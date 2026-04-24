@@ -142,14 +142,84 @@ function resizeCrop(img, crop, size) {
   return out;
 }
 
+function averageRed(pixels, width, height) {
+  let rSum = 0;
+  let gSum = 0;
+  let bSum = 0;
+  let count = 0;
+  for (let y = 0; y < height; y += 1) {
+    for (let x = 0; x < width; x += 1) {
+      const i = (y * width + x) * 4;
+      const r = pixels[i];
+      const g = pixels[i + 1];
+      const b = pixels[i + 2];
+      const a = pixels[i + 3];
+      if (a > 10 && r > 180 && g < 80 && b < 80) {
+        rSum += r;
+        gSum += g;
+        bSum += b;
+        count += 1;
+      }
+    }
+  }
+  return count > 0
+    ? [Math.round(rSum / count), Math.round(gSum / count), Math.round(bSum / count), 255]
+    : [237, 32, 26, 255];
+}
+
+function isWhiteish(pixels, i) {
+  return pixels[i + 3] <= 10 || (pixels[i] > 235 && pixels[i + 1] > 235 && pixels[i + 2] > 235);
+}
+
+function fillOuterWhiteWithRed(pixels, size, red) {
+  const out = Buffer.from(pixels);
+  const seen = new Uint8Array(size * size);
+  const queue = [];
+  const push = (x, y) => {
+    if (x < 0 || y < 0 || x >= size || y >= size) return;
+    const p = y * size + x;
+    if (seen[p]) return;
+    const i = p * 4;
+    if (!isWhiteish(out, i)) return;
+    seen[p] = 1;
+    queue.push(p);
+  };
+
+  for (let n = 0; n < size; n += 1) {
+    push(n, 0);
+    push(n, size - 1);
+    push(0, n);
+    push(size - 1, n);
+  }
+
+  for (let qi = 0; qi < queue.length; qi += 1) {
+    const p = queue[qi];
+    const i = p * 4;
+    out[i] = red[0];
+    out[i + 1] = red[1];
+    out[i + 2] = red[2];
+    out[i + 3] = red[3];
+    const x = p % size;
+    const y = Math.floor(p / size);
+    push(x + 1, y);
+    push(x - 1, y);
+    push(x, y + 1);
+    push(x, y - 1);
+  }
+
+  return out;
+}
+
 const img = decodePng(source);
 const crop = findBounds(img);
+const red = averageRed(img.pixels, img.width, img.height);
 for (const [name, size] of [
   ['apple-touch-icon.png', 180],
   ['icon-512.png', 512],
   ['icon-192.png', 192],
 ]) {
-  writePng(new URL(name, outDir), size, size, resizeCrop(img, crop, size));
+  const pixels = fillOuterWhiteWithRed(resizeCrop(img, crop, size), size, red);
+  writePng(new URL(name, outDir), size, size, pixels);
 }
 
 console.log(`cropped ${crop.side}x${crop.side} at ${crop.x},${crop.y}`);
