@@ -1,10 +1,10 @@
-const CACHE_NAME = 'kangsain-v7';
+const CACHE_NAME = 'kangsain-v8';
 const CORE_ASSETS = [
   './',
-  './manifest.webmanifest?v=7',
-  './icons/icon-192.png?v=7',
-  './icons/icon-512.png?v=7',
-  './icons/apple-touch-icon.png?v=7'
+  './manifest.webmanifest?v=8',
+  './icons/icon-192.png?v=8',
+  './icons/icon-512.png?v=8',
+  './icons/apple-touch-icon.png?v=8'
 ];
 
 self.addEventListener('install', (event) => {
