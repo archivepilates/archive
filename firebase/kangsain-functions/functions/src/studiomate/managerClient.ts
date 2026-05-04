@@ -11,7 +11,7 @@ export class ManagerClient {
   constructor(private readonly studioId: string, private readonly staffId: string) {}
 
   async login(): Promise<ManagerToken> {
-    const cached = await getManagerTokenFromStore();
+    const cached = await getManagerTokenFromStore(this.studioId, this.staffId);
     if (cached) return cached;
 
     const started = Date.now();
@@ -48,7 +48,7 @@ export class ManagerClient {
     const accountToken = String(json.account_token || json.access_token || json.token || json.data?.account_token || "");
     if (!accountToken) throw new AppError("MANAGER_API_FAILED", "Manager login response did not include token", false);
     const token = { accountToken, expiresAt: Date.now() + 50 * 60 * 1000 };
-    await saveManagerToken(token);
+    await saveManagerToken(this.studioId, this.staffId, token);
     return token;
   }
 
@@ -100,4 +100,3 @@ export class ManagerClient {
     return text ? JSON.parse(text) : {};
   }
 }
-

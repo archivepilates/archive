@@ -12,7 +12,10 @@ import { processWriteQueue } from "./queue/processWriteQueue";
 import { getInstructorHomeHandler } from "./callable/getInstructorHome";
 import { submitBookingAttendanceHandler } from "./callable/submitBookingAttendance";
 import { submitMemberMemoHandler } from "./callable/submitMemberMemo";
-import { submitInstructorHandoffHandler } from "./callable/submitInstructorHandoff";
+import { getMemberMemoHistoryHandler } from "./callable/getMemberMemoHistory";
+import { searchMembersHandler } from "./callable/searchMembers";
+import { registerFcmTokenHandler } from "./callable/registerFcmToken";
+import { sendAttendanceReminder } from "./push/sendAttendanceReminder";
 import { requireStaff, requireManager } from "./security/authGuards";
 
 const callableOptions = { region: REGION, secrets: allSecrets };
@@ -39,6 +42,13 @@ export const scheduledProcessWriteQueue = onSchedule({
   await processWriteQueue();
 });
 
+export const scheduledAttendanceReminder = onSchedule({
+  ...scheduleOptions,
+  schedule: "0 * * * *",
+}, async () => {
+  await sendAttendanceReminder();
+});
+
 export const getInstructorHome = onCall(callableOptions, async (request) => {
   try {
     return await getInstructorHomeHandler(request);
@@ -63,9 +73,25 @@ export const submitMemberMemo = onCall(callableOptions, async (request) => {
   }
 });
 
-export const submitInstructorHandoff = onCall(callableOptions, async (request) => {
+export const getMemberMemoHistory = onCall(callableOptions, async (request) => {
   try {
-    return await submitInstructorHandoffHandler(request);
+    return await getMemberMemoHistoryHandler(request);
+  } catch (err) {
+    throw toHttpsError(err);
+  }
+});
+
+export const searchMembers = onCall(callableOptions, async (request) => {
+  try {
+    return await searchMembersHandler(request);
+  } catch (err) {
+    throw toHttpsError(err);
+  }
+});
+
+export const registerFcmToken = onCall(callableOptions, async (request) => {
+  try {
+    return await registerFcmTokenHandler(request);
   } catch (err) {
     throw toHttpsError(err);
   }
@@ -96,4 +122,3 @@ export const adminPollManagerNotices = onCall(callableOptions, async (request) =
     throw toHttpsError(err);
   }
 });
-

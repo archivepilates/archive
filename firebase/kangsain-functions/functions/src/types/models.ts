@@ -8,6 +8,8 @@ export type SyncStatus = "synced" | "pending" | "failed" | "conflict";
 export type TicketExpiryLevel = "normal" | "soon" | "expired" | "unknown";
 export type QueueStatus = "pending" | "processing" | "retry" | "success" | "failed";
 export type WriteJobType = "bookingAttendanceUpdate" | "memberMemoCreate" | "lectureRefresh" | "instructorViewRebuild";
+export type MemoType = "member_note" | "lesson_note" | "private_instructor_note";
+export type MemoVisibility = "staff_and_manager" | "manager_only" | "creator_only";
 
 export interface StudioDoc {
   studioId: string;
@@ -61,10 +63,12 @@ export interface BookingDoc {
   studioId: string;
   memberId: string;
   memberName: string;
+  memberPhone: string;
   staffId: string;
   staffName: string;
   lectureDate: string;
   lectureStartAt: Timestamp | null;
+  lectureEndAt: Timestamp | null;
   sourceStatus: string;
   appStatus: AppBookingStatus;
   attendanceStatus: AttendanceStatus;
@@ -75,6 +79,7 @@ export interface BookingDoc {
   ticketExpiryLevel: TicketExpiryLevel;
   memberTagIds: string[];
   lastMemoPreview: string;
+  lastMemoAt: Timestamp | null;
   lastChangedBy: string;
   sourceHash: string;
   sourceUpdatedAt: Timestamp | null;
@@ -94,7 +99,6 @@ export interface InstructorViewDoc {
     reservedCount: number;
     cancelCount: number;
     waitCount: number;
-    groupAverageMembers: number;
   };
   lectures: Array<Record<string, unknown>>;
   updatedAt: Timestamp;
@@ -111,22 +115,6 @@ export interface AttendanceSummaryDoc {
   cancel: number;
   waitCancel: number;
   total: number;
-  updatedAt: Timestamp;
-}
-
-export interface DailyGroupStatsDoc {
-  statId: string;
-  studioId: string;
-  date: string;
-  groupLectureCount: number;
-  groupBookingCount: number;
-  averageMembers: number;
-  byStaff: Record<string, {
-    staffName: string;
-    groupLectureCount: number;
-    groupBookingCount: number;
-    averageMembers: number;
-  }>;
   updatedAt: Timestamp;
 }
 
@@ -164,3 +152,56 @@ export interface WriteQueueJobDoc {
   updatedAt: Timestamp;
 }
 
+export interface MemberTagDoc {
+  memberId: string;
+  studioId: string;
+  tags: Array<{
+    tagId: string;
+    label: string;
+    level: "info" | "warning" | "danger";
+    source: "manual";
+    updatedAt: Timestamp;
+  }>;
+  updatedAt: Timestamp;
+}
+
+export interface MemberMemoDoc {
+  memoId: string;
+  studioId: string;
+  memberId: string;
+  memberName: string;
+  lectureId: string;
+  bookingId: string;
+  staffId: string;
+  staffName: string;
+  memoType: MemoType;
+  visibility: MemoVisibility;
+  content: string;
+  syncStatus: SyncStatus;
+  createdByUid: string;
+  createdAt: Timestamp;
+  updatedAt: Timestamp;
+}
+
+export interface TokenCacheDoc {
+  tokenKey: string;
+  service: "studiomate" | "manager";
+  studioId: string;
+  staffId?: string;
+  token: string;
+  issuedAt: Timestamp;
+  expiresAt: Timestamp;
+  lastUsedAt: Timestamp;
+}
+
+export interface FcmTokenDoc {
+  tokenId: string;
+  studioId: string;
+  staffId: string;
+  uid: string;
+  token: string;
+  platform: "web" | "ios" | "android" | "unknown";
+  deviceLabel: string;
+  createdAt: Timestamp;
+  lastSeenAt: Timestamp;
+}

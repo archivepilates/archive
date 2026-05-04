@@ -16,10 +16,13 @@ StudioMate API
 - `scheduledSyncLecturesDaily`: 매일 00:05 KST, 최근 30일 + 향후 14일 수업/예약 동기화
 - `scheduledPollManagerNotices`: 5분마다 StudioMate 관리자 알림 변경분 확인
 - `scheduledProcessWriteQueue`: 1분마다 출석/메모 쓰기 큐 처리
+- `scheduledAttendanceReminder`: 매시간 출석 미체크 수업 리마인드 푸시
 - `getInstructorHome`: 로그인 강사의 14일 앱 화면 데이터 조회
+- `getMemberMemoHistory`: 담당 회원 메모 히스토리 + 최근 30일 출석 요약 조회
+- `searchMembers`: 담당 회원 이름/전화번호 검색
 - `submitBookingAttendance`: 출석/결석 변경 요청
 - `submitMemberMemo`: 회원 메모 작성
-- `submitInstructorHandoff`: 운영자 전달사항 작성
+- `registerFcmToken`: 강사 단말 FCM 토큰 등록
 - `adminSyncLecturesRange`: 운영자 수동 기간 동기화
 - `adminPollManagerNotices`: 운영자 수동 알림 polling
 
@@ -41,4 +44,4 @@ StudioMate API 토큰은 클라이언트에 노출하지 않고 서버 전용 Fi
 - 결제 금액, 매출, 정산 정보는 이번 범위에서 저장하지 않습니다.
 - 강사 앱의 쓰기 작업은 직접 Firestore write가 아니라 Callable Function과 `writeQueue`를 통해 처리합니다.
 - 관리자 알림 API는 `api.manager.studiomate.kr`의 `/api/staff/notice/common`을 사용합니다.
-
+- v2 기준 1차 범위에서 운영자 전달사항, system 자동 태그, 일일 그룹 평균 인원은 제외했습니다.
