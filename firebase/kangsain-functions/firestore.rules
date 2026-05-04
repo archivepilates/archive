@@ -1,0 +1,92 @@
+rules_version = '2';
+
+service cloud.firestore {
+  match /databases/{database}/documents {
+    function signedIn() {
+      return request.auth != null;
+    }
+
+    function isManager() {
+      return signedIn() && request.auth.token.role in ['owner', 'manager'];
+    }
+
+    function isInstructor(staffId) {
+      return signedIn() && request.auth.token.staffId == staffId;
+    }
+
+    match /studios/{studioId} {
+      allow read: if signedIn();
+      allow write: if false;
+    }
+
+    match /staffs/{staffId} {
+      allow read: if isManager() || isInstructor(staffId);
+      allow write: if false;
+    }
+
+    match /lectures/{lectureId} {
+      allow read: if isManager() || isInstructor(resource.data.staffId);
+      allow write: if false;
+    }
+
+    match /bookings/{bookingId} {
+      allow read: if isManager() || isInstructor(resource.data.staffId);
+      allow write: if false;
+    }
+
+    match /instructorViews/{viewId} {
+      allow read: if isManager() || isInstructor(resource.data.staffId);
+      allow write: if false;
+    }
+
+    match /attendanceSummaries/{summaryId} {
+      allow read: if isManager();
+      allow write: if false;
+    }
+
+    match /dailyGroupStats/{statId} {
+      allow read: if signedIn();
+      allow write: if false;
+    }
+
+    match /memberTags/{memberId} {
+      allow read: if isManager();
+      allow write: if false;
+    }
+
+    match /memberMemos/{memoId} {
+      allow read: if isManager() || isInstructor(resource.data.staffId);
+      allow write: if false;
+    }
+
+    match /instructorHandoffs/{handoffId} {
+      allow read: if isManager() || request.auth.uid == resource.data.createdByUid;
+      allow write: if false;
+    }
+
+    match /notices/{noticeId} {
+      allow read: if isManager();
+      allow write: if false;
+    }
+
+    match /syncStates/{syncName} {
+      allow read: if isManager();
+      allow write: if false;
+    }
+
+    match /writeQueue/{jobId} {
+      allow read: if isManager();
+      allow write: if false;
+    }
+
+    match /apiLogs/{logId} {
+      allow read: if isManager();
+      allow write: if false;
+    }
+
+    match /appConfig/{configId} {
+      allow read: if signedIn();
+      allow write: if false;
+    }
+  }
+}
