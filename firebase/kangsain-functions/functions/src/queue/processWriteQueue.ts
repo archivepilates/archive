@@ -59,6 +59,9 @@ async function processJob(job: WriteQueueJobDoc): Promise<void> {
       lastError: errorMessage(err),
       updatedAt: nowTimestamp(),
     }, { merge: true });
+    if (job.type === "bookingAttendanceUpdate" && failed) {
+      await refs.booking(String(job.payload.bookingId || "")).set({ syncStatus: "failed", updatedAt: nowTimestamp() }, { merge: true });
+    }
   }
 }
 
@@ -93,4 +96,3 @@ function toStudioMateAttendanceStatus(status: AttendanceStatus): string {
   if (status === "late_cancel") return "absence";
   return "booked";
 }
-

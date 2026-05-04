@@ -11,7 +11,7 @@ export class StudioMateClient {
   constructor(private readonly studioId: string) {}
 
   async login(): Promise<StudioMateToken> {
-    const cached = await getStudioMateTokenFromStore();
+    const cached = await getStudioMateTokenFromStore(this.studioId);
     if (cached) return cached;
 
     const started = Date.now();
@@ -46,7 +46,7 @@ export class StudioMateClient {
     const accessToken = String(json.access_token || json.token || "");
     if (!accessToken) throw new AppError("STUDIOMATE_LOGIN_FAILED", "StudioMate login response did not include token", false);
     const token = { accessToken, expiresAt: Date.now() + 50 * 60 * 1000 };
-    await saveStudioMateToken(token);
+    await saveStudioMateToken(this.studioId, token);
     return token;
   }
 
@@ -110,4 +110,3 @@ export class StudioMateClient {
     return text ? JSON.parse(text) : {};
   }
 }
-

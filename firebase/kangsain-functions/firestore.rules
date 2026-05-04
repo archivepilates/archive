@@ -40,28 +40,15 @@ service cloud.firestore {
     }
 
     match /attendanceSummaries/{summaryId} {
-      allow read: if isManager();
-      allow write: if false;
-    }
-
-    match /dailyGroupStats/{statId} {
-      allow read: if signedIn();
-      allow write: if false;
+      allow read, write: if false;
     }
 
     match /memberTags/{memberId} {
-      allow read: if isManager();
-      allow write: if false;
+      allow read, write: if false;
     }
 
     match /memberMemos/{memoId} {
-      allow read: if isManager() || isInstructor(resource.data.staffId);
-      allow write: if false;
-    }
-
-    match /instructorHandoffs/{handoffId} {
-      allow read: if isManager() || request.auth.uid == resource.data.createdByUid;
-      allow write: if false;
+      allow read, write: if false;
     }
 
     match /notices/{noticeId} {
@@ -79,13 +66,17 @@ service cloud.firestore {
       allow write: if false;
     }
 
-    match /apiLogs/{logId} {
-      allow read: if isManager();
+    match /tokenCache/{tokenKey} {
+      allow read, write: if false;
+    }
+
+    match /fcmTokens/{tokenId} {
+      allow read: if signedIn() && request.auth.uid == resource.data.uid;
       allow write: if false;
     }
 
-    match /appConfig/{configId} {
-      allow read: if signedIn();
+    match /apiLogs/{logId} {
+      allow read: if isManager();
       allow write: if false;
     }
   }

@@ -7,9 +7,8 @@ import { upsertStaff } from "../firestore/staffRepository";
 import { StudioMateClient } from "../studiomate/studiomateClient";
 import { asArray, normalizeBooking, normalizeLecture } from "../studiomate/normalizers";
 import type { BookingDoc } from "../types/models";
-import { nowTimestamp } from "../utils/date";
+import { nowTimestamp, todayKst } from "../utils/date";
 import { rebuildInstructorViewsForDates } from "./rebuildInstructorViews";
-import { buildDailyGroupStats } from "./buildDailyGroupStats";
 import { rebuildAttendanceSummaries } from "./rebuildAttendanceSummaries";
 
 export async function syncLecturesRange(input: {
@@ -25,7 +24,6 @@ export async function syncLecturesRange(input: {
   let bookingsChanged = 0;
   const allBookings: BookingDoc[] = [];
   const staffDates: Array<{ staffId: string; date: string }> = [];
-  const dates = new Set<string>();
 
   for (const rawLecture of rawLectures) {
     const lecture = normalizeLecture(rawLecture, studioId);
@@ -45,7 +43,6 @@ export async function syncLecturesRange(input: {
     }
     if (await upsertLectureIfChanged(lecture)) lecturesChanged++;
     staffDates.push({ staffId: lecture.staffId, date: lecture.date });
-    dates.add(lecture.date);
 
     for (const rawBooking of asArray(rawLecture.bookings)) {
       const booking = normalizeBooking(rawLecture, rawBooking, studioId);
@@ -55,8 +52,7 @@ export async function syncLecturesRange(input: {
     }
   }
 
-  await rebuildAttendanceSummaries({ studioId, endDate: input.endDate, bookings: allBookings });
-  await Promise.all([...dates].map((date) => buildDailyGroupStats({ studioId, date })));
+  await rebuildAttendanceSummaries({ studioId, endDate: input.endDate > todayKst() ? todayKst() : input.endDate, bookings: allBookings });
   await rebuildInstructorViewsForDates(studioId, staffDates);
   await refs.syncState(`lecturesRange_${studioId}`).set({
     syncName: `lecturesRange_${studioId}`,

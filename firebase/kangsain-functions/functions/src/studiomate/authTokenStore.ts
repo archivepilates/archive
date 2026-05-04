@@ -1,27 +1,35 @@
-import { db } from "../config/firebase";
 import type { ManagerToken, StudioMateToken } from "../types/studiomate";
+import { getTokenCache, saveTokenCache } from "../firestore/tokenCacheRepository";
 
-const TOKEN_COLLECTION = "_serverTokens";
-
-export async function getStudioMateTokenFromStore(): Promise<StudioMateToken | null> {
-  const snap = await db.collection(TOKEN_COLLECTION).doc("studiomate").get();
-  const data = snap.data();
-  if (!data || Number(data.expiresAt) <= Date.now() + 60_000) return null;
-  return { accessToken: String(data.accessToken), expiresAt: Number(data.expiresAt) };
+export async function getStudioMateTokenFromStore(studioId: string): Promise<StudioMateToken | null> {
+  const data = await getTokenCache(`studiomate_${studioId}`);
+  if (!data) return null;
+  return { accessToken: data.token, expiresAt: data.expiresAt.toMillis() };
 }
 
-export async function saveStudioMateToken(token: StudioMateToken): Promise<void> {
-  await db.collection(TOKEN_COLLECTION).doc("studiomate").set(token, { merge: true });
+export async function saveStudioMateToken(studioId: string, token: StudioMateToken): Promise<void> {
+  await saveTokenCache({
+    tokenKey: `studiomate_${studioId}`,
+    service: "studiomate",
+    studioId,
+    token: token.accessToken,
+    expiresAtMs: token.expiresAt,
+  });
 }
 
-export async function getManagerTokenFromStore(): Promise<ManagerToken | null> {
-  const snap = await db.collection(TOKEN_COLLECTION).doc("manager").get();
-  const data = snap.data();
-  if (!data || Number(data.expiresAt) <= Date.now() + 60_000) return null;
-  return { accountToken: String(data.accountToken), expiresAt: Number(data.expiresAt) };
+export async function getManagerTokenFromStore(studioId: string, staffId: string): Promise<ManagerToken | null> {
+  const data = await getTokenCache(`manager_${studioId}_${staffId}`);
+  if (!data) return null;
+  return { accountToken: data.token, expiresAt: data.expiresAt.toMillis() };
 }
 
-export async function saveManagerToken(token: ManagerToken): Promise<void> {
-  await db.collection(TOKEN_COLLECTION).doc("manager").set(token, { merge: true });
+export async function saveManagerToken(studioId: string, staffId: string, token: ManagerToken): Promise<void> {
+  await saveTokenCache({
+    tokenKey: `manager_${studioId}_${staffId}`,
+    service: "manager",
+    studioId,
+    staffId,
+    token: token.accountToken,
+    expiresAtMs: token.expiresAt,
+  });
 }
-

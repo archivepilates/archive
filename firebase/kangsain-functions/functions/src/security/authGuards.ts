@@ -12,11 +12,14 @@ export async function requireStaff(request: CallableRequest): Promise<StaffDoc> 
 }
 
 export function requireManager(staff: StaffDoc): void {
-  if (!["owner", "manager"].includes(staff.role)) throw new AppError("PERMISSION_DENIED", "운영자 권한이 필요합니다");
+  if (!isManagerRole(staff.role)) throw new AppError("PERMISSION_DENIED", "운영자 권한이 필요합니다");
 }
 
 export function assertOwnStaff(staff: StaffDoc, targetStaffId: string): void {
-  if (["owner", "manager"].includes(staff.role)) return;
+  if (isManagerRole(staff.role)) return;
   if (staff.staffId !== targetStaffId) throw new AppError("PERMISSION_DENIED", "담당 강사의 데이터만 접근할 수 있습니다");
 }
 
+export function isManagerRole(role: StaffDoc["role"]): boolean {
+  return ["owner", "manager"].includes(role);
+}

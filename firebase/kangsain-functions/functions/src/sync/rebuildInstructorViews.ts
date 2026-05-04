@@ -1,7 +1,8 @@
-import type { BookingDoc, InstructorViewDoc, LectureDoc } from "../types/models";
+import type { BookingDoc, InstructorViewDoc, LectureDoc, MemberTagDoc } from "../types/models";
 import { getBookingsByStaffDate } from "../firestore/bookingRepository";
 import { getLecturesByStaffDate } from "../firestore/lectureRepository";
 import { saveInstructorView } from "../firestore/instructorViewRepository";
+import { getMemberTagsMap } from "../firestore/memberTagRepository";
 import { nowTimestamp } from "../utils/date";
 
 export async function rebuildInstructorView(input: {
@@ -13,7 +14,8 @@ export async function rebuildInstructorView(input: {
     getLecturesByStaffDate(input.studioId, input.staffId, input.date),
     getBookingsByStaffDate(input.studioId, input.staffId, input.date),
   ]);
-  const view = buildInstructorView(input.studioId, input.staffId, input.date, lectures, bookings);
+  const tagsByMember = await getMemberTagsMap(bookings.map((booking) => booking.memberId));
+  const view = buildInstructorView(input.studioId, input.staffId, input.date, lectures, bookings, tagsByMember);
   await saveInstructorView(view);
   return view;
 }
@@ -23,7 +25,14 @@ export async function rebuildInstructorViewsForDates(studioId: string, staffDate
   await Promise.all([...unique.values()].map((item) => rebuildInstructorView({ studioId, ...item })));
 }
 
-function buildInstructorView(studioId: string, staffId: string, date: string, lectures: LectureDoc[], bookings: BookingDoc[]): InstructorViewDoc {
+function buildInstructorView(
+  studioId: string,
+  staffId: string,
+  date: string,
+  lectures: LectureDoc[],
+  bookings: BookingDoc[],
+  tagsByMember: Map<string, MemberTagDoc["tags"]>,
+): InstructorViewDoc {
   const byLecture = new Map<string, BookingDoc[]>();
   bookings.forEach((booking) => {
     const list = byLecture.get(booking.lectureId) || [];
@@ -38,6 +47,8 @@ function buildInstructorView(studioId: string, staffId: string, date: string, le
       return {
         lectureId: lecture.lectureId,
         timeText: timeText(lecture),
+        startAt: lecture.startAt,
+        endAt: lecture.endAt,
         title: lecture.title,
         roomName: lecture.roomName,
         divisionName: lecture.divisionName,
@@ -57,17 +68,14 @@ function buildInstructorView(studioId: string, staffId: string, date: string, le
           ticketName: booking.ticketName,
           ticketRemainingCount: booking.ticketRemainingCount,
           ticketExpiryLevel: booking.ticketExpiryLevel,
-          tags: booking.memberTagIds.map((tagId) => ({ tagId, label: tagId, level: "info" })),
-          recent30Days: null,
-          lastMemoPreview: booking.lastMemoPreview,
+          tags: tagsByMember.get(booking.memberId) || [],
+          lastMemoPreview: booking.lastMemoPreview.slice(0, 60),
+          lastMemoAt: booking.lastMemoAt,
         })),
       };
     });
 
   const activeBookings = bookings.filter((booking) => booking.appStatus === "reserved");
-  const groupLectures = lectures.filter((lecture) => lecture.lessonType === "group");
-  const groupBookings = activeBookings.filter((booking) => groupLectures.some((lecture) => lecture.lectureId === booking.lectureId));
-  const groupAverageMembers = groupLectures.length ? Number((groupBookings.length / groupLectures.length).toFixed(1)) : 0;
 
   return {
     viewId: `${staffId}_${date}`,
@@ -81,7 +89,6 @@ function buildInstructorView(studioId: string, staffId: string, date: string, le
       reservedCount: bookings.filter((booking) => booking.appStatus === "reserved").length,
       cancelCount: bookings.filter((booking) => booking.appStatus === "cancel" || booking.appStatus === "wait_cancel").length,
       waitCount: bookings.filter((booking) => booking.appStatus === "wait").length,
-      groupAverageMembers,
     },
     lectures: viewLectures,
     updatedAt: nowTimestamp(),
@@ -99,4 +106,3 @@ function timeText(lecture: LectureDoc): string {
 function startOfKstDate(date: string): Date {
   return new Date(`${date}T00:00:00+09:00`);
 }
-

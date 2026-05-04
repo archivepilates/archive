@@ -2,11 +2,14 @@ import { db } from "../config/firebase";
 import type {
   AttendanceSummaryDoc,
   BookingDoc,
-  DailyGroupStatsDoc,
+  FcmTokenDoc,
   InstructorViewDoc,
   LectureDoc,
+  MemberMemoDoc,
+  MemberTagDoc,
   NoticeDoc,
   StaffDoc,
+  TokenCacheDoc,
   WriteQueueJobDoc,
 } from "../types/models";
 
@@ -21,15 +24,19 @@ export const refs = {
   instructorView: (staffId: string, date: string) => refs.instructorViews().doc(`${staffId}_${date}`),
   attendanceSummaries: () => db.collection("attendanceSummaries").withConverter(converter<AttendanceSummaryDoc>()),
   attendanceSummary: (memberId: string, yyyymmdd: string) => refs.attendanceSummaries().doc(`${memberId}_${yyyymmdd}`),
-  dailyGroupStats: () => db.collection("dailyGroupStats").withConverter(converter<DailyGroupStatsDoc>()),
-  dailyGroupStat: (studioId: string, date: string) => refs.dailyGroupStats().doc(`${studioId}_${date}`),
+  memberTags: () => db.collection("memberTags").withConverter(converter<MemberTagDoc>()),
+  memberTag: (memberId: string) => refs.memberTags().doc(memberId),
+  memberMemos: () => db.collection("memberMemos").withConverter(converter<MemberMemoDoc>()),
+  memberMemo: (memoId: string) => refs.memberMemos().doc(memoId),
   notices: () => db.collection("notices").withConverter(converter<NoticeDoc>()),
   notice: (noticeId: string) => refs.notices().doc(noticeId),
   writeQueue: () => db.collection("writeQueue").withConverter(converter<WriteQueueJobDoc>()),
   writeJob: (jobId: string) => refs.writeQueue().doc(jobId),
+  tokenCache: () => db.collection("tokenCache").withConverter(converter<TokenCacheDoc>()),
+  tokenCacheDoc: (tokenKey: string) => refs.tokenCache().doc(tokenKey),
+  fcmTokens: () => db.collection("fcmTokens").withConverter(converter<FcmTokenDoc>()),
+  fcmToken: (tokenId: string) => refs.fcmTokens().doc(tokenId),
   syncState: (syncName: string) => db.collection("syncStates").doc(syncName),
-  memberMemos: () => db.collection("memberMemos"),
-  instructorHandoffs: () => db.collection("instructorHandoffs"),
 };
 
 function converter<T>() {
@@ -42,4 +49,3 @@ function converter<T>() {
     },
   };
 }
-

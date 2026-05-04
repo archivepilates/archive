@@ -6,6 +6,7 @@ import { ManagerClient } from "../studiomate/managerClient";
 import { normalizeManagerNotice } from "../studiomate/normalizers";
 import { nowTimestamp } from "../utils/date";
 import { enqueueLectureRefreshJob } from "../queue/enqueueWriteJob";
+import { sendBookingChangePush } from "../push/sendBookingChangePush";
 
 export async function pollManagerNotices(input?: {
   studioId?: string;
@@ -23,6 +24,7 @@ export async function pollManagerNotices(input?: {
 
   let saved = 0;
   let refreshJobs = 0;
+  let pushes = 0;
   for (const notice of notices) {
     if (await saveNoticeIfNew(notice)) {
       saved++;
@@ -34,6 +36,10 @@ export async function pollManagerNotices(input?: {
           createdByUid: "system",
         });
         refreshJobs++;
+      }
+      if (isTodayOrTomorrow(notice.sourceCreatedAt)) {
+        const result = await sendBookingChangePush({ notice });
+        pushes += result.sent;
       }
     }
   }
@@ -50,7 +56,14 @@ export async function pollManagerNotices(input?: {
     lastError: null,
   }, { merge: true });
 
-  logger.info("pollManagerNotices completed", { studioId, staffId, seen: rawNotices.length, saved, refreshJobs });
+  logger.info("pollManagerNotices completed", { studioId, staffId, seen: rawNotices.length, saved, refreshJobs, pushes });
   return { seen: rawNotices.length, saved, refreshJobs };
 }
 
+function isTodayOrTomorrow(sourceCreatedAt: string): boolean {
+  const sourceDate = sourceCreatedAt.slice(0, 10);
+  const now = new Date();
+  const today = new Date(now.getTime() + 9 * 60 * 60 * 1000).toISOString().slice(0, 10);
+  const tomorrow = new Date(now.getTime() + 33 * 60 * 60 * 1000).toISOString().slice(0, 10);
+  return sourceDate === today || sourceDate === tomorrow;
+}

@@ -50,6 +50,7 @@ export function normalizeBooking(rawLecture: any, rawBooking: any, studioId: str
   const status = stringValue(rawBooking.status);
   const appStatus = normalizeBookingStatus(status, rawBooking.updated_for);
   const startRaw = stringValue(rawLecture.start_on ?? rawLecture.start_at ?? rawLecture.start_time);
+  const endRaw = stringValue(rawLecture.end_on ?? rawLecture.end_at ?? rawLecture.end_time);
 
   return {
     bookingId,
@@ -57,10 +58,12 @@ export function normalizeBooking(rawLecture: any, rawBooking: any, studioId: str
     studioId,
     memberId: stringValue(member.id ?? rawBooking.user_id ?? rawBooking.member_id),
     memberName: stringValue(member.name ?? rawBooking.name),
+    memberPhone: digitsOnly(member.mobile ?? member.phone ?? rawBooking.mobile ?? rawBooking.phone),
     staffId: stringValue(staff.id ?? rawLecture.staff_id ?? rawLecture.instructor_id ?? rawLecture.staff_name ?? staff.name),
     staffName: stringValue(staff.name ?? staff.profile?.name ?? rawLecture.staff_name ?? rawLecture.instructor_name),
     lectureDate: startRaw ? startRaw.slice(0, 10) : "",
     lectureStartAt: parseStudioMateDateTime(startRaw),
+    lectureEndAt: parseStudioMateDateTime(endRaw),
     sourceStatus: status,
     appStatus,
     attendanceStatus: normalizeAttendanceStatus(status),
@@ -71,6 +74,7 @@ export function normalizeBooking(rawLecture: any, rawBooking: any, studioId: str
     ticketExpiryLevel: "unknown",
     memberTagIds: [],
     lastMemoPreview: "",
+    lastMemoAt: null,
     lastChangedBy: "system",
     sourceHash: stableHash(stripVolatile(rawBooking)),
     sourceUpdatedAt: parseStudioMateDateTime(rawBooking.updated_at),
@@ -153,5 +157,8 @@ function nullableNumber(value: unknown): number | null {
   return Number.isFinite(num) ? num : null;
 }
 
-export { asArray };
+function digitsOnly(value: unknown): string {
+  return stringValue(value).replace(/\D/g, "");
+}
 
+export { asArray };
