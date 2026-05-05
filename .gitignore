@@ -4,4 +4,3 @@ firebase/kangsain-functions/functions/.env
 firebase/kangsain-functions/.firebase/
 firebase/kangsain-functions/firebase-debug.log
 firebase/kangsain-functions/firebase-debug.*.log
-kangsain/firebase-config.js

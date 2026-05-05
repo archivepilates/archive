@@ -12,7 +12,7 @@
     "lint": "tsc --noEmit",
     "format": "prettier --write \"src/**/*.ts\" \"../*.json\" \"../*.md\"",
     "format:check": "prettier --check \"src/**/*.ts\" \"../*.json\" \"../*.md\"",
-    "firebase": "firebase --config ../firebase.json --project archivepilates",
+    "firebase": "firebase --config ../firebase.json --project archive-pilates",
     "serve": "npm run build && npm run firebase -- emulators:start --only functions,firestore",
     "deploy": "npm run build && npm run firebase -- deploy --only functions,firestore:rules,firestore:indexes",
     "deploy:functions": "npm run build && npm run firebase -- deploy --only functions",
