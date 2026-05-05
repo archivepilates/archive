@@ -10,9 +10,9 @@
   <meta name="mobile-web-app-capable" content="yes">
   <meta name="apple-mobile-web-app-title" content="아카이브IN">
   <meta name="apple-mobile-web-app-status-bar-style" content="default">
-  <link rel="manifest" href="./manifest.webmanifest?v=20">
-  <link rel="icon" type="image/png" sizes="192x192" href="./icons/icon-192.png?v=20">
-  <link rel="apple-touch-icon" sizes="180x180" href="./icons/apple-touch-icon.png?v=20">
+  <link rel="manifest" href="./manifest.webmanifest?v=21">
+  <link rel="icon" type="image/png" sizes="192x192" href="./icons/icon-192.png?v=21">
+  <link rel="apple-touch-icon" sizes="180x180" href="./icons/apple-touch-icon.png?v=21">
   <style>
     :root {
       --ink: #171717;
@@ -817,7 +817,7 @@
     }
 
     function renderBooking(lecture, booking) {
-      const attendanceLocked = booking.appStatus !== 'reserved';
+      const attendanceLocked = !canUpdateAttendance(lecture, booking);
       const tags = instructorVisibleTags(booking.tags || []);
       const headlineTags = tags.slice(0, 3);
       const detailTags = tags.slice(3);
@@ -965,7 +965,8 @@
     async function updateAttendance(bookingId, attendanceStatus) {
       if (!bookingId || !attendanceStatus) return;
       const booking = findBooking(bookingId);
-      if (!booking || booking.appStatus !== 'reserved') return;
+      const context = findBookingContext(bookingId);
+      if (!booking || !context || !canUpdateAttendance(context.lecture, booking)) return;
       optimisticAttendance(bookingId, attendanceStatus);
       renderApp();
       try {
@@ -1071,10 +1072,14 @@
     }
 
     function findBooking(bookingId) {
+      return findBookingContext(bookingId)?.booking || null;
+    }
+
+    function findBookingContext(bookingId) {
       for (const day of appState.days) {
         for (const lecture of day.lectures || []) {
           const booking = (lecture.bookings || []).find((item) => item.bookingId === bookingId);
-          if (booking) return booking;
+          if (booking) return { day, lecture, booking };
         }
       }
       return null;
@@ -1171,6 +1176,12 @@
 
     function instructorVisibleTags(tags) {
       return tags.filter((tag) => tag.source === 'auto_attendance' || /^30일 출석/.test(tag.label || ''));
+    }
+
+    function canUpdateAttendance(lecture, booking) {
+      if (booking?.appStatus !== 'reserved') return false;
+      const start = timestampToDate(lecture?.startAt);
+      return Boolean(start && start.getTime() <= Date.now());
     }
 
     function resolvedLessonType(lecture) {

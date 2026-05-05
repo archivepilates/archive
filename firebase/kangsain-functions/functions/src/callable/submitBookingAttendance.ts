@@ -22,6 +22,8 @@ export async function submitBookingAttendanceHandler(request: CallableRequest): 
   assertOwnStaff(staff, booking.staffId);
   if (booking.appStatus !== "reserved")
     throw new AppError("INVALID_ARGUMENT", "예약확정 회원만 출석/결석을 변경할 수 있습니다");
+  if (!canUpdateAttendanceAfterClassStart(booking.lectureStartAt?.toDate()))
+    throw new AppError("INVALID_ARGUMENT", "수업 시작시간 이후에 출석/결석을 변경할 수 있습니다");
 
   await refs.booking(bookingId).set(
     {
@@ -42,4 +44,8 @@ export async function submitBookingAttendanceHandler(request: CallableRequest): 
   await rebuildInstructorView({ studioId: booking.studioId, staffId: booking.staffId, date: booking.lectureDate });
 
   return { ok: true, bookingId, attendanceStatus, jobId: job.jobId };
+}
+
+function canUpdateAttendanceAfterClassStart(lectureStartAt?: Date): boolean {
+  return Boolean(lectureStartAt && lectureStartAt.getTime() <= Date.now());
 }

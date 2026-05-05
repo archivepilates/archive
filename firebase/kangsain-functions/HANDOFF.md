@@ -26,7 +26,8 @@
 - 앱 첫 로딩은 callable 함수가 아니라 Firestore의 `staffs/{staffId}` 및 `instructorViews/{staffId}_{date}`를 직접 읽는다.
 - 출석/결석/메모 입력은 Firestore에 optimistic write 후 `writeQueue`에 작업을 넣고, `scheduledProcessWriteQueue`가 스튜디오메이트 API로 전송한다.
 - Cloud Run callable 공개 invoker는 조직 정책상 `allUsers` 권한 부여가 막혀 있어 앱의 주 경로에서 의존하지 않도록 조정했다.
-- 30일 출석/결석 태그는 서버 집계 기반으로 태그/메모 UI에 반영하는 방향이다.
+- 30일 출석/결석 태그는 서버 집계 기반으로 `30일 출석 N회`, `30일 결석 N회`를 분리해 표시한다.
+- 출석/결석 처리는 예약확정 회원이면서 수업 시작시간 이후인 경우에만 가능하다.
 - 예약대기 회원은 출석/결석 버튼이 비활성화된다.
 - 취소/대기취소 예약은 수업 카드에서 숨긴다.
 - 그룹수업 회원에게는 수강권명/잔여횟수를 숨긴다.
@@ -113,7 +114,6 @@
 
 - Google Workspace 로그인 설정 완성.
 - MEMBERS 요약을 총 예약 수가 아니라 그룹수업 평균 출석 인원으로 재수정.
-- 30일 출석/결석 태그 UI와 서버 집계 구조 정교화.
-- 프라이빗/그룹 수업별 회원 정보 표시 규칙 추가 정리.
 - 출석/메모 writeQueue 처리 결과를 앱에서 pending/synced/failed 상태로 더 명확하게 표시.
+- 프라이빗/그룹 수업별 회원 정보 표시 규칙 추가 정리.
 - 운영자 앱 설계 및 Firebase 기반 자동화 알림 확장.

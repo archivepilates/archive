@@ -93,13 +93,22 @@ function buildAutoTags(bookings: BookingDoc[], memos: MemberMemoDoc[]): MemberTa
   const attended = bookings.filter((booking) => booking.attendanceStatus === "attended").length;
   const absent = bookings.filter((booking) => booking.attendanceStatus === "absent" || booking.attendanceStatus === "late_cancel").length;
 
-  tags.push({
-    tagId: `attendance30_${attended}_${absent}`,
-    label: `30일 출석${attended}회 결석${absent}회`,
-    level: absent >= 3 ? "danger" : attended >= 8 ? "positive" : "info",
-    source: "auto_attendance",
-    updatedAt: now,
-  });
+  tags.push(
+    {
+      tagId: `attendance30_attended_${attended}`,
+      label: `30일 출석 ${attended}회`,
+      level: attended >= 8 ? "positive" : "info",
+      source: "auto_attendance",
+      updatedAt: now,
+    },
+    {
+      tagId: `attendance30_absent_${absent}`,
+      label: `30일 결석 ${absent}회`,
+      level: absent >= 3 ? "danger" : "info",
+      source: "auto_attendance",
+      updatedAt: now,
+    },
+  );
 
   const painLabels = painTags(memos);
   painLabels.forEach((label) => {

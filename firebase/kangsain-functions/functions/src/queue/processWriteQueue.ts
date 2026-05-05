@@ -78,6 +78,8 @@ async function processAttendanceJob(job: WriteQueueJobDoc): Promise<void> {
   if (!booking) throw new Error(`Booking not found: ${bookingId}`);
   if (booking.appStatus !== "reserved")
     throw new Error(`Attendance can only be changed for reserved bookings: ${bookingId} (${booking.appStatus})`);
+  if (!canUpdateAttendanceAfterClassStart(booking.lectureStartAt?.toDate()))
+    throw new Error(`Attendance can only be changed after lecture start: ${bookingId}`);
   const client = new StudioMateClient(job.studioId);
   await client.updateBookingStatus({ bookingId, status: toStudioMateAttendanceStatus(attendanceStatus) });
   await refs.booking(bookingId).set({ syncStatus: "synced", updatedAt: nowTimestamp() }, { merge: true });
@@ -103,4 +105,8 @@ function toStudioMateAttendanceStatus(status: AttendanceStatus): string {
   if (status === "absent") return "absence";
   if (status === "late_cancel") return "absence";
   return "booked";
+}
+
+function canUpdateAttendanceAfterClassStart(lectureStartAt?: Date): boolean {
+  return Boolean(lectureStartAt && lectureStartAt.getTime() <= Date.now());
 }

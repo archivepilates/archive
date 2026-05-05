@@ -18,8 +18,11 @@ service cloud.firestore {
       return signedIn() && request.auth.token.studioId == studioId;
     }
 
-    function bookingIsReserved(bookingId) {
-      return get(/databases/$(database)/documents/bookings/$(bookingId)).data.appStatus == 'reserved';
+    function bookingCanUpdateAttendance(bookingId) {
+      let booking = get(/databases/$(database)/documents/bookings/$(bookingId)).data;
+      return booking.appStatus == 'reserved' &&
+        booking.lectureStartAt is timestamp &&
+        booking.lectureStartAt <= request.time;
     }
 
     match /studios/{studioId} {
@@ -51,6 +54,8 @@ service cloud.firestore {
         ]) &&
         (!request.resource.data.diff(resource.data).affectedKeys().hasAny(['attendanceStatus']) ||
           (resource.data.appStatus == 'reserved' &&
+            resource.data.lectureStartAt is timestamp &&
+            resource.data.lectureStartAt <= request.time &&
             request.resource.data.attendanceStatus in ['unchecked', 'attended', 'absent', 'late_cancel'])) &&
         (!request.resource.data.diff(resource.data).affectedKeys().hasAny(['syncStatus']) ||
           request.resource.data.syncStatus == 'pending') &&
@@ -120,7 +125,7 @@ service cloud.firestore {
         request.resource.data.payload is map &&
         (request.resource.data.type != 'bookingAttendanceUpdate' ||
           (request.resource.data.payload.bookingId is string &&
-            bookingIsReserved(request.resource.data.payload.bookingId)));
+            bookingCanUpdateAttendance(request.resource.data.payload.bookingId)));
       allow update, delete: if false;
     }
 
