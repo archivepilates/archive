@@ -14,6 +14,10 @@ service cloud.firestore {
       return signedIn() && request.auth.token.staffId == staffId;
     }
 
+    function sameStudio(studioId) {
+      return signedIn() && request.auth.token.studioId == studioId;
+    }
+
     match /studios/{studioId} {
       allow read: if signedIn();
       allow write: if false;
@@ -31,7 +35,24 @@ service cloud.firestore {
 
     match /bookings/{bookingId} {
       allow read: if isManager() || isInstructor(resource.data.staffId);
-      allow write: if false;
+      allow update: if
+        (isManager() || isInstructor(resource.data.staffId)) &&
+        resource.data.appStatus != 'wait' &&
+        request.resource.data.diff(resource.data).affectedKeys().hasOnly([
+          'attendanceStatus',
+          'syncStatus',
+          'lastChangedBy',
+          'lastMemoPreview',
+          'lastMemoAt',
+          'updatedAt'
+        ]) &&
+        (!request.resource.data.diff(resource.data).affectedKeys().hasAny(['attendanceStatus']) ||
+          request.resource.data.attendanceStatus in ['unchecked', 'attended', 'absent', 'late_cancel']) &&
+        (!request.resource.data.diff(resource.data).affectedKeys().hasAny(['syncStatus']) ||
+          request.resource.data.syncStatus == 'pending') &&
+        (!request.resource.data.diff(resource.data).affectedKeys().hasAny(['lastChangedBy']) ||
+          request.resource.data.lastChangedBy == request.auth.uid);
+      allow create, delete: if false;
     }
 
     match /instructorViews/{viewId} {
@@ -49,6 +70,19 @@ service cloud.firestore {
 
     match /memberMemos/{memoId} {
       allow read, write: if false;
+      allow create: if
+        signedIn() &&
+        request.resource.data.createdByUid == request.auth.uid &&
+        request.resource.data.memoId == memoId &&
+        request.resource.data.syncStatus == 'pending' &&
+        request.resource.data.visibility in ['staff_and_manager', 'manager_only', 'creator_only'] &&
+        request.resource.data.memoType in ['member_note', 'lesson_note', 'private_instructor_note'] &&
+        request.resource.data.content is string &&
+        request.resource.data.content.size() > 0 &&
+        request.resource.data.content.size() <= 2000 &&
+        sameStudio(request.resource.data.studioId) &&
+        (isManager() ||
+          get(/databases/$(database)/documents/bookings/$(request.resource.data.bookingId)).data.staffId == request.auth.token.staffId);
     }
 
     match /notices/{noticeId} {
@@ -63,7 +97,18 @@ service cloud.firestore {
 
     match /writeQueue/{jobId} {
       allow read: if isManager();
-      allow write: if false;
+      allow create: if
+        signedIn() &&
+        sameStudio(request.resource.data.studioId) &&
+        request.resource.data.jobId == jobId &&
+        request.resource.data.createdByUid == request.auth.uid &&
+        request.resource.data.status == 'pending' &&
+        request.resource.data.attempts == 0 &&
+        request.resource.data.maxAttempts == 5 &&
+        request.resource.data.lastError == null &&
+        request.resource.data.type in ['bookingAttendanceUpdate', 'memberMemoCreate'] &&
+        request.resource.data.payload is map;
+      allow update, delete: if false;
     }
 
     match /tokenCache/{tokenKey} {

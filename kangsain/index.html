@@ -10,9 +10,9 @@
   <meta name="mobile-web-app-capable" content="yes">
   <meta name="apple-mobile-web-app-title" content="강사IN">
   <meta name="apple-mobile-web-app-status-bar-style" content="default">
-  <link rel="manifest" href="./manifest.webmanifest?v=11">
-  <link rel="icon" type="image/png" sizes="192x192" href="./icons/icon-192.png?v=11">
-  <link rel="apple-touch-icon" sizes="180x180" href="./icons/apple-touch-icon.png?v=11">
+  <link rel="manifest" href="./manifest.webmanifest?v=12">
+  <link rel="icon" type="image/png" sizes="192x192" href="./icons/icon-192.png?v=12">
+  <link rel="apple-touch-icon" sizes="180x180" href="./icons/apple-touch-icon.png?v=12">
   <style>
     :root {
       --ink: #171717;
@@ -587,9 +587,13 @@
     } from 'https://www.gstatic.com/firebasejs/10.14.1/firebase-auth.js';
     import { getFunctions, httpsCallable } from 'https://www.gstatic.com/firebasejs/10.14.1/firebase-functions.js';
     import {
+      collection,
       doc,
       getDoc,
-      getFirestore
+      getFirestore,
+      serverTimestamp,
+      setDoc,
+      updateDoc
     } from 'https://www.gstatic.com/firebasejs/10.14.1/firebase-firestore.js';
     import {
       getMessaging,
@@ -873,18 +877,28 @@
       const days = viewSnaps.filter((snap) => snap.exists()).map((snap) => snap.data());
       return {
         staffId,
-        staff: { staffId, name: staff.name, role: staff.role },
+        staff: { staffId, name: staff.name, role: staff.role, studioId: staff.studioId },
         days
       };
     }
 
     async function updateAttendance(bookingId, attendanceStatus) {
       if (!bookingId || !attendanceStatus) return;
-      const fn = httpsCallable(appState.functions, functionNames.attendance);
+      const booking = findBooking(bookingId);
+      if (!booking || booking.appStatus === 'wait') return;
       optimisticAttendance(bookingId, attendanceStatus);
       renderApp();
       try {
-        await fn({ bookingId, attendanceStatus });
+        await updateDoc(doc(appState.db, 'bookings', bookingId), {
+          attendanceStatus,
+          syncStatus: 'pending',
+          lastChangedBy: appState.user.uid,
+          updatedAt: serverTimestamp()
+        });
+        await enqueueWriteJob('bookingAttendanceUpdate', {
+          bookingId,
+          attendanceStatus
+        });
       } catch (err) {
         appState.error = friendlyError(err);
         await loadHome();
@@ -919,13 +933,33 @@
       if (!active || !content) return;
       saveMemoButton.disabled = true;
       try {
-        const fn = httpsCallable(appState.functions, functionNames.memo);
-        await fn({
-          bookingId: active.bookingId,
+        const booking = findBooking(active.bookingId);
+        const memoRef = doc(collection(appState.db, 'memberMemos'));
+        await setDoc(memoRef, {
+          memoId: memoRef.id,
+          studioId: booking?.studioId || appState.staff?.studioId || '',
           memberId: active.memberId,
+          memberName: booking?.memberName || active.memberName || '',
           lectureId: active.lectureId,
+          bookingId: active.bookingId,
+          lectureDate: booking?.lectureDate || appState.selectedDate,
+          staffId: appState.staff?.staffId || '',
+          staffName: appState.staff?.name || '',
           memoType: 'member_note',
           visibility: 'staff_and_manager',
+          syncStatus: 'pending',
+          createdByUid: appState.user.uid,
+          createdAt: serverTimestamp(),
+          updatedAt: serverTimestamp(),
+          content
+        });
+        await updateDoc(doc(appState.db, 'bookings', active.bookingId), {
+          lastMemoPreview: content.slice(0, 60),
+          lastMemoAt: serverTimestamp(),
+          updatedAt: serverTimestamp()
+        });
+        await enqueueWriteJob('memberMemoCreate', {
+          memberId: active.memberId,
           content
         });
         modal.classList.remove('open');
@@ -935,6 +969,35 @@
       } finally {
         saveMemoButton.disabled = false;
       }
+    }
+
+    async function enqueueWriteJob(type, payload) {
+      const jobRef = doc(collection(appState.db, 'writeQueue'));
+      const now = serverTimestamp();
+      await setDoc(jobRef, {
+        jobId: jobRef.id,
+        studioId: appState.staff?.studioId || '',
+        type,
+        status: 'pending',
+        attempts: 0,
+        maxAttempts: 5,
+        nextRunAt: now,
+        createdByUid: appState.user.uid,
+        payload,
+        lastError: null,
+        createdAt: now,
+        updatedAt: now
+      });
+    }
+
+    function findBooking(bookingId) {
+      for (const day of appState.days) {
+        for (const lecture of day.lectures || []) {
+          const booking = (lecture.bookings || []).find((item) => item.bookingId === bookingId);
+          if (booking) return booking;
+        }
+      }
+      return null;
     }
 
     async function loadMemoHistory() {
