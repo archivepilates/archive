@@ -121,6 +121,12 @@ function resolvedLessonType(lecture: LectureDoc): LectureDoc["lessonType"] {
 function instructorVisibleTags(tags: MemberTagDoc["tags"]): MemberTagDoc["tags"] {
   return tags.filter((tag) => {
     if (tag.label === "30일 결석 0회") return false;
-    return tag.source === "auto_attendance" || tag.label.startsWith("30일 출석") || tag.label.startsWith("30일 결석");
+    return (
+      tag.source === "auto_attendance" ||
+      tag.source === "auto_memo" ||
+      tag.source === "manual" ||
+      tag.label.startsWith("30일 출석") ||
+      tag.label.startsWith("30일 결석")
+    );
   });
 }

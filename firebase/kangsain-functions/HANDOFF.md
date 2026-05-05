@@ -26,6 +26,7 @@
 - 앱 첫 로딩은 callable 함수가 아니라 Firestore의 `staffs/{staffId}` 및 `instructorViews/{staffId}_{date}`를 직접 읽는다.
 - 출석/결석/메모 입력은 Firestore에 optimistic write 후 `writeQueue`에 작업을 넣고, `scheduledProcessWriteQueue`가 스튜디오메이트 API로 전송한다.
 - 스튜디오메이트 기존 회원 메모는 `/v2/staff/memo?ref_id={memberId}&ref_type=member`에서 받아 `memberMemos`에 `studiomate_{memoId}`로 동기화한다. 앱 히스토리는 Firestore `memberMemos`를 읽는다.
+- 메모 기반 자동 태그는 허리주의/목어깨주의/무릎주의/손목주의/임신·산후/강도조절필요/운동초보/신규회원/오랜만에 방문/최근 컨디션저하 규칙으로 생성한다. 자동 태그에는 `sourceMemoId`, `sourceDate`, `locked`를 저장해 추후 삭제/숨김 처리의 원본 근거로 쓴다.
 - Cloud Run callable 공개 invoker는 조직 정책상 `allUsers` 권한 부여가 막혀 있어 앱의 주 경로에서 의존하지 않도록 조정했다.
 - 30일 출석/결석 태그는 서버 집계 기반으로 `30일 출석 N회`, `30일 결석 N회`를 분리해 표시한다.
 - 출석/결석 처리는 예약확정 회원이면서 수업 시작시간 이후인 경우에만 가능하다.
@@ -38,7 +39,7 @@
 - 앱 명칭은 `아카이브IN`으로 확정했다. 로그인 화면에는 `ARCHIVE IN` 브랜드 텍스트를 표시한다.
 - `scheduledSyncLecturesDaily` 실행 시 `rebuildMemberInsights`가 회원 태그를 자동 생성한다.
 - 자동 태그 1단계는 규칙 기반이다: 30일 출석/결석, 메모 통증 키워드, 최근 출석 10회 기준 강사/시간대 패턴.
-- 강사용 앱의 회원 태그 표시는 30일 출석/결석 태그만 노출한다. 통증/최근강사/시간대 패턴 태그는 운영자 앱에서 다룬다.
+- 강사용 앱의 회원 태그 표시는 예약상태, 고정 자동태그, 강사 수정 태그 영역으로 분리한다. 최근강사/시간대 패턴 태그는 운영자 앱에서 다룬다.
 - 강사용 앱은 14일치 `instructorViews`를 Firestore 실시간 구독한다. 알림 API 폴링으로 특정 수업/날짜가 갱신되면 앱 새로고침 없이 해당 날짜 뷰가 교체된다.
 - 앱 확인 URL은 Firebase Hosting `https://archive-pilates.web.app/kangsain/`를 우선 사용한다. GitHub Pages legacy build가 간헐적으로 멈춰 Firebase Hosting으로 정적 파일을 배포했다.
 

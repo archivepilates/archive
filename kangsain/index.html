@@ -10,9 +10,9 @@
   <meta name="mobile-web-app-capable" content="yes">
   <meta name="apple-mobile-web-app-title" content="아카이브IN">
   <meta name="apple-mobile-web-app-status-bar-style" content="default">
-  <link rel="manifest" href="./manifest.webmanifest?v=23">
-  <link rel="icon" type="image/png" sizes="192x192" href="./icons/icon-192.png?v=23">
-  <link rel="apple-touch-icon" sizes="180x180" href="./icons/apple-touch-icon.png?v=23">
+  <link rel="manifest" href="./manifest.webmanifest?v=24">
+  <link rel="icon" type="image/png" sizes="192x192" href="./icons/icon-192.png?v=24">
+  <link rel="apple-touch-icon" sizes="180x180" href="./icons/apple-touch-icon.png?v=24">
   <style>
     :root {
       --ink: #171717;
@@ -369,6 +369,8 @@
     .chip.wait { color: var(--wait); background: #fff5df; }
     .chip.done { color: #676159; background: #eee9e4; }
     .chip.attendance { padding-inline: 6px; font-size: 11px; }
+    .chip.memo { color: var(--bad); background: #faeee9; }
+    .chip.manual { color: var(--brand-dark); background: #fff1e7; }
 
     .chevron {
       color: var(--muted);
@@ -388,25 +390,10 @@
     }
 
     .member {
-      display: grid;
-      grid-template-columns: 44px minmax(0, 1fr);
-      gap: 8px;
-      align-items: start;
       padding: 10px;
       border: 1px solid var(--line);
       border-radius: 8px;
       background: #fff;
-    }
-
-    .badge {
-      display: grid;
-      place-items: center;
-      width: 52px;
-      height: 52px;
-      border-radius: 50%;
-      background: #f5f1ed;
-      color: #5f574f;
-      font-weight: 850;
     }
 
     .member-main {
@@ -419,12 +406,7 @@
       gap: 4px;
       min-width: 0;
       flex-wrap: nowrap;
-      overflow-x: auto;
-      scrollbar-width: none;
-    }
-
-    .member-row::-webkit-scrollbar {
-      display: none;
+      justify-content: space-between;
     }
 
     .member-name {
@@ -432,6 +414,29 @@
       font-size: 18px;
       font-weight: 850;
       white-space: nowrap;
+    }
+
+    .tag-field {
+      display: flex;
+      align-items: flex-start;
+      gap: 6px;
+      margin-top: 8px;
+      min-width: 0;
+    }
+
+    .tag-label {
+      flex: 0 0 auto;
+      padding-top: 5px;
+      color: var(--muted);
+      font-size: 10px;
+      font-weight: 850;
+    }
+
+    .tag-list {
+      display: flex;
+      flex-wrap: wrap;
+      gap: 4px;
+      min-width: 0;
     }
 
     .member-actions {
@@ -589,8 +594,7 @@
       .lecture-head { grid-template-columns: 62px 1fr 24px; gap: 10px; }
       .time { font-size: 18px; }
       .lecture-title { font-size: 18px; }
-      .member { grid-template-columns: 42px minmax(0, 1fr); padding: 9px; gap: 7px; }
-      .badge { width: 42px; height: 42px; }
+      .member { padding: 9px; }
       .member-name { font-size: 17px; }
       .chip.attendance { font-size: 10px; padding-inline: 5px; }
     }
@@ -832,23 +836,20 @@
 
     function renderBooking(lecture, booking) {
       const attendanceLocked = !canUpdateAttendance(lecture, booking);
-      const tags = instructorVisibleTags(booking.tags || []);
-      const headlineTags = tags.slice(0, 3);
-      const detailTags = tags.slice(3);
+      const tagGroups = memberTagGroups(booking.tags || []);
       const showTicket = resolvedLessonType(lecture) === 'private';
       return `
         <div class="member">
-          <div class="badge">${escapeHtml(statusShort(booking))}</div>
           <div class="member-main">
             <div class="member-row">
               <span class="member-name">${escapeHtml(booking.memberName || '회원')}</span>
-              ${headlineTags.map((tag) => renderTagChip(tag)).join('')}
               <span class="chip ${statusClass(booking)}">${statusLabel(booking)}</span>
             </div>
-            <div class="chips">
+            ${renderTagField('고정', tagGroups.fixed)}
+            ${renderTagField('강사', tagGroups.manual)}
+            <div class="chips ${showTicket || booking.lastMemoPreview ? '' : 'hidden'}">
               ${showTicket && booking.ticketName ? `<span class="chip">${escapeHtml(booking.ticketName)}</span>` : ''}
               ${showTicket && booking.ticketRemainingCount != null ? `<span class="chip">${booking.ticketRemainingCount}회</span>` : ''}
-              ${detailTags.map(renderTagChip).join('')}
               ${booking.lastMemoPreview ? `<span class="chip">${escapeHtml(booking.lastMemoPreview)}</span>` : ''}
             </div>
             <div class="member-actions">
@@ -1185,16 +1186,36 @@
     }
 
     function renderTagChip(tag) {
-      const className = `${tag.level === 'warning' ? 'wait' : tag.level === 'danger' ? 'bad' : tag.level === 'positive' ? 'good' : ''} ${tag.source === 'auto_attendance' ? 'attendance' : ''}`;
-      return `<span class="chip ${className.trim()}">${escapeHtml(tag.label || tag.tagId)}</span>`;
+      const className = [
+        tag.level === 'warning' ? 'wait' : tag.level === 'danger' ? 'bad' : tag.level === 'positive' ? 'good' : '',
+        tag.source === 'auto_attendance' ? 'attendance' : '',
+        tag.source === 'auto_memo' ? 'memo' : '',
+        tag.source === 'manual' ? 'manual' : ''
+      ].filter(Boolean).join(' ');
+      const title = [tag.sourceDate ? `메모일자 ${tag.sourceDate}` : '', tag.sourceMemoId ? `메모 ${tag.sourceMemoId}` : ''].filter(Boolean).join(' · ');
+      return `<span class="chip ${className}" title="${escapeAttr(title)}">${escapeHtml(tag.label || tag.tagId)}</span>`;
     }
 
-    function instructorVisibleTags(tags) {
-      return tags.filter((tag) => {
+    function renderTagField(label, tags) {
+      if (!tags.length) return '';
+      return `
+        <div class="tag-field">
+          <span class="tag-label">${label}</span>
+          <div class="tag-list">${tags.map(renderTagChip).join('')}</div>
+        </div>
+      `;
+    }
+
+    function memberTagGroups(tags) {
+      const visible = tags.filter((tag) => {
         const label = tag.label || '';
         if (/^30일 결석 0회$/.test(label)) return false;
-        return tag.source === 'auto_attendance' || /^30일 출석/.test(label) || /^30일 결석/.test(label);
+        return ['auto_attendance', 'auto_memo', 'manual'].includes(tag.source) || /^30일 출석/.test(label) || /^30일 결석/.test(label);
       });
+      return {
+        fixed: visible.filter((tag) => tag.source !== 'manual'),
+        manual: visible.filter((tag) => tag.source === 'manual')
+      };
     }
 
     function isLectureDone(lecture) {

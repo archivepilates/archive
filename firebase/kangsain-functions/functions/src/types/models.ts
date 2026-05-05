@@ -161,6 +161,9 @@ export interface MemberTagDoc {
     label: string;
     level: "info" | "positive" | "warning" | "danger";
     source: "manual" | "auto_attendance" | "auto_memo" | "auto_pattern";
+    sourceMemoId?: string;
+    sourceDate?: string;
+    locked?: boolean;
     updatedAt: Timestamp;
   }>;
   updatedAt: Timestamp;

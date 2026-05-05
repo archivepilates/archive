@@ -5,19 +5,17 @@ import { addDays, nowTimestamp } from "../utils/date";
 
 type MemberTag = MemberTagDoc["tags"][number];
 
-const PAIN_KEYWORDS = [
-  "통증",
-  "허리",
-  "목",
-  "어깨",
-  "무릎",
-  "손목",
-  "발목",
-  "고관절",
-  "골반",
-  "디스크",
-  "부상",
-  "재활",
+const MEMO_TAG_RULES = [
+  { tagId: "waist_caution", label: "허리주의", keywords: ["허리", "요통", "디스크", "척추", "좌골"] },
+  { tagId: "neck_shoulder_caution", label: "목어깨주의", keywords: ["목", "어깨", "승모근", "라운드숄더"] },
+  { tagId: "knee_caution", label: "무릎주의", keywords: ["무릎", "슬개", "반월상"] },
+  { tagId: "wrist_caution", label: "손목주의", keywords: ["손목", "손가락", "터널증후군"] },
+  { tagId: "pregnancy_postpartum", label: "임신/산후", keywords: ["임신", "산후", "출산", "산전", "임산부"] },
+  { tagId: "intensity_control", label: "강도조절필요", keywords: ["강도", "무리", "약하게", "조절", "힘들", "천천히"] },
+  { tagId: "beginner", label: "운동초보", keywords: ["초보", "입문", "운동 처음", "필라테스 처음"] },
+  { tagId: "new_member", label: "신규회원", keywords: ["신규", "첫수업", "첫 수업", "체험", "신입"] },
+  { tagId: "returning_after_gap", label: "오랜만에 방문", keywords: ["오랜만", "오랫만", "복귀", "오래 쉬"] },
+  { tagId: "condition_down", label: "최근 컨디션저하", keywords: ["컨디션", "피곤", "감기", "몸살", "어지러", "저하", "불편"] },
 ];
 
 export async function rebuildMemberInsights(input: {
@@ -110,13 +108,16 @@ function buildAutoTags(bookings: BookingDoc[], memos: MemberMemoDoc[]): MemberTa
     },
   );
 
-  const painLabels = painTags(memos);
-  painLabels.forEach((label) => {
+  const memoTags = buildMemoTags(memos);
+  memoTags.forEach((tag) => {
     tags.push({
-      tagId: `pain_${label}`,
-      label,
+      tagId: `memo_${tag.ruleId}_${tag.memoId}`,
+      label: tag.label,
       level: "warning",
       source: "auto_memo",
+      sourceMemoId: tag.memoId,
+      sourceDate: tag.sourceDate,
+      locked: true,
       updatedAt: now,
     });
   });
@@ -150,12 +151,26 @@ function buildAutoTags(bookings: BookingDoc[], memos: MemberMemoDoc[]): MemberTa
   return tags;
 }
 
-function painTags(memos: MemberMemoDoc[]): string[] {
-  const text = memos
-    .map((memo) => memo.content)
-    .join(" ")
-    .toLowerCase();
-  return PAIN_KEYWORDS.filter((word) => text.includes(word)).slice(0, 3).map((word) => `주의 ${word}`);
+function buildMemoTags(memos: MemberMemoDoc[]): Array<{ ruleId: string; label: string; memoId: string; sourceDate: string }> {
+  const sorted = [...memos].sort((a, b) => (b.createdAt?.toMillis() || 0) - (a.createdAt?.toMillis() || 0));
+  const tags: Array<{ ruleId: string; label: string; memoId: string; sourceDate: string }> = [];
+  for (const rule of MEMO_TAG_RULES) {
+    const memo = sorted.find((item) => rule.keywords.some((keyword) => item.content.includes(keyword)));
+    if (!memo) continue;
+    tags.push({
+      ruleId: rule.tagId,
+      label: rule.label,
+      memoId: memo.memoId,
+      sourceDate: memoDate(memo),
+    });
+  }
+  return tags.slice(0, 5);
+}
+
+function memoDate(memo: MemberMemoDoc): string {
+  const date = memo.createdAt?.toDate();
+  if (date) return new Intl.DateTimeFormat("ko-KR", { timeZone: "Asia/Seoul", month: "numeric", day: "numeric" }).format(date);
+  return memo.lectureDate || "";
 }
 
 function topValue(values: string[]): { value: string; count: number } | null {
