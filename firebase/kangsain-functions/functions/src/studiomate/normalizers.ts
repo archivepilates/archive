@@ -73,6 +73,7 @@ export function normalizeBooking(rawLecture: any, rawBooking: any, studioId: str
     memberId: stringValue(member.id ?? rawBooking.user_id ?? rawBooking.member_id),
     memberName: stringValue(member.name ?? rawBooking.name),
     memberPhone: digitsOnly(member.mobile ?? member.phone ?? rawBooking.mobile ?? rawBooking.phone),
+    memberRegisteredAt: parseStudioMateDateTime(member.registered_at ?? rawBooking.registered_at),
     staffId: stringValue(
       staff.id ?? rawLecture.staff_id ?? rawLecture.instructor_id ?? rawLecture.staff_name ?? staff.name,
     ),

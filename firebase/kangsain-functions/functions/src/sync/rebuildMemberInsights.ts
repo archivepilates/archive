@@ -1,4 +1,4 @@
-import type { BookingDoc, MemberMemoDoc, MemberTagDoc } from "../types/models";
+import type { BookingDoc, MemberMemoDoc, MemberProfileDoc, MemberTagDoc } from "../types/models";
 import { refs } from "../firestore/refs";
 import { saveMemberTags } from "../firestore/memberTagRepository";
 import { addDays, nowTimestamp } from "../utils/date";
@@ -13,7 +13,6 @@ const MEMO_TAG_RULES = [
   { tagId: "pregnancy_postpartum", label: "임신/산후", keywords: ["임신", "산후", "출산", "산전", "임산부"] },
   { tagId: "intensity_control", label: "강도조절필요", keywords: ["강도", "무리", "약하게", "조절", "힘들", "천천히"] },
   { tagId: "beginner", label: "운동초보", keywords: ["초보", "입문", "운동 처음", "필라테스 처음"] },
-  { tagId: "new_member", label: "신규회원", keywords: ["신규", "첫수업", "첫 수업", "체험", "신입"] },
   { tagId: "returning_after_gap", label: "오랜만에 방문", keywords: ["오랜만", "오랫만", "복귀", "오래 쉬"] },
   { tagId: "condition_down", label: "최근 컨디션저하", keywords: ["컨디션", "피곤", "감기", "몸살", "어지러", "저하", "불편"] },
 ];
@@ -34,16 +33,22 @@ export async function rebuildMemberInsights(input: {
     });
 
   const memberIds = [...rowsByMember.keys()];
-  const [memoMap, currentTagMap] = await Promise.all([
+  const [memoMap, currentTagMap, profileMap] = await Promise.all([
     getMemoMap(input.studioId, memberIds),
     getCurrentTagMap(memberIds),
+    getProfileMap(input.studioId, memberIds),
   ]);
 
   await Promise.all(
     memberIds.map((memberId) => {
       const current = currentTagMap.get(memberId);
       const manualTags = current?.tags.filter((tag) => tag.source === "manual") || [];
-      const autoTags = buildAutoTags(rowsByMember.get(memberId) || [], memoMap.get(memberId) || []);
+      const autoTags = buildAutoTags(
+        rowsByMember.get(memberId) || [],
+        memoMap.get(memberId) || [],
+        input.endDate,
+        profileMap.get(memberId),
+      );
       const tags = [...manualTags, ...autoTags].slice(0, 8);
       const doc: MemberTagDoc = {
         memberId,
@@ -85,7 +90,22 @@ async function getMemoMap(studioId: string, memberIds: string[]): Promise<Map<st
   return map;
 }
 
-function buildAutoTags(bookings: BookingDoc[], memos: MemberMemoDoc[]): MemberTag[] {
+async function getProfileMap(studioId: string, memberIds: string[]): Promise<Map<string, MemberProfileDoc>> {
+  const snaps = await Promise.all(memberIds.map((memberId) => refs.memberProfile(memberId).get()));
+  return new Map(
+    snaps
+      .map((snap) => snap.data())
+      .filter((doc): doc is MemberProfileDoc => Boolean(doc && doc.studioId === studioId))
+      .map((doc) => [doc.memberId, doc]),
+  );
+}
+
+function buildAutoTags(
+  bookings: BookingDoc[],
+  memos: MemberMemoDoc[],
+  endDate: string,
+  profile?: MemberProfileDoc,
+): MemberTag[] {
   const now = nowTimestamp();
   const tags: MemberTag[] = [];
   const attended = bookings.filter((booking) => booking.attendanceStatus === "attended").length;
@@ -121,6 +141,19 @@ function buildAutoTags(bookings: BookingDoc[], memos: MemberMemoDoc[]): MemberTa
       updatedAt: now,
     });
   });
+
+  const registeredAt = profile?.registeredAt?.toDate() || earliestRegisteredAt(bookings);
+  if (isNewMember(registeredAt, endDate)) {
+    tags.push({
+      tagId: "new_member_registered_30d",
+      label: "신규회원",
+      level: "info",
+      source: "auto_profile",
+      sourceDate: registeredAt ? formatKstShortDate(registeredAt) : "",
+      locked: true,
+      updatedAt: now,
+    });
+  }
 
   const recentAttended = bookings
     .filter((booking) => booking.attendanceStatus === "attended")
@@ -169,8 +202,26 @@ function buildMemoTags(memos: MemberMemoDoc[]): Array<{ ruleId: string; label: s
 
 function memoDate(memo: MemberMemoDoc): string {
   const date = memo.createdAt?.toDate();
-  if (date) return new Intl.DateTimeFormat("ko-KR", { timeZone: "Asia/Seoul", month: "numeric", day: "numeric" }).format(date);
+  if (date) return formatKstShortDate(date);
   return memo.lectureDate || "";
+}
+
+function earliestRegisteredAt(bookings: BookingDoc[]): Date | null {
+  return bookings
+    .map((booking) => booking.memberRegisteredAt?.toDate())
+    .filter((date): date is Date => Boolean(date))
+    .sort((a, b) => a.getTime() - b.getTime())[0] || null;
+}
+
+function isNewMember(registeredAt: Date | null, endDate: string): boolean {
+  if (!registeredAt) return false;
+  const end = new Date(`${endDate}T23:59:59+09:00`);
+  const ageDays = (end.getTime() - registeredAt.getTime()) / (24 * 60 * 60 * 1000);
+  return ageDays >= 0 && ageDays <= 30;
+}
+
+function formatKstShortDate(date: Date): string {
+  return new Intl.DateTimeFormat("ko-KR", { timeZone: "Asia/Seoul", month: "numeric", day: "numeric" }).format(date);
 }
 
 function topValue(values: string[]): { value: string; count: number } | null {

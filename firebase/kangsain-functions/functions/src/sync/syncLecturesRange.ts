@@ -12,6 +12,7 @@ import { rebuildInstructorViewsForDates } from "./rebuildInstructorViews";
 import { rebuildAttendanceSummaries } from "./rebuildAttendanceSummaries";
 import { rebuildMemberInsights } from "./rebuildMemberInsights";
 import { syncStudioMateMemberMemos } from "./syncStudioMateMemberMemos";
+import { syncStudioMateMemberProfiles } from "./syncStudioMateMemberProfiles";
 
 export async function syncLecturesRange(input: {
   studioId?: string;
@@ -70,6 +71,11 @@ export async function syncLecturesRange(input: {
     });
     phase = "sync studiomate member memos";
     await syncStudioMateMemberMemos({
+      studioId,
+      bookings: allBookings,
+    });
+    phase = "sync studiomate member profiles";
+    await syncStudioMateMemberProfiles({
       studioId,
       bookings: allBookings,
     });

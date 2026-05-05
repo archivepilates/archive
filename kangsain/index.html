@@ -370,6 +370,7 @@
     .chip.done { color: #676159; background: #eee9e4; }
     .chip.attendance { padding-inline: 6px; font-size: 11px; }
     .chip.memo { color: var(--bad); background: #faeee9; }
+    .chip.profile { color: #6b5336; background: #f2ece4; }
     .chip.manual { color: var(--brand-dark); background: #fff1e7; }
 
     .chevron {
@@ -1190,9 +1191,11 @@
         tag.level === 'warning' ? 'wait' : tag.level === 'danger' ? 'bad' : tag.level === 'positive' ? 'good' : '',
         tag.source === 'auto_attendance' ? 'attendance' : '',
         tag.source === 'auto_memo' ? 'memo' : '',
+        tag.source === 'auto_profile' ? 'profile' : '',
         tag.source === 'manual' ? 'manual' : ''
       ].filter(Boolean).join(' ');
-      const title = [tag.sourceDate ? `메모일자 ${tag.sourceDate}` : '', tag.sourceMemoId ? `메모 ${tag.sourceMemoId}` : ''].filter(Boolean).join(' · ');
+      const dateLabel = tag.source === 'auto_profile' ? '등록일' : '메모일자';
+      const title = [tag.sourceDate ? `${dateLabel} ${tag.sourceDate}` : '', tag.sourceMemoId ? `메모 ${tag.sourceMemoId}` : ''].filter(Boolean).join(' · ');
       return `<span class="chip ${className}" title="${escapeAttr(title)}">${escapeHtml(tag.label || tag.tagId)}</span>`;
     }
 
@@ -1210,7 +1213,7 @@
       const visible = tags.filter((tag) => {
         const label = tag.label || '';
         if (/^30일 결석 0회$/.test(label)) return false;
-        return ['auto_attendance', 'auto_memo', 'manual'].includes(tag.source) || /^30일 출석/.test(label) || /^30일 결석/.test(label);
+        return ['auto_attendance', 'auto_memo', 'auto_profile', 'manual'].includes(tag.source) || /^30일 출석/.test(label) || /^30일 결석/.test(label);
       });
       return {
         fixed: visible.filter((tag) => tag.source !== 'manual'),

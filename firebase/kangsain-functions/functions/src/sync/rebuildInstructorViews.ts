@@ -124,6 +124,7 @@ function instructorVisibleTags(tags: MemberTagDoc["tags"]): MemberTagDoc["tags"]
     return (
       tag.source === "auto_attendance" ||
       tag.source === "auto_memo" ||
+      tag.source === "auto_profile" ||
       tag.source === "manual" ||
       tag.label.startsWith("30일 출석") ||
       tag.label.startsWith("30일 결석")

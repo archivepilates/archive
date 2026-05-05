@@ -65,6 +65,7 @@ export interface BookingDoc {
   memberId: string;
   memberName: string;
   memberPhone: string;
+  memberRegisteredAt: Timestamp | null;
   staffId: string;
   staffName: string;
   lectureDate: string;
@@ -160,12 +161,21 @@ export interface MemberTagDoc {
     tagId: string;
     label: string;
     level: "info" | "positive" | "warning" | "danger";
-    source: "manual" | "auto_attendance" | "auto_memo" | "auto_pattern";
+    source: "manual" | "auto_attendance" | "auto_memo" | "auto_profile" | "auto_pattern";
     sourceMemoId?: string;
     sourceDate?: string;
     locked?: boolean;
     updatedAt: Timestamp;
   }>;
+  updatedAt: Timestamp;
+}
+
+export interface MemberProfileDoc {
+  memberId: string;
+  studioId: string;
+  name: string;
+  registeredAt: Timestamp | null;
+  syncedAt: Timestamp;
   updatedAt: Timestamp;
 }
 
