@@ -66,6 +66,12 @@ export class ManagerClient {
         : [];
   }
 
+  async getStaffs(): Promise<any[]> {
+    const query = new URLSearchParams({ studio_id: this.studioId });
+    const result = await this.request("GET", `/api/staff?${query.toString()}`, true);
+    return Array.isArray(result.data) ? result.data : Array.isArray(result.data?.data) ? result.data.data : [];
+  }
+
   async getCommonNotices(): Promise<any[]> {
     const query = new URLSearchParams({
       studio_id: this.studioId,

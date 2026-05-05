@@ -15,6 +15,11 @@ export async function getStaffByEmail(email: string): Promise<StaffDoc | null> {
   return snap.empty ? null : snap.docs[0].data();
 }
 
+export async function getStaffByPhone(phone: string): Promise<StaffDoc | null> {
+  const snap = await refs.staffs().where("phone", "==", phone).where("active", "==", true).limit(1).get();
+  return snap.empty ? null : snap.docs[0].data();
+}
+
 export async function getActiveStaffs(studioId: string): Promise<StaffDoc[]> {
   const snap = await refs.staffs().where("studioId", "==", studioId).where("active", "==", true).get();
   return snap.docs.map((doc) => doc.data());

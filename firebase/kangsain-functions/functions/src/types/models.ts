@@ -27,6 +27,16 @@ export interface StaffDoc {
   studioId: string;
   name: string;
   phone?: string;
+  phoneLast4?: string;
+  pinHash?: string;
+  pinSalt?: string;
+  pinSetAt?: Timestamp | null;
+  tempCodeHash?: string;
+  tempCodeSalt?: string;
+  tempCodeExpiresAt?: Timestamp | null;
+  tempCodeIssuedAt?: Timestamp | null;
+  loginFailedCount?: number;
+  loginLockedUntil?: Timestamp | null;
   role: StaffRole;
   active: boolean;
   studiomateStaffId: string;

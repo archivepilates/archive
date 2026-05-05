@@ -15,10 +15,16 @@ import { submitMemberMemoHandler } from "./callable/submitMemberMemo";
 import { getMemberMemoHistoryHandler } from "./callable/getMemberMemoHistory";
 import { searchMembersHandler } from "./callable/searchMembers";
 import { registerFcmTokenHandler } from "./callable/registerFcmToken";
+import {
+  adminIssueStaffTempCodeHandler,
+  loginStaffWithPinHandler,
+  setupStaffPinWithTempCodeHandler,
+} from "./callable/staffPinAuth";
 import { sendAttendanceReminder } from "./push/sendAttendanceReminder";
 import { requireStaff, requireManager } from "./security/authGuards";
+import { syncManagerStaffs } from "./sync/syncManagerStaffs";
 
-const callableOptions = { region: REGION, secrets: allSecrets, invoker: "public" as const };
+const callableOptions = { region: REGION, secrets: allSecrets };
 const longCallableOptions = { ...callableOptions, timeoutSeconds: 540, memory: "512MiB" as const };
 const scheduleOptions = {
   region: REGION,
@@ -76,6 +82,22 @@ export const getInstructorHome = onCall(callableOptions, async (request) => {
   }
 });
 
+export const loginStaffWithPin = onCall(callableOptions, async (request) => {
+  try {
+    return await loginStaffWithPinHandler(request);
+  } catch (err) {
+    throw toHttpsError(err);
+  }
+});
+
+export const setupStaffPinWithTempCode = onCall(callableOptions, async (request) => {
+  try {
+    return await setupStaffPinWithTempCodeHandler(request);
+  } catch (err) {
+    throw toHttpsError(err);
+  }
+});
+
 export const submitBookingAttendance = onCall(callableOptions, async (request) => {
   try {
     return await submitBookingAttendanceHandler(request);
@@ -116,6 +138,15 @@ export const registerFcmToken = onCall(callableOptions, async (request) => {
   }
 });
 
+export const adminIssueStaffTempCode = onCall(callableOptions, async (request) => {
+  try {
+    const staff = await requireStaff(request);
+    return await adminIssueStaffTempCodeHandler(request, staff);
+  } catch (err) {
+    throw toHttpsError(err);
+  }
+});
+
 export const adminSyncLecturesRange = onCall(longCallableOptions, async (request) => {
   try {
     const staff = await requireStaff(request);
@@ -128,6 +159,16 @@ export const adminSyncLecturesRange = onCall(longCallableOptions, async (request
     return await syncLecturesRange({ studioId: staff.studioId, startDate, endDate });
   } catch (err) {
     logger.error("adminSyncLecturesRange failed", err);
+    throw toHttpsError(err);
+  }
+});
+
+export const adminSyncManagerStaffs = onCall(callableOptions, async (request) => {
+  try {
+    const staff = await requireStaff(request);
+    requireManager(staff);
+    return await syncManagerStaffs({ studioId: staff.studioId, managerStaffId: staff.staffId });
+  } catch (err) {
     throw toHttpsError(err);
   }
 });

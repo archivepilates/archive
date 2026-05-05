@@ -530,6 +530,54 @@
       color: var(--muted);
     }
 
+    .loading-brand {
+      display: grid;
+      gap: 14px;
+      justify-items: center;
+    }
+
+    .loading-logo {
+      position: relative;
+      display: grid;
+      place-items: center;
+      width: 78px;
+      height: 78px;
+      overflow: hidden;
+      border: 1px solid #f0d2c0;
+      border-radius: 20px;
+      color: var(--brand);
+      background: #fff8f3;
+      font-size: 26px;
+      font-weight: 900;
+      box-shadow: var(--shadow);
+      isolation: isolate;
+    }
+
+    .loading-logo::before {
+      content: "";
+      position: absolute;
+      inset: auto 0 0;
+      height: 100%;
+      background: var(--brand);
+      transform: translateY(100%);
+      animation: logoFill 1.35s ease-in-out infinite;
+      z-index: -1;
+    }
+
+    .loading-logo::after {
+      content: "IN";
+      position: absolute;
+      color: #fff;
+      opacity: 0;
+      animation: logoTextFill 1.35s ease-in-out infinite;
+    }
+
+    .loading-brand span {
+      color: var(--muted);
+      font-size: 13px;
+      font-weight: 760;
+    }
+
     .skeleton {
       width: 100%;
       display: grid;
@@ -713,6 +761,18 @@
       50% { opacity: 0.68; }
     }
 
+    @keyframes logoFill {
+      0% { transform: translateY(100%); }
+      55% { transform: translateY(0); }
+      100% { transform: translateY(-105%); }
+    }
+
+    @keyframes logoTextFill {
+      0%, 28% { opacity: 0; }
+      45%, 82% { opacity: 1; }
+      100% { opacity: 0; }
+    }
+
     @media (prefers-reduced-motion: reduce) {
       *,
       *::before,
@@ -785,7 +845,8 @@
       signInWithEmailAndPassword,
       signInWithPopup,
       signInWithRedirect,
-      signOut
+      signOut,
+      updatePassword
     } from 'https://www.gstatic.com/firebasejs/10.14.1/firebase-auth.js';
     import { getFunctions, httpsCallable } from 'https://www.gstatic.com/firebasejs/10.14.1/firebase-functions.js';
     import {
@@ -884,19 +945,27 @@
             <div class="login-mark">IN</div>
             <div class="login-brand">ARCHIVE IN</div>
             <h1>아카이브IN</h1>
-            <p>테스트 계정으로 로그인하고 오늘 수업을 확인하세요</p>
+            <p>강사 휴대폰번호로 로그인하세요</p>
             <div class="email-login">
-              <input id="emailInput" type="email" autocomplete="email" placeholder="이메일" value="home@archivepilates.com">
-              <input id="passwordInput" type="password" autocomplete="current-password" placeholder="비밀번호">
-              <button id="emailLoginButton" class="primary" type="button" ${warning ? 'disabled' : ''}>테스트 로그인</button>
+              <input id="phoneInput" type="tel" inputmode="numeric" autocomplete="tel" placeholder="휴대폰번호">
+              <input id="pinInput" type="password" inputmode="numeric" autocomplete="current-password" placeholder="비밀번호 또는 임시코드">
+              <button id="phoneLoginButton" class="primary" type="button">로그인</button>
             </div>
             <div class="config-warning" style="${warning ? 'display:block' : ''}">${escapeHtml(warning)}</div>
+            <div class="email-login" style="margin-top:18px;">
+              <input id="setupPhoneInput" type="tel" inputmode="numeric" autocomplete="tel" placeholder="휴대폰번호">
+              <input id="tempCodeInput" type="password" inputmode="numeric" placeholder="운영자 임시코드">
+              <input id="newPinInput" type="password" inputmode="numeric" autocomplete="new-password" placeholder="새 비밀번호 6자리 이상">
+              <input id="newPinConfirmInput" type="password" inputmode="numeric" autocomplete="new-password" placeholder="새 비밀번호 확인">
+              <button id="setupPinButton" class="soft-button" type="button">임시코드로 비밀번호 변경</button>
+            </div>
           </section>
         </main>
       `;
-      document.getElementById('emailLoginButton')?.addEventListener('click', signInWithEmail);
-      document.getElementById('passwordInput')?.addEventListener('keydown', (event) => {
-        if (event.key === 'Enter') signInWithEmail();
+      document.getElementById('phoneLoginButton')?.addEventListener('click', signInWithPhonePin);
+      document.getElementById('setupPinButton')?.addEventListener('click', setupPhonePin);
+      document.getElementById('pinInput')?.addEventListener('keydown', (event) => {
+        if (event.key === 'Enter') signInWithPhonePin();
       });
     }
 
@@ -931,10 +1000,9 @@
       if (appState.loading) {
         return `
           <section class="loading">
-            <div class="skeleton">
-              <div class="skeleton-line"></div>
-              <div class="skeleton-line"></div>
-              <div class="skeleton-line"></div>
+            <div class="loading-brand">
+              <div class="loading-logo">IN</div>
+              <span>아카이브IN 동기화 확인 중</span>
             </div>
           </section>
         `;
@@ -1072,6 +1140,48 @@
         appState.error = friendlyError(err);
         renderLogin(appState.error);
       }
+    }
+
+    async function signInWithPhonePin() {
+      const phone = document.getElementById('phoneInput')?.value.trim();
+      const pin = document.getElementById('pinInput')?.value.trim();
+      if (!phone || !pin) {
+        appState.error = '휴대폰번호와 비밀번호를 입력하세요';
+        renderLogin(appState.error);
+        return;
+      }
+      try {
+        await signInWithEmailAndPassword(appState.auth, phoneLoginEmail(phone), pin);
+      } catch (err) {
+        appState.error = friendlyError(err);
+        renderLogin(appState.error);
+      }
+    }
+
+    async function setupPhonePin() {
+      const phone = document.getElementById('setupPhoneInput')?.value.trim();
+      const tempCode = document.getElementById('tempCodeInput')?.value.trim();
+      const pin = document.getElementById('newPinInput')?.value.trim();
+      const confirm = document.getElementById('newPinConfirmInput')?.value.trim();
+      if (!phone || !tempCode || !pin || pin !== confirm) {
+        appState.error = '휴대폰번호, 임시코드, 새 비밀번호 확인을 입력하세요';
+        renderLogin(appState.error);
+        return;
+      }
+      try {
+        const userCredential = await signInWithEmailAndPassword(appState.auth, phoneLoginEmail(phone), tempCode);
+        await updatePassword(userCredential.user, pin);
+        showToast('비밀번호가 변경됐습니다');
+      } catch (err) {
+        appState.error = friendlyError(err);
+        renderLogin(appState.error);
+      }
+    }
+
+    function phoneLoginEmail(phone) {
+      const digits = String(phone || '').replace(/\D/g, '');
+      if (!digits) throw new Error('휴대폰번호를 입력하세요');
+      return `p${digits}@archivepilates.com`;
     }
 
     async function loadHome() {
