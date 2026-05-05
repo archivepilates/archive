@@ -1,10 +1,10 @@
-const CACHE_NAME = 'archive-in-v21';
+const CACHE_NAME = 'archive-in-v22';
 const CORE_ASSETS = [
   './',
-  './manifest.webmanifest?v=21',
-  './icons/icon-192.png?v=21',
-  './icons/icon-512.png?v=21',
-  './icons/apple-touch-icon.png?v=21'
+  './manifest.webmanifest?v=22',
+  './icons/icon-192.png?v=22',
+  './icons/icon-512.png?v=22',
+  './icons/apple-touch-icon.png?v=22'
 ];
 
 self.addEventListener('install', (event) => {
@@ -42,8 +42,8 @@ self.addEventListener('push', (event) => {
   event.waitUntil(
     self.registration.showNotification(notification.title || '아카이브IN', {
       body: notification.body || '',
-      icon: './icons/icon-192.png?v=21',
-      badge: './icons/icon-192.png?v=21',
+      icon: './icons/icon-192.png?v=22',
+      badge: './icons/icon-192.png?v=22',
       data: payload.data || {}
     })
   );

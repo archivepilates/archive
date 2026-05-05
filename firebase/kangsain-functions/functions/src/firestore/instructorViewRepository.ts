@@ -2,7 +2,7 @@ import type { InstructorViewDoc } from "../types/models";
 import { refs } from "./refs";
 
 export async function saveInstructorView(view: InstructorViewDoc): Promise<void> {
-  await refs.instructorView(view.staffId, view.date).set(view, { merge: true });
+  await refs.instructorView(view.staffId, view.date).set(view);
 }
 
 export async function getInstructorViews(staffId: string, dates: string[]): Promise<InstructorViewDoc[]> {

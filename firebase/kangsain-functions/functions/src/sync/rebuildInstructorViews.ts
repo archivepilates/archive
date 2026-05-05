@@ -62,9 +62,6 @@ function buildInstructorView(
         uncheckedAttendanceCount: lectureBookings.filter(
           (booking) => booking.appStatus === "reserved" && booking.attendanceStatus === "unchecked",
         ).length,
-        hasTodayChange: lectureBookings.some(
-          (booking) => booking.sourceUpdatedAt && booking.sourceUpdatedAt.toMillis() > startOfKstDate(date).getTime(),
-        ),
         bookings: lectureBookings.map((booking) => ({
           bookingId: booking.bookingId,
           memberId: booking.memberId,
@@ -122,9 +119,8 @@ function resolvedLessonType(lecture: LectureDoc): LectureDoc["lessonType"] {
 }
 
 function instructorVisibleTags(tags: MemberTagDoc["tags"]): MemberTagDoc["tags"] {
-  return tags.filter((tag) => tag.source === "auto_attendance" || tag.label.startsWith("30일 출석"));
-}
-
-function startOfKstDate(date: string): Date {
-  return new Date(`${date}T00:00:00+09:00`);
+  return tags.filter((tag) => {
+    if (tag.label === "30일 결석 0회") return false;
+    return tag.source === "auto_attendance" || tag.label.startsWith("30일 출석") || tag.label.startsWith("30일 결석");
+  });
 }
