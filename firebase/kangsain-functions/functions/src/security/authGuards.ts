@@ -1,12 +1,14 @@
 import type { CallableRequest } from "firebase-functions/v2/https";
 import { AppError } from "../utils/errors";
-import { getStaffByUid } from "../firestore/staffRepository";
+import { getStaffByEmail, getStaffByUid } from "../firestore/staffRepository";
 import type { StaffDoc } from "../types/models";
 
 export async function requireStaff(request: CallableRequest): Promise<StaffDoc> {
-  const uid = request.auth?.uid;
+  const auth = request.auth;
+  const uid = auth?.uid;
   if (!uid) throw new AppError("AUTH_REQUIRED", "로그인이 필요합니다");
-  const staff = await getStaffByUid(uid);
+  const email = String(auth.token.email || "").toLowerCase();
+  const staff = (await getStaffByUid(uid)) || (email ? await getStaffByEmail(email) : null);
   if (!staff || !staff.active) throw new AppError("PERMISSION_DENIED", "사용 가능한 강사 계정이 없습니다");
   return staff;
 }

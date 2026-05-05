@@ -556,8 +556,10 @@
     import {
       getAuth,
       GoogleAuthProvider,
+      getRedirectResult,
       onAuthStateChanged,
       signInWithPopup,
+      signInWithRedirect,
       signOut
     } from 'https://www.gstatic.com/firebasejs/10.14.1/firebase-auth.js';
     import { getFunctions, httpsCallable } from 'https://www.gstatic.com/firebasejs/10.14.1/firebase-functions.js';
@@ -607,6 +609,10 @@
       appState.app = initializeApp(config);
       appState.auth = getAuth(appState.app);
       appState.functions = getFunctions(appState.app, config.functionsRegion || 'asia-northeast3');
+      getRedirectResult(appState.auth).catch((err) => {
+        appState.error = friendlyError(err);
+        renderLogin(appState.error);
+      });
       onAuthStateChanged(appState.auth, async (user) => {
         appState.user = user;
         if (!user) {
@@ -774,7 +780,15 @@
     async function signIn() {
       const provider = new GoogleAuthProvider();
       provider.setCustomParameters({ hd: 'archivepilates.com' });
-      await signInWithPopup(appState.auth, provider);
+      try {
+        await signInWithPopup(appState.auth, provider);
+      } catch (err) {
+        if (err && err.code === 'auth/popup-blocked') {
+          await signInWithRedirect(appState.auth, provider);
+          return;
+        }
+        throw err;
+      }
     }
 
     async function loadHome() {

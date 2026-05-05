@@ -23,6 +23,7 @@ export interface StudioDoc {
 export interface StaffDoc {
   staffId: string;
   uid?: string;
+  email?: string;
   studioId: string;
   name: string;
   phone?: string;
