@@ -1,10 +1,10 @@
-# 강사IN 프로젝트 핸드오프
+# 아카이브IN 프로젝트 핸드오프
 
 마지막 업데이트: 2026-05-05
 
 ## 목적
 
-강사IN은 아카이브필라테스 강사용 수업 확인/출결/메모 앱이다. 초기 Google Apps Script + Google Drive 구조에서 Firebase Storage/Firestore/Cloud Functions 기반으로 전환 중이다.
+아카이브IN은 아카이브필라테스 강사용 수업 확인/출결/메모 앱이다. 초기 Google Apps Script + Google Drive 구조에서 Firebase Storage/Firestore/Cloud Functions 기반으로 전환 중이다.
 
 현재 운영 방향은 스튜디오메이트 API를 직접 앱에서 매번 호출하지 않고, 서버가 스튜디오메이트 데이터를 주기적으로 가져와 Firestore 캐시/뷰로 가공한 뒤 앱이 빠르게 읽는 구조다.
 
@@ -33,6 +33,9 @@
 - 프라이빗 수업 회원은 수강권명/잔여횟수를 표시한다.
 - 수업 카드는 날짜 진입 시 기본 닫힘 상태이며, 수업 헤더 클릭으로 펼친다.
 - 수업 시간은 Asia/Seoul 기준으로 `08:00-08:50` 형태로 표시한다.
+- 앱 명칭은 `아카이브IN`으로 확정했다. 로그인 화면에는 `ARCHIVE IN` 브랜드 텍스트를 표시한다.
+- `scheduledSyncLecturesDaily` 실행 시 `rebuildMemberInsights`가 회원 태그를 자동 생성한다.
+- 자동 태그 1단계는 규칙 기반이다: 30일 출석/결석, 메모 통증 키워드, 최근 10회 강사/시간대 선호.
 
 ## 스튜디오메이트 수업구분
 
@@ -66,6 +69,7 @@
 - `scheduledPollManagerNotices`: 5분마다 스튜디오메이트 관리자 알림 확인.
 - `scheduledProcessWriteQueue`: 1분마다 앱 입력 큐 처리.
 - `scheduledAttendanceReminder`: 매시 정각 출석 미체크 알림.
+- `rebuildMemberInsights`: 매일 동기화 범위의 예약/메모를 분석해 `memberTags`를 갱신.
 
 캐시 보정 이력:
 

@@ -159,8 +159,8 @@ export interface MemberTagDoc {
   tags: Array<{
     tagId: string;
     label: string;
-    level: "info" | "warning" | "danger";
-    source: "manual";
+    level: "info" | "positive" | "warning" | "danger";
+    source: "manual" | "auto_attendance" | "auto_memo" | "auto_pattern";
     updatedAt: Timestamp;
   }>;
   updatedAt: Timestamp;

@@ -3,16 +3,16 @@
 <head>
   <meta charset="utf-8">
   <meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover">
-  <title>강사IN</title>
+  <title>아카이브IN</title>
   <meta name="theme-color" content="#ffffff">
-  <meta name="application-name" content="강사IN">
+  <meta name="application-name" content="아카이브IN">
   <meta name="apple-mobile-web-app-capable" content="yes">
   <meta name="mobile-web-app-capable" content="yes">
-  <meta name="apple-mobile-web-app-title" content="강사IN">
+  <meta name="apple-mobile-web-app-title" content="아카이브IN">
   <meta name="apple-mobile-web-app-status-bar-style" content="default">
-  <link rel="manifest" href="./manifest.webmanifest?v=16">
-  <link rel="icon" type="image/png" sizes="192x192" href="./icons/icon-192.png?v=16">
-  <link rel="apple-touch-icon" sizes="180x180" href="./icons/apple-touch-icon.png?v=16">
+  <link rel="manifest" href="./manifest.webmanifest?v=17">
+  <link rel="icon" type="image/png" sizes="192x192" href="./icons/icon-192.png?v=17">
+  <link rel="apple-touch-icon" sizes="180x180" href="./icons/apple-touch-icon.png?v=17">
   <style>
     :root {
       --ink: #171717;
@@ -102,7 +102,7 @@
 
     .identity h1 {
       margin: 0;
-      font-size: 24px;
+      font-size: 22px;
       line-height: 1.15;
       font-weight: 850;
     }
@@ -110,7 +110,7 @@
     .identity p {
       margin: 5px 0 0;
       color: var(--muted);
-      font-size: 14px;
+      font-size: 13px;
     }
 
     .ghost,
@@ -123,6 +123,7 @@
       border-radius: 8px;
       padding: 0 14px;
       font-weight: 760;
+      font-size: 14px;
       white-space: nowrap;
     }
 
@@ -166,15 +167,24 @@
       box-shadow: var(--shadow);
     }
 
+    .login-brand {
+      margin: 0 0 14px;
+      color: var(--brand);
+      font-size: 13px;
+      font-weight: 850;
+      letter-spacing: 0.24em;
+    }
+
     .login h1 {
       margin: 0 0 10px;
-      font-size: 34px;
+      font-size: 30px;
       line-height: 1.15;
     }
 
     .login p {
       margin: 0 0 26px;
       color: var(--muted);
+      font-size: 14px;
       line-height: 1.55;
     }
 
@@ -230,12 +240,12 @@
       border: 1px solid var(--line);
       border-radius: 8px;
       background: #fff;
-      font-size: 28px;
+      font-size: 24px;
     }
 
     .datebar strong {
       text-align: center;
-      font-size: 24px;
+      font-size: 22px;
     }
 
     .summary {
@@ -261,7 +271,7 @@
     .summary-label {
       display: block;
       color: var(--brand);
-      font-size: 13px;
+      font-size: 12px;
       font-weight: 850;
       letter-spacing: 0.16em;
     }
@@ -269,7 +279,7 @@
     .summary-value {
       display: block;
       margin-top: 8px;
-      font-size: 36px;
+      font-size: 32px;
       line-height: 1;
       font-weight: 850;
     }
@@ -278,7 +288,7 @@
       display: block;
       margin-top: 8px;
       color: var(--muted);
-      font-size: 13px;
+      font-size: 12px;
       white-space: nowrap;
       overflow: hidden;
       text-overflow: ellipsis;
@@ -287,7 +297,7 @@
     .section-title {
       margin: 26px 0 12px;
       color: var(--brand);
-      font-size: 18px;
+      font-size: 17px;
       font-weight: 850;
     }
 
@@ -320,13 +330,13 @@
 
     .time {
       color: var(--brand-dark);
-      font-size: 22px;
+      font-size: 20px;
       font-weight: 850;
     }
 
     .lecture-title {
       margin: 0;
-      font-size: 22px;
+      font-size: 20px;
       line-height: 1.2;
       font-weight: 850;
     }
@@ -346,12 +356,13 @@
       padding: 0 8px;
       color: var(--muted);
       background: #f5f2ef;
-      font-size: 13px;
+      font-size: 12px;
       font-weight: 700;
     }
 
     .chip.group { color: var(--brand-dark); background: #fff1e7; }
     .chip.private { color: #6b5336; background: #f2ece4; }
+    .chip.unknown { color: #6f6962; background: #eee9e4; }
     .chip.good { color: var(--good); background: #eef2e5; }
     .chip.bad { color: var(--bad); background: #faebe6; }
     .chip.wait { color: var(--wait); background: #fff5df; }
@@ -407,7 +418,7 @@
     }
 
     .member-name {
-      font-size: 21px;
+      font-size: 19px;
       font-weight: 850;
       overflow-wrap: anywhere;
     }
@@ -426,7 +437,7 @@
       border: 1px solid var(--line);
       background: #fff;
       color: var(--muted);
-      font-size: 13px;
+      font-size: 12px;
       font-weight: 780;
     }
 
@@ -512,7 +523,7 @@
 
     .modal-head h2 {
       margin: 0;
-      font-size: 20px;
+      font-size: 18px;
     }
 
     textarea,
@@ -558,18 +569,18 @@
       .app { padding-inline: 12px; }
       .topbar { gap: 10px; }
       .logo { width: 48px; height: 48px; border-radius: 12px; }
-      .identity h1 { font-size: 22px; }
-      .identity p { font-size: 13px; }
+      .identity h1 { font-size: 20px; }
+      .identity p { font-size: 12px; }
       .ghost, .soft-button { padding-inline: 10px; }
       .datebar { margin-inline: -12px; padding-inline: 12px; }
       .summary-label { font-size: 12px; letter-spacing: 0.12em; }
-      .summary-value { font-size: 32px; }
+      .summary-value { font-size: 30px; }
       .lecture-head { grid-template-columns: 62px 1fr 24px; gap: 10px; }
-      .time { font-size: 19px; }
-      .lecture-title { font-size: 20px; }
+      .time { font-size: 18px; }
+      .lecture-title { font-size: 18px; }
       .member { grid-template-columns: 48px 1fr; padding: 10px; }
       .badge { width: 48px; height: 48px; }
-      .member-name { font-size: 20px; }
+      .member-name { font-size: 18px; }
     }
   </style>
   <script src="./firebase-config.js?v=1"></script>
@@ -692,7 +703,8 @@
         <main class="login">
           <section class="login-panel">
             <div class="login-mark">IN</div>
-            <h1>강사 로그인</h1>
+            <div class="login-brand">ARCHIVE IN</div>
+            <h1>아카이브IN</h1>
             <p>테스트 계정으로 로그인하고 오늘 수업을 확인하세요</p>
             <div class="email-login">
               <input id="emailInput" type="email" autocomplete="email" placeholder="이메일" value="home@archivepilates.com">
@@ -782,7 +794,7 @@
             <div>
               <h3 class="lecture-title">${escapeHtml(lecture.title || '수업')}</h3>
               <div class="chips">
-                <span class="chip ${lessonType === 'private' ? 'private' : 'group'}">${lessonLabel(lessonType)}</span>
+                <span class="chip ${lessonType === 'private' ? 'private' : lessonType === 'group' ? 'group' : 'unknown'}">${lessonLabel(lessonType)}</span>
                 <span class="chip">${escapeHtml(lecture.roomName || lecture.divisionName || '')}</span>
                 <span class="chip">${lecture.bookingCount || 0}명</span>
                 ${lecture.waitCount ? `<span class="chip wait">대기 ${lecture.waitCount}</span>` : ''}
@@ -800,6 +812,8 @@
     function renderBooking(lecture, booking) {
       const wait = booking.appStatus === 'wait';
       const tags = booking.tags || [];
+      const headlineTags = tags.slice(0, 3);
+      const detailTags = tags.slice(3);
       const showTicket = resolvedLessonType(lecture) === 'private';
       return `
         <div class="member">
@@ -807,12 +821,13 @@
           <div class="member-main">
             <div class="member-row">
               <span class="member-name">${escapeHtml(booking.memberName || '회원')}</span>
+              ${headlineTags.map((tag) => renderTagChip(tag)).join('')}
               <span class="chip ${statusClass(booking)}">${statusLabel(booking)}</span>
             </div>
             <div class="chips">
               ${showTicket && booking.ticketName ? `<span class="chip">${escapeHtml(booking.ticketName)}</span>` : ''}
               ${showTicket && booking.ticketRemainingCount != null ? `<span class="chip">${booking.ticketRemainingCount}회</span>` : ''}
-              ${tags.map((tag) => `<span class="chip ${tag.level === 'warning' ? 'wait' : tag.level === 'danger' ? 'bad' : ''}">${escapeHtml(tag.label || tag.tagId)}</span>`).join('')}
+              ${detailTags.map(renderTagChip).join('')}
               ${booking.lastMemoPreview ? `<span class="chip">${escapeHtml(booking.lastMemoPreview)}</span>` : ''}
             </div>
             <div class="member-actions">
@@ -1108,7 +1123,12 @@
     function lessonLabel(type) {
       if (type === 'private') return '프라이빗';
       if (type === 'semi_private') return '세미';
+      if (type === 'unknown') return '구분확인';
       return '그룹';
+    }
+
+    function renderTagChip(tag) {
+      return `<span class="chip ${tag.level === 'warning' ? 'wait' : tag.level === 'danger' ? 'bad' : tag.level === 'positive' ? 'good' : ''}">${escapeHtml(tag.label || tag.tagId)}</span>`;
     }
 
     function resolvedLessonType(lecture) {

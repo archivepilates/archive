@@ -9,6 +9,10 @@ export async function getMemberTagsMap(memberIds: string[]): Promise<Map<string,
     snaps
       .map((snap) => snap.data())
       .filter((doc): doc is MemberTagDoc => Boolean(doc))
-      .map((doc) => [doc.memberId, doc.tags.filter((tag) => tag.source === "manual")]),
+      .map((doc) => [doc.memberId, doc.tags]),
   );
+}
+
+export async function saveMemberTags(doc: MemberTagDoc): Promise<void> {
+  await refs.memberTag(doc.memberId).set(doc, { merge: true });
 }

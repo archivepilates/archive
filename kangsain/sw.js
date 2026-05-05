@@ -1,10 +1,10 @@
-const CACHE_NAME = 'kangsain-v16';
+const CACHE_NAME = 'archive-in-v17';
 const CORE_ASSETS = [
   './',
-  './manifest.webmanifest?v=16',
-  './icons/icon-192.png?v=16',
-  './icons/icon-512.png?v=16',
-  './icons/apple-touch-icon.png?v=16'
+  './manifest.webmanifest?v=17',
+  './icons/icon-192.png?v=17',
+  './icons/icon-512.png?v=17',
+  './icons/apple-touch-icon.png?v=17'
 ];
 
 self.addEventListener('install', (event) => {
@@ -36,14 +36,14 @@ self.addEventListener('push', (event) => {
   try {
     payload = event.data ? event.data.json() : {};
   } catch (_) {
-    payload = { notification: { title: '강사IN', body: event.data ? event.data.text() : '' } };
+    payload = { notification: { title: '아카이브IN', body: event.data ? event.data.text() : '' } };
   }
   const notification = payload.notification || {};
   event.waitUntil(
-    self.registration.showNotification(notification.title || '강사IN', {
+    self.registration.showNotification(notification.title || '아카이브IN', {
       body: notification.body || '',
-      icon: './icons/icon-192.png?v=16',
-      badge: './icons/icon-192.png?v=16',
+      icon: './icons/icon-192.png?v=17',
+      badge: './icons/icon-192.png?v=17',
       data: payload.data || {}
     })
   );

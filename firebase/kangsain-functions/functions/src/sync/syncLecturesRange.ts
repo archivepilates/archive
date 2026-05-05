@@ -10,6 +10,7 @@ import type { BookingDoc } from "../types/models";
 import { nowTimestamp, todayKst } from "../utils/date";
 import { rebuildInstructorViewsForDates } from "./rebuildInstructorViews";
 import { rebuildAttendanceSummaries } from "./rebuildAttendanceSummaries";
+import { rebuildMemberInsights } from "./rebuildMemberInsights";
 
 export async function syncLecturesRange(input: {
   studioId?: string;
@@ -62,6 +63,12 @@ export async function syncLecturesRange(input: {
 
     phase = "rebuild attendance summaries";
     await rebuildAttendanceSummaries({
+      studioId,
+      endDate: input.endDate > todayKst() ? todayKst() : input.endDate,
+      bookings: allBookings,
+    });
+    phase = "rebuild member insights";
+    await rebuildMemberInsights({
       studioId,
       endDate: input.endDate > todayKst() ? todayKst() : input.endDate,
       bookings: allBookings,
