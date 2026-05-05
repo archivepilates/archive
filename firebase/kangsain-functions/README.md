@@ -39,6 +39,27 @@ MANAGER_LOGIN_PASSWORD
 
 StudioMate API 토큰은 클라이언트에 노출하지 않고 서버 전용 Firestore 문서에 캐시합니다.
 
+## 배포 순서
+
+```bash
+cd firebase/kangsain-functions/functions
+npm install
+npm run build
+cd ..
+firebase deploy --only functions,firestore:rules,firestore:indexes
+```
+
+GitHub Pages 강사IN 프론트는 `/kangsain` 폴더를 사용합니다. 실제 배포 전 `kangsain/firebase-config.example.js`를 복사해 `kangsain/firebase-config.js`를 만들고 Firebase Web App 설정값과 Web Push VAPID key를 입력해야 합니다.
+
+## 검증
+
+현재 코드 기준으로 아래 검증을 통과했습니다.
+
+```bash
+npm run typecheck
+npm run build
+```
+
 ## 주의
 
 - 결제 금액, 매출, 정산 정보는 이번 범위에서 저장하지 않습니다.

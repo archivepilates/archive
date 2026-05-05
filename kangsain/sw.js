@@ -1,10 +1,10 @@
-const CACHE_NAME = 'kangsain-v8';
+const CACHE_NAME = 'kangsain-v9';
 const CORE_ASSETS = [
   './',
-  './manifest.webmanifest?v=8',
-  './icons/icon-192.png?v=8',
-  './icons/icon-512.png?v=8',
-  './icons/apple-touch-icon.png?v=8'
+  './manifest.webmanifest?v=9',
+  './icons/icon-192.png?v=9',
+  './icons/icon-512.png?v=9',
+  './icons/apple-touch-icon.png?v=9'
 ];
 
 self.addEventListener('install', (event) => {
@@ -25,7 +25,31 @@ self.addEventListener('activate', (event) => {
 
 self.addEventListener('fetch', (event) => {
   if (event.request.method !== 'GET') return;
+  if (event.request.url.includes('firebasestorage.googleapis.com') || event.request.url.includes('googleapis.com')) return;
   event.respondWith(
     caches.match(event.request).then((cached) => cached || fetch(event.request))
   );
+});
+
+self.addEventListener('push', (event) => {
+  let payload = {};
+  try {
+    payload = event.data ? event.data.json() : {};
+  } catch (_) {
+    payload = { notification: { title: '강사IN', body: event.data ? event.data.text() : '' } };
+  }
+  const notification = payload.notification || {};
+  event.waitUntil(
+    self.registration.showNotification(notification.title || '강사IN', {
+      body: notification.body || '',
+      icon: './icons/icon-192.png?v=9',
+      badge: './icons/icon-192.png?v=9',
+      data: payload.data || {}
+    })
+  );
+});
+
+self.addEventListener('notificationclick', (event) => {
+  event.notification.close();
+  event.waitUntil(self.clients.openWindow('./'));
 });

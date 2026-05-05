@@ -1,0 +1,7 @@
+firebase/kangsain-functions/functions/node_modules/
+firebase/kangsain-functions/functions/lib/
+firebase/kangsain-functions/functions/.env
+firebase/kangsain-functions/.firebase/
+firebase/kangsain-functions/firebase-debug.log
+firebase/kangsain-functions/firebase-debug.*.log
+kangsain/firebase-config.js

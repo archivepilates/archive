@@ -10,78 +10,968 @@
   <meta name="mobile-web-app-capable" content="yes">
   <meta name="apple-mobile-web-app-title" content="강사IN">
   <meta name="apple-mobile-web-app-status-bar-style" content="default">
-  <link rel="manifest" href="./manifest.webmanifest?v=8">
-  <link rel="icon" type="image/png" sizes="192x192" href="./icons/icon-192.png?v=8">
-  <link rel="apple-touch-icon" sizes="180x180" href="./icons/apple-touch-icon.png?v=8">
+  <link rel="manifest" href="./manifest.webmanifest?v=9">
+  <link rel="icon" type="image/png" sizes="192x192" href="./icons/icon-192.png?v=9">
+  <link rel="apple-touch-icon" sizes="180x180" href="./icons/apple-touch-icon.png?v=9">
   <style>
+    :root {
+      --ink: #171717;
+      --muted: #75706a;
+      --line: #e7e1dc;
+      --paper: #ffffff;
+      --soft: #fbf5ef;
+      --brand: #e8752f;
+      --brand-dark: #b9521d;
+      --good: #728053;
+      --bad: #a94d38;
+      --wait: #a8793d;
+      --shadow: 0 10px 30px rgba(30, 20, 12, 0.08);
+    }
+
+    * { box-sizing: border-box; }
+
     html,
     body {
       width: 100%;
-      height: 100%;
+      min-height: 100%;
       margin: 0;
-      background: #ffffff;
-      overflow: hidden;
+      color: var(--ink);
+      background: var(--paper);
       font-family: system-ui, -apple-system, BlinkMacSystemFont, "Segoe UI", sans-serif;
+      letter-spacing: 0;
+    }
+
+    body { overflow-x: hidden; }
+
+    button,
+    input,
+    textarea {
+      font: inherit;
+      letter-spacing: 0;
+    }
+
+    button {
+      border: 0;
+      cursor: pointer;
+      color: inherit;
+      background: transparent;
+      -webkit-tap-highlight-color: transparent;
     }
 
     .app {
-      position: fixed;
-      inset: env(safe-area-inset-top) 0 0 0;
-      background: #ffffff;
+      min-height: 100dvh;
+      padding: max(16px, env(safe-area-inset-top)) 16px max(28px, env(safe-area-inset-bottom));
+      background: linear-gradient(#fff, #fff 55%, #fbf7f3);
     }
 
-    iframe {
-      width: 100%;
-      height: 100%;
-      border: 0;
-      display: block;
-      background: #ffffff;
+    .shell {
+      width: min(980px, 100%);
+      margin: 0 auto;
     }
 
-    .fallback {
-      position: fixed;
-      inset: env(safe-area-inset-top) 0 0 0;
+    .topbar {
+      position: sticky;
+      top: 0;
+      z-index: 10;
+      display: flex;
+      align-items: center;
+      gap: 12px;
+      min-height: 72px;
+      padding: 10px 0 14px;
+      background: rgba(255, 255, 255, 0.92);
+      backdrop-filter: blur(16px);
+    }
+
+    .logo {
+      flex: 0 0 auto;
       display: grid;
       place-items: center;
-      padding: 24px;
-      color: #1a1a1a;
+      width: 52px;
+      height: 52px;
+      border-radius: 14px;
+      color: #fff;
+      background: var(--brand);
+      font-weight: 800;
+      box-shadow: var(--shadow);
+    }
+
+    .identity {
+      min-width: 0;
+      flex: 1;
+    }
+
+    .identity h1 {
+      margin: 0;
+      font-size: 24px;
+      line-height: 1.15;
+      font-weight: 850;
+    }
+
+    .identity p {
+      margin: 5px 0 0;
+      color: var(--muted);
+      font-size: 14px;
+    }
+
+    .ghost,
+    .primary,
+    .soft-button {
+      display: inline-flex;
+      align-items: center;
+      justify-content: center;
+      min-height: 44px;
+      border-radius: 8px;
+      padding: 0 14px;
+      font-weight: 760;
+      white-space: nowrap;
+    }
+
+    .primary {
+      color: #fff;
+      background: var(--brand);
+    }
+
+    .soft-button {
+      color: var(--brand-dark);
+      background: var(--soft);
+    }
+
+    .ghost {
+      color: var(--muted);
+      background: transparent;
+    }
+
+    .login {
+      display: grid;
+      min-height: calc(100dvh - 60px);
+      place-items: center;
       text-align: center;
-      background: #ffffff;
-      z-index: 0;
     }
 
-    .fallback strong {
-      color: #f06b1a;
-      letter-spacing: 0.04em;
+    .login-panel {
+      width: min(420px, 100%);
     }
 
-    .fallback a {
-      color: #c85510;
+    .login-mark {
+      display: grid;
+      place-items: center;
+      width: 72px;
+      height: 72px;
+      margin: 0 auto 22px;
+      border-radius: 18px;
+      background: var(--brand);
+      color: #fff;
+      font-size: 28px;
+      font-weight: 850;
+      box-shadow: var(--shadow);
+    }
+
+    .login h1 {
+      margin: 0 0 10px;
+      font-size: 34px;
+      line-height: 1.15;
+    }
+
+    .login p {
+      margin: 0 0 26px;
+      color: var(--muted);
+      line-height: 1.55;
+    }
+
+    .config-warning {
+      display: none;
+      margin-top: 16px;
+      padding: 14px;
+      border: 1px solid #f0d2c0;
+      border-radius: 8px;
+      color: var(--brand-dark);
+      background: #fff7f1;
+      text-align: left;
+      font-size: 13px;
+      line-height: 1.5;
+    }
+
+    .datebar {
+      display: grid;
+      grid-template-columns: 48px 1fr 48px;
+      align-items: center;
+      gap: 12px;
+      margin: 8px -16px 22px;
+      padding: 14px 16px;
+      border-block: 1px solid var(--line);
+      background: #fbfbfa;
+    }
+
+    .datebar button {
+      width: 48px;
+      height: 48px;
+      border: 1px solid var(--line);
+      border-radius: 8px;
+      background: #fff;
+      font-size: 28px;
+    }
+
+    .datebar strong {
+      text-align: center;
+      font-size: 24px;
+    }
+
+    .summary {
+      display: grid;
+      grid-template-columns: repeat(3, minmax(0, 1fr));
+      border: 1px solid var(--line);
+      border-radius: 8px;
+      background: #fff;
+      overflow: hidden;
+      box-shadow: var(--shadow);
+    }
+
+    .summary-item {
+      min-width: 0;
+      padding: 18px 8px;
+      text-align: center;
+    }
+
+    .summary-item + .summary-item {
+      border-left: 1px solid var(--line);
+    }
+
+    .summary-label {
+      display: block;
+      color: var(--brand);
+      font-size: 13px;
+      font-weight: 850;
+      letter-spacing: 0.16em;
+    }
+
+    .summary-value {
+      display: block;
+      margin-top: 8px;
+      font-size: 36px;
+      line-height: 1;
+      font-weight: 850;
+    }
+
+    .summary-note {
+      display: block;
+      margin-top: 8px;
+      color: var(--muted);
+      font-size: 13px;
+      white-space: nowrap;
+      overflow: hidden;
+      text-overflow: ellipsis;
+    }
+
+    .section-title {
+      margin: 26px 0 12px;
+      color: var(--brand);
+      font-size: 18px;
+      font-weight: 850;
+    }
+
+    .lecture {
+      border: 1px solid #d8d1cb;
+      border-radius: 8px;
+      background: #fff;
+      overflow: hidden;
+      margin-bottom: 14px;
+    }
+
+    .lecture-head {
+      display: grid;
+      grid-template-columns: 72px 1fr auto;
+      gap: 12px;
+      align-items: center;
+      padding: 18px 14px;
+      border-bottom: 1px solid var(--line);
+    }
+
+    .time {
+      color: var(--brand-dark);
+      font-size: 22px;
+      font-weight: 850;
+    }
+
+    .lecture-title {
+      margin: 0;
+      font-size: 22px;
+      line-height: 1.2;
+      font-weight: 850;
+    }
+
+    .chips {
+      display: flex;
+      flex-wrap: wrap;
+      gap: 6px;
+      margin-top: 8px;
+    }
+
+    .chip {
+      display: inline-flex;
+      align-items: center;
+      min-height: 26px;
+      border-radius: 7px;
+      padding: 0 8px;
+      color: var(--muted);
+      background: #f5f2ef;
+      font-size: 13px;
       font-weight: 700;
-      text-decoration: none;
+    }
+
+    .chip.group { color: var(--brand-dark); background: #fff1e7; }
+    .chip.private { color: #6b5336; background: #f2ece4; }
+    .chip.good { color: var(--good); background: #eef2e5; }
+    .chip.bad { color: var(--bad); background: #faebe6; }
+    .chip.wait { color: var(--wait); background: #fff5df; }
+
+    .member-list {
+      display: grid;
+      gap: 10px;
+      padding: 12px;
+    }
+
+    .member {
+      display: grid;
+      grid-template-columns: 52px 1fr;
+      gap: 12px;
+      align-items: start;
+      padding: 12px;
+      border: 1px solid var(--line);
+      border-radius: 8px;
+      background: #fff;
+    }
+
+    .badge {
+      display: grid;
+      place-items: center;
+      width: 52px;
+      height: 52px;
+      border-radius: 50%;
+      background: #f5f1ed;
+      color: #5f574f;
+      font-weight: 850;
+    }
+
+    .member-main {
+      min-width: 0;
+    }
+
+    .member-row {
+      display: flex;
+      align-items: center;
+      gap: 8px;
+      min-width: 0;
+    }
+
+    .member-name {
+      font-size: 21px;
+      font-weight: 850;
+      overflow-wrap: anywhere;
+    }
+
+    .member-actions {
+      display: flex;
+      flex-wrap: wrap;
+      gap: 8px;
+      margin-top: 10px;
+    }
+
+    .tiny {
+      min-height: 34px;
+      border-radius: 7px;
+      padding: 0 10px;
+      border: 1px solid var(--line);
+      background: #fff;
+      color: var(--muted);
+      font-size: 13px;
+      font-weight: 780;
+    }
+
+    .tiny.active.good { color: #fff; background: var(--good); border-color: var(--good); }
+    .tiny.active.bad { color: #fff; background: var(--bad); border-color: var(--bad); }
+    .tiny:disabled { opacity: 0.45; cursor: not-allowed; }
+
+    .loading {
+      display: grid;
+      place-items: center;
+      min-height: 260px;
+      gap: 18px;
+      color: var(--muted);
+    }
+
+    .skeleton {
+      width: 100%;
+      display: grid;
+      gap: 12px;
+    }
+
+    .skeleton-line {
+      height: 78px;
+      border-radius: 8px;
+      background: linear-gradient(90deg, #f6f2ee, #fff, #f6f2ee);
+      background-size: 220% 100%;
+      animation: shimmer 1.2s infinite;
+    }
+
+    @keyframes shimmer {
+      from { background-position: 220% 0; }
+      to { background-position: -220% 0; }
+    }
+
+    .empty,
+    .error {
+      padding: 28px 18px;
+      border: 1px solid var(--line);
+      border-radius: 8px;
+      background: #fff;
+      color: var(--muted);
+      text-align: center;
+    }
+
+    .error {
+      border-color: #f0d2c0;
+      color: var(--brand-dark);
+      background: #fff7f1;
+    }
+
+    .modal {
+      position: fixed;
+      inset: 0;
+      display: none;
+      align-items: end;
+      padding: 16px;
+      background: rgba(20, 16, 13, 0.28);
+      z-index: 20;
+    }
+
+    .modal.open { display: flex; }
+
+    .modal-panel {
+      width: min(560px, 100%);
+      margin: 0 auto;
+      border-radius: 8px;
+      background: #fff;
+      box-shadow: var(--shadow);
+      overflow: hidden;
+    }
+
+    .modal-head,
+    .modal-body {
+      padding: 16px;
+    }
+
+    .modal-head {
+      display: flex;
+      align-items: center;
+      justify-content: space-between;
+      border-bottom: 1px solid var(--line);
+    }
+
+    .modal-head h2 {
+      margin: 0;
+      font-size: 20px;
+    }
+
+    textarea,
+    input {
+      width: 100%;
+      border: 1px solid var(--line);
+      border-radius: 8px;
+      padding: 12px;
+      background: #fff;
+      color: var(--ink);
+    }
+
+    textarea {
+      min-height: 110px;
+      resize: vertical;
+    }
+
+    .memo-list {
+      display: grid;
+      gap: 10px;
+      max-height: 280px;
+      overflow: auto;
+      margin-top: 12px;
+    }
+
+    .memo {
+      padding: 12px;
+      border: 1px solid var(--line);
+      border-radius: 8px;
+      color: var(--muted);
+      line-height: 1.45;
+    }
+
+    .memo strong {
+      display: block;
+      margin-bottom: 6px;
+      color: var(--ink);
+    }
+
+    .hidden { display: none !important; }
+
+    @media (max-width: 520px) {
+      .app { padding-inline: 12px; }
+      .topbar { gap: 10px; }
+      .logo { width: 48px; height: 48px; border-radius: 12px; }
+      .identity h1 { font-size: 22px; }
+      .identity p { font-size: 13px; }
+      .ghost, .soft-button { padding-inline: 10px; }
+      .datebar { margin-inline: -12px; padding-inline: 12px; }
+      .summary-label { font-size: 12px; letter-spacing: 0.12em; }
+      .summary-value { font-size: 32px; }
+      .lecture-head { grid-template-columns: 62px 1fr 24px; gap: 10px; }
+      .time { font-size: 19px; }
+      .lecture-title { font-size: 20px; }
+      .member { grid-template-columns: 48px 1fr; padding: 10px; }
+      .badge { width: 48px; height: 48px; }
+      .member-name { font-size: 20px; }
     }
   </style>
+  <script src="./firebase-config.js?v=1"></script>
 </head>
 <body>
-  <div class="fallback">
-    <div>
-      <strong>강사IN</strong><br>
-      <a href="https://script.google.com/a/macros/archivepilates.com/s/AKfycbxb1SgOXfgkP31x_V6YU88HOssRnAvnZtNO_0uL4zYPJiDRsO1j4F94NF1FJ6MqTSwB/exec">강사IN 열기</a>
+  <div id="root" class="app"></div>
+
+  <div id="memoModal" class="modal" aria-hidden="true">
+    <div class="modal-panel">
+      <div class="modal-head">
+        <h2 id="memoTitle">메모</h2>
+        <button class="ghost" type="button" data-close-modal>닫기</button>
+      </div>
+      <div class="modal-body">
+        <textarea id="memoInput" placeholder="회원 특이사항을 입력하세요"></textarea>
+        <div style="display:flex; gap:8px; margin-top:10px;">
+          <button id="saveMemoButton" class="primary" type="button">저장</button>
+          <button id="loadMemoButton" class="soft-button" type="button">히스토리</button>
+        </div>
+        <div id="memoHistory" class="memo-list"></div>
+      </div>
     </div>
   </div>
-  <main class="app">
-    <iframe
-      title="강사IN"
-      src="https://script.google.com/a/macros/archivepilates.com/s/AKfycbxb1SgOXfgkP31x_V6YU88HOssRnAvnZtNO_0uL4zYPJiDRsO1j4F94NF1FJ6MqTSwB/exec"
-      allowfullscreen>
-    </iframe>
-  </main>
-  <script>
-    if ('serviceWorker' in navigator) {
-      window.addEventListener('load', function () {
-        navigator.serviceWorker.register('./sw.js', { scope: './' }).catch(function () {});
+
+  <script type="module">
+    import { initializeApp } from 'https://www.gstatic.com/firebasejs/10.14.1/firebase-app.js';
+    import {
+      getAuth,
+      GoogleAuthProvider,
+      onAuthStateChanged,
+      signInWithPopup,
+      signOut
+    } from 'https://www.gstatic.com/firebasejs/10.14.1/firebase-auth.js';
+    import { getFunctions, httpsCallable } from 'https://www.gstatic.com/firebasejs/10.14.1/firebase-functions.js';
+    import {
+      getMessaging,
+      getToken,
+      isSupported
+    } from 'https://www.gstatic.com/firebasejs/10.14.1/firebase-messaging.js';
+
+    const root = document.getElementById('root');
+    const modal = document.getElementById('memoModal');
+    const memoTitle = document.getElementById('memoTitle');
+    const memoInput = document.getElementById('memoInput');
+    const memoHistory = document.getElementById('memoHistory');
+    const saveMemoButton = document.getElementById('saveMemoButton');
+    const loadMemoButton = document.getElementById('loadMemoButton');
+
+    const config = window.KANGSAIN_FIREBASE_CONFIG || null;
+    const appState = {
+      app: null,
+      auth: null,
+      functions: null,
+      user: null,
+      staff: null,
+      days: [],
+      selectedDate: today(),
+      loading: false,
+      error: '',
+      activeBooking: null
+    };
+
+    const functionNames = {
+      getHome: 'getInstructorHome',
+      attendance: 'submitBookingAttendance',
+      memo: 'submitMemberMemo',
+      memoHistory: 'getMemberMemoHistory',
+      registerFcm: 'registerFcmToken'
+    };
+
+    init();
+
+    function init() {
+      if (!config || !config.apiKey) {
+        renderLogin('Firebase 설정 파일이 없습니다. kangsain/firebase-config.js를 배포 환경에 추가해야 합니다.');
+        return;
+      }
+      appState.app = initializeApp(config);
+      appState.auth = getAuth(appState.app);
+      appState.functions = getFunctions(appState.app, config.functionsRegion || 'asia-northeast3');
+      onAuthStateChanged(appState.auth, async (user) => {
+        appState.user = user;
+        if (!user) {
+          appState.staff = null;
+          appState.days = [];
+          renderLogin();
+          return;
+        }
+        await loadHome();
+        registerPushToken().catch(() => {});
+      });
+      if ('serviceWorker' in navigator) {
+        window.addEventListener('load', () => {
+          navigator.serviceWorker.register('./sw.js', { scope: './' }).catch(() => {});
+        });
+      }
+    }
+
+    function renderLogin(warning = '') {
+      root.innerHTML = `
+        <main class="login">
+          <section class="login-panel">
+            <div class="login-mark">IN</div>
+            <h1>강사 로그인</h1>
+            <p>아카이브 계정으로 로그인하고 오늘 수업을 확인하세요</p>
+            <button id="loginButton" class="primary" type="button" ${warning ? 'disabled' : ''}>Google 로그인</button>
+            <div class="config-warning" style="${warning ? 'display:block' : ''}">${escapeHtml(warning)}</div>
+          </section>
+        </main>
+      `;
+      document.getElementById('loginButton')?.addEventListener('click', signIn);
+    }
+
+    function renderApp() {
+      const day = currentDay();
+      root.innerHTML = `
+        <main class="shell">
+          <header class="topbar">
+            <div class="logo">IN</div>
+            <div class="identity">
+              <h1>${escapeHtml(appState.staff?.name || appState.user?.displayName || '강사')}</h1>
+              <p>${appState.loading ? '동기화 확인 중' : formatSyncText(day)}</p>
+            </div>
+            <button id="refreshButton" class="soft-button" type="button">새로고침</button>
+            <button id="logoutButton" class="ghost" type="button">로그아웃</button>
+          </header>
+          <nav class="datebar">
+            <button id="prevDate" type="button" aria-label="이전 날짜">‹</button>
+            <strong>${dateLabel(appState.selectedDate)}</strong>
+            <button id="nextDate" type="button" aria-label="다음 날짜">›</button>
+          </nav>
+          ${renderBody(day)}
+        </main>
+      `;
+      bindAppEvents();
+    }
+
+    function renderBody(day) {
+      if (appState.loading) {
+        return `
+          <section class="loading">
+            <div class="skeleton">
+              <div class="skeleton-line"></div>
+              <div class="skeleton-line"></div>
+              <div class="skeleton-line"></div>
+            </div>
+          </section>
+        `;
+      }
+      if (appState.error) return `<section class="error">${escapeHtml(appState.error)}</section>`;
+      if (!day) return `<section class="empty">선택한 날짜의 수업이 없습니다</section>`;
+      return `
+        <section class="summary">
+          <div class="summary-item">
+            <span class="summary-label">CLASSES</span>
+            <span class="summary-value">${day.summary?.totalLectures || 0}</span>
+            <span class="summary-note">예약 ${day.summary?.reservedCount || 0}</span>
+          </div>
+          <div class="summary-item">
+            <span class="summary-label">MEMBERS</span>
+            <span class="summary-value">${day.summary?.totalBookings || 0}</span>
+            <span class="summary-note">대기 ${day.summary?.waitCount || 0}</span>
+          </div>
+          <div class="summary-item">
+            <span class="summary-label">ALERTS</span>
+            <span class="summary-value">${day.summary?.uncheckedAttendanceCount || 0}</span>
+            <span class="summary-note">미체크</span>
+          </div>
+        </section>
+        <h2 class="section-title">${dateLabel(day.date)} 수업</h2>
+        ${(day.lectures || []).map(renderLecture).join('') || '<section class="empty">수업이 없습니다</section>'}
+      `;
+    }
+
+    function renderLecture(lecture) {
+      const bookings = lecture.bookings || [];
+      return `
+        <article class="lecture">
+          <header class="lecture-head">
+            <div class="time">${escapeHtml((lecture.timeText || '').split(' ')[0])}</div>
+            <div>
+              <h3 class="lecture-title">${escapeHtml(lecture.title || '수업')}</h3>
+              <div class="chips">
+                <span class="chip ${lecture.lessonType === 'private' ? 'private' : 'group'}">${lessonLabel(lecture.lessonType)}</span>
+                <span class="chip">${escapeHtml(lecture.roomName || lecture.divisionName || '')}</span>
+                <span class="chip">${lecture.bookingCount || 0}명</span>
+                ${lecture.waitCount ? `<span class="chip wait">대기 ${lecture.waitCount}</span>` : ''}
+              </div>
+            </div>
+            <div>${lecture.hasTodayChange ? '<span class="chip wait">변경</span>' : ''}</div>
+          </header>
+          <div class="member-list">
+            ${bookings.map((booking) => renderBooking(lecture, booking)).join('') || '<div class="empty">예약 회원이 없습니다</div>'}
+          </div>
+        </article>
+      `;
+    }
+
+    function renderBooking(lecture, booking) {
+      const wait = booking.appStatus === 'wait';
+      const tags = booking.tags || [];
+      return `
+        <div class="member">
+          <div class="badge">${escapeHtml(statusShort(booking))}</div>
+          <div class="member-main">
+            <div class="member-row">
+              <span class="member-name">${escapeHtml(booking.memberName || '회원')}</span>
+              <span class="chip ${statusClass(booking)}">${statusLabel(booking)}</span>
+            </div>
+            <div class="chips">
+              ${booking.ticketName ? `<span class="chip">${escapeHtml(booking.ticketName)}</span>` : ''}
+              ${booking.ticketRemainingCount != null ? `<span class="chip">${booking.ticketRemainingCount}회</span>` : ''}
+              ${tags.map((tag) => `<span class="chip ${tag.level === 'warning' ? 'wait' : tag.level === 'danger' ? 'bad' : ''}">${escapeHtml(tag.label || tag.tagId)}</span>`).join('')}
+              ${booking.lastMemoPreview ? `<span class="chip">${escapeHtml(booking.lastMemoPreview)}</span>` : ''}
+            </div>
+            <div class="member-actions">
+              <button class="tiny ${booking.attendanceStatus === 'attended' ? 'active good' : ''}" data-attendance="${booking.bookingId}" data-status="attended" ${wait ? 'disabled' : ''}>출석</button>
+              <button class="tiny ${booking.attendanceStatus === 'absent' ? 'active bad' : ''}" data-attendance="${booking.bookingId}" data-status="absent" ${wait ? 'disabled' : ''}>결석</button>
+              <button class="tiny ${booking.attendanceStatus === 'late_cancel' ? 'active bad' : ''}" data-attendance="${booking.bookingId}" data-status="late_cancel" ${wait ? 'disabled' : ''}>노쇼</button>
+              <button class="tiny" data-memo="${booking.bookingId}" data-member="${booking.memberId}" data-lecture="${lecture.lectureId}" data-name="${escapeAttr(booking.memberName || '')}">메모</button>
+            </div>
+          </div>
+        </div>
+      `;
+    }
+
+    function bindAppEvents() {
+      document.getElementById('logoutButton')?.addEventListener('click', () => signOut(appState.auth));
+      document.getElementById('refreshButton')?.addEventListener('click', loadHome);
+      document.getElementById('prevDate')?.addEventListener('click', () => shiftDate(-1));
+      document.getElementById('nextDate')?.addEventListener('click', () => shiftDate(1));
+      root.querySelectorAll('[data-attendance]').forEach((button) => {
+        button.addEventListener('click', () => updateAttendance(button.dataset.attendance, button.dataset.status));
+      });
+      root.querySelectorAll('[data-memo]').forEach((button) => {
+        button.addEventListener('click', () => openMemo({
+          bookingId: button.dataset.memo,
+          memberId: button.dataset.member,
+          lectureId: button.dataset.lecture,
+          memberName: button.dataset.name
+        }));
       });
     }
+
+    async function signIn() {
+      const provider = new GoogleAuthProvider();
+      provider.setCustomParameters({ hd: 'archivepilates.com' });
+      await signInWithPopup(appState.auth, provider);
+    }
+
+    async function loadHome() {
+      appState.loading = true;
+      appState.error = '';
+      renderApp();
+      try {
+        const getHome = httpsCallable(appState.functions, functionNames.getHome);
+        const result = await getHome({
+          fromDate: today(),
+          toDate: addDays(today(), 13)
+        });
+        appState.staff = result.data?.staff || { name: result.data?.staffId || '' };
+        appState.days = result.data?.days || [];
+        appState.loading = false;
+      } catch (err) {
+        appState.loading = false;
+        appState.error = friendlyError(err);
+      }
+      renderApp();
+    }
+
+    async function updateAttendance(bookingId, attendanceStatus) {
+      if (!bookingId || !attendanceStatus) return;
+      const fn = httpsCallable(appState.functions, functionNames.attendance);
+      optimisticAttendance(bookingId, attendanceStatus);
+      renderApp();
+      try {
+        await fn({ bookingId, attendanceStatus });
+      } catch (err) {
+        appState.error = friendlyError(err);
+        await loadHome();
+      }
+    }
+
+    function optimisticAttendance(bookingId, attendanceStatus) {
+      appState.days.forEach((day) => {
+        (day.lectures || []).forEach((lecture) => {
+          (lecture.bookings || []).forEach((booking) => {
+            if (booking.bookingId === bookingId) {
+              booking.attendanceStatus = attendanceStatus;
+              booking.syncStatus = 'pending';
+            }
+          });
+        });
+      });
+    }
+
+    function openMemo(input) {
+      appState.activeBooking = input;
+      memoTitle.textContent = `${input.memberName || '회원'} 메모`;
+      memoInput.value = '';
+      memoHistory.innerHTML = '';
+      modal.classList.add('open');
+      modal.setAttribute('aria-hidden', 'false');
+    }
+
+    async function saveMemo() {
+      const active = appState.activeBooking;
+      const content = memoInput.value.trim();
+      if (!active || !content) return;
+      saveMemoButton.disabled = true;
+      try {
+        const fn = httpsCallable(appState.functions, functionNames.memo);
+        await fn({
+          bookingId: active.bookingId,
+          memberId: active.memberId,
+          lectureId: active.lectureId,
+          memoType: 'member_note',
+          visibility: 'staff_and_manager',
+          content
+        });
+        modal.classList.remove('open');
+        await loadHome();
+      } catch (err) {
+        memoHistory.innerHTML = `<div class="error">${escapeHtml(friendlyError(err))}</div>`;
+      } finally {
+        saveMemoButton.disabled = false;
+      }
+    }
+
+    async function loadMemoHistory() {
+      const active = appState.activeBooking;
+      if (!active?.memberId) return;
+      memoHistory.innerHTML = '<div class="memo">불러오는 중</div>';
+      try {
+        const fn = httpsCallable(appState.functions, functionNames.memoHistory);
+        const result = await fn({ memberId: active.memberId, limit: 20 });
+        const memos = result.data?.memos || [];
+        const recent = result.data?.recent30Days;
+        memoHistory.innerHTML = `
+          ${recent ? `<div class="memo"><strong>최근 30일</strong>출석 ${recent.attended || 0} · 결석 ${recent.absent || 0} · 취소 ${recent.cancel || 0}</div>` : ''}
+          ${memos.map((memo) => `<div class="memo"><strong>${escapeHtml(memo.staffName || '')} ${escapeHtml(memo.lectureDate || '')}</strong>${escapeHtml(memo.content || '')}</div>`).join('') || '<div class="memo">메모가 없습니다</div>'}
+        `;
+      } catch (err) {
+        memoHistory.innerHTML = `<div class="error">${escapeHtml(friendlyError(err))}</div>`;
+      }
+    }
+
+    async function registerPushToken() {
+      if (!config.vapidKey || !(await isSupported())) return;
+      const registration = await navigator.serviceWorker.ready;
+      const messaging = getMessaging(appState.app);
+      const token = await getToken(messaging, {
+        vapidKey: config.vapidKey,
+        serviceWorkerRegistration: registration
+      });
+      if (!token) return;
+      const fn = httpsCallable(appState.functions, functionNames.registerFcm);
+      await fn({
+        token,
+        platform: 'web',
+        deviceLabel: navigator.userAgent.slice(0, 80)
+      });
+    }
+
+    function shiftDate(amount) {
+      appState.selectedDate = addDays(appState.selectedDate, amount);
+      renderApp();
+    }
+
+    function currentDay() {
+      return appState.days.find((day) => day.date === appState.selectedDate) || null;
+    }
+
+    function formatSyncText(day) {
+      if (!day) return '수업 없음';
+      return `예약 ${day.summary?.reservedCount || 0} · 미체크 ${day.summary?.uncheckedAttendanceCount || 0}`;
+    }
+
+    function today() {
+      const now = new Date();
+      return new Date(now.getTime() + 9 * 60 * 60 * 1000).toISOString().slice(0, 10);
+    }
+
+    function addDays(date, amount) {
+      const base = new Date(`${date}T00:00:00+09:00`);
+      base.setDate(base.getDate() + amount);
+      return new Date(base.getTime() + 9 * 60 * 60 * 1000).toISOString().slice(0, 10);
+    }
+
+    function dateLabel(date) {
+      const base = new Date(`${date}T00:00:00+09:00`);
+      return `${base.getMonth() + 1}/${base.getDate()} (${['일', '월', '화', '수', '목', '금', '토'][base.getDay()]})`;
+    }
+
+    function lessonLabel(type) {
+      if (type === 'private') return '프라이빗';
+      if (type === 'semi_private') return '세미';
+      return '그룹';
+    }
+
+    function statusLabel(booking) {
+      if (booking.appStatus === 'wait') return '대기';
+      if (booking.appStatus === 'cancel' || booking.appStatus === 'wait_cancel') return '취소';
+      if (booking.attendanceStatus === 'attended') return '출석';
+      if (booking.attendanceStatus === 'absent') return '결석';
+      if (booking.attendanceStatus === 'late_cancel') return '노쇼';
+      return '예약';
+    }
+
+    function statusShort(booking) {
+      return statusLabel(booking).slice(0, 1);
+    }
+
+    function statusClass(booking) {
+      if (booking.appStatus === 'wait') return 'wait';
+      if (booking.attendanceStatus === 'attended') return 'good';
+      if (booking.attendanceStatus === 'absent' || booking.attendanceStatus === 'late_cancel') return 'bad';
+      return '';
+    }
+
+    function friendlyError(err) {
+      return err?.message?.replace(/^Firebase: /, '') || '처리 중 오류가 발생했습니다';
+    }
+
+    function escapeHtml(value) {
+      return String(value ?? '')
+        .replaceAll('&', '&amp;')
+        .replaceAll('<', '&lt;')
+        .replaceAll('>', '&gt;')
+        .replaceAll('"', '&quot;')
+        .replaceAll("'", '&#039;');
+    }
+
+    function escapeAttr(value) {
+      return escapeHtml(value).replaceAll('\n', ' ');
+    }
+
+    document.querySelectorAll('[data-close-modal]').forEach((button) => {
+      button.addEventListener('click', () => {
+        modal.classList.remove('open');
+        modal.setAttribute('aria-hidden', 'true');
+      });
+    });
+    saveMemoButton.addEventListener('click', saveMemo);
+    loadMemoButton.addEventListener('click', loadMemoHistory);
   </script>
 </body>
 </html>
