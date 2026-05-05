@@ -10,4 +10,3 @@ export async function syncLecturesDaily(): Promise<unknown> {
     endDate: addDays(today, 14),
   });
 }
-

@@ -7,7 +7,10 @@ import { refs } from "../firestore/refs";
 import { DEFAULT_STUDIO_ID } from "../config/constants";
 import { nowTimestamp, todayKst } from "../utils/date";
 
-export async function sendAttendanceReminder(input?: { studioId?: string; date?: string }): Promise<{ sentLectures: number }> {
+export async function sendAttendanceReminder(input?: {
+  studioId?: string;
+  date?: string;
+}): Promise<{ sentLectures: number }> {
   const studioId = input?.studioId || DEFAULT_STUDIO_ID;
   const date = input?.date || todayKst();
   const lectures = await getLecturesByDate(studioId, date);
@@ -18,7 +21,9 @@ export async function sendAttendanceReminder(input?: { studioId?: string; date?:
     const flagRef = refs.syncState(`attendanceReminder_${lecture.lectureId}_${date}`);
     if ((await flagRef.get()).exists) continue;
     const bookings = await getBookingsByLecture(studioId, lecture.lectureId);
-    const unchecked = bookings.filter((booking) => booking.appStatus === "reserved" && booking.attendanceStatus === "unchecked").length;
+    const unchecked = bookings.filter(
+      (booking) => booking.appStatus === "reserved" && booking.attendanceStatus === "unchecked",
+    ).length;
     if (!unchecked) continue;
     const tokens = await getFcmTokensByStaff(studioId, lecture.staffId);
     if (!tokens.length) continue;

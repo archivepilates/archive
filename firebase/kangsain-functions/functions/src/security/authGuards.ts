@@ -17,7 +17,8 @@ export function requireManager(staff: StaffDoc): void {
 
 export function assertOwnStaff(staff: StaffDoc, targetStaffId: string): void {
   if (isManagerRole(staff.role)) return;
-  if (staff.staffId !== targetStaffId) throw new AppError("PERMISSION_DENIED", "담당 강사의 데이터만 접근할 수 있습니다");
+  if (staff.staffId !== targetStaffId)
+    throw new AppError("PERMISSION_DENIED", "담당 강사의 데이터만 접근할 수 있습니다");
 }
 
 export function isManagerRole(role: StaffDoc["role"]): boolean {

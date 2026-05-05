@@ -26,4 +26,3 @@ function normalizePlatform(value: unknown): "web" | "ios" | "android" | "unknown
   if (["web", "ios", "android"].includes(text)) return text as "web" | "ios" | "android";
   return "unknown";
 }
-

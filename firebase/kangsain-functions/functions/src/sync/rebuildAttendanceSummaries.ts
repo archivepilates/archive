@@ -17,21 +17,22 @@ export async function rebuildAttendanceSummaries(input: {
       grouped.set(booking.memberId, list);
     });
 
-  await Promise.all([...grouped.entries()].map(([memberId, rows]) => {
-    const doc: AttendanceSummaryDoc = {
-      summaryId: `${memberId}_${input.endDate.replaceAll("-", "")}`,
-      studioId: input.studioId,
-      memberId,
-      periodStart,
-      periodEnd: input.endDate,
-      attended: rows.filter((row) => row.attendanceStatus === "attended").length,
-      absent: rows.filter((row) => row.attendanceStatus === "absent").length,
-      cancel: rows.filter((row) => row.appStatus === "cancel").length,
-      waitCancel: rows.filter((row) => row.appStatus === "wait_cancel").length,
-      total: rows.length,
-      updatedAt: nowTimestamp(),
-    };
-    return refs.attendanceSummary(memberId, input.endDate.replaceAll("-", "")).set(doc, { merge: true });
-  }));
+  await Promise.all(
+    [...grouped.entries()].map(([memberId, rows]) => {
+      const doc: AttendanceSummaryDoc = {
+        summaryId: `${memberId}_${input.endDate.replaceAll("-", "")}`,
+        studioId: input.studioId,
+        memberId,
+        periodStart,
+        periodEnd: input.endDate,
+        attended: rows.filter((row) => row.attendanceStatus === "attended").length,
+        absent: rows.filter((row) => row.attendanceStatus === "absent").length,
+        cancel: rows.filter((row) => row.appStatus === "cancel").length,
+        waitCancel: rows.filter((row) => row.appStatus === "wait_cancel").length,
+        total: rows.length,
+        updatedAt: nowTimestamp(),
+      };
+      return refs.attendanceSummary(memberId, input.endDate.replaceAll("-", "")).set(doc, { merge: true });
+    }),
+  );
 }
-

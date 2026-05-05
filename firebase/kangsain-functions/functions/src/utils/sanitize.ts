@@ -4,4 +4,3 @@ export function sanitizeLogText(value: unknown, maxLength = 300): string {
     .replace(/010\d{7,8}/g, "010********")
     .slice(0, maxLength);
 }
-

@@ -52,18 +52,25 @@ export async function syncLecturesRange(input: {
     }
   }
 
-  await rebuildAttendanceSummaries({ studioId, endDate: input.endDate > todayKst() ? todayKst() : input.endDate, bookings: allBookings });
-  await rebuildInstructorViewsForDates(studioId, staffDates);
-  await refs.syncState(`lecturesRange_${studioId}`).set({
-    syncName: `lecturesRange_${studioId}`,
+  await rebuildAttendanceSummaries({
     studioId,
-    status: "success",
-    lastRunAt: nowTimestamp(),
-    lastSuccessAt: nowTimestamp(),
-    range: { startDate: input.startDate, endDate: input.endDate },
-    errorCount: 0,
-    lastError: null,
-  }, { merge: true });
+    endDate: input.endDate > todayKst() ? todayKst() : input.endDate,
+    bookings: allBookings,
+  });
+  await rebuildInstructorViewsForDates(studioId, staffDates);
+  await refs.syncState(`lecturesRange_${studioId}`).set(
+    {
+      syncName: `lecturesRange_${studioId}`,
+      studioId,
+      status: "success",
+      lastRunAt: nowTimestamp(),
+      lastSuccessAt: nowTimestamp(),
+      range: { startDate: input.startDate, endDate: input.endDate },
+      errorCount: 0,
+      lastError: null,
+    },
+    { merge: true },
+  );
 
   logger.info("syncLecturesRange completed", { studioId, ...input, lecturesChanged, bookingsChanged });
   return { lecturesChanged, bookingsChanged, totalLectures: rawLectures.length, totalBookings: allBookings.length };

@@ -65,4 +65,3 @@ async function enqueueTypedJob(
   await enqueueWriteJob(job);
   return job;
 }
-

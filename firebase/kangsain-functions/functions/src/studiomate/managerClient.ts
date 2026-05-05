@@ -8,7 +8,10 @@ import { sanitizeLogText } from "../utils/sanitize";
 import { getManagerTokenFromStore, saveManagerToken } from "./authTokenStore";
 
 export class ManagerClient {
-  constructor(private readonly studioId: string, private readonly staffId: string) {}
+  constructor(
+    private readonly studioId: string,
+    private readonly staffId: string,
+  ) {}
 
   async login(): Promise<ManagerToken> {
     const cached = await getManagerTokenFromStore(this.studioId, this.staffId);
@@ -45,7 +48,9 @@ export class ManagerClient {
     if (!res.ok) throw new AppError("MANAGER_API_FAILED", `Manager login failed ${res.status}`, false);
 
     const json = JSON.parse(text) as Record<string, any>;
-    const accountToken = String(json.account_token || json.access_token || json.token || json.data?.account_token || "");
+    const accountToken = String(
+      json.account_token || json.access_token || json.token || json.data?.account_token || "",
+    );
     if (!accountToken) throw new AppError("MANAGER_API_FAILED", "Manager login response did not include token", false);
     const token = { accountToken, expiresAt: Date.now() + 50 * 60 * 1000 };
     await saveManagerToken(this.studioId, this.staffId, token);
@@ -54,7 +59,11 @@ export class ManagerClient {
 
   async getStudio(): Promise<ManagerStudio[]> {
     const result = await this.request("GET", "/api/studio", false);
-    return Array.isArray(result.studios) ? result.studios : Array.isArray(result.data?.studios) ? result.data.studios : [];
+    return Array.isArray(result.studios)
+      ? result.studios
+      : Array.isArray(result.data?.studios)
+        ? result.data.studios
+        : [];
   }
 
   async getCommonNotices(): Promise<any[]> {
@@ -96,7 +105,13 @@ export class ManagerClient {
       durationMs: Date.now() - started,
       errorMessage: res.ok ? undefined : sanitizeLogText(text),
     });
-    if (!res.ok) throw new AppError("MANAGER_API_FAILED", `Manager API failed ${res.status}`, res.status >= 500, sanitizeLogText({ includeScope, text }));
+    if (!res.ok)
+      throw new AppError(
+        "MANAGER_API_FAILED",
+        `Manager API failed ${res.status}`,
+        res.status >= 500,
+        sanitizeLogText({ includeScope, text }),
+      );
     return text ? JSON.parse(text) : {};
   }
 }

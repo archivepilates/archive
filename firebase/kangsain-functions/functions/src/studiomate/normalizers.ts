@@ -13,7 +13,9 @@ export function normalizeLecture(raw: any, studioId: string): LectureDoc {
   const staff = raw.staff || raw.instructor || {};
   const division = raw.division || {};
   const room = raw.room || {};
-  const staffId = stringValue(staff.id ?? raw.staff_id ?? raw.instructor_id ?? raw.staffId ?? raw.staff_name ?? staff.name);
+  const staffId = stringValue(
+    staff.id ?? raw.staff_id ?? raw.instructor_id ?? raw.staffId ?? raw.staff_name ?? staff.name,
+  );
   const staffName = stringValue(staff.name ?? staff.profile?.name ?? raw.staff_name ?? raw.instructor_name);
   const normalizedBookings = bookings.map((booking) => normalizeBooking(raw, booking, studioId));
 
@@ -33,7 +35,9 @@ export function normalizeLecture(raw: any, studioId: string): LectureDoc {
     capacity: numberValue(raw.max_trainee ?? raw.capacity),
     bookingCount: normalizedBookings.filter((booking) => booking.appStatus === "reserved").length,
     waitCount: normalizedBookings.filter((booking) => booking.appStatus === "wait").length,
-    cancelCount: normalizedBookings.filter((booking) => booking.appStatus === "cancel" || booking.appStatus === "wait_cancel").length,
+    cancelCount: normalizedBookings.filter(
+      (booking) => booking.appStatus === "cancel" || booking.appStatus === "wait_cancel",
+    ).length,
     sourceHash: stableHash(stripVolatile(raw)),
     sourceUpdatedAt: parseStudioMateDateTime(raw.updated_at),
     syncedAt: nowTimestamp(),
@@ -59,7 +63,9 @@ export function normalizeBooking(rawLecture: any, rawBooking: any, studioId: str
     memberId: stringValue(member.id ?? rawBooking.user_id ?? rawBooking.member_id),
     memberName: stringValue(member.name ?? rawBooking.name),
     memberPhone: digitsOnly(member.mobile ?? member.phone ?? rawBooking.mobile ?? rawBooking.phone),
-    staffId: stringValue(staff.id ?? rawLecture.staff_id ?? rawLecture.instructor_id ?? rawLecture.staff_name ?? staff.name),
+    staffId: stringValue(
+      staff.id ?? rawLecture.staff_id ?? rawLecture.instructor_id ?? rawLecture.staff_name ?? staff.name,
+    ),
     staffName: stringValue(staff.name ?? staff.profile?.name ?? rawLecture.staff_name ?? rawLecture.instructor_name),
     lectureDate: startRaw ? startRaw.slice(0, 10) : "",
     lectureStartAt: parseStudioMateDateTime(startRaw),

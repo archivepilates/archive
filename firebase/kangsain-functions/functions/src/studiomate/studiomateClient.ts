@@ -44,7 +44,8 @@ export class StudioMateClient {
 
     const json = JSON.parse(text) as Record<string, any>;
     const accessToken = String(json.access_token || json.token || "");
-    if (!accessToken) throw new AppError("STUDIOMATE_LOGIN_FAILED", "StudioMate login response did not include token", false);
+    if (!accessToken)
+      throw new AppError("STUDIOMATE_LOGIN_FAILED", "StudioMate login response did not include token", false);
     const token = { accessToken, expiresAt: Date.now() + 50 * 60 * 1000 };
     await saveStudioMateToken(this.studioId, token);
     return token;
@@ -106,7 +107,13 @@ export class StudioMateClient {
       durationMs: Date.now() - started,
       errorMessage: res.ok ? undefined : sanitizeLogText(text),
     });
-    if (!res.ok) throw new AppError("STUDIOMATE_API_FAILED", `StudioMate API failed ${res.status}`, res.status >= 500, sanitizeLogText(text));
+    if (!res.ok)
+      throw new AppError(
+        "STUDIOMATE_API_FAILED",
+        `StudioMate API failed ${res.status}`,
+        res.status >= 500,
+        sanitizeLogText(text),
+      );
     return text ? JSON.parse(text) : {};
   }
 }

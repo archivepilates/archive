@@ -29,15 +29,19 @@ export async function saveTokenCache(input: {
   const now = nowTimestamp();
   const ref = refs.tokenCacheDoc(input.tokenKey);
   await db.runTransaction(async (tx) => {
-    tx.set(ref, {
-      tokenKey: input.tokenKey,
-      service: input.service,
-      studioId: input.studioId,
-      staffId: input.staffId,
-      token: input.token,
-      issuedAt: now,
-      expiresAt: Timestamp.fromMillis(input.expiresAtMs),
-      lastUsedAt: now,
-    }, { merge: true });
+    tx.set(
+      ref,
+      {
+        tokenKey: input.tokenKey,
+        service: input.service,
+        studioId: input.studioId,
+        staffId: input.staffId,
+        token: input.token,
+        issuedAt: now,
+        expiresAt: Timestamp.fromMillis(input.expiresAtMs),
+        lastUsedAt: now,
+      },
+      { merge: true },
+    );
   });
 }

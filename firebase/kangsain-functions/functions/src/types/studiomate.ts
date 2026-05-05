@@ -20,4 +20,3 @@ export interface NormalizedLectureInput {
   raw: any;
   studioId: string;
 }
-

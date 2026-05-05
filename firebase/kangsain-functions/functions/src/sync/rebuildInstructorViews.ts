@@ -20,7 +20,10 @@ export async function rebuildInstructorView(input: {
   return view;
 }
 
-export async function rebuildInstructorViewsForDates(studioId: string, staffDates: Array<{ staffId: string; date: string }>): Promise<void> {
+export async function rebuildInstructorViewsForDates(
+  studioId: string,
+  staffDates: Array<{ staffId: string; date: string }>,
+): Promise<void> {
   const unique = new Map(staffDates.map((item) => [`${item.staffId}_${item.date}`, item]));
   await Promise.all([...unique.values()].map((item) => rebuildInstructorView({ studioId, ...item })));
 }
@@ -56,8 +59,12 @@ function buildInstructorView(
         capacity: lecture.capacity,
         bookingCount: lectureBookings.filter((booking) => booking.appStatus === "reserved").length,
         waitCount: lectureBookings.filter((booking) => booking.appStatus === "wait").length,
-        uncheckedAttendanceCount: lectureBookings.filter((booking) => booking.appStatus === "reserved" && booking.attendanceStatus === "unchecked").length,
-        hasTodayChange: lectureBookings.some((booking) => booking.sourceUpdatedAt && booking.sourceUpdatedAt.toMillis() > startOfKstDate(date).getTime()),
+        uncheckedAttendanceCount: lectureBookings.filter(
+          (booking) => booking.appStatus === "reserved" && booking.attendanceStatus === "unchecked",
+        ).length,
+        hasTodayChange: lectureBookings.some(
+          (booking) => booking.sourceUpdatedAt && booking.sourceUpdatedAt.toMillis() > startOfKstDate(date).getTime(),
+        ),
         bookings: lectureBookings.map((booking) => ({
           bookingId: booking.bookingId,
           memberId: booking.memberId,
@@ -87,7 +94,8 @@ function buildInstructorView(
       totalBookings: activeBookings.length,
       uncheckedAttendanceCount: activeBookings.filter((booking) => booking.attendanceStatus === "unchecked").length,
       reservedCount: bookings.filter((booking) => booking.appStatus === "reserved").length,
-      cancelCount: bookings.filter((booking) => booking.appStatus === "cancel" || booking.appStatus === "wait_cancel").length,
+      cancelCount: bookings.filter((booking) => booking.appStatus === "cancel" || booking.appStatus === "wait_cancel")
+        .length,
       waitCount: bookings.filter((booking) => booking.appStatus === "wait").length,
     },
     lectures: viewLectures,
@@ -99,7 +107,8 @@ function timeText(lecture: LectureDoc): string {
   const start = lecture.startAt?.toDate();
   const end = lecture.endAt?.toDate();
   if (!start) return "";
-  const hhmm = (date: Date) => `${String(date.getHours()).padStart(2, "0")}:${String(date.getMinutes()).padStart(2, "0")}`;
+  const hhmm = (date: Date) =>
+    `${String(date.getHours()).padStart(2, "0")}:${String(date.getMinutes()).padStart(2, "0")}`;
   return end ? `${hhmm(start)} - ${hhmm(end)}` : hhmm(start);
 }
 

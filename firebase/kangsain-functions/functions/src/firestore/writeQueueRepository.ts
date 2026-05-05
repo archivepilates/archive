@@ -7,7 +7,8 @@ export async function enqueueWriteJob(job: WriteQueueJobDoc): Promise<void> {
 }
 
 export async function getDueWriteJobs(limit: number): Promise<WriteQueueJobDoc[]> {
-  const snap = await refs.writeQueue()
+  const snap = await refs
+    .writeQueue()
     .where("status", "in", ["pending", "retry"])
     .where("nextRunAt", "<=", Timestamp.now())
     .orderBy("nextRunAt", "asc")

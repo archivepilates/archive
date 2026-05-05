@@ -31,7 +31,11 @@ export async function pollManagerNotices(input?: {
     if (await saveNoticeIfNew(notice)) {
       saved++;
       if (notice.refLectureId) {
-        await refreshLectureById({ studioId, lectureId: notice.refLectureId, fallbackDate: notice.sourceCreatedAt.slice(0, 10) });
+        await refreshLectureById({
+          studioId,
+          lectureId: notice.refLectureId,
+          fallbackDate: notice.sourceCreatedAt.slice(0, 10),
+        });
         refreshJobs++;
       }
       const lecture = notice.refLectureId ? await getLecture(notice.refLectureId) : null;
@@ -47,18 +51,28 @@ export async function pollManagerNotices(input?: {
   }
 
   const newest = notices.at(-1)?.sourceCreatedAt || lastNoticeCreatedAt || "";
-  await refs.syncState(`managerNoticePoller_${studioId}`).set({
-    syncName: `managerNoticePoller_${studioId}`,
-    studioId,
-    status: "success",
-    lastRunAt: nowTimestamp(),
-    lastSuccessAt: nowTimestamp(),
-    lastNoticeCreatedAt: newest,
-    errorCount: 0,
-    lastError: null,
-  }, { merge: true });
+  await refs.syncState(`managerNoticePoller_${studioId}`).set(
+    {
+      syncName: `managerNoticePoller_${studioId}`,
+      studioId,
+      status: "success",
+      lastRunAt: nowTimestamp(),
+      lastSuccessAt: nowTimestamp(),
+      lastNoticeCreatedAt: newest,
+      errorCount: 0,
+      lastError: null,
+    },
+    { merge: true },
+  );
 
-  logger.info("pollManagerNotices completed", { studioId, staffId, seen: rawNotices.length, saved, refreshJobs, pushes });
+  logger.info("pollManagerNotices completed", {
+    studioId,
+    staffId,
+    seen: rawNotices.length,
+    saved,
+    refreshJobs,
+    pushes,
+  });
   return { seen: rawNotices.length, saved, refreshJobs };
 }
 

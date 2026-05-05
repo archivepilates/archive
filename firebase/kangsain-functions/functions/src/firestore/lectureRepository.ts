@@ -11,11 +11,12 @@ export async function upsertLectureIfChanged(lecture: LectureDoc): Promise<boole
 
 export async function getLecture(lectureId: string): Promise<LectureDoc | null> {
   const snap = await refs.lecture(lectureId).get();
-  return snap.exists ? snap.data() ?? null : null;
+  return snap.exists ? (snap.data() ?? null) : null;
 }
 
 export async function getLecturesByStaffDate(studioId: string, staffId: string, date: string): Promise<LectureDoc[]> {
-  const snap = await refs.lectures()
+  const snap = await refs
+    .lectures()
     .where("studioId", "==", studioId)
     .where("staffId", "==", staffId)
     .where("date", "==", date)
@@ -24,10 +25,6 @@ export async function getLecturesByStaffDate(studioId: string, staffId: string, 
 }
 
 export async function getLecturesByDate(studioId: string, date: string): Promise<LectureDoc[]> {
-  const snap = await refs.lectures()
-    .where("studioId", "==", studioId)
-    .where("date", "==", date)
-    .get();
+  const snap = await refs.lectures().where("studioId", "==", studioId).where("date", "==", date).get();
   return snap.docs.map((doc) => doc.data());
 }
-

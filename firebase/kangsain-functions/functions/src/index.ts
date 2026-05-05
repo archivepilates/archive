@@ -21,33 +21,45 @@ import { requireStaff, requireManager } from "./security/authGuards";
 const callableOptions = { region: REGION, secrets: allSecrets };
 const scheduleOptions = { region: REGION, timeZone: TIMEZONE, secrets: allSecrets };
 
-export const scheduledSyncLecturesDaily = onSchedule({
-  ...scheduleOptions,
-  schedule: "5 0 * * *",
-}, async () => {
-  await syncLecturesDaily();
-});
+export const scheduledSyncLecturesDaily = onSchedule(
+  {
+    ...scheduleOptions,
+    schedule: "5 0 * * *",
+  },
+  async () => {
+    await syncLecturesDaily();
+  },
+);
 
-export const scheduledPollManagerNotices = onSchedule({
-  ...scheduleOptions,
-  schedule: "every 5 minutes",
-}, async () => {
-  await pollManagerNotices();
-});
+export const scheduledPollManagerNotices = onSchedule(
+  {
+    ...scheduleOptions,
+    schedule: "every 5 minutes",
+  },
+  async () => {
+    await pollManagerNotices();
+  },
+);
 
-export const scheduledProcessWriteQueue = onSchedule({
-  ...scheduleOptions,
-  schedule: "every 1 minutes",
-}, async () => {
-  await processWriteQueue();
-});
+export const scheduledProcessWriteQueue = onSchedule(
+  {
+    ...scheduleOptions,
+    schedule: "every 1 minutes",
+  },
+  async () => {
+    await processWriteQueue();
+  },
+);
 
-export const scheduledAttendanceReminder = onSchedule({
-  ...scheduleOptions,
-  schedule: "0 * * * *",
-}, async () => {
-  await sendAttendanceReminder();
-});
+export const scheduledAttendanceReminder = onSchedule(
+  {
+    ...scheduleOptions,
+    schedule: "0 * * * *",
+  },
+  async () => {
+    await sendAttendanceReminder();
+  },
+);
 
 export const getInstructorHome = onCall(callableOptions, async (request) => {
   try {

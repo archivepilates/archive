@@ -40,4 +40,3 @@ export function nowTimestamp(): Timestamp {
 }
 
 export { TIMEZONE };
-

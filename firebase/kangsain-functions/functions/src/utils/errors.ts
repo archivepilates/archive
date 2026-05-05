@@ -25,4 +25,3 @@ export function toHttpsError(err: unknown): HttpsError {
 export function errorMessage(err: unknown): string {
   return err instanceof Error ? err.message : String(err);
 }
-

@@ -8,7 +8,8 @@ export async function getMemberMemoHistory(input: {
   isManager: boolean;
   limit: number;
 }): Promise<MemberMemoDoc[]> {
-  const snap = await refs.memberMemos()
+  const snap = await refs
+    .memberMemos()
     .where("studioId", "==", input.studioId)
     .where("memberId", "==", input.memberId)
     .orderBy("createdAt", "desc")
@@ -25,4 +26,3 @@ function canReadMemo(visibility: MemoVisibility, createdByUid: string, uid: stri
   if (visibility === "creator_only") return createdByUid === uid;
   return false;
 }
-

@@ -11,7 +11,8 @@ import { nextRetryAt } from "./retryPolicy";
 import { refreshLectureById } from "../sync/refreshLectureById";
 
 export async function processWriteQueue(): Promise<{ processed: number }> {
-  const due = await refs.writeQueue()
+  const due = await refs
+    .writeQueue()
     .where("status", "in", ["pending", "retry"])
     .where("nextRunAt", "<=", Timestamp.now())
     .orderBy("nextRunAt", "asc")
@@ -52,15 +53,20 @@ async function processJob(job: WriteQueueJobDoc): Promise<void> {
   } catch (err) {
     const attempts = job.attempts + 1;
     const failed = attempts >= job.maxAttempts;
-    await refs.writeJob(job.jobId).set({
-      status: failed ? "failed" : "retry",
-      attempts,
-      nextRunAt: failed ? job.nextRunAt : nextRetryAt(attempts),
-      lastError: errorMessage(err),
-      updatedAt: nowTimestamp(),
-    }, { merge: true });
+    await refs.writeJob(job.jobId).set(
+      {
+        status: failed ? "failed" : "retry",
+        attempts,
+        nextRunAt: failed ? job.nextRunAt : nextRetryAt(attempts),
+        lastError: errorMessage(err),
+        updatedAt: nowTimestamp(),
+      },
+      { merge: true },
+    );
     if (job.type === "bookingAttendanceUpdate" && failed) {
-      await refs.booking(String(job.payload.bookingId || "")).set({ syncStatus: "failed", updatedAt: nowTimestamp() }, { merge: true });
+      await refs
+        .booking(String(job.payload.bookingId || ""))
+        .set({ syncStatus: "failed", updatedAt: nowTimestamp() }, { merge: true });
     }
   }
 }

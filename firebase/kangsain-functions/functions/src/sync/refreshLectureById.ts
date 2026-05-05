@@ -13,4 +13,3 @@ export async function refreshLectureById(input: {
   if (!date) return { refreshed: false, reason: "missing lecture date" };
   return syncLecturesRange({ studioId, startDate: date, endDate: date });
 }
-

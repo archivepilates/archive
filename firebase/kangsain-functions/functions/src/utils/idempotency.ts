@@ -13,4 +13,3 @@ export function noticeIdFor(input: {
 export function queueJobIdFor(input: unknown): string {
   return `job_${stableHash(input).slice(0, 32)}`;
 }
-

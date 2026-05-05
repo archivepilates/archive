@@ -12,17 +12,21 @@ export async function saveFcmToken(input: Omit<FcmTokenDoc, "tokenId" | "created
   const ref = refs.fcmToken(tokenId);
   const snap = await ref.get();
   const now = nowTimestamp();
-  await ref.set({
-    ...input,
-    tokenId,
-    createdAt: snap.data()?.createdAt || now,
-    lastSeenAt: now,
-  }, { merge: true });
+  await ref.set(
+    {
+      ...input,
+      tokenId,
+      createdAt: snap.data()?.createdAt || now,
+      lastSeenAt: now,
+    },
+    { merge: true },
+  );
   return tokenId;
 }
 
 export async function getFcmTokensByStaff(studioId: string, staffId: string): Promise<FcmTokenDoc[]> {
-  const snap = await refs.fcmTokens()
+  const snap = await refs
+    .fcmTokens()
     .where("studioId", "==", studioId)
     .where("staffId", "==", staffId)
     .orderBy("lastSeenAt", "desc")
@@ -34,4 +38,3 @@ export async function getFcmTokensByStaff(studioId: string, staffId: string): Pr
 export async function deleteFcmToken(tokenId: string): Promise<void> {
   await refs.fcmToken(tokenId).delete();
 }
-

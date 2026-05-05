@@ -1,8 +1,5 @@
 import type { CallableRequest } from "firebase-functions/v2/https";
-import {
-  searchBookingsByMemberName,
-  searchBookingsByMemberPhone,
-} from "../firestore/bookingRepository";
+import { searchBookingsByMemberName, searchBookingsByMemberPhone } from "../firestore/bookingRepository";
 import { getMemberTagsMap } from "../firestore/memberTagRepository";
 import { refs } from "../firestore/refs";
 import { requireStaff, isManagerRole } from "../security/authGuards";
@@ -13,19 +10,23 @@ export async function searchMembersHandler(request: CallableRequest): Promise<un
   const staff = await requireStaff(request);
   const type = String(request.data?.type || "name");
   const query = String(request.data?.query || "").trim();
-  if (!["name", "phone"].includes(type) || query.length < 2) throw new AppError("INVALID_ARGUMENT", "검색어가 너무 짧거나 종류가 올바르지 않습니다");
+  if (!["name", "phone"].includes(type) || query.length < 2)
+    throw new AppError("INVALID_ARGUMENT", "검색어가 너무 짧거나 종류가 올바르지 않습니다");
 
   const startDate = addDays(todayKst(), -90);
-  const rows = type === "phone"
-    ? await searchBookingsByMemberPhone(staff.studioId, digitsOnly(query), startDate)
-    : await searchBookingsByMemberName(staff.studioId, query, startDate);
+  const rows =
+    type === "phone"
+      ? await searchBookingsByMemberPhone(staff.studioId, digitsOnly(query), startDate)
+      : await searchBookingsByMemberName(staff.studioId, query, startDate);
   const manager = isManagerRole(staff.role);
   const visibleRows = manager ? rows : rows.filter((row) => row.staffId === staff.staffId);
   const byMember = new Map(visibleRows.map((row) => [row.memberId, row]));
   const memberIds = [...byMember.keys()].slice(0, 20);
   const tagsByMember = await getMemberTagsMap(memberIds);
   const today = todayKst();
-  const summaries = await Promise.all(memberIds.map((memberId) => refs.attendanceSummary(memberId, today.replaceAll("-", "")).get()));
+  const summaries = await Promise.all(
+    memberIds.map((memberId) => refs.attendanceSummary(memberId, today.replaceAll("-", "")).get()),
+  );
   const summaryByMember = new Map(summaries.map((snap) => [snap.id.split("_")[0], snap.data() || null]));
 
   return {
@@ -51,4 +52,3 @@ function maskPhone(phone: string): string {
   if (digits.length < 8) return "";
   return `${digits.slice(0, 3)}-****-${digits.slice(-4)}`;
 }
-

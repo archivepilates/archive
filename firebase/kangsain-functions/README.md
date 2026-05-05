@@ -58,6 +58,26 @@ GitHub Pages 강사IN 프론트는 `/kangsain` 폴더를 사용합니다. 실제
 ```bash
 npm run typecheck
 npm run build
+npm run format:check
+```
+
+## 개발 도구
+
+Functions 폴더에는 빠른 작업을 위해 `firebase-tools`, `typescript`, `tsx`, `eslint`, `prettier`, `npm`을 devDependency로 고정했습니다.
+
+```bash
+cd firebase/kangsain-functions/functions
+npm install
+npm run typecheck
+npm run build
+npm run format
+npm run deploy
+```
+
+전역 npm이 없는 로컬에서는 repo 루트에서 아래 스크립트로 도구 상태를 확인할 수 있습니다.
+
+```bash
+scripts/bootstrap-kangsain-tools.sh
 ```
 
 ## 주의

@@ -14,4 +14,3 @@ export async function getActiveStaffs(studioId: string): Promise<StaffDoc[]> {
   const snap = await refs.staffs().where("studioId", "==", studioId).where("active", "==", true).get();
   return snap.docs.map((doc) => doc.data());
 }
-

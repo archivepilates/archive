@@ -19,7 +19,9 @@ export async function getMemberMemoHistoryHandler(request: CallableRequest): Pro
 
   const endDate = todayKst();
   const summarySnap = await refs.attendanceSummary(memberId, endDate.replaceAll("-", "")).get();
-  const fallbackBookings = summarySnap.exists ? [] : await getRecentMemberBookings(staff.studioId, [memberId], addDays(endDate, -29), endDate);
+  const fallbackBookings = summarySnap.exists
+    ? []
+    : await getRecentMemberBookings(staff.studioId, [memberId], addDays(endDate, -29), endDate);
   const memos = await getMemberMemoHistory({
     studioId: staff.studioId,
     memberId,

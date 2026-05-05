@@ -24,13 +24,15 @@ export async function sendBookingChangePush(input: {
     },
   });
 
-  await Promise.all(response.responses.map((result, index) => {
-    const code = result.error?.code || "";
-    if (code.includes("registration-token-not-registered") || code.includes("invalid-registration-token")) {
-      return deleteFcmToken(tokens[index].tokenId);
-    }
-    return Promise.resolve();
-  }));
+  await Promise.all(
+    response.responses.map((result, index) => {
+      const code = result.error?.code || "";
+      if (code.includes("registration-token-not-registered") || code.includes("invalid-registration-token")) {
+        return deleteFcmToken(tokens[index].tokenId);
+      }
+      return Promise.resolve();
+    }),
+  );
   await logApiCall({
     studioId: input.notice.studioId,
     service: "manager",
@@ -42,4 +44,3 @@ export async function sendBookingChangePush(input: {
   });
   return { sent: response.successCount, failed: response.failureCount };
 }
-

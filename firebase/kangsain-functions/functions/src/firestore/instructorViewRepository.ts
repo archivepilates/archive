@@ -9,4 +9,3 @@ export async function getInstructorViews(staffId: string, dates: string[]): Prom
   const snaps = await Promise.all(dates.map((date) => refs.instructorView(staffId, date).get()));
   return snaps.filter((snap) => snap.exists).map((snap) => snap.data() as InstructorViewDoc);
 }
-
