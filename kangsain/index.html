@@ -10,9 +10,9 @@
   <meta name="mobile-web-app-capable" content="yes">
   <meta name="apple-mobile-web-app-title" content="아카이브IN">
   <meta name="apple-mobile-web-app-status-bar-style" content="default">
-  <link rel="manifest" href="./manifest.webmanifest?v=17">
-  <link rel="icon" type="image/png" sizes="192x192" href="./icons/icon-192.png?v=17">
-  <link rel="apple-touch-icon" sizes="180x180" href="./icons/apple-touch-icon.png?v=17">
+  <link rel="manifest" href="./manifest.webmanifest?v=18">
+  <link rel="icon" type="image/png" sizes="192x192" href="./icons/icon-192.png?v=18">
+  <link rel="apple-touch-icon" sizes="180x180" href="./icons/apple-touch-icon.png?v=18">
   <style>
     :root {
       --ink: #171717;
@@ -622,10 +622,15 @@
       collection,
       doc,
       getDoc,
+      getDocs,
       getFirestore,
+      limit as queryLimit,
+      orderBy,
+      query,
       serverTimestamp,
       setDoc,
-      updateDoc
+      updateDoc,
+      where
     } from 'https://www.gstatic.com/firebasejs/10.14.1/firebase-firestore.js';
     import {
       getMessaging,
@@ -661,7 +666,6 @@
       getHome: 'getInstructorHome',
       attendance: 'submitBookingAttendance',
       memo: 'submitMemberMemo',
-      memoHistory: 'getMemberMemoHistory',
       registerFcm: 'registerFcmToken'
     };
 
@@ -833,7 +837,6 @@
             <div class="member-actions">
               <button class="tiny ${booking.attendanceStatus === 'attended' ? 'active good' : ''}" data-attendance="${booking.bookingId}" data-status="attended" ${wait ? 'disabled' : ''}>출석</button>
               <button class="tiny ${booking.attendanceStatus === 'absent' ? 'active bad' : ''}" data-attendance="${booking.bookingId}" data-status="absent" ${wait ? 'disabled' : ''}>결석</button>
-              <button class="tiny ${booking.attendanceStatus === 'late_cancel' ? 'active bad' : ''}" data-attendance="${booking.bookingId}" data-status="late_cancel" ${wait ? 'disabled' : ''}>노쇼</button>
               <button class="tiny" data-memo="${booking.bookingId}" data-member="${booking.memberId}" data-lecture="${lecture.lectureId}" data-name="${escapeAttr(booking.memberName || '')}">메모</button>
             </div>
           </div>
@@ -1052,14 +1055,19 @@
       if (!active?.memberId) return;
       memoHistory.innerHTML = '<div class="memo">불러오는 중</div>';
       try {
-        const fn = httpsCallable(appState.functions, functionNames.memoHistory);
-        const result = await fn({ memberId: active.memberId, limit: 20 });
-        const memos = result.data?.memos || [];
-        const recent = result.data?.recent30Days;
-        memoHistory.innerHTML = `
-          ${recent ? `<div class="memo"><strong>최근 30일</strong>출석 ${recent.attended || 0} · 결석 ${recent.absent || 0} · 취소 ${recent.cancel || 0}</div>` : ''}
-          ${memos.map((memo) => `<div class="memo"><strong>${escapeHtml(memo.staffName || '')} ${escapeHtml(memo.lectureDate || '')}</strong>${escapeHtml(memo.content || '')}</div>`).join('') || '<div class="memo">메모가 없습니다</div>'}
-        `;
+        const snap = await getDocs(query(
+          collection(appState.db, 'memberMemos'),
+          where('studioId', '==', appState.staff?.studioId || ''),
+          where('memberId', '==', active.memberId),
+          where('visibility', '==', 'staff_and_manager'),
+          orderBy('createdAt', 'desc'),
+          queryLimit(20)
+        ));
+        const memos = snap.docs.map((docSnap) => docSnap.data());
+        memoHistory.innerHTML = memos.map((memo) => {
+          const title = [memo.staffName, memo.lectureDate || dateTimeLabel(memo.createdAt)].filter(Boolean).join(' ');
+          return `<div class="memo"><strong>${escapeHtml(title)}</strong>${escapeHtml(memo.content || '')}</div>`;
+        }).join('') || '<div class="memo">메모가 없습니다</div>';
       } catch (err) {
         memoHistory.innerHTML = `<div class="error">${escapeHtml(friendlyError(err))}</div>`;
       }
@@ -1170,12 +1178,25 @@
       return null;
     }
 
+    function dateTimeLabel(value) {
+      const date = timestampToDate(value);
+      if (!date) return '';
+      return new Intl.DateTimeFormat('ko-KR', {
+        timeZone: 'Asia/Seoul',
+        month: 'numeric',
+        day: 'numeric',
+        hour: '2-digit',
+        minute: '2-digit',
+        hour12: false
+      }).format(date);
+    }
+
     function statusLabel(booking) {
       if (booking.appStatus === 'wait') return '대기';
       if (booking.appStatus === 'cancel' || booking.appStatus === 'wait_cancel') return '취소';
       if (booking.attendanceStatus === 'attended') return '출석';
       if (booking.attendanceStatus === 'absent') return '결석';
-      if (booking.attendanceStatus === 'late_cancel') return '노쇼';
+      if (booking.attendanceStatus === 'late_cancel') return '결석';
       return '예약';
     }
 

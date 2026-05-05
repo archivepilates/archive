@@ -1,10 +1,10 @@
-const CACHE_NAME = 'archive-in-v17';
+const CACHE_NAME = 'archive-in-v18';
 const CORE_ASSETS = [
   './',
-  './manifest.webmanifest?v=17',
-  './icons/icon-192.png?v=17',
-  './icons/icon-512.png?v=17',
-  './icons/apple-touch-icon.png?v=17'
+  './manifest.webmanifest?v=18',
+  './icons/icon-192.png?v=18',
+  './icons/icon-512.png?v=18',
+  './icons/apple-touch-icon.png?v=18'
 ];
 
 self.addEventListener('install', (event) => {

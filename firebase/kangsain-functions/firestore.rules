@@ -69,7 +69,13 @@ service cloud.firestore {
     }
 
     match /memberMemos/{memoId} {
-      allow read, write: if false;
+      allow read: if
+        signedIn() &&
+        sameStudio(resource.data.studioId) &&
+        (isManager() ||
+          resource.data.visibility == 'staff_and_manager' ||
+          resource.data.createdByUid == request.auth.uid);
+      allow update, delete: if false;
       allow create: if
         signedIn() &&
         request.resource.data.createdByUid == request.auth.uid &&

@@ -112,26 +112,26 @@ function buildAutoTags(bookings: BookingDoc[], memos: MemberMemoDoc[]): MemberTa
     });
   });
 
-  const recent = bookings
-    .filter((booking) => booking.appStatus === "reserved")
+  const recentAttended = bookings
+    .filter((booking) => booking.attendanceStatus === "attended")
     .sort((a, b) => (b.lectureStartAt?.toMillis() || 0) - (a.lectureStartAt?.toMillis() || 0))
     .slice(0, 10);
-  const topStaff = topValue(recent.map((booking) => booking.staffName).filter(Boolean));
-  if (topStaff && topStaff.count >= 3) {
+  const topStaff = topValue(recentAttended.map((booking) => booking.staffName).filter(Boolean));
+  if (topStaff && isMeaningfulPattern(topStaff.count, recentAttended.length)) {
     tags.push({
       tagId: `recent_staff_${topStaff.value}`,
-      label: `최근강사 ${topStaff.value}`,
+      label: `최근강사 ${topStaff.value} ${topStaff.count}/${recentAttended.length}`,
       level: "info",
       source: "auto_pattern",
       updatedAt: now,
     });
   }
 
-  const topBand = topValue(recent.map((booking) => timeBand(booking.lectureStartAt?.toDate())).filter(Boolean));
-  if (topBand && topBand.count >= 3) {
+  const topBand = topValue(recentAttended.map((booking) => timeBand(booking.lectureStartAt?.toDate())).filter(Boolean));
+  if (topBand && isMeaningfulPattern(topBand.count, recentAttended.length)) {
     tags.push({
       tagId: `time_band_${topBand.value}`,
-      label: `${topBand.value} 선호`,
+      label: `${topBand.value}수업 ${topBand.count}/${recentAttended.length}`,
       level: "info",
       source: "auto_pattern",
       updatedAt: now,
@@ -155,6 +155,10 @@ function topValue(values: string[]): { value: string; count: number } | null {
   return [...counts.entries()]
     .map(([value, count]) => ({ value, count }))
     .sort((a, b) => b.count - a.count)[0] || null;
+}
+
+function isMeaningfulPattern(count: number, total: number): boolean {
+  return total >= 5 && count >= 4 && count / total >= 0.6;
 }
 
 function timeBand(date?: Date): string {
