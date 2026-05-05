@@ -36,6 +36,7 @@
 - 앱 명칭은 `아카이브IN`으로 확정했다. 로그인 화면에는 `ARCHIVE IN` 브랜드 텍스트를 표시한다.
 - `scheduledSyncLecturesDaily` 실행 시 `rebuildMemberInsights`가 회원 태그를 자동 생성한다.
 - 자동 태그 1단계는 규칙 기반이다: 30일 출석/결석, 메모 통증 키워드, 최근 출석 10회 기준 강사/시간대 패턴.
+- 앱 확인 URL은 Firebase Hosting `https://archive-pilates.web.app/kangsain/`를 우선 사용한다. GitHub Pages legacy build가 간헐적으로 멈춰 Firebase Hosting으로 정적 파일을 배포했다.
 
 ## 스튜디오메이트 수업구분
 
