@@ -19,7 +19,14 @@ import { sendAttendanceReminder } from "./push/sendAttendanceReminder";
 import { requireStaff, requireManager } from "./security/authGuards";
 
 const callableOptions = { region: REGION, secrets: allSecrets };
-const scheduleOptions = { region: REGION, timeZone: TIMEZONE, secrets: allSecrets };
+const longCallableOptions = { ...callableOptions, timeoutSeconds: 540, memory: "512MiB" as const };
+const scheduleOptions = {
+  region: REGION,
+  timeZone: TIMEZONE,
+  secrets: allSecrets,
+  timeoutSeconds: 540,
+  memory: "512MiB" as const,
+};
 
 export const scheduledSyncLecturesDaily = onSchedule(
   {
@@ -109,7 +116,7 @@ export const registerFcmToken = onCall(callableOptions, async (request) => {
   }
 });
 
-export const adminSyncLecturesRange = onCall(callableOptions, async (request) => {
+export const adminSyncLecturesRange = onCall(longCallableOptions, async (request) => {
   try {
     const staff = await requireStaff(request);
     requireManager(staff);
