@@ -10,9 +10,9 @@
   <meta name="mobile-web-app-capable" content="yes">
   <meta name="apple-mobile-web-app-title" content="강사IN">
   <meta name="apple-mobile-web-app-status-bar-style" content="default">
-  <link rel="manifest" href="./manifest.webmanifest?v=9">
-  <link rel="icon" type="image/png" sizes="192x192" href="./icons/icon-192.png?v=9">
-  <link rel="apple-touch-icon" sizes="180x180" href="./icons/apple-touch-icon.png?v=9">
+  <link rel="manifest" href="./manifest.webmanifest?v=10">
+  <link rel="icon" type="image/png" sizes="192x192" href="./icons/icon-192.png?v=10">
+  <link rel="apple-touch-icon" sizes="180x180" href="./icons/apple-touch-icon.png?v=10">
   <style>
     :root {
       --ink: #171717;
@@ -176,6 +176,28 @@
       margin: 0 0 26px;
       color: var(--muted);
       line-height: 1.55;
+    }
+
+    .email-login {
+      display: grid;
+      gap: 8px;
+      margin-top: 14px;
+    }
+
+    .email-login input {
+      width: 100%;
+      min-height: 46px;
+      border: 1px solid var(--line);
+      border-radius: 8px;
+      padding: 0 12px;
+      color: var(--ink);
+      background: #fff;
+      outline: none;
+    }
+
+    .email-login input:focus {
+      border-color: var(--brand);
+      box-shadow: 0 0 0 3px rgba(232, 117, 47, 0.14);
     }
 
     .config-warning {
@@ -558,6 +580,7 @@
       GoogleAuthProvider,
       getRedirectResult,
       onAuthStateChanged,
+      signInWithEmailAndPassword,
       signInWithPopup,
       signInWithRedirect,
       signOut
@@ -639,11 +662,20 @@
             <h1>강사 로그인</h1>
             <p>아카이브 계정으로 로그인하고 오늘 수업을 확인하세요</p>
             <button id="loginButton" class="primary" type="button" ${warning ? 'disabled' : ''}>Google 로그인</button>
+            <div class="email-login">
+              <input id="emailInput" type="email" autocomplete="email" placeholder="이메일" value="home@archivepilates.com">
+              <input id="passwordInput" type="password" autocomplete="current-password" placeholder="비밀번호">
+              <button id="emailLoginButton" class="soft-button" type="button" ${warning ? 'disabled' : ''}>이메일 로그인</button>
+            </div>
             <div class="config-warning" style="${warning ? 'display:block' : ''}">${escapeHtml(warning)}</div>
           </section>
         </main>
       `;
       document.getElementById('loginButton')?.addEventListener('click', signIn);
+      document.getElementById('emailLoginButton')?.addEventListener('click', signInWithEmail);
+      document.getElementById('passwordInput')?.addEventListener('keydown', (event) => {
+        if (event.key === 'Enter') signInWithEmail();
+      });
     }
 
     function renderApp() {
@@ -789,6 +821,17 @@
         }
         throw err;
       }
+    }
+
+    async function signInWithEmail() {
+      const email = document.getElementById('emailInput')?.value.trim();
+      const password = document.getElementById('passwordInput')?.value;
+      if (!email || !password) {
+        appState.error = '이메일과 비밀번호를 입력하세요';
+        renderLogin(appState.error);
+        return;
+      }
+      await signInWithEmailAndPassword(appState.auth, email, password);
     }
 
     async function loadHome() {
