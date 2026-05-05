@@ -10,9 +10,9 @@
   <meta name="mobile-web-app-capable" content="yes">
   <meta name="apple-mobile-web-app-title" content="강사IN">
   <meta name="apple-mobile-web-app-status-bar-style" content="default">
-  <link rel="manifest" href="./manifest.webmanifest?v=14">
-  <link rel="icon" type="image/png" sizes="192x192" href="./icons/icon-192.png?v=14">
-  <link rel="apple-touch-icon" sizes="180x180" href="./icons/apple-touch-icon.png?v=14">
+  <link rel="manifest" href="./manifest.webmanifest?v=15">
+  <link rel="icon" type="image/png" sizes="192x192" href="./icons/icon-192.png?v=15">
+  <link rel="apple-touch-icon" sizes="180x180" href="./icons/apple-touch-icon.png?v=15">
   <style>
     :root {
       --ink: #171717;
@@ -304,8 +304,18 @@
       grid-template-columns: 72px 1fr auto;
       gap: 12px;
       align-items: center;
+      width: 100%;
       padding: 18px 14px;
       border-bottom: 1px solid var(--line);
+      text-align: left;
+    }
+
+    .lecture.collapsed .lecture-head {
+      border-bottom: 0;
+    }
+
+    .lecture.collapsed .member-list {
+      display: none;
     }
 
     .time {
@@ -345,6 +355,17 @@
     .chip.good { color: var(--good); background: #eef2e5; }
     .chip.bad { color: var(--bad); background: #faebe6; }
     .chip.wait { color: var(--wait); background: #fff5df; }
+
+    .chevron {
+      color: var(--muted);
+      font-size: 18px;
+      font-weight: 850;
+      transform: rotate(180deg);
+    }
+
+    .lecture.collapsed .chevron {
+      transform: rotate(0deg);
+    }
 
     .member-list {
       display: grid;
@@ -621,7 +642,8 @@
       selectedDate: today(),
       loading: false,
       error: '',
-      activeBooking: null
+      activeBooking: null,
+      openLectures: new Set()
     };
 
     const functionNames = {
@@ -725,12 +747,13 @@
       }
       if (appState.error) return `<section class="error">${escapeHtml(appState.error)}</section>`;
       if (!day) return `<section class="empty">선택한 날짜의 수업이 없습니다</section>`;
+      const classCounts = classTypeCounts(day.lectures || []);
       return `
         <section class="summary">
           <div class="summary-item">
             <span class="summary-label">CLASSES</span>
             <span class="summary-value">${day.summary?.totalLectures || 0}</span>
-            <span class="summary-note">예약 ${day.summary?.reservedCount || 0}</span>
+            <span class="summary-note">그룹 ${classCounts.group} · 프라이빗 ${classCounts.private}</span>
           </div>
           <div class="summary-item">
             <span class="summary-label">MEMBERS</span>
@@ -750,21 +773,23 @@
 
     function renderLecture(lecture) {
       const bookings = (lecture.bookings || []).filter((booking) => !['cancel', 'wait_cancel'].includes(booking.appStatus));
+      const lessonType = resolvedLessonType(lecture);
+      const isOpen = appState.openLectures.has(lecture.lectureId);
       return `
-        <article class="lecture">
-          <header class="lecture-head">
-            <div class="time">${escapeHtml((lecture.timeText || '').split(' ')[0])}</div>
+        <article class="lecture ${isOpen ? '' : 'collapsed'}">
+          <button class="lecture-head" type="button" data-toggle-lecture="${escapeAttr(lecture.lectureId)}" aria-expanded="${isOpen ? 'true' : 'false'}">
+            <div class="time">${escapeHtml(lectureTimeText(lecture))}</div>
             <div>
               <h3 class="lecture-title">${escapeHtml(lecture.title || '수업')}</h3>
               <div class="chips">
-                <span class="chip ${lecture.lessonType === 'private' ? 'private' : 'group'}">${lessonLabel(lecture.lessonType)}</span>
+                <span class="chip ${lessonType === 'private' ? 'private' : 'group'}">${lessonLabel(lessonType)}</span>
                 <span class="chip">${escapeHtml(lecture.roomName || lecture.divisionName || '')}</span>
                 <span class="chip">${lecture.bookingCount || 0}명</span>
                 ${lecture.waitCount ? `<span class="chip wait">대기 ${lecture.waitCount}</span>` : ''}
               </div>
             </div>
-            <div>${lecture.hasTodayChange ? '<span class="chip wait">변경</span>' : ''}</div>
-          </header>
+            <div>${lecture.hasTodayChange ? '<span class="chip wait">변경</span>' : '<span class="chevron">⌄</span>'}</div>
+          </button>
           <div class="member-list">
             ${bookings.map((booking) => renderBooking(lecture, booking)).join('') || '<div class="empty">예약 회원이 없습니다</div>'}
           </div>
@@ -775,7 +800,7 @@
     function renderBooking(lecture, booking) {
       const wait = booking.appStatus === 'wait';
       const tags = booking.tags || [];
-      const showTicket = lecture.lessonType === 'private';
+      const showTicket = resolvedLessonType(lecture) === 'private';
       return `
         <div class="member">
           <div class="badge">${escapeHtml(statusShort(booking))}</div>
@@ -806,6 +831,9 @@
       document.getElementById('refreshButton')?.addEventListener('click', loadHome);
       document.getElementById('prevDate')?.addEventListener('click', () => shiftDate(-1));
       document.getElementById('nextDate')?.addEventListener('click', () => shiftDate(1));
+      root.querySelectorAll('[data-toggle-lecture]').forEach((button) => {
+        button.addEventListener('click', () => toggleLecture(button.dataset.toggleLecture));
+      });
       root.querySelectorAll('[data-attendance]').forEach((button) => {
         button.addEventListener('click', () => updateAttendance(button.dataset.attendance, button.dataset.status));
       });
@@ -1041,6 +1069,14 @@
 
     function shiftDate(amount) {
       appState.selectedDate = addDays(appState.selectedDate, amount);
+      appState.openLectures.clear();
+      renderApp();
+    }
+
+    function toggleLecture(lectureId) {
+      if (!lectureId) return;
+      if (appState.openLectures.has(lectureId)) appState.openLectures.delete(lectureId);
+      else appState.openLectures.add(lectureId);
       renderApp();
     }
 
@@ -1073,6 +1109,45 @@
       if (type === 'private') return '프라이빗';
       if (type === 'semi_private') return '세미';
       return '그룹';
+    }
+
+    function resolvedLessonType(lecture) {
+      if (['group', 'private', 'semi_private'].includes(lecture.lessonType)) return lecture.lessonType;
+      return Number(lecture.capacity || 0) <= 1 ? 'private' : 'group';
+    }
+
+    function classTypeCounts(lectures) {
+      return lectures.reduce((counts, lecture) => {
+        const type = resolvedLessonType(lecture);
+        if (type === 'private' || type === 'semi_private') counts.private += 1;
+        else counts.group += 1;
+        return counts;
+      }, { group: 0, private: 0 });
+    }
+
+    function lectureTimeText(lecture) {
+      const start = timestampToDate(lecture.startAt);
+      const end = timestampToDate(lecture.endAt);
+      if (!start) return (lecture.timeText || '').split(' ')[0] || '';
+      const hhmm = (date) => new Intl.DateTimeFormat('ko-KR', {
+        timeZone: 'Asia/Seoul',
+        hour: '2-digit',
+        minute: '2-digit',
+        hour12: false
+      }).format(date);
+      return end ? `${hhmm(start)}-${hhmm(end)}` : hhmm(start);
+    }
+
+    function timestampToDate(value) {
+      if (!value) return null;
+      if (typeof value.toDate === 'function') return value.toDate();
+      if (typeof value === 'string') {
+        const parsed = new Date(value);
+        return Number.isNaN(parsed.getTime()) ? null : parsed;
+      }
+      const seconds = value.seconds ?? value._seconds;
+      if (seconds != null) return new Date(Number(seconds) * 1000);
+      return null;
     }
 
     function statusLabel(booking) {

@@ -55,7 +55,7 @@ function buildInstructorView(
         title: lecture.title,
         roomName: lecture.roomName,
         divisionName: lecture.divisionName,
-        lessonType: lecture.lessonType,
+        lessonType: resolvedLessonType(lecture),
         capacity: lecture.capacity,
         bookingCount: lectureBookings.filter((booking) => booking.appStatus === "reserved").length,
         waitCount: lectureBookings.filter((booking) => booking.appStatus === "wait").length,
@@ -108,8 +108,18 @@ function timeText(lecture: LectureDoc): string {
   const end = lecture.endAt?.toDate();
   if (!start) return "";
   const hhmm = (date: Date) =>
-    `${String(date.getHours()).padStart(2, "0")}:${String(date.getMinutes()).padStart(2, "0")}`;
+    new Intl.DateTimeFormat("ko-KR", {
+      timeZone: "Asia/Seoul",
+      hour: "2-digit",
+      minute: "2-digit",
+      hour12: false,
+    }).format(date);
   return end ? `${hhmm(start)} - ${hhmm(end)}` : hhmm(start);
+}
+
+function resolvedLessonType(lecture: LectureDoc): LectureDoc["lessonType"] {
+  if (lecture.lessonType !== "unknown") return lecture.lessonType;
+  return lecture.capacity <= 1 ? "private" : "group";
 }
 
 function startOfKstDate(date: string): Date {
