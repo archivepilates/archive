@@ -74,6 +74,15 @@ export class StudioMateClient {
     });
   }
 
+  async getMemberMemos(memberId: string): Promise<any[]> {
+    const query = new URLSearchParams({
+      ref_id: memberId,
+      ref_type: "member",
+    });
+    const result = await this.request("GET", `/v2/staff/memo?${query.toString()}`);
+    return Array.isArray(result) ? result : Array.isArray(result.data) ? result.data : [];
+  }
+
   async getMemberById(memberId: string): Promise<any> {
     return this.request("GET", `/v2/staff/members/${encodeURIComponent(memberId)}`);
   }

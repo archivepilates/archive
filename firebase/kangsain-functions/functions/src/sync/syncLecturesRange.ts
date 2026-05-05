@@ -11,6 +11,7 @@ import { nowTimestamp, todayKst } from "../utils/date";
 import { rebuildInstructorViewsForDates } from "./rebuildInstructorViews";
 import { rebuildAttendanceSummaries } from "./rebuildAttendanceSummaries";
 import { rebuildMemberInsights } from "./rebuildMemberInsights";
+import { syncStudioMateMemberMemos } from "./syncStudioMateMemberMemos";
 
 export async function syncLecturesRange(input: {
   studioId?: string;
@@ -65,6 +66,11 @@ export async function syncLecturesRange(input: {
     await rebuildAttendanceSummaries({
       studioId,
       endDate: input.endDate > todayKst() ? todayKst() : input.endDate,
+      bookings: allBookings,
+    });
+    phase = "sync studiomate member memos";
+    await syncStudioMateMemberMemos({
+      studioId,
       bookings: allBookings,
     });
     phase = "rebuild member insights";
