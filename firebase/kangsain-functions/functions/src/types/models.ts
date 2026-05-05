@@ -6,7 +6,7 @@ export type AppBookingStatus = "reserved" | "cancel" | "wait" | "wait_cancel" | 
 export type AttendanceStatus = "unchecked" | "attended" | "absent" | "late_cancel";
 export type SyncStatus = "synced" | "pending" | "failed" | "conflict";
 export type TicketExpiryLevel = "normal" | "soon" | "expired" | "unknown";
-export type QueueStatus = "pending" | "processing" | "retry" | "success" | "failed";
+export type QueueStatus = "pending" | "processing" | "retry" | "done" | "failed";
 export type WriteJobType = "bookingAttendanceUpdate" | "memberMemoCreate" | "lectureRefresh" | "instructorViewRebuild";
 export type MemoType = "member_note" | "lesson_note" | "private_instructor_note";
 export type MemoVisibility = "staff_and_manager" | "manager_only" | "creator_only";
@@ -172,6 +172,7 @@ export interface MemberMemoDoc {
   memberName: string;
   lectureId: string;
   bookingId: string;
+  lectureDate: string;
   staffId: string;
   staffName: string;
   memoType: MemoType;

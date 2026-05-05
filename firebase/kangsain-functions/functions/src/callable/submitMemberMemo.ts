@@ -32,6 +32,7 @@ export async function submitMemberMemoHandler(request: CallableRequest): Promise
     memberName: booking.memberName,
     lectureId,
     bookingId,
+    lectureDate: booking.lectureDate,
     staffId: booking.staffId,
     staffName: booking.staffName,
     memoType,

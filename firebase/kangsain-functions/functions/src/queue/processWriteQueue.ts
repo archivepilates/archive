@@ -15,7 +15,7 @@ export async function processWriteQueue(): Promise<{ processed: number }> {
     .where("status", "in", ["pending", "retry"])
     .where("nextRunAt", "<=", Timestamp.now())
     .orderBy("nextRunAt", "asc")
-    .limit(20)
+    .limit(50)
     .get();
 
   let processed = 0;
@@ -48,7 +48,7 @@ async function processJob(job: WriteQueueJobDoc): Promise<void> {
     else if (job.type === "lectureRefresh") await processLectureRefreshJob(job);
     else throw new Error(`Unsupported job type: ${job.type}`);
 
-    await refs.writeJob(job.jobId).set({ status: "success", updatedAt: nowTimestamp(), lastError: null }, { merge: true });
+    await refs.writeJob(job.jobId).set({ status: "done", updatedAt: nowTimestamp(), lastError: null }, { merge: true });
   } catch (err) {
     const attempts = job.attempts + 1;
     const failed = attempts >= job.maxAttempts;

@@ -1,12 +1,14 @@
 import { logger } from "firebase-functions";
+import type { Timestamp } from "firebase-admin/firestore";
 import { DEFAULT_MANAGER_STAFF_ID, DEFAULT_STUDIO_ID } from "../config/constants";
 import { refs } from "../firestore/refs";
+import { getLecture } from "../firestore/lectureRepository";
 import { saveNoticeIfNew, getLastNoticeCreatedAt } from "../firestore/noticeRepository";
 import { ManagerClient } from "../studiomate/managerClient";
 import { normalizeManagerNotice } from "../studiomate/normalizers";
 import { nowTimestamp } from "../utils/date";
-import { enqueueLectureRefreshJob } from "../queue/enqueueWriteJob";
 import { sendBookingChangePush } from "../push/sendBookingChangePush";
+import { refreshLectureById } from "./refreshLectureById";
 
 export async function pollManagerNotices(input?: {
   studioId?: string;
@@ -29,18 +31,18 @@ export async function pollManagerNotices(input?: {
     if (await saveNoticeIfNew(notice)) {
       saved++;
       if (notice.refLectureId) {
-        await enqueueLectureRefreshJob({
-          studioId,
-          lectureId: notice.refLectureId,
-          fallbackDate: notice.sourceCreatedAt.slice(0, 10),
-          createdByUid: "system",
-        });
+        await refreshLectureById({ studioId, lectureId: notice.refLectureId, fallbackDate: notice.sourceCreatedAt.slice(0, 10) });
         refreshJobs++;
       }
-      if (isTodayOrTomorrow(notice.sourceCreatedAt)) {
-        const result = await sendBookingChangePush({ notice });
+      const lecture = notice.refLectureId ? await getLecture(notice.refLectureId) : null;
+      if (lecture && isTodayOrTomorrow(lecture.date)) {
+        const result = await sendBookingChangePush({
+          notice: { ...notice, staffId: lecture.staffId },
+          lectureTimeText: timeText(lecture.startAt),
+        });
         pushes += result.sent;
       }
+      await refs.notice(notice.noticeId).set({ processed: true, processedAt: nowTimestamp() }, { merge: true });
     }
   }
 
@@ -60,10 +62,15 @@ export async function pollManagerNotices(input?: {
   return { seen: rawNotices.length, saved, refreshJobs };
 }
 
-function isTodayOrTomorrow(sourceCreatedAt: string): boolean {
-  const sourceDate = sourceCreatedAt.slice(0, 10);
+function isTodayOrTomorrow(date: string): boolean {
   const now = new Date();
   const today = new Date(now.getTime() + 9 * 60 * 60 * 1000).toISOString().slice(0, 10);
   const tomorrow = new Date(now.getTime() + 33 * 60 * 60 * 1000).toISOString().slice(0, 10);
-  return sourceDate === today || sourceDate === tomorrow;
+  return date === today || date === tomorrow;
+}
+
+function timeText(value: Timestamp | null): string {
+  const date = value?.toDate();
+  if (!date) return "";
+  return `${String(date.getHours()).padStart(2, "0")}:${String(date.getMinutes()).padStart(2, "0")}`;
 }
