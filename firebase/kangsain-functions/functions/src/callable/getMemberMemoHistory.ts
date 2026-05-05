@@ -37,6 +37,7 @@ export async function getMemberMemoHistoryHandler(request: CallableRequest): Pro
       content: memo.content,
       staffName: memo.staffName,
       createdAt: memo.createdAt,
+      lectureDate: memo.lectureDate,
       lectureId: memo.lectureId,
     })),
     recent30Days: summarySnap.data() || buildFallbackSummary(fallbackBookings),
@@ -52,4 +53,3 @@ function buildFallbackSummary(rows: Awaited<ReturnType<typeof getRecentMemberBoo
     total: rows.length,
   };
 }
-

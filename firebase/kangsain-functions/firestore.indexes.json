@@ -89,14 +89,6 @@
       ]
     },
     {
-      "collectionGroup": "bookings",
-      "queryScope": "COLLECTION",
-      "fields": [
-        { "fieldPath": "studioId", "order": "ASCENDING" },
-        { "fieldPath": "memberName", "order": "ASCENDING" }
-      ]
-    },
-    {
       "collectionGroup": "instructorViews",
       "queryScope": "COLLECTION",
       "fields": [

@@ -71,6 +71,7 @@ export async function searchBookingsByMemberName(studioId: string, query: string
     .where("memberName", ">=", query)
     .where("memberName", "<", `${query}\uf8ff`)
     .orderBy("memberName", "asc")
+    .orderBy("lectureDate", "desc")
     .limit(50)
     .get();
   return snap.docs.map((doc) => doc.data()).filter((booking) => booking.lectureDate >= startDate);
