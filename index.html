@@ -1,0 +1,74 @@
+<!doctype html>
+<html lang="ko">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover">
+  <title>ARCHIVE-DASH</title>
+  <meta name="theme-color" content="#080d1a">
+  <meta name="application-name" content="ARCHIVE-DASH">
+  <meta name="apple-mobile-web-app-capable" content="yes">
+  <meta name="apple-mobile-web-app-title" content="ARCHIVE-DASH">
+  <meta name="apple-mobile-web-app-status-bar-style" content="black">
+  <link rel="manifest" href="./manifest.webmanifest">
+  <link rel="icon" type="image/png" sizes="192x192" href="./icons/icon-192.png?v=4">
+  <link rel="apple-touch-icon" sizes="180x180" href="./icons/apple-touch-icon.png?v=4">
+  <style>
+    html,
+    body {
+      width: 100%;
+      height: 100%;
+      margin: 0;
+      background: #080d1a;
+      overflow: hidden;
+      font-family: system-ui, -apple-system, BlinkMacSystemFont, "Segoe UI", sans-serif;
+    }
+
+    .app {
+      position: fixed;
+      inset: env(safe-area-inset-top) 0 0 0;
+      background: #080d1a;
+    }
+
+    iframe {
+      width: 100%;
+      height: 100%;
+      border: 0;
+      display: block;
+      background: #080d1a;
+    }
+
+    .fallback {
+      position: fixed;
+      inset: env(safe-area-inset-top) 0 0 0;
+      display: grid;
+      place-items: center;
+      padding: 24px;
+      color: #f8fafc;
+      text-align: center;
+      background: #080d1a;
+      z-index: 0;
+    }
+
+    .fallback a {
+      color: #93c5fd;
+      font-weight: 700;
+      text-decoration: none;
+    }
+  </style>
+</head>
+<body>
+  <div class="fallback">
+    <div>
+      <strong>ARCHIVE-DASH</strong><br>
+      <a href="https://script.google.com/macros/s/AKfycbx6iCVUG61QKUT72pLZH7gRnICXX9yFQyLMJ9Jyrm5Z7frfItqhLB9SelCOSXRieRFREQ/exec">현황판 열기</a>
+    </div>
+  </div>
+  <main class="app">
+    <iframe
+      title="ARCHIVE-DASH"
+      src="https://script.google.com/macros/s/AKfycbx6iCVUG61QKUT72pLZH7gRnICXX9yFQyLMJ9Jyrm5Z7frfItqhLB9SelCOSXRieRFREQ/exec"
+      allowfullscreen>
+    </iframe>
+  </main>
+</body>
+</html>
