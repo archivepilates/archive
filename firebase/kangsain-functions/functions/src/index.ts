@@ -18,7 +18,7 @@ import { registerFcmTokenHandler } from "./callable/registerFcmToken";
 import { sendAttendanceReminder } from "./push/sendAttendanceReminder";
 import { requireStaff, requireManager } from "./security/authGuards";
 
-const callableOptions = { region: REGION, secrets: allSecrets };
+const callableOptions = { region: REGION, secrets: allSecrets, invoker: "public" as const };
 const longCallableOptions = { ...callableOptions, timeoutSeconds: 540, memory: "512MiB" as const };
 const scheduleOptions = {
   region: REGION,

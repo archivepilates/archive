@@ -1,10 +1,10 @@
-const CACHE_NAME = 'kangsain-v10';
+const CACHE_NAME = 'kangsain-v11';
 const CORE_ASSETS = [
   './',
-  './manifest.webmanifest?v=10',
-  './icons/icon-192.png?v=10',
-  './icons/icon-512.png?v=10',
-  './icons/apple-touch-icon.png?v=10'
+  './manifest.webmanifest?v=11',
+  './icons/icon-192.png?v=11',
+  './icons/icon-512.png?v=11',
+  './icons/apple-touch-icon.png?v=11'
 ];
 
 self.addEventListener('install', (event) => {
@@ -42,8 +42,8 @@ self.addEventListener('push', (event) => {
   event.waitUntil(
     self.registration.showNotification(notification.title || '강사IN', {
       body: notification.body || '',
-      icon: './icons/icon-192.png?v=10',
-      badge: './icons/icon-192.png?v=10',
+      icon: './icons/icon-192.png?v=11',
+      badge: './icons/icon-192.png?v=11',
       data: payload.data || {}
     })
   );
