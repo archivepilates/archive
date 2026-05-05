@@ -88,9 +88,11 @@
       place-items: center;
       width: 44px;
       height: 44px;
+      border: 0;
       border-radius: 14px;
       color: #fff;
       background: var(--brand);
+      cursor: pointer;
       font-weight: 800;
       box-shadow: var(--shadow);
     }
@@ -782,7 +784,7 @@
       root.innerHTML = `
         <main class="shell">
           <header class="topbar">
-            <div class="logo">IN</div>
+            <button id="homeLogoButton" class="logo" type="button" aria-label="오늘 수업으로 이동">IN</button>
             <div class="identity">
               <h1>${escapeHtml(appState.staff?.name || appState.user?.displayName || '강사')}</h1>
               <p>${appState.loading ? '동기화 확인 중' : formatSyncText(day)}</p>
@@ -898,6 +900,7 @@
 
     function bindAppEvents() {
       document.getElementById('logoutButton')?.addEventListener('click', () => signOut(appState.auth));
+      document.getElementById('homeLogoButton')?.addEventListener('click', goToday);
       document.getElementById('refreshButton')?.addEventListener('click', loadHome);
       document.getElementById('prevDate')?.addEventListener('click', () => shiftDate(-1));
       document.getElementById('nextDate')?.addEventListener('click', () => shiftDate(1));
@@ -1182,6 +1185,12 @@
 
     function shiftDate(amount) {
       appState.selectedDate = addDays(appState.selectedDate, amount);
+      appState.openLectures.clear();
+      renderApp();
+    }
+
+    function goToday() {
+      appState.selectedDate = today();
       appState.openLectures.clear();
       renderApp();
     }
