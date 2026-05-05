@@ -58,6 +58,18 @@
       -webkit-tap-highlight-color: transparent;
     }
 
+    button,
+    .chip,
+    .lecture,
+    .member,
+    .modal-panel {
+      transition: transform 160ms ease, box-shadow 160ms ease, background-color 160ms ease, border-color 160ms ease, opacity 160ms ease;
+    }
+
+    button:active {
+      transform: scale(0.98);
+    }
+
     .app {
       min-height: 100dvh;
       padding: max(16px, env(safe-area-inset-top)) 16px max(28px, env(safe-area-inset-bottom));
@@ -80,6 +92,32 @@
       padding: 10px 0 14px;
       background: rgba(255, 255, 255, 0.92);
       backdrop-filter: blur(16px);
+    }
+
+    .sync-bar {
+      position: absolute;
+      left: 0;
+      right: 0;
+      bottom: 0;
+      height: 2px;
+      overflow: hidden;
+      background: transparent;
+    }
+
+    .sync-bar::before {
+      content: "";
+      display: block;
+      width: 42%;
+      height: 100%;
+      border-radius: 999px;
+      background: var(--brand);
+      opacity: 0;
+      transform: translateX(-110%);
+    }
+
+    .topbar.loading .sync-bar::before {
+      opacity: 1;
+      animation: syncMove 1.1s ease-in-out infinite;
     }
 
     .logo {
@@ -250,6 +288,10 @@
       font-size: 22px;
     }
 
+    .view-stage {
+      animation: viewIn 180ms ease both;
+    }
+
     .summary {
       display: grid;
       grid-template-columns: repeat(3, minmax(0, 1fr));
@@ -309,6 +351,12 @@
       background: #fff;
       overflow: hidden;
       margin-bottom: 14px;
+      animation: cardIn 180ms ease both;
+    }
+
+    .lecture:has(.lecture-head:active),
+    .member:has(.tiny:active) {
+      box-shadow: 0 8px 22px rgba(30, 20, 12, 0.07);
     }
 
     .lecture-head {
@@ -374,6 +422,12 @@
     .chip.memo { color: var(--bad); background: #faeee9; }
     .chip.profile { color: #6b5336; background: #f2ece4; }
     .chip.manual { color: var(--brand-dark); background: #fff1e7; }
+
+    .chip.pending {
+      color: var(--brand-dark);
+      background: #fff1e7;
+      animation: pulseSoft 1s ease-in-out infinite;
+    }
 
     .chevron {
       color: var(--muted);
@@ -523,6 +577,10 @@
 
     .modal.open { display: flex; }
 
+    .modal.open .modal-panel {
+      animation: modalUp 180ms ease both;
+    }
+
     .modal-panel {
       width: min(560px, 100%);
       margin: 0 auto;
@@ -606,6 +664,66 @@
 
     .hidden { display: none !important; }
 
+    .toast {
+      position: fixed;
+      left: 50%;
+      bottom: max(18px, env(safe-area-inset-bottom));
+      z-index: 40;
+      max-width: calc(100% - 32px);
+      padding: 11px 14px;
+      border-radius: 999px;
+      color: #fff;
+      background: rgba(23, 23, 23, 0.88);
+      font-size: 13px;
+      font-weight: 760;
+      box-shadow: var(--shadow);
+      transform: translate(-50%, 12px);
+      opacity: 0;
+      pointer-events: none;
+      transition: opacity 180ms ease, transform 180ms ease;
+    }
+
+    .toast.show {
+      opacity: 1;
+      transform: translate(-50%, 0);
+    }
+
+    @keyframes syncMove {
+      0% { transform: translateX(-110%); }
+      100% { transform: translateX(260%); }
+    }
+
+    @keyframes viewIn {
+      from { opacity: 0; transform: translateY(5px); }
+      to { opacity: 1; transform: translateY(0); }
+    }
+
+    @keyframes cardIn {
+      from { opacity: 0; transform: translateY(4px); }
+      to { opacity: 1; transform: translateY(0); }
+    }
+
+    @keyframes modalUp {
+      from { opacity: 0; transform: translateY(12px); }
+      to { opacity: 1; transform: translateY(0); }
+    }
+
+    @keyframes pulseSoft {
+      0%, 100% { opacity: 1; }
+      50% { opacity: 0.68; }
+    }
+
+    @media (prefers-reduced-motion: reduce) {
+      *,
+      *::before,
+      *::after {
+        animation-duration: 1ms !important;
+        animation-iteration-count: 1 !important;
+        scroll-behavior: auto !important;
+        transition-duration: 1ms !important;
+      }
+    }
+
     @media (max-width: 520px) {
       .app { padding-inline: 12px; }
       .topbar { gap: 10px; }
@@ -628,6 +746,7 @@
 </head>
 <body>
   <div id="root" class="app"></div>
+  <div id="toast" class="toast" role="status" aria-live="polite"></div>
 
   <div id="memoModal" class="modal" aria-hidden="true">
     <div class="modal-panel">
@@ -691,6 +810,7 @@
     } from 'https://www.gstatic.com/firebasejs/10.14.1/firebase-messaging.js';
 
     const root = document.getElementById('root');
+    const toast = document.getElementById('toast');
     const modal = document.getElementById('memoModal');
     const memoTitle = document.getElementById('memoTitle');
     const memoInput = document.getElementById('memoInput');
@@ -712,7 +832,8 @@
       error: '',
       activeBooking: null,
       openLectures: new Set(),
-      viewUnsubscribers: []
+      viewUnsubscribers: [],
+      toastTimer: null
     };
 
     const functionNames = {
@@ -783,7 +904,7 @@
       const day = currentDay();
       root.innerHTML = `
         <main class="shell">
-          <header class="topbar">
+          <header class="topbar ${appState.loading ? 'loading' : ''}">
             <button id="homeLogoButton" class="logo" type="button" aria-label="오늘 수업으로 이동">IN</button>
             <div class="identity">
               <h1>${escapeHtml(appState.staff?.name || appState.user?.displayName || '강사')}</h1>
@@ -791,13 +912,16 @@
             </div>
             <button id="refreshButton" class="soft-button" type="button">새로고침</button>
             <button id="logoutButton" class="ghost" type="button">로그아웃</button>
+            <div class="sync-bar" aria-hidden="true"></div>
           </header>
           <nav class="datebar">
             <button id="prevDate" type="button" aria-label="이전 날짜">‹</button>
             <strong>${dateLabel(appState.selectedDate)}</strong>
             <button id="nextDate" type="button" aria-label="다음 날짜">›</button>
           </nav>
-          ${renderBody(day)}
+          <div class="view-stage" data-date="${escapeAttr(appState.selectedDate)}">
+            ${renderBody(day)}
+          </div>
         </main>
       `;
       bindAppEvents();
@@ -1032,8 +1156,10 @@
           bookingId,
           attendanceStatus
         });
+        showToast(`${statusLabel({ ...booking, attendanceStatus })} 처리 요청됨`);
       } catch (err) {
         appState.error = friendlyError(err);
+        showToast('출결 변경 실패');
         await loadHome();
       }
     }
@@ -1096,9 +1222,11 @@
           content
         });
         modal.classList.remove('open');
+        showToast('메모 저장 요청됨');
         await loadHome();
       } catch (err) {
         memoHistory.innerHTML = `<div class="error">${escapeHtml(friendlyError(err))}</div>`;
+        showToast('메모 저장 실패');
       } finally {
         saveMemoButton.disabled = false;
       }
@@ -1358,10 +1486,19 @@
     }
 
     function statusClass(booking) {
+      if (booking.syncStatus === 'pending') return 'pending';
       if (booking.appStatus === 'wait') return 'wait';
       if (booking.attendanceStatus === 'attended') return 'good';
       if (booking.attendanceStatus === 'absent' || booking.attendanceStatus === 'late_cancel') return 'bad';
       return '';
+    }
+
+    function showToast(message) {
+      if (!toast || !message) return;
+      toast.textContent = message;
+      toast.classList.add('show');
+      clearTimeout(appState.toastTimer);
+      appState.toastTimer = setTimeout(() => toast.classList.remove('show'), 1800);
     }
 
     function friendlyError(err) {
