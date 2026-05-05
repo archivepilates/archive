@@ -10,9 +10,9 @@
   <meta name="mobile-web-app-capable" content="yes">
   <meta name="apple-mobile-web-app-title" content="강사IN">
   <meta name="apple-mobile-web-app-status-bar-style" content="default">
-  <link rel="manifest" href="./manifest.webmanifest?v=13">
-  <link rel="icon" type="image/png" sizes="192x192" href="./icons/icon-192.png?v=13">
-  <link rel="apple-touch-icon" sizes="180x180" href="./icons/apple-touch-icon.png?v=13">
+  <link rel="manifest" href="./manifest.webmanifest?v=14">
+  <link rel="icon" type="image/png" sizes="192x192" href="./icons/icon-192.png?v=14">
+  <link rel="apple-touch-icon" sizes="180x180" href="./icons/apple-touch-icon.png?v=14">
   <style>
     :root {
       --ink: #171717;
@@ -671,18 +671,16 @@
           <section class="login-panel">
             <div class="login-mark">IN</div>
             <h1>강사 로그인</h1>
-            <p>아카이브 계정으로 로그인하고 오늘 수업을 확인하세요</p>
-            <button id="loginButton" class="primary" type="button" ${warning ? 'disabled' : ''}>Google 로그인</button>
+            <p>테스트 계정으로 로그인하고 오늘 수업을 확인하세요</p>
             <div class="email-login">
               <input id="emailInput" type="email" autocomplete="email" placeholder="이메일" value="home@archivepilates.com">
               <input id="passwordInput" type="password" autocomplete="current-password" placeholder="비밀번호">
-              <button id="emailLoginButton" class="soft-button" type="button" ${warning ? 'disabled' : ''}>이메일 로그인</button>
+              <button id="emailLoginButton" class="primary" type="button" ${warning ? 'disabled' : ''}>테스트 로그인</button>
             </div>
             <div class="config-warning" style="${warning ? 'display:block' : ''}">${escapeHtml(warning)}</div>
           </section>
         </main>
       `;
-      document.getElementById('loginButton')?.addEventListener('click', signIn);
       document.getElementById('emailLoginButton')?.addEventListener('click', signInWithEmail);
       document.getElementById('passwordInput')?.addEventListener('keydown', (event) => {
         if (event.key === 'Enter') signInWithEmail();
@@ -843,7 +841,12 @@
         renderLogin(appState.error);
         return;
       }
-      await signInWithEmailAndPassword(appState.auth, email, password);
+      try {
+        await signInWithEmailAndPassword(appState.auth, email, password);
+      } catch (err) {
+        appState.error = friendlyError(err);
+        renderLogin(appState.error);
+      }
     }
 
     async function loadHome() {
@@ -1093,6 +1096,8 @@
     }
 
     function friendlyError(err) {
+      if (err?.code === 'auth/invalid-credential') return '이메일 또는 비밀번호가 맞지 않습니다';
+      if (err?.code === 'auth/too-many-requests') return '로그인 시도가 많습니다. 잠시 후 다시 시도하세요';
       return err?.message?.replace(/^Firebase: /, '') || '처리 중 오류가 발생했습니다';
     }
 
