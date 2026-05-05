@@ -852,7 +852,7 @@
               <h3 class="lecture-title">${escapeHtml(lecture.title || '수업')}</h3>
               <div class="chips">
                 <span class="chip ${lessonType === 'private' ? 'private' : lessonType === 'group' ? 'group' : 'unknown'}">${lessonLabel(lessonType)}</span>
-                <span class="chip">${escapeHtml(lecture.roomName || lecture.divisionName || '')}</span>
+                ${renderOptionalChip(lecture.roomName || lecture.divisionName)}
                 <span class="chip">${lecture.bookingCount || 0}명</span>
                 ${lecture.waitCount ? `<span class="chip wait">대기 ${lecture.waitCount}</span>` : ''}
                 ${done ? '<span class="chip done">완료</span>' : ''}
@@ -871,6 +871,7 @@
       const attendanceLocked = !canUpdateAttendance(lecture, booking);
       const tagGroups = memberTagGroups(booking.tags || []);
       const showTicket = resolvedLessonType(lecture) === 'private';
+      const ticketName = showTicket ? privateTicketLabel(booking.ticketName) : '';
       return `
         <div class="member">
           <div class="member-main">
@@ -881,7 +882,7 @@
             ${renderTagField('', tagGroups.fixed)}
             ${renderTagField('강사', tagGroups.manual)}
             <div class="chips ${showTicket || booking.lastMemoPreview ? '' : 'hidden'}">
-              ${showTicket && booking.ticketName ? `<span class="chip">${escapeHtml(booking.ticketName)}</span>` : ''}
+              ${renderOptionalChip(ticketName)}
               ${showTicket && booking.ticketRemainingCount != null ? `<span class="chip">${booking.ticketRemainingCount}회</span>` : ''}
               ${booking.lastMemoPreview ? `<span class="chip">${escapeHtml(booking.lastMemoPreview)}</span>` : ''}
             </div>
@@ -1222,6 +1223,18 @@
       if (type === 'semi_private') return '세미';
       if (type === 'unknown') return '구분확인';
       return '그룹';
+    }
+
+    function renderOptionalChip(value) {
+      const text = String(value || '').trim();
+      return text ? `<span class="chip">${escapeHtml(text)}</span>` : '';
+    }
+
+    function privateTicketLabel(value) {
+      return String(value || '')
+        .trim()
+        .replace(/^프라이빗\s*/i, '')
+        .trim();
     }
 
     function renderTagChip(tag) {
