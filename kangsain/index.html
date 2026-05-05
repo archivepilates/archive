@@ -433,6 +433,10 @@
       font-weight: 850;
     }
 
+    .tag-field.no-label {
+      gap: 0;
+    }
+
     .tag-list {
       display: flex;
       flex-wrap: wrap;
@@ -846,7 +850,7 @@
               <span class="member-name">${escapeHtml(booking.memberName || '회원')}</span>
               <span class="chip ${statusClass(booking)}">${statusLabel(booking)}</span>
             </div>
-            ${renderTagField('고정', tagGroups.fixed)}
+            ${renderTagField('', tagGroups.fixed)}
             ${renderTagField('강사', tagGroups.manual)}
             <div class="chips ${showTicket || booking.lastMemoPreview ? '' : 'hidden'}">
               ${showTicket && booking.ticketName ? `<span class="chip">${escapeHtml(booking.ticketName)}</span>` : ''}
@@ -1202,8 +1206,8 @@
     function renderTagField(label, tags) {
       if (!tags.length) return '';
       return `
-        <div class="tag-field">
-          <span class="tag-label">${label}</span>
+        <div class="tag-field ${label ? '' : 'no-label'}">
+          ${label ? `<span class="tag-label">${escapeHtml(label)}</span>` : ''}
           <div class="tag-list">${tags.map(renderTagChip).join('')}</div>
         </div>
       `;
