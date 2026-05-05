@@ -10,9 +10,9 @@
   <meta name="mobile-web-app-capable" content="yes">
   <meta name="apple-mobile-web-app-title" content="아카이브IN">
   <meta name="apple-mobile-web-app-status-bar-style" content="default">
-  <link rel="manifest" href="./manifest.webmanifest?v=18">
-  <link rel="icon" type="image/png" sizes="192x192" href="./icons/icon-192.png?v=18">
-  <link rel="apple-touch-icon" sizes="180x180" href="./icons/apple-touch-icon.png?v=18">
+  <link rel="manifest" href="./manifest.webmanifest?v=19">
+  <link rel="icon" type="image/png" sizes="192x192" href="./icons/icon-192.png?v=19">
+  <link rel="apple-touch-icon" sizes="180x180" href="./icons/apple-touch-icon.png?v=19">
   <style>
     :root {
       --ink: #171717;
@@ -625,6 +625,7 @@
       getDocs,
       getFirestore,
       limit as queryLimit,
+      onSnapshot,
       orderBy,
       query,
       serverTimestamp,
@@ -659,7 +660,8 @@
       loading: false,
       error: '',
       activeBooking: null,
-      openLectures: new Set()
+      openLectures: new Set(),
+      viewUnsubscribers: []
     };
 
     const functionNames = {
@@ -687,6 +689,7 @@
       onAuthStateChanged(appState.auth, async (user) => {
         appState.user = user;
         if (!user) {
+          unsubscribeViews();
           appState.staff = null;
           appState.days = [];
           renderLogin();
@@ -815,7 +818,7 @@
 
     function renderBooking(lecture, booking) {
       const wait = booking.appStatus === 'wait';
-      const tags = booking.tags || [];
+      const tags = instructorVisibleTags(booking.tags || []);
       const headlineTags = tags.slice(0, 3);
       const detailTags = tags.slice(3);
       const showTicket = resolvedLessonType(lecture) === 'private';
@@ -903,6 +906,7 @@
         const result = await loadHomeFromFirestore();
         appState.staff = result.staff || { name: result.staffId || '' };
         appState.days = result.days || [];
+        subscribeInstructorViews(result.staffId);
         appState.loading = false;
       } catch (err) {
         appState.loading = false;
@@ -930,6 +934,32 @@
         staff: { staffId, name: staff.name, role: staff.role, studioId: staff.studioId },
         days
       };
+    }
+
+    function subscribeInstructorViews(staffId) {
+      unsubscribeViews();
+      const dates = Array.from({ length: 14 }, (_, index) => addDays(today(), index));
+      appState.viewUnsubscribers = dates.map((date) => onSnapshot(
+        doc(appState.db, 'instructorViews', `${staffId}_${date}`),
+        (snap) => {
+          if (!snap.exists()) return;
+          upsertDay(snap.data());
+          if (!appState.loading) renderApp();
+        },
+        () => {}
+      ));
+    }
+
+    function unsubscribeViews() {
+      appState.viewUnsubscribers.forEach((unsubscribe) => unsubscribe());
+      appState.viewUnsubscribers = [];
+    }
+
+    function upsertDay(day) {
+      const index = appState.days.findIndex((item) => item.date === day.date);
+      if (index >= 0) appState.days.splice(index, 1, day);
+      else appState.days.push(day);
+      appState.days.sort((a, b) => String(a.date).localeCompare(String(b.date)));
     }
 
     async function updateAttendance(bookingId, attendanceStatus) {
@@ -1137,6 +1167,10 @@
 
     function renderTagChip(tag) {
       return `<span class="chip ${tag.level === 'warning' ? 'wait' : tag.level === 'danger' ? 'bad' : tag.level === 'positive' ? 'good' : ''}">${escapeHtml(tag.label || tag.tagId)}</span>`;
+    }
+
+    function instructorVisibleTags(tags) {
+      return tags.filter((tag) => tag.source === 'auto_attendance' || /^30일 출석/.test(tag.label || ''));
     }
 
     function resolvedLessonType(lecture) {

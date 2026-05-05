@@ -75,7 +75,7 @@ function buildInstructorView(
           ticketName: booking.ticketName,
           ticketRemainingCount: booking.ticketRemainingCount,
           ticketExpiryLevel: booking.ticketExpiryLevel,
-          tags: tagsByMember.get(booking.memberId) || [],
+          tags: instructorVisibleTags(tagsByMember.get(booking.memberId) || []),
           lastMemoPreview: booking.lastMemoPreview.slice(0, 60),
           lastMemoAt: booking.lastMemoAt,
         })),
@@ -119,6 +119,10 @@ function timeText(lecture: LectureDoc): string {
 
 function resolvedLessonType(lecture: LectureDoc): LectureDoc["lessonType"] {
   return lecture.lessonType;
+}
+
+function instructorVisibleTags(tags: MemberTagDoc["tags"]): MemberTagDoc["tags"] {
+  return tags.filter((tag) => tag.source === "auto_attendance" || tag.label.startsWith("30일 출석"));
 }
 
 function startOfKstDate(date: string): Date {

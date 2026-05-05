@@ -36,6 +36,8 @@
 - 앱 명칭은 `아카이브IN`으로 확정했다. 로그인 화면에는 `ARCHIVE IN` 브랜드 텍스트를 표시한다.
 - `scheduledSyncLecturesDaily` 실행 시 `rebuildMemberInsights`가 회원 태그를 자동 생성한다.
 - 자동 태그 1단계는 규칙 기반이다: 30일 출석/결석, 메모 통증 키워드, 최근 출석 10회 기준 강사/시간대 패턴.
+- 강사용 앱의 회원 태그 표시는 30일 출석/결석 태그만 노출한다. 통증/최근강사/시간대 패턴 태그는 운영자 앱에서 다룬다.
+- 강사용 앱은 14일치 `instructorViews`를 Firestore 실시간 구독한다. 알림 API 폴링으로 특정 수업/날짜가 갱신되면 앱 새로고침 없이 해당 날짜 뷰가 교체된다.
 - 앱 확인 URL은 Firebase Hosting `https://archive-pilates.web.app/kangsain/`를 우선 사용한다. GitHub Pages legacy build가 간헐적으로 멈춰 Firebase Hosting으로 정적 파일을 배포했다.
 
 ## 스튜디오메이트 수업구분
@@ -67,7 +69,7 @@
 스케줄:
 
 - `scheduledSyncLecturesDaily`: 매일 00:05 KST, 최근 30일 ~ 향후 14일 동기화.
-- `scheduledPollManagerNotices`: 5분마다 스튜디오메이트 관리자 알림 확인.
+- `scheduledPollManagerNotices`: 1분마다 스튜디오메이트 관리자 알림 확인.
 - `scheduledProcessWriteQueue`: 1분마다 앱 입력 큐 처리.
 - `scheduledAttendanceReminder`: 매시 정각 출석 미체크 알림.
 - `rebuildMemberInsights`: 매일 동기화 범위의 예약/메모를 분석해 `memberTags`를 갱신.

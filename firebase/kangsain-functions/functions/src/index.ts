@@ -41,7 +41,7 @@ export const scheduledSyncLecturesDaily = onSchedule(
 export const scheduledPollManagerNotices = onSchedule(
   {
     ...scheduleOptions,
-    schedule: "every 5 minutes",
+    schedule: "every 1 minutes",
   },
   async () => {
     await pollManagerNotices();
