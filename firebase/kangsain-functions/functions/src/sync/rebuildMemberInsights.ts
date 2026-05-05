@@ -4,6 +4,7 @@ import { saveMemberTags } from "../firestore/memberTagRepository";
 import { addDays, nowTimestamp } from "../utils/date";
 
 type MemberTag = MemberTagDoc["tags"][number];
+const MEMO_TAG_LOOKBACK_DAYS = 90;
 
 const MEMO_TAG_RULES = [
   { tagId: "waist_caution", label: "허리주의", keywords: ["허리", "요통", "디스크", "척추", "좌골"] },
@@ -128,7 +129,7 @@ function buildAutoTags(
     },
   );
 
-  const memoTags = buildMemoTags(memos);
+  const memoTags = buildMemoTags(memos, endDate);
   memoTags.forEach((tag) => {
     tags.push({
       tagId: `memo_${tag.ruleId}_${tag.memoId}`,
@@ -184,8 +185,9 @@ function buildAutoTags(
   return tags;
 }
 
-function buildMemoTags(memos: MemberMemoDoc[]): Array<{ ruleId: string; label: string; memoId: string; sourceDate: string }> {
-  const sorted = [...memos].sort((a, b) => (b.createdAt?.toMillis() || 0) - (a.createdAt?.toMillis() || 0));
+function buildMemoTags(memos: MemberMemoDoc[], endDate: string): Array<{ ruleId: string; label: string; memoId: string; sourceDate: string }> {
+  const recentMemos = memos.filter((memo) => isRecentMemo(memo, endDate));
+  const sorted = [...recentMemos].sort((a, b) => (memoTime(b) || 0) - (memoTime(a) || 0));
   const tags: Array<{ ruleId: string; label: string; memoId: string; sourceDate: string }> = [];
   for (const rule of MEMO_TAG_RULES) {
     const memo = sorted.find((item) => rule.keywords.some((keyword) => item.content.includes(keyword)));
@@ -198,6 +200,22 @@ function buildMemoTags(memos: MemberMemoDoc[]): Array<{ ruleId: string; label: s
     });
   }
   return tags.slice(0, 5);
+}
+
+function isRecentMemo(memo: MemberMemoDoc, endDate: string): boolean {
+  const time = memoTime(memo);
+  if (!time) return false;
+  const end = new Date(`${endDate}T23:59:59+09:00`).getTime();
+  const start = end - (MEMO_TAG_LOOKBACK_DAYS - 1) * 24 * 60 * 60 * 1000;
+  return time >= start && time <= end;
+}
+
+function memoTime(memo: MemberMemoDoc): number | null {
+  const createdAt = memo.createdAt?.toMillis();
+  if (createdAt) return createdAt;
+  if (!memo.lectureDate) return null;
+  const parsed = new Date(`${memo.lectureDate}T00:00:00+09:00`).getTime();
+  return Number.isNaN(parsed) ? null : parsed;
 }
 
 function memoDate(memo: MemberMemoDoc): string {
