@@ -28,7 +28,15 @@ export function normalizeLecture(raw: any, studioId: string): LectureDoc {
     roomName: stringValue(room.name ?? raw.room_name),
     divisionName: stringValue(division.name ?? raw.division_name),
     lessonType: normalizeLessonType(
-      raw.type ?? raw.class_type ?? division.type ?? division.name ?? raw.title ?? raw.max_trainee ?? raw.capacity,
+      raw.type ??
+        raw.course?.type ??
+        raw.class_type ??
+        raw.lesson_type ??
+        raw.lecture_type ??
+        division.type ??
+        division.name ??
+        raw.division ??
+        raw.title,
     ),
     staffId,
     staffName,
@@ -118,10 +126,8 @@ export function normalizeManagerNotice(raw: any, studioId: string, staffId: stri
 
 export function normalizeLessonType(value: unknown): LectureDoc["lessonType"] {
   const text = stringValue(value).toLowerCase();
-  const capacity = Number(text);
-  if (Number.isFinite(capacity) && capacity > 0) return capacity <= 1 ? "private" : "group";
-  if (/[gp]roup|그룹|\bG\b/.test(text)) return "group";
-  if (/private|프라이|개인|\bP\b/.test(text)) return "private";
+  if (/^g$|group|그룹/.test(text)) return "group";
+  if (/^p$|private|프라이|개인/.test(text)) return "private";
   if (/semi|듀엣|세미/.test(text)) return "semi_private";
   return "unknown";
 }

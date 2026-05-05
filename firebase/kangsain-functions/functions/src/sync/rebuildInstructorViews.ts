@@ -118,8 +118,7 @@ function timeText(lecture: LectureDoc): string {
 }
 
 function resolvedLessonType(lecture: LectureDoc): LectureDoc["lessonType"] {
-  if (lecture.lessonType !== "unknown") return lecture.lessonType;
-  return lecture.capacity <= 1 ? "private" : "group";
+  return lecture.lessonType;
 }
 
 function startOfKstDate(date: string): Date {
