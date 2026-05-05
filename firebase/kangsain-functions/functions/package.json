@@ -10,8 +10,8 @@
     "build": "tsc",
     "typecheck": "tsc --noEmit",
     "lint": "tsc --noEmit",
-    "serve": "npm run build && firebase emulators:start --only functions,firestore",
-    "deploy": "firebase deploy --only functions,firestore:rules,firestore:indexes"
+    "serve": "npm run build && firebase --config ../firebase.json emulators:start --only functions,firestore",
+    "deploy": "npm run build && firebase --config ../firebase.json --project archivepilates deploy --only functions,firestore:rules,firestore:indexes"
   },
   "dependencies": {
     "firebase-admin": "^12.7.0",
@@ -19,6 +19,7 @@
   },
   "devDependencies": {
     "@types/node": "^20.17.6",
+    "firebase-tools": "^15.16.0",
     "typescript": "^5.6.3"
   }
 }
