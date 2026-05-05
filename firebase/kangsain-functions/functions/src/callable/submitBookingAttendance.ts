@@ -20,8 +20,8 @@ export async function submitBookingAttendanceHandler(request: CallableRequest): 
   const booking = await getBooking(bookingId);
   if (!booking) throw new AppError("INVALID_ARGUMENT", "예약을 찾을 수 없습니다");
   assertOwnStaff(staff, booking.staffId);
-  if (booking.appStatus === "wait")
-    throw new AppError("INVALID_ARGUMENT", "예약대기 회원은 출석/결석을 변경할 수 없습니다");
+  if (booking.appStatus !== "reserved")
+    throw new AppError("INVALID_ARGUMENT", "예약확정 회원만 출석/결석을 변경할 수 있습니다");
 
   await refs.booking(bookingId).set(
     {

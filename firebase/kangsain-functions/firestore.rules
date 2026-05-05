@@ -18,6 +18,10 @@ service cloud.firestore {
       return signedIn() && request.auth.token.studioId == studioId;
     }
 
+    function bookingIsReserved(bookingId) {
+      return get(/databases/$(database)/documents/bookings/$(bookingId)).data.appStatus == 'reserved';
+    }
+
     match /studios/{studioId} {
       allow read: if signedIn();
       allow write: if false;
@@ -37,7 +41,6 @@ service cloud.firestore {
       allow read: if isManager() || isInstructor(resource.data.staffId);
       allow update: if
         (isManager() || isInstructor(resource.data.staffId)) &&
-        resource.data.appStatus != 'wait' &&
         request.resource.data.diff(resource.data).affectedKeys().hasOnly([
           'attendanceStatus',
           'syncStatus',
@@ -47,7 +50,8 @@ service cloud.firestore {
           'updatedAt'
         ]) &&
         (!request.resource.data.diff(resource.data).affectedKeys().hasAny(['attendanceStatus']) ||
-          request.resource.data.attendanceStatus in ['unchecked', 'attended', 'absent', 'late_cancel']) &&
+          (resource.data.appStatus == 'reserved' &&
+            request.resource.data.attendanceStatus in ['unchecked', 'attended', 'absent', 'late_cancel'])) &&
         (!request.resource.data.diff(resource.data).affectedKeys().hasAny(['syncStatus']) ||
           request.resource.data.syncStatus == 'pending') &&
         (!request.resource.data.diff(resource.data).affectedKeys().hasAny(['lastChangedBy']) ||
@@ -113,7 +117,10 @@ service cloud.firestore {
         request.resource.data.maxAttempts == 5 &&
         request.resource.data.lastError == null &&
         request.resource.data.type in ['bookingAttendanceUpdate', 'memberMemoCreate'] &&
-        request.resource.data.payload is map;
+        request.resource.data.payload is map &&
+        (request.resource.data.type != 'bookingAttendanceUpdate' ||
+          (request.resource.data.payload.bookingId is string &&
+            bookingIsReserved(request.resource.data.payload.bookingId)));
       allow update, delete: if false;
     }
 

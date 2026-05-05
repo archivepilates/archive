@@ -76,6 +76,8 @@ async function processAttendanceJob(job: WriteQueueJobDoc): Promise<void> {
   const attendanceStatus = String(job.payload.attendanceStatus || "") as AttendanceStatus;
   const booking = await getBooking(bookingId);
   if (!booking) throw new Error(`Booking not found: ${bookingId}`);
+  if (booking.appStatus !== "reserved")
+    throw new Error(`Attendance can only be changed for reserved bookings: ${bookingId} (${booking.appStatus})`);
   const client = new StudioMateClient(job.studioId);
   await client.updateBookingStatus({ bookingId, status: toStudioMateAttendanceStatus(attendanceStatus) });
   await refs.booking(bookingId).set({ syncStatus: "synced", updatedAt: nowTimestamp() }, { merge: true });
