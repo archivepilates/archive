@@ -562,6 +562,24 @@
       resize: vertical;
     }
 
+    .quick-memo-actions {
+      display: flex;
+      flex-wrap: wrap;
+      gap: 6px;
+      margin-top: 10px;
+    }
+
+    .quick-memo {
+      min-height: 30px;
+      border: 1px solid #f0d2c0;
+      border-radius: 7px;
+      padding: 0 9px;
+      background: #fff8f3;
+      color: var(--brand-dark);
+      font-size: 12px;
+      font-weight: 800;
+    }
+
     .memo-list {
       display: grid;
       gap: 10px;
@@ -617,6 +635,16 @@
       </div>
       <div class="modal-body">
         <textarea id="memoInput" placeholder="회원 특이사항을 입력하세요"></textarea>
+        <div class="quick-memo-actions" aria-label="빠른 메모">
+          <button class="quick-memo" type="button" data-quick-memo="허리 불편">허리</button>
+          <button class="quick-memo" type="button" data-quick-memo="목/어깨 불편">목어깨</button>
+          <button class="quick-memo" type="button" data-quick-memo="무릎 불편">무릎</button>
+          <button class="quick-memo" type="button" data-quick-memo="손목 불편">손목</button>
+          <button class="quick-memo" type="button" data-quick-memo="컨디션 저하">컨디션</button>
+          <button class="quick-memo" type="button" data-quick-memo="강도 낮게 진행">강도↓</button>
+          <button class="quick-memo" type="button" data-quick-memo="오랜만에 방문">오랜만</button>
+          <button class="quick-memo" type="button" data-quick-memo="운동 초보">초보</button>
+        </div>
         <div style="display:flex; gap:8px; margin-top:10px;">
           <button id="saveMemoButton" class="primary" type="button">저장</button>
           <button id="loadMemoButton" class="soft-button" type="button">히스토리</button>
@@ -1072,6 +1100,12 @@
       }
     }
 
+    function appendQuickMemo(text) {
+      const current = memoInput.value.trim();
+      memoInput.value = current ? `${current}, ${text}` : text;
+      memoInput.focus();
+    }
+
     async function enqueueWriteJob(type, payload) {
       const jobRef = doc(collection(appState.db, 'writeQueue'));
       const now = serverTimestamp();
@@ -1335,8 +1369,9 @@
     });
     saveMemoButton.addEventListener('click', saveMemo);
     loadMemoButton.addEventListener('click', loadMemoHistory);
+    document.querySelectorAll('[data-quick-memo]').forEach((button) => {
+      button.addEventListener('click', () => appendQuickMemo(button.dataset.quickMemo || ''));
+    });
   </script>
 </body>
 </html>
-      width: 44px;
-      height: 44px;
