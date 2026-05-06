@@ -1413,18 +1413,22 @@
 
     function renderAdminMemberSearch() {
       const query = appState.admin.searchQuery || '';
-      const results = query.length >= 2 ? searchAdminMembers(query).slice(0, 30) : [];
       return `
         <section class="admin-panel">
           <h2>회원 검색 + 메모 통합 검색</h2>
           <div class="admin-search">
             <input id="adminSearchInput" type="search" value="${escapeAttr(query)}" placeholder="회원명, 메모, 태그 검색">
           </div>
-          <div class="admin-list">
-            ${query.length < 2 ? '<div class="empty">두 글자 이상 입력하세요</div>' : results.map(renderMemberSearchItem).join('') || '<div class="empty">검색 결과가 없습니다</div>'}
-          </div>
+          <div id="adminSearchResults" class="admin-list">${renderAdminSearchResults()}</div>
         </section>
       `;
+    }
+
+    function renderAdminSearchResults() {
+      const query = appState.admin.searchQuery || '';
+      const results = query.length >= 2 ? searchAdminMembers(query).slice(0, 30) : [];
+      if (query.length < 2) return '<div class="empty">두 글자 이상 입력하세요</div>';
+      return results.map(renderMemberSearchItem).join('') || '<div class="empty">검색 결과가 없습니다</div>';
     }
 
     function renderAdminStaffFilters() {
@@ -1535,12 +1539,11 @@
           renderApp();
         });
       });
-      document.getElementById('adminSearchInput')?.addEventListener('input', (event) => {
+      const adminSearchInput = document.getElementById('adminSearchInput');
+      adminSearchInput?.addEventListener('input', (event) => {
         appState.admin.searchQuery = event.target.value.trim();
-        renderApp();
-        const input = document.getElementById('adminSearchInput');
-        input?.focus();
-        input?.setSelectionRange(input.value.length, input.value.length);
+        const results = document.getElementById('adminSearchResults');
+        if (results) results.innerHTML = renderAdminSearchResults();
       });
       root.querySelectorAll('[data-toggle-lecture]').forEach((button) => {
         button.addEventListener('click', () => toggleLecture(button.dataset.toggleLecture));
