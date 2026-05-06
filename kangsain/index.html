@@ -602,9 +602,37 @@
     }
 
     .chat-dock {
-      margin: 16px auto max(16px, env(safe-area-inset-bottom));
+      position: fixed;
+      right: 12px;
+      bottom: max(12px, env(safe-area-inset-bottom));
+      z-index: 35;
+      width: min(560px, calc(100vw - 24px));
+      max-height: calc(100dvh - 24px);
+      margin: 0;
       border-radius: 8px;
       box-shadow: var(--shadow);
+    }
+
+    .floating-chat {
+      position: fixed;
+      right: 16px;
+      bottom: max(16px, env(safe-area-inset-bottom));
+      z-index: 34;
+      min-width: 58px;
+      height: 58px;
+      border-radius: 999px;
+      padding: 0 18px;
+      color: #fff;
+      background: var(--brand);
+      box-shadow: var(--shadow);
+      font-weight: 900;
+    }
+
+    .floating-chat .badge {
+      position: absolute;
+      top: -4px;
+      right: -3px;
+      margin: 0;
     }
 
     .admin-staff-block {
@@ -1115,6 +1143,10 @@
         overflow-x: auto;
       }
       .chat-staff { flex: 0 0 auto; }
+      .chat-dock {
+        inset: 8px 8px max(8px, env(safe-area-inset-bottom));
+        width: auto;
+      }
       .lecture-head { grid-template-columns: 62px 1fr 24px; gap: 10px; }
       .time { font-size: 18px; }
       .lecture-title { font-size: 18px; }
@@ -1348,12 +1380,10 @@
               <h1>${escapeHtml(appState.staff?.name || appState.user?.displayName || '강사')}</h1>
               <p>${appState.loading ? '동기화 확인 중' : formatSyncText(day)}</p>
             </div>
-            <button id="chatButton" class="soft-button" type="button">채팅${renderUnreadBadge(totalUnreadChats())}</button>
             <button id="refreshButton" class="soft-button" type="button">새로고침</button>
             <button id="logoutButton" class="ghost" type="button">로그아웃</button>
             <div class="sync-bar" aria-hidden="true"></div>
           </header>
-          ${appState.chat.open ? renderInstructorChatDock() : ''}
           <nav class="datebar">
             <button id="prevDate" type="button" aria-label="이전 날짜">‹</button>
             <strong>${dateLabel(appState.selectedDate)}</strong>
@@ -1363,6 +1393,8 @@
             ${renderBody(day)}
           </div>
         </main>
+        ${renderFloatingChatButton()}
+        ${appState.chat.open ? renderInstructorChatDock() : ''}
       `;
       bindAppEvents();
     }
@@ -1401,6 +1433,7 @@
             ${renderAdminBody()}
           </div>
         </main>
+        ${renderFloatingChatButton()}
       `;
       bindAppEvents();
     }
@@ -1496,6 +1529,14 @@
           <h2 style="margin:0 0 12px; font-size:16px;">운영자 채팅</h2>
           ${renderChatBox(appState.staff?.staffId || '', appState.staff?.name || '운영자')}
         </section>
+      `;
+    }
+
+    function renderFloatingChatButton() {
+      return `
+        <button id="chatButton" class="floating-chat" type="button" aria-label="채팅 열기">
+          채팅${renderUnreadBadge(totalUnreadChats())}
+        </button>
       `;
     }
 
@@ -1742,8 +1783,14 @@
       document.getElementById('logoutButton')?.addEventListener('click', () => signOut(appState.auth));
       document.getElementById('homeLogoButton')?.addEventListener('click', goToday);
       document.getElementById('chatButton')?.addEventListener('click', () => {
-        appState.chat.open = true;
-        subscribeChat(appState.staff?.staffId || '');
+        if (appState.mode === 'manager') {
+          appState.admin.activeTab = 'chat';
+          appState.chat.open = false;
+          subscribeChat(selectedChatStaffId());
+        } else {
+          appState.chat.open = true;
+          subscribeChat(appState.staff?.staffId || '');
+        }
         renderApp();
       });
       root.querySelector('[data-close-chat]')?.addEventListener('click', () => {
