@@ -25,6 +25,10 @@ service cloud.firestore {
         booking.lectureStartAt <= request.time;
     }
 
+    function canUseConversation(threadStaffId) {
+      return isManager() || isInstructor(threadStaffId);
+    }
+
     match /studios/{studioId} {
       allow read: if signedIn();
       allow write: if false;
@@ -98,6 +102,45 @@ service cloud.firestore {
         sameStudio(request.resource.data.studioId) &&
         (isManager() ||
           get(/databases/$(database)/documents/bookings/$(request.resource.data.bookingId)).data.staffId == request.auth.token.staffId);
+    }
+
+    match /conversations/{conversationId} {
+      allow read: if
+        signedIn() &&
+        sameStudio(resource.data.studioId) &&
+        canUseConversation(resource.data.threadStaffId);
+      allow create, update: if
+        signedIn() &&
+        request.resource.data.conversationId == conversationId &&
+        request.resource.data.studioId == request.auth.token.studioId &&
+        request.resource.data.threadStaffId is string &&
+        request.resource.data.threadStaffName is string &&
+        canUseConversation(request.resource.data.threadStaffId) &&
+        request.resource.data.lastSenderStaffId == request.auth.token.staffId &&
+        request.resource.data.lastMessage is string &&
+        request.resource.data.lastMessage.size() <= 120;
+      allow delete: if false;
+
+      match /messages/{messageId} {
+        allow read: if
+          signedIn() &&
+          sameStudio(resource.data.studioId) &&
+          resource.data.conversationId == conversationId &&
+          canUseConversation(resource.data.threadStaffId);
+        allow create: if
+          signedIn() &&
+          request.resource.data.messageId == messageId &&
+          request.resource.data.conversationId == conversationId &&
+          request.resource.data.studioId == request.auth.token.studioId &&
+          request.resource.data.threadStaffId is string &&
+          canUseConversation(request.resource.data.threadStaffId) &&
+          request.resource.data.senderStaffId == request.auth.token.staffId &&
+          request.resource.data.content is string &&
+          request.resource.data.content.size() > 0 &&
+          request.resource.data.content.size() <= 1000 &&
+          request.resource.data.createdAt == request.time;
+        allow update, delete: if false;
+      }
     }
 
     match /notices/{noticeId} {
