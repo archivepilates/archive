@@ -2287,18 +2287,16 @@
       const now = serverTimestamp();
       const convRef = doc(appState.db, 'conversations', convId);
       const messageRef = doc(collection(convRef, 'messages'));
+      const optimisticMessage = {
+        messageId: messageRef.id,
+        senderStaffId: appState.staff?.staffId || '',
+        senderName: appState.staff?.name || '',
+        content: text,
+        createdAt: new Date().toISOString()
+      };
       const input = document.getElementById('chatInput');
       if (input) input.value = '';
-      appState.chat.messages = [
-        ...appState.chat.messages,
-        {
-          messageId: messageRef.id,
-          senderStaffId: appState.staff?.staffId || '',
-          senderName: appState.staff?.name || '',
-          content: text,
-          createdAt: new Date().toISOString()
-        }
-      ];
+      appState.chat.messages = [...appState.chat.messages, optimisticMessage];
       renderApp();
       scrollChatToBottom();
       try {
@@ -2326,8 +2324,12 @@
           createdAt: now
         });
       } catch (err) {
+        appState.chat.messages = appState.chat.messages.filter((message) => message.messageId !== optimisticMessage.messageId);
+        appState.chat.lastMessagesKey = '';
         showToast(`채팅 전송 실패: ${friendlyError(err)}`);
+        unsubscribeChat();
         subscribeChat(threadStaffId);
+        renderApp();
       }
     }
 

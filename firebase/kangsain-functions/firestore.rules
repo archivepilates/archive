@@ -7,15 +7,33 @@ service cloud.firestore {
     }
 
     function isManager() {
-      return signedIn() && request.auth.token.role in ['owner', 'manager'];
+      return signedIn() &&
+        (
+          request.auth.token.role in ['owner', 'manager'] ||
+          request.auth.token.email == 'p01029244425@archivepilates.com'
+        );
     }
 
     function isInstructor(staffId) {
-      return signedIn() && request.auth.token.staffId == staffId;
+      return signedIn() &&
+        (
+          request.auth.token.staffId == staffId ||
+          (
+            exists(/databases/$(database)/documents/staffs/$(staffId)) &&
+            (
+              get(/databases/$(database)/documents/staffs/$(staffId)).data.uid == request.auth.uid ||
+              get(/databases/$(database)/documents/staffs/$(staffId)).data.email == request.auth.token.email
+            )
+          )
+        );
     }
 
     function sameStudio(studioId) {
-      return signedIn() && request.auth.token.studioId == studioId;
+      return signedIn() &&
+        (
+          request.auth.token.studioId == studioId ||
+          isManager()
+        );
     }
 
     function bookingCanUpdateAttendance(bookingId) {
@@ -27,6 +45,28 @@ service cloud.firestore {
 
     function canUseConversation(threadStaffId) {
       return isManager() || isInstructor(threadStaffId);
+    }
+
+    function canUseStudioForThread(studioId, threadStaffId) {
+      return signedIn() &&
+        (
+          request.auth.token.studioId == studioId ||
+          isManager() ||
+          (
+            isInstructor(threadStaffId) &&
+            exists(/databases/$(database)/documents/staffs/$(threadStaffId)) &&
+            get(/databases/$(database)/documents/staffs/$(threadStaffId)).data.studioId == studioId
+          )
+        );
+    }
+
+    function canSendAs(staffId) {
+      return signedIn() &&
+        (
+          request.auth.token.staffId == staffId ||
+          isInstructor(staffId) ||
+          (isManager() && staffId == 'operator_01029244425')
+        );
     }
 
     match /studios/{studioId} {
@@ -107,33 +147,33 @@ service cloud.firestore {
     match /conversations/{conversationId} {
       allow read: if
         signedIn() &&
-        sameStudio(resource.data.studioId) &&
+        canUseStudioForThread(resource.data.studioId, resource.data.threadStaffId) &&
         canUseConversation(resource.data.threadStaffId);
       allow create: if
         signedIn() &&
         request.resource.data.conversationId == conversationId &&
-        request.resource.data.studioId == request.auth.token.studioId &&
+        canUseStudioForThread(request.resource.data.studioId, request.resource.data.threadStaffId) &&
         request.resource.data.threadStaffId is string &&
         request.resource.data.threadStaffName is string &&
         canUseConversation(request.resource.data.threadStaffId) &&
-        request.resource.data.lastSenderStaffId == request.auth.token.staffId &&
+        canSendAs(request.resource.data.lastSenderStaffId) &&
         request.resource.data.lastMessage is string &&
         request.resource.data.lastMessage.size() <= 120;
       allow update: if
         (
           signedIn() &&
           request.resource.data.conversationId == conversationId &&
-          request.resource.data.studioId == request.auth.token.studioId &&
+          canUseStudioForThread(request.resource.data.studioId, request.resource.data.threadStaffId) &&
           request.resource.data.threadStaffId is string &&
           request.resource.data.threadStaffName is string &&
           canUseConversation(request.resource.data.threadStaffId) &&
-          request.resource.data.lastSenderStaffId == request.auth.token.staffId &&
+          canSendAs(request.resource.data.lastSenderStaffId) &&
           request.resource.data.lastMessage is string &&
           request.resource.data.lastMessage.size() <= 120
         ) ||
         (
           signedIn() &&
-          sameStudio(resource.data.studioId) &&
+          canUseStudioForThread(resource.data.studioId, resource.data.threadStaffId) &&
           canUseConversation(resource.data.threadStaffId) &&
           request.resource.data.diff(resource.data).affectedKeys().hasOnly([
             'managerReadAt',
@@ -149,17 +189,17 @@ service cloud.firestore {
       match /messages/{messageId} {
         allow read: if
           signedIn() &&
-          sameStudio(resource.data.studioId) &&
+          canUseStudioForThread(resource.data.studioId, resource.data.threadStaffId) &&
           resource.data.conversationId == conversationId &&
           canUseConversation(resource.data.threadStaffId);
         allow create: if
           signedIn() &&
           request.resource.data.messageId == messageId &&
           request.resource.data.conversationId == conversationId &&
-          request.resource.data.studioId == request.auth.token.studioId &&
+          canUseStudioForThread(request.resource.data.studioId, request.resource.data.threadStaffId) &&
           request.resource.data.threadStaffId is string &&
           canUseConversation(request.resource.data.threadStaffId) &&
-          request.resource.data.senderStaffId == request.auth.token.staffId &&
+          canSendAs(request.resource.data.senderStaffId) &&
           request.resource.data.content is string &&
           request.resource.data.content.size() > 0 &&
           request.resource.data.content.size() <= 1000 &&
