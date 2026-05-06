@@ -618,14 +618,28 @@
       right: 16px;
       bottom: max(16px, env(safe-area-inset-bottom));
       z-index: 34;
-      min-width: 58px;
+      width: 58px;
       height: 58px;
       border-radius: 999px;
-      padding: 0 18px;
+      padding: 0;
       color: #fff;
       background: var(--brand);
       box-shadow: var(--shadow);
       font-weight: 900;
+      touch-action: none;
+      cursor: grab;
+      user-select: none;
+    }
+
+    .floating-chat.dragging {
+      cursor: grabbing;
+      transition: none;
+    }
+
+    .floating-chat .chat-icon {
+      display: block;
+      font-size: 25px;
+      line-height: 1;
     }
 
     .floating-chat .badge {
@@ -1231,6 +1245,7 @@
     const memoHistory = document.getElementById('memoHistory');
     const saveMemoButton = document.getElementById('saveMemoButton');
     const loadMemoButton = document.getElementById('loadMemoButton');
+    const FLOATING_CHAT_POSITION_KEY = 'archiveInFloatingChatPosition';
 
     const config = window.KANGSAIN_FIREBASE_CONFIG || null;
     const appState = {
@@ -1260,6 +1275,7 @@
         conversationsUnsubscribe: null,
         lastConversationsKey: '',
         lastMessagesKey: '',
+        floatingPosition: readFloatingChatPosition(),
         readMarks: {},
         unsubscribe: null
       },
@@ -1321,6 +1337,7 @@
             conversationsUnsubscribe: null,
             lastConversationsKey: '',
             lastMessagesKey: '',
+            floatingPosition: readFloatingChatPosition(),
             readMarks: {},
             unsubscribe: null
           };
@@ -1540,10 +1557,100 @@
 
     function renderFloatingChatButton() {
       return `
-        <button id="chatButton" class="floating-chat" type="button" aria-label="채팅 열기">
-          채팅${renderUnreadBadge(totalUnreadChats())}
+        <button id="chatButton" class="floating-chat" type="button" aria-label="채팅 열기" style="${floatingChatStyle()}">
+          <span class="chat-icon" aria-hidden="true">💬</span>${renderUnreadBadge(totalUnreadChats())}
         </button>
       `;
+    }
+
+    function readFloatingChatPosition() {
+      try {
+        const saved = JSON.parse(localStorage.getItem(FLOATING_CHAT_POSITION_KEY) || 'null');
+        if (!saved || !Number.isFinite(saved.x) || !Number.isFinite(saved.y)) return null;
+        return saved;
+      } catch (error) {
+        return null;
+      }
+    }
+
+    function clampFloatingChatPosition(position, size = 58) {
+      if (!position) return null;
+      const margin = 8;
+      const maxX = Math.max(margin, window.innerWidth - size - margin);
+      const maxY = Math.max(margin, window.innerHeight - size - margin);
+      return {
+        x: Math.min(Math.max(margin, position.x), maxX),
+        y: Math.min(Math.max(margin, position.y), maxY)
+      };
+    }
+
+    function floatingChatStyle() {
+      const position = clampFloatingChatPosition(appState.chat.floatingPosition);
+      if (!position) return '';
+      appState.chat.floatingPosition = position;
+      return `left:${position.x}px;top:${position.y}px;right:auto;bottom:auto;`;
+    }
+
+    function setFloatingChatPosition(button, position) {
+      const nextPosition = clampFloatingChatPosition(position, button.offsetWidth || 58);
+      if (!nextPosition) return;
+      appState.chat.floatingPosition = nextPosition;
+      button.style.left = `${nextPosition.x}px`;
+      button.style.top = `${nextPosition.y}px`;
+      button.style.right = 'auto';
+      button.style.bottom = 'auto';
+    }
+
+    function bindFloatingChatDrag(button) {
+      if (!button) return;
+      let pointerId = null;
+      let startX = 0;
+      let startY = 0;
+      let startLeft = 0;
+      let startTop = 0;
+      let moved = false;
+
+      button.addEventListener('pointerdown', (event) => {
+        if (event.pointerType === 'mouse' && event.button !== 0) return;
+        pointerId = event.pointerId;
+        const rect = button.getBoundingClientRect();
+        startX = event.clientX;
+        startY = event.clientY;
+        startLeft = rect.left;
+        startTop = rect.top;
+        moved = false;
+        button.classList.add('dragging');
+        button.setPointerCapture?.(pointerId);
+      });
+
+      button.addEventListener('pointermove', (event) => {
+        if (event.pointerId !== pointerId) return;
+        const dx = event.clientX - startX;
+        const dy = event.clientY - startY;
+        if (Math.abs(dx) + Math.abs(dy) > 4) moved = true;
+        if (!moved) return;
+        event.preventDefault();
+        setFloatingChatPosition(button, {
+          x: startLeft + dx,
+          y: startTop + dy
+        });
+      });
+
+      const endDrag = (event) => {
+        if (event.pointerId !== pointerId) return;
+        pointerId = null;
+        button.classList.remove('dragging');
+        button.releasePointerCapture?.(event.pointerId);
+        if (!moved) return;
+        button.dataset.dragged = 'true';
+        localStorage.setItem(FLOATING_CHAT_POSITION_KEY, JSON.stringify(appState.chat.floatingPosition));
+        setTimeout(() => {
+          delete button.dataset.dragged;
+        }, 0);
+      };
+
+      button.addEventListener('pointerup', endDrag);
+      button.addEventListener('pointercancel', endDrag);
     }
 
     function renderAdminChat() {
@@ -1788,7 +1895,10 @@
     function bindAppEvents() {
       document.getElementById('logoutButton')?.addEventListener('click', () => signOut(appState.auth));
       document.getElementById('homeLogoButton')?.addEventListener('click', goToday);
-      document.getElementById('chatButton')?.addEventListener('click', () => {
+      const chatButton = document.getElementById('chatButton');
+      bindFloatingChatDrag(chatButton);
+      chatButton?.addEventListener('click', () => {
+        if (chatButton.dataset.dragged === 'true') return;
         if (appState.mode === 'manager') {
           appState.admin.activeTab = 'chat';
           appState.chat.open = false;
