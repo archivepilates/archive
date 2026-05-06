@@ -712,6 +712,10 @@
       color: var(--muted);
     }
 
+    .loading.only-logo {
+      min-height: calc(100dvh - 64px);
+    }
+
     .loading-brand {
       display: grid;
       gap: 14px;
@@ -1176,6 +1180,10 @@
     }
 
     function renderApp() {
+      if (appState.loading) {
+        renderLoadingApp();
+        return;
+      }
       if (appState.mode === 'manager') {
         renderAdminApp();
         return;
@@ -1206,6 +1214,18 @@
       bindAppEvents();
     }
 
+    function renderLoadingApp() {
+      root.innerHTML = `
+        <main class="shell">
+          <section class="loading only-logo">
+            <div class="loading-brand">
+              <div class="loading-logo">IN</div>
+            </div>
+          </section>
+        </main>
+      `;
+    }
+
     function renderAdminApp() {
       root.innerHTML = `
         <main class="shell">
@@ -1233,16 +1253,6 @@
     }
 
     function renderBody(day) {
-      if (appState.loading) {
-        return `
-          <section class="loading">
-            <div class="loading-brand">
-              <div class="loading-logo">IN</div>
-              <span>아카이브IN 동기화 확인 중</span>
-            </div>
-          </section>
-        `;
-      }
       if (appState.error) return `<section class="error">${escapeHtml(appState.error)}</section>`;
       if (!day) return `<section class="empty">선택한 날짜의 수업이 없습니다</section>`;
       const classCounts = classTypeCounts(day.lectures || []);
@@ -1270,16 +1280,6 @@
     }
 
     function renderAdminBody() {
-      if (appState.loading) {
-        return `
-          <section class="loading">
-            <div class="loading-brand">
-              <div class="loading-logo">IN</div>
-              <span>운영자 화면 동기화 확인 중</span>
-            </div>
-          </section>
-        `;
-      }
       if (appState.error) return `<section class="error">${escapeHtml(appState.error)}</section>`;
       const views = currentAdminViews();
       const summary = adminSummary(views);
