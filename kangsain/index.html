@@ -370,6 +370,131 @@
       background: var(--brand);
     }
 
+    .admin-tabs {
+      display: grid;
+      grid-template-columns: repeat(4, minmax(0, 1fr));
+      gap: 6px;
+      margin: 0 0 16px;
+    }
+
+    .admin-tab {
+      min-height: 40px;
+      border: 1px solid var(--line);
+      border-radius: 8px;
+      color: var(--muted);
+      background: #fff;
+      font-size: 12px;
+      font-weight: 850;
+      white-space: nowrap;
+    }
+
+    .admin-tab.active {
+      color: #fff;
+      border-color: var(--brand);
+      background: var(--brand);
+    }
+
+    .admin-grid {
+      display: grid;
+      grid-template-columns: repeat(2, minmax(0, 1fr));
+      gap: 12px;
+      margin-top: 14px;
+    }
+
+    .admin-panel {
+      border: 1px solid var(--line);
+      border-radius: 8px;
+      background: #fff;
+      padding: 14px;
+      box-shadow: var(--shadow);
+    }
+
+    .admin-panel h2,
+    .admin-panel h3 {
+      margin: 0 0 12px;
+      font-size: 16px;
+      font-weight: 850;
+    }
+
+    .admin-table {
+      width: 100%;
+      border-collapse: collapse;
+      font-size: 12px;
+    }
+
+    .admin-table th,
+    .admin-table td {
+      padding: 9px 6px;
+      border-bottom: 1px solid var(--line);
+      text-align: left;
+      vertical-align: top;
+    }
+
+    .admin-table th {
+      color: var(--muted);
+      font-size: 11px;
+      font-weight: 850;
+    }
+
+    .admin-meter {
+      display: grid;
+      gap: 8px;
+    }
+
+    .admin-meter-row {
+      display: grid;
+      grid-template-columns: 58px 1fr 44px;
+      align-items: center;
+      gap: 8px;
+      color: var(--muted);
+      font-size: 12px;
+      font-weight: 760;
+    }
+
+    .admin-meter-track {
+      height: 8px;
+      overflow: hidden;
+      border-radius: 999px;
+      background: #f1ede8;
+    }
+
+    .admin-meter-fill {
+      height: 100%;
+      border-radius: inherit;
+      background: var(--brand);
+    }
+
+    .admin-list {
+      display: grid;
+      gap: 8px;
+    }
+
+    .admin-list-item {
+      padding: 10px;
+      border: 1px solid var(--line);
+      border-radius: 8px;
+      background: #fff;
+    }
+
+    .admin-list-item strong {
+      display: block;
+      margin-bottom: 5px;
+      font-size: 14px;
+    }
+
+    .admin-list-item p {
+      margin: 0;
+      color: var(--muted);
+      font-size: 12px;
+      line-height: 1.45;
+    }
+
+    .admin-search {
+      display: grid;
+      gap: 8px;
+      margin-bottom: 12px;
+    }
+
     .admin-staff-block {
       margin-top: 18px;
     }
@@ -851,6 +976,8 @@
       .datebar { margin-inline: -12px; padding-inline: 12px; }
       .summary-label { font-size: 12px; letter-spacing: 0.12em; }
       .summary-value { font-size: 30px; }
+      .admin-tabs { grid-template-columns: repeat(2, minmax(0, 1fr)); }
+      .admin-grid { grid-template-columns: 1fr; }
       .lecture-head { grid-template-columns: 62px 1fr 24px; gap: 10px; }
       .time { font-size: 18px; }
       .lecture-title { font-size: 18px; }
@@ -949,8 +1076,12 @@
       admin: {
         staffs: [],
         views: [],
+        rangeViews: [],
+        memos: [],
         syncState: null,
-        selectedStaffId: 'all'
+        selectedStaffId: 'all',
+        activeTab: 'overview',
+        searchQuery: ''
       },
       selectedDate: today(),
       loading: false,
@@ -990,7 +1121,16 @@
           appState.staff = null;
           appState.days = [];
           appState.mode = 'instructor';
-          appState.admin = { staffs: [], views: [], syncState: null, selectedStaffId: 'all' };
+          appState.admin = {
+            staffs: [],
+            views: [],
+            rangeViews: [],
+            memos: [],
+            syncState: null,
+            selectedStaffId: 'all',
+            activeTab: 'overview',
+            searchQuery: ''
+          };
           renderLogin();
           return;
         }
@@ -1144,6 +1284,7 @@
       const views = currentAdminViews();
       const summary = adminSummary(views);
       return `
+        ${renderAdminTabs()}
         <section class="summary">
           <div class="summary-item">
             <span class="summary-label">STAFF</span>
@@ -1161,8 +1302,128 @@
             <span class="summary-note">예약 ${summary.reserved} · 대기 ${summary.wait}</span>
           </div>
         </section>
+        ${renderAdminTabBody(views)}
+      `;
+    }
+
+    function renderAdminTabs() {
+      const active = appState.admin.activeTab || 'overview';
+      const tabs = [
+        ['overview', '현황'],
+        ['analytics', '분석'],
+        ['issues', '이슈'],
+        ['members', '회원검색']
+      ];
+      return `
+        <nav class="admin-tabs" aria-label="운영자 메뉴">
+          ${tabs.map(([id, label]) => `
+            <button class="admin-tab ${active === id ? 'active' : ''}" type="button" data-admin-tab="${id}">${label}</button>
+          `).join('')}
+        </nav>
+      `;
+    }
+
+    function renderAdminTabBody(views) {
+      const active = appState.admin.activeTab || 'overview';
+      if (active === 'analytics') return `${renderAdminStaffFilters()}${renderAdminAnalytics()}`;
+      if (active === 'issues') return `${renderAdminStaffFilters()}${renderAdminIssues()}`;
+      if (active === 'members') return renderAdminMemberSearch();
+      return `
+        ${renderAdminTrend()}
         ${renderAdminStaffFilters()}
         ${views.length ? views.map(renderAdminStaffView).join('') : '<section class="empty">선택한 날짜의 수업이 없습니다</section>'}
+      `;
+    }
+
+    function renderAdminTrend() {
+      const day = adminSummary(adminViewsByRange(0));
+      const week = adminSummary(adminViewsByRange(6));
+      const month = adminSummary(adminViewsByRange(27));
+      return `
+        <section class="admin-grid">
+          <div class="admin-panel">
+            <h2>수업 흐름</h2>
+            <div class="admin-meter">
+              ${renderMetricRow('일', day.totalLectures, month.totalLectures)}
+              ${renderMetricRow('주', week.totalLectures, month.totalLectures)}
+              ${renderMetricRow('4주', month.totalLectures, month.totalLectures)}
+            </div>
+          </div>
+          <div class="admin-panel">
+            <h2>예약/출석률</h2>
+            <table class="admin-table">
+              <tr><th>기간</th><th>예약률</th><th>출석률</th><th>미체크</th></tr>
+              ${renderRateRow('일', day)}
+              ${renderRateRow('주', week)}
+              ${renderRateRow('4주', month)}
+            </table>
+          </div>
+        </section>
+      `;
+    }
+
+    function renderAdminAnalytics() {
+      const stats = instructorStats(adminViewsByRange(27));
+      const low = lowClassIssues(adminViewsByRange(27)).slice(0, 12);
+      return `
+        <section class="admin-grid">
+          <div class="admin-panel">
+            <h2>강사 분석 4주</h2>
+            <table class="admin-table">
+              <tr><th>강사</th><th>수업</th><th>예약률</th><th>출석률</th></tr>
+              ${stats.map((row) => `
+                <tr>
+                  <td>${escapeHtml(row.name)}</td>
+                  <td>${row.classes}</td>
+                  <td>${percentText(row.reservationRate)}</td>
+                  <td>${percentText(row.attendanceRate)}</td>
+                </tr>
+              `).join('') || '<tr><td colspan="4">분석할 수업 데이터가 없습니다</td></tr>'}
+            </table>
+          </div>
+          <div class="admin-panel">
+            <h2>4주 저조 수업</h2>
+            <div class="admin-list">
+              ${low.map(renderLowClassItem).join('') || '<div class="empty">저조 수업 기준에 해당하는 수업이 없습니다</div>'}
+            </div>
+          </div>
+        </section>
+      `;
+    }
+
+    function renderAdminIssues() {
+      const issues = adminIssues(currentAdminViews());
+      return `
+        <section class="admin-grid">
+          <div class="admin-panel">
+            <h2>수업 이슈</h2>
+            <div class="admin-list">
+              ${issues.lectures.map(renderIssueItem).join('') || '<div class="empty">오늘 수업 이슈가 없습니다</div>'}
+            </div>
+          </div>
+          <div class="admin-panel">
+            <h2>이슈 회원 검토</h2>
+            <div class="admin-list">
+              ${issues.members.map(renderMemberIssueItem).join('') || '<div class="empty">검토할 우려회원이 없습니다</div>'}
+            </div>
+          </div>
+        </section>
+      `;
+    }
+
+    function renderAdminMemberSearch() {
+      const query = appState.admin.searchQuery || '';
+      const results = query.length >= 2 ? searchAdminMembers(query).slice(0, 30) : [];
+      return `
+        <section class="admin-panel">
+          <h2>회원 검색 + 메모 통합 검색</h2>
+          <div class="admin-search">
+            <input id="adminSearchInput" type="search" value="${escapeAttr(query)}" placeholder="회원명, 메모, 태그 검색">
+          </div>
+          <div class="admin-list">
+            ${query.length < 2 ? '<div class="empty">두 글자 이상 입력하세요</div>' : results.map(renderMemberSearchItem).join('') || '<div class="empty">검색 결과가 없습니다</div>'}
+          </div>
+        </section>
       `;
     }
 
@@ -1262,11 +1523,24 @@
       document.getElementById('refreshButton')?.addEventListener('click', loadHome);
       document.getElementById('prevDate')?.addEventListener('click', () => shiftDate(-1));
       document.getElementById('nextDate')?.addEventListener('click', () => shiftDate(1));
+      root.querySelectorAll('[data-admin-tab]').forEach((button) => {
+        button.addEventListener('click', () => {
+          appState.admin.activeTab = button.dataset.adminTab || 'overview';
+          renderApp();
+        });
+      });
       root.querySelectorAll('[data-admin-staff]').forEach((button) => {
         button.addEventListener('click', () => {
           appState.admin.selectedStaffId = button.dataset.adminStaff || 'all';
           renderApp();
         });
+      });
+      document.getElementById('adminSearchInput')?.addEventListener('input', (event) => {
+        appState.admin.searchQuery = event.target.value.trim();
+        renderApp();
+        const input = document.getElementById('adminSearchInput');
+        input?.focus();
+        input?.setSelectionRange(input.value.length, input.value.length);
       });
       root.querySelectorAll('[data-toggle-lecture]').forEach((button) => {
         button.addEventListener('click', () => toggleLecture(button.dataset.toggleLecture));
@@ -1408,17 +1682,23 @@
       const studioId = token.claims.studioId || '';
       if (!staffId || !studioId) throw new Error('운영자 권한이 아직 연결되지 않았습니다');
 
-      const [staffSnap, staffListSnap, viewSnap, syncSnap] = await Promise.all([
+      const rangeDates = Array.from({ length: 28 }, (_, index) => addDays(appState.selectedDate, index - 27));
+      const [staffSnap, staffListSnap, viewSnaps, memoSnap, syncSnap] = await Promise.all([
         getDoc(doc(appState.db, 'staffs', String(staffId))),
         getDocs(query(
           collection(appState.db, 'staffs'),
           where('studioId', '==', String(studioId)),
           where('active', '==', true)
         )),
-        getDocs(query(
+        Promise.all(rangeDates.map((date) => getDocs(query(
           collection(appState.db, 'instructorViews'),
           where('studioId', '==', String(studioId)),
-          where('date', '==', appState.selectedDate)
+          where('date', '==', date)
+        )))),
+        getDocs(query(
+          collection(appState.db, 'memberMemos'),
+          where('studioId', '==', String(studioId)),
+          queryLimit(300)
         )),
         getDoc(doc(appState.db, 'syncStates', `lecturesRange_${studioId}`))
       ]);
@@ -1428,18 +1708,22 @@
         .map((docSnap) => docSnap.data())
         .filter((item) => item.role === 'instructor')
         .sort((a, b) => String(a.name || '').localeCompare(String(b.name || ''), 'ko'));
-      const views = viewSnap.docs
-        .map((docSnap) => docSnap.data())
+      const rangeViews = viewSnaps.flatMap((snap) => snap.docs.map((docSnap) => docSnap.data()))
         .filter((view) => (view.summary?.totalLectures || 0) > 0)
         .sort((a, b) => staffName(a.staffId, staffs).localeCompare(staffName(b.staffId, staffs), 'ko'));
+      const views = rangeViews.filter((view) => view.date === appState.selectedDate);
       return {
         staffId,
         staff: { staffId, name: staff.name, role: staff.role, studioId: staff.studioId },
         admin: {
           staffs,
           views,
+          rangeViews,
+          memos: memoSnap.docs.map((docSnap) => docSnap.data()),
           syncState: syncSnap.exists() ? syncSnap.data() : null,
-          selectedStaffId: appState.admin.selectedStaffId || 'all'
+          selectedStaffId: appState.admin.selectedStaffId || 'all',
+          activeTab: appState.admin.activeTab || 'overview',
+          searchQuery: appState.admin.searchQuery || ''
         }
       };
     }
@@ -1473,6 +1757,9 @@
             .map((docSnap) => docSnap.data())
             .filter((view) => (view.summary?.totalLectures || 0) > 0)
             .sort((a, b) => staffName(a.staffId).localeCompare(staffName(b.staffId), 'ko'));
+          const otherRangeViews = (appState.admin.rangeViews || []).filter((view) => view.date !== appState.selectedDate);
+          appState.admin.rangeViews = [...otherRangeViews, ...appState.admin.views]
+            .sort((a, b) => String(a.date).localeCompare(String(b.date)) || staffName(a.staffId).localeCompare(staffName(b.staffId), 'ko'));
           if (!appState.loading) renderApp();
         },
         () => {}
@@ -1683,14 +1970,20 @@
     function shiftDate(amount) {
       appState.selectedDate = addDays(appState.selectedDate, amount);
       appState.openLectures.clear();
-      if (appState.mode === 'manager') subscribeAdminViews();
+      if (appState.mode === 'manager') {
+        loadHome();
+        return;
+      }
       renderApp();
     }
 
     function goToday() {
       appState.selectedDate = today();
       appState.openLectures.clear();
-      if (appState.mode === 'manager') subscribeAdminViews();
+      if (appState.mode === 'manager') {
+        loadHome();
+        return;
+      }
       renderApp();
     }
 
@@ -1715,6 +2008,10 @@
       return views.reduce((summary, view) => {
         const lectures = view.lectures || [];
         const counts = classTypeCounts(lectures);
+        const capacity = lectures.reduce((total, lecture) => total + Math.max(0, Number(lecture.capacity || 0)), 0);
+        const bookings = lectures.flatMap((lecture) => lecture.bookings || []);
+        const reserved = bookings.filter((booking) => booking.appStatus === 'reserved');
+        const attended = reserved.filter((booking) => booking.attendanceStatus === 'attended');
         summary.activeStaffs += lectures.length ? 1 : 0;
         summary.totalLectures += view.summary?.totalLectures || lectures.length;
         summary.groupLectures += counts.group;
@@ -1722,8 +2019,251 @@
         summary.reserved += view.summary?.reservedCount || 0;
         summary.wait += view.summary?.waitCount || 0;
         summary.unchecked += view.summary?.uncheckedAttendanceCount || 0;
+        summary.capacity += capacity;
+        summary.attended += attended.length;
         return summary;
-      }, { activeStaffs: 0, totalLectures: 0, groupLectures: 0, privateLectures: 0, reserved: 0, wait: 0, unchecked: 0 });
+      }, {
+        activeStaffs: 0,
+        totalLectures: 0,
+        groupLectures: 0,
+        privateLectures: 0,
+        reserved: 0,
+        wait: 0,
+        unchecked: 0,
+        capacity: 0,
+        attended: 0
+      });
+    }
+
+    function adminViewsByRange(daysBack) {
+      const start = addDays(appState.selectedDate, -daysBack);
+      const end = appState.selectedDate;
+      const selected = appState.admin.selectedStaffId || 'all';
+      return (appState.admin.rangeViews || []).filter((view) =>
+        view.date >= start &&
+        view.date <= end &&
+        (selected === 'all' || view.staffId === selected)
+      );
+    }
+
+    function renderMetricRow(label, value, max) {
+      const width = max ? Math.max(6, Math.round((value / max) * 100)) : 0;
+      return `
+        <div class="admin-meter-row">
+          <span>${escapeHtml(label)}</span>
+          <div class="admin-meter-track"><div class="admin-meter-fill" style="width:${width}%"></div></div>
+          <strong>${value}</strong>
+        </div>
+      `;
+    }
+
+    function renderRateRow(label, summary) {
+      const reservationRate = safeRate(summary.reserved, summary.capacity);
+      const attendanceRate = safeRate(summary.attended, summary.reserved);
+      return `
+        <tr>
+          <td>${escapeHtml(label)}</td>
+          <td>${percentText(reservationRate)}</td>
+          <td>${percentText(attendanceRate)}</td>
+          <td>${summary.unchecked}</td>
+        </tr>
+      `;
+    }
+
+    function instructorStats(views) {
+      const map = new Map();
+      views.forEach((view) => {
+        const row = map.get(view.staffId) || {
+          staffId: view.staffId,
+          name: staffName(view.staffId),
+          classes: 0,
+          capacity: 0,
+          reserved: 0,
+          attended: 0
+        };
+        (view.lectures || []).forEach((lecture) => {
+          row.classes += 1;
+          row.capacity += Math.max(0, Number(lecture.capacity || 0));
+          const reserved = (lecture.bookings || []).filter((booking) => booking.appStatus === 'reserved');
+          row.reserved += reserved.length;
+          row.attended += reserved.filter((booking) => booking.attendanceStatus === 'attended').length;
+        });
+        map.set(view.staffId, row);
+      });
+      return [...map.values()]
+        .map((row) => ({
+          ...row,
+          reservationRate: safeRate(row.reserved, row.capacity),
+          attendanceRate: safeRate(row.attended, row.reserved)
+        }))
+        .sort((a, b) => a.reservationRate - b.reservationRate || b.classes - a.classes);
+    }
+
+    function lowClassIssues(views) {
+      return views.flatMap((view) => (view.lectures || []).map((lecture) => {
+        const reserved = (lecture.bookings || []).filter((booking) => booking.appStatus === 'reserved').length;
+        const capacity = Math.max(0, Number(lecture.capacity || 0));
+        return {
+          view,
+          lecture,
+          staffName: staffName(view.staffId),
+          reserved,
+          capacity,
+          reservationRate: safeRate(reserved, capacity)
+        };
+      }))
+        .filter((item) => item.capacity >= 3 && (item.reserved <= 1 || item.reservationRate < 0.4))
+        .sort((a, b) => a.reservationRate - b.reservationRate || String(a.view.date).localeCompare(String(b.view.date)));
+    }
+
+    function renderLowClassItem(item) {
+      return `
+        <div class="admin-list-item">
+          <strong>${escapeHtml(item.view.date)} ${escapeHtml(lectureTimeText(item.lecture))} ${escapeHtml(item.lecture.title || '수업')}</strong>
+          <p>${escapeHtml(item.staffName)} · 예약 ${item.reserved}/${item.capacity} · 예약률 ${percentText(item.reservationRate)}</p>
+        </div>
+      `;
+    }
+
+    function adminIssues(views) {
+      const lectureIssues = [];
+      const memberMap = new Map();
+      views.forEach((view) => {
+        (view.lectures || []).forEach((lecture) => {
+          const bookings = lecture.bookings || [];
+          const reserved = bookings.filter((booking) => booking.appStatus === 'reserved');
+          if (!reserved.length) {
+            lectureIssues.push({
+              type: '예약0',
+              view,
+              lecture,
+              body: `${staffName(view.staffId)} · ${lectureTimeText(lecture)} · ${lecture.title || '수업'}`
+            });
+          }
+          const unchecked = reserved.filter((booking) => booking.attendanceStatus === 'unchecked');
+          if (isLectureDone(lecture) && unchecked.length) {
+            lectureIssues.push({
+              type: '출석미체크',
+              view,
+              lecture,
+              body: `${staffName(view.staffId)} · ${lectureTimeText(lecture)} · ${unchecked.length}명`
+            });
+          }
+          reserved.forEach((booking) => {
+            const tags = (booking.tags || []).filter((tag) =>
+              ['warning', 'danger'].includes(tag.level) ||
+              tag.source === 'auto_memo' ||
+              tag.source === 'manual'
+            );
+            if (!tags.length) return;
+            const key = booking.memberId || booking.memberName;
+            const current = memberMap.get(key) || { booking, view, lecture, tags: [] };
+            current.tags.push(...tags);
+            memberMap.set(key, current);
+          });
+        });
+      });
+      return {
+        lectures: lectureIssues.slice(0, 30),
+        members: [...memberMap.values()].slice(0, 30)
+      };
+    }
+
+    function renderIssueItem(item) {
+      return `
+        <div class="admin-list-item">
+          <strong>${escapeHtml(item.type)}</strong>
+          <p>${escapeHtml(item.body)}</p>
+        </div>
+      `;
+    }
+
+    function renderMemberIssueItem(item) {
+      const labels = uniqueValues(item.tags.map((tag) => tag.label || tag.tagId)).slice(0, 6);
+      return `
+        <div class="admin-list-item">
+          <strong>${escapeHtml(item.booking.memberName || '회원')}</strong>
+          <p>${escapeHtml(staffName(item.view.staffId))} · ${escapeHtml(lectureTimeText(item.lecture))} · ${labels.map((label) => `#${label}`).join(' ')}</p>
+        </div>
+      `;
+    }
+
+    function searchAdminMembers(queryText) {
+      const needle = normalizeSearch(queryText);
+      const map = new Map();
+      (appState.admin.rangeViews || []).forEach((view) => {
+        (view.lectures || []).forEach((lecture) => {
+          (lecture.bookings || []).forEach((booking) => {
+            if (!booking.memberId && !booking.memberName) return;
+            const key = booking.memberId || booking.memberName;
+            const row = map.get(key) || {
+              memberId: booking.memberId,
+              memberName: booking.memberName,
+              tags: [],
+              bookings: [],
+              memos: []
+            };
+            row.bookings.push({ view, lecture, booking });
+            row.tags.push(...(booking.tags || []));
+            map.set(key, row);
+          });
+        });
+      });
+      (appState.admin.memos || []).forEach((memo) => {
+        const key = memo.memberId || memo.memberName;
+        if (!key) return;
+        const row = map.get(key) || {
+          memberId: memo.memberId,
+          memberName: memo.memberName,
+          tags: [],
+          bookings: [],
+          memos: []
+        };
+        row.memberName = row.memberName || memo.memberName;
+        row.memos.push(memo);
+        map.set(key, row);
+      });
+      return [...map.values()]
+        .filter((row) => normalizeSearch([
+          row.memberName,
+          row.tags.map((tag) => tag.label || tag.tagId).join(' '),
+          row.bookings.map((item) => item.booking.lastMemoPreview || '').join(' '),
+          row.memos.map((memo) => memo.content || '').join(' ')
+        ].join(' ')).includes(needle))
+        .sort((a, b) => String(a.memberName || '').localeCompare(String(b.memberName || ''), 'ko'));
+    }
+
+    function renderMemberSearchItem(row) {
+      const recent = row.bookings.slice(-5).reverse();
+      const attended = row.bookings.filter((item) => item.booking.attendanceStatus === 'attended').length;
+      const absent = row.bookings.filter((item) => ['absent', 'late_cancel'].includes(item.booking.attendanceStatus)).length;
+      const tags = uniqueValues(row.tags.map((tag) => tag.label || tag.tagId)).slice(0, 8);
+      const memo = row.memos[0]?.content || recent.find((item) => item.booking.lastMemoPreview)?.booking.lastMemoPreview || '';
+      return `
+        <div class="admin-list-item">
+          <strong>${escapeHtml(row.memberName || '회원')}</strong>
+          <p>최근 4주 출석 ${attended} · 결석 ${absent} · 예약기록 ${row.bookings.length}</p>
+          <div class="chips">${tags.map((tag) => `<span class="chip">${escapeHtml(tag)}</span>`).join('')}</div>
+          ${memo ? `<p style="margin-top:8px;">${escapeHtml(memo).slice(0, 120)}</p>` : ''}
+          ${recent.length ? `<p style="margin-top:8px;">${recent.map((item) => `${item.view.date} ${lectureTimeText(item.lecture)} ${staffName(item.view.staffId)}`).join(' / ')}</p>` : ''}
+        </div>
+      `;
+    }
+
+    function safeRate(value, total) {
+      return total > 0 ? value / total : 0;
+    }
+
+    function percentText(value) {
+      return `${Math.round((Number(value) || 0) * 100)}%`;
+    }
+
+    function uniqueValues(values) {
+      return [...new Set(values.filter(Boolean))];
+    }
+
+    function normalizeSearch(value) {
+      return String(value || '').replace(/\s/g, '').toLowerCase();
     }
 
     function staffName(staffId, staffs = appState.admin.staffs || []) {
