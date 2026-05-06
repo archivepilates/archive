@@ -18,6 +18,7 @@ export async function syncManagerStaffs(input?: { studioId?: string; managerStaf
         const staffId = stringValue(row.id);
         const phone = digitsOnly(row.mobile ?? row.contact_infos?.find?.((item: any) => item?.is_representative)?.contact);
         const current = (await refs.staff(staffId).get()).data();
+        const managerRole = roleFromManager(row.role);
         await refs.staff(staffId).set(
           {
             staffId,
@@ -25,7 +26,7 @@ export async function syncManagerStaffs(input?: { studioId?: string; managerStaf
             name: stringValue(row.name),
             phone: phone || current?.phone || "",
             phoneLast4: phone ? phone.slice(-4) : current?.phoneLast4 || "",
-            role: roleFromManager(row.role),
+            role: current?.role === "instructor" && managerRole === "owner" ? "instructor" : managerRole,
             active: !row.deleted_at,
             studiomateStaffId: staffId,
             visibleLectureStaffNames: current?.visibleLectureStaffNames?.length

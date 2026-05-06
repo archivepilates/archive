@@ -1706,7 +1706,7 @@
       const staff = staffSnap.data();
       const staffs = staffListSnap.docs
         .map((docSnap) => docSnap.data())
-        .filter((item) => item.role === 'instructor')
+        .filter((item) => item.role !== 'viewer' && !String(item.staffId || '').startsWith('operator_'))
         .sort((a, b) => String(a.name || '').localeCompare(String(b.name || ''), 'ko'));
       const rangeViews = viewSnaps.flatMap((snap) => snap.docs.map((docSnap) => docSnap.data()))
         .filter((view) => (view.summary?.totalLectures || 0) > 0)
