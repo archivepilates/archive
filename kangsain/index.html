@@ -87,7 +87,7 @@
       z-index: 10;
       display: flex;
       align-items: center;
-      gap: 12px;
+      gap: 10px;
       min-height: 72px;
       padding: 10px 0 14px;
       background: rgba(255, 255, 255, 0.92);
@@ -151,6 +151,9 @@
       margin: 5px 0 0;
       color: var(--muted);
       font-size: 13px;
+      white-space: nowrap;
+      overflow: hidden;
+      text-overflow: ellipsis;
     }
 
     .ghost,
@@ -598,11 +601,7 @@
     }
 
     .chat-dock {
-      position: fixed;
-      inset: auto 12px max(12px, env(safe-area-inset-bottom));
-      z-index: 30;
-      max-width: 560px;
-      margin: 0 auto;
+      margin: 16px auto max(16px, env(safe-area-inset-bottom));
       border-radius: 8px;
       box-shadow: var(--shadow);
     }
@@ -1084,11 +1083,11 @@
 
     @media (max-width: 520px) {
       .app { padding-inline: 12px; }
-      .topbar { gap: 10px; }
+      .topbar { gap: 8px; }
       .logo { width: 48px; height: 48px; border-radius: 12px; }
       .identity h1 { font-size: 20px; }
       .identity p { font-size: 12px; }
-      .ghost, .soft-button { padding-inline: 10px; }
+      .ghost, .soft-button { min-height: 40px; padding-inline: 8px; font-size: 13px; }
       .datebar { margin-inline: -12px; padding-inline: 12px; }
       .summary-label { font-size: 12px; letter-spacing: 0.12em; }
       .summary-value { font-size: 30px; }
@@ -1328,6 +1327,7 @@
             <button id="logoutButton" class="ghost" type="button">로그아웃</button>
             <div class="sync-bar" aria-hidden="true"></div>
           </header>
+          ${appState.chat.open ? renderInstructorChatDock() : ''}
           <nav class="datebar">
             <button id="prevDate" type="button" aria-label="이전 날짜">‹</button>
             <strong>${dateLabel(appState.selectedDate)}</strong>
@@ -1337,7 +1337,6 @@
             ${renderBody(day)}
           </div>
         </main>
-        ${appState.chat.open ? renderInstructorChatDock() : ''}
       `;
       bindAppEvents();
     }
@@ -1468,6 +1467,7 @@
     function renderInstructorChatDock() {
       return `
         <section class="admin-panel chat-dock">
+          <h2 style="margin:0 0 12px; font-size:16px;">운영자 채팅</h2>
           ${renderChatBox(appState.staff?.staffId || '', appState.staff?.name || '운영자')}
         </section>
       `;
@@ -2037,30 +2037,47 @@
       const now = serverTimestamp();
       const convRef = doc(appState.db, 'conversations', convId);
       const messageRef = doc(collection(convRef, 'messages'));
-      await setDoc(convRef, {
-        conversationId: convId,
-        studioId: appState.staff?.studioId || '',
-        threadStaffId,
-        threadStaffName: staffNameForThread,
-        updatedAt: now,
-        lastMessage: text.slice(0, 120),
-        lastSenderStaffId: appState.staff?.staffId || '',
-        lastSenderName: appState.staff?.name || ''
-      }, { merge: true });
-      await setDoc(messageRef, {
-        messageId: messageRef.id,
-        conversationId: convId,
-        studioId: appState.staff?.studioId || '',
-        threadStaffId,
-        threadStaffName: staffNameForThread,
-        senderStaffId: appState.staff?.staffId || '',
-        senderName: appState.staff?.name || '',
-        senderRole: appState.staff?.role || '',
-        content: text,
-        createdAt: now
-      });
       const input = document.getElementById('chatInput');
       if (input) input.value = '';
+      appState.chat.messages = [
+        ...appState.chat.messages,
+        {
+          messageId: messageRef.id,
+          senderStaffId: appState.staff?.staffId || '',
+          senderName: appState.staff?.name || '',
+          content: text,
+          createdAt: new Date().toISOString()
+        }
+      ];
+      renderApp();
+      scrollChatToBottom();
+      try {
+        await setDoc(convRef, {
+          conversationId: convId,
+          studioId: appState.staff?.studioId || '',
+          threadStaffId,
+          threadStaffName: staffNameForThread,
+          updatedAt: now,
+          lastMessage: text.slice(0, 120),
+          lastSenderStaffId: appState.staff?.staffId || '',
+          lastSenderName: appState.staff?.name || ''
+        }, { merge: true });
+        await setDoc(messageRef, {
+          messageId: messageRef.id,
+          conversationId: convId,
+          studioId: appState.staff?.studioId || '',
+          threadStaffId,
+          threadStaffName: staffNameForThread,
+          senderStaffId: appState.staff?.staffId || '',
+          senderName: appState.staff?.name || '',
+          senderRole: appState.staff?.role || '',
+          content: text,
+          createdAt: now
+        });
+      } catch (err) {
+        showToast(`채팅 전송 실패: ${friendlyError(err)}`);
+        subscribeChat(threadStaffId);
+      }
     }
 
     function scrollChatToBottom() {
