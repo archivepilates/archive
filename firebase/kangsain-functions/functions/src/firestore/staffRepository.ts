@@ -2,7 +2,24 @@ import type { StaffDoc } from "../types/models";
 import { refs } from "./refs";
 
 export async function upsertStaff(staff: StaffDoc): Promise<void> {
-  await refs.staff(staff.staffId).set(staff, { merge: true });
+  const current = (await refs.staff(staff.staffId).get()).data();
+  await refs.staff(staff.staffId).set(
+    {
+      ...staff,
+      uid: current?.uid || staff.uid,
+      email: current?.email || staff.email,
+      phone: current?.phone || staff.phone,
+      phoneLast4: current?.phoneLast4 || staff.phoneLast4,
+      role: current && ["owner", "manager"].includes(current.role) ? current.role : staff.role,
+      createdAt: current?.createdAt || staff.createdAt,
+    },
+    { merge: true },
+  );
+}
+
+export async function getStaffById(staffId: string): Promise<StaffDoc | null> {
+  const snap = await refs.staff(staffId).get();
+  return snap.exists ? snap.data() || null : null;
 }
 
 export async function getStaffByUid(uid: string): Promise<StaffDoc | null> {

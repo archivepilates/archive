@@ -46,7 +46,7 @@ function roleFromManager(role: unknown): StaffRole {
   const text = stringValue(role);
   if (/오너|owner/i.test(text)) return "owner";
   if (/매니저|관리|manager/i.test(text)) return "manager";
-  if (/강사|instructor/i.test(text)) return "instructor";
+  if (/강사|instructor|staff/i.test(text)) return "instructor";
   return "viewer";
 }
 

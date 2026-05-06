@@ -3,11 +3,11 @@ import { DEFAULT_STUDIO_ID } from "../config/constants";
 import { refs } from "../firestore/refs";
 import { upsertBookingIfChanged } from "../firestore/bookingRepository";
 import { upsertLectureIfChanged } from "../firestore/lectureRepository";
-import { upsertStaff } from "../firestore/staffRepository";
+import { getActiveStaffs, upsertStaff } from "../firestore/staffRepository";
 import { StudioMateClient } from "../studiomate/studiomateClient";
 import { asArray, normalizeBooking, normalizeLecture } from "../studiomate/normalizers";
 import type { BookingDoc } from "../types/models";
-import { nowTimestamp, todayKst } from "../utils/date";
+import { addDays, dateRange, nowTimestamp, todayKst } from "../utils/date";
 import { rebuildInstructorViewsForDates } from "./rebuildInstructorViews";
 import { rebuildAttendanceSummaries } from "./rebuildAttendanceSummaries";
 import { rebuildMemberInsights } from "./rebuildMemberInsights";
@@ -86,7 +86,10 @@ export async function syncLecturesRange(input: {
       bookings: allBookings,
     });
     phase = "rebuild instructor views";
-    await rebuildInstructorViewsForDates(studioId, staffDates);
+    await rebuildInstructorViewsForDates(studioId, [
+      ...staffDates,
+      ...(await activeStaffDates(studioId, input.startDate, input.endDate)),
+    ]);
     phase = "write sync state";
     await refs.syncState(`lecturesRange_${studioId}`).set(
       {
@@ -115,4 +118,17 @@ export async function syncLecturesRange(input: {
     });
     throw err;
   }
+}
+
+async function activeStaffDates(
+  studioId: string,
+  startDate: string,
+  endDate: string,
+): Promise<Array<{ staffId: string; date: string }>> {
+  const today = todayKst();
+  const boundedStart = startDate < today ? today : startDate;
+  const boundedEnd = endDate > addDays(today, 14) ? addDays(today, 14) : endDate;
+  const dates = dateRange(boundedStart, boundedEnd);
+  const staffs = await getActiveStaffs(studioId);
+  return staffs.flatMap((staff) => dates.map((date) => ({ staffId: staff.staffId, date })));
 }
