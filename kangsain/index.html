@@ -338,6 +338,63 @@
       text-overflow: ellipsis;
     }
 
+    .admin-toolbar {
+      display: flex;
+      gap: 8px;
+      overflow-x: auto;
+      padding: 4px 0 10px;
+      margin-top: 18px;
+      scrollbar-width: none;
+    }
+
+    .admin-toolbar::-webkit-scrollbar {
+      display: none;
+    }
+
+    .admin-filter {
+      flex: 0 0 auto;
+      min-height: 38px;
+      border: 1px solid var(--line);
+      border-radius: 8px;
+      padding: 0 12px;
+      color: var(--muted);
+      background: #fff;
+      font-size: 13px;
+      font-weight: 800;
+      white-space: nowrap;
+    }
+
+    .admin-filter.active {
+      color: #fff;
+      border-color: var(--brand);
+      background: var(--brand);
+    }
+
+    .admin-staff-block {
+      margin-top: 18px;
+    }
+
+    .admin-staff-head {
+      display: flex;
+      align-items: end;
+      justify-content: space-between;
+      gap: 12px;
+      margin: 0 0 10px;
+    }
+
+    .admin-staff-head h2 {
+      margin: 0;
+      font-size: 18px;
+      font-weight: 850;
+    }
+
+    .admin-staff-head span {
+      color: var(--muted);
+      font-size: 12px;
+      font-weight: 760;
+      white-space: nowrap;
+    }
+
     .section-title {
       margin: 26px 0 12px;
       color: var(--brand);
@@ -888,6 +945,13 @@
       user: null,
       staff: null,
       days: [],
+      mode: 'instructor',
+      admin: {
+        staffs: [],
+        views: [],
+        syncState: null,
+        selectedStaffId: 'all'
+      },
       selectedDate: today(),
       loading: false,
       error: '',
@@ -925,6 +989,8 @@
           unsubscribeViews();
           appState.staff = null;
           appState.days = [];
+          appState.mode = 'instructor';
+          appState.admin = { staffs: [], views: [], syncState: null, selectedStaffId: 'all' };
           renderLogin();
           return;
         }
@@ -970,6 +1036,10 @@
     }
 
     function renderApp() {
+      if (appState.mode === 'manager') {
+        renderAdminApp();
+        return;
+      }
       const day = currentDay();
       root.innerHTML = `
         <main class="shell">
@@ -990,6 +1060,32 @@
           </nav>
           <div class="view-stage" data-date="${escapeAttr(appState.selectedDate)}">
             ${renderBody(day)}
+          </div>
+        </main>
+      `;
+      bindAppEvents();
+    }
+
+    function renderAdminApp() {
+      root.innerHTML = `
+        <main class="shell">
+          <header class="topbar ${appState.loading ? 'loading' : ''}">
+            <button id="homeLogoButton" class="logo" type="button" aria-label="오늘 운영 화면으로 이동">IN</button>
+            <div class="identity">
+              <h1>아카이브IN 운영자</h1>
+              <p>${appState.loading ? '동기화 확인 중' : adminSyncText()}</p>
+            </div>
+            <button id="refreshButton" class="soft-button" type="button">새로고침</button>
+            <button id="logoutButton" class="ghost" type="button">로그아웃</button>
+            <div class="sync-bar" aria-hidden="true"></div>
+          </header>
+          <nav class="datebar">
+            <button id="prevDate" type="button" aria-label="이전 날짜">‹</button>
+            <strong>${dateLabel(appState.selectedDate)}</strong>
+            <button id="nextDate" type="button" aria-label="다음 날짜">›</button>
+          </nav>
+          <div class="view-stage" data-date="${escapeAttr(appState.selectedDate)}">
+            ${renderAdminBody()}
           </div>
         </main>
       `;
@@ -1030,6 +1126,76 @@
         </section>
         <h2 class="section-title">${dateLabel(day.date)} 수업</h2>
         ${(day.lectures || []).map(renderLecture).join('') || '<section class="empty">수업이 없습니다</section>'}
+      `;
+    }
+
+    function renderAdminBody() {
+      if (appState.loading) {
+        return `
+          <section class="loading">
+            <div class="loading-brand">
+              <div class="loading-logo">IN</div>
+              <span>운영자 화면 동기화 확인 중</span>
+            </div>
+          </section>
+        `;
+      }
+      if (appState.error) return `<section class="error">${escapeHtml(appState.error)}</section>`;
+      const views = currentAdminViews();
+      const summary = adminSummary(views);
+      return `
+        <section class="summary">
+          <div class="summary-item">
+            <span class="summary-label">STAFF</span>
+            <span class="summary-value">${summary.activeStaffs}</span>
+            <span class="summary-note">수업 있는 강사</span>
+          </div>
+          <div class="summary-item">
+            <span class="summary-label">CLASSES</span>
+            <span class="summary-value">${summary.totalLectures}</span>
+            <span class="summary-note">그룹 ${summary.groupLectures} · 프라이빗 ${summary.privateLectures}</span>
+          </div>
+          <div class="summary-item">
+            <span class="summary-label">CHECK</span>
+            <span class="summary-value">${summary.unchecked}</span>
+            <span class="summary-note">예약 ${summary.reserved} · 대기 ${summary.wait}</span>
+          </div>
+        </section>
+        ${renderAdminStaffFilters()}
+        ${views.length ? views.map(renderAdminStaffView).join('') : '<section class="empty">선택한 날짜의 수업이 없습니다</section>'}
+      `;
+    }
+
+    function renderAdminStaffFilters() {
+      const staffs = appState.admin.staffs || [];
+      const selected = appState.admin.selectedStaffId || 'all';
+      return `
+        <div class="admin-toolbar" aria-label="강사 필터">
+          <button class="admin-filter ${selected === 'all' ? 'active' : ''}" type="button" data-admin-staff="all">전체</button>
+          ${staffs.map((staff) => `
+            <button class="admin-filter ${selected === staff.staffId ? 'active' : ''}" type="button" data-admin-staff="${escapeAttr(staff.staffId)}">
+              ${escapeHtml(staff.name || staff.staffId)}
+            </button>
+          `).join('')}
+        </div>
+      `;
+    }
+
+    function renderAdminStaffView(view) {
+      const classCounts = classTypeCounts(view.lectures || []);
+      return `
+        <section class="admin-staff-block">
+          <div class="admin-staff-head">
+            <h2>${escapeHtml(staffName(view.staffId))}</h2>
+            <span>수업 ${view.summary?.totalLectures || 0} · 예약 ${view.summary?.reservedCount || 0} · 미체크 ${view.summary?.uncheckedAttendanceCount || 0}</span>
+          </div>
+          <div class="chips" style="margin-bottom:10px;">
+            <span class="chip group">그룹 ${classCounts.group}</span>
+            <span class="chip private">프라이빗 ${classCounts.private}</span>
+            ${view.summary?.waitCount ? `<span class="chip wait">대기 ${view.summary.waitCount}</span>` : ''}
+          </div>
+          ${(view.lectures || []).map(renderLecture).join('') || '<section class="empty">수업이 없습니다</section>'}
+        </section>
       `;
     }
 
@@ -1096,6 +1262,12 @@
       document.getElementById('refreshButton')?.addEventListener('click', loadHome);
       document.getElementById('prevDate')?.addEventListener('click', () => shiftDate(-1));
       document.getElementById('nextDate')?.addEventListener('click', () => shiftDate(1));
+      root.querySelectorAll('[data-admin-staff]').forEach((button) => {
+        button.addEventListener('click', () => {
+          appState.admin.selectedStaffId = button.dataset.adminStaff || 'all';
+          renderApp();
+        });
+      });
       root.querySelectorAll('[data-toggle-lecture]').forEach((button) => {
         button.addEventListener('click', () => toggleLecture(button.dataset.toggleLecture));
       });
@@ -1189,10 +1361,20 @@
       appState.error = '';
       renderApp();
       try {
-        const result = await loadHomeFromFirestore();
+        const tokenResult = await appState.user.getIdTokenResult(true);
+        const role = tokenResult.claims.role || '';
+        const manager = role === 'owner' || role === 'manager';
+        appState.mode = manager ? 'manager' : 'instructor';
+        const result = manager ? await loadAdminHomeFromFirestore(tokenResult) : await loadHomeFromFirestore(tokenResult);
         appState.staff = result.staff || { name: result.staffId || '' };
-        appState.days = result.days || [];
-        subscribeInstructorViews(result.staffId);
+        if (manager) {
+          appState.days = [];
+          appState.admin = result.admin || appState.admin;
+          subscribeAdminViews();
+        } else {
+          appState.days = result.days || [];
+          subscribeInstructorViews(result.staffId);
+        }
         appState.loading = false;
       } catch (err) {
         appState.loading = false;
@@ -1201,8 +1383,7 @@
       renderApp();
     }
 
-    async function loadHomeFromFirestore() {
-      const token = await appState.user.getIdTokenResult(true);
+    async function loadHomeFromFirestore(token) {
       const staffId = token.claims.staffId || '';
       if (!staffId) throw new Error('강사 권한이 아직 연결되지 않았습니다');
 
@@ -1222,6 +1403,47 @@
       };
     }
 
+    async function loadAdminHomeFromFirestore(token) {
+      const staffId = token.claims.staffId || '';
+      const studioId = token.claims.studioId || '';
+      if (!staffId || !studioId) throw new Error('운영자 권한이 아직 연결되지 않았습니다');
+
+      const [staffSnap, staffListSnap, viewSnap, syncSnap] = await Promise.all([
+        getDoc(doc(appState.db, 'staffs', String(staffId))),
+        getDocs(query(
+          collection(appState.db, 'staffs'),
+          where('studioId', '==', String(studioId)),
+          where('active', '==', true)
+        )),
+        getDocs(query(
+          collection(appState.db, 'instructorViews'),
+          where('studioId', '==', String(studioId)),
+          where('date', '==', appState.selectedDate)
+        )),
+        getDoc(doc(appState.db, 'syncStates', `lecturesRange_${studioId}`))
+      ]);
+      if (!staffSnap.exists()) throw new Error('운영자 정보를 찾을 수 없습니다');
+      const staff = staffSnap.data();
+      const staffs = staffListSnap.docs
+        .map((docSnap) => docSnap.data())
+        .filter((item) => item.role === 'instructor')
+        .sort((a, b) => String(a.name || '').localeCompare(String(b.name || ''), 'ko'));
+      const views = viewSnap.docs
+        .map((docSnap) => docSnap.data())
+        .filter((view) => (view.summary?.totalLectures || 0) > 0)
+        .sort((a, b) => staffName(a.staffId, staffs).localeCompare(staffName(b.staffId, staffs), 'ko'));
+      return {
+        staffId,
+        staff: { staffId, name: staff.name, role: staff.role, studioId: staff.studioId },
+        admin: {
+          staffs,
+          views,
+          syncState: syncSnap.exists() ? syncSnap.data() : null,
+          selectedStaffId: appState.admin.selectedStaffId || 'all'
+        }
+      };
+    }
+
     function subscribeInstructorViews(staffId) {
       unsubscribeViews();
       const dates = Array.from({ length: 14 }, (_, index) => addDays(today(), index));
@@ -1234,6 +1456,27 @@
         },
         () => {}
       ));
+    }
+
+    function subscribeAdminViews() {
+      unsubscribeViews();
+      const studioId = appState.staff?.studioId;
+      if (!studioId) return;
+      appState.viewUnsubscribers = [onSnapshot(
+        query(
+          collection(appState.db, 'instructorViews'),
+          where('studioId', '==', String(studioId)),
+          where('date', '==', appState.selectedDate)
+        ),
+        (snap) => {
+          appState.admin.views = snap.docs
+            .map((docSnap) => docSnap.data())
+            .filter((view) => (view.summary?.totalLectures || 0) > 0)
+            .sort((a, b) => staffName(a.staffId).localeCompare(staffName(b.staffId), 'ko'));
+          if (!appState.loading) renderApp();
+        },
+        () => {}
+      )];
     }
 
     function unsubscribeViews() {
@@ -1277,6 +1520,16 @@
     function optimisticAttendance(bookingId, attendanceStatus) {
       appState.days.forEach((day) => {
         (day.lectures || []).forEach((lecture) => {
+          (lecture.bookings || []).forEach((booking) => {
+            if (booking.bookingId === bookingId) {
+              booking.attendanceStatus = attendanceStatus;
+              booking.syncStatus = 'pending';
+            }
+          });
+        });
+      });
+      (appState.admin.views || []).forEach((view) => {
+        (view.lectures || []).forEach((lecture) => {
           (lecture.bookings || []).forEach((booking) => {
             if (booking.bookingId === bookingId) {
               booking.attendanceStatus = attendanceStatus;
@@ -1378,6 +1631,12 @@
           if (booking) return { day, lecture, booking };
         }
       }
+      for (const view of appState.admin.views || []) {
+        for (const lecture of view.lectures || []) {
+          const booking = (lecture.bookings || []).find((item) => item.bookingId === bookingId);
+          if (booking) return { day: view, lecture, booking };
+        }
+      }
       return null;
     }
 
@@ -1424,12 +1683,14 @@
     function shiftDate(amount) {
       appState.selectedDate = addDays(appState.selectedDate, amount);
       appState.openLectures.clear();
+      if (appState.mode === 'manager') subscribeAdminViews();
       renderApp();
     }
 
     function goToday() {
       appState.selectedDate = today();
       appState.openLectures.clear();
+      if (appState.mode === 'manager') subscribeAdminViews();
       renderApp();
     }
 
@@ -1442,6 +1703,38 @@
 
     function currentDay() {
       return appState.days.find((day) => day.date === appState.selectedDate) || null;
+    }
+
+    function currentAdminViews() {
+      const selected = appState.admin.selectedStaffId || 'all';
+      const views = appState.admin.views || [];
+      return selected === 'all' ? views : views.filter((view) => view.staffId === selected);
+    }
+
+    function adminSummary(views) {
+      return views.reduce((summary, view) => {
+        const lectures = view.lectures || [];
+        const counts = classTypeCounts(lectures);
+        summary.activeStaffs += lectures.length ? 1 : 0;
+        summary.totalLectures += view.summary?.totalLectures || lectures.length;
+        summary.groupLectures += counts.group;
+        summary.privateLectures += counts.private;
+        summary.reserved += view.summary?.reservedCount || 0;
+        summary.wait += view.summary?.waitCount || 0;
+        summary.unchecked += view.summary?.uncheckedAttendanceCount || 0;
+        return summary;
+      }, { activeStaffs: 0, totalLectures: 0, groupLectures: 0, privateLectures: 0, reserved: 0, wait: 0, unchecked: 0 });
+    }
+
+    function staffName(staffId, staffs = appState.admin.staffs || []) {
+      const staff = staffs.find((item) => item.staffId === staffId);
+      return staff?.name || staffId || '강사';
+    }
+
+    function adminSyncText() {
+      const state = appState.admin.syncState;
+      const last = dateTimeLabel(state?.lastSuccessAt);
+      return last ? `전체 운영 현황 · ${last} 갱신` : '전체 운영 현황';
     }
 
     function formatSyncText(day) {
