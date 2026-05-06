@@ -522,6 +522,7 @@
       font-size: 13px;
       font-weight: 800;
       text-align: left;
+      white-space: nowrap;
     }
 
     .chat-staff.active {
@@ -720,6 +721,21 @@
       color: var(--brand-dark);
       background: #fff1e7;
       animation: pulseSoft 1s ease-in-out infinite;
+    }
+
+    .badge {
+      display: inline-grid;
+      place-items: center;
+      min-width: 18px;
+      height: 18px;
+      margin-left: 5px;
+      border-radius: 999px;
+      padding: 0 5px;
+      color: #fff;
+      background: var(--bad);
+      font-size: 10px;
+      font-weight: 900;
+      line-height: 1;
     }
 
     .chevron {
@@ -1208,6 +1224,8 @@
         open: false,
         selectedStaffId: '',
         messages: [],
+        conversations: [],
+        conversationsUnsubscribe: null,
         unsubscribe: null
       },
       selectedDate: today(),
@@ -1259,7 +1277,15 @@
             searchQuery: ''
           };
           unsubscribeChat();
-          appState.chat = { open: false, selectedStaffId: '', messages: [], unsubscribe: null };
+          unsubscribeConversations();
+          appState.chat = {
+            open: false,
+            selectedStaffId: '',
+            messages: [],
+            conversations: [],
+            conversationsUnsubscribe: null,
+            unsubscribe: null
+          };
           renderLogin();
           return;
         }
@@ -1322,7 +1348,7 @@
               <h1>${escapeHtml(appState.staff?.name || appState.user?.displayName || '강사')}</h1>
               <p>${appState.loading ? '동기화 확인 중' : formatSyncText(day)}</p>
             </div>
-            <button id="chatButton" class="soft-button" type="button">채팅</button>
+            <button id="chatButton" class="soft-button" type="button">채팅${renderUnreadBadge(totalUnreadChats())}</button>
             <button id="refreshButton" class="soft-button" type="button">새로고침</button>
             <button id="logoutButton" class="ghost" type="button">로그아웃</button>
             <div class="sync-bar" aria-hidden="true"></div>
@@ -1440,7 +1466,7 @@
         ['analytics', '분석'],
         ['issues', '이슈'],
         ['members', '회원검색'],
-        ['chat', '채팅']
+        ['chat', `채팅${renderUnreadBadge(totalUnreadChats())}`]
       ];
       return `
         <nav class="admin-tabs" aria-label="운영자 메뉴">
@@ -1483,7 +1509,7 @@
             <div class="chat-staff-list">
               ${staffs.map((staff) => `
                 <button class="chat-staff ${staff.staffId === selected ? 'active' : ''}" type="button" data-chat-staff="${escapeAttr(staff.staffId)}">
-                  ${escapeHtml(staff.name || staff.staffId)}
+                  ${escapeHtml(staff.name || staff.staffId)}${renderUnreadBadge(unreadForStaff(staff.staffId))}
                 </button>
               `).join('') || '<div class="empty">강사 목록이 없습니다</div>'}
             </div>
@@ -1520,6 +1546,10 @@
           ${escapeHtml(message.content || '')}
         </div>
       `;
+    }
+
+    function renderUnreadBadge(count) {
+      return count ? `<span class="badge">${count > 99 ? '99+' : count}</span>` : '';
     }
 
     function renderAdminTrend() {
@@ -1856,6 +1886,7 @@
         appState.mode = manager ? 'manager' : 'instructor';
         const result = manager ? await loadAdminHomeFromFirestore(tokenResult) : await loadHomeFromFirestore(tokenResult);
         appState.staff = result.staff || { name: result.staffId || '' };
+        subscribeConversations();
         if (manager) {
           appState.days = [];
           appState.admin = result.admin || appState.admin;
@@ -1988,6 +2019,29 @@
       appState.viewUnsubscribers = [];
     }
 
+    function subscribeConversations() {
+      if (!appState.staff?.studioId || appState.chat.conversationsUnsubscribe) return;
+      const filters = [
+        where('studioId', '==', appState.staff.studioId)
+      ];
+      if (appState.mode !== 'manager') filters.push(where('threadStaffId', '==', appState.staff.staffId));
+      appState.chat.conversationsUnsubscribe = onSnapshot(
+        query(collection(appState.db, 'conversations'), ...filters),
+        (snap) => {
+          appState.chat.conversations = snap.docs.map((docSnap) => docSnap.data());
+          if (appState.chat.open || appState.admin.activeTab === 'chat') markConversationRead(selectedChatStaffId()).catch(() => {});
+          if (!appState.loading) renderApp();
+        },
+        () => {}
+      );
+    }
+
+    function unsubscribeConversations() {
+      if (typeof appState.chat.conversationsUnsubscribe === 'function') appState.chat.conversationsUnsubscribe();
+      appState.chat.conversationsUnsubscribe = null;
+      appState.chat.conversations = [];
+    }
+
     function selectedChatStaffId() {
       return appState.mode === 'manager'
         ? appState.chat.selectedStaffId || appState.admin.staffs?.[0]?.staffId || ''
@@ -2001,6 +2055,7 @@
     function subscribeChat(threadStaffId) {
       if (!threadStaffId) return;
       const convId = conversationId(threadStaffId);
+      markConversationRead(threadStaffId).catch(() => {});
       if (appState.chat.unsubscribe && appState.chat.currentConvId === convId) return;
       unsubscribeChat();
       appState.chat.currentConvId = convId;
@@ -2014,12 +2069,22 @@
         (snap) => {
           appState.chat.messages = snap.docs.map((docSnap) => docSnap.data());
           if (!appState.loading && (appState.chat.open || appState.admin.activeTab === 'chat')) {
+            markConversationRead(threadStaffId).catch(() => {});
             renderApp();
             scrollChatToBottom();
           }
         },
         () => {}
       );
+    }
+
+    async function markConversationRead(threadStaffId) {
+      const conv = conversationForStaff(threadStaffId);
+      if (!conv || conv.lastSenderStaffId === appState.staff?.staffId) return;
+      const field = appState.mode === 'manager' ? 'managerReadAt' : 'staffReadAt';
+      await updateDoc(doc(appState.db, 'conversations', conversationId(threadStaffId)), {
+        [field]: serverTimestamp()
+      });
     }
 
     function unsubscribeChat() {
@@ -2058,6 +2123,7 @@
           threadStaffId,
           threadStaffName: staffNameForThread,
           updatedAt: now,
+          lastMessageAt: now,
           lastMessage: text.slice(0, 120),
           lastSenderStaffId: appState.staff?.staffId || '',
           lastSenderName: appState.staff?.name || ''
@@ -2318,6 +2384,25 @@
       const selected = appState.admin.selectedStaffId || 'all';
       const views = appState.admin.views || [];
       return selected === 'all' ? views : views.filter((view) => view.staffId === selected);
+    }
+
+    function conversationForStaff(staffId) {
+      return (appState.chat.conversations || []).find((conv) => conv.threadStaffId === staffId) || null;
+    }
+
+    function unreadForStaff(staffId) {
+      const conv = conversationForStaff(staffId);
+      if (!conv || conv.lastSenderStaffId === appState.staff?.staffId) return 0;
+      const lastMessage = timestampMillis(conv.lastMessageAt || conv.updatedAt);
+      const readAt = timestampMillis(appState.mode === 'manager' ? conv.managerReadAt : conv.staffReadAt);
+      return lastMessage && lastMessage > readAt ? 1 : 0;
+    }
+
+    function totalUnreadChats() {
+      if (appState.mode === 'manager') {
+        return (appState.admin.staffs || []).reduce((count, staff) => count + unreadForStaff(staff.staffId), 0);
+      }
+      return unreadForStaff(appState.staff?.staffId || '');
     }
 
     function adminSummary(views) {
@@ -2716,6 +2801,10 @@
       const seconds = value.seconds ?? value._seconds;
       if (seconds != null) return new Date(Number(seconds) * 1000);
       return null;
+    }
+
+    function timestampMillis(value) {
+      return timestampToDate(value)?.getTime() || 0;
     }
 
     function dateTimeLabel(value) {

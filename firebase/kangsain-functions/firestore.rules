@@ -109,7 +109,7 @@ service cloud.firestore {
         signedIn() &&
         sameStudio(resource.data.studioId) &&
         canUseConversation(resource.data.threadStaffId);
-      allow create, update: if
+      allow create: if
         signedIn() &&
         request.resource.data.conversationId == conversationId &&
         request.resource.data.studioId == request.auth.token.studioId &&
@@ -119,6 +119,31 @@ service cloud.firestore {
         request.resource.data.lastSenderStaffId == request.auth.token.staffId &&
         request.resource.data.lastMessage is string &&
         request.resource.data.lastMessage.size() <= 120;
+      allow update: if
+        (
+          signedIn() &&
+          request.resource.data.conversationId == conversationId &&
+          request.resource.data.studioId == request.auth.token.studioId &&
+          request.resource.data.threadStaffId is string &&
+          request.resource.data.threadStaffName is string &&
+          canUseConversation(request.resource.data.threadStaffId) &&
+          request.resource.data.lastSenderStaffId == request.auth.token.staffId &&
+          request.resource.data.lastMessage is string &&
+          request.resource.data.lastMessage.size() <= 120
+        ) ||
+        (
+          signedIn() &&
+          sameStudio(resource.data.studioId) &&
+          canUseConversation(resource.data.threadStaffId) &&
+          request.resource.data.diff(resource.data).affectedKeys().hasOnly([
+            'managerReadAt',
+            'staffReadAt'
+          ]) &&
+          (
+            (isManager() && request.resource.data.diff(resource.data).affectedKeys().hasOnly(['managerReadAt'])) ||
+            (isInstructor(resource.data.threadStaffId) && request.resource.data.diff(resource.data).affectedKeys().hasOnly(['staffReadAt']))
+          )
+        );
       allow delete: if false;
 
       match /messages/{messageId} {
