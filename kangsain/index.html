@@ -1258,6 +1258,9 @@
         messages: [],
         conversations: [],
         conversationsUnsubscribe: null,
+        lastConversationsKey: '',
+        lastMessagesKey: '',
+        readMarks: {},
         unsubscribe: null
       },
       selectedDate: today(),
@@ -1316,6 +1319,9 @@
             messages: [],
             conversations: [],
             conversationsUnsubscribe: null,
+            lastConversationsKey: '',
+            lastMessagesKey: '',
+            readMarks: {},
             unsubscribe: null
           };
           renderLogin();
@@ -2075,8 +2081,15 @@
       appState.chat.conversationsUnsubscribe = onSnapshot(
         query(collection(appState.db, 'conversations'), ...filters),
         (snap) => {
-          appState.chat.conversations = snap.docs.map((docSnap) => docSnap.data());
-          if (appState.chat.open || appState.admin.activeTab === 'chat') markConversationRead(selectedChatStaffId()).catch(() => {});
+          const nextConversations = snap.docs.map((docSnap) => docSnap.data());
+          const nextKey = conversationSnapshotKey(nextConversations);
+          if (nextKey === appState.chat.lastConversationsKey) return;
+          appState.chat.conversations = nextConversations;
+          appState.chat.lastConversationsKey = nextKey;
+          const activeThread = selectedChatStaffId();
+          if ((appState.chat.open || appState.admin.activeTab === 'chat') && shouldMarkConversationRead(activeThread)) {
+            markConversationRead(activeThread).catch(() => {});
+          }
           if (!appState.loading) renderApp();
         },
         () => {}
@@ -2087,6 +2100,7 @@
       if (typeof appState.chat.conversationsUnsubscribe === 'function') appState.chat.conversationsUnsubscribe();
       appState.chat.conversationsUnsubscribe = null;
       appState.chat.conversations = [];
+      appState.chat.lastConversationsKey = '';
     }
 
     function selectedChatStaffId() {
@@ -2102,7 +2116,7 @@
     function subscribeChat(threadStaffId) {
       if (!threadStaffId) return;
       const convId = conversationId(threadStaffId);
-      markConversationRead(threadStaffId).catch(() => {});
+      if (shouldMarkConversationRead(threadStaffId)) markConversationRead(threadStaffId).catch(() => {});
       if (appState.chat.unsubscribe && appState.chat.currentConvId === convId) return;
       unsubscribeChat();
       appState.chat.currentConvId = convId;
@@ -2114,9 +2128,13 @@
           queryLimit(80)
         ),
         (snap) => {
-          appState.chat.messages = snap.docs.map((docSnap) => docSnap.data());
+          const nextMessages = snap.docs.map((docSnap) => docSnap.data());
+          const nextKey = messageSnapshotKey(nextMessages);
+          if (nextKey === appState.chat.lastMessagesKey) return;
+          appState.chat.messages = nextMessages;
+          appState.chat.lastMessagesKey = nextKey;
           if (!appState.loading && (appState.chat.open || appState.admin.activeTab === 'chat')) {
-            markConversationRead(threadStaffId).catch(() => {});
+            if (shouldMarkConversationRead(threadStaffId)) markConversationRead(threadStaffId).catch(() => {});
             renderApp();
             scrollChatToBottom();
           }
@@ -2127,11 +2145,20 @@
 
     async function markConversationRead(threadStaffId) {
       const conv = conversationForStaff(threadStaffId);
-      if (!conv || conv.lastSenderStaffId === appState.staff?.staffId) return;
+      if (!conv || !shouldMarkConversationRead(threadStaffId)) return;
       const field = appState.mode === 'manager' ? 'managerReadAt' : 'staffReadAt';
-      await updateDoc(doc(appState.db, 'conversations', conversationId(threadStaffId)), {
-        [field]: serverTimestamp()
-      });
+      const lastMessage = timestampMillis(conv.lastMessageAt || conv.updatedAt);
+      const markKey = `${field}_${threadStaffId}_${lastMessage}`;
+      if (appState.chat.readMarks[markKey]) return;
+      appState.chat.readMarks[markKey] = true;
+      try {
+        await updateDoc(doc(appState.db, 'conversations', conversationId(threadStaffId)), {
+          [field]: serverTimestamp()
+        });
+      } catch (error) {
+        delete appState.chat.readMarks[markKey];
+        throw error;
+      }
     }
 
     function unsubscribeChat() {
@@ -2139,6 +2166,7 @@
       appState.chat.unsubscribe = null;
       appState.chat.currentConvId = '';
       appState.chat.messages = [];
+      appState.chat.lastMessagesKey = '';
     }
 
     async function sendChatMessage(threadStaffId, content) {
@@ -2435,6 +2463,39 @@
 
     function conversationForStaff(staffId) {
       return (appState.chat.conversations || []).find((conv) => conv.threadStaffId === staffId) || null;
+    }
+
+    function conversationSnapshotKey(conversations) {
+      return (conversations || [])
+        .map((conv) => [
+          conv.conversationId || '',
+          conv.threadStaffId || '',
+          timestampMillis(conv.lastMessageAt || conv.updatedAt),
+          timestampMillis(conv.managerReadAt),
+          timestampMillis(conv.staffReadAt),
+          conv.lastSenderStaffId || ''
+        ].join(':'))
+        .sort()
+        .join('|');
+    }
+
+    function messageSnapshotKey(messages) {
+      return (messages || [])
+        .map((message) => [
+          message.messageId || '',
+          timestampMillis(message.createdAt),
+          message.senderStaffId || '',
+          message.content || ''
+        ].join(':'))
+        .join('|');
+    }
+
+    function shouldMarkConversationRead(threadStaffId) {
+      const conv = conversationForStaff(threadStaffId);
+      if (!conv || conv.lastSenderStaffId === appState.staff?.staffId) return false;
+      const lastMessage = timestampMillis(conv.lastMessageAt || conv.updatedAt);
+      const readAt = timestampMillis(appState.mode === 'manager' ? conv.managerReadAt : conv.staffReadAt);
+      return Boolean(lastMessage && lastMessage > readAt);
     }
 
     function unreadForStaff(staffId) {
