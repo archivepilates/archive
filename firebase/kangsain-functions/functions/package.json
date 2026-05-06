@@ -4,7 +4,7 @@
   "private": true,
   "main": "lib/index.js",
   "engines": {
-    "node": "20"
+    "node": "22"
   },
   "scripts": {
     "build": "tsc",
@@ -23,7 +23,7 @@
     "firebase-functions": "^6.1.2"
   },
   "devDependencies": {
-    "@types/node": "^20.17.6",
+    "@types/node": "^22.18.10",
     "eslint": "^10.3.0",
     "firebase-tools": "^15.16.0",
     "npm": "^11.13.0",
