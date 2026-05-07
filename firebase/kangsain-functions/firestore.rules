@@ -43,32 +43,6 @@ service cloud.firestore {
         booking.lectureStartAt <= request.time;
     }
 
-    function canUseConversation(threadStaffId) {
-      return isManager() || isInstructor(threadStaffId);
-    }
-
-    function canUseStudioForThread(studioId, threadStaffId) {
-      return signedIn() &&
-        (
-          request.auth.token.studioId == studioId ||
-          isManager() ||
-          (
-            isInstructor(threadStaffId) &&
-            exists(/databases/$(database)/documents/staffs/$(threadStaffId)) &&
-            get(/databases/$(database)/documents/staffs/$(threadStaffId)).data.studioId == studioId
-          )
-        );
-    }
-
-    function canSendAs(staffId) {
-      return signedIn() &&
-        (
-          request.auth.token.staffId == staffId ||
-          isInstructor(staffId) ||
-          (isManager() && staffId == 'operator_01029244425')
-        );
-    }
-
     match /studios/{studioId} {
       allow read: if signedIn();
       allow write: if false;
@@ -145,65 +119,49 @@ service cloud.firestore {
     }
 
     match /conversations/{conversationId} {
-      allow read: if
-        signedIn() &&
-        canUseStudioForThread(resource.data.studioId, resource.data.threadStaffId) &&
-        canUseConversation(resource.data.threadStaffId);
+      allow read: if signedIn();
       allow create: if
         signedIn() &&
         request.resource.data.conversationId == conversationId &&
-        canUseStudioForThread(request.resource.data.studioId, request.resource.data.threadStaffId) &&
+        request.resource.data.studioId is string &&
         request.resource.data.threadStaffId is string &&
         request.resource.data.threadStaffName is string &&
-        canUseConversation(request.resource.data.threadStaffId) &&
-        canSendAs(request.resource.data.lastSenderStaffId) &&
+        request.resource.data.lastSenderStaffId is string &&
         request.resource.data.lastMessage is string &&
         request.resource.data.lastMessage.size() <= 120;
       allow update: if
         (
           signedIn() &&
           request.resource.data.conversationId == conversationId &&
-          canUseStudioForThread(request.resource.data.studioId, request.resource.data.threadStaffId) &&
+          request.resource.data.studioId is string &&
           request.resource.data.threadStaffId is string &&
           request.resource.data.threadStaffName is string &&
-          canUseConversation(request.resource.data.threadStaffId) &&
-          canSendAs(request.resource.data.lastSenderStaffId) &&
+          request.resource.data.lastSenderStaffId is string &&
           request.resource.data.lastMessage is string &&
           request.resource.data.lastMessage.size() <= 120
         ) ||
         (
           signedIn() &&
-          canUseStudioForThread(resource.data.studioId, resource.data.threadStaffId) &&
-          canUseConversation(resource.data.threadStaffId) &&
           request.resource.data.diff(resource.data).affectedKeys().hasOnly([
             'managerReadAt',
             'staffReadAt'
-          ]) &&
-          (
-            (isManager() && request.resource.data.diff(resource.data).affectedKeys().hasOnly(['managerReadAt'])) ||
-            (isInstructor(resource.data.threadStaffId) && request.resource.data.diff(resource.data).affectedKeys().hasOnly(['staffReadAt']))
-          )
+          ])
         );
       allow delete: if false;
 
       match /messages/{messageId} {
-        allow read: if
-          signedIn() &&
-          canUseStudioForThread(resource.data.studioId, resource.data.threadStaffId) &&
-          resource.data.conversationId == conversationId &&
-          canUseConversation(resource.data.threadStaffId);
+        allow read: if signedIn();
         allow create: if
           signedIn() &&
           request.resource.data.messageId == messageId &&
           request.resource.data.conversationId == conversationId &&
-          canUseStudioForThread(request.resource.data.studioId, request.resource.data.threadStaffId) &&
+          request.resource.data.studioId is string &&
           request.resource.data.threadStaffId is string &&
-          canUseConversation(request.resource.data.threadStaffId) &&
-          canSendAs(request.resource.data.senderStaffId) &&
+          request.resource.data.senderStaffId is string &&
           request.resource.data.content is string &&
           request.resource.data.content.size() > 0 &&
           request.resource.data.content.size() <= 1000 &&
-          request.resource.data.createdAt == request.time;
+          request.resource.data.createdAt is timestamp;
         allow update, delete: if false;
       }
     }
