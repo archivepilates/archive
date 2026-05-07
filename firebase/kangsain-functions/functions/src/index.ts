@@ -78,7 +78,7 @@ export const scheduledAttendanceReminder = onSchedule(
 export const scheduledSyncDashboardDaily = onSchedule(
   {
     ...scheduleOptions,
-    schedule: "20 0 * * *",
+    schedule: "20 0 1 * *",
   },
   async () => {
     await syncDashboardFromSheets();
