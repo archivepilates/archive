@@ -201,6 +201,11 @@ service cloud.firestore {
       allow write: if false;
     }
 
+    match /dashboardMonthlyMembers/{metricId} {
+      allow read: if isManager();
+      allow write: if false;
+    }
+
     match /writeQueue/{jobId} {
       allow read: if isManager();
       allow create: if

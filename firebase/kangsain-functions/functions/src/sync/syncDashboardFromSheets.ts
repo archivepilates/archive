@@ -7,6 +7,7 @@ import type {
   DashboardInstructorSalesRow,
   DashboardInstructorStatsRow,
   DashboardMemberSalesRow,
+  DashboardMonthlyMemberRow,
   DashboardSummaryRow,
   DashboardTicketTopRow,
 } from "../types/dashboard";
@@ -20,6 +21,9 @@ const SHEETS = {
   ticketAnalysis: "수강권분석_Master",
   ticketSales: "수강권매출_Master",
   memberSales: "회원별누적매출",
+  activeMembers: "월별 이용회원",
+  groupMembers: "월별 그룹회원",
+  privateMembers: "월별 프라이빗 회원",
 };
 
 export async function syncDashboardFromSheets(input?: {
@@ -41,12 +45,16 @@ export async function syncDashboardFromSheets(input?: {
 
 async function loadDashboardData(spreadsheetId: string): Promise<DashboardData> {
   try {
-    const [settlement, instructorStats, ticketAnalysis, ticketSales, memberSales] = await Promise.all([
+    const [settlement, instructorStats, ticketAnalysis, ticketSales, memberSales, activeMembers, groupMembers, privateMembers] =
+      await Promise.all([
       readSheetRows(spreadsheetId, SHEETS.settlement),
       readSheetRows(spreadsheetId, SHEETS.instructorStats),
       readSheetRows(spreadsheetId, SHEETS.ticketAnalysis),
       readSheetRows(spreadsheetId, SHEETS.ticketSales),
       readSheetRows(spreadsheetId, SHEETS.memberSales),
+      readSheetRows(spreadsheetId, SHEETS.activeMembers),
+      readSheetRows(spreadsheetId, SHEETS.groupMembers),
+      readSheetRows(spreadsheetId, SHEETS.privateMembers),
     ]);
 
     return buildDashboardData({
@@ -55,6 +63,9 @@ async function loadDashboardData(spreadsheetId: string): Promise<DashboardData> 
       ticketAnalysis,
       ticketSales,
       memberSales,
+      activeMembers,
+      groupMembers,
+      privateMembers,
     });
   } catch (err) {
     logger.warn("Google Sheets direct read failed; falling back to legacy dashboard endpoint", err);
@@ -75,12 +86,20 @@ export function buildDashboardData(input: {
   ticketAnalysis: SheetRow[];
   ticketSales: SheetRow[];
   memberSales?: SheetRow[];
+  activeMembers?: SheetRow[];
+  groupMembers?: SheetRow[];
+  privateMembers?: SheetRow[];
 }): DashboardData {
   const settlement = input.settlement.map(normalizeSettlementRow).filter((row) => row.월);
   const instructorStats = input.instructorStats.map(normalizeInstructorStatsRow).filter((row) => row.월 && row.강사);
   const ticketAnalysis = input.ticketAnalysis.map(normalizeTicketAnalysisRow).filter((row) => row.월);
   const ticketSales = input.ticketSales.map(normalizeTicketSalesRow).filter((row) => row.월);
   const memberSales = (input.memberSales || []).map(normalizeMemberSalesRow).filter((row) => row.회원명 || row.연락처);
+  const monthlyMembers = [
+    ...normalizeMonthlyMemberRows(input.activeMembers || [], "이용"),
+    ...normalizeMonthlyMemberRows(input.groupMembers || [], "그룹"),
+    ...normalizeMonthlyMemberRows(input.privateMembers || [], "프라이빗"),
+  ];
 
   return {
     summary: buildSummary(settlement, instructorStats, ticketSales),
@@ -108,6 +127,7 @@ export function buildDashboardData(input: {
     })),
     수강권TOP5: buildTicketTop5(ticketAnalysis),
     회원별누적매출: memberSales,
+    월별회원: monthlyMembers,
     updatedAt: new Date().toISOString(),
   };
 }
@@ -294,6 +314,16 @@ function normalizeMemberSalesRow(row: SheetRow): DashboardMemberSalesRow {
   };
 }
 
+function normalizeMonthlyMemberRows(rows: SheetRow[], kind: DashboardMonthlyMemberRow["구분"]): DashboardMonthlyMemberRow[] {
+  return rows
+    .map((row) => ({
+      월: monthKey(row.기준월 ?? row.월),
+      구분: kind,
+      회원수: numberValue(row.회원수),
+    }))
+    .filter((row) => row.월);
+}
+
 function normalizeDashboardPayload(input: Partial<DashboardData>): DashboardData {
   return {
     summary: (input.summary || [])
@@ -361,6 +391,13 @@ function normalizeDashboardPayload(input: Partial<DashboardData>): DashboardData
         보유수강권요약: stringValue(row.보유수강권요약),
       }))
       .filter((row) => row.회원명 || row.연락처),
+    월별회원: (input.월별회원 || [])
+      .map((row) => ({
+        월: monthKey(row.월),
+        구분: normalizeMemberMetricKind(row.구분),
+        회원수: numberValue(row.회원수),
+      }))
+      .filter((row) => row.월),
     updatedAt: stringValue(input.updatedAt) || new Date().toISOString(),
   };
 }
@@ -413,6 +450,12 @@ function dateValue(value: unknown): string {
   const matched = text.match(/(20\d{2})[-./년\s]*(\d{1,2})[-./월\s]*(\d{1,2})/);
   if (matched) return `${matched[1]}-${matched[2].padStart(2, "0")}-${matched[3].padStart(2, "0")}`;
   return text;
+}
+
+function normalizeMemberMetricKind(value: unknown): DashboardMonthlyMemberRow["구분"] {
+  const text = stringValue(value);
+  if (text === "그룹" || text === "프라이빗") return text;
+  return "이용";
 }
 
 function round0(value: number): number {

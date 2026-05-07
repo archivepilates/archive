@@ -29,9 +29,26 @@ async function saveDashboardMetricDocs(
   sourceSpreadsheetId: string,
   syncedAt: Timestamp,
 ): Promise<void> {
-  const batch = refs.dashboardSnapshots().firestore.batch();
+  await Promise.all([clearCollection(refs.dashboardMemberSales()), clearCollection(refs.dashboardMonthlyMembers())]);
+
+  const firestore = refs.dashboardSnapshots().firestore;
+  const batches = [firestore.batch()];
+  let writeCount = 0;
+  const setDoc = (
+    ref: FirebaseFirestore.DocumentReference,
+    data: FirebaseFirestore.DocumentData,
+    options: FirebaseFirestore.SetOptions = { merge: true },
+  ) => {
+    if (writeCount >= 450) {
+      batches.push(firestore.batch());
+      writeCount = 0;
+    }
+    batches[batches.length - 1].set(ref, data, options);
+    writeCount += 1;
+  };
+
   data.summary.forEach((row) => {
-    batch.set(
+    setDoc(
       refs.dashboardMonthlyMetric(row.월),
       {
         metricId: row.월,
@@ -46,7 +63,7 @@ async function saveDashboardMetricDocs(
   const salesByKey = new Map(data.강사별.map((row) => [`${row.월}_${row.강사}`, row]));
   data.강사통계.forEach((row) => {
     const sales = salesByKey.get(`${row.월}_${row.강사}`);
-    batch.set(
+    setDoc(
       refs.dashboardInstructorMetric(row.월, row.강사),
       {
         metricId: `${row.월}_${row.강사}`,
@@ -68,7 +85,7 @@ async function saveDashboardMetricDocs(
   data.수강권TOP5.forEach((row, index) => {
     const monthRowsBefore = data.수강권TOP5.slice(0, index).filter((item) => item.월 === row.월).length;
     const rank = monthRowsBefore + 1;
-    batch.set(
+    setDoc(
       refs.dashboardTicketMetric(row.월, rank),
       {
         metricId: `${row.월}_${rank}`,
@@ -86,7 +103,7 @@ async function saveDashboardMetricDocs(
 
   data.회원별누적매출.forEach((row) => {
     const metricId = memberSalesMetricId(row.연락처, row.회원명);
-    batch.set(
+    setDoc(
       refs.dashboardMemberSale(metricId),
       {
         metricId,
@@ -98,7 +115,31 @@ async function saveDashboardMetricDocs(
     );
   });
 
-  await batch.commit();
+  data.월별회원.forEach((row) => {
+    const metricId = `${row.구분}_${row.월}`;
+    setDoc(
+      refs.dashboardMonthlyMember(metricId),
+      {
+        metricId,
+        sourceSpreadsheetId,
+        syncedAt,
+        ...row,
+      },
+      { merge: true },
+    );
+  });
+
+  await Promise.all(batches.map((batch) => batch.commit()));
+}
+
+async function clearCollection(collection: FirebaseFirestore.CollectionReference): Promise<void> {
+  while (true) {
+    const snap = await collection.limit(450).get();
+    if (snap.empty) return;
+    const batch = collection.firestore.batch();
+    snap.docs.forEach((doc) => batch.delete(doc.ref));
+    await batch.commit();
+  }
 }
 
 function memberSalesMetricId(phone: string, memberName: string): string {

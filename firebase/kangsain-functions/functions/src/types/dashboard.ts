@@ -58,6 +58,14 @@ export interface DashboardMemberSalesRow {
   보유수강권요약: string;
 }
 
+export type DashboardMemberMetricKind = "이용" | "그룹" | "프라이빗";
+
+export interface DashboardMonthlyMemberRow {
+  월: string;
+  구분: DashboardMemberMetricKind;
+  회원수: number;
+}
+
 export interface DashboardData {
   summary: DashboardSummaryRow[];
   강사별: DashboardInstructorSalesRow[];
@@ -66,6 +74,7 @@ export interface DashboardData {
   월별강사평균인원: DashboardInstructorAverageRow[];
   수강권TOP5: DashboardTicketTopRow[];
   회원별누적매출: DashboardMemberSalesRow[];
+  월별회원: DashboardMonthlyMemberRow[];
   updatedAt: string;
 }
 
@@ -107,6 +116,12 @@ export interface DashboardTicketMetricDoc {
 }
 
 export interface DashboardMemberSalesDoc extends DashboardMemberSalesRow {
+  metricId: string;
+  sourceSpreadsheetId: string;
+  syncedAt: Timestamp;
+}
+
+export interface DashboardMonthlyMemberDoc extends DashboardMonthlyMemberRow {
   metricId: string;
   sourceSpreadsheetId: string;
   syncedAt: Timestamp;
