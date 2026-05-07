@@ -1631,9 +1631,13 @@
     }
 
     function renderFloatingChatButton() {
+      const unreadCount = totalUnreadChats();
+      const iconSrc = unreadCount > 0
+        ? './assets/chat-bubble-tongtong.apng.png'
+        : './assets/chat-bubble-tongtong-static.png';
       return `
         <button id="chatButton" class="floating-chat" type="button" aria-label="채팅 열기" style="${floatingChatStyle()}">
-          <img class="chat-bubble-icon" src="./assets/chat-bubble-tongtong.apng.png" alt="" aria-hidden="true">${renderUnreadBadge(totalUnreadChats())}
+          <img class="chat-bubble-icon" src="${iconSrc}" alt="" aria-hidden="true">${renderUnreadBadge(unreadCount)}
         </button>
       `;
     }
