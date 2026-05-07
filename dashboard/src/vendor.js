@@ -30,9 +30,18 @@ function friendlyAuthError(err) {
   return err && err.message ? err.message : "로그인에 실패했습니다";
 }
 
-function waitForUser() {
+function waitForUser(timeoutMs = 8000) {
   if (currentUser) return Promise.resolve(currentUser);
-  return new Promise((done) => userWaiters.push(done));
+  return new Promise((done, fail) => {
+    const timer = setTimeout(() => {
+      setLoginVisible(true);
+      fail(new Error("로그인 후 다시 시도하세요"));
+    }, timeoutMs);
+    userWaiters.push((user) => {
+      clearTimeout(timer);
+      done(user);
+    });
+  });
 }
 
 window.archiveDashboardAuthReady = new Promise((resolve) => {
