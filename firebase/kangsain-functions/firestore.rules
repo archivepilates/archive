@@ -218,6 +218,26 @@ service cloud.firestore {
       allow write: if false;
     }
 
+    match /dashboardSnapshots/{snapshotId} {
+      allow read: if signedIn() && snapshotId == 'current';
+      allow write: if false;
+    }
+
+    match /dashboardMonthlyMetrics/{metricId} {
+      allow read: if isManager();
+      allow write: if false;
+    }
+
+    match /dashboardInstructorMetrics/{metricId} {
+      allow read: if isManager();
+      allow write: if false;
+    }
+
+    match /dashboardTicketMetrics/{metricId} {
+      allow read: if isManager();
+      allow write: if false;
+    }
+
     match /writeQueue/{jobId} {
       allow read: if isManager();
       allow create: if

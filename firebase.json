@@ -1,0 +1,36 @@
+{
+  "functions": [
+    {
+      "source": "firebase/kangsain-functions/functions",
+      "codebase": "default",
+      "runtime": "nodejs20",
+      "predeploy": ["npm --prefix \"$RESOURCE_DIR\" run build"],
+      "ignore": [
+        "node_modules",
+        ".git",
+        "firebase-debug.log",
+        "firebase-debug.*.log"
+      ]
+    }
+  ],
+  "firestore": {
+    "rules": "firebase/kangsain-functions/firestore.rules",
+    "indexes": "firebase/kangsain-functions/firestore.indexes.json"
+  },
+  "hosting": {
+    "site": "archive-pilates",
+    "public": ".",
+    "ignore": [
+      ".git",
+      ".git/**",
+      "firebase/**",
+      "firebase.json",
+      "package.json",
+      "package-lock.json",
+      "dashboard/src/**",
+      "**/node_modules/**",
+      "firebase-debug.log",
+      "firebase-debug.*.log"
+    ]
+  }
+}

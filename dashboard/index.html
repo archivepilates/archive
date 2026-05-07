@@ -1,0 +1,871 @@
+
+<!DOCTYPE html>
+<html lang="ko">
+<head>
+<meta charset="UTF-8"/>
+<meta name="viewport" content="width=device-width,initial-scale=1.0"/>
+<title>아카이브 운영 현황판</title>
+<script>
+  if (location.hostname === 'archivepilates.github.io') {
+    location.replace('https://archive-pilates.web.app/dashboard/');
+  }
+</script>
+<meta name="theme-color" content="#080d1a"/>
+<meta name="apple-mobile-web-app-capable" content="yes"/>
+<meta name="apple-mobile-web-app-title" content="아카이브 현황판"/>
+<meta name="apple-mobile-web-app-status-bar-style" content="black-translucent"/>
+<link rel="icon" type="image/png" sizes="192x192" href="../icons/icon-192.png?v=5"/>
+<link rel="icon" type="image/png" sizes="512x512" href="../icons/icon-512.png?v=5"/>
+<link rel="apple-touch-icon" sizes="180x180" href="../icons/apple-touch-icon.png?v=5"/>
+<link rel="preconnect" href="https://fonts.googleapis.com"/>
+<link href="https://fonts.googleapis.com/css2?family=Noto+Sans+KR:wght@400;500;600;700;800&family=DM+Mono:wght@400;500&display=swap" rel="stylesheet"/>
+<script src="../kangsain/firebase-config.js"></script>
+<style>
+*,*::before,*::after{box-sizing:border-box;margin:0;padding:0;}
+html,body{overflow-x:hidden;max-width:100%;}
+
+:root{
+  --bg:#080d1a;
+  --surface:#0f1829;
+  --surface-2:#141e30;
+  --surface-3:#1a263a;
+  --border:rgba(255,255,255,.06);
+  --border-h:rgba(125,211,252,.22);
+  --t1:#f1f5f9;
+  --t2:#94a3b8;
+  --t3:#64748b;
+  --up:#10b981;
+  --dn:#ef4444;
+  --purple:#7c3aed;
+  --blue:#3b82f6;
+  --green:#22c55e;
+  --amber:#f59e0b;
+  --sky:#0ea5e9;
+  --r:16px;
+  --rlg:20px;
+  --rsm:10px;
+  --fn:'Noto Sans KR',system-ui,sans-serif;
+  --fm:'DM Mono','Courier New',monospace;
+}
+
+body{font-family:var(--fn);background:var(--bg);color:var(--t1);min-height:100vh;}
+body::before{content:'';position:fixed;inset:0;background-image:url("data:image/svg+xml,%3Csvg viewBox='0 0 200 200' xmlns='http://www.w3.org/2000/svg'%3E%3Cfilter id='n'%3E%3CfeTurbulence type='fractalNoise' baseFrequency='0.9' numOctaves='4' stitchTiles='stitch'/%3E%3C/filter%3E%3Crect width='100%25' height='100%25' filter='url(%23n)' opacity='0.025'/%3E%3C/svg%3E");pointer-events:none;z-index:0;opacity:.5;}
+
+/* ── SKELETON ── */
+#skeleton{position:fixed;inset:0;z-index:999;background:var(--bg);padding:20px 16px;display:flex;flex-direction:column;gap:14px;transition:opacity .4s ease;}
+#skeleton.fade-out{opacity:0;pointer-events:none;}
+.sk-bar{height:34px;border-radius:var(--rsm);}
+.sk-hero{height:108px;border-radius:var(--rlg);}
+.sk-row{display:grid;grid-template-columns:repeat(4,1fr);gap:8px;}
+.sk-card{height:80px;border-radius:var(--r);}
+.sk-charts{display:grid;grid-template-columns:1fr 1fr;gap:12px;}
+.sk-chart{height:260px;border-radius:var(--r);}
+.shimmer{background:linear-gradient(90deg,var(--surface) 0%,var(--surface-3) 50%,var(--surface) 100%);background-size:200% 100%;animation:shimmer 1.8s infinite linear;}
+@keyframes shimmer{0%{background-position:200% 0}100%{background-position:-200% 0}}
+@keyframes spin{from{transform:rotate(0deg)}to{transform:rotate(360deg)}}
+
+/* ── LAYOUT ── */
+.root{padding:1.25rem 0 3rem;position:relative;z-index:1;}
+.wrap{max-width:1200px;margin:0 auto;padding:0 16px;overflow-x:hidden;}
+
+/* ── HEADER ── */
+.header{display:flex;align-items:flex-start;justify-content:space-between;gap:12px;margin-bottom:1rem;}
+.htitle h1{font-size:18px;font-weight:800;color:var(--t1);letter-spacing:-.02em;line-height:1.2;}
+.htitle p{font-size:11.5px;color:var(--t3);margin-top:4px;}
+.hright{display:flex;align-items:center;gap:8px;flex-shrink:0;flex-wrap:wrap;justify-content:flex-end;}
+.month-select{font-size:13px;font-family:var(--fn);padding:7px 12px;border:1px solid var(--border);border-radius:var(--rsm);background:var(--surface-2);color:var(--t1);cursor:pointer;min-width:118px;transition:border-color .2s;}
+.month-select:hover{border-color:var(--border-h);}
+.icon-toolbar{display:flex;align-items:center;gap:3px;background:var(--surface-2);border:1px solid var(--border);border-radius:var(--rsm);padding:4px;}
+.icon-btn{width:32px;height:32px;display:flex;align-items:center;justify-content:center;border:none;background:transparent;color:var(--t2);border-radius:8px;cursor:pointer;font-size:14px;transition:all .18s ease;}
+.icon-btn:hover{background:var(--surface-3);color:var(--t1);}
+.icon-btn.active{background:rgba(125,211,252,.1);color:#7dd3fc;box-shadow:0 0 0 1px rgba(125,211,252,.2);}
+.icon-btn svg{width:15px;height:15px;}
+.speed-sel{font-size:11px;font-family:var(--fm);padding:3px 7px;border:none;background:transparent;color:var(--t3);cursor:pointer;border-radius:6px;transition:color .18s;}
+.speed-sel:hover{color:var(--t1);}
+.ttip-w{position:relative;}
+.ttip{position:absolute;bottom:calc(100% + 6px);left:50%;transform:translateX(-50%);background:#1e293b;border:1px solid var(--border);color:var(--t2);font-size:10px;white-space:nowrap;padding:4px 8px;border-radius:6px;pointer-events:none;opacity:0;transition:opacity .15s;z-index:100;}
+.ttip-w:hover .ttip{opacity:1;}
+.auth-btn{width:auto;height:32px;border:none;background:transparent;color:var(--t2);border-radius:8px;cursor:pointer;font-size:11px;font-family:var(--fn);padding:0 9px;transition:all .18s ease;}
+.auth-btn:hover{background:var(--surface-3);color:var(--t1);}
+
+/* ── STATUS BAR ── */
+.status-bar{display:flex;align-items:center;justify-content:space-between;gap:8px;margin-bottom:1.25rem;padding:7px 13px;background:var(--surface);border:1px solid var(--border);border-radius:var(--rsm);font-size:11.5px;color:var(--t2);}
+.s-left{display:flex;align-items:center;gap:7px;}
+.s-dot{width:7px;height:7px;border-radius:50%;background:#10b981;flex-shrink:0;box-shadow:0 0 7px rgba(16,185,129,.55);}
+.s-right{font-family:var(--fm);font-size:10.5px;color:var(--t3);}
+
+/* ── SECTION ── */
+.section{margin-bottom:2rem;}
+.sec-title{display:flex;align-items:center;justify-content:space-between;gap:8px;margin-bottom:.9rem;}
+.sec-title h2{font-size:15px;font-weight:700;color:var(--t1);}
+.sec-title p{font-size:11px;color:var(--t3);}
+.sec-divider{display:flex;align-items:center;gap:12px;margin:2rem 0 1.5rem;}
+.sec-divider::before,.sec-divider::after{content:'';flex:1;height:1px;background:linear-gradient(90deg,transparent,rgba(255,255,255,.07),transparent);}
+.sec-divider-lbl{font-size:10px;font-weight:600;letter-spacing:.1em;text-transform:uppercase;color:var(--t3);white-space:nowrap;}
+.score-lbl{font-size:10px;font-weight:600;letter-spacing:.08em;text-transform:uppercase;color:var(--t3);margin:0 0 8px;}
+
+/* ── HERO ── */
+.hero{background:linear-gradient(135deg,#0e1f42 0%,#0c1528 60%,#080d1a 100%);border:1px solid rgba(59,130,246,.28);border-radius:var(--rlg);padding:20px 22px 19px;margin-bottom:10px;position:relative;overflow:hidden;box-shadow:0 0 0 1px rgba(59,130,246,.04),0 20px 40px rgba(0,0,0,.3);}
+.hero::before{content:'';position:absolute;top:-50%;right:-8%;width:300px;height:300px;border-radius:50%;background:radial-gradient(circle,rgba(59,130,246,.15) 0%,transparent 65%);pointer-events:none;}
+.hero::after{content:'';position:absolute;bottom:-50%;left:25%;width:200px;height:200px;border-radius:50%;background:radial-gradient(circle,rgba(124,58,237,.12) 0%,transparent 65%);pointer-events:none;}
+.hero-inner{position:relative;z-index:1;}
+.hero-top{display:flex;align-items:flex-start;justify-content:space-between;gap:12px;}
+.hero-lbl{font-size:12px;color:#93c5fd;margin-bottom:6px;font-weight:500;}
+.hero-val{font-size:42px;line-height:1;font-weight:800;color:#eff6ff;letter-spacing:-.03em;font-family:var(--fm);}
+.hero-val .unit{font-size:21px;font-weight:500;color:#93c5fd;margin-left:2px;letter-spacing:0;}
+.hero-sub{font-size:11.5px;color:#7dd3fc;margin-top:7px;opacity:.7;}
+.mom-badge{display:inline-flex;align-items:center;gap:5px;padding:6px 13px;border-radius:999px;font-size:12.5px;font-weight:600;font-family:var(--fm);border:1px solid;white-space:nowrap;flex-shrink:0;margin-top:2px;}
+.mom-badge.up{background:rgba(16,185,129,.1);border-color:rgba(16,185,129,.3);color:#34d399;}
+.mom-badge.dn{background:rgba(239,68,68,.1);border-color:rgba(239,68,68,.3);color:#f87171;}
+.mom-badge.neu{background:rgba(148,163,184,.08);border-color:rgba(148,163,184,.18);color:var(--t2);}
+
+/* ── METRIC CARDS ── */
+.mgrid{display:grid;grid-template-columns:repeat(4,1fr);gap:8px;margin-bottom:1.25rem;}
+.mc{background:var(--surface);border:1px solid var(--border);border-radius:var(--r);padding:13px 15px;position:relative;overflow:hidden;transition:border-color .2s,transform .15s;border-left-width:3px;transform-style:preserve-3d;perspective:800px;will-change:transform;}
+.mc:hover{border-color:rgba(255,255,255,.1);transform:translateY(-1px) rotateX(1.5deg) rotateY(-1.5deg);}
+.mc.ap{border-left-color:var(--purple);}
+.mc.ag{border-left-color:var(--green);}
+.mc.ab{border-left-color:var(--blue);}
+.mc.aa{border-left-color:var(--amber);}
+.mc .lbl{font-size:11px;color:var(--t2);margin-bottom:4px;}
+.mc .val{font-size:20px;font-weight:700;color:var(--t1);font-family:var(--fm);letter-spacing:-.02em;text-shadow:0 0 18px rgba(125,211,252,.12);transform:translateZ(14px);}
+.mc .dlt{font-size:11px;margin-top:3px;font-family:var(--fm);}
+.mc::after{content:'';position:absolute;inset:auto 0 0 0;height:2px;background:linear-gradient(90deg,transparent,rgba(125,211,252,.45),transparent);transform:translateX(-100%);transition:transform .8s ease;}
+.mc.flash::after{transform:translateX(100%);}
+
+/* ── CARD ── */
+.card{background:var(--surface);border:1px solid var(--border);border-radius:var(--r);padding:14px 15px;box-shadow:0 2px 12px rgba(0,0,0,.15);}
+.card-head{display:flex;align-items:center;justify-content:space-between;gap:8px;margin-bottom:8px;}
+.card-head .ct{font-size:12.5px;font-weight:600;color:var(--t1);}
+.card-head .ctrail{display:flex;align-items:center;gap:6px;}
+.dl-btn{width:26px;height:26px;display:flex;align-items:center;justify-content:center;border:1px solid var(--border);border-radius:7px;background:transparent;color:var(--t3);cursor:pointer;flex-shrink:0;transition:all .18s ease;}
+.dl-btn:hover{background:var(--surface-2);color:var(--t1);border-color:var(--border-h);}
+.dl-btn svg{width:12px;height:12px;}
+
+/* ── GRID LAYOUTS ── */
+.crow{display:grid;grid-template-columns:1fr 1fr;gap:12px;margin-bottom:1.25rem;}
+.cfull{margin-bottom:1.25rem;}
+
+/* ── LEGEND ── */
+.legend{display:flex;flex-wrap:wrap;gap:10px;margin-bottom:8px;font-size:10.5px;color:var(--t2);}
+.legend span{display:flex;align-items:center;gap:4px;}
+.ldot{width:9px;height:9px;border-radius:2px;display:inline-block;flex-shrink:0;}
+
+/* ── CHART BOX ── */
+.chart-box{position:relative;height:220px;min-height:220px;width:100%;}
+.chart-box.tall{height:300px;min-height:300px;}
+canvas{display:block;width:100%!important;height:100%!important;}
+
+/* ── EMPTY STATE ── */
+.empty-state{height:220px;display:none;flex-direction:column;align-items:center;justify-content:center;border:1px dashed rgba(148,163,184,.1);border-radius:var(--r);background:rgba(15,24,41,.35);color:var(--t3);font-size:12px;text-align:center;gap:8px;}
+.empty-state svg{opacity:.25;width:28px;height:28px;}
+
+/* ── HTML LEGEND ── */
+.html-legend{display:flex;flex-wrap:wrap;gap:5px 14px;margin-top:10px;padding:0 2px;}
+.hl-item{display:inline-flex;align-items:center;gap:5px;font-size:11px;color:#cbd5e1;font-family:var(--fn);}
+.hl-dot{width:9px;height:9px;border-radius:50%;display:inline-block;flex-shrink:0;}
+
+/* ── INSTRUCTOR FILTER ── */
+.ifilter{display:none;align-items:center;gap:8px;flex-wrap:wrap;margin-bottom:10px;}
+.ifilter-lbl{font-size:10.5px;color:var(--t3);flex-shrink:0;}
+.ichips{display:flex;flex-wrap:wrap;gap:5px;}
+.ichip{padding:3px 10px;border-radius:999px;font-size:11px;font-family:var(--fn);border:1px solid var(--border);background:var(--surface-2);color:var(--t2);cursor:pointer;transition:all .15s ease;}
+.ichip.on{border-color:rgba(125,211,252,.3);background:rgba(125,211,252,.08);color:#7dd3fc;}
+
+/* ── LOGIN ── */
+.login-gate{position:fixed;inset:0;z-index:1200;display:none;place-items:center;background:rgba(8,13,26,.86);backdrop-filter:blur(14px);padding:18px;}
+.login-gate.on{display:grid;}
+.login-card{width:min(380px,100%);background:var(--surface);border:1px solid var(--border);border-radius:var(--r);padding:22px;box-shadow:0 24px 80px rgba(0,0,0,.36);}
+.login-card h2{font-size:20px;line-height:1.2;margin-bottom:6px;}
+.login-card p{font-size:12px;color:var(--t3);margin-bottom:16px;}
+.login-card input{width:100%;height:42px;border:1px solid var(--border);border-radius:var(--rsm);background:var(--surface-2);color:var(--t1);padding:0 12px;font:inherit;margin-bottom:8px;}
+.login-card button{width:100%;height:42px;border:0;border-radius:var(--rsm);background:#7dd3fc;color:#06111d;font-weight:800;cursor:pointer;}
+.login-error{min-height:18px;color:#f87171;font-size:11.5px;margin-top:10px;}
+.source-loop{margin:0 0 12px;overflow:hidden;border:1px solid var(--border);border-radius:var(--rsm);background:rgba(15,24,41,.62);}
+.source-track{display:flex;width:max-content;gap:8px;padding:8px;animation:marquee 28s linear infinite;will-change:transform;}
+.source-chip{white-space:nowrap;font-size:10.5px;color:var(--t2);border:1px solid var(--border);border-radius:999px;padding:4px 9px;background:var(--surface-2);}
+@keyframes marquee{from{transform:translateX(0)}to{transform:translateX(-50%)}}
+
+/* ── RESPONSIVE ── */
+@media(max-width:900px){.mgrid{grid-template-columns:repeat(2,1fr);}.crow{grid-template-columns:1fr;}}
+@media(max-width:600px){
+  .wrap{padding:0 12px;}
+  .header{flex-direction:column;align-items:stretch;}
+  .hright{justify-content:flex-start;}
+  .htitle h1{font-size:22px;}
+  .hero-val{font-size:36px;}
+  .hero-val .unit{font-size:18px;}
+  .mc .val{font-size:20px;}
+  .chart-box{height:240px;min-height:240px;}
+  .chart-box.tall{height:280px;min-height:280px;}
+  .sk-row{grid-template-columns:repeat(2,1fr);}
+  .sk-charts{grid-template-columns:1fr;}
+}
+@media(max-width:420px){
+  .mgrid{grid-template-columns:1fr 1fr;}
+  .mc{padding:14px 12px;}
+  .mc .lbl{font-size:12px;}
+  .mc .val{font-size:19px;}
+}
+</style>
+</head>
+<body>
+
+<div class="login-gate" id="loginGate">
+  <form class="login-card" id="loginForm">
+    <h2>아카이브 운영 현황판</h2>
+    <p>운영자 휴대폰번호로 로그인하세요</p>
+    <input id="phoneInput" type="tel" inputmode="numeric" autocomplete="tel" placeholder="휴대폰번호">
+    <input id="pinInput" type="password" autocomplete="current-password" placeholder="비밀번호">
+    <div class="source-loop" aria-hidden="true">
+      <div class="source-track">
+        <span class="source-chip">정산대장 Master</span>
+        <span class="source-chip">강사통계 Long</span>
+        <span class="source-chip">수강권분석 Master</span>
+        <span class="source-chip">수강권매출 Master</span>
+        <span class="source-chip">Firestore Snapshot</span>
+        <span class="source-chip">정산대장 Master</span>
+        <span class="source-chip">강사통계 Long</span>
+        <span class="source-chip">수강권분석 Master</span>
+        <span class="source-chip">수강권매출 Master</span>
+        <span class="source-chip">Firestore Snapshot</span>
+      </div>
+    </div>
+    <button type="submit">로그인</button>
+    <div class="login-error" id="loginError"></div>
+  </form>
+</div>
+
+<!-- ══ SKELETON ══ -->
+<div id="skeleton">
+  <div style="max-width:1200px;margin:0 auto;padding:0 16px;display:flex;flex-direction:column;gap:14px;">
+    <div class="sk-bar shimmer" style="width:300px;"></div>
+    <div class="sk-hero shimmer"></div>
+    <div class="sk-row">
+      <div class="sk-card shimmer"></div><div class="sk-card shimmer"></div>
+      <div class="sk-card shimmer"></div><div class="sk-card shimmer"></div>
+    </div>
+    <div class="sk-charts">
+      <div class="sk-chart shimmer"></div><div class="sk-chart shimmer"></div>
+    </div>
+    <div class="sk-charts">
+      <div class="sk-chart shimmer"></div><div class="sk-chart shimmer"></div>
+    </div>
+  </div>
+</div>
+
+<!-- ══ MAIN ══ -->
+<div class="root" id="mainContent" style="opacity:0;transition:opacity .45s ease;">
+<div class="wrap">
+
+  <!-- HEADER -->
+  <div class="header">
+    <div class="htitle">
+      <h1>아카이브 운영 현황판</h1>
+      <p id="subTitle">데이터 불러오는 중...</p>
+    </div>
+    <div class="hright">
+      <select class="month-select" id="monthSel" onchange="changeMonth(this.value)"></select>
+      <div class="icon-toolbar">
+        <div class="ttip-w">
+          <button class="icon-btn" id="refreshBtn" onclick="refreshFromDrive()">
+            <svg id="refreshIcon" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.2" stroke-linecap="round" stroke-linejoin="round"><path d="M21 12a9 9 0 0 0-9-9 9.75 9.75 0 0 0-6.74 2.74L3 8"/><path d="M3 3v5h5"/><path d="M3 12a9 9 0 0 0 9 9 9.75 9.75 0 0 0 6.74-2.74L21 16"/><path d="M16 16h5v5"/></svg>
+          </button>
+          <span class="ttip">새로고침</span>
+        </div>
+        <div class="ttip-w">
+          <button class="icon-btn" id="playBtn" onclick="toggleAutoplay()">
+            <svg id="playIcon" viewBox="0 0 24 24" fill="currentColor"><path d="M8 5v14l11-7z"/></svg>
+          </button>
+          <span class="ttip" id="playTip">자동재생 시작</span>
+        </div>
+        <select class="speed-sel" id="speedSel" onchange="changeSpeed(this.value)">
+          <option value="2600">2.6s</option>
+          <option value="1800" selected>1.8s</option>
+          <option value="1200">1.2s</option>
+        </select>
+        <button class="auth-btn" type="button" onclick="window.archiveDashboardSignOut && window.archiveDashboardSignOut()">로그아웃</button>
+      </div>
+    </div>
+  </div>
+
+  <!-- STATUS BAR -->
+  <div class="status-bar">
+    <div class="s-left">
+      <span class="s-dot"></span>
+      <span>Firebase 연동 · 아카이브 DB 스냅샷</span>
+    </div>
+    <div class="s-right">마지막 업데이트: <span id="updTime">—</span></div>
+  </div>
+
+  <!-- ══ SECTION: 운영 현황 ══ -->
+  <section class="section">
+    <div class="sec-title">
+      <h2>운영 현황</h2>
+      <p id="heroMonthLabel"></p>
+    </div>
+
+    <!-- HERO -->
+    <div class="hero">
+      <div class="hero-inner">
+        <div class="hero-top">
+          <div>
+            <div class="hero-lbl" id="heroLabel">연 누적 총매출</div>
+            <div class="hero-val" id="heroValue">-</div>
+            <div class="hero-sub" id="heroSub">수강권매출 기준 누적</div>
+          </div>
+          <div id="momBadge"></div>
+        </div>
+      </div>
+    </div>
+
+    <p class="score-lbl" id="scoreLabel"></p>
+    <div class="mgrid" id="mgrid"></div>
+
+    <!-- CHARTS ROW 1 -->
+    <div class="crow">
+      <div class="card">
+        <div class="card-head">
+          <p class="ct">월별 총매출 추이</p>
+          <button class="dl-btn" onclick="downloadChart('c1','월별총매출')" title="PNG 저장"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.2" stroke-linecap="round" stroke-linejoin="round"><path d="M21 15v4a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2v-4"/><polyline points="7 10 12 15 17 10"/><line x1="12" y1="15" x2="12" y2="3"/></svg></button>
+        </div>
+        <div class="legend"><span><span class="ldot" style="background:#7C3AED;border-radius:50%;"></span>총매출</span></div>
+        <div class="chart-box"><canvas id="c1"></canvas></div>
+      </div>
+      <div class="card">
+        <div class="card-head">
+          <p class="ct">월별 수업 마진률</p>
+          <button class="dl-btn" onclick="downloadChart('c2','월별마진률')" title="PNG 저장"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.2" stroke-linecap="round" stroke-linejoin="round"><path d="M21 15v4a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2v-4"/><polyline points="7 10 12 15 17 10"/><line x1="12" y1="15" x2="12" y2="3"/></svg></button>
+        </div>
+        <div class="legend"><span><span class="ldot" style="background:#22C55E;border-radius:50%;"></span>수업 마진률</span></div>
+        <div class="chart-box"><canvas id="c2"></canvas></div>
+      </div>
+    </div>
+
+    <!-- INSTRUCTOR DONUT (FULL WIDTH) -->
+    <div class="card cfull">
+      <div class="card-head">
+        <p class="ct">강사별 수업매출 비중</p>
+        <div class="ctrail">
+          <span style="font-size:11px;color:var(--t3);" id="instrMonthLabel"></span>
+          <button class="dl-btn" onclick="downloadChart('c3','강사별수업매출')" title="PNG 저장"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.2" stroke-linecap="round" stroke-linejoin="round"><path d="M21 15v4a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2v-4"/><polyline points="7 10 12 15 17 10"/><line x1="12" y1="15" x2="12" y2="3"/></svg></button>
+        </div>
+      </div>
+      <div class="chart-box tall"><canvas id="c3"></canvas></div>
+      <div id="c3legend" class="html-legend"></div>
+    </div>
+
+    <!-- CHARTS ROW 2 -->
+    <div class="crow">
+      <div class="card">
+        <div class="card-head">
+          <p class="ct">월별 세션 수 구성</p>
+          <button class="dl-btn" onclick="downloadChart('c4','월별세션구성')" title="PNG 저장"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.2" stroke-linecap="round" stroke-linejoin="round"><path d="M21 15v4a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2v-4"/><polyline points="7 10 12 15 17 10"/><line x1="12" y1="15" x2="12" y2="3"/></svg></button>
+        </div>
+        <div class="legend">
+          <span><span class="ldot" style="background:#8B5CF6;"></span>그룹</span>
+          <span><span class="ldot" style="background:#22C55E;"></span>프라이빗</span>
+          <span><span class="ldot" style="background:#F59E0B;"></span>강사레슨</span>
+        </div>
+        <div class="chart-box"><canvas id="c4"></canvas></div>
+      </div>
+      <div class="card">
+        <div class="card-head">
+          <p class="ct" id="c5title">강사별 예약·출석률</p>
+          <button class="dl-btn" onclick="downloadChart('c5','강사별예약출석률')" title="PNG 저장"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.2" stroke-linecap="round" stroke-linejoin="round"><path d="M21 15v4a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2v-4"/><polyline points="7 10 12 15 17 10"/><line x1="12" y1="15" x2="12" y2="3"/></svg></button>
+        </div>
+        <div class="legend">
+          <span><span class="ldot" style="background:#34D399;"></span>예약률</span>
+          <span><span class="ldot" style="background:#A78BFA;"></span>출석률</span>
+        </div>
+        <div id="c5box" class="chart-box"><canvas id="c5"></canvas></div>
+        <div id="c5empty" class="empty-state"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.5"><path d="M9 17H7A5 5 0 0 1 7 7h2"/><path d="M15 7h2a5 5 0 0 1 0 10h-2"/><line x1="8" y1="12" x2="16" y2="12"/></svg>강사 통계 데이터 없음</div>
+      </div>
+    </div>
+  </section>
+
+  <!-- ══ SECTION DIVIDER ══ -->
+  <div class="sec-divider"><span class="sec-divider-lbl">상세 분석</span></div>
+
+  <!-- ══ SECTION: 상세 분석 ══ -->
+  <section class="section">
+    <div class="sec-title">
+      <h2>상세 분석</h2>
+      <p>상단 월 선택과 함께 동기화됩니다</p>
+    </div>
+
+    <div class="crow">
+      <div class="card">
+        <div class="card-head">
+          <p class="ct">월별 그룹 예약률 / 출석률 추이</p>
+          <button class="dl-btn" onclick="downloadChart('c6','그룹예약출석률추이')" title="PNG 저장"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.2" stroke-linecap="round" stroke-linejoin="round"><path d="M21 15v4a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2v-4"/><polyline points="7 10 12 15 17 10"/><line x1="12" y1="15" x2="12" y2="3"/></svg></button>
+        </div>
+        <div class="legend">
+          <span><span class="ldot" style="background:#34D399;border-radius:50%;"></span>예약률</span>
+          <span><span class="ldot" style="background:#A78BFA;border-radius:50%;"></span>출석률</span>
+        </div>
+        <div class="chart-box"><canvas id="c6"></canvas></div>
+      </div>
+      <div class="card">
+        <div class="card-head">
+          <p class="ct">월별 그룹수업 1회 평균가격</p>
+          <button class="dl-btn" onclick="downloadChart('c7','그룹평균가격')" title="PNG 저장"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.2" stroke-linecap="round" stroke-linejoin="round"><path d="M21 15v4a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2v-4"/><polyline points="7 10 12 15 17 10"/><line x1="12" y1="15" x2="12" y2="3"/></svg></button>
+        </div>
+        <div id="avgPriceBox" class="chart-box"><canvas id="c7"></canvas></div>
+        <div id="avgPriceEmpty" class="empty-state"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.5"><circle cx="12" cy="12" r="10"/><line x1="12" y1="8" x2="12" y2="12"/><line x1="12" y1="16" x2="12.01" y2="16"/></svg>평균가격 데이터 없음</div>
+      </div>
+    </div>
+
+    <div class="crow">
+      <div class="card">
+        <div class="card-head">
+          <p class="ct">월별 강사별 그룹수업 평균인원</p>
+          <button class="dl-btn" onclick="downloadChart('c8','강사별그룹평균인원추이')" title="PNG 저장"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.2" stroke-linecap="round" stroke-linejoin="round"><path d="M21 15v4a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2v-4"/><polyline points="7 10 12 15 17 10"/><line x1="12" y1="15" x2="12" y2="3"/></svg></button>
+        </div>
+        <div class="ifilter" id="ifilterWrap">
+          <span class="ifilter-lbl">강사 필터</span>
+          <div class="ichips" id="ichips"></div>
+        </div>
+        <div id="c8box" class="chart-box"><canvas id="c8"></canvas></div>
+        <div id="c8empty" class="empty-state"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.5"><path d="M17 21v-2a4 4 0 0 0-4-4H5a4 4 0 0 0-4 4v2"/><circle cx="9" cy="7" r="4"/><path d="M23 21v-2a4 4 0 0 0-3-3.87"/><path d="M16 3.13a4 4 0 0 1 0 7.75"/></svg>강사별 평균인원 데이터 없음</div>
+      </div>
+      <div class="card">
+        <div class="card-head">
+          <p class="ct">강사별 예약·출석률 상세</p>
+          <button class="dl-btn" onclick="downloadChart('c9','강사별예약출석률상세')" title="PNG 저장"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.2" stroke-linecap="round" stroke-linejoin="round"><path d="M21 15v4a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2v-4"/><polyline points="7 10 12 15 17 10"/><line x1="12" y1="15" x2="12" y2="3"/></svg></button>
+        </div>
+        <div class="legend">
+          <span><span class="ldot" style="background:#34D399;"></span>예약률</span>
+          <span><span class="ldot" style="background:#A78BFA;"></span>출석률</span>
+        </div>
+        <div id="c9box" class="chart-box"><canvas id="c9"></canvas></div>
+        <div id="c9empty" class="empty-state"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.5"><path d="M9 17H7A5 5 0 0 1 7 7h2"/><path d="M15 7h2a5 5 0 0 1 0 10h-2"/><line x1="8" y1="12" x2="16" y2="12"/></svg>강사 통계 데이터 없음</div>
+      </div>
+    </div>
+
+    <div class="crow">
+      <div class="card">
+        <div class="card-head">
+          <p class="ct">선택 월 수강권 차감매출 비중 TOP5</p>
+          <div class="ctrail">
+            <span style="font-size:11px;color:var(--t3);" id="ticketMonthLabel"></span>
+            <button class="dl-btn" onclick="downloadChart('c10','수강권차감매출TOP5')" title="PNG 저장"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.2" stroke-linecap="round" stroke-linejoin="round"><path d="M21 15v4a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2v-4"/><polyline points="7 10 12 15 17 10"/><line x1="12" y1="15" x2="12" y2="3"/></svg></button>
+          </div>
+        </div>
+        <div id="c10box" class="chart-box"><canvas id="c10"></canvas></div>
+        <div id="c10legend" class="html-legend"></div>
+        <div id="c10empty" class="empty-state"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.5"><rect x="2" y="7" width="20" height="14" rx="2" ry="2"/><path d="M16 21V5a2 2 0 0 0-2-2h-4a2 2 0 0 0-2 2v16"/></svg>수강권 차감매출 데이터 없음</div>
+      </div>
+      <div class="card">
+        <div class="card-head">
+          <p class="ct">선택 월 강사별 그룹평균인원</p>
+          <button class="dl-btn" onclick="downloadChart('c11','강사별그룹평균인원')" title="PNG 저장"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.2" stroke-linecap="round" stroke-linejoin="round"><path d="M21 15v4a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2v-4"/><polyline points="7 10 12 15 17 10"/><line x1="12" y1="15" x2="12" y2="3"/></svg></button>
+        </div>
+        <div class="legend"><span><span class="ldot" style="background:#38BDF8;"></span>그룹평균인원</span></div>
+        <div id="c11box" class="chart-box"><canvas id="c11"></canvas></div>
+        <div id="c11empty" class="empty-state"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.5"><path d="M17 21v-2a4 4 0 0 0-4-4H5a4 4 0 0 0-4 4v2"/><circle cx="9" cy="7" r="4"/></svg>강사 통계 데이터 없음</div>
+      </div>
+    </div>
+  </section>
+
+</div><!-- /wrap -->
+</div><!-- /root -->
+
+<script src="./assets/vendor.js"></script>
+<script>
+// ══ STATE ══
+let ALL={summary:[],강사별:[],강사통계:[],월별그룹평균가격:[],월별강사평균인원:[],수강권TOP5:[],updatedAt:null};
+let months=[],latest='';
+let activeInstr=new Set();
+let c1=null,c2=null,c3=null,c4=null,c5=null,c6=null,c7=null,c8=null,c9=null,c10=null,c11=null;
+let apTimer=null,apMs=1800,apOn=false;
+const sel=document.getElementById('monthSel');
+
+// ══ FORMATTERS ══
+const fmt만=v=>(v/10000).toFixed(0)+'만';
+const fmt원=v=>Math.round(v).toLocaleString('ko-KR')+'원';
+const fmtUnit=v=>v>=100000000?'억':'만';
+const fmtHero=v=>v>=100000000?(v/100000000).toFixed(1):(v/10000).toFixed(0);
+const sign=(a,b)=>a>=b?'▲':'▼';
+const colr=(a,b)=>a>=b?'#10b981':'#ef4444';
+
+// ══ UTILS ══
+function legPos(){return window.innerWidth<=600?'bottom':'right';}
+function vGrad(chart,t,b){const{ctx,chartArea}=chart||{};if(!chartArea)return t;const g=ctx.createLinearGradient(0,chartArea.top,0,chartArea.bottom);g.addColorStop(0,t);g.addColorStop(1,b);return g;}
+function normMonth(v){if(!v)return '';const s=String(v);const m=s.match(/(20\d{2})-(\d{2})/);if(m)return m[1]+'-'+m[2];const d=new Date(v);if(!isNaN(d))return d.getFullYear()+'-'+String(d.getMonth()+1).padStart(2,'0');return '';}
+function fmtMonthLong(v){const n=normMonth(v);if(!n)return '';return n.slice(2,4)+'년 '+Number(n.slice(5,7))+'월';}
+function fmtMonthShort(v){const n=normMonth(v);if(!n)return '';return n.slice(2,4)+'.'+Number(n.slice(5,7));}
+function toN(v){if(typeof v==='number')return v;if(v==null||v==='')return 0;return Number(String(v).replace(/,/g,'').replace('%','').trim())||0;}
+function animN(el,end,fmt,dur=700){const t0=performance.now();function f(t){const p=Math.min((t-t0)/dur,1),e=1-Math.pow(1-p,3);el.textContent=fmt(end*e);if(p<1)requestAnimationFrame(f);}requestAnimationFrame(f);}
+function setBox(boxId,emptyId,show){document.getElementById(boxId).style.display=show?'block':'none';document.getElementById(emptyId).style.display=show?'none':'flex';}
+
+// ══ DATA NORMALIZE ══
+function normalize(data){
+  const o={summary:[],강사별:[],강사통계:[],월별그룹평균가격:[],월별강사평균인원:[],수강권TOP5:[],updatedAt:data&&data.updatedAt};
+  o.summary=((data&&data.summary)||[]).map(r=>({월:normMonth(r.월),총매출:toN(r.총매출),수업매출:toN(r.수업매출),실지급액:toN(r.실지급액),세전총액:toN(r.세전총액),마진률:toN(r.마진률),그룹세션:toN(r.그룹세션),프라이빗:toN(r.프라이빗),강사레슨:toN(r.강사레슨),예약률:toN(r.예약률),출석률:toN(r.출석률)})).filter(r=>r.월).sort((a,b)=>a.월.localeCompare(b.월));
+  o.강사별=((data&&data.강사별)||[]).map(r=>({월:normMonth(r.월),강사:String(r.강사||''),총매출:toN(r.총매출)})).filter(r=>r.월&&r.강사);
+  o.강사통계=((data&&data.강사통계)||[]).map(r=>({월:normMonth(r.월),강사:String(r.강사||''),그룹예약률:toN(r.그룹예약률),그룹출석률:toN(r.그룹출석률),그룹평균인원:toN(r.그룹평균인원)})).filter(r=>r.월&&r.강사);
+  o.월별그룹평균가격=((data&&data.월별그룹평균가격)||[]).map(r=>({월:normMonth(r.월),그룹1회평균가격:toN(r.그룹1회평균가격)})).filter(r=>r.월).sort((a,b)=>a.월.localeCompare(b.월));
+  o.월별강사평균인원=((data&&data.월별강사평균인원)||[]).map(r=>({월:normMonth(r.월),강사:String(r.강사||''),그룹평균인원:toN(r.그룹평균인원)})).filter(r=>r.월&&r.강사).sort((a,b)=>a.월===b.월?a.강사.localeCompare(b.강사,'ko'):a.월.localeCompare(b.월));
+  o.수강권TOP5=((data&&data.수강권TOP5)||[]).map(r=>({월:normMonth(r.월),라벨:String(r.라벨||r.수강권명||''),값:toN(r.값||0),종류수:toN(r.종류수||0)})).filter(r=>r.월&&r.라벨);
+  return o;
+}
+
+// ══ FETCH ══
+async function fetchData(){
+  const bridge = await window.archiveDashboardAuthReady;
+  if(!bridge||!bridge.fetchDashboard)throw new Error('Firebase 연결을 초기화하지 못했습니다.');
+  return normalize(await bridge.fetchDashboard());
+}
+
+// ══ CHART DOWNLOAD ══
+function downloadChart(id,name){
+  const cv=document.getElementById(id);if(!cv)return;
+  const off=document.createElement('canvas');off.width=cv.width;off.height=cv.height;
+  const ctx=off.getContext('2d');ctx.fillStyle='#0f1829';ctx.fillRect(0,0,off.width,off.height);ctx.drawImage(cv,0,0);
+  const a=document.createElement('a');a.href=off.toDataURL('image/png');a.download=name+'.png';a.click();
+}
+
+// ══ INSTRUCTOR FILTER ══
+function currentInstructorNames(){
+  const latestMonth = latest || [...new Set((ALL.summary||[]).map(r=>r.월).filter(Boolean))].sort().pop() || '';
+  const names = new Set();
+  (ALL.강사통계||[]).forEach(r=>{if(r.월===latestMonth&&r.강사)names.add(r.강사);});
+  (ALL.강사별||[]).forEach(r=>{if(r.월===latestMonth&&r.강사)names.add(r.강사);});
+  (ALL.월별강사평균인원||[]).forEach(r=>{if(r.월===latestMonth&&r.강사)names.add(r.강사);});
+  if(names.size) return names;
+  return new Set((ALL.월별강사평균인원||[]).map(r=>r.강사).filter(Boolean));
+}
+
+function currentInstructorRows(rows){
+  const current = currentInstructorNames();
+  return (rows||[]).filter(r=>!current.size||current.has(r.강사));
+}
+
+function buildInstrFilter(){
+  const all=[...currentInstructorNames()].sort((a,b)=>a.localeCompare(b,'ko'));
+  if(!all.length){document.getElementById('ifilterWrap').style.display='none';return;}
+  document.getElementById('ifilterWrap').style.display='flex';
+  activeInstr=new Set(all);
+  document.getElementById('ichips').innerHTML=all.map(n=>`<button class="ichip on" data-n="${n}" onclick="toggleInstr('${n}')">${n}</button>`).join('');
+}
+function toggleInstr(n){
+  activeInstr.has(n)?activeInstr.delete(n):activeInstr.add(n);
+  document.querySelectorAll('#ichips .ichip').forEach(c=>c.classList.toggle('on',activeInstr.has(c.dataset.n)));
+  if(c8){c8.destroy();c8=null;}buildC8();
+}
+
+// ══ POPULATE MONTH ══
+function populateMonths(){
+  months=[...new Set(ALL.summary.map(r=>normMonth(r.월)).filter(Boolean))].sort();
+  latest=months[months.length-1]||'';
+  sel.innerHTML=[...months].reverse().map(m=>`<option value="${m}">${fmtMonthLong(m)}</option>`).join('');
+  if(latest)sel.value=latest;
+  document.getElementById('subTitle').textContent=months.length?(fmtMonthLong(months[0])+' ~ '+fmtMonthLong(latest)+' · '+months.length+'개월'):'데이터 없음';
+}
+
+// ══ TIMESTAMP ══
+function setTimestamp(updatedAt){const dt=updatedAt?new Date(updatedAt):new Date();document.getElementById('updTime').textContent=dt.toLocaleString('ko-KR',{year:'numeric',month:'2-digit',day:'2-digit',hour:'2-digit',minute:'2-digit'});}
+
+// ══ YTD ══
+function calcYTD(m){const y=m.slice(0,4);return ALL.summary.filter(r=>r.월<=m&&r.월.startsWith(y)).reduce((s,r)=>s+r.총매출,0);}
+
+// ══ HERO ══
+function renderHero(month){
+  document.getElementById('heroMonthLabel').textContent=fmtMonthLong(month)+' 기준';
+  document.getElementById('heroLabel').textContent=month.slice(0,4)+'년 누적 총매출';
+  document.getElementById('heroSub').textContent='수강권매출 기준 누적';
+  const ytd=calcYTD(month);
+  const unit=fmtUnit(ytd);
+  const el=document.getElementById('heroValue');
+  const t0=performance.now();
+  function f(t){const p=Math.min((t-t0)/900,1),e=1-Math.pow(1-p,3),cur=ytd*e;el.innerHTML=fmtHero(cur)+'<span class="unit">'+unit+'</span>';if(p<1)requestAnimationFrame(f);}
+  requestAnimationFrame(f);
+  // YoY cumulative badge (compare YTD up to this month vs same period last year)
+  const badge=document.getElementById('momBadge');
+  const lastYearMonth=String(parseInt(month.slice(0,4))-1)+month.slice(4);
+  const ytdLastYear=calcYTD(lastYearMonth);
+  if(ytdLastYear>0){
+    const pct=((ytd-ytdLastYear)/ytdLastYear*100);
+    const cls=pct>0?'up':pct<0?'dn':'neu';
+    badge.innerHTML=`<div class="mom-badge ${cls}">${pct>=0?'▲':'▼'} ${pct>=0?'+':''}${pct.toFixed(1)}% vs 작년 동기</div>`;
+  }else{badge.innerHTML='';}
+}
+
+// ══ SCOREBOARD ══
+function renderScore(month){
+  const idx=ALL.summary.findIndex(r=>r.월===month);if(idx<0)return;
+  const cur=ALL.summary[idx],prev=idx>0?ALL.summary[idx-1]:null;
+  document.getElementById('scoreLabel').textContent=fmtMonthLong(month)+' 핵심 지표';
+  const accents=['ap','ap','ag','ag','ab','aa','aa','aa'];
+  const metrics=[
+    {lbl:'월 총매출',raw:cur.총매출,fmt:fmt만,dlt:prev?(sign(cur.총매출,prev.총매출)+' '+(cur.총매출>=prev.총매출?'+':'')+((cur.총매출-prev.총매출)/(prev.총매출||1)*100).toFixed(1)+'%'):'-',dc:prev?colr(cur.총매출,prev.총매출):'#64748b'},
+    {lbl:'월 수업매출',raw:cur.수업매출,fmt:fmt만,dlt:prev?(sign(cur.수업매출,prev.수업매출)+' '+(cur.수업매출>=prev.수업매출?'+':'')+((cur.수업매출-prev.수업매출)/(prev.수업매출||1)*100).toFixed(1)+'%'):'-',dc:prev?colr(cur.수업매출,prev.수업매출):'#64748b'},
+    {lbl:'수업 마진률',raw:cur.마진률,fmt:v=>v.toFixed(1)+'%',dlt:prev?(sign(cur.마진률,prev.마진률)+' '+(cur.마진률>=prev.마진률?'+':'')+(cur.마진률-prev.마진률).toFixed(1)+'%p'):'-',dc:prev?colr(cur.마진률,prev.마진률):'#64748b'},
+    {lbl:'그룹 예약률',raw:cur.예약률,fmt:v=>v.toFixed(1)+'%',dlt:prev?(sign(cur.예약률,prev.예약률)+' '+(cur.예약률>=prev.예약률?'+':'')+(cur.예약률-prev.예약률).toFixed(1)+'%p'):'-',dc:prev?colr(cur.예약률,prev.예약률):'#64748b'},
+    {lbl:'그룹 출석률',raw:cur.출석률,fmt:v=>v.toFixed(1)+'%',dlt:prev?(sign(cur.출석률,prev.출석률)+' '+(cur.출석률>=prev.출석률?'+':'')+(cur.출석률-prev.출석률).toFixed(1)+'%p'):'-',dc:prev?colr(cur.출석률,prev.출석률):'#64748b'},
+    {lbl:'그룹 세션',raw:cur.그룹세션,fmt:v=>Math.round(v)+'회',dlt:prev?(sign(cur.그룹세션,prev.그룹세션)+' '+(cur.그룹세션>=prev.그룹세션?'+':'')+(cur.그룹세션-prev.그룹세션)+'회'):'-',dc:prev?colr(cur.그룹세션,prev.그룹세션):'#64748b'},
+    {lbl:'프라이빗',raw:cur.프라이빗,fmt:v=>Math.round(v)+'회',dlt:prev?(sign(cur.프라이빗,prev.프라이빗)+' '+(cur.프라이빗>=prev.프라이빗?'+':'')+(cur.프라이빗-prev.프라이빗)+'회'):'-',dc:prev?colr(cur.프라이빗,prev.프라이빗):'#64748b'},
+    {lbl:'강사레슨',raw:cur.강사레슨,fmt:v=>Math.round(v)+'회',dlt:prev?(sign(cur.강사레슨,prev.강사레슨)+' '+(cur.강사레슨>=prev.강사레슨?'+':'')+(cur.강사레슨-prev.강사레슨)+'회'):'-',dc:prev?colr(cur.강사레슨,prev.강사레슨):'#64748b'}
+  ];
+  const grid=document.getElementById('mgrid');
+  grid.innerHTML=metrics.map((m,i)=>`<div class="mc ${accents[i]}"><div class="lbl">${m.lbl}</div><div class="val"></div><div class="dlt" style="color:${m.dc}">${m.dlt}</div></div>`).join('');
+  [...grid.children].forEach((card,i)=>{animN(card.querySelector('.val'),metrics[i].raw,metrics[i].fmt);card.classList.remove('flash');void card.offsetWidth;card.classList.add('flash');});
+}
+
+// ══ CHART DEFAULTS ══
+Chart.defaults.font.family="'Noto Sans KR',system-ui,sans-serif";
+Chart.defaults.color='#94a3b8';
+// Chart.js 4.x: generateLabels overrides can bypass per-chart labels.color,
+// so set it globally here to guarantee legend text is always visible
+// ══ HTML LEGEND RENDERER ══
+// Replaces Chart.js canvas legend for doughnut charts — avoids canvas text color issues
+function renderHtmlLegend(id,labels,colors,values,total,unit,meta){
+  const el=document.getElementById(id);if(!el)return;
+  el.innerHTML=labels.map((lbl,i)=>{
+    const pct=total>0?((values[i]/total)*100).toFixed(1):'0';
+    const note=meta&&meta[i]?meta[i]:'';
+    return '<span class="hl-item"><span class="hl-dot" style="background:'+colors[i%colors.length]+'"></span>'+lbl+note+' ('+pct+'%)</span>';
+  }).join('');
+}
+const gridColor='rgba(148,163,184,.07)';
+const tickColor='#64748b';
+
+// ══ C1: 월별 총매출 ══
+function buildC1(){
+  const s=ALL.summary,lb=s.map(r=>fmtMonthShort(r.월)),sel_m=sel.value||latest;
+  const pr=lb.map(l=>l===fmtMonthShort(sel_m)?7:4);
+  const pb=lb.map(l=>l===fmtMonthShort(sel_m)?'#fff':'#A78BFA');
+  if(c1){c1.data.labels=lb;c1.data.datasets[0].data=s.map(r=>r.총매출);c1.data.datasets[0].pointRadius=pr;c1.data.datasets[0].pointBackgroundColor=pb;c1.update('active');return;}
+  c1=new Chart(document.getElementById('c1'),{type:'line',data:{labels:lb,datasets:[{label:'총매출',data:s.map(r=>r.총매출),borderColor:'#7C3AED',backgroundColor:ctx=>vGrad(ctx.chart,'rgba(124,58,237,.36)','rgba(124,58,237,0)'),pointBackgroundColor:pb,pointBorderColor:'#E9D5FF',pointRadius:pr,pointHoverRadius:9,pointHoverBorderWidth:3,pointHitRadius:18,borderWidth:3,tension:.38,fill:true}]},options:{responsive:true,maintainAspectRatio:false,animation:{duration:1400,easing:'easeOutQuart',delay:ctx=>ctx.type==='data'?ctx.dataIndex*70:0},plugins:{legend:{display:false},tooltip:{callbacks:{label:c=>c.dataset.label+': '+fmt만(c.raw)}}},interaction:{intersect:false,mode:'index'},scales:{x:{grid:{display:false},ticks:{font:{size:10.5},autoSkip:false,color:tickColor}},y:{ticks:{callback:v=>fmt만(v),font:{size:10},color:tickColor},grid:{color:gridColor}}}}});
+}
+
+// ══ C2: 마진률 ══
+function buildC2(){
+  const s=ALL.summary,lb=s.map(r=>fmtMonthShort(r.월)),sel_m=sel.value||latest;
+  const pr=lb.map(l=>l===fmtMonthShort(sel_m)?7:4);
+  const pb=lb.map(l=>l===fmtMonthShort(sel_m)?'#fff':'#86EFAC');
+  if(c2){c2.data.labels=lb;c2.data.datasets[0].data=s.map(r=>r.마진률);c2.data.datasets[0].pointRadius=pr;c2.data.datasets[0].pointBackgroundColor=pb;c2.update('active');return;}
+  c2=new Chart(document.getElementById('c2'),{type:'line',data:{labels:lb,datasets:[{label:'마진률',data:s.map(r=>r.마진률),borderColor:'#22C55E',backgroundColor:ctx=>vGrad(ctx.chart,'rgba(34,197,94,.26)','rgba(34,197,94,0)'),pointBackgroundColor:pb,pointBorderColor:'#ECFDF5',pointRadius:pr,pointHoverRadius:9,pointHoverBorderWidth:3,pointHitRadius:18,tension:.34,fill:true,borderWidth:3}]},options:{responsive:true,maintainAspectRatio:false,animation:{duration:1300,easing:'easeOutQuart',delay:ctx=>ctx.type==='data'?ctx.dataIndex*65:0},plugins:{legend:{display:false},tooltip:{callbacks:{label:c=>c.raw+'%'}}},interaction:{intersect:false,mode:'index'},scales:{x:{grid:{display:false},ticks:{font:{size:10.5},autoSkip:false,color:tickColor}},y:{ticks:{callback:v=>v+'%',font:{size:10},color:tickColor},grid:{color:gridColor}}}}});
+}
+
+// ══ C3: 강사별 도넛 (HTML legend) ══
+function buildC3(month){
+  const d=ALL.강사별.filter(r=>r.월===month).sort((a,b)=>b.총매출-a.총매출);
+  document.getElementById('instrMonthLabel').textContent=fmtMonthLong(month);
+  const total=d.reduce((s,r)=>s+r.총매출,0);
+  const colors=['#7F77DD','#AFA9EC','#9FE1CB','#5DCAA5','#EF9F27','#D85A30','#6B7280'];
+  const cd={labels:d.map(r=>r.강사),datasets:[{label:'수업매출',data:d.map(r=>r.총매출),backgroundColor:d.map((_,i)=>colors[i%colors.length]),hoverOffset:10}]};
+  // Build HTML legend (bypasses canvas text color issues entirely)
+  renderHtmlLegend('c3legend',d.map(r=>r.강사),colors,d.map(r=>r.총매출),total,'만');
+  if(c3){c3.data=cd;c3.update();return;}
+  c3=new Chart(document.getElementById('c3'),{type:'doughnut',data:cd,options:{responsive:true,maintainAspectRatio:false,animation:{duration:1200,easing:'easeOutQuart'},cutout:'48%',hoverOffset:18,plugins:{legend:{display:false},tooltip:{callbacks:{label:c=>{const pct=total>0?((c.raw/total)*100).toFixed(1):'0';return c.label+': '+fmt만(c.raw)+' ('+pct+'%)';}}}}}});
+}
+
+// ══ C4: 세션 구성 ══
+function buildC4(){
+  const s=ALL.summary,lb=s.map(r=>fmtMonthShort(r.월));
+  if(c4){c4.data.labels=lb;c4.data.datasets[0].data=s.map(r=>r.그룹세션);c4.data.datasets[1].data=s.map(r=>r.프라이빗);c4.data.datasets[2].data=s.map(r=>r.강사레슨);c4.update('active');return;}
+  c4=new Chart(document.getElementById('c4'),{type:'bar',data:{labels:lb,datasets:[{label:'그룹',data:s.map(r=>r.그룹세션),backgroundColor:'#8B5CF6',hoverBackgroundColor:'#A78BFA',borderRadius:6},{label:'프라이빗',data:s.map(r=>r.프라이빗),backgroundColor:'#22C55E',hoverBackgroundColor:'#4ADE80',borderRadius:6},{label:'강사레슨',data:s.map(r=>r.강사레슨),backgroundColor:'#F59E0B',hoverBackgroundColor:'#FBBF24',borderRadius:6}]},options:{responsive:true,maintainAspectRatio:false,animation:{duration:1200,easing:'easeOutCubic',delay:ctx=>ctx.type==='data'?ctx.dataIndex*55:0},plugins:{legend:{display:false}},interaction:{intersect:false,mode:'index'},scales:{x:{stacked:true,grid:{display:false},ticks:{font:{size:10.5},autoSkip:false,color:tickColor}},y:{stacked:true,grid:{color:gridColor},ticks:{font:{size:10},color:tickColor}}}}});
+}
+
+// ══ C5: 강사 예약·출석 ══
+function buildC5(month){
+  const d=currentInstructorRows(ALL.강사통계.filter(r=>r.월===month)).sort((a,b)=>b.그룹예약률-a.그룹예약률);
+  document.getElementById('c5title').textContent='강사별 예약·출석률 ('+fmtMonthLong(month)+')';
+  if(!d.length){setBox('c5box','c5empty',false);if(c5){c5.destroy();c5=null;}return;}
+  setBox('c5box','c5empty',true);
+  const allV=d.flatMap(r=>[r.그룹예약률,r.그룹출석률]).filter(v=>v>0);
+  const minV=allV.length?Math.max(0,Math.min(...allV)-10):0;
+  const cd={labels:d.map(r=>r.강사),datasets:[{label:'예약률',data:d.map(r=>r.그룹예약률),backgroundColor:'#34D399',hoverBackgroundColor:'#6EE7B7',borderRadius:7,maxBarThickness:24},{label:'출석률',data:d.map(r=>r.그룹출석률),backgroundColor:'#A78BFA',hoverBackgroundColor:'#C4B5FD',borderRadius:7,maxBarThickness:24}]};
+  if(c5){c5.data=cd;c5.options.scales.y.suggestedMin=minV;c5.update();return;}
+  c5=new Chart(document.getElementById('c5'),{type:'bar',data:cd,options:{responsive:true,maintainAspectRatio:false,animation:{duration:1000,easing:'easeOutQuart',delay:ctx=>ctx.type==='data'?ctx.dataIndex*45:0},plugins:{legend:{display:false},tooltip:{callbacks:{label:c=>c.dataset.label+': '+c.raw+'%'}}},interaction:{intersect:false,mode:'index'},scales:{x:{grid:{display:false},ticks:{font:{size:10},color:tickColor}},y:{suggestedMin:minV,ticks:{callback:v=>v+'%',font:{size:10},color:tickColor},grid:{color:gridColor}}}}});
+}
+
+// ══ C6: 예약·출석률 추이 ══
+function buildC6(){
+  const s=ALL.summary,lb=s.map(r=>fmtMonthShort(r.월)),sel_m=sel.value||latest;
+  const pr=lb.map(l=>l===fmtMonthShort(sel_m)?6:3);
+  if(c6){c6.data.labels=lb;c6.data.datasets[0].data=s.map(r=>r.예약률);c6.data.datasets[0].pointRadius=pr;c6.data.datasets[1].data=s.map(r=>r.출석률);c6.data.datasets[1].pointRadius=pr;c6.update('active');return;}
+  c6=new Chart(document.getElementById('c6'),{type:'line',data:{labels:lb,datasets:[{label:'예약률',data:s.map(r=>r.예약률),borderColor:'#34D399',pointBackgroundColor:'#6EE7B7',pointRadius:pr,borderWidth:2.5,tension:.35,fill:false},{label:'출석률',data:s.map(r=>r.출석률),borderColor:'#A78BFA',pointBackgroundColor:'#C4B5FD',pointRadius:pr,borderWidth:2.5,tension:.35,fill:false}]},options:{responsive:true,maintainAspectRatio:false,animation:{duration:1200,easing:'easeOutQuart'},plugins:{legend:{display:false},tooltip:{callbacks:{label:c=>c.dataset.label+': '+c.raw+'%'}}},interaction:{intersect:false,mode:'index'},scales:{x:{grid:{display:false},ticks:{font:{size:10.5},color:tickColor}},y:{ticks:{callback:v=>v+'%',font:{size:10},color:tickColor},grid:{color:gridColor}}}}});
+}
+
+// ══ C7: 그룹 평균가격 ══
+function buildC7(){
+  const rows=ALL.월별그룹평균가격||[];
+  if(!rows.length){setBox('avgPriceBox','avgPriceEmpty',false);return;}
+  setBox('avgPriceBox','avgPriceEmpty',true);
+  const lb=rows.map(r=>fmtMonthShort(r.월)),sel_m=sel.value||latest;
+  const pr=lb.map(l=>l===fmtMonthShort(sel_m)?6:4);
+  if(c7){c7.data.labels=lb;c7.data.datasets[0].data=rows.map(r=>r.그룹1회평균가격);c7.data.datasets[0].pointRadius=pr;c7.update('active');return;}
+  c7=new Chart(document.getElementById('c7'),{type:'line',data:{labels:lb,datasets:[{label:'그룹 1회 평균가격',data:rows.map(r=>r.그룹1회평균가격),borderColor:'#F59E0B',backgroundColor:ctx=>vGrad(ctx.chart,'rgba(245,158,11,.24)','rgba(245,158,11,0)'),pointBackgroundColor:'#FCD34D',pointRadius:pr,pointHoverRadius:9,borderWidth:2.5,tension:.35,fill:true}]},options:{responsive:true,maintainAspectRatio:false,animation:{duration:1200,easing:'easeOutQuart'},plugins:{legend:{display:false},tooltip:{callbacks:{label:c=>fmt원(c.raw)}}},interaction:{intersect:false,mode:'index'},scales:{x:{grid:{display:false},ticks:{font:{size:10.5},color:tickColor}},y:{ticks:{callback:v=>fmt원(v),font:{size:10},color:tickColor},grid:{color:gridColor}}}}});
+}
+
+// ══ C8: 강사별 평균인원 + 필터 ══
+function buildC8(){
+  const rows=currentInstructorRows(ALL.월별강사평균인원||[]);
+  if(!rows.length){setBox('c8box','c8empty',false);return;}
+  setBox('c8box','c8empty',true);
+  const monthSet=[...new Set(rows.map(r=>r.월))].sort();
+  const instrSet=[...new Set(rows.map(r=>r.강사))].filter(n=>activeInstr.size===0||activeInstr.has(n));
+  const colors=['#7F77DD','#38BDF8','#34D399','#F59E0B','#EF4444','#A78BFA','#10B981','#FB7185'];
+  const ds=instrSet.map((n,i)=>({label:n,data:monthSet.map(m=>{const h=rows.find(r=>r.월===m&&r.강사===n);return h?h.그룹평균인원:null;}),backgroundColor:colors[i%colors.length],borderRadius:6,maxBarThickness:18}));
+  if(c8){c8.data.labels=monthSet.map(fmtMonthShort);c8.data.datasets=ds;c8.update();return;}
+  c8=new Chart(document.getElementById('c8'),{type:'bar',data:{labels:monthSet.map(fmtMonthShort),datasets:ds},options:{responsive:true,maintainAspectRatio:false,animation:{duration:1200,easing:'easeOutQuart'},plugins:{legend:{position:'bottom',labels:{boxWidth:9,boxHeight:9,color:'#94a3b8',font:{size:10.5}}},tooltip:{callbacks:{label:c=>c.dataset.label+': '+c.raw+'명'}}},scales:{x:{stacked:false,grid:{display:false},ticks:{color:tickColor,font:{size:10.5}}},y:{ticks:{callback:v=>v+'명',color:tickColor,font:{size:10}},grid:{color:gridColor}}}}});
+}
+
+// ══ C9: 강사별 예약·출석 상세 (horizontal) ══
+function buildC9(month){
+  const d=currentInstructorRows(ALL.강사통계.filter(r=>r.월===month)).sort((a,b)=>b.그룹예약률-a.그룹예약률);
+  if(!d.length){setBox('c9box','c9empty',false);if(c9){c9.destroy();c9=null;}return;}
+  setBox('c9box','c9empty',true);
+  const allV=d.flatMap(r=>[r.그룹예약률,r.그룹출석률]).filter(v=>v>0);
+  const minV=allV.length?Math.max(0,Math.min(...allV)-10):0;
+  const cd={labels:d.map(r=>r.강사),datasets:[{label:'예약률',data:d.map(r=>r.그룹예약률),backgroundColor:'#34D399',borderRadius:999,maxBarThickness:14},{label:'출석률',data:d.map(r=>r.그룹출석률),backgroundColor:'#A78BFA',borderRadius:999,maxBarThickness:14}]};
+  if(c9){c9.data=cd;c9.options.scales.x.suggestedMin=minV;c9.update();return;}
+  c9=new Chart(document.getElementById('c9'),{type:'bar',data:cd,options:{indexAxis:'y',responsive:true,maintainAspectRatio:false,animation:{duration:900,easing:'easeOutQuart',delay:ctx=>ctx.type==='data'?ctx.dataIndex*35:0},plugins:{legend:{display:false},tooltip:{callbacks:{label:c=>c.dataset.label+': '+c.raw+'%'}}},scales:{x:{suggestedMin:minV,ticks:{callback:v=>v+'%',color:tickColor,font:{size:10}},grid:{color:gridColor}},y:{ticks:{color:'#94a3b8',font:{size:10}},grid:{display:false}}}}});
+}
+
+// ══ C10: 수강권 차감매출 TOP5 (HTML legend) ══
+function buildC10(month){
+  const data=(ALL.수강권TOP5||[]).filter(r=>r.월===month);
+  document.getElementById('ticketMonthLabel').textContent=fmtMonthLong(month)+' 기준';
+  if(!data.length){setBox('c10box','c10empty',false);document.getElementById('c10legend').innerHTML='';return;}
+  setBox('c10box','c10empty',true);
+  const total=data.reduce((s,r)=>s+r.값,0);
+  const colors=['#7F77DD','#AFA9EC','#9FE1CB','#5DCAA5','#EF9F27','#6B7280'];
+  // Build HTML legend
+  const labels=data.map(r=>r.라벨);
+  const meta=data.map(r=>r.라벨==='기타'&&r.종류수?` · TOP5 제외 ${r.종류수}개 항목`:'');
+  renderHtmlLegend('c10legend',labels,colors,data.map(r=>r.값),total,'회',meta);
+  const cd={labels:data.map(r=>r.라벨),datasets:[{data:data.map(r=>r.값),backgroundColor:data.map((_,i)=>colors[i%colors.length]),hoverOffset:10}]};
+  if(c10){c10.data=cd;c10.update();return;}
+  c10=new Chart(document.getElementById('c10'),{type:'doughnut',data:cd,options:{responsive:true,maintainAspectRatio:false,animation:{duration:1100,easing:'easeOutQuart'},cutout:'52%',plugins:{legend:{display:false},tooltip:{callbacks:{label:c=>{const pct=total>0?((c.raw/total)*100).toFixed(1):'0';const row=data[c.dataIndex]||{};const label=row.라벨==='기타'&&row.종류수?row.라벨+' · TOP5 제외 '+row.종류수+'개 항목':c.label;return label+': '+fmt만(c.raw)+' ('+pct+'%)';}}}}}});
+}
+
+// ══ C11: 강사별 그룹평균인원 ══
+function buildC11(month){
+  const d=currentInstructorRows(ALL.강사통계.filter(r=>r.월===month)).sort((a,b)=>b.그룹평균인원-a.그룹평균인원);
+  if(!d.length){setBox('c11box','c11empty',false);if(c11){c11.destroy();c11=null;}return;}
+  setBox('c11box','c11empty',true);
+  const cd={labels:d.map(r=>r.강사),datasets:[{label:'그룹평균인원',data:d.map(r=>r.그룹평균인원),backgroundColor:'#38BDF8',hoverBackgroundColor:'#7DD3FC',borderRadius:8,maxBarThickness:24}]};
+  if(c11){c11.data=cd;c11.update();return;}
+  c11=new Chart(document.getElementById('c11'),{type:'bar',data:cd,options:{indexAxis:'y',responsive:true,maintainAspectRatio:false,animation:{duration:1000,easing:'easeOutQuart',delay:ctx=>ctx.type==='data'?ctx.dataIndex*40:0},plugins:{legend:{display:false},tooltip:{callbacks:{label:c=>'그룹평균인원: '+c.raw+'명'}}},scales:{x:{ticks:{callback:v=>v+'명',color:tickColor,font:{size:10}},grid:{color:gridColor}},y:{ticks:{color:'#94a3b8',font:{size:10}},grid:{display:false}}}}});
+}
+
+// ══ DESTROY ALL (only on data refresh) ══
+function destroyAll(){
+  [c1,c2,c3,c4,c5,c6,c7,c8,c9,c10,c11].forEach(ch=>{if(ch)ch.destroy();});
+  c1=c2=c3=c4=c5=c6=c7=c8=c9=c10=c11=null;
+}
+
+// ══ REBUILD (data refresh) ══
+function rebuildAll(updatedAt){
+  populateMonths();setTimestamp(updatedAt);
+  destroyAll();buildInstrFilter();
+  buildC1();buildC2();buildC4();buildC6();buildC7();buildC8();
+  if(latest)changeMonth(latest);
+}
+
+// ══ CHANGE MONTH (update only) ══
+function changeMonth(month){
+  if(!month)return;
+  const sy=window.scrollY;
+  sel.value=month;
+  renderHero(month);renderScore(month);
+  buildC1();buildC2();buildC3(month);buildC5(month);
+  buildC6();buildC7();buildC8();
+  buildC9(month);buildC10(month);buildC11(month);
+  requestAnimationFrame(()=>window.scrollTo({top:sy,behavior:'instant'}));
+}
+
+// ══ REFRESH ══
+const ICON_REFRESH='<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.2" stroke-linecap="round" stroke-linejoin="round"><path d="M21 12a9 9 0 0 0-9-9 9.75 9.75 0 0 0-6.74 2.74L3 8"/><path d="M3 3v5h5"/><path d="M3 12a9 9 0 0 0 9 9 9.75 9.75 0 0 0 6.74-2.74L21 16"/><path d="M16 16h5v5"/></svg>';
+const ICON_CHECK='<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5" stroke-linecap="round" stroke-linejoin="round"><polyline points="20 6 9 17 4 12"/></svg>';
+const ICON_SPIN='<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.2" stroke-linecap="round" stroke-linejoin="round" style="animation:spin .8s linear infinite"><path d="M21 12a9 9 0 0 0-9-9 9.75 9.75 0 0 0-6.74 2.74L3 8"/><path d="M3 3v5h5"/></svg>';
+async function refreshFromDrive(){
+  const btn=document.getElementById('refreshBtn');
+  btn.innerHTML=ICON_SPIN;btn.style.color='#7dd3fc';
+  try{
+    const data=await fetchData();ALL=data;rebuildAll(data.updatedAt);
+    btn.innerHTML=ICON_CHECK;btn.style.color='#10b981';
+    setTimeout(()=>{btn.innerHTML=ICON_REFRESH;btn.style.color='';},1500);
+  }catch(err){
+    console.error(err);alert('데이터 불러오기 실패: '+err.message);
+    btn.innerHTML=ICON_REFRESH;btn.style.color='';
+  }
+}
+
+// ══ AUTOPLAY ══
+const ICON_PLAY='<svg viewBox="0 0 24 24" fill="currentColor"><path d="M8 5v14l11-7z"/></svg>';
+const ICON_PAUSE='<svg viewBox="0 0 24 24" fill="currentColor"><rect x="6" y="4" width="4" height="16"/><rect x="14" y="4" width="4" height="16"/></svg>';
+function toggleAutoplay(){apOn?stopAP():startAP();}
+function startAP(){
+  if(!months.length)return;stopAP();apOn=true;
+  const btn=document.getElementById('playBtn');btn.classList.add('active');btn.innerHTML=ICON_PAUSE;
+  document.getElementById('playTip').textContent='자동재생 중단';
+  apTimer=setInterval(()=>{const idx=months.indexOf(sel.value);changeMonth(months[(idx+1)%months.length]);},apMs);
+}
+function stopAP(){
+  apOn=false;clearInterval(apTimer);apTimer=null;
+  const btn=document.getElementById('playBtn');btn.classList.remove('active');btn.innerHTML=ICON_PLAY;
+  document.getElementById('playTip').textContent='자동재생 시작';
+}
+function changeSpeed(v){apMs=Number(v)||1800;if(apOn)startAP();}
+
+// ══ RESIZE ══
+let rzTimer=null;
+window.addEventListener('resize',()=>{
+  clearTimeout(rzTimer);rzTimer=setTimeout(()=>{
+    [c1,c2,c3,c4,c5,c6,c7,c8,c9,c10,c11].forEach(ch=>{
+      if(ch){if((ch===c3||ch===c10)&&ch.options.plugins.legend)ch.options.plugins.legend.position=legPos();ch.resize();ch.update('resize');}
+    });
+  },120);
+});
+
+// ══ VISIBILITY ══
+document.addEventListener('visibilitychange',()=>{if(document.hidden&&apOn)stopAP();});
+
+// ══ SKELETON HIDE ══
+function hideSkeleton(){
+  const sk=document.getElementById('skeleton');
+  document.getElementById('mainContent').style.opacity='1';
+  sk.classList.add('fade-out');
+  setTimeout(()=>sk.style.display='none',460);
+}
+
+function renderCachedDashboard(){
+  const cached = localStorage.getItem('archive_dash');
+  if(!cached){hideSkeleton();return;}
+  try{
+    ALL=JSON.parse(cached);
+    rebuildAll(ALL.updatedAt);
+  }catch(_){}
+  hideSkeleton();
+}
+
+document.addEventListener('archiveDashboardAuthRequired', renderCachedDashboard, {once:true});
+
+// ══ INIT ══
+(async function init(){
+  try {
+    const fresh = await fetchData();
+    localStorage.setItem('archive_dash', JSON.stringify(fresh));
+    ALL = fresh;
+    rebuildAll(ALL.updatedAt);
+    hideSkeleton();
+  } catch(e) {
+    console.warn('새 데이터 로드 실패:', e.message);
+    const cached = localStorage.getItem('archive_dash');
+    if (cached) {
+      try {
+        ALL = JSON.parse(cached);
+        rebuildAll(ALL.updatedAt);
+      } catch(_) {}
+    }
+    hideSkeleton();
+  }
+})();
+</script>
+</body>
+</html>

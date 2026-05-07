@@ -1,0 +1,13 @@
+{
+  "private": true,
+  "scripts": {
+    "build:dashboard": "esbuild dashboard/src/vendor.js --bundle --format=iife --target=es2020 --outfile=dashboard/assets/vendor.js --minify"
+  },
+  "dependencies": {
+    "chart.js": "^4.4.9",
+    "firebase": "^10.14.1"
+  },
+  "devDependencies": {
+    "esbuild": "^0.25.12"
+  }
+}

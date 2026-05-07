@@ -13,6 +13,12 @@ import type {
   TokenCacheDoc,
   WriteQueueJobDoc,
 } from "../types/models";
+import type {
+  DashboardInstructorMetricDoc,
+  DashboardMonthlyMetricDoc,
+  DashboardSnapshotDoc,
+  DashboardTicketMetricDoc,
+} from "../types/dashboard";
 
 export const refs = {
   staffs: () => db.collection("staffs").withConverter(converter<StaffDoc>()),
@@ -39,6 +45,17 @@ export const refs = {
   tokenCacheDoc: (tokenKey: string) => refs.tokenCache().doc(tokenKey),
   fcmTokens: () => db.collection("fcmTokens").withConverter(converter<FcmTokenDoc>()),
   fcmToken: (tokenId: string) => refs.fcmTokens().doc(tokenId),
+  dashboardSnapshots: () => db.collection("dashboardSnapshots").withConverter(converter<DashboardSnapshotDoc>()),
+  dashboardSnapshot: (snapshotId: string) => refs.dashboardSnapshots().doc(snapshotId),
+  dashboardMonthlyMetrics: () =>
+    db.collection("dashboardMonthlyMetrics").withConverter(converter<DashboardMonthlyMetricDoc>()),
+  dashboardMonthlyMetric: (month: string) => refs.dashboardMonthlyMetrics().doc(month),
+  dashboardInstructorMetrics: () =>
+    db.collection("dashboardInstructorMetrics").withConverter(converter<DashboardInstructorMetricDoc>()),
+  dashboardInstructorMetric: (month: string, instructorName: string) =>
+    refs.dashboardInstructorMetrics().doc(`${month}_${instructorName}`),
+  dashboardTicketMetrics: () => db.collection("dashboardTicketMetrics").withConverter(converter<DashboardTicketMetricDoc>()),
+  dashboardTicketMetric: (month: string, rank: number) => refs.dashboardTicketMetrics().doc(`${month}_${rank}`),
   syncState: (syncName: string) => db.collection("syncStates").doc(syncName),
 };
 

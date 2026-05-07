@@ -23,6 +23,7 @@ import {
 import { sendAttendanceReminder } from "./push/sendAttendanceReminder";
 import { requireStaff, requireManager } from "./security/authGuards";
 import { syncManagerStaffs } from "./sync/syncManagerStaffs";
+import { syncDashboardFromSheets } from "./sync/syncDashboardFromSheets";
 
 const callableOptions = { region: REGION, secrets: allSecrets };
 const longCallableOptions = { ...callableOptions, timeoutSeconds: 540, memory: "512MiB" as const };
@@ -71,6 +72,16 @@ export const scheduledAttendanceReminder = onSchedule(
   },
   async () => {
     await sendAttendanceReminder();
+  },
+);
+
+export const scheduledSyncDashboardDaily = onSchedule(
+  {
+    ...scheduleOptions,
+    schedule: "20 0 * * *",
+  },
+  async () => {
+    await syncDashboardFromSheets();
   },
 );
 

@@ -14,6 +14,7 @@ StudioMate API
 ## 주요 함수
 
 - `scheduledSyncLecturesDaily`: 매일 00:05 KST, 최근 30일 + 향후 14일 수업/예약 동기화
+- `scheduledSyncDashboardDaily`: 매일 00:20 KST, Google Sheets `아카이브 DB`를 Firestore 현황판 데이터마트로 동기화
 - `scheduledPollManagerNotices`: 5분마다 StudioMate 관리자 알림 변경분 확인
 - `scheduledProcessWriteQueue`: 1분마다 출석/메모 쓰기 큐 처리
 - `scheduledAttendanceReminder`: 매시간 출석 미체크 수업 리마인드 푸시
@@ -25,6 +26,27 @@ StudioMate API
 - `registerFcmToken`: 강사 단말 FCM 토큰 등록
 - `adminSyncLecturesRange`: 운영자 수동 기간 동기화
 - `adminPollManagerNotices`: 운영자 수동 알림 polling
+
+## 현황판 Firebase 전환
+
+현황판의 기준 원천은 StudioMate API가 아니라 정산 완료된 Google Sheets `아카이브 DB`입니다.
+
+```text
+원본 엑셀 데이터
+  -> 아카이브 정산 자동화
+  -> 아카이브 DB
+  -> Cloud Functions
+  -> Firestore dashboard 데이터마트
+  -> dashboard/ 현황판
+```
+
+Firestore에는 운영 화면 호환용 `dashboardSnapshots/current`와 분석용 컬렉션을 함께 저장합니다.
+
+- `dashboardMonthlyMetrics/{YYYY-MM}`
+- `dashboardInstructorMetrics/{YYYY-MM}_{강사명}`
+- `dashboardTicketMetrics/{YYYY-MM}_{rank}`
+
+Cloud Functions 서비스 계정이 `아카이브 DB` 스프레드시트를 읽을 수 있도록 해당 시트 공유 권한을 부여해야 합니다. 현재 운영 화면은 `dashboardSnapshots/current`를 Firestore에서 직접 읽고, 정기 갱신은 `scheduledSyncDashboardDaily`가 담당합니다.
 
 ## Secret 설정
 
@@ -42,11 +64,18 @@ StudioMate API 토큰은 클라이언트에 노출하지 않고 서버 전용 Fi
 ## 배포 순서
 
 ```bash
+cd /path/to/archive
+npm --prefix firebase/kangsain-functions/functions install
+npm --prefix firebase/kangsain-functions/functions run build
+firebase deploy --project archive-pilates --config firebase.json --only functions,firestore:rules,firestore:indexes,hosting
+```
+
+로컬에 전역 npm이 없다면 Functions 폴더에서 번들된 도구 경로를 잡은 뒤 실행합니다.
+
+```bash
 cd firebase/kangsain-functions/functions
 npm install
 npm run build
-cd ..
-firebase deploy --only functions,firestore:rules,firestore:indexes
 ```
 
 GitHub Pages 강사IN 프론트는 `/kangsain` 폴더를 사용합니다. 실제 배포 전 `kangsain/firebase-config.example.js`를 복사해 `kangsain/firebase-config.js`를 만들고 Firebase Web App 설정값과 Web Push VAPID key를 입력해야 합니다.

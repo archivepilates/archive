@@ -149,6 +149,22 @@
         { "fieldPath": "staffId", "order": "ASCENDING" },
         { "fieldPath": "lastSeenAt", "order": "DESCENDING" }
       ]
+    },
+    {
+      "collectionGroup": "dashboardInstructorMetrics",
+      "queryScope": "COLLECTION",
+      "fields": [
+        { "fieldPath": "`월`", "order": "ASCENDING" },
+        { "fieldPath": "`총매출`", "order": "DESCENDING" }
+      ]
+    },
+    {
+      "collectionGroup": "dashboardTicketMetrics",
+      "queryScope": "COLLECTION",
+      "fields": [
+        { "fieldPath": "`월`", "order": "ASCENDING" },
+        { "fieldPath": "rank", "order": "ASCENDING" }
+      ]
     }
   ],
   "fieldOverrides": []
