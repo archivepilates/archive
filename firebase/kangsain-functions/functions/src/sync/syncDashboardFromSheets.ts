@@ -6,6 +6,7 @@ import type {
   DashboardInstructorAverageRow,
   DashboardInstructorSalesRow,
   DashboardInstructorStatsRow,
+  DashboardMemberSalesRow,
   DashboardSummaryRow,
   DashboardTicketTopRow,
 } from "../types/dashboard";
@@ -18,6 +19,7 @@ const SHEETS = {
   instructorStats: "강사통계_Long",
   ticketAnalysis: "수강권분석_Master",
   ticketSales: "수강권매출_Master",
+  memberSales: "회원별누적매출",
 };
 
 export async function syncDashboardFromSheets(input?: {
@@ -39,11 +41,12 @@ export async function syncDashboardFromSheets(input?: {
 
 async function loadDashboardData(spreadsheetId: string): Promise<DashboardData> {
   try {
-    const [settlement, instructorStats, ticketAnalysis, ticketSales] = await Promise.all([
+    const [settlement, instructorStats, ticketAnalysis, ticketSales, memberSales] = await Promise.all([
       readSheetRows(spreadsheetId, SHEETS.settlement),
       readSheetRows(spreadsheetId, SHEETS.instructorStats),
       readSheetRows(spreadsheetId, SHEETS.ticketAnalysis),
       readSheetRows(spreadsheetId, SHEETS.ticketSales),
+      readSheetRows(spreadsheetId, SHEETS.memberSales),
     ]);
 
     return buildDashboardData({
@@ -51,6 +54,7 @@ async function loadDashboardData(spreadsheetId: string): Promise<DashboardData> 
       instructorStats,
       ticketAnalysis,
       ticketSales,
+      memberSales,
     });
   } catch (err) {
     logger.warn("Google Sheets direct read failed; falling back to legacy dashboard endpoint", err);
@@ -70,11 +74,13 @@ export function buildDashboardData(input: {
   instructorStats: SheetRow[];
   ticketAnalysis: SheetRow[];
   ticketSales: SheetRow[];
+  memberSales?: SheetRow[];
 }): DashboardData {
   const settlement = input.settlement.map(normalizeSettlementRow).filter((row) => row.월);
   const instructorStats = input.instructorStats.map(normalizeInstructorStatsRow).filter((row) => row.월 && row.강사);
   const ticketAnalysis = input.ticketAnalysis.map(normalizeTicketAnalysisRow).filter((row) => row.월);
   const ticketSales = input.ticketSales.map(normalizeTicketSalesRow).filter((row) => row.월);
+  const memberSales = (input.memberSales || []).map(normalizeMemberSalesRow).filter((row) => row.회원명 || row.연락처);
 
   return {
     summary: buildSummary(settlement, instructorStats, ticketSales),
@@ -101,6 +107,7 @@ export function buildDashboardData(input: {
       그룹평균인원: round2(row.그룹출석평균),
     })),
     수강권TOP5: buildTicketTop5(ticketAnalysis),
+    회원별누적매출: memberSales,
     updatedAt: new Date().toISOString(),
   };
 }
@@ -275,6 +282,18 @@ function normalizeTicketSalesRow(row: SheetRow) {
   };
 }
 
+function normalizeMemberSalesRow(row: SheetRow): DashboardMemberSalesRow {
+  return {
+    회원명: stringValue(row.회원명),
+    연락처: stringValue(row.연락처),
+    누적매출: numberValue(row.누적매출),
+    최근결제월: monthKey(row.최근결제월),
+    최근수강권명: stringValue(row.최근수강권명),
+    최근결제일: dateValue(row.최근결제일),
+    보유수강권요약: stringValue(row["보유수강권 요약"] ?? row.보유수강권요약),
+  };
+}
+
 function normalizeDashboardPayload(input: Partial<DashboardData>): DashboardData {
   return {
     summary: (input.summary || [])
@@ -331,6 +350,17 @@ function normalizeDashboardPayload(input: Partial<DashboardData>): DashboardData
         종류수: numberValue(row.종류수),
       }))
       .filter((row) => row.월 && row.라벨),
+    회원별누적매출: (input.회원별누적매출 || [])
+      .map((row) => ({
+        회원명: stringValue(row.회원명),
+        연락처: stringValue(row.연락처),
+        누적매출: numberValue(row.누적매출),
+        최근결제월: monthKey(row.최근결제월),
+        최근수강권명: stringValue(row.최근수강권명),
+        최근결제일: dateValue(row.최근결제일),
+        보유수강권요약: stringValue(row.보유수강권요약),
+      }))
+      .filter((row) => row.회원명 || row.연락처),
     updatedAt: stringValue(input.updatedAt) || new Date().toISOString(),
   };
 }
@@ -370,6 +400,19 @@ function numberValue(value: unknown): number {
   if (typeof value === "number") return value;
   if (value == null || value === "") return 0;
   return Number(String(value).replace(/,/g, "").replace("%", "").trim()) || 0;
+}
+
+function dateValue(value: unknown): string {
+  if (typeof value === "number") {
+    const date = new Date(Math.round((value - 25569) * 86400 * 1000));
+    return `${date.getUTCFullYear()}-${String(date.getUTCMonth() + 1).padStart(2, "0")}-${String(
+      date.getUTCDate(),
+    ).padStart(2, "0")}`;
+  }
+  const text = stringValue(value);
+  const matched = text.match(/(20\d{2})[-./년\s]*(\d{1,2})[-./월\s]*(\d{1,2})/);
+  if (matched) return `${matched[1]}-${matched[2].padStart(2, "0")}-${matched[3].padStart(2, "0")}`;
+  return text;
 }
 
 function round0(value: number): number {

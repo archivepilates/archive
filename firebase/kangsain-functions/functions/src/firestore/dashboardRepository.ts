@@ -2,6 +2,7 @@ import type { Timestamp } from "firebase-admin/firestore";
 import { refs } from "./refs";
 import { nowTimestamp } from "../utils/date";
 import type { DashboardData, DashboardSnapshotDoc } from "../types/dashboard";
+import { stableHash } from "../utils/hash";
 
 export async function saveDashboardSnapshot(input: {
   data: DashboardData;
@@ -83,5 +84,25 @@ async function saveDashboardMetricDocs(
     );
   });
 
+  data.회원별누적매출.forEach((row) => {
+    const metricId = memberSalesMetricId(row.연락처, row.회원명);
+    batch.set(
+      refs.dashboardMemberSale(metricId),
+      {
+        metricId,
+        sourceSpreadsheetId,
+        syncedAt,
+        ...row,
+      },
+      { merge: true },
+    );
+  });
+
   await batch.commit();
+}
+
+function memberSalesMetricId(phone: string, memberName: string): string {
+  const digits = phone.replace(/\D/g, "");
+  if (digits) return `phone_${digits}`;
+  return `name_${stableHash(memberName).slice(0, 20)}`;
 }
