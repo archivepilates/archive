@@ -156,6 +156,32 @@
       text-overflow: ellipsis;
     }
 
+    .shell.chat-screen {
+      min-height: 100dvh;
+      display: grid;
+      grid-template-rows: auto minmax(0, 1fr);
+    }
+
+    .shell.chat-screen .view-stage,
+    .shell.chat-screen .admin-chat-panel,
+    .shell.chat-screen .chat-layout,
+    .shell.chat-screen .chat-box {
+      min-height: 0;
+      height: 100%;
+    }
+
+    .shell.chat-screen .chat-layout {
+      grid-template-rows: minmax(0, 1fr);
+    }
+
+    .shell.chat-screen .chat-box {
+      grid-template-rows: auto minmax(0, 1fr) auto;
+    }
+
+    .shell.chat-screen .chat-staff-list {
+      max-height: none;
+    }
+
     .ghost,
     .primary,
     .soft-button {
@@ -375,7 +401,7 @@
 
     .admin-tabs {
       display: grid;
-      grid-template-columns: repeat(5, minmax(0, 1fr));
+      grid-template-columns: repeat(4, minmax(0, 1fr));
       gap: 6px;
       margin: 0 0 16px;
     }
@@ -618,17 +644,18 @@
       right: 16px;
       bottom: max(16px, env(safe-area-inset-bottom));
       z-index: 34;
-      width: 58px;
-      height: 58px;
+      width: 96px;
+      height: 82px;
       border-radius: 999px;
       padding: 0;
       color: #fff;
-      background: var(--brand);
-      box-shadow: var(--shadow);
+      background: transparent;
+      box-shadow: none;
       font-weight: 900;
       touch-action: none;
       cursor: grab;
       user-select: none;
+      overflow: visible;
     }
 
     .floating-chat.dragging {
@@ -636,16 +663,20 @@
       transition: none;
     }
 
-    .floating-chat .chat-icon {
+    .floating-chat .chat-bubble-icon {
       display: block;
-      font-size: 25px;
-      line-height: 1;
+      width: 112%;
+      height: 112%;
+      margin: -6% 0 0 -6%;
+      object-fit: contain;
+      pointer-events: none;
+      filter: drop-shadow(0 10px 14px rgba(26, 26, 26, 0.12));
     }
 
     .floating-chat .badge {
       position: absolute;
-      top: -4px;
-      right: -3px;
+      top: 6px;
+      right: 7px;
       margin: 0;
     }
 
@@ -1435,23 +1466,26 @@
     }
 
     function renderAdminApp() {
+      const isChat = (appState.admin.activeTab || 'overview') === 'chat';
       root.innerHTML = `
-        <main class="shell">
+        <main class="shell ${isChat ? 'chat-screen' : ''}">
           <header class="topbar ${appState.loading ? 'loading' : ''}">
             <button id="homeLogoButton" class="logo" type="button" aria-label="오늘 운영 화면으로 이동">IN</button>
             <div class="identity">
               <h1>아카이브IN 운영자</h1>
-              <p>${appState.loading ? '동기화 확인 중' : adminSyncText()}</p>
+              ${isChat ? '' : `<p>${appState.loading ? '동기화 확인 중' : adminSyncText()}</p>`}
             </div>
-            <button id="refreshButton" class="soft-button" type="button">새로고침</button>
+            ${isChat ? '' : '<button id="refreshButton" class="soft-button" type="button">새로고침</button>'}
             <button id="logoutButton" class="ghost" type="button">로그아웃</button>
             <div class="sync-bar" aria-hidden="true"></div>
           </header>
-          <nav class="datebar">
-            <button id="prevDate" type="button" aria-label="이전 날짜">‹</button>
-            <strong>${dateLabel(appState.selectedDate)}</strong>
-            <button id="nextDate" type="button" aria-label="다음 날짜">›</button>
-          </nav>
+          ${isChat ? '' : `
+            <nav class="datebar">
+              <button id="prevDate" type="button" aria-label="이전 날짜">‹</button>
+              <strong>${dateLabel(appState.selectedDate)}</strong>
+              <button id="nextDate" type="button" aria-label="다음 날짜">›</button>
+            </nav>
+          `}
           <div class="view-stage" data-date="${escapeAttr(appState.selectedDate)}">
             ${renderAdminBody()}
           </div>
@@ -1492,6 +1526,8 @@
       if (appState.error) return `<section class="error">${escapeHtml(appState.error)}</section>`;
       const views = currentAdminViews();
       const summary = adminSummary(views);
+      const active = appState.admin.activeTab || 'overview';
+      if (active === 'chat') return renderAdminTabBody(views);
       return `
         ${renderAdminTabs()}
         <section class="summary">
@@ -1521,8 +1557,7 @@
         ['overview', '현황'],
         ['analytics', '분석'],
         ['issues', '이슈'],
-        ['members', '회원검색'],
-        ['chat', `채팅${renderUnreadBadge(totalUnreadChats())}`]
+        ['members', '회원검색']
       ];
       return `
         <nav class="admin-tabs" aria-label="운영자 메뉴">
@@ -1558,7 +1593,7 @@
     function renderFloatingChatButton() {
       return `
         <button id="chatButton" class="floating-chat" type="button" aria-label="채팅 열기" style="${floatingChatStyle()}">
-          <span class="chat-icon" aria-hidden="true">💬</span>${renderUnreadBadge(totalUnreadChats())}
+          <img class="chat-bubble-icon" src="./assets/chat-bubble-tongtong.apng.png" alt="" aria-hidden="true">${renderUnreadBadge(totalUnreadChats())}
         </button>
       `;
     }
@@ -1573,7 +1608,7 @@
       }
     }
 
-    function clampFloatingChatPosition(position, size = 58) {
+    function clampFloatingChatPosition(position, size = 96) {
       if (!position) return null;
       const margin = 8;
       const maxX = Math.max(margin, window.innerWidth - size - margin);
@@ -1592,7 +1627,7 @@
     }
 
     function setFloatingChatPosition(button, position) {
-      const nextPosition = clampFloatingChatPosition(position, button.offsetWidth || 58);
+      const nextPosition = clampFloatingChatPosition(position, button.offsetWidth || 96);
       if (!nextPosition) return;
       appState.chat.floatingPosition = nextPosition;
       button.style.left = `${nextPosition.x}px`;
@@ -1657,8 +1692,11 @@
       const staffs = appState.admin.staffs || [];
       const selected = selectedChatStaffId();
       return `
-        <section class="admin-panel">
-          <h2>강사 1:1 채팅</h2>
+        <section class="admin-panel admin-chat-panel">
+          <div class="chat-head" style="margin-bottom:12px;">
+            <h2 style="margin:0;">강사 1:1 채팅</h2>
+            <button class="ghost" type="button" data-close-admin-chat>현황으로</button>
+          </div>
           <div class="chat-layout">
             <div class="chat-staff-list">
               ${staffs.map((staff) => `
@@ -1911,6 +1949,11 @@
       });
       root.querySelector('[data-close-chat]')?.addEventListener('click', () => {
         appState.chat.open = false;
+        unsubscribeChat();
+        renderApp();
+      });
+      root.querySelector('[data-close-admin-chat]')?.addEventListener('click', () => {
+        appState.admin.activeTab = 'overview';
         unsubscribeChat();
         renderApp();
       });
