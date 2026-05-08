@@ -9,6 +9,6 @@ export const DASHBOARD_DB_SPREADSHEET_ID =
   process.env.DASHBOARD_DB_SPREADSHEET_ID || "1yEU2lDM_hTKQ-qT8UNj1PsiL7fsBwAgkzsKOzfXVsKg";
 export const DASHBOARD_LEGACY_ENDPOINT_URL =
   process.env.DASHBOARD_LEGACY_ENDPOINT_URL ||
-  "https://script.google.com/macros/s/AKfycby3lRWs1quY1Qm1BhfEltUrZAk7cS2lvv-poT01HbcaYhp_V4Y2D0Ig6tStzpFP0NvC/exec?action=dashboard";
+  "https://script.google.com/macros/s/AKfycbyKSdGPbdRpilUiSW6Afme1AdIwP8qUEA3KFNf1pc_dGIZhD_iXr6PeAUYhrIIOW8dA/exec?action=dashboard";
 
 export const WRITE_QUEUE_MAX_ATTEMPTS = 5;
