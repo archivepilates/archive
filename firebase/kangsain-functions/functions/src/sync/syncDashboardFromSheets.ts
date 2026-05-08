@@ -21,7 +21,7 @@ const SHEETS = {
   ticketAnalysis: "수강권분석_Master",
   ticketSales: "수강권매출_Master",
   memberSales: "회원별누적매출",
-  activeMembers: "월별 이용회원",
+  activeMembers: "월별 유효회원",
   groupMembers: "월별 그룹회원",
   privateMembers: "월별 프라이빗 회원",
 };
@@ -96,7 +96,7 @@ export function buildDashboardData(input: {
   const ticketSales = input.ticketSales.map(normalizeTicketSalesRow).filter((row) => row.월);
   const memberSales = (input.memberSales || []).map(normalizeMemberSalesRow).filter((row) => row.회원명 || row.연락처);
   const monthlyMembers = [
-    ...normalizeMonthlyMemberRows(input.activeMembers || [], "이용"),
+    ...normalizeMonthlyMemberRows(input.activeMembers || [], "유효"),
     ...normalizeMonthlyMemberRows(input.groupMembers || [], "그룹"),
     ...normalizeMonthlyMemberRows(input.privateMembers || [], "프라이빗"),
   ];
@@ -455,7 +455,7 @@ function dateValue(value: unknown): string {
 function normalizeMemberMetricKind(value: unknown): DashboardMonthlyMemberRow["구분"] {
   const text = stringValue(value);
   if (text === "그룹" || text === "프라이빗") return text;
-  return "이용";
+  return "유효";
 }
 
 function round0(value: number): number {

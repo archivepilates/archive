@@ -58,7 +58,7 @@ export interface DashboardMemberSalesRow {
   보유수강권요약: string;
 }
 
-export type DashboardMemberMetricKind = "이용" | "그룹" | "프라이빗";
+export type DashboardMemberMetricKind = "유효" | "그룹" | "프라이빗";
 
 export interface DashboardMonthlyMemberRow {
   월: string;
