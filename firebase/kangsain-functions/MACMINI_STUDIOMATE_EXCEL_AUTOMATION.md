@@ -124,7 +124,7 @@ Example local paths:
 
 - Browser profile: `~/ArchiveIN/automation/browser-profile`
 - Download staging: `~/ArchiveIN/automation/downloads`
-- Google Drive archive: `~/Library/CloudStorage/GoogleDrive-*/My Drive/ArchiveIN/StudioMate Excel Archive/YYYY-MM-DD`
+- Google Drive archive: `/Users/archivepilates/Library/CloudStorage/GoogleDrive-home@archivepilates.com/내 드라이브/아카이브 정산/회원원본데이터/YYYY-MM-DD`
 
 ## Browser Automation Flow
 
@@ -167,7 +167,7 @@ Useful environment variables:
 - `STUDIOMATE_MEMBER_EXPORT_PATH`: defaults to `/users`
 - `STUDIOMATE_PROFILE_DIR`: defaults to `~/ArchiveIN/automation/browser-profile`
 - `STUDIOMATE_DOWNLOAD_DIR`: defaults to `~/ArchiveIN/automation/downloads`
-- `STUDIOMATE_DRIVE_ARCHIVE_DIR`: defaults to `~/ArchiveIN/automation/StudioMate Excel Archive`
+- `STUDIOMATE_DRIVE_ARCHIVE_DIR`: defaults to `/Users/archivepilates/Library/CloudStorage/GoogleDrive-home@archivepilates.com/내 드라이브/아카이브 정산/회원원본데이터`
 - `STUDIOMATE_IMPORT_RUN_LOG`: defaults to `~/ArchiveIN/automation/member-excel-runs.jsonl`
 - `STUDIOMATE_MEMBER_EXCEL_INCLUDE_POINT`: defaults to `true`, checks `잔여 포인트`
 - `STUDIOMATE_MEMBER_EXCEL_INCLUDE_EXPIRED_TICKETS`: defaults to `true`, checks `만료된 수강권 포함`

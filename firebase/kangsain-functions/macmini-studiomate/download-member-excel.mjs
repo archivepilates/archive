@@ -5,12 +5,15 @@ import { appendFile, copyFile, mkdir, stat, writeFile } from "node:fs/promises";
 import os from "node:os";
 import path from "node:path";
 
+const defaultDriveArchiveDir =
+  "/Users/archivepilates/Library/CloudStorage/GoogleDrive-home@archivepilates.com/내 드라이브/아카이브 정산/회원원본데이터";
+
 const config = {
   baseUrl: env("STUDIOMATE_BASE_URL", "https://arcpilates.studiomate.kr"),
   memberPath: env("STUDIOMATE_MEMBER_EXPORT_PATH", "/users"),
   profileDir: expandHome(env("STUDIOMATE_PROFILE_DIR", "~/ArchiveIN/automation/browser-profile")),
   downloadDir: expandHome(env("STUDIOMATE_DOWNLOAD_DIR", "~/ArchiveIN/automation/downloads")),
-  archiveRoot: expandHome(env("STUDIOMATE_DRIVE_ARCHIVE_DIR", "~/ArchiveIN/automation/StudioMate Excel Archive")),
+  archiveRoot: expandHome(env("STUDIOMATE_DRIVE_ARCHIVE_DIR", defaultDriveArchiveDir)),
   runLogPath: expandHome(env("STUDIOMATE_IMPORT_RUN_LOG", "~/ArchiveIN/automation/member-excel-runs.jsonl")),
   headless: env("HEADLESS", "false") === "true",
   waitForLogin: env("WAIT_FOR_LOGIN", "false") === "true",
