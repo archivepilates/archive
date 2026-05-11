@@ -18,7 +18,7 @@ const config = {
 };
 
 const startedAt = new Date();
-const targetAvailableUntil = config.availableUntil || formatKoreanDate(addDays(startedAt, config.extensionDays));
+const targetAvailableUntil = config.availableUntil || formatKoreanDate(startedAt);
 const result = {
   ok: false,
   dryRun: config.dryRun,
@@ -58,7 +58,7 @@ try {
 
   result.screen = await inspectScreen(page);
   result.preview = {
-    message: `Set private/group reservation availability until ${targetAvailableUntil}; auto-extend ${config.extensionDays} days at ${config.extensionTime}.`,
+    message: `Set private/group reservation availability until ${targetAvailableUntil}; StudioMate will auto-extend ${config.extensionDays} days at ${config.extensionTime}.`,
     currentUrl: page.url()
   };
 
@@ -305,12 +305,6 @@ function expandHome(value) {
   if (value === "~") return os.homedir();
   if (value.startsWith("~/")) return path.join(os.homedir(), value.slice(2));
   return value;
-}
-
-function addDays(date, days) {
-  const next = new Date(date);
-  next.setDate(next.getDate() + days);
-  return next;
 }
 
 function formatKoreanDate(date) {

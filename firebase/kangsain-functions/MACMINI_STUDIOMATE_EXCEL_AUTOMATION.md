@@ -204,14 +204,16 @@ Default target:
 
 - `프라이빗 수업`
 - `그룹 수업`
-- `예약 가능 일자`: run date + `13` days
+- `예약 가능 일자`: run date
 - `13` days
 - `13:00`
+
+Example: on `2026. 5. 11.`, set the reservation availability date to `2026. 5. 11.` and auto-extend `13` days at `13:00`. After `13:00`, StudioMate opens reservations through `2026. 5. 24.`.
 
 Useful environment variables:
 
 - `STUDIOMATE_OPERATION_INFO_PATH`: exact StudioMate operation-info URL path if the auto-navigation cannot find it, currently `/settings/operations`
-- `STUDIOMATE_RESERVATION_AVAILABLE_UNTIL`: optional override such as `2026. 5. 24.`
+- `STUDIOMATE_RESERVATION_AVAILABLE_UNTIL`: optional override such as `2026. 5. 11.`
 - `STUDIOMATE_RESERVATION_EXTENSION_DAYS`: defaults to `13`
 - `STUDIOMATE_RESERVATION_EXTENSION_TIME`: defaults to `13:00`
 - `STUDIOMATE_OUTPUT_DIR`: defaults to `~/ArchiveIN/automation/studiomate-results`
