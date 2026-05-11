@@ -212,7 +212,7 @@ Example: on Monday `2026. 5. 11.`, set the reservation availability date to `202
 
 Useful environment variables:
 
-- `STUDIOMATE_OPERATION_INFO_PATH`: exact StudioMate operation-info URL path if the auto-navigation cannot find it, currently `/settings/operations`
+- `STUDIOMATE_OPERATION_INFO_PATH`: defaults to `/settings/operations`
 - `STUDIOMATE_RESERVATION_AVAILABLE_UNTIL`: optional override such as `2026. 5. 11.`
 - `STUDIOMATE_RESERVATION_EXTENSION_DAYS`: defaults to `13`
 - `STUDIOMATE_RESERVATION_EXTENSION_TIME`: defaults to `13:00`

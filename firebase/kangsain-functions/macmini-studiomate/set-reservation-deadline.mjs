@@ -5,7 +5,7 @@ import path from "node:path";
 
 const config = {
   baseUrl: env("STUDIOMATE_BASE_URL", "https://arcpilates.studiomate.kr"),
-  operationInfoPath: env("STUDIOMATE_OPERATION_INFO_PATH", ""),
+  operationInfoPath: env("STUDIOMATE_OPERATION_INFO_PATH", "/settings/operations"),
   profileDir: expandHome(env("STUDIOMATE_PROFILE_DIR", "~/ArchiveIN/automation/browser-profile")),
   outputDir: expandHome(env("STUDIOMATE_OUTPUT_DIR", "~/ArchiveIN/automation/studiomate-results")),
   headless: env("HEADLESS", "false") === "true",
@@ -87,7 +87,7 @@ try {
 }
 
 async function navigateToOperationInfo(page) {
-  const firstPath = config.operationInfoPath || "/settings";
+  const firstPath = config.operationInfoPath;
   await page.goto(new URL(firstPath, config.baseUrl).toString(), {
     waitUntil: "networkidle",
     timeout: 60000
