@@ -139,6 +139,45 @@ Example local paths:
 9. Move the raw Excel file to Google Drive archive.
 10. Run importer.
 
+## Phase 1 CLI
+
+The first local Mac mini CLI is:
+
+```bash
+npm run studiomate:member-excel
+```
+
+Default behavior is safe inspection only:
+
+```bash
+DRY_RUN=true npm run studiomate:member-excel
+```
+
+Real member Excel download requires an explicit confirmation flag:
+
+```bash
+DRY_RUN=false CONFIRM=true npm run studiomate:member-excel
+```
+
+Useful environment variables:
+
+- `STUDIOMATE_BASE_URL`: defaults to `https://arcpilates.studiomate.kr`
+- `STUDIOMATE_MEMBER_EXPORT_PATH`: defaults to `/users`
+- `STUDIOMATE_PROFILE_DIR`: defaults to `~/ArchiveIN/automation/browser-profile`
+- `STUDIOMATE_DOWNLOAD_DIR`: defaults to `~/ArchiveIN/automation/downloads`
+- `STUDIOMATE_DRIVE_ARCHIVE_DIR`: defaults to `~/ArchiveIN/automation/StudioMate Excel Archive`
+- `STUDIOMATE_IMPORT_RUN_LOG`: defaults to `~/ArchiveIN/automation/member-excel-runs.jsonl`
+- `HEADLESS`: defaults to `false`
+- `WAIT_FOR_LOGIN`: defaults to `false`
+
+If the persistent browser profile is not logged in, run:
+
+```bash
+HEADLESS=false WAIT_FOR_LOGIN=true DRY_RUN=true npm run studiomate:member-excel
+```
+
+Log in manually in the opened browser. The automation resumes after the member page loads and stores the logged-in session in the persistent browser profile.
+
 ## Implementation Phases
 
 ### Phase 1: Browser Download and Archive

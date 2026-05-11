@@ -1,11 +1,13 @@
 {
   "private": true,
   "scripts": {
-    "build:dashboard": "esbuild dashboard/src/vendor.js --bundle --format=iife --target=es2020 --outfile=dashboard/assets/vendor.js --minify"
+    "build:dashboard": "esbuild dashboard/src/vendor.js --bundle --format=iife --target=es2020 --outfile=dashboard/assets/vendor.js --minify",
+    "studiomate:member-excel": "node firebase/kangsain-functions/macmini-studiomate/download-member-excel.mjs"
   },
   "dependencies": {
     "chart.js": "^4.4.9",
-    "firebase": "^10.14.1"
+    "firebase": "^10.14.1",
+    "playwright": "^1.52.0"
   },
   "devDependencies": {
     "esbuild": "^0.25.12"
