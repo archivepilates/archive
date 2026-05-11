@@ -169,6 +169,8 @@ Useful environment variables:
 - `STUDIOMATE_DOWNLOAD_DIR`: defaults to `~/ArchiveIN/automation/downloads`
 - `STUDIOMATE_DRIVE_ARCHIVE_DIR`: defaults to `~/ArchiveIN/automation/StudioMate Excel Archive`
 - `STUDIOMATE_IMPORT_RUN_LOG`: defaults to `~/ArchiveIN/automation/member-excel-runs.jsonl`
+- `STUDIOMATE_MEMBER_EXCEL_INCLUDE_POINT`: defaults to `true`, checks `잔여 포인트`
+- `STUDIOMATE_MEMBER_EXCEL_INCLUDE_EXPIRED_TICKETS`: defaults to `true`, checks `만료된 수강권 포함`
 - `HEADLESS`: defaults to `false`
 - `WAIT_FOR_LOGIN`: defaults to `false`
 

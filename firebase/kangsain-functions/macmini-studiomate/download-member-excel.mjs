@@ -15,7 +15,9 @@ const config = {
   headless: env("HEADLESS", "false") === "true",
   waitForLogin: env("WAIT_FOR_LOGIN", "false") === "true",
   dryRun: env("DRY_RUN", "true") !== "false",
-  confirm: env("CONFIRM", "false") === "true"
+  confirm: env("CONFIRM", "false") === "true",
+  includeRemainingPoint: env("STUDIOMATE_MEMBER_EXCEL_INCLUDE_POINT", "true") !== "false",
+  includeExpiredTickets: env("STUDIOMATE_MEMBER_EXCEL_INCLUDE_EXPIRED_TICKETS", "true") !== "false"
 };
 
 const startedAt = new Date();
@@ -61,12 +63,16 @@ try {
     hasExcelButton: await hasExcelButton(page),
     memberCountText: (bodyText.match(/필터된\s*회원\s*\d+명/) || [])[0] || ""
   };
+  result.selectedOptions = {
+    includeRemainingPoint: config.includeRemainingPoint,
+    includeExpiredTickets: config.includeExpiredTickets
+  };
 
   if (config.dryRun) {
     result.ok = true;
     result.message = "DRY_RUN: member page inspected. Excel download click skipped.";
   } else {
-    const download = await clickExcelDownload(page);
+    const { download, selectedOptions } = await clickExcelDownload(page);
     const suggested = sanitizeFileName(download.suggestedFilename() || "studiomate-members.xlsx");
     const stagingPath = path.join(config.downloadDir, `${timestamp()}-${suggested}`);
     await download.saveAs(stagingPath);
@@ -86,6 +92,7 @@ try {
       archivePath,
       sourceSize: (await stat(stagingPath)).size,
       status: "downloaded",
+      selectedOptions,
       createdAt: new Date().toISOString()
     };
     await appendFile(config.runLogPath, `${JSON.stringify(runRecord)}\n`);
@@ -96,7 +103,8 @@ try {
       suggestedFilename: suggested,
       sha256: hash,
       stagingPath,
-      archivePath
+      archivePath,
+      selectedOptions
     };
   }
 } catch (error) {
@@ -171,9 +179,21 @@ async function clickExcelDownload(page) {
   if (!(await button.isVisible().catch(() => false))) {
     throw new Error("Excel download button not found on StudioMate members page.");
   }
-  const downloadPromise = page.waitForEvent("download", { timeout: 30000 });
   await button.click();
-  return downloadPromise;
+  await page.getByText("회원목록 엑셀 다운로드", { exact: false }).waitFor({ state: "visible", timeout: 10000 });
+
+  const selectedOptions = [];
+  if (config.includeRemainingPoint) {
+    selectedOptions.push(await ensureCheckbox(page, "잔여 포인트"));
+  }
+  if (config.includeExpiredTickets) {
+    selectedOptions.push(await ensureCheckbox(page, "만료된 수강권 포함"));
+  }
+
+  const downloadPromise = page.waitForEvent("download", { timeout: 120000 });
+  await page.locator("button").filter({ hasText: /^다운로드$/ }).last().click();
+  const download = await downloadPromise;
+  return { download, selectedOptions };
 }
 
 function excelDownloadButton(page) {
@@ -181,6 +201,19 @@ function excelDownloadButton(page) {
     .locator("button, a")
     .filter({ hasText: /엑셀\s*다운로드|엑셀다운로드|엑셀\s*다운/i })
     .first();
+}
+
+async function ensureCheckbox(page, labelText) {
+  const label = page.locator("label").filter({ hasText: labelText }).first();
+  if (!(await label.isVisible().catch(() => false))) {
+    throw new Error(`Excel option checkbox not found: ${labelText}`);
+  }
+  const checkedBefore = await label.locator("input").first().isChecked().catch(() => null);
+  if (checkedBefore !== true) {
+    await label.click();
+  }
+  const checkedAfter = await label.locator("input").first().isChecked().catch(() => null);
+  return { labelText, checkedBefore, checkedAfter };
 }
 
 async function waitForStableFile(filePath) {
