@@ -9,7 +9,7 @@
   <array>
     <string>/bin/zsh</string>
     <string>-lc</string>
-    <string>cd /Users/archivepilates/Documents/Codex/2026-05-07/archive &amp;&amp; DRY_RUN=true HEADLESS=true npm run studiomate:reservation-deadline</string>
+    <string>cd /Users/archivepilates/Documents/Codex/2026-05-07/archive &amp;&amp; TZ=Asia/Seoul DRY_RUN=true HEADLESS=true npm run studiomate:reservation-deadline</string>
   </array>
 
   <key>StartCalendarInterval</key>

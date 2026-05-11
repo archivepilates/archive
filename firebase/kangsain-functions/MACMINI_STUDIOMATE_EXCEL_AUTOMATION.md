@@ -204,11 +204,11 @@ Default target:
 
 - `프라이빗 수업`
 - `그룹 수업`
-- `예약 가능 일자`: run date
+- `예약 가능 일자`: weekly run date, normally that Monday
 - `13` days
 - `13:00`
 
-Example: on `2026. 5. 11.`, set the reservation availability date to `2026. 5. 11.` and auto-extend `13` days at `13:00`. After `13:00`, StudioMate opens reservations through `2026. 5. 24.`.
+Example: on Monday `2026. 5. 11.`, set the reservation availability date to `2026. 5. 11.` and auto-extend `13` days at `13:00`. After `13:00`, StudioMate opens reservations through `2026. 5. 24.`.
 
 Useful environment variables:
 
@@ -228,6 +228,7 @@ HEADLESS=false WAIT_FOR_LOGIN=true DRY_RUN=true npm run studiomate:reservation-d
 Recommended weekly schedule on the Mac mini:
 
 - Every Monday at `12:30`
+- Use the Mac mini local timezone, `Asia/Seoul`
 - Run in `DRY_RUN=true` until the UI path and field selectors are verified once
 - After verification, switch the scheduled command to `DRY_RUN=false CONFIRM=true`
 
