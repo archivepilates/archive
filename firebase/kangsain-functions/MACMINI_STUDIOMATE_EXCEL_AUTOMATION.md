@@ -103,7 +103,8 @@ Message queue before actual send.
 - Run at low frequency, such as once per day or when manually triggered.
 - Do not auto-send member/customer messages in phase 1.
 - Create member/customer message candidates only, and require manager approval.
-- Operator completion reports are allowed only for automation run status, sent to the configured KakaoTalk room after verification.
+- Operator completion reports are allowed only for automation run status, sent from `home@archivepilates.com` to `home@archivepilates.com` after verification.
+- Operator completion emails should be collected under the Gmail label `자동화 완료보고`.
 - Operator completion reports must stay concise and must not include individual member names unless an error or manual review requires it.
 - Deduplicate imports using file hash.
 - Deduplicate members by StudioMate member ID first, then phone, then exact name only as fallback.
