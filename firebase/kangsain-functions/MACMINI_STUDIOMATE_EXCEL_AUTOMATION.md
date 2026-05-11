@@ -101,8 +101,10 @@ Message queue before actual send.
 - Keep a persistent browser profile on the Mac mini so the manager can re-login manually if needed.
 - Stop the job and notify the operator if the login page, captcha, security warning, or changed export UI appears.
 - Run at low frequency, such as once per day or when manually triggered.
-- Do not auto-send messages in phase 1.
-- Create message candidates only, and require manager approval.
+- Do not auto-send member/customer messages in phase 1.
+- Create member/customer message candidates only, and require manager approval.
+- Operator completion reports are allowed only for automation run status, sent to the configured KakaoTalk room after verification.
+- Operator completion reports must stay concise and must not include individual member names unless an error or manual review requires it.
 - Deduplicate imports using file hash.
 - Deduplicate members by StudioMate member ID first, then phone, then exact name only as fallback.
 - Keep raw Excel files in Drive as source evidence; do not store raw personal data dumps in Git.
