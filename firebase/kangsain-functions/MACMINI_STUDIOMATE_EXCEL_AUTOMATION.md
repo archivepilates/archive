@@ -141,7 +141,9 @@ Example local paths:
 
 ## Phase 1 CLI
 
-The first local Mac mini CLI is:
+### Member Excel Download
+
+The first local Mac mini member Excel CLI is:
 
 ```bash
 npm run studiomate:member-excel
@@ -177,6 +179,61 @@ HEADLESS=false WAIT_FOR_LOGIN=true DRY_RUN=true npm run studiomate:member-excel
 ```
 
 Log in manually in the opened browser. The automation resumes after the member page loads and stores the logged-in session in the persistent browser profile.
+
+### Weekly Reservation Availability Deadline
+
+The local Mac mini CLI for StudioMate `설정 -> 운영정보 -> 07. 예약 가능 기한 설정` is:
+
+```bash
+npm run studiomate:reservation-deadline
+```
+
+Default behavior is safe inspection only:
+
+```bash
+DRY_RUN=true npm run studiomate:reservation-deadline
+```
+
+Real setting changes require explicit confirmation:
+
+```bash
+DRY_RUN=false CONFIRM=true npm run studiomate:reservation-deadline
+```
+
+Default target:
+
+- `프라이빗 수업`
+- `그룹 수업`
+- `예약 가능 일자`: run date + `13` days
+- `13` days
+- `13:00`
+
+Useful environment variables:
+
+- `STUDIOMATE_OPERATION_INFO_PATH`: exact StudioMate operation-info URL path if the auto-navigation cannot find it, currently `/settings/operations`
+- `STUDIOMATE_RESERVATION_AVAILABLE_UNTIL`: optional override such as `2026. 5. 24.`
+- `STUDIOMATE_RESERVATION_EXTENSION_DAYS`: defaults to `13`
+- `STUDIOMATE_RESERVATION_EXTENSION_TIME`: defaults to `13:00`
+- `STUDIOMATE_OUTPUT_DIR`: defaults to `~/ArchiveIN/automation/studiomate-results`
+- `WAIT_FOR_LOGIN`: defaults to `false`
+
+First login/setup run:
+
+```bash
+HEADLESS=false WAIT_FOR_LOGIN=true DRY_RUN=true npm run studiomate:reservation-deadline
+```
+
+Recommended weekly schedule on the Mac mini:
+
+- Every Monday at `12:30`
+- Run in `DRY_RUN=true` until the UI path and field selectors are verified once
+- After verification, switch the scheduled command to `DRY_RUN=false CONFIRM=true`
+
+A launchd template is available at:
+
+```bash
+firebase/kangsain-functions/macmini-studiomate/com.archive.studiomate-reservation-deadline.plist
+```
 
 ## Implementation Phases
 
