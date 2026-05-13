@@ -3,7 +3,9 @@
   "scripts": {
     "build:dashboard": "esbuild dashboard/src/vendor.js --bundle --format=iife --target=es2020 --outfile=dashboard/assets/vendor.js --minify",
     "studiomate:member-excel": "node firebase/kangsain-functions/macmini-studiomate/download-member-excel.mjs",
-    "studiomate:reservation-deadline": "node firebase/kangsain-functions/macmini-studiomate/set-reservation-deadline.mjs"
+    "studiomate:member-excel-job": "node firebase/kangsain-functions/macmini-studiomate/run-member-excel-job.mjs",
+    "studiomate:reservation-deadline": "node firebase/kangsain-functions/macmini-studiomate/set-reservation-deadline.mjs",
+    "studiomate:reservation-deadline-job": "node firebase/kangsain-functions/macmini-studiomate/run-reservation-deadline-job.mjs"
   },
   "dependencies": {
     "chart.js": "^4.4.9",

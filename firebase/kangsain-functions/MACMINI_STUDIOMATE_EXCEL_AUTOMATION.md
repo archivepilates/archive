@@ -144,6 +144,34 @@ Example local paths:
 
 ## Phase 1 CLI
 
+### LaunchAgent Jobs
+
+The Mac mini production path uses user LaunchAgents instead of Codex cron jobs, because Codex cron runs can be sandboxed away from the logged-in Chrome/Google network session.
+
+Active LaunchAgents:
+
+- `com.archive.studiomate-member-excel`: daily `23:00`, runs the member Excel job.
+- `com.archive.studiomate-reservation-deadline`: Mondays `12:30`, runs the reservation availability deadline job.
+
+Temporarily disabled:
+
+- `com.archive.studiomate-contacts-sync`: intended daily `23:10`, but keep unloaded until the Google Contacts token/storage account is revalidated. The current preflight guard blocks high-volume changes before apply.
+
+Manual checks:
+
+```bash
+launchctl list | rg 'com\\.archive\\.studiomate'
+launchctl kickstart -k gui/$(id -u)/com.archive.studiomate-member-excel
+```
+
+Failure controls:
+
+- Job wrappers call `node`/`python` directly instead of nested `npm run` during scheduled execution.
+- Transient Playwright/Node failures such as `Unknown system error -11` are retried.
+- Each step has a timeout and writes a JSON report under `~/ArchiveIN/automation/reports`.
+- Completion emails use the Gmail API and label `자동화 완료보고`.
+- Google Contacts sync runs preflight dry-run first and blocks apply if projected changes exceed `CONTACTS_SYNC_MAX_AUTO_CREATE` or `CONTACTS_SYNC_MAX_AUTO_UPDATE`.
+
 ### Member Excel Download
 
 The first local Mac mini member Excel CLI is:
