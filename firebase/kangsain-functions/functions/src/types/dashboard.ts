@@ -48,13 +48,31 @@ export interface DashboardTicketTopRow {
   종류수?: number;
 }
 
+export interface DashboardMonthlyActiveMemberRow {
+  월: string;
+  이용회원수: number;
+}
+
+export interface DashboardMemberSalesRow {
+  memberId: string;
+  memberName: string;
+  memberPhone: string;
+  totalRevenue: number;
+  lastMonth: string;
+  recentTicketName?: string;
+  recentPaymentDate?: string;
+  ticketSummary?: string;
+}
+
 export interface DashboardData {
   summary: DashboardSummaryRow[];
   강사별: DashboardInstructorSalesRow[];
   강사통계: DashboardInstructorStatsRow[];
   월별그룹평균가격: DashboardAveragePriceRow[];
   월별강사평균인원: DashboardInstructorAverageRow[];
+  월별이용회원: DashboardMonthlyActiveMemberRow[];
   수강권TOP5: DashboardTicketTopRow[];
+  회원매출: DashboardMemberSalesRow[];
   updatedAt: string;
 }
 

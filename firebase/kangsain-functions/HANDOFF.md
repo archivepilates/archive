@@ -10,10 +10,10 @@
 
 ## 배포 위치
 
-- 웹앱: `kangsain/`
+- 웹앱: `archivein/`
 - Firebase Functions: `firebase/kangsain-functions/functions/`
 - Firebase rules/indexes: `firebase/kangsain-functions/`
-- GitHub Pages URL: `https://archivepilates.github.io/archive/kangsain/`
+- GitHub Pages URL: `https://archivepilates.github.io/archive/archivein/`
 - Firebase project: `archive-pilates`
 - Functions region: `asia-northeast3`
 - Firestore location: `asia-northeast3`
@@ -41,7 +41,7 @@
 - 자동 태그 1단계는 규칙 기반이다: 30일 출석/결석, 메모 통증 키워드, 최근 출석 10회 기준 강사/시간대 패턴.
 - 강사용 앱의 회원 태그 표시는 예약상태, 고정 자동태그, 강사 수정 태그 영역으로 분리한다. 최근강사/시간대 패턴 태그는 운영자 앱에서 다룬다.
 - 강사용 앱은 14일치 `instructorViews`를 Firestore 실시간 구독한다. 알림 API 폴링으로 특정 수업/날짜가 갱신되면 앱 새로고침 없이 해당 날짜 뷰가 교체된다.
-- 앱 확인 URL은 Firebase Hosting `https://archive-pilates.web.app/kangsain/`를 우선 사용한다. GitHub Pages legacy build가 간헐적으로 멈춰 Firebase Hosting으로 정적 파일을 배포했다.
+- 앱 확인 URL은 Firebase Hosting `https://archive-pilates.web.app/archivein/`를 우선 사용한다. 기존 `/kangsain/` 경로는 `/archivein/`으로 리다이렉트한다.
 
 ## 스튜디오메이트 수업구분
 
@@ -93,7 +93,7 @@
 
 ## 테스트 방법
 
-1. `https://archivepilates.github.io/archive/kangsain/index.html?v=<latest-commit>` 접속.
+1. `https://archivepilates.github.io/archive/archivein/index.html?v=<latest-commit>` 접속.
 2. 테스트 로그인은 이메일/비밀번호 방식 사용.
 3. 로그인 후 정은영 강사 화면에서 날짜 이동.
 4. 확인 항목:
@@ -108,7 +108,7 @@
 ## 주의사항
 
 - 이 문서에는 비밀번호/토큰/개인 인증값을 남기지 않는다.
-- `kangsain/index 2.html`은 작업 중 생긴 untracked 파일로 보이며 현재 코드 작업에서는 건드리지 않았다.
+- 앱 정적 폴더명은 `archivein/`을 기준으로 한다. 기존 `kangsain/`에는 legacy redirect만 둔다.
 - Firebase Functions 배포 시 Node.js 20 런타임 지원 종료 경고가 나온다. 이후 Node 22 업그레이드가 필요할 수 있다.
 - `firebase-functions` 의존성도 구버전 경고가 나온다. 업그레이드는 breaking change 확인 후 별도 진행한다.
 

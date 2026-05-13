@@ -28,6 +28,9 @@ export interface StaffDoc {
   name: string;
   phone?: string;
   phoneLast4?: string;
+  color?: string;
+  themeColor?: string;
+  backgroundColor?: string;
   pinHash?: string;
   pinSalt?: string;
   pinSetAt?: Timestamp | null;
@@ -62,6 +65,48 @@ export interface LectureDoc {
   bookingCount: number;
   waitCount: number;
   cancelCount: number;
+  sourceHash: string;
+  sourceUpdatedAt: Timestamp | null;
+  syncedAt: Timestamp;
+  updatedAt: Timestamp;
+}
+
+export interface ConsultationDoc {
+  consultationId: string;
+  studioId: string;
+  date: string;
+  startAt: Timestamp | null;
+  endAt: Timestamp | null;
+  staffId: string;
+  staffName: string;
+  staffIds: string[];
+  staffNames: string[];
+  memberId: string;
+  memberName: string;
+  memberPhone: string;
+  channel: string;
+  status: "scheduled" | "deleted" | "unknown";
+  memo: string;
+  sourceHash: string;
+  sourceUpdatedAt: Timestamp | null;
+  syncedAt: Timestamp;
+  updatedAt: Timestamp;
+}
+
+export interface OtherScheduleDoc {
+  scheduleId: string;
+  studioId: string;
+  date: string;
+  startAt: Timestamp | null;
+  endAt: Timestamp | null;
+  staffId: string;
+  staffName: string;
+  staffIds: string[];
+  staffNames: string[];
+  title: string;
+  category: string;
+  status: "scheduled" | "deleted" | "unknown";
+  memo: string;
   sourceHash: string;
   sourceUpdatedAt: Timestamp | null;
   syncedAt: Timestamp;
@@ -130,6 +175,40 @@ export interface AttendanceSummaryDoc {
   updatedAt: Timestamp;
 }
 
+export interface AdminActionDoc {
+  actionId: string;
+  studioId: string;
+  date: string;
+  periodStart: string;
+  periodEnd: string;
+  actions: Array<{
+    actionKey: string;
+    type: "ticket_expiring" | "attendance_drop" | "long_absence" | "low_class" | "attendance_unchecked";
+    label: string;
+    title: string;
+    body: string;
+    level: "good" | "wait" | "bad";
+    memberId?: string;
+    memberName?: string;
+    lectureId?: string;
+    staffId?: string;
+    staffName?: string;
+    sort: string;
+  }>;
+  summary: {
+    total: number;
+    ticketExpiring: number;
+    attendanceDrop: number;
+    longAbsence: number;
+    lowClass: number;
+    attendanceUnchecked: number;
+  };
+  completedActionKeys?: string[];
+  completedByUid?: string;
+  completedAt?: Timestamp;
+  updatedAt: Timestamp;
+}
+
 export interface NoticeDoc {
   noticeId: string;
   studioId: string;
@@ -140,6 +219,8 @@ export interface NoticeDoc {
   refStatus: string;
   refLectureId: string;
   refBookingId: string;
+  refDate: string;
+  refDates: string[];
   updatedFor: string;
   sourceCreatedAt: string;
   sourceUpdatedAt: string;

@@ -1,6 +1,6 @@
-# 아카이브 강사IN Firebase Functions
+# 아카이브IN Firebase Functions
 
-이 폴더는 강사IN을 Google Apps Script 중심 구조에서 Firebase Cloud Functions + Firestore 구조로 전환하기 위한 1차 서버 구현입니다.
+이 폴더는 아카이브IN을 Google Apps Script 중심 구조에서 Firebase Cloud Functions + Firestore 구조로 전환하기 위한 1차 서버 구현입니다.
 
 ## 구조
 
@@ -8,7 +8,7 @@
 StudioMate API
   -> Cloud Functions
   -> Firestore
-  -> 강사IN 앱
+  -> 아카이브IN 앱
 ```
 
 ## 주요 함수
@@ -78,7 +78,7 @@ npm install
 npm run build
 ```
 
-GitHub Pages 강사IN 프론트는 `/kangsain` 폴더를 사용합니다. 실제 배포 전 `kangsain/firebase-config.example.js`를 복사해 `kangsain/firebase-config.js`를 만들고 Firebase Web App 설정값과 Web Push VAPID key를 입력해야 합니다.
+아카이브IN 프론트는 `/archivein` 폴더를 사용합니다. 실제 배포 전 `archivein/firebase-config.example.js`를 복사해 `archivein/firebase-config.js`를 만들고 Firebase Web App 설정값과 Web Push VAPID key를 입력해야 합니다. 기존 `/kangsain` 경로는 `/archivein`으로 리다이렉트합니다.
 
 ## 검증
 
@@ -106,7 +106,7 @@ npm run deploy
 전역 npm이 없는 로컬에서는 repo 루트에서 아래 스크립트로 도구 상태를 확인할 수 있습니다.
 
 ```bash
-scripts/bootstrap-kangsain-tools.sh
+scripts/bootstrap-archivein-tools.sh
 ```
 
 ## 주의

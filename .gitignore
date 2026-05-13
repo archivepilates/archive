@@ -4,3 +4,14 @@ firebase/kangsain-functions/functions/.env
 firebase/kangsain-functions/.firebase/
 firebase/kangsain-functions/firebase-debug.log
 firebase/kangsain-functions/firebase-debug.*.log
+node_modules/
+.firebase/
+.DS_Store
+firebase/.DS_Store
+
+# Local service account keys. Never commit these.
+.secrets/
+service-account*.json
+*service*account*.json
+archive-codex-operator*.json
+*.enc

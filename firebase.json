@@ -4,7 +4,7 @@
       "source": "firebase/kangsain-functions/functions",
       "codebase": "default",
       "runtime": "nodejs22",
-      "predeploy": ["npm --prefix \"$RESOURCE_DIR\" run build"],
+      "predeploy": ["node \"$RESOURCE_DIR/node_modules/typescript/bin/tsc\" -p \"$RESOURCE_DIR/tsconfig.json\""],
       "ignore": [
         "node_modules",
         ".git",
@@ -22,19 +22,19 @@
     "public": ".",
     "headers": [
       {
-        "source": "/kangsain/index.html",
+        "source": "/archivein/index.html",
         "headers": [
           { "key": "Cache-Control", "value": "no-cache, no-store, must-revalidate" }
         ]
       },
       {
-        "source": "/kangsain/",
+        "source": "/archivein/",
         "headers": [
           { "key": "Cache-Control", "value": "no-cache, no-store, must-revalidate" }
         ]
       },
       {
-        "source": "/kangsain/sw.js",
+        "source": "/archivein/sw.js",
         "headers": [
           { "key": "Cache-Control", "value": "no-cache, no-store, must-revalidate" }
         ]
@@ -70,6 +70,8 @@
     "ignore": [
       ".git",
       ".git/**",
+      ".firebase",
+      ".firebase/**",
       "firebase/**",
       "firebase.json",
       "package.json",
@@ -78,6 +80,32 @@
       "**/node_modules/**",
       "firebase-debug.log",
       "firebase-debug.*.log"
+    ],
+    "redirects": [
+      {
+        "source": "/kangsain",
+        "destination": "/archivein/",
+        "type": 301
+      },
+      {
+        "source": "/kangsain/",
+        "destination": "/archivein/",
+        "type": 301
+      },
+      {
+        "source": "/kangsain/**",
+        "destination": "/archivein/",
+        "type": 301
+      }
+    ],
+    "rewrites": [
+      {
+        "source": "/aki/**",
+        "run": {
+          "serviceId": "aki-agent-api",
+          "region": "asia-northeast3"
+        }
+      }
     ]
   }
 }

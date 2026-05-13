@@ -19,4 +19,4 @@ cd "$FUNCTIONS_DIR"
 "${NPM_CMD[@]}" install
 "${NPM_CMD[@]}" run typecheck
 "${NPM_CMD[@]}" run build
-echo "ArchiveIN Firebase tools are ready. This legacy script name is kept for compatibility."
+echo "ArchiveIN Firebase tools are ready."

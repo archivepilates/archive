@@ -6,6 +6,8 @@ import type {
   DashboardInstructorAverageRow,
   DashboardInstructorSalesRow,
   DashboardInstructorStatsRow,
+  DashboardMonthlyActiveMemberRow,
+  DashboardMemberSalesRow,
   DashboardSummaryRow,
   DashboardTicketTopRow,
 } from "../types/dashboard";
@@ -18,43 +20,89 @@ const SHEETS = {
   instructorStats: "강사통계_Long",
   ticketAnalysis: "수강권분석_Master",
   ticketSales: "수강권매출_Master",
+  ticketSalesRaw: "수강권매출_원본",
+  memberSales: "회원별누적매출",
 };
+
+const MONTHLY_ACTIVE_MEMBER_SHEETS = [
+  "월별유효회원",
+  "월별 유효회원",
+  "유효회원_월별",
+  "유효회원 월별",
+  "월별수강권보유회원",
+  "월별 수강권 보유회원",
+  "월별전체이용회원",
+  "월별 전체 이용회원",
+  "전체이용회원",
+  "전체 이용회원",
+  "월별이용회원_전체",
+  "월별 이용회원_전체",
+  "이용회원_월별",
+  "이용회원 월별",
+  "월별이용회원",
+  "월별 이용회원",
+  "이용회원_Master",
+  "이용회원수_Master",
+  "월별이용회원_Master",
+];
 
 export async function syncDashboardFromSheets(input?: {
   spreadsheetId?: string;
-}): Promise<{ summaryRows: number; instructorRows: number; updatedAt: string }> {
+}): Promise<{
+  summaryRows: number;
+  instructorRows: number;
+  memberSalesRows: number;
+  updatedAt: string;
+  warning?: string;
+}> {
   const spreadsheetId = input?.spreadsheetId || DASHBOARD_DB_SPREADSHEET_ID;
-  const data = await loadDashboardData(spreadsheetId);
+  const { data, warning } = await loadDashboardData(spreadsheetId);
   await saveDashboardSnapshot({ data, sourceSpreadsheetId: spreadsheetId });
   logger.info("syncDashboardFromSheets completed", {
     summaryRows: data.summary.length,
     instructorRows: data.강사별.length,
+    memberSalesRows: data.회원매출.length,
+    warning,
   });
   return {
     summaryRows: data.summary.length,
     instructorRows: data.강사별.length,
+    memberSalesRows: data.회원매출.length,
     updatedAt: data.updatedAt,
+    warning,
   };
 }
 
-async function loadDashboardData(spreadsheetId: string): Promise<DashboardData> {
+async function loadDashboardData(spreadsheetId: string): Promise<{ data: DashboardData; warning?: string }> {
   try {
-    const [settlement, instructorStats, ticketAnalysis, ticketSales] = await Promise.all([
+    const [settlement, instructorStats, ticketAnalysis, ticketSales, ticketSalesRaw, memberSales, monthlyActiveMembers] = await Promise.all([
       readSheetRows(spreadsheetId, SHEETS.settlement),
       readSheetRows(spreadsheetId, SHEETS.instructorStats),
       readSheetRows(spreadsheetId, SHEETS.ticketAnalysis),
       readSheetRows(spreadsheetId, SHEETS.ticketSales),
+      readSheetRows(spreadsheetId, SHEETS.ticketSalesRaw),
+      readSheetRows(spreadsheetId, SHEETS.memberSales),
+      readFirstAvailableSheetRows(spreadsheetId, MONTHLY_ACTIVE_MEMBER_SHEETS),
     ]);
 
-    return buildDashboardData({
-      settlement,
-      instructorStats,
-      ticketAnalysis,
-      ticketSales,
-    });
+    return {
+      data: buildDashboardData({
+        settlement,
+        instructorStats,
+        ticketAnalysis,
+        ticketSales,
+        ticketSalesRaw,
+        memberSales,
+        monthlyActiveMembers,
+      }),
+    };
   } catch (err) {
+    const message = err instanceof Error ? err.message : String(err);
     logger.warn("Google Sheets direct read failed; falling back to legacy dashboard endpoint", err);
-    return fetchLegacyDashboardData();
+    return {
+      data: await fetchLegacyDashboardData(),
+      warning: `정산 시트 직접 읽기 실패: ${message}`,
+    };
   }
 }
 
@@ -70,11 +118,21 @@ export function buildDashboardData(input: {
   instructorStats: SheetRow[];
   ticketAnalysis: SheetRow[];
   ticketSales: SheetRow[];
+  ticketSalesRaw?: SheetRow[];
+  memberSales?: SheetRow[];
+  monthlyActiveMembers?: SheetRow[];
 }): DashboardData {
   const settlement = input.settlement.map(normalizeSettlementRow).filter((row) => row.월);
   const instructorStats = input.instructorStats.map(normalizeInstructorStatsRow).filter((row) => row.월 && row.강사);
   const ticketAnalysis = input.ticketAnalysis.map(normalizeTicketAnalysisRow).filter((row) => row.월);
   const ticketSales = input.ticketSales.map(normalizeTicketSalesRow).filter((row) => row.월);
+  const ticketSalesRaw = (input.ticketSalesRaw || []).map(normalizeTicketSalesRow).filter((row) => row.월);
+  const memberSales = (input.memberSales || []).map(normalizeMemberSalesRow).filter(
+    (row) => row.totalRevenue > 0 && (row.memberId || row.memberName || row.memberPhone),
+  );
+  const monthlyActiveMembers = (input.monthlyActiveMembers || [])
+    .map(normalizeMonthlyActiveMemberRow)
+    .filter((row) => row.월 && row.이용회원수 > 0);
 
   return {
     summary: buildSummary(settlement, instructorStats, ticketSales),
@@ -100,7 +158,9 @@ export function buildDashboardData(input: {
       강사: row.강사,
       그룹평균인원: round2(row.그룹출석평균),
     })),
+    월별이용회원: monthlyActiveMembers.length ? monthlyActiveMembers : buildMonthlyActiveMembers(ticketAnalysis),
     수강권TOP5: buildTicketTop5(ticketAnalysis),
+    회원매출: memberSales.length ? memberSales : buildMemberSales(ticketSalesRaw.length ? ticketSalesRaw : ticketSales),
     updatedAt: new Date().toISOString(),
   };
 }
@@ -124,6 +184,42 @@ async function readSheetRows(spreadsheetId: string, sheetName: string): Promise<
     .map((row) =>
       Object.fromEntries(headers.map((header, index) => [String(header || `col${index + 1}`), row[index] ?? ""])),
     );
+}
+
+async function readFirstAvailableSheetRows(spreadsheetId: string, sheetNames: string[]): Promise<SheetRow[]> {
+  let lastError: unknown = null;
+  const candidates: Array<{ sheetName: string; rows: number; sample?: SheetRow; normalizedRows: DashboardMonthlyActiveMemberRow[] }> = [];
+  for (const sheetName of sheetNames) {
+    try {
+      const rows = await readSheetRows(spreadsheetId, sheetName);
+      const normalizedRows = rows.map(normalizeMonthlyActiveMemberRow).filter((row) => row.월 && row.이용회원수 > 0);
+      candidates.push({ sheetName, rows: rows.length, sample: rows[0], normalizedRows });
+    } catch (err) {
+      lastError = err;
+    }
+  }
+  const selected =
+    candidates.find((candidate) => candidate.normalizedRows.some((row) => row.이용회원수 > 0 && row.이용회원수 < 500)) ||
+    candidates[0];
+  if (selected) {
+    logger.info("Monthly active member sheet loaded", {
+      sheetName: selected.sheetName,
+      rows: selected.rows,
+      sample: selected.sample,
+      candidates: candidates.map((candidate) => ({
+        sheetName: candidate.sheetName,
+        rows: candidate.rows,
+        sample: candidate.sample,
+        normalizedSample: candidate.normalizedRows.slice(0, 3),
+      })),
+    });
+    return await readSheetRows(spreadsheetId, selected.sheetName);
+  }
+  logger.warn("Monthly active member sheet not found; using fallback from ticket analysis", {
+    sheetNames,
+    lastError: lastError instanceof Error ? lastError.message : String(lastError || ""),
+  });
+  return [];
 }
 
 async function getGoogleAccessToken(): Promise<string> {
@@ -216,6 +312,42 @@ function buildTicketTop5(rows: ReturnType<typeof normalizeTicketAnalysisRow>[]):
   return output.sort((a, b) => (a.월 === b.월 ? b.값 - a.값 : a.월.localeCompare(b.월)));
 }
 
+function buildMonthlyActiveMembers(rows: ReturnType<typeof normalizeTicketAnalysisRow>[]): DashboardMonthlyActiveMemberRow[] {
+  return [...groupByMonth(rows).entries()]
+    .map(([month, monthRows]) => ({
+      월: month,
+      이용회원수: round0(sum(monthRows, "유료출석건수")),
+    }))
+    .filter((row) => row.이용회원수 > 0)
+    .sort((a, b) => a.월.localeCompare(b.월));
+}
+
+function buildMemberSales(rows: ReturnType<typeof normalizeTicketSalesRow>[]): DashboardMemberSalesRow[] {
+  const map = new Map<string, DashboardMemberSalesRow>();
+  rows
+    .filter((row) => row.총결제금액 > 0 && (row.회원ID || row.회원명 || row.회원연락처))
+    .forEach((row) => {
+      const key = row.회원ID || normalizePhone(row.회원연락처) || row.회원명;
+      const current = map.get(key) || {
+        memberId: row.회원ID,
+        memberName: row.회원명,
+        memberPhone: normalizePhone(row.회원연락처),
+        totalRevenue: 0,
+        lastMonth: "",
+      };
+      current.memberId ||= row.회원ID;
+      current.memberName ||= row.회원명;
+      current.memberPhone ||= normalizePhone(row.회원연락처);
+      current.totalRevenue += row.총결제금액;
+      if (row.월 > current.lastMonth) current.lastMonth = row.월;
+      map.set(key, current);
+    });
+
+  return [...map.values()]
+    .map((row) => ({ ...row, totalRevenue: round0(row.totalRevenue) }))
+    .sort((a, b) => b.totalRevenue - a.totalRevenue || a.memberName.localeCompare(b.memberName, "ko"));
+}
+
 function emptySummary(month: string): DashboardSummaryRow {
   return {
     월: month,
@@ -271,8 +403,66 @@ function normalizeTicketAnalysisRow(row: SheetRow) {
 function normalizeTicketSalesRow(row: SheetRow) {
   return {
     월: monthKey(row.기준월),
-    총결제금액: numberValue(row.총결제금액),
+    회원ID: stringValue(firstValue(row, ["회원ID", "회원Id", "회원id", "회원번호", "회원코드", "회원고유번호", "memberId", "member_id"])),
+    회원명: stringValue(firstValue(row, ["회원명", "회원", "고객명", "고객", "성명", "이름", "name", "memberName"])),
+    회원연락처: stringValue(firstValue(row, ["회원연락처", "연락처", "휴대폰", "휴대폰번호", "전화번호", "핸드폰", "mobile", "phone"])),
+    총결제금액: numberValue(
+      firstValue(row, ["총결제금액", "결제금액합계", "결제금액", "실결제금액", "매출", "금액", "판매금액", "결제총액", "amount", "price"]),
+    ),
   };
+}
+
+function normalizeMemberSalesRow(row: SheetRow): DashboardMemberSalesRow {
+  return {
+    memberId: stringValue(firstValue(row, ["회원ID", "회원Id", "회원id", "회원번호", "회원코드", "memberId", "member_id"])),
+    memberName: stringValue(firstValue(row, ["회원명", "회원", "고객명", "고객", "성명", "이름", "memberName", "name"])),
+    memberPhone: normalizePhone(firstValue(row, ["연락처", "회원연락처", "휴대폰", "휴대폰번호", "전화번호", "memberPhone", "phone"])),
+    totalRevenue: numberValue(firstValue(row, ["누적매출", "총누적매출", "총매출", "totalRevenue", "revenue"])),
+    lastMonth: monthKey(firstValue(row, ["최근결제월", "최근월", "lastMonth"])),
+    recentTicketName: stringValue(firstValue(row, ["최근수강권명", "최근수강권", "recentTicketName"])),
+    recentPaymentDate: dateKey(firstValue(row, ["최근결제일", "recentPaymentDate"])),
+    ticketSummary: stringValue(firstValue(row, ["보유수강권 요약", "보유수강권", "수강권요약", "ticketSummary"])),
+  };
+}
+
+function normalizeMonthlyActiveMemberRow(row: SheetRow): DashboardMonthlyActiveMemberRow {
+  const memberList = stringValue(firstValue(row, ["회원목록", "회원 리스트", "유효회원목록", "수강권보유회원목록", "membersList"]));
+  const dedupedMemberCount = countDistinctMembers(memberList);
+  const sheetMemberCount = numberValue(
+    firstValue(row, [
+      "월유효회원수",
+      "유효회원수",
+      "월별유효회원수",
+      "수강권보유회원수",
+      "수강권 보유 회원수",
+      "이용회원수",
+      "월별이용회원수",
+      "회원수",
+      "이용회원",
+      "활성이용회원수",
+      "activeMembers",
+      "members",
+    ]),
+  );
+  return {
+    월: monthKey(firstValue(row, ["기준월", "월", "month", "월별"])),
+    이용회원수: sheetMemberCount || dedupedMemberCount,
+  };
+}
+
+function countDistinctMembers(memberList: string): number {
+  if (!memberList) return 0;
+  const members = memberList
+    .split(/\s*,\s*/)
+    .map((item) => item.trim())
+    .filter(Boolean)
+    .map((item) => {
+      const phone = item.match(/01\d[-\d\s)]{7,}/)?.[0]?.replace(/\D/g, "");
+      const name = item.replace(/\([^)]*\)/g, "").trim();
+      return phone || name;
+    })
+    .filter(Boolean);
+  return new Set(members).size;
 }
 
 function normalizeDashboardPayload(input: Partial<DashboardData>): DashboardData {
@@ -323,6 +513,12 @@ function normalizeDashboardPayload(input: Partial<DashboardData>): DashboardData
         그룹평균인원: numberValue(row.그룹평균인원),
       }))
       .filter((row) => row.월 && row.강사),
+    월별이용회원: (input.월별이용회원 || [])
+      .map((row) => ({
+        월: monthKey(row.월),
+        이용회원수: numberValue(row.이용회원수),
+      }))
+      .filter((row) => row.월 && row.이용회원수 > 0),
     수강권TOP5: (input.수강권TOP5 || [])
       .map((row) => ({
         월: monthKey(row.월),
@@ -331,8 +527,27 @@ function normalizeDashboardPayload(input: Partial<DashboardData>): DashboardData
         종류수: numberValue(row.종류수),
       }))
       .filter((row) => row.월 && row.라벨),
+    회원매출: (input.회원매출 || [])
+      .map((row) => ({
+        memberId: stringValue(row.memberId),
+        memberName: stringValue(row.memberName),
+        memberPhone: normalizePhone(row.memberPhone),
+        totalRevenue: numberValue(row.totalRevenue),
+        lastMonth: monthKey(row.lastMonth),
+        recentTicketName: stringValue(row.recentTicketName),
+        recentPaymentDate: stringValue(row.recentPaymentDate),
+        ticketSummary: stringValue(row.ticketSummary),
+      }))
+      .filter((row) => row.totalRevenue > 0 && (row.memberId || row.memberName || row.memberPhone)),
     updatedAt: stringValue(input.updatedAt) || new Date().toISOString(),
   };
+}
+
+function firstValue(row: SheetRow, keys: string[]): unknown {
+  for (const key of keys) {
+    if (row[key] != null && row[key] !== "") return row[key];
+  }
+  return "";
 }
 
 function monthKey(value: unknown): string {
@@ -344,6 +559,17 @@ function monthKey(value: unknown): string {
   const matched = text.match(/(20\d{2})[-./년\s]*(\d{1,2})/);
   if (matched) return `${matched[1]}-${matched[2].padStart(2, "0")}`;
   return "";
+}
+
+function dateKey(value: unknown): string {
+  if (typeof value === "number") {
+    const date = new Date(Math.round((value - 25569) * 86400 * 1000));
+    return `${date.getUTCFullYear()}-${String(date.getUTCMonth() + 1).padStart(2, "0")}-${String(date.getUTCDate()).padStart(2, "0")}`;
+  }
+  const text = stringValue(value);
+  const matched = text.match(/(20\d{2})[-./년\s]*(\d{1,2})[-./월\s]*(\d{1,2})/);
+  if (matched) return `${matched[1]}-${matched[2].padStart(2, "0")}-${matched[3].padStart(2, "0")}`;
+  return text;
 }
 
 function weightedPercent<T>(rows: T[], valueKey: keyof T, weightKey: keyof T): number {
@@ -370,6 +596,10 @@ function numberValue(value: unknown): number {
   if (typeof value === "number") return value;
   if (value == null || value === "") return 0;
   return Number(String(value).replace(/,/g, "").replace("%", "").trim()) || 0;
+}
+
+function normalizePhone(value: unknown): string {
+  return String(value ?? "").replace(/\D/g, "");
 }
 
 function round0(value: number): number {

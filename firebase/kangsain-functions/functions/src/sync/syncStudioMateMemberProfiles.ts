@@ -1,8 +1,9 @@
 import { logger } from "firebase-functions";
 import type { BookingDoc, MemberProfileDoc } from "../types/models";
 import { refs } from "../firestore/refs";
+import { saveRawMirrorBatch } from "../firestore/rawMirrorRepository";
 import { StudioMateClient } from "../studiomate/studiomateClient";
-import { nowTimestamp, parseStudioMateDateTime } from "../utils/date";
+import { nowTimestamp, parseStudioMateDateTime, todayKst } from "../utils/date";
 
 export async function syncStudioMateMemberProfiles(input: {
   studioId: string;
@@ -16,6 +17,14 @@ export async function syncStudioMateMemberProfiles(input: {
     const results = await Promise.allSettled(
       chunk.map(async (member) => {
         const raw = await client.getMemberById(member.memberId);
+        await saveRawMirrorBatch({
+          studioId: input.studioId,
+          dataset: "staffMemberProfiles",
+          sourcePath: "/v2/staff/members/{memberId}",
+          records: [{ member, raw }],
+          mirrorDate: todayKst(),
+          idFor: () => member.memberId,
+        });
         const data = raw.data || raw;
         const doc: MemberProfileDoc = {
           memberId: member.memberId,
@@ -31,6 +40,7 @@ export async function syncStudioMateMemberProfiles(input: {
     results
       .filter((result): result is PromiseRejectedResult => result.status === "rejected")
       .forEach((result) => logger.warn("syncStudioMateMemberProfiles member failed", { message: String(result.reason) }));
+    if (index + 5 < members.length) await sleep(250);
   }
 
   logger.info("syncStudioMateMemberProfiles completed", { studioId: input.studioId, members: members.length });
@@ -50,4 +60,8 @@ function uniqueMembers(bookings: BookingDoc[]): Array<{ memberId: string; member
 function stringValue(value: unknown): string {
   if (value == null) return "";
   return String(value).trim();
+}
+
+function sleep(ms: number): Promise<void> {
+  return new Promise((resolve) => setTimeout(resolve, ms));
 }

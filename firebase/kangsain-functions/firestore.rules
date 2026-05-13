@@ -36,6 +36,12 @@ service cloud.firestore {
         );
     }
 
+    function isIncludedStaff(data) {
+      return signedIn() &&
+        data.staffIds is list &&
+        request.auth.token.staffId in data.staffIds;
+    }
+
     function bookingCanUpdateAttendance(bookingId) {
       let booking = get(/databases/$(database)/documents/bookings/$(bookingId)).data;
       return booking.appStatus == 'reserved' &&
@@ -87,8 +93,32 @@ service cloud.firestore {
       allow write: if false;
     }
 
+    match /consultations/{consultationId} {
+      allow read: if isManager() || sameStudio(resource.data.studioId) || isInstructor(resource.data.staffId) || isIncludedStaff(resource.data);
+      allow write: if false;
+    }
+
+    match /otherSchedules/{scheduleId} {
+      allow read: if isManager() || sameStudio(resource.data.studioId) || isInstructor(resource.data.staffId) || isIncludedStaff(resource.data);
+      allow write: if false;
+    }
+
     match /attendanceSummaries/{summaryId} {
       allow read, write: if false;
+    }
+
+    match /adminActions/{actionId} {
+      allow read: if isManager();
+      allow update: if isManager() &&
+        request.resource.data.diff(resource.data).affectedKeys().hasOnly([
+          'completedActionKeys',
+          'completedByUid',
+          'completedAt'
+        ]) &&
+        request.resource.data.completedActionKeys is list &&
+        request.resource.data.completedByUid == request.auth.uid &&
+        request.resource.data.completedAt is timestamp;
+      allow write: if false;
     }
 
     match /memberTags/{memberId} {
@@ -171,9 +201,28 @@ service cloud.firestore {
       allow write: if false;
     }
 
+    match /studiomateRaw/{path=**} {
+      allow read, write: if false;
+    }
+
     match /syncStates/{syncName} {
       allow read: if isManager();
       allow write: if false;
+    }
+
+    match /adminSyncRequests/{requestId} {
+      allow read: if isManager();
+      allow create: if
+        isManager() &&
+        request.resource.data.requestId == requestId &&
+        request.resource.data.studioId is string &&
+        sameStudio(request.resource.data.studioId) &&
+        request.resource.data.startDate is string &&
+        request.resource.data.endDate is string &&
+        request.resource.data.createdByUid == request.auth.uid &&
+        request.resource.data.status == 'pending' &&
+        request.resource.data.createdAt is timestamp;
+      allow update, delete: if false;
     }
 
     match /dashboardSnapshots/{snapshotId} {

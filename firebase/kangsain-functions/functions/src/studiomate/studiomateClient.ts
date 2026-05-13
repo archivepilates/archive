@@ -61,6 +61,24 @@ export class StudioMateClient {
     return Array.isArray(result) ? result : Array.isArray(result.data) ? result.data : [];
   }
 
+  async getEtcSchedules(params: { startDate: string; endDate: string }): Promise<any[]> {
+    const limit = 300;
+    const schedules: any[] = [];
+    for (let page = 1; page <= 20; page++) {
+      const query = new URLSearchParams({
+        start_date: params.startDate,
+        end_date: params.endDate,
+        limit: String(limit),
+        page: String(page),
+      });
+      const result = await this.request("GET", `/v2/staff/etcSchedule?${query.toString()}`);
+      const rows = extractRows(result);
+      schedules.push(...rows);
+      if (rows.length < limit || isLastPage(result, page)) break;
+    }
+    return schedules;
+  }
+
   async updateBookingStatus(params: { bookingId: string; status: string }): Promise<void> {
     await this.request("PATCH", `/staff/booking/${encodeURIComponent(params.bookingId)}/status`, {
       status: params.status,
@@ -125,4 +143,17 @@ export class StudioMateClient {
       );
     return text ? JSON.parse(text) : {};
   }
+}
+
+function extractRows(result: any): any[] {
+  if (Array.isArray(result)) return result;
+  if (Array.isArray(result?.data)) return result.data;
+  if (Array.isArray(result?.data?.data)) return result.data.data;
+  return [];
+}
+
+function isLastPage(result: any, page: number): boolean {
+  const meta = result?.meta || result?.data?.meta;
+  const lastPage = Number(meta?.last_page || meta?.lastPage || meta?.total_pages || 0);
+  return lastPage > 0 && page >= lastPage;
 }

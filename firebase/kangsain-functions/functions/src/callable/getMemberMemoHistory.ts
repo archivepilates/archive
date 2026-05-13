@@ -3,6 +3,7 @@ import { getRecentMemberBookings, staffHasHandledMember } from "../firestore/boo
 import { getMemberMemoHistory } from "../firestore/memberMemoRepository";
 import { refs } from "../firestore/refs";
 import { requireStaff, isManagerRole } from "../security/authGuards";
+import { attendanceTotals } from "../utils/attendance";
 import { addDays, todayKst } from "../utils/date";
 import { AppError } from "../utils/errors";
 
@@ -47,11 +48,5 @@ export async function getMemberMemoHistoryHandler(request: CallableRequest): Pro
 }
 
 function buildFallbackSummary(rows: Awaited<ReturnType<typeof getRecentMemberBookings>>) {
-  return {
-    attended: rows.filter((row) => row.attendanceStatus === "attended").length,
-    absent: rows.filter((row) => row.attendanceStatus === "absent").length,
-    cancel: rows.filter((row) => row.appStatus === "cancel").length,
-    waitCancel: rows.filter((row) => row.appStatus === "wait_cancel").length,
-    total: rows.length,
-  };
+  return attendanceTotals(rows);
 }

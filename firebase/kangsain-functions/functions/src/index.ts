@@ -1,5 +1,6 @@
 import "./config/firebase";
-import { onCall, HttpsError } from "firebase-functions/v2/https";
+import { onCall, onRequest, HttpsError } from "firebase-functions/v2/https";
+import { onDocumentCreated } from "firebase-functions/v2/firestore";
 import { onSchedule } from "firebase-functions/v2/scheduler";
 import { logger } from "firebase-functions";
 import { REGION, TIMEZONE } from "./config/constants";
@@ -21,12 +22,21 @@ import {
   setupStaffPinWithTempCodeHandler,
 } from "./callable/staffPinAuth";
 import { sendAttendanceReminder } from "./push/sendAttendanceReminder";
-import { requireStaff, requireManager } from "./security/authGuards";
+import { isManagerRole, requireStaff, requireManager } from "./security/authGuards";
 import { syncManagerStaffs } from "./sync/syncManagerStaffs";
 import { syncDashboardFromSheets } from "./sync/syncDashboardFromSheets";
+import { preSecurityRawMirror } from "./sync/preSecurityRawMirror";
+import { getStaffByUid } from "./firestore/staffRepository";
+import { nowTimestamp } from "./utils/date";
 
-const callableOptions = { region: REGION, secrets: allSecrets };
+const callableOptions = { region: REGION, secrets: allSecrets, invoker: "public" as const };
 const longCallableOptions = { ...callableOptions, timeoutSeconds: 540, memory: "512MiB" as const };
+const longRequestOptions = {
+  region: REGION,
+  secrets: allSecrets,
+  timeoutSeconds: 540,
+  memory: "512MiB" as const,
+};
 const scheduleOptions = {
   region: REGION,
   timeZone: TIMEZONE,
@@ -84,6 +94,36 @@ export const scheduledSyncDashboardDaily = onSchedule(
     await syncDashboardFromSheets();
   },
 );
+
+export const scheduledPreSecurityRawMirror = onSchedule(
+  {
+    ...scheduleOptions,
+    schedule: "20 12 12 5 *",
+  },
+  async () => {
+    await preSecurityRawMirror();
+  },
+);
+
+export const syncDashboardNow = onRequest(longRequestOptions, async (request, response) => {
+  if (request.method === "OPTIONS") {
+    response.set("Access-Control-Allow-Origin", "*");
+    response.set("Access-Control-Allow-Methods", "GET,POST,OPTIONS");
+    response.set("Access-Control-Allow-Headers", "Content-Type,Authorization");
+    response.status(204).send("");
+    return;
+  }
+  try {
+    const result = await syncDashboardFromSheets();
+    response.set("Access-Control-Allow-Origin", "*");
+    response.status(200).json({ ok: true, ...result });
+  } catch (err) {
+    const message = err instanceof Error ? err.message : String(err);
+    logger.error("syncDashboardNow failed", { message });
+    response.set("Access-Control-Allow-Origin", "*");
+    response.status(500).json({ ok: false, error: message });
+  }
+});
 
 export const getInstructorHome = onCall(callableOptions, async (request) => {
   try {
@@ -167,7 +207,17 @@ export const adminSyncLecturesRange = onCall(longCallableOptions, async (request
     if (!/^\d{4}-\d{2}-\d{2}$/.test(startDate) || !/^\d{4}-\d{2}-\d{2}$/.test(endDate)) {
       throw new HttpsError("invalid-argument", "startDate/endDate가 필요합니다");
     }
-    return await syncLecturesRange({ studioId: staff.studioId, startDate, endDate });
+    const lecturesResult = await syncLecturesRange({ studioId: staff.studioId, startDate, endDate });
+    let dashboardResult: Awaited<ReturnType<typeof syncDashboardFromSheets>> | null = null;
+    let dashboardError = "";
+    try {
+      dashboardResult = await syncDashboardFromSheets();
+      if (dashboardResult.warning) dashboardError = dashboardResult.warning;
+    } catch (dashboardErr) {
+      dashboardError = dashboardErr instanceof Error ? dashboardErr.message : String(dashboardErr);
+      logger.warn("adminSyncLecturesRange dashboard sync failed", { dashboardError });
+    }
+    return { ...lecturesResult, dashboard: dashboardResult, dashboardError };
   } catch (err) {
     logger.error("adminSyncLecturesRange failed", err);
     throw toHttpsError(err);
@@ -193,3 +243,72 @@ export const adminPollManagerNotices = onCall(callableOptions, async (request) =
     throw toHttpsError(err);
   }
 });
+
+export const processAdminSyncRequest = onDocumentCreated(
+  {
+    ...scheduleOptions,
+    document: "adminSyncRequests/{requestId}",
+  },
+  async (event) => {
+    const snap = event.data;
+    if (!snap) return;
+    const ref = snap.ref;
+    const data = snap.data() as {
+      requestId?: string;
+      studioId?: string;
+      startDate?: string;
+      endDate?: string;
+      createdByUid?: string;
+      status?: string;
+    };
+    const startDate = String(data.startDate || "");
+    const endDate = String(data.endDate || "");
+    try {
+      await ref.set({ status: "running", startedAt: nowTimestamp(), lastError: null }, { merge: true });
+      if (data.status !== "pending") throw new Error("이미 처리된 동기화 요청입니다");
+      if (!data.createdByUid) throw new Error("요청자 정보가 없습니다");
+      if (!/^\d{4}-\d{2}-\d{2}$/.test(startDate) || !/^\d{4}-\d{2}-\d{2}$/.test(endDate)) {
+        throw new Error("startDate/endDate가 필요합니다");
+      }
+      const staff = await getStaffByUid(data.createdByUid);
+      if (!staff || !staff.active || !isManagerRole(staff.role)) throw new Error("운영자 권한이 필요합니다");
+      const studioId = String(data.studioId || staff.studioId);
+      let noticeError = "";
+      let dashboardError = "";
+      try {
+        await pollManagerNotices({ studioId });
+      } catch (err) {
+        noticeError = err instanceof Error ? err.message : String(err);
+        logger.warn("processAdminSyncRequest notice sync failed", { requestId: event.params.requestId, noticeError });
+      }
+      const lecturesResult = await syncLecturesRange({ studioId, startDate, endDate });
+      try {
+        const dashboardResult = await syncDashboardFromSheets();
+        if (dashboardResult.warning) dashboardError = dashboardResult.warning;
+      } catch (err) {
+        dashboardError = err instanceof Error ? err.message : String(err);
+        logger.warn("processAdminSyncRequest dashboard sync failed", { requestId: event.params.requestId, dashboardError });
+      }
+      await ref.set(
+        {
+          status: "success",
+          completedAt: nowTimestamp(),
+          result: { ...lecturesResult, noticeError, dashboardError },
+          lastError: null,
+        },
+        { merge: true },
+      );
+    } catch (err) {
+      const message = err instanceof Error ? err.message : String(err);
+      logger.error("processAdminSyncRequest failed", { requestId: event.params.requestId, message });
+      await ref.set(
+        {
+          status: "error",
+          completedAt: nowTimestamp(),
+          lastError: message,
+        },
+        { merge: true },
+      );
+    }
+  },
+);

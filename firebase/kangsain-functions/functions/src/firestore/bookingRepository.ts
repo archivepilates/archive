@@ -1,4 +1,5 @@
 import type { BookingDoc } from "../types/models";
+import { nowTimestamp } from "../utils/date";
 import { refs } from "./refs";
 
 export async function upsertBookingIfChanged(booking: BookingDoc): Promise<boolean> {
@@ -47,6 +48,7 @@ export async function getRecentMemberBookings(
         .where("memberId", "in", chunk)
         .where("lectureDate", ">=", startDate)
         .where("lectureDate", "<=", endDate)
+        .orderBy("lectureDate", "desc")
         .get(),
     ),
   );
@@ -95,4 +97,38 @@ export async function searchBookingsByMemberName(
     .limit(50)
     .get();
   return snap.docs.map((doc) => doc.data()).filter((booking) => booking.lectureDate >= startDate);
+}
+
+export async function markBookingsCanceledForLectures(studioId: string, lectureIds: string[]): Promise<number> {
+  if (!lectureIds.length) return 0;
+  let changed = 0;
+  for (let index = 0; index < lectureIds.length; index += 10) {
+    const chunk = lectureIds.slice(index, index + 10);
+    const snap = await refs
+      .bookings()
+      .where("studioId", "==", studioId)
+      .where("lectureId", "in", chunk)
+      .get();
+    const targets = snap.docs.filter((doc) => !["cancel", "wait_cancel"].includes(doc.data().appStatus));
+    if (!targets.length) continue;
+    const batch = refs.bookings().firestore.batch();
+    targets.forEach((doc) => {
+      const booking = doc.data();
+      batch.set(
+        doc.ref,
+        {
+          appStatus: "cancel",
+          sourceStatus: "lecture_deleted",
+          syncStatus: "synced",
+          sourceHash: `lecture_deleted_${booking.sourceHash}`,
+          updatedAt: nowTimestamp(),
+          syncedAt: nowTimestamp(),
+        },
+        { merge: true },
+      );
+    });
+    await batch.commit();
+    changed += targets.length;
+  }
+  return changed;
 }

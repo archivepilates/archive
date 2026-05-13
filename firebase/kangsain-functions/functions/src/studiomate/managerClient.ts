@@ -82,6 +82,28 @@ export class ManagerClient {
     return Array.isArray(result.data) ? result.data : Array.isArray(result.data?.data) ? result.data.data : [];
   }
 
+  async getCounsels(input: { startDate: string; endDate: string }): Promise<any[]> {
+    const query = new URLSearchParams({
+      studio_id: this.studioId,
+      staff_id: this.staffId,
+      start_date: input.startDate,
+      end_date: input.endDate,
+    });
+    const result = await this.request("GET", `/api/schedule/counsel?${query.toString()}`, true);
+    return Array.isArray(result.data) ? result.data : Array.isArray(result.data?.data) ? result.data.data : [];
+  }
+
+  async getEtcSchedules(input: { startDate: string; endDate: string }): Promise<any[]> {
+    const query = new URLSearchParams({
+      studio_id: this.studioId,
+      staff_id: this.staffId,
+      start_date: input.startDate,
+      end_date: input.endDate,
+    });
+    const result = await this.request("GET", `/api/schedule/etc?${query.toString()}`, true);
+    return Array.isArray(result.data) ? result.data : Array.isArray(result.data?.data) ? result.data.data : [];
+  }
+
   async getCommonNoReadCount(): Promise<number> {
     const query = new URLSearchParams({ studio_id: this.studioId, staff_id: this.staffId });
     const result = await this.request("GET", `/api/staff/notice/common-no-read-count?${query.toString()}`, true);

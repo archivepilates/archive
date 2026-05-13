@@ -8,7 +8,7 @@ export async function refreshLectureById(input: {
   fallbackDate?: string;
 }): Promise<unknown> {
   const studioId = input.studioId || DEFAULT_STUDIO_ID;
-  const existing = await getLecture(input.lectureId);
+  const existing = input.lectureId ? await getLecture(input.lectureId) : null;
   const date = existing?.date || input.fallbackDate;
   if (!date) return { refreshed: false, reason: "missing lecture date" };
   return syncLecturesRange({ studioId, startDate: date, endDate: date });

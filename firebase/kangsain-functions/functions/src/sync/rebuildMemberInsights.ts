@@ -1,7 +1,9 @@
 import type { BookingDoc, MemberMemoDoc, MemberProfileDoc, MemberTagDoc } from "../types/models";
+import { getRecentMemberBookings } from "../firestore/bookingRepository";
 import { refs } from "../firestore/refs";
 import { saveMemberTags } from "../firestore/memberTagRepository";
-import { addDays, nowTimestamp } from "../utils/date";
+import { actualAttendanceBookings, attendanceTotals } from "../utils/attendance";
+import { addDays, formatDateKst, nowTimestamp } from "../utils/date";
 
 type MemberTag = MemberTagDoc["tags"][number];
 const MEMO_TAG_LOOKBACK_DAYS = 90;
@@ -24,9 +26,16 @@ export async function rebuildMemberInsights(input: {
   bookings: BookingDoc[];
 }): Promise<void> {
   const periodStart = addDays(input.endDate, -29);
+  const targetMemberIds = uniqueMemberIds(input.bookings);
+  if (!targetMemberIds.length) return;
+
+  const recentBookings = await getRecentMemberBookings(input.studioId, targetMemberIds, periodStart, input.endDate);
+  const sourceBookings = mergeBookings(input.bookings, recentBookings);
+  const targetMemberSet = new Set(targetMemberIds);
   const rowsByMember = new Map<string, BookingDoc[]>();
-  input.bookings
-    .filter((booking) => booking.memberId && booking.lectureDate >= periodStart && booking.lectureDate <= input.endDate)
+  sourceBookings
+    .filter((booking) => targetMemberSet.has(booking.memberId))
+    .filter((booking) => booking.lectureDate >= periodStart && booking.lectureDate <= input.endDate)
     .forEach((booking) => {
       const list = rowsByMember.get(booking.memberId) || [];
       list.push(booking);
@@ -60,6 +69,19 @@ export async function rebuildMemberInsights(input: {
       return saveMemberTags(doc);
     }),
   );
+}
+
+function uniqueMemberIds(bookings: BookingDoc[]): string[] {
+  return [...new Set(bookings.map((booking) => booking.memberId).filter(Boolean))];
+}
+
+function mergeBookings(primary: BookingDoc[], secondary: BookingDoc[]): BookingDoc[] {
+  const map = new Map<string, BookingDoc>();
+  [...secondary, ...primary].forEach((booking) => {
+    const key = booking.bookingId || `${booking.memberId}_${booking.lectureId}_${booking.lectureDate}`;
+    if (key) map.set(key, booking);
+  });
+  return [...map.values()];
 }
 
 async function getCurrentTagMap(memberIds: string[]): Promise<Map<string, MemberTagDoc>> {
@@ -109,8 +131,10 @@ function buildAutoTags(
 ): MemberTag[] {
   const now = nowTimestamp();
   const tags: MemberTag[] = [];
-  const attended = bookings.filter((booking) => booking.attendanceStatus === "attended").length;
-  const absent = bookings.filter((booking) => booking.attendanceStatus === "absent" || booking.attendanceStatus === "late_cancel").length;
+  const actualBookings = actualAttendanceBookings(bookings, endDate);
+  const totals = attendanceTotals(bookings, endDate);
+  const attended = totals.attended;
+  const absent = totals.absent;
 
   tags.push(
     {
@@ -150,13 +174,13 @@ function buildAutoTags(
       label: "신규회원",
       level: "info",
       source: "auto_profile",
-      sourceDate: registeredAt ? formatKstShortDate(registeredAt) : "",
+      sourceDate: registeredAt ? formatDateKst(registeredAt) : "",
       locked: true,
       updatedAt: now,
     });
   }
 
-  const recentAttended = bookings
+  const recentAttended = actualBookings
     .filter((booking) => booking.attendanceStatus === "attended")
     .sort((a, b) => (b.lectureStartAt?.toMillis() || 0) - (a.lectureStartAt?.toMillis() || 0))
     .slice(0, 10);

@@ -44,6 +44,7 @@ function buildInstructorView(
   });
 
   const viewLectures = lectures
+    .filter((lecture) => lecture.status !== "deleted")
     .sort((a, b) => String(a.startAt?.toMillis() || 0).localeCompare(String(b.startAt?.toMillis() || 0)))
     .map((lecture) => {
       const lectureBookings = byLecture.get(lecture.lectureId) || [];
@@ -66,11 +67,14 @@ function buildInstructorView(
           bookingId: booking.bookingId,
           memberId: booking.memberId,
           memberName: booking.memberName,
+          memberPhone: booking.memberPhone,
+          memberRegisteredAt: booking.memberRegisteredAt,
           appStatus: booking.appStatus,
           attendanceStatus: booking.attendanceStatus,
           syncStatus: booking.syncStatus,
           ticketName: booking.ticketName,
           ticketRemainingCount: booking.ticketRemainingCount,
+          ticketExpiresAt: booking.ticketExpiresAt,
           ticketExpiryLevel: booking.ticketExpiryLevel,
           tags: instructorVisibleTags(tagsByMember.get(booking.memberId) || []),
           lastMemoPreview: booking.lastMemoPreview.slice(0, 60),
@@ -79,6 +83,7 @@ function buildInstructorView(
       };
     });
 
+  const activeLectures = lectures.filter((lecture) => lecture.status !== "deleted");
   const activeBookings = bookings.filter((booking) => booking.appStatus === "reserved");
 
   return {
@@ -87,7 +92,7 @@ function buildInstructorView(
     staffId,
     date,
     summary: {
-      totalLectures: lectures.length,
+      totalLectures: activeLectures.length,
       totalBookings: activeBookings.length,
       uncheckedAttendanceCount: activeBookings.filter((booking) => booking.attendanceStatus === "unchecked").length,
       reservedCount: bookings.filter((booking) => booking.appStatus === "reserved").length,

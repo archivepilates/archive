@@ -58,6 +58,24 @@
       "fields": [
         { "fieldPath": "studioId", "order": "ASCENDING" },
         { "fieldPath": "memberId", "order": "ASCENDING" },
+        { "fieldPath": "lectureDate", "order": "ASCENDING" }
+      ]
+    },
+    {
+      "collectionGroup": "bookings",
+      "queryScope": "COLLECTION",
+      "fields": [
+        { "fieldPath": "memberId", "order": "ASCENDING" },
+        { "fieldPath": "studioId", "order": "ASCENDING" },
+        { "fieldPath": "lectureDate", "order": "ASCENDING" }
+      ]
+    },
+    {
+      "collectionGroup": "bookings",
+      "queryScope": "COLLECTION",
+      "fields": [
+        { "fieldPath": "studioId", "order": "ASCENDING" },
+        { "fieldPath": "memberId", "order": "ASCENDING" },
         { "fieldPath": "lectureDate", "order": "DESCENDING" }
       ]
     },
@@ -139,6 +157,22 @@
         { "fieldPath": "studioId", "order": "ASCENDING" },
         { "fieldPath": "staffId", "order": "ASCENDING" },
         { "fieldPath": "createdAt", "order": "DESCENDING" }
+      ]
+    },
+    {
+      "collectionGroup": "consultations",
+      "queryScope": "COLLECTION",
+      "fields": [
+        { "fieldPath": "staffIds", "arrayConfig": "CONTAINS" },
+        { "fieldPath": "date", "order": "ASCENDING" }
+      ]
+    },
+    {
+      "collectionGroup": "otherSchedules",
+      "queryScope": "COLLECTION",
+      "fields": [
+        { "fieldPath": "staffIds", "arrayConfig": "CONTAINS" },
+        { "fieldPath": "date", "order": "ASCENDING" }
       ]
     },
     {
