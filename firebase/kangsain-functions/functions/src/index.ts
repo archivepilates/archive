@@ -27,6 +27,7 @@ import { isManagerRole, requireStaff, requireManager } from "./security/authGuar
 import { syncManagerStaffs } from "./sync/syncManagerStaffs";
 import { syncDashboardFromSheets } from "./sync/syncDashboardFromSheets";
 import { preSecurityRawMirror } from "./sync/preSecurityRawMirror";
+import { processAlimtalkQueue } from "./alimtalk/processAlimtalkQueue";
 import { getStaffByUid } from "./firestore/staffRepository";
 import { nowTimestamp } from "./utils/date";
 
@@ -83,6 +84,16 @@ export const scheduledProcessContactSyncJobs = onSchedule(
   },
   async () => {
     await processContactSyncJobs();
+  },
+);
+
+export const scheduledProcessAlimtalkQueue = onSchedule(
+  {
+    ...scheduleOptions,
+    schedule: "every 5 minutes",
+  },
+  async () => {
+    await processAlimtalkQueue();
   },
 );
 

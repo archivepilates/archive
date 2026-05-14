@@ -760,6 +760,72 @@
       cursor: default;
     }
 
+    .alimtalk-queue {
+      display: grid;
+      gap: 14px;
+    }
+
+    .alimtalk-queue-actions {
+      display: flex;
+      flex-wrap: wrap;
+      align-items: center;
+      justify-content: flex-end;
+      gap: 8px;
+    }
+
+    .alimtalk-queue-actions .ghost,
+    .alimtalk-queue-actions .primary {
+      width: auto;
+      min-height: 38px;
+      padding: 0 14px;
+      border-radius: 12px;
+      font-size: 13px;
+      white-space: nowrap;
+    }
+
+    .alimtalk-list {
+      display: grid;
+      gap: 8px;
+    }
+
+    .alimtalk-row {
+      display: grid;
+      grid-template-columns: minmax(0, 1.1fr) minmax(0, 1fr) auto;
+      align-items: center;
+      gap: 10px;
+      padding: 12px;
+      border: 1px solid var(--line);
+      border-radius: 12px;
+      background: rgba(255, 255, 255, 0.84);
+    }
+
+    .alimtalk-row-main,
+    .alimtalk-row-meta {
+      display: grid;
+      min-width: 0;
+      gap: 3px;
+    }
+
+    .alimtalk-row .member-name {
+      justify-self: start;
+      padding: 0;
+      min-height: auto;
+      border: 0;
+      background: transparent;
+      text-align: left;
+    }
+
+    .alimtalk-row span,
+    .alimtalk-row small {
+      min-width: 0;
+      color: var(--muted);
+      font-size: 12px;
+      font-weight: 750;
+      overflow: hidden;
+      text-overflow: ellipsis;
+      white-space: nowrap;
+    }
+
     .action-summary {
       display: flex;
       flex-wrap: wrap;
@@ -2549,6 +2615,20 @@
       .action-content { grid-template-columns: auto minmax(0, 1fr); }
       .action-content .chip { grid-column: 2; justify-self: start; }
       .action-send { grid-column: 2; justify-self: start; }
+      .alimtalk-row {
+        grid-template-columns: minmax(0, 1fr);
+        align-items: start;
+      }
+      .alimtalk-row .action-send {
+        grid-column: auto;
+      }
+      .alimtalk-queue-actions {
+        justify-content: stretch;
+      }
+      .alimtalk-queue-actions .ghost,
+      .alimtalk-queue-actions .primary {
+        flex: 1 1 120px;
+      }
       .member-search-stats { grid-template-columns: repeat(2, minmax(0, 1fr)); }
       .member-detail-grid { grid-template-columns: 1fr; }
       .member-mini-list.recent-lesson-list li {
@@ -3271,8 +3351,8 @@
       const messageMeta = actionMessageMeta(item);
       const targetDate = actionDate(item);
       const bodyText = actionDisplayBody(item);
-      const sendButton = messageMeta
-        ? `<button class="action-send ${escapeAttr(messageMeta.mode)}" type="button" data-action-send="${escapeAttr(item.actionKey || '')}" data-action-type="${escapeAttr(item.type || '')}" data-action-title="${escapeAttr(item.title || '')}" data-action-date="${escapeAttr(targetDate)}" data-action-message-mode="${escapeAttr(messageMeta.mode)}" data-action-message-detail="${escapeAttr(messageMeta.detail || '')}" ${messageMeta.disabled ? 'disabled' : ''}>${escapeHtml(messageMeta.label)}</button>`
+      const sendStatus = messageMeta
+        ? `<span class="action-send ${escapeAttr(messageMeta.mode)}">${escapeHtml(messageMeta.label)}</span>`
         : '';
       return `
         <div class="detail-row action-row">
@@ -3282,7 +3362,7 @@
             <strong>${escapeHtml(item.title)}</strong>
             <span class="chip ${item.level || 'wait'}">${escapeHtml(bodyText)}</span>
           ${item.memberKey ? '</button>' : '</div>'}
-          ${sendButton}
+          ${sendStatus}
         </div>
       `;
     }
@@ -3441,6 +3521,107 @@
         candidate.sourceDate || '',
         candidate.templateCode || ''
       ].join('_');
+    }
+
+    function alimtalkCandidatePeriodRange(mode = appState.viewMode, date = appState.selectedDate) {
+      if (mode === 'day') return { start: date, end: date };
+      return periodRangeForMode(mode, date);
+    }
+
+    function periodAlimtalkCandidates(mode = appState.viewMode, date = appState.selectedDate) {
+      const { start, end } = alimtalkCandidatePeriodRange(mode, date);
+      return (appState.admin.alimtalkCandidates || [])
+        .filter((candidate) => !['sent', 'skipped'].includes(String(candidate.status || '')))
+        .filter((candidate) => {
+          const sourceDate = String(candidate.sourceDate || '').slice(0, 10);
+          if (!sourceDate) return mode === 'day';
+          return sourceDate >= start && sourceDate <= end;
+        })
+        .sort((a, b) =>
+          String(a.sourceDate || '').localeCompare(String(b.sourceDate || '')) ||
+          String(a.memberName || '').localeCompare(String(b.memberName || ''), 'ko') ||
+          String(a.type || '').localeCompare(String(b.type || ''), 'ko')
+        );
+    }
+
+    function candidatePhone(candidate) {
+      const raw = candidate.phone || candidate.memberPhone || candidate.mobile || candidate.phoneNumber || '';
+      return String(raw || '').trim();
+    }
+
+    function canQueueAlimtalkCandidate(candidate) {
+      const rule = alimtalkRuleMeta(candidate);
+      const status = String(candidate.status || 'candidate');
+      return Boolean(candidate.candidateId) &&
+        Boolean(candidatePhone(candidate)) &&
+        rule.status === 'APPROVED' &&
+        ['candidate', 'reviewed', 'failed'].includes(status);
+    }
+
+    function alimtalkCandidateStatusMeta(candidate) {
+      const status = String(candidate.status || 'candidate');
+      const rule = alimtalkRuleMeta(candidate);
+      if (status === 'queued') return { label: '발송대기', mode: 'auto' };
+      if (status === 'processing') return { label: '발송중', mode: 'auto' };
+      if (status === 'sent') return { label: '발송완료', mode: 'auto' };
+      if (status === 'failed') return { label: '실패', mode: 'review' };
+      if (status === 'skipped') return { label: '제외', mode: 'review' };
+      if (!candidatePhone(candidate)) return { label: '연락처 없음', mode: 'review' };
+      if (rule.status === 'APPROVED') return { label: '승인 가능', mode: 'auto' };
+      if (rule.status === 'HOLD') return { label: '보류', mode: 'pending' };
+      return { label: '템플릿 검수중', mode: 'pending' };
+    }
+
+    function renderAlimtalkApprovalQueue(mode = appState.viewMode) {
+      if (appState.mode !== 'admin') return '';
+      const rows = periodAlimtalkCandidates(mode, appState.selectedDate);
+      if (!rows.length) return '';
+      const sendable = rows.filter(canQueueAlimtalkCandidate);
+      const queued = rows.filter((item) => String(item.status || '') === 'queued');
+      const blocked = rows.length - sendable.length - queued.length;
+      const title = mode === 'day' ? '오늘 알림톡 발송 후보' : mode === 'week' ? '이번 주 알림톡 발송 후보' : '이번 달 알림톡 발송 후보';
+      const subtitle = [
+        `승인가능 ${sendable.length}`,
+        queued.length ? `발송대기 ${queued.length}` : '',
+        blocked > 0 ? `확인필요 ${blocked}` : ''
+      ].filter(Boolean).join(' · ');
+      return `
+        <section class="panel alimtalk-queue">
+          <div class="section-head">
+            <div>
+              <h2>${escapeHtml(title)}</h2>
+              <p>${escapeHtml(subtitle || '검토할 후보가 없습니다')}</p>
+            </div>
+            <div class="alimtalk-queue-actions">
+              <button class="ghost" type="button" data-alimtalk-copy="${escapeAttr(mode)}">명단 복사</button>
+              <button class="primary" type="button" data-alimtalk-approve="${escapeAttr(mode)}" ${sendable.length ? '' : 'disabled'}>일괄 승인</button>
+            </div>
+          </div>
+          <div class="alimtalk-list">
+            ${rows.map((candidate) => renderAlimtalkCandidateRow(candidate)).join('')}
+          </div>
+        </section>
+      `;
+    }
+
+    function renderAlimtalkCandidateRow(candidate) {
+      const rule = alimtalkRuleMeta(candidate);
+      const status = alimtalkCandidateStatusMeta(candidate);
+      const memberKey = candidate.memberId || candidate.memberName || '';
+      const sourceDate = candidate.sourceDate ? shortDate(String(candidate.sourceDate).slice(0, 10)) : '';
+      return `
+        <div class="alimtalk-row">
+          <div class="alimtalk-row-main">
+            ${memberKey ? `<button class="member-name" type="button" data-action-member="${escapeAttr(memberKey)}">${escapeHtml(candidate.memberName || '회원')}</button>` : `<strong>${escapeHtml(candidate.memberName || '회원')}</strong>`}
+            <span>${escapeHtml([candidatePhone(candidate) || '연락처 없음', sourceDate].filter(Boolean).join(' · '))}</span>
+          </div>
+          <div class="alimtalk-row-meta">
+            <strong>${escapeHtml(rule.label || candidate.title || '알림톡')}</strong>
+            <small>${escapeHtml(candidate.reason || rule.detail || candidate.type || '')}</small>
+          </div>
+          <span class="action-send ${escapeAttr(status.mode)}">${escapeHtml(status.label)}</span>
+        </div>
+      `;
     }
 
     function adminActionItemsForViewsByDate(views) {
@@ -3847,6 +4028,7 @@
         ${renderAdminStaffFilters()}
         ${renderAdminScheduleSwitch()}
         ${renderAdminDaySchedule(views)}
+        ${renderAlimtalkApprovalQueue('day')}
         ${renderAdminActionQueue(views)}
       `;
     }
@@ -3858,6 +4040,7 @@
       return `
         ${renderWeekView()}
         ${renderWeekOperationsSummary()}
+        ${renderAlimtalkApprovalQueue('week')}
       `;
     }
 
@@ -3869,6 +4052,7 @@
         ${renderMonthDashboard()}
         ${renderMonthCalendar()}
         ${renderPeriodOperationsSummary('month')}
+        ${renderAlimtalkApprovalQueue('month')}
       `;
     }
 
@@ -5186,20 +5370,15 @@
           completeAdminAction(button.dataset.actionComplete, button.dataset.actionDate || appState.selectedDate);
         });
       });
-      container.querySelectorAll('[data-action-send]').forEach((button) => {
-        if (button.dataset.boundActionSend === 'true') return;
-        button.dataset.boundActionSend = 'true';
-        button.addEventListener('click', (event) => {
-          event.stopPropagation();
-          prepareActionMessage(
-            button.dataset.actionSend,
-            button.dataset.actionType,
-            button.dataset.actionTitle,
-            button.dataset.actionDate,
-            button.dataset.actionMessageMode,
-            button.dataset.actionMessageDetail
-          );
-        });
+      container.querySelectorAll('[data-alimtalk-copy]').forEach((button) => {
+        if (button.dataset.boundAlimtalkCopy === 'true') return;
+        button.dataset.boundAlimtalkCopy = 'true';
+        button.addEventListener('click', () => copyAlimtalkCandidateList(button.dataset.alimtalkCopy || appState.viewMode));
+      });
+      container.querySelectorAll('[data-alimtalk-approve]').forEach((button) => {
+        if (button.dataset.boundAlimtalkApprove === 'true') return;
+        button.dataset.boundAlimtalkApprove = 'true';
+        button.addEventListener('click', () => approveAlimtalkCandidates(button.dataset.alimtalkApprove || appState.viewMode));
       });
       container.querySelectorAll('[data-action-member]').forEach((button) => {
         if (button.dataset.boundMemberInfo === 'true') return;
@@ -5221,6 +5400,82 @@
         showToast(`${type || detail || '알림톡'} 템플릿 검수 완료 후 발송할 수 있습니다`);
       } else {
         showToast(`${title || '회원'} 확인 후 알림 발송 대상입니다`);
+      }
+    }
+
+    function alimtalkCandidateListText(mode = appState.viewMode) {
+      const rows = periodAlimtalkCandidates(mode, appState.selectedDate);
+      const sendable = rows.filter(canQueueAlimtalkCandidate);
+      const waiting = rows.filter((row) => !canQueueAlimtalkCandidate(row));
+      const lines = [
+        `[아카이브IN 알림톡 발송 후보] ${periodLabelForMode(mode)}`,
+        `승인가능 ${sendable.length}명 / 확인필요 ${waiting.length}명`,
+        ''
+      ];
+      if (sendable.length) {
+        lines.push('승인가능');
+        sendable.forEach((candidate, index) => {
+          const rule = alimtalkRuleMeta(candidate);
+          lines.push(`${index + 1}. ${candidate.memberName || '회원'} / ${candidatePhone(candidate)} / ${rule.label || candidate.type || '알림톡'} / ${candidate.reason || rule.detail || ''}`);
+        });
+        lines.push('');
+      }
+      if (waiting.length) {
+        lines.push('확인필요');
+        waiting.forEach((candidate, index) => {
+          const rule = alimtalkRuleMeta(candidate);
+          const status = alimtalkCandidateStatusMeta(candidate);
+          lines.push(`${index + 1}. ${candidate.memberName || '회원'} / ${candidatePhone(candidate) || '연락처 없음'} / ${rule.label || candidate.type || '알림톡'} / ${status.label}`);
+        });
+      }
+      return lines.join('\n').trim();
+    }
+
+    function periodLabelForMode(mode = appState.viewMode) {
+      if (mode === 'day') return dateLabel(appState.selectedDate);
+      const { start, end } = alimtalkCandidatePeriodRange(mode, appState.selectedDate);
+      return `${shortDate(start)}~${shortDate(end)}`;
+    }
+
+    async function copyAlimtalkCandidateList(mode = appState.viewMode) {
+      const text = alimtalkCandidateListText(mode);
+      if (!text) {
+        showToast('복사할 알림톡 후보가 없습니다');
+        return;
+      }
+      try {
+        await navigator.clipboard.writeText(text);
+        showToast('알림톡 후보 명단을 복사했습니다');
+      } catch (err) {
+        showToast('브라우저 권한 때문에 복사하지 못했습니다');
+      }
+    }
+
+    async function approveAlimtalkCandidates(mode = appState.viewMode) {
+      if (!appState.db || !appState.staff?.studioId) return;
+      const rows = periodAlimtalkCandidates(mode, appState.selectedDate).filter(canQueueAlimtalkCandidate);
+      if (!rows.length) {
+        showToast('일괄 승인할 알림톡 후보가 없습니다');
+        return;
+      }
+      try {
+        await Promise.all(rows.map((candidate) => updateDoc(
+          doc(appState.db, 'alimtalkCandidates', String(candidate.candidateId)),
+          {
+            status: 'queued',
+            reviewedByUid: appState.user?.uid || '',
+            reviewedAt: serverTimestamp(),
+            updatedAt: serverTimestamp()
+          }
+        )));
+        const approvedIds = new Set(rows.map((candidate) => String(candidate.candidateId)));
+        appState.admin.alimtalkCandidates = (appState.admin.alimtalkCandidates || []).map((candidate) =>
+          approvedIds.has(String(candidate.candidateId)) ? { ...candidate, status: 'queued' } : candidate
+        );
+        renderApp();
+        showToast(`알림톡 후보 ${rows.length}명을 발송대기로 승인했습니다`);
+      } catch (err) {
+        showToast(`알림톡 승인 실패: ${friendlyError(err)}`);
       }
     }
 

@@ -297,7 +297,14 @@ export interface MemberProfileDoc {
 export type ContactSyncTarget = "archivepilates_gmail" | "home_archivepilates";
 export type ContactSyncStatus = "pending" | "synced" | "skipped" | "failed";
 export type AlimtalkCandidateType = "new_member" | "ticket_expiring" | "remaining_low" | "long_absence" | "manual_review";
-export type AlimtalkCandidateStatus = "candidate" | "reviewed" | "queued" | "sent" | "skipped" | "failed";
+export type AlimtalkCandidateStatus =
+  | "candidate"
+  | "reviewed"
+  | "queued"
+  | "processing"
+  | "sent"
+  | "skipped"
+  | "failed";
 
 export interface MemberContactIndexDoc {
   memberId: string;
