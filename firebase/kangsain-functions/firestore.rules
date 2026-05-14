@@ -140,6 +140,26 @@ service cloud.firestore {
       allow write: if false;
     }
 
+    match /alimtalkCandidates/{candidateId} {
+      allow read: if isManager() && sameStudio(resource.data.studioId);
+      allow update: if isManager() &&
+        sameStudio(resource.data.studioId) &&
+        request.resource.data.diff(resource.data).affectedKeys().hasOnly([
+          'status',
+          'reviewedByUid',
+          'reviewedAt',
+          'updatedAt'
+        ]) &&
+        request.resource.data.status in ['reviewed', 'queued', 'skipped'] &&
+        request.resource.data.reviewedByUid == request.auth.uid;
+      allow create, delete: if false;
+    }
+
+    match /alimtalkSends/{sendId} {
+      allow read: if isManager() && sameStudio(resource.data.studioId);
+      allow write: if false;
+    }
+
     match /memberMemos/{memoId} {
       allow read: if
         signedIn() &&

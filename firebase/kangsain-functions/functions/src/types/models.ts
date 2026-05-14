@@ -280,6 +280,14 @@ export interface MemberProfileDoc {
   memoPreview?: string;
   activeTicketNames?: string[];
   activeTicketCount?: number;
+  activeTickets?: Array<{
+    name: string;
+    remainingCount: number | null;
+    expiresAt: Timestamp | null;
+    expiryLevel: TicketExpiryLevel;
+  }>;
+  isNewMember?: boolean;
+  newMemberBasis?: "registered_at" | "first_seen_booking" | "unknown";
   registeredAt: Timestamp | null;
   sourceUpdatedAt?: Timestamp | null;
   syncedAt: Timestamp;
@@ -288,6 +296,8 @@ export interface MemberProfileDoc {
 
 export type ContactSyncTarget = "archivepilates_gmail" | "home_archivepilates";
 export type ContactSyncStatus = "pending" | "synced" | "skipped" | "failed";
+export type AlimtalkCandidateType = "new_member" | "ticket_expiring" | "remaining_low" | "long_absence" | "manual_review";
+export type AlimtalkCandidateStatus = "candidate" | "reviewed" | "queued" | "sent" | "skipped" | "failed";
 
 export interface MemberContactIndexDoc {
   memberId: string;
@@ -299,8 +309,54 @@ export interface MemberContactIndexDoc {
   activeTicketCount: number;
   source: "studiomate_api";
   contactTargets: Record<ContactSyncTarget, ContactSyncStatus>;
+  contactHash?: string;
+  activeTicketNames?: string[];
+  homeContactResourceName?: string;
+  lastContactSyncJobId?: string;
+  contactLastError?: string | null;
   contactUpdatedAt?: Timestamp | null;
   syncedAt: Timestamp;
+  updatedAt: Timestamp;
+}
+
+export interface AlimtalkCandidateDoc {
+  candidateId: string;
+  studioId: string;
+  memberId: string;
+  memberName: string;
+  memberPhone: string;
+  type: AlimtalkCandidateType;
+  status: AlimtalkCandidateStatus;
+  templateCode: string;
+  title: string;
+  reason: string;
+  sourceActionKey?: string;
+  sourceDate: string;
+  payload: Record<string, string>;
+  reviewedByUid?: string;
+  reviewedAt?: Timestamp | null;
+  sentAt?: Timestamp | null;
+  lastError: string | null;
+  createdAt: Timestamp;
+  updatedAt: Timestamp;
+}
+
+export interface AlimtalkSendDoc {
+  sendId: string;
+  studioId: string;
+  candidateId: string;
+  memberId: string;
+  memberName: string;
+  memberPhone: string;
+  templateCode: string;
+  status: QueueStatus;
+  attempts: number;
+  maxAttempts: number;
+  nextRunAt: Timestamp;
+  solapiMessageId?: string;
+  lastError: string | null;
+  createdByUid: string;
+  createdAt: Timestamp;
   updatedAt: Timestamp;
 }
 
@@ -316,6 +372,10 @@ export interface ContactSyncJobDoc {
   maxAttempts: number;
   nextRunAt: Timestamp;
   lastError: string | null;
+  result?: {
+    action: "created" | "updated" | "skipped";
+    resourceName?: string;
+  };
   sourceReason: "member_profile_refresh" | "notice_member_signup" | "notice_ticket_update" | "manual_resync";
   createdAt: Timestamp;
   updatedAt: Timestamp;

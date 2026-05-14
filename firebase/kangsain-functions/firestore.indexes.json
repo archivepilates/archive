@@ -141,6 +141,24 @@
       ]
     },
     {
+      "collectionGroup": "contactSyncJobs",
+      "queryScope": "COLLECTION",
+      "fields": [
+        { "fieldPath": "target", "order": "ASCENDING" },
+        { "fieldPath": "status", "order": "ASCENDING" },
+        { "fieldPath": "nextRunAt", "order": "ASCENDING" }
+      ]
+    },
+    {
+      "collectionGroup": "alimtalkCandidates",
+      "queryScope": "COLLECTION",
+      "fields": [
+        { "fieldPath": "studioId", "order": "ASCENDING" },
+        { "fieldPath": "status", "order": "ASCENDING" },
+        { "fieldPath": "sourceDate", "order": "DESCENDING" }
+      ]
+    },
+    {
       "collectionGroup": "memberMemos",
       "queryScope": "COLLECTION",
       "fields": [

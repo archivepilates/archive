@@ -10,6 +10,7 @@ import { syncLecturesDaily } from "./sync/syncLecturesDaily";
 import { syncLecturesRange } from "./sync/syncLecturesRange";
 import { pollManagerNotices } from "./sync/pollManagerNotices";
 import { processWriteQueue } from "./queue/processWriteQueue";
+import { processContactSyncJobs } from "./sync/processContactSyncJobs";
 import { getInstructorHomeHandler } from "./callable/getInstructorHome";
 import { submitBookingAttendanceHandler } from "./callable/submitBookingAttendance";
 import { submitMemberMemoHandler } from "./callable/submitMemberMemo";
@@ -72,6 +73,16 @@ export const scheduledProcessWriteQueue = onSchedule(
   },
   async () => {
     await processWriteQueue();
+  },
+);
+
+export const scheduledProcessContactSyncJobs = onSchedule(
+  {
+    ...scheduleOptions,
+    schedule: "every 5 minutes",
+  },
+  async () => {
+    await processContactSyncJobs();
   },
 );
 

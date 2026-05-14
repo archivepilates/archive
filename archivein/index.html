@@ -2693,6 +2693,8 @@
         rangeOtherSchedules: [],
         memos: [],
         memberProfiles: [],
+        memberContactIndex: [],
+        alimtalkCandidates: [],
         actions: [],
         rangeActions: [],
         actionsState: null,
@@ -2766,7 +2768,12 @@
             rangeViews: [],
             consultations: [],
             rangeConsultations: [],
+            otherSchedules: [],
+            rangeOtherSchedules: [],
             memos: [],
+            memberProfiles: [],
+            memberContactIndex: [],
+            alimtalkCandidates: [],
             actions: [],
             rangeActions: [],
             actionsState: null,
@@ -2774,6 +2781,7 @@
             dashboard: null,
             selectedStaffId: 'all',
             activeTab: 'overview',
+            scheduleView: 'list',
             searchQuery: ''
           };
           appState.detailPanel = '';
@@ -3275,6 +3283,10 @@
     function actionMessageMeta(item) {
       const type = String(item?.type || '');
       if (!item?.memberKey) return '';
+      if (item?.alimtalkStatus === 'sent') return { label: '발송완료', mode: 'auto' };
+      if (item?.alimtalkStatus === 'queued') return { label: '발송대기', mode: 'auto' };
+      if (item?.alimtalkStatus === 'skipped') return { label: '제외', mode: 'review' };
+      if (item?.alimtalkCandidateId) return { label: '발송후보', mode: 'auto' };
       if (type === '수강권') return { label: '자동대상', mode: 'auto' };
       if (type === '장기미방문') return { label: '확인필요', mode: 'review' };
       if (type === '출석률' || type === '결석증가') return { label: '확인필요', mode: 'review' };
@@ -3329,6 +3341,14 @@
         .filter(([key]) => stats?.reasons?.[key])
         .map(([key, label]) => `<span class="chip profile">${escapeHtml(label)} ${stats.reasons[key]}</span>`)
         .join('');
+    }
+
+    function alimtalkCandidateByActionKey() {
+      const map = new Map();
+      (appState.admin.alimtalkCandidates || []).forEach((candidate) => {
+        if (candidate.sourceActionKey) map.set(candidate.sourceActionKey, candidate);
+      });
+      return map;
     }
 
     function adminActionItemsForViewsByDate(views) {
@@ -3389,6 +3409,7 @@
 
     function normalizedAdminActions(views, date = appState.selectedDate) {
       const completed = completedAdminActionKeys(date);
+      const candidateMap = alimtalkCandidateByActionKey();
       return dedupeAdminActions(adminActionsForDate(date).map((action) => ({
         actionKey: action.actionKey || '',
         type: action.label || action.type || '액션',
@@ -3396,7 +3417,11 @@
         body: action.body || '',
         level: action.level || 'wait',
         memberKey: action.memberId || action.memberName || '',
-        sort: action.sort || ''
+        sort: action.sort || '',
+        alimtalkCandidateId: candidateMap.get(action.actionKey || '')?.candidateId || '',
+        alimtalkStatus: candidateMap.get(action.actionKey || '')?.status || '',
+        alimtalkTemplateCode: candidateMap.get(action.actionKey || '')?.templateCode || '',
+        alimtalkReason: candidateMap.get(action.actionKey || '')?.reason || ''
       }))
         .filter((action) => action.actionKey && !completed.has(action.actionKey))
         .filter((action) => action.type !== '출석저조')
@@ -5252,7 +5277,7 @@
       if (!staffId || !studioId) throw new Error('운영자 권한이 아직 연결되지 않았습니다');
 
       const rangeDates = visibleDatesForMode(appState.viewMode, appState.selectedDate, true);
-      const [staffSnap, staffListSnap, viewSnaps, consultationSnaps, otherScheduleSnaps, memoSnap, memberProfileSnap, actionSnaps, syncSnap, dashboardSnap] = await Promise.all([
+      const [staffSnap, staffListSnap, viewSnaps, consultationSnaps, otherScheduleSnaps, memoSnap, memberProfileSnap, memberContactSnap, alimtalkCandidateSnap, actionSnaps, syncSnap, dashboardSnap] = await Promise.all([
         getDoc(doc(appState.db, 'staffs', String(staffId))),
         getDocs(query(
           collection(appState.db, 'staffs'),
@@ -5281,6 +5306,16 @@
         )),
         getDocs(query(
           collection(appState.db, 'memberProfiles'),
+          where('studioId', '==', String(studioId)),
+          queryLimit(500)
+        )),
+        getDocs(query(
+          collection(appState.db, 'memberContactIndex'),
+          where('studioId', '==', String(studioId)),
+          queryLimit(500)
+        )),
+        getDocs(query(
+          collection(appState.db, 'alimtalkCandidates'),
           where('studioId', '==', String(studioId)),
           queryLimit(500)
         )),
@@ -5323,6 +5358,8 @@
           rangeOtherSchedules,
           memos: memoSnap.docs.map((docSnap) => docSnap.data()),
           memberProfiles: memberProfileSnap.docs.map((docSnap) => ({ memberId: docSnap.id, ...docSnap.data() })),
+          memberContactIndex: memberContactSnap.docs.map((docSnap) => ({ memberId: docSnap.id, ...docSnap.data() })),
+          alimtalkCandidates: alimtalkCandidateSnap.docs.map((docSnap) => ({ candidateId: docSnap.id, ...docSnap.data() })),
           actions: selectedActionState ? (selectedActionState.actions || []) : [],
           rangeActions,
           actionsState: selectedActionState,
@@ -6589,6 +6626,23 @@
         row.profile = profile;
         map.set(key, row);
       });
+      (appState.admin.memberContactIndex || []).forEach((contact) => {
+        const key = contact.memberId || contact.name;
+        if (!key) return;
+        const row = map.get(key) || {
+          memberId: contact.memberId,
+          memberName: contact.name,
+          memberPhone: contact.phone,
+          tags: [],
+          bookings: [],
+          memos: []
+        };
+        row.memberId = row.memberId || contact.memberId;
+        row.memberName = row.memberName || contact.name;
+        row.memberPhone = contact.phone || row.memberPhone;
+        row.contactIndex = contact;
+        map.set(key, row);
+      });
       return [...map.values()].map((row) => ({
         ...row,
         bookings: row.bookings.sort((a, b) => bookingSortValue(a) - bookingSortValue(b))
@@ -6617,11 +6671,13 @@
       const tickets = memberTicketSummaries(row).slice(0, 3);
       const healthTags = memberHealthTags(row).slice(0, 8);
       const memos = memberMemoPreviews(row, recent).slice(0, 3);
+      const opsChips = memberOpsChips(row);
       return `
         <div class="admin-list-item member-search-card">
           <div class="member-search-head">
             <button class="member-name" type="button" data-action-member="${escapeAttr(row.memberId || row.memberName || '')}">${escapeHtml(row.memberName || '회원')}</button>
           </div>
+          ${opsChips.length ? `<div class="chips">${opsChips.map((chip) => `<span class="chip ${escapeAttr(chip.level)}">${escapeHtml(chip.label)}</span>`).join('')}</div>` : ''}
           <div class="member-search-stats">
             <div class="member-search-stat"><span>연락처</span><strong>${escapeHtml(formatPhone(row.memberPhone) || '-')}</strong></div>
             <div class="member-search-stat"><span>누적매출</span><strong>${escapeHtml(memberRevenueText(row))}</strong></div>
@@ -6659,6 +6715,29 @@
           ${renderMemberRecentLessons(row, 8)}
         </div>
       `;
+    }
+
+    function memberOpsChips(row) {
+      const chips = [];
+      const contactStatus = row.contactIndex?.contactTargets?.home_archivepilates;
+      if (contactStatus === 'synced') chips.push({ label: '주소록 동기화', level: 'positive' });
+      else if (contactStatus === 'pending') chips.push({ label: '주소록 대기', level: 'wait' });
+      else if (contactStatus === 'failed') chips.push({ label: '주소록 실패', level: 'danger' });
+      const candidate = (appState.admin.alimtalkCandidates || []).find((item) =>
+        item.memberId === row.memberId || normalizeSearch(item.memberName) === normalizeSearch(row.memberName)
+      );
+      if (candidate) {
+        const statusLabel = {
+          candidate: '알림톡 후보',
+          reviewed: '알림톡 검토',
+          queued: '알림톡 대기',
+          sent: '알림톡 완료',
+          skipped: '알림톡 제외',
+          failed: '알림톡 실패'
+        }[candidate.status] || '알림톡';
+        chips.push({ label: statusLabel, level: candidate.status === 'failed' ? 'danger' : candidate.status === 'sent' ? 'positive' : 'wait' });
+      }
+      return chips;
     }
 
     function renderInstructorMemberCard(row) {

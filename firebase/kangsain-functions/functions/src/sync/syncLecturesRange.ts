@@ -15,6 +15,7 @@ import { rebuildMemberInsights } from "./rebuildMemberInsights";
 import { syncStudioMateMemberMemos } from "./syncStudioMateMemberMemos";
 import { syncStudioMateMemberProfiles } from "./syncStudioMateMemberProfiles";
 import { rebuildAdminActions } from "./rebuildAdminActions";
+import { rebuildAlimtalkCandidatesForRange } from "../alimtalk/rebuildAlimtalkCandidates";
 import { syncConsultationsRange } from "./syncConsultationsRange";
 import { syncOtherSchedulesRange } from "./syncOtherSchedulesRange";
 
@@ -142,6 +143,12 @@ export async function syncLecturesRange(input: {
       endDate: input.endDate,
       lectures: allLectures,
       bookings: allBookings,
+    });
+    phase = "rebuild alimtalk candidates";
+    await rebuildAlimtalkCandidatesForRange({
+      studioId,
+      startDate: input.startDate,
+      endDate: input.endDate,
     });
     phase = "sync consultations";
     const consultationResult = await syncConsultationsRange({
