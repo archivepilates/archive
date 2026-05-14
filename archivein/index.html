@@ -4025,6 +4025,7 @@
       return `
         ${renderAdminDayTrend()}
         ${renderAdminConsultations()}
+        ${renderAdminOtherSchedules()}
         ${renderAdminStaffFilters()}
         ${renderAdminScheduleSwitch()}
         ${renderAdminDaySchedule(views)}
@@ -4653,6 +4654,22 @@
           </div>
           <div class="consultation-list">
             ${consultations.slice().sort(compareConsultations).map(renderConsultation).join('')}
+          </div>
+        </section>
+      `;
+    }
+
+    function renderAdminOtherSchedules() {
+      const schedules = adminOtherSchedulesForDate(appState.selectedDate);
+      if (!schedules.length) return '';
+      return `
+        <section class="admin-staff-block">
+          <div class="admin-staff-head">
+            <h2>기타일정</h2>
+            <span>${schedules.length}건</span>
+          </div>
+          <div class="consultation-list">
+            ${schedules.map(renderOtherSchedule).join('')}
           </div>
         </section>
       `;
