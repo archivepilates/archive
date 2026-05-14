@@ -186,7 +186,7 @@ Google 주소록 쓰기에는 Google People API 권한이 필요하다.
 
 신규회원 웰컴 템플릿 `KA01TP260514081318309wQGfeIJxIAJ`는 검수중이므로 승인 전까지 자동 발송에 연결하지 않는다.
 
-기간권 잔여기간 안내 v3 `KA01TP260514145047261araXgWLVFRs`와 횟수권 잔여횟수 안내 v3 `KA01TP260514145047393VpTbcCZKkCV`는 SOLAPI에 초안(`PENDING`)으로만 생성했다. 검수 요청 전 사용자가 문구를 수정할 수 있도록 자동 발송에는 연결하지 않는다.
+기간권 잔여기간 안내 v3 `KA01TP260514145047261araXgWLVFRs`, 횟수권 잔여횟수 안내 v3 `KA01TP260514145047393VpTbcCZKkCV`, 프라이빗 기간권 잔여기간 안내 v1 `KA01TP26051415223549299i7oyn1Urk`, 프라이빗 횟수권 잔여횟수 안내 v1 `KA01TP260514152235608d9icGOBotnV`는 SOLAPI에 초안(`PENDING`)으로만 생성했다. 검수 요청 전 사용자가 문구를 수정할 수 있도록 자동 발송에는 연결하지 않는다.
 
 SOLAPI 운영 secret:
 
