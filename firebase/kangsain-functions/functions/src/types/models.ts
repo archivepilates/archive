@@ -7,7 +7,13 @@ export type AttendanceStatus = "unchecked" | "attended" | "absent" | "late_cance
 export type SyncStatus = "synced" | "pending" | "failed" | "conflict";
 export type TicketExpiryLevel = "normal" | "soon" | "expired" | "unknown";
 export type QueueStatus = "pending" | "processing" | "retry" | "done" | "failed";
-export type WriteJobType = "bookingAttendanceUpdate" | "memberMemoCreate" | "lectureRefresh" | "instructorViewRebuild";
+export type WriteJobType =
+  | "bookingAttendanceUpdate"
+  | "memberMemoCreate"
+  | "lectureRefresh"
+  | "instructorViewRebuild"
+  | "memberProfileRefresh"
+  | "googleContactSync";
 export type MemoType = "member_note" | "lesson_note" | "private_instructor_note";
 export type MemoVisibility = "staff_and_manager" | "manager_only" | "creator_only";
 
@@ -265,8 +271,53 @@ export interface MemberProfileDoc {
   memberId: string;
   studioId: string;
   name: string;
+  normalizedName?: string;
+  phone?: string;
+  phoneLast4?: string;
+  email?: string;
+  birthDate?: string;
+  gender?: string;
+  memoPreview?: string;
+  activeTicketNames?: string[];
+  activeTicketCount?: number;
   registeredAt: Timestamp | null;
+  sourceUpdatedAt?: Timestamp | null;
   syncedAt: Timestamp;
+  updatedAt: Timestamp;
+}
+
+export type ContactSyncTarget = "archivepilates_gmail" | "home_archivepilates";
+export type ContactSyncStatus = "pending" | "synced" | "skipped" | "failed";
+
+export interface MemberContactIndexDoc {
+  memberId: string;
+  studioId: string;
+  name: string;
+  phone: string;
+  phoneLast4: string;
+  registeredAt: Timestamp | null;
+  activeTicketCount: number;
+  source: "studiomate_api";
+  contactTargets: Record<ContactSyncTarget, ContactSyncStatus>;
+  contactUpdatedAt?: Timestamp | null;
+  syncedAt: Timestamp;
+  updatedAt: Timestamp;
+}
+
+export interface ContactSyncJobDoc {
+  jobId: string;
+  studioId: string;
+  memberId: string;
+  memberName: string;
+  memberPhone: string;
+  target: ContactSyncTarget;
+  status: QueueStatus;
+  attempts: number;
+  maxAttempts: number;
+  nextRunAt: Timestamp;
+  lastError: string | null;
+  sourceReason: "member_profile_refresh" | "notice_member_signup" | "notice_ticket_update" | "manual_resync";
+  createdAt: Timestamp;
   updatedAt: Timestamp;
 }
 

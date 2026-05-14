@@ -2692,6 +2692,7 @@
         otherSchedules: [],
         rangeOtherSchedules: [],
         memos: [],
+        memberProfiles: [],
         actions: [],
         rangeActions: [],
         actionsState: null,
@@ -5251,7 +5252,7 @@
       if (!staffId || !studioId) throw new Error('운영자 권한이 아직 연결되지 않았습니다');
 
       const rangeDates = visibleDatesForMode(appState.viewMode, appState.selectedDate, true);
-      const [staffSnap, staffListSnap, viewSnaps, consultationSnaps, otherScheduleSnaps, memoSnap, actionSnaps, syncSnap, dashboardSnap] = await Promise.all([
+      const [staffSnap, staffListSnap, viewSnaps, consultationSnaps, otherScheduleSnaps, memoSnap, memberProfileSnap, actionSnaps, syncSnap, dashboardSnap] = await Promise.all([
         getDoc(doc(appState.db, 'staffs', String(staffId))),
         getDocs(query(
           collection(appState.db, 'staffs'),
@@ -5277,6 +5278,11 @@
           collection(appState.db, 'memberMemos'),
           where('studioId', '==', String(studioId)),
           queryLimit(300)
+        )),
+        getDocs(query(
+          collection(appState.db, 'memberProfiles'),
+          where('studioId', '==', String(studioId)),
+          queryLimit(500)
         )),
         Promise.all(rangeDates.map((date) => getOptionalDoc(doc(appState.db, 'adminActions', `${studioId}_${date}`)))),
         getDoc(doc(appState.db, 'syncStates', `lecturesRange_${studioId}`)),
@@ -5316,6 +5322,7 @@
           otherSchedules,
           rangeOtherSchedules,
           memos: memoSnap.docs.map((docSnap) => docSnap.data()),
+          memberProfiles: memberProfileSnap.docs.map((docSnap) => ({ memberId: docSnap.id, ...docSnap.data() })),
           actions: selectedActionState ? (selectedActionState.actions || []) : [],
           rangeActions,
           actionsState: selectedActionState,
@@ -6500,6 +6507,10 @@
         .filter((row) => normalizeSearch([
           row.memberName,
           row.memberPhone,
+          row.profile?.phone,
+          row.profile?.phoneLast4,
+          row.profile?.registeredAt ? fullDateLabel(row.profile.registeredAt) : '',
+          (row.profile?.activeTicketNames || []).join(' '),
           row.tags.map((tag) => tag.label || tag.tagId).join(' '),
           row.bookings.map((item) => item.booking.lastMemoPreview || '').join(' '),
           row.memos.map((memo) => memo.content || '').join(' ')
@@ -6559,6 +6570,23 @@
         };
         row.memberName = row.memberName || memo.memberName;
         row.memos.push(memo);
+        map.set(key, row);
+      });
+      (appState.admin.memberProfiles || []).forEach((profile) => {
+        const key = profile.memberId || profile.name;
+        if (!key) return;
+        const row = map.get(key) || {
+          memberId: profile.memberId,
+          memberName: profile.name,
+          memberPhone: profile.phone,
+          tags: [],
+          bookings: [],
+          memos: []
+        };
+        row.memberId = row.memberId || profile.memberId;
+        row.memberName = row.memberName || profile.name;
+        row.memberPhone = profile.phone || row.memberPhone;
+        row.profile = profile;
         map.set(key, row);
       });
       return [...map.values()].map((row) => ({
