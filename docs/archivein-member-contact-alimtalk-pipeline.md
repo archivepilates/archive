@@ -92,7 +92,30 @@ Google People API에 실제 쓰기를 수행할 작업 큐다.
 - `archivepilates@gmail.com`: 기존 연락처 계정 유지용
 - `home@archivepilates.com`: ArchiveIN/Firebase 운영 기준 계정
 
-전환기에는 두 계정 모두 저장하고, 장기적으로는 `home@archivepilates.com` 기준으로 단순화한다.
+현재 운영 중인 Mac mini 자동화 기준으로는 `archivepilates@gmail.com` Google Contacts가 실제 주소록 동기화 대상이고 OAuth 토큰을 사용한다. `home@archivepilates.com`은 완료/실패 보고 메일, Drive/Sheets, Cloud/Firebase 관리 계정이다. 전환기에는 두 계정 모두 고려하되, 개인 Gmail 주소록 직접 수정은 서비스계정이 아니라 OAuth 토큰 방식이 필요하다.
+
+기존 Mac mini 연락처 동기화에서 가져올 안전 규칙:
+
+- StudioMate 회원과 Google 연락처는 정규화된 전화번호로 매칭한다.
+- 전화번호나 이름이 없는 StudioMate 행은 동기화하지 않는다.
+- 동일 전화번호의 Google 연락처가 여러 개 있으면 자동 반영하지 않고 보류한다.
+- Google-only 연락처는 삭제하지 않는다.
+- Google 연락처 삭제/병합/대량 이동은 자동화 범위에 넣지 않는다.
+- 기존 스탭/원장/대표/차단성 라벨이 있는 연락처는 무리하게 덮어쓰지 않는다.
+- 신규 생성과 대량 수정은 dry-run 기준 제한을 둔다.
+
+기존 이름 규칙:
+
+- 일반 회원: `StudioMate이름 회원 YYMMDD`
+- 강사: `StudioMate이름 강사님`
+- 스탭 라벨이 있는 기존 연락처는 표시 이름을 보존한다.
+
+기존 자동 반영 제한:
+
+- 신규 생성 10건 이하
+- 기존 수정 50건 이하
+
+이 제한을 초과하면 실제 반영하지 않고 운영자 확인 또는 실패 보고로 넘긴다.
 
 ## 동기화 트리거
 
@@ -132,6 +155,12 @@ Google 주소록 쓰기에는 Google People API 권한이 필요하다.
 
 - `https://www.googleapis.com/auth/contacts`
 
+기존 Mac mini 토큰 기준:
+
+- `archivepilates@gmail.com` 연락처 동기화는 OAuth 토큰을 사용한다.
+- `home@archivepilates.com` 완료보고 메일과 Drive/Sheets 작업은 서비스계정 도메인 위임을 사용한다.
+- Firebase로 옮길 때도 이 계정 차이를 유지해야 한다.
+
 ## 알림톡 연결 기준
 
 알림톡 후보도 `memberProfiles`와 같은 회원 식별 기준을 쓴다.
@@ -156,6 +185,14 @@ Google 주소록 쓰기에는 Google People API 권한이 필요하다.
 | 수강권 만료 안내 | `KA01TP260513132546446zCdmdJXDOW4` | 만료 후, 다른 활성 수강권이 없는 회원 |
 
 신규회원 웰컴 템플릿 `KA01TP260514081318309wQGfeIJxIAJ`는 검수중이므로 승인 전까지 자동 발송에 연결하지 않는다.
+
+SOLAPI 운영 secret:
+
+- `SOLAPI_API_KEY`
+- `SOLAPI_API_SECRET`
+- `SOLAPI_PFID`
+
+이 값은 Google Secret Manager에 저장하고, Cloud Functions 런타임 서비스계정에 `roles/secretmanager.secretAccessor` 권한을 부여한다. 코드, 문서, GitHub에는 값을 직접 저장하지 않는다.
 
 중복 발송 방지:
 

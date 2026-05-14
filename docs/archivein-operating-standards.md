@@ -108,6 +108,8 @@ ArchiveIN은 데이터 원천별 책임을 명확히 나눈다.
 
 전환기에는 `archivepilates@gmail.com`과 `home@archivepilates.com` 주소록에 이중 저장할 수 있다. 장기적으로는 Workspace 관리와 자동화 권한을 단순화하기 위해 `home@archivepilates.com`을 기준 계정으로 두는 것이 좋다. 단, Google 주소록 자체는 보조 저장소이므로 앱 표시의 원천으로 삼지 않는다.
 
+현재 Mac mini 연락처 자동화는 `archivepilates@gmail.com` Google Contacts를 OAuth 토큰으로 수정한다. 이 흐름을 Firebase로 옮길 때도 서비스계정만으로 개인 Gmail 주소록을 직접 수정할 수 있다고 가정하지 않는다. 기존 자동화의 dry-run, 신규 생성 10건 이하, 수정 50건 이하, Google-only 연락처 삭제 금지 원칙을 유지한다.
+
 점검 순서:
 
 1. 화면에서 보이는 값과 기준 날짜/시간을 확인한다.
