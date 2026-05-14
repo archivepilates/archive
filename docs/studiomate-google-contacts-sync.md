@@ -1,28 +1,29 @@
 # StudioMate Google Contacts Sync
 
 작성일: 2026-05-14  
+운영 기준 변경: 2026-05-15  
 관리 기준 채팅: StudioMate/Codex 자동화 통합 관리 채팅
 
 ## 목적
 
-StudioMate 회원목록 엑셀 데이터를 기준으로 Archive Pilates Google 연락처를 동기화한다.
+StudioMate 회원 API/상담 API에서 정리된 ArchiveIN 회원/상담 연락처를 기준으로 Archive Pilates Google 연락처를 동기화한다.
 
-현재 동기화 대상은 `archivepilates@gmail.com` Google Contacts이고, 완료/실패 보고 메일은 `home@archivepilates.com`에서 `home@archivepilates.com`으로 보낸다.
+현재 동기화 대상은 `home@archivepilates.com` Google Contacts이다. `archivepilates@gmail.com` 주소록은 과거 자동화 대상/이관 원본으로만 본다.
 
 ## 계정 기준
 
 | 용도 | 계정 | 인증 방식 |
 | --- | --- | --- |
-| Google Contacts 동기화 대상 | `archivepilates@gmail.com` | OAuth 토큰 |
+| Google Contacts 동기화 대상 | `home@archivepilates.com` | 서비스계정 도메인 전체 위임 / People API |
 | 완료/실패 보고 메일 | `home@archivepilates.com` | 서비스계정 도메인 위임 |
 | Google Drive 정산 폴더 | `home@archivepilates.com` | Google Drive Desktop / 서비스계정 |
 | Google Cloud/Admin/API 설정 | `home@archivepilates.com` | 관리자/Cloud 계정 |
 
 주의:
 
-- `home@archivepilates.com` 주소록과 `archivepilates@gmail.com` 주소록은 다르다.
-- 연락처 동기화는 `archivepilates@gmail.com` OAuth 토큰으로 실행해야 한다.
-- 서비스계정은 완료보고 Gmail, Drive/Sheets 같은 서버형 자동화에 쓰되, 개인 Gmail 주소록 직접 수정에는 OAuth를 사용한다.
+- `home@archivepilates.com` 주소록을 ArchiveIN 운영 기준 주소록으로 사용한다.
+- 연락처 동기화는 Firebase Functions의 `memberContactIndex` / `contactSyncJobs` / `HomePeopleClient` 흐름을 기준으로 한다.
+- Mac mini에 남아 있는 `archivepilates@gmail.com` OAuth 토큰 기반 스크립트는 레거시로 보고, 실행이 필요하면 `home@archivepilates.com` 기준으로 수정한 뒤 사용한다.
 - 토큰, 서비스계정 JSON, 비밀번호는 Git에 올리지 않는다.
 
 ## 관련 경로
@@ -31,7 +32,7 @@ StudioMate 회원목록 엑셀 데이터를 기준으로 Archive Pilates Google 
 | --- | --- |
 | 연락처 동기화 프로젝트 | `/Users/archivepilates/Documents/New project 2` |
 | StudioMate 자동화 프로젝트 | `/Users/archivepilates/Documents/Codex/2026-05-07/archive` |
-| Google Contacts OAuth 토큰 | `/Users/archivepilates/Documents/New project 2/contacts-token-archivepilates-gmail.json` |
+| Google Contacts 레거시 OAuth 토큰 | `/Users/archivepilates/Documents/New project 2/contacts-token-archivepilates-gmail.json` |
 | 서비스계정 키 | `/Users/archivepilates/ArchiveIN/secrets/google/archive-codex-operator.json` |
 | StudioMate 회원목록 Drive 저장 폴더 | `/Users/archivepilates/Library/CloudStorage/GoogleDrive-home@archivepilates.com/내 드라이브/아카이브 정산/회원원본데이터` |
 | 연락처 동기화 리포트 | `/Users/archivepilates/Documents/New project 2/reports/studiomate-google-sync` |
@@ -42,7 +43,7 @@ StudioMate 회원목록 엑셀 데이터를 기준으로 Archive Pilates Google 
 
 | 파일 | 역할 |
 | --- | --- |
-| `scripts/auth-contacts.mjs` | `archivepilates@gmail.com` OAuth 토큰 발급 |
+| `scripts/auth-contacts.mjs` | 레거시 OAuth 토큰 발급 |
 | `scripts/google-auth.mjs` | OAuth / 서비스계정 인증 공통 처리 |
 | `scripts/export_studiomate_members.py` | 최신 StudioMate 회원목록 엑셀에서 `studiomate-members.json` 생성 |
 | `scripts/sync_studiomate_to_google_contacts.mjs` | Google Contacts dry-run / apply 실행 |
@@ -249,6 +250,13 @@ Codex 앱 자동화는 혼선을 줄이기 위해 보조/수동 테스트용으�
 
 ## 최근 작업 이력
 
+### 2026-05-15 주소록 기준 계정 통일
+
+- ArchiveIN 운영 기준 Google Contacts 계정을 `home@archivepilates.com`으로 통일했다.
+- Firebase Functions `HomePeopleClient`는 서비스계정 도메인 전체 위임으로 `home@archivepilates.com` Contacts를 수정한다.
+- `archivepilates@gmail.com` 주소록은 과거 이관 원본/레거시 자동화 대상으로만 둔다.
+- Mac mini 연락처 자동화가 계속 필요하면 `home@archivepilates.com` 기준으로 수정한 뒤 실행한다.
+
 ### 2026-05-13 계정 분리 정리
 
 - `archivepilates@gmail.com` 주소록 OAuth 토큰을 새로 발급했다.
@@ -332,17 +340,17 @@ Codex 앱 자동화는 혼선을 줄이기 위해 보조/수동 테스트용으�
 
 ## 현재 상태
 
-2026-05-14 기준:
+2026-05-15 기준:
 
 | 항목 | 상태 |
 | --- | --- |
-| Google Contacts 대상 계정 | `archivepilates@gmail.com` |
+| Google Contacts 대상 계정 | `home@archivepilates.com` |
 | 완료보고 메일 계정 | `home@archivepilates.com` |
-| 연락처 동기화 LaunchAgent | 활성 |
+| 연락처 동기화 LaunchAgent | 레거시. 필요 시 home 기준 수정 후 사용 |
 | 회원목록 다운로드 LaunchAgent | 활성 |
 | 예약 가능 기한 LaunchAgent | 활성 |
-| 최신 검증 dry-run | 추가 0 / 수정 0 / 보류 0 |
-| 완료보고 메일 | 성공 |
+| Firebase 연락처 큐 | `memberContactIndex` / `contactSyncJobs` 기준 |
+| 완료보고 메일 | `home@archivepilates.com` 기준 |
 
 ## 운영 원칙
 

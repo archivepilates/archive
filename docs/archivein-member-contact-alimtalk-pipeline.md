@@ -1,6 +1,6 @@
 # ArchiveIN 회원 프로필, 주소록, 알림톡 파이프라인
 
-마지막 업데이트: 2026-05-14
+마지막 업데이트: 2026-05-15
 
 ## 목표
 
@@ -12,17 +12,21 @@
 
 주소록 자동화와 알림톡 자동화가 각각 StudioMate 데이터를 따로 해석하면 동명이인, 연락처 변경, 신규회원 판단, 수강권 만료 판단이 쉽게 어긋난다. 따라서 회원 프로필 정리는 Firebase Functions 쪽에서 공통으로 담당한다.
 
+Google Contacts는 `memberProfiles`를 보강하는 원천이 아니라, StudioMate/Firebase 기준 연락처를 운영자가 쓰기 좋게 복제해두는 보조 저장소다. 즉 기본 흐름은 `StudioMate -> Firebase 회원카드 -> Google Contacts`이고, `Google Contacts -> Firebase 회원카드` 역방향 동기화는 운영 기준이 아니다.
+
 ## 데이터 흐름
 
 ```mermaid
 flowchart LR
   A["StudioMate API 회원/수강권/예약 데이터"] --> B["Firebase Functions 동기화"]
+  A2["StudioMate API 상담 연락처"] --> B
   B --> C["memberProfiles/{memberId}"]
   C --> D["ArchiveIN 회원카드"]
   C --> E["memberContactIndex/{memberId}"]
+  B --> E2["memberContactIndex/{consultationId}"]
+  E2 --> F
   E --> F["contactSyncJobs/{jobId}"]
-  F --> G["Google Contacts: archivepilates@gmail.com"]
-  F --> H["Google Contacts: home@archivepilates.com"]
+  F --> G["Google Contacts: home@archivepilates.com"]
   C --> I["ACTIONS / 알림톡 후보"]
   I --> J["alimtalkCandidates/{candidateId}"]
   J --> K["알림톡 발송 로그"]
@@ -54,6 +58,7 @@ flowchart LR
 ### `memberContactIndex/{memberId}`
 
 Google 주소록 동기화 전용 인덱스다. 주소록은 원천 데이터가 아니며, 이 인덱스는 `memberProfiles`에서 파생된다.
+상담 등록처럼 아직 StudioMate 회원 ID가 없는 연락처는 `consultation_{consultationId}` 형태의 임시 키로 저장하고, Google Contacts에서는 전화번호 기준으로 같은 사람을 업데이트한다.
 
 필수 필드:
 
@@ -64,7 +69,6 @@ Google 주소록 동기화 전용 인덱스다. 주소록은 원천 데이터가
 - `phoneLast4`
 - `registeredAt`
 - `activeTicketCount`
-- `contactTargets.archivepilates_gmail`
 - `contactTargets.home_archivepilates`
 - `syncedAt`
 - `updatedAt`
@@ -89,10 +93,9 @@ Google People API에 실제 쓰기를 수행할 작업 큐다.
 
 대상 계정:
 
-- `archivepilates@gmail.com`: 기존 연락처 계정 유지용
-- `home@archivepilates.com`: ArchiveIN/Firebase 운영 기준 계정
+- `home@archivepilates.com`: ArchiveIN/Firebase/Google Contacts 운영 기준 계정
 
-현재 운영 중인 Mac mini 자동화 기준으로는 `archivepilates@gmail.com` Google Contacts가 실제 주소록 동기화 대상이고 OAuth 토큰을 사용한다. `home@archivepilates.com`은 완료/실패 보고 메일, Drive/Sheets, Cloud/Firebase 관리 계정이다. 전환기에는 두 계정 모두 고려하되, 개인 Gmail 주소록 직접 수정은 서비스계정이 아니라 OAuth 토큰 방식이 필요하다.
+2026-05-15 이후 주소록 동기화 대상은 `home@archivepilates.com`으로 통일한다. `archivepilates@gmail.com` 주소록은 과거 자동화 대상/이관 원본으로만 본다.
 
 기존 Mac mini 연락처 동기화에서 가져올 안전 규칙:
 
@@ -146,20 +149,21 @@ Google 주소록 쓰기에는 Google People API 권한이 필요하다.
 
 권장 방식:
 
-1. `home@archivepilates.com`은 Workspace 운영 계정으로 두고 Firebase Secret Manager에 OAuth refresh token 또는 도메인 위임 설정을 저장한다.
-2. `archivepilates@gmail.com`은 소비자 Gmail 계정이므로 OAuth refresh token 방식으로만 안정적으로 쓴다.
-3. 서비스계정 JSON 키 파일에 개인 OAuth refresh token을 직접 넣지 않는다.
-4. 키와 토큰은 Secret Manager 또는 암호화 파일로 보관하고, GitHub에는 올리지 않는다.
+1. `home@archivepilates.com`은 Workspace 운영 계정이자 Google Contacts 기준 계정이다.
+2. Firebase Functions에서는 서비스계정 도메인 전체 위임으로 `home@archivepilates.com`의 Google Contacts를 수정한다.
+3. `archivepilates@gmail.com`은 과거 주소록 이관 원본으로만 사용한다.
+4. 서비스계정 JSON 키 파일에 개인 OAuth refresh token을 직접 넣지 않는다.
+5. 키와 토큰은 Secret Manager 또는 암호화 파일로 보관하고, GitHub에는 올리지 않는다.
 
 필요 scope:
 
 - `https://www.googleapis.com/auth/contacts`
 
-기존 Mac mini 토큰 기준:
+현재 Firebase 기준:
 
-- `archivepilates@gmail.com` 연락처 동기화는 OAuth 토큰을 사용한다.
-- `home@archivepilates.com` 완료보고 메일과 Drive/Sheets 작업은 서비스계정 도메인 위임을 사용한다.
-- Firebase로 옮길 때도 이 계정 차이를 유지해야 한다.
+- `home@archivepilates.com` 연락처 동기화는 서비스계정 도메인 전체 위임을 사용한다.
+- 완료보고 메일과 Drive/Sheets 작업도 `home@archivepilates.com` 운영 기준을 따른다.
+- Mac mini 자동화가 남아 있으면 `home@archivepilates.com` 기준으로 수정한 뒤 사용한다.
 
 ## 알림톡 연결 기준
 
@@ -180,13 +184,21 @@ Google 주소록 쓰기에는 Google People API 권한이 필요하다.
 
 | 목적 | 템플릿 ID | 기준 |
 | --- | --- | --- |
-| 수강권 기간 안내 | `KA01TP260513132546274Sp5VtNf2pv7` | 활성 수강권, 만료 14일 이내 |
-| 수강권 잔여횟수 안내 | `KA01TP260513132546352nPdudb2yHnG` | 활성 수강권, 잔여 5회 미만 |
-| 수강권 만료 안내 | `KA01TP260513132546446zCdmdJXDOW4` | 만료 후, 다른 활성 수강권이 없는 회원 |
+| 예약 안내 v2 | `KA01TP2605131325462341f8ACO2THW6` | 예약 오픈 안내 대상 |
+| 신규회원 웰컴 v3 | `KA01TP260514081318309wQGfeIJxIAJ` | 최초 등록 30일 이내 신규회원 |
 
-신규회원 웰컴 템플릿 `KA01TP260514081318309wQGfeIJxIAJ`는 검수중이므로 승인 전까지 자동 발송에 연결하지 않는다.
+검수중 템플릿:
 
-그룹 기간권 잔여기간 안내 v3 `KA01TP260514145047261araXgWLVFRs`, 그룹 횟수권 잔여횟수 안내 v3 `KA01TP260514145047393VpTbcCZKkCV`, 프라이빗 횟수권 잔여횟수 안내 v1 `KA01TP260514152235608d9icGOBotnV`, 프라이빗 사전설문 안내 v1 `KA01TP260514153632171uiWXYoeiOLS`는 SOLAPI에 초안(`PENDING`)으로만 생성했다. 검수 요청 전 사용자가 문구를 수정할 수 있도록 자동 발송에는 연결하지 않는다.
+| 목적 | 템플릿 ID | 기준 |
+| --- | --- | --- |
+| 그룹 기간권 잔여기간 안내 v3 | `KA01TP260514145047261araXgWLVFRs` | 활성 그룹 기간권, 만료 14일 이내 |
+| 그룹 횟수권 잔여횟수 안내 v3 | `KA01TP260514145047393VpTbcCZKkCV` | 활성 그룹 횟수권, 잔여 5회 미만 |
+| 프라이빗 횟수권 잔여횟수 안내 v1 | `KA01TP260514152235608d9icGOBotnV` | 활성 프라이빗 횟수권, 잔여 3회 이하 |
+| 프라이빗 사전설문 안내 v1 | `KA01TP260514153632171uiWXYoeiOLS` | 첫 프라이빗 등록/예약 회원 |
+
+검수중 템플릿은 후보만 생성하고 실제 발송에는 연결하지 않는다. 프라이빗 기간권 잔여기간 안내 v1 `KA01TP260514153314927WH270IppWQS`는 운영 빈도가 낮아 자동 연결 보류로 둔다.
+
+템플릿별 데이터 연결 기준은 `docs/solapi-template-data-operating-rules.md`를 우선 기준으로 따른다.
 
 SOLAPI 운영 secret:
 

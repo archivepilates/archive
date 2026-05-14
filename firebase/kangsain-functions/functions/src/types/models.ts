@@ -376,7 +376,12 @@ export interface ContactSyncJobDoc {
     action: "created" | "updated" | "skipped";
     resourceName?: string;
   };
-  sourceReason: "member_profile_refresh" | "notice_member_signup" | "notice_ticket_update" | "manual_resync";
+  sourceReason:
+    | "member_profile_refresh"
+    | "notice_member_signup"
+    | "notice_ticket_update"
+    | "consultation_schedule"
+    | "manual_resync";
   createdAt: Timestamp;
   updatedAt: Timestamp;
 }

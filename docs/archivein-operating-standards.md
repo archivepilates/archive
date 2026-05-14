@@ -88,7 +88,7 @@ ArchiveIN은 데이터 원천별 책임을 명확히 나눈다.
 | --- | --- | --- | --- |
 | StudioMate API | 수업, 예약, 출결, 회원 메모 등 운영 원천 | 강사용 수업 목록, 예약 상태, 출결 write queue | 앱 클라이언트가 직접 매번 호출하지 않는다. 서버 동기화와 캐시를 우선한다. |
 | Firebase Firestore 캐시 | 앱이 빠르게 읽는 운영 뷰와 처리 상태 | `instructorViews`, `memberProfiles`, 회원 태그, write queue, ACTION 후보 | 캐시가 원천이라고 착각하지 않는다. 동기화 시각과 근거를 함께 본다. |
-| Google 주소록 | 전화 발신/검색/운영 커뮤니케이션 보조 저장소 | `archivepilates@gmail.com`, `home@archivepilates.com` 연락처 | 회원 원천이 아니다. StudioMate API에서 내려온 `memberProfiles`를 기준으로 동기화한다. |
+| Google 주소록 | 전화 발신/검색/운영 커뮤니케이션 보조 저장소 | `home@archivepilates.com` 연락처 | 회원 원천이 아니다. StudioMate API에서 내려온 `memberProfiles`와 상담 연락처를 기준으로 동기화한다. |
 | 아카이브DB | 정산/월별 분석/운영 지표의 기준 데이터 | 월별 유효회원, 매출성 지표, 정산 후 데이터마트 | StudioMate 실시간 상태와 다를 수 있다. 정산 완료 기준임을 표시한다. |
 | 맥미니 자동화 | StudioMate 엑셀/관리자 흐름 보조 자동화 | 엑셀 다운로드, Drive 정리, 아카이브DB 갱신 보조 | 자동화 실패나 지연을 Firebase 장애로 오해하지 않는다. |
 
@@ -106,9 +106,9 @@ ArchiveIN은 데이터 원천별 책임을 명확히 나눈다.
 4. Google 주소록 동기화는 `memberContactIndex/{memberId}`와 `contactSyncJobs`를 통해 처리한다.
 5. 알림톡 후보 산정은 같은 회원 프로필과 수강권/출석 요약을 사용한다.
 
-전환기에는 `archivepilates@gmail.com`과 `home@archivepilates.com` 주소록에 이중 저장할 수 있다. 장기적으로는 Workspace 관리와 자동화 권한을 단순화하기 위해 `home@archivepilates.com`을 기준 계정으로 두는 것이 좋다. 단, Google 주소록 자체는 보조 저장소이므로 앱 표시의 원천으로 삼지 않는다.
+2026-05-15 이후 주소록 기준 계정은 `home@archivepilates.com` 하나로 통일한다. `archivepilates@gmail.com` 주소록은 과거 자동화 대상/이관 원본으로만 본다. 단, Google 주소록 자체는 보조 저장소이므로 앱 표시의 원천으로 삼지 않는다.
 
-현재 Mac mini 연락처 자동화는 `archivepilates@gmail.com` Google Contacts를 OAuth 토큰으로 수정한다. 이 흐름을 Firebase로 옮길 때도 서비스계정만으로 개인 Gmail 주소록을 직접 수정할 수 있다고 가정하지 않는다. 기존 자동화의 dry-run, 신규 생성 10건 이하, 수정 50건 이하, Google-only 연락처 삭제 금지 원칙을 유지한다.
+Firebase 주소록 동기화는 `home@archivepilates.com`을 Google People API 위임 대상으로 사용한다. Mac mini에 남아 있는 `archivepilates@gmail.com` 기준 자동화는 더 이상 운영 기준이 아니며, 실행이 필요하면 `home@archivepilates.com` 기준으로 수정한 뒤 사용한다. 기존 자동화의 dry-run, 신규 생성 10건 이하, 수정 50건 이하, Google-only 연락처 삭제 금지 원칙은 유지한다.
 
 점검 순서:
 
@@ -117,6 +117,17 @@ ArchiveIN은 데이터 원천별 책임을 명확히 나눈다.
 3. StudioMate API 원본과 비교한다.
 4. 아카이브DB 기준 지표라면 시트 갱신 시각과 정산 기준을 확인한다.
 5. 맥미니 자동화가 필요한 흐름이면 자동화 실행 로그와 결과 파일을 확인한다.
+
+### StudioMate 예약 가능 기한 설정 자동화
+
+매주 월요일 12:30에 수행하는 StudioMate 예약 가능 기한 설정 변경은 현재 Mac mini 브라우저 자동화 기준이다. ArchiveIN Firebase Functions의 StudioMate API 클라이언트에는 아직 이 설정 변경 전용 endpoint가 확인되어 있지 않다.
+
+API 전환 조건:
+
+1. StudioMate 관리자 설정 화면에서 실제 네트워크 요청의 endpoint, method, payload, 인증 헤더를 캡처한다.
+2. 동일 계정/동일 권한으로 저빈도 테스트 호출이 성공하는지 확인한다.
+3. 실패 시 브라우저 자동화로 fallback할 수 있게 둔다.
+4. 확인 전까지는 설정 변경 자동화를 Firebase 서버 API로 옮기지 않는다.
 
 ## 5. 모바일 UI 운영 기준
 

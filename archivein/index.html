@@ -753,6 +753,13 @@
       color: #9E422B;
     }
 
+    .action-send.pending {
+      border-color: rgba(119, 119, 119, 0.2);
+      background: rgba(120, 120, 120, 0.08);
+      color: var(--muted);
+      cursor: default;
+    }
+
     .action-summary {
       display: flex;
       flex-wrap: wrap;
@@ -3265,7 +3272,7 @@
       const targetDate = actionDate(item);
       const bodyText = actionDisplayBody(item);
       const sendButton = messageMeta
-        ? `<button class="action-send ${escapeAttr(messageMeta.mode)}" type="button" data-action-send="${escapeAttr(item.actionKey || '')}" data-action-type="${escapeAttr(item.type || '')}" data-action-title="${escapeAttr(item.title || '')}" data-action-date="${escapeAttr(targetDate)}" data-action-message-mode="${escapeAttr(messageMeta.mode)}">${escapeHtml(messageMeta.label)}</button>`
+        ? `<button class="action-send ${escapeAttr(messageMeta.mode)}" type="button" data-action-send="${escapeAttr(item.actionKey || '')}" data-action-type="${escapeAttr(item.type || '')}" data-action-title="${escapeAttr(item.title || '')}" data-action-date="${escapeAttr(targetDate)}" data-action-message-mode="${escapeAttr(messageMeta.mode)}" data-action-message-detail="${escapeAttr(messageMeta.detail || '')}" ${messageMeta.disabled ? 'disabled' : ''}>${escapeHtml(messageMeta.label)}</button>`
         : '';
       return `
         <div class="detail-row action-row">
@@ -3281,13 +3288,18 @@
     }
 
     function actionMessageMeta(item) {
-      const type = String(item?.type || '');
       if (!item?.memberKey) return '';
-      if (item?.alimtalkStatus === 'sent') return { label: '발송완료', mode: 'auto' };
-      if (item?.alimtalkStatus === 'queued') return { label: '발송대기', mode: 'auto' };
-      if (item?.alimtalkStatus === 'skipped') return { label: '제외', mode: 'review' };
-      if (item?.alimtalkCandidateId) return { label: '발송후보', mode: 'auto' };
-      if (type === '수강권') return { label: '자동대상', mode: 'auto' };
+      const status = String(item?.alimtalkStatus || '');
+      const rule = alimtalkRuleMeta(item);
+      if (status === 'sent') return { label: '발송완료', mode: 'auto', detail: rule.label || '' };
+      if (status === 'queued') return { label: '발송대기', mode: 'auto', detail: rule.label || '' };
+      if (status === 'skipped') return { label: '제외', mode: 'review', detail: rule.label || '' };
+      if (status === 'failed') return { label: '발송실패', mode: 'review', detail: rule.label || '' };
+      if (rule.key) {
+        if (rule.status === 'APPROVED') return { label: rule.label, mode: 'auto', detail: rule.detail || '' };
+        return { label: `${rule.label} 검수중`, mode: 'pending', detail: rule.detail || '', disabled: true };
+      }
+      const type = String(item?.type || '');
       if (type === '장기미방문') return { label: '확인필요', mode: 'review' };
       if (type === '출석률' || type === '결석증가') return { label: '확인필요', mode: 'review' };
       if (type === '케어확인') return { label: '메모확인', mode: 'review' };
@@ -3296,7 +3308,8 @@
 
     function actionDisplayBody(item) {
       const body = String(item?.body || '').trim();
-      const reason = actionReasonMeta(item);
+      const rule = alimtalkRuleMeta(item);
+      const reason = rule.key ? rule : actionReasonMeta(item);
       if (!reason) return body;
       if (body.includes(reason.label)) return body;
       return body ? `${reason.label} · ${body}` : reason.label;
@@ -3316,21 +3329,62 @@
       return { key: 'ticketCheck', label: '수강권확인' };
     }
 
+    function alimtalkTemplateMeta(code) {
+      const map = {
+        KA01TP2605131325462341f8ACO2THW6: { key: 'reservationOpen', label: '예약 안내', status: 'APPROVED', detail: '예약 오픈 안내' },
+        KA01TP260514081318309wQGfeIJxIAJ: { key: 'newMember', label: '신규회원', status: 'APPROVED', detail: '신규회원 웰컴' },
+        KA01TP260514145047261araXgWLVFRs: { key: 'groupPeriod', label: '그룹 기간 임박', status: 'INSPECTING', detail: '그룹 기간권 만료 14일 이내' },
+        KA01TP260514145047393VpTbcCZKkCV: { key: 'groupCount', label: '그룹 횟수 부족', status: 'INSPECTING', detail: '그룹 횟수권 잔여 5회 미만' },
+        KA01TP260514152235608d9icGOBotnV: { key: 'privateCount', label: '프라이빗 횟수 부족', status: 'INSPECTING', detail: '프라이빗 횟수권 잔여 3회 이하' },
+        KA01TP260514153314927WH270IppWQS: { key: 'privatePeriod', label: '프라이빗 기간 임박', status: 'HOLD', detail: '운영 보류' },
+        KA01TP260514153632171uiWXYoeiOLS: { key: 'privateSurvey', label: '프라이빗 설문 필요', status: 'INSPECTING', detail: '첫 프라이빗 등록/예약' }
+      };
+      return map[String(code || '')] || null;
+    }
+
+    function alimtalkRuleMeta(item) {
+      const template = alimtalkTemplateMeta(item?.alimtalkTemplateCode || item?.templateCode);
+      if (template) return template;
+      const candidateType = String(item?.alimtalkType || item?.candidateType || '');
+      const typeMap = {
+        new_member: { key: 'newMember', label: '신규회원', status: 'APPROVED', detail: '신규회원 웰컴' },
+        ticket_expiring: { key: 'groupPeriod', label: '그룹 기간 임박', status: 'INSPECTING', detail: '수강권 기간 임박' },
+        remaining_low: { key: 'groupCount', label: '그룹 횟수 부족', status: 'INSPECTING', detail: '수강권 잔여횟수 부족' },
+        private_count_low: { key: 'privateCount', label: '프라이빗 횟수 부족', status: 'INSPECTING', detail: '프라이빗 잔여횟수 부족' },
+        private_survey: { key: 'privateSurvey', label: '프라이빗 설문 필요', status: 'INSPECTING', detail: '프라이빗 사전설문' }
+      };
+      if (typeMap[candidateType]) return typeMap[candidateType];
+      const reason = actionReasonMeta(item);
+      if (reason?.key === 'lowRemaining') return { key: 'groupCount', label: '그룹 횟수 부족', status: 'INSPECTING', detail: '잔여횟수 부족' };
+      if (reason?.key === 'expiringSoon') return { key: 'groupPeriod', label: '그룹 기간 임박', status: 'INSPECTING', detail: '기간 만료 임박' };
+      if (reason?.key === 'lowAndSoon') return { key: 'groupTicketRisk', label: '그룹 수강권 확인', status: 'INSPECTING', detail: '기간/횟수 동시 확인' };
+      return {};
+    }
+
     function actionAutomationStats(rows) {
       return (rows || []).reduce((stats, row) => {
         const meta = actionMessageMeta(row);
+        const rule = alimtalkRuleMeta(row);
+        const reason = rule.key ? rule : actionReasonMeta(row);
         if (meta?.mode === 'auto') {
           stats.auto += 1;
-          const reason = actionReasonMeta(row);
-          if (reason) stats.reasons[reason.key] = (stats.reasons[reason.key] || 0) + 1;
         }
+        if (meta?.mode === 'pending') stats.pending += 1;
         if (meta?.mode === 'review') stats.review += 1;
+        if (reason && meta) stats.reasons[reason.key] = (stats.reasons[reason.key] || 0) + 1;
         return stats;
-      }, { auto: 0, review: 0, reasons: {} });
+      }, { auto: 0, pending: 0, review: 0, reasons: {} });
     }
 
     function renderActionReasonSummary(stats) {
       const labels = [
+        ['newMember', '신규'],
+        ['privateSurvey', '설문'],
+        ['privateCount', 'P잔여'],
+        ['groupCount', 'G잔여'],
+        ['groupPeriod', 'G기간'],
+        ['groupTicketRisk', 'G확인'],
+        ['reservationOpen', '예약'],
         ['lowAndSoon', '잔여/기간'],
         ['lowRemaining', '잔여부족'],
         ['expiringSoon', '기간임박'],
@@ -3351,8 +3405,49 @@
       return map;
     }
 
+    function alimtalkCandidateActionItems(date = appState.selectedDate, options = {}) {
+      const completed = completedAdminActionKeys(date);
+      const includeLinked = Boolean(options.includeLinked);
+      return (appState.admin.alimtalkCandidates || [])
+        .filter((candidate) => includeLinked || !candidate.sourceActionKey)
+        .filter((candidate) => !['sent', 'skipped'].includes(String(candidate.status || '')))
+        .filter((candidate) => !date || !candidate.sourceDate || candidate.sourceDate === date)
+        .map((candidate) => {
+          const rule = alimtalkRuleMeta(candidate);
+          const actionKey = `alimtalk_${candidate.candidateId || stableActionCandidateKey(candidate)}`;
+          return {
+            actionKey,
+            type: rule.label || candidate.title || '알림톡',
+            title: candidate.memberName || '회원',
+            body: candidate.reason || rule.detail || '',
+            level: rule.status === 'APPROVED' ? 'good' : 'wait',
+            memberKey: candidate.memberId || candidate.memberName || '',
+            sort: `0_${candidate.sourceDate || date}_${rule.key || 'alimtalk'}_${candidate.memberName || ''}`,
+            sourceDate: candidate.sourceDate || date,
+            alimtalkCandidateId: candidate.candidateId || '',
+            alimtalkType: candidate.type || '',
+            alimtalkStatus: candidate.status || '',
+            alimtalkTemplateCode: candidate.templateCode || '',
+            alimtalkReason: candidate.reason || ''
+          };
+        })
+        .filter((item) => item.actionKey && !completed.has(item.actionKey));
+    }
+
+    function stableActionCandidateKey(candidate) {
+      return [
+        candidate.memberId || candidate.memberName || 'member',
+        candidate.type || 'alimtalk',
+        candidate.sourceDate || '',
+        candidate.templateCode || ''
+      ].join('_');
+    }
+
     function adminActionItemsForViewsByDate(views) {
-      const dates = [...new Set((views || []).map((view) => view.date).filter(Boolean))].sort();
+      const dates = [...new Set([
+        ...(views || []).map((view) => view.date).filter(Boolean),
+        ...(appState.admin.alimtalkCandidates || []).map((candidate) => candidate.sourceDate).filter(Boolean)
+      ])].sort();
       return dedupeAdminActions(dates
         .flatMap((date) => adminActionItems(views.filter((view) => view.date === date), date))
         .sort((a, b) =>
@@ -3367,7 +3462,10 @@
       const actionViews = views.filter((view) => view.date <= reservationOpenEndDate(today()));
       const serverActions = normalizedAdminActions(views, date);
       if (serverActions.length) {
-        return dedupeAdminActions(serverActions.filter((action) => actionDate(action, date) <= reservationOpenEndDate(today())));
+        return dedupeAdminActions([
+          ...serverActions.filter((action) => actionDate(action, date) <= reservationOpenEndDate(today())),
+          ...alimtalkCandidateActionItems(date)
+        ]);
       }
       const rows = [];
       actionViews.forEach((view) => {
@@ -3401,6 +3499,7 @@
       });
       rows.push(...memberActionItems(views, date));
       rows.push(...careActionItems(views, date));
+      rows.push(...alimtalkCandidateActionItems(date));
       return dedupeAdminActions(rows
         .filter((row) => row.actionKey && !completed.has(row.actionKey))
         .sort((a, b) => String(a.sort || '').localeCompare(String(b.sort || ''), 'ko')))
@@ -3419,6 +3518,7 @@
         memberKey: action.memberId || action.memberName || '',
         sort: action.sort || '',
         alimtalkCandidateId: candidateMap.get(action.actionKey || '')?.candidateId || '',
+        alimtalkType: candidateMap.get(action.actionKey || '')?.type || '',
         alimtalkStatus: candidateMap.get(action.actionKey || '')?.status || '',
         alimtalkTemplateCode: candidateMap.get(action.actionKey || '')?.templateCode || '',
         alimtalkReason: candidateMap.get(action.actionKey || '')?.reason || ''
@@ -3481,7 +3581,7 @@
     }
 
     function actionDate(action, fallbackDate = appState.selectedDate) {
-      return String(action.sort || action.actionKey || '').match(/\d{4}-\d{2}-\d{2}/)?.[0] || fallbackDate;
+      return action?.sourceDate || action?.date || String(action.sort || action.actionKey || '').match(/\d{4}-\d{2}-\d{2}/)?.[0] || fallbackDate;
     }
 
     function reservationOpenEndDate(baseDate) {
@@ -3753,23 +3853,22 @@
 
     function renderAdminWeekBody() {
       const active = appState.admin.activeTab || 'overview';
-      if (active === 'analytics') return `${renderAdminAnalytics()}${renderSelectedDateOperations()}`;
+      if (active === 'analytics') return renderAdminAnalytics();
       if (active === 'members') return renderAdminMemberSearch();
       return `
         ${renderWeekView()}
         ${renderWeekOperationsSummary()}
-        ${renderSelectedDateOperations()}
       `;
     }
 
     function renderAdminMonthBody() {
       const active = appState.admin.activeTab || 'overview';
-      if (active === 'analytics') return `${renderMonthActions()}${renderMonthCalendar()}${renderSelectedDateOperations()}`;
+      if (active === 'analytics') return `${renderMonthActions()}${renderMonthCalendar()}`;
       if (active === 'members') return renderAdminMemberSearch();
       return `
         ${renderMonthDashboard()}
         ${renderMonthCalendar()}
-        ${renderSelectedDateOperations()}
+        ${renderPeriodOperationsSummary('month')}
       `;
     }
 
@@ -4078,26 +4177,58 @@
     }
 
     function renderWeekOperationsSummary() {
-      const views = adminViewsForWeek(appState.selectedDate);
-      const consultations = adminConsultationsForWeek(appState.selectedDate);
-      const newMembers = weekNewMembers();
+      return renderPeriodOperationsSummary('week');
+    }
+
+    function renderPeriodOperationsSummary(mode = appState.viewMode) {
+      const { start, end } = periodRangeForMode(mode, appState.selectedDate);
+      const periodLabel = mode === 'month' ? '이번 달' : '이번 주';
+      const consultations = adminConsultationsForRange(start, end);
+      const newMembers = periodNewMembers(start, end);
+      const expiredTickets = periodExpiredTickets(start, end);
+      const renewedMembers = periodRenewedMembers(start, end, expiredTickets);
+      const expiredMemberCount = new Set(expiredTickets.map((item) => item.row.memberId || item.row.memberName).filter(Boolean)).size;
       return `
         <section class="week-insight-grid">
           <div class="admin-panel">
-            <h2>이번 주 상담</h2>
+            <div class="day-operation-head">
+              <h2>${periodLabel} 상담</h2>
+              <span>${consultations.length}건</span>
+            </div>
             <div class="admin-list">
               ${consultations.slice(0, 8).map((item) => `
                 <div class="admin-list-item">
                   <strong>${escapeHtml(shortDate(item.date))} ${escapeHtml(consultationTimeText(item))} ${escapeHtml(item.memberName || '상담')}</strong>
                   <p>${escapeHtml([staffName(item.staffId), formatPhone(item.memberPhone), item.memo].filter(Boolean).join(' · '))}</p>
                 </div>
-              `).join('') || '<div class="empty">이번 주 상담이 없습니다</div>'}
+              `).join('') || `<div class="empty">${periodLabel} 상담이 없습니다</div>`}
             </div>
           </div>
           <div class="admin-panel">
-            <h2>신규회원</h2>
+            <div class="day-operation-head">
+              <h2>신규회원</h2>
+              <span>${newMembers.length}명</span>
+            </div>
             <div class="admin-list">
-              ${newMembers.slice(0, 8).map(renderNewMemberItem).join('') || '<div class="empty">이번 주 신규회원이 없습니다</div>'}
+              ${newMembers.slice(0, 8).map(renderNewMemberItem).join('') || `<div class="empty">${periodLabel} 신규회원이 없습니다</div>`}
+            </div>
+          </div>
+          <div class="admin-panel">
+            <div class="day-operation-head">
+              <h2>수강권 만료</h2>
+              <span>${expiredMemberCount}명</span>
+            </div>
+            <div class="admin-list">
+              ${expiredTickets.slice(0, 8).map(renderExpiredTicketItem).join('') || `<div class="empty">${periodLabel} 만료 수강권이 없습니다</div>`}
+            </div>
+          </div>
+          <div class="admin-panel">
+            <div class="day-operation-head">
+              <h2>재등록 확인</h2>
+              <span>${renewedMembers.length}명</span>
+            </div>
+            <div class="admin-list">
+              ${renewedMembers.slice(0, 8).map(renderRenewedMemberItem).join('') || `<div class="empty">${periodLabel} 재등록 확인 회원이 없습니다</div>`}
             </div>
           </div>
         </section>
@@ -4142,6 +4273,30 @@
         <div class="admin-list-item">
           <button class="member-name" type="button" data-action-member="${escapeAttr(row.memberId || row.memberName || '')}">${escapeHtml(row.memberName || '회원')}</button>
           <p>등록일 ${escapeHtml(fullDateLabel(row.registeredAt) || '-')}</p>
+        </div>
+      `;
+    }
+
+    function renderExpiredTicketItem(item) {
+      const remaining = ticketCountLabel(item.booking.ticketRemainingCount);
+      const meta = [privateTicketLabel(item.booking.ticketName) || item.booking.ticketName, fullDateLabel(item.expires), remaining]
+        .filter(Boolean)
+        .join(' · ');
+      return `
+        <div class="admin-list-item">
+          <button class="member-name" type="button" data-action-member="${escapeAttr(item.row.memberId || item.row.memberName || '')}">${escapeHtml(item.row.memberName || '회원')}</button>
+          <p>${escapeHtml(meta || '수강권 만료')}</p>
+        </div>
+      `;
+    }
+
+    function renderRenewedMemberItem(item) {
+      const currentName = privateTicketLabel(item.renewedTicket?.booking?.ticketName) || item.renewedTicket?.booking?.ticketName || '다른 수강권';
+      const expiredName = privateTicketLabel(item.booking.ticketName) || item.booking.ticketName || '만료 수강권';
+      return `
+        <div class="admin-list-item">
+          <button class="member-name" type="button" data-action-member="${escapeAttr(item.row.memberId || item.row.memberName || '')}">${escapeHtml(item.row.memberName || '회원')}</button>
+          <p>${escapeHtml(`${expiredName} → ${currentName}`)}</p>
         </div>
       `;
     }
@@ -4290,6 +4445,7 @@
             <h2>월간 액션</h2>
             <div class="action-summary">
               ${stats.auto ? `<span class="chip good">자동 ${stats.auto}</span>` : ''}
+              ${stats.pending ? `<span class="chip wait">검수중 ${stats.pending}</span>` : ''}
               ${renderActionReasonSummary(stats)}
               ${stats.review ? `<span class="chip wait">확인 ${stats.review}</span>` : ''}
               <span>${rows.length}건</span>
@@ -4751,6 +4907,7 @@
             <h2>액션 필요</h2>
             <div class="action-summary">
               ${stats.auto ? `<span class="chip good">자동 ${stats.auto}</span>` : ''}
+              ${stats.pending ? `<span class="chip wait">검수중 ${stats.pending}</span>` : ''}
               ${renderActionReasonSummary(stats)}
               ${stats.review ? `<span class="chip wait">확인 ${stats.review}</span>` : ''}
               <span>${rows.length}건</span>
@@ -4918,6 +5075,10 @@
       root.querySelectorAll('[data-calendar-date]').forEach((button) => {
         button.addEventListener('click', () => {
           appState.selectedDate = button.dataset.calendarDate || appState.selectedDate;
+          if (appState.mode === 'manager' && appState.viewMode !== 'day') {
+            appState.viewMode = 'day';
+            appState.admin.activeTab = defaultAdminTabForMode('day');
+          }
           appState.openLectures.clear();
           appState.detailPanel = '';
           appState.detailLectureId = '';
@@ -5035,7 +5196,8 @@
             button.dataset.actionType,
             button.dataset.actionTitle,
             button.dataset.actionDate,
-            button.dataset.actionMessageMode
+            button.dataset.actionMessageMode,
+            button.dataset.actionMessageDetail
           );
         });
       });
@@ -5051,10 +5213,12 @@
       });
     }
 
-    function prepareActionMessage(actionKey, type, title, date, mode) {
+    function prepareActionMessage(actionKey, type, title, date, mode, detail = '') {
       if (!actionKey) return;
       if (mode === 'auto') {
-        showToast(`${title || '회원'} ${type || '액션'} 자동 알림 후보입니다`);
+        showToast(`${title || '회원'} ${type || detail || '알림톡'} 후보입니다`);
+      } else if (mode === 'pending') {
+        showToast(`${type || detail || '알림톡'} 템플릿 검수 완료 후 발송할 수 있습니다`);
       } else {
         showToast(`${title || '회원'} 확인 후 알림 발송 대상입니다`);
       }
@@ -6130,6 +6294,10 @@
     function adminConsultationsForWeek(date) {
       const start = weekStartDate(date);
       const end = addDays(start, 6);
+      return adminConsultationsForRange(start, end);
+    }
+
+    function adminConsultationsForRange(start, end) {
       const selected = appState.admin.selectedStaffId || 'all';
       return (appState.admin.rangeConsultations || [])
         .filter((item) =>
@@ -6178,24 +6346,39 @@
     function weekNewMembers() {
       const start = weekStartDate(appState.selectedDate);
       const end = addDays(start, 6);
+      return periodNewMembers(start, end);
+    }
+
+    function periodNewMembers(start, end) {
       const rows = new Map();
-      adminViewsForWeek(appState.selectedDate).forEach((view) => {
+      (appState.admin.memberProfiles || []).forEach((profile) => {
+        const registered = dateOnlyFromValue(profile.registeredAt || profile.firstRegisteredAt || profile.joinedAt || profile.createdAt);
+        if (!registered || registered < start || registered > end) return;
+        const key = profile.memberId || profile.name;
+        if (!key || rows.has(key)) return;
+        rows.set(key, {
+          memberId: profile.memberId,
+          memberName: profile.name,
+          registeredAt: registered
+        });
+      });
+      adminViewsForRange(start, end).forEach((view) => {
         (view.lectures || []).forEach((lecture) => {
           (lecture.bookings || [])
             .filter((booking) => !['cancel', 'wait_cancel'].includes(booking.appStatus))
             .forEach((booking) => {
               const registered = dateOnlyFromValue(booking.memberRegisteredAt);
               const newTag = (booking.tags || []).find((tag) => /신규회원/.test(tag.label || tag.tagId || ''));
-              const isNewByTag = Boolean(newTag);
-              const isNewByRegisteredAt = isWithinDaysFromEnd(registered, end, 30);
+              const sourceDate = registered || newTag?.sourceDate || '';
+              const isNewByTag = Boolean(newTag && sourceDate >= start && sourceDate <= end);
+              const isNewByRegisteredAt = Boolean(registered && registered >= start && registered <= end);
               if (!isNewByTag && !isNewByRegisteredAt) return;
               const key = booking.memberId || booking.memberName;
               if (!key || rows.has(key)) return;
               rows.set(key, {
                 memberId: booking.memberId,
                 memberName: booking.memberName,
-                registeredAt: registered || newTag?.sourceDate || '',
-                detail: `${staffName(view.staffId)} · ${lectureTimeText(lecture)} ${lecture.title || '수업'}`
+                registeredAt: sourceDate
               });
             });
         });
@@ -6204,6 +6387,66 @@
         String(a.registeredAt || '').localeCompare(String(b.registeredAt || '')) ||
         String(a.memberName || '').localeCompare(String(b.memberName || ''), 'ko')
       );
+    }
+
+    function adminViewsForRange(start, end) {
+      const selected = appState.admin.selectedStaffId || 'all';
+      return (appState.admin.rangeViews || []).filter((view) =>
+        view.date >= start &&
+        view.date <= end &&
+        (selected === 'all' || view.staffId === selected)
+      );
+    }
+
+    function periodExpiredTickets(start, end) {
+      const rows = new Map();
+      collectAdminMembers().forEach((row) => {
+        (row.bookings || []).forEach((item) => {
+          const booking = item.booking || {};
+          if (!booking.ticketName) return;
+          const expires = dateOnlyFromValue(booking.ticketExpiresAt);
+          if (!expires || expires < start || expires > end) return;
+          const key = `${row.memberId || row.memberName}_${ticketIdentity(booking)}_${expires}`;
+          if (rows.has(key)) return;
+          rows.set(key, {
+            row,
+            booking,
+            expires,
+            renewedTicket: otherActiveTicketRecord(row.bookings, item, expires)
+          });
+        });
+      });
+      return [...rows.values()].sort((a, b) =>
+        String(a.expires || '').localeCompare(String(b.expires || '')) ||
+        String(a.row.memberName || '').localeCompare(String(b.row.memberName || ''), 'ko')
+      );
+    }
+
+    function periodRenewedMembers(start, end, expiredTickets = periodExpiredTickets(start, end)) {
+      const rows = new Map();
+      expiredTickets
+        .filter((item) => item.renewedTicket)
+        .forEach((item) => {
+          const key = item.row.memberId || item.row.memberName;
+          if (!key || rows.has(key)) return;
+          rows.set(key, item);
+        });
+      return [...rows.values()];
+    }
+
+    function otherActiveTicketRecord(records, targetRecord, date = appState.selectedDate) {
+      const targetTicketKey = ticketIdentity(targetRecord?.booking || {});
+      return (records || []).find((item) => {
+        if (item === targetRecord) return false;
+        const booking = item.booking || {};
+        if (!booking.ticketName) return false;
+        if (ticketIdentity(booking) === targetTicketKey) return false;
+        if (booking.ticketExpiryLevel === 'expired' || isTicketExpired(booking.ticketExpiresAt)) return false;
+        const expires = dateOnlyFromValue(booking.ticketExpiresAt);
+        if (expires && expires < date) return false;
+        const remaining = Number(booking.ticketRemainingCount);
+        return !Number.isFinite(remaining) || remaining > 0;
+      }) || null;
     }
 
     function isWithinDaysFromEnd(date, endDate, days) {
@@ -7157,7 +7400,9 @@
       if (date) return new Date(date.getTime() + 9 * 60 * 60 * 1000).toISOString().slice(0, 10);
       const text = String(value || '');
       const match = text.match(/\d{4}-\d{2}-\d{2}/);
-      return match ? match[0] : '';
+      if (match) return match[0];
+      const parsed = parseDateLabel(text);
+      return parsed ? new Date(parsed.getTime() + 9 * 60 * 60 * 1000).toISOString().slice(0, 10) : '';
     }
 
     function uniqueValues(values) {
@@ -7262,6 +7507,19 @@
       const first = `${month}-01`;
       const start = weekStartDate(first);
       return Array.from({ length: 42 }, (_, index) => addDays(start, index));
+    }
+
+    function periodRangeForMode(mode, date) {
+      if (mode === 'month') {
+        const month = String(date || appState.selectedDate).slice(0, 7);
+        const start = `${month}-01`;
+        const next = new Date(`${start}T00:00:00+09:00`);
+        next.setMonth(next.getMonth() + 1);
+        const nextStart = new Date(next.getTime() + 9 * 60 * 60 * 1000).toISOString().slice(0, 10);
+        return { start, end: addDays(nextStart, -1) };
+      }
+      const start = weekStartDate(date || appState.selectedDate);
+      return { start, end: addDays(start, 6) };
     }
 
     function weekStartDate(date) {
