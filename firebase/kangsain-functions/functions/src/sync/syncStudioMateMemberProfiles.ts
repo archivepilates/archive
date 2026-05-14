@@ -31,7 +31,10 @@ export async function syncStudioMateMemberProfiles(input: {
         const data = raw.data || raw;
         const bookingRegisteredAt = firstBookingRegisteredAt(input.bookings, member.memberId);
         const registeredAt = parseStudioMateDateTime(data.registered_at) || bookingRegisteredAt;
-        const ticketSummary = ticketSummaryByMember.get(member.memberId) || {
+        const profileTicketSummary = buildTicketSummaryFromMemberProfile(data);
+        const ticketSummary = profileTicketSummary.activeTicketCount
+          ? profileTicketSummary
+          : ticketSummaryByMember.get(member.memberId) || {
           activeTicketNames: [] as string[],
           activeTicketCount: 0,
           activeTickets: [] as MemberProfileDoc["activeTickets"],
@@ -180,6 +183,61 @@ function buildTicketSummaryByMember(bookings: BookingDoc[]): Map<
   );
 }
 
+function buildTicketSummaryFromMemberProfile(data: Record<string, unknown>): {
+  activeTicketNames: string[];
+  activeTicketCount: number;
+  activeTickets: NonNullable<MemberProfileDoc["activeTickets"]>;
+} {
+  const rows = asArray(data.userTickets)
+    .map(normalizeMemberProfileTicket)
+    .filter((ticket): ticket is NonNullable<MemberProfileDoc["activeTickets"]>[number] => Boolean(ticket));
+  const activeTickets = dedupeTickets(rows).sort(compareTickets);
+  return {
+    activeTicketNames: activeTickets.map((ticket) => ticket.name),
+    activeTicketCount: activeTickets.length,
+    activeTickets,
+  };
+}
+
+function normalizeMemberProfileTicket(raw: unknown): NonNullable<MemberProfileDoc["activeTickets"]>[number] | null {
+  if (!raw || typeof raw !== "object") return null;
+  const row = raw as Record<string, unknown>;
+  if (row.deleted_at) return null;
+  if (row.active === false || row.ticket_usable === false) return null;
+  if (["refund", "refunded", "cancel", "canceled", "inactive", "unusable"].includes(stringValue(row.status || row.ticket_usable_status))) {
+    return null;
+  }
+  const ticket = row.ticket && typeof row.ticket === "object" ? (row.ticket as Record<string, unknown>) : {};
+  const parentGoods = row.parentGoods && typeof row.parentGoods === "object" ? (row.parentGoods as Record<string, unknown>) : {};
+  const name = stringValue(ticket.title ?? parentGoods.title ?? row.ticket_title ?? row.title);
+  if (!name) return null;
+  const expiresAt = parseStudioMateDateTime(stringValue(row.expire_at));
+  const remainingCount = nullableNumber(row.remaining_coupon ?? row.usable_coupon);
+  const expiryLevel = profileTicketExpiryLevel(expiresAt);
+  if (expiryLevel === "expired") return null;
+  if (Number.isFinite(Number(remainingCount)) && Number(remainingCount) <= 0) return null;
+  return { name, remainingCount, expiresAt, expiryLevel };
+}
+
+function dedupeTickets(tickets: NonNullable<MemberProfileDoc["activeTickets"]>): NonNullable<MemberProfileDoc["activeTickets"]> {
+  const map = new Map<string, NonNullable<MemberProfileDoc["activeTickets"]>[number]>();
+  tickets.forEach((ticket) => {
+    const key = ticketIdentity(ticket);
+    const current = map.get(key);
+    map.set(key, current ? betterTicket(current, ticket) : ticket);
+  });
+  return [...map.values()];
+}
+
+function compareTickets(a: NonNullable<MemberProfileDoc["activeTickets"]>[number], b: NonNullable<MemberProfileDoc["activeTickets"]>[number]) {
+  const levelRank = (level: TicketExpiryLevel) => (level === "soon" ? 0 : level === "normal" ? 1 : level === "unknown" ? 2 : 3);
+  return (
+    levelRank(a.expiryLevel) - levelRank(b.expiryLevel) ||
+    (a.expiresAt?.toMillis() || Number.MAX_SAFE_INTEGER) - (b.expiresAt?.toMillis() || Number.MAX_SAFE_INTEGER) ||
+    a.name.localeCompare(b.name, "ko")
+  );
+}
+
 function isActiveTicket(booking: BookingDoc): boolean {
   if (!booking.ticketName) return false;
   if (booking.ticketExpiryLevel === "expired") return false;
@@ -189,7 +247,7 @@ function isActiveTicket(booking: BookingDoc): boolean {
 }
 
 function ticketIdentity(ticket: { name: string; remainingCount: number | null; expiresAt: Timestamp | null; expiryLevel: TicketExpiryLevel }): string {
-  return [ticket.name, ticket.expiresAt?.toMillis() || "", ticket.remainingCount ?? ""].join("_");
+  return [ticket.name, ticket.expiresAt?.toMillis() || ""].join("_");
 }
 
 function betterTicket<T extends { remainingCount: number | null; expiresAt: Timestamp | null; expiryLevel: TicketExpiryLevel }>(
@@ -212,6 +270,25 @@ function firstBookingRegisteredAt(bookings: BookingDoc[], memberId: string) {
       .sort((a, b) => (a.memberRegisteredAt?.toMillis() || 0) - (b.memberRegisteredAt?.toMillis() || 0))[0]
       ?.memberRegisteredAt || null
   );
+}
+
+function profileTicketExpiryLevel(expiresAt: Timestamp | null): TicketExpiryLevel {
+  if (!expiresAt) return "unknown";
+  const diffDays = (expiresAt.toMillis() - Date.now()) / (24 * 60 * 60 * 1000);
+  if (diffDays < 0) return "expired";
+  if (diffDays <= 14) return "soon";
+  return "normal";
+}
+
+function nullableNumber(value: unknown): number | null {
+  if (value == null || value === "") return null;
+  const num = Number(value);
+  return Number.isFinite(num) ? num : null;
+}
+
+function asArray(value: unknown): unknown[] {
+  if (Array.isArray(value)) return value;
+  return [];
 }
 
 function isNewMember(registeredAt: Timestamp | null): boolean {

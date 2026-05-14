@@ -2007,6 +2007,7 @@
     .chip {
       display: inline-flex;
       align-items: center;
+      justify-content: center;
       min-height: 24px;
       border-radius: 7px;
       padding: 0 8px;
@@ -2014,6 +2015,7 @@
       background: var(--canvas);
       font-size: 11px;
       font-weight: 700;
+      line-height: 1;
       white-space: nowrap;
     }
 
@@ -7539,6 +7541,25 @@
     }
 
     function memberTicketSummaries(row) {
+      const profileTickets = Array.isArray(row.profile?.activeTickets) ? row.profile.activeTickets : [];
+      if (profileTickets.length) {
+        return profileTickets.map((ticket) => {
+          const name = privateTicketLabel(ticket.name) || ticket.name || '수강권';
+          const remaining = ticketCountLabel(ticket.remainingCount);
+          const expiryText = ticketExpiryText({
+            ticketExpiryLevel: ticket.expiryLevel,
+            ticketExpiresAt: ticket.expiresAt
+          });
+          const meta = [remaining, expiryText].filter(Boolean).join(' · ') || '정보확인';
+          return {
+            name,
+            meta,
+            level: ticket.expiryLevel === 'expired' || isTicketExpired(ticket.expiresAt)
+              ? 'bad'
+              : (ticket.expiryLevel === 'soon' || isTicketExpiringSoon(ticket.expiresAt) ? 'wait' : '')
+          };
+        });
+      }
       const map = new Map();
       row.bookings.slice().reverse().forEach((item) => {
         const booking = item.booking || {};

@@ -75,8 +75,7 @@ function candidateFromAction(
 ): AlimtalkCandidateDoc | null {
   if (!action.memberId || !action.memberName || !profile?.phone) return null;
   if (!["ticket_expiring", "long_absence"].includes(action.type)) return null;
-  const type: AlimtalkCandidateType =
-    action.type === "ticket_expiring" && action.body.includes("회") ? "remaining_low" : (action.type as AlimtalkCandidateType);
+  const type = alimtalkTypeFromAction(action, profile);
   const candidateId = `action_${stableHash({ date: doc.date, key: action.actionKey }).slice(0, 24)}`;
   return {
     candidateId,
@@ -100,6 +99,23 @@ function candidateFromAction(
     createdAt: nowTimestamp(),
     updatedAt: nowTimestamp(),
   };
+}
+
+function alimtalkTypeFromAction(action: AdminActionDoc["actions"][number], profile?: MemberProfileDoc): AlimtalkCandidateType {
+  if (action.type !== "ticket_expiring") return action.type as AlimtalkCandidateType;
+  const remaining = actionRemainingCount(action, profile);
+  if (Number.isFinite(remaining) && Number(remaining) >= 0 && Number(remaining) < 5) return "remaining_low";
+  return "ticket_expiring";
+}
+
+function actionRemainingCount(action: AdminActionDoc["actions"][number], profile?: MemberProfileDoc): number | null {
+  const matchedTicket = profile?.activeTickets?.find((ticket) => {
+    const name = ticket.name || "";
+    return Boolean(name && (action.body.includes(name) || action.title.includes(name) || action.label.includes(name)));
+  }) || profile?.activeTickets?.find((ticket) => ticket.expiryLevel === "soon") || profile?.activeTickets?.[0];
+  if (matchedTicket?.remainingCount != null) return Number(matchedTicket.remainingCount);
+  const match = action.body.match(/(\d+)\s*회/);
+  return match ? Number(match[1]) : null;
 }
 
 async function upsertCandidate(candidate: AlimtalkCandidateDoc): Promise<void> {
