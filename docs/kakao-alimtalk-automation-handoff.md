@@ -88,6 +88,15 @@ GET https://api.solapi.com/messages/v4/groups/{groupId}
 - 신규회원 웰컴 v3 `KA01TP260514081318309wQGfeIJxIAJ`는 공식 인스타 링크 반영 후 검수중.
 - 예약 안내 v2 `KA01TP2605131325462341f8ACO2THW6`는 반려 후 수정된 상태이며 운영 발송에 쓰지 않는다.
 
+검수 전 초안:
+
+| 목적 | Template ID | 현재 상태 | 변수 |
+|---|---|---|---|
+| 기간권 잔여기간 안내 v3 | `KA01TP260514145047261araXgWLVFRs` | `PENDING` | `#{이름}`, `#{남은일수}`, `#{수강권명}` |
+| 횟수권 잔여횟수 안내 v3 | `KA01TP260514145047393VpTbcCZKkCV` | `PENDING` | `#{이름}`, `#{잔여횟수}`, `#{수강권명}`, `#{만료일}` |
+
+위 초안 2건은 SOLAPI에 생성만 해두었고, 카카오 검수 요청은 하지 않았다. 사용자가 문구를 최종 수정하고 검수 요청한 뒤 `APPROVED` 상태가 되기 전까지 자동 발송에 연결하지 않는다.
+
 ## 템플릿 본문
 
 ### 수강권 기간 안내
@@ -504,4 +513,3 @@ alimtalkSends/stm_123_ticket_456_expired_d1
 
 - `reports/kakao-channel/`
 - `/Users/archivepilates/Documents/macmini-archive/contacts-kakao/reports/kakao-channel/`
-
