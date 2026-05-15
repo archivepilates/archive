@@ -1680,6 +1680,22 @@
       text-align: right;
     }
 
+    .ticket-row-button {
+      display: flex;
+      align-items: center;
+      justify-content: space-between;
+      gap: 8px;
+      width: 100%;
+      min-width: 0;
+      padding: 0;
+      text-align: left;
+    }
+
+    .ticket-detail-list {
+      display: grid;
+      gap: 8px;
+    }
+
     .member-mini-list.recent-lesson-list li {
       display: grid;
       grid-template-columns: minmax(0, 1fr) minmax(74px, max-content);
@@ -2010,12 +2026,12 @@
       justify-content: center;
       min-height: 24px;
       border-radius: 7px;
-      padding: 0 8px;
+      padding: 2px 8px 0;
       color: var(--muted);
       background: var(--canvas);
       font-size: 11px;
       font-weight: 700;
-      line-height: 1;
+      line-height: 1.1;
       white-space: nowrap;
     }
 
@@ -5409,6 +5425,11 @@
         button.dataset.boundMemberInfo = 'true';
         button.addEventListener('click', () => openMemberDetail(button.dataset.memberDetail));
       });
+      container.querySelectorAll('[data-ticket-member]').forEach((button) => {
+        if (button.dataset.boundTicketDetail === 'true') return;
+        button.dataset.boundTicketDetail = 'true';
+        button.addEventListener('click', () => openTicketDetail(button.dataset.ticketMember, button.dataset.ticketIndex || '0'));
+      });
     }
 
     function prepareActionMessage(actionKey, type, title, date, mode, detail = '') {
@@ -6255,6 +6276,59 @@
       detailModal.classList.add('open');
       detailModal.setAttribute('aria-hidden', 'false');
       document.body.classList.add('modal-active');
+    }
+
+    function openTicketDetail(memberKey, ticketIndex) {
+      const row = collectMembers().find((item) => item.memberId === memberKey || item.memberName === memberKey);
+      if (!row) return;
+      const tickets = memberTicketSummaries(row);
+      const ticket = tickets[Number(ticketIndex)];
+      if (!ticket) return;
+      detailTitle.textContent = `${row.memberName || '회원'} 수강권`;
+      detailBody.innerHTML = renderTicketDetail(row, ticket);
+      bindMemberInfoTriggers(detailBody);
+      detailModal.classList.add('open');
+      detailModal.setAttribute('aria-hidden', 'false');
+      document.body.classList.add('modal-active');
+    }
+
+    function renderTicketDetail(row, ticket) {
+      const remaining = ticketCountLabel(ticket.remainingCount) || '-';
+      const usable = ticketCountLabel(ticket.usableCount);
+      const maxCount = ticketCountLabel(ticket.maxCount);
+      const period = [dateOnlyLabel(ticket.availableFrom), dateOnlyLabel(ticket.expiresAt)].filter(Boolean).join(' ~ ') || '-';
+      const status = ticket.expiryLevel === 'soon'
+        ? '만료임박'
+        : ticket.expiryLevel === 'expired'
+          ? '만료'
+          : ticket.expiryLevel === 'normal'
+            ? '이용중'
+            : ticket.status || '확인필요';
+      const classType = ticketClassTypeLabel(ticket.classType);
+      return `
+        <div class="admin-list-item member-search-card">
+          <div class="member-search-head">
+            <strong>${escapeHtml(ticket.name || '수강권')}</strong>
+            <span class="chip ${escapeAttr(ticket.level || '')}">${escapeHtml(ticket.meta || status)}</span>
+          </div>
+          <div class="member-search-stats">
+            <div class="member-search-stat"><span>회원</span><strong>${escapeHtml(row.memberName || '-')}</strong></div>
+            <div class="member-search-stat"><span>잔여횟수</span><strong>${escapeHtml(remaining)}</strong></div>
+            <div class="member-search-stat"><span>상태</span><strong>${escapeHtml(status)}</strong></div>
+            <div class="member-search-stat"><span>수강권 기간</span><strong>${escapeHtml(period)}</strong></div>
+            <div class="member-search-stat"><span>사용가능</span><strong>${escapeHtml(usable || '-')}</strong></div>
+            <div class="member-search-stat"><span>전체횟수</span><strong>${escapeHtml(maxCount || '-')}</strong></div>
+          </div>
+          <div class="member-search-section">
+            <h3>상세</h3>
+            <div class="ticket-detail-list">
+              <div class="member-search-meta"><div><b>구분</b> ${escapeHtml(classType || '-')}</div></div>
+              <div class="member-search-meta"><div><b>데이터 기준</b> ${escapeHtml(ticket.source || '회원카드')}</div></div>
+            </div>
+          </div>
+          <button class="ghost" type="button" data-action-member="${escapeAttr(row.memberId || row.memberName || '')}">회원정보로 돌아가기</button>
+        </div>
+      `;
     }
 
     function openSyncInfo() {
@@ -7211,10 +7285,12 @@
             <h3>수강권</h3>
             ${tickets.length ? `
               <ul class="member-mini-list">
-                ${tickets.map((ticket) => `
+                ${tickets.map((ticket, ticketIndex) => `
                   <li>
-                    <strong>${escapeHtml(ticket.name)}</strong>
-                    <span class="chip ${ticket.level}">${escapeHtml(ticket.meta)}</span>
+                    <button class="ticket-row-button" type="button" data-ticket-member="${escapeAttr(row.memberId || row.memberName || '')}" data-ticket-index="${ticketIndex}">
+                      <strong>${escapeHtml(ticket.name)}</strong>
+                      <span class="chip ${ticket.level}">${escapeHtml(ticket.meta)}</span>
+                    </button>
                   </li>
                 `).join('')}
               </ul>
@@ -7554,6 +7630,15 @@
           return {
             name,
             meta,
+            remainingCount: ticket.remainingCount,
+            usableCount: ticket.usableCount,
+            maxCount: ticket.maxCount,
+            availableFrom: ticket.availableFrom,
+            expiresAt: ticket.expiresAt,
+            expiryLevel: ticket.expiryLevel,
+            status: ticket.status,
+            classType: ticket.classType,
+            source: '회원 상세 API',
             level: ticket.expiryLevel === 'expired' || isTicketExpired(ticket.expiresAt)
               ? 'bad'
               : (ticket.expiryLevel === 'soon' || isTicketExpiringSoon(ticket.expiresAt) ? 'wait' : '')
@@ -7571,6 +7656,10 @@
         map.set(name, {
           name,
           meta,
+          remainingCount: booking.ticketRemainingCount,
+          expiresAt: booking.ticketExpiresAt,
+          expiryLevel: booking.ticketExpiryLevel,
+          source: '예약 이력',
           level: booking.ticketExpiryLevel === 'expired' || isTicketExpired(booking.ticketExpiresAt)
             ? 'bad'
             : (booking.ticketExpiryLevel === 'soon' || isTicketExpiringSoon(booking.ticketExpiresAt) ? 'wait' : '')
@@ -7580,9 +7669,9 @@
     }
 
     function ticketExpiryText(booking) {
-      if (booking.ticketExpiryLevel === 'expired' || isTicketExpired(booking.ticketExpiresAt)) return '만료';
-      if (booking.ticketExpiryLevel === 'soon' || isTicketExpiringSoon(booking.ticketExpiresAt)) return '만료임박';
       const expires = dateOnlyLabel(booking.ticketExpiresAt);
+      if (booking.ticketExpiryLevel === 'expired' || isTicketExpired(booking.ticketExpiresAt)) return expires ? `${expires} 만료` : '만료';
+      if (booking.ticketExpiryLevel === 'soon' || isTicketExpiringSoon(booking.ticketExpiresAt)) return expires ? `${expires} 만료임박` : '만료임박';
       return expires ? `${expires} 만료` : '';
     }
 
@@ -8011,6 +8100,14 @@
       const remaining = Number(value);
       if (!Number.isFinite(remaining) || remaining < 0 || remaining > 100) return '';
       return `${remaining}회`;
+    }
+
+    function ticketClassTypeLabel(value) {
+      const type = String(value || '').toUpperCase();
+      if (type === 'G') return '그룹';
+      if (type === 'P') return '프라이빗';
+      if (type === 'T') return '트리플';
+      return String(value || '');
     }
 
     function hasActiveTicketRecord(records, date) {

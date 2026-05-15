@@ -281,10 +281,17 @@ export interface MemberProfileDoc {
   activeTicketNames?: string[];
   activeTicketCount?: number;
   activeTickets?: Array<{
+    userTicketId?: string;
+    ticketId?: string;
     name: string;
     remainingCount: number | null;
+    usableCount?: number | null;
+    maxCount?: number | null;
+    availableFrom?: Timestamp | null;
     expiresAt: Timestamp | null;
     expiryLevel: TicketExpiryLevel;
+    status?: string;
+    classType?: string;
   }>;
   isNewMember?: boolean;
   newMemberBasis?: "registered_at" | "first_seen_booking" | "unknown";

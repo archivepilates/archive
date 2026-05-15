@@ -211,12 +211,28 @@ function normalizeMemberProfileTicket(raw: unknown): NonNullable<MemberProfileDo
   const parentGoods = row.parentGoods && typeof row.parentGoods === "object" ? (row.parentGoods as Record<string, unknown>) : {};
   const name = stringValue(ticket.title ?? parentGoods.title ?? row.ticket_title ?? row.title);
   if (!name) return null;
+  const status = stringValue(row.ticket_usable_status || row.status);
   const expiresAt = parseStudioMateDateTime(stringValue(row.expire_at));
+  const availableFrom = parseStudioMateDateTime(stringValue(row.availability_start_at));
   const remainingCount = nullableNumber(row.remaining_coupon ?? row.usable_coupon);
+  const usableCount = nullableNumber(row.usable_coupon);
+  const maxCount = nullableNumber(row.max_coupon ?? ticket.max_coupon ?? parentGoods.max_coupon);
   const expiryLevel = profileTicketExpiryLevel(expiresAt);
   if (expiryLevel === "expired") return null;
   if (Number.isFinite(Number(remainingCount)) && Number(remainingCount) <= 0) return null;
-  return { name, remainingCount, expiresAt, expiryLevel };
+  return {
+    userTicketId: stringValue(row.id),
+    ticketId: stringValue(row.ticket_id ?? ticket.id ?? parentGoods.id),
+    name,
+    remainingCount,
+    usableCount,
+    maxCount,
+    availableFrom,
+    expiresAt,
+    expiryLevel,
+    status,
+    classType: stringValue(ticket.available_class_type ?? parentGoods.available_class_type),
+  };
 }
 
 function dedupeTickets(tickets: NonNullable<MemberProfileDoc["activeTickets"]>): NonNullable<MemberProfileDoc["activeTickets"]> {
