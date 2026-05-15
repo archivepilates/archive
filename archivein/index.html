@@ -35,6 +35,7 @@
       --metric-action: #C94632;
       --shadow: 0 16px 36px rgba(26, 26, 26, 0.08);
       --soft-shadow: 0 8px 22px rgba(26, 26, 26, 0.055);
+      --lift-shadow: 0 20px 48px rgba(26, 26, 26, 0.075);
       --type-title: 22px;
       --type-body: 15px;
       --type-caption: 13px;
@@ -101,7 +102,7 @@
     }
 
     .shell {
-      width: min(760px, 100%);
+      width: min(1180px, 100%);
       margin: 0 auto;
     }
 
@@ -467,13 +468,13 @@
     .calendar-day {
       position: relative;
       min-width: 0;
-      min-height: 88px;
+      min-height: 98px;
       padding: 8px 6px;
       border: 1px solid var(--line);
       border-radius: 8px;
       background: var(--surface);
       text-align: center;
-      box-shadow: var(--soft-shadow);
+      box-shadow: var(--lift-shadow);
     }
 
     .calendar-day.muted {
@@ -488,7 +489,8 @@
 
     .calendar-day.selected {
       border-color: var(--brand);
-      box-shadow: 0 0 0 2px rgba(240, 107, 26, 0.14), var(--soft-shadow);
+      background: rgba(240, 107, 26, 0.08);
+      box-shadow: 0 0 0 2px rgba(240, 107, 26, 0.14), var(--lift-shadow);
     }
 
     .calendar-date {
@@ -573,15 +575,15 @@
       display: grid;
       grid-template-columns: repeat(3, minmax(0, 1fr));
       border: 1px solid var(--line);
-      border-radius: 8px;
+      border-radius: 10px;
       background: var(--surface);
       overflow: hidden;
-      box-shadow: var(--soft-shadow);
+      box-shadow: var(--lift-shadow);
     }
 
     .summary-item {
       min-width: 0;
-      padding: 17px 7px;
+      padding: 23px 12px 22px;
       text-align: center;
     }
 
@@ -604,24 +606,24 @@
     .summary-label {
       display: block;
       color: var(--brand);
-      font-size: 11px;
+      font-size: 12px;
       font-weight: 850;
       letter-spacing: 0;
     }
 
     .summary-value {
       display: block;
-      margin-top: 7px;
-      font-size: 31px;
+      margin-top: 9px;
+      font-size: 38px;
       line-height: 1;
       font-weight: 850;
     }
 
     .summary-note {
       display: block;
-      margin-top: 7px;
+      margin-top: 9px;
       color: var(--muted);
-      font-size: 11px;
+      font-size: 12px;
       white-space: nowrap;
       overflow: hidden;
       text-overflow: ellipsis;
@@ -727,6 +729,9 @@
     }
 
     .action-send {
+      display: inline-flex;
+      align-items: center;
+      justify-content: center;
       width: auto;
       min-width: 64px;
       height: 32px;
@@ -738,6 +743,8 @@
       color: var(--brand-dark);
       font-size: 12px;
       font-weight: 800;
+      line-height: 1;
+      text-align: center;
       white-space: nowrap;
     }
 
@@ -903,12 +910,12 @@
     }
 
     .admin-tab {
-      min-height: 40px;
+      min-height: 46px;
       border: 1px solid var(--line);
       border-radius: 8px;
       color: var(--muted);
       background: var(--surface);
-      font-size: 12px;
+      font-size: 13px;
       font-weight: 850;
       white-space: nowrap;
     }
@@ -954,10 +961,10 @@
 
     .admin-panel {
       border: 1px solid var(--line);
-      border-radius: 8px;
+      border-radius: 10px;
       background: var(--surface);
-      padding: 14px;
-      box-shadow: var(--soft-shadow);
+      padding: 18px;
+      box-shadow: var(--lift-shadow);
     }
 
     .admin-panel h2,
@@ -1479,16 +1486,16 @@
 
     .timeline-list {
       display: grid;
-      gap: 10px;
+      gap: 14px;
     }
 
     .timeline-lecture {
       border: 1px solid var(--line);
       border-left: 6px solid var(--staff-color, var(--brand));
-      border-radius: 8px;
+      border-radius: 10px;
       background: var(--surface);
       overflow: hidden;
-      box-shadow: var(--soft-shadow);
+      box-shadow: var(--lift-shadow);
     }
 
     .timeline-lecture .lecture-head {
@@ -1941,7 +1948,7 @@
     .timeline-list .timeline-lecture {
       margin-bottom: 0;
       border-color: var(--staff-color, var(--brand));
-      border-left-width: 6px;
+      border-left-width: 8px;
       border-left-style: solid;
       border-left-color: var(--staff-color, var(--brand));
     }
@@ -1953,11 +1960,11 @@
 
     .lecture-head {
       display: grid;
-      grid-template-columns: 68px 1fr auto;
-      gap: 12px;
+      grid-template-columns: 82px 1fr auto;
+      gap: 16px;
       align-items: center;
       width: 100%;
-      padding: 17px 14px;
+      padding: 20px 18px;
       border-bottom: 1px solid var(--line);
       text-align: left;
     }
@@ -2002,13 +2009,13 @@
 
     .time {
       color: var(--brand-dark);
-      font-size: 19px;
+      font-size: 22px;
       font-weight: 850;
     }
 
     .lecture-title {
       margin: 0;
-      font-size: 19px;
+      font-size: 22px;
       line-height: 1.2;
       font-weight: 850;
     }
@@ -2024,12 +2031,12 @@
       display: inline-flex;
       align-items: center;
       justify-content: center;
-      min-height: 24px;
+      min-height: 26px;
       border-radius: 7px;
-      padding: 2px 8px 0;
+      padding: 2px 9px 0;
       color: var(--muted);
       background: var(--canvas);
-      font-size: 11px;
+      font-size: 12px;
       font-weight: 700;
       line-height: 1.1;
       white-space: nowrap;
@@ -2482,6 +2489,155 @@
       }
     }
 
+    @media (min-width: 900px) {
+      .app {
+        padding: max(30px, env(safe-area-inset-top)) 28px max(72px, env(safe-area-inset-bottom));
+        background: linear-gradient(180deg, #fff 0%, #fff 58%, #fafafa 100%);
+      }
+
+      .topbar {
+        min-height: 90px;
+        gap: 16px;
+        padding: 0 0 22px;
+        margin-bottom: 22px;
+        background: rgba(255, 255, 255, 0.92);
+      }
+
+      .logo {
+        width: 58px;
+        height: 58px;
+        border-radius: 10px;
+        font-size: 20px;
+      }
+
+      .identity h1 {
+        font-size: 30px;
+        line-height: 1.08;
+      }
+
+      .identity p {
+        margin-top: 8px;
+        font-size: 15px;
+      }
+
+      .icon-action {
+        width: 52px;
+        height: 52px;
+        min-height: 52px;
+        border-radius: 10px;
+        color: var(--brand-dark);
+        background: var(--soft);
+        border-color: rgba(240, 107, 26, 0.22);
+      }
+
+      .datebar {
+        grid-template-columns: 60px 1fr 60px;
+        margin: 12px 0 12px;
+      }
+
+      .date-nav-button {
+        width: 58px;
+        height: 58px;
+        border-radius: 10px;
+        font-size: 28px;
+      }
+
+      .datebar strong {
+        font-size: 30px;
+      }
+
+      .view-switch {
+        margin-bottom: 24px;
+        padding: 5px;
+        border-radius: 10px;
+      }
+
+      .view-switch button {
+        height: 46px;
+        border-radius: 8px;
+        font-size: 15px;
+      }
+
+      .admin-tabs {
+        gap: 10px;
+        margin-bottom: 24px;
+      }
+
+      .admin-tab {
+        min-height: 54px;
+        border-radius: 10px;
+        font-size: 15px;
+      }
+
+      .summary {
+        margin-bottom: 20px;
+      }
+
+      .summary-item {
+        padding-block: 28px 26px;
+      }
+
+      .summary-label {
+        font-size: 14px;
+      }
+
+      .summary-value {
+        font-size: 48px;
+      }
+
+      .summary-note {
+        font-size: 14px;
+      }
+
+      .day-operation-head h2,
+      .admin-staff-head h2 {
+        font-size: 24px;
+      }
+
+      .schedule-switch {
+        border-radius: 10px;
+        padding: 5px;
+      }
+
+      .schedule-switch button {
+        min-width: 78px;
+        min-height: 42px;
+        border-radius: 8px;
+        font-size: 14px;
+      }
+
+      .calendar-grid {
+        gap: 10px;
+      }
+
+      .calendar-day {
+        min-height: 118px;
+        border-radius: 10px;
+        padding: 14px 8px;
+      }
+
+      .calendar-date {
+        font-size: 22px;
+      }
+
+      .calendar-date small {
+        font-size: 11px;
+      }
+
+      .calendar-metrics {
+        gap: 6px;
+        margin-top: 12px;
+      }
+
+      .calendar-grid.month .calendar-metric {
+        width: 15px;
+        min-width: 15px;
+        height: 15px;
+        padding: 0;
+        font-size: 0;
+      }
+    }
+
     @media (max-width: 520px) {
       .app { padding-inline: 12px; }
       .topbar { gap: 7px; min-height: 64px; padding-bottom: 10px; }
@@ -2750,6 +2906,8 @@
     const detailTitle = document.getElementById('detailTitle');
     const detailBody = document.getElementById('detailBody');
     const FLOATING_CHAT_POSITION_KEY = 'archiveInFloatingChatPosition';
+    const CHAT_ENABLED = false;
+    const SHOW_ALIMTALK_STATUS_TAGS = false;
     const SYNC_SCHEDULE_NOTES = [
       {
         title: '전체 수업/예약 동기화',
@@ -2978,8 +3136,8 @@
             ${renderBody(day)}
           </div>
         </main>
-        ${renderFloatingChatButton()}
-        ${appState.chat.open ? renderInstructorChatDock() : ''}
+        ${CHAT_ENABLED ? renderFloatingChatButton() : ''}
+        ${CHAT_ENABLED && appState.chat.open ? renderInstructorChatDock() : ''}
       `;
       bindAppEvents();
     }
@@ -2998,7 +3156,8 @@
 
     function renderAdminApp() {
       appState.memberTagCache = null;
-      const isChat = (appState.admin.activeTab || 'overview') === 'chat';
+      if (!CHAT_ENABLED && appState.admin.activeTab === 'chat') appState.admin.activeTab = 'overview';
+      const isChat = CHAT_ENABLED && (appState.admin.activeTab || 'overview') === 'chat';
       root.innerHTML = `
         <main class="shell ${isChat ? 'chat-screen' : ''}">
           <header class="topbar ${appState.loading ? 'loading' : ''}">
@@ -3023,7 +3182,7 @@
             ${renderAdminBody()}
           </div>
         </main>
-        ${renderFloatingChatButton()}
+        ${CHAT_ENABLED ? renderFloatingChatButton() : ''}
       `;
       bindAppEvents();
     }
@@ -3193,7 +3352,7 @@
         .filter((booking) => !['cancel', 'wait_cancel'].includes(booking.appStatus))
         .map((booking) => ({ lecture, booking })));
       return bookings.map(({ lecture, booking }) => `
-        <button class="detail-row" type="button" data-action-member="${escapeAttr(booking.memberId || booking.memberName || '')}">
+        <button class="detail-row" type="button" data-action-member="${escapeAttr(bookingMemberKey(booking))}">
           <span>${escapeHtml(lectureTimeText(lecture))}</span>
           <strong>${escapeHtml(booking.memberName || '회원')}</strong>
           <span class="chip ${statusClass(booking)}">${statusLabel(booking)}</span>
@@ -3218,7 +3377,7 @@
           .filter((booking) => booking.appStatus === 'reserved' && booking.attendanceStatus === 'unchecked' && isLectureDone(lecture))
           .forEach((booking) => {
             rows.push(`
-              <button class="detail-row" type="button" data-action-member="${escapeAttr(booking.memberId || booking.memberName || '')}">
+              <button class="detail-row" type="button" data-action-member="${escapeAttr(bookingMemberKey(booking))}">
                 <span>${escapeHtml(lectureTimeText(lecture))}</span>
                 <strong>${escapeHtml(booking.memberName || '회원')}</strong>
                 <span class="chip bad">미체크</span>
@@ -3240,7 +3399,7 @@
           );
           if (!importantTags.length) return;
           rows.push(`
-            <button class="detail-row" type="button" data-action-member="${escapeAttr(booking.memberId || booking.memberName || '')}">
+            <button class="detail-row" type="button" data-action-member="${escapeAttr(bookingMemberKey(booking))}">
               <span>${escapeHtml(lectureTimeText(lecture))}</span>
               <strong>${escapeHtml(booking.memberName || '회원')}</strong>
               <span class="chip wait">${escapeHtml((importantTags[0].label || importantTags[0].tagId || '주의'))}</span>
@@ -3270,7 +3429,7 @@
               ['warning', 'danger'].includes(tag.level) ||
               ['auto_memo', 'manual'].includes(tag.source)
             );
-            if (importantTags.length) members.add(booking.memberId || booking.memberName);
+            if (importantTags.length) members.add(bookingMemberKey(booking));
           });
       });
       return members.size;
@@ -3341,7 +3500,7 @@
         <div class="detail-bookings">
           ${bookings.map((booking) => `
             <div class="detail-booking">
-              <button class="member-name" type="button" data-action-member="${escapeAttr(booking.memberId || booking.memberName || '')}">${escapeHtml(booking.memberName || '회원')}</button>
+              <button class="member-name" type="button" data-action-member="${escapeAttr(bookingMemberKey(booking))}">${escapeHtml(booking.memberName || '회원')}</button>
               <span class="chip ${statusClass(booking)}">${statusLabel(booking)}</span>
             </div>
           `).join('') || '<div class="empty">예약 회원이 없습니다</div>'}
@@ -3353,7 +3512,7 @@
       return views.flatMap((view) => (view.lectures || []).flatMap((lecture) => (lecture.bookings || [])
         .filter((booking) => !['cancel', 'wait_cancel'].includes(booking.appStatus))
         .map((booking) => `
-          <button class="detail-row" type="button" data-action-member="${escapeAttr(booking.memberId || booking.memberName || '')}">
+          <button class="detail-row" type="button" data-action-member="${escapeAttr(bookingMemberKey(booking))}">
             <span>${escapeHtml(lectureTimeText(lecture))}</span>
             <strong>${escapeHtml(booking.memberName || '회원')}</strong>
             <span class="chip ${statusClass(booking)}">${escapeHtml(staffName(view.staffId))} · ${statusLabel(booking)}</span>
@@ -3389,7 +3548,8 @@
       if (!item?.memberKey) return '';
       const status = String(item?.alimtalkStatus || '');
       const rule = alimtalkRuleMeta(item);
-      if (status === 'sent') return { label: '발송완료', mode: 'auto', detail: rule.label || '' };
+      if (!SHOW_ALIMTALK_STATUS_TAGS && (status || rule.key || item?.alimtalkType || item?.alimtalkTemplateCode)) return '';
+      if (status === 'sent') return '';
       if (status === 'queued') return { label: '발송대기', mode: 'auto', detail: rule.label || '' };
       if (status === 'skipped') return { label: '제외', mode: 'review', detail: rule.label || '' };
       if (status === 'failed') return { label: '발송실패', mode: 'review', detail: rule.label || '' };
@@ -3431,11 +3591,11 @@
       const map = {
         KA01TP2605131325462341f8ACO2THW6: { key: 'reservationOpen', label: '예약 안내', status: 'APPROVED', detail: '예약 오픈 안내' },
         KA01TP260514081318309wQGfeIJxIAJ: { key: 'newMember', label: '신규회원', status: 'APPROVED', detail: '신규회원 웰컴' },
-        KA01TP260514145047261araXgWLVFRs: { key: 'groupPeriod', label: '그룹 기간 임박', status: 'INSPECTING', detail: '그룹 기간권 만료 14일 이내' },
-        KA01TP260514145047393VpTbcCZKkCV: { key: 'groupCount', label: '그룹 횟수 부족', status: 'INSPECTING', detail: '그룹 횟수권 잔여 5회 미만' },
-        KA01TP260514152235608d9icGOBotnV: { key: 'privateCount', label: '프라이빗 횟수 부족', status: 'INSPECTING', detail: '프라이빗 횟수권 잔여 3회 이하' },
-        KA01TP260514153314927WH270IppWQS: { key: 'privatePeriod', label: '프라이빗 기간 임박', status: 'HOLD', detail: '운영 보류' },
-        KA01TP260514153632171uiWXYoeiOLS: { key: 'privateSurvey', label: '프라이빗 설문 필요', status: 'INSPECTING', detail: '첫 프라이빗 등록/예약' }
+        KA01TP260514145047261araXgWLVFRs: { key: 'groupPeriod', label: '그룹 기간 임박', status: 'APPROVED', detail: '그룹 기간권 만료 14일 이내' },
+        KA01TP260514145047393VpTbcCZKkCV: { key: 'groupCount', label: '그룹 횟수 부족', status: 'APPROVED', detail: '그룹 횟수권 잔여 5회 미만' },
+        KA01TP260514152235608d9icGOBotnV: { key: 'privateCount', label: '프라이빗 횟수 부족', status: 'APPROVED', detail: '프라이빗 횟수권 잔여 3회 이하' },
+        KA01TP260514153314927WH270IppWQS: { key: 'privatePeriod', label: '프라이빗 기간 임박', status: 'APPROVED', detail: '프라이빗 기간권 만료 14일 이내' },
+        KA01TP260514153632171uiWXYoeiOLS: { key: 'privateSurvey', label: '프라이빗 설문 필요', status: 'APPROVED', detail: '첫 프라이빗 등록/예약' }
       };
       return map[String(code || '')] || null;
     }
@@ -3446,15 +3606,16 @@
       const candidateType = String(item?.alimtalkType || item?.candidateType || '');
       const typeMap = {
         new_member: { key: 'newMember', label: '신규회원', status: 'APPROVED', detail: '신규회원 웰컴' },
-        ticket_expiring: { key: 'groupPeriod', label: '그룹 기간 임박', status: 'INSPECTING', detail: '수강권 기간 임박' },
-        remaining_low: { key: 'groupCount', label: '그룹 횟수 부족', status: 'INSPECTING', detail: '수강권 잔여횟수 부족' },
-        private_count_low: { key: 'privateCount', label: '프라이빗 횟수 부족', status: 'INSPECTING', detail: '프라이빗 잔여횟수 부족' },
-        private_survey: { key: 'privateSurvey', label: '프라이빗 설문 필요', status: 'INSPECTING', detail: '프라이빗 사전설문' }
+        ticket_expiring: { key: 'groupPeriod', label: '그룹 기간 임박', status: 'APPROVED', detail: '수강권 기간 임박' },
+        remaining_low: { key: 'groupCount', label: '그룹 횟수 부족', status: 'APPROVED', detail: '수강권 잔여횟수 부족' },
+        private_count_low: { key: 'privateCount', label: '프라이빗 횟수 부족', status: 'APPROVED', detail: '프라이빗 잔여횟수 부족' },
+        private_ticket_expiring: { key: 'privatePeriod', label: '프라이빗 기간 임박', status: 'APPROVED', detail: '프라이빗 기간 만료 임박' },
+        private_survey: { key: 'privateSurvey', label: '프라이빗 설문 필요', status: 'APPROVED', detail: '프라이빗 사전설문' }
       };
       if (typeMap[candidateType]) return typeMap[candidateType];
       const reason = actionReasonMeta(item);
-      if (reason?.key === 'lowRemaining') return { key: 'groupCount', label: '그룹 횟수 부족', status: 'INSPECTING', detail: '잔여횟수 부족' };
-      if (reason?.key === 'expiringSoon') return { key: 'groupPeriod', label: '그룹 기간 임박', status: 'INSPECTING', detail: '기간 만료 임박' };
+      if (reason?.key === 'lowRemaining') return { key: 'groupCount', label: '그룹 횟수 부족', status: 'APPROVED', detail: '잔여횟수 부족' };
+      if (reason?.key === 'expiringSoon') return { key: 'groupPeriod', label: '그룹 기간 임박', status: 'APPROVED', detail: '기간 만료 임박' };
       if (reason?.key === 'lowAndSoon') return { key: 'groupTicketRisk', label: '그룹 수강권 확인', status: 'INSPECTING', detail: '기간/횟수 동시 확인' };
       return {};
     }
@@ -3510,6 +3671,7 @@
         .filter((candidate) => includeLinked || !candidate.sourceActionKey)
         .filter((candidate) => !['sent', 'skipped'].includes(String(candidate.status || '')))
         .filter((candidate) => !date || !candidate.sourceDate || candidate.sourceDate === date)
+        .filter((candidate) => !shouldSuppressTicketCandidate(candidate, date))
         .map((candidate) => {
           const rule = alimtalkRuleMeta(candidate);
           const actionKey = `alimtalk_${candidate.candidateId || stableActionCandidateKey(candidate)}`;
@@ -3519,7 +3681,7 @@
             title: candidate.memberName || '회원',
             body: candidate.reason || rule.detail || '',
             level: rule.status === 'APPROVED' ? 'good' : 'wait',
-            memberKey: candidate.memberId || candidate.memberName || '',
+            memberKey: memberIdentityKey(candidate.memberId, candidate.memberName, candidatePhone(candidate)),
             sort: `0_${candidate.sourceDate || date}_${rule.key || 'alimtalk'}_${candidate.memberName || ''}`,
             sourceDate: candidate.sourceDate || date,
             alimtalkCandidateId: candidate.candidateId || '',
@@ -3534,7 +3696,7 @@
 
     function stableActionCandidateKey(candidate) {
       return [
-        candidate.memberId || candidate.memberName || 'member',
+        memberIdentityKey(candidate.memberId, candidate.memberName, candidatePhone(candidate)) || 'member',
         candidate.type || 'alimtalk',
         candidate.sourceDate || '',
         candidate.templateCode || ''
@@ -3555,6 +3717,7 @@
           if (!sourceDate) return mode === 'day';
           return sourceDate >= start && sourceDate <= end;
         })
+        .filter((candidate) => !shouldSuppressTicketCandidate(candidate, candidate.sourceDate || date))
         .sort((a, b) =>
           String(a.sourceDate || '').localeCompare(String(b.sourceDate || '')) ||
           String(a.memberName || '').localeCompare(String(b.memberName || ''), 'ko') ||
@@ -3573,7 +3736,17 @@
       return Boolean(candidate.candidateId) &&
         Boolean(candidatePhone(candidate)) &&
         rule.status === 'APPROVED' &&
-        ['candidate', 'reviewed', 'failed'].includes(status);
+        ['candidate', 'reviewed', 'failed'].includes(status) &&
+        !shouldSuppressTicketCandidate(candidate, candidate.sourceDate || appState.selectedDate);
+    }
+
+    function shouldSuppressTicketCandidate(candidate, date = appState.selectedDate) {
+      if (!isTicketAlimtalkType(candidate?.type)) return false;
+      return hasOtherActiveTicketForMemberKey([], memberIdentityKey(candidate.memberId, candidate.memberName, candidatePhone(candidate)), date);
+    }
+
+    function isTicketAlimtalkType(value) {
+      return ['ticket_expiring', 'remaining_low', 'private_count_low', 'private_ticket_expiring', 'groupPeriod', 'groupCount', 'privateCount', 'privatePeriod'].includes(String(value || ''));
     }
 
     function alimtalkCandidateStatusMeta(candidate) {
@@ -3625,7 +3798,7 @@
     function renderAlimtalkCandidateRow(candidate) {
       const rule = alimtalkRuleMeta(candidate);
       const status = alimtalkCandidateStatusMeta(candidate);
-      const memberKey = candidate.memberId || candidate.memberName || '';
+      const memberKey = memberIdentityKey(candidate.memberId, candidate.memberName, candidatePhone(candidate));
       const sourceDate = candidate.sourceDate ? shortDate(String(candidate.sourceDate).slice(0, 10)) : '';
       return `
         <div class="alimtalk-row">
@@ -3689,7 +3862,7 @@
                 title: `${booking.memberName || '회원'} · ${lectureTimeText(lecture)} ${lecture.title || '수업'}`,
                 body: staffName(view.staffId),
                 level: 'bad',
-                memberKey: booking.memberId || booking.memberName,
+                memberKey: bookingMemberKey(booking),
                 actionKey: `local_attendance_unchecked_${booking.bookingId || `${view.date}_${lecture.lectureId}_${booking.memberName || ''}`}`,
                 sort: `3_${view.date}_${lectureTimeText(lecture)}_${booking.memberName || ''}`
               });
@@ -3725,8 +3898,15 @@
         .filter((action) => action.actionKey && !completed.has(action.actionKey))
         .filter((action) => action.type !== '출석저조')
         .filter((action) => action.type !== '장기미방문' || hasActiveTicketForMemberKey(views, action.memberKey, date))
-        .filter((action) => action.type !== '수강권' || !hasOtherActiveTicketForMemberKey(views, action.memberKey, date))
+        .filter((action) => !isTicketRiskAction(action) || !hasOtherActiveTicketForMemberKey(views, action.memberKey, date))
         .sort((a, b) => String(a.sort || '').localeCompare(String(b.sort || ''), 'ko')));
+    }
+
+    function isTicketRiskAction(action) {
+      const fields = [action?.type, action?.alimtalkType, action?.title, action?.body].join(' ');
+      return action?.type === '수강권' ||
+        isTicketAlimtalkType(action?.alimtalkType) ||
+        /수강권|잔여부족|만료임박|기간임박|잔여횟수/.test(fields);
     }
 
     function dedupeAdminActions(actions, options = {}) {
@@ -3806,6 +3986,7 @@
 
     function hasOtherActiveTicketForMemberKey(views, memberKey, date = appState.selectedDate) {
       if (!memberKey) return false;
+      if (hasOtherActiveProfileTicketForMemberKey(memberKey, date)) return true;
       const records = [];
       views.forEach((view) => {
         (view.lectures || []).forEach((lecture) => {
@@ -3822,6 +4003,54 @@
         isTicketActionable(item.booking)
       );
       return Boolean(target && hasOtherActiveTicket(records, target, date));
+    }
+
+    function hasOtherActiveProfileTicketForMemberKey(memberKey, date = appState.selectedDate) {
+      const profile = profileForMemberKey(memberKey);
+      const activeTickets = activeProfileTickets(profile, date);
+      const identities = new Set(activeTickets.map(profileTicketIdentity).filter(Boolean));
+      return identities.size > 1;
+    }
+
+    function profileForMemberKey(memberKey) {
+      const key = String(memberKey || '').trim();
+      if (!key) return null;
+      return (appState.admin.memberProfiles || []).find((profile) =>
+        String(profile.memberId || '').trim() === key ||
+        String(profile.name || '').trim() === key
+      ) || null;
+    }
+
+    function activeProfileTickets(profile, date = appState.selectedDate) {
+      return (Array.isArray(profile?.activeTickets) ? profile.activeTickets : [])
+        .filter((ticket) => isActiveProfileTicket(ticket, date));
+    }
+
+    function isActiveProfileTicket(ticket, date = appState.selectedDate) {
+      if (!ticket?.name) return false;
+      if (!isLessonProfileTicket(ticket)) return false;
+      if (ticket.expiryLevel === 'expired' || isTicketExpired(ticket.expiresAt)) return false;
+      const expires = dateOnlyFromValue(ticket.expiresAt);
+      if (expires && expires < date) return false;
+      const remaining = Number(ticket.remainingCount);
+      return !Number.isFinite(remaining) || remaining > 0;
+    }
+
+    function isLessonProfileTicket(ticket) {
+      const classType = String(ticket?.classType || '').toUpperCase();
+      const name = String(ticket?.name || '');
+      if (classType === 'I') return false;
+      if (/토삭스|삭스|양말|기간연장/.test(name)) return false;
+      return true;
+    }
+
+    function profileTicketIdentity(ticket) {
+      const userTicketId = String(ticket?.userTicketId || '').trim();
+      if (userTicketId) return `user:${userTicketId}`;
+      const ticketId = String(ticket?.ticketId || '').trim();
+      const name = String(ticket?.name || '').trim();
+      const expires = dateOnlyFromValue(ticket?.expiresAt);
+      return [ticketId, name, expires].filter(Boolean).join('|');
     }
 
     function adminActionStateForDate(date) {
@@ -3845,9 +4074,9 @@
           (lecture.bookings || [])
             .filter((booking) => !['cancel', 'wait_cancel'].includes(booking.appStatus))
             .forEach((booking) => {
-              const key = booking.memberId || booking.memberName;
+              const key = bookingMemberKey(booking);
               if (!key) return;
-              const row = map.get(key) || { memberId: booking.memberId, memberName: booking.memberName, records: [] };
+              const row = map.get(key) || { memberId: booking.memberId, memberName: booking.memberName, memberPhone: booking.memberPhone, records: [] };
               row.records.push({ view, lecture, booking });
               row.memberName = row.memberName || booking.memberName;
               map.set(key, row);
@@ -3871,7 +4100,7 @@
                 tag.source === 'manual'
               );
               if (!tags.length) return;
-              const memberKey = booking.memberId || booking.memberName;
+              const memberKey = bookingMemberKey(booking);
               const label = uniqueValues(tags.map((tag) => tag.label || tag.tagId)).slice(0, 2).join(', ');
               if (!memberKey || map.has(memberKey)) return;
               map.set(memberKey, {
@@ -3899,18 +4128,19 @@
         item.booking.appStatus === 'reserved' &&
         item.view.date >= date &&
         isTicketActionable(item.booking) &&
+        !hasOtherActiveTicketForMemberKey([], memberIdentityKey(row.memberId, row.memberName, row.memberPhone), date) &&
         !hasOtherActiveTicket(records, item, date)
       );
       if (ticketRisk) {
         const remaining = ticketRemainingText(ticketRisk.booking.ticketRemainingCount);
         const expired = ticketRisk.booking.ticketExpiryLevel === 'expired' || isTicketExpired(ticketRisk.booking.ticketExpiresAt);
         actions.push({
-          actionKey: `local_ticket_expiring_${row.memberId || row.memberName}`,
+          actionKey: `local_ticket_expiring_${memberIdentityKey(row.memberId, row.memberName, row.memberPhone)}`,
           type: '수강권',
           title: memberName,
           body: `${expired ? '만료' : '만료임박'}${remaining}`,
           level: expired ? 'bad' : 'wait',
-          memberKey: row.memberId || row.memberName,
+          memberKey: memberIdentityKey(row.memberId, row.memberName, row.memberPhone),
           sort: `0_${memberName}`
         });
       }
@@ -3927,22 +4157,22 @@
         const recentAbsent = recent.filter((item) => ['absent', 'late_cancel'].includes(item.booking.attendanceStatus)).length;
         if (previous.length >= 2 && recent.length >= 2 && previousRate >= 0.7 && (recentRate <= 0.5 || previousRate - recentRate >= 0.35)) {
           actions.push({
-            actionKey: `local_attendance_drop_${row.memberId || row.memberName}`,
+            actionKey: `local_attendance_drop_${memberIdentityKey(row.memberId, row.memberName, row.memberPhone)}`,
             type: '출석률',
             title: memberName,
             body: `${percentText(previousRate)} → ${percentText(recentRate)}`,
             level: 'bad',
-            memberKey: row.memberId || row.memberName,
+            memberKey: memberIdentityKey(row.memberId, row.memberName, row.memberPhone),
             sort: `1_${memberName}`
           });
         } else if (recentAbsent >= 2) {
           actions.push({
-            actionKey: `local_attendance_drop_${row.memberId || row.memberName}`,
+            actionKey: `local_attendance_drop_${memberIdentityKey(row.memberId, row.memberName, row.memberPhone)}`,
             type: '결석증가',
             title: memberName,
             body: `최근 결석 ${recentAbsent}회`,
             level: 'bad',
-            memberKey: row.memberId || row.memberName,
+            memberKey: memberIdentityKey(row.memberId, row.memberName, row.memberPhone),
             sort: `1_${memberName}`
           });
         }
@@ -3951,12 +4181,12 @@
         const lastAttended = attendedRecords.at(-1);
         if (lastAttended && daysBetween(lastAttended.view.date, selected) >= 21 && hasActiveTicketRecord(records, selected)) {
           actions.push({
-            actionKey: `local_long_absence_${row.memberId || row.memberName}`,
+            actionKey: `local_long_absence_${memberIdentityKey(row.memberId, row.memberName, row.memberPhone)}`,
             type: '장기미방문',
             title: memberName,
             body: `${lastAttended.view.date} 이후 출석 없음`,
             level: 'wait',
-            memberKey: row.memberId || row.memberName,
+            memberKey: memberIdentityKey(row.memberId, row.memberName, row.memberPhone),
             sort: `2_${memberName}`
           });
         }
@@ -4039,7 +4269,7 @@
       const active = appState.admin.activeTab || 'overview';
       if (active === 'analytics') return `${renderAdminStaffFilters()}${renderAdminAnalytics()}`;
       if (active === 'members') return renderAdminMemberSearch();
-      if (active === 'chat') return renderAdminChat();
+      if (CHAT_ENABLED && active === 'chat') return renderAdminChat();
       return `
         ${renderAdminDayTrend()}
         ${renderAdminConsultations()}
@@ -4409,11 +4639,11 @@
           </div>
           <div class="admin-panel">
             <div class="day-operation-head">
-              <h2>신규회원</h2>
+              <h2>${periodLabel} 등록 회원</h2>
               <span>${newMembers.length}명</span>
             </div>
             <div class="admin-list">
-              ${newMembers.slice(0, 8).map(renderNewMemberItem).join('') || `<div class="empty">${periodLabel} 신규회원이 없습니다</div>`}
+              ${newMembers.slice(0, 8).map(renderNewMemberItem).join('') || `<div class="empty">${periodLabel} 등록 회원이 없습니다</div>`}
             </div>
           </div>
           <div class="admin-panel">
@@ -4454,9 +4684,9 @@
       const rows = weekNewMembers();
       return `
         <section class="admin-panel">
-          <h2>주간 신규회원</h2>
+          <h2>이번 주 등록 회원</h2>
           <div class="admin-list">
-            ${rows.map(renderNewMemberItem).join('') || '<div class="empty">이번 주 신규회원이 없습니다</div>'}
+            ${rows.map(renderNewMemberItem).join('') || '<div class="empty">이번 주 등록 회원이 없습니다</div>'}
           </div>
         </section>
       `;
@@ -4474,7 +4704,7 @@
     function renderNewMemberItem(row) {
       return `
         <div class="admin-list-item">
-          <button class="member-name" type="button" data-action-member="${escapeAttr(row.memberId || row.memberName || '')}">${escapeHtml(row.memberName || '회원')}</button>
+          <button class="member-name" type="button" data-action-member="${escapeAttr(memberActionKey(row))}">${escapeHtml(row.memberName || '회원')}</button>
           <p>등록일 ${escapeHtml(fullDateLabel(row.registeredAt) || '-')}</p>
         </div>
       `;
@@ -5254,30 +5484,32 @@
     function bindAppEvents() {
       document.getElementById('logoutButton')?.addEventListener('click', () => signOut(appState.auth));
       document.getElementById('homeLogoButton')?.addEventListener('click', goToday);
-      const chatButton = document.getElementById('chatButton');
-      bindFloatingChatDrag(chatButton);
-      chatButton?.addEventListener('click', () => {
-        if (chatButton.dataset.dragged === 'true') return;
-        if (appState.mode === 'manager') {
-          appState.admin.activeTab = 'chat';
+      if (CHAT_ENABLED) {
+        const chatButton = document.getElementById('chatButton');
+        bindFloatingChatDrag(chatButton);
+        chatButton?.addEventListener('click', () => {
+          if (chatButton.dataset.dragged === 'true') return;
+          if (appState.mode === 'manager') {
+            appState.admin.activeTab = 'chat';
+            appState.chat.open = false;
+            subscribeChat(selectedChatStaffId());
+          } else {
+            appState.chat.open = true;
+            subscribeChat(appState.staff?.staffId || '');
+          }
+          renderApp();
+        });
+        root.querySelector('[data-close-chat]')?.addEventListener('click', () => {
           appState.chat.open = false;
-          subscribeChat(selectedChatStaffId());
-        } else {
-          appState.chat.open = true;
-          subscribeChat(appState.staff?.staffId || '');
-        }
-        renderApp();
-      });
-      root.querySelector('[data-close-chat]')?.addEventListener('click', () => {
-        appState.chat.open = false;
-        unsubscribeChat();
-        renderApp();
-      });
-      root.querySelector('[data-close-admin-chat]')?.addEventListener('click', () => {
-        appState.admin.activeTab = 'overview';
-        unsubscribeChat();
-        renderApp();
-      });
+          unsubscribeChat();
+          renderApp();
+        });
+        root.querySelector('[data-close-admin-chat]')?.addEventListener('click', () => {
+          appState.admin.activeTab = 'overview';
+          unsubscribeChat();
+          renderApp();
+        });
+      }
       document.getElementById('refreshButton')?.addEventListener('click', loadHome);
       document.getElementById('syncInfoButton')?.addEventListener('click', openSyncInfo);
       document.getElementById('prevDate')?.addEventListener('click', () => shiftDate(-1));
@@ -5307,7 +5539,7 @@
       root.querySelectorAll('[data-admin-tab]').forEach((button) => {
         button.addEventListener('click', () => {
           appState.admin.activeTab = button.dataset.adminTab || 'overview';
-          if (appState.admin.activeTab === 'chat') subscribeChat(selectedChatStaffId());
+          if (CHAT_ENABLED && appState.admin.activeTab === 'chat') subscribeChat(selectedChatStaffId());
           else if (appState.mode === 'manager') unsubscribeChat();
           renderApp();
         });
@@ -5653,7 +5885,7 @@
           appState.admin = result.admin || appState.admin;
           if (!appState.chat.selectedStaffId) appState.chat.selectedStaffId = appState.admin.staffs?.[0]?.staffId || '';
           subscribeAdminViews();
-          if (appState.admin.activeTab === 'chat') subscribeChat(selectedChatStaffId());
+          if (CHAT_ENABLED && appState.admin.activeTab === 'chat') subscribeChat(selectedChatStaffId());
         } else {
           appState.days = result.days || [];
           subscribeInstructorViews(result.staffId);
@@ -5960,6 +6192,7 @@
     }
 
     function subscribeConversations() {
+      if (!CHAT_ENABLED) return;
       if (!appState.staff?.studioId || appState.chat.conversationsUnsubscribe) return;
       const filters = [
         where('studioId', '==', appState.staff.studioId)
@@ -6268,7 +6501,7 @@
     }
 
     function openMemberInfo(memberKey) {
-      const row = collectMembers().find((item) => item.memberId === memberKey || item.memberName === memberKey);
+      const row = collectMembers().find((item) => memberRowMatchesKey(item, memberKey));
       if (!row) return;
       detailTitle.textContent = `${row.memberName || '회원'} 정보`;
       detailBody.innerHTML = renderMemberSearchItem(row);
@@ -6279,7 +6512,7 @@
     }
 
     function openTicketDetail(memberKey, ticketIndex) {
-      const row = collectMembers().find((item) => item.memberId === memberKey || item.memberName === memberKey);
+      const row = collectMembers().find((item) => memberRowMatchesKey(item, memberKey));
       if (!row) return;
       const tickets = memberTicketSummaries(row);
       const ticket = tickets[Number(ticketIndex)];
@@ -6326,7 +6559,7 @@
               <div class="member-search-meta"><div><b>데이터 기준</b> ${escapeHtml(ticket.source || '회원카드')}</div></div>
             </div>
           </div>
-          <button class="ghost" type="button" data-action-member="${escapeAttr(row.memberId || row.memberName || '')}">회원정보로 돌아가기</button>
+          <button class="ghost" type="button" data-action-member="${escapeAttr(memberActionKey(row))}">회원정보로 돌아가기</button>
         </div>
       `;
     }
@@ -6430,11 +6663,10 @@
     }
 
     function memberRecords(member) {
-      const key = member.memberId || member.memberName;
       const matches = [];
       const collect = (date, staffId, lecture) => {
         (lecture.bookings || []).forEach((booking) => {
-          if ((member.memberId && booking.memberId === member.memberId) || (!member.memberId && (booking.memberName || '') === key)) {
+          if (bookingMatchesMemberRow(booking, member)) {
             matches.push({ date, staffId, lecture, booking });
           }
         });
@@ -6702,11 +6934,13 @@
       (appState.admin.memberProfiles || []).forEach((profile) => {
         const registered = dateOnlyFromValue(profile.registeredAt || profile.firstRegisteredAt || profile.joinedAt || profile.createdAt);
         if (!registered || registered < start || registered > end) return;
-        const key = profile.memberId || profile.name;
+        const key = memberIdentityKey(profile.memberId, profile.name, profile.phone);
         if (!key || rows.has(key)) return;
         rows.set(key, {
           memberId: profile.memberId,
           memberName: profile.name,
+          memberPhone: profile.phone,
+          identityKey: key,
           registeredAt: registered
         });
       });
@@ -6721,11 +6955,13 @@
               const isNewByTag = Boolean(newTag && sourceDate >= start && sourceDate <= end);
               const isNewByRegisteredAt = Boolean(registered && registered >= start && registered <= end);
               if (!isNewByTag && !isNewByRegisteredAt) return;
-              const key = booking.memberId || booking.memberName;
+              const key = bookingMemberKey(booking);
               if (!key || rows.has(key)) return;
               rows.set(key, {
                 memberId: booking.memberId,
                 memberName: booking.memberName,
+                memberPhone: booking.memberPhone,
+                identityKey: key,
                 registeredAt: sourceDate
               });
             });
@@ -6754,7 +6990,7 @@
           if (!booking.ticketName) return;
           const expires = dateOnlyFromValue(booking.ticketExpiresAt);
           if (!expires || expires < start || expires > end) return;
-          const key = `${row.memberId || row.memberName}_${ticketIdentity(booking)}_${expires}`;
+          const key = `${memberActionKey(row)}_${ticketIdentity(booking)}_${expires}`;
           if (rows.has(key)) return;
           rows.set(key, {
             row,
@@ -7097,7 +7333,7 @@
               tag.source === 'manual'
             );
             if (!tags.length) return;
-            const key = booking.memberId || booking.memberName;
+            const key = bookingMemberKey(booking);
             const current = memberMap.get(key) || { booking, view, lecture, tags: [] };
             current.tags.push(...tags);
             memberMap.set(key, current);
@@ -7151,14 +7387,15 @@
       const seenBookings = new Set();
       const addBooking = (view, lecture, booking) => {
         if (!booking.memberId && !booking.memberName) return;
-        const bookingKey = booking.bookingId || `${booking.memberId || booking.memberName}_${view.date || ''}_${lecture.lectureId || lectureTimeText(lecture)}`;
+        const bookingKey = booking.bookingId || `${bookingMemberKey(booking)}_${view.date || ''}_${lecture.lectureId || lectureTimeText(lecture)}`;
         if (seenBookings.has(bookingKey)) return;
         seenBookings.add(bookingKey);
-        const key = booking.memberId || booking.memberName;
+        const key = bookingMemberKey(booking);
         const row = map.get(key) || {
           memberId: booking.memberId,
           memberName: booking.memberName,
           memberPhone: booking.memberPhone,
+          identityKey: key,
           tags: [],
           bookings: [],
           memos: []
@@ -7186,12 +7423,13 @@
         });
       });
       (appState.admin.memos || []).forEach((memo) => {
-        const key = memo.memberId || memo.memberName;
+        const key = memberIdentityKey(memo.memberId, memo.memberName, '');
         if (!key) return;
         const row = map.get(key) || {
           memberId: memo.memberId,
           memberName: memo.memberName,
           memberPhone: '',
+          identityKey: key,
           tags: [],
           bookings: [],
           memos: []
@@ -7201,12 +7439,13 @@
         map.set(key, row);
       });
       (appState.admin.memberProfiles || []).forEach((profile) => {
-        const key = profile.memberId || profile.name;
+        const key = memberIdentityKey(profile.memberId, profile.name, profile.phone);
         if (!key) return;
         const row = map.get(key) || {
           memberId: profile.memberId,
           memberName: profile.name,
           memberPhone: profile.phone,
+          identityKey: key,
           tags: [],
           bookings: [],
           memos: []
@@ -7218,12 +7457,13 @@
         map.set(key, row);
       });
       (appState.admin.memberContactIndex || []).forEach((contact) => {
-        const key = contact.memberId || contact.name;
+        const key = memberIdentityKey(contact.memberId, contact.name, contact.phone);
         if (!key) return;
         const row = map.get(key) || {
           memberId: contact.memberId,
           memberName: contact.name,
           memberPhone: contact.phone,
+          identityKey: key,
           tags: [],
           bookings: [],
           memos: []
@@ -7242,6 +7482,55 @@
 
     function collectAdminMembers() {
       return collectMembers();
+    }
+
+    function memberIdentityKey(memberId, memberName, memberPhone) {
+      const id = String(memberId || '').trim();
+      if (id) return `id:${id}`;
+      const phone = normalizePhone(memberPhone);
+      if (phone) return `phone:${phone}`;
+      const name = normalizeSearch(memberName);
+      return name ? `name:${name}` : '';
+    }
+
+    function bookingMemberKey(booking = {}) {
+      return memberIdentityKey(booking.memberId, booking.memberName, booking.memberPhone);
+    }
+
+    function memberActionKey(row = {}) {
+      return row.identityKey || memberIdentityKey(row.memberId, row.memberName, row.memberPhone || row.profile?.phone || row.contactIndex?.phone);
+    }
+
+    function memberRowMatchesKey(row = {}, memberKey = '') {
+      const key = String(memberKey || '');
+      if (!key) return false;
+      if (key.includes(':')) {
+        if (memberActionKey(row) === key) return true;
+        if (key === memberIdentityKey(row.memberId, row.memberName, row.memberPhone)) return true;
+        if (key === memberIdentityKey('', row.memberName, row.profile?.phone)) return true;
+        if (key === memberIdentityKey('', row.memberName, row.contactIndex?.phone)) return true;
+        return false;
+      }
+      if (row.memberId && row.memberId === key) return true;
+      const phone = normalizePhone(key);
+      if (phone && normalizePhone(row.memberPhone || row.profile?.phone || row.contactIndex?.phone) === phone) return true;
+      return !row.memberId && !phone && row.memberName === key;
+    }
+
+    function bookingMatchesMemberRow(booking = {}, row = {}) {
+      if (row.memberId && booking.memberId) return row.memberId === booking.memberId;
+      const rowPhone = normalizePhone(row.memberPhone || row.profile?.phone || row.contactIndex?.phone);
+      const bookingPhone = normalizePhone(booking.memberPhone);
+      if (rowPhone && bookingPhone) return rowPhone === bookingPhone;
+      return !row.memberId && !rowPhone && row.memberName && row.memberName === booking.memberName;
+    }
+
+    function candidateMatchesMemberRow(candidate = {}, row = {}) {
+      if (row.memberId && candidate.memberId) return row.memberId === candidate.memberId;
+      const rowPhone = normalizePhone(row.memberPhone || row.profile?.phone || row.contactIndex?.phone);
+      const candidatePhone = normalizePhone(candidate.memberPhone);
+      if (rowPhone && candidatePhone) return rowPhone === candidatePhone;
+      return !row.memberId && !rowPhone && row.memberName && normalizeSearch(candidate.memberName) === normalizeSearch(row.memberName);
     }
 
     function bookingSortValue(item) {
@@ -7266,7 +7555,7 @@
       return `
         <div class="admin-list-item member-search-card">
           <div class="member-search-head">
-            <button class="member-name" type="button" data-action-member="${escapeAttr(row.memberId || row.memberName || '')}">${escapeHtml(row.memberName || '회원')}</button>
+            <button class="member-name" type="button" data-action-member="${escapeAttr(memberActionKey(row))}">${escapeHtml(row.memberName || '회원')}</button>
           </div>
           ${opsChips.length ? `<div class="chips">${opsChips.map((chip) => `<span class="chip ${escapeAttr(chip.level)}">${escapeHtml(chip.label)}</span>`).join('')}</div>` : ''}
           <div class="member-search-stats">
@@ -7287,7 +7576,7 @@
               <ul class="member-mini-list">
                 ${tickets.map((ticket, ticketIndex) => `
                   <li>
-                    <button class="ticket-row-button" type="button" data-ticket-member="${escapeAttr(row.memberId || row.memberName || '')}" data-ticket-index="${ticketIndex}">
+                    <button class="ticket-row-button" type="button" data-ticket-member="${escapeAttr(memberActionKey(row))}" data-ticket-index="${ticketIndex}">
                       <strong>${escapeHtml(ticket.name)}</strong>
                       <span class="chip ${ticket.level}">${escapeHtml(ticket.meta)}</span>
                     </button>
@@ -7316,10 +7605,8 @@
       if (contactStatus === 'synced') chips.push({ label: '주소록 동기화', level: 'positive' });
       else if (contactStatus === 'pending') chips.push({ label: '주소록 대기', level: 'wait' });
       else if (contactStatus === 'failed') chips.push({ label: '주소록 실패', level: 'danger' });
-      const candidate = (appState.admin.alimtalkCandidates || []).find((item) =>
-        item.memberId === row.memberId || normalizeSearch(item.memberName) === normalizeSearch(row.memberName)
-      );
-      if (candidate) {
+      const candidate = (appState.admin.alimtalkCandidates || []).find((item) => candidateMatchesMemberRow(item, row));
+      if (SHOW_ALIMTALK_STATUS_TAGS && candidate) {
         const statusLabel = {
           candidate: '알림톡 후보',
           reviewed: '알림톡 검토',
@@ -7340,7 +7627,7 @@
       return `
         <div class="admin-list-item member-search-card">
           <div class="member-search-head">
-            <button class="member-name" type="button" data-action-member="${escapeAttr(row.memberId || row.memberName || '')}">${escapeHtml(row.memberName || '회원')}</button>
+            <button class="member-name" type="button" data-action-member="${escapeAttr(memberActionKey(row))}">${escapeHtml(row.memberName || '회원')}</button>
           </div>
           <div class="member-search-section">
             <h3>건강이슈</h3>
@@ -7422,7 +7709,7 @@
 
     function canonicalMemberTags(booking) {
       const tags = booking?.tags || [];
-      const memberKey = booking?.memberId || booking?.memberName || '';
+      const memberKey = bookingMemberKey(booking);
       if (!memberKey) return tags;
       const cache = appState.memberTagCache || (appState.memberTagCache = buildMemberTagCache());
       const canonical = cache.get(memberKey);
@@ -7434,7 +7721,7 @@
     function buildMemberTagCache() {
       const map = new Map();
       const add = (booking) => {
-        const key = booking?.memberId || booking?.memberName || '';
+        const key = bookingMemberKey(booking);
         if (!key) return;
         const current = map.get(key) || { attended: null, absent: null };
         (booking.tags || []).forEach((tag) => {
@@ -7534,7 +7821,7 @@
       const booking = item.booking || {};
       const lecture = item.lecture || {};
       const lectureKey = lecture.lectureId || booking.lectureId || `${item.view?.date || ''}_${timestampMillis(lecture.startAt) || ''}_${lecture.staffId || booking.staffId || booking.staffName || ''}`;
-      return `${booking.memberId || booking.memberName || ''}_${lectureKey}`;
+      return `${bookingMemberKey(booking)}_${lectureKey}`;
     }
 
     function attendanceRecordPriority(item) {
@@ -8092,7 +8379,12 @@
     }
 
     function ticketIdentity(booking) {
-      return String(booking.ticketId || booking.ticketName || '').trim();
+      const userTicketId = String(booking.userTicketId || '').trim();
+      if (userTicketId) return `user:${userTicketId}`;
+      const ticketId = String(booking.ticketId || '').trim();
+      const name = String(booking.ticketName || '').trim();
+      const expires = dateOnlyFromValue(booking.ticketExpiresAt);
+      return [ticketId, name, expires].filter(Boolean).join('|');
     }
 
     function ticketCountLabel(value) {

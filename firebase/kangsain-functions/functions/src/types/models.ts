@@ -303,7 +303,14 @@ export interface MemberProfileDoc {
 
 export type ContactSyncTarget = "archivepilates_gmail" | "home_archivepilates";
 export type ContactSyncStatus = "pending" | "synced" | "skipped" | "failed";
-export type AlimtalkCandidateType = "new_member" | "ticket_expiring" | "remaining_low" | "long_absence" | "manual_review";
+export type AlimtalkCandidateType =
+  | "new_member"
+  | "ticket_expiring"
+  | "remaining_low"
+  | "private_count_low"
+  | "private_ticket_expiring"
+  | "long_absence"
+  | "manual_review";
 export type AlimtalkCandidateStatus =
   | "candidate"
   | "reviewed"
@@ -347,6 +354,8 @@ export interface AlimtalkCandidateDoc {
   sourceActionKey?: string;
   sourceDate: string;
   payload: Record<string, string>;
+  dedupeKey?: string;
+  queuedBy?: "operator" | "auto";
   reviewedByUid?: string;
   reviewedAt?: Timestamp | null;
   sentAt?: Timestamp | null;
@@ -363,6 +372,9 @@ export interface AlimtalkSendDoc {
   memberName: string;
   memberPhone: string;
   templateCode: string;
+  dedupeKey?: string;
+  dedupePolicy?: string;
+  dedupeWindowDays?: number | null;
   status: QueueStatus;
   attempts: number;
   maxAttempts: number;

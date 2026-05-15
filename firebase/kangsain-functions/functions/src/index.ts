@@ -28,6 +28,8 @@ import { syncManagerStaffs } from "./sync/syncManagerStaffs";
 import { syncDashboardFromSheets } from "./sync/syncDashboardFromSheets";
 import { preSecurityRawMirror } from "./sync/preSecurityRawMirror";
 import { processAlimtalkQueue } from "./alimtalk/processAlimtalkQueue";
+import { queueDailyAlimtalkCandidates } from "./alimtalk/queueDailyAlimtalk";
+import { sendDailyAlimtalkReport } from "./alimtalk/sendDailyAlimtalkReport";
 import { getStaffByUid } from "./firestore/staffRepository";
 import { nowTimestamp } from "./utils/date";
 
@@ -94,6 +96,30 @@ export const scheduledProcessAlimtalkQueue = onSchedule(
   },
   async () => {
     await processAlimtalkQueue();
+  },
+);
+
+export const scheduledQueueAndSendAlimtalkDaily = onSchedule(
+  {
+    ...scheduleOptions,
+    schedule: "30 11 * * *",
+  },
+  async () => {
+    const queueSummary = await queueDailyAlimtalkCandidates();
+    const processSummary = { processed: 0, sent: 0, failed: 0 };
+    for (let index = 0; index < 10; index += 1) {
+      const result = await processAlimtalkQueue();
+      processSummary.processed += result.processed;
+      processSummary.sent += result.sent;
+      processSummary.failed += result.failed;
+      if (!result.processed) break;
+    }
+    try {
+      await sendDailyAlimtalkReport({ queueSummary, processSummary });
+    } catch (err) {
+      const message = err instanceof Error ? err.message : String(err);
+      logger.error("scheduledQueueAndSendAlimtalkDaily report failed", { message });
+    }
   },
 );
 

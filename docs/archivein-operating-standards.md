@@ -106,9 +106,13 @@ ArchiveIN은 데이터 원천별 책임을 명확히 나눈다.
 4. Google 주소록 동기화는 `memberContactIndex/{memberId}`와 `contactSyncJobs`를 통해 처리한다.
 5. 알림톡 후보 산정은 같은 회원 프로필과 수강권/출석 요약을 사용한다.
 
+회원 매칭은 `memberId -> 전화번호 -> 이름` 순서로만 허용한다. 같은 이름이 여러 명이면 전화번호 또는 `memberId`가 확인되기 전까지 출결 30일 요약, 수강권, 알림톡 후보, 주소록 상태를 한 카드로 합치지 않는다.
+
 2026-05-15 이후 주소록 기준 계정은 `home@archivepilates.com` 하나로 통일한다. `archivepilates@gmail.com` 주소록은 과거 자동화 대상/이관 원본으로만 본다. 단, Google 주소록 자체는 보조 저장소이므로 앱 표시의 원천으로 삼지 않는다.
 
 Firebase 주소록 동기화는 `home@archivepilates.com`을 Google People API 위임 대상으로 사용한다. Mac mini에 남아 있는 `archivepilates@gmail.com` 기준 자동화는 더 이상 운영 기준이 아니며, 실행이 필요하면 `home@archivepilates.com` 기준으로 수정한 뒤 사용한다. 기존 자동화의 dry-run, 신규 생성 10건 이하, 수정 50건 이하, Google-only 연락처 삭제 금지 원칙은 유지한다.
+
+앱 내 채팅 기능은 사용도가 낮아 운영 화면에서 숨긴다. 숨김 상태에서는 채팅 실시간 구독도 시작하지 않아 Firestore 읽기 사용량을 줄인다.
 
 점검 순서:
 

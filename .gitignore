@@ -5,6 +5,13 @@ firebase/kangsain-functions/.firebase/
 firebase/kangsain-functions/firebase-debug.log
 firebase/kangsain-functions/firebase-debug.*.log
 node_modules/
+artifacts/**
+artifacts/**/node_modules/
+artifacts/**/node_modules_deps/
+artifacts/*/node_modules/
+artifacts/*/node_modules_deps/
+artifacts/*/node_modules
+artifacts/*/node_modules_deps
 .firebase/
 .DS_Store
 firebase/.DS_Store

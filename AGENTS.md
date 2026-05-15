@@ -1,0 +1,49 @@
+# AGENTS.md
+
+## Project
+
+- Name: archive-in
+- Canonical live app: `https://archive-pilates.web.app/archivein/`
+- Firebase/GCP project: `archive-pilates`
+- Primary rule: preserve existing user work and avoid production-impacting commands unless explicitly requested.
+
+## Working Guidelines
+
+- Read the current files before changing behavior.
+- Keep edits scoped to the requested task.
+- Prefer read-only checks before live automation or deploy actions.
+- Do not run `git push`, deploy commands, StudioMate writes, Google Contacts writes, Secret Manager writes, or SOLAPI sends without explicit approval.
+- Put task notes under `docs/tasks/`, durable decisions under `docs/decisions/`, and generated outputs under `artifacts/`.
+
+## ArchiveIN Work Coordination
+
+- Use the main ArchiveIN project chat as the control surface for cross-cutting decisions about the web app, Firebase model, StudioMate sync, Google Contacts, Kakao Alimtalk, and deployment readiness.
+- If a separate chat or agent is used for a narrow subtask, bring the decision/result back into the main ArchiveIN chat before treating it as project direction.
+- When speed helps and the task can be split safely, use parallel agents, including the Spark model for quick read-only exploration or bounded implementation checks.
+- Use worktrees when a change is non-trivial, experimental, or should be isolated from the current branch.
+- Start live checks with read-only verification of the deployed ArchiveIN app, Firebase/Hosting configuration, and visible browser errors before proposing fixes.
+
+## Local Setup
+
+- Active development worktree: `/Users/archivepilates/codex-worktrees/archivein-live-setup`
+- Base branch: `origin/archivein-canonical-20260514`
+- Local branch convention: `codex/mini/<task-name>`
+- Service account key path: `/Users/archivepilates/ArchiveIN/secrets/google/archive-codex-operator.json`
+- Service account email: `archive-codex-operator@archive-pilates.iam.gserviceaccount.com`
+
+Firebase CLI may prefer a stale signed-in user token. For service-account-backed CLI reads or approved deploys, generate an access token in the current shell:
+
+```bash
+source scripts/use-archivein-firebase-service-account.sh
+```
+
+## Build Checks
+
+```bash
+npm ci
+npm run build:dashboard
+npm --prefix firebase/kangsain-functions/functions ci
+npm --prefix firebase/kangsain-functions/functions run build
+```
+
+The Functions package declares Node.js `22`. If the machine default is newer, expect npm engine warnings unless Node 22 is selected.

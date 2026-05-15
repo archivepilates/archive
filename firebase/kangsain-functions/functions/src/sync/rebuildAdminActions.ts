@@ -281,7 +281,10 @@ function hasOtherActiveTicket(rows: BookingDoc[], target: BookingDoc, targetDate
 }
 
 function ticketIdentity(booking: BookingDoc): string {
-  return String(booking.ticketName || "").trim();
+  const row = booking as BookingDoc & { userTicketId?: string; ticketId?: string };
+  if (row.userTicketId) return `user:${row.userTicketId}`;
+  const expiresAt = booking.ticketExpiresAt?.toMillis() || "";
+  return [row.ticketId || "", booking.ticketName || "", expiresAt].filter(Boolean).join("|");
 }
 
 function attendanceRate(rows: BookingDoc[]): number {

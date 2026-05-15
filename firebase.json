@@ -79,7 +79,11 @@
       "dashboard/src/**",
       "**/node_modules/**",
       "firebase-debug.log",
-      "firebase-debug.*.log"
+      "firebase-debug.*.log",
+      "AGENTS.md",
+      "docs/**",
+      "artifacts/**",
+      "scripts/**"
     ],
     "redirects": [
       {
