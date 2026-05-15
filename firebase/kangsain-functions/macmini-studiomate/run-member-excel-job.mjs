@@ -6,6 +6,8 @@ import path from "node:path";
 
 const ROOT_DIR = "/Users/archivepilates/Documents/Codex/2026-05-07/archive";
 const CONTACTS_DIR = "/Users/archivepilates/Documents/New project 2";
+const BROWSER_NODE = "/Applications/Codex.app/Contents/Resources/node";
+const DEFAULT_NODE = "/usr/local/bin/node";
 const LAST_RESULT = path.join(os.homedir(), "ArchiveIN/automation/downloads/last-member-excel-download-result.json");
 const REPORT_DIR = path.join(os.homedir(), "ArchiveIN/automation/reports/member-excel-job");
 
@@ -16,7 +18,7 @@ const result = { ok: false, startedAt: startedAt.toISOString(), steps: [] };
 await mkdir(REPORT_DIR, { recursive: true });
 
 try {
-  const dryRun = await runWithRetry("dry-run", "/usr/local/bin/node", ["firebase/kangsain-functions/macmini-studiomate/download-member-excel.mjs"], ROOT_DIR, {
+  const dryRun = await runWithRetry("dry-run", BROWSER_NODE, ["firebase/kangsain-functions/macmini-studiomate/download-member-excel.mjs"], ROOT_DIR, {
     TZ: "Asia/Seoul",
     HEADLESS: "true",
     DRY_RUN: "true",
@@ -24,7 +26,7 @@ try {
   result.steps.push({ name: "dry-run", ok: dryRun.code === 0, code: dryRun.code, output: dryRun.output });
   if (dryRun.code !== 0) throw new Error(extractError(dryRun.output) || "StudioMate member Excel dry-run failed.");
 
-  const realRun = await runWithRetry("download", "/usr/local/bin/node", ["firebase/kangsain-functions/macmini-studiomate/download-member-excel.mjs"], ROOT_DIR, {
+  const realRun = await runWithRetry("download", BROWSER_NODE, ["firebase/kangsain-functions/macmini-studiomate/download-member-excel.mjs"], ROOT_DIR, {
     TZ: "Asia/Seoul",
     HEADLESS: "true",
     DRY_RUN: "false",
@@ -76,7 +78,7 @@ function failureBody(message) {
 }
 
 async function sendReport(subject, body) {
-  const report = await run("/usr/local/bin/node", ["scripts/send_automation_report.mjs"], CONTACTS_DIR, {
+  const report = await run(DEFAULT_NODE, ["scripts/send_automation_report.mjs"], CONTACTS_DIR, {
     AUTOMATION_REPORT_SUBJECT: subject,
     AUTOMATION_REPORT_BODY: body,
   });

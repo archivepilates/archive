@@ -67,6 +67,15 @@
         ]
       }
     ],
+    "rewrites": [
+      {
+        "source": "/aki/**",
+        "run": {
+          "serviceId": "aki-agent-api",
+          "region": "asia-northeast3"
+        }
+      }
+    ],
     "ignore": [
       ".git",
       ".git/**",
