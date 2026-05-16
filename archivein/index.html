@@ -2925,7 +2925,7 @@
         detail: '강사가 앱에서 변경한 출석·결석·메모를 전송 큐에서 스튜디오메이트로 보냅니다.'
       },
       {
-        title: '운영 현황/매출 데이터',
+        title: '운영 현황 데이터',
         schedule: '매일 00:20',
         detail: '구글시트 기반 현황판 데이터를 Firestore로 미러링합니다.'
       },
@@ -5805,7 +5805,7 @@
       const email = document.getElementById('emailInput')?.value.trim();
       const password = document.getElementById('passwordInput')?.value;
       if (!email || !password) {
-        appState.error = '이메일과 비밀번호를 입력하세요';
+        appState.error = '휴대폰번호와 비밀번호를 입력하세요';
         renderLogin(appState.error);
         return;
       }
@@ -6574,8 +6574,8 @@
       detailBody.innerHTML = `
         <div class="admin-list-item member-search-card">
           <div class="member-search-head">
-            <strong>현재 배포 기준</strong>
-            <span class="chip">2026-05-07</span>
+            <strong>동기화 상태</strong>
+            <span class="chip">현재 설정 기준</span>
           </div>
           <div class="member-search-stats">
             <div class="member-search-stat"><span>최근 전체동기화</span><strong>${escapeHtml(lastFullSync)}</strong></div>
@@ -6597,9 +6597,10 @@
             </ul>
           </div>
           <div class="member-search-meta">
-            <div><b>참고</b> 스튜디오메이트에서 변경됐지만 알림 API에 잡히지 않는 정보는 다음 전체 또는 부분 동기화 전까지 늦게 보일 수 있습니다.</div>
+            <div><b>참고</b> 선택일 수업 동기화는 해당 날짜의 수업 정보를 다시 가져오며, 화면에 쓰이는 매출 반영 데이터도 함께 갱신합니다.</div>
+            <div><b>주의</b> 스튜디오메이트에서 변경됐지만 알림 API에 잡히지 않는 정보는 다음 전체 또는 부분 동기화 전까지 늦게 보일 수 있습니다.</div>
           </div>
-          <button id="manualSyncButton" class="primary" type="button">선택일/매출 데이터 동기화</button>
+          <button id="manualSyncButton" class="primary" type="button">선택일 수업 동기화(매출 반영 포함)</button>
         </div>
       `;
       document.getElementById('manualSyncButton')?.addEventListener('click', runManualSync);
@@ -6632,7 +6633,7 @@
         showToast(`동기화 실패: ${friendlyError(err)}`);
         if (button) {
           button.disabled = false;
-          button.textContent = '선택일/매출 데이터 동기화';
+          button.textContent = '선택일 수업 동기화(매출 반영 포함)';
         }
       }
     }
@@ -8464,7 +8465,7 @@
     }
 
     function friendlyError(err) {
-      if (err?.code === 'auth/invalid-credential') return '이메일 또는 비밀번호가 맞지 않습니다';
+      if (err?.code === 'auth/invalid-credential') return '휴대폰번호 또는 비밀번호가 맞지 않습니다';
       if (err?.code === 'auth/too-many-requests') return '로그인 시도가 많습니다. 잠시 후 다시 시도하세요';
       return err?.message?.replace(/^Firebase: /, '') || '처리 중 오류가 발생했습니다';
     }

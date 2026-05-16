@@ -5,25 +5,16 @@ import { solapiApiKey, solapiApiSecret, solapiPfid } from "../config/secrets";
 import { refs } from "../firestore/refs";
 import type { AlimtalkCandidateDoc } from "../types/models";
 import { errorMessage } from "../utils/errors";
-import { addDays, nowTimestamp, todayKst } from "../utils/date";
+import { nowTimestamp, todayKst } from "../utils/date";
 import { stableHash } from "../utils/hash";
-import {
-  ALIMTALK_MEMBER_EXCLUSION_REASONS,
-  APPROVED_ALIMTALK_TEMPLATE_CODES,
-  NEW_MEMBER_ALIMTALK_START_DATE,
-  NEW_MEMBER_ALIMTALK_WINDOW_DAYS,
-  alimtalkDedupePolicy,
-} from "./templates";
+import { APPROVED_ALIMTALK_TEMPLATE_CODES, alimtalkDedupePolicy } from "./templates";
+import { autoSendabilityIssue } from "./eligibility";
 
 const SOLAPI_SEND_URL = "https://api.solapi.com/messages/v4/send-many/detail";
 const PROCESSING_STALE_MS = 10 * 60 * 1000;
 
 export async function processAlimtalkQueue(): Promise<{ processed: number; sent: number; failed: number }> {
-  const snap = await refs
-    .alimtalkCandidates()
-    .where("status", "in", ["queued", "processing"])
-    .limit(20)
-    .get();
+  const snap = await refs.alimtalkCandidates().where("status", "in", ["queued", "processing"]).limit(20).get();
 
   let processed = 0;
   let sent = 0;
@@ -34,7 +25,7 @@ export async function processAlimtalkQueue(): Promise<{ processed: number; sent:
     if (!claimed) continue;
     processed += 1;
     try {
-      const sendabilityIssue = sendabilityIssueForToday(claimed);
+      const sendabilityIssue = autoSendabilityIssue(claimed, todayKst());
       if (sendabilityIssue) {
         await refs.alimtalkCandidate(claimed.candidateId).set(
           {
@@ -184,20 +175,6 @@ function isStaleProcessing(candidate: AlimtalkCandidateDoc): boolean {
   return updatedAt > 0 && Date.now() - updatedAt >= PROCESSING_STALE_MS;
 }
 
-function sendabilityIssueForToday(candidate: AlimtalkCandidateDoc): string {
-  const today = todayKst();
-  if (!candidate.memberPhone) return "전화번호 없음";
-  if (ALIMTALK_MEMBER_EXCLUSION_REASONS[candidate.memberId]) return ALIMTALK_MEMBER_EXCLUSION_REASONS[candidate.memberId];
-  if (!APPROVED_ALIMTALK_TEMPLATE_CODES.has(candidate.templateCode)) return `승인 템플릿 코드 아님: ${candidate.templateCode}`;
-  if (candidate.sourceDate && candidate.sourceDate > today) return "대상일이 발송 기준일 이후";
-  if (candidate.type !== "new_member" && candidate.sourceDate !== today) return "수강권 알림은 발송 기준일 후보만 발송";
-  if (candidate.type === "new_member" && candidate.sourceDate < NEW_MEMBER_ALIMTALK_START_DATE) return "신규회원 웰컴 시작일 이전 등록";
-  if (candidate.type === "new_member" && candidate.sourceDate < addDays(today, -(NEW_MEMBER_ALIMTALK_WINDOW_DAYS - 1))) {
-    return `신규회원 웰컴은 등록 ${NEW_MEMBER_ALIMTALK_WINDOW_DAYS}일 이내 후보만 발송`;
-  }
-  return "";
-}
-
 function alimtalkDedupeKey(candidate: AlimtalkCandidateDoc): string {
   return stableHash({
     studioId: candidate.studioId,
@@ -228,7 +205,8 @@ async function sendSolapiAlimtalk(candidate: AlimtalkCandidateDoc): Promise<{ me
   const to = normalizePhone(candidate.memberPhone);
   if (!to) throw new Error("member phone is empty");
   if (!candidate.templateCode) throw new Error("templateCode is empty");
-  if (!APPROVED_ALIMTALK_TEMPLATE_CODES.has(candidate.templateCode)) throw new Error(`template is not approved: ${candidate.templateCode}`);
+  if (!APPROVED_ALIMTALK_TEMPLATE_CODES.has(candidate.templateCode))
+    throw new Error(`template is not approved: ${candidate.templateCode}`);
 
   const body = {
     messages: [
@@ -273,7 +251,9 @@ function solapiAuthHeader(): string {
   const apiSecret = solapiApiSecret.value();
   const dateTime = new Date().toISOString();
   const salt = randomBytes(16).toString("hex");
-  const signature = createHmac("sha256", apiSecret).update(dateTime + salt).digest("hex");
+  const signature = createHmac("sha256", apiSecret)
+    .update(dateTime + salt)
+    .digest("hex");
   return `HMAC-SHA256 apiKey=${apiKey}, date=${dateTime}, salt=${salt}, signature=${signature}`;
 }
 

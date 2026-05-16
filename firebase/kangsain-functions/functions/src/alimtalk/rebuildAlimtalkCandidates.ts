@@ -15,14 +15,18 @@ export async function rebuildAlimtalkCandidatesForRange(input: {
   studioId: string;
   startDate: string;
   endDate: string;
-}): Promise<{ candidates: number }> {
+}): Promise<{ candidates: number; candidateIds: string[] }> {
   const profilesSnap = await refs.memberProfiles().where("studioId", "==", input.studioId).get();
 
   const writes: Array<Promise<unknown>> = [];
+  const candidateIds: string[] = [];
   const profiles = profilesSnap.docs.map((snap) => snap.data());
   dateRange(input.startDate, input.endDate).forEach((sourceDate) => {
     profiles.forEach((profile) => {
-      directTicketCandidates(profile, sourceDate).forEach((candidate) => writes.push(upsertCandidate(candidate)));
+      directTicketCandidates(profile, sourceDate).forEach((candidate) => {
+        candidateIds.push(candidate.candidateId);
+        writes.push(upsertCandidate(candidate));
+      });
     });
   });
 
@@ -39,9 +43,11 @@ export async function rebuildAlimtalkCandidatesForRange(input: {
     .forEach((profile) => {
       const sourceDate = registeredDate(profile);
       if (!sourceDate || !profile.phone) return;
+      const candidateId = `new_member_${profile.memberId}_${sourceDate}`;
+      candidateIds.push(candidateId);
       writes.push(
         upsertCandidate({
-          candidateId: `new_member_${profile.memberId}_${sourceDate}`,
+          candidateId,
           studioId: profile.studioId,
           memberId: profile.memberId,
           memberName: profile.name,
@@ -69,7 +75,7 @@ export async function rebuildAlimtalkCandidatesForRange(input: {
 
   await Promise.all(writes);
   logger.info("rebuildAlimtalkCandidatesForRange completed", { studioId: input.studioId, candidates: writes.length });
-  return { candidates: writes.length };
+  return { candidates: writes.length, candidateIds };
 }
 
 function directTicketCandidates(profile: MemberProfileDoc, sourceDate: string): AlimtalkCandidateDoc[] {
@@ -156,11 +162,17 @@ function hasOtherActiveTicket(
   return activeProfileTickets(profile, sourceDate).some((ticket) => profileTicketIdentity(ticket) !== targetKey);
 }
 
-function activeProfileTickets(profile: MemberProfileDoc | undefined, sourceDate: string): NonNullable<MemberProfileDoc["activeTickets"]> {
+function activeProfileTickets(
+  profile: MemberProfileDoc | undefined,
+  sourceDate: string,
+): NonNullable<MemberProfileDoc["activeTickets"]> {
   return (profile?.activeTickets || []).filter((ticket) => isActiveProfileTicket(ticket, sourceDate));
 }
 
-function isActiveProfileTicket(ticket: NonNullable<MemberProfileDoc["activeTickets"]>[number], sourceDate: string): boolean {
+function isActiveProfileTicket(
+  ticket: NonNullable<MemberProfileDoc["activeTickets"]>[number],
+  sourceDate: string,
+): boolean {
   if (!ticket.name) return false;
   if (!isLessonProfileTicket(ticket)) return false;
   if (ticket.expiryLevel === "expired") return false;
@@ -189,7 +201,10 @@ function profileTicketIdentity(ticket: NonNullable<MemberProfileDoc["activeTicke
   return [ticket.ticketId || "", ticket.name || "", expiresAt].filter(Boolean).join("|");
 }
 
-function ticketPayload(ticket: NonNullable<MemberProfileDoc["activeTickets"]>[number], sourceDate: string): Record<string, string> {
+function ticketPayload(
+  ticket: NonNullable<MemberProfileDoc["activeTickets"]>[number],
+  sourceDate: string,
+): Record<string, string> {
   return {
     ticketId: ticket.ticketId || "",
     userTicketId: ticket.userTicketId || "",
@@ -208,10 +223,15 @@ function formatKoreanDate(value: NonNullable<MemberProfileDoc["activeTickets"]>[
     year: "numeric",
     month: "numeric",
     day: "numeric",
-  }).format(date).replace(/\s/g, " ");
+  })
+    .format(date)
+    .replace(/\s/g, " ");
 }
 
-function remainingDays(value: NonNullable<MemberProfileDoc["activeTickets"]>[number]["expiresAt"], sourceDate: string): string {
+function remainingDays(
+  value: NonNullable<MemberProfileDoc["activeTickets"]>[number]["expiresAt"],
+  sourceDate: string,
+): string {
   const date = value?.toDate?.();
   if (!date) return "";
   const expiryText = new Intl.DateTimeFormat("sv-SE", { timeZone: "Asia/Seoul" }).format(date);

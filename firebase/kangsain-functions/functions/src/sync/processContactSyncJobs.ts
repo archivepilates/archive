@@ -9,21 +9,40 @@ import { errorMessage } from "../utils/errors";
 import { nextRetryAt } from "../queue/retryPolicy";
 
 export async function processContactSyncJobs(): Promise<{ processed: number }> {
-  const due = await refs
-    .contactSyncJobs()
-    .where("status", "in", ["pending", "retry"])
-    .limit(50)
-    .get();
+  const now = Timestamp.now();
+  const nowMillis = now.toMillis();
+  const due = await refs.contactSyncJobs().where("status", "in", ["pending", "retry"]).limit(100).get();
 
-  const dueJobs = due.docs
-    .map((snap) => snap.data())
-    .filter((job) => job.target === "home_archivepilates")
-    .filter((job) => job.nextRunAt.toMillis() <= Timestamp.now().toMillis())
-    .sort((a, b) => a.nextRunAt.toMillis() - b.nextRunAt.toMillis())
-    .slice(0, 25);
+  const dueJobs: Array<{ job: ContactSyncJobDoc; nextRunAtMillis: number }> = [];
+  let malformed = 0;
 
-  if (!dueJobs.length) {
-    logger.info("processContactSyncJobs completed", { processed: 0 });
+  for (const snap of due.docs) {
+    const job = snap.data();
+    if (job.target !== "home_archivepilates") continue;
+
+    const nextRunAtMillis = timestampMillis(job.nextRunAt);
+    if (nextRunAtMillis === null) {
+      malformed++;
+      try {
+        await failMalformedJob(snap.id, job, "contactSyncJobs job has missing or malformed nextRunAt");
+      } catch (err) {
+        logger.warn("Failed to mark malformed contact sync job", { jobId: snap.id, message: errorMessage(err) });
+      }
+      continue;
+    }
+
+    if (nextRunAtMillis <= nowMillis) {
+      dueJobs.push({ job, nextRunAtMillis });
+    }
+  }
+
+  const runnableJobs = dueJobs
+    .sort((a, b) => a.nextRunAtMillis - b.nextRunAtMillis)
+    .slice(0, 25)
+    .map(({ job }) => job);
+
+  if (!runnableJobs.length) {
+    logger.info("processContactSyncJobs completed", { processed: 0, malformed });
     return { processed: 0 };
   }
 
@@ -32,7 +51,7 @@ export async function processContactSyncJobs(): Promise<{ processed: number }> {
   const seenPhones = new Set<string>();
   let processed = 0;
 
-  for (const job of dueJobs) {
+  for (const job of runnableJobs) {
     const claimed = await claimJob(job);
     if (!claimed) continue;
     const phoneKey = normalizePhone(claimed.memberPhone);
@@ -46,8 +65,41 @@ export async function processContactSyncJobs(): Promise<{ processed: number }> {
     processed++;
   }
 
-  logger.info("processContactSyncJobs completed", { processed });
+  logger.info("processContactSyncJobs completed", { processed, malformed });
   return { processed };
+}
+
+function timestampMillis(value: unknown): number | null {
+  if (!(value instanceof Timestamp)) return null;
+  try {
+    return value.toMillis();
+  } catch {
+    return null;
+  }
+}
+
+async function failMalformedJob(jobId: string, job: ContactSyncJobDoc, message: string): Promise<void> {
+  logger.warn("Skipping malformed contact sync job", { jobId, memberId: job.memberId, message });
+  await refs.contactSyncJob(jobId).set(
+    {
+      status: "failed",
+      lastError: message,
+      updatedAt: nowTimestamp(),
+    },
+    { merge: true },
+  );
+  if (!job.memberId) return;
+  await refs.memberContactIndexDoc(job.memberId).set(
+    {
+      contactTargets: {
+        archivepilates_gmail: "skipped",
+        home_archivepilates: "failed",
+      },
+      contactLastError: message,
+      updatedAt: nowTimestamp(),
+    },
+    { merge: true },
+  );
 }
 
 async function claimJob(job: ContactSyncJobDoc): Promise<ContactSyncJobDoc | null> {

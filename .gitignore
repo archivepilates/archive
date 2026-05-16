@@ -4,6 +4,8 @@ firebase/kangsain-functions/functions/.env
 firebase/kangsain-functions/.firebase/
 firebase/kangsain-functions/firebase-debug.log
 firebase/kangsain-functions/firebase-debug.*.log
+**/firebase-debug.log
+**/firebase-debug.*.log
 node_modules/
 artifacts/**
 artifacts/**/node_modules/

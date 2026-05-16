@@ -35,25 +35,52 @@ export async function pollManagerNotices(input?: {
 
   let saved = 0;
   let refreshJobs = 0;
+  let skippedRefreshJobs = 0;
+  let skippedConsultationSyncs = 0;
   let pushes = 0;
+  const refreshedLectureIds = new Set<string>();
+  const refreshedDates = new Set<string>();
+  const consultationSyncedDates = new Set<string>();
   for (const notice of notices) {
     if (await saveNoticeIfNew(notice)) {
       saved++;
       const refreshDates = new Set([...(notice.refDates || []), notice.refDate].filter(Boolean));
       if (notice.refLectureId) {
-        await refreshLectureById({
-          studioId,
-          lectureId: notice.refLectureId,
-          fallbackDate: notice.refDate || notice.sourceCreatedAt.slice(0, 10),
-        });
-        refreshJobs++;
+        if (refreshedLectureIds.has(notice.refLectureId)) {
+          skippedRefreshJobs++;
+        } else {
+          const result = await refreshLectureById({
+            studioId,
+            lectureId: notice.refLectureId,
+            fallbackDate: notice.refDate || notice.sourceCreatedAt.slice(0, 10),
+          });
+          refreshedLectureIds.add(notice.refLectureId);
+          if (result.refreshed) {
+            refreshedDates.add(result.date);
+            consultationSyncedDates.add(result.date);
+          }
+          refreshJobs++;
+        }
       }
       for (const date of refreshDates) {
-        await refreshLectureById({ studioId, lectureId: "", fallbackDate: date });
-        refreshJobs++;
-        if (isConsultationNotice(notice)) {
-          await syncConsultationsRange({ studioId, staffId, startDate: date, endDate: date });
+        if (refreshedDates.has(date)) {
+          skippedRefreshJobs++;
+        } else {
+          const result = await refreshLectureById({ studioId, lectureId: "", fallbackDate: date });
+          if (result.refreshed) {
+            refreshedDates.add(result.date);
+            consultationSyncedDates.add(result.date);
+          }
           refreshJobs++;
+        }
+        if (isConsultationNotice(notice)) {
+          if (consultationSyncedDates.has(date)) {
+            skippedConsultationSyncs++;
+          } else {
+            await syncConsultationsRange({ studioId, staffId, startDate: date, endDate: date });
+            consultationSyncedDates.add(date);
+            refreshJobs++;
+          }
         }
       }
       const lecture = notice.refLectureId ? await getLecture(notice.refLectureId) : null;
@@ -89,12 +116,21 @@ export async function pollManagerNotices(input?: {
     seen: rawNotices.length,
     saved,
     refreshJobs,
+    skippedRefreshJobs,
+    skippedConsultationSyncs,
+    refreshedDates: refreshedDates.size,
+    refreshedLectures: refreshedLectureIds.size,
     pushes,
   });
   return { seen: rawNotices.length, saved, refreshJobs };
 }
 
-function isConsultationNotice(notice: { label?: string; msgType?: string; refType?: string; raw?: Record<string, unknown> }): boolean {
+function isConsultationNotice(notice: {
+  label?: string;
+  msgType?: string;
+  refType?: string;
+  raw?: Record<string, unknown>;
+}): boolean {
   const text = `${notice.label || ""} ${notice.msgType || ""} ${notice.refType || ""} ${JSON.stringify(
     notice.raw || {},
   )}`;
