@@ -2023,6 +2023,7 @@
     .chips {
       display: flex;
       flex-wrap: wrap;
+      align-content: flex-start;
       gap: 6px;
       margin-top: 8px;
     }
@@ -2660,6 +2661,10 @@
       .summary-value { font-size: 29px; }
       .admin-tabs { grid-template-columns: repeat(3, minmax(0, 1fr)); }
       .admin-tab { min-height: 36px; font-size: 11px; }
+      .consultation { min-height: 116px; }
+      .consultation .chips { min-height: 58px; }
+      .lecture-head { min-height: 108px; }
+      .lecture-head .chips { min-height: 58px; }
       .admin-grid { grid-template-columns: 1fr; }
       .week-insight-grid,
       .dashboard-kpis { grid-template-columns: 1fr; }

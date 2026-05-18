@@ -8,8 +8,10 @@ import {
   CANDIDATE_TEMPLATE_CODES,
   NEW_MEMBER_ALIMTALK_START_DATE,
   NEW_MEMBER_ALIMTALK_WINDOW_DAYS,
+  alimtalkDedupePolicy,
   type SendableAlimtalkCandidateType,
 } from "./templates";
+import { alimtalkDedupeKey, findCompletedDuplicate } from "./dedupe";
 
 export async function rebuildAlimtalkCandidatesForRange(input: {
   studioId: string;
@@ -21,61 +23,79 @@ export async function rebuildAlimtalkCandidatesForRange(input: {
   const writes: Array<Promise<unknown>> = [];
   const candidateIds: string[] = [];
   const profiles = profilesSnap.docs.map((snap) => snap.data());
-  dateRange(input.startDate, input.endDate).forEach((sourceDate) => {
-    profiles.forEach((profile) => {
-      directTicketCandidates(profile, sourceDate).forEach((candidate) => {
-        candidateIds.push(candidate.candidateId);
-        writes.push(upsertCandidate(candidate));
-      });
-    });
-  });
+  for (const sourceDate of dateRange(input.startDate, input.endDate)) {
+    for (const profile of profiles) {
+      for (const candidate of directTicketCandidates(profile, sourceDate)) {
+        await enqueueSendableCandidate(candidate, candidateIds, writes);
+      }
+    }
+  }
 
-  profiles
-    .filter(
-      (profile) =>
-        profile.isNewMember &&
-        !ALIMTALK_MEMBER_EXCLUSION_REASONS[profile.memberId] &&
-        activeProfileTickets(profile, input.endDate).length > 0 &&
-        registeredDate(profile) >= NEW_MEMBER_ALIMTALK_START_DATE &&
-        registeredDate(profile) >= newMemberWindowStartDate(input.endDate) &&
-        registeredDate(profile) <= input.endDate,
-    )
-    .forEach((profile) => {
-      const sourceDate = registeredDate(profile);
-      if (!sourceDate || !profile.phone) return;
-      const candidateId = `new_member_${profile.memberId}_${sourceDate}`;
-      candidateIds.push(candidateId);
-      writes.push(
-        upsertCandidate({
-          candidateId,
-          studioId: profile.studioId,
-          memberId: profile.memberId,
+  for (const profile of profiles.filter(
+    (profile) =>
+      profile.isNewMember &&
+      !ALIMTALK_MEMBER_EXCLUSION_REASONS[profile.memberId] &&
+      activeProfileTickets(profile, input.endDate).length > 0 &&
+      registeredDate(profile) >= NEW_MEMBER_ALIMTALK_START_DATE &&
+      registeredDate(profile) >= newMemberWindowStartDate(input.endDate) &&
+      registeredDate(profile) <= input.endDate,
+  )) {
+    const sourceDate = registeredDate(profile);
+    if (!sourceDate || !profile.phone) continue;
+    const candidateId = `new_member_${profile.memberId}_${sourceDate}`;
+    await enqueueSendableCandidate(
+      {
+        candidateId,
+        studioId: profile.studioId,
+        memberId: profile.memberId,
+        memberName: profile.name,
+        memberPhone: profile.phone,
+        type: "new_member",
+        status: "candidate",
+        templateCode: CANDIDATE_TEMPLATE_CODES.new_member,
+        title: "신규회원",
+        reason: `최초등록 ${sourceDate}`,
+        sourceDate,
+        payload: {
           memberName: profile.name,
-          memberPhone: profile.phone,
-          type: "new_member",
-          status: "candidate",
-          templateCode: CANDIDATE_TEMPLATE_CODES.new_member,
-          title: "신규회원",
-          reason: `최초등록 ${sourceDate}`,
-          sourceDate,
-          payload: {
-            memberName: profile.name,
-            registeredDate: sourceDate,
-            activeTicketNames: activeProfileTickets(profile, input.endDate)
-              .map((ticket) => ticket.name)
-              .filter(Boolean)
-              .join(", "),
-          },
-          lastError: null,
-          createdAt: nowTimestamp(),
-          updatedAt: nowTimestamp(),
-        }),
-      );
-    });
+          registeredDate: sourceDate,
+          activeTicketNames: activeProfileTickets(profile, input.endDate)
+            .map((ticket) => ticket.name)
+            .filter(Boolean)
+            .join(", "),
+        },
+        lastError: null,
+        createdAt: nowTimestamp(),
+        updatedAt: nowTimestamp(),
+      },
+      candidateIds,
+      writes,
+    );
+  }
 
   await Promise.all(writes);
-  logger.info("rebuildAlimtalkCandidatesForRange completed", { studioId: input.studioId, candidates: writes.length });
-  return { candidates: writes.length, candidateIds };
+  logger.info("rebuildAlimtalkCandidatesForRange completed", {
+    studioId: input.studioId,
+    candidates: candidateIds.length,
+  });
+  return { candidates: candidateIds.length, candidateIds };
+}
+
+async function enqueueSendableCandidate(
+  candidate: AlimtalkCandidateDoc,
+  candidateIds: string[],
+  writes: Array<Promise<unknown>>,
+): Promise<boolean> {
+  const dedupeKey = alimtalkDedupeKey(candidate);
+  const dedupePolicy = alimtalkDedupePolicy(candidate.templateCode);
+  const duplicate = await findCompletedDuplicate(dedupeKey, dedupePolicy.windowDays);
+  if (duplicate) {
+    writes.push(markDuplicateSkipped(candidate, dedupeKey, `중복 발송 차단(${dedupePolicy.label}): ${duplicate}`));
+    return false;
+  }
+  candidateIds.push(candidate.candidateId);
+  writes.push(upsertCandidate({ ...candidate, dedupeKey }));
+  return true;
 }
 
 function directTicketCandidates(profile: MemberProfileDoc, sourceDate: string): AlimtalkCandidateDoc[] {
@@ -257,6 +277,26 @@ async function upsertCandidate(candidate: AlimtalkCandidateDoc): Promise<void> {
     {
       ...candidate,
       status: previous?.status || candidate.status,
+      createdAt: previous?.createdAt || candidate.createdAt,
+      updatedAt: nowTimestamp(),
+    },
+    { merge: true },
+  );
+}
+
+async function markDuplicateSkipped(candidate: AlimtalkCandidateDoc, dedupeKey: string, reason: string): Promise<void> {
+  const ref = refs.alimtalkCandidate(candidate.candidateId);
+  const previous = (await ref.get()).data();
+  if (previous && ["queued", "processing", "sent"].includes(previous.status)) {
+    await ref.set({ updatedAt: nowTimestamp() }, { merge: true });
+    return;
+  }
+  await ref.set(
+    {
+      ...candidate,
+      dedupeKey,
+      status: "skipped",
+      lastError: reason,
       createdAt: previous?.createdAt || candidate.createdAt,
       updatedAt: nowTimestamp(),
     },

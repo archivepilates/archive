@@ -17,99 +17,133 @@
     "rules": "firebase/kangsain-functions/firestore.rules",
     "indexes": "firebase/kangsain-functions/firestore.indexes.json"
   },
-  "hosting": {
-    "site": "archive-pilates",
-    "public": ".",
-    "headers": [
-      {
-        "source": "/archivein/index.html",
-        "headers": [
-          { "key": "Cache-Control", "value": "no-cache, no-store, must-revalidate" }
-        ]
-      },
-      {
-        "source": "/archivein/",
-        "headers": [
-          { "key": "Cache-Control", "value": "no-cache, no-store, must-revalidate" }
-        ]
-      },
-      {
-        "source": "/archivein/sw.js",
-        "headers": [
-          { "key": "Cache-Control", "value": "no-cache, no-store, must-revalidate" }
-        ]
-      },
-      {
-        "source": "/dashboard/**",
-        "headers": [
-          {
-            "key": "Cache-Control",
-            "value": "no-cache, no-store, must-revalidate"
-          }
-        ]
-      },
-      {
-        "source": "/index.html",
-        "headers": [
-          {
-            "key": "Cache-Control",
-            "value": "no-cache, no-store, must-revalidate"
-          }
-        ]
-      },
-      {
-        "source": "/404.html",
-        "headers": [
-          {
-            "key": "Cache-Control",
-            "value": "no-cache, no-store, must-revalidate"
-          }
-        ]
-      }
-    ],
-    "ignore": [
-      ".git",
-      ".git/**",
-      ".firebase",
-      ".firebase/**",
-      "firebase/**",
-      "firebase.json",
-      "package.json",
-      "package-lock.json",
-      "dashboard/src/**",
-      "**/node_modules/**",
-      "firebase-debug.log",
-      "firebase-debug.*.log",
-      "AGENTS.md",
-      "docs/**",
-      "artifacts/**",
-      "scripts/**"
-    ],
-    "redirects": [
-      {
-        "source": "/kangsain",
-        "destination": "/archivein/",
-        "type": 301
-      },
-      {
-        "source": "/kangsain/",
-        "destination": "/archivein/",
-        "type": 301
-      },
-      {
-        "source": "/kangsain/**",
-        "destination": "/archivein/",
-        "type": 301
-      }
-    ],
-    "rewrites": [
-      {
-        "source": "/aki/**",
-        "run": {
-          "serviceId": "aki-agent-api",
-          "region": "asia-northeast3"
+  "hosting": [
+    {
+      "site": "archive-pilates",
+      "public": ".",
+      "headers": [
+        {
+          "source": "/archivein/index.html",
+          "headers": [
+            { "key": "Cache-Control", "value": "no-cache, no-store, must-revalidate" }
+          ]
+        },
+        {
+          "source": "/archivein/",
+          "headers": [
+            { "key": "Cache-Control", "value": "no-cache, no-store, must-revalidate" }
+          ]
+        },
+        {
+          "source": "/archivein/sw.js",
+          "headers": [
+            { "key": "Cache-Control", "value": "no-cache, no-store, must-revalidate" }
+          ]
+        },
+        {
+          "source": "/dashboard/**",
+          "headers": [
+            {
+              "key": "Cache-Control",
+              "value": "no-cache, no-store, must-revalidate"
+            }
+          ]
+        },
+        {
+          "source": "/index.html",
+          "headers": [
+            {
+              "key": "Cache-Control",
+              "value": "no-cache, no-store, must-revalidate"
+            }
+          ]
+        },
+        {
+          "source": "/404.html",
+          "headers": [
+            {
+              "key": "Cache-Control",
+              "value": "no-cache, no-store, must-revalidate"
+            }
+          ]
         }
-      }
-    ]
-  }
+      ],
+      "ignore": [
+        ".git",
+        ".git/**",
+        ".firebase",
+        ".firebase/**",
+        "firebase/**",
+        "firebase.json",
+        "package.json",
+        "package-lock.json",
+        "dashboard/src/**",
+        "**/node_modules/**",
+        "firebase-debug.log",
+        "firebase-debug.*.log",
+        "AGENTS.md",
+        "docs/**",
+        "artifacts/**",
+        "scripts/**"
+      ],
+      "redirects": [
+        {
+          "source": "/kangsain",
+          "destination": "/archivein/",
+          "type": 301
+        },
+        {
+          "source": "/kangsain/",
+          "destination": "/archivein/",
+          "type": 301
+        },
+        {
+          "source": "/kangsain/**",
+          "destination": "/archivein/",
+          "type": 301
+        }
+      ],
+      "rewrites": [
+        {
+          "source": "/aki/**",
+          "run": {
+            "serviceId": "aki-agent-api",
+            "region": "asia-northeast3"
+          }
+        }
+      ]
+    },
+    {
+      "site": "archive-pilates-in",
+      "public": "archivein",
+      "headers": [
+        {
+          "source": "/index.html",
+          "headers": [
+            { "key": "Cache-Control", "value": "no-cache, no-store, must-revalidate" }
+          ]
+        },
+        {
+          "source": "/",
+          "headers": [
+            { "key": "Cache-Control", "value": "no-cache, no-store, must-revalidate" }
+          ]
+        },
+        {
+          "source": "/sw.js",
+          "headers": [
+            { "key": "Cache-Control", "value": "no-cache, no-store, must-revalidate" }
+          ]
+        }
+      ],
+      "ignore": [
+        ".git",
+        ".git/**",
+        ".firebase",
+        ".firebase/**",
+        "firebase-debug.log",
+        "firebase-debug.*.log"
+      ]
+    }
+  ]
 }
