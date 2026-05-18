@@ -123,10 +123,13 @@ async function queueConsultationContactSync(consultation: ConsultationDoc): Prom
   if (!consultation.memberPhone || !consultation.memberName || consultation.status === "deleted") return;
 
   const contactId = consultation.memberId || `consultation_${consultation.consultationId}`;
+  const contactDisplayName = formatConsultationContactDisplayName(consultation);
   const contactHash = stableHash({
     name: consultation.memberName,
+    contactDisplayName,
     phone: consultation.memberPhone,
     consultationId: consultation.consultationId,
+    date: consultation.date,
     source: "consultation_schedule",
   });
   const previousContact = (await refs.memberContactIndexDoc(contactId).get()).data();
@@ -141,6 +144,7 @@ async function queueConsultationContactSync(consultation: ConsultationDoc): Prom
       memberId: contactId,
       studioId: consultation.studioId,
       name: consultation.memberName,
+      contactDisplayName,
       phone: consultation.memberPhone,
       phoneLast4: consultation.memberPhone.slice(-4),
       registeredAt: null,
@@ -170,6 +174,7 @@ async function queueConsultationContactSync(consultation: ConsultationDoc): Prom
     studioId: consultation.studioId,
     memberId: contactId,
     memberName: consultation.memberName,
+    contactDisplayName,
     memberPhone: consultation.memberPhone,
     target: "home_archivepilates",
     status: "pending",
@@ -182,4 +187,30 @@ async function queueConsultationContactSync(consultation: ConsultationDoc): Prom
     updatedAt: nowTimestamp(),
   };
   await refs.contactSyncJob(jobId).set(job, { merge: true });
+}
+
+function formatConsultationContactDisplayName(consultation: ConsultationDoc): string {
+  return [consultation.memberName, compactConsultationDate(consultation), consultationContactKind(consultation)]
+    .filter(Boolean)
+    .join(" ");
+}
+
+function compactConsultationDate(consultation: ConsultationDoc): string {
+  if (/^\d{4}-\d{2}-\d{2}$/.test(consultation.date)) {
+    return consultation.date.replace(/^20/, "").replaceAll("-", "");
+  }
+  const startAt = consultation.startAt?.toDate();
+  if (!startAt) return "";
+  const formatter = new Intl.DateTimeFormat("en-CA", {
+    timeZone: "Asia/Seoul",
+    year: "numeric",
+    month: "2-digit",
+    day: "2-digit",
+  });
+  return formatter.format(startAt).replace(/^20/, "").replaceAll("-", "");
+}
+
+function consultationContactKind(consultation: ConsultationDoc): "상담" | "체험" {
+  const text = [consultation.channel, consultation.memo].filter(Boolean).join(" ");
+  return /체험|trial|experience/i.test(text) ? "체험" : "상담";
 }

@@ -111,6 +111,25 @@ StudioMate이름 회원 YYMMDD
 - `YYMMDD`는 StudioMate 등록일 기준이다.
 - 등록일이 없으면 `StudioMate이름 회원` 형식을 사용한다.
 
+상담자:
+
+```text
+StudioMate이름 YYMMDD 상담
+```
+
+- `YYMMDD`는 상담 일정일 기준이다.
+- 아직 수강권 등록/회원 등록일이 없는 연락처도 이름만 저장하지 않고 상담일을 붙인다.
+
+체험자:
+
+```text
+StudioMate이름 YYMMDD 체험
+```
+
+- 상담 채널이나 메모에 `체험`, `trial`, `experience`가 있으면 체험자로 분류한다.
+- 정식 등록되면 같은 전화번호를 기준으로 일반 회원 이름 규칙(`StudioMate이름 회원 YYMMDD`)으로 승격한다.
+- 상담/체험 job과 회원 job이 같은 전화번호로 동시에 대기 중이면 회원 job을 우선 처리한다.
+
 강사:
 
 ```text

@@ -324,6 +324,7 @@ export interface MemberContactIndexDoc {
   memberId: string;
   studioId: string;
   name: string;
+  contactDisplayName?: string;
   phone: string;
   phoneLast4: string;
   registeredAt: Timestamp | null;
@@ -391,6 +392,7 @@ export interface ContactSyncJobDoc {
   studioId: string;
   memberId: string;
   memberName: string;
+  contactDisplayName?: string;
   memberPhone: string;
   target: ContactSyncTarget;
   status: QueueStatus;

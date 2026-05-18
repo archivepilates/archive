@@ -1,0 +1,66 @@
+<!doctype html>
+<html lang="ko">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1">
+  <title>상담/체험 연락처 이름 규칙 동기화</title>
+  <style>
+    body { font-family: -apple-system, BlinkMacSystemFont, "Apple SD Gothic Neo", "Noto Sans KR", sans-serif; margin: 40px; color: #1f2933; line-height: 1.65; }
+    h1 { font-size: 24px; margin: 0 0 12px; }
+    h2 { font-size: 18px; margin: 28px 0 8px; }
+    .meta { color: #667085; font-size: 13px; margin-bottom: 24px; }
+    .grid { display: grid; grid-template-columns: repeat(4, minmax(0, 1fr)); gap: 12px; margin: 18px 0 24px; }
+    .card { border: 1px solid #d0d5dd; border-radius: 8px; padding: 14px; background: #f9fafb; }
+    .card strong { display: block; font-size: 22px; color: #111827; }
+    table { width: 100%; border-collapse: collapse; margin-top: 10px; font-size: 14px; }
+    th, td { border: 1px solid #d0d5dd; padding: 8px 10px; text-align: left; vertical-align: top; }
+    th { background: #f2f4f7; }
+    code { background: #f2f4f7; padding: 1px 4px; border-radius: 4px; }
+  </style>
+</head>
+<body>
+  <h1>상담/체험 연락처 이름 규칙 동기화</h1>
+  <div class="meta">작성일: 2026-05-18 · 대상: home@archivepilates.com Google Contacts</div>
+
+  <h2>적용 규칙</h2>
+  <table>
+    <thead><tr><th>대상</th><th>이름 형식</th><th>날짜 기준</th></tr></thead>
+    <tbody>
+      <tr><td>일반 회원</td><td><code>이름 회원 YYMMDD</code></td><td>StudioMate 등록일</td></tr>
+      <tr><td>상담자</td><td><code>이름 YYMMDD 상담</code></td><td>상담 일정일</td></tr>
+      <tr><td>체험자</td><td><code>이름 YYMMDD 체험</code></td><td>체험/상담 일정일</td></tr>
+    </tbody>
+  </table>
+
+  <h2>실제 동기화 결과</h2>
+  <div class="grid">
+    <div class="card"><span>상담 문서</span><strong>31</strong></div>
+    <div class="card"><span>상담 연락처 전화번호</span><strong>8</strong></div>
+    <div class="card"><span>실제 수정</span><strong>3</strong></div>
+    <div class="card"><span>실패</span><strong>0</strong></div>
+  </div>
+  <p>이미 <code>회원 YYMMDD</code>, <code>강사님</code>, 대표/원장/스탭 성격 이름으로 승격된 연락처는 상담 이름으로 낮추지 않고 보존했다.</p>
+
+  <table>
+    <thead><tr><th>이전 이름</th><th>변경 후</th></tr></thead>
+    <tbody>
+      <tr><td>강인아님 체험 250411</td><td>강인아 251110 상담</td></tr>
+      <tr><td>조선영</td><td>조선영 260518 상담</td></tr>
+      <tr><td>최정민</td><td>최정민 260518 상담</td></tr>
+    </tbody>
+  </table>
+
+  <h2>코드 변경</h2>
+  <p><code>contactDisplayName</code>을 연락처 인덱스와 sync job에 추가했다. 회원 프로필 동기화는 회원 표시명, 상담 동기화는 상담/체험 표시명을 생성한다. <code>processContactSyncJobs</code>는 <code>contactDisplayName</code>을 우선 사용하며, 상담 job이 이미 회원/강사/스탭/대표 이름으로 승격된 연락처를 덮어쓰지 않도록 보호한다. 같은 전화번호의 상담/체험 job과 회원 job이 동시에 대기 중이면 회원 job을 우선 처리한다.</p>
+
+  <h2>검증</h2>
+  <ul>
+    <li><code>npm run typecheck</code> 통과</li>
+    <li><code>git diff --check</code> 통과</li>
+    <li>People API readback으로 3건의 변경 후 이름 확인</li>
+  </ul>
+
+  <h2>배포 상태</h2>
+  <p>2026-05-18에 Firebase project <code>archive-pilates</code>의 Functions 배포를 완료했다.</p>
+</body>
+</html>

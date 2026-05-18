@@ -73,8 +73,10 @@ export async function syncStudioMateMemberProfiles(input: {
         };
         await refs.memberProfile(member.memberId).set(doc, { merge: true });
         if (phone) {
+          const contactDisplayName = formatMemberContactDisplayName(doc.name, registeredAt);
           const contactHash = stableHash({
             name: doc.name,
+            contactDisplayName,
             phone,
             registeredAt: registeredAt?.toMillis() || null,
             activeTicketNames: ticketSummary.activeTicketNames,
@@ -94,6 +96,7 @@ export async function syncStudioMateMemberProfiles(input: {
               memberId: member.memberId,
               studioId: input.studioId,
               name: doc.name,
+              contactDisplayName,
               phone,
               phoneLast4: phone.slice(-4),
               registeredAt,
@@ -117,6 +120,7 @@ export async function syncStudioMateMemberProfiles(input: {
               studioId: input.studioId,
               memberId: member.memberId,
               memberName: doc.name,
+              contactDisplayName,
               memberPhone: phone,
               target: "home_archivepilates",
               status: "pending",
@@ -310,6 +314,21 @@ function asArray(value: unknown): unknown[] {
 function isNewMember(registeredAt: Timestamp | null): boolean {
   if (!registeredAt) return false;
   return registeredAt.toMillis() >= new Date(`${addDays(todayKst(), -30)}T00:00:00+09:00`).getTime();
+}
+
+function formatMemberContactDisplayName(name: string, registeredAt: Timestamp | null): string {
+  const compactRegisteredAt = registeredAt ? compactDateKst(registeredAt.toDate()) : "";
+  return [name, "회원", compactRegisteredAt].filter(Boolean).join(" ");
+}
+
+function compactDateKst(date: Date): string {
+  const formatter = new Intl.DateTimeFormat("en-CA", {
+    timeZone: "Asia/Seoul",
+    year: "numeric",
+    month: "2-digit",
+    day: "2-digit",
+  });
+  return formatter.format(date).replace(/^20/, "").replaceAll("-", "");
 }
 
 function uniqueMembers(bookings: BookingDoc[]): Array<{ memberId: string; memberName: string }> {

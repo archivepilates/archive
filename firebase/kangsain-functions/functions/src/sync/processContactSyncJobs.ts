@@ -36,10 +36,7 @@ export async function processContactSyncJobs(): Promise<{ processed: number }> {
     }
   }
 
-  const runnableJobs = dueJobs
-    .sort((a, b) => a.nextRunAtMillis - b.nextRunAtMillis)
-    .slice(0, 25)
-    .map(({ job }) => job);
+  const runnableJobs = chooseRunnableJobs(dueJobs);
 
   if (!runnableJobs.length) {
     logger.info("processContactSyncJobs completed", { processed: 0, malformed });
@@ -76,6 +73,30 @@ function timestampMillis(value: unknown): number | null {
   } catch {
     return null;
   }
+}
+
+function chooseRunnableJobs(jobs: Array<{ job: ContactSyncJobDoc; nextRunAtMillis: number }>): ContactSyncJobDoc[] {
+  const byPhone = new Map<string, { job: ContactSyncJobDoc; nextRunAtMillis: number }>();
+  for (const entry of jobs.sort((a, b) => a.nextRunAtMillis - b.nextRunAtMillis)) {
+    const phoneKey = normalizePhone(entry.job.memberPhone);
+    const previous = byPhone.get(phoneKey);
+    if (!previous || jobPriority(entry.job) > jobPriority(previous.job)) {
+      byPhone.set(phoneKey, entry);
+    }
+  }
+
+  return [...byPhone.values()]
+    .sort((a, b) => {
+      const priorityDiff = jobPriority(b.job) - jobPriority(a.job);
+      if (priorityDiff) return priorityDiff;
+      return a.nextRunAtMillis - b.nextRunAtMillis;
+    })
+    .slice(0, 25)
+    .map(({ job }) => job);
+}
+
+function jobPriority(job: ContactSyncJobDoc): number {
+  return job.sourceReason === "consultation_schedule" ? 0 : 1;
 }
 
 async function failMalformedJob(jobId: string, job: ContactSyncJobDoc, message: string): Promise<void> {
@@ -121,15 +142,25 @@ async function processJob(
 ): Promise<void> {
   try {
     const phoneKey = normalizePhone(job.memberPhone);
+    const existing = contactsByPhone.get(phoneKey) || [];
+    if (job.sourceReason === "consultation_schedule" && shouldPreserveExistingConsultationContact(existing)) {
+      await finishJob(job, { action: "skipped", resourceName: existing[0]?.resourceName });
+      return;
+    }
     const result = await client.upsertByPhone({
-      existing: contactsByPhone.get(phoneKey) || [],
-      name: job.memberName,
+      existing,
+      name: job.contactDisplayName || job.memberName,
       phone: job.memberPhone,
     });
     await finishJob(job, result);
   } catch (err) {
     await failJob(job, err);
   }
+}
+
+function shouldPreserveExistingConsultationContact(existing: Array<{ name: string }>): boolean {
+  if (existing.length !== 1) return false;
+  return / 회원(?: \d{6})?$| 강사님$|대표|원장|부원장|스탭|스텝/.test(existing[0].name);
 }
 
 async function finishJob(
