@@ -17,10 +17,13 @@
 <link rel="icon" type="image/png" sizes="192x192" href="../icons/icon-192.png?v=5"/>
 <link rel="icon" type="image/png" sizes="512x512" href="../icons/icon-512.png?v=5"/>
 <link rel="apple-touch-icon" sizes="180x180" href="../icons/apple-touch-icon.png?v=5"/>
-<link rel="preconnect" href="https://fonts.googleapis.com"/>
-<link href="https://fonts.googleapis.com/css2?family=Noto+Sans+KR:wght@400;500;600;700;800&family=DM+Mono:wght@400;500&display=swap" rel="stylesheet"/>
+<link rel="preconnect" href="https://cdn.jsdelivr.net"/>
+<link rel="stylesheet" href="https://cdn.jsdelivr.net/gh/orioncactus/pretendard/dist/web/static/pretendard.css"/>
 <script src="../archivein/firebase-config.js"></script>
 <style>
+@font-face{font-family:"Archive Latin";font-style:normal;font-weight:300;src:url("https://cdn.jsdelivr.net/gh/projectnoonnu/noonfonts_six@1.2/S-CoreDream-3Light.woff") format("woff");unicode-range:U+0000-00FF,U+2000-206F,U+20A0-22FF,U+25A0-25FF;}
+@font-face{font-family:"Archive Latin";font-style:normal;font-weight:400 600;src:url("https://cdn.jsdelivr.net/gh/projectnoonnu/noonfonts_six@1.2/S-CoreDream-5Medium.woff") format("woff");unicode-range:U+0000-00FF,U+2000-206F,U+20A0-22FF,U+25A0-25FF;}
+@font-face{font-family:"Archive Latin";font-style:normal;font-weight:700 900;src:url("https://cdn.jsdelivr.net/gh/projectnoonnu/noonfonts_six@1.2/S-CoreDream-6Bold.woff") format("woff");unicode-range:U+0000-00FF,U+2000-206F,U+20A0-22FF,U+25A0-25FF;}
 *,*::before,*::after{box-sizing:border-box;margin:0;padding:0;}
 html,body{overflow-x:hidden;max-width:100%;}
 
@@ -44,8 +47,8 @@ html,body{overflow-x:hidden;max-width:100%;}
   --r:16px;
   --rlg:20px;
   --rsm:10px;
-  --fn:'Noto Sans KR',system-ui,sans-serif;
-  --fm:'DM Mono','Courier New',monospace;
+  --fn:"Archive Latin","Pretendard",system-ui,sans-serif;
+  --fm:"Archive Latin","Pretendard",system-ui,sans-serif;
 }
 
 body{font-family:var(--fn);background:var(--bg);color:var(--t1);min-height:100vh;}
@@ -614,7 +617,7 @@ function renderScore(month){
 }
 
 // ══ CHART DEFAULTS ══
-Chart.defaults.font.family="'Noto Sans KR',system-ui,sans-serif";
+Chart.defaults.font.family='"Archive Latin","Pretendard",system-ui,sans-serif';
 Chart.defaults.color='#94a3b8';
 // Chart.js 4.x: generateLabels overrides can bypass per-chart labels.color,
 // so set it globally here to guarantee legend text is always visible
