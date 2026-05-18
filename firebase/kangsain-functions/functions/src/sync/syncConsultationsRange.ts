@@ -5,7 +5,7 @@ import { saveRawMirrorBatch } from "../firestore/rawMirrorRepository";
 import { refs } from "../firestore/refs";
 import { ManagerClient } from "../studiomate/managerClient";
 import { normalizeConsultation } from "../studiomate/normalizers";
-import type { ConsultationDoc, ContactSyncJobDoc } from "../types/models";
+import type { ConsultationDoc, ContactSyncJobDoc, MemberProfileDoc } from "../types/models";
 import { dateRange, nowTimestamp } from "../utils/date";
 import { stableHash } from "../utils/hash";
 
@@ -19,6 +19,7 @@ export async function syncConsultationsRange(input: {
   const staffId = input.staffId || DEFAULT_MANAGER_STAFF_ID;
   const client = new ManagerClient(studioId, staffId);
   const rawConsultations = await client.getCounsels({ startDate: input.startDate, endDate: input.endDate });
+  const profileLookup = await uniqueMemberProfilesByName(studioId);
   await saveRawMirrorBatch({
     studioId,
     dataset: "managerCounsels",
@@ -31,7 +32,7 @@ export async function syncConsultationsRange(input: {
   const consultationIdsByDate = new Map<string, Set<string>>();
 
   for (const rawConsultation of rawConsultations) {
-    const consultation = normalizeConsultation(rawConsultation, studioId);
+    const consultation = enrichConsultationMember(normalizeConsultation(rawConsultation, studioId), profileLookup);
     if (!consultation.consultationId || !consultation.date) continue;
     const dateIds = consultationIdsByDate.get(consultation.date) || new Set<string>();
     dateIds.add(consultation.consultationId);
@@ -77,6 +78,41 @@ export async function syncConsultationsRange(input: {
     consultationsDeleted,
   });
   return { consultationsChanged, consultationsDeleted, totalConsultations: rawConsultations.length };
+}
+
+async function uniqueMemberProfilesByName(studioId: string): Promise<Map<string, MemberProfileDoc>> {
+  const snap = await refs.memberProfiles().where("studioId", "==", studioId).get();
+  const profilesByName = new Map<string, MemberProfileDoc | null>();
+  snap.docs.forEach((doc) => {
+    const profile = doc.data();
+    if (!profile.name || !profile.phone) return;
+    const key = normalizeName(profile.name);
+    if (!key) return;
+    profilesByName.set(key, profilesByName.has(key) ? null : profile);
+  });
+  return new Map(
+    [...profilesByName.entries()].filter((entry): entry is [string, MemberProfileDoc] => Boolean(entry[1])),
+  );
+}
+
+function enrichConsultationMember(
+  consultation: ConsultationDoc,
+  profilesByName: Map<string, MemberProfileDoc>,
+): ConsultationDoc {
+  if ((consultation.memberId && consultation.memberPhone) || !consultation.memberName) return consultation;
+  const profile = profilesByName.get(normalizeName(consultation.memberName));
+  if (!profile) return consultation;
+  return {
+    ...consultation,
+    memberId: consultation.memberId || profile.memberId,
+    memberPhone: consultation.memberPhone || profile.phone || "",
+  };
+}
+
+function normalizeName(value: unknown): string {
+  return String(value || "")
+    .trim()
+    .replace(/\s+/g, "");
 }
 
 function todayDate(): string {

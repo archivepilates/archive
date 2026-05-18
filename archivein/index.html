@@ -2028,6 +2028,11 @@
       margin-top: 8px;
     }
 
+    .chip-break {
+      flex-basis: 100%;
+      height: 0;
+    }
+
     .chip {
       display: inline-flex;
       align-items: center;
@@ -2050,6 +2055,7 @@
     .chip.bad { color: var(--bad); background: #FAECE7; }
     .chip.wait { color: var(--wait); background: #FFF5DF; }
     .chip.done { color: var(--muted); background: var(--canvas); }
+    .chip.phone { color: var(--muted); background: var(--canvas); }
     .chip.attendance { padding-inline: 6px; font-size: 11px; }
     .chip.memo { color: var(--bad); background: #FAECE7; }
     .chip.profile { color: var(--text-2); background: var(--canvas); }
@@ -3281,8 +3287,8 @@
               <span class="chip wait">상담</span>
               ${renderOptionalChip(appState.mode === 'manager' ? scheduleStaffLabel(consultation) : '')}
               ${renderOptionalChip(channelLabel(consultation.channel))}
-              ${renderOptionalChip(formatPhone(consultation.memberPhone))}
               ${renderOptionalChip(consultation.memo)}
+              ${renderPhoneChip(consultation.memberPhone)}
             </div>
           </div>
         </article>
@@ -4602,7 +4608,7 @@
                 ${renderOptionalChip(lecture.roomName || lecture.divisionName)}
                 <span class="chip">${lecture.bookingCount || 0}명</span>
                 ${lecture.waitCount ? `<span class="chip wait">대기 ${lecture.waitCount}</span>` : ''}
-                ${done ? '<span class="chip done">완료</span>' : ''}
+                ${done ? '<span class="chip-break" aria-hidden="true"></span><span class="chip done">완료</span>' : ''}
               </div>
             </div>
             <div><span class="chevron">⌄</span></div>
@@ -5444,7 +5450,7 @@
                 ${renderOptionalChip(lecture.roomName || lecture.divisionName)}
                 <span class="chip">${lecture.bookingCount || 0}명</span>
                 ${lecture.waitCount ? `<span class="chip wait">대기 ${lecture.waitCount}</span>` : ''}
-                ${done ? '<span class="chip done">완료</span>' : ''}
+                ${done ? '<span class="chip-break" aria-hidden="true"></span><span class="chip done">완료</span>' : ''}
               </div>
             </div>
             <div><span class="chevron">⌄</span></div>
@@ -8236,6 +8242,11 @@
     function renderOptionalChip(value) {
       const text = String(value || '').trim();
       return text ? `<span class="chip">${escapeHtml(text)}</span>` : '';
+    }
+
+    function renderPhoneChip(value) {
+      const text = formatPhone(value);
+      return text ? `<span class="chip-break" aria-hidden="true"></span><span class="chip phone">${escapeHtml(text)}</span>` : '';
     }
 
     function privateTicketLabel(value) {
