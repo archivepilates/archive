@@ -3023,6 +3023,7 @@
       detailPanel: '',
       detailLectureId: '',
       viewMode: 'day',
+      emergencyMode: null,
       loading: false,
       error: '',
       activeBooking: null,
@@ -3088,6 +3089,7 @@
           };
           appState.detailPanel = '';
           appState.viewMode = 'day';
+          appState.emergencyMode = null;
           unsubscribeChat();
           unsubscribeConversations();
           appState.chat = {
@@ -5491,7 +5493,8 @@
     }
 
     function renderBooking(lecture, booking) {
-      const attendanceLocked = !canUpdateAttendance(lecture, booking);
+      const writeLocked = isEmergencyReadOnlyMode();
+      const attendanceLocked = writeLocked || !canUpdateAttendance(lecture, booking);
       const tagGroups = memberTagGroups(canonicalMemberTags(booking));
       const showTicket = resolvedLessonType(lecture) === 'private';
       const ticketName = showTicket ? privateTicketLabel(booking.ticketName) : '';
@@ -5513,7 +5516,7 @@
             <div class="member-actions">
               <button class="tiny ${booking.attendanceStatus === 'attended' ? 'active good' : ''}" data-attendance="${booking.bookingId}" data-status="attended" ${attendanceLocked ? 'disabled' : ''}>출석</button>
               <button class="tiny ${booking.attendanceStatus === 'absent' ? 'active bad' : ''}" data-attendance="${booking.bookingId}" data-status="absent" ${attendanceLocked ? 'disabled' : ''}>결석</button>
-              <button class="tiny" data-memo="${booking.bookingId}" data-member="${booking.memberId}" data-lecture="${lecture.lectureId}" data-name="${escapeAttr(booking.memberName || '')}">메모</button>
+              <button class="tiny" data-memo="${booking.bookingId}" data-member="${booking.memberId}" data-lecture="${lecture.lectureId}" data-name="${escapeAttr(booking.memberName || '')}" ${writeLocked ? 'disabled' : ''}>메모</button>
             </div>
           </div>
         </div>
@@ -5921,6 +5924,7 @@
         if (requestId !== appState.loadRequestId) return;
         appState.mode = manager ? 'manager' : 'instructor';
         appState.staff = result.staff || { name: result.staffId || '' };
+        appState.emergencyMode = result.emergencyMode || null;
         subscribeConversations();
         if (manager) {
           appState.days = [];
@@ -5962,7 +5966,7 @@
       const staff = staffSnap.data();
 
       const dates = visibleDatesForMode(appState.viewMode, appState.selectedDate, false);
-      const [viewSnaps, consultationSnaps, otherScheduleSnaps] = await Promise.all([
+      const [viewSnaps, consultationSnaps, otherScheduleSnaps, emergencySnap] = await Promise.all([
         Promise.all(dates.map((date) => getDocs(query(
           collection(appState.db, 'instructorViews'),
           where('staffId', '==', String(staffId)),
@@ -5977,7 +5981,8 @@
           collection(appState.db, 'otherSchedules'),
           where('studioId', '==', String(staff.studioId || '')),
           where('date', '==', date)
-        ))))
+        )))),
+        getOptionalDoc(doc(appState.db, 'opsState', 'studiomateReservationExcelEmergency'))
       ]);
       const days = viewSnaps.flatMap((snap) => snap.docs.map((docSnap) => docSnap.data()));
       const consultations = consultationSnaps
@@ -5989,6 +5994,7 @@
       return {
         staffId,
         staff: { staffId, name: staff.name, role: staff.role, studioId: staff.studioId },
+        emergencyMode: emergencySnap.exists() ? emergencySnap.data() : null,
         days: attachConsultationsToDays(days, consultations, dates, otherSchedules)
       };
     }
@@ -6010,7 +6016,7 @@
       if (!staffId || !studioId) throw new Error('운영자 권한이 아직 연결되지 않았습니다');
 
       const rangeDates = visibleDatesForMode(appState.viewMode, appState.selectedDate, true);
-      const [staffSnap, staffListSnap, viewSnaps, consultationSnaps, otherScheduleSnaps, memoSnap, memberProfileSnap, memberContactSnap, alimtalkCandidateSnap, actionSnaps, syncSnap, dashboardSnap] = await Promise.all([
+      const [staffSnap, staffListSnap, viewSnaps, consultationSnaps, otherScheduleSnaps, memoSnap, memberProfileSnap, memberContactSnap, alimtalkCandidateSnap, actionSnaps, syncSnap, dashboardSnap, emergencySnap] = await Promise.all([
         getDoc(doc(appState.db, 'staffs', String(staffId))),
         getDocs(query(
           collection(appState.db, 'staffs'),
@@ -6054,7 +6060,8 @@
         )),
         Promise.all(rangeDates.map((date) => getOptionalDoc(doc(appState.db, 'adminActions', `${studioId}_${date}`)))),
         getDoc(doc(appState.db, 'syncStates', `lecturesRange_${studioId}`)),
-        getOptionalDoc(doc(appState.db, 'dashboardSnapshots', 'current'))
+        getOptionalDoc(doc(appState.db, 'dashboardSnapshots', 'current')),
+        getOptionalDoc(doc(appState.db, 'opsState', 'studiomateReservationExcelEmergency'))
       ]);
       if (!staffSnap.exists()) throw new Error('운영자 정보를 찾을 수 없습니다');
       const staff = staffSnap.data();
@@ -6062,7 +6069,7 @@
         .map((docSnap) => docSnap.data())
         .filter((item) => item.role !== 'viewer' && !String(item.staffId || '').startsWith('operator_'))
         .sort((a, b) => String(a.name || '').localeCompare(String(b.name || ''), 'ko'));
-      const rangeViews = viewSnaps.flatMap((snap) => snap.docs.map((docSnap) => docSnap.data()))
+      const rangeViews = dedupeEmergencyInstructorViews(viewSnaps.flatMap((snap) => snap.docs.map((docSnap) => docSnap.data())))
         .filter((view) => (view.summary?.totalLectures || 0) > 0)
         .sort((a, b) => staffName(a.staffId, staffs).localeCompare(staffName(b.staffId, staffs), 'ko'));
       const views = rangeViews.filter((view) => view.date === appState.selectedDate);
@@ -6081,6 +6088,7 @@
       return {
         staffId,
         staff: { staffId, name: staff.name, role: staff.role, studioId: staff.studioId },
+        emergencyMode: emergencySnap.exists() ? emergencySnap.data() : null,
         admin: {
           staffs,
           views,
@@ -6159,8 +6167,7 @@
           where('date', '==', appState.selectedDate)
         ),
         (snap) => {
-          appState.admin.views = snap.docs
-            .map((docSnap) => docSnap.data())
+          appState.admin.views = dedupeEmergencyInstructorViews(snap.docs.map((docSnap) => docSnap.data()))
             .filter((view) => (view.summary?.totalLectures || 0) > 0)
             .sort((a, b) => staffName(a.staffId).localeCompare(staffName(b.staffId), 'ko'));
           const otherRangeViews = (appState.admin.rangeViews || []).filter((view) => view.date !== appState.selectedDate);
@@ -6469,6 +6476,10 @@
 
     async function updateAttendance(bookingId, attendanceStatus) {
       if (!bookingId || !attendanceStatus) return;
+      if (isEmergencyReadOnlyMode()) {
+        showToast('비상모드에서는 출결 쓰기를 일시 중지했습니다');
+        return;
+      }
       const booking = findBooking(bookingId);
       const context = findBookingContext(bookingId);
       if (!booking || !context || !canUpdateAttendance(context.lecture, booking)) return;
@@ -6517,6 +6528,10 @@
     }
 
     function openMemo(input) {
+      if (isEmergencyReadOnlyMode()) {
+        showToast('비상모드에서는 메모 작성을 일시 중지했습니다');
+        return;
+      }
       appState.activeBooking = input;
       memoTitle.textContent = `${input.memberName || '회원'} 메모`;
       memoInput.value = '';
@@ -6727,6 +6742,10 @@
       const active = appState.activeBooking;
       const content = memoInput.value.trim();
       if (!active || !content) return;
+      if (isEmergencyReadOnlyMode()) {
+        showToast('비상모드에서는 메모 작성을 일시 중지했습니다');
+        return;
+      }
       saveMemoButton.disabled = true;
       try {
         const booking = findBooking(active.bookingId);
@@ -8043,6 +8062,21 @@
       return [...staffMap.values()].sort((a, b) => staffName(a.staffId, [a]).localeCompare(staffName(b.staffId, [b]), 'ko'));
     }
 
+    function dedupeEmergencyInstructorViews(views) {
+      const realLectureIds = new Set();
+      (views || []).forEach((view) => {
+        if (String(view?.staffId || '').startsWith('excel_staff_')) return;
+        (view.lectures || []).forEach((lecture) => {
+          if (lecture.lectureId) realLectureIds.add(String(lecture.lectureId));
+        });
+      });
+      if (!realLectureIds.size) return views || [];
+      return (views || []).filter((view) => {
+        if (!String(view?.staffId || '').startsWith('excel_staff_')) return true;
+        return !(view.lectures || []).some((lecture) => realLectureIds.has(String(lecture.lectureId || '')));
+      });
+    }
+
     function visibleAdminRangeViews() {
       const dates = new Set(appState.viewMode === 'month' ? monthCalendarDates(appState.selectedDate) : weekDates(appState.selectedDate));
       return (appState.admin.rangeViews || []).filter((view) => dates.has(view.date));
@@ -8359,6 +8393,10 @@
       if (booking?.appStatus !== 'reserved') return false;
       const start = timestampToDate(lecture?.startAt);
       return Boolean(start && start.getTime() <= Date.now());
+    }
+
+    function isEmergencyReadOnlyMode() {
+      return Boolean(appState.emergencyMode?.active);
     }
 
     function resolvedLessonType(lecture) {

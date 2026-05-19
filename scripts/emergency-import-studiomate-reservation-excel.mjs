@@ -19,6 +19,13 @@ const RESERVATION_EXPORT_ROOTS = [
   "/Users/archivepilates/Library/CloudStorage/GoogleDrive-home@archivepilates.com/내 드라이브/아카이브 정산/수업예약내역",
   "/Users/archivepilates/Library/CloudStorage/GoogleDrive-home@archivepilates.com/내 드라이브/아카이브 정산/수업예약내역",
 ];
+const FALLBACK_STAFF_BY_NAME = new Map(
+  [
+    ["배민진", "1983525"],
+    ["정은영", "2222464"],
+    ["이초림", "2849322"],
+  ].map(([name, staffId]) => [normalizeName(name), { staffId, name }]),
+);
 
 const args = new Set(process.argv.slice(2));
 const fileArg = valueArg("--file");
@@ -49,11 +56,12 @@ if (!sourceFile) {
 const rows = readRows(sourceFile);
 const parsedRows = rows.map(normalizeReservationRow).filter((row) => row.date && row.startTime && row.title);
 const dateBounds = requestedDateBounds(parsedRows);
-const [existingLectures, existingProfiles] = await Promise.all([
+const [existingLectures, existingProfiles, existingStaffs] = await Promise.all([
   loadExistingLectures(dateBounds.startDate, dateBounds.endDate),
   loadExistingProfiles(),
+  loadExistingStaffs(),
 ]);
-const { lectures, bookings, skipped } = buildPlans(parsedRows, existingLectures, existingProfiles);
+const { lectures, bookings, skipped } = buildPlans(parsedRows, existingLectures, existingProfiles, existingStaffs);
 const staffDates = uniquePairs(lectures.map((lecture) => ({ staffId: lecture.staffId, date: lecture.date })));
 const plannedWrites = lectures.length + bookings.length + staffDates.length + 1;
 
@@ -229,7 +237,18 @@ async function loadExistingProfiles() {
   return { byPhoneName, byName };
 }
 
-function buildPlans(rows, existingLectures, existingProfiles) {
+async function loadExistingStaffs() {
+  const snap = await db.collection("staffs").where("studioId", "==", STUDIO_ID).where("active", "==", true).get();
+  const byName = new Map();
+  for (const doc of snap.docs) {
+    const data = doc.data();
+    const name = normalizeName(data.name || "");
+    if (name) byName.set(name, { staffId: data.staffId || doc.id, name: data.name || "" });
+  }
+  return { byName };
+}
+
+function buildPlans(rows, existingLectures, existingProfiles, existingStaffs) {
   const skipped = { rowsWithoutMember: 0, memberNoMatch: 0, memberAmbiguousName: 0 };
   const grouped = new Map();
   for (const row of rows) {
@@ -243,7 +262,11 @@ function buildPlans(rows, existingLectures, existingProfiles) {
   const bookings = [];
   for (const group of grouped.values()) {
     const base = group.row;
-    const lectureId = matchedLectureId(base, existingLectures) || `excel_lecture_${hash(`${base.date}|${base.startTime}|${base.staffName}|${base.title}`).slice(0, 16)}`;
+    const matchedLecture = matchedLectureDoc(base, existingLectures);
+    const matchedStaff = existingStaffs.byName.get(normalizeName(base.staffName)) || FALLBACK_STAFF_BY_NAME.get(normalizeName(base.staffName));
+    const lectureId = matchedLecture?.data?.lectureId || matchedLecture?.id || `excel_lecture_${hash(`${base.date}|${base.startTime}|${base.staffName}|${base.title}`).slice(0, 16)}`;
+    const staffId = matchedStaff?.staffId || matchedLecture?.data?.staffId || base.staffId;
+    const staffName = matchedStaff?.name || matchedLecture?.data?.staffName || base.staffName;
     const lectureBookings = [];
     for (const row of group.bookings) {
       const member = matchMember(row, existingProfiles);
@@ -261,8 +284,8 @@ function buildPlans(rows, existingLectures, existingProfiles) {
         memberName: row.memberName || member.data.name || "",
         memberPhone: row.memberPhone || normalizePhone(member.data.phone || ""),
         memberRegisteredAt: member.data.registeredAt || null,
-        staffId: base.staffId,
-        staffName: base.staffName,
+        staffId,
+        staffName,
         lectureDate: base.date,
         lectureStartAt: parseTimestamp(`${base.date} ${base.startTime}`),
         lectureEndAt: base.endTime ? parseTimestamp(`${base.date} ${base.endTime}`) : null,
@@ -297,8 +320,8 @@ function buildPlans(rows, existingLectures, existingProfiles) {
       roomName: base.roomName,
       divisionName: base.divisionName,
       lessonType: base.lessonType,
-      staffId: base.staffId,
-      staffName: base.staffName,
+      staffId,
+      staffName,
       title: base.title,
       status: "open",
       capacity: base.capacity || Math.max(lectureBookings.length, 1),
@@ -316,7 +339,7 @@ function buildPlans(rows, existingLectures, existingProfiles) {
   return { lectures, bookings, skipped };
 }
 
-function matchedLectureId(row, existingLectures) {
+function matchedLectureDoc(row, existingLectures) {
   const targetStart = parseTimestamp(`${row.date} ${row.startTime}`)?.toMillis();
   const candidates = existingLectures.filter((item) => item.data.date === row.date);
   const exact = candidates.find((item) => {
@@ -327,7 +350,14 @@ function matchedLectureId(row, existingLectures) {
       normalizeName(lecture.title || "") === normalizeName(row.title)
     );
   });
-  return exact?.data?.lectureId || exact?.id || "";
+  if (exact) return exact;
+  return candidates.find((item) => {
+    const lecture = item.data;
+    return (
+      Math.abs((lecture.startAt?.toMillis?.() || 0) - (targetStart || 0)) <= 60000 &&
+      normalizeName(lecture.title || "") === normalizeName(row.title)
+    );
+  }) || null;
 }
 
 function matchMember(row, existingProfiles) {
@@ -366,8 +396,13 @@ async function rebuildInstructorViews(staffDates) {
       db.collection("lectures").where("studioId", "==", STUDIO_ID).where("staffId", "==", item.staffId).where("date", "==", item.date).get(),
       db.collection("bookings").where("studioId", "==", STUDIO_ID).where("staffId", "==", item.staffId).where("lectureDate", "==", item.date).get(),
     ]);
-    const lectures = lecturesSnap.docs.map((doc) => doc.data()).filter((lecture) => lecture.status !== "deleted");
-    const bookings = bookingsSnap.docs.map((doc) => doc.data());
+    const lectures = lecturesSnap.docs
+      .map((doc) => doc.data())
+      .filter((lecture) => lecture.status !== "deleted" && lecture.emergencySourceFile === sourceFile);
+    const lectureIds = new Set(lectures.map((lecture) => lecture.lectureId).filter(Boolean));
+    const bookings = bookingsSnap.docs
+      .map((doc) => doc.data())
+      .filter((booking) => lectureIds.has(booking.lectureId) && booking.emergencySourceFile === sourceFile);
     const staffName =
       lectures.map((lecture) => cleanText(lecture.staffName)).find(Boolean) ||
       bookings.map((booking) => cleanText(booking.staffName)).find(Boolean) ||
@@ -606,7 +641,7 @@ function normalizeHeader(value) {
 }
 
 function cleanText(value) {
-  return String(value ?? "").trim();
+  return String(value ?? "").normalize("NFC").trim();
 }
 
 function normalizeName(value) {
