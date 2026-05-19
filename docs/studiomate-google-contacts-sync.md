@@ -204,13 +204,13 @@ CONTACTS_SYNC_MAX_AUTO_UPDATE=50
 | 자동화 | LaunchAgent | 시간 | 상태 |
 | --- | --- | --- | --- |
 | StudioMate 회원목록 다운로드 | `com.archive.studiomate-member-excel` | 매일 23:00 | 활성 |
-| StudioMate → Google Contacts 동기화 | `com.archive.studiomate-contacts-sync` | 매일 23:10 | 활성 |
+| StudioMate → Google Contacts 동기화 | `com.archive.studiomate-contacts-sync` | 매일 23:10 | 비상모드 중 비활성 |
 | StudioMate 예약 가능 기한 설정 | `com.archive.studiomate-reservation-deadline` | 매주 월요일 12:30 | 활성 |
 
 연락처 동기화 LaunchAgent:
 
 ```text
-/Users/archivepilates/Library/LaunchAgents/com.archive.studiomate-contacts-sync.plist
+/Users/archivepilates/Library/LaunchAgents/com.archive.studiomate-contacts-sync.plist.disabled-20260519
 ```
 
 실행 내용:
@@ -218,6 +218,8 @@ CONTACTS_SYNC_MAX_AUTO_UPDATE=50
 ```bash
 cd "/Users/archivepilates/Documents/New project 2" && /usr/local/bin/node scripts/run_studiomate_google_sync_job.mjs
 ```
+
+2026-05-19 비상모드에서는 이 레거시 23:10 작업을 unload하고 `.disabled-20260519`로 보관한다. 최신 비상 연락처 동기화는 `com.archive.studiomate-emergency-contacts-sync`가 1시간 간격으로 담당한다.
 
 로그:
 
@@ -375,7 +377,7 @@ Codex 앱 자동화는 혼선을 줄이기 위해 보조/수동 테스트용으�
 | --- | --- |
 | Google Contacts 대상 계정 | `home@archivepilates.com` |
 | 완료보고 메일 계정 | `home@archivepilates.com` |
-| 연락처 동기화 LaunchAgent | 레거시. 필요 시 home 기준 수정 후 사용 |
+| 연락처 동기화 LaunchAgent | 23:10 레거시 작업 비활성. 비상모드 연락처 작업은 `com.archive.studiomate-emergency-contacts-sync` |
 | 회원목록 다운로드 LaunchAgent | 활성 |
 | 예약 가능 기한 LaunchAgent | 활성 |
 | Firebase 연락처 큐 | `memberContactIndex` / `contactSyncJobs` 기준 |
