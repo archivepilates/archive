@@ -16,13 +16,18 @@
 - Treat go-live language such as `배포`, `배포해줘`, `반영`, `publish`, or `release` as explicit approval for the full scoped sequence: validation, commit if needed, deploy, live verification, and GitHub push. Do not split deploy and push unless the user explicitly says deploy-only/local-only or a blocker applies.
 - Put task notes under `docs/tasks/`, durable decisions under `docs/decisions/`, and generated outputs under `artifacts/`.
 
-## ArchiveIN Work Coordination
+## ARCHIVE IN Work Coordination
 
-- Use the main ArchiveIN project chat as the control surface for cross-cutting decisions about the web app, Firebase model, StudioMate sync, Google Contacts, Kakao Alimtalk, and deployment readiness.
-- If a separate chat or agent is used for a narrow subtask, bring the decision/result back into the main ArchiveIN chat before treating it as project direction.
+- Use the main ARCHIVE IN project chat as the control surface for cross-cutting decisions about the web app, Firebase model, StudioMate sync, Google Contacts, Kakao Alimtalk, and deployment readiness.
+- If a separate chat or agent is used for a narrow subtask, bring the decision/result back into the main ARCHIVE IN chat before treating it as project direction.
 - When speed helps and the task can be split safely, use parallel agents, including the Spark model for quick read-only exploration or bounded implementation checks.
 - Use worktrees when a change is non-trivial, experimental, or should be isolated from the current branch.
-- Start live checks with read-only verification of the deployed ArchiveIN app, Firebase/Hosting configuration, and visible browser errors before proposing fixes.
+- Start live checks with read-only verification of the deployed ARCHIVE IN app, Firebase/Hosting configuration, and visible browser errors before proposing fixes.
+
+## Brand Writing Rules
+
+- Always write the app/product name as `ARCHIVE IN` in new chat responses, UI text, reports, documents, commit summaries, and operator-facing materials.
+- Do not use `ArchiveIN`, `Archive In`, `archive in`, or other mixed/lowercase variants unless quoting an exact file path, URL, command, package name, branch name, or historical source text.
 
 ## Local Setup
 
