@@ -1,8 +1,10 @@
 import { createHash, createHmac } from "node:crypto";
 import { Timestamp } from "firebase-admin/firestore";
 import { logger } from "firebase-functions";
+import type { FirestoreEvent, QueryDocumentSnapshot } from "firebase-functions/v2/firestore";
 import { DEFAULT_STUDIO_ID } from "../config/constants";
 import { privateSurveyWebhookSecret } from "../config/secrets";
+import { db } from "../config/firebase";
 import { refs } from "../firestore/refs";
 import type { BookingDoc, MemberProfileDoc, PrivateSurveyResponseDoc } from "../types/models";
 import { enqueueMemberMemoJob } from "../queue/enqueueWriteJob";
@@ -10,8 +12,7 @@ import { nowTimestamp } from "../utils/date";
 import { stableHash } from "../utils/hash";
 
 const PUBLIC_VIEW_BASE_URL =
-  process.env.PRIVATE_SURVEY_VIEW_BASE_URL ||
-  "https://asia-northeast3-archive-pilates.cloudfunctions.net/privateSurveyResponseView";
+  process.env.PRIVATE_SURVEY_VIEW_BASE_URL || "https://in.archivepilates.com/privateSurveyResponseView";
 
 interface SurveyIngestPayload {
   spreadsheetId?: string;
@@ -122,6 +123,93 @@ export async function ingestPrivateSurveyResponseHandler(request: any, response:
     const message = err instanceof Error ? err.message : String(err);
     logger.error("ingestPrivateSurveyResponse failed", { message });
     response.status(400).json({ ok: false, error: message });
+  }
+}
+
+export async function processPrivateSurveyIntakeHandler(
+  event: FirestoreEvent<QueryDocumentSnapshot | undefined, { intakeId: string }>,
+): Promise<void> {
+  const snap = event.data;
+  if (!snap) return;
+  const intake = snap.data() as Record<string, unknown>;
+  const payload = normalizePayload(intake);
+  const responseId = String(intake.responseId || responseIdFor(payload));
+  const accessToken = String(intake.accessToken || accessTokenFor(responseId));
+  const docKey = `${responseId}-${accessToken}`;
+  if (event.params.intakeId !== docKey) {
+    await snap.ref.set(
+      {
+        status: "failed",
+        lastError: "intake id does not match responseId/accessToken",
+        updatedAt: nowTimestamp(),
+      },
+      { merge: true },
+    );
+    return;
+  }
+
+  try {
+    await snap.ref.set({ status: "processing", updatedAt: nowTimestamp() }, { merge: true });
+    const detailUrl = detailUrlFor(responseId, accessToken);
+    const matching = await matchSurveyToMember(payload);
+    const summary = summarizeAnswers(payload);
+    const doc = await buildSurveyDoc({ payload, responseId, accessToken, detailUrl, matching, summary });
+    await refs.privateSurveyResponse(responseId).set(doc, { merge: true });
+
+    let memoJobId = "";
+    let memoStatus: PrivateSurveyResponseDoc["delivery"]["studioMateMemoStatus"] = "skipped";
+    if (matching.memberId) {
+      const job = await enqueueMemberMemoJob({
+        studioId: doc.studioId,
+        memberId: matching.memberId,
+        content: studioMateMemoContent(doc),
+        createdByUid: "system:private-survey-intake",
+      });
+      memoJobId = job.jobId;
+      memoStatus = "queued";
+    }
+
+    const delivery = {
+      ...doc.delivery,
+      studioMateMemoStatus: memoStatus,
+      studioMateMemoJobId: memoJobId,
+    };
+    await refs.privateSurveyResponse(responseId).set({ delivery, updatedAt: nowTimestamp() }, { merge: true });
+    await db.collection("privateSurveyPublic").doc(docKey).set(
+      {
+        responseId,
+        accessToken,
+        docKey,
+        detailUrl,
+        memberName: doc.memberName,
+        memberPhoneLast4: doc.memberPhoneLast4,
+        experienceType: doc.experienceType,
+        submittedAtText: doc.submittedAtText,
+        summary: doc.summary,
+        rawAnswers: doc.rawAnswers,
+        matching: doc.matching,
+        delivery,
+        source: doc.source,
+        updatedAt: nowTimestamp(),
+      },
+      { merge: true },
+    );
+    await snap.ref.set(
+      {
+        status: "processed",
+        responseId,
+        accessToken,
+        detailUrl,
+        matching,
+        delivery,
+        updatedAt: nowTimestamp(),
+      },
+      { merge: true },
+    );
+  } catch (err) {
+    const message = err instanceof Error ? err.message : String(err);
+    logger.error("processPrivateSurveyIntake failed", { intakeId: event.params.intakeId, message });
+    await snap.ref.set({ status: "failed", lastError: message, updatedAt: nowTimestamp() }, { merge: true });
   }
 }
 

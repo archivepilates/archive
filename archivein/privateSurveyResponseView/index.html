@@ -6,45 +6,120 @@
   <meta name="robots" content="noindex,nofollow">
   <title>ARCHIVE IN 사전설문</title>
   <style>
+    :root { color-scheme: light; --ink:#181512; --muted:#746b62; --line:#e6ded5; --paper:#fffdf9; --accent:#2f6f68; --soft:#eef5f2; --bad:#9d2f24; }
     * { box-sizing: border-box; }
-    body {
-      margin: 0;
-      min-height: 100vh;
-      display: grid;
-      place-items: center;
-      padding: 24px;
-      background: #f6f1eb;
-      color: #181512;
-      font-family: -apple-system, BlinkMacSystemFont, "Apple SD Gothic Neo", "Noto Sans KR", sans-serif;
-    }
-    main {
-      width: min(420px, 100%);
-      padding: 20px;
-      border: 1px solid #e6ded5;
-      border-radius: 8px;
-      background: #fffdf9;
-    }
-    strong { display: block; margin-bottom: 8px; color: #2f6f68; font-size: 13px; }
-    p { margin: 0; line-height: 1.55; }
+    body { margin:0; font-family:-apple-system,BlinkMacSystemFont,"Apple SD Gothic Neo","Noto Sans KR",sans-serif; background:#f6f1eb; color:var(--ink); }
+    main { width:min(720px,100%); margin:0 auto; padding:18px 14px 36px; }
+    .top { padding:18px 2px 12px; }
+    .eyebrow { font-size:12px; font-weight:800; color:var(--accent); }
+    h1 { margin:6px 0 8px; font-size:28px; line-height:1.15; letter-spacing:0; }
+    .meta { color:var(--muted); font-size:14px; line-height:1.55; }
+    .panel { background:var(--paper); border:1px solid var(--line); border-radius:8px; padding:16px; margin:12px 0; }
+    .match { background:var(--soft); border-color:#c9ddd7; }
+    .warn { background:#fff7f4; border-color:#f0c9c1; color:var(--bad); }
+    .label { font-size:12px; color:var(--muted); font-weight:800; margin-bottom:6px; }
+    .value { font-size:16px; line-height:1.55; white-space:pre-wrap; word-break:keep-all; overflow-wrap:anywhere; }
+    .grid { display:grid; gap:10px; }
+    .small { font-size:13px; color:var(--muted); line-height:1.5; }
+    footer { padding:12px 2px; color:var(--muted); font-size:12px; }
   </style>
 </head>
 <body>
-  <main>
-    <strong>ARCHIVE IN</strong>
-    <p id="message">사전설문을 여는 중입니다.</p>
+  <main id="app">
+    <section class="top">
+      <div class="eyebrow">ARCHIVE IN</div>
+      <h1>사전설문을 여는 중입니다</h1>
+      <div class="meta">잠시만 기다려주세요.</div>
+    </section>
   </main>
-  <script>
+  <script src="/firebase-config.js"></script>
+  <script type="module">
+    import { initializeApp } from 'https://www.gstatic.com/firebasejs/10.14.1/firebase-app.js';
+    import { doc, getDoc, getFirestore } from 'https://www.gstatic.com/firebasejs/10.14.1/firebase-firestore.js';
+
+    const appRoot = document.getElementById('app');
     const params = new URLSearchParams(location.search);
     const id = String(params.get('id') || '').trim();
     const token = String(params.get('token') || '').trim();
-    const message = document.getElementById('message');
-    const validId = /^[a-z0-9-]+$/i.test(id);
-    const validToken = /^[a-f0-9]{12,80}$/i.test(token);
+    const validId = /^psr-[a-z0-9-]{8,80}$/i.test(id);
+    const validToken = /^[a-f0-9]{16,80}$/i.test(token);
 
-    if (!id || !token || !validId || !validToken) {
-      message.textContent = '설문 링크가 올바르지 않습니다.';
+    if (!validId || !validToken) {
+      renderMessage('설문 링크가 올바르지 않습니다.', '링크를 다시 확인해주세요.');
     } else {
-      location.replace(`/private-surveys/${encodeURIComponent(id)}-${encodeURIComponent(token)}.html`);
+      loadSurvey().catch((err) => renderMessage('설문을 열 수 없습니다.', err && err.message ? err.message : String(err), true));
+    }
+
+    async function loadSurvey() {
+      const config = window.KANGSAIN_FIREBASE_CONFIG;
+      if (!config || !config.apiKey) throw new Error('Firebase 설정을 찾을 수 없습니다.');
+      const app = initializeApp(config);
+      const db = getFirestore(app);
+      const docKey = `${id}-${token}`;
+      const snap = await getDoc(doc(db, 'privateSurveyPublic', docKey));
+      if (!snap.exists()) throw new Error('아직 설문 상세화면이 준비되지 않았습니다.');
+      renderSurvey(snap.data());
+    }
+
+    function renderSurvey(data) {
+      const summary = data.summary || {};
+      const matching = data.matching || {};
+      const rows = [
+        ['운동 목적', summary.goal],
+        ['신경 부위', summary.focusArea],
+        ['통증/병력', summary.painOrMedicalNote],
+        ['운동 수준', summary.exerciseLevel],
+        ['걱정/어려움', summary.concernOrDifficulty],
+        ['기대/중요 요소', summary.expectationOrImportantFactor],
+        ['유입경로', summary.referralSource],
+        ['생활/이전 아쉬움', summary.lifestyleOrPreviousIssue],
+      ];
+      appRoot.innerHTML = `
+        <section class="top">
+          <div class="eyebrow">ARCHIVE IN · 첫 프라이빗 사전설문</div>
+          <h1>${escapeHtml(data.memberName || '회원')} 회원</h1>
+          <div class="meta">제출 ${escapeHtml(data.submittedAtText || '-')}<br>경험구분 ${escapeHtml(data.experienceType || '-')}</div>
+        </section>
+        <section class="panel match">
+          <div class="label">담당 수업</div>
+          <div class="value">${escapeHtml(matchText(matching))}</div>
+        </section>
+        <section class="grid">
+          ${rows.map(([label, value]) => answerBlock(label, value)).join('')}
+        </section>
+        <section class="panel">
+          <div class="label">원본 위치</div>
+          <div class="small">Google Sheets ${escapeHtml(data.source?.sheetName || '-')} · ${escapeHtml(String(data.source?.rowNumber || '-'))}행</div>
+        </section>
+        <footer>설문 내용은 수업 준비 목적의 내부 자료입니다. 링크를 외부에 공유하지 마세요.</footer>
+      `;
+    }
+
+    function matchText(matching) {
+      if (matching.status !== 'matched') return matching.reason || '담당 수업 매칭 대기 중';
+      return [
+        matching.lectureDate || '',
+        matching.staffName ? `담당강사: ${matching.staffName}` : '',
+        matching.reason || ''
+      ].filter(Boolean).join('\n');
+    }
+
+    function answerBlock(label, value) {
+      return `<section class="panel"><div class="label">${escapeHtml(label)}</div><div class="value">${escapeHtml(value || '-')}</div></section>`;
+    }
+
+    function renderMessage(title, body, warn = false) {
+      appRoot.innerHTML = `<section class="top"><div class="eyebrow">ARCHIVE IN</div><h1>${escapeHtml(title)}</h1></section><section class="panel ${warn ? 'warn' : ''}"><div class="value">${escapeHtml(body)}</div></section>`;
+    }
+
+    function escapeHtml(value) {
+      return String(value == null ? '' : value).replace(/[&<>"']/g, (char) => ({
+        '&': '&amp;',
+        '<': '&lt;',
+        '>': '&gt;',
+        '"': '&quot;',
+        "'": '&#39;'
+      })[char] || char);
     }
   </script>
 </body>

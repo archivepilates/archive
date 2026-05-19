@@ -34,6 +34,7 @@ import { getStaffByUid } from "./firestore/staffRepository";
 import { nowTimestamp } from "./utils/date";
 import {
   ingestPrivateSurveyResponseHandler,
+  processPrivateSurveyIntakeHandler,
   privateSurveyResponseViewHandler,
 } from "./privateSurvey/privateSurveyResponse";
 
@@ -193,6 +194,14 @@ export const syncDashboardNow = onRequest(longRequestOptions, async (request, re
 export const ingestPrivateSurveyResponse = onRequest(privateSurveyIngestOptions, ingestPrivateSurveyResponseHandler);
 
 export const privateSurveyResponseView = onRequest(publicRequestOptions, privateSurveyResponseViewHandler);
+
+export const processPrivateSurveyIntake = onDocumentCreated(
+  {
+    ...scheduleOptions,
+    document: "privateSurveyIntakes/{intakeId}",
+  },
+  processPrivateSurveyIntakeHandler,
+);
 
 export const getInstructorHome = onCall(callableOptions, async (request) => {
   try {

@@ -160,6 +160,30 @@ service cloud.firestore {
       allow write: if false;
     }
 
+    match /privateSurveyIntakes/{intakeId} {
+      allow read: if false;
+      allow create: if
+        request.resource.data.docKey == intakeId &&
+        request.resource.data.responseId is string &&
+        request.resource.data.responseId.matches('^psr-[a-z0-9-]{8,80}$') &&
+        request.resource.data.accessToken is string &&
+        request.resource.data.accessToken.matches('^[a-f0-9]{16,80}$') &&
+        request.resource.data.memberName is string &&
+        request.resource.data.memberName.size() > 0 &&
+        request.resource.data.memberName.size() <= 40 &&
+        request.resource.data.memberPhone is string &&
+        request.resource.data.memberPhone.matches('^[0-9]{10,11}$') &&
+        request.resource.data.answers is map &&
+        request.resource.data.createdAt is timestamp &&
+        request.resource.data.status == 'pending';
+      allow update, delete: if false;
+    }
+
+    match /privateSurveyPublic/{docKey} {
+      allow read: if docKey.matches('^psr-[a-z0-9-]{8,80}-[a-f0-9]{16,80}$');
+      allow write: if false;
+    }
+
     match /memberMemos/{memoId} {
       allow read: if
         signedIn() &&
