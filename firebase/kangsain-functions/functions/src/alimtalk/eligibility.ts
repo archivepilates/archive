@@ -4,6 +4,7 @@ import {
   APPROVED_ALIMTALK_TEMPLATE_CODES,
   NEW_MEMBER_ALIMTALK_START_DATE,
   NEW_MEMBER_ALIMTALK_WINDOW_DAYS,
+  PRIVATE_SURVEY_ALIMTALK_START_DATE,
 } from "./templates";
 import type { AlimtalkCandidateDoc } from "../types/models";
 
@@ -14,7 +15,8 @@ export function autoSendabilityIssue(candidate: AlimtalkCandidateDoc, today: str
   if (!APPROVED_ALIMTALK_TEMPLATE_CODES.has(candidate.templateCode))
     return `승인 템플릿 코드 아님: ${candidate.templateCode}`;
   if (candidate.sourceDate && candidate.sourceDate > today) return "대상일이 발송 기준일 이후";
-  if (candidate.type !== "new_member" && candidate.sourceDate !== today) return "수강권 알림은 발송 기준일 후보만 발송";
+  if (candidate.type !== "new_member" && candidate.type !== "private_survey" && candidate.sourceDate !== today)
+    return "수강권 알림은 발송 기준일 후보만 발송";
   if (candidate.type === "new_member" && candidate.sourceDate < NEW_MEMBER_ALIMTALK_START_DATE)
     return "신규회원 웰컴 시작일 이전 등록";
   if (
@@ -23,5 +25,9 @@ export function autoSendabilityIssue(candidate: AlimtalkCandidateDoc, today: str
   ) {
     return `신규회원 웰컴은 등록 ${NEW_MEMBER_ALIMTALK_WINDOW_DAYS}일 이내 후보만 발송`;
   }
+  if (candidate.type === "private_survey" && candidate.sourceDate < PRIVATE_SURVEY_ALIMTALK_START_DATE)
+    return "프라이빗 사전설문 자동발송 시작일 이전 후보";
+  if (candidate.type === "private_survey" && candidate.sourceDate !== today)
+    return "프라이빗 사전설문은 발송 기준일 후보만 발송";
   return "";
 }

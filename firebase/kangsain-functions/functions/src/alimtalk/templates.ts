@@ -2,6 +2,7 @@ import type { AlimtalkCandidateType } from "../types/models";
 
 export const NEW_MEMBER_ALIMTALK_START_DATE = "2026-05-16";
 export const NEW_MEMBER_ALIMTALK_WINDOW_DAYS = 3;
+export const PRIVATE_SURVEY_ALIMTALK_START_DATE = "2026-05-19";
 
 export const ALIMTALK_MEMBER_EXCLUSION_REASONS: Record<string, string> = {
   "3270886": "출산예정 회원 알림톡 제외",
@@ -10,6 +11,7 @@ export const ALIMTALK_MEMBER_EXCLUSION_REASONS: Record<string, string> = {
 
 export type SendableAlimtalkCandidateType =
   | "new_member"
+  | "private_survey"
   | "ticket_expiring"
   | "remaining_low"
   | "private_count_low"
@@ -55,6 +57,7 @@ export const ALIMTALK_TEMPLATES = {
 
 export const CANDIDATE_TEMPLATE_CODES: Record<SendableAlimtalkCandidateType, string> = {
   new_member: ALIMTALK_TEMPLATES.new_member.code,
+  private_survey: ALIMTALK_TEMPLATES.private_survey.code,
   ticket_expiring: ALIMTALK_TEMPLATES.ticket_expiring.code,
   remaining_low: ALIMTALK_TEMPLATES.remaining_low.code,
   private_count_low: ALIMTALK_TEMPLATES.private_count_low.code,

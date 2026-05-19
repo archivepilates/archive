@@ -305,6 +305,7 @@ export type ContactSyncTarget = "archivepilates_gmail" | "home_archivepilates";
 export type ContactSyncStatus = "pending" | "synced" | "skipped" | "failed";
 export type AlimtalkCandidateType =
   | "new_member"
+  | "private_survey"
   | "ticket_expiring"
   | "remaining_low"
   | "private_count_low"

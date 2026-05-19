@@ -117,6 +117,7 @@ function linesOrEmpty(lines: string[]): string[] {
 function templateLabel(type: string): string {
   const labels: Record<string, string> = {
     new_member: "신규회원 웰컴",
+    private_survey: "프라이빗 사전설문",
     ticket_expiring: "그룹 기간 만료",
     remaining_low: "그룹 횟수 부족",
     private_count_low: "개인 횟수 부족",

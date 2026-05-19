@@ -8,6 +8,7 @@ import {
   CANDIDATE_TEMPLATE_CODES,
   NEW_MEMBER_ALIMTALK_START_DATE,
   NEW_MEMBER_ALIMTALK_WINDOW_DAYS,
+  PRIVATE_SURVEY_ALIMTALK_START_DATE,
   alimtalkDedupePolicy,
   type SendableAlimtalkCandidateType,
 } from "./templates";
@@ -27,6 +28,10 @@ export async function rebuildAlimtalkCandidatesForRange(input: {
     for (const profile of profiles) {
       for (const candidate of directTicketCandidates(profile, sourceDate)) {
         await enqueueSendableCandidate(candidate, candidateIds, writes);
+      }
+      const privateSurveyCandidate = privateSurveyCandidateForDate(profile, sourceDate);
+      if (privateSurveyCandidate) {
+        await enqueueSendableCandidate(privateSurveyCandidate, candidateIds, writes);
       }
     }
   }
@@ -104,6 +109,37 @@ function directTicketCandidates(profile: MemberProfileDoc, sourceDate: string): 
   return activeProfileTickets(profile, sourceDate)
     .map((ticket) => directTicketCandidate(profile, ticket, sourceDate))
     .filter((candidate): candidate is AlimtalkCandidateDoc => Boolean(candidate));
+}
+
+function privateSurveyCandidateForDate(profile: MemberProfileDoc, sourceDate: string): AlimtalkCandidateDoc | null {
+  if (sourceDate < PRIVATE_SURVEY_ALIMTALK_START_DATE) return null;
+  if (!profile.memberId || !profile.name || !profile.phone) return null;
+  if (ALIMTALK_MEMBER_EXCLUSION_REASONS[profile.memberId]) return null;
+  const ticket = activeProfileTickets(profile, sourceDate).find(
+    (ticket) => isPrivateProfileTicket(ticket) && privateTicketStartDate(ticket, profile) === sourceDate,
+  );
+  if (!ticket) return null;
+  return {
+    candidateId: `private_survey_${profile.memberId}_${sourceDate}`,
+    studioId: profile.studioId,
+    memberId: profile.memberId,
+    memberName: profile.name,
+    memberPhone: profile.phone,
+    type: "private_survey",
+    status: "candidate",
+    templateCode: CANDIDATE_TEMPLATE_CODES.private_survey,
+    title: "프라이빗 사전설문",
+    reason: `프라이빗 수강권 시작 ${sourceDate}`,
+    sourceDate,
+    payload: {
+      memberName: profile.name,
+      ticketName: ticket.name || "",
+      privateTicketStartDate: sourceDate,
+    },
+    lastError: null,
+    createdAt: nowTimestamp(),
+    updatedAt: nowTimestamp(),
+  };
 }
 
 function directTicketCandidate(
@@ -213,6 +249,15 @@ function isPrivateProfileTicket(ticket: NonNullable<MemberProfileDoc["activeTick
   const classType = String(ticket.classType || "").toUpperCase();
   const name = String(ticket.name || "");
   return classType === "P" || classType === "PRIVATE" || /프라이빗|개인/.test(name);
+}
+
+function privateTicketStartDate(
+  ticket: NonNullable<MemberProfileDoc["activeTickets"]>[number],
+  profile: MemberProfileDoc,
+): string {
+  const availableFrom = ticket.availableFrom?.toDate?.();
+  if (availableFrom) return new Intl.DateTimeFormat("sv-SE", { timeZone: "Asia/Seoul" }).format(availableFrom);
+  return registeredDate(profile);
 }
 
 function profileTicketIdentity(ticket: NonNullable<MemberProfileDoc["activeTickets"]>[number]): string {
