@@ -7,7 +7,6 @@ import { privateSurveyWebhookSecret } from "../config/secrets";
 import { db } from "../config/firebase";
 import { refs } from "../firestore/refs";
 import type { BookingDoc, MemberProfileDoc, PrivateSurveyResponseDoc } from "../types/models";
-import { enqueueMemberMemoJob } from "../queue/enqueueWriteJob";
 import { nowTimestamp } from "../utils/date";
 import { stableHash } from "../utils/hash";
 import { DelegatedGoogleClient } from "../google/delegatedGoogleClient";
@@ -88,39 +87,13 @@ export async function ingestPrivateSurveyResponseHandler(request: any, response:
     const doc = await buildSurveyDoc({ payload, responseId, accessToken, detailUrl, matching, summary });
     await refs.privateSurveyResponse(responseId).set(doc, { merge: true });
 
-    let memoJobId = "";
-    let memoStatus: PrivateSurveyResponseDoc["delivery"]["studioMateMemoStatus"] = "skipped";
-    if (matching.memberId) {
-      const memoContent = studioMateMemoContent(doc);
-      const job = await enqueueMemberMemoJob({
-        studioId: doc.studioId,
-        memberId: matching.memberId,
-        content: memoContent,
-        createdByUid: "system:private-survey-ingest",
-      });
-      memoJobId = job.jobId;
-      memoStatus = "queued";
-    }
-
-    await refs.privateSurveyResponse(responseId).set(
-      {
-        delivery: {
-          ...doc.delivery,
-          studioMateMemoStatus: memoStatus,
-          studioMateMemoJobId: memoJobId,
-        },
-        updatedAt: nowTimestamp(),
-      },
-      { merge: true },
-    );
-
     response.status(200).json({
       ok: true,
       responseId,
       detailUrl,
       matching,
-      studioMateMemoStatus: memoStatus,
-      studioMateMemoJobId: memoJobId,
+      studioMateMemoStatus: doc.delivery.studioMateMemoStatus,
+      studioMateMemoJobId: doc.delivery.studioMateMemoJobId,
       alimtalkStatus: "skipped",
       alimtalkReason: doc.delivery.alimtalkReason,
     });
@@ -161,23 +134,10 @@ export async function processPrivateSurveyIntakeHandler(
     const doc = await buildSurveyDoc({ payload, responseId, accessToken, detailUrl, matching, summary });
     await refs.privateSurveyResponse(responseId).set(doc, { merge: true });
 
-    let memoJobId = "";
-    let memoStatus: PrivateSurveyResponseDoc["delivery"]["studioMateMemoStatus"] = "skipped";
-    if (matching.memberId) {
-      const job = await enqueueMemberMemoJob({
-        studioId: doc.studioId,
-        memberId: matching.memberId,
-        content: studioMateMemoContent(doc),
-        createdByUid: "system:private-survey-intake",
-      });
-      memoJobId = job.jobId;
-      memoStatus = "queued";
-    }
-
     const delivery = {
       ...doc.delivery,
-      studioMateMemoStatus: memoStatus,
-      studioMateMemoJobId: memoJobId,
+      studioMateMemoStatus: "skipped" as const,
+      studioMateMemoJobId: "",
     };
     await refs.privateSurveyResponse(responseId).set({ delivery, updatedAt: nowTimestamp() }, { merge: true });
     await db.collection("privateSurveyPublic").doc(docKey).set(
@@ -396,7 +356,7 @@ async function buildSurveyDoc(input: {
     matching: input.matching,
     delivery: {
       detailUrl: input.detailUrl,
-      studioMateMemoStatus: "pending",
+      studioMateMemoStatus: "skipped",
       studioMateMemoJobId: "",
       alimtalkStatus: "skipped",
       alimtalkReason: "담당강사 설문 제출 알림용 승인 템플릿이 없어 알림톡 발송을 보류했습니다.",
@@ -504,18 +464,6 @@ function summarizeAnswers(payload: NormalizedSurveyPayload): SurveySummary {
       ? [a["7. 평소 생활패턴은 어떤 편인가요?"], a["8. 가장 먼저 바꾸고 싶은 부분은 무엇인가요?"]].filter(Boolean).join(" / ")
       : a["5. 이전 수업에서 아쉬웠던 점은 무엇인가요?"] || "",
   };
-}
-
-function studioMateMemoContent(doc: PrivateSurveyResponseDoc): string {
-  return [
-    "[첫 프라이빗 사전설문]",
-    `제출: ${doc.submittedAtText}`,
-    `설문 확인: ${doc.delivery.detailUrl}`,
-    doc.matching.staffName ? `담당강사: ${doc.matching.staffName}` : "",
-    "설문 전문은 링크에서 확인",
-  ]
-    .filter(Boolean)
-    .join("\n");
 }
 
 function parseKoreanTimestamp(value: string): Timestamp | null {
