@@ -22,6 +22,7 @@ StudioMate API 접근이 403으로 막혔을 때, 브라우저 자동화로 내�
 - 엑셀에만 있는 사람을 `excel_...` 임시 ID로 만드는 것은 `--allow-new-excel-profiles`를 붙였을 때만 허용한다.
 - Google Contacts 작업 큐는 기본 생성하지 않는다. 필요할 때만 `--queue-contact-sync`를 붙여 `contactSyncJobs`를 준비한다.
 - `contactSyncJobs` 생성은 Google Contacts 실제 쓰기와 다르다. 비상모드 중에는 `scheduledProcessContactSyncJobs`가 정지 상태이므로, 실제 주소록 반영은 별도 승인 후 수동 처리한다.
+- 연락처 예외 스탭은 회원목록 엑셀에 있더라도 회원 연락처 큐를 만들지 않는다. 현재 예외는 김기효, 김민지, 김아영, 배민진, 이초림, 정은영이다.
 
 ## 실행 명령
 

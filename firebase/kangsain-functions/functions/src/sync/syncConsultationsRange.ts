@@ -8,6 +8,7 @@ import { normalizeConsultation } from "../studiomate/normalizers";
 import type { ConsultationDoc, ContactSyncJobDoc, MemberProfileDoc } from "../types/models";
 import { dateRange, nowTimestamp } from "../utils/date";
 import { stableHash } from "../utils/hash";
+import { isProtectedStaffContact } from "./protectedContactRules";
 
 export async function syncConsultationsRange(input: {
   studioId?: string;
@@ -121,6 +122,7 @@ function todayDate(): string {
 
 async function queueConsultationContactSync(consultation: ConsultationDoc): Promise<void> {
   if (!consultation.memberPhone || !consultation.memberName || consultation.status === "deleted") return;
+  if (isProtectedStaffContact({ name: consultation.memberName, phone: consultation.memberPhone })) return;
 
   const contactId = consultation.memberId || `consultation_${consultation.consultationId}`;
   const contactDisplayName = formatConsultationContactDisplayName(consultation);

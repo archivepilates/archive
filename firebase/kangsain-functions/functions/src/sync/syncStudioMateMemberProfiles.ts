@@ -6,6 +6,7 @@ import { saveRawMirrorBatch } from "../firestore/rawMirrorRepository";
 import { StudioMateClient } from "../studiomate/studiomateClient";
 import { addDays, nowTimestamp, parseStudioMateDateTime, todayKst } from "../utils/date";
 import { stableHash } from "../utils/hash";
+import { isProtectedStaffContact } from "./protectedContactRules";
 
 export async function syncStudioMateMemberProfiles(input: {
   studioId: string;
@@ -72,7 +73,7 @@ export async function syncStudioMateMemberProfiles(input: {
           updatedAt: nowTimestamp(),
         };
         await refs.memberProfile(member.memberId).set(doc, { merge: true });
-        if (phone) {
+        if (phone && !isProtectedStaffContact({ name: doc.name, phone })) {
           const contactDisplayName = formatMemberContactDisplayName(doc.name, registeredAt);
           const contactHash = stableHash({
             name: doc.name,

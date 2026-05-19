@@ -19,6 +19,14 @@ const MEMBER_EXPORT_ROOTS = [
   "/Users/archivepilates/Library/CloudStorage/GoogleDrive-home@archivepilates.com/내 드라이브/아카이브 정산/회원원본데이터",
   "/Users/archivepilates/Library/CloudStorage/GoogleDrive-home@archivepilates.com/내 드라이브/아카이브 정산/회원원본데이터",
 ];
+const PROTECTED_STAFF_CONTACTS = [
+  { name: "김기효", phone: "01086488585", role: "owner" },
+  { name: "김민지", phone: "01075594765", role: "instructor" },
+  { name: "김아영", phone: "01032510242", role: "instructor" },
+  { name: "배민진", phone: "01044033249", role: "owner" },
+  { name: "이초림", phone: "01040381248", role: "instructor" },
+  { name: "정은영", phone: "01040180513", role: "staff" },
+];
 
 const args = new Set(process.argv.slice(2));
 const fileArg = valueArg("--file");
@@ -177,9 +185,14 @@ function buildPlans(groups, existingProfiles, existingContacts) {
   let skippedNoActiveTicket = 0;
   let skippedAmbiguousPhone = 0;
   let skippedNoExistingProfile = 0;
+  let skippedProtectedStaffContact = 0;
   let skippedNoPhone = groups.skippedNoPhone || 0;
   const plans = [];
   for (const group of groups) {
+    if (isProtectedStaffContact(group)) {
+      skippedProtectedStaffContact += 1;
+      continue;
+    }
     const activeTickets = buildActiveTickets(group.rows);
     const registeredAt = parseKstTimestamp(bestDate(group.rows, "등록일"));
     const latestAttendance = bestDate(group.rows, "최근출석일");
@@ -294,6 +307,7 @@ function buildPlans(groups, existingProfiles, existingContacts) {
       ambiguousExistingPhone: skippedAmbiguousPhone,
       noExistingProfile: skippedNoExistingProfile,
       profilesWithoutActiveTicket: skippedNoActiveTicket,
+      protectedStaffContact: skippedProtectedStaffContact,
     },
   };
 }
@@ -420,6 +434,15 @@ function normalizePhone(value) {
     if (digits.slice(0, half) === digits.slice(half)) digits = digits.slice(0, half);
   }
   return digits;
+}
+
+function isProtectedStaffContact(input) {
+  const phone = normalizePhone(input.phone || "");
+  const name = normalizeName(input.name || "");
+  return PROTECTED_STAFF_CONTACTS.some((contact) => {
+    if (phone && phone === contact.phone) return true;
+    return name === normalizeName(contact.name);
+  });
 }
 
 function nullableNumber(value) {

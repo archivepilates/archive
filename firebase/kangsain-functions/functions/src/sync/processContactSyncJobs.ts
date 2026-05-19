@@ -7,6 +7,7 @@ import type { ContactSyncJobDoc } from "../types/models";
 import { nowTimestamp } from "../utils/date";
 import { errorMessage } from "../utils/errors";
 import { nextRetryAt } from "../queue/retryPolicy";
+import { shouldPreserveExistingContactName, shouldSkipProtectedStaffContactJob } from "./protectedContactRules";
 
 export async function processContactSyncJobs(): Promise<{ processed: number }> {
   const now = Timestamp.now();
@@ -143,6 +144,10 @@ async function processJob(
   try {
     const phoneKey = normalizePhone(job.memberPhone);
     const existing = contactsByPhone.get(phoneKey) || [];
+    if (shouldSkipProtectedStaffContactJob(job)) {
+      await finishJob(job, { action: "skipped", resourceName: existing[0]?.resourceName });
+      return;
+    }
     if (job.sourceReason === "consultation_schedule" && shouldPreserveExistingConsultationContact(existing)) {
       await finishJob(job, { action: "skipped", resourceName: existing[0]?.resourceName });
       return;
@@ -160,7 +165,7 @@ async function processJob(
 
 function shouldPreserveExistingConsultationContact(existing: Array<{ name: string }>): boolean {
   if (existing.length !== 1) return false;
-  return / 회원(?: \d{6})?$| 강사님$|대표|원장|부원장|스탭|스텝/.test(existing[0].name);
+  return shouldPreserveExistingContactName(existing[0].name);
 }
 
 async function finishJob(
