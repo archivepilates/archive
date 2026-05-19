@@ -15,11 +15,12 @@ StudioMate API 접근이 403으로 막혔을 때, 브라우저 자동화로 내�
 - 비상모드 전용 다운로드/반영은 1시간 간격으로 실행한다.
 - 브라우저 자동화로 받은 회원목록 엑셀을 회원카드/수강권 보정에 사용한다.
 - 수업 예약 화면 복구에는 브라우저 자동화로 받은 수업예약내역 엑셀을 함께 사용한다.
-- 엑셀 원본은 Google Drive `회원원본데이터` 폴더에 보관된 최신 `회원목록_*.xlsx`를 사용한다.
+- 회원목록 엑셀 원본은 비상모드 전용 다운로드/아카이브 폴더의 최신 `회원목록_*.xlsx`를 우선 사용하고, 없을 때만 Google Drive `회원원본데이터` 폴더의 최신 파일을 사용한다.
 - 기본 실행은 dry-run이다. Firestore 반영은 `--apply`를 붙였을 때만 한다.
 - 기본 반영 대상은 기존 `memberProfiles`와 전화번호, 이름이 매칭되는 회원만이다.
 - 엑셀에만 있는 사람을 `excel_...` 임시 ID로 만드는 것은 `--allow-new-excel-profiles`를 붙였을 때만 허용한다.
-- Google Contacts 작업 큐는 기본 생성하지 않는다. 필요할 때만 `--queue-contact-sync`를 붙인다.
+- Google Contacts 작업 큐는 기본 생성하지 않는다. 필요할 때만 `--queue-contact-sync`를 붙여 `contactSyncJobs`를 준비한다.
+- `contactSyncJobs` 생성은 Google Contacts 실제 쓰기와 다르다. 비상모드 중에는 `scheduledProcessContactSyncJobs`가 정지 상태이므로, 실제 주소록 반영은 별도 승인 후 수동 처리한다.
 
 ## 실행 명령
 
@@ -78,6 +79,12 @@ node scripts/run-studiomate-excel-emergency-mode.mjs --reservation-file "/path/t
 node scripts/emergency-import-studiomate-member-excel.mjs --allow-new-excel-profiles
 ```
 
+Google Contacts 동기화 큐까지 준비:
+
+```bash
+node scripts/emergency-import-studiomate-member-excel.mjs --queue-contact-sync --apply
+```
+
 ## 반영 데이터
 
 - `memberProfiles/{memberId}`
@@ -88,6 +95,11 @@ node scripts/emergency-import-studiomate-member-excel.mjs --allow-new-excel-prof
 - `memberContactIndex/{memberId}`
   - 연락처 동기화용 이름/전화번호/등록일/수강권 요약
   - 기본 상태는 Google Contacts 큐 미생성
+  - `--queue-contact-sync` 사용 시 `home@archivepilates.com` 주소록용 pending 상태와 `contactSyncJobs`를 생성
+- `contactSyncJobs/{jobId}`
+  - `target: home_archivepilates`
+  - 전화번호/표시명/등록일/수강권 요약이 바뀐 회원만 생성
+  - 기존에 같은 연락처 해시가 `synced`인 회원은 중복 큐 생성하지 않음
 - `opsState/studiomateExcelEmergency`
   - 마지막 비상 엑셀 반영 상태
 - `lectures/{lectureId}` / `bookings/{bookingId}`

@@ -14,6 +14,8 @@ const PYTHON =
   process.env.ARCHIVEIN_PYTHON ||
   "/Users/archivepilates/.cache/codex-runtimes/codex-primary-runtime/dependencies/python/bin/python3";
 const MEMBER_EXPORT_ROOTS = [
+  "/Users/archivepilates/ArchiveIN/emergency/archive/member",
+  "/Users/archivepilates/ArchiveIN/emergency/downloads",
   "/Users/archivepilates/Library/CloudStorage/GoogleDrive-home@archivepilates.com/내 드라이브/아카이브 정산/회원원본데이터",
   "/Users/archivepilates/Library/CloudStorage/GoogleDrive-home@archivepilates.com/내 드라이브/아카이브 정산/회원원본데이터",
 ];
@@ -36,8 +38,8 @@ if (!sourceFile) {
 
 const rows = readMemberRows(sourceFile);
 const groupedMembers = groupRows(rows);
-const existingProfiles = await loadExistingProfiles();
-const { plans, skipped } = buildPlans(groupedMembers, existingProfiles);
+const [existingProfiles, existingContacts] = await Promise.all([loadExistingProfiles(), loadExistingContacts()]);
+const { plans, skipped } = buildPlans(groupedMembers, existingProfiles, existingContacts);
 const summary = {
   ok: true,
   mode: apply ? "apply" : "dry-run",
@@ -47,6 +49,7 @@ const summary = {
   readRows: rows.length,
   groupedMembers: groupedMembers.length,
   plannedWrites: plans.length,
+  plannedContactSyncJobs: plans.filter((plan) => plan.contactSyncJobDoc).length,
   matchedExistingProfiles: plans.filter((plan) => plan.matchType === "existing").length,
   temporaryExcelProfiles: plans.filter((plan) => plan.matchType === "temporary_excel_id").length,
   skipped,
@@ -163,7 +166,14 @@ async function loadExistingProfiles() {
   return byPhone;
 }
 
-function buildPlans(groups, existingProfiles) {
+async function loadExistingContacts() {
+  const snap = await db.collection("memberContactIndex").where("studioId", "==", STUDIO_ID).get();
+  const out = new Map();
+  for (const doc of snap.docs) out.set(doc.id, doc.data());
+  return out;
+}
+
+function buildPlans(groups, existingProfiles, existingContacts) {
   let skippedNoActiveTicket = 0;
   let skippedAmbiguousPhone = 0;
   let skippedNoExistingProfile = 0;
@@ -223,6 +233,19 @@ function buildPlans(groups, existingProfiles) {
     };
     const contactDisplayName = [group.name, "회원", compactDate(registeredAt)].filter(Boolean).join(" ");
     const contactHash = hash({ name: group.name, contactDisplayName, phone: group.phone, registeredAt: registeredAt?.toMillis() || null, activeTicketNames: profileDoc.activeTicketNames });
+    const previousContact = existingContacts.get(memberId);
+    const shouldQueueHomeSync =
+      queueContactSync &&
+      (!previousContact ||
+        previousContact.contactHash !== contactHash ||
+        previousContact.contactTargets?.home_archivepilates !== "synced");
+    const contactTargets = {
+      archivepilates_gmail: previousContact?.contactTargets?.archivepilates_gmail || "skipped",
+      home_archivepilates: shouldQueueHomeSync
+        ? "pending"
+        : previousContact?.contactTargets?.home_archivepilates || "skipped",
+    };
+    const jobId = `contact_${memberId}_home_${contactHash.slice(0, 16)}`;
     const contactIndexDoc = {
       memberId,
       studioId: STUDIO_ID,
@@ -235,14 +258,34 @@ function buildPlans(groups, existingProfiles) {
       activeTicketNames: profileDoc.activeTicketNames,
       source: "studiomate_excel_emergency",
       contactHash,
-      contactTargets: {
-        archivepilates_gmail: "skipped",
-        home_archivepilates: queueContactSync ? "pending" : "skipped",
-      },
+      contactTargets,
+      homeContactResourceName: previousContact?.homeContactResourceName || "",
+      lastContactSyncJobId: shouldQueueHomeSync ? jobId : previousContact?.lastContactSyncJobId || "",
+      contactLastError: shouldQueueHomeSync ? null : previousContact?.contactLastError || null,
+      contactUpdatedAt: previousContact?.contactUpdatedAt || null,
       syncedAt: admin.firestore.Timestamp.now(),
       updatedAt: admin.firestore.Timestamp.now(),
     };
-    plans.push({ memberId, matchType, profileDoc, contactIndexDoc });
+    const contactSyncJobDoc = shouldQueueHomeSync
+      ? {
+          jobId,
+          studioId: STUDIO_ID,
+          memberId,
+          memberName: group.name,
+          contactDisplayName,
+          memberPhone: group.phone,
+          target: "home_archivepilates",
+          status: "pending",
+          attempts: 0,
+          maxAttempts: 5,
+          nextRunAt: admin.firestore.Timestamp.now(),
+          lastError: null,
+          sourceReason: profileDoc.isNewMember ? "notice_member_signup" : "member_profile_refresh",
+          createdAt: admin.firestore.Timestamp.now(),
+          updatedAt: admin.firestore.Timestamp.now(),
+        }
+      : null;
+    plans.push({ memberId, matchType, profileDoc, contactIndexDoc, contactSyncJobDoc });
   }
   return {
     plans,
@@ -296,6 +339,12 @@ async function applyPlans(plans) {
     batch.set(db.collection("memberProfiles").doc(plan.memberId), plan.profileDoc, { merge: true });
     batch.set(db.collection("memberContactIndex").doc(plan.memberId), plan.contactIndexDoc, { merge: true });
     count += 2;
+    if (plan.contactSyncJobDoc) {
+      batch.set(db.collection("contactSyncJobs").doc(plan.contactSyncJobDoc.jobId), plan.contactSyncJobDoc, {
+        merge: true,
+      });
+      count += 1;
+    }
     if (count >= 450) {
       await batch.commit();
       batch = db.batch();
