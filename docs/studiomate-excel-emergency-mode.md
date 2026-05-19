@@ -20,8 +20,8 @@ StudioMate API 접근이 403으로 막혔을 때, 브라우저 자동화로 내�
 - 기본 실행은 dry-run이다. Firestore 반영은 `--apply`를 붙였을 때만 한다.
 - 기본 반영 대상은 기존 `memberProfiles`와 전화번호, 이름이 매칭되는 회원만이다.
 - 엑셀에만 있는 사람을 `excel_...` 임시 ID로 만드는 것은 `--allow-new-excel-profiles`를 붙였을 때만 허용한다.
-- Google Contacts 작업 큐는 기본 생성하지 않는다. 필요할 때만 `--queue-contact-sync`를 붙여 `contactSyncJobs`를 준비한다.
-- `contactSyncJobs` 생성은 Google Contacts 실제 쓰기와 다르다. 비상모드 중에는 `scheduledProcessContactSyncJobs`가 정지 상태이므로, 실제 주소록 반영은 별도 승인 후 수동 처리한다.
+- Google Contacts 작업 큐는 회원 엑셀 반영과 분리한다. 비상 연락처 LaunchAgent만 `--queue-contact-sync`를 붙여 `contactSyncJobs`를 준비한다.
+- `contactSyncJobs` 생성은 Google Contacts 실제 쓰기와 다르다. 비상모드 중에는 Firebase Scheduler `scheduledProcessContactSyncJobs`를 평소 `PAUSED`로 두고, 비상 연락처 LaunchAgent가 필요할 때만 잠깐 실행한 뒤 다시 `PAUSED`로 되돌린다.
 - 연락처 예외 스탭은 회원목록 엑셀에 있더라도 회원 연락처 큐를 만들지 않는다. 현재 예외는 김기효, 김민지, 김아영, 배민진, 이초림, 정은영이다.
 
 ## 실행 명령
@@ -56,11 +56,32 @@ node scripts/run-studiomate-excel-emergency-mode.mjs --download --apply
 com.archive.studiomate-excel-emergency-mode
 ```
 
+1시간 간격 비상 연락처 동기화 LaunchAgent:
+
+```text
+com.archive.studiomate-emergency-contacts-sync
+```
+
+실행 내용:
+
+```bash
+node scripts/run-emergency-contacts-hourly-sync.mjs
+```
+
+동작:
+
+1. 최신 회원목록 엑셀을 `--apply --queue-contact-sync`로 반영한다.
+2. `scheduledProcessContactSyncJobs` Scheduler job을 잠깐 `resume`/`run`한다.
+3. `home_archivepilates` 연락처 큐가 0건이 될 때까지 필요한 횟수만 반복 실행한다.
+4. 작업 후 Scheduler job을 다시 `PAUSED`로 돌린다.
+
 로그:
 
 ```text
 /Users/archivepilates/ArchiveIN/emergency/logs/studiomate-excel-emergency-mode.out.log
 /Users/archivepilates/ArchiveIN/emergency/logs/studiomate-excel-emergency-mode.err.log
+/Users/archivepilates/ArchiveIN/emergency/logs/studiomate-emergency-contacts-sync.out.log
+/Users/archivepilates/ArchiveIN/emergency/logs/studiomate-emergency-contacts-sync.err.log
 ```
 
 특정 엑셀 파일을 지정:
