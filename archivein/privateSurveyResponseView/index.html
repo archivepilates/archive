@@ -1,0 +1,51 @@
+<!doctype html>
+<html lang="ko">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1">
+  <meta name="robots" content="noindex,nofollow">
+  <title>ARCHIVE IN 사전설문</title>
+  <style>
+    * { box-sizing: border-box; }
+    body {
+      margin: 0;
+      min-height: 100vh;
+      display: grid;
+      place-items: center;
+      padding: 24px;
+      background: #f6f1eb;
+      color: #181512;
+      font-family: -apple-system, BlinkMacSystemFont, "Apple SD Gothic Neo", "Noto Sans KR", sans-serif;
+    }
+    main {
+      width: min(420px, 100%);
+      padding: 20px;
+      border: 1px solid #e6ded5;
+      border-radius: 8px;
+      background: #fffdf9;
+    }
+    strong { display: block; margin-bottom: 8px; color: #2f6f68; font-size: 13px; }
+    p { margin: 0; line-height: 1.55; }
+  </style>
+</head>
+<body>
+  <main>
+    <strong>ARCHIVE IN</strong>
+    <p id="message">사전설문을 여는 중입니다.</p>
+  </main>
+  <script>
+    const params = new URLSearchParams(location.search);
+    const id = String(params.get('id') || '').trim();
+    const token = String(params.get('token') || '').trim();
+    const message = document.getElementById('message');
+    const validId = /^[a-z0-9-]+$/i.test(id);
+    const validToken = /^[a-f0-9]{12,80}$/i.test(token);
+
+    if (!id || !token || !validId || !validToken) {
+      message.textContent = '설문 링크가 올바르지 않습니다.';
+    } else {
+      location.replace(`/private-surveys/${encodeURIComponent(id)}-${encodeURIComponent(token)}.html`);
+    }
+  </script>
+</body>
+</html>

@@ -223,6 +223,8 @@ function templateVariables(candidate: AlimtalkCandidateDoc): Record<string, stri
     "#{수강권명}": String(payload.ticketName || payload.ticket || ""),
     "#{잔여횟수}": String(payload.remainingCount || ""),
     "#{만료일}": String(payload.expiresAt || payload.expiryDate || payload.expireDate || ""),
+    "#{설문ID}": String(payload.surveyId || payload.responseId || ""),
+    "#{접근토큰}": String(payload.accessToken || ""),
   };
 }
 
