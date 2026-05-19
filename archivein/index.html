@@ -3500,7 +3500,7 @@
     function adminSummaryStaffRows(views) {
       return views.map((view) => `
         <div class="detail-row">
-          <span>${escapeHtml(staffName(view.staffId))}</span>
+          <span>${escapeHtml(viewStaffName(view))}</span>
           <strong>수업 ${view.summary?.totalLectures || (view.lectures || []).length} · 예약 ${view.summary?.reservedCount || 0}</strong>
           <span class="chip ${view.summary?.uncheckedAttendanceCount ? 'bad' : 'good'}">미체크 ${view.summary?.uncheckedAttendanceCount || 0}</span>
         </div>
@@ -3514,13 +3514,13 @@
         key: adminLectureDetailKey(view, lecture),
         sortTime: timestampMillis(lecture.startAt) || Date.parse(`${view.date || appState.selectedDate}T${lectureTimeText(lecture).slice(0, 5)}:00+09:00`) || 0
       })))
-      .sort((a, b) => a.sortTime - b.sortTime || staffName(a.view.staffId).localeCompare(staffName(b.view.staffId), 'ko'))
+      .sort((a, b) => a.sortTime - b.sortTime || viewStaffName(a.view).localeCompare(viewStaffName(b.view), 'ko'))
       .map(({ view, lecture, key }) => {
         const lessonType = resolvedLessonType(lecture);
         const open = appState.detailLectureId === key;
         return `
           <button class="detail-row ${open ? 'active' : ''}" type="button" data-admin-detail-lecture="${escapeAttr(key)}">
-            <span>${escapeHtml(staffName(view.staffId))}</span>
+            <span>${escapeHtml(viewStaffName(view, lecture))}</span>
             <strong>${escapeHtml(lectureTimeText(lecture))} ${escapeHtml(lecture.title || '수업')}</strong>
             <span class="chip ${lessonType === 'private' ? 'private' : lessonType === 'group' ? 'group' : 'unknown'}">${lessonLabel(lessonType)} · ${lecture.bookingCount || 0}/${lecture.capacity || '-'}</span>
           </button>
@@ -3554,7 +3554,7 @@
           <button class="detail-row" type="button" data-action-member="${escapeAttr(bookingMemberKey(booking))}">
             <span>${escapeHtml(lectureTimeText(lecture))}</span>
             <strong>${escapeHtml(booking.memberName || '회원')}</strong>
-            <span class="chip ${statusClass(booking)}">${escapeHtml(staffName(view.staffId))} · ${statusLabel(booking)}</span>
+            <span class="chip ${statusClass(booking)}">${escapeHtml(viewStaffName(view, lecture))} · ${statusLabel(booking)}</span>
           </button>
         `)));
     }
@@ -3887,7 +3887,7 @@
             rows.push({
               type: '예약저조',
               title: `${lectureTimeText(lecture)} ${lecture.title || '수업'}`,
-              body: `${staffName(view.staffId)} · 예약 ${reserved.length}/${capacity}`,
+              body: `${viewStaffName(view, lecture)} · 예약 ${reserved.length}/${capacity}`,
               level: 'wait',
               actionKey: `local_low_class_${view.date}_${lecture.lectureId || lectureTimeText(lecture)}`,
               sort: `4_${view.date}_${lectureTimeText(lecture)}`
@@ -3899,7 +3899,7 @@
               rows.push({
                 type: '출석미체크',
                 title: `${booking.memberName || '회원'} · ${lectureTimeText(lecture)} ${lecture.title || '수업'}`,
-                body: staffName(view.staffId),
+                body: viewStaffName(view, lecture),
                 level: 'bad',
                 memberKey: bookingMemberKey(booking),
                 actionKey: `local_attendance_unchecked_${booking.bookingId || `${view.date}_${lecture.lectureId}_${booking.memberName || ''}`}`,
@@ -4145,7 +4145,7 @@
               map.set(memberKey, {
                 type: '케어확인',
                 title: booking.memberName || '회원',
-                body: `${staffName(view.staffId)} · ${lectureTimeText(lecture)} · ${label || '메모 확인'}`,
+                body: `${viewStaffName(view, lecture)} · ${lectureTimeText(lecture)} · ${label || '메모 확인'}`,
                 level: 'wait',
                 memberKey,
                 actionKey: `local_care_review_${date}_${memberKey}`,
@@ -4447,7 +4447,7 @@
           head: lessonType === 'private' ? (memberLabel || lecture.title || '프라이빗') : `${lecture.bookingCount || 0}/${capacity}`,
           title: lessonType === 'private' ? (lecture.title || '프라이빗') : (lecture.title || '수업'),
           time: lectureTimeText(lecture).slice(0, 5),
-          meta: `${staffName(view.staffId)} · ${lessonLabel(lessonType)}${lecture.waitCount ? ` · 대기 ${lecture.waitCount}` : ''}`,
+          meta: `${viewStaffName(view, lecture)} · ${lessonLabel(lessonType)}${lecture.waitCount ? ` · 대기 ${lecture.waitCount}` : ''}`,
           color: staffColor(view.staffId),
           range,
           lectureId: lecture.lectureId
@@ -4613,7 +4613,7 @@
         sortTime: timestampMillis(lecture.startAt) || Date.parse(`${view.date || appState.selectedDate}T${lectureTimeText(lecture).slice(0, 5)}:00+09:00`) || 0
       }))).sort((a, b) =>
         a.sortTime - b.sortTime ||
-        staffName(a.view.staffId).localeCompare(staffName(b.view.staffId), 'ko') ||
+        viewStaffName(a.view, a.lecture).localeCompare(viewStaffName(b.view, b.lecture), 'ko') ||
         String(a.lecture.title || '').localeCompare(String(b.lecture.title || ''), 'ko')
       );
     }
@@ -4631,7 +4631,7 @@
             <div>
               <h3 class="lecture-title">${escapeHtml(lecture.title || '수업')}</h3>
               <div class="chips">
-                <span class="chip profile timeline-staff">${escapeHtml(staffName(view.staffId))}</span>
+                <span class="chip profile timeline-staff">${escapeHtml(viewStaffName(view, lecture))}</span>
                 <span class="chip ${lessonType === 'private' ? 'private' : lessonType === 'group' ? 'group' : 'unknown'}">${lessonLabel(lessonType)}</span>
                 ${renderOptionalChip(lecture.roomName || lecture.divisionName)}
                 <span class="chip">${lecture.bookingCount || 0}명</span>
@@ -5437,7 +5437,7 @@
           <button class="admin-filter ${selected === 'all' ? 'active' : ''}" type="button" data-admin-staff="all">전체</button>
           ${staffs.map((staff) => `
             <button class="admin-filter ${selected === staff.staffId ? 'active' : ''}" type="button" data-admin-staff="${escapeAttr(staff.staffId)}" style="--staff-color:${escapeAttr(staffColor(staff.staffId))};">
-              ${escapeHtml(staff.name || staff.staffId)}
+              ${escapeHtml(staff.name || staffName(staff.staffId))}
             </button>
           `).join('')}
         </div>
@@ -5449,7 +5449,7 @@
       return `
         <section class="admin-staff-block">
           <div class="admin-staff-head">
-            <h2>${escapeHtml(staffName(view.staffId))}</h2>
+            <h2>${escapeHtml(viewStaffName(view))}</h2>
             <span>수업 ${view.summary?.totalLectures || 0} · 예약 ${view.summary?.reservedCount || 0} · 미체크 ${view.summary?.uncheckedAttendanceCount || 0}</span>
           </div>
           <div class="chips" style="margin-bottom:10px;">
@@ -7300,7 +7300,7 @@
       views.forEach((view) => {
         const row = map.get(view.staffId) || {
           staffId: view.staffId,
-          name: staffName(view.staffId),
+          name: viewStaffName(view),
           groupClasses: 0,
           reserved: 0,
           attended: 0
@@ -7336,7 +7336,7 @@
         return {
           view,
           lecture,
-          staffName: staffName(view.staffId),
+          staffName: viewStaffName(view, lecture),
           reserved,
           capacity,
           reservationRate,
@@ -7369,7 +7369,7 @@
               type: '예약0',
               view,
               lecture,
-              body: `${staffName(view.staffId)} · ${lectureTimeText(lecture)} · ${lecture.title || '수업'}`
+              body: `${viewStaffName(view, lecture)} · ${lectureTimeText(lecture)} · ${lecture.title || '수업'}`
             });
           }
           const unchecked = reserved.filter((booking) => booking.attendanceStatus === 'unchecked');
@@ -7378,7 +7378,7 @@
               type: '출석미체크',
               view,
               lecture,
-              body: `${staffName(view.staffId)} · ${lectureTimeText(lecture)} · ${unchecked.length}명`
+              body: `${viewStaffName(view, lecture)} · ${lectureTimeText(lecture)} · ${unchecked.length}명`
             });
           }
           reserved.forEach((booking) => {
@@ -8029,10 +8029,18 @@
 
     function activeAdminStaffs() {
       const sourceViews = appState.viewMode === 'day' ? (appState.admin.views || []) : visibleAdminRangeViews();
-      const activeIds = new Set(sourceViews
+      const activeViews = sourceViews
         .filter((view) => (view.summary?.totalLectures || (view.lectures || []).length) > 0)
-        .map((view) => view.staffId));
-      return (appState.admin.staffs || []).filter((staff) => activeIds.has(staff.staffId));
+      const activeIds = new Set(activeViews.map((view) => view.staffId));
+      const staffMap = new Map((appState.admin.staffs || [])
+        .filter((staff) => activeIds.has(staff.staffId))
+        .map((staff) => [String(staff.staffId), staff]));
+      activeViews.forEach((view) => {
+        const key = String(view.staffId || '');
+        if (!key || staffMap.has(key)) return;
+        staffMap.set(key, { staffId: key, name: viewStaffName(view) });
+      });
+      return [...staffMap.values()].sort((a, b) => staffName(a.staffId, [a]).localeCompare(staffName(b.staffId, [b]), 'ko'));
     }
 
     function visibleAdminRangeViews() {
@@ -8147,9 +8155,16 @@
       return normalizedDirect || staffName(item?.view?.staffId || item?.booking?.staffId || item?.lecture?.staffId);
     }
 
+    function viewStaffName(view, lecture = null) {
+      const directName = view?.staffName || lecture?.staffName || '';
+      const normalizedDirect = STAFF_NAME_ALIASES[String(directName)] || directName;
+      return normalizedDirect || staffName(view?.staffId || lecture?.staffId);
+    }
+
     function staffName(staffId, staffs = appState.admin.staffs || []) {
       const key = String(staffId || '');
       const staff = (staffs || []).filter(Boolean).find((item) => String(item.staffId || '') === key);
+      if (!staff?.name && key.startsWith('excel_')) return '강사 확인';
       return staff?.name || STAFF_NAME_ALIASES[key] || key || '강사';
     }
 
@@ -8284,6 +8299,7 @@
 
     function renderOptionalChip(value) {
       const text = String(value || '').trim();
+      if (/^excel_/.test(text)) return '';
       return text ? `<span class="chip">${escapeHtml(text)}</span>` : '';
     }
 

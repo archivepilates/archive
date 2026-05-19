@@ -368,6 +368,10 @@ async function rebuildInstructorViews(staffDates) {
     ]);
     const lectures = lecturesSnap.docs.map((doc) => doc.data()).filter((lecture) => lecture.status !== "deleted");
     const bookings = bookingsSnap.docs.map((doc) => doc.data());
+    const staffName =
+      lectures.map((lecture) => cleanText(lecture.staffName)).find(Boolean) ||
+      bookings.map((booking) => cleanText(booking.staffName)).find(Boolean) ||
+      "";
     const byLecture = new Map();
     for (const booking of bookings) {
       const list = byLecture.get(booking.lectureId) || [];
@@ -387,6 +391,7 @@ async function rebuildInstructorViews(staffDates) {
           roomName: lecture.roomName,
           divisionName: lecture.divisionName,
           lessonType: lecture.lessonType,
+          staffName: lecture.staffName,
           capacity: lecture.capacity,
           bookingCount: lectureBookings.filter((booking) => booking.appStatus === "reserved").length,
           waitCount: lectureBookings.filter((booking) => booking.appStatus === "wait").length,
@@ -416,6 +421,7 @@ async function rebuildInstructorViews(staffDates) {
         viewId: `${item.staffId}_${item.date}`,
         studioId: STUDIO_ID,
         staffId: item.staffId,
+        staffName,
         date: item.date,
         summary: {
           totalLectures: lectures.length,
