@@ -59,7 +59,6 @@ const privateSurveyIngestOptions = {
   secrets: [privateSurveyWebhookSecret],
   timeoutSeconds: 120,
   memory: "256MiB" as const,
-  invoker: "public" as const,
 };
 const publicRequestOptions = {
   region: REGION,
