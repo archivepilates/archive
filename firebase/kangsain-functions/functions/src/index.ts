@@ -4,7 +4,7 @@ import { onDocumentCreated } from "firebase-functions/v2/firestore";
 import { onSchedule } from "firebase-functions/v2/scheduler";
 import { logger } from "firebase-functions";
 import { REGION, TIMEZONE } from "./config/constants";
-import { allSecrets } from "./config/secrets";
+import { allSecrets, privateSurveyWebhookSecret } from "./config/secrets";
 import { toHttpsError } from "./utils/errors";
 import { syncLecturesDaily } from "./sync/syncLecturesDaily";
 import { syncLecturesRange } from "./sync/syncLecturesRange";
@@ -32,6 +32,10 @@ import { queueDailyAlimtalkCandidates } from "./alimtalk/queueDailyAlimtalk";
 import { sendDailyAlimtalkReport } from "./alimtalk/sendDailyAlimtalkReport";
 import { getStaffByUid } from "./firestore/staffRepository";
 import { nowTimestamp } from "./utils/date";
+import {
+  ingestPrivateSurveyResponseHandler,
+  privateSurveyResponseViewHandler,
+} from "./privateSurvey/privateSurveyResponse";
 
 const callableOptions = { region: REGION, secrets: allSecrets, invoker: "public" as const };
 const longCallableOptions = { ...callableOptions, timeoutSeconds: 540, memory: "512MiB" as const };
@@ -47,6 +51,19 @@ const scheduleOptions = {
   secrets: allSecrets,
   timeoutSeconds: 540,
   memory: "512MiB" as const,
+};
+const privateSurveyIngestOptions = {
+  region: REGION,
+  secrets: [privateSurveyWebhookSecret],
+  timeoutSeconds: 120,
+  memory: "256MiB" as const,
+  invoker: "public" as const,
+};
+const publicRequestOptions = {
+  region: REGION,
+  timeoutSeconds: 60,
+  memory: "256MiB" as const,
+  invoker: "public" as const,
 };
 
 export const scheduledSyncLecturesDaily = onSchedule(
@@ -172,6 +189,10 @@ export const syncDashboardNow = onRequest(longRequestOptions, async (request, re
     response.status(500).json({ ok: false, error: message });
   }
 });
+
+export const ingestPrivateSurveyResponse = onRequest(privateSurveyIngestOptions, ingestPrivateSurveyResponseHandler);
+
+export const privateSurveyResponseView = onRequest(publicRequestOptions, privateSurveyResponseViewHandler);
 
 export const getInstructorHome = onCall(callableOptions, async (request) => {
   try {

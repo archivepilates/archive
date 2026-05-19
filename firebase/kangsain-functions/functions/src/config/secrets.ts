@@ -8,6 +8,7 @@ export const googleDwdServiceAccountJson = defineSecret("GOOGLE_DWD_SERVICE_ACCO
 export const solapiApiKey = defineSecret("SOLAPI_API_KEY");
 export const solapiApiSecret = defineSecret("SOLAPI_API_SECRET");
 export const solapiPfid = defineSecret("SOLAPI_PFID");
+export const privateSurveyWebhookSecret = defineSecret("PRIVATE_SURVEY_WEBHOOK_SECRET");
 
 export const allSecrets = [
   studiomateLoginId,

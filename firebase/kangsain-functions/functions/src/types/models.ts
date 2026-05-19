@@ -388,6 +388,56 @@ export interface AlimtalkSendDoc {
   updatedAt: Timestamp;
 }
 
+export interface PrivateSurveyResponseDoc {
+  responseId: string;
+  studioId: string;
+  source: {
+    spreadsheetId: string;
+    sheetName: string;
+    rowNumber: number;
+  };
+  submittedAt: Timestamp | null;
+  submittedAtText: string;
+  memberName: string;
+  memberPhone: string;
+  memberPhoneLast4: string;
+  experienceType: string;
+  summary: {
+    goal: string;
+    focusArea: string;
+    painOrMedicalNote: string;
+    exerciseLevel: string;
+    concernOrDifficulty: string;
+    expectationOrImportantFactor: string;
+    referralSource: string;
+    lifestyleOrPreviousIssue: string;
+  };
+  rawAnswers: Record<string, string>;
+  matching: {
+    status: "matched" | "not_found" | "ambiguous" | "no_booking";
+    memberId: string;
+    memberName: string;
+    memberPhone: string;
+    bookingId: string;
+    lectureId: string;
+    lectureDate: string;
+    lectureStartAt: Timestamp | null;
+    staffId: string;
+    staffName: string;
+    reason: string;
+  };
+  delivery: {
+    detailUrl: string;
+    studioMateMemoStatus: "pending" | "queued" | "skipped" | "failed";
+    studioMateMemoJobId: string;
+    alimtalkStatus: "skipped" | "pending" | "sent" | "failed";
+    alimtalkReason: string;
+  };
+  accessTokenHash: string;
+  createdAt: Timestamp;
+  updatedAt: Timestamp;
+}
+
 export interface ContactSyncJobDoc {
   jobId: string;
   studioId: string;

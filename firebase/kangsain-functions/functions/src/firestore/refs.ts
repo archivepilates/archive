@@ -16,6 +16,7 @@ import type {
   MemberTagDoc,
   NoticeDoc,
   OtherScheduleDoc,
+  PrivateSurveyResponseDoc,
   StaffDoc,
   TokenCacheDoc,
   WriteQueueJobDoc,
@@ -56,6 +57,9 @@ export const refs = {
   alimtalkCandidate: (candidateId: string) => refs.alimtalkCandidates().doc(candidateId),
   alimtalkSends: () => db.collection("alimtalkSends").withConverter(converter<AlimtalkSendDoc>()),
   alimtalkSend: (sendId: string) => refs.alimtalkSends().doc(sendId),
+  privateSurveyResponses: () =>
+    db.collection("privateSurveyResponses").withConverter(converter<PrivateSurveyResponseDoc>()),
+  privateSurveyResponse: (responseId: string) => refs.privateSurveyResponses().doc(responseId),
   memberMemos: () => db.collection("memberMemos").withConverter(converter<MemberMemoDoc>()),
   memberMemo: (memoId: string) => refs.memberMemos().doc(memoId),
   notices: () => db.collection("notices").withConverter(converter<NoticeDoc>()),
