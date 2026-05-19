@@ -31,11 +31,11 @@ export async function sendDailyAlimtalkReport(input: {
     processSummary: input.processSummary,
     candidates,
   });
-  const title = `ArchiveIN 알림톡 발송 로그 ${date}`;
+  const title = `ARCHIVE IN 알림톡 발송 로그 ${date}`;
   const document = await createAlimtalkLogDocument({ title, body });
   const emailBody = `${body}\n\n구글드라이브 로그 문서\n${document.url}\n`;
   await sendAlimtalkLogEmail({
-    subject: `[ArchiveIN] 알림톡 발송 로그 ${date}`,
+    subject: `[ARCHIVE IN] 알림톡 발송 로그 ${date}`,
     body: emailBody,
   });
   logger.info("sendDailyAlimtalkReport completed", {
@@ -70,7 +70,7 @@ function buildReportBody(input: {
   const operatorSent = sent.filter((candidate) => candidate.queuedBy === "operator" && !candidate.reviewedByUid?.startsWith("system:"));
 
   return [
-    "ArchiveIN 알림톡 발송 로그",
+    "ARCHIVE IN 알림톡 발송 로그",
     "",
     `기준일: ${input.date}`,
     `생성시각: ${now}`,

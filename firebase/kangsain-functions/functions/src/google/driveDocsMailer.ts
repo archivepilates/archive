@@ -54,7 +54,7 @@ export async function sendAlimtalkLogEmail(input: {
   const to = input.to || OPERATOR_EMAIL;
   const raw = Buffer.from(
     [
-      `From: ArchiveIN <${OPERATOR_EMAIL}>`,
+      `From: ARCHIVE IN <${OPERATOR_EMAIL}>`,
       `To: ${to}`,
       `Subject: ${encodeMimeHeader(input.subject)}`,
       "MIME-Version: 1.0",
