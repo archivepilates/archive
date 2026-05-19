@@ -1,8 +1,10 @@
-# ArchiveIN Mac mini StudioMate Excel Automation
+# ARCHIVE IN Mac mini StudioMate Excel Automation
 
 ## Goal
 
-Use the Archive server Mac mini to download StudioMate Excel exports through normal browser automation, upload/archive them through Google Drive, and process them into ArchiveIN member data.
+Use the ARCHIVE PILATES Mac mini to download StudioMate Excel exports through normal browser automation, upload/archive them through Google Drive, and process them into ARCHIVE IN member data.
+
+2026-05-19 temporary operating note: while StudioMate API access is blocked by the security 403 response, use `scripts/emergency-import-studiomate-member-excel.mjs` as the manual emergency importer. See `docs/studiomate-excel-emergency-mode.md`.
 
 This is not a private API scraper. It should operate like a logged-in manager using the normal StudioMate web UI:
 
@@ -33,7 +35,7 @@ flowchart LR
 
 ### `memberCards/{memberId}`
 
-Unified member card used by ArchiveIN.
+Unified member card used by ARCHIVE IN.
 
 - `memberId`
 - `studioMateMemberId`
@@ -160,7 +162,7 @@ Example local paths:
 
 ### Phase 3: App UI
 
-- ArchiveIN operator app reads `memberCards`.
+- ARCHIVE IN operator app reads `memberCards`.
 - Member name click shows role-specific card from unified data.
 - Add "new members" and "changed members" action board.
 
