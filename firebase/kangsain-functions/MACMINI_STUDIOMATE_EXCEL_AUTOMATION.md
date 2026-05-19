@@ -4,7 +4,7 @@
 
 Use the ARCHIVE PILATES Mac mini to download StudioMate Excel exports through normal browser automation, upload/archive them through Google Drive, and process them into ARCHIVE IN member data.
 
-2026-05-19 temporary operating note: while StudioMate API access is blocked by the security 403 response, use `scripts/emergency-import-studiomate-member-excel.mjs` as the manual emergency importer. See `docs/studiomate-excel-emergency-mode.md`.
+2026-05-19 temporary operating note: while StudioMate API access is blocked by the security 403 response, use `scripts/run-studiomate-excel-emergency-mode.mjs --download --apply` as the separate emergency workflow. It uses a separate command, download folder, logs, and 1-hour LaunchAgent, while reusing the Mac mini StudioMate browser session to avoid duplicate login. It then imports member-list Excel and reservation-history Excel when available. See `docs/studiomate-excel-emergency-mode.md`.
 
 This is not a private API scraper. It should operate like a logged-in manager using the normal StudioMate web UI:
 
