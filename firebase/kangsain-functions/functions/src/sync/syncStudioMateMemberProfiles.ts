@@ -35,10 +35,10 @@ export async function syncStudioMateMemberProfiles(input: {
         const ticketSummary = profileTicketSummary.activeTicketCount
           ? profileTicketSummary
           : ticketSummaryByMember.get(member.memberId) || {
-          activeTicketNames: [] as string[],
-          activeTicketCount: 0,
-          activeTickets: [] as MemberProfileDoc["activeTickets"],
-        };
+              activeTicketNames: [] as string[],
+              activeTicketCount: 0,
+              activeTickets: [] as MemberProfileDoc["activeTickets"],
+            };
         const phone = digitsOnly(
           firstValue(data, [
             "mobile",
@@ -89,7 +89,9 @@ export async function syncStudioMateMemberProfiles(input: {
           const jobId = `contact_${member.memberId}_home_${contactHash.slice(0, 16)}`;
           const contactTargets = {
             archivepilates_gmail: previousContact?.contactTargets?.archivepilates_gmail || "skipped",
-            home_archivepilates: shouldQueueHomeSync ? "pending" : previousContact?.contactTargets?.home_archivepilates || "synced",
+            home_archivepilates: shouldQueueHomeSync
+              ? "pending"
+              : previousContact?.contactTargets?.home_archivepilates || "synced",
           } as const;
           await refs.memberContactIndexDoc(member.memberId).set(
             {
@@ -139,7 +141,9 @@ export async function syncStudioMateMemberProfiles(input: {
     );
     results
       .filter((result): result is PromiseRejectedResult => result.status === "rejected")
-      .forEach((result) => logger.warn("syncStudioMateMemberProfiles member failed", { message: String(result.reason) }));
+      .forEach((result) =>
+        logger.warn("syncStudioMateMemberProfiles member failed", { message: String(result.reason) }),
+      );
     if (index + 5 < members.length) await sleep(250);
   }
 
@@ -208,11 +212,16 @@ function normalizeMemberProfileTicket(raw: unknown): NonNullable<MemberProfileDo
   const row = raw as Record<string, unknown>;
   if (row.deleted_at) return null;
   if (row.active === false || row.ticket_usable === false) return null;
-  if (["refund", "refunded", "cancel", "canceled", "inactive", "unusable"].includes(stringValue(row.status || row.ticket_usable_status))) {
+  if (
+    ["refund", "refunded", "cancel", "canceled", "inactive", "unusable"].includes(
+      stringValue(row.status || row.ticket_usable_status),
+    )
+  ) {
     return null;
   }
   const ticket = row.ticket && typeof row.ticket === "object" ? (row.ticket as Record<string, unknown>) : {};
-  const parentGoods = row.parentGoods && typeof row.parentGoods === "object" ? (row.parentGoods as Record<string, unknown>) : {};
+  const parentGoods =
+    row.parentGoods && typeof row.parentGoods === "object" ? (row.parentGoods as Record<string, unknown>) : {};
   const name = stringValue(ticket.title ?? parentGoods.title ?? row.ticket_title ?? row.title);
   if (!name) return null;
   const status = stringValue(row.ticket_usable_status || row.status);
@@ -223,7 +232,7 @@ function normalizeMemberProfileTicket(raw: unknown): NonNullable<MemberProfileDo
   const maxCount = nullableNumber(row.max_coupon ?? ticket.max_coupon ?? parentGoods.max_coupon);
   const expiryLevel = profileTicketExpiryLevel(expiresAt);
   if (expiryLevel === "expired") return null;
-  if (Number.isFinite(Number(remainingCount)) && Number(remainingCount) <= 0) return null;
+  if (remainingCount != null && Number.isFinite(Number(remainingCount)) && Number(remainingCount) <= 0) return null;
   return {
     userTicketId: stringValue(row.id),
     ticketId: stringValue(row.ticket_id ?? ticket.id ?? parentGoods.id),
@@ -239,7 +248,9 @@ function normalizeMemberProfileTicket(raw: unknown): NonNullable<MemberProfileDo
   };
 }
 
-function dedupeTickets(tickets: NonNullable<MemberProfileDoc["activeTickets"]>): NonNullable<MemberProfileDoc["activeTickets"]> {
+function dedupeTickets(
+  tickets: NonNullable<MemberProfileDoc["activeTickets"]>,
+): NonNullable<MemberProfileDoc["activeTickets"]> {
   const map = new Map<string, NonNullable<MemberProfileDoc["activeTickets"]>[number]>();
   tickets.forEach((ticket) => {
     const key = ticketIdentity(ticket);
@@ -249,8 +260,12 @@ function dedupeTickets(tickets: NonNullable<MemberProfileDoc["activeTickets"]>):
   return [...map.values()];
 }
 
-function compareTickets(a: NonNullable<MemberProfileDoc["activeTickets"]>[number], b: NonNullable<MemberProfileDoc["activeTickets"]>[number]) {
-  const levelRank = (level: TicketExpiryLevel) => (level === "soon" ? 0 : level === "normal" ? 1 : level === "unknown" ? 2 : 3);
+function compareTickets(
+  a: NonNullable<MemberProfileDoc["activeTickets"]>[number],
+  b: NonNullable<MemberProfileDoc["activeTickets"]>[number],
+) {
+  const levelRank = (level: TicketExpiryLevel) =>
+    level === "soon" ? 0 : level === "normal" ? 1 : level === "unknown" ? 2 : 3;
   return (
     levelRank(a.expiryLevel) - levelRank(b.expiryLevel) ||
     (a.expiresAt?.toMillis() || Number.MAX_SAFE_INTEGER) - (b.expiresAt?.toMillis() || Number.MAX_SAFE_INTEGER) ||
@@ -262,24 +277,31 @@ function isActiveTicket(booking: BookingDoc): boolean {
   if (!booking.ticketName) return false;
   if (booking.ticketExpiryLevel === "expired") return false;
   if (booking.ticketExpiresAt && booking.ticketExpiresAt.toMillis() < Date.now()) return false;
-  const remaining = Number(booking.ticketRemainingCount);
+  const remaining = booking.ticketRemainingCount == null ? Number.NaN : Number(booking.ticketRemainingCount);
   return !Number.isFinite(remaining) || remaining > 0;
 }
 
-function ticketIdentity(ticket: { name: string; remainingCount: number | null; expiresAt: Timestamp | null; expiryLevel: TicketExpiryLevel }): string {
+function ticketIdentity(ticket: {
+  name: string;
+  remainingCount: number | null;
+  expiresAt: Timestamp | null;
+  expiryLevel: TicketExpiryLevel;
+}): string {
   return [ticket.name, ticket.expiresAt?.toMillis() || ""].join("_");
 }
 
-function betterTicket<T extends { remainingCount: number | null; expiresAt: Timestamp | null; expiryLevel: TicketExpiryLevel }>(
-  current: T,
-  next: T,
-): T {
-  if ((next.expiresAt?.toMillis() || Number.MAX_SAFE_INTEGER) < (current.expiresAt?.toMillis() || Number.MAX_SAFE_INTEGER)) {
+function betterTicket<
+  T extends { remainingCount: number | null; expiresAt: Timestamp | null; expiryLevel: TicketExpiryLevel },
+>(current: T, next: T): T {
+  if (
+    (next.expiresAt?.toMillis() || Number.MAX_SAFE_INTEGER) < (current.expiresAt?.toMillis() || Number.MAX_SAFE_INTEGER)
+  ) {
     return next;
   }
   const currentRemaining = Number(current.remainingCount);
   const nextRemaining = Number(next.remainingCount);
-  if (Number.isFinite(nextRemaining) && (!Number.isFinite(currentRemaining) || nextRemaining < currentRemaining)) return next;
+  if (Number.isFinite(nextRemaining) && (!Number.isFinite(currentRemaining) || nextRemaining < currentRemaining))
+    return next;
   return current;
 }
 

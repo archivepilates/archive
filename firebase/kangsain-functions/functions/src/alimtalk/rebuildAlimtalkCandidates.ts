@@ -1,5 +1,5 @@
 import { logger } from "firebase-functions";
-import type { AlimtalkCandidateDoc, MemberProfileDoc } from "../types/models";
+import type { AlimtalkCandidateDoc, BookingDoc, MemberProfileDoc } from "../types/models";
 import { refs } from "../firestore/refs";
 import { addDays, dateRange, nowTimestamp } from "../utils/date";
 import { stableHash } from "../utils/hash";
@@ -29,7 +29,7 @@ export async function rebuildAlimtalkCandidatesForRange(input: {
       for (const candidate of directTicketCandidates(profile, sourceDate)) {
         await enqueueSendableCandidate(candidate, candidateIds, writes);
       }
-      const privateSurveyCandidate = privateSurveyCandidateForDate(profile, sourceDate);
+      const privateSurveyCandidate = await privateSurveyCandidateForDate(profile, sourceDate);
       if (privateSurveyCandidate) {
         await enqueueSendableCandidate(privateSurveyCandidate, candidateIds, writes);
       }
@@ -79,11 +79,46 @@ export async function rebuildAlimtalkCandidatesForRange(input: {
   }
 
   await Promise.all(writes);
+  await markStaleCandidatesSkipped({
+    studioId: input.studioId,
+    startDate: input.startDate,
+    endDate: input.endDate,
+    currentCandidateIds: new Set(candidateIds),
+  });
   logger.info("rebuildAlimtalkCandidatesForRange completed", {
     studioId: input.studioId,
     candidates: candidateIds.length,
   });
   return { candidates: candidateIds.length, candidateIds };
+}
+
+async function markStaleCandidatesSkipped(input: {
+  studioId: string;
+  startDate: string;
+  endDate: string;
+  currentCandidateIds: Set<string>;
+}): Promise<void> {
+  const writes: Array<Promise<unknown>> = [];
+  for (const sourceDate of dateRange(input.startDate, input.endDate)) {
+    const snap = await refs.alimtalkCandidates().where("sourceDate", "==", sourceDate).limit(500).get();
+    snap.docs.forEach((doc) => {
+      const candidate = doc.data();
+      if (candidate.studioId !== input.studioId) return;
+      if (input.currentCandidateIds.has(candidate.candidateId)) return;
+      if (!["candidate", "reviewed", "failed"].includes(candidate.status)) return;
+      writes.push(
+        refs.alimtalkCandidate(candidate.candidateId).set(
+          {
+            status: "skipped",
+            lastError: "현재 수강권 상태 재계산 결과 발송 대상 아님",
+            updatedAt: nowTimestamp(),
+          },
+          { merge: true },
+        ),
+      );
+    });
+  }
+  await Promise.all(writes);
 }
 
 async function enqueueSendableCandidate(
@@ -111,7 +146,10 @@ function directTicketCandidates(profile: MemberProfileDoc, sourceDate: string): 
     .filter((candidate): candidate is AlimtalkCandidateDoc => Boolean(candidate));
 }
 
-function privateSurveyCandidateForDate(profile: MemberProfileDoc, sourceDate: string): AlimtalkCandidateDoc | null {
+async function privateSurveyCandidateForDate(
+  profile: MemberProfileDoc,
+  sourceDate: string,
+): Promise<AlimtalkCandidateDoc | null> {
   if (sourceDate < PRIVATE_SURVEY_ALIMTALK_START_DATE) return null;
   if (!profile.memberId || !profile.name || !profile.phone) return null;
   if (ALIMTALK_MEMBER_EXCLUSION_REASONS[profile.memberId]) return null;
@@ -119,6 +157,7 @@ function privateSurveyCandidateForDate(profile: MemberProfileDoc, sourceDate: st
     (ticket) => isPrivateProfileTicket(ticket) && privateTicketStartDate(ticket, profile) === sourceDate,
   );
   if (!ticket) return null;
+  if (await hasAttendedPrivateBookingOnOrBefore(profile.memberId, sourceDate)) return null;
   return {
     candidateId: `private_survey_${profile.memberId}_${sourceDate}`,
     studioId: profile.studioId,
@@ -140,6 +179,23 @@ function privateSurveyCandidateForDate(profile: MemberProfileDoc, sourceDate: st
     createdAt: nowTimestamp(),
     updatedAt: nowTimestamp(),
   };
+}
+
+async function hasAttendedPrivateBookingOnOrBefore(memberId: string, sourceDate: string): Promise<boolean> {
+  const snap = await refs.bookings().where("memberId", "==", memberId).get();
+  return snap.docs
+    .map((doc) => doc.data())
+    .some(
+      (booking) =>
+        booking.appStatus === "reserved" &&
+        booking.lectureDate <= sourceDate &&
+        booking.attendanceStatus === "attended" &&
+        isPrivateBookingTicket(booking),
+    );
+}
+
+function isPrivateBookingTicket(booking: BookingDoc): boolean {
+  return /프라이빗|개인|1:1/i.test(booking.ticketName || "");
 }
 
 function directTicketCandidate(
@@ -191,7 +247,7 @@ function alimtalkTypeFromTicket(
   ticket: NonNullable<MemberProfileDoc["activeTickets"]>[number],
   sourceDate: string,
 ): SendableAlimtalkCandidateType | null {
-  const remaining = Number(ticket.remainingCount);
+  const remaining = ticket.remainingCount == null ? Number.NaN : Number(ticket.remainingCount);
   if (Number.isFinite(remaining) && remaining >= 0) {
     if (isPrivateProfileTicket(ticket) && remaining <= 3) return "private_count_low";
     if (!isPrivateProfileTicket(ticket) && remaining < 5) return "remaining_low";
@@ -233,7 +289,7 @@ function isActiveProfileTicket(
   if (!isLessonProfileTicket(ticket)) return false;
   if (ticket.expiryLevel === "expired") return false;
   if (ticket.expiresAt && expiryDateText(ticket.expiresAt) < sourceDate) return false;
-  const remaining = Number(ticket.remainingCount);
+  const remaining = ticket.remainingCount == null ? Number.NaN : Number(ticket.remainingCount);
   return !Number.isFinite(remaining) || remaining > 0;
 }
 

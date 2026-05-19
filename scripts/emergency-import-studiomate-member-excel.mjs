@@ -309,7 +309,7 @@ function buildActiveTickets(rows) {
     const availableFrom = parseKstTimestamp(row["수강권시작일"]);
     const remainingCount = nullableNumber(row["잔여횟수"]);
     if (expiresAt && kstDate(expiresAt.toDate()) < today) continue;
-    if (Number.isFinite(Number(remainingCount)) && Number(remainingCount) <= 0) continue;
+    if (remainingCount != null && Number.isFinite(Number(remainingCount)) && Number(remainingCount) <= 0) continue;
     active.push({
       userTicketId: "",
       ticketId: "",
