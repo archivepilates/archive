@@ -3524,7 +3524,7 @@
           <button class="detail-row ${open ? 'active' : ''}" type="button" data-admin-detail-lecture="${escapeAttr(key)}">
             <span>${escapeHtml(viewStaffName(view, lecture))}</span>
             <strong>${escapeHtml(lectureTimeText(lecture))} ${escapeHtml(lecture.title || '수업')}</strong>
-            <span class="chip ${lessonType === 'private' ? 'private' : lessonType === 'group' ? 'group' : 'unknown'}">${lessonLabel(lessonType)} · ${lecture.bookingCount || 0}/${lecture.capacity || '-'}</span>
+            <span class="chip ${lessonType === 'private' ? 'private' : lessonType === 'group' ? 'group' : 'unknown'}">${lessonLabel(lessonType)} · ${lectureOccupancyLabel(lecture)}</span>
           </button>
           ${open ? renderDetailBookings(lecture) : ''}
         `;
@@ -3884,8 +3884,8 @@
       actionViews.forEach((view) => {
         (view.lectures || []).forEach((lecture) => {
           const reserved = (lecture.bookings || []).filter((booking) => booking.appStatus === 'reserved');
-          const capacity = Math.max(0, Number(lecture.capacity || 0));
-          if (resolvedLessonType(lecture) === 'group' && capacity >= 3 && reserved.length <= 3) {
+          const capacity = isEmergencyReadOnlyMode() ? 0 : Math.max(0, Number(lecture.capacity || 0));
+          if (!isEmergencyReadOnlyMode() && resolvedLessonType(lecture) === 'group' && capacity >= 3 && reserved.length <= 3) {
             rows.push({
               type: '예약저조',
               title: `${lectureTimeText(lecture)} ${lecture.title || '수업'}`,
@@ -4440,13 +4440,12 @@
       const events = adminTimelineRows(views).map(({ view, lecture }) => {
         const range = lectureMinuteRange(lecture, date);
         const lessonType = resolvedLessonType(lecture);
-        const capacity = Number(lecture.capacity || 0) || (lessonType === 'group' ? 5 : Math.max(1, lecture.bookingCount || 1));
         const activeBookings = (lecture.bookings || []).filter((booking) => !['cancel', 'wait_cancel'].includes(booking.appStatus));
         const memberLabel = activeBookings.map((booking) => booking.memberName).filter(Boolean).slice(0, 2).join(', ');
         return range ? {
           kind: lessonType === 'private' ? 'private' : 'class',
           staffId: view.staffId,
-          head: lessonType === 'private' ? (memberLabel || lecture.title || '프라이빗') : `${lecture.bookingCount || 0}/${capacity}`,
+          head: lessonType === 'private' ? (memberLabel || lecture.title || '프라이빗') : lectureOccupancyLabel(lecture),
           title: lessonType === 'private' ? (lecture.title || '프라이빗') : (lecture.title || '수업'),
           time: lectureTimeText(lecture).slice(0, 5),
           meta: `${viewStaffName(view, lecture)} · ${lessonLabel(lessonType)}${lecture.waitCount ? ` · 대기 ${lecture.waitCount}` : ''}`,
@@ -7234,7 +7233,9 @@
         const lectures = view.lectures || [];
         const groupLectures = lectures.filter((lecture) => resolvedLessonType(lecture) === 'group');
         const counts = classTypeCounts(lectures);
-        const capacity = lectures.reduce((total, lecture) => total + Math.max(0, Number(lecture.capacity || 0)), 0);
+        const capacity = isEmergencyReadOnlyMode()
+          ? 0
+          : lectures.reduce((total, lecture) => total + Math.max(0, Number(lecture.capacity || 0)), 0);
         const bookings = lectures.flatMap((lecture) => lecture.bookings || []);
         const reserved = bookings.filter((booking) => booking.appStatus === 'reserved');
         const attended = reserved.filter((booking) => booking.attendanceStatus === 'attended');
@@ -7344,6 +7345,7 @@
     }
 
     function lowClassIssues(views) {
+      if (isEmergencyReadOnlyMode()) return [];
       return views.flatMap((view) => (view.lectures || [])
         .filter((lecture) => resolvedLessonType(lecture) === 'group' && isLectureDone(lecture))
         .map((lecture) => {
@@ -8397,6 +8399,12 @@
 
     function isEmergencyReadOnlyMode() {
       return Boolean(appState.emergencyMode?.active);
+    }
+
+    function lectureOccupancyLabel(lecture) {
+      const count = Number(lecture?.bookingCount || 0);
+      if (isEmergencyReadOnlyMode()) return `${count}명`;
+      return `${count}/${lecture?.capacity || '-'}`;
     }
 
     function resolvedLessonType(lecture) {

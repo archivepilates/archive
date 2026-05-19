@@ -175,7 +175,7 @@ function normalizeReservationRow(row) {
   const divisionName = pick(row, ["구분", "수업구분", "종류", "division", "type"]);
   const memberName = pick(row, ["회원명", "회원", "예약자", "이름", "name", "memberName"]);
   const memberPhone = normalizePhone(pick(row, ["전화번호", "휴대폰", "연락처", "핸드폰", "mobile", "phone"]));
-  const capacity = nullableNumber(pick(row, ["정원", "수강정원", "capacity", "max"]));
+  const capacity = nullableNumber(pickExact(row, ["정원", "수업정원", "예약정원", "수강정원", "capacity"]));
   const bookingStatus = pick(row, ["예약상태", "상태", "예약구분", "status"]);
   const attendanceText = pick(row, ["출결", "출석", "출석상태", "출결상태", "attendance"]);
   const ticketName = pick(row, ["수강권명", "이용권", "회원권", "ticket"]);
@@ -311,6 +311,7 @@ function buildPlans(rows, existingLectures, existingProfiles, existingStaffs) {
       lectureBookings.push(booking);
       bookings.push(booking);
     }
+    const activeBookingCount = lectureBookings.filter((booking) => booking.appStatus === "reserved").length;
     lectures.push({
       lectureId,
       studioId: STUDIO_ID,
@@ -324,8 +325,8 @@ function buildPlans(rows, existingLectures, existingProfiles, existingStaffs) {
       staffName,
       title: base.title,
       status: "open",
-      capacity: base.capacity || Math.max(lectureBookings.length, 1),
-      bookingCount: lectureBookings.filter((booking) => booking.appStatus === "reserved").length,
+      capacity: base.capacity || (base.lessonType === "group" ? null : Math.max(activeBookingCount, 1)),
+      bookingCount: activeBookingCount,
       waitCount: lectureBookings.filter((booking) => booking.appStatus === "wait").length,
       cancelCount: lectureBookings.filter((booking) => ["cancel", "wait_cancel"].includes(booking.appStatus)).length,
       sourceHash: hash({ base, bookingIds: lectureBookings.map((booking) => booking.bookingId).sort() }),
@@ -524,6 +525,15 @@ function pick(row, names) {
   for (const name of names) {
     const partial = keys.find((key) => normalizeHeader(key).includes(normalizeHeader(name)));
     if (partial && cleanText(row[partial])) return cleanText(row[partial]);
+  }
+  return "";
+}
+
+function pickExact(row, names) {
+  const keys = Object.keys(row);
+  for (const name of names) {
+    const exact = keys.find((key) => normalizeHeader(key) === normalizeHeader(name));
+    if (exact && cleanText(row[exact])) return cleanText(row[exact]);
   }
   return "";
 }
