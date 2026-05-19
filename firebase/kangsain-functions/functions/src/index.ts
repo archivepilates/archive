@@ -36,6 +36,7 @@ import {
   ingestPrivateSurveyResponseHandler,
   processPrivateSurveyIntakeHandler,
   privateSurveyResponseViewHandler,
+  syncPrivateSurveyResponsesFromSheet,
 } from "./privateSurvey/privateSurveyResponse";
 
 const callableOptions = { region: REGION, secrets: allSecrets, invoker: "public" as const };
@@ -158,6 +159,16 @@ export const scheduledSyncDashboardDaily = onSchedule(
   },
   async () => {
     await syncDashboardFromSheets();
+  },
+);
+
+export const scheduledSyncPrivateSurveyResponses = onSchedule(
+  {
+    ...scheduleOptions,
+    schedule: "every 5 minutes",
+  },
+  async () => {
+    await syncPrivateSurveyResponsesFromSheet();
   },
 );
 

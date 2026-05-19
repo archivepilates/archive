@@ -41,7 +41,10 @@ function processPrivateSurveyRow_(sheet, rowNumber) {
   headers.forEach((header, index) => {
     if (!header) return;
     if (Object.values(FIELD_HEADERS).indexOf(header) >= 0) return;
-    answers[String(header).trim()] = String(values[index] || '').trim();
+    const key = String(header).trim();
+    const value = String(values[index] || '').trim();
+    if (answers[key] && !value) return;
+    answers[key] = value || answers[key] || '';
   });
 
   const name = firstFilled_(answers, ['1. 성함을 입력해주세요']);
@@ -146,8 +149,10 @@ function normalizePhone_(value) {
 }
 
 function buildSurveyId_(rowNumber, name) {
-  const slug = String(name || 'member').replace(/[^0-9A-Za-z가-힣]/g, '').slice(0, 16) || 'member';
-  return `psr-${Utilities.formatDate(new Date(), 'Asia/Seoul', 'yyyyMMdd')}-${rowNumber}-${slug}`.toLowerCase();
+  const seed = `${Utilities.formatDate(new Date(), 'Asia/Seoul', 'yyyyMMdd')}-${rowNumber}-${name || 'member'}`;
+  const bytes = Utilities.computeDigest(Utilities.DigestAlgorithm.SHA_256, seed);
+  const hex = bytes.map((byte) => (`0${(byte & 0xff).toString(16)}`).slice(-2)).join('').slice(0, 24);
+  return `psr-${Utilities.formatDate(new Date(), 'Asia/Seoul', 'yyyyMMdd')}-${rowNumber}-${hex}`;
 }
 
 function buildAccessToken_() {

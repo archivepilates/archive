@@ -10,9 +10,14 @@ import type { BookingDoc, MemberProfileDoc, PrivateSurveyResponseDoc } from "../
 import { enqueueMemberMemoJob } from "../queue/enqueueWriteJob";
 import { nowTimestamp } from "../utils/date";
 import { stableHash } from "../utils/hash";
+import { DelegatedGoogleClient } from "../google/delegatedGoogleClient";
 
 const PUBLIC_VIEW_BASE_URL =
   process.env.PRIVATE_SURVEY_VIEW_BASE_URL || "https://in.archivepilates.com/privateSurveyResponseView";
+const PRIVATE_SURVEY_SPREADSHEET_ID =
+  process.env.PRIVATE_SURVEY_SPREADSHEET_ID || "19KlHxFl71fCVRRy8oz93lSfTjj0z4783K5EFO4_KnTk";
+const PRIVATE_SURVEY_SHEET_NAME = process.env.PRIVATE_SURVEY_SHEET_NAME || "설문지 응답 시트1";
+const OUTPUT_HEADERS = ["설문ID", "접근토큰", "상세링크", "ARCHIVE IN 처리상태", "ARCHIVE IN 전송시각", "ARCHIVE IN 오류"];
 
 interface SurveyIngestPayload {
   spreadsheetId?: string;
@@ -213,6 +218,79 @@ export async function processPrivateSurveyIntakeHandler(
   }
 }
 
+export async function syncPrivateSurveyResponsesFromSheet(): Promise<{ processed: number; skipped: number }> {
+  const client = new DelegatedGoogleClient([
+    "https://www.googleapis.com/auth/spreadsheets",
+    "https://www.googleapis.com/auth/drive.readonly",
+  ]);
+  const rows = await readSurveySheet(client);
+  if (!rows.length) return { processed: 0, skipped: 0 };
+
+  const headers = rows[0].map((value) => String(value || "").trim());
+  const headerMap = ensureHeaderMap(headers);
+  await ensureSheetHeaders(client, headers, headerMap);
+
+  let processed = 0;
+  let skipped = 0;
+  for (let index = 1; index < rows.length; index += 1) {
+    const rowNumber = index + 1;
+    const row = rows[index] || [];
+    const answers = answersFromRow(headers, row);
+    if (!answers["타임스탬프"]) {
+      skipped += 1;
+      continue;
+    }
+    if (cell(row, headerMap["ARCHIVE IN 처리상태"]) === "전송완료" && cell(row, headerMap["설문ID"])) {
+      skipped += 1;
+      continue;
+    }
+    const memberName = firstFilled(answers, ["1. 성함을 입력해주세요"]);
+    const memberPhone = normalizePhone(firstFilled(answers, ["2. 연락처를 입력해주세요"]));
+    if (!memberName || !memberPhone) {
+      await updateSheetOutput(client, rowNumber, headerMap, ["", "", "", "오류", kstNowText(), "성함 또는 연락처가 비어 있습니다."]);
+      skipped += 1;
+      continue;
+    }
+    const payload = normalizePayload({
+      spreadsheetId: PRIVATE_SURVEY_SPREADSHEET_ID,
+      sheetName: PRIVATE_SURVEY_SHEET_NAME,
+      rowNumber,
+      submittedAt: answers["타임스탬프"],
+      experienceType: answers["필라테스 운동경험이 있으신가요?"],
+      memberName,
+      memberPhone,
+      answers,
+    });
+    const responseId = cell(row, headerMap["설문ID"]) || responseIdFor(payload);
+    const accessToken = cell(row, headerMap["접근토큰"]) || accessTokenFor(responseId);
+    const detailUrl = detailUrlFor(responseId, accessToken);
+    const docKey = `${responseId}-${accessToken}`;
+    await db.collection("privateSurveyIntakes").doc(docKey).set(
+      {
+        docKey,
+        responseId,
+        accessToken,
+        spreadsheetId: PRIVATE_SURVEY_SPREADSHEET_ID,
+        sheetName: PRIVATE_SURVEY_SHEET_NAME,
+        rowNumber,
+        submittedAt: payload.submittedAt,
+        experienceType: payload.experienceType,
+        memberName: payload.memberName,
+        memberPhone: payload.memberPhone,
+        answers: payload.answers,
+        status: "pending",
+        createdAt: nowTimestamp(),
+        updatedAt: nowTimestamp(),
+      },
+      { merge: true },
+    );
+    await updateSheetOutput(client, rowNumber, headerMap, [responseId, accessToken, detailUrl, "전송완료", kstNowText(), ""]);
+    processed += 1;
+  }
+  logger.info("syncPrivateSurveyResponsesFromSheet completed", { processed, skipped });
+  return { processed, skipped };
+}
+
 export async function privateSurveyResponseViewHandler(request: any, response: any): Promise<void> {
   const responseId = String(request.query?.id || "");
   const accessToken = String(request.query?.token || "");
@@ -260,11 +338,19 @@ function normalizePayload(input: Record<string, unknown>): NormalizedSurveyPaylo
 }
 
 function normalizeAnswers(answers: Record<string, unknown>): Record<string, string> {
-  return Object.fromEntries(Object.entries(answers).map(([key, value]) => [key.trim(), stringValue(value)]));
+  const normalized: Record<string, string> = {};
+  for (const [key, value] of Object.entries(answers)) {
+    const header = key.trim();
+    const text = stringValue(value);
+    if (!header) continue;
+    if (normalized[header] && !text) continue;
+    normalized[header] = text || normalized[header] || "";
+  }
+  return normalized;
 }
 
 function responseIdFor(payload: NormalizedSurveyPayload): string {
-  return `psr_${stableHash({
+  return `psr-${stableHash({
     spreadsheetId: payload.spreadsheetId,
     sheetName: payload.sheetName,
     rowNumber: payload.rowNumber,
@@ -535,6 +621,105 @@ function firstFilled(answers: Record<string, string>, labels: string[]): string 
     if (matches.length) return matches[0][1];
   }
   return "";
+}
+
+async function readSurveySheet(client: DelegatedGoogleClient): Promise<string[][]> {
+  const range = encodeURIComponent(`'${PRIVATE_SURVEY_SHEET_NAME}'!A:AZ`);
+  const url = `https://sheets.googleapis.com/v4/spreadsheets/${encodeURIComponent(
+    PRIVATE_SURVEY_SPREADSHEET_ID,
+  )}/values/${range}?valueRenderOption=FORMATTED_VALUE`;
+  const result = await client.request<{ values?: string[][] }>(url);
+  return result.values || [];
+}
+
+function ensureHeaderMap(headers: string[]): Record<string, number> {
+  const map: Record<string, number> = {};
+  headers.forEach((header, index) => {
+    if (header) map[header] = index;
+  });
+  for (const header of OUTPUT_HEADERS) {
+    if (map[header] == null) {
+      map[header] = headers.length;
+      headers.push(header);
+    }
+  }
+  return map;
+}
+
+async function ensureSheetHeaders(
+  client: DelegatedGoogleClient,
+  headers: string[],
+  headerMap: Record<string, number>,
+): Promise<void> {
+  const outputStart = Math.min(...OUTPUT_HEADERS.map((header) => headerMap[header]));
+  const outputEnd = Math.max(...OUTPUT_HEADERS.map((header) => headerMap[header]));
+  const range = `${columnName(outputStart + 1)}1:${columnName(outputEnd + 1)}1`;
+  await writeSheetValues(client, range, [OUTPUT_HEADERS]);
+}
+
+function answersFromRow(headers: string[], row: string[]): Record<string, string> {
+  const answers: Record<string, string> = {};
+  headers.forEach((header, index) => {
+    if (!header || OUTPUT_HEADERS.includes(header)) return;
+    const key = header.trim();
+    const value = String(row[index] || "").trim();
+    if (answers[key] && !value) return;
+    answers[key] = value || answers[key] || "";
+  });
+  return answers;
+}
+
+async function updateSheetOutput(
+  client: DelegatedGoogleClient,
+  rowNumber: number,
+  headerMap: Record<string, number>,
+  values: string[],
+): Promise<void> {
+  const start = Math.min(...OUTPUT_HEADERS.map((header) => headerMap[header]));
+  const end = Math.max(...OUTPUT_HEADERS.map((header) => headerMap[header]));
+  const ordered = Array.from({ length: end - start + 1 }, () => "");
+  OUTPUT_HEADERS.forEach((header, index) => {
+    ordered[headerMap[header] - start] = values[index] || "";
+  });
+  const range = `${columnName(start + 1)}${rowNumber}:${columnName(end + 1)}${rowNumber}`;
+  await writeSheetValues(client, range, [ordered]);
+}
+
+async function writeSheetValues(client: DelegatedGoogleClient, range: string, values: string[][]): Promise<void> {
+  const encodedRange = encodeURIComponent(`'${PRIVATE_SURVEY_SHEET_NAME}'!${range}`);
+  const url = `https://sheets.googleapis.com/v4/spreadsheets/${encodeURIComponent(
+    PRIVATE_SURVEY_SPREADSHEET_ID,
+  )}/values/${encodedRange}?valueInputOption=USER_ENTERED`;
+  await client.request(url, {
+    method: "PUT",
+    body: JSON.stringify({ range: `'${PRIVATE_SURVEY_SHEET_NAME}'!${range}`, majorDimension: "ROWS", values }),
+  });
+}
+
+function cell(row: string[], index: number | undefined): string {
+  return index == null ? "" : String(row[index] || "").trim();
+}
+
+function columnName(columnNumber: number): string {
+  let n = columnNumber;
+  let name = "";
+  while (n > 0) {
+    const remainder = (n - 1) % 26;
+    name = String.fromCharCode(65 + remainder) + name;
+    n = Math.floor((n - 1) / 26);
+  }
+  return name;
+}
+
+function kstNowText(): string {
+  return new Intl.DateTimeFormat("sv-SE", {
+    timeZone: "Asia/Seoul",
+    year: "numeric",
+    month: "2-digit",
+    day: "2-digit",
+    hour: "2-digit",
+    minute: "2-digit",
+  }).format(new Date());
 }
 
 function normalizePhone(value: string): string {

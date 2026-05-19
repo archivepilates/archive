@@ -98,10 +98,27 @@
     function matchText(matching) {
       if (matching.status !== 'matched') return matching.reason || '담당 수업 매칭 대기 중';
       return [
-        matching.lectureDate || '',
+        formatLessonTime(matching),
         matching.staffName ? `담당강사: ${matching.staffName}` : '',
         matching.reason || ''
       ].filter(Boolean).join('\n');
+    }
+
+    function formatLessonTime(matching) {
+      const raw = matching.lectureStartAt;
+      const date = raw && typeof raw.toDate === 'function' ? raw.toDate() : (raw ? new Date(raw) : null);
+      if (date && !Number.isNaN(date.getTime())) {
+        return `수업일시: ${new Intl.DateTimeFormat('ko-KR', {
+          timeZone: 'Asia/Seoul',
+          year: 'numeric',
+          month: '2-digit',
+          day: '2-digit',
+          weekday: 'short',
+          hour: '2-digit',
+          minute: '2-digit'
+        }).format(date)}`;
+      }
+      return matching.lectureDate ? `수업일자: ${matching.lectureDate}` : '';
     }
 
     function answerBlock(label, value) {

@@ -19,4 +19,5 @@ export const allSecrets = [
   solapiApiKey,
   solapiApiSecret,
   solapiPfid,
+  privateSurveyWebhookSecret,
 ];
