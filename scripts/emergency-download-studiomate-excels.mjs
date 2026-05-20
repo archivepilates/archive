@@ -51,6 +51,9 @@ try {
   if (kind === "all" || kind === "reservation") {
     result.downloads.reservation = await downloadReservationExcel(page);
   }
+  if (kind === "all" || kind === "deleted-class") {
+    result.downloads.deletedClass = await downloadDeletedClassExcel(page);
+  }
   result.ok = Object.values(result.downloads).every((item) => item?.ok);
 } catch (error) {
   result.ok = false;
@@ -95,6 +98,21 @@ async function downloadReservationExcel(page) {
   return saveDownload(download, "reservation");
 }
 
+async function downloadDeletedClassExcel(page) {
+  await page.goto(config.baseUrl, { waitUntil: "networkidle", timeout: 60000 });
+  await closeNoticeDialog(page);
+  await assertLoggedIn(page);
+  await navigateDeletedClasses(page);
+  if (result.dryRun) return inspectOnly(page, "deleted-class", /삭제된\s*수업|삭제\s*수업|수업/);
+
+  const button = locatorByText(page, /엑셀\s*다운로드|엑셀다운로드|엑셀\s*다운/i);
+  if (!(await button.isVisible().catch(() => false))) throw new Error("Deleted class Excel download button not found.");
+  await button.click();
+  await page.waitForTimeout(800);
+  const download = await clickDownloadConfirmation(page);
+  return saveDownload(download, "deleted-class");
+}
+
 async function navigateReservationHistory(page) {
   const directPaths = [
     "/lectures",
@@ -117,6 +135,31 @@ async function navigateReservationHistory(page) {
   const text = await page.locator("body").innerText({ timeout: 10000 }).catch(() => "");
   if (!/예약내역|예약\s*내역/.test(text) && !(await hasExcelButton(page))) {
     throw new Error("Reservation history screen not found. Open StudioMate 수업 > 예약내역 once, then rerun emergency mode.");
+  }
+}
+
+async function navigateDeletedClasses(page) {
+  const directPaths = [
+    "/lectures",
+    "/lessons",
+    "/schedule",
+  ];
+  for (const target of directPaths) {
+    await page.goto(new URL(target, config.baseUrl).toString(), { waitUntil: "networkidle", timeout: 30000 }).catch(() => {});
+    await closeNoticeDialog(page);
+    await clickExactTextByScript(page, "삭제된 수업");
+    await page.waitForTimeout(1200);
+    const text = await page.locator("body").innerText({ timeout: 5000 }).catch(() => "");
+    if (/삭제된\s*수업|삭제\s*수업/.test(text) && (await hasExcelButton(page))) return;
+  }
+
+  await clickExactTextByScript(page, "수업");
+  await page.waitForTimeout(1200);
+  await clickExactTextByScript(page, "삭제된 수업");
+  await page.waitForTimeout(1200);
+  const text = await page.locator("body").innerText({ timeout: 10000 }).catch(() => "");
+  if (!/삭제된\s*수업|삭제\s*수업/.test(text) && !(await hasExcelButton(page))) {
+    throw new Error("Deleted class screen not found. Open StudioMate 수업 > 삭제된 수업 once, then rerun deleted-class emergency download.");
   }
 }
 

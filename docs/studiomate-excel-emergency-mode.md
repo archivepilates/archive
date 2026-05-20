@@ -19,6 +19,7 @@ StudioMate API 접근이 403으로 막혔을 때, 브라우저 자동화로 내�
 - 수업예약내역 엑셀은 기존 수업과 매칭되면 기존 StudioMate 강사 ID를 사용한다. 같은 수업이 기존 강사 ID와 `excel_staff_...` 임시 강사 ID로 동시에 보이면 안 된다.
 - 수업 화면은 최신 수업예약내역 엑셀에 포함된 수업만 기준으로 재생성한다. 이전 API 동기화에서 남은 수업이 최신 엑셀에 없으면 비상모드 화면에서는 제외한다.
 - 수업예약내역 엑셀에는 신뢰할 수 있는 수업 정원 원천이 없다. 비상모드 화면에서는 최대정원과 정원 기반 예약저조 판단을 사용하지 않고 현재 예약 인원만 표시한다.
+- StudioMate `수업 > 삭제된 수업` 영역의 삭제 로그는 예약내역 엑셀과 별도 원천이다. 폐강/수업조정 취소 구분을 위해 하루 1회 별도 브라우저 자동화로 다운로드하고 `studiomateDeletedClassLogs`에 적재한다.
 - 회원목록 엑셀 원본은 비상모드 전용 다운로드/아카이브 폴더의 최신 `회원목록_*.xlsx`를 우선 사용하고, 없을 때만 Google Drive `회원원본데이터` 폴더의 최신 파일을 사용한다.
 - 기본 실행은 dry-run이다. Firestore 반영은 `--apply`를 붙였을 때만 한다.
 - 기본 반영 대상은 기존 `memberProfiles`와 전화번호, 이름이 매칭되는 회원만이다.
@@ -66,6 +67,25 @@ com.archive.studiomate-excel-emergency-mode
 com.archive.studiomate-emergency-contacts-sync
 ```
 
+하루 1회 삭제된 수업 로그 수집 LaunchAgent:
+
+```text
+com.archive.studiomate-deleted-class-daily
+```
+
+실행 내용:
+
+```bash
+node scripts/run-studiomate-deleted-class-daily.mjs --download --apply
+```
+
+동작:
+
+1. StudioMate `수업 > 삭제된 수업` 탭에서 엑셀을 다운로드한다.
+2. 원본 파일은 `~/ArchiveIN/emergency/archive/deleted-class/YYYY-MM-DD/`에 보관한다.
+3. 엑셀 행은 `studiomateDeletedClassLogs`에 원본 컬럼과 함께 적재한다.
+4. 이 로그는 월별 폐강 리스트에서 `진짜 폐강`, `수업 조정 취소`, `개인수업 취소/조정`을 나누기 위한 근거 데이터로 사용한다.
+
 실행 내용:
 
 ```bash
@@ -86,6 +106,8 @@ node scripts/run-emergency-contacts-hourly-sync.mjs
 /Users/archivepilates/ArchiveIN/emergency/logs/studiomate-excel-emergency-mode.err.log
 /Users/archivepilates/ArchiveIN/emergency/logs/studiomate-emergency-contacts-sync.out.log
 /Users/archivepilates/ArchiveIN/emergency/logs/studiomate-emergency-contacts-sync.err.log
+/Users/archivepilates/ArchiveIN/emergency/logs/studiomate-deleted-class-daily.out.log
+/Users/archivepilates/ArchiveIN/emergency/logs/studiomate-deleted-class-daily.err.log
 ```
 
 특정 엑셀 파일을 지정:
@@ -139,6 +161,12 @@ node scripts/emergency-import-studiomate-member-excel.mjs --queue-contact-sync -
   - 수업예약내역 엑셀로 확인 가능한 범위의 30일 출결 요약
 - `opsState/studiomateReservationExcelEmergency`
   - 마지막 수업예약내역 비상 반영 상태
+- `studiomateDeletedClassLogs/{logId}`
+  - StudioMate `삭제된 수업` 엑셀 행 원본
+  - 수업일, 시간, 강사, 수업명, 룸, 수업구분, 삭제일시/삭제자/사유 컬럼이 있으면 정규화
+  - 폐강과 수업 조정 취소를 구분하기 위한 월별 리포트 원천
+- `opsState/studiomateDeletedClassExcelEmergency`
+  - 마지막 삭제된 수업 로그 수집 상태
 
 ## 분리 원칙
 
