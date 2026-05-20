@@ -203,7 +203,7 @@ CONTACTS_SYNC_MAX_AUTO_UPDATE=50
 
 | 자동화 | LaunchAgent | 시간 | 상태 |
 | --- | --- | --- | --- |
-| StudioMate 회원목록 다운로드 | `com.archive.studiomate-member-excel` | 매일 23:00 | 활성 |
+| StudioMate 회원목록 다운로드 | `com.archive.studiomate-member-excel` | 매일 23:00 | 삭제됨. 비상모드 `com.archive.studiomate-excel-emergency-mode`가 회원목록을 포함해 처리 |
 | StudioMate → Google Contacts 동기화 | `com.archive.studiomate-contacts-sync` | 매일 23:10 | 비상모드 중 비활성 |
 | StudioMate 예약 가능 기한 설정 | `com.archive.studiomate-reservation-deadline` | 매주 월요일 12:30 | 활성 |
 
@@ -378,7 +378,7 @@ Codex 앱 자동화는 혼선을 줄이기 위해 보조/수동 테스트용으�
 | Google Contacts 대상 계정 | `home@archivepilates.com` |
 | 완료보고 메일 계정 | `home@archivepilates.com` |
 | 연락처 동기화 LaunchAgent | 23:10 레거시 작업 비활성. 비상모드 연락처 작업은 `com.archive.studiomate-emergency-contacts-sync` |
-| 회원목록 다운로드 LaunchAgent | 활성 |
+| 회원목록 다운로드 LaunchAgent | 삭제됨. 비상모드 전용 엑셀 자동화가 회원목록 다운로드를 담당 |
 | 예약 가능 기한 LaunchAgent | 활성 |
 | Firebase 연락처 큐 | `memberContactIndex` / `contactSyncJobs` 기준 |
 | 완료보고 메일 | `home@archivepilates.com` 기준 |

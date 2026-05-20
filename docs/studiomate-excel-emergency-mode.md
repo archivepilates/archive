@@ -12,7 +12,7 @@ StudioMate API 접근이 403으로 막혔을 때, 브라우저 자동화로 내�
 
 - Firebase Scheduler 기반 StudioMate 동기화와 연락처 동기화는 일시중지 상태로 둔다.
 - 알림톡은 정상 API 자동화가 아니라 엑셀 기반 비상모드 운영으로 재개한다. 후보 원천은 비상모드가 갱신한 `memberProfiles.activeTickets`이며, 실발송은 운영자 승인과 중복/제외 최종 확인 뒤 처리한다.
-- 기존 23:00 회원목록 다운로드 자동화와 분리된 비상모드 전용 브라우저 자동화로 엑셀을 받는다.
+- 기존 23:00 회원목록 다운로드 자동화 `com.archive.studiomate-member-excel`는 실패 메일 혼선을 막기 위해 삭제했다. 회원목록 엑셀은 비상모드 전용 브라우저 자동화가 받는다.
 - 비상모드 전용 다운로드/반영은 1시간 간격으로 실행한다.
 - 브라우저 자동화로 받은 회원목록 엑셀을 회원카드/수강권 보정에 사용한다.
 - 수업 예약 화면 복구에는 브라우저 자동화로 받은 수업예약내역 엑셀을 함께 사용한다.
@@ -183,7 +183,7 @@ node scripts/emergency-import-studiomate-member-excel.mjs --queue-contact-sync -
 
 ## 분리 원칙
 
-- 기존 `com.archive.studiomate-member-excel` 자동화는 그대로 둔다.
+- 기존 `com.archive.studiomate-member-excel` 자동화는 삭제 상태로 둔다. 회원목록 다운로드는 `com.archive.studiomate-excel-emergency-mode`에 포함한다.
 - 비상모드는 기존 다운로드 자동화와 별도 명령/LaunchAgent/다운로드 폴더/로그/실행 기록을 사용한다.
 - StudioMate 로그인 세션은 중복 로그인을 피하기 위해 기존 Mac mini 브라우저 프로필을 읽어 사용한다.
 - 비상모드 다운로드가 실패하거나 회원목록 엑셀을 받지 못하면 그 시간대 Firestore 반영을 건너뛴다.
