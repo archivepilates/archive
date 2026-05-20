@@ -134,6 +134,14 @@ function normalizeDeletedClassRow(row, index) {
   const deletedAtText = pick(row, ["삭제일", "삭제일시", "삭제시간", "취소일", "취소일시", "deletedAt", "deleted_at"]);
   const deletedBy = pick(row, ["삭제자", "삭제한사람", "처리자", "담당자", "deletedBy", "operator"]);
   const reason = pick(row, ["삭제사유", "삭제이유", "취소사유", "사유", "reason"]);
+  const type = lessonType(title, divisionName);
+  const classification = classifyDeletedClass({
+    date,
+    title,
+    lessonType: type,
+    deletedAtText,
+    reason,
+  });
   const normalized = {
     studioId: STUDIO_ID,
     source: "studiomate_deleted_class_excel",
@@ -148,10 +156,15 @@ function normalizeDeletedClassRow(row, index) {
     staffName,
     roomName,
     divisionName,
-    lessonType: lessonType(title, divisionName),
+    lessonType: type,
     deletedAtText,
     deletedBy,
     reason,
+    operationalCategory: classification.operationalCategory,
+    includeInClosureReport: classification.includeInClosureReport,
+    needsOperatorReview: classification.needsOperatorReview,
+    classificationReason: classification.classificationReason,
+    deletedLeadDays: classification.deletedLeadDays,
     raw: row,
     importedAt: admin.firestore.Timestamp.now(),
     updatedAt: admin.firestore.Timestamp.now(),
@@ -196,6 +209,70 @@ function lessonType(title, divisionName) {
   if (/group|그룹/.test(text)) return "group";
   if (/(님| 외 \\d+명)$/.test(String(title || "").trim())) return "private";
   return "";
+}
+
+function classifyDeletedClass({ date, title, lessonType, deletedAtText, reason }) {
+  const text = `${reason || ""}`.trim();
+  const leadDays = deletedLeadDays(date, deletedAtText);
+  const placeholder = isSchedulePlaceholderTitle(title);
+  if (lessonType === "private") {
+    return category("개인수업 취소/조정", false, false, "개인 수업 삭제는 월별 폐강 집계에서 제외", leadDays);
+  }
+  if (/휴일/.test(text)) {
+    return category("휴일/운영일정 조정", false, false, "휴일 설정 삭제는 폐강이 아니라 운영일정 조정", leadDays);
+  }
+  if (/최소\s*수강인원\s*미달/.test(text)) {
+    return category("폐강", true, false, "최소 수강인원 미달은 폐강 확정", leadDays);
+  }
+  if (/클래스\s*폐강/.test(text)) {
+    if (placeholder || (leadDays !== null && leadDays >= 7)) {
+      return category("수업 조정 취소", false, false, "클래스 폐강이지만 템플릿/강사명 수업이거나 7일 이상 전에 삭제됨", leadDays);
+    }
+    return category("폐강", true, false, "그룹 수업이 임박 시점에 클래스 폐강으로 삭제됨", leadDays);
+  }
+  if (/수업\s*삭제/.test(text)) {
+    if (placeholder || (leadDays !== null && leadDays >= 7)) {
+      return category("수업 조정 취소", false, false, "수업 삭제가 템플릿/강사명 수업이거나 7일 이상 전에 처리됨", leadDays);
+    }
+    return category("그룹 삭제수업 확인필요", false, true, "삭제이유가 일반 수업 삭제라 폐강 여부 확인 필요", leadDays);
+  }
+  if (/예약취소|수강권|예약\s*실패/.test(text)) {
+    return category("예약/수강권 사유 취소", false, false, "예약 또는 수강권 사유는 폐강 집계에서 제외", leadDays);
+  }
+  if (lessonType === "group") {
+    return category("그룹 삭제수업 확인필요", false, true, "그룹 삭제수업이지만 자동 판별 사유가 없음", leadDays);
+  }
+  return category("확인필요", false, true, "수업구분 또는 삭제이유 확인 필요", leadDays);
+}
+
+function category(operationalCategory, includeInClosureReport, needsOperatorReview, classificationReason, deletedLeadDays) {
+  return {
+    operationalCategory,
+    includeInClosureReport,
+    needsOperatorReview,
+    classificationReason,
+    deletedLeadDays,
+  };
+}
+
+function deletedLeadDays(date, deletedAtText) {
+  const classDate = parseYmd(date);
+  const deletedDate = parseYmd(deletedAtText);
+  if (!classDate || !deletedDate) return null;
+  return Math.round((classDate.getTime() - deletedDate.getTime()) / 86400000);
+}
+
+function parseYmd(value) {
+  const text = String(value || "");
+  const match = text.match(/(20\d{2})[./-](\d{1,2})[./-](\d{1,2})/);
+  if (!match) return null;
+  return new Date(Number(match[1]), Number(match[2]) - 1, Number(match[3]));
+}
+
+function isSchedulePlaceholderTitle(value) {
+  const title = normalizeName(value);
+  if (!title) return false;
+  return /^(원장님|부원장님|오픈클래스|테스트|휴일|수업)$/.test(title) || /강사님$/.test(title) || /쌤$/.test(title);
 }
 
 function normalizeDate(value) {
