@@ -75,6 +75,20 @@ export interface DashboardDailyRevenueRow {
   월누적수업매출?: number;
   전월동일일수업누적?: number;
   전년동월동일일수업누적?: number;
+  월누적세전총액?: number;
+  전월동일일세전총액?: number;
+  월누적수업마진률?: number;
+  전월동일일수업마진률?: number;
+  월누적그룹세션?: number;
+  전월동일일그룹세션?: number;
+  월누적프라이빗?: number;
+  전월동일일프라이빗?: number;
+  월누적강사레슨?: number;
+  전월동일일강사레슨?: number;
+  월누적그룹예약률?: number;
+  전월동일일그룹예약률?: number;
+  월누적그룹출석률?: number;
+  전월동일일그룹출석률?: number;
 }
 
 export interface DashboardData {

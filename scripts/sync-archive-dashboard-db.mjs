@@ -62,7 +62,7 @@ async function main() {
     수강권매출_Master: buildTicketSalesMaster(ticketRows),
     회원별누적매출: buildMemberSales(ticketRows),
     수강권분석_Master: buildTicketAnalysis(lessonRows),
-    매출일일누적: buildDailyRevenue(ticketRows, lessonRows),
+    매출일일누적: buildDailyRevenue(ticketRows, lessonRows, settlementRates),
     정산대장_DailyPreview: dailySettlementPreview,
     강사통계_DailyPreview: dailyInstructorPreview,
   };
@@ -516,32 +516,65 @@ function buildDailyInstructorPreview(rows, settlementPreview) {
   ];
 }
 
-function buildDailyRevenue(ticketRows, lessonRows) {
+function buildDailyRevenue(ticketRows, lessonRows, rates) {
   const ticketByDate = new Map();
   for (const row of ticketRows) {
     if (!row.결제일 || row.결제금액합계 <= 0) continue;
-    ticketByDate.set(row.결제일, (ticketByDate.get(row.결제일) || 0) + row.결제금액합계);
+    addToMap(ticketByDate, row.결제일, row.결제금액합계);
   }
   const lessonByDate = new Map();
+  const pretaxByDate = new Map();
+  const privateByDate = new Map();
+  const instructorLessonByDate = new Map();
+  const groupSessionKeysByDate = new Map();
+  const groupReservationByDate = new Map();
+  const groupAttendanceByDate = new Map();
   for (const row of lessonRows) {
     if (!row.수업일자) continue;
-    const revenue = row.차감금액 || (row.출결 === "출석" ? row.회당금액 * (row.차감횟수 || 1) : 0);
-    if (revenue <= 0) continue;
-    lessonByDate.set(row.수업일자, (lessonByDate.get(row.수업일자) || 0) + revenue);
+    const count = row.차감횟수 || 1;
+    const revenue = row.차감금액 || (row.출결 === "출석" ? row.회당금액 * count : 0);
+    if (revenue > 0) addToMap(lessonByDate, row.수업일자, revenue);
+    const rate = rates.byInstructor.get(row.강사명) || rates.fallback;
+    if (row.수업구분 === "그룹") {
+      const sessionKey = [row.강사명, row.수업시작, row.수업종료].join("\u0001");
+      const keys = groupSessionKeysByDate.get(row.수업일자) || new Set();
+      if (!keys.has(sessionKey)) {
+        keys.add(sessionKey);
+        addToMap(pretaxByDate, row.수업일자, rate.groupPayPerCount);
+      }
+      groupSessionKeysByDate.set(row.수업일자, keys);
+      addToMap(groupReservationByDate, row.수업일자, 1);
+      if (row.출결 === "출석") addToMap(groupAttendanceByDate, row.수업일자, 1);
+    } else if (row.수업구분 === "프라이빗") {
+      addToMap(privateByDate, row.수업일자, count);
+      addToMap(pretaxByDate, row.수업일자, count * rate.privatePayPerCount);
+    } else if (row.수업구분 === "강사레슨") {
+      addToMap(instructorLessonByDate, row.수업일자, count);
+      addToMap(pretaxByDate, row.수업일자, count * rate.instructorLessonPayPerCount);
+    }
   }
   const dates = completeDailyDates([...ticketByDate.keys(), ...lessonByDate.keys()]);
-  const ticketCumulativeByDate = new Map();
-  const lessonCumulativeByDate = new Map();
-  const ticketMonthRunning = new Map();
-  const lessonMonthRunning = new Map();
+  const cumulative = {
+    ticket: new Map(),
+    lesson: new Map(),
+    pretax: new Map(),
+    groupSessions: new Map(),
+    privateSessions: new Map(),
+    instructorLessonSessions: new Map(),
+    groupReservations: new Map(),
+    groupAttendance: new Map(),
+  };
+  const running = Object.fromEntries(Object.keys(cumulative).map((key) => [key, new Map()]));
   for (const date of dates) {
     const month = monthKey(date);
-    const ticketCumulative = (ticketMonthRunning.get(month) || 0) + (ticketByDate.get(date) || 0);
-    const lessonCumulative = (lessonMonthRunning.get(month) || 0) + (lessonByDate.get(date) || 0);
-    ticketMonthRunning.set(month, ticketCumulative);
-    lessonMonthRunning.set(month, lessonCumulative);
-    ticketCumulativeByDate.set(date, ticketCumulative);
-    lessonCumulativeByDate.set(date, lessonCumulative);
+    addRunning(cumulative.ticket, running.ticket, month, date, ticketByDate.get(date) || 0);
+    addRunning(cumulative.lesson, running.lesson, month, date, lessonByDate.get(date) || 0);
+    addRunning(cumulative.pretax, running.pretax, month, date, pretaxByDate.get(date) || 0);
+    addRunning(cumulative.groupSessions, running.groupSessions, month, date, groupSessionKeysByDate.get(date)?.size || 0);
+    addRunning(cumulative.privateSessions, running.privateSessions, month, date, privateByDate.get(date) || 0);
+    addRunning(cumulative.instructorLessonSessions, running.instructorLessonSessions, month, date, instructorLessonByDate.get(date) || 0);
+    addRunning(cumulative.groupReservations, running.groupReservations, month, date, groupReservationByDate.get(date) || 0);
+    addRunning(cumulative.groupAttendance, running.groupAttendance, month, date, groupAttendanceByDate.get(date) || 0);
   }
   const headers = [
     "기준일",
@@ -554,26 +587,74 @@ function buildDailyRevenue(ticketRows, lessonRows) {
     "월누적수업매출",
     "전월동일일수업누적",
     "전년동월동일일수업누적",
+    "월누적세전총액",
+    "전월동일일세전총액",
+    "월누적수업마진률",
+    "전월동일일수업마진률",
+    "월누적그룹세션",
+    "전월동일일그룹세션",
+    "월누적프라이빗",
+    "전월동일일프라이빗",
+    "월누적강사레슨",
+    "전월동일일강사레슨",
+    "월누적그룹예약률",
+    "전월동일일그룹예약률",
+    "월누적그룹출석률",
+    "전월동일일그룹출석률",
   ];
   return [
     headers,
     ...dates.map((date) => {
       const previousMonthDate = previousMonthSameDay(date);
       const previousYearDate = previousYearSameDay(date);
+      const lesson = cumulative.lesson.get(date) || 0;
+      const pretax = cumulative.pretax.get(date) || 0;
+      const prevLesson = cumulativeThroughDate(cumulative.lesson, previousMonthDate);
+      const prevPretax = cumulativeThroughDate(cumulative.pretax, previousMonthDate);
+      const groupSessions = cumulative.groupSessions.get(date) || 0;
+      const groupReservations = cumulative.groupReservations.get(date) || 0;
+      const groupAttendance = cumulative.groupAttendance.get(date) || 0;
+      const prevGroupSessions = cumulativeThroughDate(cumulative.groupSessions, previousMonthDate);
+      const prevGroupReservations = cumulativeThroughDate(cumulative.groupReservations, previousMonthDate);
+      const prevGroupAttendance = cumulativeThroughDate(cumulative.groupAttendance, previousMonthDate);
       return [
         date,
         monthKey(date),
         Math.round(ticketByDate.get(date) || 0),
-        Math.round(ticketCumulativeByDate.get(date) || 0),
-        Math.round(cumulativeThroughDate(ticketCumulativeByDate, previousMonthDate)),
-        Math.round(cumulativeThroughDate(ticketCumulativeByDate, previousYearDate)),
+        Math.round(cumulative.ticket.get(date) || 0),
+        Math.round(cumulativeThroughDate(cumulative.ticket, previousMonthDate)),
+        Math.round(cumulativeThroughDate(cumulative.ticket, previousYearDate)),
         Math.round(lessonByDate.get(date) || 0),
-        Math.round(lessonCumulativeByDate.get(date) || 0),
-        Math.round(cumulativeThroughDate(lessonCumulativeByDate, previousMonthDate)),
-        Math.round(cumulativeThroughDate(lessonCumulativeByDate, previousYearDate)),
+        Math.round(lesson),
+        Math.round(prevLesson),
+        Math.round(cumulativeThroughDate(cumulative.lesson, previousYearDate)),
+        Math.round(pretax),
+        Math.round(prevPretax),
+        lesson ? round1(((lesson - pretax) / lesson) * 100) : 0,
+        prevLesson ? round1(((prevLesson - prevPretax) / prevLesson) * 100) : 0,
+        round2(groupSessions),
+        round2(prevGroupSessions),
+        round2(cumulative.privateSessions.get(date) || 0),
+        round2(cumulativeThroughDate(cumulative.privateSessions, previousMonthDate)),
+        round2(cumulative.instructorLessonSessions.get(date) || 0),
+        round2(cumulativeThroughDate(cumulative.instructorLessonSessions, previousMonthDate)),
+        groupSessions ? round1((groupReservations / (groupSessions * 5)) * 100) : 0,
+        prevGroupSessions ? round1((prevGroupReservations / (prevGroupSessions * 5)) * 100) : 0,
+        groupReservations ? round1((groupAttendance / groupReservations) * 100) : 0,
+        prevGroupReservations ? round1((prevGroupAttendance / prevGroupReservations) * 100) : 0,
       ];
     }),
   ];
+}
+
+function addToMap(map, key, value) {
+  map.set(key, (map.get(key) || 0) + value);
+}
+
+function addRunning(targetMap, monthRunning, month, date, value) {
+  const next = (monthRunning.get(month) || 0) + value;
+  monthRunning.set(month, next);
+  targetMap.set(date, next);
 }
 
 function completeDailyDates(existingDates) {
@@ -653,6 +734,20 @@ async function syncFirebaseDashboard({ dailyRevenueSheet, settlementPreviewSheet
     월누적수업매출: amount(row.월누적수업매출),
     전월동일일수업누적: amount(row.전월동일일수업누적),
     전년동월동일일수업누적: amount(row.전년동월동일일수업누적),
+    월누적세전총액: amount(row.월누적세전총액),
+    전월동일일세전총액: amount(row.전월동일일세전총액),
+    월누적수업마진률: amount(row.월누적수업마진률),
+    전월동일일수업마진률: amount(row.전월동일일수업마진률),
+    월누적그룹세션: amount(row.월누적그룹세션),
+    전월동일일그룹세션: amount(row.전월동일일그룹세션),
+    월누적프라이빗: amount(row.월누적프라이빗),
+    전월동일일프라이빗: amount(row.전월동일일프라이빗),
+    월누적강사레슨: amount(row.월누적강사레슨),
+    전월동일일강사레슨: amount(row.전월동일일강사레슨),
+    월누적그룹예약률: amount(row.월누적그룹예약률),
+    전월동일일그룹예약률: amount(row.전월동일일그룹예약률),
+    월누적그룹출석률: amount(row.월누적그룹출석률),
+    전월동일일그룹출석률: amount(row.전월동일일그룹출석률),
   }));
   const settlementPreview = sheetRowsToObjects(settlementPreviewSheet);
   const instructorPreview = sheetRowsToObjects(instructorPreviewSheet);
