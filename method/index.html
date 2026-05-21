@@ -1,0 +1,1216 @@
+<!-- ============================================== -->
+<!-- ARCHIVE PILATES — 오프라인 강사레슨 상세 페이지  -->
+<!-- imweb 코드섹션 삽입용 (모든 스타일은 .am-page 스코프 내) -->
+<!-- ============================================== -->
+
+<style>
+  @import url('https://fonts.googleapis.com/css2?family=Instrument+Serif:ital@0;1&family=JetBrains+Mono:wght@300;400;500&display=swap');
+  @import url('https://cdn.jsdelivr.net/gh/orioncactus/pretendard@v1.3.9/dist/web/variable/pretendardvariable-dynamic-subset.css');
+
+  .am-page {
+    --am-bg: #0a0a0a;
+    --am-bg-2: #141414;
+    --am-bg-3: #1c1c1c;
+    --am-line: #2a2a2a;
+    --am-line-strong: #3a3a3a;
+    --am-text: #f5f5f0;
+    --am-text-2: #a8a8a3;
+    --am-text-3: #6a6a65;
+    --am-orange: #FF751F;
+    --am-orange-dim: rgba(255, 117, 31, 0.12);
+
+    --am-serif: 'Instrument Serif', 'Noto Serif KR', serif;
+    --am-mono: 'JetBrains Mono', ui-monospace, monospace;
+    --am-sans: 'Pretendard Variable', 'Pretendard', -apple-system, BlinkMacSystemFont, sans-serif;
+
+    background: var(--am-bg);
+    color: var(--am-text);
+    font-family: var(--am-sans);
+    font-weight: 400;
+    line-height: 1.6;
+    letter-spacing: -0.005em;
+    -webkit-font-smoothing: antialiased;
+    -moz-osx-font-smoothing: grayscale;
+    margin: 0 calc(50% - 50vw); /* break out of imweb container */
+    width: 100vw;
+    overflow-x: hidden;
+  }
+
+  .am-page * { box-sizing: border-box; }
+  .am-page img { max-width: 100%; display: block; }
+
+  /* ----- shared layout ----- */
+  .am-wrap {
+    max-width: 1180px;
+    margin: 0 auto;
+    padding: 0 32px;
+  }
+
+  .am-label {
+    font-family: var(--am-mono);
+    font-size: 11px;
+    font-weight: 400;
+    letter-spacing: 0.18em;
+    color: var(--am-text-3);
+    text-transform: uppercase;
+  }
+
+  .am-rule { height: 1px; background: var(--am-line); border: 0; margin: 0; }
+
+  /* ===================================================== */
+  /* HERO                                                  */
+  /* ===================================================== */
+  .am-hero {
+    position: relative;
+    padding: 88px 0 120px;
+    border-bottom: 1px solid var(--am-line);
+    overflow: hidden;
+  }
+
+  .am-hero::before {
+    content: '';
+    position: absolute;
+    inset: 0;
+    background:
+      radial-gradient(ellipse 60% 40% at 80% 20%, var(--am-orange-dim), transparent 60%),
+      linear-gradient(180deg, #0d0d0d 0%, #0a0a0a 100%);
+    pointer-events: none;
+  }
+
+  .am-hero-inner { position: relative; z-index: 1; }
+
+  .am-hero-meta {
+    display: flex;
+    align-items: center;
+    gap: 16px;
+    margin-bottom: 56px;
+  }
+
+  .am-hero-meta::after {
+    content: '';
+    flex: 1;
+    height: 1px;
+    background: var(--am-line);
+  }
+
+  .am-hero-dot {
+    width: 6px; height: 6px;
+    background: var(--am-orange);
+    border-radius: 50%;
+    box-shadow: 0 0 12px var(--am-orange);
+    animation: am-pulse 2s ease-in-out infinite;
+  }
+  @keyframes am-pulse {
+    0%, 100% { opacity: 1; }
+    50% { opacity: 0.35; }
+  }
+
+  .am-hero-meta-text {
+    font-family: var(--am-mono);
+    font-size: 12px;
+    letter-spacing: 0.12em;
+    color: var(--am-text-2);
+  }
+  .am-hero-meta-text strong {
+    color: var(--am-orange);
+    font-weight: 500;
+  }
+
+  .am-hero-title {
+    font-family: var(--am-serif);
+    font-weight: 400;
+    font-size: clamp(56px, 11vw, 156px);
+    line-height: 0.92;
+    letter-spacing: -0.03em;
+    margin: 0;
+    color: var(--am-text);
+  }
+  .am-hero-title em {
+    font-style: italic;
+    color: var(--am-orange);
+    font-weight: 400;
+  }
+
+  .am-hero-sub {
+    max-width: 620px;
+    font-size: 17px;
+    line-height: 1.7;
+    color: var(--am-text-2);
+    margin: 48px 0 0;
+  }
+  .am-hero-sub strong { color: var(--am-text); font-weight: 500; }
+
+  .am-hero-stats {
+    display: grid;
+    grid-template-columns: repeat(4, 1fr);
+    gap: 0;
+    margin-top: 80px;
+    border-top: 1px solid var(--am-line);
+    border-bottom: 1px solid var(--am-line);
+  }
+  .am-hero-stat {
+    padding: 28px 24px 24px;
+    border-right: 1px solid var(--am-line);
+  }
+  .am-hero-stat:last-child { border-right: 0; }
+  .am-hero-stat-num {
+    font-family: var(--am-serif);
+    font-size: 38px;
+    line-height: 1;
+    color: var(--am-text);
+    margin-bottom: 8px;
+  }
+  .am-hero-stat-label {
+    font-family: var(--am-mono);
+    font-size: 11px;
+    color: var(--am-text-3);
+    letter-spacing: 0.12em;
+    text-transform: uppercase;
+  }
+
+  /* ===================================================== */
+  /* CURRENT (NEXT SESSION CTA)                            */
+  /* ===================================================== */
+  .am-current {
+    padding: 96px 0;
+    background: linear-gradient(180deg, #0a0a0a 0%, #0d0a06 100%);
+    border-bottom: 1px solid var(--am-line);
+  }
+
+  .am-current-grid {
+    display: grid;
+    grid-template-columns: 200px 1fr;
+    gap: 56px;
+    align-items: start;
+  }
+
+  .am-current-issue {
+    font-family: var(--am-serif);
+    font-size: 120px;
+    line-height: 0.85;
+    color: var(--am-orange);
+    letter-spacing: -0.04em;
+  }
+  .am-current-issue-label {
+    font-family: var(--am-mono);
+    font-size: 11px;
+    letter-spacing: 0.18em;
+    color: var(--am-text-3);
+    text-transform: uppercase;
+    margin-top: 16px;
+    display: block;
+  }
+
+  .am-current-content { padding-top: 8px; }
+
+  .am-current-topic {
+    font-family: var(--am-serif);
+    font-size: 56px;
+    line-height: 1.05;
+    margin: 0 0 8px;
+    letter-spacing: -0.02em;
+  }
+  .am-current-topic-en {
+    font-family: var(--am-mono);
+    font-size: 14px;
+    color: var(--am-text-3);
+    letter-spacing: 0.1em;
+    text-transform: uppercase;
+    margin-bottom: 40px;
+  }
+
+  .am-current-desc {
+    font-size: 17px;
+    line-height: 1.75;
+    color: var(--am-text-2);
+    margin-bottom: 40px;
+    max-width: 600px;
+  }
+
+  .am-current-info {
+    display: grid;
+    grid-template-columns: repeat(3, 1fr);
+    gap: 28px;
+    padding: 28px 0;
+    border-top: 1px solid var(--am-line);
+    border-bottom: 1px solid var(--am-line);
+    margin-bottom: 40px;
+  }
+  .am-current-info-row {
+    display: flex;
+    flex-direction: column;
+    gap: 8px;
+  }
+  .am-current-info-label {
+    font-family: var(--am-mono);
+    font-size: 11px;
+    color: var(--am-text-3);
+    letter-spacing: 0.12em;
+    text-transform: uppercase;
+  }
+  .am-current-info-val {
+    font-size: 18px;
+    color: var(--am-text);
+    line-height: 1.4;
+  }
+  .am-current-info-val small {
+    display: block;
+    font-size: 13px;
+    color: var(--am-text-3);
+    margin-top: 4px;
+  }
+
+  .am-cta {
+    display: inline-flex;
+    align-items: center;
+    gap: 14px;
+    padding: 20px 36px;
+    background: var(--am-orange);
+    color: #0a0a0a;
+    font-weight: 600;
+    font-size: 15px;
+    letter-spacing: 0.02em;
+    text-decoration: none;
+    border-radius: 0;
+    transition: all 0.3s cubic-bezier(0.2, 0.8, 0.2, 1);
+    border: 1px solid var(--am-orange);
+  }
+  .am-cta:hover {
+    background: #ff8a3d;
+    border-color: #ff8a3d;
+    transform: translateY(-2px);
+    box-shadow: 0 12px 32px -8px rgba(255, 117, 31, 0.4);
+  }
+  .am-cta-arrow {
+    display: inline-block;
+    transition: transform 0.3s;
+  }
+  .am-cta:hover .am-cta-arrow { transform: translateX(6px); }
+
+  .am-cta-note {
+    font-family: var(--am-mono);
+    font-size: 12px;
+    color: var(--am-text-3);
+    margin-top: 16px;
+  }
+
+  /* ===================================================== */
+  /* SECTION shared                                        */
+  /* ===================================================== */
+  .am-section { padding: 120px 0; border-bottom: 1px solid var(--am-line); }
+
+  .am-section-head {
+    display: grid;
+    grid-template-columns: 200px 1fr;
+    gap: 56px;
+    margin-bottom: 80px;
+  }
+  .am-section-num {
+    font-family: var(--am-mono);
+    font-size: 13px;
+    color: var(--am-text-3);
+    letter-spacing: 0.12em;
+  }
+  .am-section-title {
+    font-family: var(--am-serif);
+    font-size: clamp(36px, 5vw, 60px);
+    line-height: 1.05;
+    letter-spacing: -0.02em;
+    margin: 0;
+    color: var(--am-text);
+  }
+  .am-section-title em { color: var(--am-orange); font-style: italic; }
+  .am-section-lead {
+    font-size: 17px;
+    line-height: 1.75;
+    color: var(--am-text-2);
+    margin: 28px 0 0;
+    max-width: 640px;
+  }
+
+  /* ===================================================== */
+  /* DIFFERENTIATORS                                       */
+  /* ===================================================== */
+  .am-diff-grid {
+    display: grid;
+    grid-template-columns: repeat(3, 1fr);
+    gap: 0;
+    border-top: 1px solid var(--am-line);
+    border-left: 1px solid var(--am-line);
+  }
+  .am-diff-card {
+    padding: 48px 40px 56px;
+    border-right: 1px solid var(--am-line);
+    border-bottom: 1px solid var(--am-line);
+    background: var(--am-bg);
+    transition: background 0.4s;
+  }
+  .am-diff-card:hover { background: var(--am-bg-2); }
+  .am-diff-num {
+    font-family: var(--am-mono);
+    font-size: 11px;
+    color: var(--am-orange);
+    letter-spacing: 0.18em;
+    margin-bottom: 32px;
+  }
+  .am-diff-title {
+    font-family: var(--am-serif);
+    font-size: 28px;
+    line-height: 1.15;
+    margin: 0 0 20px;
+    letter-spacing: -0.01em;
+  }
+  .am-diff-desc {
+    font-size: 15px;
+    line-height: 1.7;
+    color: var(--am-text-2);
+    margin: 0;
+  }
+  .am-diff-tag {
+    display: inline-block;
+    margin-top: 24px;
+    padding: 5px 10px;
+    background: var(--am-orange-dim);
+    color: var(--am-orange);
+    font-family: var(--am-mono);
+    font-size: 10px;
+    letter-spacing: 0.12em;
+    text-transform: uppercase;
+  }
+
+  /* ===================================================== */
+  /* STRUCTURE                                             */
+  /* ===================================================== */
+  .am-structure {
+    display: grid;
+    grid-template-columns: 1fr 1fr;
+    gap: 48px;
+    align-items: start;
+  }
+  .am-flow {
+    display: flex;
+    flex-direction: column;
+    gap: 1px;
+    background: var(--am-line);
+    border: 1px solid var(--am-line);
+  }
+  .am-flow-row {
+    display: grid;
+    grid-template-columns: 90px 1fr 80px;
+    gap: 24px;
+    padding: 28px 28px;
+    background: var(--am-bg);
+    align-items: center;
+  }
+  .am-flow-time {
+    font-family: var(--am-mono);
+    font-size: 13px;
+    color: var(--am-orange);
+    letter-spacing: 0.04em;
+  }
+  .am-flow-title {
+    font-size: 16px;
+    color: var(--am-text);
+    line-height: 1.4;
+  }
+  .am-flow-title small {
+    display: block;
+    color: var(--am-text-3);
+    font-size: 13px;
+    margin-top: 4px;
+  }
+  .am-flow-tag {
+    font-family: var(--am-mono);
+    font-size: 11px;
+    color: var(--am-text-3);
+    text-align: right;
+    letter-spacing: 0.08em;
+    text-transform: uppercase;
+  }
+
+  .am-teams {
+    background: var(--am-bg-2);
+    border: 1px solid var(--am-line);
+    padding: 32px;
+  }
+  .am-teams h4 {
+    font-family: var(--am-serif);
+    font-size: 22px;
+    margin: 0 0 8px;
+    letter-spacing: -0.01em;
+  }
+  .am-teams-desc {
+    font-size: 14px;
+    color: var(--am-text-2);
+    margin: 0 0 28px;
+    line-height: 1.7;
+  }
+  .am-team-row {
+    display: grid;
+    grid-template-columns: 80px 1fr;
+    gap: 16px;
+    padding: 20px 0;
+    border-top: 1px solid var(--am-line);
+    align-items: center;
+  }
+  .am-team-row:first-of-type { border-top: 1px solid var(--am-line-strong); }
+  .am-team-name {
+    font-family: var(--am-mono);
+    font-size: 13px;
+    color: var(--am-orange);
+    letter-spacing: 0.08em;
+  }
+  .am-team-flow {
+    font-size: 14px;
+    color: var(--am-text-2);
+    line-height: 1.5;
+  }
+  .am-team-flow strong { color: var(--am-text); font-weight: 500; }
+
+  /* ===================================================== */
+  /* TOPICS                                                */
+  /* ===================================================== */
+  .am-archive-list {
+    display: flex;
+    flex-direction: column;
+  }
+  .am-archive-item {
+    display: grid;
+    grid-template-columns: 120px 1fr 180px 140px;
+    gap: 32px;
+    padding: 36px 0;
+    border-top: 1px solid var(--am-line);
+    align-items: baseline;
+    transition: padding 0.3s;
+  }
+  .am-archive-item:last-child { border-bottom: 1px solid var(--am-line); }
+  .am-archive-item:hover { padding-left: 16px; padding-right: 16px; }
+
+  .am-archive-num {
+    font-family: var(--am-serif);
+    font-size: 32px;
+    color: var(--am-text-3);
+    line-height: 1;
+  }
+  .am-archive-item:hover .am-archive-num { color: var(--am-orange); }
+
+  .am-archive-topic {
+    font-family: var(--am-serif);
+    font-size: 26px;
+    color: var(--am-text);
+    line-height: 1.2;
+    letter-spacing: -0.01em;
+  }
+  .am-archive-equip {
+    font-family: var(--am-mono);
+    font-size: 12px;
+    color: var(--am-text-2);
+    letter-spacing: 0.08em;
+    text-transform: uppercase;
+  }
+  .am-archive-date {
+    font-family: var(--am-mono);
+    font-size: 12px;
+    color: var(--am-text-3);
+    letter-spacing: 0.06em;
+    text-align: right;
+  }
+
+  /* ===================================================== */
+  /* INSTRUCTORS                                           */
+  /* ===================================================== */
+  .am-inst-grid {
+    display: grid;
+    grid-template-columns: 1fr 1fr;
+    gap: 32px;
+  }
+  .am-inst-card {
+    background: var(--am-bg-2);
+    border: 1px solid var(--am-line);
+    padding: 48px 40px;
+  }
+  .am-inst-role {
+    font-family: var(--am-mono);
+    font-size: 11px;
+    color: var(--am-orange);
+    letter-spacing: 0.18em;
+    text-transform: uppercase;
+    margin-bottom: 16px;
+  }
+  .am-inst-name {
+    font-family: var(--am-serif);
+    font-size: 44px;
+    line-height: 1;
+    margin: 0 0 8px;
+    letter-spacing: -0.02em;
+  }
+  .am-inst-name-en {
+    font-family: var(--am-mono);
+    font-size: 12px;
+    color: var(--am-text-3);
+    letter-spacing: 0.1em;
+    margin-bottom: 32px;
+  }
+  .am-inst-focus {
+    font-size: 15px;
+    line-height: 1.7;
+    color: var(--am-text-2);
+    padding-top: 24px;
+    border-top: 1px solid var(--am-line);
+  }
+  .am-inst-focus strong { color: var(--am-text); font-weight: 500; }
+
+  /* ===================================================== */
+  /* PRICING & APPLY                                       */
+  /* ===================================================== */
+  .am-apply-box {
+    background: linear-gradient(180deg, #1a1208 0%, #120e08 100%);
+    border: 1px solid var(--am-line-strong);
+    padding: 64px 56px;
+  }
+  .am-apply-grid {
+    display: grid;
+    grid-template-columns: 1fr 1px 1fr;
+    gap: 48px;
+    align-items: start;
+  }
+  .am-apply-divider {
+    background: var(--am-line);
+    align-self: stretch;
+  }
+  .am-apply-price {
+    font-family: var(--am-serif);
+    font-size: 96px;
+    line-height: 0.9;
+    color: var(--am-orange);
+    margin: 8px 0 0;
+    letter-spacing: -0.03em;
+  }
+  .am-apply-price small {
+    font-size: 18px;
+    color: var(--am-text-2);
+    font-family: var(--am-sans);
+    margin-left: 8px;
+    letter-spacing: 0;
+  }
+  .am-apply-account {
+    font-family: var(--am-mono);
+    font-size: 14px;
+    color: var(--am-text-2);
+    line-height: 2;
+    margin: 32px 0 0;
+  }
+  .am-apply-account-label {
+    color: var(--am-text-3);
+    display: inline-block;
+    width: 80px;
+  }
+  .am-apply-account strong { color: var(--am-text); font-weight: 500; }
+
+  .am-apply-steps { counter-reset: step; }
+  .am-apply-step {
+    display: grid;
+    grid-template-columns: 32px 1fr;
+    gap: 20px;
+    padding: 20px 0;
+    border-top: 1px solid var(--am-line);
+  }
+  .am-apply-step:first-child { border-top: 0; padding-top: 0; }
+  .am-apply-step::before {
+    counter-increment: step;
+    content: counter(step, decimal-leading-zero);
+    font-family: var(--am-mono);
+    font-size: 13px;
+    color: var(--am-orange);
+    letter-spacing: 0.08em;
+  }
+  .am-apply-step-title {
+    font-size: 16px;
+    color: var(--am-text);
+    margin: 0 0 6px;
+    font-weight: 500;
+  }
+  .am-apply-step-desc {
+    font-size: 13px;
+    color: var(--am-text-2);
+    line-height: 1.65;
+    margin: 0;
+  }
+  .am-apply-step-desc code {
+    font-family: var(--am-mono);
+    font-size: 12px;
+    background: var(--am-bg-3);
+    padding: 2px 6px;
+    color: var(--am-text);
+    border-radius: 2px;
+  }
+
+  /* ===================================================== */
+  /* NOTICES                                               */
+  /* ===================================================== */
+  .am-notice-grid {
+    display: grid;
+    grid-template-columns: repeat(2, 1fr);
+    gap: 1px;
+    background: var(--am-line);
+    border: 1px solid var(--am-line);
+  }
+  .am-notice {
+    background: var(--am-bg);
+    padding: 32px;
+  }
+  .am-notice-icon {
+    font-family: var(--am-mono);
+    font-size: 11px;
+    color: var(--am-orange);
+    letter-spacing: 0.12em;
+    margin-bottom: 16px;
+  }
+  .am-notice-title {
+    font-size: 17px;
+    margin: 0 0 12px;
+    color: var(--am-text);
+    font-weight: 500;
+  }
+  .am-notice-text {
+    font-size: 14px;
+    line-height: 1.7;
+    color: var(--am-text-2);
+    margin: 0;
+  }
+
+  /* ===================================================== */
+  /* FOOTER CTA                                            */
+  /* ===================================================== */
+  .am-footer-cta {
+    padding: 140px 0;
+    text-align: center;
+    background:
+      radial-gradient(ellipse 80% 60% at 50% 50%, var(--am-orange-dim), transparent 70%),
+      #0a0a0a;
+    border-bottom: 1px solid var(--am-line);
+  }
+  .am-footer-label {
+    font-family: var(--am-mono);
+    font-size: 11px;
+    letter-spacing: 0.18em;
+    color: var(--am-text-3);
+    text-transform: uppercase;
+    margin-bottom: 32px;
+  }
+  .am-footer-title {
+    font-family: var(--am-serif);
+    font-size: clamp(40px, 6vw, 72px);
+    line-height: 1.05;
+    margin: 0 0 24px;
+    letter-spacing: -0.02em;
+  }
+  .am-footer-title em { color: var(--am-orange); font-style: italic; }
+  .am-footer-sub {
+    font-size: 16px;
+    color: var(--am-text-2);
+    margin: 0 0 48px;
+  }
+  .am-contact-meta {
+    margin-top: 64px;
+    font-family: var(--am-mono);
+    font-size: 12px;
+    color: var(--am-text-3);
+    letter-spacing: 0.08em;
+  }
+  .am-contact-meta span { color: var(--am-text-2); }
+
+  /* ===================================================== */
+  /* RESPONSIVE                                            */
+  /* ===================================================== */
+  @media (max-width: 880px) {
+    .am-wrap { padding: 0 20px; }
+
+    .am-hero { padding: 56px 0 72px; }
+    .am-hero-meta { margin-bottom: 32px; flex-wrap: wrap; }
+    .am-hero-sub { font-size: 15px; margin-top: 32px; }
+    .am-hero-stats { grid-template-columns: 1fr 1fr; }
+    .am-hero-stat { border-bottom: 1px solid var(--am-line); }
+    .am-hero-stat:nth-child(2) { border-right: 0; }
+    .am-hero-stat:nth-child(3), .am-hero-stat:nth-child(4) { border-bottom: 0; }
+
+    .am-current { padding: 64px 0; }
+    .am-current-grid { grid-template-columns: 1fr; gap: 24px; }
+    .am-current-issue { font-size: 72px; }
+    .am-current-topic { font-size: 38px; }
+    .am-current-info { grid-template-columns: 1fr; gap: 20px; padding: 20px 0; }
+
+    .am-section { padding: 72px 0; }
+    .am-section-head { grid-template-columns: 1fr; gap: 16px; margin-bottom: 48px; }
+
+    .am-diff-grid { grid-template-columns: 1fr; }
+    .am-diff-card { padding: 32px 24px; }
+
+    .am-structure { grid-template-columns: 1fr; gap: 24px; }
+    .am-flow-row { grid-template-columns: 70px 1fr; padding: 20px; }
+    .am-flow-tag { display: none; }
+
+    .am-archive-item {
+      grid-template-columns: 60px 1fr;
+      gap: 16px;
+      padding: 24px 0;
+    }
+    .am-archive-item:hover { padding-left: 0; padding-right: 0; }
+    .am-archive-num { font-size: 22px; }
+    .am-archive-topic { font-size: 20px; grid-column: 2; }
+    .am-archive-equip, .am-archive-date {
+      grid-column: 2;
+      text-align: left;
+      font-size: 11px;
+    }
+
+    .am-inst-grid { grid-template-columns: 1fr; }
+    .am-inst-card { padding: 32px 24px; }
+    .am-inst-name { font-size: 32px; }
+
+    .am-apply-box { padding: 36px 24px; }
+    .am-apply-grid { grid-template-columns: 1fr; gap: 32px; }
+    .am-apply-divider { display: none; }
+    .am-apply-price { font-size: 64px; }
+
+    .am-notice-grid { grid-template-columns: 1fr; }
+    .am-notice { padding: 24px; }
+
+    .am-footer-cta { padding: 80px 0; }
+  }
+</style>
+
+<div class="am-page">
+
+  <!-- ============== HERO ============== -->
+  <section class="am-hero">
+    <div class="am-wrap am-hero-inner">
+
+      <div class="am-hero-meta">
+        <span class="am-hero-dot"></span>
+        <span class="am-hero-meta-text"><strong>OFFLINE LESSON</strong> &nbsp;/&nbsp; BUSAN MYEONGJI · ARCHIVE PILATES</span>
+      </div>
+
+      <h1 class="am-hero-title">
+        OFFLINE<br>
+        <em>LESSON</em>
+      </h1>
+
+      <p class="am-hero-sub">
+        부산 강서구 명지, ARCHIVE PILATES에서 진행하는 <strong>강사 대상 오프라인 레슨</strong>.
+        수업을 더 많이 외우는 시간이 아니라, 움직임을 보고 판단하는 기준과
+        현장에서 바로 쓸 수 있는 티칭 언어를 함께 정리하는 시간입니다.
+      </p>
+
+      <div class="am-hero-stats">
+        <div class="am-hero-stat">
+          <div class="am-hero-stat-num">5:1</div>
+          <div class="am-hero-stat-label">Instructor Lesson</div>
+        </div>
+        <div class="am-hero-stat">
+          <div class="am-hero-stat-num">5</div>
+          <div class="am-hero-stat-label">Seats</div>
+        </div>
+        <div class="am-hero-stat">
+          <div class="am-hero-stat-num">F/B</div>
+          <div class="am-hero-stat-label">Feedback</div>
+        </div>
+        <div class="am-hero-stat">
+          <div class="am-hero-stat-num">MJ</div>
+          <div class="am-hero-stat-label">Busan Myeongji</div>
+        </div>
+      </div>
+
+    </div>
+  </section>
+
+  <!-- ============== CURRENT OFFER ============== -->
+  <section class="am-current">
+    <div class="am-wrap">
+
+      <div class="am-current-grid">
+
+        <div>
+          <div class="am-current-issue">5:1</div>
+          <span class="am-current-issue-label">Instructor Group Lesson</span>
+        </div>
+
+        <div class="am-current-content">
+
+          <div class="am-current-topic-en">INSTRUCTOR OFFLINE LESSON</div>
+          <h2 class="am-current-topic">오프라인 강사레슨</h2>
+
+          <p class="am-current-desc">
+            예비 강사, 현직 강사, 수업을 시작했지만 큐잉·보조·시퀀스 설계가 아직 흩어져 있는 분을 위한 레슨입니다.
+            몸을 더 많이 움직이는 것보다 <strong style="color:var(--am-text);">무엇을 보고, 어떤 순서로 판단하고, 어떤 말로 전달할지</strong>를 정리합니다.
+          </p>
+
+          <div class="am-current-info">
+            <div class="am-current-info-row">
+              <div class="am-current-info-label">Format</div>
+              <div class="am-current-info-val">5:1 강사레슨<small>소수 정원 피드백형 수업</small></div>
+            </div>
+            <div class="am-current-info-row">
+              <div class="am-current-info-label">Location</div>
+              <div class="am-current-info-val">부산 강서구 명지<small>에코팰리스 704호</small></div>
+            </div>
+            <div class="am-current-info-row">
+              <div class="am-current-info-label">Tuition</div>
+              <div class="am-current-info-val">상담 후 안내<small>주제·회차별 구성</small></div>
+            </div>
+          </div>
+
+          <a href="http://pf.kakao.com/_AHdvn/chat" target="_blank" rel="noopener" class="am-cta">
+            카카오톡으로 일정 문의하기
+            <span class="am-cta-arrow">→</span>
+          </a>
+          <div class="am-cta-note">카카오 채널에서 희망 일정과 레슨 목적을 남겨주세요.</div>
+
+        </div>
+
+      </div>
+
+    </div>
+  </section>
+
+  <!-- ============== DIFFERENTIATORS ============== -->
+  <section class="am-section">
+    <div class="am-wrap">
+
+      <div class="am-section-head">
+        <div class="am-section-num">01 / WHY</div>
+        <div>
+          <h2 class="am-section-title">수업을 보는 <em>기준</em>.</h2>
+          <p class="am-section-lead">
+            오프라인 강사레슨은 동작을 많이 배우는 수업이 아니라, 회원의 움직임을 관찰하고
+            필요한 개입을 선택하는 판단력을 만드는 수업입니다.
+          </p>
+        </div>
+      </div>
+
+      <div class="am-diff-grid">
+
+        <div class="am-diff-card">
+          <div class="am-diff-num">01</div>
+          <h3 class="am-diff-title">움직임 관찰</h3>
+          <p class="am-diff-desc">
+            정렬, 호흡, 체중이동, 보상 패턴을 어떻게 볼지 정리합니다.
+            단순히 틀린 자세를 찾기보다 왜 그렇게 움직이는지 읽는 연습을 합니다.
+          </p>
+          <span class="am-diff-tag">Observation</span>
+        </div>
+
+        <div class="am-diff-card">
+          <div class="am-diff-num">02</div>
+          <h3 class="am-diff-title">큐잉과 보조</h3>
+          <p class="am-diff-desc">
+            회원이 바로 이해할 수 있는 말, 손으로 도와야 하는 순간,
+            기다려야 하는 순간을 나눠 봅니다. 말이 길어지는 수업을 줄이고 핵심을 남깁니다.
+          </p>
+          <span class="am-diff-tag">Cueing</span>
+        </div>
+
+        <div class="am-diff-card">
+          <div class="am-diff-num">03</div>
+          <h3 class="am-diff-title">시퀀스 설계</h3>
+          <p class="am-diff-desc">
+            한 동작을 잘 시키는 것을 넘어, 수업 전체가 왜 그 순서로 이어지는지 설명할 수 있게 만듭니다.
+            회원 케이스에 따라 강도와 방향을 조절합니다.
+          </p>
+          <span class="am-diff-tag">Sequence</span>
+        </div>
+
+      </div>
+
+    </div>
+  </section>
+
+  <!-- ============== STRUCTURE ============== -->
+  <section class="am-section">
+    <div class="am-wrap">
+
+      <div class="am-section-head">
+        <div class="am-section-num">02 / FORMAT</div>
+        <div>
+          <h2 class="am-section-title">정해진 회차의 <em>수업 흐름</em>.</h2>
+          <p class="am-section-lead">
+            아카이브메소드는 참여자별 커스텀 레슨이 아니라, 미리 설계된 주제와 시퀀스를
+            5:1 소수 정원 안에서 함께 경험하고 해석하는 강사 교육입니다.
+          </p>
+        </div>
+      </div>
+
+      <div class="am-structure">
+
+        <div class="am-flow">
+          <div class="am-flow-row">
+            <div class="am-flow-time">01</div>
+            <div class="am-flow-title">회차 주제 안내<small>그 달의 수업 주제와 핵심 관찰 포인트 공유</small></div>
+            <div class="am-flow-tag">Topic</div>
+          </div>
+          <div class="am-flow-row">
+            <div class="am-flow-time">02</div>
+            <div class="am-flow-title">실전 수업 경험<small>미리 짜인 시퀀스를 직접 움직이며 수업 언어 확인</small></div>
+            <div class="am-flow-tag">Class</div>
+          </div>
+          <div class="am-flow-row">
+            <div class="am-flow-time">03</div>
+            <div class="am-flow-title">시퀀스 해석<small>동작 배치, 난이도 조절, 큐잉 의도 정리</small></div>
+            <div class="am-flow-tag">Review</div>
+          </div>
+          <div class="am-flow-row">
+            <div class="am-flow-time">04</div>
+            <div class="am-flow-title">질문과 기록<small>현장 질문, 적용 포인트, 다음 회차 연결</small></div>
+            <div class="am-flow-tag">Archive</div>
+          </div>
+        </div>
+
+        <div class="am-teams">
+          <h4>운영 방식</h4>
+          <p class="am-teams-desc">
+            회차별 주제와 시퀀스는 사전에 설계됩니다. 참여자는 정해진 수업을 경험한 뒤,
+            강사 관점에서 왜 그렇게 구성되었는지 함께 해석합니다.
+          </p>
+
+          <div class="am-team-row">
+            <div class="am-team-name">5:1</div>
+            <div class="am-team-flow"><strong>소수 정원</strong> → <strong>회차별 운영</strong></div>
+          </div>
+          <div class="am-team-row">
+            <div class="am-team-name">Method</div>
+            <div class="am-team-flow"><strong>정해진 주제</strong> → <strong>시퀀스 해석</strong></div>
+          </div>
+        </div>
+
+      </div>
+
+    </div>
+  </section>
+
+  <!-- ============== TOPICS ============== -->
+  <section class="am-section">
+    <div class="am-wrap">
+
+      <div class="am-section-head">
+        <div class="am-section-num">03 / TOPICS</div>
+        <div>
+          <h2 class="am-section-title">다룰 수 있는 <em>주제</em>.</h2>
+          <p class="am-section-lead">
+            레슨 주제는 고정 커리큘럼보다 현재 필요한 문제를 중심으로 정합니다.
+            아래 항목 중 필요한 방향을 선택해 상담할 수 있습니다.
+          </p>
+        </div>
+      </div>
+
+      <div class="am-archive-list">
+
+        <div class="am-archive-item">
+          <div class="am-archive-num">01</div>
+          <div class="am-archive-topic">기초 큐잉 정리</div>
+          <div class="am-archive-equip">Reformer + Mat</div>
+          <div class="am-archive-date">Cueing</div>
+        </div>
+
+        <div class="am-archive-item">
+          <div class="am-archive-num">02</div>
+          <div class="am-archive-topic">회원 케이스 관찰</div>
+          <div class="am-archive-equip">Posture + Pattern</div>
+          <div class="am-archive-date">Case</div>
+        </div>
+
+        <div class="am-archive-item">
+          <div class="am-archive-num">03</div>
+          <div class="am-archive-topic">시퀀스 설계</div>
+          <div class="am-archive-equip">Level + Flow</div>
+          <div class="am-archive-date">Sequence</div>
+        </div>
+
+        <div class="am-archive-item">
+          <div class="am-archive-num">04</div>
+          <div class="am-archive-topic">장비별 응용</div>
+          <div class="am-archive-equip">Reformer + Barrel + Chair</div>
+          <div class="am-archive-date">Apparatus</div>
+        </div>
+
+      </div>
+
+    </div>
+  </section>
+
+  <!-- ============== INSTRUCTORS ============== -->
+  <section class="am-section">
+    <div class="am-wrap">
+
+      <div class="am-section-head">
+        <div class="am-section-num">04 / INSTRUCTORS</div>
+        <div>
+          <h2 class="am-section-title">ARCHIVE PILATES의 <em>관점</em>.</h2>
+          <p class="am-section-lead">
+            레슨은 동작의 정답을 주입하기보다, 강사가 스스로 판단하고 설명할 수 있는 기준을 세우는 방향으로 진행합니다.
+          </p>
+        </div>
+      </div>
+
+      <div class="am-inst-grid">
+
+        <div class="am-inst-card">
+          <div class="am-inst-role">PRINCIPAL · 원장</div>
+          <h3 class="am-inst-name">배민진</h3>
+          <div class="am-inst-name-en">BAE MIN JIN</div>
+          <p class="am-inst-focus">
+            <strong>움직임 관찰과 수업 언어.</strong>
+            회원의 움직임을 보고 필요한 큐잉을 선택하는 과정, 수업 전체의 리듬과 기록 방식을 함께 정리합니다.
+          </p>
+        </div>
+
+        <div class="am-inst-card">
+          <div class="am-inst-role">ARCHIVE PILATES</div>
+          <h3 class="am-inst-name">명지 스튜디오</h3>
+          <div class="am-inst-name-en">BUSAN MYEONGJI</div>
+          <p class="am-inst-focus">
+            <strong>현장에서 바로 적용 가능한 레슨.</strong>
+            부산 강서구 명지 스튜디오에서 장비와 실제 케이스를 기준으로 피드백합니다.
+            레슨 후에도 반복해서 정리할 수 있는 과제를 남깁니다.
+          </p>
+        </div>
+
+      </div>
+
+    </div>
+  </section>
+
+  <!-- ============== APPLY ============== -->
+  <section class="am-section">
+    <div class="am-wrap">
+
+      <div class="am-section-head">
+        <div class="am-section-num">05 / APPLY</div>
+        <div>
+          <h2 class="am-section-title">신청과 <em>일정 조율</em>.</h2>
+        </div>
+      </div>
+
+      <div class="am-apply-box">
+        <div class="am-apply-grid">
+
+          <div>
+            <div class="am-current-info-label" style="margin-bottom:8px;">Tuition · 수강료</div>
+            <div class="am-apply-price">상담<small>후 안내</small></div>
+            <div class="am-apply-account">
+              <div><span class="am-apply-account-label">형태</span><strong>5:1 강사레슨</strong></div>
+              <div><span class="am-apply-account-label">장소</span><strong>부산 강서구 명지국제2로28번길 34</strong></div>
+              <div><span class="am-apply-account-label">호수</span><strong>에코팰리스 704호</strong></div>
+            </div>
+          </div>
+
+          <div class="am-apply-divider"></div>
+
+          <div>
+            <div class="am-current-info-label" style="margin-bottom:24px;">Process · 신청 절차</div>
+
+            <div class="am-apply-steps">
+              <div class="am-apply-step">
+                <div>
+                  <h4 class="am-apply-step-title">카카오 채널 문의</h4>
+                  <p class="am-apply-step-desc">참여를 원하는 회차와 이름, 연락처를 남겨주세요.<br>예시: <code>아카이브메소드 5:1 강사레슨 신청합니다</code></p>
+                </div>
+              </div>
+              <div class="am-apply-step">
+                <div>
+                  <h4 class="am-apply-step-title">회차 안내</h4>
+                  <p class="am-apply-step-desc">모집 중인 주제, 일정, 정원, 수강료를 안내합니다. 회차별 수업 내용은 사전에 설계된 흐름으로 진행됩니다.</p>
+                </div>
+              </div>
+              <div class="am-apply-step">
+                <div>
+                  <h4 class="am-apply-step-title">일정 확정</h4>
+                  <p class="am-apply-step-desc">일정과 입금 확인 후 예약이 확정됩니다. 확정 전까지 시간은 선점되지 않습니다.</p>
+                </div>
+              </div>
+            </div>
+          </div>
+
+        </div>
+      </div>
+
+    </div>
+  </section>
+
+  <!-- ============== NOTICES ============== -->
+  <section class="am-section">
+    <div class="am-wrap">
+
+      <div class="am-section-head">
+        <div class="am-section-num">06 / NOTICE</div>
+        <div>
+          <h2 class="am-section-title">신청 전 확인.</h2>
+          <p class="am-section-lead">
+            오프라인 레슨은 목적과 일정 조율이 필요한 수업입니다. 아래 내용을 확인한 뒤 문의해주세요.
+          </p>
+        </div>
+      </div>
+
+      <div class="am-notice-grid">
+
+        <div class="am-notice">
+          <div class="am-notice-icon">— 01</div>
+          <h4 class="am-notice-title">대상</h4>
+          <p class="am-notice-text">
+            필라테스 강사, 예비 강사, 수업 설계와 티칭 언어를 더 깊게 정리하고 싶은 분을 대상으로 합니다.
+          </p>
+        </div>
+
+        <div class="am-notice">
+          <div class="am-notice-icon">— 02</div>
+          <h4 class="am-notice-title">일정 확정</h4>
+          <p class="am-notice-text">
+            카카오 채널 상담 후 레슨 방향과 시간을 조율합니다. 일정은 입금 확인 후 확정됩니다.
+          </p>
+        </div>
+
+        <div class="am-notice">
+          <div class="am-notice-icon">— 03</div>
+          <h4 class="am-notice-title">촬영 및 기록</h4>
+          <p class="am-notice-text">
+            레슨 기록을 위해 사진이나 영상 촬영이 진행될 수 있습니다. 홍보 활용 여부는 사전에 안내하고 동의를 확인합니다.
+          </p>
+        </div>
+
+        <div class="am-notice">
+          <div class="am-notice-icon">— 04</div>
+          <h4 class="am-notice-title">변경 및 취소</h4>
+          <p class="am-notice-text">
+            예약 확정 후 변경과 취소 기준은 개별 안내합니다. 당일 변경이나 무단 불참은 제한될 수 있습니다.
+          </p>
+        </div>
+
+      </div>
+
+    </div>
+  </section>
+
+  <!-- ============== FOOTER CTA ============== -->
+  <section class="am-footer-cta">
+    <div class="am-wrap">
+      <div class="am-footer-label">OFFLINE INSTRUCTOR LESSON</div>
+      <h2 class="am-footer-title">
+        수업을 더 선명하게<br>
+        <em>설명할 수 있도록.</em>
+      </h2>
+      <p class="am-footer-sub">
+        부산 강서구 명지 · 5:1 강사레슨 · 상담 후 일정 확정
+      </p>
+
+      <a href="http://pf.kakao.com/_AHdvn/chat" target="_blank" rel="noopener" class="am-cta">
+        카카오톡으로 일정 문의하기
+        <span class="am-cta-arrow">→</span>
+      </a>
+
+      <div class="am-contact-meta">
+        문의 <span>010-2924-4425</span> · Instagram <a href="https://www.instagram.com/minjin.vibe/" target="_blank" rel="noopener"><span>@minjin.vibe</span></a> · Kakao <a href="http://pf.kakao.com/_AHdvn/chat" target="_blank" rel="noopener"><span>채팅하기</span></a>
+      </div>
+    </div>
+  </section>
+
+</div>
+<!-- ============== END OFFLINE LESSON PAGE ============== -->
