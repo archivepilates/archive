@@ -6066,7 +6066,7 @@
       renderApp();
       try {
         const { manager, result } = await withTimeout((async () => {
-          const tokenResult = await appState.user.getIdTokenResult(false);
+          const tokenResult = await appState.user.getIdTokenResult(true);
           const role = tokenResult.claims.role || '';
           const isManager = role === 'owner' || role === 'manager';
           if (!isManager && appState.viewMode === 'month') appState.viewMode = 'day';
