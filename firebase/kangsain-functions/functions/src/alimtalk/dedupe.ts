@@ -44,6 +44,12 @@ function dedupeScope(candidate: AlimtalkCandidateDoc): Record<string, string> {
   if (type === "new_member") return { memberId: candidate.memberId };
   if (type === "private_survey") return { memberId: candidate.memberId };
   if (type === "group_survey") return { memberId: candidate.memberId };
+  if (type === "instructor_lesson_material") {
+    return {
+      lessonDate: String(payload.lessonDate || payload.classDate || payload.sourceDate || candidate.sourceDate || ""),
+      managementNumber: String(payload.managementNumber || payload.materialNumber || payload.archiveMethodId || ""),
+    };
+  }
   if (type === "reservation_open") {
     return {
       reservationWeek: String(payload.reservationWeek || payload.weekLabel || ""),

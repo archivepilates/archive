@@ -6,7 +6,7 @@ import { refs } from "../firestore/refs";
 import type { AlimtalkCandidateDoc } from "../types/models";
 import { errorMessage } from "../utils/errors";
 import { nowTimestamp, todayKst } from "../utils/date";
-import { alimtalkDedupePolicy } from "./templates";
+import { ALIMTALK_TEMPLATE_CHANNEL_IDS, alimtalkDedupePolicy } from "./templates";
 import { autoSendabilityIssue } from "./eligibility";
 import { alimtalkDedupeKey, findCompletedDuplicate, normalizePhone } from "./dedupe";
 import { isAlimtalkTemplateApproved } from "./templateStatus";
@@ -192,7 +192,7 @@ async function sendSolapiAlimtalk(candidate: AlimtalkCandidateDoc): Promise<{ me
         to,
         type: "ATA",
         kakaoOptions: {
-          pfId: solapiPfid.value(),
+          pfId: ALIMTALK_TEMPLATE_CHANNEL_IDS[candidate.templateCode] || solapiPfid.value(),
           templateId: candidate.templateCode,
           disableSms: true,
           variables: templateVariables(candidate),
@@ -247,6 +247,7 @@ function templateVariables(candidate: AlimtalkCandidateDoc): Record<string, stri
     "#{만료일}": String(payload.expiresAt || payload.expiryDate || payload.expireDate || ""),
     "#{설문ID}": String(payload.surveyId || payload.responseId || ""),
     "#{접근토큰}": String(payload.accessToken || ""),
+    "#{관리번호}": String(payload.managementNumber || payload.materialNumber || payload.archiveMethodId || ""),
   };
 }
 

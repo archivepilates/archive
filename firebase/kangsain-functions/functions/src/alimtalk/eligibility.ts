@@ -17,6 +17,12 @@ export async function autoSendabilityIssue(candidate: AlimtalkCandidateDoc, toda
     return `승인 템플릿 코드 아님: ${candidate.templateCode}`;
   if ((candidate.attempts || 0) >= (candidate.maxAttempts || 2)) return "발송 실패 재시도 한도 초과";
   if (candidate.sourceDate && candidate.sourceDate > today) return "대상일이 발송 기준일 이후";
+  if (candidate.type === "instructor_lesson_material") {
+    if (candidate.sourceDate !== today) return "강사레슨 수업자료는 발송 기준일 후보만 발송";
+    if (!candidate.payload?.managementNumber && !candidate.payload?.materialNumber && !candidate.payload?.archiveMethodId)
+      return "강사레슨 수업자료 관리번호 없음";
+    return "";
+  }
   if (
     candidate.type !== "new_member" &&
     candidate.type !== "private_survey" &&

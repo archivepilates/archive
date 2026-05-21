@@ -307,6 +307,7 @@ export type AlimtalkCandidateType =
   | "new_member"
   | "private_survey"
   | "group_survey"
+  | "instructor_lesson_material"
   | "ticket_expiring"
   | "remaining_low"
   | "private_count_low"

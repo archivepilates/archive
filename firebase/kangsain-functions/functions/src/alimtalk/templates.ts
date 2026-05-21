@@ -1,5 +1,7 @@
 import type { AlimtalkCandidateType } from "../types/models";
 
+export const INSTRUCTOR_LESSON_ALIMTALK_CHANNEL_ID = "KA01PF260511123407631PSoAflYAVXs";
+
 export const NEW_MEMBER_ALIMTALK_START_DATE = "2026-05-16";
 export const NEW_MEMBER_ALIMTALK_WINDOW_DAYS = 3;
 export const PRIVATE_SURVEY_ALIMTALK_START_DATE = "2026-05-19";
@@ -70,7 +72,16 @@ export const ALIMTALK_TEMPLATES = {
     label: "담당강사 그룹 사전확인 제출 안내 v1",
     status: "inspecting",
   },
+  instructor_lesson_material: {
+    code: "KA01TP260521120040094XcMvYgFTryj",
+    label: "강사레슨 수업자료 안내 v1",
+    status: "inspecting",
+  },
 } as const;
+
+export const ALIMTALK_TEMPLATE_CHANNEL_IDS: Readonly<Record<string, string>> = {
+  [ALIMTALK_TEMPLATES.instructor_lesson_material.code]: INSTRUCTOR_LESSON_ALIMTALK_CHANNEL_ID,
+};
 
 export const CANDIDATE_TEMPLATE_CODES: Record<SendableAlimtalkCandidateType, string> = {
   new_member: ALIMTALK_TEMPLATES.new_member.code,
@@ -127,6 +138,10 @@ export const ALIMTALK_DEDUPE_POLICIES_BY_TEMPLATE_CODE: Record<string, AlimtalkD
   [ALIMTALK_TEMPLATES.private_ticket_expiring.code]: {
     label: "프라이빗 수강권별 기간 안내 30일",
     windowDays: 30,
+  },
+  [ALIMTALK_TEMPLATES.instructor_lesson_material.code]: {
+    label: "강사레슨 수업자료 수업별 1회",
+    windowDays: null,
   },
 };
 
