@@ -27,6 +27,7 @@ const OUTPUT_HEADERS = [
 ];
 const STAFF_PRIVATE_SURVEY_TEMPLATE_ID = "KA01TP260519093416836f1EHZYJ00uM";
 const SOLAPI_SEND_URL = "https://api.solapi.com/messages/v4/send-many/detail";
+const ARCHIVE_LOGO_URL = "https://in.archivepilates.com/logo120.png";
 
 interface SurveyIngestPayload {
   spreadsheetId?: string;
@@ -602,7 +603,7 @@ async function matchSurveyToMember(payload: NormalizedSurveyPayload): Promise<Ma
     lectureStartAt: booking.lectureStartAt || null,
     staffId: booking.staffId,
     staffName: booking.staffName,
-    reason: "전화번호 완전일치 후 가장 가까운 예정 프라이빗 예약에 매칭했습니다.",
+    reason: "예정 프라이빗 예약 자동매칭",
   };
 }
 
@@ -696,15 +697,17 @@ function renderSurveyPage(doc: PrivateSurveyResponseDoc): string {
         timeStyle: "short",
       }).format(doc.submittedAt.toDate())
     : doc.submittedAtText;
-  const rows = [
+  const priorityRows = [
     ["운동 목적", doc.summary.goal],
     ["신경 부위", doc.summary.focusArea],
     ["통증/병력", doc.summary.painOrMedicalNote],
+  ];
+  const detailRows = [
     ["운동 수준", doc.summary.exerciseLevel],
     ["걱정/어려움", doc.summary.concernOrDifficulty],
     ["기대/중요 요소", doc.summary.expectationOrImportantFactor],
-    ["유입경로", doc.summary.referralSource],
     ["생활/이전 아쉬움", doc.summary.lifestyleOrPreviousIssue],
+    ["유입경로", doc.summary.referralSource],
   ];
   return `<!doctype html>
 <html lang="ko">
@@ -713,42 +716,67 @@ function renderSurveyPage(doc: PrivateSurveyResponseDoc): string {
   <meta name="viewport" content="width=device-width, initial-scale=1">
   <title>ARCHIVE IN 사전설문</title>
   <style>
-    :root { color-scheme: light; --ink:#181512; --muted:#746b62; --line:#e6ded5; --paper:#fffdf9; --accent:#2f6f68; --soft:#eef5f2; }
+    :root { color-scheme: light; --ink:#181512; --muted:#746b62; --line:#e8e0d7; --paper:#fffdf9; --accent:#c9392f; --soft:#f5efe9; --green:#2f6f68; }
     * { box-sizing: border-box; }
     body { margin:0; font-family:-apple-system,BlinkMacSystemFont,"Apple SD Gothic Neo","Noto Sans KR",sans-serif; background:#f6f1eb; color:var(--ink); }
-    main { width:min(720px,100%); margin:0 auto; padding:18px 14px 36px; }
-    .top { padding:18px 2px 12px; }
+    main { width:min(760px,100%); margin:0 auto; padding:18px 14px 36px; }
+    .top { display:grid; grid-template-columns:1fr auto; gap:16px; align-items:start; padding:18px 2px 14px; border-bottom:1px solid rgba(24,21,18,.08); }
+    .brand { width:52px; height:52px; border-radius:50%; object-fit:contain; }
     .eyebrow { font-size:12px; font-weight:800; color:var(--accent); }
-    h1 { margin:6px 0 8px; font-size:28px; line-height:1.15; letter-spacing:0; }
-    .meta { color:var(--muted); font-size:14px; line-height:1.55; }
-    .panel { background:var(--paper); border:1px solid var(--line); border-radius:8px; padding:16px; margin:12px 0; }
-    .match { background:var(--soft); border-color:#c9ddd7; }
-    .label { font-size:12px; color:var(--muted); font-weight:800; margin-bottom:6px; }
-    .value { font-size:16px; line-height:1.55; white-space:pre-wrap; word-break:keep-all; overflow-wrap:anywhere; }
-    .grid { display:grid; gap:10px; }
+    h1 { margin:6px 0 10px; font-size:28px; line-height:1.18; letter-spacing:0; }
+    .meta { display:flex; flex-wrap:wrap; gap:6px; color:var(--muted); font-size:13px; line-height:1.5; }
+    .chip { display:inline-flex; align-items:center; min-height:28px; padding:4px 9px; border:1px solid var(--line); border-radius:999px; background:rgba(255,253,249,.72); }
+    .section-title { margin:22px 2px 9px; font-size:13px; font-weight:900; color:#3e3831; }
+    .panel { background:var(--paper); border:1px solid var(--line); border-radius:8px; padding:15px 16px; }
+    .match { margin:14px 0 0; background:var(--soft); border-color:#dfd2c5; }
+    .label { font-size:12px; color:var(--muted); font-weight:800; margin-bottom:7px; }
+    .value { font-size:16px; line-height:1.62; white-space:pre-line; word-break:keep-all; overflow-wrap:break-word; }
+    .priority { display:grid; gap:10px; }
+    .grid { display:grid; grid-template-columns:repeat(2,minmax(0,1fr)); gap:10px; }
     .small { font-size:13px; color:var(--muted); line-height:1.5; }
-    footer { padding:12px 2px; color:var(--muted); font-size:12px; }
+    footer { padding:14px 2px; color:var(--muted); font-size:12px; line-height:1.5; }
+    @media (max-width:560px) {
+      main { padding:14px 12px 30px; }
+      .top { grid-template-columns:1fr 44px; gap:12px; padding-top:12px; }
+      .brand { width:44px; height:44px; }
+      h1 { font-size:25px; }
+      .grid { grid-template-columns:1fr; }
+      .panel { padding:14px; }
+      .value { font-size:15px; line-height:1.62; }
+    }
   </style>
 </head>
 <body>
   <main>
     <section class="top">
-      <div class="eyebrow">ARCHIVE IN · 첫 프라이빗 사전설문</div>
-      <h1>${escapeHtml(doc.memberName)} 회원</h1>
-      <div class="meta">제출 ${escapeHtml(submitted)}<br>경험구분 ${escapeHtml(doc.experienceType || "-")}</div>
+      <div>
+        <div class="eyebrow">ARCHIVE IN · 첫 프라이빗 사전설문</div>
+        <h1>${escapeHtml(doc.memberName)} 회원</h1>
+        <div class="meta">
+          <span class="chip">제출 ${escapeHtml(submitted)}</span>
+          <span class="chip">경험구분 ${escapeHtml(doc.experienceType || "-")}</span>
+        </div>
+      </div>
+      <img class="brand" src="${ARCHIVE_LOGO_URL}" alt="ARCHIVE PILATES">
     </section>
     <section class="panel match">
       <div class="label">담당 수업 매칭</div>
       <div class="value">${escapeHtml(matchText(doc))}</div>
     </section>
-    <section class="grid">
-      ${rows.map(([label, value]) => answerBlock(label, value)).join("")}
+    <div class="section-title">핵심 확인</div>
+    <section class="priority">
+      ${priorityRows.map(([label, value]) => answerBlock(label, value)).join("")}
     </section>
-    <section class="panel">
+    <div class="section-title">상세 답변</div>
+    <section class="grid">
+      ${detailRows.map(([label, value]) => answerBlock(label, value)).join("")}
+    </section>
+    <div class="section-title">원본</div>
+    <section class="panel source">
       <div class="label">원본 위치</div>
       <div class="small">Google Sheets ${escapeHtml(doc.source.sheetName)} · ${doc.source.rowNumber}행</div>
     </section>
-    <footer>설문 내용은 수업 준비 목적의 내부 자료입니다.</footer>
+    <footer>설문 내용은 수업 준비 목적의 내부 자료입니다. 링크를 외부에 공유하지 마세요.</footer>
   </main>
 </body>
 </html>`;
