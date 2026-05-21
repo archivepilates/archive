@@ -1,5 +1,6 @@
 #!/usr/bin/env node
 import crypto from "node:crypto";
+import { spawnSync } from "node:child_process";
 import { createReadStream } from "node:fs";
 import { appendFile, copyFile, mkdir, stat, writeFile } from "node:fs/promises";
 import os from "node:os";
@@ -9,6 +10,8 @@ const args = new Set(process.argv.slice(2));
 const kind = valueArg("--kind") || "all";
 const dryRun = args.has("--dry-run") || process.env.DRY_RUN === "true";
 const apply = args.has("--apply") || process.env.DRY_RUN === "false";
+const requestedStartDate = valueArg("--start-date");
+const requestedEndDate = valueArg("--end-date");
 
 const config = {
   baseUrl: env("STUDIOMATE_BASE_URL", "https://arcpilates.studiomate.kr"),
@@ -18,6 +21,10 @@ const config = {
   runLogPath: expandHome(env("STUDIOMATE_EMERGENCY_RUN_LOG", "~/ArchiveIN/emergency/runs.jsonl")),
   headless: env("HEADLESS", "true") !== "false",
   waitForLogin: env("WAIT_FOR_LOGIN", "false") === "true",
+  python: env(
+    "ARCHIVEIN_PYTHON",
+    "/Users/archivepilates/.cache/codex-runtimes/codex-primary-runtime/dependencies/python/bin/python3",
+  ),
 };
 
 const startedAt = new Date();
@@ -43,6 +50,11 @@ const context = await chromium.launchPersistentContext(config.profileDir, {
   headless: config.headless,
 });
 const page = await context.newPage();
+let capturedAuthorization = "";
+page.on("request", (request) => {
+  if (!request.url().includes("api.studiomate.kr")) return;
+  capturedAuthorization = request.headers().authorization || capturedAuthorization;
+});
 
 try {
   if (kind === "all" || kind === "member") {
@@ -88,14 +100,16 @@ async function downloadReservationExcel(page) {
   await closeNoticeDialog(page);
   await assertLoggedIn(page);
   await navigateReservationHistory(page);
-  if (result.dryRun) return inspectOnly(page, "reservation", /예약내역|예약\s*내역|수업/);
+  const range = emergencyDateRange();
+  if (result.dryRun) {
+    return {
+      ...(await inspectOnly(page, "reservation", /예약내역|예약\s*내역|수업/)),
+      range,
+    };
+  }
 
-  const button = locatorByText(page, /엑셀\s*다운로드|엑셀다운로드|엑셀\s*다운/i);
-  if (!(await button.isVisible().catch(() => false))) throw new Error("Reservation Excel download button not found.");
-  await button.click();
-  await page.waitForTimeout(800);
-  const download = await clickDownloadConfirmation(page);
-  return saveDownload(download, "reservation");
+  const rows = await reservationRows(range);
+  return saveGeneratedRows(rows, "reservation", `예약내역_${range.startDate}_${range.endDate}.xlsx`, range);
 }
 
 async function downloadDeletedClassExcel(page) {
@@ -103,14 +117,16 @@ async function downloadDeletedClassExcel(page) {
   await closeNoticeDialog(page);
   await assertLoggedIn(page);
   await navigateDeletedClasses(page);
-  if (result.dryRun) return inspectOnly(page, "deleted-class", /삭제된\s*수업|삭제\s*수업|수업/);
+  const range = emergencyDateRange();
+  if (result.dryRun) {
+    return {
+      ...(await inspectOnly(page, "deleted-class", /삭제된\s*수업|삭제\s*수업|수업/)),
+      range,
+    };
+  }
 
-  const button = locatorByText(page, /엑셀\s*다운로드|엑셀다운로드|엑셀\s*다운/i);
-  if (!(await button.isVisible().catch(() => false))) throw new Error("Deleted class Excel download button not found.");
-  await button.click();
-  await page.waitForTimeout(800);
-  const download = await clickDownloadConfirmation(page);
-  return saveDownload(download, "deleted-class");
+  const rows = await deletedClassRows(range);
+  return saveGeneratedRows(rows, "deleted-class", `삭제된수업_${range.startDate}_${range.endDate}.xlsx`, range);
 }
 
 async function navigateReservationHistory(page) {
@@ -272,6 +288,148 @@ async function saveDownload(download, name) {
   return { ok: true, kind: name, suggestedFilename: suggested, stagingPath, archivePath, sha256: hash };
 }
 
+async function saveGeneratedRows(rows, name, suggestedFilename, range) {
+  const suggested = sanitizeFileName(suggestedFilename);
+  const stagingPath = path.join(config.downloadDir, `${timestamp()}-${name}-${suggested}`);
+  const jsonPath = path.join(config.downloadDir, `${timestamp()}-${name}-rows.json`);
+  await writeFile(jsonPath, `${JSON.stringify(rows)}\n`);
+  const py = String.raw`
+from pathlib import Path
+import json
+import pandas as pd
+rows = json.loads(Path(${JSON.stringify(jsonPath)}).read_text())
+target = Path(${JSON.stringify(stagingPath)})
+df = pd.DataFrame(rows)
+df.to_excel(target, index=False)
+`;
+  const result = spawnSync(config.python, ["-c", py], { encoding: "utf8", maxBuffer: 64 * 1024 * 1024 });
+  if (result.status !== 0) throw new Error(result.stderr || result.stdout || `Failed to write ${name} Excel`);
+  await waitForStableFile(stagingPath);
+  const hash = await sha256File(stagingPath);
+  const archiveDir = path.join(config.archiveRoot, name, dateFolder(startedAt));
+  await mkdir(archiveDir, { recursive: true });
+  const archivePath = path.join(archiveDir, `${path.parse(suggested).name}-${hash.slice(0, 12)}${path.parse(suggested).ext || ".xlsx"}`);
+  await copyFile(stagingPath, archivePath);
+  return { ok: true, kind: name, suggestedFilename: suggested, stagingPath, archivePath, sha256: hash, range, rows: rows.length };
+}
+
+async function reservationRows(range) {
+  const out = [];
+  let pageNumber = 1;
+  let lastPage = 1;
+  do {
+    const json = await apiJson(`/staff/booking?start_date=${range.startDate}&end_date=${range.endDate}&page=${pageNumber}&limit=100`);
+    const page = json?.bookings || {};
+    const rows = Array.isArray(page.data) ? page.data : [];
+    out.push(...rows.map(reservationRow));
+    lastPage = Number(page.last_page || pageNumber);
+    pageNumber += 1;
+  } while (pageNumber <= lastPage);
+  return out;
+}
+
+async function deletedClassRows(range) {
+  const json = await apiJson(`/staff/lecture?start_date=${range.startDate}&end_date=${range.endDate}&is_trashed=1&is_min=1`);
+  const lectures = Array.isArray(json?.lectures) ? json.lectures : [];
+  return lectures.flatMap(deletedClassRow);
+}
+
+async function apiJson(pathname) {
+  if (!capturedAuthorization) throw new Error("StudioMate API authorization header not captured.");
+  const response = await fetch(new URL(pathname, "https://api.studiomate.kr").toString(), {
+    headers: { authorization: capturedAuthorization, accept: "application/json" },
+  });
+  const text = await response.text();
+  if (!response.ok) throw new Error(`StudioMate API request failed: ${response.status} ${text.slice(0, 500)}`);
+  return JSON.parse(text);
+}
+
+function reservationRow(booking) {
+  const lecture = booking.lecture || {};
+  const member = booking.member || {};
+  const profile = member.profile || {};
+  const userTicket = booking.user_ticket || {};
+  const ticket = userTicket.ticket || {};
+  return {
+    수업일: datePart(lecture.start_on),
+    수업시작: timePart(lecture.start_on),
+    수업종료: timePart(lecture.end_on),
+    강사: lecture.staff?.profile?.name || "",
+    수업구분: lecture.course?.type === "P" ? "개인" : lecture.course?.type === "G" ? "그룹" : "",
+    수업명: lecture.title || "",
+    룸: lecture.room?.name || "",
+    예약상태: bookingStatusText(booking.status),
+    상태변경일시: booking.updated_at || "",
+    회원명: profile.name || "",
+    휴대폰번호: member.mobile || "",
+    수강권명: ticket.title || "",
+    수강권잔여횟수: userTicket.remaining_coupon ?? "",
+    수강권전체횟수: userTicket.max_coupon ?? "",
+    수강권종료일: datePart(userTicket.expire_at),
+    수강권상태: userTicket.is_holding ? "정지" : "",
+    예약ID: booking.id || "",
+  };
+}
+
+function deletedClassRow(lecture) {
+  const base = {
+    수업일: datePart(lecture.start_on),
+    수업시작: timePart(lecture.start_on),
+    수업종료: timePart(lecture.end_on),
+    강사: lecture.staff?.profile?.name || lecture.staff?.name || "",
+    수업구분: lecture.type === "P" ? "개인" : lecture.type === "G" ? "그룹" : "",
+    수업명: lecture.title || lecture.course?.title || "",
+    룸: lecture.room?.name || "",
+    삭제시간: lecture.deleted_at || "",
+    삭제한사람: lecture.deleter?.profile?.name || lecture.deleter?.name || "",
+    삭제이유: lecture.deleted_for || "",
+  };
+  const bookings = Array.isArray(lecture.bookings) ? lecture.bookings : [];
+  if (!bookings.length) return [{ ...base, 예약상태: "", 회원명: "", 휴대폰번호: "" }];
+  return bookings.map((booking) => {
+    const member = booking.member || booking.user || booking.trainee || {};
+    const profile = member.profile || {};
+    return {
+      ...base,
+      예약상태: bookingStatusText(booking.status || booking.attendance_status),
+      회원명: profile.name || member.name || "",
+      휴대폰번호: member.mobile || "",
+    };
+  });
+}
+
+function bookingStatusText(status) {
+  const value = String(status || "");
+  if (/cancel|deleted/.test(value)) return "취소";
+  if (/wait/.test(value)) return "대기";
+  if (/absence|absent|noshow/.test(value)) return "결석";
+  if (/attendance|attend|check/.test(value)) return "출석";
+  return value || "예약";
+}
+
+function emergencyDateRange() {
+  const startDate = requestedStartDate || kstDate(new Date());
+  return {
+    startDate,
+    endDate: requestedEndDate || reservationOpenEndDate(startDate),
+  };
+}
+
+function reservationOpenEndDate(baseDate) {
+  const base = new Date(`${baseDate}T00:00:00+09:00`);
+  const daysSinceMonday = (base.getDay() + 6) % 7;
+  return addDays(baseDate, 13 - daysSinceMonday);
+}
+
+function datePart(value) {
+  return String(value || "").slice(0, 10);
+}
+
+function timePart(value) {
+  const text = String(value || "");
+  return text.length >= 16 ? text.slice(11, 16) : "";
+}
+
 async function waitForStableFile(filePath) {
   let lastSize = -1;
   for (let i = 0; i < 20; i += 1) {
@@ -313,6 +471,16 @@ function expandHome(value) {
 
 function dateFolder(date) {
   return [date.getFullYear(), String(date.getMonth() + 1).padStart(2, "0"), String(date.getDate()).padStart(2, "0")].join("-");
+}
+
+function kstDate(date) {
+  return new Intl.DateTimeFormat("en-CA", { timeZone: "Asia/Seoul", year: "numeric", month: "2-digit", day: "2-digit" }).format(date);
+}
+
+function addDays(date, days) {
+  const base = new Date(`${date}T00:00:00+09:00`);
+  base.setDate(base.getDate() + days);
+  return kstDate(base);
 }
 
 function timestamp() {

@@ -14,6 +14,7 @@ const reportDir = path.join(os.homedir(), "ArchiveIN/automation/reports/excel-em
 const steps = [];
 let downloadedMemberFile = "";
 let downloadedReservationFile = "";
+let downloadedDeletedClassFile = "";
 
 let downloadFailedWithoutMember = false;
 if (download) {
@@ -27,6 +28,8 @@ if (download) {
   downloadedMemberFile = downloadStep.stdout?.downloads?.member?.archivePath || downloadStep.stdout?.downloads?.member?.stagingPath || "";
   downloadedReservationFile =
     downloadStep.stdout?.downloads?.reservation?.archivePath || downloadStep.stdout?.downloads?.reservation?.stagingPath || "";
+  downloadedDeletedClassFile =
+    downloadStep.stdout?.downloads?.deletedClass?.archivePath || downloadStep.stdout?.downloads?.deletedClass?.stagingPath || "";
   downloadFailedWithoutMember = apply && !downloadedMemberFile;
 }
 
@@ -46,6 +49,17 @@ if (!downloadFailedWithoutMember) {
       ...(apply ? ["--apply"] : []),
     ]),
   );
+
+  if (downloadedDeletedClassFile) {
+    steps.push(
+      runStep("deletedClassLogs", [
+        "scripts/emergency-import-studiomate-deleted-class-excel.mjs",
+        "--file",
+        downloadedDeletedClassFile,
+        ...(apply ? ["--apply"] : []),
+      ]),
+    );
+  }
 }
 
 const failed = steps.filter((step) => (step.exitCode && step.exitCode !== 0) || step.requiredFailed);

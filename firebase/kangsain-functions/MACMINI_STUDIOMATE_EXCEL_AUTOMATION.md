@@ -6,7 +6,7 @@ Use the ARCHIVE PILATES Mac mini to download StudioMate Excel exports through no
 
 2026-05-19 temporary operating note: while StudioMate API access is blocked by the security 403 response, use `scripts/run-studiomate-excel-emergency-mode.mjs --download --apply` as the separate emergency workflow. It uses a separate command, download folder, logs, and 1-hour LaunchAgent, while reusing the Mac mini StudioMate browser session to avoid duplicate login. It then imports member-list Excel and reservation-history Excel when available. See `docs/studiomate-excel-emergency-mode.md`.
 
-2026-05-20 update: StudioMate `수업 > 삭제된 수업` has the authoritative deleted-class log. Collect it separately once per day with `scripts/run-studiomate-deleted-class-daily.mjs --download --apply`; do not mix it into the hourly reservation-history workflow.
+2026-05-21 update: StudioMate `수업 > 삭제된 수업` has the authoritative deleted-class log. The hourly emergency workflow now collects reservation history and deleted-class logs for the ARCHIVE IN reservation-open range, currently today through the next Sunday that is open for reservations. The separate 23:40 deleted-class LaunchAgent is removed to avoid duplicate downloads.
 
 This is not a private API scraper. It should operate like a logged-in manager using the normal StudioMate web UI:
 

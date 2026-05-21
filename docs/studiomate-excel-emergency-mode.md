@@ -16,10 +16,11 @@ StudioMate API 접근이 403으로 막혔을 때, 브라우저 자동화로 내�
 - 비상모드 전용 다운로드/반영은 1시간 간격으로 실행한다.
 - 브라우저 자동화로 받은 회원목록 엑셀을 회원카드/수강권 보정에 사용한다.
 - 수업 예약 화면 복구에는 브라우저 자동화로 받은 수업예약내역 엑셀을 함께 사용한다.
+- 수업예약내역과 삭제된 수업 로그는 `오늘 ~ 예약오픈 종료일` 범위로 받는다. 예약오픈 종료일은 ARCHIVE IN 액션 기준과 동일하게 이번 주를 포함한 다음 주 일요일이다.
 - 수업예약내역 엑셀은 기존 수업과 매칭되면 기존 StudioMate 강사 ID를 사용한다. 같은 수업이 기존 강사 ID와 `excel_staff_...` 임시 강사 ID로 동시에 보이면 안 된다.
 - 수업 화면은 최신 수업예약내역 엑셀에 포함된 수업만 기준으로 재생성한다. 이전 API 동기화에서 남은 수업이 최신 엑셀에 없으면 비상모드 화면에서는 제외한다.
 - 수업예약내역 엑셀에는 신뢰할 수 있는 수업 정원 원천이 없다. 비상모드 화면에서는 최대정원과 정원 기반 예약저조 판단을 사용하지 않고 현재 예약 인원만 표시한다.
-- StudioMate `수업 > 삭제된 수업` 영역의 삭제 로그는 예약내역 엑셀과 별도 원천이다. 폐강/수업조정 취소 구분을 위해 하루 1회 별도 브라우저 자동화로 다운로드하고 `studiomateDeletedClassLogs`에 적재한다.
+- StudioMate `수업 > 삭제된 수업` 영역의 삭제 로그는 예약내역 엑셀과 별도 원천이지만, 별도 23:40 자동화는 사용하지 않는다. 1시간 비상모드 다운로드에 포함해 같은 예약가능 기간 범위로 받고 `studiomateDeletedClassLogs`에 적재한다.
 - 회원목록 엑셀 원본은 비상모드 전용 다운로드/아카이브 폴더의 최신 `회원목록_*.xlsx`를 우선 사용하고, 없을 때만 Google Drive `회원원본데이터` 폴더의 최신 파일을 사용한다.
 - 기본 실행은 dry-run이다. Firestore 반영은 `--apply`를 붙였을 때만 한다.
 - 기본 반영 대상은 기존 `memberProfiles`와 전화번호, 이름이 매칭되는 회원만이다.
@@ -67,24 +68,7 @@ com.archive.studiomate-excel-emergency-mode
 com.archive.studiomate-emergency-contacts-sync
 ```
 
-하루 1회 삭제된 수업 로그 수집 LaunchAgent:
-
-```text
-com.archive.studiomate-deleted-class-daily
-```
-
-실행 내용:
-
-```bash
-node scripts/run-studiomate-deleted-class-daily.mjs --download --apply
-```
-
-동작:
-
-1. StudioMate `수업 > 삭제된 수업` 탭에서 엑셀을 다운로드한다.
-2. 원본 파일은 `~/ArchiveIN/emergency/archive/deleted-class/YYYY-MM-DD/`에 보관한다.
-3. 엑셀 행은 `studiomateDeletedClassLogs`에 원본 컬럼과 함께 적재한다.
-4. 이 로그는 월별 폐강 리스트에서 `진짜 폐강`, `수업 조정 취소`, `개인수업 취소/조정`을 나누기 위한 근거 데이터로 사용한다.
+삭제된 수업 로그는 `com.archive.studiomate-excel-emergency-mode` 안에서 회원목록, 수업예약내역과 함께 받는다. 원본 파일은 `~/ArchiveIN/emergency/archive/deleted-class/YYYY-MM-DD/`에 보관하고, 엑셀 행은 `studiomateDeletedClassLogs`에 원본 컬럼과 함께 적재한다.
 
 삭제된 수업 분류 규칙:
 
@@ -119,8 +103,6 @@ node scripts/run-emergency-contacts-hourly-sync.mjs
 /Users/archivepilates/ArchiveIN/emergency/logs/studiomate-excel-emergency-mode.err.log
 /Users/archivepilates/ArchiveIN/emergency/logs/studiomate-emergency-contacts-sync.out.log
 /Users/archivepilates/ArchiveIN/emergency/logs/studiomate-emergency-contacts-sync.err.log
-/Users/archivepilates/ArchiveIN/emergency/logs/studiomate-deleted-class-daily.out.log
-/Users/archivepilates/ArchiveIN/emergency/logs/studiomate-deleted-class-daily.err.log
 ```
 
 특정 엑셀 파일을 지정:
