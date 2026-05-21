@@ -404,14 +404,14 @@ function buildDailySettlementPreview(rows, rates) {
     if (row.기준월 !== currentMonth || !row.강사명 || row.수업일자 > today) continue;
     const current = map.get(row.강사명) || {
       성명: row.강사명,
-      그룹횟수: 0,
+      그룹수업키: new Set(),
       프라이빗횟수: 0,
       강사레슨횟수: 0,
       총매출: 0,
     };
     const count = row.차감횟수 || 1;
     const revenue = row.차감금액 || (row.출결 === "출석" ? row.회당금액 * count : 0);
-    if (row.수업구분 === "그룹") current.그룹횟수 += count;
+    if (row.수업구분 === "그룹") current.그룹수업키.add([row.수업일자, row.수업시작, row.수업종료].join("\u0001"));
     else if (row.수업구분 === "프라이빗") current.프라이빗횟수 += count;
     else if (row.수업구분 === "강사레슨") current.강사레슨횟수 += count;
     current.총매출 += revenue;
@@ -437,7 +437,8 @@ function buildDailySettlementPreview(rows, rates) {
     .sort((a, b) => a.성명.localeCompare(b.성명, "ko"))
     .map((row, index) => {
       const rate = rates.byInstructor.get(row.성명) || rates.fallback;
-      const groupPay = row.그룹횟수 * rate.groupPayPerCount;
+      const groupCount = row.그룹수업키.size;
+      const groupPay = groupCount * rate.groupPayPerCount;
       const privatePay = row.프라이빗횟수 * rate.privatePayPerCount;
       const instructorPay = row.강사레슨횟수 * rate.instructorLessonPayPerCount;
       const pretax = groupPay + privatePay + instructorPay;
@@ -448,7 +449,7 @@ function buildDailySettlementPreview(rows, rates) {
         currentMonth,
         index + 1,
         row.성명,
-        round2(row.그룹횟수),
+        round2(groupCount),
         round2(row.프라이빗횟수),
         round2(row.강사레슨횟수),
         Math.round(groupPay),
@@ -471,7 +472,7 @@ function buildDailyInstructorPreview(rows, settlementPreview) {
   const sessions = new Map();
   for (const row of rows) {
     if (row.기준월 !== currentMonth || row.수업구분 !== "그룹" || !row.강사명 || row.수업일자 > today) continue;
-    const key = [row.강사명, row.수업일자, row.수업시작, row.수업종료, row.수강권명].join("\u0001");
+    const key = [row.강사명, row.수업일자, row.수업시작, row.수업종료].join("\u0001");
     const current = sessions.get(key) || { 강사명: row.강사명, 예약: 0, 출석: 0 };
     current.예약 += 1;
     if (row.출결 === "출석") current.출석 += 1;

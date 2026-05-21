@@ -618,10 +618,11 @@ function renderHero(month){
 function renderScore(month){
   const idx=ALL.summary.findIndex(r=>r.월===month);if(idx<0)return;
   const cur=ALL.summary[idx],prev=idx>0?ALL.summary[idx-1]:null;
+  const dailyRef=getDailyRevenueRef(month);
   document.getElementById('scoreLabel').textContent=fmtMonthLong(month)+' 핵심 지표';
   const accents=['ap','ap','ag','ag','ab','aa','aa','aa'];
   const metrics=[
-    {lbl:'월 총매출',raw:cur.총매출,fmt:fmt만,dlt:prev?(sign(cur.총매출,prev.총매출)+' '+(cur.총매출>=prev.총매출?'+':'')+((cur.총매출-prev.총매출)/(prev.총매출||1)*100).toFixed(1)+'%'):'-',dc:prev?colr(cur.총매출,prev.총매출):'#64748b'},
+    {lbl:'월 총매출',raw:cur.총매출,fmt:fmt만,dlt:dailyRef?revenueDeltaText(dailyRef.current,dailyRef.previous):prev?(sign(cur.총매출,prev.총매출)+' '+(cur.총매출>=prev.총매출?'+':'')+((cur.총매출-prev.총매출)/(prev.총매출||1)*100).toFixed(1)+'%'):'-',dc:dailyRef?colr(dailyRef.current,dailyRef.previous):prev?colr(cur.총매출,prev.총매출):'#64748b'},
     {lbl:'월 수업매출',raw:cur.수업매출,fmt:fmt만,dlt:prev?(sign(cur.수업매출,prev.수업매출)+' '+(cur.수업매출>=prev.수업매출?'+':'')+((cur.수업매출-prev.수업매출)/(prev.수업매출||1)*100).toFixed(1)+'%'):'-',dc:prev?colr(cur.수업매출,prev.수업매출):'#64748b'},
     {lbl:'수업 마진률',raw:cur.마진률,fmt:v=>v.toFixed(1)+'%',dlt:prev?(sign(cur.마진률,prev.마진률)+' '+(cur.마진률>=prev.마진률?'+':'')+(cur.마진률-prev.마진률).toFixed(1)+'%p'):'-',dc:prev?colr(cur.마진률,prev.마진률):'#64748b'},
     {lbl:'그룹 예약률',raw:cur.예약률,fmt:v=>v.toFixed(1)+'%',dlt:prev?(sign(cur.예약률,prev.예약률)+' '+(cur.예약률>=prev.예약률?'+':'')+(cur.예약률-prev.예약률).toFixed(1)+'%p'):'-',dc:prev?colr(cur.예약률,prev.예약률):'#64748b'},
@@ -633,6 +634,18 @@ function renderScore(month){
   const grid=document.getElementById('mgrid');
   grid.innerHTML=metrics.map((m,i)=>`<div class="mc ${accents[i]}"><div class="lbl">${m.lbl}</div><div class="val"></div><div class="dlt" style="color:${m.dc}">${m.dlt}</div></div>`).join('');
   [...grid.children].forEach((card,i)=>{animN(card.querySelector('.val'),metrics[i].raw,metrics[i].fmt);card.classList.remove('flash');void card.offsetWidth;card.classList.add('flash');});
+}
+
+function getDailyRevenueRef(month){
+  const currentMonth=normMonth(new Date());
+  if(month!==currentMonth)return null;
+  const row=[...(ALL.매출일일누적||[])].filter(r=>r.기준월===month).sort((a,b)=>a.기준일.localeCompare(b.기준일)).pop();
+  if(!row||!row.전월동일일누적)return null;
+  return {current:row.월누적매출,previous:row.전월동일일누적};
+}
+function revenueDeltaText(current,previous){
+  if(!previous)return '-';
+  return sign(current,previous)+' '+(current>=previous?'+':'')+((current-previous)/previous*100).toFixed(1)+'% vs 전월 동일일';
 }
 
 // ══ CHART DEFAULTS ══
