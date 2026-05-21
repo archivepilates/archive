@@ -20,7 +20,10 @@ firebase/.DS_Store
 
 # Local service account keys. Never commit these.
 .secrets/
+secrets/
 service-account*.json
 *service*account*.json
 archive-codex-operator*.json
+notion*.env
+notion*.token
 *.enc
