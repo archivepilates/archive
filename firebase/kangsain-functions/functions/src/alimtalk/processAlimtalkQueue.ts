@@ -6,9 +6,10 @@ import { refs } from "../firestore/refs";
 import type { AlimtalkCandidateDoc } from "../types/models";
 import { errorMessage } from "../utils/errors";
 import { nowTimestamp, todayKst } from "../utils/date";
-import { APPROVED_ALIMTALK_TEMPLATE_CODES, alimtalkDedupePolicy } from "./templates";
+import { alimtalkDedupePolicy } from "./templates";
 import { autoSendabilityIssue } from "./eligibility";
 import { alimtalkDedupeKey, findCompletedDuplicate, normalizePhone } from "./dedupe";
+import { isAlimtalkTemplateApproved } from "./templateStatus";
 
 const SOLAPI_SEND_URL = "https://api.solapi.com/messages/v4/send-many/detail";
 const PROCESSING_STALE_MS = 10 * 60 * 1000;
@@ -25,7 +26,7 @@ export async function processAlimtalkQueue(): Promise<{ processed: number; sent:
     if (!claimed) continue;
     processed += 1;
     try {
-      const sendabilityIssue = autoSendabilityIssue(claimed, todayKst());
+      const sendabilityIssue = await autoSendabilityIssue(claimed, todayKst());
       if (sendabilityIssue) {
         await refs.alimtalkCandidate(claimed.candidateId).set(
           {
@@ -57,6 +58,8 @@ export async function processAlimtalkQueue(): Promise<{ processed: number; sent:
         {
           status: "sent",
           dedupeKey,
+          attempts: claimed.attempts || 0,
+          maxAttempts: claimed.maxAttempts || 2,
           sentAt: nowTimestamp(),
           lastError: null,
           updatedAt: nowTimestamp(),
@@ -90,9 +93,13 @@ export async function processAlimtalkQueue(): Promise<{ processed: number; sent:
       sent += 1;
     } catch (err) {
       const message = errorMessage(err);
+      const attempts = (claimed.attempts || 0) + 1;
+      const maxAttempts = claimed.maxAttempts || 2;
       await refs.alimtalkCandidate(claimed.candidateId).set(
         {
           status: "failed",
+          attempts,
+          maxAttempts,
           lastError: message,
           updatedAt: nowTimestamp(),
         },
@@ -111,8 +118,8 @@ export async function processAlimtalkQueue(): Promise<{ processed: number; sent:
           dedupePolicy: alimtalkDedupePolicy(claimed.templateCode).label,
           dedupeWindowDays: alimtalkDedupePolicy(claimed.templateCode).windowDays,
           status: "failed",
-          attempts: 1,
-          maxAttempts: 1,
+          attempts,
+          maxAttempts,
           nextRunAt: nowTimestamp(),
           lastError: message,
           createdByUid: claimed.reviewedByUid || "system",
@@ -142,9 +149,24 @@ async function claimCandidate(candidate: AlimtalkCandidateDoc): Promise<Alimtalk
     if (!current) return null;
     if (current.status === "processing" && !isStaleProcessing(current)) return null;
     if (!["queued", "processing"].includes(current.status)) return null;
+    if ((current.attempts || 0) >= (current.maxAttempts || 2)) {
+      tx.set(
+        ref,
+        {
+          status: "failed",
+          maxAttempts: current.maxAttempts || 2,
+          lastError: current.lastError || "발송 실패 재시도 한도 초과",
+          updatedAt: nowTimestamp(),
+        },
+        { merge: true },
+      );
+      return null;
+    }
     const next = {
       ...current,
       status: "processing" as const,
+      attempts: current.attempts || 0,
+      maxAttempts: current.maxAttempts || 2,
       updatedAt: nowTimestamp(),
     };
     tx.set(ref, next, { merge: true });
@@ -161,7 +183,7 @@ async function sendSolapiAlimtalk(candidate: AlimtalkCandidateDoc): Promise<{ me
   const to = normalizePhone(candidate.memberPhone);
   if (!to) throw new Error("member phone is empty");
   if (!candidate.templateCode) throw new Error("templateCode is empty");
-  if (!APPROVED_ALIMTALK_TEMPLATE_CODES.has(candidate.templateCode))
+  if (!(await isAlimtalkTemplateApproved(candidate.templateCode)))
     throw new Error(`template is not approved: ${candidate.templateCode}`);
 
   const body = {

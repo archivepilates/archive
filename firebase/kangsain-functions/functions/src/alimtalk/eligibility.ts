@@ -1,20 +1,21 @@
 import { addDays } from "../utils/date";
 import {
   ALIMTALK_MEMBER_EXCLUSION_REASONS,
-  APPROVED_ALIMTALK_TEMPLATE_CODES,
   GROUP_SURVEY_ALIMTALK_START_DATE,
   NEW_MEMBER_ALIMTALK_START_DATE,
   NEW_MEMBER_ALIMTALK_WINDOW_DAYS,
   PRIVATE_SURVEY_ALIMTALK_START_DATE,
 } from "./templates";
 import type { AlimtalkCandidateDoc } from "../types/models";
+import { isAlimtalkTemplateApproved } from "./templateStatus";
 
-export function autoSendabilityIssue(candidate: AlimtalkCandidateDoc, today: string): string {
+export async function autoSendabilityIssue(candidate: AlimtalkCandidateDoc, today: string): Promise<string> {
   if (!candidate.memberPhone) return "전화번호 없음";
   if (ALIMTALK_MEMBER_EXCLUSION_REASONS[candidate.memberId])
     return ALIMTALK_MEMBER_EXCLUSION_REASONS[candidate.memberId];
-  if (!APPROVED_ALIMTALK_TEMPLATE_CODES.has(candidate.templateCode))
+  if (!(await isAlimtalkTemplateApproved(candidate.templateCode)))
     return `승인 템플릿 코드 아님: ${candidate.templateCode}`;
+  if ((candidate.attempts || 0) >= (candidate.maxAttempts || 2)) return "발송 실패 재시도 한도 초과";
   if (candidate.sourceDate && candidate.sourceDate > today) return "대상일이 발송 기준일 이후";
   if (
     candidate.type !== "new_member" &&

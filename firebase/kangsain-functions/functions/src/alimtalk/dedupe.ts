@@ -49,6 +49,18 @@ function dedupeScope(candidate: AlimtalkCandidateDoc): Record<string, string> {
       reservationWeek: String(payload.reservationWeek || payload.weekLabel || ""),
     };
   }
+  if (["ticket_expiring", "remaining_low", "private_count_low", "private_ticket_expiring"].includes(type)) {
+    const ticketIdentity =
+      String(payload.userTicketId || "") ||
+      String(payload.ticketId || "") ||
+      [payload.ticketName || payload.ticket || "", payload.expiresAt || payload.expiryDate || ""]
+        .filter(Boolean)
+        .join("|");
+    return {
+      ticketIdentity,
+      ticketName: String(payload.ticketName || payload.ticket || ""),
+    };
+  }
   return {
     ticketName: String(payload.ticketName || payload.ticket || ""),
   };

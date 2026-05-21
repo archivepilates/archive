@@ -60,6 +60,16 @@ export const ALIMTALK_TEMPLATES = {
     label: "프라이빗 기간권 잔여기간 안내 v1",
     status: "approved",
   },
+  staff_private_survey: {
+    code: "KA01TP260519093416836f1EHZYJ00uM",
+    label: "담당강사 사전설문 제출 안내 v1",
+    status: "approved",
+  },
+  staff_group_survey: {
+    code: "KA01TP260521072937354Ve2n5cEapDL",
+    label: "담당강사 그룹 사전확인 제출 안내 v1",
+    status: "inspecting",
+  },
 } as const;
 
 export const CANDIDATE_TEMPLATE_CODES: Record<SendableAlimtalkCandidateType, string> = {
@@ -72,11 +82,13 @@ export const CANDIDATE_TEMPLATE_CODES: Record<SendableAlimtalkCandidateType, str
   private_ticket_expiring: ALIMTALK_TEMPLATES.private_ticket_expiring.code,
 };
 
-export const APPROVED_ALIMTALK_TEMPLATE_CODES: ReadonlySet<string> = new Set(
+export const STATIC_APPROVED_ALIMTALK_TEMPLATE_CODES: ReadonlySet<string> = new Set(
   Object.values(ALIMTALK_TEMPLATES)
     .filter((template) => template.status === "approved")
     .map((template) => template.code),
 );
+
+export const APPROVED_ALIMTALK_TEMPLATE_CODES = STATIC_APPROVED_ALIMTALK_TEMPLATE_CODES;
 
 export interface AlimtalkDedupePolicy {
   label: string;
@@ -93,15 +105,15 @@ export const ALIMTALK_DEDUPE_POLICIES_BY_TEMPLATE_CODE: Record<string, AlimtalkD
     windowDays: null,
   },
   [ALIMTALK_TEMPLATES.ticket_expiring.code]: {
-    label: "수강권 기간 안내 30일",
+    label: "수강권별 기간 안내 30일",
     windowDays: 30,
   },
   [ALIMTALK_TEMPLATES.remaining_low.code]: {
-    label: "수강권 횟수 안내 30일",
+    label: "수강권별 횟수 안내 30일",
     windowDays: 30,
   },
   [ALIMTALK_TEMPLATES.private_count_low.code]: {
-    label: "프라이빗 횟수 안내 30일",
+    label: "프라이빗 수강권별 횟수 안내 30일",
     windowDays: 30,
   },
   [ALIMTALK_TEMPLATES.private_survey.code]: {
@@ -113,7 +125,7 @@ export const ALIMTALK_DEDUPE_POLICIES_BY_TEMPLATE_CODE: Record<string, AlimtalkD
     windowDays: null,
   },
   [ALIMTALK_TEMPLATES.private_ticket_expiring.code]: {
-    label: "프라이빗 기간 안내 30일",
+    label: "프라이빗 수강권별 기간 안내 30일",
     windowDays: 30,
   },
 };

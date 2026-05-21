@@ -25,7 +25,10 @@ export async function queueDailyAlimtalkCandidates(
   let queued = 0;
   let blocked = 0;
   for (const candidate of candidates) {
-    if (!["candidate", "reviewed", "failed"].includes(candidate.status) || autoSendabilityIssue(candidate, today)) {
+    if (
+      !["candidate", "reviewed", "failed"].includes(candidate.status) ||
+      (await autoSendabilityIssue(candidate, today))
+    ) {
       blocked += 1;
       continue;
     }
@@ -52,13 +55,14 @@ async function listRebuiltCandidates(candidateIds: string[], studioId: string): 
 }
 
 async function queueCandidate(candidate: AlimtalkCandidateDoc, today: string): Promise<boolean> {
+  if (await autoSendabilityIssue(candidate, today)) return false;
   return db.runTransaction(async (tx) => {
     const ref = refs.alimtalkCandidate(candidate.candidateId);
     const snap = await tx.get(ref);
     const current = snap.data();
     if (!current) return false;
     if (!["candidate", "reviewed", "failed"].includes(current.status)) return false;
-    if (autoSendabilityIssue(current, today)) return false;
+    if ((current.attempts || 0) >= (current.maxAttempts || 2)) return false;
     tx.set(
       ref,
       {
@@ -66,6 +70,8 @@ async function queueCandidate(candidate: AlimtalkCandidateDoc, today: string): P
         queuedBy: "auto",
         reviewedByUid: "system:auto-daily-1130",
         reviewedAt: nowTimestamp(),
+        attempts: current.attempts || 0,
+        maxAttempts: current.maxAttempts || 2,
         lastError: null,
         updatedAt: nowTimestamp(),
       },

@@ -359,6 +359,8 @@ export interface AlimtalkCandidateDoc {
   sourceDate: string;
   payload: Record<string, string>;
   dedupeKey?: string;
+  attempts?: number;
+  maxAttempts?: number;
   queuedBy?: "operator" | "auto";
   reviewedByUid?: string;
   reviewedAt?: Timestamp | null;

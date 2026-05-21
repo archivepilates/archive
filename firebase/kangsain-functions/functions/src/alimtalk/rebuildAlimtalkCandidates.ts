@@ -78,6 +78,8 @@ export async function rebuildAlimtalkCandidatesForRange(input: {
             .filter(Boolean)
             .join(", "),
         },
+        attempts: 0,
+        maxAttempts: 2,
         lastError: null,
         createdAt: nowTimestamp(),
         updatedAt: nowTimestamp(),
@@ -196,6 +198,8 @@ async function groupSurveyCandidateForDate(
       groupSurveyDeliveryMode: timing.deliveryMode,
       minutesUntilLesson: timing.minutesUntilLesson,
     },
+    attempts: 0,
+    maxAttempts: 2,
     lastError: null,
     createdAt: nowTimestamp(),
     updatedAt: nowTimestamp(),
@@ -226,9 +230,9 @@ async function firstUpcomingGroupBookingInReservationWindow(
 
 async function hasSubmittedGroupSurvey(memberId: string, memberPhone: string): Promise<boolean> {
   const byMember = await refs.privateSurveyResponses().where("matching.memberId", "==", memberId).limit(10).get();
-  if (byMember.docs.some((doc) => doc.data().surveyType === "group")) return true;
+  if (byMember.docs.some((doc) => doc.data().surveyType === "group" && isRecentSurveyResponse(doc.data()))) return true;
   const byPhone = await refs.privateSurveyResponses().where("memberPhone", "==", memberPhone).limit(10).get();
-  return byPhone.docs.some((doc) => doc.data().surveyType === "group");
+  return byPhone.docs.some((doc) => doc.data().surveyType === "group" && isRecentSurveyResponse(doc.data()));
 }
 
 async function hasAttendedGroupBookingOnOrBefore(memberId: string, sourceDate: string): Promise<boolean> {
@@ -338,6 +342,8 @@ async function privateSurveyCandidateForDate(
       lectureDate: booking.lectureDate,
       privateSurveyWindowEndDate: reservationOpenEndDate(sourceDate),
     },
+    attempts: 0,
+    maxAttempts: 2,
     lastError: null,
     createdAt: nowTimestamp(),
     updatedAt: nowTimestamp(),
@@ -367,10 +373,27 @@ async function firstUpcomingPrivateBookingInReservationWindow(
 }
 
 async function hasSubmittedPrivateSurvey(memberId: string, memberPhone: string): Promise<boolean> {
-  const byMember = await refs.privateSurveyResponses().where("matching.memberId", "==", memberId).limit(1).get();
-  if (!byMember.empty) return true;
-  const byPhone = await refs.privateSurveyResponses().where("memberPhone", "==", memberPhone).limit(1).get();
-  return !byPhone.empty;
+  const byMember = await refs.privateSurveyResponses().where("matching.memberId", "==", memberId).limit(10).get();
+  if (
+    byMember.docs.some(
+      (doc) => (doc.data().surveyType || "private") === "private" && isRecentSurveyResponse(doc.data()),
+    )
+  )
+    return true;
+  const byPhone = await refs.privateSurveyResponses().where("memberPhone", "==", memberPhone).limit(10).get();
+  return byPhone.docs.some(
+    (doc) => (doc.data().surveyType || "private") === "private" && isRecentSurveyResponse(doc.data()),
+  );
+}
+
+function isRecentSurveyResponse(response: {
+  submittedAt?: FirebaseFirestore.Timestamp | null;
+  createdAt?: FirebaseFirestore.Timestamp | null;
+}): boolean {
+  const responseMs = response.submittedAt?.toMillis?.() || response.createdAt?.toMillis?.() || 0;
+  if (!responseMs) return true;
+  const oneYearMs = 365 * 24 * 60 * 60 * 1000;
+  return Date.now() - responseMs < oneYearMs;
 }
 
 async function hasAttendedPrivateBookingOnOrBefore(memberId: string, sourceDate: string): Promise<boolean> {
@@ -429,6 +452,8 @@ function directTicketCandidate(
       date: sourceDate,
       ...payload,
     },
+    attempts: 0,
+    maxAttempts: 2,
     lastError: null,
     createdAt: nowTimestamp(),
     updatedAt: nowTimestamp(),

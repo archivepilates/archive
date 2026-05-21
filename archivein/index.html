@@ -2997,6 +2997,9 @@
         memberProfiles: [],
         memberContactIndex: [],
         alimtalkCandidates: [],
+        privateSurveyResponses: [],
+        studiomateMemoWriteJobs: [],
+        alimtalkTemplateStates: [],
         actions: [],
         rangeActions: [],
         actionsState: null,
@@ -3077,6 +3080,9 @@
             memberProfiles: [],
             memberContactIndex: [],
             alimtalkCandidates: [],
+            privateSurveyResponses: [],
+            studiomateMemoWriteJobs: [],
+            alimtalkTemplateStates: [],
             actions: [],
             rangeActions: [],
             actionsState: null,
@@ -3639,7 +3645,16 @@
         KA01TP260514153632171uiWXYoeiOLS: { key: 'privateSurvey', label: '프라이빗 설문 필요', status: 'APPROVED', detail: '첫 프라이빗 등록/예약' },
         KA01TP2605210729364330NbhZVAu9zA: { key: 'groupSurvey', label: '그룹 설문 필요', status: 'INSPECTING', detail: '첫 그룹수업 사전확인' }
       };
-      return map[String(code || '')] || null;
+      const key = String(code || '');
+      const meta = map[key] || null;
+      const state = (appState.admin.alimtalkTemplateStates || []).find((item) => String(item.templateCode || '') === key);
+      if (!state) return meta;
+      const status = String(state.status || '').toUpperCase();
+      return {
+        ...(meta || { key, label: state.label || state.name || key, detail: 'SOLAPI 템플릿' }),
+        status: status || meta?.status || '',
+        detail: state.lastError ? `SOLAPI 상태 확인 오류: ${state.lastError}` : (meta?.detail || state.name || '')
+      };
     }
 
     function alimtalkRuleMeta(item) {
@@ -3781,6 +3796,7 @@
         Boolean(candidatePhone(candidate)) &&
         rule.status === 'APPROVED' &&
         ['candidate', 'reviewed', 'failed'].includes(status) &&
+        Number(candidate.attempts || 0) < Number(candidate.maxAttempts || 2) &&
         !shouldSuppressTicketCandidate(candidate, candidate.sourceDate || appState.selectedDate);
     }
 
@@ -3855,6 +3871,130 @@
             <small>${escapeHtml(candidate.reason || rule.detail || candidate.type || '')}</small>
           </div>
           <span class="action-send ${escapeAttr(status.mode)}">${escapeHtml(status.label)}</span>
+        </div>
+      `;
+    }
+
+    function renderAlimtalkFlowBoard(mode = appState.viewMode) {
+      if (appState.mode !== 'admin') return '';
+      const rows = surveyFlowRows(mode);
+      const staffDue = staffSurveyDueRows(mode);
+      const failedMemoJobs = (appState.admin.studiomateMemoWriteJobs || []).filter((job) => ['failed', 'retry'].includes(String(job.status || '')));
+      const templateIssues = (appState.admin.alimtalkTemplateStates || []).filter((item) => String(item.status || '').toUpperCase() !== 'APPROVED');
+      if (!rows.length && !staffDue.length && !failedMemoJobs.length && !templateIssues.length) return '';
+      return `
+        <section class="panel alimtalk-queue">
+          <div class="section-head">
+            <div>
+              <h2>설문·강사 알림 흐름</h2>
+              <p>${escapeHtml(`회원요청 ${periodAlimtalkCandidates(mode, appState.selectedDate).filter((item) => ['private_survey', 'group_survey'].includes(String(item.type || ''))).length} · 설문제출 ${rows.length} · 강사예정 ${staffDue.length} · 메모확인 ${failedMemoJobs.length}`)}</p>
+            </div>
+          </div>
+          <div class="alimtalk-list">
+            ${staffDue.length ? staffDue.slice(0, 8).map(renderStaffSurveyDueRow).join('') : ''}
+            ${rows.slice(0, 8).map(renderSurveyFlowRow).join('')}
+            ${failedMemoJobs.slice(0, 5).map(renderMemoJobIssueRow).join('')}
+            ${templateIssues.slice(0, 5).map(renderTemplateIssueRow).join('')}
+          </div>
+        </section>
+      `;
+    }
+
+    function surveyFlowRows(mode = appState.viewMode) {
+      const { start, end } = alimtalkCandidatePeriodRange(mode, appState.selectedDate);
+      return (appState.admin.privateSurveyResponses || [])
+        .filter((row) => {
+          const date = row?.matching?.lectureDate || dateOnlyFromValue(row.submittedAt || row.createdAt);
+          return date >= start && date <= end;
+        })
+        .sort((a, b) => String(a?.matching?.lectureDate || '').localeCompare(String(b?.matching?.lectureDate || '')) || String(a.memberName || '').localeCompare(String(b.memberName || ''), 'ko'));
+    }
+
+    function staffSurveyDueRows(mode = appState.viewMode) {
+      return surveyFlowRows(mode)
+        .map((row) => ({ ...row, staffDueAt: staffSurveyDueAt(row) }))
+        .filter((row) => row.staffDueAt && ['pending', 'failed'].includes(String(row.delivery?.alimtalkStatus || 'pending')))
+        .sort((a, b) => (timestampMillis(a.staffDueAt) || 0) - (timestampMillis(b.staffDueAt) || 0));
+    }
+
+    function staffSurveyDueAt(row) {
+      const type = String(row.surveyType || 'private');
+      if (type === 'group') {
+        const start = timestampToDate(row?.matching?.lectureStartAt);
+        return start ? new Date(start.getTime() - 60 * 60 * 1000) : null;
+      }
+      const lectureDate = row?.matching?.lectureDate || '';
+      if (!lectureDate) return null;
+      const due = new Date(`${lectureDate}T09:00:00+09:00`);
+      return Number.isNaN(due.getTime()) ? null : new Date(due.getTime() - 24 * 60 * 60 * 1000);
+    }
+
+    function renderStaffSurveyDueRow(row) {
+      const typeLabel = String(row.surveyType || 'private') === 'group' ? '그룹 강사알림 예정' : '프라이빗 강사알림 예정';
+      const due = dateTimeLabel(row.staffDueAt);
+      return `
+        <div class="alimtalk-row">
+          <div class="alimtalk-row-main">
+            <strong>${escapeHtml(row.memberName || '회원')}</strong>
+            <span>${escapeHtml([row.matching?.staffName || '담당강사', row.matching?.lectureDate || '', due].filter(Boolean).join(' · '))}</span>
+          </div>
+          <div class="alimtalk-row-meta">
+            <strong>${escapeHtml(typeLabel)}</strong>
+            <small>${escapeHtml(row.delivery?.alimtalkReason || '발송 대기')}</small>
+          </div>
+          <span class="action-send pending">예약</span>
+        </div>
+      `;
+    }
+
+    function renderSurveyFlowRow(row) {
+      const typeLabel = String(row.surveyType || 'private') === 'group' ? '그룹 설문 제출' : '프라이빗 설문 제출';
+      const memoJob = (appState.admin.studiomateMemoWriteJobs || []).find((job) => String(job.jobId || '').includes(String(row.responseId || '')));
+      const delivery = row.delivery?.alimtalkStatus || 'pending';
+      const memoStatus = memoJob?.status || 'pending';
+      return `
+        <div class="alimtalk-row">
+          <div class="alimtalk-row-main">
+            <strong>${escapeHtml(row.memberName || '회원')}</strong>
+            <span>${escapeHtml([row.matching?.lectureDate || '', row.matching?.staffName || '', dateTimeLabel(row.submittedAt || row.createdAt)].filter(Boolean).join(' · '))}</span>
+          </div>
+          <div class="alimtalk-row-meta">
+            <strong>${escapeHtml(typeLabel)}</strong>
+            <small>${escapeHtml(`강사알림 ${delivery} · StudioMate 메모 ${memoStatus}`)}</small>
+          </div>
+          <span class="action-send ${delivery === 'sent' ? 'auto' : delivery === 'failed' ? 'review' : 'pending'}">${escapeHtml(delivery === 'sent' ? '전달완료' : delivery === 'failed' ? '확인필요' : '대기')}</span>
+        </div>
+      `;
+    }
+
+    function renderMemoJobIssueRow(job) {
+      return `
+        <div class="alimtalk-row">
+          <div class="alimtalk-row-main">
+            <strong>${escapeHtml(job.memberName || '회원')}</strong>
+            <span>${escapeHtml(job.memberPhone || '')}</span>
+          </div>
+          <div class="alimtalk-row-meta">
+            <strong>StudioMate 메모쓰기 확인</strong>
+            <small>${escapeHtml(job.lastError || job.status || '')}</small>
+          </div>
+          <span class="action-send review">${escapeHtml(job.status || '확인')}</span>
+        </div>
+      `;
+    }
+
+    function renderTemplateIssueRow(item) {
+      return `
+        <div class="alimtalk-row">
+          <div class="alimtalk-row-main">
+            <strong>${escapeHtml(item.label || item.name || item.templateCode || '템플릿')}</strong>
+            <span>${escapeHtml(item.templateCode || '')}</span>
+          </div>
+          <div class="alimtalk-row-meta">
+            <strong>SOLAPI 템플릿 상태</strong>
+            <small>${escapeHtml(item.lastError || item.name || '')}</small>
+          </div>
+          <span class="action-send pending">${escapeHtml(item.status || '확인')}</span>
         </div>
       `;
     }
@@ -4322,6 +4462,7 @@
         ${renderAdminScheduleSwitch()}
         ${renderAdminDaySchedule(views)}
         ${renderAlimtalkApprovalQueue('day')}
+        ${renderAlimtalkFlowBoard('day')}
         ${renderAdminActionQueue(views)}
       `;
     }
@@ -4334,6 +4475,7 @@
         ${renderWeekView()}
         ${renderWeekOperationsSummary()}
         ${renderAlimtalkApprovalQueue('week')}
+        ${renderAlimtalkFlowBoard('week')}
       `;
     }
 
@@ -4346,6 +4488,7 @@
         ${renderMonthCalendar()}
         ${renderPeriodOperationsSummary('month')}
         ${renderAlimtalkApprovalQueue('month')}
+        ${renderAlimtalkFlowBoard('month')}
       `;
     }
 
@@ -6018,7 +6161,7 @@
       if (!staffId || !studioId) throw new Error('운영자 권한이 아직 연결되지 않았습니다');
 
       const rangeDates = visibleDatesForMode(appState.viewMode, appState.selectedDate, true);
-      const [staffSnap, staffListSnap, viewSnaps, consultationSnaps, otherScheduleSnaps, memoSnap, memberProfileSnap, memberContactSnap, alimtalkCandidateSnap, actionSnaps, syncSnap, dashboardSnap, emergencySnap] = await Promise.all([
+      const [staffSnap, staffListSnap, viewSnaps, consultationSnaps, otherScheduleSnaps, memoSnap, memberProfileSnap, memberContactSnap, alimtalkCandidateSnap, privateSurveySnap, memoWriteJobSnap, templateStateSnap, actionSnaps, syncSnap, dashboardSnap, emergencySnap] = await Promise.all([
         getDoc(doc(appState.db, 'staffs', String(staffId))),
         getDocs(query(
           collection(appState.db, 'staffs'),
@@ -6059,6 +6202,20 @@
           collection(appState.db, 'alimtalkCandidates'),
           where('studioId', '==', String(studioId)),
           queryLimit(500)
+        )),
+        getDocs(query(
+          collection(appState.db, 'privateSurveyResponses'),
+          where('studioId', '==', String(studioId)),
+          queryLimit(200)
+        )),
+        getDocs(query(
+          collection(appState.db, 'studiomateMemoWriteJobs'),
+          where('studioId', '==', String(studioId)),
+          queryLimit(200)
+        )),
+        getDocs(query(
+          collection(appState.db, 'alimtalkTemplateStates'),
+          queryLimit(50)
         )),
         Promise.all(rangeDates.map((date) => getOptionalDoc(doc(appState.db, 'adminActions', `${studioId}_${date}`)))),
         getDoc(doc(appState.db, 'syncStates', `lecturesRange_${studioId}`)),
@@ -6103,6 +6260,9 @@
           memberProfiles: memberProfileSnap.docs.map((docSnap) => ({ memberId: docSnap.id, ...docSnap.data() })),
           memberContactIndex: memberContactSnap.docs.map((docSnap) => ({ memberId: docSnap.id, ...docSnap.data() })),
           alimtalkCandidates: alimtalkCandidateSnap.docs.map((docSnap) => ({ candidateId: docSnap.id, ...docSnap.data() })),
+          privateSurveyResponses: privateSurveySnap.docs.map((docSnap) => ({ responseId: docSnap.id, ...docSnap.data() })),
+          studiomateMemoWriteJobs: memoWriteJobSnap.docs.map((docSnap) => ({ jobId: docSnap.id, ...docSnap.data() })),
+          alimtalkTemplateStates: templateStateSnap.docs.map((docSnap) => ({ templateCode: docSnap.id, ...docSnap.data() })),
           actions: selectedActionState ? (selectedActionState.actions || []) : [],
           rangeActions,
           actionsState: selectedActionState,

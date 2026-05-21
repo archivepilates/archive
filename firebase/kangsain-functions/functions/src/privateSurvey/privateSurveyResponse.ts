@@ -11,6 +11,7 @@ import { nowTimestamp } from "../utils/date";
 import { stableHash } from "../utils/hash";
 import { DelegatedGoogleClient } from "../google/delegatedGoogleClient";
 import { getStaffById } from "../firestore/staffRepository";
+import { isAlimtalkTemplateApproved } from "../alimtalk/templateStatus";
 
 const PUBLIC_VIEW_BASE_URL =
   process.env.PRIVATE_SURVEY_VIEW_BASE_URL || "https://in.archivepilates.com/privateSurveyResponseView";
@@ -27,7 +28,6 @@ const OUTPUT_HEADERS = [
 ];
 const STAFF_PRIVATE_SURVEY_TEMPLATE_ID = "KA01TP260519093416836f1EHZYJ00uM";
 const STAFF_GROUP_SURVEY_TEMPLATE_ID = "KA01TP260521072937354Ve2n5cEapDL";
-const STAFF_GROUP_SURVEY_TEMPLATE_STATUS = "inspecting";
 const SOLAPI_SEND_URL = "https://api.solapi.com/messages/v4/send-many/detail";
 const ARCHIVE_LOGO_URL = "https://in.archivepilates.com/logo120.png";
 
@@ -808,8 +808,7 @@ async function deliverStaffSurveyAlimtalk(
   }
 
   const templateId = staffSurveyTemplateId(doc);
-  const templateStatus = staffSurveyTemplateStatus(doc);
-  if (templateStatus !== "approved") {
+  if (!(await isAlimtalkTemplateApproved(templateId))) {
     return {
       ...delivery,
       alimtalkStatus: "pending",
@@ -824,6 +823,15 @@ async function deliverStaffSurveyAlimtalk(
       ...delivery,
       alimtalkStatus: "sent",
       alimtalkReason: "이미 담당강사 사전설문 알림톡 발송 완료",
+    };
+  }
+  const previousAttempts = existing?.attempts || 0;
+  const maxAttempts = existing?.maxAttempts || 2;
+  if (previousAttempts >= maxAttempts) {
+    return {
+      ...delivery,
+      alimtalkStatus: "failed",
+      alimtalkReason: `담당강사 알림톡 발송 실패 재시도 한도 초과: ${existing?.lastError || sendId}`,
     };
   }
 
@@ -850,8 +858,8 @@ async function deliverStaffSurveyAlimtalk(
         dedupePolicy: `${doc.surveyType === "group" ? "담당강사 그룹 사전확인" : "담당강사 사전설문"} 제출 알림 응답별 1회`,
         dedupeWindowDays: null,
         status: "done",
-        attempts: 1,
-        maxAttempts: 1,
+        attempts: previousAttempts + 1,
+        maxAttempts,
         nextRunAt: nowTimestamp(),
         solapiMessageId: result.messageId,
         lastError: null,
@@ -868,6 +876,7 @@ async function deliverStaffSurveyAlimtalk(
     };
   } catch (err) {
     const message = err instanceof Error ? err.message : String(err);
+    const attempts = previousAttempts + 1;
     await sendRef.set(
       {
         sendId,
@@ -881,8 +890,8 @@ async function deliverStaffSurveyAlimtalk(
         dedupePolicy: `${doc.surveyType === "group" ? "담당강사 그룹 사전확인" : "담당강사 사전설문"} 제출 알림 응답별 1회`,
         dedupeWindowDays: null,
         status: "failed",
-        attempts: 1,
-        maxAttempts: 1,
+        attempts,
+        maxAttempts,
         nextRunAt: nowTimestamp(),
         lastError: message,
         createdByUid: "system:private-survey-intake",
@@ -899,7 +908,7 @@ async function deliverStaffSurveyAlimtalk(
     return {
       ...delivery,
       alimtalkStatus: "failed",
-      alimtalkReason: message,
+      alimtalkReason: attempts >= maxAttempts ? `${message} · 재시도 한도 초과` : message,
     };
   }
 }
@@ -1066,10 +1075,6 @@ async function sendStaffPrivateSurveyAlimtalk(input: {
 
 function staffSurveyTemplateId(doc: PrivateSurveyResponseDoc): string {
   return doc.surveyType === "group" ? STAFF_GROUP_SURVEY_TEMPLATE_ID : STAFF_PRIVATE_SURVEY_TEMPLATE_ID;
-}
-
-function staffSurveyTemplateStatus(doc: PrivateSurveyResponseDoc): "approved" | "inspecting" {
-  return doc.surveyType === "group" ? STAFF_GROUP_SURVEY_TEMPLATE_STATUS : "approved";
 }
 
 function solapiAuthHeader(): string {

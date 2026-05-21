@@ -1,4 +1,5 @@
 import { logger } from "firebase-functions";
+import { db } from "../config/firebase";
 import { refs } from "../firestore/refs";
 import { createAlimtalkLogDocument, sendAlimtalkLogEmail } from "../google/driveDocsMailer";
 import type { AlimtalkCandidateDoc } from "../types/models";
@@ -25,11 +26,13 @@ export async function sendDailyAlimtalkReport(input: {
   const studioId = input.studioId || "5330";
   const date = input.date || todayKst();
   const candidates = await listDailyCandidates(studioId, date);
+  const surveyStats = await surveyFlowStats(studioId, date);
   const body = buildReportBody({
     date,
     queueSummary: input.queueSummary,
     processSummary: input.processSummary,
     candidates,
+    surveyStats,
   });
   const title = `ARCHIVE IN 알림톡 발송 로그 ${date}`;
   const document = await createAlimtalkLogDocument({ title, body });
@@ -52,7 +55,9 @@ async function listDailyCandidates(studioId: string, date: string): Promise<Alim
   return snap.docs
     .map((doc) => doc.data())
     .filter((candidate) => candidate.studioId === studioId)
-    .sort((a, b) => `${statusSort(a.status)}_${a.memberName}`.localeCompare(`${statusSort(b.status)}_${b.memberName}`, "ko"));
+    .sort((a, b) =>
+      `${statusSort(a.status)}_${a.memberName}`.localeCompare(`${statusSort(b.status)}_${b.memberName}`, "ko"),
+    );
 }
 
 function buildReportBody(input: {
@@ -60,14 +65,19 @@ function buildReportBody(input: {
   queueSummary: QueueSummary;
   processSummary: ProcessSummary;
   candidates: AlimtalkCandidateDoc[];
+  surveyStats: { submitted: number; staffSent: number; memoFailed: number };
 }): string {
   const now = formatKstNow();
   const sent = input.candidates.filter((candidate) => candidate.status === "sent");
   const skipped = input.candidates.filter((candidate) => candidate.status === "skipped");
   const failed = input.candidates.filter((candidate) => candidate.status === "failed");
   const remaining = input.candidates.filter((candidate) => !["sent", "skipped", "failed"].includes(candidate.status));
-  const autoSent = sent.filter((candidate) => candidate.queuedBy === "auto" || candidate.reviewedByUid?.startsWith("system:"));
-  const operatorSent = sent.filter((candidate) => candidate.queuedBy === "operator" && !candidate.reviewedByUid?.startsWith("system:"));
+  const autoSent = sent.filter(
+    (candidate) => candidate.queuedBy === "auto" || candidate.reviewedByUid?.startsWith("system:"),
+  );
+  const operatorSent = sent.filter(
+    (candidate) => candidate.queuedBy === "operator" && !candidate.reviewedByUid?.startsWith("system:"),
+  );
 
   return [
     "ARCHIVE IN 알림톡 발송 로그",
@@ -86,6 +96,9 @@ function buildReportBody(input: {
     `- 중복/예외 차단: ${skipped.length}건`,
     `- 자동화 발송 성공: ${autoSent.length}건`,
     `- 운영자 승인 발송 성공: ${operatorSent.length}건`,
+    `- 설문 제출: ${input.surveyStats.submitted}건`,
+    `- 강사 설문 알림 발송: ${input.surveyStats.staffSent}건`,
+    `- StudioMate 메모쓰기 확인필요: ${input.surveyStats.memoFailed}건`,
     "",
     "발송 완료",
     ...linesOrEmpty(sent.map(candidateLine)),
@@ -102,8 +115,46 @@ function buildReportBody(input: {
   ].join("\n");
 }
 
+async function surveyFlowStats(
+  studioId: string,
+  date: string,
+): Promise<{ submitted: number; staffSent: number; memoFailed: number }> {
+  const [surveySnap, staffSendSnap, memoJobSnap] = await Promise.all([
+    refs.privateSurveyResponses().where("studioId", "==", studioId).limit(300).get(),
+    refs.alimtalkSends().where("studioId", "==", studioId).where("status", "==", "done").limit(300).get(),
+    db
+      .collection("studiomateMemoWriteJobs")
+      .where("studioId", "==", studioId)
+      .where("status", "in", ["failed", "retry"])
+      .limit(300)
+      .get(),
+  ]);
+  const submitted = surveySnap.docs.filter(
+    (doc) => dateText(doc.data().createdAt) === date || dateText(doc.data().submittedAt) === date,
+  ).length;
+  const staffSent = staffSendSnap.docs
+    .map((doc) => doc.data())
+    .filter(
+      (send) =>
+        /^group_survey_staff_|^private_survey_staff_/.test(send.sendId || "") && dateText(send.updatedAt) === date,
+    ).length;
+  const memoFailed = memoJobSnap.docs
+    .map((doc) => doc.data())
+    .filter(
+      (job) => /^group_survey_|^private_survey_/.test(job.jobId || "") && dateText(job.updatedAt) === date,
+    ).length;
+  return { submitted, staffSent, memoFailed };
+}
+
+function dateText(value: FirebaseFirestore.Timestamp | null | undefined): string {
+  const date = value?.toDate?.();
+  if (!date) return "";
+  return new Intl.DateTimeFormat("sv-SE", { timeZone: "Asia/Seoul" }).format(date);
+}
+
 function candidateLine(candidate: AlimtalkCandidateDoc): string {
-  const mode = candidate.queuedBy === "auto" || candidate.reviewedByUid?.startsWith("system:") ? "자동화" : "운영자 승인";
+  const mode =
+    candidate.queuedBy === "auto" || candidate.reviewedByUid?.startsWith("system:") ? "자동화" : "운영자 승인";
   const ticket = candidate.payload?.ticketName || candidate.payload?.ticket || "";
   const detail = ticket ? ` / ${ticket}` : "";
   const error = candidate.lastError ? ` / ${candidate.lastError}` : "";
