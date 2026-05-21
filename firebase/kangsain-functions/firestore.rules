@@ -187,6 +187,11 @@ service cloud.firestore {
       allow write: if false;
     }
 
+    match /privateSurveyResponses/{responseId} {
+      allow read: if isManager() && sameStudio(resource.data.studioId);
+      allow write: if false;
+    }
+
     match /memberMemos/{memoId} {
       allow read: if
         signedIn() &&
@@ -272,6 +277,11 @@ service cloud.firestore {
       allow write: if false;
     }
 
+    match /opsState/{stateId} {
+      allow read: if isManager();
+      allow write: if false;
+    }
+
     match /adminSyncRequests/{requestId} {
       allow read: if isManager();
       allow create: if
@@ -303,6 +313,16 @@ service cloud.firestore {
     }
 
     match /dashboardTicketMetrics/{metricId} {
+      allow read: if isManager();
+      allow write: if false;
+    }
+
+    match /studiomateMemoWriteJobs/{jobId} {
+      allow read: if isManager() && sameStudio(resource.data.studioId);
+      allow write: if false;
+    }
+
+    match /alimtalkTemplateStates/{templateCode} {
       allow read: if isManager();
       allow write: if false;
     }
