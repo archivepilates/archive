@@ -3,6 +3,7 @@ import { saveDashboardSnapshot } from "../firestore/dashboardRepository";
 import type {
   DashboardAveragePriceRow,
   DashboardData,
+  DashboardDailyRevenueRow,
   DashboardInstructorAverageRow,
   DashboardInstructorSalesRow,
   DashboardInstructorStatsRow,
@@ -22,6 +23,7 @@ const SHEETS = {
   ticketSales: "수강권매출_Master",
   ticketSalesRaw: "수강권매출_원본",
   memberSales: "회원별누적매출",
+  dailyRevenue: "매출일일누적",
 };
 
 const MONTHLY_ACTIVE_MEMBER_SHEETS = [
@@ -75,13 +77,14 @@ export async function syncDashboardFromSheets(input?: {
 
 async function loadDashboardData(spreadsheetId: string): Promise<{ data: DashboardData; warning?: string }> {
   try {
-    const [settlement, instructorStats, ticketAnalysis, ticketSales, ticketSalesRaw, memberSales, monthlyActiveMembers] = await Promise.all([
+    const [settlement, instructorStats, ticketAnalysis, ticketSales, ticketSalesRaw, memberSales, dailyRevenue, monthlyActiveMembers] = await Promise.all([
       readSheetRows(spreadsheetId, SHEETS.settlement),
       readSheetRows(spreadsheetId, SHEETS.instructorStats),
       readSheetRows(spreadsheetId, SHEETS.ticketAnalysis),
       readSheetRows(spreadsheetId, SHEETS.ticketSales),
       readSheetRows(spreadsheetId, SHEETS.ticketSalesRaw),
       readSheetRows(spreadsheetId, SHEETS.memberSales),
+      readOptionalSheetRows(spreadsheetId, SHEETS.dailyRevenue),
       readFirstAvailableSheetRows(spreadsheetId, MONTHLY_ACTIVE_MEMBER_SHEETS),
     ]);
 
@@ -93,6 +96,7 @@ async function loadDashboardData(spreadsheetId: string): Promise<{ data: Dashboa
         ticketSales,
         ticketSalesRaw,
         memberSales,
+        dailyRevenue,
         monthlyActiveMembers,
       }),
     };
@@ -120,6 +124,7 @@ export function buildDashboardData(input: {
   ticketSales: SheetRow[];
   ticketSalesRaw?: SheetRow[];
   memberSales?: SheetRow[];
+  dailyRevenue?: SheetRow[];
   monthlyActiveMembers?: SheetRow[];
 }): DashboardData {
   const settlement = input.settlement.map(normalizeSettlementRow).filter((row) => row.월);
@@ -130,6 +135,7 @@ export function buildDashboardData(input: {
   const memberSales = (input.memberSales || []).map(normalizeMemberSalesRow).filter(
     (row) => row.totalRevenue > 0 && (row.memberId || row.memberName || row.memberPhone),
   );
+  const dailyRevenue = (input.dailyRevenue || []).map(normalizeDailyRevenueRow).filter((row) => row.기준일 && row.기준월);
   const monthlyActiveMembers = (input.monthlyActiveMembers || [])
     .map(normalizeMonthlyActiveMemberRow)
     .filter((row) => row.월 && row.이용회원수 > 0);
@@ -161,6 +167,7 @@ export function buildDashboardData(input: {
     월별이용회원: monthlyActiveMembers.length ? monthlyActiveMembers : buildMonthlyActiveMembers(ticketAnalysis),
     수강권TOP5: buildTicketTop5(ticketAnalysis),
     회원매출: memberSales.length ? memberSales : buildMemberSales(ticketSalesRaw.length ? ticketSalesRaw : ticketSales),
+    매출일일누적: dailyRevenue,
     updatedAt: new Date().toISOString(),
   };
 }
@@ -184,6 +191,18 @@ async function readSheetRows(spreadsheetId: string, sheetName: string): Promise<
     .map((row) =>
       Object.fromEntries(headers.map((header, index) => [String(header || `col${index + 1}`), row[index] ?? ""])),
     );
+}
+
+async function readOptionalSheetRows(spreadsheetId: string, sheetName: string): Promise<SheetRow[]> {
+  try {
+    return await readSheetRows(spreadsheetId, sheetName);
+  } catch (err) {
+    logger.info("Optional dashboard sheet not found; continuing without it", {
+      sheetName,
+      message: err instanceof Error ? err.message : String(err),
+    });
+    return [];
+  }
 }
 
 async function readFirstAvailableSheetRows(spreadsheetId: string, sheetNames: string[]): Promise<SheetRow[]> {
@@ -425,6 +444,17 @@ function normalizeMemberSalesRow(row: SheetRow): DashboardMemberSalesRow {
   };
 }
 
+function normalizeDailyRevenueRow(row: SheetRow): DashboardDailyRevenueRow {
+  return {
+    기준일: dateKey(firstValue(row, ["기준일", "일자", "date"])),
+    기준월: monthKey(firstValue(row, ["기준월", "월", "month"])),
+    일매출: numberValue(firstValue(row, ["일매출", "dailyRevenue"])),
+    월누적매출: numberValue(firstValue(row, ["월누적매출", "mtdRevenue"])),
+    전월동일일누적: numberValue(firstValue(row, ["전월동일일누적", "prevMonthSameDayMtd"])),
+    전년동월동일일누적: numberValue(firstValue(row, ["전년동월동일일누적", "prevYearSameDayMtd"])),
+  };
+}
+
 function normalizeMonthlyActiveMemberRow(row: SheetRow): DashboardMonthlyActiveMemberRow {
   const memberList = stringValue(firstValue(row, ["회원목록", "회원 리스트", "유효회원목록", "수강권보유회원목록", "membersList"]));
   const dedupedMemberCount = countDistinctMembers(memberList);
@@ -539,6 +569,16 @@ function normalizeDashboardPayload(input: Partial<DashboardData>): DashboardData
         ticketSummary: stringValue(row.ticketSummary),
       }))
       .filter((row) => row.totalRevenue > 0 && (row.memberId || row.memberName || row.memberPhone)),
+    매출일일누적: (input.매출일일누적 || [])
+      .map((row) => ({
+        기준일: dateKey(row.기준일),
+        기준월: monthKey(row.기준월),
+        일매출: numberValue(row.일매출),
+        월누적매출: numberValue(row.월누적매출),
+        전월동일일누적: numberValue(row.전월동일일누적),
+        전년동월동일일누적: numberValue(row.전년동월동일일누적),
+      }))
+      .filter((row) => row.기준일 && row.기준월),
     updatedAt: stringValue(input.updatedAt) || new Date().toISOString(),
   };
 }

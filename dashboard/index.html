@@ -345,6 +345,23 @@ canvas{display:block;width:100%!important;height:100%!important;}
       </div>
     </div>
 
+    <div class="card cfull">
+      <div class="card-head">
+        <p class="ct">일일 누적 매출 비교</p>
+        <div class="ctrail">
+          <span style="font-size:11px;color:var(--t3);" id="dailyRevenueLabel"></span>
+          <button class="dl-btn" onclick="downloadChart('c12','일일누적매출비교')" title="PNG 저장"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.2" stroke-linecap="round" stroke-linejoin="round"><path d="M21 15v4a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2v-4"/><polyline points="7 10 12 15 17 10"/><line x1="12" y1="15" x2="12" y2="3"/></svg></button>
+        </div>
+      </div>
+      <div class="legend">
+        <span><span class="ldot" style="background:#38BDF8;border-radius:50%;"></span>선택월 누적</span>
+        <span><span class="ldot" style="background:#F59E0B;border-radius:50%;"></span>전월 동일일 누적</span>
+        <span><span class="ldot" style="background:#94A3B8;border-radius:50%;"></span>전년 동일일 누적</span>
+      </div>
+      <div id="c12box" class="chart-box"><canvas id="c12"></canvas></div>
+      <div id="c12empty" class="empty-state"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.5"><path d="M3 3v18h18"/><path d="m19 9-5 5-4-4-3 3"/></svg>일일 누적 매출 데이터 없음</div>
+    </div>
+
     <!-- INSTRUCTOR DONUT (FULL WIDTH) -->
     <div class="card cfull">
       <div class="card-head">
@@ -477,10 +494,10 @@ canvas{display:block;width:100%!important;height:100%!important;}
 <script src="./assets/vendor.js"></script>
 <script>
 // ══ STATE ══
-let ALL={summary:[],강사별:[],강사통계:[],월별그룹평균가격:[],월별강사평균인원:[],수강권TOP5:[],updatedAt:null};
+let ALL={summary:[],강사별:[],강사통계:[],월별그룹평균가격:[],월별강사평균인원:[],수강권TOP5:[],매출일일누적:[],updatedAt:null};
 let months=[],latest='';
 let activeInstr=new Set();
-let c1=null,c2=null,c3=null,c4=null,c5=null,c6=null,c7=null,c8=null,c9=null,c10=null,c11=null;
+let c1=null,c2=null,c3=null,c4=null,c5=null,c6=null,c7=null,c8=null,c9=null,c10=null,c11=null,c12=null;
 let apTimer=null,apMs=1800,apOn=false;
 const sel=document.getElementById('monthSel');
 
@@ -496,6 +513,7 @@ const colr=(a,b)=>a>=b?'#10b981':'#ef4444';
 function legPos(){return window.innerWidth<=600?'bottom':'right';}
 function vGrad(chart,t,b){const{ctx,chartArea}=chart||{};if(!chartArea)return t;const g=ctx.createLinearGradient(0,chartArea.top,0,chartArea.bottom);g.addColorStop(0,t);g.addColorStop(1,b);return g;}
 function normMonth(v){if(!v)return '';const s=String(v);const m=s.match(/(20\d{2})-(\d{2})/);if(m)return m[1]+'-'+m[2];const d=new Date(v);if(!isNaN(d))return d.getFullYear()+'-'+String(d.getMonth()+1).padStart(2,'0');return '';}
+function normDate(v){if(!v)return '';const s=String(v);const m=s.match(/(20\d{2})-(\d{2})-(\d{2})/);if(m)return m[1]+'-'+m[2]+'-'+m[3];const d=new Date(v);if(!isNaN(d))return d.getFullYear()+'-'+String(d.getMonth()+1).padStart(2,'0')+'-'+String(d.getDate()).padStart(2,'0');return '';}
 function fmtMonthLong(v){const n=normMonth(v);if(!n)return '';return n.slice(2,4)+'년 '+Number(n.slice(5,7))+'월';}
 function fmtMonthShort(v){const n=normMonth(v);if(!n)return '';return n.slice(2,4)+'.'+Number(n.slice(5,7));}
 function toN(v){if(typeof v==='number')return v;if(v==null||v==='')return 0;return Number(String(v).replace(/,/g,'').replace('%','').trim())||0;}
@@ -504,13 +522,14 @@ function setBox(boxId,emptyId,show){document.getElementById(boxId).style.display
 
 // ══ DATA NORMALIZE ══
 function normalize(data){
-  const o={summary:[],강사별:[],강사통계:[],월별그룹평균가격:[],월별강사평균인원:[],수강권TOP5:[],updatedAt:data&&data.updatedAt};
+  const o={summary:[],강사별:[],강사통계:[],월별그룹평균가격:[],월별강사평균인원:[],수강권TOP5:[],매출일일누적:[],updatedAt:data&&data.updatedAt};
   o.summary=((data&&data.summary)||[]).map(r=>({월:normMonth(r.월),총매출:toN(r.총매출),수업매출:toN(r.수업매출),실지급액:toN(r.실지급액),세전총액:toN(r.세전총액),마진률:toN(r.마진률),그룹세션:toN(r.그룹세션),프라이빗:toN(r.프라이빗),강사레슨:toN(r.강사레슨),예약률:toN(r.예약률),출석률:toN(r.출석률)})).filter(r=>r.월).sort((a,b)=>a.월.localeCompare(b.월));
   o.강사별=((data&&data.강사별)||[]).map(r=>({월:normMonth(r.월),강사:String(r.강사||''),총매출:toN(r.총매출)})).filter(r=>r.월&&r.강사);
   o.강사통계=((data&&data.강사통계)||[]).map(r=>({월:normMonth(r.월),강사:String(r.강사||''),그룹예약률:toN(r.그룹예약률),그룹출석률:toN(r.그룹출석률),그룹평균인원:toN(r.그룹평균인원)})).filter(r=>r.월&&r.강사);
   o.월별그룹평균가격=((data&&data.월별그룹평균가격)||[]).map(r=>({월:normMonth(r.월),그룹1회평균가격:toN(r.그룹1회평균가격)})).filter(r=>r.월).sort((a,b)=>a.월.localeCompare(b.월));
   o.월별강사평균인원=((data&&data.월별강사평균인원)||[]).map(r=>({월:normMonth(r.월),강사:String(r.강사||''),그룹평균인원:toN(r.그룹평균인원)})).filter(r=>r.월&&r.강사).sort((a,b)=>a.월===b.월?a.강사.localeCompare(b.강사,'ko'):a.월.localeCompare(b.월));
   o.수강권TOP5=((data&&data.수강권TOP5)||[]).map(r=>({월:normMonth(r.월),라벨:String(r.라벨||r.수강권명||''),값:toN(r.값||0),종류수:toN(r.종류수||0)})).filter(r=>r.월&&r.라벨);
+  o.매출일일누적=((data&&data.매출일일누적)||[]).map(r=>({기준일:normDate(r.기준일||r.일자),기준월:normMonth(r.기준월||r.월),일매출:toN(r.일매출),월누적매출:toN(r.월누적매출),전월동일일누적:toN(r.전월동일일누적),전년동월동일일누적:toN(r.전년동월동일일누적)})).filter(r=>r.기준일&&r.기준월).sort((a,b)=>a.기준일.localeCompare(b.기준일));
   return o;
 }
 
@@ -643,6 +662,22 @@ function buildC1(){
   c1=new Chart(document.getElementById('c1'),{type:'line',data:{labels:lb,datasets:[{label:'총매출',data:s.map(r=>r.총매출),borderColor:'#7C3AED',backgroundColor:ctx=>vGrad(ctx.chart,'rgba(124,58,237,.36)','rgba(124,58,237,0)'),pointBackgroundColor:pb,pointBorderColor:'#E9D5FF',pointRadius:pr,pointHoverRadius:9,pointHoverBorderWidth:3,pointHitRadius:18,borderWidth:3,tension:.38,fill:true}]},options:{responsive:true,maintainAspectRatio:false,animation:{duration:1400,easing:'easeOutQuart',delay:ctx=>ctx.type==='data'?ctx.dataIndex*70:0},plugins:{legend:{display:false},tooltip:{callbacks:{label:c=>c.dataset.label+': '+fmt만(c.raw)}}},interaction:{intersect:false,mode:'index'},scales:{x:{grid:{display:false},ticks:{font:{size:10.5},autoSkip:false,color:tickColor}},y:{ticks:{callback:v=>fmt만(v),font:{size:10},color:tickColor},grid:{color:gridColor}}}}});
 }
 
+// ══ C12: 일일 누적 매출 비교 ══
+function buildC12(month){
+  const rows=(ALL.매출일일누적||[]).filter(r=>r.기준월===month).sort((a,b)=>a.기준일.localeCompare(b.기준일));
+  document.getElementById('dailyRevenueLabel').textContent=fmtMonthLong(month)+' 기준';
+  if(!rows.length){setBox('c12box','c12empty',false);if(c12){c12.destroy();c12=null;}return;}
+  setBox('c12box','c12empty',true);
+  const labels=rows.map(r=>Number(r.기준일.slice(8,10))+'일');
+  const cd={labels,datasets:[
+    {label:'선택월 누적',data:rows.map(r=>r.월누적매출),borderColor:'#38BDF8',backgroundColor:ctx=>vGrad(ctx.chart,'rgba(56,189,248,.22)','rgba(56,189,248,0)'),pointBackgroundColor:'#BAE6FD',pointRadius:3,pointHoverRadius:7,borderWidth:2.7,tension:.28,fill:true},
+    {label:'전월 동일일 누적',data:rows.map(r=>r.전월동일일누적),borderColor:'#F59E0B',pointBackgroundColor:'#FCD34D',pointRadius:2,borderWidth:2,tension:.28,fill:false},
+    {label:'전년 동일일 누적',data:rows.map(r=>r.전년동월동일일누적),borderColor:'#94A3B8',pointBackgroundColor:'#CBD5E1',pointRadius:2,borderWidth:2,tension:.28,fill:false,borderDash:[5,5]}
+  ]};
+  if(c12){c12.data=cd;c12.update('active');return;}
+  c12=new Chart(document.getElementById('c12'),{type:'line',data:cd,options:{responsive:true,maintainAspectRatio:false,animation:{duration:1200,easing:'easeOutQuart',delay:ctx=>ctx.type==='data'?ctx.dataIndex*18:0},plugins:{legend:{display:false},tooltip:{callbacks:{label:c=>c.dataset.label+': '+fmt만(c.raw)}}},interaction:{intersect:false,mode:'index'},scales:{x:{grid:{display:false},ticks:{font:{size:10.5},color:tickColor,maxRotation:0}},y:{ticks:{callback:v=>fmt만(v),font:{size:10},color:tickColor},grid:{color:gridColor}}}}});
+}
+
 // ══ C2: 마진률 ══
 function buildC2(){
   const s=ALL.summary,lb=s.map(r=>fmtMonthShort(r.월)),sel_m=sel.value||latest;
@@ -758,8 +793,8 @@ function buildC11(month){
 
 // ══ DESTROY ALL (only on data refresh) ══
 function destroyAll(){
-  [c1,c2,c3,c4,c5,c6,c7,c8,c9,c10,c11].forEach(ch=>{if(ch)ch.destroy();});
-  c1=c2=c3=c4=c5=c6=c7=c8=c9=c10=c11=null;
+  [c1,c2,c3,c4,c5,c6,c7,c8,c9,c10,c11,c12].forEach(ch=>{if(ch)ch.destroy();});
+  c1=c2=c3=c4=c5=c6=c7=c8=c9=c10=c11=c12=null;
 }
 
 // ══ REBUILD (data refresh) ══
@@ -777,6 +812,7 @@ function changeMonth(month){
   sel.value=month;
   renderHero(month);renderScore(month);
   buildC1();buildC2();buildC3(month);buildC5(month);
+  buildC12(month);
   buildC6();buildC7();buildC8();
   buildC9(month);buildC10(month);buildC11(month);
   requestAnimationFrame(()=>window.scrollTo({top:sy,behavior:'instant'}));
@@ -820,7 +856,7 @@ function changeSpeed(v){apMs=Number(v)||1800;if(apOn)startAP();}
 let rzTimer=null;
 window.addEventListener('resize',()=>{
   clearTimeout(rzTimer);rzTimer=setTimeout(()=>{
-    [c1,c2,c3,c4,c5,c6,c7,c8,c9,c10,c11].forEach(ch=>{
+    [c1,c2,c3,c4,c5,c6,c7,c8,c9,c10,c11,c12].forEach(ch=>{
       if(ch){if((ch===c3||ch===c10)&&ch.options.plugins.legend)ch.options.plugins.legend.position=legPos();ch.resize();ch.update('resize');}
     });
   },120);

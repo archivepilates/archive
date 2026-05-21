@@ -64,6 +64,15 @@ export interface DashboardMemberSalesRow {
   ticketSummary?: string;
 }
 
+export interface DashboardDailyRevenueRow {
+  기준일: string;
+  기준월: string;
+  일매출: number;
+  월누적매출: number;
+  전월동일일누적: number;
+  전년동월동일일누적: number;
+}
+
 export interface DashboardData {
   summary: DashboardSummaryRow[];
   강사별: DashboardInstructorSalesRow[];
@@ -73,6 +82,7 @@ export interface DashboardData {
   월별이용회원: DashboardMonthlyActiveMemberRow[];
   수강권TOP5: DashboardTicketTopRow[];
   회원매출: DashboardMemberSalesRow[];
+  매출일일누적?: DashboardDailyRevenueRow[];
   updatedAt: string;
 }
 

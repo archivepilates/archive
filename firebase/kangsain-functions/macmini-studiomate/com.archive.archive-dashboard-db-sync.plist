@@ -1,0 +1,39 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<!DOCTYPE plist PUBLIC "-//Apple//DTD PLIST 1.0//EN" "http://www.apple.com/DTDs/PropertyList-1.0.dtd">
+<plist version="1.0">
+<dict>
+  <key>Label</key>
+  <string>com.archive.archive-dashboard-db-sync</string>
+  <key>ProgramArguments</key>
+  <array>
+    <string>/opt/homebrew/bin/node</string>
+    <string>/Users/archivepilates/codex-worktrees/archivein-live-setup/scripts/run-archive-dashboard-sales-daily.mjs</string>
+    <string>--apply</string>
+    <string>--sync-firebase</string>
+  </array>
+  <key>WorkingDirectory</key>
+  <string>/Users/archivepilates/codex-worktrees/archivein-live-setup</string>
+  <key>StartCalendarInterval</key>
+  <dict>
+    <key>Hour</key>
+    <integer>23</integer>
+    <key>Minute</key>
+    <integer>0</integer>
+  </dict>
+  <key>EnvironmentVariables</key>
+  <dict>
+    <key>TZ</key>
+    <string>Asia/Seoul</string>
+    <key>GOOGLE_APPLICATION_CREDENTIALS</key>
+    <string>/Users/archivepilates/ArchiveIN/secrets/google/archive-codex-operator.json</string>
+    <key>GOOGLE_CLOUD_PROJECT</key>
+    <string>archive-pilates</string>
+    <key>DASHBOARD_DB_SPREADSHEET_ID</key>
+    <string>1yEU2lDM_hTKQ-qT8UNj1PsiL7fsBwAgkzsKOzfXVsKg</string>
+  </dict>
+  <key>StandardOutPath</key>
+  <string>/Users/archivepilates/ArchiveIN/emergency/logs/archive-dashboard-db-sync.out.log</string>
+  <key>StandardErrorPath</key>
+  <string>/Users/archivepilates/ArchiveIN/emergency/logs/archive-dashboard-db-sync.err.log</string>
+</dict>
+</plist>

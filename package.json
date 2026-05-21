@@ -2,6 +2,9 @@
   "private": true,
   "scripts": {
     "build:dashboard": "esbuild dashboard/src/vendor.js --bundle --format=iife --target=es2020 --outfile=dashboard/assets/vendor.js --minify",
+    "download:studiomate-sales": "node scripts/download-studiomate-sales-excels.mjs",
+    "run:archive-dashboard-sales-daily": "node scripts/run-archive-dashboard-sales-daily.mjs",
+    "sync:archive-dashboard-db": "node scripts/sync-archive-dashboard-db.mjs",
     "verify:archivein-admin": "node scripts/verify-archivein-admin-firestore-access.mjs",
     "process:admin-emergency-sync": "node scripts/process-admin-emergency-sync-requests.mjs"
   },
