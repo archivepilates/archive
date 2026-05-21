@@ -1,22 +1,32 @@
-import { createHash, createHmac } from "node:crypto";
+import { createHash, createHmac, randomBytes } from "node:crypto";
 import { Timestamp } from "firebase-admin/firestore";
 import { logger } from "firebase-functions";
 import type { FirestoreEvent, QueryDocumentSnapshot } from "firebase-functions/v2/firestore";
 import { DEFAULT_STUDIO_ID } from "../config/constants";
-import { privateSurveyWebhookSecret } from "../config/secrets";
+import { privateSurveyWebhookSecret, solapiApiKey, solapiApiSecret, solapiPfid } from "../config/secrets";
 import { db } from "../config/firebase";
 import { refs } from "../firestore/refs";
 import type { BookingDoc, MemberProfileDoc, PrivateSurveyResponseDoc } from "../types/models";
 import { nowTimestamp } from "../utils/date";
 import { stableHash } from "../utils/hash";
 import { DelegatedGoogleClient } from "../google/delegatedGoogleClient";
+import { getStaffById } from "../firestore/staffRepository";
 
 const PUBLIC_VIEW_BASE_URL =
   process.env.PRIVATE_SURVEY_VIEW_BASE_URL || "https://in.archivepilates.com/privateSurveyResponseView";
 const PRIVATE_SURVEY_SPREADSHEET_ID =
   process.env.PRIVATE_SURVEY_SPREADSHEET_ID || "19KlHxFl71fCVRRy8oz93lSfTjj0z4783K5EFO4_KnTk";
 const PRIVATE_SURVEY_SHEET_NAME = process.env.PRIVATE_SURVEY_SHEET_NAME || "설문지 응답 시트1";
-const OUTPUT_HEADERS = ["설문ID", "접근토큰", "상세링크", "ARCHIVE IN 처리상태", "ARCHIVE IN 전송시각", "ARCHIVE IN 오류"];
+const OUTPUT_HEADERS = [
+  "설문ID",
+  "접근토큰",
+  "상세링크",
+  "ARCHIVE IN 처리상태",
+  "ARCHIVE IN 전송시각",
+  "ARCHIVE IN 오류",
+];
+const STAFF_PRIVATE_SURVEY_TEMPLATE_ID = "KA01TP260519093416836f1EHZYJ00uM";
+const SOLAPI_SEND_URL = "https://api.solapi.com/messages/v4/send-many/detail";
 
 interface SurveyIngestPayload {
   spreadsheetId?: string;
@@ -86,16 +96,16 @@ export async function ingestPrivateSurveyResponseHandler(request: any, response:
     const summary = summarizeAnswers(payload);
     const doc = await buildSurveyDoc({ payload, responseId, accessToken, detailUrl, matching, summary });
     await refs.privateSurveyResponse(responseId).set(doc, { merge: true });
+    const delivery = await deliverStaffSurveyAlimtalk(doc, accessToken);
+    await refs.privateSurveyResponse(responseId).set({ delivery, updatedAt: nowTimestamp() }, { merge: true });
 
     response.status(200).json({
       ok: true,
       responseId,
       detailUrl,
       matching,
-      studioMateMemoStatus: doc.delivery.studioMateMemoStatus,
-      studioMateMemoJobId: doc.delivery.studioMateMemoJobId,
-      alimtalkStatus: "skipped",
-      alimtalkReason: doc.delivery.alimtalkReason,
+      alimtalkStatus: delivery.alimtalkStatus,
+      alimtalkReason: delivery.alimtalkReason,
     });
   } catch (err) {
     const message = err instanceof Error ? err.message : String(err);
@@ -134,11 +144,7 @@ export async function processPrivateSurveyIntakeHandler(
     const doc = await buildSurveyDoc({ payload, responseId, accessToken, detailUrl, matching, summary });
     await refs.privateSurveyResponse(responseId).set(doc, { merge: true });
 
-    const delivery = {
-      ...doc.delivery,
-      studioMateMemoStatus: "skipped" as const,
-      studioMateMemoJobId: "",
-    };
+    const delivery = await deliverStaffSurveyAlimtalk(doc, accessToken);
     await refs.privateSurveyResponse(responseId).set({ delivery, updatedAt: nowTimestamp() }, { merge: true });
     await db.collection("privateSurveyPublic").doc(docKey).set(
       {
@@ -207,7 +213,14 @@ export async function syncPrivateSurveyResponsesFromSheet(): Promise<{ processed
     const memberName = firstFilled(answers, ["1. 성함을 입력해주세요"]);
     const memberPhone = normalizePhone(firstFilled(answers, ["2. 연락처를 입력해주세요"]));
     if (!memberName || !memberPhone) {
-      await updateSheetOutput(client, rowNumber, headerMap, ["", "", "", "오류", kstNowText(), "성함 또는 연락처가 비어 있습니다."]);
+      await updateSheetOutput(client, rowNumber, headerMap, [
+        "",
+        "",
+        "",
+        "오류",
+        kstNowText(),
+        "성함 또는 연락처가 비어 있습니다.",
+      ]);
       skipped += 1;
       continue;
     }
@@ -244,7 +257,14 @@ export async function syncPrivateSurveyResponsesFromSheet(): Promise<{ processed
       },
       { merge: true },
     );
-    await updateSheetOutput(client, rowNumber, headerMap, [responseId, accessToken, detailUrl, "전송완료", kstNowText(), ""]);
+    await updateSheetOutput(client, rowNumber, headerMap, [
+      responseId,
+      accessToken,
+      detailUrl,
+      "전송완료",
+      kstNowText(),
+      "",
+    ]);
     processed += 1;
   }
   logger.info("syncPrivateSurveyResponsesFromSheet completed", { processed, skipped });
@@ -356,15 +376,194 @@ async function buildSurveyDoc(input: {
     matching: input.matching,
     delivery: {
       detailUrl: input.detailUrl,
-      studioMateMemoStatus: "skipped",
-      studioMateMemoJobId: "",
-      alimtalkStatus: "skipped",
-      alimtalkReason: "담당강사 설문 제출 알림용 승인 템플릿이 없어 알림톡 발송을 보류했습니다.",
+      alimtalkStatus: "pending",
+      alimtalkReason: "담당강사 알림톡 발송 대기",
     },
     accessTokenHash: sha256(input.accessToken),
     createdAt: now,
     updatedAt: now,
   };
+}
+
+async function deliverStaffSurveyAlimtalk(
+  doc: PrivateSurveyResponseDoc,
+  accessToken: string,
+): Promise<PrivateSurveyResponseDoc["delivery"]> {
+  const delivery = { ...doc.delivery };
+  if (doc.matching.status !== "matched" || !doc.matching.staffId) {
+    return {
+      ...delivery,
+      alimtalkStatus: "pending",
+      alimtalkReason: doc.matching.reason || "담당 수업 매칭 후 담당강사 알림톡 발송 가능",
+    };
+  }
+
+  const staff = await getStaffById(doc.matching.staffId);
+  const staffPhone = normalizePhone(staff?.phone || "");
+  if (!staff || !staffPhone) {
+    return {
+      ...delivery,
+      alimtalkStatus: "pending",
+      alimtalkReason: "담당강사 전화번호가 없어 알림톡 발송 대기",
+    };
+  }
+
+  const sendId = `private_survey_staff_${doc.responseId}`;
+  const sendRef = refs.alimtalkSend(sendId);
+  const existing = (await sendRef.get()).data();
+  if (existing?.status === "done") {
+    return {
+      ...delivery,
+      alimtalkStatus: "sent",
+      alimtalkReason: "이미 담당강사 사전설문 알림톡 발송 완료",
+    };
+  }
+
+  try {
+    const result = await sendStaffPrivateSurveyAlimtalk({
+      to: staffPhone,
+      staffName: staff.name || doc.matching.staffName,
+      memberName: doc.memberName,
+      lessonTime: lessonTimeText(doc),
+      responseId: doc.responseId,
+      accessToken,
+    });
+    await sendRef.set(
+      {
+        sendId,
+        studioId: doc.studioId,
+        candidateId: sendId,
+        memberId: staff.staffId,
+        memberName: staff.name || doc.matching.staffName,
+        memberPhone: staffPhone,
+        templateCode: STAFF_PRIVATE_SURVEY_TEMPLATE_ID,
+        dedupeKey: sendId,
+        dedupePolicy: "담당강사 사전설문 제출 알림 응답별 1회",
+        dedupeWindowDays: null,
+        status: "done",
+        attempts: 1,
+        maxAttempts: 1,
+        nextRunAt: nowTimestamp(),
+        solapiMessageId: result.messageId,
+        lastError: null,
+        createdByUid: "system:private-survey-intake",
+        createdAt: nowTimestamp(),
+        updatedAt: nowTimestamp(),
+      },
+      { merge: true },
+    );
+    return {
+      ...delivery,
+      alimtalkStatus: "sent",
+      alimtalkReason: "담당강사 사전설문 알림톡 발송 완료",
+    };
+  } catch (err) {
+    const message = err instanceof Error ? err.message : String(err);
+    await sendRef.set(
+      {
+        sendId,
+        studioId: doc.studioId,
+        candidateId: sendId,
+        memberId: staff.staffId,
+        memberName: staff.name || doc.matching.staffName,
+        memberPhone: staffPhone,
+        templateCode: STAFF_PRIVATE_SURVEY_TEMPLATE_ID,
+        dedupeKey: sendId,
+        dedupePolicy: "담당강사 사전설문 제출 알림 응답별 1회",
+        dedupeWindowDays: null,
+        status: "failed",
+        attempts: 1,
+        maxAttempts: 1,
+        nextRunAt: nowTimestamp(),
+        lastError: message,
+        createdByUid: "system:private-survey-intake",
+        createdAt: nowTimestamp(),
+        updatedAt: nowTimestamp(),
+      },
+      { merge: true },
+    );
+    logger.warn("staff private survey alimtalk failed", {
+      responseId: doc.responseId,
+      staffId: staff.staffId,
+      message,
+    });
+    return {
+      ...delivery,
+      alimtalkStatus: "failed",
+      alimtalkReason: message,
+    };
+  }
+}
+
+async function sendStaffPrivateSurveyAlimtalk(input: {
+  to: string;
+  staffName: string;
+  memberName: string;
+  lessonTime: string;
+  responseId: string;
+  accessToken: string;
+}): Promise<{ messageId: string }> {
+  const body = {
+    messages: [
+      {
+        to: input.to,
+        type: "ATA",
+        kakaoOptions: {
+          pfId: solapiPfid.value(),
+          templateId: STAFF_PRIVATE_SURVEY_TEMPLATE_ID,
+          disableSms: true,
+          variables: {
+            "#{강사명}": input.staffName,
+            "#{회원명}": input.memberName,
+            "#{수업일시}": input.lessonTime,
+            "#{설문ID}": input.responseId,
+            "#{접근토큰}": input.accessToken,
+          },
+        },
+      },
+    ],
+    strict: true,
+    allowDuplicates: false,
+    showMessageList: true,
+  };
+
+  const response = await fetch(SOLAPI_SEND_URL, {
+    method: "POST",
+    headers: {
+      Authorization: solapiAuthHeader(),
+      "Content-Type": "application/json",
+    },
+    body: JSON.stringify(body),
+  });
+  const result = (await response.json().catch(() => ({}))) as SolapiSendResponse;
+  if (!response.ok) {
+    throw new Error(result.errorMessage || result.message || `SOLAPI ${response.status}`);
+  }
+  if (Array.isArray(result.failedMessageList) && result.failedMessageList.length) {
+    throw new Error(result.failedMessageList[0]?.statusMessage || "SOLAPI rejected message");
+  }
+  return {
+    messageId: result.messageList?.[0]?.messageId || result.groupInfo?.groupId || "",
+  };
+}
+
+function solapiAuthHeader(): string {
+  const apiKey = solapiApiKey.value();
+  const apiSecret = solapiApiSecret.value();
+  const dateTime = new Date().toISOString();
+  const salt = randomBytes(16).toString("hex");
+  const signature = createHmac("sha256", apiSecret)
+    .update(dateTime + salt)
+    .digest("hex");
+  return `HMAC-SHA256 apiKey=${apiKey}, date=${dateTime}, salt=${salt}, signature=${signature}`;
+}
+
+interface SolapiSendResponse {
+  message?: string;
+  errorMessage?: string;
+  failedMessageList?: Array<{ statusMessage?: string }>;
+  messageList?: Array<{ messageId?: string }>;
+  groupInfo?: { groupId?: string };
 }
 
 async function matchSurveyToMember(payload: NormalizedSurveyPayload): Promise<MatchResult> {
@@ -441,14 +640,22 @@ function summarizeAnswers(payload: NormalizedSurveyPayload): SurveySummary {
   const a = payload.answers;
   const beginner = payload.experienceType.includes("초보");
   return {
-    goal: beginner ? a["3. 필라테스를 시작하려는 가장 큰 이유는 무엇인가요?"] || "" : a["8. 현재 운동 목표는 무엇인가요?"] || "",
-    focusArea: beginner ? a["4. 현재 가장 신경 쓰이는 부위는 어디인가요?"] || "" : a["6. 현재 불편하거나 개선이 필요한 부위는?"] || "",
+    goal: beginner
+      ? a["3. 필라테스를 시작하려는 가장 큰 이유는 무엇인가요?"] || ""
+      : a["8. 현재 운동 목표는 무엇인가요?"] || "",
+    focusArea: beginner
+      ? a["4. 현재 가장 신경 쓰이는 부위는 어디인가요?"] || ""
+      : a["6. 현재 불편하거나 개선이 필요한 부위는?"] || "",
     painOrMedicalNote: beginner
       ? a["5. 통증이나 불편한 부위가 있다면 적어주세요"] || ""
       : a["7. 통증 / 병력 / 수술 경험이 있다면 작성해주세요"] || "",
     exerciseLevel: beginner
       ? a["6. 운동 경험은 어떤 편인가요?"] || ""
-      : [a["3. 필라테스 경험 기간은 어느 정도이신가요?"], a["4. 주로 어떤 수업을 받아보셨나요?"], a["9. 본인의 운동 수준은 어느 정도라고 생각하시나요?"]]
+      : [
+          a["3. 필라테스 경험 기간은 어느 정도이신가요?"],
+          a["4. 주로 어떤 수업을 받아보셨나요?"],
+          a["9. 본인의 운동 수준은 어느 정도라고 생각하시나요?"],
+        ]
           .filter(Boolean)
           .join(" / "),
     concernOrDifficulty: beginner
@@ -461,7 +668,9 @@ function summarizeAnswers(payload: NormalizedSurveyPayload): SurveySummary {
       ? a["11. 아카이브필라테스를 어떻게 알게 되셨나요?"] || ""
       : a["12. 아카이브필라테스를 어떻게 알게 되셨나요?"] || "",
     lifestyleOrPreviousIssue: beginner
-      ? [a["7. 평소 생활패턴은 어떤 편인가요?"], a["8. 가장 먼저 바꾸고 싶은 부분은 무엇인가요?"]].filter(Boolean).join(" / ")
+      ? [a["7. 평소 생활패턴은 어떤 편인가요?"], a["8. 가장 먼저 바꾸고 싶은 부분은 무엇인가요?"]]
+          .filter(Boolean)
+          .join(" / ")
       : a["5. 이전 수업에서 아쉬웠던 점은 무엇인가요?"] || "",
   };
 }
@@ -473,7 +682,9 @@ function parseKoreanTimestamp(value: string): Timestamp | null {
   let hour = Number(hourText);
   if (ampm === "오후" && hour < 12) hour += 12;
   if (ampm === "오전" && hour === 12) hour = 0;
-  const date = new Date(Date.UTC(Number(year), Number(month) - 1, Number(day), hour - 9, Number(minute), Number(second || 0)));
+  const date = new Date(
+    Date.UTC(Number(year), Number(month) - 1, Number(day), hour - 9, Number(minute), Number(second || 0)),
+  );
   return Timestamp.fromDate(date);
 }
 
@@ -549,6 +760,10 @@ function answerBlock(label: string, value: string): string {
 
 function matchText(doc: PrivateSurveyResponseDoc): string {
   if (doc.matching.status !== "matched") return doc.matching.reason;
+  return `${doc.matching.staffName || "담당강사 미확인"} · ${lessonTimeText(doc)}`;
+}
+
+function lessonTimeText(doc: PrivateSurveyResponseDoc): string {
   const time = doc.matching.lectureStartAt?.toDate?.()
     ? new Intl.DateTimeFormat("ko-KR", {
         timeZone: "Asia/Seoul",
@@ -556,7 +771,7 @@ function matchText(doc: PrivateSurveyResponseDoc): string {
         timeStyle: "short",
       }).format(doc.matching.lectureStartAt.toDate())
     : doc.matching.lectureDate;
-  return `${doc.matching.staffName || "담당강사 미확인"} · ${time}`;
+  return time || "-";
 }
 
 function renderMessagePage(message: string): string {

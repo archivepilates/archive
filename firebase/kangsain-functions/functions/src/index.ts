@@ -4,7 +4,7 @@ import { onDocumentCreated } from "firebase-functions/v2/firestore";
 import { onSchedule } from "firebase-functions/v2/scheduler";
 import { logger } from "firebase-functions";
 import { REGION, TIMEZONE } from "./config/constants";
-import { allSecrets, privateSurveyWebhookSecret } from "./config/secrets";
+import { allSecrets } from "./config/secrets";
 import { toHttpsError } from "./utils/errors";
 import { syncLecturesDaily } from "./sync/syncLecturesDaily";
 import { syncLecturesRange } from "./sync/syncLecturesRange";
@@ -56,7 +56,7 @@ const scheduleOptions = {
 };
 const privateSurveyIngestOptions = {
   region: REGION,
-  secrets: [privateSurveyWebhookSecret],
+  secrets: allSecrets,
   timeoutSeconds: 120,
   memory: "256MiB" as const,
 };
@@ -375,7 +375,10 @@ export const processAdminSyncRequest = onDocumentCreated(
         if (dashboardResult.warning) dashboardError = dashboardResult.warning;
       } catch (err) {
         dashboardError = err instanceof Error ? err.message : String(err);
-        logger.warn("processAdminSyncRequest dashboard sync failed", { requestId: event.params.requestId, dashboardError });
+        logger.warn("processAdminSyncRequest dashboard sync failed", {
+          requestId: event.params.requestId,
+          dashboardError,
+        });
       }
       await ref.set(
         {

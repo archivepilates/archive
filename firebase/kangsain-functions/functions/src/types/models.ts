@@ -428,8 +428,6 @@ export interface PrivateSurveyResponseDoc {
   };
   delivery: {
     detailUrl: string;
-    studioMateMemoStatus: "pending" | "queued" | "skipped" | "failed";
-    studioMateMemoJobId: string;
     alimtalkStatus: "skipped" | "pending" | "sent" | "failed";
     alimtalkReason: string;
   };
