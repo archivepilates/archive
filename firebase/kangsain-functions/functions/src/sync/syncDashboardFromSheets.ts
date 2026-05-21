@@ -452,6 +452,10 @@ function normalizeDailyRevenueRow(row: SheetRow): DashboardDailyRevenueRow {
     월누적매출: numberValue(firstValue(row, ["월누적매출", "mtdRevenue"])),
     전월동일일누적: numberValue(firstValue(row, ["전월동일일누적", "prevMonthSameDayMtd"])),
     전년동월동일일누적: numberValue(firstValue(row, ["전년동월동일일누적", "prevYearSameDayMtd"])),
+    일수업매출: numberValue(firstValue(row, ["일수업매출", "dailyLessonRevenue"])),
+    월누적수업매출: numberValue(firstValue(row, ["월누적수업매출", "mtdLessonRevenue"])),
+    전월동일일수업누적: numberValue(firstValue(row, ["전월동일일수업누적", "prevMonthSameDayLessonMtd"])),
+    전년동월동일일수업누적: numberValue(firstValue(row, ["전년동월동일일수업누적", "prevYearSameDayLessonMtd"])),
   };
 }
 
@@ -577,6 +581,10 @@ function normalizeDashboardPayload(input: Partial<DashboardData>): DashboardData
         월누적매출: numberValue(row.월누적매출),
         전월동일일누적: numberValue(row.전월동일일누적),
         전년동월동일일누적: numberValue(row.전년동월동일일누적),
+        일수업매출: numberValue(row.일수업매출),
+        월누적수업매출: numberValue(row.월누적수업매출),
+        전월동일일수업누적: numberValue(row.전월동일일수업누적),
+        전년동월동일일수업누적: numberValue(row.전년동월동일일수업누적),
       }))
       .filter((row) => row.기준일 && row.기준월),
     updatedAt: stringValue(input.updatedAt) || new Date().toISOString(),

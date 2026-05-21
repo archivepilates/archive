@@ -62,7 +62,7 @@ async function main() {
     수강권매출_Master: buildTicketSalesMaster(ticketRows),
     회원별누적매출: buildMemberSales(ticketRows),
     수강권분석_Master: buildTicketAnalysis(lessonRows),
-    매출일일누적: buildDailyRevenue(ticketRows),
+    매출일일누적: buildDailyRevenue(ticketRows, lessonRows),
     정산대장_DailyPreview: dailySettlementPreview,
     강사통계_DailyPreview: dailyInstructorPreview,
   };
@@ -516,32 +516,63 @@ function buildDailyInstructorPreview(rows, settlementPreview) {
   ];
 }
 
-function buildDailyRevenue(rows) {
-  const byDate = new Map();
-  for (const row of rows) {
+function buildDailyRevenue(ticketRows, lessonRows) {
+  const ticketByDate = new Map();
+  for (const row of ticketRows) {
     if (!row.결제일 || row.결제금액합계 <= 0) continue;
-    byDate.set(row.결제일, (byDate.get(row.결제일) || 0) + row.결제금액합계);
+    ticketByDate.set(row.결제일, (ticketByDate.get(row.결제일) || 0) + row.결제금액합계);
   }
-  const dates = completeDailyDates([...byDate.keys()]);
-  const cumulativeByDate = new Map();
-  const monthRunning = new Map();
+  const lessonByDate = new Map();
+  for (const row of lessonRows) {
+    if (!row.수업일자) continue;
+    const revenue = row.차감금액 || (row.출결 === "출석" ? row.회당금액 * (row.차감횟수 || 1) : 0);
+    if (revenue <= 0) continue;
+    lessonByDate.set(row.수업일자, (lessonByDate.get(row.수업일자) || 0) + revenue);
+  }
+  const dates = completeDailyDates([...ticketByDate.keys(), ...lessonByDate.keys()]);
+  const ticketCumulativeByDate = new Map();
+  const lessonCumulativeByDate = new Map();
+  const ticketMonthRunning = new Map();
+  const lessonMonthRunning = new Map();
   for (const date of dates) {
     const month = monthKey(date);
-    const cumulative = (monthRunning.get(month) || 0) + (byDate.get(date) || 0);
-    monthRunning.set(month, cumulative);
-    cumulativeByDate.set(date, cumulative);
+    const ticketCumulative = (ticketMonthRunning.get(month) || 0) + (ticketByDate.get(date) || 0);
+    const lessonCumulative = (lessonMonthRunning.get(month) || 0) + (lessonByDate.get(date) || 0);
+    ticketMonthRunning.set(month, ticketCumulative);
+    lessonMonthRunning.set(month, lessonCumulative);
+    ticketCumulativeByDate.set(date, ticketCumulative);
+    lessonCumulativeByDate.set(date, lessonCumulative);
   }
-  const headers = ["기준일", "기준월", "일매출", "월누적매출", "전월동일일누적", "전년동월동일일누적"];
+  const headers = [
+    "기준일",
+    "기준월",
+    "일매출",
+    "월누적매출",
+    "전월동일일누적",
+    "전년동월동일일누적",
+    "일수업매출",
+    "월누적수업매출",
+    "전월동일일수업누적",
+    "전년동월동일일수업누적",
+  ];
   return [
     headers,
-    ...dates.map((date) => [
-      date,
-      monthKey(date),
-      Math.round(byDate.get(date) || 0),
-      Math.round(cumulativeByDate.get(date) || 0),
-      Math.round(cumulativeThroughDate(cumulativeByDate, previousMonthSameDay(date))),
-      Math.round(cumulativeThroughDate(cumulativeByDate, previousYearSameDay(date))),
-    ]),
+    ...dates.map((date) => {
+      const previousMonthDate = previousMonthSameDay(date);
+      const previousYearDate = previousYearSameDay(date);
+      return [
+        date,
+        monthKey(date),
+        Math.round(ticketByDate.get(date) || 0),
+        Math.round(ticketCumulativeByDate.get(date) || 0),
+        Math.round(cumulativeThroughDate(ticketCumulativeByDate, previousMonthDate)),
+        Math.round(cumulativeThroughDate(ticketCumulativeByDate, previousYearDate)),
+        Math.round(lessonByDate.get(date) || 0),
+        Math.round(lessonCumulativeByDate.get(date) || 0),
+        Math.round(cumulativeThroughDate(lessonCumulativeByDate, previousMonthDate)),
+        Math.round(cumulativeThroughDate(lessonCumulativeByDate, previousYearDate)),
+      ];
+    }),
   ];
 }
 
@@ -618,6 +649,10 @@ async function syncFirebaseDashboard({ dailyRevenueSheet, settlementPreviewSheet
     월누적매출: amount(row.월누적매출),
     전월동일일누적: amount(row.전월동일일누적),
     전년동월동일일누적: amount(row.전년동월동일일누적),
+    일수업매출: amount(row.일수업매출),
+    월누적수업매출: amount(row.월누적수업매출),
+    전월동일일수업누적: amount(row.전월동일일수업누적),
+    전년동월동일일수업누적: amount(row.전년동월동일일수업누적),
   }));
   const settlementPreview = sheetRowsToObjects(settlementPreviewSheet);
   const instructorPreview = sheetRowsToObjects(instructorPreviewSheet);

@@ -71,6 +71,10 @@ export interface DashboardDailyRevenueRow {
   월누적매출: number;
   전월동일일누적: number;
   전년동월동일일누적: number;
+  일수업매출?: number;
+  월누적수업매출?: number;
+  전월동일일수업누적?: number;
+  전년동월동일일수업누적?: number;
 }
 
 export interface DashboardData {
