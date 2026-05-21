@@ -25,7 +25,8 @@
     .priority { display:grid; gap:10px; }
     .grid { display:grid; grid-template-columns:repeat(2,minmax(0,1fr)); gap:10px; }
     .small { font-size:13px; color:var(--muted); line-height:1.5; }
-    footer { padding:14px 2px; color:var(--muted); font-size:12px; line-height:1.5; }
+    .notice { margin-top:16px; padding:12px 14px; background:#fff7f4; border:1px solid #f0c9c1; border-radius:8px; color:var(--bad); font-size:12px; line-height:1.62; word-break:keep-all; overflow-wrap:break-word; }
+    .notice strong { display:block; margin-bottom:2px; font-size:12px; color:var(--bad); }
     @media (max-width:560px) {
       main { padding:14px 12px 30px; }
       .top { grid-template-columns:1fr 44px; gap:12px; padding-top:12px; }
@@ -114,12 +115,10 @@
         <section class="grid">
           ${detailRows.map(([label, value]) => answerBlock(label, value)).join('')}
         </section>
-        <div class="section-title">원본</div>
-        <section class="panel">
-          <div class="label">원본 위치</div>
-          <div class="small">Google Sheets ${escapeHtml(data.source?.sheetName || '-')} · ${escapeHtml(String(data.source?.rowNumber || '-'))}행</div>
+        <section class="notice">
+          <strong>내부 자료 안내</strong>
+          설문 내용은 수업 준비 목적의 내부 자료입니다.<br>링크를 외부에 공유하지 마세요.
         </section>
-        <footer>설문 내용은 수업 준비 목적의 내부 자료입니다. 링크를 외부에 공유하지 마세요.</footer>
       `;
     }
 
