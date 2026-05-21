@@ -133,7 +133,7 @@ export async function ingestPrivateSurveyResponseHandler(request: any, response:
     const summary = summarizeAnswers(payload);
     const doc = await buildSurveyDoc({ payload, responseId, accessToken, detailUrl, matching, summary });
     await refs.privateSurveyResponse(responseId).set(doc, { merge: true });
-    const delivery = await deliverStaffSurveyAlimtalk(doc, accessToken);
+    const delivery = pendingStaffSurveyDelivery(doc);
     await refs.privateSurveyResponse(responseId).set({ delivery, updatedAt: nowTimestamp() }, { merge: true });
     await enqueueSurveyMemoOutputs(doc);
 
@@ -187,7 +187,7 @@ export async function processPrivateSurveyIntakeHandler(
     const doc = await buildSurveyDoc({ payload, responseId, accessToken, detailUrl, matching, summary });
     await refs.privateSurveyResponse(responseId).set(doc, { merge: true });
 
-    const delivery = await deliverStaffSurveyAlimtalk(doc, accessToken);
+    const delivery = pendingStaffSurveyDelivery(doc);
     await refs.privateSurveyResponse(responseId).set({ delivery, updatedAt: nowTimestamp() }, { merge: true });
     await enqueueSurveyMemoOutputs(doc);
     await db.collection("privateSurveyPublic").doc(docKey).set(
@@ -373,7 +373,7 @@ export async function submitGroupSurveyResponseHandler(request: any, response: a
     });
 
     await refs.privateSurveyResponse(responseId).set(doc, { merge: true });
-    const delivery = await deliverStaffSurveyAlimtalk(doc, accessToken);
+    const delivery = pendingStaffSurveyDelivery(doc);
     await refs.privateSurveyResponse(responseId).set({ delivery, updatedAt: nowTimestamp() }, { merge: true });
     await writePublicSurveyDoc(doc, accessToken, delivery);
     await enqueueSurveyMemoOutputs(doc, groupSurveyMemoContent(doc, payload));
@@ -659,6 +659,129 @@ async function writePublicSurveyDoc(
       },
       { merge: true },
     );
+}
+
+export async function processDueStaffSurveyAlimtalks(): Promise<{ checked: number; sent: number; failed: number }> {
+  const snap = await refs
+    .privateSurveyResponses()
+    .where("delivery.alimtalkStatus", "in", ["pending", "failed"])
+    .limit(100)
+    .get();
+  let checked = 0;
+  let sent = 0;
+  let failed = 0;
+  const nowMs = Date.now();
+
+  for (const docSnap of snap.docs) {
+    const doc = docSnap.data();
+    checked += 1;
+    if (isStaffSurveyAlimtalkMissed(doc, nowMs)) {
+      await docSnap.ref.set(
+        {
+          delivery: {
+            ...doc.delivery,
+            alimtalkStatus: "skipped",
+            alimtalkReason: "수업 시작 이후라 담당강사 사전설문 알림톡 발송 생략",
+          },
+          updatedAt: nowTimestamp(),
+        },
+        { merge: true },
+      );
+      continue;
+    }
+    if (!isStaffSurveyAlimtalkDue(doc, nowMs)) continue;
+    const accessToken = accessTokenFromDetailUrl(doc.delivery.detailUrl);
+    if (!accessToken) {
+      failed += 1;
+      await docSnap.ref.set(
+        {
+          delivery: {
+            ...doc.delivery,
+            alimtalkStatus: "failed",
+            alimtalkReason: "상세링크 접근토큰을 확인할 수 없어 담당강사 알림톡 발송 실패",
+          },
+          updatedAt: nowTimestamp(),
+        },
+        { merge: true },
+      );
+      continue;
+    }
+
+    const delivery = await deliverStaffSurveyAlimtalk(doc, accessToken);
+    if (delivery.alimtalkStatus === "sent") sent += 1;
+    if (delivery.alimtalkStatus === "failed") failed += 1;
+    await docSnap.ref.set({ delivery, updatedAt: nowTimestamp() }, { merge: true });
+    await writePublicSurveyDoc(doc, accessToken, delivery);
+  }
+
+  logger.info("processDueStaffSurveyAlimtalks completed", { checked, sent, failed });
+  return { checked, sent, failed };
+}
+
+function pendingStaffSurveyDelivery(doc: PrivateSurveyResponseDoc): PrivateSurveyResponseDoc["delivery"] {
+  const dueText = staffSurveyDueText(doc);
+  const surveyLabel = doc.surveyType === "group" ? "담당강사 그룹 사전확인" : "담당강사 프라이빗 사전설문";
+  return {
+    ...doc.delivery,
+    alimtalkStatus: "pending",
+    alimtalkReason: `${surveyLabel} 알림톡 발송 대기${dueText ? ` · ${dueText}` : ""}`,
+  };
+}
+
+function isStaffSurveyAlimtalkDue(doc: PrivateSurveyResponseDoc, nowMs = Date.now()): boolean {
+  if (doc.matching.status !== "matched" || !doc.matching.staffId) return false;
+  const dueAt = staffSurveyNotificationDueAt(doc);
+  if (!dueAt) return false;
+  const lectureStartMs = doc.matching.lectureStartAt?.toMillis?.() || 0;
+  if (lectureStartMs && nowMs >= lectureStartMs) return false;
+  return dueAt.toMillis() <= nowMs;
+}
+
+function isStaffSurveyAlimtalkMissed(doc: PrivateSurveyResponseDoc, nowMs = Date.now()): boolean {
+  const lectureStartMs = doc.matching.lectureStartAt?.toMillis?.() || 0;
+  return Boolean(lectureStartMs && nowMs >= lectureStartMs);
+}
+
+function staffSurveyDueText(doc: PrivateSurveyResponseDoc): string {
+  const dueAt = staffSurveyNotificationDueAt(doc);
+  if (!dueAt) return "";
+  const label = doc.surveyType === "group" ? "수업 1시간 전" : "수업 하루 전 오전";
+  return `${label}(${formatKstDateTime(dueAt.toDate())})`;
+}
+
+function staffSurveyNotificationDueAt(doc: PrivateSurveyResponseDoc): Timestamp | null {
+  if (doc.surveyType === "group") {
+    const startMs = doc.matching.lectureStartAt?.toMillis?.() || 0;
+    if (!startMs) return null;
+    return Timestamp.fromMillis(startMs - 60 * 60 * 1000);
+  }
+  if (!doc.matching.lectureDate) return null;
+  const due = new Date(`${doc.matching.lectureDate}T09:00:00+09:00`);
+  if (Number.isNaN(due.getTime())) return null;
+  due.setDate(due.getDate() - 1);
+  return Timestamp.fromDate(due);
+}
+
+function accessTokenFromDetailUrl(detailUrl: string): string {
+  try {
+    return new URL(detailUrl).searchParams.get("token") || "";
+  } catch {
+    return "";
+  }
+}
+
+function formatKstDateTime(date: Date): string {
+  return new Intl.DateTimeFormat("ko-KR", {
+    timeZone: "Asia/Seoul",
+    month: "numeric",
+    day: "numeric",
+    weekday: "short",
+    hour: "2-digit",
+    minute: "2-digit",
+    hour12: false,
+  })
+    .format(date)
+    .replace(/\s/g, " ");
 }
 
 async function deliverStaffSurveyAlimtalk(

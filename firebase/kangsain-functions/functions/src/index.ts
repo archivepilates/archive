@@ -34,6 +34,7 @@ import { getStaffByUid } from "./firestore/staffRepository";
 import { nowTimestamp } from "./utils/date";
 import {
   ingestPrivateSurveyResponseHandler,
+  processDueStaffSurveyAlimtalks,
   processPrivateSurveyIntakeHandler,
   privateSurveyResponseViewHandler,
   syncPrivateSurveyResponsesFromSheet,
@@ -168,6 +169,16 @@ export const scheduledSyncPrivateSurveyResponses = onSchedule(
   },
   async () => {
     await syncPrivateSurveyResponsesFromSheet();
+  },
+);
+
+export const scheduledProcessStaffSurveyAlimtalks = onSchedule(
+  {
+    ...scheduleOptions,
+    schedule: "every 10 minutes",
+  },
+  async () => {
+    await processDueStaffSurveyAlimtalks();
   },
 );
 
