@@ -2995,19 +2995,19 @@
     const SHOW_ALIMTALK_STATUS_TAGS = false;
     const SYNC_SCHEDULE_NOTES = [
       {
-        title: '비상모드 엑셀 동기화',
+        title: '엑셀 동기화',
         schedule: '1시간마다 / 수동요청 30초 확인',
         detail: '스튜디오메이트 웹에서 회원목록·예약내역·삭제된 수업 엑셀을 다운로드해 Firestore에 반영합니다.'
       },
       {
         title: '예약 변경 확인',
-        schedule: '비상모드 엑셀 기준',
+        schedule: '엑셀 기준',
         detail: 'API 알림 확인 대신 최신 예약내역 엑셀 반영 결과를 기준으로 수업 화면을 갱신합니다.'
       },
       {
         title: '출석/결석/메모 전송',
-        schedule: '비상모드 중 일시중지',
-        detail: 'StudioMate 쓰기 제한 중에는 앱의 출석·결석·메모 작성 기능을 막고 읽기 전용으로 운영합니다.'
+        schedule: '자사 사이트 전까지 일시중지',
+        detail: 'StudioMate 쓰기 기능은 사용하지 않고, 앱의 출석·결석·메모 작성 기능은 읽기 전용으로 운영합니다.'
       },
       {
         title: '운영 현황 데이터',
@@ -6738,7 +6738,7 @@
     async function updateAttendance(bookingId, attendanceStatus) {
       if (!bookingId || !attendanceStatus) return;
       if (isEmergencyReadOnlyMode()) {
-        showToast('비상모드에서는 출결 쓰기를 일시 중지했습니다');
+        showToast('엑셀 동기화 기본모드에서는 출결 쓰기를 일시 중지했습니다');
         return;
       }
       const booking = findBooking(bookingId);
@@ -6790,7 +6790,7 @@
 
     function openMemo(input) {
       if (isEmergencyReadOnlyMode()) {
-        showToast('비상모드에서는 메모 작성을 일시 중지했습니다');
+        showToast('엑셀 동기화 기본모드에서는 메모 작성을 일시 중지했습니다');
         return;
       }
       appState.activeBooking = input;
@@ -6915,10 +6915,10 @@
             </ul>
           </div>
           <div class="member-search-meta">
-            <div><b>참고</b> 현재 수동 동기화는 비상모드 엑셀 다운로드를 실행한 뒤 회원목록·예약내역·삭제된 수업을 Firestore에 반영합니다.</div>
+            <div><b>참고</b> 현재 수동 동기화는 엑셀 다운로드를 실행한 뒤 회원목록·예약내역·삭제된 수업을 Firestore에 반영합니다.</div>
             <div><b>주의</b> 다운로드와 반영이 끝날 때까지 시간이 걸릴 수 있으며, 진행 중에는 중복 요청을 막기 위해 버튼을 잠급니다.</div>
           </div>
-          <button id="manualSyncButton" class="primary" type="button">비상모드 엑셀 동기화 실행</button>
+          <button id="manualSyncButton" class="primary" type="button">엑셀 동기화 실행</button>
         </div>
       `;
       document.getElementById('manualSyncButton')?.addEventListener('click', runManualSync);
@@ -6933,7 +6933,7 @@
       if (appState.manualSync.active) return;
       appState.manualSync.active = true;
       appState.manualSync.progress = 3;
-      appState.manualSync.label = '비상모드 요청 준비 중';
+      appState.manualSync.label = '엑셀 동기화 요청 준비 중';
       updateManualSyncButton();
       startManualSyncProgressAnimation();
       try {
@@ -6943,14 +6943,14 @@
         appState.manualSync.label = '동기화 완료';
         updateManualSyncButton();
         if (result.warning || result.skippedImports) {
-          showToast('비상모드 엑셀 동기화 완료 · 일부 확인 필요');
+          showToast('엑셀 동기화 완료 · 일부 확인 필요');
         } else {
-          showToast('비상모드 엑셀 동기화 완료');
+          showToast('엑셀 동기화 완료');
         }
         await loadHome();
         openSyncInfo();
       } catch (err) {
-        showToast(`비상모드 동기화 실패: ${friendlyError(err)}`);
+        showToast(`엑셀 동기화 실패: ${friendlyError(err)}`);
       } finally {
         stopManualSyncProgressAnimation();
         appState.manualSync.active = false;
@@ -6969,12 +6969,12 @@
         button.disabled = true;
         button.classList.add('sync-progress');
         button.style.setProperty('--sync-progress', `${progress}%`);
-        button.textContent = `${Math.round(progress)}% · ${appState.manualSync.label || '비상모드 동기화 중'}`;
+        button.textContent = `${Math.round(progress)}% · ${appState.manualSync.label || '엑셀 동기화 중'}`;
       } else {
         button.disabled = false;
         button.classList.remove('sync-progress');
         button.style.removeProperty('--sync-progress');
-        button.textContent = '비상모드 엑셀 동기화 실행';
+        button.textContent = '엑셀 동기화 실행';
       }
     }
 
@@ -7003,7 +7003,7 @@
       if (existing) {
         appState.manualSync.requestId = existing.requestId;
         appState.manualSync.progress = Number(existing.progressPercent || 8);
-        appState.manualSync.label = existing.progressLabel || '이미 실행 중인 비상모드 동기화 확인 중';
+        appState.manualSync.label = existing.progressLabel || '이미 실행 중인 엑셀 동기화 확인 중';
         updateManualSyncButton();
         return await waitForManualSyncRequest(requestRef);
       }
@@ -7018,7 +7018,7 @@
         createdByUid: user.uid,
         status: 'pending',
         progressPercent: 3,
-        progressLabel: '맥미니 비상모드 실행 대기',
+        progressLabel: '맥미니 엑셀 동기화 실행 대기',
         createdAt: serverTimestamp(),
         lastError: null
       });
@@ -7048,7 +7048,7 @@
         if (data?.status === 'success') return data;
         if (data?.status === 'error') throw new Error(data.lastError || '동기화 요청 처리 실패');
       }
-      throw new Error('비상모드 엑셀 동기화 요청 시간이 초과되었습니다');
+      throw new Error('엑셀 동기화 요청 시간이 초과되었습니다');
     }
 
     function memberRecords(member) {
@@ -7074,7 +7074,7 @@
       const content = memoInput.value.trim();
       if (!active || !content) return;
       if (isEmergencyReadOnlyMode()) {
-        showToast('비상모드에서는 메모 작성을 일시 중지했습니다');
+        showToast('엑셀 동기화 기본모드에서는 메모 작성을 일시 중지했습니다');
         return;
       }
       saveMemoButton.disabled = true;

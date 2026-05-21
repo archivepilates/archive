@@ -24,6 +24,13 @@
 - Use worktrees when a change is non-trivial, experimental, or should be isolated from the current branch.
 - Start live checks with read-only verification of the deployed ARCHIVE IN app, Firebase/Hosting configuration, and visible browser errors before proposing fixes.
 
+## StudioMate Sync Mode
+
+- Until ARCHIVE PILATES operates its own site, treat StudioMate Excel download/import as the default ARCHIVE IN sync mode.
+- Do not use StudioMate API mode for normal ARCHIVE IN operations, manual sync, contact sync, Alimtalk candidate generation, or dashboard-facing app sync.
+- Legacy internal names such as `emergency_excel`, `run-studiomate-excel-emergency-mode.mjs`, and `com.archive.studiomate-excel-emergency-mode` may remain for compatibility, but staff-facing copy and operating decisions should call it Excel sync/default sync, not temporary emergency mode.
+- API-mode work should only be a read-only investigation or a future migration plan unless the user explicitly approves a switch after ARCHIVE PILATES own-site operations are ready.
+
 ## Brand Writing Rules
 
 - Always write the app/product name as `ARCHIVE IN` in new chat responses, UI text, reports, documents, commit summaries, and operator-facing materials.

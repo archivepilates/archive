@@ -63,7 +63,7 @@ async function claimNextRequest() {
       {
         status: "running",
         progressPercent: 8,
-        progressLabel: "맥미니 비상모드 시작",
+        progressLabel: "맥미니 엑셀 동기화 시작",
         startedAt: FieldValue.serverTimestamp(),
         claimedBy: os.hostname(),
         lastError: null,
@@ -83,7 +83,7 @@ async function processRequest(request) {
     const result = runEmergencyExcelMode();
     steps.push(result);
     if (result.exitCode !== 0 || result.stdout?.ok === false) {
-      throw new Error(result.stderr || result.stdout?.error || "비상모드 엑셀 동기화 실패");
+      throw new Error(result.stderr || result.stdout?.error || "엑셀 동기화 실패");
     }
     await updateProgress(ref, 96, "앱 데이터 반영 완료 확인");
     await ref.set(

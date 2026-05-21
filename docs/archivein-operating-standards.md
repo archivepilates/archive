@@ -86,7 +86,8 @@ ArchiveIN은 데이터 원천별 책임을 명확히 나눈다.
 
 | 구분 | 역할 | 사용 예 | 주의사항 |
 | --- | --- | --- | --- |
-| StudioMate API | 수업, 예약, 출결, 회원 메모 등 운영 원천 | 강사용 수업 목록, 예약 상태, 출결 write queue | 앱 클라이언트가 직접 매번 호출하지 않는다. 서버 동기화와 캐시를 우선한다. |
+| StudioMate 엑셀 다운로드 | 기본 수업/예약/회원 운영 원천 | 강사용 수업 목록, 예약 상태, 회원카드, 수강권, 알림톡 후보 | 자사 사이트 운영 전까지 API 대신 기본 동기화 방식으로 사용한다. |
+| StudioMate API | 보류 중인 과거/대기 경로 | 자사 사이트 운영 이후 재검토 | 평상시 ARCHIVE IN 운영에서는 사용하지 않는다. |
 | Firebase Firestore 캐시 | 앱이 빠르게 읽는 운영 뷰와 처리 상태 | `instructorViews`, `memberProfiles`, 회원 태그, write queue, ACTION 후보 | 캐시가 원천이라고 착각하지 않는다. 동기화 시각과 근거를 함께 본다. |
 | Google 주소록 | 전화 발신/검색/운영 커뮤니케이션 보조 저장소 | `home@archivepilates.com` 연락처 | 회원 원천이 아니다. StudioMate API에서 내려온 `memberProfiles`와 상담 연락처를 기준으로 동기화한다. |
 | 아카이브DB | 정산/월별 분석/운영 지표의 기준 데이터 | 월별 유효회원, 매출성 지표, 정산 후 데이터마트 | StudioMate 실시간 상태와 다를 수 있다. 정산 완료 기준임을 표시한다. |
@@ -96,11 +97,11 @@ ArchiveIN은 데이터 원천별 책임을 명확히 나눈다.
 
 ### 회원 프로필/연락처 동기화 기준
 
-회원카드 연락처, Google 주소록, 알림톡 발송 대상은 모두 같은 StudioMate 회원 프로필 동기화 결과를 기준으로 한다. 엑셀에서 따로 내려받은 회원명단과 앱 회원카드가 서로 다른 기준으로 움직이면 동명이인, 연락처 변경, 신규회원 판단이 꼬이기 쉽다.
+회원카드 연락처, Google 주소록, 알림톡 발송 대상은 모두 같은 StudioMate 엑셀 동기화 결과를 기준으로 한다. 엑셀에서 내려받은 회원명단과 앱 회원카드가 서로 다른 기준으로 움직이면 동명이인, 연락처 변경, 신규회원 판단이 꼬이기 쉽다.
 
 기준 흐름:
 
-1. StudioMate API에서 회원 프로필을 가져온다.
+1. StudioMate 웹에서 회원목록 엑셀을 내려받는다.
 2. Firestore `memberProfiles/{memberId}`에 회원명, 연락처, 등록일, 활성 수강권 요약, 갱신 시각을 저장한다.
 3. 앱 회원카드는 역할에 따라 같은 `memberProfiles`를 다르게 보여준다.
 4. Google 주소록 동기화는 `memberContactIndex/{memberId}`와 `contactSyncJobs`를 통해 처리한다.
@@ -125,9 +126,9 @@ Firebase 주소록 동기화는 `home@archivepilates.com`을 Google People API �
 3. Firestore rules 변경 또는 운영자 대시보드 데이터 변경 후에는 `npm run verify:archivein-admin`을 실행한다.
 4. 검증은 `01029244425` 운영자 계정 기준으로 라이브 또는 배포 대상 URL에서 수행한다.
 
-### 비상모드 수동 동기화 기준
+### 엑셀 동기화 수동 실행 기준
 
-StudioMate API 접근이 막혀 비상모드가 활성화된 동안 운영자 모드의 수동 동기화 버튼은 API 동기화를 직접 실행하지 않는다. 버튼은 `adminSyncRequests`에 `requestMode: emergency_excel` 요청을 만들고, 맥미니 LaunchAgent `com.archive.archivein-admin-emergency-sync`가 요청을 받아 비상모드 엑셀 다운로드와 Firestore 반영을 수행한다.
+운영자 모드의 수동 동기화 버튼은 API 동기화를 직접 실행하지 않는다. 버튼은 `adminSyncRequests`에 `requestMode: emergency_excel` 요청을 만들고, 맥미니 LaunchAgent `com.archive.archivein-admin-emergency-sync`가 요청을 받아 엑셀 다운로드와 Firestore 반영을 수행한다. 내부 식별자 `emergency_excel`은 호환을 위해 유지하지만, 운영상 의미는 기본 엑셀 동기화 모드다.
 
 수동 동기화 중에는 버튼을 잠그고 진행률을 표시한다. 같은 요청이 `pending` 또는 `running` 상태이면 새 요청을 만들지 않고 기존 요청을 추적한다. 운영자는 진행률이 완료 또는 실패로 바뀔 때까지 버튼을 반복해서 누르지 않는다.
 
@@ -135,7 +136,7 @@ StudioMate API 접근이 막혀 비상모드가 활성화된 동안 운영자 �
 
 1. 화면에서 보이는 값과 기준 날짜/시간을 확인한다.
 2. Firebase 캐시 문서의 갱신 시각과 원천 참조를 확인한다.
-3. StudioMate API 원본과 비교한다.
+3. StudioMate 웹 엑셀 원본과 비교한다.
 4. 아카이브DB 기준 지표라면 시트 갱신 시각과 정산 기준을 확인한다.
 5. 맥미니 자동화가 필요한 흐름이면 자동화 실행 로그와 결과 파일을 확인한다.
 
