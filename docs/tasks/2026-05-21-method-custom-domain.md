@@ -39,3 +39,7 @@
 - 2026-05-21 21:40 KST 기준 `cert.state`는 `CERT_VALIDATING`.
 - 강제 resolve로 `https://method.archivepilates.com/`를 Firebase IP `199.36.158.100`에 연결하면 페이지 HTML은 HTTP 200으로 서빙됨.
 - 단, TLS 인증서는 아직 `firebaseapp.com` 임시 인증서라 일반 브라우저 HTTPS 검증은 실패한다.
+- 2026-05-21 22:12 KST: `https://method.archivepilates.com/` 일반 HTTPS 요청이 HTTP 200으로 성공하고 `OFFLINE LESSON` / `5:1` 콘텐츠 확인됨.
+- 2026-05-21 22:12 KST: Firebase API 상태는 `HOST_ACTIVE` / `OWNERSHIP_ACTIVE` / `CERT_PROPAGATING`.
+- 2026-05-21 23:12 KST: Firebase API 상태가 `HOST_ACTIVE` / `OWNERSHIP_ACTIVE` / `CERT_ACTIVE`로 전환됨.
+- 2026-05-21 23:12 KST: `method.archivepilates.com CNAME archive-pilates-method.web.app` 확인, `https://method.archivepilates.com/` HTTP 200 및 `OFFLINE LESSON` / `5:1` 콘텐츠 확인.
