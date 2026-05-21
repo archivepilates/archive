@@ -3833,7 +3833,7 @@
     }
 
     function renderAlimtalkApprovalQueue(mode = appState.viewMode) {
-      if (appState.mode !== 'admin') return '';
+      if (appState.mode !== 'manager') return '';
       const rows = periodAlimtalkCandidates(mode, appState.selectedDate);
       if (!rows.length) return '';
       const sendable = rows.filter(canQueueAlimtalkCandidate);
@@ -3885,7 +3885,7 @@
     }
 
     function renderAlimtalkFlowBoard(mode = appState.viewMode) {
-      if (appState.mode !== 'admin') return '';
+      if (appState.mode !== 'manager') return '';
       const rows = surveyFlowRows(mode);
       const staffDue = staffSurveyDueRows(mode);
       const failedMemoJobs = (appState.admin.studiomateMemoWriteJobs || []).filter((job) => ['failed', 'retry'].includes(String(job.status || '')));
@@ -6107,6 +6107,8 @@
       if (claims.staffId && claims.studioId && claims.role) return { ...tokenResult, claims };
       const email = String(appState.user?.email || claims.email || '').trim();
       if (!email) return { ...tokenResult, claims };
+      const fallback = operatorStaffContextByEmail(email);
+      if (fallback) return { ...tokenResult, claims: { ...claims, ...fallback } };
       try {
         const snap = await getDocs(query(
           collection(appState.db, 'staffs'),
@@ -6127,6 +6129,22 @@
       } catch (err) {
         return { ...tokenResult, claims };
       }
+    }
+
+    function operatorStaffContextByEmail(email) {
+      const map = {
+        'p01029244425@archivepilates.com': {
+          staffId: 'operator_01029244425',
+          studioId: '5330',
+          role: 'manager'
+        },
+        'p01086488585@archivepilates.com': {
+          staffId: '1979746',
+          studioId: '5330',
+          role: 'owner'
+        }
+      };
+      return map[String(email || '').toLowerCase()] || null;
     }
 
     function withTimeout(promise, timeoutMs, message) {
