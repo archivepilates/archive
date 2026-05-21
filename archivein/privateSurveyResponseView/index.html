@@ -79,26 +79,27 @@
     function renderSurvey(data) {
       const summary = data.summary || {};
       const matching = data.matching || {};
+      const isGroup = data.surveyType === 'group';
       const priorityRows = [
-        ['운동 목적', summary.goal],
-        ['신경 부위', summary.focusArea],
+        [isGroup ? '걱정되는 부분' : '운동 목적', summary.goal],
+        [isGroup ? '통증/불편 부위' : '신경 부위', summary.focusArea],
         ['통증/병력', summary.painOrMedicalNote],
       ];
       const detailRows = [
         ['운동 수준', summary.exerciseLevel],
-        ['걱정/어려움', summary.concernOrDifficulty],
-        ['기대/중요 요소', summary.expectationOrImportantFactor],
-        ['생활/이전 아쉬움', summary.lifestyleOrPreviousIssue],
-        ['유입경로', summary.referralSource],
-      ];
+        [isGroup ? '요청사항' : '걱정/어려움', isGroup ? summary.expectationOrImportantFactor : summary.concernOrDifficulty],
+        [isGroup ? '' : '기대/중요 요소', isGroup ? '' : summary.expectationOrImportantFactor],
+        [isGroup ? '' : '생활/이전 아쉬움', isGroup ? '' : summary.lifestyleOrPreviousIssue],
+        [isGroup ? '' : '유입경로', isGroup ? '' : summary.referralSource],
+      ].filter(([label]) => label);
       appRoot.innerHTML = `
         <section class="top">
           <div>
-            <div class="eyebrow">ARCHIVE IN · 첫 프라이빗 사전설문</div>
+            <div class="eyebrow">ARCHIVE IN · ${isGroup ? '그룹 첫 수업 사전확인' : '첫 프라이빗 사전설문'}</div>
             <h1>${escapeHtml(data.memberName || '회원')} 회원</h1>
             <div class="meta">
               <span class="chip">제출 ${escapeHtml(data.submittedAtText || '-')}</span>
-              <span class="chip">경험구분 ${escapeHtml(data.experienceType || '-')}</span>
+              <span class="chip">${isGroup ? '운동경험' : '경험구분'} ${escapeHtml(data.experienceType || '-')}</span>
             </div>
           </div>
           <img class="brand" src="${ARCHIVE_LOGO_URL}" alt="ARCHIVE PILATES">

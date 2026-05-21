@@ -2,6 +2,7 @@ import { addDays } from "../utils/date";
 import {
   ALIMTALK_MEMBER_EXCLUSION_REASONS,
   APPROVED_ALIMTALK_TEMPLATE_CODES,
+  GROUP_SURVEY_ALIMTALK_START_DATE,
   NEW_MEMBER_ALIMTALK_START_DATE,
   NEW_MEMBER_ALIMTALK_WINDOW_DAYS,
   PRIVATE_SURVEY_ALIMTALK_START_DATE,
@@ -15,7 +16,12 @@ export function autoSendabilityIssue(candidate: AlimtalkCandidateDoc, today: str
   if (!APPROVED_ALIMTALK_TEMPLATE_CODES.has(candidate.templateCode))
     return `승인 템플릿 코드 아님: ${candidate.templateCode}`;
   if (candidate.sourceDate && candidate.sourceDate > today) return "대상일이 발송 기준일 이후";
-  if (candidate.type !== "new_member" && candidate.type !== "private_survey" && candidate.sourceDate !== today)
+  if (
+    candidate.type !== "new_member" &&
+    candidate.type !== "private_survey" &&
+    candidate.type !== "group_survey" &&
+    candidate.sourceDate !== today
+  )
     return "수강권 알림은 발송 기준일 후보만 발송";
   if (candidate.type === "new_member" && candidate.sourceDate < NEW_MEMBER_ALIMTALK_START_DATE)
     return "신규회원 웰컴 시작일 이전 등록";
@@ -29,5 +35,11 @@ export function autoSendabilityIssue(candidate: AlimtalkCandidateDoc, today: str
     return "프라이빗 사전설문 자동발송 시작일 이전 후보";
   if (candidate.type === "private_survey" && candidate.sourceDate !== today)
     return "프라이빗 사전설문은 발송 기준일 후보만 발송";
+  if (candidate.type === "group_survey" && candidate.sourceDate < GROUP_SURVEY_ALIMTALK_START_DATE)
+    return "그룹 첫 수업 사전확인 자동발송 시작일 이전 후보";
+  if (candidate.type === "group_survey" && candidate.sourceDate !== today)
+    return "그룹 첫 수업 사전확인은 발송 기준일 후보만 발송";
+  if (candidate.type === "group_survey" && candidate.payload?.groupSurveyDeliveryMode === "too_late")
+    return "수업 시작 30분 미만 첫 그룹수업은 설문 발송 대신 현장 확인";
   return "";
 }

@@ -1,11 +1,15 @@
+import { createHash, createHmac } from "node:crypto";
 import { logger } from "firebase-functions";
 import type { AlimtalkCandidateDoc, BookingDoc, MemberProfileDoc } from "../types/models";
+import { db } from "../config/firebase";
+import { privateSurveyWebhookSecret } from "../config/secrets";
 import { refs } from "../firestore/refs";
 import { addDays, dateRange, nowTimestamp } from "../utils/date";
 import { stableHash } from "../utils/hash";
 import {
   ALIMTALK_MEMBER_EXCLUSION_REASONS,
   CANDIDATE_TEMPLATE_CODES,
+  GROUP_SURVEY_ALIMTALK_START_DATE,
   NEW_MEMBER_ALIMTALK_START_DATE,
   NEW_MEMBER_ALIMTALK_WINDOW_DAYS,
   PRIVATE_SURVEY_ALIMTALK_START_DATE,
@@ -32,6 +36,11 @@ export async function rebuildAlimtalkCandidatesForRange(input: {
       const privateSurveyCandidate = await privateSurveyCandidateForDate(profile, sourceDate);
       if (privateSurveyCandidate) {
         await enqueueSendableCandidate(privateSurveyCandidate, candidateIds, writes);
+      }
+      const groupSurveyCandidate = await groupSurveyCandidateForDate(profile, sourceDate);
+      if (groupSurveyCandidate) {
+        const enqueued = await enqueueSendableCandidate(groupSurveyCandidate, candidateIds, writes);
+        if (enqueued) writes.push(upsertGroupSurveyRequest(groupSurveyCandidate));
       }
     }
   }
@@ -144,6 +153,158 @@ function directTicketCandidates(profile: MemberProfileDoc, sourceDate: string): 
   return activeProfileTickets(profile, sourceDate)
     .map((ticket) => directTicketCandidate(profile, ticket, sourceDate))
     .filter((candidate): candidate is AlimtalkCandidateDoc => Boolean(candidate));
+}
+
+async function groupSurveyCandidateForDate(
+  profile: MemberProfileDoc,
+  sourceDate: string,
+): Promise<AlimtalkCandidateDoc | null> {
+  if (sourceDate < GROUP_SURVEY_ALIMTALK_START_DATE) return null;
+  if (!profile.memberId || !profile.name || !profile.phone) return null;
+  if (ALIMTALK_MEMBER_EXCLUSION_REASONS[profile.memberId]) return null;
+  const booking = await firstUpcomingGroupBookingInReservationWindow(profile.memberId, sourceDate);
+  if (!booking) return null;
+  if (await hasSubmittedGroupSurvey(profile.memberId, profile.phone)) return null;
+  if (await hasAttendedGroupBookingOnOrBefore(profile.memberId, sourceDate)) return null;
+  const requestId = groupSurveyRequestId(profile.memberId, booking.bookingId);
+  const accessToken = groupSurveyAccessToken(requestId);
+  const timing = groupSurveyTiming(booking, sourceDate);
+  return {
+    candidateId: `group_survey_${profile.memberId}_${sourceDate}`,
+    studioId: profile.studioId,
+    memberId: profile.memberId,
+    memberName: profile.name,
+    memberPhone: profile.phone,
+    type: "group_survey",
+    status: "candidate",
+    templateCode: CANDIDATE_TEMPLATE_CODES.group_survey,
+    title: "그룹 첫 수업 사전확인",
+    reason: `첫 그룹수업 예약 ${booking.lectureDate}`,
+    sourceDate,
+    payload: {
+      memberName: profile.name,
+      ticketName: booking.ticketName || "",
+      bookingId: booking.bookingId,
+      lectureId: booking.lectureId,
+      lectureDate: booking.lectureDate,
+      staffId: booking.staffId,
+      staffName: booking.staffName,
+      surveyId: requestId,
+      responseId: requestId,
+      accessToken,
+      groupSurveyWindowEndDate: reservationOpenEndDate(sourceDate),
+      groupSurveyDeliveryMode: timing.deliveryMode,
+      minutesUntilLesson: timing.minutesUntilLesson,
+    },
+    lastError: null,
+    createdAt: nowTimestamp(),
+    updatedAt: nowTimestamp(),
+  };
+}
+
+async function firstUpcomingGroupBookingInReservationWindow(
+  memberId: string,
+  sourceDate: string,
+): Promise<BookingDoc | null> {
+  const endDate = reservationOpenEndDate(sourceDate);
+  const snap = await refs.bookings().where("memberId", "==", memberId).get();
+  const bookings = snap.docs
+    .map((doc) => doc.data())
+    .filter(
+      (booking) =>
+        booking.appStatus === "reserved" &&
+        booking.lectureDate >= sourceDate &&
+        booking.lectureDate <= endDate &&
+        isGroupBooking(booking),
+    )
+    .sort((a, b) => {
+      if (a.lectureDate !== b.lectureDate) return a.lectureDate.localeCompare(b.lectureDate);
+      return (a.lectureStartAt?.toMillis() || 0) - (b.lectureStartAt?.toMillis() || 0);
+    });
+  return bookings[0] || null;
+}
+
+async function hasSubmittedGroupSurvey(memberId: string, memberPhone: string): Promise<boolean> {
+  const byMember = await refs.privateSurveyResponses().where("matching.memberId", "==", memberId).limit(10).get();
+  if (byMember.docs.some((doc) => doc.data().surveyType === "group")) return true;
+  const byPhone = await refs.privateSurveyResponses().where("memberPhone", "==", memberPhone).limit(10).get();
+  return byPhone.docs.some((doc) => doc.data().surveyType === "group");
+}
+
+async function hasAttendedGroupBookingOnOrBefore(memberId: string, sourceDate: string): Promise<boolean> {
+  const snap = await refs.bookings().where("memberId", "==", memberId).get();
+  return snap.docs
+    .map((doc) => doc.data())
+    .some(
+      (booking) =>
+        booking.appStatus === "reserved" &&
+        booking.lectureDate <= sourceDate &&
+        booking.attendanceStatus === "attended" &&
+        isGroupBooking(booking),
+    );
+}
+
+function isGroupBooking(booking: BookingDoc): boolean {
+  if (/프라이빗|개인|1:1/i.test(booking.ticketName || "")) return false;
+  return /그룹|체험|듀엣|소그룹/i.test(booking.ticketName || "") || booking.ticketName === "";
+}
+
+function groupSurveyTiming(
+  booking: BookingDoc,
+  sourceDate: string,
+): { deliveryMode: string; minutesUntilLesson: string } {
+  if (booking.lectureDate !== sourceDate) return { deliveryMode: "advance", minutesUntilLesson: "" };
+  const startMs = booking.lectureStartAt?.toMillis?.() || 0;
+  if (!startMs) return { deliveryMode: "same_day", minutesUntilLesson: "" };
+  const minutes = Math.floor((startMs - Date.now()) / (60 * 1000));
+  if (minutes < 30) return { deliveryMode: "too_late", minutesUntilLesson: String(minutes) };
+  if (minutes < 180) return { deliveryMode: "same_day_urgent", minutesUntilLesson: String(minutes) };
+  return { deliveryMode: "same_day", minutesUntilLesson: String(minutes) };
+}
+
+function groupSurveyRequestId(memberId: string, bookingId: string): string {
+  return `gsr-${stableHash({ memberId, bookingId }).slice(0, 12)}`;
+}
+
+function groupSurveyAccessToken(requestId: string): string {
+  return createHmac("sha256", privateSurveyWebhookSecret.value()).update(requestId).digest("hex").slice(0, 16);
+}
+
+function sha256(value: string): string {
+  return createHash("sha256").update(value).digest("hex");
+}
+
+async function upsertGroupSurveyRequest(candidate: AlimtalkCandidateDoc): Promise<void> {
+  const requestId = String(candidate.payload.surveyId || candidate.payload.responseId || "");
+  const accessToken = String(candidate.payload.accessToken || "");
+  if (!requestId || !accessToken) return;
+  const ref = db.collection("groupSurveyRequests").doc(requestId);
+  const previous = (await ref.get()).data();
+  if (previous?.status === "submitted") {
+    await ref.set({ updatedAt: nowTimestamp() }, { merge: true });
+    return;
+  }
+  await ref.set(
+    {
+      requestId,
+      studioId: candidate.studioId,
+      memberId: candidate.memberId,
+      memberName: candidate.memberName,
+      memberPhone: candidate.memberPhone,
+      memberPhoneLast4: candidate.memberPhone.slice(-4),
+      bookingId: candidate.payload.bookingId || "",
+      lectureId: candidate.payload.lectureId || "",
+      lectureDate: candidate.payload.lectureDate || "",
+      staffId: candidate.payload.staffId || "",
+      staffName: candidate.payload.staffName || "",
+      sourceCandidateId: candidate.candidateId,
+      accessTokenHash: sha256(accessToken),
+      status: previous?.status || "pending",
+      createdAt: previous?.createdAt || nowTimestamp(),
+      updatedAt: nowTimestamp(),
+    },
+    { merge: true },
+  );
 }
 
 async function privateSurveyCandidateForDate(

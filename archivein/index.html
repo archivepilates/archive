@@ -3636,7 +3636,8 @@
         KA01TP260514145047393VpTbcCZKkCV: { key: 'groupCount', label: '그룹 횟수 부족', status: 'APPROVED', detail: '그룹 횟수권 잔여 5회 미만' },
         KA01TP260514152235608d9icGOBotnV: { key: 'privateCount', label: '프라이빗 횟수 부족', status: 'APPROVED', detail: '프라이빗 횟수권 잔여 3회 이하' },
         KA01TP260514153314927WH270IppWQS: { key: 'privatePeriod', label: '프라이빗 기간 임박', status: 'APPROVED', detail: '프라이빗 기간권 만료 14일 이내' },
-        KA01TP260514153632171uiWXYoeiOLS: { key: 'privateSurvey', label: '프라이빗 설문 필요', status: 'APPROVED', detail: '첫 프라이빗 등록/예약' }
+        KA01TP260514153632171uiWXYoeiOLS: { key: 'privateSurvey', label: '프라이빗 설문 필요', status: 'APPROVED', detail: '첫 프라이빗 등록/예약' },
+        KA01TP2605210729364330NbhZVAu9zA: { key: 'groupSurvey', label: '그룹 설문 필요', status: 'INSPECTING', detail: '첫 그룹수업 사전확인' }
       };
       return map[String(code || '')] || null;
     }
@@ -3651,7 +3652,8 @@
         remaining_low: { key: 'groupCount', label: '그룹 횟수 부족', status: 'APPROVED', detail: '수강권 잔여횟수 부족' },
         private_count_low: { key: 'privateCount', label: '프라이빗 횟수 부족', status: 'APPROVED', detail: '프라이빗 잔여횟수 부족' },
         private_ticket_expiring: { key: 'privatePeriod', label: '프라이빗 기간 임박', status: 'APPROVED', detail: '프라이빗 기간 만료 임박' },
-        private_survey: { key: 'privateSurvey', label: '프라이빗 설문 필요', status: 'APPROVED', detail: '프라이빗 사전설문' }
+        private_survey: { key: 'privateSurvey', label: '프라이빗 설문 필요', status: 'APPROVED', detail: '프라이빗 사전설문' },
+        group_survey: { key: 'groupSurvey', label: '그룹 설문 필요', status: 'INSPECTING', detail: '그룹 첫 수업 사전확인' }
       };
       if (typeMap[candidateType]) return typeMap[candidateType];
       const reason = actionReasonMeta(item);
@@ -3679,7 +3681,8 @@
     function renderActionReasonSummary(stats) {
       const labels = [
         ['newMember', '신규'],
-        ['privateSurvey', '설문'],
+        ['privateSurvey', 'P설문'],
+        ['groupSurvey', 'G설문'],
         ['privateCount', 'P잔여'],
         ['groupCount', 'G잔여'],
         ['groupPeriod', 'G기간'],

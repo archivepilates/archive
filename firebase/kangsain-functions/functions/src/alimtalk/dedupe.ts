@@ -43,6 +43,7 @@ function dedupeScope(candidate: AlimtalkCandidateDoc): Record<string, string> {
   const type = String(candidate.type);
   if (type === "new_member") return { memberId: candidate.memberId };
   if (type === "private_survey") return { memberId: candidate.memberId };
+  if (type === "group_survey") return { memberId: candidate.memberId };
   if (type === "reservation_open") {
     return {
       reservationWeek: String(payload.reservationWeek || payload.weekLabel || ""),

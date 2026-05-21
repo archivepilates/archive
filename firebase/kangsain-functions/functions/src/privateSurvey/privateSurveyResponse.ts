@@ -26,6 +26,8 @@ const OUTPUT_HEADERS = [
   "ARCHIVE IN 오류",
 ];
 const STAFF_PRIVATE_SURVEY_TEMPLATE_ID = "KA01TP260519093416836f1EHZYJ00uM";
+const STAFF_GROUP_SURVEY_TEMPLATE_ID = "KA01TP260521072937354Ve2n5cEapDL";
+const STAFF_GROUP_SURVEY_TEMPLATE_STATUS = "inspecting";
 const SOLAPI_SEND_URL = "https://api.solapi.com/messages/v4/send-many/detail";
 const ARCHIVE_LOGO_URL = "https://in.archivepilates.com/logo120.png";
 
@@ -76,8 +78,42 @@ interface MatchResult {
   reason: string;
 }
 
+interface GroupSurveyRequestDoc {
+  requestId: string;
+  studioId: string;
+  memberId: string;
+  memberName: string;
+  memberPhone: string;
+  memberPhoneLast4: string;
+  bookingId: string;
+  lectureId: string;
+  lectureDate: string;
+  staffId: string;
+  staffName: string;
+  sourceCandidateId: string;
+  accessTokenHash: string;
+  status: "pending" | "submitted";
+  createdAt: Timestamp;
+  updatedAt: Timestamp;
+}
+
+interface GroupSurveySubmitPayload {
+  requestId: string;
+  accessToken: string;
+  exerciseExperience: string;
+  painAreas: string[];
+  painNote: string;
+  cautionTypes: string[];
+  concern: string;
+  requestNote: string;
+}
+
 export async function ingestPrivateSurveyResponseHandler(request: any, response: any): Promise<void> {
   setCors(response);
+  if (isGroupSurveySubmitRequest(request)) {
+    await submitGroupSurveyResponseHandler(request, response);
+    return;
+  }
   if (request.method === "OPTIONS") {
     response.status(204).send("");
     return;
@@ -113,6 +149,11 @@ export async function ingestPrivateSurveyResponseHandler(request: any, response:
     logger.error("ingestPrivateSurveyResponse failed", { message });
     response.status(400).json({ ok: false, error: message });
   }
+}
+
+function isGroupSurveySubmitRequest(request: any): boolean {
+  const url = String(request.originalUrl || request.url || request.path || "");
+  return url.includes("/api/groupSurveySubmit") || url.includes("groupSurveySubmit");
 }
 
 export async function processPrivateSurveyIntakeHandler(
@@ -289,9 +330,79 @@ export async function privateSurveyResponseViewHandler(request: any, response: a
   response.status(200).send(renderSurveyPage(doc));
 }
 
+export async function submitGroupSurveyResponseHandler(request: any, response: any): Promise<void> {
+  setCors(response);
+  if (request.method === "OPTIONS") {
+    response.status(204).send("");
+    return;
+  }
+  try {
+    if (request.method === "GET") {
+      const { groupRequest } = await readGroupSurveyRequest(request.query?.id, request.query?.token);
+      response.status(200).json({
+        ok: true,
+        requestId: groupRequest.requestId,
+        memberName: groupRequest.memberName,
+        staffName: groupRequest.staffName,
+        lessonTime: await groupLessonTime(groupRequest),
+        status: groupRequest.status,
+      });
+      return;
+    }
+    if (request.method !== "POST") {
+      response.status(405).json({ ok: false, error: "method_not_allowed" });
+      return;
+    }
+    const payload = normalizeGroupSurveySubmitPayload(request.body || {});
+    const { groupRequest, accessToken } = await readGroupSurveyRequest(payload.requestId, payload.accessToken);
+    const responseId = groupRequest.requestId;
+    const detailUrl = detailUrlFor(responseId, accessToken);
+    const answers = groupSurveyAnswers(payload);
+    const summary = summarizeGroupSurveyAnswers(payload);
+    const matching = await groupSurveyMatch(groupRequest);
+    const doc = await buildGroupSurveyDoc({
+      groupRequest,
+      responseId,
+      accessToken,
+      detailUrl,
+      answers,
+      summary,
+      matching,
+    });
+
+    await refs.privateSurveyResponse(responseId).set(doc, { merge: true });
+    const delivery = await deliverStaffSurveyAlimtalk(doc, accessToken);
+    await refs.privateSurveyResponse(responseId).set({ delivery, updatedAt: nowTimestamp() }, { merge: true });
+    await writePublicSurveyDoc(doc, accessToken, delivery);
+    await enqueueGroupSurveyMemoOutputs(doc, payload);
+    await db.collection("groupSurveyRequests").doc(groupRequest.requestId).set(
+      {
+        status: "submitted",
+        responseId,
+        detailUrl,
+        delivery,
+        submittedAt: nowTimestamp(),
+        updatedAt: nowTimestamp(),
+      },
+      { merge: true },
+    );
+    response.status(200).json({
+      ok: true,
+      responseId,
+      detailUrl,
+      alimtalkStatus: delivery.alimtalkStatus,
+      alimtalkReason: delivery.alimtalkReason,
+    });
+  } catch (err) {
+    const message = err instanceof Error ? err.message : String(err);
+    logger.error("submitGroupSurveyResponse failed", { message });
+    response.status(400).json({ ok: false, error: message });
+  }
+}
+
 function setCors(response: any): void {
   response.set("Access-Control-Allow-Origin", "*");
-  response.set("Access-Control-Allow-Methods", "POST,OPTIONS");
+  response.set("Access-Control-Allow-Methods", "GET,POST,OPTIONS");
   response.set("Access-Control-Allow-Headers", "Content-Type,X-Archive-Survey-Secret");
 }
 
@@ -299,6 +410,98 @@ function assertWebhookSecret(request: any): void {
   const expected = privateSurveyWebhookSecret.value();
   const actual = String(request.get?.("X-Archive-Survey-Secret") || request.body?.secret || "");
   if (!expected || actual !== expected) throw new Error("invalid webhook secret");
+}
+
+async function readGroupSurveyRequest(
+  requestIdInput: unknown,
+  accessTokenInput: unknown,
+): Promise<{ groupRequest: GroupSurveyRequestDoc; accessToken: string }> {
+  const requestId = stringValue(requestIdInput);
+  const accessToken = stringValue(accessTokenInput);
+  if (!/^gsr-[a-z0-9-]{8,80}$/i.test(requestId) || !/^[a-f0-9]{16,80}$/i.test(accessToken)) {
+    throw new Error("설문 링크가 올바르지 않습니다.");
+  }
+  const snap = await db.collection("groupSurveyRequests").doc(requestId).get();
+  const groupRequest = snap.data() as GroupSurveyRequestDoc | undefined;
+  if (!groupRequest || groupRequest.accessTokenHash !== sha256(accessToken)) {
+    throw new Error("설문을 열 수 있는 권한이 없습니다.");
+  }
+  return { groupRequest, accessToken };
+}
+
+function normalizeGroupSurveySubmitPayload(input: Record<string, unknown>): GroupSurveySubmitPayload {
+  const payload: GroupSurveySubmitPayload = {
+    requestId: stringValue(input.requestId || input.id),
+    accessToken: stringValue(input.accessToken || input.token),
+    exerciseExperience: stringValue(input.exerciseExperience),
+    painAreas: stringArray(input.painAreas),
+    painNote: stringValue(input.painNote),
+    cautionTypes: stringArray(input.cautionTypes),
+    concern: stringValue(input.concern),
+    requestNote: stringValue(input.requestNote),
+  };
+  if (!payload.requestId || !payload.accessToken) throw new Error("설문 링크가 올바르지 않습니다.");
+  if (!payload.exerciseExperience) throw new Error("운동 경험을 선택해주세요.");
+  if (!payload.painAreas.length) throw new Error("통증/불편 부위를 선택해주세요.");
+  if (!payload.cautionTypes.length) throw new Error("주의사항을 선택해주세요.");
+  if (!payload.concern) throw new Error("걱정되는 부분을 선택해주세요.");
+  return payload;
+}
+
+function stringArray(value: unknown): string[] {
+  const raw = Array.isArray(value) ? value : typeof value === "string" ? value.split(",") : [];
+  return raw
+    .map((item) => stringValue(item))
+    .filter(Boolean)
+    .slice(0, 12);
+}
+
+function groupSurveyAnswers(payload: GroupSurveySubmitPayload): Record<string, string> {
+  return {
+    "필라테스 또는 운동 경험": payload.exerciseExperience,
+    "현재 통증이나 불편한 부위": payload.painAreas.join(", "),
+    "통증이나 불편함 상세": payload.painNote,
+    "수업 전 강사가 알아야 할 내용": payload.cautionTypes.join(", "),
+    "첫 그룹수업에서 걱정되는 부분": payload.concern,
+    "강사 참고 요청사항": payload.requestNote,
+  };
+}
+
+function summarizeGroupSurveyAnswers(payload: GroupSurveySubmitPayload): SurveySummary {
+  return {
+    goal: payload.concern,
+    focusArea: payload.painAreas.join(", "),
+    painOrMedicalNote: [payload.cautionTypes.join(", "), payload.painNote].filter(Boolean).join("\n"),
+    exerciseLevel: payload.exerciseExperience,
+    concernOrDifficulty: payload.concern,
+    expectationOrImportantFactor: payload.requestNote,
+    referralSource: "",
+    lifestyleOrPreviousIssue: "",
+  };
+}
+
+async function groupSurveyMatch(groupRequest: GroupSurveyRequestDoc): Promise<MatchResult> {
+  const booking = groupRequest.bookingId ? (await refs.booking(groupRequest.bookingId).get()).data() : null;
+  return {
+    status: "matched",
+    memberId: groupRequest.memberId,
+    memberName: groupRequest.memberName,
+    memberPhone: groupRequest.memberPhone,
+    bookingId: groupRequest.bookingId,
+    lectureId: groupRequest.lectureId,
+    lectureDate: booking?.lectureDate || groupRequest.lectureDate,
+    lectureStartAt: booking?.lectureStartAt || null,
+    staffId: booking?.staffId || groupRequest.staffId,
+    staffName: booking?.staffName || groupRequest.staffName,
+    reason: "첫 그룹수업 예약 자동매칭",
+  };
+}
+
+async function groupLessonTime(groupRequest: GroupSurveyRequestDoc): Promise<string> {
+  const matching = await groupSurveyMatch(groupRequest);
+  return lessonTimeText({
+    matching,
+  } as PrivateSurveyResponseDoc);
 }
 
 function normalizePayload(input: Record<string, unknown>): NormalizedSurveyPayload {
@@ -386,6 +589,76 @@ async function buildSurveyDoc(input: {
   };
 }
 
+async function buildGroupSurveyDoc(input: {
+  groupRequest: GroupSurveyRequestDoc;
+  responseId: string;
+  accessToken: string;
+  detailUrl: string;
+  answers: Record<string, string>;
+  summary: SurveySummary;
+  matching: MatchResult;
+}): Promise<PrivateSurveyResponseDoc> {
+  const now = nowTimestamp();
+  return {
+    responseId: input.responseId,
+    studioId: input.groupRequest.studioId || DEFAULT_STUDIO_ID,
+    surveyType: "group",
+    source: {
+      spreadsheetId: "ARCHIVE_IN_GROUP_SURVEY",
+      sheetName: "groupSurvey",
+      rowNumber: 0,
+    },
+    submittedAt: now,
+    submittedAtText: kstNowText(),
+    memberName: input.groupRequest.memberName,
+    memberPhone: input.groupRequest.memberPhone,
+    memberPhoneLast4: input.groupRequest.memberPhoneLast4 || input.groupRequest.memberPhone.slice(-4),
+    experienceType: input.answers["필라테스 또는 운동 경험"] || "",
+    summary: input.summary,
+    rawAnswers: input.answers,
+    matching: input.matching,
+    delivery: {
+      detailUrl: input.detailUrl,
+      alimtalkStatus: "pending",
+      alimtalkReason: "담당강사 그룹 사전확인 알림톡 발송 대기",
+    },
+    accessTokenHash: sha256(input.accessToken),
+    createdAt: now,
+    updatedAt: now,
+  };
+}
+
+async function writePublicSurveyDoc(
+  doc: PrivateSurveyResponseDoc,
+  accessToken: string,
+  delivery: PrivateSurveyResponseDoc["delivery"],
+): Promise<void> {
+  const docKey = `${doc.responseId}-${accessToken}`;
+  await db
+    .collection("privateSurveyPublic")
+    .doc(docKey)
+    .set(
+      {
+        responseId: doc.responseId,
+        surveyType: doc.surveyType || "private",
+        accessToken,
+        docKey,
+        detailUrl: delivery.detailUrl,
+        memberName: doc.memberName,
+        memberPhoneLast4: doc.memberPhoneLast4,
+        experienceType: doc.experienceType,
+        submittedAtText: doc.submittedAtText,
+        summary: doc.summary,
+        rawAnswers: doc.rawAnswers,
+        matching: doc.matching,
+        delivery,
+        source: doc.source,
+        updatedAt: nowTimestamp(),
+      },
+      { merge: true },
+    );
+}
+
 async function deliverStaffSurveyAlimtalk(
   doc: PrivateSurveyResponseDoc,
   accessToken: string,
@@ -409,7 +682,16 @@ async function deliverStaffSurveyAlimtalk(
     };
   }
 
-  const sendId = `private_survey_staff_${doc.responseId}`;
+  const templateId = staffSurveyTemplateId(doc);
+  const templateStatus = staffSurveyTemplateStatus(doc);
+  if (templateStatus !== "approved") {
+    return {
+      ...delivery,
+      alimtalkStatus: "pending",
+      alimtalkReason: `담당강사 알림톡 템플릿 검수 대기: ${templateId}`,
+    };
+  }
+  const sendId = `${doc.surveyType === "group" ? "group_survey_staff" : "private_survey_staff"}_${doc.responseId}`;
   const sendRef = refs.alimtalkSend(sendId);
   const existing = (await sendRef.get()).data();
   if (existing?.status === "done") {
@@ -428,6 +710,7 @@ async function deliverStaffSurveyAlimtalk(
       lessonTime: lessonTimeText(doc),
       responseId: doc.responseId,
       accessToken,
+      templateId,
     });
     await sendRef.set(
       {
@@ -437,9 +720,9 @@ async function deliverStaffSurveyAlimtalk(
         memberId: staff.staffId,
         memberName: staff.name || doc.matching.staffName,
         memberPhone: staffPhone,
-        templateCode: STAFF_PRIVATE_SURVEY_TEMPLATE_ID,
+        templateCode: templateId,
         dedupeKey: sendId,
-        dedupePolicy: "담당강사 사전설문 제출 알림 응답별 1회",
+        dedupePolicy: `${doc.surveyType === "group" ? "담당강사 그룹 사전확인" : "담당강사 사전설문"} 제출 알림 응답별 1회`,
         dedupeWindowDays: null,
         status: "done",
         attempts: 1,
@@ -456,7 +739,7 @@ async function deliverStaffSurveyAlimtalk(
     return {
       ...delivery,
       alimtalkStatus: "sent",
-      alimtalkReason: "담당강사 사전설문 알림톡 발송 완료",
+      alimtalkReason: `${doc.surveyType === "group" ? "담당강사 그룹 사전확인" : "담당강사 사전설문"} 알림톡 발송 완료`,
     };
   } catch (err) {
     const message = err instanceof Error ? err.message : String(err);
@@ -468,9 +751,9 @@ async function deliverStaffSurveyAlimtalk(
         memberId: staff.staffId,
         memberName: staff.name || doc.matching.staffName,
         memberPhone: staffPhone,
-        templateCode: STAFF_PRIVATE_SURVEY_TEMPLATE_ID,
+        templateCode: templateId,
         dedupeKey: sendId,
-        dedupePolicy: "담당강사 사전설문 제출 알림 응답별 1회",
+        dedupePolicy: `${doc.surveyType === "group" ? "담당강사 그룹 사전확인" : "담당강사 사전설문"} 제출 알림 응답별 1회`,
         dedupeWindowDays: null,
         status: "failed",
         attempts: 1,
@@ -496,6 +779,87 @@ async function deliverStaffSurveyAlimtalk(
   }
 }
 
+async function enqueueGroupSurveyMemoOutputs(
+  doc: PrivateSurveyResponseDoc,
+  payload: GroupSurveySubmitPayload,
+): Promise<void> {
+  if (doc.surveyType !== "group" || !doc.matching.memberId) return;
+  const content = groupSurveyMemoContent(doc, payload);
+  const memoRef = refs.memberMemos().doc(`group_survey_${doc.responseId}`);
+  await memoRef.set(
+    {
+      memoId: memoRef.id,
+      studioId: doc.studioId,
+      memberId: doc.matching.memberId,
+      memberName: doc.memberName,
+      lectureId: doc.matching.lectureId,
+      bookingId: doc.matching.bookingId,
+      lectureDate: doc.matching.lectureDate,
+      staffId: doc.matching.staffId,
+      staffName: doc.matching.staffName,
+      memoType: "member_note",
+      visibility: "staff_and_manager",
+      content,
+      syncStatus: "pending",
+      createdByUid: "system:group-survey",
+      createdAt: nowTimestamp(),
+      updatedAt: nowTimestamp(),
+    },
+    { merge: true },
+  );
+  if (doc.matching.bookingId) {
+    await refs
+      .booking(doc.matching.bookingId)
+      .set(
+        { lastMemoPreview: content.slice(0, 60), lastMemoAt: nowTimestamp(), updatedAt: nowTimestamp() },
+        { merge: true },
+      );
+  }
+  await db
+    .collection("studiomateMemoWriteJobs")
+    .doc(`group_survey_${doc.responseId}`)
+    .set(
+      {
+        jobId: `group_survey_${doc.responseId}`,
+        studioId: doc.studioId,
+        source: "group_survey",
+        status: "pending",
+        writeMode: "playwright",
+        memberId: doc.matching.memberId,
+        memberName: doc.memberName,
+        memberPhone: doc.memberPhone,
+        bookingId: doc.matching.bookingId,
+        lectureId: doc.matching.lectureId,
+        lectureDate: doc.matching.lectureDate,
+        staffId: doc.matching.staffId,
+        staffName: doc.matching.staffName,
+        content,
+        attempts: 0,
+        maxAttempts: 3,
+        lastError: null,
+        createdAt: nowTimestamp(),
+        updatedAt: nowTimestamp(),
+      },
+      { merge: true },
+    );
+}
+
+function groupSurveyMemoContent(doc: PrivateSurveyResponseDoc, payload: GroupSurveySubmitPayload): string {
+  return [
+    "[ARCHIVE IN 그룹 첫 수업 사전확인]",
+    `첫 그룹수업: ${lessonTimeText(doc)} / ${doc.matching.staffName || "담당강사 미확인"}`,
+    "",
+    `운동경험: ${payload.exerciseExperience || "-"}`,
+    `통증/불편: ${payload.painAreas.join(", ") || "-"}`,
+    payload.painNote ? `통증상세: ${payload.painNote}` : "",
+    `주의사항: ${payload.cautionTypes.join(", ") || "-"}`,
+    `걱정: ${payload.concern || "-"}`,
+    `요청: ${payload.requestNote || "-"}`,
+  ]
+    .filter((line) => line !== "")
+    .join("\n");
+}
+
 async function sendStaffPrivateSurveyAlimtalk(input: {
   to: string;
   staffName: string;
@@ -503,6 +867,7 @@ async function sendStaffPrivateSurveyAlimtalk(input: {
   lessonTime: string;
   responseId: string;
   accessToken: string;
+  templateId: string;
 }): Promise<{ messageId: string }> {
   const body = {
     messages: [
@@ -511,7 +876,7 @@ async function sendStaffPrivateSurveyAlimtalk(input: {
         type: "ATA",
         kakaoOptions: {
           pfId: solapiPfid.value(),
-          templateId: STAFF_PRIVATE_SURVEY_TEMPLATE_ID,
+          templateId: input.templateId,
           disableSms: true,
           variables: {
             "#{강사명}": input.staffName,
@@ -546,6 +911,14 @@ async function sendStaffPrivateSurveyAlimtalk(input: {
   return {
     messageId: result.messageList?.[0]?.messageId || result.groupInfo?.groupId || "",
   };
+}
+
+function staffSurveyTemplateId(doc: PrivateSurveyResponseDoc): string {
+  return doc.surveyType === "group" ? STAFF_GROUP_SURVEY_TEMPLATE_ID : STAFF_PRIVATE_SURVEY_TEMPLATE_ID;
+}
+
+function staffSurveyTemplateStatus(doc: PrivateSurveyResponseDoc): "approved" | "inspecting" {
+  return doc.surveyType === "group" ? STAFF_GROUP_SURVEY_TEMPLATE_STATUS : "approved";
 }
 
 function solapiAuthHeader(): string {
@@ -697,18 +1070,22 @@ function renderSurveyPage(doc: PrivateSurveyResponseDoc): string {
         timeStyle: "short",
       }).format(doc.submittedAt.toDate())
     : doc.submittedAtText;
+  const isGroup = doc.surveyType === "group";
   const priorityRows = [
-    ["운동 목적", doc.summary.goal],
-    ["신경 부위", doc.summary.focusArea],
+    [isGroup ? "걱정되는 부분" : "운동 목적", doc.summary.goal],
+    [isGroup ? "통증/불편 부위" : "신경 부위", doc.summary.focusArea],
     ["통증/병력", doc.summary.painOrMedicalNote],
   ];
   const detailRows = [
     ["운동 수준", doc.summary.exerciseLevel],
-    ["걱정/어려움", doc.summary.concernOrDifficulty],
-    ["기대/중요 요소", doc.summary.expectationOrImportantFactor],
-    ["생활/이전 아쉬움", doc.summary.lifestyleOrPreviousIssue],
-    ["유입경로", doc.summary.referralSource],
-  ];
+    [
+      isGroup ? "요청사항" : "걱정/어려움",
+      isGroup ? doc.summary.expectationOrImportantFactor : doc.summary.concernOrDifficulty,
+    ],
+    [isGroup ? "" : "기대/중요 요소", isGroup ? "" : doc.summary.expectationOrImportantFactor],
+    [isGroup ? "" : "생활/이전 아쉬움", isGroup ? "" : doc.summary.lifestyleOrPreviousIssue],
+    [isGroup ? "" : "유입경로", isGroup ? "" : doc.summary.referralSource],
+  ].filter(([label]) => label);
   return `<!doctype html>
 <html lang="ko">
 <head>
@@ -751,11 +1128,11 @@ function renderSurveyPage(doc: PrivateSurveyResponseDoc): string {
   <main>
     <section class="top">
       <div>
-        <div class="eyebrow">ARCHIVE IN · 첫 프라이빗 사전설문</div>
+        <div class="eyebrow">ARCHIVE IN · ${isGroup ? "그룹 첫 수업 사전확인" : "첫 프라이빗 사전설문"}</div>
         <h1>${escapeHtml(doc.memberName)} 회원</h1>
         <div class="meta">
           <span class="chip">제출 ${escapeHtml(submitted)}</span>
-          <span class="chip">경험구분 ${escapeHtml(doc.experienceType || "-")}</span>
+          <span class="chip">${isGroup ? "운동경험" : "경험구분"} ${escapeHtml(doc.experienceType || "-")}</span>
         </div>
       </div>
       <img class="brand" src="${ARCHIVE_LOGO_URL}" alt="ARCHIVE PILATES">

@@ -3,6 +3,7 @@ import type { AlimtalkCandidateType } from "../types/models";
 export const NEW_MEMBER_ALIMTALK_START_DATE = "2026-05-16";
 export const NEW_MEMBER_ALIMTALK_WINDOW_DAYS = 3;
 export const PRIVATE_SURVEY_ALIMTALK_START_DATE = "2026-05-19";
+export const GROUP_SURVEY_ALIMTALK_START_DATE = "2026-05-21";
 
 export const ALIMTALK_MEMBER_EXCLUSION_REASONS: Record<string, string> = {
   "3270886": "출산예정 회원 알림톡 제외",
@@ -12,6 +13,7 @@ export const ALIMTALK_MEMBER_EXCLUSION_REASONS: Record<string, string> = {
 export type SendableAlimtalkCandidateType =
   | "new_member"
   | "private_survey"
+  | "group_survey"
   | "ticket_expiring"
   | "remaining_low"
   | "private_count_low"
@@ -48,6 +50,11 @@ export const ALIMTALK_TEMPLATES = {
     label: "프라이빗 사전설문 안내 v1",
     status: "approved",
   },
+  group_survey: {
+    code: "KA01TP2605210729364330NbhZVAu9zA",
+    label: "그룹 첫 수업 사전확인 안내 v1",
+    status: "inspecting",
+  },
   private_ticket_expiring: {
     code: "KA01TP260514153314927WH270IppWQS",
     label: "프라이빗 기간권 잔여기간 안내 v1",
@@ -58,6 +65,7 @@ export const ALIMTALK_TEMPLATES = {
 export const CANDIDATE_TEMPLATE_CODES: Record<SendableAlimtalkCandidateType, string> = {
   new_member: ALIMTALK_TEMPLATES.new_member.code,
   private_survey: ALIMTALK_TEMPLATES.private_survey.code,
+  group_survey: ALIMTALK_TEMPLATES.group_survey.code,
   ticket_expiring: ALIMTALK_TEMPLATES.ticket_expiring.code,
   remaining_low: ALIMTALK_TEMPLATES.remaining_low.code,
   private_count_low: ALIMTALK_TEMPLATES.private_count_low.code,
@@ -98,6 +106,10 @@ export const ALIMTALK_DEDUPE_POLICIES_BY_TEMPLATE_CODE: Record<string, AlimtalkD
   },
   [ALIMTALK_TEMPLATES.private_survey.code]: {
     label: "프라이빗 사전설문 영구 1회",
+    windowDays: null,
+  },
+  [ALIMTALK_TEMPLATES.group_survey.code]: {
+    label: "그룹 첫 수업 사전확인 영구 1회",
     windowDays: null,
   },
   [ALIMTALK_TEMPLATES.private_ticket_expiring.code]: {

@@ -306,6 +306,7 @@ export type ContactSyncStatus = "pending" | "synced" | "skipped" | "failed";
 export type AlimtalkCandidateType =
   | "new_member"
   | "private_survey"
+  | "group_survey"
   | "ticket_expiring"
   | "remaining_low"
   | "private_count_low"
@@ -391,6 +392,7 @@ export interface AlimtalkSendDoc {
 export interface PrivateSurveyResponseDoc {
   responseId: string;
   studioId: string;
+  surveyType?: "private" | "group";
   source: {
     spreadsheetId: string;
     sheetName: string;

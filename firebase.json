@@ -143,6 +143,15 @@
         ".firebase/**",
         "firebase-debug.log",
         "firebase-debug.*.log"
+      ],
+      "rewrites": [
+        {
+          "source": "/api/groupSurveySubmit",
+          "function": {
+            "functionId": "ingestPrivateSurveyResponse",
+            "region": "asia-northeast3"
+          }
+        }
       ]
     }
   ]
