@@ -135,6 +135,7 @@ export async function ingestPrivateSurveyResponseHandler(request: any, response:
     await refs.privateSurveyResponse(responseId).set(doc, { merge: true });
     const delivery = await deliverStaffSurveyAlimtalk(doc, accessToken);
     await refs.privateSurveyResponse(responseId).set({ delivery, updatedAt: nowTimestamp() }, { merge: true });
+    await enqueueSurveyMemoOutputs(doc);
 
     response.status(200).json({
       ok: true,
@@ -188,6 +189,7 @@ export async function processPrivateSurveyIntakeHandler(
 
     const delivery = await deliverStaffSurveyAlimtalk(doc, accessToken);
     await refs.privateSurveyResponse(responseId).set({ delivery, updatedAt: nowTimestamp() }, { merge: true });
+    await enqueueSurveyMemoOutputs(doc);
     await db.collection("privateSurveyPublic").doc(docKey).set(
       {
         responseId,
@@ -374,7 +376,7 @@ export async function submitGroupSurveyResponseHandler(request: any, response: a
     const delivery = await deliverStaffSurveyAlimtalk(doc, accessToken);
     await refs.privateSurveyResponse(responseId).set({ delivery, updatedAt: nowTimestamp() }, { merge: true });
     await writePublicSurveyDoc(doc, accessToken, delivery);
-    await enqueueGroupSurveyMemoOutputs(doc, payload);
+    await enqueueSurveyMemoOutputs(doc, groupSurveyMemoContent(doc, payload));
     await db.collection("groupSurveyRequests").doc(groupRequest.requestId).set(
       {
         status: "submitted",
@@ -779,13 +781,14 @@ async function deliverStaffSurveyAlimtalk(
   }
 }
 
-async function enqueueGroupSurveyMemoOutputs(
+async function enqueueSurveyMemoOutputs(
   doc: PrivateSurveyResponseDoc,
-  payload: GroupSurveySubmitPayload,
+  content = surveyMemoContent(doc),
 ): Promise<void> {
-  if (doc.surveyType !== "group" || !doc.matching.memberId) return;
-  const content = groupSurveyMemoContent(doc, payload);
-  const memoRef = refs.memberMemos().doc(`group_survey_${doc.responseId}`);
+  if (doc.matching.status !== "matched" || !doc.matching.memberId || !content) return;
+  const kind = surveyMemoKind(doc);
+  const memoId = `${kind}_${doc.responseId}`;
+  const memoRef = refs.memberMemos().doc(memoId);
   await memoRef.set(
     {
       memoId: memoRef.id,
@@ -801,7 +804,7 @@ async function enqueueGroupSurveyMemoOutputs(
       visibility: "staff_and_manager",
       content,
       syncStatus: "pending",
-      createdByUid: "system:group-survey",
+      createdByUid: `system:${kind}`,
       createdAt: nowTimestamp(),
       updatedAt: nowTimestamp(),
     },
@@ -815,46 +818,71 @@ async function enqueueGroupSurveyMemoOutputs(
         { merge: true },
       );
   }
-  await db
-    .collection("studiomateMemoWriteJobs")
-    .doc(`group_survey_${doc.responseId}`)
-    .set(
-      {
-        jobId: `group_survey_${doc.responseId}`,
-        studioId: doc.studioId,
-        source: "group_survey",
-        status: "pending",
-        writeMode: "playwright",
-        memberId: doc.matching.memberId,
-        memberName: doc.memberName,
-        memberPhone: doc.memberPhone,
-        bookingId: doc.matching.bookingId,
-        lectureId: doc.matching.lectureId,
-        lectureDate: doc.matching.lectureDate,
-        staffId: doc.matching.staffId,
-        staffName: doc.matching.staffName,
-        content,
-        attempts: 0,
-        maxAttempts: 3,
-        lastError: null,
-        createdAt: nowTimestamp(),
-        updatedAt: nowTimestamp(),
-      },
-      { merge: true },
-    );
+  await db.collection("studiomateMemoWriteJobs").doc(memoId).set(
+    {
+      jobId: memoId,
+      studioId: doc.studioId,
+      source: kind,
+      status: "pending",
+      writeMode: "playwright",
+      memberId: doc.matching.memberId,
+      memberName: doc.memberName,
+      memberPhone: doc.memberPhone,
+      bookingId: doc.matching.bookingId,
+      lectureId: doc.matching.lectureId,
+      lectureDate: doc.matching.lectureDate,
+      staffId: doc.matching.staffId,
+      staffName: doc.matching.staffName,
+      content,
+      attempts: 0,
+      maxAttempts: 3,
+      lastError: null,
+      createdAt: nowTimestamp(),
+      updatedAt: nowTimestamp(),
+    },
+    { merge: true },
+  );
 }
 
-function groupSurveyMemoContent(doc: PrivateSurveyResponseDoc, payload: GroupSurveySubmitPayload): string {
+function surveyMemoKind(doc: PrivateSurveyResponseDoc): "group_survey" | "private_survey" {
+  return doc.surveyType === "group" ? "group_survey" : "private_survey";
+}
+
+function surveyMemoContent(doc: PrivateSurveyResponseDoc): string {
+  if (doc.surveyType === "group") return groupSurveyMemoContent(doc);
+  return privateSurveyMemoContent(doc);
+}
+
+function privateSurveyMemoContent(doc: PrivateSurveyResponseDoc): string {
+  return [
+    "[ARCHIVE IN 프라이빗 사전설문]",
+    `첫 프라이빗: ${lessonTimeText(doc)} / ${doc.matching.staffName || "담당강사 미확인"}`,
+    "",
+    `경험구분: ${doc.experienceType || "-"}`,
+    `운동목적: ${doc.summary.goal || "-"}`,
+    `신경부위: ${doc.summary.focusArea || "-"}`,
+    `통증/병력: ${doc.summary.painOrMedicalNote || "-"}`,
+    `운동수준: ${doc.summary.exerciseLevel || "-"}`,
+    `걱정/어려움: ${doc.summary.concernOrDifficulty || "-"}`,
+    `기대/중요요소: ${doc.summary.expectationOrImportantFactor || "-"}`,
+    doc.summary.lifestyleOrPreviousIssue ? `생활/이전 아쉬움: ${doc.summary.lifestyleOrPreviousIssue}` : "",
+    doc.summary.referralSource ? `유입경로: ${doc.summary.referralSource}` : "",
+  ]
+    .filter((line) => line !== "")
+    .join("\n");
+}
+
+function groupSurveyMemoContent(doc: PrivateSurveyResponseDoc, payload?: GroupSurveySubmitPayload): string {
   return [
     "[ARCHIVE IN 그룹 첫 수업 사전확인]",
     `첫 그룹수업: ${lessonTimeText(doc)} / ${doc.matching.staffName || "담당강사 미확인"}`,
     "",
-    `운동경험: ${payload.exerciseExperience || "-"}`,
-    `통증/불편: ${payload.painAreas.join(", ") || "-"}`,
-    payload.painNote ? `통증상세: ${payload.painNote}` : "",
-    `주의사항: ${payload.cautionTypes.join(", ") || "-"}`,
-    `걱정: ${payload.concern || "-"}`,
-    `요청: ${payload.requestNote || "-"}`,
+    `운동경험: ${payload?.exerciseExperience || doc.summary.exerciseLevel || "-"}`,
+    `통증/불편: ${payload?.painAreas.join(", ") || doc.summary.focusArea || "-"}`,
+    payload?.painNote ? `통증상세: ${payload.painNote}` : "",
+    `주의사항: ${payload?.cautionTypes.join(", ") || doc.summary.painOrMedicalNote || "-"}`,
+    `걱정: ${payload?.concern || doc.summary.concernOrDifficulty || doc.summary.goal || "-"}`,
+    `요청: ${payload?.requestNote || doc.summary.expectationOrImportantFactor || "-"}`,
   ]
     .filter((line) => line !== "")
     .join("\n");
