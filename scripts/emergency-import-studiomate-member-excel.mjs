@@ -205,7 +205,8 @@ function buildPlans(groups, existingProfiles, existingContacts) {
     const email = firstNonEmpty(group.rows, "이메일");
     const gender = firstNonEmpty(group.rows, "성별");
     const birthDate = firstNonEmpty(group.rows, "생년월일");
-    const memoPreview = firstNonEmpty(group.rows, "메모").slice(0, 120);
+    const contactMemo = cleanContactMemo(firstNonEmpty(group.rows, "메모"));
+    const memoPreview = contactMemo.slice(0, 120);
     const existing = existingProfiles.get(group.phone) || [];
     const exact = existing.filter((item) => normalizeName(item.data.name || "") === group.normalizedName);
     let memberId = "";
@@ -259,7 +260,14 @@ function buildPlans(groups, existingProfiles, existingContacts) {
       emergencyLastAttendance: latestAttendance,
     };
     const contactDisplayName = [group.name, "회원", compactDate(registeredAt)].filter(Boolean).join(" ");
-    const contactHash = hash({ name: group.name, contactDisplayName, phone: group.phone, registeredAt: registeredAt?.toMillis() || null, activeTicketNames: profileDoc.activeTicketNames });
+    const contactHash = hash({
+      name: group.name,
+      contactDisplayName,
+      contactMemo,
+      phone: group.phone,
+      registeredAt: registeredAt?.toMillis() || null,
+      activeTicketNames: profileDoc.activeTicketNames,
+    });
     const previousContact = existingContacts.get(memberId);
     const shouldQueueHomeSync =
       queueContactSync &&
@@ -278,6 +286,7 @@ function buildPlans(groups, existingProfiles, existingContacts) {
       studioId: STUDIO_ID,
       name: group.name,
       contactDisplayName,
+      contactMemo,
       phone: group.phone,
       phoneLast4: group.phone.slice(-4),
       registeredAt,
@@ -300,6 +309,7 @@ function buildPlans(groups, existingProfiles, existingContacts) {
           memberId,
           memberName: group.name,
           contactDisplayName,
+          contactMemo,
           memberPhone: group.phone,
           target: "home_archivepilates",
           status: "pending",
@@ -441,6 +451,16 @@ function bestDate(rows, key) {
 
 function cleanText(value) {
   return String(value ?? "").trim();
+}
+
+function cleanContactMemo(value) {
+  return String(value ?? "")
+    .replace(/\r\n?/g, "\n")
+    .split("\n")
+    .map((line) => line.trim())
+    .filter(Boolean)
+    .join("\n")
+    .slice(0, 1000);
 }
 
 function normalizeName(value) {

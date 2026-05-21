@@ -9,6 +9,7 @@ export interface HomeContact {
   etag: string;
   name: string;
   phones: string[];
+  biography: string;
 }
 
 export class HomePeopleClient {
@@ -20,7 +21,7 @@ export class HomePeopleClient {
     do {
       const params = new URLSearchParams({
         pageSize: "1000",
-        personFields: "names,phoneNumbers,metadata",
+        personFields: "names,phoneNumbers,biographies,metadata",
         sortOrder: "FIRST_NAME_ASCENDING",
       });
       if (pageToken) params.set("pageToken", pageToken);
@@ -45,15 +46,19 @@ export class HomePeopleClient {
     existing: HomeContact[];
     name: string;
     phone: string;
+    memo?: string;
   }): Promise<{ action: "created" | "updated" | "skipped"; resourceName?: string }> {
     const normalizedPhone = normalizePhone(input.phone);
     if (!normalizedPhone) throw new Error("연락처 전화번호가 없습니다");
     if (input.existing.length > 1) throw new Error(`같은 전화번호 연락처가 ${input.existing.length}개 있습니다`);
 
+    const nextBiography = nextContactBiography(input.existing[0]?.biography || "", input.memo);
     const person = {
       names: [{ givenName: input.name }],
       phoneNumbers: [{ value: formatPhone(input.phone) }],
+      ...(nextBiography ? { biographies: [{ value: nextBiography }] } : {}),
     };
+    const updatePersonFields = nextBiography ? "names,phoneNumbers,biographies" : "names,phoneNumbers";
 
     if (!input.existing.length) {
       const created = await this.request<{ resourceName?: string }>("/v1/people:createContact", {
@@ -66,12 +71,16 @@ export class HomePeopleClient {
     const current = input.existing[0];
     const currentName = current.name.trim();
     const currentPhone = normalizePhone(current.phones[0] || "");
-    if (currentName === input.name.trim() && currentPhone === normalizedPhone) {
+    if (
+      currentName === input.name.trim() &&
+      currentPhone === normalizedPhone &&
+      normalizeBiography(current.biography) === normalizeBiography(nextBiography)
+    ) {
       return { action: "skipped", resourceName: current.resourceName };
     }
 
     const updated = await this.request<{ resourceName?: string }>(
-      `/v1/${current.resourceName}:updateContact?updatePersonFields=names,phoneNumbers`,
+      `/v1/${current.resourceName}:updateContact?updatePersonFields=${updatePersonFields}`,
       {
         method: "PATCH",
         body: JSON.stringify({
@@ -145,12 +154,14 @@ function parseContact(raw: unknown): HomeContact {
     etag?: string;
     names?: Array<{ displayName?: string }>;
     phoneNumbers?: Array<{ value?: string }>;
+    biographies?: Array<{ value?: string }>;
   };
   return {
     resourceName: person.resourceName || "",
     etag: person.etag || "",
     name: person.names?.[0]?.displayName || "",
     phones: (person.phoneNumbers || []).map((phone) => phone.value || "").filter(Boolean),
+    biography: person.biographies?.[0]?.value || "",
   };
 }
 
@@ -163,4 +174,35 @@ function formatPhone(value: string): string {
   if (digits.length === 11) return `${digits.slice(0, 3)}-${digits.slice(3, 7)}-${digits.slice(7)}`;
   if (digits.length === 10) return `${digits.slice(0, 3)}-${digits.slice(3, 6)}-${digits.slice(6)}`;
   return value;
+}
+
+const ARCHIVE_MEMO_START = "[Archive StudioMate 메모]";
+const ARCHIVE_MEMO_END = "[/Archive StudioMate 메모]";
+
+function nextContactBiography(current: string, memo: string | undefined): string {
+  const cleanedMemo = cleanMemo(memo || "");
+  if (!cleanedMemo) return current || "";
+  const block = `${ARCHIVE_MEMO_START}\n${cleanedMemo}\n${ARCHIVE_MEMO_END}`;
+  const pattern = new RegExp(`${escapeRegExp(ARCHIVE_MEMO_START)}[\\s\\S]*?${escapeRegExp(ARCHIVE_MEMO_END)}`);
+  const base = String(current || "").trim();
+  if (pattern.test(base)) return base.replace(pattern, block).trim();
+  return [base, block].filter(Boolean).join("\n\n");
+}
+
+function cleanMemo(value: string): string {
+  return String(value || "")
+    .replace(/\r\n?/g, "\n")
+    .split("\n")
+    .map((line) => line.trim())
+    .filter(Boolean)
+    .join("\n")
+    .slice(0, 1000);
+}
+
+function normalizeBiography(value: string): string {
+  return String(value || "").trim().replace(/\r\n?/g, "\n");
+}
+
+function escapeRegExp(value: string): string {
+  return value.replace(/[.*+?^${}()|[\]\\]/g, "\\$&");
 }

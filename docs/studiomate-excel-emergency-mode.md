@@ -139,11 +139,12 @@ node scripts/emergency-import-studiomate-member-excel.mjs --queue-contact-sync -
   - 비상 엑셀 원천 파일 경로
 - `memberContactIndex/{memberId}`
   - 연락처 동기화용 이름/전화번호/등록일/수강권 요약
+  - Google 연락처 메모 동기화용 StudioMate 회원카드 메모
   - 기본 상태는 Google Contacts 큐 미생성
   - `--queue-contact-sync` 사용 시 `home@archivepilates.com` 주소록용 pending 상태와 `contactSyncJobs`를 생성
 - `contactSyncJobs/{jobId}`
   - `target: home_archivepilates`
-  - 전화번호/표시명/등록일/수강권 요약이 바뀐 회원만 생성
+  - 전화번호/표시명/등록일/수강권 요약/회원카드 메모가 바뀐 회원만 생성
   - 기존에 같은 연락처 해시가 `synced`인 회원은 중복 큐 생성하지 않음
 - `opsState/studiomateExcelEmergency`
   - 마지막 비상 엑셀 반영 상태

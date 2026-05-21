@@ -156,6 +156,7 @@ async function processJob(
       existing,
       name: job.contactDisplayName || job.memberName,
       phone: job.memberPhone,
+      memo: job.contactMemo,
     });
     await finishJob(job, result);
   } catch (err) {

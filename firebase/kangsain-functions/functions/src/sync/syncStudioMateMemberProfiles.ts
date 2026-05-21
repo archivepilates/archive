@@ -52,6 +52,9 @@ export async function syncStudioMateMemberProfiles(input: {
             "mobilePhone",
           ]),
         );
+        const contactMemo = cleanContactMemo(
+          firstValue(data, ["memo", "note", "notes", "member_memo", "memberMemo", "description", "remark", "remarks"]),
+        );
         const doc: MemberProfileDoc = {
           memberId: member.memberId,
           studioId: input.studioId,
@@ -62,6 +65,7 @@ export async function syncStudioMateMemberProfiles(input: {
           email: stringValue(firstValue(data, ["email", "mail"])),
           birthDate: stringValue(firstValue(data, ["birth", "birthday", "birth_date", "birthDate"])),
           gender: stringValue(firstValue(data, ["gender", "sex"])),
+          memoPreview: contactMemo.slice(0, 120),
           activeTicketNames: ticketSummary.activeTicketNames,
           activeTicketCount: ticketSummary.activeTicketCount,
           activeTickets: ticketSummary.activeTickets,
@@ -78,6 +82,7 @@ export async function syncStudioMateMemberProfiles(input: {
           const contactHash = stableHash({
             name: doc.name,
             contactDisplayName,
+            contactMemo,
             phone,
             registeredAt: registeredAt?.toMillis() || null,
             activeTicketNames: ticketSummary.activeTicketNames,
@@ -100,6 +105,7 @@ export async function syncStudioMateMemberProfiles(input: {
               studioId: input.studioId,
               name: doc.name,
               contactDisplayName,
+              contactMemo,
               phone,
               phoneLast4: phone.slice(-4),
               registeredAt,
@@ -124,6 +130,7 @@ export async function syncStudioMateMemberProfiles(input: {
               memberId: member.memberId,
               memberName: doc.name,
               contactDisplayName,
+              contactMemo,
               memberPhone: phone,
               target: "home_archivepilates",
               status: "pending",
@@ -371,6 +378,16 @@ function stringValue(value: unknown): string {
 
 function normalizeName(value: unknown): string {
   return stringValue(value).replace(/\s+/g, "");
+}
+
+function cleanContactMemo(value: unknown): string {
+  return stringValue(value)
+    .replace(/\r\n?/g, "\n")
+    .split("\n")
+    .map((line) => line.trim())
+    .filter(Boolean)
+    .join("\n")
+    .slice(0, 1000);
 }
 
 function digitsOnly(value: unknown): string {
