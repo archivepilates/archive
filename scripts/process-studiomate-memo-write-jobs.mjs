@@ -10,6 +10,7 @@ const admin = require("../firebase/kangsain-functions/functions/node_modules/fir
 const args = new Set(process.argv.slice(2));
 const apply = args.has("--apply");
 const limit = Number(valueArg("--limit") || process.env.STUDIOMATE_MEMO_WRITE_LIMIT || "10");
+const jobId = valueArg("--job-id") || process.env.STUDIOMATE_MEMO_WRITE_JOB_ID || "";
 const config = {
   projectId: process.env.GOOGLE_CLOUD_PROJECT || process.env.GCLOUD_PROJECT || "archive-pilates",
   baseUrl: process.env.STUDIOMATE_WEB_BASE_URL || "https://arcpilates.studiomate.kr",
@@ -32,6 +33,7 @@ const result = {
   written: 0,
   skipped: 0,
   failed: 0,
+  jobId: jobId || null,
   jobs: [],
 };
 
@@ -72,7 +74,7 @@ try {
         item.status = "dry-run";
         result.skipped += 1;
       } else {
-        await writeMemo(data, capturedAuthorization);
+        await writeMemo(page, data, capturedAuthorization);
         await ref.set(
           {
             status: "done",
@@ -119,6 +121,13 @@ try {
 }
 
 async function loadPendingJobs(max) {
+  if (jobId) {
+    const doc = await db.collection("studiomateMemoWriteJobs").doc(jobId).get();
+    if (!doc.exists) return [];
+    const data = doc.data();
+    if (!["pending", "retry"].includes(String(data?.status || ""))) return [];
+    return [{ ref: doc.ref, data }];
+  }
   const snap = await db
     .collection("studiomateMemoWriteJobs")
     .where("status", "in", ["pending", "retry"])
@@ -127,21 +136,57 @@ async function loadPendingJobs(max) {
   return snap.docs.map((doc) => ({ ref: doc.ref, data: doc.data() }));
 }
 
-async function writeMemo(job, authorization) {
+async function writeMemo(page, job, authorization) {
   const memberId = String(job.memberId || "");
   const content = String(job.content || "");
   if (!memberId || !content) throw new Error("memberId/content is required");
-  const response = await fetch(new URL("/v2/staff/memo", config.apiBaseUrl).toString(), {
-    method: "POST",
-    headers: {
-      Authorization: authorization,
-      "Content-Type": "application/json",
-      "web-version": "1.0.23",
+  try {
+    await writeMemoViaBrowserRequest(page, memberId, content, authorization);
+    return;
+  } catch (error) {
+    const message = error instanceof Error ? error.message : String(error);
+    if (!/403|비정상|abnormal/i.test(message)) throw error;
+  }
+  await writeMemoViaUi(page, memberId, content);
+}
+
+async function writeMemoViaBrowserRequest(page, memberId, content, authorization) {
+  const result = await page.evaluate(
+    async ({ apiBaseUrl, authorization, memberId, content }) => {
+      const response = await fetch(new URL("/v2/staff/memo", apiBaseUrl).toString(), {
+        method: "POST",
+        headers: {
+          Authorization: authorization,
+          "Content-Type": "application/json",
+          "web-version": "1.0.23",
+        },
+        body: JSON.stringify({ member_id: memberId, memo: content }),
+      });
+      return {
+        ok: response.ok,
+        status: response.status,
+        text: (await response.text()).slice(0, 300),
+      };
     },
-    body: JSON.stringify({ member_id: memberId, memo: content }),
+    { apiBaseUrl: config.apiBaseUrl, authorization, memberId, content },
+  );
+  if (!result.ok) throw new Error(`StudioMate memo write failed ${result.status}: ${result.text}`);
+}
+
+async function writeMemoViaUi(page, memberId, content) {
+  await page.goto(new URL(`/users/detail?id=${encodeURIComponent(memberId)}`, config.baseUrl).toString(), {
+    waitUntil: "networkidle",
+    timeout: 60000,
   });
-  const text = await response.text();
-  if (!response.ok) throw new Error(`StudioMate memo write failed ${response.status}: ${text.slice(0, 180)}`);
+  await page.getByText("메모 추가", { exact: true }).click({ timeout: 15000 });
+  const textarea = page.locator("textarea").last();
+  await textarea.fill(content, { timeout: 15000 });
+  await page.getByText("저장", { exact: true }).last().click({ timeout: 15000 });
+  await page.waitForTimeout(2500);
+  const body = await page.locator("body").innerText({ timeout: 10000 });
+  if (!body.includes(content.split("\n")[0]) || !body.includes(content.slice(-30))) {
+    throw new Error("StudioMate memo UI save did not show the expected content after save.");
+  }
 }
 
 async function assertLoggedIn(page) {
