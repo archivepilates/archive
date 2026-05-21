@@ -334,11 +334,11 @@ function responseIdFor(payload: NormalizedSurveyPayload): string {
     spreadsheetId: payload.spreadsheetId,
     sheetName: payload.sheetName,
     rowNumber: payload.rowNumber,
-  }).slice(0, 28)}`;
+  }).slice(0, 12)}`;
 }
 
 function accessTokenFor(responseId: string): string {
-  return createHmac("sha256", privateSurveyWebhookSecret.value()).update(responseId).digest("hex").slice(0, 40);
+  return createHmac("sha256", privateSurveyWebhookSecret.value()).update(responseId).digest("hex").slice(0, 16);
 }
 
 function detailUrlFor(responseId: string, accessToken: string): string {

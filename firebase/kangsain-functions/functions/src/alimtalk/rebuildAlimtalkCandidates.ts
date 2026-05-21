@@ -153,10 +153,9 @@ async function privateSurveyCandidateForDate(
   if (sourceDate < PRIVATE_SURVEY_ALIMTALK_START_DATE) return null;
   if (!profile.memberId || !profile.name || !profile.phone) return null;
   if (ALIMTALK_MEMBER_EXCLUSION_REASONS[profile.memberId]) return null;
-  const ticket = activeProfileTickets(profile, sourceDate).find(
-    (ticket) => isPrivateProfileTicket(ticket) && privateTicketStartDate(ticket, profile) === sourceDate,
-  );
-  if (!ticket) return null;
+  const booking = await firstUpcomingPrivateBookingInReservationWindow(profile.memberId, sourceDate);
+  if (!booking) return null;
+  if (await hasSubmittedPrivateSurvey(profile.memberId, profile.phone)) return null;
   if (await hasAttendedPrivateBookingOnOrBefore(profile.memberId, sourceDate)) return null;
   return {
     candidateId: `private_survey_${profile.memberId}_${sourceDate}`,
@@ -168,17 +167,49 @@ async function privateSurveyCandidateForDate(
     status: "candidate",
     templateCode: CANDIDATE_TEMPLATE_CODES.private_survey,
     title: "프라이빗 사전설문",
-    reason: `프라이빗 수강권 시작 ${sourceDate}`,
+    reason: `첫 프라이빗 예약 ${booking.lectureDate}`,
     sourceDate,
     payload: {
       memberName: profile.name,
-      ticketName: ticket.name || "",
-      privateTicketStartDate: sourceDate,
+      ticketName: booking.ticketName || "",
+      bookingId: booking.bookingId,
+      lectureId: booking.lectureId,
+      lectureDate: booking.lectureDate,
+      privateSurveyWindowEndDate: reservationOpenEndDate(sourceDate),
     },
     lastError: null,
     createdAt: nowTimestamp(),
     updatedAt: nowTimestamp(),
   };
+}
+
+async function firstUpcomingPrivateBookingInReservationWindow(
+  memberId: string,
+  sourceDate: string,
+): Promise<BookingDoc | null> {
+  const endDate = reservationOpenEndDate(sourceDate);
+  const snap = await refs.bookings().where("memberId", "==", memberId).get();
+  const bookings = snap.docs
+    .map((doc) => doc.data())
+    .filter(
+      (booking) =>
+        booking.appStatus === "reserved" &&
+        booking.lectureDate >= sourceDate &&
+        booking.lectureDate <= endDate &&
+        isPrivateBookingTicket(booking),
+    )
+    .sort((a, b) => {
+      if (a.lectureDate !== b.lectureDate) return a.lectureDate.localeCompare(b.lectureDate);
+      return (a.lectureStartAt?.toMillis() || 0) - (b.lectureStartAt?.toMillis() || 0);
+    });
+  return bookings[0] || null;
+}
+
+async function hasSubmittedPrivateSurvey(memberId: string, memberPhone: string): Promise<boolean> {
+  const byMember = await refs.privateSurveyResponses().where("matching.memberId", "==", memberId).limit(1).get();
+  if (!byMember.empty) return true;
+  const byPhone = await refs.privateSurveyResponses().where("memberPhone", "==", memberPhone).limit(1).get();
+  return !byPhone.empty;
 }
 
 async function hasAttendedPrivateBookingOnOrBefore(memberId: string, sourceDate: string): Promise<boolean> {
@@ -307,15 +338,6 @@ function isPrivateProfileTicket(ticket: NonNullable<MemberProfileDoc["activeTick
   return classType === "P" || classType === "PRIVATE" || /프라이빗|개인/.test(name);
 }
 
-function privateTicketStartDate(
-  ticket: NonNullable<MemberProfileDoc["activeTickets"]>[number],
-  profile: MemberProfileDoc,
-): string {
-  const availableFrom = ticket.availableFrom?.toDate?.();
-  if (availableFrom) return new Intl.DateTimeFormat("sv-SE", { timeZone: "Asia/Seoul" }).format(availableFrom);
-  return registeredDate(profile);
-}
-
 function profileTicketIdentity(ticket: NonNullable<MemberProfileDoc["activeTickets"]>[number]): string {
   if (ticket.userTicketId) return `user:${ticket.userTicketId}`;
   const expiresAt = ticket.expiresAt?.toMillis() || "";
@@ -365,6 +387,12 @@ function expiryDateText(value: NonNullable<MemberProfileDoc["activeTickets"]>[nu
   const date = value?.toDate?.();
   if (!date) return "";
   return new Intl.DateTimeFormat("sv-SE", { timeZone: "Asia/Seoul" }).format(date);
+}
+
+function reservationOpenEndDate(baseDate: string): string {
+  const base = new Date(`${baseDate}T00:00:00+09:00`);
+  const daysSinceMonday = (base.getDay() + 6) % 7;
+  return addDays(baseDate, 13 - daysSinceMonday);
 }
 
 async function upsertCandidate(candidate: AlimtalkCandidateDoc): Promise<void> {
