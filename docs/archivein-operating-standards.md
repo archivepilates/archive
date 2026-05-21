@@ -114,6 +114,17 @@ Firebase 주소록 동기화는 `home@archivepilates.com`을 Google People API �
 
 앱 내 채팅 기능은 사용도가 낮아 운영 화면에서 숨긴다. 숨김 상태에서는 채팅 실시간 구독도 시작하지 않아 Firestore 읽기 사용량을 줄인다.
 
+### 운영자 화면 Firestore 권한 변경 기준
+
+운영자 화면이 읽는 Firestore 컬렉션을 추가하거나 변경하면 앱 코드와 Firestore rules를 같은 변경 단위로 본다. `loadAdminHomeFromFirestore()` 또는 운영자 실시간 구독에서 새 컬렉션을 읽기 시작했는데 rules가 따라오지 않으면 운영자 화면 전체가 `Missing or insufficient permissions.`로 실패할 수 있다.
+
+필수 점검:
+
+1. 운영자 화면 read 목록과 `firebase/kangsain-functions/firestore.rules`의 `isManager()` 허용 범위를 대조한다.
+2. 새 운영자 read 컬렉션은 `scripts/verify-archivein-admin-firestore-access.mjs` 검증 목록에 추가한다.
+3. Firestore rules 변경 또는 운영자 대시보드 데이터 변경 후에는 `npm run verify:archivein-admin`을 실행한다.
+4. 검증은 `01029244425` 운영자 계정 기준으로 라이브 또는 배포 대상 URL에서 수행한다.
+
 점검 순서:
 
 1. 화면에서 보이는 값과 기준 날짜/시간을 확인한다.
