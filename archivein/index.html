@@ -264,9 +264,41 @@
     }
 
     .primary {
+      position: relative;
       color: #fff;
       background: var(--brand);
       box-shadow: 0 8px 16px rgba(240, 107, 26, 0.18);
+      overflow: hidden;
+    }
+
+    .primary.sync-progress {
+      isolation: isolate;
+      background: rgba(240, 107, 26, 0.42);
+      cursor: wait;
+    }
+
+    .primary.sync-progress::before {
+      content: "";
+      position: absolute;
+      inset: 0;
+      z-index: -1;
+      width: var(--sync-progress, 0%);
+      background: var(--brand);
+      transition: width 0.45s ease;
+    }
+
+    .primary.sync-progress::after {
+      content: "";
+      position: absolute;
+      inset: 0;
+      z-index: -1;
+      background: linear-gradient(100deg, transparent 0%, rgba(255, 255, 255, 0.25) 44%, transparent 78%);
+      transform: translateX(-100%);
+      animation: syncShimmer 1.4s ease-in-out infinite;
+    }
+
+    .primary:disabled {
+      opacity: 0.82;
     }
 
     .soft-button {
@@ -2489,6 +2521,11 @@
       100% { transform: translateX(260%); }
     }
 
+    @keyframes syncShimmer {
+      0% { transform: translateX(-100%); }
+      100% { transform: translateX(100%); }
+    }
+
     @keyframes viewIn {
       from { opacity: 0; transform: translateY(5px); }
       to { opacity: 1; transform: translateY(0); }
@@ -2958,19 +2995,19 @@
     const SHOW_ALIMTALK_STATUS_TAGS = false;
     const SYNC_SCHEDULE_NOTES = [
       {
-        title: '전체 수업/예약 동기화',
-        schedule: '매일 00:05',
-        detail: '스튜디오메이트에서 오늘 기준 -30일 ~ +14일 수업/예약/상담을 다시 가져오고, 강사 화면·30일 출결·ACTIONS를 재계산합니다.'
+        title: '비상모드 엑셀 동기화',
+        schedule: '1시간마다 / 수동요청 30초 확인',
+        detail: '스튜디오메이트 웹에서 회원목록·예약내역·삭제된 수업 엑셀을 다운로드해 Firestore에 반영합니다.'
       },
       {
-        title: '예약 변경 알림 확인',
-        schedule: '10분마다',
-        detail: '스튜디오메이트 알림 API를 확인하고, 예약/대기/취소/상담 알림에 연결된 날짜만 부분 동기화합니다.'
+        title: '예약 변경 확인',
+        schedule: '비상모드 엑셀 기준',
+        detail: 'API 알림 확인 대신 최신 예약내역 엑셀 반영 결과를 기준으로 수업 화면을 갱신합니다.'
       },
       {
         title: '출석/결석/메모 전송',
-        schedule: '1분마다',
-        detail: '강사가 앱에서 변경한 출석·결석·메모를 전송 큐에서 스튜디오메이트로 보냅니다.'
+        schedule: '비상모드 중 일시중지',
+        detail: 'StudioMate 쓰기 제한 중에는 앱의 출석·결석·메모 작성 기능을 막고 읽기 전용으로 운영합니다.'
       },
       {
         title: '운영 현황 데이터',
@@ -3043,7 +3080,14 @@
       viewUnsubscribers: [],
       memberTagCache: null,
       toastTimer: null,
-      loadRequestId: 0
+      loadRequestId: 0,
+      manualSync: {
+        requestId: '',
+        active: false,
+        progress: 0,
+        label: '',
+        timer: null
+      }
     };
 
     const functionNames = {
@@ -6871,13 +6915,14 @@
             </ul>
           </div>
           <div class="member-search-meta">
-            <div><b>참고</b> 선택일 수업 동기화는 해당 날짜의 수업 정보를 다시 가져오며, 화면에 쓰이는 매출 반영 데이터도 함께 갱신합니다.</div>
-            <div><b>주의</b> 스튜디오메이트에서 변경됐지만 알림 API에 잡히지 않는 정보는 다음 전체 또는 부분 동기화 전까지 늦게 보일 수 있습니다.</div>
+            <div><b>참고</b> 현재 수동 동기화는 비상모드 엑셀 다운로드를 실행한 뒤 회원목록·예약내역·삭제된 수업을 Firestore에 반영합니다.</div>
+            <div><b>주의</b> 다운로드와 반영이 끝날 때까지 시간이 걸릴 수 있으며, 진행 중에는 중복 요청을 막기 위해 버튼을 잠급니다.</div>
           </div>
-          <button id="manualSyncButton" class="primary" type="button">선택일 수업 동기화(매출 반영 포함)</button>
+          <button id="manualSyncButton" class="primary" type="button">비상모드 엑셀 동기화 실행</button>
         </div>
       `;
       document.getElementById('manualSyncButton')?.addEventListener('click', runManualSync);
+      updateManualSyncButton();
       detailModal.classList.add('open');
       detailModal.setAttribute('aria-hidden', 'false');
       document.body.classList.add('modal-active');
@@ -6885,56 +6930,125 @@
 
     async function runManualSync() {
       if (appState.mode !== 'manager') return;
-      const button = document.getElementById('manualSyncButton');
-      if (button) {
-        button.disabled = true;
-        button.textContent = '동기화 중...';
-      }
+      if (appState.manualSync.active) return;
+      appState.manualSync.active = true;
+      appState.manualSync.progress = 3;
+      appState.manualSync.label = '비상모드 요청 준비 중';
+      updateManualSyncButton();
+      startManualSyncProgressAnimation();
       try {
-        const syncResult = await requestManualSync({
-          startDate: appState.selectedDate,
-          endDate: appState.selectedDate
-        });
+        const syncResult = await requestEmergencyExcelSync();
         const result = syncResult?.result || {};
-        if (result.dashboardError || result.noticeError) {
-          showToast(`${dateLabel(appState.selectedDate)} 수업 동기화 완료 · 일부 연동 확인 필요`);
+        appState.manualSync.progress = 100;
+        appState.manualSync.label = '동기화 완료';
+        updateManualSyncButton();
+        if (result.warning || result.skippedImports) {
+          showToast('비상모드 엑셀 동기화 완료 · 일부 확인 필요');
         } else {
-          showToast(`${dateLabel(appState.selectedDate)} 동기화 완료`);
+          showToast('비상모드 엑셀 동기화 완료');
         }
         await loadHome();
         openSyncInfo();
       } catch (err) {
-        showToast(`동기화 실패: ${friendlyError(err)}`);
-        if (button) {
-          button.disabled = false;
-          button.textContent = '선택일 수업 동기화(매출 반영 포함)';
-        }
+        showToast(`비상모드 동기화 실패: ${friendlyError(err)}`);
+      } finally {
+        stopManualSyncProgressAnimation();
+        appState.manualSync.active = false;
+        appState.manualSync.requestId = '';
+        appState.manualSync.progress = 0;
+        appState.manualSync.label = '';
+        updateManualSyncButton();
       }
     }
 
-    async function requestManualSync({ startDate, endDate }) {
+    function updateManualSyncButton() {
+      const button = document.getElementById('manualSyncButton');
+      if (!button) return;
+      const progress = Math.max(0, Math.min(100, Number(appState.manualSync.progress || 0)));
+      if (appState.manualSync.active) {
+        button.disabled = true;
+        button.classList.add('sync-progress');
+        button.style.setProperty('--sync-progress', `${progress}%`);
+        button.textContent = `${Math.round(progress)}% · ${appState.manualSync.label || '비상모드 동기화 중'}`;
+      } else {
+        button.disabled = false;
+        button.classList.remove('sync-progress');
+        button.style.removeProperty('--sync-progress');
+        button.textContent = '비상모드 엑셀 동기화 실행';
+      }
+    }
+
+    function startManualSyncProgressAnimation() {
+      stopManualSyncProgressAnimation();
+      appState.manualSync.timer = setInterval(() => {
+        if (!appState.manualSync.active) return;
+        const current = Number(appState.manualSync.progress || 0);
+        if (current >= 94) return;
+        const next = current < 35 ? current + 2 : current < 70 ? current + 1 : current + 0.4;
+        appState.manualSync.progress = Math.min(94, next);
+        updateManualSyncButton();
+      }, 900);
+    }
+
+    function stopManualSyncProgressAnimation() {
+      if (appState.manualSync.timer) clearInterval(appState.manualSync.timer);
+      appState.manualSync.timer = null;
+    }
+
+    async function requestEmergencyExcelSync() {
       const user = appState.auth?.currentUser;
       if (!user) throw new Error('로그인이 필요합니다');
-      const requestRef = doc(collection(appState.db, 'adminSyncRequests'));
+      const existing = await findActiveEmergencyExcelSyncRequest();
+      const requestRef = existing ? doc(appState.db, 'adminSyncRequests', existing.requestId) : doc(collection(appState.db, 'adminSyncRequests'));
+      if (existing) {
+        appState.manualSync.requestId = existing.requestId;
+        appState.manualSync.progress = Number(existing.progressPercent || 8);
+        appState.manualSync.label = existing.progressLabel || '이미 실행 중인 비상모드 동기화 확인 중';
+        updateManualSyncButton();
+        return await waitForManualSyncRequest(requestRef);
+      }
+      appState.manualSync.requestId = requestRef.id;
       await setDoc(requestRef, {
         requestId: requestRef.id,
+        requestMode: 'emergency_excel',
+        source: 'archivein_admin_manual_emergency_excel',
         studioId: String(appState.staff?.studioId || '5330'),
-        startDate,
-        endDate,
+        startDate: appState.selectedDate,
+        endDate: appState.selectedDate,
         createdByUid: user.uid,
         status: 'pending',
+        progressPercent: 3,
+        progressLabel: '맥미니 비상모드 실행 대기',
         createdAt: serverTimestamp(),
         lastError: null
       });
+      return await waitForManualSyncRequest(requestRef);
+    }
+
+    async function findActiveEmergencyExcelSyncRequest() {
+      const snap = await getDocs(query(
+        collection(appState.db, 'adminSyncRequests'),
+        where('requestMode', '==', 'emergency_excel'),
+        queryLimit(10)
+      ));
+      return snap.docs
+        .map((docSnap) => ({ requestId: docSnap.id, ...docSnap.data() }))
+        .find((item) => ['pending', 'running'].includes(String(item.status || '')) && String(item.studioId || '') === String(appState.staff?.studioId || '5330')) || null;
+    }
+
+    async function waitForManualSyncRequest(requestRef) {
       const startedAt = Date.now();
-      while (Date.now() - startedAt < 90000) {
+      while (Date.now() - startedAt < 12 * 60 * 1000) {
         await new Promise((resolve) => setTimeout(resolve, 2000));
         const snap = await getDoc(requestRef);
         const data = snap.exists() ? snap.data() : null;
+        if (data?.progressPercent != null) appState.manualSync.progress = Math.max(Number(appState.manualSync.progress || 0), Number(data.progressPercent || 0));
+        if (data?.progressLabel) appState.manualSync.label = data.progressLabel;
+        updateManualSyncButton();
         if (data?.status === 'success') return data;
         if (data?.status === 'error') throw new Error(data.lastError || '동기화 요청 처리 실패');
       }
-      throw new Error('동기화 요청 시간이 초과되었습니다');
+      throw new Error('비상모드 엑셀 동기화 요청 시간이 초과되었습니다');
     }
 
     function memberRecords(member) {

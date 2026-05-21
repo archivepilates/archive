@@ -63,6 +63,14 @@ node scripts/run-studiomate-excel-emergency-mode.mjs --download --apply
 com.archive.studiomate-excel-emergency-mode
 ```
 
+운영자 수동 동기화 요청 처리 LaunchAgent:
+
+```text
+com.archive.archivein-admin-emergency-sync
+```
+
+ARCHIVE IN 운영자 모드의 동기화 버튼은 StudioMate API 동기화를 직접 실행하지 않는다. `adminSyncRequests`에 `requestMode: emergency_excel` 요청을 만들고, 맥미니 LaunchAgent `com.archive.archivein-admin-emergency-sync`가 최대 30초 안에 요청을 받아 `scripts/run-studiomate-excel-emergency-mode.mjs --download --apply`를 실행한다. 앱 버튼은 요청 완료 전까지 잠기며 Firestore의 `progressPercent`, `progressLabel`을 기준으로 진행률을 보여준다.
+
 1시간 간격 비상 연락처 동기화 LaunchAgent:
 
 ```text
@@ -102,6 +110,8 @@ node scripts/run-emergency-contacts-hourly-sync.mjs
 ```text
 /Users/archivepilates/ArchiveIN/emergency/logs/studiomate-excel-emergency-mode.out.log
 /Users/archivepilates/ArchiveIN/emergency/logs/studiomate-excel-emergency-mode.err.log
+/Users/archivepilates/ArchiveIN/emergency/logs/archivein-admin-emergency-sync.out.log
+/Users/archivepilates/ArchiveIN/emergency/logs/archivein-admin-emergency-sync.err.log
 /Users/archivepilates/ArchiveIN/emergency/logs/studiomate-emergency-contacts-sync.out.log
 /Users/archivepilates/ArchiveIN/emergency/logs/studiomate-emergency-contacts-sync.err.log
 ```

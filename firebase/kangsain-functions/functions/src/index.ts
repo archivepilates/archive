@@ -366,12 +366,19 @@ export const processAdminSyncRequest = onDocumentCreated(
     const ref = snap.ref;
     const data = snap.data() as {
       requestId?: string;
+      requestMode?: string;
       studioId?: string;
       startDate?: string;
       endDate?: string;
       createdByUid?: string;
       status?: string;
     };
+    if (data.requestMode === "emergency_excel") {
+      logger.info("processAdminSyncRequest skipped emergency Excel request for Mac mini runner", {
+        requestId: event.params.requestId,
+      });
+      return;
+    }
     const startDate = String(data.startDate || "");
     const endDate = String(data.endDate || "");
     try {

@@ -125,6 +125,12 @@ Firebase 주소록 동기화는 `home@archivepilates.com`을 Google People API �
 3. Firestore rules 변경 또는 운영자 대시보드 데이터 변경 후에는 `npm run verify:archivein-admin`을 실행한다.
 4. 검증은 `01029244425` 운영자 계정 기준으로 라이브 또는 배포 대상 URL에서 수행한다.
 
+### 비상모드 수동 동기화 기준
+
+StudioMate API 접근이 막혀 비상모드가 활성화된 동안 운영자 모드의 수동 동기화 버튼은 API 동기화를 직접 실행하지 않는다. 버튼은 `adminSyncRequests`에 `requestMode: emergency_excel` 요청을 만들고, 맥미니 LaunchAgent `com.archive.archivein-admin-emergency-sync`가 요청을 받아 비상모드 엑셀 다운로드와 Firestore 반영을 수행한다.
+
+수동 동기화 중에는 버튼을 잠그고 진행률을 표시한다. 같은 요청이 `pending` 또는 `running` 상태이면 새 요청을 만들지 않고 기존 요청을 추적한다. 운영자는 진행률이 완료 또는 실패로 바뀔 때까지 버튼을 반복해서 누르지 않는다.
+
 점검 순서:
 
 1. 화면에서 보이는 값과 기준 날짜/시간을 확인한다.

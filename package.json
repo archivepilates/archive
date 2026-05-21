@@ -2,7 +2,8 @@
   "private": true,
   "scripts": {
     "build:dashboard": "esbuild dashboard/src/vendor.js --bundle --format=iife --target=es2020 --outfile=dashboard/assets/vendor.js --minify",
-    "verify:archivein-admin": "node scripts/verify-archivein-admin-firestore-access.mjs"
+    "verify:archivein-admin": "node scripts/verify-archivein-admin-firestore-access.mjs",
+    "process:admin-emergency-sync": "node scripts/process-admin-emergency-sync-requests.mjs"
   },
   "dependencies": {
     "chart.js": "^4.4.9",
