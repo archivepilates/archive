@@ -6067,12 +6067,13 @@
       try {
         const { manager, result } = await withTimeout((async () => {
           const tokenResult = await appState.user.getIdTokenResult(true);
-          const role = tokenResult.claims.role || '';
+          const authContext = await resolveStaffContext(tokenResult);
+          const role = authContext.claims.role || '';
           const isManager = role === 'owner' || role === 'manager';
           if (!isManager && appState.viewMode === 'month') appState.viewMode = 'day';
           return {
             manager: isManager,
-            result: isManager ? await loadAdminHomeFromFirestore(tokenResult) : await loadHomeFromFirestore(tokenResult)
+            result: isManager ? await loadAdminHomeFromFirestore(authContext) : await loadHomeFromFirestore(authContext)
           };
         })(), 45000, '데이터 불러오기 시간이 초과되었습니다');
         if (requestId !== appState.loadRequestId) return;
@@ -6098,6 +6099,33 @@
           appState.loading = false;
           renderApp();
         }
+      }
+    }
+
+    async function resolveStaffContext(tokenResult) {
+      const claims = { ...(tokenResult.claims || {}) };
+      if (claims.staffId && claims.studioId && claims.role) return { ...tokenResult, claims };
+      const email = String(appState.user?.email || claims.email || '').trim();
+      if (!email) return { ...tokenResult, claims };
+      try {
+        const snap = await getDocs(query(
+          collection(appState.db, 'staffs'),
+          where('email', '==', email),
+          queryLimit(1)
+        ));
+        const staff = snap.docs[0]?.data();
+        if (!staff) return { ...tokenResult, claims };
+        return {
+          ...tokenResult,
+          claims: {
+            ...claims,
+            staffId: claims.staffId || staff.staffId || snap.docs[0].id,
+            studioId: claims.studioId || staff.studioId || '',
+            role: claims.role || staff.role || ''
+          }
+        };
+      } catch (err) {
+        return { ...tokenResult, claims };
       }
     }
 

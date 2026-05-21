@@ -10,7 +10,10 @@ service cloud.firestore {
       return signedIn() &&
         (
           request.auth.token.role in ['owner', 'manager'] ||
-          request.auth.token.email == 'p01029244425@archivepilates.com'
+          request.auth.token.email in [
+            'p01086488585@archivepilates.com',
+            'p01029244425@archivepilates.com'
+          ]
         );
     }
 
