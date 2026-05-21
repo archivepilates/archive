@@ -56,7 +56,7 @@
     const params = new URLSearchParams(location.search);
     const id = String(params.get('id') || '').trim();
     const token = String(params.get('token') || '').trim();
-    const validId = /^psr-[a-z0-9-]{8,80}$/i.test(id);
+    const validId = /^(psr|gsr)-[a-z0-9-]{8,80}$/i.test(id);
     const validToken = /^[a-f0-9]{16,80}$/i.test(token);
 
     if (!validId || !validToken) {
