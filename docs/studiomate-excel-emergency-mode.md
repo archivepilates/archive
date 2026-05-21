@@ -23,8 +23,9 @@ StudioMate API 접근이 403으로 막혔을 때, 브라우저 자동화로 내�
 - StudioMate `수업 > 삭제된 수업` 영역의 삭제 로그는 예약내역 엑셀과 별도 원천이지만, 별도 23:40 자동화는 사용하지 않는다. 1시간 비상모드 다운로드에 포함해 같은 예약가능 기간 범위로 받고 `studiomateDeletedClassLogs`에 적재한다.
 - 회원목록 엑셀 원본은 비상모드 전용 다운로드/아카이브 폴더의 최신 `회원목록_*.xlsx`를 우선 사용하고, 없을 때만 Google Drive `회원원본데이터` 폴더의 최신 파일을 사용한다.
 - 기본 실행은 dry-run이다. Firestore 반영은 `--apply`를 붙였을 때만 한다.
-- 기본 반영 대상은 기존 `memberProfiles`와 전화번호, 이름이 매칭되는 회원만이다.
-- 엑셀에만 있는 사람을 `excel_...` 임시 ID로 만드는 것은 `--allow-new-excel-profiles`를 붙였을 때만 허용한다.
+- 기본 반영 대상은 기존 `memberProfiles`와 전화번호, 이름이 매칭되는 회원이다.
+- 1시간 비상모드 runner는 `--allow-new-excel-profiles --new-excel-profile-max-age-days 3`을 붙여 실행한다.
+- 엑셀에만 있는 사람은 등록일이 3일 이내이고 활성 수강권이 있을 때만 `excel_...` 임시 ID로 회원카드를 만든다. 수강권 없는 상담고객은 회원카드를 만들지 않는다.
 - Google Contacts 작업 큐는 회원 엑셀 반영과 분리한다. 비상 연락처 LaunchAgent만 `--queue-contact-sync`를 붙여 `contactSyncJobs`를 준비한다.
 - `contactSyncJobs` 생성은 Google Contacts 실제 쓰기와 다르다. 비상모드 중에는 Firebase Scheduler `scheduledProcessContactSyncJobs`를 평소 `PAUSED`로 두고, 비상 연락처 LaunchAgent가 필요할 때만 잠깐 실행한 뒤 다시 `PAUSED`로 되돌린다.
 - 연락처 예외 스탭은 회원목록 엑셀에 있더라도 회원 연락처 큐를 만들지 않는다. 현재 예외는 김기효, 김민지, 김아영, 배민진, 이초림, 정은영이다.
@@ -117,10 +118,10 @@ node scripts/emergency-import-studiomate-member-excel.mjs --file "/path/to/회�
 node scripts/run-studiomate-excel-emergency-mode.mjs --reservation-file "/path/to/수업예약내역.xlsx"
 ```
 
-엑셀에만 있고 기존 ARCHIVE IN 회원카드가 없는 사람까지 임시 생성:
+엑셀에만 있고 기존 ARCHIVE IN 회원카드가 없는 신규 등록 회원까지 임시 생성:
 
 ```bash
-node scripts/emergency-import-studiomate-member-excel.mjs --allow-new-excel-profiles
+node scripts/emergency-import-studiomate-member-excel.mjs --allow-new-excel-profiles --new-excel-profile-max-age-days 3
 ```
 
 Google Contacts 동기화 큐까지 준비:

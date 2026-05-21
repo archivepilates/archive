@@ -32,6 +32,9 @@ const args = new Set(process.argv.slice(2));
 const fileArg = valueArg("--file");
 const apply = args.has("--apply");
 const allowNewExcelProfiles = args.has("--allow-new-excel-profiles");
+const newExcelProfileMaxAgeDays = Number(
+  valueArg("--new-excel-profile-max-age-days") || process.env.ARCHIVEIN_NEW_EXCEL_PROFILE_MAX_AGE_DAYS || "3",
+);
 const queueContactSync = args.has("--queue-contact-sync");
 const maxWrites = Number(valueArg("--max-writes") || process.env.ARCHIVEIN_EMERGENCY_MAX_WRITES || "5000");
 const today = kstDate(new Date());
@@ -62,6 +65,7 @@ const summary = {
   temporaryExcelProfiles: plans.filter((plan) => plan.matchType === "temporary_excel_id").length,
   skipped,
   allowNewExcelProfiles,
+  newExcelProfileMaxAgeDays,
   queueContactSync,
   maxWrites,
 };
@@ -186,6 +190,8 @@ function buildPlans(groups, existingProfiles, existingContacts) {
   let skippedAmbiguousPhone = 0;
   let skippedNoExistingProfile = 0;
   let skippedProtectedStaffContact = 0;
+  let skippedNewProfileNoActiveTicket = 0;
+  let skippedNewProfileTooOld = 0;
   let skippedNoPhone = groups.skippedNoPhone || 0;
   const plans = [];
   for (const group of groups) {
@@ -214,6 +220,14 @@ function buildPlans(groups, existingProfiles, existingContacts) {
       skippedAmbiguousPhone += 1;
       continue;
     } else if (allowNewExcelProfiles) {
+      if (!activeTickets.length) {
+        skippedNewProfileNoActiveTicket += 1;
+        continue;
+      }
+      if (!isRecentNewProfileCandidate(registeredAt)) {
+        skippedNewProfileTooOld += 1;
+        continue;
+      }
       memberId = `excel_${hash(`${group.phone}|${group.normalizedName}`).slice(0, 16)}`;
     } else {
       skippedNoExistingProfile += 1;
@@ -307,9 +321,17 @@ function buildPlans(groups, existingProfiles, existingContacts) {
       ambiguousExistingPhone: skippedAmbiguousPhone,
       noExistingProfile: skippedNoExistingProfile,
       profilesWithoutActiveTicket: skippedNoActiveTicket,
+      newProfileNoActiveTicket: skippedNewProfileNoActiveTicket,
+      newProfileTooOld: skippedNewProfileTooOld,
       protectedStaffContact: skippedProtectedStaffContact,
     },
   };
+}
+
+function isRecentNewProfileCandidate(registeredAt) {
+  if (!registeredAt) return false;
+  if (!Number.isFinite(newExcelProfileMaxAgeDays) || newExcelProfileMaxAgeDays < 0) return true;
+  return daysBetween(kstDate(registeredAt.toDate()), today) <= newExcelProfileMaxAgeDays;
 }
 
 function buildActiveTickets(rows) {

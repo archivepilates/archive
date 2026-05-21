@@ -38,6 +38,9 @@ if (!downloadFailedWithoutMember) {
     runStep("memberProfiles", [
       "scripts/emergency-import-studiomate-member-excel.mjs",
       ...(memberFile || downloadedMemberFile ? ["--file", memberFile || downloadedMemberFile] : []),
+      "--allow-new-excel-profiles",
+      "--new-excel-profile-max-age-days",
+      "3",
       ...(apply ? ["--apply"] : []),
     ]),
   );
