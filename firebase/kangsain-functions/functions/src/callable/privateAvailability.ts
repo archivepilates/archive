@@ -324,6 +324,21 @@ function buildResolvedSlot({
     };
   }
 
+  if (!hasLectureOnDate(lectures, instructor, date)) {
+    return {
+      type: "unavailable",
+      autoUnavailable: true,
+      instructor,
+      date,
+      time,
+      endTime,
+      memo: "",
+      sourceKey: "manual",
+      source: "ARCHIVE PILATES 수업 없는 날",
+      checkedAt: "자동 불가",
+    };
+  }
+
   const otherBusy = otherSchedules.filter((item) => busyMatches(item, instructor, date, time, endTime));
   if (otherBusy.length) {
     return {
@@ -367,6 +382,13 @@ function normalizeBusy(id: string, data: Record<string, unknown>, kind: "lecture
     staffIds: staffIds.filter(Boolean).map(String),
     staffNames: staffNames.filter(Boolean).map(String),
   };
+}
+
+function hasLectureOnDate(lectures: BusyRow[], instructor: { staffId: string; name: string }, date: string): boolean {
+  return lectures.some((lecture) => {
+    if (lecture.date !== date) return false;
+    return lecture.staffIds.includes(instructor.staffId) || lecture.staffNames.map(normalizeName).includes(normalizeName(instructor.name));
+  });
 }
 
 function busyMatches(
