@@ -355,7 +355,7 @@ canvas{display:block;width:100%!important;height:100%!important;}
       </div>
       <div class="legend">
         <span><span class="ldot" style="background:#38BDF8;border-radius:50%;"></span>선택월 누적</span>
-        <span><span class="ldot" style="background:#F59E0B;border-radius:50%;"></span>전월 동일일 누적</span>
+        <span><span class="ldot" style="background:#F59E0B;border-radius:50%;"></span>전월 동일 누적</span>
         <span><span class="ldot" style="background:#94A3B8;border-radius:50%;"></span>전년 동일일 누적</span>
       </div>
       <div id="c12box" class="chart-box"><canvas id="c12"></canvas></div>
@@ -623,7 +623,7 @@ function renderScore(month){
   const accents=['ap','ap','ag','ag','ab','aa','aa','aa'];
   const metrics=[
     {lbl:'월 총매출',raw:cur.총매출,fmt:fmt만,dlt:dailyRef?revenueDeltaText(dailyRef.current,dailyRef.previous):prev?(sign(cur.총매출,prev.총매출)+' '+(cur.총매출>=prev.총매출?'+':'')+((cur.총매출-prev.총매출)/(prev.총매출||1)*100).toFixed(1)+'%'):'-',dc:dailyRef?colr(dailyRef.current,dailyRef.previous):prev?colr(cur.총매출,prev.총매출):'#64748b'},
-    {lbl:'월 수업매출',raw:cur.수업매출,fmt:fmt만,dlt:hasRefValue(dailyRef,'previousLesson')?revenueDeltaText(dailyRef.lesson,dailyRef.previousLesson,'전월 동일일'):prev?(sign(cur.수업매출,prev.수업매출)+' '+(cur.수업매출>=prev.수업매출?'+':'')+((cur.수업매출-prev.수업매출)/(prev.수업매출||1)*100).toFixed(1)+'%'):'-',dc:hasRefValue(dailyRef,'previousLesson')?colr(dailyRef.lesson,dailyRef.previousLesson):prev?colr(cur.수업매출,prev.수업매출):'#64748b'},
+    {lbl:'월 수업매출',raw:cur.수업매출,fmt:fmt만,dlt:hasRefValue(dailyRef,'previousLesson')?revenueDeltaText(dailyRef.lesson,dailyRef.previousLesson,'전월 동일'):prev?(sign(cur.수업매출,prev.수업매출)+' '+(cur.수업매출>=prev.수업매출?'+':'')+((cur.수업매출-prev.수업매출)/(prev.수업매출||1)*100).toFixed(1)+'%'):'-',dc:hasRefValue(dailyRef,'previousLesson')?colr(dailyRef.lesson,dailyRef.previousLesson):prev?colr(cur.수업매출,prev.수업매출):'#64748b'},
     {lbl:'수업 마진률',raw:cur.마진률,fmt:v=>v.toFixed(1)+'%',dlt:hasRefValue(dailyRef,'previousMargin')?rateDeltaText(dailyRef.margin,dailyRef.previousMargin):prev?(sign(cur.마진률,prev.마진률)+' '+(cur.마진률>=prev.마진률?'+':'')+(cur.마진률-prev.마진률).toFixed(1)+'%p'):'-',dc:hasRefValue(dailyRef,'previousMargin')?colr(dailyRef.margin,dailyRef.previousMargin):prev?colr(cur.마진률,prev.마진률):'#64748b'},
     {lbl:'그룹 예약률',raw:cur.예약률,fmt:v=>v.toFixed(1)+'%',dlt:hasRefValue(dailyRef,'previousReservationRate')?rateDeltaText(dailyRef.reservationRate,dailyRef.previousReservationRate):prev?(sign(cur.예약률,prev.예약률)+' '+(cur.예약률>=prev.예약률?'+':'')+(cur.예약률-prev.예약률).toFixed(1)+'%p'):'-',dc:hasRefValue(dailyRef,'previousReservationRate')?colr(dailyRef.reservationRate,dailyRef.previousReservationRate):prev?colr(cur.예약률,prev.예약률):'#64748b'},
     {lbl:'그룹 출석률',raw:cur.출석률,fmt:v=>v.toFixed(1)+'%',dlt:hasRefValue(dailyRef,'previousAttendanceRate')?rateDeltaText(dailyRef.attendanceRate,dailyRef.previousAttendanceRate):prev?(sign(cur.출석률,prev.출석률)+' '+(cur.출석률>=prev.출석률?'+':'')+(cur.출석률-prev.출석률).toFixed(1)+'%p'):'-',dc:hasRefValue(dailyRef,'previousAttendanceRate')?colr(dailyRef.attendanceRate,dailyRef.previousAttendanceRate):prev?colr(cur.출석률,prev.출석률):'#64748b'},
@@ -643,16 +643,16 @@ function getDailyRevenueRef(month){
   if(!row||!row.전월동일일누적)return null;
   return {current:row.월누적매출,previous:row.전월동일일누적,lesson:row.월누적수업매출,previousLesson:row.전월동일일수업누적,margin:row.월누적수업마진률,previousMargin:row.전월동일일수업마진률,groupSessions:row.월누적그룹세션,previousGroupSessions:row.전월동일일그룹세션,private:row.월누적프라이빗,previousPrivate:row.전월동일일프라이빗,instructorLesson:row.월누적강사레슨,previousInstructorLesson:row.전월동일일강사레슨,reservationRate:row.월누적그룹예약률,previousReservationRate:row.전월동일일그룹예약률,attendanceRate:row.월누적그룹출석률,previousAttendanceRate:row.전월동일일그룹출석률};
 }
-function revenueDeltaText(current,previous,label='전월 동일일'){
+function revenueDeltaText(current,previous,label='전월 동일'){
   if(!previous)return '-';
   return sign(current,previous)+' '+(current>=previous?'+':'')+((current-previous)/previous*100).toFixed(1)+'% vs '+label;
 }
 function hasRefValue(ref,key){return ref&&Number.isFinite(ref[key]);}
 function countDeltaText(current,previous){
-  return sign(current,previous)+' '+(current>=previous?'+':'')+Math.round(current-previous)+'회 vs 전월 동일일';
+  return sign(current,previous)+' '+(current>=previous?'+':'')+Math.round(current-previous)+'회 vs 전월 동일';
 }
 function rateDeltaText(current,previous){
-  return sign(current,previous)+' '+(current>=previous?'+':'')+(current-previous).toFixed(1)+'%p vs 전월 동일일';
+  return sign(current,previous)+' '+(current>=previous?'+':'')+(current-previous).toFixed(1)+'%p vs 전월 동일';
 }
 
 // ══ CHART DEFAULTS ══
@@ -691,7 +691,7 @@ function buildC12(month){
   const labels=rows.map(r=>Number(r.기준일.slice(8,10))+'일');
   const cd={labels,datasets:[
     {label:'선택월 누적',data:rows.map(r=>r.월누적매출),borderColor:'#38BDF8',backgroundColor:ctx=>vGrad(ctx.chart,'rgba(56,189,248,.22)','rgba(56,189,248,0)'),pointBackgroundColor:'#BAE6FD',pointRadius:3,pointHoverRadius:7,borderWidth:2.7,tension:.28,fill:true},
-    {label:'전월 동일일 누적',data:rows.map(r=>r.전월동일일누적),borderColor:'#F59E0B',pointBackgroundColor:'#FCD34D',pointRadius:2,borderWidth:2,tension:.28,fill:false},
+    {label:'전월 동일 누적',data:rows.map(r=>r.전월동일일누적),borderColor:'#F59E0B',pointBackgroundColor:'#FCD34D',pointRadius:2,borderWidth:2,tension:.28,fill:false},
     {label:'전년 동일일 누적',data:rows.map(r=>r.전년동월동일일누적),borderColor:'#94A3B8',pointBackgroundColor:'#CBD5E1',pointRadius:2,borderWidth:2,tension:.28,fill:false,borderDash:[5,5]}
   ]};
   if(c12){c12.data=cd;c12.update('active');return;}
