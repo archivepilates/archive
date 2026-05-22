@@ -20,6 +20,10 @@ const REPORT_DIR = path.join(os.homedir(), "ArchiveIN/automation/reports/emergen
 const MAX_PROCESS_ITERATIONS = Number(process.env.EMERGENCY_CONTACTS_MAX_PROCESS_ITERATIONS || "40");
 const PROCESS_WAIT_MS = Number(process.env.EMERGENCY_CONTACTS_PROCESS_WAIT_MS || "12000");
 
+process.env.GOOGLE_APPLICATION_CREDENTIALS = KEY_FILE;
+process.env.GOOGLE_CLOUD_PROJECT = PROJECT_ID;
+process.env.GCLOUD_PROJECT = PROJECT_ID;
+
 if (!admin.apps.length) admin.initializeApp({ projectId: PROJECT_ID });
 const db = admin.firestore();
 

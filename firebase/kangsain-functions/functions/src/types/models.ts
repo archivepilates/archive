@@ -466,6 +466,7 @@ export interface ContactSyncJobDoc {
     | "notice_member_signup"
     | "notice_ticket_update"
     | "consultation_schedule"
+    | "consultation_member_excel"
     | "manual_resync";
   createdAt: Timestamp;
   updatedAt: Timestamp;

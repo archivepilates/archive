@@ -97,7 +97,7 @@ function chooseRunnableJobs(jobs: Array<{ job: ContactSyncJobDoc; nextRunAtMilli
 }
 
 function jobPriority(job: ContactSyncJobDoc): number {
-  return job.sourceReason === "consultation_schedule" ? 0 : 1;
+  return ["consultation_schedule", "consultation_member_excel"].includes(job.sourceReason) ? 0 : 1;
 }
 
 async function failMalformedJob(jobId: string, job: ContactSyncJobDoc, message: string): Promise<void> {

@@ -192,6 +192,7 @@ function buildPlans(groups, existingProfiles, existingContacts) {
   let skippedProtectedStaffContact = 0;
   let skippedNewProfileNoActiveTicket = 0;
   let skippedNewProfileTooOld = 0;
+  let consultationContacts = 0;
   let skippedNoPhone = groups.skippedNoPhone || 0;
   const plans = [];
   for (const group of groups) {
@@ -207,6 +208,75 @@ function buildPlans(groups, existingProfiles, existingContacts) {
     const birthDate = firstNonEmpty(group.rows, "생년월일");
     const contactMemo = cleanContactMemo(firstNonEmpty(group.rows, "메모"));
     const memoPreview = contactMemo.slice(0, 120);
+    if (isConsultationGroup(group, activeTickets)) {
+      const consultationDate = parseKstTimestamp(consultationDateText(group.rows));
+      const memberId = `consultation_excel_${hash(`${group.phone}|${group.normalizedName}`).slice(0, 16)}`;
+      const contactDisplayName = [group.name, "상담", compactDate(consultationDate)].filter(Boolean).join(" ");
+      const contactHash = hash({
+        name: group.name,
+        contactDisplayName,
+        contactMemo,
+        phone: group.phone,
+        consultationDate: consultationDate?.toMillis() || null,
+        source: "studiomate_excel_consultation_v2",
+      });
+      const previousContact = existingContacts.get(memberId);
+      const shouldQueueHomeSync =
+        queueContactSync &&
+        (!previousContact ||
+          previousContact.contactHash !== contactHash ||
+          previousContact.contactTargets?.home_archivepilates !== "synced");
+      const jobId = `contact_${memberId}_home_${contactHash.slice(0, 16)}`;
+      const contactIndexDoc = {
+        memberId,
+        studioId: STUDIO_ID,
+        name: group.name,
+        contactDisplayName,
+        contactMemo,
+        phone: group.phone,
+        phoneLast4: group.phone.slice(-4),
+        registeredAt: consultationDate,
+        activeTicketCount: 0,
+        activeTicketNames: [],
+        source: "studiomate_excel_emergency",
+        contactHash,
+        contactTargets: {
+          archivepilates_gmail: previousContact?.contactTargets?.archivepilates_gmail || "skipped",
+          home_archivepilates: shouldQueueHomeSync
+            ? "pending"
+            : previousContact?.contactTargets?.home_archivepilates || "skipped",
+        },
+        homeContactResourceName: previousContact?.homeContactResourceName || "",
+        lastContactSyncJobId: shouldQueueHomeSync ? jobId : previousContact?.lastContactSyncJobId || "",
+        contactLastError: shouldQueueHomeSync ? null : previousContact?.contactLastError || null,
+        contactUpdatedAt: previousContact?.contactUpdatedAt || null,
+        syncedAt: admin.firestore.Timestamp.now(),
+        updatedAt: admin.firestore.Timestamp.now(),
+      };
+      const contactSyncJobDoc = shouldQueueHomeSync
+        ? {
+            jobId,
+            studioId: STUDIO_ID,
+            memberId,
+            memberName: group.name,
+            contactDisplayName,
+            contactMemo,
+            memberPhone: group.phone,
+            target: "home_archivepilates",
+            status: "pending",
+            attempts: 0,
+            maxAttempts: 5,
+            nextRunAt: admin.firestore.Timestamp.now(),
+            lastError: null,
+            sourceReason: "consultation_member_excel",
+            createdAt: admin.firestore.Timestamp.now(),
+            updatedAt: admin.firestore.Timestamp.now(),
+          }
+        : null;
+      consultationContacts += 1;
+      plans.push({ memberId, matchType: "consultation_excel", contactIndexDoc, contactSyncJobDoc });
+      continue;
+    }
     const existing = existingProfiles.get(group.phone) || [];
     const exact = existing.filter((item) => normalizeName(item.data.name || "") === group.normalizedName);
     let memberId = "";
@@ -334,6 +404,7 @@ function buildPlans(groups, existingProfiles, existingContacts) {
       newProfileNoActiveTicket: skippedNewProfileNoActiveTicket,
       newProfileTooOld: skippedNewProfileTooOld,
       protectedStaffContact: skippedProtectedStaffContact,
+      consultationContacts,
     },
   };
 }
@@ -382,9 +453,12 @@ async function applyPlans(plans) {
   let batch = db.batch();
   let count = 0;
   for (const plan of plans) {
-    batch.set(db.collection("memberProfiles").doc(plan.memberId), plan.profileDoc, { merge: true });
+    if (plan.profileDoc) {
+      batch.set(db.collection("memberProfiles").doc(plan.memberId), plan.profileDoc, { merge: true });
+      count += 1;
+    }
     batch.set(db.collection("memberContactIndex").doc(plan.memberId), plan.contactIndexDoc, { merge: true });
-    count += 2;
+    count += 1;
     if (plan.contactSyncJobDoc) {
       batch.set(db.collection("contactSyncJobs").doc(plan.contactSyncJobDoc.jobId), plan.contactSyncJobDoc, {
         merge: true,
@@ -404,6 +478,24 @@ function isUsableTicketStatus(status) {
   if (!status) return false;
   if (/만료|환불|취소|정지|양도/.test(status)) return false;
   return /사용|이용|정상|예정/.test(status);
+}
+
+function isConsultationGroup(group, activeTickets) {
+  if (activeTickets.length) return false;
+  return group.rows.some((row) => cleanText(row["등급"]) === "상담회원");
+}
+
+function consultationDateText(rows) {
+  const memoDate = rows.map((row) => consultationDateFromMemo(row["메모"])).find(Boolean);
+  return memoDate || bestDate(rows, "등록일");
+}
+
+function consultationDateFromMemo(value) {
+  const text = cleanText(value);
+  const bracketDate = text.match(/\[(20\d{2}[-.]\d{1,2}[-.]\d{1,2})\]\[[^\]]*상담[^\]]*\]/);
+  if (bracketDate) return bracketDate[1];
+  const plainDate = text.match(/(20\d{2}[-.]\d{1,2}[-.]\d{1,2}).{0,20}상담|상담.{0,20}(20\d{2}[-.]\d{1,2}[-.]\d{1,2})/);
+  return plainDate?.[1] || plainDate?.[2] || "";
 }
 
 function parseKstTimestamp(value) {

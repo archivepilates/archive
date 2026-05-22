@@ -27,6 +27,7 @@ StudioMate API 모드는 ARCHIVE PILATES 자사 사이트 운영 전까지 사�
 - 기본 반영 대상은 기존 `memberProfiles`와 전화번호, 이름이 매칭되는 회원이다.
 - 1시간 엑셀 동기화 runner는 `--allow-new-excel-profiles --new-excel-profile-max-age-days 3`을 붙여 실행한다.
 - 엑셀에만 있는 사람은 등록일이 3일 이내이고 활성 수강권이 있을 때만 `excel_...` 임시 ID로 회원카드를 만든다. 수강권 없는 상담고객은 회원카드를 만들지 않는다.
+- 단, `등급=상담회원`이고 활성 수강권이 없는 사람은 회원카드는 만들지 않고 Google 연락처만 `이름 상담 YYMMDD` 형식으로 동기화한다. `YYMMDD`는 메모의 상담일을 우선 사용하고 없으면 등록일을 사용한다.
 - Google Contacts 작업 큐는 회원 엑셀 반영과 분리한다. 연락처 LaunchAgent만 `--queue-contact-sync`를 붙여 `contactSyncJobs`를 준비한다.
 - `contactSyncJobs` 생성은 Google Contacts 실제 쓰기와 다르다. 엑셀 동기화 기본모드에서는 Firebase Scheduler `scheduledProcessContactSyncJobs`를 평소 `PAUSED`로 두고, 연락처 LaunchAgent가 필요할 때만 잠깐 실행한 뒤 다시 `PAUSED`로 되돌린다.
 - 연락처 예외 스탭은 회원목록 엑셀에 있더라도 회원 연락처 큐를 만들지 않는다. 현재 예외는 김기효, 김민지, 김아영, 배민진, 이초림, 정은영이다.
@@ -156,6 +157,7 @@ node scripts/emergency-import-studiomate-member-excel.mjs --queue-contact-sync -
 - `contactSyncJobs/{jobId}`
   - `target: home_archivepilates`
   - 전화번호/표시명/등록일/수강권 요약/회원카드 메모가 바뀐 회원만 생성
+  - 상담회원은 `sourceReason: consultation_member_excel`로 생성하며 정규 회원 등록 시 회원 연락처 형식으로 승격된다
   - 기존에 같은 연락처 해시가 `synced`인 회원은 중복 큐 생성하지 않음
 - `opsState/studiomateExcelEmergency`
   - 마지막 비상 엑셀 반영 상태

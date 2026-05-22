@@ -114,7 +114,7 @@ StudioMate이름 회원 YYMMDD
 상담자:
 
 ```text
-StudioMate이름 YYMMDD 상담
+StudioMate이름 상담 YYMMDD
 ```
 
 - `YYMMDD`는 상담 일정일 기준이다.

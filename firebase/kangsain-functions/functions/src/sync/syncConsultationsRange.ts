@@ -192,7 +192,7 @@ async function queueConsultationContactSync(consultation: ConsultationDoc): Prom
 }
 
 function formatConsultationContactDisplayName(consultation: ConsultationDoc): string {
-  return [consultation.memberName, compactConsultationDate(consultation), consultationContactKind(consultation)]
+  return [consultation.memberName, consultationContactKind(consultation), compactConsultationDate(consultation)]
     .filter(Boolean)
     .join(" ");
 }
