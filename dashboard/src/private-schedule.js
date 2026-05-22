@@ -240,7 +240,7 @@ async function loadLiveData() {
   if (!state.db || !state.user) throw new Error("로그인이 필요합니다");
   const { start, end } = currentRange();
   const [staffSnap, lectureSnap, otherSnap, availabilitySnap] = await Promise.all([
-    readQuerySafely(query(collection(state.db, "staffs"), where("active", "==", true), limit(80))),
+    readQuerySafely(query(collection(state.db, "staffs"), limit(120))),
     readQuerySafely(query(collection(state.db, "lectures"), where("date", ">=", start), where("date", "<=", end), orderBy("date"), limit(500))),
     readQuerySafely(query(collection(state.db, "otherSchedules"), where("date", ">=", start), where("date", "<=", end), orderBy("date"), limit(500))),
     readQuerySafely(query(collection(state.db, "privateAvailabilitySlots"), where("date", ">=", start), where("date", "<=", end), orderBy("date"), limit(800))),
@@ -716,7 +716,9 @@ function bindEvents() {
       setLoginVisible(true, friendlyAuthError(err));
     }
   });
-  document.getElementById("signOutBtn").addEventListener("click", () => signOut(state.auth));
+  const signOutBtn = document.getElementById("signOutBtn");
+  window.signOutPrivateSchedule = () => signOut(state.auth);
+  signOutBtn.addEventListener("click", window.signOutPrivateSchedule);
   document.getElementById("refreshBtn").addEventListener("click", refresh);
   document.getElementById("prevWeek").addEventListener("click", async () => {
     state.weekStart = addDays(state.weekStart, -7);
