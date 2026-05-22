@@ -48,6 +48,12 @@ ARCHIVE IN 운영자 계정 `01029244425`로 로그인하면 운영자 화면 �
 - `Missing or insufficient permissions.` 미노출 확인
 - 강사 화면으로 잘못 진입하지 않음 확인
 
+2026-05-22 추가 조치:
+
+- 운영자 판별을 데이터 로딩 전에 먼저 반영하도록 변경했다. 운영자 보조 컬렉션 권한 문제가 재발해도 화면이 강사 모드처럼 보이는 혼동을 줄인다.
+- 운영자 홈의 보조 컬렉션 일부(`privateSurveyResponses`, `studiomateMemoWriteJobs`, `alimtalkTemplateStates`)는 권한 오류가 나도 홈 전체가 죽지 않고 빈 목록으로 로딩되도록 방어 처리했다.
+- 운영자 검증 스크립트 기본 URL을 실제 ARCHIVE IN 운영 도메인 `https://in.archivepilates.com/`로 변경했다.
+
 배포 커밋:
 
 - `62ff7b9 fix: allow operator dashboard reads`

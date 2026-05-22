@@ -6142,6 +6142,7 @@
           const authContext = await resolveStaffContext(tokenResult);
           const role = authContext.claims.role || '';
           const isManager = role === 'owner' || role === 'manager';
+          appState.mode = isManager ? 'manager' : 'instructor';
           if (!isManager && appState.viewMode === 'month') appState.viewMode = 'day';
           return {
             manager: isManager,
@@ -6282,6 +6283,17 @@
       }
     }
 
+    async function getOptionalDocs(ref) {
+      try {
+        return await getDocs(ref);
+      } catch (err) {
+        if (String(err?.code || '').includes('permission') || String(err?.message || '').includes('permission')) {
+          return { docs: [] };
+        }
+        throw err;
+      }
+    }
+
     async function loadAdminHomeFromFirestore(token) {
       const staffId = token.claims.staffId || '';
       const studioId = token.claims.studioId || '';
@@ -6330,17 +6342,17 @@
           where('studioId', '==', String(studioId)),
           queryLimit(500)
         )),
-        getDocs(query(
+        getOptionalDocs(query(
           collection(appState.db, 'privateSurveyResponses'),
           where('studioId', '==', String(studioId)),
           queryLimit(200)
         )),
-        getDocs(query(
+        getOptionalDocs(query(
           collection(appState.db, 'studiomateMemoWriteJobs'),
           where('studioId', '==', String(studioId)),
           queryLimit(200)
         )),
-        getDocs(query(
+        getOptionalDocs(query(
           collection(appState.db, 'alimtalkTemplateStates'),
           queryLimit(50)
         )),

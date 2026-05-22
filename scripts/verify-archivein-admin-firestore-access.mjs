@@ -6,7 +6,7 @@ const admin = require("../firebase/kangsain-functions/functions/node_modules/fir
 
 const projectId = process.env.FIREBASE_PROJECT || "archive-pilates";
 const adminEmail = process.env.ARCHIVEIN_VERIFY_ADMIN_EMAIL || "p01029244425@archivepilates.com";
-const targetUrl = process.env.ARCHIVEIN_VERIFY_URL || "https://archive-pilates.web.app/archivein/";
+const targetUrl = process.env.ARCHIVEIN_VERIFY_URL || "https://in.archivepilates.com/";
 const studioId = process.env.ARCHIVEIN_VERIFY_STUDIO_ID || "5330";
 const staffId = process.env.ARCHIVEIN_VERIFY_STAFF_ID || "operator_01029244425";
 const role = process.env.ARCHIVEIN_VERIFY_ROLE || "manager";
