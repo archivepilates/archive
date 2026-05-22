@@ -20,7 +20,7 @@
     button{border:0;background:transparent;color:inherit;cursor:pointer}
     .app{min-height:100vh;padding:18px clamp(12px,2vw,24px) 32px}
     .wrap{max-width:1440px;margin:0 auto}
-    .topbar{display:flex;align-items:flex-start;justify-content:space-between;gap:16px;margin-bottom:14px}
+    .topbar{display:grid;grid-template-columns:minmax(260px,1fr) minmax(360px,620px);align-items:start;gap:14px;margin-bottom:10px}
     .eyebrow{font-size:12px;font-weight:700;color:var(--brand);margin-bottom:5px}
     h1{font-size:28px;line-height:1.12;margin:0;font-weight:850}
     .sub{margin:7px 0 0;color:var(--muted);font-size:13px}
@@ -30,16 +30,14 @@
     .pill-btn{padding:0 12px;font-size:13px;font-weight:700;color:var(--ink)}
     .pill-btn.on{background:#1f2a22;color:#fff;border-color:#1f2a22}
     .icon-btn svg,.pill-btn svg{width:17px;height:17px;stroke-width:2}
-    .filters{display:grid;grid-template-columns:minmax(210px,1fr) auto auto;gap:10px;margin:14px 0 16px}
+    .filters{display:grid;grid-template-columns:auto minmax(160px,220px);gap:10px;margin:10px 0 12px}
     .control{height:42px;border:1px solid var(--line);border-radius:8px;background:var(--panel);padding:0 12px;color:var(--ink)}
-    .control[multiple]{height:84px;padding:7px 10px}
-    .control[multiple] option{padding:3px 0}
     .week-nav{display:flex;align-items:center;gap:8px}
     .week-label{min-width:210px;height:42px;border:1px solid var(--line);border-radius:8px;background:var(--panel);display:flex;align-items:center;justify-content:center;font-weight:800;font-size:13px}
-    .stats{display:grid;grid-template-columns:repeat(4,minmax(0,1fr));gap:10px;margin-bottom:14px}
-    .stat{background:var(--panel);border:1px solid var(--line);border-radius:8px;padding:13px 14px;box-shadow:var(--shadow)}
+    .stats{display:grid;grid-template-columns:repeat(4,minmax(0,1fr));gap:8px;margin-bottom:10px}
+    .stat{background:var(--panel);border:1px solid var(--line);border-radius:8px;padding:9px 11px;box-shadow:var(--shadow)}
     .stat .k{font-size:12px;color:var(--muted);margin-bottom:5px}
-    .stat .v{font-size:24px;font-weight:850}
+    .stat .v{font-size:20px;font-weight:850}
     .legend{display:flex;align-items:center;gap:12px;flex-wrap:wrap;margin:4px 0 12px;color:var(--muted);font-size:12px}
     .legend i{display:inline-block;width:10px;height:10px;border-radius:3px;margin-right:5px;vertical-align:-1px}
     .board-wrap{background:var(--panel);border:1px solid var(--line);border-radius:8px;box-shadow:var(--shadow);overflow:hidden}
@@ -64,14 +62,17 @@
     .slot-meta{grid-column:1/-1;font-size:10px;color:currentColor;opacity:.72;white-space:nowrap;overflow:hidden;text-overflow:ellipsis}
     .empty-slot{width:100%;height:100%;min-height:44px;border:1px dashed #ece8df;border-radius:8px;color:var(--subtle);display:grid;place-items:center;font-size:11px}
     .empty-slot:hover{border-color:#d6cbbb;background:#fffaf0;color:var(--brand-2)}
-    .side{display:grid;grid-template-columns:1.2fr .8fr;gap:12px;margin-top:14px}
-    .panel{background:var(--panel);border:1px solid var(--line);border-radius:8px;padding:14px;box-shadow:var(--shadow)}
-    .panel h2{font-size:15px;margin:0 0 10px}
+    .empty-slot.blocked{border-color:#ead3ce;background:#fbf0ed;color:#8b433a}
+    .empty-slot.blocked:hover{border-color:#d49c92;background:#f8e6e1;color:#7b352d}
+    .top-panels{display:grid;grid-template-columns:minmax(0,1fr) minmax(220px,.9fr);gap:10px}
+    .panel{background:var(--panel);border:1px solid var(--line);border-radius:8px;padding:10px;box-shadow:var(--shadow)}
+    .top-panels .panel{max-height:210px;overflow:auto}
+    .panel h2{font-size:13px;margin:0 0 8px}
     .instructor-list{display:flex;gap:8px;flex-wrap:wrap}
-    .chip{height:32px;border:1px solid var(--line);border-radius:999px;padding:0 11px;background:#fbfaf7;font-size:12px;font-weight:700}
+    .chip{height:30px;border:1px solid var(--line);border-radius:999px;padding:0 10px;background:#fbfaf7;font-size:12px;font-weight:700}
     .chip.on{background:var(--ink);color:#fff;border-color:var(--ink)}
     .detail-list{display:grid;gap:8px}
-    .detail{border:1px solid var(--line);border-radius:8px;padding:10px;background:#fbfaf7;font-size:12px;color:var(--muted)}
+    .detail{border:1px solid var(--line);border-radius:8px;padding:9px;background:#fbfaf7;font-size:12px;color:var(--muted)}
     .detail b{display:block;color:var(--ink);font-size:13px;margin-bottom:3px}
     .slot-form{display:grid;gap:8px}
     .slot-form .row{display:grid;grid-template-columns:1fr 1fr;gap:8px}
@@ -97,7 +98,7 @@
     .login-error{min-height:18px;margin-top:9px;color:var(--wine);font-size:12px}
     .toast{position:fixed;right:18px;bottom:18px;background:#1f2a22;color:#fff;border-radius:8px;padding:10px 12px;font-size:12px;opacity:0;transform:translateY(10px);transition:.2s;z-index:30}
     .toast.on{opacity:1;transform:translateY(0)}
-    @media(max-width:980px){.filters{grid-template-columns:1fr}.week-nav{justify-content:space-between}.side{grid-template-columns:1fr}.stats{grid-template-columns:repeat(2,1fr)}.board-wrap{overflow-x:auto}.topbar{flex-direction:column}.actions{justify-content:flex-start}}
+    @media(max-width:980px){.topbar,.filters,.top-panels{grid-template-columns:1fr}.week-nav{justify-content:space-between}.stats{grid-template-columns:repeat(2,1fr)}.board-wrap{overflow-x:auto}.actions{justify-content:flex-start}}
   </style>
 </head>
 <body>
@@ -120,20 +121,33 @@
           <h1>아카이브 프라이빗 스케줄</h1>
           <p class="sub" id="sourceText">강사 가능 시간과 StudioMate 수업 점유 시간을 불러오는 중...</p>
         </div>
-        <div class="actions">
-          <button class="pill-btn" id="operatorBtn" type="button" title="불가 사유 보기">
-            <svg viewBox="0 0 24 24" fill="none" stroke="currentColor"><path d="M12 20h9"/><path d="M16.5 3.5a2.1 2.1 0 0 1 3 3L7 19l-4 1 1-4Z"/></svg>
-            운영자 모드
-          </button>
-          <button class="icon-btn" id="refreshBtn" type="button" title="새로고침">
-            <svg viewBox="0 0 24 24" fill="none" stroke="currentColor"><path d="M21 12a9 9 0 0 0-15.2-6.4L3 8"/><path d="M3 3v5h5"/><path d="M3 12a9 9 0 0 0 15.2 6.4L21 16"/><path d="M16 16h5v5"/></svg>
-          </button>
-          <button class="pill-btn" type="button" id="signOutBtn">로그아웃</button>
+        <div>
+          <div class="actions">
+            <button class="pill-btn" id="operatorBtn" type="button" title="불가 사유 보기">
+              <svg viewBox="0 0 24 24" fill="none" stroke="currentColor"><path d="M12 20h9"/><path d="M16.5 3.5a2.1 2.1 0 0 1 3 3L7 19l-4 1 1-4Z"/></svg>
+              운영자 모드
+            </button>
+            <button class="icon-btn" id="refreshBtn" type="button" title="새로고침">
+              <svg viewBox="0 0 24 24" fill="none" stroke="currentColor"><path d="M21 12a9 9 0 0 0-15.2-6.4L3 8"/><path d="M3 3v5h5"/><path d="M3 12a9 9 0 0 0 15.2 6.4L21 16"/><path d="M16 16h5v5"/></svg>
+            </button>
+            <button class="pill-btn" type="button" id="signOutBtn">로그아웃</button>
+          </div>
+          <div class="top-panels">
+            <div class="panel">
+              <h2>강사 선택</h2>
+              <div class="instructor-list" id="instructorChips"></div>
+            </div>
+            <div class="panel">
+              <h2>선택 슬롯</h2>
+              <div class="detail-list" id="details">
+                <div class="detail"><b>슬롯을 선택하세요</b>상담 중 제안 가능한 시간과 불가 사유를 여기서 확인합니다.</div>
+              </div>
+            </div>
+          </div>
         </div>
       </header>
 
       <section class="filters">
-        <select class="control" id="instructorSelect" multiple aria-label="강사 복수 선택"></select>
         <div class="week-nav">
           <button class="icon-btn" id="prevWeek" type="button" title="이전 주"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor"><path d="m15 18-6-6 6-6"/></svg></button>
           <div class="week-label" id="weekLabel"></div>
@@ -163,19 +177,6 @@
 
       <section class="board-wrap">
         <div class="board" id="board"></div>
-      </section>
-
-      <section class="side">
-        <div class="panel">
-          <h2>강사 선택</h2>
-          <div class="instructor-list" id="instructorChips"></div>
-        </div>
-        <div class="panel">
-          <h2>선택 슬롯</h2>
-          <div class="detail-list" id="details">
-            <div class="detail"><b>슬롯을 선택하세요</b>상담 중 제안 가능한 시간, 마지막 확인 상태, 불가 사유를 여기서 확인합니다.</div>
-          </div>
-        </div>
       </section>
     </div>
   </main>

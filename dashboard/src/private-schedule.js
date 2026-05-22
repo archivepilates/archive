@@ -16,7 +16,6 @@ const loginGate = document.getElementById("loginGate");
 const loginForm = document.getElementById("loginForm");
 const loginError = document.getElementById("loginError");
 const board = document.getElementById("board");
-const instructorSelect = document.getElementById("instructorSelect");
 const instructorChips = document.getElementById("instructorChips");
 const timeFilter = document.getElementById("timeFilter");
 const operatorBtn = document.getElementById("operatorBtn");
@@ -282,13 +281,25 @@ function isTimeVisible(time) {
 }
 
 function busyFor(instructor, date, time) {
+  return busyForRange(instructor, date, time, nextHour(time));
+}
+
+function busyForRange(instructor, date, startTime, endTime) {
   const allBusy = [...state.lectures, ...state.otherSchedules];
   return allBusy.filter((item) => {
-    if (item.date !== date || !overlaps(time, item.start, item.end)) return false;
+    if (item.date !== date || !rangesOverlap(startTime, endTime, item.start, item.end)) return false;
     const byId = item.staffIds.includes(instructor.staffId);
     const byName = item.staffNames.includes(instructor.name);
     return byId || byName;
   });
+}
+
+function rangesOverlap(startA, endA, startB, endB) {
+  const aStart = timeToMin(startA);
+  const aEnd = timeToMin(endA || startA);
+  const bStart = timeToMin(startB);
+  const bEnd = timeToMin(endB || startB);
+  return aStart < bEnd && bStart < aEnd;
 }
 
 function slotFor(instructor, date, time) {
@@ -296,6 +307,20 @@ function slotFor(instructor, date, time) {
   const available = state.availability.find(
     (item) => item.staffId === instructor.staffId && item.date === date && item.time === time,
   );
+  if (available && available.status !== "unavailable") {
+    return {
+      type: ["confirm", "request"].includes(available.status) ? available.status : "available",
+      slotId: available.slotId,
+      instructor,
+      date,
+      time,
+      endTime: available.endTime || nextHour(time),
+      memo: available.memo || "",
+      sourceKey: available.sourceKey || "manual",
+      source: busy.length ? `${available.source} · 운영자 예외` : available.source,
+      checkedAt: available.checkedAt,
+    };
+  }
   if (busy.length) {
     return {
       type: "busy",
@@ -305,9 +330,22 @@ function slotFor(instructor, date, time) {
       reason: busy.map((item) => (item.kind === "lecture" ? `ARCHIVE PILATES 수업 · ${item.title}` : `외부/기타 일정 · ${item.title}`)).join(" / "),
     };
   }
-  if (!available) return null;
+  if (!available) {
+    return {
+      type: "available",
+      virtual: true,
+      instructor,
+      date,
+      time,
+      endTime: nextHour(time),
+      memo: "",
+      sourceKey: "manual",
+      source: "센터 수업 외 우선 가능",
+      checkedAt: "알림톡 확인 전",
+    };
+  }
   return {
-    type: ["confirm", "request", "unavailable"].includes(available.status) ? available.status : "available",
+    type: "unavailable",
     slotId: available.slotId,
     instructor,
     date,
@@ -335,9 +373,6 @@ function slotHtml(slot) {
 function renderHeaderControls() {
   const dates = weekDates();
   document.getElementById("weekLabel").textContent = `${ymd(dates[0]).slice(5).replace("-", ".")} - ${ymd(dates[6]).slice(5).replace("-", ".")}`;
-  instructorSelect.innerHTML = state.instructors
-    .map((item) => `<option value="${item.staffId}" ${state.selectedInstructorIds.includes(item.staffId) ? "selected" : ""}>${item.name}</option>`)
-    .join("");
   instructorChips.innerHTML = [
     `<button class="chip ${state.selectedInstructorIds.length === 0 ? "on" : ""}" data-id="all" type="button">전체</button>`,
     ...state.instructors.map((item) => `<button class="chip ${state.selectedInstructorIds.includes(item.staffId) ? "on" : ""}" data-id="${item.staffId}" type="button">${item.name}</button>`),
@@ -345,7 +380,7 @@ function renderHeaderControls() {
   operatorBtn.classList.toggle("on", state.operatorMode);
   sourceText.textContent = state.usingSample
     ? "라이브 데이터가 부족한 항목은 기본 가능 시간으로 표시 중입니다. StudioMate 점유 시간은 불러온 범위만 반영됩니다."
-    : "강사명단, 프라이빗 가능 슬롯, StudioMate 수업, 기타 일정을 읽어 제안 가능한 시간만 표시합니다.";
+    : "센터 수업과 등록된 불가 시간을 제외한 시간은 우선 가능으로 보고, 알림톡 확인 후 안 되는 슬롯만 삭제해 최종 제출합니다.";
 }
 
 function renderStats(slots) {
@@ -374,9 +409,10 @@ function renderBoard() {
       const cellSlots = instructors.map((instructor) => slotFor(instructor, dateKey, time)).filter(Boolean);
       allSlots.push(...cellSlots);
       const visibleSlots = cellSlots.filter((slot) => state.operatorMode || slot.type !== "busy");
+      const hiddenBusy = cellSlots.length > 0 && visibleSlots.length === 0;
       board.insertAdjacentHTML("beforeend", `
         <div class="slot-cell">
-          ${visibleSlots.length ? `<div class="slot-stack">${visibleSlots.map(slotHtml).join("")}</div>` : emptyCellHtml(dateKey, time)}
+          ${visibleSlots.length ? `<div class="slot-stack">${visibleSlots.map(slotHtml).join("")}</div>` : emptyCellHtml(dateKey, time, hiddenBusy)}
         </div>
       `);
     });
@@ -384,15 +420,18 @@ function renderBoard() {
   renderStats(allSlots);
 }
 
-function emptyCellHtml(date, time) {
+function emptyCellHtml(date, time, hiddenBusy = false) {
+  if (hiddenBusy) return `<button class="empty-slot blocked" type="button" data-blocked='${encodeURIComponent(JSON.stringify({ date, time }))}'>불가 시간</button>`;
   const staffIds = selectedStaffIdsForForm();
   if (!staffIds.length) return `<div class="empty-slot"></div>`;
   return `<button class="empty-slot" type="button" data-empty='${encodeURIComponent(JSON.stringify({ date, time, staffIds }))}'>등록</button>`;
 }
 
 function renderDetail(slot) {
-  const label = slot.type === "busy" ? "불가 사유" : slot.type === "confirm" ? "확인 필요 슬롯" : "제안 가능 슬롯";
+  const label = slot.type === "busy" || slot.type === "unavailable" ? "불가 사유" : slot.type === "confirm" ? "확인 필요 슬롯" : "제안 가능 슬롯";
   const body = slot.type === "busy" ? slot.reason : `${slot.source} · ${slot.checkedAt}`;
+  const blocked = slot.type === "busy" || slot.type === "unavailable";
+  const canEdit = !blocked || state.operatorMode;
   details.innerHTML = `
     <div class="detail">
       <b>${label}</b>
@@ -400,10 +439,24 @@ function renderDetail(slot) {
     </div>
     <div class="detail">
       <b>운영 액션</b>
-      ${slot.type === "busy" ? "운영자 모드에서만 확인하는 차단 사유입니다." : "회원에게 후보로 제안하거나 강사에게 최종 확인 후 StudioMate에 등록하세요."}
+      ${blocked ? "불가 시간입니다. 가능 시간으로 바꾸는 작업은 운영자 모드에서만 가능합니다." : "회원에게 후보로 제안하거나 강사에게 최종 확인 후 StudioMate에 등록하세요."}
     </div>
-    ${slot.type === "busy" ? "" : slotForm(slot)}
+    ${canEdit ? slotForm(slot) : ""}
   `;
+}
+
+function renderBlockedDetail(cell) {
+  details.innerHTML = `
+    <div class="detail">
+      <b>불가 시간</b>
+      ${cell.date} ${cell.time}<br>센터 수업 또는 등록된 불가 일정과 겹쳐 일반 모드에서는 가능 슬롯으로 요청할 수 없습니다.
+    </div>
+    <div class="detail">
+      <b>운영자 모드 필요</b>
+      불가 시간을 가능으로 변경해야 하는 예외 상황이면 운영자 모드를 켠 뒤 해당 슬롯을 수정하세요.
+    </div>
+  `;
+  showToast("불가 시간입니다. 운영자 모드에서만 변경할 수 있습니다");
 }
 
 function renderEmptyDetail(cell) {
@@ -560,6 +613,13 @@ async function saveSlot(form) {
   const dates = expandRepeatDates(data.startDate, data.endDate, repeatWeekdays, data.repeatEvery);
   if (!staffIds.length) throw new Error("강사를 선택하세요");
   if (!dates.length) throw new Error("등록할 요일과 기간을 확인하세요");
+  const wantsAvailable = ["available", "confirm", "request"].includes(data.status);
+  if (wantsAvailable && !state.operatorMode) {
+    const conflict = findBusyConflict(staffIds, dates, data.startTime, data.endTime);
+    if (conflict) {
+      throw new Error(`${conflict.name} ${conflict.date} ${data.startTime}-${data.endTime}은 불가 시간입니다`);
+    }
+  }
   if (state.preview) {
     staffIds.forEach((staffId) => {
       const instructor = state.instructors.find((item) => item.staffId === staffId);
@@ -603,6 +663,19 @@ async function saveSlot(form) {
   showToast(`가능 슬롯 ${staffIds.length * dates.length}개를 저장했습니다`);
 }
 
+function findBusyConflict(staffIds, dates, startTime, endTime) {
+  for (const staffId of staffIds) {
+    const instructor = state.instructors.find((item) => item.staffId === staffId);
+    if (!instructor) continue;
+    for (const date of dates) {
+      if (busyForRange(instructor, date, startTime, endTime).length) {
+        return { name: instructor.name, date };
+      }
+    }
+  }
+  return null;
+}
+
 async function deleteSlot(slotId) {
   if (state.preview) {
     state.availability = state.availability.filter((item) => item.slotId !== slotId);
@@ -641,10 +714,6 @@ function bindEvents() {
     state.operatorMode = !state.operatorMode;
     renderBoard();
   });
-  instructorSelect.addEventListener("change", (event) => {
-    state.selectedInstructorIds = Array.from(event.target.selectedOptions).map((option) => option.value);
-    renderBoard();
-  });
   timeFilter.addEventListener("change", (event) => {
     state.timeFilter = event.target.value;
     renderBoard();
@@ -664,8 +733,10 @@ function bindEvents() {
   board.addEventListener("click", (event) => {
     const button = event.target.closest("[data-slot]");
     const empty = event.target.closest("[data-empty]");
+    const blocked = event.target.closest("[data-blocked]");
     if (button) renderDetail(JSON.parse(decodeURIComponent(button.dataset.slot)));
     if (empty) renderEmptyDetail(JSON.parse(decodeURIComponent(empty.dataset.empty)));
+    if (blocked) renderBlockedDetail(JSON.parse(decodeURIComponent(blocked.dataset.blocked)));
   });
   details.addEventListener("submit", async (event) => {
     const form = event.target.closest("[data-slot-form]");
