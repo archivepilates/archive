@@ -6,12 +6,13 @@ import { DEFAULT_STUDIO_ID } from "../config/constants";
 import { privateSurveyWebhookSecret, solapiApiKey, solapiApiSecret, solapiPfid } from "../config/secrets";
 import { db } from "../config/firebase";
 import { refs } from "../firestore/refs";
-import type { BookingDoc, MemberProfileDoc, PrivateSurveyResponseDoc } from "../types/models";
+import type { AlimtalkCandidateDoc, BookingDoc, MemberProfileDoc, PrivateSurveyResponseDoc } from "../types/models";
 import { nowTimestamp } from "../utils/date";
 import { stableHash } from "../utils/hash";
 import { DelegatedGoogleClient } from "../google/delegatedGoogleClient";
 import { getStaffById } from "../firestore/staffRepository";
 import { isAlimtalkTemplateApproved } from "../alimtalk/templateStatus";
+import { sendAlimtalkLogEmail } from "../google/driveDocsMailer";
 
 const PUBLIC_VIEW_BASE_URL =
   process.env.PRIVATE_SURVEY_VIEW_BASE_URL || "https://in.archivepilates.com/privateSurveyResponseView";
@@ -787,6 +788,230 @@ export async function processDueStaffSurveyAlimtalks(): Promise<{ checked: numbe
 
   logger.info("processDueStaffSurveyAlimtalks completed", { checked, sent, failed });
   return { checked, sent, failed };
+}
+
+export async function processMissingSurveySubmissionAlerts(): Promise<{
+  checked: number;
+  due: number;
+  emailed: number;
+}> {
+  const [privateResult, groupResult] = await Promise.all([
+    processMissingPrivateSurveySubmissionAlerts(),
+    processMissingGroupSurveySubmissionAlerts(),
+  ]);
+  const summary = {
+    checked: privateResult.checked + groupResult.checked,
+    due: privateResult.due + groupResult.due,
+    emailed: privateResult.emailed + groupResult.emailed,
+  };
+  logger.info("processMissingSurveySubmissionAlerts completed", summary);
+  return summary;
+}
+
+async function processMissingPrivateSurveySubmissionAlerts(): Promise<{
+  checked: number;
+  due: number;
+  emailed: number;
+}> {
+  const snap = await refs.alimtalkCandidates().where("status", "==", "sent").limit(500).get();
+  let checked = 0;
+  let due = 0;
+  let emailed = 0;
+  const nowMs = Date.now();
+
+  for (const docSnap of snap.docs) {
+    const candidate = docSnap.data();
+    if (candidate.type !== "private_survey") continue;
+    checked += 1;
+    const dueAt = privateSurveyMissingSubmissionDueAt(candidate);
+    if (!dueAt || dueAt.toMillis() > nowMs) continue;
+    due += 1;
+    if (await hasSubmittedPrivateSurvey(candidate.memberId, candidate.memberPhone)) continue;
+    const booking = await bookingForSurveyCandidate(candidate);
+    const sent = await sendMissingSurveySubmissionEmailOnce({
+      alertId: `private_${candidate.candidateId}`,
+      surveyType: "private",
+      memberName: candidate.memberName,
+      memberPhone: candidate.memberPhone,
+      lessonTime: booking ? lessonTimeText({ matching: matchFromBooking(booking) } as PrivateSurveyResponseDoc) : candidate.payload.lectureDate || "-",
+      staffName: booking?.staffName || "",
+      dueAt,
+      sourceId: candidate.candidateId,
+      requestOrCandidateId: candidate.candidateId,
+    });
+    if (sent) emailed += 1;
+  }
+
+  return { checked, due, emailed };
+}
+
+async function processMissingGroupSurveySubmissionAlerts(): Promise<{
+  checked: number;
+  due: number;
+  emailed: number;
+}> {
+  const snap = await db.collection("groupSurveyRequests").where("status", "==", "pending").limit(500).get();
+  let checked = 0;
+  let due = 0;
+  let emailed = 0;
+  const nowMs = Date.now();
+
+  for (const docSnap of snap.docs) {
+    const groupRequest = docSnap.data() as GroupSurveyRequestDoc;
+    checked += 1;
+    const matching = await groupSurveyMatch(groupRequest);
+    const dueAt = groupSurveyMissingSubmissionDueAt(matching);
+    if (!dueAt || dueAt.toMillis() > nowMs) continue;
+    due += 1;
+    const response = await refs.privateSurveyResponse(groupRequest.requestId).get();
+    if (response.exists) continue;
+    const sent = await sendMissingSurveySubmissionEmailOnce({
+      alertId: `group_${groupRequest.requestId}`,
+      surveyType: "group",
+      memberName: groupRequest.memberName,
+      memberPhone: groupRequest.memberPhone,
+      lessonTime: lessonTimeText({ matching } as PrivateSurveyResponseDoc),
+      staffName: matching.staffName,
+      dueAt,
+      sourceId: groupRequest.sourceCandidateId || groupRequest.requestId,
+      requestOrCandidateId: groupRequest.requestId,
+    });
+    if (sent) emailed += 1;
+  }
+
+  return { checked, due, emailed };
+}
+
+function privateSurveyMissingSubmissionDueAt(candidate: AlimtalkCandidateDoc): Timestamp | null {
+  const lectureDate = candidate.payload.lectureDate;
+  if (!lectureDate) return null;
+  const due = new Date(`${lectureDate}T09:00:00+09:00`);
+  if (Number.isNaN(due.getTime())) return null;
+  due.setDate(due.getDate() - 1);
+  return Timestamp.fromDate(due);
+}
+
+function groupSurveyMissingSubmissionDueAt(matching: MatchResult): Timestamp | null {
+  const startMs = matching.lectureStartAt?.toMillis?.() || 0;
+  if (!startMs) return null;
+  return Timestamp.fromMillis(startMs - 60 * 60 * 1000);
+}
+
+async function bookingForSurveyCandidate(candidate: AlimtalkCandidateDoc): Promise<BookingDoc | null> {
+  const bookingId = candidate.payload.bookingId || "";
+  if (bookingId) {
+    const booking = (await refs.booking(bookingId).get()).data();
+    if (booking) return booking;
+  }
+  if (!candidate.memberId || !candidate.payload.lectureDate) return null;
+  const snap = await refs.bookings().where("memberId", "==", candidate.memberId).get();
+  return (
+    snap.docs
+      .map((doc) => doc.data())
+      .filter((booking) => booking.lectureDate === candidate.payload.lectureDate && isPrivateBookingTicket(booking))
+      .sort((a, b) => (a.lectureStartAt?.toMillis() || 0) - (b.lectureStartAt?.toMillis() || 0))[0] || null
+  );
+}
+
+async function hasSubmittedPrivateSurvey(memberId: string, memberPhone: string): Promise<boolean> {
+  const byMember = memberId
+    ? await refs.privateSurveyResponses().where("matching.memberId", "==", memberId).limit(10).get()
+    : null;
+  if (
+    byMember?.docs.some(
+      (doc) => (doc.data().surveyType || "private") === "private" && isRecentSurveyResponse(doc.data()),
+    )
+  )
+    return true;
+  const byPhone = memberPhone
+    ? await refs.privateSurveyResponses().where("memberPhone", "==", memberPhone).limit(10).get()
+    : null;
+  return Boolean(
+    byPhone?.docs.some(
+      (doc) => (doc.data().surveyType || "private") === "private" && isRecentSurveyResponse(doc.data()),
+    ),
+  );
+}
+
+function isRecentSurveyResponse(response: PrivateSurveyResponseDoc): boolean {
+  const responseMs = response.submittedAt?.toMillis?.() || response.createdAt?.toMillis?.() || 0;
+  if (!responseMs) return true;
+  return Date.now() - responseMs < 365 * 24 * 60 * 60 * 1000;
+}
+
+function isPrivateBookingTicket(booking: BookingDoc): boolean {
+  return /프라이빗|개인|1:1/i.test(booking.ticketName || "");
+}
+
+function matchFromBooking(booking: BookingDoc): MatchResult {
+  return {
+    status: "matched",
+    memberId: booking.memberId,
+    memberName: booking.memberName,
+    memberPhone: booking.memberPhone,
+    bookingId: booking.bookingId,
+    lectureId: booking.lectureId,
+    lectureDate: booking.lectureDate,
+    lectureStartAt: booking.lectureStartAt,
+    staffId: booking.staffId,
+    staffName: booking.staffName,
+    reason: "예약 기준 자동매칭",
+  };
+}
+
+async function sendMissingSurveySubmissionEmailOnce(input: {
+  alertId: string;
+  surveyType: "private" | "group";
+  memberName: string;
+  memberPhone: string;
+  lessonTime: string;
+  staffName: string;
+  dueAt: Timestamp;
+  sourceId: string;
+  requestOrCandidateId: string;
+}): Promise<boolean> {
+  const ref = db.collection("surveySubmissionAlerts").doc(input.alertId);
+  const payload = {
+    alertId: input.alertId,
+    surveyType: input.surveyType,
+    memberName: input.memberName,
+    memberPhone: input.memberPhone,
+    lessonTime: input.lessonTime,
+    staffName: input.staffName,
+    dueAt: input.dueAt,
+    sourceId: input.sourceId,
+    requestOrCandidateId: input.requestOrCandidateId,
+    status: "email_sent",
+    createdAt: nowTimestamp(),
+    updatedAt: nowTimestamp(),
+  };
+  try {
+    await ref.create(payload);
+  } catch (err: any) {
+    if (Number(err?.code) === 6 || String(err?.message || "").includes("ALREADY_EXISTS")) return false;
+    throw err;
+  }
+
+  const typeLabel = input.surveyType === "group" ? "그룹 첫 수업 사전확인" : "프라이빗 사전설문";
+  await sendAlimtalkLogEmail({
+    subject: `[ARCHIVE IN] ${typeLabel} 미제출 알림 - ${input.memberName}`,
+    body: [
+      `${typeLabel}이 아직 제출되지 않았어요.`,
+      "",
+      `이름: ${input.memberName}`,
+      `연락처: ${input.memberPhone}`,
+      `수업일시: ${input.lessonTime}`,
+      input.staffName ? `수업 강사: ${input.staffName}` : "",
+      `강사 전달 기준시각: ${formatKstDateTime(input.dueAt.toDate())}`,
+      "",
+      "회원에게 설문 제출 여부를 확인해 주세요.",
+      "",
+      `추적ID: ${input.requestOrCandidateId}`,
+    ]
+      .filter((line) => line !== "")
+      .join("\n"),
+  });
+  return true;
 }
 
 function pendingStaffSurveyDelivery(doc: PrivateSurveyResponseDoc): PrivateSurveyResponseDoc["delivery"] {

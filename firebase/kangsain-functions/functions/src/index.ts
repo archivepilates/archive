@@ -36,6 +36,7 @@ import { nowTimestamp } from "./utils/date";
 import {
   ingestPrivateSurveyResponseHandler,
   processDueStaffSurveyAlimtalks,
+  processMissingSurveySubmissionAlerts,
   processPrivateSurveyIntakeHandler,
   privateSurveyResponseViewHandler,
   syncPrivateSurveyResponsesFromSheet,
@@ -190,6 +191,7 @@ export const scheduledProcessStaffSurveyAlimtalks = onSchedule(
     schedule: "every 10 minutes",
   },
   async () => {
+    await processMissingSurveySubmissionAlerts();
     await processDueStaffSurveyAlimtalks();
   },
 );
