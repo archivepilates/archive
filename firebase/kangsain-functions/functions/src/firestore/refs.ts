@@ -9,6 +9,7 @@ import type {
   MemberProfileDoc,
   MemberTagDoc,
   NoticeDoc,
+  PrivateAvailabilitySlotDoc,
   StaffDoc,
   TokenCacheDoc,
   WriteQueueJobDoc,
@@ -29,6 +30,9 @@ export const refs = {
   lecture: (lectureId: string) => refs.lectures().doc(lectureId),
   bookings: () => db.collection("bookings").withConverter(converter<BookingDoc>()),
   booking: (bookingId: string) => refs.bookings().doc(bookingId),
+  privateAvailabilitySlots: () =>
+    db.collection("privateAvailabilitySlots").withConverter(converter<PrivateAvailabilitySlotDoc>()),
+  privateAvailabilitySlot: (slotId: string) => refs.privateAvailabilitySlots().doc(slotId),
   instructorViews: () => db.collection("instructorViews").withConverter(converter<InstructorViewDoc>()),
   instructorView: (staffId: string, date: string) => refs.instructorViews().doc(`${staffId}_${date}`),
   attendanceSummaries: () => db.collection("attendanceSummaries").withConverter(converter<AttendanceSummaryDoc>()),

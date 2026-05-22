@@ -10,6 +10,8 @@ export type QueueStatus = "pending" | "processing" | "retry" | "done" | "failed"
 export type WriteJobType = "bookingAttendanceUpdate" | "memberMemoCreate" | "lectureRefresh" | "instructorViewRebuild";
 export type MemoType = "member_note" | "lesson_note" | "private_instructor_note";
 export type MemoVisibility = "staff_and_manager" | "manager_only" | "creator_only";
+export type PrivateAvailabilityStatus = "available" | "confirm" | "request" | "unavailable";
+export type PrivateAvailabilitySource = "manual" | "monthly_alimtalk" | "weekly_check" | "import";
 
 export interface StudioDoc {
   studioId: string;
@@ -65,6 +67,24 @@ export interface LectureDoc {
   sourceHash: string;
   sourceUpdatedAt: Timestamp | null;
   syncedAt: Timestamp;
+  updatedAt: Timestamp;
+}
+
+export interface PrivateAvailabilitySlotDoc {
+  slotId: string;
+  studioId: string;
+  staffId: string;
+  staffName: string;
+  date: string;
+  startTime: string;
+  endTime: string;
+  status: PrivateAvailabilityStatus;
+  source: PrivateAvailabilitySource;
+  memo: string;
+  checkedAt: Timestamp | null;
+  checkedByUid: string;
+  createdByUid: string;
+  createdAt: Timestamp;
   updatedAt: Timestamp;
 }
 

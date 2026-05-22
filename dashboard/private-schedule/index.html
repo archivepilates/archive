@@ -1,0 +1,177 @@
+<!doctype html>
+<html lang="ko">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width,initial-scale=1">
+  <title>아카이브 프라이빗 스케줄</title>
+  <meta name="theme-color" content="#f7f6f2">
+  <link rel="preconnect" href="https://fonts.googleapis.com">
+  <link href="https://fonts.googleapis.com/css2?family=Noto+Sans+KR:wght@400;500;600;700;800&display=swap" rel="stylesheet">
+  <script src="../../archivein/firebase-config.js"></script>
+  <style>
+    :root{
+      --ink:#1b1b18;--muted:#6f736b;--subtle:#9a9c94;--line:#e3e0d8;--paper:#fffdfa;
+      --canvas:#f7f6f2;--panel:#ffffff;--soft:#f2ece1;--brand:#ec6f24;--brand-2:#b8531d;
+      --sage:#6d7d58;--blue:#426b8f;--wine:#9b5148;--gold:#a8742a;--shadow:0 18px 42px rgba(36,31,24,.08);
+    }
+    *{box-sizing:border-box}
+    html,body{margin:0;min-height:100%;font-family:'Noto Sans KR',system-ui,sans-serif;color:var(--ink);background:var(--canvas);letter-spacing:0}
+    button,select{font:inherit;letter-spacing:0}
+    button{border:0;background:transparent;color:inherit;cursor:pointer}
+    .app{min-height:100vh;padding:18px clamp(12px,2vw,24px) 32px}
+    .wrap{max-width:1440px;margin:0 auto}
+    .topbar{display:flex;align-items:flex-start;justify-content:space-between;gap:16px;margin-bottom:14px}
+    .eyebrow{font-size:12px;font-weight:700;color:var(--brand);margin-bottom:5px}
+    h1{font-size:28px;line-height:1.12;margin:0;font-weight:850}
+    .sub{margin:7px 0 0;color:var(--muted);font-size:13px}
+    .actions{display:flex;align-items:center;gap:8px;flex-wrap:wrap;justify-content:flex-end}
+    .icon-btn,.pill-btn{height:36px;border:1px solid var(--line);border-radius:8px;background:var(--panel);box-shadow:0 6px 18px rgba(42,37,30,.05);display:inline-flex;align-items:center;justify-content:center;gap:7px}
+    .icon-btn{width:38px}
+    .pill-btn{padding:0 12px;font-size:13px;font-weight:700;color:var(--ink)}
+    .pill-btn.on{background:#1f2a22;color:#fff;border-color:#1f2a22}
+    .icon-btn svg,.pill-btn svg{width:17px;height:17px;stroke-width:2}
+    .filters{display:grid;grid-template-columns:minmax(210px,1fr) auto auto;gap:10px;margin:14px 0 16px}
+    .control{height:42px;border:1px solid var(--line);border-radius:8px;background:var(--panel);padding:0 12px;color:var(--ink)}
+    .week-nav{display:flex;align-items:center;gap:8px}
+    .week-label{min-width:210px;height:42px;border:1px solid var(--line);border-radius:8px;background:var(--panel);display:flex;align-items:center;justify-content:center;font-weight:800;font-size:13px}
+    .stats{display:grid;grid-template-columns:repeat(4,minmax(0,1fr));gap:10px;margin-bottom:14px}
+    .stat{background:var(--panel);border:1px solid var(--line);border-radius:8px;padding:13px 14px;box-shadow:var(--shadow)}
+    .stat .k{font-size:12px;color:var(--muted);margin-bottom:5px}
+    .stat .v{font-size:24px;font-weight:850}
+    .legend{display:flex;align-items:center;gap:12px;flex-wrap:wrap;margin:4px 0 12px;color:var(--muted);font-size:12px}
+    .legend i{display:inline-block;width:10px;height:10px;border-radius:3px;margin-right:5px;vertical-align:-1px}
+    .board-wrap{background:var(--panel);border:1px solid var(--line);border-radius:8px;box-shadow:var(--shadow);overflow:hidden}
+    .board{display:grid;grid-template-columns:84px repeat(7,minmax(128px,1fr));min-width:980px}
+    .corner,.day-head,.time-cell,.slot-cell{border-right:1px solid var(--line);border-bottom:1px solid var(--line)}
+    .corner,.day-head{position:sticky;top:0;z-index:4;background:#fbfaf7}
+    .corner{left:0;z-index:5}
+    .day-head{min-height:58px;padding:10px;text-align:center}
+    .day-name{font-size:13px;font-weight:850}
+    .day-date{font-size:11px;color:var(--muted);margin-top:3px}
+    .time-cell{position:sticky;left:0;z-index:3;background:#fbfaf7;min-height:76px;padding:10px 8px;font-size:12px;font-weight:800;color:var(--muted)}
+    .slot-cell{min-height:76px;padding:6px;background:#fffefa}
+    .slot-stack{display:flex;flex-direction:column;gap:5px}
+    .slot{width:100%;border:1px solid transparent;border-radius:8px;padding:7px 8px;min-height:42px;display:grid;grid-template-columns:minmax(0,1fr) auto;gap:2px 6px;text-align:left;font-size:12px;line-height:1.25}
+    .slot.available{background:#eef4e8;border-color:#d8e4ce;color:#2f4329}
+    .slot.confirm{background:#fff3d8;border-color:#ead7a9;color:#654714}
+    .slot.request{background:#e9f1f8;border-color:#cbdae8;color:#253f59}
+    .slot.busy{background:#f5ece9;border-color:#e7d3cf;color:#6d332c}
+    .slot.hidden{display:none}
+    .slot-name{font-weight:850;white-space:nowrap;overflow:hidden;text-overflow:ellipsis}
+    .slot-time{font-size:10px;color:currentColor;opacity:.78;white-space:nowrap;align-self:center}
+    .slot-meta{grid-column:1/-1;font-size:10px;color:currentColor;opacity:.72;white-space:nowrap;overflow:hidden;text-overflow:ellipsis}
+    .empty-slot{width:100%;height:100%;min-height:44px;border:1px dashed #ece8df;border-radius:8px;color:var(--subtle);display:grid;place-items:center;font-size:11px}
+    .empty-slot:hover{border-color:#d6cbbb;background:#fffaf0;color:var(--brand-2)}
+    .side{display:grid;grid-template-columns:1.2fr .8fr;gap:12px;margin-top:14px}
+    .panel{background:var(--panel);border:1px solid var(--line);border-radius:8px;padding:14px;box-shadow:var(--shadow)}
+    .panel h2{font-size:15px;margin:0 0 10px}
+    .instructor-list{display:flex;gap:8px;flex-wrap:wrap}
+    .chip{height:32px;border:1px solid var(--line);border-radius:999px;padding:0 11px;background:#fbfaf7;font-size:12px;font-weight:700}
+    .chip.on{background:var(--ink);color:#fff;border-color:var(--ink)}
+    .detail-list{display:grid;gap:8px}
+    .detail{border:1px solid var(--line);border-radius:8px;padding:10px;background:#fbfaf7;font-size:12px;color:var(--muted)}
+    .detail b{display:block;color:var(--ink);font-size:13px;margin-bottom:3px}
+    .slot-form{display:grid;gap:8px}
+    .slot-form .row{display:grid;grid-template-columns:1fr 1fr;gap:8px}
+    .slot-form label{display:grid;gap:4px;font-size:11px;color:var(--muted);font-weight:700}
+    .slot-form input,.slot-form select,.slot-form textarea{width:100%;border:1px solid var(--line);border-radius:8px;background:#fff;padding:8px 9px;font:inherit;font-size:12px;color:var(--ink)}
+    .slot-form textarea{min-height:64px;resize:vertical}
+    .form-actions{display:flex;gap:8px;flex-wrap:wrap}
+    .solid-btn,.danger-btn{height:34px;border-radius:8px;padding:0 12px;font-size:12px;font-weight:850}
+    .solid-btn{background:var(--brand);color:#fff}
+    .danger-btn{background:#f7e8e4;color:var(--wine)}
+    .login-gate{position:fixed;inset:0;background:rgba(247,246,242,.86);backdrop-filter:blur(12px);display:none;align-items:center;justify-content:center;padding:18px;z-index:20}
+    .login-gate.on{display:flex}
+    .login-card{width:min(380px,100%);background:var(--panel);border:1px solid var(--line);border-radius:8px;padding:22px;box-shadow:var(--shadow)}
+    .login-card h2{margin:0 0 6px;font-size:21px}.login-card p{margin:0 0 14px;color:var(--muted);font-size:13px}
+    .login-card input{width:100%;height:42px;border:1px solid var(--line);border-radius:8px;margin-bottom:8px;padding:0 12px;font:inherit}
+    .login-card button{width:100%;height:42px;border-radius:8px;background:var(--brand);color:#fff;font-weight:850}
+    .login-error{min-height:18px;margin-top:9px;color:var(--wine);font-size:12px}
+    .toast{position:fixed;right:18px;bottom:18px;background:#1f2a22;color:#fff;border-radius:8px;padding:10px 12px;font-size:12px;opacity:0;transform:translateY(10px);transition:.2s;z-index:30}
+    .toast.on{opacity:1;transform:translateY(0)}
+    @media(max-width:980px){.filters{grid-template-columns:1fr}.week-nav{justify-content:space-between}.side{grid-template-columns:1fr}.stats{grid-template-columns:repeat(2,1fr)}.board-wrap{overflow-x:auto}.topbar{flex-direction:column}.actions{justify-content:flex-start}}
+  </style>
+</head>
+<body>
+  <div class="login-gate" id="loginGate">
+    <form class="login-card" id="loginForm">
+      <h2>아카이브 프라이빗 스케줄</h2>
+      <p>운영자 휴대폰번호로 로그인하세요</p>
+      <input id="phoneInput" type="tel" inputmode="numeric" autocomplete="tel" placeholder="휴대폰번호">
+      <input id="pinInput" type="password" autocomplete="current-password" placeholder="비밀번호">
+      <button type="submit">로그인</button>
+      <div class="login-error" id="loginError"></div>
+    </form>
+  </div>
+
+  <main class="app">
+    <div class="wrap">
+      <header class="topbar">
+        <div>
+          <div class="eyebrow">PRIVATE WEEKLY BOARD</div>
+          <h1>아카이브 프라이빗 스케줄</h1>
+          <p class="sub" id="sourceText">강사 가능 시간과 StudioMate 수업 점유 시간을 불러오는 중...</p>
+        </div>
+        <div class="actions">
+          <button class="pill-btn" id="operatorBtn" type="button" title="불가 사유 보기">
+            <svg viewBox="0 0 24 24" fill="none" stroke="currentColor"><path d="M12 20h9"/><path d="M16.5 3.5a2.1 2.1 0 0 1 3 3L7 19l-4 1 1-4Z"/></svg>
+            운영자 모드
+          </button>
+          <button class="icon-btn" id="refreshBtn" type="button" title="새로고침">
+            <svg viewBox="0 0 24 24" fill="none" stroke="currentColor"><path d="M21 12a9 9 0 0 0-15.2-6.4L3 8"/><path d="M3 3v5h5"/><path d="M3 12a9 9 0 0 0 15.2 6.4L21 16"/><path d="M16 16h5v5"/></svg>
+          </button>
+          <button class="pill-btn" type="button" id="signOutBtn">로그아웃</button>
+        </div>
+      </header>
+
+      <section class="filters">
+        <select class="control" id="instructorSelect"></select>
+        <div class="week-nav">
+          <button class="icon-btn" id="prevWeek" type="button" title="이전 주"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor"><path d="m15 18-6-6 6-6"/></svg></button>
+          <div class="week-label" id="weekLabel"></div>
+          <button class="icon-btn" id="nextWeek" type="button" title="다음 주"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor"><path d="m9 18 6-6-6-6"/></svg></button>
+        </div>
+        <select class="control" id="timeFilter">
+          <option value="all">전체 시간대</option>
+          <option value="morning">오전</option>
+          <option value="afternoon">오후</option>
+          <option value="evening">저녁</option>
+        </select>
+      </section>
+
+      <section class="stats">
+        <div class="stat"><div class="k">가능 슬롯</div><div class="v" id="availableCount">-</div></div>
+        <div class="stat"><div class="k">확인 필요</div><div class="v" id="confirmCount">-</div></div>
+        <div class="stat"><div class="k">표시 강사</div><div class="v" id="instructorCount">-</div></div>
+        <div class="stat"><div class="k">점유/불가</div><div class="v" id="busyCount">-</div></div>
+      </section>
+
+      <div class="legend">
+        <span><i style="background:#eef4e8;border:1px solid #d8e4ce"></i>가능</span>
+        <span><i style="background:#fff3d8;border:1px solid #ead7a9"></i>확인 필요</span>
+        <span><i style="background:#e9f1f8;border:1px solid #cbdae8"></i>회원 요청중</span>
+        <span><i style="background:#f5ece9;border:1px solid #e7d3cf"></i>운영자 모드 불가 사유</span>
+      </div>
+
+      <section class="board-wrap">
+        <div class="board" id="board"></div>
+      </section>
+
+      <section class="side">
+        <div class="panel">
+          <h2>강사 선택</h2>
+          <div class="instructor-list" id="instructorChips"></div>
+        </div>
+        <div class="panel">
+          <h2>선택 슬롯</h2>
+          <div class="detail-list" id="details">
+            <div class="detail"><b>슬롯을 선택하세요</b>상담 중 제안 가능한 시간, 마지막 확인 상태, 불가 사유를 여기서 확인합니다.</div>
+          </div>
+        </div>
+      </section>
+    </div>
+  </main>
+  <div class="toast" id="toast"></div>
+  <script src="./assets/app.js"></script>
+</body>
+</html>

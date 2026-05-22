@@ -2,6 +2,7 @@
   "private": true,
   "scripts": {
     "build:dashboard": "esbuild dashboard/src/vendor.js --bundle --format=iife --target=es2020 --outfile=dashboard/assets/vendor.js --minify",
+    "build:private-schedule": "esbuild dashboard/src/private-schedule.js --bundle --format=iife --target=es2020 --outfile=dashboard/private-schedule/assets/app.js --minify",
     "studiomate:member-excel": "node firebase/kangsain-functions/macmini-studiomate/download-member-excel.mjs",
     "studiomate:reservation-deadline": "node firebase/kangsain-functions/macmini-studiomate/set-reservation-deadline.mjs"
   },

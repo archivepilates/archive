@@ -87,6 +87,11 @@ service cloud.firestore {
       allow write: if false;
     }
 
+    match /privateAvailabilitySlots/{slotId} {
+      allow read: if isManager() || sameStudio(resource.data.studioId) || isInstructor(resource.data.staffId);
+      allow write: if false;
+    }
+
     match /attendanceSummaries/{summaryId} {
       allow read, write: if false;
     }

@@ -20,6 +20,10 @@ import {
   loginStaffWithPinHandler,
   setupStaffPinWithTempCodeHandler,
 } from "./callable/staffPinAuth";
+import {
+  adminDeletePrivateAvailabilitySlotHandler,
+  adminSavePrivateAvailabilitySlotHandler,
+} from "./callable/privateAvailability";
 import { sendAttendanceReminder } from "./push/sendAttendanceReminder";
 import { requireStaff, requireManager } from "./security/authGuards";
 import { syncManagerStaffs } from "./sync/syncManagerStaffs";
@@ -179,6 +183,26 @@ export const adminSyncManagerStaffs = onCall(callableOptions, async (request) =>
     const staff = await requireStaff(request);
     requireManager(staff);
     return await syncManagerStaffs({ studioId: staff.studioId, managerStaffId: staff.staffId });
+  } catch (err) {
+    throw toHttpsError(err);
+  }
+});
+
+export const adminSavePrivateAvailabilitySlot = onCall(callableOptions, async (request) => {
+  try {
+    const staff = await requireStaff(request);
+    requireManager(staff);
+    return await adminSavePrivateAvailabilitySlotHandler(request, staff);
+  } catch (err) {
+    throw toHttpsError(err);
+  }
+});
+
+export const adminDeletePrivateAvailabilitySlot = onCall(callableOptions, async (request) => {
+  try {
+    const staff = await requireStaff(request);
+    requireManager(staff);
+    return await adminDeletePrivateAvailabilitySlotHandler(request, staff);
   } catch (err) {
     throw toHttpsError(err);
   }
