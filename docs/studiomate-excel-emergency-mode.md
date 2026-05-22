@@ -19,6 +19,8 @@ StudioMate API 모드는 ARCHIVE PILATES 자사 사이트 운영 전까지 사�
 - 수업 예약 화면 복구에는 브라우저 자동화로 받은 수업예약내역 엑셀을 함께 사용한다.
 - 수업예약내역과 삭제된 수업 로그는 `오늘 ~ 예약오픈 종료일` 범위로 받는다. 예약오픈 종료일은 ARCHIVE IN 액션 기준과 동일하게 이번 주를 포함한 다음 주 일요일이다.
 - 수업예약내역 엑셀은 기존 수업과 매칭되면 기존 StudioMate 강사 ID를 사용한다. 같은 수업이 기존 강사 ID와 `excel_staff_...` 임시 강사 ID로 동시에 보이면 안 된다.
+- 최신 재직 강사명단은 수업예약내역 엑셀만으로 판단하지 않는다. 주 1회 Mac mini Playwright가 StudioMate `강사` 탭(`/staffs`)을 스캔해 `staffs` 기준명단을 보정한다.
+- 강사탭 스캔에서 확인된 강사는 `staffs.active=true`로 보강한다. 기존 active 강사가 강사탭에서 빠졌고 미래 수업/예약이 없으면 퇴사 후보로 보고 `active=false`로 내린다. 미래 수업/예약이 남아 있으면 자동 비활성화하지 않는다.
 - 수업 화면은 최신 수업예약내역 엑셀에 포함된 수업만 기준으로 재생성한다. 이전 API 동기화에서 남은 수업이 최신 엑셀에 없으면 화면에서는 제외한다.
 - 수업예약내역 엑셀에는 신뢰할 수 있는 수업 정원 원천이 없다. 화면에서는 최대정원과 정원 기반 예약저조 판단을 사용하지 않고 현재 예약 인원만 표시한다.
 - StudioMate `수업 > 삭제된 수업` 영역의 삭제 로그는 예약내역 엑셀과 별도 원천이지만, 별도 23:40 자동화는 사용하지 않는다. 1시간 엑셀 동기화에 포함해 같은 예약가능 기간 범위로 받고 `studiomateDeletedClassLogs`에 적재한다.
@@ -45,6 +47,15 @@ node scripts/emergency-import-studiomate-member-excel.mjs
 
 ```bash
 node scripts/run-studiomate-excel-emergency-mode.mjs
+```
+
+주간 강사탭 스캔:
+
+```bash
+cd /Users/archivepilates/codex-worktrees/archivein-live-setup
+source scripts/use-archivein-firebase-service-account.sh >/dev/null
+node scripts/sync-studiomate-staffs-from-browser.mjs
+node scripts/sync-studiomate-staffs-from-browser.mjs --apply
 ```
 
 엑셀 동기화 전용 브라우저 다운로드까지 함께 점검:
@@ -186,6 +197,7 @@ node scripts/emergency-import-studiomate-member-excel.mjs --queue-contact-sync -
 - 기존 `com.archive.studiomate-member-excel` 자동화는 삭제 상태로 둔다. 회원목록 다운로드는 `com.archive.studiomate-excel-emergency-mode`에 포함한다.
 - 엑셀 동기화는 기존 다운로드 자동화와 별도 명령/LaunchAgent/다운로드 폴더/로그/실행 기록을 사용한다.
 - StudioMate 로그인 세션은 중복 로그인을 피하기 위해 기존 Mac mini 브라우저 프로필을 읽어 사용한다.
+- 주간 강사탭 스캔 자동화는 `com.archive.studiomate-staff-browser-scan`이며 매주 월요일 07:20에 실행한다.
 - 엑셀 다운로드가 실패하거나 회원목록 엑셀을 받지 못하면 그 시간대 Firestore 반영을 건너뛴다.
 
 ## 제한

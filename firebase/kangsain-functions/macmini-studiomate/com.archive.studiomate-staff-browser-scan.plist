@@ -1,0 +1,42 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<!DOCTYPE plist PUBLIC "-//Apple//DTD PLIST 1.0//EN" "http://www.apple.com/DTDs/PropertyList-1.0.dtd">
+<plist version="1.0">
+<dict>
+  <key>Label</key>
+  <string>com.archive.studiomate-staff-browser-scan</string>
+  <key>ProgramArguments</key>
+  <array>
+    <string>/opt/homebrew/bin/node</string>
+    <string>/Users/archivepilates/codex-worktrees/archivein-live-setup/scripts/sync-studiomate-staffs-from-browser.mjs</string>
+    <string>--apply</string>
+  </array>
+  <key>WorkingDirectory</key>
+  <string>/Users/archivepilates/codex-worktrees/archivein-live-setup</string>
+  <key>StartCalendarInterval</key>
+  <dict>
+    <key>Weekday</key>
+    <integer>1</integer>
+    <key>Hour</key>
+    <integer>7</integer>
+    <key>Minute</key>
+    <integer>20</integer>
+  </dict>
+  <key>EnvironmentVariables</key>
+  <dict>
+    <key>TZ</key>
+    <string>Asia/Seoul</string>
+    <key>HEADLESS</key>
+    <string>true</string>
+    <key>STUDIOMATE_BASE_URL</key>
+    <string>https://arcpilates.studiomate.kr</string>
+    <key>GOOGLE_APPLICATION_CREDENTIALS</key>
+    <string>/Users/archivepilates/ArchiveIN/secrets/google/archive-codex-operator.json</string>
+    <key>GOOGLE_CLOUD_PROJECT</key>
+    <string>archive-pilates</string>
+  </dict>
+  <key>StandardOutPath</key>
+  <string>/Users/archivepilates/ArchiveIN/emergency/logs/studiomate-staff-browser-scan.out.log</string>
+  <key>StandardErrorPath</key>
+  <string>/Users/archivepilates/ArchiveIN/emergency/logs/studiomate-staff-browser-scan.err.log</string>
+</dict>
+</plist>
