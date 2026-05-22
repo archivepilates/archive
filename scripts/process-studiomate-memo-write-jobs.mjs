@@ -85,6 +85,11 @@ try {
           },
           { merge: true },
         );
+        await updateMemberMemoSyncStatus(data.jobId || ref.id, {
+          syncStatus: "synced",
+          syncedAt: admin.firestore.Timestamp.now(),
+          syncError: null,
+        });
         item.status = "done";
         result.written += 1;
       }
@@ -92,16 +97,21 @@ try {
       const attempts = Number(data.attempts || 0) + 1;
       const maxAttempts = Number(data.maxAttempts || 3);
       const message = error instanceof Error ? error.message : String(error);
+      const status = attempts >= maxAttempts ? "failed" : "retry";
       await ref.set(
         {
-          status: attempts >= maxAttempts ? "failed" : "retry",
+          status,
           attempts,
           lastError: message,
           updatedAt: admin.firestore.Timestamp.now(),
         },
         { merge: true },
       );
-      item.status = attempts >= maxAttempts ? "failed" : "retry";
+      await updateMemberMemoSyncStatus(data.jobId || ref.id, {
+        syncStatus: status,
+        syncError: message,
+      });
+      item.status = status;
       item.error = message;
       result.failed += 1;
     }
@@ -134,6 +144,20 @@ async function loadPendingJobs(max) {
     .limit(max)
     .get();
   return snap.docs.map((doc) => ({ ref: doc.ref, data: doc.data() }));
+}
+
+async function updateMemberMemoSyncStatus(memoId, patch) {
+  if (!memoId) return;
+  await db
+    .collection("memberMemos")
+    .doc(String(memoId))
+    .set(
+      {
+        ...patch,
+        updatedAt: admin.firestore.Timestamp.now(),
+      },
+      { merge: true },
+    );
 }
 
 async function writeMemo(page, job, authorization) {
