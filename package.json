@@ -6,6 +6,7 @@
     "run:archive-dashboard-sales-daily": "node scripts/run-archive-dashboard-sales-daily.mjs",
     "sync:archive-dashboard-db": "node scripts/sync-archive-dashboard-db.mjs",
     "verify:archivein-admin": "node scripts/verify-archivein-admin-firestore-access.mjs",
+    "deploy:archivein-live": "bash scripts/deploy-archivein-live.sh",
     "process:admin-emergency-sync": "node scripts/process-admin-emergency-sync-requests.mjs"
   },
   "dependencies": {
