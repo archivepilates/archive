@@ -338,7 +338,7 @@ function renderHeaderControls() {
   if (operatorModeLabel) operatorModeLabel.textContent = state.operatorMode ? "운영자 모드" : "예약 모드";
   sourceText.textContent = state.usingSample
     ? "라이브 데이터가 부족한 항목은 기본 가능 시간으로 표시 중입니다. StudioMate 점유 시간은 불러온 범위만 반영됩니다."
-    : "센터 수업과 등록된 불가 시간을 제외한 시간은 우선 가능으로 보고, 알림톡 확인 후 안 되는 슬롯만 삭제해 최종 제출합니다.";
+    : "";
 }
 
 function renderStats(slots) {
@@ -387,9 +387,8 @@ function emptyCellHtml(date, time, hiddenBusy = false) {
 
 function defaultDetailHtml() {
   return `
-    <div class="detail">
+    <div class="detail placeholder">
       <b>슬롯을 선택하세요</b>
-      상담 중 제안 가능한 시간과 불가 사유를 여기서 확인합니다. 편집은 운영자 모드에서만 가능합니다.
     </div>
   `;
 }
