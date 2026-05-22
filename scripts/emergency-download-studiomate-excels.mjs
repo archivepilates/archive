@@ -6,6 +6,7 @@ import { appendFile, copyFile, mkdir, stat, writeFile } from "node:fs/promises";
 import os from "node:os";
 import path from "node:path";
 import { acquireStudioMateBrowserLock } from "./lib/studiomate-browser-lock.mjs";
+import { ensureStudioMateLoggedIn } from "./lib/studiomate-login.mjs";
 
 const args = new Set(process.argv.slice(2));
 const kind = valueArg("--kind") || "all";
@@ -197,29 +198,7 @@ async function inspectOnly(page, name, expectedText) {
 }
 
 async function assertLoggedIn(page) {
-  const text = await page.locator("body").innerText({ timeout: 15000 }).catch(() => "");
-  const hasPasswordInput = await page.locator('input[type="password"]').first().isVisible().catch(() => false);
-  if (hasPasswordInput || (/로그인/.test(text) && /아이디|비밀번호|이메일|비번/.test(text))) {
-    if (config.waitForLogin && !config.headless) {
-      await waitForManualLogin(page);
-      return;
-    }
-    throw new Error("StudioMate login required for emergency browser profile. Run HEADLESS=false WAIT_FOR_LOGIN=true node scripts/emergency-download-studiomate-excels.mjs --dry-run, then log in manually.");
-  }
-  if (/captcha|보안문자|인증번호/i.test(text)) {
-    throw new Error("StudioMate security/captcha/verification screen detected. Manual operator action required.");
-  }
-}
-
-async function waitForManualLogin(page) {
-  const deadline = Date.now() + 5 * 60 * 1000;
-  while (Date.now() < deadline) {
-    const text = await page.locator("body").innerText({ timeout: 5000 }).catch(() => "");
-    if (/captcha|보안문자|인증번호/i.test(text)) throw new Error("StudioMate security screen detected.");
-    if (!(await page.locator('input[type="password"]').first().isVisible().catch(() => false)) && /회원|수업|예약/.test(text)) return;
-    await page.waitForTimeout(2000);
-  }
-  throw new Error("Timed out waiting for manual StudioMate login.");
+  await ensureStudioMateLoggedIn(page, { headless: config.headless, waitForLogin: config.waitForLogin });
 }
 
 async function closeNoticeDialog(page) {

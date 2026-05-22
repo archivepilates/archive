@@ -3,6 +3,7 @@ import os from "node:os";
 import path from "node:path";
 import { mkdir, writeFile } from "node:fs/promises";
 import { createRequire } from "node:module";
+import { ensureStudioMateLoggedIn } from "./lib/studiomate-login.mjs";
 
 const require = createRequire(import.meta.url);
 const admin = require("../firebase/kangsain-functions/functions/node_modules/firebase-admin");
@@ -252,24 +253,12 @@ function roleFromStudioMate(row) {
 }
 
 function protectedRole(currentRole, scannedRole) {
-  if (currentRole === "owner") return "owner";
-  if (currentRole === "manager" && scannedRole !== "owner") return "manager";
-  return scannedRole || currentRole || "instructor";
+  if (currentRole) return currentRole;
+  return scannedRole || "instructor";
 }
 
 async function assertLoggedIn(page) {
-  const text = await page.locator("body").innerText({ timeout: 15000 }).catch(() => "");
-  const hasPasswordInput = await page.locator('input[type="password"]').first().isVisible().catch(() => false);
-  if (hasPasswordInput || (/로그인/.test(text) && /아이디|비밀번호|이메일|비번/.test(text))) {
-    if (WAIT_FOR_LOGIN && !HEADLESS) {
-      await waitForManualLogin(page);
-      return;
-    }
-    throw new Error("StudioMate login required for browser staff scan. Run the Excel sync login recovery first.");
-  }
-  if (/captcha|보안문자|인증번호/i.test(text)) {
-    throw new Error("StudioMate security/captcha/verification screen detected. Manual operator action required.");
-  }
+  await ensureStudioMateLoggedIn(page, { headless: HEADLESS, waitForLogin: WAIT_FOR_LOGIN });
 }
 
 async function closeNoticeDialog(page) {
@@ -283,19 +272,6 @@ async function closeNoticeDialog(page) {
       await page.waitForTimeout(300);
     }
   }
-}
-
-async function waitForManualLogin(page) {
-  console.error("StudioMate login is required. Complete login in the opened browser window.");
-  const started = Date.now();
-  const timeoutMs = 5 * 60 * 1000;
-  while (Date.now() - started < timeoutMs) {
-    await page.waitForTimeout(1000);
-    const text = await page.locator("body").innerText({ timeout: 5000 }).catch(() => "");
-    const hasPasswordInput = await page.locator('input[type="password"]').first().isVisible().catch(() => false);
-    if (!hasPasswordInput && /회원|수업|예약|강사|설정/.test(text)) return;
-  }
-  throw new Error("StudioMate manual login wait timed out.");
 }
 
 async function writeReport(summary) {
