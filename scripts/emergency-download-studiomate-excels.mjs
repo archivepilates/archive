@@ -5,6 +5,7 @@ import { createReadStream } from "node:fs";
 import { appendFile, copyFile, mkdir, stat, writeFile } from "node:fs/promises";
 import os from "node:os";
 import path from "node:path";
+import { acquireStudioMateBrowserLock } from "./lib/studiomate-browser-lock.mjs";
 
 const args = new Set(process.argv.slice(2));
 const kind = valueArg("--kind") || "all";
@@ -44,19 +45,22 @@ await mkdir(config.downloadDir, { recursive: true });
 await mkdir(config.archiveRoot, { recursive: true });
 await mkdir(path.dirname(config.runLogPath), { recursive: true });
 
-const { chromium } = await import("playwright");
-const context = await chromium.launchPersistentContext(config.profileDir, {
-  acceptDownloads: true,
-  headless: config.headless,
-});
-const page = await context.newPage();
+let releaseBrowserLock = null;
+let context = null;
 let capturedAuthorization = "";
-page.on("request", (request) => {
-  if (!request.url().includes("api.studiomate.kr")) return;
-  capturedAuthorization = request.headers().authorization || capturedAuthorization;
-});
 
 try {
+  releaseBrowserLock = await acquireStudioMateBrowserLock({ owner: "studiomate-excel-emergency-mode" });
+  const { chromium } = await import("playwright");
+  context = await chromium.launchPersistentContext(config.profileDir, {
+    acceptDownloads: true,
+    headless: config.headless,
+  });
+  const page = await context.newPage();
+  page.on("request", (request) => {
+    if (!request.url().includes("api.studiomate.kr")) return;
+    capturedAuthorization = request.headers().authorization || capturedAuthorization;
+  });
   if (kind === "all" || kind === "member") {
     result.downloads.member = await downloadMemberExcel(page);
   }
@@ -76,7 +80,8 @@ try {
   await writeFile(path.join(config.downloadDir, "last-emergency-excel-download-result.json"), `${JSON.stringify(result, null, 2)}\n`);
   await appendFile(config.runLogPath, `${JSON.stringify(result)}\n`);
   console.log(JSON.stringify(result, null, 2));
-  await context.close();
+  if (context) await context.close();
+  if (releaseBrowserLock) await releaseBrowserLock();
 }
 
 async function downloadMemberExcel(page) {

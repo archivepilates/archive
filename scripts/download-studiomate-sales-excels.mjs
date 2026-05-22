@@ -6,6 +6,7 @@ import { createReadStream } from "node:fs";
 import { copyFile, mkdir, readFile, stat, writeFile } from "node:fs/promises";
 import os from "node:os";
 import path from "node:path";
+import { acquireStudioMateBrowserLock } from "./lib/studiomate-browser-lock.mjs";
 
 const args = new Set(process.argv.slice(2));
 const apply = args.has("--apply") || process.env.DRY_RUN === "false";
@@ -56,14 +57,17 @@ await mkdir(config.downloadDir, { recursive: true });
 await mkdir(path.join(config.driveRoot, "수업매출원본데이터"), { recursive: true });
 await mkdir(path.join(config.driveRoot, "수강권매출원본데이터"), { recursive: true });
 
-const { chromium } = await import("playwright");
-const context = await chromium.launchPersistentContext(config.profileDir, {
-  acceptDownloads: true,
-  headless: config.headless,
-});
-const page = await context.newPage();
+let releaseBrowserLock = null;
+let context = null;
 
 try {
+  releaseBrowserLock = await acquireStudioMateBrowserLock({ owner: "studiomate-sales-download" });
+  const { chromium } = await import("playwright");
+  context = await chromium.launchPersistentContext(config.profileDir, {
+    acceptDownloads: true,
+    headless: config.headless,
+  });
+  const page = await context.newPage();
   if (kind === "all" || kind === "lesson-sales") {
     result.downloads.lessonSales = await downloadSalesExcel(page, {
       kind: "lesson-sales",
@@ -93,7 +97,8 @@ try {
   result.finishedAt = new Date().toISOString();
   await writeFile(path.join(config.downloadDir, "last-studiomate-sales-download-result.json"), `${JSON.stringify(result, null, 2)}\n`);
   console.log(JSON.stringify(result, null, 2));
-  await context.close();
+  if (context) await context.close();
+  if (releaseBrowserLock) await releaseBrowserLock();
 }
 
 async function downloadSalesExcel(page, target) {

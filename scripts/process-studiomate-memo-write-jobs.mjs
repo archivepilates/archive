@@ -4,6 +4,7 @@ import os from "node:os";
 import path from "node:path";
 import { createRequire } from "node:module";
 import { createSign } from "node:crypto";
+import { acquireStudioMateBrowserLock } from "./lib/studiomate-browser-lock.mjs";
 
 const require = createRequire(import.meta.url);
 const admin = require("../firebase/kangsain-functions/functions/node_modules/firebase-admin");
@@ -55,16 +56,19 @@ if (!jobs.length) {
   process.exit(0);
 }
 
-const { chromium } = await import("playwright");
-const context = await chromium.launchPersistentContext(config.profileDir, { headless: config.headless });
-const page = await context.newPage();
+let releaseBrowserLock = null;
+let context = null;
 let capturedAuthorization = "";
-page.on("request", (request) => {
-  if (!request.url().includes("api.studiomate.kr")) return;
-  capturedAuthorization = request.headers().authorization || capturedAuthorization;
-});
 
 try {
+  releaseBrowserLock = await acquireStudioMateBrowserLock({ owner: "studiomate-memo-write-queue" });
+  const { chromium } = await import("playwright");
+  context = await chromium.launchPersistentContext(config.profileDir, { headless: config.headless });
+  const page = await context.newPage();
+  page.on("request", (request) => {
+    if (!request.url().includes("api.studiomate.kr")) return;
+    capturedAuthorization = request.headers().authorization || capturedAuthorization;
+  });
   await page.goto(new URL("/users", config.baseUrl).toString(), { waitUntil: "networkidle", timeout: 60000 });
   await assertLoggedIn(page);
   if (!capturedAuthorization) {
@@ -137,7 +141,8 @@ try {
   await writeFile(path.join(path.dirname(config.runLogPath), "last-studiomate-memo-write-result.json"), `${JSON.stringify(result, null, 2)}\n`);
   await appendFile(config.runLogPath, `${JSON.stringify(result)}\n`);
   console.log(JSON.stringify(result, null, 2));
-  await context.close();
+  if (context) await context.close();
+  if (releaseBrowserLock) await releaseBrowserLock();
 }
 
 async function loadPendingJobs(max) {

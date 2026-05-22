@@ -212,6 +212,7 @@ node scripts/emergency-import-studiomate-member-excel.mjs --queue-contact-sync -
 - 알림톡 대상자 선정은 엑셀 동기화로 갱신된 회원카드 수강권을 기준으로 한다.
 - 알림톡은 엑셀 동기화 기본모드 기준으로 운영하며, 실발송 전 운영자 승인, 중복 발송 차단, 제외 회원 검토를 유지한다.
 - 프라이빗/그룹 사전설문 제출 내용은 ARCHIVE IN `memberMemos`에 먼저 저장하고, StudioMate 회원카드 메모 쓰기는 `studiomateMemoWriteJobs` 큐와 Mac mini Playwright LaunchAgent가 처리한다. StudioMate 로그인 만료, 화면 변경, 메모쓰기 실패로 작업이 `failed`가 되면 `home@archivepilates.com`으로 실패 메일을 보낸다.
+- StudioMate 엑셀 다운로드, 매출 다운로드, 회원메모 쓰기처럼 `~/ArchiveIN/automation/browser-profile`을 여는 Playwright 작업은 공통 락 `~/ArchiveIN/automation/locks/studiomate-browser-profile.lock`으로 직렬화한다. 한 작업이 실행 중이면 다른 작업은 최대 30분 기다리고, 45분 이상 오래된 락은 stale로 보고 정리한다.
 
 ## API 모드 재검토 조건
 
