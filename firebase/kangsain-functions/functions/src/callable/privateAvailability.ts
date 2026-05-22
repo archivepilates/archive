@@ -246,6 +246,12 @@ async function validateSlotPayload(
     throw new AppError("NOT_FOUND", "선택한 강사를 찾을 수 없습니다");
   }
   if (AVAILABLE_STATUSES.includes(payload.status)) {
+    const centerClosed = await isCenterClosed(actor.studioId, payload.date);
+    if (centerClosed) {
+      const reason = `${payload.date} 센터 휴일`;
+      if (options.skipLectureConflicts) return { skipped: true, reason, payload, target, existing: undefined };
+      throw new AppError("FAILED_PRECONDITION", `${payload.date}은 센터 휴일입니다`);
+    }
     const conflict = await findLectureConflict(actor.studioId, target, payload.date, payload.startTime, payload.endTime);
     if (conflict) {
       const reason = `${target.name} ${payload.date} ${payload.startTime}-${payload.endTime} ARCHIVE PILATES 수업 시간`;
@@ -323,6 +329,21 @@ function buildResolvedSlot({
       reason: archiveBusy.map((item) => `ARCHIVE PILATES 수업 · ${item.title}`).join(" / "),
       source: "ARCHIVE PILATES 수업",
       checkedAt: "",
+    };
+  }
+
+  if (!hasAnyLectureOnDate(lectures, date)) {
+    return {
+      type: "unavailable",
+      lockedByCenterHoliday: true,
+      instructor,
+      date,
+      time,
+      endTime,
+      memo: "",
+      sourceKey: "manual",
+      source: "센터 휴일",
+      checkedAt: "자동 불가",
     };
   }
 
@@ -406,6 +427,18 @@ function hasLectureOnDate(lectures: BusyRow[], instructor: { staffId: string; na
   return lectures.some((lecture) => {
     if (lecture.date !== date) return false;
     return lecture.staffIds.includes(instructor.staffId) || lecture.staffNames.map(normalizeName).includes(normalizeName(instructor.name));
+  });
+}
+
+function hasAnyLectureOnDate(lectures: BusyRow[], date: string): boolean {
+  return lectures.some((lecture) => lecture.date === date);
+}
+
+async function isCenterClosed(studioId: string, date: string): Promise<boolean> {
+  const snap = await refs.lectures().where("date", "==", date).get();
+  return !snap.docs.some((doc) => {
+    const lecture = doc.data();
+    return lecture.studioId === studioId && String(lecture.status || "").toLowerCase() !== "deleted";
   });
 }
 

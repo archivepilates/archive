@@ -231,6 +231,7 @@ function normalizeResolvedSlot(data) {
     checkedAt: checkedAtLabel(data.checkedAt) || String(data.checkedAt || ""),
     virtual: Boolean(data.virtual),
     lockedByLecture: Boolean(data.lockedByLecture),
+    lockedByCenterHoliday: Boolean(data.lockedByCenterHoliday),
   };
 }
 
@@ -401,7 +402,8 @@ function renderDetail(slot) {
   const label = slot.type === "busy" || slot.type === "unavailable" ? "불가 사유" : slot.type === "confirm" ? "확인 필요 슬롯" : "제안 가능 슬롯";
   const body = slot.type === "busy" ? slot.reason : `${slot.source} · ${slot.checkedAt}`;
   const blocked = slot.type === "busy" || slot.type === "unavailable";
-  const canEdit = state.operatorMode && !slot.lockedByLecture;
+  const locked = slot.lockedByLecture || slot.lockedByCenterHoliday;
+  const canEdit = state.operatorMode && !locked;
   details.innerHTML = `
     <div class="detail">
       <div class="detail-head">
@@ -413,7 +415,9 @@ function renderDetail(slot) {
     <div class="detail">
       <b>운영 액션</b>
       ${state.operatorMode
-        ? slot.lockedByLecture
+        ? slot.lockedByCenterHoliday
+          ? "센터 휴일은 운영자 모드에서도 가능 슬롯으로 변경할 수 없습니다."
+          : slot.lockedByLecture
           ? "ARCHIVE PILATES 수업과 겹친 시간은 운영자 모드에서도 가능 슬롯으로 변경할 수 없습니다."
           : "운영자 모드입니다. 필요하면 슬롯 상태를 수정하고 저장하세요."
         : blocked
