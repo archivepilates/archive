@@ -228,8 +228,12 @@ function normalizeBusy(doc, kind) {
 
 function normalizeAvailability(doc) {
   const data = doc.data();
+  return normalizeAvailabilityData(data, doc.id);
+}
+
+function normalizeAvailabilityData(data, fallbackId = "") {
   return {
-    slotId: String(data.slotId || doc.id),
+    slotId: String(data.slotId || fallbackId),
     staffId: String(data.staffId || ""),
     staffName: String(data.staffName || ""),
     date: String(data.date || ""),
@@ -239,8 +243,14 @@ function normalizeAvailability(doc) {
     source: sourceLabel(data.source),
     sourceKey: String(data.source || "manual"),
     memo: String(data.memo || ""),
-    checkedAt: data.checkedAt?.toDate ? formatDateTime(data.checkedAt.toDate()) : "수동 확인",
+    checkedAt: checkedAtLabel(data.checkedAt),
   };
+}
+
+function checkedAtLabel(value) {
+  if (value?.toDate) return formatDateTime(value.toDate()) || "수동 확인";
+  if (typeof value === "string" && value) return formatDateTime(new Date(value)) || "수동 확인";
+  return "수동 확인";
 }
 
 function sourceLabel(source) {
@@ -267,11 +277,11 @@ async function readQuerySafely(q) {
 async function loadLiveData() {
   if (!state.db || !state.user) throw new Error("로그인이 필요합니다");
   const { start, end } = currentRange();
-  const [staffSnap, lectureSnap, otherSnap, availabilitySnap] = await Promise.all([
+  const [staffSnap, lectureSnap, otherSnap, availabilityRows] = await Promise.all([
     readQuerySafely(query(collection(state.db, "staffs"), limit(120))),
     readQuerySafely(query(collection(state.db, "lectures"), where("date", ">=", start), where("date", "<=", end), orderBy("date"), limit(500))),
     readQuerySafely(query(collection(state.db, "otherSchedules"), where("date", ">=", start), where("date", "<=", end), orderBy("date"), limit(500))),
-    readQuerySafely(query(collection(state.db, "privateAvailabilitySlots"), where("date", ">=", start), where("date", "<=", end), orderBy("date"), limit(800))),
+    loadPrivateAvailabilitySlots(start, end),
   ]);
 
   const staffRows = staffSnap
@@ -280,8 +290,30 @@ async function loadLiveData() {
   state.instructors = staffRows;
   state.lectures = lectureSnap ? lectureSnap.docs.map((doc) => normalizeBusy(doc, "lecture")).filter((row) => row.status !== "deleted") : [];
   state.otherSchedules = otherSnap ? otherSnap.docs.map((doc) => normalizeBusy(doc, "other")).filter((row) => row.status !== "deleted") : [];
-  state.availability = availabilitySnap ? availabilitySnap.docs.map(normalizeAvailability).filter((row) => row.staffId && row.date && row.time) : [];
+  state.availability = availabilityRows;
   state.usingSample = false;
+}
+
+async function loadPrivateAvailabilitySlots(startDate, endDate) {
+  if (state.functions) {
+    try {
+      const listSlots = httpsCallable(state.functions, "adminSavePrivateAvailabilitySlot");
+      const result = await listSlots({ action: "list", startDate, endDate });
+      const slots = Array.isArray(result.data?.slots) ? result.data.slots : [];
+      return slots.map((slot) => normalizeAvailabilityData(slot, slot.slotId)).filter((row) => row.staffId && row.date && row.time);
+    } catch (err) {
+      console.warn("Callable availability query failed:", err.message);
+    }
+  }
+
+  const snap = await readQuerySafely(query(
+    collection(state.db, "privateAvailabilitySlots"),
+    where("date", ">=", startDate),
+    where("date", "<=", endDate),
+    orderBy("date"),
+    limit(800),
+  ));
+  return snap ? snap.docs.map(normalizeAvailability).filter((row) => row.staffId && row.date && row.time) : [];
 }
 
 function getFilteredInstructors() {

@@ -9,6 +9,9 @@ const SOURCES: PrivateAvailabilitySource[] = ["manual", "monthly_alimtalk", "wee
 const AVAILABLE_STATUSES: PrivateAvailabilityStatus[] = ["available", "confirm", "request"];
 
 export async function adminSavePrivateAvailabilitySlotHandler(request: CallableRequest, actor: StaffDoc) {
+  const action = clean(request.data?.action, 30);
+  if (action === "list") return adminListPrivateAvailabilitySlotsHandler(request, actor);
+
   const staffId = clean(request.data?.staffId, 80);
   const date = clean(request.data?.date, 20);
   const startTime = clean(request.data?.startTime, 10);
@@ -63,6 +66,40 @@ export async function adminSavePrivateAvailabilitySlotHandler(request: CallableR
     { merge: true },
   );
   return { ok: true, slotId };
+}
+
+export async function adminListPrivateAvailabilitySlotsHandler(request: CallableRequest, actor: StaffDoc) {
+  const startDate = clean(request.data?.startDate, 20);
+  const endDate = clean(request.data?.endDate, 20);
+  if (!/^\d{4}-\d{2}-\d{2}$/.test(startDate) || !/^\d{4}-\d{2}-\d{2}$/.test(endDate)) {
+    throw new AppError("INVALID_ARGUMENT", "조회 기간이 올바르지 않습니다");
+  }
+
+  const snap = await refs
+    .privateAvailabilitySlots()
+    .where("date", ">=", startDate)
+    .where("date", "<=", endDate)
+    .orderBy("date")
+    .limit(2000)
+    .get();
+
+  return {
+    slots: snap.docs
+      .map((doc) => doc.data())
+      .filter((slot) => slot.studioId === actor.studioId)
+      .map((slot) => ({
+        slotId: slot.slotId,
+        staffId: slot.staffId,
+        staffName: slot.staffName,
+        date: slot.date,
+        startTime: slot.startTime,
+        endTime: slot.endTime,
+        status: slot.status,
+        source: slot.source,
+        memo: slot.memo,
+        checkedAt: slot.checkedAt?.toDate().toISOString() || "",
+      })),
+  };
 }
 
 export async function adminDeletePrivateAvailabilitySlotHandler(request: CallableRequest, actor: StaffDoc) {
