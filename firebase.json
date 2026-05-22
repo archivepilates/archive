@@ -105,6 +105,13 @@
       ],
       "rewrites": [
         {
+          "source": "/archivein/api/groupSurveySubmit",
+          "function": {
+            "functionId": "ingestPrivateSurveyResponse",
+            "region": "asia-northeast3"
+          }
+        },
+        {
           "source": "/aki/**",
           "run": {
             "serviceId": "aki-agent-api",

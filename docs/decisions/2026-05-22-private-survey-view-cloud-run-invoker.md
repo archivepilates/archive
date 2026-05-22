@@ -26,6 +26,12 @@ gcloud run services update privatesurveyresponseview \
   --no-invoker-iam-check
 ```
 
+The canonical staff-facing survey detail link is the static ARCHIVE IN page:
+
+- `https://in.archivepilates.com/privateSurveyResponseView?id=...&token=...`
+
+That page reads `privateSurveyPublic/{id-token}` directly from Firestore. The exported `privateSurveyResponseView` Cloud Function remains available as a direct Cloud Run/Cloud Functions endpoint for compatibility and diagnostics, but Firebase Hosting does not rewrite the canonical static page path to the function.
+
 ## Verified State
 
 After applying the setting:

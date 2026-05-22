@@ -51,7 +51,7 @@
         <p class="lead">회원님께서 예약하신 첫 그룹수업을 더 안전하게 준비하기 위한 사전 확인 설문입니다. 통증, 질환, 운동 경험 등 수업 전 강사가 확인해야 할 내용을 간단히 작성해 주세요.</p>
         <div class="meta" id="meta"><span class="chip">설문 정보를 확인하는 중</span></div>
       </div>
-      <img class="brand" src="/logo120.png" alt="ARCHIVE PILATES">
+      <img class="brand" src="../logo120.png" alt="ARCHIVE PILATES">
     </section>
     <form id="surveyForm" hidden>
       <fieldset>
@@ -108,7 +108,7 @@
         return;
       }
       try {
-        const info = await requestJson(`/api/groupSurveySubmit?id=${encodeURIComponent(requestId)}&token=${encodeURIComponent(accessToken)}`);
+        const info = await requestJson(`../api/groupSurveySubmit?id=${encodeURIComponent(requestId)}&token=${encodeURIComponent(accessToken)}`);
         meta.innerHTML = [
           `<span class="chip">${escapeHtml(info.memberName || '회원')} 회원</span>`,
           `<span class="chip">${escapeHtml(info.lessonTime || '첫 그룹수업')}</span>`,
@@ -151,7 +151,7 @@
           concern: valueOf('concern'),
           requestNote: form.elements.requestNote.value.trim()
         };
-        const result = await requestJson('/api/groupSurveySubmit', {
+        const result = await requestJson('../api/groupSurveySubmit', {
           method: 'POST',
           headers: { 'Content-Type': 'application/json' },
           body: JSON.stringify(payload)
