@@ -1,14 +1,5 @@
 import { initializeApp } from "firebase/app";
 import { getAuth, onAuthStateChanged, signInWithEmailAndPassword, signOut } from "firebase/auth";
-import {
-  collection,
-  getDocs,
-  getFirestore,
-  limit,
-  orderBy,
-  query,
-  where,
-} from "firebase/firestore";
 import { getFunctions, httpsCallable } from "firebase/functions";
 
 const config = window.KANGSAIN_FIREBASE_CONFIG;
@@ -34,7 +25,6 @@ const FALLBACK_STAFF_COLORS = ["#6d7d58", "#426b8f", "#9b5148", "#a8742a", "#6f5
 const state = {
   app: null,
   auth: null,
-  db: null,
   functions: null,
   user: null,
   weekStart: startOfWeek(new Date()),
@@ -85,13 +75,6 @@ function addDays(date, days) {
 function timeToMin(time) {
   const [h, m] = String(time || "00:00").slice(0, 5).split(":").map(Number);
   return h * 60 + m;
-}
-
-function timestampToTime(value) {
-  if (!value) return "";
-  const date = value.toDate ? value.toDate() : new Date(value);
-  if (Number.isNaN(date.getTime())) return "";
-  return String(date.getHours()).padStart(2, "0") + ":" + String(date.getMinutes()).padStart(2, "0");
 }
 
 function overlaps(rowTime, start, end) {
@@ -170,33 +153,6 @@ function nextHour(value) {
   return `${String(Math.floor(next / 60)).padStart(2, "0")}:${String(next % 60).padStart(2, "0")}`;
 }
 
-function normalizeStaff(doc) {
-  const data = doc.data();
-  return {
-    staffId: String(data.staffId || doc.id),
-    name: String(data.name || data.staffName || doc.id),
-    role: data.role || "instructor",
-    active: data.active !== false,
-    color: staffColorFromData(data, doc.id),
-  };
-}
-
-function staffColorFromData(data, fallbackKey = "") {
-  const candidates = [
-    data.privateScheduleColor,
-    data.archiveInColor,
-    data.scheduleColor,
-    data.calendarColor,
-    data.lessonColor,
-    data.color,
-    data.themeColor,
-    data.backgroundColor,
-    data.hexColor,
-  ];
-  const value = candidates.find((item) => isHexColor(item));
-  return value || colorFromKey(data.staffId || data.name || fallbackKey);
-}
-
 function isHexColor(value) {
   return typeof value === "string" && /^#[0-9a-f]{6}$/i.test(value.trim());
 }
@@ -208,48 +164,12 @@ function colorFromKey(value) {
   return FALLBACK_STAFF_COLORS[hash % FALLBACK_STAFF_COLORS.length];
 }
 
-function normalizeBusy(doc, kind) {
-  const data = doc.data();
-  const names = Array.isArray(data.staffNames) && data.staffNames.length ? data.staffNames : [data.staffName];
-  const ids = Array.isArray(data.staffIds) && data.staffIds.length ? data.staffIds : [data.staffId];
-  return {
-    id: doc.id,
-    kind,
-    date: data.date,
-    start: timestampToTime(data.startAt),
-    end: timestampToTime(data.endAt),
-    title: data.title || data.divisionName || data.category || (kind === "lecture" ? "ARCHIVE PILATES 수업" : "기타 일정"),
-    status: data.status || "scheduled",
-    lessonType: data.lessonType || "unknown",
-    staffIds: ids.filter(Boolean).map(String),
-    staffNames: names.filter(Boolean).map(String),
-  };
-}
-
-function normalizeAvailability(doc) {
-  const data = doc.data();
-  return normalizeAvailabilityData(data, doc.id);
-}
-
-function normalizeAvailabilityData(data, fallbackId = "") {
-  return {
-    slotId: String(data.slotId || fallbackId),
-    staffId: String(data.staffId || ""),
-    staffName: String(data.staffName || ""),
-    date: String(data.date || ""),
-    time: String(data.startTime || ""),
-    endTime: String(data.endTime || nextHour(data.startTime || "")),
-    status: String(data.status || "available"),
-    source: sourceLabel(data.source),
-    sourceKey: String(data.source || "manual"),
-    memo: String(data.memo || ""),
-    checkedAt: checkedAtLabel(data.checkedAt),
-  };
-}
-
 function checkedAtLabel(value) {
   if (value?.toDate) return formatDateTime(value.toDate()) || "수동 확인";
-  if (typeof value === "string" && value) return formatDateTime(new Date(value)) || "수동 확인";
+  if (typeof value === "string" && value) {
+    const date = new Date(value);
+    return Number.isNaN(date.getTime()) ? value : formatDateTime(date);
+  }
   return "수동 확인";
 }
 
@@ -265,55 +185,52 @@ function formatDateTime(date) {
   return `${ymd(date)} ${String(date.getHours()).padStart(2, "0")}:${String(date.getMinutes()).padStart(2, "0")}`;
 }
 
-async function readQuerySafely(q) {
-  try {
-    return await getDocs(q);
-  } catch (err) {
-    console.warn("Firestore query failed:", err.message);
-    return null;
-  }
-}
-
 async function loadLiveData() {
-  if (!state.db || !state.user) throw new Error("로그인이 필요합니다");
+  if (!state.functions || !state.user) throw new Error("로그인이 필요합니다");
   const { start, end } = currentRange();
-  const [staffSnap, lectureSnap, otherSnap, availabilityRows] = await Promise.all([
-    readQuerySafely(query(collection(state.db, "staffs"), limit(120))),
-    readQuerySafely(query(collection(state.db, "lectures"), where("date", ">=", start), where("date", "<=", end), orderBy("date"), limit(500))),
-    readQuerySafely(query(collection(state.db, "otherSchedules"), where("date", ">=", start), where("date", "<=", end), orderBy("date"), limit(500))),
-    loadPrivateAvailabilitySlots(start, end),
-  ]);
-
-  const staffRows = staffSnap
-    ? staffSnap.docs.map(normalizeStaff).filter((s) => s.active && s.role !== "viewer" && !isExcludedInstructorName(s.name))
-    : [];
-  state.instructors = staffRows;
-  state.lectures = lectureSnap ? lectureSnap.docs.map((doc) => normalizeBusy(doc, "lecture")).filter((row) => row.status !== "deleted") : [];
-  state.otherSchedules = otherSnap ? otherSnap.docs.map((doc) => normalizeBusy(doc, "other")).filter((row) => row.status !== "deleted") : [];
-  state.availability = availabilityRows;
+  const getWeek = httpsCallable(state.functions, "adminSavePrivateAvailabilitySlot");
+  const result = await getWeek({ action: "getWeek", startDate: start, endDate: end });
+  const instructors = Array.isArray(result.data?.instructors) ? result.data.instructors : [];
+  const slots = Array.isArray(result.data?.slots) ? result.data.slots : [];
+  state.instructors = instructors
+    .map(normalizeResolvedInstructor)
+    .filter((s) => s.active && s.role !== "viewer" && !isExcludedInstructorName(s.name));
+  state.lectures = [];
+  state.otherSchedules = [];
+  state.availability = slots.map(normalizeResolvedSlot).filter((row) => row.staffId && row.date && row.time);
   state.usingSample = false;
 }
 
-async function loadPrivateAvailabilitySlots(startDate, endDate) {
-  if (state.functions) {
-    try {
-      const listSlots = httpsCallable(state.functions, "adminSavePrivateAvailabilitySlot");
-      const result = await listSlots({ action: "list", startDate, endDate });
-      const slots = Array.isArray(result.data?.slots) ? result.data.slots : [];
-      return slots.map((slot) => normalizeAvailabilityData(slot, slot.slotId)).filter((row) => row.staffId && row.date && row.time);
-    } catch (err) {
-      console.warn("Callable availability query failed:", err.message);
-    }
-  }
+function normalizeResolvedInstructor(data) {
+  return {
+    staffId: String(data.staffId || ""),
+    name: String(data.name || data.staffName || ""),
+    role: data.role || "instructor",
+    active: data.active !== false,
+    color: isHexColor(data.color) ? data.color : colorFromKey(data.staffId || data.name),
+  };
+}
 
-  const snap = await readQuerySafely(query(
-    collection(state.db, "privateAvailabilitySlots"),
-    where("date", ">=", startDate),
-    where("date", "<=", endDate),
-    orderBy("date"),
-    limit(800),
-  ));
-  return snap ? snap.docs.map(normalizeAvailability).filter((row) => row.staffId && row.date && row.time) : [];
+function normalizeResolvedSlot(data) {
+  const instructor = normalizeResolvedInstructor(data.instructor || {});
+  return {
+    ...data,
+    type: String(data.type || "available"),
+    slotId: String(data.slotId || ""),
+    staffId: instructor.staffId,
+    staffName: instructor.name,
+    instructor,
+    date: String(data.date || ""),
+    time: String(data.time || data.startTime || ""),
+    endTime: String(data.endTime || nextHour(data.time || data.startTime || "")),
+    memo: String(data.memo || ""),
+    sourceKey: String(data.sourceKey || "manual"),
+    source: String(data.source || "센터 수업 외 우선 가능"),
+    reason: String(data.reason || ""),
+    checkedAt: checkedAtLabel(data.checkedAt) || String(data.checkedAt || ""),
+    virtual: Boolean(data.virtual),
+    lockedByLecture: Boolean(data.lockedByLecture),
+  };
 }
 
 function getFilteredInstructors() {
@@ -367,70 +284,7 @@ function rangesOverlap(startA, endA, startB, endB) {
 }
 
 function slotFor(instructor, date, time) {
-  const busy = busyFor(instructor, date, time);
-  const archiveBusy = busy.filter((item) => item.kind === "lecture");
-  const available = state.availability.find(
-    (item) => item.staffId === instructor.staffId && item.date === date && item.time === time,
-  );
-  if (archiveBusy.length) {
-    return {
-      type: "busy",
-      lockedByLecture: true,
-      instructor,
-      date,
-      time,
-      reason: archiveBusy.map((item) => `ARCHIVE PILATES 수업 · ${item.title}`).join(" / "),
-    };
-  }
-  if (available && available.status !== "unavailable") {
-    return {
-      type: ["confirm", "request"].includes(available.status) ? available.status : "available",
-      slotId: available.slotId,
-      instructor,
-      date,
-      time,
-      endTime: available.endTime || nextHour(time),
-      memo: available.memo || "",
-      sourceKey: available.sourceKey || "manual",
-      source: busy.length ? `${available.source} · 운영자 예외` : available.source,
-      checkedAt: available.checkedAt,
-    };
-  }
-  if (busy.length) {
-    return {
-      type: "busy",
-      instructor,
-      date,
-      time,
-      reason: busy.map((item) => (item.kind === "lecture" ? `ARCHIVE PILATES 수업 · ${item.title}` : `외부/기타 일정 · ${item.title}`)).join(" / "),
-    };
-  }
-  if (!available) {
-    return {
-      type: "available",
-      virtual: true,
-      instructor,
-      date,
-      time,
-      endTime: nextHour(time),
-      memo: "",
-      sourceKey: "manual",
-      source: "센터 수업 외 우선 가능",
-      checkedAt: "알림톡 확인 전",
-    };
-  }
-  return {
-    type: "unavailable",
-    slotId: available.slotId,
-    instructor,
-    date,
-    time,
-    endTime: available.endTime || nextHour(time),
-    memo: available.memo || "",
-    sourceKey: available.sourceKey || "manual",
-    source: available.source,
-    checkedAt: available.checkedAt,
-  };
+  return state.availability.find((item) => item.staffId === instructor.staffId && item.date === date && item.time === time) || null;
 }
 
 function slotHtml(slot) {
@@ -789,8 +643,8 @@ async function saveSlot(form) {
     return;
   }
   const save = httpsCallable(state.functions, "adminSavePrivateAvailabilitySlot");
-  await Promise.all(staffIds.flatMap((staffId) =>
-    dates.flatMap((date) => timeSlots.map((timeSlot) => save({
+  const slots = staffIds.flatMap((staffId) =>
+    dates.flatMap((date) => timeSlots.map((timeSlot) => ({
       staffId,
       date,
       startTime: timeSlot.startTime,
@@ -799,11 +653,12 @@ async function saveSlot(form) {
       source: data.source,
       memo: data.memo,
     }))),
-  ));
+  );
+  const result = await save({ action: "updateSlots", slots });
   await loadLiveData();
   renderBoard();
   closeDetail();
-  showToast(`슬롯 ${staffIds.length * dates.length * timeSlots.length}개를 저장했습니다`);
+  showToast(`슬롯 ${result.data?.savedCount || slots.length}개를 저장했습니다`);
 }
 
 function findBusyConflict(staffIds, dates, startTime, endTime, options = {}) {
@@ -957,7 +812,6 @@ function init() {
   }
   state.app = initializeApp(config);
   state.auth = getAuth(state.app);
-  state.db = getFirestore(state.app);
   state.functions = getFunctions(state.app, "asia-northeast3");
   onAuthStateChanged(state.auth, async (user) => {
     state.user = user;

@@ -1,4 +1,5 @@
 import type { CallableRequest } from "firebase-functions/v2/https";
+import { db } from "../config/firebase";
 import { refs } from "../firestore/refs";
 import type { PrivateAvailabilitySource, PrivateAvailabilityStatus, StaffDoc } from "../types/models";
 import { nowTimestamp } from "../utils/date";
@@ -7,56 +8,52 @@ import { AppError } from "../utils/errors";
 const STATUSES: PrivateAvailabilityStatus[] = ["available", "confirm", "request", "unavailable"];
 const SOURCES: PrivateAvailabilitySource[] = ["manual", "monthly_alimtalk", "weekly_check", "import"];
 const AVAILABLE_STATUSES: PrivateAvailabilityStatus[] = ["available", "confirm", "request"];
+const TIME_ROWS = ["09:00", "10:00", "11:00", "12:00", "13:00", "14:00", "15:00", "16:00", "17:00", "18:00", "19:00", "20:00", "21:00"];
+const EXCLUDED_INSTRUCTOR_NAMES = new Set(["운영자", "김기효"]);
+const FALLBACK_STAFF_COLORS = ["#6d7d58", "#426b8f", "#9b5148", "#a8742a", "#6f5f91", "#2f6fa3", "#7b6f46", "#8b5d5d"];
+
+interface BusyRow {
+  id: string;
+  kind: "lecture" | "other";
+  date: string;
+  start: string;
+  end: string;
+  title: string;
+  status: string;
+  studioId: string;
+  staffIds: string[];
+  staffNames: string[];
+}
+
+interface ResolvedInstructor {
+  staffId: string;
+  name: string;
+  role: string;
+  active: boolean;
+  color: string;
+}
 
 export async function adminSavePrivateAvailabilitySlotHandler(request: CallableRequest, actor: StaffDoc) {
   const action = clean(request.data?.action, 30);
   if (action === "list") return adminListPrivateAvailabilitySlotsHandler(request, actor);
+  if (action === "getWeek") return adminGetPrivateScheduleWeekHandler(request, actor);
+  if (action === "updateSlots") return adminUpdatePrivateAvailabilitySlotsHandler(request, actor);
 
-  const staffId = clean(request.data?.staffId, 80);
-  const date = clean(request.data?.date, 20);
-  const startTime = clean(request.data?.startTime, 10);
-  const endTime = clean(request.data?.endTime || nextHour(startTime), 10);
-  const status = clean(request.data?.status, 30) as PrivateAvailabilityStatus;
-  const source = clean(request.data?.source || "manual", 40) as PrivateAvailabilitySource;
-  const memo = clean(request.data?.memo, 500);
-
-  if (!staffId) throw new AppError("INVALID_ARGUMENT", "강사를 선택하세요");
-  if (!/^\d{4}-\d{2}-\d{2}$/.test(date)) throw new AppError("INVALID_ARGUMENT", "날짜 형식이 올바르지 않습니다");
-  if (!validTime(startTime) || !validTime(endTime)) throw new AppError("INVALID_ARGUMENT", "시간 형식이 올바르지 않습니다");
-  if (toMinutes(endTime) <= toMinutes(startTime)) throw new AppError("INVALID_ARGUMENT", "종료 시간이 시작 시간보다 늦어야 합니다");
-  if (!STATUSES.includes(status)) throw new AppError("INVALID_ARGUMENT", "상태값이 올바르지 않습니다");
-  if (!SOURCES.includes(source)) throw new AppError("INVALID_ARGUMENT", "출처값이 올바르지 않습니다");
-
-  const staffSnap = await refs.staff(staffId).get();
-  const target = staffSnap.data();
-  if (!target || !target.active || target.studioId !== actor.studioId) {
-    throw new AppError("NOT_FOUND", "선택한 강사를 찾을 수 없습니다");
-  }
-  if (AVAILABLE_STATUSES.includes(status)) {
-    const conflict = await findLectureConflict(actor.studioId, target, date, startTime, endTime);
-    if (conflict) {
-      throw new AppError(
-        "FAILED_PRECONDITION",
-        `${target.name} ${date} ${startTime}-${endTime}은 ARCHIVE PILATES 수업 시간입니다`,
-      );
-    }
-  }
-
-  const slotId = `${actor.studioId}_${staffId}_${date}_${startTime.replace(":", "")}`;
-  const existing = (await refs.privateAvailabilitySlot(slotId).get()).data();
+  const { payload, target, existing } = await validateSlotPayload(request.data || {}, actor);
+  const slotId = `${actor.studioId}_${payload.staffId}_${payload.date}_${payload.startTime.replace(":", "")}`;
   const now = nowTimestamp();
   await refs.privateAvailabilitySlot(slotId).set(
     {
       slotId,
       studioId: actor.studioId,
-      staffId,
+      staffId: payload.staffId,
       staffName: target.name,
-      date,
-      startTime,
-      endTime,
-      status,
-      source,
-      memo,
+      date: payload.date,
+      startTime: payload.startTime,
+      endTime: payload.endTime,
+      status: payload.status,
+      source: payload.source,
+      memo: payload.memo,
       checkedAt: now,
       checkedByUid: request.auth?.uid || "",
       createdByUid: existing?.createdByUid || request.auth?.uid || "",
@@ -68,12 +65,108 @@ export async function adminSavePrivateAvailabilitySlotHandler(request: CallableR
   return { ok: true, slotId };
 }
 
+export async function adminGetPrivateScheduleWeekHandler(request: CallableRequest, actor: StaffDoc) {
+  const startDate = clean(request.data?.startDate, 20);
+  const endDate = clean(request.data?.endDate, 20);
+  validateDateRange(startDate, endDate);
+
+  const [staffSnap, lectureSnap, otherSnap, availabilitySnap] = await Promise.all([
+    refs.staffs().get(),
+    refs.lectures().where("date", ">=", startDate).where("date", "<=", endDate).get(),
+    db.collection("otherSchedules").where("date", ">=", startDate).where("date", "<=", endDate).get(),
+    refs.privateAvailabilitySlots().where("date", ">=", startDate).where("date", "<=", endDate).get(),
+  ]);
+
+  const instructors = staffSnap.docs
+    .map((doc) => ({ id: doc.id, data: doc.data() }))
+    .filter(({ data }) => data.studioId === actor.studioId && data.active && data.role !== "viewer" && !EXCLUDED_INSTRUCTOR_NAMES.has(data.name))
+    .map(({ id, data }) => ({
+      staffId: data.staffId || id,
+      name: data.name,
+      role: data.role,
+      active: data.active,
+      color: staffColorFromData(data, id),
+    }))
+    .sort((a, b) => a.name.localeCompare(b.name, "ko"));
+
+  const lectures = lectureSnap.docs
+    .map((doc) => normalizeBusy(doc.id, doc.data() as unknown as Record<string, unknown>, "lecture"))
+    .filter((row) => row.studioId === actor.studioId)
+    .filter((row) => row.status !== "deleted");
+  const otherSchedules = otherSnap.docs
+    .map((doc) => normalizeBusy(doc.id, doc.data(), "other"))
+    .filter((row) => row.studioId === actor.studioId)
+    .filter((row) => row.status !== "deleted");
+  const manualSlots = new Map(
+    availabilitySnap.docs
+      .map((doc) => doc.data())
+      .filter((slot) => slot.studioId === actor.studioId)
+      .map((slot) => [`${slot.staffId}_${slot.date}_${slot.startTime}`, slot] as const),
+  );
+
+  const slots = datesBetween(startDate, endDate).flatMap((date) =>
+    TIME_ROWS.flatMap((time) =>
+      instructors.map((instructor) =>
+        buildResolvedSlot({
+          instructor,
+          date,
+          time,
+          lectures,
+          otherSchedules,
+          manualSlot: manualSlots.get(`${instructor.staffId}_${date}_${time}`),
+        }),
+      ),
+    ),
+  );
+
+  return {
+    instructors,
+    slots,
+    generatedAt: new Date().toISOString(),
+    source: "server_resolved",
+  };
+}
+
+export async function adminUpdatePrivateAvailabilitySlotsHandler(request: CallableRequest, actor: StaffDoc) {
+  const rawSlots = Array.isArray(request.data?.slots) ? request.data.slots : [];
+  if (!rawSlots.length) throw new AppError("INVALID_ARGUMENT", "저장할 슬롯이 없습니다");
+  if (rawSlots.length > 500) throw new AppError("INVALID_ARGUMENT", "한 번에 저장할 슬롯은 500개 이하로 선택하세요");
+
+  const targets = await Promise.all(rawSlots.map((raw: Record<string, unknown>) => validateSlotPayload(raw, actor)));
+  const now = nowTimestamp();
+  const batch = db.batch();
+  targets.forEach(({ payload, target, existing }) => {
+    const slotId = `${actor.studioId}_${payload.staffId}_${payload.date}_${payload.startTime.replace(":", "")}`;
+    batch.set(
+      refs.privateAvailabilitySlot(slotId),
+      {
+        slotId,
+        studioId: actor.studioId,
+        staffId: payload.staffId,
+        staffName: target.name,
+        date: payload.date,
+        startTime: payload.startTime,
+        endTime: payload.endTime,
+        status: payload.status,
+        source: payload.source,
+        memo: payload.memo,
+        checkedAt: now,
+        checkedByUid: request.auth?.uid || "",
+        createdByUid: existing?.createdByUid || request.auth?.uid || "",
+        createdAt: existing?.createdAt || now,
+        updatedAt: now,
+      },
+      { merge: true },
+    );
+  });
+  await batch.commit();
+  return { ok: true, savedCount: targets.length };
+}
+
 export async function adminListPrivateAvailabilitySlotsHandler(request: CallableRequest, actor: StaffDoc) {
   const startDate = clean(request.data?.startDate, 20);
   const endDate = clean(request.data?.endDate, 20);
-  if (!/^\d{4}-\d{2}-\d{2}$/.test(startDate) || !/^\d{4}-\d{2}-\d{2}$/.test(endDate)) {
-    throw new AppError("INVALID_ARGUMENT", "조회 기간이 올바르지 않습니다");
-  }
+  validateDateRange(startDate, endDate);
 
   const snap = await refs
     .privateAvailabilitySlots()
@@ -112,6 +205,212 @@ export async function adminDeletePrivateAvailabilitySlotHandler(request: Callabl
   if (slot.studioId !== actor.studioId) throw new AppError("PERMISSION_DENIED", "다른 지점 슬롯은 삭제할 수 없습니다");
   await ref.delete();
   return { ok: true, deleted: true };
+}
+
+async function validateSlotPayload(raw: Record<string, unknown>, actor: StaffDoc) {
+  const payload = {
+    staffId: clean(raw?.staffId, 80),
+    date: clean(raw?.date, 20),
+    startTime: clean(raw?.startTime, 10),
+    endTime: clean(raw?.endTime || nextHour(clean(raw?.startTime, 10)), 10),
+    status: clean(raw?.status, 30) as PrivateAvailabilityStatus,
+    source: clean(raw?.source || "manual", 40) as PrivateAvailabilitySource,
+    memo: clean(raw?.memo, 500),
+  };
+  if (!payload.staffId) throw new AppError("INVALID_ARGUMENT", "강사를 선택하세요");
+  if (!/^\d{4}-\d{2}-\d{2}$/.test(payload.date)) throw new AppError("INVALID_ARGUMENT", "날짜 형식이 올바르지 않습니다");
+  if (!validTime(payload.startTime) || !validTime(payload.endTime)) throw new AppError("INVALID_ARGUMENT", "시간 형식이 올바르지 않습니다");
+  if (toMinutes(payload.endTime) <= toMinutes(payload.startTime)) {
+    throw new AppError("INVALID_ARGUMENT", "종료 시간이 시작 시간보다 늦어야 합니다");
+  }
+  if (!STATUSES.includes(payload.status)) throw new AppError("INVALID_ARGUMENT", "상태값이 올바르지 않습니다");
+  if (!SOURCES.includes(payload.source)) throw new AppError("INVALID_ARGUMENT", "출처값이 올바르지 않습니다");
+
+  const staffSnap = await refs.staff(payload.staffId).get();
+  const target = staffSnap.data();
+  if (!target || !target.active || target.studioId !== actor.studioId) {
+    throw new AppError("NOT_FOUND", "선택한 강사를 찾을 수 없습니다");
+  }
+  if (AVAILABLE_STATUSES.includes(payload.status)) {
+    const conflict = await findLectureConflict(actor.studioId, target, payload.date, payload.startTime, payload.endTime);
+    if (conflict) {
+      throw new AppError(
+        "FAILED_PRECONDITION",
+        `${target.name} ${payload.date} ${payload.startTime}-${payload.endTime}은 ARCHIVE PILATES 수업 시간입니다`,
+      );
+    }
+  }
+
+  const slotId = `${actor.studioId}_${payload.staffId}_${payload.date}_${payload.startTime.replace(":", "")}`;
+  const existing = (await refs.privateAvailabilitySlot(slotId).get()).data();
+  return { payload, target, existing };
+}
+
+function validateDateRange(startDate: string, endDate: string): void {
+  if (!/^\d{4}-\d{2}-\d{2}$/.test(startDate) || !/^\d{4}-\d{2}-\d{2}$/.test(endDate)) {
+    throw new AppError("INVALID_ARGUMENT", "조회 기간이 올바르지 않습니다");
+  }
+  const start = new Date(`${startDate}T00:00:00Z`);
+  const end = new Date(`${endDate}T00:00:00Z`);
+  if (Number.isNaN(start.getTime()) || Number.isNaN(end.getTime()) || end < start) {
+    throw new AppError("INVALID_ARGUMENT", "조회 기간이 올바르지 않습니다");
+  }
+  if ((end.getTime() - start.getTime()) / 86400000 > 62) {
+    throw new AppError("INVALID_ARGUMENT", "조회 기간은 62일 이하로 선택하세요");
+  }
+}
+
+function datesBetween(startDate: string, endDate: string): string[] {
+  const result: string[] = [];
+  const end = new Date(`${endDate}T00:00:00Z`);
+  for (let cursor = new Date(`${startDate}T00:00:00Z`); cursor <= end; cursor.setUTCDate(cursor.getUTCDate() + 1)) {
+    result.push(cursor.toISOString().slice(0, 10));
+  }
+  return result;
+}
+
+function buildResolvedSlot({
+  instructor,
+  date,
+  time,
+  lectures,
+  otherSchedules,
+  manualSlot,
+}: {
+  instructor: ResolvedInstructor;
+  date: string;
+  time: string;
+  lectures: BusyRow[];
+  otherSchedules: BusyRow[];
+  manualSlot?: {
+    slotId: string;
+    startTime: string;
+    endTime: string;
+    status: PrivateAvailabilityStatus;
+    source: PrivateAvailabilitySource;
+    memo: string;
+    checkedAt: FirebaseFirestore.Timestamp | null;
+  };
+}) {
+  const endTime = nextHour(time);
+  const archiveBusy = lectures.filter((item) => busyMatches(item, instructor, date, time, endTime));
+  if (archiveBusy.length) {
+    return {
+      type: "busy",
+      lockedByLecture: true,
+      instructor,
+      date,
+      time,
+      endTime,
+      reason: archiveBusy.map((item) => `ARCHIVE PILATES 수업 · ${item.title}`).join(" / "),
+      source: "ARCHIVE PILATES 수업",
+      checkedAt: "",
+    };
+  }
+
+  if (manualSlot) {
+    const type = manualSlot.status === "unavailable" ? "unavailable" : manualSlot.status;
+    return {
+      type,
+      slotId: manualSlot.slotId,
+      instructor,
+      date,
+      time,
+      endTime: manualSlot.endTime || endTime,
+      memo: manualSlot.memo || "",
+      sourceKey: manualSlot.source || "manual",
+      source: sourceLabel(manualSlot.source),
+      checkedAt: manualSlot.checkedAt?.toDate().toISOString() || "수동 확인",
+    };
+  }
+
+  const otherBusy = otherSchedules.filter((item) => busyMatches(item, instructor, date, time, endTime));
+  if (otherBusy.length) {
+    return {
+      type: "busy",
+      instructor,
+      date,
+      time,
+      endTime,
+      reason: otherBusy.map((item) => `외부/기타 일정 · ${item.title}`).join(" / "),
+      source: "기타 일정",
+      checkedAt: "",
+    };
+  }
+
+  return {
+    type: "available",
+    virtual: true,
+    instructor,
+    date,
+    time,
+    endTime,
+    memo: "",
+    sourceKey: "manual",
+    source: "센터 수업 외 우선 가능",
+    checkedAt: "알림톡 확인 전",
+  };
+}
+
+function normalizeBusy(id: string, data: Record<string, unknown>, kind: "lecture" | "other"): BusyRow {
+  const staffNames = Array.isArray(data.staffNames) && data.staffNames.length ? data.staffNames : [data.staffName];
+  const staffIds = Array.isArray(data.staffIds) && data.staffIds.length ? data.staffIds : [data.staffId];
+  return {
+    id,
+    kind,
+    date: String(data.date || ""),
+    start: timestampToTime(data.startAt as FirebaseFirestore.Timestamp | null | undefined),
+    end: timestampToTime(data.endAt as FirebaseFirestore.Timestamp | null | undefined),
+    title: String(data.title || data.divisionName || data.category || (kind === "lecture" ? "ARCHIVE PILATES 수업" : "기타 일정")),
+    status: String(data.status || "scheduled"),
+    studioId: String(data.studioId || ""),
+    staffIds: staffIds.filter(Boolean).map(String),
+    staffNames: staffNames.filter(Boolean).map(String),
+  };
+}
+
+function busyMatches(
+  busy: BusyRow,
+  instructor: { staffId: string; name: string },
+  date: string,
+  startTime: string,
+  endTime: string,
+): boolean {
+  if (busy.date !== date || !rangesOverlap(startTime, endTime, busy.start, busy.end)) return false;
+  return busy.staffIds.includes(instructor.staffId) || busy.staffNames.map(normalizeName).includes(normalizeName(instructor.name));
+}
+
+function sourceLabel(source: PrivateAvailabilitySource): string {
+  if (source === "monthly_alimtalk") return "월간 알림톡";
+  if (source === "weekly_check") return "주간 확인";
+  if (source === "import") return "가져오기";
+  return "수동 입력";
+}
+
+function staffColorFromData(data: StaffDoc, fallbackKey = ""): string {
+  const candidates = [
+    data.privateScheduleColor,
+    data.archiveInColor,
+    data.scheduleColor,
+    data.calendarColor,
+    data.lessonColor,
+    data.color,
+    data.themeColor,
+    data.backgroundColor,
+    data.hexColor,
+  ];
+  const value = candidates.find(isHexColor);
+  return value || colorFromKey(data.staffId || data.name || fallbackKey);
+}
+
+function isHexColor(value: unknown): value is string {
+  return typeof value === "string" && /^#[0-9a-f]{6}$/i.test(value.trim());
+}
+
+function colorFromKey(value: string): string {
+  let hash = 0;
+  for (let index = 0; index < value.length; index += 1) hash = (hash * 31 + value.charCodeAt(index)) >>> 0;
+  return FALLBACK_STAFF_COLORS[hash % FALLBACK_STAFF_COLORS.length];
 }
 
 function clean(value: unknown, max: number): string {
