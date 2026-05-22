@@ -141,6 +141,7 @@ body::before{content:'';position:fixed;inset:0;background-image:url("data:image/
 .card-head{display:flex;align-items:center;justify-content:space-between;gap:8px;margin-bottom:8px;}
 .card-head .ct{font-size:12.5px;font-weight:600;color:var(--t1);}
 .card-head .ctrail{display:flex;align-items:center;gap:6px;}
+.chart-month{font-size:11px;color:var(--t3);white-space:nowrap;}
 .dl-btn{width:26px;height:26px;display:flex;align-items:center;justify-content:center;border:1px solid var(--border);border-radius:7px;background:transparent;color:var(--t3);cursor:pointer;flex-shrink:0;transition:all .18s ease;}
 .dl-btn:hover{background:var(--surface-2);color:var(--t1);border-color:var(--border-h);}
 .dl-btn svg{width:12px;height:12px;}
@@ -330,7 +331,10 @@ canvas{display:block;width:100%!important;height:100%!important;}
       <div class="card">
         <div class="card-head">
           <p class="ct">월별 총매출 추이</p>
-          <button class="dl-btn" onclick="downloadChart('c1','월별총매출')" title="PNG 저장"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.2" stroke-linecap="round" stroke-linejoin="round"><path d="M21 15v4a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2v-4"/><polyline points="7 10 12 15 17 10"/><line x1="12" y1="15" x2="12" y2="3"/></svg></button>
+          <div class="ctrail">
+            <span class="chart-month chart-selected-month"></span>
+            <button class="dl-btn" onclick="downloadChart('c1','월별총매출')" title="PNG 저장"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.2" stroke-linecap="round" stroke-linejoin="round"><path d="M21 15v4a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2v-4"/><polyline points="7 10 12 15 17 10"/><line x1="12" y1="15" x2="12" y2="3"/></svg></button>
+          </div>
         </div>
         <div class="legend"><span><span class="ldot" style="background:#7C3AED;border-radius:50%;"></span>총매출</span></div>
         <div class="chart-box"><canvas id="c1"></canvas></div>
@@ -338,7 +342,10 @@ canvas{display:block;width:100%!important;height:100%!important;}
       <div class="card">
         <div class="card-head">
           <p class="ct">월별 수업 마진률</p>
-          <button class="dl-btn" onclick="downloadChart('c2','월별마진률')" title="PNG 저장"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.2" stroke-linecap="round" stroke-linejoin="round"><path d="M21 15v4a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2v-4"/><polyline points="7 10 12 15 17 10"/><line x1="12" y1="15" x2="12" y2="3"/></svg></button>
+          <div class="ctrail">
+            <span class="chart-month chart-selected-month"></span>
+            <button class="dl-btn" onclick="downloadChart('c2','월별마진률')" title="PNG 저장"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.2" stroke-linecap="round" stroke-linejoin="round"><path d="M21 15v4a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2v-4"/><polyline points="7 10 12 15 17 10"/><line x1="12" y1="15" x2="12" y2="3"/></svg></button>
+          </div>
         </div>
         <div class="legend"><span><span class="ldot" style="background:#22C55E;border-radius:50%;"></span>수업 마진률</span></div>
         <div class="chart-box"><canvas id="c2"></canvas></div>
@@ -349,7 +356,7 @@ canvas{display:block;width:100%!important;height:100%!important;}
       <div class="card-head">
         <p class="ct">일일 누적 매출 비교</p>
         <div class="ctrail">
-          <span style="font-size:11px;color:var(--t3);" id="dailyRevenueLabel"></span>
+          <span class="chart-month" id="dailyRevenueLabel"></span>
           <button class="dl-btn" onclick="downloadChart('c12','일일누적매출비교')" title="PNG 저장"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.2" stroke-linecap="round" stroke-linejoin="round"><path d="M21 15v4a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2v-4"/><polyline points="7 10 12 15 17 10"/><line x1="12" y1="15" x2="12" y2="3"/></svg></button>
         </div>
       </div>
@@ -367,7 +374,7 @@ canvas{display:block;width:100%!important;height:100%!important;}
       <div class="card-head">
         <p class="ct">강사별 수업매출 비중</p>
         <div class="ctrail">
-          <span style="font-size:11px;color:var(--t3);" id="instrMonthLabel"></span>
+          <span class="chart-month" id="instrMonthLabel"></span>
           <button class="dl-btn" onclick="downloadChart('c3','강사별수업매출')" title="PNG 저장"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.2" stroke-linecap="round" stroke-linejoin="round"><path d="M21 15v4a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2v-4"/><polyline points="7 10 12 15 17 10"/><line x1="12" y1="15" x2="12" y2="3"/></svg></button>
         </div>
       </div>
@@ -380,7 +387,10 @@ canvas{display:block;width:100%!important;height:100%!important;}
       <div class="card">
         <div class="card-head">
           <p class="ct">월별 세션 수 구성</p>
-          <button class="dl-btn" onclick="downloadChart('c4','월별세션구성')" title="PNG 저장"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.2" stroke-linecap="round" stroke-linejoin="round"><path d="M21 15v4a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2v-4"/><polyline points="7 10 12 15 17 10"/><line x1="12" y1="15" x2="12" y2="3"/></svg></button>
+          <div class="ctrail">
+            <span class="chart-month chart-selected-month"></span>
+            <button class="dl-btn" onclick="downloadChart('c4','월별세션구성')" title="PNG 저장"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.2" stroke-linecap="round" stroke-linejoin="round"><path d="M21 15v4a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2v-4"/><polyline points="7 10 12 15 17 10"/><line x1="12" y1="15" x2="12" y2="3"/></svg></button>
+          </div>
         </div>
         <div class="legend">
           <span><span class="ldot" style="background:#8B5CF6;"></span>그룹</span>
@@ -392,7 +402,10 @@ canvas{display:block;width:100%!important;height:100%!important;}
       <div class="card">
         <div class="card-head">
           <p class="ct" id="c5title">강사별 예약·출석률</p>
-          <button class="dl-btn" onclick="downloadChart('c5','강사별예약출석률')" title="PNG 저장"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.2" stroke-linecap="round" stroke-linejoin="round"><path d="M21 15v4a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2v-4"/><polyline points="7 10 12 15 17 10"/><line x1="12" y1="15" x2="12" y2="3"/></svg></button>
+          <div class="ctrail">
+            <span class="chart-month" id="c5MonthLabel"></span>
+            <button class="dl-btn" onclick="downloadChart('c5','강사별예약출석률')" title="PNG 저장"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.2" stroke-linecap="round" stroke-linejoin="round"><path d="M21 15v4a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2v-4"/><polyline points="7 10 12 15 17 10"/><line x1="12" y1="15" x2="12" y2="3"/></svg></button>
+          </div>
         </div>
         <div class="legend">
           <span><span class="ldot" style="background:#34D399;"></span>예약률</span>
@@ -418,7 +431,10 @@ canvas{display:block;width:100%!important;height:100%!important;}
       <div class="card">
         <div class="card-head">
           <p class="ct">월별 그룹 예약률 / 출석률 추이</p>
-          <button class="dl-btn" onclick="downloadChart('c6','그룹예약출석률추이')" title="PNG 저장"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.2" stroke-linecap="round" stroke-linejoin="round"><path d="M21 15v4a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2v-4"/><polyline points="7 10 12 15 17 10"/><line x1="12" y1="15" x2="12" y2="3"/></svg></button>
+          <div class="ctrail">
+            <span class="chart-month chart-selected-month"></span>
+            <button class="dl-btn" onclick="downloadChart('c6','그룹예약출석률추이')" title="PNG 저장"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.2" stroke-linecap="round" stroke-linejoin="round"><path d="M21 15v4a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2v-4"/><polyline points="7 10 12 15 17 10"/><line x1="12" y1="15" x2="12" y2="3"/></svg></button>
+          </div>
         </div>
         <div class="legend">
           <span><span class="ldot" style="background:#34D399;border-radius:50%;"></span>예약률</span>
@@ -428,8 +444,11 @@ canvas{display:block;width:100%!important;height:100%!important;}
       </div>
       <div class="card">
         <div class="card-head">
-          <p class="ct">월별 그룹수업 1회 평균가격</p>
-          <button class="dl-btn" onclick="downloadChart('c7','그룹평균가격')" title="PNG 저장"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.2" stroke-linecap="round" stroke-linejoin="round"><path d="M21 15v4a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2v-4"/><polyline points="7 10 12 15 17 10"/><line x1="12" y1="15" x2="12" y2="3"/></svg></button>
+          <p class="ct">월별 그룹수업 1회 평균가격 <span class="chart-month">(VAT 포함)</span></p>
+          <div class="ctrail">
+            <span class="chart-month chart-selected-month"></span>
+            <button class="dl-btn" onclick="downloadChart('c7','그룹평균가격')" title="PNG 저장"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.2" stroke-linecap="round" stroke-linejoin="round"><path d="M21 15v4a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2v-4"/><polyline points="7 10 12 15 17 10"/><line x1="12" y1="15" x2="12" y2="3"/></svg></button>
+          </div>
         </div>
         <div id="avgPriceBox" class="chart-box"><canvas id="c7"></canvas></div>
         <div id="avgPriceEmpty" class="empty-state"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.5"><circle cx="12" cy="12" r="10"/><line x1="12" y1="8" x2="12" y2="12"/><line x1="12" y1="16" x2="12.01" y2="16"/></svg>평균가격 데이터 없음</div>
@@ -440,7 +459,10 @@ canvas{display:block;width:100%!important;height:100%!important;}
       <div class="card">
         <div class="card-head">
           <p class="ct">월별 강사별 그룹수업 평균인원</p>
-          <button class="dl-btn" onclick="downloadChart('c8','강사별그룹평균인원추이')" title="PNG 저장"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.2" stroke-linecap="round" stroke-linejoin="round"><path d="M21 15v4a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2v-4"/><polyline points="7 10 12 15 17 10"/><line x1="12" y1="15" x2="12" y2="3"/></svg></button>
+          <div class="ctrail">
+            <span class="chart-month chart-selected-month"></span>
+            <button class="dl-btn" onclick="downloadChart('c8','강사별그룹평균인원추이')" title="PNG 저장"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.2" stroke-linecap="round" stroke-linejoin="round"><path d="M21 15v4a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2v-4"/><polyline points="7 10 12 15 17 10"/><line x1="12" y1="15" x2="12" y2="3"/></svg></button>
+          </div>
         </div>
         <div class="ifilter" id="ifilterWrap">
           <span class="ifilter-lbl">강사 필터</span>
@@ -452,7 +474,10 @@ canvas{display:block;width:100%!important;height:100%!important;}
       <div class="card">
         <div class="card-head">
           <p class="ct">강사별 예약·출석률 상세</p>
-          <button class="dl-btn" onclick="downloadChart('c9','강사별예약출석률상세')" title="PNG 저장"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.2" stroke-linecap="round" stroke-linejoin="round"><path d="M21 15v4a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2v-4"/><polyline points="7 10 12 15 17 10"/><line x1="12" y1="15" x2="12" y2="3"/></svg></button>
+          <div class="ctrail">
+            <span class="chart-month" id="c9MonthLabel"></span>
+            <button class="dl-btn" onclick="downloadChart('c9','강사별예약출석률상세')" title="PNG 저장"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.2" stroke-linecap="round" stroke-linejoin="round"><path d="M21 15v4a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2v-4"/><polyline points="7 10 12 15 17 10"/><line x1="12" y1="15" x2="12" y2="3"/></svg></button>
+          </div>
         </div>
         <div class="legend">
           <span><span class="ldot" style="background:#34D399;"></span>예약률</span>
@@ -468,7 +493,7 @@ canvas{display:block;width:100%!important;height:100%!important;}
         <div class="card-head">
           <p class="ct">선택 월 수강권 차감매출 비중 TOP5</p>
           <div class="ctrail">
-            <span style="font-size:11px;color:var(--t3);" id="ticketMonthLabel"></span>
+            <span class="chart-month" id="ticketMonthLabel"></span>
             <button class="dl-btn" onclick="downloadChart('c10','수강권차감매출TOP5')" title="PNG 저장"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.2" stroke-linecap="round" stroke-linejoin="round"><path d="M21 15v4a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2v-4"/><polyline points="7 10 12 15 17 10"/><line x1="12" y1="15" x2="12" y2="3"/></svg></button>
           </div>
         </div>
@@ -479,7 +504,10 @@ canvas{display:block;width:100%!important;height:100%!important;}
       <div class="card">
         <div class="card-head">
           <p class="ct">선택 월 강사별 그룹평균인원</p>
-          <button class="dl-btn" onclick="downloadChart('c11','강사별그룹평균인원')" title="PNG 저장"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.2" stroke-linecap="round" stroke-linejoin="round"><path d="M21 15v4a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2v-4"/><polyline points="7 10 12 15 17 10"/><line x1="12" y1="15" x2="12" y2="3"/></svg></button>
+          <div class="ctrail">
+            <span class="chart-month" id="c11MonthLabel"></span>
+            <button class="dl-btn" onclick="downloadChart('c11','강사별그룹평균인원')" title="PNG 저장"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.2" stroke-linecap="round" stroke-linejoin="round"><path d="M21 15v4a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2v-4"/><polyline points="7 10 12 15 17 10"/><line x1="12" y1="15" x2="12" y2="3"/></svg></button>
+          </div>
         </div>
         <div class="legend"><span><span class="ldot" style="background:#38BDF8;"></span>그룹평균인원</span></div>
         <div id="c11box" class="chart-box"><canvas id="c11"></canvas></div>
@@ -614,6 +642,15 @@ function renderHero(month){
   }else{badge.innerHTML='';}
 }
 
+function setChartMonthLabels(month){
+  const label=fmtMonthLong(month)+' 기준';
+  document.querySelectorAll('.chart-selected-month').forEach(el=>{el.textContent=label;});
+  ['dailyRevenueLabel','instrMonthLabel','c5MonthLabel','c9MonthLabel','ticketMonthLabel','c11MonthLabel'].forEach(id=>{
+    const el=document.getElementById(id);
+    if(el)el.textContent=label;
+  });
+}
+
 // ══ SCOREBOARD ══
 function renderScore(month){
   const idx=ALL.summary.findIndex(r=>r.월===month);if(idx<0)return;
@@ -685,7 +722,6 @@ function buildC1(){
 // ══ C12: 일일 누적 매출 비교 ══
 function buildC12(month){
   const rows=(ALL.매출일일누적||[]).filter(r=>r.기준월===month).sort((a,b)=>a.기준일.localeCompare(b.기준일));
-  document.getElementById('dailyRevenueLabel').textContent=fmtMonthLong(month)+' 기준';
   if(!rows.length){setBox('c12box','c12empty',false);if(c12){c12.destroy();c12=null;}return;}
   setBox('c12box','c12empty',true);
   const labels=rows.map(r=>Number(r.기준일.slice(8,10))+'일');
@@ -710,7 +746,6 @@ function buildC2(){
 // ══ C3: 강사별 도넛 (HTML legend) ══
 function buildC3(month){
   const d=ALL.강사별.filter(r=>r.월===month).sort((a,b)=>b.총매출-a.총매출);
-  document.getElementById('instrMonthLabel').textContent=fmtMonthLong(month);
   const total=d.reduce((s,r)=>s+r.총매출,0);
   const colors=['#7F77DD','#AFA9EC','#9FE1CB','#5DCAA5','#EF9F27','#D85A30','#6B7280'];
   const cd={labels:d.map(r=>r.강사),datasets:[{label:'수업매출',data:d.map(r=>r.총매출),backgroundColor:d.map((_,i)=>colors[i%colors.length]),hoverOffset:10}]};
@@ -730,7 +765,7 @@ function buildC4(){
 // ══ C5: 강사 예약·출석 ══
 function buildC5(month){
   const d=currentInstructorRows(ALL.강사통계.filter(r=>r.월===month)).sort((a,b)=>b.그룹예약률-a.그룹예약률);
-  document.getElementById('c5title').textContent='강사별 예약·출석률 ('+fmtMonthLong(month)+')';
+  document.getElementById('c5title').textContent='강사별 예약·출석률';
   if(!d.length){setBox('c5box','c5empty',false);if(c5){c5.destroy();c5=null;}return;}
   setBox('c5box','c5empty',true);
   const allV=d.flatMap(r=>[r.그룹예약률,r.그룹출석률]).filter(v=>v>0);
@@ -787,7 +822,6 @@ function buildC9(month){
 // ══ C10: 수강권 차감매출 TOP5 (HTML legend) ══
 function buildC10(month){
   const data=(ALL.수강권TOP5||[]).filter(r=>r.월===month);
-  document.getElementById('ticketMonthLabel').textContent=fmtMonthLong(month)+' 기준';
   if(!data.length){setBox('c10box','c10empty',false);document.getElementById('c10legend').innerHTML='';return;}
   setBox('c10box','c10empty',true);
   const total=data.reduce((s,r)=>s+r.값,0);
@@ -830,6 +864,7 @@ function changeMonth(month){
   if(!month)return;
   const sy=window.scrollY;
   sel.value=month;
+  setChartMonthLabels(month);
   renderHero(month);renderScore(month);
   buildC1();buildC2();buildC3(month);buildC5(month);
   buildC12(month);
