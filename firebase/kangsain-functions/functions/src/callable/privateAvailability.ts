@@ -1,5 +1,6 @@
 import type { CallableRequest } from "firebase-functions/v2/https";
 import { db } from "../config/firebase";
+import { TIMEZONE } from "../config/constants";
 import { refs } from "../firestore/refs";
 import type { PrivateAvailabilitySource, PrivateAvailabilityStatus, StaffDoc } from "../types/models";
 import { nowTimestamp } from "../utils/date";
@@ -500,7 +501,15 @@ function rangesOverlap(startA: string, endA: string, startB: string, endB: strin
 function timestampToTime(value: FirebaseFirestore.Timestamp | null | undefined): string {
   if (!value) return "";
   const date = value.toDate();
-  return `${String(date.getHours()).padStart(2, "0")}:${String(date.getMinutes()).padStart(2, "0")}`;
+  const parts = new Intl.DateTimeFormat("en-GB", {
+    timeZone: TIMEZONE,
+    hour: "2-digit",
+    minute: "2-digit",
+    hourCycle: "h23",
+  }).formatToParts(date);
+  const hour = parts.find((part) => part.type === "hour")?.value || "00";
+  const minute = parts.find((part) => part.type === "minute")?.value || "00";
+  return `${hour}:${minute}`;
 }
 
 function normalizeName(value: unknown): string {
