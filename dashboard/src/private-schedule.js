@@ -611,6 +611,19 @@ function expandRepeatDates(startDate, endDate, weekdays, repeatEvery) {
   return result;
 }
 
+function expandTimeSlots(startTime, endTime) {
+  const start = timeToMin(startTime);
+  const end = timeToMin(endTime);
+  if (!startTime || !endTime || end <= start) return [];
+  return TIME_ROWS.filter((time) => {
+    const value = timeToMin(time);
+    return value >= start && value < end;
+  }).map((time) => ({
+    startTime: time,
+    endTime: nextHour(time),
+  }));
+}
+
 async function refresh() {
   try {
     await loadLiveData();
@@ -643,8 +656,10 @@ async function saveSlot(form) {
   const staffIds = formData.getAll("staffIds").map(String).filter(Boolean);
   const repeatWeekdays = formData.getAll("repeatWeekdays");
   const dates = expandRepeatDates(data.startDate, data.endDate, repeatWeekdays, data.repeatEvery);
+  const timeSlots = expandTimeSlots(data.startTime, data.endTime);
   if (!staffIds.length) throw new Error("강사를 선택하세요");
   if (!dates.length) throw new Error("등록할 요일과 기간을 확인하세요");
+  if (!timeSlots.length) throw new Error("시작/종료 시간을 확인하세요");
   const wantsAvailable = ["available", "confirm", "request"].includes(data.status);
   const wantsUnavailable = data.status === "unavailable";
   if (wantsAvailable && !state.operatorMode) {
@@ -658,15 +673,58 @@ async function saveSlot(form) {
     staffIds.forEach((staffId) => {
       const instructor = state.instructors.find((item) => item.staffId === staffId);
       dates.forEach((date) => {
-        const slotId = `preview_${staffId}_${date}_${data.startTime.replace(":", "")}`;
-        const existingIndex = state.availability.findIndex((item) => item.slotId === slotId);
+        timeSlots.forEach((timeSlot) => {
+          const slotId = `preview_${staffId}_${date}_${timeSlot.startTime.replace(":", "")}`;
+          const existingIndex = state.availability.findIndex((item) => item.slotId === slotId);
+          const row = {
+            slotId,
+            staffId,
+            staffName: instructor?.name || "",
+            date,
+            time: timeSlot.startTime,
+            endTime: timeSlot.endTime,
+            status: data.status,
+            source: sourceLabel(data.source),
+            sourceKey: data.source,
+            memo: data.memo,
+            checkedAt: "방금 수정",
+          };
+          if (existingIndex >= 0) state.availability[existingIndex] = row;
+          else state.availability.push(row);
+        });
+      });
+    });
+    renderBoard();
+    showToast(`슬롯 ${staffIds.length * dates.length * timeSlots.length}개를 저장했습니다`);
+    return;
+  }
+  const save = httpsCallable(state.functions, "adminSavePrivateAvailabilitySlot");
+  await Promise.all(staffIds.flatMap((staffId) =>
+    dates.flatMap((date) => timeSlots.map((timeSlot) => save({
+      staffId,
+      date,
+      startTime: timeSlot.startTime,
+      endTime: timeSlot.endTime,
+      status: data.status,
+      source: data.source,
+      memo: data.memo,
+    }))),
+  ));
+  staffIds.forEach((staffId) => {
+    const instructor = state.instructors.find((item) => item.staffId === staffId);
+    dates.forEach((date) => {
+      timeSlots.forEach((timeSlot) => {
+        const slotId = `${staffId}_${date}_${timeSlot.startTime.replace(":", "")}`;
+        const existingIndex = state.availability.findIndex(
+          (item) => item.staffId === staffId && item.date === date && item.time === timeSlot.startTime,
+        );
         const row = {
           slotId,
           staffId,
           staffName: instructor?.name || "",
           date,
-          time: data.startTime,
-          endTime: data.endTime,
+          time: timeSlot.startTime,
+          endTime: timeSlot.endTime,
           status: data.status,
           source: sourceLabel(data.source),
           sourceKey: data.source,
@@ -677,24 +735,9 @@ async function saveSlot(form) {
         else state.availability.push(row);
       });
     });
-    renderBoard();
-    showToast(`슬롯 ${staffIds.length * dates.length}개를 저장했습니다`);
-    return;
-  }
-  const save = httpsCallable(state.functions, "adminSavePrivateAvailabilitySlot");
-  await Promise.all(staffIds.flatMap((staffId) =>
-    dates.map((date) => save({
-      staffId,
-      date,
-      startTime: data.startTime,
-      endTime: data.endTime,
-      status: data.status,
-      source: data.source,
-      memo: data.memo,
-    })),
-  ));
-  await refresh();
-  showToast(`슬롯 ${staffIds.length * dates.length}개를 저장했습니다`);
+  });
+  renderBoard();
+  showToast(`슬롯 ${staffIds.length * dates.length * timeSlots.length}개를 저장했습니다`);
 }
 
 function findBusyConflict(staffIds, dates, startTime, endTime) {
