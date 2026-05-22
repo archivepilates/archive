@@ -8,7 +8,7 @@ import { errorMessage } from "../utils/errors";
 import { nowTimestamp, todayKst } from "../utils/date";
 import { ALIMTALK_TEMPLATE_CHANNEL_IDS, alimtalkDedupePolicy } from "./templates";
 import { autoSendabilityIssue } from "./eligibility";
-import { alimtalkDedupeKey, findCompletedDuplicate, normalizePhone } from "./dedupe";
+import { alimtalkDedupeKey, findCompletedDuplicateForCandidate, normalizePhone } from "./dedupe";
 import { isAlimtalkTemplateApproved } from "./templateStatus";
 
 const SOLAPI_SEND_URL = "https://api.solapi.com/messages/v4/send-many/detail";
@@ -40,7 +40,7 @@ export async function processAlimtalkQueue(): Promise<{ processed: number; sent:
       }
       const dedupeKey = alimtalkDedupeKey(claimed);
       const dedupePolicy = alimtalkDedupePolicy(claimed.templateCode);
-      const duplicate = await findCompletedDuplicate(dedupeKey, dedupePolicy.windowDays);
+      const duplicate = await findCompletedDuplicateForCandidate(claimed, dedupeKey, dedupePolicy.windowDays);
       if (duplicate) {
         await refs.alimtalkCandidate(claimed.candidateId).set(
           {

@@ -20,6 +20,34 @@ export async function findCompletedDuplicate(dedupeKey: string, windowDays: numb
   return duplicate?.id || "";
 }
 
+export async function findCompletedDuplicateForCandidate(
+  candidate: AlimtalkCandidateDoc,
+  dedupeKey: string,
+  windowDays: number | null,
+): Promise<string> {
+  const exact = await findCompletedDuplicate(dedupeKey, windowDays);
+  if (exact) return exact;
+  if (!isTicketReminder(candidate)) return "";
+
+  const cutoffMs = windowDays == null ? 0 : Date.now() - windowDays * 24 * 60 * 60 * 1000;
+  const snap = await refs
+    .alimtalkSends()
+    .where("memberPhone", "==", candidate.memberPhone)
+    .where("templateCode", "==", candidate.templateCode)
+    .where("status", "==", "done")
+    .limit(20)
+    .get();
+  for (const sendDoc of snap.docs) {
+    const send = sendDoc.data();
+    const sentMs = send.createdAt?.toMillis?.() || send.updatedAt?.toMillis?.() || 0;
+    if (windowDays != null && sentMs && sentMs < cutoffMs) continue;
+    const previousCandidate = (await refs.alimtalkCandidate(send.candidateId || sendDoc.id).get()).data();
+    if (!previousCandidate || !isTicketReminder(previousCandidate)) continue;
+    if (ticketReminderFingerprint(previousCandidate) === ticketReminderFingerprint(candidate)) return sendDoc.id;
+  }
+  return "";
+}
+
 export function alimtalkDedupeKey(candidate: AlimtalkCandidateDoc): string {
   return stableHash({
     studioId: candidate.studioId,
@@ -56,18 +84,27 @@ function dedupeScope(candidate: AlimtalkCandidateDoc): Record<string, string> {
     };
   }
   if (["ticket_expiring", "remaining_low", "private_count_low", "private_ticket_expiring"].includes(type)) {
-    const ticketIdentity =
-      String(payload.userTicketId || "") ||
-      String(payload.ticketId || "") ||
-      [payload.ticketName || payload.ticket || "", payload.expiresAt || payload.expiryDate || ""]
-        .filter(Boolean)
-        .join("|");
     return {
-      ticketIdentity,
-      ticketName: String(payload.ticketName || payload.ticket || ""),
+      ticketIdentity: ticketReminderFingerprint(candidate),
     };
   }
   return {
     ticketName: String(payload.ticketName || payload.ticket || ""),
   };
+}
+
+function isTicketReminder(candidate: AlimtalkCandidateDoc): boolean {
+  return ["ticket_expiring", "remaining_low", "private_count_low", "private_ticket_expiring"].includes(
+    String(candidate.type),
+  );
+}
+
+function ticketReminderFingerprint(candidate: AlimtalkCandidateDoc): string {
+  const payload = candidate.payload || {};
+  return [
+    String(candidate.type || ""),
+    String(payload.ticketName || payload.ticket || "").trim(),
+    String(payload.expiresAt || payload.expiryDate || payload.expireDate || "").trim(),
+    String(payload.remainingCount || "").trim(),
+  ].join("|");
 }

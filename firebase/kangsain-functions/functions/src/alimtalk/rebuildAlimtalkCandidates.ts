@@ -16,7 +16,7 @@ import {
   alimtalkDedupePolicy,
   type SendableAlimtalkCandidateType,
 } from "./templates";
-import { alimtalkDedupeKey, findCompletedDuplicate } from "./dedupe";
+import { alimtalkDedupeKey, findCompletedDuplicateForCandidate } from "./dedupe";
 
 export async function rebuildAlimtalkCandidatesForRange(input: {
   studioId: string;
@@ -139,7 +139,7 @@ async function enqueueSendableCandidate(
 ): Promise<boolean> {
   const dedupeKey = alimtalkDedupeKey(candidate);
   const dedupePolicy = alimtalkDedupePolicy(candidate.templateCode);
-  const duplicate = await findCompletedDuplicate(dedupeKey, dedupePolicy.windowDays);
+  const duplicate = await findCompletedDuplicateForCandidate(candidate, dedupeKey, dedupePolicy.windowDays);
   if (duplicate) {
     writes.push(markDuplicateSkipped(candidate, dedupeKey, `중복 발송 차단(${dedupePolicy.label}): ${duplicate}`));
     return false;
