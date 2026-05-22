@@ -241,11 +241,14 @@ async function hasAttendedGroupBookingOnOrBefore(memberId: string, sourceDate: s
     .map((doc) => doc.data())
     .some(
       (booking) =>
-        booking.appStatus === "reserved" &&
         booking.lectureDate <= sourceDate &&
         booking.attendanceStatus === "attended" &&
-        isGroupBooking(booking),
+        isGroupAttendanceHistory(booking),
     );
+}
+
+function isGroupAttendanceHistory(booking: BookingDoc): boolean {
+  return !/프라이빗|개인|1:1/i.test(booking.ticketName || "");
 }
 
 function isGroupBooking(booking: BookingDoc): boolean {

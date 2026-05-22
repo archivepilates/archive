@@ -93,7 +93,7 @@ interface GroupSurveyRequestDoc {
   staffName: string;
   sourceCandidateId: string;
   accessTokenHash: string;
-  status: "pending" | "submitted";
+  status: "pending" | "submitted" | "skipped";
   createdAt: Timestamp;
   updatedAt: Timestamp;
 }
@@ -369,6 +369,10 @@ export async function submitGroupSurveyResponseHandler(request: any, response: a
   try {
     if (request.method === "GET") {
       const { groupRequest } = await readGroupSurveyRequest(request.query?.id, request.query?.token);
+      if (groupRequest.status === "skipped") {
+        response.status(410).json({ ok: false, error: "이미 대상에서 제외된 설문입니다." });
+        return;
+      }
       response.status(200).json({
         ok: true,
         requestId: groupRequest.requestId,
@@ -385,6 +389,10 @@ export async function submitGroupSurveyResponseHandler(request: any, response: a
     }
     const payload = normalizeGroupSurveySubmitPayload(request.body || {});
     const { groupRequest, accessToken } = await readGroupSurveyRequest(payload.requestId, payload.accessToken);
+    if (groupRequest.status === "skipped") {
+      response.status(410).json({ ok: false, error: "이미 대상에서 제외된 설문입니다." });
+      return;
+    }
     const responseId = groupRequest.requestId;
     const detailUrl = detailUrlFor(responseId, accessToken);
     if (groupRequest.status === "submitted") {
