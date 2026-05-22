@@ -3,6 +3,7 @@ import os from "node:os";
 import path from "node:path";
 import { mkdir, writeFile } from "node:fs/promises";
 import { createRequire } from "node:module";
+import { acquireStudioMateBrowserLock } from "./lib/studiomate-browser-lock.mjs";
 import { ensureStudioMateLoggedIn } from "./lib/studiomate-login.mjs";
 
 const require = createRequire(import.meta.url);
@@ -93,19 +94,21 @@ if (summary.ok) {
 }
 
 async function scanStudioMateStaffTab() {
+  const releaseBrowserLock = await acquireStudioMateBrowserLock({ owner: "studiomate-staff-browser-scan" });
   const { chromium } = await import("playwright");
-  const context = await chromium.launchPersistentContext(PROFILE_DIR, {
-    acceptDownloads: true,
-    headless: HEADLESS,
-  });
-  const page = await context.newPage();
-  let capturedAuthorization = "";
-  page.on("request", (request) => {
-    if (!request.url().includes("api.studiomate.kr")) return;
-    capturedAuthorization = request.headers().authorization || capturedAuthorization;
-  });
+  let context = null;
 
   try {
+    context = await chromium.launchPersistentContext(PROFILE_DIR, {
+      acceptDownloads: true,
+      headless: HEADLESS,
+    });
+    const page = await context.newPage();
+    let capturedAuthorization = "";
+    page.on("request", (request) => {
+      if (!request.url().includes("api.studiomate.kr")) return;
+      capturedAuthorization = request.headers().authorization || capturedAuthorization;
+    });
     await page.goto(new URL("/staffs", BASE_URL).toString(), { waitUntil: "networkidle", timeout: 60000 });
     await closeNoticeDialog(page);
     await assertLoggedIn(page);
@@ -119,7 +122,8 @@ async function scanStudioMateStaffTab() {
     const staffs = await fetchAllStaffs(capturedAuthorization);
     return { scanUrl: page.url(), staffs };
   } finally {
-    await context.close();
+    if (context) await context.close();
+    await releaseBrowserLock();
   }
 }
 
