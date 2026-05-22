@@ -428,23 +428,43 @@ function renderBoard() {
 function emptyCellHtml(date, time, hiddenBusy = false) {
   if (hiddenBusy) return `<button class="empty-slot blocked" type="button" data-blocked='${encodeURIComponent(JSON.stringify({ date, time }))}'>불가 시간</button>`;
   const staffIds = selectedStaffIdsForForm();
-  if (!staffIds.length) return `<div class="empty-slot"></div>`;
+  if (!state.operatorMode || !staffIds.length) return `<div class="empty-slot"></div>`;
   return `<button class="empty-slot" type="button" data-empty='${encodeURIComponent(JSON.stringify({ date, time, staffIds }))}'>등록</button>`;
+}
+
+function defaultDetailHtml() {
+  return `
+    <div class="detail">
+      <b>슬롯을 선택하세요</b>
+      상담 중 제안 가능한 시간과 불가 사유를 여기서 확인합니다. 편집은 운영자 모드에서만 가능합니다.
+    </div>
+  `;
+}
+
+function closeDetail() {
+  details.innerHTML = defaultDetailHtml();
 }
 
 function renderDetail(slot) {
   const label = slot.type === "busy" || slot.type === "unavailable" ? "불가 사유" : slot.type === "confirm" ? "확인 필요 슬롯" : "제안 가능 슬롯";
   const body = slot.type === "busy" ? slot.reason : `${slot.source} · ${slot.checkedAt}`;
   const blocked = slot.type === "busy" || slot.type === "unavailable";
-  const canEdit = !blocked || state.operatorMode;
+  const canEdit = state.operatorMode;
   details.innerHTML = `
     <div class="detail">
-      <b>${label}</b>
-      ${slot.date} ${slot.time} · ${slot.instructor.name}<br>${body}
+      <div class="detail-head">
+        <b>${label}</b>
+        <button class="close-btn" type="button" data-close-detail title="닫기">×</button>
+      </div>
+      <div>${slot.date} ${slot.time} · ${slot.instructor.name}<br>${body}</div>
     </div>
     <div class="detail">
       <b>운영 액션</b>
-      ${blocked ? "불가 시간입니다. 가능 시간으로 바꾸는 작업은 운영자 모드에서만 가능합니다." : "회원에게 후보로 제안하거나 강사에게 최종 확인 후 StudioMate에 등록하세요."}
+      ${state.operatorMode
+        ? "운영자 모드입니다. 필요하면 슬롯 상태를 수정하고 저장하세요."
+        : blocked
+          ? "불가 시간입니다. 가능 시간으로 바꾸는 작업은 운영자 모드에서만 가능합니다."
+          : "회원에게 후보로 제안하거나 강사에게 최종 확인 후 StudioMate에 등록하세요."}
     </div>
     ${canEdit ? slotForm(slot) : ""}
   `;
@@ -453,8 +473,11 @@ function renderDetail(slot) {
 function renderBlockedDetail(cell) {
   details.innerHTML = `
     <div class="detail">
-      <b>불가 시간</b>
-      ${cell.date} ${cell.time}<br>센터 수업 또는 등록된 불가 일정과 겹쳐 일반 모드에서는 가능 슬롯으로 요청할 수 없습니다.
+      <div class="detail-head">
+        <b>불가 시간</b>
+        <button class="close-btn" type="button" data-close-detail title="닫기">×</button>
+      </div>
+      <div>${cell.date} ${cell.time}<br>센터 수업 또는 등록된 불가 일정과 겹쳐 일반 모드에서는 가능 슬롯으로 요청할 수 없습니다.</div>
     </div>
     <div class="detail">
       <b>운영자 모드 필요</b>
@@ -465,14 +488,21 @@ function renderBlockedDetail(cell) {
 }
 
 function renderEmptyDetail(cell) {
+  if (!state.operatorMode) {
+    showToast("슬롯 등록은 운영자 모드에서만 가능합니다");
+    return;
+  }
   const staffIds = Array.isArray(cell.staffIds) ? cell.staffIds : [cell.staffId].filter(Boolean);
   const instructors = state.instructors.filter((item) => staffIds.includes(item.staffId));
   const instructor = instructors[0];
   if (!instructor) return;
   details.innerHTML = `
     <div class="detail">
-      <b>선택 슬롯</b>
-      ${cell.date} ${cell.time} · ${instructors.map((item) => item.name).join(", ")}
+      <div class="detail-head">
+        <b>선택 슬롯</b>
+        <button class="close-btn" type="button" data-close-detail title="닫기">×</button>
+      </div>
+      <div>${cell.date} ${cell.time} · ${instructors.map((item) => item.name).join(", ")}</div>
     </div>
     ${slotForm({
       instructor,
@@ -515,8 +545,13 @@ function slotForm(slot) {
             <option value="2">2주 간격</option>
           </select>
         </label>
-        <label>등록 기준
-          <input type="text" value="${selectedInstructorLabel()}" disabled>
+        <label>출처
+          <select name="source">
+            <option value="manual" ${slot.sourceKey === "manual" ? "selected" : ""}>수동 입력</option>
+            <option value="monthly_alimtalk" ${slot.sourceKey === "monthly_alimtalk" ? "selected" : ""}>월간 알림톡</option>
+            <option value="weekly_check" ${slot.sourceKey === "weekly_check" ? "selected" : ""}>주간 확인</option>
+            <option value="import" ${slot.sourceKey === "import" ? "selected" : ""}>가져오기</option>
+          </select>
         </label>
       </div>
       <div class="weekday-pick" aria-label="요일 선택">
@@ -542,14 +577,6 @@ function slotForm(slot) {
             <option value="confirm" ${status === "confirm" ? "selected" : ""}>확인 필요</option>
             <option value="request" ${status === "request" ? "selected" : ""}>회원 요청중</option>
             <option value="unavailable" ${status === "unavailable" ? "selected" : ""}>불가</option>
-          </select>
-        </label>
-        <label>출처
-          <select name="source">
-            <option value="manual" ${slot.sourceKey === "manual" ? "selected" : ""}>수동 입력</option>
-            <option value="monthly_alimtalk" ${slot.sourceKey === "monthly_alimtalk" ? "selected" : ""}>월간 알림톡</option>
-            <option value="weekly_check" ${slot.sourceKey === "weekly_check" ? "selected" : ""}>주간 확인</option>
-            <option value="import" ${slot.sourceKey === "import" ? "selected" : ""}>가져오기</option>
           </select>
         </label>
       </div>
@@ -730,6 +757,7 @@ function bindEvents() {
   });
   operatorBtn.addEventListener("click", () => {
     state.operatorMode = !state.operatorMode;
+    closeDetail();
     renderBoard();
   });
   instructorDropdownBtn.addEventListener("click", () => {
@@ -773,6 +801,11 @@ function bindEvents() {
     }
   });
   details.addEventListener("click", async (event) => {
+    const closeButton = event.target.closest("[data-close-detail]");
+    if (closeButton) {
+      closeDetail();
+      return;
+    }
     const saveButton = event.target.closest("[data-save-slot]");
     if (saveButton) {
       event.preventDefault();
