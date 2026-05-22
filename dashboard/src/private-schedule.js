@@ -27,6 +27,7 @@ const toast = document.getElementById("toast");
 const DAYS = ["월", "화", "수", "목", "금", "토", "일"];
 const TIME_ROWS = ["09:00", "10:00", "11:00", "12:00", "13:00", "14:00", "15:00", "16:00", "17:00", "18:00", "19:00", "20:00", "21:00"];
 const SAMPLE_NAMES = ["김아름", "이서윤", "박지민", "최민정", "정하늘"];
+const EXCLUDED_INSTRUCTOR_NAMES = ["운영자", "김기효"];
 const state = {
   app: null,
   auth: null,
@@ -38,7 +39,7 @@ const state = {
   lectures: [],
   otherSchedules: [],
   availability: [],
-  selectedInstructor: "all",
+  selectedInstructorIds: [],
   timeFilter: "all",
   operatorMode: false,
   usingSample: false,
@@ -114,7 +115,7 @@ function currentRange() {
 }
 
 function fallbackInstructors() {
-  return SAMPLE_NAMES.map((name, index) => ({
+  return SAMPLE_NAMES.filter((name) => !isExcludedInstructorName(name)).map((name, index) => ({
     staffId: `sample-${index + 1}`,
     name,
     role: "instructor",
@@ -122,6 +123,15 @@ function fallbackInstructors() {
     color: ["#6d7d58", "#426b8f", "#9b5148", "#a8742a", "#6f5f91"][index],
     sample: true,
   }));
+}
+
+function normalizeName(value) {
+  return String(value || "").replace(/\s+/g, "").trim();
+}
+
+function isExcludedInstructorName(name) {
+  const normalized = normalizeName(name);
+  return EXCLUDED_INSTRUCTOR_NAMES.some((blocked) => normalizeName(blocked) === normalized);
 }
 
 function buildDefaultAvailability(instructors) {
@@ -234,7 +244,9 @@ async function loadLiveData() {
     readQuerySafely(query(collection(state.db, "privateAvailabilitySlots"), where("date", ">=", start), where("date", "<=", end), orderBy("date"), limit(800))),
   ]);
 
-  const staffRows = staffSnap ? staffSnap.docs.map(normalizeStaff).filter((s) => s.active && s.role !== "viewer") : [];
+  const staffRows = staffSnap
+    ? staffSnap.docs.map(normalizeStaff).filter((s) => s.active && s.role !== "viewer" && !isExcludedInstructorName(s.name))
+    : [];
   state.instructors = staffRows;
   state.lectures = lectureSnap ? lectureSnap.docs.map((doc) => normalizeBusy(doc, "lecture")).filter((row) => row.status !== "deleted") : [];
   state.otherSchedules = otherSnap ? otherSnap.docs.map((doc) => normalizeBusy(doc, "other")).filter((row) => row.status !== "deleted") : [];
@@ -244,8 +256,21 @@ async function loadLiveData() {
 
 function getFilteredInstructors() {
   const all = state.instructors;
-  if (state.selectedInstructor === "all") return all;
-  return all.filter((item) => item.staffId === state.selectedInstructor);
+  if (!state.selectedInstructorIds.length) return all;
+  return all.filter((item) => state.selectedInstructorIds.includes(item.staffId));
+}
+
+function selectedInstructorLabel() {
+  if (!state.selectedInstructorIds.length) return "전체 강사";
+  return state.instructors
+    .filter((item) => state.selectedInstructorIds.includes(item.staffId))
+    .map((item) => item.name)
+    .join(", ");
+}
+
+function selectedStaffIdsForForm(fallbackStaffId = "") {
+  if (fallbackStaffId) return [fallbackStaffId];
+  return state.selectedInstructorIds.length ? state.selectedInstructorIds : [];
 }
 
 function isTimeVisible(time) {
@@ -310,14 +335,12 @@ function slotHtml(slot) {
 function renderHeaderControls() {
   const dates = weekDates();
   document.getElementById("weekLabel").textContent = `${ymd(dates[0]).slice(5).replace("-", ".")} - ${ymd(dates[6]).slice(5).replace("-", ".")}`;
-  instructorSelect.innerHTML = [
-    `<option value="all">전체 강사</option>`,
-    ...state.instructors.map((item) => `<option value="${item.staffId}">${item.name}</option>`),
-  ].join("");
-  instructorSelect.value = state.selectedInstructor;
+  instructorSelect.innerHTML = state.instructors
+    .map((item) => `<option value="${item.staffId}" ${state.selectedInstructorIds.includes(item.staffId) ? "selected" : ""}>${item.name}</option>`)
+    .join("");
   instructorChips.innerHTML = [
-    `<button class="chip ${state.selectedInstructor === "all" ? "on" : ""}" data-id="all" type="button">전체</button>`,
-    ...state.instructors.map((item) => `<button class="chip ${state.selectedInstructor === item.staffId ? "on" : ""}" data-id="${item.staffId}" type="button">${item.name}</button>`),
+    `<button class="chip ${state.selectedInstructorIds.length === 0 ? "on" : ""}" data-id="all" type="button">전체</button>`,
+    ...state.instructors.map((item) => `<button class="chip ${state.selectedInstructorIds.includes(item.staffId) ? "on" : ""}" data-id="${item.staffId}" type="button">${item.name}</button>`),
   ].join("");
   operatorBtn.classList.toggle("on", state.operatorMode);
   sourceText.textContent = state.usingSample
@@ -362,8 +385,9 @@ function renderBoard() {
 }
 
 function emptyCellHtml(date, time) {
-  if (state.selectedInstructor === "all") return `<div class="empty-slot"></div>`;
-  return `<button class="empty-slot" type="button" data-empty='${encodeURIComponent(JSON.stringify({ date, time, staffId: state.selectedInstructor }))}'>등록</button>`;
+  const staffIds = selectedStaffIdsForForm();
+  if (!staffIds.length) return `<div class="empty-slot"></div>`;
+  return `<button class="empty-slot" type="button" data-empty='${encodeURIComponent(JSON.stringify({ date, time, staffIds }))}'>등록</button>`;
 }
 
 function renderDetail(slot) {
@@ -383,15 +407,18 @@ function renderDetail(slot) {
 }
 
 function renderEmptyDetail(cell) {
-  const instructor = state.instructors.find((item) => item.staffId === cell.staffId);
+  const staffIds = Array.isArray(cell.staffIds) ? cell.staffIds : [cell.staffId].filter(Boolean);
+  const instructors = state.instructors.filter((item) => staffIds.includes(item.staffId));
+  const instructor = instructors[0];
   if (!instructor) return;
   details.innerHTML = `
     <div class="detail">
       <b>새 가능 슬롯 등록</b>
-      ${cell.date} ${cell.time} · ${instructor.name}
+      ${cell.date} ${cell.time} · ${instructors.map((item) => item.name).join(", ")}
     </div>
     ${slotForm({
       instructor,
+      staffIds,
       date: cell.date,
       time: cell.time,
       endTime: nextHour(cell.time),
@@ -405,11 +432,43 @@ function renderEmptyDetail(cell) {
 function slotForm(slot) {
   const isExisting = Boolean(slot.slotId);
   const status = slot.type === "unavailable" || slot.type === "busy" ? "unavailable" : slot.type || "available";
+  const selectedStaffIds = slot.staffIds || selectedStaffIdsForForm(slot.instructor?.staffId);
+  const weekday = weekIndexFromDate(slot.date);
   return `
     <form class="detail slot-form" data-slot-form>
       <input type="hidden" name="slotId" value="${slot.slotId || ""}">
-      <input type="hidden" name="staffId" value="${slot.instructor.staffId}">
-      <input type="hidden" name="date" value="${slot.date}">
+      <label>강사
+        <select name="staffIds" multiple size="${Math.min(Math.max(state.instructors.length, 3), 7)}">
+          ${state.instructors.map((item) => `<option value="${item.staffId}" ${selectedStaffIds.includes(item.staffId) ? "selected" : ""}>${item.name}</option>`).join("")}
+        </select>
+      </label>
+      <div class="row">
+        <label>시작일
+          <input name="startDate" type="date" value="${slot.date}">
+        </label>
+        <label>종료일
+          <input name="endDate" type="date" value="${slot.date}">
+        </label>
+      </div>
+      <div class="row">
+        <label>반복 주기
+          <select name="repeatEvery">
+            <option value="1">매주</option>
+            <option value="2">2주 간격</option>
+          </select>
+        </label>
+        <label>등록 기준
+          <input type="text" value="${selectedInstructorLabel()}" disabled>
+        </label>
+      </div>
+      <div class="weekday-pick" aria-label="요일 선택">
+        ${DAYS.map((day, index) => `
+          <label class="weekday ${index === weekday ? "on" : ""}">
+            <input type="checkbox" name="repeatWeekdays" value="${index}" ${index === weekday ? "checked" : ""}>
+            <span>${day}</span>
+          </label>
+        `).join("")}
+      </div>
       <div class="row">
         <label>시작
           <select name="startTime">${TIME_ROWS.map((time) => `<option value="${time}" ${time === slot.time ? "selected" : ""}>${time}</option>`).join("")}</select>
@@ -447,6 +506,26 @@ function slotForm(slot) {
   `;
 }
 
+function weekIndexFromDate(date) {
+  const jsDay = new Date(`${date}T00:00:00`).getDay();
+  return jsDay === 0 ? 6 : jsDay - 1;
+}
+
+function expandRepeatDates(startDate, endDate, weekdays, repeatEvery) {
+  const selectedDays = new Set(weekdays.map(Number));
+  const start = new Date(`${startDate}T00:00:00`);
+  const end = new Date(`${endDate}T00:00:00`);
+  if (Number.isNaN(start.getTime()) || Number.isNaN(end.getTime()) || end < start) return [];
+  const interval = Math.max(Number(repeatEvery) || 1, 1);
+  const result = [];
+  for (let cursor = new Date(start); cursor <= end; cursor = addDays(cursor, 1)) {
+    const weeksFromStart = Math.floor((cursor - startOfWeek(start)) / (7 * 24 * 60 * 60 * 1000));
+    const dayIndex = weekIndexFromDate(ymd(cursor));
+    if (selectedDays.has(dayIndex) && weeksFromStart % interval === 0) result.push(ymd(cursor));
+  }
+  return result;
+}
+
 async function refresh() {
   try {
     await loadLiveData();
@@ -474,41 +553,54 @@ async function refresh() {
 }
 
 async function saveSlot(form) {
-  const data = Object.fromEntries(new FormData(form).entries());
+  const formData = new FormData(form);
+  const data = Object.fromEntries(formData.entries());
+  const staffIds = formData.getAll("staffIds").map(String).filter(Boolean);
+  const repeatWeekdays = formData.getAll("repeatWeekdays");
+  const dates = expandRepeatDates(data.startDate, data.endDate, repeatWeekdays, data.repeatEvery);
+  if (!staffIds.length) throw new Error("강사를 선택하세요");
+  if (!dates.length) throw new Error("등록할 요일과 기간을 확인하세요");
   if (state.preview) {
-    const instructor = state.instructors.find((item) => item.staffId === data.staffId);
-    const slotId = data.slotId || `preview_${data.staffId}_${data.date}_${data.startTime.replace(":", "")}`;
-    const existingIndex = state.availability.findIndex((item) => item.slotId === slotId);
-    const row = {
-      slotId,
-      staffId: data.staffId,
-      staffName: instructor?.name || "",
-      date: data.date,
-      time: data.startTime,
-      endTime: data.endTime,
-      status: data.status,
-      source: sourceLabel(data.source),
-      sourceKey: data.source,
-      memo: data.memo,
-      checkedAt: "방금 수정",
-    };
-    if (existingIndex >= 0) state.availability[existingIndex] = row;
-    else state.availability.push(row);
+    staffIds.forEach((staffId) => {
+      const instructor = state.instructors.find((item) => item.staffId === staffId);
+      dates.forEach((date) => {
+        const slotId = `preview_${staffId}_${date}_${data.startTime.replace(":", "")}`;
+        const existingIndex = state.availability.findIndex((item) => item.slotId === slotId);
+        const row = {
+          slotId,
+          staffId,
+          staffName: instructor?.name || "",
+          date,
+          time: data.startTime,
+          endTime: data.endTime,
+          status: data.status,
+          source: sourceLabel(data.source),
+          sourceKey: data.source,
+          memo: data.memo,
+          checkedAt: "방금 수정",
+        };
+        if (existingIndex >= 0) state.availability[existingIndex] = row;
+        else state.availability.push(row);
+      });
+    });
     renderBoard();
-    showToast("미리보기 슬롯을 저장했습니다");
+    showToast(`미리보기 슬롯 ${staffIds.length * dates.length}개를 저장했습니다`);
     return;
   }
   const save = httpsCallable(state.functions, "adminSavePrivateAvailabilitySlot");
-  await save({
-    staffId: data.staffId,
-    date: data.date,
-    startTime: data.startTime,
-    endTime: data.endTime,
-    status: data.status,
-    source: data.source,
-    memo: data.memo,
-  });
+  await Promise.all(staffIds.flatMap((staffId) =>
+    dates.map((date) => save({
+      staffId,
+      date,
+      startTime: data.startTime,
+      endTime: data.endTime,
+      status: data.status,
+      source: data.source,
+      memo: data.memo,
+    })),
+  ));
   await refresh();
+  showToast(`가능 슬롯 ${staffIds.length * dates.length}개를 저장했습니다`);
 }
 
 async function deleteSlot(slotId) {
@@ -550,7 +642,7 @@ function bindEvents() {
     renderBoard();
   });
   instructorSelect.addEventListener("change", (event) => {
-    state.selectedInstructor = event.target.value;
+    state.selectedInstructorIds = Array.from(event.target.selectedOptions).map((option) => option.value);
     renderBoard();
   });
   timeFilter.addEventListener("change", (event) => {
@@ -560,7 +652,13 @@ function bindEvents() {
   instructorChips.addEventListener("click", (event) => {
     const button = event.target.closest("[data-id]");
     if (!button) return;
-    state.selectedInstructor = button.dataset.id;
+    if (button.dataset.id === "all") {
+      state.selectedInstructorIds = [];
+    } else if (state.selectedInstructorIds.includes(button.dataset.id)) {
+      state.selectedInstructorIds = state.selectedInstructorIds.filter((id) => id !== button.dataset.id);
+    } else {
+      state.selectedInstructorIds = [...state.selectedInstructorIds, button.dataset.id];
+    }
     renderBoard();
   });
   board.addEventListener("click", (event) => {

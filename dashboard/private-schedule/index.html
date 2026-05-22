@@ -16,7 +16,7 @@
     }
     *{box-sizing:border-box}
     html,body{margin:0;min-height:100%;font-family:'Noto Sans KR',system-ui,sans-serif;color:var(--ink);background:var(--canvas);letter-spacing:0}
-    button,select{font:inherit;letter-spacing:0}
+    button,select,input{font:inherit;letter-spacing:0}
     button{border:0;background:transparent;color:inherit;cursor:pointer}
     .app{min-height:100vh;padding:18px clamp(12px,2vw,24px) 32px}
     .wrap{max-width:1440px;margin:0 auto}
@@ -32,6 +32,8 @@
     .icon-btn svg,.pill-btn svg{width:17px;height:17px;stroke-width:2}
     .filters{display:grid;grid-template-columns:minmax(210px,1fr) auto auto;gap:10px;margin:14px 0 16px}
     .control{height:42px;border:1px solid var(--line);border-radius:8px;background:var(--panel);padding:0 12px;color:var(--ink)}
+    .control[multiple]{height:84px;padding:7px 10px}
+    .control[multiple] option{padding:3px 0}
     .week-nav{display:flex;align-items:center;gap:8px}
     .week-label{min-width:210px;height:42px;border:1px solid var(--line);border-radius:8px;background:var(--panel);display:flex;align-items:center;justify-content:center;font-weight:800;font-size:13px}
     .stats{display:grid;grid-template-columns:repeat(4,minmax(0,1fr));gap:10px;margin-bottom:14px}
@@ -75,7 +77,13 @@
     .slot-form .row{display:grid;grid-template-columns:1fr 1fr;gap:8px}
     .slot-form label{display:grid;gap:4px;font-size:11px;color:var(--muted);font-weight:700}
     .slot-form input,.slot-form select,.slot-form textarea{width:100%;border:1px solid var(--line);border-radius:8px;background:#fff;padding:8px 9px;font:inherit;font-size:12px;color:var(--ink)}
+    .slot-form select[multiple]{min-height:86px}
     .slot-form textarea{min-height:64px;resize:vertical}
+    .weekday-pick{display:grid;grid-template-columns:repeat(7,minmax(0,1fr));gap:6px;margin:2px 0}
+    .weekday{display:block}
+    .weekday input{position:absolute;opacity:0;pointer-events:none}
+    .weekday span{height:34px;border:1px solid var(--line);border-radius:999px;background:#fbfaf7;display:grid;place-items:center;font-size:12px;font-weight:850;color:var(--muted)}
+    .weekday input:checked + span{background:#2f6fa3;border-color:#2f6fa3;color:#fff}
     .form-actions{display:flex;gap:8px;flex-wrap:wrap}
     .solid-btn,.danger-btn{height:34px;border-radius:8px;padding:0 12px;font-size:12px;font-weight:850}
     .solid-btn{background:var(--brand);color:#fff}
@@ -125,7 +133,7 @@
       </header>
 
       <section class="filters">
-        <select class="control" id="instructorSelect"></select>
+        <select class="control" id="instructorSelect" multiple aria-label="강사 복수 선택"></select>
         <div class="week-nav">
           <button class="icon-btn" id="prevWeek" type="button" title="이전 주"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor"><path d="m15 18-6-6 6-6"/></svg></button>
           <div class="week-label" id="weekLabel"></div>
