@@ -85,11 +85,12 @@ try {
         item.status = "dry-run";
         result.skipped += 1;
       } else {
-        await writeMemo(page, data, capturedAuthorization);
+        const writeResult = await writeMemo(page, data, capturedAuthorization);
         await ref.set(
           {
             status: "done",
             attempts: Number(data.attempts || 0) + 1,
+            ...(writeResult.studiomateMemberId ? { studiomateMemberId: writeResult.studiomateMemberId } : {}),
             writtenAt: admin.firestore.Timestamp.now(),
             lastError: null,
             updatedAt: admin.firestore.Timestamp.now(),
@@ -315,14 +316,47 @@ async function writeMemo(page, job, authorization) {
   const memberId = String(job.memberId || "");
   const content = String(job.content || "");
   if (!memberId || !content) throw new Error("memberId/content is required");
+  const studiomateMemberId = await resolveStudioMateMemberId(page, job);
   try {
-    await writeMemoViaBrowserRequest(page, memberId, content, authorization);
-    return;
+    await writeMemoViaBrowserRequest(page, studiomateMemberId, content, authorization);
+    return { studiomateMemberId };
   } catch (error) {
     const message = error instanceof Error ? error.message : String(error);
     if (!/403|비정상|abnormal/i.test(message)) throw error;
   }
-  await writeMemoViaUi(page, memberId, content);
+  await writeMemoViaUi(page, studiomateMemberId, content);
+  return { studiomateMemberId };
+}
+
+async function resolveStudioMateMemberId(page, job) {
+  const current = String(job.studiomateMemberId || job.memberId || "");
+  if (/^\d+$/.test(current)) return current;
+
+  const phone = digitsOnly(job.memberPhone || "");
+  const name = String(job.memberName || "").trim();
+  const query = phone || name;
+  if (!query) throw new Error("StudioMate member id lookup requires memberPhone or memberName.");
+
+  await page.goto(new URL("/users", config.baseUrl).toString(), { waitUntil: "networkidle", timeout: 60000 });
+  await assertLoggedIn(page);
+  const search = page.locator('input[placeholder="이름 또는 전화번호로 검색"]').first();
+  if (!(await search.isVisible().catch(() => false))) throw new Error("StudioMate member search input was not found.");
+  await search.fill(query);
+  await page.waitForTimeout(1200);
+
+  const clicked = await clickSearchResult(page, { phone, name });
+  if (!clicked) {
+    throw new Error(`StudioMate member search result not found for ${name || "-"} ${phone || "-"}.`);
+  }
+  await page.waitForLoadState("networkidle", { timeout: 30000 }).catch(() => {});
+  await page.waitForTimeout(1000);
+
+  const url = new URL(page.url());
+  const resolved = url.searchParams.get("id") || "";
+  if (!/^\d+$/.test(resolved)) {
+    throw new Error(`StudioMate member search did not open a member detail page: ${page.url()}`);
+  }
+  return resolved;
 }
 
 async function writeMemoViaBrowserRequest(page, memberId, content, authorization) {
@@ -364,6 +398,24 @@ async function writeMemoViaUi(page, memberId, content) {
   }
 }
 
+async function clickSearchResult(page, { phone, name }) {
+  const results = page.locator(".members .member");
+  const count = await results.count().catch(() => 0);
+  for (let index = 0; index < count; index += 1) {
+    const candidate = results.nth(index);
+    if (!(await candidate.isVisible().catch(() => false))) continue;
+    const text = await candidate.innerText().catch(() => "");
+    const textPhone = digitsOnly(text);
+    const matchesPhone = phone && textPhone.includes(phone.slice(-8));
+    const matchesName = name && text.includes(name);
+    if (matchesPhone || matchesName) {
+      await candidate.click({ timeout: 5000 });
+      return true;
+    }
+  }
+  return false;
+}
+
 async function assertLoggedIn(page) {
   await ensureStudioMateLoggedIn(page, { headless: config.headless, waitForLogin: config.waitForLogin });
 }
@@ -380,4 +432,8 @@ function valueArg(name) {
 function expandHome(value) {
   if (!value) return value;
   return value.startsWith("~/") ? path.join(os.homedir(), value.slice(2)) : value;
+}
+
+function digitsOnly(value) {
+  return String(value || "").replace(/\D/g, "");
 }
