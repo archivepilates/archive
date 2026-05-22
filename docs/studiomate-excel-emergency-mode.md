@@ -29,6 +29,7 @@ StudioMate API 모드는 ARCHIVE PILATES 자사 사이트 운영 전까지 사�
 - 기본 반영 대상은 기존 `memberProfiles`와 전화번호, 이름이 매칭되는 회원이다.
 - 1시간 엑셀 동기화 runner는 `--allow-new-excel-profiles --new-excel-profile-max-age-days 3`을 붙여 실행한다.
 - 엑셀에만 있는 사람은 등록일이 3일 이내이고 활성 수강권이 있을 때만 `excel_...` 임시 ID로 회원카드를 만든다. 수강권 없는 상담고객은 회원카드를 만들지 않는다.
+- `excel_...` 임시 ID로 만든 신규회원은 `studiomateMemberIdLookupJobs` 큐를 함께 만든다. StudioMate 메모쓰기 같은 후행 작업은 전화번호/이름으로 StudioMate 실제 회원 ID를 먼저 찾아 `memberProfiles.studiomateMemberId`에 보강한 뒤 진행한다.
 - 단, `등급=상담회원`이고 활성 수강권이 없는 사람은 회원카드는 만들지 않고 Google 연락처만 `이름 상담 YYMMDD` 형식으로 동기화한다. `YYMMDD`는 메모의 상담일을 우선 사용하고 없으면 등록일을 사용한다.
 - Google Contacts 작업 큐는 회원 엑셀 반영과 분리한다. 연락처 LaunchAgent만 `--queue-contact-sync`를 붙여 `contactSyncJobs`를 준비한다.
 - `contactSyncJobs` 생성은 Google Contacts 실제 쓰기와 다르다. 엑셀 동기화 기본모드에서는 Firebase Scheduler `scheduledProcessContactSyncJobs`를 평소 `PAUSED`로 두고, 연락처 LaunchAgent가 필요할 때만 잠깐 실행한 뒤 다시 `PAUSED`로 되돌린다.
@@ -172,6 +173,9 @@ node scripts/emergency-import-studiomate-member-excel.mjs --queue-contact-sync -
   - 기존에 같은 연락처 해시가 `synced`인 회원은 중복 큐 생성하지 않음
 - `opsState/studiomateExcelEmergency`
   - 마지막 비상 엑셀 반영 상태
+- `studiomateMemberIdLookupJobs/{jobId}`
+  - 엑셀 기반 신규회원의 `excel_...` 임시 ID를 StudioMate 실제 회원 ID로 보강하기 위한 큐
+  - 전화번호/이름으로 StudioMate 웹 회원검색을 수행하고, 성공 시 `memberProfiles.studiomateMemberId`를 저장
 - `lectures/{lectureId}` / `bookings/{bookingId}`
   - 수업일, 시간, 수업명, 강사, 예약자, 예약상태, 출결상태
   - `lectures.lessonType`: 수업 자체의 그룹/프라이빗 성격
@@ -212,6 +216,7 @@ node scripts/emergency-import-studiomate-member-excel.mjs --queue-contact-sync -
 - 알림톡 대상자 선정은 엑셀 동기화로 갱신된 회원카드 수강권을 기준으로 한다.
 - 알림톡은 엑셀 동기화 기본모드 기준으로 운영하며, 실발송 전 운영자 승인, 중복 발송 차단, 제외 회원 검토를 유지한다.
 - 프라이빗/그룹 사전설문 제출 내용은 ARCHIVE IN `memberMemos`에 먼저 저장하고, StudioMate 회원카드 메모 쓰기는 `studiomateMemoWriteJobs` 큐와 Mac mini Playwright LaunchAgent가 처리한다. StudioMate 로그인 만료, 화면 변경, 메모쓰기 실패로 작업이 `failed`가 되면 `home@archivepilates.com`으로 실패 메일을 보낸다.
+- ARCHIVE IN Firestore 메모가 원본이고, StudioMate 메모는 Playwright로 후행 복사하는 편의 기록이다. StudioMate에는 기본적으로 새 메모 추가만 수행하며 기존 StudioMate 메모 삭제/수정은 자동화하지 않는다.
 - StudioMate 엑셀 다운로드, 매출 다운로드, 회원메모 쓰기처럼 `~/ArchiveIN/automation/browser-profile`을 여는 Playwright 작업은 공통 락 `~/ArchiveIN/automation/locks/studiomate-browser-profile.lock`으로 직렬화한다. 한 작업이 실행 중이면 다른 작업은 최대 30분 기다리고, 45분 이상 오래된 락은 stale로 보고 정리한다.
 - StudioMate 로그인 세션이 만료되면 Playwright 작업은 저장된 자격증명을 `STUDIOMATE_LOGIN_ID`/`STUDIOMATE_LOGIN_PASSWORD` 환경변수, macOS Keychain, Firebase Secret Manager 순서로 찾아 재로그인을 시도한다. 캡차, 보안문자, 인증번호 화면이 나오면 자동 로그인하지 않고 실패 리포트를 남긴다.
 

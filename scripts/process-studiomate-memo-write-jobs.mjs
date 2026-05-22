@@ -102,6 +102,7 @@ try {
           syncedAt: admin.firestore.Timestamp.now(),
           syncError: null,
         });
+        await markMemberIdLookupDone(data, writeResult.studiomateMemberId);
         item.status = "done";
         result.written += 1;
       }
@@ -357,6 +358,39 @@ async function resolveStudioMateMemberId(page, job) {
     throw new Error(`StudioMate member search did not open a member detail page: ${page.url()}`);
   }
   return resolved;
+}
+
+async function markMemberIdLookupDone(job, studiomateMemberId) {
+  const memberId = String(job.memberId || "");
+  if (!memberId || !studiomateMemberId || !memberId.startsWith("excel_")) return;
+  const now = admin.firestore.Timestamp.now();
+  await Promise.all([
+    db.collection("memberProfiles").doc(memberId).set(
+      {
+        studiomateMemberId,
+        studiomateMemberIdResolvedAt: now,
+        updatedAt: now,
+      },
+      { merge: true },
+    ),
+    db.collection("studiomateMemberIdLookupJobs").doc(`studiomate_member_id_lookup_${memberId}`).set(
+      {
+        jobId: `studiomate_member_id_lookup_${memberId}`,
+        studioId: job.studioId || "5330",
+        memberId,
+        memberName: job.memberName || "",
+        memberPhone: job.memberPhone || "",
+        status: "done",
+        attempts: admin.firestore.FieldValue.increment(1),
+        studiomateMemberId,
+        resolvedAt: now,
+        updatedAt: now,
+        lastError: null,
+        source: "studiomate_memo_write_resolution",
+      },
+      { merge: true },
+    ),
+  ]);
 }
 
 async function writeMemoViaBrowserRequest(page, memberId, content, authorization) {

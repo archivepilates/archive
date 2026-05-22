@@ -61,6 +61,7 @@ const summary = {
   groupedMembers: groupedMembers.length,
   plannedWrites: plans.length,
   plannedContactSyncJobs: plans.filter((plan) => plan.contactSyncJobDoc).length,
+  plannedStudiomateMemberIdLookupJobs: plans.filter((plan) => plan.studiomateMemberIdLookupJobDoc).length,
   matchedExistingProfiles: plans.filter((plan) => plan.matchType === "existing").length,
   temporaryExcelProfiles: plans.filter((plan) => plan.matchType === "temporary_excel_id").length,
   skipped,
@@ -392,7 +393,26 @@ function buildPlans(groups, existingProfiles, existingContacts) {
           updatedAt: admin.firestore.Timestamp.now(),
         }
       : null;
-    plans.push({ memberId, matchType, profileDoc, contactIndexDoc, contactSyncJobDoc });
+    const studiomateMemberIdLookupJobDoc =
+      matchType === "temporary_excel_id"
+        ? {
+            jobId: `studiomate_member_id_lookup_${memberId}`,
+            studioId: STUDIO_ID,
+            memberId,
+            memberName: group.name,
+            memberPhone: group.phone,
+            phoneLast4: group.phone.slice(-4),
+            status: "pending",
+            attempts: 0,
+            maxAttempts: 5,
+            source: "studiomate_excel_new_member",
+            sourceFile,
+            createdAt: admin.firestore.Timestamp.now(),
+            updatedAt: admin.firestore.Timestamp.now(),
+            lastError: null,
+          }
+        : null;
+    plans.push({ memberId, matchType, profileDoc, contactIndexDoc, contactSyncJobDoc, studiomateMemberIdLookupJobDoc });
   }
   return {
     plans,
@@ -463,6 +483,14 @@ async function applyPlans(plans) {
       batch.set(db.collection("contactSyncJobs").doc(plan.contactSyncJobDoc.jobId), plan.contactSyncJobDoc, {
         merge: true,
       });
+      count += 1;
+    }
+    if (plan.studiomateMemberIdLookupJobDoc) {
+      batch.set(
+        db.collection("studiomateMemberIdLookupJobs").doc(plan.studiomateMemberIdLookupJobDoc.jobId),
+        plan.studiomateMemberIdLookupJobDoc,
+        { merge: true },
+      );
       count += 1;
     }
     if (count >= 450) {
