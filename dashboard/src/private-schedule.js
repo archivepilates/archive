@@ -17,6 +17,9 @@ const loginForm = document.getElementById("loginForm");
 const loginError = document.getElementById("loginError");
 const board = document.getElementById("board");
 const instructorChips = document.getElementById("instructorChips");
+const instructorDropdown = document.getElementById("instructorDropdown");
+const instructorDropdownBtn = document.getElementById("instructorDropdownBtn");
+const instructorDropdownLabel = document.getElementById("instructorDropdownLabel");
 const timeFilter = document.getElementById("timeFilter");
 const operatorBtn = document.getElementById("operatorBtn");
 const sourceText = document.getElementById("sourceText");
@@ -261,10 +264,11 @@ function getFilteredInstructors() {
 
 function selectedInstructorLabel() {
   if (!state.selectedInstructorIds.length) return "전체 강사";
-  return state.instructors
+  const names = state.instructors
     .filter((item) => state.selectedInstructorIds.includes(item.staffId))
     .map((item) => item.name)
-    .join(", ");
+  if (names.length <= 2) return names.join(", ");
+  return `${names.slice(0, 2).join(", ")} 외 ${names.length - 2}명`;
 }
 
 function selectedStaffIdsForForm(fallbackStaffId = "") {
@@ -377,6 +381,7 @@ function renderHeaderControls() {
     `<button class="chip ${state.selectedInstructorIds.length === 0 ? "on" : ""}" data-id="all" type="button">전체</button>`,
     ...state.instructors.map((item) => `<button class="chip ${state.selectedInstructorIds.includes(item.staffId) ? "on" : ""}" data-id="${item.staffId}" type="button">${item.name}</button>`),
   ].join("");
+  instructorDropdownLabel.textContent = selectedInstructorLabel();
   operatorBtn.classList.toggle("on", state.operatorMode);
   sourceText.textContent = state.usingSample
     ? "라이브 데이터가 부족한 항목은 기본 가능 시간으로 표시 중입니다. StudioMate 점유 시간은 불러온 범위만 반영됩니다."
@@ -466,7 +471,7 @@ function renderEmptyDetail(cell) {
   if (!instructor) return;
   details.innerHTML = `
     <div class="detail">
-      <b>새 가능 슬롯 등록</b>
+      <b>선택 슬롯</b>
       ${cell.date} ${cell.time} · ${instructors.map((item) => item.name).join(", ")}
     </div>
     ${slotForm({
@@ -552,7 +557,7 @@ function slotForm(slot) {
         <textarea name="memo" placeholder="예: 6월 월간 확인, 화목 저녁만 가능">${slot.memo || ""}</textarea>
       </label>
       <div class="form-actions">
-        <button class="solid-btn" type="submit">${isExisting ? "수정 저장" : "가능 슬롯 등록"}</button>
+        <button class="solid-btn" type="button" data-save-slot onclick="window.savePrivateSlotFromButton(this)">저장</button>
         ${isExisting ? `<button class="danger-btn" type="button" data-delete-slot="${slot.slotId}">삭제</button>` : ""}
       </div>
     </form>
@@ -614,12 +619,14 @@ async function saveSlot(form) {
   if (!staffIds.length) throw new Error("강사를 선택하세요");
   if (!dates.length) throw new Error("등록할 요일과 기간을 확인하세요");
   const wantsAvailable = ["available", "confirm", "request"].includes(data.status);
+  const wantsUnavailable = data.status === "unavailable";
   if (wantsAvailable && !state.operatorMode) {
     const conflict = findBusyConflict(staffIds, dates, data.startTime, data.endTime);
     if (conflict) {
       throw new Error(`${conflict.name} ${conflict.date} ${data.startTime}-${data.endTime}은 불가 시간입니다`);
     }
   }
+  if (wantsUnavailable && !data.source) data.source = "manual";
   if (state.preview) {
     staffIds.forEach((staffId) => {
       const instructor = state.instructors.find((item) => item.staffId === staffId);
@@ -644,7 +651,7 @@ async function saveSlot(form) {
       });
     });
     renderBoard();
-    showToast(`미리보기 슬롯 ${staffIds.length * dates.length}개를 저장했습니다`);
+    showToast(`슬롯 ${staffIds.length * dates.length}개를 저장했습니다`);
     return;
   }
   const save = httpsCallable(state.functions, "adminSavePrivateAvailabilitySlot");
@@ -660,7 +667,7 @@ async function saveSlot(form) {
     })),
   ));
   await refresh();
-  showToast(`가능 슬롯 ${staffIds.length * dates.length}개를 저장했습니다`);
+  showToast(`슬롯 ${staffIds.length * dates.length}개를 저장했습니다`);
 }
 
 function findBusyConflict(staffIds, dates, startTime, endTime) {
@@ -689,6 +696,15 @@ async function deleteSlot(slotId) {
 }
 
 function bindEvents() {
+  window.savePrivateSlotFromButton = async (button) => {
+    const form = button.closest("[data-slot-form]");
+    if (!form) return;
+    try {
+      await saveSlot(form);
+    } catch (err) {
+      showToast(err.message || "저장 실패");
+    }
+  };
   loginForm.addEventListener("submit", async (event) => {
     event.preventDefault();
     const phone = document.getElementById("phoneInput").value.replace(/\D/g, "");
@@ -713,6 +729,12 @@ function bindEvents() {
   operatorBtn.addEventListener("click", () => {
     state.operatorMode = !state.operatorMode;
     renderBoard();
+  });
+  instructorDropdownBtn.addEventListener("click", () => {
+    instructorDropdown.classList.toggle("open");
+  });
+  document.addEventListener("click", (event) => {
+    if (!instructorDropdown.contains(event.target)) instructorDropdown.classList.remove("open");
   });
   timeFilter.addEventListener("change", (event) => {
     state.timeFilter = event.target.value;
@@ -749,6 +771,18 @@ function bindEvents() {
     }
   });
   details.addEventListener("click", async (event) => {
+    const saveButton = event.target.closest("[data-save-slot]");
+    if (saveButton) {
+      event.preventDefault();
+      const form = saveButton.closest("[data-slot-form]");
+      if (!form) return;
+      try {
+        await saveSlot(form);
+      } catch (err) {
+        showToast(err.message || "저장 실패");
+      }
+      return;
+    }
     const button = event.target.closest("[data-delete-slot]");
     if (!button) return;
     try {
