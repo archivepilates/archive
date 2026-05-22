@@ -4977,6 +4977,7 @@
       const month = appState.selectedDate.slice(0, 7);
       const row = dashboardMonthRow(month);
       const prev = dashboardPreviousMonthRow(month);
+      const comparison = dashboardComparableMonthValues(month, prev);
       const ytd = dashboardYtdRevenue(month);
       const lastYearYtd = dashboardYtdRevenue(dashboardSameMonthLastYear(month));
       const activeMembers = dashboardMonthlyActiveValue(month);
@@ -4989,19 +4990,19 @@
             <h2>${escapeHtml(month.slice(0, 4))}년 연 누적 총매출</h2>
             <div class="dashboard-kpis compact">
               ${dashboardKpi('연 누적 총매출', dashboardMoneyShort(ytd), dashboardRateDelta(ytd, lastYearYtd, 'vs 작년 동기'), { wide: true })}
-              ${dashboardKpi('월 총매출', revenueReady ? dashboardMoneyShort(row.총매출 || 0) : '집계 전', revenueReady ? dashboardRateDelta(row.총매출, prev.총매출, '전월 대비') : null)}
-              ${dashboardKpi('월 수업매출', revenueReady ? dashboardMoneyShort(row.수업매출 || 0) : '집계 전', revenueReady ? dashboardRateDelta(row.수업매출, prev.수업매출, '전월 대비') : null)}
+              ${dashboardKpi('월 총매출', revenueReady ? dashboardMoneyShort(row.총매출 || 0) : '집계 전', revenueReady ? dashboardRateDelta(row.총매출, comparison.총매출, comparison.label) : null)}
+              ${dashboardKpi('월 수업매출', revenueReady ? dashboardMoneyShort(row.수업매출 || 0) : '집계 전', revenueReady ? dashboardRateDelta(row.수업매출, comparison.수업매출, comparison.label) : null)}
             </div>
           </div>
           <div class="admin-panel">
             <h2>${escapeHtml(month)} 핵심지표</h2>
             <div class="dashboard-kpis compact">
               ${dashboardKpi('유효회원', activeMembers || '-', dashboardPlainDelta(activeMembers, prevActiveMembers, '명'))}
-              ${dashboardKpi('그룹 예약률', classMetricReady ? dashboardPercentText(row.예약률 || 0) : '집계 전', classMetricReady ? dashboardPointDelta(row.예약률, prev.예약률) : null)}
-              ${dashboardKpi('그룹 출석률', classMetricReady ? dashboardPercentText(row.출석률 || 0) : '집계 전', classMetricReady ? dashboardPointDelta(row.출석률, prev.출석률) : null)}
-              ${dashboardKpi('수업 마진률', classMetricReady ? dashboardPercentText(row.마진률 || 0) : '집계 전', classMetricReady ? dashboardPointDelta(row.마진률, prev.마진률) : null)}
-              ${dashboardKpi('그룹 세션', classMetricReady ? `${Math.round(Number(row.그룹세션) || 0)}회` : '집계 전', classMetricReady ? dashboardPlainDelta(row.그룹세션, prev.그룹세션, '회') : null)}
-              ${dashboardKpi('프라이빗', classMetricReady ? `${Math.round(Number(row.프라이빗) || 0)}회` : '집계 전', classMetricReady ? dashboardPlainDelta(row.프라이빗, prev.프라이빗, '회') : null)}
+              ${dashboardKpi('그룹 예약률', classMetricReady ? dashboardPercentText(row.예약률 || 0) : '집계 전', classMetricReady ? dashboardPointDelta(row.예약률, comparison.예약률, comparison.label) : null)}
+              ${dashboardKpi('그룹 출석률', classMetricReady ? dashboardPercentText(row.출석률 || 0) : '집계 전', classMetricReady ? dashboardPointDelta(row.출석률, comparison.출석률, comparison.label) : null)}
+              ${dashboardKpi('수업 마진률', classMetricReady ? dashboardPercentText(row.마진률 || 0) : '집계 전', classMetricReady ? dashboardPointDelta(row.마진률, comparison.마진률, comparison.label) : null)}
+              ${dashboardKpi('그룹 세션', classMetricReady ? `${Math.round(Number(row.그룹세션) || 0)}회` : '집계 전', classMetricReady ? dashboardPlainDelta(row.그룹세션, comparison.그룹세션, '회', comparison.label) : null)}
+              ${dashboardKpi('프라이빗', classMetricReady ? `${Math.round(Number(row.프라이빗) || 0)}회` : '집계 전', classMetricReady ? dashboardPlainDelta(row.프라이빗, comparison.프라이빗, '회', comparison.label) : null)}
             </div>
           </div>
         </section>
@@ -5035,6 +5036,33 @@
 
     function dashboardPreviousMonthRow(month) {
       return dashboardMonthRow(previousMonthKey(month));
+    }
+
+    function dashboardDailyRows() {
+      const rows = appState.admin.dashboard?.매출일일누적 || [];
+      return Array.isArray(rows) ? rows : [];
+    }
+
+    function dashboardLatestDailyRow(month) {
+      return dashboardDailyRows()
+        .filter((row) => String(row.기준월 || '').slice(0, 7) === month)
+        .sort((a, b) => String(a.기준일 || '').localeCompare(String(b.기준일 || '')))
+        .at(-1) || null;
+    }
+
+    function dashboardComparableMonthValues(month, previousFullMonthRow) {
+      const daily = dashboardLatestDailyRow(month);
+      if (!daily) return { ...previousFullMonthRow, label: '전월 대비' };
+      return {
+        label: '전월 동일일 대비',
+        총매출: Number(daily.전월동일일누적) || previousFullMonthRow.총매출,
+        수업매출: Number(daily.전월동일일수업누적) || previousFullMonthRow.수업매출,
+        예약률: Number(daily.전월동일일그룹예약률) || previousFullMonthRow.예약률,
+        출석률: Number(daily.전월동일일그룹출석률) || previousFullMonthRow.출석률,
+        마진률: Number(daily.전월동일일수업마진률) || previousFullMonthRow.마진률,
+        그룹세션: Number(daily.전월동일일그룹세션) || previousFullMonthRow.그룹세션,
+        프라이빗: Number(daily.전월동일일프라이빗) || previousFullMonthRow.프라이빗
+      };
     }
 
     function dashboardYtdRevenue(month) {
@@ -5085,24 +5113,24 @@
       };
     }
 
-    function dashboardPointDelta(current, previous) {
+    function dashboardPointDelta(current, previous, label = '전월 대비') {
       const cur = Number(current) || 0;
       const prev = Number(previous) || 0;
-      if (!prev) return { text: '전월 대비 -', className: '' };
+      if (!prev) return { text: `${label} -`, className: '' };
       const delta = cur - prev;
       return {
-        text: `${delta >= 0 ? '▲ +' : '▼ '}${delta.toFixed(1)}%p 전월 대비`,
+        text: `${delta >= 0 ? '▲ +' : '▼ '}${delta.toFixed(1)}%p ${label}`,
         className: delta >= 0 ? 'up' : 'down'
       };
     }
 
-    function dashboardPlainDelta(current, previous, unit) {
+    function dashboardPlainDelta(current, previous, unit, label = '전월 대비') {
       const cur = Number(current) || 0;
       const prev = Number(previous) || 0;
-      if (!prev) return { text: '전월 대비 -', className: '' };
+      if (!prev) return { text: `${label} -`, className: '' };
       const delta = cur - prev;
       return {
-        text: `${delta >= 0 ? '▲ +' : '▼ '}${Math.round(delta).toLocaleString('ko-KR')}${unit} 전월 대비`,
+        text: `${delta >= 0 ? '▲ +' : '▼ '}${Math.round(delta).toLocaleString('ko-KR')}${unit} ${label}`,
         className: delta >= 0 ? 'up' : 'down'
       };
     }
