@@ -13,6 +13,7 @@ const instructorDropdownBtn = document.getElementById("instructorDropdownBtn");
 const instructorDropdownLabel = document.getElementById("instructorDropdownLabel");
 const timeFilter = document.getElementById("timeFilter");
 const operatorBtn = document.getElementById("operatorBtn");
+const operatorModeLabel = document.getElementById("operatorModeLabel");
 const sourceText = document.getElementById("sourceText");
 const details = document.getElementById("details");
 const toast = document.getElementById("toast");
@@ -288,7 +289,7 @@ function slotFor(instructor, date, time) {
 }
 
 function slotHtml(slot) {
-  const type = slot.type === "unavailable" ? "busy" : slot.type === "busy" ? "busy" : slot.type;
+  const type = slot.type === "unavailable" ? "unavailable" : slot.type === "busy" ? "busy" : slot.type;
   const meta = slot.type === "busy" ? slot.reason : `${slot.checkedAt} · ${slot.source}`;
   const staffColor = slot.instructor?.color || colorFromKey(slot.instructor?.staffId || slot.instructor?.name);
   return `
@@ -323,6 +324,7 @@ function renderHeaderControls() {
   ].join("");
   instructorDropdownLabel.textContent = selectedInstructorLabel();
   operatorBtn.classList.toggle("on", state.operatorMode);
+  if (operatorModeLabel) operatorModeLabel.textContent = state.operatorMode ? "운영자 모드" : "예약 모드";
   sourceText.textContent = state.usingSample
     ? "라이브 데이터가 부족한 항목은 기본 가능 시간으로 표시 중입니다. StudioMate 점유 시간은 불러온 범위만 반영됩니다."
     : "센터 수업과 등록된 불가 시간을 제외한 시간은 우선 가능으로 보고, 알림톡 확인 후 안 되는 슬롯만 삭제해 최종 제출합니다.";
@@ -353,8 +355,8 @@ function renderBoard() {
       const dateKey = ymd(date);
       const cellSlots = instructors.map((instructor) => slotFor(instructor, dateKey, time)).filter(Boolean);
       allSlots.push(...cellSlots);
-      const visibleSlots = cellSlots.filter((slot) => state.operatorMode || slot.type !== "busy");
-      const hiddenBusy = cellSlots.length > 0 && visibleSlots.length === 0;
+      const visibleSlots = cellSlots.filter((slot) => state.operatorMode || !["busy", "unavailable"].includes(slot.type));
+      const hiddenBusy = cellSlots.length > 0 && visibleSlots.length === 0 && cellSlots.some((slot) => slot.type === "busy");
       board.insertAdjacentHTML("beforeend", `
         <div class="slot-cell">
           ${visibleSlots.length ? `<div class="slot-stack">${visibleSlots.map(slotHtml).join("")}</div>` : emptyCellHtml(dateKey, time, hiddenBusy)}
