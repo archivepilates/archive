@@ -112,10 +112,10 @@
         meta.innerHTML = [
           `<span class="chip">${escapeHtml(info.memberName || '회원')} 회원</span>`,
           `<span class="chip">${escapeHtml(info.lessonTime || '첫 그룹수업')}</span>`,
-          info.staffName ? `<span class="chip">담당 ${escapeHtml(info.staffName)}</span>` : ''
+          info.staffName ? `<span class="chip">수업 강사 ${escapeHtml(info.staffName)}</span>` : ''
         ].filter(Boolean).join('');
         if (info.status === 'submitted') {
-          showMessage('이미 제출이 완료되었습니다. 작성해 주신 내용은 담당강사가 수업 준비를 위해 확인합니다.');
+          showMessage('이미 제출이 완료되었습니다. 작성해 주신 내용은 수업 강사가 수업 준비를 위해 확인합니다.');
           return;
         }
         form.hidden = false;
@@ -151,13 +151,15 @@
           concern: valueOf('concern'),
           requestNote: form.elements.requestNote.value.trim()
         };
-        await requestJson('/api/groupSurveySubmit', {
+        const result = await requestJson('/api/groupSurveySubmit', {
           method: 'POST',
           headers: { 'Content-Type': 'application/json' },
           body: JSON.stringify(payload)
         });
         form.hidden = true;
-        showMessage('제출이 완료되었습니다. 작성해 주신 내용은 담당강사가 수업 준비를 위해 확인합니다.');
+        showMessage(result.duplicate
+          ? '이미 제출이 완료되었습니다. 작성해 주신 내용은 수업 강사가 수업 준비를 위해 확인합니다.'
+          : '제출이 완료되었습니다. 작성해 주신 내용은 수업 강사가 수업 준비를 위해 확인합니다.');
       } catch (err) {
         showMessage(err.message || '제출 중 오류가 발생했습니다. 잠시 후 다시 시도해 주세요.', true);
       } finally {

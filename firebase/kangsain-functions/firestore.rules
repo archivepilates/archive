@@ -183,7 +183,7 @@ service cloud.firestore {
     }
 
     match /privateSurveyPublic/{docKey} {
-      allow read: if docKey.matches('^psr-[a-z0-9-]{8,80}-[a-f0-9]{16,80}$');
+      allow read: if docKey.matches('^(psr|gsr)-[a-z0-9-]{8,80}-[a-f0-9]{16,80}$');
       allow write: if false;
     }
 

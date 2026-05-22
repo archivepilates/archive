@@ -132,7 +132,19 @@ export async function ingestPrivateSurveyResponseHandler(request: any, response:
     const matching = await matchSurveyToMember(payload);
     const summary = summarizeAnswers(payload);
     const doc = await buildSurveyDoc({ payload, responseId, accessToken, detailUrl, matching, summary });
-    await refs.privateSurveyResponse(responseId).set(doc, { merge: true });
+    const created = await createSurveyResponseIfNew(responseId, doc);
+    if (!created) {
+      const existing = (await refs.privateSurveyResponse(responseId).get()).data();
+      response.status(200).json({
+        ok: true,
+        duplicate: true,
+        responseId,
+        detailUrl: existing?.delivery?.detailUrl || detailUrl,
+        alimtalkStatus: existing?.delivery?.alimtalkStatus || "sent",
+        alimtalkReason: "이미 제출된 사전설문입니다.",
+      });
+      return;
+    }
     const delivery = pendingStaffSurveyDelivery(doc);
     await refs.privateSurveyResponse(responseId).set({ delivery, updatedAt: nowTimestamp() }, { merge: true });
     await enqueueSurveyMemoOutputs(doc);
@@ -185,7 +197,22 @@ export async function processPrivateSurveyIntakeHandler(
     const matching = await matchSurveyToMember(payload);
     const summary = summarizeAnswers(payload);
     const doc = await buildSurveyDoc({ payload, responseId, accessToken, detailUrl, matching, summary });
-    await refs.privateSurveyResponse(responseId).set(doc, { merge: true });
+    const created = await createSurveyResponseIfNew(responseId, doc);
+    if (!created) {
+      const existing = (await refs.privateSurveyResponse(responseId).get()).data();
+      await snap.ref.set(
+        {
+          status: "duplicate",
+          responseId,
+          accessToken,
+          detailUrl: existing?.delivery?.detailUrl || detailUrl,
+          delivery: existing?.delivery || null,
+          updatedAt: nowTimestamp(),
+        },
+        { merge: true },
+      );
+      return;
+    }
 
     const delivery = pendingStaffSurveyDelivery(doc);
     await refs.privateSurveyResponse(responseId).set({ delivery, updatedAt: nowTimestamp() }, { merge: true });
@@ -359,6 +386,18 @@ export async function submitGroupSurveyResponseHandler(request: any, response: a
     const { groupRequest, accessToken } = await readGroupSurveyRequest(payload.requestId, payload.accessToken);
     const responseId = groupRequest.requestId;
     const detailUrl = detailUrlFor(responseId, accessToken);
+    if (groupRequest.status === "submitted") {
+      const existing = (await refs.privateSurveyResponse(responseId).get()).data();
+      response.status(200).json({
+        ok: true,
+        duplicate: true,
+        responseId,
+        detailUrl: existing?.delivery?.detailUrl || detailUrl,
+        alimtalkStatus: existing?.delivery?.alimtalkStatus || "sent",
+        alimtalkReason: "이미 제출된 사전설문입니다.",
+      });
+      return;
+    }
     const answers = groupSurveyAnswers(payload);
     const summary = summarizeGroupSurveyAnswers(payload);
     const matching = await groupSurveyMatch(groupRequest);
@@ -372,7 +411,29 @@ export async function submitGroupSurveyResponseHandler(request: any, response: a
       matching,
     });
 
-    await refs.privateSurveyResponse(responseId).set(doc, { merge: true });
+    const created = await createSurveyResponseIfNew(responseId, doc);
+    if (!created) {
+      const existing = (await refs.privateSurveyResponse(responseId).get()).data();
+      await db.collection("groupSurveyRequests").doc(groupRequest.requestId).set(
+        {
+          status: "submitted",
+          responseId,
+          detailUrl: existing?.delivery?.detailUrl || detailUrl,
+          submittedAt: nowTimestamp(),
+          updatedAt: nowTimestamp(),
+        },
+        { merge: true },
+      );
+      response.status(200).json({
+        ok: true,
+        duplicate: true,
+        responseId,
+        detailUrl: existing?.delivery?.detailUrl || detailUrl,
+        alimtalkStatus: existing?.delivery?.alimtalkStatus || "sent",
+        alimtalkReason: "이미 제출된 사전설문입니다.",
+      });
+      return;
+    }
     const delivery = pendingStaffSurveyDelivery(doc);
     await refs.privateSurveyResponse(responseId).set({ delivery, updatedAt: nowTimestamp() }, { merge: true });
     await writePublicSurveyDoc(doc, accessToken, delivery);
@@ -412,6 +473,16 @@ function assertWebhookSecret(request: any): void {
   const expected = privateSurveyWebhookSecret.value();
   const actual = String(request.get?.("X-Archive-Survey-Secret") || request.body?.secret || "");
   if (!expected || actual !== expected) throw new Error("invalid webhook secret");
+}
+
+async function createSurveyResponseIfNew(responseId: string, doc: PrivateSurveyResponseDoc): Promise<boolean> {
+  try {
+    await refs.privateSurveyResponse(responseId).create(doc);
+    return true;
+  } catch (err: any) {
+    if (Number(err?.code) === 6 || String(err?.message || "").includes("ALREADY_EXISTS")) return false;
+    throw err;
+  }
 }
 
 async function readGroupSurveyRequest(
@@ -583,7 +654,7 @@ async function buildSurveyDoc(input: {
     delivery: {
       detailUrl: input.detailUrl,
       alimtalkStatus: "pending",
-      alimtalkReason: "담당강사 알림톡 발송 대기",
+      alimtalkReason: "강사 알림톡 발송 대기",
     },
     accessTokenHash: sha256(input.accessToken),
     createdAt: now,
@@ -622,7 +693,7 @@ async function buildGroupSurveyDoc(input: {
     delivery: {
       detailUrl: input.detailUrl,
       alimtalkStatus: "pending",
-      alimtalkReason: "담당강사 그룹 사전확인 알림톡 발송 대기",
+      alimtalkReason: "그룹 사전확인 강사 알림톡 발송 대기",
     },
     accessTokenHash: sha256(input.accessToken),
     createdAt: now,
@@ -681,7 +752,7 @@ export async function processDueStaffSurveyAlimtalks(): Promise<{ checked: numbe
           delivery: {
             ...doc.delivery,
             alimtalkStatus: "skipped",
-            alimtalkReason: "수업 시작 이후라 담당강사 사전설문 알림톡 발송 생략",
+            alimtalkReason: "수업 시작 이후라 강사 사전설문 알림톡 발송 생략",
           },
           updatedAt: nowTimestamp(),
         },
@@ -698,7 +769,7 @@ export async function processDueStaffSurveyAlimtalks(): Promise<{ checked: numbe
           delivery: {
             ...doc.delivery,
             alimtalkStatus: "failed",
-            alimtalkReason: "상세링크 접근토큰을 확인할 수 없어 담당강사 알림톡 발송 실패",
+            alimtalkReason: "상세링크 접근토큰을 확인할 수 없어 강사 알림톡 발송 실패",
           },
           updatedAt: nowTimestamp(),
         },
@@ -720,7 +791,7 @@ export async function processDueStaffSurveyAlimtalks(): Promise<{ checked: numbe
 
 function pendingStaffSurveyDelivery(doc: PrivateSurveyResponseDoc): PrivateSurveyResponseDoc["delivery"] {
   const dueText = staffSurveyDueText(doc);
-  const surveyLabel = doc.surveyType === "group" ? "담당강사 그룹 사전확인" : "담당강사 프라이빗 사전설문";
+  const surveyLabel = doc.surveyType === "group" ? "그룹 사전확인" : "프라이빗 사전설문";
   return {
     ...doc.delivery,
     alimtalkStatus: "pending",
@@ -793,7 +864,7 @@ async function deliverStaffSurveyAlimtalk(
     return {
       ...delivery,
       alimtalkStatus: "pending",
-      alimtalkReason: doc.matching.reason || "담당 수업 매칭 후 담당강사 알림톡 발송 가능",
+      alimtalkReason: doc.matching.reason || "수업 매칭 후 강사 알림톡 발송 가능",
     };
   }
 
@@ -803,7 +874,7 @@ async function deliverStaffSurveyAlimtalk(
     return {
       ...delivery,
       alimtalkStatus: "pending",
-      alimtalkReason: "담당강사 전화번호가 없어 알림톡 발송 대기",
+      alimtalkReason: "강사 전화번호가 없어 알림톡 발송 대기",
     };
   }
 
@@ -812,7 +883,7 @@ async function deliverStaffSurveyAlimtalk(
     return {
       ...delivery,
       alimtalkStatus: "pending",
-      alimtalkReason: `담당강사 알림톡 템플릿 검수 대기: ${templateId}`,
+      alimtalkReason: `강사 알림톡 템플릿 검수 대기: ${templateId}`,
     };
   }
   const sendId = `${doc.surveyType === "group" ? "group_survey_staff" : "private_survey_staff"}_${doc.responseId}`;
@@ -822,7 +893,7 @@ async function deliverStaffSurveyAlimtalk(
     return {
       ...delivery,
       alimtalkStatus: "sent",
-      alimtalkReason: "이미 담당강사 사전설문 알림톡 발송 완료",
+      alimtalkReason: "이미 강사 사전설문 알림톡 발송 완료",
     };
   }
   const previousAttempts = existing?.attempts || 0;
@@ -831,7 +902,7 @@ async function deliverStaffSurveyAlimtalk(
     return {
       ...delivery,
       alimtalkStatus: "failed",
-      alimtalkReason: `담당강사 알림톡 발송 실패 재시도 한도 초과: ${existing?.lastError || sendId}`,
+      alimtalkReason: `강사 알림톡 발송 실패 재시도 한도 초과: ${existing?.lastError || sendId}`,
     };
   }
 
@@ -855,13 +926,14 @@ async function deliverStaffSurveyAlimtalk(
         memberPhone: staffPhone,
         templateCode: templateId,
         dedupeKey: sendId,
-        dedupePolicy: `${doc.surveyType === "group" ? "담당강사 그룹 사전확인" : "담당강사 사전설문"} 제출 알림 응답별 1회`,
+        dedupePolicy: `${doc.surveyType === "group" ? "그룹 사전확인" : "프라이빗 사전설문"} 강사 제출 알림 응답별 1회`,
         dedupeWindowDays: null,
         status: "done",
         attempts: previousAttempts + 1,
         maxAttempts,
         nextRunAt: nowTimestamp(),
         solapiMessageId: result.messageId,
+        variables: result.variables,
         lastError: null,
         createdByUid: "system:private-survey-intake",
         createdAt: nowTimestamp(),
@@ -872,7 +944,7 @@ async function deliverStaffSurveyAlimtalk(
     return {
       ...delivery,
       alimtalkStatus: "sent",
-      alimtalkReason: `${doc.surveyType === "group" ? "담당강사 그룹 사전확인" : "담당강사 사전설문"} 알림톡 발송 완료`,
+      alimtalkReason: `${doc.surveyType === "group" ? "그룹 사전확인" : "프라이빗 사전설문"} 강사 알림톡 발송 완료`,
     };
   } catch (err) {
     const message = err instanceof Error ? err.message : String(err);
@@ -887,7 +959,7 @@ async function deliverStaffSurveyAlimtalk(
         memberPhone: staffPhone,
         templateCode: templateId,
         dedupeKey: sendId,
-        dedupePolicy: `${doc.surveyType === "group" ? "담당강사 그룹 사전확인" : "담당강사 사전설문"} 제출 알림 응답별 1회`,
+        dedupePolicy: `${doc.surveyType === "group" ? "그룹 사전확인" : "프라이빗 사전설문"} 강사 제출 알림 응답별 1회`,
         dedupeWindowDays: null,
         status: "failed",
         attempts,
@@ -988,7 +1060,7 @@ function surveyMemoContent(doc: PrivateSurveyResponseDoc): string {
 function privateSurveyMemoContent(doc: PrivateSurveyResponseDoc): string {
   return [
     "[ARCHIVE IN 프라이빗 사전설문]",
-    `첫 프라이빗: ${lessonTimeText(doc)} / ${doc.matching.staffName || "담당강사 미확인"}`,
+    `첫 프라이빗: ${lessonTimeText(doc)} / ${doc.matching.staffName || "강사 미확인"}`,
     "",
     `경험구분: ${doc.experienceType || "-"}`,
     `운동목적: ${doc.summary.goal || "-"}`,
@@ -1007,7 +1079,7 @@ function privateSurveyMemoContent(doc: PrivateSurveyResponseDoc): string {
 function groupSurveyMemoContent(doc: PrivateSurveyResponseDoc, payload?: GroupSurveySubmitPayload): string {
   return [
     "[ARCHIVE IN 그룹 첫 수업 사전확인]",
-    `첫 그룹수업: ${lessonTimeText(doc)} / ${doc.matching.staffName || "담당강사 미확인"}`,
+    `첫 그룹수업: ${lessonTimeText(doc)} / ${doc.matching.staffName || "강사 미확인"}`,
     "",
     `운동경험: ${payload?.exerciseExperience || doc.summary.exerciseLevel || "-"}`,
     `통증/불편: ${payload?.painAreas.join(", ") || doc.summary.focusArea || "-"}`,
@@ -1028,7 +1100,14 @@ async function sendStaffPrivateSurveyAlimtalk(input: {
   responseId: string;
   accessToken: string;
   templateId: string;
-}): Promise<{ messageId: string }> {
+}): Promise<{ messageId: string; variables: Record<string, string> }> {
+  const variables = {
+    "#{강사명}": input.staffName,
+    "#{회원명}": input.memberName,
+    "#{수업일시}": input.lessonTime,
+    "#{설문ID}": input.responseId,
+    "#{접근토큰}": input.accessToken,
+  };
   const body = {
     messages: [
       {
@@ -1038,13 +1117,7 @@ async function sendStaffPrivateSurveyAlimtalk(input: {
           pfId: solapiPfid.value(),
           templateId: input.templateId,
           disableSms: true,
-          variables: {
-            "#{강사명}": input.staffName,
-            "#{회원명}": input.memberName,
-            "#{수업일시}": input.lessonTime,
-            "#{설문ID}": input.responseId,
-            "#{접근토큰}": input.accessToken,
-          },
+          variables,
         },
       },
     ],
@@ -1070,6 +1143,7 @@ async function sendStaffPrivateSurveyAlimtalk(input: {
   }
   return {
     messageId: result.messageList?.[0]?.messageId || result.groupInfo?.groupId || "",
+    variables,
   };
 }
 
@@ -1252,11 +1326,11 @@ function renderSurveyPage(doc: PrivateSurveyResponseDoc): string {
     :root { color-scheme: light; --ink:#181512; --muted:#746b62; --line:#e8e0d7; --paper:#fffdf9; --accent:#c9392f; --soft:#f5efe9; --green:#2f6f68; }
     * { box-sizing: border-box; }
     body { margin:0; font-family:-apple-system,BlinkMacSystemFont,"Apple SD Gothic Neo","Noto Sans KR",sans-serif; background:#f6f1eb; color:var(--ink); }
-    main { width:min(760px,100%); margin:0 auto; padding:18px 14px 36px; }
-    .top { display:grid; grid-template-columns:1fr auto; gap:16px; align-items:start; padding:18px 2px 14px; border-bottom:1px solid rgba(24,21,18,.08); }
-    .brand { width:52px; height:52px; border-radius:50%; object-fit:contain; }
+    main { width:min(760px,100%); margin:0 auto; padding:14px 14px 30px; }
+    .top { display:grid; grid-template-columns:1fr auto; gap:12px; align-items:start; padding:12px 2px 10px; border-bottom:1px solid rgba(24,21,18,.08); }
+    .brand { width:44px; height:44px; border-radius:50%; object-fit:contain; }
     .eyebrow { font-size:12px; font-weight:800; color:var(--accent); }
-    h1 { margin:6px 0 10px; font-size:28px; line-height:1.18; letter-spacing:0; }
+    h1 { margin:5px 0 8px; font-size:24px; line-height:1.22; letter-spacing:0; }
     .meta { display:flex; flex-wrap:wrap; gap:6px; color:var(--muted); font-size:13px; line-height:1.5; }
     .chip { display:inline-flex; align-items:center; min-height:28px; padding:4px 9px; border:1px solid var(--line); border-radius:999px; background:rgba(255,253,249,.72); }
     .section-title { margin:22px 2px 9px; font-size:13px; font-weight:900; color:#3e3831; }
@@ -1273,7 +1347,7 @@ function renderSurveyPage(doc: PrivateSurveyResponseDoc): string {
       main { padding:14px 12px 30px; }
       .top { grid-template-columns:1fr 44px; gap:12px; padding-top:12px; }
       .brand { width:44px; height:44px; }
-      h1 { font-size:25px; }
+      h1 { font-size:22px; }
       .grid { grid-template-columns:1fr; }
       .panel { padding:14px; }
       .value { font-size:15px; line-height:1.62; }
@@ -1285,7 +1359,7 @@ function renderSurveyPage(doc: PrivateSurveyResponseDoc): string {
     <section class="top">
       <div>
         <div class="eyebrow">ARCHIVE IN · ${isGroup ? "그룹 첫 수업 사전확인" : "첫 프라이빗 사전설문"}</div>
-        <h1>${escapeHtml(doc.memberName)} 회원</h1>
+        <h1>${escapeHtml(doc.memberName)}</h1>
         <div class="meta">
           <span class="chip">제출 ${escapeHtml(submitted)}</span>
           <span class="chip">${isGroup ? "운동경험" : "경험구분"} ${escapeHtml(doc.experienceType || "-")}</span>
@@ -1294,7 +1368,7 @@ function renderSurveyPage(doc: PrivateSurveyResponseDoc): string {
       <img class="brand" src="${ARCHIVE_LOGO_URL}" alt="ARCHIVE PILATES">
     </section>
     <section class="panel match">
-      <div class="label">담당 수업 매칭</div>
+      <div class="label">${isGroup ? "첫 수업" : "수업 정보"}</div>
       <div class="value">${escapeHtml(matchText(doc))}</div>
     </section>
     <div class="section-title">핵심 확인</div>
@@ -1320,7 +1394,10 @@ function answerBlock(label: string, value: string): string {
 
 function matchText(doc: PrivateSurveyResponseDoc): string {
   if (doc.matching.status !== "matched") return doc.matching.reason;
-  return `${doc.matching.staffName || "담당강사 미확인"} · ${lessonTimeText(doc)}`;
+  return [
+    lessonTimeText(doc),
+    doc.matching.staffName ? `${doc.surveyType === "group" ? "첫 수업 강사" : "수업 강사"}: ${doc.matching.staffName}` : "",
+  ].filter(Boolean).join("\n");
 }
 
 function lessonTimeText(doc: PrivateSurveyResponseDoc): string {

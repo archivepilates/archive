@@ -387,6 +387,7 @@ export interface AlimtalkSendDoc {
   maxAttempts: number;
   nextRunAt: Timestamp;
   solapiMessageId?: string;
+  variables?: Record<string, string>;
   lastError: string | null;
   createdByUid: string;
   createdAt: Timestamp;
