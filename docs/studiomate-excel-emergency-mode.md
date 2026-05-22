@@ -199,6 +199,7 @@ node scripts/emergency-import-studiomate-member-excel.mjs --queue-contact-sync -
 - 수업예약내역 엑셀에 StudioMate 수업 ID/예약 ID가 없으면 시간, 강사, 수업명, 회원 전화번호/이름으로 기존 데이터에 최대한 맞춘다.
 - 알림톡 대상자 선정은 엑셀 동기화로 갱신된 회원카드 수강권을 기준으로 한다.
 - 알림톡은 엑셀 동기화 기본모드 기준으로 운영하며, 실발송 전 운영자 승인, 중복 발송 차단, 제외 회원 검토를 유지한다.
+- 프라이빗/그룹 사전설문 제출 내용은 ARCHIVE IN `memberMemos`에 먼저 저장하고, StudioMate 회원카드 메모 쓰기는 `studiomateMemoWriteJobs` 큐와 Mac mini Playwright LaunchAgent가 처리한다. StudioMate 로그인 만료, 화면 변경, 메모쓰기 실패로 작업이 `failed`가 되면 `home@archivepilates.com`으로 실패 메일을 보낸다.
 
 ## API 모드 재검토 조건
 

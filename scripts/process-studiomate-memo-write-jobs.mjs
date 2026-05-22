@@ -1,8 +1,9 @@
 #!/usr/bin/env node
-import { appendFile, mkdir, writeFile } from "node:fs/promises";
+import { appendFile, mkdir, readFile, writeFile } from "node:fs/promises";
 import os from "node:os";
 import path from "node:path";
 import { createRequire } from "node:module";
+import { createSign } from "node:crypto";
 
 const require = createRequire(import.meta.url);
 const admin = require("../firebase/kangsain-functions/functions/node_modules/firebase-admin");
@@ -19,6 +20,11 @@ const config = {
   runLogPath: expandHome(process.env.STUDIOMATE_MEMO_WRITE_RUN_LOG || "~/ArchiveIN/emergency/runs/studiomate-memo-write.jsonl"),
   headless: process.env.HEADLESS !== "false",
   waitForLogin: process.env.WAIT_FOR_LOGIN === "true",
+  operatorEmail: process.env.ARCHIVE_OPERATOR_EMAIL || "home@archivepilates.com",
+  delegatedUser: process.env.GOOGLE_DELEGATED_USER || "home@archivepilates.com",
+  googleCredentialsPath:
+    process.env.GOOGLE_APPLICATION_CREDENTIALS ||
+    "/Users/archivepilates/ArchiveIN/secrets/google/archive-codex-operator.json",
 };
 
 if (!admin.apps.length) admin.initializeApp({ projectId: config.projectId });
@@ -111,6 +117,9 @@ try {
         syncStatus: status,
         syncError: message,
       });
+      if (status === "failed") {
+        await sendMemoWriteFailureEmailOnce(ref, data, message);
+      }
       item.status = status;
       item.error = message;
       result.failed += 1;
@@ -121,6 +130,7 @@ try {
 } catch (error) {
   result.ok = false;
   result.error = error instanceof Error ? error.message : String(error);
+  await markLoadedJobsFailed(result.error);
   process.exitCode = 1;
 } finally {
   result.finishedAt = new Date().toISOString();
@@ -158,6 +168,141 @@ async function updateMemberMemoSyncStatus(memoId, patch) {
       },
       { merge: true },
     );
+}
+
+async function markLoadedJobsFailed(message) {
+  for (const { ref, data } of jobs) {
+    const attempts = Number(data.attempts || 0) + 1;
+    await ref.set(
+      {
+        status: "failed",
+        attempts,
+        lastError: message,
+        updatedAt: admin.firestore.Timestamp.now(),
+      },
+      { merge: true },
+    );
+    await updateMemberMemoSyncStatus(data.jobId || ref.id, {
+      syncStatus: "failed",
+      syncError: message,
+    });
+    try {
+      await sendMemoWriteFailureEmailOnce(ref, { ...data, attempts }, message);
+    } catch (emailError) {
+      result.error = `${message}; failure email failed: ${
+        emailError instanceof Error ? emailError.message : String(emailError)
+      }`;
+    }
+  }
+}
+
+async function sendMemoWriteFailureEmailOnce(ref, job, message) {
+  const latest = (await ref.get()).data() || {};
+  if (latest.failureEmailSentAt) return;
+  const jobId = String(job.jobId || ref.id);
+  const subject = `[ARCHIVE IN] StudioMate 메모쓰기 실패: ${job.memberName || jobId}`;
+  const body = [
+    "StudioMate 회원메모 쓰기 작업이 실패했습니다.",
+    "",
+    `작업ID: ${jobId}`,
+    `회원: ${job.memberName || "-"}`,
+    `회원ID: ${job.memberId || "-"}`,
+    `수업일: ${job.lectureDate || "-"}`,
+    `출처: ${job.source || "-"}`,
+    `시도횟수: ${Number(latest.attempts || job.attempts || 0)}/${Number(latest.maxAttempts || job.maxAttempts || 3)}`,
+    "",
+    "오류:",
+    message,
+    "",
+    "조치:",
+    "StudioMate 로그인/회원 상세 화면의 메모 버튼 상태를 확인한 뒤 작업을 retry 상태로 되돌려 재시도하세요.",
+  ].join("\n");
+  await sendGmail({
+    to: config.operatorEmail,
+    subject,
+    body,
+  });
+  await ref.set(
+    {
+      failureEmailSentAt: admin.firestore.Timestamp.now(),
+      updatedAt: admin.firestore.Timestamp.now(),
+    },
+    { merge: true },
+  );
+}
+
+async function sendGmail({ to, subject, body }) {
+  const accessToken = await googleAccessToken(["https://www.googleapis.com/auth/gmail.send"]);
+  const raw = Buffer.from(
+    [
+      `From: ARCHIVE IN <${config.delegatedUser}>`,
+      `To: ${to}`,
+      `Subject: ${encodeMimeHeader(subject)}`,
+      "MIME-Version: 1.0",
+      "Content-Type: text/plain; charset=UTF-8",
+      "Content-Transfer-Encoding: 8bit",
+      "",
+      body,
+    ].join("\r\n"),
+  ).toString("base64url");
+  const response = await fetch("https://gmail.googleapis.com/gmail/v1/users/me/messages/send", {
+    method: "POST",
+    headers: {
+      Authorization: `Bearer ${accessToken}`,
+      "Content-Type": "application/json",
+    },
+    body: JSON.stringify({ raw }),
+  });
+  if (!response.ok) {
+    throw new Error(`Gmail failure email send failed ${response.status}: ${(await response.text()).slice(0, 300)}`);
+  }
+}
+
+async function googleAccessToken(scopes) {
+  const key = JSON.parse(await readFile(config.googleCredentialsPath, "utf8"));
+  const now = Math.floor(Date.now() / 1000);
+  const assertion = signJwt(
+    {
+      alg: "RS256",
+      typ: "JWT",
+    },
+    {
+      iss: key.client_email,
+      scope: scopes.join(" "),
+      aud: "https://oauth2.googleapis.com/token",
+      exp: now + 3600,
+      iat: now,
+      sub: config.delegatedUser,
+    },
+    key.private_key,
+  );
+  const response = await fetch("https://oauth2.googleapis.com/token", {
+    method: "POST",
+    headers: { "Content-Type": "application/x-www-form-urlencoded" },
+    body: new URLSearchParams({
+      grant_type: "urn:ietf:params:oauth:grant-type:jwt-bearer",
+      assertion,
+    }),
+  });
+  const data = await response.json();
+  if (!response.ok) throw new Error(`Google token failed ${response.status}: ${JSON.stringify(data).slice(0, 300)}`);
+  return data.access_token;
+}
+
+function signJwt(header, payload, privateKey) {
+  const input = `${base64url(JSON.stringify(header))}.${base64url(JSON.stringify(payload))}`;
+  const signer = createSign("RSA-SHA256");
+  signer.update(input);
+  signer.end();
+  return `${input}.${signer.sign(privateKey, "base64url")}`;
+}
+
+function base64url(value) {
+  return Buffer.from(value).toString("base64url");
+}
+
+function encodeMimeHeader(value) {
+  return `=?UTF-8?B?${Buffer.from(value).toString("base64")}?=`;
 }
 
 async function writeMemo(page, job, authorization) {
