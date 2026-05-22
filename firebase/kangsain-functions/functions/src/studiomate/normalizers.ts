@@ -66,6 +66,17 @@ export function normalizeBooking(rawLecture: any, rawBooking: any, studioId: str
   const startRaw = stringValue(rawLecture.start_on ?? rawLecture.start_at ?? rawLecture.start_time);
   const endRaw = stringValue(rawLecture.end_on ?? rawLecture.end_at ?? rawLecture.end_time);
   const ticketExpiresAt = parseStudioMateDateTime(rawBooking.userTicket?.expire_at);
+  const lessonType = normalizeLessonType(
+    rawLecture.type ??
+      rawLecture.course?.type ??
+      rawLecture.class_type ??
+      rawLecture.lesson_type ??
+      rawLecture.lecture_type ??
+      rawLecture.division?.type ??
+      rawLecture.division?.name ??
+      rawLecture.division ??
+      rawLecture.title,
+  );
 
   return {
     bookingId,
@@ -82,11 +93,16 @@ export function normalizeBooking(rawLecture: any, rawBooking: any, studioId: str
     lectureDate: startRaw ? startRaw.slice(0, 10) : "",
     lectureStartAt: parseStudioMateDateTime(startRaw),
     lectureEndAt: parseStudioMateDateTime(endRaw),
+    lessonType,
     sourceStatus: status,
     appStatus,
     attendanceStatus: normalizeAttendanceStatus(status),
     syncStatus: "synced",
     ticketName: stringValue(ticket.title ?? rawBooking.ticket_title),
+    ticketClassType: stringValue(
+      ticket.available_class_type ?? rawBooking.userTicket?.available_class_type ?? rawBooking.available_class_type,
+    ),
+    ticketType: stringValue(ticket.type ?? rawBooking.userTicket?.type ?? rawBooking.ticket_type),
     ticketRemainingCount: nullableNumber(rawBooking.userTicket?.remaining_coupon ?? rawBooking.remaining_coupon),
     ticketExpiresAt,
     ticketExpiryLevel: ticketExpiryLevel(ticketExpiresAt),

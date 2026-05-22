@@ -248,10 +248,12 @@ async function hasAttendedGroupBookingOnOrBefore(memberId: string, sourceDate: s
 }
 
 function isGroupAttendanceHistory(booking: BookingDoc): boolean {
-  return !/프라이빗|개인|1:1/i.test(booking.ticketName || "");
+  return isGroupBooking(booking);
 }
 
 function isGroupBooking(booking: BookingDoc): boolean {
+  if (booking.lessonType === "group") return true;
+  if (booking.lessonType === "private" || booking.lessonType === "semi_private") return false;
   if (/프라이빗|개인|1:1/i.test(booking.ticketName || "")) return false;
   return /그룹|체험|듀엣|소그룹/i.test(booking.ticketName || "") || booking.ticketName === "";
 }
@@ -413,6 +415,8 @@ async function hasAttendedPrivateBookingOnOrBefore(memberId: string, sourceDate:
 }
 
 function isPrivateBookingTicket(booking: BookingDoc): boolean {
+  if (booking.lessonType === "private" || booking.lessonType === "semi_private") return true;
+  if (booking.lessonType === "group") return false;
   return /프라이빗|개인|1:1/i.test(booking.ticketName || "");
 }
 

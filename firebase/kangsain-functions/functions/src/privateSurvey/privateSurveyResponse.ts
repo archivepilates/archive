@@ -948,6 +948,8 @@ function isRecentSurveyResponse(response: PrivateSurveyResponseDoc): boolean {
 }
 
 function isPrivateBookingTicket(booking: BookingDoc): boolean {
+  if (booking.lessonType === "private" || booking.lessonType === "semi_private") return true;
+  if (booking.lessonType === "group") return false;
   return /프라이빗|개인|1:1/i.test(booking.ticketName || "");
 }
 
@@ -1453,7 +1455,7 @@ async function nearestBooking(profile: MemberProfileDoc, submittedAtText: string
       if (a.lectureDate !== b.lectureDate) return a.lectureDate.localeCompare(b.lectureDate);
       return (a.lectureStartAt?.toMillis() || 0) - (b.lectureStartAt?.toMillis() || 0);
     });
-  const privateBooking = bookings.find((booking) => /프라이빗|개인|1:1/i.test(booking.ticketName || ""));
+  const privateBooking = bookings.find((booking) => isPrivateBookingTicket(booking));
   return privateBooking || bookings[0] || null;
 }
 

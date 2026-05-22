@@ -132,11 +132,14 @@ export interface BookingDoc {
   lectureDate: string;
   lectureStartAt: Timestamp | null;
   lectureEndAt: Timestamp | null;
+  lessonType?: LessonType;
   sourceStatus: string;
   appStatus: AppBookingStatus;
   attendanceStatus: AttendanceStatus;
   syncStatus: SyncStatus;
   ticketName: string;
+  ticketClassType?: string;
+  ticketType?: string;
   ticketRemainingCount: number | null;
   ticketExpiresAt: Timestamp | null;
   ticketExpiryLevel: TicketExpiryLevel;

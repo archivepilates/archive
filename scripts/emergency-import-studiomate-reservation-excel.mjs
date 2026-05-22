@@ -289,11 +289,13 @@ function buildPlans(rows, existingLectures, existingProfiles, existingStaffs) {
         lectureDate: base.date,
         lectureStartAt: parseTimestamp(`${base.date} ${base.startTime}`),
         lectureEndAt: base.endTime ? parseTimestamp(`${base.date} ${base.endTime}`) : null,
+        lessonType: base.lessonType,
         sourceStatus: row.bookingStatus || "",
         appStatus: row.appStatus,
         attendanceStatus: row.attendanceStatus,
         syncStatus: "synced",
         ticketName: row.ticketName || "",
+        ticketClassType: matchedActiveTicketClassType(row, member.data),
         ticketRemainingCount: row.ticketRemainingCount,
         ticketExpiresAt: row.ticketExpiresAt,
         ticketExpiryLevel: ticketExpiryLevel(row.ticketExpiresAt),
@@ -442,6 +444,8 @@ async function rebuildInstructorViews(staffDates) {
             attendanceStatus: booking.attendanceStatus,
             syncStatus: booking.syncStatus,
             ticketName: booking.ticketName,
+            lessonType: booking.lessonType,
+            ticketClassType: booking.ticketClassType,
             ticketRemainingCount: booking.ticketRemainingCount,
             ticketExpiresAt: booking.ticketExpiresAt,
             ticketExpiryLevel: booking.ticketExpiryLevel,
@@ -561,6 +565,21 @@ function lessonType(title, division) {
   if (/듀엣|semi|세미/.test(value)) return "semi_private";
   if (/그룹|group|캐딜락|체어|리포머|바렐|척추|피로/.test(value)) return "group";
   return "unknown";
+}
+
+function matchedActiveTicketClassType(row, memberProfile) {
+  const tickets = Array.isArray(memberProfile?.activeTickets) ? memberProfile.activeTickets : [];
+  if (!tickets.length) return "";
+  const ticketName = normalizeName(row.ticketName || "");
+  const exact = tickets.find((ticket) => ticketName && normalizeName(ticket.name || "") === ticketName);
+  if (exact?.classType) return cleanText(exact.classType);
+  const partial = tickets.find((ticket) => {
+    const name = normalizeName(ticket.name || "");
+    return ticketName && name && (name.includes(ticketName) || ticketName.includes(name));
+  });
+  if (partial?.classType) return cleanText(partial.classType);
+  if (tickets.length === 1 && tickets[0]?.classType) return cleanText(tickets[0].classType);
+  return "";
 }
 
 function staffIdFor(name) {
