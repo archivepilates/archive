@@ -66,7 +66,8 @@
     .empty-slot.blocked:hover{border-color:#d49c92;background:#f8e6e1;color:#7b352d}
     .top-panels{display:grid;grid-template-columns:minmax(180px,240px) minmax(280px,1fr);gap:10px;align-items:start}
     .panel{background:var(--panel);border:1px solid var(--line);border-radius:8px;padding:10px;box-shadow:var(--shadow)}
-    .top-panels .panel{max-height:260px;overflow:visible}
+    .top-panels .panel{overflow:visible}
+    .top-panels .slot-panel{max-height:min(520px,58vh);overflow:auto;overscroll-behavior:contain}
     .panel h2{font-size:13px;margin:0 0 8px}
     .dropdown{position:relative}
     .dropdown-btn{width:100%;height:36px;border:1px solid var(--line);border-radius:8px;background:#fbfaf7;padding:0 10px;display:flex;align-items:center;justify-content:space-between;gap:8px;font-size:12px;font-weight:800;text-align:left}
@@ -147,7 +148,7 @@
                 </div>
               </div>
             </div>
-            <div class="panel">
+            <div class="panel slot-panel">
               <h2>선택 슬롯</h2>
               <div class="detail-list" id="details">
                 <div class="detail"><b>슬롯을 선택하세요</b>상담 중 제안 가능한 시간과 불가 사유를 여기서 확인합니다.</div>
