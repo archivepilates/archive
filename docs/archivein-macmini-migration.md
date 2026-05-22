@@ -1,8 +1,8 @@
-# ArchiveIN Mac mini Migration Handoff
+# ARCHIVE IN Mac mini Migration Handoff
 
-마지막 업데이트: 2026-05-15
+마지막 업데이트: 2026-05-22
 
-이 문서는 ArchiveIN 프로젝트를 Mac mini에서 이어받아 개발, 배포, 자동화 운영할 때 필요한 기준 문서다.
+이 문서는 ARCHIVE IN 프로젝트를 Mac mini에서 이어받아 개발, 배포, 자동화 운영할 때 필요한 기준 문서다.
 
 중요: 이 파일은 GitHub에 올려도 되는 공개 운영 문서다. 서비스계정 JSON, StudioMate 로그인, SOLAPI API Secret 같은 실제 비밀값은 이 문서에 넣지 않는다. 실제 키 값은 로컬 전용 파일 `ARCHIVEIN_MACMINI_PRIVATE_KEYS.md`를 사용한다.
 
@@ -139,7 +139,7 @@ chmod 600 "$HOME/.config/archive-pilates/archive-codex-operator.json"
 
 ## 6. Firebase Secret Manager
 
-ArchiveIN Functions는 아래 Secret Manager 값을 사용한다.
+ARCHIVE IN Functions는 아래 Secret Manager 값을 사용한다.
 
 ```text
 STUDIOMATE_LOGIN_ID
@@ -170,7 +170,7 @@ printf '%s' 'NEW_SECRET_VALUE' | gcloud secrets versions add SECRET_NAME \
 
 ## 7. 주요 앱/함수 역할
 
-### ArchiveIN 웹앱
+### ARCHIVE IN 웹앱
 
 - 경로: `archivein/`
 - 배포 대상: Firebase Hosting `/archivein/`
@@ -192,17 +192,17 @@ printf '%s' 'NEW_SECRET_VALUE' | gcloud secrets versions add SECRET_NAME \
 
 ```mermaid
 flowchart LR
-  A["StudioMate API"] --> B["Firebase Functions"]
+  A["StudioMate 엑셀 다운로드/반영"] --> B["Firebase Functions"]
   B --> C["Firestore memberProfiles"]
   B --> D["Firestore lectures/bookings"]
   B --> E["Firestore consultations/otherSchedules"]
-  C --> F["ArchiveIN 회원카드"]
+  C --> F["ARCHIVE IN 회원카드"]
   C --> G["Google Contacts home@archivepilates.com"]
   C --> H["Alimtalk candidates"]
   H --> I["Operator review / approval"]
   I --> J["SOLAPI Alimtalk send"]
   K["Archive DB / Dashboard Sheets"] --> L["dashboardSnapshots/current"]
-  L --> M["ArchiveIN 월간 대시보드"]
+  L --> M["ARCHIVE IN 월간 대시보드"]
 ```
 
 ## 9. Google Contacts 기준

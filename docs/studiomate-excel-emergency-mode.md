@@ -163,6 +163,9 @@ node scripts/emergency-import-studiomate-member-excel.mjs --queue-contact-sync -
   - 마지막 비상 엑셀 반영 상태
 - `lectures/{lectureId}` / `bookings/{bookingId}`
   - 수업일, 시간, 수업명, 강사, 예약자, 예약상태, 출결상태
+  - `lectures.lessonType`: 수업 자체의 그룹/프라이빗 성격
+  - `bookings.lessonType`: 예약 import 시 저장하는 수업 성격 캐시
+  - `bookings.ticketClassType`: 예약 수강권이 회원카드 `activeTickets.classType`과 매칭될 때 저장하는 수강권 성격
   - 기존 수업과 시간/강사/수업명이 매칭되면 기존 `lectureId`를 유지
   - 새 수업은 `excel_lecture_...` 임시 ID 사용
 - `instructorViews/{staffId}_{date}`

@@ -1,14 +1,14 @@
-# ArchiveIN 운영 기준 초안
+# ARCHIVE IN 운영 기준 초안
 
 마지막 업데이트: 2026-05-14
 
 ## 1. 제품 원칙
 
-ArchiveIN은 StudioMate 대체제가 아니다. 예약, 출결, 회원 원장 전체를 복제하는 범용 운영 시스템이 아니라, Archive Pilates의 운영 판단과 회원 케어를 빠르게 돕는 맞춤 도구로 본다.
+ARCHIVE IN은 StudioMate 대체제가 아니다. 예약, 출결, 회원 원장 전체를 복제하는 범용 운영 시스템이 아니라, ARCHIVE PILATES의 운영 판단과 회원 케어를 빠르게 돕는 맞춤 도구로 본다.
 
 운영 기준은 아래 우선순위를 따른다.
 
-1. Archive Pilates 현장 운영자가 오늘 처리해야 할 일을 빠르게 판단한다.
+1. ARCHIVE PILATES 현장 운영자가 오늘 처리해야 할 일을 빠르게 판단한다.
 2. 강사가 수업 직전 회원 상태와 주의사항을 놓치지 않는다.
 3. ACTIONS는 실제 후속 조치로 이어질 후보만 보여준다.
 4. StudioMate, 아카이브DB, Firebase 캐시, 맥미니 자동화의 역할을 섞지 않는다.
@@ -72,24 +72,24 @@ ACTIONS는 카카오 알림톡 자동화와 자연스럽게 연결될 수 있어
 권장 흐름:
 
 1. 서버가 ACTION 후보를 계산한다.
-2. 운영자가 ArchiveIN에서 후보와 근거를 검토한다.
+2. 운영자가 ARCHIVE IN에서 후보와 근거를 검토한다.
 3. 운영자가 발송 대상과 메시지 유형을 확정한다.
-4. ArchiveIN이 추천 메시지 템플릿과 개인화 맥락을 보여준다.
+4. ARCHIVE IN이 추천 메시지 템플릿과 개인화 맥락을 보여준다.
 5. 발송 버튼은 알림톡 자동화로 연결한다.
-6. 발송 결과, 시간, 템플릿, 대상 회원, 후속 상태를 ArchiveIN에 기록한다.
+6. 발송 결과, 시간, 템플릿, 대상 회원, 후속 상태를 ARCHIVE IN에 기록한다.
 
 자동 발송은 기본값으로 두지 않는다. 초안 단계에서는 운영자 검토 후 발송을 기준으로 한다.
 
 ## 4. 데이터 원천과 동기화 구분
 
-ArchiveIN은 데이터 원천별 책임을 명확히 나눈다.
+ARCHIVE IN은 데이터 원천별 책임을 명확히 나눈다.
 
 | 구분 | 역할 | 사용 예 | 주의사항 |
 | --- | --- | --- | --- |
 | StudioMate 엑셀 다운로드 | 기본 수업/예약/회원 운영 원천 | 강사용 수업 목록, 예약 상태, 회원카드, 수강권, 알림톡 후보 | 자사 사이트 운영 전까지 API 대신 기본 동기화 방식으로 사용한다. |
 | StudioMate API | 보류 중인 과거/대기 경로 | 자사 사이트 운영 이후 재검토 | 평상시 ARCHIVE IN 운영에서는 사용하지 않는다. |
 | Firebase Firestore 캐시 | 앱이 빠르게 읽는 운영 뷰와 처리 상태 | `instructorViews`, `memberProfiles`, 회원 태그, write queue, ACTION 후보 | 캐시가 원천이라고 착각하지 않는다. 동기화 시각과 근거를 함께 본다. |
-| Google 주소록 | 전화 발신/검색/운영 커뮤니케이션 보조 저장소 | `home@archivepilates.com` 연락처 | 회원 원천이 아니다. StudioMate API에서 내려온 `memberProfiles`와 상담 연락처를 기준으로 동기화한다. |
+| Google 주소록 | 전화 발신/검색/운영 커뮤니케이션 보조 저장소 | `home@archivepilates.com` 연락처 | 회원 원천이 아니다. StudioMate 엑셀 동기화로 갱신된 `memberProfiles`와 상담 연락처를 기준으로 동기화한다. |
 | 아카이브DB | 정산/월별 분석/운영 지표의 기준 데이터 | 월별 유효회원, 매출성 지표, 정산 후 데이터마트 | StudioMate 실시간 상태와 다를 수 있다. 정산 완료 기준임을 표시한다. |
 | 맥미니 자동화 | StudioMate 엑셀/관리자 흐름 보조 자동화 | 엑셀 다운로드, Drive 정리, 아카이브DB 갱신 보조 | 자동화 실패나 지연을 Firebase 장애로 오해하지 않는다. |
 
@@ -142,7 +142,7 @@ Firebase 주소록 동기화는 `home@archivepilates.com`을 Google People API �
 
 ### StudioMate 예약 가능 기한 설정 자동화
 
-매주 월요일 12:30에 수행하는 StudioMate 예약 가능 기한 설정 변경은 현재 Mac mini 브라우저 자동화 기준이다. ArchiveIN Firebase Functions의 StudioMate API 클라이언트에는 아직 이 설정 변경 전용 endpoint가 확인되어 있지 않다.
+매주 월요일 12:30에 수행하는 StudioMate 예약 가능 기한 설정 변경은 현재 Mac mini 브라우저 자동화 기준이다. ARCHIVE IN Firebase Functions의 StudioMate API 클라이언트에는 아직 이 설정 변경 전용 endpoint가 확인되어 있지 않다.
 
 API 전환 조건:
 
@@ -153,7 +153,7 @@ API 전환 조건:
 
 ## 5. 모바일 UI 운영 기준
 
-ArchiveIN은 모바일 사용성이 핵심 품질 기준이다.
+ARCHIVE IN은 모바일 사용성이 핵심 품질 기준이다.
 
 필수 확인 항목:
 
@@ -178,7 +178,7 @@ ArchiveIN은 모바일 사용성이 핵심 품질 기준이다.
 
 ## 7. Firebase 배포와 공개 호출 기준
 
-ArchiveIN 앱에서 Firebase SDK로 호출하는 Callable Function은 Cloud Run 앞단에서 막히면 앱 안에서는 `Missing or insufficient permissions`처럼 보일 수 있다. 이때 Firestore rules만 의심하지 말고 Cloud Run Invoker 설정을 함께 확인한다.
+ARCHIVE IN 앱에서 Firebase SDK로 호출하는 Callable Function은 Cloud Run 앞단에서 막히면 앱 안에서는 `Missing or insufficient permissions`처럼 보일 수 있다. 이때 Firestore rules만 의심하지 말고 Cloud Run Invoker 설정을 함께 확인한다.
 
 현재 프로젝트에는 `constraints/iam.allowedPolicyMemberDomains` 조직정책이 적용되어 있어 `allUsers -> roles/run.invoker` 바인딩은 막힌다. 대신 `constraints/run.managed.requireInvokerIam`은 꺼져 있으므로, 앱이 호출해야 하는 Callable Function은 서비스 단위로 Invoker IAM 체크를 끄는 방식을 우선 사용한다.
 

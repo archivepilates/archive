@@ -1,8 +1,8 @@
-# Archive Pilates Kakao Alimtalk Automation Handoff
+# ARCHIVE PILATES Kakao Alimtalk Automation Handoff
 
-Last updated: 2026-05-14
+Last updated: 2026-05-22
 
-이 문서는 다른 Codex/작업자가 StudioMate API 연동 데이터 동기화와 Firebase Functions 기반 알림톡 자동화를 이어받기 위한 요약입니다.
+이 문서는 다른 Codex/작업자가 StudioMate 엑셀 다운로드/반영 동기화와 Firebase Functions 기반 알림톡 자동화를 이어받기 위한 요약입니다.
 
 ## 목표
 
@@ -19,7 +19,7 @@ Last updated: 2026-05-14
 ## 현재 권장 아키텍처
 
 ```text
-StudioMate API 또는 StudioMate export
+StudioMate 엑셀 다운로드/반영
   -> sync worker
   -> normalized member/pass records
   -> Firebase Firestore or Storage
@@ -30,7 +30,7 @@ StudioMate API 또는 StudioMate export
 
 역할 분리:
 
-- StudioMate API sync: 회원, 연락처, 수강권 원천 데이터 수집 및 정규화
+- StudioMate Excel sync: 회원, 연락처, 수강권, 예약 원천 데이터 수집 및 정규화
 - Firebase Functions: 규칙 판단, 중복 발송 방지, SOLAPI 발송, 결과 저장
 - SOLAPI: 승인된 카카오 알림톡 템플릿 발송
 
@@ -538,7 +538,7 @@ alimtalkSends/stm_123_ticket_456_expired_d1
 
 ## 다음 작업 체크리스트
 
-1. StudioMate API에서 회원/수강권 필드 매핑 확정
+1. StudioMate 엑셀 회원/수강권 필드 매핑 확정
 2. Firestore schema 설계
 3. `members`, `passes`, `syncRuns`, `alimtalkSends` 컬렉션 생성
 4. SOLAPI credentials를 Firebase Secret Manager에 등록

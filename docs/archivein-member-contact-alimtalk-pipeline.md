@@ -1,10 +1,10 @@
-# ArchiveIN 회원 프로필, 주소록, 알림톡 파이프라인
+# ARCHIVE IN 회원 프로필, 주소록, 알림톡 파이프라인
 
-마지막 업데이트: 2026-05-15
+마지막 업데이트: 2026-05-22
 
 ## 목표
 
-회원 데이터는 StudioMate API를 기준으로 ArchiveIN 서버가 한 번 정리하고, 그 결과를 아래 세 곳에서 같이 사용한다.
+회원 데이터는 StudioMate 엑셀 다운로드/반영 결과를 기준으로 ARCHIVE IN 서버가 한 번 정리하고, 그 결과를 아래 세 곳에서 같이 사용한다.
 
 - 운영자/강사 회원카드
 - Google 주소록 동기화
@@ -18,10 +18,10 @@ Google Contacts는 `memberProfiles`를 보강하는 원천이 아니라, StudioM
 
 ```mermaid
 flowchart LR
-  A["StudioMate API 회원/수강권/예약 데이터"] --> B["Firebase Functions 동기화"]
-  A2["StudioMate API 상담 연락처"] --> B
+  A["StudioMate 엑셀 회원/수강권/예약 데이터"] --> B["Firebase Functions 동기화"]
+  A2["StudioMate 엑셀 상담/연락처 데이터"] --> B
   B --> C["memberProfiles/{memberId}"]
-  C --> D["ArchiveIN 회원카드"]
+  C --> D["ARCHIVE IN 회원카드"]
   C --> E["memberContactIndex/{memberId}"]
   B --> E2["memberContactIndex/{consultationId}"]
   E2 --> F
@@ -100,7 +100,7 @@ Google People API에 실제 쓰기를 수행할 작업 큐다.
 
 대상 계정:
 
-- `home@archivepilates.com`: ArchiveIN/Firebase/Google Contacts 운영 기준 계정
+- `home@archivepilates.com`: ARCHIVE IN/Firebase/Google Contacts 운영 기준 계정
 
 2026-05-15 이후 주소록 동기화 대상은 `home@archivepilates.com`으로 통일한다. `archivepilates@gmail.com` 주소록은 과거 자동화 대상/이관 원본으로만 본다.
 
@@ -192,6 +192,7 @@ Google 주소록 쓰기에는 Google People API 권한이 필요하다.
 - 운영자 화면은 일/주/월 단위의 알림톡 발송 후보를 한 번에 보여준다.
 - 자동 발송은 매일 11:30 KST에 실행한다. `scheduledQueueAndSendAlimtalkDaily`가 `memberProfiles.activeTickets`를 직접 스캔해 발송 기준일의 수강권 상태를 재계산하고, 수강권 기간/횟수 안내는 기준일 후보만 `queued` 상태로 넘긴 뒤 큐를 처리한다.
 - 운영자 ACTIONS는 화면 참고용이며, 알림톡 대상자 선정 원천은 현재 회원카드 수강권 상태다.
+- 그룹/프라이빗 구분은 구조화 필드를 우선한다. 수업 성격은 `lectures.lessonType`과 `bookings.lessonType`, 수강권 성격은 `memberProfiles.activeTickets[].classType`과 `bookings.ticketClassType`을 기준으로 보고, 수강권명 문자열 추정은 값이 비어 있을 때만 fallback으로 사용한다.
 - 운영자 화면과 회원카드에는 알림톡 상태 태그/칩을 표시하지 않는다. 후보 패널, 발송 이력, Google Drive 로그 문서, 메일 보고에서만 확인한다.
 - 신규회원 웰컴은 기준일 기준 등록 3일 이내 후보만 자동 발송 대상으로 본다.
 - 운영자는 필요할 때 후보 명단을 복사해 검토하거나 `일괄 승인`으로 수동 발송 대기 처리할 수 있다.

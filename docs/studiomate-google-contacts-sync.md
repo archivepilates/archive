@@ -6,7 +6,7 @@
 
 ## 목적
 
-StudioMate 회원 API/상담 API에서 정리된 ArchiveIN 회원/상담 연락처를 기준으로 Archive Pilates Google 연락처를 동기화한다.
+StudioMate 엑셀 다운로드/반영으로 정리된 ARCHIVE IN 회원/상담 연락처를 기준으로 ARCHIVE PILATES Google 연락처를 동기화한다.
 
 현재 동기화 대상은 `home@archivepilates.com` Google Contacts이다. `archivepilates@gmail.com` 주소록은 과거 자동화 대상/이관 원본으로만 본다.
 
@@ -21,7 +21,7 @@ StudioMate 회원 API/상담 API에서 정리된 ArchiveIN 회원/상담 연락�
 
 주의:
 
-- `home@archivepilates.com` 주소록을 ArchiveIN 운영 기준 주소록으로 사용한다.
+- `home@archivepilates.com` 주소록을 ARCHIVE IN 운영 기준 주소록으로 사용한다.
 - 연락처 동기화는 Firebase Functions의 `memberContactIndex` / `contactSyncJobs` / `HomePeopleClient` 흐름을 기준으로 한다.
 - Mac mini에 남아 있는 `archivepilates@gmail.com` OAuth 토큰 기반 스크립트는 레거시로 보고, 실행이 필요하면 `home@archivepilates.com` 기준으로 수정한 뒤 사용한다.
 - 토큰, 서비스계정 JSON, 비밀번호는 Git에 올리지 않는다.
@@ -162,7 +162,7 @@ StudioMate이름 강사님
 
 ### 메모 규칙
 
-- StudioMate 회원카드 메모 또는 비상모드 회원목록 엑셀의 `메모` 컬럼은 Google 연락처 메모 필드에 동기화한다.
+- StudioMate 회원카드 메모 또는 정상모드 엑셀 회원목록의 `메모` 컬럼은 Google 연락처 메모 필드에 동기화한다.
 - 기존 Google 연락처 메모는 보존하고, 아래 Archive 전용 블록만 추가하거나 교체한다.
 
 ```text
@@ -218,8 +218,8 @@ CONTACTS_SYNC_MAX_AUTO_UPDATE=50
 
 | 자동화 | LaunchAgent | 시간 | 상태 |
 | --- | --- | --- | --- |
-| StudioMate 회원목록 다운로드 | `com.archive.studiomate-member-excel` | 매일 23:00 | 삭제됨. 비상모드 `com.archive.studiomate-excel-emergency-mode`가 회원목록을 포함해 처리 |
-| StudioMate → Google Contacts 동기화 | `com.archive.studiomate-contacts-sync` | 매일 23:10 | 비상모드 중 비활성 |
+| StudioMate 회원목록 다운로드 | `com.archive.studiomate-member-excel` | 매일 23:00 | 삭제됨. 정상모드 엑셀 자동화 `com.archive.studiomate-excel-emergency-mode`가 회원목록을 포함해 처리 |
+| StudioMate → Google Contacts 동기화 | `com.archive.studiomate-contacts-sync` | 매일 23:10 | 레거시 작업으로 비활성 |
 | StudioMate 예약 가능 기한 설정 | `com.archive.studiomate-reservation-deadline` | 매주 월요일 12:30 | 활성 |
 
 연락처 동기화 LaunchAgent:
@@ -234,7 +234,7 @@ CONTACTS_SYNC_MAX_AUTO_UPDATE=50
 cd "/Users/archivepilates/Documents/New project 2" && /usr/local/bin/node scripts/run_studiomate_google_sync_job.mjs
 ```
 
-2026-05-19 비상모드에서는 이 레거시 23:10 작업을 unload하고 `.disabled-20260519`로 보관한다. 최신 비상 연락처 동기화는 `com.archive.studiomate-emergency-contacts-sync`가 1시간 간격으로 담당한다.
+2026-05-22부터 이 레거시 23:10 작업은 unload 상태로 유지하고 `.disabled-20260519`로 보관한다. 최신 정상모드 엑셀 연락처 동기화는 `com.archive.studiomate-emergency-contacts-sync`가 1시간 간격으로 담당한다. LaunchAgent 이름의 `emergency`는 호환용 레거시 이름이다.
 
 로그:
 
@@ -298,7 +298,7 @@ Codex 앱 자동화는 혼선을 줄이기 위해 보조/수동 테스트용으�
 
 ### 2026-05-15 주소록 기준 계정 통일
 
-- ArchiveIN 운영 기준 Google Contacts 계정을 `home@archivepilates.com`으로 통일했다.
+- ARCHIVE IN 운영 기준 Google Contacts 계정을 `home@archivepilates.com`으로 통일했다.
 - Firebase Functions `HomePeopleClient`는 서비스계정 도메인 전체 위임으로 `home@archivepilates.com` Contacts를 수정한다.
 - `archivepilates@gmail.com` 주소록은 과거 이관 원본/레거시 자동화 대상으로만 둔다.
 - Mac mini 연락처 자동화가 계속 필요하면 `home@archivepilates.com` 기준으로 수정한 뒤 실행한다.
@@ -392,8 +392,8 @@ Codex 앱 자동화는 혼선을 줄이기 위해 보조/수동 테스트용으�
 | --- | --- |
 | Google Contacts 대상 계정 | `home@archivepilates.com` |
 | 완료보고 메일 계정 | `home@archivepilates.com` |
-| 연락처 동기화 LaunchAgent | 23:10 레거시 작업 비활성. 비상모드 연락처 작업은 `com.archive.studiomate-emergency-contacts-sync` |
-| 회원목록 다운로드 LaunchAgent | 삭제됨. 비상모드 전용 엑셀 자동화가 회원목록 다운로드를 담당 |
+| 연락처 동기화 LaunchAgent | 23:10 레거시 작업 비활성. 정상모드 엑셀 연락처 작업은 `com.archive.studiomate-emergency-contacts-sync` |
+| 회원목록 다운로드 LaunchAgent | 삭제됨. 정상모드 엑셀 자동화가 회원목록 다운로드를 담당 |
 | 예약 가능 기한 LaunchAgent | 활성 |
 | Firebase 연락처 큐 | `memberContactIndex` / `contactSyncJobs` 기준 |
 | 완료보고 메일 | `home@archivepilates.com` 기준 |
