@@ -950,7 +950,22 @@ function isRecentSurveyResponse(response: PrivateSurveyResponseDoc): boolean {
 function isPrivateBookingTicket(booking: BookingDoc): boolean {
   if (booking.lessonType === "private" || booking.lessonType === "semi_private") return true;
   if (booking.lessonType === "group") return false;
+  const ticketKind = bookingTicketKind(booking);
+  if (ticketKind === "private") return true;
+  if (ticketKind === "group" || ticketKind === "instructor") return false;
   return /프라이빗|개인|1:1/i.test(booking.ticketName || "");
+}
+
+function bookingTicketKind(booking: BookingDoc): "group" | "private" | "instructor" | "" {
+  const values = [booking.ticketClassType, booking.ticketType].map((value) => String(value || "").trim());
+  for (const value of values) {
+    const upper = value.toUpperCase();
+    if (!upper) continue;
+    if (upper === "P" || upper === "PRIVATE" || /프라이빗|개인|1:1/i.test(value)) return "private";
+    if (upper === "G" || upper === "GROUP" || /그룹|체험|듀엣|소그룹/i.test(value)) return "group";
+    if (upper === "I" || upper === "INSTRUCTOR" || /강사레슨/i.test(value)) return "instructor";
+  }
+  return "";
 }
 
 function matchFromBooking(booking: BookingDoc): MatchResult {
