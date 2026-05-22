@@ -19,6 +19,7 @@ export async function syncManagerStaffs(input?: { studioId?: string; managerStaf
         const phone = digitsOnly(row.mobile ?? row.contact_infos?.find?.((item: any) => item?.is_representative)?.contact);
         const current = (await refs.staff(staffId).get()).data();
         const managerRole = roleFromManager(row.role);
+        const color = staffColorFromManager(row) || current?.privateScheduleColor || current?.archiveInColor || current?.color || "";
         await refs.staff(staffId).set(
           {
             staffId,
@@ -32,6 +33,13 @@ export async function syncManagerStaffs(input?: { studioId?: string; managerStaf
             visibleLectureStaffNames: current?.visibleLectureStaffNames?.length
               ? current.visibleLectureStaffNames
               : [stringValue(row.name)],
+            ...(color
+              ? {
+                  privateScheduleColor: color,
+                  archiveInColor: current?.archiveInColor || color,
+                  color: current?.color || color,
+                }
+              : {}),
             createdAt: current?.createdAt || now,
             updatedAt: now,
           },
@@ -57,4 +65,22 @@ function stringValue(value: unknown): string {
 
 function digitsOnly(value: unknown): string {
   return stringValue(value).replace(/\D/g, "");
+}
+
+function staffColorFromManager(row: any): string {
+  const candidates = [
+    row?.private_schedule_color,
+    row?.archive_in_color,
+    row?.schedule_color,
+    row?.calendar_color,
+    row?.lesson_color,
+    row?.color,
+    row?.theme_color,
+    row?.background_color,
+    row?.hex_color,
+    row?.profile?.color,
+    row?.profile?.theme_color,
+  ];
+  const color = candidates.find((value) => /^#[0-9a-f]{6}$/i.test(stringValue(value)));
+  return color ? stringValue(color) : "";
 }

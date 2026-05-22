@@ -30,6 +30,7 @@ const DAYS = ["월", "화", "수", "목", "금", "토", "일"];
 const TIME_ROWS = ["09:00", "10:00", "11:00", "12:00", "13:00", "14:00", "15:00", "16:00", "17:00", "18:00", "19:00", "20:00", "21:00"];
 const SAMPLE_NAMES = ["김아름", "이서윤", "박지민", "최민정", "정하늘"];
 const EXCLUDED_INSTRUCTOR_NAMES = ["운영자", "김기효"];
+const FALLBACK_STAFF_COLORS = ["#6d7d58", "#426b8f", "#9b5148", "#a8742a", "#6f5f91", "#2f6fa3", "#7b6f46", "#8b5d5d"];
 const state = {
   app: null,
   auth: null,
@@ -122,7 +123,7 @@ function fallbackInstructors() {
     name,
     role: "instructor",
     active: true,
-    color: ["#6d7d58", "#426b8f", "#9b5148", "#a8742a", "#6f5f91"][index],
+    color: FALLBACK_STAFF_COLORS[index % FALLBACK_STAFF_COLORS.length],
     sample: true,
   }));
 }
@@ -176,8 +177,35 @@ function normalizeStaff(doc) {
     name: String(data.name || data.staffName || doc.id),
     role: data.role || "instructor",
     active: data.active !== false,
-    color: data.color || data.themeColor || data.backgroundColor || "",
+    color: staffColorFromData(data, doc.id),
   };
+}
+
+function staffColorFromData(data, fallbackKey = "") {
+  const candidates = [
+    data.privateScheduleColor,
+    data.archiveInColor,
+    data.scheduleColor,
+    data.calendarColor,
+    data.lessonColor,
+    data.color,
+    data.themeColor,
+    data.backgroundColor,
+    data.hexColor,
+  ];
+  const value = candidates.find((item) => isHexColor(item));
+  return value || colorFromKey(data.staffId || data.name || fallbackKey);
+}
+
+function isHexColor(value) {
+  return typeof value === "string" && /^#[0-9a-f]{6}$/i.test(value.trim());
+}
+
+function colorFromKey(value) {
+  const key = String(value || "");
+  let hash = 0;
+  for (let index = 0; index < key.length; index += 1) hash = (hash * 31 + key.charCodeAt(index)) >>> 0;
+  return FALLBACK_STAFF_COLORS[hash % FALLBACK_STAFF_COLORS.length];
 }
 
 function normalizeBusy(doc, kind) {
@@ -308,9 +336,20 @@ function rangesOverlap(startA, endA, startB, endB) {
 
 function slotFor(instructor, date, time) {
   const busy = busyFor(instructor, date, time);
+  const archiveBusy = busy.filter((item) => item.kind === "lecture");
   const available = state.availability.find(
     (item) => item.staffId === instructor.staffId && item.date === date && item.time === time,
   );
+  if (archiveBusy.length) {
+    return {
+      type: "busy",
+      lockedByLecture: true,
+      instructor,
+      date,
+      time,
+      reason: archiveBusy.map((item) => `ARCHIVE PILATES 수업 · ${item.title}`).join(" / "),
+    };
+  }
   if (available && available.status !== "unavailable") {
     return {
       type: ["confirm", "request"].includes(available.status) ? available.status : "available",
@@ -365,13 +404,28 @@ function slotFor(instructor, date, time) {
 function slotHtml(slot) {
   const type = slot.type === "unavailable" ? "busy" : slot.type === "busy" ? "busy" : slot.type;
   const meta = slot.type === "busy" ? slot.reason : `${slot.checkedAt} · ${slot.source}`;
+  const staffColor = slot.instructor?.color || colorFromKey(slot.instructor?.staffId || slot.instructor?.name);
   return `
-    <button class="slot ${type}" type="button" data-slot='${encodeURIComponent(JSON.stringify(slot))}'>
+    <button class="slot ${type}" type="button" style="${slotStyle(staffColor)}" data-slot='${encodeURIComponent(JSON.stringify(slot))}'>
       <span class="slot-name">${slot.instructor.name}</span>
       <span class="slot-time">${slot.time}</span>
       <span class="slot-meta">${meta}</span>
     </button>
   `;
+}
+
+function slotStyle(color) {
+  const safeColor = isHexColor(color) ? color.trim() : FALLBACK_STAFF_COLORS[0];
+  return `--staff-color:${safeColor};--staff-ink:${readableInk(safeColor)}`;
+}
+
+function readableInk(color) {
+  const hex = color.replace("#", "");
+  const r = parseInt(hex.slice(0, 2), 16);
+  const g = parseInt(hex.slice(2, 4), 16);
+  const b = parseInt(hex.slice(4, 6), 16);
+  const darkened = [r, g, b].map((value) => Math.max(20, Math.round(value * 0.45)));
+  return `rgb(${darkened.join(",")})`;
 }
 
 function renderHeaderControls() {
@@ -449,7 +503,7 @@ function renderDetail(slot) {
   const label = slot.type === "busy" || slot.type === "unavailable" ? "불가 사유" : slot.type === "confirm" ? "확인 필요 슬롯" : "제안 가능 슬롯";
   const body = slot.type === "busy" ? slot.reason : `${slot.source} · ${slot.checkedAt}`;
   const blocked = slot.type === "busy" || slot.type === "unavailable";
-  const canEdit = state.operatorMode;
+  const canEdit = state.operatorMode && !slot.lockedByLecture;
   details.innerHTML = `
     <div class="detail">
       <div class="detail-head">
@@ -461,7 +515,9 @@ function renderDetail(slot) {
     <div class="detail">
       <b>운영 액션</b>
       ${state.operatorMode
-        ? "운영자 모드입니다. 필요하면 슬롯 상태를 수정하고 저장하세요."
+        ? slot.lockedByLecture
+          ? "ARCHIVE PILATES 수업과 겹친 시간은 운영자 모드에서도 가능 슬롯으로 변경할 수 없습니다."
+          : "운영자 모드입니다. 필요하면 슬롯 상태를 수정하고 저장하세요."
         : blocked
           ? "불가 시간입니다. 가능 시간으로 바꾸는 작업은 운영자 모드에서만 가능합니다."
           : "회원에게 후보로 제안하거나 강사에게 최종 확인 후 StudioMate에 등록하세요."}
@@ -481,7 +537,7 @@ function renderBlockedDetail(cell) {
     </div>
     <div class="detail">
       <b>운영자 모드 필요</b>
-      불가 시간을 가능으로 변경해야 하는 예외 상황이면 운영자 모드를 켠 뒤 해당 슬롯을 수정하세요.
+      ARCHIVE PILATES 수업과 겹친 시간은 운영자 모드에서도 가능 슬롯으로 변경할 수 없습니다.
     </div>
   `;
   showToast("불가 시간입니다. 운영자 모드에서만 변경할 수 있습니다");
@@ -584,7 +640,7 @@ function slotForm(slot) {
         <textarea name="memo" placeholder="예: 6월 월간 확인, 화목 저녁만 가능">${slot.memo || ""}</textarea>
       </label>
       <div class="form-actions">
-        <button class="solid-btn" type="button" data-save-slot onclick="window.savePrivateSlotFromButton(this)">저장</button>
+        <button class="solid-btn" type="button" data-save-slot>저장</button>
         ${isExisting ? `<button class="danger-btn" type="button" data-delete-slot="${slot.slotId}">삭제</button>` : ""}
       </div>
     </form>
@@ -662,10 +718,11 @@ async function saveSlot(form) {
   if (!timeSlots.length) throw new Error("시작/종료 시간을 확인하세요");
   const wantsAvailable = ["available", "confirm", "request"].includes(data.status);
   const wantsUnavailable = data.status === "unavailable";
-  if (wantsAvailable && !state.operatorMode) {
-    const conflict = findBusyConflict(staffIds, dates, data.startTime, data.endTime);
+  if (wantsAvailable) {
+    const conflict = findBusyConflict(staffIds, dates, data.startTime, data.endTime, { lectureOnly: state.operatorMode });
     if (conflict) {
-      throw new Error(`${conflict.name} ${conflict.date} ${data.startTime}-${data.endTime}은 불가 시간입니다`);
+      const prefix = conflict.kind === "lecture" ? "ARCHIVE PILATES 수업 시간입니다" : "불가 시간입니다";
+      throw new Error(`${conflict.name} ${conflict.date} ${data.startTime}-${data.endTime}은 ${prefix}`);
     }
   }
   if (wantsUnavailable && !data.source) data.source = "manual";
@@ -695,6 +752,7 @@ async function saveSlot(form) {
       });
     });
     renderBoard();
+    closeDetail();
     showToast(`슬롯 ${staffIds.length * dates.length * timeSlots.length}개를 저장했습니다`);
     return;
   }
@@ -710,43 +768,20 @@ async function saveSlot(form) {
       memo: data.memo,
     }))),
   ));
-  staffIds.forEach((staffId) => {
-    const instructor = state.instructors.find((item) => item.staffId === staffId);
-    dates.forEach((date) => {
-      timeSlots.forEach((timeSlot) => {
-        const slotId = `${staffId}_${date}_${timeSlot.startTime.replace(":", "")}`;
-        const existingIndex = state.availability.findIndex(
-          (item) => item.staffId === staffId && item.date === date && item.time === timeSlot.startTime,
-        );
-        const row = {
-          slotId,
-          staffId,
-          staffName: instructor?.name || "",
-          date,
-          time: timeSlot.startTime,
-          endTime: timeSlot.endTime,
-          status: data.status,
-          source: sourceLabel(data.source),
-          sourceKey: data.source,
-          memo: data.memo,
-          checkedAt: "방금 수정",
-        };
-        if (existingIndex >= 0) state.availability[existingIndex] = row;
-        else state.availability.push(row);
-      });
-    });
-  });
+  await loadLiveData();
   renderBoard();
+  closeDetail();
   showToast(`슬롯 ${staffIds.length * dates.length * timeSlots.length}개를 저장했습니다`);
 }
 
-function findBusyConflict(staffIds, dates, startTime, endTime) {
+function findBusyConflict(staffIds, dates, startTime, endTime, options = {}) {
   for (const staffId of staffIds) {
     const instructor = state.instructors.find((item) => item.staffId === staffId);
     if (!instructor) continue;
     for (const date of dates) {
-      if (busyForRange(instructor, date, startTime, endTime).length) {
-        return { name: instructor.name, date };
+      const conflict = busyForRange(instructor, date, startTime, endTime).find((item) => !options.lectureOnly || item.kind === "lecture");
+      if (conflict) {
+        return { name: instructor.name, date, kind: conflict.kind };
       }
     }
   }
@@ -767,13 +802,7 @@ async function deleteSlot(slotId) {
 
 function bindEvents() {
   window.savePrivateSlotFromButton = async (button) => {
-    const form = button.closest("[data-slot-form]");
-    if (!form) return;
-    try {
-      await saveSlot(form);
-    } catch (err) {
-      showToast(err.message || "저장 실패");
-    }
+    await saveFromButton(button);
   };
   loginForm.addEventListener("submit", async (event) => {
     event.preventDefault();
@@ -834,14 +863,11 @@ function bindEvents() {
     if (blocked) renderBlockedDetail(JSON.parse(decodeURIComponent(blocked.dataset.blocked)));
   });
   details.addEventListener("submit", async (event) => {
-    const form = event.target.closest("[data-slot-form]");
-    if (!form) return;
-    event.preventDefault();
-    try {
-      await saveSlot(form);
-    } catch (err) {
-      showToast(err.message || "저장 실패");
-    }
+      const form = event.target.closest("[data-slot-form]");
+      if (!form) return;
+      event.preventDefault();
+      const button = form.querySelector("[data-save-slot]");
+      await saveFromButton(button);
   });
   details.addEventListener("click", async (event) => {
     const closeButton = event.target.closest("[data-close-detail]");
@@ -852,13 +878,7 @@ function bindEvents() {
     const saveButton = event.target.closest("[data-save-slot]");
     if (saveButton) {
       event.preventDefault();
-      const form = saveButton.closest("[data-slot-form]");
-      if (!form) return;
-      try {
-        await saveSlot(form);
-      } catch (err) {
-        showToast(err.message || "저장 실패");
-      }
+      await saveFromButton(saveButton);
       return;
     }
     const button = event.target.closest("[data-delete-slot]");
@@ -869,6 +889,22 @@ function bindEvents() {
       showToast(err.message || "삭제 실패");
     }
   });
+}
+
+async function saveFromButton(button) {
+  const form = button?.closest("[data-slot-form]");
+  if (!form || button?.disabled) return;
+  const originalText = button.textContent;
+  button.disabled = true;
+  button.textContent = "저장 중";
+  try {
+    await saveSlot(form);
+  } catch (err) {
+    showToast(err.message || "저장 실패");
+  } finally {
+    button.disabled = false;
+    button.textContent = originalText || "저장";
+  }
 }
 
 function init() {

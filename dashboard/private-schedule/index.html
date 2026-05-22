@@ -51,11 +51,11 @@
     .time-cell{position:sticky;left:0;z-index:3;background:#fbfaf7;min-height:76px;padding:10px 8px;font-size:12px;font-weight:800;color:var(--muted)}
     .slot-cell{min-height:76px;padding:6px;background:#fffefa}
     .slot-stack{display:flex;flex-direction:column;gap:5px}
-    .slot{width:100%;border:1px solid transparent;border-radius:8px;padding:7px 8px;min-height:42px;display:grid;grid-template-columns:minmax(0,1fr) auto;gap:2px 6px;text-align:left;font-size:12px;line-height:1.25}
-    .slot.available{background:#eef4e8;border-color:#d8e4ce;color:#2f4329}
-    .slot.confirm{background:#fff3d8;border-color:#ead7a9;color:#654714}
-    .slot.request{background:#e9f1f8;border-color:#cbdae8;color:#253f59}
-    .slot.busy{background:#f5ece9;border-color:#e7d3cf;color:#6d332c}
+    .slot{width:100%;border:1px solid color-mix(in srgb,var(--staff-color,#6d7d58) 34%,#fff);border-left:4px solid var(--staff-color,#6d7d58);border-radius:8px;padding:7px 8px;min-height:42px;display:grid;grid-template-columns:minmax(0,1fr) auto;gap:2px 6px;text-align:left;font-size:12px;line-height:1.25;background:color-mix(in srgb,var(--staff-color,#6d7d58) 13%,#fff);color:var(--staff-ink,#263323)}
+    .slot.available{background:color-mix(in srgb,var(--staff-color,#6d7d58) 13%,#fff);border-color:color-mix(in srgb,var(--staff-color,#6d7d58) 34%,#fff);border-left-color:var(--staff-color,#6d7d58);color:var(--staff-ink,#263323)}
+    .slot.confirm{background:color-mix(in srgb,var(--staff-color,#a8742a) 18%,#fff6df);border-color:color-mix(in srgb,var(--staff-color,#a8742a) 38%,#fff);border-left-color:var(--staff-color,#a8742a);color:var(--staff-ink,#654714)}
+    .slot.request{background:color-mix(in srgb,var(--staff-color,#426b8f) 15%,#eef7ff);border-color:color-mix(in srgb,var(--staff-color,#426b8f) 38%,#fff);border-left-color:var(--staff-color,#426b8f);color:var(--staff-ink,#253f59)}
+    .slot.busy{background:#f5ece9;border-color:#e7d3cf;border-left-color:#9b5148;color:#6d332c}
     .slot.hidden{display:none}
     .slot-name{font-weight:850;white-space:nowrap;overflow:hidden;text-overflow:ellipsis}
     .slot-time{font-size:10px;color:currentColor;opacity:.78;white-space:nowrap;align-self:center}

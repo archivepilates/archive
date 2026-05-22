@@ -6,6 +6,7 @@ import { AppError } from "../utils/errors";
 
 const STATUSES: PrivateAvailabilityStatus[] = ["available", "confirm", "request", "unavailable"];
 const SOURCES: PrivateAvailabilitySource[] = ["manual", "monthly_alimtalk", "weekly_check", "import"];
+const AVAILABLE_STATUSES: PrivateAvailabilityStatus[] = ["available", "confirm", "request"];
 
 export async function adminSavePrivateAvailabilitySlotHandler(request: CallableRequest, actor: StaffDoc) {
   const staffId = clean(request.data?.staffId, 80);
@@ -27,6 +28,15 @@ export async function adminSavePrivateAvailabilitySlotHandler(request: CallableR
   const target = staffSnap.data();
   if (!target || !target.active || target.studioId !== actor.studioId) {
     throw new AppError("NOT_FOUND", "선택한 강사를 찾을 수 없습니다");
+  }
+  if (AVAILABLE_STATUSES.includes(status)) {
+    const conflict = await findLectureConflict(actor.studioId, target, date, startTime, endTime);
+    if (conflict) {
+      throw new AppError(
+        "FAILED_PRECONDITION",
+        `${target.name} ${date} ${startTime}-${endTime}은 ARCHIVE PILATES 수업 시간입니다`,
+      );
+    }
   }
 
   const slotId = `${actor.studioId}_${staffId}_${date}_${startTime.replace(":", "")}`;
@@ -84,4 +94,40 @@ function nextHour(value: string): string {
   if (!validTime(value)) return "";
   const min = toMinutes(value) + 60;
   return `${String(Math.floor(min / 60)).padStart(2, "0")}:${String(min % 60).padStart(2, "0")}`;
+}
+
+async function findLectureConflict(
+  studioId: string,
+  staff: StaffDoc,
+  date: string,
+  startTime: string,
+  endTime: string,
+): Promise<boolean> {
+  const snap = await refs.lectures().where("studioId", "==", studioId).where("date", "==", date).get();
+  const staffNames = new Set([staff.name, ...(staff.visibleLectureStaffNames || [])].map(normalizeName).filter(Boolean));
+  return snap.docs.some((doc) => {
+    const lecture = doc.data();
+    if (String(lecture.status || "").toLowerCase() === "deleted") return false;
+    const sameStaff = lecture.staffId === staff.staffId || staffNames.has(normalizeName(lecture.staffName));
+    if (!sameStaff) return false;
+    return rangesOverlap(startTime, endTime, timestampToTime(lecture.startAt), timestampToTime(lecture.endAt));
+  });
+}
+
+function rangesOverlap(startA: string, endA: string, startB: string, endB: string): boolean {
+  const aStart = toMinutes(startA);
+  const aEnd = toMinutes(endA || startA);
+  const bStart = toMinutes(startB);
+  const bEnd = toMinutes(endB || startB);
+  return aStart < bEnd && bStart < aEnd;
+}
+
+function timestampToTime(value: FirebaseFirestore.Timestamp | null | undefined): string {
+  if (!value) return "";
+  const date = value.toDate();
+  return `${String(date.getHours()).padStart(2, "0")}:${String(date.getMinutes()).padStart(2, "0")}`;
+}
+
+function normalizeName(value: unknown): string {
+  return String(value || "").replace(/\s+/g, "").trim();
 }

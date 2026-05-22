@@ -43,6 +43,15 @@ export interface StaffDoc {
   active: boolean;
   studiomateStaffId: string;
   visibleLectureStaffNames: string[];
+  privateScheduleColor?: string;
+  archiveInColor?: string;
+  scheduleColor?: string;
+  calendarColor?: string;
+  lessonColor?: string;
+  color?: string;
+  themeColor?: string;
+  backgroundColor?: string;
+  hexColor?: string;
   createdAt: Timestamp;
   updatedAt: Timestamp;
 }
