@@ -132,7 +132,11 @@ export async function adminUpdatePrivateAvailabilitySlotsHandler(request: Callab
   if (!rawSlots.length) throw new AppError("INVALID_ARGUMENT", "저장할 슬롯이 없습니다");
   if (rawSlots.length > 500) throw new AppError("INVALID_ARGUMENT", "한 번에 저장할 슬롯은 500개 이하로 선택하세요");
 
-  const targets = await Promise.all(rawSlots.map((raw: Record<string, unknown>) => validateSlotPayload(raw, actor)));
+  const rows = await Promise.all(
+    rawSlots.map((raw: Record<string, unknown>) => validateSlotPayload(raw, actor, { skipLectureConflicts: true })),
+  );
+  const skipped = rows.filter((row) => row.skipped);
+  const targets = rows.filter((row) => !row.skipped);
   const now = nowTimestamp();
   const batch = db.batch();
   targets.forEach(({ payload, target, existing }) => {
@@ -159,8 +163,13 @@ export async function adminUpdatePrivateAvailabilitySlotsHandler(request: Callab
       { merge: true },
     );
   });
-  await batch.commit();
-  return { ok: true, savedCount: targets.length };
+  if (targets.length) await batch.commit();
+  return {
+    ok: true,
+    savedCount: targets.length,
+    skippedCount: skipped.length,
+    skipped: skipped.map((row) => row.reason).filter(Boolean),
+  };
 }
 
 export async function adminListPrivateAvailabilitySlotsHandler(request: CallableRequest, actor: StaffDoc) {
@@ -207,7 +216,11 @@ export async function adminDeletePrivateAvailabilitySlotHandler(request: Callabl
   return { ok: true, deleted: true };
 }
 
-async function validateSlotPayload(raw: Record<string, unknown>, actor: StaffDoc) {
+async function validateSlotPayload(
+  raw: Record<string, unknown>,
+  actor: StaffDoc,
+  options: { skipLectureConflicts?: boolean } = {},
+) {
   const payload = {
     staffId: clean(raw?.staffId, 80),
     date: clean(raw?.date, 20),
@@ -234,6 +247,10 @@ async function validateSlotPayload(raw: Record<string, unknown>, actor: StaffDoc
   if (AVAILABLE_STATUSES.includes(payload.status)) {
     const conflict = await findLectureConflict(actor.studioId, target, payload.date, payload.startTime, payload.endTime);
     if (conflict) {
+      const reason = `${target.name} ${payload.date} ${payload.startTime}-${payload.endTime} ARCHIVE PILATES 수업 시간`;
+      if (options.skipLectureConflicts) {
+        return { skipped: true, reason, payload, target, existing: undefined };
+      }
       throw new AppError(
         "FAILED_PRECONDITION",
         `${target.name} ${payload.date} ${payload.startTime}-${payload.endTime}은 ARCHIVE PILATES 수업 시간입니다`,
@@ -243,7 +260,7 @@ async function validateSlotPayload(raw: Record<string, unknown>, actor: StaffDoc
 
   const slotId = `${actor.studioId}_${payload.staffId}_${payload.date}_${payload.startTime.replace(":", "")}`;
   const existing = (await refs.privateAvailabilitySlot(slotId).get()).data();
-  return { payload, target, existing };
+  return { skipped: false, payload, target, existing };
 }
 
 function validateDateRange(startDate: string, endDate: string): void {

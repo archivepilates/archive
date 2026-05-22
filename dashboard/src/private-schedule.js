@@ -250,8 +250,18 @@ function selectedInstructorLabel() {
 }
 
 function selectedStaffIdsForForm(fallbackStaffId = "") {
-  if (fallbackStaffId) return [fallbackStaffId];
   return state.selectedInstructorIds.length ? state.selectedInstructorIds : [];
+}
+
+function targetStaffIdsForForm(form) {
+  if (state.selectedInstructorIds.length) return state.selectedInstructorIds;
+  return [form?.dataset.fallbackStaffId].filter(Boolean);
+}
+
+function targetInstructorNames(staffIds) {
+  return state.instructors
+    .filter((item) => staffIds.includes(item.staffId))
+    .map((item) => item.name);
 }
 
 function isTimeVisible(time) {
@@ -465,15 +475,17 @@ function slotForm(slot) {
   const isExisting = Boolean(slot.slotId);
   const status = slot.type === "unavailable" || slot.type === "busy" ? "unavailable" : slot.type || "available";
   const selectedStaffIds = slot.staffIds || selectedStaffIdsForForm(slot.instructor?.staffId);
+  const fallbackStaffId = selectedStaffIds[0] || slot.instructor?.staffId || "";
+  const appliedStaffIds = state.selectedInstructorIds.length ? state.selectedInstructorIds : [fallbackStaffId].filter(Boolean);
+  const appliedNames = targetInstructorNames(appliedStaffIds);
   const weekday = weekIndexFromDate(slot.date);
   return `
-    <form class="detail slot-form" data-slot-form>
+    <form class="detail slot-form" data-slot-form data-fallback-staff-id="${fallbackStaffId}">
       <input type="hidden" name="slotId" value="${slot.slotId || ""}">
-      <label>강사
-        <select name="staffIds" multiple size="${Math.min(Math.max(state.instructors.length, 3), 7)}">
-          ${state.instructors.map((item) => `<option value="${item.staffId}" ${selectedStaffIds.includes(item.staffId) ? "selected" : ""}>${item.name}</option>`).join("")}
-        </select>
-      </label>
+      <div class="form-note">
+        <b>적용 강사</b>
+        ${appliedNames.length ? appliedNames.join(", ") : "왼쪽 강사 선택에서 지정하세요"}
+      </div>
       <div class="row">
         <label>시작일
           <input name="startDate" type="date" value="${slot.date}">
@@ -597,7 +609,7 @@ async function refresh() {
 async function saveSlot(form) {
   const formData = new FormData(form);
   const data = Object.fromEntries(formData.entries());
-  const staffIds = formData.getAll("staffIds").map(String).filter(Boolean);
+  const staffIds = targetStaffIdsForForm(form);
   const repeatWeekdays = formData.getAll("repeatWeekdays");
   const dates = expandRepeatDates(data.startDate, data.endDate, repeatWeekdays, data.repeatEvery);
   const timeSlots = expandTimeSlots(data.startTime, data.endTime);
@@ -660,7 +672,9 @@ async function saveSlot(form) {
   await loadLiveData();
   renderBoard();
   closeDetail();
-  showToast(`슬롯 ${result.data?.savedCount || slots.length}개를 저장했습니다`);
+  const savedCount = result.data?.savedCount || 0;
+  const skippedCount = result.data?.skippedCount || 0;
+  showToast(skippedCount ? `슬롯 ${savedCount}개 저장 · 수업시간 ${skippedCount}개 제외` : `슬롯 ${savedCount || slots.length}개를 저장했습니다`);
 }
 
 function findBusyConflict(staffIds, dates, startTime, endTime, options = {}) {
