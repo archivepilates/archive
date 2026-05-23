@@ -6,13 +6,14 @@ import type { AlimtalkCandidateDoc } from "../types/models";
 import { nowTimestamp, todayKst } from "../utils/date";
 import { autoSendabilityIssue } from "./eligibility";
 import { rebuildAlimtalkCandidatesForRange } from "./rebuildAlimtalkCandidates";
+import { requireApprovalForLargeAlimtalkBatch } from "./approvalGate";
 
 export async function queueDailyAlimtalkCandidates(
   input: {
     studioId?: string;
     today?: string;
   } = {},
-): Promise<{ rebuilt: number; queued: number; blocked: number }> {
+): Promise<{ rebuilt: number; queued: number; blocked: number; approvalRequired?: boolean; approvalId?: string }> {
   const studioId = input.studioId || DEFAULT_STUDIO_ID;
   const today = input.today || todayKst();
   const rebuilt = await rebuildAlimtalkCandidatesForRange({
@@ -22,7 +23,7 @@ export async function queueDailyAlimtalkCandidates(
   });
   const candidates = await listRebuiltCandidates(rebuilt.candidateIds, studioId);
 
-  let queued = 0;
+  const sendable: AlimtalkCandidateDoc[] = [];
   let blocked = 0;
   for (const candidate of candidates) {
     if (
@@ -32,6 +33,31 @@ export async function queueDailyAlimtalkCandidates(
       blocked += 1;
       continue;
     }
+    sendable.push(candidate);
+  }
+
+  const approval = await requireApprovalForLargeAlimtalkBatch({ studioId, today, candidates: sendable });
+  if (approval.required && !approval.approved) {
+    logger.info("queueDailyAlimtalkCandidates awaiting approval", {
+      studioId,
+      today,
+      rebuilt: rebuilt.candidates,
+      sendable: sendable.length,
+      blocked,
+      approvalId: approval.approvalId,
+      emailed: approval.emailed,
+    });
+    return {
+      rebuilt: rebuilt.candidates,
+      queued: 0,
+      blocked: blocked + sendable.length,
+      approvalRequired: true,
+      approvalId: approval.approvalId,
+    };
+  }
+
+  let queued = 0;
+  for (const candidate of sendable) {
     const didQueue = await queueCandidate(candidate, today);
     if (didQueue) queued += 1;
   }
@@ -43,7 +69,13 @@ export async function queueDailyAlimtalkCandidates(
     queued,
     blocked,
   });
-  return { rebuilt: rebuilt.candidates, queued, blocked };
+  return {
+    rebuilt: rebuilt.candidates,
+    queued,
+    blocked,
+    approvalRequired: approval.required,
+    approvalId: approval.approvalId,
+  };
 }
 
 async function listRebuiltCandidates(candidateIds: string[], studioId: string): Promise<AlimtalkCandidateDoc[]> {

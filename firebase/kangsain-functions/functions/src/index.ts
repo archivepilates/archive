@@ -28,6 +28,7 @@ import { syncManagerStaffs } from "./sync/syncManagerStaffs";
 import { syncDashboardFromSheets } from "./sync/syncDashboardFromSheets";
 import { preSecurityRawMirror } from "./sync/preSecurityRawMirror";
 import { processAlimtalkQueue } from "./alimtalk/processAlimtalkQueue";
+import { approveAlimtalkBatchHandler } from "./alimtalk/approvalGate";
 import { queueDailyAlimtalkCandidates } from "./alimtalk/queueDailyAlimtalk";
 import { sendDailyAlimtalkReport } from "./alimtalk/sendDailyAlimtalkReport";
 import { syncAlimtalkTemplateStatuses } from "./alimtalk/templateStatus";
@@ -68,6 +69,9 @@ const publicRequestOptions = {
   timeoutSeconds: 60,
   memory: "256MiB" as const,
   invoker: "public" as const,
+};
+const publicLongRequestOptions = {
+  ...longRequestOptions,
 };
 
 export const scheduledSyncLecturesDaily = onSchedule(
@@ -229,6 +233,8 @@ export const syncDashboardNow = onRequest(longRequestOptions, async (request, re
 export const ingestPrivateSurveyResponse = onRequest(privateSurveyIngestOptions, ingestPrivateSurveyResponseHandler);
 
 export const privateSurveyResponseView = onRequest(publicRequestOptions, privateSurveyResponseViewHandler);
+
+export const approveAlimtalkBatch = onRequest(publicLongRequestOptions, approveAlimtalkBatchHandler);
 
 export const processPrivateSurveyIntake = onDocumentCreated(
   {

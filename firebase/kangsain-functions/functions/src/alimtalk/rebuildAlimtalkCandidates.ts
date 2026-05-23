@@ -248,10 +248,14 @@ async function hasAttendedGroupBookingOnOrBefore(memberId: string, sourceDate: s
 }
 
 function isGroupAttendanceHistory(booking: BookingDoc): boolean {
-  return isGroupBooking(booking);
+  if (isInstructorLessonBooking(booking)) return false;
+  if (booking.lessonType === "private" || booking.lessonType === "semi_private") return false;
+  if (/프라이빗|개인|1:1/i.test(booking.ticketName || "")) return false;
+  return true;
 }
 
 function isGroupBooking(booking: BookingDoc): boolean {
+  if (isInstructorLessonBooking(booking)) return false;
   if (booking.lessonType === "group") return true;
   if (booking.lessonType === "private" || booking.lessonType === "semi_private") return false;
   const ticketKind = bookingTicketKind(booking);
@@ -418,6 +422,7 @@ async function hasAttendedPrivateBookingOnOrBefore(memberId: string, sourceDate:
 }
 
 function isPrivateBookingTicket(booking: BookingDoc): boolean {
+  if (isInstructorLessonBooking(booking)) return false;
   if (booking.lessonType === "private" || booking.lessonType === "semi_private") return true;
   if (booking.lessonType === "group") return false;
   const ticketKind = bookingTicketKind(booking);
@@ -436,6 +441,11 @@ function bookingTicketKind(booking: BookingDoc): "group" | "private" | "instruct
     if (upper === "I" || upper === "INSTRUCTOR" || /강사레슨/i.test(value)) return "instructor";
   }
   return "";
+}
+
+function isInstructorLessonBooking(booking: BookingDoc): boolean {
+  if (/강사레슨/i.test(booking.ticketName || "")) return true;
+  return bookingTicketKind(booking) === "instructor";
 }
 
 function directTicketCandidate(

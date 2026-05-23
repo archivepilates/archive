@@ -48,20 +48,38 @@ export async function createAlimtalkLogDocument(input: {
 export async function sendAlimtalkLogEmail(input: {
   subject: string;
   body: string;
+  htmlBody?: string;
   to?: string;
 }): Promise<void> {
   const client = new DelegatedGoogleClient([GMAIL_SEND_SCOPE]);
   const to = input.to || OPERATOR_EMAIL;
+  const boundary = `archive-in-${Date.now().toString(36)}`;
+  const content = input.htmlBody
+    ? [
+        `Content-Type: multipart/alternative; boundary="${boundary}"`,
+        "",
+        `--${boundary}`,
+        "Content-Type: text/plain; charset=UTF-8",
+        "Content-Transfer-Encoding: 8bit",
+        "",
+        input.body,
+        "",
+        `--${boundary}`,
+        "Content-Type: text/html; charset=UTF-8",
+        "Content-Transfer-Encoding: 8bit",
+        "",
+        input.htmlBody,
+        "",
+        `--${boundary}--`,
+      ].join("\r\n")
+    : ["Content-Type: text/plain; charset=UTF-8", "Content-Transfer-Encoding: 8bit", "", input.body].join("\r\n");
   const raw = Buffer.from(
     [
       `From: ARCHIVE IN <${OPERATOR_EMAIL}>`,
       `To: ${to}`,
       `Subject: ${encodeMimeHeader(input.subject)}`,
       "MIME-Version: 1.0",
-      "Content-Type: text/plain; charset=UTF-8",
-      "Content-Transfer-Encoding: 8bit",
-      "",
-      input.body,
+      content,
     ].join("\r\n"),
   ).toString("base64url");
   await client.request("https://gmail.googleapis.com/gmail/v1/users/me/messages/send", {

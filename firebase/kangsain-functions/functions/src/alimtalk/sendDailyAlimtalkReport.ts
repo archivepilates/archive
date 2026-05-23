@@ -9,6 +9,8 @@ interface QueueSummary {
   rebuilt: number;
   queued: number;
   blocked: number;
+  approvalRequired?: boolean;
+  approvalId?: string;
 }
 
 interface ProcessSummary {
@@ -90,6 +92,7 @@ function buildReportBody(input: {
     `- 후보 재계산: ${input.queueSummary.rebuilt}건`,
     `- 자동 큐 전환: ${input.queueSummary.queued}건`,
     `- 자동 큐 제외/보류: ${input.queueSummary.blocked}건`,
+    `- 대량 발송 승인 대기: ${input.queueSummary.approvalRequired ? `예 (${input.queueSummary.approvalId || ""})` : "아니오"}`,
     `- 큐 처리: ${input.processSummary.processed}건`,
     `- 발송 성공: ${input.processSummary.sent}건`,
     `- 발송 실패: ${input.processSummary.failed}건`,
