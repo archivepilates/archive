@@ -23,8 +23,8 @@ export type SendableAlimtalkCandidateType =
 
 export const ALIMTALK_TEMPLATES = {
   reservation_open: {
-    code: "KA01TP2605131325462341f8ACO2THW6",
-    label: "예약 안내 v2",
+    code: "KA01TP260518023011547VpbovK8MrI9",
+    label: "스튜디오메이트 예약 안내 v3",
     status: "approved",
   },
   new_member: {
@@ -55,7 +55,7 @@ export const ALIMTALK_TEMPLATES = {
   group_survey: {
     code: "KA01TP2605210729364330NbhZVAu9zA",
     label: "그룹 첫 수업 사전확인 안내 v1",
-    status: "inspecting",
+    status: "approved",
   },
   private_ticket_expiring: {
     code: "KA01TP260514153314927WH270IppWQS",
@@ -68,14 +68,14 @@ export const ALIMTALK_TEMPLATES = {
     status: "approved",
   },
   staff_group_survey: {
-    code: "KA01TP260521072937354Ve2n5cEapDL",
-    label: "담당강사 그룹 사전확인 제출 안내 v1",
-    status: "inspecting",
+    code: "KA01TP260522041704111wu4Z0cu9cgl",
+    label: "첫 그룹수업 회원 확인 v1",
+    status: "approved",
   },
   instructor_lesson_material: {
     code: "KA01TP260521120040094XcMvYgFTryj",
     label: "강사레슨 수업자료 안내 v1",
-    status: "inspecting",
+    status: "approved",
   },
 } as const;
 

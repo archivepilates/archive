@@ -28,7 +28,7 @@ const OUTPUT_HEADERS = [
   "ARCHIVE IN 오류",
 ];
 const STAFF_PRIVATE_SURVEY_TEMPLATE_ID = "KA01TP260519093416836f1EHZYJ00uM";
-const STAFF_GROUP_SURVEY_TEMPLATE_ID = "KA01TP260521072937354Ve2n5cEapDL";
+const STAFF_GROUP_SURVEY_TEMPLATE_ID = "KA01TP260522041704111wu4Z0cu9cgl";
 const SOLAPI_SEND_URL = "https://api.solapi.com/messages/v4/send-many/detail";
 const ARCHIVE_LOGO_URL = "https://in.archivepilates.com/logo120.png";
 
