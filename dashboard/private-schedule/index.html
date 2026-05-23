@@ -44,7 +44,7 @@
     .board-wrap{background:var(--panel);border:1px solid var(--line);border-radius:8px;box-shadow:var(--shadow);overflow:hidden}
     .board{display:grid;grid-template-columns:84px repeat(7,minmax(128px,1fr));min-width:980px}
     .corner,.day-head,.time-cell,.slot-cell{border-right:1px solid var(--line);border-bottom:1px solid var(--line)}
-    .corner,.day-head{position:sticky;top:0;z-index:4;background:#fbfaf7}
+    .corner,.day-head{position:sticky;top:var(--board-head-top,0px);z-index:8;background:#fbfaf7;box-shadow:0 8px 16px rgba(36,31,24,.06)}
     .corner{left:0;z-index:5}
     .day-head{min-height:58px;padding:10px;text-align:center}
     .day-name{font-size:13px;font-weight:850}
@@ -201,6 +201,6 @@
     </div>
   </main>
   <div class="toast" id="toast"></div>
-  <script src="./assets/app.js?v=20260522-5"></script>
+  <script src="./assets/app.js?v=20260523-2"></script>
 </body>
 </html>

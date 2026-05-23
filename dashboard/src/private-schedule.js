@@ -92,6 +92,12 @@ function showToast(message) {
   setTimeout(() => toast.classList.remove("on"), 1700);
 }
 
+function updateStickyOffsets() {
+  const topbar = document.querySelector(".topbar");
+  const height = topbar ? Math.ceil(topbar.getBoundingClientRect().height) : 0;
+  document.documentElement.style.setProperty("--board-head-top", `${height}px`);
+}
+
 function weekDates() {
   return DAYS.map((_, index) => addDays(state.weekStart, index));
 }
@@ -349,6 +355,7 @@ function renderStats(slots) {
 }
 
 function renderBoard() {
+  updateStickyOffsets();
   renderHeaderControls();
   const dates = weekDates();
   const instructors = getFilteredInstructors();
@@ -395,6 +402,7 @@ function defaultDetailHtml() {
 
 function closeDetail() {
   details.innerHTML = defaultDetailHtml();
+  updateStickyOffsets();
 }
 
 function renderDetail(slot) {
@@ -425,6 +433,7 @@ function renderDetail(slot) {
     </div>
     ${canEdit ? slotForm(slot) : ""}
   `;
+  updateStickyOffsets();
 }
 
 function renderBlockedDetail(cell) {
@@ -441,6 +450,7 @@ function renderBlockedDetail(cell) {
       ARCHIVE PILATES 수업과 겹친 시간은 운영자 모드에서도 가능 슬롯으로 변경할 수 없습니다.
     </div>
   `;
+  updateStickyOffsets();
   showToast("불가 시간입니다. 운영자 모드에서만 변경할 수 있습니다");
 }
 
@@ -472,6 +482,7 @@ function renderEmptyDetail(cell) {
       memo: "",
     })}
   `;
+  updateStickyOffsets();
 }
 
 function slotForm(slot) {
@@ -707,6 +718,7 @@ async function deleteSlot(slotId) {
 }
 
 function bindEvents() {
+  window.addEventListener("resize", updateStickyOffsets);
   window.savePrivateSlotFromButton = async (button) => {
     await saveFromButton(button);
   };
