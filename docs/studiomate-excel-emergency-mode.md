@@ -216,7 +216,8 @@ node scripts/emergency-import-studiomate-member-excel.mjs --queue-contact-sync -
 - 알림톡 대상자 선정은 엑셀 동기화로 갱신된 회원카드 수강권을 기준으로 한다.
 - 알림톡은 엑셀 동기화 기본모드 기준으로 운영하며, 실발송 전 운영자 승인, 중복 발송 차단, 제외 회원 검토를 유지한다.
 - 프라이빗/그룹 사전설문 제출 내용은 ARCHIVE IN `memberMemos`에 먼저 저장하고, StudioMate 회원카드 메모 쓰기는 `studiomateMemoWriteJobs` 큐와 Mac mini Playwright LaunchAgent가 처리한다. StudioMate 로그인 만료, 화면 변경, 메모쓰기 실패로 작업이 `failed`가 되면 `home@archivepilates.com`으로 실패 메일을 보낸다.
-- ARCHIVE IN Firestore 메모가 원본이고, StudioMate 메모는 Playwright로 후행 복사하는 편의 기록이다. StudioMate에는 기본적으로 새 메모 추가만 수행하며 기존 StudioMate 메모 삭제/수정은 자동화하지 않는다.
+- ARCHIVE IN Firestore 메모가 원본이고, StudioMate 메모는 Playwright로 후행 복사하는 편의 기록이다. StudioMate에는 기본적으로 새 메모 추가만 수행한다. 단, 자동화 오판으로 동일 메모가 중복 저장된 것이 확인된 경우 운영자 승인 후 StudioMate 화면 UI에서 중복 메모만 삭제할 수 있으며, API 삭제는 사용하지 않는다.
+- StudioMate 메모쓰기 Playwright는 저장 전에 동일 메모가 이미 보이면 추가 저장하지 않고 성공 처리하며, 저장 후 화면 검증은 공백/줄바꿈을 정규화해 확인한다.
 - StudioMate 엑셀 다운로드, 매출 다운로드, 회원메모 쓰기처럼 `~/ArchiveIN/automation/browser-profile`을 여는 Playwright 작업은 공통 락 `~/ArchiveIN/automation/locks/studiomate-browser-profile.lock`으로 직렬화한다. 한 작업이 실행 중이면 다른 작업은 최대 30분 기다리고, 45분 이상 오래된 락은 stale로 보고 정리한다.
 - StudioMate 로그인 세션이 만료되면 Playwright 작업은 저장된 자격증명을 `STUDIOMATE_LOGIN_ID`/`STUDIOMATE_LOGIN_PASSWORD` 환경변수, macOS Keychain, Firebase Secret Manager 순서로 찾아 재로그인을 시도한다. 캡차, 보안문자, 인증번호 화면이 나오면 자동 로그인하지 않고 실패 리포트를 남긴다.
 

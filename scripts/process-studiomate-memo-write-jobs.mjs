@@ -421,15 +421,34 @@ async function writeMemoViaUi(page, memberId, content) {
     waitUntil: "networkidle",
     timeout: 60000,
   });
+  const beforeBody = await page.locator("body").innerText({ timeout: 10000 });
+  if (bodyContainsMemoContent(beforeBody, content)) return;
   await page.getByText("메모 추가", { exact: true }).click({ timeout: 15000 });
   const textarea = page.locator("textarea").last();
   await textarea.fill(content, { timeout: 15000 });
   await page.getByText("저장", { exact: true }).last().click({ timeout: 15000 });
   await page.waitForTimeout(2500);
   const body = await page.locator("body").innerText({ timeout: 10000 });
-  if (!body.includes(content.split("\n")[0]) || !body.includes(content.slice(-30))) {
+  if (!bodyContainsMemoContent(body, content)) {
     throw new Error("StudioMate memo UI save did not show the expected content after save.");
   }
+}
+
+function bodyContainsMemoContent(body, content) {
+  const normalizedBody = normalizeMemoText(body);
+  const normalizedContent = normalizeMemoText(content);
+  if (!normalizedContent) return false;
+  const firstLine = normalizeMemoText(content.split("\n")[0] || "");
+  const tail = normalizedContent.slice(-30);
+  return Boolean(firstLine && normalizedBody.includes(firstLine) && tail && normalizedBody.includes(tail));
+}
+
+function normalizeMemoText(value) {
+  return String(value || "")
+    .replace(/\r\n/g, "\n")
+    .replace(/[ \t]+/g, " ")
+    .replace(/[ \t]*\n[ \t]*/g, "\n")
+    .trim();
 }
 
 async function clickSearchResult(page, { phone, name }) {
