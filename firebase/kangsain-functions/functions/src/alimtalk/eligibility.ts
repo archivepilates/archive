@@ -2,7 +2,7 @@ import { addDays } from "../utils/date";
 import { ALIMTALK_MEMBER_EXCLUSION_REASONS } from "./templates";
 import type { AlimtalkCandidateDoc } from "../types/models";
 import { isAlimtalkTemplateApproved } from "./templateStatus";
-import { alimtalkTemplateTargetRule } from "./templateTargetRules";
+import { alimtalkTemplateTargetRule, solapiButtonUrlLengthIssue } from "./templateTargetRules";
 
 export async function autoSendabilityIssue(candidate: AlimtalkCandidateDoc, today: string): Promise<string> {
   const rule = alimtalkTemplateTargetRule(candidate.type);
@@ -29,7 +29,21 @@ export async function autoSendabilityIssue(candidate: AlimtalkCandidateDoc, toda
     )
       return "강사레슨 수업자료 관리번호 없음";
   }
+  const buttonUrlIssue = solapiButtonUrlLengthIssue({
+    rules: rule?.buttonUrlRules,
+    variables: candidateTemplateVariables(candidate),
+  });
+  if (buttonUrlIssue) return buttonUrlIssue;
   if (rule?.blocksTooLateGroupSurvey && candidate.payload?.groupSurveyDeliveryMode === "too_late")
     return "수업 시작 30분 미만 첫 그룹수업은 설문 발송 대신 현장 확인";
   return "";
+}
+
+function candidateTemplateVariables(candidate: AlimtalkCandidateDoc): Record<string, string> {
+  const payload = candidate.payload || {};
+  return {
+    "#{설문ID}": String(payload.surveyId || payload.responseId || ""),
+    "#{접근토큰}": String(payload.accessToken || ""),
+    "#{관리번호}": String(payload.managementNumber || payload.materialNumber || payload.archiveMethodId || ""),
+  };
 }

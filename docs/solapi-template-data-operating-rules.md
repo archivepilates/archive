@@ -220,6 +220,13 @@
 - `groupSurveyRequests/{requestId}`가 `submitted` 상태이면 설문 페이지와 API 모두 추가 제출을 받지 않는다.
 - 설문 응답 원본은 `privateSurveyResponses/{responseId}`를 최초 생성 1회만 허용한다. 같은 `responseId` 재제출은 중복으로 처리하고 강사용 알림톡/메모 큐를 다시 만들지 않는다.
 
+버튼 URL 제한:
+
+- SOLAPI 버튼 URL은 변수 치환 후 100자 이하여야 한다.
+- 회원용 그룹 설문 URL은 `https://in.archivepilates.com/groupSurvey?id=#{설문ID}&token=#{접근토큰}` 형식이다.
+- 강사용 설문 확인 URL은 `https://in.archivepilates.com/privateSurveyResponseView?id=#{설문ID}&token=#{접근토큰}` 형식이다.
+- `설문ID`와 `접근토큰`이 길어 URL이 100자를 넘으면 ARCHIVE IN이 SOLAPI 발송 전에 차단한다.
+
 ### 6. 예약 안내
 
 대상:
@@ -266,10 +273,12 @@
 - `https://in.archivepilates.com/method/#{관리번호}`
 - `방문안내 보기`
 - `https://www.notion.so/367d49eae4bf811ca3daea273ed278c8`
+- 버튼 URL은 변수 치환 후 100자 이하여야 한다. `관리번호`가 길어 수업자료 URL이 100자를 넘으면 발송하지 않는다.
 
 제외:
 
 - 관리번호가 비어 있는 예약.
+- 버튼 URL이 변수 치환 후 100자를 초과하는 예약.
 - 강사레슨 예약이 취소된 회원.
 - 같은 수업/관리번호 조합으로 이미 발송된 이력이 있는 회원.
 

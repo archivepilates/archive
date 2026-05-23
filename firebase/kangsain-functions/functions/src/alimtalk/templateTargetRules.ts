@@ -20,7 +20,21 @@ export interface AlimtalkTemplateTargetRule {
   requiresMemberPhone: boolean;
   requiresManagementNumber?: boolean;
   blocksTooLateGroupSurvey?: boolean;
+  buttonUrlRules?: AlimtalkButtonUrlRule[];
 }
+
+export interface AlimtalkButtonUrlRule {
+  label: string;
+  template: string;
+  maxLength: number;
+}
+
+export const SOLAPI_BUTTON_URL_MAX_LENGTH = 100;
+export const SURVEY_DETAIL_BUTTON_URL_TEMPLATE =
+  "https://in.archivepilates.com/privateSurveyResponseView?id=#{설문ID}&token=#{접근토큰}";
+export const GROUP_SURVEY_BUTTON_URL_TEMPLATE =
+  "https://in.archivepilates.com/groupSurvey?id=#{설문ID}&token=#{접근토큰}";
+export const METHOD_MATERIAL_BUTTON_URL_TEMPLATE = "https://in.archivepilates.com/method/#{관리번호}";
 
 export const ALIMTALK_TEMPLATE_TARGET_RULES: Partial<Record<AlimtalkCandidateType, AlimtalkTemplateTargetRule>> = {
   new_member: {
@@ -80,6 +94,13 @@ export const ALIMTALK_TEMPLATE_TARGET_RULES: Partial<Record<AlimtalkCandidateTyp
     requiresApprovedTemplate: true,
     requiresMemberPhone: true,
     blocksTooLateGroupSurvey: true,
+    buttonUrlRules: [
+      {
+        label: "그룹 사전확인 작성 버튼",
+        template: GROUP_SURVEY_BUTTON_URL_TEMPLATE,
+        maxLength: SOLAPI_BUTTON_URL_MAX_LENGTH,
+      },
+    ],
     targetRules: [
       "오늘부터 다음 주 일요일까지 예정된 첫 그룹수업 예약이 있음",
       "예약이 강사레슨이 아님",
@@ -94,6 +115,7 @@ export const ALIMTALK_TEMPLATE_TARGET_RULES: Partial<Record<AlimtalkCandidateTyp
       "최근 1년 내 그룹 사전확인 제출 이력 있음",
       "과거 그룹 출석 완료 이력 있음",
       "수업 시작 30분 미만인 당일 급예약",
+      "버튼 URL 치환 후 100자 초과",
       "SOLAPI 미승인 템플릿",
     ],
   },
@@ -181,11 +203,19 @@ export const ALIMTALK_TEMPLATE_TARGET_RULES: Partial<Record<AlimtalkCandidateTyp
     requiresApprovedTemplate: true,
     requiresMemberPhone: true,
     requiresManagementNumber: true,
+    buttonUrlRules: [
+      {
+        label: "강사레슨 수업자료 버튼",
+        template: METHOD_MATERIAL_BUTTON_URL_TEMPLATE,
+        maxLength: SOLAPI_BUTTON_URL_MAX_LENGTH,
+      },
+    ],
     targetRules: ["강사레슨 예약", "수업 하루 전 후보", "수업자료 관리번호가 있음", "강사레슨 카카오 채널 템플릿 사용"],
     exclusionRules: [
       "전화번호 없음",
       "강사레슨 예약 아님",
       "수업자료 관리번호 없음",
+      "버튼 URL 치환 후 100자 초과",
       "같은 수업자료와 수업일 조합 발송 이력 있음",
       "SOLAPI 미승인 템플릿",
     ],
@@ -194,4 +224,36 @@ export const ALIMTALK_TEMPLATE_TARGET_RULES: Partial<Record<AlimtalkCandidateTyp
 
 export function alimtalkTemplateTargetRule(type: string): AlimtalkTemplateTargetRule | null {
   return ALIMTALK_TEMPLATE_TARGET_RULES[type as AlimtalkCandidateType] || null;
+}
+
+export function renderAlimtalkButtonUrl(template: string, variables: Record<string, string>): string {
+  return Object.entries(variables).reduce((url, [name, value]) => url.replaceAll(name, value), template);
+}
+
+export function solapiButtonUrlLengthIssue(input: {
+  rules?: AlimtalkButtonUrlRule[];
+  variables: Record<string, string>;
+}): string {
+  for (const rule of input.rules || []) {
+    const url = renderAlimtalkButtonUrl(rule.template, input.variables);
+    if (url.length > rule.maxLength)
+      return `${rule.label} URL ${url.length}자: SOLAPI 버튼 URL은 ${rule.maxLength}자 이하`;
+  }
+  return "";
+}
+
+export function surveyDetailButtonUrlLengthIssue(responseId: string, accessToken: string): string {
+  return solapiButtonUrlLengthIssue({
+    rules: [
+      {
+        label: "설문 확인하기 버튼",
+        template: SURVEY_DETAIL_BUTTON_URL_TEMPLATE,
+        maxLength: SOLAPI_BUTTON_URL_MAX_LENGTH,
+      },
+    ],
+    variables: {
+      "#{설문ID}": responseId,
+      "#{접근토큰}": accessToken,
+    },
+  });
 }

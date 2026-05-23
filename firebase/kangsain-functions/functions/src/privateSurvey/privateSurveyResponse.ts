@@ -12,6 +12,7 @@ import { stableHash } from "../utils/hash";
 import { DelegatedGoogleClient } from "../google/delegatedGoogleClient";
 import { getStaffById } from "../firestore/staffRepository";
 import { isAlimtalkTemplateApproved } from "../alimtalk/templateStatus";
+import { surveyDetailButtonUrlLengthIssue } from "../alimtalk/templateTargetRules";
 import { sendAlimtalkLogEmail } from "../google/driveDocsMailer";
 
 const PUBLIC_VIEW_BASE_URL =
@@ -423,16 +424,19 @@ export async function submitGroupSurveyResponseHandler(request: any, response: a
     const created = await createSurveyResponseIfNew(responseId, doc);
     if (!created) {
       const existing = (await refs.privateSurveyResponse(responseId).get()).data();
-      await db.collection("groupSurveyRequests").doc(groupRequest.requestId).set(
-        {
-          status: "submitted",
-          responseId,
-          detailUrl: existing?.delivery?.detailUrl || detailUrl,
-          submittedAt: nowTimestamp(),
-          updatedAt: nowTimestamp(),
-        },
-        { merge: true },
-      );
+      await db
+        .collection("groupSurveyRequests")
+        .doc(groupRequest.requestId)
+        .set(
+          {
+            status: "submitted",
+            responseId,
+            detailUrl: existing?.delivery?.detailUrl || detailUrl,
+            submittedAt: nowTimestamp(),
+            updatedAt: nowTimestamp(),
+          },
+          { merge: true },
+        );
       response.status(200).json({
         ok: true,
         duplicate: true,
@@ -841,7 +845,9 @@ async function processMissingPrivateSurveySubmissionAlerts(): Promise<{
       surveyType: "private",
       memberName: candidate.memberName,
       memberPhone: candidate.memberPhone,
-      lessonTime: booking ? lessonTimeText({ matching: matchFromBooking(booking) } as PrivateSurveyResponseDoc) : candidate.payload.lectureDate || "-",
+      lessonTime: booking
+        ? lessonTimeText({ matching: matchFromBooking(booking) } as PrivateSurveyResponseDoc)
+        : candidate.payload.lectureDate || "-",
       staffName: booking?.staffName || "",
       dueAt,
       sourceId: candidate.candidateId,
@@ -1358,6 +1364,8 @@ async function sendStaffPrivateSurveyAlimtalk(input: {
     "#{설문ID}": input.responseId,
     "#{접근토큰}": input.accessToken,
   };
+  const buttonUrlIssue = surveyDetailButtonUrlLengthIssue(input.responseId, input.accessToken);
+  if (buttonUrlIssue) throw new Error(buttonUrlIssue);
   const body = {
     messages: [
       {
@@ -1646,8 +1654,12 @@ function matchText(doc: PrivateSurveyResponseDoc): string {
   if (doc.matching.status !== "matched") return doc.matching.reason;
   return [
     lessonTimeText(doc),
-    doc.matching.staffName ? `${doc.surveyType === "group" ? "첫 수업 강사" : "수업 강사"}: ${doc.matching.staffName}` : "",
-  ].filter(Boolean).join("\n");
+    doc.matching.staffName
+      ? `${doc.surveyType === "group" ? "첫 수업 강사" : "수업 강사"}: ${doc.matching.staffName}`
+      : "",
+  ]
+    .filter(Boolean)
+    .join("\n");
 }
 
 function lessonTimeText(doc: PrivateSurveyResponseDoc): string {
