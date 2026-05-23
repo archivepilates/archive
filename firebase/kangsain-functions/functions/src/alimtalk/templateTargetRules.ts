@@ -30,6 +30,7 @@ export interface AlimtalkButtonUrlRule {
 }
 
 export const SOLAPI_BUTTON_URL_MAX_LENGTH = 100;
+export const SHORT_LINK_BUTTON_URL_TEMPLATE = "https://in.archivepilates.com/s/#{링크ID}/";
 export const SURVEY_DETAIL_BUTTON_URL_TEMPLATE =
   "https://in.archivepilates.com/privateSurveyResponseView?id=#{설문ID}&token=#{접근토큰}";
 export const GROUP_SURVEY_BUTTON_URL_TEMPLATE =
@@ -97,7 +98,7 @@ export const ALIMTALK_TEMPLATE_TARGET_RULES: Partial<Record<AlimtalkCandidateTyp
     buttonUrlRules: [
       {
         label: "그룹 사전확인 작성 버튼",
-        template: GROUP_SURVEY_BUTTON_URL_TEMPLATE,
+        template: SHORT_LINK_BUTTON_URL_TEMPLATE,
         maxLength: SOLAPI_BUTTON_URL_MAX_LENGTH,
       },
     ],
@@ -115,7 +116,7 @@ export const ALIMTALK_TEMPLATE_TARGET_RULES: Partial<Record<AlimtalkCandidateTyp
       "최근 1년 내 그룹 사전확인 제출 이력 있음",
       "과거 그룹 출석 완료 이력 있음",
       "수업 시작 30분 미만인 당일 급예약",
-      "버튼 URL 치환 후 100자 초과",
+      "짧은 링크 생성 실패 또는 버튼 URL 치환 후 100자 초과",
       "SOLAPI 미승인 템플릿",
     ],
   },
@@ -206,7 +207,7 @@ export const ALIMTALK_TEMPLATE_TARGET_RULES: Partial<Record<AlimtalkCandidateTyp
     buttonUrlRules: [
       {
         label: "강사레슨 수업자료 버튼",
-        template: METHOD_MATERIAL_BUTTON_URL_TEMPLATE,
+        template: SHORT_LINK_BUTTON_URL_TEMPLATE,
         maxLength: SOLAPI_BUTTON_URL_MAX_LENGTH,
       },
     ],
@@ -215,7 +216,7 @@ export const ALIMTALK_TEMPLATE_TARGET_RULES: Partial<Record<AlimtalkCandidateTyp
       "전화번호 없음",
       "강사레슨 예약 아님",
       "수업자료 관리번호 없음",
-      "버튼 URL 치환 후 100자 초과",
+      "짧은 링크 생성 실패 또는 버튼 URL 치환 후 100자 초과",
       "같은 수업자료와 수업일 조합 발송 이력 있음",
       "SOLAPI 미승인 템플릿",
     ],
@@ -242,18 +243,23 @@ export function solapiButtonUrlLengthIssue(input: {
   return "";
 }
 
-export function surveyDetailButtonUrlLengthIssue(responseId: string, accessToken: string): string {
+export function surveyDetailButtonUrlLengthIssue(
+  responseId: string,
+  accessToken: string,
+  shortLinkId = "sv-000000000000",
+): string {
   return solapiButtonUrlLengthIssue({
     rules: [
       {
         label: "설문 확인하기 버튼",
-        template: SURVEY_DETAIL_BUTTON_URL_TEMPLATE,
+        template: SHORT_LINK_BUTTON_URL_TEMPLATE,
         maxLength: SOLAPI_BUTTON_URL_MAX_LENGTH,
       },
     ],
     variables: {
       "#{설문ID}": responseId,
       "#{접근토큰}": accessToken,
+      "#{링크ID}": shortLinkId,
     },
   });
 }

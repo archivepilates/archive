@@ -6,6 +6,7 @@ import { privateSurveyWebhookSecret } from "../config/secrets";
 import { refs } from "../firestore/refs";
 import { addDays, dateRange, nowTimestamp } from "../utils/date";
 import { stableHash } from "../utils/hash";
+import { shortLinkIdForTarget, shortUrlForId } from "../utils/shortLinks";
 import {
   ALIMTALK_MEMBER_EXCLUSION_REASONS,
   CANDIDATE_TEMPLATE_CODES,
@@ -170,6 +171,8 @@ async function groupSurveyCandidateForDate(
   if (await hasAttendedGroupBookingOnOrBefore(profile.memberId, sourceDate)) return null;
   const requestId = groupSurveyRequestId(profile.memberId, booking.bookingId);
   const accessToken = groupSurveyAccessToken(requestId);
+  const targetUrl = groupSurveyTargetUrl(requestId, accessToken);
+  const shortLinkId = shortLinkIdForTarget("group_survey", targetUrl);
   const timing = groupSurveyTiming(booking, sourceDate);
   return {
     candidateId: `group_survey_${profile.memberId}_${sourceDate}`,
@@ -194,6 +197,8 @@ async function groupSurveyCandidateForDate(
       surveyId: requestId,
       responseId: requestId,
       accessToken,
+      shortLinkId,
+      shortUrl: shortUrlForId(shortLinkId),
       groupSurveyWindowEndDate: reservationOpenEndDate(sourceDate),
       groupSurveyDeliveryMode: timing.deliveryMode,
       minutesUntilLesson: timing.minutesUntilLesson,
@@ -286,6 +291,13 @@ function groupSurveyAccessToken(requestId: string): string {
   return createHmac("sha256", privateSurveyWebhookSecret.value()).update(requestId).digest("hex").slice(0, 16);
 }
 
+function groupSurveyTargetUrl(requestId: string, accessToken: string): string {
+  const url = new URL("https://in.archivepilates.com/groupSurvey");
+  url.searchParams.set("id", requestId);
+  url.searchParams.set("token", accessToken);
+  return url.toString();
+}
+
 function sha256(value: string): string {
   return createHash("sha256").update(value).digest("hex");
 }
@@ -314,6 +326,8 @@ async function upsertGroupSurveyRequest(candidate: AlimtalkCandidateDoc): Promis
       staffId: candidate.payload.staffId || "",
       staffName: candidate.payload.staffName || "",
       sourceCandidateId: candidate.candidateId,
+      shortLinkId: candidate.payload.shortLinkId || "",
+      shortUrl: candidate.payload.shortUrl || "",
       accessTokenHash: sha256(accessToken),
       status: previous?.status || "pending",
       createdAt: previous?.createdAt || nowTimestamp(),

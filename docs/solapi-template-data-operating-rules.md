@@ -223,9 +223,10 @@
 버튼 URL 제한:
 
 - SOLAPI 버튼 URL은 변수 치환 후 100자 이하여야 한다.
-- 회원용 그룹 설문 URL은 `https://in.archivepilates.com/groupSurvey?id=#{설문ID}&token=#{접근토큰}` 형식이다.
-- 강사용 설문 확인 URL은 `https://in.archivepilates.com/privateSurveyResponseView?id=#{설문ID}&token=#{접근토큰}` 형식이다.
-- `설문ID`와 `접근토큰`이 길어 URL이 100자를 넘으면 ARCHIVE IN이 SOLAPI 발송 전에 차단한다.
+- 함수는 원본 링크를 `shortLinks/{링크ID}`에 저장하고, 버튼에는 `https://in.archivepilates.com/s/#{링크ID}/` 형식의 짧은 링크를 넣는다.
+- 회원용 그룹 설문 원본 URL은 `https://in.archivepilates.com/groupSurvey?id=#{설문ID}&token=#{접근토큰}` 형식이다.
+- 강사용 설문 확인 원본 URL은 `https://in.archivepilates.com/privateSurveyResponseView?id=#{설문ID}&token=#{접근토큰}` 형식이다.
+- 짧은 링크 생성 전후에도 URL이 100자를 넘으면 ARCHIVE IN이 SOLAPI 발송 전에 차단한다.
 
 ### 6. 예약 안내
 
@@ -270,10 +271,11 @@
 버튼 URL:
 
 - `수업자료 보기`
-- `https://in.archivepilates.com/method/#{관리번호}`
+- `https://in.archivepilates.com/s/#{링크ID}/` 형식의 짧은 링크를 사용한다.
+- 원본 자료 URL은 `https://in.archivepilates.com/method/#{관리번호}`이다.
 - `방문안내 보기`
 - `https://www.notion.so/367d49eae4bf811ca3daea273ed278c8`
-- 버튼 URL은 변수 치환 후 100자 이하여야 한다. `관리번호`가 길어 수업자료 URL이 100자를 넘으면 발송하지 않는다.
+- 버튼 URL은 변수 치환 후 100자 이하여야 한다. 함수가 짧은 링크를 생성해 `#{링크ID}`로 전달한다.
 
 제외:
 

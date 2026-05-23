@@ -6,6 +6,7 @@ import { refs } from "../firestore/refs";
 import type { AlimtalkCandidateDoc } from "../types/models";
 import { errorMessage } from "../utils/errors";
 import { nowTimestamp, todayKst } from "../utils/date";
+import { ensureShortLink } from "../utils/shortLinks";
 import { ALIMTALK_TEMPLATE_CHANNEL_IDS, alimtalkDedupePolicy } from "./templates";
 import { autoSendabilityIssue } from "./eligibility";
 import { alimtalkDedupeKey, findCompletedDuplicateForCandidate, normalizePhone } from "./dedupe";
@@ -186,6 +187,7 @@ async function sendSolapiAlimtalk(candidate: AlimtalkCandidateDoc): Promise<{ me
   if (!(await isAlimtalkTemplateApproved(candidate.templateCode)))
     throw new Error(`template is not approved: ${candidate.templateCode}`);
 
+  const variables = await templateVariables(candidate);
   const body = {
     messages: [
       {
@@ -195,7 +197,7 @@ async function sendSolapiAlimtalk(candidate: AlimtalkCandidateDoc): Promise<{ me
           pfId: ALIMTALK_TEMPLATE_CHANNEL_IDS[candidate.templateCode] || solapiPfid.value(),
           templateId: candidate.templateCode,
           disableSms: true,
-          variables: templateVariables(candidate),
+          variables,
         },
       },
     ],
@@ -235,9 +237,13 @@ function solapiAuthHeader(): string {
   return `HMAC-SHA256 apiKey=${apiKey}, date=${dateTime}, salt=${salt}, signature=${signature}`;
 }
 
-function templateVariables(candidate: AlimtalkCandidateDoc): Record<string, string> {
+async function templateVariables(candidate: AlimtalkCandidateDoc): Promise<Record<string, string>> {
   const payload = candidate.payload || {};
   const memberName = String(payload.memberName || candidate.memberName || "");
+  const surveyId = String(payload.surveyId || payload.responseId || "");
+  const accessToken = String(payload.accessToken || "");
+  const managementNumber = String(payload.managementNumber || payload.materialNumber || payload.archiveMethodId || "");
+  const shortLinkId = await shortLinkIdForCandidate(candidate, surveyId, accessToken, managementNumber);
   return {
     "#{이름}": memberName,
     "#{예약주차}": String(payload.reservationWeek || payload.weekLabel || ""),
@@ -245,10 +251,57 @@ function templateVariables(candidate: AlimtalkCandidateDoc): Record<string, stri
     "#{수강권명}": String(payload.ticketName || payload.ticket || ""),
     "#{잔여횟수}": String(payload.remainingCount || ""),
     "#{만료일}": String(payload.expiresAt || payload.expiryDate || payload.expireDate || ""),
-    "#{설문ID}": String(payload.surveyId || payload.responseId || ""),
-    "#{접근토큰}": String(payload.accessToken || ""),
-    "#{관리번호}": String(payload.managementNumber || payload.materialNumber || payload.archiveMethodId || ""),
+    "#{설문ID}": surveyId,
+    "#{접근토큰}": accessToken,
+    "#{관리번호}": managementNumber,
+    "#{링크ID}": shortLinkId,
   };
+}
+
+async function shortLinkIdForCandidate(
+  candidate: AlimtalkCandidateDoc,
+  surveyId: string,
+  accessToken: string,
+  managementNumber: string,
+): Promise<string> {
+  const existing = String(candidate.payload?.shortLinkId || "");
+  if (existing) return existing;
+  if (candidate.type === "group_survey" && surveyId && accessToken) {
+    const link = await ensureShortLink({
+      type: "group_survey",
+      targetUrl: groupSurveyTargetUrl(surveyId, accessToken),
+      sourceId: candidate.candidateId,
+    });
+    await refs.alimtalkCandidate(candidate.candidateId).set(
+      { payload: { ...candidate.payload, shortLinkId: link.linkId, shortUrl: link.shortUrl }, updatedAt: nowTimestamp() },
+      { merge: true },
+    );
+    return link.linkId;
+  }
+  if (candidate.type === "instructor_lesson_material" && managementNumber) {
+    const link = await ensureShortLink({
+      type: "method_material",
+      targetUrl: methodMaterialTargetUrl(managementNumber),
+      sourceId: candidate.candidateId,
+    });
+    await refs.alimtalkCandidate(candidate.candidateId).set(
+      { payload: { ...candidate.payload, shortLinkId: link.linkId, shortUrl: link.shortUrl }, updatedAt: nowTimestamp() },
+      { merge: true },
+    );
+    return link.linkId;
+  }
+  return "";
+}
+
+function groupSurveyTargetUrl(surveyId: string, accessToken: string): string {
+  const url = new URL("https://in.archivepilates.com/groupSurvey");
+  url.searchParams.set("id", surveyId);
+  url.searchParams.set("token", accessToken);
+  return url.toString();
+}
+
+function methodMaterialTargetUrl(managementNumber: string): string {
+  return `https://in.archivepilates.com/method/${encodeURIComponent(managementNumber)}`;
 }
 
 interface SolapiSendResponse {

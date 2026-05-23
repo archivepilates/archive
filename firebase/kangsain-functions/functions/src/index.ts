@@ -34,6 +34,7 @@ import { sendDailyAlimtalkReport } from "./alimtalk/sendDailyAlimtalkReport";
 import { syncAlimtalkTemplateStatuses } from "./alimtalk/templateStatus";
 import { getStaffByUid } from "./firestore/staffRepository";
 import { nowTimestamp } from "./utils/date";
+import { redirectShortLinkHandler } from "./utils/shortLinks";
 import {
   ingestPrivateSurveyResponseHandler,
   processDueStaffSurveyAlimtalks,
@@ -233,6 +234,8 @@ export const syncDashboardNow = onRequest(longRequestOptions, async (request, re
 export const ingestPrivateSurveyResponse = onRequest(privateSurveyIngestOptions, ingestPrivateSurveyResponseHandler);
 
 export const privateSurveyResponseView = onRequest(publicRequestOptions, privateSurveyResponseViewHandler);
+
+export const redirectShortLink = onRequest(publicRequestOptions, redirectShortLinkHandler);
 
 export const approveAlimtalkBatch = onRequest(publicLongRequestOptions, approveAlimtalkBatchHandler);
 

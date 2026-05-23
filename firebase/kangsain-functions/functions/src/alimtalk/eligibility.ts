@@ -1,6 +1,7 @@
 import { addDays } from "../utils/date";
 import { ALIMTALK_MEMBER_EXCLUSION_REASONS } from "./templates";
 import type { AlimtalkCandidateDoc } from "../types/models";
+import { shortLinkIdForTarget } from "../utils/shortLinks";
 import { isAlimtalkTemplateApproved } from "./templateStatus";
 import { alimtalkTemplateTargetRule, solapiButtonUrlLengthIssue } from "./templateTargetRules";
 
@@ -41,9 +42,41 @@ export async function autoSendabilityIssue(candidate: AlimtalkCandidateDoc, toda
 
 function candidateTemplateVariables(candidate: AlimtalkCandidateDoc): Record<string, string> {
   const payload = candidate.payload || {};
+  const surveyId = String(payload.surveyId || payload.responseId || "");
+  const accessToken = String(payload.accessToken || "");
+  const managementNumber = String(payload.managementNumber || payload.materialNumber || payload.archiveMethodId || "");
   return {
-    "#{설문ID}": String(payload.surveyId || payload.responseId || ""),
-    "#{접근토큰}": String(payload.accessToken || ""),
-    "#{관리번호}": String(payload.managementNumber || payload.materialNumber || payload.archiveMethodId || ""),
+    "#{설문ID}": surveyId,
+    "#{접근토큰}": accessToken,
+    "#{관리번호}": managementNumber,
+    "#{링크ID}": candidateShortLinkId(candidate, surveyId, accessToken, managementNumber),
   };
+}
+
+function candidateShortLinkId(
+  candidate: AlimtalkCandidateDoc,
+  surveyId: string,
+  accessToken: string,
+  managementNumber: string,
+): string {
+  const existing = String(candidate.payload?.shortLinkId || "");
+  if (existing) return existing;
+  if (candidate.type === "group_survey" && surveyId && accessToken) {
+    return shortLinkIdForTarget("group_survey", groupSurveyTargetUrl(surveyId, accessToken));
+  }
+  if (candidate.type === "instructor_lesson_material" && managementNumber) {
+    return shortLinkIdForTarget("method_material", methodMaterialTargetUrl(managementNumber));
+  }
+  return "";
+}
+
+function groupSurveyTargetUrl(surveyId: string, accessToken: string): string {
+  const url = new URL("https://in.archivepilates.com/groupSurvey");
+  url.searchParams.set("id", surveyId);
+  url.searchParams.set("token", accessToken);
+  return url.toString();
+}
+
+function methodMaterialTargetUrl(managementNumber: string): string {
+  return `https://in.archivepilates.com/method/${encodeURIComponent(managementNumber)}`;
 }

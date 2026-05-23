@@ -112,6 +112,13 @@
           }
         },
         {
+          "source": "/s/**",
+          "function": {
+            "functionId": "redirectShortLink",
+            "region": "asia-northeast3"
+          }
+        },
+        {
           "source": "/aki/**",
           "run": {
             "serviceId": "aki-agent-api",
@@ -156,6 +163,13 @@
           "source": "/api/groupSurveySubmit",
           "function": {
             "functionId": "ingestPrivateSurveyResponse",
+            "region": "asia-northeast3"
+          }
+        },
+        {
+          "source": "/s/**",
+          "function": {
+            "functionId": "redirectShortLink",
             "region": "asia-northeast3"
           }
         }

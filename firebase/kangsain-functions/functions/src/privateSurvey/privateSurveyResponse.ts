@@ -14,6 +14,7 @@ import { getStaffById } from "../firestore/staffRepository";
 import { isAlimtalkTemplateApproved } from "../alimtalk/templateStatus";
 import { surveyDetailButtonUrlLengthIssue } from "../alimtalk/templateTargetRules";
 import { sendAlimtalkLogEmail } from "../google/driveDocsMailer";
+import { ensureShortLink } from "../utils/shortLinks";
 
 const PUBLIC_VIEW_BASE_URL =
   process.env.PRIVATE_SURVEY_VIEW_BASE_URL || "https://in.archivepilates.com/privateSurveyResponseView";
@@ -1357,14 +1358,21 @@ async function sendStaffPrivateSurveyAlimtalk(input: {
   accessToken: string;
   templateId: string;
 }): Promise<{ messageId: string; variables: Record<string, string> }> {
+  const detailUrl = detailUrlFor(input.responseId, input.accessToken);
+  const shortLink = await ensureShortLink({
+    type: "survey_detail",
+    targetUrl: detailUrl,
+    sourceId: input.responseId,
+  });
   const variables = {
     "#{강사명}": input.staffName,
     "#{회원명}": input.memberName,
     "#{수업일시}": input.lessonTime,
     "#{설문ID}": input.responseId,
     "#{접근토큰}": input.accessToken,
+    "#{링크ID}": shortLink.linkId,
   };
-  const buttonUrlIssue = surveyDetailButtonUrlLengthIssue(input.responseId, input.accessToken);
+  const buttonUrlIssue = surveyDetailButtonUrlLengthIssue(input.responseId, input.accessToken, shortLink.linkId);
   if (buttonUrlIssue) throw new Error(buttonUrlIssue);
   const body = {
     messages: [

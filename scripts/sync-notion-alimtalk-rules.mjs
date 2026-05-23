@@ -109,7 +109,8 @@ function buildBlocks() {
     bullet("프라이빗/그룹 설문은 마지막 같은 유형 설문 제출 후 1년이 지나면 다시 후보가 될 수 있다."),
     bullet("강사용 그룹 설문 알림은 수업 1시간 전 이후, 강사용 프라이빗 설문 알림은 수업 하루 전 오전 9시 이후 발송한다."),
     bullet("강사레슨 수업자료 안내는 수업 하루 전 발송을 기본으로 하며, 버튼은 `수업자료 보기`와 `방문안내 보기` 2개를 사용한다."),
-    bullet("강사레슨 수업자료 버튼 URL은 `https://in.archivepilates.com/method/#{관리번호}`, 방문안내 버튼 URL은 `https://www.notion.so/367d49eae4bf811ca3daea273ed278c8`이다."),
+    bullet("설문/수업자료 버튼은 함수가 `shortLinks/{링크ID}`를 만들고 SOLAPI에는 `https://in.archivepilates.com/s/#{링크ID}/` 형식의 100자 이하 짧은 링크를 넣는다."),
+    bullet("강사레슨 수업자료 원본 URL은 `https://in.archivepilates.com/method/#{관리번호}`, 방문안내 버튼 URL은 `https://www.notion.so/367d49eae4bf811ca3daea273ed278c8`이다."),
     heading(2, "Repo 원본"),
     paragraph("상세 원본은 GitHub repo의 `docs/solapi-template-data-operating-rules.md`, `docs/kakao-alimtalk-automation-handoff.md`, `docs/archivein-member-contact-alimtalk-pipeline.md`를 기준으로 한다."),
   ];

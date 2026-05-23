@@ -26,9 +26,10 @@ The source of truth in code is:
 ## SOLAPI Button URL Limit
 
 - SOLAPI web-link button URLs must be 100 characters or fewer after variable substitution.
-- Staff survey detail buttons use `https://in.archivepilates.com/privateSurveyResponseView?id=#{설문ID}&token=#{접근토큰}`.
-- Group survey request buttons use `https://in.archivepilates.com/groupSurvey?id=#{설문ID}&token=#{접근토큰}`.
-- Instructor lesson material buttons use `https://in.archivepilates.com/method/#{관리번호}`.
+- ARCHIVE IN functions now create short links under `https://in.archivepilates.com/s/#{링크ID}/` and store the original URL in Firestore `shortLinks/{linkId}`.
+- Staff survey detail original URLs still resolve to `https://in.archivepilates.com/privateSurveyResponseView?id=#{설문ID}&token=#{접근토큰}`.
+- Group survey request original URLs still resolve to `https://in.archivepilates.com/groupSurvey?id=#{설문ID}&token=#{접근토큰}`.
+- Instructor lesson material original URLs still resolve to `https://in.archivepilates.com/method/#{관리번호}`.
 - If the rendered URL is longer than 100 characters, ARCHIVE IN blocks sending before calling SOLAPI.
 
 ## Operational Check
