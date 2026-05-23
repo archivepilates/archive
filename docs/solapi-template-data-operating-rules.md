@@ -39,14 +39,14 @@
 
 | 템플릿 | Template ID | 현재 상태 | 자동 연결 단계 |
 | --- | --- | --- | --- |
-| 아카이브 스튜디오메이트 예약 안내 v2 | `KA01TP2605131325462341f8ACO2THW6` | `APPROVED` | 수동/예약 발송 후보 |
+| 아카이브 스튜디오메이트 예약 안내 v3 | `KA01TP260518023011547VpbovK8MrI9` | `APPROVED` | 수동/예약 발송 후보 |
 | 아카이브 신규회원 웰컴 안내 v3 | `KA01TP260514081318309wQGfeIJxIAJ` | `APPROVED` | 매일 11:30 자동 발송 |
 | 아카이브 그룹 기간권 잔여기간 안내 v3 | `KA01TP260514145047261araXgWLVFRs` | `APPROVED` | 매일 11:30 자동 발송 |
 | 아카이브 그룹 횟수권 잔여횟수 안내 v3 | `KA01TP260514145047393VpTbcCZKkCV` | `APPROVED` | 매일 11:30 자동 발송 |
 | 아카이브 프라이빗 횟수권 잔여횟수 안내 v1 | `KA01TP260514152235608d9icGOBotnV` | `APPROVED` | 매일 11:30 자동 발송 |
 | 아카이브 프라이빗 기간권 잔여기간 안내 v1 | `KA01TP260514153314927WH270IppWQS` | `APPROVED` | 매일 11:30 자동 발송 |
 | 아카이브 프라이빗 사전설문 안내 v1 | `KA01TP260514153632171uiWXYoeiOLS` | `APPROVED` | 매일 11:30 자동 발송 |
-| 강사레슨_수업자료 안내 v1 | `KA01TP260521120040094XcMvYgFTryj` | `INSPECTING` | 아카이브강사레슨 채널, 수업자료/방문안내 버튼 2개 구성으로 검수 요청 |
+| 강사레슨_수업자료 안내 v1 | `KA01TP260521120040094XcMvYgFTryj` | `APPROVED` | 아카이브강사레슨 채널, 수업자료/방문안내 버튼 2개 구성 |
 
 ### 1. 신규회원 웰컴 안내
 
@@ -226,6 +226,7 @@
 - 함수는 원본 링크를 `shortLinks/{링크ID}`에 저장하고, 버튼에는 `https://in.archivepilates.com/s/#{링크ID}/` 형식의 짧은 링크를 넣는다.
 - 회원용 그룹 설문 원본 URL은 `https://in.archivepilates.com/groupSurvey?id=#{설문ID}&token=#{접근토큰}` 형식이다.
 - 강사용 설문 확인 원본 URL은 `https://in.archivepilates.com/privateSurveyResponseView?id=#{설문ID}&token=#{접근토큰}` 형식이다.
+- 현재 승인 템플릿이 기존 변수 버튼을 쓰는 동안에는 원본 URL과 짧은 URL을 모두 검사한다.
 - 짧은 링크 생성 전후에도 URL이 100자를 넘으면 ARCHIVE IN이 SOLAPI 발송 전에 차단한다.
 
 ### 6. 예약 안내
@@ -275,7 +276,7 @@
 - 원본 자료 URL은 `https://in.archivepilates.com/method/#{관리번호}`이다.
 - `방문안내 보기`
 - `https://www.notion.so/367d49eae4bf811ca3daea273ed278c8`
-- 버튼 URL은 변수 치환 후 100자 이하여야 한다. 함수가 짧은 링크를 생성해 `#{링크ID}`로 전달한다.
+- 버튼 URL은 변수 치환 후 100자 이하여야 한다. 현재 승인 템플릿이 기존 `관리번호` 버튼을 쓰는 동안에는 원본 자료 URL도 함께 검사한다.
 
 제외:
 

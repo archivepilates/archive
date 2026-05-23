@@ -30,6 +30,7 @@ The source of truth in code is:
 - Staff survey detail original URLs still resolve to `https://in.archivepilates.com/privateSurveyResponseView?id=#{설문ID}&token=#{접근토큰}`.
 - Group survey request original URLs still resolve to `https://in.archivepilates.com/groupSurvey?id=#{설문ID}&token=#{접근토큰}`.
 - Instructor lesson material original URLs still resolve to `https://in.archivepilates.com/method/#{관리번호}`.
+- While approved SOLAPI templates still use the original button variables, ARCHIVE IN validates both the original URL and the short URL before sending.
 - If the rendered URL is longer than 100 characters, ARCHIVE IN blocks sending before calling SOLAPI.
 
 ## Operational Check

@@ -13,6 +13,7 @@ export const ALIMTALK_MEMBER_EXCLUSION_REASONS: Record<string, string> = {
 };
 
 export type SendableAlimtalkCandidateType =
+  | "reservation_open"
   | "new_member"
   | "private_survey"
   | "group_survey"
@@ -84,6 +85,7 @@ export const ALIMTALK_TEMPLATE_CHANNEL_IDS: Readonly<Record<string, string>> = {
 };
 
 export const CANDIDATE_TEMPLATE_CODES: Record<SendableAlimtalkCandidateType, string> = {
+  reservation_open: ALIMTALK_TEMPLATES.reservation_open.code,
   new_member: ALIMTALK_TEMPLATES.new_member.code,
   private_survey: ALIMTALK_TEMPLATES.private_survey.code,
   group_survey: ALIMTALK_TEMPLATES.group_survey.code,

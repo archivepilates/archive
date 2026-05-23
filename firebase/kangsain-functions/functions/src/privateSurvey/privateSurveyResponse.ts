@@ -7,6 +7,7 @@ import { privateSurveyWebhookSecret, solapiApiKey, solapiApiSecret, solapiPfid }
 import { db } from "../config/firebase";
 import { refs } from "../firestore/refs";
 import type { AlimtalkCandidateDoc, BookingDoc, MemberProfileDoc, PrivateSurveyResponseDoc } from "../types/models";
+import { ALIMTALK_TEMPLATES } from "../alimtalk/templates";
 import { nowTimestamp } from "../utils/date";
 import { stableHash } from "../utils/hash";
 import { DelegatedGoogleClient } from "../google/delegatedGoogleClient";
@@ -29,8 +30,8 @@ const OUTPUT_HEADERS = [
   "ARCHIVE IN 전송시각",
   "ARCHIVE IN 오류",
 ];
-const STAFF_PRIVATE_SURVEY_TEMPLATE_ID = "KA01TP260519093416836f1EHZYJ00uM";
-const STAFF_GROUP_SURVEY_TEMPLATE_ID = "KA01TP260522041704111wu4Z0cu9cgl";
+const STAFF_PRIVATE_SURVEY_TEMPLATE_ID = ALIMTALK_TEMPLATES.staff_private_survey.code;
+const STAFF_GROUP_SURVEY_TEMPLATE_ID = ALIMTALK_TEMPLATES.staff_group_survey.code;
 const SOLAPI_SEND_URL = "https://api.solapi.com/messages/v4/send-many/detail";
 const ARCHIVE_LOGO_URL = "https://in.archivepilates.com/logo120.png";
 

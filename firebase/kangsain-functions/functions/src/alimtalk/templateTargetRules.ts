@@ -38,6 +38,16 @@ export const GROUP_SURVEY_BUTTON_URL_TEMPLATE =
 export const METHOD_MATERIAL_BUTTON_URL_TEMPLATE = "https://in.archivepilates.com/method/#{관리번호}";
 
 export const ALIMTALK_TEMPLATE_TARGET_RULES: Partial<Record<AlimtalkCandidateType, AlimtalkTemplateTargetRule>> = {
+  reservation_open: {
+    type: "reservation_open",
+    templateCode: ALIMTALK_TEMPLATES.reservation_open.code,
+    templateLabel: ALIMTALK_TEMPLATES.reservation_open.label,
+    sourceDatePolicy: "manual",
+    requiresApprovedTemplate: true,
+    requiresMemberPhone: true,
+    targetRules: ["운영자가 확정한 예약 오픈 주차", "예약 안내 수신 대상", "예약주차 변수가 있음"],
+    exclusionRules: ["전화번호 없음", "예약주차 변수 없음", "동일 예약주차 6일 내 발송 이력 있음", "SOLAPI 미승인 템플릿"],
+  },
   new_member: {
     type: "new_member",
     templateCode: ALIMTALK_TEMPLATES.new_member.code,
@@ -96,6 +106,11 @@ export const ALIMTALK_TEMPLATE_TARGET_RULES: Partial<Record<AlimtalkCandidateTyp
     requiresMemberPhone: true,
     blocksTooLateGroupSurvey: true,
     buttonUrlRules: [
+      {
+        label: "그룹 사전확인 작성 버튼",
+        template: GROUP_SURVEY_BUTTON_URL_TEMPLATE,
+        maxLength: SOLAPI_BUTTON_URL_MAX_LENGTH,
+      },
       {
         label: "그룹 사전확인 작성 버튼",
         template: SHORT_LINK_BUTTON_URL_TEMPLATE,
@@ -207,6 +222,11 @@ export const ALIMTALK_TEMPLATE_TARGET_RULES: Partial<Record<AlimtalkCandidateTyp
     buttonUrlRules: [
       {
         label: "강사레슨 수업자료 버튼",
+        template: METHOD_MATERIAL_BUTTON_URL_TEMPLATE,
+        maxLength: SOLAPI_BUTTON_URL_MAX_LENGTH,
+      },
+      {
+        label: "강사레슨 수업자료 버튼",
         template: SHORT_LINK_BUTTON_URL_TEMPLATE,
         maxLength: SOLAPI_BUTTON_URL_MAX_LENGTH,
       },
@@ -250,6 +270,11 @@ export function surveyDetailButtonUrlLengthIssue(
 ): string {
   return solapiButtonUrlLengthIssue({
     rules: [
+      {
+        label: "설문 확인하기 버튼",
+        template: SURVEY_DETAIL_BUTTON_URL_TEMPLATE,
+        maxLength: SOLAPI_BUTTON_URL_MAX_LENGTH,
+      },
       {
         label: "설문 확인하기 버튼",
         template: SHORT_LINK_BUTTON_URL_TEMPLATE,

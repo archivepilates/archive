@@ -307,6 +307,7 @@ export interface MemberProfileDoc {
 export type ContactSyncTarget = "archivepilates_gmail" | "home_archivepilates";
 export type ContactSyncStatus = "pending" | "synced" | "skipped" | "failed";
 export type AlimtalkCandidateType =
+  | "reservation_open"
   | "new_member"
   | "private_survey"
   | "group_survey"

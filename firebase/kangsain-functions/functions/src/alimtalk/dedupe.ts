@@ -101,10 +101,11 @@ function isTicketReminder(candidate: AlimtalkCandidateDoc): boolean {
 
 function ticketReminderFingerprint(candidate: AlimtalkCandidateDoc): string {
   const payload = candidate.payload || {};
+  const explicitTicketId = String(payload.userTicketId || payload.ticketId || "").trim();
+  if (explicitTicketId) return `${String(candidate.type || "")}|ticket:${explicitTicketId}`;
   return [
     String(candidate.type || ""),
     String(payload.ticketName || payload.ticket || "").trim(),
     String(payload.expiresAt || payload.expiryDate || payload.expireDate || "").trim(),
-    String(payload.remainingCount || "").trim(),
   ].join("|");
 }
