@@ -3,13 +3,24 @@ import { DelegatedGoogleClient } from "./delegatedGoogleClient";
 const DRIVE_SCOPE = "https://www.googleapis.com/auth/drive";
 const DOCS_SCOPE = "https://www.googleapis.com/auth/documents";
 const GMAIL_SEND_SCOPE = "https://www.googleapis.com/auth/gmail.send";
+const GMAIL_MODIFY_SCOPE = "https://www.googleapis.com/auth/gmail.modify";
 const REPORT_FOLDER_NAME = "알림톡";
 const OPERATOR_EMAIL = "home@archivepilates.com";
+const ALIMTALK_REPORT_LABEL_NAME = "알림톡 보고";
 
 interface DriveFile {
   id: string;
   name?: string;
   webViewLink?: string;
+}
+
+interface GmailMessage {
+  id: string;
+}
+
+interface GmailLabel {
+  id: string;
+  name: string;
 }
 
 export async function createAlimtalkLogDocument(input: {
@@ -51,7 +62,7 @@ export async function sendAlimtalkLogEmail(input: {
   htmlBody?: string;
   to?: string;
 }): Promise<void> {
-  const client = new DelegatedGoogleClient([GMAIL_SEND_SCOPE]);
+  const client = new DelegatedGoogleClient([GMAIL_SEND_SCOPE, GMAIL_MODIFY_SCOPE]);
   const to = input.to || OPERATOR_EMAIL;
   const boundary = `archive-in-${Date.now().toString(36)}`;
   const content = input.htmlBody
@@ -82,10 +93,38 @@ export async function sendAlimtalkLogEmail(input: {
       content,
     ].join("\r\n"),
   ).toString("base64url");
-  await client.request("https://gmail.googleapis.com/gmail/v1/users/me/messages/send", {
+  const sent = await client.request<GmailMessage>("https://gmail.googleapis.com/gmail/v1/users/me/messages/send", {
     method: "POST",
     body: JSON.stringify({ raw }),
   });
+  if (sent.id) {
+    await applyGmailLabel(client, sent.id, ALIMTALK_REPORT_LABEL_NAME);
+  }
+}
+
+async function applyGmailLabel(client: DelegatedGoogleClient, messageId: string, labelName: string): Promise<void> {
+  const labelId = await findOrCreateGmailLabel(client, labelName);
+  await client.request(`https://gmail.googleapis.com/gmail/v1/users/me/messages/${encodeURIComponent(messageId)}/modify`, {
+    method: "POST",
+    body: JSON.stringify({ addLabelIds: [labelId] }),
+  });
+}
+
+async function findOrCreateGmailLabel(client: DelegatedGoogleClient, name: string): Promise<string> {
+  const labels = await client.request<{ labels?: GmailLabel[] }>(
+    "https://gmail.googleapis.com/gmail/v1/users/me/labels",
+  );
+  const existing = labels.labels?.find((label) => label.name === name);
+  if (existing?.id) return existing.id;
+  const created = await client.request<GmailLabel>("https://gmail.googleapis.com/gmail/v1/users/me/labels", {
+    method: "POST",
+    body: JSON.stringify({
+      name,
+      labelListVisibility: "labelShow",
+      messageListVisibility: "show",
+    }),
+  });
+  return created.id;
 }
 
 async function findOrCreateFolder(client: DelegatedGoogleClient, name: string): Promise<string> {
