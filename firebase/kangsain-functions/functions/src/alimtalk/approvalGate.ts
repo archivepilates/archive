@@ -210,9 +210,10 @@ async function sendApprovalEmail(input: {
     approvalUrl,
   });
   await sendAlimtalkLogEmail({
-    subject: `[ARCHIVE IN] 알림톡 ${input.candidates.length}건 발송 승인 요청`,
+    subject: `[알림톡][긴급] ${input.candidates.length}건 발송 승인 요청 ${input.date}`,
     body,
     htmlBody,
+    status: "urgent",
   });
 }
 

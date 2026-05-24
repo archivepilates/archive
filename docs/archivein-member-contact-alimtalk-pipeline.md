@@ -193,7 +193,7 @@ Google 주소록 쓰기에는 Google People API 권한이 필요하다.
 - 자동 발송은 매일 11:30 KST에 실행한다. `scheduledQueueAndSendAlimtalkDaily`가 `memberProfiles.activeTickets`를 직접 스캔해 발송 기준일의 수강권 상태를 재계산하고, 수강권 기간/횟수 안내는 기준일 후보만 `queued` 상태로 넘긴 뒤 큐를 처리한다.
 - 운영자 ACTIONS는 화면 참고용이며, 알림톡 대상자 선정 원천은 현재 회원카드 수강권 상태다.
 - 그룹/프라이빗 구분은 구조화 필드를 우선한다. 수업 성격은 `lectures.lessonType`과 `bookings.lessonType`, 수강권 성격은 `memberProfiles.activeTickets[].classType`과 `bookings.ticketClassType`을 기준으로 보고, 수강권명 문자열 추정은 값이 비어 있을 때만 fallback으로 사용한다.
-- 운영자 화면과 회원카드에는 알림톡 상태 태그/칩을 표시하지 않는다. 후보 패널, 발송 이력, Google Drive 로그 문서, 메일 보고에서만 확인한다. 알림톡 보고/승인/미제출 알림 메일은 Gmail `알림톡 보고` 라벨을 자동 적용한다.
+- 운영자 화면과 회원카드에는 알림톡 상태 태그/칩을 표시하지 않는다. 후보 패널, 발송 이력, Google Drive 로그 문서, 메일 보고에서만 확인한다. 알림톡 보고/승인/미제출 알림 메일 제목은 `[알림톡][상태] 핵심내용` 형식을 사용하고, Gmail에는 `알림톡 보고` 라벨과 `자동화 성공`, `자동화 실패`, `자동화 긴급`, `자동화 확인필요` 중 하나를 함께 적용한다.
 - 신규회원 웰컴은 기준일 기준 등록 3일 이내 후보만 자동 발송 대상으로 본다.
 - 운영자는 필요할 때 후보 명단을 복사해 검토하거나 `일괄 승인`으로 수동 발송 대기 처리할 수 있다.
 - 서버 워커 `scheduledProcessAlimtalkQueue`가 5분마다 남은 `queued` 후보를 확인해 SOLAPI로 발송하고, `alimtalkSends/{candidateId}`에 결과를 남긴다.

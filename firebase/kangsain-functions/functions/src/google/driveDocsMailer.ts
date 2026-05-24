@@ -7,6 +7,14 @@ const GMAIL_MODIFY_SCOPE = "https://www.googleapis.com/auth/gmail.modify";
 const REPORT_FOLDER_NAME = "알림톡";
 const OPERATOR_EMAIL = "home@archivepilates.com";
 const ALIMTALK_REPORT_LABEL_NAME = "알림톡 보고";
+const AUTOMATION_STATUS_LABELS = {
+  success: "자동화 성공",
+  failure: "자동화 실패",
+  urgent: "자동화 긴급",
+  attention: "자동화 확인필요",
+} as const;
+
+export type AutomationEmailStatus = keyof typeof AUTOMATION_STATUS_LABELS;
 
 interface DriveFile {
   id: string;
@@ -61,6 +69,8 @@ export async function sendAlimtalkLogEmail(input: {
   body: string;
   htmlBody?: string;
   to?: string;
+  status?: AutomationEmailStatus;
+  labelNames?: string[];
 }): Promise<void> {
   const client = new DelegatedGoogleClient([GMAIL_SEND_SCOPE, GMAIL_MODIFY_SCOPE]);
   const to = input.to || OPERATOR_EMAIL;
@@ -98,15 +108,28 @@ export async function sendAlimtalkLogEmail(input: {
     body: JSON.stringify({ raw }),
   });
   if (sent.id) {
-    await applyGmailLabel(client, sent.id, ALIMTALK_REPORT_LABEL_NAME);
+    await applyGmailLabels(client, sent.id, reportLabelNames(input.status, input.labelNames));
   }
 }
 
-async function applyGmailLabel(client: DelegatedGoogleClient, messageId: string, labelName: string): Promise<void> {
-  const labelId = await findOrCreateGmailLabel(client, labelName);
+function reportLabelNames(status?: AutomationEmailStatus, labelNames: string[] = []): string[] {
+  return uniqueLabels([
+    ALIMTALK_REPORT_LABEL_NAME,
+    status ? AUTOMATION_STATUS_LABELS[status] : "",
+    ...labelNames,
+  ]);
+}
+
+function uniqueLabels(labels: string[]): string[] {
+  return [...new Set(labels.map((label) => label.trim()).filter(Boolean))];
+}
+
+async function applyGmailLabels(client: DelegatedGoogleClient, messageId: string, labelNames: string[]): Promise<void> {
+  const labelIds = await Promise.all(labelNames.map((labelName) => findOrCreateGmailLabel(client, labelName)));
+  if (!labelIds.length) return;
   await client.request(`https://gmail.googleapis.com/gmail/v1/users/me/messages/${encodeURIComponent(messageId)}/modify`, {
     method: "POST",
-    body: JSON.stringify({ addLabelIds: [labelId] }),
+    body: JSON.stringify({ addLabelIds: labelIds }),
   });
 }
 

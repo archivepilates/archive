@@ -36,12 +36,14 @@ export async function sendDailyAlimtalkReport(input: {
     candidates,
     surveyStats,
   });
+  const status = reportStatus(input.processSummary, surveyStats);
   const title = `ARCHIVE IN 알림톡 발송 로그 ${date}`;
   const document = await createAlimtalkLogDocument({ title, body });
   const emailBody = `${body}\n\n구글드라이브 로그 문서\n${document.url}\n`;
   await sendAlimtalkLogEmail({
-    subject: `[ARCHIVE IN] 알림톡 발송 로그 ${date}`,
+    subject: `[알림톡][${status === "failure" ? "실패" : "성공"}] 발송 로그 ${date}`,
     body: emailBody,
+    status,
   });
   logger.info("sendDailyAlimtalkReport completed", {
     studioId,
@@ -50,6 +52,13 @@ export async function sendDailyAlimtalkReport(input: {
     candidateCount: candidates.length,
   });
   return { documentUrl: document.url };
+}
+
+function reportStatus(
+  processSummary: ProcessSummary,
+  surveyStats: { submitted: number; staffSent: number; memoFailed: number },
+): "success" | "failure" {
+  return processSummary.failed > 0 || surveyStats.memoFailed > 0 ? "failure" : "success";
 }
 
 async function listDailyCandidates(studioId: string, date: string): Promise<AlimtalkCandidateDoc[]> {

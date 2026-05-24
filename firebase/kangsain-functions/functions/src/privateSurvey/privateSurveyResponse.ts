@@ -1027,7 +1027,7 @@ async function sendMissingSurveySubmissionEmailOnce(input: {
 
   const typeLabel = input.surveyType === "group" ? "그룹 첫 수업 사전확인" : "프라이빗 사전설문";
   await sendAlimtalkLogEmail({
-    subject: `[ARCHIVE IN] ${typeLabel} 미제출 알림 - ${input.memberName}`,
+    subject: `[알림톡][확인필요] ${typeLabel} 미제출 - ${input.memberName}`,
     body: [
       `${typeLabel}이 아직 제출되지 않았어요.`,
       "",
@@ -1043,6 +1043,7 @@ async function sendMissingSurveySubmissionEmailOnce(input: {
     ]
       .filter((line) => line !== "")
       .join("\n"),
+    status: "attention",
   });
   return true;
 }
