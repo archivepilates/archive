@@ -35,6 +35,10 @@ export async function rebuildAlimtalkCandidatesForRange(input: {
   const profiles = profilesSnap.docs.map((snap) => snap.data());
   for (const sourceDate of dateRange(input.startDate, input.endDate)) {
     for (const profile of profiles) {
+      const reservationOpenCandidate = reservationOpenCandidateForDate(profile, sourceDate);
+      if (reservationOpenCandidate) {
+        await enqueueSendableCandidate(reservationOpenCandidate, candidateIds, writes);
+      }
       for (const candidate of directTicketCandidates(profile, sourceDate)) {
         await enqueueSendableCandidate(candidate, candidateIds, writes);
       }
@@ -183,6 +187,45 @@ function directTicketCandidates(profile: MemberProfileDoc, sourceDate: string): 
   return activeProfileTickets(profile, sourceDate)
     .map((ticket) => directTicketCandidate(profile, ticket, sourceDate))
     .filter((candidate): candidate is AlimtalkCandidateDoc => Boolean(candidate));
+}
+
+function reservationOpenCandidateForDate(profile: MemberProfileDoc, sourceDate: string): AlimtalkCandidateDoc | null {
+  if (!isMondayDate(sourceDate)) return null;
+  if (!profile.memberId || !profile.name || !profile.phone) return null;
+  if (ALIMTALK_MEMBER_EXCLUSION_REASONS[profile.memberId]) return null;
+  const groupTickets = activeGroupProfileTickets(profile, sourceDate);
+  if (!groupTickets.length) return null;
+  const reservationWeek = reservationOpenWeekLabel(sourceDate);
+  const weekStartDate = addDays(sourceDate, 7);
+  return {
+    candidateId: `reservation_open_${profile.memberId}_${weekStartDate}`,
+    studioId: profile.studioId,
+    memberId: profile.memberId,
+    memberName: profile.name,
+    memberPhone: profile.phone,
+    type: "reservation_open",
+    status: "candidate",
+    templateCode: CANDIDATE_TEMPLATE_CODES.reservation_open,
+    title: "예약 오픈 안내",
+    reason: `${reservationWeek} 예약 오픈 안내`,
+    sourceDate,
+    payload: {
+      memberName: profile.name,
+      reservationWeek,
+      weekLabel: reservationWeek,
+      reservationWeekStartDate: weekStartDate,
+      reservationWeekEndDate: addDays(weekStartDate, 6),
+      activeTicketNames: groupTickets
+        .map((ticket) => ticket.name)
+        .filter(Boolean)
+        .join(", "),
+    },
+    attempts: 0,
+    maxAttempts: 2,
+    lastError: null,
+    createdAt: nowTimestamp(),
+    updatedAt: nowTimestamp(),
+  };
 }
 
 async function groupSurveyCandidateForDate(
@@ -639,6 +682,13 @@ function hasHoldingTicket(profile: MemberProfileDoc | undefined): boolean {
   return Boolean(profile?.ticketStatusSummary?.hasHoldingTicket);
 }
 
+function activeGroupProfileTickets(
+  profile: MemberProfileDoc | undefined,
+  sourceDate: string,
+): NonNullable<MemberProfileDoc["activeTickets"]> {
+  return activeProfileTickets(profile, sourceDate).filter((ticket) => !isPrivateProfileTicket(ticket));
+}
+
 function activeProfileTickets(
   profile: MemberProfileDoc | undefined,
   sourceDate: string,
@@ -724,6 +774,36 @@ function daysBetweenDateStrings(startDate: string, endDate: string): number {
   const end = new Date(`${endDate}T00:00:00+09:00`).getTime();
   if (!Number.isFinite(start) || !Number.isFinite(end)) return Number.NaN;
   return Math.floor((end - start) / (24 * 60 * 60 * 1000));
+}
+
+function isMondayDate(value: string): boolean {
+  const date = new Date(`${value}T00:00:00+09:00`);
+  return !Number.isNaN(date.getTime()) && date.getDay() === 1;
+}
+
+function reservationOpenWeekLabel(sourceDate: string): string {
+  const startDate = addDays(sourceDate, 7);
+  const endDate = addDays(startDate, 6);
+  const start = new Date(`${startDate}T00:00:00+09:00`);
+  const month = start.getMonth() + 1;
+  const week = weekOfMonthFromMonday(startDate);
+  return `${month}월${week}주차(${shortKoreanDate(startDate)}~${shortKoreanDate(endDate)})`;
+}
+
+function weekOfMonthFromMonday(value: string): number {
+  const date = new Date(`${value}T00:00:00+09:00`);
+  const firstDay = new Date(date);
+  firstDay.setDate(1);
+  const firstMondayOffset = (8 - firstDay.getDay()) % 7;
+  const firstMondayDate = 1 + firstMondayOffset;
+  if (date.getDate() < firstMondayDate) return 1;
+  return Math.floor((date.getDate() - firstMondayDate) / 7) + 1;
+}
+
+function shortKoreanDate(value: string): string {
+  const date = new Date(`${value}T00:00:00+09:00`);
+  const weekdays = ["일", "월", "화", "수", "목", "금", "토"];
+  return `${date.getMonth() + 1}/${date.getDate()}(${weekdays[date.getDay()]})`;
 }
 
 function remainingDays(
