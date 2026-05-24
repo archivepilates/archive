@@ -192,6 +192,11 @@ service cloud.firestore {
       allow write: if false;
     }
 
+    match /inbodyWebhookEvents/{eventId} {
+      allow read: if isManager() && sameStudio(resource.data.studioId);
+      allow write: if false;
+    }
+
     match /memberMemos/{memoId} {
       allow read: if
         signedIn() &&

@@ -43,6 +43,8 @@ import {
   privateSurveyResponseViewHandler,
   syncPrivateSurveyResponsesFromSheet,
 } from "./privateSurvey/privateSurveyResponse";
+import { receiveInBodyWebhookHandler } from "./inbody/inbodyWebhook";
+import { inbodyWebhookSecret } from "./config/secrets";
 
 const callableOptions = { region: REGION, secrets: allSecrets, invoker: "public" as const };
 const longCallableOptions = { ...callableOptions, timeoutSeconds: 540, memory: "512MiB" as const };
@@ -232,6 +234,14 @@ export const syncDashboardNow = onRequest(longRequestOptions, async (request, re
 });
 
 export const ingestPrivateSurveyResponse = onRequest(privateSurveyIngestOptions, ingestPrivateSurveyResponseHandler);
+
+export const receiveInBodyWebhook = onRequest(
+  {
+    ...publicRequestOptions,
+    secrets: [inbodyWebhookSecret],
+  },
+  receiveInBodyWebhookHandler,
+);
 
 export const privateSurveyResponseView = onRequest(publicRequestOptions, privateSurveyResponseViewHandler);
 
