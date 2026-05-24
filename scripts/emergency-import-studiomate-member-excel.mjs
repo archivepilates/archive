@@ -202,6 +202,7 @@ function buildPlans(groups, existingProfiles, existingContacts) {
       continue;
     }
     const activeTickets = buildActiveTickets(group.rows);
+    const ticketStatusSummary = buildTicketStatusSummary(group.rows);
     const registeredAt = parseKstTimestamp(bestDate(group.rows, "등록일"));
     const latestAttendance = bestDate(group.rows, "최근출석일");
     const email = firstNonEmpty(group.rows, "이메일");
@@ -320,6 +321,7 @@ function buildPlans(groups, existingProfiles, existingContacts) {
       activeTicketNames: activeTickets.map((ticket) => ticket.name),
       activeTicketCount: activeTickets.length,
       activeTickets,
+      ticketStatusSummary,
       isNewMember: registeredAt ? daysBetween(kstDate(registeredAt.toDate()), today) <= 3 : false,
       newMemberBasis: registeredAt ? "registered_at" : "unknown",
       registeredAt,
@@ -467,6 +469,31 @@ function buildActiveTickets(rows) {
     byKey.set(key, ticket);
   }
   return [...byKey.values()].sort((a, b) => (a.expiresAt?.toMillis() || Number.MAX_SAFE_INTEGER) - (b.expiresAt?.toMillis() || Number.MAX_SAFE_INTEGER));
+}
+
+function buildTicketStatusSummary(rows) {
+  const holdingTickets = [];
+  for (const row of rows) {
+    const status = cleanText(row["수강권상태"]);
+    const name = cleanText(row["수강권명"]);
+    if (!name || !isHoldingTicketStatus(status)) continue;
+    holdingTickets.push({
+      name,
+      status,
+      availableFrom: parseKstTimestamp(row["수강권시작일"]),
+      expiresAt: parseKstTimestamp(row["수강권종료일"]),
+      updatedAtText: cleanText(row["수강권최종수정일"]),
+    });
+  }
+  return {
+    hasHoldingTicket: holdingTickets.length > 0,
+    holdingTicketCount: holdingTickets.length,
+    holdingTickets,
+  };
+}
+
+function isHoldingTicketStatus(status) {
+  return /정지|중지|홀딩/.test(cleanText(status));
 }
 
 async function applyPlans(plans) {

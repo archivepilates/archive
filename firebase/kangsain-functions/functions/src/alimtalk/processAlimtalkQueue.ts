@@ -251,6 +251,8 @@ async function templateVariables(candidate: AlimtalkCandidateDoc): Promise<Recor
     "#{수강권명}": String(payload.ticketName || payload.ticket || ""),
     "#{잔여횟수}": String(payload.remainingCount || ""),
     "#{만료일}": String(payload.expiresAt || payload.expiryDate || payload.expireDate || ""),
+    "#{미방문일수}": String(payload.absenceDays || payload.daysSinceLastVisit || ""),
+    "#{마지막출석일}": String(payload.lastAttendanceDateText || payload.lastAttendanceDate || ""),
     "#{설문ID}": surveyId,
     "#{접근토큰}": accessToken,
     "#{관리번호}": managementNumber,

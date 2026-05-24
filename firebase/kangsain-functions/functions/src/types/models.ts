@@ -296,6 +296,17 @@ export interface MemberProfileDoc {
     status?: string;
     classType?: string;
   }>;
+  ticketStatusSummary?: {
+    hasHoldingTicket?: boolean;
+    holdingTicketCount?: number;
+    holdingTickets?: Array<{
+      name: string;
+      status: string;
+      availableFrom?: Timestamp | null;
+      expiresAt?: Timestamp | null;
+      updatedAtText?: string;
+    }>;
+  };
   isNewMember?: boolean;
   newMemberBasis?: "registered_at" | "first_seen_booking" | "unknown";
   registeredAt: Timestamp | null;

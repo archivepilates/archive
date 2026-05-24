@@ -6,6 +6,7 @@ export const NEW_MEMBER_ALIMTALK_START_DATE = "2026-05-16";
 export const NEW_MEMBER_ALIMTALK_WINDOW_DAYS = 3;
 export const PRIVATE_SURVEY_ALIMTALK_START_DATE = "2026-05-19";
 export const GROUP_SURVEY_ALIMTALK_START_DATE = "2026-05-21";
+export const LONG_ABSENCE_ALIMTALK_START_DATE = "2026-05-24";
 
 export const ALIMTALK_MEMBER_EXCLUSION_REASONS: Record<string, string> = {
   "3270886": "출산예정 회원 알림톡 제외",
@@ -20,7 +21,8 @@ export type SendableAlimtalkCandidateType =
   | "ticket_expiring"
   | "remaining_low"
   | "private_count_low"
-  | "private_ticket_expiring";
+  | "private_ticket_expiring"
+  | "long_absence";
 
 export const ALIMTALK_TEMPLATES = {
   reservation_open: {
@@ -63,6 +65,11 @@ export const ALIMTALK_TEMPLATES = {
     label: "프라이빗 기간권 잔여기간 안내 v1",
     status: "approved",
   },
+  long_absence: {
+    code: "KA01TP260524083643752cySb9BoDOjN",
+    label: "장기 미방문 수업안내 v1",
+    status: "pending",
+  },
   staff_private_survey: {
     code: "KA01TP260519093416836f1EHZYJ00uM",
     label: "담당강사 사전설문 제출 안내 v1",
@@ -93,6 +100,7 @@ export const CANDIDATE_TEMPLATE_CODES: Record<SendableAlimtalkCandidateType, str
   remaining_low: ALIMTALK_TEMPLATES.remaining_low.code,
   private_count_low: ALIMTALK_TEMPLATES.private_count_low.code,
   private_ticket_expiring: ALIMTALK_TEMPLATES.private_ticket_expiring.code,
+  long_absence: ALIMTALK_TEMPLATES.long_absence.code,
 };
 
 export const STATIC_APPROVED_ALIMTALK_TEMPLATE_CODES: ReadonlySet<string> = new Set(
@@ -140,6 +148,10 @@ export const ALIMTALK_DEDUPE_POLICIES_BY_TEMPLATE_CODE: Record<string, AlimtalkD
   [ALIMTALK_TEMPLATES.private_ticket_expiring.code]: {
     label: "프라이빗 수강권별 기간 안내 30일",
     windowDays: 30,
+  },
+  [ALIMTALK_TEMPLATES.long_absence.code]: {
+    label: "장기 미방문 안내 14일",
+    windowDays: 14,
   },
   [ALIMTALK_TEMPLATES.instructor_lesson_material.code]: {
     label: "강사레슨 수업자료 수업별 1회",

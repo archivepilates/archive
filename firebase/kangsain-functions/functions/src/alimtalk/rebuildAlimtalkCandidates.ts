@@ -11,6 +11,7 @@ import {
   ALIMTALK_MEMBER_EXCLUSION_REASONS,
   CANDIDATE_TEMPLATE_CODES,
   GROUP_SURVEY_ALIMTALK_START_DATE,
+  LONG_ABSENCE_ALIMTALK_START_DATE,
   NEW_MEMBER_ALIMTALK_START_DATE,
   NEW_MEMBER_ALIMTALK_WINDOW_DAYS,
   PRIVATE_SURVEY_ALIMTALK_START_DATE,
@@ -24,7 +25,10 @@ export async function rebuildAlimtalkCandidatesForRange(input: {
   startDate: string;
   endDate: string;
 }): Promise<{ candidates: number; candidateIds: string[] }> {
-  const profilesSnap = await refs.memberProfiles().where("studioId", "==", input.studioId).get();
+  const [profilesSnap, bookingIndex] = await Promise.all([
+    refs.memberProfiles().where("studioId", "==", input.studioId).get(),
+    loadBookingIndex(input.studioId),
+  ]);
 
   const writes: Array<Promise<unknown>> = [];
   const candidateIds: string[] = [];
@@ -34,14 +38,18 @@ export async function rebuildAlimtalkCandidatesForRange(input: {
       for (const candidate of directTicketCandidates(profile, sourceDate)) {
         await enqueueSendableCandidate(candidate, candidateIds, writes);
       }
-      const privateSurveyCandidate = await privateSurveyCandidateForDate(profile, sourceDate);
+      const privateSurveyCandidate = await privateSurveyCandidateForDate(profile, sourceDate, bookingIndex);
       if (privateSurveyCandidate) {
         await enqueueSendableCandidate(privateSurveyCandidate, candidateIds, writes);
       }
-      const groupSurveyCandidate = await groupSurveyCandidateForDate(profile, sourceDate);
+      const groupSurveyCandidate = await groupSurveyCandidateForDate(profile, sourceDate, bookingIndex);
       if (groupSurveyCandidate) {
         const enqueued = await enqueueSendableCandidate(groupSurveyCandidate, candidateIds, writes);
         if (enqueued) writes.push(upsertGroupSurveyRequest(groupSurveyCandidate));
+      }
+      const longAbsenceCandidate = await longAbsenceCandidateForDate(profile, sourceDate, bookingIndex);
+      if (longAbsenceCandidate) {
+        await enqueueSendableCandidate(longAbsenceCandidate, candidateIds, writes);
       }
     }
   }
@@ -104,6 +112,25 @@ export async function rebuildAlimtalkCandidatesForRange(input: {
   return { candidates: candidateIds.length, candidateIds };
 }
 
+type BookingIndex = Map<string, BookingDoc[]>;
+
+async function loadBookingIndex(studioId: string): Promise<BookingIndex> {
+  const snap = await refs.bookings().where("studioId", "==", studioId).get();
+  const index: BookingIndex = new Map();
+  for (const doc of snap.docs) {
+    const booking = doc.data();
+    if (!booking.memberId) continue;
+    const list = index.get(booking.memberId) || [];
+    list.push(booking);
+    index.set(booking.memberId, list);
+  }
+  return index;
+}
+
+function memberBookings(bookingIndex: BookingIndex, memberId: string): BookingDoc[] {
+  return bookingIndex.get(memberId) || [];
+}
+
 async function markStaleCandidatesSkipped(input: {
   studioId: string;
   startDate: string;
@@ -161,14 +188,15 @@ function directTicketCandidates(profile: MemberProfileDoc, sourceDate: string): 
 async function groupSurveyCandidateForDate(
   profile: MemberProfileDoc,
   sourceDate: string,
+  bookingIndex: BookingIndex,
 ): Promise<AlimtalkCandidateDoc | null> {
   if (sourceDate < GROUP_SURVEY_ALIMTALK_START_DATE) return null;
   if (!profile.memberId || !profile.name || !profile.phone) return null;
   if (ALIMTALK_MEMBER_EXCLUSION_REASONS[profile.memberId]) return null;
-  const booking = await firstUpcomingGroupBookingInReservationWindow(profile.memberId, sourceDate);
+  const booking = firstUpcomingGroupBookingInReservationWindow(profile.memberId, sourceDate, bookingIndex);
   if (!booking) return null;
   if (await hasSubmittedGroupSurvey(profile.memberId, profile.phone)) return null;
-  if (await hasAttendedGroupBookingOnOrBefore(profile.memberId, sourceDate)) return null;
+  if (hasAttendedGroupBookingOnOrBefore(profile.memberId, sourceDate, bookingIndex)) return null;
   const requestId = groupSurveyRequestId(profile.memberId, booking.bookingId);
   const accessToken = groupSurveyAccessToken(requestId);
   const targetUrl = groupSurveyTargetUrl(requestId, accessToken);
@@ -211,14 +239,13 @@ async function groupSurveyCandidateForDate(
   };
 }
 
-async function firstUpcomingGroupBookingInReservationWindow(
+function firstUpcomingGroupBookingInReservationWindow(
   memberId: string,
   sourceDate: string,
-): Promise<BookingDoc | null> {
+  bookingIndex: BookingIndex,
+): BookingDoc | null {
   const endDate = reservationOpenEndDate(sourceDate);
-  const snap = await refs.bookings().where("memberId", "==", memberId).get();
-  const bookings = snap.docs
-    .map((doc) => doc.data())
+  const bookings = memberBookings(bookingIndex, memberId)
     .filter(
       (booking) =>
         booking.appStatus === "reserved" &&
@@ -240,16 +267,17 @@ async function hasSubmittedGroupSurvey(memberId: string, memberPhone: string): P
   return byPhone.docs.some((doc) => doc.data().surveyType === "group" && isRecentSurveyResponse(doc.data()));
 }
 
-async function hasAttendedGroupBookingOnOrBefore(memberId: string, sourceDate: string): Promise<boolean> {
-  const snap = await refs.bookings().where("memberId", "==", memberId).get();
-  return snap.docs
-    .map((doc) => doc.data())
-    .some(
+function hasAttendedGroupBookingOnOrBefore(
+  memberId: string,
+  sourceDate: string,
+  bookingIndex: BookingIndex,
+): boolean {
+  return memberBookings(bookingIndex, memberId).some(
       (booking) =>
         booking.lectureDate <= sourceDate &&
         booking.attendanceStatus === "attended" &&
         isGroupAttendanceHistory(booking),
-    );
+  );
 }
 
 function isGroupAttendanceHistory(booking: BookingDoc): boolean {
@@ -340,14 +368,15 @@ async function upsertGroupSurveyRequest(candidate: AlimtalkCandidateDoc): Promis
 async function privateSurveyCandidateForDate(
   profile: MemberProfileDoc,
   sourceDate: string,
+  bookingIndex: BookingIndex,
 ): Promise<AlimtalkCandidateDoc | null> {
   if (sourceDate < PRIVATE_SURVEY_ALIMTALK_START_DATE) return null;
   if (!profile.memberId || !profile.name || !profile.phone) return null;
   if (ALIMTALK_MEMBER_EXCLUSION_REASONS[profile.memberId]) return null;
-  const booking = await firstUpcomingPrivateBookingInReservationWindow(profile.memberId, sourceDate);
+  const booking = firstUpcomingPrivateBookingInReservationWindow(profile.memberId, sourceDate, bookingIndex);
   if (!booking) return null;
   if (await hasSubmittedPrivateSurvey(profile.memberId, profile.phone)) return null;
-  if (await hasAttendedPrivateBookingOnOrBefore(profile.memberId, sourceDate)) return null;
+  if (hasAttendedPrivateBookingOnOrBefore(profile.memberId, sourceDate, bookingIndex)) return null;
   return {
     candidateId: `private_survey_${profile.memberId}_${sourceDate}`,
     studioId: profile.studioId,
@@ -376,14 +405,79 @@ async function privateSurveyCandidateForDate(
   };
 }
 
-async function firstUpcomingPrivateBookingInReservationWindow(
+async function longAbsenceCandidateForDate(
+  profile: MemberProfileDoc,
+  sourceDate: string,
+  bookingIndex: BookingIndex,
+): Promise<AlimtalkCandidateDoc | null> {
+  if (sourceDate < LONG_ABSENCE_ALIMTALK_START_DATE) return null;
+  if (!profile.memberId || !profile.name || !profile.phone) return null;
+  if (ALIMTALK_MEMBER_EXCLUSION_REASONS[profile.memberId]) return null;
+  if (hasHoldingTicket(profile)) return null;
+  const activeTickets = activeProfileTickets(profile, sourceDate);
+  if (!activeTickets.length) return null;
+  const lastAttendance = lastAttendedBooking(profile.memberId, sourceDate, bookingIndex);
+  if (!lastAttendance) return null;
+  const absenceDays = daysBetweenDateStrings(lastAttendance.lectureDate, sourceDate);
+  if (!Number.isFinite(absenceDays) || absenceDays < 7) return null;
+  const primaryTicket = activeTickets[0];
+  return {
+    candidateId: `long_absence_${profile.memberId}_${sourceDate}`,
+    studioId: profile.studioId,
+    memberId: profile.memberId,
+    memberName: profile.name,
+    memberPhone: profile.phone,
+    type: "long_absence",
+    status: "candidate",
+    templateCode: CANDIDATE_TEMPLATE_CODES.long_absence,
+    title: "장기 미방문",
+    reason: `마지막 출석 ${lastAttendance.lectureDate} · ${absenceDays}일`,
+    sourceDate,
+    payload: {
+      memberName: profile.name,
+      ticketName: primaryTicket.name || "",
+      activeTicketNames: activeTickets
+        .map((ticket) => ticket.name)
+        .filter(Boolean)
+        .join(", "),
+      absenceDays: String(absenceDays),
+      daysSinceLastVisit: String(absenceDays),
+      lastAttendanceDate: lastAttendance.lectureDate,
+      lastAttendanceDateText: formatKoreanDateText(lastAttendance.lectureDate),
+      bookingId: lastAttendance.bookingId || "",
+      lectureId: lastAttendance.lectureId || "",
+    },
+    attempts: 0,
+    maxAttempts: 2,
+    lastError: null,
+    createdAt: nowTimestamp(),
+    updatedAt: nowTimestamp(),
+  };
+}
+
+function lastAttendedBooking(memberId: string, sourceDate: string, bookingIndex: BookingIndex): BookingDoc | null {
+  const attended = memberBookings(bookingIndex, memberId)
+    .filter(
+      (booking) =>
+        booking.attendanceStatus === "attended" &&
+        booking.lectureDate &&
+        booking.lectureDate <= sourceDate &&
+        !isInstructorLessonBooking(booking),
+    )
+    .sort((a, b) => {
+      if (a.lectureDate !== b.lectureDate) return b.lectureDate.localeCompare(a.lectureDate);
+      return (b.lectureStartAt?.toMillis() || 0) - (a.lectureStartAt?.toMillis() || 0);
+    });
+  return attended[0] || null;
+}
+
+function firstUpcomingPrivateBookingInReservationWindow(
   memberId: string,
   sourceDate: string,
-): Promise<BookingDoc | null> {
+  bookingIndex: BookingIndex,
+): BookingDoc | null {
   const endDate = reservationOpenEndDate(sourceDate);
-  const snap = await refs.bookings().where("memberId", "==", memberId).get();
-  const bookings = snap.docs
-    .map((doc) => doc.data())
+  const bookings = memberBookings(bookingIndex, memberId)
     .filter(
       (booking) =>
         booking.appStatus === "reserved" &&
@@ -422,17 +516,18 @@ function isRecentSurveyResponse(response: {
   return Date.now() - responseMs < oneYearMs;
 }
 
-async function hasAttendedPrivateBookingOnOrBefore(memberId: string, sourceDate: string): Promise<boolean> {
-  const snap = await refs.bookings().where("memberId", "==", memberId).get();
-  return snap.docs
-    .map((doc) => doc.data())
-    .some(
+function hasAttendedPrivateBookingOnOrBefore(
+  memberId: string,
+  sourceDate: string,
+  bookingIndex: BookingIndex,
+): boolean {
+  return memberBookings(bookingIndex, memberId).some(
       (booking) =>
         booking.appStatus === "reserved" &&
         booking.lectureDate <= sourceDate &&
         booking.attendanceStatus === "attended" &&
         isPrivateBookingTicket(booking),
-    );
+  );
 }
 
 function isPrivateBookingTicket(booking: BookingDoc): boolean {
@@ -540,6 +635,10 @@ function hasOtherActiveTicket(
   return activeProfileTickets(profile, sourceDate).some((ticket) => profileTicketIdentity(ticket) !== targetKey);
 }
 
+function hasHoldingTicket(profile: MemberProfileDoc | undefined): boolean {
+  return Boolean(profile?.ticketStatusSummary?.hasHoldingTicket);
+}
+
 function activeProfileTickets(
   profile: MemberProfileDoc | undefined,
   sourceDate: string,
@@ -604,6 +703,27 @@ function formatKoreanDate(value: NonNullable<MemberProfileDoc["activeTickets"]>[
   })
     .format(date)
     .replace(/\s/g, " ");
+}
+
+function formatKoreanDateText(value: string): string {
+  if (!value) return "";
+  const date = new Date(`${value}T00:00:00+09:00`);
+  if (Number.isNaN(date.getTime())) return value;
+  return new Intl.DateTimeFormat("ko-KR", {
+    timeZone: "Asia/Seoul",
+    year: "numeric",
+    month: "numeric",
+    day: "numeric",
+  })
+    .format(date)
+    .replace(/\s/g, " ");
+}
+
+function daysBetweenDateStrings(startDate: string, endDate: string): number {
+  const start = new Date(`${startDate}T00:00:00+09:00`).getTime();
+  const end = new Date(`${endDate}T00:00:00+09:00`).getTime();
+  if (!Number.isFinite(start) || !Number.isFinite(end)) return Number.NaN;
+  return Math.floor((end - start) / (24 * 60 * 60 * 1000));
 }
 
 function remainingDays(
