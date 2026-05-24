@@ -2,7 +2,7 @@ import { logger } from "firebase-functions";
 import { DEFAULT_STUDIO_ID } from "../config/constants";
 import { db } from "../config/firebase";
 import { refs } from "../firestore/refs";
-import type { AlimtalkCandidateDoc } from "../types/models";
+import type { AlimtalkCandidateDoc, AlimtalkCandidateType } from "../types/models";
 import { nowTimestamp, todayKst } from "../utils/date";
 import { autoSendabilityIssue } from "./eligibility";
 import { rebuildAlimtalkCandidatesForRange } from "./rebuildAlimtalkCandidates";
@@ -12,6 +12,10 @@ export async function queueDailyAlimtalkCandidates(
   input: {
     studioId?: string;
     today?: string;
+    includeTypes?: AlimtalkCandidateType[];
+    excludeTypes?: AlimtalkCandidateType[];
+    approvalScope?: string;
+    reviewedByUid?: string;
   } = {},
 ): Promise<{ rebuilt: number; queued: number; blocked: number; approvalRequired?: boolean; approvalId?: string }> {
   const studioId = input.studioId || DEFAULT_STUDIO_ID;
@@ -21,7 +25,9 @@ export async function queueDailyAlimtalkCandidates(
     startDate: today,
     endDate: today,
   });
-  const candidates = await listRebuiltCandidates(rebuilt.candidateIds, studioId);
+  const candidates = (await listRebuiltCandidates(rebuilt.candidateIds, studioId)).filter((candidate) =>
+    candidateTypeIncluded(candidate, input),
+  );
 
   const sendable: AlimtalkCandidateDoc[] = [];
   let blocked = 0;
@@ -36,7 +42,12 @@ export async function queueDailyAlimtalkCandidates(
     sendable.push(candidate);
   }
 
-  const approval = await requireApprovalForLargeAlimtalkBatch({ studioId, today, candidates: sendable });
+  const approval = await requireApprovalForLargeAlimtalkBatch({
+    studioId,
+    today,
+    candidates: sendable,
+    scope: input.approvalScope,
+  });
   if (approval.required && !approval.approved) {
     logger.info("queueDailyAlimtalkCandidates awaiting approval", {
       studioId,
@@ -58,7 +69,7 @@ export async function queueDailyAlimtalkCandidates(
 
   let queued = 0;
   for (const candidate of sendable) {
-    const didQueue = await queueCandidate(candidate, today);
+    const didQueue = await queueCandidate(candidate, today, input.reviewedByUid || "system:auto-daily-1130");
     if (didQueue) queued += 1;
   }
 
@@ -78,6 +89,15 @@ export async function queueDailyAlimtalkCandidates(
   };
 }
 
+function candidateTypeIncluded(
+  candidate: AlimtalkCandidateDoc,
+  input: { includeTypes?: AlimtalkCandidateType[]; excludeTypes?: AlimtalkCandidateType[] },
+): boolean {
+  if (input.includeTypes?.length && !input.includeTypes.includes(candidate.type)) return false;
+  if (input.excludeTypes?.includes(candidate.type)) return false;
+  return true;
+}
+
 async function listRebuiltCandidates(candidateIds: string[], studioId: string): Promise<AlimtalkCandidateDoc[]> {
   const uniqueIds = [...new Set(candidateIds)];
   const snaps = await Promise.all(uniqueIds.map((candidateId) => refs.alimtalkCandidate(candidateId).get()));
@@ -86,7 +106,7 @@ async function listRebuiltCandidates(candidateIds: string[], studioId: string): 
     .filter((candidate): candidate is AlimtalkCandidateDoc => Boolean(candidate && candidate.studioId === studioId));
 }
 
-async function queueCandidate(candidate: AlimtalkCandidateDoc, today: string): Promise<boolean> {
+async function queueCandidate(candidate: AlimtalkCandidateDoc, today: string, reviewedByUid: string): Promise<boolean> {
   if (await autoSendabilityIssue(candidate, today)) return false;
   return db.runTransaction(async (tx) => {
     const ref = refs.alimtalkCandidate(candidate.candidateId);
@@ -100,7 +120,7 @@ async function queueCandidate(candidate: AlimtalkCandidateDoc, today: string): P
       {
         status: "queued",
         queuedBy: "auto",
-        reviewedByUid: "system:auto-daily-1130",
+        reviewedByUid,
         reviewedAt: nowTimestamp(),
         attempts: current.attempts || 0,
         maxAttempts: current.maxAttempts || 2,

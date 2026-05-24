@@ -27,6 +27,7 @@ interface ApprovalDoc {
   approvalId: string;
   studioId: string;
   sourceDate: string;
+  scope?: string;
   status: "pending" | "approved";
   candidateIds: string[];
   candidateCount: number;
@@ -42,9 +43,10 @@ export async function requireApprovalForLargeAlimtalkBatch(input: {
   studioId: string;
   today: string;
   candidates: AlimtalkCandidateDoc[];
+  scope?: string;
 }): Promise<AlimtalkApprovalResult> {
   if (input.candidates.length < APPROVAL_THRESHOLD) return { required: false, approved: true };
-  const approvalId = dailyApprovalId(input.studioId, input.today);
+  const approvalId = dailyApprovalId(input.studioId, input.today, input.scope);
   const ref = db.collection(APPROVAL_COLLECTION).doc(approvalId);
   const existing = (await ref.get()).data() as ApprovalDoc | undefined;
   if (existing?.status === "approved") return { required: true, approved: true, approvalId };
@@ -58,6 +60,7 @@ export async function requireApprovalForLargeAlimtalkBatch(input: {
         approvalId,
         studioId: input.studioId,
         sourceDate: input.today,
+        scope: input.scope || "daily",
         status: "pending",
         candidateIds: input.candidates.map((candidate) => candidate.candidateId),
         candidateCount: input.candidates.length,
@@ -238,8 +241,8 @@ function approvalHtml(input: { date: string; count: number; lines: string[]; app
   ].join("");
 }
 
-function dailyApprovalId(studioId: string, date: string): string {
-  return `${studioId}_${date}`;
+function dailyApprovalId(studioId: string, date: string, scope = "daily"): string {
+  return `${studioId}_${date}_${scope}`;
 }
 
 function tokenHash(value: string): string {
@@ -248,6 +251,7 @@ function tokenHash(value: string): string {
 
 function templateLabel(type: string): string {
   const labels: Record<string, string> = {
+    reservation_open: "예약오픈 안내",
     new_member: "신규회원 웰컴",
     private_survey: "프라이빗 사전설문",
     group_survey: "그룹 첫 수업 사전확인",

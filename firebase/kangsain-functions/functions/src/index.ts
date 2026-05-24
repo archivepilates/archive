@@ -133,7 +133,11 @@ export const scheduledQueueAndSendAlimtalkDaily = onSchedule(
   },
   async () => {
     await syncAlimtalkTemplateStatuses();
-    const queueSummary = await queueDailyAlimtalkCandidates();
+    const queueSummary = await queueDailyAlimtalkCandidates({
+      excludeTypes: ["reservation_open"],
+      approvalScope: "daily",
+      reviewedByUid: "system:auto-daily-1130",
+    });
     const processSummary = { processed: 0, sent: 0, failed: 0 };
     for (let index = 0; index < 10; index += 1) {
       const result = await processAlimtalkQueue();
@@ -147,6 +151,35 @@ export const scheduledQueueAndSendAlimtalkDaily = onSchedule(
     } catch (err) {
       const message = err instanceof Error ? err.message : String(err);
       logger.error("scheduledQueueAndSendAlimtalkDaily report failed", { message });
+    }
+  },
+);
+
+export const scheduledQueueReservationOpenAlimtalk = onSchedule(
+  {
+    ...scheduleOptions,
+    schedule: "30 12 * * 1",
+  },
+  async () => {
+    await syncAlimtalkTemplateStatuses();
+    const queueSummary = await queueDailyAlimtalkCandidates({
+      includeTypes: ["reservation_open"],
+      approvalScope: "reservation_open",
+      reviewedByUid: "system:auto-reservation-open-1230",
+    });
+    const processSummary = { processed: 0, sent: 0, failed: 0 };
+    for (let index = 0; index < 10; index += 1) {
+      const result = await processAlimtalkQueue();
+      processSummary.processed += result.processed;
+      processSummary.sent += result.sent;
+      processSummary.failed += result.failed;
+      if (!result.processed) break;
+    }
+    try {
+      await sendDailyAlimtalkReport({ queueSummary, processSummary });
+    } catch (err) {
+      const message = err instanceof Error ? err.message : String(err);
+      logger.error("scheduledQueueReservationOpenAlimtalk report failed", { message });
     }
   },
 );
