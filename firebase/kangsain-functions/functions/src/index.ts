@@ -44,7 +44,6 @@ import {
   syncPrivateSurveyResponsesFromSheet,
 } from "./privateSurvey/privateSurveyResponse";
 import { receiveInBodyWebhookHandler } from "./inbody/inbodyWebhook";
-import { inbodyWebhookSecret } from "./config/secrets";
 
 const callableOptions = { region: REGION, secrets: allSecrets, invoker: "public" as const };
 const longCallableOptions = { ...callableOptions, timeoutSeconds: 540, memory: "512MiB" as const };
@@ -233,15 +232,18 @@ export const syncDashboardNow = onRequest(longRequestOptions, async (request, re
   }
 });
 
-export const ingestPrivateSurveyResponse = onRequest(privateSurveyIngestOptions, ingestPrivateSurveyResponseHandler);
+function isInBodyWebhookRequest(request: any): boolean {
+  const path = String(request.path || request.originalUrl || request.url || "");
+  return path.includes("/api/inbody/webhook") || Boolean(request.get?.("x-archive-inbody-secret"));
+}
 
-export const receiveInBodyWebhook = onRequest(
-  {
-    ...publicRequestOptions,
-    secrets: [inbodyWebhookSecret],
-  },
-  receiveInBodyWebhookHandler,
-);
+export const ingestPrivateSurveyResponse = onRequest(privateSurveyIngestOptions, async (request, response) => {
+  if (isInBodyWebhookRequest(request)) {
+    await receiveInBodyWebhookHandler(request, response);
+    return;
+  }
+  await ingestPrivateSurveyResponseHandler(request, response);
+});
 
 export const privateSurveyResponseView = onRequest(publicRequestOptions, privateSurveyResponseViewHandler);
 
