@@ -167,6 +167,13 @@
           }
         },
         {
+          "source": "/api/inbody/webhook",
+          "function": {
+            "functionId": "receiveInBodyWebhook",
+            "region": "asia-northeast3"
+          }
+        },
+        {
           "source": "/s/**",
           "function": {
             "functionId": "redirectShortLink",
