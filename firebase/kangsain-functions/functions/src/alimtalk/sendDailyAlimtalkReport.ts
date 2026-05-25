@@ -36,12 +36,13 @@ export async function sendDailyAlimtalkReport(input: {
     candidates,
     surveyStats,
   });
-  const status = reportStatus(input.processSummary, surveyStats);
+  const status = reportStatus(input.processSummary, candidates, surveyStats);
+  const statusLabel = reportStatusLabel(status);
   const title = `ARCHIVE IN 알림톡 발송 로그 ${date}`;
   const document = await createAlimtalkLogDocument({ title, body });
   const emailBody = `${body}\n\n구글드라이브 로그 문서\n${document.url}\n`;
   await sendAlimtalkLogEmail({
-    subject: `[알림톡][${status === "failure" ? "실패" : "성공"}] 발송 로그 ${date}`,
+    subject: `[알림톡][${statusLabel}] 발송 로그 ${date}`,
     body: emailBody,
     status,
   });
@@ -56,9 +57,18 @@ export async function sendDailyAlimtalkReport(input: {
 
 function reportStatus(
   processSummary: ProcessSummary,
+  candidates: AlimtalkCandidateDoc[],
   surveyStats: { submitted: number; staffSent: number; memoFailed: number },
-): "success" | "failure" {
-  return processSummary.failed > 0 || surveyStats.memoFailed > 0 ? "failure" : "success";
+): "success" | "failure" | "attention" {
+  if (processSummary.failed > 0 || candidates.some((candidate) => candidate.status === "failed")) return "failure";
+  if (surveyStats.memoFailed > 0) return "attention";
+  return "success";
+}
+
+function reportStatusLabel(status: "success" | "failure" | "attention"): string {
+  if (status === "failure") return "실패";
+  if (status === "attention") return "확인필요";
+  return "성공";
 }
 
 async function listDailyCandidates(studioId: string, date: string): Promise<AlimtalkCandidateDoc[]> {
