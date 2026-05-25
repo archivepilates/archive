@@ -24,6 +24,8 @@ export async function queueDailyAlimtalkCandidates(
     studioId,
     startDate: today,
     endDate: today,
+    includeTypes: input.includeTypes,
+    excludeTypes: input.excludeTypes,
   });
   const candidates = (await listRebuiltCandidates(rebuilt.candidateIds, studioId)).filter((candidate) =>
     candidateTypeIncluded(candidate, input),

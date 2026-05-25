@@ -1,6 +1,6 @@
 import { createHash, createHmac } from "node:crypto";
 import { logger } from "firebase-functions";
-import type { AlimtalkCandidateDoc, BookingDoc, MemberProfileDoc } from "../types/models";
+import type { AlimtalkCandidateDoc, AlimtalkCandidateType, BookingDoc, MemberProfileDoc } from "../types/models";
 import { db } from "../config/firebase";
 import { privateSurveyWebhookSecret } from "../config/secrets";
 import { refs } from "../firestore/refs";
@@ -24,6 +24,8 @@ export async function rebuildAlimtalkCandidatesForRange(input: {
   studioId: string;
   startDate: string;
   endDate: string;
+  includeTypes?: AlimtalkCandidateType[];
+  excludeTypes?: AlimtalkCandidateType[];
 }): Promise<{ candidates: number; candidateIds: string[] }> {
   const [profilesSnap, bookingIndex] = await Promise.all([
     refs.memberProfiles().where("studioId", "==", input.studioId).get(),
@@ -35,71 +37,83 @@ export async function rebuildAlimtalkCandidatesForRange(input: {
   const profiles = profilesSnap.docs.map((snap) => snap.data());
   for (const sourceDate of dateRange(input.startDate, input.endDate)) {
     for (const profile of profiles) {
-      const reservationOpenCandidate = reservationOpenCandidateForDate(profile, sourceDate);
-      if (reservationOpenCandidate) {
-        await enqueueSendableCandidate(reservationOpenCandidate, candidateIds, writes);
+      if (shouldBuildCandidateType("reservation_open", input)) {
+        const reservationOpenCandidate = reservationOpenCandidateForDate(profile, sourceDate);
+        if (reservationOpenCandidate) {
+          await enqueueSendableCandidate(reservationOpenCandidate, candidateIds, writes);
+        }
       }
-      for (const candidate of directTicketCandidates(profile, sourceDate)) {
+      for (const candidate of directTicketCandidates(profile, sourceDate).filter((item) =>
+        shouldBuildCandidateType(item.type, input),
+      )) {
         await enqueueSendableCandidate(candidate, candidateIds, writes);
       }
-      const privateSurveyCandidate = await privateSurveyCandidateForDate(profile, sourceDate, bookingIndex);
-      if (privateSurveyCandidate) {
-        await enqueueSendableCandidate(privateSurveyCandidate, candidateIds, writes);
+      if (shouldBuildCandidateType("private_survey", input)) {
+        const privateSurveyCandidate = await privateSurveyCandidateForDate(profile, sourceDate, bookingIndex);
+        if (privateSurveyCandidate) {
+          await enqueueSendableCandidate(privateSurveyCandidate, candidateIds, writes);
+        }
       }
-      const groupSurveyCandidate = await groupSurveyCandidateForDate(profile, sourceDate, bookingIndex);
-      if (groupSurveyCandidate) {
-        const enqueued = await enqueueSendableCandidate(groupSurveyCandidate, candidateIds, writes);
-        if (enqueued) writes.push(upsertGroupSurveyRequest(groupSurveyCandidate));
+      if (shouldBuildCandidateType("group_survey", input)) {
+        const groupSurveyCandidate = await groupSurveyCandidateForDate(profile, sourceDate, bookingIndex);
+        if (groupSurveyCandidate) {
+          const enqueued = await enqueueSendableCandidate(groupSurveyCandidate, candidateIds, writes);
+          if (enqueued) writes.push(upsertGroupSurveyRequest(groupSurveyCandidate));
+        }
       }
-      const longAbsenceCandidate = await longAbsenceCandidateForDate(profile, sourceDate, bookingIndex);
-      if (longAbsenceCandidate) {
-        await enqueueSendableCandidate(longAbsenceCandidate, candidateIds, writes);
+      if (shouldBuildCandidateType("long_absence", input)) {
+        const longAbsenceCandidate = await longAbsenceCandidateForDate(profile, sourceDate, bookingIndex);
+        if (longAbsenceCandidate) {
+          await enqueueSendableCandidate(longAbsenceCandidate, candidateIds, writes);
+        }
       }
     }
   }
 
-  for (const profile of profiles.filter(
-    (profile) =>
-      profile.isNewMember &&
-      !ALIMTALK_MEMBER_EXCLUSION_REASONS[profile.memberId] &&
-      activeProfileTickets(profile, input.endDate).length > 0 &&
-      registeredDate(profile) >= NEW_MEMBER_ALIMTALK_START_DATE &&
-      registeredDate(profile) >= newMemberWindowStartDate(input.endDate) &&
-      registeredDate(profile) <= input.endDate,
-  )) {
-    const sourceDate = registeredDate(profile);
-    if (!sourceDate || !profile.phone) continue;
-    const candidateId = `new_member_${profile.memberId}_${sourceDate}`;
-    await enqueueSendableCandidate(
-      {
-        candidateId,
-        studioId: profile.studioId,
-        memberId: profile.memberId,
-        memberName: profile.name,
-        memberPhone: profile.phone,
-        type: "new_member",
-        status: "candidate",
-        templateCode: CANDIDATE_TEMPLATE_CODES.new_member,
-        title: "신규회원",
-        reason: `최초등록 ${sourceDate}`,
-        sourceDate,
-        payload: {
+  if (shouldBuildCandidateType("new_member", input)) {
+    for (const profile of profiles.filter(
+      (profile) =>
+        profile.isNewMember &&
+        !ALIMTALK_MEMBER_EXCLUSION_REASONS[profile.memberId] &&
+        activeProfileTickets(profile, input.endDate).length > 0 &&
+        registeredDate(profile) >= NEW_MEMBER_ALIMTALK_START_DATE &&
+        registeredDate(profile) >= newMemberWindowStartDate(input.endDate) &&
+        registeredDate(profile) <= input.endDate,
+    )) {
+      const sourceDate = registeredDate(profile);
+      if (!sourceDate || !profile.phone) continue;
+      const candidateId = `new_member_${profile.memberId}_${sourceDate}`;
+      await enqueueSendableCandidate(
+        {
+          candidateId,
+          studioId: profile.studioId,
+          memberId: profile.memberId,
           memberName: profile.name,
-          registeredDate: sourceDate,
-          activeTicketNames: activeProfileTickets(profile, input.endDate)
-            .map((ticket) => ticket.name)
-            .filter(Boolean)
-            .join(", "),
+          memberPhone: profile.phone,
+          type: "new_member",
+          status: "candidate",
+          templateCode: CANDIDATE_TEMPLATE_CODES.new_member,
+          title: "신규회원",
+          reason: `최초등록 ${sourceDate}`,
+          sourceDate,
+          payload: {
+            memberName: profile.name,
+            registeredDate: sourceDate,
+            activeTicketNames: activeProfileTickets(profile, input.endDate)
+              .map((ticket) => ticket.name)
+              .filter(Boolean)
+              .join(", "),
+          },
+          attempts: 0,
+          maxAttempts: 2,
+          lastError: null,
+          createdAt: nowTimestamp(),
+          updatedAt: nowTimestamp(),
         },
-        attempts: 0,
-        maxAttempts: 2,
-        lastError: null,
-        createdAt: nowTimestamp(),
-        updatedAt: nowTimestamp(),
-      },
-      candidateIds,
-      writes,
-    );
+        candidateIds,
+        writes,
+      );
+    }
   }
 
   await Promise.all(writes);
@@ -108,6 +122,8 @@ export async function rebuildAlimtalkCandidatesForRange(input: {
     startDate: input.startDate,
     endDate: input.endDate,
     currentCandidateIds: new Set(candidateIds),
+    includeTypes: input.includeTypes,
+    excludeTypes: input.excludeTypes,
   });
   logger.info("rebuildAlimtalkCandidatesForRange completed", {
     studioId: input.studioId,
@@ -117,6 +133,15 @@ export async function rebuildAlimtalkCandidatesForRange(input: {
 }
 
 type BookingIndex = Map<string, BookingDoc[]>;
+
+function shouldBuildCandidateType(
+  type: AlimtalkCandidateType,
+  input: { includeTypes?: AlimtalkCandidateType[]; excludeTypes?: AlimtalkCandidateType[] },
+): boolean {
+  if (input.includeTypes?.length && !input.includeTypes.includes(type)) return false;
+  if (input.excludeTypes?.includes(type)) return false;
+  return true;
+}
 
 async function loadBookingIndex(studioId: string): Promise<BookingIndex> {
   const snap = await refs.bookings().where("studioId", "==", studioId).get();
@@ -140,6 +165,8 @@ async function markStaleCandidatesSkipped(input: {
   startDate: string;
   endDate: string;
   currentCandidateIds: Set<string>;
+  includeTypes?: AlimtalkCandidateType[];
+  excludeTypes?: AlimtalkCandidateType[];
 }): Promise<void> {
   const writes: Array<Promise<unknown>> = [];
   for (const sourceDate of dateRange(input.startDate, input.endDate)) {
@@ -147,6 +174,7 @@ async function markStaleCandidatesSkipped(input: {
     snap.docs.forEach((doc) => {
       const candidate = doc.data();
       if (candidate.studioId !== input.studioId) return;
+      if (!shouldBuildCandidateType(candidate.type, input)) return;
       if (input.currentCandidateIds.has(candidate.candidateId)) return;
       if (!["candidate", "reviewed", "failed"].includes(candidate.status)) return;
       writes.push(

@@ -68,7 +68,7 @@ export const ALIMTALK_TEMPLATES = {
   long_absence: {
     code: "KA01TP260524083643752cySb9BoDOjN",
     label: "장기 미방문 수업안내 v1",
-    status: "pending",
+    status: "inspecting",
   },
   staff_private_survey: {
     code: "KA01TP260519093416836f1EHZYJ00uM",
