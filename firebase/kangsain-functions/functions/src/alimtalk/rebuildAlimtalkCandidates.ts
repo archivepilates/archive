@@ -833,14 +833,17 @@ function reservationOpenEndDate(baseDate: string): string {
 async function upsertCandidate(candidate: AlimtalkCandidateDoc): Promise<void> {
   const ref = refs.alimtalkCandidate(candidate.candidateId);
   const previous = (await ref.get()).data();
-  if (previous && ["queued", "sent", "skipped"].includes(previous.status)) {
+  if (previous && ["queued", "sent"].includes(previous.status)) {
     await ref.set({ updatedAt: nowTimestamp() }, { merge: true });
     return;
   }
+  const shouldRestoreStaleSkip =
+    previous?.status === "skipped" && previous.lastError === "현재 수강권 상태 재계산 결과 발송 대상 아님";
   await ref.set(
     {
       ...candidate,
-      status: previous?.status || candidate.status,
+      status: shouldRestoreStaleSkip ? candidate.status : previous?.status || candidate.status,
+      lastError: shouldRestoreStaleSkip ? candidate.lastError : previous?.lastError || candidate.lastError,
       createdAt: previous?.createdAt || candidate.createdAt,
       updatedAt: nowTimestamp(),
     },
