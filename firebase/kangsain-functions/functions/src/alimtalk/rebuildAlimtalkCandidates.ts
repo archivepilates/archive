@@ -221,10 +221,11 @@ function reservationOpenCandidateForDate(profile: MemberProfileDoc, sourceDate: 
   if (!isMondayDate(sourceDate)) return null;
   if (!profile.memberId || !profile.name || !profile.phone) return null;
   if (ALIMTALK_MEMBER_EXCLUSION_REASONS[profile.memberId]) return null;
-  const groupTickets = activeGroupProfileTickets(profile, sourceDate);
+  const weekStartDate = addDays(sourceDate, 7);
+  const weekEndDate = addDays(weekStartDate, 6);
+  const groupTickets = activeGroupProfileTicketsForReservationWindow(profile, weekStartDate, weekEndDate);
   if (!groupTickets.length) return null;
   const reservationWeek = reservationOpenWeekLabel(sourceDate);
-  const weekStartDate = addDays(sourceDate, 7);
   return {
     candidateId: `reservation_open_${profile.memberId}_${weekStartDate}`,
     studioId: profile.studioId,
@@ -717,6 +718,23 @@ function activeGroupProfileTickets(
   return activeProfileTickets(profile, sourceDate).filter((ticket) => !isPrivateProfileTicket(ticket));
 }
 
+function activeGroupProfileTicketsForReservationWindow(
+  profile: MemberProfileDoc | undefined,
+  weekStartDate: string,
+  weekEndDate: string,
+): NonNullable<MemberProfileDoc["activeTickets"]> {
+  return (profile?.activeTickets || []).filter((ticket) => {
+    if (!ticket.name) return false;
+    if (!isLessonProfileTicket(ticket)) return false;
+    if (isPrivateProfileTicket(ticket)) return false;
+    if (ticket.expiryLevel === "expired") return false;
+    if (ticket.availableFrom && expiryDateText(ticket.availableFrom) > weekEndDate) return false;
+    if (ticket.expiresAt && expiryDateText(ticket.expiresAt) < weekStartDate) return false;
+    const remaining = ticket.remainingCount == null ? Number.NaN : Number(ticket.remainingCount);
+    return !Number.isFinite(remaining) || remaining > 0;
+  });
+}
+
 function activeProfileTickets(
   profile: MemberProfileDoc | undefined,
   sourceDate: string,
@@ -731,6 +749,7 @@ function isActiveProfileTicket(
   if (!ticket.name) return false;
   if (!isLessonProfileTicket(ticket)) return false;
   if (ticket.expiryLevel === "expired") return false;
+  if (ticket.availableFrom && expiryDateText(ticket.availableFrom) > sourceDate) return false;
   if (ticket.expiresAt && expiryDateText(ticket.expiresAt) < sourceDate) return false;
   const remaining = ticket.remainingCount == null ? Number.NaN : Number(ticket.remainingCount);
   return !Number.isFinite(remaining) || remaining > 0;
