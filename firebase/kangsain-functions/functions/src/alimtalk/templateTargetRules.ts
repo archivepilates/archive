@@ -230,7 +230,7 @@ export const ALIMTALK_TEMPLATE_TARGET_RULES: Partial<Record<AlimtalkCandidateTyp
     requiresMemberPhone: true,
     targetRules: [
       "활성 수업 수강권 보유",
-      "마지막 출석 완료일이 발송 기준일로부터 10일 이상 지남",
+      "회원목록 엑셀 최근출석일 또는 예약 출석 완료일 중 더 최신값이 발송 기준일로부터 10일 이상 지남",
       "마지막 출석일과 보유 수강권명이 변수로 있음",
     ],
     exclusionRules: [

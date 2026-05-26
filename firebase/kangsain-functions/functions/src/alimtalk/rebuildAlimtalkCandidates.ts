@@ -136,6 +136,13 @@ type BookingIndex = Map<string, BookingDoc[]>;
 
 const LONG_ABSENCE_MIN_DAYS = 10;
 
+type LongAbsenceLastAttendance = {
+  date: string;
+  source: string;
+  bookingId?: string;
+  lectureId?: string;
+};
+
 function shouldBuildCandidateType(
   type: AlimtalkCandidateType,
   input: { includeTypes?: AlimtalkCandidateType[]; excludeTypes?: AlimtalkCandidateType[] },
@@ -491,9 +498,9 @@ async function longAbsenceCandidateForDate(
   const activeTickets = activeProfileTickets(profile, sourceDate);
   if (!activeTickets.length) return null;
   if (hasUpcomingReservedBookingOnOrAfter(profile.memberId, sourceDate, bookingIndex)) return null;
-  const lastAttendance = lastAttendedBooking(profile.memberId, sourceDate, bookingIndex);
+  const lastAttendance = lastAttendanceForLongAbsence(profile, sourceDate, bookingIndex);
   if (!lastAttendance) return null;
-  const absenceDays = daysBetweenDateStrings(lastAttendance.lectureDate, sourceDate);
+  const absenceDays = daysBetweenDateStrings(lastAttendance.date, sourceDate);
   if (!Number.isFinite(absenceDays) || absenceDays < LONG_ABSENCE_MIN_DAYS) return null;
   const primaryTicket = activeTickets[0];
   return {
@@ -506,7 +513,7 @@ async function longAbsenceCandidateForDate(
     status: "candidate",
     templateCode: CANDIDATE_TEMPLATE_CODES.long_absence,
     title: "장기 미방문",
-    reason: `마지막 출석 ${lastAttendance.lectureDate} · ${absenceDays}일`,
+    reason: `마지막 출석 ${lastAttendance.date} · ${absenceDays}일`,
     sourceDate,
     payload: {
       memberName: profile.name,
@@ -517,8 +524,9 @@ async function longAbsenceCandidateForDate(
         .join(", "),
       absenceDays: String(absenceDays),
       daysSinceLastVisit: String(absenceDays),
-      lastAttendanceDate: lastAttendance.lectureDate,
-      lastAttendanceDateText: formatKoreanDateText(lastAttendance.lectureDate),
+      lastAttendanceDate: lastAttendance.date,
+      lastAttendanceDateText: formatKoreanDateText(lastAttendance.date),
+      lastAttendanceSource: lastAttendance.source,
       bookingId: lastAttendance.bookingId || "",
       lectureId: lastAttendance.lectureId || "",
     },
@@ -528,6 +536,29 @@ async function longAbsenceCandidateForDate(
     createdAt: nowTimestamp(),
     updatedAt: nowTimestamp(),
   };
+}
+
+function lastAttendanceForLongAbsence(
+  profile: MemberProfileDoc,
+  sourceDate: string,
+  bookingIndex: BookingIndex,
+): LongAbsenceLastAttendance | null {
+  const profileLastAttendance = normalizedDateText(profile.emergencyLastAttendance || "");
+  const bookingLastAttendance = lastAttendedBooking(profile.memberId, sourceDate, bookingIndex);
+  const bookingDate = normalizedDateText(bookingLastAttendance?.lectureDate || "");
+  const candidates: LongAbsenceLastAttendance[] = [];
+  if (profileLastAttendance && profileLastAttendance <= sourceDate) {
+    candidates.push({ date: profileLastAttendance, source: "memberProfiles.emergencyLastAttendance" });
+  }
+  if (bookingDate && bookingDate <= sourceDate) {
+    candidates.push({
+      date: bookingDate,
+      source: "bookings.attendanceStatus",
+      bookingId: bookingLastAttendance?.bookingId || "",
+      lectureId: bookingLastAttendance?.lectureId || "",
+    });
+  }
+  return candidates.sort((a, b) => b.date.localeCompare(a.date))[0] || null;
 }
 
 function lastAttendedBooking(memberId: string, sourceDate: string, bookingIndex: BookingIndex): BookingDoc | null {
@@ -827,6 +858,15 @@ function formatKoreanDateText(value: string): string {
   })
     .format(date)
     .replace(/\s/g, " ");
+}
+
+function normalizedDateText(value: string): string {
+  const text = String(value || "").trim();
+  if (!text) return "";
+  const match = text.match(/(\d{4})[-./년\s]*(\d{1,2})[-./월\s]*(\d{1,2})/);
+  if (!match) return "";
+  const [, year, month, day] = match;
+  return `${year}-${month.padStart(2, "0")}-${day.padStart(2, "0")}`;
 }
 
 function daysBetweenDateStrings(startDate: string, endDate: string): number {
