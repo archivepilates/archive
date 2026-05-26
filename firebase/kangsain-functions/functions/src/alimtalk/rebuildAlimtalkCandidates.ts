@@ -134,6 +134,8 @@ export async function rebuildAlimtalkCandidatesForRange(input: {
 
 type BookingIndex = Map<string, BookingDoc[]>;
 
+const LONG_ABSENCE_MIN_DAYS = 10;
+
 function shouldBuildCandidateType(
   type: AlimtalkCandidateType,
   input: { includeTypes?: AlimtalkCandidateType[]; excludeTypes?: AlimtalkCandidateType[] },
@@ -488,10 +490,11 @@ async function longAbsenceCandidateForDate(
   if (hasHoldingTicket(profile)) return null;
   const activeTickets = activeProfileTickets(profile, sourceDate);
   if (!activeTickets.length) return null;
+  if (hasUpcomingReservedBookingOnOrAfter(profile.memberId, sourceDate, bookingIndex)) return null;
   const lastAttendance = lastAttendedBooking(profile.memberId, sourceDate, bookingIndex);
   if (!lastAttendance) return null;
   const absenceDays = daysBetweenDateStrings(lastAttendance.lectureDate, sourceDate);
-  if (!Number.isFinite(absenceDays) || absenceDays < 7) return null;
+  if (!Number.isFinite(absenceDays) || absenceDays < LONG_ABSENCE_MIN_DAYS) return null;
   const primaryTicket = activeTickets[0];
   return {
     candidateId: `long_absence_${profile.memberId}_${sourceDate}`,
@@ -541,6 +544,16 @@ function lastAttendedBooking(memberId: string, sourceDate: string, bookingIndex:
       return (b.lectureStartAt?.toMillis() || 0) - (a.lectureStartAt?.toMillis() || 0);
     });
   return attended[0] || null;
+}
+
+function hasUpcomingReservedBookingOnOrAfter(memberId: string, sourceDate: string, bookingIndex: BookingIndex): boolean {
+  return memberBookings(bookingIndex, memberId).some(
+    (booking) =>
+      booking.appStatus === "reserved" &&
+      booking.lectureDate &&
+      booking.lectureDate >= sourceDate &&
+      !isInstructorLessonBooking(booking),
+  );
 }
 
 function firstUpcomingPrivateBookingInReservationWindow(

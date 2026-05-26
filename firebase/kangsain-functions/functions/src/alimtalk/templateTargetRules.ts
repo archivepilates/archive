@@ -230,7 +230,7 @@ export const ALIMTALK_TEMPLATE_TARGET_RULES: Partial<Record<AlimtalkCandidateTyp
     requiresMemberPhone: true,
     targetRules: [
       "활성 수업 수강권 보유",
-      "마지막 출석 완료일이 발송 기준일로부터 7일 이상 지남",
+      "마지막 출석 완료일이 발송 기준일로부터 10일 이상 지남",
       "마지막 출석일과 보유 수강권명이 변수로 있음",
     ],
     exclusionRules: [
@@ -238,8 +238,9 @@ export const ALIMTALK_TEMPLATE_TARGET_RULES: Partial<Record<AlimtalkCandidateTyp
       "전화번호 없음",
       "활성 수업 수강권 없음",
       "수강권 정지중/중지/홀딩 상태",
+      "발송 기준일 당일 또는 이후 예정 예약이 있음",
       "출석 완료 이력 없음",
-      "마지막 출석 완료일이 7일 미만",
+      "마지막 출석 완료일이 10일 미만",
       "동일 회원 장기 미방문 안내 14일 내 발송 이력 있음",
       "SOLAPI 미승인 템플릿",
     ],
