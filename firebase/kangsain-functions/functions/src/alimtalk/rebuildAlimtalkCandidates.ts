@@ -4,6 +4,7 @@ import type { AlimtalkCandidateDoc, AlimtalkCandidateType, BookingDoc, MemberPro
 import { db } from "../config/firebase";
 import { privateSurveyWebhookSecret } from "../config/secrets";
 import { refs } from "../firestore/refs";
+import { isProtectedStaffContact } from "../sync/protectedContactRules";
 import { addDays, dateRange, nowTimestamp } from "../utils/date";
 import { stableHash } from "../utils/hash";
 import { shortLinkIdForTarget, shortUrlForId } from "../utils/shortLinks";
@@ -75,6 +76,7 @@ export async function rebuildAlimtalkCandidatesForRange(input: {
       (profile) =>
         profile.isNewMember &&
         !ALIMTALK_MEMBER_EXCLUSION_REASONS[profile.memberId] &&
+        !isProtectedStaffContact({ name: profile.name, phone: profile.phone }) &&
         activeProfileTickets(profile, input.endDate).length > 0 &&
         registeredDate(profile) >= NEW_MEMBER_ALIMTALK_START_DATE &&
         registeredDate(profile) >= newMemberWindowStartDate(input.endDate) &&
@@ -221,6 +223,7 @@ async function enqueueSendableCandidate(
 function directTicketCandidates(profile: MemberProfileDoc, sourceDate: string): AlimtalkCandidateDoc[] {
   if (!profile.memberId || !profile.name || !profile.phone) return [];
   if (ALIMTALK_MEMBER_EXCLUSION_REASONS[profile.memberId]) return [];
+  if (isProtectedStaffContact({ name: profile.name, phone: profile.phone })) return [];
   return activeProfileTickets(profile, sourceDate)
     .map((ticket) => directTicketCandidate(profile, ticket, sourceDate))
     .filter((candidate): candidate is AlimtalkCandidateDoc => Boolean(candidate));
@@ -230,6 +233,7 @@ function reservationOpenCandidateForDate(profile: MemberProfileDoc, sourceDate: 
   if (!isMondayDate(sourceDate)) return null;
   if (!profile.memberId || !profile.name || !profile.phone) return null;
   if (ALIMTALK_MEMBER_EXCLUSION_REASONS[profile.memberId]) return null;
+  if (isProtectedStaffContact({ name: profile.name, phone: profile.phone })) return null;
   const weekStartDate = addDays(sourceDate, 7);
   const weekEndDate = addDays(weekStartDate, 6);
   const groupTickets = activeGroupProfileTicketsForReservationWindow(profile, weekStartDate, weekEndDate);
@@ -274,6 +278,7 @@ async function groupSurveyCandidateForDate(
   if (sourceDate < GROUP_SURVEY_ALIMTALK_START_DATE) return null;
   if (!profile.memberId || !profile.name || !profile.phone) return null;
   if (ALIMTALK_MEMBER_EXCLUSION_REASONS[profile.memberId]) return null;
+  if (isProtectedStaffContact({ name: profile.name, phone: profile.phone })) return null;
   const booking = firstUpcomingGroupBookingInReservationWindow(profile.memberId, sourceDate, bookingIndex);
   if (!booking) return null;
   if (await hasSubmittedGroupSurvey(profile.memberId, profile.phone)) return null;
@@ -454,6 +459,7 @@ async function privateSurveyCandidateForDate(
   if (sourceDate < PRIVATE_SURVEY_ALIMTALK_START_DATE) return null;
   if (!profile.memberId || !profile.name || !profile.phone) return null;
   if (ALIMTALK_MEMBER_EXCLUSION_REASONS[profile.memberId]) return null;
+  if (isProtectedStaffContact({ name: profile.name, phone: profile.phone })) return null;
   const booking = firstUpcomingPrivateBookingInReservationWindow(profile.memberId, sourceDate, bookingIndex);
   if (!booking) return null;
   if (await hasSubmittedPrivateSurvey(profile.memberId, profile.phone)) return null;
@@ -494,6 +500,7 @@ async function longAbsenceCandidateForDate(
   if (sourceDate < LONG_ABSENCE_ALIMTALK_START_DATE) return null;
   if (!profile.memberId || !profile.name || !profile.phone) return null;
   if (ALIMTALK_MEMBER_EXCLUSION_REASONS[profile.memberId]) return null;
+  if (isProtectedStaffContact({ name: profile.name, phone: profile.phone })) return null;
   if (hasHoldingTicket(profile)) return null;
   const activeTickets = activeProfileTickets(profile, sourceDate);
   if (!activeTickets.length) return null;

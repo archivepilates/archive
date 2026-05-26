@@ -49,6 +49,7 @@ export const ALIMTALK_TEMPLATE_TARGET_RULES: Partial<Record<AlimtalkCandidateTyp
     targetRules: ["월요일 발송 기준일", "활성 그룹 수강권 보유", "예약주차 변수가 자동 계산됨"],
     exclusionRules: [
       "알림톡 제외 회원",
+      "보호 스텝/강사 연락처",
       "전화번호 없음",
       "활성 그룹 수강권 없음",
       "프라이빗/강사레슨/체험권/비수업권만 보유",
@@ -74,6 +75,7 @@ export const ALIMTALK_TEMPLATE_TARGET_RULES: Partial<Record<AlimtalkCandidateTyp
     ],
     exclusionRules: [
       "알림톡 제외 회원",
+      "보호 스텝/강사 연락처",
       "전화번호 없음",
       "활성 수업 수강권 없음",
       "상담 고객 또는 수업권이 아닌 상품만 보유",
@@ -97,6 +99,7 @@ export const ALIMTALK_TEMPLATE_TARGET_RULES: Partial<Record<AlimtalkCandidateTyp
     ],
     exclusionRules: [
       "알림톡 제외 회원",
+      "보호 스텝/강사 연락처",
       "전화번호 없음",
       "프라이빗 예약 없음",
       "그룹 또는 강사레슨 예약",
@@ -134,6 +137,7 @@ export const ALIMTALK_TEMPLATE_TARGET_RULES: Partial<Record<AlimtalkCandidateTyp
     ],
     exclusionRules: [
       "알림톡 제외 회원",
+      "보호 스텝/강사 연락처",
       "전화번호 없음",
       "그룹 예약 없음",
       "프라이빗 또는 강사레슨 예약",
