@@ -6,6 +6,7 @@ import { inbodyWebhookSecret } from "../config/secrets";
 import { db } from "../config/firebase";
 import { nowTimestamp } from "../utils/date";
 import { stableHash } from "../utils/hash";
+import { syncInBodyMeasurementFromWebhook, type InBodyWebhookEventDoc } from "./inbodySync";
 
 const LOOKINBODY_ACCOUNT = "arcpilates";
 const SOURCE = "lookinbody";
@@ -40,7 +41,7 @@ export async function receiveInBodyWebhookHandler(request: Request, response: Re
     const eventId = eventIdFor(payload);
     const receivedAt = nowTimestamp();
     const eventRef = db.collection("inbodyWebhookEvents").doc(eventId);
-    const eventDoc = {
+    const eventDoc: InBodyWebhookEventDoc & Record<string, unknown> = {
       eventId,
       studioId: DEFAULT_STUDIO_ID,
       source: SOURCE,
@@ -83,15 +84,27 @@ export async function receiveInBodyWebhookHandler(request: Request, response: Re
       );
     }
 
+    const syncResult = await syncInBodyMeasurementFromWebhook({ eventRef, eventDoc });
+
     logger.info("receiveInBodyWebhook stored", {
       eventId,
       duplicate,
+      lookupStatus: syncResult.lookupStatus,
+      measurementId: syncResult.measurementId,
       account: payload.Account,
       type: payload.Type,
       userTokenLast4: payload.TelHP.slice(-4),
       testDatetimes: payload.TestDatetimes,
     });
-    response.status(200).json({ success: true, ok: true, eventId, duplicate });
+    response.status(200).json({
+      success: true,
+      ok: true,
+      eventId,
+      duplicate,
+      lookupStatus: syncResult.lookupStatus,
+      measurementId: syncResult.measurementId,
+      reportId: syncResult.reportId,
+    });
   } catch (err) {
     const message = err instanceof Error ? err.message : String(err);
     logger.warn("receiveInBodyWebhook rejected", { message });
