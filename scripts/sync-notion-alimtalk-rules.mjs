@@ -99,7 +99,7 @@ function buildBlocks() {
     bullet("회원용_신규회원 웰컴 안내 v3"),
     bullet("회원용_프라이빗 사전설문 안내 v1"),
     bullet("회원용_그룹 첫 수업 사전확인 안내 v1"),
-    bullet("회원용_장기 미방문 수업안내 v1: Template ID `KA01TP260524083643752cySb9BoDOjN`, 현재 `INSPECTING`. 후보 생성/데이터 연결은 완료했고 승인 전 실제 발송은 차단한다."),
+    bullet("회원용_장기 미방문 수업안내 v1: Template ID `KA01TP260524083643752cySb9BoDOjN`, 현재 `APPROVED`. 매일 11:30 자동 발송 대상에 포함한다."),
     bullet("강사용_프라이빗 사전설문 제출 안내 v1"),
     bullet("강사용_그룹 사전확인 제출 안내 v1"),
     bullet("강사레슨_수업자료 안내 v1: 아카이브강사레슨 채널, Template ID `KA01TP260521120040094XcMvYgFTryj`, 현재 `INSPECTING`. 수업자료/방문안내 버튼 2개 구성이다."),
