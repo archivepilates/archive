@@ -134,7 +134,7 @@ export const scheduledQueueAndSendAlimtalkDaily = onSchedule(
   async () => {
     await syncAlimtalkTemplateStatuses();
     const queueSummary = await queueDailyAlimtalkCandidates({
-      excludeTypes: ["reservation_open"],
+      excludeTypes: ["reservation_open", "long_absence"],
       approvalScope: "daily",
       reviewedByUid: "system:auto-daily-1130",
     });
