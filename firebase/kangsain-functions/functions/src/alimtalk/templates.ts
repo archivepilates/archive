@@ -150,8 +150,8 @@ export const ALIMTALK_DEDUPE_POLICIES_BY_TEMPLATE_CODE: Record<string, AlimtalkD
     windowDays: 30,
   },
   [ALIMTALK_TEMPLATES.long_absence.code]: {
-    label: "장기 미방문 안내 14일",
-    windowDays: 14,
+    label: "장기 미방문 같은 마지막 출석일 1회",
+    windowDays: null,
   },
   [ALIMTALK_TEMPLATES.instructor_lesson_material.code]: {
     label: "강사레슨 수업자료 수업별 1회",

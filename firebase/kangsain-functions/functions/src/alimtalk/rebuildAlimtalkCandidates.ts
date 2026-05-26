@@ -502,6 +502,7 @@ async function longAbsenceCandidateForDate(
   if (ALIMTALK_MEMBER_EXCLUSION_REASONS[profile.memberId]) return null;
   if (isProtectedStaffContact({ name: profile.name, phone: profile.phone })) return null;
   if (hasHoldingTicket(profile)) return null;
+  if (hasActiveLongAbsenceExcludedTicket(profile, sourceDate)) return null;
   const activeTickets = activeProfileTickets(profile, sourceDate);
   if (!activeTickets.length) return null;
   if (hasUpcomingReservedBookingOnOrAfter(profile.memberId, sourceDate, bookingIndex)) return null;
@@ -762,6 +763,26 @@ function hasHoldingTicket(profile: MemberProfileDoc | undefined): boolean {
   return Boolean(profile?.ticketStatusSummary?.hasHoldingTicket);
 }
 
+function hasActiveLongAbsenceExcludedTicket(profile: MemberProfileDoc | undefined, sourceDate: string): boolean {
+  return (profile?.activeTickets || []).some(
+    (ticket) =>
+      isUsableProfileTicketOnDate(ticket, sourceDate) &&
+      (isInstructorLessonProfileTicket(ticket) || isOneTimeProfileTicket(ticket)),
+  );
+}
+
+function isUsableProfileTicketOnDate(
+  ticket: NonNullable<MemberProfileDoc["activeTickets"]>[number],
+  sourceDate: string,
+): boolean {
+  if (!ticket.name) return false;
+  if (ticket.expiryLevel === "expired") return false;
+  if (ticket.availableFrom && expiryDateText(ticket.availableFrom) > sourceDate) return false;
+  if (ticket.expiresAt && expiryDateText(ticket.expiresAt) < sourceDate) return false;
+  const remaining = ticket.remainingCount == null ? Number.NaN : Number(ticket.remainingCount);
+  return !Number.isFinite(remaining) || remaining > 0;
+}
+
 function activeGroupProfileTickets(
   profile: MemberProfileDoc | undefined,
   sourceDate: string,
@@ -809,9 +830,20 @@ function isActiveProfileTicket(
 function isLessonProfileTicket(ticket: NonNullable<MemberProfileDoc["activeTickets"]>[number]): boolean {
   const classType = String(ticket.classType || "").toUpperCase();
   const name = String(ticket.name || "");
-  if (classType === "I") return false;
+  if (isInstructorLessonProfileTicket(ticket)) return false;
   if (/토삭스|삭스|양말|기간연장|체험|체험권|강사레슨/.test(name)) return false;
   return true;
+}
+
+function isInstructorLessonProfileTicket(ticket: NonNullable<MemberProfileDoc["activeTickets"]>[number]): boolean {
+  const classType = String(ticket.classType || "").toUpperCase();
+  const name = String(ticket.name || "");
+  return classType === "I" || /강사레슨/.test(name);
+}
+
+function isOneTimeProfileTicket(ticket: NonNullable<MemberProfileDoc["activeTickets"]>[number]): boolean {
+  const name = String(ticket.name || "");
+  return /(^|[^0-9])1\s*회|1회권|1회상품권|원데이|드랍인|drop\s*in/i.test(name);
 }
 
 function isPrivateProfileTicket(ticket: NonNullable<MemberProfileDoc["activeTickets"]>[number]): boolean {
