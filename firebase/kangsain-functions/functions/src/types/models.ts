@@ -310,6 +310,9 @@ export interface MemberProfileDoc {
   isNewMember?: boolean;
   newMemberBasis?: "registered_at" | "first_seen_booking" | "unknown";
   registeredAt: Timestamp | null;
+  emergencyLastAttendance?: string;
+  emergencySource?: string;
+  emergencySourceFile?: string;
   sourceUpdatedAt?: Timestamp | null;
   syncedAt: Timestamp;
   updatedAt: Timestamp;

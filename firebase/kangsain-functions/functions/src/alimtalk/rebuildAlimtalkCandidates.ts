@@ -4,6 +4,7 @@ import type { AlimtalkCandidateDoc, BookingDoc, MemberProfileDoc } from "../type
 import { db } from "../config/firebase";
 import { privateSurveyWebhookSecret } from "../config/secrets";
 import { refs } from "../firestore/refs";
+import { isProtectedStaffContact } from "../sync/protectedContactRules";
 import { addDays, dateRange, nowTimestamp } from "../utils/date";
 import { stableHash } from "../utils/hash";
 import { shortLinkIdForTarget, shortUrlForId } from "../utils/shortLinks";
@@ -12,6 +13,7 @@ import {
   CANDIDATE_TEMPLATE_CODES,
   GROUP_SURVEY_ALIMTALK_START_DATE,
   LONG_ABSENCE_ALIMTALK_START_DATE,
+  LONG_ABSENCE_MIN_DAYS,
   NEW_MEMBER_ALIMTALK_START_DATE,
   NEW_MEMBER_ALIMTALK_WINDOW_DAYS,
   PRIVATE_SURVEY_ALIMTALK_START_DATE,
@@ -58,6 +60,7 @@ export async function rebuildAlimtalkCandidatesForRange(input: {
     (profile) =>
       profile.isNewMember &&
       !ALIMTALK_MEMBER_EXCLUSION_REASONS[profile.memberId] &&
+      !isProtectedStaffContact({ name: profile.name, phone: profile.phone }) &&
       activeProfileTickets(profile, input.endDate).length > 0 &&
       registeredDate(profile) >= NEW_MEMBER_ALIMTALK_START_DATE &&
       registeredDate(profile) >= newMemberWindowStartDate(input.endDate) &&
@@ -113,6 +116,13 @@ export async function rebuildAlimtalkCandidatesForRange(input: {
 }
 
 type BookingIndex = Map<string, BookingDoc[]>;
+
+type LongAbsenceLastAttendance = {
+  date: string;
+  source: string;
+  bookingId?: string;
+  lectureId?: string;
+};
 
 async function loadBookingIndex(studioId: string): Promise<BookingIndex> {
   const snap = await refs.bookings().where("studioId", "==", studioId).get();
@@ -180,6 +190,7 @@ async function enqueueSendableCandidate(
 function directTicketCandidates(profile: MemberProfileDoc, sourceDate: string): AlimtalkCandidateDoc[] {
   if (!profile.memberId || !profile.name || !profile.phone) return [];
   if (ALIMTALK_MEMBER_EXCLUSION_REASONS[profile.memberId]) return [];
+  if (isProtectedStaffContact({ name: profile.name, phone: profile.phone })) return [];
   return activeProfileTickets(profile, sourceDate)
     .map((ticket) => directTicketCandidate(profile, ticket, sourceDate))
     .filter((candidate): candidate is AlimtalkCandidateDoc => Boolean(candidate));
@@ -193,6 +204,7 @@ async function groupSurveyCandidateForDate(
   if (sourceDate < GROUP_SURVEY_ALIMTALK_START_DATE) return null;
   if (!profile.memberId || !profile.name || !profile.phone) return null;
   if (ALIMTALK_MEMBER_EXCLUSION_REASONS[profile.memberId]) return null;
+  if (isProtectedStaffContact({ name: profile.name, phone: profile.phone })) return null;
   const booking = firstUpcomingGroupBookingInReservationWindow(profile.memberId, sourceDate, bookingIndex);
   if (!booking) return null;
   if (await hasSubmittedGroupSurvey(profile.memberId, profile.phone)) return null;
@@ -373,6 +385,7 @@ async function privateSurveyCandidateForDate(
   if (sourceDate < PRIVATE_SURVEY_ALIMTALK_START_DATE) return null;
   if (!profile.memberId || !profile.name || !profile.phone) return null;
   if (ALIMTALK_MEMBER_EXCLUSION_REASONS[profile.memberId]) return null;
+  if (isProtectedStaffContact({ name: profile.name, phone: profile.phone })) return null;
   const booking = firstUpcomingPrivateBookingInReservationWindow(profile.memberId, sourceDate, bookingIndex);
   if (!booking) return null;
   if (await hasSubmittedPrivateSurvey(profile.memberId, profile.phone)) return null;
@@ -413,13 +426,16 @@ async function longAbsenceCandidateForDate(
   if (sourceDate < LONG_ABSENCE_ALIMTALK_START_DATE) return null;
   if (!profile.memberId || !profile.name || !profile.phone) return null;
   if (ALIMTALK_MEMBER_EXCLUSION_REASONS[profile.memberId]) return null;
+  if (isProtectedStaffContact({ name: profile.name, phone: profile.phone })) return null;
   if (hasHoldingTicket(profile)) return null;
+  if (hasActiveLongAbsenceExcludedTicket(profile, sourceDate)) return null;
   const activeTickets = activeProfileTickets(profile, sourceDate);
   if (!activeTickets.length) return null;
-  const lastAttendance = lastAttendedBooking(profile.memberId, sourceDate, bookingIndex);
+  if (hasUpcomingReservedBookingOnOrAfter(profile.memberId, sourceDate, bookingIndex)) return null;
+  const lastAttendance = lastAttendanceForLongAbsence(profile, sourceDate, bookingIndex);
   if (!lastAttendance) return null;
-  const absenceDays = daysBetweenDateStrings(lastAttendance.lectureDate, sourceDate);
-  if (!Number.isFinite(absenceDays) || absenceDays < 7) return null;
+  const absenceDays = daysBetweenDateStrings(lastAttendance.date, sourceDate);
+  if (!Number.isFinite(absenceDays) || absenceDays < LONG_ABSENCE_MIN_DAYS) return null;
   const primaryTicket = activeTickets[0];
   return {
     candidateId: `long_absence_${profile.memberId}_${sourceDate}`,
@@ -431,7 +447,7 @@ async function longAbsenceCandidateForDate(
     status: "candidate",
     templateCode: CANDIDATE_TEMPLATE_CODES.long_absence,
     title: "장기 미방문",
-    reason: `마지막 출석 ${lastAttendance.lectureDate} · ${absenceDays}일`,
+    reason: `마지막 출석 ${lastAttendance.date} · ${absenceDays}일`,
     sourceDate,
     payload: {
       memberName: profile.name,
@@ -442,8 +458,9 @@ async function longAbsenceCandidateForDate(
         .join(", "),
       absenceDays: String(absenceDays),
       daysSinceLastVisit: String(absenceDays),
-      lastAttendanceDate: lastAttendance.lectureDate,
-      lastAttendanceDateText: formatKoreanDateText(lastAttendance.lectureDate),
+      lastAttendanceDate: lastAttendance.date,
+      lastAttendanceDateText: formatKoreanDateText(lastAttendance.date),
+      lastAttendanceSource: lastAttendance.source,
       bookingId: lastAttendance.bookingId || "",
       lectureId: lastAttendance.lectureId || "",
     },
@@ -453,6 +470,29 @@ async function longAbsenceCandidateForDate(
     createdAt: nowTimestamp(),
     updatedAt: nowTimestamp(),
   };
+}
+
+function lastAttendanceForLongAbsence(
+  profile: MemberProfileDoc,
+  sourceDate: string,
+  bookingIndex: BookingIndex,
+): LongAbsenceLastAttendance | null {
+  const profileLastAttendance = normalizedDateText(profile.emergencyLastAttendance || "");
+  const bookingLastAttendance = lastAttendedBooking(profile.memberId, sourceDate, bookingIndex);
+  const bookingDate = normalizedDateText(bookingLastAttendance?.lectureDate || "");
+  const candidates: LongAbsenceLastAttendance[] = [];
+  if (profileLastAttendance && profileLastAttendance <= sourceDate) {
+    candidates.push({ date: profileLastAttendance, source: "memberProfiles.emergencyLastAttendance" });
+  }
+  if (bookingDate && bookingDate <= sourceDate) {
+    candidates.push({
+      date: bookingDate,
+      source: "bookings.attendanceStatus",
+      bookingId: bookingLastAttendance?.bookingId || "",
+      lectureId: bookingLastAttendance?.lectureId || "",
+    });
+  }
+  return candidates.sort((a, b) => b.date.localeCompare(a.date))[0] || null;
 }
 
 function lastAttendedBooking(memberId: string, sourceDate: string, bookingIndex: BookingIndex): BookingDoc | null {
@@ -469,6 +509,16 @@ function lastAttendedBooking(memberId: string, sourceDate: string, bookingIndex:
       return (b.lectureStartAt?.toMillis() || 0) - (a.lectureStartAt?.toMillis() || 0);
     });
   return attended[0] || null;
+}
+
+function hasUpcomingReservedBookingOnOrAfter(memberId: string, sourceDate: string, bookingIndex: BookingIndex): boolean {
+  return memberBookings(bookingIndex, memberId).some(
+    (booking) =>
+      booking.appStatus === "reserved" &&
+      booking.lectureDate &&
+      booking.lectureDate >= sourceDate &&
+      !isInstructorLessonBooking(booking),
+  );
 }
 
 function firstUpcomingPrivateBookingInReservationWindow(
@@ -639,6 +689,26 @@ function hasHoldingTicket(profile: MemberProfileDoc | undefined): boolean {
   return Boolean(profile?.ticketStatusSummary?.hasHoldingTicket);
 }
 
+function hasActiveLongAbsenceExcludedTicket(profile: MemberProfileDoc | undefined, sourceDate: string): boolean {
+  return (profile?.activeTickets || []).some(
+    (ticket) =>
+      isUsableProfileTicketOnDate(ticket, sourceDate) &&
+      (isInstructorLessonProfileTicket(ticket) || isOneTimeProfileTicket(ticket)),
+  );
+}
+
+function isUsableProfileTicketOnDate(
+  ticket: NonNullable<MemberProfileDoc["activeTickets"]>[number],
+  sourceDate: string,
+): boolean {
+  if (!ticket.name) return false;
+  if (ticket.expiryLevel === "expired") return false;
+  if (ticket.availableFrom && expiryDateText(ticket.availableFrom) > sourceDate) return false;
+  if (ticket.expiresAt && expiryDateText(ticket.expiresAt) < sourceDate) return false;
+  const remaining = ticket.remainingCount == null ? Number.NaN : Number(ticket.remainingCount);
+  return !Number.isFinite(remaining) || remaining > 0;
+}
+
 function activeProfileTickets(
   profile: MemberProfileDoc | undefined,
   sourceDate: string,
@@ -661,9 +731,20 @@ function isActiveProfileTicket(
 function isLessonProfileTicket(ticket: NonNullable<MemberProfileDoc["activeTickets"]>[number]): boolean {
   const classType = String(ticket.classType || "").toUpperCase();
   const name = String(ticket.name || "");
-  if (classType === "I") return false;
+  if (isInstructorLessonProfileTicket(ticket)) return false;
   if (/토삭스|삭스|양말|기간연장|체험|체험권|강사레슨/.test(name)) return false;
   return true;
+}
+
+function isInstructorLessonProfileTicket(ticket: NonNullable<MemberProfileDoc["activeTickets"]>[number]): boolean {
+  const classType = String(ticket.classType || "").toUpperCase();
+  const name = String(ticket.name || "");
+  return classType === "I" || /강사레슨/.test(name);
+}
+
+function isOneTimeProfileTicket(ticket: NonNullable<MemberProfileDoc["activeTickets"]>[number]): boolean {
+  const name = String(ticket.name || "");
+  return /(^|[^0-9])1\s*회|1회권|1회상품권|원데이|드랍인|drop\s*in/i.test(name);
 }
 
 function isPrivateProfileTicket(ticket: NonNullable<MemberProfileDoc["activeTickets"]>[number]): boolean {
@@ -717,6 +798,15 @@ function formatKoreanDateText(value: string): string {
   })
     .format(date)
     .replace(/\s/g, " ");
+}
+
+function normalizedDateText(value: string): string {
+  const text = String(value || "").trim();
+  if (!text) return "";
+  const match = text.match(/(\d{4})[-./년\s]*(\d{1,2})[-./월\s]*(\d{1,2})/);
+  if (!match) return "";
+  const [, year, month, day] = match;
+  return `${year}-${month.padStart(2, "0")}-${day.padStart(2, "0")}`;
 }
 
 function daysBetweenDateStrings(startDate: string, endDate: string): number {

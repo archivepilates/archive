@@ -90,6 +90,7 @@ function buildBlocks() {
   return [
     heading(2, "운영 기준"),
     paragraph(`마지막 동기화: ${today}`),
+    paragraph("ARCHIVE IN 알림톡 템플릿 정책 원본은 repo의 `firebase/kangsain-functions/functions/src/alimtalk/templatePolicies.ts`다. Notion은 사람이 읽는 운영 뷰로 관리한다."),
     paragraph("ARCHIVE IN 알림톡 템플릿은 채널과 수신자 성격에 따라 회원용, 스텝/담당강사용, 강사레슨 회원용으로 분리한다."),
     heading(2, "분류"),
     bullet("회원용: ARCHIVE PILATES 일반 회원 채널. prefix는 `회원용_`. 신규회원, 수강권, 프라이빗/그룹 사전설문 요청을 포함한다."),
@@ -99,7 +100,7 @@ function buildBlocks() {
     bullet("회원용_신규회원 웰컴 안내 v3"),
     bullet("회원용_프라이빗 사전설문 안내 v1"),
     bullet("회원용_그룹 첫 수업 사전확인 안내 v1"),
-    bullet("회원용_장기 미방문 수업안내 v1: Template ID `KA01TP260524083643752cySb9BoDOjN`, 현재 `PENDING`. 검수 요청은 하지 않았고 후보 생성/데이터 연결만 완료했다."),
+    bullet("회원용_장기 미방문 수업안내 v1: Template ID `KA01TP260524083643752cySb9BoDOjN`, 현재 `PENDING`/`paused`. 후보 생성/데이터 연결만 유지하고 자동 발송은 차단한다."),
     bullet("강사용_프라이빗 사전설문 제출 안내 v1"),
     bullet("강사용_그룹 사전확인 제출 안내 v1"),
     bullet("강사레슨_수업자료 안내 v1: 아카이브강사레슨 채널, Template ID `KA01TP260521120040094XcMvYgFTryj`, 현재 `INSPECTING`. 수업자료/방문안내 버튼 2개 구성이다."),
@@ -107,7 +108,7 @@ function buildBlocks() {
     bullet("SOLAPI 템플릿 승인 상태는 매일 10:00 및 11:30 발송 직전에 자동 동기화한다."),
     bullet("발송 실패 재시도는 1회만 허용한다. 최초 실패와 재시도 실패 후에는 자동/수동 큐 전환을 막는다."),
     bullet("수강권 기간/횟수 알림의 중복 방지는 회원, 템플릿, 수강권 식별자를 함께 사용한다. 같은 이름의 새 수강권은 별도 대상이다."),
-    bullet("장기 미방문 안내는 활성 수업 수강권 보유, 마지막 출석 7일 이상, 수강권 정지/중지/홀딩 아님 조건으로 후보를 만든다. 중복 방지는 회원별 14일이다."),
+    bullet("장기 미방문 안내는 활성 수업 수강권 보유, 회원목록 엑셀 `최근출석일` 또는 예약 출석 완료일 중 더 최신값 기준 10일 이상, 보호 스텝/강사 연락처 제외, 수강권 정지/중지/홀딩 아님, 1회권/강사레슨 수강권 보유 제외, 발송 기준일 당일 또는 이후 예정 예약 없음 조건으로 후보를 만든다. 같은 회원의 같은 마지막 출석일 기준 1회만 발송한다."),
     bullet("StudioMate 엑셀의 `수강권상태`가 정지중/중지/홀딩이면 `memberProfiles.ticketStatusSummary.hasHoldingTicket`으로 저장하고 장기 미방문 안내에서 제외한다."),
     bullet("프라이빗/그룹 설문은 마지막 같은 유형 설문 제출 후 1년이 지나면 다시 후보가 될 수 있다."),
     bullet("강사용 그룹 설문 알림은 수업 1시간 전 이후, 강사용 프라이빗 설문 알림은 수업 하루 전 오전 9시 이후 발송한다."),
@@ -116,7 +117,7 @@ function buildBlocks() {
     bullet("현재 승인 템플릿이 기존 `설문ID`, `접근토큰`, `관리번호` 버튼을 쓰는 동안에는 원본 URL과 짧은 URL을 모두 검사한다."),
     bullet("강사레슨 수업자료 원본 URL은 `https://in.archivepilates.com/method/#{관리번호}`, 방문안내 버튼 URL은 `https://www.notion.so/367d49eae4bf811ca3daea273ed278c8`이다."),
     heading(2, "Repo 원본"),
-    paragraph("상세 원본은 GitHub repo의 `docs/solapi-template-data-operating-rules.md`, `docs/kakao-alimtalk-automation-handoff.md`, `docs/archivein-member-contact-alimtalk-pipeline.md`를 기준으로 한다."),
+    paragraph("정책 원본은 GitHub repo의 `firebase/kangsain-functions/functions/src/alimtalk/templatePolicies.ts`이며, 문서 원본은 `docs/solapi-template-data-operating-rules.md`, `docs/archivein-member-contact-alimtalk-pipeline.md`를 함께 참고한다."),
   ];
 }
 

@@ -1,163 +1,69 @@
-import type { AlimtalkCandidateType } from "../types/models";
+import {
+  ALIMTALK_MEMBER_EXCLUSION_REASONS,
+  ALIMTALK_TEMPLATE_POLICIES,
+  INSTRUCTOR_LESSON_ALIMTALK_CHANNEL_ID,
+  GROUP_SURVEY_ALIMTALK_START_DATE,
+  LONG_ABSENCE_ALIMTALK_START_DATE,
+  LONG_ABSENCE_MIN_DAYS,
+  NEW_MEMBER_ALIMTALK_START_DATE,
+  NEW_MEMBER_ALIMTALK_WINDOW_DAYS,
+  PRIVATE_SURVEY_ALIMTALK_START_DATE,
+  SENDABLE_ALIMTALK_CANDIDATE_TYPES,
+  type AlimtalkDedupePolicy,
+  type SendableAlimtalkCandidateType,
+} from "./templatePolicies";
 
-export const INSTRUCTOR_LESSON_ALIMTALK_CHANNEL_ID = "KA01PF260511123407631PSoAflYAVXs";
-
-export const NEW_MEMBER_ALIMTALK_START_DATE = "2026-05-16";
-export const NEW_MEMBER_ALIMTALK_WINDOW_DAYS = 3;
-export const PRIVATE_SURVEY_ALIMTALK_START_DATE = "2026-05-19";
-export const GROUP_SURVEY_ALIMTALK_START_DATE = "2026-05-21";
-export const LONG_ABSENCE_ALIMTALK_START_DATE = "2026-05-24";
-
-export const ALIMTALK_MEMBER_EXCLUSION_REASONS: Record<string, string> = {
-  "3270886": "출산예정 회원 알림톡 제외",
-  "3834419": "출산예정 회원 알림톡 제외",
+export {
+  ALIMTALK_MEMBER_EXCLUSION_REASONS,
+  GROUP_SURVEY_ALIMTALK_START_DATE,
+  INSTRUCTOR_LESSON_ALIMTALK_CHANNEL_ID,
+  LONG_ABSENCE_ALIMTALK_START_DATE,
+  LONG_ABSENCE_MIN_DAYS,
+  NEW_MEMBER_ALIMTALK_START_DATE,
+  NEW_MEMBER_ALIMTALK_WINDOW_DAYS,
+  PRIVATE_SURVEY_ALIMTALK_START_DATE,
+  type AlimtalkDedupePolicy,
+  type SendableAlimtalkCandidateType,
 };
 
-export type SendableAlimtalkCandidateType =
-  | "reservation_open"
-  | "new_member"
-  | "private_survey"
-  | "group_survey"
-  | "ticket_expiring"
-  | "remaining_low"
-  | "private_count_low"
-  | "private_ticket_expiring"
-  | "long_absence";
-
-export const ALIMTALK_TEMPLATES = {
-  reservation_open: {
-    code: "KA01TP260518023011547VpbovK8MrI9",
-    label: "스튜디오메이트 예약 안내 v3",
-    status: "approved",
-  },
-  new_member: {
-    code: "KA01TP260514081318309wQGfeIJxIAJ",
-    label: "신규회원 웰컴 v3",
-    status: "approved",
-  },
-  ticket_expiring: {
-    code: "KA01TP260514145047261araXgWLVFRs",
-    label: "그룹 기간권 잔여기간 안내 v3",
-    status: "approved",
-  },
-  remaining_low: {
-    code: "KA01TP260514145047393VpTbcCZKkCV",
-    label: "그룹 횟수권 잔여횟수 안내 v3",
-    status: "approved",
-  },
-  private_count_low: {
-    code: "KA01TP260514152235608d9icGOBotnV",
-    label: "프라이빗 횟수권 잔여횟수 안내 v1",
-    status: "approved",
-  },
-  private_survey: {
-    code: "KA01TP260514153632171uiWXYoeiOLS",
-    label: "프라이빗 사전설문 안내 v1",
-    status: "approved",
-  },
-  group_survey: {
-    code: "KA01TP2605210729364330NbhZVAu9zA",
-    label: "그룹 첫 수업 사전확인 안내 v1",
-    status: "approved",
-  },
-  private_ticket_expiring: {
-    code: "KA01TP260514153314927WH270IppWQS",
-    label: "프라이빗 기간권 잔여기간 안내 v1",
-    status: "approved",
-  },
-  long_absence: {
-    code: "KA01TP260524083643752cySb9BoDOjN",
-    label: "장기 미방문 수업안내 v1",
-    status: "pending",
-  },
-  staff_private_survey: {
-    code: "KA01TP260519093416836f1EHZYJ00uM",
-    label: "담당강사 사전설문 제출 안내 v1",
-    status: "approved",
-  },
-  staff_group_survey: {
-    code: "KA01TP260522041704111wu4Z0cu9cgl",
-    label: "첫 그룹수업 회원 확인 v1",
-    status: "approved",
-  },
-  instructor_lesson_material: {
-    code: "KA01TP260521120040094XcMvYgFTryj",
-    label: "강사레슨 수업자료 안내 v1",
-    status: "approved",
-  },
-} as const;
-
-export const ALIMTALK_TEMPLATE_CHANNEL_IDS: Readonly<Record<string, string>> = {
-  [ALIMTALK_TEMPLATES.instructor_lesson_material.code]: INSTRUCTOR_LESSON_ALIMTALK_CHANNEL_ID,
+export const ALIMTALK_TEMPLATES = Object.fromEntries(
+  Object.entries(ALIMTALK_TEMPLATE_POLICIES).map(([type, policy]) => [
+    type,
+    {
+      code: policy.code,
+      label: policy.label,
+      status: policy.status,
+    },
+  ]),
+) as {
+  readonly [Type in keyof typeof ALIMTALK_TEMPLATE_POLICIES]: {
+    readonly code: (typeof ALIMTALK_TEMPLATE_POLICIES)[Type]["code"];
+    readonly label: (typeof ALIMTALK_TEMPLATE_POLICIES)[Type]["label"];
+    readonly status: (typeof ALIMTALK_TEMPLATE_POLICIES)[Type]["status"];
+  };
 };
 
-export const CANDIDATE_TEMPLATE_CODES: Record<SendableAlimtalkCandidateType, string> = {
-  reservation_open: ALIMTALK_TEMPLATES.reservation_open.code,
-  new_member: ALIMTALK_TEMPLATES.new_member.code,
-  private_survey: ALIMTALK_TEMPLATES.private_survey.code,
-  group_survey: ALIMTALK_TEMPLATES.group_survey.code,
-  ticket_expiring: ALIMTALK_TEMPLATES.ticket_expiring.code,
-  remaining_low: ALIMTALK_TEMPLATES.remaining_low.code,
-  private_count_low: ALIMTALK_TEMPLATES.private_count_low.code,
-  private_ticket_expiring: ALIMTALK_TEMPLATES.private_ticket_expiring.code,
-  long_absence: ALIMTALK_TEMPLATES.long_absence.code,
-};
+export const ALIMTALK_TEMPLATE_CHANNEL_IDS: Readonly<Record<string, string>> = Object.fromEntries(
+  Object.values(ALIMTALK_TEMPLATE_POLICIES)
+    .filter((policy) => policy.channelId)
+    .map((policy) => [policy.code, policy.channelId || ""]),
+);
+
+export const CANDIDATE_TEMPLATE_CODES: Record<SendableAlimtalkCandidateType, string> = Object.fromEntries(
+  SENDABLE_ALIMTALK_CANDIDATE_TYPES.map((type) => [type, ALIMTALK_TEMPLATE_POLICIES[type].code]),
+) as Record<SendableAlimtalkCandidateType, string>;
 
 export const STATIC_APPROVED_ALIMTALK_TEMPLATE_CODES: ReadonlySet<string> = new Set(
-  Object.values(ALIMTALK_TEMPLATES)
-    .filter((template) => template.status === "approved")
-    .map((template) => template.code),
+  Object.values(ALIMTALK_TEMPLATE_POLICIES)
+    .filter((policy) => policy.status === "approved")
+    .map((policy) => policy.code),
 );
 
 export const APPROVED_ALIMTALK_TEMPLATE_CODES = STATIC_APPROVED_ALIMTALK_TEMPLATE_CODES;
 
-export interface AlimtalkDedupePolicy {
-  label: string;
-  windowDays: number | null;
-}
-
-export const ALIMTALK_DEDUPE_POLICIES_BY_TEMPLATE_CODE: Record<string, AlimtalkDedupePolicy> = {
-  [ALIMTALK_TEMPLATES.reservation_open.code]: {
-    label: "예약 오픈 안내 주간 반복",
-    windowDays: 6,
-  },
-  [ALIMTALK_TEMPLATES.new_member.code]: {
-    label: "신규회원 웰컴 영구 1회",
-    windowDays: null,
-  },
-  [ALIMTALK_TEMPLATES.ticket_expiring.code]: {
-    label: "수강권별 기간 안내 30일",
-    windowDays: 30,
-  },
-  [ALIMTALK_TEMPLATES.remaining_low.code]: {
-    label: "수강권별 횟수 안내 30일",
-    windowDays: 30,
-  },
-  [ALIMTALK_TEMPLATES.private_count_low.code]: {
-    label: "프라이빗 수강권별 횟수 안내 30일",
-    windowDays: 30,
-  },
-  [ALIMTALK_TEMPLATES.private_survey.code]: {
-    label: "프라이빗 사전설문 영구 1회",
-    windowDays: null,
-  },
-  [ALIMTALK_TEMPLATES.group_survey.code]: {
-    label: "그룹 첫 수업 사전확인 영구 1회",
-    windowDays: null,
-  },
-  [ALIMTALK_TEMPLATES.private_ticket_expiring.code]: {
-    label: "프라이빗 수강권별 기간 안내 30일",
-    windowDays: 30,
-  },
-  [ALIMTALK_TEMPLATES.long_absence.code]: {
-    label: "장기 미방문 안내 14일",
-    windowDays: 14,
-  },
-  [ALIMTALK_TEMPLATES.instructor_lesson_material.code]: {
-    label: "강사레슨 수업자료 수업별 1회",
-    windowDays: null,
-  },
-};
+export const ALIMTALK_DEDUPE_POLICIES_BY_TEMPLATE_CODE: Record<string, AlimtalkDedupePolicy> = Object.fromEntries(
+  Object.values(ALIMTALK_TEMPLATE_POLICIES).map((policy) => [policy.code, policy.dedupePolicy]),
+);
 
 export function alimtalkDedupePolicy(templateCode: string): AlimtalkDedupePolicy {
   return (
