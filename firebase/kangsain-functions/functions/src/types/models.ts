@@ -453,6 +453,14 @@ export interface PrivateSurveyResponseDoc {
     alimtalkStatus: "skipped" | "pending" | "sent" | "failed";
     alimtalkReason: string;
   };
+  notionSync?: {
+    status: "synced" | "skipped" | "failed";
+    action?: "created" | "updated";
+    memberPageId?: string;
+    intakePageId?: string;
+    syncedAt?: string;
+    error?: string;
+  } | null;
   accessTokenHash: string;
   createdAt: Timestamp;
   updatedAt: Timestamp;

@@ -10,6 +10,8 @@ export const solapiApiSecret = defineSecret("SOLAPI_API_SECRET");
 export const solapiPfid = defineSecret("SOLAPI_PFID");
 export const privateSurveyWebhookSecret = defineSecret("PRIVATE_SURVEY_WEBHOOK_SECRET");
 export const inbodyWebhookSecret = defineSecret("INBODY_WEBHOOK_SECRET");
+export const inbodyApiKey = defineSecret("INBODY_API_KEY");
+export const notionToken = defineSecret("NOTION_TOKEN");
 
 export const allSecrets = [
   studiomateLoginId,
@@ -22,4 +24,5 @@ export const allSecrets = [
   solapiPfid,
   privateSurveyWebhookSecret,
   inbodyWebhookSecret,
+  inbodyApiKey,
 ];

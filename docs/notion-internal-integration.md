@@ -12,13 +12,61 @@ ARCHIVE IN 운영 규칙을 Codex Notion 플러그인 OAuth 만료와 무관하�
 
 1. `archivepilates@gmail.com`으로 Notion에 로그인한다.
 2. Notion Developers에서 internal integration을 만든다.
-3. integration 이름은 `ARCHIVE IN Ops Sync`처럼 운영 용도를 알 수 있게 만든다.
+3. integration 이름은 `ARCHIVE AI`를 사용한다.
 4. 권한은 운영 문서 갱신에 필요한 범위로 둔다.
    - Read content
    - Update content
    - Insert content
 5. `카카오 알림톡 운영 규칙` 페이지에서 이 integration을 초대/share 한다.
 6. 발급된 internal integration token은 GitHub, Notion, 채팅, 문서에 적지 않는다.
+
+## 프라이빗 사전설문 Firestore to Notion 동기화
+
+Google Form 응답 Apps Script는 Firestore `privateSurveyIntakes/{intakeId}` 저장까지만 담당한다. Firebase Function `processPrivateSurveyIntake`가 응답을 `privateSurveyResponses`, 공개 상세 문서, 강사 메모 큐로 처리한 뒤 Notion 프라이빗 회원 차트 DB에도 upsert한다. Notion 전송 실패는 설문 처리 자체를 막지 않고 Firestore의 `notionSync` 상태에만 기록한다.
+
+대상:
+
+- Google 계정: `home@archivepilates.com`
+- Google Sheet: `아카이브필라테스 프라이빗 사전설문(응답)`
+- Apps Script: `apps-script/private-survey/Code.js`
+- Firestore intake: `privateSurveyIntakes/{intakeId}`
+- Firebase Function: `processPrivateSurveyIntake`
+- Notion sync module: `firebase/kangsain-functions/functions/src/privateSurvey/notionSync.ts`
+- Notion 계정: `archivepilates@gmail.com`
+- Notion 페이지: `ARCHIVE PILATES 프라이빗 회원 차트 시스템`
+- Members DB: `c58a39ceb7ac405ba43b38d3b5871ed3`
+- Intake Survey DB: `87064e93fd834c0ab2e2da8070522922`
+
+Firebase Functions secret에 아래 값을 넣는다.
+
+```text
+NOTION_TOKEN=secret_...
+```
+
+선택값:
+
+```text
+NOTION_PRIVATE_MEMBERS_DATABASE_ID=c58a39ceb7ac405ba43b38d3b5871ed3
+NOTION_PRIVATE_INTAKE_DATABASE_ID=87064e93fd834c0ab2e2da8070522922
+```
+
+Notion에서 `ARCHIVE PILATES 프라이빗 회원 차트 시스템` 페이지 또는 두 DB를 internal integration에 share해야 한다. 설정 후 `processPrivateSurveyIntake`를 테스트 응답 1건으로 실행해 Firestore `notionSync.status`가 `synced`가 되는지 확인한다.
+
+2026-05-27 확인: Firebase project `archive-pilates`에 `NOTION_TOKEN` secret version 1 생성 완료. Notion integration `ARCHIVE AI`가 Members DB와 Intake Survey DB를 조회할 수 있다.
+
+운영 기준:
+
+- Apps Script는 Notion API를 직접 호출하지 않는다.
+- Notion 실패 시 `privateSurveyIntakes/{intakeId}.notionSync.status = failed`로 남긴다.
+- Notion 실패 시 `privateSurveyResponses/{responseId}.notionSync.status = failed`로도 남긴다.
+- 기존 응답을 다시 처리하거나 duplicate로 잡혀도 기존 `privateSurveyResponses` 문서를 기준으로 Notion 재동기화를 시도한다.
+- `scheduledSyncPrivateSurveyNotion`이 30분마다 미동기화/실패 응답을 재시도한다. `NOTION_TOKEN`이 없으면 쓰기 없이 skip한다.
+
+중복 방지 기준:
+
+- 회원은 `Phone`으로 먼저 찾고, 없으면 `Name`으로 찾는다.
+- 설문 응답은 `Raw Response URL`로 찾는다.
+- 같은 응답을 다시 처리하면 새로 만들지 않고 기존 Notion 페이지를 업데이트한다.
 
 ## 로컬 실행
 

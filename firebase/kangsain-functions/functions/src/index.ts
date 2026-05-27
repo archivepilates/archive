@@ -4,7 +4,7 @@ import { onDocumentCreated } from "firebase-functions/v2/firestore";
 import { onSchedule } from "firebase-functions/v2/scheduler";
 import { logger } from "firebase-functions";
 import { REGION, TIMEZONE } from "./config/constants";
-import { allSecrets } from "./config/secrets";
+import { allSecrets, notionToken } from "./config/secrets";
 import { toHttpsError } from "./utils/errors";
 import { syncLecturesDaily } from "./sync/syncLecturesDaily";
 import { syncLecturesRange } from "./sync/syncLecturesRange";
@@ -41,9 +41,11 @@ import {
   processMissingSurveySubmissionAlerts,
   processPrivateSurveyIntakeHandler,
   privateSurveyResponseViewHandler,
+  syncPrivateSurveyNotionBackfill,
   syncPrivateSurveyResponsesFromSheet,
 } from "./privateSurvey/privateSurveyResponse";
 import { receiveInBodyWebhookHandler } from "./inbody/inbodyWebhook";
+import { inbodyMemberReportViewHandler } from "./inbody/inbodyMemberReportView";
 
 const callableOptions = { region: REGION, secrets: allSecrets, invoker: "public" as const };
 const longCallableOptions = { ...callableOptions, timeoutSeconds: 540, memory: "512MiB" as const };
@@ -66,11 +68,20 @@ const privateSurveyIngestOptions = {
   timeoutSeconds: 120,
   memory: "256MiB" as const,
 };
+const privateSurveyIntakeOptions = {
+  ...scheduleOptions,
+  secrets: [...allSecrets, notionToken],
+};
 const publicRequestOptions = {
   region: REGION,
   timeoutSeconds: 60,
   memory: "256MiB" as const,
   invoker: "public" as const,
+};
+const publicRequestOptionsWithoutInvoker = {
+  region: REGION,
+  timeoutSeconds: 60,
+  memory: "256MiB" as const,
 };
 const publicLongRequestOptions = {
   ...longRequestOptions,
@@ -202,6 +213,16 @@ export const scheduledProcessStaffSurveyAlimtalks = onSchedule(
   },
 );
 
+export const scheduledSyncPrivateSurveyNotion = onSchedule(
+  {
+    ...privateSurveyIntakeOptions,
+    schedule: "every 30 minutes",
+  },
+  async () => {
+    await syncPrivateSurveyNotionBackfill();
+  },
+);
+
 export const scheduledPreSecurityRawMirror = onSchedule(
   {
     ...scheduleOptions,
@@ -247,13 +268,15 @@ export const ingestPrivateSurveyResponse = onRequest(privateSurveyIngestOptions,
 
 export const privateSurveyResponseView = onRequest(publicRequestOptions, privateSurveyResponseViewHandler);
 
+export const inbodyMemberReportView = onRequest(publicRequestOptionsWithoutInvoker, inbodyMemberReportViewHandler);
+
 export const redirectShortLink = onRequest(publicRequestOptions, redirectShortLinkHandler);
 
 export const approveAlimtalkBatch = onRequest(publicLongRequestOptions, approveAlimtalkBatchHandler);
 
 export const processPrivateSurveyIntake = onDocumentCreated(
   {
-    ...scheduleOptions,
+    ...privateSurveyIntakeOptions,
     document: "privateSurveyIntakes/{intakeId}",
   },
   processPrivateSurveyIntakeHandler,

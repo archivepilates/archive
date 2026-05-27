@@ -16,6 +16,7 @@ import { isAlimtalkTemplateApproved } from "../alimtalk/templateStatus";
 import { surveyDetailButtonUrlLengthIssue } from "../alimtalk/templateTargetRules";
 import { sendAlimtalkLogEmail } from "../google/driveDocsMailer";
 import { ensureShortLink } from "../utils/shortLinks";
+import { isNotionPrivateSurveySyncConfigured, syncPrivateSurveyResponseToNotion } from "./notionSync";
 
 const PUBLIC_VIEW_BASE_URL =
   process.env.PRIVATE_SURVEY_VIEW_BASE_URL || "https://in.archivepilates.com/privateSurveyResponseView";
@@ -204,6 +205,16 @@ export async function processPrivateSurveyIntakeHandler(
     const created = await createSurveyResponseIfNew(responseId, doc);
     if (!created) {
       const existing = (await refs.privateSurveyResponse(responseId).get()).data();
+      const notionSync = existing
+        ? await syncPrivateSurveyResponseToNotion({
+            ...existing,
+            delivery: existing.delivery || {
+              detailUrl,
+              alimtalkStatus: "pending",
+              alimtalkReason: "강사 알림톡 발송 대기",
+            },
+          })
+        : null;
       await snap.ref.set(
         {
           status: "duplicate",
@@ -211,10 +222,14 @@ export async function processPrivateSurveyIntakeHandler(
           accessToken,
           detailUrl: existing?.delivery?.detailUrl || detailUrl,
           delivery: existing?.delivery || null,
+          notionSync,
           updatedAt: nowTimestamp(),
         },
         { merge: true },
       );
+      if (existing && notionSync) {
+        await refs.privateSurveyResponse(responseId).set({ notionSync, updatedAt: nowTimestamp() }, { merge: true });
+      }
       return;
     }
 
@@ -240,6 +255,8 @@ export async function processPrivateSurveyIntakeHandler(
       },
       { merge: true },
     );
+    const notionSync = await syncPrivateSurveyResponseToNotion({ ...doc, delivery });
+    await refs.privateSurveyResponse(responseId).set({ notionSync, updatedAt: nowTimestamp() }, { merge: true });
     await snap.ref.set(
       {
         status: "processed",
@@ -248,6 +265,7 @@ export async function processPrivateSurveyIntakeHandler(
         detailUrl,
         matching,
         delivery,
+        notionSync,
         updatedAt: nowTimestamp(),
       },
       { merge: true },
@@ -257,6 +275,42 @@ export async function processPrivateSurveyIntakeHandler(
     logger.error("processPrivateSurveyIntake failed", { intakeId: event.params.intakeId, message });
     await snap.ref.set({ status: "failed", lastError: message, updatedAt: nowTimestamp() }, { merge: true });
   }
+}
+
+export async function syncPrivateSurveyNotionBackfill(): Promise<{
+  checked: number;
+  synced: number;
+  failed: number;
+  skipped: number;
+  configured: boolean;
+}> {
+  if (!isNotionPrivateSurveySyncConfigured()) {
+    logger.warn("syncPrivateSurveyNotionBackfill skipped: NOTION_TOKEN is not configured");
+    return { checked: 0, synced: 0, failed: 0, skipped: 0, configured: false };
+  }
+
+  const snap = await refs.privateSurveyResponses().orderBy("updatedAt", "desc").limit(200).get();
+  let checked = 0;
+  let synced = 0;
+  let failed = 0;
+  let skipped = 0;
+
+  for (const docSnap of snap.docs) {
+    const doc = docSnap.data();
+    if (doc.surveyType === "group" || doc.notionSync?.status === "synced" || !doc.delivery?.detailUrl) {
+      skipped += 1;
+      continue;
+    }
+    checked += 1;
+    const notionSync = await syncPrivateSurveyResponseToNotion(doc);
+    if (notionSync.status === "synced") synced += 1;
+    if (notionSync.status === "failed") failed += 1;
+    if (notionSync.status === "skipped") skipped += 1;
+    await docSnap.ref.set({ notionSync, updatedAt: nowTimestamp() }, { merge: true });
+  }
+
+  logger.info("syncPrivateSurveyNotionBackfill completed", { checked, synced, failed, skipped });
+  return { checked, synced, failed, skipped, configured: true };
 }
 
 export async function syncPrivateSurveyResponsesFromSheet(): Promise<{ processed: number; skipped: number }> {
