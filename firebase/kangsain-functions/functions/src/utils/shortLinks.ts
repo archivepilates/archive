@@ -4,7 +4,7 @@ import { nowTimestamp } from "./date";
 import { stableHash } from "./hash";
 
 const SHORT_LINK_BASE_URL = "https://in.archivepilates.com/s";
-const ALLOWED_TARGET_ORIGIN = "https://in.archivepilates.com";
+const ALLOWED_TARGET_ORIGINS = new Set(["https://in.archivepilates.com", "https://www.notion.so"]);
 
 export type ShortLinkType = "survey_detail" | "group_survey" | "method_material" | "private_chart";
 
@@ -83,5 +83,5 @@ function shortLinkIdFromRequest(request: any): string {
 
 function assertAllowedTargetUrl(targetUrl: string): void {
   const url = new URL(targetUrl);
-  if (url.origin !== ALLOWED_TARGET_ORIGIN) throw new Error("short link target origin is not allowed");
+  if (!ALLOWED_TARGET_ORIGINS.has(url.origin)) throw new Error("short link target origin is not allowed");
 }

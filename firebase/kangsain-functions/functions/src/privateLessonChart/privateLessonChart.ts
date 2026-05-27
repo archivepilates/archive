@@ -193,7 +193,24 @@ async function ensureChartRequestForBooking(booking: BookingDoc): Promise<{ requ
     updatedAt: now,
   };
   await refs.privateLessonChartRequest(requestId).create(doc);
-  await upsertChartRecordBase(doc);
+  const baseRecord = await upsertChartRecordBase(doc);
+  const notionSync = await syncPrivateLessonChartRecordToNotion(baseRecord, doc);
+  await refs.privateLessonChartRecord(requestId).set({ notionSync, updatedAt: nowTimestamp() }, { merge: true });
+  if (notionSync.pageUrl) {
+    const mediaUploadShort = await ensureShortLink({
+      type: "private_chart",
+      targetUrl: notionSync.pageUrl,
+      sourceId: `${requestId}_media`,
+    });
+    await refs.privateLessonChartRequest(requestId).set(
+      {
+        mediaUploadUrl: notionSync.pageUrl,
+        mediaUploadShortUrl: mediaUploadShort.shortUrl,
+        updatedAt: nowTimestamp(),
+      },
+      { merge: true },
+    );
+  }
   return { requestId, created: true };
 }
 
@@ -336,32 +353,38 @@ async function syncPrivateLessonChartRecordToNotion(
       "Pre Status": notionSelect(record.prePlan ? "submitted" : "pending"),
       "Post Status": notionSelect(record.postRecord ? "submitted" : "pending"),
       "GPT Status": notionSelect(record.gptStatus),
+      "회원 리포트": record.publicReportUrl ? { url: record.publicReportUrl } : undefined,
+      발송상태: notionSelect(record.publicReportUrl ? "대기" : ""),
     });
     const content = notionChartChildren(record, chartRequest);
     const existingPageId = record.notionSync?.pageId;
     if (existingPageId) {
       await notionRequest(`pages/${existingPageId}`, "PATCH", { properties });
-      await replacePageContent(existingPageId, content);
-      return { status: "synced", pageId: existingPageId, syncedAt: new Date().toISOString() };
+      await appendPageContent(existingPageId, notionUpdateChildren(record, chartRequest));
+      return {
+        status: "synced",
+        pageId: existingPageId,
+        pageUrl: record.notionSync?.pageUrl || notionPageUrl(existingPageId),
+        syncedAt: new Date().toISOString(),
+      };
     }
     const page = await notionRequest("pages", "POST", {
       parent: { database_id: NOTION_SESSION_RECORDS_DATABASE_ID },
       properties,
       children: content,
     });
-    return { status: "synced", pageId: String(page.id), syncedAt: new Date().toISOString() };
+    return { status: "synced", pageId: String(page.id), pageUrl: String(page.url || notionPageUrl(String(page.id))), syncedAt: new Date().toISOString() };
   } catch (err) {
     return { status: "failed", error: errorMessage(err), syncedAt: new Date().toISOString() };
   }
 }
 
-async function replacePageContent(pageId: string, children: Record<string, unknown>[]): Promise<void> {
-  const list = await notionRequest(`blocks/${pageId}/children?page_size=100`, "GET");
-  const blocks = Array.isArray(list.results) ? list.results : [];
-  for (const block of blocks) {
-    if (block?.id) await notionRequest(`blocks/${block.id}`, "DELETE");
-  }
+async function appendPageContent(pageId: string, children: Record<string, unknown>[]): Promise<void> {
   await notionRequest(`blocks/${pageId}/children`, "PATCH", { children });
+}
+
+function notionPageUrl(pageId: string): string {
+  return `https://www.notion.so/${pageId.replaceAll("-", "")}`;
 }
 
 async function notionMemberPageId(
@@ -552,6 +575,38 @@ function notionChartChildren(record: PrivateLessonChartRecordDoc, chartRequest: 
     divider(),
     heading(3, "✅ 회원용 초안"),
     paragraph(record.gptDraftSummary || "GPT 초안 생성 대기 중입니다."),
+    divider(),
+    heading(3, "🖼 사진·영상 업로드"),
+    paragraph("수업 중 촬영한 사진과 영상은 이 섹션 아래에 업로드합니다. 자동화는 기존 업로드 블록을 삭제하지 않습니다."),
+    divider(),
+    heading(3, "📱 회원 리포트 검수"),
+    paragraph(record.publicReportUrl ? "아래 임베드 또는 회원 리포트 URL 속성에서 최종 회원용 리포트를 확인합니다." : "회원용 HTML 리포트 생성 대기 중입니다."),
+    ...(record.publicReportUrl ? [embed(record.publicReportUrl)] : []),
+  ];
+}
+
+function notionUpdateChildren(record: PrivateLessonChartRecordDoc, chartRequest: PrivateLessonChartRequestDoc): Record<string, unknown>[] {
+  return [
+    divider(),
+    heading(3, `자동화 업데이트 ${new Date().toLocaleString("ko-KR", { timeZone: "Asia/Seoul" })}`),
+    paragraph(`회차: ${record.sessionNumber}회차 / 수업일: ${lessonTimeText(chartRequest)} / 담당: ${record.staffName || "미정"}`),
+    heading(3, "수업 전 계획"),
+    ...bullets([
+      `목표: ${textArray(record.prePlan?.goals).join(", ") || "-"}`,
+      `집중 부위: ${textArray(record.prePlan?.focusAreas).join(", ") || "-"}`,
+      `예정 기구: ${textArray(record.prePlan?.equipment).join(", ") || "-"}`,
+      `메모: ${String(record.prePlan?.memo || "-")}`,
+    ]),
+    heading(3, "수업 후 기록"),
+    ...bullets([
+      `컨디션: ${firstText(record.postRecord?.condition) || "-"}`,
+      `통증 변화: ${firstText(record.postRecord?.painChange) || "-"}`,
+      `오늘 변화: ${textArray(record.postRecord?.changes).join(", ") || "-"}`,
+      `다음 수업 메모: ${String(record.postRecord?.nextMemo || "-")}`,
+    ]),
+    heading(3, "회원 리포트"),
+    paragraph(record.gptDraftSummary || "GPT 초안 생성 대기 중입니다."),
+    ...(record.publicReportUrl ? [embed(record.publicReportUrl)] : []),
   ];
 }
 
@@ -682,6 +737,10 @@ function bullets(values: string[]): Record<string, unknown>[] {
 
 function divider(): Record<string, unknown> {
   return { object: "block", type: "divider", divider: {} };
+}
+
+function embed(url: string): Record<string, unknown> {
+  return { object: "block", type: "embed", embed: { url } };
 }
 
 function safeJson(value: unknown): string {

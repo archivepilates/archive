@@ -489,8 +489,10 @@ export interface PrivateLessonChartRequestDoc {
   accessTokenHash: string;
   preUrl: string;
   postUrl: string;
+  mediaUploadUrl?: string;
   preShortUrl: string;
   postShortUrl: string;
+  mediaUploadShortUrl?: string;
   status: PrivateLessonChartRequestStatus;
   preStatus: "pending" | "submitted";
   postStatus: "pending" | "submitted";
@@ -538,11 +540,13 @@ export interface PrivateLessonChartRecordDoc {
   gptTaskId?: string;
   gptDraftSummary?: string;
   gptDraftNextDirection?: string;
+  publicReportUrl?: string;
   publicSummary?: string;
   publicNextDirection?: string;
   notionSync?: {
     status: "pending" | "synced" | "failed";
     pageId?: string;
+    pageUrl?: string;
     syncedAt?: string;
     error?: string;
   };
