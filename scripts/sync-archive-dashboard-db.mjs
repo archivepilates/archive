@@ -664,7 +664,7 @@ function completeDailyDates(existingDates) {
   const today = todayKey();
   for (const month of months) {
     const lastExisting = existingDates.filter((date) => monthKey(date) === month).sort().pop();
-    const endDate = month === monthKey(today) ? today : lastExisting;
+    const endDate = month === monthKey(today) && lastExisting > today ? today : lastExisting;
     if (!endDate) continue;
     for (let date = `${month}-01`; date <= endDate; date = addDays(date, 1)) {
       dates.add(date);
@@ -715,14 +715,6 @@ async function ensureSheets(token, sheetNames) {
 }
 
 async function syncFirebaseDashboard({ dailyRevenueSheet, settlementPreviewSheet, instructorPreviewSheet }) {
-  const idToken = await googleIdentityToken(config.syncEndpoint);
-  const result = await fetch(config.syncEndpoint, {
-    method: "POST",
-    headers: { authorization: `Bearer ${idToken}` },
-  });
-  const text = await result.text();
-  const functionResult = { ok: result.ok, status: result.status, body: safeJson(text) || text.slice(0, 2000) };
-  if (!result.ok) return functionResult;
   const dailyRevenue = sheetRowsToObjects(dailyRevenueSheet).map((row) => ({
     기준일: stringValue(row.기준일),
     기준월: stringValue(row.기준월),
@@ -751,9 +743,18 @@ async function syncFirebaseDashboard({ dailyRevenueSheet, settlementPreviewSheet
   }));
   const settlementPreview = sheetRowsToObjects(settlementPreviewSheet);
   const instructorPreview = sheetRowsToObjects(instructorPreviewSheet);
+  const idToken = await googleIdentityToken(config.syncEndpoint);
+  const result = await fetch(config.syncEndpoint, {
+    method: "POST",
+    headers: { authorization: `Bearer ${idToken}` },
+  });
+  const text = await result.text();
+  const functionResult = { ok: result.ok, status: result.status, body: safeJson(text) || text.slice(0, 2000) };
   const firestorePatch = await patchDashboardCurrentPreview({ dailyRevenue, settlementPreview, instructorPreview });
   return {
-    ...functionResult,
+    ok: functionResult.ok || Boolean(firestorePatch.ok),
+    status: firestorePatch.ok ? firestorePatch.status : functionResult.status,
+    functionResult,
     dailyRevenueRows: dailyRevenue.length,
     settlementPreviewRows: settlementPreview.length,
     instructorPreviewRows: instructorPreview.length,
@@ -766,14 +767,18 @@ async function patchDashboardCurrentPreview({ dailyRevenue, settlementPreview, i
   const token = await googleAccessToken(["https://www.googleapis.com/auth/datastore"], { delegated: false });
   const current = await fetchFirestoreDashboard(token);
   const preview = buildFirestoreCurrentPreview({ dailyRevenue, settlementPreview, instructorPreview });
+  const currentMonthDailyRevenue = dailyRevenue
+    .filter((row) => monthKey(row.기준월) === currentMonth)
+    .sort((a, b) => stringValue(a.기준일).localeCompare(stringValue(b.기준일)));
   const next = {
     summary: replaceMonthRows(current.summary || [], currentMonth, preview.summary),
     강사별: replaceMonthRows(current.강사별 || [], currentMonth, preview.강사별),
     강사통계: replaceMonthRows(current.강사통계 || [], currentMonth, preview.강사통계),
     월별강사평균인원: replaceMonthRows(current.월별강사평균인원 || [], currentMonth, preview.월별강사평균인원),
-    매출일일누적: dailyRevenue,
+    매출일일누적: currentMonthDailyRevenue,
+    updatedAt: new Date().toISOString(),
   };
-  const fieldPaths = ["summary", "강사별", "강사통계", "월별강사평균인원", "매출일일누적"];
+  const fieldPaths = ["summary", "강사별", "강사통계", "월별강사평균인원", "매출일일누적", "updatedAt"];
   const mask = fieldPaths.map((field) => `updateMask.fieldPaths=${encodeURIComponent(`\`${field}\``)}`).join("&");
   const result = await fetch(
     `https://firestore.googleapis.com/v1/projects/archive-pilates/databases/(default)/documents/dashboardSnapshots/current?${mask}`,
@@ -784,7 +789,7 @@ async function patchDashboardCurrentPreview({ dailyRevenue, settlementPreview, i
         "content-type": "application/json",
       },
       body: JSON.stringify({
-        fields: Object.fromEntries(Object.entries(next).map(([field, rows]) => [field, firestoreValue(rows)])),
+        fields: Object.fromEntries(Object.entries(next).map(([field, value]) => [field, firestoreValue(value)])),
       }),
     },
   );
@@ -798,7 +803,8 @@ async function patchDashboardCurrentPreview({ dailyRevenue, settlementPreview, i
       name: body.name || "",
       currentMonth,
       previewRows: Object.fromEntries(Object.entries(preview).map(([field, value]) => [field, value.length])),
-      rows: Object.fromEntries(Object.entries(next).map(([field, value]) => [field, value.length])),
+      rows: Object.fromEntries(Object.entries(next).map(([field, value]) => [field, Array.isArray(value) ? value.length : 1])),
+      dailyRevenueScope: "current-month-only",
     };
   }
   return { ok: result.ok, status: result.status, body };
