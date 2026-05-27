@@ -82,14 +82,12 @@ async function claimPendingTasks(max) {
 }
 
 async function resetStaleProcessingTasks() {
-  const staleBefore = admin.firestore.Timestamp.fromMillis(Date.now() - PROCESSING_STALE_MINUTES * 60 * 1000);
-  const snap = await db
-    .collection("privateLessonChartGptTasks")
-    .where("status", "==", "processing")
-    .where("processingStartedAt", "<", staleBefore)
-    .limit(20)
-    .get();
+  const staleBeforeMillis = Date.now() - PROCESSING_STALE_MINUTES * 60 * 1000;
+  const snap = await db.collection("privateLessonChartGptTasks").where("status", "==", "processing").limit(50).get();
   for (const doc of snap.docs) {
+    const data = doc.data();
+    const startedAtMillis = data.processingStartedAt?.toMillis?.() || Date.now();
+    if (startedAtMillis >= staleBeforeMillis) continue;
     await doc.ref.set(
       {
         status: "pending",
