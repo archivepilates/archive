@@ -1,0 +1,361 @@
+<!doctype html>
+<html lang="ko">
+<head>
+  <meta charset="utf-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1" />
+  <title>StudioMate 이용내역 백필 승인 전 검토</title>
+  <style>
+    :root { --bg:#f7f4ee; --paper:#fffdf8; --text:#171717; --muted:#6f6b63; --line:#ded8cb; --accent:#126b4f; --warn:#b2542f; }
+    * { box-sizing:border-box; }
+    body { margin:0; font-family:-apple-system,BlinkMacSystemFont,"Apple SD Gothic Neo","Noto Sans KR",sans-serif; background:var(--bg); color:var(--text); line-height:1.55; }
+    main { max-width:1120px; margin:0 auto; padding:40px 24px 64px; }
+    h1 { margin:0 0 8px; font-size:30px; letter-spacing:0; }
+    h2 { margin:34px 0 12px; font-size:18px; }
+    p { margin:0 0 12px; color:var(--muted); }
+    .panel { background:var(--paper); border:1px solid var(--line); border-radius:8px; padding:20px; margin-top:18px; }
+    .grid { display:grid; grid-template-columns:repeat(auto-fit,minmax(180px,1fr)); gap:12px; }
+    .metric { border:1px solid var(--line); border-radius:6px; padding:14px; background:#fff; }
+    .label { color:var(--muted); font-size:13px; }
+    .value { font-size:24px; font-weight:750; margin-top:4px; }
+    .ok { color:var(--accent); }
+    .warn { color:var(--warn); }
+    table { width:100%; border-collapse:collapse; background:#fff; border:1px solid var(--line); border-radius:8px; overflow:hidden; }
+    th, td { border-bottom:1px solid var(--line); padding:10px 12px; text-align:left; vertical-align:top; font-size:14px; }
+    th { background:#f0ece3; color:#37342e; font-weight:700; }
+    tr:last-child td { border-bottom:0; }
+    code { word-break:break-all; font-family:ui-monospace,SFMono-Regular,Menlo,monospace; font-size:12px; color:#333; }
+  </style>
+</head>
+<body>
+<main>
+  <h1>StudioMate 이용내역 백필 승인 전 검토</h1>
+  <p>Firestore 쓰기 없이 수집 엑셀을 정규화하고 기존 ARCHIVE IN bookings와 비교한 결과입니다.</p>
+  <section class="panel">
+    <div class="grid">
+      <div class="metric"><div class="label">수집 회원 커버리지</div><div class="value ok">942/942</div></div>
+      <div class="metric"><div class="label">정규화 고유 행</div><div class="value ">65,767</div></div>
+      <div class="metric"><div class="label">기존 bookings 읽기</div><div class="value ">12,346</div></div>
+      <div class="metric"><div class="label">백필 후보</div><div class="value warn">53,324</div></div>
+      <div class="metric"><div class="label">상태 충돌</div><div class="value warn">262</div></div>
+      <div class="metric"><div class="label">회원 미매칭</div><div class="value ok">0</div></div>
+    </div>
+  </section>
+  <h2>판정 요약</h2>
+  <table><thead><tr><th>항목</th><th>건수</th></tr></thead><tbody><tr><td>existing_same_loose</td><td>12,181</td></tr><tr><td>missing_candidate</td><td>53,324</td></tr><tr><td>status_conflict_loose</td><td>262</td></tr></tbody></table>
+  <h2>상태 분포</h2>
+  <table><thead><tr><th>항목</th><th>건수</th></tr></thead><tbody><tr><td>결석</td><td>2,971</td></tr><tr><td>노쇼</td><td>7</td></tr><tr><td>예약</td><td>441</td></tr><tr><td>예약 대기</td><td>63</td></tr><tr><td>예약 확정</td><td>30</td></tr><tr><td>출석</td><td>37,545</td></tr><tr><td>취소</td><td>24,710</td></tr></tbody></table>
+  <h2>출력 파일</h2>
+  <table><tbody>
+    <tr><th>정규화 CSV</th><td><code>/Users/archivepilates/ArchiveIN/emergency/archive/member-usage/2026-05-27/member-usage-normalized-2026-05-27.csv</code></td></tr>
+    <tr><th>정규화 JSON</th><td><code>/Users/archivepilates/ArchiveIN/emergency/archive/member-usage/2026-05-27/member-usage-normalized-2026-05-27.json</code></td></tr>
+    <tr><th>요약 JSON</th><td><code>/Users/archivepilates/ArchiveIN/emergency/archive/member-usage/2026-05-27/member-usage-dry-run-summary-2026-05-27.json</code></td></tr>
+  </tbody></table>
+  <h2>검토 필요 예시: 상태 충돌</h2>
+  <table><thead><tr><th>회원</th><th>수업</th><th>상태</th><th>비고</th></tr></thead><tbody><tr>
+        <td>신우현<br><code>01050165686</code></td>
+        <td>2024-08-11 10:00<br>신우현 외 1명<br><span class="label">배민진</span></td>
+        <td>취소<br><code>cancel/unchecked</code></td>
+        <td><code>{&quot;existingBookingId&quot;:&quot;156530160&quot;,&quot;existingAppStatus&quot;:&quot;reserved&quot;,&quot;existingAttendanceStatus&quot;:&quot;attended&quot;,&quot;existingTitle&quot;:&quot;&quot;,&quot;existingStaffName&quot;:&quot;배민진&quot;}</code></td>
+      </tr><tr>
+        <td>유새라<br><code>01088616007</code></td>
+        <td>2024-08-11 10:00<br>피로 회복 필라테스<br><span class="label">김민지</span></td>
+        <td>결석<br><code>reserved/absent</code></td>
+        <td><code>{&quot;existingBookingId&quot;:&quot;156232151&quot;,&quot;existingAppStatus&quot;:&quot;cancel&quot;,&quot;existingAttendanceStatus&quot;:&quot;absent&quot;,&quot;existingTitle&quot;:&quot;&quot;,&quot;existingStaffName&quot;:&quot;김민지&quot;}</code></td>
+      </tr><tr>
+        <td>정숙자<br><code>01020283583</code></td>
+        <td>2024-08-11 10:00<br>피로 회복 필라테스<br><span class="label">김민지</span></td>
+        <td>취소<br><code>cancel/unchecked</code></td>
+        <td><code>{&quot;existingBookingId&quot;:&quot;156331298&quot;,&quot;existingAppStatus&quot;:&quot;wait_cancel&quot;,&quot;existingAttendanceStatus&quot;:&quot;unchecked&quot;,&quot;existingTitle&quot;:&quot;&quot;,&quot;existingStaffName&quot;:&quot;김민지&quot;}</code></td>
+      </tr><tr>
+        <td>이주현<br><code>01088228671</code></td>
+        <td>2024-08-12 09:00<br>복부&amp;옆구리 군살 정리<br><span class="label">정은영</span></td>
+        <td>결석<br><code>reserved/absent</code></td>
+        <td><code>{&quot;existingBookingId&quot;:&quot;154528164&quot;,&quot;existingAppStatus&quot;:&quot;cancel&quot;,&quot;existingAttendanceStatus&quot;:&quot;unchecked&quot;,&quot;existingTitle&quot;:&quot;&quot;,&quot;existingStaffName&quot;:&quot;정은영&quot;}</code></td>
+      </tr><tr>
+        <td>홍혜원<br><code>01090717325</code></td>
+        <td>2024-08-12 09:00<br>복부&amp;옆구리 군살 정리<br><span class="label">정은영</span></td>
+        <td>취소<br><code>cancel/unchecked</code></td>
+        <td><code>{&quot;existingBookingId&quot;:&quot;156085851&quot;,&quot;existingAppStatus&quot;:&quot;wait_cancel&quot;,&quot;existingAttendanceStatus&quot;:&quot;unchecked&quot;,&quot;existingTitle&quot;:&quot;&quot;,&quot;existingStaffName&quot;:&quot;정은영&quot;}</code></td>
+      </tr><tr>
+        <td>이주현<br><code>01088228671</code></td>
+        <td>2024-08-12 11:00<br>복부&amp;옆구리 군살 정리<br><span class="label">정은영</span></td>
+        <td>결석<br><code>reserved/absent</code></td>
+        <td><code>{&quot;existingBookingId&quot;:&quot;156655740&quot;,&quot;existingAppStatus&quot;:&quot;unknown&quot;,&quot;existingAttendanceStatus&quot;:&quot;absent&quot;,&quot;existingTitle&quot;:&quot;&quot;,&quot;existingStaffName&quot;:&quot;정은영&quot;}</code></td>
+      </tr><tr>
+        <td>이지인<br><code>01083050825</code></td>
+        <td>2024-08-12 19:00<br>복부&amp;옆구리 군살 정리<br><span class="label">정은영</span></td>
+        <td>결석<br><code>reserved/absent</code></td>
+        <td><code>{&quot;existingBookingId&quot;:&quot;155592581&quot;,&quot;existingAppStatus&quot;:&quot;cancel&quot;,&quot;existingAttendanceStatus&quot;:&quot;absent&quot;,&quot;existingTitle&quot;:&quot;&quot;,&quot;existingStaffName&quot;:&quot;정은영&quot;}</code></td>
+      </tr><tr>
+        <td>김민하<br><code>01028416240</code></td>
+        <td>2024-08-12 20:00<br>복부&amp;옆구리 군살 정리<br><span class="label">정은영</span></td>
+        <td>취소<br><code>cancel/unchecked</code></td>
+        <td><code>{&quot;existingBookingId&quot;:&quot;155577468&quot;,&quot;existingAppStatus&quot;:&quot;wait_cancel&quot;,&quot;existingAttendanceStatus&quot;:&quot;unchecked&quot;,&quot;existingTitle&quot;:&quot;&quot;,&quot;existingStaffName&quot;:&quot;정은영&quot;}</code></td>
+      </tr><tr>
+        <td>유주현<br><code>01071813290</code></td>
+        <td>2024-08-12 20:00<br>흉추 기능 회복<br><span class="label">배민진</span></td>
+        <td>취소<br><code>cancel/unchecked</code></td>
+        <td><code>{&quot;existingBookingId&quot;:&quot;156023156&quot;,&quot;existingAppStatus&quot;:&quot;wait_cancel&quot;,&quot;existingAttendanceStatus&quot;:&quot;unchecked&quot;,&quot;existingTitle&quot;:&quot;&quot;,&quot;existingStaffName&quot;:&quot;배민진&quot;}</code></td>
+      </tr><tr>
+        <td>황보라<br><code>01042851209</code></td>
+        <td>2024-08-12 20:00<br>복부&amp;옆구리 군살 정리<br><span class="label">정은영</span></td>
+        <td>취소<br><code>cancel/unchecked</code></td>
+        <td><code>{&quot;existingBookingId&quot;:&quot;155534856&quot;,&quot;existingAppStatus&quot;:&quot;wait_cancel&quot;,&quot;existingAttendanceStatus&quot;:&quot;unchecked&quot;,&quot;existingTitle&quot;:&quot;&quot;,&quot;existingStaffName&quot;:&quot;정은영&quot;}</code></td>
+      </tr><tr>
+        <td>김은영<br><code>01096915100</code></td>
+        <td>2025-02-28 08:00<br>고강도 필라테스 (리포머)<br><span class="label">정은영</span></td>
+        <td>취소<br><code>cancel/unchecked</code></td>
+        <td><code>{&quot;existingBookingId&quot;:&quot;183380847&quot;,&quot;existingAppStatus&quot;:&quot;wait_cancel&quot;,&quot;existingAttendanceStatus&quot;:&quot;unchecked&quot;,&quot;existingTitle&quot;:&quot;&quot;,&quot;existingStaffName&quot;:&quot;정은영&quot;}</code></td>
+      </tr><tr>
+        <td>유새라<br><code>01088616007</code></td>
+        <td>2025-02-28 08:00<br>고강도 필라테스 (리포머)<br><span class="label">정은영</span></td>
+        <td>취소<br><code>cancel/unchecked</code></td>
+        <td><code>{&quot;existingBookingId&quot;:&quot;184692708&quot;,&quot;existingAppStatus&quot;:&quot;wait_cancel&quot;,&quot;existingAttendanceStatus&quot;:&quot;unchecked&quot;,&quot;existingTitle&quot;:&quot;&quot;,&quot;existingStaffName&quot;:&quot;정은영&quot;}</code></td>
+      </tr><tr>
+        <td>유새라<br><code>01088616007</code></td>
+        <td>2025-02-28 09:00<br>고강도 필라테스 (리포머)<br><span class="label">정은영</span></td>
+        <td>취소<br><code>cancel/unchecked</code></td>
+        <td><code>{&quot;existingBookingId&quot;:&quot;184586742&quot;,&quot;existingAppStatus&quot;:&quot;wait_cancel&quot;,&quot;existingAttendanceStatus&quot;:&quot;unchecked&quot;,&quot;existingTitle&quot;:&quot;&quot;,&quot;existingStaffName&quot;:&quot;정은영&quot;}</code></td>
+      </tr><tr>
+        <td>장정은<br><code>01057663664</code></td>
+        <td>2025-02-28 09:00<br>고강도 필라테스 (리포머)<br><span class="label">정은영</span></td>
+        <td>취소<br><code>cancel/unchecked</code></td>
+        <td><code>{&quot;existingBookingId&quot;:&quot;184284711&quot;,&quot;existingAppStatus&quot;:&quot;wait_cancel&quot;,&quot;existingAttendanceStatus&quot;:&quot;unchecked&quot;,&quot;existingTitle&quot;:&quot;&quot;,&quot;existingStaffName&quot;:&quot;정은영&quot;}</code></td>
+      </tr><tr>
+        <td>현나경<br><code>01093110871</code></td>
+        <td>2025-02-28 10:00<br>고강도 필라테스 (리포머)<br><span class="label">정은영</span></td>
+        <td>취소<br><code>cancel/unchecked</code></td>
+        <td><code>{&quot;existingBookingId&quot;:&quot;184933194&quot;,&quot;existingAppStatus&quot;:&quot;wait_cancel&quot;,&quot;existingAttendanceStatus&quot;:&quot;unchecked&quot;,&quot;existingTitle&quot;:&quot;&quot;,&quot;existingStaffName&quot;:&quot;정은영&quot;}</code></td>
+      </tr><tr>
+        <td>김인경<br><code>01031331231</code></td>
+        <td>2025-02-28 14:00<br>엉덩이 볼륨 up! (리포머)<br><span class="label">이초림</span></td>
+        <td>결석<br><code>reserved/absent</code></td>
+        <td><code>{&quot;existingBookingId&quot;:&quot;183376683&quot;,&quot;existingAppStatus&quot;:&quot;unknown&quot;,&quot;existingAttendanceStatus&quot;:&quot;absent&quot;,&quot;existingTitle&quot;:&quot;&quot;,&quot;existingStaffName&quot;:&quot;이초림&quot;}</code></td>
+      </tr><tr>
+        <td>정가영<br><code>01072292822</code></td>
+        <td>2025-02-28 19:00<br>직장인 증후군 (바렐)<br><span class="label">배민진</span></td>
+        <td>취소<br><code>cancel/unchecked</code></td>
+        <td><code>{&quot;existingBookingId&quot;:&quot;183271408&quot;,&quot;existingAppStatus&quot;:&quot;wait_cancel&quot;,&quot;existingAttendanceStatus&quot;:&quot;unchecked&quot;,&quot;existingTitle&quot;:&quot;&quot;,&quot;existingStaffName&quot;:&quot;배민진&quot;}</code></td>
+      </tr><tr>
+        <td>정다운<br><code>01056867315</code></td>
+        <td>2025-02-28 20:00<br>직장인 증후군 (바렐)<br><span class="label">배민진</span></td>
+        <td>결석<br><code>reserved/absent</code></td>
+        <td><code>{&quot;existingBookingId&quot;:&quot;183438671&quot;,&quot;existingAppStatus&quot;:&quot;cancel&quot;,&quot;existingAttendanceStatus&quot;:&quot;absent&quot;,&quot;existingTitle&quot;:&quot;&quot;,&quot;existingStaffName&quot;:&quot;배민진&quot;}</code></td>
+      </tr><tr>
+        <td>정순지<br><code>01082256171</code></td>
+        <td>2025-04-28 09:00<br>은영쌤<br><span class="label">정은영</span></td>
+        <td>취소<br><code>cancel/unchecked</code></td>
+        <td><code>{&quot;existingBookingId&quot;:&quot;187809000&quot;,&quot;existingAppStatus&quot;:&quot;reserved&quot;,&quot;existingAttendanceStatus&quot;:&quot;attended&quot;,&quot;existingTitle&quot;:&quot;&quot;,&quot;existingStaffName&quot;:&quot;정은영&quot;}</code></td>
+      </tr><tr>
+        <td>김은영<br><code>01096915100</code></td>
+        <td>2025-04-28 10:00<br>잘록한 허리 만들기<br><span class="label">정은영</span></td>
+        <td>취소<br><code>cancel/unchecked</code></td>
+        <td><code>{&quot;existingBookingId&quot;:&quot;193053763&quot;,&quot;existingAppStatus&quot;:&quot;wait_cancel&quot;,&quot;existingAttendanceStatus&quot;:&quot;unchecked&quot;,&quot;existingTitle&quot;:&quot;&quot;,&quot;existingStaffName&quot;:&quot;정은영&quot;}</code></td>
+      </tr><tr>
+        <td>정숙자<br><code>01020283583</code></td>
+        <td>2025-04-28 10:00<br>잘록한 허리 만들기<br><span class="label">정은영</span></td>
+        <td>취소<br><code>cancel/unchecked</code></td>
+        <td><code>{&quot;existingBookingId&quot;:&quot;193052775&quot;,&quot;existingAppStatus&quot;:&quot;wait_cancel&quot;,&quot;existingAttendanceStatus&quot;:&quot;unchecked&quot;,&quot;existingTitle&quot;:&quot;&quot;,&quot;existingStaffName&quot;:&quot;정은영&quot;}</code></td>
+      </tr><tr>
+        <td>김인경<br><code>01031331231</code></td>
+        <td>2025-04-28 11:00<br>잘록한 허리 만들기<br><span class="label">정은영</span></td>
+        <td>취소<br><code>cancel/unchecked</code></td>
+        <td><code>{&quot;existingBookingId&quot;:&quot;193940874&quot;,&quot;existingAppStatus&quot;:&quot;wait_cancel&quot;,&quot;existingAttendanceStatus&quot;:&quot;unchecked&quot;,&quot;existingTitle&quot;:&quot;&quot;,&quot;existingStaffName&quot;:&quot;정은영&quot;}</code></td>
+      </tr><tr>
+        <td>유새라<br><code>01088616007</code></td>
+        <td>2025-04-28 19:00<br>좌우 밸런스<br><span class="label">배민진</span></td>
+        <td>취소<br><code>cancel/unchecked</code></td>
+        <td><code>{&quot;existingBookingId&quot;:&quot;193360475&quot;,&quot;existingAppStatus&quot;:&quot;wait_cancel&quot;,&quot;existingAttendanceStatus&quot;:&quot;unchecked&quot;,&quot;existingTitle&quot;:&quot;&quot;,&quot;existingStaffName&quot;:&quot;배민진&quot;}</code></td>
+      </tr><tr>
+        <td>김보현2<br><code>01086055012</code></td>
+        <td>2025-04-28 20:00<br>잘록한 허리 만들기<br><span class="label">정은영</span></td>
+        <td>취소<br><code>cancel/unchecked</code></td>
+        <td><code>{&quot;existingBookingId&quot;:&quot;194091709&quot;,&quot;existingAppStatus&quot;:&quot;wait_cancel&quot;,&quot;existingAttendanceStatus&quot;:&quot;unchecked&quot;,&quot;existingTitle&quot;:&quot;&quot;,&quot;existingStaffName&quot;:&quot;정은영&quot;}</code></td>
+      </tr><tr>
+        <td>오윤정<br><code>01055979695</code></td>
+        <td>2025-04-28 20:00<br>좌우 밸런스<br><span class="label">배민진</span></td>
+        <td>취소<br><code>cancel/unchecked</code></td>
+        <td><code>{&quot;existingBookingId&quot;:&quot;193740959&quot;,&quot;existingAppStatus&quot;:&quot;wait_cancel&quot;,&quot;existingAttendanceStatus&quot;:&quot;unchecked&quot;,&quot;existingTitle&quot;:&quot;&quot;,&quot;existingStaffName&quot;:&quot;배민진&quot;}</code></td>
+      </tr><tr>
+        <td>이한선<br><code>01033731842</code></td>
+        <td>2025-04-28 21:00<br>잘록한 허리 만들기<br><span class="label">정은영</span></td>
+        <td>결석<br><code>reserved/absent</code></td>
+        <td><code>{&quot;existingBookingId&quot;:&quot;193053918&quot;,&quot;existingAppStatus&quot;:&quot;unknown&quot;,&quot;existingAttendanceStatus&quot;:&quot;absent&quot;,&quot;existingTitle&quot;:&quot;&quot;,&quot;existingStaffName&quot;:&quot;정은영&quot;}</code></td>
+      </tr><tr>
+        <td>왕해민<br><code>01040122856</code></td>
+        <td>2025-10-31 09:00<br>매끈한 바디 라인<br><span class="label">정은영</span></td>
+        <td>취소<br><code>cancel/unchecked</code></td>
+        <td><code>{&quot;existingBookingId&quot;:&quot;221086636&quot;,&quot;existingAppStatus&quot;:&quot;wait_cancel&quot;,&quot;existingAttendanceStatus&quot;:&quot;unchecked&quot;,&quot;existingTitle&quot;:&quot;&quot;,&quot;existingStaffName&quot;:&quot;정은영&quot;}</code></td>
+      </tr><tr>
+        <td>백지혜<br><code>01028483054</code></td>
+        <td>2025-10-31 09:30<br>전신 코어 강화<br><span class="label">배민진</span></td>
+        <td>취소<br><code>cancel/unchecked</code></td>
+        <td><code>{&quot;existingBookingId&quot;:&quot;221078347&quot;,&quot;existingAppStatus&quot;:&quot;wait_cancel&quot;,&quot;existingAttendanceStatus&quot;:&quot;unchecked&quot;,&quot;existingTitle&quot;:&quot;&quot;,&quot;existingStaffName&quot;:&quot;배민진&quot;}</code></td>
+      </tr><tr>
+        <td>박현정<br><code>01041709169</code></td>
+        <td>2025-10-31 11:00<br>매끈한 바디 라인<br><span class="label">정은영</span></td>
+        <td>취소<br><code>cancel/unchecked</code></td>
+        <td><code>{&quot;existingBookingId&quot;:&quot;221366412&quot;,&quot;existingAppStatus&quot;:&quot;wait_cancel&quot;,&quot;existingAttendanceStatus&quot;:&quot;unchecked&quot;,&quot;existingTitle&quot;:&quot;&quot;,&quot;existingStaffName&quot;:&quot;정은영&quot;}</code></td>
+      </tr><tr>
+        <td>김수민2<br><code>01090542017</code></td>
+        <td>2025-10-31 17:30<br>전신 코어 강화<br><span class="label">배민진</span></td>
+        <td>취소<br><code>cancel/unchecked</code></td>
+        <td><code>{&quot;existingBookingId&quot;:&quot;222569612&quot;,&quot;existingAppStatus&quot;:&quot;wait_cancel&quot;,&quot;existingAttendanceStatus&quot;:&quot;unchecked&quot;,&quot;existingTitle&quot;:&quot;&quot;,&quot;existingStaffName&quot;:&quot;배민진&quot;}</code></td>
+      </tr></tbody></table>
+  <h2>검토 필요 예시: 백필 후보</h2>
+  <table><thead><tr><th>회원</th><th>수업</th><th>상태</th><th>비고</th></tr></thead><tbody><tr>
+        <td>김정민<br><code>01025858933</code></td>
+        <td>2023-03-06 08:00<br>바렐/캐딜락<br><span class="label">배민진</span></td>
+        <td>결석<br><code>reserved/absent</code></td>
+        <td><code>{&quot;memberId&quot;:&quot;1999091&quot;}</code></td>
+      </tr><tr>
+        <td>남연재<br><code>01079273290</code></td>
+        <td>2023-03-06 08:00<br>바렐/캐딜락<br><span class="label">배민진</span></td>
+        <td>출석<br><code>reserved/attended</code></td>
+        <td><code>{&quot;memberId&quot;:&quot;1998936&quot;}</code></td>
+      </tr><tr>
+        <td>이온유<br><code>01029948602</code></td>
+        <td>2023-03-06 08:00<br>바렐/캐딜락<br><span class="label">배민진</span></td>
+        <td>출석<br><code>reserved/attended</code></td>
+        <td><code>{&quot;memberId&quot;:&quot;2023033&quot;}</code></td>
+      </tr><tr>
+        <td>배민진<br><code>01044033249</code></td>
+        <td>2023-03-06 09:00<br>캐딜락/바렐<br><span class="label">배민진</span></td>
+        <td>취소<br><code>cancel/unchecked</code></td>
+        <td><code>{&quot;memberId&quot;:&quot;1992206&quot;}</code></td>
+      </tr><tr>
+        <td>이수민<br><code>01044532128</code></td>
+        <td>2023-03-06 11:00<br>바렐/캐딜락<br><span class="label">배민진</span></td>
+        <td>출석<br><code>reserved/attended</code></td>
+        <td><code>{&quot;memberId&quot;:&quot;1984716&quot;}</code></td>
+      </tr><tr>
+        <td>이연희<br><code>01090801046</code></td>
+        <td>2023-03-06 11:00<br>바렐/캐딜락<br><span class="label">배민진</span></td>
+        <td>출석<br><code>reserved/attended</code></td>
+        <td><code>{&quot;memberId&quot;:&quot;2017926&quot;}</code></td>
+      </tr><tr>
+        <td>정숙자<br><code>01020283583</code></td>
+        <td>2023-03-06 11:00<br>바렐/캐딜락<br><span class="label">배민진</span></td>
+        <td>출석<br><code>reserved/attended</code></td>
+        <td><code>{&quot;memberId&quot;:&quot;1985970&quot;}</code></td>
+      </tr><tr>
+        <td>차효경<br><code>01023860647</code></td>
+        <td>2023-03-06 11:00<br>바렐/캐딜락<br><span class="label">배민진</span></td>
+        <td>출석<br><code>reserved/attended</code></td>
+        <td><code>{&quot;memberId&quot;:&quot;1999438&quot;}</code></td>
+      </tr><tr>
+        <td>김정민<br><code>01025858933</code></td>
+        <td>2023-03-06 14:00<br>캐딜락/바렐<br><span class="label">김수진</span></td>
+        <td>출석<br><code>reserved/attended</code></td>
+        <td><code>{&quot;memberId&quot;:&quot;1999091&quot;}</code></td>
+      </tr><tr>
+        <td>오은화<br><code>01053364325</code></td>
+        <td>2023-03-06 14:00<br>캐딜락/바렐<br><span class="label">김수진</span></td>
+        <td>출석<br><code>reserved/attended</code></td>
+        <td><code>{&quot;memberId&quot;:&quot;1987070&quot;}</code></td>
+      </tr><tr>
+        <td>정은영<br><code>01040180513</code></td>
+        <td>2023-03-06 14:00<br>캐딜락/바렐<br><span class="label">김수진</span></td>
+        <td>출석<br><code>reserved/attended</code></td>
+        <td><code>{&quot;memberId&quot;:&quot;2022993&quot;}</code></td>
+      </tr><tr>
+        <td>김혜진<br><code>01065573507</code></td>
+        <td>2023-03-06 17:30<br>김혜진님<br><span class="label">배민진</span></td>
+        <td>출석<br><code>reserved/attended</code></td>
+        <td><code>{&quot;memberId&quot;:&quot;2003842&quot;}</code></td>
+      </tr><tr>
+        <td>배민진<br><code>01044033249</code></td>
+        <td>2023-03-06 18:30<br>캐딜락/바렐<br><span class="label">김수진</span></td>
+        <td>취소<br><code>cancel/unchecked</code></td>
+        <td><code>{&quot;memberId&quot;:&quot;1992206&quot;}</code></td>
+      </tr><tr>
+        <td>소재경<br><code>01072721265</code></td>
+        <td>2023-03-06 19:30<br>바렐/캐딜락<br><span class="label">배민진</span></td>
+        <td>출석<br><code>reserved/attended</code></td>
+        <td><code>{&quot;memberId&quot;:&quot;1991699&quot;}</code></td>
+      </tr><tr>
+        <td>조정선<br><code>01045759182</code></td>
+        <td>2023-03-06 19:30<br>바렐/캐딜락<br><span class="label">배민진</span></td>
+        <td>출석<br><code>reserved/attended</code></td>
+        <td><code>{&quot;memberId&quot;:&quot;2020342&quot;}</code></td>
+      </tr><tr>
+        <td>김세현<br><code>01057015217</code></td>
+        <td>2023-03-06 20:00<br>김세현님<br><span class="label">김수진</span></td>
+        <td>출석<br><code>reserved/attended</code></td>
+        <td><code>{&quot;memberId&quot;:&quot;1997879&quot;}</code></td>
+      </tr><tr>
+        <td>김민송<br><code>01065051502</code></td>
+        <td>2023-03-06 20:30<br>바렐/캐딜락<br><span class="label">배민진</span></td>
+        <td>출석<br><code>reserved/attended</code></td>
+        <td><code>{&quot;memberId&quot;:&quot;2011065&quot;}</code></td>
+      </tr><tr>
+        <td>김혜정<br><code>01032627436</code></td>
+        <td>2023-03-06 20:30<br>바렐/캐딜락<br><span class="label">배민진</span></td>
+        <td>출석<br><code>reserved/attended</code></td>
+        <td><code>{&quot;memberId&quot;:&quot;2023004&quot;}</code></td>
+      </tr><tr>
+        <td>김덕영<br><code>01085230402</code></td>
+        <td>2023-03-07 08:30<br>캐딜락/체어<br><span class="label">배민진</span></td>
+        <td>출석<br><code>reserved/attended</code></td>
+        <td><code>{&quot;memberId&quot;:&quot;2002111&quot;}</code></td>
+      </tr><tr>
+        <td>박인영<br><code>01093392293</code></td>
+        <td>2023-03-07 08:30<br>캐딜락/체어<br><span class="label">배민진</span></td>
+        <td>출석<br><code>reserved/attended</code></td>
+        <td><code>{&quot;memberId&quot;:&quot;2002094&quot;}</code></td>
+      </tr><tr>
+        <td>백민숙<br><code>01085993850</code></td>
+        <td>2023-03-07 08:30<br>캐딜락/체어<br><span class="label">배민진</span></td>
+        <td>출석<br><code>reserved/attended</code></td>
+        <td><code>{&quot;memberId&quot;:&quot;1984457&quot;}</code></td>
+      </tr><tr>
+        <td>김서원<br><code>01024484131</code></td>
+        <td>2023-03-07 09:30<br>캐딜락/체어<br><span class="label">배민진</span></td>
+        <td>출석<br><code>reserved/attended</code></td>
+        <td><code>{&quot;memberId&quot;:&quot;1984759&quot;}</code></td>
+      </tr><tr>
+        <td>이정미<br><code>01085241759</code></td>
+        <td>2023-03-07 09:30<br>캐딜락/체어<br><span class="label">배민진</span></td>
+        <td>출석<br><code>reserved/attended</code></td>
+        <td><code>{&quot;memberId&quot;:&quot;1997396&quot;}</code></td>
+      </tr><tr>
+        <td>배민진<br><code>01044033249</code></td>
+        <td>2023-03-07 10:30<br>바렐/체어<br><span class="label">김수진</span></td>
+        <td>취소<br><code>cancel/unchecked</code></td>
+        <td><code>{&quot;memberId&quot;:&quot;1992206&quot;}</code></td>
+      </tr><tr>
+        <td>권수진<br><code>01098723583</code></td>
+        <td>2023-03-07 14:00<br>캐딜락/체어<br><span class="label">배민진</span></td>
+        <td>출석<br><code>reserved/attended</code></td>
+        <td><code>{&quot;memberId&quot;:&quot;1985957&quot;}</code></td>
+      </tr><tr>
+        <td>이윤정<br><code>01043775673</code></td>
+        <td>2023-03-07 14:00<br>캐딜락/체어<br><span class="label">배민진</span></td>
+        <td>출석<br><code>reserved/attended</code></td>
+        <td><code>{&quot;memberId&quot;:&quot;2053032&quot;}</code></td>
+      </tr><tr>
+        <td>이윤정<br><code>01076481170</code></td>
+        <td>2023-03-07 14:00<br>캐딜락/체어<br><span class="label">배민진</span></td>
+        <td>출석<br><code>reserved/attended</code></td>
+        <td><code>{&quot;memberId&quot;:&quot;2053032&quot;}</code></td>
+      </tr><tr>
+        <td>정은영<br><code>01040180513</code></td>
+        <td>2023-03-07 14:00<br>캐딜락/체어<br><span class="label">배민진</span></td>
+        <td>출석<br><code>reserved/attended</code></td>
+        <td><code>{&quot;memberId&quot;:&quot;2022993&quot;}</code></td>
+      </tr><tr>
+        <td>김미진<br><code>01025422706</code></td>
+        <td>2023-03-07 19:00<br>캐딜락/체어<br><span class="label">배민진</span></td>
+        <td>출석<br><code>reserved/attended</code></td>
+        <td><code>{&quot;memberId&quot;:&quot;1990983&quot;}</code></td>
+      </tr><tr>
+        <td>소재경<br><code>01072721265</code></td>
+        <td>2023-03-07 19:00<br>캐딜락/체어<br><span class="label">배민진</span></td>
+        <td>취소<br><code>cancel/unchecked</code></td>
+        <td><code>{&quot;memberId&quot;:&quot;1991699&quot;}</code></td>
+      </tr></tbody></table>
+  <h2>검토 필요 예시: 회원 미매칭</h2>
+  <p>없음</p>
+</main>
+</body>
+</html>
