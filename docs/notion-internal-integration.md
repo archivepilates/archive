@@ -54,6 +54,16 @@ Notion에서 `ARCHIVE PILATES 프라이빗 회원 차트 시스템` 페이지 �
 
 2026-05-27 확인: Firebase project `archive-pilates`에 `NOTION_TOKEN` secret version 1 생성 완료. Notion integration `ARCHIVE AI`가 Members DB와 Intake Survey DB를 조회할 수 있다.
 
+2026-05-27 E2E QA:
+
+- 실제 Google Form 테스트 응답 제출 완료: `테스트_노션동기화 / 01000009999`
+- Firestore intake: `psr-d81b99b8b88d-6e7f7ee7944e16a3`
+- Firestore response: `psr-d81b99b8b88d`
+- Notion sync result: `status=synced`, `action=created`, `failed=0`
+- Notion Intake page: `36dd49ea-e4bf-81cc-92d7-f709764727fc`
+- Notion Member page: `36dd49ea-e4bf-81ad-a839-f1860e6318c5`
+- 테스트 응답은 실제 회원이 아니므로 Intake `Survey Status`를 `보류`로 변경했다.
+
 운영 기준:
 
 - Apps Script는 Notion API를 직접 호출하지 않는다.
