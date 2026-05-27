@@ -366,6 +366,7 @@
 데이터 매핑:
 
 - `#{회원명}`: `privateLessonChartRequests.memberName`
+- `#{강사명}`: `privateLessonChartRequests.staffName`
 - `#{회차}`: `privateLessonChartRequests.sessionNumber`
 - `#{수업일시}`: 수업일 + 시작시간
 - `#{수업전계획링크ID}`: 수업 전 계획 작성 short link id
