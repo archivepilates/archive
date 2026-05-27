@@ -9,14 +9,17 @@ const db = admin.firestore();
 
 const command = process.argv[2] || "count";
 const limit = Math.max(1, Math.min(10, Number(readArg("--limit") || 5)));
+const PROCESSING_STALE_MINUTES = 30;
 
 async function main() {
   if (command === "count") {
+    await resetStaleProcessingTasks();
     const snap = await db.collection("privateLessonChartGptTasks").where("status", "==", "pending").limit(20).get();
     console.log(String(snap.size));
     return;
   }
   if (command === "claim") {
+    await resetStaleProcessingTasks();
     const tasks = await claimPendingTasks(limit);
     console.log(JSON.stringify(tasks, null, 2));
     return;
@@ -48,6 +51,7 @@ async function claimPendingTasks(max) {
         doc.ref,
         {
           status: "processing",
+          attempts: Number(data.attempts || 0) + 1,
           processingStartedAt: admin.firestore.Timestamp.now(),
           lockedBy: "macmini-codex-agent",
           updatedAt: admin.firestore.Timestamp.now(),
@@ -61,6 +65,9 @@ async function claimPendingTasks(max) {
     const record = recordSnap?.exists ? recordSnap.data() : null;
     claimed.push({
       taskId: task.taskId,
+      sourceCollection: task.sourceCollection || "privateLessonChartRecords",
+      sourceDocId: task.sourceDocId || task.recordId,
+      sourceHash: task.sourceHash || "",
       recordId: task.recordId,
       requestId: task.requestId,
       memberName: task.memberName,
@@ -72,6 +79,26 @@ async function claimPendingTasks(max) {
     });
   }
   return claimed;
+}
+
+async function resetStaleProcessingTasks() {
+  const staleBefore = admin.firestore.Timestamp.fromMillis(Date.now() - PROCESSING_STALE_MINUTES * 60 * 1000);
+  const snap = await db
+    .collection("privateLessonChartGptTasks")
+    .where("status", "==", "processing")
+    .where("processingStartedAt", "<", staleBefore)
+    .limit(20)
+    .get();
+  for (const doc of snap.docs) {
+    await doc.ref.set(
+      {
+        status: "pending",
+        error: `processing stale over ${PROCESSING_STALE_MINUTES} minutes; requeued by macmini agent`,
+        updatedAt: admin.firestore.Timestamp.now(),
+      },
+      { merge: true },
+    );
+  }
 }
 
 async function completeTask(input) {

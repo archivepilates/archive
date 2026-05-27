@@ -554,6 +554,9 @@ export interface PrivateLessonChartGptTaskDoc {
   taskId: string;
   type: "private_lesson_chart_public_draft";
   status: PrivateLessonChartGptStatus;
+  sourceCollection?: "privateLessonChartRecords";
+  sourceDocId?: string;
+  sourceHash?: string;
   recordId: string;
   requestId: string;
   memberId: string;
@@ -562,6 +565,11 @@ export interface PrivateLessonChartGptTaskDoc {
   sessionNumber: number;
   lessonDate: string;
   promptBrief: string;
+  inputSnapshot?: {
+    intakeSummary?: PrivateLessonChartRequestDoc["intakeSummary"];
+    prePlan?: Record<string, unknown>;
+    postRecord?: Record<string, unknown>;
+  };
   result?: {
     summary?: string;
     nextDirection?: string;

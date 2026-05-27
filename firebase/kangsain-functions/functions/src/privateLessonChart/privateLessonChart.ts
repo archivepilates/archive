@@ -16,6 +16,7 @@ import type {
 } from "../types/models";
 import { addDays, formatDateKst, nowTimestamp, todayKst } from "../utils/date";
 import { errorMessage } from "../utils/errors";
+import { stableHash } from "../utils/hash";
 import { ensureShortLink } from "../utils/shortLinks";
 
 const PUBLIC_BASE_URL = process.env.PRIVATE_CHART_BASE_URL || "https://in.archivepilates.com/private-chart/";
@@ -98,6 +99,44 @@ export async function createPrivateLessonChartRequestsForDate(date: string): Pro
 
   logger.info("createPrivateLessonChartRequestsForDate completed", { date, checked, created, skipped });
   return { date, checked, created, skipped };
+}
+
+export async function enqueuePendingPrivateLessonChartGptTasks(): Promise<{
+  checked: number;
+  enqueued: number;
+  skipped: number;
+}> {
+  const snap = await refs.privateLessonChartRecords().where("gptStatus", "==", "pending").limit(100).get();
+  let checked = 0;
+  let enqueued = 0;
+  let skipped = 0;
+
+  for (const recordSnap of snap.docs) {
+    const record = recordSnap.data();
+    if (!record.postRecord || !record.postSubmittedAt) {
+      skipped += 1;
+      continue;
+    }
+    checked += 1;
+    const requestSnap = await refs.privateLessonChartRequest(record.requestId).get();
+    const chartRequest = requestSnap.data();
+    if (!chartRequest) {
+      skipped += 1;
+      continue;
+    }
+    const result = await ensureGptTask(record, chartRequest).catch((err) => {
+      logger.warn("enqueuePendingPrivateLessonChartGptTasks failed", {
+        recordId: record.recordId,
+        message: errorMessage(err),
+      });
+      return null;
+    });
+    if (result?.enqueued) enqueued += 1;
+    else skipped += 1;
+  }
+
+  logger.info("enqueuePendingPrivateLessonChartGptTasks completed", { checked, enqueued, skipped });
+  return { checked, enqueued, skipped };
 }
 
 async function ensureChartRequestForBooking(booking: BookingDoc): Promise<{ requestId: string; created: boolean }> {
@@ -229,13 +268,23 @@ async function upsertChartRecordBase(chartRequest: PrivateLessonChartRequestDoc)
 async function ensureGptTask(
   record: PrivateLessonChartRecordDoc,
   chartRequest: PrivateLessonChartRequestDoc,
-): Promise<void> {
+): Promise<{ taskId: string; enqueued: boolean }> {
   const taskId = `plc_gpt_${record.recordId}`;
   const now = nowTimestamp();
+  const sourceHash = gptSourceHash(record, chartRequest);
+  const existing = await refs.privateLessonChartGptTask(taskId).get();
+  const existingTask = existing.data();
+  if (existingTask?.sourceHash === sourceHash && existingTask.status !== "failed") {
+    await refs.privateLessonChartRecord(record.recordId).set({ gptTaskId: taskId, updatedAt: now }, { merge: true });
+    return { taskId, enqueued: false };
+  }
   const task: PrivateLessonChartGptTaskDoc = {
     taskId,
     type: "private_lesson_chart_public_draft",
     status: "pending",
+    sourceCollection: "privateLessonChartRecords",
+    sourceDocId: record.recordId,
+    sourceHash,
     recordId: record.recordId,
     requestId: record.requestId,
     memberId: record.memberId,
@@ -244,12 +293,18 @@ async function ensureGptTask(
     sessionNumber: record.sessionNumber,
     lessonDate: record.lessonDate,
     promptBrief: gptPromptBrief(record, chartRequest),
+    inputSnapshot: {
+      intakeSummary: chartRequest.intakeSummary,
+      prePlan: record.prePlan,
+      postRecord: record.postRecord,
+    },
     error: null,
     createdAt: now,
     updatedAt: now,
   };
   await refs.privateLessonChartGptTask(taskId).set(task, { merge: true });
   await refs.privateLessonChartRecord(record.recordId).set({ gptTaskId: taskId, gptStatus: "pending", updatedAt: now }, { merge: true });
+  return { taskId, enqueued: true };
 }
 
 async function syncPrivateLessonChartRecordToNotion(
@@ -450,6 +505,15 @@ function gptPromptBrief(record: PrivateLessonChartRecordDoc, chartRequest: Priva
     `수업 후 기록: ${safeJson(record.postRecord || {})}`,
     "출력: summary 2문장, nextDirection 1문장.",
   ].join("\n");
+}
+
+function gptSourceHash(record: PrivateLessonChartRecordDoc, chartRequest: PrivateLessonChartRequestDoc): string {
+  return stableHash({
+    requestId: record.requestId,
+    intakeSummary: chartRequest.intakeSummary || {},
+    prePlan: record.prePlan || {},
+    postRecord: record.postRecord || {},
+  });
 }
 
 function notionChartChildren(record: PrivateLessonChartRecordDoc, chartRequest: PrivateLessonChartRequestDoc): Record<string, unknown>[] {

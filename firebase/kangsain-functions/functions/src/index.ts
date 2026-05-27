@@ -46,10 +46,10 @@ import {
 } from "./privateSurvey/privateSurveyResponse";
 import {
   createTomorrowPrivateLessonChartRequests,
+  enqueuePendingPrivateLessonChartGptTasks,
   privateLessonChartApiHandler,
 } from "./privateLessonChart/privateLessonChart";
 import { receiveInBodyWebhookHandler } from "./inbody/inbodyWebhook";
-import { inbodyMemberReportViewHandler } from "./inbody/inbodyMemberReportView";
 
 const callableOptions = { region: REGION, secrets: allSecrets, invoker: "public" as const };
 const longCallableOptions = { ...callableOptions, timeoutSeconds: 540, memory: "512MiB" as const };
@@ -88,11 +88,6 @@ const publicRequestOptions = {
   timeoutSeconds: 60,
   memory: "256MiB" as const,
   invoker: "public" as const,
-};
-const publicRequestOptionsWithoutInvoker = {
-  region: REGION,
-  timeoutSeconds: 60,
-  memory: "256MiB" as const,
 };
 const publicLongRequestOptions = {
   ...longRequestOptions,
@@ -244,6 +239,16 @@ export const scheduledCreatePrivateLessonChartRequests = onSchedule(
   },
 );
 
+export const scheduledEnqueuePrivateLessonChartGptTasks = onSchedule(
+  {
+    ...privateSurveyIntakeOptions,
+    schedule: "every 10 minutes",
+  },
+  async () => {
+    await enqueuePendingPrivateLessonChartGptTasks();
+  },
+);
+
 export const scheduledPreSecurityRawMirror = onSchedule(
   {
     ...scheduleOptions,
@@ -288,8 +293,6 @@ export const ingestPrivateSurveyResponse = onRequest(privateSurveyIngestOptions,
 });
 
 export const privateSurveyResponseView = onRequest(publicRequestOptions, privateSurveyResponseViewHandler);
-
-export const inbodyMemberReportView = onRequest(publicRequestOptionsWithoutInvoker, inbodyMemberReportViewHandler);
 
 export const privateLessonChartApi = onRequest(privateLessonChartRequestOptions, privateLessonChartApiHandler);
 

@@ -10,16 +10,19 @@
 - 알림톡 버튼은 수업 전 계획, 수업 후 기록 2개로 분리한다.
 - 링크에는 회원 정보와 예약 정보를 직접 노출하지 않고 `requestId`와 토큰만 포함한다.
 - Notion은 기존 `개인레슨 차트` 페이지의 회차별 문서 흐름을 참고한다.
-- GPT 요약은 OpenAI API 과금 호출 없이 Mac mini Codex 자동화 작업 큐로 처리한다.
+- GPT 요약은 Notion Formula가 아니라 Firestore 설문/수업기록 데이터를 원천 큐로 삼아 처리한다.
+- OpenAI API 과금 호출 없이 Mac mini LaunchAgent가 Codex CLI 에이전트를 필요할 때만 실행한다.
 
 ## 구현 구조
 
 - `privateLessonChartRequests`: 예약별 입력 요청, 버튼 링크, 제출 상태, 사전설문 요약
-- `privateLessonChartRecords`: 수업 전 계획, 수업 후 기록, Notion 동기화 상태
-- `privateLessonChartGptTasks`: 수업 후 기록 제출 뒤 생성되는 회원용 초안 작업
+- `privateLessonChartRecords`: 수업 전 계획, 수업 후 기록, Notion 동기화 상태. GPT 큐의 원천 데이터.
+- `privateLessonChartGptTasks`: `privateLessonChartRecords`에서 파생되는 실행 큐. `sourceHash`로 중복/재처리를 제어.
 - `privateLessonChartApi`: 강사용 입력폼 조회/제출 HTTP API
 - `scheduledCreatePrivateLessonChartRequests`: 매일 18:00 KST에 다음날 프라이빗 예약의 차트 요청 생성
+- `scheduledEnqueuePrivateLessonChartGptTasks`: 10분마다 수업 후 기록이 있는데 GPT 큐가 누락된 records를 재확인
 - `/private-chart/`: 강사용 모바일 입력 화면
+- `com.archive.private-chart-gpt-agent`: Mac mini LaunchAgent. 5분마다 pending GPT task 확인 후 Codex CLI 실행.
 
 ## Notion 반영
 
@@ -62,5 +65,6 @@
 ## 남은 운영 단계
 
 - 알림톡 템플릿 승인 후 `template_pending` 상태의 요청을 실제 발송 큐와 연결한다.
-- Mac mini Codex 자동화가 `privateLessonChartGptTasks`의 `pending` 작업을 읽어 회원용 초안을 작성하고 Notion/Firestore에 반영한다.
+- Mac mini LaunchAgent가 `privateLessonChartGptTasks`의 `pending` 작업을 읽어 회원용 초안을 작성하고 Notion/Firestore에 반영한다.
+- Notion Formula는 큐 생성에 사용하지 않는다. Formula는 상태 표시, 필터, 임시 요약용으로만 사용한다.
 - 첫 운영 전에는 실제 예약 1건으로 수업 전/후 제출과 Notion 회차 페이지 생성을 확인한다.
