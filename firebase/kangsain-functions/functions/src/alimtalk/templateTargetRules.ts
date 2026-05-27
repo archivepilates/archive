@@ -28,6 +28,7 @@ export interface AlimtalkTemplateTargetRule {
   minSourceDate?: string;
   sourceDatePolicy: AlimtalkSourceDatePolicy;
   maxAgeDays?: number;
+  automationStatus: "active" | "paused" | "manual";
   requiresApprovedTemplate: boolean;
   requiresMemberPhone: boolean;
   requiresManagementNumber?: boolean;
@@ -50,6 +51,7 @@ export const ALIMTALK_TEMPLATE_TARGET_RULES: Partial<Record<AlimtalkCandidateTyp
         minSourceDate: policy.minSourceDate,
         sourceDatePolicy: policy.sourceDatePolicy,
         maxAgeDays: policy.maxAgeDays,
+        automationStatus: policy.automationStatus,
         requiresApprovedTemplate: policy.requiresApprovedTemplate,
         requiresMemberPhone: policy.requiresMemberPhone,
         requiresManagementNumber: policy.requiresManagementNumber,

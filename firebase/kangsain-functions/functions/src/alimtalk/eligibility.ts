@@ -7,6 +7,8 @@ import { alimtalkTemplateTargetRule, solapiButtonUrlLengthIssue } from "./templa
 
 export async function autoSendabilityIssue(candidate: AlimtalkCandidateDoc, today: string): Promise<string> {
   const rule = alimtalkTemplateTargetRule(candidate.type);
+  if (rule?.automationStatus === "paused") return `${rule.templateLabel} 자동화 일시중지`;
+  if (rule?.automationStatus === "manual") return `${rule.templateLabel} 수동 발송 전용`;
   if (rule?.requiresMemberPhone && !candidate.memberPhone) return "전화번호 없음";
   if (ALIMTALK_MEMBER_EXCLUSION_REASONS[candidate.memberId])
     return ALIMTALK_MEMBER_EXCLUSION_REASONS[candidate.memberId];

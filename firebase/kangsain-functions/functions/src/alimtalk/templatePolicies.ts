@@ -27,6 +27,7 @@ export type SendableAlimtalkCandidateType =
   | "new_member"
   | "private_survey"
   | "group_survey"
+  | "instructor_lesson_material"
   | "ticket_expiring"
   | "remaining_low"
   | "private_count_low"
@@ -284,9 +285,9 @@ export const ALIMTALK_TEMPLATE_POLICIES: Record<AlimtalkTemplatePolicyKey, Alimt
     type: "long_absence",
     code: "KA01TP260524083643752cySb9BoDOjN",
     label: "장기 미방문 수업안내 v1",
-    status: "pending",
+    status: "approved",
     audience: "member",
-    automationStatus: "paused",
+    automationStatus: "active",
     minSourceDate: LONG_ABSENCE_ALIMTALK_START_DATE,
     sourceDatePolicy: "today",
     requiresApprovedTemplate: true,
@@ -354,10 +355,17 @@ export const ALIMTALK_TEMPLATE_POLICIES: Record<AlimtalkTemplatePolicyKey, Alimt
       { label: "강사레슨 수업자료 버튼", template: METHOD_MATERIAL_BUTTON_URL_TEMPLATE, maxLength: SOLAPI_BUTTON_URL_MAX_LENGTH },
       { label: "강사레슨 수업자료 버튼", template: SHORT_LINK_BUTTON_URL_TEMPLATE, maxLength: SOLAPI_BUTTON_URL_MAX_LENGTH },
     ],
-    targetRules: ["강사레슨 예약", "수업 하루 전 후보", "수업자료 관리번호가 있음", "강사레슨 카카오 채널 템플릿 사용"],
+    targetRules: [
+      "강사레슨 예약",
+      "수업 하루 전 후보",
+      "수업명에 영문 주제명이 있음",
+      "관리번호는 영문주제-수업날짜6자리 형식",
+      "강사레슨 카카오 채널 템플릿 사용",
+    ],
     exclusionRules: [
       "전화번호 없음",
       "강사레슨 예약 아님",
+      "수업명에서 영문 주제명 추출 실패",
       "수업자료 관리번호 없음",
       "짧은 링크 생성 실패 또는 버튼 URL 치환 후 100자 초과",
       "같은 수업자료와 수업일 조합 발송 이력 있음",
@@ -372,6 +380,7 @@ export const SENDABLE_ALIMTALK_CANDIDATE_TYPES = [
   "new_member",
   "private_survey",
   "group_survey",
+  "instructor_lesson_material",
   "ticket_expiring",
   "remaining_low",
   "private_count_low",
