@@ -466,6 +466,111 @@ export interface PrivateSurveyResponseDoc {
   updatedAt: Timestamp;
 }
 
+export type PrivateLessonChartMode = "pre" | "post";
+export type PrivateLessonChartRequestStatus = "pending" | "pre_submitted" | "post_submitted" | "completed" | "cancelled";
+export type PrivateLessonChartGptStatus = "pending" | "processing" | "draft_created" | "approved" | "published" | "failed";
+
+export interface PrivateLessonChartRequestDoc {
+  requestId: string;
+  studioId: string;
+  bookingId: string;
+  lectureId: string;
+  memberId: string;
+  memberName: string;
+  memberPhone: string;
+  memberPhoneLast4: string;
+  staffId: string;
+  staffName: string;
+  staffPhone: string;
+  lessonDate: string;
+  lessonStartAt: Timestamp | null;
+  lessonEndAt: Timestamp | null;
+  sessionNumber: number;
+  accessTokenHash: string;
+  preUrl: string;
+  postUrl: string;
+  preShortUrl: string;
+  postShortUrl: string;
+  status: PrivateLessonChartRequestStatus;
+  preStatus: "pending" | "submitted";
+  postStatus: "pending" | "submitted";
+  alimtalk: {
+    status: "template_pending" | "queued" | "sent" | "failed" | "skipped";
+    templateName: string;
+    lastError: string | null;
+  };
+  intakeSummary?: {
+    responseId?: string;
+    submittedAtText?: string;
+    experienceType?: string;
+    goal?: string;
+    focusArea?: string;
+    painOrMedicalNote?: string;
+    exerciseLevel?: string;
+    concernOrDifficulty?: string;
+    expectationOrImportantFactor?: string;
+    referralSource?: string;
+    lifestyleOrPreviousIssue?: string;
+  };
+  createdAt: Timestamp;
+  updatedAt: Timestamp;
+}
+
+export interface PrivateLessonChartRecordDoc {
+  recordId: string;
+  requestId: string;
+  studioId: string;
+  bookingId: string;
+  lectureId: string;
+  memberId: string;
+  memberName: string;
+  memberPhone: string;
+  staffId: string;
+  staffName: string;
+  lessonDate: string;
+  lessonStartAt: Timestamp | null;
+  sessionNumber: number;
+  prePlan?: Record<string, unknown>;
+  postRecord?: Record<string, unknown>;
+  preSubmittedAt?: Timestamp | null;
+  postSubmittedAt?: Timestamp | null;
+  gptStatus: PrivateLessonChartGptStatus;
+  gptTaskId?: string;
+  gptDraftSummary?: string;
+  gptDraftNextDirection?: string;
+  publicSummary?: string;
+  publicNextDirection?: string;
+  notionSync?: {
+    status: "pending" | "synced" | "failed";
+    pageId?: string;
+    syncedAt?: string;
+    error?: string;
+  };
+  createdAt: Timestamp;
+  updatedAt: Timestamp;
+}
+
+export interface PrivateLessonChartGptTaskDoc {
+  taskId: string;
+  type: "private_lesson_chart_public_draft";
+  status: PrivateLessonChartGptStatus;
+  recordId: string;
+  requestId: string;
+  memberId: string;
+  memberName: string;
+  staffName: string;
+  sessionNumber: number;
+  lessonDate: string;
+  promptBrief: string;
+  result?: {
+    summary?: string;
+    nextDirection?: string;
+  };
+  error: string | null;
+  createdAt: Timestamp;
+  updatedAt: Timestamp;
+}
+
 export interface ContactSyncJobDoc {
   jobId: string;
   studioId: string;

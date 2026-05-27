@@ -112,6 +112,17 @@
           }
         },
         {
+          "source": "/archivein/api/privateChart",
+          "function": {
+            "functionId": "privateLessonChartApi",
+            "region": "asia-northeast3"
+          }
+        },
+        {
+          "source": "/archivein/private-chart/**",
+          "destination": "/archivein/private-chart/index.html"
+        },
+        {
           "source": "/s/**",
           "function": {
             "functionId": "redirectShortLink",
@@ -165,6 +176,17 @@
             "functionId": "ingestPrivateSurveyResponse",
             "region": "asia-northeast3"
           }
+        },
+        {
+          "source": "/api/privateChart",
+          "function": {
+            "functionId": "privateLessonChartApi",
+            "region": "asia-northeast3"
+          }
+        },
+        {
+          "source": "/private-chart/**",
+          "destination": "/private-chart/index.html"
         },
         {
           "source": "/api/inbody/webhook",

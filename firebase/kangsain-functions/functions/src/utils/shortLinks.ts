@@ -6,11 +6,11 @@ import { stableHash } from "./hash";
 const SHORT_LINK_BASE_URL = "https://in.archivepilates.com/s";
 const ALLOWED_TARGET_ORIGIN = "https://in.archivepilates.com";
 
-export type ShortLinkType = "survey_detail" | "group_survey" | "method_material";
+export type ShortLinkType = "survey_detail" | "group_survey" | "method_material" | "private_chart";
 
 export function shortLinkIdForTarget(type: ShortLinkType, targetUrl: string): string {
   const prefix =
-    type === "survey_detail" ? "sv" : type === "group_survey" ? "gs" : "mt";
+    type === "survey_detail" ? "sv" : type === "group_survey" ? "gs" : type === "private_chart" ? "pc" : "mt";
   return `${prefix}-${stableHash({ type, targetUrl }).slice(0, 12)}`;
 }
 

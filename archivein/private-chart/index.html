@@ -1,0 +1,447 @@
+<!doctype html>
+<html lang="ko">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1">
+  <title>ARCHIVE PILATES Private Chart</title>
+  <style>
+    :root {
+      color-scheme: light;
+      --bg: #f7f5f2;
+      --surface: #fffdfa;
+      --line: #ded8d0;
+      --text: #201d19;
+      --muted: #6f675f;
+      --soft: #ece7df;
+      --accent: #4f5b4a;
+      --accent-weak: #e5eadf;
+      --danger: #8b4a3b;
+      --radius: 8px;
+      font-family: -apple-system, BlinkMacSystemFont, "Apple SD Gothic Neo", "Noto Sans KR", system-ui, sans-serif;
+    }
+
+    * {
+      box-sizing: border-box;
+    }
+
+    body {
+      margin: 0;
+      background: var(--bg);
+      color: var(--text);
+      line-height: 1.5;
+    }
+
+    main {
+      width: min(100%, 720px);
+      margin: 0 auto;
+      padding: 20px 16px 48px;
+    }
+
+    header {
+      padding: 18px 0 14px;
+      border-bottom: 1px solid var(--line);
+    }
+
+    .brand {
+      margin: 0 0 8px;
+      color: var(--muted);
+      font-size: 12px;
+      font-weight: 700;
+      letter-spacing: 0;
+    }
+
+    h1 {
+      margin: 0;
+      font-size: 24px;
+      line-height: 1.25;
+      font-weight: 750;
+      letter-spacing: 0;
+    }
+
+    h2 {
+      margin: 0 0 12px;
+      font-size: 16px;
+      line-height: 1.35;
+      letter-spacing: 0;
+    }
+
+    p {
+      margin: 0;
+    }
+
+    .meta {
+      display: grid;
+      gap: 8px;
+      margin-top: 16px;
+      color: var(--muted);
+      font-size: 14px;
+    }
+
+    .summary {
+      display: grid;
+      gap: 8px;
+      margin: 18px 0;
+      padding: 14px;
+      background: var(--surface);
+      border: 1px solid var(--line);
+      border-radius: var(--radius);
+    }
+
+    .summary dl {
+      display: grid;
+      gap: 8px;
+      margin: 0;
+    }
+
+    .summary div {
+      display: grid;
+      gap: 3px;
+    }
+
+    .summary dt {
+      color: var(--muted);
+      font-size: 12px;
+      font-weight: 700;
+    }
+
+    .summary dd {
+      margin: 0;
+      font-size: 14px;
+      word-break: keep-all;
+      overflow-wrap: anywhere;
+    }
+
+    section {
+      margin-top: 18px;
+      padding-top: 18px;
+      border-top: 1px solid var(--line);
+    }
+
+    .grid {
+      display: grid;
+      gap: 8px;
+    }
+
+    .choices {
+      display: flex;
+      flex-wrap: wrap;
+      gap: 8px;
+    }
+
+    .choice {
+      min-height: 44px;
+      display: inline-flex;
+      align-items: center;
+      gap: 7px;
+      padding: 10px 12px;
+      background: var(--surface);
+      border: 1px solid var(--line);
+      border-radius: var(--radius);
+      font-size: 14px;
+      color: var(--text);
+    }
+
+    .choice input {
+      width: 16px;
+      height: 16px;
+      accent-color: var(--accent);
+    }
+
+    .choice:has(input:checked) {
+      border-color: var(--accent);
+      background: var(--accent-weak);
+    }
+
+    textarea {
+      width: 100%;
+      min-height: 104px;
+      resize: vertical;
+      padding: 12px;
+      border: 1px solid var(--line);
+      border-radius: var(--radius);
+      background: var(--surface);
+      color: var(--text);
+      font: inherit;
+      font-size: 15px;
+    }
+
+    .score-row {
+      display: grid;
+      grid-template-columns: minmax(92px, 1fr) auto;
+      gap: 10px;
+      align-items: center;
+      min-height: 44px;
+    }
+
+    .score-label {
+      color: var(--muted);
+      font-size: 14px;
+      word-break: keep-all;
+    }
+
+    .scores {
+      display: flex;
+      gap: 6px;
+    }
+
+    .scores .choice {
+      justify-content: center;
+      min-width: 38px;
+      padding: 8px;
+    }
+
+    .scores input {
+      position: absolute;
+      inline-size: 1px;
+      block-size: 1px;
+      opacity: 0;
+    }
+
+    .status {
+      margin-top: 16px;
+      min-height: 22px;
+      color: var(--muted);
+      font-size: 14px;
+    }
+
+    .status.error {
+      color: var(--danger);
+    }
+
+    .actions {
+      position: sticky;
+      bottom: 0;
+      margin: 24px -16px 0;
+      padding: 12px 16px calc(12px + env(safe-area-inset-bottom));
+      background: color-mix(in srgb, var(--bg) 92%, transparent);
+      border-top: 1px solid var(--line);
+      backdrop-filter: blur(12px);
+    }
+
+    button {
+      width: 100%;
+      min-height: 48px;
+      border: 0;
+      border-radius: var(--radius);
+      background: var(--text);
+      color: white;
+      font: inherit;
+      font-size: 15px;
+      font-weight: 700;
+      cursor: pointer;
+    }
+
+    button:disabled {
+      cursor: wait;
+      opacity: 0.55;
+    }
+
+    .hidden {
+      display: none;
+    }
+
+    @media (min-width: 640px) {
+      main {
+        padding: 28px 22px 56px;
+      }
+
+      .summary dl {
+        grid-template-columns: repeat(2, minmax(0, 1fr));
+      }
+    }
+  </style>
+</head>
+<body>
+  <main>
+    <header>
+      <p class="brand">ARCHIVE PILATES</p>
+      <h1 id="title">프라이빗 차트 작성</h1>
+      <div class="meta" id="meta">차트 정보를 불러오는 중입니다.</div>
+    </header>
+
+    <div class="summary" id="summary" aria-live="polite"></div>
+
+    <form id="form" class="hidden">
+      <div id="sections"></div>
+      <p class="status" id="status"></p>
+      <div class="actions">
+        <button type="submit" id="submitButton">제출</button>
+      </div>
+    </form>
+  </main>
+
+  <script>
+    const params = new URLSearchParams(window.location.search);
+    const state = {
+      requestId: params.get("r") || "",
+      token: params.get("t") || "",
+      mode: params.get("mode") === "post" ? "post" : "pre",
+      loading: false,
+    };
+
+    const sets = {
+      goals: ["코어 안정성", "골반 정렬", "흉곽/호흡", "목/어깨 긴장 완화", "허리 안정화", "하지 정렬", "유연성", "체력/근지구력", "밸런스", "통증 관리"],
+      focusAreas: ["목/어깨", "흉곽", "허리", "골반", "복부", "둔부", "고관절", "하체", "발/발목", "전신"],
+      equipment: ["리포머", "캐딜락", "체어", "바렐", "매트", "소도구", "미정"],
+      cautions: ["통증 확인 필요", "강도 낮게 시작", "호흡 먼저 체크", "좌우 차이 확인", "피로도 확인", "관절 가동범위 확인", "특별 주의 없음"],
+      changes: ["정렬 인지 향상", "호흡 안정", "골반 중립 유지 시간 증가", "어깨 긴장 감소", "흉곽 움직임 개선", "좌우 밸런스 개선", "하지 정렬 개선", "코어 활성 향상", "통증 감소", "가동범위 향상", "피로도 높음", "집중도 낮음", "큰 변화 없음"],
+    };
+
+    const preFields = [
+      { type: "multi", key: "goals", label: "오늘의 수업 목적", options: sets.goals },
+      { type: "multi", key: "focusAreas", label: "집중 부위", options: sets.focusAreas },
+      { type: "multi", key: "equipment", label: "예정 기구", options: sets.equipment },
+      { type: "single", key: "intensity", label: "강도 계획", options: ["낮게 시작", "보통", "점진 상승", "컨디션 보고 조절"] },
+      { type: "multi", key: "cautions", label: "수업 전 체크", options: sets.cautions },
+      { type: "text", key: "memo", label: "계획 메모" },
+    ];
+
+    const postFields = [
+      { type: "single", key: "attendance", label: "출결", options: ["출석", "지각", "당일 취소", "결석"] },
+      { type: "single", key: "condition", label: "오늘 컨디션", options: ["좋음", "보통", "피로", "통증 있음", "집중 어려움"] },
+      { type: "single", key: "painChange", label: "통증 변화", options: ["없음", "기존 통증 유지", "통증 감소", "통증 증가", "새 통증 발생"] },
+      { type: "multi", key: "goals", label: "진행 목표", options: sets.goals },
+      { type: "multi", key: "focusAreas", label: "진행 부위", options: sets.focusAreas },
+      { type: "multi", key: "equipment", label: "사용 기구", options: sets.equipment },
+      { type: "multi", key: "changes", label: "오늘 관찰된 변화", options: sets.changes },
+      { type: "scores", label: "기능 점수" },
+      { type: "text", key: "nextMemo", label: "다음 수업 메모" },
+    ];
+
+    const title = document.getElementById("title");
+    const meta = document.getElementById("meta");
+    const summary = document.getElementById("summary");
+    const form = document.getElementById("form");
+    const sections = document.getElementById("sections");
+    const statusEl = document.getElementById("status");
+    const submitButton = document.getElementById("submitButton");
+
+    boot();
+
+    async function boot() {
+      try {
+        if (!state.requestId || !state.token) throw new Error("차트 링크 정보가 부족합니다.");
+        const res = await fetch(`/api/privateChart?r=${encodeURIComponent(state.requestId)}&t=${encodeURIComponent(state.token)}&mode=${state.mode}`);
+        const data = await res.json();
+        if (!res.ok || data.ok === false) {
+          throw new Error(data.error || "차트 정보를 불러오지 못했습니다.");
+        }
+        render(data);
+      } catch (error) {
+        meta.textContent = "";
+        summary.innerHTML = "";
+        setStatus(error.message || String(error), true);
+      }
+    }
+
+    function render(data) {
+      const isPost = data.mode === "post";
+      title.textContent = isPost ? "수업 후 기록" : "수업 전 계획";
+      submitButton.textContent = isPost ? "수업 후 기록 제출" : "수업 전 계획 제출";
+      meta.innerHTML = [
+        `<span>${escapeHtml(data.memberName || "-")}님 · ${Number(data.sessionNumber || 1)}회차</span>`,
+        `<span>${escapeHtml(data.lessonTime || data.lessonDate || "-")} · 담당 ${escapeHtml(data.staffName || "미정")}</span>`,
+      ].join("");
+      summary.innerHTML = intakeHtml(data.intakeSummary);
+      sections.innerHTML = (isPost ? postFields : preFields).map(fieldHtml).join("");
+      form.classList.remove("hidden");
+      form.addEventListener("submit", submit);
+    }
+
+    function intakeHtml(intake) {
+      if (!intake) return `<h2>사전설문 요약</h2><p>연결된 사전설문이 없습니다.</p>`;
+      const rows = [
+        ["목표", intake.goal],
+        ["신경 부위", intake.focusArea],
+        ["운동 수준", intake.exerciseLevel],
+        ["기대/중요 요소", intake.expectationOrImportantFactor],
+        ["생활/이전 이슈", intake.lifestyleOrPreviousIssue],
+        ["주의", intake.painOrMedicalNote ? "상세 내용은 강사용 기록에서 확인" : "특별 주의 내용 없음"],
+      ];
+      return `<h2>사전설문 요약</h2><dl>${rows.map(([k, v]) => `<div><dt>${escapeHtml(k)}</dt><dd>${escapeHtml(v || "-")}</dd></div>`).join("")}</dl>`;
+    }
+
+    function fieldHtml(field) {
+      if (field.type === "text") {
+        return `<section><label for="${field.key}"><h2>${escapeHtml(field.label)}</h2></label><textarea id="${field.key}" name="${field.key}" placeholder="필요할 때만 입력"></textarea></section>`;
+      }
+      if (field.type === "scores") {
+        return `<section><h2>${escapeHtml(field.label)}</h2><div class="grid">${[
+          ["coreScore", "코어 안정성"],
+          ["balanceScore", "밸런스"],
+          ["breathingScore", "호흡"],
+          ["mobilityScore", "가동성"],
+          ["flexibilityScore", "유연성"],
+        ].map(([key, label]) => scoreHtml(key, label)).join("")}</div></section>`;
+      }
+      const inputType = field.type === "single" ? "radio" : "checkbox";
+      return `<section><h2>${escapeHtml(field.label)}</h2><div class="choices">${field.options.map((option) => `
+        <label class="choice">
+          <input type="${inputType}" name="${field.key}" value="${escapeHtml(option)}">
+          <span>${escapeHtml(option)}</span>
+        </label>`).join("")}</div></section>`;
+    }
+
+    function scoreHtml(key, label) {
+      return `<div class="score-row"><span class="score-label">${escapeHtml(label)}</span><div class="scores">${[1, 2, 3, 4, 5].map((score) => `
+        <label class="choice"><input type="radio" name="${key}" value="${score}"><span>${score}</span></label>`).join("")}</div></div>`;
+    }
+
+    async function submit(event) {
+      event.preventDefault();
+      if (state.loading) return;
+      state.loading = true;
+      submitButton.disabled = true;
+      setStatus("제출 중입니다.", false);
+      try {
+        const answers = readAnswers(new FormData(form));
+        const res = await fetch("/api/privateChart", {
+          method: "POST",
+          headers: { "Content-Type": "application/json" },
+          body: JSON.stringify({ requestId: state.requestId, token: state.token, mode: state.mode, answers }),
+        });
+        const data = await res.json();
+        if (!res.ok || data.ok === false) throw new Error(data.error || "제출에 실패했습니다.");
+        setStatus("제출되었습니다. Notion 차트에 반영됩니다.", false);
+        submitButton.textContent = "제출 완료";
+      } catch (error) {
+        state.loading = false;
+        submitButton.disabled = false;
+        setStatus(error.message || String(error), true);
+      }
+    }
+
+    function readAnswers(formData) {
+      const answers = {};
+      const activeFields = state.mode === "post" ? postFields : preFields;
+      for (const field of activeFields) {
+        if (field.type === "multi") answers[field.key] = formData.getAll(field.key).map(String);
+        if (field.type === "single") answers[field.key] = String(formData.get(field.key) || "");
+        if (field.type === "text") answers[field.key] = String(formData.get(field.key) || "");
+      }
+      if (state.mode === "post") {
+        for (const key of ["coreScore", "balanceScore", "breathingScore", "mobilityScore", "flexibilityScore"]) {
+          const value = Number(formData.get(key));
+          if (Number.isFinite(value) && value > 0) answers[key] = value;
+        }
+      }
+      return answers;
+    }
+
+    function setStatus(message, error) {
+      statusEl.textContent = message;
+      statusEl.classList.toggle("error", Boolean(error));
+    }
+
+    function escapeHtml(value) {
+      return String(value ?? "").replace(/[&<>"']/g, (char) => ({
+        "&": "&amp;",
+        "<": "&lt;",
+        ">": "&gt;",
+        '"': "&quot;",
+        "'": "&#039;",
+      }[char]));
+    }
+  </script>
+</body>
+</html>

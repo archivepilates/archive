@@ -44,6 +44,10 @@ import {
   syncPrivateSurveyNotionBackfill,
   syncPrivateSurveyResponsesFromSheet,
 } from "./privateSurvey/privateSurveyResponse";
+import {
+  createTomorrowPrivateLessonChartRequests,
+  privateLessonChartApiHandler,
+} from "./privateLessonChart/privateLessonChart";
 import { receiveInBodyWebhookHandler } from "./inbody/inbodyWebhook";
 import { inbodyMemberReportViewHandler } from "./inbody/inbodyMemberReportView";
 
@@ -71,6 +75,13 @@ const privateSurveyIngestOptions = {
 const privateSurveyIntakeOptions = {
   ...scheduleOptions,
   secrets: [...allSecrets, notionToken],
+};
+const privateLessonChartRequestOptions = {
+  region: REGION,
+  secrets: [...allSecrets, notionToken],
+  timeoutSeconds: 120,
+  memory: "256MiB" as const,
+  invoker: "public" as const,
 };
 const publicRequestOptions = {
   region: REGION,
@@ -223,6 +234,16 @@ export const scheduledSyncPrivateSurveyNotion = onSchedule(
   },
 );
 
+export const scheduledCreatePrivateLessonChartRequests = onSchedule(
+  {
+    ...privateSurveyIntakeOptions,
+    schedule: "0 18 * * *",
+  },
+  async () => {
+    await createTomorrowPrivateLessonChartRequests();
+  },
+);
+
 export const scheduledPreSecurityRawMirror = onSchedule(
   {
     ...scheduleOptions,
@@ -269,6 +290,8 @@ export const ingestPrivateSurveyResponse = onRequest(privateSurveyIngestOptions,
 export const privateSurveyResponseView = onRequest(publicRequestOptions, privateSurveyResponseViewHandler);
 
 export const inbodyMemberReportView = onRequest(publicRequestOptionsWithoutInvoker, inbodyMemberReportViewHandler);
+
+export const privateLessonChartApi = onRequest(privateLessonChartRequestOptions, privateLessonChartApiHandler);
 
 export const redirectShortLink = onRequest(publicRequestOptions, redirectShortLinkHandler);
 
