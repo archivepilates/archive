@@ -28,6 +28,13 @@ const NOTION_MEMBERS_DATABASE_ID = process.env.NOTION_PRIVATE_MEMBERS_DATABASE_I
 const NOTION_SESSION_RECORDS_DATABASE_ID =
   process.env.NOTION_PRIVATE_SESSION_RECORDS_DATABASE_ID || "105b17685d914fbe915ef5b65146d993";
 const PRIVATE_CHART_TEMPLATE_NAME = "강사용_프라이빗 차트 작성 안내 v1";
+const NOTION_INSTRUCTOR_CHART_PAGE_IDS: Record<string, string> = {
+  "이초림 수석강사": "22cd49eae4bf802ebc89fe094d0c355a",
+  "배민진 원장님": "22dd49eae4bf80258427fe92a4b6ce2c",
+  "정은영 부원장님": "22dd49eae4bf809da7e7d6953e41eb86",
+  "김기효 강사": "36ed49eae4bf8161a0d3edd9f30643b9",
+  "김기효": "36ed49eae4bf8161a0d3edd9f30643b9",
+};
 
 type ChartAnswerMap = Record<string, string[] | string | number | null>;
 
@@ -590,7 +597,7 @@ async function syncPrivateLessonChartRecordToNotion(
   try {
     const memberPageId = await notionMemberPageId(record.memberPhone, record.memberName, chartRequest);
     const properties = compactObject({
-      Name: notionTitle(`${record.memberName} ${record.sessionNumber}회차`),
+      Name: notionTitle(notionSessionTitle(record, chartRequest)),
       Date: notionDate(
         record.lessonStartAt ? record.lessonStartAt.toDate().toISOString() : `${record.lessonDate}T00:00:00+09:00`,
       ),
@@ -622,6 +629,11 @@ async function syncPrivateLessonChartRecordToNotion(
     if (existingPageId) {
       await notionRequest(`pages/${existingPageId}`, "PATCH", { properties });
       await appendPageContent(existingPageId, notionUpdateChildren(record, chartRequest));
+      await syncInstructorMemberChartLink(
+        record,
+        chartRequest,
+        record.notionSync?.pageUrl || notionPageUrl(existingPageId),
+      );
       return {
         status: "synced",
         pageId: existingPageId,
@@ -634,15 +646,90 @@ async function syncPrivateLessonChartRecordToNotion(
       properties,
       children: content,
     });
+    const pageUrl = String(page.url || notionPageUrl(String(page.id)));
+    await syncInstructorMemberChartLink(record, chartRequest, pageUrl);
     return {
       status: "synced",
       pageId: String(page.id),
-      pageUrl: String(page.url || notionPageUrl(String(page.id))),
+      pageUrl,
       syncedAt: new Date().toISOString(),
     };
   } catch (err) {
     return { status: "failed", error: errorMessage(err), syncedAt: new Date().toISOString() };
   }
+}
+
+async function syncInstructorMemberChartLink(
+  record: PrivateLessonChartRecordDoc,
+  chartRequest: PrivateLessonChartRequestDoc,
+  sessionPageUrl: string,
+): Promise<void> {
+  if (!sessionPageUrl || record.lessonDate < todayKst()) return;
+  const memberPageId = await findInstructorMemberPageId(record.staffName, record.memberName).catch((err) => {
+    logger.warn("findInstructorMemberPageId failed", {
+      staffName: record.staffName,
+      memberName: record.memberName,
+      message: errorMessage(err),
+    });
+    return "";
+  });
+  if (!memberPageId) return;
+  const hasLink = await pageHasLink(memberPageId, sessionPageUrl);
+  if (hasLink) return;
+  await appendPageContent(memberPageId, [
+    linkedSessionParagraph(notionSessionTitle(record, chartRequest), sessionPageUrl),
+  ]);
+}
+
+async function findInstructorMemberPageId(staffName: string, memberName: string): Promise<string> {
+  const instructorPageId = NOTION_INSTRUCTOR_CHART_PAGE_IDS[staffName];
+  if (!instructorPageId) return "";
+  const normalizedMemberName = normalizeKoreanName(memberName);
+  const direct = await findChildPageByTitle(instructorPageId, normalizedMemberName);
+  if (direct) return direct;
+  const children = await notionBlockChildren(instructorPageId);
+  for (const child of children) {
+    const title = String(child.child_page?.title || "");
+    if (!title || /완료|종료|자료|식단|자동화/.test(title)) continue;
+    const nested = await findChildPageByTitle(String(child.id || ""), normalizedMemberName);
+    if (nested) return nested;
+  }
+  return "";
+}
+
+async function findChildPageByTitle(parentPageId: string, normalizedMemberName: string): Promise<string> {
+  const children = await notionBlockChildren(parentPageId);
+  const hit = children.find((child) => {
+    const title = String(child.child_page?.title || "");
+    return title && normalizeKoreanName(title) === normalizedMemberName;
+  });
+  return hit?.id ? String(hit.id) : "";
+}
+
+async function notionBlockChildren(blockId: string): Promise<any[]> {
+  const children: any[] = [];
+  let cursor = "";
+  do {
+    const query = cursor ? `?page_size=100&start_cursor=${encodeURIComponent(cursor)}` : "?page_size=100";
+    const result = await notionRequest(`blocks/${blockId}/children${query}`, "GET");
+    children.push(...(Array.isArray(result.results) ? result.results : []));
+    cursor = result.has_more && result.next_cursor ? String(result.next_cursor) : "";
+  } while (cursor);
+  return children;
+}
+
+async function pageHasLink(pageId: string, url: string): Promise<boolean> {
+  const children = await notionBlockChildren(pageId);
+  return children.some((child) => blockHasHref(child, url));
+}
+
+function blockHasHref(block: any, url: string): boolean {
+  const values = Object.values(block || {});
+  return values.some((value: any) =>
+    Array.isArray(value?.rich_text)
+      ? value.rich_text.some((item: any) => String(item?.href || item?.text?.link?.url || "") === url)
+      : false,
+  );
 }
 
 async function appendPageContent(pageId: string, children: Record<string, unknown>[]): Promise<void> {
@@ -984,6 +1071,34 @@ function lessonTimeText(chartRequest: Pick<PrivateLessonChartRequestDoc, "lesson
   }).format(date);
 }
 
+function notionSessionTitle(record: PrivateLessonChartRecordDoc, chartRequest: PrivateLessonChartRequestDoc): string {
+  return `${lessonTitleDate(chartRequest)} · ${record.memberName} ${record.sessionNumber}회차(자동화)`;
+}
+
+function lessonTitleDate(chartRequest: Pick<PrivateLessonChartRequestDoc, "lessonDate" | "lessonStartAt">): string {
+  const date = chartRequest.lessonStartAt?.toDate?.();
+  if (!date) return chartRequest.lessonDate.replaceAll("-", ".");
+  const parts = new Intl.DateTimeFormat("ko-KR", {
+    timeZone: "Asia/Seoul",
+    year: "numeric",
+    month: "2-digit",
+    day: "2-digit",
+    hour: "2-digit",
+    minute: "2-digit",
+    hour12: false,
+  }).formatToParts(date);
+  const value = (type: string) => parts.find((part) => part.type === type)?.value || "";
+  return `${value("year")}.${value("month")}.${value("day")} ${value("hour")}:${value("minute")}`;
+}
+
+function normalizeKoreanName(value: string): string {
+  return String(value || "")
+    .replace(/\s+/g, "")
+    .replace(/님$/g, "")
+    .replace(/\d+$/g, "")
+    .trim();
+}
+
 function textArray(value: unknown): string[] {
   if (Array.isArray(value)) return value.map((item) => String(item).trim()).filter(Boolean);
   if (!value) return [];
@@ -1060,6 +1175,24 @@ function paragraph(text: string): Record<string, unknown> {
     object: "block",
     type: "paragraph",
     paragraph: { rich_text: [{ type: "text", text: { content: text.slice(0, 2000) } }] },
+  };
+}
+
+function linkedSessionParagraph(text: string, url: string): Record<string, unknown> {
+  return {
+    object: "block",
+    type: "paragraph",
+    paragraph: {
+      rich_text: [
+        {
+          type: "text",
+          text: {
+            content: text.slice(0, 2000),
+            link: { url },
+          },
+        },
+      ],
+    },
   };
 }
 

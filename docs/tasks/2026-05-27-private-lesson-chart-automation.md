@@ -24,12 +24,17 @@
 - `회원용_프라이빗 수업 리포트 안내 v1`: 수업 후 HTML 리포트를 회원에게 전달하는 별도 알림톡. 강사용 입력 알림톡과 분리한다.
 - `/private-chart/`: 강사용 모바일 입력 화면
 - `com.archive.private-chart-gpt-agent`: Mac mini LaunchAgent. 5분마다 pending GPT task 확인 후 Codex CLI 실행.
-- 수업 하루 전 요청 생성 시점에 Notion 회차 차트를 미리 생성하고, 해당 페이지 URL을 사진·영상 업로드 버튼에 연결한다.
+- 수업 하루 전 요청 생성 시점에 `Private Session Records DB` 회차 원본을 만들고, 해당 페이지 URL을 사진·영상 업로드 버튼에 연결한다.
+- 강사용 기존 회원 페이지에는 `YYYY.MM.DD HH:mm · n회차(자동화)` 링크를 추가한다. DB 원본은 웹훅/발송 상태 관리를 위해 유지한다.
 
 ## Notion 반영
 
-- 기존 `개인레슨 차트` 페이지 하위에 `ARCHIVE PILATES 프라이빗 차트 자동화` 운영 페이지를 생성했다.
-- 같은 위치에 `자동화 회차 차트 템플릿`을 생성했다.
+- 기존 `개인레슨 차트` 페이지는 강사용 진입점으로 유지한다.
+- 기존 강사별 회원 페이지 아래에 오늘 이후 자동화 회차 링크를 붙인다.
+- 강사별 진입 페이지는 `이초림 수석강사`, `배민진 원장님`, `정은영 부원장님`, `김기효 강사` 기준으로 운영한다.
+- `자동화 회차 차트 템플릿`은 `개인레슨 차트` 바로 아래에 둔다.
+- 운영 기록, DB, 웹훅, GPT 큐 규칙은 `아카이브 운영 규칙 > ARCHIVE PILATES 프라이빗 회원 차트 시스템` 아래로 분리한다.
+- `ARCHIVE AI` Notion 연결은 `Private Session Records DB` 접근은 정상이다. 기존 강사별 회원 페이지에 자동 링크를 붙이려면 `개인레슨 차트` 루트 페이지도 `ARCHIVE AI` 연결에 공유되어야 한다.
 - `Private Session Records DB`에 자동화용 속성을 추가했다.
   - `Chart Request ID`
   - `Session Number`
