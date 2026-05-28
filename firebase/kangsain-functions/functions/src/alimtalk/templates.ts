@@ -18,6 +18,7 @@ export type SendableAlimtalkCandidateType =
   | "new_member"
   | "private_survey"
   | "group_survey"
+  | "private_lesson_report"
   | "ticket_expiring"
   | "remaining_low"
   | "private_count_low"
@@ -85,6 +86,11 @@ export const ALIMTALK_TEMPLATES = {
     label: "강사레슨 수업자료 안내 v1",
     status: "approved",
   },
+  private_lesson_report: {
+    code: "KA01TP260528081225871Fr92FW901Vo",
+    label: "프라이빗 회원 리포트 안내 v1",
+    status: "pending",
+  },
 } as const;
 
 export const ALIMTALK_TEMPLATE_CHANNEL_IDS: Readonly<Record<string, string>> = {
@@ -96,6 +102,7 @@ export const CANDIDATE_TEMPLATE_CODES: Record<SendableAlimtalkCandidateType, str
   new_member: ALIMTALK_TEMPLATES.new_member.code,
   private_survey: ALIMTALK_TEMPLATES.private_survey.code,
   group_survey: ALIMTALK_TEMPLATES.group_survey.code,
+  private_lesson_report: ALIMTALK_TEMPLATES.private_lesson_report.code,
   ticket_expiring: ALIMTALK_TEMPLATES.ticket_expiring.code,
   remaining_low: ALIMTALK_TEMPLATES.remaining_low.code,
   private_count_low: ALIMTALK_TEMPLATES.private_count_low.code,
@@ -155,6 +162,10 @@ export const ALIMTALK_DEDUPE_POLICIES_BY_TEMPLATE_CODE: Record<string, AlimtalkD
   },
   [ALIMTALK_TEMPLATES.instructor_lesson_material.code]: {
     label: "강사레슨 수업자료 수업별 1회",
+    windowDays: null,
+  },
+  [ALIMTALK_TEMPLATES.private_lesson_report.code]: {
+    label: "프라이빗 회원 리포트 회차별 1회",
     windowDays: null,
   },
 };

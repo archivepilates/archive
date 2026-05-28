@@ -37,6 +37,10 @@
 | `#{관리번호}` | 강사레슨 수업자료 관리번호 | 버튼 URL `https://in.archivepilates.com/method/#{관리번호}`에 사용한다. |
 | `#{미방문일수}` | 마지막 출석 완료일과 발송 기준일 차이 | 숫자만 전달한다. 기준일 포함 없이 지난 일수로 계산한다. |
 | `#{마지막출석일}` | `bookings[].lectureDate` 중 마지막 출석 완료일 | `YYYY. M. D.` 형식으로 표기한다. |
+| `#{회차}` | 프라이빗 차트 회차 | 회원용 리포트 알림톡에서는 `privateLessonChartRecords.sessionNumber + "회차"`로 전달한다. |
+| `#{수업일시}` | 수업 날짜와 시작 시간 | `lessonDate`와 `lessonStartAt`을 KST 기준 `MM.DD 요일 HH:mm` 형식으로 전달한다. |
+| `#{강사명}` | 담당 강사명 | `privateLessonChartRecords.staffName`을 사용한다. |
+| `#{리포트링크ID}` | 회원용 HTML 리포트 짧은 링크 ID | 버튼 URL `https://in.archivepilates.com/s/#{리포트링크ID}/`에 사용한다. 원본 리포트 URL은 `shortLinks`에 저장한다. |
 
 ## 템플릿별 운영 규칙
 
@@ -51,6 +55,7 @@
 | 아카이브 프라이빗 사전설문 안내 v1 | `KA01TP260514153632171uiWXYoeiOLS` | `APPROVED` | 매일 11:30 자동 발송 |
 | 아카이브 장기 미방문 수업안내 v1 | `KA01TP260524083643752cySb9BoDOjN` | `PENDING` | 후보 생성 연결 완료, 승인 전 실제 발송 차단 |
 | 강사레슨_수업자료 안내 v1 | `KA01TP260521120040094XcMvYgFTryj` | `APPROVED` | 아카이브강사레슨 채널, 수업자료/방문안내 버튼 2개 구성 |
+| 회원용_프라이빗 수업 리포트 안내 v1 | `KA01TP260528081225871Fr92FW901Vo` | `PENDING` | 수업 후 Notion 검수 승인 후 발송. 검수 승인 후 코드 연결 필요 |
 
 ### 1. 신규회원 웰컴 안내
 
@@ -328,6 +333,74 @@
 중복 방지 기간:
 
 - 영구 1회. 같은 회원, 같은 수업일, 같은 관리번호 조합으로 중복 발송하지 않는다.
+
+### 9. 회원용 프라이빗 수업 리포트 안내
+
+용도:
+
+- 강사용 입력 요청이 아니라, 수업 후 생성된 회원용 HTML 리포트를 회원에게 전달하는 알림톡이다.
+- 발송은 자동 즉시 발송이 아니라 Notion 검수 후 `발송` 체크가 된 회차만 처리한다.
+
+대상:
+
+- `privateLessonChartRecords/{recordId}`에 해당 회차 기록이 있음.
+- `postRecord`가 제출되어 있음.
+- `gptStatus`가 `draft_created` 상태임.
+- `publicReportUrl` 또는 회원 리포트 URL이 존재함.
+- Notion 세션 기록의 `발송` 체크박스가 체크되어 있음.
+- Notion 세션 기록의 `발송상태`가 `대기`임.
+- 회원 전화번호가 정상 저장되어 있음.
+- 같은 `recordId`로 회원용 리포트 알림톡 성공 발송 이력이 없음.
+
+발송 시점:
+
+- 수업 후 리포트 생성.
+- 운영자 또는 강사가 Notion에서 리포트를 검수.
+- Notion `발송` 체크 후 Notion 웹훅이 Firebase Function으로 전달된다.
+- Function은 해당 Notion 페이지를 다시 조회해서 `발송=true`, `발송상태=대기`, `회원 리포트` URL 조건을 확인한 뒤 알림톡 큐로 전환한다.
+- 웹훅 누락 복구용으로 하루 3회만 동일 조건을 재조회한다.
+
+변수:
+
+- `#{회원명}` = `privateLessonChartRecords.memberName`
+- `#{회차}` = `privateLessonChartRecords.sessionNumber + "회차"`
+- `#{수업일시}` = `lessonDate + lessonStartAt`을 KST 기준으로 변환
+- `#{강사명}` = `privateLessonChartRecords.staffName`
+- `#{리포트링크ID}` = `privateLessonChartRecords.publicReportUrl`을 `shortLinks`로 변환한 짧은 링크 ID
+
+버튼:
+
+- `리포트 확인하기`
+- URL 변수: `https://in.archivepilates.com/s/#{리포트링크ID}/`
+- 실제 발송 payload에는 전체 URL이 아니라 `pr-...` 형식의 `#{리포트링크ID}`만 넣는다.
+- 원본 `publicReportUrl`은 Firestore `shortLinks/{리포트링크ID}.targetUrl`에 저장한다.
+
+제외:
+
+- 회원 전화번호 없음.
+- `publicReportUrl` 없음.
+- GPT 초안 미생성.
+- 수업 후 기록 미제출.
+- Notion `발송` 체크 전.
+- Notion `발송상태`가 `대기`가 아님.
+- 발송상태가 완료, 실패 후 수동 보류, 또는 운영 보류 상태.
+- 동일 회차 `recordId`로 이미 발송 완료된 경우.
+
+중복키:
+
+- `private_lesson_report:{recordId}`
+
+중복 방지 기간:
+
+- 영구 1회. 같은 회차 리포트는 같은 회원에게 다시 발송하지 않는다.
+
+중복 방지 정책:
+
+- Notion 웹훅 이벤트 ID는 `notionWebhookEvents/{eventId}`에 기록해서 같은 이벤트 재전송을 무시한다.
+- 알림톡 후보 ID는 `private_lesson_report_{recordId}`로 고정한다.
+- 후보가 이미 `queued` 또는 `processing`이면 새 후보를 만들지 않는다.
+- 후보가 이미 `sent`이면 Notion `발송상태`를 `완료`로 맞추고 추가 발송하지 않는다.
+- 실패 후보는 Notion 상태가 계속 `대기`일 때만 같은 후보 ID로 재시도 가능하게 둔다.
 
 ## 후보 상태 운영
 

@@ -45,8 +45,10 @@ import {
   syncPrivateSurveyResponsesFromSheet,
 } from "./privateSurvey/privateSurveyResponse";
 import {
+  enqueueApprovedPrivateLessonReportAlimtalks,
   createTomorrowPrivateLessonChartRequests,
   enqueuePendingPrivateLessonChartGptTasks,
+  notionPrivateLessonReportWebhookHandler,
   privateLessonChartApiHandler,
 } from "./privateLessonChart/privateLessonChart";
 import { receiveInBodyWebhookHandler } from "./inbody/inbodyWebhook";
@@ -249,6 +251,16 @@ export const scheduledEnqueuePrivateLessonChartGptTasks = onSchedule(
   },
 );
 
+export const scheduledEnqueuePrivateLessonReportAlimtalks = onSchedule(
+  {
+    ...privateSurveyIntakeOptions,
+    schedule: "10 9,15,21 * * *",
+  },
+  async () => {
+    await enqueueApprovedPrivateLessonReportAlimtalks();
+  },
+);
+
 export const scheduledPreSecurityRawMirror = onSchedule(
   {
     ...scheduleOptions,
@@ -295,6 +307,11 @@ export const ingestPrivateSurveyResponse = onRequest(privateSurveyIngestOptions,
 export const privateSurveyResponseView = onRequest(publicRequestOptions, privateSurveyResponseViewHandler);
 
 export const privateLessonChartApi = onRequest(privateLessonChartRequestOptions, privateLessonChartApiHandler);
+
+export const notionPrivateLessonReportWebhook = onRequest(
+  privateLessonChartRequestOptions,
+  notionPrivateLessonReportWebhookHandler,
+);
 
 export const redirectShortLink = onRequest(publicRequestOptions, redirectShortLinkHandler);
 

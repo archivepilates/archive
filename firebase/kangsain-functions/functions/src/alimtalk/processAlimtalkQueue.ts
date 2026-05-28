@@ -244,8 +244,13 @@ async function templateVariables(candidate: AlimtalkCandidateDoc): Promise<Recor
   const accessToken = String(payload.accessToken || "");
   const managementNumber = String(payload.managementNumber || payload.materialNumber || payload.archiveMethodId || "");
   const shortLinkId = await shortLinkIdForCandidate(candidate, surveyId, accessToken, managementNumber);
+  const reportLinkId = await reportLinkIdForCandidate(candidate);
   return {
     "#{이름}": memberName,
+    "#{회원명}": String(payload.memberName || candidate.memberName || ""),
+    "#{회차}": String(payload.sessionLabel || payload.sessionNumberText || ""),
+    "#{수업일시}": String(payload.lessonDateTime || payload.lessonDate || ""),
+    "#{강사명}": String(payload.staffName || payload.instructorName || ""),
     "#{예약주차}": String(payload.reservationWeek || payload.weekLabel || ""),
     "#{남은일수}": String(payload.remainingDays || ""),
     "#{수강권명}": String(payload.ticketName || payload.ticket || ""),
@@ -257,7 +262,28 @@ async function templateVariables(candidate: AlimtalkCandidateDoc): Promise<Recor
     "#{접근토큰}": accessToken,
     "#{관리번호}": managementNumber,
     "#{링크ID}": shortLinkId,
+    "#{리포트링크ID}": reportLinkId,
   };
+}
+
+async function reportLinkIdForCandidate(candidate: AlimtalkCandidateDoc): Promise<string> {
+  const existing = String(candidate.payload?.reportLinkId || "");
+  if (existing) return existing;
+  const publicReportUrl = String(candidate.payload?.publicReportUrl || "");
+  if (candidate.type !== "private_lesson_report" || !publicReportUrl) return "";
+  const link = await ensureShortLink({
+    type: "private_report",
+    targetUrl: publicReportUrl,
+    sourceId: candidate.candidateId,
+  });
+  await refs.alimtalkCandidate(candidate.candidateId).set(
+    {
+      payload: { ...candidate.payload, reportLinkId: link.linkId, reportShortUrl: link.shortUrl },
+      updatedAt: nowTimestamp(),
+    },
+    { merge: true },
+  );
+  return link.linkId;
 }
 
 async function shortLinkIdForCandidate(
@@ -274,10 +300,15 @@ async function shortLinkIdForCandidate(
       targetUrl: groupSurveyTargetUrl(surveyId, accessToken),
       sourceId: candidate.candidateId,
     });
-    await refs.alimtalkCandidate(candidate.candidateId).set(
-      { payload: { ...candidate.payload, shortLinkId: link.linkId, shortUrl: link.shortUrl }, updatedAt: nowTimestamp() },
-      { merge: true },
-    );
+    await refs
+      .alimtalkCandidate(candidate.candidateId)
+      .set(
+        {
+          payload: { ...candidate.payload, shortLinkId: link.linkId, shortUrl: link.shortUrl },
+          updatedAt: nowTimestamp(),
+        },
+        { merge: true },
+      );
     return link.linkId;
   }
   if (candidate.type === "instructor_lesson_material" && managementNumber) {
@@ -286,10 +317,15 @@ async function shortLinkIdForCandidate(
       targetUrl: methodMaterialTargetUrl(managementNumber),
       sourceId: candidate.candidateId,
     });
-    await refs.alimtalkCandidate(candidate.candidateId).set(
-      { payload: { ...candidate.payload, shortLinkId: link.linkId, shortUrl: link.shortUrl }, updatedAt: nowTimestamp() },
-      { merge: true },
-    );
+    await refs
+      .alimtalkCandidate(candidate.candidateId)
+      .set(
+        {
+          payload: { ...candidate.payload, shortLinkId: link.linkId, shortUrl: link.shortUrl },
+          updatedAt: nowTimestamp(),
+        },
+        { merge: true },
+      );
     return link.linkId;
   }
   return "";

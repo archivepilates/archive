@@ -79,6 +79,11 @@ function dedupeScope(candidate: AlimtalkCandidateDoc): Record<string, string> {
       managementNumber: String(payload.managementNumber || payload.materialNumber || payload.archiveMethodId || ""),
     };
   }
+  if (type === "private_lesson_report") {
+    return {
+      recordId: String(payload.recordId || candidate.sourceActionKey || candidate.candidateId || ""),
+    };
+  }
   if (type === "reservation_open") {
     return {
       reservationWeek: String(payload.reservationWeek || payload.weekLabel || ""),

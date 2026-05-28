@@ -119,6 +119,13 @@
           }
         },
         {
+          "source": "/archivein/api/notion/privateLessonReportWebhook",
+          "function": {
+            "functionId": "notionPrivateLessonReportWebhook",
+            "region": "asia-northeast3"
+          }
+        },
+        {
           "source": "/archivein/private-chart/**",
           "destination": "/archivein/private-chart/index.html"
         },
@@ -181,6 +188,13 @@
           "source": "/api/privateChart",
           "function": {
             "functionId": "privateLessonChartApi",
+            "region": "asia-northeast3"
+          }
+        },
+        {
+          "source": "/api/notion/privateLessonReportWebhook",
+          "function": {
+            "functionId": "notionPrivateLessonReportWebhook",
             "region": "asia-northeast3"
           }
         },

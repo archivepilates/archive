@@ -323,6 +323,7 @@ export type AlimtalkCandidateType =
   | "private_survey"
   | "group_survey"
   | "instructor_lesson_material"
+  | "private_lesson_report"
   | "ticket_expiring"
   | "remaining_low"
   | "private_count_low"
@@ -467,8 +468,19 @@ export interface PrivateSurveyResponseDoc {
 }
 
 export type PrivateLessonChartMode = "pre" | "post";
-export type PrivateLessonChartRequestStatus = "pending" | "pre_submitted" | "post_submitted" | "completed" | "cancelled";
-export type PrivateLessonChartGptStatus = "pending" | "processing" | "draft_created" | "approved" | "published" | "failed";
+export type PrivateLessonChartRequestStatus =
+  | "pending"
+  | "pre_submitted"
+  | "post_submitted"
+  | "completed"
+  | "cancelled";
+export type PrivateLessonChartGptStatus =
+  | "pending"
+  | "processing"
+  | "draft_created"
+  | "approved"
+  | "published"
+  | "failed";
 
 export interface PrivateLessonChartRequestDoc {
   requestId: string;

@@ -1,4 +1,4 @@
-import { createHmac } from "node:crypto";
+import { createHmac, timingSafeEqual } from "node:crypto";
 import { Timestamp } from "firebase-admin/firestore";
 import { logger } from "firebase-functions";
 import { DEFAULT_STUDIO_ID } from "../config/constants";
@@ -6,6 +6,7 @@ import { notionToken, privateSurveyWebhookSecret } from "../config/secrets";
 import { db } from "../config/firebase";
 import { refs } from "../firestore/refs";
 import type {
+  AlimtalkCandidateDoc,
   BookingDoc,
   PrivateLessonChartGptTaskDoc,
   PrivateLessonChartMode,
@@ -18,6 +19,8 @@ import { addDays, formatDateKst, nowTimestamp, todayKst } from "../utils/date";
 import { errorMessage } from "../utils/errors";
 import { stableHash } from "../utils/hash";
 import { ensureShortLink } from "../utils/shortLinks";
+import { ALIMTALK_TEMPLATES } from "../alimtalk/templates";
+import { isAlimtalkTemplateApproved } from "../alimtalk/templateStatus";
 
 const PUBLIC_BASE_URL = process.env.PRIVATE_CHART_BASE_URL || "https://in.archivepilates.com/private-chart/";
 const NOTION_API_VERSION = "2022-06-28";
@@ -55,6 +58,45 @@ export async function privateLessonChartApiHandler(request: any, response: any):
     const message = errorMessage(err);
     logger.warn("privateLessonChartApi failed", { message });
     response.status(400).json({ ok: false, error: message });
+  }
+}
+
+export async function notionPrivateLessonReportWebhookHandler(request: any, response: any): Promise<void> {
+  if (request.method !== "POST") {
+    response.status(405).json({ ok: false, error: "method not allowed" });
+    return;
+  }
+
+  try {
+    const body = request.body || {};
+    if (body.verification_token) {
+      await db
+        .collection("systemSettings")
+        .doc("notionPrivateLessonReportWebhook")
+        .set(
+          {
+            verificationToken: String(body.verification_token),
+            verified: false,
+            updatedAt: nowTimestamp(),
+          },
+          { merge: true },
+        );
+      response.status(200).json({ ok: true });
+      return;
+    }
+
+    const trusted = await verifyNotionWebhookSignature(request);
+    if (!trusted) {
+      response.status(401).json({ ok: false, error: "invalid signature" });
+      return;
+    }
+
+    const result = await handleNotionPrivateLessonReportEvent(body);
+    response.status(200).json({ ok: true, ...result });
+  } catch (err) {
+    const message = errorMessage(err);
+    logger.warn("notionPrivateLessonReportWebhook failed", { message });
+    response.status(500).json({ ok: false, error: message });
   }
 }
 
@@ -137,6 +179,219 @@ export async function enqueuePendingPrivateLessonChartGptTasks(): Promise<{
 
   logger.info("enqueuePendingPrivateLessonChartGptTasks completed", { checked, enqueued, skipped });
   return { checked, enqueued, skipped };
+}
+
+export async function enqueueApprovedPrivateLessonReportAlimtalks(): Promise<{
+  checked: number;
+  queued: number;
+  skipped: number;
+  completed: number;
+  failed: number;
+}> {
+  const notionPages = await notionApprovedReportPages();
+  const templateApproved = await isAlimtalkTemplateApproved(ALIMTALK_TEMPLATES.private_lesson_report.code);
+  let checked = 0;
+  let queued = 0;
+  let skipped = 0;
+  let completed = 0;
+  let failed = 0;
+
+  for (const page of notionPages) {
+    checked += 1;
+    const result = await enqueuePrivateLessonReportForNotionPage(page, templateApproved);
+    if (result === "queued") queued += 1;
+    else if (result === "completed") completed += 1;
+    else if (result === "failed") failed += 1;
+    else skipped += 1;
+  }
+
+  logger.info("enqueueApprovedPrivateLessonReportAlimtalks completed", {
+    checked,
+    queued,
+    skipped,
+    completed,
+    failed,
+  });
+  return { checked, queued, skipped, completed, failed };
+}
+
+async function handleNotionPrivateLessonReportEvent(body: any): Promise<{ status: string }> {
+  const eventId = String(body.id || "");
+  if (eventId && !(await claimNotionWebhookEvent(eventId, body))) return { status: "duplicate" };
+  if (String(body.type || "") !== "page.properties_updated") return { status: "ignored_type" };
+
+  const pageId = String(body.entity?.id || "");
+  if (!pageId) return { status: "missing_page" };
+  const updatedProperties = Array.isArray(body.data?.updated_properties)
+    ? body.data.updated_properties.map(String)
+    : [];
+  if (
+    updatedProperties.length &&
+    !updatedProperties.some((name: string) => ["발송", "발송상태", "회원 리포트"].includes(name))
+  ) {
+    return { status: "ignored_property" };
+  }
+
+  const page = await notionRequest(`pages/${pageId}`, "GET");
+  if (!isPrivateSessionRecordPage(page)) return { status: "ignored_page" };
+  const templateApproved = await isAlimtalkTemplateApproved(ALIMTALK_TEMPLATES.private_lesson_report.code);
+  const result = await enqueuePrivateLessonReportForNotionPage(page, templateApproved);
+  if (eventId) {
+    await db.collection("notionWebhookEvents").doc(eventId).set(
+      {
+        status: result,
+        pageId,
+        updatedAt: nowTimestamp(),
+      },
+      { merge: true },
+    );
+  }
+  return { status: result };
+}
+
+async function enqueuePrivateLessonReportForNotionPage(
+  page: any,
+  templateApproved: boolean,
+): Promise<"queued" | "completed" | "failed" | "skipped" | "already_queued" | "template_pending"> {
+  if (!notionCheckbox(page.properties?.["발송"])) return "skipped";
+  if (notionSelectName(page.properties?.["발송상태"]) !== "대기") return "skipped";
+  if (!notionUrl(page.properties?.["회원 리포트"])) return "skipped";
+
+  const recordId = notionRichText(page.properties?.["Chart Request ID"]);
+  if (!recordId) return "skipped";
+  const record = (await refs.privateLessonChartRecord(recordId).get()).data();
+  if (
+    !record ||
+    !record.postRecord ||
+    record.gptStatus !== "draft_created" ||
+    !record.publicReportUrl ||
+    !record.memberPhone
+  ) {
+    return "skipped";
+  }
+
+  const candidateId = `private_lesson_report_${record.recordId}`;
+  const existing = (await refs.alimtalkCandidate(candidateId).get()).data();
+  if (existing?.status === "sent") {
+    await updatePrivateLessonReportNotionStatus(page.id, "완료");
+    return "completed";
+  }
+  if (existing?.status === "queued" || existing?.status === "processing") return "already_queued";
+
+  const link = await ensureShortLink({
+    type: "private_report",
+    targetUrl: record.publicReportUrl,
+    sourceId: record.recordId,
+  });
+  const now = nowTimestamp();
+  const nextStatus: AlimtalkCandidateDoc["status"] = templateApproved ? "queued" : "candidate";
+  const candidate: AlimtalkCandidateDoc = {
+    candidateId,
+    studioId: record.studioId || DEFAULT_STUDIO_ID,
+    memberId: record.memberId,
+    memberName: record.memberName,
+    memberPhone: record.memberPhone,
+    type: "private_lesson_report",
+    status: nextStatus,
+    templateCode: ALIMTALK_TEMPLATES.private_lesson_report.code,
+    title: "프라이빗 회원 리포트",
+    reason: `${record.memberName} ${record.sessionNumber}회차 회원 리포트 검수 완료`,
+    sourceActionKey: record.recordId,
+    sourceDate: record.lessonDate,
+    payload: {
+      memberName: record.memberName,
+      sessionNumberText: `${record.sessionNumber}회차`,
+      sessionLabel: `${record.sessionNumber}회차`,
+      lessonDate: record.lessonDate,
+      lessonDateTime: lessonTimeText(record),
+      staffName: record.staffName,
+      instructorName: record.staffName,
+      recordId: record.recordId,
+      requestId: record.requestId,
+      publicReportUrl: record.publicReportUrl,
+      reportLinkId: link.linkId,
+      reportShortUrl: link.shortUrl,
+      notionPageId: String(page.id || ""),
+    },
+    attempts: existing?.attempts || 0,
+    maxAttempts: existing?.maxAttempts || 2,
+    queuedBy: templateApproved ? "auto" : undefined,
+    reviewedByUid: templateApproved ? "system:notion-private-report" : existing?.reviewedByUid,
+    reviewedAt: templateApproved ? now : existing?.reviewedAt || null,
+    lastError: templateApproved ? null : "프라이빗 회원 리포트 템플릿 승인 대기",
+    createdAt: existing?.createdAt || now,
+    updatedAt: now,
+  };
+  await refs.alimtalkCandidate(candidateId).set(candidate, { merge: true });
+  if (existing?.status === "failed") return "failed";
+  return templateApproved ? "queued" : "template_pending";
+}
+
+async function claimNotionWebhookEvent(eventId: string, body: any): Promise<boolean> {
+  return db.runTransaction(async (tx) => {
+    const ref = db.collection("notionWebhookEvents").doc(eventId);
+    const snap = await tx.get(ref);
+    if (snap.exists) return false;
+    tx.set(ref, {
+      eventId,
+      type: String(body.type || ""),
+      pageId: String(body.entity?.id || ""),
+      status: "received",
+      createdAt: nowTimestamp(),
+      updatedAt: nowTimestamp(),
+    });
+    return true;
+  });
+}
+
+async function notionApprovedReportPages(): Promise<any[]> {
+  const result = await notionRequest(`databases/${NOTION_SESSION_RECORDS_DATABASE_ID}/query`, "POST", {
+    filter: {
+      and: [
+        { property: "발송", checkbox: { equals: true } },
+        { property: "발송상태", select: { equals: "대기" } },
+        { property: "회원 리포트", url: { is_not_empty: true } },
+      ],
+    },
+    page_size: 50,
+  });
+  return Array.isArray(result.results) ? result.results : [];
+}
+
+async function updatePrivateLessonReportNotionStatus(pageId: string, status: string): Promise<void> {
+  if (!pageId) return;
+  await notionRequest(`pages/${pageId}`, "PATCH", {
+    properties: {
+      발송상태: notionSelect(status),
+    },
+  });
+}
+
+async function verifyNotionWebhookSignature(request: any): Promise<boolean> {
+  const signature = String(request.get?.("X-Notion-Signature") || request.headers?.["x-notion-signature"] || "");
+  if (!signature.startsWith("sha256=")) return false;
+  const settings = (await db.collection("systemSettings").doc("notionPrivateLessonReportWebhook").get()).data();
+  const verificationToken = String(settings?.verificationToken || "");
+  if (!verificationToken) return false;
+  const rawBody = request.rawBody
+    ? Buffer.isBuffer(request.rawBody)
+      ? request.rawBody
+      : Buffer.from(String(request.rawBody))
+    : Buffer.from(JSON.stringify(request.body || {}));
+  const expected = `sha256=${createHmac("sha256", verificationToken).update(rawBody).digest("hex")}`;
+  if (signature.length !== expected.length) return false;
+  return timingSafeEqual(Buffer.from(signature), Buffer.from(expected));
+}
+
+function isPrivateSessionRecordPage(page: any): boolean {
+  const parentId = String(page?.parent?.database_id || page?.parent?.data_source_id || "");
+  return normalizeNotionId(parentId) === normalizeNotionId(NOTION_SESSION_RECORDS_DATABASE_ID);
+}
+
+function normalizeNotionId(value: string): string {
+  return String(value || "")
+    .replaceAll("-", "")
+    .toLowerCase();
 }
 
 async function ensureChartRequestForBooking(booking: BookingDoc): Promise<{ requestId: string; created: boolean }> {
@@ -246,7 +501,9 @@ async function submitPrivateLessonChart(
     mode === "pre"
       ? { preStatus: "submitted" as const, status: nextStatus }
       : { postStatus: "submitted" as const, status: nextStatus };
-  await refs.privateLessonChartRequest(chartRequest.requestId).set({ ...requestPatch, updatedAt: now }, { merge: true });
+  await refs
+    .privateLessonChartRequest(chartRequest.requestId)
+    .set({ ...requestPatch, updatedAt: now }, { merge: true });
 
   const notionSync = await syncPrivateLessonChartRecordToNotion(nextRecord, chartRequest);
   await recordRef.set({ notionSync, updatedAt: nowTimestamp() }, { merge: true });
@@ -320,7 +577,9 @@ async function ensureGptTask(
     updatedAt: now,
   };
   await refs.privateLessonChartGptTask(taskId).set(task, { merge: true });
-  await refs.privateLessonChartRecord(record.recordId).set({ gptTaskId: taskId, gptStatus: "pending", updatedAt: now }, { merge: true });
+  await refs
+    .privateLessonChartRecord(record.recordId)
+    .set({ gptTaskId: taskId, gptStatus: "pending", updatedAt: now }, { merge: true });
   return { taskId, enqueued: true };
 }
 
@@ -332,7 +591,9 @@ async function syncPrivateLessonChartRecordToNotion(
     const memberPageId = await notionMemberPageId(record.memberPhone, record.memberName, chartRequest);
     const properties = compactObject({
       Name: notionTitle(`${record.memberName} ${record.sessionNumber}회차`),
-      Date: notionDate(record.lessonStartAt ? record.lessonStartAt.toDate().toISOString() : `${record.lessonDate}T00:00:00+09:00`),
+      Date: notionDate(
+        record.lessonStartAt ? record.lessonStartAt.toDate().toISOString() : `${record.lessonDate}T00:00:00+09:00`,
+      ),
       "Member Relation": memberPageId ? { relation: [{ id: memberPageId }] } : undefined,
       Instructor: notionSelect(record.staffName || "미정"),
       "Session Status": notionSelect(record.postRecord ? "출석" : record.prePlan ? "수업전 계획" : "예정"),
@@ -373,7 +634,12 @@ async function syncPrivateLessonChartRecordToNotion(
       properties,
       children: content,
     });
-    return { status: "synced", pageId: String(page.id), pageUrl: String(page.url || notionPageUrl(String(page.id))), syncedAt: new Date().toISOString() };
+    return {
+      status: "synced",
+      pageId: String(page.id),
+      pageUrl: String(page.url || notionPageUrl(String(page.id))),
+      syncedAt: new Date().toISOString(),
+    };
   } catch (err) {
     return { status: "failed", error: errorMessage(err), syncedAt: new Date().toISOString() };
   }
@@ -416,7 +682,11 @@ async function notionQueryFirst(databaseId: string, filter: Record<string, unkno
   return first?.id ? String(first.id) : "";
 }
 
-async function notionRequest(path: string, method: "GET" | "POST" | "PATCH" | "DELETE", body?: Record<string, unknown>): Promise<any> {
+async function notionRequest(
+  path: string,
+  method: "GET" | "POST" | "PATCH" | "DELETE",
+  body?: Record<string, unknown>,
+): Promise<any> {
   const response = await fetch(`https://api.notion.com/v1/${path}`, {
     method,
     headers: {
@@ -432,7 +702,9 @@ async function notionRequest(path: string, method: "GET" | "POST" | "PATCH" | "D
   return parsed;
 }
 
-async function readChartRequestFromRequest(request: any): Promise<{ chartRequest: PrivateLessonChartRequestDoc; mode: PrivateLessonChartMode }> {
+async function readChartRequestFromRequest(
+  request: any,
+): Promise<{ chartRequest: PrivateLessonChartRequestDoc; mode: PrivateLessonChartMode }> {
   const requestId = String(request.query?.r || request.query?.requestId || "").trim();
   const token = String(request.query?.t || request.query?.token || "").trim();
   const mode = normalizeMode(request.query?.mode);
@@ -446,11 +718,15 @@ async function readChartRequest(requestId: string, token: string): Promise<Priva
   }
   const snap = await refs.privateLessonChartRequest(requestId).get();
   const chartRequest = snap.data();
-  if (!chartRequest || chartRequest.accessTokenHash !== sha256(token)) throw new Error("차트 링크를 확인할 수 없습니다.");
+  if (!chartRequest || chartRequest.accessTokenHash !== sha256(token))
+    throw new Error("차트 링크를 확인할 수 없습니다.");
   return chartRequest;
 }
 
-function publicChartRequest(chartRequest: PrivateLessonChartRequestDoc, mode: PrivateLessonChartMode): Record<string, unknown> {
+function publicChartRequest(
+  chartRequest: PrivateLessonChartRequestDoc,
+  mode: PrivateLessonChartMode,
+): Record<string, unknown> {
   return {
     requestId: chartRequest.requestId,
     mode,
@@ -499,7 +775,9 @@ function isPrivateBooking(booking: BookingDoc): boolean {
   return /프라이빗|개인|1:1|PRIVATE|\bP\b/i.test(text);
 }
 
-function privateSurveySummaryForRequest(doc: PrivateSurveyResponseDoc): NonNullable<PrivateLessonChartRequestDoc["intakeSummary"]> {
+function privateSurveySummaryForRequest(
+  doc: PrivateSurveyResponseDoc,
+): NonNullable<PrivateLessonChartRequestDoc["intakeSummary"]> {
   return {
     responseId: doc.responseId,
     submittedAtText: doc.submittedAtText,
@@ -539,13 +817,22 @@ function gptSourceHash(record: PrivateLessonChartRecordDoc, chartRequest: Privat
   });
 }
 
-function notionChartChildren(record: PrivateLessonChartRecordDoc, chartRequest: PrivateLessonChartRequestDoc): Record<string, unknown>[] {
+function notionChartChildren(
+  record: PrivateLessonChartRecordDoc,
+  chartRequest: PrivateLessonChartRequestDoc,
+): Record<string, unknown>[] {
   return [
     heading(2, `${record.memberName}님 개인레슨 차트`),
-    paragraph(`회차: ${record.sessionNumber}회차 / 수업일: ${lessonTimeText(chartRequest)} / 담당: ${record.staffName || "미정"}`),
-    callout("사진·영상 업로드는 이 페이지 상단에서 바로 처리합니다. 아래 '업로드 위치'에 파일을 드래그하거나 + 버튼으로 사진/영상을 추가하세요."),
+    paragraph(
+      `회차: ${record.sessionNumber}회차 / 수업일: ${lessonTimeText(chartRequest)} / 담당: ${record.staffName || "미정"}`,
+    ),
+    callout(
+      "사진·영상 업로드는 이 페이지 상단에서 바로 처리합니다. 아래 '업로드 위치'에 파일을 드래그하거나 + 버튼으로 사진/영상을 추가하세요.",
+    ),
     heading(2, "사진·영상 업로드"),
-    paragraph("업로드 위치: 이 문장 바로 아래에 사진·영상을 추가합니다. 자동화는 이 영역의 기존 미디어 블록을 삭제하지 않습니다."),
+    paragraph(
+      "업로드 위치: 이 문장 바로 아래에 사진·영상을 추가합니다. 자동화는 이 영역의 기존 미디어 블록을 삭제하지 않습니다.",
+    ),
     divider(),
     heading(3, "오늘의 수업 목적"),
     ...bullets(textArray(record.prePlan?.goals).length ? textArray(record.prePlan?.goals) : ["수업 전 계획 미작성"]),
@@ -581,16 +868,25 @@ function notionChartChildren(record: PrivateLessonChartRecordDoc, chartRequest: 
     paragraph(record.gptDraftSummary || "GPT 초안 생성 대기 중입니다."),
     divider(),
     heading(3, "회원 리포트 검수"),
-    paragraph(record.publicReportUrl ? "아래 임베드 또는 회원 리포트 URL 속성에서 최종 회원용 리포트를 확인합니다." : "회원용 HTML 리포트 생성 대기 중입니다."),
+    paragraph(
+      record.publicReportUrl
+        ? "아래 임베드 또는 회원 리포트 URL 속성에서 최종 회원용 리포트를 확인합니다."
+        : "회원용 HTML 리포트 생성 대기 중입니다.",
+    ),
     ...(record.publicReportUrl ? [embed(record.publicReportUrl)] : []),
   ];
 }
 
-function notionUpdateChildren(record: PrivateLessonChartRecordDoc, chartRequest: PrivateLessonChartRequestDoc): Record<string, unknown>[] {
+function notionUpdateChildren(
+  record: PrivateLessonChartRecordDoc,
+  chartRequest: PrivateLessonChartRequestDoc,
+): Record<string, unknown>[] {
   return [
     divider(),
     heading(3, `자동화 업데이트 ${new Date().toLocaleString("ko-KR", { timeZone: "Asia/Seoul" })}`),
-    paragraph(`회차: ${record.sessionNumber}회차 / 수업일: ${lessonTimeText(chartRequest)} / 담당: ${record.staffName || "미정"}`),
+    paragraph(
+      `회차: ${record.sessionNumber}회차 / 수업일: ${lessonTimeText(chartRequest)} / 담당: ${record.staffName || "미정"}`,
+    ),
     heading(3, "수업 전 계획"),
     ...bullets([
       `목표: ${textArray(record.prePlan?.goals).join(", ") || "-"}`,
@@ -623,7 +919,9 @@ function chartNotes(record: PrivateLessonChartRecordDoc, chartRequest: PrivateLe
     "",
     "수업 후 기록",
     safeJson(record.postRecord || {}),
-  ].join("\n").slice(0, 1900);
+  ]
+    .join("\n")
+    .slice(0, 1900);
 }
 
 function chartUrl(mode: PrivateLessonChartMode, requestId: string, token: string): string {
@@ -635,7 +933,10 @@ function chartUrl(mode: PrivateLessonChartMode, requestId: string, token: string
 }
 
 function accessTokenFor(requestId: string): string {
-  return createHmac("sha256", privateSurveyWebhookSecret.value()).update(`private-chart:${requestId}`).digest("hex").slice(0, 16);
+  return createHmac("sha256", privateSurveyWebhookSecret.value())
+    .update(`private-chart:${requestId}`)
+    .digest("hex")
+    .slice(0, 16);
 }
 
 function sha256(value: string): string {
@@ -650,9 +951,16 @@ function normalizeAnswers(input: Record<string, unknown>): ChartAnswerMap {
   const output: ChartAnswerMap = {};
   for (const [key, value] of Object.entries(input || {})) {
     if (!/^[a-zA-Z0-9_]{1,40}$/.test(key)) continue;
-    if (Array.isArray(value)) output[key] = value.map((item) => String(item).trim()).filter(Boolean).slice(0, 30);
+    if (Array.isArray(value))
+      output[key] = value
+        .map((item) => String(item).trim())
+        .filter(Boolean)
+        .slice(0, 30);
     else if (typeof value === "number") output[key] = Number.isFinite(value) ? value : null;
-    else output[key] = String(value || "").trim().slice(0, 1000);
+    else
+      output[key] = String(value || "")
+        .trim()
+        .slice(0, 1000);
   }
   return output;
 }
@@ -679,7 +987,10 @@ function lessonTimeText(chartRequest: Pick<PrivateLessonChartRequestDoc, "lesson
 function textArray(value: unknown): string[] {
   if (Array.isArray(value)) return value.map((item) => String(item).trim()).filter(Boolean);
   if (!value) return [];
-  return String(value).split(",").map((item) => item.trim()).filter(Boolean);
+  return String(value)
+    .split(",")
+    .map((item) => item.trim())
+    .filter(Boolean);
 }
 
 function firstText(value: unknown): string {
@@ -693,6 +1004,26 @@ function notionTitle(value: string): Record<string, unknown> {
 
 function notionText(value: string): Record<string, unknown> {
   return { rich_text: value ? [{ text: { content: value.slice(0, 2000) } }] : [] };
+}
+
+function notionRichText(property: any): string {
+  const items = Array.isArray(property?.rich_text) ? property.rich_text : [];
+  return items
+    .map((item: any) => String(item?.plain_text || ""))
+    .join("")
+    .trim();
+}
+
+function notionCheckbox(property: any): boolean {
+  return Boolean(property?.checkbox);
+}
+
+function notionSelectName(property: any): string {
+  return String(property?.select?.name || "");
+}
+
+function notionUrl(property: any): string {
+  return String(property?.url || "");
 }
 
 function notionSelect(value: string): Record<string, unknown> | undefined {
@@ -725,7 +1056,11 @@ function heading(level: 1 | 2 | 3, text: string): Record<string, unknown> {
 }
 
 function paragraph(text: string): Record<string, unknown> {
-  return { object: "block", type: "paragraph", paragraph: { rich_text: [{ type: "text", text: { content: text.slice(0, 2000) } }] } };
+  return {
+    object: "block",
+    type: "paragraph",
+    paragraph: { rich_text: [{ type: "text", text: { content: text.slice(0, 2000) } }] },
+  };
 }
 
 function callout(text: string): Record<string, unknown> {
