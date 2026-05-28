@@ -46,7 +46,7 @@ import {
 } from "./privateSurvey/privateSurveyResponse";
 import {
   enqueueApprovedPrivateLessonReportAlimtalks,
-  createTomorrowPrivateLessonChartRequests,
+  createAndSendTomorrowPrivateLessonCharts,
   enqueuePendingPrivateLessonChartGptTasks,
   notionPrivateLessonReportWebhookHandler,
   privateLessonChartApiHandler,
@@ -237,7 +237,7 @@ export const scheduledCreatePrivateLessonChartRequests = onSchedule(
     schedule: "0 18 * * *",
   },
   async () => {
-    await createTomorrowPrivateLessonChartRequests();
+    await createAndSendTomorrowPrivateLessonCharts();
   },
 );
 

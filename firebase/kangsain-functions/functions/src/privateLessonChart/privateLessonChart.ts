@@ -1,8 +1,8 @@
-import { createHmac, timingSafeEqual } from "node:crypto";
+import { createHmac, randomBytes, timingSafeEqual } from "node:crypto";
 import { Timestamp } from "firebase-admin/firestore";
 import { logger } from "firebase-functions";
 import { DEFAULT_STUDIO_ID } from "../config/constants";
-import { notionToken, privateSurveyWebhookSecret } from "../config/secrets";
+import { notionToken, privateSurveyWebhookSecret, solapiApiKey, solapiApiSecret, solapiPfid } from "../config/secrets";
 import { db } from "../config/firebase";
 import { refs } from "../firestore/refs";
 import type {
@@ -27,16 +27,19 @@ const NOTION_API_VERSION = "2022-06-28";
 const NOTION_MEMBERS_DATABASE_ID = process.env.NOTION_PRIVATE_MEMBERS_DATABASE_ID || "c58a39ceb7ac405ba43b38d3b5871ed3";
 const NOTION_SESSION_RECORDS_DATABASE_ID =
   process.env.NOTION_PRIVATE_SESSION_RECORDS_DATABASE_ID || "105b17685d914fbe915ef5b65146d993";
-const PRIVATE_CHART_TEMPLATE_NAME = "강사용_프라이빗 차트 작성 안내 v1";
+const STAFF_PRIVATE_CHART_TEMPLATE_ID = "KA01TP260527182741301uIuSTL01YQ1";
+const PRIVATE_CHART_TEMPLATE_NAME = "강사용_프라이빗 차트 작성 안내 v2";
+const SOLAPI_SEND_URL = "https://api.solapi.com/messages/v4/send-many/detail";
+const SOLAPI_TEMPLATE_URL = "https://api.solapi.com/kakao/v2/templates";
 const NOTION_INSTRUCTOR_CHART_PAGE_IDS: Record<string, string> = {
   "이초림 수석강사": "22cd49eae4bf802ebc89fe094d0c355a",
-  "이초림": "22cd49eae4bf802ebc89fe094d0c355a",
+  이초림: "22cd49eae4bf802ebc89fe094d0c355a",
   "배민진 원장님": "22dd49eae4bf80258427fe92a4b6ce2c",
-  "배민진": "22dd49eae4bf80258427fe92a4b6ce2c",
+  배민진: "22dd49eae4bf80258427fe92a4b6ce2c",
   "정은영 부원장님": "22dd49eae4bf809da7e7d6953e41eb86",
-  "정은영": "22dd49eae4bf809da7e7d6953e41eb86",
+  정은영: "22dd49eae4bf809da7e7d6953e41eb86",
   "김기효 강사": "36ed49eae4bf8161a0d3edd9f30643b9",
-  "김기효": "36ed49eae4bf8161a0d3edd9f30643b9",
+  김기효: "36ed49eae4bf8161a0d3edd9f30643b9",
 };
 
 type ChartAnswerMap = Record<string, string[] | string | number | null>;
@@ -120,6 +123,17 @@ export async function createTomorrowPrivateLessonChartRequests(): Promise<{
   return createPrivateLessonChartRequestsForDate(targetDate);
 }
 
+export async function createAndSendTomorrowPrivateLessonCharts(): Promise<{
+  date: string;
+  createSummary: Awaited<ReturnType<typeof createPrivateLessonChartRequestsForDate>>;
+  sendSummary: Awaited<ReturnType<typeof sendPendingPrivateLessonChartAlimtalksForDate>>;
+}> {
+  const targetDate = addDays(todayKst(), 1);
+  const createSummary = await createPrivateLessonChartRequestsForDate(targetDate);
+  const sendSummary = await sendPendingPrivateLessonChartAlimtalksForDate(targetDate);
+  return { date: targetDate, createSummary, sendSummary };
+}
+
 export async function createPrivateLessonChartRequestsForDate(date: string): Promise<{
   date: string;
   checked: number;
@@ -127,16 +141,12 @@ export async function createPrivateLessonChartRequestsForDate(date: string): Pro
   skipped: number;
 }> {
   const snap = await refs.bookings().where("lectureDate", "==", date).limit(500).get();
+  const bookings = canonicalPrivateBookings(snap.docs.map((doc) => doc.data()));
   let checked = 0;
   let created = 0;
-  let skipped = 0;
+  let skipped = snap.size - bookings.length;
 
-  for (const bookingSnap of snap.docs) {
-    const booking = bookingSnap.data();
-    if (!isPrivateBooking(booking)) {
-      skipped += 1;
-      continue;
-    }
+  for (const booking of bookings) {
     checked += 1;
     const result = await ensureChartRequestForBooking(booking).catch((err) => {
       logger.warn("ensureChartRequestForBooking failed", {
@@ -151,6 +161,156 @@ export async function createPrivateLessonChartRequestsForDate(date: string): Pro
 
   logger.info("createPrivateLessonChartRequestsForDate completed", { date, checked, created, skipped });
   return { date, checked, created, skipped };
+}
+
+export async function sendPendingPrivateLessonChartAlimtalksForDate(date: string): Promise<{
+  date: string;
+  checked: number;
+  sent: number;
+  skipped: number;
+  failed: number;
+}> {
+  const templateApproved = await isStaffPrivateChartTemplateApproved();
+  const snap = await refs.privateLessonChartRequests().where("lessonDate", "==", date).limit(500).get();
+  const canonical = canonicalChartRequests(snap.docs.map((doc) => doc.data()));
+  const canonicalIds = new Set(canonical.map((request) => request.requestId));
+  let checked = 0;
+  let sent = 0;
+  let skipped = snap.size - canonical.length;
+  let failed = 0;
+
+  for (const request of snap.docs.map((doc) => doc.data())) {
+    if (!canonicalIds.has(request.requestId) && isSendablePrivateChartRequest(request)) {
+      await refs.privateLessonChartRequest(request.requestId).set(
+        {
+          alimtalk: {
+            ...(request.alimtalk || {}),
+            status: "skipped",
+            templateName: PRIVATE_CHART_TEMPLATE_NAME,
+            templateId: STAFF_PRIVATE_CHART_TEMPLATE_ID,
+            lastError: "동일 수업의 실제 예약 ID 요청이 있어 Excel 중복 요청은 발송 제외",
+          },
+          updatedAt: nowTimestamp(),
+        },
+        { merge: true },
+      );
+    }
+  }
+
+  for (const request of canonical) {
+    if (!isSendablePrivateChartRequest(request)) {
+      skipped += 1;
+      continue;
+    }
+    checked += 1;
+    if (!templateApproved) {
+      await refs.privateLessonChartRequest(request.requestId).set(
+        {
+          alimtalk: {
+            ...(request.alimtalk || {}),
+            status: "template_pending",
+            templateName: PRIVATE_CHART_TEMPLATE_NAME,
+            templateId: STAFF_PRIVATE_CHART_TEMPLATE_ID,
+            lastError: "강사용 프라이빗 차트 알림톡 템플릿 승인 대기",
+          },
+          updatedAt: nowTimestamp(),
+        },
+        { merge: true },
+      );
+      skipped += 1;
+      continue;
+    }
+
+    const sendId = `staff_private_lesson_chart_${request.requestId}`;
+    const existingSend = (await refs.alimtalkSend(sendId).get()).data();
+    if (existingSend?.status === "done") {
+      await refs.privateLessonChartRequest(request.requestId).set(
+        {
+          alimtalk: {
+            ...(request.alimtalk || {}),
+            status: "sent",
+            templateName: PRIVATE_CHART_TEMPLATE_NAME,
+            templateId: STAFF_PRIVATE_CHART_TEMPLATE_ID,
+            solapiMessageId: existingSend.solapiMessageId || "",
+            lastError: null,
+          },
+          updatedAt: nowTimestamp(),
+        },
+        { merge: true },
+      );
+      skipped += 1;
+      continue;
+    }
+
+    try {
+      const variables = privateChartAlimtalkVariables(request);
+      const result = await sendStaffPrivateChartAlimtalk(request.staffPhone, variables);
+      await refs.privateLessonChartRequest(request.requestId).set(
+        {
+          alimtalk: {
+            status: "sent",
+            templateName: PRIVATE_CHART_TEMPLATE_NAME,
+            templateId: STAFF_PRIVATE_CHART_TEMPLATE_ID,
+            solapiMessageId: result.messageId,
+            sentAt: nowTimestamp(),
+            lastError: null,
+          },
+          updatedAt: nowTimestamp(),
+        },
+        { merge: true },
+      );
+      await refs.alimtalkSend(sendId).set(
+        {
+          sendId,
+          studioId: request.studioId,
+          candidateId: sendId,
+          memberId: request.memberId,
+          memberName: request.memberName,
+          memberPhone: request.staffPhone,
+          templateCode: STAFF_PRIVATE_CHART_TEMPLATE_ID,
+          dedupeKey: sendId,
+          dedupePolicy: "강사용 프라이빗 차트 수업별 1회",
+          dedupeWindowDays: null,
+          status: "done",
+          attempts: 1,
+          maxAttempts: 1,
+          nextRunAt: nowTimestamp(),
+          solapiMessageId: result.messageId,
+          variables,
+          lastError: null,
+          createdByUid: "system:private-lesson-chart",
+          createdAt: nowTimestamp(),
+          updatedAt: nowTimestamp(),
+        },
+        { merge: true },
+      );
+      sent += 1;
+    } catch (err) {
+      const message = errorMessage(err);
+      failed += 1;
+      await refs.privateLessonChartRequest(request.requestId).set(
+        {
+          alimtalk: {
+            ...(request.alimtalk || {}),
+            status: "failed",
+            templateName: PRIVATE_CHART_TEMPLATE_NAME,
+            templateId: STAFF_PRIVATE_CHART_TEMPLATE_ID,
+            lastError: message,
+          },
+          updatedAt: nowTimestamp(),
+        },
+        { merge: true },
+      );
+      logger.warn("sendPendingPrivateLessonChartAlimtalksForDate failed", {
+        requestId: request.requestId,
+        bookingId: request.bookingId,
+        message,
+      });
+    }
+  }
+
+  logger.info("sendPendingPrivateLessonChartAlimtalksForDate completed", { date, checked, sent, skipped, failed });
+  return { date, checked, sent, skipped, failed };
 }
 
 export async function enqueuePendingPrivateLessonChartGptTasks(): Promise<{
@@ -884,6 +1044,168 @@ function isPrivateBooking(booking: BookingDoc): boolean {
   if (booking.lessonType === "private" || booking.lessonType === "semi_private") return true;
   const text = `${booking.ticketName || ""} ${booking.ticketClassType || ""} ${booking.ticketType || ""}`;
   return /프라이빗|개인|1:1|PRIVATE|\bP\b/i.test(text);
+}
+
+function canonicalPrivateBookings(bookings: BookingDoc[]): BookingDoc[] {
+  const grouped = new Map<string, BookingDoc>();
+  for (const booking of bookings) {
+    if (!isPrivateBooking(booking)) continue;
+    const key = privateLessonOccurrenceKey(booking);
+    const current = grouped.get(key);
+    if (!current || preferCanonicalBooking(booking, current)) grouped.set(key, booking);
+  }
+  return [...grouped.values()].sort(
+    (a, b) => (a.lectureStartAt?.toMillis?.() || 0) - (b.lectureStartAt?.toMillis?.() || 0),
+  );
+}
+
+function canonicalChartRequests(requests: PrivateLessonChartRequestDoc[]): PrivateLessonChartRequestDoc[] {
+  const grouped = new Map<string, PrivateLessonChartRequestDoc>();
+  for (const request of requests) {
+    const key = privateChartRequestOccurrenceKey(request);
+    const current = grouped.get(key);
+    if (!current || preferCanonicalBookingLike(request.bookingId, current.bookingId)) grouped.set(key, request);
+  }
+  return [...grouped.values()].sort(
+    (a, b) => (a.lessonStartAt?.toMillis?.() || 0) - (b.lessonStartAt?.toMillis?.() || 0),
+  );
+}
+
+function privateLessonOccurrenceKey(
+  value: Pick<BookingDoc, "memberId" | "staffId" | "lectureStartAt" | "lectureDate" | "memberName" | "staffName">,
+): string {
+  const start = value.lectureStartAt?.toMillis?.() || value.lectureDate || "";
+  return [
+    value.memberId || normalizeKoreanName(value.memberName || ""),
+    value.staffId || normalizeKoreanName(value.staffName || ""),
+    start,
+  ].join("|");
+}
+
+function privateChartRequestOccurrenceKey(
+  value: Pick<
+    PrivateLessonChartRequestDoc,
+    "memberId" | "staffId" | "lessonStartAt" | "lessonDate" | "memberName" | "staffName"
+  >,
+): string {
+  const start = value.lessonStartAt?.toMillis?.() || value.lessonDate || "";
+  return [
+    value.memberId || normalizeKoreanName(value.memberName || ""),
+    value.staffId || normalizeKoreanName(value.staffName || ""),
+    start,
+  ].join("|");
+}
+
+function preferCanonicalBooking(next: BookingDoc, current: BookingDoc): boolean {
+  return preferCanonicalBookingLike(next.bookingId, current.bookingId);
+}
+
+function preferCanonicalBookingLike(nextBookingId: string, currentBookingId: string): boolean {
+  const nextExcel = isExcelBookingId(nextBookingId);
+  const currentExcel = isExcelBookingId(currentBookingId);
+  if (nextExcel !== currentExcel) return !nextExcel;
+  return String(nextBookingId || "") < String(currentBookingId || "");
+}
+
+function isExcelBookingId(bookingId: string): boolean {
+  return String(bookingId || "").startsWith("excel_booking_");
+}
+
+function isSendablePrivateChartRequest(request: PrivateLessonChartRequestDoc): boolean {
+  if (request.alimtalk?.status !== "template_pending" && request.alimtalk?.status !== "queued") return false;
+  if (!request.staffPhone || !normalizePhone(request.staffPhone)) return false;
+  if (!request.preShortUrl || !request.postShortUrl || !request.mediaUploadShortUrl) return false;
+  if (!request.memberName || !request.staffName || !request.lessonStartAt) return false;
+  return true;
+}
+
+function privateChartAlimtalkVariables(request: PrivateLessonChartRequestDoc): Record<string, string> {
+  return {
+    "#{강사명}": request.staffName,
+    "#{회원명}": request.memberName,
+    "#{회차}": String(request.sessionNumber || ""),
+    "#{수업일시}": lessonTimeText(request),
+    "#{수업전계획링크ID}": shortLinkIdFromUrl(request.preShortUrl),
+    "#{수업후기록링크ID}": shortLinkIdFromUrl(request.postShortUrl),
+    "#{사진영상업로드링크ID}": shortLinkIdFromUrl(request.mediaUploadShortUrl || ""),
+  };
+}
+
+function shortLinkIdFromUrl(shortUrl: string): string {
+  const match = String(shortUrl || "").match(/\/s\/([^/?#]+)\/?/);
+  return match ? decodeURIComponent(match[1]) : "";
+}
+
+async function sendStaffPrivateChartAlimtalk(
+  staffPhone: string,
+  variables: Record<string, string>,
+): Promise<{ messageId: string }> {
+  const to = normalizePhone(staffPhone);
+  if (!to) throw new Error("staff phone is empty");
+  if (Object.values(variables).some((value) => !value)) throw new Error("template variable is empty");
+
+  const response = await fetch(SOLAPI_SEND_URL, {
+    method: "POST",
+    headers: {
+      Authorization: solapiAuthHeader(),
+      "Content-Type": "application/json",
+    },
+    body: JSON.stringify({
+      messages: [
+        {
+          to,
+          type: "ATA",
+          kakaoOptions: {
+            pfId: solapiPfid.value(),
+            templateId: STAFF_PRIVATE_CHART_TEMPLATE_ID,
+            disableSms: true,
+            variables,
+          },
+        },
+      ],
+      strict: true,
+      allowDuplicates: false,
+      showMessageList: true,
+    }),
+  });
+  const result = (await response.json().catch(() => ({}))) as {
+    errorMessage?: string;
+    message?: string;
+    failedMessageList?: Array<{ statusMessage?: string }>;
+    messageList?: Array<{ messageId?: string }>;
+    groupInfo?: { groupId?: string };
+  };
+  if (!response.ok) throw new Error(result.errorMessage || result.message || `SOLAPI ${response.status}`);
+  if (Array.isArray(result.failedMessageList) && result.failedMessageList.length) {
+    throw new Error(result.failedMessageList[0]?.statusMessage || "SOLAPI rejected message");
+  }
+  return {
+    messageId: result.messageList?.[0]?.messageId || result.groupInfo?.groupId || "",
+  };
+}
+
+async function isStaffPrivateChartTemplateApproved(): Promise<boolean> {
+  const response = await fetch(`${SOLAPI_TEMPLATE_URL}/${encodeURIComponent(STAFF_PRIVATE_CHART_TEMPLATE_ID)}`, {
+    headers: {
+      Authorization: solapiAuthHeader(),
+    },
+  });
+  if (!response.ok) return isAlimtalkTemplateApproved(STAFF_PRIVATE_CHART_TEMPLATE_ID);
+  const body = (await response.json().catch(() => ({}))) as { status?: string };
+  return String(body.status || "").toUpperCase() === "APPROVED";
+}
+
+function solapiAuthHeader(): string {
+  const dateTime = new Date().toISOString();
+  const salt = randomBytes(16).toString("hex");
+  const signature = createHmac("sha256", solapiApiSecret.value())
+    .update(dateTime + salt)
+    .digest("hex");
+  return `HMAC-SHA256 apiKey=${solapiApiKey.value()}, date=${dateTime}, salt=${salt}, signature=${signature}`;
+}
+
+function normalizePhone(value: string): string {
+  return String(value || "").replace(/\D/g, "");
 }
 
 function privateSurveySummaryForRequest(

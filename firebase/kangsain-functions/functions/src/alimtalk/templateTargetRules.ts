@@ -289,8 +289,13 @@ export const ALIMTALK_TEMPLATE_TARGET_RULES: Partial<Record<AlimtalkCandidateTyp
     requiresMemberPhone: true,
     buttonUrlRules: [
       {
-        label: "프라이빗 회원 리포트 버튼",
+        label: "프라이빗 수업 리포트 버튼",
         template: PRIVATE_REPORT_BUTTON_URL_TEMPLATE,
+        maxLength: SOLAPI_BUTTON_URL_MAX_LENGTH,
+      },
+      {
+        label: "프라이빗 인바디 리포트 버튼",
+        template: "https://in.archivepilates.com/s/#{인바디링크ID}/",
         maxLength: SOLAPI_BUTTON_URL_MAX_LENGTH,
       },
     ],
@@ -299,6 +304,7 @@ export const ALIMTALK_TEMPLATE_TARGET_RULES: Partial<Record<AlimtalkCandidateTyp
       "GPT 회원용 리포트 초안이 생성됨",
       "회원용 HTML 리포트 URL이 있음",
       "Notion에서 발송 체크와 발송상태 대기 확인",
+      "최신 인바디 리포트가 있으면 인바디 버튼에 연결하고, 없으면 측정 데이터 없음 안내 화면에 연결",
     ],
     exclusionRules: [
       "전화번호 없음",
@@ -307,6 +313,35 @@ export const ALIMTALK_TEMPLATE_TARGET_RULES: Partial<Record<AlimtalkCandidateTyp
       "Notion 발송 체크 전",
       "Notion 발송상태가 대기가 아님",
       "같은 회차 리포트 발송 이력 있음",
+      "SOLAPI 미승인 템플릿",
+    ],
+  },
+  inbody_report: {
+    type: "inbody_report",
+    templateCode: ALIMTALK_TEMPLATES.inbody_report.code,
+    templateLabel: ALIMTALK_TEMPLATES.inbody_report.label,
+    sourceDatePolicy: "same_or_before_today",
+    requiresApprovedTemplate: true,
+    requiresMemberPhone: true,
+    buttonUrlRules: [
+      {
+        label: "인바디 리포트 버튼",
+        template: PRIVATE_REPORT_BUTTON_URL_TEMPLATE,
+        maxLength: SOLAPI_BUTTON_URL_MAX_LENGTH,
+      },
+    ],
+    targetRules: [
+      "프라이빗 유효회원",
+      "인바디 측정 후 회원용 리포트 URL 생성 완료",
+      "회원 전화번호가 있음",
+      "운영자 승인 또는 자동 발송 조건 충족",
+    ],
+    exclusionRules: [
+      "프라이빗 유효회원 아님",
+      "전화번호 없음",
+      "인바디 리포트 URL 없음",
+      "같은 측정 또는 리포트 발송 이력 있음",
+      "운영자 승인 전 또는 자동 발송 조건 미충족",
       "SOLAPI 미승인 템플릿",
     ],
   },

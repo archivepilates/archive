@@ -1,0 +1,86 @@
+<!doctype html>
+<html lang="ko">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1">
+  <title>ARCHIVE PILATES 인바디 리포트</title>
+  <style>
+    :root {
+      color-scheme: light;
+      --bg: #f7f3ee;
+      --text: #171513;
+      --muted: #706a62;
+      --line: #ddd3c8;
+      --accent: #8c6a4f;
+    }
+
+    * {
+      box-sizing: border-box;
+    }
+
+    body {
+      margin: 0;
+      min-height: 100vh;
+      display: grid;
+      place-items: center;
+      padding: 28px 18px;
+      background: var(--bg);
+      color: var(--text);
+      font-family: -apple-system, BlinkMacSystemFont, "Apple SD Gothic Neo", "Noto Sans KR", sans-serif;
+      line-height: 1.65;
+    }
+
+    main {
+      width: min(100%, 520px);
+      border-top: 1px solid var(--line);
+      border-bottom: 1px solid var(--line);
+      padding: 30px 0;
+    }
+
+    .brand {
+      margin: 0 0 34px;
+      font-size: 13px;
+      font-weight: 700;
+      letter-spacing: 0;
+    }
+
+    h1 {
+      margin: 0 0 16px;
+      font-size: 24px;
+      line-height: 1.35;
+      letter-spacing: 0;
+    }
+
+    p {
+      margin: 0;
+      color: var(--muted);
+      font-size: 16px;
+      word-break: keep-all;
+      overflow-wrap: break-word;
+    }
+
+    .note {
+      margin-top: 24px;
+      padding-top: 18px;
+      border-top: 1px solid var(--line);
+      color: var(--accent);
+      font-size: 14px;
+    }
+  </style>
+</head>
+<body>
+  <main>
+    <p class="brand">ARCHIVE PILATES</p>
+    <h1 id="title">인바디 측정 데이터가 아직 없습니다.</h1>
+    <p id="message">최근 인바디 측정 후 리포트가 생성되면 이곳에서 확인하실 수 있습니다.</p>
+    <p class="note">측정 후에도 계속 보이지 않으면 데스크에 알려주세요.</p>
+  </main>
+  <script>
+    const params = new URLSearchParams(location.search);
+    const member = (params.get("member") || "").trim();
+    if (member) {
+      document.getElementById("title").textContent = `${member}님, 인바디 측정 데이터가 아직 없습니다.`;
+    }
+  </script>
+</body>
+</html>

@@ -16,6 +16,8 @@
 
 수업 하루 전 18:00 이후.
 
+Firebase Scheduler `scheduledCreatePrivateLessonChartRequests`가 요청 생성과 강사용 알림톡 발송을 같은 실행 안에서 처리한다.
+
 ## 본문
 
 ```text
@@ -63,6 +65,7 @@
 - 원천 예약은 Firestore `bookings/{bookingId}`입니다.
 - 프라이빗/세미프라이빗 예약만 대상입니다.
 - 같은 회원, 같은 강사, 같은 날짜, 같은 시작시각의 예약이 웹 예약과 엑셀 보강 데이터에 중복 존재하면 실제 알림톡은 1건만 생성합니다.
+- 중복 예약이 있으면 숫자 StudioMate 예약 ID를 우선 사용하고 `excel_booking_...` 요청은 `skipped`로 표시합니다.
 - 요청 문서 ID는 `privateLessonChartRequests/plc_{bookingId}` 형식을 사용합니다.
 
 ### 토큰과 원본 URL
@@ -111,6 +114,7 @@
 - `mediaUploadShortUrl`은 302로 실제 Notion 회차 차트로 이동해야 합니다.
 - Notion 회차 차트에는 `사진·영상 업로드` 섹션이 있어야 합니다.
 - 알림톡 템플릿 승인 전에는 요청 문서의 `alimtalk.status`를 `template_pending`으로 유지합니다.
+- 자동 발송 대상 상태는 `template_pending` 또는 `queued`로 제한합니다. 수동 테스트 상태와 이미 `sent/skipped`된 요청은 제외합니다.
 
 ## 운영 조건
 

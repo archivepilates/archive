@@ -84,6 +84,11 @@ function dedupeScope(candidate: AlimtalkCandidateDoc): Record<string, string> {
       recordId: String(payload.recordId || candidate.sourceActionKey || candidate.candidateId || ""),
     };
   }
+  if (type === "inbody_report") {
+    return {
+      reportToken: String(payload.reportToken || payload.inbodyReportToken || candidate.sourceActionKey || candidate.candidateId || ""),
+    };
+  }
   if (type === "reservation_open") {
     return {
       reservationWeek: String(payload.reservationWeek || payload.weekLabel || ""),

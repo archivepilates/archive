@@ -41,6 +41,7 @@
 | `#{수업일시}` | 수업 날짜와 시작 시간 | `lessonDate`와 `lessonStartAt`을 KST 기준 `MM.DD 요일 HH:mm` 형식으로 전달한다. |
 | `#{강사명}` | 담당 강사명 | `privateLessonChartRecords.staffName`을 사용한다. |
 | `#{리포트링크ID}` | 회원용 HTML 리포트 짧은 링크 ID | 버튼 URL `https://in.archivepilates.com/s/#{리포트링크ID}/`에 사용한다. 원본 리포트 URL은 `shortLinks`에 저장한다. |
+| `#{인바디링크ID}` | 최신 인바디 리포트 짧은 링크 ID | 버튼 URL `https://in.archivepilates.com/s/#{인바디링크ID}/`에 사용한다. 인바디 리포트가 없으면 측정 데이터 없음 안내 화면으로 연결한다. |
 
 ## 템플릿별 운영 규칙
 
@@ -55,7 +56,9 @@
 | 아카이브 프라이빗 사전설문 안내 v1 | `KA01TP260514153632171uiWXYoeiOLS` | `APPROVED` | 매일 11:30 자동 발송 |
 | 아카이브 장기 미방문 수업안내 v1 | `KA01TP260524083643752cySb9BoDOjN` | `PENDING` | 후보 생성 연결 완료, 승인 전 실제 발송 차단 |
 | 강사레슨_수업자료 안내 v1 | `KA01TP260521120040094XcMvYgFTryj` | `APPROVED` | 아카이브강사레슨 채널, 수업자료/방문안내 버튼 2개 구성 |
-| 회원용_프라이빗 수업 리포트 안내 v1 | `KA01TP260528081225871Fr92FW901Vo` | `PENDING` | 수업 후 Notion 검수 승인 후 발송. 검수 승인 후 코드 연결 필요 |
+| 회원용_프라이빗 수업 리포트 안내 v2 | `KA01TP260528090731992hVPP5efmmUC` | `PENDING` | 수업 리포트와 최신 인바디 리포트를 버튼 2개로 통합 발송. 검수 승인 후 사용 |
+| 회원용_프라이빗 수업 리포트 안내 v1 | `KA01TP260528081225871Fr92FW901Vo` | `INSPECTING` | v2로 대체 예정. 승인되더라도 신규 운영 연결은 v2 기준 |
+| 회원용_인바디 리포트 안내 v1 | `KA01TP260528090148593isshfXtt8vE` | `PENDING` | 단독 인바디 발송용으로 보류. 프라이빗 리포트 운영은 v2 통합 기준 |
 
 ### 1. 신규회원 웰컴 안내
 
@@ -340,6 +343,7 @@
 
 - 강사용 입력 요청이 아니라, 수업 후 생성된 회원용 HTML 리포트를 회원에게 전달하는 알림톡이다.
 - 발송은 자동 즉시 발송이 아니라 Notion 검수 후 `발송` 체크가 된 회차만 처리한다.
+- v2부터는 같은 알림톡에 최신 인바디 리포트 버튼을 함께 제공한다.
 
 대상:
 
@@ -367,13 +371,18 @@
 - `#{수업일시}` = `lessonDate + lessonStartAt`을 KST 기준으로 변환
 - `#{강사명}` = `privateLessonChartRecords.staffName`
 - `#{리포트링크ID}` = `privateLessonChartRecords.publicReportUrl`을 `shortLinks`로 변환한 짧은 링크 ID
+- `#{인바디링크ID}` = 최신 `inbodyWebhookEvents.memberReportUrl`을 `shortLinks`로 변환한 짧은 링크 ID. 없으면 측정 데이터 없음 안내 화면 링크 ID
 
 버튼:
 
-- `리포트 확인하기`
-- URL 변수: `https://in.archivepilates.com/s/#{리포트링크ID}/`
-- 실제 발송 payload에는 전체 URL이 아니라 `pr-...` 형식의 `#{리포트링크ID}`만 넣는다.
+- `수업 리포트 보기`
+  - URL 변수: `https://in.archivepilates.com/s/#{리포트링크ID}/`
+- `인바디 리포트 보기`
+  - URL 변수: `https://in.archivepilates.com/s/#{인바디링크ID}/`
+- 실제 발송 payload에는 전체 URL이 아니라 `pr-...` 형식의 `#{리포트링크ID}`와 `ir-...` 형식의 `#{인바디링크ID}`만 넣는다.
 - 원본 `publicReportUrl`은 Firestore `shortLinks/{리포트링크ID}.targetUrl`에 저장한다.
+- 최신 인바디 리포트 URL은 `shortLinks/{인바디링크ID}.targetUrl`에 저장한다.
+- 인바디 측정 데이터가 없으면 `https://in.archivepilates.com/reports/inbody-members/?status=no-data&member=...` 안내 화면으로 연결한다.
 
 제외:
 
@@ -401,6 +410,58 @@
 - 후보가 이미 `queued` 또는 `processing`이면 새 후보를 만들지 않는다.
 - 후보가 이미 `sent`이면 Notion `발송상태`를 `완료`로 맞추고 추가 발송하지 않는다.
 - 실패 후보는 Notion 상태가 계속 `대기`일 때만 같은 후보 ID로 재시도 가능하게 둔다.
+
+### 10. 회원용 인바디 리포트 안내
+
+용도:
+
+- 프라이빗 유효회원이 인바디 측정 후 생성된 개인 리포트를 알림톡으로 전달한다.
+- 리포트는 Firebase Hosting의 개인별 URL로 열고, 알림톡 버튼에는 짧은 링크 ID만 전달한다.
+
+대상:
+
+- 프라이빗 유효회원.
+- 인바디 측정 데이터가 있고 회원용 리포트 URL이 생성됨.
+- 회원 전화번호가 정상 저장되어 있음.
+- 같은 측정 또는 같은 리포트에 대해 성공 발송 이력이 없음.
+- 운영자 승인 또는 자동 발송 조건을 충족함.
+
+발송 시점:
+
+- 인바디 리포트 URL 생성 후 후보를 만든다.
+- 초기 운영은 운영자 승인 후 발송으로 둔다.
+- 자동 발송으로 전환할 때는 프라이빗 유효회원 여부와 중복키 검증을 먼저 통과해야 한다.
+
+변수:
+
+- `#{회원명}` = 회원 이름
+- `#{리포트링크ID}` = `shortLinks`에 저장된 인바디 리포트 짧은 링크 ID
+
+버튼:
+
+- `리포트 확인하기`
+- URL 변수: `https://in.archivepilates.com/s/#{리포트링크ID}/`
+- 원본 URL 예시: `https://in.archivepilates.com/reports/inbody-members/{reportToken}`
+- 실제 발송 payload에는 전체 URL이 아니라 `ir-...` 형식의 `#{리포트링크ID}`만 넣는다.
+- 원본 리포트 URL은 Firestore `shortLinks/{리포트링크ID}.targetUrl`에 저장한다.
+
+제외:
+
+- 프라이빗 유효회원 아님.
+- 회원 전화번호 없음.
+- 인바디 리포트 URL 없음.
+- 같은 측정 또는 같은 리포트 발송 이력 있음.
+- 운영자 승인 전 또는 자동 발송 조건 미충족.
+- SOLAPI 미승인 템플릿.
+
+중복키:
+
+- 기본: `inbody_report:{reportToken}`
+- 측정일 기준 후보에서는 `inbody_report:{memberId}:{latestMeasurementDateTime}`도 허용한다.
+
+중복 방지 기간:
+
+- 영구 1회. 같은 리포트 토큰 또는 같은 측정 시각 리포트는 다시 발송하지 않는다.
 
 ## 후보 상태 운영
 

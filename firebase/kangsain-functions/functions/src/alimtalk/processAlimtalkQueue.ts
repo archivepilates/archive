@@ -245,6 +245,7 @@ async function templateVariables(candidate: AlimtalkCandidateDoc): Promise<Recor
   const managementNumber = String(payload.managementNumber || payload.materialNumber || payload.archiveMethodId || "");
   const shortLinkId = await shortLinkIdForCandidate(candidate, surveyId, accessToken, managementNumber);
   const reportLinkId = await reportLinkIdForCandidate(candidate);
+  const inbodyLinkId = await inbodyLinkIdForCandidate(candidate);
   return {
     "#{이름}": memberName,
     "#{회원명}": String(payload.memberName || candidate.memberName || ""),
@@ -263,16 +264,77 @@ async function templateVariables(candidate: AlimtalkCandidateDoc): Promise<Recor
     "#{관리번호}": managementNumber,
     "#{링크ID}": shortLinkId,
     "#{리포트링크ID}": reportLinkId,
+    "#{인바디링크ID}": inbodyLinkId,
   };
+}
+
+async function inbodyLinkIdForCandidate(candidate: AlimtalkCandidateDoc): Promise<string> {
+  const existing = String(candidate.payload?.inbodyLinkId || "");
+  if (existing) return existing;
+  if (candidate.type !== "private_lesson_report") return "";
+  const targetUrl = (await latestInbodyReportUrlForCandidate(candidate)) || inbodyNoDataUrl(candidate.memberName);
+  const link = await ensureShortLink({
+    type: "inbody_report",
+    targetUrl,
+    sourceId: `${candidate.candidateId}_inbody`,
+  });
+  await refs.alimtalkCandidate(candidate.candidateId).set(
+    {
+      payload: {
+        ...candidate.payload,
+        inbodyLinkId: link.linkId,
+        inbodyShortUrl: link.shortUrl,
+        inbodyReportUrl: targetUrl,
+        inbodyReportStatus: targetUrl.includes("status=no-data") ? "no_data" : "found",
+      },
+      updatedAt: nowTimestamp(),
+    },
+    { merge: true },
+  );
+  return link.linkId;
+}
+
+async function latestInbodyReportUrlForCandidate(candidate: AlimtalkCandidateDoc): Promise<string> {
+  const explicit = String(candidate.payload?.inbodyReportUrl || candidate.payload?.latestInbodyReportUrl || "");
+  if (explicit) return explicit;
+  const rows: Array<{ testAtMs: number; memberReportUrl: string }> = [];
+  const byMemberId = candidate.memberId
+    ? await db.collection("inbodyWebhookEvents").where("matchedMemberId", "==", candidate.memberId).limit(20).get()
+    : null;
+  for (const doc of byMemberId?.docs || []) {
+    const data = doc.data();
+    const memberReportUrl = String(data.memberReportUrl || "");
+    if (!memberReportUrl || data.memberReportStatus !== "synced") continue;
+    rows.push({ testAtMs: data.testAt?.toMillis?.() || 0, memberReportUrl });
+  }
+  const phone = normalizePhone(candidate.memberPhone);
+  const byPhone = phone
+    ? await db.collection("inbodyWebhookEvents").where("userToken", "==", phone).limit(20).get()
+    : null;
+  for (const doc of byPhone?.docs || []) {
+    const data = doc.data();
+    const memberReportUrl = String(data.memberReportUrl || "");
+    if (!memberReportUrl || data.memberReportStatus !== "synced") continue;
+    rows.push({ testAtMs: data.testAt?.toMillis?.() || 0, memberReportUrl });
+  }
+  rows.sort((a, b) => b.testAtMs - a.testAtMs);
+  return rows[0]?.memberReportUrl || "";
+}
+
+function inbodyNoDataUrl(memberName: string): string {
+  const url = new URL("https://in.archivepilates.com/reports/inbody-members/");
+  url.searchParams.set("status", "no-data");
+  if (memberName) url.searchParams.set("member", memberName);
+  return url.toString();
 }
 
 async function reportLinkIdForCandidate(candidate: AlimtalkCandidateDoc): Promise<string> {
   const existing = String(candidate.payload?.reportLinkId || "");
   if (existing) return existing;
   const publicReportUrl = String(candidate.payload?.publicReportUrl || "");
-  if (candidate.type !== "private_lesson_report" || !publicReportUrl) return "";
+  if (!["private_lesson_report", "inbody_report"].includes(candidate.type) || !publicReportUrl) return "";
   const link = await ensureShortLink({
-    type: "private_report",
+    type: candidate.type === "inbody_report" ? "inbody_report" : "private_report",
     targetUrl: publicReportUrl,
     sourceId: candidate.candidateId,
   });

@@ -6,7 +6,13 @@ import { stableHash } from "./hash";
 const SHORT_LINK_BASE_URL = "https://in.archivepilates.com/s";
 const ALLOWED_TARGET_ORIGINS = new Set(["https://in.archivepilates.com", "https://www.notion.so"]);
 
-export type ShortLinkType = "survey_detail" | "group_survey" | "method_material" | "private_chart" | "private_report";
+export type ShortLinkType =
+  | "survey_detail"
+  | "group_survey"
+  | "method_material"
+  | "private_chart"
+  | "private_report"
+  | "inbody_report";
 
 export function shortLinkIdForTarget(type: ShortLinkType, targetUrl: string): string {
   const prefix =
@@ -18,7 +24,9 @@ export function shortLinkIdForTarget(type: ShortLinkType, targetUrl: string): st
           ? "pc"
           : type === "private_report"
             ? "pr"
-            : "mt";
+            : type === "inbody_report"
+              ? "ir"
+              : "mt";
   return `${prefix}-${stableHash({ type, targetUrl }).slice(0, 12)}`;
 }
 

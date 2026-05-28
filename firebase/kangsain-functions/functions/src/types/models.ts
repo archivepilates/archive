@@ -324,6 +324,7 @@ export type AlimtalkCandidateType =
   | "group_survey"
   | "instructor_lesson_material"
   | "private_lesson_report"
+  | "inbody_report"
   | "ticket_expiring"
   | "remaining_low"
   | "private_count_low"
@@ -511,6 +512,9 @@ export interface PrivateLessonChartRequestDoc {
   alimtalk: {
     status: "template_pending" | "queued" | "sent" | "failed" | "skipped";
     templateName: string;
+    templateId?: string;
+    solapiMessageId?: string;
+    sentAt?: Timestamp;
     lastError: string | null;
   };
   intakeSummary?: {
