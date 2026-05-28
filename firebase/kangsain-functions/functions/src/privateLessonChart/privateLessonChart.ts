@@ -541,12 +541,16 @@ function gptSourceHash(record: PrivateLessonChartRecordDoc, chartRequest: Privat
 
 function notionChartChildren(record: PrivateLessonChartRecordDoc, chartRequest: PrivateLessonChartRequestDoc): Record<string, unknown>[] {
   return [
-    heading(3, `📋 ${record.memberName}님 개인레슨 차트`),
+    heading(2, `${record.memberName}님 개인레슨 차트`),
     paragraph(`회차: ${record.sessionNumber}회차 / 수업일: ${lessonTimeText(chartRequest)} / 담당: ${record.staffName || "미정"}`),
-    heading(3, "✔ 오늘의 수업 목적"),
+    callout("사진·영상 업로드는 이 페이지 상단에서 바로 처리합니다. 아래 '업로드 위치'에 파일을 드래그하거나 + 버튼으로 사진/영상을 추가하세요."),
+    heading(2, "사진·영상 업로드"),
+    paragraph("업로드 위치: 이 문장 바로 아래에 사진·영상을 추가합니다. 자동화는 이 영역의 기존 미디어 블록을 삭제하지 않습니다."),
+    divider(),
+    heading(3, "오늘의 수업 목적"),
     ...bullets(textArray(record.prePlan?.goals).length ? textArray(record.prePlan?.goals) : ["수업 전 계획 미작성"]),
     divider(),
-    heading(3, "🔹 사전설문 참고"),
+    heading(3, "사전설문 참고"),
     ...bullets([
       `목표: ${chartRequest.intakeSummary?.goal || "-"}`,
       `신경 부위: ${chartRequest.intakeSummary?.focusArea || "-"}`,
@@ -554,7 +558,7 @@ function notionChartChildren(record: PrivateLessonChartRecordDoc, chartRequest: 
       chartRequest.intakeSummary?.painOrMedicalNote ? "주의 내용 확인 필요" : "특별 주의 내용 없음",
     ]),
     divider(),
-    heading(3, "🔹 수업 전 계획"),
+    heading(3, "수업 전 계획"),
     ...bullets([
       `집중 부위: ${textArray(record.prePlan?.focusAreas).join(", ") || "-"}`,
       `예정 기구: ${textArray(record.prePlan?.equipment).join(", ") || "-"}`,
@@ -563,7 +567,7 @@ function notionChartChildren(record: PrivateLessonChartRecordDoc, chartRequest: 
       `메모: ${String(record.prePlan?.memo || "-")}`,
     ]),
     divider(),
-    heading(3, "🔹 수업 후 기록"),
+    heading(3, "수업 후 기록"),
     ...bullets([
       `컨디션: ${firstText(record.postRecord?.condition) || "-"}`,
       `통증 변화: ${firstText(record.postRecord?.painChange) || "-"}`,
@@ -573,13 +577,10 @@ function notionChartChildren(record: PrivateLessonChartRecordDoc, chartRequest: 
       `다음 수업 메모: ${String(record.postRecord?.nextMemo || "-")}`,
     ]),
     divider(),
-    heading(3, "✅ 회원용 초안"),
+    heading(3, "회원용 초안"),
     paragraph(record.gptDraftSummary || "GPT 초안 생성 대기 중입니다."),
     divider(),
-    heading(3, "🖼 사진·영상 업로드"),
-    paragraph("수업 중 촬영한 사진과 영상은 이 섹션 아래에 업로드합니다. 자동화는 기존 업로드 블록을 삭제하지 않습니다."),
-    divider(),
-    heading(3, "📱 회원 리포트 검수"),
+    heading(3, "회원 리포트 검수"),
     paragraph(record.publicReportUrl ? "아래 임베드 또는 회원 리포트 URL 속성에서 최종 회원용 리포트를 확인합니다." : "회원용 HTML 리포트 생성 대기 중입니다."),
     ...(record.publicReportUrl ? [embed(record.publicReportUrl)] : []),
   ];
@@ -725,6 +726,18 @@ function heading(level: 1 | 2 | 3, text: string): Record<string, unknown> {
 
 function paragraph(text: string): Record<string, unknown> {
   return { object: "block", type: "paragraph", paragraph: { rich_text: [{ type: "text", text: { content: text.slice(0, 2000) } }] } };
+}
+
+function callout(text: string): Record<string, unknown> {
+  return {
+    object: "block",
+    type: "callout",
+    callout: {
+      icon: { type: "emoji", emoji: "📎" },
+      color: "gray_background",
+      rich_text: [{ type: "text", text: { content: text.slice(0, 2000) } }],
+    },
+  };
 }
 
 function bullets(values: string[]): Record<string, unknown>[] {
