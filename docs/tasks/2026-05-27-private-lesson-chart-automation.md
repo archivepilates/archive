@@ -32,6 +32,7 @@
 - 기존 `개인레슨 차트` 페이지는 강사용 진입점으로 유지한다.
 - 기존 강사별 회원 페이지 아래에 오늘 이후 자동화 회차 링크를 붙인다.
 - 강사별 진입 페이지는 `이초림 수석강사`, `배민진 원장님`, `정은영 부원장님`, `김기효 강사` 기준으로 운영한다.
+- StudioMate/Firestore 강사명은 직함 없이 `이초림`, `배민진`, `정은영`, `김기효`로 들어올 수 있어 자동화 매핑에 별칭을 함께 둔다.
 - `자동화 회차 차트 템플릿`은 `개인레슨 차트` 바로 아래에 둔다.
 - 운영 기록, DB, 웹훅, GPT 큐 규칙은 `아카이브 운영 규칙 > ARCHIVE PILATES 프라이빗 회원 차트 시스템` 아래로 분리한다.
 - `ARCHIVE AI` Notion 연결은 `Private Session Records DB` 접근은 정상이다. 기존 강사별 회원 페이지에 자동 링크를 붙이려면 `개인레슨 차트` 루트 페이지도 `ARCHIVE AI` 연결에 공유되어야 한다.
@@ -77,9 +78,9 @@
 
 ## 회원용 리포트 알림톡
 
-템플릿명: `회원용_프라이빗 수업 리포트 안내 v1`
+템플릿명: `회원용_프라이빗 수업 리포트 안내 v2`
 
-Template ID: `KA01TP260528081225871Fr92FW901Vo`
+Template ID: `KA01TP260528090731992hVPP5efmmUC`
 
 상태: `PENDING`
 
@@ -87,6 +88,7 @@ Template ID: `KA01TP260528081225871Fr92FW901Vo`
 
 - 강사용 차트 작성 알림톡이 아니라, 수업 후 생성된 회원용 HTML 리포트를 회원에게 전달한다.
 - 즉시 자동 발송하지 않고, Notion 회차 차트에서 운영자 또는 강사가 리포트를 검수한 뒤 `발송` 체크를 해야 발송한다.
+- 최신 인바디 리포트도 같은 알림톡의 두 번째 버튼으로 제공한다. 인바디 측정 데이터가 없으면 안내 화면으로 연결한다.
 
 본문 초안:
 
@@ -108,12 +110,15 @@ Template ID: `KA01TP260528081225871Fr92FW901Vo`
 - `#{수업일시}` = `lessonDate + lessonStartAt`을 KST 기준으로 변환
 - `#{강사명}` = `privateLessonChartRecords.staffName`
 - `#{리포트링크ID}` = `privateLessonChartRecords.publicReportUrl`을 `shortLinks`로 변환한 짧은 링크 ID
+- `#{인바디링크ID}` = 최신 인바디 리포트 URL을 `shortLinks`로 변환한 짧은 링크 ID. 없으면 측정 데이터 없음 안내 화면 링크 ID
 
 버튼:
 
-- 리포트 확인하기: `https://in.archivepilates.com/s/#{리포트링크ID}/`
+- 수업 리포트 보기: `https://in.archivepilates.com/s/#{리포트링크ID}/`
+- 인바디 리포트 보기: `https://in.archivepilates.com/s/#{인바디링크ID}/`
 - SOLAPI 발송 payload에는 `#{리포트URL}`을 쓰지 않고 `#{리포트링크ID}`만 전달한다.
 - 원본 `publicReportUrl`은 Firestore `shortLinks/{리포트링크ID}.targetUrl`에 저장한다.
+- 원본 인바디 리포트 URL은 Firestore `shortLinks/{인바디링크ID}.targetUrl`에 저장한다.
 
 발송 후보 조건:
 

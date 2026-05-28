@@ -30,8 +30,11 @@ const NOTION_SESSION_RECORDS_DATABASE_ID =
 const PRIVATE_CHART_TEMPLATE_NAME = "강사용_프라이빗 차트 작성 안내 v1";
 const NOTION_INSTRUCTOR_CHART_PAGE_IDS: Record<string, string> = {
   "이초림 수석강사": "22cd49eae4bf802ebc89fe094d0c355a",
+  "이초림": "22cd49eae4bf802ebc89fe094d0c355a",
   "배민진 원장님": "22dd49eae4bf80258427fe92a4b6ce2c",
+  "배민진": "22dd49eae4bf80258427fe92a4b6ce2c",
   "정은영 부원장님": "22dd49eae4bf809da7e7d6953e41eb86",
+  "정은영": "22dd49eae4bf809da7e7d6953e41eb86",
   "김기효 강사": "36ed49eae4bf8161a0d3edd9f30643b9",
   "김기효": "36ed49eae4bf8161a0d3edd9f30643b9",
 };
