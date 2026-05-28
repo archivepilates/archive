@@ -53,6 +53,6 @@ PROMPT
 codex exec \
   --cd "$ROOT_DIR" \
   --sandbox danger-full-access \
-  --ask-for-approval never \
+  --full-auto \
   --output-last-message "$LAST_MESSAGE_FILE" \
   "$(cat "$PROMPT_FILE")"
