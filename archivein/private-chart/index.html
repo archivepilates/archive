@@ -278,6 +278,9 @@
       mode: params.get("mode") === "post" ? "post" : "pre",
       loading: false,
     };
+    const apiBase = window.location.pathname.startsWith("/archivein/")
+      ? "/archivein/api/privateChart"
+      : "/api/privateChart";
 
     const sets = {
       goals: ["코어 안정성", "골반 정렬", "흉곽/호흡", "목/어깨 긴장 완화", "허리 안정화", "하지 정렬", "유연성", "체력/근지구력", "밸런스", "통증 관리"],
@@ -321,7 +324,7 @@
     async function boot() {
       try {
         if (!state.requestId || !state.token) throw new Error("차트 링크 정보가 부족합니다.");
-        const res = await fetch(`/api/privateChart?r=${encodeURIComponent(state.requestId)}&t=${encodeURIComponent(state.token)}&mode=${state.mode}`);
+        const res = await fetch(`${apiBase}?r=${encodeURIComponent(state.requestId)}&t=${encodeURIComponent(state.token)}&mode=${state.mode}`);
         const data = await res.json();
         if (!res.ok || data.ok === false) {
           throw new Error(data.error || "차트 정보를 불러오지 못했습니다.");
@@ -395,7 +398,7 @@
       setStatus("제출 중입니다.", false);
       try {
         const answers = readAnswers(new FormData(form));
-        const res = await fetch("/api/privateChart", {
+        const res = await fetch(apiBase, {
           method: "POST",
           headers: { "Content-Type": "application/json" },
           body: JSON.stringify({ requestId: state.requestId, token: state.token, mode: state.mode, answers }),
