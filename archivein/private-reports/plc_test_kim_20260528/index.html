@@ -6,97 +6,293 @@
   <title>ARCHIVE PILATES Private Report - 김기효 1회차</title>
   <style>
     :root {
-      --bg: #f7f5f1;
-      --paper: #fffdfa;
-      --ink: #1f1d1a;
-      --muted: #706960;
-      --line: #ded8cf;
-      --soft: #ece7df;
-      --accent: #596454;
-      --accent-2: #9a8f82;
+      color-scheme: light;
+      --bg: #fbfaf7;
+      --paper: #fffdf9;
+      --ink: #181512;
+      --muted: #746b62;
+      --quiet: #9d948a;
+      --line: #e8e0d7;
+      --soft: #f4eee8;
+      --accent: #2f6f68;
+      --warm: #b7a997;
       --radius: 8px;
       font-family: -apple-system, BlinkMacSystemFont, "Apple SD Gothic Neo", "Noto Sans KR", system-ui, sans-serif;
     }
+
     * { box-sizing: border-box; }
-    body { margin: 0; background: var(--bg); color: var(--ink); line-height: 1.58; }
-    main { width: min(100%, 760px); margin: 0 auto; padding: 22px 16px 54px; }
-    header { padding: 20px 0 18px; border-bottom: 1px solid var(--line); }
-    .brand { margin: 0 0 10px; color: var(--muted); font-size: 12px; font-weight: 800; letter-spacing: .08em; }
-    h1 { margin: 0; font-size: 28px; line-height: 1.18; letter-spacing: 0; }
-    .meta { display: flex; flex-wrap: wrap; gap: 8px; margin-top: 16px; }
-    .pill { padding: 7px 10px; border: 1px solid var(--line); border-radius: 999px; background: var(--paper); color: var(--muted); font-size: 13px; font-weight: 700; }
-    section { padding: 24px 0; border-bottom: 1px solid var(--line); }
-    h2 { margin: 0 0 14px; font-size: 18px; line-height: 1.34; }
+    html { background: var(--bg); }
+    body {
+      margin: 0;
+      background: var(--bg);
+      color: var(--ink);
+      font-size: 15px;
+      line-height: 1.64;
+      word-break: keep-all;
+      -webkit-font-smoothing: antialiased;
+    }
+    .page {
+      width: min(100%, 720px);
+      margin: 0 auto;
+      padding: 26px 18px 64px;
+    }
+    .top {
+      display: grid;
+      grid-template-columns: 1fr auto;
+      gap: 18px;
+      align-items: start;
+      padding: 4px 0 24px;
+      border-bottom: 1px solid var(--line);
+    }
+    .eyebrow {
+      margin: 0 0 12px;
+      color: var(--accent);
+      font-size: 11px;
+      font-weight: 900;
+      letter-spacing: .14em;
+      text-transform: uppercase;
+    }
+    h1 {
+      margin: 0;
+      font-size: 34px;
+      line-height: 1.08;
+      font-weight: 850;
+      letter-spacing: 0;
+    }
+    .sub {
+      margin: 12px 0 0;
+      color: var(--muted);
+      font-size: 14px;
+    }
+    .logo {
+      width: 46px;
+      height: 46px;
+      border: 1px solid var(--line);
+      border-radius: 50%;
+      object-fit: contain;
+      background: var(--paper);
+      padding: 6px;
+    }
+    .meta {
+      display: grid;
+      grid-template-columns: repeat(3, 1fr);
+      border-bottom: 1px solid var(--line);
+    }
+    .meta-item {
+      min-width: 0;
+      padding: 14px 10px;
+      border-right: 1px solid var(--line);
+    }
+    .meta-item:first-child { padding-left: 0; }
+    .meta-item:last-child { border-right: 0; padding-right: 0; }
+    .label {
+      display: block;
+      margin-bottom: 5px;
+      color: var(--quiet);
+      font-size: 10px;
+      font-weight: 900;
+      letter-spacing: .12em;
+      text-transform: uppercase;
+    }
+    .value {
+      display: block;
+      color: var(--ink);
+      font-size: 14px;
+      font-weight: 800;
+    }
+    section {
+      padding: 28px 0;
+      border-bottom: 1px solid var(--line);
+    }
+    .section-head {
+      display: flex;
+      align-items: baseline;
+      gap: 12px;
+      margin-bottom: 16px;
+    }
+    .num {
+      color: var(--accent);
+      font-size: 11px;
+      font-weight: 900;
+      letter-spacing: .12em;
+    }
+    h2 {
+      margin: 0;
+      font-size: 19px;
+      line-height: 1.32;
+      letter-spacing: 0;
+    }
     p { margin: 0; }
-    .lead { padding: 18px; border: 1px solid var(--line); border-radius: var(--radius); background: var(--paper); }
-    .lead p + p { margin-top: 10px; color: var(--muted); }
-    .grid { display: grid; gap: 10px; }
-    @media (min-width: 680px) { .grid.two { grid-template-columns: 1fr 1fr; } }
-    .card { padding: 16px; border: 1px solid var(--line); border-radius: var(--radius); background: var(--paper); }
-    .label { display: block; margin-bottom: 7px; color: var(--muted); font-size: 12px; font-weight: 800; }
-    .value { font-size: 16px; font-weight: 750; }
-    .bars { display: grid; gap: 12px; }
-    .bar-row { display: grid; grid-template-columns: 82px 1fr 28px; gap: 10px; align-items: center; font-size: 13px; color: var(--muted); }
-    .track { height: 9px; overflow: hidden; border-radius: 999px; background: var(--soft); }
-    .fill { height: 100%; border-radius: inherit; background: var(--accent); }
-    ul { margin: 0; padding: 0; list-style: none; }
-    li { display: grid; grid-template-columns: 7px 1fr; gap: 10px; padding: 8px 0; color: var(--muted); }
-    li:before { content: ""; width: 5px; height: 5px; margin-top: 10px; border-radius: 50%; background: var(--accent-2); }
-    footer { padding-top: 18px; color: var(--muted); font-size: 12px; }
+    .summary {
+      padding: 18px 0 2px;
+    }
+    .summary p {
+      font-size: 20px;
+      line-height: 1.55;
+      font-weight: 760;
+    }
+    .summary p + p {
+      margin-top: 12px;
+      color: var(--muted);
+      font-size: 16px;
+      font-weight: 600;
+    }
+    .grid {
+      display: grid;
+      gap: 1px;
+      overflow: hidden;
+      border: 1px solid var(--line);
+      border-radius: var(--radius);
+      background: var(--line);
+    }
+    @media (min-width: 620px) {
+      .grid { grid-template-columns: repeat(2, 1fr); }
+    }
+    .metric {
+      min-width: 0;
+      padding: 17px 16px;
+      background: var(--paper);
+    }
+    .metric .value {
+      font-size: 17px;
+      line-height: 1.36;
+    }
+    .chart {
+      display: grid;
+      gap: 13px;
+    }
+    .bar {
+      display: grid;
+      grid-template-columns: 70px minmax(0, 1fr) 24px;
+      gap: 12px;
+      align-items: center;
+      color: var(--muted);
+      font-size: 13px;
+      font-weight: 700;
+    }
+    .track {
+      height: 8px;
+      overflow: hidden;
+      border-radius: 99px;
+      background: var(--soft);
+    }
+    .fill {
+      height: 100%;
+      border-radius: inherit;
+      background: var(--accent);
+    }
+    .next {
+      padding: 18px;
+      border: 1px solid var(--line);
+      border-radius: var(--radius);
+      background: var(--paper);
+    }
+    ul {
+      display: grid;
+      gap: 9px;
+      margin: 0;
+      padding: 0;
+      list-style: none;
+      color: var(--muted);
+    }
+    li {
+      display: grid;
+      grid-template-columns: 18px 1fr;
+      gap: 10px;
+      align-items: start;
+    }
+    li:before {
+      content: "";
+      width: 7px;
+      height: 7px;
+      margin-top: 9px;
+      border: 1px solid var(--warm);
+      border-radius: 50%;
+      background: var(--paper);
+    }
+    footer {
+      padding-top: 20px;
+      color: var(--quiet);
+      font-size: 11px;
+      font-weight: 800;
+      letter-spacing: .12em;
+      text-transform: uppercase;
+    }
+
+    @media (max-width: 420px) {
+      .page { padding: 22px 16px 54px; }
+      h1 { font-size: 30px; }
+      .logo { width: 42px; height: 42px; }
+      .meta { grid-template-columns: 1fr; }
+      .meta-item {
+        padding: 12px 0;
+        border-right: 0;
+        border-bottom: 1px solid var(--line);
+      }
+      .meta-item:last-child { border-bottom: 0; }
+      .summary p { font-size: 18px; }
+      .bar { grid-template-columns: 58px minmax(0, 1fr) 22px; gap: 9px; }
+    }
   </style>
 </head>
 <body>
-  <main>
-    <header>
-      <p class="brand">ARCHIVE PILATES PRIVATE REPORT</p>
-      <h1>김기효님 1회차 리포트</h1>
-      <div class="meta">
-        <span class="pill">2026.05.29 14:00</span>
-        <span class="pill">담당 김기효</span>
-        <span class="pill">프라이빗 1회차</span>
+  <main class="page">
+    <header class="top">
+      <div>
+        <p class="eyebrow">Private Lesson Report</p>
+        <h1>김기효님<br>1회차 리포트</h1>
+        <p class="sub">오늘의 수업 흐름과 다음 방향을 정리했습니다.</p>
       </div>
+      <img class="logo" src="../../logo120.png" alt="ARCHIVE PILATES">
     </header>
 
+    <div class="meta" aria-label="수업 정보">
+      <div class="meta-item"><span class="label">Date</span><span class="value">2026.05.29 14:00</span></div>
+      <div class="meta-item"><span class="label">Session</span><span class="value">프라이빗 1회차</span></div>
+      <div class="meta-item"><span class="label">Instructor</span><span class="value">김기효</span></div>
+    </div>
+
     <section>
-      <div class="lead">
+      <div class="section-head"><span class="num">01</span><h2>수업 요약</h2></div>
+      <div class="summary">
         <p>오늘은 전신 안정성을 확인하며 허리 안정화와 유연성 회복을 중심으로 수업을 진행했습니다.</p>
         <p>컨디션을 보며 강도를 조절했고, 다음 수업에서 이어갈 기준점을 정리했습니다.</p>
       </div>
     </section>
 
     <section>
-      <h2>오늘의 핵심</h2>
-      <div class="grid two">
-        <div class="card"><span class="label">진행 방향</span><p class="value">허리 안정화 · 유연성</p></div>
-        <div class="card"><span class="label">집중 부위</span><p class="value">전신 움직임 확인</p></div>
-        <div class="card"><span class="label">사용 기구</span><p class="value">체어</p></div>
-        <div class="card"><span class="label">다음 방향</span><p class="value">호흡과 코어 활성부터 안정성 회복</p></div>
+      <div class="section-head"><span class="num">02</span><h2>오늘의 핵심</h2></div>
+      <div class="grid">
+        <div class="metric"><span class="label">Focus</span><span class="value">허리 안정화 · 유연성</span></div>
+        <div class="metric"><span class="label">Area</span><span class="value">전신 움직임 확인</span></div>
+        <div class="metric"><span class="label">Equipment</span><span class="value">체어</span></div>
+        <div class="metric"><span class="label">Next</span><span class="value">호흡과 코어 활성</span></div>
       </div>
     </section>
 
     <section>
-      <h2>변화 흐름</h2>
-      <div class="bars">
-        <div class="bar-row"><span>코어</span><div class="track"><div class="fill" style="width:20%"></div></div><b>1</b></div>
-        <div class="bar-row"><span>밸런스</span><div class="track"><div class="fill" style="width:20%"></div></div><b>1</b></div>
-        <div class="bar-row"><span>호흡</span><div class="track"><div class="fill" style="width:20%"></div></div><b>1</b></div>
-        <div class="bar-row"><span>가동성</span><div class="track"><div class="fill" style="width:20%"></div></div><b>1</b></div>
-        <div class="bar-row"><span>유연성</span><div class="track"><div class="fill" style="width:20%"></div></div><b>1</b></div>
+      <div class="section-head"><span class="num">03</span><h2>변화 흐름</h2></div>
+      <div class="chart" aria-label="기능 점수">
+        <div class="bar"><span>코어</span><div class="track"><div class="fill" style="width:20%"></div></div><b>1</b></div>
+        <div class="bar"><span>밸런스</span><div class="track"><div class="fill" style="width:20%"></div></div><b>1</b></div>
+        <div class="bar"><span>호흡</span><div class="track"><div class="fill" style="width:20%"></div></div><b>1</b></div>
+        <div class="bar"><span>가동성</span><div class="track"><div class="fill" style="width:20%"></div></div><b>1</b></div>
+        <div class="bar"><span>유연성</span><div class="track"><div class="fill" style="width:20%"></div></div><b>1</b></div>
       </div>
     </section>
 
     <section>
-      <h2>다음 수업 방향</h2>
-      <ul>
-        <li>호흡 리듬과 코어 활성 타이밍을 먼저 정리합니다.</li>
-        <li>전신 움직임 안에서 안정적으로 버티는 시간을 조금씩 늘립니다.</li>
-        <li>컨디션을 확인하며 강도는 천천히 올립니다.</li>
-      </ul>
+      <div class="section-head"><span class="num">04</span><h2>다음 수업 방향</h2></div>
+      <div class="next">
+        <ul>
+          <li>호흡 리듬과 코어 활성 타이밍을 먼저 정리합니다.</li>
+          <li>전신 움직임 안에서 안정적으로 버티는 시간을 조금씩 늘립니다.</li>
+          <li>컨디션을 확인하며 강도는 천천히 올립니다.</li>
+        </ul>
+      </div>
     </section>
 
-    <footer>
-      ARCHIVE PILATES · Private lesson chart generated for member review.
-    </footer>
+    <footer>ARCHIVE PILATES · PRIVATE LESSON CHART</footer>
   </main>
 </body>
 </html>
