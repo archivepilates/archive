@@ -58,7 +58,7 @@ export async function rebuildAlimtalkCandidatesForRange(input: {
     (profile) =>
       profile.isNewMember &&
       !ALIMTALK_MEMBER_EXCLUSION_REASONS[profile.memberId] &&
-      activeProfileTickets(profile, input.endDate).length > 0 &&
+      currentOrUpcomingLessonProfileTickets(profile, input.endDate).length > 0 &&
       registeredDate(profile) >= NEW_MEMBER_ALIMTALK_START_DATE &&
       registeredDate(profile) >= newMemberWindowStartDate(input.endDate) &&
       registeredDate(profile) <= input.endDate,
@@ -82,7 +82,7 @@ export async function rebuildAlimtalkCandidatesForRange(input: {
         payload: {
           memberName: profile.name,
           registeredDate: sourceDate,
-          activeTicketNames: activeProfileTickets(profile, input.endDate)
+          activeTicketNames: currentOrUpcomingLessonProfileTickets(profile, input.endDate)
             .map((ticket) => ticket.name)
             .filter(Boolean)
             .join(", "),
@@ -180,7 +180,7 @@ async function enqueueSendableCandidate(
 function directTicketCandidates(profile: MemberProfileDoc, sourceDate: string): AlimtalkCandidateDoc[] {
   if (!profile.memberId || !profile.name || !profile.phone) return [];
   if (ALIMTALK_MEMBER_EXCLUSION_REASONS[profile.memberId]) return [];
-  return activeProfileTickets(profile, sourceDate)
+  return currentLessonProfileTickets(profile, sourceDate)
     .map((ticket) => directTicketCandidate(profile, ticket, sourceDate))
     .filter((candidate): candidate is AlimtalkCandidateDoc => Boolean(candidate));
 }
@@ -414,7 +414,7 @@ async function longAbsenceCandidateForDate(
   if (!profile.memberId || !profile.name || !profile.phone) return null;
   if (ALIMTALK_MEMBER_EXCLUSION_REASONS[profile.memberId]) return null;
   if (hasHoldingTicket(profile)) return null;
-  const activeTickets = activeProfileTickets(profile, sourceDate);
+  const activeTickets = currentLessonProfileTickets(profile, sourceDate);
   if (!activeTickets.length) return null;
   const lastAttendance = lastAttendedBooking(profile.memberId, sourceDate, bookingIndex);
   if (!lastAttendance) return null;
@@ -632,21 +632,39 @@ function hasOtherActiveTicket(
   sourceDate: string,
 ): boolean {
   const targetKey = profileTicketIdentity(target);
-  return activeProfileTickets(profile, sourceDate).some((ticket) => profileTicketIdentity(ticket) !== targetKey);
+  return currentOrUpcomingLessonProfileTickets(profile, sourceDate).some(
+    (ticket) => profileTicketIdentity(ticket) !== targetKey,
+  );
 }
 
 function hasHoldingTicket(profile: MemberProfileDoc | undefined): boolean {
   return Boolean(profile?.ticketStatusSummary?.hasHoldingTicket);
 }
 
-function activeProfileTickets(
+function currentLessonProfileTickets(
   profile: MemberProfileDoc | undefined,
   sourceDate: string,
 ): NonNullable<MemberProfileDoc["activeTickets"]> {
-  return (profile?.activeTickets || []).filter((ticket) => isActiveProfileTicket(ticket, sourceDate));
+  return (profile?.activeTickets || []).filter((ticket) => isCurrentLessonProfileTicket(ticket, sourceDate));
 }
 
-function isActiveProfileTicket(
+function currentOrUpcomingLessonProfileTickets(
+  profile: MemberProfileDoc | undefined,
+  sourceDate: string,
+): NonNullable<MemberProfileDoc["activeTickets"]> {
+  return (profile?.activeTickets || []).filter((ticket) => isCurrentOrUpcomingLessonProfileTicket(ticket, sourceDate));
+}
+
+function isCurrentLessonProfileTicket(
+  ticket: NonNullable<MemberProfileDoc["activeTickets"]>[number],
+  sourceDate: string,
+): boolean {
+  if (!isCurrentOrUpcomingLessonProfileTicket(ticket, sourceDate)) return false;
+  if (ticket.availableFrom && expiryDateText(ticket.availableFrom) > sourceDate) return false;
+  return true;
+}
+
+function isCurrentOrUpcomingLessonProfileTicket(
   ticket: NonNullable<MemberProfileDoc["activeTickets"]>[number],
   sourceDate: string,
 ): boolean {
