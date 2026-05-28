@@ -559,6 +559,8 @@ export interface PrivateLessonChartRecordDoc {
     status: "pending" | "synced" | "failed";
     pageId?: string;
     pageUrl?: string;
+    instructorPageId?: string;
+    instructorPageUrl?: string;
     syncedAt?: string;
     error?: string;
   };
