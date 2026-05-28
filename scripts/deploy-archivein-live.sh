@@ -18,4 +18,7 @@ firebase deploy \
 echo "== ARCHIVE IN live deploy: operator access verification =="
 npm run verify:archivein-admin
 
+echo "== ARCHIVE IN live deploy: hosting URL verification =="
+npm run verify:archivein-hosting -- "$@"
+
 echo "== ARCHIVE IN live deploy complete =="
