@@ -208,6 +208,46 @@
       color: var(--danger);
     }
 
+    .report-panel {
+      display: grid;
+      gap: 12px;
+      margin-top: 18px;
+      padding: 16px;
+      border: 1px solid var(--line);
+      border-radius: var(--radius);
+      background: var(--surface);
+    }
+
+    .report-panel h2 {
+      margin-bottom: 0;
+    }
+
+    .report-panel p {
+      color: var(--muted);
+      font-size: 14px;
+      word-break: keep-all;
+      overflow-wrap: anywhere;
+    }
+
+    .report-frame {
+      width: 100%;
+      min-height: 520px;
+      border: 1px solid var(--line);
+      border-radius: var(--radius);
+      background: white;
+    }
+
+    .button-row {
+      display: grid;
+      gap: 8px;
+    }
+
+    .secondary {
+      background: var(--surface);
+      color: var(--text);
+      border: 1px solid var(--line);
+    }
+
     .actions {
       position: sticky;
       bottom: 0;
@@ -263,6 +303,7 @@
 
     <form id="form" class="hidden">
       <div id="sections"></div>
+      <div id="reportPanel" class="report-panel hidden" aria-live="polite"></div>
       <p class="status" id="status"></p>
       <div class="actions">
         <button type="submit" id="submitButton">제출</button>
@@ -277,6 +318,7 @@
       token: params.get("t") || "",
       mode: params.get("mode") === "post" ? "post" : "pre",
       loading: false,
+      data: null,
     };
     const apiBase = window.location.pathname.startsWith("/archivein/")
       ? "/archivein/api/privateChart"
@@ -316,6 +358,7 @@
     const summary = document.getElementById("summary");
     const form = document.getElementById("form");
     const sections = document.getElementById("sections");
+    const reportPanel = document.getElementById("reportPanel");
     const statusEl = document.getElementById("status");
     const submitButton = document.getElementById("submitButton");
 
@@ -338,6 +381,7 @@
     }
 
     function render(data) {
+      state.data = data;
       const isPost = data.mode === "post";
       title.textContent = isPost ? "수업 후 기록" : "수업 전 계획";
       submitButton.textContent = isPost ? "수업 후 기록 제출" : "수업 전 계획 제출";
@@ -347,8 +391,46 @@
       ].join("");
       summary.innerHTML = intakeHtml(data.intakeSummary);
       sections.innerHTML = (isPost ? postFields : preFields).map(fieldHtml).join("");
+      renderReportPanel(data);
       form.classList.remove("hidden");
       form.addEventListener("submit", submit);
+    }
+
+    function renderReportPanel(data) {
+      if (data.mode !== "post") {
+        reportPanel.classList.add("hidden");
+        reportPanel.innerHTML = "";
+        return;
+      }
+      const report = data.report || {};
+      const approved = ["approved", "queued", "sent"].includes(String(report.status || report.approval?.status || ""));
+      const ready = Boolean(report.url);
+      const submitted = data.postStatus === "submitted" || Boolean(report.postSubmitted);
+      const message = ready
+        ? approved
+          ? "승인이 반영되었습니다. 회원 알림톡 발송 상태는 운영 큐에서 관리됩니다."
+          : "수업 전/후 기록이 반영된 최종 리포트입니다. 내용을 확인한 뒤 발송 승인해 주세요."
+        : submitted
+          ? "수업 전/후 기록을 회원용 리포트로 변환해 주세요."
+          : "수업 후 기록 제출 후 회원용 리포트가 생성됩니다.";
+      reportPanel.classList.remove("hidden");
+      reportPanel.innerHTML = `
+        <h2>회원용 리포트</h2>
+        <p>${escapeHtml(message)}</p>
+        ${ready ? `<iframe class="report-frame" title="회원용 리포트 미리보기" src="${escapeAttr(report.url)}"></iframe>` : ""}
+        <div class="button-row">
+          ${submitted ? `<button class="${ready ? "secondary" : ""}" type="button" data-convert-report ${approved ? "disabled" : ""}>${ready ? "리포트 변환 완료" : "수업 전/후 기록으로 리포트 변환"}</button>` : ""}
+          ${ready ? `<button class="secondary" type="button" data-open-report>리포트 새 창으로 보기</button>` : `<button class="secondary" type="button" data-refresh-report>리포트 상태 새로고침</button>`}
+          ${ready ? `<button type="button" data-approve-report ${approved ? "disabled" : ""}>${approved ? "승인 완료" : "회원 알림톡 발송 승인"}</button>` : ""}
+        </div>`;
+      const convertButton = reportPanel.querySelector("[data-convert-report]");
+      if (convertButton && !ready) convertButton.addEventListener("click", convertReport);
+      const openButton = reportPanel.querySelector("[data-open-report]");
+      if (openButton) openButton.addEventListener("click", () => window.open(report.url, "_blank", "noopener"));
+      const refreshButton = reportPanel.querySelector("[data-refresh-report]");
+      if (refreshButton) refreshButton.addEventListener("click", refreshReport);
+      const approveButton = reportPanel.querySelector("[data-approve-report]");
+      if (approveButton) approveButton.addEventListener("click", approveReport);
     }
 
     function intakeHtml(intake) {
@@ -405,12 +487,71 @@
         });
         const data = await res.json();
         if (!res.ok || data.ok === false) throw new Error(data.error || "제출에 실패했습니다.");
-        setStatus("제출되었습니다. Notion 차트에 반영됩니다.", false);
+        setStatus(state.mode === "post" ? "제출되었습니다. 리포트 생성 상태를 확인합니다." : "제출되었습니다. Notion 차트에 반영됩니다.", false);
         submitButton.textContent = "제출 완료";
+        if (state.mode === "post") await refreshReport();
+        state.loading = false;
       } catch (error) {
         state.loading = false;
         submitButton.disabled = false;
         setStatus(error.message || String(error), true);
+      }
+    }
+
+    async function refreshReport() {
+      const res = await fetch(`${apiBase}?r=${encodeURIComponent(state.requestId)}&t=${encodeURIComponent(state.token)}&mode=${state.mode}`);
+      const data = await res.json();
+      if (!res.ok || data.ok === false) throw new Error(data.error || "리포트 상태를 불러오지 못했습니다.");
+      state.data = data;
+      renderReportPanel(data);
+      return data;
+    }
+
+    async function convertReport() {
+      if (state.loading) return;
+      state.loading = true;
+      setStatus("회원용 리포트 변환 요청 중입니다.", false);
+      const button = reportPanel.querySelector("[data-convert-report]");
+      if (button) button.disabled = true;
+      try {
+        const res = await fetch(apiBase, {
+          method: "POST",
+          headers: { "Content-Type": "application/json" },
+          body: JSON.stringify({ requestId: state.requestId, token: state.token, action: "convertReport" }),
+        });
+        const data = await res.json();
+        if (!res.ok || data.ok === false) throw new Error(data.error || "리포트 변환 요청에 실패했습니다.");
+        setStatus(data.message || "리포트 변환 요청이 등록되었습니다.", false);
+        await refreshReport();
+      } catch (error) {
+        setStatus(error.message || String(error), true);
+        if (button) button.disabled = false;
+      } finally {
+        state.loading = false;
+      }
+    }
+
+    async function approveReport() {
+      if (state.loading) return;
+      state.loading = true;
+      setStatus("발송 승인 처리 중입니다.", false);
+      const button = reportPanel.querySelector("[data-approve-report]");
+      if (button) button.disabled = true;
+      try {
+        const res = await fetch(apiBase, {
+          method: "POST",
+          headers: { "Content-Type": "application/json" },
+          body: JSON.stringify({ requestId: state.requestId, token: state.token, action: "approveReport" }),
+        });
+        const data = await res.json();
+        if (!res.ok || data.ok === false) throw new Error(data.error || "승인 처리에 실패했습니다.");
+        setStatus(data.message || "승인되었습니다.", false);
+        await refreshReport();
+      } catch (error) {
+        setStatus(error.message || String(error), true);
+        if (button) button.disabled = false;
+      } finally {
+        state.loading = false;
       }
     }
 
@@ -444,6 +585,10 @@
         '"': "&quot;",
         "'": "&#039;",
       }[char]));
+    }
+
+    function escapeAttr(value) {
+      return escapeHtml(value).replace(/`/g, "&#096;");
     }
   </script>
 </body>

@@ -557,8 +557,16 @@ export interface PrivateLessonChartRecordDoc {
   gptDraftSummary?: string;
   gptDraftNextDirection?: string;
   publicReportUrl?: string;
+  publicReportCanonicalUrl?: string;
   publicSummary?: string;
   publicNextDirection?: string;
+  publicReportApproval?: {
+    status: "pending" | "approved" | "queued" | "sent" | "failed";
+    approvedAt?: Timestamp;
+    approvedBy?: string;
+    candidateId?: string;
+    lastError?: string | null;
+  };
   notionSync?: {
     status: "pending" | "synced" | "failed";
     pageId?: string;

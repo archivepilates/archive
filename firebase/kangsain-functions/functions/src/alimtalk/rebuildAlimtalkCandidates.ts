@@ -124,7 +124,62 @@ async function loadBookingIndex(studioId: string): Promise<BookingIndex> {
     list.push(booking);
     index.set(booking.memberId, list);
   }
+  for (const [memberId, bookingList] of index.entries()) {
+    index.set(memberId, canonicalizeBookings(bookingList));
+  }
   return index;
+}
+
+function canonicalizeBookings(bookings: BookingDoc[]): BookingDoc[] {
+  const grouped = new Map<string, BookingDoc>();
+  for (const booking of bookings) {
+    const key = bookingOccurrenceKey(booking);
+    const current = grouped.get(key);
+    if (!current || shouldPreferCanonicalBooking(booking, current)) {
+      grouped.set(key, booking);
+    }
+  }
+  return [...grouped.values()].sort((a, b) => {
+    if (a.lectureDate !== b.lectureDate) return a.lectureDate.localeCompare(b.lectureDate);
+    return (a.lectureStartAt?.toMillis?.() || 0) - (b.lectureStartAt?.toMillis?.() || 0);
+  });
+}
+
+function bookingOccurrenceKey(booking: BookingDoc): string {
+  return [
+    booking.memberId || normalizeKoreanName(booking.memberName || ""),
+    booking.staffId || normalizeKoreanName(booking.staffName || ""),
+    booking.lectureStartAt?.toMillis?.() || booking.lectureDate,
+  ].join("|");
+}
+
+function shouldPreferCanonicalBooking(next: BookingDoc, current: BookingDoc): boolean {
+  const nextIsExcel = isExcelBookingId(next.bookingId);
+  const currentIsExcel = isExcelBookingId(current.bookingId);
+  if (nextIsExcel !== currentIsExcel) return !nextIsExcel;
+  const nextAttendanceScore = attendanceScore(next.attendanceStatus);
+  const currentAttendanceScore = attendanceScore(current.attendanceStatus);
+  if (nextAttendanceScore !== currentAttendanceScore) return nextAttendanceScore > currentAttendanceScore;
+  if (next.appStatus !== current.appStatus) {
+    if (next.appStatus === "reserved") return true;
+    if (current.appStatus === "reserved") return false;
+  }
+  return String(next.bookingId || "") < String(current.bookingId || "");
+}
+
+function attendanceScore(status: BookingDoc["attendanceStatus"]): number {
+  if (status === "attended") return 3;
+  if (status === "absent") return 2;
+  if (status === "late_cancel") return 1;
+  return 0;
+}
+
+function isExcelBookingId(bookingId: string): boolean {
+  return String(bookingId || "").startsWith("excel_booking_");
+}
+
+function normalizeKoreanName(value: string): string {
+  return value.trim().replace(/\s+/g, "");
 }
 
 function memberBookings(bookingIndex: BookingIndex, memberId: string): BookingDoc[] {

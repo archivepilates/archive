@@ -50,6 +50,7 @@ import {
   enqueuePendingPrivateLessonChartGptTasks,
   notionPrivateLessonReportWebhookHandler,
   privateLessonChartApiHandler,
+  privateLessonReportViewHandler,
 } from "./privateLessonChart/privateLessonChart";
 import { receiveInBodyWebhookHandler } from "./inbody/inbodyWebhook";
 
@@ -307,6 +308,8 @@ export const ingestPrivateSurveyResponse = onRequest(privateSurveyIngestOptions,
 export const privateSurveyResponseView = onRequest(publicRequestOptions, privateSurveyResponseViewHandler);
 
 export const privateLessonChartApi = onRequest(privateLessonChartRequestOptions, privateLessonChartApiHandler);
+
+export const privateLessonReportView = onRequest(publicRequestOptions, privateLessonReportViewHandler);
 
 export const notionPrivateLessonReportWebhook = onRequest(
   privateLessonChartRequestOptions,
