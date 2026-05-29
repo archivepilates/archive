@@ -31,6 +31,10 @@ const PRIVATE_CHART_TEMPLATE_NAME = "강사용_프라이빗 차트 작성 안내
 const PRIVATE_LESSON_REPORT_VIEW_BASE_URL = process.env.PRIVATE_LESSON_REPORT_VIEW_BASE_URL ||
   "https://in.archivepilates.com/api/privateLessonReport";
 const GEMINI_MODEL = process.env.PRIVATE_LESSON_REPORT_GEMINI_MODEL || "gemini-2.5-flash";
+const GEMINI_FALLBACK_MODELS = (process.env.PRIVATE_LESSON_REPORT_GEMINI_FALLBACK_MODELS || "gemini-2.5-flash-lite")
+  .split(",")
+  .map((item) => item.trim())
+  .filter(Boolean);
 const GEMINI_GENERATE_URL = "https://generativelanguage.googleapis.com/v1beta/models";
 const SOLAPI_SEND_URL = "https://api.solapi.com/messages/v4/send-many/detail";
 const SOLAPI_TEMPLATE_URL = "https://api.solapi.com/kakao/v2/templates";
@@ -1664,31 +1668,49 @@ async function generateGeminiPrivateLessonDraft(
   if (!apiKey) throw new Error("GEMINI_API_KEY secret이 설정되어 있지 않습니다.");
 
   const prompt = gptPromptBrief(record, chartRequest);
-  const response = await fetch(
-    `${GEMINI_GENERATE_URL}/${encodeURIComponent(GEMINI_MODEL)}:generateContent?key=${encodeURIComponent(apiKey)}`,
-    {
-      method: "POST",
-      headers: { "Content-Type": "application/json" },
-      body: JSON.stringify({
-        systemInstruction: {
-          parts: [
-            {
-              text:
-                "당신은 ARCHIVE PILATES의 프라이빗 회원 리포트 에디터입니다. " +
-                "한국어로 간결하고 따뜻하게 작성하고, JSON 외 다른 텍스트는 출력하지 않습니다.",
-            },
-          ],
-        },
-        contents: [{ role: "user", parts: [{ text: prompt }] }],
-        generationConfig: {
-          temperature: 0.45,
-          topP: 0.9,
-          maxOutputTokens: 512,
-          responseMimeType: "application/json",
-        },
-      }),
-    },
-  );
+  const models = [...new Set([GEMINI_MODEL, ...GEMINI_FALLBACK_MODELS])];
+  let lastError = "";
+  for (const model of models) {
+    for (let attempt = 1; attempt <= 2; attempt += 1) {
+      try {
+        return await requestGeminiPrivateLessonDraft(apiKey, model, prompt);
+      } catch (err) {
+        lastError = errorMessage(err);
+        if (!isRetryableGeminiError(lastError) || attempt === 2) break;
+        await delay(700 * attempt);
+      }
+    }
+  }
+  throw new Error(lastError || "Gemini 리포트 생성에 실패했습니다.");
+}
+
+async function requestGeminiPrivateLessonDraft(
+  apiKey: string,
+  model: string,
+  prompt: string,
+): Promise<{ summary: string; nextDirection: string }> {
+  const response = await fetch(`${GEMINI_GENERATE_URL}/${encodeURIComponent(model)}:generateContent`, {
+    method: "POST",
+    headers: { "Content-Type": "application/json", "X-goog-api-key": apiKey },
+    body: JSON.stringify({
+      systemInstruction: {
+        parts: [
+          {
+            text:
+              "당신은 ARCHIVE PILATES의 프라이빗 회원 리포트 에디터입니다. " +
+              "한국어로 간결하고 따뜻하게 작성하고, JSON 외 다른 텍스트는 출력하지 않습니다.",
+          },
+        ],
+      },
+      contents: [{ role: "user", parts: [{ text: prompt }] }],
+      generationConfig: {
+        temperature: 0.45,
+        topP: 0.9,
+        maxOutputTokens: 512,
+        responseMimeType: "application/json",
+      },
+    }),
+  });
   const text = await response.text();
   const json = text ? JSON.parse(text) : {};
   if (!response.ok) {
@@ -1702,6 +1724,14 @@ async function generateGeminiPrivateLessonDraft(
     throw new Error("Gemini 리포트 응답에 summary 또는 nextDirection이 없습니다.");
   }
   return { summary, nextDirection };
+}
+
+function isRetryableGeminiError(message: string): boolean {
+  return /\b(429|500|502|503|504)\b|RESOURCE_EXHAUSTED|UNAVAILABLE|high demand/i.test(message);
+}
+
+function delay(ms: number): Promise<void> {
+  return new Promise((resolve) => setTimeout(resolve, ms));
 }
 
 function extractGeminiText(response: any): string {
