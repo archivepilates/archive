@@ -114,6 +114,8 @@ function buildBlocks() {
     bullet("강사레슨 수업자료 안내는 수업 하루 전 발송을 기본으로 하며, 버튼은 `수업자료 보기`와 `방문안내 보기` 2개를 사용한다."),
     bullet("설문/수업자료 버튼은 함수가 `shortLinks/{링크ID}`를 만들고 SOLAPI에는 `https://in.archivepilates.com/s/#{링크ID}/` 형식의 100자 이하 짧은 링크를 넣는다."),
     bullet("현재 승인 템플릿이 기존 `설문ID`, `접근토큰`, `관리번호` 버튼을 쓰는 동안에는 원본 URL과 짧은 URL을 모두 검사한다."),
+    bullet("강사레슨 수업자료 관리번호는 `영문수업주제-YYMMDD`로 정규화한다. `circulation-kg02-260530` 같은 회원/테스트 식별자가 섞인 값은 `circulation-260530`으로 보정한다."),
+    bullet("같은 강사레슨 수업자료 단축링크를 여러 후보가 공유할 때는 `shortLinks.sourceIds`에 후보를 누적하고 기존 `sourceId`를 덮어쓰지 않는다."),
     bullet("강사레슨 수업자료 원본 URL은 `https://in.archivepilates.com/method/#{관리번호}`, 방문안내 버튼 URL은 `https://www.notion.so/367d49eae4bf811ca3daea273ed278c8`이다."),
     heading(2, "Repo 원본"),
     paragraph("상세 원본은 GitHub repo의 `docs/solapi-template-data-operating-rules.md`, `docs/kakao-alimtalk-automation-handoff.md`, `docs/archivein-member-contact-alimtalk-pipeline.md`를 기준으로 한다."),

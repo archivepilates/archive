@@ -320,6 +320,9 @@
 - `수업자료 보기`
 - `https://in.archivepilates.com/s/#{링크ID}/` 형식의 짧은 링크를 사용한다.
 - 원본 자료 URL은 `https://in.archivepilates.com/method/#{관리번호}`이다.
+- 관리번호는 `영문수업주제-YYMMDD` 형식으로 정규화한다. 수업명, 기존 링크, 테스트 후보에 `kg02`, `bm01`, `jy03` 같은 회원/테스트 식별자가 섞여 있으면 영문 주제와 날짜만 남긴다.
+- 예: `circulation-kg02-260530` -> `circulation-260530`
+- 같은 수업자료 단축링크는 여러 후보가 공유할 수 있으므로 `shortLinks.sourceIds`에 사용 후보를 누적하고, 반복 발송 때 기존 `sourceId`를 덮어쓰지 않는다.
 - `방문안내 보기`
 - `https://www.notion.so/367d49eae4bf811ca3daea273ed278c8`
 - 버튼 URL은 변수 치환 후 100자 이하여야 한다. 현재 승인 템플릿이 기존 `관리번호` 버튼을 쓰는 동안에는 원본 자료 URL도 함께 검사한다.
