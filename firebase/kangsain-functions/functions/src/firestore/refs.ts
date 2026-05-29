@@ -19,7 +19,6 @@ import type {
   PrivateSurveyResponseDoc,
   PrivateLessonChartRecordDoc,
   PrivateLessonChartRequestDoc,
-  PrivateLessonChartGptTaskDoc,
   StaffDoc,
   TokenCacheDoc,
   WriteQueueJobDoc,
@@ -69,9 +68,6 @@ export const refs = {
   privateLessonChartRecords: () =>
     db.collection("privateLessonChartRecords").withConverter(converter<PrivateLessonChartRecordDoc>()),
   privateLessonChartRecord: (recordId: string) => refs.privateLessonChartRecords().doc(recordId),
-  privateLessonChartGptTasks: () =>
-    db.collection("privateLessonChartGptTasks").withConverter(converter<PrivateLessonChartGptTaskDoc>()),
-  privateLessonChartGptTask: (taskId: string) => refs.privateLessonChartGptTasks().doc(taskId),
   memberMemos: () => db.collection("memberMemos").withConverter(converter<MemberMemoDoc>()),
   memberMemo: (memoId: string) => refs.memberMemos().doc(memoId),
   notices: () => db.collection("notices").withConverter(converter<NoticeDoc>()),

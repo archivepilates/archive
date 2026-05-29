@@ -4,7 +4,7 @@ import { onDocumentCreated } from "firebase-functions/v2/firestore";
 import { onSchedule } from "firebase-functions/v2/scheduler";
 import { logger } from "firebase-functions";
 import { REGION, TIMEZONE } from "./config/constants";
-import { allSecrets, notionToken } from "./config/secrets";
+import { allSecrets, geminiApiKey, notionToken } from "./config/secrets";
 import { toHttpsError } from "./utils/errors";
 import { syncLecturesDaily } from "./sync/syncLecturesDaily";
 import { syncLecturesRange } from "./sync/syncLecturesRange";
@@ -47,7 +47,7 @@ import {
 import {
   enqueueApprovedPrivateLessonReportAlimtalks,
   createAndSendTomorrowPrivateLessonCharts,
-  enqueuePendingPrivateLessonChartGptTasks,
+  generatePendingPrivateLessonChartReports,
   notionPrivateLessonReportWebhookHandler,
   privateLessonChartApiHandler,
   privateLessonReportViewHandler,
@@ -81,10 +81,14 @@ const privateSurveyIntakeOptions = {
 };
 const privateLessonChartRequestOptions = {
   region: REGION,
-  secrets: [...allSecrets, notionToken],
+  secrets: [...allSecrets, notionToken, geminiApiKey],
   timeoutSeconds: 120,
   memory: "256MiB" as const,
   invoker: "public" as const,
+};
+const privateLessonChartScheduleOptions = {
+  ...privateSurveyIntakeOptions,
+  secrets: [...allSecrets, notionToken, geminiApiKey],
 };
 const publicRequestOptions = {
   region: REGION,
@@ -242,13 +246,13 @@ export const scheduledCreatePrivateLessonChartRequests = onSchedule(
   },
 );
 
-export const scheduledEnqueuePrivateLessonChartGptTasks = onSchedule(
+export const scheduledGeneratePrivateLessonChartReports = onSchedule(
   {
-    ...privateSurveyIntakeOptions,
+    ...privateLessonChartScheduleOptions,
     schedule: "every 10 minutes",
   },
   async () => {
-    await enqueuePendingPrivateLessonChartGptTasks();
+    await generatePendingPrivateLessonChartReports();
   },
 );
 

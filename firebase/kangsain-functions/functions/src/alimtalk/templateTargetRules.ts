@@ -301,7 +301,7 @@ export const ALIMTALK_TEMPLATE_TARGET_RULES: Partial<Record<AlimtalkCandidateTyp
     ],
     targetRules: [
       "수업 후 기록이 제출된 프라이빗 회차",
-      "GPT 회원용 리포트 초안이 생성됨",
+      "Gemini 회원용 리포트 초안이 생성됨",
       "회원용 HTML 리포트 URL이 있음",
       "Notion에서 발송 체크와 발송상태 대기 확인",
       "최신 인바디 리포트가 있으면 인바디 버튼에 연결하고, 없으면 측정 데이터 없음 안내 화면에 연결",

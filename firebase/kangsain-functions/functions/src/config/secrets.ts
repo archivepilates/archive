@@ -12,6 +12,7 @@ export const privateSurveyWebhookSecret = defineSecret("PRIVATE_SURVEY_WEBHOOK_S
 export const inbodyWebhookSecret = defineSecret("INBODY_WEBHOOK_SECRET");
 export const inbodyApiKey = defineSecret("INBODY_API_KEY");
 export const notionToken = defineSecret("NOTION_TOKEN");
+export const geminiApiKey = defineSecret("GEMINI_API_KEY");
 
 export const allSecrets = [
   studiomateLoginId,

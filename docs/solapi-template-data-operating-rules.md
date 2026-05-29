@@ -349,7 +349,7 @@
 
 - `privateLessonChartRecords/{recordId}`에 해당 회차 기록이 있음.
 - `postRecord`가 제출되어 있음.
-- `gptStatus`가 `draft_created` 상태임.
+- `gptStatus`가 `draft_created` 상태임. 기존 속성명은 유지하지만 생성 주체는 Gemini API다.
 - `publicReportUrl` 또는 회원 리포트 URL이 존재함.
 - Notion 세션 기록의 `발송` 체크박스가 체크되어 있음.
 - Notion 세션 기록의 `발송상태`가 `대기`임.
@@ -388,7 +388,7 @@
 
 - 회원 전화번호 없음.
 - `publicReportUrl` 없음.
-- GPT 초안 미생성.
+- Gemini 회원용 초안 미생성.
 - 수업 후 기록 미제출.
 - Notion `발송` 체크 전.
 - Notion `발송상태`가 `대기`가 아님.

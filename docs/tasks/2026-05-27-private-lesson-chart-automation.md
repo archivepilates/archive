@@ -10,20 +10,19 @@
 - 알림톡 버튼은 수업 전 계획, 수업 후 기록, 사진·영상 업로드 3개로 분리한다.
 - 링크에는 회원 정보와 예약 정보를 직접 노출하지 않고 `requestId`와 토큰만 포함한다.
 - Notion은 기존 `개인레슨 차트` 페이지의 회차별 문서 흐름을 참고한다.
-- GPT 요약은 Notion Formula가 아니라 Firestore 설문/수업기록 데이터를 원천 큐로 삼아 처리한다.
-- OpenAI API 과금 호출 없이 Mac mini LaunchAgent가 Codex CLI 에이전트를 필요할 때만 실행한다.
+- 회원용 리포트 문장은 Notion Formula나 Mac mini GPT 에이전트가 아니라 Firebase Function에서 Gemini API로 즉시 생성한다.
+- Gemini 실패 시 `gptStatus=failed`로 저장하고, 수업 후 링크의 리포트 변환 버튼으로 재시도한다.
 
 ## 구현 구조
 
 - `privateLessonChartRequests`: 예약별 입력 요청, 버튼 링크, 제출 상태, 사전설문 요약
-- `privateLessonChartRecords`: 수업 전 계획, 수업 후 기록, Notion 동기화 상태. GPT 큐의 원천 데이터.
-- `privateLessonChartGptTasks`: `privateLessonChartRecords`에서 파생되는 실행 큐. `sourceHash`로 중복/재처리를 제어.
+- `privateLessonChartRecords`: 수업 전 계획, 수업 후 기록, Gemini 생성 결과, Notion 동기화 상태를 저장한다.
 - `privateLessonChartApi`: 강사용 입력폼 조회/제출 HTTP API
 - `scheduledCreatePrivateLessonChartRequests`: 매일 18:00 KST에 다음날 프라이빗 예약의 차트 요청 생성 후 강사용 차트 알림톡 발송
-- `scheduledEnqueuePrivateLessonChartGptTasks`: 10분마다 수업 후 기록이 있는데 GPT 큐가 누락된 records를 재확인
+- `scheduledGeneratePrivateLessonChartReports`: 10분마다 수업 후 기록이 있는데 리포트 생성이 누락된 records를 재확인
+- `GEMINI_API_KEY`: Gemini Developer API 호출용 Secret Manager 값. Generative Language API 전용 제한 키를 저장한다.
 - `회원용_프라이빗 수업 리포트 안내 v1`: 수업 후 HTML 리포트를 회원에게 전달하는 별도 알림톡. 강사용 입력 알림톡과 분리한다.
 - `/private-chart/`: 강사용 모바일 입력 화면
-- `com.archive.private-chart-gpt-agent`: Mac mini LaunchAgent. 5분마다 pending GPT task 확인 후 Codex CLI 실행.
 - 수업 하루 전 요청 생성 시점에 `Private Session Records DB` 회차 원본을 만들고, 해당 페이지 URL을 사진·영상 업로드 버튼에 연결한다.
 - 강사용 기존 회원 페이지에는 `YYYY.MM.DD HH:mm · n회차(자동화)` 일반 페이지를 추가한다.
 - 사진·영상 업로드 버튼은 DB 원본이 아니라 강사용 일반 페이지로 연결한다. DB 원본은 웹훅/발송 상태 관리를 위해 내부용으로 유지한다.
@@ -37,16 +36,16 @@
 - 강사별 진입 페이지는 `이초림 수석강사`, `배민진 원장님`, `정은영 부원장님`, `김기효 강사` 기준으로 운영한다.
 - StudioMate/Firestore 강사명은 직함 없이 `이초림`, `배민진`, `정은영`, `김기효`로 들어올 수 있어 자동화 매핑에 별칭을 함께 둔다.
 - `자동화 회차 차트 템플릿`은 `개인레슨 차트` 바로 아래에 둔다.
-- 운영 기록, DB, 웹훅, GPT 큐 규칙은 `아카이브 운영 규칙 > ARCHIVE PILATES 프라이빗 회원 차트 시스템` 아래로 분리한다.
+- 운영 기록, DB, 웹훅, Gemini 리포트 생성 규칙은 `아카이브 운영 규칙 > ARCHIVE PILATES 프라이빗 회원 차트 시스템` 아래로 분리한다.
 - `ARCHIVE AI` Notion 연결은 `Private Session Records DB` 접근은 정상이다. 기존 강사별 회원 페이지에 자동 링크를 붙이려면 `개인레슨 차트` 루트 페이지도 `ARCHIVE AI` 연결에 공유되어야 한다.
 - `Private Session Records DB`에 자동화용 속성을 추가했다.
   - `Chart Request ID`
   - `Session Number`
   - `Pre Status`
   - `Post Status`
-- `GPT Status`
-- `GPT Draft Summary`
-- `GPT Draft Next Direction`
+- `GPT Status` (기존 속성명 유지, Gemini 생성 상태 표시)
+- `GPT Draft Summary` (기존 속성명 유지, Gemini 요약문 저장)
+- `GPT Draft Next Direction` (기존 속성명 유지, Gemini 다음 수업 방향 저장)
 - `회원 리포트`
 - `발송`
 - `발송상태`
@@ -156,7 +155,7 @@ Notion 웹훅:
 
 - 강사용 차트 작성 알림톡은 승인 완료 상태다. 다음 단계는 실제 예약 기준 자동 후보 생성/발송 연결이다.
 - 회원용 리포트 알림톡은 SOLAPI 템플릿 생성 완료 상태다. 검수 승인 후 Template ID를 코드에 연결한다.
-- Mac mini LaunchAgent가 `privateLessonChartGptTasks`의 `pending` 작업을 읽어 회원용 초안을 작성하고 Notion/Firestore에 반영한다.
-- Notion Formula는 큐 생성에 사용하지 않는다. Formula는 상태 표시, 필터, 임시 요약용으로만 사용한다.
-- 강사는 Notion 차트의 HTML 리포트 임베드를 확인하고 `발송` 체크박스를 눌러 회원 알림톡 발송을 승인한다.
+- Firebase Function이 Gemini API로 회원용 초안을 생성하고 Notion/Firestore에 반영한다.
+- Notion Formula는 리포트 생성에 사용하지 않는다. Formula는 상태 표시, 필터, 임시 요약용으로만 사용한다.
+- 강사는 수업 후 링크의 리포트 섹션에서 HTML 리포트를 확인하고 회원 알림톡 발송을 승인한다.
 - 첫 운영 전에는 실제 예약 1건으로 수업 전/후 제출과 Notion 회차 페이지 생성을 확인한다.

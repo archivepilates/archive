@@ -2,13 +2,12 @@ import { createHmac, randomBytes, timingSafeEqual } from "node:crypto";
 import { Timestamp } from "firebase-admin/firestore";
 import { logger } from "firebase-functions";
 import { DEFAULT_STUDIO_ID } from "../config/constants";
-import { notionToken, privateSurveyWebhookSecret, solapiApiKey, solapiApiSecret, solapiPfid } from "../config/secrets";
+import { geminiApiKey, notionToken, privateSurveyWebhookSecret, solapiApiKey, solapiApiSecret, solapiPfid } from "../config/secrets";
 import { db } from "../config/firebase";
 import { refs } from "../firestore/refs";
 import type {
   AlimtalkCandidateDoc,
   BookingDoc,
-  PrivateLessonChartGptTaskDoc,
   PrivateLessonChartMode,
   PrivateLessonChartRecordDoc,
   PrivateLessonChartRequestDoc,
@@ -31,6 +30,8 @@ const STAFF_PRIVATE_CHART_TEMPLATE_ID = "KA01TP260527182741301uIuSTL01YQ1";
 const PRIVATE_CHART_TEMPLATE_NAME = "강사용_프라이빗 차트 작성 안내 v2";
 const PRIVATE_LESSON_REPORT_VIEW_BASE_URL = process.env.PRIVATE_LESSON_REPORT_VIEW_BASE_URL ||
   "https://in.archivepilates.com/api/privateLessonReport";
+const GEMINI_MODEL = process.env.PRIVATE_LESSON_REPORT_GEMINI_MODEL || "gemini-2.5-flash";
+const GEMINI_GENERATE_URL = "https://generativelanguage.googleapis.com/v1beta/models";
 const SOLAPI_SEND_URL = "https://api.solapi.com/messages/v4/send-many/detail";
 const SOLAPI_TEMPLATE_URL = "https://api.solapi.com/kakao/v2/templates";
 const NOTION_INSTRUCTOR_CHART_PAGE_IDS: Record<string, string> = {
@@ -359,15 +360,17 @@ export async function sendPendingPrivateLessonChartAlimtalksForDate(date: string
   return { date, checked, sent, skipped, failed };
 }
 
-export async function enqueuePendingPrivateLessonChartGptTasks(): Promise<{
+export async function generatePendingPrivateLessonChartReports(): Promise<{
   checked: number;
-  enqueued: number;
+  generated: number;
   skipped: number;
+  failed: number;
 }> {
   const snap = await refs.privateLessonChartRecords().where("gptStatus", "==", "pending").limit(100).get();
   let checked = 0;
-  let enqueued = 0;
+  let generated = 0;
   let skipped = 0;
+  let failed = 0;
 
   for (const recordSnap of snap.docs) {
     const record = recordSnap.data();
@@ -382,19 +385,19 @@ export async function enqueuePendingPrivateLessonChartGptTasks(): Promise<{
       skipped += 1;
       continue;
     }
-    const result = await ensureGptTask(record, chartRequest).catch((err) => {
-      logger.warn("enqueuePendingPrivateLessonChartGptTasks failed", {
+    const result = await generatePrivateLessonReportDraft(record, chartRequest).catch((err) => {
+      logger.warn("generatePendingPrivateLessonChartReports failed", {
         recordId: record.recordId,
         message: errorMessage(err),
       });
       return null;
     });
-    if (result?.enqueued) enqueued += 1;
-    else skipped += 1;
+    if (result?.generated || result?.ready) generated += 1;
+    else failed += 1;
   }
 
-  logger.info("enqueuePendingPrivateLessonChartGptTasks completed", { checked, enqueued, skipped });
-  return { checked, enqueued, skipped };
+  logger.info("generatePendingPrivateLessonChartReports completed", { checked, generated, skipped, failed });
+  return { checked, generated, skipped, failed };
 }
 
 export async function enqueueApprovedPrivateLessonReportAlimtalks(): Promise<{
@@ -582,27 +585,15 @@ async function convertPrivateLessonReportFromChart(
     };
   }
 
-  const result = await ensureGptTask(record, chartRequest);
-  await refs.privateLessonChartRecord(record.recordId).set(
-    {
-      gptTaskId: result.taskId,
-      gptStatus: "pending",
-      publicReportApproval: {
-        status: "pending",
-        lastError: null,
-      },
-      updatedAt: nowTimestamp(),
-    },
-    { merge: true },
-  );
+  const generated = await generatePrivateLessonReportDraft(record, chartRequest, { force: true });
+  const notionSync = await syncPrivateLessonChartRecordToNotion(generated.record, chartRequest);
+  await refs.privateLessonChartRecord(record.recordId).set({ notionSync, updatedAt: nowTimestamp() }, { merge: true });
   return {
     recordId: record.recordId,
-    reportStatus: "processing",
-    taskId: result.taskId,
-    reportUrl: record.publicReportUrl || "",
-    message: result.enqueued
-      ? "리포트 변환 요청이 등록되었습니다. 잠시 후 리포트 상태를 새로고침해 주세요."
-      : "이미 리포트 변환 요청이 등록되어 있습니다. 잠시 후 리포트 상태를 새로고침해 주세요.",
+    reportStatus: "ready",
+    taskId: generated.taskId,
+    reportUrl: generated.record.publicReportUrl || generated.record.publicReportCanonicalUrl || "",
+    message: "수업 전/후 기록을 반영해 회원용 리포트를 생성했습니다. 내용을 확인한 뒤 발송 승인해 주세요.",
   };
 }
 
@@ -1015,11 +1006,22 @@ async function submitPrivateLessonChart(
     .privateLessonChartRequest(chartRequest.requestId)
     .set({ ...requestPatch, updatedAt: now }, { merge: true });
 
-  const notionSync = await syncPrivateLessonChartRecordToNotion(nextRecord, chartRequest);
+  let recordForNotion = nextRecord;
+  if (mode === "post") {
+    try {
+      recordForNotion = (await generatePrivateLessonReportDraft(nextRecord, chartRequest)).record;
+    } catch (err) {
+      logger.warn("submitPrivateLessonChart Gemini draft failed", {
+        requestId: chartRequest.requestId,
+        memberName: chartRequest.memberName,
+        message: errorMessage(err),
+      });
+    }
+  }
+  const notionSync = await syncPrivateLessonChartRecordToNotion(recordForNotion, chartRequest);
   await recordRef.set({ notionSync, updatedAt: nowTimestamp() }, { merge: true });
-  if (mode === "post") await ensureGptTask(nextRecord, chartRequest);
 
-  return { requestId: chartRequest.requestId, recordId: nextRecord.recordId, mode, notionStatus: notionSync.status };
+  return { requestId: chartRequest.requestId, recordId: recordForNotion.recordId, mode, notionStatus: notionSync.status };
 }
 
 async function upsertChartRecordBase(chartRequest: PrivateLessonChartRequestDoc): Promise<PrivateLessonChartRecordDoc> {
@@ -1049,48 +1051,93 @@ async function upsertChartRecordBase(chartRequest: PrivateLessonChartRequestDoc)
   return base;
 }
 
-async function ensureGptTask(
+async function generatePrivateLessonReportDraft(
   record: PrivateLessonChartRecordDoc,
   chartRequest: PrivateLessonChartRequestDoc,
-): Promise<{ taskId: string; enqueued: boolean }> {
-  const taskId = `plc_gpt_${record.recordId}`;
-  const now = nowTimestamp();
+  options: { force?: boolean } = {},
+): Promise<{ taskId: string; generated: boolean; ready: boolean; record: PrivateLessonChartRecordDoc }> {
   const sourceHash = gptSourceHash(record, chartRequest);
-  const existing = await refs.privateLessonChartGptTask(taskId).get();
-  const existingTask = existing.data();
-  if (existingTask?.sourceHash === sourceHash && existingTask.status !== "failed") {
-    await refs.privateLessonChartRecord(record.recordId).set({ gptTaskId: taskId, updatedAt: now }, { merge: true });
-    return { taskId, enqueued: false };
+  const taskId = `gemini_${record.recordId}_${sourceHash.slice(0, 12)}`;
+  if (
+    !options.force &&
+    record.gptStatus === "draft_created" &&
+    record.gptDraftSummary &&
+    record.gptDraftNextDirection &&
+    record.gptTaskId === taskId &&
+    (record.publicReportUrl || record.publicReportCanonicalUrl)
+  ) {
+    return { taskId, generated: false, ready: true, record };
   }
-  const task: PrivateLessonChartGptTaskDoc = {
-    taskId,
-    type: "private_lesson_chart_public_draft",
-    status: "pending",
-    sourceCollection: "privateLessonChartRecords",
-    sourceDocId: record.recordId,
-    sourceHash,
-    recordId: record.recordId,
-    requestId: record.requestId,
-    memberId: record.memberId,
-    memberName: record.memberName,
-    staffName: record.staffName,
-    sessionNumber: record.sessionNumber,
-    lessonDate: record.lessonDate,
-    promptBrief: gptPromptBrief(record, chartRequest),
-    inputSnapshot: {
-      intakeSummary: chartRequest.intakeSummary,
-      prePlan: record.prePlan,
-      postRecord: record.postRecord,
+
+  const now = nowTimestamp();
+  await refs.privateLessonChartRecord(record.recordId).set(
+    {
+      gptTaskId: taskId,
+      gptStatus: "processing",
+      gptProvider: "gemini",
+      gptModel: GEMINI_MODEL,
+      gptSourceHash: sourceHash,
+      gptError: null,
+      updatedAt: now,
     },
-    error: null,
-    createdAt: now,
-    updatedAt: now,
-  };
-  await refs.privateLessonChartGptTask(taskId).set(task, { merge: true });
-  await refs
-    .privateLessonChartRecord(record.recordId)
-    .set({ gptTaskId: taskId, gptStatus: "pending", updatedAt: now }, { merge: true });
-  return { taskId, enqueued: true };
+    { merge: true },
+  );
+
+  try {
+    const draft = await generateGeminiPrivateLessonDraft(record, chartRequest);
+    const nextRecord = {
+      ...record,
+      gptTaskId: taskId,
+      gptStatus: "draft_created",
+      gptDraftSummary: draft.summary,
+      gptDraftNextDirection: draft.nextDirection,
+      publicSummary: draft.summary,
+      publicNextDirection: draft.nextDirection,
+      updatedAt: nowTimestamp(),
+    } as PrivateLessonChartRecordDoc;
+    const reportResolution = await resolveReportShortUrl(nextRecord);
+    const readyRecord = {
+      ...nextRecord,
+      publicReportUrl: reportResolution.publicReportUrl || nextRecord.publicReportUrl,
+      publicReportCanonicalUrl: reportResolution.publicReportCanonicalUrl || nextRecord.publicReportCanonicalUrl,
+    } as PrivateLessonChartRecordDoc;
+    await refs.privateLessonChartRecord(record.recordId).set(
+      {
+        gptTaskId: taskId,
+        gptStatus: "draft_created",
+        gptProvider: "gemini",
+        gptModel: GEMINI_MODEL,
+        gptSourceHash: sourceHash,
+        gptDraftSummary: draft.summary,
+        gptDraftNextDirection: draft.nextDirection,
+        publicSummary: draft.summary,
+        publicNextDirection: draft.nextDirection,
+        publicReportUrl: readyRecord.publicReportUrl || "",
+        publicReportCanonicalUrl: readyRecord.publicReportCanonicalUrl || "",
+        publicReportApproval: { status: "pending", lastError: null },
+        gptError: null,
+        updatedAt: nowTimestamp(),
+      },
+      { merge: true },
+    );
+    return { taskId, generated: true, ready: true, record: readyRecord };
+  } catch (err) {
+    const message = errorMessage(err);
+    await refs.privateLessonChartRecord(record.recordId).set(
+      {
+        gptTaskId: taskId,
+        gptStatus: "failed",
+        gptProvider: "gemini",
+        gptModel: GEMINI_MODEL,
+        gptSourceHash: sourceHash,
+        gptError: message,
+        publicReportApproval: { status: "pending", lastError: message },
+        updatedAt: nowTimestamp(),
+      },
+      { merge: true },
+    );
+    throw err;
+  }
 }
 
 async function syncPrivateLessonChartRecordToNotion(
@@ -1593,8 +1640,9 @@ function privateSurveySummaryForRequest(
 
 function gptPromptBrief(record: PrivateLessonChartRecordDoc, chartRequest: PrivateLessonChartRequestDoc): string {
   return [
-    "ARCHIVE PILATES 프라이빗 회원용 수업 요약 초안을 작성합니다.",
-    "톤: 조용하고 전문적이며 따뜻하게. 통증/병력 상세와 내부 판단은 직접 노출하지 않습니다.",
+    "ARCHIVE PILATES 프라이빗 회원용 수업 리포트 문장을 작성합니다.",
+    "톤: 조용하고 전문적이며 따뜻하게. 과장, 진단, 치료 효과 단정, 통증/병력 상세 노출은 금지합니다.",
+    "회원이 읽는 문장입니다. 강사용 체크값을 자연스럽고 고급스럽게 정리합니다.",
     `회원: ${record.memberName}`,
     `회차: ${record.sessionNumber}회차`,
     `수업일: ${record.lessonDate}`,
@@ -1602,8 +1650,80 @@ function gptPromptBrief(record: PrivateLessonChartRecordDoc, chartRequest: Priva
     `사전설문 요약: ${safeJson(chartRequest.intakeSummary || {})}`,
     `수업 전 계획: ${safeJson(record.prePlan || {})}`,
     `수업 후 기록: ${safeJson(record.postRecord || {})}`,
-    "출력: summary 2문장, nextDirection 1문장.",
+    "출력은 JSON만 허용합니다.",
+    "summary: 1~2문장. 오늘 진행과 관찰된 변화를 따뜻하지만 담백하게 요약합니다.",
+    "nextDirection: 1문장. 다음 수업 방향을 확신형 진단이 아니라 관리 방향으로 표현합니다.",
   ].join("\n");
+}
+
+async function generateGeminiPrivateLessonDraft(
+  record: PrivateLessonChartRecordDoc,
+  chartRequest: PrivateLessonChartRequestDoc,
+): Promise<{ summary: string; nextDirection: string }> {
+  const apiKey = geminiApiKey.value();
+  if (!apiKey) throw new Error("GEMINI_API_KEY secret이 설정되어 있지 않습니다.");
+
+  const prompt = gptPromptBrief(record, chartRequest);
+  const response = await fetch(
+    `${GEMINI_GENERATE_URL}/${encodeURIComponent(GEMINI_MODEL)}:generateContent?key=${encodeURIComponent(apiKey)}`,
+    {
+      method: "POST",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({
+        systemInstruction: {
+          parts: [
+            {
+              text:
+                "당신은 ARCHIVE PILATES의 프라이빗 회원 리포트 에디터입니다. " +
+                "한국어로 간결하고 따뜻하게 작성하고, JSON 외 다른 텍스트는 출력하지 않습니다.",
+            },
+          ],
+        },
+        contents: [{ role: "user", parts: [{ text: prompt }] }],
+        generationConfig: {
+          temperature: 0.45,
+          topP: 0.9,
+          maxOutputTokens: 512,
+          responseMimeType: "application/json",
+        },
+      }),
+    },
+  );
+  const text = await response.text();
+  const json = text ? JSON.parse(text) : {};
+  if (!response.ok) {
+    throw new Error(`Gemini API ${response.status}: ${json.error?.message || text}`);
+  }
+  const output = extractGeminiText(json);
+  const parsed = parseJsonObject(output);
+  const summary = cleanReportSentence(parsed.summary);
+  const nextDirection = cleanReportSentence(parsed.nextDirection);
+  if (!summary || !nextDirection) {
+    throw new Error("Gemini 리포트 응답에 summary 또는 nextDirection이 없습니다.");
+  }
+  return { summary, nextDirection };
+}
+
+function extractGeminiText(response: any): string {
+  const parts = response?.candidates?.[0]?.content?.parts;
+  if (!Array.isArray(parts)) return "";
+  return parts.map((part: any) => String(part?.text || "")).join("").trim();
+}
+
+function parseJsonObject(text: string): Record<string, any> {
+  const normalized = text
+    .replace(/^```(?:json)?/i, "")
+    .replace(/```$/i, "")
+    .trim();
+  const parsed = normalized ? JSON.parse(normalized) : {};
+  return parsed && typeof parsed === "object" && !Array.isArray(parsed) ? parsed : {};
+}
+
+function cleanReportSentence(value: unknown): string {
+  return String(value || "")
+    .replace(/\s+/g, " ")
+    .trim()
+    .slice(0, 360);
 }
 
 function gptSourceHash(record: PrivateLessonChartRecordDoc, chartRequest: PrivateLessonChartRequestDoc): string {
@@ -1663,7 +1783,7 @@ function notionChartChildren(
     ]),
     divider(),
     heading(3, "회원용 초안"),
-    paragraph(record.gptDraftSummary || "GPT 초안 생성 대기 중입니다."),
+    paragraph(record.gptDraftSummary || "Gemini 초안 생성 대기 중입니다."),
     divider(),
     heading(3, "회원 리포트 검수"),
     paragraph(
@@ -1797,7 +1917,7 @@ function notionUpdateChildren(
       `다음 수업 메모: ${String(record.postRecord?.nextMemo || "-")}`,
     ]),
     heading(3, "회원 리포트"),
-    paragraph(record.gptDraftSummary || "GPT 초안 생성 대기 중입니다."),
+    paragraph(record.gptDraftSummary || "Gemini 초안 생성 대기 중입니다."),
     ...(record.publicReportUrl ? [embed(record.publicReportUrl)] : []),
   ];
 }

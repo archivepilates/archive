@@ -554,6 +554,10 @@ export interface PrivateLessonChartRecordDoc {
   postSubmittedAt?: Timestamp | null;
   gptStatus: PrivateLessonChartGptStatus;
   gptTaskId?: string;
+  gptProvider?: "gemini" | "macmini_gpt" | string;
+  gptModel?: string;
+  gptSourceHash?: string;
+  gptError?: string | null;
   gptDraftSummary?: string;
   gptDraftNextDirection?: string;
   publicReportUrl?: string;
@@ -576,35 +580,6 @@ export interface PrivateLessonChartRecordDoc {
     syncedAt?: string;
     error?: string;
   };
-  createdAt: Timestamp;
-  updatedAt: Timestamp;
-}
-
-export interface PrivateLessonChartGptTaskDoc {
-  taskId: string;
-  type: "private_lesson_chart_public_draft";
-  status: PrivateLessonChartGptStatus;
-  sourceCollection?: "privateLessonChartRecords";
-  sourceDocId?: string;
-  sourceHash?: string;
-  recordId: string;
-  requestId: string;
-  memberId: string;
-  memberName: string;
-  staffName: string;
-  sessionNumber: number;
-  lessonDate: string;
-  promptBrief: string;
-  inputSnapshot?: {
-    intakeSummary?: PrivateLessonChartRequestDoc["intakeSummary"];
-    prePlan?: Record<string, unknown>;
-    postRecord?: Record<string, unknown>;
-  };
-  result?: {
-    summary?: string;
-    nextDirection?: string;
-  };
-  error: string | null;
   createdAt: Timestamp;
   updatedAt: Timestamp;
 }
