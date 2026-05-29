@@ -259,6 +259,7 @@
 
 - 수강권 상태가 `정지중`, `중지`, `홀딩`인 회원. StudioMate 엑셀의 `수강권상태`를 `memberProfiles.ticketStatusSummary.hasHoldingTicket`으로 저장해 판단한다.
 - 활성 수업 수강권 없음.
+- 스텝 계정.
 - 출석 완료 이력 없음.
 - 발송 기준일 이후 예정 예약 있음.
 - 마지막 출석 완료일이 7일 미만.

@@ -9,6 +9,8 @@ export const GROUP_SURVEY_ALIMTALK_START_DATE = "2026-05-21";
 export const LONG_ABSENCE_ALIMTALK_START_DATE = "2026-05-24";
 
 export const ALIMTALK_MEMBER_EXCLUSION_REASONS: Record<string, string> = {
+  "1982133": "스텝 계정 알림톡 제외",
+  "2022993": "스텝 계정 알림톡 제외",
   "3270886": "출산예정 회원 알림톡 제외",
   "3834419": "출산예정 회원 알림톡 제외",
 };
