@@ -1,10 +1,58 @@
 {
   "functions": [
     {
-      "source": "firebase/kangsain-functions/functions",
-      "codebase": "default",
+      "source": "firebase/function-codebases/alimtalk",
+      "codebase": "functions-alimtalk",
       "runtime": "nodejs22",
-      "predeploy": ["node \"$RESOURCE_DIR/node_modules/typescript/bin/tsc\" -p \"$RESOURCE_DIR/tsconfig.json\""],
+      "predeploy": [
+        "node scripts/prepare-functions-codebase.mjs \"$RESOURCE_DIR\"",
+        "node firebase/kangsain-functions/functions/node_modules/typescript/bin/tsc -p \"$RESOURCE_DIR/tsconfig.json\""
+      ],
+      "ignore": [
+        "node_modules",
+        ".git",
+        "firebase-debug.log",
+        "firebase-debug.*.log"
+      ]
+    },
+    {
+      "source": "firebase/function-codebases/private-chart",
+      "codebase": "functions-private-chart",
+      "runtime": "nodejs22",
+      "predeploy": [
+        "node scripts/prepare-functions-codebase.mjs \"$RESOURCE_DIR\"",
+        "node firebase/kangsain-functions/functions/node_modules/typescript/bin/tsc -p \"$RESOURCE_DIR/tsconfig.json\""
+      ],
+      "ignore": [
+        "node_modules",
+        ".git",
+        "firebase-debug.log",
+        "firebase-debug.*.log"
+      ]
+    },
+    {
+      "source": "firebase/function-codebases/sync",
+      "codebase": "functions-sync",
+      "runtime": "nodejs22",
+      "predeploy": [
+        "node scripts/prepare-functions-codebase.mjs \"$RESOURCE_DIR\"",
+        "node firebase/kangsain-functions/functions/node_modules/typescript/bin/tsc -p \"$RESOURCE_DIR/tsconfig.json\""
+      ],
+      "ignore": [
+        "node_modules",
+        ".git",
+        "firebase-debug.log",
+        "firebase-debug.*.log"
+      ]
+    },
+    {
+      "source": "firebase/function-codebases/app",
+      "codebase": "functions-app",
+      "runtime": "nodejs22",
+      "predeploy": [
+        "node scripts/prepare-functions-codebase.mjs \"$RESOURCE_DIR\"",
+        "node firebase/kangsain-functions/functions/node_modules/typescript/bin/tsc -p \"$RESOURCE_DIR/tsconfig.json\""
+      ],
       "ignore": [
         "node_modules",
         ".git",

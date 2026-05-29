@@ -29,3 +29,20 @@ npm run validate:function-boundaries
 ## Next Migration Gate
 
 The next go-live step is not a normal refactor. It should be a controlled Firebase migration that deploys one physical codebase at a time and verifies live function URLs, callable names, and schedules.
+
+## 2026-05-30 Completion
+
+Physical codebase split was completed and deployed.
+
+- `functions-alimtalk`: deployed 4 functions.
+- `functions-private-chart`: deployed 13 functions.
+- `functions-sync`: deployed 12 functions.
+- `functions-app`: deployed 9 functions.
+- `functions:list`: verified 38 ACTIVE functions split across the four codebases.
+- Live HTTP smoke checks:
+  - `https://in.archivepilates.com/api/privateLessonReport`: returned 400 without token, confirming the function is reached.
+  - `https://in.archivepilates.com/s/not-existing-codebase-check`: returned 404, confirming the short-link function is reached.
+- Notion record:
+  - https://www.notion.so/ARCHIVE-IN-Functions-codebase-2026-05-30-36fd49eae4bf81c6901bf7c0b116ad85
+
+Path safety was handled by generating each physical codebase source during predeploy from the current repo root instead of hardcoding an absolute worktree path.

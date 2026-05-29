@@ -1,11 +1,12 @@
 {
-  "phase": "export-boundary-ready",
+  "phase": "physical-codebase-ready",
   "project": "archive-pilates",
-  "currentActiveFirebaseCodebase": "default",
-  "physicalCodebaseSplitEnabled": false,
-  "reasonPhysicalSplitDisabled": "Function names must stay stable until each target codebase is deployed with an explicit no-delete migration plan.",
+  "previousFirebaseCodebase": "default",
+  "physicalCodebaseSplitEnabled": true,
+  "generationRule": "Each physical codebase source is generated from firebase/kangsain-functions/functions/src during predeploy so repo/worktree path changes do not break imports.",
   "targetCodebases": {
     "functions-alimtalk": {
+      "physicalSource": "firebase/function-codebases/alimtalk",
       "sourceEntrypoint": "firebase/kangsain-functions/functions/src/exports/alimtalk.ts",
       "owns": [
         "scheduledProcessAlimtalkQueue",
@@ -16,6 +17,7 @@
       "forbidden": ["StudioMate writes", "Google Contacts writes", "private chart generation"]
     },
     "functions-private-chart": {
+      "physicalSource": "firebase/function-codebases/private-chart",
       "sourceEntrypoint": "firebase/kangsain-functions/functions/src/exports/privateChart.ts",
       "owns": [
         "scheduledSyncPrivateSurveyResponses",
@@ -35,6 +37,7 @@
       "forbidden": ["daily Alimtalk candidate selection", "StudioMate writes", "Google Contacts writes"]
     },
     "functions-sync": {
+      "physicalSource": "firebase/function-codebases/sync",
       "sourceEntrypoint": "firebase/kangsain-functions/functions/src/exports/sync.ts",
       "owns": [
         "scheduledSyncLecturesDaily",
@@ -53,6 +56,7 @@
       "forbidden": ["SOLAPI sends", "private chart report generation"]
     },
     "functions-app": {
+      "physicalSource": "firebase/function-codebases/app",
       "sourceEntrypoint": "firebase/kangsain-functions/functions/src/exports/app.ts",
       "owns": [
         "getInstructorHome",
@@ -68,5 +72,5 @@
       "forbidden": ["scheduled jobs", "external member-facing sends"]
     }
   },
-  "migrationRule": "Deploying separate Firebase codebases must be a separate go-live task with dry-run inventory, explicit function delete prevention, live smoke checks, and rollback notes."
+  "migrationRule": "Deploy physical codebases one at a time after prepare/build/validate and dry-run. Do not restore the default all-in-one source unless a rollback is intentional."
 }

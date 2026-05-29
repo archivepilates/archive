@@ -1,0 +1,13 @@
+{
+  "name": "archive-functions-app",
+  "version": "0.1.0",
+  "private": true,
+  "main": "lib/index.js",
+  "engines": {
+    "node": "22"
+  },
+  "dependencies": {
+    "firebase-admin": "^12.7.0",
+    "firebase-functions": "^7.2.5"
+  }
+}

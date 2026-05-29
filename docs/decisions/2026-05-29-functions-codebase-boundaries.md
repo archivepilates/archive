@@ -51,3 +51,21 @@ cd ../../.. && npm run validate:function-boundaries
 ```
 
 The validation script fails if a compiled export is missing from the manifest, a manifest function is not exported, or physical codebase split is accidentally enabled.
+
+## 2026-05-30 Physical Split Deployment
+
+The physical codebase split was enabled and deployed on 2026-05-30.
+
+- `functions-alimtalk`: 4 functions.
+- `functions-private-chart`: 13 functions.
+- `functions-sync`: 12 functions.
+- `functions-app`: 9 functions.
+- Total live functions verified by `functions:list`: 38.
+
+The old `default` single source is no longer the deployment source in root `firebase.json`.
+
+Each physical codebase source is generated during Firebase predeploy from `firebase/kangsain-functions/functions/src`. This keeps the deployment independent from a hardcoded local worktree path and prevents broken imports when another Codex thread runs from a different repo path.
+
+Operator Notion record:
+
+https://www.notion.so/ARCHIVE-IN-Functions-codebase-2026-05-30-36fd49eae4bf81c6901bf7c0b116ad85

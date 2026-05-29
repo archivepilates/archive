@@ -1,0 +1,139 @@
+<!doctype html>
+<html lang="ko">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1">
+  <title>ARCHIVE IN Functions Codebase Split Report</title>
+  <style>
+    :root {
+      --bg: #f7f3ed;
+      --paper: #ffffff;
+      --ink: #1f1f1f;
+      --muted: #6f6b66;
+      --line: #e6ded4;
+      --accent: #c85f18;
+      --soft: #fff4ea;
+    }
+    * { box-sizing: border-box; }
+    body {
+      margin: 0;
+      min-height: 100vh;
+      background: var(--bg);
+      color: var(--ink);
+      font-family: ui-sans-serif, system-ui, -apple-system, BlinkMacSystemFont, "Segoe UI", sans-serif;
+      line-height: 1.6;
+    }
+    main {
+      width: min(920px, calc(100% - 32px));
+      margin: 0 auto;
+      padding: 40px 0 56px;
+    }
+    header {
+      margin-bottom: 24px;
+      border-bottom: 1px solid var(--line);
+      padding-bottom: 20px;
+    }
+    h1 {
+      margin: 0 0 8px;
+      font-size: 28px;
+      line-height: 1.2;
+      letter-spacing: 0;
+    }
+    h2 {
+      margin: 28px 0 10px;
+      font-size: 18px;
+      letter-spacing: 0;
+    }
+    p { margin: 0 0 10px; }
+    .meta {
+      color: var(--muted);
+      font-size: 14px;
+    }
+    .panel {
+      background: var(--paper);
+      border: 1px solid var(--line);
+      border-radius: 8px;
+      padding: 20px;
+      box-shadow: 0 12px 28px rgba(31, 31, 31, 0.04);
+    }
+    .grid {
+      display: grid;
+      grid-template-columns: repeat(auto-fit, minmax(min(100%, 180px), 1fr));
+      gap: 12px;
+      margin: 16px 0 4px;
+    }
+    .metric {
+      border: 1px solid var(--line);
+      border-radius: 8px;
+      padding: 14px;
+      background: var(--soft);
+    }
+    .metric strong {
+      display: block;
+      font-size: 24px;
+      color: var(--accent);
+      line-height: 1.1;
+    }
+    ul {
+      margin: 8px 0 0;
+      padding-left: 20px;
+    }
+    code {
+      background: #f1ebe3;
+      border: 1px solid var(--line);
+      border-radius: 5px;
+      padding: 1px 5px;
+      font-size: 0.95em;
+    }
+    a { color: var(--accent); }
+  </style>
+</head>
+<body>
+  <main>
+    <header>
+      <h1>ARCHIVE IN Functions Codebase Split</h1>
+      <p class="meta">2026-05-30 · archive-pilates · Firebase Functions</p>
+    </header>
+
+    <section class="panel">
+      <h2>결론</h2>
+      <p>Firebase Functions를 단일 <code>default</code> codebase에서 네 개의 물리 codebase로 분리하고 배포까지 완료했다.</p>
+      <div class="grid">
+        <div class="metric"><strong>4</strong>알림톡 함수</div>
+        <div class="metric"><strong>13</strong>프라이빗 차트/설문 함수</div>
+        <div class="metric"><strong>12</strong>동기화 함수</div>
+        <div class="metric"><strong>9</strong>앱 callable 함수</div>
+      </div>
+    </section>
+
+    <section class="panel">
+      <h2>적용 내용</h2>
+      <ul>
+        <li><code>firebase/function-codebases/alimtalk</code>, <code>private-chart</code>, <code>sync</code>, <code>app</code> source를 추가했다.</li>
+        <li><code>firebase.json</code>의 Functions 설정을 네 codebase로 분리했다.</li>
+        <li><code>scripts/prepare-functions-codebase.mjs</code>를 추가해 predeploy 때 현재 repo 기준으로 source를 생성한다.</li>
+        <li><code>scripts/validate-functions-boundaries.mjs</code>가 Firebase 설정, manifest, compiled export 수를 함께 검증하도록 확장했다.</li>
+        <li>절대 worktree 경로에 의존하지 않도록 생성 기준을 repo root와 <code>RESOURCE_DIR</code>로 통일했다.</li>
+      </ul>
+    </section>
+
+    <section class="panel">
+      <h2>검증</h2>
+      <ul>
+        <li><code>npm run build:function-codebases</code> 통과.</li>
+        <li><code>npm run validate:function-boundaries</code> 통과.</li>
+        <li>Firebase Functions dry-run 통과.</li>
+        <li>네 codebase 순차 배포 통과.</li>
+        <li><code>functions:list</code> 기준 총 38개 함수가 네 codebase로 분리된 것을 확인했다.</li>
+        <li><code>/api/privateLessonReport</code>는 토큰 없음 400, <code>/s/not-existing-codebase-check</code>는 404로 함수 도달을 확인했다.</li>
+      </ul>
+    </section>
+
+    <section class="panel">
+      <h2>운영 기록</h2>
+      <p>Notion 운영 규칙 하위 페이지에 배포 기록을 남겼다.</p>
+      <p><a href="https://www.notion.so/ARCHIVE-IN-Functions-codebase-2026-05-30-36fd49eae4bf81c6901bf7c0b116ad85">ARCHIVE IN Functions codebase 분리 기록 2026-05-30</a></p>
+    </section>
+  </main>
+</body>
+</html>

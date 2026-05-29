@@ -7,6 +7,8 @@
     "sync:archive-dashboard-db": "node scripts/sync-archive-dashboard-db.mjs",
     "rebuild:member-360": "node scripts/rebuild-member-360-db.mjs",
     "verify:archivein-admin": "node scripts/verify-archivein-admin-firestore-access.mjs",
+    "prepare:function-codebases": "node scripts/prepare-functions-codebase.mjs all",
+    "build:function-codebases": "npm run prepare:function-codebases && node firebase/kangsain-functions/functions/node_modules/typescript/bin/tsc -p firebase/function-codebases/alimtalk/tsconfig.json && node firebase/kangsain-functions/functions/node_modules/typescript/bin/tsc -p firebase/function-codebases/private-chart/tsconfig.json && node firebase/kangsain-functions/functions/node_modules/typescript/bin/tsc -p firebase/function-codebases/sync/tsconfig.json && node firebase/kangsain-functions/functions/node_modules/typescript/bin/tsc -p firebase/function-codebases/app/tsconfig.json",
     "validate:function-boundaries": "node scripts/validate-functions-boundaries.mjs",
     "deploy:archivein-live": "bash scripts/deploy-archivein-live.sh",
     "process:admin-emergency-sync": "node scripts/process-admin-emergency-sync-requests.mjs"
