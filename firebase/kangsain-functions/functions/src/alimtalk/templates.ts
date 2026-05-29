@@ -20,6 +20,7 @@ export type SendableAlimtalkCandidateType =
   | "new_member"
   | "private_survey"
   | "group_survey"
+  | "instructor_lesson_material"
   | "private_lesson_report"
   | "inbody_report"
   | "ticket_expiring"
@@ -110,6 +111,7 @@ export const CANDIDATE_TEMPLATE_CODES: Record<SendableAlimtalkCandidateType, str
   new_member: ALIMTALK_TEMPLATES.new_member.code,
   private_survey: ALIMTALK_TEMPLATES.private_survey.code,
   group_survey: ALIMTALK_TEMPLATES.group_survey.code,
+  instructor_lesson_material: ALIMTALK_TEMPLATES.instructor_lesson_material.code,
   private_lesson_report: ALIMTALK_TEMPLATES.private_lesson_report.code,
   inbody_report: ALIMTALK_TEMPLATES.inbody_report.code,
   ticket_expiring: ALIMTALK_TEMPLATES.ticket_expiring.code,

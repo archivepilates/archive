@@ -29,6 +29,14 @@ export async function autoSendabilityIssue(candidate: AlimtalkCandidateDoc, toda
       !candidate.payload?.archiveMethodId
     )
       return "강사레슨 수업자료 관리번호 없음";
+    if (
+      candidate.type === "instructor_lesson_material" &&
+      !isValidInstructorLessonManagementNumber(
+        String(candidate.payload?.managementNumber || candidate.payload?.materialNumber || candidate.payload?.archiveMethodId || ""),
+      )
+    ) {
+      return "강사레슨 수업자료 관리번호 형식 오류";
+    }
   }
   const buttonUrlIssue = solapiButtonUrlLengthIssue({
     rules: rule?.buttonUrlRules,
@@ -83,4 +91,8 @@ function groupSurveyTargetUrl(surveyId: string, accessToken: string): string {
 
 function methodMaterialTargetUrl(managementNumber: string): string {
   return `https://in.archivepilates.com/method/${encodeURIComponent(managementNumber)}`;
+}
+
+function isValidInstructorLessonManagementNumber(managementNumber: string): boolean {
+  return /^[a-z0-9]+(?:-[a-z0-9]+)*-\d{6}$/.test(managementNumber);
 }

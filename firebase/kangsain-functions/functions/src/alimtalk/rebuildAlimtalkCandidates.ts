@@ -1,6 +1,6 @@
 import { createHash, createHmac } from "node:crypto";
 import { logger } from "firebase-functions";
-import type { AlimtalkCandidateDoc, BookingDoc, MemberProfileDoc } from "../types/models";
+import type { AlimtalkCandidateDoc, BookingDoc, LectureDoc, MemberProfileDoc } from "../types/models";
 import { db } from "../config/firebase";
 import { privateSurveyWebhookSecret } from "../config/secrets";
 import { refs } from "../firestore/refs";
@@ -25,9 +25,10 @@ export async function rebuildAlimtalkCandidatesForRange(input: {
   startDate: string;
   endDate: string;
 }): Promise<{ candidates: number; candidateIds: string[] }> {
-  const [profilesSnap, bookingIndex] = await Promise.all([
+  const [profilesSnap, bookingIndex, lectureIndex] = await Promise.all([
     refs.memberProfiles().where("studioId", "==", input.studioId).get(),
     loadBookingIndex(input.studioId),
+    loadLectureIndex(input.studioId),
   ]);
 
   const writes: Array<Promise<unknown>> = [];
@@ -46,6 +47,9 @@ export async function rebuildAlimtalkCandidatesForRange(input: {
       if (groupSurveyCandidate) {
         const enqueued = await enqueueSendableCandidate(groupSurveyCandidate, candidateIds, writes);
         if (enqueued) writes.push(upsertGroupSurveyRequest(groupSurveyCandidate));
+      }
+      for (const candidate of instructorLessonMaterialCandidatesForDate(profile, sourceDate, bookingIndex, lectureIndex)) {
+        await enqueueSendableCandidate(candidate, candidateIds, writes);
       }
       const longAbsenceCandidate = await longAbsenceCandidateForDate(profile, sourceDate, bookingIndex);
       if (longAbsenceCandidate) {
@@ -113,6 +117,7 @@ export async function rebuildAlimtalkCandidatesForRange(input: {
 }
 
 type BookingIndex = Map<string, BookingDoc[]>;
+type LectureIndex = Map<string, LectureDoc>;
 
 async function loadBookingIndex(studioId: string): Promise<BookingIndex> {
   const snap = await refs.bookings().where("studioId", "==", studioId).get();
@@ -126,6 +131,17 @@ async function loadBookingIndex(studioId: string): Promise<BookingIndex> {
   }
   for (const [memberId, bookingList] of index.entries()) {
     index.set(memberId, canonicalizeBookings(bookingList));
+  }
+  return index;
+}
+
+async function loadLectureIndex(studioId: string): Promise<LectureIndex> {
+  const snap = await refs.lectures().where("studioId", "==", studioId).get();
+  const index: LectureIndex = new Map();
+  for (const doc of snap.docs) {
+    const lecture = doc.data();
+    if (!lecture.lectureId) continue;
+    index.set(lecture.lectureId, lecture);
   }
   return index;
 }
@@ -238,6 +254,76 @@ function directTicketCandidates(profile: MemberProfileDoc, sourceDate: string): 
   return currentLessonProfileTickets(profile, sourceDate)
     .map((ticket) => directTicketCandidate(profile, ticket, sourceDate))
     .filter((candidate): candidate is AlimtalkCandidateDoc => Boolean(candidate));
+}
+
+function instructorLessonMaterialCandidatesForDate(
+  profile: MemberProfileDoc,
+  sourceDate: string,
+  bookingIndex: BookingIndex,
+  lectureIndex: LectureIndex,
+): AlimtalkCandidateDoc[] {
+  if (!profile.memberId || !profile.name || !profile.phone) return [];
+  const lessonDate = addDays(sourceDate, 1);
+  return memberBookings(bookingIndex, profile.memberId)
+    .filter((booking) => booking.appStatus === "reserved" && booking.lectureDate === lessonDate && isInstructorLessonBooking(booking))
+    .map((booking) => instructorLessonMaterialCandidate(profile, booking, sourceDate, lectureIndex))
+    .filter((candidate): candidate is AlimtalkCandidateDoc => Boolean(candidate));
+}
+
+function instructorLessonMaterialCandidate(
+  profile: MemberProfileDoc,
+  booking: BookingDoc,
+  sourceDate: string,
+  lectureIndex: LectureIndex,
+): AlimtalkCandidateDoc | null {
+  const lecture = lectureIndex.get(booking.lectureId);
+  const title = lecture?.title || "";
+  const topicSlug = instructorLessonTopicSlug(title);
+  if (!topicSlug) return null;
+  const lessonDateShort = compactDate6(booking.lectureDate);
+  if (!lessonDateShort) return null;
+  const managementNumber = `${topicSlug}-${lessonDateShort}`;
+  if (!isValidInstructorLessonManagementNumber(managementNumber)) return null;
+  const targetUrl = `https://in.archivepilates.com/method/${encodeURIComponent(managementNumber)}`;
+  const shortLinkId = shortLinkIdForTarget("method_material", targetUrl);
+  return {
+    candidateId: `instructor_lesson_material_${stableHash({
+      memberId: profile.memberId,
+      bookingId: booking.bookingId,
+      managementNumber,
+    }).slice(0, 24)}`,
+    studioId: profile.studioId,
+    memberId: profile.memberId,
+    memberName: profile.name,
+    memberPhone: profile.phone || "",
+    type: "instructor_lesson_material",
+    status: "candidate",
+    templateCode: CANDIDATE_TEMPLATE_CODES.instructor_lesson_material,
+    title: "강사레슨 수업자료",
+    reason: `강사레슨 D-1 · ${managementNumber}`,
+    sourceDate,
+    payload: {
+      memberName: profile.name,
+      bookingId: booking.bookingId,
+      lectureId: booking.lectureId,
+      lectureDate: booking.lectureDate,
+      lessonDate: booking.lectureDate,
+      lessonTitle: title,
+      ticketName: booking.ticketName || "",
+      staffId: booking.staffId || "",
+      staffName: booking.staffName || lecture?.staffName || "",
+      managementNumber,
+      materialNumber: managementNumber,
+      archiveMethodId: managementNumber,
+      shortLinkId,
+      shortUrl: shortUrlForId(shortLinkId),
+    },
+    attempts: 0,
+    maxAttempts: 2,
+    lastError: null,
+    createdAt: nowTimestamp(),
+    updatedAt: nowTimestamp(),
+  };
 }
 
 async function groupSurveyCandidateForDate(
@@ -825,6 +911,39 @@ function expiryDateText(value: NonNullable<MemberProfileDoc["activeTickets"]>[nu
   const date = value?.toDate?.();
   if (!date) return "";
   return new Intl.DateTimeFormat("sv-SE", { timeZone: "Asia/Seoul" }).format(date);
+}
+
+function compactDate6(value: string): string {
+  const normalized = normalizedDateText(value);
+  if (!normalized) return "";
+  return `${normalized.slice(2, 4)}${normalized.slice(5, 7)}${normalized.slice(8, 10)}`;
+}
+
+function instructorLessonTopicSlug(title: string): string {
+  const words = String(title || "")
+    .match(/[A-Za-z][A-Za-z0-9_-]*/g)
+    ?.map((word) =>
+      word
+        .trim()
+        .toLowerCase()
+        .replace(/_/g, "-")
+        .replace(/[^a-z0-9-]/g, ""),
+    )
+    .filter(Boolean);
+  return words?.join("-") || "";
+}
+
+function normalizedDateText(value: string): string {
+  const text = String(value || "").trim();
+  if (!text) return "";
+  const match = text.match(/(\d{4})[-./년\s]*(\d{1,2})[-./월\s]*(\d{1,2})/);
+  if (!match) return "";
+  const [, year, month, day] = match;
+  return `${year}-${month.padStart(2, "0")}-${day.padStart(2, "0")}`;
+}
+
+function isValidInstructorLessonManagementNumber(managementNumber: string): boolean {
+  return /^[a-z0-9]+(?:-[a-z0-9]+)*-\d{6}$/.test(managementNumber);
 }
 
 function reservationOpenEndDate(baseDate: string): string {
