@@ -905,7 +905,7 @@ async function ensureChartRequestForBooking(booking: BookingDoc): Promise<{ requ
   const [staffSnap, intakeSummary, sessionNumber] = await Promise.all([
     booking.staffId ? refs.staff(booking.staffId).get() : Promise.resolve(null as any),
     latestPrivateSurveyForBooking(booking),
-    nextSessionNumber(booking.memberId),
+    nextSessionNumber(booking),
   ]);
   const staff = staffSnap?.data?.();
   const token = accessTokenFor(requestId);
@@ -981,6 +981,12 @@ async function submitPrivateLessonChart(
   const recordRef = refs.privateLessonChartRecord(chartRequest.requestId);
   const snap = await recordRef.get();
   const base = snap.data() || (await upsertChartRecordBase(chartRequest));
+  if (mode === "pre" && (chartRequest.preStatus === "submitted" || base.preSubmittedAt)) {
+    throw new Error("이미 제출된 수업 전 계획입니다. 기존 기록 보호를 위해 다시 제출할 수 없습니다.");
+  }
+  if (mode === "post" && (chartRequest.postStatus === "submitted" || base.postSubmittedAt)) {
+    throw new Error("이미 제출된 수업 후 기록입니다. 기존 기록 보호를 위해 다시 제출할 수 없습니다.");
+  }
   const now = nowTimestamp();
   const recordPatch =
     mode === "pre"
@@ -1320,8 +1326,14 @@ function publicChartRequest(
   mode: PrivateLessonChartMode,
   record: PrivateLessonChartRecordDoc | null = null,
 ): Record<string, unknown> {
-  const reportStatus = record?.publicReportApproval?.status ||
-    (record?.gptStatus === "draft_created" ? "ready" : record?.gptStatus || "pending");
+  const approvalStatus = record?.publicReportApproval?.status || "";
+  const reportReady = record?.gptStatus === "draft_created" &&
+    Boolean(record.publicReportUrl || record.publicReportCanonicalUrl);
+  const reportStatus = approvalStatus && approvalStatus !== "pending"
+    ? approvalStatus
+    : reportReady
+      ? "ready"
+      : record?.gptStatus || "pending";
   return {
     requestId: chartRequest.requestId,
     mode,
@@ -1333,6 +1345,15 @@ function publicChartRequest(
     preStatus: chartRequest.preStatus,
     postStatus: chartRequest.postStatus,
     intakeSummary: chartRequest.intakeSummary || null,
+    existingAnswers: record
+      ? {
+        pre: record.prePlan || null,
+        post: record.postRecord || null,
+      }
+      : { pre: null, post: null },
+    locked: mode === "pre"
+      ? chartRequest.preStatus === "submitted" || Boolean(record?.preSubmittedAt)
+      : chartRequest.postStatus === "submitted" || Boolean(record?.postSubmittedAt),
     report: record
       ? {
         recordId: record.recordId,
@@ -1369,11 +1390,18 @@ async function latestPrivateSurveyForBooking(booking: BookingDoc): Promise<Priva
   );
 }
 
-async function nextSessionNumber(memberId: string): Promise<number> {
-  if (!memberId) return 1;
-  const snap = await refs.privateLessonChartRecords().where("memberId", "==", memberId).limit(200).get();
-  const max = snap.docs.reduce((acc, doc) => Math.max(acc, Number(doc.data().sessionNumber || 0)), 0);
-  return max + 1;
+async function nextSessionNumber(booking: BookingDoc): Promise<number> {
+  if (!booking.memberId) return 1;
+  const snap = await refs.bookings().where("memberId", "==", booking.memberId).limit(500).get();
+  const currentStart = booking.lectureStartAt?.toMillis?.() || 0;
+  const canonical = canonicalPrivateBookings(snap.docs.map((doc) => doc.data()))
+    .filter((item) => item.appStatus === "reserved")
+    .filter((item) => !["absent", "late_cancel"].includes(item.attendanceStatus));
+  if (currentStart) {
+    return canonical.filter((item) => (item.lectureStartAt?.toMillis?.() || 0) < currentStart).length + 1;
+  }
+  const currentDate = booking.lectureDate || "";
+  return canonical.filter((item) => (item.lectureDate || "") < currentDate).length + 1;
 }
 
 function isPrivateBooking(booking: BookingDoc): boolean {

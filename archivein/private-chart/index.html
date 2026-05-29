@@ -211,7 +211,7 @@
     .report-panel {
       display: grid;
       gap: 12px;
-      margin-top: 18px;
+      margin-top: 14px;
       padding: 16px;
       border: 1px solid var(--line);
       border-radius: var(--radius);
@@ -246,6 +246,17 @@
       background: var(--surface);
       color: var(--text);
       border: 1px solid var(--line);
+    }
+
+    .locked-note {
+      margin-top: 16px;
+      padding: 12px;
+      border: 1px solid var(--line);
+      border-radius: var(--radius);
+      background: var(--accent-weak);
+      color: var(--accent);
+      font-size: 14px;
+      font-weight: 700;
     }
 
     .actions {
@@ -303,11 +314,11 @@
 
     <form id="form" class="hidden">
       <div id="sections"></div>
-      <div id="reportPanel" class="report-panel hidden" aria-live="polite"></div>
       <p class="status" id="status"></p>
       <div class="actions">
         <button type="submit" id="submitButton">제출</button>
       </div>
+      <div id="reportPanel" class="report-panel hidden" aria-live="polite"></div>
     </form>
   </main>
 
@@ -391,9 +402,45 @@
       ].join("");
       summary.innerHTML = intakeHtml(data.intakeSummary);
       sections.innerHTML = (isPost ? postFields : preFields).map(fieldHtml).join("");
+      applyExistingAnswers(data);
+      applyLockedState(data);
       renderReportPanel(data);
       form.classList.remove("hidden");
       form.addEventListener("submit", submit);
+    }
+
+    function applyExistingAnswers(data) {
+      const answers = data.mode === "post" ? data.existingAnswers?.post : data.existingAnswers?.pre;
+      if (!answers || typeof answers !== "object") return;
+      for (const [key, value] of Object.entries(answers)) {
+        const values = Array.isArray(value) ? value.map(String) : [String(value ?? "")];
+        const field = form.elements[key];
+        if (!field) continue;
+        if (field instanceof RadioNodeList) {
+          values.forEach((item) => {
+            const input = Array.from(field).find((node) => node.value === item);
+            if (input) input.checked = true;
+          });
+          if ("value" in field && values.length === 1) field.value = values[0];
+          continue;
+        }
+        if (field instanceof HTMLTextAreaElement || field instanceof HTMLInputElement) {
+          field.value = values[0] || "";
+        }
+      }
+    }
+
+    function applyLockedState(data) {
+      if (!data.locked) return;
+      form.querySelectorAll("input, textarea").forEach((input) => {
+        input.disabled = true;
+      });
+      submitButton.disabled = true;
+      submitButton.textContent = data.mode === "post" ? "수업 후 기록 제출 완료" : "수업 전 계획 제출 완료";
+      const note = document.createElement("p");
+      note.className = "locked-note";
+      note.textContent = "이미 제출된 기록입니다. 기존 내용 보호를 위해 다시 제출할 수 없습니다.";
+      sections.after(note);
     }
 
     function renderReportPanel(data) {
@@ -475,6 +522,10 @@
     async function submit(event) {
       event.preventDefault();
       if (state.loading) return;
+      if (state.data?.locked) {
+        setStatus("이미 제출된 기록입니다. 기존 내용 보호를 위해 다시 제출할 수 없습니다.", true);
+        return;
+      }
       state.loading = true;
       submitButton.disabled = true;
       setStatus("제출 중입니다.", false);
