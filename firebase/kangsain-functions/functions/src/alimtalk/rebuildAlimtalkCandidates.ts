@@ -19,6 +19,7 @@ import {
   type SendableAlimtalkCandidateType,
 } from "./templates";
 import { alimtalkDedupeKey, findCompletedDuplicateForCandidate } from "./dedupe";
+import { isValidInstructorLessonManagementNumber as isValidInstructorLessonManagementNumberFromUtil } from "./instructorLessonManagement";
 
 export async function rebuildAlimtalkCandidatesForRange(input: {
   studioId: string;
@@ -283,7 +284,7 @@ function instructorLessonMaterialCandidate(
   const lessonDateShort = compactDate6(booking.lectureDate);
   if (!lessonDateShort) return null;
   const managementNumber = `${topicSlug}-${lessonDateShort}`;
-  if (!isValidInstructorLessonManagementNumber(managementNumber)) return null;
+  if (!isValidInstructorLessonManagementNumberFromUtil(managementNumber)) return null;
   const targetUrl = `https://in.archivepilates.com/method/${encodeURIComponent(managementNumber)}`;
   const shortLinkId = shortLinkIdForTarget("method_material", targetUrl);
   return {
@@ -920,17 +921,23 @@ function compactDate6(value: string): string {
 }
 
 function instructorLessonTopicSlug(title: string): string {
-  const words = String(title || "")
-    .match(/[A-Za-z][A-Za-z0-9_-]*/g)
-    ?.map((word) =>
-      word
-        .trim()
-        .toLowerCase()
-        .replace(/_/g, "-")
-        .replace(/[^a-z0-9-]/g, ""),
-    )
-    .filter(Boolean);
-  return words?.join("-") || "";
+  const normalizedText = String(title || "").toLowerCase().replace(/_/g, "-");
+  const tokens = normalizedText
+    .split(/[^a-z0-9]+/g)
+    .flatMap((token) => token.split("-").filter(Boolean));
+  const topicWords: string[] = [];
+  let hasStarted = false;
+  for (const token of tokens) {
+    if (!/^[a-z]+$/.test(token)) {
+      if (!hasStarted) {
+        continue;
+      }
+      break;
+    }
+    hasStarted = true;
+    topicWords.push(token);
+  }
+  return topicWords.join("-") || "";
 }
 
 function normalizedDateText(value: string): string {
@@ -940,10 +947,6 @@ function normalizedDateText(value: string): string {
   if (!match) return "";
   const [, year, month, day] = match;
   return `${year}-${month.padStart(2, "0")}-${day.padStart(2, "0")}`;
-}
-
-function isValidInstructorLessonManagementNumber(managementNumber: string): boolean {
-  return /^[a-z0-9]+(?:-[a-z0-9]+)*-\d{6}$/.test(managementNumber);
 }
 
 function reservationOpenEndDate(baseDate: string): string {

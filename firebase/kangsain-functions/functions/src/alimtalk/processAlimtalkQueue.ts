@@ -11,6 +11,7 @@ import { ALIMTALK_TEMPLATE_CHANNEL_IDS, alimtalkDedupePolicy } from "./templates
 import { autoSendabilityIssue } from "./eligibility";
 import { alimtalkDedupeKey, findCompletedDuplicateForCandidate, normalizePhone } from "./dedupe";
 import { isAlimtalkTemplateApproved } from "./templateStatus";
+import { normalizeInstructorLessonManagementNumber } from "./instructorLessonManagement";
 
 const SOLAPI_SEND_URL = "https://api.solapi.com/messages/v4/send-many/detail";
 const PROCESSING_STALE_MS = 10 * 60 * 1000;
@@ -242,7 +243,9 @@ async function templateVariables(candidate: AlimtalkCandidateDoc): Promise<Recor
   const memberName = String(payload.memberName || candidate.memberName || "");
   const surveyId = String(payload.surveyId || payload.responseId || "");
   const accessToken = String(payload.accessToken || "");
-  const managementNumber = String(payload.managementNumber || payload.materialNumber || payload.archiveMethodId || "");
+  const managementNumber = normalizeInstructorLessonManagementNumber(
+    String(payload.managementNumber || payload.materialNumber || payload.archiveMethodId || ""),
+  );
   const shortLinkId = await shortLinkIdForCandidate(candidate, surveyId, accessToken, managementNumber);
   const reportLinkId = await reportLinkIdForCandidate(candidate);
   const inbodyLinkId = await inbodyLinkIdForCandidate(candidate);
@@ -355,22 +358,24 @@ async function shortLinkIdForCandidate(
   managementNumber: string,
 ): Promise<string> {
   const existing = String(candidate.payload?.shortLinkId || "");
-  if (existing) return existing;
+  if (candidate.type !== "instructor_lesson_material" && existing) return existing;
   if (candidate.type === "group_survey" && surveyId && accessToken) {
     const link = await ensureShortLink({
       type: "group_survey",
       targetUrl: groupSurveyTargetUrl(surveyId, accessToken),
       sourceId: candidate.candidateId,
     });
-    await refs
-      .alimtalkCandidate(candidate.candidateId)
-      .set(
-        {
-          payload: { ...candidate.payload, shortLinkId: link.linkId, shortUrl: link.shortUrl },
-          updatedAt: nowTimestamp(),
-        },
-        { merge: true },
-      );
+    if (!existing) {
+      await refs
+        .alimtalkCandidate(candidate.candidateId)
+        .set(
+          {
+            payload: { ...candidate.payload, shortLinkId: link.linkId, shortUrl: link.shortUrl },
+            updatedAt: nowTimestamp(),
+          },
+          { merge: true },
+        );
+    }
     return link.linkId;
   }
   if (candidate.type === "instructor_lesson_material" && managementNumber) {

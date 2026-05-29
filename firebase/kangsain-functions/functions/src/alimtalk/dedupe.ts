@@ -1,6 +1,7 @@
 import { refs } from "../firestore/refs";
 import type { AlimtalkCandidateDoc } from "../types/models";
 import { stableHash } from "../utils/hash";
+import { normalizeInstructorLessonManagementNumber } from "./instructorLessonManagement";
 
 export async function findCompletedDuplicate(dedupeKey: string, windowDays: number | null): Promise<string> {
   if (!dedupeKey) return "";
@@ -76,7 +77,9 @@ function dedupeScope(candidate: AlimtalkCandidateDoc): Record<string, string> {
   if (type === "instructor_lesson_material") {
     return {
       lessonDate: String(payload.lessonDate || payload.classDate || payload.sourceDate || candidate.sourceDate || ""),
-      managementNumber: String(payload.managementNumber || payload.materialNumber || payload.archiveMethodId || ""),
+      managementNumber: normalizeInstructorLessonManagementNumber(
+        String(payload.managementNumber || payload.materialNumber || payload.archiveMethodId || ""),
+      ),
     };
   }
   if (type === "private_lesson_report") {

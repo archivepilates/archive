@@ -4,6 +4,7 @@ import type { AlimtalkCandidateDoc } from "../types/models";
 import { shortLinkIdForTarget } from "../utils/shortLinks";
 import { isAlimtalkTemplateApproved } from "./templateStatus";
 import { alimtalkTemplateTargetRule, solapiButtonUrlLengthIssue } from "./templateTargetRules";
+import { isValidInstructorLessonManagementNumber, normalizeInstructorLessonManagementNumber } from "./instructorLessonManagement";
 
 export async function autoSendabilityIssue(candidate: AlimtalkCandidateDoc, today: string): Promise<string> {
   const rule = alimtalkTemplateTargetRule(candidate.type);
@@ -23,18 +24,13 @@ export async function autoSendabilityIssue(candidate: AlimtalkCandidateDoc, toda
     }
   }
   if (rule?.requiresManagementNumber) {
-    if (
-      !candidate.payload?.managementNumber &&
-      !candidate.payload?.materialNumber &&
-      !candidate.payload?.archiveMethodId
-    )
-      return "강사레슨 수업자료 관리번호 없음";
-    if (
-      candidate.type === "instructor_lesson_material" &&
-      !isValidInstructorLessonManagementNumber(
-        String(candidate.payload?.managementNumber || candidate.payload?.materialNumber || candidate.payload?.archiveMethodId || ""),
-      )
-    ) {
+    const rawManagementNumber = String(
+      candidate.payload?.managementNumber || candidate.payload?.materialNumber || candidate.payload?.archiveMethodId || "",
+    );
+    if (!rawManagementNumber) return "강사레슨 수업자료 관리번호 없음";
+    const managementNumber = normalizeInstructorLessonManagementNumber(rawManagementNumber);
+    if (!managementNumber) return "강사레슨 수업자료 관리번호 형식 오류";
+    if (candidate.type === "instructor_lesson_material" && !isValidInstructorLessonManagementNumber(managementNumber)) {
       return "강사레슨 수업자료 관리번호 형식 오류";
     }
   }
@@ -52,7 +48,9 @@ function candidateTemplateVariables(candidate: AlimtalkCandidateDoc): Record<str
   const payload = candidate.payload || {};
   const surveyId = String(payload.surveyId || payload.responseId || "");
   const accessToken = String(payload.accessToken || "");
-  const managementNumber = String(payload.managementNumber || payload.materialNumber || payload.archiveMethodId || "");
+  const managementNumber = normalizeInstructorLessonManagementNumber(
+    String(payload.managementNumber || payload.materialNumber || payload.archiveMethodId || ""),
+  );
   const reportLinkId = String(payload.reportLinkId || "");
   const inbodyLinkId = String(payload.inbodyLinkId || "");
   return {
@@ -91,8 +89,4 @@ function groupSurveyTargetUrl(surveyId: string, accessToken: string): string {
 
 function methodMaterialTargetUrl(managementNumber: string): string {
   return `https://in.archivepilates.com/method/${encodeURIComponent(managementNumber)}`;
-}
-
-function isValidInstructorLessonManagementNumber(managementNumber: string): boolean {
-  return /^[a-z0-9]+(?:-[a-z0-9]+)*-\d{6}$/.test(managementNumber);
 }

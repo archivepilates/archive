@@ -41,21 +41,32 @@ export async function ensureShortLink(input: {
 }): Promise<{ linkId: string; shortUrl: string }> {
   assertAllowedTargetUrl(input.targetUrl);
   const linkId = shortLinkIdForTarget(input.type, input.targetUrl);
-  await db
-    .collection("shortLinks")
-    .doc(linkId)
-    .set(
+  const ref = db.collection("shortLinks").doc(linkId);
+  const sourceId = input.sourceId || "";
+  await db.runTransaction(async (tx) => {
+    const now = nowTimestamp();
+    const snap = await tx.get(ref);
+    const previous = snap.data() || {};
+    const sourceIds = Array.isArray(previous.sourceIds)
+      ? previous.sourceIds.filter((value): value is string => typeof value === "string" && Boolean(value))
+      : [];
+    if (sourceId && !sourceIds.includes(sourceId)) sourceIds.push(sourceId);
+    tx.set(
+      ref,
       {
         linkId,
         type: input.type,
         targetUrl: input.targetUrl,
-        sourceId: input.sourceId || "",
+        sourceId: previous.sourceId || sourceId,
+        latestSourceId: sourceId || previous.latestSourceId || previous.sourceId || "",
+        sourceIds,
         active: true,
-        updatedAt: nowTimestamp(),
-        createdAt: nowTimestamp(),
+        updatedAt: now,
+        createdAt: previous.createdAt || now,
       },
       { merge: true },
     );
+  });
   return { linkId, shortUrl: shortUrlForId(linkId) };
 }
 
