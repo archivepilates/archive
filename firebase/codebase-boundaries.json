@@ -1,0 +1,72 @@
+{
+  "phase": "export-boundary-ready",
+  "project": "archive-pilates",
+  "currentActiveFirebaseCodebase": "default",
+  "physicalCodebaseSplitEnabled": false,
+  "reasonPhysicalSplitDisabled": "Function names must stay stable until each target codebase is deployed with an explicit no-delete migration plan.",
+  "targetCodebases": {
+    "functions-alimtalk": {
+      "sourceEntrypoint": "firebase/kangsain-functions/functions/src/exports/alimtalk.ts",
+      "owns": [
+        "scheduledProcessAlimtalkQueue",
+        "scheduledQueueAndSendAlimtalkDaily",
+        "scheduledSyncAlimtalkTemplateStatuses",
+        "approveAlimtalkBatch"
+      ],
+      "forbidden": ["StudioMate writes", "Google Contacts writes", "private chart generation"]
+    },
+    "functions-private-chart": {
+      "sourceEntrypoint": "firebase/kangsain-functions/functions/src/exports/privateChart.ts",
+      "owns": [
+        "scheduledSyncPrivateSurveyResponses",
+        "scheduledProcessStaffSurveyAlimtalks",
+        "scheduledSyncPrivateSurveyNotion",
+        "scheduledCreatePrivateLessonChartRequests",
+        "scheduledGeneratePrivateLessonChartReports",
+        "scheduledEnqueuePrivateLessonReportAlimtalks",
+        "ingestPrivateSurveyResponse",
+        "privateSurveyResponseView",
+        "privateLessonChartApi",
+        "privateLessonReportView",
+        "notionPrivateLessonReportWebhook",
+        "redirectShortLink",
+        "processPrivateSurveyIntake"
+      ],
+      "forbidden": ["daily Alimtalk candidate selection", "StudioMate writes", "Google Contacts writes"]
+    },
+    "functions-sync": {
+      "sourceEntrypoint": "firebase/kangsain-functions/functions/src/exports/sync.ts",
+      "owns": [
+        "scheduledSyncLecturesDaily",
+        "scheduledPollManagerNotices",
+        "scheduledProcessWriteQueue",
+        "scheduledProcessContactSyncJobs",
+        "scheduledAttendanceReminder",
+        "scheduledSyncDashboardDaily",
+        "scheduledPreSecurityRawMirror",
+        "syncDashboardNow",
+        "adminSyncLecturesRange",
+        "adminSyncManagerStaffs",
+        "adminPollManagerNotices",
+        "processAdminSyncRequest"
+      ],
+      "forbidden": ["SOLAPI sends", "private chart report generation"]
+    },
+    "functions-app": {
+      "sourceEntrypoint": "firebase/kangsain-functions/functions/src/exports/app.ts",
+      "owns": [
+        "getInstructorHome",
+        "loginStaffWithPin",
+        "setupStaffPinWithTempCode",
+        "submitBookingAttendance",
+        "submitMemberMemo",
+        "getMemberMemoHistory",
+        "searchMembers",
+        "registerFcmToken",
+        "adminIssueStaffTempCode"
+      ],
+      "forbidden": ["scheduled jobs", "external member-facing sends"]
+    }
+  },
+  "migrationRule": "Deploying separate Firebase codebases must be a separate go-live task with dry-run inventory, explicit function delete prevention, live smoke checks, and rollback notes."
+}

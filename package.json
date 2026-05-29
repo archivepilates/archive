@@ -7,6 +7,7 @@
     "sync:archive-dashboard-db": "node scripts/sync-archive-dashboard-db.mjs",
     "rebuild:member-360": "node scripts/rebuild-member-360-db.mjs",
     "verify:archivein-admin": "node scripts/verify-archivein-admin-firestore-access.mjs",
+    "validate:function-boundaries": "node scripts/validate-functions-boundaries.mjs",
     "deploy:archivein-live": "bash scripts/deploy-archivein-live.sh",
     "process:admin-emergency-sync": "node scripts/process-admin-emergency-sync-requests.mjs"
   },
