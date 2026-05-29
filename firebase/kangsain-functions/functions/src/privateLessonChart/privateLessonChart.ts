@@ -1892,7 +1892,6 @@ function renderPrivateLessonReportPage(
     `</div></section>` +
     `<section><div class="section-title"><h2>기능 점수</h2><span class="hint">1-5 기준</span></div>${scores.length ? `<div class="scores">` +
     scores.map(([name, score]) => `<div class="score-row"><span>${escapeHtml(String(name))}</span><div class="bar"><div class="fill" style="width:${Math.max(0, Math.min(100, Number(score) * 20))}%"></div></div><b>${escapeHtml(String(score))}</b></div>`).join("") + `</div>` : "<p class=\"note\">아직 입력된 점수가 없습니다.</p>"}</section>` +
-    `<section><div class="section-title"><h2>다음 수업 방향</h2></div><p class="note">${nextDirection}</p></section>` +
     `<p class="footer">본 리포트는 프라이빗 회원 수업 기록 기준으로 생성되었습니다.<br><span class=\"copy\">${escapeHtml(reportVisibleUrl)}</span></p>` +
     `</main></body></html>`;
 }
