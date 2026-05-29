@@ -1,5 +1,6 @@
 firebase/kangsain-functions/functions/node_modules/
 firebase/kangsain-functions/functions/lib/
+firebase/function-codebases/*/node_modules
 firebase/function-codebases/*/node_modules/
 firebase/function-codebases/*/src/
 firebase/function-codebases/*/lib/
