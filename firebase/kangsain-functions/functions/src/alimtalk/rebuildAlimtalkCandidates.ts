@@ -471,6 +471,7 @@ async function longAbsenceCandidateForDate(
   if (hasHoldingTicket(profile)) return null;
   const activeTickets = currentLessonProfileTickets(profile, sourceDate);
   if (!activeTickets.length) return null;
+  if (hasUpcomingReservedBooking(profile.memberId, sourceDate, bookingIndex)) return null;
   const lastAttendance = lastAttendedBooking(profile.memberId, sourceDate, bookingIndex);
   if (!lastAttendance) return null;
   const absenceDays = daysBetweenDateStrings(lastAttendance.lectureDate, sourceDate);
@@ -524,6 +525,15 @@ function lastAttendedBooking(memberId: string, sourceDate: string, bookingIndex:
       return (b.lectureStartAt?.toMillis() || 0) - (a.lectureStartAt?.toMillis() || 0);
     });
   return attended[0] || null;
+}
+
+function hasUpcomingReservedBooking(memberId: string, sourceDate: string, bookingIndex: BookingIndex): boolean {
+  return memberBookings(bookingIndex, memberId).some(
+    (booking) =>
+      booking.appStatus === "reserved" &&
+      booking.lectureDate >= sourceDate &&
+      !isInstructorLessonBooking(booking),
+  );
 }
 
 function firstUpcomingPrivateBookingInReservationWindow(

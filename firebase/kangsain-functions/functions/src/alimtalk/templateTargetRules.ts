@@ -245,6 +245,7 @@ export const ALIMTALK_TEMPLATE_TARGET_RULES: Partial<Record<AlimtalkCandidateTyp
       "활성 수업 수강권 없음",
       "수강권 정지중/중지/홀딩 상태",
       "출석 완료 이력 없음",
+      "발송 기준일 이후 예정 예약 있음",
       "마지막 출석 완료일이 7일 미만",
       "동일 회원 장기 미방문 안내 14일 내 발송 이력 있음",
       "SOLAPI 미승인 템플릿",
