@@ -1,0 +1,143 @@
+<!doctype html>
+<html lang="ko">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover">
+<title>순환 피드백 큐카드 | ARCHIVE METHOD</title>
+<meta name="theme-color" content="#fbfaf7">
+<meta name="description" content="ARCHIVE METHOD 강사레슨 피드백 큐카드 - 순환">
+<link rel="preconnect" href="https://cdn.jsdelivr.net">
+<link rel="stylesheet" href="https://cdn.jsdelivr.net/gh/orioncactus/pretendard/dist/web/static/pretendard.css">
+<style>
+:root{--bg:#fbfaf7;--paper:#fff;--ink:#1f1d1a;--muted:#716b63;--quiet:#9c9389;--line:#e7dfd6;--soft:#f3eee8;--accent:#f06b1a;--dark:#211d19;--green:#4f7f67;--blue:#566f8f;--radius:14px;--shadow:0 10px 32px rgba(44,37,30,.08)}*{box-sizing:border-box}html{scroll-behavior:smooth}body{margin:0;background:var(--bg);color:var(--ink);font-family:"Pretendard",-apple-system,BlinkMacSystemFont,system-ui,sans-serif;font-size:15px;line-height:1.62;word-break:keep-all;-webkit-font-smoothing:antialiased}.page{max-width:680px;margin:0 auto;padding:28px 18px 92px}.progress{position:fixed;inset:0 auto auto 0;height:3px;width:0;background:var(--accent);z-index:50}.top{padding:22px 0 20px;border-bottom:1px solid var(--line)}.kicker{color:var(--accent);font-size:11px;font-weight:900;letter-spacing:.15em;text-transform:uppercase}.title{margin:10px 0 6px;font-size:clamp(34px,11vw,64px);line-height:.98;letter-spacing:-.04em}.sub{margin:0;color:var(--muted);font-size:14px}.meta{display:flex;flex-wrap:wrap;gap:8px;margin-top:18px}.pill{display:inline-flex;align-items:center;min-height:31px;padding:6px 11px;border:1px solid var(--line);border-radius:999px;background:var(--paper);color:var(--muted);font-size:12px;font-weight:800}.hero-note{margin-top:18px;padding:16px;border:1px solid var(--line);border-radius:var(--radius);background:var(--paper);box-shadow:var(--shadow)}.hero-note strong{display:block;margin-bottom:6px;font-size:15px}.hero-note p{margin:0;color:var(--muted)}section{padding:30px 0;border-bottom:1px solid var(--line)}.section-head{display:flex;align-items:center;gap:12px;margin-bottom:16px}.section-num{color:var(--accent);font-size:11px;font-weight:900;letter-spacing:.14em}.section-title{margin:0;font-size:20px;line-height:1.25}.grid{display:grid;gap:12px}.two{grid-template-columns:1fr}@media(min-width:620px){.two{grid-template-columns:1fr 1fr}}.card{padding:18px;border:1px solid var(--line);border-radius:var(--radius);background:var(--paper);box-shadow:0 1px 6px rgba(44,37,30,.05)}.card.dark{background:var(--dark);border-color:var(--dark);color:#fff}.card h3{margin:0 0 7px;font-size:17px}.card p{margin:0;color:var(--muted)}.dark p{color:rgba(255,255,255,.72)}.tag{display:inline-flex;margin-bottom:10px;color:var(--accent);font-size:10px;font-weight:900;letter-spacing:.13em;text-transform:uppercase}.summary{display:grid;gap:10px}.summary-row{display:grid;grid-template-columns:82px 1fr;gap:12px;padding:14px 0;border-top:1px solid var(--line)}.summary-row:first-child{border-top:0}.summary-label{color:var(--quiet);font-size:11px;font-weight:900;letter-spacing:.12em;text-transform:uppercase}.summary-text{color:var(--ink);font-weight:700}.tabs{display:grid;grid-template-columns:1fr 1fr;overflow:hidden;border:1px solid var(--line);border-radius:14px 14px 0 0}.tab{min-height:58px;border:0;border-right:1px solid var(--line);background:var(--soft);color:var(--muted);font:800 13px "Pretendard",system-ui,sans-serif}.tab:last-child{border-right:0}.tab span{display:block;margin-top:2px;font-size:10px;font-weight:700;letter-spacing:.08em;color:var(--quiet)}.tab.active{background:var(--accent);color:#fff}.tab.active span{color:rgba(255,255,255,.78)}.pane{display:none;border:1px solid var(--line);border-top:0;border-radius:0 0 14px 14px;background:var(--paper);overflow:hidden}.pane.on{display:block}.block{padding:18px;border-top:1px solid var(--line)}.block:first-child{border-top:0}.block-title{display:flex;align-items:center;gap:8px;margin:0 0 12px;font-size:14px}.block-title:before{content:attr(data-mark);color:var(--accent);font-size:11px;font-weight:900;letter-spacing:.08em}.list{list-style:none;margin:0;padding:0}.list li{display:grid;grid-template-columns:8px 1fr;gap:10px;padding:8px 0;border-top:1px solid #f0ebe6;color:var(--muted)}.list li:first-child{border-top:0}.list li:before{content:"";width:5px;height:5px;margin-top:9px;border-radius:50%;background:var(--accent)}.phase-list{display:grid;gap:1px;overflow:hidden;border:1px solid var(--line);border-radius:12px;background:var(--line)}.phase-card{display:grid;grid-template-columns:56px 1fr;background:var(--paper)}.phase-mark{display:flex;align-items:flex-start;justify-content:center;padding:15px 10px;color:var(--accent);font-size:11px;font-weight:900;letter-spacing:.1em;background:var(--soft)}.phase-body{min-width:0;padding:14px 16px}.phase-name{margin:0 0 8px;font-size:14px}.move-list{list-style:none;margin:0;padding:0}.move-list li{padding:6px 0;border-top:1px solid #f0ebe6;color:var(--muted)}.move-list li:first-child{border-top:0}.mini-grid{display:grid;gap:10px}.mini{padding:13px 14px;border-radius:12px;background:var(--soft);color:var(--muted)}.mini b{display:block;margin-bottom:4px;color:var(--ink)}.question{padding:16px 0;border-top:1px solid var(--line)}.question:first-child{border-top:0}.q-label{color:var(--accent);font-size:11px;font-weight:900;letter-spacing:.12em}.q-text{margin-top:4px;font-weight:800}.takeaways{counter-reset:take}.take{display:grid;grid-template-columns:32px 1fr;gap:12px;padding:14px 0;border-top:1px solid var(--line)}.take:first-child{border-top:0}.take:before{counter-increment:take;content:counter(take,decimal-leading-zero);color:var(--accent);font-size:12px;font-weight:900;letter-spacing:.08em}.survey{position:relative;overflow:hidden;margin-top:28px;padding:24px;border-radius:18px;background:var(--dark);color:#fff}.survey:after{content:"";position:absolute;right:-70px;top:-80px;width:190px;height:190px;border-radius:50%;background:rgba(240,107,26,.12)}.survey h2{position:relative;margin:6px 0 8px;font-size:21px}.survey p{position:relative;margin:0 0 18px;color:rgba(255,255,255,.66)}.btn{position:relative;display:block;width:100%;padding:15px;border-radius:12px;background:var(--accent);color:#fff;text-align:center;text-decoration:none;font-weight:900;letter-spacing:.07em}.btn small{display:block;margin-top:2px;font-size:10px;font-weight:500;letter-spacing:.1em;color:rgba(255,255,255,.75)}footer{padding-top:22px;color:var(--quiet);font-size:11px;font-weight:700;letter-spacing:.12em;text-transform:uppercase}.topbtn{position:fixed;right:18px;bottom:24px;width:44px;height:44px;border:0;border-radius:50%;background:var(--dark);color:#fff;font-weight:900;box-shadow:var(--shadow);opacity:0;transform:translateY(10px);transition:.2s}.topbtn.on{opacity:1;transform:none}@media(max-width:380px){.page{padding-left:14px;padding-right:14px}.summary-row{grid-template-columns:1fr;gap:4px}.card{padding:16px}.block{padding:16px}.tab{font-size:12px}.tab span{font-size:9px}}
+</style>
+</head>
+<body>
+<div class="progress" id="progress"></div>
+<button class="topbtn" id="topbtn" onclick="window.scrollTo({top:0,behavior:'smooth'})" aria-label="맨 위로">↑</button>
+<main class="page">
+  <header class="top">
+    <div class="kicker">ARCHIVE METHOD · 큐카드 2605</div>
+    <h1 class="title">순환</h1>
+    <p class="sub">리포머 민진T · 바렐 은영T · 피드백 큐카드</p>
+    <div class="meta">
+      <span class="pill">강사레슨</span>
+      <span class="pill">큐카드</span>
+      <span class="pill">피드백 3분</span>
+    </div>
+    <div class="hero-note">
+      <strong>오늘의 핵심</strong>
+      <p>순환은 혈액만이 아니라 호흡, 체온, 근수축, 림프 흐름, 체중이동이 함께 만드는 몸 안의 흐름입니다.</p>
+    </div>
+  </header>
+
+  <section>
+    <div class="section-head"><div class="section-num">01</div><h2 class="section-title">30초 요약</h2></div>
+    <div class="card">
+      <div class="summary">
+        <div class="summary-row"><div class="summary-label">민진T</div><div class="summary-text">호흡·근육 펌프·관절 움직임·체중이동으로 림프 흐름을 만든다.</div></div>
+        <div class="summary-row"><div class="summary-label">은영T</div><div class="summary-text">큰 근육군과 리듬으로 체온·심박·땀 반응을 만든다.</div></div>
+        <div class="summary-row"><div class="summary-label">구분</div><div class="summary-text">땀은 체온 조절 반응, 림프는 회복 순환 시스템으로 설명한다.</div></div>
+      </div>
+    </div>
+  </section>
+
+  <section>
+    <div class="section-head"><div class="section-num">02</div><h2 class="section-title">두 파트의 목적</h2></div>
+    <div class="grid two">
+      <article class="card dark">
+        <div class="tag">MINJIN · REFORMER</div>
+        <h3>림프순환</h3>
+        <p>호흡에서 시작해 발목·종아리, 고관절, 근육 펌프, 흉곽과 상지 흐름, 회복 호흡으로 이어갑니다.</p>
+      </article>
+      <article class="card">
+        <div class="tag">EUNYOUNG · BARREL</div>
+        <h3>심폐 활성화와 땀</h3>
+        <p>큰 근육군을 반복적이고 리드미컬하게 사용해 심박수, 호흡량, 체온이 자연스럽게 연결되도록 합니다.</p>
+      </article>
+    </div>
+  </section>
+
+  <section>
+    <div class="section-head"><div class="section-num">03</div><h2 class="section-title">수업 시퀀스와 피드백</h2></div>
+    <div class="tabs">
+      <button class="tab active" type="button" onclick="switchTab('mj', this)">민진T · 리포머<span>림프순환</span></button>
+      <button class="tab" type="button" onclick="switchTab('ey', this)">은영T · 바렐<span>땀/심폐순환</span></button>
+    </div>
+
+    <div id="tab-mj" class="pane on">
+      <div class="block">
+        <h3 class="block-title" data-mark="SEQ">Sequence</h3>
+        <div class="phase-list">
+          <div class="phase-card"><div class="phase-mark">W</div><div class="phase-body"><h4 class="phase-name">Warm-up</h4><ul class="move-list"><li>Breathing</li><li>Half Kneeling Roll Down</li><li>Roll Down with Shoulder Extension</li></ul></div></div>
+          <div class="phase-card"><div class="phase-mark">M1</div><div class="phase-body"><h4 class="phase-name">Lower Body Circulation</h4><ul class="move-list"><li>Foot Press</li><li>Resisted Standing Rise</li><li>Thoracic Rotation</li><li>Limbering</li></ul></div></div>
+          <div class="phase-card"><div class="phase-mark">M2</div><div class="phase-body"><h4 class="phase-name">Upper Body Circulation</h4><ul class="move-list"><li>(Seated) Spine Wave</li><li>(Standing) Shoulder Press</li><li>Arch &amp; Curl Press</li></ul></div></div>
+          <div class="phase-card"><div class="phase-mark">M3</div><div class="phase-body"><h4 class="phase-name">Inversion Flow</h4><ul class="move-list"><li>Hundred</li><li>Pelvic Curl</li><li>Rollover</li><li>Open-Close Rollover</li></ul></div></div>
+          <div class="phase-card"><div class="phase-mark">M4</div><div class="phase-body"><h4 class="phase-name">Control Balance Variation</h4><ul class="move-list"><li>Single Leg Stretch Position</li><li>Spiral Transition</li><li>Arabesque Heel Pump</li><li>Scapular Knee Stretch</li></ul></div></div>
+          <div class="phase-card"><div class="phase-mark">C</div><div class="phase-body"><h4 class="phase-name">Cool-down</h4><ul class="move-list"><li>Mermaid Lateral Breath</li><li>Side Bend</li><li>Cervical Glide</li><li>Chest Expansion</li><li>Underarm Release</li><li>Lateral Reach Stretch · 액와부 부드럽게 압박</li></ul></div></div>
+        </div>
+      </div>
+      <div class="block">
+        <h3 class="block-title" data-mark="TEACH">Teaching Point</h3>
+        <div class="mini-grid">
+          <div class="mini"><b>호흡</b>갈비뼈가 옆과 뒤로 넓어지고, 내쉬며 몸 안의 압력이 정리되는지 봅니다.</div>
+          <div class="mini"><b>펌프</b>오래 버티기보다 반복적인 수축-이완과 체중이동으로 흐름을 만듭니다.</div>
+          <div class="mini"><b>주의</b>림프부종을 치료한다고 말하지 않고, 회복 순환을 돕는 움직임으로 설명합니다.</div>
+        </div>
+      </div>
+      <div class="block">
+        <h3 class="block-title" data-mark="ASK">Feedback Question</h3>
+        <div class="question"><div class="q-label">Q1</div><div class="q-text">오늘 어느 구간에서 몸이 가벼워지거나 흐름이 생기는 느낌이 있었나요?</div></div>
+        <div class="question"><div class="q-label">Q2</div><div class="q-text">림프순환을 회원에게 설명한다면 어떤 한 문장으로 말할 수 있나요?</div></div>
+      </div>
+    </div>
+
+    <div id="tab-ey" class="pane">
+      <div class="block">
+        <h3 class="block-title" data-mark="SEQ">Sequence</h3>
+        <div class="phase-list">
+          <div class="phase-card"><div class="phase-mark">W</div><div class="phase-body"><h4 class="phase-name">Warm-up</h4><ul class="move-list"><li>암워킹 스완 연결</li><li>암워킹 푸시업 연결</li><li>슬로우버피 시리즈</li><li>런지</li><li>피스톨</li><li>레그써클 시리즈 + 둔근</li><li>닐링 사이드 오블릭 점핑</li></ul></div></div>
+          <div class="phase-card"><div class="phase-mark">M</div><div class="phase-body"><h4 class="phase-name">Main</h4><ul class="move-list"><li>라운드 백</li><li>플랫백</li><li>트리</li><li>트리 베리에이션</li><li>포포인트 버드독</li><li>사이드라잉 오픈 내전근 시저스</li></ul></div></div>
+          <div class="phase-card"><div class="phase-mark">C</div><div class="phase-body"><h4 class="phase-name">Cool-down</h4><ul class="move-list"><li>다운독</li><li>옆자</li></ul></div></div>
+        </div>
+      </div>
+      <div class="block">
+        <h3 class="block-title" data-mark="TEACH">Teaching Point</h3>
+        <div class="mini-grid">
+          <div class="mini"><b>열감</b>큰 근육군을 리드미컬하게 사용해 체온과 심박 반응을 자연스럽게 올립니다.</div>
+          <div class="mini"><b>땀</b>땀은 운동 효과 자체가 아니라, 몸이 올라간 체온을 조절하는 냉각 시스템입니다.</div>
+          <div class="mini"><b>호흡</b>힘들수록 숨이 멈추지 않게 큐잉하고, 움직임의 리듬을 유지합니다.</div>
+        </div>
+      </div>
+      <div class="block">
+        <h3 class="block-title" data-mark="ASK">Feedback Question</h3>
+        <div class="question"><div class="q-label">Q1</div><div class="q-text">열감, 심박, 땀 반응이 어느 구간에서 가장 분명했나요?</div></div>
+        <div class="question"><div class="q-label">Q2</div><div class="q-text">“땀을 많이 냈다”가 아니라 “왜 땀이 났는지”를 어떻게 설명할 수 있나요?</div></div>
+      </div>
+    </div>
+  </section>
+
+  <section>
+    <div class="section-head"><div class="section-num">04</div><h2 class="section-title">복습 문장 3개</h2></div>
+    <div class="card takeaways">
+      <div class="take">순환은 혈액만이 아니라 호흡, 체온, 림프, 근수축이 함께 만드는 흐름입니다.</div>
+      <div class="take">땀은 운동 효과 자체가 아니라 체온 조절 시스템의 반응입니다.</div>
+      <div class="take">림프 흐름은 호흡, 근육 펌프, 관절 움직임, 체중이동이 함께 도울 때 좋아집니다.</div>
+    </div>
+  </section>
+
+  <div class="survey">
+    <div class="tag">Archive Method Feedback</div>
+    <h2>수업 직후 인사이트를 남겨주세요.</h2>
+    <p>오늘 수업에서 설명 가능해진 문장과 아직 헷갈리는 지점을 짧게 기록합니다.</p>
+    <a class="btn" href="https://docs.google.com/forms/d/e/1FAIpQLSfqhr1lMpXtTUja6Jvp1D_Iee6AwVGmhjHYDthKr5RVtdWMNA/viewform" target="_blank" rel="noopener">피드백 남기기<small>Instructor Lesson Reflection</small></a>
+  </div>
+
+  <footer>ARCHIVE PILATES · ARCHIVE METHOD · 2605</footer>
+</main>
+<script>
+function switchTab(id,btn){document.querySelectorAll('.pane').forEach(p=>p.classList.remove('on'));document.querySelectorAll('.tab').forEach(b=>b.classList.remove('active'));document.getElementById('tab-'+id).classList.add('on');btn.classList.add('active')}
+const progress=document.getElementById('progress'),topbtn=document.getElementById('topbtn');window.addEventListener('scroll',()=>{const s=scrollY,h=document.documentElement.scrollHeight-innerHeight;progress.style.width=(h>0?s/h*100:0)+'%';topbtn.classList.toggle('on',s>260)},{passive:true});
+</script>
+</body>
+</html>
