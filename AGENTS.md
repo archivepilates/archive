@@ -60,3 +60,13 @@ npm --prefix firebase/kangsain-functions/functions run build
 ```
 
 The Functions package declares Node.js `22`. If the machine default is newer, expect npm engine warnings unless Node 22 is selected.
+
+## Functions Codebase Rules
+
+- Firebase Functions are split into four physical codebases: `functions-alimtalk`, `functions-private-chart`, `functions-sync`, and `functions-app`.
+- Shared cross-codebase contracts live in `firebase/packages/contracts`. Put shared event names, queue payloads, Firestore collection names, and codebase ownership constants there before duplicating them in feature code.
+- Before changing a Functions deployment path, run `npm run detect:affected-functions` to see which codebases are affected.
+- For local deploys, prefer `npm run deploy:affected-functions:dry` first. Use `npm run deploy:affected-functions -- --base <sha> --head HEAD` only when the user explicitly approves deploy/go-live.
+- Shared files such as `firebase.json`, `firebase/codebase-boundaries.json`, `firebase/packages/contracts/**`, `firebase/kangsain-functions/functions/src/config/**`, `runtime/**`, `types/**`, and broad utility/firestore files affect all four codebases.
+- Do not deploy all Functions by habit. Deploy only the affected codebase unless a shared contract or shared runtime file changed.
+- GitHub CI runs affected-codebase detection and boundary validation so other Codex threads can see the expected deployment scope.

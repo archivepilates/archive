@@ -4,6 +4,8 @@ firebase/function-codebases/*/node_modules
 firebase/function-codebases/*/node_modules/
 firebase/function-codebases/*/src/
 firebase/function-codebases/*/lib/
+firebase/packages/*/node_modules/
+firebase/packages/*/lib/
 firebase/kangsain-functions/functions/.env
 firebase/kangsain-functions/.firebase/
 firebase/kangsain-functions/firebase-debug.log

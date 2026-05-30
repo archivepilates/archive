@@ -1,0 +1,68 @@
+name: ARCHIVE IN Functions Affected Check
+
+on:
+  pull_request:
+    paths:
+      - "firebase/**"
+      - "scripts/**"
+      - "package.json"
+      - "package-lock.json"
+      - ".github/workflows/functions-affected-check.yml"
+  push:
+    branches:
+      - main
+      - "codex/**"
+    paths:
+      - "firebase/**"
+      - "scripts/**"
+      - "package.json"
+      - "package-lock.json"
+      - ".github/workflows/functions-affected-check.yml"
+
+jobs:
+  affected-functions:
+    runs-on: ubuntu-latest
+    permissions:
+      contents: read
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+        with:
+          fetch-depth: 0
+
+      - name: Setup Node
+        uses: actions/setup-node@v4
+        with:
+          node-version: 22
+
+      - name: Install root dependencies
+        run: npm ci
+
+      - name: Install Functions dependencies
+        run: npm --prefix firebase/kangsain-functions/functions ci
+
+      - name: Detect affected codebases
+        id: affected
+        env:
+          BASE_SHA: ${{ github.event.pull_request.base.sha || github.event.before }}
+        run: |
+          if [ -z "$BASE_SHA" ] || [ "$BASE_SHA" = "0000000000000000000000000000000000000000" ]; then
+            BASE_SHA="$(git rev-parse HEAD~1)"
+          fi
+          node scripts/detect-affected-function-codebases.mjs --base "$BASE_SHA" --head HEAD --github-output
+
+      - name: Build contracts and generated codebases
+        run: npm run build:function-codebases
+
+      - name: Validate function boundaries
+        run: npm run validate:function-boundaries
+
+      - name: Summary
+        run: |
+          {
+            echo "### ARCHIVE IN Functions affected check"
+            echo ""
+            echo "- Codebases: ${{ steps.affected.outputs.codebases }}"
+            echo "- Deploy target: ${{ steps.affected.outputs.deploy_only }}"
+            echo "- All codebases affected: ${{ steps.affected.outputs.all_codebases_affected }}"
+          } >> "$GITHUB_STEP_SUMMARY"
