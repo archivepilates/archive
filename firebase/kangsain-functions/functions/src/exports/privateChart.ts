@@ -19,6 +19,7 @@ import {
   syncPrivateSurveyNotionBackfill,
   syncPrivateSurveyResponsesFromSheet,
 } from "../privateSurvey/privateSurveyResponse";
+import { memberSignupContractHandler } from "../memberSignup/memberSignupContract";
 import {
   privateLessonChartRequestOptions,
   privateLessonChartScheduleOptions,
@@ -108,6 +109,8 @@ export const privateSurveyResponseView = onRequest(publicRequestOptions, private
 export const privateLessonChartApi = onRequest(privateLessonChartRequestOptions, privateLessonChartApiHandler);
 
 export const privateLessonReportView = onRequest(publicRequestOptions, privateLessonReportViewHandler);
+
+export const memberSignupContract = onRequest(publicRequestOptions, memberSignupContractHandler);
 
 export const notionPrivateLessonReportWebhook = onRequest(
   privateLessonChartRequestOptions,

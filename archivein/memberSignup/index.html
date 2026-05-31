@@ -1,0 +1,256 @@
+<!doctype html>
+<html lang="ko">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1">
+  <meta name="robots" content="noindex,nofollow">
+  <title>ARCHIVE PILATES 회원가입서</title>
+  <style>
+    :root { color-scheme:light; --ink:#181512; --muted:#716960; --line:#e6ded5; --paper:#fffdfa; --bg:#f7f2ec; --accent:#b73d32; --soft:#f1e9e1; --good:#2f6f68; --bad:#96352c; }
+    * { box-sizing:border-box; }
+    body { margin:0; font-family:-apple-system,BlinkMacSystemFont,"Apple SD Gothic Neo","Noto Sans KR",sans-serif; background:var(--bg); color:var(--ink); }
+    main { width:min(760px,100%); margin:0 auto; padding:16px 14px 92px; }
+    .top { display:grid; grid-template-columns:1fr 48px; gap:14px; align-items:start; padding:14px 2px 16px; border-bottom:1px solid rgba(24,21,18,.08); }
+    .brand { width:48px; height:48px; border-radius:50%; object-fit:contain; }
+    .eyebrow { font-size:12px; font-weight:900; color:var(--accent); }
+    h1 { margin:6px 0 8px; font-size:26px; line-height:1.18; letter-spacing:0; }
+    .lead { margin:0; color:var(--muted); font-size:14px; line-height:1.65; word-break:keep-all; overflow-wrap:break-word; }
+    .meta { display:flex; flex-wrap:wrap; gap:6px; margin-top:10px; }
+    .chip { display:inline-flex; align-items:center; min-height:28px; padding:4px 9px; border:1px solid var(--line); border-radius:999px; background:rgba(255,253,250,.76); color:var(--muted); font-size:13px; }
+    form { display:grid; gap:12px; margin-top:14px; }
+    section, .message { border:1px solid var(--line); border-radius:8px; background:var(--paper); padding:15px; }
+    h2 { margin:0 0 12px; font-size:16px; line-height:1.3; }
+    .grid { display:grid; grid-template-columns:1fr 1fr; gap:9px; }
+    .item { min-width:0; padding:10px 0; border-top:1px solid rgba(24,21,18,.07); }
+    .item:first-child, .item:nth-child(2) { border-top:0; }
+    .label { display:block; color:var(--muted); font-size:12px; line-height:1.4; }
+    .value { display:block; margin-top:3px; font-size:15px; font-weight:800; line-height:1.45; overflow-wrap:break-word; }
+    .field { display:grid; gap:7px; margin-top:10px; }
+    input[type="text"] { width:100%; min-height:46px; border:1px solid var(--line); border-radius:8px; padding:10px 11px; background:#fff; color:var(--ink); font:inherit; }
+    input[type="text"]:focus { outline:2px solid rgba(183,61,50,.18); border-color:var(--accent); }
+    .terms { display:grid; gap:10px; }
+    details { border:1px solid var(--line); border-radius:8px; background:#fff; overflow:hidden; }
+    summary { min-height:46px; padding:12px; cursor:pointer; font-weight:900; }
+    .term-body { padding:0 12px 12px; color:#37312c; font-size:13px; line-height:1.65; word-break:keep-all; }
+    .agree { display:grid; grid-template-columns:24px 1fr; gap:9px; align-items:start; margin-top:8px; color:#352f2a; font-size:14px; line-height:1.5; }
+    input[type="checkbox"] { width:19px; height:19px; margin:1px 0 0; accent-color:var(--accent); }
+    .signature { display:grid; gap:10px; }
+    .sign-box { border:1px solid var(--line); border-radius:8px; background:#fff; padding:12px; }
+    .notice { color:var(--muted); font-size:12px; line-height:1.55; }
+    .actions { position:fixed; left:0; right:0; bottom:0; padding:12px 14px 18px; background:linear-gradient(to top,var(--bg) 82%,rgba(247,242,236,0)); }
+    .actions-inner { width:min(760px,100%); margin:0 auto; }
+    button { width:100%; min-height:50px; border:0; border-radius:8px; background:var(--accent); color:#fff; font-size:15px; font-weight:900; cursor:pointer; }
+    button:disabled { opacity:.55; cursor:wait; }
+    .message { margin-top:14px; line-height:1.7; word-break:keep-all; overflow-wrap:break-word; }
+    .message.good { border-color:#bcd7d2; background:#f2faf8; color:var(--good); }
+    .message.bad { border-color:#f0c9c1; background:#fff7f4; color:var(--bad); }
+    @media (max-width:560px) {
+      main { padding:14px 12px 88px; }
+      h1 { font-size:24px; }
+      section, .message { padding:14px; }
+      .grid { grid-template-columns:1fr; gap:0; }
+      .item:nth-child(2) { border-top:1px solid rgba(24,21,18,.07); }
+      .actions { padding-left:12px; padding-right:12px; }
+    }
+  </style>
+</head>
+<body>
+  <main>
+    <section class="top">
+      <div>
+        <div class="eyebrow">ARCHIVE PILATES</div>
+        <h1>회원가입서 확인 및 서명</h1>
+        <p class="lead">StudioMate 등록 정보를 바탕으로 작성된 회원가입서입니다. 비어 있는 항목을 보완하고 약관을 확인한 뒤 본인 이름으로 서명해 주세요.</p>
+        <div class="meta" id="meta"><span class="chip">가입서 정보를 확인하는 중</span></div>
+      </div>
+      <img class="brand" src="../logo120.png" alt="ARCHIVE PILATES">
+    </section>
+
+    <form id="signupForm" hidden>
+      <section>
+        <h2>고객 기본 정보</h2>
+        <div class="grid" id="memberGrid"></div>
+        <div class="field">
+          <label class="label" for="address">주소</label>
+          <input id="address" name="address" type="text" autocomplete="street-address" placeholder="주소를 입력해 주세요">
+        </div>
+        <div class="field">
+          <label class="label" for="visitRoute">방문경로</label>
+          <input id="visitRoute" name="visitRoute" type="text" placeholder="예: 네이버 지도검색, 지인추천, 인스타그램">
+        </div>
+        <div class="field">
+          <label class="label" for="exercisePurpose">운동목적</label>
+          <input id="exercisePurpose" name="exercisePurpose" type="text" placeholder="예: 체형교정, 통증관리, 여가생활">
+        </div>
+        <div class="field">
+          <label class="label" for="recommender">추천인</label>
+          <input id="recommender" name="recommender" type="text" placeholder="없으면 비워두셔도 됩니다">
+        </div>
+      </section>
+
+      <section>
+        <h2>상품 구매 정보</h2>
+        <div class="grid" id="purchaseGrid"></div>
+      </section>
+
+      <section>
+        <h2>약관 및 동의</h2>
+        <div class="terms">
+          <details open>
+            <summary>환불 및 취소</summary>
+            <div class="term-body">환불은 회원 본인 요청 시 가능하며, 환불 요청일 기준 사용분과 총 결제금액의 10% 위약금을 반영해 산정합니다. 이미 사용 완료된 수업, 무료 제공 수업, 회원 본인 사유의 미출석 수업, 유효기간 종료 회원권은 환불 대상에서 제외됩니다.</div>
+          </details>
+          <label class="agree"><input type="checkbox" name="refundAndCancellation"><span>환불 및 취소 규정을 확인하고 동의합니다.</span></label>
+
+          <details>
+            <summary>시설 이용 및 수강권 사용</summary>
+            <div class="term-body">모든 수업은 사전 예약제로 운영됩니다. 수업 취소는 그룹 수업 6시간 전, 프라이빗 수업 전일 21시 이전까지 가능하며 이후에는 결석 또는 노쇼로 처리될 수 있습니다. 회원은 자신의 건강 상태를 사전에 확인하고 필요한 내용을 시설에 고지해야 합니다.</div>
+          </details>
+          <label class="agree"><input type="checkbox" name="facilityUse"><span>시설 이용, 수강권 사용, 안전 책임 범위를 확인하고 동의합니다.</span></label>
+
+          <details>
+            <summary>개인정보 이용</summary>
+            <div class="term-body">ARCHIVE PILATES는 회원 가입, 계약 이행, 본인 확인, 고지사항 전달, 고객관리를 위해 성명, 생년월일, 성별, 연락처, 이메일 등 필요한 개인정보를 수집·이용하며 계약 체결일로부터 5년 또는 관계 법령이 정한 기간까지 보관합니다.</div>
+          </details>
+          <label class="agree"><input type="checkbox" name="privacyUse"><span>개인정보 수집 및 이용에 동의합니다.</span></label>
+        </div>
+      </section>
+
+      <section class="signature">
+        <h2>서명</h2>
+        <label class="agree"><input type="checkbox" name="finalConfirmation"><span>위 정보와 약관 내용을 확인했으며, 본 회원가입서에 전자적으로 서명합니다.</span></label>
+        <div class="sign-box">
+          <label class="label" for="signerName">서명자 이름</label>
+          <input id="signerName" name="signerName" type="text" autocomplete="name" required>
+          <p class="notice">제출 시 서명자 이름, 제출 시각, 접속 환경이 함께 기록됩니다.</p>
+        </div>
+      </section>
+
+      <div class="actions">
+        <div class="actions-inner"><button type="submit">동의하고 서명 제출</button></div>
+      </div>
+    </form>
+    <section id="message" class="message" hidden></section>
+  </main>
+  <script>
+    const params = new URLSearchParams(location.search);
+    const contractId = String(params.get('id') || '').trim();
+    const accessToken = String(params.get('token') || '').trim();
+    const form = document.getElementById('signupForm');
+    const meta = document.getElementById('meta');
+    const message = document.getElementById('message');
+    const button = form.querySelector('button');
+    let currentContract = null;
+
+    init();
+
+    async function init() {
+      if (!/^msc-[a-z0-9-]{8,100}$/i.test(contractId) || !/^[a-zA-Z0-9_-]{16,160}$/.test(accessToken)) {
+        showMessage('회원가입서 링크가 올바르지 않습니다. 받은 알림톡 링크를 다시 확인해 주세요.', true);
+        return;
+      }
+      try {
+        const data = await requestJson(`../api/memberSignupContract?id=${encodeURIComponent(contractId)}&token=${encodeURIComponent(accessToken)}`);
+        currentContract = data.contract;
+        renderContract(currentContract);
+        if (currentContract.status === 'submitted') {
+          showMessage(`${currentContract.signature?.signedAtText || ''} 서명 제출이 완료된 회원가입서입니다.`);
+          return;
+        }
+        form.hidden = false;
+      } catch (err) {
+        showMessage(err.message || '회원가입서 정보를 불러오지 못했습니다.', true);
+      }
+    }
+
+    function renderContract(contract) {
+      meta.innerHTML = [
+        `<span class="chip">${escapeHtml(contract.memberName || '회원')} 회원</span>`,
+        contract.memberPhoneLast4 ? `<span class="chip">휴대폰 끝자리 ${escapeHtml(contract.memberPhoneLast4)}</span>` : '',
+        `<span class="chip">${escapeHtml(statusLabel(contract.status))}</span>`
+      ].filter(Boolean).join('');
+      renderGrid('memberGrid', [
+        ['이름', contract.member.name],
+        ['휴대폰 번호', contract.member.phoneMasked],
+        ['성별', contract.member.gender],
+        ['생년월일', contract.member.birthDate],
+        ['이메일', contract.member.email]
+      ]);
+      renderGrid('purchaseGrid', [
+        ['수강권', contract.purchase.ticketName],
+        ['이용시작일', contract.purchase.startDate],
+        ['이용종료일', contract.purchase.endDate],
+        ['결제방법', contract.purchase.paymentMethod],
+        ['결제금액', contract.purchase.paidAmount],
+        ['미수금', contract.purchase.unpaidAmount || '0원']
+      ]);
+      form.elements.address.value = contract.member.address || '';
+      form.elements.visitRoute.value = contract.member.visitRoute || '';
+      form.elements.exercisePurpose.value = contract.member.exercisePurpose || '';
+      form.elements.recommender.value = contract.member.recommender || '';
+      form.elements.signerName.value = contract.member.name || '';
+    }
+
+    function renderGrid(id, rows) {
+      document.getElementById(id).innerHTML = rows.map(([label, value]) => `
+        <div class="item">
+          <span class="label">${escapeHtml(label)}</span>
+          <span class="value">${escapeHtml(value || '-')}</span>
+        </div>
+      `).join('');
+    }
+
+    form.addEventListener('submit', async (event) => {
+      event.preventDefault();
+      button.disabled = true;
+      try {
+        const payload = {
+          contractId,
+          accessToken,
+          address: form.elements.address.value.trim(),
+          visitRoute: form.elements.visitRoute.value.trim(),
+          exercisePurpose: form.elements.exercisePurpose.value.trim(),
+          recommender: form.elements.recommender.value.trim(),
+          refundAndCancellation: form.elements.refundAndCancellation.checked,
+          facilityUse: form.elements.facilityUse.checked,
+          privacyUse: form.elements.privacyUse.checked,
+          finalConfirmation: form.elements.finalConfirmation.checked,
+          signerName: form.elements.signerName.value.trim()
+        };
+        const result = await requestJson('../api/memberSignupContract', {
+          method: 'POST',
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify(payload)
+        });
+        form.hidden = true;
+        showMessage(result.duplicate ? '이미 서명 제출이 완료되었습니다.' : '회원가입서 서명 제출이 완료되었습니다.');
+      } catch (err) {
+        showMessage(err.message || '제출 중 오류가 발생했습니다. 잠시 후 다시 시도해 주세요.', true);
+      } finally {
+        button.disabled = false;
+      }
+    });
+
+    async function requestJson(url, options) {
+      const response = await fetch(url, options);
+      const data = await response.json().catch(() => ({}));
+      if (!response.ok || data.ok === false) throw new Error(data.error || `HTTP ${response.status}`);
+      return data;
+    }
+
+    function statusLabel(status) {
+      return status === 'submitted' ? '서명완료' : status === 'opened' ? '작성중' : '작성대기';
+    }
+
+    function showMessage(text, warn = false) {
+      message.hidden = false;
+      message.className = `message ${warn ? 'bad' : 'good'}`;
+      message.textContent = text;
+    }
+
+    function escapeHtml(value) {
+      return String(value == null ? '' : value).replace(/[&<>"']/g, (char) => ({ '&':'&amp;', '<':'&lt;', '>':'&gt;', '"':'&quot;', "'":'&#39;' })[char] || char);
+    }
+  </script>
+</body>
+</html>

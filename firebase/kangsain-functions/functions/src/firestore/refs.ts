@@ -10,6 +10,7 @@ import type {
   FcmTokenDoc,
   InstructorViewDoc,
   MemberContactIndexDoc,
+  MemberSignupContractDoc,
   LectureDoc,
   MemberMemoDoc,
   MemberProfileDoc,
@@ -53,6 +54,9 @@ export const refs = {
   memberProfile: (memberId: string) => refs.memberProfiles().doc(memberId),
   memberContactIndex: () => db.collection("memberContactIndex").withConverter(converter<MemberContactIndexDoc>()),
   memberContactIndexDoc: (memberId: string) => refs.memberContactIndex().doc(memberId),
+  memberSignupContracts: () =>
+    db.collection("memberSignupContracts").withConverter(converter<MemberSignupContractDoc>()),
+  memberSignupContract: (contractId: string) => refs.memberSignupContracts().doc(contractId),
   contactSyncJobs: () => db.collection("contactSyncJobs").withConverter(converter<ContactSyncJobDoc>()),
   contactSyncJob: (jobId: string) => refs.contactSyncJobs().doc(jobId),
   alimtalkCandidates: () => db.collection("alimtalkCandidates").withConverter(converter<AlimtalkCandidateDoc>()),

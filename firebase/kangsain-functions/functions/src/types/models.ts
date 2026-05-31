@@ -315,6 +315,58 @@ export interface MemberProfileDoc {
   updatedAt: Timestamp;
 }
 
+export type MemberSignupContractStatus = "draft" | "opened" | "submitted" | "expired" | "cancelled";
+
+export interface MemberSignupContractDoc {
+  contractId: string;
+  studioId: string;
+  memberId: string;
+  memberName: string;
+  memberPhone: string;
+  memberPhoneLast4: string;
+  status: MemberSignupContractStatus;
+  accessTokenHash: string;
+  source: "studiomate_profile" | "manual_sample" | "manual";
+  member: {
+    name: string;
+    phone: string;
+    gender?: string;
+    birthDate?: string;
+    email?: string;
+    address?: string;
+    visitRoute?: string;
+    exercisePurpose?: string;
+    recommender?: string;
+  };
+  purchase: {
+    ticketName?: string;
+    startDate?: string;
+    endDate?: string;
+    paymentMethod?: string;
+    paidAmount?: string;
+    unpaidAmount?: string;
+  };
+  termsVersion: string;
+  agreements?: {
+    refundAndCancellation: boolean;
+    facilityUse: boolean;
+    privacyUse: boolean;
+    finalConfirmation: boolean;
+  };
+  signature?: {
+    signerName: string;
+    signedAtText: string;
+    signedAt: Timestamp;
+    userAgent: string;
+    ipHash: string;
+  };
+  openedAt?: Timestamp | null;
+  submittedAt?: Timestamp | null;
+  expiresAt?: Timestamp | null;
+  createdAt: Timestamp;
+  updatedAt: Timestamp;
+}
+
 export type ContactSyncTarget = "archivepilates_gmail" | "home_archivepilates";
 export type ContactSyncStatus = "pending" | "synced" | "skipped" | "failed";
 export type AlimtalkCandidateType =
