@@ -359,6 +359,8 @@ export interface MemberSignupContractDoc {
     signedAt: Timestamp;
     userAgent: string;
     ipHash: string;
+    signatureImageDataUrl?: string;
+    signatureImageHash?: string;
   };
   openedAt?: Timestamp | null;
   submittedAt?: Timestamp | null;

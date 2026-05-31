@@ -45,6 +45,7 @@ export async function memberSignupContractHandler(request: any, response: any): 
         status: "submitted",
         member: {
           ...contract.member,
+          birthDate: submission.birthDate,
           address: submission.address,
           visitRoute: submission.visitRoute,
           exercisePurpose: submission.exercisePurpose,
@@ -57,6 +58,8 @@ export async function memberSignupContractHandler(request: any, response: any): 
           signedAt,
           userAgent: String(request.get?.("user-agent") || ""),
           ipHash: sha256(String(request.ip || request.get?.("x-forwarded-for") || "")),
+          signatureImageDataUrl: submission.signatureImageDataUrl,
+          signatureImageHash: sha256(submission.signatureImageDataUrl),
         },
         submittedAt: signedAt,
         updatedAt: signedAt,
@@ -103,12 +106,19 @@ function normalizeSubmission(input: Record<string, unknown>, fallbackName: strin
   if (!agreements.finalConfirmation) throw new Error("입력 정보 최종 확인에 동의해주세요.");
   const signerName = stringValue(input.signerName || input.signatureName || fallbackName);
   if (!signerName) throw new Error("서명자 이름을 입력해주세요.");
+  const signatureImageDataUrl = stringValue(input.signatureImageDataUrl);
+  if (!/^data:image\/png;base64,[a-zA-Z0-9+/=]+$/.test(signatureImageDataUrl)) {
+    throw new Error("직접 서명을 입력해주세요.");
+  }
+  if (signatureImageDataUrl.length > 250000) throw new Error("서명 이미지가 너무 큽니다. 다시 서명해 주세요.");
   return {
+    birthDate: stringValue(input.birthDate).slice(0, 40),
     address: stringValue(input.address).slice(0, 240),
     visitRoute: stringValue(input.visitRoute).slice(0, 80),
     exercisePurpose: stringValue(input.exercisePurpose).slice(0, 120),
     recommender: stringValue(input.recommender).slice(0, 80),
     signerName,
+    signatureImageDataUrl,
     agreements,
   };
 }

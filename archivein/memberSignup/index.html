@@ -10,7 +10,7 @@
     * { box-sizing:border-box; }
     body { margin:0; font-family:-apple-system,BlinkMacSystemFont,"Apple SD Gothic Neo","Noto Sans KR",sans-serif; background:var(--bg); color:var(--ink); }
     main { width:min(760px,100%); margin:0 auto; padding:16px 14px 92px; }
-    .top { display:grid; grid-template-columns:1fr 48px; gap:14px; align-items:start; padding:14px 2px 16px; border-bottom:1px solid rgba(24,21,18,.08); }
+    .top { display:grid; grid-template-columns:1fr 48px; gap:14px; align-items:start; padding:18px 6px 18px 18px; border-bottom:1px solid rgba(24,21,18,.08); }
     .brand { width:48px; height:48px; border-radius:50%; object-fit:contain; }
     .eyebrow { font-size:12px; font-weight:900; color:var(--accent); }
     h1 { margin:6px 0 8px; font-size:26px; line-height:1.18; letter-spacing:0; }
@@ -36,6 +36,9 @@
     input[type="checkbox"] { width:19px; height:19px; margin:1px 0 0; accent-color:var(--accent); }
     .signature { display:grid; gap:10px; }
     .sign-box { border:1px solid var(--line); border-radius:8px; background:#fff; padding:12px; }
+    .signature-pad { display:block; width:100%; height:178px; margin-top:8px; border:1px solid var(--line); border-radius:8px; background:#fff; touch-action:none; }
+    .signature-tools { display:flex; justify-content:space-between; align-items:center; gap:10px; margin-top:8px; }
+    .clear-signature { width:auto; min-height:36px; padding:0 12px; border:1px solid var(--line); background:#fff; color:var(--ink); font-size:13px; }
     .notice { color:var(--muted); font-size:12px; line-height:1.55; }
     .actions { position:fixed; left:0; right:0; bottom:0; padding:12px 14px 18px; background:linear-gradient(to top,var(--bg) 82%,rgba(247,242,236,0)); }
     .actions-inner { width:min(760px,100%); margin:0 auto; }
@@ -46,6 +49,7 @@
     .message.bad { border-color:#f0c9c1; background:#fff7f4; color:var(--bad); }
     @media (max-width:560px) {
       main { padding:14px 12px 88px; }
+      .top { padding-left:16px; padding-right:8px; }
       h1 { font-size:24px; }
       section, .message { padding:14px; }
       .grid { grid-template-columns:1fr; gap:0; }
@@ -60,7 +64,7 @@
       <div>
         <div class="eyebrow">ARCHIVE PILATES</div>
         <h1>회원가입서 확인 및 서명</h1>
-        <p class="lead">StudioMate 등록 정보를 바탕으로 작성된 회원가입서입니다. 비어 있는 항목을 보완하고 약관을 확인한 뒤 본인 이름으로 서명해 주세요.</p>
+        <p class="lead">ARCHIVE PILATES 이용을 시작하기 전 필요한 가입 정보를 확인합니다. 정확한 안내와 안전한 수업 준비를 위해 비어 있는 항목을 채우고 약관 확인 후 서명해 주세요.</p>
         <div class="meta" id="meta"><span class="chip">가입서 정보를 확인하는 중</span></div>
       </div>
       <img class="brand" src="../logo120.png" alt="ARCHIVE PILATES">
@@ -73,6 +77,10 @@
         <div class="field">
           <label class="label" for="address">주소</label>
           <input id="address" name="address" type="text" autocomplete="street-address" placeholder="주소를 입력해 주세요">
+        </div>
+        <div class="field">
+          <label class="label" for="birthDate">생년월일</label>
+          <input id="birthDate" name="birthDate" type="text" inputmode="numeric" autocomplete="bday" placeholder="예: 1990.01.01">
         </div>
         <div class="field">
           <label class="label" for="visitRoute">방문경로</label>
@@ -120,9 +128,13 @@
         <h2>서명</h2>
         <label class="agree"><input type="checkbox" name="finalConfirmation"><span>위 정보와 약관 내용을 확인했으며, 본 회원가입서에 전자적으로 서명합니다.</span></label>
         <div class="sign-box">
-          <label class="label" for="signerName">서명자 이름</label>
-          <input id="signerName" name="signerName" type="text" autocomplete="name" required>
-          <p class="notice">제출 시 서명자 이름, 제출 시각, 접속 환경이 함께 기록됩니다.</p>
+          <span class="label">직접 서명</span>
+          <canvas id="signaturePad" class="signature-pad" aria-label="직접 서명 입력 영역"></canvas>
+          <div class="signature-tools">
+            <span class="notice">손가락 또는 마우스로 서명해 주세요.</span>
+            <button class="clear-signature" type="button" id="clearSignature">지우기</button>
+          </div>
+          <p class="notice">제출 시 서명 이미지, 제출 시각, 접속 환경이 함께 기록됩니다.</p>
         </div>
       </section>
 
@@ -140,9 +152,16 @@
     const meta = document.getElementById('meta');
     const message = document.getElementById('message');
     const button = form.querySelector('button');
+    const signaturePad = document.getElementById('signaturePad');
+    const clearSignature = document.getElementById('clearSignature');
+    const signatureContext = signaturePad.getContext('2d');
     let currentContract = null;
+    let signatureDrawn = false;
+    let drawing = false;
+    let lastPoint = null;
 
     init();
+    setupSignaturePad();
 
     async function init() {
       if (!/^msc-[a-z0-9-]{8,100}$/i.test(contractId) || !/^[a-zA-Z0-9_-]{16,160}$/.test(accessToken)) {
@@ -158,6 +177,7 @@
           return;
         }
         form.hidden = false;
+        requestAnimationFrame(resizeSignaturePad);
       } catch (err) {
         showMessage(err.message || '회원가입서 정보를 불러오지 못했습니다.', true);
       }
@@ -173,7 +193,6 @@
         ['이름', contract.member.name],
         ['휴대폰 번호', contract.member.phoneMasked],
         ['성별', contract.member.gender],
-        ['생년월일', contract.member.birthDate],
         ['이메일', contract.member.email]
       ]);
       renderGrid('purchaseGrid', [
@@ -185,10 +204,10 @@
         ['미수금', contract.purchase.unpaidAmount || '0원']
       ]);
       form.elements.address.value = contract.member.address || '';
+      form.elements.birthDate.value = contract.member.birthDate || '';
       form.elements.visitRoute.value = contract.member.visitRoute || '';
       form.elements.exercisePurpose.value = contract.member.exercisePurpose || '';
       form.elements.recommender.value = contract.member.recommender || '';
-      form.elements.signerName.value = contract.member.name || '';
     }
 
     function renderGrid(id, rows) {
@@ -208,6 +227,7 @@
           contractId,
           accessToken,
           address: form.elements.address.value.trim(),
+          birthDate: form.elements.birthDate.value.trim(),
           visitRoute: form.elements.visitRoute.value.trim(),
           exercisePurpose: form.elements.exercisePurpose.value.trim(),
           recommender: form.elements.recommender.value.trim(),
@@ -215,7 +235,8 @@
           facilityUse: form.elements.facilityUse.checked,
           privacyUse: form.elements.privacyUse.checked,
           finalConfirmation: form.elements.finalConfirmation.checked,
-          signerName: form.elements.signerName.value.trim()
+          signerName: currentContract?.member?.name || '',
+          signatureImageDataUrl: signatureDrawn ? signaturePad.toDataURL('image/png') : ''
         };
         const result = await requestJson('../api/memberSignupContract', {
           method: 'POST',
@@ -240,6 +261,80 @@
 
     function statusLabel(status) {
       return status === 'submitted' ? '서명완료' : status === 'opened' ? '작성중' : '작성대기';
+    }
+
+    function setupSignaturePad() {
+      resizeSignaturePad();
+      window.addEventListener('resize', resizeSignaturePad);
+      signaturePad.addEventListener('pointerdown', startSignature);
+      signaturePad.addEventListener('pointermove', drawSignature);
+      signaturePad.addEventListener('pointerup', endSignature);
+      signaturePad.addEventListener('pointercancel', endSignature);
+      clearSignature.addEventListener('click', () => {
+        signatureContext.clearRect(0, 0, signaturePad.width, signaturePad.height);
+        drawSignatureBaseline();
+        signatureDrawn = false;
+      });
+    }
+
+    function resizeSignaturePad() {
+      const ratio = Math.max(window.devicePixelRatio || 1, 1);
+      const rect = signaturePad.getBoundingClientRect();
+      const existing = signatureDrawn ? signaturePad.toDataURL('image/png') : '';
+      signaturePad.width = Math.floor(rect.width * ratio);
+      signaturePad.height = Math.floor(rect.height * ratio);
+      signatureContext.setTransform(ratio, 0, 0, ratio, 0, 0);
+      signatureContext.lineCap = 'round';
+      signatureContext.lineJoin = 'round';
+      signatureContext.lineWidth = 2.2;
+      signatureContext.strokeStyle = '#181512';
+      drawSignatureBaseline();
+      if (existing) {
+        const image = new Image();
+        image.onload = () => signatureContext.drawImage(image, 0, 0, rect.width, rect.height);
+        image.src = existing;
+      }
+    }
+
+    function drawSignatureBaseline() {
+      const rect = signaturePad.getBoundingClientRect();
+      signatureContext.save();
+      signatureContext.strokeStyle = '#e6ded5';
+      signatureContext.lineWidth = 1;
+      signatureContext.beginPath();
+      signatureContext.moveTo(18, rect.height - 34);
+      signatureContext.lineTo(rect.width - 18, rect.height - 34);
+      signatureContext.stroke();
+      signatureContext.restore();
+    }
+
+    function startSignature(event) {
+      event.preventDefault();
+      signaturePad.setPointerCapture(event.pointerId);
+      drawing = true;
+      lastPoint = pointFromEvent(event);
+    }
+
+    function drawSignature(event) {
+      if (!drawing || !lastPoint) return;
+      event.preventDefault();
+      const point = pointFromEvent(event);
+      signatureContext.beginPath();
+      signatureContext.moveTo(lastPoint.x, lastPoint.y);
+      signatureContext.lineTo(point.x, point.y);
+      signatureContext.stroke();
+      lastPoint = point;
+      signatureDrawn = true;
+    }
+
+    function endSignature() {
+      drawing = false;
+      lastPoint = null;
+    }
+
+    function pointFromEvent(event) {
+      const rect = signaturePad.getBoundingClientRect();
+      return { x: event.clientX - rect.left, y: event.clientY - rect.top };
     }
 
     function showMessage(text, warn = false) {
