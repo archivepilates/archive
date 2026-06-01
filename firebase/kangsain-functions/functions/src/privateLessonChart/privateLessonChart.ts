@@ -1457,6 +1457,7 @@ async function nextSessionNumber(booking: BookingDoc): Promise<number> {
 
 function isPrivateBooking(booking: BookingDoc): boolean {
   if (booking.appStatus && booking.appStatus !== "reserved") return false;
+  if (booking.lessonType === "group") return false;
   if (booking.lessonType === "private" || booking.lessonType === "semi_private") return true;
   const text = `${booking.ticketName || ""} ${booking.ticketClassType || ""} ${booking.ticketType || ""}`;
   return /프라이빗|개인|1:1|PRIVATE|\bP\b/i.test(text);
