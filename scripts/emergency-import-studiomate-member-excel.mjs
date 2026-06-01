@@ -32,9 +32,7 @@ const args = new Set(process.argv.slice(2));
 const fileArg = valueArg("--file");
 const apply = args.has("--apply");
 const allowNewExcelProfiles = args.has("--allow-new-excel-profiles");
-const newExcelProfileMaxAgeDays = Number(
-  valueArg("--new-excel-profile-max-age-days") || process.env.ARCHIVEIN_NEW_EXCEL_PROFILE_MAX_AGE_DAYS || "3",
-);
+const legacyNewExcelProfileMaxAgeDays = valueArg("--new-excel-profile-max-age-days") || process.env.ARCHIVEIN_NEW_EXCEL_PROFILE_MAX_AGE_DAYS || "";
 const queueContactSync = args.has("--queue-contact-sync");
 const maxWrites = Number(valueArg("--max-writes") || process.env.ARCHIVEIN_EMERGENCY_MAX_WRITES || "5000");
 const today = kstDate(new Date());
@@ -66,7 +64,8 @@ const summary = {
   temporaryExcelProfiles: plans.filter((plan) => plan.matchType === "temporary_excel_id").length,
   skipped,
   allowNewExcelProfiles,
-  newExcelProfileMaxAgeDays,
+  newExcelProfileRule: "active_ticket_required_registered_at_not_limited",
+  legacyNewExcelProfileMaxAgeDays,
   queueContactSync,
   maxWrites,
 };
@@ -297,10 +296,6 @@ function buildPlans(groups, existingProfiles, existingContacts) {
         skippedNewProfileNoActiveTicket += 1;
         continue;
       }
-      if (!isRecentNewProfileCandidate(registeredAt)) {
-        skippedNewProfileTooOld += 1;
-        continue;
-      }
       memberId = `excel_${hash(`${group.phone}|${group.normalizedName}`).slice(0, 16)}`;
     } else {
       skippedNoExistingProfile += 1;
@@ -429,12 +424,6 @@ function buildPlans(groups, existingProfiles, existingContacts) {
       consultationContacts,
     },
   };
-}
-
-function isRecentNewProfileCandidate(registeredAt) {
-  if (!registeredAt) return false;
-  if (!Number.isFinite(newExcelProfileMaxAgeDays) || newExcelProfileMaxAgeDays < 0) return true;
-  return daysBetween(kstDate(registeredAt.toDate()), today) <= newExcelProfileMaxAgeDays;
 }
 
 function buildActiveTickets(rows) {
