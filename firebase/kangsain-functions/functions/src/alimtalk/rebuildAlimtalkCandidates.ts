@@ -25,7 +25,9 @@ export async function rebuildAlimtalkCandidatesForRange(input: {
   studioId: string;
   startDate: string;
   endDate: string;
+  mode?: "daily" | "reservation_open";
 }): Promise<{ candidates: number; candidateIds: string[] }> {
+  const mode = input.mode || "daily";
   const [profilesSnap, bookingIndex, lectureIndex] = await Promise.all([
     refs.memberProfiles().where("studioId", "==", input.studioId).get(),
     loadBookingIndex(input.studioId),
@@ -37,6 +39,13 @@ export async function rebuildAlimtalkCandidatesForRange(input: {
   const profiles = profilesSnap.docs.map((snap) => snap.data());
   for (const sourceDate of dateRange(input.startDate, input.endDate)) {
     for (const profile of profiles) {
+      if (mode === "reservation_open") {
+        const reservationOpenCandidate = reservationOpenCandidateForDate(profile, sourceDate);
+        if (reservationOpenCandidate) {
+          await enqueueSendableCandidate(reservationOpenCandidate, candidateIds, writes);
+        }
+        continue;
+      }
       for (const candidate of directTicketCandidates(profile, sourceDate)) {
         await enqueueSendableCandidate(candidate, candidateIds, writes);
       }
@@ -59,48 +68,50 @@ export async function rebuildAlimtalkCandidatesForRange(input: {
     }
   }
 
-  for (const profile of profiles.filter(
-    (profile) =>
-      profile.isNewMember &&
-      !ALIMTALK_MEMBER_EXCLUSION_REASONS[profile.memberId] &&
-      currentOrUpcomingLessonProfileTickets(profile, input.endDate).length > 0 &&
-      registeredDate(profile) >= NEW_MEMBER_ALIMTALK_START_DATE &&
-      registeredDate(profile) >= newMemberWindowStartDate(input.endDate) &&
-      registeredDate(profile) <= input.endDate,
-  )) {
-    const sourceDate = registeredDate(profile);
-    if (!sourceDate || !profile.phone) continue;
-    const candidateId = `new_member_${profile.memberId}_${sourceDate}`;
-    await enqueueSendableCandidate(
-      {
-        candidateId,
-        studioId: profile.studioId,
-        memberId: profile.memberId,
-        memberName: profile.name,
-        memberPhone: profile.phone,
-        type: "new_member",
-        status: "candidate",
-        templateCode: CANDIDATE_TEMPLATE_CODES.new_member,
-        title: "신규회원",
-        reason: `최초등록 ${sourceDate}`,
-        sourceDate,
-        payload: {
+  if (mode === "daily") {
+    for (const profile of profiles.filter(
+      (profile) =>
+        profile.isNewMember &&
+        !ALIMTALK_MEMBER_EXCLUSION_REASONS[profile.memberId] &&
+        currentOrUpcomingLessonProfileTickets(profile, input.endDate).length > 0 &&
+        registeredDate(profile) >= NEW_MEMBER_ALIMTALK_START_DATE &&
+        registeredDate(profile) >= newMemberWindowStartDate(input.endDate) &&
+        registeredDate(profile) <= input.endDate,
+    )) {
+      const sourceDate = registeredDate(profile);
+      if (!sourceDate || !profile.phone) continue;
+      const candidateId = `new_member_${profile.memberId}_${sourceDate}`;
+      await enqueueSendableCandidate(
+        {
+          candidateId,
+          studioId: profile.studioId,
+          memberId: profile.memberId,
           memberName: profile.name,
-          registeredDate: sourceDate,
-          activeTicketNames: currentOrUpcomingLessonProfileTickets(profile, input.endDate)
-            .map((ticket) => ticket.name)
-            .filter(Boolean)
-            .join(", "),
+          memberPhone: profile.phone,
+          type: "new_member",
+          status: "candidate",
+          templateCode: CANDIDATE_TEMPLATE_CODES.new_member,
+          title: "신규회원",
+          reason: `최초등록 ${sourceDate}`,
+          sourceDate,
+          payload: {
+            memberName: profile.name,
+            registeredDate: sourceDate,
+            activeTicketNames: currentOrUpcomingLessonProfileTickets(profile, input.endDate)
+              .map((ticket) => ticket.name)
+              .filter(Boolean)
+              .join(", "),
+          },
+          attempts: 0,
+          maxAttempts: 2,
+          lastError: null,
+          createdAt: nowTimestamp(),
+          updatedAt: nowTimestamp(),
         },
-        attempts: 0,
-        maxAttempts: 2,
-        lastError: null,
-        createdAt: nowTimestamp(),
-        updatedAt: nowTimestamp(),
-      },
-      candidateIds,
-      writes,
-    );
+        candidateIds,
+        writes,
+      );
+    }
   }
 
   await Promise.all(writes);
@@ -109,13 +120,27 @@ export async function rebuildAlimtalkCandidatesForRange(input: {
     startDate: input.startDate,
     endDate: input.endDate,
     currentCandidateIds: new Set(candidateIds),
+    candidateTypes: mode === "reservation_open" ? ["reservation_open"] : DAILY_ALIMTALK_CANDIDATE_TYPES,
   });
   logger.info("rebuildAlimtalkCandidatesForRange completed", {
     studioId: input.studioId,
     candidates: candidateIds.length,
+    mode,
   });
   return { candidates: candidateIds.length, candidateIds };
 }
+
+const DAILY_ALIMTALK_CANDIDATE_TYPES: SendableAlimtalkCandidateType[] = [
+  "new_member",
+  "private_survey",
+  "group_survey",
+  "instructor_lesson_material",
+  "ticket_expiring",
+  "remaining_low",
+  "private_count_low",
+  "private_ticket_expiring",
+  "long_absence",
+];
 
 type BookingIndex = Map<string, BookingDoc[]>;
 type LectureIndex = Map<string, LectureDoc>;
@@ -208,13 +233,16 @@ async function markStaleCandidatesSkipped(input: {
   startDate: string;
   endDate: string;
   currentCandidateIds: Set<string>;
+  candidateTypes: SendableAlimtalkCandidateType[];
 }): Promise<void> {
   const writes: Array<Promise<unknown>> = [];
+  const candidateTypes = new Set(input.candidateTypes);
   for (const sourceDate of dateRange(input.startDate, input.endDate)) {
     const snap = await refs.alimtalkCandidates().where("sourceDate", "==", sourceDate).limit(500).get();
     snap.docs.forEach((doc) => {
       const candidate = doc.data();
       if (candidate.studioId !== input.studioId) return;
+      if (!candidateTypes.has(candidate.type as SendableAlimtalkCandidateType)) return;
       if (input.currentCandidateIds.has(candidate.candidateId)) return;
       if (!["candidate", "reviewed", "failed"].includes(candidate.status)) return;
       writes.push(
@@ -255,6 +283,47 @@ function directTicketCandidates(profile: MemberProfileDoc, sourceDate: string): 
   return currentLessonProfileTickets(profile, sourceDate)
     .map((ticket) => directTicketCandidate(profile, ticket, sourceDate))
     .filter((candidate): candidate is AlimtalkCandidateDoc => Boolean(candidate));
+}
+
+function reservationOpenCandidateForDate(profile: MemberProfileDoc, sourceDate: string): AlimtalkCandidateDoc | null {
+  if (!isReservationOpenSendDate(sourceDate)) return null;
+  if (!profile.memberId || !profile.name || !profile.phone) return null;
+  if (ALIMTALK_MEMBER_EXCLUSION_REASONS[profile.memberId]) return null;
+  const reservationStartDate = reservationOpenStartDate(sourceDate);
+  const reservationEndDate = reservationOpenEndDate(sourceDate);
+  const eligibleTickets = reservationOpenEligibleGroupTickets(profile, reservationStartDate, reservationEndDate);
+  if (!eligibleTickets.length) return null;
+  const reservationWeek = reservationWeekLabel(reservationStartDate, reservationEndDate);
+  const candidateId = `reservation_open_${profile.memberId}_${reservationStartDate}`;
+  return {
+    candidateId,
+    studioId: profile.studioId,
+    memberId: profile.memberId,
+    memberName: profile.name,
+    memberPhone: profile.phone,
+    type: "reservation_open",
+    status: "candidate",
+    templateCode: CANDIDATE_TEMPLATE_CODES.reservation_open,
+    title: "예약 안내",
+    reason: `예약 오픈 안내 · ${reservationWeek}`,
+    sourceDate,
+    payload: {
+      memberName: profile.name,
+      reservationWeek,
+      weekLabel: reservationWeek,
+      reservationStartDate,
+      reservationEndDate,
+      activeTicketNames: eligibleTickets
+        .map((ticket) => ticket.name)
+        .filter(Boolean)
+        .join(", "),
+    },
+    attempts: 0,
+    maxAttempts: 2,
+    lastError: null,
+    createdAt: nowTimestamp(),
+    updatedAt: nowTimestamp(),
+  };
 }
 
 function instructorLessonMaterialCandidatesForDate(
@@ -836,6 +905,39 @@ function isLessonProfileTicket(ticket: NonNullable<MemberProfileDoc["activeTicke
   return true;
 }
 
+function reservationOpenEligibleGroupTickets(
+  profile: MemberProfileDoc | undefined,
+  reservationStartDate: string,
+  reservationEndDate: string,
+): NonNullable<MemberProfileDoc["activeTickets"]> {
+  return (profile?.activeTickets || []).filter((ticket) =>
+    isReservationOpenEligibleGroupTicket(ticket, reservationStartDate, reservationEndDate),
+  );
+}
+
+function isReservationOpenEligibleGroupTicket(
+  ticket: NonNullable<MemberProfileDoc["activeTickets"]>[number],
+  reservationStartDate: string,
+  reservationEndDate: string,
+): boolean {
+  if (!ticket.name) return false;
+  if (!isLessonProfileTicket(ticket)) return false;
+  if (!isGroupOrMixedProfileTicket(ticket)) return false;
+  if (ticket.expiryLevel === "expired") return false;
+  if (ticket.availableFrom && expiryDateText(ticket.availableFrom) > reservationEndDate) return false;
+  if (ticket.expiresAt && expiryDateText(ticket.expiresAt) < reservationStartDate) return false;
+  const remaining = ticket.remainingCount == null ? Number.NaN : Number(ticket.remainingCount);
+  return !Number.isFinite(remaining) || remaining > 0;
+}
+
+function isGroupOrMixedProfileTicket(ticket: NonNullable<MemberProfileDoc["activeTickets"]>[number]): boolean {
+  const classType = String(ticket.classType || "").toUpperCase();
+  const name = String(ticket.name || "");
+  if (classType === "G" || classType === "GROUP") return true;
+  if (/그룹|듀엣|소그룹|혼합/.test(name)) return true;
+  return !isPrivateProfileTicket(ticket);
+}
+
 function isPrivateProfileTicket(ticket: NonNullable<MemberProfileDoc["activeTickets"]>[number]): boolean {
   const classType = String(ticket.classType || "").toUpperCase();
   const name = String(ticket.name || "");
@@ -953,6 +1055,28 @@ function reservationOpenEndDate(baseDate: string): string {
   const base = new Date(`${baseDate}T00:00:00+09:00`);
   const daysSinceMonday = (base.getDay() + 6) % 7;
   return addDays(baseDate, 13 - daysSinceMonday);
+}
+
+function reservationOpenStartDate(baseDate: string): string {
+  return addDays(reservationOpenEndDate(baseDate), -6);
+}
+
+function isReservationOpenSendDate(sourceDate: string): boolean {
+  const date = new Date(`${sourceDate}T00:00:00+09:00`);
+  return !Number.isNaN(date.getTime()) && date.getDay() === 1;
+}
+
+function reservationWeekLabel(startDate: string, endDate: string): string {
+  const start = new Date(`${startDate}T00:00:00+09:00`);
+  const weekNumber = Math.ceil(start.getDate() / 7);
+  return `${start.getMonth() + 1}월${weekNumber}주차(${shortMonthDayWithWeekday(startDate)}~${shortMonthDayWithWeekday(endDate)})`;
+}
+
+function shortMonthDayWithWeekday(value: string): string {
+  const date = new Date(`${value}T00:00:00+09:00`);
+  if (Number.isNaN(date.getTime())) return value;
+  const weekdays = ["일", "월", "화", "수", "목", "금", "토"];
+  return `${date.getMonth() + 1}/${date.getDate()}(${weekdays[date.getDay()]})`;
 }
 
 async function upsertCandidate(candidate: AlimtalkCandidateDoc): Promise<void> {

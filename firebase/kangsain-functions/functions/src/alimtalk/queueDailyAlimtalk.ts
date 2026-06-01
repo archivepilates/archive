@@ -78,6 +78,78 @@ export async function queueDailyAlimtalkCandidates(
   };
 }
 
+export async function queueReservationOpenAlimtalkCandidates(
+  input: {
+    studioId?: string;
+    today?: string;
+  } = {},
+): Promise<{ rebuilt: number; queued: number; blocked: number; approvalRequired?: boolean; approvalId?: string }> {
+  const studioId = input.studioId || DEFAULT_STUDIO_ID;
+  const today = input.today || todayKst();
+  const rebuilt = await rebuildAlimtalkCandidatesForRange({
+    studioId,
+    startDate: today,
+    endDate: today,
+    mode: "reservation_open",
+  });
+  const candidates = await listRebuiltCandidates(rebuilt.candidateIds, studioId);
+
+  const sendable: AlimtalkCandidateDoc[] = [];
+  let blocked = 0;
+  for (const candidate of candidates) {
+    if (
+      candidate.type !== "reservation_open" ||
+      !["candidate", "reviewed", "failed"].includes(candidate.status) ||
+      (await autoSendabilityIssue(candidate, today))
+    ) {
+      blocked += 1;
+      continue;
+    }
+    sendable.push(candidate);
+  }
+
+  const approval = await requireApprovalForLargeAlimtalkBatch({ studioId, today, candidates: sendable });
+  if (approval.required && !approval.approved) {
+    logger.info("queueReservationOpenAlimtalkCandidates awaiting approval", {
+      studioId,
+      today,
+      rebuilt: rebuilt.candidates,
+      sendable: sendable.length,
+      blocked,
+      approvalId: approval.approvalId,
+      emailed: approval.emailed,
+    });
+    return {
+      rebuilt: rebuilt.candidates,
+      queued: 0,
+      blocked: blocked + sendable.length,
+      approvalRequired: true,
+      approvalId: approval.approvalId,
+    };
+  }
+
+  let queued = 0;
+  for (const candidate of sendable) {
+    const didQueue = await queueCandidate(candidate, today, "system:auto-reservation-open-1230");
+    if (didQueue) queued += 1;
+  }
+
+  logger.info("queueReservationOpenAlimtalkCandidates completed", {
+    studioId,
+    today,
+    rebuilt: rebuilt.candidates,
+    queued,
+    blocked,
+  });
+  return {
+    rebuilt: rebuilt.candidates,
+    queued,
+    blocked,
+    approvalRequired: approval.required,
+    approvalId: approval.approvalId,
+  };
+}
+
 async function listRebuiltCandidates(candidateIds: string[], studioId: string): Promise<AlimtalkCandidateDoc[]> {
   const uniqueIds = [...new Set(candidateIds)];
   const snaps = await Promise.all(uniqueIds.map((candidateId) => refs.alimtalkCandidate(candidateId).get()));
@@ -86,7 +158,11 @@ async function listRebuiltCandidates(candidateIds: string[], studioId: string): 
     .filter((candidate): candidate is AlimtalkCandidateDoc => Boolean(candidate && candidate.studioId === studioId));
 }
 
-async function queueCandidate(candidate: AlimtalkCandidateDoc, today: string): Promise<boolean> {
+async function queueCandidate(
+  candidate: AlimtalkCandidateDoc,
+  today: string,
+  reviewedByUid = "system:auto-daily-1130",
+): Promise<boolean> {
   if (await autoSendabilityIssue(candidate, today)) return false;
   return db.runTransaction(async (tx) => {
     const ref = refs.alimtalkCandidate(candidate.candidateId);
@@ -100,7 +176,7 @@ async function queueCandidate(candidate: AlimtalkCandidateDoc, today: string): P
       {
         status: "queued",
         queuedBy: "auto",
-        reviewedByUid: "system:auto-daily-1130",
+        reviewedByUid,
         reviewedAt: nowTimestamp(),
         attempts: current.attempts || 0,
         maxAttempts: current.maxAttempts || 2,

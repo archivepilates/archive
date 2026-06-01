@@ -23,6 +23,9 @@ export async function autoSendabilityIssue(candidate: AlimtalkCandidateDoc, toda
       return `${rule.templateLabel}은 등록 ${rule.maxAgeDays}일 이내 후보만 발송`;
     }
   }
+  if (candidate.type === "reservation_open" && !(candidate.payload?.reservationWeek || candidate.payload?.weekLabel)) {
+    return "예약주차 변수 없음";
+  }
   if (rule?.requiresManagementNumber) {
     const rawManagementNumber = String(
       candidate.payload?.managementNumber || candidate.payload?.materialNumber || candidate.payload?.archiveMethodId || "",
