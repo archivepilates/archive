@@ -181,6 +181,13 @@
           }
         },
         {
+          "source": "/archivein/api/onsiteWelcomeRequest",
+          "function": {
+            "functionId": "onsiteWelcomeRequest",
+            "region": "asia-northeast3"
+          }
+        },
+        {
           "source": "/archivein/api/notion/privateLessonReportWebhook",
           "function": {
             "functionId": "notionPrivateLessonReportWebhook",
@@ -264,6 +271,13 @@
           "source": "/api/memberSignupContract",
           "function": {
             "functionId": "memberSignupContract",
+            "region": "asia-northeast3"
+          }
+        },
+        {
+          "source": "/api/onsiteWelcomeRequest",
+          "function": {
+            "functionId": "onsiteWelcomeRequest",
             "region": "asia-northeast3"
           }
         },

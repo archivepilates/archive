@@ -326,7 +326,7 @@ export interface MemberSignupContractDoc {
   memberPhoneLast4: string;
   status: MemberSignupContractStatus;
   accessTokenHash: string;
-  source: "studiomate_profile" | "manual_sample" | "manual";
+  source: "studiomate_profile" | "studiomate_playwright_lookup" | "manual_sample" | "manual";
   member: {
     name: string;
     phone: string;
@@ -367,6 +367,46 @@ export interface MemberSignupContractDoc {
   expiresAt?: Timestamp | null;
   createdAt: Timestamp;
   updatedAt: Timestamp;
+}
+
+export type OnsiteWelcomeRequestStatus =
+  | "pending"
+  | "running"
+  | "ready"
+  | "sent"
+  | "error"
+  | "cancelled";
+
+export interface OnsiteWelcomeRequestDoc {
+  requestId: string;
+  studioId: string;
+  status: OnsiteWelcomeRequestStatus;
+  accessTokenHash: string;
+  phone: string;
+  phoneLast4: string;
+  memberNameHint?: string;
+  source: "onsite_welcome_page";
+  progressPercent: number;
+  progressLabel: string;
+  claimedBy?: string;
+  lookup?: {
+    source: "studiomate_playwright_lookup";
+    memberId?: string;
+    memberName?: string;
+    memberPhone?: string;
+    ticketName?: string;
+    startDate?: string;
+    endDate?: string;
+    rawTextPreview?: string;
+  };
+  contractId?: string;
+  signupUrl?: string;
+  alimtalkCandidateId?: string;
+  lastError?: string | null;
+  createdAt: Timestamp;
+  updatedAt: Timestamp;
+  startedAt?: Timestamp | null;
+  completedAt?: Timestamp | null;
 }
 
 export type ContactSyncTarget = "archivepilates_gmail" | "home_archivepilates";

@@ -11,6 +11,7 @@ import type {
   InstructorViewDoc,
   MemberContactIndexDoc,
   MemberSignupContractDoc,
+  OnsiteWelcomeRequestDoc,
   LectureDoc,
   MemberMemoDoc,
   MemberProfileDoc,
@@ -57,6 +58,9 @@ export const refs = {
   memberSignupContracts: () =>
     db.collection("memberSignupContracts").withConverter(converter<MemberSignupContractDoc>()),
   memberSignupContract: (contractId: string) => refs.memberSignupContracts().doc(contractId),
+  onsiteWelcomeRequests: () =>
+    db.collection("onsiteWelcomeRequests").withConverter(converter<OnsiteWelcomeRequestDoc>()),
+  onsiteWelcomeRequest: (requestId: string) => refs.onsiteWelcomeRequests().doc(requestId),
   contactSyncJobs: () => db.collection("contactSyncJobs").withConverter(converter<ContactSyncJobDoc>()),
   contactSyncJob: (jobId: string) => refs.contactSyncJobs().doc(jobId),
   alimtalkCandidates: () => db.collection("alimtalkCandidates").withConverter(converter<AlimtalkCandidateDoc>()),

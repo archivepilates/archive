@@ -20,6 +20,7 @@ import {
   syncPrivateSurveyResponsesFromSheet,
 } from "../privateSurvey/privateSurveyResponse";
 import { memberSignupContractHandler } from "../memberSignup/memberSignupContract";
+import { onsiteWelcomeRequestHandler } from "../memberSignup/onsiteWelcomeRequest";
 import {
   privateLessonChartRequestOptions,
   privateLessonChartScheduleOptions,
@@ -111,6 +112,8 @@ export const privateLessonChartApi = onRequest(privateLessonChartRequestOptions,
 export const privateLessonReportView = onRequest(publicRequestOptions, privateLessonReportViewHandler);
 
 export const memberSignupContract = onRequest(publicRequestOptions, memberSignupContractHandler);
+
+export const onsiteWelcomeRequest = onRequest(publicRequestOptions, onsiteWelcomeRequestHandler);
 
 export const notionPrivateLessonReportWebhook = onRequest(
   privateLessonChartRequestOptions,

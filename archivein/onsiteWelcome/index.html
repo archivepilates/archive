@@ -1,0 +1,171 @@
+<!doctype html>
+<html lang="ko">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1">
+  <meta name="robots" content="noindex,nofollow">
+  <title>ARCHIVE PILATES 현장 웰컴</title>
+  <style>
+    :root { color-scheme:light; --ink:#181512; --muted:#716960; --line:#e5ddd4; --bg:#f7f2ec; --paper:#fffdfa; --accent:#b73d32; --good:#2f6f68; --bad:#96352c; }
+    * { box-sizing:border-box; }
+    body { margin:0; font-family:-apple-system,BlinkMacSystemFont,"Apple SD Gothic Neo","Noto Sans KR",sans-serif; background:var(--bg); color:var(--ink); }
+    main { width:min(560px,100%); margin:0 auto; padding:18px 14px 36px; }
+    header { display:grid; grid-template-columns:1fr 48px; gap:14px; align-items:start; padding:12px 2px 18px; border-bottom:1px solid rgba(24,21,18,.08); }
+    img { width:48px; height:48px; border-radius:50%; object-fit:contain; }
+    .eyebrow { font-size:12px; font-weight:900; color:var(--accent); }
+    h1 { margin:6px 0 8px; font-size:26px; line-height:1.18; letter-spacing:0; }
+    p { margin:0; color:var(--muted); font-size:14px; line-height:1.65; word-break:keep-all; }
+    form, .panel { display:grid; gap:12px; margin-top:14px; border:1px solid var(--line); border-radius:8px; background:var(--paper); padding:15px; }
+    label { display:grid; gap:7px; color:#3b352f; font-size:13px; font-weight:800; }
+    input { width:100%; min-height:48px; border:1px solid var(--line); border-radius:8px; padding:10px 11px; background:#fff; color:var(--ink); font:inherit; font-size:17px; }
+    input:focus { outline:2px solid rgba(183,61,50,.18); border-color:var(--accent); }
+    button { min-height:50px; border:0; border-radius:8px; background:var(--accent); color:#fff; font-size:15px; font-weight:900; cursor:pointer; }
+    button:disabled { opacity:.55; cursor:wait; }
+    .progress { height:9px; border-radius:999px; overflow:hidden; background:#eee6dd; }
+    .bar { height:100%; width:0; background:var(--accent); transition:width .25s ease; }
+    .status { font-size:14px; line-height:1.6; color:var(--muted); white-space:pre-wrap; }
+    .result { display:grid; gap:8px; }
+    .row { display:grid; grid-template-columns:82px 1fr; gap:10px; padding-top:8px; border-top:1px solid rgba(24,21,18,.08); font-size:14px; }
+    .row b { color:#403933; }
+    .message { margin-top:14px; border:1px solid var(--line); border-radius:8px; background:var(--paper); padding:14px; line-height:1.7; word-break:keep-all; }
+    .message.good { border-color:#bcd7d2; background:#f2faf8; color:var(--good); }
+    .message.bad { border-color:#f0c9c1; background:#fff7f4; color:var(--bad); }
+  </style>
+</head>
+<body>
+  <main>
+    <header>
+      <div>
+        <div class="eyebrow">ARCHIVE PILATES</div>
+        <h1>현장 웰컴 즉시발송</h1>
+        <p>StudioMate에 신규회원 기본정보와 수강권을 저장한 뒤, 휴대폰 번호로 단건 조회를 요청합니다. Mac mini가 StudioMate 화면을 확인해 가입서 링크를 준비합니다.</p>
+      </div>
+      <img src="../logo120.png" alt="ARCHIVE PILATES">
+    </header>
+
+    <form id="requestForm">
+      <label>휴대폰 번호
+        <input name="phone" inputmode="tel" autocomplete="tel" placeholder="01012345678" required>
+      </label>
+      <label>회원명 확인용
+        <input name="memberName" autocomplete="name" placeholder="동명이인 방지용, 선택 입력">
+      </label>
+      <button type="submit">StudioMate 단건 조회 요청</button>
+    </form>
+
+    <section id="panel" class="panel" hidden>
+      <div class="progress"><div id="bar" class="bar"></div></div>
+      <div id="status" class="status">요청 준비 중</div>
+      <div id="result" class="result"></div>
+    </section>
+    <section id="message" class="message" hidden></section>
+  </main>
+
+  <script>
+    const form = document.getElementById('requestForm');
+    const panel = document.getElementById('panel');
+    const statusEl = document.getElementById('status');
+    const resultEl = document.getElementById('result');
+    const message = document.getElementById('message');
+    const bar = document.getElementById('bar');
+    const button = form.querySelector('button');
+    let pollTimer = null;
+    let current = null;
+
+    form.addEventListener('submit', async (event) => {
+      event.preventDefault();
+      button.disabled = true;
+      hideMessage();
+      resultEl.innerHTML = '';
+      try {
+        const payload = {
+          phone: form.elements.phone.value.trim(),
+          memberName: form.elements.memberName.value.trim()
+        };
+        current = await requestJson('../api/onsiteWelcomeRequest', {
+          method: 'POST',
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify(payload)
+        });
+        panel.hidden = false;
+        setStatus({ progressPercent: 5, progressLabel: '현장 웰컴 요청 접수', status: 'pending' });
+        startPolling();
+      } catch (err) {
+        showMessage(err.message || '요청을 만들지 못했습니다.', true);
+        button.disabled = false;
+      }
+    });
+
+    function startPolling() {
+      clearInterval(pollTimer);
+      pollTimer = setInterval(loadStatus, 2500);
+      loadStatus();
+    }
+
+    async function loadStatus() {
+      if (!current?.requestId || !current?.accessToken) return;
+      try {
+        const data = await requestJson(`../api/onsiteWelcomeRequest?id=${encodeURIComponent(current.requestId)}&token=${encodeURIComponent(current.accessToken)}`);
+        setStatus(data.request);
+        if (['ready', 'sent', 'error', 'cancelled'].includes(data.request.status)) {
+          clearInterval(pollTimer);
+          button.disabled = false;
+        }
+      } catch (err) {
+        clearInterval(pollTimer);
+        button.disabled = false;
+        showMessage(err.message || '상태를 확인하지 못했습니다.', true);
+      }
+    }
+
+    function setStatus(request) {
+      const percent = Math.max(0, Math.min(100, Number(request.progressPercent || 0)));
+      bar.style.width = `${percent}%`;
+      statusEl.textContent = request.progressLabel || statusLabel(request.status);
+      if (request.lastError) showMessage(request.lastError, true);
+      if (request.signupUrl) {
+        resultEl.innerHTML = [
+          row('회원', request.lookup?.memberName || request.memberNameHint || '-'),
+          row('수강권', request.lookup?.ticketName || '-'),
+          row('가입서', `<a href="${escapeAttr(request.signupUrl)}" target="_blank" rel="noreferrer">회원가입서 열기</a>`)
+        ].join('');
+        showMessage('가입서 링크가 준비되었습니다. 알림톡 템플릿 버튼 연결 후 즉시 발송 단계로 이어집니다.');
+      }
+    }
+
+    function row(label, value) {
+      return `<div class="row"><b>${escapeHtml(label)}</b><span>${value}</span></div>`;
+    }
+
+    async function requestJson(url, options) {
+      const response = await fetch(url, options);
+      const data = await response.json().catch(() => ({}));
+      if (!response.ok || data.ok === false) throw new Error(data.error || `HTTP ${response.status}`);
+      return data;
+    }
+
+    function statusLabel(status) {
+      return status === 'running' ? 'StudioMate 조회 중' : status === 'ready' ? '가입서 준비 완료' : status === 'error' ? '처리 실패' : '대기 중';
+    }
+
+    function showMessage(text, warn = false) {
+      message.hidden = false;
+      message.className = `message ${warn ? 'bad' : 'good'}`;
+      message.textContent = text;
+    }
+
+    function hideMessage() {
+      message.hidden = true;
+      message.textContent = '';
+    }
+
+    function escapeHtml(value) {
+      return String(value == null ? '' : value).replace(/[&<>"']/g, (char) => ({ '&':'&amp;', '<':'&lt;', '>':'&gt;', '"':'&quot;', "'":'&#39;' })[char] || char);
+    }
+
+    function escapeAttr(value) {
+      return escapeHtml(value).replace(/`/g, '&#96;');
+    }
+  </script>
+</body>
+</html>
