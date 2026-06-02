@@ -8,7 +8,9 @@ const ALLOWED_TARGET_ORIGINS = new Set(["https://in.archivepilates.com", "https:
 
 export type ShortLinkType =
   | "survey_detail"
+  | "private_survey"
   | "group_survey"
+  | "member_signup"
   | "method_material"
   | "private_chart"
   | "private_report"
@@ -18,15 +20,19 @@ export function shortLinkIdForTarget(type: ShortLinkType, targetUrl: string): st
   const prefix =
     type === "survey_detail"
       ? "sv"
-      : type === "group_survey"
-        ? "gs"
-        : type === "private_chart"
-          ? "pc"
-          : type === "private_report"
-            ? "pr"
-            : type === "inbody_report"
-              ? "ir"
-              : "mt";
+      : type === "private_survey"
+        ? "ps"
+        : type === "group_survey"
+          ? "gs"
+          : type === "member_signup"
+            ? "ms"
+            : type === "private_chart"
+              ? "pc"
+              : type === "private_report"
+                ? "pr"
+                : type === "inbody_report"
+                  ? "ir"
+                  : "mt";
   return `${prefix}-${stableHash({ type, targetUrl }).slice(0, 12)}`;
 }
 

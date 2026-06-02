@@ -358,11 +358,17 @@ async function shortLinkIdForCandidate(
   managementNumber: string,
 ): Promise<string> {
   const existing = String(candidate.payload?.shortLinkId || "");
-  if (candidate.type !== "instructor_lesson_material" && existing) return existing;
-  if (candidate.type === "group_survey" && surveyId && accessToken) {
+  if (!["private_survey", "group_survey", "instructor_lesson_material"].includes(candidate.type) && existing) {
+    return existing;
+  }
+  if ((candidate.type === "private_survey" || candidate.type === "group_survey") && surveyId && accessToken) {
+    const type = candidate.type === "private_survey" ? "private_survey" : "group_survey";
     const link = await ensureShortLink({
-      type: "group_survey",
-      targetUrl: groupSurveyTargetUrl(surveyId, accessToken),
+      type,
+      targetUrl:
+        candidate.type === "private_survey"
+          ? privateSurveyTargetUrl(surveyId, accessToken)
+          : groupSurveyTargetUrl(surveyId, accessToken),
       sourceId: candidate.candidateId,
     });
     if (!existing) {
@@ -400,6 +406,13 @@ async function shortLinkIdForCandidate(
 
 function groupSurveyTargetUrl(surveyId: string, accessToken: string): string {
   const url = new URL("https://in.archivepilates.com/groupSurvey");
+  url.searchParams.set("id", surveyId);
+  url.searchParams.set("token", accessToken);
+  return url.toString();
+}
+
+function privateSurveyTargetUrl(surveyId: string, accessToken: string): string {
+  const url = new URL("https://in.archivepilates.com/privateSurvey");
   url.searchParams.set("id", surveyId);
   url.searchParams.set("token", accessToken);
   return url.toString();

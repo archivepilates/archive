@@ -102,6 +102,28 @@ interface GroupSurveyRequestDoc {
   updatedAt: Timestamp;
 }
 
+interface PrivateSurveyRequestDoc {
+  requestId: string;
+  studioId: string;
+  memberId: string;
+  memberName: string;
+  memberPhone: string;
+  memberPhoneLast4: string;
+  bookingId: string;
+  lectureId: string;
+  lectureDate: string;
+  staffId: string;
+  staffName: string;
+  ticketName: string;
+  sourceCandidateId: string;
+  shortLinkId?: string;
+  shortUrl?: string;
+  accessTokenHash: string;
+  status: "pending" | "submitted" | "skipped";
+  createdAt: Timestamp;
+  updatedAt: Timestamp;
+}
+
 interface GroupSurveySubmitPayload {
   requestId: string;
   accessToken: string;
@@ -113,8 +135,26 @@ interface GroupSurveySubmitPayload {
   requestNote: string;
 }
 
+interface PrivateSurveySubmitPayload {
+  requestId: string;
+  accessToken: string;
+  experienceType: string;
+  goals: string[];
+  focusAreas: string[];
+  painNote: string;
+  lifestyle: string[];
+  exerciseLevel: string;
+  concern: string;
+  requestNote: string;
+  referralSource: string;
+}
+
 export async function ingestPrivateSurveyResponseHandler(request: any, response: any): Promise<void> {
   setCors(response);
+  if (isPrivateSurveySubmitRequest(request)) {
+    await submitPrivateSurveyResponseHandler(request, response);
+    return;
+  }
   if (isGroupSurveySubmitRequest(request)) {
     await submitGroupSurveyResponseHandler(request, response);
     return;
@@ -172,6 +212,11 @@ export async function ingestPrivateSurveyResponseHandler(request: any, response:
 function isGroupSurveySubmitRequest(request: any): boolean {
   const url = String(request.originalUrl || request.url || request.path || "");
   return url.includes("/api/groupSurveySubmit") || url.includes("groupSurveySubmit");
+}
+
+function isPrivateSurveySubmitRequest(request: any): boolean {
+  const url = String(request.originalUrl || request.url || request.path || "");
+  return url.includes("/api/privateSurveySubmit") || url.includes("privateSurveySubmit");
 }
 
 export async function processPrivateSurveyIntakeHandler(
@@ -532,6 +577,124 @@ export async function submitGroupSurveyResponseHandler(request: any, response: a
   }
 }
 
+export async function submitPrivateSurveyResponseHandler(request: any, response: any): Promise<void> {
+  setCors(response);
+  if (request.method === "OPTIONS") {
+    response.status(204).send("");
+    return;
+  }
+  try {
+    if (request.method === "GET") {
+      const { privateRequest } = await readPrivateSurveyRequest(request.query?.id, request.query?.token);
+      if (privateRequest.status === "skipped") {
+        response.status(410).json({ ok: false, error: "이미 대상에서 제외된 설문입니다." });
+        return;
+      }
+      response.status(200).json({
+        ok: true,
+        requestId: privateRequest.requestId,
+        memberName: privateRequest.memberName,
+        memberPhone: displayPhone(privateRequest.memberPhone),
+        staffName: privateRequest.staffName,
+        lessonTime: await privateLessonTime(privateRequest),
+        status: privateRequest.status,
+      });
+      return;
+    }
+    if (request.method !== "POST") {
+      response.status(405).json({ ok: false, error: "method_not_allowed" });
+      return;
+    }
+    const payload = normalizePrivateSurveySubmitPayload(request.body || {});
+    const { privateRequest, accessToken } = await readPrivateSurveyRequest(payload.requestId, payload.accessToken);
+    if (privateRequest.status === "skipped") {
+      response.status(410).json({ ok: false, error: "이미 대상에서 제외된 설문입니다." });
+      return;
+    }
+    const responseId = privateRequest.requestId;
+    const detailUrl = detailUrlFor(responseId, accessToken);
+    if (privateRequest.status === "submitted") {
+      const existing = (await refs.privateSurveyResponse(responseId).get()).data();
+      response.status(200).json({
+        ok: true,
+        duplicate: true,
+        responseId,
+        detailUrl: existing?.delivery?.detailUrl || detailUrl,
+        alimtalkStatus: existing?.delivery?.alimtalkStatus || "sent",
+        alimtalkReason: "이미 제출된 사전설문입니다.",
+      });
+      return;
+    }
+
+    const answers = privateSurveyAnswers(payload);
+    const summary = summarizePrivateSurveyAnswers(payload);
+    const matching = await privateSurveyMatch(privateRequest);
+    const doc = await buildNativePrivateSurveyDoc({
+      privateRequest,
+      responseId,
+      accessToken,
+      detailUrl,
+      answers,
+      summary,
+      matching,
+      experienceType: payload.experienceType,
+    });
+    const created = await createSurveyResponseIfNew(responseId, doc);
+    if (!created) {
+      const existing = (await refs.privateSurveyResponse(responseId).get()).data();
+      await db.collection("privateSurveyRequests").doc(privateRequest.requestId).set(
+        {
+          status: "submitted",
+          responseId,
+          detailUrl: existing?.delivery?.detailUrl || detailUrl,
+          submittedAt: nowTimestamp(),
+          updatedAt: nowTimestamp(),
+        },
+        { merge: true },
+      );
+      response.status(200).json({
+        ok: true,
+        duplicate: true,
+        responseId,
+        detailUrl: existing?.delivery?.detailUrl || detailUrl,
+        alimtalkStatus: existing?.delivery?.alimtalkStatus || "sent",
+        alimtalkReason: "이미 제출된 사전설문입니다.",
+      });
+      return;
+    }
+
+    const delivery = pendingStaffSurveyDelivery(doc);
+    await refs.privateSurveyResponse(responseId).set({ delivery, updatedAt: nowTimestamp() }, { merge: true });
+    await writePublicSurveyDoc(doc, accessToken, delivery);
+    await enqueueSurveyMemoOutputs(doc);
+    const notionSync = await syncPrivateSurveyResponseToNotion({ ...doc, delivery });
+    await refs.privateSurveyResponse(responseId).set({ notionSync, updatedAt: nowTimestamp() }, { merge: true });
+    await db.collection("privateSurveyRequests").doc(privateRequest.requestId).set(
+      {
+        status: "submitted",
+        responseId,
+        detailUrl,
+        delivery,
+        notionSync,
+        submittedAt: nowTimestamp(),
+        updatedAt: nowTimestamp(),
+      },
+      { merge: true },
+    );
+    response.status(200).json({
+      ok: true,
+      responseId,
+      detailUrl,
+      alimtalkStatus: delivery.alimtalkStatus,
+      alimtalkReason: delivery.alimtalkReason,
+    });
+  } catch (err) {
+    const message = err instanceof Error ? err.message : String(err);
+    logger.error("submitPrivateSurveyResponse failed", { message });
+    response.status(400).json({ ok: false, error: message });
+  }
+}
+
 function setCors(response: any): void {
   response.set("Access-Control-Allow-Origin", "*");
   response.set("Access-Control-Allow-Methods", "GET,POST,OPTIONS");
@@ -571,6 +734,46 @@ async function readGroupSurveyRequest(
   return { groupRequest, accessToken };
 }
 
+async function readPrivateSurveyRequest(
+  requestIdInput: unknown,
+  accessTokenInput: unknown,
+): Promise<{ privateRequest: PrivateSurveyRequestDoc; accessToken: string }> {
+  const requestId = stringValue(requestIdInput);
+  const accessToken = stringValue(accessTokenInput);
+  if (!/^psr-[a-z0-9-]{8,80}$/i.test(requestId) || !/^[a-f0-9]{16,80}$/i.test(accessToken)) {
+    throw new Error("설문 링크가 올바르지 않습니다.");
+  }
+  const snap = await db.collection("privateSurveyRequests").doc(requestId).get();
+  const privateRequest = snap.data() as PrivateSurveyRequestDoc | undefined;
+  if (!privateRequest || privateRequest.accessTokenHash !== sha256(accessToken)) {
+    throw new Error("설문을 열 수 있는 권한이 없습니다.");
+  }
+  return { privateRequest, accessToken };
+}
+
+function normalizePrivateSurveySubmitPayload(input: Record<string, unknown>): PrivateSurveySubmitPayload {
+  const payload: PrivateSurveySubmitPayload = {
+    requestId: stringValue(input.requestId || input.id),
+    accessToken: stringValue(input.accessToken || input.token),
+    experienceType: stringValue(input.experienceType),
+    goals: stringArray(input.goals),
+    focusAreas: stringArray(input.focusAreas),
+    painNote: stringValue(input.painNote),
+    lifestyle: stringArray(input.lifestyle),
+    exerciseLevel: stringValue(input.exerciseLevel),
+    concern: stringValue(input.concern),
+    requestNote: stringValue(input.requestNote),
+    referralSource: stringValue(input.referralSource),
+  };
+  if (!payload.requestId || !payload.accessToken) throw new Error("설문 링크가 올바르지 않습니다.");
+  if (!payload.experienceType) throw new Error("필라테스 경험을 선택해주세요.");
+  if (!payload.goals.length) throw new Error("운동 목표를 선택해주세요.");
+  if (!payload.focusAreas.length) throw new Error("신경 쓰이는 부위를 선택해주세요.");
+  if (!payload.exerciseLevel) throw new Error("운동 경험을 선택해주세요.");
+  if (!payload.concern) throw new Error("걱정되는 부분을 선택해주세요.");
+  return payload;
+}
+
 function normalizeGroupSurveySubmitPayload(input: Record<string, unknown>): GroupSurveySubmitPayload {
   const payload: GroupSurveySubmitPayload = {
     requestId: stringValue(input.requestId || input.id),
@@ -598,6 +801,33 @@ function stringArray(value: unknown): string[] {
     .slice(0, 12);
 }
 
+function privateSurveyAnswers(payload: PrivateSurveySubmitPayload): Record<string, string> {
+  return {
+    "필라테스 운동경험이 있으신가요?": payload.experienceType,
+    "현재 운동 목표": payload.goals.join(", "),
+    "현재 가장 신경 쓰이는 부위": payload.focusAreas.join(", "),
+    "통증이나 불편한 부위": payload.painNote,
+    "평소 생활패턴": payload.lifestyle.join(", "),
+    "운동 경험": payload.exerciseLevel,
+    "운동을 시작할 때 가장 걱정되는 부분": payload.concern,
+    "프라이빗 수업 진행 시 중요하게 생각하는 요소": payload.requestNote,
+    "아카이브필라테스를 알게 된 경로": payload.referralSource,
+  };
+}
+
+function summarizePrivateSurveyAnswers(payload: PrivateSurveySubmitPayload): SurveySummary {
+  return {
+    goal: payload.goals.join(", "),
+    focusArea: payload.focusAreas.join(", "),
+    painOrMedicalNote: payload.painNote,
+    exerciseLevel: payload.exerciseLevel,
+    concernOrDifficulty: payload.concern,
+    expectationOrImportantFactor: payload.requestNote,
+    referralSource: payload.referralSource,
+    lifestyleOrPreviousIssue: payload.lifestyle.join(", "),
+  };
+}
+
 function groupSurveyAnswers(payload: GroupSurveySubmitPayload): Record<string, string> {
   return {
     "필라테스 또는 운동 경험": payload.exerciseExperience,
@@ -620,6 +850,30 @@ function summarizeGroupSurveyAnswers(payload: GroupSurveySubmitPayload): SurveyS
     referralSource: "",
     lifestyleOrPreviousIssue: "",
   };
+}
+
+async function privateSurveyMatch(privateRequest: PrivateSurveyRequestDoc): Promise<MatchResult> {
+  const booking = privateRequest.bookingId ? (await refs.booking(privateRequest.bookingId).get()).data() : null;
+  return {
+    status: "matched",
+    memberId: privateRequest.memberId,
+    memberName: privateRequest.memberName,
+    memberPhone: privateRequest.memberPhone,
+    bookingId: privateRequest.bookingId,
+    lectureId: privateRequest.lectureId,
+    lectureDate: booking?.lectureDate || privateRequest.lectureDate,
+    lectureStartAt: booking?.lectureStartAt || null,
+    staffId: booking?.staffId || privateRequest.staffId,
+    staffName: booking?.staffName || privateRequest.staffName,
+    reason: "첫 프라이빗 예약 자동매칭",
+  };
+}
+
+async function privateLessonTime(privateRequest: PrivateSurveyRequestDoc): Promise<string> {
+  const matching = await privateSurveyMatch(privateRequest);
+  return lessonTimeText({
+    matching,
+  } as PrivateSurveyResponseDoc);
 }
 
 async function groupSurveyMatch(groupRequest: GroupSurveyRequestDoc): Promise<MatchResult> {
@@ -763,6 +1017,46 @@ async function buildGroupSurveyDoc(input: {
       detailUrl: input.detailUrl,
       alimtalkStatus: "pending",
       alimtalkReason: "그룹 사전확인 강사 알림톡 발송 대기",
+    },
+    accessTokenHash: sha256(input.accessToken),
+    createdAt: now,
+    updatedAt: now,
+  };
+}
+
+async function buildNativePrivateSurveyDoc(input: {
+  privateRequest: PrivateSurveyRequestDoc;
+  responseId: string;
+  accessToken: string;
+  detailUrl: string;
+  answers: Record<string, string>;
+  summary: SurveySummary;
+  matching: MatchResult;
+  experienceType: string;
+}): Promise<PrivateSurveyResponseDoc> {
+  const now = nowTimestamp();
+  return {
+    responseId: input.responseId,
+    studioId: input.privateRequest.studioId || DEFAULT_STUDIO_ID,
+    surveyType: "private",
+    source: {
+      spreadsheetId: "ARCHIVE_IN_PRIVATE_SURVEY",
+      sheetName: "privateSurvey",
+      rowNumber: 0,
+    },
+    submittedAt: now,
+    submittedAtText: kstNowText(),
+    memberName: input.privateRequest.memberName,
+    memberPhone: input.privateRequest.memberPhone,
+    memberPhoneLast4: input.privateRequest.memberPhoneLast4 || input.privateRequest.memberPhone.slice(-4),
+    experienceType: input.experienceType,
+    summary: input.summary,
+    rawAnswers: input.answers,
+    matching: input.matching,
+    delivery: {
+      detailUrl: input.detailUrl,
+      alimtalkStatus: "pending",
+      alimtalkReason: "프라이빗 사전설문 강사 알림톡 발송 대기",
     },
     accessTokenHash: sha256(input.accessToken),
     createdAt: now,
@@ -1852,6 +2146,13 @@ function normalizePhone(value: string): string {
   const digits = value.replace(/\D/g, "");
   if (digits.startsWith("82")) return `0${digits.slice(2)}`;
   return digits;
+}
+
+function displayPhone(value: string): string {
+  const digits = normalizePhone(value);
+  if (digits.length === 11) return `${digits.slice(0, 3)}-${digits.slice(3, 7)}-${digits.slice(7)}`;
+  if (digits.length === 10) return `${digits.slice(0, 3)}-${digits.slice(3, 6)}-${digits.slice(6)}`;
+  return value;
 }
 
 function stringValue(value: unknown): string {

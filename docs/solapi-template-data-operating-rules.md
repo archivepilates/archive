@@ -194,6 +194,9 @@
 - 프라이빗 수강권 등록 감지 후 후보 생성.
 - 첫 프라이빗 수업 시작 전까지 발송하는 것을 원칙으로 한다.
 - 현재 자동화는 예약 가능 기간 안의 첫 프라이빗 예약을 기준으로 후보를 만든다.
+- 회원 설문은 Google Form을 사용하지 않고 ARCHIVE IN 자체 설문 페이지를 사용한다.
+- 회원 연락처는 알림톡 발송 요청에 저장된 번호를 읽기전용으로 표시하고, 회원이 직접 수정하지 못하게 한다.
+- 설문 매칭은 회원이 입력한 연락처가 아니라 `privateSurveyRequests/{requestId}`의 회원/예약/강사 정보를 기준으로 처리한다.
 - 강사용 설문 전달 기준시각은 수업 하루 전 오전 9시다.
 - 강사용 전달 기준시각까지 회원 설문 제출이 없으면 `home@archivepilates.com`으로 미제출 알림 메일을 1회 발송한다.
 
@@ -211,6 +214,7 @@
 중복 방지 기간:
 
 - 영구 1회. 같은 회원에게 프라이빗 사전설문은 다시 보내지 않는다.
+- `privateSurveyRequests/{requestId}`가 `submitted` 상태이면 설문 페이지와 API 모두 추가 제출을 받지 않는다.
 - 설문 응답 원본은 `privateSurveyResponses/{responseId}`를 최초 생성 1회만 허용한다. 같은 `responseId` 재제출은 중복으로 처리하고 강사용 알림톡/메모 큐를 다시 만들지 않는다.
 
 ### 5-1. 그룹 첫 수업 사전확인 안내
@@ -236,6 +240,7 @@
 
 - SOLAPI 버튼 URL은 변수 치환 후 100자 이하여야 한다.
 - 함수는 원본 링크를 `shortLinks/{링크ID}`에 저장하고, 버튼에는 `https://in.archivepilates.com/s/#{링크ID}/` 형식의 짧은 링크를 넣는다.
+- 회원용 프라이빗 설문 원본 URL은 `https://in.archivepilates.com/privateSurvey?id=#{설문ID}&token=#{접근토큰}` 형식이다.
 - 회원용 그룹 설문 원본 URL은 `https://in.archivepilates.com/groupSurvey?id=#{설문ID}&token=#{접근토큰}` 형식이다.
 - 강사용 설문 확인 원본 URL은 `https://in.archivepilates.com/privateSurveyResponseView?id=#{설문ID}&token=#{접근토큰}` 형식이다.
 - 현재 승인 템플릿이 기존 변수 버튼을 쓰는 동안에는 원본 URL과 짧은 URL을 모두 검사한다.

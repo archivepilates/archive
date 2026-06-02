@@ -51,7 +51,8 @@ export async function rebuildAlimtalkCandidatesForRange(input: {
       }
       const privateSurveyCandidate = await privateSurveyCandidateForDate(profile, sourceDate, bookingIndex);
       if (privateSurveyCandidate) {
-        await enqueueSendableCandidate(privateSurveyCandidate, candidateIds, writes);
+        const enqueued = await enqueueSendableCandidate(privateSurveyCandidate, candidateIds, writes);
+        if (enqueued) writes.push(upsertPrivateSurveyRequest(privateSurveyCandidate));
       }
       const groupSurveyCandidate = await groupSurveyCandidateForDate(profile, sourceDate, bookingIndex);
       if (groupSurveyCandidate) {
@@ -537,6 +538,21 @@ function groupSurveyTargetUrl(requestId: string, accessToken: string): string {
   return url.toString();
 }
 
+function privateSurveyRequestId(memberId: string, bookingId: string): string {
+  return `psr-${stableHash({ memberId, bookingId }).slice(0, 12)}`;
+}
+
+function privateSurveyAccessToken(requestId: string): string {
+  return createHmac("sha256", privateSurveyWebhookSecret.value()).update(requestId).digest("hex").slice(0, 16);
+}
+
+function privateSurveyTargetUrl(requestId: string, accessToken: string): string {
+  const url = new URL("https://in.archivepilates.com/privateSurvey");
+  url.searchParams.set("id", requestId);
+  url.searchParams.set("token", accessToken);
+  return url.toString();
+}
+
 function sha256(value: string): string {
   return createHash("sha256").update(value).digest("hex");
 }
@@ -576,6 +592,42 @@ async function upsertGroupSurveyRequest(candidate: AlimtalkCandidateDoc): Promis
   );
 }
 
+async function upsertPrivateSurveyRequest(candidate: AlimtalkCandidateDoc): Promise<void> {
+  const requestId = String(candidate.payload.surveyId || candidate.payload.responseId || "");
+  const accessToken = String(candidate.payload.accessToken || "");
+  if (!requestId || !accessToken) return;
+  const ref = db.collection("privateSurveyRequests").doc(requestId);
+  const previous = (await ref.get()).data();
+  if (previous?.status === "submitted") {
+    await ref.set({ updatedAt: nowTimestamp() }, { merge: true });
+    return;
+  }
+  await ref.set(
+    {
+      requestId,
+      studioId: candidate.studioId,
+      memberId: candidate.memberId,
+      memberName: candidate.memberName,
+      memberPhone: candidate.memberPhone,
+      memberPhoneLast4: candidate.memberPhone.slice(-4),
+      bookingId: candidate.payload.bookingId || "",
+      lectureId: candidate.payload.lectureId || "",
+      lectureDate: candidate.payload.lectureDate || "",
+      staffId: candidate.payload.staffId || "",
+      staffName: candidate.payload.staffName || "",
+      ticketName: candidate.payload.ticketName || "",
+      sourceCandidateId: candidate.candidateId,
+      shortLinkId: candidate.payload.shortLinkId || "",
+      shortUrl: candidate.payload.shortUrl || "",
+      accessTokenHash: sha256(accessToken),
+      status: previous?.status || "pending",
+      createdAt: previous?.createdAt || nowTimestamp(),
+      updatedAt: nowTimestamp(),
+    },
+    { merge: true },
+  );
+}
+
 async function privateSurveyCandidateForDate(
   profile: MemberProfileDoc,
   sourceDate: string,
@@ -588,6 +640,10 @@ async function privateSurveyCandidateForDate(
   if (!booking) return null;
   if (await hasSubmittedPrivateSurvey(profile.memberId, profile.phone)) return null;
   if (hasAttendedPrivateBookingOnOrBefore(profile.memberId, sourceDate, bookingIndex)) return null;
+  const requestId = privateSurveyRequestId(profile.memberId, booking.bookingId);
+  const accessToken = privateSurveyAccessToken(requestId);
+  const targetUrl = privateSurveyTargetUrl(requestId, accessToken);
+  const shortLinkId = shortLinkIdForTarget("private_survey", targetUrl);
   return {
     candidateId: `private_survey_${profile.memberId}_${sourceDate}`,
     studioId: profile.studioId,
@@ -606,6 +662,13 @@ async function privateSurveyCandidateForDate(
       bookingId: booking.bookingId,
       lectureId: booking.lectureId,
       lectureDate: booking.lectureDate,
+      staffId: booking.staffId,
+      staffName: booking.staffName,
+      surveyId: requestId,
+      responseId: requestId,
+      accessToken,
+      shortLinkId,
+      shortUrl: shortUrlForId(shortLinkId),
       privateSurveyWindowEndDate: reservationOpenEndDate(sourceDate),
     },
     attempts: 0,

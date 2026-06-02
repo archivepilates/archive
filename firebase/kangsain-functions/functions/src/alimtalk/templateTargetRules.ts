@@ -34,6 +34,8 @@ export const SOLAPI_BUTTON_URL_MAX_LENGTH = 100;
 export const SHORT_LINK_BUTTON_URL_TEMPLATE = "https://in.archivepilates.com/s/#{링크ID}/";
 export const SURVEY_DETAIL_BUTTON_URL_TEMPLATE =
   "https://in.archivepilates.com/privateSurveyResponseView?id=#{설문ID}&token=#{접근토큰}";
+export const PRIVATE_SURVEY_BUTTON_URL_TEMPLATE =
+  "https://in.archivepilates.com/privateSurvey?id=#{설문ID}&token=#{접근토큰}";
 export const GROUP_SURVEY_BUTTON_URL_TEMPLATE =
   "https://in.archivepilates.com/groupSurvey?id=#{설문ID}&token=#{접근토큰}";
 export const METHOD_MATERIAL_BUTTON_URL_TEMPLATE = "https://in.archivepilates.com/method/#{관리번호}";
@@ -94,9 +96,22 @@ export const ALIMTALK_TEMPLATE_TARGET_RULES: Partial<Record<AlimtalkCandidateTyp
     sourceDatePolicy: "today",
     requiresApprovedTemplate: true,
     requiresMemberPhone: true,
+    buttonUrlRules: [
+      {
+        label: "프라이빗 사전설문 작성 버튼",
+        template: PRIVATE_SURVEY_BUTTON_URL_TEMPLATE,
+        maxLength: SOLAPI_BUTTON_URL_MAX_LENGTH,
+      },
+      {
+        label: "프라이빗 사전설문 작성 버튼",
+        template: SHORT_LINK_BUTTON_URL_TEMPLATE,
+        maxLength: SOLAPI_BUTTON_URL_MAX_LENGTH,
+      },
+    ],
     targetRules: [
       "오늘부터 다음 주 일요일까지 예정된 첫 프라이빗 예약이 있음",
       "예약이 강사레슨이 아님",
+      "자체설문 요청 문서와 짧은 링크가 있음",
       "최근 1년 내 프라이빗 사전설문 제출 이력이 없음",
       "과거 프라이빗 출석 완료 이력이 없음",
     ],
@@ -105,6 +120,7 @@ export const ALIMTALK_TEMPLATE_TARGET_RULES: Partial<Record<AlimtalkCandidateTyp
       "전화번호 없음",
       "프라이빗 예약 없음",
       "그룹 또는 강사레슨 예약",
+      "짧은 링크 생성 실패 또는 버튼 URL 치환 후 100자 초과",
       "최근 1년 내 프라이빗 사전설문 제출 이력 있음",
       "과거 프라이빗 출석 완료 이력 있음",
       "SOLAPI 미승인 템플릿",
