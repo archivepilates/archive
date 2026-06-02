@@ -1,0 +1,30 @@
+{
+  "name": "ARCHIVE PILATES 현장 웰컴",
+  "short_name": "ARCHIVE 웰컴",
+  "description": "ARCHIVE PILATES 현장 신규회원 웰컴 발송",
+  "start_url": "/onsiteWelcome/",
+  "scope": "/onsiteWelcome/",
+  "display": "standalone",
+  "background_color": "#fffdfa",
+  "theme_color": "#e9251d",
+  "icons": [
+    {
+      "src": "/onsiteWelcome/icons/archive-pilates-icon-192.png",
+      "sizes": "192x192",
+      "type": "image/png",
+      "purpose": "any"
+    },
+    {
+      "src": "/onsiteWelcome/icons/archive-pilates-icon-512.png",
+      "sizes": "512x512",
+      "type": "image/png",
+      "purpose": "any"
+    },
+    {
+      "src": "/onsiteWelcome/icons/archive-pilates-icon-1024.png",
+      "sizes": "1024x1024",
+      "type": "image/png",
+      "purpose": "any"
+    }
+  ]
+}

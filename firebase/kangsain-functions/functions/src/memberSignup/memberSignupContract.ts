@@ -1,9 +1,11 @@
 import { createHash } from "node:crypto";
 import type { MemberSignupContractDoc } from "../types/models";
+import { db } from "../config/firebase";
 import { refs } from "../firestore/refs";
 import { nowTimestamp } from "../utils/date";
 
-const TERMS_VERSION = "archive-member-signup-2026-05";
+const TERMS_VERSION = "archive-member-signup-2026-06";
+const MARKETING_AD_CONSENT_TERMS_VERSION = "archive-member-signup-2026-06";
 
 export async function memberSignupContractHandler(request: any, response: any): Promise<void> {
   try {
@@ -52,6 +54,9 @@ export async function memberSignupContractHandler(request: any, response: any): 
           recommender: submission.recommender,
         },
         agreements: submission.agreements,
+        marketingAdConsentAt: submission.agreements.marketingAdConsent ? signedAt : null,
+        marketingAdConsentSource: "memberSignup",
+        marketingAdConsentTermsVersion: MARKETING_AD_CONSENT_TERMS_VERSION,
         signature: {
           signerName: submission.signerName,
           signedAtText,
@@ -76,6 +81,22 @@ export async function memberSignupContractHandler(request: any, response: any): 
   }
 }
 
+export async function purgeUnsignedDiscardedMemberSignupContracts(): Promise<{ scanned: number; deleted: number }> {
+  const now = nowTimestamp();
+  const snap = await refs.memberSignupContracts().where("purgeAfter", "<=", now).limit(100).get();
+  const batch = db.batch();
+  let deleted = 0;
+  for (const docSnap of snap.docs) {
+    const contract = docSnap.data();
+    if (!["cancelled", "expired"].includes(contract.status)) continue;
+    if (contract.status === "submitted" || contract.submittedAt || contract.signature) continue;
+    batch.delete(docSnap.ref);
+    deleted += 1;
+  }
+  if (deleted) await batch.commit();
+  return { scanned: snap.size, deleted };
+}
+
 async function readAuthorizedContract(idInput: unknown, tokenInput: unknown): Promise<MemberSignupContractDoc> {
   const contractId = stringValue(idInput);
   const accessToken = stringValue(tokenInput);
@@ -86,6 +107,9 @@ async function readAuthorizedContract(idInput: unknown, tokenInput: unknown): Pr
   const contract = snap.data();
   if (!contract || contract.accessTokenHash !== sha256(accessToken)) {
     throw new Error("회원가입서를 열 수 있는 권한이 없습니다.");
+  }
+  if (contract.status === "cancelled") {
+    throw new Error("폐기된 회원가입서 링크입니다. 새 링크를 다시 받아주세요.");
   }
   if (contract.expiresAt?.toMillis?.() && contract.expiresAt.toMillis() < Date.now()) {
     throw new Error("회원가입서 링크가 만료되었습니다.");
@@ -98,6 +122,7 @@ function normalizeSubmission(input: Record<string, unknown>, fallbackName: strin
     refundAndCancellation: booleanValue(input.refundAndCancellation),
     facilityUse: booleanValue(input.facilityUse),
     privacyUse: booleanValue(input.privacyUse),
+    marketingAdConsent: booleanValue(input.marketingAdConsent),
     finalConfirmation: booleanValue(input.finalConfirmation),
   };
   if (!agreements.refundAndCancellation) throw new Error("환불 및 취소 규정에 동의해주세요.");
@@ -142,6 +167,26 @@ function publicContract(contract: MemberSignupContractDoc) {
     },
     purchase: contract.purchase || {},
     termsVersion: contract.termsVersion || TERMS_VERSION,
+    agreements: {
+      refundAndCancellation: Boolean(contract.agreements?.refundAndCancellation),
+      facilityUse: Boolean(contract.agreements?.facilityUse),
+      privacyUse: Boolean(contract.agreements?.privacyUse),
+      marketingAdConsent: Boolean(contract.agreements?.marketingAdConsent),
+      finalConfirmation: Boolean(contract.agreements?.finalConfirmation),
+    },
+    marketingAdConsentAtText: contract.marketingAdConsentAt
+      ? new Intl.DateTimeFormat("ko-KR", {
+          timeZone: "Asia/Seoul",
+          year: "numeric",
+          month: "numeric",
+          day: "numeric",
+          hour: "2-digit",
+          minute: "2-digit",
+          hour12: false,
+        }).format(contract.marketingAdConsentAt.toDate())
+      : "",
+    marketingAdConsentSource: contract.marketingAdConsentSource || "",
+    marketingAdConsentTermsVersion: contract.marketingAdConsentTermsVersion || "",
     signature: contract.signature
       ? {
           signerName: contract.signature.signerName,

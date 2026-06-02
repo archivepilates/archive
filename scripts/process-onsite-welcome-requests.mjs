@@ -125,7 +125,7 @@ async function processRequest(page, request) {
   if (!apply) {
     await request.ref.set(
       {
-        status: "ready",
+        status: "lookup_ready",
         progressPercent: 85,
         progressLabel: "드라이런: 가입서 링크 생성 예정",
         lookup,
@@ -140,7 +140,7 @@ async function processRequest(page, request) {
   }
   await request.ref.set(
     {
-      status: "ready",
+      status: "lookup_ready",
       progressPercent: 92,
       progressLabel: "가입서 링크 준비 완료",
       lookup,
@@ -169,14 +169,22 @@ async function lookupStudioMateMember(page, request) {
   const url = new URL(page.url());
   const memberId = url.searchParams.get("id") || "";
   const body = await page.locator("body").innerText({ timeout: 10000 });
+  validateMemberDetail(body, { phone, name: request.memberNameHint || "" });
+  const activeTicket = extractActiveTicketInfo(body);
+  const profile = extractMemberProfileInfo(body);
   return {
     source: "studiomate_playwright_lookup",
     memberId,
     memberName: extractName(body, request.memberNameHint),
     memberPhone: phone,
-    ticketName: extractTicketName(body),
-    startDate: extractNearDate(body, ["시작", "이용시작", "사용시작"]),
-    endDate: extractNearDate(body, ["종료", "만료", "이용종료"]),
+    gender: profile.gender,
+    birthDate: profile.birthDate,
+    email: profile.email,
+    address: profile.address,
+    ticketName: activeTicket.ticketName || extractTicketName(body),
+    startDate: activeTicket.startDate || extractNearDate(body, ["시작", "이용시작", "사용시작"]),
+    endDate: activeTicket.endDate || extractNearDate(body, ["종료", "만료", "이용종료"]),
+    paidAmount: activeTicket.paidAmount || "",
     rawTextPreview: body.slice(0, 1200),
   };
 }
@@ -184,19 +192,35 @@ async function lookupStudioMateMember(page, request) {
 async function clickSingleSearchResult(page, { phone, name }) {
   const results = page.locator(".members .member");
   const matches = [];
+  const phoneTail = phone.slice(-8);
+  const normalizedName = String(name || "").trim();
   const count = await results.count().catch(() => 0);
   for (let index = 0; index < count; index += 1) {
     const candidate = results.nth(index);
     if (!(await candidate.isVisible().catch(() => false))) continue;
     const text = await candidate.innerText().catch(() => "");
     const textPhone = digitsOnly(text);
-    if (textPhone.includes(phone.slice(-8)) || (name && text.includes(name))) matches.push({ candidate, text });
+    const phoneMatches = phoneTail && textPhone.includes(phoneTail);
+    const nameMatches = !normalizedName || text.includes(normalizedName);
+    if (phoneMatches && nameMatches) matches.push({ candidate, text });
   }
   if (matches.length !== 1) {
-    return { clicked: false, error: matches.length ? "검색 결과가 2명 이상입니다. 회원명을 함께 입력해주세요." : "" };
+    return { clicked: false, error: matches.length ? "검색 결과가 2명 이상입니다. 회원명을 더 정확히 입력해주세요." : "전화번호와 회원명이 일치하는 StudioMate 회원을 찾지 못했습니다." };
   }
   await matches[0].candidate.click({ timeout: 5000 });
   return { clicked: true };
+}
+
+function validateMemberDetail(body, { phone, name }) {
+  const text = String(body || "");
+  const phoneTail = digitsOnly(phone).slice(-8);
+  const normalizedName = String(name || "").trim();
+  if (phoneTail && !digitsOnly(text).includes(phoneTail)) {
+    throw new Error("StudioMate 상세 화면의 전화번호가 요청값과 다릅니다. 가입서 생성을 중단했습니다.");
+  }
+  if (normalizedName && !text.includes(normalizedName)) {
+    throw new Error("StudioMate 상세 화면의 회원명이 요청값과 다릅니다. 가입서 생성을 중단했습니다.");
+  }
 }
 
 async function createSignupContract(request, lookup) {
@@ -204,6 +228,7 @@ async function createSignupContract(request, lookup) {
   const memberKey = lookup.memberId || `onsite_${sha256(`${request.phone}|${lookup.memberName || ""}`).slice(0, 16)}`;
   const contractId = `msc-${memberKey}-${Date.now().toString(36)}`.replace(/[^a-zA-Z0-9-]/g, "-");
   const now = admin.firestore.Timestamp.now();
+  if (apply) await cancelActiveUnsignedContracts(memberKey, now);
   const doc = {
     contractId,
     studioId: request.studioId || "5330",
@@ -217,10 +242,10 @@ async function createSignupContract(request, lookup) {
     member: {
       name: lookup.memberName || request.memberNameHint || "",
       phone: digitsOnly(request.phone),
-      gender: "",
-      birthDate: "",
-      email: "",
-      address: "",
+      gender: lookup.gender || "",
+      birthDate: lookup.birthDate || "",
+      email: lookup.email || "",
+      address: lookup.address || "",
       visitRoute: "",
       exercisePurpose: "",
       recommender: "",
@@ -230,10 +255,10 @@ async function createSignupContract(request, lookup) {
       startDate: lookup.startDate || "",
       endDate: lookup.endDate || "",
       paymentMethod: "",
-      paidAmount: "",
+      paidAmount: lookup.paidAmount || "",
       unpaidAmount: "0원",
     },
-    termsVersion: "archive-member-signup-2026-05",
+    termsVersion: "archive-member-signup-2026-06",
     openedAt: null,
     submittedAt: null,
     expiresAt: admin.firestore.Timestamp.fromMillis(Date.now() + 1000 * 60 * 60 * 24 * 14),
@@ -247,15 +272,132 @@ async function createSignupContract(request, lookup) {
   };
 }
 
+async function cancelActiveUnsignedContracts(memberId, now) {
+  const purgeAfter = admin.firestore.Timestamp.fromMillis(now.toMillis() + 1000 * 60 * 60 * 24 * 7);
+  const snap = await db
+    .collection("memberSignupContracts")
+    .where("memberId", "==", memberId)
+    .where("status", "in", ["draft", "opened"])
+    .limit(20)
+    .get();
+  const batch = db.batch();
+  let count = 0;
+  for (const docSnap of snap.docs) {
+    const contract = docSnap.data();
+    if (contract.signature || contract.submittedAt || contract.status === "submitted") continue;
+    batch.set(
+      docSnap.ref,
+      {
+        status: "cancelled",
+        expiresAt: now,
+        cancelledAt: now,
+        cancelReason: "replaced_by_new_onsite_signup",
+        purgeAfter,
+        updatedAt: now,
+      },
+      { merge: true },
+    );
+    count += 1;
+  }
+  if (count) await batch.commit();
+}
+
 function extractName(body, fallback) {
   const compact = String(body || "").split(/\n+/).map((line) => line.trim()).filter(Boolean);
   if (fallback && body.includes(fallback)) return fallback;
   return compact.find((line) => /^[가-힣]{2,5}$/.test(line)) || fallback || "";
 }
 
+function extractMemberProfileInfo(body) {
+  const lines = String(body || "").split(/\n+/).map((line) => line.trim()).filter(Boolean);
+  return {
+    gender: extractInlineOrNext(lines, "성별"),
+    birthDate: normalizeDateText(extractInlineOrNext(lines, "생년월일")),
+    email: extractEmail(lines),
+    address: extractAddress(lines),
+  };
+}
+
+function extractInlineOrNext(lines, label) {
+  for (let index = 0; index < lines.length; index += 1) {
+    const line = lines[index];
+    if (!line.includes(label)) continue;
+    const inline = line.replace(new RegExp(`^${label}\\s*[:：]?\\s*`), "").trim();
+    if (inline && inline !== label) return inline;
+    return lines[index + 1] || "";
+  }
+  return "";
+}
+
+function extractEmail(lines) {
+  const text = lines.join(" ");
+  const match = text.match(/[a-zA-Z0-9._%+-]+@[a-zA-Z0-9.-]+\.[a-zA-Z]{2,}/);
+  return match ? match[0] : "";
+}
+
+function extractAddress(lines) {
+  const address = extractInlineOrNext(lines, "주소");
+  if (!address || /주소\s*검색|검색|수정|저장/.test(address)) return "";
+  return address;
+}
+
 function extractTicketName(body) {
   const lines = String(body || "").split(/\n+/).map((line) => line.trim()).filter(Boolean);
-  return lines.find((line) => /(그룹|프라이빗|수강권|회권|개월|주)/.test(line) && line.length <= 80) || "";
+  const activeTicketIndex = lines.findIndex((line) => /사용중인\s*수강권/.test(line));
+  if (activeTicketIndex >= 0) {
+    const activeTicket = lines
+      .slice(activeTicketIndex + 1, activeTicketIndex + 24)
+      .find((line) => isLikelyTicketName(line) && !isTicketMetaLine(line) && !/^\+|새로운|이전\s*수강권|클릭하시면|확인하실|예약가능|취소가능|잔여|결제|회당/.test(line));
+    if (activeTicket) return activeTicket;
+  }
+  const labelIndex = lines.findIndex((line) => /^(보유\s*)?(수강권|이용권|회원권)$/.test(line));
+  if (labelIndex >= 0) {
+    const near = lines.slice(labelIndex + 1, labelIndex + 8).find((line) => isLikelyTicketName(line));
+    if (near) return near;
+  }
+  return lines.find((line) => isLikelyTicketName(line)) || "";
+}
+
+function extractActiveTicketInfo(body) {
+  const lines = String(body || "").split(/\n+/).map((line) => line.trim()).filter(Boolean);
+  const activeTicketIndex = lines.findIndex((line) => /사용중인\s*수강권/.test(line));
+  if (activeTicketIndex < 0) return {};
+  const windowLines = lines.slice(activeTicketIndex + 1, activeTicketIndex + 32);
+  const ticketName = windowLines.find((line) => isLikelyTicketName(line) && !isTicketMetaLine(line) && !/^\+|새로운|이전\s*수강권|클릭하시면|확인하실|예약가능|취소가능|잔여|결제|회당/.test(line)) || "";
+  const periodLine = windowLines.find((line) => /20\d{2}[.\-/년]\s*\d{1,2}[.\-/월]\s*\d{1,2}/.test(line) && /[~～-]/.test(line)) || "";
+  const periodMatch = periodLine.match(/(20\d{2}[.\-/년 ]+\d{1,2}[.\-/월 ]+\d{1,2}\.?)[\s.]*[~～-]\s*(20\d{2}[.\-/년 ]+\d{1,2}[.\-/월 ]+\d{1,2}\.?)/);
+  const paidLine = windowLines.find((line) => /결제\s*금액/.test(line)) || "";
+  const paidMatch = paidLine.match(/결제\s*금액\s*([0-9,]+\s*원|[0-9,]+)/);
+  return {
+    ticketName,
+    startDate: periodMatch ? normalizeDateText(periodMatch[1]) : "",
+    endDate: periodMatch ? normalizeDateText(periodMatch[2]) : "",
+    paidAmount: paidMatch ? normalizeMoneyText(paidMatch[1]) : "",
+  };
+}
+
+function normalizeDateText(value) {
+  return String(value || "").replace(/[년월]/g, ".").replace(/[\/-]/g, ".").replace(/\s+/g, " ").replace(/\.+$/, "").trim();
+}
+
+function normalizeMoneyText(value) {
+  const raw = String(value || "").trim();
+  return raw.endsWith("원") ? raw.replace(/\s+/g, "") : `${raw.replace(/\s+/g, "")}원`;
+}
+
+function isLikelyTicketName(line) {
+  const value = String(line || "").trim();
+  if (!value || value.length > 80) return false;
+  if (isTicketMetaLine(value)) return false;
+  if (/(예약했습니다|예약\s*완료|수업에\s*예약|잔여\s*횟수|잔여횟수|남았습니다|출석|결석|노쇼|취소했습니다)/.test(value)) return false;
+  if (/\[[^\]]+\]\s*회원님이/.test(value)) return false;
+  if (/(강사|수업|바렐|리포머|체어|캐딜락)/.test(value) && /20\d{2}[.\-/년]/.test(value)) return false;
+  return /(그룹|프라이빗|개인|듀엣|트리플|수강권|회원권|회권|\d+\s*회|\d+\s*개월|\d+\s*주)/.test(value);
+}
+
+function isTicketMetaLine(line) {
+  const value = String(line || "").trim();
+  return /^(횟수제|기간제|월정액|그룹형|개인형|듀엣형|트리플형|프라이빗형|듀엣|트리플|프라이빗|그룹|\d+\s*:\s*\d+)(\s*[·ㆍ|/,-]\s*(횟수제|기간제|월정액|그룹형|개인형|듀엣형|트리플형|프라이빗형|듀엣|트리플|프라이빗|그룹|\d+\s*:\s*\d+))*$/.test(value);
 }
 
 function extractNearDate(body, labels) {

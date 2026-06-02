@@ -4,6 +4,16 @@
   <meta charset="utf-8">
   <meta name="viewport" content="width=device-width, initial-scale=1">
   <meta name="robots" content="noindex,nofollow">
+  <meta name="theme-color" content="#e9251d">
+  <meta name="apple-mobile-web-app-capable" content="yes">
+  <meta name="apple-mobile-web-app-status-bar-style" content="default">
+  <meta name="apple-mobile-web-app-title" content="ARCHIVE 웰컴">
+  <meta name="application-name" content="ARCHIVE 웰컴">
+  <link rel="icon" type="image/png" sizes="32x32" href="/onsiteWelcome/icons/favicon-32.png">
+  <link rel="shortcut icon" type="image/png" href="/favicon.png">
+  <link rel="apple-touch-icon" sizes="180x180" href="/onsiteWelcome/icons/apple-touch-icon.png">
+  <link rel="apple-touch-icon" href="/apple-touch-icon.png">
+  <link rel="manifest" href="/onsiteWelcome/site.webmanifest">
   <title>ARCHIVE PILATES 현장 웰컴</title>
   <style>
     :root { color-scheme:light; --ink:#181512; --muted:#716960; --line:#e5ddd4; --bg:#f7f2ec; --paper:#fffdfa; --accent:#b73d32; --good:#2f6f68; --bad:#96352c; }
@@ -27,6 +37,20 @@
     .result { display:grid; gap:8px; }
     .row { display:grid; grid-template-columns:82px 1fr; gap:10px; padding-top:8px; border-top:1px solid rgba(24,21,18,.08); font-size:14px; }
     .row b { color:#403933; }
+    .send { background:#181512; }
+    .send:disabled { background:#8c8278; }
+    .steps { display:grid; gap:7px; }
+    .step { display:grid; grid-template-columns:22px 1fr; gap:8px; align-items:center; color:var(--muted); font-size:13px; }
+    .dot { width:12px; height:12px; border-radius:50%; border:1px solid #c8bdb2; background:#fff; }
+    .step.done { color:var(--good); font-weight:800; }
+    .step.done .dot { border-color:var(--good); background:var(--good); }
+    .step.active { color:var(--accent); font-weight:900; }
+    .step.active .dot { border-color:var(--accent); background:var(--accent); }
+    .history { display:grid; gap:8px; }
+    .history-card { position:relative; }
+    .history-item { width:100%; min-height:0; display:grid; gap:3px; padding:11px 42px 11px 11px; border:1px solid var(--line); border-radius:8px; background:#fff; color:var(--ink); text-align:left; font-size:13px; font-weight:700; }
+    .history-item small { color:var(--muted); font-size:12px; font-weight:500; }
+    .discard-history { position:absolute; top:7px; right:7px; width:30px; min-height:30px; border:1px solid rgba(150,53,44,.2); border-radius:999px; background:#fff7f4; color:var(--bad); font-size:15px; line-height:1; }
     .message { margin-top:14px; border:1px solid var(--line); border-radius:8px; background:var(--paper); padding:14px; line-height:1.7; word-break:keep-all; }
     .message.good { border-color:#bcd7d2; background:#f2faf8; color:var(--good); }
     .message.bad { border-color:#f0c9c1; background:#fff7f4; color:var(--bad); }
@@ -38,7 +62,7 @@
       <div>
         <div class="eyebrow">ARCHIVE PILATES</div>
         <h1>현장 웰컴 즉시발송</h1>
-        <p>StudioMate에 신규회원 기본정보와 수강권을 저장한 뒤, 휴대폰 번호로 단건 조회를 요청합니다. Mac mini가 StudioMate 화면을 확인해 가입서 링크를 준비합니다.</p>
+        <p>회원님의 가입서 작성 링크를 준비합니다. 휴대폰 번호와 성함을 확인한 뒤, 안내에 따라 가입서 링크를 발송해 주세요.</p>
       </div>
       <img src="../logo120.png" alt="ARCHIVE PILATES">
     </header>
@@ -50,13 +74,19 @@
       <label>회원명 확인용
         <input name="memberName" autocomplete="name" placeholder="동명이인 방지용, 선택 입력">
       </label>
-      <button type="submit">StudioMate 단건 조회 요청</button>
+      <button type="submit">가입서 링크 준비</button>
     </form>
 
     <section id="panel" class="panel" hidden>
       <div class="progress"><div id="bar" class="bar"></div></div>
       <div id="status" class="status">요청 준비 중</div>
+      <div id="steps" class="steps"></div>
       <div id="result" class="result"></div>
+      <button id="sendButton" class="send" type="button" hidden>웰컴 알림톡 전송</button>
+    </section>
+    <section class="panel">
+      <div class="status"><b>보낸 이력</b><br>이 브라우저에서 만든 현장 웰컴 요청을 표시합니다.</div>
+      <div id="history" class="history"></div>
     </section>
     <section id="message" class="message" hidden></section>
   </main>
@@ -66,11 +96,15 @@
     const panel = document.getElementById('panel');
     const statusEl = document.getElementById('status');
     const resultEl = document.getElementById('result');
+    const stepsEl = document.getElementById('steps');
     const message = document.getElementById('message');
     const bar = document.getElementById('bar');
     const button = form.querySelector('button');
+    const sendButton = document.getElementById('sendButton');
+    const historyEl = document.getElementById('history');
     let pollTimer = null;
     let current = null;
+    renderHistory();
 
     form.addEventListener('submit', async (event) => {
       event.preventDefault();
@@ -86,6 +120,13 @@
           method: 'POST',
           headers: { 'Content-Type': 'application/json' },
           body: JSON.stringify(payload)
+        });
+        rememberRequest({
+          requestId: current.requestId,
+          accessToken: current.accessToken,
+          phone: payload.phone,
+          memberName: payload.memberName,
+          createdAt: new Date().toISOString()
         });
         panel.hidden = false;
         setStatus({ progressPercent: 5, progressLabel: '현장 웰컴 요청 접수', status: 'pending' });
@@ -107,7 +148,8 @@
       try {
         const data = await requestJson(`../api/onsiteWelcomeRequest?id=${encodeURIComponent(current.requestId)}&token=${encodeURIComponent(current.accessToken)}`);
         setStatus(data.request);
-        if (['ready', 'sent', 'error', 'cancelled'].includes(data.request.status)) {
+        updateHistoryItem(data.request);
+        if (['lookup_ready', 'sent', 'error', 'cancelled'].includes(data.request.status)) {
           clearInterval(pollTimer);
           button.disabled = false;
         }
@@ -121,16 +163,57 @@
     function setStatus(request) {
       const percent = Math.max(0, Math.min(100, Number(request.progressPercent || 0)));
       bar.style.width = `${percent}%`;
-      statusEl.textContent = request.progressLabel || statusLabel(request.status);
+      statusEl.textContent = displayProgressLabel(request.progressLabel || statusLabel(request.status));
       if (request.lastError) showMessage(request.lastError, true);
+      renderStages(request.stages || []);
+      const sendVisible = ['lookup_ready', 'ready'].includes(request.status) && Boolean(request.signupUrl);
+      sendButton.hidden = !sendVisible;
+      sendButton.disabled = request.status === 'ready' || !request.canSendAlimtalk;
+      sendButton.textContent = request.hasAlimtalkSentHistory ? '웰컴 알림톡 발송 완료' : '웰컴 알림톡 전송';
       if (request.signupUrl) {
         resultEl.innerHTML = [
           row('회원', request.lookup?.memberName || request.memberNameHint || '-'),
           row('수강권', request.lookup?.ticketName || '-'),
           row('가입서', `<a href="${escapeAttr(request.signupUrl)}" target="_blank" rel="noreferrer">회원가입서 열기</a>`)
         ].join('');
-        showMessage('가입서 링크가 준비되었습니다. 알림톡 템플릿 버튼 연결 후 즉시 발송 단계로 이어집니다.');
+        if (request.status === 'lookup_ready') showMessage('가입서 링크가 준비되었습니다. 알림톡 전송 요청 버튼을 눌러주세요.');
       }
+    }
+
+    sendButton.addEventListener('click', async () => {
+      if (!current?.requestId || !current?.accessToken) return;
+      await sendAlimtalk(current, sendButton);
+    });
+
+    async function sendAlimtalk(row, triggerButton) {
+      if (!row?.requestId || !row?.accessToken) return;
+      if (triggerButton) triggerButton.disabled = true;
+      hideMessage();
+      try {
+        const data = await requestJson('../api/onsiteWelcomeRequest', {
+          method: 'POST',
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify({ action: 'send', requestId: row.requestId, accessToken: row.accessToken })
+        });
+        current = { ...row, ...current, requestId: row.requestId, accessToken: row.accessToken };
+        setStatus(data.request);
+        updateHistoryItem(data.request);
+        if (data.request.status === 'sent') {
+          showMessage('웰컴 알림톡 발송이 완료되었습니다.');
+        } else if (!data.request.lastError) {
+          showMessage('알림톡 전송을 처리했습니다.');
+        }
+        if (!['sent', 'error', 'cancelled'].includes(data.request.status)) startPolling();
+      } catch (err) {
+        showMessage(err.message || '알림톡 전송 요청에 실패했습니다.', true);
+        if (triggerButton) triggerButton.disabled = false;
+      }
+    }
+
+    function renderStages(stages) {
+      stepsEl.innerHTML = stages.map((step) => `
+        <div class="step ${escapeAttr(step.state || 'pending')}"><span class="dot"></span><span>${escapeHtml(step.label)}</span></div>
+      `).join('');
     }
 
     function row(label, value) {
@@ -145,7 +228,109 @@
     }
 
     function statusLabel(status) {
-      return status === 'running' ? 'StudioMate 조회 중' : status === 'ready' ? '가입서 준비 완료' : status === 'error' ? '처리 실패' : '대기 중';
+      return status === 'running' ? '가입서 준비 중' : status === 'lookup_ready' ? '가입서 준비 완료' : status === 'ready' ? '알림톡 전송 요청 완료' : status === 'sent' ? '웰컴 알림톡 발송 완료' : status === 'error' ? '처리 실패' : '대기 중';
+    }
+
+    function rememberRequest(item) {
+      const rows = historyRows().filter((row) => row.requestId !== item.requestId);
+      rows.unshift(item);
+      localStorage.setItem('archiveOnsiteWelcomeHistory', JSON.stringify(rows.slice(0, 20)));
+      renderHistory();
+    }
+
+    function updateHistoryItem(request) {
+      const rows = historyRows();
+      const index = rows.findIndex((row) => row.requestId === request.requestId);
+      if (index < 0) return;
+      rows[index] = {
+        ...rows[index],
+        status: request.status,
+        progressLabel: request.progressLabel,
+        signupUrl: request.signupUrl,
+        alimtalkSendId: request.alimtalkSendId || '',
+        contractStatus: request.contractStatus || '',
+        hasAlimtalkSentHistory: Boolean(request.hasAlimtalkSentHistory),
+        canSendAlimtalk: Boolean(request.canSendAlimtalk),
+        memberName: request.lookup?.memberName || rows[index].memberName
+      };
+      localStorage.setItem('archiveOnsiteWelcomeHistory', JSON.stringify(rows.slice(0, 20)));
+      renderHistory();
+    }
+
+    function historyRows() {
+      try {
+        return JSON.parse(localStorage.getItem('archiveOnsiteWelcomeHistory') || '[]').filter((row) => row.requestId && row.accessToken);
+      } catch (_) {
+        return [];
+      }
+    }
+
+    function renderHistory() {
+      const rows = historyRows();
+      historyEl.innerHTML = rows.length ? rows.map((row) => `
+        <div class="history-card">
+          <button class="history-item" type="button" data-request="${escapeAttr(row.requestId)}">
+            <span>${escapeHtml(row.memberName || row.memberNameHint || '회원명 미확인')} · ${escapeHtml(phoneLast4(row.phone))}</span>
+            <small>${escapeHtml(displayProgressLabel(row.progressLabel || statusLabel(row.status || 'pending')))}</small>
+          </button>
+          <button class="discard-history" type="button" aria-label="이력 폐기" data-discard="${escapeAttr(row.requestId)}">X</button>
+        </div>
+      `).join('') : '<div class="status">아직 이 브라우저에서 만든 요청이 없습니다.</div>';
+      historyEl.querySelectorAll('[data-request]').forEach((item) => {
+        item.addEventListener('click', () => {
+          const row = rows.find((entry) => entry.requestId === item.dataset.request);
+          if (!row) return;
+          current = row;
+          panel.hidden = false;
+          startPolling();
+        });
+      });
+      historyEl.querySelectorAll('[data-discard]').forEach((item) => {
+        item.addEventListener('click', async () => {
+          const row = rows.find((entry) => entry.requestId === item.dataset.discard);
+          if (!row) return;
+          if (!confirm('이 현장 웰컴 이력을 폐기할까요?')) return;
+          item.disabled = true;
+          hideMessage();
+          try {
+            await requestJson('../api/onsiteWelcomeRequest', {
+              method: 'POST',
+              headers: { 'Content-Type': 'application/json' },
+              body: JSON.stringify({ action: 'discard', requestId: row.requestId, accessToken: row.accessToken })
+            });
+            forgetRequest(row.requestId);
+            if (current?.requestId === row.requestId) {
+              clearInterval(pollTimer);
+              current = null;
+              panel.hidden = true;
+              button.disabled = false;
+            }
+            showMessage('잘못 생성된 현장 웰컴 이력을 폐기했습니다.');
+          } catch (err) {
+            showMessage(err.message || '이력 폐기에 실패했습니다.', true);
+            item.disabled = false;
+          }
+        });
+      });
+    }
+
+    function forgetRequest(requestId) {
+      const rows = historyRows().filter((row) => row.requestId !== requestId);
+      localStorage.setItem('archiveOnsiteWelcomeHistory', JSON.stringify(rows.slice(0, 20)));
+      renderHistory();
+    }
+
+    function phoneLast4(phone) {
+      const digits = String(phone || '').replace(/\D/g, '');
+      return digits ? `끝자리 ${digits.slice(-4)}` : '번호 미확인';
+    }
+
+    function displayProgressLabel(label) {
+      return String(label || '')
+        .replace(/StudioMate 회원 검색 시작/g, '가입서 준비 중')
+        .replace(/StudioMate 단건 조회 실패/g, '가입서 준비 실패')
+        .replace(/StudioMate 조회 중/g, '가입서 준비 중')
+        .replace(/StudioMate/g, '가입서');
     }
 
     function showMessage(text, warn = false) {

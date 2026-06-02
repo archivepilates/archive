@@ -32,6 +32,7 @@
     details { border:1px solid var(--line); border-radius:8px; background:#fff; overflow:hidden; }
     summary { min-height:46px; padding:12px; cursor:pointer; font-weight:900; }
     .term-body { padding:0 12px 12px; color:#37312c; font-size:13px; line-height:1.65; word-break:keep-all; }
+    .highlight { padding:1px 3px 2px; border-radius:3px; background:linear-gradient(180deg,rgba(255,255,255,0) 18%,rgba(255,221,82,.72) 18%,rgba(255,221,82,.72) 88%,rgba(255,255,255,0) 88%); font-weight:900; color:#241f1b; }
     .agree { display:grid; grid-template-columns:24px 1fr; gap:9px; align-items:start; margin-top:8px; color:#352f2a; font-size:14px; line-height:1.5; }
     input[type="checkbox"] { width:19px; height:19px; margin:1px 0 0; accent-color:var(--accent); }
     .signature { display:grid; gap:10px; }
@@ -110,17 +111,19 @@
           </details>
           <label class="agree"><input type="checkbox" name="refundAndCancellation"><span>환불 및 취소 규정을 확인하고 동의합니다.</span></label>
 
-          <details>
+          <details open>
             <summary>시설 이용 및 수강권 사용</summary>
-            <div class="term-body">모든 수업은 사전 예약제로 운영됩니다. 수업 취소는 그룹 수업 6시간 전, 프라이빗 수업 전일 21시 이전까지 가능하며 이후에는 결석 또는 노쇼로 처리될 수 있습니다. 회원은 자신의 건강 상태를 사전에 확인하고 필요한 내용을 시설에 고지해야 합니다.</div>
+            <div class="term-body">모든 수업은 사전 예약제로 운영됩니다. 수업 취소는 <mark class="highlight">평일 그룹 수업 6시간 전</mark>, <mark class="highlight">주말 그룹 수업(토,일) 금요일 오후 9시</mark>, 프라이빗 수업 전일 21시 이전까지 가능하며 이후에는 결석 또는 노쇼로 처리될 수 있습니다. 회원은 자신의 건강 상태를 사전에 확인하고 필요한 내용을 시설에 고지해야 합니다.</div>
           </details>
           <label class="agree"><input type="checkbox" name="facilityUse"><span>시설 이용, 수강권 사용, 안전 책임 범위를 확인하고 동의합니다.</span></label>
 
-          <details>
+          <details open>
             <summary>개인정보 이용</summary>
             <div class="term-body">ARCHIVE PILATES는 회원 가입, 계약 이행, 본인 확인, 고지사항 전달, 고객관리를 위해 성명, 생년월일, 성별, 연락처, 이메일 등 필요한 개인정보를 수집·이용하며 계약 체결일로부터 5년 또는 관계 법령이 정한 기간까지 보관합니다.</div>
           </details>
           <label class="agree"><input type="checkbox" name="privacyUse"><span>개인정보 수집 및 이용에 동의합니다.</span></label>
+
+          <label class="agree"><input type="checkbox" name="marketingAdConsent"><span>[선택] ARCHIVE PILATES의 이벤트, 프로모션, 혜택, 신규 프로그램 안내 등 광고성 정보 수신에 동의합니다.</span></label>
         </div>
       </section>
 
@@ -199,9 +202,7 @@
         ['수강권', contract.purchase.ticketName],
         ['이용시작일', contract.purchase.startDate],
         ['이용종료일', contract.purchase.endDate],
-        ['결제방법', contract.purchase.paymentMethod],
-        ['결제금액', contract.purchase.paidAmount],
-        ['미수금', contract.purchase.unpaidAmount || '0원']
+        ['결제금액', contract.purchase.paidAmount]
       ]);
       form.elements.address.value = contract.member.address || '';
       form.elements.birthDate.value = contract.member.birthDate || '';
@@ -234,6 +235,7 @@
           refundAndCancellation: form.elements.refundAndCancellation.checked,
           facilityUse: form.elements.facilityUse.checked,
           privacyUse: form.elements.privacyUse.checked,
+          marketingAdConsent: form.elements.marketingAdConsent.checked,
           finalConfirmation: form.elements.finalConfirmation.checked,
           signerName: currentContract?.member?.name || '',
           signatureImageDataUrl: signatureDrawn ? signaturePad.toDataURL('image/png') : ''
