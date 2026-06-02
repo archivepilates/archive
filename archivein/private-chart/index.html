@@ -152,6 +152,27 @@
       background: var(--accent-weak);
     }
 
+    .purpose-groups {
+      display: grid;
+      gap: 12px;
+    }
+
+    .purpose-group {
+      padding: 12px;
+      background: color-mix(in srgb, var(--surface) 82%, var(--bg));
+      border: 1px solid var(--line);
+      border-radius: var(--radius);
+    }
+
+    .purpose-title {
+      margin: 0 0 10px;
+      color: var(--muted);
+      font-size: 13px;
+      font-weight: 750;
+      line-height: 1.35;
+      word-break: keep-all;
+    }
+
     textarea {
       width: 100%;
       min-height: 104px;
@@ -337,6 +358,15 @@
 
     const sets = {
       goals: ["코어 안정성", "골반 정렬", "흉곽/호흡", "목/어깨 긴장 완화", "허리 안정화", "하지 정렬", "유연성", "체력/근지구력", "밸런스", "통증 관리"],
+      purposeCategories: [
+        { label: "신체 부위별 강화 · 안정화", options: ["코어 안정화", "둔부 강화", "고관절 안정화", "견갑 안정화", "하체 정렬", "발목 안정화", "밸런스 안정화"] },
+        { label: "산전 · 산후 회복", options: ["호흡 회복", "복압 조절", "골반저근 인지", "체간 재활성", "부종/순환 관리"] },
+        { label: "통증 완화", options: ["허리 부담 완화", "목/어깨 긴장 완화", "고관절 불편감 완화", "무릎 부담 완화", "통증 관리"] },
+        { label: "컨디셔닝", options: ["전신 순환", "피로 회복", "가벼운 움직임 회복", "리듬 회복", "호흡 안정"] },
+        { label: "자세교정", options: ["골반 정렬", "흉곽 정렬", "라운드숄더 개선", "좌우 밸런스", "스탠딩 정렬"] },
+        { label: "다이어트 · 체형관리", options: ["전신 근지구력", "하체 라인", "복부 활성", "유산소성 흐름", "대사 활성"] },
+        { label: "유연성 향상", options: ["햄스트링 유연성", "고관절 가동성", "흉추 가동성", "어깨 가동성", "척추 분절"] },
+      ],
       focusAreas: ["목/어깨", "흉곽", "허리", "골반", "복부", "둔부", "고관절", "하체", "발/발목", "전신"],
       equipment: ["리포머", "캐딜락", "체어", "바렐", "매트", "소도구", "미정"],
       cautions: ["통증 확인 필요", "강도 낮게 시작", "호흡 먼저 체크", "좌우 차이 확인", "피로도 확인", "관절 가동범위 확인", "특별 주의 없음"],
@@ -344,7 +374,7 @@
     };
 
     const preFields = [
-      { type: "multi", key: "goals", label: "오늘의 수업 목적", options: sets.goals },
+      { type: "groupedMulti", key: "goals", label: "오늘의 수업 목적", groups: sets.purposeCategories },
       { type: "multi", key: "focusAreas", label: "집중 부위", options: sets.focusAreas },
       { type: "multi", key: "equipment", label: "예정 기구", options: sets.equipment },
       { type: "single", key: "intensity", label: "강도 계획", options: ["낮게 시작", "보통", "점진 상승", "컨디션 보고 조절"] },
@@ -506,6 +536,17 @@
           ["flexibilityScore", "유연성"],
         ].map(([key, label]) => scoreHtml(key, label)).join("")}</div></section>`;
       }
+      if (field.type === "groupedMulti") {
+        return `<section><h2>${escapeHtml(field.label)}</h2><div class="purpose-groups">${field.groups.map((group) => `
+          <div class="purpose-group">
+            <p class="purpose-title">${escapeHtml(group.label)}</p>
+            <div class="choices">${group.options.map((option) => `
+              <label class="choice">
+                <input type="checkbox" name="${field.key}" value="${escapeHtml(option)}">
+                <span>${escapeHtml(option)}</span>
+              </label>`).join("")}</div>
+          </div>`).join("")}</div></section>`;
+      }
       const inputType = field.type === "single" ? "radio" : "checkbox";
       return `<section><h2>${escapeHtml(field.label)}</h2><div class="choices">${field.options.map((option) => `
         <label class="choice">
@@ -610,7 +651,7 @@
       const answers = {};
       const activeFields = state.mode === "post" ? postFields : preFields;
       for (const field of activeFields) {
-        if (field.type === "multi") answers[field.key] = formData.getAll(field.key).map(String);
+        if (field.type === "multi" || field.type === "groupedMulti") answers[field.key] = formData.getAll(field.key).map(String);
         if (field.type === "single") answers[field.key] = String(formData.get(field.key) || "");
         if (field.type === "text") answers[field.key] = String(formData.get(field.key) || "");
       }
