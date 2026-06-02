@@ -91,9 +91,9 @@ export const ALIMTALK_TEMPLATES = {
     status: "approved",
   },
   private_lesson_report: {
-    code: "KA01TP260528090731992hVPP5efmmUC",
-    label: "프라이빗 회원 리포트 안내 v2",
-    status: "pending",
+    code: "KA01TP260528081225871Fr92FW901Vo",
+    label: "프라이빗 회원 리포트 안내 v1",
+    status: "approved",
   },
   inbody_report: {
     code: "KA01TP260528090148593isshfXtt8vE",
