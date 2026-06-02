@@ -9,36 +9,55 @@
     :root { color-scheme:light; --ink:#181512; --muted:#746b62; --line:#e8e0d7; --paper:#fffdf9; --accent:#c9392f; --good:#2f6f68; --bad:#9d2f24; }
     * { box-sizing:border-box; }
     body { margin:0; font-family:-apple-system,BlinkMacSystemFont,"Apple SD Gothic Neo","Noto Sans KR",sans-serif; background:#f6f1eb; color:var(--ink); }
-    main { width:min(720px,100%); margin:0 auto; padding:18px 14px 36px; }
-    .top { display:grid; grid-template-columns:1fr auto; gap:16px; align-items:start; padding:18px 2px 14px; border-bottom:1px solid rgba(24,21,18,.08); }
-    .brand { width:52px; height:52px; border-radius:50%; object-fit:contain; }
+    main { width:min(680px,100%); margin:0 auto; padding:16px 14px 36px; }
+    .top { display:grid; grid-template-columns:minmax(0,1fr) auto; gap:12px; align-items:start; padding:14px 2px 14px; border-bottom:1px solid rgba(24,21,18,.08); }
+    .brand { width:46px; height:46px; border-radius:50%; object-fit:contain; }
     .eyebrow { font-size:12px; font-weight:800; color:var(--accent); }
-    h1 { margin:6px 0 10px; font-size:27px; line-height:1.18; letter-spacing:0; }
-    .lead { margin:0; color:var(--muted); font-size:14px; line-height:1.66; word-break:keep-all; overflow-wrap:break-word; }
-    .meta { display:flex; flex-wrap:wrap; gap:6px; margin-top:10px; color:var(--muted); font-size:13px; line-height:1.5; }
-    .chip { display:inline-flex; align-items:center; min-height:28px; padding:4px 9px; border:1px solid var(--line); border-radius:999px; background:rgba(255,253,249,.72); }
+    h1 { margin:5px 0 8px; font-size:26px; line-height:1.2; letter-spacing:0; }
+    .lead { max-width:34rem; margin:0; color:var(--muted); font-size:14px; line-height:1.58; word-break:keep-all; overflow-wrap:break-word; }
+    .meta { display:flex; flex-wrap:wrap; gap:6px; margin-top:10px; color:var(--muted); font-size:12px; line-height:1.45; }
+    .chip { display:inline-flex; align-items:center; max-width:100%; min-height:26px; padding:4px 8px; border:1px solid var(--line); border-radius:999px; background:rgba(255,253,249,.72); white-space:normal; word-break:keep-all; overflow-wrap:anywhere; }
     form { display:grid; gap:12px; margin-top:16px; }
-    fieldset, .field, .message { margin:0; padding:15px 16px; border:1px solid var(--line); border-radius:8px; background:var(--paper); }
-    legend, .label { padding:0; margin:0 0 10px; font-size:14px; font-weight:900; color:#3e3831; }
+    fieldset, .field, .message { min-width:0; margin:0; padding:14px 15px; border:1px solid var(--line); border-radius:8px; background:var(--paper); }
+    fieldset::after { content:""; display:block; clear:both; }
+    legend { float:left; width:100%; }
+    legend, .label { padding:0; margin:0 0 10px; font-size:14px; font-weight:900; color:#3e3831; line-height:1.45; word-break:keep-all; overflow-wrap:break-word; }
+    legend + .options { clear:both; }
     .hint { margin:6px 0 0; color:var(--muted); font-size:12px; line-height:1.5; }
-    .options { display:grid; gap:8px; }
-    label.option { display:grid; grid-template-columns:22px 1fr; gap:8px; align-items:start; min-height:32px; font-size:15px; line-height:1.48; }
-    input[type="radio"], input[type="checkbox"] { width:18px; height:18px; margin:2px 0 0; accent-color:var(--accent); }
-    textarea { width:100%; min-height:92px; resize:vertical; border:1px solid var(--line); border-radius:8px; padding:11px 12px; background:#fff; color:var(--ink); font:inherit; line-height:1.55; }
-    textarea:focus { outline:2px solid rgba(201,57,47,.18); border-color:var(--accent); }
-    .actions { position:sticky; bottom:0; margin:0 -14px -36px; padding:12px 14px 18px; background:linear-gradient(to top,#f6f1eb 82%,rgba(246,241,235,0)); }
+    .options { display:grid; gap:7px; }
+    label.option { display:grid; grid-template-columns:22px minmax(0,1fr); gap:8px; align-items:start; min-height:34px; font-size:15px; line-height:1.45; word-break:keep-all; overflow-wrap:break-word; }
+    .option span { min-width:0; }
+    input[type="radio"], input[type="checkbox"] { width:18px; height:18px; margin:2px 0 0; flex:0 0 auto; accent-color:var(--accent); }
+    textarea, .other-input { width:100%; border:1px solid var(--line); border-radius:8px; padding:11px 12px; background:#fff; color:var(--ink); font:inherit; line-height:1.55; }
+    textarea { min-height:92px; resize:vertical; }
+    textarea:focus, .other-input:focus { outline:2px solid rgba(201,57,47,.18); border-color:var(--accent); }
+    .other-field { display:none; margin-top:10px; }
+    .other-field.is-visible { display:block; }
+    .actions { margin:2px 0 0; padding:0; }
     button { width:100%; min-height:48px; border:0; border-radius:8px; background:var(--accent); color:#fff; font-size:15px; font-weight:900; cursor:pointer; }
     button:disabled { opacity:.55; cursor:wait; }
     .message { margin-top:16px; line-height:1.7; word-break:keep-all; overflow-wrap:break-word; }
     .message.good { border-color:#bcd7d2; background:#f2faf8; color:var(--good); }
     .message.bad { border-color:#f0c9c1; background:#fff7f4; color:var(--bad); }
     @media (max-width:560px) {
-      main { padding:14px 12px 34px; }
-      .top { grid-template-columns:1fr 44px; gap:12px; padding-top:12px; }
-      .brand { width:44px; height:44px; }
-      h1 { font-size:24px; }
-      fieldset, .field, .message { padding:14px; }
-      .actions { margin-left:-12px; margin-right:-12px; padding-left:12px; padding-right:12px; }
+      main { padding:12px 11px 34px; }
+      .top { grid-template-columns:minmax(0,1fr) 38px; gap:10px; padding:10px 1px 12px; }
+      .brand { width:38px; height:38px; }
+      h1 { font-size:23px; line-height:1.22; }
+      .lead { font-size:13px; line-height:1.56; }
+      .meta { gap:5px; font-size:11px; }
+      .chip { min-height:24px; padding:3px 7px; }
+      form { gap:10px; margin-top:12px; }
+      fieldset, .field, .message { padding:13px; }
+      legend, .label { margin-bottom:9px; font-size:13px; }
+      label.option { min-height:32px; font-size:14px; line-height:1.42; }
+      textarea { min-height:86px; }
+    }
+    @media (max-width:340px) {
+      main { padding-left:9px; padding-right:9px; }
+      .top { grid-template-columns:1fr; }
+      .brand { display:none; }
+      h1 { font-size:22px; }
     }
   </style>
 </head>
@@ -61,6 +80,9 @@
       <fieldset>
         <legend>현재 운동 목표를 선택해 주세요</legend>
         <div class="options" data-check="goals"></div>
+        <div class="other-field" data-other-field="goals">
+          <input class="other-input" name="goalsOther" maxlength="80" placeholder="기타 목표를 적어주세요">
+        </div>
         <p class="hint">여러 개 선택할 수 있어요.</p>
       </fieldset>
       <fieldset>
@@ -107,7 +129,7 @@
     const button = form.querySelector('button');
     const choices = {
       experienceType: ['처음이에요', '3개월 미만 경험이 있어요', '3개월~1년 정도 경험이 있어요', '1년 이상 꾸준히 해본 적 있어요'],
-      goals: ['자세 교정', '체형 개선', '통증 완화', '근력/체력 향상', '유연성 향상', '운동 습관 만들기', '산전/산후 회복'],
+      goals: ['자세 교정', '체형 개선', '통증 완화', '근력/체력 향상', '유연성 향상', '운동 습관 만들기', '산전/산후 회복', '기타'],
       focusAreas: ['없음', '목/어깨', '등/흉추', '허리', '골반/고관절', '복부', '엉덩이/하체', '무릎/발목', '기타'],
       lifestyle: ['앉아있는 시간이 많아요', '서있는 시간이 많아요', '육아/가사 시간이 많아요', '운동량이 적은 편이에요', '스트레스나 수면 부족이 있어요', '특별히 해당 없음'],
       exerciseLevel: ['거의 운동하지 않아요', '가끔 운동해요', '꾸준히 운동하는 편이에요', '재활/치료 운동 경험이 있어요'],
@@ -152,6 +174,7 @@
           </label>
         `).join('');
       }
+      bindOtherField('goals', 'goalsOther');
     }
 
     form.addEventListener('submit', async (event) => {
@@ -162,7 +185,7 @@
           requestId,
           accessToken,
           experienceType: valueOf('experienceType'),
-          goals: valuesOf('goals'),
+          goals: valuesWithOther('goals', 'goalsOther'),
           focusAreas: valuesOf('focusAreas'),
           painNote: form.elements.painNote.value.trim(),
           lifestyle: valuesOf('lifestyle'),
@@ -193,6 +216,25 @@
 
     function valuesOf(name) {
       return Array.from(form.querySelectorAll(`input[name="${name}"]:checked`)).map((input) => input.value);
+    }
+
+    function valuesWithOther(name, otherName) {
+      const values = valuesOf(name);
+      const other = String(form.elements[otherName]?.value || '').trim();
+      if (other && values.includes('기타')) return values.filter((value) => value !== '기타').concat(`기타: ${other}`);
+      return values;
+    }
+
+    function bindOtherField(name, otherName) {
+      const field = document.querySelector(`[data-other-field="${name}"]`);
+      if (!field) return;
+      const sync = () => {
+        const checked = valuesOf(name).includes('기타');
+        field.classList.toggle('is-visible', checked);
+        if (!checked && form.elements[otherName]) form.elements[otherName].value = '';
+      };
+      form.querySelectorAll(`input[name="${name}"]`).forEach((input) => input.addEventListener('change', sync));
+      sync();
     }
 
     async function requestJson(url, options) {
