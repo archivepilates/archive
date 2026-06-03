@@ -20,6 +20,10 @@
 
 - Use the main ARCHIVE IN project chat as the control surface for cross-cutting decisions about the web app, Firebase model, StudioMate sync, Google Contacts, Kakao Alimtalk, and deployment readiness.
 - If a separate chat or agent is used for a narrow subtask, bring the decision/result back into the main ARCHIVE IN chat before treating it as project direction.
+- ARCHIVE CORE transition work uses `workLanes/archive-core-transition` as the shared work lane. New subthreads should read that lane first, update handoffs there, and use lane-specific worktrees for code changes.
+- Current ARCHIVE CORE transition worktree: `/Users/archivepilates/codex-worktrees/archive-core-transition`; branch: `codex/mini/archive-core-transition`.
+- ARCHIVE CORE is an operator-only web platform. It should not be treated as a teacher app, member app, or immediate StudioMate replacement.
+- Keep existing Alimtalk, StudioMate sync, and member-facing writes on their current canonical sources until a shadow-compare migration explicitly approves a source change.
 - When speed helps and the task can be split safely, use parallel agents, including the Spark model for quick read-only exploration or bounded implementation checks.
 - Use worktrees when a change is non-trivial, experimental, or should be isolated from the current branch.
 - Start live checks with read-only verification of the deployed ARCHIVE IN app, Firebase/Hosting configuration, and visible browser errors before proposing fixes.

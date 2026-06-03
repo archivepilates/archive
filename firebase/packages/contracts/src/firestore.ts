@@ -9,6 +9,7 @@ export const archiveCollections = {
   privateLessonChartRequests: "privateLessonChartRequests",
   privateLessonChartRecords: "privateLessonChartRecords",
   adminSyncRequests: "adminSyncRequests",
+  workLanes: "workLanes",
   membersMirror: "members",
   member360CardsMirror: "member360Cards",
 } as const;
@@ -29,3 +30,5 @@ export const sourceOfTruthCollections = [
 ] as const;
 
 export const mirrorCollections = [archiveCollections.membersMirror, archiveCollections.member360CardsMirror] as const;
+
+export const incubationCollections = [archiveCollections.workLanes] as const;

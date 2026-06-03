@@ -1,3 +1,5 @@
+import type { ArchiveCoreSourceKind } from "./archive-core";
+
 export const archiveEventTopics = {
   alimtalkCandidateQueued: "alimtalk.candidate.queued",
   alimtalkSendCompleted: "alimtalk.send.completed",
@@ -40,7 +42,7 @@ export interface PrivateLessonChartRequestedPayload extends MemberIdentityRef {
 
 export interface StudioMateExcelImportedPayload {
   importId: string;
-  sourceKind: "members" | "reservations" | "deleted-classes" | "sales" | "usage";
+  sourceKind: ArchiveCoreSourceKind;
   sourceDate: string;
   importedRows: number;
 }
