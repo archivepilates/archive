@@ -6,7 +6,10 @@ const state = {
   automationItems: [],
   sourceImports: [],
   qualityIssues: [],
+  businessSnapshot: null,
+  businessMonths: [],
   lane: null,
+  authReady: null,
 };
 
 function qs(id) {
@@ -28,6 +31,47 @@ function formatDate(value) {
     hour: "2-digit",
     minute: "2-digit",
   }).format(raw);
+}
+
+function normMonth(value) {
+  if (!value) return "";
+  const stringValue = String(value);
+  const match = stringValue.match(/(20\d{2})-(\d{2})/);
+  if (match) return `${match[1]}-${match[2]}`;
+  const date = new Date(value);
+  if (Number.isNaN(date.getTime())) return "";
+  return `${date.getFullYear()}-${String(date.getMonth() + 1).padStart(2, "0")}`;
+}
+
+function formatMonth(value) {
+  const month = normMonth(value);
+  if (!month) return "-";
+  return `${month.slice(2, 4)}년 ${Number(month.slice(5, 7))}월`;
+}
+
+function toNumber(value) {
+  if (typeof value === "number") return value;
+  if (value === null || value === undefined || value === "") return 0;
+  return Number(String(value).replaceAll(",", "").replace("%", "").trim()) || 0;
+}
+
+function formatManwon(value) {
+  if (!Number.isFinite(value)) return "-";
+  const manwon = Math.round(value / 10000);
+  return `${manwon.toLocaleString("ko-KR")}만`;
+}
+
+function formatRate(value) {
+  if (!Number.isFinite(value)) return "-";
+  return `${value.toFixed(1)}%`;
+}
+
+function deltaText(current, previous, suffix = "%") {
+  if (!Number.isFinite(current) || !Number.isFinite(previous) || previous === 0) return "비교 데이터 대기";
+  const diff = suffix === "%p" ? current - previous : ((current - previous) / previous) * 100;
+  const marker = diff >= 0 ? "▲" : "▼";
+  const sign = diff >= 0 ? "+" : "";
+  return `${marker} ${sign}${diff.toFixed(1)}${suffix} vs 전월`;
 }
 
 function normalizeStatus(value) {
@@ -95,14 +139,94 @@ async function initFirebase() {
   const config = window.KANGSAIN_FIREBASE_CONFIG;
   if (!config?.apiKey) throw new Error("Firebase 설정을 찾을 수 없습니다.");
 
-  const [{ initializeApp, getApps }, firestore] = await Promise.all([
+  const [{ initializeApp, getApps }, firestore, auth] = await Promise.all([
     import(`https://www.gstatic.com/firebasejs/${FIREBASE_APP_VERSION}/firebase-app.js`),
     import(`https://www.gstatic.com/firebasejs/${FIREBASE_APP_VERSION}/firebase-firestore.js`),
+    import(`https://www.gstatic.com/firebasejs/${FIREBASE_APP_VERSION}/firebase-auth.js`),
   ]);
 
   const app = getApps().length ? getApps()[0] : initializeApp(config);
-  state.firebaseRuntime = { db: firestore.getFirestore(app), ...firestore };
+  state.firebaseRuntime = {
+    app,
+    db: firestore.getFirestore(app),
+    authClient: auth.getAuth(app),
+    auth,
+    ...firestore,
+  };
   return state.firebaseRuntime;
+}
+
+function ensureLoginGate() {
+  if (qs("coreLoginGate") || !document.querySelector("[data-firestore-dashboard]")) return;
+  const gate = document.createElement("div");
+  gate.className = "login-gate";
+  gate.id = "coreLoginGate";
+  gate.innerHTML = `
+    <form class="login-card" id="coreLoginForm">
+      <h2>ARCHIVE CORE</h2>
+      <p>운영자 휴대폰번호와 비밀번호로 로그인하세요.</p>
+      <label>
+        <span>휴대폰번호</span>
+        <input id="coreLoginPhone" type="tel" inputmode="numeric" autocomplete="tel" placeholder="01000000000" />
+      </label>
+      <label>
+        <span>비밀번호</span>
+        <input id="coreLoginPassword" type="password" autocomplete="current-password" placeholder="비밀번호" />
+      </label>
+      <button type="submit">로그인</button>
+      <div class="login-error" id="coreLoginError"></div>
+    </form>
+  `;
+  document.body.appendChild(gate);
+  qs("coreLoginForm")?.addEventListener("submit", async (event) => {
+    event.preventDefault();
+    const phone = qs("coreLoginPhone")?.value.replace(/\D/g, "") || "";
+    const password = qs("coreLoginPassword")?.value.trim() || "";
+    if (!phone || !password) {
+      setText("coreLoginError", "휴대폰번호와 비밀번호를 입력하세요.");
+      return;
+    }
+    setText("coreLoginError", "");
+    try {
+      const runtime = await initFirebase();
+      await runtime.auth.signInWithEmailAndPassword(runtime.authClient, `p${phone}@archivepilates.com`, password);
+      gate.classList.remove("on");
+      await refresh();
+    } catch (error) {
+      setText("coreLoginError", loginErrorMessage(error));
+    }
+  });
+}
+
+function loginErrorMessage(error) {
+  const code = String(error?.code || "");
+  if (code.includes("invalid-credential") || code.includes("wrong-password") || code.includes("user-not-found")) {
+    return "로그인 정보를 확인하세요.";
+  }
+  if (code.includes("too-many-requests")) return "요청이 많습니다. 잠시 후 다시 시도하세요.";
+  if (code.includes("unauthorized-domain")) return "Firebase Auth 허용 도메인 확인이 필요합니다.";
+  return error?.message || "로그인에 실패했습니다.";
+}
+
+function showLoginGate(message = "") {
+  ensureLoginGate();
+  const gate = qs("coreLoginGate");
+  if (!gate) return;
+  setText("coreLoginError", message);
+  gate.classList.add("on");
+}
+
+async function waitForAuth(runtime) {
+  if (runtime.authClient.currentUser) return runtime.authClient.currentUser;
+  if (!state.authReady) {
+    state.authReady = new Promise((resolve) => {
+      const unsubscribe = runtime.auth.onAuthStateChanged(runtime.authClient, (user) => {
+        unsubscribe();
+        resolve(user || null);
+      });
+    });
+  }
+  return state.authReady;
 }
 
 async function getRecentCollection(db, firestore, collectionName, maxItems = 8) {
@@ -218,6 +342,199 @@ function renderQualityIssues(items) {
     .join("");
 }
 
+function normalizeBusinessSnapshot(data) {
+  const summary = (data?.summary || [])
+    .map((row) => ({
+      month: normMonth(row.월),
+      totalRevenue: toNumber(row.총매출),
+      lessonRevenue: toNumber(row.수업매출),
+      marginRate: toNumber(row.마진률),
+      groupSessions: toNumber(row.그룹세션),
+      privateSessions: toNumber(row.프라이빗),
+      reservationRate: toNumber(row.예약률),
+      attendanceRate: toNumber(row.출석률),
+    }))
+    .filter((row) => row.month)
+    .sort((a, b) => a.month.localeCompare(b.month));
+
+  const instructorRevenue = (data?.강사별 || [])
+    .map((row) => ({
+      month: normMonth(row.월),
+      name: String(row.강사 || ""),
+      revenue: toNumber(row.총매출),
+    }))
+    .filter((row) => row.month && row.name);
+
+  const ticketTop = (data?.수강권TOP5 || [])
+    .map((row) => ({
+      month: normMonth(row.월),
+      label: String(row.라벨 || row.수강권명 || ""),
+      value: toNumber(row.값),
+      hiddenKinds: toNumber(row.종류수),
+    }))
+    .filter((row) => row.month && row.label);
+
+  const dailyRevenue = (data?.매출일일누적 || [])
+    .map((row) => ({
+      month: normMonth(row.기준월 || row.월),
+      date: String(row.기준일 || row.일자 || ""),
+      totalRevenue: toNumber(row.월누적매출),
+      previousTotalRevenue: toNumber(row.전월동일일누적),
+      lessonRevenue: toNumber(row.월누적수업매출),
+      previousLessonRevenue: toNumber(row.전월동일일수업누적),
+      marginRate: toNumber(row.월누적수업마진률),
+      previousMarginRate: toNumber(row.전월동일일수업마진률),
+      attendanceRate: toNumber(row.월누적그룹출석률),
+      previousAttendanceRate: toNumber(row.전월동일일그룹출석률),
+    }))
+    .filter((row) => row.month && row.date)
+    .sort((a, b) => a.date.localeCompare(b.date));
+
+  return {
+    summary,
+    instructorRevenue,
+    ticketTop,
+    dailyRevenue,
+    updatedAt: data?.updatedAt || data?.syncedAt || null,
+  };
+}
+
+function latestDailyForMonth(snapshot, month) {
+  return [...(snapshot?.dailyRevenue || [])].filter((row) => row.month === month).pop() || null;
+}
+
+function renderBusinessBars(summary, selectedMonth) {
+  const container = qs("businessMonthlyBars");
+  if (!container) return;
+  const rows = summary.slice(-8);
+  if (!rows.length) {
+    container.innerHTML = `<div class="empty-state">dashboardSnapshots/current summary 데이터가 없습니다.</div>`;
+    return;
+  }
+  const maxRevenue = Math.max(...rows.map((row) => row.totalRevenue), 1);
+  container.innerHTML = rows
+    .map((row) => {
+      const percent = Math.max(6, Math.round((row.totalRevenue / maxRevenue) * 100));
+      const active = row.month === selectedMonth ? " active" : "";
+      return `
+        <button class="business-bar${active}" type="button" data-business-month="${escapeHtml(row.month)}">
+          <span>${escapeHtml(formatMonth(row.month))}</span>
+          <strong>${escapeHtml(formatManwon(row.totalRevenue))}</strong>
+          <i style="--bar-width:${percent}%"></i>
+        </button>
+      `;
+    })
+    .join("");
+}
+
+function renderBusinessRanks(snapshot, month) {
+  const container = qs("businessRankList");
+  if (!container) return;
+  const instructors = snapshot.instructorRevenue
+    .filter((row) => row.month === month)
+    .sort((a, b) => b.revenue - a.revenue)
+    .slice(0, 4);
+  const tickets = snapshot.ticketTop.filter((row) => row.month === month).slice(0, 4);
+
+  if (!instructors.length && !tickets.length) {
+    container.innerHTML = `<div class="empty-state">선택 월 TOP 데이터가 없습니다.</div>`;
+    return;
+  }
+
+  const renderRows = (title, rows, valueKey) => `
+    <div class="rank-section">
+      <h3>${escapeHtml(title)}</h3>
+      ${rows
+        .map(
+          (row, index) => `
+            <div class="rank-row">
+              <span>${index + 1}</span>
+              <strong>${escapeHtml(row.name || row.label)}</strong>
+              <em>${escapeHtml(formatManwon(row[valueKey]))}</em>
+            </div>
+          `,
+        )
+        .join("")}
+    </div>
+  `;
+
+  container.innerHTML = [
+    instructors.length ? renderRows("강사 수업매출", instructors, "revenue") : "",
+    tickets.length ? renderRows("수강권 차감매출", tickets, "value") : "",
+  ].join("");
+}
+
+function renderBusinessMonth(month) {
+  const snapshot = state.businessSnapshot;
+  if (!snapshot) return;
+  const current = snapshot.summary.find((row) => row.month === month) || snapshot.summary.at(-1);
+  if (!current) return;
+  const previousIndex = snapshot.summary.findIndex((row) => row.month === current.month) - 1;
+  const previous = previousIndex >= 0 ? snapshot.summary[previousIndex] : null;
+  const daily = latestDailyForMonth(snapshot, current.month);
+
+  setText("businessMonthLabel", `${formatMonth(current.month)} 기준`);
+  setText("businessHeroValue", `${formatManwon(current.totalRevenue)} 총매출`);
+  setText(
+    "businessHeroNote",
+    daily ? `${daily.date} 누적 기준 · 기존 현황판 원천` : "월 summary 기준 · 기존 현황판 원천",
+  );
+  setText("businessTotalRevenue", formatManwon(daily?.totalRevenue || current.totalRevenue));
+  setText("businessLessonRevenue", formatManwon(daily?.lessonRevenue || current.lessonRevenue));
+  setText("businessMarginRate", formatRate(daily?.marginRate || current.marginRate));
+  setText("businessAttendanceRate", formatRate(daily?.attendanceRate || current.attendanceRate));
+  setText(
+    "businessTotalDelta",
+    daily?.previousTotalRevenue ? deltaText(daily.totalRevenue, daily.previousTotalRevenue) : deltaText(current.totalRevenue, previous?.totalRevenue),
+  );
+  setText(
+    "businessLessonDelta",
+    daily?.previousLessonRevenue ? deltaText(daily.lessonRevenue, daily.previousLessonRevenue) : deltaText(current.lessonRevenue, previous?.lessonRevenue),
+  );
+  setText(
+    "businessMarginDelta",
+    daily?.previousMarginRate ? deltaText(daily.marginRate, daily.previousMarginRate, "%p") : deltaText(current.marginRate, previous?.marginRate, "%p"),
+  );
+  setText(
+    "businessAttendanceDelta",
+    daily?.previousAttendanceRate
+      ? deltaText(daily.attendanceRate, daily.previousAttendanceRate, "%p")
+      : deltaText(current.attendanceRate, previous?.attendanceRate, "%p"),
+  );
+  renderBusinessBars(snapshot.summary, current.month);
+  renderBusinessRanks(snapshot, current.month);
+}
+
+function renderBusiness(snapshot) {
+  const select = qs("businessMonthSelect");
+  if (!select) return;
+  state.businessSnapshot = snapshot;
+  state.businessMonths = snapshot.summary.map((row) => row.month);
+  if (!state.businessMonths.length) {
+    qs("businessSnapshotStatus").textContent = "데이터 없음";
+    qs("businessSnapshotStatus").className = "pill warn";
+    return;
+  }
+  select.innerHTML = [...state.businessMonths]
+    .reverse()
+    .map((month) => `<option value="${escapeHtml(month)}">${escapeHtml(formatMonth(month))}</option>`)
+    .join("");
+  const latestMonth = state.businessMonths.at(-1);
+  select.value = latestMonth;
+  qs("businessSnapshotStatus").textContent = "연결됨";
+  qs("businessSnapshotStatus").className = "pill good";
+  setText("businessUpdatedAt", snapshot.updatedAt ? formatDate(snapshot.updatedAt) : "업데이트 확인");
+  renderBusinessMonth(latestMonth);
+}
+
+function renderBusinessFallback(error) {
+  if (!qs("businessMonthSelect")) return;
+  qs("businessSnapshotStatus").textContent = error ? "권한 확인" : "대기";
+  qs("businessSnapshotStatus").className = "pill warn";
+  setText("businessHeroValue", "데이터 연결 대기");
+  setText("businessHeroNote", error?.message || "Firestore 권한 또는 snapshot 문서 확인이 필요합니다.");
+}
+
 function renderFallback(error) {
   const reason = error?.code === "permission-denied" ? "로그인 권한 필요" : "Firestore 읽기 실패";
   setConnection(reason, error?.message || "정적 화면으로 표시합니다.");
@@ -225,6 +542,8 @@ function renderFallback(error) {
   renderAutomation([]);
   renderImports([]);
   renderQualityIssues([]);
+  renderBusinessFallback(error);
+  if (error?.code === "permission-denied") showLoginGate();
 }
 
 async function refresh() {
@@ -234,12 +553,20 @@ async function refresh() {
 
   try {
     const runtime = await initFirebase();
+    const user = await waitForAuth(runtime);
+    if (!user) {
+      const error = new Error("운영자 로그인이 필요합니다.");
+      error.code = "permission-denied";
+      throw error;
+    }
     const { db, doc, getDoc } = runtime;
-    const [laneSnapshot, automationItems, sourceImports, qualityIssues] = await Promise.all([
+    const shouldLoadBusiness = Boolean(qs("businessMonthSelect"));
+    const [laneSnapshot, automationItems, sourceImports, qualityIssues, dashboardSnapshot] = await Promise.all([
       getDoc(doc(db, "workLanes", WORK_LANE_ID)),
       getRecentCollection(db, runtime, "automationStatus"),
       getRecentCollection(db, runtime, "sourceImports"),
       getRecentCollection(db, runtime, "dataQualityIssues", 12),
+      shouldLoadBusiness ? getDoc(doc(db, "dashboardSnapshots", "current")) : Promise.resolve(null),
     ]);
 
     state.lane = laneSnapshot.exists() ? laneSnapshot.data() : { status: "active" };
@@ -250,6 +577,10 @@ async function refresh() {
     renderAutomation(automationItems);
     renderImports(sourceImports);
     renderQualityIssues(qualityIssues);
+    if (shouldLoadBusiness) {
+      if (dashboardSnapshot?.exists()) renderBusiness(normalizeBusinessSnapshot(dashboardSnapshot.data()));
+      else renderBusinessFallback(new Error("dashboardSnapshots/current 문서가 없습니다."));
+    }
     setConnection("연결됨", `archive-pilates · ${formatDate(new Date())}`);
   } catch (error) {
     renderFallback(error);
@@ -260,4 +591,13 @@ async function refresh() {
 
 activateNav();
 qs("refreshButton")?.addEventListener("click", refresh);
+qs("businessMonthSelect")?.addEventListener("change", (event) => renderBusinessMonth(event.target.value));
+document.addEventListener("click", (event) => {
+  const target = event.target.closest("[data-business-month]");
+  if (!target) return;
+  const month = target.getAttribute("data-business-month");
+  const select = qs("businessMonthSelect");
+  if (select) select.value = month;
+  renderBusinessMonth(month);
+});
 if (document.querySelector("[data-firestore-dashboard]")) refresh();

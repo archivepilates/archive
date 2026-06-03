@@ -191,9 +191,34 @@ default URL: https://archive-pilates-core.web.app
 intended custom domain: core.archivepilates.com
 ```
 
-Current DNS note:
+Current custom domain state:
 
 ```txt
-core.archivepilates.com currently resolves to 121.254.178.238.
-It is not yet connected to Firebase Hosting.
+core.archivepilates.com -> Firebase Hosting site archive-pilates-core
+hostState: HOST_ACTIVE
+ownershipState: OWNERSHIP_ACTIVE
+certState: CERT_ACTIVE
 ```
+
+Firebase Auth authorized domains include:
+
+```txt
+archive-pilates-core.web.app
+core.archivepilates.com
+```
+
+## 2026-06-03 Business Page Update
+
+The Business page now reads `dashboardSnapshots/current` after operator login and displays a CORE-style summary of:
+
+```txt
+monthly total revenue
+monthly lesson revenue
+lesson margin rate
+group attendance rate
+monthly revenue trend
+instructor lesson revenue TOP
+ticket deduction revenue TOP
+```
+
+This is read-only and does not replace the existing `/dashboard` source or calculations yet.

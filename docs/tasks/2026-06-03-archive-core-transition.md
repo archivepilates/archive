@@ -81,6 +81,9 @@ Phase 1: read-only operations console foundation.
 - `/core/assets/app.js` catches permission or missing-data failures and does not write to Firestore.
 - `sourceImports`, `automationStatus`, and `dataQualityIssues` are currently read surfaces. They are not yet connected to live import scripts in this branch.
 - Existing Alimtalk and StudioMate automations remain on their current canonical collections and scripts.
+- `core.archivepilates.com` is connected to Firebase Hosting site `archive-pilates-core`.
+- Firebase Auth authorized domains include `archive-pilates-core.web.app` and `core.archivepilates.com`.
+- Business reads `dashboardSnapshots/current` read-only and shows a CORE-style monthly summary after operator login.
 
 ## Handoff Rule
 
