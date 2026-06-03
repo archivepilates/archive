@@ -75,6 +75,7 @@ a {
 
 .sidebar {
   position: sticky;
+  z-index: 40;
   top: 18px;
   height: calc(100dvh - 36px);
   overflow: visible;
@@ -133,6 +134,7 @@ a {
 .nav a {
   display: flex;
   position: relative;
+  z-index: 1;
   width: 54px;
   min-height: 54px;
   align-items: center;
@@ -184,7 +186,7 @@ a {
 
 .nav-label {
   position: absolute;
-  z-index: 20;
+  z-index: 999;
   top: 50%;
   left: calc(100% + 10px);
   display: grid;

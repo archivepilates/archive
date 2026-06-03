@@ -161,7 +161,7 @@ function enhanceNav() {
       .trim();
     const title = label || section;
     link.setAttribute("aria-label", `${title}${small ? ` · ${small}` : ""}`);
-    link.setAttribute("title", title);
+    link.removeAttribute("title");
     link.innerHTML = `
       ${navIcon(section)}
       <span class="nav-label">
