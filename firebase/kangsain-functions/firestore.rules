@@ -327,6 +327,46 @@ service cloud.firestore {
       allow write: if false;
     }
 
+    match /members/{memberId} {
+      allow read: if isManager();
+      allow write: if false;
+
+      match /{document=**} {
+        allow read: if isManager();
+        allow write: if false;
+      }
+    }
+
+    match /member360Cards/{memberId} {
+      allow read: if isManager();
+      allow write: if false;
+    }
+
+    match /memberSummaries/{memberId} {
+      allow read: if isManager();
+      allow write: if false;
+    }
+
+    match /memberUsageEvents/{eventId} {
+      allow read: if isManager();
+      allow write: if false;
+    }
+
+    match /privateSessionLedger/{ledgerId} {
+      allow read: if isManager();
+      allow write: if false;
+    }
+
+    match /privateLessonChartRequests/{requestId} {
+      allow read: if isManager();
+      allow write: if false;
+    }
+
+    match /privateLessonChartRecords/{recordId} {
+      allow read: if isManager();
+      allow write: if false;
+    }
+
     match /dashboardSnapshots/{snapshotId} {
       allow read: if signedIn() && snapshotId == 'current';
       allow write: if false;

@@ -9,7 +9,7 @@
     <script src="../firebase-config.js"></script>
     <script type="module" src="../assets/app.js"></script>
   </head>
-  <body>
+  <body data-firestore-dashboard data-members-dashboard>
     <div class="shell">
       <aside class="sidebar" aria-label="ARCHIVE CORE navigation">
         <div class="brand"><div class="brand-mark" aria-hidden="true">CORE</div><strong>ARCHIVE CORE</strong><span>ARCHIVE PILATES Operations Platform</span></div>
@@ -27,11 +27,30 @@
         </nav>
       </aside>
       <main class="main">
-        <header class="page-hero">
-          <p class="eyebrow">MEMBERS</p>
-          <h1>회원 데이터</h1>
-          <p class="subtitle">회원 기본정보, alias, 요약 read-model을 분리해서 동명이인과 임시 ID 문제를 줄입니다.</p>
+        <header class="topbar">
+          <div class="title-block">
+            <p class="eyebrow">MEMBERS</p>
+            <h1>회원 데이터</h1>
+            <p class="subtitle">회원 기본정보, alias, 요약 read-model을 분리해서 동명이인과 임시 ID 문제를 줄입니다.</p>
+          </div>
+          <div class="top-actions" aria-label="상태 확인">
+            <div class="connection-card" aria-live="polite"><span id="connectionLabel">로딩</span><strong id="connectionDetail">Firestore 연결 준비 중</strong></div>
+            <button class="refresh-button" id="refreshButton" type="button">새로고침</button>
+          </div>
         </header>
+        <section class="grid kpis">
+          <article class="panel metric"><div class="metric-label">최근 회원</div><div class="metric-value" id="membersVisibleCount">0</div><div class="metric-note">members read-model</div></article>
+          <article class="panel metric"><div class="metric-label">활성 수강권</div><div class="metric-value" id="membersActiveTicketCount">0</div><div class="metric-note">최근 목록 기준</div></article>
+          <article class="panel metric"><div class="metric-label">최근 방문 있음</div><div class="metric-value" id="membersRecentVisitCount">0</div><div class="metric-note">recentVisitAt 기준</div></article>
+          <article class="panel metric"><div class="metric-label">매출 요약 있음</div><div class="metric-value" id="membersRevenueCount">0</div><div class="metric-note">totalRevenue 기준</div></article>
+        </section>
+        <section class="panel">
+          <div class="panel-header">
+            <div><h2>최근 갱신 회원</h2><p>회원 중심 미러입니다. 발송/쓰기 원천으로 사용하지 않습니다.</p></div>
+            <span class="pill warn">read-only</span>
+          </div>
+          <div class="table-wrap"><table><thead><tr><th>회원</th><th>수강권</th><th>최근 방문</th><th>누적 매출</th></tr></thead><tbody id="membersTable"><tr><td colspan="4">Firestore 연결 후 표시합니다.</td></tr></tbody></table></div>
+        </section>
         <section class="grid data-grid">
           <article class="panel detail-card"><span class="pill warn">전환 준비</span><h2>members</h2><p>이름, 전화번호, 등록일, 상태, 최근 방문, 현재 수강권 요약을 담는 회원 기준 문서.</p></article>
           <article class="panel detail-card"><span class="pill warn">전환 준비</span><h2>memberAliases</h2><p>StudioMate ID, 전화번호 변경, 이름 변경, excel 임시 ID를 실제 회원으로 연결.</p></article>

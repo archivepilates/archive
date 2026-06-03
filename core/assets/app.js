@@ -8,6 +8,11 @@ const state = {
   qualityIssues: [],
   businessSnapshot: null,
   businessMonths: [],
+  members: [],
+  privateRequests: [],
+  privateRecords: [],
+  privateUsageEvents: [],
+  privateLedgerEntries: [],
   lane: null,
   authReady: null,
 };
@@ -230,10 +235,14 @@ async function waitForAuth(runtime) {
 }
 
 async function getRecentCollection(db, firestore, collectionName, maxItems = 8) {
+  return getRecentCollectionBy(db, firestore, collectionName, "updatedAt", maxItems);
+}
+
+async function getRecentCollectionBy(db, firestore, collectionName, orderField = "updatedAt", maxItems = 8) {
   try {
     const queryRef = firestore.query(
       firestore.collection(db, collectionName),
-      firestore.orderBy("updatedAt", "desc"),
+      firestore.orderBy(orderField, "desc"),
       firestore.limit(maxItems),
     );
     const snapshot = await firestore.getDocs(queryRef);
@@ -243,7 +252,7 @@ async function getRecentCollection(db, firestore, collectionName, maxItems = 8) 
     const snapshot = await firestore.getDocs(firestore.collection(db, collectionName));
     return snapshot.docs
       .map((docSnapshot) => ({ id: docSnapshot.id, ...docSnapshot.data() }))
-      .sort((a, b) => String(b.updatedAt || "").localeCompare(String(a.updatedAt || "")))
+      .sort((a, b) => String(b[orderField] || "").localeCompare(String(a[orderField] || "")))
       .slice(0, maxItems);
   }
 }
@@ -340,6 +349,101 @@ function renderQualityIssues(items) {
       `;
     })
     .join("");
+}
+
+function renderMembers(items) {
+  const table = qs("membersTable");
+  if (!table) return;
+  setText("membersVisibleCount", String(items.length));
+  setText("membersActiveTicketCount", String(items.filter((item) => toNumber(item.activeTicketCount) > 0).length));
+  setText("membersRecentVisitCount", String(items.filter((item) => item.recentVisitAt).length));
+  setText("membersRevenueCount", String(items.filter((item) => toNumber(item.totalRevenue) > 0).length));
+
+  if (!items.length) {
+    table.innerHTML = `<tr><td colspan="4">최근 members 문서가 없거나 권한 확인이 필요합니다.</td></tr>`;
+    return;
+  }
+
+  table.innerHTML = items
+    .map((item) => {
+      const ticketNames = (item.currentTicketsSummary || item.activeTicketNames || [])
+        .map((ticket) => (typeof ticket === "string" ? ticket : ticket.name))
+        .filter(Boolean)
+        .slice(0, 2);
+      const ticketText = ticketNames.length ? ticketNames.join(", ") : "활성 수강권 없음";
+      const phone = item.phoneLast4 ? ` · ${item.phoneLast4}` : "";
+      return `
+        <tr>
+          <td><strong>${escapeHtml(item.name || item.memberId || item.id)}</strong><br><span>${escapeHtml(item.memberId || item.id)}${escapeHtml(phone)}</span></td>
+          <td>${escapeHtml(ticketText)}<br><span>${escapeHtml(toNumber(item.activeTicketCount) ? `${item.activeTicketCount}개` : "0개")}</span></td>
+          <td>${escapeHtml(formatDate(item.recentVisitAt))}</td>
+          <td>${escapeHtml(formatManwon(toNumber(item.totalRevenue)))}</td>
+        </tr>
+      `;
+    })
+    .join("");
+}
+
+function renderPrivate(requests, records, usageEvents, ledgerEntries) {
+  if (!qs("privateRequestList")) return;
+  setText("privateRequestCount", String(requests.length));
+  setText("privateRecordCount", String(records.length));
+  setText("privateUsageCount", String(usageEvents.length));
+  setText("privateLedgerCount", String(ledgerEntries.length));
+
+  const requestList = qs("privateRequestList");
+  if (requestList) {
+    requestList.innerHTML = requests.length
+      ? requests
+          .map((item) => {
+            const status = item.preStatus || item.postStatus || item.status || item.alimtalk?.status || "pending";
+            const lesson = [item.lessonDate, item.staffName].filter(Boolean).join(" · ");
+            return `
+              <div class="status-row">
+                <div>
+                  <strong>${escapeHtml(item.memberName || item.memberId || item.id)}</strong>
+                  <p>${escapeHtml(lesson || "수업 정보 없음")} · ${escapeHtml(item.bookingId || item.requestId || item.id)}</p>
+                </div>
+                ${pill(status)}
+              </div>
+            `;
+          })
+          .join("")
+      : `<div class="empty-state">최근 privateLessonChartRequests 문서가 없습니다.</div>`;
+  }
+
+  const ledgerList = qs("privateLedgerList");
+  if (!ledgerList) return;
+  if (ledgerEntries.length) {
+    ledgerList.innerHTML = ledgerEntries
+      .map((item) => `
+        <div class="status-row">
+          <div>
+            <strong>${escapeHtml(item.memberName || item.memberId || item.id)}</strong>
+            <p>${escapeHtml(item.startsAt || item.lessonDate || "")} · 누적 ${escapeHtml(item.cumulativePrivateRound || "-")}회</p>
+          </div>
+          ${pill(item.status || "active")}
+        </div>
+      `)
+      .join("");
+    return;
+  }
+  ledgerList.innerHTML = `
+    <div class="status-row">
+      <div>
+        <strong>memberUsageEvents</strong>
+        <p>${usageEvents.length ? "이용 이력 문서가 감지되었습니다." : "아직 운영 반영된 이용 이력 문서가 없습니다."}</p>
+      </div>
+      ${pill(usageEvents.length ? "reviewing" : "pending")}
+    </div>
+    <div class="status-row">
+      <div>
+        <strong>privateSessionLedger</strong>
+        <p>현재 회차 계산 장부는 준비 단계입니다. 기존 차트 원천은 유지됩니다.</p>
+      </div>
+      ${pill("pending")}
+    </div>
+  `;
 }
 
 function normalizeBusinessSnapshot(data) {
@@ -561,22 +665,47 @@ async function refresh() {
     }
     const { db, doc, getDoc } = runtime;
     const shouldLoadBusiness = Boolean(qs("businessMonthSelect"));
-    const [laneSnapshot, automationItems, sourceImports, qualityIssues, dashboardSnapshot] = await Promise.all([
+    const shouldLoadMembers = Boolean(qs("membersTable"));
+    const shouldLoadPrivate = Boolean(qs("privateRequestList"));
+    const [
+      laneSnapshot,
+      automationItems,
+      sourceImports,
+      qualityIssues,
+      dashboardSnapshot,
+      members,
+      privateRequests,
+      privateRecords,
+      privateUsageEvents,
+      privateLedgerEntries,
+    ] = await Promise.all([
       getDoc(doc(db, "workLanes", WORK_LANE_ID)),
       getRecentCollection(db, runtime, "automationStatus"),
       getRecentCollection(db, runtime, "sourceImports"),
       getRecentCollection(db, runtime, "dataQualityIssues", 12),
       shouldLoadBusiness ? getDoc(doc(db, "dashboardSnapshots", "current")) : Promise.resolve(null),
+      shouldLoadMembers ? getRecentCollection(db, runtime, "members", 12) : Promise.resolve([]),
+      shouldLoadPrivate ? getRecentCollectionBy(db, runtime, "privateLessonChartRequests", "createdAt", 8) : Promise.resolve([]),
+      shouldLoadPrivate ? getRecentCollectionBy(db, runtime, "privateLessonChartRecords", "createdAt", 8) : Promise.resolve([]),
+      shouldLoadPrivate ? getRecentCollectionBy(db, runtime, "memberUsageEvents", "updatedAt", 8) : Promise.resolve([]),
+      shouldLoadPrivate ? getRecentCollectionBy(db, runtime, "privateSessionLedger", "updatedAt", 8) : Promise.resolve([]),
     ]);
 
     state.lane = laneSnapshot.exists() ? laneSnapshot.data() : { status: "active" };
     state.automationItems = automationItems;
     state.sourceImports = sourceImports;
     state.qualityIssues = qualityIssues;
+    state.members = members;
+    state.privateRequests = privateRequests;
+    state.privateRecords = privateRecords;
+    state.privateUsageEvents = privateUsageEvents;
+    state.privateLedgerEntries = privateLedgerEntries;
     renderLane(state.lane);
     renderAutomation(automationItems);
     renderImports(sourceImports);
     renderQualityIssues(qualityIssues);
+    renderMembers(members);
+    renderPrivate(privateRequests, privateRecords, privateUsageEvents, privateLedgerEntries);
     if (shouldLoadBusiness) {
       if (dashboardSnapshot?.exists()) renderBusiness(normalizeBusinessSnapshot(dashboardSnapshot.data()));
       else renderBusinessFallback(new Error("dashboardSnapshots/current 문서가 없습니다."));

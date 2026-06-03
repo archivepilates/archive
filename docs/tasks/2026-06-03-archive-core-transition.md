@@ -84,6 +84,10 @@ Phase 1: read-only operations console foundation.
 - `core.archivepilates.com` is connected to Firebase Hosting site `archive-pilates-core`.
 - Firebase Auth authorized domains include `archive-pilates-core.web.app` and `core.archivepilates.com`.
 - Business reads `dashboardSnapshots/current` read-only and shows a CORE-style monthly summary after operator login.
+- Imports, Members, and Private pages now use the shared operator login/read flow.
+- Members reads the existing `members` mirror read-only and shows recent member, ticket, visit, and revenue summary rows.
+- Private reads existing `privateLessonChartRequests` and `privateLessonChartRecords` read-only. `memberUsageEvents` and `privateSessionLedger` remain empty/preparation surfaces until the usage-history pipeline is applied.
+- Firestore browser writes remain blocked for the added CORE read surfaces.
 
 ## Handoff Rule
 

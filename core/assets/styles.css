@@ -472,6 +472,11 @@ td {
   font-size: 0.92rem;
 }
 
+td span {
+  color: var(--muted);
+  font-size: 0.82rem;
+}
+
 .list {
   display: grid;
   gap: 12px;

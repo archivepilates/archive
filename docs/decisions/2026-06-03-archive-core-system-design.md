@@ -222,3 +222,29 @@ ticket deduction revenue TOP
 ```
 
 This is read-only and does not replace the existing `/dashboard` source or calculations yet.
+
+## 2026-06-03 Four-Step Operator Data Update
+
+ARCHIVE CORE now has read-only operator data surfaces for the first four operating steps:
+
+```txt
+1. operator login gate and Firebase Auth custom-domain setup
+2. Home / Business dashboard bridge
+3. Imports source and data quality page
+4. Members / Private read-model pages
+```
+
+Current read sources:
+
+```txt
+Business: dashboardSnapshots/current
+Imports: sourceImports, dataQualityIssues
+Members: members
+Private: privateLessonChartRequests, privateLessonChartRecords, memberUsageEvents, privateSessionLedger
+```
+
+The `members` collection is treated as a mirror/read-model. It can support operator review and GPT/business analysis, but it is not approved as an external send/write source.
+
+The `memberUsageEvents` and `privateSessionLedger` collections are visible in the Private page, but are not yet populated. Private lesson chart sends and StudioMate-related writes continue to use existing canonical sources until the usage-history pipeline passes dry-run verification.
+
+Browser write access remains blocked for all newly exposed CORE collections.
