@@ -302,6 +302,31 @@ service cloud.firestore {
       allow update, delete: if false;
     }
 
+    match /workLanes/{laneId} {
+      allow read: if isManager();
+      allow write: if false;
+
+      match /{document=**} {
+        allow read: if isManager();
+        allow write: if false;
+      }
+    }
+
+    match /automationStatus/{statusId} {
+      allow read: if isManager();
+      allow write: if false;
+    }
+
+    match /sourceImports/{importId} {
+      allow read: if isManager();
+      allow write: if false;
+    }
+
+    match /dataQualityIssues/{issueId} {
+      allow read: if isManager();
+      allow write: if false;
+    }
+
     match /dashboardSnapshots/{snapshotId} {
       allow read: if signedIn() && snapshotId == 'current';
       allow write: if false;
