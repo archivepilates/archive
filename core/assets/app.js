@@ -127,6 +127,52 @@ function setConnection(label, detail) {
   setText("connectionDetail", detail);
 }
 
+const NAV_ICONS = {
+  home: "M3 11.5 12 4l9 7.5M5 10v10h14V10M9 20v-6h6v6",
+  members: "M16 19v-1.5A3.5 3.5 0 0 0 12.5 14h-5A3.5 3.5 0 0 0 4 17.5V19M11 8a3 3 0 1 1-6 0 3 3 0 0 1 6 0M20 19v-1a3 3 0 0 0-3-3h-1.2M15 5.2a2.8 2.8 0 0 1 0 5.6",
+  lessons: "M4 6.5h16M4 12h16M4 17.5h9M8 4v16M16 4v10",
+  private: "M5 4h14v16H5zM8 8h8M8 12h5M8 16h7",
+  messages: "M4 6h16v11H8l-4 3V6zM8 10h8M8 14h5",
+  automation: "M12 3v4M12 17v4M4.9 4.9l2.8 2.8M16.3 16.3l2.8 2.8M3 12h4M17 12h4M4.9 19.1l2.8-2.8M16.3 7.7l2.8-2.8M9 12a3 3 0 1 0 6 0 3 3 0 0 0-6 0",
+  business: "M4 19h16M6 16V9M12 16V5M18 16v-7",
+  imports: "M12 3v11M7 9l5 5 5-5M5 19h14",
+  rules: "M6 4h12v16H6zM9 8h6M9 12h6M9 16h4",
+  settings: "M12 8a4 4 0 1 0 0 8 4 4 0 0 0 0-8M12 3v3M12 18v3M4.6 6.2l2.1 2.1M17.3 15.7l2.1 2.1M3 12h3M18 12h3M4.6 17.8l2.1-2.1M17.3 8.3l2.1-2.1",
+};
+
+function navIcon(section) {
+  const path = NAV_ICONS[section] || NAV_ICONS.home;
+  return `
+    <svg class="nav-icon" aria-hidden="true" viewBox="0 0 24 24" focusable="false">
+      <path d="${path}" />
+    </svg>
+  `;
+}
+
+function enhanceNav() {
+  document.querySelectorAll(".nav a").forEach((link) => {
+    if (link.dataset.enhanced === "true") return;
+    const section = link.dataset.section || "home";
+    const small = link.querySelector("small")?.textContent?.trim() || "";
+    const label = [...link.childNodes]
+      .filter((node) => node.nodeType === Node.TEXT_NODE)
+      .map((node) => node.textContent)
+      .join("")
+      .trim();
+    const title = label || section;
+    link.setAttribute("aria-label", `${title}${small ? ` · ${small}` : ""}`);
+    link.setAttribute("title", title);
+    link.innerHTML = `
+      ${navIcon(section)}
+      <span class="nav-label">
+        <span>${escapeHtml(title)}</span>
+        ${small ? `<small>${escapeHtml(small)}</small>` : ""}
+      </span>
+    `;
+    link.dataset.enhanced = "true";
+  });
+}
+
 function activateNav() {
   const path = window.location.pathname.replace(/\/+$/, "");
   document.querySelectorAll(".nav a").forEach((link) => {
@@ -718,6 +764,7 @@ async function refresh() {
   }
 }
 
+enhanceNav();
 activateNav();
 qs("refreshButton")?.addEventListener("click", refresh);
 qs("businessMonthSelect")?.addEventListener("change", (event) => renderBusinessMonth(event.target.value));

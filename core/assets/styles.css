@@ -68,7 +68,7 @@ a {
 .shell {
   display: grid;
   min-height: 100dvh;
-  grid-template-columns: minmax(236px, 276px) minmax(0, 1fr);
+  grid-template-columns: 86px minmax(0, 1fr);
   gap: 24px;
   padding: 18px;
 }
@@ -77,8 +77,8 @@ a {
   position: sticky;
   top: 18px;
   height: calc(100dvh - 36px);
-  overflow: auto;
-  padding: 24px 18px;
+  overflow: visible;
+  padding: 18px 10px;
   border: 1px solid rgba(255, 255, 255, 0.74);
   border-radius: 8px;
   background: rgba(255, 255, 255, 0.84);
@@ -88,17 +88,18 @@ a {
 
 .brand {
   display: grid;
+  justify-items: center;
   gap: 3px;
-  margin-bottom: 26px;
-  padding: 4px 4px 18px;
+  margin-bottom: 20px;
+  padding: 2px 2px 16px;
   border-bottom: 1px solid var(--line-soft);
 }
 
 .brand-mark {
   display: inline-grid;
-  width: 56px;
-  height: 56px;
-  margin-bottom: 12px;
+  width: 48px;
+  height: 48px;
+  margin-bottom: 0;
   place-items: center;
   border-radius: 8px;
   background: linear-gradient(145deg, #ff7a2c, var(--accent));
@@ -107,15 +108,18 @@ a {
   font-family: var(--font-system);
   font-weight: 800;
   letter-spacing: 0;
+  font-size: 0.8rem;
 }
 
 .brand strong {
+  display: none;
   font-family: var(--font-system);
   font-size: 1.32rem;
   letter-spacing: 0;
 }
 
 .brand span {
+  display: none;
   color: var(--muted);
   font-size: 0.88rem;
 }
@@ -123,14 +127,18 @@ a {
 .nav {
   display: grid;
   gap: 8px;
+  justify-items: center;
 }
 
 .nav a {
   display: flex;
+  position: relative;
+  width: 54px;
+  min-height: 54px;
   align-items: center;
-  justify-content: space-between;
-  gap: 12px;
-  padding: 12px 13px;
+  justify-content: center;
+  gap: 0;
+  padding: 0;
   border: 1px solid transparent;
   border-radius: 8px;
   color: var(--muted);
@@ -158,8 +166,61 @@ a {
 }
 
 .nav small {
-  color: var(--soft);
+  color: currentColor;
+  opacity: 0.74;
   font-size: 0.76rem;
+}
+
+.nav-icon {
+  width: 22px;
+  height: 22px;
+  flex: 0 0 auto;
+  fill: none;
+  stroke: currentColor;
+  stroke-width: 1.9;
+  stroke-linecap: round;
+  stroke-linejoin: round;
+}
+
+.nav-label {
+  position: absolute;
+  z-index: 20;
+  top: 50%;
+  left: calc(100% + 10px);
+  display: grid;
+  min-width: 112px;
+  width: max-content;
+  gap: 2px;
+  padding: 8px 10px;
+  border: 1px solid rgba(17, 24, 39, 0.08);
+  border-radius: 8px;
+  background: rgba(17, 24, 39, 0.94);
+  box-shadow: 0 14px 32px rgba(17, 24, 39, 0.18);
+  color: #fff;
+  opacity: 0;
+  pointer-events: none;
+  transform: translate(0, -50%) scale(0.98);
+  transition:
+    opacity 140ms ease,
+    transform 140ms ease;
+  white-space: nowrap;
+}
+
+.nav-label::before {
+  content: "";
+  position: absolute;
+  top: 50%;
+  right: 100%;
+  width: 8px;
+  height: 8px;
+  background: rgba(17, 24, 39, 0.94);
+  transform: translate(4px, -50%) rotate(45deg);
+}
+
+.nav a:hover .nav-label,
+.nav a:focus-visible .nav-label {
+  opacity: 1;
+  transform: translate(4px, -50%) scale(1);
 }
 
 .main {
@@ -849,10 +910,48 @@ td span {
     position: static;
     height: auto;
     border-radius: 8px;
+    padding: 18px;
+  }
+
+  .brand {
+    justify-items: start;
+    margin-bottom: 18px;
+    padding: 0 0 16px;
+  }
+
+  .brand strong,
+  .brand span {
+    display: block;
   }
 
   .nav {
     grid-template-columns: repeat(auto-fit, minmax(min(100%, 120px), 1fr));
+    justify-items: stretch;
+  }
+
+  .nav a {
+    width: auto;
+    justify-content: flex-start;
+    gap: 9px;
+    padding: 10px 11px;
+  }
+
+  .nav-label {
+    position: static;
+    display: grid;
+    min-width: 0;
+    padding: 0;
+    border: 0;
+    background: transparent;
+    box-shadow: none;
+    color: inherit;
+    opacity: 1;
+    transform: none;
+    white-space: normal;
+  }
+
+  .nav-label::before {
+    display: none;
   }
 
   .overview-grid,
