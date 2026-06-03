@@ -153,3 +153,47 @@ Required before any production source switch:
 6. limited apply
 7. send/write log verification
 ```
+
+## 2026-06-03 Page Structure Update
+
+ARCHIVE CORE is no longer treated as a single long page.
+
+The page structure is:
+
+```txt
+/
+/members/
+/lessons/
+/private/
+/messages/
+/automation/
+/business/
+/imports/
+/rules/
+/settings/
+```
+
+The main page is a menu summary dashboard. Each menu has a separate detail page.
+
+The same `core/` folder is designed to work in both contexts:
+
+```txt
+https://archive-pilates.web.app/core/
+https://core.archivepilates.com/
+```
+
+Prepared Firebase Hosting site:
+
+```txt
+site: archive-pilates-core
+public: core
+default URL: https://archive-pilates-core.web.app
+intended custom domain: core.archivepilates.com
+```
+
+Current DNS note:
+
+```txt
+core.archivepilates.com currently resolves to 121.254.178.238.
+It is not yet connected to Firebase Hosting.
+```

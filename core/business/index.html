@@ -1,0 +1,31 @@
+<!doctype html>
+<html lang="ko">
+  <head>
+    <meta charset="utf-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1" />
+    <meta name="theme-color" content="#f8f5ef" />
+    <title>Business · ARCHIVE CORE</title>
+    <link rel="stylesheet" href="../assets/styles.css" />
+    <script src="../firebase-config.js"></script>
+    <script type="module" src="../assets/app.js"></script>
+  </head>
+  <body>
+    <div class="shell">
+      <aside class="sidebar" aria-label="ARCHIVE CORE navigation">
+        <div class="brand"><div class="brand-mark" aria-hidden="true">CORE</div><strong>ARCHIVE CORE</strong><span>ARCHIVE PILATES Operations Platform</span></div>
+        <nav class="nav">
+          <a href="../" data-section="home">Home <small>요약</small></a><a href="../members/" data-section="members">Members <small>회원</small></a><a href="../lessons/" data-section="lessons">Lessons <small>수업</small></a><a href="../private/" data-section="private">Private <small>차트</small></a><a href="../messages/" data-section="messages">Messages <small>알림톡</small></a><a href="../automation/" data-section="automation">Automation <small>관제</small></a><a href="./" data-section="business">Business <small>지표</small></a><a href="../imports/" data-section="imports">Imports <small>원본</small></a><a href="../rules/" data-section="rules">Rules <small>규칙</small></a><a href="../settings/" data-section="settings">Settings <small>설정</small></a>
+        </nav>
+      </aside>
+      <main class="main">
+        <header class="page-hero"><p class="eyebrow">BUSINESS</p><h1>경영 지표</h1><p class="subtitle">기존 아카이브 대시보드를 CORE 안으로 편입해 매출, 출석, 재등록 흐름을 봅니다.</p></header>
+        <section class="grid data-grid">
+          <article class="panel detail-card"><span class="pill">businessSnapshots</span><h2>월별 지표</h2><p>수강권 매출, 수업 매출, 출석률, 재등록, 이탈 흐름을 월 단위로 저장.</p></article>
+          <article class="panel detail-card"><span class="pill">정산 검증</span><h2>settlement source</h2><p>Google Drive 정산 원본과 Firestore 지표를 비교해 차이를 추적.</p></article>
+          <article class="panel detail-card"><span class="pill">ACM</span><h2>ARCHIVE CORE MEMBER</h2><p>장기 우수 회원 조건과 후보군을 경영 지표와 연결.</p></article>
+          <article class="panel detail-card"><span class="pill warn">다음</span><h2>대시보드 이관</h2><p>기존 `/dashboard` 내용을 Business 페이지 구조로 단계 이관.</p></article>
+        </section>
+      </main>
+    </div>
+  </body>
+</html>

@@ -1,0 +1,31 @@
+<!doctype html>
+<html lang="ko">
+  <head>
+    <meta charset="utf-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1" />
+    <meta name="theme-color" content="#f8f5ef" />
+    <title>Private · ARCHIVE CORE</title>
+    <link rel="stylesheet" href="../assets/styles.css" />
+    <script src="../firebase-config.js"></script>
+    <script type="module" src="../assets/app.js"></script>
+  </head>
+  <body>
+    <div class="shell">
+      <aside class="sidebar" aria-label="ARCHIVE CORE navigation">
+        <div class="brand"><div class="brand-mark" aria-hidden="true">CORE</div><strong>ARCHIVE CORE</strong><span>ARCHIVE PILATES Operations Platform</span></div>
+        <nav class="nav">
+          <a href="../" data-section="home">Home <small>요약</small></a><a href="../members/" data-section="members">Members <small>회원</small></a><a href="../lessons/" data-section="lessons">Lessons <small>수업</small></a><a href="./" data-section="private">Private <small>차트</small></a><a href="../messages/" data-section="messages">Messages <small>알림톡</small></a><a href="../automation/" data-section="automation">Automation <small>관제</small></a><a href="../business/" data-section="business">Business <small>지표</small></a><a href="../imports/" data-section="imports">Imports <small>원본</small></a><a href="../rules/" data-section="rules">Rules <small>규칙</small></a><a href="../settings/" data-section="settings">Settings <small>설정</small></a>
+        </nav>
+      </aside>
+      <main class="main">
+        <header class="page-hero"><p class="eyebrow">PRIVATE</p><h1>프라이빗 회차 장부</h1><p class="subtitle">bookings 부족 문제를 memberUsageEvents와 privateSessionLedger로 보완합니다.</p></header>
+        <section class="grid data-grid">
+          <article class="panel detail-card"><span class="pill danger">우선</span><h2>memberUsageEvents</h2><p>회원별 이용내역 엑셀 기반 누적 이용 이력. 프라이빗 회차 계산의 1순위 후보.</p></article>
+          <article class="panel detail-card"><span class="pill warn">계산 장부</span><h2>privateSessionLedger</h2><p>회원 누적 회차와 현재 수강권 회차를 분리해 저장하는 계산 결과.</p></article>
+          <article class="panel detail-card"><span class="pill">샘플 검증</span><h2>방지숙 케이스</h2><p>누적 회차와 현재 수강권 회차가 달라지는 대표 샘플로 dry-run 검증.</p></article>
+          <article class="panel detail-card"><span class="pill good">보호</span><h2>기존 차트 유지</h2><p>검증 전까지 프라이빗 차트 발송/요청 원천은 기존 canonical source 유지.</p></article>
+        </section>
+      </main>
+    </div>
+  </body>
+</html>

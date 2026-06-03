@@ -1,0 +1,31 @@
+<!doctype html>
+<html lang="ko">
+  <head>
+    <meta charset="utf-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1" />
+    <meta name="theme-color" content="#f8f5ef" />
+    <title>Rules · ARCHIVE CORE</title>
+    <link rel="stylesheet" href="../assets/styles.css" />
+    <script src="../firebase-config.js"></script>
+    <script type="module" src="../assets/app.js"></script>
+  </head>
+  <body>
+    <div class="shell">
+      <aside class="sidebar" aria-label="ARCHIVE CORE navigation">
+        <div class="brand"><div class="brand-mark" aria-hidden="true">CORE</div><strong>ARCHIVE CORE</strong><span>ARCHIVE PILATES Operations Platform</span></div>
+        <nav class="nav">
+          <a href="../" data-section="home">Home <small>요약</small></a><a href="../members/" data-section="members">Members <small>회원</small></a><a href="../lessons/" data-section="lessons">Lessons <small>수업</small></a><a href="../private/" data-section="private">Private <small>차트</small></a><a href="../messages/" data-section="messages">Messages <small>알림톡</small></a><a href="../automation/" data-section="automation">Automation <small>관제</small></a><a href="../business/" data-section="business">Business <small>지표</small></a><a href="../imports/" data-section="imports">Imports <small>원본</small></a><a href="./" data-section="rules">Rules <small>규칙</small></a><a href="../settings/" data-section="settings">Settings <small>설정</small></a>
+        </nav>
+      </aside>
+      <main class="main">
+        <header class="page-hero"><p class="eyebrow">RULES</p><h1>운영 규칙</h1><p class="subtitle">Notion 운영 규칙과 ARCHIVE CORE 실행 상태를 연결합니다.</p></header>
+        <section class="grid data-grid">
+          <article class="panel detail-card"><span class="pill good">canonical</span><h2>외부 액션 원천</h2><p>알림톡, 연락처, StudioMate write는 승인된 canonical source에서만 실행.</p></article>
+          <article class="panel detail-card"><span class="pill">workLanes</span><h2>임시 작업 본부</h2><p>새 스레드와 실험 데이터는 workLanes에 두고, 승격 전까지 원천으로 쓰지 않음.</p></article>
+          <article class="panel detail-card"><span class="pill danger">duplicate</span><h2>중복 데이터</h2><p>real StudioMate/API record를 excel fallback보다 우선 사용.</p></article>
+          <article class="panel detail-card"><span class="pill">Notion</span><h2>운영 문서</h2><p>규칙 변경은 Notion 아카이브 운영 규칙 또는 CORE 설계 페이지에 기록.</p></article>
+        </section>
+      </main>
+    </div>
+  </body>
+</html>

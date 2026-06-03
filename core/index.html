@@ -6,10 +6,10 @@
     <meta name="theme-color" content="#f8f5ef" />
     <title>ARCHIVE CORE</title>
     <link rel="stylesheet" href="./assets/styles.css" />
-    <script src="../archivein/firebase-config.js"></script>
+    <script src="./firebase-config.js"></script>
     <script type="module" src="./assets/app.js"></script>
   </head>
-  <body>
+  <body data-firestore-dashboard>
     <div class="shell">
       <aside class="sidebar" aria-label="ARCHIVE CORE navigation">
         <div class="brand">
@@ -18,25 +18,25 @@
           <span>ARCHIVE PILATES Operations Platform</span>
         </div>
         <nav class="nav">
-          <a href="#home" aria-current="page">Home <small>운영</small></a>
-          <a href="#members">Members <small>회원</small></a>
-          <a href="#lessons">Lessons <small>수업</small></a>
-          <a href="#private">Private <small>차트</small></a>
-          <a href="#messages">Messages <small>알림톡</small></a>
-          <a href="#automation">Automation <small>관제</small></a>
-          <a href="#business">Business <small>대시보드</small></a>
-          <a href="#imports">Imports <small>원본</small></a>
-          <a href="#rules">Rules <small>규칙</small></a>
-          <a href="#settings">Settings <small>설정</small></a>
+          <a href="./" data-section="home">Home <small>요약</small></a>
+          <a href="./members/" data-section="members">Members <small>회원</small></a>
+          <a href="./lessons/" data-section="lessons">Lessons <small>수업</small></a>
+          <a href="./private/" data-section="private">Private <small>차트</small></a>
+          <a href="./messages/" data-section="messages">Messages <small>알림톡</small></a>
+          <a href="./automation/" data-section="automation">Automation <small>관제</small></a>
+          <a href="./business/" data-section="business">Business <small>지표</small></a>
+          <a href="./imports/" data-section="imports">Imports <small>원본</small></a>
+          <a href="./rules/" data-section="rules">Rules <small>규칙</small></a>
+          <a href="./settings/" data-section="settings">Settings <small>설정</small></a>
         </nav>
       </aside>
 
-      <main class="main" id="home">
+      <main class="main">
         <header class="topbar">
           <div class="title-block">
-            <p class="eyebrow">OPERATOR CONSOLE · FOUNDATION</p>
-            <h1>ARCHIVE PILATES 운영 데이터 허브</h1>
-            <p class="subtitle">StudioMate 원본, 알림톡, 프라이빗 회차, 정산, 자동화 상태를 운영자 관점으로 묶습니다.</p>
+            <p class="eyebrow">OPERATOR CONSOLE · HOME</p>
+            <h1>ARCHIVE CORE 운영 요약</h1>
+            <p class="subtitle">오늘 봐야 할 자동화, 원본, 데이터 품질, 메시지 전환 상태를 한 화면에 모읍니다.</p>
           </div>
           <div class="top-actions" aria-label="상태 확인">
             <div class="connection-card" aria-live="polite">
@@ -48,34 +48,57 @@
         </header>
 
         <section class="grid kpis" aria-label="운영 요약">
-          <article class="panel metric">
-            <div class="metric-label">전환 Lane</div>
+          <a class="panel metric metric-link" href="./automation/">
+            <div class="metric-label">자동화 관제</div>
             <div class="metric-value" id="laneStatus">준비</div>
             <div class="metric-note" id="laneUpdated">workLanes 연결 전</div>
-          </article>
-          <article class="panel metric">
+          </a>
+          <a class="panel metric metric-link" href="./imports/">
             <div class="metric-label">원본 Import</div>
             <div class="metric-value" id="importCount">0</div>
             <div class="metric-note">최근 sourceImports</div>
-          </article>
-          <article class="panel metric">
+          </a>
+          <a class="panel metric metric-link" href="./imports/">
             <div class="metric-label">데이터 이슈</div>
             <div class="metric-value" id="qualityCount">0</div>
             <div class="metric-note">open/review 상태 우선</div>
-          </article>
-          <article class="panel metric">
+          </a>
+          <a class="panel metric metric-link" href="./messages/">
             <div class="metric-label">알림톡 전환</div>
             <div class="metric-value">보호</div>
-            <div class="metric-note">기존 원천 유지, shadow compare 후 전환</div>
-          </article>
+            <div class="metric-note">기존 원천 유지</div>
+          </a>
+        </section>
+
+        <section class="grid summary-grid" aria-label="메뉴별 현황">
+          <a class="panel menu-card" href="./members/">
+            <span class="pill">Members</span>
+            <h2>회원 데이터</h2>
+            <p>members, memberAliases, memberSummaries 전환 준비</p>
+          </a>
+          <a class="panel menu-card" href="./lessons/">
+            <span class="pill">Lessons</span>
+            <h2>수업 운영</h2>
+            <p>lessonOccurrences, reservations, 삭제 수업 로그 정리</p>
+          </a>
+          <a class="panel menu-card" href="./private/">
+            <span class="pill warn">Private</span>
+            <h2>프라이빗 장부</h2>
+            <p>memberUsageEvents와 privateSessionLedger 우선 구축</p>
+          </a>
+          <a class="panel menu-card" href="./business/">
+            <span class="pill">Business</span>
+            <h2>경영 지표</h2>
+            <p>기존 아카이브 대시보드와 월별 정산 지표 편입</p>
+          </a>
         </section>
 
         <section class="grid overview-grid">
-          <article class="panel panel-tall" id="automation">
+          <article class="panel panel-tall">
             <div class="panel-header">
               <div>
                 <h2>자동화 관제</h2>
-                <p>Mac mini, Firebase, Excel import 작업의 최근 상태를 모읍니다.</p>
+                <p>Mac mini, Firebase, Excel import 작업의 최근 상태입니다.</p>
               </div>
               <span class="pill" id="automationMode">연결 대기</span>
             </div>
@@ -84,168 +107,22 @@
             </div>
           </article>
 
-          <aside class="panel panel-tall" aria-label="전환 체크리스트">
+          <aside class="panel panel-tall">
             <div class="panel-header">
               <div>
                 <h2>전환 체크리스트</h2>
-                <p>운영 영향 없이 CORE로 옮기기 위한 순서입니다.</p>
+                <p>운영 영향 없이 CORE로 옮기기 위한 현재 순서입니다.</p>
               </div>
               <span class="pill warn">Phase 1</span>
             </div>
             <ol class="checklist">
-              <li><span class="check done">완료</span><strong>workLane와 전용 worktree 분리</strong></li>
-              <li><span class="check done">완료</span><strong>contracts에 CORE 컬렉션 등록</strong></li>
-              <li><span class="check active">진행</span><strong>sourceImports와 자동화 상태판 구성</strong></li>
-              <li><span class="check">대기</span><strong>memberUsageEvents dry-run 설계</strong></li>
-              <li><span class="check">대기</span><strong>알림톡 shadow compare 후 전환 판단</strong></li>
+              <li><span class="check done">완료</span><strong>전용 worktree와 workLane 분리</strong></li>
+              <li><span class="check done">완료</span><strong>/core 운영자 콘솔 배포</strong></li>
+              <li><span class="check active">진행</span><strong>메뉴별 페이지 구조 전환</strong></li>
+              <li><span class="check">대기</span><strong>자동화 상태/원본 import 실제 연결</strong></li>
+              <li><span class="check">대기</span><strong>프라이빗 회차 dry-run 검증</strong></li>
             </ol>
           </aside>
-        </section>
-
-        <section class="grid data-grid" id="imports">
-          <article class="panel">
-            <div class="panel-header">
-              <div>
-                <h2>최근 원본 Import</h2>
-                <p>StudioMate와 정산 원본의 수집, 정규화, 반영 상태입니다.</p>
-              </div>
-              <span class="pill">sourceImports</span>
-            </div>
-            <div class="table-wrap">
-              <table>
-                <thead>
-                  <tr>
-                    <th>원본</th>
-                    <th>상태</th>
-                    <th>행</th>
-                    <th>마지막 처리</th>
-                  </tr>
-                </thead>
-                <tbody id="importsTable">
-                  <tr>
-                    <td colspan="4">Firestore 연결 후 표시합니다.</td>
-                  </tr>
-                </tbody>
-              </table>
-            </div>
-          </article>
-
-          <article class="panel">
-            <div class="panel-header">
-              <div>
-                <h2>데이터 품질 이슈</h2>
-                <p>동명이인, excel fallback, 중복 예약, 누락 연락처를 먼저 잡습니다.</p>
-              </div>
-              <span class="pill danger">guardrail</span>
-            </div>
-            <div class="list" id="qualityList" aria-live="polite">
-              <div class="empty-state">확인 중인 이슈가 있으면 여기에 표시됩니다.</div>
-            </div>
-          </article>
-        </section>
-
-        <section class="grid data-grid">
-          <article class="panel" id="private">
-            <div class="panel-header">
-              <div>
-                <h2>프라이빗 회차 장부</h2>
-                <p>예약 목록만 보지 않고, 회원별 이용내역을 우선 원천으로 삼습니다.</p>
-              </div>
-              <span class="pill warn">privateSessionLedger</span>
-            </div>
-            <div class="rules">
-              <div>
-                <strong>회차 계산 원천</strong>
-                <span>1순위 memberUsageEvents, 2순위 reservations/bookings 보조</span>
-              </div>
-              <div>
-                <strong>중복 제거 기준</strong>
-                <span>회원, 강사, 수업 시작시간, 수업명, 원본 우선순위</span>
-              </div>
-              <div>
-                <strong>표시 분리</strong>
-                <span>회원 누적 회차와 현재 수강권 회차를 따로 계산</span>
-              </div>
-            </div>
-          </article>
-
-          <article class="panel" id="messages">
-            <div class="panel-header">
-              <div>
-                <h2>알림톡 보호 규칙</h2>
-                <p>DB 전환 중에도 후보 선정과 발송은 기존 canonical source를 유지합니다.</p>
-              </div>
-              <span class="pill good">protected</span>
-            </div>
-            <div class="rules">
-              <div>
-                <strong>대상자 선정</strong>
-                <span>workLanes나 mirror가 아니라 승인된 canonical collection만 사용</span>
-              </div>
-              <div>
-                <strong>중복 방지</strong>
-                <span>canonicalBookingKey와 template/action type으로 후보 생성 전 차단</span>
-              </div>
-              <div>
-                <strong>전환 방식</strong>
-                <span>새 CORE 데이터와 기존 결과를 shadow compare 후 적용</span>
-              </div>
-            </div>
-          </article>
-        </section>
-
-        <section class="panel" id="rules">
-          <div class="panel-header">
-            <div>
-              <h2>CORE 컬렉션 역할</h2>
-              <p>원천, 정규화, 계산 결과를 분리해서 같은 데이터가 여러 기능에서 충돌하지 않게 합니다.</p>
-            </div>
-            <span class="pill">contracts</span>
-          </div>
-          <div class="table-wrap">
-            <table>
-              <thead>
-                <tr>
-                  <th>영역</th>
-                  <th>컬렉션</th>
-                  <th>역할</th>
-                  <th>외부 액션 사용</th>
-                </tr>
-              </thead>
-              <tbody>
-                <tr>
-                  <td>원본 추적</td>
-                  <td>sourceImports / sourceImportRows</td>
-                  <td>엑셀 파일, 다운로드 시각, 정규화 결과, 원본 행 감사</td>
-                  <td>불가</td>
-                </tr>
-                <tr>
-                  <td>회원</td>
-                  <td>members / memberAliases</td>
-                  <td>회원 기본정보, 전화번호, StudioMate ID, 임시 ID 연결</td>
-                  <td>승인 후 가능</td>
-                </tr>
-                <tr>
-                  <td>이용 이력</td>
-                  <td>memberUsageEvents / privateSessionLedger</td>
-                  <td>누적 프라이빗 회차와 현재 수강권 회차 계산</td>
-                  <td>읽기 우선</td>
-                </tr>
-                <tr>
-                  <td>결제와 수강권</td>
-                  <td>memberPaymentEvents / memberTickets</td>
-                  <td>회원별 구매, 환불, 수강권 원장과 월별 매출 검증</td>
-                  <td>운영자 승인 필요</td>
-                </tr>
-                <tr>
-                  <td>커뮤니케이션</td>
-                  <td>communicationCandidates / Sends / DedupeKeys</td>
-                  <td>후보, 승인, 발송, 중복 차단 기록</td>
-                  <td>canonical source만</td>
-                </tr>
-              </tbody>
-            </table>
-          </div>
         </section>
       </main>
     </div>

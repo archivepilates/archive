@@ -1,0 +1,44 @@
+<!doctype html>
+<html lang="ko">
+  <head>
+    <meta charset="utf-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1" />
+    <meta name="theme-color" content="#f8f5ef" />
+    <title>Members · ARCHIVE CORE</title>
+    <link rel="stylesheet" href="../assets/styles.css" />
+    <script src="../firebase-config.js"></script>
+    <script type="module" src="../assets/app.js"></script>
+  </head>
+  <body>
+    <div class="shell">
+      <aside class="sidebar" aria-label="ARCHIVE CORE navigation">
+        <div class="brand"><div class="brand-mark" aria-hidden="true">CORE</div><strong>ARCHIVE CORE</strong><span>ARCHIVE PILATES Operations Platform</span></div>
+        <nav class="nav">
+          <a href="../" data-section="home">Home <small>요약</small></a>
+          <a href="./" data-section="members">Members <small>회원</small></a>
+          <a href="../lessons/" data-section="lessons">Lessons <small>수업</small></a>
+          <a href="../private/" data-section="private">Private <small>차트</small></a>
+          <a href="../messages/" data-section="messages">Messages <small>알림톡</small></a>
+          <a href="../automation/" data-section="automation">Automation <small>관제</small></a>
+          <a href="../business/" data-section="business">Business <small>지표</small></a>
+          <a href="../imports/" data-section="imports">Imports <small>원본</small></a>
+          <a href="../rules/" data-section="rules">Rules <small>규칙</small></a>
+          <a href="../settings/" data-section="settings">Settings <small>설정</small></a>
+        </nav>
+      </aside>
+      <main class="main">
+        <header class="page-hero">
+          <p class="eyebrow">MEMBERS</p>
+          <h1>회원 데이터</h1>
+          <p class="subtitle">회원 기본정보, alias, 요약 read-model을 분리해서 동명이인과 임시 ID 문제를 줄입니다.</p>
+        </header>
+        <section class="grid data-grid">
+          <article class="panel detail-card"><span class="pill warn">전환 준비</span><h2>members</h2><p>이름, 전화번호, 등록일, 상태, 최근 방문, 현재 수강권 요약을 담는 회원 기준 문서.</p></article>
+          <article class="panel detail-card"><span class="pill warn">전환 준비</span><h2>memberAliases</h2><p>StudioMate ID, 전화번호 변경, 이름 변경, excel 임시 ID를 실제 회원으로 연결.</p></article>
+          <article class="panel detail-card"><span class="pill">read-model</span><h2>memberSummaries</h2><p>운영자 검색과 GPT 분석을 위한 요약. 외부 발송/쓰기 원천으로는 사용하지 않음.</p></article>
+          <article class="panel detail-card"><span class="pill danger">주의</span><h2>name-only match 금지</h2><p>회원 write, 알림톡, 연락처 동기화는 전화번호 또는 StudioMate ID 확인 후 진행.</p></article>
+        </section>
+      </main>
+    </div>
+  </body>
+</html>
