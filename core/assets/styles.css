@@ -488,6 +488,12 @@ a.panel {
   letter-spacing: 0;
 }
 
+.metric-value.compact {
+  font-size: 1.1rem;
+  line-height: 1.25;
+  overflow-wrap: anywhere;
+}
+
 .metric-note {
   margin-top: 6px;
   color: var(--soft);
@@ -541,6 +547,17 @@ a.panel {
   font-size: 0.82rem;
   font-weight: 800;
   white-space: nowrap;
+}
+
+.member-link {
+  display: inline-flex;
+  min-height: 0;
+  color: var(--text);
+  text-decoration: none;
+}
+
+.member-link:hover {
+  color: var(--accent);
 }
 
 .pill {
@@ -635,6 +652,32 @@ td span {
   margin: 3px 0 0;
   color: var(--muted);
   font-size: 0.84rem;
+}
+
+.profile-hero {
+  display: grid;
+  grid-template-columns: minmax(0, 1fr) minmax(220px, 0.7fr);
+  gap: 18px;
+  align-items: start;
+  margin-bottom: 18px;
+  padding: 22px;
+}
+
+.profile-hero h2 {
+  margin-top: 10px;
+  font-size: 1.45rem;
+}
+
+.profile-hero p {
+  margin: 8px 0 0;
+  color: var(--muted);
+}
+
+.tag-row {
+  display: flex;
+  min-width: 0;
+  flex-wrap: wrap;
+  gap: 8px;
 }
 
 .empty-state {
@@ -741,6 +784,14 @@ td span {
 .rank-row strong {
   min-width: 0;
   overflow-wrap: anywhere;
+}
+
+.rank-row strong small {
+  display: block;
+  margin-top: 3px;
+  color: var(--muted);
+  font-size: 0.76rem;
+  font-weight: 700;
 }
 
 .rank-row em {
@@ -959,7 +1010,8 @@ td span {
   .overview-grid,
   .data-grid,
   .summary-grid,
-  .kpis {
+  .kpis,
+  .profile-hero {
     grid-template-columns: 1fr 1fr;
   }
 }
@@ -992,7 +1044,8 @@ td span {
   .overview-grid,
   .data-grid,
   .summary-grid,
-  .kpis {
+  .kpis,
+  .profile-hero {
     grid-template-columns: 1fr;
   }
 
@@ -1016,6 +1069,7 @@ td span {
   .metric,
   .menu-card,
   .detail-card,
+  .profile-hero,
   .business-hero,
   .panel-header,
   .list,

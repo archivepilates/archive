@@ -99,6 +99,27 @@
           </aside>
         </section>
 
+        <section class="grid overview-grid">
+          <article class="panel">
+            <div class="panel-header">
+              <div>
+                <h2>회원 매출 인사이트</h2>
+                <p>member360Cards read-model의 누적 매출 상위 회원입니다.</p>
+              </div>
+              <span class="pill" id="businessMemberSummary">회원 지표 대기</span>
+            </div>
+            <div class="rank-list" id="businessMemberInsightList">
+              <div class="empty-state">Firestore 연결 후 회원 누적 지표를 표시합니다.</div>
+            </div>
+          </article>
+          <article class="panel detail-card">
+            <span class="pill warn">ACM 후보 점검</span>
+            <h2>운영 판단용 보조 지표</h2>
+            <p>현재 화면은 누적 매출, 출석 요약, 활성 수강권을 함께 보는 검토용입니다. ACM 확정은 별도 기준과 원천 검증 후 진행합니다.</p>
+            <p>회원 상세 화면에서 수강권, 구매, 예약, 메모, 알림톡 로그를 함께 확인할 수 있습니다.</p>
+          </article>
+        </section>
+
         <section class="grid data-grid">
           <article class="panel detail-card"><span class="pill">dashboardSnapshots</span><h2>현재 연결</h2><p>기존 `/dashboard`가 사용하는 `dashboardSnapshots/current`를 읽기 전용으로 표시합니다.</p></article>
           <article class="panel detail-card"><span class="pill warn">다음</span><h2>businessSnapshots</h2><p>월별 지표를 CORE 전용 스냅샷으로 분리하기 전까지 기존 현황판 원천을 유지합니다.</p></article>

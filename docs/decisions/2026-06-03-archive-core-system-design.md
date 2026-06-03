@@ -310,3 +310,38 @@ memberNoMatch: 0
 ```
 
 Because this would update canonical `bookings` and `lectures`, it must not be applied as a background mirror job. Required next step is sample verification and explicit approval for limited apply.
+
+## 2026-06-04 Step 1-4 UI/Data Decision
+
+ARCHIVE CORE can now expose member-centered detail and business insight screens before the database source switch is approved, with one strict boundary:
+
+```txt
+display/read-model use: allowed
+external send/write target selection: not allowed
+```
+
+Implemented read-only screens:
+
+```txt
+Members list -> member detail
+Private chart health -> private ledger migration status
+Automation -> status document dashboard
+Imports -> source and quality dashboard
+Business -> dashboardSnapshots plus member360 revenue insight
+```
+
+Member detail reads:
+
+```txt
+members/{memberId}
+member360Cards/{memberId}
+members/{memberId}/summary/current
+members/{memberId}/tickets
+members/{memberId}/purchases
+members/{memberId}/bookings
+members/{memberId}/memos
+members/{memberId}/alimtalkLogs
+members/{memberId}/tags
+```
+
+The Private page may show the usage-history backfill dry-run result, but `memberUsageEvents` and `privateSessionLedger` remain pending until limited apply is separately approved. The existing private chart request and Alimtalk flows must not switch to the new ledger during this UI step.

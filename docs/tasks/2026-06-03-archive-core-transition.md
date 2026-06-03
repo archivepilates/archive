@@ -88,6 +88,10 @@ Phase 1: read-only operations console foundation.
 - Members reads the existing `members` mirror read-only and shows recent member, ticket, visit, and revenue summary rows.
 - Private reads existing `privateLessonChartRequests` and `privateLessonChartRecords` read-only. `memberUsageEvents` and `privateSessionLedger` remain empty/preparation surfaces until the usage-history pipeline is applied.
 - Firestore browser writes remain blocked for the added CORE read surfaces.
+- Members list now links to `/members/detail/?id={memberId}`.
+- Member detail reads `members/{memberId}`, `member360Cards/{memberId}`, `members/{memberId}/summary/current`, and member subcollections read-only.
+- Automation and Imports pages distinguish “collection connected but no status/source documents yet” from permission failure.
+- Business page also reads `member360Cards` by `totalRevenue` for member-level business insight display.
 
 ## 2026-06-04 Data Work Result
 
@@ -117,6 +121,14 @@ Phase 1: read-only operations console foundation.
   - plannedWrites: 65453
   - memberNoMatch: 0
 - Did not apply the 65453-write `bookings` backfill yet. This changes canonical source records and needs separate approval after sample verification.
+
+## 2026-06-04 UI/Data Step 1-4 Result
+
+- Step 1 Members: added member detail route and linked the recent member list to detail pages.
+- Step 2 Private: added private chart health, submission count, correction count, and usage-history backfill dry-run status.
+- Step 3 Imports/Automation: added status KPI cards and clearer empty states for not-yet-connected `automationStatus`, `sourceImports`, and `dataQualityIssues` documents.
+- Step 4 Business: added member revenue insight panel based on `member360Cards` read-model data.
+- External sends, StudioMate writes, Contacts writes, and Alimtalk candidate selection remain on existing canonical sources. ARCHIVE CORE displays mirrors only.
 
 ## Handoff Rule
 

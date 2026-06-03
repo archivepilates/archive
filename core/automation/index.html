@@ -22,6 +22,12 @@
           <div class="title-block"><p class="eyebrow">AUTOMATION</p><h1>자동화 관제</h1><p class="subtitle">동기화, 다운로드, import, 알림톡, 보고 작업의 상태를 모읍니다.</p></div>
           <div class="top-actions"><div class="connection-card" aria-live="polite"><span id="connectionLabel">로딩</span><strong id="connectionDetail">Firestore 연결 준비 중</strong></div><button class="refresh-button" id="refreshButton" type="button">새로고침</button></div>
         </header>
+        <section class="grid kpis">
+          <article class="panel metric"><div class="metric-label">상태 문서</div><div class="metric-value" id="automationStatusCount">0건</div><div class="metric-note">automationStatus</div></article>
+          <article class="panel metric"><div class="metric-label">연결 상태</div><div class="metric-value compact" id="automationConnectedState">확인 중</div><div class="metric-note">Firestore read</div></article>
+          <article class="panel metric"><div class="metric-label">다음 연결</div><div class="metric-value compact">작업 로그</div><div class="metric-note" id="automationNextAction">자동화 결과 저장 연결 확인</div></article>
+          <article class="panel metric"><div class="metric-label">운영 원칙</div><div class="metric-value compact">read-only</div><div class="metric-note">실행 버튼은 별도 승인 후 추가</div></article>
+        </section>
         <section class="panel panel-tall">
           <div class="panel-header"><div><h2>최근 자동화 상태</h2><p>automationStatus 문서 기준입니다.</p></div><span class="pill" id="automationMode">연결 대기</span></div>
           <div class="list" id="automationList"><div class="empty-state">Firestore 연결 후 automationStatus를 표시합니다.</div></div>

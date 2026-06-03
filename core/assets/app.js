@@ -8,7 +8,9 @@ const state = {
   qualityIssues: [],
   businessSnapshot: null,
   businessMonths: [],
+  businessMembers: [],
   members: [],
+  memberDetail: null,
   privateRequests: [],
   privateRecords: [],
   privateUsageEvents: [],
@@ -64,6 +66,21 @@ function formatManwon(value) {
   if (!Number.isFinite(value)) return "-";
   const manwon = Math.round(value / 10000);
   return `${manwon.toLocaleString("ko-KR")}만`;
+}
+
+function formatCount(value, suffix = "건") {
+  return `${toNumber(value).toLocaleString("ko-KR")}${suffix}`;
+}
+
+function shortDate(value) {
+  if (!value) return "-";
+  const raw = typeof value?.toDate === "function" ? value.toDate() : new Date(value);
+  if (Number.isNaN(raw.getTime())) return String(value);
+  return new Intl.DateTimeFormat("ko-KR", {
+    year: "2-digit",
+    month: "numeric",
+    day: "numeric",
+  }).format(raw);
 }
 
 function formatRate(value) {
@@ -303,6 +320,48 @@ async function getRecentCollectionBy(db, firestore, collectionName, orderField =
   }
 }
 
+function memberDetailId() {
+  const params = new URLSearchParams(window.location.search);
+  return (params.get("id") || params.get("memberId") || "").trim();
+}
+
+async function getLimitedSubcollection(db, firestore, memberId, subcollection, maxItems = 12) {
+  const snapshot = await firestore.getDocs(
+    firestore.query(firestore.collection(db, "members", memberId, subcollection), firestore.limit(maxItems)),
+  );
+  return snapshot.docs.map((docSnapshot) => ({ id: docSnapshot.id, ...docSnapshot.data() }));
+}
+
+async function loadMemberDetail(runtime, memberId) {
+  if (!memberId) return { missingId: true };
+  const { db, doc, getDoc } = runtime;
+  const [memberSnapshot, cardSnapshot, summarySnapshot, tickets, purchases, bookings, memos, alimtalkLogs, tags] =
+    await Promise.all([
+      getDoc(doc(db, "members", memberId)),
+      getDoc(doc(db, "member360Cards", memberId)),
+      getDoc(doc(db, "members", memberId, "summary", "current")),
+      getLimitedSubcollection(db, runtime, memberId, "tickets", 12),
+      getLimitedSubcollection(db, runtime, memberId, "purchases", 12),
+      getLimitedSubcollection(db, runtime, memberId, "bookings", 12),
+      getLimitedSubcollection(db, runtime, memberId, "memos", 8),
+      getLimitedSubcollection(db, runtime, memberId, "alimtalkLogs", 8),
+      getLimitedSubcollection(db, runtime, memberId, "tags", 20),
+    ]);
+  return {
+    id: memberId,
+    missing: !memberSnapshot.exists() && !cardSnapshot.exists(),
+    member: memberSnapshot.exists() ? { id: memberSnapshot.id, ...memberSnapshot.data() } : null,
+    card: cardSnapshot.exists() ? { id: cardSnapshot.id, ...cardSnapshot.data() } : null,
+    summary: summarySnapshot.exists() ? summarySnapshot.data() : null,
+    tickets,
+    purchases,
+    bookings,
+    memos,
+    alimtalkLogs,
+    tags,
+  };
+}
+
 function renderLane(lane) {
   setText("laneStatus", statusLabel(lane?.status || "active"));
   setText(
@@ -314,14 +373,22 @@ function renderLane(lane) {
 function renderAutomation(items) {
   const automationMode = qs("automationMode");
   if (automationMode) {
-    automationMode.textContent = items.length ? "연결" : "대기";
+    automationMode.textContent = items.length ? "연결" : "기록 대기";
     automationMode.className = `pill ${items.length ? "good" : "warn"}`;
   }
+  setText("automationStatusCount", formatCount(items.length));
+  setText("automationConnectedState", items.length ? "상태 문서 연결됨" : "컬렉션 연결 · 기록 없음");
+  setText(
+    "automationNextAction",
+    items.length
+      ? "최근 문서 기준으로 상태를 표시합니다."
+      : "Mac mini / Excel / 알림톡 작업이 automationStatus에 결과를 쓰도록 연결해야 합니다.",
+  );
 
   const list = qs("automationList");
   if (!list) return;
   if (!items.length) {
-    list.innerHTML = `<div class="empty-state">automationStatus 문서가 아직 없거나 권한 확인이 필요합니다.</div>`;
+    list.innerHTML = `<div class="empty-state">automationStatus 컬렉션은 읽었지만 최근 기록 문서가 없습니다. 자동화 작업 결과 저장 연결이 다음 단계입니다.</div>`;
     return;
   }
 
@@ -345,10 +412,12 @@ function renderAutomation(items) {
 
 function renderImports(items) {
   setText("importCount", String(items.length));
+  setText("sourceImportCount", formatCount(items.length));
+  setText("importConnectionState", items.length ? "최근 원본 처리 기록 연결됨" : "sourceImports 기록 대기");
   const table = qs("importsTable");
   if (!table) return;
   if (!items.length) {
-    table.innerHTML = `<tr><td colspan="4">최근 sourceImports 문서가 없거나 권한 확인이 필요합니다.</td></tr>`;
+    table.innerHTML = `<tr><td colspan="4">sourceImports 컬렉션은 읽었지만 최근 원본 처리 문서가 없습니다.</td></tr>`;
     return;
   }
 
@@ -372,11 +441,12 @@ function renderImports(items) {
 function renderQualityIssues(items) {
   const activeIssues = items.filter((item) => !["resolved", "closed", "done"].includes(String(item.status || "").toLowerCase()));
   setText("qualityCount", String(activeIssues.length));
+  setText("qualityOpenCount", formatCount(activeIssues.length));
 
   const list = qs("qualityList");
   if (!list) return;
   if (!activeIssues.length) {
-    list.innerHTML = `<div class="empty-state">열린 데이터 품질 이슈가 없습니다. 연결 전이면 권한 확인이 필요합니다.</div>`;
+    list.innerHTML = `<div class="empty-state">열린 데이터 품질 이슈가 없습니다. import 검증 작업이 기록을 만들면 여기에서 확인합니다.</div>`;
     return;
   }
 
@@ -418,9 +488,10 @@ function renderMembers(items) {
         .slice(0, 2);
       const ticketText = ticketNames.length ? ticketNames.join(", ") : "활성 수강권 없음";
       const phone = item.phoneLast4 ? ` · ${item.phoneLast4}` : "";
+      const detailHref = `./detail/?id=${encodeURIComponent(item.memberId || item.id)}`;
       return `
         <tr>
-          <td><strong>${escapeHtml(item.name || item.memberId || item.id)}</strong><br><span>${escapeHtml(item.memberId || item.id)}${escapeHtml(phone)}</span></td>
+          <td><a class="member-link" href="${detailHref}"><strong>${escapeHtml(item.name || item.memberId || item.id)}</strong></a><br><span>${escapeHtml(item.memberId || item.id)}${escapeHtml(phone)}</span></td>
           <td>${escapeHtml(ticketText)}<br><span>${escapeHtml(toNumber(item.activeTicketCount) ? `${item.activeTicketCount}개` : "0개")}</span></td>
           <td>${escapeHtml(formatDate(item.recentVisitAt))}</td>
           <td>${escapeHtml(formatManwon(toNumber(item.totalRevenue)))}</td>
@@ -430,12 +501,153 @@ function renderMembers(items) {
     .join("");
 }
 
+function renderMiniList(id, items, options = {}) {
+  const list = qs(id);
+  if (!list) return;
+  if (!items.length) {
+    list.innerHTML = `<div class="empty-state">${escapeHtml(options.empty || "표시할 기록이 없습니다.")}</div>`;
+    return;
+  }
+  list.innerHTML = items
+    .map((item) => {
+      const title = options.title?.(item) || item.name || item.title || item.ticketName || item.id;
+      const detail = options.detail?.(item) || item.summary || item.status || item.memo || item.id;
+      const status = options.status?.(item);
+      return `
+        <div class="status-row">
+          <div>
+            <strong>${escapeHtml(title)}</strong>
+            <p>${escapeHtml(detail)}</p>
+          </div>
+          ${status ? pill(status) : ""}
+        </div>
+      `;
+    })
+    .join("");
+}
+
+function renderMemberDetail(detail) {
+  if (!qs("memberDetailName")) return;
+  if (detail?.missingId) {
+    setText("memberDetailName", "회원 선택 필요");
+    setText("memberDetailSubtitle", "Members 목록에서 회원을 선택하면 상세 read-model을 표시합니다.");
+    return;
+  }
+  if (detail?.missing) {
+    setText("memberDetailName", "회원 문서 없음");
+    setText("memberDetailSubtitle", `${detail.id} 회원 문서를 찾지 못했습니다.`);
+    return;
+  }
+
+  const member = detail?.member || detail?.card || {};
+  const summary = detail?.summary || {};
+  const merged = { ...detail?.card, ...member, ...summary };
+  const signals = merged.signals || detail?.card?.signals || [];
+  const tickets = detail?.tickets?.length ? detail.tickets : merged.currentTicketsSummary || [];
+  const purchases = detail?.purchases?.length ? detail.purchases : merged.recentPurchases || [];
+  const bookings = detail?.bookings?.length ? detail.bookings : merged.recentBookings || [];
+  const memos = detail?.memos?.length ? detail.memos : merged.recentMemos || [];
+  const alimtalkLogs = detail?.alimtalkLogs?.length ? detail.alimtalkLogs : merged.recentAlimtalk || [];
+  const tags = detail?.tags?.length ? detail.tags : merged.tags || [];
+
+  setText("memberDetailName", member.name || member.memberName || detail?.id || "회원");
+  setText(
+    "memberDetailSubtitle",
+    `${member.memberId || detail?.id || "-"} · ${member.phoneLast4 ? `끝자리 ${member.phoneLast4}` : "전화번호 요약 없음"} · ${statusLabel(member.status || "active")}`,
+  );
+  setText("memberDetailRevenue", formatManwon(toNumber(member.totalRevenue)));
+  setText("memberDetailTickets", formatCount(member.activeTicketCount || tickets.length, "개"));
+  setText("memberDetailBookings", formatCount(member.bookingCount || bookings.length));
+  setText("memberDetailRecentVisit", formatDate(member.recentVisitAt));
+  setText("memberDetailRegisteredAt", shortDate(member.registeredAt));
+  setText("memberDetailUpdatedAt", formatDate(member.updatedAt || summary.updatedAt));
+
+  const signalList = qs("memberDetailSignals");
+  if (signalList) {
+    signalList.innerHTML = signals.length
+      ? signals.map((signal) => `<span class="pill warn">${escapeHtml(signal)}</span>`).join("")
+      : `<span class="pill">신호 없음</span>`;
+  }
+
+  renderMiniList("memberDetailTicketsList", tickets, {
+    empty: "현재 수강권 요약이 없습니다.",
+    title: (item) => item.ticketName || item.name || item.id,
+    detail: (item) => {
+      const remain = item.remainingCount ?? item.remaining ?? item.remainCount;
+      const max = item.maxCount ?? item.totalCount ?? "";
+      const expires = item.expiresAt || item.expireAt || item.endAt;
+      return [
+        `잔여 ${remain ?? "-"}${max ? ` / ${max}` : ""}`,
+        expires ? `만료 ${shortDate(expires)}` : "",
+        item.classType || item.status || "",
+      ]
+        .filter(Boolean)
+        .join(" · ");
+    },
+    status: (item) => item.status || item.ticketStatus,
+  });
+  renderMiniList("memberDetailPurchasesList", purchases, {
+    empty: "최근 구매/수강권 이력이 없습니다.",
+    title: (item) => item.ticketName || item.productName || item.name || item.id,
+    detail: (item) =>
+      [shortDate(item.purchasedAt || item.createdAt), formatManwon(toNumber(item.price || item.amount || item.revenue))]
+        .filter(Boolean)
+        .join(" · "),
+    status: (item) => item.status,
+  });
+  renderMiniList("memberDetailBookingsList", bookings, {
+    empty: "최근 예약/출석 이력이 없습니다.",
+    title: (item) => item.lessonTitle || item.lectureTitle || item.ticketName || item.id,
+    detail: (item) =>
+      [shortDate(item.lessonDate || item.startsAt || item.startAt), item.startTime, item.staffName || item.instructorName]
+        .filter(Boolean)
+        .join(" · "),
+    status: (item) => item.attendanceStatus || item.status,
+  });
+  renderMiniList("memberDetailMemosList", memos, {
+    empty: "최근 메모가 없습니다.",
+    title: (item) => item.title || item.memoType || item.authorName || "메모",
+    detail: (item) => item.memo || item.content || item.text || shortDate(item.createdAt),
+    status: (item) => item.syncStatus || item.status,
+  });
+  renderMiniList("memberDetailAlimtalkList", alimtalkLogs, {
+    empty: "최근 알림톡 기록이 없습니다.",
+    title: (item) => item.templateName || item.templateCode || item.candidateType || item.id,
+    detail: (item) =>
+      [shortDate(item.sentAt || item.createdAt), item.reason || item.message || item.managementNumber].filter(Boolean).join(" · "),
+    status: (item) => item.status || item.sendStatus,
+  });
+
+  const tagList = qs("memberDetailTagsList");
+  if (tagList) {
+    const values = tags
+      .map((tag) => (typeof tag === "string" ? tag : tag.label || tag.name || tag.tag || tag.id))
+      .filter(Boolean)
+      .slice(0, 24);
+    tagList.innerHTML = values.length
+      ? values.map((tag) => `<span class="pill">${escapeHtml(tag)}</span>`).join("")
+      : `<span class="pill">태그 없음</span>`;
+  }
+}
+
 function renderPrivate(requests, records, usageEvents, ledgerEntries) {
   if (!qs("privateRequestList")) return;
   setText("privateRequestCount", String(requests.length));
   setText("privateRecordCount", String(records.length));
   setText("privateUsageCount", String(usageEvents.length));
   setText("privateLedgerCount", String(ledgerEntries.length));
+  const recordFailures = records.filter((item) =>
+    ["failed", "error"].includes(String(item.gptStatus || item.status || "").toLowerCase()),
+  ).length;
+  const corrections = records.filter((item) => item.sessionNumberCorrection).length;
+  const submitted = requests.filter((item) =>
+    ["submitted", "pre_submitted", "post_submitted", "completed"].includes(
+      String(item.preStatus || item.postStatus || item.status || "").toLowerCase(),
+    ),
+  ).length;
+  setText("privateRecordHealth", recordFailures ? `${recordFailures}건 오류 확인` : "차트 기록 읽기 정상");
+  setText("privateSubmittedCount", formatCount(submitted));
+  setText("privateCorrectionCount", formatCount(corrections));
 
   const requestList = qs("privateRequestList");
   if (requestList) {
@@ -488,6 +700,13 @@ function renderPrivate(requests, records, usageEvents, ledgerEntries) {
         <p>현재 회차 계산 장부는 준비 단계입니다. 기존 차트 원천은 유지됩니다.</p>
       </div>
       ${pill("pending")}
+    </div>
+    <div class="status-row">
+      <div>
+        <strong>이용내역 backfill dry-run</strong>
+        <p>65,521행 검토 · 예약 생성 53,191건 후보 · 제한 적용 승인 전까지 write 보류</p>
+      </div>
+      ${pill("reviewing")}
     </div>
   `;
 }
@@ -677,12 +896,37 @@ function renderBusiness(snapshot) {
   renderBusinessMonth(latestMonth);
 }
 
+function renderBusinessMemberInsights(items) {
+  const list = qs("businessMemberInsightList");
+  if (!list) return;
+  setText("businessMemberSummary", items.length ? `${items.length}명 read-model` : "회원 지표 대기");
+  if (!items.length) {
+    list.innerHTML = `<div class="empty-state">member360Cards 또는 members의 누적 매출 요약을 읽지 못했습니다.</div>`;
+    return;
+  }
+  list.innerHTML = items
+    .map((item, index) => {
+      const name = item.name || item.memberName || item.memberId || item.id;
+      const visits = item.attendedCount ? `출석 ${item.attendedCount}회` : "출석 요약 대기";
+      const tickets = item.activeTicketCount ? `활성 ${item.activeTicketCount}개` : "활성 수강권 없음";
+      return `
+        <div class="rank-row">
+          <span>${index + 1}</span>
+          <strong>${escapeHtml(name)}<small>${escapeHtml(visits)} · ${escapeHtml(tickets)}</small></strong>
+          <em>${escapeHtml(formatManwon(toNumber(item.totalRevenue)))}</em>
+        </div>
+      `;
+    })
+    .join("");
+}
+
 function renderBusinessFallback(error) {
   if (!qs("businessMonthSelect")) return;
   qs("businessSnapshotStatus").textContent = error ? "권한 확인" : "대기";
   qs("businessSnapshotStatus").className = "pill warn";
   setText("businessHeroValue", "데이터 연결 대기");
   setText("businessHeroNote", error?.message || "Firestore 권한 또는 snapshot 문서 확인이 필요합니다.");
+  renderBusinessMemberInsights([]);
 }
 
 function renderFallback(error) {
@@ -692,6 +936,8 @@ function renderFallback(error) {
   renderAutomation([]);
   renderImports([]);
   renderQualityIssues([]);
+  renderMemberDetail(null);
+  renderPrivate([], [], [], []);
   renderBusinessFallback(error);
   if (error?.code === "permission-denied") showLoginGate();
 }
@@ -712,6 +958,7 @@ async function refresh() {
     const { db, doc, getDoc } = runtime;
     const shouldLoadBusiness = Boolean(qs("businessMonthSelect"));
     const shouldLoadMembers = Boolean(qs("membersTable"));
+    const shouldLoadMemberDetail = Boolean(qs("memberDetailName"));
     const shouldLoadPrivate = Boolean(qs("privateRequestList"));
     const [
       laneSnapshot,
@@ -720,6 +967,8 @@ async function refresh() {
       qualityIssues,
       dashboardSnapshot,
       members,
+      memberDetail,
+      businessMembers,
       privateRequests,
       privateRecords,
       privateUsageEvents,
@@ -731,6 +980,8 @@ async function refresh() {
       getRecentCollection(db, runtime, "dataQualityIssues", 12),
       shouldLoadBusiness ? getDoc(doc(db, "dashboardSnapshots", "current")) : Promise.resolve(null),
       shouldLoadMembers ? getRecentCollection(db, runtime, "members", 12) : Promise.resolve([]),
+      shouldLoadMemberDetail ? loadMemberDetail(runtime, memberDetailId()) : Promise.resolve(null),
+      shouldLoadBusiness ? getRecentCollectionBy(db, runtime, "member360Cards", "totalRevenue", 8) : Promise.resolve([]),
       shouldLoadPrivate ? getRecentCollectionBy(db, runtime, "privateLessonChartRequests", "createdAt", 8) : Promise.resolve([]),
       shouldLoadPrivate ? getRecentCollectionBy(db, runtime, "privateLessonChartRecords", "createdAt", 8) : Promise.resolve([]),
       shouldLoadPrivate ? getRecentCollectionBy(db, runtime, "memberUsageEvents", "updatedAt", 8) : Promise.resolve([]),
@@ -742,6 +993,8 @@ async function refresh() {
     state.sourceImports = sourceImports;
     state.qualityIssues = qualityIssues;
     state.members = members;
+    state.memberDetail = memberDetail;
+    state.businessMembers = businessMembers;
     state.privateRequests = privateRequests;
     state.privateRecords = privateRecords;
     state.privateUsageEvents = privateUsageEvents;
@@ -751,10 +1004,12 @@ async function refresh() {
     renderImports(sourceImports);
     renderQualityIssues(qualityIssues);
     renderMembers(members);
+    renderMemberDetail(memberDetail);
     renderPrivate(privateRequests, privateRecords, privateUsageEvents, privateLedgerEntries);
     if (shouldLoadBusiness) {
       if (dashboardSnapshot?.exists()) renderBusiness(normalizeBusinessSnapshot(dashboardSnapshot.data()));
       else renderBusinessFallback(new Error("dashboardSnapshots/current 문서가 없습니다."));
+      renderBusinessMemberInsights(businessMembers);
     }
     setConnection("연결됨", `archive-pilates · ${formatDate(new Date())}`);
   } catch (error) {
