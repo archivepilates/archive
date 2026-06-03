@@ -89,6 +89,35 @@ Phase 1: read-only operations console foundation.
 - Private reads existing `privateLessonChartRequests` and `privateLessonChartRecords` read-only. `memberUsageEvents` and `privateSessionLedger` remain empty/preparation surfaces until the usage-history pipeline is applied.
 - Firestore browser writes remain blocked for the added CORE read surfaces.
 
+## 2026-06-04 Data Work Result
+
+- Rebuilt ARCHIVE CORE member read-model data from existing canonical source collections.
+- Applied read-only mirror writes:
+  - `members`: 852 docs
+  - `member360Cards`: 852 docs
+  - `members/{memberId}/summary/current`
+  - `members/{memberId}/tickets/{ticketId}`
+  - `members/{memberId}/purchases/{purchaseId}`
+  - `members/{memberId}/bookings/{bookingId}`
+  - `members/{memberId}/memos/{memoId}`
+  - `members/{memberId}/alimtalkLogs/{logId}`
+  - `members/{memberId}/tags/{tagId}`
+- Verified sample `members/3045390`:
+  - name: 방지숙
+  - purchases: 15
+  - bookings: 52
+  - totalRevenue: 11200000
+- Deployed Firestore index required for date-filtered `bookings` reads:
+  - `bookings`: `studioId ASC`, `lectureDate ASC`
+- Ran StudioMate member usage booking backfill dry-run through 2026-06-03.
+  - selectedRows: 65521
+  - bookingCreates: 53191
+  - bookingUpdates: 683
+  - lectureCreates: 11579
+  - plannedWrites: 65453
+  - memberNoMatch: 0
+- Did not apply the 65453-write `bookings` backfill yet. This changes canonical source records and needs separate approval after sample verification.
+
 ## Handoff Rule
 
 Subthreads should be instructed by lane, not repeated long context:

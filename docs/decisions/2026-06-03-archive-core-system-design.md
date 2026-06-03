@@ -248,3 +248,65 @@ The `members` collection is treated as a mirror/read-model. It can support opera
 The `memberUsageEvents` and `privateSessionLedger` collections are visible in the Private page, but are not yet populated. Private lesson chart sends and StudioMate-related writes continue to use existing canonical sources until the usage-history pipeline passes dry-run verification.
 
 Browser write access remains blocked for all newly exposed CORE collections.
+
+## 2026-06-04 Member Read-Model Apply
+
+ARCHIVE CORE member-centered data has now been generated as a read-model mirror.
+
+Applied collections:
+
+```txt
+members/{memberId}
+members/{memberId}/summary/current
+members/{memberId}/tickets/{ticketId}
+members/{memberId}/purchases/{purchaseId}
+members/{memberId}/bookings/{bookingId}
+members/{memberId}/memos/{memoId}
+members/{memberId}/alimtalkLogs/{logId}
+members/{memberId}/tags/{tagId}
+member360Cards/{memberId}
+```
+
+Verified counts:
+
+```txt
+members: 852
+member360Cards: 852
+```
+
+Sample verification:
+
+```txt
+members/3045390: 방지숙, totalRevenue 11200000
+members/3045390/purchases: 15
+members/3045390/bookings: 52
+members/3045390/summary/current: exists
+member360Cards/3045390: exists
+```
+
+Source inputs used:
+
+```txt
+memberProfiles: 348
+bookings: 13779
+memberMemos: 1858
+memberTags: 330
+alimtalkCandidates: 1895
+alimtalkSends: 481
+ticketPurchases: 2903
+```
+
+This does not change the source-of-truth policy. Existing feature collections remain canonical for sends, writes, attendance, reservations, memos, and Alimtalk decisions. `members` and `member360Cards` are approved only for operator review, ARCHIVE CORE display, GPT/business analysis, and sample verification.
+
+The separate StudioMate member usage booking backfill remains pending. The 2026-06-04 dry-run found:
+
+```txt
+selectedRows: 65521
+bookingCreates: 53191
+bookingUpdates: 683
+lectureCreates: 11579
+plannedWrites: 65453
+memberNoMatch: 0
+```
+
+Because this would update canonical `bookings` and `lectures`, it must not be applied as a background mirror job. Required next step is sample verification and explicit approval for limited apply.
