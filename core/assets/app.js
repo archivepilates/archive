@@ -565,7 +565,13 @@ function renderMemberDetail(detail) {
   const signalList = qs("memberDetailSignals");
   if (signalList) {
     signalList.innerHTML = signals.length
-      ? signals.map((signal) => `<span class="pill warn">${escapeHtml(signal)}</span>`).join("")
+      ? signals
+          .map((signal) => {
+            const label = typeof signal === "string" ? signal : signal.label || signal.type || "신호";
+            const tone = signalTone(typeof signal === "string" ? "" : signal.level || signal.severity);
+            return `<span class="pill ${tone}">${escapeHtml(label)}</span>`;
+          })
+          .join("")
       : `<span class="pill">신호 없음</span>`;
   }
 
@@ -628,6 +634,14 @@ function renderMemberDetail(detail) {
       ? values.map((tag) => `<span class="pill">${escapeHtml(tag)}</span>`).join("")
       : `<span class="pill">태그 없음</span>`;
   }
+}
+
+function signalTone(value) {
+  const level = String(value || "").toLowerCase();
+  if (["critical", "danger", "error"].includes(level)) return "danger";
+  if (["warning", "warn"].includes(level)) return "warn";
+  if (["good", "success", "healthy"].includes(level)) return "good";
+  return "";
 }
 
 function renderPrivate(requests, records, usageEvents, ledgerEntries) {
