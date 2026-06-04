@@ -24,6 +24,9 @@ const state = {
 
 let memberSearchTerm = "";
 let memberFilter = "all";
+let memberPage = 1;
+
+const MEMBER_PAGE_SIZE = 20;
 
 function qs(id) {
   return document.getElementById(id);
@@ -43,6 +46,7 @@ function setPillText(id, value) {
 
 function formatDate(value) {
   if (!value) return "-";
+  if (Array.isArray(value) && !value.length) return "-";
   const raw = typeof value?.toDate === "function" ? value.toDate() : new Date(value);
   if (Number.isNaN(raw.getTime())) return String(value);
   return new Intl.DateTimeFormat("ko-KR", {
@@ -87,6 +91,7 @@ function formatCount(value, suffix = "건") {
 
 function shortDate(value) {
   if (!value) return "-";
+  if (Array.isArray(value) && !value.length) return "-";
   const raw = typeof value?.toDate === "function" ? value.toDate() : new Date(value);
   if (Number.isNaN(raw.getTime())) return String(value);
   return new Intl.DateTimeFormat("ko-KR", {
@@ -98,6 +103,7 @@ function shortDate(value) {
 
 function compactDateTime(value) {
   if (!value) return "-";
+  if (Array.isArray(value) && !value.length) return "-";
   const raw = typeof value?.toDate === "function" ? value.toDate() : new Date(value);
   if (Number.isNaN(raw.getTime())) return String(value);
   const month = raw.getMonth() + 1;
@@ -610,6 +616,93 @@ function activeQualityIssues() {
   return state.qualityIssues.filter((item) => !["resolved", "closed", "done"].includes(String(item.status || "").toLowerCase()));
 }
 
+function normalizePhone(value) {
+  return String(value || "").replace(/\D/g, "");
+}
+
+function normalizedMemberName(item) {
+  return String(item.name || item.memberName || "").trim().replace(/\s+/g, "");
+}
+
+function memberMergeKey(item) {
+  const phone = normalizePhone(item.phone || item.mobile || item.phoneNumber);
+  const name = normalizedMemberName(item);
+  if (name && phone.length >= 8) return `name-phone:${name}:${phone}`;
+  const last4 = normalizePhone(item.phoneLast4).slice(-4);
+  if (name && last4.length === 4) return `name-last4:${name}:${last4}`;
+  return `id:${item.memberId || item.id}`;
+}
+
+function timestampMs(value) {
+  if (!value) return 0;
+  if (Array.isArray(value) && !value.length) return 0;
+  if (typeof value?.toDate === "function") return value.toDate().getTime() || 0;
+  const date = new Date(value);
+  return Number.isNaN(date.getTime()) ? 0 : date.getTime();
+}
+
+function ticketLabel(ticket) {
+  if (typeof ticket === "string") return ticket;
+  return ticket?.name || ticket?.ticketName || ticket?.title || "";
+}
+
+function uniqueTickets(items) {
+  const tickets = [];
+  const seen = new Set();
+  items
+    .flatMap((item) => item.currentTicketsSummary || item.activeTicketNames || [])
+    .forEach((ticket) => {
+      const label = ticketLabel(ticket);
+      if (!label || seen.has(label)) return;
+      seen.add(label);
+      tickets.push(ticket);
+    });
+  return tickets;
+}
+
+function memberRank(item) {
+  const stableId = String(item.memberId || item.id || "");
+  const isFallback = stableId.startsWith("excel_") || stableId.startsWith("usage_");
+  return (
+    (toNumber(item.activeTicketCount) > 0 ? 100 : 0) +
+    (timestampMs(item.recentVisitAt) ? 40 : 0) +
+    (toNumber(item.totalRevenue) > 0 ? 20 : 0) +
+    (normalizePhone(item.phone).length >= 8 ? 10 : 0) +
+    (isFallback ? -50 : 0)
+  );
+}
+
+function mergeMemberGroup(group) {
+  if (group.length === 1) return group[0];
+  const sorted = [...group].sort((a, b) => memberRank(b) - memberRank(a) || timestampMs(b.updatedAt) - timestampMs(a.updatedAt));
+  const primary = sorted[0];
+  const ids = sorted.map((item) => String(item.memberId || item.id || "")).filter(Boolean);
+  const recent = sorted.reduce((latest, item) => (timestampMs(item.recentVisitAt) > timestampMs(latest) ? item.recentVisitAt : latest), primary.recentVisitAt);
+  return {
+    ...primary,
+    currentTicketsSummary: uniqueTickets(sorted),
+    activeTicketCount: Math.max(...sorted.map((item) => toNumber(item.activeTicketCount || (item.currentTicketsSummary || []).length))),
+    totalRevenue: Math.max(...sorted.map((item) => toNumber(item.totalRevenue))),
+    recentVisitAt: recent,
+    phone: primary.phone || sorted.find((item) => item.phone)?.phone,
+    phoneLast4: primary.phoneLast4 || sorted.find((item) => item.phoneLast4)?.phoneLast4,
+    mergedMemberCount: group.length,
+    mergedMemberIds: ids,
+  };
+}
+
+function mergeDuplicateMembers(items) {
+  const groups = new Map();
+  items.forEach((item) => {
+    const key = memberMergeKey(item);
+    if (!groups.has(key)) groups.set(key, []);
+    groups.get(key).push(item);
+  });
+  return [...groups.values()]
+    .map(mergeMemberGroup)
+    .sort((a, b) => toNumber(b.totalRevenue) - toNumber(a.totalRevenue) || timestampMs(b.recentVisitAt) - timestampMs(a.recentVisitAt));
+}
+
 function memberHasQualityIssue(item) {
   const activeIssues = activeQualityIssues();
   const memberId = String(item.memberId || item.id || "");
@@ -666,11 +759,36 @@ function renderMemberFilterButtons(items) {
   });
 }
 
+function renderMemberPagination(totalItems) {
+  const pagination = qs("memberPagination");
+  if (!pagination) return;
+  if (totalItems <= MEMBER_PAGE_SIZE) {
+    pagination.innerHTML = `<span>전체 ${totalItems.toLocaleString("ko-KR")}명</span>`;
+    return;
+  }
+  const totalPages = Math.ceil(totalItems / MEMBER_PAGE_SIZE);
+  memberPage = Math.min(Math.max(memberPage, 1), totalPages);
+  const start = (memberPage - 1) * MEMBER_PAGE_SIZE + 1;
+  const end = Math.min(memberPage * MEMBER_PAGE_SIZE, totalItems);
+  pagination.innerHTML = `
+    <span>${start.toLocaleString("ko-KR")}-${end.toLocaleString("ko-KR")} / ${totalItems.toLocaleString("ko-KR")}명</span>
+    <div class="pagination-actions">
+      <button class="filter-button" type="button" data-member-page="prev" ${memberPage <= 1 ? "disabled" : ""}>이전</button>
+      <strong>${memberPage.toLocaleString("ko-KR")} / ${totalPages.toLocaleString("ko-KR")}</strong>
+      <button class="filter-button" type="button" data-member-page="next" ${memberPage >= totalPages ? "disabled" : ""}>다음</button>
+    </div>
+  `;
+}
+
 function renderMembers(items) {
   const table = qs("membersTable");
   if (!table) return;
-  renderMemberFilterButtons(items);
-  const visibleItems = items.filter(matchesMemberSearch).filter(matchesMemberFilter);
+  const mergedItems = mergeDuplicateMembers(items);
+  renderMemberFilterButtons(mergedItems);
+  const visibleItems = mergedItems.filter(matchesMemberSearch).filter(matchesMemberFilter);
+  const totalPages = Math.max(1, Math.ceil(visibleItems.length / MEMBER_PAGE_SIZE));
+  memberPage = Math.min(Math.max(memberPage, 1), totalPages);
+  const pageItems = visibleItems.slice((memberPage - 1) * MEMBER_PAGE_SIZE, memberPage * MEMBER_PAGE_SIZE);
   setText("membersVisibleCount", String(visibleItems.length));
   setText("membersActiveTicketCount", String(visibleItems.filter((item) => toNumber(item.activeTicketCount) > 0).length));
   setText("membersRecentVisitCount", String(visibleItems.filter((item) => item.recentVisitAt).length));
@@ -678,14 +796,16 @@ function renderMembers(items) {
 
   if (!items.length) {
     table.innerHTML = `<tr><td colspan="4">member360Cards 문서가 없거나 권한 확인이 필요합니다.</td></tr>`;
+    renderMemberPagination(0);
     return;
   }
   if (!visibleItems.length) {
     table.innerHTML = `<tr><td colspan="4">검색어와 일치하는 회원이 없습니다.</td></tr>`;
+    renderMemberPagination(0);
     return;
   }
 
-  table.innerHTML = visibleItems
+  table.innerHTML = pageItems
     .map((item) => {
       const ticketNames = (item.currentTicketsSummary || item.activeTicketNames || [])
         .map((ticket) => (typeof ticket === "string" ? ticket : ticket.name))
@@ -694,9 +814,13 @@ function renderMembers(items) {
       const ticketText = ticketNames.length ? ticketNames.join(", ") : "활성 수강권 없음";
       const phone = item.phoneLast4 ? ` · ${item.phoneLast4}` : "";
       const detailHref = `./detail/?id=${encodeURIComponent(item.memberId || item.id)}`;
+      const mergedNote =
+        item.mergedMemberCount > 1
+          ? `<br><span class="member-merge-note">중복 ${item.mergedMemberCount}건 병합 · ${escapeHtml((item.mergedMemberIds || []).join(", "))}</span>`
+          : "";
       return `
         <tr>
-          <td><a class="member-link" href="${detailHref}"><strong>${escapeHtml(item.name || item.memberId || item.id)}</strong></a><br><span>${escapeHtml(item.memberId || item.id)}${escapeHtml(phone)}</span></td>
+          <td><a class="member-link" href="${detailHref}"><strong>${escapeHtml(item.name || item.memberId || item.id)}</strong></a><br><span>${escapeHtml(item.memberId || item.id)}${escapeHtml(phone)}</span>${mergedNote}</td>
           <td>${escapeHtml(ticketText)}<br><span>${escapeHtml(toNumber(item.activeTicketCount) ? `${item.activeTicketCount}개` : "0개")}</span></td>
           <td>${escapeHtml(formatDate(item.recentVisitAt))}</td>
           <td>${escapeHtml(formatManwon(toNumber(item.totalRevenue)))}</td>
@@ -704,6 +828,7 @@ function renderMembers(items) {
       `;
     })
     .join("");
+  renderMemberPagination(visibleItems.length);
 }
 
 function renderMessages(candidates, sends) {
@@ -1544,13 +1669,22 @@ qs("refreshButton")?.addEventListener("click", refresh);
 qs("businessMonthSelect")?.addEventListener("change", (event) => renderBusinessMonth(event.target.value));
 qs("memberSearchInput")?.addEventListener("input", (event) => {
   memberSearchTerm = event.target.value.trim();
+  memberPage = 1;
   renderMembers(state.members);
 });
 document.querySelectorAll("[data-member-filter]").forEach((button) => {
   button.addEventListener("click", () => {
     memberFilter = button.dataset.memberFilter || "all";
+    memberPage = 1;
     renderMembers(state.members);
   });
+});
+qs("memberPagination")?.addEventListener("click", (event) => {
+  const button = event.target.closest("[data-member-page]");
+  if (!button) return;
+  const action = button.dataset.memberPage;
+  memberPage += action === "next" ? 1 : -1;
+  renderMembers(state.members);
 });
 document.addEventListener("click", (event) => {
   const target = event.target.closest("[data-business-month]");
