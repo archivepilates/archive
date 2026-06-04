@@ -341,7 +341,8 @@ h3 {
 }
 
 .kpis {
-  grid-template-columns: repeat(4, minmax(0, 1fr));
+  grid-template-columns: repeat(auto-fit, minmax(min(100%, 260px), 1fr));
+  margin-bottom: 22px;
 }
 
 .summary-grid {
@@ -1010,7 +1011,6 @@ td span {
   .overview-grid,
   .data-grid,
   .summary-grid,
-  .kpis,
   .profile-hero {
     grid-template-columns: 1fr 1fr;
   }
@@ -1044,7 +1044,6 @@ td span {
   .overview-grid,
   .data-grid,
   .summary-grid,
-  .kpis,
   .profile-hero {
     grid-template-columns: 1fr;
   }
