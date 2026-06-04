@@ -1,0 +1,172 @@
+<!doctype html>
+<html lang="ko">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1">
+  <title>ARCHIVE PILATES 아임웹 하이브리드 제작 계획</title>
+  <style>
+    :root {
+      --ink: #111;
+      --text: #4c4943;
+      --muted: #7d776f;
+      --line: #e6e1d9;
+      --soft: #faf8f4;
+      --dark: #070707;
+      --accent: #ff751f;
+      --ok: #2f7d4f;
+      --warn: #a25f00;
+    }
+    * { box-sizing: border-box; }
+    body {
+      margin: 0;
+      background: #fff;
+      color: var(--text);
+      font-family: -apple-system, BlinkMacSystemFont, "Apple SD Gothic Neo", "Noto Sans KR", sans-serif;
+      line-height: 1.72;
+      word-break: keep-all;
+      letter-spacing: 0;
+    }
+    main { width: min(1120px, calc(100% - 40px)); margin: 0 auto; padding: 56px 0 92px; }
+    header { padding: 46px 0 42px; border-bottom: 1px solid var(--line); }
+    .kicker { margin: 0 0 12px; color: var(--accent); font-size: 12px; font-weight: 800; letter-spacing: .08em; text-transform: uppercase; }
+    h1, h2, h3 { margin: 0; color: var(--ink); line-height: 1.18; }
+    h1 { max-width: 860px; font-size: clamp(38px, 6vw, 68px); }
+    h2 { margin-bottom: 18px; font-size: clamp(28px, 4vw, 42px); }
+    h3 { margin-bottom: 8px; font-size: 20px; }
+    p { margin: 0; }
+    .lead { max-width: 780px; margin-top: 22px; color: var(--ink); font-size: 20px; }
+    section { padding: 46px 0; border-bottom: 1px solid var(--line); }
+    .grid { display: grid; gap: 16px; }
+    .two { grid-template-columns: repeat(2, minmax(0, 1fr)); }
+    .three { grid-template-columns: repeat(3, minmax(0, 1fr)); }
+    .card { padding: 22px; border: 1px solid var(--line); border-radius: 8px; background: #fff; }
+    .soft { background: var(--soft); }
+    .dark { background: var(--dark); color: #fff; }
+    .dark h3, .dark p { color: #fff; }
+    .label { display: block; margin-bottom: 8px; color: var(--accent); font-size: 12px; font-weight: 900; letter-spacing: .05em; text-transform: uppercase; }
+    ul, ol { margin: 12px 0 0; padding-left: 20px; }
+    li + li { margin-top: 7px; }
+    table { width: 100%; border-collapse: collapse; margin-top: 16px; border: 1px solid var(--line); }
+    th, td { padding: 13px 14px; border-bottom: 1px solid var(--line); text-align: left; vertical-align: top; }
+    th { background: var(--soft); color: var(--ink); font-size: 14px; }
+    tr:last-child td { border-bottom: 0; }
+    code { padding: 2px 5px; border-radius: 4px; background: var(--soft); color: var(--ink); font-family: ui-monospace, SFMono-Regular, Menlo, Consolas, monospace; font-size: .92em; }
+    .ok { color: var(--ok); font-weight: 800; }
+    .warn { color: var(--warn); font-weight: 800; }
+    .flow { display: grid; gap: 12px; margin-top: 16px; }
+    .step { display: grid; grid-template-columns: 190px 1fr; gap: 16px; padding: 18px; border: 1px solid var(--line); border-radius: 8px; background: #fff; }
+    .step strong { color: var(--ink); }
+    .note { margin-top: 16px; padding: 16px; border-left: 4px solid var(--accent); background: var(--soft); color: var(--ink); }
+    @media (max-width: 760px) {
+      main { width: min(100% - 28px, 1120px); padding-top: 28px; }
+      .two, .three { grid-template-columns: 1fr; }
+      .step { grid-template-columns: 1fr; }
+      th, td { display: block; width: 100%; }
+      th { border-bottom: 0; }
+    }
+  </style>
+</head>
+<body>
+<main>
+  <header>
+    <p class="kicker">Imweb Hybrid Build Plan</p>
+    <h1>ARCHIVE PILATES 웹사이트 하이브리드 제작 계획</h1>
+    <p class="lead">아임웹 기본 위젯은 운영, 결제, 회원 기능을 맡기고 코드 위젯은 브랜드 랜딩 경험만 담당한다. 목표는 강사레슨 대상자가 오프라인/온라인 클래스를 빠르게 이해하고 상품 상세 또는 상담으로 이동하는 구조다.</p>
+  </header>
+
+  <section>
+    <h2>최종 원칙</h2>
+    <div class="grid three">
+      <div class="card soft"><span class="label">Native</span><h3>아임웹 기능 우선</h3><p>메뉴, 로그인, 회원가입, 상품, 결제, 게시판, 푸터, SEO는 아임웹 위젯으로 관리한다.</p></div>
+      <div class="card soft"><span class="label">Code</span><h3>브랜드 경험만 코드</h3><p>히어로, 강사레슨 카드, 후기 흐름, 채널 섹션, FAQ 애니메이션처럼 일반 위젯으로 어려운 부분만 코드로 만든다.</p></div>
+      <div class="card soft"><span class="label">Sales</span><h3>신청/구매 흐름 중심</h3><p>오프라인 CTA는 예약 신청 또는 일정 조율 폼으로, 온라인 CTA는 상품 상세로 이동한다. 카카오 상담은 빠른 질문 채널로 둔다.</p></div>
+    </div>
+  </section>
+
+  <section>
+    <h2>아임웹 위젯 배치표</h2>
+    <table>
+      <thead><tr><th>순서</th><th>섹션</th><th>사용 위젯</th><th>설정/내용</th><th>이유</th></tr></thead>
+      <tbody>
+        <tr><td>1</td><td>상단 헤더</td><td>아임웹 기본 헤더 / 메뉴 위젯</td><td>로고, 메뉴, 모바일 왼쪽 메뉴, 로그인, 회원가입 노출. 메뉴: 강사레슨, 온라인 클래스, 후기, 채널, 문의.</td><td>로그인/회원가입/모바일 메뉴는 아임웹 기본 기능이 안정적이다.</td></tr>
+        <tr><td>2</td><td>메인 랜딩</td><td>코드 위젯</td><td><code>archive-pilates-hybrid-landing-widget.html</code> 전체 붙여넣기.</td><td>더소셜스식 큰 히어로, 어두운 클래스 카드, CSS 애니메이션을 한 번에 구현한다.</td></tr>
+        <tr><td>3</td><td>오프라인 강사레슨 상품</td><td>상품 위젯 / 쇼핑 상품 상세</td><td>기존 <code>/shop_view/1</code>을 오프라인 강사레슨 상품으로 변경. 상품명, 가격, 상세설명, 대표 이미지, 구매 옵션 설정.</td><td>결제, 주문서, 알림, 회원 주문 내역은 상품 위젯이 맡아야 한다.</td></tr>
+        <tr><td>4</td><td>온라인 클래스 상품</td><td>상품 위젯 / 쇼핑 상품 상세</td><td>기존 <code>/shop_view/2</code>를 온라인 클래스 상품으로 변경. 주문자 이메일 수집 필드와 수강 안내 문구 설정.</td><td>유튜브 비공개 영상 제공이나 VOD 안내가 주문 흐름과 연결된다.</td></tr>
+        <tr><td>5</td><td>후기</td><td>게시판 위젯 또는 DB/갤러리 위젯</td><td>초기에는 코드 위젯 후기 유지. 실제 후기가 쌓이면 게시판/DB 위젯으로 분리.</td><td>반복 관리되는 후기는 아임웹에서 추가/수정하는 편이 빠르다.</td></tr>
+        <tr><td>6</td><td>인스타그램 / 유튜브 / 블로그</td><td>코드 위젯 또는 배너/버튼 위젯</td><td>현재는 코드 위젯 안의 콘텐츠 채널 섹션 사용. Instagram은 <code>https://www.instagram.com/minjin.vibe/</code>, YouTube는 <code>https://www.youtube.com/@archivepilates</code>, Blog는 <code>https://m.blog.naver.com/archive_23</code>.</td><td>강사레슨 대상자에게 수업 언어와 분위기를 보여주는 신뢰 구간이다.</td></tr>
+        <tr><td>7</td><td>오프라인 강의 예약 신청</td><td>아임웹 입력폼 위젯 + 카카오 채널 버튼</td><td>이름, 연락처, 강사/예비강사 여부, 희망 레슨 형태, 희망 요일/시간대, 문의 내용을 받는다. 카카오 채널은 빠른 일정 조율 버튼으로 연결한다.</td><td>아임웹 예약 기능은 숙박형 1일/1박 예약에 적합해 시간 단위 강사레슨 예약에는 맞지 않는다. 초기에는 신청 폼으로 받고 수동 확정하는 편이 안전하다.</td></tr>
+        <tr><td>8</td><td>푸터</td><td>아임웹 기본 푸터</td><td>주소: 부산 강서구 명지국제2로28번길 34 에코팰리스 704호. Instagram, YouTube, Blog, Kakao 링크 포함.</td><td>사업자 정보와 공통 링크는 전역 푸터로 관리한다.</td></tr>
+      </tbody>
+    </table>
+  </section>
+
+  <section>
+    <h2>페이지/메뉴 구조</h2>
+    <div class="flow">
+      <div class="step"><strong>홈</strong><p>코드 위젯 랜딩을 첫 화면에 배치. 핵심 CTA는 오프라인 클래스 보기, 온라인 클래스 보기.</p></div>
+      <div class="step"><strong>오프라인 강사레슨</strong><p>아임웹 상품 상세 페이지. 가격, 대상, 진행 방식, 일정, 환불/변경 기준을 명확히 작성.</p></div>
+      <div class="step"><strong>온라인 클래스</strong><p>아임웹 상품 상세 페이지. 주문 후 수강 안내, 유튜브 비공개 영상 제공 방식, 이메일 확인 절차를 작성.</p></div>
+      <div class="step"><strong>후기</strong><p>초기에는 홈 코드 섹션. 후기가 쌓이면 게시판 위젯으로 별도 메뉴화.</p></div>
+      <div class="step"><strong>채널</strong><p>인스타그램, 유튜브, 블로그. 강사레슨 대상자가 수업 언어를 확인하는 보조 전환 구간.</p></div>
+      <div class="step"><strong>오프라인 예약 신청</strong><p>아임웹 입력폼 위젯. 희망 일정과 레슨 목적을 받은 뒤 카카오 채널 또는 문자로 확정한다. 실시간 시간표 예약이 필요해지면 네이버 예약 또는 별도 예약 솔루션을 연결한다.</p></div>
+    </div>
+  </section>
+
+  <section>
+    <h2>사용할 코드 위젯</h2>
+    <div class="card">
+      <p><span class="ok">사용 파일</span>: <code>/Users/archivepilates/Desktop/archive-pilates-imweb-benchmark/archive-pilates-hybrid-landing-widget.html</code></p>
+      <ul>
+        <li>아임웹 코드 위젯 하나에 전체 붙여넣기.</li>
+        <li>상단 헤더, 로그인, 회원가입, 푸터를 포함하지 않는다.</li>
+        <li>현재 CTA는 <code>/shop_view/1</code>, <code>/shop_view/2</code>로 연결된다.</li>
+        <li>유튜브 링크는 <code>https://www.youtube.com/@archivepilates</code>로 연결한다.</li>
+        <li>인스타그램 링크는 <code>https://www.instagram.com/minjin.vibe/</code>로 연결한다.</li>
+        <li>카카오 상담 링크는 <code>http://pf.kakao.com/_AHdvn/chat</code>로 연결한다.</li>
+      </ul>
+    </div>
+  </section>
+
+  <section>
+    <h2>작업 순서</h2>
+    <ol>
+      <li>아임웹 디자인 모드에서 기본 헤더를 먼저 정리한다. 로고, 메뉴, 모바일 메뉴, 로그인, 회원가입을 켠다.</li>
+      <li>홈 첫 섹션에 코드 위젯을 만들고 <code>archive-pilates-hybrid-landing-widget.html</code> 전체를 붙여넣는다.</li>
+      <li>기존 임시 코드 섹션이나 숨겨둔 섹션은 삭제한다. 숨김 CSS로 오래 유지하지 않는다.</li>
+      <li>쇼핑 관리에서 <code>/shop_view/1</code> 상품을 오프라인 강사레슨으로 바꾼다.</li>
+      <li>쇼핑 관리에서 <code>/shop_view/2</code> 상품을 온라인 클래스로 바꾼다.</li>
+      <li>오프라인 예약 신청 섹션은 아임웹 입력폼 위젯으로 만든다. 항목은 이름, 연락처, 강사/예비강사 여부, 희망 레슨 형태, 희망 요일/시간대, 문의 내용으로 둔다.</li>
+      <li>푸터에 주소, 소셜 링크, 블로그 링크를 넣는다.</li>
+      <li>모바일 미리보기에서 헤더, CTA, 상품 상세 이동, 글자 겹침을 확인한다.</li>
+      <li>게시 후 실제 URL에서 오프라인/온라인 CTA와 로그인/회원가입을 한 번씩 확인한다.</li>
+    </ol>
+  </section>
+
+  <section>
+    <h2>병목 목록</h2>
+    <div class="grid two">
+      <div class="card"><span class="label warn">Product</span><h3>상품 상세 세팅</h3><p><code>/shop_view/1</code>, <code>/shop_view/2</code>는 현재 상품 페이지로는 살아 있지만 강사레슨 상품 정보로 교체해야 한다.</p></div>
+      <div class="card"><span class="label ok">YouTube</span><h3>유튜브 URL 반영</h3><p>유튜브 채널은 <code>https://www.youtube.com/@archivepilates</code>로 반영했다.</p></div>
+      <div class="card"><span class="label warn">Reservation</span><h3>아임웹 예약 위젯 보류</h3><p>아임웹 예약 기능은 숙박형 예약에 가까워 시간 단위 강사레슨에는 부적합하다. 초기에는 입력폼과 카카오 채널로 예약 신청을 받고, 필요하면 네이버 예약 등 외부 예약 솔루션을 연결한다.</p></div>
+      <div class="card"><span class="label warn">Assets</span><h3>실제 사진</h3><p>현재 이미지는 임시 외부 이미지다. 스튜디오, 레슨, 온라인 클래스 썸네일로 교체하면 완성도가 올라간다.</p></div>
+    </div>
+  </section>
+
+  <section>
+    <h2>최종 확인 체크리스트</h2>
+    <ul>
+      <li>모바일에서 왼쪽 메뉴가 보인다.</li>
+      <li>로그인과 회원가입이 아임웹 기본 기능으로 작동한다.</li>
+      <li>오프라인 CTA가 오프라인 강사레슨 예약 신청 섹션으로 이동한다.</li>
+      <li>온라인 CTA가 온라인 클래스 상품으로 이동한다.</li>
+      <li>오프라인 예약 신청 폼에서 이름, 연락처, 희망 일정, 문의 내용이 정상 접수된다.</li>
+      <li>중간 섹션에 ARCHIVE IN, 채용, 일반회원 수업 안내가 노출되지 않는다.</li>
+      <li>콘텐츠 채널은 Instagram, YouTube, Blog 중심으로 보인다.</li>
+      <li>주소는 부산 강서구 명지로 표기된다.</li>
+      <li>푸터는 아임웹 기본 푸터로 관리된다.</li>
+    </ul>
+    <p class="note">이 계획은 사용자가 직접 아임웹에서 작업하는 것을 전제로 한다. Codex는 브라우저 조작 없이 코드 파일, 링크 구조, 위젯 사용 계획, 점검표를 제공한다.</p>
+  </section>
+</main>
+</body>
+</html>

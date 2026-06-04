@@ -1,0 +1,449 @@
+<!doctype html>
+<html lang="ko">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1">
+  <title>Mac mini Automation Dashboard - 2026-05-28</title>
+  <style>
+    :root {
+      color-scheme: light;
+      --bg: #f6f2ec;
+      --panel: #fffaf3;
+      --panel-2: #ffffff;
+      --text: #191713;
+      --muted: #6d675d;
+      --line: #dfd6c9;
+      --accent: #735c3f;
+      --ok: #256a4b;
+      --wait: #75612d;
+      --warn: #a24f2a;
+      --bad: #9b2f2f;
+      --soft-ok: #e5f1ea;
+      --soft-wait: #f3ead2;
+      --soft-warn: #f7e3d8;
+      --soft-bad: #f3dada;
+    }
+    * { box-sizing: border-box; }
+    body {
+      margin: 0;
+      background: var(--bg);
+      color: var(--text);
+      font: 15px/1.55 -apple-system, BlinkMacSystemFont, "Segoe UI", sans-serif;
+    }
+    main {
+      width: min(1180px, calc(100% - 32px));
+      margin: 0 auto;
+      padding: 28px 0 48px;
+    }
+    header {
+      display: grid;
+      grid-template-columns: 1.4fr 1fr;
+      gap: 20px;
+      align-items: end;
+      padding: 22px 0 18px;
+      border-bottom: 1px solid var(--line);
+    }
+    h1, h2, h3, p { margin: 0; }
+    h1 {
+      font-size: clamp(28px, 4vw, 48px);
+      line-height: 1.05;
+      letter-spacing: 0;
+    }
+    h2 {
+      margin: 30px 0 12px;
+      font-size: 20px;
+      line-height: 1.2;
+    }
+    h3 { font-size: 16px; }
+    .meta {
+      color: var(--muted);
+      display: grid;
+      gap: 6px;
+      justify-items: end;
+      text-align: right;
+    }
+    .grid {
+      display: grid;
+      grid-template-columns: repeat(4, minmax(0, 1fr));
+      gap: 12px;
+      margin: 18px 0 24px;
+    }
+    .metric, .note, .panel {
+      background: var(--panel);
+      border: 1px solid var(--line);
+      border-radius: 8px;
+    }
+    .metric {
+      padding: 16px;
+      min-height: 96px;
+      display: grid;
+      gap: 8px;
+      align-content: start;
+    }
+    .metric strong {
+      font-size: 28px;
+      line-height: 1;
+    }
+    .metric span, .small { color: var(--muted); font-size: 13px; }
+    .note { padding: 16px; margin: 12px 0; }
+    .note strong { color: var(--bad); }
+    .stack { display: grid; gap: 10px; }
+    .table-wrap {
+      overflow-x: auto;
+      background: var(--panel-2);
+      border: 1px solid var(--line);
+      border-radius: 8px;
+    }
+    table {
+      width: 100%;
+      border-collapse: collapse;
+      min-width: 900px;
+    }
+    th, td {
+      padding: 10px 12px;
+      text-align: left;
+      vertical-align: top;
+      border-bottom: 1px solid #eee5da;
+    }
+    th {
+      color: var(--muted);
+      font-size: 12px;
+      text-transform: uppercase;
+      background: #faf5ee;
+      position: sticky;
+      top: 0;
+    }
+    tr:last-child td { border-bottom: 0; }
+    code {
+      font-family: ui-monospace, SFMono-Regular, Menlo, Consolas, monospace;
+      font-size: 12px;
+      overflow-wrap: anywhere;
+    }
+    .badge {
+      display: inline-flex;
+      min-height: 24px;
+      align-items: center;
+      border-radius: 999px;
+      padding: 2px 9px;
+      font-size: 12px;
+      font-weight: 650;
+      white-space: nowrap;
+    }
+    .ok { color: var(--ok); background: var(--soft-ok); }
+    .wait { color: var(--wait); background: var(--soft-wait); }
+    .warn { color: var(--warn); background: var(--soft-warn); }
+    .bad { color: var(--bad); background: var(--soft-bad); }
+    .panel { padding: 16px; }
+    .cards {
+      display: grid;
+      grid-template-columns: repeat(3, minmax(0, 1fr));
+      gap: 12px;
+    }
+    .card {
+      min-width: 0;
+      padding: 14px;
+      background: var(--panel-2);
+      border: 1px solid var(--line);
+      border-radius: 8px;
+      display: grid;
+      gap: 8px;
+    }
+    .card p { color: var(--muted); }
+    .timeline {
+      display: grid;
+      grid-template-columns: repeat(6, minmax(110px, 1fr));
+      gap: 8px;
+      overflow-x: auto;
+      padding-bottom: 4px;
+    }
+    .slot {
+      min-height: 84px;
+      padding: 10px;
+      background: var(--panel-2);
+      border: 1px solid var(--line);
+      border-radius: 8px;
+    }
+    .slot b { display: block; margin-bottom: 6px; }
+    footer {
+      margin-top: 28px;
+      color: var(--muted);
+      border-top: 1px solid var(--line);
+      padding-top: 16px;
+    }
+    @media (max-width: 860px) {
+      main { width: min(100% - 20px, 1180px); padding-top: 16px; }
+      header { grid-template-columns: 1fr; }
+      .meta { justify-items: start; text-align: left; }
+      .grid, .cards { grid-template-columns: 1fr 1fr; }
+    }
+    @media (max-width: 560px) {
+      .grid, .cards { grid-template-columns: 1fr; }
+      th, td { padding: 9px 10px; }
+    }
+  </style>
+</head>
+<body>
+<main>
+  <header>
+    <div>
+      <p class="small">ARCHIVE PILATES / Mac mini 운영 자동화</p>
+      <h1>Automation Dashboard</h1>
+    </div>
+    <div class="meta">
+      <p>점검 시각: 2026-05-28 16:24:11 KST</p>
+      <p>범위: launchd, cron, Codex automations, brew services, pm2, 주요 로컬 포트</p>
+      <p>방식: 읽기 전용 점검. 토큰과 credential 값은 보고서에서 제외.</p>
+    </div>
+  </header>
+
+  <section class="grid" aria-label="Summary">
+    <div class="metric"><strong>11</strong><span>ARCHIVE 계열 launchd 항목</span></div>
+    <div class="metric"><strong>3</strong><span>현재 실행 중인 핵심 서비스</span></div>
+    <div class="metric"><strong>5</strong><span>Codex cron automation 등록 항목</span></div>
+    <div class="metric"><strong>0</strong><span>현재 사용자 crontab / pm2 항목</span></div>
+  </section>
+
+  <section class="note">
+    <strong>즉시 확인 포인트:</strong>
+    `com.archive.inbody-report-worker`는 최근 종료코드 127이고,
+    `com.archive.studiomate-reservation-deadline`은 최근 종료코드 1입니다. 사용자 단위 `homebrew.mxcl.caddy`는
+    오류 루프 확인 후 정리했고, 실제 서비스는 시스템 데몬 `com.archive.caddy`가 실행 중입니다.
+  </section>
+
+  <h2>실행 중인 상시 서비스</h2>
+  <section class="cards">
+    <article class="card">
+      <h3><span class="badge ok">running</span> archive-ai-server</h3>
+      <p><code>com.archive.archive-ai-server</code></p>
+      <p>RunAtLoad + KeepAlive. <code>127.0.0.1:8787</code>에서 로컬 HTTP 서비스가 열려 있습니다.</p>
+    </article>
+    <article class="card">
+      <h3><span class="badge ok">running</span> drive-mcp</h3>
+      <p><code>com.archive.drive-mcp</code></p>
+      <p>RunAtLoad + KeepAlive. <code>127.0.0.1:8080</code>에서 MCP proxy가 열려 있습니다.</p>
+    </article>
+    <article class="card">
+      <h3><span class="badge ok">running</span> caddy daemon</h3>
+      <p><code>com.archive.caddy</code></p>
+      <p>시스템 LaunchDaemon. <code>/Users/archivepilates/Caddyfile</code>을 사용합니다.</p>
+    </article>
+  </section>
+
+  <h2>스케줄 지도</h2>
+  <section class="timeline" aria-label="Schedule map">
+    <div class="slot"><b>30초</b><code>archivein-admin-emergency-sync</code></div>
+    <div class="slot"><b>5분</b><code>inbody-report-worker</code><br><code>private-chart-gpt-agent</code><br><code>studiomate-memo-write-queue</code></div>
+    <div class="slot"><b>1시간</b><code>studiomate-emergency-contacts-sync</code><br><code>studiomate-excel-emergency-mode</code></div>
+    <div class="slot"><b>매일 23:00</b><code>archive-dashboard-db-sync</code></div>
+    <div class="slot"><b>월 12:30</b><code>studiomate-reservation-deadline</code></div>
+  </section>
+
+  <h2>목적 요약</h2>
+  <div class="table-wrap">
+    <table>
+      <thead>
+      <tr>
+        <th>자동화</th>
+        <th>목적</th>
+        <th>현재 판단</th>
+      </tr>
+      </thead>
+      <tbody>
+      <tr>
+        <td><code>com.archive.archive-ai-server</code></td>
+        <td>맥미니 로컬 AI 작업 허브를 HTTP 서비스로 열어 Codex/Drive MCP 작업을 연결</td>
+        <td><span class="badge ok">운영 중</span></td>
+      </tr>
+      <tr>
+        <td><code>com.archive.drive-mcp</code></td>
+        <td>Google Drive/문서 작업용 MCP 브리지를 로컬 포트로 제공</td>
+        <td><span class="badge ok">운영 중</span></td>
+      </tr>
+      <tr>
+        <td><code>com.archive.caddy</code></td>
+        <td>외부 도메인을 맥미니 로컬 MCP/AI 서비스로 연결하는 리버스 프록시</td>
+        <td><span class="badge ok">운영 중</span></td>
+      </tr>
+      <tr>
+        <td><code>com.archive.archive-dashboard-db-sync</code></td>
+        <td>스튜디오메이트 매출/대시보드 데이터를 정리해 ARCHIVE IN Firebase 대시보드 DB에 반영</td>
+        <td><span class="badge wait">매일 23:00</span></td>
+      </tr>
+      <tr>
+        <td><code>com.archive.archivein-admin-emergency-sync</code></td>
+        <td>ARCHIVE IN 관리자 긴급 동기화 요청을 감지해 필요한 동기화 작업을 처리</td>
+        <td><span class="badge wait">30초마다</span></td>
+      </tr>
+      <tr>
+        <td><code>com.archive.studiomate-excel-emergency-mode</code></td>
+        <td>스튜디오메이트 회원 엑셀을 내려받아 ARCHIVE IN/Firebase 쪽 비상 동기화 자료로 반영</td>
+        <td><span class="badge wait">1시간마다</span></td>
+      </tr>
+      <tr>
+        <td><code>com.archive.studiomate-emergency-contacts-sync</code></td>
+        <td>스튜디오메이트 기준 회원 연락처를 비상 연락처/Google Contacts 동기화 흐름에 반영</td>
+        <td><span class="badge wait">1시간마다</span></td>
+      </tr>
+      <tr>
+        <td><code>com.archive.studiomate-memo-write-queue</code></td>
+        <td>ARCHIVE IN Firestore 메모 변경분을 스튜디오메이트 회원 메모에 순차적으로 복사</td>
+        <td><span class="badge wait">5분마다</span></td>
+      </tr>
+      <tr>
+        <td><code>com.archive.private-chart-gpt-agent</code></td>
+        <td>프라이빗 수업 차트의 GPT 공개용 요약/다음 방향 초안을 생성</td>
+        <td><span class="badge wait">5분마다</span></td>
+      </tr>
+      <tr>
+        <td><code>com.archive.inbody-report-worker</code></td>
+        <td>InBody 측정/출석 후보를 읽어 회원용 InBody 리포트 자료를 생성 또는 동기화</td>
+        <td><span class="badge bad">현재 스크립트 경로 누락</span></td>
+      </tr>
+      <tr>
+        <td><code>com.archive.studiomate-reservation-deadline</code></td>
+        <td>매주 월요일 스튜디오메이트 예약 가능 기한을 다음 운영 주기에 맞게 갱신</td>
+        <td><span class="badge bad">최근 실패 이력</span></td>
+      </tr>
+      </tbody>
+    </table>
+  </div>
+
+  <h2>Launchd Inventory</h2>
+  <div class="table-wrap">
+    <table>
+      <thead>
+      <tr>
+        <th>상태</th>
+        <th>Label</th>
+        <th>트리거</th>
+        <th>실행 내용</th>
+        <th>최근 실행 신호</th>
+        <th>로그</th>
+      </tr>
+      </thead>
+      <tbody>
+      <tr>
+        <td><span class="badge ok">running</span></td>
+        <td><code>com.archive.archive-ai-server</code></td>
+        <td>RunAtLoad + KeepAlive</td>
+        <td><code>node /Users/archivepilates/archive-ai-server/dist/server.js</code></td>
+        <td>PID 2113, last exit: never exited</td>
+        <td><code>/Users/archivepilates/archive-ai-server/logs/</code></td>
+      </tr>
+      <tr>
+        <td><span class="badge wait">scheduled</span></td>
+        <td><code>com.archive.archive-dashboard-db-sync</code></td>
+        <td>매일 23:00</td>
+        <td><code>run-archive-dashboard-sales-daily.mjs --apply --sync-firebase</code></td>
+        <td>runs 6, last exit 0, 최신 out log 2026-05-27 23:01</td>
+        <td><code>/Users/archivepilates/ArchiveIN/emergency/logs/archive-dashboard-db-sync.*.log</code></td>
+      </tr>
+      <tr>
+        <td><span class="badge wait">interval</span></td>
+        <td><code>com.archive.archivein-admin-emergency-sync</code></td>
+        <td>30초마다</td>
+        <td><code>process-admin-emergency-sync-requests.mjs</code></td>
+        <td>runs 18776, last exit 0, reports가 30초 단위로 생성 중</td>
+        <td><code>/Users/archivepilates/ArchiveIN/emergency/logs/archivein-admin-emergency-sync.*.log</code></td>
+      </tr>
+      <tr>
+        <td><span class="badge ok">running</span></td>
+        <td><code>com.archive.drive-mcp</code></td>
+        <td>RunAtLoad + KeepAlive</td>
+        <td><code>mcp-proxy --port 8080 --host 127.0.0.1 -- server.js</code></td>
+        <td>PID 2109, last exit: never exited</td>
+        <td><code>/Users/archivepilates/archive-drive-mcp/logs/drive-mcp.*.log</code></td>
+      </tr>
+      <tr>
+        <td><span class="badge bad">last exit 127</span></td>
+        <td><code>com.archive.inbody-report-worker</code></td>
+        <td>RunAtLoad + 5분마다</td>
+        <td><code>run-inbody-report-worker.sh</code></td>
+        <td>runs 290, last exit 127, err log 2026-05-28 16:21</td>
+        <td><code>/Users/archivepilates/ArchiveIN/automation/logs/inbody-report-worker.*.log</code></td>
+      </tr>
+      <tr>
+        <td><span class="badge wait">interval</span></td>
+        <td><code>com.archive.private-chart-gpt-agent</code></td>
+        <td>RunAtLoad + 5분마다</td>
+        <td><code>run-private-chart-gpt-agent.sh</code></td>
+        <td>runs 209, last exit 0, 최신 log 2026-05-28 16:19</td>
+        <td><code>/Users/archivepilates/ArchiveIN/automation/logs/private-chart-gpt-agent.*</code></td>
+      </tr>
+      <tr>
+        <td><span class="badge wait">interval</span></td>
+        <td><code>com.archive.studiomate-emergency-contacts-sync</code></td>
+        <td>1시간마다</td>
+        <td><code>run-emergency-contacts-hourly-sync.mjs</code></td>
+        <td>runs 204, last exit 0, 최신 out log 2026-05-28 15:27</td>
+        <td><code>/Users/archivepilates/ArchiveIN/emergency/logs/studiomate-emergency-contacts-sync.*.log</code></td>
+      </tr>
+      <tr>
+        <td><span class="badge wait">interval</span></td>
+        <td><code>com.archive.studiomate-excel-emergency-mode</code></td>
+        <td>1시간마다</td>
+        <td><code>run-studiomate-excel-emergency-mode.mjs --download --apply</code></td>
+        <td>runs 200, last exit 0, 최신 out log 2026-05-28 15:39</td>
+        <td><code>/Users/archivepilates/ArchiveIN/emergency/logs/studiomate-excel-emergency-mode.*.log</code></td>
+      </tr>
+      <tr>
+        <td><span class="badge wait">interval</span></td>
+        <td><code>com.archive.studiomate-memo-write-queue</code></td>
+        <td>5분마다</td>
+        <td><code>process-studiomate-memo-write-jobs.mjs --apply --limit 5</code></td>
+        <td>runs 2010, last exit 0, 최신 out log 2026-05-28 16:21</td>
+        <td><code>/Users/archivepilates/ArchiveIN/automation/logs/studiomate-memo-write-queue.*.log</code></td>
+      </tr>
+      <tr>
+        <td><span class="badge bad">last exit 1</span></td>
+        <td><code>com.archive.studiomate-reservation-deadline</code></td>
+        <td>매주 월요일 12:30</td>
+        <td><code>caffeinate -s zsh -lc .../run-reservation-deadline-job.mjs</code></td>
+        <td>runs 1, last exit 1, 최신 err log 2026-05-25 12:30</td>
+        <td><code>/Users/archivepilates/ArchiveIN/automation/logs/studiomate-reservation-deadline.*.log</code></td>
+      </tr>
+      <tr>
+        <td><span class="badge ok">running</span></td>
+        <td><code>com.archive.caddy</code></td>
+        <td>RunAtLoad + KeepAlive, system daemon</td>
+        <td><code>caddy run --config /Users/archivepilates/Caddyfile</code></td>
+        <td>PID 825, last exit: never exited</td>
+        <td><code>/Users/archivepilates/archive-drive-mcp/logs/caddy.*.log</code></td>
+      </tr>
+      </tbody>
+    </table>
+  </div>
+
+  <h2>기타 자동화</h2>
+  <div class="table-wrap">
+    <table>
+      <thead>
+      <tr><th>종류</th><th>상태</th><th>이름</th><th>스케줄</th><th>비고</th></tr>
+      </thead>
+      <tbody>
+      <tr><td>crontab</td><td><span class="badge wait">none</span></td><td>archivepilates user crontab</td><td>-</td><td><code>crontab -l</code>: no crontab</td></tr>
+      <tr><td>pm2</td><td><span class="badge wait">none</span></td><td>pm2 process manager</td><td>-</td><td><code>pm2</code> 명령 없음</td></tr>
+      <tr><td>brew services</td><td><span class="badge ok">none</span></td><td>caddy</td><td>-</td><td>사용자 단위 Homebrew Caddy 자동실행은 2026-05-28에 정리됨. 시스템 `com.archive.caddy`는 유지.</td></tr>
+      <tr><td>Codex cron</td><td><span class="badge wait">paused</span></td><td>ARCHIVE PILATES YouTube video list sync</td><td>월요일 주 1회</td><td>현재 PAUSED</td></tr>
+      <tr><td>Codex cron</td><td><span class="badge wait">paused</span></td><td>Emergency contacts hourly sync</td><td>1시간마다</td><td>LaunchAgent fallback only, 현재 PAUSED</td></tr>
+      <tr><td>Codex cron</td><td><span class="badge wait">paused</span></td><td>Private Chart GPT Draft Worker</td><td>1시간마다</td><td>현재 PAUSED. launchd 5분 worker와 별도</td></tr>
+      <tr><td>Codex cron</td><td><span class="badge wait">paused</span></td><td>Fallback only - StudioMate member Excel download</td><td>매일 23:00</td><td>현재 PAUSED</td></tr>
+      <tr><td>Codex cron</td><td><span class="badge wait">paused</span></td><td>Fallback only - StudioMate reservation deadline</td><td>월요일 12:30</td><td>현재 PAUSED</td></tr>
+      </tbody>
+    </table>
+  </div>
+
+  <h2>주의 목록</h2>
+  <section class="stack">
+    <div class="panel"><b>1. InBody worker 실행 경로/의존성 점검 필요</b><br>최근 종료코드 127은 일반적으로 command not found 또는 스크립트 내부 의존성 누락을 의심합니다.</div>
+    <div class="panel"><b>2. 예약가능기한 월요일 작업 실패 이력 확인</b><br>`studiomate-reservation-deadline`은 월요일 12:30 작업이며, 2026-05-25 12:30 err log와 종료코드 1이 있습니다.</div>
+    <div class="panel"><b>3. Caddy 중복 정리 완료</b><br>사용자 `homebrew.mxcl.caddy` 자동실행은 제거했고, 시스템 `com.archive.caddy`만 운영용으로 유지됩니다.</div>
+  </section>
+
+  <footer>
+    <p>원천 확인 명령: <code>launchctl list</code>, <code>launchctl print gui/501/...</code>, <code>launchctl print system/com.archive.caddy</code>, <code>plutil -convert json</code>, <code>crontab -l</code>, <code>brew services list</code>, <code>lsof -nP -iTCP -sTCP:LISTEN</code>, <code>find ~/.codex/automations</code>.</p>
+    <p>민감정보 처리: `launchctl print`에 노출될 수 있는 토큰, credential 파일 내용, Authorization 값은 대시보드에 싣지 않았습니다.</p>
+  </footer>
+</main>
+</body>
+</html>

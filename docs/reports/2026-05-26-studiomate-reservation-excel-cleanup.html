@@ -1,0 +1,115 @@
+<!doctype html>
+<html lang="ko">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1">
+  <title>StudioMate 예약내역 엑셀 재수집 정리</title>
+  <style>
+    :root { color-scheme: light; --bg:#f7f4ee; --text:#181716; --muted:#6e675f; --line:#ddd5ca; --accent:#0f8a50; --card:#fffdfa; }
+    * { box-sizing:border-box; }
+    body { margin:0; background:var(--bg); color:var(--text); font:15px/1.6 -apple-system,BlinkMacSystemFont,"Segoe UI",sans-serif; }
+    main { max-width:960px; margin:0 auto; padding:40px 20px 64px; }
+    h1 { margin:0 0 8px; font-size:28px; line-height:1.25; letter-spacing:0; }
+    h2 { margin:32px 0 12px; font-size:18px; }
+    p { margin:0 0 12px; color:var(--muted); }
+    .lead { color:var(--text); font-size:17px; }
+    .grid { display:grid; grid-template-columns:repeat(auto-fit,minmax(180px,1fr)); gap:10px; margin:18px 0 8px; }
+    .metric { background:var(--card); border:1px solid var(--line); border-radius:8px; padding:14px; }
+    .metric span { display:block; color:var(--muted); font-size:12px; }
+    .metric strong { display:block; margin-top:4px; font-size:22px; line-height:1.2; }
+    table { width:100%; border-collapse:collapse; background:var(--card); border:1px solid var(--line); border-radius:8px; overflow:hidden; }
+    th, td { padding:9px 10px; border-bottom:1px solid var(--line); text-align:left; vertical-align:top; }
+    th { background:#eee8df; font-size:12px; color:#4c463f; }
+    tr:last-child td { border-bottom:0; }
+    code { font-family:ui-monospace,SFMono-Regular,Menlo,monospace; font-size:12px; word-break:break-all; }
+    .ok { color:var(--accent); font-weight:700; }
+    .warn { color:#9a5b00; font-weight:700; }
+  </style>
+</head>
+<body>
+<main>
+  <h1>StudioMate 예약내역 엑셀 재수집 정리</h1>
+  <p class="lead">2026-05-26 작업 결과, StudioMate UI에서 직접 받은 예약내역 엑셀은 <strong>2025-11-27부터 2026-06-30까지</strong> 정리 완료. 같은 기간 기존 Firestore bookings는 백업 후 삭제했고, 통합 엑셀 기준으로 교체 적용했다.</p>
+
+  <div class="grid">
+    <div class="metric"><span>통합 원본 행</span><strong>11,759</strong></div>
+    <div class="metric"><span>교체 후 bookings</span><strong>11,138</strong></div>
+    <div class="metric"><span>미매칭</span><strong>127행 / 45명</strong></div>
+    <div class="metric"><span>수업 기간</span><strong>2025-11-27 ~ 2026-06-30</strong></div>
+  </div>
+
+  <h2>확인된 제한</h2>
+  <p><span class="warn">StudioMate 예약내역 UI 과거 조회 제한:</span> 2026-05-26 기준 2025-11-27 이전 날짜는 달력에서 disabled 상태라 엑셀 다운로드가 불가했다. 따라서 2024-08~2025-11-26 구간은 UI 엑셀만으로 재수집할 수 없다.</p>
+
+  <h2>다운로드 구간</h2>
+  <table>
+    <thead><tr><th>구간</th><th>행 수</th><th>화면 카운트</th><th>보관 파일</th></tr></thead>
+    <tbody>
+      <tr><td>2025-11-27 ~ 2025-11-30</td><td>177</td><td>전체 177명</td><td><code>/Users/archivepilates/ArchiveIN/emergency/archive/reservation/2026-05-26/예약내역_2025-11-27_2025-11-30-ui-3532a3d08986.xlsx</code></td></tr>
+      <tr><td>2025-12-01 ~ 2025-12-31</td><td>1,770</td><td>전체 1,770명</td><td><code>/Users/archivepilates/ArchiveIN/emergency/archive/reservation/2026-05-26/예약내역_2025-12-01_2025-12-31-ui-388dee13bfb3.xlsx</code></td></tr>
+      <tr><td>2026-01-01 ~ 2026-01-31</td><td>2,054</td><td>전체 2,054명</td><td><code>/Users/archivepilates/ArchiveIN/emergency/archive/reservation/2026-05-26/예약내역_2026-01-01_2026-01-31-ui-56d1c5926089.xlsx</code></td></tr>
+      <tr><td>2026-02-01 ~ 2026-02-28</td><td>1,783</td><td>전체 1,783명</td><td><code>/Users/archivepilates/ArchiveIN/emergency/archive/reservation/2026-05-26/예약내역_2026-02-01_2026-02-28-ui-56a737bffd72.xlsx</code></td></tr>
+      <tr><td>2026-03-01 ~ 2026-03-31</td><td>2,054</td><td>전체 2,054명</td><td><code>/Users/archivepilates/ArchiveIN/emergency/archive/reservation/2026-05-26/예약내역_2026-03-01_2026-03-31-ui-15a79bc2e43f.xlsx</code></td></tr>
+      <tr><td>2026-04-01 ~ 2026-04-30</td><td>1,957</td><td>전체 1,957명</td><td><code>/Users/archivepilates/ArchiveIN/emergency/archive/reservation/2026-05-26/예약내역_2026-04-01_2026-04-30-ui-3a36bb440f48.xlsx</code></td></tr>
+      <tr><td>2026-05-01 ~ 2026-05-31</td><td>1,600</td><td>전체 1,600명</td><td><code>/Users/archivepilates/ArchiveIN/emergency/archive/reservation/2026-05-26/예약내역_2026-05-01_2026-05-31-ui-793765a9503b.xlsx</code></td></tr>
+      <tr><td>2026-06-01 ~ 2026-06-30</td><td>364</td><td>전체 364명</td><td><code>/Users/archivepilates/ArchiveIN/emergency/archive/reservation/2026-05-26/예약내역_2026-06-01_2026-06-30-ui-9fe72078f1d4.xlsx</code></td></tr>
+    </tbody>
+  </table>
+
+  <h2>정리 산출물</h2>
+  <p>통합 엑셀: <code>/Users/archivepilates/Documents/ARCHIVE-IN/artifacts/studiomate-reservation-cleanup/예약내역_UI통합_2025-11-27_2026-06-30.xlsx</code></p>
+  <p>요약 JSON: <code>/Users/archivepilates/Documents/ARCHIVE-IN/artifacts/studiomate-reservation-cleanup/예약내역_UI통합_2025-11-27_2026-06-30-summary.json</code></p>
+  <p>미매칭 JSON: <code>/Users/archivepilates/Documents/ARCHIVE-IN/artifacts/studiomate-reservation-cleanup/예약내역_UI통합_회원매칭실패_2025-11-27_2026-06-30.json</code></p>
+  <p>교체 검증 JSON: <code>/Users/archivepilates/Documents/ARCHIVE-IN/artifacts/studiomate-reservation-cleanup/예약내역_UI통합_교체검증_2025-11-27_2026-06-30.json</code></p>
+
+  <h2>드라이런 결과</h2>
+  <table>
+    <tbody>
+      <tr><th>읽은 행</th><td>11,759</td></tr>
+      <tr><th>파싱 행</th><td>11,759</td></tr>
+      <tr><th>수업 계획</th><td>2,146</td></tr>
+      <tr><th>예약 계획</th><td>11,632</td></tr>
+      <tr><th>강사뷰 계획</th><td>475</td></tr>
+      <tr><th>미매칭</th><td>127행, 45명. 상위: 임지영 28행, 주은혜 16행, 김혜수 8행.</td></tr>
+    </tbody>
+  </table>
+
+  <h2>교체 적용 결과</h2>
+  <table>
+    <tbody>
+      <tr><th>적용 시각</th><td>2026-05-27 00:00~00:05 KST</td></tr>
+      <tr><th>백업 후 삭제한 기존 bookings</th><td>5,184건</td></tr>
+      <tr><th>백업 위치</th><td><code>bookingReplacementArchives/reservation_excel_replace_20251127_20260630_2026-05-26T15-00-27-075Z/bookings</code></td></tr>
+      <tr><th>교체 후 범위 내 bookings</th><td>11,138건</td></tr>
+      <tr><th>source 검증</th><td>11,138건 모두 통합 엑셀 source. 수업매출 source 0건, 다른 source 0건.</td></tr>
+      <tr><th>상태 분포</th><td>reserved 7,354 / cancel 3,722 / wait 62</td></tr>
+      <tr><th>출결 분포</th><td>attended 6,349 / unchecked 4,267 / absent 522</td></tr>
+    </tbody>
+  </table>
+
+  <h2>중복 행 처리</h2>
+  <p>드라이런 예약 매칭은 11,632행이었으나, 같은 회원이 같은 수업에 반복 표시된 엑셀 행은 동일 bookingId로 합쳐졌다. 원본 엑셀 기준 같은 회원+같은 수업 중복은 462개 묶음, 추가 중복 행 497건이다. 교체 후 실제 bookings 문서 수는 11,138건이다.</p>
+
+  <h2>샘플 검증</h2>
+  <table>
+    <thead><tr><th>회원</th><th>마지막 출석</th><th>마지막 예약</th><th>booking 수</th></tr></thead>
+    <tbody>
+      <tr><td>안종수</td><td>2026-04-02</td><td>2026-04-02</td><td>31</td></tr>
+      <tr><td>안미영</td><td>2026-04-02</td><td>2026-04-02</td><td>41</td></tr>
+      <tr><td>이정향</td><td>2026-04-05</td><td>2026-04-26</td><td>72</td></tr>
+      <tr><td>강혜원</td><td>2026-04-14</td><td>2026-05-12</td><td>24</td></tr>
+      <tr><td>장선미</td><td>2026-04-29</td><td>2026-05-12</td><td>79</td></tr>
+      <tr><td>나혜경</td><td>2026-04-30</td><td>2026-04-30</td><td>23</td></tr>
+      <tr><td>최인경</td><td>2026-05-09</td><td>2026-05-09</td><td>19</td></tr>
+      <tr><td>정은영</td><td>2026-05-10</td><td>2026-05-10</td><td>14</td></tr>
+      <tr><td>장지덕</td><td>2026-05-12</td><td>2026-05-12</td><td>94</td></tr>
+      <tr><td>유주현</td><td>2026-05-14</td><td>2026-05-14</td><td>43</td></tr>
+    </tbody>
+  </table>
+
+  <h2>남은 판단</h2>
+  <p>미매칭 45명/127행은 아직 bookings에 넣지 않았다. 대부분 현재 memberProfiles에 없는 과거 체험/강사레슨성 데이터로 보인다. 필요하면 회원목록 엑셀과 다시 대조해서 필요한 회원만 프로필 복구 후 추가 반영한다.</p>
+  <p class="ok">production bookings 교체 완료. 같은 기간 기존 bookings는 백업되어 되돌릴 수 있다.</p>
+</main>
+</body>
+</html>

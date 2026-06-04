@@ -1,0 +1,171 @@
+<!doctype html>
+<html lang="ko">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1">
+  <title>Mac mini project cleanup · 2026-05-24</title>
+  <style>
+    :root {
+      color-scheme: light;
+      --bg: #f7f3ee;
+      --panel: #fffaf4;
+      --ink: #191817;
+      --muted: #68625c;
+      --line: #ded6cc;
+      --accent: #72583e;
+    }
+    * { box-sizing: border-box; }
+    body {
+      margin: 0;
+      background: var(--bg);
+      color: var(--ink);
+      font: 15px/1.6 -apple-system, BlinkMacSystemFont, "Apple SD Gothic Neo", "Noto Sans KR", sans-serif;
+    }
+    main { width: min(960px, calc(100% - 32px)); margin: 40px auto; }
+    h1, h2 { margin: 0; letter-spacing: 0; }
+    h1 { font-size: 28px; line-height: 1.25; }
+    h2 { margin-top: 28px; font-size: 18px; }
+    p { margin: 8px 0 0; color: var(--muted); }
+    section {
+      margin-top: 16px;
+      padding: 20px;
+      background: var(--panel);
+      border: 1px solid var(--line);
+      border-radius: 8px;
+    }
+    table { width: 100%; border-collapse: collapse; margin-top: 12px; table-layout: fixed; }
+    th, td {
+      padding: 10px 8px;
+      border-top: 1px solid var(--line);
+      text-align: left;
+      vertical-align: top;
+      overflow-wrap: anywhere;
+    }
+    th { color: var(--muted); font-size: 13px; font-weight: 600; }
+    code {
+      font-family: ui-monospace, SFMono-Regular, Menlo, Consolas, monospace;
+      font-size: 13px;
+      color: var(--accent);
+    }
+    .status {
+      display: inline-block;
+      min-width: 72px;
+      padding: 2px 8px;
+      border: 1px solid var(--line);
+      border-radius: 999px;
+      color: var(--ink);
+      background: #fff;
+      font-size: 13px;
+      text-align: center;
+    }
+    @media (max-width: 640px) {
+      main { width: min(100% - 24px, 960px); margin: 24px auto; }
+      h1 { font-size: 23px; }
+      section { padding: 16px; }
+      th, td { display: block; width: 100%; padding: 8px 0; }
+      th { border-top: 1px solid var(--line); padding-top: 12px; }
+      tr { display: block; padding: 8px 0; border-top: 1px solid var(--line); }
+      tr:first-child { border-top: 0; }
+      td { border-top: 0; }
+    }
+  </style>
+</head>
+<body>
+<main>
+  <h1>Mac mini project cleanup</h1>
+  <p>2026-05-24 KST 기준. ARCHIVE IN 중심으로 오래된 프로젝트 폴더와 깨진 인덱스를 정리했습니다.</p>
+
+  <section>
+    <h2>결론</h2>
+    <p>활성 프로젝트 인덱스는 <code>archive-in</code>, <code>archive-ai-server</code>, <code>archive-drive-mcp</code> 세 개만 남겼습니다. 자동화가 직접 참조하는 두 경로는 아직 삭제하지 않았습니다.</p>
+  </section>
+
+  <section>
+    <h2>삭제/제거</h2>
+    <table>
+      <thead>
+        <tr><th>항목</th><th>처리</th><th>메모</th></tr>
+      </thead>
+      <tbody>
+        <tr>
+          <td><code>/Users/archivepilates/Documents/New project</code></td>
+          <td><span class="status">격리 이동</span></td>
+          <td><code>/Users/archivepilates/project-backups/2026-05-24-unused-projects/Documents-New-project</code>에 보관했습니다.</td>
+        </tr>
+        <tr>
+          <td>오래된 Documents 프로젝트</td>
+          <td><span class="status">삭제</span></td>
+          <td><code>archivepilates.com</code>, <code>archivepilates.com 2</code>, <code>archive-ai-server</code>, <code>macmini-archive</code>, <code>New project 2</code>, 빈 동기화 폴더, SRT 변환기 폴더를 삭제했습니다.</td>
+        </tr>
+        <tr>
+          <td>오래된 <code>Documents/Codex</code> 날짜 폴더</td>
+          <td><span class="status">삭제</span></td>
+          <td><code>2026-04-24</code>부터 <code>2026-05-22</code>까지 비활성 날짜 폴더와 <code>archive-telegram-codex-bot</code> 소스 폴더를 삭제했습니다. 단, 자동화가 참조하는 <code>2026-05-07/archive</code>는 보존했습니다.</td>
+        </tr>
+        <tr>
+          <td><code>/Users/archivepilates/codex-worktrees/archivein-private-schedule-deploy</code></td>
+          <td><span class="status">worktree 제거</span></td>
+          <td>깨끗한 ARCHIVE IN 보조 worktree라 <code>git worktree remove</code>로 폴더를 제거했습니다.</td>
+        </tr>
+        <tr>
+          <td><code>/Users/archivepilates/codex-worktrees/archive-apply-website-improvements</code></td>
+          <td><span class="status">삭제</span></td>
+          <td>이전 원본 worktree 메타데이터가 이미 삭제된 경로에 연결되어 git 상태가 깨져 있어 남은 폴더를 제거했습니다.</td>
+        </tr>
+        <tr>
+          <td><code>/Users/archivepilates/dev</code> symlink</td>
+          <td><span class="status">정리</span></td>
+          <td>삭제된 프로젝트를 가리키던 symlink를 제거하고 <code>PROJECTS.md</code>를 현재 상태로 재작성했습니다.</td>
+        </tr>
+      </tbody>
+    </table>
+  </section>
+
+  <section>
+    <h2>보존</h2>
+    <table>
+      <thead>
+        <tr><th>경로</th><th>상태</th><th>이유</th></tr>
+      </thead>
+      <tbody>
+        <tr>
+          <td><code>/Users/archivepilates/Documents/ARCHIVE-IN</code></td>
+          <td>활성</td>
+          <td>현재 ARCHIVE IN 작업 루트입니다.</td>
+        </tr>
+        <tr>
+          <td><code>/Users/archivepilates/codex-worktrees/archivein-live-setup</code></td>
+          <td>자동화 런타임</td>
+          <td>여러 LaunchAgent가 아직 이 worktree의 스크립트를 직접 실행합니다.</td>
+        </tr>
+        <tr>
+          <td><code>/Users/archivepilates/Documents/Codex/2026-05-07/archive</code></td>
+          <td>자동화 런타임</td>
+          <td><code>com.archive.studiomate-reservation-deadline</code>이 이 경로를 직접 참조합니다.</td>
+        </tr>
+        <tr>
+          <td><code>/Users/archivepilates/archive-ai-server</code></td>
+          <td>실행 중</td>
+          <td><code>com.archive.archive-ai-server</code>와 현재 node 프로세스가 사용 중입니다.</td>
+        </tr>
+        <tr>
+          <td><code>/Users/archivepilates/archive-drive-mcp</code></td>
+          <td>런타임</td>
+          <td><code>com.archive.drive-mcp</code>가 참조합니다.</td>
+        </tr>
+        <tr>
+          <td><code>/Users/archivepilates/ArchiveIN</code></td>
+          <td>운영 데이터</td>
+          <td>자동화 로그, emergency 데이터, secrets 경로가 포함되어 프로젝트 정리 대상에서 제외했습니다.</td>
+        </tr>
+      </tbody>
+    </table>
+  </section>
+
+  <section>
+    <h2>검증</h2>
+    <p><code>~/dev</code>에는 <code>archive-in</code>, <code>archive-ai-server</code>, <code>archive-drive-mcp</code> 링크만 남았습니다. <code>git worktree list</code>에는 현재 ARCHIVE IN 루트만 남았습니다. 정리 후 <code>/Users/archivepilates</code> 볼륨 여유 공간은 약 17GiB입니다.</p>
+  </section>
+</main>
+</body>
+</html>
