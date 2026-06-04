@@ -12,6 +12,7 @@ export function sourceImportId({ sourceKind, sourceFilePath = "", mode = "", sou
 export async function recordSourceImport(db, input) {
   const now = new Date().toISOString();
   const status = input.status || (input.mode === "apply" ? "applied" : "dry_run");
+  const studioId = input.studioId || process.env.STUDIOMATE_STUDIO_ID || process.env.MANAGER_STUDIO_ID || "5330";
   const importId =
     input.importId ||
     sourceImportId({
@@ -22,6 +23,7 @@ export async function recordSourceImport(db, input) {
     });
   const doc = {
     importId,
+    studioId,
     sourceKind: input.sourceKind,
     sourceFileName: input.sourceFileName || (input.sourceFilePath || input.sourceFile ? path.basename(input.sourceFilePath || input.sourceFile) : ""),
     sourceFilePath: input.sourceFilePath || input.sourceFile || "",
@@ -67,20 +69,21 @@ export async function recordDataQualityIssues(db, issues) {
   const batch = db.batch();
   let writes = 0;
   for (const issue of issues.filter(Boolean)) {
+    const studioId = issue.studioId || process.env.STUDIOMATE_STUDIO_ID || process.env.MANAGER_STUDIO_ID || "5330";
     const issueId =
       issue.issueId ||
       stableHash({
         issueType: issue.issueType || "unknown",
         memberId: issue.memberId || "",
         memberName: issue.memberName || "",
-        sourcePaths: issue.sourcePaths || [],
-        sourceImportIds: issue.sourceImportIds || [],
+        studioId,
         title: issue.title || "",
       }).slice(0, 32);
     batch.set(
       db.collection("dataQualityIssues").doc(issueId),
       removeUndefined({
         issueId,
+        studioId,
         issueType: issue.issueType || "unknown",
         severity: issue.severity || "warning",
         status: issue.status || "open",

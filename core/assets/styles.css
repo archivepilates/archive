@@ -458,6 +458,9 @@ a.panel {
 }
 
 .metric {
+  display: grid;
+  align-content: start;
+  min-height: 156px;
   padding: 20px;
 }
 
@@ -494,6 +497,8 @@ a.panel {
   font-size: 1.92rem;
   font-weight: 800;
   letter-spacing: 0;
+  line-height: 1.12;
+  overflow-wrap: anywhere;
 }
 
 .metric-value.compact {
@@ -506,6 +511,55 @@ a.panel {
   margin-top: 6px;
   color: var(--soft);
   font-size: 0.84rem;
+}
+
+[data-member-detail-dashboard] .profile-hero {
+  min-height: 164px;
+  align-items: center;
+}
+
+[data-member-detail-dashboard] .kpis {
+  grid-template-columns: repeat(4, minmax(0, 1fr));
+  align-items: stretch;
+}
+
+[data-member-detail-dashboard] .metric {
+  height: 172px;
+}
+
+[data-member-detail-dashboard] .metric-value {
+  font-size: 1.86rem;
+}
+
+[data-member-detail-dashboard] #memberDetailRecentVisit {
+  font-size: 1.58rem;
+  white-space: nowrap;
+}
+
+[data-member-detail-dashboard] .overview-grid {
+  grid-template-columns: repeat(2, minmax(0, 1fr));
+  align-items: stretch;
+}
+
+[data-member-detail-dashboard] .overview-grid > .panel,
+[data-member-detail-dashboard] .summary-grid > .panel,
+[data-member-detail-dashboard] .data-grid > .panel {
+  height: 100%;
+}
+
+[data-member-detail-dashboard] .kpis > .panel + .panel,
+[data-member-detail-dashboard] .overview-grid > .panel + .panel,
+[data-member-detail-dashboard] .summary-grid > .panel + .panel,
+[data-member-detail-dashboard] .data-grid > .panel + .panel {
+  margin-top: 0;
+}
+
+[data-member-detail-dashboard] .status-row {
+  min-height: 74px;
+}
+
+[data-member-detail-dashboard] .detail-card {
+  min-height: 150px;
 }
 
 .menu-card,
@@ -1102,6 +1156,11 @@ a.rank-row:hover,
   .profile-hero {
     grid-template-columns: 1fr 1fr;
   }
+
+  [data-member-detail-dashboard] .kpis,
+  [data-member-detail-dashboard] .overview-grid {
+    grid-template-columns: 1fr 1fr;
+  }
 }
 
 @media (max-width: 720px) {
@@ -1134,6 +1193,18 @@ a.rank-row:hover,
   .summary-grid,
   .profile-hero {
     grid-template-columns: 1fr;
+  }
+
+  [data-member-detail-dashboard] .kpis,
+  [data-member-detail-dashboard] .overview-grid {
+    grid-template-columns: 1fr;
+  }
+
+  [data-member-detail-dashboard] .profile-hero,
+  [data-member-detail-dashboard] .metric,
+  [data-member-detail-dashboard] .detail-card {
+    height: auto;
+    min-height: 0;
   }
 
   .business-hero {

@@ -87,6 +87,17 @@ function shortDate(value) {
   }).format(raw);
 }
 
+function compactDateTime(value) {
+  if (!value) return "-";
+  const raw = typeof value?.toDate === "function" ? value.toDate() : new Date(value);
+  if (Number.isNaN(raw.getTime())) return String(value);
+  const month = raw.getMonth() + 1;
+  const day = raw.getDate();
+  const hours = String(raw.getHours()).padStart(2, "0");
+  const minutes = String(raw.getMinutes()).padStart(2, "0");
+  return `${month}.${day} ${hours}:${minutes}`;
+}
+
 function formatRate(value) {
   if (!Number.isFinite(value)) return "-";
   return `${value.toFixed(1)}%`;
@@ -320,6 +331,22 @@ async function getRecentCollectionBy(db, firestore, collectionName, orderField =
     );
     const snapshot = await firestore.getDocs(queryRef);
     return snapshot.docs.map((docSnapshot) => ({ id: docSnapshot.id, ...docSnapshot.data() }));
+  } catch (error) {
+    if (String(error?.code || error?.message || "").includes("permission")) throw error;
+    const snapshot = await firestore.getDocs(firestore.collection(db, collectionName));
+    return snapshot.docs
+      .map((docSnapshot) => ({ id: docSnapshot.id, ...docSnapshot.data() }))
+      .sort((a, b) => String(b[orderField] || "").localeCompare(String(a[orderField] || "")))
+      .slice(0, maxItems);
+  }
+}
+
+async function getCollectionBy(db, firestore, collectionName, orderField = "updatedAt", maxItems = 1000) {
+  try {
+    const snapshot = await firestore.getDocs(
+      firestore.query(firestore.collection(db, collectionName), firestore.orderBy(orderField, "desc")),
+    );
+    return snapshot.docs.slice(0, maxItems).map((docSnapshot) => ({ id: docSnapshot.id, ...docSnapshot.data() }));
   } catch (error) {
     if (String(error?.code || error?.message || "").includes("permission")) throw error;
     const snapshot = await firestore.getDocs(firestore.collection(db, collectionName));
@@ -773,7 +800,7 @@ function renderMemberDetail(detail) {
   setText("memberDetailRevenue", formatManwon(toNumber(member.totalRevenue)));
   setText("memberDetailTickets", formatCount(member.activeTicketCount || tickets.length, "개"));
   setText("memberDetailBookings", formatCount(member.bookingCount || bookings.length));
-  setText("memberDetailRecentVisit", formatDate(member.recentVisitAt));
+  setText("memberDetailRecentVisit", compactDateTime(member.recentVisitAt));
   setText("memberDetailRegisteredAt", shortDate(member.registeredAt));
   setText("memberDetailUpdatedAt", formatDate(member.updatedAt || summary.updatedAt));
   setText("memberDetailMemoCount", formatCount(memos.length));
@@ -1323,10 +1350,10 @@ async function refresh() {
     ] = await Promise.all([
       getDoc(doc(db, "workLanes", WORK_LANE_ID)),
       getRecentCollection(db, runtime, "automationStatus"),
-      getRecentCollection(db, runtime, "sourceImports"),
-      getRecentCollection(db, runtime, "dataQualityIssues", 12),
+      getCollectionBy(db, runtime, "sourceImports", "updatedAt", 50),
+      getCollectionBy(db, runtime, "dataQualityIssues", "updatedAt", 100),
       shouldLoadBusiness ? getDoc(doc(db, "dashboardSnapshots", "current")) : Promise.resolve(null),
-      shouldLoadMembers ? getRecentCollectionBy(db, runtime, "member360Cards", "totalRevenue", 50) : Promise.resolve([]),
+      shouldLoadMembers ? getCollectionBy(db, runtime, "member360Cards", "totalRevenue", 2000) : Promise.resolve([]),
       shouldLoadMessages ? getRecentCollectionBy(db, runtime, "alimtalkCandidates", "updatedAt", 12) : Promise.resolve([]),
       shouldLoadMessages ? getRecentCollectionBy(db, runtime, "alimtalkSends", "updatedAt", 12) : Promise.resolve([]),
       shouldLoadMemberDetail ? loadMemberDetail(runtime, memberDetailId()) : Promise.resolve(null),
