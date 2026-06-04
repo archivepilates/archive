@@ -384,6 +384,31 @@ reservation import must exclude sales/매출 paths
 wrong sourceImports from that dry-run must be superseded, not deleted
 ```
 
+## 2026-06-05 Source Imports / Data Quality Issue Dedupe
+
+Problem:
+
+```txt
+dataQualityIssues created one new open missing_phone issue for every hourly member Excel import
+latest sourceImports from the automation worktree did not always include studioId
+```
+
+Cause:
+
+```txt
+the live automation helper included sourceImportIds/sourcePaths in the issue id seed
+so the same underlying issue changed id whenever a new Excel file was imported
+```
+
+Fix:
+
+```txt
+data quality issue ids now use a stable issueKey based on studioId + issueType + member/memberName + title
+sourceImports, automationStatus, and dataQualityIssues always record studioId
+member Excel rows with missing phone are logged as info because they are excluded from member/contact matching and external execution sources
+existing duplicate open missing_phone issues were resolved and superseded by canonical issue 4a25e5a708cb7edfce997a0fe26117fe
+```
+
 Verified dry-run from the actual LaunchAgent path:
 
 ```txt

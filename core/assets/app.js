@@ -130,6 +130,7 @@ function normalizeStatus(value) {
   if (["success", "ok", "healthy", "done", "active", "completed"].includes(status)) return "good";
   if (["failed", "error", "critical", "blocked"].includes(status)) return "danger";
   if (["running", "pending", "warning", "review", "stale"].includes(status)) return "warn";
+  if (["info", "notice"].includes(status)) return "";
   return "";
 }
 
@@ -146,6 +147,8 @@ function statusLabel(value) {
     running: "실행중",
     pending: "대기",
     warning: "주의",
+    info: "정보",
+    notice: "정보",
     stale: "지연",
     reviewing: "검토",
     open: "확인",
@@ -599,7 +602,11 @@ function renderQualityIssues(items) {
 
 function qualityActionText(item) {
   const type = String(item.issueType || item.type || item.title || "").toLowerCase();
-  if (type.includes("phone") || type.includes("전화")) return "전화번호 확인 전 외부 실행 보류";
+  if (type.includes("phone") || type.includes("전화")) {
+    return String(item.severity || "").toLowerCase() === "info"
+      ? "외부 실행 원천에서 제외됨, 필요 시 StudioMate 원본 전화번호 보완"
+      : "전화번호 확인 전 외부 실행 보류";
+  }
   if (type.includes("duplicate") || type.includes("중복")) return "canonical key 기준 우선순위 확인";
   if (type.includes("name") || type.includes("동명이인")) return "이름 단독 매칭 금지, 전화번호/StudioMate ID 확인";
   if (type.includes("excel")) return "실제 StudioMate memberId 해소 후 사용";
