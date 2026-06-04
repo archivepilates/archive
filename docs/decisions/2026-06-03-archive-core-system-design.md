@@ -223,6 +223,30 @@ ticket deduction revenue TOP
 
 This is read-only and does not replace the existing `/dashboard` source or calculations yet.
 
+## 2026-06-04 Command Thread And Worktree Update
+
+ARCHIVE CORE uses one main command thread for requirements, priority, final judgment, and release approval.
+
+Feature-specific threads, Spark tasks, and Subagents must work in lane-specific worktrees and report back to the main command thread before their output becomes project direction.
+
+Decision record:
+
+```txt
+docs/decisions/2026-06-04-archive-core-command-thread-worktrees.md
+```
+
+Current lane worktrees:
+
+```txt
+archive-core-transition   command / integration
+archive-core-ui           UI / routing / responsive operator UX
+archive-core-data         member data / imports / read models
+archive-core-functions    Functions / contracts / rules / APIs
+archive-alimtalk          Kakao Alimtalk
+studiomate-automation     StudioMate Excel and Playwright automation
+archive-core-docs         Notion and operating documents
+```
+
 ## 2026-06-03 Four-Step Operator Data Update
 
 ARCHIVE CORE now has read-only operator data surfaces for the first four operating steps:

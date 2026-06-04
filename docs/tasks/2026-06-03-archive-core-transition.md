@@ -161,3 +161,56 @@ Subthreads should be instructed by lane, not repeated long context:
 ```txt
 archive-core-transition 워크라인 기준으로 [담당 파트]만 진행해줘.
 ```
+
+## 2026-06-04 Command Thread And Worktree Split
+
+ARCHIVE CORE now uses one main command thread for requirements, priority, final judgment, and release approval.
+
+Feature-specific work happens in lane worktrees and reports back to the main command thread before it becomes project direction.
+
+```txt
+command / integration
+  worktree: /Users/archivepilates/codex-worktrees/archive-core-transition
+  branch:   codex/mini/archive-core-transition
+
+ui
+  worktree: /Users/archivepilates/codex-worktrees/archive-core-ui
+  branch:   codex/mini/archive-core-ui
+
+data
+  worktree: /Users/archivepilates/codex-worktrees/archive-core-data
+  branch:   codex/mini/archive-core-data
+
+functions
+  worktree: /Users/archivepilates/codex-worktrees/archive-core-functions
+  branch:   codex/mini/archive-core-functions
+
+alimtalk
+  worktree: /Users/archivepilates/codex-worktrees/archive-alimtalk
+  branch:   codex/mini/archive-alimtalk
+
+studiomate automation
+  worktree: /Users/archivepilates/codex-worktrees/studiomate-automation
+  branch:   codex/mini/studiomate-automation
+
+docs
+  worktree: /Users/archivepilates/codex-worktrees/archive-core-docs
+  branch:   codex/mini/archive-core-docs
+```
+
+Lane ownership:
+
+- `archive-core-transition`: command coordination, integration review, release readiness, and emergency shared fixes only.
+- `archive-core-ui`: `/core` UI, routing, responsive layout, visual states, and operator UX.
+- `archive-core-data`: `members`, `member360Cards`, source import logs, data quality issues, read-model rebuilds, and shadow-compare reports.
+- `archive-core-functions`: Firebase Functions, contracts, Firestore rules/indexes, affected deploy boundaries, and API surfaces.
+- `archive-alimtalk`: Kakao Alimtalk candidates, sends, templates, dedupe, approval flow, and communication logs.
+- `studiomate-automation`: StudioMate Excel download/import, Playwright automation, staff scan, memo write queue, and LaunchAgent-facing scripts.
+- `archive-core-docs`: Notion drafts, decision docs, handoff summaries, operating rules, and transition checklists.
+
+Cross-lane rules:
+
+- One worktree equals one functional lane.
+- Do not mix Alimtalk, StudioMate automation, CORE UI, Functions, and data mirror changes in one commit.
+- Any feature thread or subagent must report changed files, behavior change, checks run, skipped checks, and remaining risks back to the main command thread.
+- External sends, StudioMate writes, Contacts writes, payment/reservation decisions, and data source switching still require explicit main-thread approval.

@@ -22,6 +22,18 @@
 - If a separate chat or agent is used for a narrow subtask, bring the decision/result back into the main ARCHIVE IN chat before treating it as project direction.
 - ARCHIVE CORE transition work uses `workLanes/archive-core-transition` as the shared work lane. New subthreads should read that lane first, update handoffs there, and use lane-specific worktrees for code changes.
 - Current ARCHIVE CORE transition worktree: `/Users/archivepilates/codex-worktrees/archive-core-transition`; branch: `codex/mini/archive-core-transition`.
+- ARCHIVE CORE now uses one main command thread. The main command thread owns requirements, priorities, final judgment, go-live approval, Notion status, and cross-lane handoff decisions.
+- Feature-specific Codex threads or subagents may investigate or implement bounded work, but they must report results back to the main ARCHIVE CORE command thread before their output becomes project direction.
+- Do not repeat cross-cutting instructions across feature threads. Put shared instructions in the command thread, `workLanes/archive-core-transition`, this `AGENTS.md`, and the relevant Notion page.
+- ARCHIVE CORE worktree map:
+  - `/Users/archivepilates/codex-worktrees/archive-core-transition` / `codex/mini/archive-core-transition`: command coordination, integration review, release readiness, and emergency shared fixes only.
+  - `/Users/archivepilates/codex-worktrees/archive-core-ui` / `codex/mini/archive-core-ui`: `/core` UI, routing, responsive layout, visual states, and operator UX.
+  - `/Users/archivepilates/codex-worktrees/archive-core-data` / `codex/mini/archive-core-data`: `members`, `member360Cards`, source import logs, data quality issues, read-model rebuilds, and shadow-compare reports.
+  - `/Users/archivepilates/codex-worktrees/archive-core-functions` / `codex/mini/archive-core-functions`: Firebase Functions, contracts, Firestore rules/indexes, affected deploy boundaries, and API surfaces.
+  - `/Users/archivepilates/codex-worktrees/archive-alimtalk` / `codex/mini/archive-alimtalk`: Kakao Alimtalk candidates, sends, templates, dedupe, approval flow, and communication logs.
+  - `/Users/archivepilates/codex-worktrees/studiomate-automation` / `codex/mini/studiomate-automation`: StudioMate Excel download/import, Playwright automation, staff scan, memo write queue, and LaunchAgent-facing scripts.
+  - `/Users/archivepilates/codex-worktrees/archive-core-docs` / `codex/mini/archive-core-docs`: Notion drafts, decision docs, handoff summaries, operating rules, and transition checklists.
+- One worktree equals one functional lane. Do not commit Alimtalk, StudioMate automation, CORE UI, Functions, and data mirror changes together unless the main command thread explicitly approves an integration commit.
 - ARCHIVE CORE is an operator-only web platform. It should not be treated as a teacher app, member app, or immediate StudioMate replacement.
 - Keep existing Alimtalk, StudioMate sync, and member-facing writes on their current canonical sources until a shadow-compare migration explicitly approves a source change.
 - When speed helps and the task can be split safely, use parallel agents, including the Spark model for quick read-only exploration or bounded implementation checks.
