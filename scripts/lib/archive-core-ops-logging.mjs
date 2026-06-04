@@ -9,9 +9,14 @@ export function sourceImportId({ sourceKind, sourceFilePath = "", mode = "", sou
   return stableHash({ sourceKind, sourceFilePath, mode, sourceVersion }).slice(0, 32);
 }
 
+function defaultStudioId(input = {}) {
+  return input.studioId || process.env.STUDIOMATE_STUDIO_ID || process.env.MANAGER_STUDIO_ID || "5330";
+}
+
 export async function recordSourceImport(db, input) {
   const now = new Date().toISOString();
   const status = input.status || (input.mode === "apply" ? "applied" : "dry_run");
+  const studioId = defaultStudioId(input);
   const importId =
     input.importId ||
     sourceImportId({
@@ -22,6 +27,7 @@ export async function recordSourceImport(db, input) {
     });
   const doc = {
     importId,
+    studioId,
     sourceKind: input.sourceKind,
     sourceFileName: input.sourceFileName || (input.sourceFilePath || input.sourceFile ? path.basename(input.sourceFilePath || input.sourceFile) : ""),
     sourceFilePath: input.sourceFilePath || input.sourceFile || "",
@@ -47,6 +53,7 @@ export async function recordAutomationStatus(db, input) {
   const automationId = input.automationId || "unknown";
   const doc = {
     automationId,
+    studioId: defaultStudioId(input),
     title: input.title || automationId,
     ownerArea: input.ownerArea || "other",
     status: input.status || "unknown",
@@ -67,20 +74,23 @@ export async function recordDataQualityIssues(db, issues) {
   const batch = db.batch();
   let writes = 0;
   for (const issue of issues.filter(Boolean)) {
-    const issueId =
-      issue.issueId ||
+    const studioId = defaultStudioId(issue);
+    const issueKey =
+      issue.issueKey ||
       stableHash({
         issueType: issue.issueType || "unknown",
         memberId: issue.memberId || "",
         memberName: issue.memberName || "",
-        sourcePaths: issue.sourcePaths || [],
-        sourceImportIds: issue.sourceImportIds || [],
+        studioId,
         title: issue.title || "",
       }).slice(0, 32);
+    const issueId = issue.issueId || issueKey;
     batch.set(
       db.collection("dataQualityIssues").doc(issueId),
       removeUndefined({
         issueId,
+        issueKey,
+        studioId,
         issueType: issue.issueType || "unknown",
         severity: issue.severity || "warning",
         status: issue.status || "open",
@@ -110,9 +120,9 @@ export function qualityIssuesFromSummary(summary, importId) {
   const issues = [];
   addCountIssue(issues, skipped.rowsWithoutNameOrPhone, {
     issueType: "missing_phone",
-    severity: "warning",
+    severity: "info",
     title: "회원 원본에 이름/전화번호 누락 행 있음",
-    summary: `${skipped.rowsWithoutNameOrPhone}개 행은 이름 또는 전화번호가 없어 회원 매칭에서 제외되었습니다.`,
+    summary: `${skipped.rowsWithoutNameOrPhone}개 회원목록 행은 이름 또는 전화번호가 없어 회원/연락처 매칭과 외부 실행 원천에서 제외되었습니다.`,
     sourceImportIds,
     sourcePaths,
   });
