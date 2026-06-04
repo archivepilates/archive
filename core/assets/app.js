@@ -112,10 +112,9 @@ function formatRate(value) {
   return `${value.toFixed(1)}%`;
 }
 
-function memberDetailHref(memberId, depth = "root") {
-  if (!memberId) return depth === "nested" ? "../../members/" : "../members/";
-  const prefix = depth === "nested" ? "../../members/detail/" : "../members/detail/";
-  return `${prefix}?id=${encodeURIComponent(memberId)}`;
+function memberDetailHref(memberId) {
+  if (!memberId) return "/members/";
+  return `/members/detail/?id=${encodeURIComponent(memberId)}`;
 }
 
 function deltaText(current, previous, suffix = "%") {
@@ -225,7 +224,8 @@ function activateNav() {
   document.querySelectorAll(".nav a").forEach((link) => {
     const href = new URL(link.getAttribute("href"), window.location.href);
     const hrefPath = href.pathname.replace(/\/+$/, "");
-    const isRoot = link.dataset.section === "home" && (path.endsWith("/core") || path === "");
+    const isHomePath = path === "" || path === "/dashboard" || path.endsWith("/core");
+    const isRoot = link.dataset.section === "home" && isHomePath;
     const isActive = isRoot || (link.dataset.section && hrefPath && path.endsWith(hrefPath));
     if (isActive) link.setAttribute("aria-current", "page");
     else link.removeAttribute("aria-current");
@@ -693,7 +693,7 @@ function renderMembers(items) {
         .slice(0, 2);
       const ticketText = ticketNames.length ? ticketNames.join(", ") : "활성 수강권 없음";
       const phone = item.phoneLast4 ? ` · ${item.phoneLast4}` : "";
-      const detailHref = `./detail/?id=${encodeURIComponent(item.memberId || item.id)}`;
+      const detailHref = memberDetailHref(item.memberId || item.id);
       return `
         <tr>
           <td><a class="member-link" href="${detailHref}"><strong>${escapeHtml(item.name || item.memberId || item.id)}</strong></a><br><span>${escapeHtml(item.memberId || item.id)}${escapeHtml(phone)}</span></td>
@@ -971,10 +971,10 @@ function renderMemberDetail(detail) {
   if (nextList) {
     const id = member.memberId || detail?.id;
     const links = [
-      { title: "알림톡 이력 확인", detail: "최근 후보/발송 로그와 템플릿 상태를 함께 봅니다.", href: "../../messages/", status: "active" },
-      { title: "원본 품질 확인", detail: "중복, 임시 ID, name-only match 여부를 확인합니다.", href: "../../imports/", status: relatedIssues.length ? "warning" : "active" },
-      { title: "경영 맥락 확인", detail: "매출 상위/ACM 후보/장기회원 판단 흐름과 연결합니다.", href: "../../business/", status: toNumber(member.totalRevenue) ? "success" : "active" },
-      { title: "회원 목록으로 돌아가기", detail: id ? `${id} 기준 검색/비교를 이어갑니다.` : "다른 회원을 검색합니다.", href: "../", status: "active" },
+      { title: "알림톡 이력 확인", detail: "최근 후보/발송 로그와 템플릿 상태를 함께 봅니다.", href: "/messages/", status: "active" },
+      { title: "원본 품질 확인", detail: "중복, 임시 ID, name-only match 여부를 확인합니다.", href: "/imports/", status: relatedIssues.length ? "warning" : "active" },
+      { title: "경영 맥락 확인", detail: "매출 상위/ACM 후보/장기회원 판단 흐름과 연결합니다.", href: "/business/", status: toNumber(member.totalRevenue) ? "success" : "active" },
+      { title: "회원 목록으로 돌아가기", detail: id ? `${id} 기준 검색/비교를 이어갑니다.` : "다른 회원을 검색합니다.", href: "/members/", status: "active" },
     ];
     nextList.innerHTML = links
       .map(
@@ -1369,7 +1369,7 @@ function renderHomeDecisions() {
         ? `${failedAutomation.length}개 자동화 상태가 실패/중단으로 보입니다. Automation 탭에서 원인을 먼저 확인하세요.`
         : "최근 자동화 상태에서 실패/중단 신호는 보이지 않습니다.",
       status: failedAutomation.length ? "failed" : "success",
-      href: "./automation/",
+      href: "/automation/",
     },
     {
       title: openIssues.length ? "데이터 품질 이슈 확인" : "원본 품질 안정권",
@@ -1377,13 +1377,13 @@ function renderHomeDecisions() {
         ? `${openIssues.length}개 열린 이슈가 있습니다. 발송/쓰기 전 Imports 탭에서 매칭 상태를 확인하세요.`
         : "열린 데이터 품질 이슈가 없습니다.",
       status: openIssues.length ? "warning" : "success",
-      href: "./imports/",
+      href: "/imports/",
     },
     {
       title: "회원/알림톡은 read-only 확인",
       detail: "ARCHIVE CORE는 현재 운영 판단 콘솔입니다. 외부 발송/쓰기 원천은 기존 canonical 컬렉션을 유지합니다.",
       status: "active",
-      href: "./rules/",
+      href: "/rules/",
     },
   ];
   list.innerHTML = rows
