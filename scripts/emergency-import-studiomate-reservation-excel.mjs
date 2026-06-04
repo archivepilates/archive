@@ -5,6 +5,7 @@ import { existsSync, mkdirSync, writeFileSync } from "node:fs";
 import os from "node:os";
 import path from "node:path";
 import { createRequire } from "node:module";
+import { qualityIssuesFromSummary, recordDataQualityIssues, recordSourceImport } from "./lib/archive-core-ops-logging.mjs";
 
 const require = createRequire(import.meta.url);
 const admin = require("../firebase/kangsain-functions/functions/node_modules/firebase-admin");
@@ -15,6 +16,7 @@ const PYTHON =
   process.env.ARCHIVEIN_PYTHON ||
   "/Users/archivepilates/.cache/codex-runtimes/codex-primary-runtime/dependencies/python/bin/python3";
 const RESERVATION_EXPORT_ROOTS = [
+  path.join(os.homedir(), "ArchiveIN/emergency/downloads"),
   path.join(os.homedir(), "ArchiveIN/automation/downloads"),
   "/Users/archivepilates/Library/CloudStorage/GoogleDrive-home@archivepilates.com/내 드라이브/아카이브 정산/수업예약내역",
   "/Users/archivepilates/Library/CloudStorage/GoogleDrive-home@archivepilates.com/내 드라이브/아카이브 정산/수업예약내역",
@@ -108,7 +110,24 @@ if (apply) {
 mkdirSync(reportDir, { recursive: true });
 const reportPath = path.join(reportDir, `${new Date().toISOString().replace(/[:.]/g, "-")}-reservation-${apply ? "apply" : "dry-run"}.json`);
 writeFileSync(reportPath, `${JSON.stringify(summary, null, 2)}\n`);
-console.log(JSON.stringify({ ...summary, reportPath }, null, 2));
+const { importId } = await recordSourceImport(db, {
+  sourceKind: "studiomate_reservation_excel",
+  sourceFilePath: sourceFile,
+  mode: summary.mode,
+  status: apply ? "applied" : "dry_run",
+  rowCount: summary.readRows,
+  normalizedRows: summary.parsedRows,
+  appliedRows: apply ? summary.bookings : 0,
+  skippedRows: Object.values(summary.skipped || {}).reduce((sum, value) => sum + Number(value || 0), 0),
+  notes: [
+    `dateRange=${summary.dateRange?.startDate || ""}~${summary.dateRange?.endDate || ""}`,
+    `lectures=${summary.lectures}`,
+    `bookings=${summary.bookings}`,
+  ],
+});
+await recordDataQualityIssues(db, qualityIssuesFromSummary(summary, importId));
+
+console.log(JSON.stringify({ ...summary, reportPath, sourceImportId: importId }, null, 2));
 
 function valueArg(name) {
   const prefix = `${name}=`;
@@ -123,7 +142,8 @@ function latestReservationExportPath() {
 from pathlib import Path
 import json
 roots = ${JSON.stringify(RESERVATION_EXPORT_ROOTS)}
-needles = ("예약", "수업", "reservation", "booking", "lecture")
+needles = ("예약", "예약내역", "reservation", "booking")
+excluded = ("매출", "sales", "lesson-sales", "ticket-sales", "/sales/")
 files = []
 for root in roots:
     p = Path(root).expanduser()
@@ -131,7 +151,14 @@ for root in roots:
         continue
     for item in p.rglob("*"):
         name = item.name.lower()
-        if item.is_file() and item.suffix.lower() in {".xlsx", ".xls", ".csv"} and not item.name.startswith("~$") and any(n in name for n in needles):
+        full = str(item).lower()
+        if (
+            item.is_file()
+            and item.suffix.lower() in {".xlsx", ".xls", ".csv"}
+            and not item.name.startswith("~$")
+            and any(n in name for n in needles)
+            and not any(n in name or n in full for n in excluded)
+        ):
             files.append(item)
 files.sort(key=lambda p: p.stat().st_mtime)
 print(json.dumps(str(files[-1]) if files else ""))

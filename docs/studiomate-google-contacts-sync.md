@@ -234,7 +234,7 @@ CONTACTS_SYNC_MAX_AUTO_UPDATE=50
 cd "/Users/archivepilates/Documents/New project 2" && /usr/local/bin/node scripts/run_studiomate_google_sync_job.mjs
 ```
 
-2026-05-22부터 이 레거시 23:10 작업은 unload 상태로 유지하고 `.disabled-20260519`로 보관한다. 최신 정상모드 엑셀 연락처 동기화는 `com.archive.studiomate-emergency-contacts-sync`가 1시간 간격으로 담당한다. LaunchAgent 이름의 `emergency`는 호환용 레거시 이름이다.
+2026-05-22부터 이 레거시 23:10 작업은 unload 상태로 유지하고 `.disabled-20260519`로 보관한다. 2026-05-31부터 최신 정상모드 엑셀 runner `com.archive.studiomate-excel-emergency-mode`가 회원목록 다운로드 성공 직후 `memberProfiles`, `memberContactIndex`, `contactSyncJobs` 큐 준비까지 같은 작업 안에서 처리한다. `com.archive.studiomate-emergency-contacts-sync`는 중복 실행과 실제 Google Contacts 처리 혼선을 막기 위해 자동 실행하지 않고 수동 복구용으로만 보관한다.
 
 로그:
 
@@ -392,7 +392,7 @@ Codex 앱 자동화는 혼선을 줄이기 위해 보조/수동 테스트용으�
 | --- | --- |
 | Google Contacts 대상 계정 | `home@archivepilates.com` |
 | 완료보고 메일 계정 | `home@archivepilates.com` |
-| 연락처 동기화 LaunchAgent | 23:10 레거시 작업 비활성. 정상모드 엑셀 연락처 작업은 `com.archive.studiomate-emergency-contacts-sync` |
+| 연락처 동기화 LaunchAgent | 23:10 레거시 작업 비활성. `contactSyncJobs` 큐 준비는 정상모드 엑셀 runner 안에서 즉시 처리. `com.archive.studiomate-emergency-contacts-sync`는 수동 복구용 |
 | 회원목록 다운로드 LaunchAgent | 삭제됨. 정상모드 엑셀 자동화가 회원목록 다운로드를 담당 |
 | 예약 가능 기한 LaunchAgent | 활성 |
 | Firebase 연락처 큐 | `memberContactIndex` / `contactSyncJobs` 기준 |

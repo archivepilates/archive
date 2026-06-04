@@ -5,6 +5,7 @@ import { existsSync, mkdirSync, writeFileSync } from "node:fs";
 import os from "node:os";
 import path from "node:path";
 import { createRequire } from "node:module";
+import { recordSourceImport } from "./lib/archive-core-ops-logging.mjs";
 
 const require = createRequire(import.meta.url);
 const admin = require("../firebase/kangsain-functions/functions/node_modules/firebase-admin");
@@ -74,7 +75,18 @@ if (apply) {
 mkdirSync(reportDir, { recursive: true });
 const reportPath = path.join(reportDir, `${new Date().toISOString().replace(/[:.]/g, "-")}-deleted-class-${apply ? "apply" : "dry-run"}.json`);
 writeFileSync(reportPath, `${JSON.stringify(summary, null, 2)}\n`);
-console.log(JSON.stringify({ ...summary, reportPath }, null, 2));
+const { importId } = await recordSourceImport(db, {
+  sourceKind: "studiomate_deleted_class_excel",
+  sourceFilePath: sourceFile,
+  mode: summary.mode,
+  status: apply ? "applied" : "dry_run",
+  rowCount: summary.readRows,
+  normalizedRows: summary.parsedRows,
+  appliedRows: apply ? summary.parsedRows : 0,
+  notes: [`months=${summary.months.join(",")}`],
+});
+
+console.log(JSON.stringify({ ...summary, reportPath, sourceImportId: importId }, null, 2));
 
 function latestDeletedClassExportPath() {
   const py = String.raw`

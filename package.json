@@ -19,7 +19,11 @@
   },
   "dependencies": {
     "chart.js": "^4.4.9",
-    "firebase": "^10.14.1"
+    "csv-parse": "^6.2.1",
+    "csv-stringify": "^6.7.0",
+    "exceljs": "^4.4.0",
+    "firebase": "^10.14.1",
+    "xlsx": "^0.18.5"
   },
   "devDependencies": {
     "esbuild": "^0.25.12",

@@ -27,12 +27,13 @@ StudioMate API 모드는 ARCHIVE PILATES 자사 사이트 운영 전까지 사�
 - 회원목록 엑셀 원본은 엑셀 동기화 전용 다운로드/아카이브 폴더의 최신 `회원목록_*.xlsx`를 우선 사용하고, 없을 때만 Google Drive `회원원본데이터` 폴더의 최신 파일을 사용한다.
 - 기본 실행은 dry-run이다. Firestore 반영은 `--apply`를 붙였을 때만 한다.
 - 기본 반영 대상은 기존 `memberProfiles`와 전화번호, 이름이 매칭되는 회원이다.
-- 1시간 엑셀 동기화 runner는 `--allow-new-excel-profiles --new-excel-profile-max-age-days 3`을 붙여 실행한다.
-- 엑셀에만 있는 사람은 등록일이 3일 이내이고 활성 수강권이 있을 때만 `excel_...` 임시 ID로 회원카드를 만든다. 수강권 없는 상담고객은 회원카드를 만들지 않는다.
+- 1시간 엑셀 동기화 runner는 `--allow-new-excel-profiles`를 붙여 실행한다.
+- 엑셀에만 있는 사람은 활성 수강권이 있을 때 `excel_...` 임시 ID로 회원카드를 만든다. 등록일만으로는 제외하지 않는다. 수강권 없는 상담고객은 회원카드를 만들지 않는다.
 - `excel_...` 임시 ID로 만든 신규회원은 `studiomateMemberIdLookupJobs` 큐를 함께 만든다. StudioMate 메모쓰기 같은 후행 작업은 전화번호/이름으로 StudioMate 실제 회원 ID를 먼저 찾아 `memberProfiles.studiomateMemberId`에 보강한 뒤 진행한다.
 - 단, `등급=상담회원`이고 활성 수강권이 없는 사람은 회원카드는 만들지 않고 Google 연락처만 `이름 상담 YYMMDD` 형식으로 동기화한다. `YYMMDD`는 메모의 상담일을 우선 사용하고 없으면 등록일을 사용한다.
-- Google Contacts 작업 큐는 회원 엑셀 반영과 분리한다. 연락처 LaunchAgent만 `--queue-contact-sync`를 붙여 `contactSyncJobs`를 준비한다.
-- `contactSyncJobs` 생성은 Google Contacts 실제 쓰기와 다르다. 엑셀 동기화 기본모드에서는 Firebase Scheduler `scheduledProcessContactSyncJobs`를 평소 `PAUSED`로 두고, 연락처 LaunchAgent가 필요할 때만 잠깐 실행한 뒤 다시 `PAUSED`로 되돌린다.
+- Google Contacts 작업 큐 준비는 회원목록 다운로드 성공 직후 같은 1시간 엑셀 동기화 runner 안에서 실행한다. runner는 `--queue-contact-sync`를 붙여 `memberContactIndex`와 `contactSyncJobs`를 즉시 갱신한다.
+- `contactSyncJobs` 생성은 Google Contacts 실제 쓰기와 다르다. 엑셀 동기화 runner는 연락처 큐까지만 만들고 Firebase Scheduler `scheduledProcessContactSyncJobs`를 직접 실행하지 않는다.
+- 기존 1시간 연락처 LaunchAgent `com.archive.studiomate-emergency-contacts-sync`는 중복 실행과 실제 Google Contacts 처리 혼선을 막기 위해 자동 실행하지 않고 수동 복구용으로만 보관한다.
 - 연락처 예외 스탭은 회원목록 엑셀에 있더라도 회원 연락처 큐를 만들지 않는다. 현재 예외는 김기효, 김민지, 김아영, 배민진, 이초림, 정은영이다.
 - ARCHIVE IN 앱 안의 출석, 결석, 메모 작성은 버튼과 저장 로직에서 모두 차단한다. 화면 확인과 읽기 전용 운영만 허용한다.
 
@@ -85,10 +86,10 @@ com.archive.archivein-admin-emergency-sync
 
 ARCHIVE IN 운영자 모드의 동기화 버튼은 StudioMate API 동기화를 직접 실행하지 않는다. `adminSyncRequests`에 `requestMode: emergency_excel` 요청을 만들고, 맥미니 LaunchAgent `com.archive.archivein-admin-emergency-sync`가 최대 30초 안에 요청을 받아 `scripts/run-studiomate-excel-emergency-mode.mjs --download --apply`를 실행한다. 앱 버튼은 요청 완료 전까지 잠기며 Firestore의 `progressPercent`, `progressLabel`을 기준으로 진행률을 보여준다.
 
-1시간 간격 연락처 동기화 LaunchAgent:
+수동 복구용 연락처 처리 스크립트:
 
 ```text
-com.archive.studiomate-emergency-contacts-sync
+scripts/run-emergency-contacts-hourly-sync.mjs
 ```
 
 삭제된 수업 로그는 `com.archive.studiomate-excel-emergency-mode` 안에서 회원목록, 수업예약내역과 함께 받는다. 원본 파일은 `~/ArchiveIN/emergency/archive/deleted-class/YYYY-MM-DD/`에 보관하고, 엑셀 행은 `studiomateDeletedClassLogs`에 원본 컬럼과 함께 적재한다.
@@ -106,7 +107,7 @@ com.archive.studiomate-emergency-contacts-sync
 | 예약/수강권 사유 취소 | 삭제이유가 `예약취소`, `수강권 환불`, `수강권 사용불가 처리`, `예약 실패` 등 | 제외 |
 | 그룹 삭제수업 확인필요 | 그룹 수업이고 삭제이유가 일반 `수업 삭제`이며 수업일 7일 미만 전에 삭제됨 | 운영자 확인 후 결정 |
 
-실행 내용:
+복구용 실행 내용:
 
 ```bash
 node scripts/run-emergency-contacts-hourly-sync.mjs
@@ -114,7 +115,7 @@ node scripts/run-emergency-contacts-hourly-sync.mjs
 
 동작:
 
-1. 최신 회원목록 엑셀을 `--apply --queue-contact-sync`로 반영한다.
+1. 최신 회원목록 엑셀을 `--apply --queue-contact-sync`로 다시 반영한다.
 2. `scheduledProcessContactSyncJobs` Scheduler job을 잠깐 `resume`/`run`한다.
 3. `home_archivepilates` 연락처 큐가 0건이 될 때까지 필요한 횟수만 반복 실행한다.
 4. 작업 후 Scheduler job을 다시 `PAUSED`로 돌린다.
@@ -145,7 +146,7 @@ node scripts/run-studiomate-excel-emergency-mode.mjs --reservation-file "/path/t
 엑셀에만 있고 기존 ARCHIVE IN 회원카드가 없는 신규 등록 회원까지 임시 생성:
 
 ```bash
-node scripts/emergency-import-studiomate-member-excel.mjs --allow-new-excel-profiles --new-excel-profile-max-age-days 3
+node scripts/emergency-import-studiomate-member-excel.mjs --allow-new-excel-profiles
 ```
 
 Google Contacts 동기화 큐까지 준비:
