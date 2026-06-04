@@ -20,6 +20,11 @@
 
 - Use the main ARCHIVE IN project chat as the control surface for cross-cutting decisions about the web app, Firebase model, StudioMate sync, Google Contacts, Kakao Alimtalk, and deployment readiness.
 - If a separate chat or agent is used for a narrow subtask, bring the decision/result back into the main ARCHIVE IN chat before treating it as project direction.
+- New ARCHIVE IN threads and exploratory lanes should attach first to the shared `workLanes/{laneId}` incubation structure unless they are clearly a narrow patch to an already promoted lane. Use `workLanes` for inputs, outputs, reports, decisions, jobs, and handoffs while the lane is still provisional.
+- New ARCHIVE IN threads that require code edits must use their own dedicated worktree or branch. Data lane separation does not isolate Git file changes, so do not add new thread code into an already dirty shared deploy worktree.
+- Treat lane setup as a pair: `workLanes/{laneId}` for provisional data and a lane-specific worktree for provisional code. Promote only stable lanes into production collections, canonical queues, or independent Functions codebases.
+- Do not let `workLanes` become a production source of truth. Member-facing actions such as Kakao Alimtalk sends, StudioMate writes, Google Contacts writes, attendance/memo writes, or payment/reservation decisions must use approved canonical collections and source files, not provisional work-lane outputs.
+- Promote a work lane to its own collection or Functions codebase only after documenting source-of-truth, canonical identity key, duplicate handling, allowed readers, forbidden downstream actions, dry-run report path, and verification method.
 - When speed helps and the task can be split safely, use parallel agents, including the Spark model for quick read-only exploration or bounded implementation checks.
 - Use worktrees when a change is non-trivial, experimental, or should be isolated from the current branch.
 - Start live checks with read-only verification of the deployed ARCHIVE IN app, Firebase/Hosting configuration, and visible browser errors before proposing fixes.
@@ -65,6 +70,7 @@ The Functions package declares Node.js `22`. If the machine default is newer, ex
 
 - Firebase Functions are split into four physical codebases: `functions-alimtalk`, `functions-private-chart`, `functions-sync`, and `functions-app`.
 - Shared cross-codebase contracts live in `firebase/packages/contracts`. Put shared event names, queue payloads, Firestore collection names, and codebase ownership constants there before duplicating them in feature code.
+- Functions codebase separation controls deploy scope, not Git cleanliness. If a worktree contains unrelated changes from multiple lanes, affected-only deploy may still be possible, but commit/push must wait until the lane's file changes are isolated.
 - Before changing a Functions deployment path, run `npm run detect:affected-functions` to see which codebases are affected.
 - For local deploys, prefer `npm run deploy:affected-functions:dry` first. Use `npm run deploy:affected-functions -- --base <sha> --head HEAD` only when the user explicitly approves deploy/go-live.
 - Shared files such as `firebase.json`, `firebase/codebase-boundaries.json`, `firebase/packages/contracts/**`, `firebase/kangsain-functions/functions/src/config/**`, `runtime/**`, `types/**`, and broad utility/firestore files affect all four codebases.
