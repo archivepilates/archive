@@ -9,7 +9,7 @@
     <script src="../firebase-config.js"></script>
     <script type="module" src="../assets/app.js"></script>
   </head>
-  <body>
+  <body data-firestore-dashboard data-messages-dashboard>
     <div class="shell">
       <aside class="sidebar" aria-label="ARCHIVE CORE navigation">
         <div class="brand"><div class="brand-mark" aria-hidden="true">CORE</div><strong>ARCHIVE CORE</strong><span>ARCHIVE PILATES Operations Platform</span></div>
@@ -18,7 +18,33 @@
         </nav>
       </aside>
       <main class="main">
-        <header class="page-hero"><p class="eyebrow">MESSAGES</p><h1>알림톡 운영</h1><p class="subtitle">후보, 승인, 발송, 중복방지 기록을 CORE 구조로 점진 전환합니다.</p></header>
+        <header class="topbar">
+          <div class="title-block">
+            <p class="eyebrow">MESSAGES</p>
+            <h1>알림톡 운영</h1>
+            <p class="subtitle">후보, 승인, 발송, 중복방지 기록을 CORE 구조로 점진 전환합니다.</p>
+          </div>
+          <div class="top-actions" aria-label="상태 확인">
+            <div class="connection-card" aria-live="polite"><span id="connectionLabel">로딩</span><strong id="connectionDetail">Firestore 연결 준비 중</strong></div>
+            <button class="refresh-button" id="refreshButton" type="button">새로고침</button>
+          </div>
+        </header>
+        <section class="grid kpis">
+          <article class="panel metric"><div class="metric-label">최근 후보</div><div class="metric-value" id="messagesCandidateCount">0건</div><div class="metric-note">alimtalkCandidates</div></article>
+          <article class="panel metric"><div class="metric-label">최근 발송 로그</div><div class="metric-value" id="messagesSendCount">0건</div><div class="metric-note">alimtalkSends</div></article>
+          <article class="panel metric"><div class="metric-label">발송완료 후보</div><div class="metric-value" id="messagesSentCount">0건</div><div class="metric-note">최근 후보 기준</div></article>
+          <article class="panel metric"><div class="metric-label">실패 로그</div><div class="metric-value" id="messagesFailedCount">0건</div><div class="metric-note">확인 필요</div></article>
+        </section>
+        <section class="grid overview-grid">
+          <article class="panel">
+            <div class="panel-header"><div><h2>최근 알림톡 후보</h2><p>alimtalkCandidates의 최근 상태입니다.</p></div><span class="pill">candidates</span></div>
+            <div class="list" id="messagesCandidateList"><div class="empty-state">Firestore 연결 후 후보 기록을 표시합니다.</div></div>
+          </article>
+          <article class="panel">
+            <div class="panel-header"><div><h2>최근 발송 로그</h2><p>alimtalkSends의 최근 처리 결과입니다.</p></div><span class="pill">sends</span></div>
+            <div class="list" id="messagesSendList"><div class="empty-state">Firestore 연결 후 발송 기록을 표시합니다.</div></div>
+          </article>
+        </section>
         <section class="grid data-grid">
           <article class="panel detail-card"><span class="pill good">기존 유지</span><h2>communicationCandidates</h2><p>후보 선정 원천은 검증 전까지 기존 알림톡 로직을 유지.</p></article>
           <article class="panel detail-card"><span class="pill">승인</span><h2>communicationApprovals</h2><p>운영자 승인 여부와 승인 시각을 발송 로그와 분리.</p></article>

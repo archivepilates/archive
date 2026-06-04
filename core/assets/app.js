@@ -11,6 +11,8 @@ const state = {
   businessMembers: [],
   members: [],
   memberDetail: null,
+  alimtalkCandidates: [],
+  alimtalkSends: [],
   privateRequests: [],
   privateRecords: [],
   privateUsageEvents: [],
@@ -501,6 +503,44 @@ function renderMembers(items) {
     .join("");
 }
 
+function renderMessages(candidates, sends) {
+  if (!qs("messagesCandidateList")) return;
+  const sentCandidates = candidates.filter((item) => String(item.status || "").toLowerCase() === "sent");
+  const failedSends = sends.filter((item) => ["failed", "error"].includes(String(item.status || "").toLowerCase()));
+  setText("messagesCandidateCount", formatCount(candidates.length));
+  setText("messagesSendCount", formatCount(sends.length));
+  setText("messagesSentCount", formatCount(sentCandidates.length));
+  setText("messagesFailedCount", formatCount(failedSends.length));
+
+  const renderAlimtalkRow = (item, options = {}) => {
+    const template = item.title || item.templateName || item.templateCode || item.type || "알림톡";
+    const member = item.memberName || item.name || item.memberId || item.id;
+    const date = formatDate(item.sentAt || item.updatedAt || item.createdAt || item.sourceDate);
+    const reason = item.reason || item.lastError || item.dedupePolicy || item.candidateId || "";
+    return `
+      <div class="status-row">
+        <div>
+          <strong>${escapeHtml(member)}</strong>
+          <p>${escapeHtml(template)} · ${escapeHtml(date)}${reason ? ` · ${escapeHtml(reason)}` : ""}</p>
+        </div>
+        ${pill(options.status?.(item) || item.status || item.sendStatus)}
+      </div>
+    `;
+  };
+
+  const candidateList = qs("messagesCandidateList");
+  candidateList.innerHTML = candidates.length
+    ? candidates.map((item) => renderAlimtalkRow(item)).join("")
+    : `<div class="empty-state">최근 alimtalkCandidates 문서가 없습니다.</div>`;
+
+  const sendList = qs("messagesSendList");
+  if (sendList) {
+    sendList.innerHTML = sends.length
+      ? sends.map((item) => renderAlimtalkRow(item, { status: (send) => send.status || "done" })).join("")
+      : `<div class="empty-state">최근 alimtalkSends 문서가 없습니다.</div>`;
+  }
+}
+
 function renderMiniList(id, items, options = {}) {
   const list = qs(id);
   if (!list) return;
@@ -950,6 +990,8 @@ function renderFallback(error) {
   renderAutomation([]);
   renderImports([]);
   renderQualityIssues([]);
+  renderMembers([]);
+  renderMessages([], []);
   renderMemberDetail(null);
   renderPrivate([], [], [], []);
   renderBusinessFallback(error);
@@ -972,6 +1014,7 @@ async function refresh() {
     const { db, doc, getDoc } = runtime;
     const shouldLoadBusiness = Boolean(qs("businessMonthSelect"));
     const shouldLoadMembers = Boolean(qs("membersTable"));
+    const shouldLoadMessages = Boolean(qs("messagesCandidateList"));
     const shouldLoadMemberDetail = Boolean(qs("memberDetailName"));
     const shouldLoadPrivate = Boolean(qs("privateRequestList"));
     const [
@@ -981,6 +1024,8 @@ async function refresh() {
       qualityIssues,
       dashboardSnapshot,
       members,
+      alimtalkCandidates,
+      alimtalkSends,
       memberDetail,
       businessMembers,
       privateRequests,
@@ -993,7 +1038,9 @@ async function refresh() {
       getRecentCollection(db, runtime, "sourceImports"),
       getRecentCollection(db, runtime, "dataQualityIssues", 12),
       shouldLoadBusiness ? getDoc(doc(db, "dashboardSnapshots", "current")) : Promise.resolve(null),
-      shouldLoadMembers ? getRecentCollection(db, runtime, "members", 12) : Promise.resolve([]),
+      shouldLoadMembers ? getRecentCollectionBy(db, runtime, "member360Cards", "totalRevenue", 12) : Promise.resolve([]),
+      shouldLoadMessages ? getRecentCollectionBy(db, runtime, "alimtalkCandidates", "updatedAt", 12) : Promise.resolve([]),
+      shouldLoadMessages ? getRecentCollectionBy(db, runtime, "alimtalkSends", "updatedAt", 12) : Promise.resolve([]),
       shouldLoadMemberDetail ? loadMemberDetail(runtime, memberDetailId()) : Promise.resolve(null),
       shouldLoadBusiness ? getRecentCollectionBy(db, runtime, "member360Cards", "totalRevenue", 8) : Promise.resolve([]),
       shouldLoadPrivate ? getRecentCollectionBy(db, runtime, "privateLessonChartRequests", "createdAt", 8) : Promise.resolve([]),
@@ -1007,6 +1054,8 @@ async function refresh() {
     state.sourceImports = sourceImports;
     state.qualityIssues = qualityIssues;
     state.members = members;
+    state.alimtalkCandidates = alimtalkCandidates;
+    state.alimtalkSends = alimtalkSends;
     state.memberDetail = memberDetail;
     state.businessMembers = businessMembers;
     state.privateRequests = privateRequests;
@@ -1018,6 +1067,7 @@ async function refresh() {
     renderImports(sourceImports);
     renderQualityIssues(qualityIssues);
     renderMembers(members);
+    renderMessages(alimtalkCandidates, alimtalkSends);
     renderMemberDetail(memberDetail);
     renderPrivate(privateRequests, privateRecords, privateUsageEvents, privateLedgerEntries);
     if (shouldLoadBusiness) {
