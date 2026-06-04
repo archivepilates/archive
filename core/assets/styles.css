@@ -542,9 +542,24 @@ a.panel {
 }
 
 [data-member-detail-dashboard] .overview-grid > .panel,
-[data-member-detail-dashboard] .summary-grid > .panel,
-[data-member-detail-dashboard] .data-grid > .panel {
+[data-member-detail-dashboard] .summary-grid > .panel {
   height: 100%;
+}
+
+[data-member-detail-dashboard] .data-grid {
+  align-items: start;
+}
+
+[data-member-detail-dashboard] .data-grid > .panel:not(.detail-card) {
+  display: flex;
+  flex-direction: column;
+  height: 520px;
+}
+
+[data-member-detail-dashboard] .data-grid > .panel:not(.detail-card) > .list {
+  min-height: 0;
+  flex: 1;
+  overflow-y: auto;
 }
 
 [data-member-detail-dashboard] .kpis > .panel + .panel,
@@ -1201,10 +1216,18 @@ a.rank-row:hover,
   }
 
   [data-member-detail-dashboard] .profile-hero,
-  [data-member-detail-dashboard] .metric,
   [data-member-detail-dashboard] .detail-card {
     height: auto;
     min-height: 0;
+  }
+
+  [data-member-detail-dashboard] .metric {
+    height: auto;
+    min-height: 146px;
+  }
+
+  [data-member-detail-dashboard] .data-grid > .panel:not(.detail-card) {
+    height: 480px;
   }
 
   .business-hero {
