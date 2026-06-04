@@ -56,6 +56,24 @@
           <article class="panel metric"><div class="metric-label">최근 방문</div><div class="metric-value" id="memberDetailRecentVisit">-</div><div class="metric-note">recentVisitAt</div></article>
         </section>
 
+        <section class="grid overview-grid">
+          <article class="panel">
+            <div class="panel-header"><div><h2>운영 판단</h2><p>이 회원을 볼 때 먼저 확인할 상태입니다.</p></div><span class="pill good">decision</span></div>
+            <div class="list" id="memberDetailDecisionList"><div class="empty-state">Firestore 연결 후 판단 항목을 표시합니다.</div></div>
+          </article>
+          <aside class="panel">
+            <div class="panel-header"><div><h2>다음 확인</h2><p>회원 맥락에서 이어서 볼 운영 화면입니다.</p></div><span class="pill">drilldown</span></div>
+            <div class="list" id="memberDetailNextList"><div class="empty-state">회원 정보 연결 후 표시합니다.</div></div>
+          </aside>
+        </section>
+
+        <section class="grid summary-grid">
+          <article class="panel detail-card"><span class="pill">메모</span><h2 id="memberDetailMemoCount">0건</h2><p>최근 운영 메모와 StudioMate 복사 상태를 함께 확인합니다.</p></article>
+          <article class="panel detail-card"><span class="pill">알림톡</span><h2 id="memberDetailAlimtalkCount">0건</h2><p>후보/발송 이력은 검토용이며 실제 발송 원천은 canonical collection입니다.</p></article>
+          <article class="panel detail-card"><span class="pill warn">품질 이슈</span><h2 id="memberDetailQualityCount">0건</h2><p>전화번호, 동명이인, 임시 ID, 중복 fallback 여부를 확인합니다.</p></article>
+          <article class="panel detail-card"><span class="pill good">경영 연결</span><h2>회원 맥락</h2><p>누적 매출, 출석, 활성 수강권을 경영 판단과 함께 봅니다.</p></article>
+        </section>
+
         <section class="grid data-grid">
           <article class="panel">
             <div class="panel-header"><div><h2>현재 수강권</h2><p>활성 수강권 요약과 만료/잔여 상태입니다.</p></div><span class="pill">tickets</span></div>
@@ -76,6 +94,10 @@
           <article class="panel">
             <div class="panel-header"><div><h2>알림톡 로그</h2><p>최근 발송/후보 기록의 검토용 요약입니다.</p></div><span class="pill">alimtalk</span></div>
             <div class="list" id="memberDetailAlimtalkList"><div class="empty-state">Firestore 연결 후 표시합니다.</div></div>
+          </article>
+          <article class="panel">
+            <div class="panel-header"><div><h2>데이터 품질</h2><p>외부 실행 전에 확인해야 할 매칭/원천 이슈입니다.</p></div><span class="pill danger">quality</span></div>
+            <div class="list" id="memberDetailQualityList"><div class="empty-state">Firestore 연결 후 표시합니다.</div></div>
           </article>
           <article class="panel detail-card">
             <span class="pill">identity</span>

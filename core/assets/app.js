@@ -92,6 +92,12 @@ function formatRate(value) {
   return `${value.toFixed(1)}%`;
 }
 
+function memberDetailHref(memberId, depth = "root") {
+  if (!memberId) return depth === "nested" ? "../../members/" : "../members/";
+  const prefix = depth === "nested" ? "../../members/detail/" : "../members/detail/";
+  return `${prefix}?id=${encodeURIComponent(memberId)}`;
+}
+
 function deltaText(current, previous, suffix = "%") {
   if (!Number.isFinite(current) || !Number.isFinite(previous) || previous === 0) return "비교 데이터 대기";
   const diff = suffix === "%p" ? current - previous : ((current - previous) / previous) * 100;
@@ -375,12 +381,22 @@ function renderLane(lane) {
 }
 
 function renderAutomation(items) {
+  const failedItems = items.filter((item) =>
+    ["failed", "error", "critical", "blocked"].includes(String(item.status || item.health || "").toLowerCase()),
+  );
+  const latestItem = [...items].sort((a, b) => {
+    const left = new Date(a.updatedAt?.toDate?.() || a.updatedAt || a.lastRunAt || a.checkedAt || 0).getTime();
+    const right = new Date(b.updatedAt?.toDate?.() || b.updatedAt || b.lastRunAt || b.checkedAt || 0).getTime();
+    return right - left;
+  })[0];
   const automationMode = qs("automationMode");
   if (automationMode) {
-    automationMode.textContent = items.length ? "연결" : "기록 대기";
-    automationMode.className = `pill ${items.length ? "good" : "warn"}`;
+    automationMode.textContent = failedItems.length ? "확인 필요" : items.length ? "연결" : "기록 대기";
+    automationMode.className = `pill ${failedItems.length ? "danger" : items.length ? "good" : "warn"}`;
   }
   setText("automationStatusCount", formatCount(items.length));
+  setText("automationFailedCount", formatCount(failedItems.length));
+  setText("automationRecentRun", latestItem ? formatDate(latestItem.updatedAt || latestItem.lastRunAt || latestItem.checkedAt) : "기록 대기");
   setText("automationConnectedState", items.length ? "상태 문서 연결됨" : "컬렉션 연결 · 기록 없음");
   setText(
     "automationNextAction",
@@ -401,11 +417,13 @@ function renderAutomation(items) {
       const name = item.title || item.name || item.id;
       const detail = item.summary || item.message || item.lastResult || item.description || "상세 기록 없음";
       const updated = formatDate(item.updatedAt || item.lastRunAt || item.checkedAt);
+      const nextRun = item.nextRunAt || item.nextScheduledAt ? ` · 다음 ${formatDate(item.nextRunAt || item.nextScheduledAt)}` : "";
+      const error = item.lastError || item.errorMessage ? ` · ${item.lastError || item.errorMessage}` : "";
       return `
         <div class="status-row">
           <div>
             <strong>${escapeHtml(name)}</strong>
-            <p>${escapeHtml(detail)} · ${escapeHtml(updated)}</p>
+            <p>${escapeHtml(detail)} · ${escapeHtml(updated)}${escapeHtml(nextRun)}${escapeHtml(error)}</p>
           </div>
           ${pill(item.status || item.health)}
         </div>
@@ -436,11 +454,12 @@ function renderAutomation(items) {
       .map((flow) => {
         const status = flow.source?.status || flow.source?.health || (flow.source ? "active" : "pending");
         const updated = flow.source ? formatDate(flow.source.updatedAt || flow.source.lastRunAt || flow.source.checkedAt) : "기록 대기";
+        const lastResult = flow.source?.lastResult || flow.source?.summary || flow.source?.message || flow.detail;
         return `
           <div class="status-row">
             <div>
               <strong>${escapeHtml(flow.title)}</strong>
-              <p>${escapeHtml(flow.detail)} · ${escapeHtml(updated)}</p>
+              <p>${escapeHtml(lastResult)} · ${escapeHtml(updated)}</p>
             </div>
             ${pill(status)}
           </div>
@@ -494,17 +513,30 @@ function renderQualityIssues(items) {
     .map((item) => {
       const title = item.title || item.issueType || item.id;
       const detail = item.summary || item.description || item.memberName || "상세 기록 없음";
+      const action = qualityActionText(item);
+      const href = item.memberId ? memberDetailHref(item.memberId) : null;
+      const tagName = href ? "a" : "div";
+      const attrs = href ? ` class="status-row status-link" href="${escapeHtml(href)}"` : ` class="status-row"`;
       return `
-        <div class="status-row">
+        <${tagName}${attrs}>
           <div>
             <strong>${escapeHtml(title)}</strong>
-            <p>${escapeHtml(detail)}</p>
+            <p>${escapeHtml(detail)} · ${escapeHtml(action)}</p>
           </div>
           ${pill(item.severity || item.status)}
-        </div>
+        </${tagName}>
       `;
     })
     .join("");
+}
+
+function qualityActionText(item) {
+  const type = String(item.issueType || item.type || item.title || "").toLowerCase();
+  if (type.includes("phone") || type.includes("전화")) return "전화번호 확인 전 외부 실행 보류";
+  if (type.includes("duplicate") || type.includes("중복")) return "canonical key 기준 우선순위 확인";
+  if (type.includes("name") || type.includes("동명이인")) return "이름 단독 매칭 금지, 전화번호/StudioMate ID 확인";
+  if (type.includes("excel")) return "실제 StudioMate memberId 해소 후 사용";
+  return "운영자가 원천/매칭 상태 확인";
 }
 
 function matchesMemberSearch(item) {
@@ -606,6 +638,40 @@ function renderMessages(candidates, sends) {
       : `<div class="empty-state">최근 alimtalkSends 문서가 없습니다.</div>`;
   }
 
+  const templateList = qs("messagesTemplateList");
+  if (templateList) {
+    const templateMap = new Map();
+    for (const item of [...candidates, ...sends]) {
+      const key = item.title || item.templateName || item.templateCode || item.type || "알림톡";
+      const current = templateMap.get(key) || { label: key, candidates: 0, sends: 0, failed: 0, sent: 0 };
+      if (candidates.includes(item)) current.candidates += 1;
+      if (sends.includes(item)) current.sends += 1;
+      const status = String(item.status || item.sendStatus || "").toLowerCase();
+      if (["failed", "error"].includes(status)) current.failed += 1;
+      if (["sent", "done", "success", "completed"].includes(status)) current.sent += 1;
+      templateMap.set(key, current);
+    }
+    const rows = [...templateMap.values()]
+      .sort((a, b) => b.failed - a.failed || b.sends + b.candidates - (a.sends + a.candidates))
+      .slice(0, 8);
+    templateList.innerHTML = rows.length
+      ? rows
+          .map((row) => {
+            const status = row.failed ? "failed" : row.sent ? "success" : "active";
+            return `
+              <div class="status-row">
+                <div>
+                  <strong>${escapeHtml(row.label)}</strong>
+                  <p>후보 ${escapeHtml(row.candidates)}건 · 발송 ${escapeHtml(row.sends)}건 · 실패 ${escapeHtml(row.failed)}건</p>
+                </div>
+                ${pill(status)}
+              </div>
+            `;
+          })
+          .join("")
+      : `<div class="empty-state">최근 템플릿별 기록이 없습니다.</div>`;
+  }
+
   const decisionList = qs("messagesDecisionList");
   if (decisionList) {
     const rows = [
@@ -690,6 +756,14 @@ function renderMemberDetail(detail) {
   const memos = detail?.memos?.length ? detail.memos : merged.recentMemos || [];
   const alimtalkLogs = detail?.alimtalkLogs?.length ? detail.alimtalkLogs : merged.recentAlimtalk || [];
   const tags = detail?.tags?.length ? detail.tags : merged.tags || [];
+  const relatedIssues = state.qualityIssues.filter((item) => {
+    const target = [item.memberId, item.memberName, item.name, item.profileId].filter(Boolean).join(" ");
+    return target.includes(member.memberId || detail?.id || "") || target.includes(member.name || member.memberName || "");
+  });
+  const openSignals = signals.filter((signal) => {
+    const level = typeof signal === "string" ? "" : signal.level || signal.severity;
+    return ["critical", "danger", "error", "warning", "warn"].includes(String(level || "").toLowerCase());
+  });
 
   setText("memberDetailName", member.name || member.memberName || detail?.id || "회원");
   setText(
@@ -702,6 +776,9 @@ function renderMemberDetail(detail) {
   setText("memberDetailRecentVisit", formatDate(member.recentVisitAt));
   setText("memberDetailRegisteredAt", shortDate(member.registeredAt));
   setText("memberDetailUpdatedAt", formatDate(member.updatedAt || summary.updatedAt));
+  setText("memberDetailMemoCount", formatCount(memos.length));
+  setText("memberDetailAlimtalkCount", formatCount(alimtalkLogs.length));
+  setText("memberDetailQualityCount", formatCount(relatedIssues.length));
 
   const signalList = qs("memberDetailSignals");
   if (signalList) {
@@ -714,6 +791,64 @@ function renderMemberDetail(detail) {
           })
           .join("")
       : `<span class="pill">신호 없음</span>`;
+  }
+
+  const decisionList = qs("memberDetailDecisionList");
+  if (decisionList) {
+    const rows = [
+      {
+        title: openSignals.length ? "주의 신호 확인" : "주의 신호 낮음",
+        detail: openSignals.length
+          ? `${openSignals.length}개 신호가 있습니다. 수강권, 메모, 알림톡 상태를 먼저 확인하세요.`
+          : "현재 read-model 기준 긴급 신호는 보이지 않습니다.",
+        status: openSignals.length ? "warning" : "success",
+      },
+      {
+        title: toNumber(member.activeTicketCount || tickets.length) ? "수강권 보유" : "수강권 확인 필요",
+        detail: toNumber(member.activeTicketCount || tickets.length)
+          ? "현재 수강권 요약이 있어 최근 예약/출석과 함께 보면 됩니다."
+          : "활성 수강권 요약이 없으므로 상담/미등록/만료 상태를 확인하세요.",
+        status: toNumber(member.activeTicketCount || tickets.length) ? "active" : "warning",
+      },
+      {
+        title: relatedIssues.length ? "데이터 품질 이슈 있음" : "품질 이슈 없음",
+        detail: relatedIssues.length
+          ? "전화번호, 임시 ID, 중복 fallback 등 외부 실행 전 확인이 필요합니다."
+          : "최근 열린 품질 이슈와 직접 연결된 항목은 보이지 않습니다.",
+        status: relatedIssues.length ? "warning" : "success",
+      },
+    ];
+    decisionList.innerHTML = rows
+      .map(
+        (row) => `
+          <div class="status-row">
+            <div><strong>${escapeHtml(row.title)}</strong><p>${escapeHtml(row.detail)}</p></div>
+            ${pill(row.status)}
+          </div>
+        `,
+      )
+      .join("");
+  }
+
+  const nextList = qs("memberDetailNextList");
+  if (nextList) {
+    const id = member.memberId || detail?.id;
+    const links = [
+      { title: "알림톡 이력 확인", detail: "최근 후보/발송 로그와 템플릿 상태를 함께 봅니다.", href: "../../messages/", status: "active" },
+      { title: "원본 품질 확인", detail: "중복, 임시 ID, name-only match 여부를 확인합니다.", href: "../../imports/", status: relatedIssues.length ? "warning" : "active" },
+      { title: "경영 맥락 확인", detail: "매출 상위/ACM 후보/장기회원 판단 흐름과 연결합니다.", href: "../../business/", status: toNumber(member.totalRevenue) ? "success" : "active" },
+      { title: "회원 목록으로 돌아가기", detail: id ? `${id} 기준 검색/비교를 이어갑니다.` : "다른 회원을 검색합니다.", href: "../", status: "active" },
+    ];
+    nextList.innerHTML = links
+      .map(
+        (row) => `
+          <a class="status-row status-link" href="${row.href}">
+            <div><strong>${escapeHtml(row.title)}</strong><p>${escapeHtml(row.detail)}</p></div>
+            ${pill(row.status)}
+          </a>
+        `,
+      )
+      .join("");
   }
 
   renderMiniList("memberDetailTicketsList", tickets, {
@@ -775,6 +910,13 @@ function renderMemberDetail(detail) {
       ? values.map((tag) => `<span class="pill">${escapeHtml(tag)}</span>`).join("")
       : `<span class="pill">태그 없음</span>`;
   }
+
+  renderMiniList("memberDetailQualityList", relatedIssues, {
+    empty: "이 회원과 직접 연결된 열린 품질 이슈가 없습니다.",
+    title: (item) => item.title || item.issueType || item.id,
+    detail: (item) => [item.summary || item.description || "상세 기록 없음", qualityActionText(item)].filter(Boolean).join(" · "),
+    status: (item) => item.severity || item.status,
+  });
 }
 
 function signalTone(value) {
@@ -1062,14 +1204,15 @@ function renderBusinessMemberInsights(items) {
   list.innerHTML = items
     .map((item, index) => {
       const name = item.name || item.memberName || item.memberId || item.id;
+      const id = item.memberId || item.id;
       const visits = item.attendedCount ? `출석 ${item.attendedCount}회` : "출석 요약 대기";
       const tickets = item.activeTicketCount ? `활성 ${item.activeTicketCount}개` : "활성 수강권 없음";
       return `
-        <div class="rank-row">
+        <a class="rank-row rank-link" href="${memberDetailHref(id)}">
           <span>${index + 1}</span>
           <strong>${escapeHtml(name)}<small>${escapeHtml(visits)} · ${escapeHtml(tickets)}</small></strong>
           <em>${escapeHtml(formatManwon(toNumber(item.totalRevenue)))}</em>
-        </div>
+        </a>
       `;
     })
     .join("");
