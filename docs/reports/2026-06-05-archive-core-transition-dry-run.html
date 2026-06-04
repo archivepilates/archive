@@ -1,0 +1,248 @@
+<!doctype html>
+<html lang="ko">
+<head>
+  <meta charset="utf-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1" />
+  <title>ARCHIVE CORE 전환 데이터 리포트</title>
+  <style>
+    :root { --bg:#f4f1ea; --paper:#fffefa; --text:#101828; --muted:#667085; --line:#d8dee8; --accent:#f5661f; --green:#08775f; --warn:#b54708; --red:#b42318; }
+    * { box-sizing:border-box; }
+    body { margin:0; font-family:-apple-system,BlinkMacSystemFont,"Apple SD Gothic Neo","Noto Sans KR",sans-serif; background:var(--bg); color:var(--text); line-height:1.58; }
+    main { max-width:1180px; margin:0 auto; padding:40px 20px 72px; }
+    h1 { margin:0; font-size:30px; letter-spacing:0; }
+    h2 { margin:34px 0 12px; font-size:19px; }
+    p { margin:8px 0 0; color:var(--muted); }
+    .panel { margin-top:18px; background:var(--paper); border:1px solid var(--line); border-radius:8px; padding:22px; box-shadow:0 12px 30px rgba(16,24,40,.06); }
+    .grid { display:grid; grid-template-columns:repeat(auto-fit,minmax(min(100%,190px),1fr)); gap:12px; }
+    .metric { border:1px solid var(--line); border-radius:8px; padding:16px; background:#fff; min-width:0; }
+    .label { color:var(--muted); font-size:13px; font-weight:700; }
+    .value { margin-top:4px; font-size:26px; font-weight:800; }
+    .accent { color:var(--accent); }
+    .green { color:var(--green); }
+    .warn { color:var(--warn); }
+    .red { color:var(--red); }
+    table { width:100%; border-collapse:collapse; background:#fff; border:1px solid var(--line); border-radius:8px; overflow:hidden; }
+    th,td { padding:11px 12px; border-bottom:1px solid var(--line); text-align:left; vertical-align:top; font-size:14px; }
+    th { background:#eef2f7; color:#344054; }
+    tr:last-child td { border-bottom:0; }
+    code { font-family:ui-monospace,SFMono-Regular,Menlo,monospace; font-size:12px; overflow-wrap:anywhere; }
+    ul { margin:10px 0 0; padding-left:20px; color:var(--muted); }
+    @media (max-width:520px) { main { padding:28px 12px 56px; } .panel { padding:16px; } .value { font-size:23px; } th,td { font-size:13px; } }
+  </style>
+</head>
+<body>
+<main>
+  <h1>ARCHIVE CORE 전환 데이터 리포트</h1>
+  <p>dry-run · 2026-06-04T16:59:56.321Z · 외부 발송/쓰기 원천은 변경하지 않았습니다.</p>
+
+  <section class="panel">
+    <div class="grid">
+      <div class="metric"><div class="label">선택 회원</div><div class="value accent">6</div></div>
+      <div class="metric"><div class="label">이용 이벤트</div><div class="value green">2,530</div></div>
+      <div class="metric"><div class="label">프라이빗 장부</div><div class="value green">307</div></div>
+      <div class="metric"><div class="label">수강권</div><div class="value ">80</div></div>
+      <div class="metric"><div class="label">결제 이벤트</div><div class="value ">80</div></div>
+      <div class="metric"><div class="label">예상 writes</div><div class="value ">7,764</div></div>
+    </div>
+  </section>
+
+  <section class="panel">
+    <h2>Shadow Compare</h2>
+    <p>개인 이용내역 원본을 기존 bookings와 비교했습니다. bookings에 없는 과거 이용내역은 CORE 회차 계산 보강 대상입니다.</p>
+    <div class="grid">
+      <div class="metric"><div class="label">기존 bookings</div><div class="value ">628</div></div>
+      <div class="metric"><div class="label">일치</div><div class="value green">0</div></div>
+      <div class="metric"><div class="label">시간만 일치</div><div class="value warn">516</div></div>
+      <div class="metric"><div class="label">상태 충돌</div><div class="value warn">1</div></div>
+      <div class="metric"><div class="label">bookings 누락</div><div class="value warn">2,013</div></div>
+    </div>
+    <h2>판정 분포</h2>
+    <table><thead><tr><th>항목</th><th>건수</th></tr></thead><tbody><tr><td>existing_same_loose</td><td>516</td></tr><tr><td>missing_from_bookings</td><td>2,013</td></tr><tr><td>status_conflict_loose</td><td>1</td></tr></tbody></table>
+  </section>
+
+  <section class="panel">
+    <h2>정규화 분포</h2>
+    <div class="grid">
+      <div><table><thead><tr><th>수업 유형</th><th>건수</th></tr></thead><tbody><tr><td>group</td><td>2,162</td></tr><tr><td>private</td><td>368</td></tr></tbody></table></div>
+      <div><table><thead><tr><th>이용 상태</th><th>건수</th></tr></thead><tbody><tr><td>absent</td><td>31</td></tr><tr><td>attended</td><td>1,710</td></tr><tr><td>cancelled</td><td>773</td></tr><tr><td>reserved</td><td>14</td></tr><tr><td>unknown</td><td>2</td></tr></tbody></table></div>
+      <div><table><thead><tr><th>컬렉션</th><th>건수</th></tr></thead><tbody><tr><td>lessonOccurrences</td><td>2,237</td></tr><tr><td>memberPaymentEvents</td><td>80</td></tr><tr><td>memberTickets</td><td>80</td></tr><tr><td>memberUsageEvents</td><td>2,530</td></tr><tr><td>privateSessionLedger</td><td>307</td></tr><tr><td>reservations</td><td>2,530</td></tr></tbody></table></div>
+    </div>
+  </section>
+
+  <section class="panel">
+    <h2>가드레일</h2>
+    <ul><li>This script writes only ARCHIVE CORE collections when --apply is used.</li><li>It does not write bookings, lectures, alimtalkCandidates, contactSyncJobs, StudioMate, or Google Contacts.</li><li>External sends and writes must continue using existing canonical sources until operator-approved shadow compare.</li></ul>
+  </section>
+
+  <section class="panel">
+    <h2>상태 충돌 예시</h2>
+    <table><thead><tr><th>회원</th><th>수업</th><th>CORE 상태</th><th>기존 booking</th></tr></thead><tbody><tr>
+        <td>조민정<br><code>3030691</code></td>
+        <td>2026-04-01T08:00:00+09:00<br>모터(펑셔널트레이닝)<br><span class="label">정은영</span></td>
+        <td>cancelled<br><code>group</code></td>
+        <td><code>{&quot;bookingId&quot;:&quot;excel_booking_ea0d397fa9de47accf&quot;,&quot;appStatus&quot;:&quot;reserved&quot;,&quot;attendanceStatus&quot;:&quot;attended&quot;,&quot;title&quot;:&quot;&quot;,&quot;staffName&quot;:&quot;정은영&quot;}</code></td>
+      </tr></tbody></table>
+    <h2>bookings 누락 예시</h2>
+    <table><thead><tr><th>회원</th><th>수업</th><th>CORE 상태</th><th>기존 booking</th></tr></thead><tbody><tr>
+        <td>정숙자<br><code>1985970</code></td>
+        <td>2023-03-06T11:00:00+09:00<br>바렐/캐딜락<br><span class="label">배민진</span></td>
+        <td>attended<br><code>group</code></td>
+        <td><code>{}</code></td>
+      </tr><tr>
+        <td>정숙자<br><code>1985970</code></td>
+        <td>2023-03-08T11:00:00+09:00<br>체어/바렐<br><span class="label">배민진</span></td>
+        <td>cancelled<br><code>group</code></td>
+        <td><code>{}</code></td>
+      </tr><tr>
+        <td>정숙자<br><code>1985970</code></td>
+        <td>2023-03-08T20:30:00+09:00<br>체어/바렐<br><span class="label">배민진</span></td>
+        <td>attended<br><code>group</code></td>
+        <td><code>{}</code></td>
+      </tr><tr>
+        <td>정숙자<br><code>1985970</code></td>
+        <td>2023-03-09T14:00:00+09:00<br>바렐/캐딜락<br><span class="label">배민진</span></td>
+        <td>attended<br><code>group</code></td>
+        <td><code>{}</code></td>
+      </tr><tr>
+        <td>정숙자<br><code>1985970</code></td>
+        <td>2023-03-09T20:00:00+09:00<br>바렐/캐딜락<br><span class="label">배민진</span></td>
+        <td>cancelled<br><code>group</code></td>
+        <td><code>{}</code></td>
+      </tr><tr>
+        <td>정숙자<br><code>1985970</code></td>
+        <td>2023-03-10T11:00:00+09:00<br>캐딜락/체어<br><span class="label">배민진</span></td>
+        <td>cancelled<br><code>group</code></td>
+        <td><code>{}</code></td>
+      </tr><tr>
+        <td>구아름<br><code>2047962</code></td>
+        <td>2023-03-11T10:00:00+09:00<br>바렐/캐딜락<br><span class="label">배민진</span></td>
+        <td>attended<br><code>group</code></td>
+        <td><code>{}</code></td>
+      </tr><tr>
+        <td>정숙자<br><code>1985970</code></td>
+        <td>2023-03-12T11:00:00+09:00<br>캐딜락/체어<br><span class="label">김민지</span></td>
+        <td>attended<br><code>group</code></td>
+        <td><code>{}</code></td>
+      </tr><tr>
+        <td>정숙자<br><code>1985970</code></td>
+        <td>2023-03-13T09:30:00+09:00<br>바렐/체어<br><span class="label">배민진</span></td>
+        <td>attended<br><code>group</code></td>
+        <td><code>{}</code></td>
+      </tr><tr>
+        <td>정숙자<br><code>1985970</code></td>
+        <td>2023-03-13T11:00:00+09:00<br>바렐/캐딜락<br><span class="label">배민진</span></td>
+        <td>cancelled<br><code>group</code></td>
+        <td><code>{}</code></td>
+      </tr><tr>
+        <td>정숙자<br><code>1985970</code></td>
+        <td>2023-03-14T09:30:00+09:00<br>캐딜락/체어<br><span class="label">배민진</span></td>
+        <td>attended<br><code>group</code></td>
+        <td><code>{}</code></td>
+      </tr><tr>
+        <td>정숙자<br><code>1985970</code></td>
+        <td>2023-03-14T14:00:00+09:00<br>캐딜락/체어<br><span class="label">배민진</span></td>
+        <td>cancelled<br><code>group</code></td>
+        <td><code>{}</code></td>
+      </tr><tr>
+        <td>정숙자<br><code>1985970</code></td>
+        <td>2023-03-15T19:30:00+09:00<br>체어/바렐<br><span class="label">배민진</span></td>
+        <td>cancelled<br><code>group</code></td>
+        <td><code>{}</code></td>
+      </tr><tr>
+        <td>정숙자<br><code>1985970</code></td>
+        <td>2023-03-15T20:30:00+09:00<br>체어/바렐<br><span class="label">배민진</span></td>
+        <td>attended<br><code>group</code></td>
+        <td><code>{}</code></td>
+      </tr><tr>
+        <td>정숙자<br><code>1985970</code></td>
+        <td>2023-03-16T09:30:00+09:00<br>바렐/캐딜락<br><span class="label">배민진</span></td>
+        <td>attended<br><code>group</code></td>
+        <td><code>{}</code></td>
+      </tr><tr>
+        <td>정숙자<br><code>1985970</code></td>
+        <td>2023-03-16T14:00:00+09:00<br>바렐/캐딜락<br><span class="label">배민진</span></td>
+        <td>cancelled<br><code>group</code></td>
+        <td><code>{}</code></td>
+      </tr><tr>
+        <td>정숙자<br><code>1985970</code></td>
+        <td>2023-03-17T11:00:00+09:00<br>캐딜락/체어<br><span class="label">배민진</span></td>
+        <td>cancelled<br><code>group</code></td>
+        <td><code>{}</code></td>
+      </tr><tr>
+        <td>정숙자<br><code>1985970</code></td>
+        <td>2023-03-18T09:00:00+09:00<br>바렐/캐딜락<br><span class="label">김민지</span></td>
+        <td>cancelled<br><code>group</code></td>
+        <td><code>{}</code></td>
+      </tr><tr>
+        <td>정숙자<br><code>1985970</code></td>
+        <td>2023-03-19T10:00:00+09:00<br>캐딜락/체어<br><span class="label">김민지</span></td>
+        <td>attended<br><code>group</code></td>
+        <td><code>{}</code></td>
+      </tr><tr>
+        <td>정숙자<br><code>1985970</code></td>
+        <td>2023-03-21T09:00:00+09:00<br>캐딜락/체어<br><span class="label">배민진</span></td>
+        <td>attended<br><code>group</code></td>
+        <td><code>{}</code></td>
+      </tr><tr>
+        <td>정숙자<br><code>1985970</code></td>
+        <td>2023-03-23T09:00:00+09:00<br>바렐/캐딜락<br><span class="label">배민진</span></td>
+        <td>attended<br><code>group</code></td>
+        <td><code>{}</code></td>
+      </tr><tr>
+        <td>정숙자<br><code>1985970</code></td>
+        <td>2023-03-25T10:00:00+09:00<br>바렐/캐딜락<br><span class="label">김민지</span></td>
+        <td>attended<br><code>group</code></td>
+        <td><code>{}</code></td>
+      </tr><tr>
+        <td>정숙자<br><code>1985970</code></td>
+        <td>2023-03-26T10:00:00+09:00<br>캐딜락/체어<br><span class="label">김민지</span></td>
+        <td>attended<br><code>group</code></td>
+        <td><code>{}</code></td>
+      </tr><tr>
+        <td>구아름<br><code>2047962</code></td>
+        <td>2023-03-27T08:00:00+09:00<br>상하지 밸런스 (바렐+캐딜락)<br><span class="label">배민진</span></td>
+        <td>attended<br><code>group</code></td>
+        <td><code>{}</code></td>
+      </tr><tr>
+        <td>정숙자<br><code>1985970</code></td>
+        <td>2023-03-28T14:00:00+09:00<br>상체 강화(캐딜락+체어)<br><span class="label">배민진</span></td>
+        <td>attended<br><code>group</code></td>
+        <td><code>{}</code></td>
+      </tr><tr>
+        <td>구아름<br><code>2047962</code></td>
+        <td>2023-03-29T08:00:00+09:00<br>백 &amp; 척추 유연성 (체어+바렐)<br><span class="label">배민진</span></td>
+        <td>cancelled<br><code>group</code></td>
+        <td><code>{}</code></td>
+      </tr><tr>
+        <td>정숙자<br><code>1985970</code></td>
+        <td>2023-03-29T11:00:00+09:00<br>백 &amp; 척추 유연성 (체어+바렐)<br><span class="label">배민진</span></td>
+        <td>cancelled<br><code>group</code></td>
+        <td><code>{}</code></td>
+      </tr><tr>
+        <td>구아름<br><code>2047962</code></td>
+        <td>2023-03-30T09:00:00+09:00<br>하체 강화(바렐+캐딜락)<br><span class="label">배민진</span></td>
+        <td>attended<br><code>group</code></td>
+        <td><code>{}</code></td>
+      </tr><tr>
+        <td>구아름<br><code>2047962</code></td>
+        <td>2023-03-31T08:00:00+09:00<br>힙 &amp; 카디오 (캐딜락+바렐)<br><span class="label">배민진</span></td>
+        <td>attended<br><code>group</code></td>
+        <td><code>{}</code></td>
+      </tr><tr>
+        <td>구아름<br><code>2047962</code></td>
+        <td>2023-04-03T08:00:00+09:00<br>상체 강화(리포머+체어)<br><span class="label">배민진</span></td>
+        <td>attended<br><code>group</code></td>
+        <td><code>{}</code></td>
+      </tr></tbody></table>
+  </section>
+
+  <section class="panel">
+    <h2>원본 파일</h2>
+    <table><tbody>
+      <tr><th>이용내역 JSON</th><td><code>/Users/archivepilates/ArchiveIN/emergency/archive/member-usage/2026-05-27/member-usage-normalized-2026-05-27.json</code></td></tr>
+      <tr><th>수강권 CSV</th><td><code>/Users/archivepilates/ArchiveIN/emergency/archive/member-usage/2026-05-27/member-ticket-history-normalized-2026-05-27.csv</code></td></tr>
+    </tbody></table>
+  </section>
+</main>
+</body>
+</html>

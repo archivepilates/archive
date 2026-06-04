@@ -273,6 +273,65 @@ The `memberUsageEvents` and `privateSessionLedger` collections are visible in th
 
 Browser write access remains blocked for all newly exposed CORE collections.
 
+## 2026-06-05 Sample Ledger Apply
+
+ARCHIVE CORE now has a limited sample apply for the member-usage and private-session ledger structure.
+
+Applied sample member ids:
+
+```txt
+1985970
+2047962
+3030691
+3045390
+3574953
+4081797
+```
+
+Applied CORE-only collections:
+
+```txt
+memberUsageEvents
+memberTickets
+memberPaymentEvents
+lessonOccurrences
+reservations
+privateSessionLedger
+sourceImports
+automationStatus
+dataQualityIssues
+```
+
+This does not change the operating source for Alimtalk, StudioMate writes, Google Contacts, reservation decisions, or attendance/memo actions.
+
+The transition script intentionally blocks unsafe expansion:
+
+```txt
+dry-run default
+apply requires --apply --confirm-archive-core-transition
+full apply requires --all --allow-full-apply
+```
+
+Current sample finding:
+
+```txt
+memberUsageEvents: 2,530
+privateSessionLedger: 307
+bookings missing from sample usage history: 2,013
+duplicate canonical usage rows normalized: 90
+status conflict loose match: 1
+```
+
+Decision:
+
+- ARCHIVE CORE can use `memberUsageEvents` and `privateSessionLedger` as the candidate data model for operator review.
+- They are not yet approved as send/write source collections.
+- The next required gate is current StudioMate member-usage re-download and full shadow compare.
+
+Reason:
+
+The available normalized member usage history source is from `2026-05-27`. It proves the model works, but it is stale on `2026-06-05`. For example, 방지숙 currently shows cumulative private round `178` ending at `2026-05-28`, while later manually reviewed Excel evidence exists. Therefore the model should be refreshed before full production switching.
+
 ## 2026-06-04 Member Read-Model Apply
 
 ARCHIVE CORE member-centered data has now been generated as a read-model mirror.

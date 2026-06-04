@@ -6,6 +6,7 @@
     "run:archive-dashboard-sales-daily": "node scripts/run-archive-dashboard-sales-daily.mjs",
     "sync:archive-dashboard-db": "node scripts/sync-archive-dashboard-db.mjs",
     "rebuild:member-360": "node scripts/rebuild-member-360-db.mjs",
+    "prepare:archive-core-transition": "node scripts/prepare-archive-core-transition-data.mjs",
     "verify:archivein-admin": "node scripts/verify-archivein-admin-firestore-access.mjs",
     "build:contracts": "node firebase/kangsain-functions/functions/node_modules/typescript/bin/tsc -p firebase/packages/contracts/tsconfig.json",
     "prepare:function-codebases": "node scripts/prepare-functions-codebase.mjs all",

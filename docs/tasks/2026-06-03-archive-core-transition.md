@@ -154,6 +154,99 @@ Phase 1: read-only operations console foundation.
   - reservation import now requires reservation/booking filenames and excludes sales/매출 paths.
   - wrong dry-run source import `37905d7070e83cb767a5e78e5bc52b99` was marked `superseded`.
 
+## 2026-06-05 Transition Step 1-7 Result
+
+Implemented the first safe ARCHIVE CORE data-transition package.
+
+Completed:
+
+- Added `scripts/prepare-archive-core-transition-data.mjs`.
+- Added `npm run prepare:archive-core-transition`.
+- Extended ARCHIVE CORE contracts for:
+  - `memberTickets`
+  - `memberPaymentEvents`
+  - `lessonOccurrences`
+  - `reservations`
+  - `memberUsageEvents`
+  - `privateSessionLedger`
+- Ran dry-run and apply for the 6-member sample:
+  - 방지숙 `3045390`
+  - 구아름 `2047962`
+  - 정숙자 `1985970`
+  - 조민정 `3030691`
+  - 박정인 `3574953`
+  - 김아영 `4081797`
+
+Applied CORE-only documents:
+
+```txt
+memberUsageEvents      2,530
+memberTickets             80
+memberPaymentEvents       80
+lessonOccurrences      2,237
+reservations           2,530
+privateSessionLedger     307
+```
+
+Firestore operation records:
+
+```txt
+sourceImports/12caabd6535d48d1a1a794f60e758d2f
+sourceImports/1deda1b1c7947b52f8a2c6cc1b980b93
+automationStatus/archive-core-transition-ledger
+dataQualityIssues: 2 open warnings
+```
+
+Shadow compare result:
+
+```txt
+selectedUsageRows          2,620
+usageEvents                2,530
+duplicateCanonicalRows        90
+existingBookingsRead          628
+existingSameLoose             516
+statusConflictLoose             1
+missingFromBookings         2,013
+```
+
+Important interpretation:
+
+- The current `bookings` collection is not complete enough for cumulative private-session counting.
+- Member usage history Excel is a better first source for cumulative usage and private ledger reconstruction.
+- The current normalized member-usage source is the `2026-05-27` snapshot, so it is too stale for final production source switching on `2026-06-05`.
+- 방지숙 sample ledger currently ends at:
+  - `2026-05-28 12:00`
+  - cumulative private round `178`
+  - current ticket round `18/20`
+  - `computation.stale = true`
+
+Guardrails enforced by the script:
+
+- Writes only ARCHIVE CORE collections.
+- Does not write `bookings`, `lectures`, `alimtalkCandidates`, `contactSyncJobs`, StudioMate, or Google Contacts.
+- Requires `--apply --confirm-archive-core-transition` for Firestore writes.
+- Full apply additionally requires `--all --allow-full-apply`.
+- External sends and writes must keep using existing canonical sources until operator-approved full shadow compare.
+
+Reports:
+
+```txt
+docs/reports/2026-06-05-archive-core-transition-dry-run.html
+docs/reports/2026-06-05-archive-core-transition-apply.html
+/Users/archivepilates/ArchiveIN/automation/reports/archive-core-transition/2026-06-05-archive-core-transition-dry-run.json
+/Users/archivepilates/ArchiveIN/automation/reports/archive-core-transition/2026-06-05-archive-core-transition-apply.json
+```
+
+Remaining gate before full transition:
+
+1. Re-run StudioMate member usage download/normalization with a current source snapshot.
+2. Run full dry-run shadow compare.
+3. Review duplicate canonical rows and status conflicts.
+4. Apply in a larger controlled batch.
+5. Rebuild derived summaries if needed.
+6. Switch one read-only CORE page first.
+7. Only after approval, switch Alimtalk/private-chart selection rules.
+
 ## Handoff Rule
 
 Subthreads should be instructed by lane, not repeated long context:

@@ -107,6 +107,83 @@ export interface ArchiveCoreDataQualityRef {
   warnings: string[];
 }
 
+export interface ArchiveCoreMemberTicketDocument {
+  ticketId: string;
+  studioId?: string;
+  memberId: string;
+  memberName?: string;
+  memberPhone?: string;
+  ticketName: string;
+  lessonType: ArchiveCoreLessonType;
+  classType?: string;
+  startDate?: string;
+  endDate?: string;
+  maxCount?: number;
+  remainingCount?: number;
+  usableCount?: number;
+  ticketStatus?: string;
+  isActiveTicket?: boolean;
+  sourceKind: ArchiveCoreSourceKind;
+  sourceImportId?: string;
+  sourceRowId?: string;
+  createdAt: string;
+  updatedAt: string;
+}
+
+export interface ArchiveCoreMemberPaymentEventDocument {
+  paymentEventId: string;
+  studioId?: string;
+  memberId: string;
+  memberName?: string;
+  memberPhone?: string;
+  ticketId?: string;
+  ticketName?: string;
+  paymentType?: string;
+  paymentAmount: number;
+  paymentAt?: string;
+  paymentMethod?: string;
+  sourceKind: ArchiveCoreSourceKind;
+  sourceImportId?: string;
+  sourceRowId?: string;
+  createdAt: string;
+  updatedAt: string;
+}
+
+export interface ArchiveCoreLessonOccurrenceDocument {
+  lessonOccurrenceId: string;
+  studioId?: string;
+  lessonType: ArchiveCoreLessonType;
+  lessonTitle?: string;
+  staffName?: string;
+  roomName?: string;
+  capacity?: number;
+  startsAt: string;
+  endsAt?: string;
+  sourceKind: ArchiveCoreSourceKind;
+  sourceImportId?: string;
+  sourceUsageEventIds?: string[];
+  reservationCount?: number;
+  createdAt: string;
+  updatedAt: string;
+}
+
+export interface ArchiveCoreReservationDocument {
+  reservationId: string;
+  studioId?: string;
+  lessonOccurrenceId: string;
+  memberId: string;
+  memberName?: string;
+  memberPhone?: string;
+  startsAt: string;
+  status: ArchiveCoreUsageStatus;
+  sourceKind: ArchiveCoreSourceKind;
+  sourceImportId?: string;
+  sourceUsageEventId?: string;
+  canonicalUsageKey: string;
+  createdAt: string;
+  updatedAt: string;
+}
+
 export interface ArchiveCoreSourceImportDocument {
   importId: string;
   sourceKind: ArchiveCoreSourceKind;
@@ -168,6 +245,7 @@ export interface ArchiveCoreDataQualityIssueDocument {
 
 export interface ArchiveCoreMemberUsageEventDocument {
   usageEventId: string;
+  studioId?: string;
   memberId: string;
   memberName?: string;
   memberPhone?: string;
@@ -192,6 +270,7 @@ export interface ArchiveCoreMemberUsageEventDocument {
 
 export interface ArchiveCorePrivateSessionLedgerDocument {
   ledgerId: string;
+  studioId?: string;
   memberId: string;
   memberName?: string;
   usageEventId: string;
