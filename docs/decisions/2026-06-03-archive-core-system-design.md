@@ -409,6 +409,14 @@ member Excel rows with missing phone are logged as info because they are exclude
 existing duplicate open missing_phone issues were resolved and superseded by canonical issue 4a25e5a708cb7edfce997a0fe26117fe
 ```
 
+UI rule:
+
+```txt
+severity=info or notice is not counted as an open/actionable quality issue
+info/notice records are shown under source reference notes
+only non-info unresolved records drive the home quality warning, imports actionable count, and member quality filter
+```
+
 Verified dry-run from the actual LaunchAgent path:
 
 ```txt

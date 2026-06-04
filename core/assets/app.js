@@ -557,47 +557,70 @@ function sourceKindLabel(value) {
   return raw || "원본";
 }
 
+function isResolvedQualityIssue(item) {
+  return ["resolved", "closed", "done"].includes(String(item.status || "").toLowerCase());
+}
+
+function isReferenceQualityIssue(item) {
+  return ["info", "notice"].includes(String(item.severity || item.status || "").toLowerCase());
+}
+
 function renderQualityIssues(items) {
-  const activeIssues = items.filter((item) => !["resolved", "closed", "done"].includes(String(item.status || "").toLowerCase()));
-  const resolvedIssues = items.filter((item) => ["resolved", "closed", "done"].includes(String(item.status || "").toLowerCase()));
-  const latestIssue = activeIssues[0];
-  setText("qualityCount", String(activeIssues.length));
-  setText("qualityOpenCount", formatCount(activeIssues.length));
+  const openItems = items.filter((item) => !isResolvedQualityIssue(item));
+  const actionableIssues = openItems.filter((item) => !isReferenceQualityIssue(item));
+  const referenceIssues = openItems.filter(isReferenceQualityIssue);
+  const resolvedIssues = items.filter(isResolvedQualityIssue);
+  const latestIssue = actionableIssues[0];
+  setText("qualityCount", String(actionableIssues.length));
+  setText("qualityOpenCount", formatCount(actionableIssues.length));
+  setText("qualityReferenceCount", formatCount(referenceIssues.length));
   setText("qualityResolvedCount", formatCount(resolvedIssues.length));
-  setText("latestQualityTitle", latestIssue ? latestIssue.title || latestIssue.issueType || "품질 이슈" : "열린 이슈 없음");
+  setText("latestQualityTitle", latestIssue ? latestIssue.title || latestIssue.issueType || "품질 이슈" : "실행 보류 이슈 없음");
   setText(
     "latestQualityNote",
     latestIssue
       ? `${latestIssue.summary || "상세 기록 없음"} · ${qualityActionText(latestIssue)}`
-      : "외부 실행 전 정지해야 할 열린 품질 이슈가 없습니다.",
+      : referenceIssues.length
+        ? `원본 참고사항 ${referenceIssues.length}건은 외부 실행 원천에서 이미 제외되어 있습니다.`
+        : "외부 실행 전 정지해야 할 열린 품질 이슈가 없습니다.",
   );
 
   const list = qs("qualityList");
-  if (!list) return;
-  if (!activeIssues.length) {
-    list.innerHTML = `<div class="empty-state">열린 데이터 품질 이슈가 없습니다. import 검증 작업이 기록을 만들면 여기에서 확인합니다.</div>`;
-    return;
+  if (list) {
+    if (!actionableIssues.length) {
+      list.innerHTML = `<div class="empty-state">실행 보류 품질 이슈가 없습니다. 알림톡/연락처/쓰기 작업을 멈춰야 할 항목은 여기로 올라옵니다.</div>`;
+    } else {
+      list.innerHTML = actionableIssues.map(renderQualityIssueRow).join("");
+    }
   }
 
-  list.innerHTML = activeIssues
-    .map((item) => {
-      const title = item.title || item.issueType || item.id;
-      const detail = item.summary || item.description || item.memberName || "상세 기록 없음";
-      const action = qualityActionText(item);
-      const href = item.memberId ? memberDetailHref(item.memberId) : null;
-      const tagName = href ? "a" : "div";
-      const attrs = href ? ` class="status-row status-link" href="${escapeHtml(href)}"` : ` class="status-row"`;
-      return `
-        <${tagName}${attrs}>
-          <div>
-            <strong>${escapeHtml(title)}</strong>
-            <p>${escapeHtml(detail)} · ${escapeHtml(action)} · ${escapeHtml((item.sourcePaths || []).map((path) => path.split("/").pop()).slice(0, 1).join(", "))}</p>
-          </div>
-          ${pill(item.severity || item.status)}
-        </${tagName}>
-      `;
-    })
-    .join("");
+  const referenceList = qs("qualityReferenceList");
+  if (referenceList) {
+    if (!referenceIssues.length) {
+      referenceList.innerHTML = `<div class="empty-state">외부 실행에서 제외된 원본 참고사항이 없습니다.</div>`;
+    } else {
+      referenceList.innerHTML = referenceIssues.map(renderQualityIssueRow).join("");
+    }
+  }
+}
+
+function renderQualityIssueRow(item) {
+  const title = item.title || item.issueType || item.id;
+  const detail = item.summary || item.description || item.memberName || "상세 기록 없음";
+  const action = qualityActionText(item);
+  const source = (item.sourcePaths || []).map((path) => path.split("/").pop()).slice(0, 1).join(", ");
+  const href = item.memberId ? memberDetailHref(item.memberId) : null;
+  const tagName = href ? "a" : "div";
+  const attrs = href ? ` class="status-row status-link" href="${escapeHtml(href)}"` : ` class="status-row"`;
+  return `
+    <${tagName}${attrs}>
+      <div>
+        <strong>${escapeHtml(title)}</strong>
+        <p>${escapeHtml([detail, action, source].filter(Boolean).join(" · "))}</p>
+      </div>
+      ${pill(item.severity || item.status)}
+    </${tagName}>
+  `;
 }
 
 function qualityActionText(item) {
@@ -614,7 +637,7 @@ function qualityActionText(item) {
 }
 
 function activeQualityIssues() {
-  return state.qualityIssues.filter((item) => !["resolved", "closed", "done"].includes(String(item.status || "").toLowerCase()));
+  return state.qualityIssues.filter((item) => !isResolvedQualityIssue(item) && !isReferenceQualityIssue(item));
 }
 
 function memberHasQualityIssue(item) {

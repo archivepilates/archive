@@ -24,14 +24,14 @@
         </header>
         <section class="grid kpis">
           <article class="panel metric"><div class="metric-label">원본 처리 기록</div><div class="metric-value" id="sourceImportCount">0건</div><div class="metric-note">sourceImports</div></article>
-          <article class="panel metric"><div class="metric-label">열린 품질 이슈</div><div class="metric-value" id="qualityOpenCount">0건</div><div class="metric-note">dataQualityIssues</div></article>
+          <article class="panel metric"><div class="metric-label">실행 보류 이슈</div><div class="metric-value" id="qualityOpenCount">0건</div><div class="metric-note">발송/쓰기 전 확인</div></article>
           <article class="panel metric"><div class="metric-label">연결 상태</div><div class="metric-value compact" id="importConnectionState">확인 중</div><div class="metric-note">원본 import 결과</div></article>
           <article class="panel metric"><div class="metric-label">보호 규칙</div><div class="metric-value compact">canonical</div><div class="metric-note">excel fallback은 외부 발송 원천 제외</div></article>
         </section>
         <section class="grid summary-grid" aria-label="원본 품질 요약">
           <article class="panel detail-card"><span class="pill">latest</span><h2 id="latestImportKind">원본 대기</h2><p id="latestImportNote">최근 import 결과를 표시합니다.</p></article>
-          <article class="panel detail-card"><span class="pill warn">open</span><h2 id="latestQualityTitle">품질 확인</h2><p id="latestQualityNote">열린 이슈의 원인과 다음 액션을 표시합니다.</p></article>
-          <article class="panel detail-card"><span class="pill good">resolved</span><h2 id="qualityResolvedCount">0건</h2><p>resolved 처리된 품질 이슈입니다.</p></article>
+          <article class="panel detail-card"><span class="pill warn">actionable</span><h2 id="latestQualityTitle">품질 확인</h2><p id="latestQualityNote">발송/쓰기 전에 멈춰야 하는 이슈를 표시합니다.</p></article>
+          <article class="panel detail-card"><span class="pill">reference</span><h2 id="qualityReferenceCount">0건</h2><p>외부 실행 원천에서 이미 제외된 원본 참고사항입니다.</p></article>
           <article class="panel detail-card"><span class="pill danger">stop rule</span><h2>외부 실행 보류</h2><p id="qualityStopRule">전화번호/회원ID가 확인되지 않으면 발송과 쓰기를 하지 않습니다.</p></article>
         </section>
         <section class="grid overview-grid">
@@ -40,7 +40,8 @@
             <div class="flow-list">
               <div><strong>파일 선택</strong><span>회원목록, 예약내역, 삭제 수업, 정산 원본을 종류별로 분리</span></div>
               <div><strong>Import 기록</strong><span>sourceImports에 파일명, 행 수, 처리 상태 저장</span></div>
-              <div><strong>품질 이슈</strong><span>전화번호 누락, 동명이인, name-only match, 중복 fallback 기록</span></div>
+              <div><strong>품질 이슈</strong><span>동명이인, name-only match, 중복 fallback 등 실행 전 정지 항목</span></div>
+              <div><strong>참고사항</strong><span>전화번호 없는 보조 프로필처럼 이미 외부 실행에서 제외된 원본 기록</span></div>
               <div><strong>운영 채택</strong><span>검증된 원천만 회원/알림톡/경영 화면에서 사용</span></div>
             </div>
           </article>
@@ -56,8 +57,12 @@
             <div class="table-wrap"><table><thead><tr><th>원본</th><th>상태</th><th>행</th><th>마지막 처리</th></tr></thead><tbody id="importsTable"><tr><td colspan="4">Firestore 연결 후 표시합니다.</td></tr></tbody></table></div>
           </article>
           <article class="panel">
-            <div class="panel-header"><div><h2>데이터 품질 이슈</h2><p>dataQualityIssues 기준입니다.</p></div><span class="pill danger">guardrail</span></div>
-            <div class="list" id="qualityList"><div class="empty-state">확인 중인 이슈가 있으면 여기에 표시됩니다.</div></div>
+            <div class="panel-header"><div><h2>실행 보류 품질 이슈</h2><p>알림톡, 연락처, 쓰기 작업 전에 멈춰야 할 항목입니다.</p></div><span class="pill danger">guardrail</span></div>
+            <div class="list" id="qualityList"><div class="empty-state">실행 보류 이슈가 있으면 여기에 표시됩니다.</div></div>
+          </article>
+          <article class="panel">
+            <div class="panel-header"><div><h2>원본 참고사항</h2><p>외부 실행 원천에서 이미 제외된 정보성 원본 기록입니다.</p></div><span class="pill">reference</span></div>
+            <div class="list" id="qualityReferenceList"><div class="empty-state">참고사항이 있으면 여기에 표시됩니다.</div></div>
           </article>
         </section>
       </main>
