@@ -18,6 +18,7 @@ export const ALIMTALK_MEMBER_EXCLUSION_REASONS: Record<string, string> = {
 export type SendableAlimtalkCandidateType =
   | "reservation_open"
   | "new_member"
+  | "onsite_welcome"
   | "private_survey"
   | "group_survey"
   | "instructor_lesson_material"
@@ -36,8 +37,13 @@ export const ALIMTALK_TEMPLATES = {
     status: "approved",
   },
   new_member: {
-    code: "KA01TP260514081318309wQGfeIJxIAJ",
-    label: "신규회원 웰컴 v3",
+    code: "",
+    label: "신규회원 웰컴 v3 삭제됨",
+    status: "deleted",
+  },
+  onsite_welcome: {
+    code: process.env.ONSITE_WELCOME_ALIMTALK_TEMPLATE_ID || "KA01TP260602101939427lPhGyuDLvFM",
+    label: "신규회원 웰컴 v5",
     status: "approved",
   },
   ticket_expiring: {
@@ -73,7 +79,7 @@ export const ALIMTALK_TEMPLATES = {
   long_absence: {
     code: "KA01TP260524083643752cySb9BoDOjN",
     label: "장기 미방문 수업안내 v1",
-    status: "pending",
+    status: "approved",
   },
   staff_private_survey: {
     code: "KA01TP260519093416836f1EHZYJ00uM",
@@ -91,9 +97,9 @@ export const ALIMTALK_TEMPLATES = {
     status: "approved",
   },
   private_lesson_report: {
-    code: "KA01TP260528090731992hVPP5efmmUC",
-    label: "프라이빗 회원 리포트 안내 v2",
-    status: "pending",
+    code: "KA01TP260528081225871Fr92FW901Vo",
+    label: "프라이빗 회원 리포트 안내 v1",
+    status: "approved",
   },
   inbody_report: {
     code: "KA01TP260528090148593isshfXtt8vE",
@@ -109,6 +115,7 @@ export const ALIMTALK_TEMPLATE_CHANNEL_IDS: Readonly<Record<string, string>> = {
 export const CANDIDATE_TEMPLATE_CODES: Record<SendableAlimtalkCandidateType, string> = {
   reservation_open: ALIMTALK_TEMPLATES.reservation_open.code,
   new_member: ALIMTALK_TEMPLATES.new_member.code,
+  onsite_welcome: ALIMTALK_TEMPLATES.onsite_welcome.code,
   private_survey: ALIMTALK_TEMPLATES.private_survey.code,
   group_survey: ALIMTALK_TEMPLATES.group_survey.code,
   instructor_lesson_material: ALIMTALK_TEMPLATES.instructor_lesson_material.code,
@@ -139,10 +146,22 @@ export const ALIMTALK_DEDUPE_POLICIES_BY_TEMPLATE_CODE: Record<string, AlimtalkD
     label: "예약 오픈 안내 주간 반복",
     windowDays: 6,
   },
-  [ALIMTALK_TEMPLATES.new_member.code]: {
-    label: "신규회원 웰컴 영구 1회",
-    windowDays: null,
-  },
+  ...(ALIMTALK_TEMPLATES.new_member.code
+    ? {
+        [ALIMTALK_TEMPLATES.new_member.code]: {
+          label: "신규회원 웰컴 영구 1회",
+          windowDays: null,
+        },
+      }
+    : {}),
+  ...(ALIMTALK_TEMPLATES.onsite_welcome.code
+    ? {
+        [ALIMTALK_TEMPLATES.onsite_welcome.code]: {
+          label: "현장 웰컴 영구 1회",
+          windowDays: null,
+        },
+      }
+    : {}),
   [ALIMTALK_TEMPLATES.ticket_expiring.code]: {
     label: "수강권별 기간 안내 30일",
     windowDays: 30,

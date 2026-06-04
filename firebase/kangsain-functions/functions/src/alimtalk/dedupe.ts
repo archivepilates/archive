@@ -71,6 +71,7 @@ function dedupeScope(candidate: AlimtalkCandidateDoc): Record<string, string> {
   const payload = candidate.payload || {};
   const type = String(candidate.type);
   if (type === "new_member") return { memberId: candidate.memberId };
+  if (type === "onsite_welcome") return { memberId: candidate.memberId };
   if (type === "private_survey") return { memberId: candidate.memberId };
   if (type === "group_survey") return { memberId: candidate.memberId };
   if (type === "long_absence") return { memberId: candidate.memberId };

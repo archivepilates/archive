@@ -3,7 +3,7 @@ import { logger } from "firebase-functions";
 import { db } from "../config/firebase";
 import { solapiApiKey, solapiApiSecret, solapiPfid } from "../config/secrets";
 import { nowTimestamp } from "../utils/date";
-import { ALIMTALK_TEMPLATES, STATIC_APPROVED_ALIMTALK_TEMPLATE_CODES } from "./templates";
+import { ALIMTALK_TEMPLATES } from "./templates";
 
 const SOLAPI_TEMPLATE_URL = "https://api.solapi.com/kakao/v2/templates";
 const APPROVED_STATUSES = new Set(["APPROVED"]);
@@ -31,10 +31,11 @@ export async function syncAlimtalkTemplateStatuses(): Promise<{ checked: number;
   let approved = 0;
   let failed = 0;
   for (const template of Object.values(ALIMTALK_TEMPLATES)) {
+    if (!template.code) continue;
     checked += 1;
     try {
       const remote = await fetchSolapiTemplate(template.code);
-      const status = String(remote?.status || template.status || "").toUpperCase();
+      const status = remote ? String(remote.status || template.status || "").toUpperCase() : "NOT_FOUND";
       if (APPROVED_STATUSES.has(status)) approved += 1;
       await db
         .collection("alimtalkTemplateStates")
@@ -46,7 +47,7 @@ export async function syncAlimtalkTemplateStatuses(): Promise<{ checked: number;
             name: remote?.name || template.label,
             status,
             source: "solapi",
-            lastError: null,
+            lastError: remote ? null : "TemplateNotFound: 템플릿을 찾을 수 없습니다.",
             syncedAt: nowTimestamp(),
             updatedAt: nowTimestamp(),
           },
@@ -82,7 +83,7 @@ export async function isAlimtalkTemplateApproved(templateCode: string): Promise<
   if (!templateCode) return false;
   const state = await templateState(templateCode);
   if (state?.source === "solapi") return APPROVED_STATUSES.has(String(state.status || "").toUpperCase());
-  return STATIC_APPROVED_ALIMTALK_TEMPLATE_CODES.has(templateCode);
+  return false;
 }
 
 async function templateState(templateCode: string): Promise<TemplateState | null> {
@@ -93,16 +94,18 @@ async function templateState(templateCode: string): Promise<TemplateState | null
   if (state && Date.now() - syncedAt < TEMPLATE_STATUS_CACHE_MS) return state;
 
   const template = Object.values(ALIMTALK_TEMPLATES).find((item) => item.code === templateCode);
-  if (!template) return state || null;
+  const label = template?.label || templateCode;
+  const staticStatus = template?.status || "";
   try {
     const remote = await fetchSolapiTemplate(templateCode);
+    const status = remote ? String(remote.status || staticStatus || "").toUpperCase() : "NOT_FOUND";
     const next = {
       templateCode,
-      label: template.label,
-      name: remote?.name || template.label,
-      status: String(remote?.status || template.status || "").toUpperCase(),
+      label,
+      name: remote?.name || label,
+      status,
       source: "solapi" as const,
-      lastError: null,
+      lastError: remote ? null : "TemplateNotFound: 템플릿을 찾을 수 없습니다.",
       syncedAt: nowTimestamp(),
       updatedAt: nowTimestamp(),
     };
@@ -113,9 +116,9 @@ async function templateState(templateCode: string): Promise<TemplateState | null
     await ref.set(
       {
         templateCode,
-        label: template.label,
-        name: template.label,
-        status: String(template.status || "").toUpperCase(),
+        label,
+        name: label,
+        status: String(staticStatus || "").toUpperCase(),
         source: "error",
         lastError: message,
         syncedAt: nowTimestamp(),
@@ -123,7 +126,15 @@ async function templateState(templateCode: string): Promise<TemplateState | null
       },
       { merge: true },
     );
-    return state || null;
+    return {
+      templateCode,
+      label,
+      name: label,
+      status: String(staticStatus || "ERROR").toUpperCase(),
+      source: "error",
+      lastError: message,
+      syncedAt: nowTimestamp(),
+    };
   }
 }
 

@@ -25,11 +25,11 @@ async function enqueueAndSendOnsiteWelcome(
 ): Promise<"queued" | "sent" | "failed" | "skipped" | "template_pending"> {
   const templateCode = await onsiteWelcomeTemplateCode();
   if (!templateCode) {
-    await markRequestTemplatePending(request.requestId, "신규회원 웰컴 v4 템플릿 코드 설정 대기");
+    await markRequestTemplatePending(request.requestId, "신규회원 웰컴 v5 템플릿 코드 설정 대기");
     return "template_pending";
   }
   if (!(await isAlimtalkTemplateApproved(templateCode))) {
-    await markRequestTemplatePending(request.requestId, `신규회원 웰컴 v4 템플릿 승인 대기: ${templateCode}`);
+    await markRequestTemplatePending(request.requestId, `신규회원 웰컴 v5 템플릿 승인 대기: ${templateCode}`);
     return "template_pending";
   }
 

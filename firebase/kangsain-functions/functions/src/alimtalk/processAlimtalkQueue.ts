@@ -56,11 +56,12 @@ export async function processAlimtalkQueue(): Promise<{ processed: number; sent:
         continue;
       }
       const result = await sendSolapiAlimtalk(claimed);
+      const sendAttempts = (claimed.attempts || 0) + 1;
       await refs.alimtalkCandidate(claimed.candidateId).set(
         {
           status: "sent",
           dedupeKey,
-          attempts: claimed.attempts || 0,
+          attempts: sendAttempts,
           maxAttempts: claimed.maxAttempts || 2,
           sentAt: nowTimestamp(),
           lastError: null,
@@ -81,8 +82,8 @@ export async function processAlimtalkQueue(): Promise<{ processed: number; sent:
           dedupePolicy: dedupePolicy.label,
           dedupeWindowDays: dedupePolicy.windowDays,
           status: "done",
-          attempts: 1,
-          maxAttempts: 1,
+          attempts: sendAttempts,
+          maxAttempts: claimed.maxAttempts || 2,
           nextRunAt: nowTimestamp(),
           solapiMessageId: result.messageId,
           lastError: null,
@@ -248,7 +249,7 @@ async function templateVariables(candidate: AlimtalkCandidateDoc): Promise<Recor
   );
   const shortLinkId = await shortLinkIdForCandidate(candidate, surveyId, accessToken, managementNumber);
   const reportLinkId = await reportLinkIdForCandidate(candidate);
-  const inbodyLinkId = await inbodyLinkIdForCandidate(candidate);
+  const inbodyLinkId = String(payload.inbodyLinkId || "");
   return {
     "#{이름}": memberName,
     "#{회원명}": String(payload.memberName || candidate.memberName || ""),
@@ -269,66 +270,6 @@ async function templateVariables(candidate: AlimtalkCandidateDoc): Promise<Recor
     "#{리포트링크ID}": reportLinkId,
     "#{인바디링크ID}": inbodyLinkId,
   };
-}
-
-async function inbodyLinkIdForCandidate(candidate: AlimtalkCandidateDoc): Promise<string> {
-  const existing = String(candidate.payload?.inbodyLinkId || "");
-  if (existing) return existing;
-  if (candidate.type !== "private_lesson_report") return "";
-  const targetUrl = (await latestInbodyReportUrlForCandidate(candidate)) || inbodyNoDataUrl(candidate.memberName);
-  const link = await ensureShortLink({
-    type: "inbody_report",
-    targetUrl,
-    sourceId: `${candidate.candidateId}_inbody`,
-  });
-  await refs.alimtalkCandidate(candidate.candidateId).set(
-    {
-      payload: {
-        ...candidate.payload,
-        inbodyLinkId: link.linkId,
-        inbodyShortUrl: link.shortUrl,
-        inbodyReportUrl: targetUrl,
-        inbodyReportStatus: targetUrl.includes("status=no-data") ? "no_data" : "found",
-      },
-      updatedAt: nowTimestamp(),
-    },
-    { merge: true },
-  );
-  return link.linkId;
-}
-
-async function latestInbodyReportUrlForCandidate(candidate: AlimtalkCandidateDoc): Promise<string> {
-  const explicit = String(candidate.payload?.inbodyReportUrl || candidate.payload?.latestInbodyReportUrl || "");
-  if (explicit) return explicit;
-  const rows: Array<{ testAtMs: number; memberReportUrl: string }> = [];
-  const byMemberId = candidate.memberId
-    ? await db.collection("inbodyWebhookEvents").where("matchedMemberId", "==", candidate.memberId).limit(20).get()
-    : null;
-  for (const doc of byMemberId?.docs || []) {
-    const data = doc.data();
-    const memberReportUrl = String(data.memberReportUrl || "");
-    if (!memberReportUrl || data.memberReportStatus !== "synced") continue;
-    rows.push({ testAtMs: data.testAt?.toMillis?.() || 0, memberReportUrl });
-  }
-  const phone = normalizePhone(candidate.memberPhone);
-  const byPhone = phone
-    ? await db.collection("inbodyWebhookEvents").where("userToken", "==", phone).limit(20).get()
-    : null;
-  for (const doc of byPhone?.docs || []) {
-    const data = doc.data();
-    const memberReportUrl = String(data.memberReportUrl || "");
-    if (!memberReportUrl || data.memberReportStatus !== "synced") continue;
-    rows.push({ testAtMs: data.testAt?.toMillis?.() || 0, memberReportUrl });
-  }
-  rows.sort((a, b) => b.testAtMs - a.testAtMs);
-  return rows[0]?.memberReportUrl || "";
-}
-
-function inbodyNoDataUrl(memberName: string): string {
-  const url = new URL("https://in.archivepilates.com/reports/inbody-members/");
-  url.searchParams.set("status", "no-data");
-  if (memberName) url.searchParams.set("member", memberName);
-  return url.toString();
 }
 
 async function reportLinkIdForCandidate(candidate: AlimtalkCandidateDoc): Promise<string> {
@@ -358,11 +299,38 @@ async function shortLinkIdForCandidate(
   managementNumber: string,
 ): Promise<string> {
   const existing = String(candidate.payload?.shortLinkId || "");
-  if (candidate.type !== "instructor_lesson_material" && existing) return existing;
-  if (candidate.type === "group_survey" && surveyId && accessToken) {
+  if (!["private_survey", "group_survey", "onsite_welcome", "instructor_lesson_material"].includes(candidate.type) && existing) {
+    return existing;
+  }
+  if ((candidate.type === "private_survey" || candidate.type === "group_survey") && surveyId && accessToken) {
+    const type = candidate.type === "private_survey" ? "private_survey" : "group_survey";
     const link = await ensureShortLink({
-      type: "group_survey",
-      targetUrl: groupSurveyTargetUrl(surveyId, accessToken),
+      type,
+      targetUrl:
+        candidate.type === "private_survey"
+          ? privateSurveyTargetUrl(surveyId, accessToken)
+          : groupSurveyTargetUrl(surveyId, accessToken),
+      sourceId: candidate.candidateId,
+    });
+    if (!existing) {
+      await refs
+        .alimtalkCandidate(candidate.candidateId)
+        .set(
+          {
+            payload: { ...candidate.payload, shortLinkId: link.linkId, shortUrl: link.shortUrl },
+            updatedAt: nowTimestamp(),
+          },
+          { merge: true },
+        );
+    }
+    return link.linkId;
+  }
+  if (candidate.type === "onsite_welcome") {
+    const signupUrl = String(candidate.payload?.signupUrl || "");
+    if (!signupUrl) return "";
+    const link = await ensureShortLink({
+      type: "member_signup",
+      targetUrl: signupUrl,
       sourceId: candidate.candidateId,
     });
     if (!existing) {
@@ -400,6 +368,13 @@ async function shortLinkIdForCandidate(
 
 function groupSurveyTargetUrl(surveyId: string, accessToken: string): string {
   const url = new URL("https://in.archivepilates.com/groupSurvey");
+  url.searchParams.set("id", surveyId);
+  url.searchParams.set("token", accessToken);
+  return url.toString();
+}
+
+function privateSurveyTargetUrl(surveyId: string, accessToken: string): string {
+  const url = new URL("https://in.archivepilates.com/privateSurvey");
   url.searchParams.set("id", surveyId);
   url.searchParams.set("token", accessToken);
   return url.toString();

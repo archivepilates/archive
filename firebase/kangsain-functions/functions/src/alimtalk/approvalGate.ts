@@ -27,6 +27,7 @@ interface ApprovalDoc {
   approvalId: string;
   studioId: string;
   sourceDate: string;
+  scope?: string;
   status: "pending" | "approved";
   candidateIds: string[];
   candidateCount: number;
@@ -42,12 +43,15 @@ export async function requireApprovalForLargeAlimtalkBatch(input: {
   studioId: string;
   today: string;
   candidates: AlimtalkCandidateDoc[];
+  scope?: string;
 }): Promise<AlimtalkApprovalResult> {
   if (input.candidates.length < APPROVAL_THRESHOLD) return { required: false, approved: true };
-  const approvalId = dailyApprovalId(input.studioId, input.today);
+  const scope = input.scope || approvalScopeForCandidates(input.candidates);
+  const approvalId = dailyApprovalId(input.studioId, input.today, scope);
   const ref = db.collection(APPROVAL_COLLECTION).doc(approvalId);
   const existing = (await ref.get()).data() as ApprovalDoc | undefined;
-  if (existing?.status === "approved") return { required: true, approved: true, approvalId };
+  if (existing?.status === "approved" && (existing.scope || "daily") === scope)
+    return { required: true, approved: true, approvalId };
 
   let token = "";
   let emailed = false;
@@ -58,6 +62,7 @@ export async function requireApprovalForLargeAlimtalkBatch(input: {
         approvalId,
         studioId: input.studioId,
         sourceDate: input.today,
+        scope,
         status: "pending",
         candidateIds: input.candidates.map((candidate) => candidate.candidateId),
         candidateCount: input.candidates.length,
@@ -72,6 +77,7 @@ export async function requireApprovalForLargeAlimtalkBatch(input: {
       approvalId,
       token,
       date: input.today,
+      scope,
       candidates: input.candidates,
     });
     emailed = true;
@@ -80,6 +86,7 @@ export async function requireApprovalForLargeAlimtalkBatch(input: {
       {
         candidateIds: input.candidates.map((candidate) => candidate.candidateId),
         candidateCount: input.candidates.length,
+        scope,
         updatedAt: nowTimestamp(),
       },
       { merge: true },
@@ -185,6 +192,7 @@ async function sendApprovalEmail(input: {
   approvalId: string;
   token: string;
   date: string;
+  scope: string;
   candidates: AlimtalkCandidateDoc[];
 }): Promise<void> {
   const approvalUrl = `${APPROVAL_FUNCTION_URL}?id=${encodeURIComponent(input.approvalId)}&token=${encodeURIComponent(
@@ -195,6 +203,7 @@ async function sendApprovalEmail(input: {
     "ARCHIVE IN 알림톡 대량 발송 승인 요청",
     "",
     `기준일: ${input.date}`,
+    `발송범위: ${approvalScopeLabel(input.scope)}`,
     `발송 예정: ${input.candidates.length}건`,
     "",
     "발송 예정 리스트",
@@ -205,12 +214,13 @@ async function sendApprovalEmail(input: {
   ].join("\n");
   const htmlBody = approvalHtml({
     date: input.date,
+    scope: input.scope,
     count: input.candidates.length,
     lines,
     approvalUrl,
   });
   await sendAlimtalkLogEmail({
-    subject: `[알림톡][긴급] ${input.candidates.length}건 발송 승인 요청 ${input.date}`,
+    subject: `[알림톡][긴급] ${approvalScopeLabel(input.scope)} ${input.candidates.length}건 승인 ${input.date}`,
     body,
     htmlBody,
     status: "urgent",
@@ -224,12 +234,14 @@ function candidateLine(candidate: AlimtalkCandidateDoc): string {
   return `- ${candidate.memberName} / ${detail}`;
 }
 
-function approvalHtml(input: { date: string; count: number; lines: string[]; approvalUrl: string }): string {
+function approvalHtml(input: { date: string; scope: string; count: number; lines: string[]; approvalUrl: string }): string {
   const items = input.lines.map((line) => `<li>${escapeHtml(line.replace(/^- /, ""))}</li>`).join("");
   return [
     '<div style="font-family:Arial,sans-serif;line-height:1.5;color:#111">',
     "<h2>ARCHIVE IN 알림톡 대량 발송 승인 요청</h2>",
-    `<p>기준일: <b>${escapeHtml(input.date)}</b><br>발송 예정: <b>${input.count}건</b></p>`,
+    `<p>기준일: <b>${escapeHtml(input.date)}</b><br>발송범위: <b>${escapeHtml(
+      approvalScopeLabel(input.scope),
+    )}</b><br>발송 예정: <b>${input.count}건</b></p>`,
     `<ol>${items}</ol>`,
     '<div style="margin-top:24px">',
     `<a href="${escapeHtml(input.approvalUrl)}" style="display:inline-block;background:#111;color:#fff;text-decoration:none;padding:12px 18px;border-radius:6px;font-weight:700">발송 승인하기</a>`,
@@ -238,8 +250,20 @@ function approvalHtml(input: { date: string; count: number; lines: string[]; app
   ].join("");
 }
 
-function dailyApprovalId(studioId: string, date: string): string {
-  return `${studioId}_${date}`;
+function approvalScopeForCandidates(candidates: AlimtalkCandidateDoc[]): string {
+  const types = [...new Set(candidates.map((candidate) => String(candidate.type || "unknown")))].sort();
+  if (types.length === 1) return types[0];
+  return "daily";
+}
+
+function approvalScopeLabel(scope: string): string {
+  if (scope === "daily") return "일일 알림톡";
+  if (scope === "reservation_open") return "수업예약 오픈 안내";
+  return templateLabel(scope);
+}
+
+function dailyApprovalId(studioId: string, date: string, scope: string): string {
+  return `${studioId}_${date}_${scope || "daily"}`;
 }
 
 function tokenHash(value: string): string {
@@ -249,6 +273,7 @@ function tokenHash(value: string): string {
 function templateLabel(type: string): string {
   const labels: Record<string, string> = {
     new_member: "신규회원 웰컴",
+    onsite_welcome: "현장 웰컴",
     private_survey: "프라이빗 사전설문",
     group_survey: "그룹 첫 수업 사전확인",
     instructor_lesson_material: "강사레슨 수업자료",
@@ -256,6 +281,10 @@ function templateLabel(type: string): string {
     remaining_low: "그룹 횟수 부족",
     private_count_low: "프라이빗 횟수 부족",
     private_ticket_expiring: "프라이빗 기간 만료",
+    long_absence: "장기 미방문",
+    private_lesson_report: "프라이빗 수업 리포트",
+    inbody_report: "인바디 리포트",
+    reservation_open: "수업예약 오픈 안내",
   };
   return labels[type] || type;
 }

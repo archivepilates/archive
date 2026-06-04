@@ -84,17 +84,17 @@ Template ID: `KA01TP260527182741301uIuSTL01YQ1`
 
 ## 회원용 리포트 알림톡
 
-템플릿명: `회원용_프라이빗 수업 리포트 안내 v2`
+템플릿명: `회원용_프라이빗 수업 리포트 안내 v1`
 
-Template ID: `KA01TP260528090731992hVPP5efmmUC`
+Template ID: `KA01TP260528081225871Fr92FW901Vo`
 
-상태: `PENDING`
+상태: `APPROVED`
 
 용도:
 
 - 강사용 차트 작성 알림톡이 아니라, 수업 후 생성된 회원용 HTML 리포트를 회원에게 전달한다.
 - 즉시 자동 발송하지 않고, Notion 회차 차트에서 운영자 또는 강사가 리포트를 검수한 뒤 `발송` 체크를 해야 발송한다.
-- 최신 인바디 리포트도 같은 알림톡의 두 번째 버튼으로 제공한다. 인바디 측정 데이터가 없으면 안내 화면으로 연결한다.
+- 2026-06-02 기준 v2는 폐기하고 승인된 v1으로 우선 운영한다. 인바디 리포트 버튼 통합은 새 템플릿 승인 전까지 보류한다.
 
 본문 초안:
 
@@ -116,12 +116,11 @@ Template ID: `KA01TP260528090731992hVPP5efmmUC`
 - `#{수업일시}` = `lessonDate + lessonStartAt`을 KST 기준으로 변환
 - `#{강사명}` = `privateLessonChartRecords.staffName`
 - `#{리포트링크ID}` = `privateLessonChartRecords.publicReportUrl`을 `shortLinks`로 변환한 짧은 링크 ID
-- `#{인바디링크ID}` = 최신 인바디 리포트 URL을 `shortLinks`로 변환한 짧은 링크 ID. 없으면 측정 데이터 없음 안내 화면 링크 ID
+- `#{인바디링크ID}` = 현재 v1 템플릿에서는 사용하지 않는다.
 
 버튼:
 
-- 수업 리포트 보기: `https://in.archivepilates.com/s/#{리포트링크ID}/`
-- 인바디 리포트 보기: `https://in.archivepilates.com/s/#{인바디링크ID}/`
+- 리포트 확인하기: `https://in.archivepilates.com/s/#{리포트링크ID}/`
 - SOLAPI 발송 payload에는 `#{리포트URL}`을 쓰지 않고 `#{리포트링크ID}`만 전달한다.
 - 원본 `publicReportUrl`은 Firestore `shortLinks/{리포트링크ID}.targetUrl`에 저장한다.
 - 원본 인바디 리포트 URL은 Firestore `shortLinks/{인바디링크ID}.targetUrl`에 저장한다.

@@ -34,6 +34,8 @@ export const SOLAPI_BUTTON_URL_MAX_LENGTH = 100;
 export const SHORT_LINK_BUTTON_URL_TEMPLATE = "https://in.archivepilates.com/s/#{링크ID}/";
 export const SURVEY_DETAIL_BUTTON_URL_TEMPLATE =
   "https://in.archivepilates.com/privateSurveyResponseView?id=#{설문ID}&token=#{접근토큰}";
+export const PRIVATE_SURVEY_BUTTON_URL_TEMPLATE =
+  "https://in.archivepilates.com/privateSurvey?id=#{설문ID}&token=#{접근토큰}";
 export const GROUP_SURVEY_BUTTON_URL_TEMPLATE =
   "https://in.archivepilates.com/groupSurvey?id=#{설문ID}&token=#{접근토큰}";
 export const METHOD_MATERIAL_BUTTON_URL_TEMPLATE = "https://in.archivepilates.com/method/#{관리번호}";
@@ -86,6 +88,35 @@ export const ALIMTALK_TEMPLATE_TARGET_RULES: Partial<Record<AlimtalkCandidateTyp
       "SOLAPI 미승인 템플릿",
     ],
   },
+  onsite_welcome: {
+    type: "onsite_welcome",
+    templateCode: ALIMTALK_TEMPLATES.onsite_welcome.code,
+    templateLabel: ALIMTALK_TEMPLATES.onsite_welcome.label,
+    sourceDatePolicy: "today",
+    requiresApprovedTemplate: true,
+    requiresMemberPhone: true,
+    buttonUrlRules: [
+      {
+        label: "회원가입서 작성 버튼",
+        template: SHORT_LINK_BUTTON_URL_TEMPLATE,
+        maxLength: SOLAPI_BUTTON_URL_MAX_LENGTH,
+      },
+    ],
+    targetRules: [
+      "현장 웰컴 페이지에서 가입서 링크가 준비된 lookup_ready 요청",
+      "직원이 웰컴 페이지의 알림톡 전송 버튼을 직접 클릭",
+      "StudioMate 전화번호 단건 조회 성공",
+      "회원가입서 초안과 짧은 링크가 있음",
+      "기존 신규회원 웰컴 발송 이력이 없음",
+    ],
+    exclusionRules: [
+      "전화번호 없음",
+      "회원가입서 링크 없음",
+      "신규회원 웰컴 v5 템플릿 코드 미설정 또는 미승인",
+      "기존 신규회원 웰컴 발송 이력 있음",
+      "같은 현장 웰컴 요청 이미 sent/error 처리",
+    ],
+  },
   private_survey: {
     type: "private_survey",
     templateCode: ALIMTALK_TEMPLATES.private_survey.code,
@@ -94,9 +125,22 @@ export const ALIMTALK_TEMPLATE_TARGET_RULES: Partial<Record<AlimtalkCandidateTyp
     sourceDatePolicy: "today",
     requiresApprovedTemplate: true,
     requiresMemberPhone: true,
+    buttonUrlRules: [
+      {
+        label: "프라이빗 사전설문 작성 버튼",
+        template: PRIVATE_SURVEY_BUTTON_URL_TEMPLATE,
+        maxLength: SOLAPI_BUTTON_URL_MAX_LENGTH,
+      },
+      {
+        label: "프라이빗 사전설문 작성 버튼",
+        template: SHORT_LINK_BUTTON_URL_TEMPLATE,
+        maxLength: SOLAPI_BUTTON_URL_MAX_LENGTH,
+      },
+    ],
     targetRules: [
       "오늘부터 다음 주 일요일까지 예정된 첫 프라이빗 예약이 있음",
       "예약이 강사레슨이 아님",
+      "자체설문 요청 문서와 짧은 링크가 있음",
       "최근 1년 내 프라이빗 사전설문 제출 이력이 없음",
       "과거 프라이빗 출석 완료 이력이 없음",
     ],
@@ -105,6 +149,7 @@ export const ALIMTALK_TEMPLATE_TARGET_RULES: Partial<Record<AlimtalkCandidateTyp
       "전화번호 없음",
       "프라이빗 예약 없음",
       "그룹 또는 강사레슨 예약",
+      "짧은 링크 생성 실패 또는 버튼 URL 치환 후 100자 초과",
       "최근 1년 내 프라이빗 사전설문 제출 이력 있음",
       "과거 프라이빗 출석 완료 이력 있음",
       "SOLAPI 미승인 템플릿",
@@ -301,18 +346,12 @@ export const ALIMTALK_TEMPLATE_TARGET_RULES: Partial<Record<AlimtalkCandidateTyp
         template: PRIVATE_REPORT_BUTTON_URL_TEMPLATE,
         maxLength: SOLAPI_BUTTON_URL_MAX_LENGTH,
       },
-      {
-        label: "프라이빗 인바디 리포트 버튼",
-        template: "https://in.archivepilates.com/s/#{인바디링크ID}/",
-        maxLength: SOLAPI_BUTTON_URL_MAX_LENGTH,
-      },
     ],
     targetRules: [
       "수업 후 기록이 제출된 프라이빗 회차",
       "Gemini 회원용 리포트 초안이 생성됨",
       "회원용 HTML 리포트 URL이 있음",
       "Notion에서 발송 체크와 발송상태 대기 확인",
-      "최신 인바디 리포트가 있으면 인바디 버튼에 연결하고, 없으면 측정 데이터 없음 안내 화면에 연결",
     ],
     exclusionRules: [
       "전화번호 없음",

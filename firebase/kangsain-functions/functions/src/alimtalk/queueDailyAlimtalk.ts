@@ -36,7 +36,7 @@ export async function queueDailyAlimtalkCandidates(
     sendable.push(candidate);
   }
 
-  const approval = await requireApprovalForLargeAlimtalkBatch({ studioId, today, candidates: sendable });
+  const approval = await requireApprovalForLargeAlimtalkBatch({ studioId, today, candidates: sendable, scope: "daily" });
   if (approval.required && !approval.approved) {
     logger.info("queueDailyAlimtalkCandidates awaiting approval", {
       studioId,
@@ -108,7 +108,12 @@ export async function queueReservationOpenAlimtalkCandidates(
     sendable.push(candidate);
   }
 
-  const approval = await requireApprovalForLargeAlimtalkBatch({ studioId, today, candidates: sendable });
+  const approval = await requireApprovalForLargeAlimtalkBatch({
+    studioId,
+    today,
+    candidates: sendable,
+    scope: "reservation_open",
+  });
   if (approval.required && !approval.approved) {
     logger.info("queueReservationOpenAlimtalkCandidates awaiting approval", {
       studioId,

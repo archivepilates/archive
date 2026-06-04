@@ -74,6 +74,9 @@ function candidateShortLinkId(
 ): string {
   const existing = String(candidate.payload?.shortLinkId || "");
   if (existing) return existing;
+  if (candidate.type === "private_survey" && surveyId && accessToken) {
+    return shortLinkIdForTarget("private_survey", privateSurveyTargetUrl(surveyId, accessToken));
+  }
   if (candidate.type === "group_survey" && surveyId && accessToken) {
     return shortLinkIdForTarget("group_survey", groupSurveyTargetUrl(surveyId, accessToken));
   }
@@ -85,6 +88,13 @@ function candidateShortLinkId(
 
 function groupSurveyTargetUrl(surveyId: string, accessToken: string): string {
   const url = new URL("https://in.archivepilates.com/groupSurvey");
+  url.searchParams.set("id", surveyId);
+  url.searchParams.set("token", accessToken);
+  return url.toString();
+}
+
+function privateSurveyTargetUrl(surveyId: string, accessToken: string): string {
+  const url = new URL("https://in.archivepilates.com/privateSurvey");
   url.searchParams.set("id", surveyId);
   url.searchParams.set("token", accessToken);
   return url.toString();

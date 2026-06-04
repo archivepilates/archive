@@ -51,7 +51,8 @@ export async function rebuildAlimtalkCandidatesForRange(input: {
       }
       const privateSurveyCandidate = await privateSurveyCandidateForDate(profile, sourceDate, bookingIndex);
       if (privateSurveyCandidate) {
-        await enqueueSendableCandidate(privateSurveyCandidate, candidateIds, writes);
+        const enqueued = await enqueueSendableCandidate(privateSurveyCandidate, candidateIds, writes);
+        if (enqueued) writes.push(upsertPrivateSurveyRequest(privateSurveyCandidate));
       }
       const groupSurveyCandidate = await groupSurveyCandidateForDate(profile, sourceDate, bookingIndex);
       if (groupSurveyCandidate) {
@@ -68,7 +69,7 @@ export async function rebuildAlimtalkCandidatesForRange(input: {
     }
   }
 
-  if (mode === "daily") {
+  if (mode === "daily" && CANDIDATE_TEMPLATE_CODES.new_member) {
     for (const profile of profiles.filter(
       (profile) =>
         profile.isNewMember &&
@@ -144,6 +145,7 @@ const DAILY_ALIMTALK_CANDIDATE_TYPES: SendableAlimtalkCandidateType[] = [
 
 type BookingIndex = Map<string, BookingDoc[]>;
 type LectureIndex = Map<string, LectureDoc>;
+const STALE_PROCESSING_RECALCULATION_MS = 10 * 60 * 1000;
 
 async function loadBookingIndex(studioId: string): Promise<BookingIndex> {
   const snap = await refs.bookings().where("studioId", "==", studioId).get();
@@ -244,7 +246,7 @@ async function markStaleCandidatesSkipped(input: {
       if (candidate.studioId !== input.studioId) return;
       if (!candidateTypes.has(candidate.type as SendableAlimtalkCandidateType)) return;
       if (input.currentCandidateIds.has(candidate.candidateId)) return;
-      if (!["candidate", "reviewed", "failed"].includes(candidate.status)) return;
+      if (!shouldSkipStaleCandidate(candidate)) return;
       writes.push(
         refs.alimtalkCandidate(candidate.candidateId).set(
           {
@@ -258,6 +260,13 @@ async function markStaleCandidatesSkipped(input: {
     });
   }
   await Promise.all(writes);
+}
+
+function shouldSkipStaleCandidate(candidate: AlimtalkCandidateDoc): boolean {
+  if (["candidate", "reviewed", "failed", "queued"].includes(candidate.status)) return true;
+  if (candidate.status !== "processing") return false;
+  const updatedAt = candidate.updatedAt?.toMillis?.() || 0;
+  return updatedAt > 0 && Date.now() - updatedAt >= STALE_PROCESSING_RECALCULATION_MS;
 }
 
 async function enqueueSendableCandidate(
@@ -537,6 +546,21 @@ function groupSurveyTargetUrl(requestId: string, accessToken: string): string {
   return url.toString();
 }
 
+function privateSurveyRequestId(memberId: string, bookingId: string): string {
+  return `psr-${stableHash({ memberId, bookingId }).slice(0, 12)}`;
+}
+
+function privateSurveyAccessToken(requestId: string): string {
+  return createHmac("sha256", privateSurveyWebhookSecret.value()).update(requestId).digest("hex").slice(0, 16);
+}
+
+function privateSurveyTargetUrl(requestId: string, accessToken: string): string {
+  const url = new URL("https://in.archivepilates.com/privateSurvey");
+  url.searchParams.set("id", requestId);
+  url.searchParams.set("token", accessToken);
+  return url.toString();
+}
+
 function sha256(value: string): string {
   return createHash("sha256").update(value).digest("hex");
 }
@@ -576,6 +600,42 @@ async function upsertGroupSurveyRequest(candidate: AlimtalkCandidateDoc): Promis
   );
 }
 
+async function upsertPrivateSurveyRequest(candidate: AlimtalkCandidateDoc): Promise<void> {
+  const requestId = String(candidate.payload.surveyId || candidate.payload.responseId || "");
+  const accessToken = String(candidate.payload.accessToken || "");
+  if (!requestId || !accessToken) return;
+  const ref = db.collection("privateSurveyRequests").doc(requestId);
+  const previous = (await ref.get()).data();
+  if (previous?.status === "submitted") {
+    await ref.set({ updatedAt: nowTimestamp() }, { merge: true });
+    return;
+  }
+  await ref.set(
+    {
+      requestId,
+      studioId: candidate.studioId,
+      memberId: candidate.memberId,
+      memberName: candidate.memberName,
+      memberPhone: candidate.memberPhone,
+      memberPhoneLast4: candidate.memberPhone.slice(-4),
+      bookingId: candidate.payload.bookingId || "",
+      lectureId: candidate.payload.lectureId || "",
+      lectureDate: candidate.payload.lectureDate || "",
+      staffId: candidate.payload.staffId || "",
+      staffName: candidate.payload.staffName || "",
+      ticketName: candidate.payload.ticketName || "",
+      sourceCandidateId: candidate.candidateId,
+      shortLinkId: candidate.payload.shortLinkId || "",
+      shortUrl: candidate.payload.shortUrl || "",
+      accessTokenHash: sha256(accessToken),
+      status: previous?.status || "pending",
+      createdAt: previous?.createdAt || nowTimestamp(),
+      updatedAt: nowTimestamp(),
+    },
+    { merge: true },
+  );
+}
+
 async function privateSurveyCandidateForDate(
   profile: MemberProfileDoc,
   sourceDate: string,
@@ -588,6 +648,10 @@ async function privateSurveyCandidateForDate(
   if (!booking) return null;
   if (await hasSubmittedPrivateSurvey(profile.memberId, profile.phone)) return null;
   if (hasAttendedPrivateBookingOnOrBefore(profile.memberId, sourceDate, bookingIndex)) return null;
+  const requestId = privateSurveyRequestId(profile.memberId, booking.bookingId);
+  const accessToken = privateSurveyAccessToken(requestId);
+  const targetUrl = privateSurveyTargetUrl(requestId, accessToken);
+  const shortLinkId = shortLinkIdForTarget("private_survey", targetUrl);
   return {
     candidateId: `private_survey_${profile.memberId}_${sourceDate}`,
     studioId: profile.studioId,
@@ -606,6 +670,13 @@ async function privateSurveyCandidateForDate(
       bookingId: booking.bookingId,
       lectureId: booking.lectureId,
       lectureDate: booking.lectureDate,
+      staffId: booking.staffId,
+      staffName: booking.staffName,
+      surveyId: requestId,
+      responseId: requestId,
+      accessToken,
+      shortLinkId,
+      shortUrl: shortUrlForId(shortLinkId),
       privateSurveyWindowEndDate: reservationOpenEndDate(sourceDate),
     },
     attempts: 0,

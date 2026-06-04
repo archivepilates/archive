@@ -181,6 +181,7 @@ function templateLabel(type: string): string {
   const labels: Record<string, string> = {
     reservation_open: "수업예약오픈안내",
     new_member: "신규회원 웰컴",
+    onsite_welcome: "현장 웰컴",
     private_survey: "프라이빗 사전설문",
     ticket_expiring: "그룹 기간 만료",
     remaining_low: "그룹 횟수 부족",
