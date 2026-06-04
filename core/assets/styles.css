@@ -342,7 +342,13 @@ h3 {
 
 .kpis {
   grid-template-columns: repeat(auto-fit, minmax(min(100%, 260px), 1fr));
+  grid-auto-rows: 156px;
+  align-items: start;
   margin-bottom: 22px;
+}
+
+.kpis > .panel + .panel {
+  margin-top: 0;
 }
 
 .summary-grid {
@@ -463,10 +469,17 @@ a.panel {
 }
 
 .metric {
-  display: grid;
-  align-content: start;
+  display: flex;
+  flex-direction: column;
+  align-items: flex-start;
   min-height: 156px;
   padding: 20px;
+}
+
+.kpis > .metric {
+  align-self: start;
+  height: 156px;
+  min-height: 0;
 }
 
 .metric::before {
@@ -498,12 +511,16 @@ a.panel {
 }
 
 .metric-value {
+  min-width: 0;
   margin-top: 9px;
   font-size: 1.92rem;
   font-weight: 800;
   letter-spacing: 0;
   line-height: 1.12;
-  overflow-wrap: anywhere;
+  overflow: hidden;
+  overflow-wrap: normal;
+  text-overflow: ellipsis;
+  white-space: nowrap;
 }
 
 .metric-value.compact {
@@ -513,9 +530,13 @@ a.panel {
 }
 
 .metric-note {
+  min-width: 0;
   margin-top: 6px;
   color: var(--soft);
   font-size: 0.84rem;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
 }
 
 [data-member-detail-dashboard] .profile-hero {
@@ -525,10 +546,11 @@ a.panel {
 
 [data-member-detail-dashboard] .kpis {
   grid-template-columns: repeat(4, minmax(0, 1fr));
-  align-items: stretch;
+  grid-auto-rows: 172px;
+  align-items: start;
 }
 
-[data-member-detail-dashboard] .metric {
+[data-member-detail-dashboard] .kpis > .metric {
   height: 172px;
 }
 
