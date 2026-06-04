@@ -21,6 +21,8 @@ const state = {
   authReady: null,
 };
 
+let memberSearchTerm = "";
+
 function qs(id) {
   return document.getElementById(id);
 }
@@ -410,6 +412,42 @@ function renderAutomation(items) {
       `;
     })
     .join("");
+
+  const healthList = qs("automationHealthList");
+  if (healthList) {
+    const flows = [
+      {
+        title: "StudioMate Excel 동기화",
+        source: items.find((item) => item.id === "studiomate-excel-sync") || items[0],
+        detail: "회원목록, 예약내역, 삭제 수업 원본을 가져와 CORE 표시용 상태를 갱신합니다.",
+      },
+      {
+        title: "알림톡 자동발송",
+        source: items.find((item) => String(item.id || "").includes("alimtalk")),
+        detail: "후보 선정과 실제 발송은 기존 canonical 컬렉션 기준으로 유지합니다.",
+      },
+      {
+        title: "Google Contacts 동기화",
+        source: items.find((item) => String(item.id || "").includes("contact")),
+        detail: "연락처 write는 승인된 동기화 큐와 매칭 규칙만 사용합니다.",
+      },
+    ];
+    healthList.innerHTML = flows
+      .map((flow) => {
+        const status = flow.source?.status || flow.source?.health || (flow.source ? "active" : "pending");
+        const updated = flow.source ? formatDate(flow.source.updatedAt || flow.source.lastRunAt || flow.source.checkedAt) : "기록 대기";
+        return `
+          <div class="status-row">
+            <div>
+              <strong>${escapeHtml(flow.title)}</strong>
+              <p>${escapeHtml(flow.detail)} · ${escapeHtml(updated)}</p>
+            </div>
+            ${pill(status)}
+          </div>
+        `;
+      })
+      .join("");
+  }
 }
 
 function renderImports(items) {
@@ -469,20 +507,43 @@ function renderQualityIssues(items) {
     .join("");
 }
 
+function matchesMemberSearch(item) {
+  if (!memberSearchTerm) return true;
+  const haystack = [
+    item.name,
+    item.memberName,
+    item.memberId,
+    item.id,
+    item.phone,
+    item.phoneLast4,
+    ...(item.tagLabels || []),
+    ...(item.currentTicketsSummary || []).map((ticket) => (typeof ticket === "string" ? ticket : ticket.name || ticket.ticketName)),
+  ]
+    .filter(Boolean)
+    .join(" ")
+    .toLowerCase();
+  return haystack.includes(memberSearchTerm.toLowerCase());
+}
+
 function renderMembers(items) {
   const table = qs("membersTable");
   if (!table) return;
-  setText("membersVisibleCount", String(items.length));
-  setText("membersActiveTicketCount", String(items.filter((item) => toNumber(item.activeTicketCount) > 0).length));
-  setText("membersRecentVisitCount", String(items.filter((item) => item.recentVisitAt).length));
-  setText("membersRevenueCount", String(items.filter((item) => toNumber(item.totalRevenue) > 0).length));
+  const visibleItems = items.filter(matchesMemberSearch);
+  setText("membersVisibleCount", String(visibleItems.length));
+  setText("membersActiveTicketCount", String(visibleItems.filter((item) => toNumber(item.activeTicketCount) > 0).length));
+  setText("membersRecentVisitCount", String(visibleItems.filter((item) => item.recentVisitAt).length));
+  setText("membersRevenueCount", String(visibleItems.filter((item) => toNumber(item.totalRevenue) > 0).length));
 
   if (!items.length) {
-    table.innerHTML = `<tr><td colspan="4">최근 members 문서가 없거나 권한 확인이 필요합니다.</td></tr>`;
+    table.innerHTML = `<tr><td colspan="4">member360Cards 문서가 없거나 권한 확인이 필요합니다.</td></tr>`;
+    return;
+  }
+  if (!visibleItems.length) {
+    table.innerHTML = `<tr><td colspan="4">검색어와 일치하는 회원이 없습니다.</td></tr>`;
     return;
   }
 
-  table.innerHTML = items
+  table.innerHTML = visibleItems
     .map((item) => {
       const ticketNames = (item.currentTicketsSummary || item.activeTicketNames || [])
         .map((ticket) => (typeof ticket === "string" ? ticket : ticket.name))
@@ -507,10 +568,15 @@ function renderMessages(candidates, sends) {
   if (!qs("messagesCandidateList")) return;
   const sentCandidates = candidates.filter((item) => String(item.status || "").toLowerCase() === "sent");
   const failedSends = sends.filter((item) => ["failed", "error"].includes(String(item.status || "").toLowerCase()));
+  const pendingCandidates = candidates.filter((item) =>
+    ["queued", "pending", "review", "reviewed", "processing"].includes(String(item.status || "").toLowerCase()),
+  );
   setText("messagesCandidateCount", formatCount(candidates.length));
   setText("messagesSendCount", formatCount(sends.length));
   setText("messagesSentCount", formatCount(sentCandidates.length));
   setText("messagesFailedCount", formatCount(failedSends.length));
+  setText("messagesPendingDecision", pendingCandidates.length ? `${pendingCandidates.length}건 확인` : "대기 없음");
+  setText("messagesRiskDecision", failedSends.length ? `${failedSends.length}건 실패` : "위험 낮음");
 
   const renderAlimtalkRow = (item, options = {}) => {
     const template = item.title || item.templateName || item.templateCode || item.type || "알림톡";
@@ -538,6 +604,41 @@ function renderMessages(candidates, sends) {
     sendList.innerHTML = sends.length
       ? sends.map((item) => renderAlimtalkRow(item, { status: (send) => send.status || "done" })).join("")
       : `<div class="empty-state">최근 alimtalkSends 문서가 없습니다.</div>`;
+  }
+
+  const decisionList = qs("messagesDecisionList");
+  if (decisionList) {
+    const rows = [
+      {
+        title: "오늘 볼 것",
+        detail: pendingCandidates.length
+          ? "대기/검토/처리중 후보가 있습니다. 실제 발송 전 중복과 템플릿을 확인하세요."
+          : "최근 후보 기준으로 즉시 승인해야 할 대기 항목은 보이지 않습니다.",
+        status: pendingCandidates.length ? "warning" : "success",
+      },
+      {
+        title: "실패 로그",
+        detail: failedSends.length
+          ? "실패 로그가 있습니다. 템플릿, 전화번호, Solapi 응답을 확인해야 합니다."
+          : "최근 발송 로그에서 실패 상태는 보이지 않습니다.",
+        status: failedSends.length ? "failed" : "success",
+      },
+      {
+        title: "운영 경계",
+        detail: "이 탭은 확인용입니다. 후보 선정과 발송 원천은 기존 alimtalkCandidates/alimtalkSends를 유지합니다.",
+        status: "active",
+      },
+    ];
+    decisionList.innerHTML = rows
+      .map(
+        (row) => `
+          <div class="status-row">
+            <div><strong>${escapeHtml(row.title)}</strong><p>${escapeHtml(row.detail)}</p></div>
+            ${pill(row.status)}
+          </div>
+        `,
+      )
+      .join("");
   }
 }
 
@@ -974,6 +1075,49 @@ function renderBusinessMemberInsights(items) {
     .join("");
 }
 
+function renderHomeDecisions() {
+  const list = qs("homeDecisionList");
+  if (!list) return;
+  const openIssues = state.qualityIssues.filter((item) => !["resolved", "closed", "done"].includes(String(item.status || "").toLowerCase()));
+  const failedAutomation = state.automationItems.filter((item) =>
+    ["failed", "error", "critical", "blocked"].includes(String(item.status || item.health || "").toLowerCase()),
+  );
+  const rows = [
+    {
+      title: failedAutomation.length ? "자동화 실패 확인" : "자동화 상태 정상권",
+      detail: failedAutomation.length
+        ? `${failedAutomation.length}개 자동화 상태가 실패/중단으로 보입니다. Automation 탭에서 원인을 먼저 확인하세요.`
+        : "최근 자동화 상태에서 실패/중단 신호는 보이지 않습니다.",
+      status: failedAutomation.length ? "failed" : "success",
+      href: "./automation/",
+    },
+    {
+      title: openIssues.length ? "데이터 품질 이슈 확인" : "원본 품질 안정권",
+      detail: openIssues.length
+        ? `${openIssues.length}개 열린 이슈가 있습니다. 발송/쓰기 전 Imports 탭에서 매칭 상태를 확인하세요.`
+        : "열린 데이터 품질 이슈가 없습니다.",
+      status: openIssues.length ? "warning" : "success",
+      href: "./imports/",
+    },
+    {
+      title: "회원/알림톡은 read-only 확인",
+      detail: "ARCHIVE CORE는 현재 운영 판단 콘솔입니다. 외부 발송/쓰기 원천은 기존 canonical 컬렉션을 유지합니다.",
+      status: "active",
+      href: "./rules/",
+    },
+  ];
+  list.innerHTML = rows
+    .map(
+      (row) => `
+        <a class="status-row status-link" href="${row.href}">
+          <div><strong>${escapeHtml(row.title)}</strong><p>${escapeHtml(row.detail)}</p></div>
+          ${pill(row.status)}
+        </a>
+      `,
+    )
+    .join("");
+}
+
 function renderBusinessFallback(error) {
   if (!qs("businessMonthSelect")) return;
   qs("businessSnapshotStatus").textContent = error ? "권한 확인" : "대기";
@@ -992,6 +1136,7 @@ function renderFallback(error) {
   renderQualityIssues([]);
   renderMembers([]);
   renderMessages([], []);
+  renderHomeDecisions();
   renderMemberDetail(null);
   renderPrivate([], [], [], []);
   renderBusinessFallback(error);
@@ -1038,7 +1183,7 @@ async function refresh() {
       getRecentCollection(db, runtime, "sourceImports"),
       getRecentCollection(db, runtime, "dataQualityIssues", 12),
       shouldLoadBusiness ? getDoc(doc(db, "dashboardSnapshots", "current")) : Promise.resolve(null),
-      shouldLoadMembers ? getRecentCollectionBy(db, runtime, "member360Cards", "totalRevenue", 12) : Promise.resolve([]),
+      shouldLoadMembers ? getRecentCollectionBy(db, runtime, "member360Cards", "totalRevenue", 50) : Promise.resolve([]),
       shouldLoadMessages ? getRecentCollectionBy(db, runtime, "alimtalkCandidates", "updatedAt", 12) : Promise.resolve([]),
       shouldLoadMessages ? getRecentCollectionBy(db, runtime, "alimtalkSends", "updatedAt", 12) : Promise.resolve([]),
       shouldLoadMemberDetail ? loadMemberDetail(runtime, memberDetailId()) : Promise.resolve(null),
@@ -1068,6 +1213,7 @@ async function refresh() {
     renderQualityIssues(qualityIssues);
     renderMembers(members);
     renderMessages(alimtalkCandidates, alimtalkSends);
+    renderHomeDecisions();
     renderMemberDetail(memberDetail);
     renderPrivate(privateRequests, privateRecords, privateUsageEvents, privateLedgerEntries);
     if (shouldLoadBusiness) {
@@ -1087,6 +1233,10 @@ enhanceNav();
 activateNav();
 qs("refreshButton")?.addEventListener("click", refresh);
 qs("businessMonthSelect")?.addEventListener("change", (event) => renderBusinessMonth(event.target.value));
+qs("memberSearchInput")?.addEventListener("input", (event) => {
+  memberSearchTerm = event.target.value.trim();
+  renderMembers(state.members);
+});
 document.addEventListener("click", (event) => {
   const target = event.target.closest("[data-business-month]");
   if (!target) return;

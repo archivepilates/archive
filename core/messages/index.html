@@ -37,6 +37,18 @@
         </section>
         <section class="grid overview-grid">
           <article class="panel">
+            <div class="panel-header"><div><h2>알림톡 판단 큐</h2><p>승인, 실패, 중복 위험을 먼저 확인합니다.</p></div><span class="pill" id="messagesPendingDecision">확인 중</span></div>
+            <div class="list" id="messagesDecisionList"><div class="empty-state">Firestore 연결 후 판단 항목을 표시합니다.</div></div>
+          </article>
+          <aside class="panel detail-card">
+            <span class="pill danger" id="messagesRiskDecision">확인 중</span>
+            <h2>발송 전 보호 규칙</h2>
+            <p>같은 canonical key와 template/action type이 이미 있으면 후보 생성 또는 발송을 중단합니다.</p>
+            <p>excel fallback 예약은 실제 StudioMate/API 예약이 있으면 외부 발송 원천에서 제외합니다.</p>
+          </aside>
+        </section>
+        <section class="grid overview-grid">
+          <article class="panel">
             <div class="panel-header"><div><h2>최근 알림톡 후보</h2><p>alimtalkCandidates의 최근 상태입니다.</p></div><span class="pill">candidates</span></div>
             <div class="list" id="messagesCandidateList"><div class="empty-state">Firestore 연결 후 후보 기록을 표시합니다.</div></div>
           </article>

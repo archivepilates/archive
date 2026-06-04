@@ -49,7 +49,18 @@
             <div><h2>회원 매출 요약</h2><p>member360Cards 누적 매출 기준입니다. 발송/쓰기 원천으로 사용하지 않습니다.</p></div>
             <span class="pill warn">read-only</span>
           </div>
+          <div class="toolbar">
+            <label class="search-field">
+              <span>회원 검색</span>
+              <input id="memberSearchInput" type="search" autocomplete="off" placeholder="이름, 회원ID, 전화번호 끝자리, 수강권" />
+            </label>
+            <a class="text-link" href="../rules/">원천 규칙</a>
+          </div>
           <div class="table-wrap"><table><thead><tr><th>회원</th><th>수강권</th><th>최근 방문</th><th>누적 매출</th></tr></thead><tbody id="membersTable"><tr><td colspan="4">Firestore 연결 후 표시합니다.</td></tr></tbody></table></div>
+        </section>
+        <section class="grid data-grid">
+          <article class="panel detail-card"><span class="pill good">빠른 판단</span><h2>검색 후 상세 확인</h2><p>회원명, 회원ID, 전화번호 끝자리, 수강권명으로 목록을 좁힌 뒤 상세 화면에서 구매, 예약, 메모, 알림톡 로그를 확인합니다.</p></article>
+          <article class="panel detail-card"><span class="pill warn">운영 경계</span><h2>표시용 read-model</h2><p>member360Cards는 운영자 검토와 GPT 분석용입니다. 발송, 연락처, StudioMate write는 canonical source를 사용합니다.</p></article>
         </section>
         <section class="grid data-grid">
           <article class="panel detail-card"><span class="pill warn">전환 준비</span><h2>members</h2><p>이름, 전화번호, 등록일, 상태, 최근 방문, 현재 수강권 요약을 담는 회원 기준 문서.</p></article>

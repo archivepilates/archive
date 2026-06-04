@@ -28,6 +28,22 @@
           <article class="panel metric"><div class="metric-label">연결 상태</div><div class="metric-value compact" id="importConnectionState">확인 중</div><div class="metric-note">원본 import 결과</div></article>
           <article class="panel metric"><div class="metric-label">보호 규칙</div><div class="metric-value compact">canonical</div><div class="metric-note">excel fallback은 외부 발송 원천 제외</div></article>
         </section>
+        <section class="grid overview-grid">
+          <article class="panel">
+            <div class="panel-header"><div><h2>원본 처리 흐름</h2><p>문제가 생겼을 때 어느 단계에서 멈췄는지 먼저 봅니다.</p></div><span class="pill">source flow</span></div>
+            <div class="flow-list">
+              <div><strong>파일 선택</strong><span>회원목록, 예약내역, 삭제 수업, 정산 원본을 종류별로 분리</span></div>
+              <div><strong>Import 기록</strong><span>sourceImports에 파일명, 행 수, 처리 상태 저장</span></div>
+              <div><strong>품질 이슈</strong><span>전화번호 누락, 동명이인, name-only match, 중복 fallback 기록</span></div>
+              <div><strong>운영 채택</strong><span>검증된 원천만 회원/알림톡/경영 화면에서 사용</span></div>
+            </div>
+          </article>
+          <aside class="panel detail-card">
+            <span class="pill danger">guardrail</span>
+            <h2>외부 실행 전 정지 조건</h2>
+            <p>회원 ID가 임시 `excel_`인 상태, 전화번호 없는 name-only match, 실제 예약과 fallback 예약 중복은 발송/쓰기 전에 멈춥니다.</p>
+          </aside>
+        </section>
         <section class="grid data-grid">
           <article class="panel">
             <div class="panel-header"><div><h2>최근 원본 Import</h2><p>sourceImports 기준입니다.</p></div><span class="pill">sourceImports</span></div>

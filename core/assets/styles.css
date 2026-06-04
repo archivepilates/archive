@@ -643,6 +643,17 @@ td span {
   box-shadow: 0 8px 22px rgba(20, 35, 55, 0.04);
 }
 
+.status-link {
+  min-height: 0;
+  color: inherit;
+  text-decoration: none;
+}
+
+.status-link:hover {
+  border-color: rgba(37, 99, 235, 0.22);
+  background: #ffffff;
+}
+
 .status-row strong {
   display: block;
   overflow-wrap: anywhere;
@@ -679,6 +690,64 @@ td span {
   min-width: 0;
   flex-wrap: wrap;
   gap: 8px;
+}
+
+.toolbar {
+  display: flex;
+  align-items: end;
+  justify-content: space-between;
+  gap: 12px;
+  padding: 16px 20px 0;
+}
+
+.search-field {
+  display: grid;
+  width: min(100%, 520px);
+  gap: 6px;
+}
+
+.search-field span {
+  color: var(--muted);
+  font-size: 0.78rem;
+  font-weight: 800;
+}
+
+.search-field input {
+  width: 100%;
+  min-height: 44px;
+  border: 1px solid var(--line);
+  border-radius: 8px;
+  background: var(--surface-strong);
+  color: var(--text);
+  padding: 0 12px;
+}
+
+.flow-list {
+  display: grid;
+  gap: 10px;
+  padding: 20px;
+}
+
+.flow-list div {
+  display: grid;
+  grid-template-columns: minmax(82px, 0.28fr) minmax(0, 1fr);
+  gap: 12px;
+  align-items: start;
+  border: 1px solid var(--line-soft);
+  border-radius: 8px;
+  background: var(--surface-strong);
+  padding: 12px 14px;
+}
+
+.flow-list strong {
+  color: var(--text);
+  font-size: 0.9rem;
+}
+
+.flow-list span {
+  min-width: 0;
+  color: var(--muted);
+  font-size: 0.88rem;
 }
 
 .empty-state {
@@ -1075,8 +1144,24 @@ td span {
   .rank-list,
   .business-bars,
   .rules,
+  .flow-list,
   .checklist {
     padding: 16px;
+  }
+
+  .toolbar {
+    align-items: stretch;
+    flex-direction: column;
+    padding: 16px 16px 0;
+  }
+
+  .search-field {
+    width: 100%;
+  }
+
+  .flow-list div {
+    grid-template-columns: 1fr;
+    gap: 4px;
   }
 
   .panel-header {

@@ -19,6 +19,22 @@
       </aside>
       <main class="main">
         <header class="page-hero"><p class="eyebrow">RULES</p><h1>운영 규칙</h1><p class="subtitle">Notion 운영 규칙과 ARCHIVE CORE 실행 상태를 연결합니다.</p></header>
+        <section class="grid overview-grid">
+          <article class="panel">
+            <div class="panel-header"><div><h2>데이터 원천 경계</h2><p>보는 데이터와 실행 데이터는 의도적으로 분리합니다.</p></div><span class="pill good">canonical first</span></div>
+            <div class="rules">
+              <div><strong>표시/분석</strong><span>members, member360Cards, dashboardSnapshots는 운영자 검토와 GPT 분석용 read-model입니다.</span></div>
+              <div><strong>알림톡/외부 발송</strong><span>alimtalkCandidates, alimtalkSends, 승인 큐와 canonical key 기준만 사용합니다.</span></div>
+              <div><strong>StudioMate write</strong><span>Firestore memo queue와 StudioMate 브라우저 lock을 거친 작업만 실행합니다.</span></div>
+              <div><strong>연락처 동기화</strong><span>전화번호와 실제 StudioMate memberId가 확인된 contactSyncJobs만 사용합니다.</span></div>
+            </div>
+          </article>
+          <aside class="panel detail-card">
+            <span class="pill warn">operator note</span>
+            <h2>CORE는 판단 콘솔</h2>
+            <p>ARCHIVE CORE에서 상태를 보고 판단하되, 실제 발송/쓰기/예약/결제 관련 실행은 승인된 원천과 큐에서만 진행합니다.</p>
+          </aside>
+        </section>
         <section class="grid data-grid">
           <article class="panel detail-card"><span class="pill good">canonical</span><h2>외부 액션 원천</h2><p>알림톡, 연락처, StudioMate write는 승인된 canonical source에서만 실행.</p></article>
           <article class="panel detail-card"><span class="pill">workLanes</span><h2>임시 작업 본부</h2><p>새 스레드와 실험 데이터는 workLanes에 두고, 승격 전까지 원천으로 쓰지 않음.</p></article>

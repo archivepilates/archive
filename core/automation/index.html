@@ -28,6 +28,21 @@
           <article class="panel metric"><div class="metric-label">다음 연결</div><div class="metric-value compact">작업 로그</div><div class="metric-note" id="automationNextAction">자동화 결과 저장 연결 확인</div></article>
           <article class="panel metric"><div class="metric-label">운영 원칙</div><div class="metric-value compact">read-only</div><div class="metric-note">실행 버튼은 별도 승인 후 추가</div></article>
         </section>
+        <section class="grid overview-grid">
+          <article class="panel">
+            <div class="panel-header"><div><h2>자동화 흐름</h2><p>운영자가 봐야 할 순서대로 상태를 묶었습니다.</p></div><span class="pill">workflow</span></div>
+            <div class="flow-list">
+              <div><strong>수집</strong><span>StudioMate Excel 다운로드, 정산 원본 확보</span></div>
+              <div><strong>정규화</strong><span>sourceImports, dataQualityIssues 기록</span></div>
+              <div><strong>표시</strong><span>members, member360Cards, dashboardSnapshots 읽기</span></div>
+              <div><strong>실행</strong><span>알림톡, 연락처, StudioMate write는 승인된 큐만 사용</span></div>
+            </div>
+          </article>
+          <aside class="panel">
+            <div class="panel-header"><div><h2>핵심 자동화 건강도</h2><p>상태 문서가 없으면 아직 연결 대기입니다.</p></div><span class="pill warn">health</span></div>
+            <div class="list" id="automationHealthList"><div class="empty-state">Firestore 연결 후 핵심 자동화 상태를 표시합니다.</div></div>
+          </aside>
+        </section>
         <section class="panel panel-tall">
           <div class="panel-header"><div><h2>최근 자동화 상태</h2><p>automationStatus 문서 기준입니다.</p></div><span class="pill" id="automationMode">연결 대기</span></div>
           <div class="list" id="automationList"><div class="empty-state">Firestore 연결 후 automationStatus를 표시합니다.</div></div>
