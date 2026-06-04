@@ -4,6 +4,7 @@ import { spawnSync } from "node:child_process";
 import { existsSync } from "node:fs";
 import path from "node:path";
 import { createRequire } from "node:module";
+import { qualityIssuesFromSummary, recordDataQualityIssues, recordSourceImport } from "./lib/archive-core-ops-logging.mjs";
 
 const require = createRequire(import.meta.url);
 const admin = require("../firebase/kangsain-functions/functions/node_modules/firebase-admin");
@@ -91,7 +92,24 @@ if (apply) {
   );
 }
 
-console.log(JSON.stringify(summary, null, 2));
+const { importId } = await recordSourceImport(db, {
+  sourceKind: "studiomate_member_excel",
+  sourceFilePath: sourceFile,
+  mode: summary.mode,
+  status: apply ? "applied" : "dry_run",
+  rowCount: summary.readRows,
+  normalizedRows: summary.groupedMembers,
+  appliedRows: apply ? summary.plannedWrites : 0,
+  skippedRows: Object.values(summary.skipped || {}).reduce((sum, value) => sum + Number(value || 0), 0),
+  notes: [
+    `matchedExistingProfiles=${summary.matchedExistingProfiles}`,
+    `temporaryExcelProfiles=${summary.temporaryExcelProfiles}`,
+    `queueContactSync=${summary.queueContactSync}`,
+  ],
+});
+await recordDataQualityIssues(db, qualityIssuesFromSummary(summary, importId));
+
+console.log(JSON.stringify({ ...summary, sourceImportId: importId }, null, 2));
 
 function valueArg(name) {
   const prefix = `${name}=`;

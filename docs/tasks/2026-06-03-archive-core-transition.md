@@ -130,6 +130,30 @@ Phase 1: read-only operations console foundation.
 - Step 4 Business: added member revenue insight panel based on `member360Cards` read-model data.
 - External sends, StudioMate writes, Contacts writes, and Alimtalk candidate selection remain on existing canonical sources. ARCHIVE CORE displays mirrors only.
 
+## 2026-06-04 Automation/Import/Quality Step 1-3 Result
+
+- Added shared logging helper: `scripts/lib/archive-core-ops-logging.mjs`.
+- Connected StudioMate member Excel import to:
+  - `sourceImports`
+  - `dataQualityIssues`
+- Connected StudioMate reservation Excel import to:
+  - `sourceImports`
+  - `dataQualityIssues`
+- Connected deleted-class Excel import to:
+  - `sourceImports`
+- Connected `scripts/run-studiomate-excel-emergency-mode.mjs` to:
+  - `automationStatus/studiomate-excel-sync`
+- Verified on the actual LaunchAgent worktree path:
+  - `/Users/archivepilates/codex-worktrees/archivein-live-setup`
+- Dry-run result:
+  - member source import: `e44c00be488037c6f10da266adc04649`
+  - reservation source import: `846f95c7f856f6d57639e9db78459c9c`
+  - automation status: `studiomate-excel-sync`, status `healthy`
+- Fixed a source-selection bug:
+  - reservation import previously allowed `수업매출` sales files because the filename filter accepted `수업`.
+  - reservation import now requires reservation/booking filenames and excludes sales/매출 paths.
+  - wrong dry-run source import `37905d7070e83cb767a5e78e5bc52b99` was marked `superseded`.
+
 ## Handoff Rule
 
 Subthreads should be instructed by lane, not repeated long context:

@@ -345,3 +345,50 @@ members/{memberId}/tags
 ```
 
 The Private page may show the usage-history backfill dry-run result, but `memberUsageEvents` and `privateSessionLedger` remain pending until limited apply is separately approved. The existing private chart request and Alimtalk flows must not switch to the new ledger during this UI step.
+
+## 2026-06-04 Automation Status / Source Imports / Quality Issues
+
+ARCHIVE CORE now receives operational records from the StudioMate Excel sync pipeline.
+
+Connected writer surfaces:
+
+```txt
+scripts/run-studiomate-excel-emergency-mode.mjs
+-> automationStatus/studiomate-excel-sync
+
+scripts/emergency-import-studiomate-member-excel.mjs
+-> sourceImports
+-> dataQualityIssues
+
+scripts/emergency-import-studiomate-reservation-excel.mjs
+-> sourceImports
+-> dataQualityIssues
+
+scripts/emergency-import-studiomate-deleted-class-excel.mjs
+-> sourceImports
+```
+
+This is operational metadata only. It does not switch Alimtalk target selection, Contacts writes, StudioMate memo writes, attendance writes, or canonical booking writes to ARCHIVE CORE.
+
+Important bug found during verification:
+
+```txt
+reservation latest-file discovery accepted 수업매출 sales files
+```
+
+Decision:
+
+```txt
+reservation import must require reservation/booking filenames
+reservation import must exclude sales/매출 paths
+wrong sourceImports from that dry-run must be superseded, not deleted
+```
+
+Verified dry-run from the actual LaunchAgent path:
+
+```txt
+/Users/archivepilates/codex-worktrees/archivein-live-setup
+member sourceImportId: e44c00be488037c6f10da266adc04649
+reservation sourceImportId: 846f95c7f856f6d57639e9db78459c9c
+automationStatus/studiomate-excel-sync: healthy
+```
