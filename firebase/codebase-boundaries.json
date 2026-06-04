@@ -11,6 +11,7 @@
       "owns": [
         "scheduledProcessAlimtalkQueue",
         "scheduledQueueAndSendAlimtalkDaily",
+        "scheduledQueueAndSendReservationOpenAlimtalk",
         "scheduledSyncAlimtalkTemplateStatuses",
         "approveAlimtalkBatch"
       ],
@@ -26,10 +27,13 @@
         "scheduledCreatePrivateLessonChartRequests",
         "scheduledGeneratePrivateLessonChartReports",
         "scheduledEnqueuePrivateLessonReportAlimtalks",
+        "scheduledPurgeDiscardedMemberSignupContracts",
         "ingestPrivateSurveyResponse",
         "privateSurveyResponseView",
         "privateLessonChartApi",
         "privateLessonReportView",
+        "memberSignupContract",
+        "onsiteWelcomeRequest",
         "notionPrivateLessonReportWebhook",
         "redirectShortLink",
         "processPrivateSurveyIntake"
