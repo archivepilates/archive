@@ -1,5 +1,6 @@
 const FIREBASE_APP_VERSION = "10.14.1";
 const WORK_LANE_ID = "archive-core-transition";
+const STUDIO_ID = "5330";
 
 const state = {
   firebaseRuntime: null,
@@ -22,6 +23,7 @@ const state = {
 };
 
 let memberSearchTerm = "";
+let memberFilter = "all";
 
 function qs(id) {
   return document.getElementById(id);
@@ -30,6 +32,13 @@ function qs(id) {
 function setText(id, value) {
   const element = qs(id);
   if (element) element.textContent = value;
+}
+
+function setPillText(id, value) {
+  const element = qs(id);
+  if (!element) return;
+  element.textContent = statusLabel(value);
+  element.className = `pill ${normalizeStatus(value)}`;
 }
 
 function formatDate(value) {
@@ -357,6 +366,10 @@ async function getCollectionBy(db, firestore, collectionName, orderField = "upda
   }
 }
 
+function studioItems(items) {
+  return items.filter((item) => String(item.studioId || STUDIO_ID) === STUDIO_ID);
+}
+
 function memberDetailId() {
   const params = new URLSearchParams(window.location.search);
   return (params.get("id") || params.get("memberId") || "").trim();
@@ -500,6 +513,14 @@ function renderImports(items) {
   setText("importCount", String(items.length));
   setText("sourceImportCount", formatCount(items.length));
   setText("importConnectionState", items.length ? "최근 원본 처리 기록 연결됨" : "sourceImports 기록 대기");
+  const latest = items[0];
+  setText("latestImportKind", latest ? sourceKindLabel(latest.sourceKind || latest.kind || latest.fileName || latest.id) : "원본 대기");
+  setText(
+    "latestImportNote",
+    latest
+      ? `${latest.sourceFileName || latest.sourceKind || latest.id} · ${formatDate(latest.updatedAt || latest.importedAt || latest.createdAt)}`
+      : "최근 import 결과가 없습니다.",
+  );
   const table = qs("importsTable");
   if (!table) return;
   if (!items.length) {
@@ -514,7 +535,7 @@ function renderImports(items) {
       const updated = formatDate(item.updatedAt || item.importedAt || item.createdAt);
       return `
         <tr>
-          <td>${escapeHtml(source)}</td>
+          <td><strong>${escapeHtml(sourceKindLabel(source))}</strong><br><span>${escapeHtml(item.sourceFileName || item.fileName || item.id)}</span></td>
           <td>${pill(item.status || item.importStatus)}</td>
           <td>${escapeHtml(rows)}</td>
           <td>${escapeHtml(updated)}</td>
@@ -524,10 +545,29 @@ function renderImports(items) {
     .join("");
 }
 
+function sourceKindLabel(value) {
+  const raw = String(value || "");
+  if (raw.includes("member")) return "회원목록";
+  if (raw.includes("reservation")) return "예약내역";
+  if (raw.includes("deleted")) return "삭제 수업";
+  if (raw.includes("sales")) return "매출 원본";
+  return raw || "원본";
+}
+
 function renderQualityIssues(items) {
   const activeIssues = items.filter((item) => !["resolved", "closed", "done"].includes(String(item.status || "").toLowerCase()));
+  const resolvedIssues = items.filter((item) => ["resolved", "closed", "done"].includes(String(item.status || "").toLowerCase()));
+  const latestIssue = activeIssues[0];
   setText("qualityCount", String(activeIssues.length));
   setText("qualityOpenCount", formatCount(activeIssues.length));
+  setText("qualityResolvedCount", formatCount(resolvedIssues.length));
+  setText("latestQualityTitle", latestIssue ? latestIssue.title || latestIssue.issueType || "품질 이슈" : "열린 이슈 없음");
+  setText(
+    "latestQualityNote",
+    latestIssue
+      ? `${latestIssue.summary || "상세 기록 없음"} · ${qualityActionText(latestIssue)}`
+      : "외부 실행 전 정지해야 할 열린 품질 이슈가 없습니다.",
+  );
 
   const list = qs("qualityList");
   if (!list) return;
@@ -548,7 +588,7 @@ function renderQualityIssues(items) {
         <${tagName}${attrs}>
           <div>
             <strong>${escapeHtml(title)}</strong>
-            <p>${escapeHtml(detail)} · ${escapeHtml(action)}</p>
+            <p>${escapeHtml(detail)} · ${escapeHtml(action)} · ${escapeHtml((item.sourcePaths || []).map((path) => path.split("/").pop()).slice(0, 1).join(", "))}</p>
           </div>
           ${pill(item.severity || item.status)}
         </${tagName}>
@@ -564,6 +604,20 @@ function qualityActionText(item) {
   if (type.includes("name") || type.includes("동명이인")) return "이름 단독 매칭 금지, 전화번호/StudioMate ID 확인";
   if (type.includes("excel")) return "실제 StudioMate memberId 해소 후 사용";
   return "운영자가 원천/매칭 상태 확인";
+}
+
+function activeQualityIssues() {
+  return state.qualityIssues.filter((item) => !["resolved", "closed", "done"].includes(String(item.status || "").toLowerCase()));
+}
+
+function memberHasQualityIssue(item) {
+  const activeIssues = activeQualityIssues();
+  const memberId = String(item.memberId || item.id || "");
+  const memberName = String(item.name || item.memberName || "");
+  return activeIssues.some((issue) => {
+    const target = [issue.memberId, issue.memberName, issue.name, issue.profileId].filter(Boolean).join(" ");
+    return (memberId && target.includes(memberId)) || (memberName && target.includes(memberName));
+  });
 }
 
 function matchesMemberSearch(item) {
@@ -584,10 +638,39 @@ function matchesMemberSearch(item) {
   return haystack.includes(memberSearchTerm.toLowerCase());
 }
 
+function matchesMemberFilter(item) {
+  if (memberFilter === "active-ticket") return toNumber(item.activeTicketCount) > 0;
+  if (memberFilter === "recent-visit") return Boolean(item.recentVisitAt);
+  if (memberFilter === "revenue") return toNumber(item.totalRevenue) > 0;
+  if (memberFilter === "quality") return memberHasQualityIssue(item);
+  return true;
+}
+
+function renderMemberFilterButtons(items) {
+  const counts = {
+    all: items.length,
+    "active-ticket": items.filter((item) => toNumber(item.activeTicketCount) > 0).length,
+    "recent-visit": items.filter((item) => item.recentVisitAt).length,
+    revenue: items.filter((item) => toNumber(item.totalRevenue) > 0).length,
+    quality: items.filter(memberHasQualityIssue).length,
+  };
+  setText("memberFilterAllCount", counts.all);
+  setText("memberFilterActiveCount", counts["active-ticket"]);
+  setText("memberFilterRecentCount", counts["recent-visit"]);
+  setText("memberFilterRevenueCount", counts.revenue);
+  setText("memberFilterQualityCount", counts.quality);
+  document.querySelectorAll("[data-member-filter]").forEach((button) => {
+    const active = button.dataset.memberFilter === memberFilter;
+    button.classList.toggle("is-active", active);
+    button.setAttribute("aria-pressed", active ? "true" : "false");
+  });
+}
+
 function renderMembers(items) {
   const table = qs("membersTable");
   if (!table) return;
-  const visibleItems = items.filter(matchesMemberSearch);
+  renderMemberFilterButtons(items);
+  const visibleItems = items.filter(matchesMemberSearch).filter(matchesMemberFilter);
   setText("membersVisibleCount", String(visibleItems.length));
   setText("membersActiveTicketCount", String(visibleItems.filter((item) => toNumber(item.activeTicketCount) > 0).length));
   setText("membersRecentVisitCount", String(visibleItems.filter((item) => item.recentVisitAt).length));
@@ -806,6 +889,33 @@ function renderMemberDetail(detail) {
   setText("memberDetailMemoCount", formatCount(memos.length));
   setText("memberDetailAlimtalkCount", formatCount(alimtalkLogs.length));
   setText("memberDetailQualityCount", formatCount(relatedIssues.length));
+
+  const activeTicketCount = toNumber(member.activeTicketCount || tickets.length);
+  const lastVisitText = member.recentVisitAt ? compactDateTime(member.recentVisitAt) : "최근 방문 없음";
+  if (relatedIssues.length) {
+    setPillText("memberDetailPrimaryActionTone", "warning");
+    setText("memberDetailPrimaryAction", "품질 이슈 먼저 확인");
+    setText("memberDetailPrimaryActionNote", "전화번호, 임시 ID, 중복 fallback 여부를 확인하기 전에는 외부 실행으로 넘기지 않습니다.");
+  } else if (openSignals.length) {
+    setPillText("memberDetailPrimaryActionTone", "warning");
+    setText("memberDetailPrimaryAction", "주의 신호 확인");
+    setText("memberDetailPrimaryActionNote", "수강권, 메모, 알림톡 상태를 먼저 확인하고 필요하면 운영자가 직접 판단합니다.");
+  } else {
+    setPillText("memberDetailPrimaryActionTone", "success");
+    setText("memberDetailPrimaryAction", "긴급 신호 낮음");
+    setText("memberDetailPrimaryActionNote", "현재 read-model 기준으로 즉시 멈춰야 할 품질/주의 신호는 보이지 않습니다.");
+  }
+  setPillText("memberDetailCareActionTone", activeTicketCount ? "active" : "warning");
+  setText("memberDetailCareAction", activeTicketCount ? "수강권 기반 케어" : "수강권 상태 확인");
+  setText(
+    "memberDetailCareActionNote",
+    activeTicketCount
+      ? `${activeTicketCount}개 활성 수강권 · 최근 방문 ${lastVisitText} · 메모 ${memos.length}건`
+      : `활성 수강권 요약 없음 · 최근 방문 ${lastVisitText} · 상담/만료/미등록 여부 확인`,
+  );
+  setPillText("memberDetailGuardrailTone", "success");
+  setText("memberDetailGuardrail", "검토용 read-model");
+  setText("memberDetailGuardrailNote", "알림톡, 연락처, StudioMate write는 canonical source에서만 대상자를 선정합니다.");
 
   const signalList = qs("memberDetailSignals");
   if (signalList) {
@@ -1248,7 +1358,7 @@ function renderBusinessMemberInsights(items) {
 function renderHomeDecisions() {
   const list = qs("homeDecisionList");
   if (!list) return;
-  const openIssues = state.qualityIssues.filter((item) => !["resolved", "closed", "done"].includes(String(item.status || "").toLowerCase()));
+  const openIssues = activeQualityIssues();
   const failedAutomation = state.automationItems.filter((item) =>
     ["failed", "error", "critical", "blocked"].includes(String(item.status || item.health || "").toLowerCase()),
   );
@@ -1288,6 +1398,32 @@ function renderHomeDecisions() {
     .join("");
 }
 
+function renderHomeSummary() {
+  if (!qs("homeMemberTotal")) return;
+  const openIssues = activeQualityIssues();
+  const failedAutomation = state.automationItems.filter((item) =>
+    ["failed", "error", "critical", "blocked"].includes(String(item.status || item.health || "").toLowerCase()),
+  );
+  const activeMembers = state.members.filter((item) => toNumber(item.activeTicketCount) > 0).length;
+  const pendingCandidates = state.alimtalkCandidates.filter((item) =>
+    ["queued", "pending", "review", "reviewed", "processing"].includes(String(item.status || "").toLowerCase()),
+  ).length;
+  const latestImport = state.sourceImports[0];
+  setText("homeMemberTotal", formatCount(state.members.length, "명"));
+  setText("homeMemberNote", `활성 수강권 ${activeMembers.toLocaleString("ko-KR")}명 · 전체 회원 검색 가능`);
+  setText("homeImportTotal", formatCount(state.sourceImports.length));
+  setText(
+    "homeImportNote",
+    latestImport
+      ? `${sourceKindLabel(latestImport.sourceKind || latestImport.kind)} · ${formatDate(latestImport.updatedAt || latestImport.importedAt)}`
+      : "최근 원본 import 기록 대기",
+  );
+  setText("homeMessageTotal", formatCount(state.alimtalkCandidates.length));
+  setText("homeMessageNote", pendingCandidates ? `${pendingCandidates}건 대기/검토 후보 확인` : "최근 후보 기준 대기 낮음");
+  setText("homeAutomationTotal", failedAutomation.length ? `${failedAutomation.length}건 확인` : "정상권");
+  setText("homeAutomationNote", openIssues.length ? `품질 이슈 ${openIssues.length}건과 함께 확인` : "자동화 실패/품질 위험 낮음");
+}
+
 function renderBusinessFallback(error) {
   if (!qs("businessMonthSelect")) return;
   qs("businessSnapshotStatus").textContent = error ? "권한 확인" : "대기";
@@ -1306,6 +1442,7 @@ function renderFallback(error) {
   renderQualityIssues([]);
   renderMembers([]);
   renderMessages([], []);
+  renderHomeSummary();
   renderHomeDecisions();
   renderMemberDetail(null);
   renderPrivate([], [], [], []);
@@ -1328,6 +1465,7 @@ async function refresh() {
     }
     const { db, doc, getDoc } = runtime;
     const shouldLoadBusiness = Boolean(qs("businessMonthSelect"));
+    const shouldLoadHome = Boolean(qs("homeMemberTotal"));
     const shouldLoadMembers = Boolean(qs("membersTable"));
     const shouldLoadMessages = Boolean(qs("messagesCandidateList"));
     const shouldLoadMemberDetail = Boolean(qs("memberDetailName"));
@@ -1353,9 +1491,9 @@ async function refresh() {
       getCollectionBy(db, runtime, "sourceImports", "updatedAt", 50),
       getCollectionBy(db, runtime, "dataQualityIssues", "updatedAt", 100),
       shouldLoadBusiness ? getDoc(doc(db, "dashboardSnapshots", "current")) : Promise.resolve(null),
-      shouldLoadMembers ? getCollectionBy(db, runtime, "member360Cards", "totalRevenue", 2000) : Promise.resolve([]),
-      shouldLoadMessages ? getRecentCollectionBy(db, runtime, "alimtalkCandidates", "updatedAt", 12) : Promise.resolve([]),
-      shouldLoadMessages ? getRecentCollectionBy(db, runtime, "alimtalkSends", "updatedAt", 12) : Promise.resolve([]),
+      shouldLoadMembers || shouldLoadHome ? getCollectionBy(db, runtime, "member360Cards", "totalRevenue", 2000) : Promise.resolve([]),
+      shouldLoadMessages || shouldLoadHome ? getRecentCollectionBy(db, runtime, "alimtalkCandidates", "updatedAt", 12) : Promise.resolve([]),
+      shouldLoadMessages || shouldLoadHome ? getRecentCollectionBy(db, runtime, "alimtalkSends", "updatedAt", 12) : Promise.resolve([]),
       shouldLoadMemberDetail ? loadMemberDetail(runtime, memberDetailId()) : Promise.resolve(null),
       shouldLoadBusiness ? getRecentCollectionBy(db, runtime, "member360Cards", "totalRevenue", 8) : Promise.resolve([]),
       shouldLoadPrivate ? getRecentCollectionBy(db, runtime, "privateLessonChartRequests", "createdAt", 8) : Promise.resolve([]),
@@ -1366,9 +1504,9 @@ async function refresh() {
 
     state.lane = laneSnapshot.exists() ? laneSnapshot.data() : { status: "active" };
     state.automationItems = automationItems;
-    state.sourceImports = sourceImports;
-    state.qualityIssues = qualityIssues;
-    state.members = members;
+    state.sourceImports = studioItems(sourceImports);
+    state.qualityIssues = studioItems(qualityIssues);
+    state.members = studioItems(members);
     state.alimtalkCandidates = alimtalkCandidates;
     state.alimtalkSends = alimtalkSends;
     state.memberDetail = memberDetail;
@@ -1379,10 +1517,11 @@ async function refresh() {
     state.privateLedgerEntries = privateLedgerEntries;
     renderLane(state.lane);
     renderAutomation(automationItems);
-    renderImports(sourceImports);
-    renderQualityIssues(qualityIssues);
-    renderMembers(members);
+    renderImports(state.sourceImports);
+    renderQualityIssues(state.qualityIssues);
+    renderMembers(state.members);
     renderMessages(alimtalkCandidates, alimtalkSends);
+    renderHomeSummary();
     renderHomeDecisions();
     renderMemberDetail(memberDetail);
     renderPrivate(privateRequests, privateRecords, privateUsageEvents, privateLedgerEntries);
@@ -1406,6 +1545,12 @@ qs("businessMonthSelect")?.addEventListener("change", (event) => renderBusinessM
 qs("memberSearchInput")?.addEventListener("input", (event) => {
   memberSearchTerm = event.target.value.trim();
   renderMembers(state.members);
+});
+document.querySelectorAll("[data-member-filter]").forEach((button) => {
+  button.addEventListener("click", () => {
+    memberFilter = button.dataset.memberFilter || "all";
+    renderMembers(state.members);
+  });
 });
 document.addEventListener("click", (event) => {
   const target = event.target.closest("[data-business-month]");

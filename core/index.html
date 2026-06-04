@@ -104,23 +104,23 @@
         <section class="grid summary-grid" aria-label="메뉴별 현황">
           <a class="panel menu-card" href="./members/">
             <span class="pill">Members</span>
-            <h2>회원 데이터</h2>
-            <p>members, memberAliases, memberSummaries 전환 준비</p>
+            <h2 id="homeMemberTotal">회원 데이터</h2>
+            <p id="homeMemberNote">전체 회원 read-model 연결 상태를 확인합니다.</p>
           </a>
-          <a class="panel menu-card" href="./lessons/">
-            <span class="pill">Lessons</span>
-            <h2>수업 운영</h2>
-            <p>lessonOccurrences, reservations, 삭제 수업 로그 정리</p>
+          <a class="panel menu-card" href="./imports/">
+            <span class="pill warn">Imports</span>
+            <h2 id="homeImportTotal">원본 데이터</h2>
+            <p id="homeImportNote">회원목록, 예약내역, 삭제 수업 import 상태를 봅니다.</p>
           </a>
-          <a class="panel menu-card" href="./private/">
-            <span class="pill warn">Private</span>
-            <h2>프라이빗 장부</h2>
-            <p>memberUsageEvents와 privateSessionLedger 우선 구축</p>
+          <a class="panel menu-card" href="./messages/">
+            <span class="pill">Messages</span>
+            <h2 id="homeMessageTotal">알림톡</h2>
+            <p id="homeMessageNote">최근 후보와 발송 로그 상태를 확인합니다.</p>
           </a>
-          <a class="panel menu-card" href="./business/">
-            <span class="pill">Business</span>
-            <h2>경영 지표</h2>
-            <p>기존 아카이브 대시보드와 월별 정산 지표 편입</p>
+          <a class="panel menu-card" href="./automation/">
+            <span class="pill good">Automation</span>
+            <h2 id="homeAutomationTotal">자동화</h2>
+            <p id="homeAutomationNote">자동화 실패/지연 여부를 먼저 확인합니다.</p>
           </a>
         </section>
 

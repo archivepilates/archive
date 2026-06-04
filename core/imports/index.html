@@ -28,6 +28,12 @@
           <article class="panel metric"><div class="metric-label">연결 상태</div><div class="metric-value compact" id="importConnectionState">확인 중</div><div class="metric-note">원본 import 결과</div></article>
           <article class="panel metric"><div class="metric-label">보호 규칙</div><div class="metric-value compact">canonical</div><div class="metric-note">excel fallback은 외부 발송 원천 제외</div></article>
         </section>
+        <section class="grid summary-grid" aria-label="원본 품질 요약">
+          <article class="panel detail-card"><span class="pill">latest</span><h2 id="latestImportKind">원본 대기</h2><p id="latestImportNote">최근 import 결과를 표시합니다.</p></article>
+          <article class="panel detail-card"><span class="pill warn">open</span><h2 id="latestQualityTitle">품질 확인</h2><p id="latestQualityNote">열린 이슈의 원인과 다음 액션을 표시합니다.</p></article>
+          <article class="panel detail-card"><span class="pill good">resolved</span><h2 id="qualityResolvedCount">0건</h2><p>resolved 처리된 품질 이슈입니다.</p></article>
+          <article class="panel detail-card"><span class="pill danger">stop rule</span><h2>외부 실행 보류</h2><p id="qualityStopRule">전화번호/회원ID가 확인되지 않으면 발송과 쓰기를 하지 않습니다.</p></article>
+        </section>
         <section class="grid overview-grid">
           <article class="panel">
             <div class="panel-header"><div><h2>원본 처리 흐름</h2><p>문제가 생겼을 때 어느 단계에서 멈췄는지 먼저 봅니다.</p></div><span class="pill">source flow</span></div>

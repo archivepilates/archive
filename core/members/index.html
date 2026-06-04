@@ -54,6 +54,13 @@
               <span>회원 검색</span>
               <input id="memberSearchInput" type="search" autocomplete="off" placeholder="이름, 회원ID, 전화번호 끝자리, 수강권" />
             </label>
+            <div class="filter-bar" id="memberFilterBar" aria-label="회원 빠른 필터">
+              <button class="filter-button is-active" type="button" data-member-filter="all">전체 <span id="memberFilterAllCount">0</span></button>
+              <button class="filter-button" type="button" data-member-filter="active-ticket">활성 <span id="memberFilterActiveCount">0</span></button>
+              <button class="filter-button" type="button" data-member-filter="recent-visit">최근 방문 <span id="memberFilterRecentCount">0</span></button>
+              <button class="filter-button" type="button" data-member-filter="revenue">매출 있음 <span id="memberFilterRevenueCount">0</span></button>
+              <button class="filter-button" type="button" data-member-filter="quality">품질 이슈 <span id="memberFilterQualityCount">0</span></button>
+            </div>
             <a class="text-link" href="../rules/">원천 규칙</a>
           </div>
           <div class="table-wrap"><table><thead><tr><th>회원</th><th>수강권</th><th>최근 방문</th><th>누적 매출</th></tr></thead><tbody id="membersTable"><tr><td colspan="4">Firestore 연결 후 표시합니다.</td></tr></tbody></table></div>
