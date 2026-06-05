@@ -156,6 +156,10 @@ function statusLabel(value) {
     blocked: "중단",
     running: "실행중",
     pending: "대기",
+    submitted: "제출",
+    pre_submitted: "사전 제출",
+    post_submitted: "사후 제출",
+    draft_created: "초안 생성",
     warning: "주의",
     stale: "지연",
     reviewing: "검토",
@@ -1351,7 +1355,106 @@ function signalTone(value) {
   return "";
 }
 
-function renderPrivate(requests, records, usageEvents, ledgerEntries) {
+function privateProgressStatus(value) {
+  const status = String(value || "").toLowerCase();
+  if (timestampMs(value) && status.includes("t")) return "success";
+  if (["submitted", "done", "completed", "success", "draft_created"].includes(status)) return "success";
+  if (["failed", "error", "blocked"].includes(status)) return "failed";
+  if (["pending", "pre_submitted", "reviewing"].includes(status)) return "warning";
+  return status || "pending";
+}
+
+function privateStepPill(label, value) {
+  const status = privateProgressStatus(value);
+  const tone = normalizeStatus(status);
+  return `<span class="pill ${tone}">${escapeHtml(label)} ${escapeHtml(statusLabel(status))}</span>`;
+}
+
+function privateKeySet(item) {
+  return [
+    item.id,
+    item.requestId,
+    item.recordId,
+    item.bookingId,
+    item.candidateId,
+    item.sendId,
+    item.ledgerId,
+    item.usageEventId,
+    item.dedupeKey,
+  ]
+    .filter(Boolean)
+    .map((value) => String(value));
+}
+
+function matchesPrivateProgress(source, target) {
+  const keys = privateKeySet(source);
+  const targetText = privateKeySet(target).join(" ");
+  return keys.some((key) => targetText.includes(key));
+}
+
+function findPrivateReportSend(row, candidates, sends) {
+  const related = [...candidates, ...sends].filter((item) => {
+    const typeText = [item.type, item.title, item.templateCode, item.candidateId, item.dedupeKey, item.id].filter(Boolean).join(" ").toLowerCase();
+    const looksLikeReport = typeText.includes("private_lesson_report") || typeText.includes("private_chart") || typeText.includes("리포트");
+    return looksLikeReport && matchesPrivateProgress(row, item);
+  });
+  return related.sort((a, b) => timestampMs(b.updatedAt || b.createdAt) - timestampMs(a.updatedAt || a.createdAt))[0] || null;
+}
+
+function renderPrivateProgress(requests, records, ledgerEntries, candidates = [], sends = []) {
+  const list = qs("privateProgressList");
+  if (!list) return;
+  const recordById = new Map(records.flatMap((record) => privateKeySet(record).map((key) => [key, record])));
+  const rows = requests
+    .map((request) => {
+      const record = privateKeySet(request).map((key) => recordById.get(key)).find(Boolean) || null;
+      const merged = { ...record, ...request };
+      const ledger =
+        ledgerEntries.find((item) => {
+          const sameMember = item.memberId && item.memberId === merged.memberId;
+          const sameRound =
+            String(item.cumulativePrivateRound || item.currentTicketRound || "") === String(merged.sessionNumber || "");
+          const sameDate = dateKey(item.startsAt) && dateKey(item.startsAt) === dateKey(merged.lessonStartAt || merged.lessonDate);
+          return sameMember && (sameRound || sameDate);
+        }) || null;
+      const send = findPrivateReportSend({ ...merged, ...record }, candidates, sends);
+      return { request, record, ledger, send, merged };
+    })
+    .sort((a, b) => timestampMs(b.merged.lessonStartAt || b.merged.lessonDate || b.merged.createdAt) - timestampMs(a.merged.lessonStartAt || a.merged.lessonDate || a.merged.createdAt));
+
+  const completedReports = rows.filter((row) => row.record?.publicReportUrl || row.record?.publicReportCanonicalUrl).length;
+  const completedSends = rows.filter((row) => ["done", "sent", "success", "completed"].includes(String(row.send?.status || "").toLowerCase())).length;
+  setPillText("privateProgressStatus", rows.length ? (completedReports === rows.length && completedSends === rows.length ? "success" : "warning") : "pending");
+
+  list.innerHTML = rows.length
+    ? rows
+        .slice(0, 30)
+        .map(({ request, record, ledger, send, merged }) => {
+          const round = merged.sessionNumber || ledger?.cumulativePrivateRound || ledger?.currentTicketRound || "-";
+          const reportReady = Boolean(record?.publicReportUrl || record?.publicReportCanonicalUrl);
+          const sendStatus = send?.status || "pending";
+          return `
+            <div class="status-row private-progress-row">
+              <div>
+                <strong>${escapeHtml(merged.memberName || merged.memberId || request.id)} · ${escapeHtml(round)}회차</strong>
+                <p>${escapeHtml(compactDateTime(merged.lessonStartAt || merged.lessonDate))} · ${escapeHtml(merged.staffName || "강사 미지정")} · ${escapeHtml(merged.bookingId || merged.requestId || request.id)}</p>
+                <div class="tag-row">
+                  ${privateStepPill("사전", request.preStatus || record?.preSubmittedAt)}
+                  ${privateStepPill("사후", request.postStatus || record?.postSubmittedAt)}
+                  ${privateStepPill("리포트", reportReady ? "success" : record?.gptStatus || "pending")}
+                  ${privateStepPill("알림톡", sendStatus)}
+                </div>
+                <p>사전 · 사후 · 리포트 · 알림톡 순서로 표시합니다.${ledger ? ` · 장부 누적 ${escapeHtml(ledger.cumulativePrivateRound || "-")}회` : ""}</p>
+              </div>
+              ${pill(sendStatus)}
+            </div>
+          `;
+        })
+        .join("")
+    : `<div class="empty-state">최근 privateLessonChartRequests 문서가 없습니다.</div>`;
+}
+
+function renderPrivate(requests, records, usageEvents, ledgerEntries, candidates = [], sends = []) {
   if (!qs("privateRequestList")) return;
   setText("privateRequestCount", String(requests.length));
   setText("privateRecordCount", String(records.length));
@@ -1369,6 +1472,7 @@ function renderPrivate(requests, records, usageEvents, ledgerEntries) {
   setText("privateRecordHealth", recordFailures ? `${recordFailures}건 오류 확인` : "차트 기록 읽기 정상");
   setText("privateSubmittedCount", formatCount(submitted));
   setText("privateCorrectionCount", formatCount(corrections));
+  renderPrivateProgress(requests, records, ledgerEntries, candidates, sends);
 
   const requestList = qs("privateRequestList");
   if (requestList) {
@@ -1785,12 +1889,12 @@ async function refresh() {
       getCollectionBy(db, runtime, "dataQualityIssues", "updatedAt", 100),
       shouldLoadBusiness ? getDoc(doc(db, "dashboardSnapshots", "current")) : Promise.resolve(null),
       shouldLoadMembers || shouldLoadHome ? getCollectionBy(db, runtime, "member360Cards", "totalRevenue", 2000) : Promise.resolve([]),
-      shouldLoadMessages || shouldLoadHome ? getRecentCollectionBy(db, runtime, "alimtalkCandidates", "updatedAt", 12) : Promise.resolve([]),
-      shouldLoadMessages || shouldLoadHome ? getRecentCollectionBy(db, runtime, "alimtalkSends", "updatedAt", 12) : Promise.resolve([]),
+      shouldLoadMessages || shouldLoadHome || shouldLoadPrivate ? getRecentCollectionBy(db, runtime, "alimtalkCandidates", "updatedAt", shouldLoadPrivate ? 100 : 12) : Promise.resolve([]),
+      shouldLoadMessages || shouldLoadHome || shouldLoadPrivate ? getRecentCollectionBy(db, runtime, "alimtalkSends", "updatedAt", shouldLoadPrivate ? 100 : 12) : Promise.resolve([]),
       shouldLoadMemberDetail ? loadMemberDetail(runtime, memberDetailId()) : Promise.resolve(null),
       shouldLoadBusiness ? getRecentCollectionBy(db, runtime, "member360Cards", "totalRevenue", 8) : Promise.resolve([]),
-      shouldLoadPrivate ? getRecentCollectionBy(db, runtime, "privateLessonChartRequests", "createdAt", 8) : Promise.resolve([]),
-      shouldLoadPrivate ? getRecentCollectionBy(db, runtime, "privateLessonChartRecords", "createdAt", 8) : Promise.resolve([]),
+      shouldLoadPrivate ? getRecentCollectionBy(db, runtime, "privateLessonChartRequests", "createdAt", 100) : Promise.resolve([]),
+      shouldLoadPrivate ? getRecentCollectionBy(db, runtime, "privateLessonChartRecords", "createdAt", 100) : Promise.resolve([]),
       shouldLoadPrivate ? getRecentCollectionBy(db, runtime, "memberUsageEvents", "updatedAt", 8) : Promise.resolve([]),
       shouldLoadPrivate ? getRecentCollectionBy(db, runtime, "privateSessionLedger", "updatedAt", 8) : Promise.resolve([]),
       shouldLoadLessons ? getCollectionBy(db, runtime, "lessonOccurrences", "startsAt", 1000) : Promise.resolve([]),
@@ -1825,7 +1929,7 @@ async function refresh() {
     renderHomeSummary();
     renderHomeDecisions();
     renderMemberDetail(memberDetail);
-    renderPrivate(privateRequests, privateRecords, privateUsageEvents, privateLedgerEntries);
+    renderPrivate(privateRequests, privateRecords, privateUsageEvents, privateLedgerEntries, alimtalkCandidates, alimtalkSends);
     renderLessons(lessonOccurrences, reservations, [...deletedClassLogs, ...deletedLessons]);
     if (shouldLoadBusiness) {
       if (dashboardSnapshot?.exists()) renderBusiness(normalizeBusinessSnapshot(dashboardSnapshot.data()));
