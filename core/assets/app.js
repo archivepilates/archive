@@ -1402,11 +1402,9 @@ function findPrivateReportSend(row, candidates, sends) {
   return related.sort((a, b) => timestampMs(b.updatedAt || b.createdAt) - timestampMs(a.updatedAt || a.createdAt))[0] || null;
 }
 
-function renderPrivateProgress(requests, records, ledgerEntries, candidates = [], sends = []) {
-  const list = qs("privateProgressList");
-  if (!list) return;
+function privateProgressRows(requests, records, ledgerEntries, candidates = [], sends = []) {
   const recordById = new Map(records.flatMap((record) => privateKeySet(record).map((key) => [key, record])));
-  const rows = requests
+  return requests
     .map((request) => {
       const record = privateKeySet(request).map((key) => recordById.get(key)).find(Boolean) || null;
       const merged = { ...record, ...request };
@@ -1422,41 +1420,120 @@ function renderPrivateProgress(requests, records, ledgerEntries, candidates = []
       return { request, record, ledger, send, merged };
     })
     .sort((a, b) => timestampMs(b.merged.lessonStartAt || b.merged.lessonDate || b.merged.createdAt) - timestampMs(a.merged.lessonStartAt || a.merged.lessonDate || a.merged.createdAt));
+}
 
-  const completedReports = rows.filter((row) => row.record?.publicReportUrl || row.record?.publicReportCanonicalUrl).length;
-  const completedSends = rows.filter((row) => ["done", "sent", "success", "completed"].includes(String(row.send?.status || "").toLowerCase())).length;
-  setPillText("privateProgressStatus", rows.length ? (completedReports === rows.length && completedSends === rows.length ? "success" : "warning") : "pending");
+function privateStage(row) {
+  const preDone = privateProgressStatus(row.request.preStatus || row.record?.preSubmittedAt) === "success";
+  const postDone = privateProgressStatus(row.request.postStatus || row.record?.postSubmittedAt) === "success";
+  const reportDone = Boolean(row.record?.publicReportUrl || row.record?.publicReportCanonicalUrl);
+  const sendDone = ["done", "sent", "success", "completed"].includes(String(row.send?.status || "").toLowerCase());
+  if (!preDone) return "pre";
+  if (!postDone) return "post";
+  if (!reportDone) return "report";
+  if (!sendDone) return "send";
+  return "complete";
+}
+
+function formatPrivateClassLine(row) {
+  const round = row.merged.sessionNumber || row.ledger?.cumulativePrivateRound || row.ledger?.currentTicketRound || "-";
+  const date = new Date(timestampMs(row.merged.lessonStartAt || row.merged.lessonDate));
+  const dateText = Number.isNaN(date.getTime())
+    ? "-"
+    : `${String(date.getFullYear()).slice(2)}${String(date.getMonth() + 1).padStart(2, "0")}${String(date.getDate()).padStart(2, "0")} ${String(date.getHours()).padStart(2, "0")}:${String(date.getMinutes()).padStart(2, "0")}`;
+  return `${row.merged.memberName || row.merged.memberId || row.request.id} ${round}회차 ${dateText} ${row.merged.staffName || "강사 미지정"}`;
+}
+
+function renderPrivateStageCard(row) {
+  const stage = privateStage(row);
+  const reportReady = Boolean(row.record?.publicReportUrl || row.record?.publicReportCanonicalUrl);
+  const sendStatus = row.send?.status || "pending";
+  return `
+    <div class="stage-card">
+      <strong>${escapeHtml(formatPrivateClassLine(row))}</strong>
+      <p>${escapeHtml(row.merged.bookingId || row.merged.requestId || row.request.id)}</p>
+      <div class="tag-row">
+        ${privateStepPill("사전", row.request.preStatus || row.record?.preSubmittedAt)}
+        ${privateStepPill("사후", row.request.postStatus || row.record?.postSubmittedAt)}
+        ${privateStepPill("리포트", reportReady ? "success" : row.record?.gptStatus || "pending")}
+        ${privateStepPill("전송", sendStatus)}
+      </div>
+      ${stage === "complete" ? `<p>완료</p>` : ""}
+    </div>
+  `;
+}
+
+function renderPrivateInstructorPending(rows) {
+  const list = qs("privateInstructorPendingList");
+  if (!list) return;
+  const pendingRows = rows.filter((row) => privateStage(row) !== "complete");
+  const byStaff = new Map();
+  pendingRows.forEach((row) => {
+    const staff = row.merged.staffName || "강사 미지정";
+    if (!byStaff.has(staff)) byStaff.set(staff, []);
+    byStaff.get(staff).push(row);
+  });
+  setPillText("privateInstructorPendingStatus", pendingRows.length ? "warning" : "success");
+  list.innerHTML = pendingRows.length
+    ? [...byStaff.entries()]
+        .sort((a, b) => b[1].length - a[1].length)
+        .map(
+          ([staff, staffRows]) => `
+            <div class="status-row">
+              <div>
+                <strong>${escapeHtml(staff)} · ${staffRows.length.toLocaleString("ko-KR")}건</strong>
+                <p>${escapeHtml(staffRows.slice(0, 4).map(formatPrivateClassLine).join(" / "))}</p>
+              </div>
+              ${pill("warning")}
+            </div>
+          `,
+        )
+        .join("")
+    : `<div class="empty-state">진행 안 된 프라이빗 차트가 없습니다.</div>`;
+}
+
+function renderPrivateProgress(requests, records, ledgerEntries, candidates = [], sends = []) {
+  const list = qs("privateProgressList");
+  if (!list) return;
+  const rows = privateProgressRows(requests, records, ledgerEntries, candidates, sends);
+  renderPrivateInstructorPending(rows);
+
+  const groups = {
+    pre: rows.filter((row) => privateStage(row) === "pre"),
+    post: rows.filter((row) => privateStage(row) === "post"),
+    report: rows.filter((row) => privateStage(row) === "report"),
+    send: rows.filter((row) => privateStage(row) === "send"),
+    complete: rows.filter((row) => privateStage(row) === "complete"),
+  };
+  setText("privatePendingCount", formatCount(rows.length - groups.complete.length));
+  setText("privatePreStageCount", formatCount(groups.pre.length));
+  setText("privatePostStageCount", formatCount(groups.post.length));
+  setText("privateCompleteStageCount", formatCount(groups.complete.length));
+  setPillText("privateProgressStatus", rows.length && rows.length === groups.complete.length ? "success" : "warning");
 
   list.innerHTML = rows.length
-    ? rows
-        .slice(0, 30)
-        .map(({ request, record, ledger, send, merged }) => {
-          const round = merged.sessionNumber || ledger?.cumulativePrivateRound || ledger?.currentTicketRound || "-";
-          const reportReady = Boolean(record?.publicReportUrl || record?.publicReportCanonicalUrl);
-          const sendStatus = send?.status || "pending";
-          return `
-            <div class="status-row private-progress-row">
-              <div>
-                <strong>${escapeHtml(merged.memberName || merged.memberId || request.id)} · ${escapeHtml(round)}회차</strong>
-                <p>${escapeHtml(compactDateTime(merged.lessonStartAt || merged.lessonDate))} · ${escapeHtml(merged.staffName || "강사 미지정")} · ${escapeHtml(merged.bookingId || merged.requestId || request.id)}</p>
-                <div class="tag-row">
-                  ${privateStepPill("사전", request.preStatus || record?.preSubmittedAt)}
-                  ${privateStepPill("사후", request.postStatus || record?.postSubmittedAt)}
-                  ${privateStepPill("리포트", reportReady ? "success" : record?.gptStatus || "pending")}
-                  ${privateStepPill("알림톡", sendStatus)}
-                </div>
-                <p>사전 · 사후 · 리포트 · 알림톡 순서로 표시합니다.${ledger ? ` · 장부 누적 ${escapeHtml(ledger.cumulativePrivateRound || "-")}회` : ""}</p>
+    ? [
+        ["pre", "수업전 설문 단계", groups.pre],
+        ["post", "수업후 설문 단계", groups.post],
+        ["report", "리포트 완성 단계", groups.report],
+        ["send", "리포트 전송 단계", groups.send],
+        ["complete", "완료 단계", groups.complete],
+      ]
+        .map(
+          ([key, title, stageRows]) => `
+            <article class="stage-column stage-${key}">
+              <div class="stage-column-header"><strong>${escapeHtml(title)}</strong><span>${stageRows.length.toLocaleString("ko-KR")}건</span></div>
+              <div class="stage-card-list">
+                ${stageRows.length ? stageRows.slice(0, 12).map(renderPrivateStageCard).join("") : `<div class="empty-state">해당 단계 수업 없음</div>`}
               </div>
-              ${pill(sendStatus)}
-            </div>
-          `;
-        })
+            </article>
+          `,
+        )
         .join("")
     : `<div class="empty-state">최근 privateLessonChartRequests 문서가 없습니다.</div>`;
 }
 
 function renderPrivate(requests, records, usageEvents, ledgerEntries, candidates = [], sends = []) {
-  if (!qs("privateRequestList")) return;
+  if (!qs("privateProgressList")) return;
   setText("privateRequestCount", String(requests.length));
   setText("privateRecordCount", String(records.length));
   setText("privateUsageCount", String(usageEvents.length));
@@ -1474,67 +1551,6 @@ function renderPrivate(requests, records, usageEvents, ledgerEntries, candidates
   setText("privateSubmittedCount", formatCount(submitted));
   setText("privateCorrectionCount", formatCount(corrections));
   renderPrivateProgress(requests, records, ledgerEntries, candidates, sends);
-
-  const requestList = qs("privateRequestList");
-  if (requestList) {
-    requestList.innerHTML = requests.length
-      ? requests
-          .map((item) => {
-            const status = item.preStatus || item.postStatus || item.status || item.alimtalk?.status || "pending";
-            const lesson = [item.lessonDate, item.staffName].filter(Boolean).join(" · ");
-            return `
-              <div class="status-row">
-                <div>
-                  <strong>${escapeHtml(item.memberName || item.memberId || item.id)}</strong>
-                  <p>${escapeHtml(lesson || "수업 정보 없음")} · ${escapeHtml(item.bookingId || item.requestId || item.id)}</p>
-                </div>
-                ${pill(status)}
-              </div>
-            `;
-          })
-          .join("")
-      : `<div class="empty-state">최근 privateLessonChartRequests 문서가 없습니다.</div>`;
-  }
-
-  const ledgerList = qs("privateLedgerList");
-  if (!ledgerList) return;
-  if (ledgerEntries.length) {
-    ledgerList.innerHTML = ledgerEntries
-      .map((item) => `
-        <div class="status-row">
-          <div>
-            <strong>${escapeHtml(item.memberName || item.memberId || item.id)}</strong>
-            <p>${escapeHtml(item.startsAt || item.lessonDate || "")} · 누적 ${escapeHtml(item.cumulativePrivateRound || "-")}회</p>
-          </div>
-          ${pill(item.status || "active")}
-        </div>
-      `)
-      .join("");
-    return;
-  }
-  ledgerList.innerHTML = `
-    <div class="status-row">
-      <div>
-        <strong>memberUsageEvents</strong>
-        <p>${usageEvents.length ? "이용 이력 문서가 감지되었습니다." : "아직 운영 반영된 이용 이력 문서가 없습니다."}</p>
-      </div>
-      ${pill(usageEvents.length ? "reviewing" : "pending")}
-    </div>
-    <div class="status-row">
-      <div>
-        <strong>privateSessionLedger</strong>
-        <p>현재 회차 계산 장부는 준비 단계입니다. 기존 차트 원천은 유지됩니다.</p>
-      </div>
-      ${pill("pending")}
-    </div>
-    <div class="status-row">
-      <div>
-        <strong>이용내역 backfill dry-run</strong>
-        <p>65,521행 검토 · 예약 생성 53,191건 후보 · 제한 적용 승인 전까지 write 보류</p>
-      </div>
-      ${pill("reviewing")}
-    </div>
-  `;
 }
 
 function normalizeBusinessSnapshot(data) {

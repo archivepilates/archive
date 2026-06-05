@@ -810,6 +810,72 @@ td span {
   font-size: 0.84rem;
 }
 
+.compact-list {
+  gap: 10px;
+}
+
+.stage-board {
+  display: grid;
+  grid-template-columns: repeat(5, minmax(0, 1fr));
+  gap: 12px;
+  padding: 20px;
+}
+
+.stage-column {
+  display: grid;
+  min-width: 0;
+  align-content: start;
+  gap: 10px;
+  border: 1px solid var(--line-soft);
+  border-radius: 8px;
+  background: rgba(248, 250, 252, 0.74);
+  padding: 12px;
+}
+
+.stage-column-header {
+  display: flex;
+  min-width: 0;
+  align-items: center;
+  justify-content: space-between;
+  gap: 8px;
+}
+
+.stage-column-header strong,
+.stage-card strong {
+  min-width: 0;
+  overflow-wrap: anywhere;
+}
+
+.stage-column-header span {
+  color: var(--muted);
+  font-size: 0.78rem;
+  font-weight: 800;
+  white-space: nowrap;
+}
+
+.stage-card-list {
+  display: grid;
+  min-width: 0;
+  gap: 10px;
+}
+
+.stage-card {
+  display: grid;
+  min-width: 0;
+  gap: 7px;
+  border: 1px solid var(--line-soft);
+  border-radius: 8px;
+  background: #ffffff;
+  padding: 12px;
+  box-shadow: 0 8px 18px rgba(20, 35, 55, 0.04);
+}
+
+.stage-card p {
+  margin: 0;
+  color: var(--muted);
+  font-size: 0.8rem;
+}
+
 .profile-hero {
   display: grid;
   grid-template-columns: minmax(0, 1fr) minmax(220px, 0.7fr);
@@ -1245,6 +1311,10 @@ a.rank-row:hover,
   [data-member-detail-dashboard] .overview-grid {
     grid-template-columns: 1fr 1fr;
   }
+
+  .stage-board {
+    grid-template-columns: repeat(2, minmax(0, 1fr));
+  }
 }
 
 @media (max-width: 720px) {
@@ -1278,6 +1348,11 @@ a.rank-row:hover,
   .action-grid,
   .profile-hero {
     grid-template-columns: 1fr;
+  }
+
+  .stage-board {
+    grid-template-columns: 1fr;
+    padding: 16px;
   }
 
   [data-member-detail-dashboard] .kpis,

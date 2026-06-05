@@ -19,7 +19,7 @@
       </aside>
       <main class="main">
         <header class="topbar">
-          <div class="title-block"><p class="eyebrow">PRIVATE</p><h1>프라이빗 회차 장부</h1><p class="subtitle">개인 이용내역 원본을 memberUsageEvents와 privateSessionLedger로 분리해 bookings 누락 문제를 보완합니다.</p></div>
+          <div class="title-block"><p class="eyebrow">PRIVATE</p><h1>프라이빗 차트 진행</h1><p class="subtitle">강사 사전설문, 수업후설문, 리포트 완성, 리포트 전송까지 회차별 진행 상태를 봅니다.</p></div>
           <div class="top-actions" aria-label="상태 확인"><div class="connection-card" aria-live="polite"><span id="connectionLabel">로딩</span><strong id="connectionDetail">Firestore 연결 준비 중</strong></div><button class="refresh-button" id="refreshButton" type="button">새로고침</button></div>
         </header>
         <section class="grid kpis">
@@ -29,27 +29,24 @@
           <article class="panel metric"><div class="metric-label">회차 장부</div><div class="metric-value" id="privateLedgerCount">0</div><div class="metric-note">privateSessionLedger</div></article>
         </section>
         <section class="grid summary-grid">
-          <article class="panel detail-card"><span class="pill good">기존 운영</span><h2 id="privateRecordHealth">차트 기록 확인 중</h2><p>privateLessonChartRecords 기준 GPT/리포트 생성 상태를 봅니다.</p></article>
-          <article class="panel detail-card"><span class="pill">제출</span><h2 id="privateSubmittedCount">0건</h2><p>최근 요청 중 사전/사후 제출이 감지된 항목입니다.</p></article>
-          <article class="panel detail-card"><span class="pill warn">보정</span><h2 id="privateCorrectionCount">0건</h2><p>회차 보정이 들어간 기록은 장부 전환 때 별도 점검합니다.</p></article>
-          <article class="panel detail-card"><span class="pill danger">보호</span><h2>실행 원천 보류</h2><p>memberUsageEvents / privateSessionLedger는 최신 원본 재수집과 전체 shadow compare 승인 전까지 알림톡/쓰기 원천으로 쓰지 않습니다.</p></article>
+          <article class="panel detail-card"><span class="pill warn">미진행</span><h2 id="privatePendingCount">0건</h2><p>아직 완료 단계에 도달하지 않은 프라이빗 차트입니다.</p></article>
+          <article class="panel detail-card"><span class="pill">수업전</span><h2 id="privatePreStageCount">0건</h2><p>강사 사전설문 제출이 필요한 수업입니다.</p></article>
+          <article class="panel detail-card"><span class="pill">수업후</span><h2 id="privatePostStageCount">0건</h2><p>사전설문은 끝났고 수업후 설문이 필요한 수업입니다.</p></article>
+          <article class="panel detail-card"><span class="pill good">완료</span><h2 id="privateCompleteStageCount">0건</h2><p>리포트 전송까지 끝난 수업입니다.</p></article>
         </section>
         <section class="panel">
           <div class="panel-header">
-            <div><h2>회원별 회차 진행 현황</h2><p>강사 사전설문, 수업후설문, 리포트 생성, 리포트 알림톡 발송 여부를 회차별로 봅니다.</p></div>
+            <div><h2>강사별 미진행</h2><p>완료 단계에 도달하지 않은 프라이빗 차트를 강사별로 모아 봅니다.</p></div>
+            <span class="pill warn" id="privateInstructorPendingStatus">집계 대기</span>
+          </div>
+          <div class="list compact-list" id="privateInstructorPendingList"><div class="empty-state">Firestore 연결 후 표시합니다.</div></div>
+        </section>
+        <section class="panel">
+          <div class="panel-header">
+            <div><h2>4단계 진행 보드</h2><p>각 수업을 현재 멈춰 있는 단계에 배치합니다.</p></div>
             <span class="pill" id="privateProgressStatus">진행 확인</span>
           </div>
-          <div class="list" id="privateProgressList"><div class="empty-state">Firestore 연결 후 표시합니다.</div></div>
-        </section>
-        <section class="grid overview-grid">
-          <article class="panel">
-            <div class="panel-header"><div><h2>최근 프라이빗 차트 요청</h2><p>기존 프라이빗 차트 운영 원천을 읽기 전용으로 확인합니다.</p></div><span class="pill">requests</span></div>
-            <div class="list" id="privateRequestList"><div class="empty-state">Firestore 연결 후 표시합니다.</div></div>
-          </article>
-          <article class="panel">
-            <div class="panel-header"><div><h2>회차 장부 전환 상태</h2><p>샘플 장부는 적용됐고, 전체 전환 전 최신 개인 이용내역 원본 확인이 필요합니다.</p></div><span class="pill warn">migration</span></div>
-            <div class="list" id="privateLedgerList"><div class="empty-state">아직 계산 장부 문서가 없으면 여기에 준비 상태를 표시합니다.</div></div>
-          </article>
+          <div class="stage-board" id="privateProgressList"><div class="empty-state">Firestore 연결 후 표시합니다.</div></div>
         </section>
         <section class="grid data-grid">
           <article class="panel detail-card"><span class="pill danger">우선</span><h2>memberUsageEvents</h2><p>회원별 이용내역 엑셀 기반 누적 이용 이력. 프라이빗 회차 계산의 1순위 후보.</p></article>
