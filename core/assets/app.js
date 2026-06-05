@@ -18,6 +18,10 @@ const state = {
   privateRecords: [],
   privateUsageEvents: [],
   privateLedgerEntries: [],
+  lessonOccurrences: [],
+  reservations: [],
+  deletedClassLogs: [],
+  deletedLessons: [],
   lane: null,
   authReady: null,
 };
@@ -641,6 +645,27 @@ function timestampMs(value) {
   return Number.isNaN(date.getTime()) ? 0 : date.getTime();
 }
 
+function dateKey(value) {
+  const ms = timestampMs(value);
+  if (!ms) return "";
+  const date = new Date(ms);
+  return `${date.getFullYear()}-${String(date.getMonth() + 1).padStart(2, "0")}-${String(date.getDate()).padStart(2, "0")}`;
+}
+
+function startOfLocalDay(value = new Date()) {
+  const date = value instanceof Date ? new Date(value) : new Date(timestampMs(value));
+  date.setHours(0, 0, 0, 0);
+  return date;
+}
+
+function isWithinDays(value, startDate, days) {
+  const ms = timestampMs(value);
+  if (!ms) return false;
+  const start = startOfLocalDay(startDate).getTime();
+  const end = start + days * 24 * 60 * 60 * 1000;
+  return ms >= start && ms < end;
+}
+
 function ticketLabel(ticket) {
   if (typeof ticket === "string") return ticket;
   return ticket?.name || ticket?.ticketName || ticket?.title || "";
@@ -940,6 +965,143 @@ function renderMessages(candidates, sends) {
         `,
       )
       .join("");
+  }
+}
+
+function lessonTypeLabel(value) {
+  const type = String(value || "").toLowerCase();
+  if (type.includes("semi")) return "세미";
+  if (type.includes("private") || type.includes("개인") || type.includes("프라이빗")) return "프라이빗";
+  if (type.includes("group") || type.includes("그룹")) return "그룹";
+  return value || "수업";
+}
+
+function lessonStatusTone(item) {
+  const count = toNumber(item.reservationCount);
+  const capacity = toNumber(item.capacity);
+  if (capacity && count >= capacity) return "success";
+  if (capacity && count <= 1 && String(item.lessonType || "").toLowerCase().includes("group")) return "warning";
+  return "active";
+}
+
+function renderLessonRow(item) {
+  const startsAt = item.startsAt || item.lessonDate || item.startAt;
+  const title = item.lessonTitle || item.lectureTitle || item.title || "수업명 없음";
+  const staff = item.staffName || item.instructorName || "강사 미지정";
+  const count = toNumber(item.reservationCount);
+  const capacity = toNumber(item.capacity);
+  const room = item.roomName || item.room || "";
+  const source = item.sourceKind || "source";
+  return `
+    <div class="status-row">
+      <div>
+        <strong>${escapeHtml(compactDateTime(startsAt))} · ${escapeHtml(title)}</strong>
+        <p>${escapeHtml(staff)} · ${escapeHtml(lessonTypeLabel(item.lessonType))}${room ? ` · ${escapeHtml(room)}` : ""}</p>
+        <p>예약 ${count.toLocaleString("ko-KR")}${capacity ? ` / 정원 ${capacity.toLocaleString("ko-KR")}` : ""} · ${escapeHtml(source)}</p>
+      </div>
+      ${pill(lessonStatusTone(item))}
+    </div>
+  `;
+}
+
+function renderLessons(lessons, reservations, deletedLogs) {
+  if (!qs("lessonsTodayList")) return;
+  const items = studioItems(lessons)
+    .filter((item) => timestampMs(item.startsAt || item.lessonDate || item.startAt))
+    .sort((a, b) => timestampMs(a.startsAt || a.lessonDate || a.startAt) - timestampMs(b.startsAt || b.lessonDate || b.startAt));
+  const now = new Date();
+  const todayLessons = items.filter((item) => dateKey(item.startsAt || item.lessonDate || item.startAt) === dateKey(now));
+  const weekLessons = items.filter((item) => isWithinDays(item.startsAt || item.lessonDate || item.startAt, now, 7));
+  const groupLessons = weekLessons.filter((item) => String(item.lessonType || "").toLowerCase().includes("group"));
+  const privateLessons = weekLessons.filter((item) => {
+    const type = String(item.lessonType || "").toLowerCase();
+    return type.includes("private") || type.includes("semi");
+  });
+  const reservationItems = studioItems(reservations);
+  const deletedItems = studioItems(deletedLogs);
+
+  setText("lessonsTodayCount", formatCount(todayLessons.length, "개"));
+  setText("lessonsWeekCount", formatCount(weekLessons.length, "개"));
+  setText("lessonsGroupCount", formatCount(groupLessons.length, "개"));
+  setText("lessonsPrivateCount", formatCount(privateLessons.length, "개"));
+  setPillText("lessonsTodayStatus", todayLessons.length ? "active" : "warning");
+  setPillText("lessonsInstructorStatus", weekLessons.length ? "success" : "warning");
+  setPillText("lessonsDeletedStatus", deletedItems.length ? "active" : "warning");
+
+  const todayList = qs("lessonsTodayList");
+  if (todayList) {
+    todayList.innerHTML = todayLessons.length
+      ? todayLessons.slice(0, 12).map(renderLessonRow).join("")
+      : `<div class="empty-state">오늘 기준 lessonOccurrences 수업이 없습니다. 원천 기간 또는 import 상태를 확인하세요.</div>`;
+  }
+
+  const byInstructor = new Map();
+  weekLessons.forEach((item) => {
+    const staff = item.staffName || item.instructorName || "강사 미지정";
+    const current = byInstructor.get(staff) || { count: 0, reservations: 0, group: 0, private: 0 };
+    current.count += 1;
+    current.reservations += toNumber(item.reservationCount);
+    const type = String(item.lessonType || "").toLowerCase();
+    if (type.includes("private") || type.includes("semi")) current.private += 1;
+    else current.group += 1;
+    byInstructor.set(staff, current);
+  });
+  const instructorList = qs("lessonsInstructorList");
+  if (instructorList) {
+    const rows = [...byInstructor.entries()].sort((a, b) => b[1].count - a[1].count);
+    instructorList.innerHTML = rows.length
+      ? rows
+          .map(
+            ([staff, row]) => `
+              <div class="status-row">
+                <div>
+                  <strong>${escapeHtml(staff)}</strong>
+                  <p>이번주 ${row.count.toLocaleString("ko-KR")}개 · 그룹 ${row.group.toLocaleString("ko-KR")} · 프라이빗 ${row.private.toLocaleString("ko-KR")}</p>
+                  <p>예약 합계 ${row.reservations.toLocaleString("ko-KR")}명</p>
+                </div>
+                ${pill("success")}
+              </div>
+            `,
+          )
+          .join("")
+      : `<div class="empty-state">이번주 강사별 수업 집계가 없습니다.</div>`;
+  }
+
+  const sourceList = qs("lessonsSourceList");
+  if (sourceList) {
+    const sourceKinds = [...new Set(weekLessons.map((item) => item.sourceKind).filter(Boolean))];
+    sourceList.innerHTML = `
+      <div class="status-row">
+        <div>
+          <strong>lessonOccurrences ${items.length.toLocaleString("ko-KR")}개</strong>
+          <p>이번주 표시 ${weekLessons.length.toLocaleString("ko-KR")}개 · reservations 샘플 ${reservationItems.length.toLocaleString("ko-KR")}개</p>
+          <p>${escapeHtml(sourceKinds.join(", ") || "sourceKind 없음")}</p>
+        </div>
+        ${pill(items.length ? "success" : "warning")}
+      </div>
+      <div class="status-row">
+        <div>
+          <strong>운영 경계</strong>
+          <p>이 탭은 read-only 현황입니다. 알림톡, 연락처, StudioMate write 대상 선정에는 사용하지 않습니다.</p>
+        </div>
+        ${pill("warning")}
+      </div>
+    `;
+  }
+
+  const deletedList = qs("lessonsDeletedList");
+  if (deletedList) {
+    deletedList.innerHTML = deletedItems.length
+      ? deletedItems.slice(0, 8).map(renderLessonRow).join("")
+      : `
+        <div class="status-row">
+          <div>
+            <strong>삭제 수업 로그 미수집</strong>
+            <p>현재 deletedClassLogs 원천이 비어 있어 인원미달 폐강과 시간표 조정을 자동 분류하지 않습니다.</p>
+          </div>
+          ${pill("warning")}
+        </div>
+      `;
   }
 }
 
@@ -1567,6 +1729,7 @@ function renderFallback(error) {
   renderQualityIssues([]);
   renderMembers([]);
   renderMessages([], []);
+  renderLessons([], [], []);
   renderHomeSummary();
   renderHomeDecisions();
   renderMemberDetail(null);
@@ -1595,6 +1758,7 @@ async function refresh() {
     const shouldLoadMessages = Boolean(qs("messagesCandidateList"));
     const shouldLoadMemberDetail = Boolean(qs("memberDetailName"));
     const shouldLoadPrivate = Boolean(qs("privateRequestList"));
+    const shouldLoadLessons = Boolean(qs("lessonsTodayList"));
     const [
       laneSnapshot,
       automationItems,
@@ -1610,6 +1774,10 @@ async function refresh() {
       privateRecords,
       privateUsageEvents,
       privateLedgerEntries,
+      lessonOccurrences,
+      reservations,
+      deletedClassLogs,
+      deletedLessons,
     ] = await Promise.all([
       getDoc(doc(db, "workLanes", WORK_LANE_ID)),
       getRecentCollection(db, runtime, "automationStatus"),
@@ -1625,6 +1793,10 @@ async function refresh() {
       shouldLoadPrivate ? getRecentCollectionBy(db, runtime, "privateLessonChartRecords", "createdAt", 8) : Promise.resolve([]),
       shouldLoadPrivate ? getRecentCollectionBy(db, runtime, "memberUsageEvents", "updatedAt", 8) : Promise.resolve([]),
       shouldLoadPrivate ? getRecentCollectionBy(db, runtime, "privateSessionLedger", "updatedAt", 8) : Promise.resolve([]),
+      shouldLoadLessons ? getCollectionBy(db, runtime, "lessonOccurrences", "startsAt", 1000) : Promise.resolve([]),
+      shouldLoadLessons ? getCollectionBy(db, runtime, "reservations", "startsAt", 1000) : Promise.resolve([]),
+      shouldLoadLessons ? getCollectionBy(db, runtime, "deletedClassLogs", "updatedAt", 100) : Promise.resolve([]),
+      shouldLoadLessons ? getCollectionBy(db, runtime, "deletedLessons", "updatedAt", 100) : Promise.resolve([]),
     ]);
 
     state.lane = laneSnapshot.exists() ? laneSnapshot.data() : { status: "active" };
@@ -1640,6 +1812,10 @@ async function refresh() {
     state.privateRecords = privateRecords;
     state.privateUsageEvents = privateUsageEvents;
     state.privateLedgerEntries = privateLedgerEntries;
+    state.lessonOccurrences = lessonOccurrences;
+    state.reservations = reservations;
+    state.deletedClassLogs = deletedClassLogs;
+    state.deletedLessons = deletedLessons;
     renderLane(state.lane);
     renderAutomation(automationItems);
     renderImports(state.sourceImports);
@@ -1650,6 +1826,7 @@ async function refresh() {
     renderHomeDecisions();
     renderMemberDetail(memberDetail);
     renderPrivate(privateRequests, privateRecords, privateUsageEvents, privateLedgerEntries);
+    renderLessons(lessonOccurrences, reservations, [...deletedClassLogs, ...deletedLessons]);
     if (shouldLoadBusiness) {
       if (dashboardSnapshot?.exists()) renderBusiness(normalizeBusinessSnapshot(dashboardSnapshot.data()));
       else renderBusinessFallback(new Error("dashboardSnapshots/current 문서가 없습니다."));
