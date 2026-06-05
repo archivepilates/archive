@@ -1395,8 +1395,9 @@ function matchesPrivateProgress(source, target) {
 function findPrivateReportSend(row, candidates, sends) {
   const related = [...candidates, ...sends].filter((item) => {
     const typeText = [item.type, item.title, item.templateCode, item.candidateId, item.dedupeKey, item.id].filter(Boolean).join(" ").toLowerCase();
-    const looksLikeReport = typeText.includes("private_lesson_report") || typeText.includes("private_chart") || typeText.includes("리포트");
-    return looksLikeReport && matchesPrivateProgress(row, item);
+    const looksLikeReport = typeText.includes("private_lesson_report") || typeText.includes("manual_private_chart") || typeText.includes("리포트");
+    const looksLikeStaffInput = typeText.includes("staff_private_lesson_chart") || typeText.includes("instructor");
+    return looksLikeReport && !looksLikeStaffInput && matchesPrivateProgress(row, item);
   });
   return related.sort((a, b) => timestampMs(b.updatedAt || b.createdAt) - timestampMs(a.updatedAt || a.createdAt))[0] || null;
 }
@@ -1889,8 +1890,8 @@ async function refresh() {
       getCollectionBy(db, runtime, "dataQualityIssues", "updatedAt", 100),
       shouldLoadBusiness ? getDoc(doc(db, "dashboardSnapshots", "current")) : Promise.resolve(null),
       shouldLoadMembers || shouldLoadHome ? getCollectionBy(db, runtime, "member360Cards", "totalRevenue", 2000) : Promise.resolve([]),
-      shouldLoadMessages || shouldLoadHome || shouldLoadPrivate ? getRecentCollectionBy(db, runtime, "alimtalkCandidates", "updatedAt", shouldLoadPrivate ? 100 : 12) : Promise.resolve([]),
-      shouldLoadMessages || shouldLoadHome || shouldLoadPrivate ? getRecentCollectionBy(db, runtime, "alimtalkSends", "updatedAt", shouldLoadPrivate ? 100 : 12) : Promise.resolve([]),
+      shouldLoadMessages || shouldLoadHome || shouldLoadPrivate ? getRecentCollectionBy(db, runtime, "alimtalkCandidates", "updatedAt", shouldLoadPrivate ? 500 : 12) : Promise.resolve([]),
+      shouldLoadMessages || shouldLoadHome || shouldLoadPrivate ? getRecentCollectionBy(db, runtime, "alimtalkSends", "updatedAt", shouldLoadPrivate ? 500 : 12) : Promise.resolve([]),
       shouldLoadMemberDetail ? loadMemberDetail(runtime, memberDetailId()) : Promise.resolve(null),
       shouldLoadBusiness ? getRecentCollectionBy(db, runtime, "member360Cards", "totalRevenue", 8) : Promise.resolve([]),
       shouldLoadPrivate ? getRecentCollectionBy(db, runtime, "privateLessonChartRequests", "createdAt", 100) : Promise.resolve([]),
