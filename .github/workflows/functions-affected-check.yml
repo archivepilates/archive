@@ -4,6 +4,7 @@ on:
   pull_request:
     paths:
       - "firebase/**"
+      - "archivein/onsiteWelcome/**"
       - "scripts/**"
       - "package.json"
       - "package-lock.json"
@@ -14,6 +15,7 @@ on:
       - "codex/**"
     paths:
       - "firebase/**"
+      - "archivein/onsiteWelcome/**"
       - "scripts/**"
       - "package.json"
       - "package-lock.json"
@@ -56,6 +58,9 @@ jobs:
 
       - name: Validate function boundaries
         run: npm run validate:function-boundaries
+
+      - name: Validate onsite welcome release guard
+        run: npm run validate:onsite-welcome
 
       - name: Summary
         run: |

@@ -18,6 +18,7 @@ export const ALIMTALK_MEMBER_EXCLUSION_REASONS: Record<string, string> = {
 export type SendableAlimtalkCandidateType =
   | "reservation_open"
   | "new_member"
+  | "onsite_welcome"
   | "private_survey"
   | "group_survey"
   | "instructor_lesson_material"
@@ -38,6 +39,11 @@ export const ALIMTALK_TEMPLATES = {
   new_member: {
     code: "KA01TP260514081318309wQGfeIJxIAJ",
     label: "신규회원 웰컴 v3",
+    status: "approved",
+  },
+  onsite_welcome: {
+    code: process.env.ONSITE_WELCOME_ALIMTALK_TEMPLATE_ID || "KA01TP260602101939427lPhGyuDLvFM",
+    label: "신규회원 웰컴 v5",
     status: "approved",
   },
   ticket_expiring: {
@@ -109,6 +115,7 @@ export const ALIMTALK_TEMPLATE_CHANNEL_IDS: Readonly<Record<string, string>> = {
 export const CANDIDATE_TEMPLATE_CODES: Record<SendableAlimtalkCandidateType, string> = {
   reservation_open: ALIMTALK_TEMPLATES.reservation_open.code,
   new_member: ALIMTALK_TEMPLATES.new_member.code,
+  onsite_welcome: ALIMTALK_TEMPLATES.onsite_welcome.code,
   private_survey: ALIMTALK_TEMPLATES.private_survey.code,
   group_survey: ALIMTALK_TEMPLATES.group_survey.code,
   instructor_lesson_material: ALIMTALK_TEMPLATES.instructor_lesson_material.code,
@@ -141,6 +148,10 @@ export const ALIMTALK_DEDUPE_POLICIES_BY_TEMPLATE_CODE: Record<string, AlimtalkD
   },
   [ALIMTALK_TEMPLATES.new_member.code]: {
     label: "신규회원 웰컴 영구 1회",
+    windowDays: null,
+  },
+  [ALIMTALK_TEMPLATES.onsite_welcome.code]: {
+    label: "현장 웰컴 영구 1회",
     windowDays: null,
   },
   [ALIMTALK_TEMPLATES.ticket_expiring.code]: {

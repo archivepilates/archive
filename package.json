@@ -11,6 +11,7 @@
     "build:contracts": "node firebase/kangsain-functions/functions/node_modules/typescript/bin/tsc -p firebase/packages/contracts/tsconfig.json",
     "prepare:function-codebases": "node scripts/prepare-functions-codebase.mjs all",
     "build:function-codebases": "npm run build:contracts && npm run prepare:function-codebases && node firebase/kangsain-functions/functions/node_modules/typescript/bin/tsc -p firebase/function-codebases/alimtalk/tsconfig.json && node firebase/kangsain-functions/functions/node_modules/typescript/bin/tsc -p firebase/function-codebases/private-chart/tsconfig.json && node firebase/kangsain-functions/functions/node_modules/typescript/bin/tsc -p firebase/function-codebases/sync/tsconfig.json && node firebase/kangsain-functions/functions/node_modules/typescript/bin/tsc -p firebase/function-codebases/app/tsconfig.json",
+    "validate:onsite-welcome": "node scripts/validate-onsite-welcome-release.mjs",
     "detect:affected-functions": "node scripts/detect-affected-function-codebases.mjs",
     "deploy:affected-functions:dry": "node scripts/deploy-affected-functions.mjs --dry-run",
     "deploy:affected-functions": "node scripts/deploy-affected-functions.mjs --apply",

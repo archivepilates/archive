@@ -354,6 +354,9 @@ export interface MemberSignupContractDoc {
     marketingAdConsent?: boolean;
     finalConfirmation: boolean;
   };
+  marketingAdConsentAt?: Timestamp | null;
+  marketingAdConsentSource?: "memberSignup";
+  marketingAdConsentTermsVersion?: string;
   signature?: {
     signerName: string;
     signedAtText: string;
@@ -366,6 +369,8 @@ export interface MemberSignupContractDoc {
   openedAt?: Timestamp | null;
   submittedAt?: Timestamp | null;
   expiresAt?: Timestamp | null;
+  cancelledAt?: Timestamp | null;
+  cancelReason?: string;
   purgeAfter?: Timestamp | null;
   createdAt: Timestamp;
   updatedAt: Timestamp;
@@ -374,6 +379,7 @@ export interface MemberSignupContractDoc {
 export type OnsiteWelcomeRequestStatus =
   | "pending"
   | "running"
+  | "lookup_ready"
   | "ready"
   | "sent"
   | "error"
@@ -404,6 +410,7 @@ export interface OnsiteWelcomeRequestDoc {
   contractId?: string;
   signupUrl?: string;
   alimtalkCandidateId?: string;
+  alimtalkSendId?: string;
   lastError?: string | null;
   createdAt: Timestamp;
   updatedAt: Timestamp;
@@ -416,6 +423,7 @@ export type ContactSyncStatus = "pending" | "synced" | "skipped" | "failed";
 export type AlimtalkCandidateType =
   | "reservation_open"
   | "new_member"
+  | "onsite_welcome"
   | "private_survey"
   | "group_survey"
   | "instructor_lesson_material"

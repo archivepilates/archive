@@ -86,6 +86,35 @@ export const ALIMTALK_TEMPLATE_TARGET_RULES: Partial<Record<AlimtalkCandidateTyp
       "SOLAPI 미승인 템플릿",
     ],
   },
+  onsite_welcome: {
+    type: "onsite_welcome",
+    templateCode: ALIMTALK_TEMPLATES.onsite_welcome.code,
+    templateLabel: ALIMTALK_TEMPLATES.onsite_welcome.label,
+    sourceDatePolicy: "today",
+    requiresApprovedTemplate: true,
+    requiresMemberPhone: true,
+    buttonUrlRules: [
+      {
+        label: "회원가입서 작성 버튼",
+        template: SHORT_LINK_BUTTON_URL_TEMPLATE,
+        maxLength: SOLAPI_BUTTON_URL_MAX_LENGTH,
+      },
+    ],
+    targetRules: [
+      "현장 웰컴 페이지에서 가입서 링크가 준비된 lookup_ready 요청",
+      "직원이 웰컴 페이지의 알림톡 전송 버튼을 직접 클릭",
+      "StudioMate 전화번호 단건 조회 성공",
+      "회원가입서 초안과 짧은 링크가 있음",
+      "기존 신규회원 웰컴 발송 이력이 없음",
+    ],
+    exclusionRules: [
+      "전화번호 없음",
+      "회원가입서 링크 없음",
+      "신규회원 웰컴 v5 템플릿 코드 미설정 또는 미승인",
+      "기존 신규회원 웰컴 발송 이력 있음",
+      "같은 현장 웰컴 요청 이미 sent/error 처리",
+    ],
+  },
   private_survey: {
     type: "private_survey",
     templateCode: ALIMTALK_TEMPLATES.private_survey.code,

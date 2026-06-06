@@ -6,6 +6,9 @@ cd "$ROOT_DIR"
 
 source "$ROOT_DIR/scripts/use-archivein-firebase-service-account.sh" >/dev/null
 
+echo "== ARCHIVE IN live deploy: onsite welcome guard =="
+npm run validate:onsite-welcome
+
 echo "== ARCHIVE IN live deploy: Firestore rules dry-run =="
 firebase deploy --project archive-pilates --config firebase.json --only firestore:rules --dry-run
 
