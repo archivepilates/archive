@@ -5,11 +5,12 @@ import { shortLinkIdForTarget } from "../utils/shortLinks";
 import { isAlimtalkTemplateApproved } from "./templateStatus";
 import { alimtalkTemplateTargetRule, solapiButtonUrlLengthIssue } from "./templateTargetRules";
 import { isValidInstructorLessonManagementNumber, normalizeInstructorLessonManagementNumber } from "./instructorLessonManagement";
+import { isAlimtalkTestRecipient } from "./testRecipients";
 
 export async function autoSendabilityIssue(candidate: AlimtalkCandidateDoc, today: string): Promise<string> {
   const rule = alimtalkTemplateTargetRule(candidate.type);
   if (rule?.requiresMemberPhone && !candidate.memberPhone) return "전화번호 없음";
-  if (ALIMTALK_MEMBER_EXCLUSION_REASONS[candidate.memberId])
+  if (ALIMTALK_MEMBER_EXCLUSION_REASONS[candidate.memberId] && !isAlimtalkTestRecipient(candidate))
     return ALIMTALK_MEMBER_EXCLUSION_REASONS[candidate.memberId];
   if (rule?.requiresApprovedTemplate && !(await isAlimtalkTemplateApproved(candidate.templateCode)))
     return `승인 템플릿 코드 아님: ${candidate.templateCode}`;

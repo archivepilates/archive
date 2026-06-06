@@ -8,6 +8,7 @@ import { autoSendabilityIssue } from "./eligibility";
 import { processAlimtalkQueue } from "./processAlimtalkQueue";
 import { isAlimtalkTemplateApproved } from "./templateStatus";
 import { ALIMTALK_TEMPLATES } from "./templates";
+import { isAlimtalkTestRecipient } from "./testRecipients";
 
 const ONSITE_WELCOME_SETTINGS_DOC = "onsiteWelcomeAlimtalk";
 
@@ -40,7 +41,8 @@ async function enqueueAndSendOnsiteWelcome(
   if (!memberName) throw new Error("현장 웰컴 알림톡 회원명 없음");
   if (!request.signupUrl || !request.contractId) throw new Error("회원가입서 링크 없음");
 
-  const duplicate = await existingWelcomeSend({ memberId, memberPhone, templateCode });
+  const isTestRecipient = isAlimtalkTestRecipient({ memberId, memberName, memberPhone });
+  const duplicate = isTestRecipient ? "" : await existingWelcomeSend({ memberId, memberPhone, templateCode });
   if (duplicate) {
     await refs.onsiteWelcomeRequest(request.requestId).set(
       {
@@ -73,7 +75,7 @@ async function enqueueAndSendOnsiteWelcome(
   const issue = await autoSendabilityIssue(candidate, todayKst());
   if (issue) throw new Error(issue);
   const dedupeKey = alimtalkDedupeKey(candidate);
-  const completedDuplicate = await findCompletedDuplicate(dedupeKey, null);
+  const completedDuplicate = isTestRecipient ? "" : await findCompletedDuplicate(dedupeKey, null);
   if (completedDuplicate) throw new Error(`중복 발송 차단: ${completedDuplicate}`);
 
   await refs.alimtalkCandidate(candidate.candidateId).set({ ...candidate, dedupeKey }, { merge: true });

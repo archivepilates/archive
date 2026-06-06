@@ -20,6 +20,7 @@ import {
 } from "./templates";
 import { alimtalkDedupeKey, findCompletedDuplicateForCandidate } from "./dedupe";
 import { isValidInstructorLessonManagementNumber as isValidInstructorLessonManagementNumberFromUtil } from "./instructorLessonManagement";
+import { isAlimtalkTestRecipient } from "./testRecipients";
 
 export async function rebuildAlimtalkCandidatesForRange(input: {
   studioId: string;
@@ -72,7 +73,7 @@ export async function rebuildAlimtalkCandidatesForRange(input: {
     for (const profile of profiles.filter(
       (profile) =>
         profile.isNewMember &&
-        !ALIMTALK_MEMBER_EXCLUSION_REASONS[profile.memberId] &&
+        (!ALIMTALK_MEMBER_EXCLUSION_REASONS[profile.memberId] || isAlimtalkTestRecipient(profile)) &&
         currentOrUpcomingLessonProfileTickets(profile, input.endDate).length > 0 &&
         registeredDate(profile) >= NEW_MEMBER_ALIMTALK_START_DATE &&
         registeredDate(profile) >= newMemberWindowStartDate(input.endDate) &&
@@ -271,7 +272,9 @@ async function enqueueSendableCandidate(
 ): Promise<boolean> {
   const dedupeKey = alimtalkDedupeKey(candidate);
   const dedupePolicy = alimtalkDedupePolicy(candidate.templateCode);
-  const duplicate = await findCompletedDuplicateForCandidate(candidate, dedupeKey, dedupePolicy.windowDays);
+  const duplicate = isAlimtalkTestRecipient(candidate)
+    ? ""
+    : await findCompletedDuplicateForCandidate(candidate, dedupeKey, dedupePolicy.windowDays);
   if (duplicate) {
     writes.push(markDuplicateSkipped(candidate, dedupeKey, `중복 발송 차단(${dedupePolicy.label}): ${duplicate}`));
     return false;
@@ -283,7 +286,7 @@ async function enqueueSendableCandidate(
 
 function directTicketCandidates(profile: MemberProfileDoc, sourceDate: string): AlimtalkCandidateDoc[] {
   if (!profile.memberId || !profile.name || !profile.phone) return [];
-  if (ALIMTALK_MEMBER_EXCLUSION_REASONS[profile.memberId]) return [];
+  if (ALIMTALK_MEMBER_EXCLUSION_REASONS[profile.memberId] && !isAlimtalkTestRecipient(profile)) return [];
   return currentLessonProfileTickets(profile, sourceDate)
     .map((ticket) => directTicketCandidate(profile, ticket, sourceDate))
     .filter((candidate): candidate is AlimtalkCandidateDoc => Boolean(candidate));
@@ -292,7 +295,7 @@ function directTicketCandidates(profile: MemberProfileDoc, sourceDate: string): 
 function reservationOpenCandidateForDate(profile: MemberProfileDoc, sourceDate: string): AlimtalkCandidateDoc | null {
   if (!isReservationOpenSendDate(sourceDate)) return null;
   if (!profile.memberId || !profile.name || !profile.phone) return null;
-  if (ALIMTALK_MEMBER_EXCLUSION_REASONS[profile.memberId]) return null;
+  if (ALIMTALK_MEMBER_EXCLUSION_REASONS[profile.memberId] && !isAlimtalkTestRecipient(profile)) return null;
   const reservationStartDate = reservationOpenStartDate(sourceDate);
   const reservationEndDate = reservationOpenEndDate(sourceDate);
   const eligibleTickets = reservationOpenEligibleGroupTickets(profile, reservationStartDate, reservationEndDate);
@@ -407,7 +410,7 @@ async function groupSurveyCandidateForDate(
 ): Promise<AlimtalkCandidateDoc | null> {
   if (sourceDate < GROUP_SURVEY_ALIMTALK_START_DATE) return null;
   if (!profile.memberId || !profile.name || !profile.phone) return null;
-  if (ALIMTALK_MEMBER_EXCLUSION_REASONS[profile.memberId]) return null;
+  if (ALIMTALK_MEMBER_EXCLUSION_REASONS[profile.memberId] && !isAlimtalkTestRecipient(profile)) return null;
   const booking = firstUpcomingGroupBookingInReservationWindow(profile.memberId, sourceDate, bookingIndex);
   if (!booking) return null;
   if (await hasSubmittedGroupSurvey(profile.memberId, profile.phone)) return null;
@@ -587,7 +590,7 @@ async function privateSurveyCandidateForDate(
 ): Promise<AlimtalkCandidateDoc | null> {
   if (sourceDate < PRIVATE_SURVEY_ALIMTALK_START_DATE) return null;
   if (!profile.memberId || !profile.name || !profile.phone) return null;
-  if (ALIMTALK_MEMBER_EXCLUSION_REASONS[profile.memberId]) return null;
+  if (ALIMTALK_MEMBER_EXCLUSION_REASONS[profile.memberId] && !isAlimtalkTestRecipient(profile)) return null;
   const booking = firstUpcomingPrivateBookingInReservationWindow(profile.memberId, sourceDate, bookingIndex);
   if (!booking) return null;
   if (await hasSubmittedPrivateSurvey(profile.memberId, profile.phone)) return null;
@@ -627,7 +630,7 @@ async function longAbsenceCandidateForDate(
 ): Promise<AlimtalkCandidateDoc | null> {
   if (sourceDate < LONG_ABSENCE_ALIMTALK_START_DATE) return null;
   if (!profile.memberId || !profile.name || !profile.phone) return null;
-  if (ALIMTALK_MEMBER_EXCLUSION_REASONS[profile.memberId]) return null;
+  if (ALIMTALK_MEMBER_EXCLUSION_REASONS[profile.memberId] && !isAlimtalkTestRecipient(profile)) return null;
   if (hasHoldingTicket(profile)) return null;
   const activeTickets = currentLessonProfileTickets(profile, sourceDate);
   if (!activeTickets.length) return null;

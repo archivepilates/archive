@@ -2,6 +2,7 @@ import { refs } from "../firestore/refs";
 import type { AlimtalkCandidateDoc } from "../types/models";
 import { stableHash } from "../utils/hash";
 import { normalizeInstructorLessonManagementNumber } from "./instructorLessonManagement";
+import { isAlimtalkTestRecipient } from "./testRecipients";
 
 export async function findCompletedDuplicate(dedupeKey: string, windowDays: number | null): Promise<string> {
   if (!dedupeKey) return "";
@@ -26,6 +27,7 @@ export async function findCompletedDuplicateForCandidate(
   dedupeKey: string,
   windowDays: number | null,
 ): Promise<string> {
+  if (isAlimtalkTestRecipient(candidate)) return "";
   const exact = await findCompletedDuplicate(dedupeKey, windowDays);
   if (exact) return exact;
   if (!isTicketReminder(candidate)) return "";
