@@ -328,6 +328,11 @@ function showLoginGate(message = "") {
   gate.classList.add("on");
 }
 
+function hideLoginGate() {
+  const gate = qs("coreLoginGate");
+  if (gate) gate.classList.remove("on");
+}
+
 async function waitForAuth(runtime) {
   if (runtime.authClient.currentUser) return runtime.authClient.currentUser;
   if (!state.authReady) {
@@ -339,6 +344,11 @@ async function waitForAuth(runtime) {
     });
   }
   return state.authReady;
+}
+
+function isPermissionDenied(error) {
+  const text = `${error?.code || ""} ${error?.message || ""}`.toLowerCase();
+  return text.includes("permission-denied") || text.includes("missing or insufficient permission");
 }
 
 async function getRecentCollection(db, firestore, collectionName, maxItems = 8) {
@@ -377,6 +387,18 @@ async function getCollectionBy(db, firestore, collectionName, orderField = "upda
       .map((docSnapshot) => ({ id: docSnapshot.id, ...docSnapshot.data() }))
       .sort((a, b) => String(b[orderField] || "").localeCompare(String(a[orderField] || "")))
       .slice(0, maxItems);
+  }
+}
+
+async function getOptionalCollectionBy(db, firestore, collectionName, orderField = "updatedAt", maxItems = 1000) {
+  try {
+    return await getCollectionBy(db, firestore, collectionName, orderField, maxItems);
+  } catch (error) {
+    if (isPermissionDenied(error)) {
+      console.warn(`ARCHIVE CORE optional collection skipped: ${collectionName}`, error);
+      return [];
+    }
+    throw error;
   }
 }
 
@@ -1841,8 +1863,12 @@ function renderBusinessFallback(error) {
   renderBusinessMemberInsights([]);
 }
 
-function renderFallback(error) {
-  const reason = error?.code === "permission-denied" ? "로그인 권한 필요" : "Firestore 읽기 실패";
+function renderFallback(error, options = {}) {
+  const reason = isPermissionDenied(error)
+    ? options.requireLogin
+      ? "로그인 권한 필요"
+      : "데이터 권한 확인 필요"
+    : "Firestore 읽기 실패";
   setConnection(reason, error?.message || "정적 화면으로 표시합니다.");
   renderLane({ status: "active" });
   renderAutomation([]);
@@ -1856,7 +1882,7 @@ function renderFallback(error) {
   renderMemberDetail(null);
   renderPrivate([], [], [], []);
   renderBusinessFallback(error);
-  if (error?.code === "permission-denied") showLoginGate();
+  if (options.requireLogin) showLoginGate();
 }
 
 async function refresh() {
@@ -1872,13 +1898,14 @@ async function refresh() {
       error.code = "permission-denied";
       throw error;
     }
+    hideLoginGate();
     const { db, doc, getDoc } = runtime;
     const shouldLoadBusiness = Boolean(qs("businessMonthSelect"));
     const shouldLoadHome = Boolean(qs("homeMemberTotal"));
     const shouldLoadMembers = Boolean(qs("membersTable"));
     const shouldLoadMessages = Boolean(qs("messagesCandidateList"));
     const shouldLoadMemberDetail = Boolean(qs("memberDetailName"));
-    const shouldLoadPrivate = Boolean(qs("privateRequestList"));
+    const shouldLoadPrivate = Boolean(qs("privateProgressList"));
     const shouldLoadLessons = Boolean(qs("lessonsTodayList"));
     const [
       laneSnapshot,
@@ -1914,10 +1941,10 @@ async function refresh() {
       shouldLoadPrivate ? getRecentCollectionBy(db, runtime, "privateLessonChartRecords", "createdAt", 100) : Promise.resolve([]),
       shouldLoadPrivate ? getRecentCollectionBy(db, runtime, "memberUsageEvents", "updatedAt", 8) : Promise.resolve([]),
       shouldLoadPrivate ? getRecentCollectionBy(db, runtime, "privateSessionLedger", "updatedAt", 8) : Promise.resolve([]),
-      shouldLoadLessons ? getCollectionBy(db, runtime, "lessonOccurrences", "startsAt", 1000) : Promise.resolve([]),
-      shouldLoadLessons ? getCollectionBy(db, runtime, "reservations", "startsAt", 1000) : Promise.resolve([]),
-      shouldLoadLessons ? getCollectionBy(db, runtime, "deletedClassLogs", "updatedAt", 100) : Promise.resolve([]),
-      shouldLoadLessons ? getCollectionBy(db, runtime, "deletedLessons", "updatedAt", 100) : Promise.resolve([]),
+      shouldLoadLessons ? getOptionalCollectionBy(db, runtime, "lessonOccurrences", "startsAt", 1000) : Promise.resolve([]),
+      shouldLoadLessons ? getOptionalCollectionBy(db, runtime, "reservations", "startsAt", 1000) : Promise.resolve([]),
+      shouldLoadLessons ? getOptionalCollectionBy(db, runtime, "deletedClassLogs", "updatedAt", 100) : Promise.resolve([]),
+      shouldLoadLessons ? getOptionalCollectionBy(db, runtime, "deletedLessons", "updatedAt", 100) : Promise.resolve([]),
     ]);
 
     state.lane = laneSnapshot.exists() ? laneSnapshot.data() : { status: "active" };
@@ -1955,7 +1982,7 @@ async function refresh() {
     }
     setConnection("연결됨", `archive-pilates · ${formatDate(new Date())}`);
   } catch (error) {
-    renderFallback(error);
+    renderFallback(error, { requireLogin: !state.firebaseRuntime?.authClient?.currentUser });
   } finally {
     if (refreshButton) refreshButton.disabled = false;
   }

@@ -367,6 +367,26 @@ service cloud.firestore {
       allow write: if false;
     }
 
+    match /lessonOccurrences/{occurrenceId} {
+      allow read: if isManager();
+      allow write: if false;
+    }
+
+    match /reservations/{reservationId} {
+      allow read: if isManager();
+      allow write: if false;
+    }
+
+    match /deletedClassLogs/{logId} {
+      allow read: if isManager();
+      allow write: if false;
+    }
+
+    match /deletedLessons/{lessonId} {
+      allow read: if isManager();
+      allow write: if false;
+    }
+
     match /dashboardSnapshots/{snapshotId} {
       allow read: if signedIn() && snapshotId == 'current';
       allow write: if false;
