@@ -169,7 +169,8 @@
       statusEl.textContent = displayProgressLabel(request.progressLabel || statusLabel(request.status));
       if (request.lastError) showMessage(request.lastError, true);
       const terminalError = ['error', 'cancelled'].includes(request.status);
-      renderStages(terminalError ? [] : normalizeStages(request));
+      const visibleStages = terminalError ? [] : (request.stages || []);
+      renderStages(normalizeStages({ ...request, stages: visibleStages }));
       const sendVisible = ['lookup_ready', 'ready'].includes(request.status) && Boolean(request.signupUrl);
       sendButton.hidden = !sendVisible;
       sendButton.disabled = request.status === 'ready' || !request.canSendAlimtalk;
