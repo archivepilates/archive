@@ -1,10 +1,12 @@
 import { createHash } from "node:crypto";
+import { Timestamp } from "firebase-admin/firestore";
 import { db } from "../config/firebase";
 import type { MemberSignupContractDoc } from "../types/models";
 import { refs } from "../firestore/refs";
 import { nowTimestamp } from "../utils/date";
 
 const TERMS_VERSION = "archive-member-signup-2026-05";
+const MEMBER_SIGNUP_PURGE_DELAY_MS = 1000 * 60 * 60 * 24 * 30;
 
 export async function memberSignupContractHandler(request: any, response: any): Promise<void> {
   try {
@@ -74,10 +76,19 @@ export async function memberSignupContractHandler(request: any, response: any): 
           throw new Error("회원가입서를 열 수 있는 권한이 없습니다.");
         }
         if (current.expiresAt?.toMillis?.() && current.expiresAt.toMillis() < Date.now()) {
-          throw new Error("회원가입서 링크가 만료되었습니다.");
+          tx.set(
+            contractRef,
+            {
+              status: "expired",
+              purgeAfter: Timestamp.fromMillis(Date.now() + MEMBER_SIGNUP_PURGE_DELAY_MS),
+              updatedAt: nowTimestamp(),
+            },
+            { merge: true },
+          );
+          return { expired: true, duplicate: false, contract: null };
         }
         if (current.status === "submitted") {
-          return { duplicate: true, contract: current };
+          return { expired: false, duplicate: true, contract: current };
         }
         if (!["draft", "opened"].includes(current.status)) {
           throw new Error("현재 제출할 수 없는 회원가입서입니다.");
@@ -97,8 +108,11 @@ export async function memberSignupContractHandler(request: any, response: any): 
           },
           { merge: true },
         );
-        return { duplicate: false, contract: null };
+        return { expired: false, duplicate: false, contract: null };
       });
+      if (transactionResult.expired) {
+        throw new Error("회원가입서 링크가 만료되었습니다.");
+      }
       if (transactionResult.duplicate && transactionResult.contract) {
         response.json({ ok: true, duplicate: true, contract: publicContract(transactionResult.contract) });
         return;
@@ -142,9 +156,22 @@ async function readAuthorizedContract(idInput: unknown, tokenInput: unknown): Pr
     throw new Error("회원가입서를 열 수 있는 권한이 없습니다.");
   }
   if (contract.expiresAt?.toMillis?.() && contract.expiresAt.toMillis() < Date.now()) {
+    await markExpiredContractForPurge(contract);
     throw new Error("회원가입서 링크가 만료되었습니다.");
   }
   return contract;
+}
+
+async function markExpiredContractForPurge(contract: MemberSignupContractDoc): Promise<void> {
+  if (["submitted", "cancelled", "expired"].includes(contract.status)) return;
+  await refs.memberSignupContract(contract.contractId).set(
+    {
+      status: "expired",
+      purgeAfter: Timestamp.fromMillis(Date.now() + MEMBER_SIGNUP_PURGE_DELAY_MS),
+      updatedAt: nowTimestamp(),
+    },
+    { merge: true },
+  );
 }
 
 function normalizeSubmission(input: Record<string, unknown>, fallbackName: string) {

@@ -366,6 +366,7 @@ export interface MemberSignupContractDoc {
   openedAt?: Timestamp | null;
   submittedAt?: Timestamp | null;
   expiresAt?: Timestamp | null;
+  purgeAfter?: Timestamp | null;
   createdAt: Timestamp;
   updatedAt: Timestamp;
 }
@@ -578,6 +579,13 @@ export type PrivateLessonChartGptStatus =
   | "published"
   | "failed";
 
+export interface PrivateLessonSessionNumberCorrection {
+  from: number | null;
+  to: number;
+  reason: string;
+  correctedAt: Timestamp;
+}
+
 export interface PrivateLessonChartRequestDoc {
   requestId: string;
   studioId: string;
@@ -594,6 +602,7 @@ export interface PrivateLessonChartRequestDoc {
   lessonStartAt: Timestamp | null;
   lessonEndAt: Timestamp | null;
   sessionNumber: number;
+  sessionNumberCorrection?: PrivateLessonSessionNumberCorrection;
   accessTokenHash: string;
   preUrl: string;
   postUrl: string;
@@ -643,6 +652,7 @@ export interface PrivateLessonChartRecordDoc {
   lessonDate: string;
   lessonStartAt: Timestamp | null;
   sessionNumber: number;
+  sessionNumberCorrection?: PrivateLessonSessionNumberCorrection;
   prePlan?: Record<string, unknown>;
   postRecord?: Record<string, unknown>;
   preSubmittedAt?: Timestamp | null;

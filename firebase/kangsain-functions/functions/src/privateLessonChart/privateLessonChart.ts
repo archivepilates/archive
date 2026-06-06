@@ -895,7 +895,10 @@ function normalizeNotionId(value: string): string {
 async function ensureChartRequestForBooking(booking: BookingDoc): Promise<{ requestId: string; created: boolean }> {
   const requestId = `plc_${booking.bookingId}`;
   const existing = await refs.privateLessonChartRequest(requestId).get();
-  if (existing.exists) return { requestId, created: false };
+  if (existing.exists) {
+    await repairExistingChartRequestSessionNumber(booking, existing.data());
+    return { requestId, created: false };
+  }
 
   const [staffSnap, intakeSummary, sessionNumber] = await Promise.all([
     booking.staffId ? refs.staff(booking.staffId).get() : Promise.resolve(null as any),
@@ -966,6 +969,40 @@ async function ensureChartRequestForBooking(booking: BookingDoc): Promise<{ requ
     );
   }
   return { requestId, created: true };
+}
+
+async function repairExistingChartRequestSessionNumber(
+  booking: BookingDoc,
+  request: PrivateLessonChartRequestDoc | undefined,
+): Promise<void> {
+  if (!request) return;
+  const sessionNumber = await nextSessionNumber(booking);
+  if (!sessionNumber || Number(request.sessionNumber || 0) === sessionNumber) return;
+  const now = nowTimestamp();
+  const correction = {
+    from: request.sessionNumber || null,
+    to: sessionNumber,
+    reason: "memberUsageEvents/privateSessionLedger 기준 회차 재계산",
+    correctedAt: now,
+  };
+  await Promise.all([
+    refs.privateLessonChartRequest(request.requestId).set(
+      {
+        sessionNumber,
+        sessionNumberCorrection: correction,
+        updatedAt: now,
+      },
+      { merge: true },
+    ),
+    refs.privateLessonChartRecord(request.requestId).set(
+      {
+        sessionNumber,
+        sessionNumberCorrection: correction,
+        updatedAt: now,
+      },
+      { merge: true },
+    ),
+  ]);
 }
 
 async function submitPrivateLessonChart(
@@ -1454,11 +1491,10 @@ async function nextSessionNumber(booking: BookingDoc): Promise<number> {
   if (ledgerNumber) return ledgerNumber;
   const usageNumber = await nextSessionNumberFromUsageEvents(booking);
   if (usageNumber) return usageNumber;
-  const snap = await refs.bookings().where("memberId", "==", booking.memberId).limit(500).get();
+  const snap = await refs.bookings().where("memberId", "==", booking.memberId).get();
   const currentStart = booking.lectureStartAt?.toMillis?.() || 0;
   const canonical = canonicalPrivateBookings(snap.docs.map((doc) => doc.data()))
-    .filter((item) => item.appStatus === "reserved")
-    .filter((item) => !["absent", "late_cancel"].includes(item.attendanceStatus));
+    .filter(isCountablePrivateHistoryBooking);
   if (currentStart) {
     return canonical.filter((item) => (item.lectureStartAt?.toMillis?.() || 0) < currentStart).length + 1;
   }
@@ -1467,7 +1503,7 @@ async function nextSessionNumber(booking: BookingDoc): Promise<number> {
 }
 
 async function nextSessionNumberFromPrivateLedger(booking: BookingDoc): Promise<number | null> {
-  const snap = await db.collection("privateSessionLedger").where("memberId", "==", booking.memberId).limit(1000).get();
+  const snap = await db.collection("privateSessionLedger").where("memberId", "==", booking.memberId).get();
   const rows = canonicalPrivateTimelineRows(
     snap.docs
       .map((doc): Record<string, any> => ({ id: doc.id, ...(doc.data() || {}) }))
@@ -1489,7 +1525,7 @@ async function nextSessionNumberFromPrivateLedger(booking: BookingDoc): Promise<
 }
 
 async function nextSessionNumberFromUsageEvents(booking: BookingDoc): Promise<number | null> {
-  const snap = await db.collection("memberUsageEvents").where("memberId", "==", booking.memberId).limit(1000).get();
+  const snap = await db.collection("memberUsageEvents").where("memberId", "==", booking.memberId).get();
   const rows = canonicalPrivateTimelineRows(
     snap.docs
       .map((doc): Record<string, any> => ({ id: doc.id, ...(doc.data() || {}) }))
@@ -1598,6 +1634,12 @@ function isPrivateBooking(booking: BookingDoc): boolean {
   if (booking.lessonType === "private" || booking.lessonType === "semi_private") return true;
   const text = `${booking.ticketName || ""} ${booking.ticketClassType || ""} ${booking.ticketType || ""} ${(booking as any).title || ""} ${(booking as any).lectureTitle || ""}`;
   return /프라이빗|개인|1:1|PRIVATE|\bP\b/i.test(text);
+}
+
+function isCountablePrivateHistoryBooking(booking: BookingDoc): boolean {
+  if (["wait", "wait_cancel", "cancel"].includes(String(booking.appStatus || ""))) return false;
+  if (["absent", "late_cancel"].includes(String(booking.attendanceStatus || ""))) return false;
+  return true;
 }
 
 function canonicalPrivateBookings(bookings: BookingDoc[]): BookingDoc[] {

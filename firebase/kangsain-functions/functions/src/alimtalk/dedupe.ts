@@ -9,7 +9,7 @@ export async function findCompletedDuplicate(dedupeKey: string, windowDays: numb
     .alimtalkSends()
     .where("dedupeKey", "==", dedupeKey)
     .where("status", "==", "done")
-    .limit(1)
+    .limit(100)
     .get();
   const cutoffMs = windowDays == null ? 0 : Date.now() - windowDays * 24 * 60 * 60 * 1000;
   const duplicate = snap.docs.find((doc) => {
@@ -36,7 +36,7 @@ export async function findCompletedDuplicateForCandidate(
     .where("memberPhone", "==", candidate.memberPhone)
     .where("templateCode", "==", candidate.templateCode)
     .where("status", "==", "done")
-    .limit(20)
+    .limit(100)
     .get();
   for (const sendDoc of snap.docs) {
     const send = sendDoc.data();
