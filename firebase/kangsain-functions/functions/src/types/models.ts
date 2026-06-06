@@ -703,6 +703,14 @@ export interface PrivateLessonChartRecordDoc {
   publicReportCanonicalUrl?: string;
   publicSummary?: string;
   publicNextDirection?: string;
+  media?: {
+    rootFolderId?: string;
+    memberFolderId?: string;
+    sessionFolderId?: string;
+    sessionFolderUrl?: string;
+    files?: PrivateLessonChartMediaFile[];
+    updatedAt?: Timestamp;
+  };
   publicReportApproval?: {
     status: "pending" | "approved" | "queued" | "sent" | "failed";
     approvedAt?: Timestamp;
@@ -721,6 +729,24 @@ export interface PrivateLessonChartRecordDoc {
   };
   createdAt: Timestamp;
   updatedAt: Timestamp;
+}
+
+export interface PrivateLessonChartMediaFile {
+  mediaId: string;
+  fileName: string;
+  mimeType: string;
+  size: number;
+  driveFileId: string;
+  driveUrl: string;
+  previewUrl: string;
+  thumbnailUrl?: string;
+  iconUrl?: string;
+  folderId: string;
+  includeInReport: boolean;
+  uploadedAt: Timestamp;
+  uploadedBy: string;
+  source: "private_chart_teacher_upload";
+  status: "uploaded";
 }
 
 export interface ContactSyncJobDoc {

@@ -46,6 +46,17 @@ export class DelegatedGoogleClient {
     return Buffer.from(await response.arrayBuffer());
   }
 
+  async requestRaw(url: string, init: RequestInit = {}): Promise<Response> {
+    const token = await this.getAccessToken();
+    return fetch(url, {
+      ...init,
+      headers: {
+        Authorization: `Bearer ${token}`,
+        ...(init.headers || {}),
+      },
+    });
+  }
+
   private async getAccessToken(): Promise<string> {
     if (this.accessToken) return this.accessToken;
     const key = JSON.parse(googleDwdServiceAccountJson.value()) as {

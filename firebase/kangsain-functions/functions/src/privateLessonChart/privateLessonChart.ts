@@ -8,6 +8,7 @@ import { refs } from "../firestore/refs";
 import type {
   AlimtalkCandidateDoc,
   BookingDoc,
+  PrivateLessonChartMediaFile,
   PrivateLessonChartMode,
   PrivateLessonChartRecordDoc,
   PrivateLessonChartRequestDoc,
@@ -20,6 +21,7 @@ import { stableHash } from "../utils/hash";
 import { ensureShortLink } from "../utils/shortLinks";
 import { ALIMTALK_TEMPLATES } from "../alimtalk/templates";
 import { isAlimtalkTemplateApproved } from "../alimtalk/templateStatus";
+import { initPrivateLessonMediaUpload, uploadPrivateLessonMediaChunk } from "./privateLessonMedia";
 
 const PUBLIC_BASE_URL = process.env.PRIVATE_CHART_BASE_URL || "https://in.archivepilates.com/private-chart/";
 const NOTION_API_VERSION = "2022-06-28";
@@ -75,6 +77,32 @@ export async function privateLessonChartApiHandler(request: any, response: any):
       }
       if (String(body.action || "") === "approveReport") {
         const result = await approvePrivateLessonReportFromChart(chartRequest);
+        response.status(200).json({ ok: true, ...result });
+        return;
+      }
+      if (String(body.action || "") === "initMediaUpload") {
+        const record =
+          (await refs.privateLessonChartRecord(chartRequest.requestId).get()).data() ||
+          (await upsertChartRecordBase(chartRequest));
+        const result = await initPrivateLessonMediaUpload({
+          chartRequest,
+          record,
+          fileName: String(body.fileName || ""),
+          mimeType: String(body.mimeType || ""),
+          size: Number(body.size || 0),
+        });
+        response.status(200).json({ ok: true, ...result });
+        return;
+      }
+      if (String(body.action || "") === "uploadMediaChunk") {
+        const result = await uploadPrivateLessonMediaChunk({
+          chartRequest,
+          uploadId: String(body.uploadId || ""),
+          start: Number(body.start || 0),
+          end: Number(body.end || 0),
+          total: Number(body.total || 0),
+          chunkBase64: String(body.chunkBase64 || ""),
+        });
         response.status(200).json({ ok: true, ...result });
         return;
       }
@@ -952,7 +980,7 @@ async function ensureChartRequestForBooking(booking: BookingDoc): Promise<{ requ
   const baseRecord = await upsertChartRecordBase(doc);
   const notionSync = await syncPrivateLessonChartRecordToNotion(baseRecord, doc);
   await refs.privateLessonChartRecord(requestId).set({ notionSync, updatedAt: nowTimestamp() }, { merge: true });
-  const mediaUploadUrl = notionSync.instructorPageUrl || notionSync.pageUrl;
+  const mediaUploadUrl = postUrl;
   if (mediaUploadUrl) {
     const mediaUploadShort = await ensureShortLink({
       type: "private_chart",
@@ -1489,6 +1517,21 @@ function publicChartRequest(
         postSubmitted: Boolean(record.postSubmittedAt),
       }
       : null,
+    media: record?.media
+      ? {
+        sessionFolderUrl: record.media.sessionFolderUrl || "",
+        files: mediaFilesForReport(record).map((file) => ({
+          mediaId: file.mediaId,
+          fileName: file.fileName,
+          mimeType: file.mimeType,
+          size: file.size,
+          driveUrl: file.driveUrl,
+          previewUrl: file.previewUrl,
+          thumbnailUrl: file.thumbnailUrl || "",
+          includeInReport: file.includeInReport !== false,
+        })),
+      }
+      : { sessionFolderUrl: "", files: [] },
   };
 }
 
@@ -2068,11 +2111,7 @@ function notionChartChildren(
       `회차: ${record.sessionNumber}회차 / 수업일: ${lessonTimeText(chartRequest)} / 담당: ${record.staffName || "미정"}`,
     ),
     callout(
-      "사진·영상 업로드는 이 페이지 상단에서 바로 처리합니다. 아래 '업로드 위치'에 파일을 드래그하거나 + 버튼으로 사진/영상을 추가하세요.",
-    ),
-    heading(2, "사진·영상 업로드"),
-    paragraph(
-      "업로드 위치: 이 문장 바로 아래에 사진·영상을 추가합니다. 자동화는 이 영역의 기존 미디어 블록을 삭제하지 않습니다.",
+      "사진·영상은 수업 후 기록 설문 페이지에서 첨부합니다. 첨부한 파일은 home@archivepilates.com Google Drive의 회원별/회차별 폴더에 저장되고 회원 리포트에 자동 포함됩니다.",
     ),
     divider(),
     heading(3, "오늘의 수업 목적"),
@@ -2157,6 +2196,8 @@ function renderPrivateLessonReportPage(
   const flowSummary = [condition, painChange].filter(Boolean).join(" · ") || "수업 기록 기준으로 정리 중";
   const todayProgress = [...goals, ...equipment].slice(0, 12);
   const observationItems = [...changes, ...movementObservations, ...memberResponses].slice(0, 16);
+  const mediaFiles = mediaFilesForReport(record);
+  const mediaSection = renderPrivateLessonReportMediaSection(mediaFiles, record.media?.sessionFolderUrl || "");
 
   return `<!doctype html><html lang="ko"><head><meta charset="utf-8"><meta name="viewport" content="width=device-width,initial-scale=1"/>` +
     `<title>${title}</title><style>
@@ -2168,8 +2209,9 @@ function renderPrivateLessonReportPage(
       .grid{display:grid;gap:12px;margin-top:18px}.tile{padding:16px;background:var(--surface);border:1px solid var(--line);border-radius:8px}.tile small{display:block;color:var(--muted);font-size:12px;font-weight:800}.tile strong{display:block;margin-top:6px;font-size:22px}
       section{margin-top:28px}.section-title{display:flex;align-items:end;justify-content:space-between;gap:12px;margin-bottom:12px}h2{margin:0;font-size:17px;letter-spacing:0}.hint{color:var(--muted);font-size:12px}
       .chips{display:flex;flex-wrap:wrap;gap:8px}.chip{display:inline-flex;align-items:center;min-height:34px;padding:7px 10px;border:1px solid var(--line);border-radius:999px;background:var(--surface);font-size:13px;color:#2d2924}
+      .media-grid{display:grid;gap:12px}.media-card{overflow:hidden;background:var(--surface);border:1px solid var(--line);border-radius:8px}.media-card iframe{display:block;width:100%;aspect-ratio:16/10;border:0;background:#f0ede8}.media-info{display:flex;align-items:center;justify-content:space-between;gap:10px;padding:10px 12px;color:var(--muted);font-size:12px}.media-info a{color:var(--accent);font-weight:800;text-decoration:none}
       .note{padding:16px;border-left:3px solid var(--accent);background:rgba(255,253,250,.72);color:#312c26;word-break:keep-all}.footer{margin-top:32px;padding-top:16px;border-top:1px solid var(--line);color:var(--muted);font-size:12px}.copy{word-break:break-all}
-      @media (min-width:680px){main{padding:38px 28px 72px}.grid{grid-template-columns:repeat(3,minmax(0,1fr))}h1{font-size:36px}.lead{padding:24px}}
+      @media (min-width:680px){main{padding:38px 28px 72px}.grid{grid-template-columns:repeat(3,minmax(0,1fr))}.media-grid{grid-template-columns:repeat(2,minmax(0,1fr))}h1{font-size:36px}.lead{padding:24px}}
     </style></head><body><main><div class="hero"><p class="brand">ARCHIVE PILATES</p><h1>${escapeHtml(title)}</h1>` +
     `<p class="meta">${escapeHtml(sessionText)} · ${escapeHtml(lessonTime)} · 담당: ${staffName}</p>` +
     `<div class="lead"><p>${reportSummary}</p><p class="next">${nextDirection}</p></div>` +
@@ -2183,8 +2225,26 @@ function renderPrivateLessonReportPage(
     (observationItems.length ? observationItems : ["기록된 변화 없음"]).map((item) => `<span class="chip">${escapeHtml(item)}</span>`).join("") +
     `</div></section>` +
     `<section><div class="section-title"><h2>다음 수업 방향</h2><span class="hint">이어갈 관리 포인트</span></div><p class="note">${escapeHtml(nextMemo || nextDirection)}</p></section>` +
+    mediaSection +
     `<p class="footer">본 리포트는 프라이빗 회원 수업 기록 기준으로 생성되었습니다.<br><span class=\"copy\">${escapeHtml(reportVisibleUrl)}</span></p>` +
     `</main></body></html>`;
+}
+
+function renderPrivateLessonReportMediaSection(files: PrivateLessonChartMediaFile[], folderUrl: string): string {
+  if (!files.length) return "";
+  return `<section><div class="section-title"><h2>수업 사진·영상</h2><span class="hint">강사 업로드 자료</span></div><div class="media-grid">` +
+    files.map((file) => {
+      const url = file.previewUrl || drivePreviewUrl(file.driveFileId);
+      return `<article class="media-card"><iframe loading="lazy" title="${escapeAttr(file.fileName)}" src="${escapeAttr(url)}" allow="autoplay"></iframe>` +
+        `<div class="media-info"><span>${escapeHtml(file.fileName)}</span><a href="${escapeAttr(file.driveUrl || url)}" target="_blank" rel="noopener">원본 보기</a></div></article>`;
+    }).join("") +
+    `</div>${folderUrl ? `<p class="footer"><a href="${escapeAttr(folderUrl)}" target="_blank" rel="noopener">Drive 폴더 보기</a></p>` : ""}</section>`;
+}
+
+function mediaFilesForReport(record: PrivateLessonChartRecordDoc): PrivateLessonChartMediaFile[] {
+  return (record.media?.files || [])
+    .filter((file) => file && file.status === "uploaded" && file.includeInReport !== false && file.driveFileId)
+    .slice(0, 12);
 }
 
 function asTextList(values: unknown[]): string {
@@ -2210,6 +2270,14 @@ function escapeHtml(value: string): string {
     '"': "&quot;",
     "'": "&#039;",
   })[char] || char);
+}
+
+function escapeAttr(value: string): string {
+  return escapeHtml(value).replace(/`/g, "&#096;");
+}
+
+function drivePreviewUrl(fileId: string): string {
+  return `https://drive.google.com/file/d/${fileId}/preview`;
 }
 
 function notionUpdateChildren(
@@ -2253,8 +2321,8 @@ function notionInstructorChartChildren(
     callout("이 페이지는 강사용 회차 기록입니다. 회원 발송은 수업 후 기록 링크의 리포트 화면에서 처리합니다."),
     heading(2, `${record.memberName}님 ${record.sessionNumber}회차`),
     paragraph(`수업일: ${lessonTimeText(chartRequest)} / 담당: ${record.staffName || "미정"}`),
-    heading(2, "사진·영상 업로드"),
-    paragraph("이 문장 아래에 수업 사진과 영상을 추가합니다."),
+    heading(2, "사진·영상"),
+    paragraph("수업 후 기록 설문에서 첨부한 사진과 영상은 Google Drive에 저장되고 회원 리포트에 자동 포함됩니다."),
     divider(),
     heading(3, "수업 전 계획"),
     ...bullets([

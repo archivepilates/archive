@@ -226,6 +226,69 @@
       background: white;
     }
 
+    .media-upload-panel {
+      display: grid;
+      gap: 12px;
+      margin-top: 18px;
+      padding: 16px;
+      border: 1px solid var(--line);
+      border-radius: var(--radius);
+      background: var(--surface);
+    }
+
+    .media-upload-panel h2 {
+      margin-bottom: 0;
+    }
+
+    .media-upload-panel p,
+    .media-file {
+      color: var(--muted);
+      font-size: 14px;
+      word-break: keep-all;
+      overflow-wrap: anywhere;
+    }
+
+    .media-input {
+      display: grid;
+      gap: 8px;
+      padding: 14px;
+      border: 1px dashed var(--line);
+      border-radius: var(--radius);
+      background: var(--accent-weak);
+    }
+
+    .media-input input {
+      padding: 0;
+      border: 0;
+      background: transparent;
+    }
+
+    .media-list {
+      display: grid;
+      gap: 8px;
+    }
+
+    .media-file {
+      display: grid;
+      gap: 6px;
+      padding: 10px 12px;
+      border: 1px solid var(--line);
+      border-radius: var(--radius);
+      background: #fff;
+    }
+
+    .media-file a {
+      color: var(--accent);
+      font-weight: 800;
+      text-decoration: none;
+    }
+
+    progress {
+      width: 100%;
+      height: 8px;
+      accent-color: var(--accent);
+    }
+
     .button-row {
       display: grid;
       gap: 8px;
@@ -303,6 +366,7 @@
 
     <form id="form" class="hidden">
       <div id="sections"></div>
+      <div id="mediaPanel" class="media-upload-panel hidden"></div>
       <p class="status" id="status"></p>
       <div class="actions">
         <button type="submit" id="submitButton">제출</button>
@@ -318,6 +382,7 @@
       token: params.get("t") || "",
       mode: params.get("mode") === "post" ? "post" : "pre",
       loading: false,
+      uploading: 0,
       data: null,
     };
     const apiBase = window.location.pathname.startsWith("/archivein/")
@@ -370,6 +435,7 @@
     const summary = document.getElementById("summary");
     const form = document.getElementById("form");
     const sections = document.getElementById("sections");
+    const mediaPanel = document.getElementById("mediaPanel");
     const reportPanel = document.getElementById("reportPanel");
     const statusEl = document.getElementById("status");
     const submitButton = document.getElementById("submitButton");
@@ -403,6 +469,7 @@
       ].join("");
       summary.innerHTML = intakeHtml(data.intakeSummary);
       sections.innerHTML = (isPost ? postFields : preFields).map(fieldHtml).join("");
+      renderMediaPanel(data);
       applyExistingAnswers(data);
       applyLockedState(data);
       renderReportPanel(data);
@@ -481,6 +548,105 @@
       if (approveButton) approveButton.addEventListener("click", approveReport);
     }
 
+    function renderMediaPanel(data) {
+      if (data.mode !== "post") {
+        mediaPanel.classList.add("hidden");
+        mediaPanel.innerHTML = "";
+        return;
+      }
+      const files = Array.isArray(data.media?.files) ? data.media.files : [];
+      mediaPanel.classList.remove("hidden");
+      mediaPanel.innerHTML = `
+        <h2>수업 사진·영상</h2>
+        <p>여기에 첨부한 사진과 영상은 같은 회차 회원 리포트에 자동 포함됩니다. 리포트에 넣을 파일만 선택해 주세요.</p>
+        <label class="media-input">
+          <span>사진/영상 선택</span>
+          <input type="file" id="mediaFiles" accept="image/*,video/*" multiple>
+        </label>
+        <div id="mediaUploadQueue" class="media-list"></div>
+        <div class="media-list">
+          ${files.length ? files.map(mediaFileHtml).join("") : `<div class="media-file">아직 업로드된 사진/영상이 없습니다.</div>`}
+        </div>
+        ${data.media?.sessionFolderUrl ? `<a href="${escapeAttr(data.media.sessionFolderUrl)}" target="_blank" rel="noopener">Drive 폴더 열기</a>` : ""}
+      `;
+      const input = mediaPanel.querySelector("#mediaFiles");
+      if (input) input.addEventListener("change", handleMediaFiles);
+    }
+
+    function mediaFileHtml(file) {
+      const kind = String(file.mimeType || "").startsWith("video/") ? "영상" : "사진";
+      return `<div class="media-file"><strong>${escapeHtml(kind)} · ${escapeHtml(file.fileName || "파일")}</strong>` +
+        `<span>${formatBytes(Number(file.size || 0))} · 리포트 자동 포함</span>` +
+        `<a href="${escapeAttr(file.driveUrl || file.previewUrl || "#")}" target="_blank" rel="noopener">Drive에서 보기</a></div>`;
+    }
+
+    async function handleMediaFiles(event) {
+      const files = Array.from(event.target.files || []);
+      event.target.value = "";
+      if (!files.length) return;
+      for (const file of files) {
+        try {
+          await uploadMediaFile(file);
+        } catch (error) {
+          setStatus(error.message || String(error), true);
+        }
+      }
+      await refreshReport();
+    }
+
+    async function uploadMediaFile(file) {
+      const queue = mediaPanel.querySelector("#mediaUploadQueue");
+      const item = document.createElement("div");
+      item.className = "media-file";
+      item.innerHTML = `<strong>${escapeHtml(file.name)}</strong><span>업로드 준비 중</span><progress max="100" value="0"></progress>`;
+      queue.prepend(item);
+      const label = item.querySelector("span");
+      const progress = item.querySelector("progress");
+      state.uploading += 1;
+      submitButton.disabled = true;
+      try {
+        if (!/^image\/|^video\//.test(file.type || "")) throw new Error("사진 또는 영상 파일만 업로드할 수 있습니다.");
+        const init = await postJson({
+          action: "initMediaUpload",
+          requestId: state.requestId,
+          token: state.token,
+          fileName: file.name,
+          mimeType: file.type,
+          size: file.size,
+        });
+        const chunkSize = Number(init.chunkSize || 1024 * 1024);
+        let offset = 0;
+        while (offset < file.size) {
+          const endExclusive = Math.min(offset + chunkSize, file.size);
+          const chunk = file.slice(offset, endExclusive);
+          const chunkBase64 = await blobToBase64(chunk);
+          const result = await postJson({
+            action: "uploadMediaChunk",
+            requestId: state.requestId,
+            token: state.token,
+            uploadId: init.uploadId,
+            start: offset,
+            end: endExclusive - 1,
+            total: file.size,
+            chunkBase64,
+          });
+          offset = Number(result.bytesUploaded || endExclusive);
+          progress.value = Math.round((offset / file.size) * 100);
+          label.textContent = `업로드 중 ${progress.value}%`;
+        }
+        label.textContent = "업로드 완료 · 리포트 자동 포함";
+      } catch (error) {
+        label.textContent = error.message || String(error);
+        item.classList.add("error");
+        throw error;
+      } finally {
+        state.uploading = Math.max(0, state.uploading - 1);
+        if (!state.loading && state.uploading === 0 && !state.data?.locked) {
+          submitButton.disabled = false;
+        }
+      }
+    }
+
     function intakeHtml(intake) {
       if (!intake) return `<h2>사전설문 요약</h2><p>연결된 사전설문이 없습니다.</p>`;
       const rows = [
@@ -531,6 +697,7 @@
       submitButton.disabled = true;
       setStatus("제출 중입니다.", false);
       try {
+        if (state.uploading > 0) throw new Error("사진/영상 업로드가 끝난 뒤 제출해 주세요.");
         const answers = readAnswers(new FormData(form));
         if (state.mode === "post" && !String(answers.nextMemo || "").trim()) {
           throw new Error("다음 수업 방향을 입력해 주세요. 회원 리포트에 반영됩니다.");
@@ -558,8 +725,35 @@
       const data = await res.json();
       if (!res.ok || data.ok === false) throw new Error(data.error || "리포트 상태를 불러오지 못했습니다.");
       state.data = data;
+      renderMediaPanel(data);
       renderReportPanel(data);
       return data;
+    }
+
+    async function postJson(payload) {
+      const res = await fetch(apiBase, {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify(payload),
+      });
+      const data = await res.json();
+      if (!res.ok || data.ok === false) throw new Error(data.error || "요청 처리에 실패했습니다.");
+      return data;
+    }
+
+    function blobToBase64(blob) {
+      return new Promise((resolve, reject) => {
+        const reader = new FileReader();
+        reader.onload = () => resolve(String(reader.result || "").split(",")[1] || "");
+        reader.onerror = () => reject(reader.error || new Error("파일을 읽지 못했습니다."));
+        reader.readAsDataURL(blob);
+      });
+    }
+
+    function formatBytes(value) {
+      if (!value) return "크기 미상";
+      if (value < 1024 * 1024) return `${Math.round(value / 1024)}KB`;
+      return `${(value / 1024 / 1024).toFixed(1)}MB`;
     }
 
     async function convertReport() {
