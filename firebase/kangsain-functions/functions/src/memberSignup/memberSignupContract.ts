@@ -1,4 +1,5 @@
 import { createHash } from "node:crypto";
+import { db } from "../config/firebase";
 import type { MemberSignupContractDoc } from "../types/models";
 import { refs } from "../firestore/refs";
 import { nowTimestamp } from "../utils/date";
@@ -22,7 +23,8 @@ export async function memberSignupContractHandler(request: any, response: any): 
 
     if (request.method === "POST") {
       const body = request.body || {};
-      const contract = await readAuthorizedContract(body.contractId || body.id, body.accessToken || body.token);
+      const tokenInput = body.accessToken || body.token;
+      const contract = await readAuthorizedContract(body.contractId || body.id, tokenInput);
       if (contract.status === "submitted") {
         response.json({ ok: true, duplicate: true, contract: publicContract(contract) });
         return;
@@ -64,7 +66,43 @@ export async function memberSignupContractHandler(request: any, response: any): 
         submittedAt: signedAt,
         updatedAt: signedAt,
       };
-      await refs.memberSignupContract(contract.contractId).set(next, { merge: true });
+      const transactionResult = await db.runTransaction(async (tx) => {
+        const contractRef = refs.memberSignupContract(contract.contractId);
+        const snap = await tx.get(contractRef);
+        const current = snap.data();
+        if (!current || current.accessTokenHash !== sha256(stringValue(tokenInput))) {
+          throw new Error("회원가입서를 열 수 있는 권한이 없습니다.");
+        }
+        if (current.expiresAt?.toMillis?.() && current.expiresAt.toMillis() < Date.now()) {
+          throw new Error("회원가입서 링크가 만료되었습니다.");
+        }
+        if (current.status === "submitted") {
+          return { duplicate: true, contract: current };
+        }
+        if (!["draft", "opened"].includes(current.status)) {
+          throw new Error("현재 제출할 수 없는 회원가입서입니다.");
+        }
+        tx.set(
+          contractRef,
+          {
+            ...next,
+            member: {
+              ...current.member,
+              birthDate: submission.birthDate,
+              address: submission.address,
+              visitRoute: submission.visitRoute,
+              exercisePurpose: submission.exercisePurpose,
+              recommender: submission.recommender,
+            },
+          },
+          { merge: true },
+        );
+        return { duplicate: false, contract: null };
+      });
+      if (transactionResult.duplicate && transactionResult.contract) {
+        response.json({ ok: true, duplicate: true, contract: publicContract(transactionResult.contract) });
+        return;
+      }
       response.json({ ok: true, duplicate: false, submittedAtText: signedAtText });
       return;
     }
@@ -74,6 +112,22 @@ export async function memberSignupContractHandler(request: any, response: any): 
     const message = err instanceof Error ? err.message : String(err);
     response.status(400).json({ ok: false, error: message });
   }
+}
+
+export async function purgeUnsignedDiscardedMemberSignupContracts(): Promise<{ scanned: number; deleted: number }> {
+  const now = nowTimestamp();
+  const snap = await refs.memberSignupContracts().where("purgeAfter", "<=", now).limit(100).get();
+  const batch = db.batch();
+  let deleted = 0;
+  for (const docSnap of snap.docs) {
+    const contract = docSnap.data();
+    if (!["cancelled", "expired"].includes(contract.status)) continue;
+    if (contract.status === "submitted" || contract.submittedAt || contract.signature) continue;
+    batch.delete(docSnap.ref);
+    deleted += 1;
+  }
+  if (deleted) await batch.commit();
+  return { scanned: snap.size, deleted };
 }
 
 async function readAuthorizedContract(idInput: unknown, tokenInput: unknown): Promise<MemberSignupContractDoc> {
@@ -98,6 +152,7 @@ function normalizeSubmission(input: Record<string, unknown>, fallbackName: strin
     refundAndCancellation: booleanValue(input.refundAndCancellation),
     facilityUse: booleanValue(input.facilityUse),
     privacyUse: booleanValue(input.privacyUse),
+    marketingAdConsent: booleanValue(input.marketingAdConsent),
     finalConfirmation: booleanValue(input.finalConfirmation),
   };
   if (!agreements.refundAndCancellation) throw new Error("환불 및 취소 규정에 동의해주세요.");

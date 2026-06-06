@@ -34,21 +34,14 @@
           <article class="panel detail-card"><span class="pill good">resolved</span><h2 id="qualityResolvedCount">0건</h2><p>resolved 처리된 품질 이슈입니다.</p></article>
           <article class="panel detail-card"><span class="pill danger">stop rule</span><h2>외부 실행 보류</h2><p id="qualityStopRule">전화번호/회원ID가 확인되지 않으면 발송과 쓰기를 하지 않습니다.</p></article>
         </section>
-        <section class="grid overview-grid">
-          <article class="panel">
-            <div class="panel-header"><div><h2>원본 처리 흐름</h2><p>문제가 생겼을 때 어느 단계에서 멈췄는지 먼저 봅니다.</p></div><span class="pill">source flow</span></div>
-            <div class="flow-list">
-              <div><strong>파일 선택</strong><span>회원목록, 예약내역, 삭제 수업, 정산 원본을 종류별로 분리</span></div>
-              <div><strong>Import 기록</strong><span>sourceImports에 파일명, 행 수, 처리 상태 저장</span></div>
-              <div><strong>품질 이슈</strong><span>전화번호 누락, 동명이인, name-only match, 중복 fallback 기록</span></div>
-              <div><strong>운영 채택</strong><span>검증된 원천만 회원/알림톡/경영 화면에서 사용</span></div>
-            </div>
-          </article>
-          <aside class="panel detail-card">
-            <span class="pill danger">guardrail</span>
-            <h2>외부 실행 전 정지 조건</h2>
-            <p>회원 ID가 임시 `excel_`인 상태, 전화번호 없는 name-only match, 실제 예약과 fallback 예약 중복은 발송/쓰기 전에 멈춥니다.</p>
-          </aside>
+        <section class="panel">
+          <div class="panel-header"><div><h2>원본 품질 운영 보드</h2><p>원본 수집부터 운영 채택까지, 멈춰야 할 조건을 먼저 확인합니다.</p></div><span class="pill">source flow</span></div>
+          <div class="ops-board">
+            <article class="ops-card"><div class="ops-card-header"><h3>1. 파일 선택</h3><span class="pill">source</span></div><p>회원목록, 예약내역, 삭제 수업, 정산 원본을 종류별로 분리합니다.</p></article>
+            <article class="ops-card"><div class="ops-card-header"><h3>2. Import 기록</h3><span class="pill">import</span></div><p>sourceImports에 파일명, 행 수, 처리 상태가 남아야 합니다.</p></article>
+            <article class="ops-card"><div class="ops-card-header"><h3>3. 품질 이슈</h3><span class="pill warn">review</span></div><p>전화번호 누락, 동명이인, name-only match, 중복 fallback을 기록합니다.</p></article>
+            <article class="ops-card"><div class="ops-card-header"><h3>4. 운영 채택</h3><span class="pill danger">guardrail</span></div><p>임시 ID, 전화번호 누락, 실제 예약과 fallback 중복은 발송/쓰기 전에 멈춥니다.</p></article>
+          </div>
         </section>
         <section class="grid data-grid">
           <article class="panel">

@@ -27,6 +27,7 @@
         "scheduledCreatePrivateLessonChartRequests",
         "scheduledGeneratePrivateLessonChartReports",
         "scheduledEnqueuePrivateLessonReportAlimtalks",
+        "scheduledPurgeDiscardedMemberSignupContracts",
         "ingestPrivateSurveyResponse",
         "privateSurveyResponseView",
         "privateLessonChartApi",

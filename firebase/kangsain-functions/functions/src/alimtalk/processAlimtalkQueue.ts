@@ -55,12 +55,13 @@ export async function processAlimtalkQueue(): Promise<{ processed: number; sent:
         );
         continue;
       }
+      const attempts = (claimed.attempts || 0) + 1;
       const result = await sendSolapiAlimtalk(claimed);
       await refs.alimtalkCandidate(claimed.candidateId).set(
         {
           status: "sent",
           dedupeKey,
-          attempts: claimed.attempts || 0,
+          attempts,
           maxAttempts: claimed.maxAttempts || 2,
           sentAt: nowTimestamp(),
           lastError: null,
@@ -81,7 +82,7 @@ export async function processAlimtalkQueue(): Promise<{ processed: number; sent:
           dedupePolicy: dedupePolicy.label,
           dedupeWindowDays: dedupePolicy.windowDays,
           status: "done",
-          attempts: 1,
+          attempts,
           maxAttempts: 1,
           nextRunAt: nowTimestamp(),
           solapiMessageId: result.messageId,

@@ -9,7 +9,7 @@
     :root { color-scheme:light; --ink:#181512; --muted:#716960; --line:#e6ded5; --paper:#fffdfa; --bg:#f7f2ec; --accent:#b73d32; --soft:#f1e9e1; --good:#2f6f68; --bad:#96352c; }
     * { box-sizing:border-box; }
     body { margin:0; font-family:-apple-system,BlinkMacSystemFont,"Apple SD Gothic Neo","Noto Sans KR",sans-serif; background:var(--bg); color:var(--ink); }
-    main { width:min(760px,100%); margin:0 auto; padding:16px 14px 92px; }
+    main { width:min(760px,100%); margin:0 auto; padding:16px 14px 28px; }
     .top { display:grid; grid-template-columns:1fr 48px; gap:14px; align-items:start; padding:18px 6px 18px 18px; border-bottom:1px solid rgba(24,21,18,.08); }
     .brand { width:48px; height:48px; border-radius:50%; object-fit:contain; }
     .eyebrow { font-size:12px; font-weight:900; color:var(--accent); }
@@ -40,7 +40,7 @@
     .signature-tools { display:flex; justify-content:space-between; align-items:center; gap:10px; margin-top:8px; }
     .clear-signature { width:auto; min-height:36px; padding:0 12px; border:1px solid var(--line); background:#fff; color:var(--ink); font-size:13px; }
     .notice { color:var(--muted); font-size:12px; line-height:1.55; }
-    .actions { position:fixed; left:0; right:0; bottom:0; padding:12px 14px 18px; background:linear-gradient(to top,var(--bg) 82%,rgba(247,242,236,0)); }
+    .actions { position:sticky; bottom:0; z-index:5; padding:12px 0 4px; background:linear-gradient(to top,var(--bg) 86%,rgba(247,242,236,0)); }
     .actions-inner { width:min(760px,100%); margin:0 auto; }
     button { width:100%; min-height:50px; border:0; border-radius:8px; background:var(--accent); color:#fff; font-size:15px; font-weight:900; cursor:pointer; }
     button:disabled { opacity:.55; cursor:wait; }
@@ -48,7 +48,7 @@
     .message.good { border-color:#bcd7d2; background:#f2faf8; color:var(--good); }
     .message.bad { border-color:#f0c9c1; background:#fff7f4; color:var(--bad); }
     @media (max-width:560px) {
-      main { padding:14px 12px 88px; }
+      main { padding:14px 12px 24px; }
       .top { padding-left:16px; padding-right:8px; }
       h1 { font-size:24px; }
       section, .message { padding:14px; }
@@ -121,6 +121,7 @@
             <div class="term-body">ARCHIVE PILATES는 회원 가입, 계약 이행, 본인 확인, 고지사항 전달, 고객관리를 위해 성명, 생년월일, 성별, 연락처, 이메일 등 필요한 개인정보를 수집·이용하며 계약 체결일로부터 5년 또는 관계 법령이 정한 기간까지 보관합니다.</div>
           </details>
           <label class="agree"><input type="checkbox" name="privacyUse"><span>개인정보 수집 및 이용에 동의합니다.</span></label>
+          <label class="agree"><input type="checkbox" name="marketingAdConsent"><span>[선택] ARCHIVE PILATES의 이벤트, 프로모션, 혜택, 신규 프로그램 안내 등 광고성 정보 수신에 동의합니다.</span></label>
         </div>
       </section>
 
@@ -234,6 +235,7 @@
           refundAndCancellation: form.elements.refundAndCancellation.checked,
           facilityUse: form.elements.facilityUse.checked,
           privacyUse: form.elements.privacyUse.checked,
+          marketingAdConsent: form.elements.marketingAdConsent.checked,
           finalConfirmation: form.elements.finalConfirmation.checked,
           signerName: currentContract?.member?.name || '',
           signatureImageDataUrl: signatureDrawn ? signaturePad.toDataURL('image/png') : ''

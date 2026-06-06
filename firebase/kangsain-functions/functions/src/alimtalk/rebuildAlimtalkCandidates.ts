@@ -196,9 +196,9 @@ function bookingOccurrenceKey(booking: BookingDoc): string {
 }
 
 function shouldPreferCanonicalBooking(next: BookingDoc, current: BookingDoc): boolean {
-  const nextIsExcel = isExcelBookingId(next.bookingId);
-  const currentIsExcel = isExcelBookingId(current.bookingId);
-  if (nextIsExcel !== currentIsExcel) return !nextIsExcel;
+  const nextPriority = bookingSourcePriority(next.bookingId);
+  const currentPriority = bookingSourcePriority(current.bookingId);
+  if (nextPriority !== currentPriority) return nextPriority < currentPriority;
   const nextAttendanceScore = attendanceScore(next.attendanceStatus);
   const currentAttendanceScore = attendanceScore(current.attendanceStatus);
   if (nextAttendanceScore !== currentAttendanceScore) return nextAttendanceScore > currentAttendanceScore;
@@ -216,8 +216,12 @@ function attendanceScore(status: BookingDoc["attendanceStatus"]): number {
   return 0;
 }
 
-function isExcelBookingId(bookingId: string): boolean {
-  return String(bookingId || "").startsWith("excel_booking_");
+function bookingSourcePriority(bookingId: string): number {
+  const id = String(bookingId || "");
+  if (id.startsWith("usage_booking_")) return 1;
+  if (id.startsWith("excel_booking_")) return 2;
+  if (id.startsWith("excel_") || id.startsWith("usage_")) return 3;
+  return 0;
 }
 
 function normalizeKoreanName(value: string): string {

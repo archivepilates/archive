@@ -351,6 +351,7 @@ export interface MemberSignupContractDoc {
     refundAndCancellation: boolean;
     facilityUse: boolean;
     privacyUse: boolean;
+    marketingAdConsent?: boolean;
     finalConfirmation: boolean;
   };
   signature?: {

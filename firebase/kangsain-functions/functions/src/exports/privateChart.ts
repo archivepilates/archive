@@ -19,7 +19,10 @@ import {
   syncPrivateSurveyNotionBackfill,
   syncPrivateSurveyResponsesFromSheet,
 } from "../privateSurvey/privateSurveyResponse";
-import { memberSignupContractHandler } from "../memberSignup/memberSignupContract";
+import {
+  memberSignupContractHandler,
+  purgeUnsignedDiscardedMemberSignupContracts,
+} from "../memberSignup/memberSignupContract";
 import { onsiteWelcomeRequestHandler } from "../memberSignup/onsiteWelcomeRequest";
 import {
   privateLessonChartRequestOptions,
@@ -89,6 +92,16 @@ export const scheduledEnqueuePrivateLessonReportAlimtalks = onSchedule(
   },
   async () => {
     await enqueueApprovedPrivateLessonReportAlimtalks();
+  },
+);
+
+export const scheduledPurgeDiscardedMemberSignupContracts = onSchedule(
+  {
+    ...privateSurveyIntakeOptions,
+    schedule: "20 4 * * *",
+  },
+  async () => {
+    await purgeUnsignedDiscardedMemberSignupContracts();
   },
 );
 

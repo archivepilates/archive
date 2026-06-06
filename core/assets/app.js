@@ -24,6 +24,7 @@ const state = {
   deletedLessons: [],
   lane: null,
   authReady: null,
+  readWarnings: [],
 };
 
 let memberSearchTerm = "";
@@ -339,11 +340,22 @@ async function waitForAuth(runtime) {
     state.authReady = new Promise((resolve) => {
       const unsubscribe = runtime.auth.onAuthStateChanged(runtime.authClient, (user) => {
         unsubscribe();
+        state.authReady = null;
         resolve(user || null);
       });
     });
   }
   return state.authReady;
+}
+
+async function safeRead(label, operation, fallback) {
+  try {
+    return await operation();
+  } catch (error) {
+    state.readWarnings.push({ label, message: error?.message || String(error) });
+    console.warn(`ARCHIVE CORE read skipped: ${label}`, error);
+    return fallback;
+  }
 }
 
 function isPermissionDenied(error) {
@@ -1892,6 +1904,7 @@ async function refresh() {
 
   try {
     const runtime = await initFirebase();
+    state.readWarnings = [];
     const user = await waitForAuth(runtime);
     if (!user) {
       const error = new Error("운영자 로그인이 필요합니다.");
@@ -1927,27 +1940,69 @@ async function refresh() {
       deletedClassLogs,
       deletedLessons,
     ] = await Promise.all([
-      getDoc(doc(db, "workLanes", WORK_LANE_ID)),
-      getRecentCollection(db, runtime, "automationStatus"),
-      getCollectionBy(db, runtime, "sourceImports", "updatedAt", 50),
-      getCollectionBy(db, runtime, "dataQualityIssues", "updatedAt", 100),
-      shouldLoadBusiness ? getDoc(doc(db, "dashboardSnapshots", "current")) : Promise.resolve(null),
-      shouldLoadMembers || shouldLoadHome ? getCollectionBy(db, runtime, "member360Cards", "totalRevenue", 2000) : Promise.resolve([]),
-      shouldLoadMessages || shouldLoadHome || shouldLoadPrivate ? getRecentCollectionBy(db, runtime, "alimtalkCandidates", "updatedAt", shouldLoadPrivate ? 500 : 12) : Promise.resolve([]),
-      shouldLoadMessages || shouldLoadHome || shouldLoadPrivate ? getRecentCollectionBy(db, runtime, "alimtalkSends", "updatedAt", shouldLoadPrivate ? 500 : 12) : Promise.resolve([]),
-      shouldLoadMemberDetail ? loadMemberDetail(runtime, memberDetailId()) : Promise.resolve(null),
-      shouldLoadBusiness ? getRecentCollectionBy(db, runtime, "member360Cards", "totalRevenue", 8) : Promise.resolve([]),
-      shouldLoadPrivate ? getRecentCollectionBy(db, runtime, "privateLessonChartRequests", "createdAt", 100) : Promise.resolve([]),
-      shouldLoadPrivate ? getRecentCollectionBy(db, runtime, "privateLessonChartRecords", "createdAt", 100) : Promise.resolve([]),
-      shouldLoadPrivate ? getRecentCollectionBy(db, runtime, "memberUsageEvents", "updatedAt", 8) : Promise.resolve([]),
-      shouldLoadPrivate ? getRecentCollectionBy(db, runtime, "privateSessionLedger", "updatedAt", 8) : Promise.resolve([]),
-      shouldLoadLessons ? getOptionalCollectionBy(db, runtime, "lessonOccurrences", "startsAt", 1000) : Promise.resolve([]),
-      shouldLoadLessons ? getOptionalCollectionBy(db, runtime, "reservations", "startsAt", 1000) : Promise.resolve([]),
-      shouldLoadLessons ? getOptionalCollectionBy(db, runtime, "deletedClassLogs", "updatedAt", 100) : Promise.resolve([]),
-      shouldLoadLessons ? getOptionalCollectionBy(db, runtime, "deletedLessons", "updatedAt", 100) : Promise.resolve([]),
+      safeRead("workLanes", () => getDoc(doc(db, "workLanes", WORK_LANE_ID)), null),
+      safeRead("automationStatus", () => getRecentCollection(db, runtime, "automationStatus"), []),
+      safeRead("sourceImports", () => getCollectionBy(db, runtime, "sourceImports", "updatedAt", 50), []),
+      safeRead("dataQualityIssues", () => getCollectionBy(db, runtime, "dataQualityIssues", "updatedAt", 100), []),
+      shouldLoadBusiness
+        ? safeRead("dashboardSnapshots/current", () => getDoc(doc(db, "dashboardSnapshots", "current")), null)
+        : Promise.resolve(null),
+      shouldLoadMembers || shouldLoadHome
+        ? safeRead("member360Cards", () => getCollectionBy(db, runtime, "member360Cards", "totalRevenue", 2000), [])
+        : Promise.resolve([]),
+      shouldLoadMessages || shouldLoadHome || shouldLoadPrivate
+        ? safeRead(
+            "alimtalkCandidates",
+            () => getRecentCollectionBy(db, runtime, "alimtalkCandidates", "updatedAt", shouldLoadPrivate ? 500 : 12),
+            [],
+          )
+        : Promise.resolve([]),
+      shouldLoadMessages || shouldLoadHome || shouldLoadPrivate
+        ? safeRead(
+            "alimtalkSends",
+            () => getRecentCollectionBy(db, runtime, "alimtalkSends", "updatedAt", shouldLoadPrivate ? 500 : 12),
+            [],
+          )
+        : Promise.resolve([]),
+      shouldLoadMemberDetail ? safeRead("memberDetail", () => loadMemberDetail(runtime, memberDetailId()), null) : Promise.resolve(null),
+      shouldLoadBusiness
+        ? safeRead("businessMembers", () => getRecentCollectionBy(db, runtime, "member360Cards", "totalRevenue", 8), [])
+        : Promise.resolve([]),
+      shouldLoadPrivate
+        ? safeRead(
+            "privateLessonChartRequests",
+            () => getRecentCollectionBy(db, runtime, "privateLessonChartRequests", "createdAt", 100),
+            [],
+          )
+        : Promise.resolve([]),
+      shouldLoadPrivate
+        ? safeRead(
+            "privateLessonChartRecords",
+            () => getRecentCollectionBy(db, runtime, "privateLessonChartRecords", "createdAt", 100),
+            [],
+          )
+        : Promise.resolve([]),
+      shouldLoadPrivate
+        ? safeRead("memberUsageEvents", () => getRecentCollectionBy(db, runtime, "memberUsageEvents", "updatedAt", 8), [])
+        : Promise.resolve([]),
+      shouldLoadPrivate
+        ? safeRead("privateSessionLedger", () => getRecentCollectionBy(db, runtime, "privateSessionLedger", "updatedAt", 8), [])
+        : Promise.resolve([]),
+      shouldLoadLessons
+        ? safeRead("lessonOccurrences", () => getOptionalCollectionBy(db, runtime, "lessonOccurrences", "startsAt", 1000), [])
+        : Promise.resolve([]),
+      shouldLoadLessons
+        ? safeRead("reservations", () => getOptionalCollectionBy(db, runtime, "reservations", "startsAt", 1000), [])
+        : Promise.resolve([]),
+      shouldLoadLessons
+        ? safeRead("deletedClassLogs", () => getOptionalCollectionBy(db, runtime, "deletedClassLogs", "updatedAt", 100), [])
+        : Promise.resolve([]),
+      shouldLoadLessons
+        ? safeRead("deletedLessons", () => getOptionalCollectionBy(db, runtime, "deletedLessons", "updatedAt", 100), [])
+        : Promise.resolve([]),
     ]);
 
-    state.lane = laneSnapshot.exists() ? laneSnapshot.data() : { status: "active" };
+    state.lane = laneSnapshot?.exists?.() ? laneSnapshot.data() : { status: "active" };
     state.automationItems = automationItems;
     state.sourceImports = studioItems(sourceImports);
     state.qualityIssues = studioItems(qualityIssues);
@@ -1980,7 +2035,12 @@ async function refresh() {
       else renderBusinessFallback(new Error("dashboardSnapshots/current 문서가 없습니다."));
       renderBusinessMemberInsights(businessMembers);
     }
-    setConnection("연결됨", `archive-pilates · ${formatDate(new Date())}`);
+    setConnection(
+      state.readWarnings.length ? "부분 연결" : "연결됨",
+      state.readWarnings.length
+        ? `${state.readWarnings.length}개 원천 읽기 확인 필요 · ${formatDate(new Date())}`
+        : `archive-pilates · ${formatDate(new Date())}`,
+    );
   } catch (error) {
     renderFallback(error, { requireLogin: !state.firebaseRuntime?.authClient?.currentUser });
   } finally {

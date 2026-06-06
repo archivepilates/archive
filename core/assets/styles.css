@@ -876,6 +876,55 @@ td span {
   font-size: 0.8rem;
 }
 
+.ops-board {
+  display: grid;
+  grid-template-columns: repeat(auto-fit, minmax(min(100%, 260px), 1fr));
+  gap: 12px;
+  padding: 20px;
+}
+
+.ops-card {
+  display: grid;
+  min-width: 0;
+  align-content: start;
+  gap: 10px;
+  border: 1px solid var(--line-soft);
+  border-radius: 8px;
+  background: rgba(248, 250, 252, 0.78);
+  padding: 14px;
+}
+
+.ops-card-header {
+  display: flex;
+  min-width: 0;
+  align-items: center;
+  justify-content: space-between;
+  gap: 10px;
+}
+
+.ops-card h3,
+.ops-card strong {
+  min-width: 0;
+  overflow-wrap: anywhere;
+}
+
+.ops-card p {
+  margin: 0;
+  color: var(--muted);
+  font-size: 0.85rem;
+  word-break: keep-all;
+}
+
+.ops-card .list,
+.ops-card .flow-list,
+.ops-card .rank-list {
+  padding: 0;
+}
+
+.ops-card .status-row {
+  box-shadow: none;
+}
+
 .profile-hero {
   display: grid;
   grid-template-columns: minmax(0, 1fr) minmax(220px, 0.7fr);

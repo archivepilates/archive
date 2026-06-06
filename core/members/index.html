@@ -66,15 +66,23 @@
           <div class="table-wrap"><table><thead><tr><th>회원</th><th>수강권</th><th>최근 방문</th><th>누적 매출</th></tr></thead><tbody id="membersTable"><tr><td colspan="4">Firestore 연결 후 표시합니다.</td></tr></tbody></table></div>
           <div class="pagination-bar" id="memberPagination" aria-label="회원 목록 페이지"></div>
         </section>
-        <section class="grid data-grid">
-          <article class="panel detail-card"><span class="pill good">빠른 판단</span><h2>검색 후 상세 확인</h2><p>회원명, 회원ID, 전화번호 끝자리, 수강권명으로 목록을 좁힌 뒤 상세 화면에서 구매, 예약, 메모, 알림톡 로그를 확인합니다.</p></article>
-          <article class="panel detail-card"><span class="pill warn">운영 경계</span><h2>표시용 read-model</h2><p>member360Cards는 운영자 검토와 GPT 분석용입니다. 발송, 연락처, StudioMate write는 canonical source를 사용합니다.</p></article>
+        <section class="panel">
+          <div class="panel-header"><div><h2>회원 운영 보드</h2><p>회원을 찾고, 상태를 보고, 외부 실행 전에 멈춰야 할 조건을 확인합니다.</p></div><span class="pill warn">read-only</span></div>
+          <div class="ops-board">
+            <article class="ops-card"><div class="ops-card-header"><h3>1. 검색/필터</h3><span class="pill">search</span></div><p>이름, 회원ID, 전화번호 끝자리, 수강권명으로 빠르게 좁힙니다.</p></article>
+            <article class="ops-card"><div class="ops-card-header"><h3>2. 상세 확인</h3><span class="pill good">member 360</span></div><p>회원 상세에서 구매, 예약, 메모, 알림톡 로그를 함께 봅니다.</p></article>
+            <article class="ops-card"><div class="ops-card-header"><h3>3. 품질 이슈</h3><span class="pill warn">guard</span></div><p>동명이인, 임시 ID, 전화번호 누락이 있으면 Imports 탭에서 원천을 먼저 확인합니다.</p></article>
+            <article class="ops-card"><div class="ops-card-header"><h3>4. 외부 실행</h3><span class="pill danger">stop</span></div><p>발송, 연락처, StudioMate write는 member360Cards가 아니라 canonical source만 사용합니다.</p></article>
+          </div>
         </section>
-        <section class="grid data-grid">
-          <article class="panel detail-card"><span class="pill warn">전환 준비</span><h2>members</h2><p>이름, 전화번호, 등록일, 상태, 최근 방문, 현재 수강권 요약을 담는 회원 기준 문서.</p></article>
-          <article class="panel detail-card"><span class="pill warn">전환 준비</span><h2>memberAliases</h2><p>StudioMate ID, 전화번호 변경, 이름 변경, excel 임시 ID를 실제 회원으로 연결.</p></article>
-          <article class="panel detail-card"><span class="pill">read-model</span><h2>memberSummaries</h2><p>운영자 검색과 GPT 분석을 위한 요약. 외부 발송/쓰기 원천으로는 사용하지 않음.</p></article>
-          <article class="panel detail-card"><span class="pill danger">주의</span><h2>name-only match 금지</h2><p>회원 write, 알림톡, 연락처 동기화는 전화번호 또는 StudioMate ID 확인 후 진행.</p></article>
+        <section class="panel">
+          <div class="panel-header"><div><h2>회원 데이터 경계</h2><p>CORE 회원 화면은 판단용 read-model입니다. 원천과 실행 경계를 분리합니다.</p></div><span class="pill">source map</span></div>
+          <div class="ops-board">
+            <article class="ops-card"><h3>members</h3><p>이름, 전화번호, 등록일, 상태, 최근 방문, 현재 수강권 요약을 담는 회원 기준 문서.</p></article>
+            <article class="ops-card"><h3>memberAliases</h3><p>StudioMate ID, 전화번호 변경, 이름 변경, excel 임시 ID를 실제 회원으로 연결.</p></article>
+            <article class="ops-card"><h3>memberSummaries</h3><p>운영자 검색과 GPT 분석을 위한 요약. 외부 발송/쓰기 원천으로는 사용하지 않습니다.</p></article>
+            <article class="ops-card"><h3>name-only match 금지</h3><p>회원 write, 알림톡, 연락처 동기화는 전화번호 또는 StudioMate ID 확인 후 진행합니다.</p></article>
+          </div>
         </section>
       </main>
     </div>

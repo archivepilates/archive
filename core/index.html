@@ -101,27 +101,33 @@
           </aside>
         </section>
 
-        <section class="grid summary-grid" aria-label="메뉴별 현황">
-          <a class="panel menu-card" href="./members/">
-            <span class="pill">Members</span>
-            <h2 id="homeMemberTotal">회원 데이터</h2>
-            <p id="homeMemberNote">전체 회원 read-model 연결 상태를 확인합니다.</p>
-          </a>
-          <a class="panel menu-card" href="./imports/">
-            <span class="pill warn">Imports</span>
-            <h2 id="homeImportTotal">원본 데이터</h2>
-            <p id="homeImportNote">회원목록, 예약내역, 삭제 수업 import 상태를 봅니다.</p>
-          </a>
-          <a class="panel menu-card" href="./messages/">
-            <span class="pill">Messages</span>
-            <h2 id="homeMessageTotal">알림톡</h2>
-            <p id="homeMessageNote">최근 후보와 발송 로그 상태를 확인합니다.</p>
-          </a>
-          <a class="panel menu-card" href="./automation/">
-            <span class="pill good">Automation</span>
-            <h2 id="homeAutomationTotal">자동화</h2>
-            <p id="homeAutomationNote">자동화 실패/지연 여부를 먼저 확인합니다.</p>
-          </a>
+        <section class="panel" aria-label="메뉴별 현황">
+          <div class="panel-header">
+            <div><h2>운영 영역별 바로가기</h2><p>각 메뉴는 보고서가 아니라 운영자가 다음 판단을 내리는 작업판입니다.</p></div>
+            <span class="pill">operator map</span>
+          </div>
+          <div class="ops-board">
+            <a class="ops-card status-link" href="./members/">
+              <div class="ops-card-header"><h3>회원</h3><span class="pill">Members</span></div>
+              <strong id="homeMemberTotal">회원 데이터</strong>
+              <p id="homeMemberNote">전체 회원 read-model 연결 상태를 확인합니다.</p>
+            </a>
+            <a class="ops-card status-link" href="./imports/">
+              <div class="ops-card-header"><h3>원본/품질</h3><span class="pill warn">Imports</span></div>
+              <strong id="homeImportTotal">원본 데이터</strong>
+              <p id="homeImportNote">회원목록, 예약내역, 삭제 수업 import 상태를 봅니다.</p>
+            </a>
+            <a class="ops-card status-link" href="./messages/">
+              <div class="ops-card-header"><h3>알림톡</h3><span class="pill">Messages</span></div>
+              <strong id="homeMessageTotal">알림톡</strong>
+              <p id="homeMessageNote">최근 후보와 발송 로그 상태를 확인합니다.</p>
+            </a>
+            <a class="ops-card status-link" href="./automation/">
+              <div class="ops-card-header"><h3>자동화</h3><span class="pill good">Automation</span></div>
+              <strong id="homeAutomationTotal">자동화</strong>
+              <p id="homeAutomationNote">자동화 실패/지연 여부를 먼저 확인합니다.</p>
+            </a>
+          </div>
         </section>
 
         <section class="grid overview-grid">
