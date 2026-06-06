@@ -121,6 +121,7 @@ async function claimNextRequest() {
 
 async function processRequest(page, request) {
   const lookup = await lookupStudioMateMember(page, request.data);
+  validateLookupForSignup(lookup);
   const signup = await createSignupContract(request.data, lookup);
   if (!apply) {
     await request.ref.set(
@@ -184,8 +185,17 @@ async function lookupStudioMateMember(page, request) {
     startDate: activeTicket.startDate || extractNearDate(body, ["시작", "이용시작", "사용시작"]),
     endDate: activeTicket.endDate || extractNearDate(body, ["종료", "만료", "이용종료"]),
     paidAmount: activeTicket.paidAmount || "",
-    rawTextPreview: body.slice(0, 1200),
+    rawTextPreview: body.slice(0, 2400),
   };
+}
+
+function validateLookupForSignup(lookup) {
+  if (!lookup.ticketName) {
+    throw new Error("StudioMate 상세 화면에서 사용중인 수강권 정보를 찾지 못했습니다. 가입서 생성을 중단했습니다.");
+  }
+  if (!lookup.startDate || !lookup.endDate) {
+    throw new Error("StudioMate 상세 화면에서 수강권 이용기간을 찾지 못했습니다. 가입서 생성을 중단했습니다.");
+  }
 }
 
 async function waitAndClickSingleSearchResult(page, { phone, name }) {
@@ -231,15 +241,26 @@ async function findSearchResultMatches(page, { phone, name }) {
 async function waitForMatchingMemberDetail(page, { phone, name }) {
   const phoneTail = digitsOnly(phone).slice(-8);
   const normalizedName = String(name || "").trim();
-  const deadline = Date.now() + 8000;
+  const deadline = Date.now() + 20000;
   let lastBody = "";
+  let matchedMember = false;
+  let sawActiveTicketSection = false;
   while (Date.now() < deadline) {
     lastBody = await page.locator("body").innerText({ timeout: 10000 }).catch(() => "");
     const detailPage = page.url().includes("/users/detail");
     const phoneMatches = !phoneTail || digitsOnly(lastBody).includes(phoneTail);
     const nameMatches = !normalizedName || lastBody.includes(normalizedName);
-    if (detailPage && phoneMatches && nameMatches) return lastBody;
+    matchedMember = Boolean(detailPage && phoneMatches && nameMatches);
+    sawActiveTicketSection ||= /사용중인\s*수강권/.test(lastBody);
+    if (matchedMember) {
+      const activeTicket = extractActiveTicketInfo(lastBody);
+      if (activeTicket.ticketName && activeTicket.startDate && activeTicket.endDate) return lastBody;
+    }
     await page.waitForTimeout(250);
+  }
+  if (matchedMember) {
+    const reason = sawActiveTicketSection ? "수강권명 또는 이용기간을 읽지 못했습니다" : "사용중인 수강권 영역이 표시되지 않았습니다";
+    throw new Error(`StudioMate 상세 화면에서 ${reason}. 가입서 생성을 중단했습니다.`);
   }
   const detailState = page.url().includes("/users/detail") ? "상세 화면 확인 지연" : "상세 화면 이동 실패";
   throw new Error(`${detailState}: 요청한 회원 정보가 StudioMate 상세 화면에 표시되지 않았습니다.`);
