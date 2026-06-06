@@ -172,7 +172,7 @@ function buildStages(doc: OnsiteWelcomeRequestDoc, contractStatus: string, studi
   const submitted = contractStatus === "submitted";
   const syncDone = ["synced", "done"].includes(studioMateSyncStatus);
   return [
-    { key: "alimtalk_sent", label: "알림톡 발송완료", state: alimtalkDone ? "done" : doc.status === "ready" ? "active" : "pending" },
+    { key: "alimtalk_sent", label: "알림톡 발송", state: alimtalkDone ? "done" : doc.status === "ready" ? "active" : "pending" },
     { key: "member_writing", label: "회원 작성중", state: writing ? "active" : submitted ? "done" : alimtalkDone ? "pending" : "pending" },
     { key: "member_submitted", label: "회원 작성완료", state: submitted ? "done" : "pending" },
     { key: "studiomate_syncing", label: "스튜디오메이트 동기화중", state: submitted && !syncDone ? "active" : syncDone ? "done" : "pending" },

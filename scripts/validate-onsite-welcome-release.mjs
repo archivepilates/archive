@@ -4,6 +4,8 @@ import { readFileSync, existsSync } from "node:fs";
 import { join } from "node:path";
 
 const root = process.cwd();
+const macMiniLaunchAgentPath = "/Users/archivepilates/Library/LaunchAgents/com.archive.onsite-welcome-requests.plist";
+const macMiniLiveRunnerPath = "/Users/archivepilates/codex-worktrees/archivein-live-setup/scripts/process-onsite-welcome-requests.mjs";
 
 const requiredFiles = [
   "archivein/onsiteWelcome/index.html",
@@ -15,11 +17,25 @@ const requiredFiles = [
   "firebase/kangsain-functions/functions/src/alimtalk/onsiteWelcomeAlimtalk.ts",
   "firebase/kangsain-functions/functions/src/alimtalk/templates.ts",
   "firebase/kangsain-functions/functions/src/alimtalk/templateTargetRules.ts",
+  "firebase/kangsain-functions/functions/src/exports/privateChart.ts",
+  "firebase/kangsain-functions/functions/src/runtime/functionOptions.ts",
   "firebase/kangsain-functions/functions/src/types/models.ts",
   "firebase/kangsain-functions/functions/src/utils/shortLinks.ts",
+  "scripts/process-onsite-welcome-requests.mjs",
 ];
 
 const requiredSnippets = [
+  {
+    file: "firebase.json",
+    snippets: [
+      "\"site\": \"archive-pilates-in\"",
+      "\"public\": \"archivein\"",
+      "\"source\": \"/onsiteWelcome/\"",
+      "\"source\": \"/onsiteWelcome/index.html\"",
+      "\"source\": \"/archivein/onsiteWelcome/\"",
+      "\"source\": \"/archivein/onsiteWelcome/index.html\"",
+    ],
+  },
   {
     file: "archivein/onsiteWelcome/index.html",
     snippets: [
@@ -29,6 +45,7 @@ const requiredSnippets = [
       "request.canSendAlimtalk",
       "action: 'send'",
       "archiveOnsiteWelcomeHistory",
+      "terminalError ? [] : (request.stages || [])",
     ],
   },
   {
@@ -39,6 +56,7 @@ const requiredSnippets = [
       "\"lookup_ready\"",
       "canSendAlimtalk",
       "hasSentAlimtalkHistory",
+      "label: \"알림톡 발송\"",
     ],
   },
   {
@@ -75,12 +93,41 @@ const requiredSnippets = [
     ],
   },
   {
+    file: "firebase/kangsain-functions/functions/src/exports/privateChart.ts",
+    snippets: [
+      "publicSolapiRequestOptions",
+      "export const onsiteWelcomeRequest = onRequest(publicSolapiRequestOptions, onsiteWelcomeRequestHandler)",
+    ],
+  },
+  {
+    file: "firebase/kangsain-functions/functions/src/runtime/functionOptions.ts",
+    snippets: [
+      "export const publicSolapiRequestOptions",
+      "secrets: [solapiApiKey, solapiApiSecret, solapiPfid]",
+    ],
+  },
+  {
     file: "firebase/kangsain-functions/functions/src/types/models.ts",
     snippets: ["| \"lookup_ready\"", "| \"onsite_welcome\"", "alimtalkSendId?: string"],
   },
   {
     file: "firebase/kangsain-functions/functions/src/utils/shortLinks.ts",
     snippets: ["| \"member_signup\"", "? \"ms\""],
+  },
+  {
+    file: "scripts/process-onsite-welcome-requests.mjs",
+    snippets: [
+      "status: \"lookup_ready\"",
+      "waitForMatchingMemberDetail",
+      "extractActiveTicketInfo",
+      "validateLookupForSignup",
+      "사용중인 수강권 정보를 찾지 못했습니다",
+      "수강권 이용기간을 찾지 못했습니다",
+      "rawTextPreview: body.slice(0, 2400)",
+      "Date.now() + 20000",
+      "sawActiveTicketSection",
+      "activeTicket.ticketName && activeTicket.startDate && activeTicket.endDate",
+    ],
   },
 ];
 
@@ -95,6 +142,26 @@ for (const check of requiredSnippets) {
   const content = existsSync(path) ? readFileSync(path, "utf8") : "";
   for (const snippet of check.snippets) {
     if (!content.includes(snippet)) failures.push(`missing snippet in ${check.file}: ${snippet}`);
+  }
+}
+
+if (existsSync(macMiniLaunchAgentPath)) {
+  const plist = readFileSync(macMiniLaunchAgentPath, "utf8");
+  if (!plist.includes(macMiniLiveRunnerPath)) {
+    failures.push(`unexpected onsite welcome LaunchAgent runner path: expected ${macMiniLiveRunnerPath}`);
+  }
+  if (existsSync(macMiniLiveRunnerPath)) {
+    const liveRunner = readFileSync(macMiniLiveRunnerPath, "utf8");
+    for (const snippet of [
+      "Date.now() + 20000",
+      "sawActiveTicketSection",
+      "activeTicket.ticketName && activeTicket.startDate && activeTicket.endDate",
+      "rawTextPreview: body.slice(0, 2400)",
+    ]) {
+      if (!liveRunner.includes(snippet)) failures.push(`missing snippet in active LaunchAgent runner: ${snippet}`);
+    }
+  } else {
+    failures.push(`active LaunchAgent runner missing: ${macMiniLiveRunnerPath}`);
   }
 }
 

@@ -1,5 +1,5 @@
 import { REGION, TIMEZONE } from "../config/constants";
-import { allSecrets, geminiApiKey, notionToken } from "../config/secrets";
+import { allSecrets, geminiApiKey, notionToken, solapiApiKey, solapiApiSecret, solapiPfid } from "../config/secrets";
 
 export const callableOptions = { region: REGION, secrets: allSecrets, invoker: "public" as const };
 export const longCallableOptions = { ...callableOptions, timeoutSeconds: 540, memory: "512MiB" as const };
@@ -49,6 +49,11 @@ export const publicRequestOptions = {
   timeoutSeconds: 60,
   memory: "256MiB" as const,
   invoker: "public" as const,
+};
+
+export const publicSolapiRequestOptions = {
+  ...publicRequestOptions,
+  secrets: [solapiApiKey, solapiApiSecret, solapiPfid],
 };
 
 export const publicLongRequestOptions = {

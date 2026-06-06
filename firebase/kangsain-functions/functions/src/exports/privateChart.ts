@@ -30,6 +30,7 @@ import {
   privateSurveyIngestOptions,
   privateSurveyIntakeOptions,
   publicRequestOptions,
+  publicSolapiRequestOptions,
   scheduleOptions,
 } from "../runtime/functionOptions";
 import { redirectShortLinkHandler } from "../utils/shortLinks";
@@ -126,7 +127,7 @@ export const privateLessonReportView = onRequest(publicRequestOptions, privateLe
 
 export const memberSignupContract = onRequest(publicRequestOptions, memberSignupContractHandler);
 
-export const onsiteWelcomeRequest = onRequest(publicRequestOptions, onsiteWelcomeRequestHandler);
+export const onsiteWelcomeRequest = onRequest(publicSolapiRequestOptions, onsiteWelcomeRequestHandler);
 
 export const notionPrivateLessonReportWebhook = onRequest(
   privateLessonChartRequestOptions,

@@ -165,7 +165,8 @@
       bar.style.width = `${percent}%`;
       statusEl.textContent = displayProgressLabel(request.progressLabel || statusLabel(request.status));
       if (request.lastError) showMessage(request.lastError, true);
-      renderStages(request.stages || []);
+      const terminalError = ['error', 'cancelled'].includes(request.status);
+      renderStages(terminalError ? [] : (request.stages || []));
       const sendVisible = ['lookup_ready', 'ready'].includes(request.status) && Boolean(request.signupUrl);
       sendButton.hidden = !sendVisible;
       sendButton.disabled = request.status === 'ready' || !request.canSendAlimtalk;
