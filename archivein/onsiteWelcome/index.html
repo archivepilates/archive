@@ -169,7 +169,7 @@
       statusEl.textContent = displayProgressLabel(request.progressLabel || statusLabel(request.status));
       if (request.lastError) showMessage(request.lastError, true);
       const terminalError = ['error', 'cancelled'].includes(request.status);
-      renderStages(terminalError ? [] : (request.stages || []));
+      renderStages(terminalError ? [] : normalizeStages(request));
       const sendVisible = ['lookup_ready', 'ready'].includes(request.status) && Boolean(request.signupUrl);
       sendButton.hidden = !sendVisible;
       sendButton.disabled = request.status === 'ready' || !request.canSendAlimtalk;
@@ -218,6 +218,18 @@
       stepsEl.innerHTML = stages.map((step) => `
         <div class="step ${escapeAttr(step.state || 'pending')}"><span class="dot"></span><span>${escapeHtml(step.label)}</span></div>
       `).join('');
+    }
+
+    function normalizeStages(request) {
+      const stages = Array.isArray(request.stages) ? request.stages.map((stage) => ({ ...stage })) : [];
+      const syncStatus = String(request.studioMateSyncStatus || '').trim();
+      const deferred = ['pending_excel_reconcile', 'manual_required', 'skipped'].includes(syncStatus);
+      if (!deferred) return stages;
+      return stages.map((stage) => {
+        if (stage.key === 'studiomate_syncing') return { ...stage, label: '정기 반영 대기', state: 'pending' };
+        if (stage.key === 'studiomate_synced') return { ...stage, label: '스튜디오메이트 확인 대기', state: 'pending' };
+        return stage;
+      });
     }
 
     function row(label, value) {

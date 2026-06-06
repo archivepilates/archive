@@ -44,6 +44,8 @@
     .actions-inner { width:min(760px,100%); margin:0 auto; }
     button { width:100%; min-height:50px; border:0; border-radius:8px; background:var(--accent); color:#fff; font-size:15px; font-weight:900; cursor:pointer; }
     button:disabled { opacity:.55; cursor:wait; }
+    button.is-submitting { position:relative; }
+    button.is-submitting::before { content:""; display:inline-block; width:14px; height:14px; margin-right:8px; border:2px solid rgba(255,255,255,.45); border-top-color:#fff; border-radius:50%; vertical-align:-2px; animation:spin .8s linear infinite; }
     .message { margin-top:14px; line-height:1.7; word-break:keep-all; overflow-wrap:break-word; }
     .message.good { border-color:#bcd7d2; background:#f2faf8; color:var(--good); }
     .message.bad { border-color:#f0c9c1; background:#fff7f4; color:var(--bad); }
@@ -55,6 +57,10 @@
       .grid { grid-template-columns:1fr; gap:0; }
       .item:nth-child(2) { border-top:1px solid rgba(24,21,18,.07); }
       .actions { padding-left:12px; padding-right:12px; }
+    }
+    @keyframes spin { to { transform:rotate(360deg); } }
+    @media (prefers-reduced-motion:reduce) {
+      button.is-submitting::before { animation:none; }
     }
   </style>
 </head>
@@ -140,7 +146,7 @@
       </section>
 
       <div class="actions">
-        <div class="actions-inner"><button type="submit">동의하고 서명 제출</button></div>
+        <div class="actions-inner"><button type="submit" id="submitButton">동의하고 서명 제출</button></div>
       </div>
     </form>
     <section id="message" class="message" hidden></section>
@@ -152,7 +158,7 @@
     const form = document.getElementById('signupForm');
     const meta = document.getElementById('meta');
     const message = document.getElementById('message');
-    const button = form.querySelector('button');
+    const submitButton = document.getElementById('submitButton');
     const signaturePad = document.getElementById('signaturePad');
     const clearSignature = document.getElementById('clearSignature');
     const signatureContext = signaturePad.getContext('2d');
@@ -160,6 +166,7 @@
     let signatureDrawn = false;
     let drawing = false;
     let lastPoint = null;
+    let isSubmitting = false;
 
     init();
     setupSignaturePad();
@@ -222,7 +229,8 @@
 
     form.addEventListener('submit', async (event) => {
       event.preventDefault();
-      button.disabled = true;
+      if (isSubmitting) return;
+      setSubmitState('submitting');
       try {
         const payload = {
           contractId,
@@ -246,13 +254,25 @@
           body: JSON.stringify(payload)
         });
         form.hidden = true;
+        setSubmitState('submitted');
         showMessage(result.duplicate ? '이미 서명 제출이 완료되었습니다.' : '회원가입서 서명 제출이 완료되었습니다.');
       } catch (err) {
+        setSubmitState('idle');
         showMessage(err.message || '제출 중 오류가 발생했습니다. 잠시 후 다시 시도해 주세요.', true);
-      } finally {
-        button.disabled = false;
       }
     });
+
+    function setSubmitState(state) {
+      isSubmitting = state === 'submitting';
+      submitButton.disabled = state !== 'idle';
+      submitButton.classList.toggle('is-submitting', state === 'submitting');
+      submitButton.setAttribute('aria-busy', state === 'submitting' ? 'true' : 'false');
+      form.setAttribute('aria-busy', state === 'submitting' ? 'true' : 'false');
+      submitButton.textContent =
+        state === 'submitting' ? '제출 중입니다. 잠시만 기다려 주세요' :
+        state === 'submitted' ? '제출 완료' :
+        '동의하고 서명 제출';
+    }
 
     async function requestJson(url, options) {
       const response = await fetch(url, options);
