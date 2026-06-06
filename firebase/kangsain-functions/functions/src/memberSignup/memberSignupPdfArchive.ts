@@ -125,43 +125,37 @@ async function uploadPdfToDrive(input: { filename: string; pdfBytes: Uint8Array 
 export async function createMemberSignupPdf(contract: MemberSignupContractDoc): Promise<Uint8Array> {
   const pdf = await PDFDocument.create();
   pdf.registerFontkit(fontkit);
-  const font = await pdf.embedFont(await readFile(fontPath()), { subset: true });
+  // pdf-lib font subsetting can break Korean glyph rendering in Google Drive and macOS Quick Look.
+  const font = await pdf.embedFont(await readFile(fontPath()), { subset: false });
   const page = pdf.addPage([595.28, 841.89]);
-  const ctx: PdfContext = { pdf, page, font, width: 595.28, height: 841.89, margin: 42, y: 790 };
+  const ctx: PdfContext = { pdf, page, font, width: 595.28, height: 841.89, margin: 42, y: 792 };
 
-  drawText(ctx, "ARCHIVE PILATES", 12, { color: rgb(0.71, 0.23, 0.2), bold: true });
-  drawText(ctx, "회원가입서", 26, { color: rgb(0.08, 0.08, 0.08), bold: true, gap: 16 });
+  drawText(ctx, "ARCHIVE PILATES", 11, { color: rgb(0.71, 0.23, 0.2), bold: true, gap: 10 });
+  drawText(ctx, "회원가입서", 28, { color: rgb(0.08, 0.08, 0.08), bold: true, gap: 4 });
+  drawText(ctx, `제출일 ${contract.signature?.signedAtText || "-"}`, 10, { color: rgb(0.45, 0.41, 0.36), gap: 14 });
   drawDivider(ctx);
 
-  drawSection(ctx, "회원 기본정보");
+  drawSection(ctx, "회원 정보");
   drawRows(ctx, [
-    ["이름", contract.member.name || contract.memberName],
-    ["휴대폰", formatPhone(contract.member.phone || contract.memberPhone)],
-    ["생년월일", contract.member.birthDate || "-"],
-    ["성별", contract.member.gender || "-"],
+    ["이름/휴대폰", joinDisplay([contract.member.name || contract.memberName, formatPhone(contract.member.phone || contract.memberPhone)])],
+    ["생년월일/성별", joinDisplay([contract.member.birthDate, contract.member.gender])],
     ["주소", contract.member.address || "-"],
-    ["방문경로", contract.member.visitRoute || "-"],
-    ["운동목적", contract.member.exercisePurpose || "-"],
+    ["방문/운동목적", joinDisplay([contract.member.visitRoute, contract.member.exercisePurpose])],
     ["추천인", contract.member.recommender || "-"],
   ]);
 
-  drawSection(ctx, "수강권 및 결제정보");
+  drawSection(ctx, "수강권 정보");
   drawRows(ctx, [
     ["수강권", contract.purchase?.ticketName || "-"],
     ["이용기간", [contract.purchase?.startDate, contract.purchase?.endDate].filter(Boolean).join(" ~ ") || "-"],
-    ["결제방법", contract.purchase?.paymentMethod || "-"],
-    ["결제금액", contract.purchase?.paidAmount || "-"],
-    ["미수금", contract.purchase?.unpaidAmount || "0원"],
+    ["결제", formatPaymentSummary(contract)],
   ]);
 
   drawSection(ctx, "약관 및 동의");
   drawRows(ctx, [
-    ["환불 및 취소 규정", yesNo(contract.agreements?.refundAndCancellation)],
-    ["시설 이용 및 수강권 사용", yesNo(contract.agreements?.facilityUse)],
-    ["개인정보 수집 및 이용", yesNo(contract.agreements?.privacyUse)],
+    ["필수 약관", formatRequiredAgreements(contract)],
     ["마케팅 정보 수신", contract.agreements?.marketingAdConsent ? "동의" : "미동의"],
-    ["최종 확인 및 전자서명", yesNo(contract.agreements?.finalConfirmation)],
-    ["약관 버전", contract.termsVersion || "-"],
+    ["약관 버전", formatTermsVersion(contract.termsVersion)],
   ]);
 
   drawSection(ctx, "전자서명");
@@ -170,22 +164,21 @@ export async function createMemberSignupPdf(contract: MemberSignupContractDoc): 
   drawRows(ctx, [
     ["서명자", signature.signerName],
     ["제출시각", signature.signedAtText],
-    ["서명 해시", signature.signatureImageHash || "-"],
-    ["접속 IP 해시", signature.ipHash || "-"],
+    ["문서 상태", "전자서명 완료 · 원본 기록 보관"],
   ]);
   await drawSignatureImage(pdf, ctx, signature.signatureImageDataUrl || "");
 
-  drawFooter(ctx, contract.contractId);
+  drawFooter(ctx);
   return pdf.save();
 }
 
 async function drawSignatureImage(pdf: PDFDocument, ctx: PdfContext, dataUrl: string): Promise<void> {
   const match = dataUrl.match(/^data:image\/png;base64,([a-zA-Z0-9+/=]+)$/);
   if (!match) return;
-  if (ctx.y < 130) addPage(ctx);
+  if (ctx.y < 86) addPage(ctx);
   const image = await pdf.embedPng(Buffer.from(match[1], "base64"));
-  const maxWidth = 220;
-  const maxHeight = 82;
+  const maxWidth = 160;
+  const maxHeight = 46;
   const scale = Math.min(maxWidth / image.width, maxHeight / image.height, 1);
   const width = image.width * scale;
   const height = image.height * scale;
@@ -204,39 +197,50 @@ async function drawSignatureImage(pdf: PDFDocument, ctx: PdfContext, dataUrl: st
     width,
     height,
   });
-  ctx.y -= maxHeight + 38;
+  ctx.y -= maxHeight + 34;
 }
 
 function drawSection(ctx: PdfContext, title: string): void {
   if (ctx.y < 150) addPage(ctx);
-  ctx.y -= 8;
-  drawText(ctx, title, 15, { color: rgb(0.08, 0.08, 0.08), bold: true, gap: 8 });
+  ctx.y -= 4;
+  drawText(ctx, title, 13.5, { color: rgb(0.08, 0.08, 0.08), bold: true, gap: 6 });
 }
 
 function drawRows(ctx: PdfContext, rows: Array<[string, string]>): void {
+  const labelX = ctx.margin + 4;
+  const valueX = ctx.margin + 112;
+  const rightX = ctx.width - ctx.margin;
+  const valueWidth = rightX - valueX;
   for (const [label, value] of rows) {
-    if (ctx.y < 90) addPage(ctx);
+    if (ctx.y < 92) addPage(ctx);
     const rowY = ctx.y;
-    ctx.page.drawText(label, {
-      x: ctx.margin,
-      y: rowY,
-      size: 10,
-      font: ctx.font,
-      color: rgb(0.42, 0.38, 0.34),
+    const lines = wrapText(ctx.font, value || "-", 10.5, valueWidth);
+    const rowHeight = Math.max(24, lines.length * 14 + 9);
+    ctx.page.drawLine({
+      start: { x: ctx.margin, y: rowY + 8 },
+      end: { x: rightX, y: rowY + 8 },
+      thickness: 0.55,
+      color: rgb(0.9, 0.87, 0.82),
     });
-    const lines = wrapText(ctx.font, value || "-", 10.5, ctx.width - ctx.margin * 2 - 120);
+    ctx.page.drawText(label, {
+      x: labelX,
+      y: rowY,
+      size: 9.5,
+      font: ctx.font,
+      color: rgb(0.36, 0.32, 0.28),
+    });
     lines.forEach((line, index) => {
       ctx.page.drawText(line, {
-        x: ctx.margin + 116,
+        x: valueX,
         y: rowY - index * 14,
         size: 10.5,
         font: ctx.font,
-        color: rgb(0.12, 0.1, 0.09),
+        color: rgb(0.11, 0.09, 0.08),
       });
     });
-    ctx.y -= Math.max(20, lines.length * 14 + 6);
+    ctx.y -= rowHeight;
   }
-  ctx.y -= 4;
+  ctx.y -= 8;
 }
 
 function drawText(
@@ -269,8 +273,8 @@ function drawDivider(ctx: PdfContext): void {
   ctx.y -= 22;
 }
 
-function drawFooter(ctx: PdfContext, contractId: string): void {
-  ctx.page.drawText(`ARCHIVE PILATES · ${contractId}`, {
+function drawFooter(ctx: PdfContext): void {
+  ctx.page.drawText("ARCHIVE PILATES · 회원가입서 전자보관", {
     x: ctx.margin,
     y: 28,
     size: 8,
@@ -287,6 +291,7 @@ function addPage(ctx: PdfContext): void {
 function wrapText(font: PDFFont, text: string, size: number, maxWidth: number): string[] {
   const source = String(text || "-").replace(/\s+/g, " ").trim();
   const lines: string[] = [];
+  if (!source) return ["-"];
   let current = "";
   for (const char of [...source]) {
     const next = current ? `${current}${char}` : char;
@@ -299,6 +304,34 @@ function wrapText(font: PDFFont, text: string, size: number, maxWidth: number): 
   }
   if (current) lines.push(current);
   return lines;
+}
+
+function formatTermsVersion(value: string | undefined): string {
+  const source = String(value || "").trim();
+  if (!source) return "-";
+  return source.replace(/^archive-member-signup-/, "가입서 약관 ");
+}
+
+function formatPaymentSummary(contract: MemberSignupContractDoc): string {
+  const method = contract.purchase?.paymentMethod || "-";
+  const paid = contract.purchase?.paidAmount || "-";
+  const unpaid = contract.purchase?.unpaidAmount || "0원";
+  return `방법 ${method} · 결제 ${paid} · 미수 ${unpaid}`;
+}
+
+function formatRequiredAgreements(contract: MemberSignupContractDoc): string {
+  const agreements = contract.agreements;
+  const allRequired =
+    agreements?.refundAndCancellation &&
+    agreements.facilityUse &&
+    agreements.privacyUse &&
+    agreements.finalConfirmation;
+  return allRequired ? "환불/취소, 시설/수강권, 개인정보, 최종 확인/서명 모두 동의" : "필수 약관 일부 미동의";
+}
+
+function joinDisplay(values: Array<string | undefined>): string {
+  const clean = values.map((value) => String(value || "").trim()).filter(Boolean);
+  return clean.length ? clean.join(" · ") : "-";
 }
 
 function fontPath(): string {

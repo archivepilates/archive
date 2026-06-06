@@ -316,6 +316,15 @@ export interface MemberProfileDoc {
 }
 
 export type MemberSignupContractStatus = "draft" | "opened" | "submitted" | "expired" | "cancelled";
+export type MemberSignupStudioMateSyncStatus =
+  | "pending_excel_reconcile"
+  | "manual_required"
+  | "processing"
+  | "syncing"
+  | "synced"
+  | "done"
+  | "failed"
+  | "skipped";
 
 export interface MemberSignupContractDoc {
   contractId: string;
@@ -357,6 +366,13 @@ export interface MemberSignupContractDoc {
   marketingAdConsentAt?: Timestamp | null;
   marketingAdConsentSource?: "memberSignup";
   marketingAdConsentTermsVersion?: string;
+  studiomateProfileSyncStatus?: MemberSignupStudioMateSyncStatus | string;
+  studiomateSyncStatus?: MemberSignupStudioMateSyncStatus | string;
+  studiomateProfileSync?: {
+    status: MemberSignupStudioMateSyncStatus | string;
+    reason?: string;
+    updatedAt?: Timestamp | null;
+  };
   signature?: {
     signerName: string;
     signedAtText: string;

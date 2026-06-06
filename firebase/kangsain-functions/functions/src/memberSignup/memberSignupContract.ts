@@ -69,6 +69,13 @@ export async function memberSignupContractHandler(request: any, response: any): 
           signatureImageHash: sha256(submission.signatureImageDataUrl),
         },
         submittedAt: signedAt,
+        studiomateProfileSyncStatus: "pending_excel_reconcile",
+        studiomateSyncStatus: "pending_excel_reconcile",
+        studiomateProfileSync: {
+          status: "pending_excel_reconcile",
+          reason: "StudioMate profile write is reconciled by the regular Excel/member-list workflow.",
+          updatedAt: signedAt,
+        },
         updatedAt: signedAt,
       };
       const transactionResult = await db.runTransaction(async (tx) => {
