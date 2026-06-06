@@ -29,6 +29,23 @@ export class DelegatedGoogleClient {
     return json as T;
   }
 
+  async requestBuffer(url: string, init: RequestInit = {}): Promise<Buffer> {
+    const token = await this.getAccessToken();
+    const response = await fetch(url, {
+      ...init,
+      headers: {
+        Authorization: `Bearer ${token}`,
+        ...(init.headers || {}),
+      },
+    });
+    if (!response.ok) {
+      const text = await response.text().catch(() => "");
+      const json = text ? JSON.parse(text) : {};
+      throw new Error(json?.error?.message || `Google API failed: ${response.status}`);
+    }
+    return Buffer.from(await response.arrayBuffer());
+  }
+
   private async getAccessToken(): Promise<string> {
     if (this.accessToken) return this.accessToken;
     const key = JSON.parse(googleDwdServiceAccountJson.value()) as {

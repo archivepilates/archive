@@ -1,9 +1,11 @@
 import { createHash } from "node:crypto";
+import { logger } from "firebase-functions";
 import { Timestamp } from "firebase-admin/firestore";
 import { db } from "../config/firebase";
 import type { MemberSignupContractDoc } from "../types/models";
 import { refs } from "../firestore/refs";
 import { nowTimestamp } from "../utils/date";
+import { archiveMemberSignupContractPdf } from "./memberSignupPdfArchive";
 
 const TERMS_VERSION = "archive-member-signup-2026-05";
 const MEMBER_SIGNUP_PURGE_DELAY_MS = 1000 * 60 * 60 * 24 * 30;
@@ -28,6 +30,7 @@ export async function memberSignupContractHandler(request: any, response: any): 
       const tokenInput = body.accessToken || body.token;
       const contract = await readAuthorizedContract(body.contractId || body.id, tokenInput);
       if (contract.status === "submitted") {
+        await tryArchiveSubmittedContract(contract);
         response.json({ ok: true, duplicate: true, contract: publicContract(contract) });
         return;
       }
@@ -114,10 +117,13 @@ export async function memberSignupContractHandler(request: any, response: any): 
         throw new Error("회원가입서 링크가 만료되었습니다.");
       }
       if (transactionResult.duplicate && transactionResult.contract) {
+        await tryArchiveSubmittedContract(transactionResult.contract);
         response.json({ ok: true, duplicate: true, contract: publicContract(transactionResult.contract) });
         return;
       }
-      response.json({ ok: true, duplicate: false, submittedAtText: signedAtText });
+      const submitted = (await refs.memberSignupContract(contract.contractId).get()).data();
+      const archive = submitted ? await tryArchiveSubmittedContract(submitted) : null;
+      response.json({ ok: true, duplicate: false, submittedAtText: signedAtText, driveArchive: archive });
       return;
     }
 
@@ -125,6 +131,21 @@ export async function memberSignupContractHandler(request: any, response: any): 
   } catch (err) {
     const message = err instanceof Error ? err.message : String(err);
     response.status(400).json({ ok: false, error: message });
+  }
+}
+
+async function tryArchiveSubmittedContract(contract: MemberSignupContractDoc): Promise<{
+  status: "saved" | "skipped" | "failed";
+  fileId?: string;
+  url?: string;
+  error?: string;
+}> {
+  try {
+    return await archiveMemberSignupContractPdf(contract);
+  } catch (err) {
+    const message = err instanceof Error ? err.message : String(err);
+    logger.warn("member signup PDF archive failed", { contractId: contract.contractId, message });
+    return { status: "failed", error: message };
   }
 }
 

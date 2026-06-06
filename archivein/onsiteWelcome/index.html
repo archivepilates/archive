@@ -31,6 +31,8 @@
     input:focus { outline:2px solid rgba(183,61,50,.18); border-color:var(--accent); }
     button { min-height:50px; border:0; border-radius:8px; background:var(--accent); color:#fff; font-size:15px; font-weight:900; cursor:pointer; }
     button:disabled { opacity:.55; cursor:wait; }
+    .folder-link { display:flex; align-items:center; justify-content:center; min-height:46px; margin-top:10px; border:1px solid var(--line); border-radius:8px; background:#fff; color:var(--ink); text-decoration:none; font-size:14px; font-weight:900; }
+    .folder-link:focus-visible { outline:2px solid rgba(183,61,50,.24); outline-offset:2px; }
     .progress { height:9px; border-radius:999px; overflow:hidden; background:#eee6dd; }
     .bar { height:100%; width:0; background:var(--accent); transition:width .25s ease; }
     .status { font-size:14px; line-height:1.6; color:var(--muted); white-space:pre-wrap; }
@@ -75,6 +77,7 @@
         <input name="memberName" autocomplete="name" placeholder="동명이인 방지용, 선택 입력">
       </label>
       <button type="submit">가입서 링크 준비</button>
+      <a class="folder-link" href="https://drive.google.com/drive/folders/1jpW73Io8GOkrURxoUoWZ2257mWKqEe8X" target="_blank" rel="noreferrer">서명완료 가입서 PDF 폴더</a>
     </form>
 
     <section id="panel" class="panel" hidden>

@@ -29,6 +29,7 @@ import {
   privateLessonChartScheduleOptions,
   privateSurveyIngestOptions,
   privateSurveyIntakeOptions,
+  publicDriveRequestOptions,
   publicRequestOptions,
   publicSolapiRequestOptions,
   scheduleOptions,
@@ -125,7 +126,7 @@ export const privateLessonChartApi = onRequest(privateLessonChartRequestOptions,
 
 export const privateLessonReportView = onRequest(publicRequestOptions, privateLessonReportViewHandler);
 
-export const memberSignupContract = onRequest(publicRequestOptions, memberSignupContractHandler);
+export const memberSignupContract = onRequest(publicDriveRequestOptions, memberSignupContractHandler);
 
 export const onsiteWelcomeRequest = onRequest(publicSolapiRequestOptions, onsiteWelcomeRequestHandler);
 

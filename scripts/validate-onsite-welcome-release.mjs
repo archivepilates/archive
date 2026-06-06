@@ -17,7 +17,9 @@ const requiredFiles = [
   "firebase/kangsain-functions/functions/src/alimtalk/onsiteWelcomeAlimtalk.ts",
   "firebase/kangsain-functions/functions/src/alimtalk/templates.ts",
   "firebase/kangsain-functions/functions/src/alimtalk/templateTargetRules.ts",
+  "firebase/kangsain-functions/functions/src/assets/NotoSansKR.ttf",
   "firebase/kangsain-functions/functions/src/exports/privateChart.ts",
+  "firebase/kangsain-functions/functions/src/memberSignup/memberSignupPdfArchive.ts",
   "firebase/kangsain-functions/functions/src/runtime/functionOptions.ts",
   "firebase/kangsain-functions/functions/src/types/models.ts",
   "firebase/kangsain-functions/functions/src/utils/shortLinks.ts",
@@ -46,6 +48,8 @@ const requiredSnippets = [
       "action: 'send'",
       "archiveOnsiteWelcomeHistory",
       "terminalError ? [] : (request.stages || [])",
+      "서명완료 가입서 PDF 폴더",
+      "https://drive.google.com/drive/folders/1jpW73Io8GOkrURxoUoWZ2257mWKqEe8X",
     ],
   },
   {
@@ -96,6 +100,8 @@ const requiredSnippets = [
     file: "firebase/kangsain-functions/functions/src/exports/privateChart.ts",
     snippets: [
       "publicSolapiRequestOptions",
+      "publicDriveRequestOptions",
+      "export const memberSignupContract = onRequest(publicDriveRequestOptions, memberSignupContractHandler)",
       "export const onsiteWelcomeRequest = onRequest(publicSolapiRequestOptions, onsiteWelcomeRequestHandler)",
     ],
   },
@@ -104,6 +110,19 @@ const requiredSnippets = [
     snippets: [
       "export const publicSolapiRequestOptions",
       "secrets: [solapiApiKey, solapiApiSecret, solapiPfid]",
+      "export const publicDriveRequestOptions",
+      "secrets: [googleDwdServiceAccountJson]",
+    ],
+  },
+  {
+    file: "firebase/kangsain-functions/functions/src/memberSignup/memberSignupPdfArchive.ts",
+    snippets: [
+      "ARCHIVE PILATES 회원가입서 PDF",
+      "1jpW73Io8GOkrURxoUoWZ2257mWKqEe8X",
+      "createMemberSignupPdf",
+      "uploadPdfToDrive",
+      "NotoSansKR.ttf",
+      "signatureImageDataUrl",
     ],
   },
   {

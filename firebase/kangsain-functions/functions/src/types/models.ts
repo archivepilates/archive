@@ -366,6 +366,16 @@ export interface MemberSignupContractDoc {
     signatureImageDataUrl?: string;
     signatureImageHash?: string;
   };
+  driveArchive?: {
+    status: "processing" | "saved" | "failed";
+    fileId?: string;
+    url?: string;
+    folderId?: string;
+    folderUrl?: string;
+    lastError?: string;
+    savedAt?: Timestamp | null;
+    updatedAt?: Timestamp | null;
+  };
   openedAt?: Timestamp | null;
   submittedAt?: Timestamp | null;
   expiresAt?: Timestamp | null;
