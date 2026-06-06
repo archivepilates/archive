@@ -241,7 +241,8 @@ async function waitForMatchingMemberDetail(page, { phone, name }) {
     if (detailPage && phoneMatches && nameMatches) return lastBody;
     await page.waitForTimeout(250);
   }
-  return lastBody;
+  const detailState = page.url().includes("/users/detail") ? "상세 화면 확인 지연" : "상세 화면 이동 실패";
+  throw new Error(`${detailState}: 요청한 회원 정보가 StudioMate 상세 화면에 표시되지 않았습니다.`);
 }
 
 function validateMemberDetail(body, { phone, name }) {
@@ -261,7 +262,7 @@ async function createSignupContract(request, lookup) {
   const memberKey = lookup.memberId || `onsite_${sha256(`${request.phone}|${lookup.memberName || ""}`).slice(0, 16)}`;
   const contractId = `msc-${memberKey}-${Date.now().toString(36)}`.replace(/[^a-zA-Z0-9-]/g, "-");
   const now = admin.firestore.Timestamp.now();
-  if (apply) await cancelActiveUnsignedContracts(memberKey, now);
+  if (apply) await cancelActiveUnsignedContracts({ memberId: memberKey, memberPhone: request.phone }, now);
   const doc = {
     contractId,
     studioId: request.studioId || "5330",
@@ -305,32 +306,53 @@ async function createSignupContract(request, lookup) {
   };
 }
 
-async function cancelActiveUnsignedContracts(memberId, now) {
+async function cancelActiveUnsignedContracts(identity, now) {
   const purgeAfter = admin.firestore.Timestamp.fromMillis(now.toMillis() + 1000 * 60 * 60 * 24 * 7);
-  const snap = await db
-    .collection("memberSignupContracts")
-    .where("memberId", "==", memberId)
-    .where("status", "in", ["draft", "opened"])
-    .limit(20)
-    .get();
-  const batch = db.batch();
-  let count = 0;
-  for (const docSnap of snap.docs) {
-    const contract = docSnap.data();
-    if (contract.signature || contract.submittedAt || contract.status === "submitted") continue;
-    batch.set(
-      docSnap.ref,
-      {
-        status: "cancelled",
-        expiresAt: now,
-        cancelledAt: now,
-        cancelReason: "replaced_by_new_onsite_signup",
-        purgeAfter,
-        updatedAt: now,
-      },
-      { merge: true },
+  const snaps = [];
+  if (identity.memberId) {
+    snaps.push(
+      await db
+        .collection("memberSignupContracts")
+        .where("memberId", "==", identity.memberId)
+        .where("status", "in", ["draft", "opened"])
+        .limit(20)
+        .get(),
     );
-    count += 1;
+  }
+  const phone = digitsOnly(identity.memberPhone);
+  if (phone) {
+    snaps.push(
+      await db
+        .collection("memberSignupContracts")
+        .where("memberPhone", "==", phone)
+        .where("status", "in", ["draft", "opened"])
+        .limit(20)
+        .get(),
+    );
+  }
+  const batch = db.batch();
+  const seen = new Set();
+  let count = 0;
+  for (const snap of snaps) {
+    for (const docSnap of snap.docs) {
+      if (seen.has(docSnap.id)) continue;
+      seen.add(docSnap.id);
+      const contract = docSnap.data();
+      if (contract.signature || contract.submittedAt || contract.status === "submitted") continue;
+      batch.set(
+        docSnap.ref,
+        {
+          status: "cancelled",
+          expiresAt: now,
+          cancelledAt: now,
+          cancelReason: "replaced_by_new_onsite_signup",
+          purgeAfter,
+          updatedAt: now,
+        },
+        { merge: true },
+      );
+      count += 1;
+    }
   }
   if (count) await batch.commit();
 }
