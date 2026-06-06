@@ -160,15 +160,14 @@ async function lookupStudioMateMember(page, request) {
   await page.goto(new URL("/users", config.baseUrl).toString(), { waitUntil: "networkidle", timeout: 60000 });
   const search = page.locator('input[placeholder="이름 또는 전화번호로 검색"]').first();
   if (!(await search.isVisible().catch(() => false))) throw new Error("StudioMate 회원 검색창을 찾지 못했습니다.");
+  await search.fill("");
   await search.fill(phone);
-  await page.waitForTimeout(1200);
-  const match = await clickSingleSearchResult(page, { phone, name: request.memberNameHint || "" });
+  const match = await waitAndClickSingleSearchResult(page, { phone, name: request.memberNameHint || "" });
   if (!match.clicked) throw new Error(match.error || "전화번호와 일치하는 StudioMate 회원을 찾지 못했습니다.");
   await page.waitForLoadState("networkidle", { timeout: 30000 }).catch(() => {});
-  await page.waitForTimeout(900);
+  const body = await waitForMatchingMemberDetail(page, { phone, name: request.memberNameHint || "" });
   const url = new URL(page.url());
   const memberId = url.searchParams.get("id") || "";
-  const body = await page.locator("body").innerText({ timeout: 10000 });
   validateMemberDetail(body, { phone, name: request.memberNameHint || "" });
   const activeTicket = extractActiveTicketInfo(body);
   const profile = extractMemberProfileInfo(body);
@@ -181,7 +180,7 @@ async function lookupStudioMateMember(page, request) {
     birthDate: profile.birthDate,
     email: profile.email,
     address: profile.address,
-    ticketName: activeTicket.ticketName || extractTicketName(body),
+    ticketName: activeTicket.ticketName || "",
     startDate: activeTicket.startDate || extractNearDate(body, ["시작", "이용시작", "사용시작"]),
     endDate: activeTicket.endDate || extractNearDate(body, ["종료", "만료", "이용종료"]),
     paidAmount: activeTicket.paidAmount || "",
@@ -189,26 +188,60 @@ async function lookupStudioMateMember(page, request) {
   };
 }
 
-async function clickSingleSearchResult(page, { phone, name }) {
+async function waitAndClickSingleSearchResult(page, { phone, name }) {
+  const deadline = Date.now() + 8000;
+  let lastResult = { matches: [], visibleCount: 0 };
+  while (Date.now() < deadline) {
+    lastResult = await findSearchResultMatches(page, { phone, name });
+    if (lastResult.matches.length === 1) {
+      await lastResult.matches[0].candidate.click({ timeout: 5000 });
+      return { clicked: true };
+    }
+    if (lastResult.matches.length > 1) {
+      return { clicked: false, error: "검색 결과가 2명 이상입니다. 회원명을 더 정확히 입력해주세요." };
+    }
+    await page.waitForTimeout(250);
+  }
+  return {
+    clicked: false,
+    error: `전화번호와 회원명이 일치하는 StudioMate 회원을 찾지 못했습니다. 검색결과 ${lastResult.visibleCount}건`,
+  };
+}
+
+async function findSearchResultMatches(page, { phone, name }) {
   const results = page.locator(".members .member");
   const matches = [];
   const phoneTail = phone.slice(-8);
   const normalizedName = String(name || "").trim();
   const count = await results.count().catch(() => 0);
+  let visibleCount = 0;
   for (let index = 0; index < count; index += 1) {
     const candidate = results.nth(index);
     if (!(await candidate.isVisible().catch(() => false))) continue;
+    visibleCount += 1;
     const text = await candidate.innerText().catch(() => "");
     const textPhone = digitsOnly(text);
     const phoneMatches = phoneTail && textPhone.includes(phoneTail);
     const nameMatches = !normalizedName || text.includes(normalizedName);
     if (phoneMatches && nameMatches) matches.push({ candidate, text });
   }
-  if (matches.length !== 1) {
-    return { clicked: false, error: matches.length ? "검색 결과가 2명 이상입니다. 회원명을 더 정확히 입력해주세요." : "전화번호와 회원명이 일치하는 StudioMate 회원을 찾지 못했습니다." };
+  return { matches, visibleCount };
+}
+
+async function waitForMatchingMemberDetail(page, { phone, name }) {
+  const phoneTail = digitsOnly(phone).slice(-8);
+  const normalizedName = String(name || "").trim();
+  const deadline = Date.now() + 8000;
+  let lastBody = "";
+  while (Date.now() < deadline) {
+    lastBody = await page.locator("body").innerText({ timeout: 10000 }).catch(() => "");
+    const detailPage = page.url().includes("/users/detail");
+    const phoneMatches = !phoneTail || digitsOnly(lastBody).includes(phoneTail);
+    const nameMatches = !normalizedName || lastBody.includes(normalizedName);
+    if (detailPage && phoneMatches && nameMatches) return lastBody;
+    await page.waitForTimeout(250);
   }
-  await matches[0].candidate.click({ timeout: 5000 });
-  return { clicked: true };
+  return lastBody;
 }
 
 function validateMemberDetail(body, { phone, name }) {
@@ -389,6 +422,9 @@ function isLikelyTicketName(line) {
   const value = String(line || "").trim();
   if (!value || value.length > 80) return false;
   if (isTicketMetaLine(value)) return false;
+  if (/^\[[^\]]+\]/.test(value) || /ARCHIVE IN|사전확인|알림톡|리포트/.test(value)) return false;
+  if (/첫\s*프라이빗|체험|상담/.test(value) && /20\d{2}|AM|PM|오전|오후|[:：]/.test(value)) return false;
+  if (/20\d{2}/.test(value) && /(AM|PM|오전|오후|\/|:|：)/.test(value)) return false;
   if (/(예약했습니다|예약\s*완료|수업에\s*예약|잔여\s*횟수|잔여횟수|남았습니다|출석|결석|노쇼|취소했습니다)/.test(value)) return false;
   if (/\[[^\]]+\]\s*회원님이/.test(value)) return false;
   if (/(강사|수업|바렐|리포머|체어|캐딜락)/.test(value) && /20\d{2}[.\-/년]/.test(value)) return false;
