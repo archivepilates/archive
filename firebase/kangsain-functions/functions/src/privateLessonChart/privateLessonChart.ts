@@ -1024,6 +1024,9 @@ async function submitPrivateLessonChart(
       throw new Error("이미 제출된 수업 후 기록입니다. 기존 기록 보호를 위해 다시 제출할 수 없습니다.");
     }
     const now = nowTimestamp();
+    if (mode === "post" && !cleanReportSentence(answers.nextMemo)) {
+      throw new Error("다음 수업 방향을 입력해 주세요. 회원 리포트에 반영됩니다.");
+    }
     const recordPatch =
       mode === "pre"
         ? { prePlan: answers, preSubmittedAt: now, gptStatus: base.gptStatus || "pending" }
@@ -1928,10 +1931,12 @@ function privateSurveySummaryForRequest(
 }
 
 function gptPromptBrief(record: PrivateLessonChartRecordDoc, chartRequest: PrivateLessonChartRequestDoc): string {
+  const teacherNextDirection = cleanReportSentence(record.postRecord?.nextMemo);
   return [
     "ARCHIVE PILATES 프라이빗 회원용 수업 리포트 문장을 작성합니다.",
     "톤: 조용하고 전문적이며 따뜻하게. 과장, 진단, 치료 효과 단정, 통증/병력 상세 노출은 금지합니다.",
     "점수, 평균, 등급, 평가처럼 느껴지는 표현은 쓰지 않습니다. 몸 상태의 흐름과 다음 수업 방향만 정리합니다.",
+    "다음 수업 방향은 반드시 강사가 입력한 '강사 다음 수업 방향 원문'만 근거로 합니다. 새 목표나 진단을 추론하지 않습니다.",
     "회원이 읽는 문장입니다. 강사용 체크값을 자연스럽고 고급스럽게 정리합니다.",
     `회원: ${record.memberName}`,
     `회차: ${record.sessionNumber}회차`,
@@ -1940,9 +1945,10 @@ function gptPromptBrief(record: PrivateLessonChartRecordDoc, chartRequest: Priva
     `사전설문 요약: ${safeJson(chartRequest.intakeSummary || {})}`,
     `수업 전 계획: ${safeJson(record.prePlan || {})}`,
     `수업 후 기록: ${safeJson(record.postRecord || {})}`,
+    `강사 다음 수업 방향 원문: ${teacherNextDirection}`,
     "출력은 JSON만 허용합니다.",
     "summary: 1~2문장. 오늘 진행과 관찰된 변화를 평가 없이 따뜻하지만 담백하게 요약합니다.",
-    "nextDirection: 1문장. 다음 수업 방향을 확신형 진단이 아니라 이어갈 관리 방향으로 표현합니다.",
+    "nextDirection: 1문장. 강사 다음 수업 방향 원문을 회원용 문장으로만 다듬습니다. 원문에 없는 내용을 추가하지 않습니다.",
   ].join("\n");
 }
 
@@ -2005,7 +2011,8 @@ async function requestGeminiPrivateLessonDraft(
   const output = extractGeminiText(json);
   const parsed = parseJsonObject(output);
   const summary = cleanReportSentence(parsed.summary);
-  const nextDirection = cleanReportSentence(parsed.nextDirection);
+  const teacherNextDirection = cleanReportSentence(prompt.match(/강사 다음 수업 방향 원문: (.*)/)?.[1] || "");
+  const nextDirection = cleanReportSentence(parsed.nextDirection) || teacherNextDirection;
   if (!summary || !nextDirection) {
     throw new Error("Gemini 리포트 응답에 summary 또는 nextDirection이 없습니다.");
   }

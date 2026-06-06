@@ -113,6 +113,12 @@
           ]
         },
         {
+          "source": "/archivein/private-chart/**",
+          "headers": [
+            { "key": "Cache-Control", "value": "no-cache, no-store, must-revalidate" }
+          ]
+        },
+        {
           "source": "/dashboard/**",
           "headers": [
             {
@@ -375,6 +381,12 @@
         },
         {
           "source": "/onsiteWelcome/icons/**",
+          "headers": [
+            { "key": "Cache-Control", "value": "no-cache, no-store, must-revalidate" }
+          ]
+        },
+        {
+          "source": "/private-chart/**",
           "headers": [
             { "key": "Cache-Control", "value": "no-cache, no-store, must-revalidate" }
           ]

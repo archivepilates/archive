@@ -362,7 +362,7 @@
       { type: "multi", key: "changes", label: "오늘 관찰된 변화", options: sets.changes },
       { type: "multi", key: "movementObservations", label: "움직임 관찰", options: sets.movementObservations },
       { type: "multi", key: "memberResponses", label: "회원 체감/반응", options: sets.memberResponses },
-      { type: "text", key: "nextMemo", label: "다음 수업 방향 메모" },
+      { type: "text", key: "nextMemo", label: "다음 수업 방향", required: true, placeholder: "다음 수업에서 이어갈 방향을 회원에게 설명하듯 적어주세요." },
     ];
 
     const title = document.getElementById("title");
@@ -496,7 +496,10 @@
 
     function fieldHtml(field) {
       if (field.type === "text") {
-        return `<section><label for="${field.key}"><h2>${escapeHtml(field.label)}</h2></label><textarea id="${field.key}" name="${field.key}" placeholder="필요할 때만 입력"></textarea></section>`;
+        const required = field.required ? "required" : "";
+        const placeholder = field.placeholder || "필요할 때만 입력";
+        const help = field.required ? `<p class="field-help">회원 리포트의 다음 수업 방향 원문으로 사용됩니다.</p>` : "";
+        return `<section><label for="${field.key}"><h2>${escapeHtml(field.label)}</h2></label>${help}<textarea id="${field.key}" name="${field.key}" ${required} placeholder="${escapeAttr(placeholder)}"></textarea></section>`;
       }
       if (field.type === "groupedMulti") {
         return `<section><h2>${escapeHtml(field.label)}</h2><div class="purpose-groups">${field.groups.map((group) => `
@@ -529,6 +532,9 @@
       setStatus("제출 중입니다.", false);
       try {
         const answers = readAnswers(new FormData(form));
+        if (state.mode === "post" && !String(answers.nextMemo || "").trim()) {
+          throw new Error("다음 수업 방향을 입력해 주세요. 회원 리포트에 반영됩니다.");
+        }
         const res = await fetch(apiBase, {
           method: "POST",
           headers: { "Content-Type": "application/json" },
