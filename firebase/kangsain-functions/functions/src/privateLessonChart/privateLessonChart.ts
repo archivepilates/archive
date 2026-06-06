@@ -1205,15 +1205,20 @@ async function syncPrivateLessonChartRecordToNotion(
       );
     }
     const reportUrl = reportResolution.publicReportUrl;
-    const properties = compactObject({
+    const newPageProperties = compactObject({
       "회원 리포트": reportUrl ? { url: reportUrl } : undefined,
       발송: { checkbox: false },
       발송상태: notionSelect(reportUrl ? "대기" : ""),
     });
+    const existingPageProperties = compactObject({
+      "회원 리포트": reportUrl ? { url: reportUrl } : undefined,
+    });
     const content = notionChartChildren(record, chartRequest);
     const existingPageId = record.notionSync?.pageId;
     if (existingPageId) {
-      await notionRequest(`pages/${existingPageId}`, "PATCH", { properties });
+      if (Object.keys(existingPageProperties).length) {
+        await notionRequest(`pages/${existingPageId}`, "PATCH", { properties: existingPageProperties });
+      }
       await appendPageContent(existingPageId, notionUpdateChildren(record, chartRequest));
       const instructorPage = await syncInstructorMemberChartPage(
         record,
@@ -1231,7 +1236,7 @@ async function syncPrivateLessonChartRecordToNotion(
     }
     const page = await notionRequest("pages", "POST", {
       parent: { database_id: NOTION_SESSION_RECORDS_DATABASE_ID },
-      properties,
+      properties: newPageProperties,
       children: content,
     });
     const pageUrl = String(page.url || notionPageUrl(String(page.id)));
@@ -1255,6 +1260,22 @@ async function syncInstructorMemberChartPage(
   sessionPageUrl: string,
 ): Promise<{ pageId: string; pageUrl: string } | null> {
   if (!sessionPageUrl) return null;
+  const title = notionSessionTitle(record, chartRequest);
+  const knownPageId = record.notionSync?.instructorPageId;
+  if (knownPageId) {
+    await updateNotionPageTitle(knownPageId, title).catch((err) => {
+      logger.warn("update instructor chart page title failed", {
+        pageId: knownPageId,
+        title,
+        message: errorMessage(err),
+      });
+    });
+    await appendPageContent(knownPageId, notionInstructorUpdateChildren(record, chartRequest));
+    return {
+      pageId: knownPageId,
+      pageUrl: record.notionSync?.instructorPageUrl || notionPageUrl(knownPageId),
+    };
+  }
   const memberPageId = await findInstructorMemberPageId(record.staffName, record.memberName).catch((err) => {
     logger.warn("findInstructorMemberPageId failed", {
       staffName: record.staffName,
@@ -1264,7 +1285,6 @@ async function syncInstructorMemberChartPage(
     return "";
   });
   if (!memberPageId) return null;
-  const title = notionSessionTitle(record, chartRequest);
   const existingPageId = await findChildPageByExactTitle(memberPageId, title);
   if (existingPageId) {
     await appendPageContent(existingPageId, notionInstructorUpdateChildren(record, chartRequest));
@@ -1340,6 +1360,10 @@ function blockHasHref(block: any, url: string): boolean {
 
 async function appendPageContent(pageId: string, children: Record<string, unknown>[]): Promise<void> {
   await notionRequest(`blocks/${pageId}/children`, "PATCH", { children });
+}
+
+async function updateNotionPageTitle(pageId: string, title: string): Promise<void> {
+  await notionRequest(`pages/${pageId}`, "PATCH", { properties: notionTitle(title) });
 }
 
 function notionPageUrl(pageId: string): string {
@@ -1488,9 +1512,13 @@ async function latestPrivateSurveyForBooking(booking: BookingDoc): Promise<Priva
 async function nextSessionNumber(booking: BookingDoc): Promise<number> {
   if (!booking.memberId) return 1;
   const ledgerNumber = await nextSessionNumberFromPrivateLedger(booking);
-  if (ledgerNumber) return ledgerNumber;
   const usageNumber = await nextSessionNumberFromUsageEvents(booking);
-  if (usageNumber) return usageNumber;
+  const bookingNumber = await nextSessionNumberFromBookings(booking);
+  const existingChartNumber = await nextSessionNumberFromExistingChartRequests(booking);
+  return Math.max(ledgerNumber || 0, usageNumber || 0, bookingNumber || 0, existingChartNumber || 1);
+}
+
+async function nextSessionNumberFromBookings(booking: BookingDoc): Promise<number> {
   const snap = await refs.bookings().where("memberId", "==", booking.memberId).get();
   const currentStart = booking.lectureStartAt?.toMillis?.() || 0;
   const canonical = canonicalPrivateBookings(snap.docs.map((doc) => doc.data()))
@@ -1547,6 +1575,28 @@ async function nextSessionNumberFromUsageEvents(booking: BookingDoc): Promise<nu
   return nextSessionNumberFromTimeline(booking, rows);
 }
 
+async function nextSessionNumberFromExistingChartRequests(booking: BookingDoc): Promise<number | null> {
+  const snap = await refs.privateLessonChartRequests().where("memberId", "==", booking.memberId).get();
+  const rows = canonicalPrivateTimelineRows(
+    snap.docs
+      .map((doc): Record<string, any> => ({ ...(doc.data() || {}), requestId: doc.id }))
+      .filter((item) => String(item.status || "") !== "cancelled")
+      .map((item) => ({
+        id: String(item.requestId || item.bookingId || ""),
+        memberId: String(item.memberId || ""),
+        staffId: String(item.staffId || ""),
+        staffName: String(item.staffName || ""),
+        startsAt: timestampMillisFromValue(item.lessonStartAt),
+        date: String(item.lessonDate || dateFromAnyValue(item.lessonStartAt) || ""),
+        title: "",
+        ticketName: "",
+        sessionNumber: positiveNumber(item.sessionNumber),
+        sourcePriority: bookingSourcePriority(String(item.bookingId || "")),
+      })),
+  );
+  return nextSessionNumberFromTimeline(booking, rows);
+}
+
 type PrivateTimelineRow = {
   id: string;
   memberId: string;
@@ -1560,15 +1610,19 @@ type PrivateTimelineRow = {
   sourcePriority: number;
 };
 
-function nextSessionNumberFromTimeline(booking: BookingDoc, rows: PrivateTimelineRow[]): number | null {
+async function nextSessionNumberFromTimeline(booking: BookingDoc, rows: PrivateTimelineRow[]): Promise<number | null> {
   if (!rows.length) return null;
   const current = privateTimelineRowFromBooking(booking);
   const exact = rows.find((row) => privateTimelineOccurrenceKey(row) === privateTimelineOccurrenceKey(current));
   if (exact?.sessionNumber) return exact.sessionNumber;
-  const currentStart = current.startsAt;
-  if (currentStart) return rows.filter((row) => row.startsAt && row.startsAt < currentStart).length + 1;
-  if (current.date) return rows.filter((row) => row.date && row.date < current.date).length + 1;
-  return rows.length + 1;
+  const beforeRows = rows.filter((row) => comparePrivateTimelineRows(row, current) < 0);
+  if (!beforeRows.length) return 1;
+  const lastSource = beforeRows.reduce((latest, row) =>
+    comparePrivateTimelineRows(row, latest) > 0 ? row : latest,
+  );
+  const baseNumber = Math.max(...beforeRows.map((row) => row.sessionNumber || 0), beforeRows.length);
+  const supplement = await supplementalPrivateBookingsAfterTimeline(booking, current, lastSource, rows);
+  return baseNumber + supplement.length + 1;
 }
 
 function privateTimelineRowFromBooking(booking: BookingDoc): PrivateTimelineRow {
@@ -1596,15 +1650,54 @@ function canonicalPrivateTimelineRows(rows: PrivateTimelineRow[]): PrivateTimeli
       grouped.set(key, row);
     }
   }
-  return [...grouped.values()].sort((a, b) => (a.startsAt || 0) - (b.startsAt || 0) || String(a.date).localeCompare(String(b.date)));
+  return [...grouped.values()].sort(comparePrivateTimelineRows);
 }
 
 function privateTimelineOccurrenceKey(value: PrivateTimelineRow): string {
   return [
     value.memberId || "",
-    value.staffId || normalizeKoreanName(value.staffName || ""),
+    staffOccurrenceIdentity(value.staffId, value.staffName),
     value.startsAt || value.date || "",
   ].join("|");
+}
+
+function comparePrivateTimelineRows(a: PrivateTimelineRow, b: PrivateTimelineRow): number {
+  return (
+    timelineOrderValue(a) - timelineOrderValue(b) ||
+    String(a.date || "").localeCompare(String(b.date || "")) ||
+    String(a.id || "").localeCompare(String(b.id || ""))
+  );
+}
+
+function timelineOrderValue(row: PrivateTimelineRow): number {
+  if (row.startsAt) return row.startsAt;
+  if (!row.date) return 0;
+  const parsed = Date.parse(`${row.date.slice(0, 10)}T00:00:00+09:00`);
+  return Number.isFinite(parsed) ? parsed : 0;
+}
+
+async function supplementalPrivateBookingsAfterTimeline(
+  booking: BookingDoc,
+  current: PrivateTimelineRow,
+  lastSource: PrivateTimelineRow,
+  sourceRows: PrivateTimelineRow[],
+): Promise<BookingDoc[]> {
+  if (!booking.memberId) return [];
+  const boundary = timelineOrderValue(lastSource);
+  const sourceKeys = new Set(sourceRows.map(privateTimelineOccurrenceKey));
+  const currentKey = privateTimelineOccurrenceKey(current);
+  const snap = await refs.bookings().where("memberId", "==", booking.memberId).get();
+  return canonicalPrivateBookings(snap.docs.map((doc) => doc.data()))
+    .filter(isCountablePrivateHistoryBooking)
+    .filter((item) => {
+      const row = privateTimelineRowFromBooking(item);
+      const order = timelineOrderValue(row);
+      if (!order || order <= boundary) return false;
+      if (comparePrivateTimelineRows(row, current) >= 0) return false;
+      const key = privateTimelineOccurrenceKey(row);
+      if (key === currentKey || sourceKeys.has(key)) return false;
+      return true;
+    });
 }
 
 function timestampMillisFromValue(value: any): number {
@@ -1673,7 +1766,7 @@ function privateLessonOccurrenceKey(
   const start = value.lectureStartAt?.toMillis?.() || value.lectureDate || "";
   return [
     value.memberId || normalizeKoreanName(value.memberName || ""),
-    value.staffId || normalizeKoreanName(value.staffName || ""),
+    staffOccurrenceIdentity(value.staffId, value.staffName),
     start,
   ].join("|");
 }
@@ -1687,9 +1780,13 @@ function privateChartRequestOccurrenceKey(
   const start = value.lessonStartAt?.toMillis?.() || value.lessonDate || "";
   return [
     value.memberId || normalizeKoreanName(value.memberName || ""),
-    value.staffId || normalizeKoreanName(value.staffName || ""),
+    staffOccurrenceIdentity(value.staffId, value.staffName),
     start,
   ].join("|");
+}
+
+function staffOccurrenceIdentity(staffId?: string, staffName?: string): string {
+  return normalizeKoreanName(staffName || "") || String(staffId || "");
 }
 
 function preferCanonicalBooking(next: BookingDoc, current: BookingDoc): boolean {

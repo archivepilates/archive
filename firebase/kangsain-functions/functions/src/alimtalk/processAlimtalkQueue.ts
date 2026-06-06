@@ -1,7 +1,7 @@
 import { createHmac, randomBytes } from "node:crypto";
 import { logger } from "firebase-functions";
 import { db } from "../config/firebase";
-import { solapiApiKey, solapiApiSecret, solapiPfid } from "../config/secrets";
+import { notionToken, solapiApiKey, solapiApiSecret, solapiPfid } from "../config/secrets";
 import { refs } from "../firestore/refs";
 import type { AlimtalkCandidateDoc } from "../types/models";
 import { errorMessage } from "../utils/errors";
@@ -15,6 +15,7 @@ import { normalizeInstructorLessonManagementNumber } from "./instructorLessonMan
 import { isAlimtalkTestRecipient } from "./testRecipients";
 
 const SOLAPI_SEND_URL = "https://api.solapi.com/messages/v4/send-many/detail";
+const NOTION_API_VERSION = "2022-06-28";
 const PROCESSING_STALE_MS = 10 * 60 * 1000;
 
 export async function processAlimtalkQueue(): Promise<{ processed: number; sent: number; failed: number }> {
@@ -96,6 +97,7 @@ export async function processAlimtalkQueue(): Promise<{ processed: number; sent:
         },
         { merge: true },
       );
+      await markPrivateLessonReportSent(claimed);
       sent += 1;
     } catch (err) {
       const message = errorMessage(err);
@@ -145,6 +147,62 @@ export async function processAlimtalkQueue(): Promise<{ processed: number; sent:
 
   logger.info("processAlimtalkQueue completed", { processed, sent, failed });
   return { processed, sent, failed };
+}
+
+async function markPrivateLessonReportSent(candidate: AlimtalkCandidateDoc): Promise<void> {
+  if (candidate.type !== "private_lesson_report") return;
+  const recordId = String(candidate.payload?.recordId || candidate.sourceActionKey || "").trim();
+  const notionPageId = String(candidate.payload?.notionPageId || "").trim();
+  const sentAt = nowTimestamp();
+  if (recordId) {
+    await refs.privateLessonChartRecord(recordId).set(
+      {
+        gptStatus: "published",
+        publicReportApproval: {
+          status: "sent",
+          candidateId: candidate.candidateId,
+          lastError: null,
+        },
+        updatedAt: sentAt,
+      },
+      { merge: true },
+    );
+  }
+  if (notionPageId) {
+    await updatePrivateLessonReportNotionStatus(notionPageId, "완료").catch((err) => {
+      logger.warn("private lesson report notion sent status update failed", {
+        candidateId: candidate.candidateId,
+        recordId,
+        notionPageId,
+        message: errorMessage(err),
+      });
+    });
+  }
+}
+
+async function updatePrivateLessonReportNotionStatus(pageId: string, status: string): Promise<void> {
+  await notionRequest(`pages/${pageId}`, "PATCH", {
+    properties: {
+      발송: { checkbox: true },
+      발송상태: { select: { name: status } },
+    },
+  });
+}
+
+async function notionRequest(path: string, method: "GET" | "POST" | "PATCH" | "DELETE", body?: Record<string, unknown>): Promise<any> {
+  const response = await fetch(`https://api.notion.com/v1/${path}`, {
+    method,
+    headers: {
+      Authorization: `Bearer ${notionToken.value()}`,
+      "Content-Type": "application/json",
+      "Notion-Version": NOTION_API_VERSION,
+    },
+    body: body ? JSON.stringify(body) : undefined,
+  });
+  const text = await response.text();
+  const parsed = text ? JSON.parse(text) : {};
+  if (!response.ok) throw new Error(`Notion API ${path} failed ${response.status}: ${parsed.message || text}`);
+  return parsed;
 }
 
 async function claimCandidate(candidate: AlimtalkCandidateDoc): Promise<AlimtalkCandidateDoc | null> {

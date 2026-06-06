@@ -6,11 +6,22 @@ import { processAlimtalkQueue } from "../alimtalk/processAlimtalkQueue";
 import { queueDailyAlimtalkCandidates, queueReservationOpenAlimtalkCandidates } from "../alimtalk/queueDailyAlimtalk";
 import { sendDailyAlimtalkReport } from "../alimtalk/sendDailyAlimtalkReport";
 import { syncAlimtalkTemplateStatuses } from "../alimtalk/templateStatus";
+import { notionToken } from "../config/secrets";
 import { publicLongRequestOptions, scheduleOptions } from "../runtime/functionOptions";
+
+const alimtalkQueueScheduleOptions = {
+  ...scheduleOptions,
+  secrets: [...scheduleOptions.secrets, notionToken],
+};
+
+const alimtalkQueueRequestOptions = {
+  ...publicLongRequestOptions,
+  secrets: [...publicLongRequestOptions.secrets, notionToken],
+};
 
 export const scheduledProcessAlimtalkQueue = onSchedule(
   {
-    ...scheduleOptions,
+    ...alimtalkQueueScheduleOptions,
     schedule: "every 5 minutes",
   },
   async () => {
@@ -20,7 +31,7 @@ export const scheduledProcessAlimtalkQueue = onSchedule(
 
 export const scheduledQueueAndSendAlimtalkDaily = onSchedule(
   {
-    ...scheduleOptions,
+    ...alimtalkQueueScheduleOptions,
     schedule: "30 11 * * *",
   },
   async () => {
@@ -45,7 +56,7 @@ export const scheduledQueueAndSendAlimtalkDaily = onSchedule(
 
 export const scheduledQueueAndSendReservationOpenAlimtalk = onSchedule(
   {
-    ...scheduleOptions,
+    ...alimtalkQueueScheduleOptions,
     schedule: "30 12 * * 1",
   },
   async () => {
@@ -78,4 +89,4 @@ export const scheduledSyncAlimtalkTemplateStatuses = onSchedule(
   },
 );
 
-export const approveAlimtalkBatch = onRequest(publicLongRequestOptions, approveAlimtalkBatchHandler);
+export const approveAlimtalkBatch = onRequest(alimtalkQueueRequestOptions, approveAlimtalkBatchHandler);
