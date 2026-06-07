@@ -146,6 +146,8 @@ async function enqueueStudioMateProfileWriteJob(contract: MemberSignupContractDo
   if (contract.status !== "submitted") return;
   const now = nowTimestamp();
   const jobId = `member_signup_profile_${contract.contractId}`;
+  const memoId = `member_signup_memo_${contract.contractId}`;
+  const memoContent = memberSignupMemoContent(contract);
   await db.collection("studiomateProfileWriteJobs").doc(jobId).set(
     {
       jobId,
@@ -169,6 +171,73 @@ async function enqueueStudioMateProfileWriteJob(contract: MemberSignupContractDo
     },
     { merge: true },
   );
+  await refs.memberMemo(memoId).set(
+    {
+      memoId,
+      studioId: contract.studioId,
+      memberId: contract.memberId,
+      memberName: contract.memberName,
+      lectureId: "",
+      bookingId: "",
+      lectureDate: "",
+      staffId: "",
+      staffName: "",
+      memoType: "member_note",
+      visibility: "staff_and_manager",
+      content: memoContent,
+      syncStatus: "pending",
+      createdByUid: "system:member_signup",
+      createdAt: now,
+      updatedAt: now,
+    },
+    { merge: true },
+  );
+  await db.collection("studiomateMemoWriteJobs").doc(memoId).set(
+    {
+      jobId: memoId,
+      studioId: contract.studioId,
+      source: "member_signup",
+      status: "pending",
+      writeMode: "playwright",
+      memberId: contract.memberId,
+      memberName: contract.memberName,
+      memberPhone: contract.memberPhone,
+      content: memoContent,
+      attempts: 0,
+      maxAttempts: 3,
+      lastError: null,
+      createdAt: now,
+      updatedAt: now,
+    },
+    { merge: true },
+  );
+}
+
+function memberSignupMemoContent(contract: MemberSignupContractDoc): string {
+  const member = contract.member || {};
+  const agreement: NonNullable<MemberSignupContractDoc["agreements"]> = contract.agreements || {
+    refundAndCancellation: false,
+    facilityUse: false,
+    privacyUse: false,
+    finalConfirmation: false,
+  };
+  return [
+    "[ARCHIVE IN 회원가입서 제출]",
+    `제출: ${contract.signature?.signedAtText || "-"}`,
+    `회원: ${contract.memberName || member.name || "-"} / ${formatPhone(contract.memberPhone || member.phone || "")}`,
+    `생년월일: ${member.birthDate || "-"}`,
+    `주소: ${member.address || "-"}`,
+    `방문경로: ${member.visitRoute || "-"}`,
+    `운동목적: ${member.exercisePurpose || "-"}`,
+    `추천인: ${member.recommender || "-"}`,
+    `마케팅 수신동의: ${agreement.marketingAdConsent ? "동의" : "미동의"}`,
+  ].join("\n");
+}
+
+function formatPhone(value: string): string {
+  const digits = stringValue(value).replace(/\D/g, "");
+  if (digits.length === 11) return `${digits.slice(0, 3)}-${digits.slice(3, 7)}-${digits.slice(7)}`;
+  return digits || "-";
 }
 
 async function tryArchiveSubmittedContract(contract: MemberSignupContractDoc): Promise<{
