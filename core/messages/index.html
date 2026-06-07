@@ -4,7 +4,7 @@
     <meta charset="utf-8" />
     <meta name="viewport" content="width=device-width, initial-scale=1" />
     <meta name="theme-color" content="#f8f5ef" />
-    <title>Messages · ARCHIVE CORE</title>
+    <title>알림톡 · ARCHIVE CORE</title>
     <link rel="stylesheet" href="/assets/styles.css" />
     <script src="/firebase-config.js"></script>
     <script type="module" src="/assets/app.js"></script>
@@ -14,13 +14,13 @@
       <aside class="sidebar" aria-label="ARCHIVE CORE navigation">
         <div class="brand"><div class="brand-mark" aria-hidden="true">CORE</div><strong>ARCHIVE CORE</strong><span>ARCHIVE PILATES Operations Platform</span></div>
         <nav class="nav">
-          <a href="/" data-section="home">Home <small>요약</small></a><a href="/members/" data-section="members">Members <small>회원</small></a><a href="/lessons/" data-section="lessons">Lessons <small>수업</small></a><a href="/private/" data-section="private">Private <small>차트</small></a><a href="/messages/" data-section="messages">Messages <small>알림톡</small></a><a href="/automation/" data-section="automation">Automation <small>관제</small></a><a href="/business/" data-section="business">Business <small>지표</small></a><a href="/imports/" data-section="imports">Imports <small>원본</small></a><a href="/rules/" data-section="rules">Rules <small>규칙</small></a><a href="/settings/" data-section="settings">Settings <small>설정</small></a>
+          <a href="/" data-section="home">홈 <small>오늘</small></a><a href="/members/" data-section="members">회원 <small>검색</small></a><a href="/lessons/" data-section="lessons">수업 <small>운영</small></a><a href="/private/" data-section="private">프라이빗 <small>진행</small></a><a href="/messages/" data-section="messages">알림톡 <small>발송</small></a><a href="/automation/" data-section="automation">자동화 <small>관제</small></a><a href="/business/" data-section="business">경영 <small>지표</small></a><a href="/imports/" data-section="imports">원본 <small>품질</small></a><a href="/rules/" data-section="rules">규칙 <small>운영</small></a><a href="/settings/" data-section="settings">설정 <small>시스템</small></a>
         </nav>
       </aside>
       <main class="main">
         <header class="topbar">
           <div class="title-block">
-            <p class="eyebrow">MESSAGES</p>
+            <p class="eyebrow">알림톡</p>
             <h1>알림톡 운영</h1>
             <p class="subtitle">후보, 승인, 발송, 중복방지 기록을 CORE 구조로 점진 전환합니다.</p>
           </div>
@@ -41,31 +41,32 @@
             <div class="list" id="messagesDecisionList"><div class="empty-state">Firestore 연결 후 판단 항목을 표시합니다.</div></div>
           </article>
           <aside class="panel detail-card">
-            <span class="pill danger" id="messagesRiskDecision">확인 중</span>
+            <span data-source-trust="guardrail">실행 보호</span>
             <h2>발송 전 보호 규칙</h2>
-            <p>같은 canonical key와 template/action type이 이미 있으면 후보 생성 또는 발송을 중단합니다.</p>
+            <p><strong id="messagesRiskDecision">확인 중</strong></p>
+            <p>같은 검증 키와 템플릿/액션 종류가 이미 있으면 후보 생성 또는 발송을 중단합니다.</p>
             <p>excel fallback 예약은 실제 StudioMate/API 예약이 있으면 외부 발송 원천에서 제외합니다.</p>
           </aside>
         </section>
         <section class="panel">
-          <div class="panel-header"><div><h2>템플릿별 현황</h2><p>최근 후보와 발송 로그를 템플릿 단위로 묶어 봅니다.</p></div><span class="pill">templates</span></div>
+          <div class="panel-header"><div><h2>템플릿별 현황</h2><p>최근 후보와 발송 로그를 템플릿 단위로 묶어 봅니다.</p></div><span data-source-trust="canonical">검증 원천</span></div>
           <div class="list" id="messagesTemplateList"><div class="empty-state">Firestore 연결 후 템플릿별 현황을 표시합니다.</div></div>
         </section>
         <section class="grid overview-grid">
           <article class="panel">
-            <div class="panel-header"><div><h2>최근 알림톡 후보</h2><p>alimtalkCandidates의 최근 상태입니다.</p></div><span class="pill">candidates</span></div>
+            <div class="panel-header"><div><h2>최근 알림톡 후보</h2><p>alimtalkCandidates의 최근 상태입니다.</p></div><span data-source-trust="canonical">검증 원천</span></div>
             <div class="list" id="messagesCandidateList"><div class="empty-state">Firestore 연결 후 후보 기록을 표시합니다.</div></div>
           </article>
           <article class="panel">
-            <div class="panel-header"><div><h2>최근 발송 로그</h2><p>alimtalkSends의 최근 처리 결과입니다.</p></div><span class="pill">sends</span></div>
+            <div class="panel-header"><div><h2>최근 발송 로그</h2><p>alimtalkSends의 최근 처리 결과입니다.</p></div><span data-source-trust="source">원본 확인</span></div>
             <div class="list" id="messagesSendList"><div class="empty-state">Firestore 연결 후 발송 기록을 표시합니다.</div></div>
           </article>
         </section>
         <section class="grid data-grid">
-          <article class="panel detail-card"><span class="pill good">기존 유지</span><h2>communicationCandidates</h2><p>후보 선정 원천은 검증 전까지 기존 알림톡 로직을 유지.</p></article>
-          <article class="panel detail-card"><span class="pill">승인</span><h2>communicationApprovals</h2><p>운영자 승인 여부와 승인 시각을 발송 로그와 분리.</p></article>
-          <article class="panel detail-card"><span class="pill">발송</span><h2>communicationSends</h2><p>자동화 발송과 운영자 승인 발송을 구분해 기록.</p></article>
-          <article class="panel detail-card"><span class="pill danger">중복 차단</span><h2>communicationDedupeKeys</h2><p>canonical key와 template/action type 기준으로 후보 생성 전 차단.</p></article>
+          <article class="panel detail-card"><span data-source-trust="canonical">검증 원천</span><h2>communicationCandidates</h2><p>후보 선정 원천은 검증 전까지 기존 알림톡 로직을 유지.</p></article>
+          <article class="panel detail-card"><span data-source-trust="source">원본 확인</span><h2>communicationApprovals</h2><p>운영자 승인 여부와 승인 시각을 발송 로그와 분리.</p></article>
+          <article class="panel detail-card"><span data-source-trust="source">원본 확인</span><h2>communicationSends</h2><p>자동화 발송과 운영자 승인 발송을 구분해 기록.</p></article>
+          <article class="panel detail-card"><span data-source-trust="blocked">실행 보류</span><h2>communicationDedupeKeys</h2><p>검증 키와 템플릿/액션 종류 기준으로 후보 생성 전 차단.</p></article>
         </section>
       </main>
     </div>

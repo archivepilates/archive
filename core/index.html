@@ -18,25 +18,25 @@
           <span>ARCHIVE PILATES Operations Platform</span>
         </div>
         <nav class="nav">
-          <a href="/" data-section="home">Home <small>요약</small></a>
-          <a href="/members/" data-section="members">Members <small>회원</small></a>
-          <a href="/lessons/" data-section="lessons">Lessons <small>수업</small></a>
-          <a href="/private/" data-section="private">Private <small>차트</small></a>
-          <a href="/messages/" data-section="messages">Messages <small>알림톡</small></a>
-          <a href="/automation/" data-section="automation">Automation <small>관제</small></a>
-          <a href="/business/" data-section="business">Business <small>지표</small></a>
-          <a href="/imports/" data-section="imports">Imports <small>원본</small></a>
-          <a href="/rules/" data-section="rules">Rules <small>규칙</small></a>
-          <a href="/settings/" data-section="settings">Settings <small>설정</small></a>
+          <a href="/" data-section="home">홈 <small>오늘</small></a>
+          <a href="/members/" data-section="members">회원 <small>검색</small></a>
+          <a href="/lessons/" data-section="lessons">수업 <small>운영</small></a>
+          <a href="/private/" data-section="private">프라이빗 <small>진행</small></a>
+          <a href="/messages/" data-section="messages">알림톡 <small>발송</small></a>
+          <a href="/automation/" data-section="automation">자동화 <small>관제</small></a>
+          <a href="/business/" data-section="business">경영 <small>지표</small></a>
+          <a href="/imports/" data-section="imports">원본 <small>품질</small></a>
+          <a href="/rules/" data-section="rules">규칙 <small>운영</small></a>
+          <a href="/settings/" data-section="settings">설정 <small>시스템</small></a>
         </nav>
       </aside>
 
       <main class="main">
         <header class="topbar">
           <div class="title-block">
-            <p class="eyebrow">OPERATOR CONSOLE · HOME</p>
-            <h1>ARCHIVE CORE 운영 요약</h1>
-            <p class="subtitle">오늘 봐야 할 자동화, 원본, 데이터 품질, 메시지 전환 상태를 한 화면에 모읍니다.</p>
+            <p class="eyebrow">운영자 콘솔 · 홈</p>
+            <h1>오늘 할 일</h1>
+            <p class="subtitle">자동화 실패, 원본 품질, 알림톡 후보, 프라이빗 진행을 먼저 보고 필요한 탭으로 바로 이동합니다.</p>
           </div>
           <div class="top-actions" aria-label="상태 확인">
             <div class="connection-card" aria-live="polite">
@@ -49,12 +49,12 @@
 
         <section class="grid kpis" aria-label="운영 요약">
           <a class="panel metric metric-link" href="/automation/">
-            <div class="metric-label">자동화 관제</div>
+            <div class="metric-label">자동화 상태</div>
             <div class="metric-value" id="laneStatus">준비</div>
             <div class="metric-note" id="laneUpdated">workLanes 연결 전</div>
           </a>
           <a class="panel metric metric-link" href="/imports/">
-            <div class="metric-label">원본 Import</div>
+            <div class="metric-label">원본 처리</div>
             <div class="metric-value" id="importCount">0</div>
             <div class="metric-note">최근 sourceImports</div>
           </a>
@@ -64,20 +64,24 @@
             <div class="metric-note">open/review 상태 우선</div>
           </a>
           <a class="panel metric metric-link" href="/messages/">
-            <div class="metric-label">알림톡 전환</div>
+            <div class="metric-label">알림톡 보호</div>
             <div class="metric-value">보호</div>
             <div class="metric-note">기존 원천 유지</div>
           </a>
+        </section>
+
+        <section class="task-board" id="homeTodayTaskBoard" aria-label="오늘 할 일 목록">
+          <div class="empty-state">Firestore 연결 후 오늘 할 일을 표시합니다.</div>
         </section>
 
         <section class="grid overview-grid">
           <article class="panel">
             <div class="panel-header">
               <div>
-                <h2>오늘의 운영 판단</h2>
-                <p>먼저 볼 위험, 확인할 원본, 지켜야 할 경계를 한곳에 둡니다.</p>
+                <h2>확인 순서</h2>
+                <p>위험 신호와 원천 경계를 같은 규칙으로 표시합니다.</p>
               </div>
-              <span class="pill good">decision</span>
+              <span data-source-trust="guardrail">실행 보호</span>
             </div>
             <div class="list" id="homeDecisionList">
               <div class="empty-state">Firestore 연결 후 오늘의 판단 항목을 표시합니다.</div>
@@ -90,35 +94,35 @@
                 <h2>운영 흐름</h2>
                 <p>원본에서 의사결정까지의 기본 순서입니다.</p>
               </div>
-              <span class="pill">flow</span>
+              <span data-source-trust="source">원본 확인</span>
             </div>
             <div class="flow-list">
               <div><strong>1. 원본 수집</strong><span>StudioMate Excel / 정산 원본 / Firebase 로그</span></div>
               <div><strong>2. 품질 확인</strong><span>중복, 누락, name-only match, excel fallback 분리</span></div>
               <div><strong>3. 운영 판단</strong><span>회원, 알림톡, 자동화, 경영 탭에서 상태 확인</span></div>
-              <div><strong>4. 외부 실행</strong><span>승인된 canonical source에서만 발송/쓰기 진행</span></div>
+              <div><strong>4. 외부 실행</strong><span>승인된 검증 원천에서만 발송/쓰기 진행</span></div>
             </div>
           </aside>
         </section>
 
         <section class="grid summary-grid" aria-label="메뉴별 현황">
           <a class="panel menu-card" href="/members/">
-            <span class="pill">Members</span>
+            <span data-source-trust="mirror">보기 전용</span>
             <h2 id="homeMemberTotal">회원 데이터</h2>
-            <p id="homeMemberNote">전체 회원 read-model 연결 상태를 확인합니다.</p>
+            <p id="homeMemberNote">전체 회원 요약 모델 연결 상태를 확인합니다.</p>
           </a>
           <a class="panel menu-card" href="/imports/">
-            <span class="pill warn">Imports</span>
+            <span data-source-trust="source">원본 확인</span>
             <h2 id="homeImportTotal">원본 데이터</h2>
             <p id="homeImportNote">회원목록, 예약내역, 삭제 수업 import 상태를 봅니다.</p>
           </a>
           <a class="panel menu-card" href="/messages/">
-            <span class="pill">Messages</span>
+            <span data-source-trust="canonical">검증 원천</span>
             <h2 id="homeMessageTotal">알림톡</h2>
             <p id="homeMessageNote">최근 후보와 발송 로그 상태를 확인합니다.</p>
           </a>
           <a class="panel menu-card" href="/automation/">
-            <span class="pill good">Automation</span>
+            <span data-source-trust="source">원본 확인</span>
             <h2 id="homeAutomationTotal">자동화</h2>
             <p id="homeAutomationNote">자동화 실패/지연 여부를 먼저 확인합니다.</p>
           </a>

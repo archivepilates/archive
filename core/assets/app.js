@@ -12,6 +12,7 @@ const state = {
   businessMembers: [],
   members: [],
   memberDetail: null,
+  lessons: [],
   alimtalkCandidates: [],
   alimtalkSends: [],
   privateRequests: [],
@@ -107,6 +108,12 @@ function compactDateTime(value) {
   return `${month}.${day} ${hours}:${minutes}`;
 }
 
+function localDateKey(value = new Date()) {
+  const raw = typeof value?.toDate === "function" ? value.toDate() : new Date(value);
+  if (Number.isNaN(raw.getTime())) return "";
+  return `${raw.getFullYear()}-${String(raw.getMonth() + 1).padStart(2, "0")}-${String(raw.getDate()).padStart(2, "0")}`;
+}
+
 function formatRate(value) {
   if (!Number.isFinite(value)) return "-";
   return `${value.toFixed(1)}%`;
@@ -176,6 +183,19 @@ function setConnection(label, detail) {
   setText("connectionDetail", detail);
 }
 
+const NAV_ITEMS = {
+  home: { label: "홈", caption: "오늘 할 일" },
+  members: { label: "회원", caption: "검색/상세" },
+  lessons: { label: "수업", caption: "운영/예외" },
+  private: { label: "프라이빗", caption: "4단계 진행" },
+  messages: { label: "알림톡", caption: "후보/발송" },
+  automation: { label: "자동화", caption: "관제" },
+  business: { label: "경영", caption: "지표" },
+  imports: { label: "원본", caption: "품질" },
+  rules: { label: "규칙", caption: "운영 기준" },
+  settings: { label: "설정", caption: "시스템" },
+};
+
 const NAV_ICONS = {
   home: "M3 11.5 12 4l9 7.5M5 10v10h14V10M9 20v-6h6v6",
   members: "M16 19v-1.5A3.5 3.5 0 0 0 12.5 14h-5A3.5 3.5 0 0 0 4 17.5V19M11 8a3 3 0 1 1-6 0 3 3 0 0 1 6 0M20 19v-1a3 3 0 0 0-3-3h-1.2M15 5.2a2.8 2.8 0 0 1 0 5.6",
@@ -202,13 +222,14 @@ function enhanceNav() {
   document.querySelectorAll(".nav a").forEach((link) => {
     if (link.dataset.enhanced === "true") return;
     const section = link.dataset.section || "home";
-    const small = link.querySelector("small")?.textContent?.trim() || "";
-    const label = [...link.childNodes]
+    const item = NAV_ITEMS[section];
+    const small = item?.caption || link.querySelector("small")?.textContent?.trim() || "";
+    const fallbackLabel = [...link.childNodes]
       .filter((node) => node.nodeType === Node.TEXT_NODE)
       .map((node) => node.textContent)
       .join("")
       .trim();
-    const title = label || section;
+    const title = item?.label || fallbackLabel || section;
     link.setAttribute("aria-label", `${title}${small ? ` · ${small}` : ""}`);
     link.removeAttribute("title");
     link.innerHTML = `
@@ -220,6 +241,57 @@ function enhanceNav() {
     `;
     link.dataset.enhanced = "true";
   });
+}
+
+function sourceTrustMeta(value) {
+  const key = String(value || "review").toLowerCase();
+  const map = {
+    canonical: { label: "검증 원천", tone: "good" },
+    source: { label: "원본 확인", tone: "source" },
+    mirror: { label: "보기 전용", tone: "mirror" },
+    readmodel: { label: "보기 전용", tone: "mirror" },
+    "read-model": { label: "보기 전용", tone: "mirror" },
+    guardrail: { label: "실행 보호", tone: "warn" },
+    fallback: { label: "보조 원본", tone: "warn" },
+    review: { label: "확인 필요", tone: "warn" },
+    error: { label: "오류 확인", tone: "danger" },
+    blocked: { label: "실행 보류", tone: "danger" },
+    legacy: { label: "이전 구조", tone: "mirror" },
+  };
+  return map[key] || { label: String(value || "확인 필요"), tone: "warn" };
+}
+
+function sourceTrustBadge(value, label) {
+  const meta = sourceTrustMeta(value);
+  return `<span class="source-trust ${escapeHtml(meta.tone)}"><i aria-hidden="true"></i>${escapeHtml(label || meta.label)}</span>`;
+}
+
+function enhanceSourceTrustBadges() {
+  document.querySelectorAll("[data-source-trust]").forEach((element) => {
+    if (element.dataset.enhanced === "true") return;
+    const meta = sourceTrustMeta(element.dataset.sourceTrust);
+    element.classList.add("source-trust", meta.tone);
+    if (!element.textContent.trim()) element.textContent = meta.label;
+    if (!element.querySelector("i")) element.insertAdjacentHTML("afterbegin", `<i aria-hidden="true"></i>`);
+    element.dataset.enhanced = "true";
+  });
+}
+
+function renderTaskRow(row) {
+  const tag = row.href ? "a" : "div";
+  const attrs = row.href ? ` class="status-row status-link task-row" href="${escapeHtml(row.href)}"` : ` class="status-row task-row"`;
+  return `
+    <${tag}${attrs}>
+      <div>
+        <strong>${escapeHtml(row.title)}</strong>
+        <p>${escapeHtml(row.detail)}</p>
+      </div>
+      <div class="row-badges">
+        ${sourceTrustBadge(row.trust || "review")}
+        ${pill(row.status || "active")}
+      </div>
+    </${tag}>
+  `;
 }
 
 function activateNav() {
@@ -415,6 +487,23 @@ async function loadMemberDetail(runtime, memberId) {
   };
 }
 
+async function loadLessons(runtime) {
+  const candidates = [
+    { collection: "lessonOccurrences", order: "startsAt" },
+    { collection: "lectures", order: "updatedAt" },
+    { collection: "bookings", order: "startsAt" },
+  ];
+  for (const candidate of candidates) {
+    try {
+      const items = await getCollectionBy(runtime.db, runtime, candidate.collection, candidate.order, 160);
+      if (items.length) return items.map((item) => ({ ...item, sourceCollection: candidate.collection }));
+    } catch (error) {
+      if (String(error?.code || error?.message || "").includes("permission")) throw error;
+    }
+  }
+  return [];
+}
+
 function renderLane(lane) {
   setText("laneStatus", statusLabel(lane?.status || "active"));
   setText(
@@ -468,7 +557,10 @@ function renderAutomation(items) {
             <strong>${escapeHtml(name)}</strong>
             <p>${escapeHtml(detail)} · ${escapeHtml(updated)}${escapeHtml(nextRun)}${escapeHtml(error)}</p>
           </div>
-          ${pill(item.status || item.health)}
+          <div class="row-badges">
+            ${sourceTrustBadge(["failed", "error", "critical", "blocked"].includes(String(item.status || item.health || "").toLowerCase()) ? "error" : "source")}
+            ${pill(item.status || item.health)}
+          </div>
         </div>
       `;
     })
@@ -500,11 +592,11 @@ function renderAutomation(items) {
         const lastResult = flow.source?.lastResult || flow.source?.summary || flow.source?.message || flow.detail;
         return `
           <div class="status-row">
-            <div>
-              <strong>${escapeHtml(flow.title)}</strong>
-              <p>${escapeHtml(lastResult)} · ${escapeHtml(updated)}</p>
-            </div>
-            ${pill(status)}
+          <div>
+            <strong>${escapeHtml(flow.title)}</strong>
+            <p>${escapeHtml(lastResult)} · ${escapeHtml(updated)}</p>
+          </div>
+            <div class="row-badges">${sourceTrustBadge(flow.source ? "source" : "review")}${pill(status)}</div>
           </div>
         `;
       })
@@ -539,7 +631,7 @@ function renderImports(items) {
       return `
         <tr>
           <td><strong>${escapeHtml(sourceKindLabel(source))}</strong><br><span>${escapeHtml(item.sourceFileName || item.fileName || item.id)}</span></td>
-          <td>${pill(item.status || item.importStatus)}</td>
+          <td><div class="row-badges">${sourceTrustBadge("source")}${pill(item.status || item.importStatus)}</div></td>
           <td>${escapeHtml(rows)}</td>
           <td>${escapeHtml(updated)}</td>
         </tr>
@@ -618,7 +710,10 @@ function renderQualityIssueRow(item) {
         <strong>${escapeHtml(title)}</strong>
         <p>${escapeHtml([detail, action, source].filter(Boolean).join(" · "))}</p>
       </div>
-      ${pill(item.severity || item.status)}
+      <div class="row-badges">
+        ${sourceTrustBadge(isReferenceQualityIssue(item) ? "mirror" : "review")}
+        ${pill(item.severity || item.status)}
+      </div>
     </${tagName}>
   `;
 }
@@ -630,7 +725,7 @@ function qualityActionText(item) {
       ? "외부 실행 원천에서 제외됨, 필요 시 StudioMate 원본 전화번호 보완"
       : "전화번호 확인 전 외부 실행 보류";
   }
-  if (type.includes("duplicate") || type.includes("중복")) return "canonical key 기준 우선순위 확인";
+  if (type.includes("duplicate") || type.includes("중복")) return "검증 키 기준 우선순위 확인";
   if (type.includes("name") || type.includes("동명이인")) return "이름 단독 매칭 금지, 전화번호/StudioMate ID 확인";
   if (type.includes("excel")) return "실제 StudioMate memberId 해소 후 사용";
   return "운영자가 원천/매칭 상태 확인";
@@ -726,7 +821,7 @@ function renderMembers(items) {
       const detailHref = memberDetailHref(item.memberId || item.id);
       return `
         <tr>
-          <td><a class="member-link" href="${detailHref}"><strong>${escapeHtml(item.name || item.memberId || item.id)}</strong></a><br><span>${escapeHtml(item.memberId || item.id)}${escapeHtml(phone)}</span></td>
+          <td><a class="member-link" href="${detailHref}"><strong>${escapeHtml(item.name || item.memberId || item.id)}</strong></a><br><span>${escapeHtml(item.memberId || item.id)}${escapeHtml(phone)}</span>${memberHasQualityIssue(item) ? `<br>${sourceTrustBadge("review", "품질 확인")}` : `<br>${sourceTrustBadge("mirror")}`}</td>
           <td>${escapeHtml(ticketText)}<br><span>${escapeHtml(toNumber(item.activeTicketCount) ? `${item.activeTicketCount}개` : "0개")}</span></td>
           <td>${escapeHtml(formatDate(item.recentVisitAt))}</td>
           <td>${escapeHtml(formatManwon(toNumber(item.totalRevenue)))}</td>
@@ -734,6 +829,101 @@ function renderMembers(items) {
       `;
     })
     .join("");
+}
+
+function lessonDateValue(item) {
+  return item.startsAt || item.startAt || item.startTimeAt || item.lessonAt || item.lessonDate || item.date || item.createdAt;
+}
+
+function lessonTypeLabel(item) {
+  const text = [item.classType, item.lessonType, item.ticketType, item.title, item.lessonTitle, item.name]
+    .filter(Boolean)
+    .join(" ")
+    .toLowerCase();
+  if (text.includes("private") || text.includes("프라이빗") || text.includes("개인") || text.includes("1:1")) return "프라이빗";
+  if (text.includes("semi") || text.includes("세미")) return "세미";
+  if (text.includes("group") || text.includes("그룹")) return "그룹";
+  return "수업";
+}
+
+function lessonStatusLabel(item) {
+  const status = String(item.status || item.attendanceStatus || item.lessonStatus || item.operationStatus || "").toLowerCase();
+  const reason = String(item.cancelReason || item.deletedReason || item.reason || "").toLowerCase();
+  if (["deleted", "canceled", "cancelled", "closed"].includes(status) || reason.includes("폐강")) return "폐강/취소";
+  if (["changed", "rescheduled"].includes(status) || reason.includes("조정")) return "조정";
+  if (["completed", "done"].includes(status)) return "완료";
+  if (["running", "active", "open", "scheduled"].includes(status)) return "예정";
+  return statusLabel(status || "active");
+}
+
+function lessonStatusTone(item) {
+  const label = lessonStatusLabel(item);
+  if (label.includes("폐강") || label.includes("취소")) return "failed";
+  if (label.includes("조정")) return "warning";
+  if (label.includes("완료")) return "success";
+  return "active";
+}
+
+function renderLessons(items) {
+  if (!qs("lessonsTodayList")) return;
+  const rows = items.slice(0, 80);
+  const todayKey = localDateKey();
+  const todayRows = rows.filter((item) => {
+    const raw = lessonDateValue(item);
+    if (!raw) return false;
+    const date = typeof raw?.toDate === "function" ? raw.toDate() : new Date(raw);
+    if (Number.isNaN(date.getTime())) return String(raw).includes(todayKey);
+    return localDateKey(date) === todayKey;
+  });
+  const exceptionRows = rows.filter((item) => ["failed", "warning"].includes(lessonStatusTone(item)));
+  const privateRows = rows.filter((item) => lessonTypeLabel(item) === "프라이빗" || lessonTypeLabel(item) === "세미");
+  const groupRows = rows.filter((item) => lessonTypeLabel(item) === "그룹");
+  setText("lessonsTodayCount", formatCount(todayRows.length));
+  setText("lessonsExceptionCount", formatCount(exceptionRows.length));
+  setText("lessonsGroupCount", formatCount(groupRows.length));
+  setText("lessonsPrivateCount", formatCount(privateRows.length));
+
+  const renderLessonRow = (item, trust = "source") => {
+    const title = item.lessonTitle || item.title || item.name || item.lectureName || item.id;
+    const teacher = item.staffName || item.instructorName || item.teacherName || item.coachName || "강사 확인";
+    const starts = compactDateTime(lessonDateValue(item));
+    const count = item.reservationCount ?? item.bookingCount ?? item.memberCount ?? item.currentCount ?? "";
+    const capacity = item.maxTrainee ?? item.capacity ?? item.maxCount ?? "";
+    const countText = count || capacity ? ` · ${count || "-"}${capacity ? `/${capacity}` : ""}명` : "";
+    return `
+      <div class="status-row">
+        <div>
+          <strong>${escapeHtml(title)}</strong>
+          <p>${escapeHtml([starts, teacher, lessonTypeLabel(item)].filter(Boolean).join(" · "))}${escapeHtml(countText)}</p>
+        </div>
+        <div class="row-badges">
+          ${sourceTrustBadge(trust)}
+          ${pill(lessonStatusTone(item))}
+        </div>
+      </div>
+    `;
+  };
+
+  const todayList = qs("lessonsTodayList");
+  todayList.innerHTML = todayRows.length
+    ? todayRows.slice(0, 12).map((item) => renderLessonRow(item, "source")).join("")
+    : `<div class="empty-state">오늘 날짜로 연결된 수업 원본이 아직 없습니다. 최근 원본/예약 import 상태를 먼저 확인하세요.</div>`;
+
+  const exceptionList = qs("lessonsExceptionList");
+  if (exceptionList) {
+    exceptionList.innerHTML = exceptionRows.length
+      ? exceptionRows.slice(0, 10).map((item) => renderLessonRow(item, "review")).join("")
+      : `<div class="empty-state">최근 수업 원본에서 폐강/조정/오류로 보이는 항목은 없습니다.</div>`;
+  }
+
+  const sourceList = qs("lessonsSourceList");
+  if (sourceList) {
+    sourceList.innerHTML = [
+      { title: "수업 원본", detail: rows.length ? `${rows.length}건 읽음 · 표시/검토용` : "lectures 또는 lessonOccurrences 연결 대기", status: rows.length ? "success" : "warning", trust: rows.length ? "source" : "review" },
+      { title: "예약/출석 원천", detail: "회원별 예약, 출석, 결석 판단은 검증된 booking/reservation 원천과 대조해야 합니다.", status: "active", trust: "guardrail" },
+      { title: "폐강/조정 구분", detail: "삭제 수업 로그와 예약내역만으로 추정한 취소를 분리해서 확인합니다.", status: exceptionRows.length ? "warning" : "success", trust: "review" },
+    ].map(renderTaskRow).join("");
+  }
 }
 
 function renderMessages(candidates, sends) {
@@ -755,13 +945,17 @@ function renderMessages(candidates, sends) {
     const member = item.memberName || item.name || item.memberId || item.id;
     const date = formatDate(item.sentAt || item.updatedAt || item.createdAt || item.sourceDate);
     const reason = item.reason || item.lastError || item.dedupePolicy || item.candidateId || "";
+    const trust = item.canonicalBookingKey || item.canonicalKey || item.templateCode ? "canonical" : "review";
     return `
       <div class="status-row">
         <div>
           <strong>${escapeHtml(member)}</strong>
           <p>${escapeHtml(template)} · ${escapeHtml(date)}${reason ? ` · ${escapeHtml(reason)}` : ""}</p>
         </div>
-        ${pill(options.status?.(item) || item.status || item.sendStatus)}
+        <div class="row-badges">
+          ${sourceTrustBadge(trust)}
+          ${pill(options.status?.(item) || item.status || item.sendStatus)}
+        </div>
       </div>
     `;
   };
@@ -804,7 +998,7 @@ function renderMessages(candidates, sends) {
                   <strong>${escapeHtml(row.label)}</strong>
                   <p>후보 ${escapeHtml(row.candidates)}건 · 발송 ${escapeHtml(row.sends)}건 · 실패 ${escapeHtml(row.failed)}건</p>
                 </div>
-                ${pill(status)}
+                <div class="row-badges">${sourceTrustBadge("canonical")}${pill(status)}</div>
               </div>
             `;
           })
@@ -838,10 +1032,7 @@ function renderMessages(candidates, sends) {
     decisionList.innerHTML = rows
       .map(
         (row) => `
-          <div class="status-row">
-            <div><strong>${escapeHtml(row.title)}</strong><p>${escapeHtml(row.detail)}</p></div>
-            ${pill(row.status)}
-          </div>
+          ${renderTaskRow({ ...row, href: "/messages/", trust: row.status === "failed" ? "error" : "guardrail" })}
         `,
       )
       .join("");
@@ -877,7 +1068,7 @@ function renderMemberDetail(detail) {
   if (!qs("memberDetailName")) return;
   if (detail?.missingId) {
     setText("memberDetailName", "회원 선택 필요");
-    setText("memberDetailSubtitle", "Members 목록에서 회원을 선택하면 상세 read-model을 표시합니다.");
+    setText("memberDetailSubtitle", "회원 목록에서 회원을 선택하면 상세 요약 모델을 표시합니다.");
     return;
   }
   if (detail?.missing) {
@@ -933,7 +1124,7 @@ function renderMemberDetail(detail) {
   } else {
     setPillText("memberDetailPrimaryActionTone", "success");
     setText("memberDetailPrimaryAction", "긴급 신호 낮음");
-    setText("memberDetailPrimaryActionNote", "현재 read-model 기준으로 즉시 멈춰야 할 품질/주의 신호는 보이지 않습니다.");
+    setText("memberDetailPrimaryActionNote", "현재 요약 모델 기준으로 즉시 멈춰야 할 품질/주의 신호는 보이지 않습니다.");
   }
   setPillText("memberDetailCareActionTone", activeTicketCount ? "active" : "warning");
   setText("memberDetailCareAction", activeTicketCount ? "수강권 기반 케어" : "수강권 상태 확인");
@@ -944,8 +1135,8 @@ function renderMemberDetail(detail) {
       : `활성 수강권 요약 없음 · 최근 방문 ${lastVisitText} · 상담/만료/미등록 여부 확인`,
   );
   setPillText("memberDetailGuardrailTone", "success");
-  setText("memberDetailGuardrail", "검토용 read-model");
-  setText("memberDetailGuardrailNote", "알림톡, 연락처, StudioMate write는 canonical source에서만 대상자를 선정합니다.");
+  setText("memberDetailGuardrail", "검토용 요약 모델");
+  setText("memberDetailGuardrailNote", "알림톡, 연락처, StudioMate write는 검증 원천에서만 대상자를 선정합니다.");
 
   const signalList = qs("memberDetailSignals");
   if (signalList) {
@@ -967,7 +1158,7 @@ function renderMemberDetail(detail) {
         title: openSignals.length ? "주의 신호 확인" : "주의 신호 낮음",
         detail: openSignals.length
           ? `${openSignals.length}개 신호가 있습니다. 수강권, 메모, 알림톡 상태를 먼저 확인하세요.`
-          : "현재 read-model 기준 긴급 신호는 보이지 않습니다.",
+          : "현재 요약 모델 기준 긴급 신호는 보이지 않습니다.",
         status: openSignals.length ? "warning" : "success",
       },
       {
@@ -1113,6 +1304,60 @@ function renderPrivate(requests, records, usageEvents, ledgerEntries) {
   setText("privateSubmittedCount", formatCount(submitted));
   setText("privateCorrectionCount", formatCount(corrections));
 
+  const privateDisplayTitle = (item) => {
+    const member = item.memberName || item.name || item.memberId || item.id;
+    const round = item.sessionNumber || item.round || item.cumulativePrivateRound || item.privateRound;
+    const date = item.lessonDate || item.startsAt || item.startAt || item.createdAt;
+    const staff = item.staffName || item.instructorName || item.teacherName || "";
+    return `${member}${round ? ` ${round}회차` : ""} ${compactDateTime(date)} ${staff}`.trim();
+  };
+  const stageFor = (item) => {
+    const pre = String(item.preStatus || item.preSurveyStatus || item.status || "").toLowerCase();
+    const post = String(item.postStatus || item.postSurveyStatus || "").toLowerCase();
+    const report = String(item.reportStatus || item.gptStatus || item.chartStatus || "").toLowerCase();
+    const send = String(item.reportSendStatus || item.alimtalk?.status || item.sendStatus || "").toLowerCase();
+    if (["sent", "success", "done", "completed"].includes(send)) return "done";
+    if (["completed", "done", "success", "ready"].includes(report)) return "report";
+    if (["submitted", "done", "success", "completed"].includes(post)) return "post";
+    if (["submitted", "pre_submitted", "done", "success", "completed"].includes(pre)) return "pre";
+    return "pre";
+  };
+  const progressBoard = qs("privateProgressBoard");
+  if (progressBoard) {
+    const allProgress = [...requests, ...records].slice(0, 24);
+    const stages = [
+      { id: "pre", title: "수업전 설문", note: "강사 수업 전 확인", trust: "canonical" },
+      { id: "post", title: "수업후 설문", note: "강사 회고/다음 방향", trust: "canonical" },
+      { id: "report", title: "리포트 완성", note: "회원 공유 전 검토", trust: "review" },
+      { id: "done", title: "리포트 전송", note: "회원 알림톡 완료", trust: "guardrail" },
+    ];
+    progressBoard.innerHTML = stages
+      .map((stage) => {
+        const stageItems = allProgress.filter((item) => stageFor(item) === stage.id).slice(0, 5);
+        return `
+          <article class="stage-card">
+            <header>
+              <div>
+                <strong>${escapeHtml(stage.title)}</strong>
+                <span>${escapeHtml(stage.note)}</span>
+              </div>
+              ${sourceTrustBadge(stage.trust)}
+            </header>
+            <div class="stage-list">
+              ${
+                stageItems.length
+                  ? stageItems
+                      .map((item) => `<div><strong>${escapeHtml(privateDisplayTitle(item))}</strong><span>${escapeHtml(item.bookingId || item.requestId || item.id)}</span></div>`)
+                      .join("")
+                  : `<div class="empty-stage">해당 단계 항목 없음</div>`
+              }
+            </div>
+          </article>
+        `;
+      })
+      .join("");
+  }
+
   const requestList = qs("privateRequestList");
   if (requestList) {
     requestList.innerHTML = requests.length
@@ -1126,7 +1371,7 @@ function renderPrivate(requests, records, usageEvents, ledgerEntries) {
                   <strong>${escapeHtml(item.memberName || item.memberId || item.id)}</strong>
                   <p>${escapeHtml(lesson || "수업 정보 없음")} · ${escapeHtml(item.bookingId || item.requestId || item.id)}</p>
                 </div>
-                ${pill(status)}
+                <div class="row-badges">${sourceTrustBadge("canonical")}${pill(status)}</div>
               </div>
             `;
           })
@@ -1140,13 +1385,13 @@ function renderPrivate(requests, records, usageEvents, ledgerEntries) {
     ledgerList.innerHTML = ledgerEntries
       .map((item) => `
         <div class="status-row">
-          <div>
-            <strong>${escapeHtml(item.memberName || item.memberId || item.id)}</strong>
-            <p>${escapeHtml(item.startsAt || item.lessonDate || "")} · 누적 ${escapeHtml(item.cumulativePrivateRound || "-")}회</p>
-          </div>
-          ${pill(item.status || "active")}
+        <div>
+          <strong>${escapeHtml(item.memberName || item.memberId || item.id)}</strong>
+          <p>${escapeHtml(item.startsAt || item.lessonDate || "")} · 누적 ${escapeHtml(item.cumulativePrivateRound || "-")}회</p>
         </div>
-      `)
+        <div class="row-badges">${sourceTrustBadge("mirror")}${pill(item.status || "active")}</div>
+      </div>
+    `)
       .join("");
     return;
   }
@@ -1156,21 +1401,21 @@ function renderPrivate(requests, records, usageEvents, ledgerEntries) {
         <strong>memberUsageEvents</strong>
         <p>${usageEvents.length ? "이용 이력 문서가 감지되었습니다." : "아직 운영 반영된 이용 이력 문서가 없습니다."}</p>
       </div>
-      ${pill(usageEvents.length ? "reviewing" : "pending")}
+      <div class="row-badges">${sourceTrustBadge(usageEvents.length ? "source" : "review")}${pill(usageEvents.length ? "reviewing" : "pending")}</div>
     </div>
     <div class="status-row">
       <div>
         <strong>privateSessionLedger</strong>
         <p>현재 회차 계산 장부는 준비 단계입니다. 기존 차트 원천은 유지됩니다.</p>
       </div>
-      ${pill("pending")}
+      <div class="row-badges">${sourceTrustBadge("mirror")}${pill("pending")}</div>
     </div>
     <div class="status-row">
       <div>
         <strong>이용내역 backfill dry-run</strong>
         <p>65,521행 검토 · 예약 생성 53,191건 후보 · 제한 적용 승인 전까지 write 보류</p>
       </div>
-      ${pill("reviewing")}
+      <div class="row-badges">${sourceTrustBadge("guardrail")}${pill("reviewing")}</div>
     </div>
   `;
 }
@@ -1363,7 +1608,7 @@ function renderBusiness(snapshot) {
 function renderBusinessMemberInsights(items) {
   const list = qs("businessMemberInsightList");
   if (!list) return;
-  setText("businessMemberSummary", items.length ? `${items.length}명 read-model` : "회원 지표 대기");
+  setText("businessMemberSummary", items.length ? `${items.length}명 요약 모델` : "회원 지표 대기");
   if (!items.length) {
     list.innerHTML = `<div class="empty-state">member360Cards 또는 members의 누적 매출 요약을 읽지 못했습니다.</div>`;
     return;
@@ -1396,36 +1641,71 @@ function renderHomeDecisions() {
     {
       title: failedAutomation.length ? "자동화 실패 확인" : "자동화 상태 정상권",
       detail: failedAutomation.length
-        ? `${failedAutomation.length}개 자동화 상태가 실패/중단으로 보입니다. Automation 탭에서 원인을 먼저 확인하세요.`
+        ? `${failedAutomation.length}개 자동화 상태가 실패/중단으로 보입니다. 자동화 탭에서 원인을 먼저 확인하세요.`
         : "최근 자동화 상태에서 실패/중단 신호는 보이지 않습니다.",
       status: failedAutomation.length ? "failed" : "success",
+      trust: failedAutomation.length ? "error" : "source",
       href: "/automation/",
     },
     {
       title: openIssues.length ? "데이터 품질 이슈 확인" : "원본 품질 안정권",
       detail: openIssues.length
-        ? `${openIssues.length}개 열린 이슈가 있습니다. 발송/쓰기 전 Imports 탭에서 매칭 상태를 확인하세요.`
+        ? `${openIssues.length}개 열린 이슈가 있습니다. 발송/쓰기 전 원본 탭에서 매칭 상태를 확인하세요.`
         : "열린 데이터 품질 이슈가 없습니다.",
       status: openIssues.length ? "warning" : "success",
+      trust: openIssues.length ? "review" : "source",
       href: "/imports/",
     },
     {
-      title: "회원/알림톡은 read-only 확인",
+      title: "회원/알림톡은 보기 전용 확인",
       detail: "ARCHIVE CORE는 현재 운영 판단 콘솔입니다. 외부 발송/쓰기 원천은 기존 canonical 컬렉션을 유지합니다.",
       status: "active",
+      trust: "guardrail",
       href: "/rules/",
     },
   ];
-  list.innerHTML = rows
-    .map(
-      (row) => `
-        <a class="status-row status-link" href="${row.href}">
-          <div><strong>${escapeHtml(row.title)}</strong><p>${escapeHtml(row.detail)}</p></div>
-          ${pill(row.status)}
-        </a>
-      `,
-    )
-    .join("");
+  list.innerHTML = rows.map(renderTaskRow).join("");
+
+  const taskBoard = qs("homeTodayTaskBoard");
+  if (taskBoard) {
+    const pendingCandidates = state.alimtalkCandidates.filter((item) =>
+      ["queued", "pending", "review", "reviewed", "processing"].includes(String(item.status || "").toLowerCase()),
+    );
+    const privatePending = state.privateRequests.filter((item) =>
+      ["pending", "queued", "review"].includes(String(item.status || item.preStatus || "").toLowerCase()),
+    );
+    const tasks = [
+      {
+        title: failedAutomation.length ? "자동화 실패 먼저 확인" : "자동화 정상권 유지",
+        detail: failedAutomation.length ? `${failedAutomation.length}건 실패/중단 상태` : "최근 실패/중단 신호 없음",
+        status: failedAutomation.length ? "failed" : "success",
+        trust: failedAutomation.length ? "error" : "source",
+        href: "/automation/",
+      },
+      {
+        title: openIssues.length ? "원본 품질 확인" : "원본 품질 안정권",
+        detail: openIssues.length ? `${openIssues.length}건 실행 보류 이슈` : "발송/쓰기 전 정지 이슈 없음",
+        status: openIssues.length ? "warning" : "success",
+        trust: openIssues.length ? "review" : "source",
+        href: "/imports/",
+      },
+      {
+        title: pendingCandidates.length ? "알림톡 후보 검토" : "알림톡 대기 낮음",
+        detail: pendingCandidates.length ? `${pendingCandidates.length}건 후보/승인 상태 확인` : "최근 후보 기준 즉시 확인 항목 낮음",
+        status: pendingCandidates.length ? "warning" : "success",
+        trust: "canonical",
+        href: "/messages/",
+      },
+      {
+        title: privatePending.length ? "프라이빗 진행 확인" : "프라이빗 진행 대기 낮음",
+        detail: privatePending.length ? `${privatePending.length}건 설문/리포트 진행 확인` : "최근 요청 기준 대기 항목 낮음",
+        status: privatePending.length ? "warning" : "success",
+        trust: "canonical",
+        href: "/private/",
+      },
+    ];
+    taskBoard.innerHTML = tasks.map(renderTaskRow).join("");
+  }
 }
 
 function renderHomeSummary() {
@@ -1471,6 +1751,7 @@ function renderFallback(error) {
   renderImports([]);
   renderQualityIssues([]);
   renderMembers([]);
+  renderLessons([]);
   renderMessages([], []);
   renderHomeSummary();
   renderHomeDecisions();
@@ -1497,6 +1778,7 @@ async function refresh() {
     const shouldLoadBusiness = Boolean(qs("businessMonthSelect"));
     const shouldLoadHome = Boolean(qs("homeMemberTotal"));
     const shouldLoadMembers = Boolean(qs("membersTable"));
+    const shouldLoadLessons = Boolean(qs("lessonsTodayList"));
     const shouldLoadMessages = Boolean(qs("messagesCandidateList"));
     const shouldLoadMemberDetail = Boolean(qs("memberDetailName"));
     const shouldLoadPrivate = Boolean(qs("privateRequestList"));
@@ -1507,6 +1789,7 @@ async function refresh() {
       qualityIssues,
       dashboardSnapshot,
       members,
+      lessons,
       alimtalkCandidates,
       alimtalkSends,
       memberDetail,
@@ -1522,12 +1805,13 @@ async function refresh() {
       getCollectionBy(db, runtime, "dataQualityIssues", "updatedAt", 100),
       shouldLoadBusiness ? getDoc(doc(db, "dashboardSnapshots", "current")) : Promise.resolve(null),
       shouldLoadMembers || shouldLoadHome ? getCollectionBy(db, runtime, "member360Cards", "totalRevenue", 2000) : Promise.resolve([]),
+      shouldLoadLessons ? loadLessons(runtime) : Promise.resolve([]),
       shouldLoadMessages || shouldLoadHome ? getRecentCollectionBy(db, runtime, "alimtalkCandidates", "updatedAt", 12) : Promise.resolve([]),
       shouldLoadMessages || shouldLoadHome ? getRecentCollectionBy(db, runtime, "alimtalkSends", "updatedAt", 12) : Promise.resolve([]),
       shouldLoadMemberDetail ? loadMemberDetail(runtime, memberDetailId()) : Promise.resolve(null),
       shouldLoadBusiness ? getRecentCollectionBy(db, runtime, "member360Cards", "totalRevenue", 8) : Promise.resolve([]),
-      shouldLoadPrivate ? getRecentCollectionBy(db, runtime, "privateLessonChartRequests", "createdAt", 8) : Promise.resolve([]),
-      shouldLoadPrivate ? getRecentCollectionBy(db, runtime, "privateLessonChartRecords", "createdAt", 8) : Promise.resolve([]),
+      shouldLoadPrivate || shouldLoadHome ? getRecentCollectionBy(db, runtime, "privateLessonChartRequests", "createdAt", 8) : Promise.resolve([]),
+      shouldLoadPrivate || shouldLoadHome ? getRecentCollectionBy(db, runtime, "privateLessonChartRecords", "createdAt", 8) : Promise.resolve([]),
       shouldLoadPrivate ? getRecentCollectionBy(db, runtime, "memberUsageEvents", "updatedAt", 8) : Promise.resolve([]),
       shouldLoadPrivate ? getRecentCollectionBy(db, runtime, "privateSessionLedger", "updatedAt", 8) : Promise.resolve([]),
     ]);
@@ -1537,6 +1821,7 @@ async function refresh() {
     state.sourceImports = studioItems(sourceImports);
     state.qualityIssues = studioItems(qualityIssues);
     state.members = studioItems(members);
+    state.lessons = studioItems(lessons);
     state.alimtalkCandidates = alimtalkCandidates;
     state.alimtalkSends = alimtalkSends;
     state.memberDetail = memberDetail;
@@ -1550,6 +1835,7 @@ async function refresh() {
     renderImports(state.sourceImports);
     renderQualityIssues(state.qualityIssues);
     renderMembers(state.members);
+    renderLessons(state.lessons);
     renderMessages(alimtalkCandidates, alimtalkSends);
     renderHomeSummary();
     renderHomeDecisions();
@@ -1569,6 +1855,7 @@ async function refresh() {
 }
 
 enhanceNav();
+enhanceSourceTrustBadges();
 activateNav();
 qs("refreshButton")?.addEventListener("click", refresh);
 qs("businessMonthSelect")?.addEventListener("change", (event) => renderBusinessMonth(event.target.value));

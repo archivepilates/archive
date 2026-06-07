@@ -4,7 +4,7 @@
     <meta charset="utf-8" />
     <meta name="viewport" content="width=device-width, initial-scale=1" />
     <meta name="theme-color" content="#f8f5ef" />
-    <title>Automation · ARCHIVE CORE</title>
+    <title>자동화 · ARCHIVE CORE</title>
     <link rel="stylesheet" href="/assets/styles.css" />
     <script src="/firebase-config.js"></script>
     <script type="module" src="/assets/app.js"></script>
@@ -14,23 +14,23 @@
       <aside class="sidebar" aria-label="ARCHIVE CORE navigation">
         <div class="brand"><div class="brand-mark" aria-hidden="true">CORE</div><strong>ARCHIVE CORE</strong><span>ARCHIVE PILATES Operations Platform</span></div>
         <nav class="nav">
-          <a href="/" data-section="home">Home <small>요약</small></a><a href="/members/" data-section="members">Members <small>회원</small></a><a href="/lessons/" data-section="lessons">Lessons <small>수업</small></a><a href="/private/" data-section="private">Private <small>차트</small></a><a href="/messages/" data-section="messages">Messages <small>알림톡</small></a><a href="/automation/" data-section="automation">Automation <small>관제</small></a><a href="/business/" data-section="business">Business <small>지표</small></a><a href="/imports/" data-section="imports">Imports <small>원본</small></a><a href="/rules/" data-section="rules">Rules <small>규칙</small></a><a href="/settings/" data-section="settings">Settings <small>설정</small></a>
+          <a href="/" data-section="home">홈 <small>오늘</small></a><a href="/members/" data-section="members">회원 <small>검색</small></a><a href="/lessons/" data-section="lessons">수업 <small>운영</small></a><a href="/private/" data-section="private">프라이빗 <small>진행</small></a><a href="/messages/" data-section="messages">알림톡 <small>발송</small></a><a href="/automation/" data-section="automation">자동화 <small>관제</small></a><a href="/business/" data-section="business">경영 <small>지표</small></a><a href="/imports/" data-section="imports">원본 <small>품질</small></a><a href="/rules/" data-section="rules">규칙 <small>운영</small></a><a href="/settings/" data-section="settings">설정 <small>시스템</small></a>
         </nav>
       </aside>
       <main class="main">
         <header class="topbar">
-          <div class="title-block"><p class="eyebrow">AUTOMATION</p><h1>자동화 관제</h1><p class="subtitle">동기화, 다운로드, import, 알림톡, 보고 작업의 상태를 모읍니다.</p></div>
+          <div class="title-block"><p class="eyebrow">자동화</p><h1>자동화 관제</h1><p class="subtitle">동기화, 다운로드, import, 알림톡, 보고 작업의 상태를 모읍니다.</p></div>
           <div class="top-actions"><div class="connection-card" aria-live="polite"><span id="connectionLabel">로딩</span><strong id="connectionDetail">Firestore 연결 준비 중</strong></div><button class="refresh-button" id="refreshButton" type="button">새로고침</button></div>
         </header>
         <section class="grid kpis">
           <article class="panel metric"><div class="metric-label">상태 문서</div><div class="metric-value" id="automationStatusCount">0건</div><div class="metric-note">automationStatus</div></article>
           <article class="panel metric"><div class="metric-label">실패/중단</div><div class="metric-value" id="automationFailedCount">0건</div><div class="metric-note">먼저 확인할 작업</div></article>
           <article class="panel metric"><div class="metric-label">최근 실행</div><div class="metric-value compact" id="automationRecentRun">확인 중</div><div class="metric-note" id="automationConnectedState">Firestore read</div></article>
-          <article class="panel metric"><div class="metric-label">운영 원칙</div><div class="metric-value compact">read-only</div><div class="metric-note">실행 버튼은 별도 승인 후 추가</div></article>
+          <article class="panel metric"><div class="metric-label">운영 원칙</div><div class="metric-value compact">보기전용</div><div class="metric-note">실행 버튼은 별도 승인 후 추가</div></article>
         </section>
         <section class="grid overview-grid">
           <article class="panel">
-            <div class="panel-header"><div><h2>자동화 흐름</h2><p>운영자가 봐야 할 순서대로 상태를 묶었습니다.</p></div><span class="pill">workflow</span></div>
+            <div class="panel-header"><div><h2>자동화 흐름</h2><p>운영자가 봐야 할 순서대로 상태를 묶었습니다.</p></div><span data-source-trust="source">원본 확인</span></div>
             <div class="flow-list">
               <div><strong>수집</strong><span>StudioMate Excel 다운로드, 정산 원본 확보</span></div>
               <div><strong>정규화</strong><span>sourceImports, dataQualityIssues 기록</span></div>
@@ -39,7 +39,7 @@
             </div>
           </article>
           <aside class="panel">
-            <div class="panel-header"><div><h2>핵심 자동화 건강도</h2><p>상태 문서가 없으면 아직 연결 대기입니다.</p></div><span class="pill warn">health</span></div>
+            <div class="panel-header"><div><h2>핵심 자동화 건강도</h2><p>상태 문서가 없으면 아직 연결 대기입니다.</p></div><span data-source-trust="review">확인 필요</span></div>
             <div class="list" id="automationHealthList"><div class="empty-state">Firestore 연결 후 핵심 자동화 상태를 표시합니다.</div></div>
           </aside>
         </section>

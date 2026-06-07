@@ -4,7 +4,7 @@
     <meta charset="utf-8" />
     <meta name="viewport" content="width=device-width, initial-scale=1" />
     <meta name="theme-color" content="#f8f5ef" />
-    <title>Settings · ARCHIVE CORE</title>
+    <title>설정 · ARCHIVE CORE</title>
     <link rel="stylesheet" href="/assets/styles.css" />
     <script src="/firebase-config.js"></script>
     <script type="module" src="/assets/app.js"></script>
@@ -14,16 +14,16 @@
       <aside class="sidebar" aria-label="ARCHIVE CORE navigation">
         <div class="brand"><div class="brand-mark" aria-hidden="true">CORE</div><strong>ARCHIVE CORE</strong><span>ARCHIVE PILATES Operations Platform</span></div>
         <nav class="nav">
-          <a href="/" data-section="home">Home <small>요약</small></a><a href="/members/" data-section="members">Members <small>회원</small></a><a href="/lessons/" data-section="lessons">Lessons <small>수업</small></a><a href="/private/" data-section="private">Private <small>차트</small></a><a href="/messages/" data-section="messages">Messages <small>알림톡</small></a><a href="/automation/" data-section="automation">Automation <small>관제</small></a><a href="/business/" data-section="business">Business <small>지표</small></a><a href="/imports/" data-section="imports">Imports <small>원본</small></a><a href="/rules/" data-section="rules">Rules <small>규칙</small></a><a href="/settings/" data-section="settings">Settings <small>설정</small></a>
+          <a href="/" data-section="home">홈 <small>오늘</small></a><a href="/members/" data-section="members">회원 <small>검색</small></a><a href="/lessons/" data-section="lessons">수업 <small>운영</small></a><a href="/private/" data-section="private">프라이빗 <small>진행</small></a><a href="/messages/" data-section="messages">알림톡 <small>발송</small></a><a href="/automation/" data-section="automation">자동화 <small>관제</small></a><a href="/business/" data-section="business">경영 <small>지표</small></a><a href="/imports/" data-section="imports">원본 <small>품질</small></a><a href="/rules/" data-section="rules">규칙 <small>운영</small></a><a href="/settings/" data-section="settings">설정 <small>시스템</small></a>
         </nav>
       </aside>
       <main class="main">
-        <header class="page-hero"><p class="eyebrow">SETTINGS</p><h1>시스템 설정</h1><p class="subtitle">권한, 도메인, 배포 대상, 데이터 전환 상태를 관리합니다.</p></header>
+        <header class="page-hero"><p class="eyebrow">설정</p><h1>시스템 설정</h1><p class="subtitle">권한, 도메인, 배포 대상, 데이터 전환 상태를 관리합니다.</p></header>
         <section class="grid data-grid">
-          <article class="panel detail-card"><span class="pill warn">준비</span><h2>core.archivepilates.com</h2><p>Firebase Hosting 전용 site와 custom domain 연결 대상으로 사용.</p></article>
-          <article class="panel detail-card"><span class="pill">권한</span><h2>operator access</h2><p>비로그인 브라우저는 Firestore fallback만 표시. 운영자 권한 연결 필요.</p></article>
-          <article class="panel detail-card"><span class="pill">배포</span><h2>hosting target</h2><p>root /core 호환과 core subdomain root 구조를 동시에 유지.</p></article>
-          <article class="panel detail-card"><span class="pill good">보호</span><h2>production writes</h2><p>설정 페이지 도입만으로 외부 write 권한이나 원천은 변경하지 않음.</p></article>
+          <article class="panel detail-card"><span data-source-trust="review">확인 필요</span><h2>core.archivepilates.com</h2><p>Firebase Hosting 전용 site와 custom domain 연결 대상으로 사용.</p></article>
+          <article class="panel detail-card"><span data-source-trust="guardrail">권한 확인</span><h2>운영자 접근 권한</h2><p>비로그인 브라우저는 Firestore fallback만 표시. 운영자 권한 연결 필요.</p></article>
+          <article class="panel detail-card"><span data-source-trust="source">배포 원천</span><h2>Hosting 대상</h2><p>root /core 호환과 core subdomain root 구조를 동시에 유지.</p></article>
+          <article class="panel detail-card"><span data-source-trust="guardrail">실행 보호</span><h2>운영 쓰기 권한</h2><p>설정 페이지 도입만으로 외부 write 권한이나 원천은 변경하지 않음.</p></article>
         </section>
       </main>
     </div>
