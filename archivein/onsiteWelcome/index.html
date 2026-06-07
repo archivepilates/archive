@@ -152,7 +152,7 @@
         const data = await requestJson(`../api/onsiteWelcomeRequest?id=${encodeURIComponent(current.requestId)}&token=${encodeURIComponent(current.accessToken)}`);
         setStatus(data.request);
         updateHistoryItem(data.request);
-        if (['lookup_ready', 'sent', 'error', 'cancelled'].includes(data.request.status)) {
+        if (shouldStopPolling(data.request)) {
           clearInterval(pollTimer);
           button.disabled = false;
         }
@@ -208,11 +208,21 @@
         } else if (!data.request.lastError) {
           showMessage('알림톡 전송을 처리했습니다.');
         }
-        if (!['sent', 'error', 'cancelled'].includes(data.request.status)) startPolling();
+        if (!shouldStopPolling(data.request)) startPolling();
       } catch (err) {
         showMessage(err.message || '알림톡 전송 요청에 실패했습니다.', true);
         if (triggerButton) triggerButton.disabled = false;
       }
+    }
+
+    function shouldStopPolling(request) {
+      if (['error', 'cancelled'].includes(request.status)) return true;
+      if (['lookup_ready', 'ready'].includes(request.status)) return true;
+      if (request.status !== 'sent') return false;
+      const contractStatus = String(request.contractStatus || '');
+      const syncStatus = String(request.studioMateSyncStatus || '');
+      if (contractStatus !== 'submitted') return false;
+      return !['pending', 'processing', 'syncing'].includes(syncStatus);
     }
 
     function renderStages(stages) {

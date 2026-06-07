@@ -69,11 +69,11 @@ export async function memberSignupContractHandler(request: any, response: any): 
           signatureImageHash: sha256(submission.signatureImageDataUrl),
         },
         submittedAt: signedAt,
-        studiomateProfileSyncStatus: "pending_excel_reconcile",
-        studiomateSyncStatus: "pending_excel_reconcile",
+        studiomateProfileSyncStatus: "pending",
+        studiomateSyncStatus: "pending",
         studiomateProfileSync: {
-          status: "pending_excel_reconcile",
-          reason: "StudioMate profile write is reconciled by the regular Excel/member-list workflow.",
+          status: "pending",
+          reason: "StudioMate profile write is queued for individual Playwright sync.",
           updatedAt: signedAt,
         },
         updatedAt: signedAt,
@@ -129,6 +129,7 @@ export async function memberSignupContractHandler(request: any, response: any): 
         return;
       }
       const submitted = (await refs.memberSignupContract(contract.contractId).get()).data();
+      if (submitted) await enqueueStudioMateProfileWriteJob(submitted);
       const archive = submitted ? await tryArchiveSubmittedContract(submitted) : null;
       response.json({ ok: true, duplicate: false, submittedAtText: signedAtText, driveArchive: archive });
       return;
@@ -139,6 +140,35 @@ export async function memberSignupContractHandler(request: any, response: any): 
     const message = err instanceof Error ? err.message : String(err);
     response.status(400).json({ ok: false, error: message });
   }
+}
+
+async function enqueueStudioMateProfileWriteJob(contract: MemberSignupContractDoc): Promise<void> {
+  if (contract.status !== "submitted") return;
+  const now = nowTimestamp();
+  const jobId = `member_signup_profile_${contract.contractId}`;
+  await db.collection("studiomateProfileWriteJobs").doc(jobId).set(
+    {
+      jobId,
+      type: "member_signup_profile",
+      studioId: contract.studioId,
+      contractId: contract.contractId,
+      memberId: contract.memberId,
+      memberName: contract.memberName,
+      memberPhone: contract.memberPhone,
+      status: "pending",
+      attempts: 0,
+      maxAttempts: 3,
+      source: "member_signup_contract",
+      payload: {
+        member: contract.member || {},
+        agreements: contract.agreements || {},
+        submittedAt: contract.submittedAt || null,
+      },
+      createdAt: now,
+      updatedAt: now,
+    },
+    { merge: true },
+  );
 }
 
 async function tryArchiveSubmittedContract(contract: MemberSignupContractDoc): Promise<{
