@@ -174,9 +174,15 @@ function buildStages(doc: OnsiteWelcomeRequestDoc, contractStatus: string, studi
   const submitted = contractStatus === "submitted";
   const syncDone = ["synced", "done"].includes(studioMateSyncStatus);
   const syncDeferred = ["pending_excel_reconcile", "manual_required", "skipped"].includes(studioMateSyncStatus);
-  const syncProcessing = ["processing", "syncing", "pending"].includes(studioMateSyncStatus);
+  const syncProcessing = ["processing", "syncing", "pending", "retry"].includes(studioMateSyncStatus);
   const syncStageLabel =
-    studioMateSyncStatus === "pending" ? "개별 반영 대기" : syncDeferred ? "정기 반영 대기" : "스튜디오메이트 동기화중";
+    studioMateSyncStatus === "pending"
+      ? "개별 반영 대기"
+      : studioMateSyncStatus === "retry"
+        ? "개별 반영 재시도 대기"
+        : syncDeferred
+          ? "정기 반영 대기"
+          : "스튜디오메이트 동기화중";
   const syncDoneLabel = syncDeferred ? "스튜디오메이트 확인 대기" : "스튜디오메이트 동기화 완료";
   const syncStageState = syncDone ? "done" : submitted && !syncDeferred && (syncProcessing || !studioMateSyncStatus) ? "active" : "pending";
   return [

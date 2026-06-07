@@ -199,6 +199,7 @@ async function enqueueStudioMateProfileWriteJob(contract: MemberSignupContractDo
       source: "member_signup",
       status: "pending",
       writeMode: "playwright",
+      contractId: contract.contractId,
       memberId: contract.memberId,
       memberName: contract.memberName,
       memberPhone: contract.memberPhone,

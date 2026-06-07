@@ -102,6 +102,11 @@ try {
           syncedAt: admin.firestore.Timestamp.now(),
           syncError: null,
         });
+        await updateMemberSignupContractSyncStatus(data, {
+          status: "done",
+          reason: "StudioMate member signup memo was written by individual Playwright sync.",
+          updatedAt: admin.firestore.Timestamp.now(),
+        });
         await markMemberIdLookupDone(data, writeResult.studiomateMemberId);
         item.status = "done";
         result.written += 1;
@@ -123,6 +128,11 @@ try {
       await updateMemberMemoSyncStatus(data.jobId || ref.id, {
         syncStatus: status,
         syncError: message,
+      });
+      await updateMemberSignupContractSyncStatus(data, {
+        status,
+        reason: message,
+        updatedAt: admin.firestore.Timestamp.now(),
       });
       if (status === "failed") {
         await sendMemoWriteFailureEmailOnce(ref, data, message);
@@ -176,6 +186,25 @@ async function updateMemberMemoSyncStatus(memoId, patch) {
       },
       { merge: true },
     );
+}
+
+async function updateMemberSignupContractSyncStatus(job, patch) {
+  if (!String(job.source || "").startsWith("member_signup")) return;
+  const contractId = String(job.contractId || "").trim();
+  if (!contractId) return;
+  await db.collection("memberSignupContracts").doc(contractId).set(
+    {
+      studiomateSyncStatus: patch.status,
+      studiomateProfileSyncStatus: patch.status,
+      studiomateProfileSync: {
+        status: patch.status,
+        reason: patch.reason || "",
+        updatedAt: patch.updatedAt || admin.firestore.Timestamp.now(),
+      },
+      updatedAt: patch.updatedAt || admin.firestore.Timestamp.now(),
+    },
+    { merge: true },
+  );
 }
 
 async function markLoadedJobsFailed(message) {

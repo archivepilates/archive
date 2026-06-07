@@ -319,6 +319,7 @@ export type MemberSignupContractStatus = "draft" | "opened" | "submitted" | "exp
 export type MemberSignupStudioMateSyncStatus =
   | "pending_excel_reconcile"
   | "manual_required"
+  | "retry"
   | "processing"
   | "syncing"
   | "synced"
