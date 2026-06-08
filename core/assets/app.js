@@ -184,16 +184,16 @@ function setConnection(label, detail) {
 }
 
 const NAV_ITEMS = {
-  home: { label: "홈", caption: "오늘 할 일" },
-  members: { label: "회원", caption: "검색/상세" },
-  lessons: { label: "수업", caption: "운영/예외" },
-  private: { label: "프라이빗", caption: "4단계 진행" },
-  messages: { label: "알림톡", caption: "후보/발송" },
-  automation: { label: "자동화", caption: "관제" },
-  business: { label: "경영", caption: "지표" },
-  imports: { label: "원본", caption: "품질" },
-  rules: { label: "규칙", caption: "운영 기준" },
-  settings: { label: "설정", caption: "시스템" },
+  home: { label: "오늘 할 일", caption: "확인 필요" },
+  members: { label: "회원 찾기", caption: "검색/상세" },
+  lessons: { label: "수업 확인", caption: "운영/예외" },
+  private: { label: "개인수업 차트", caption: "4단계 진행" },
+  messages: { label: "알림톡 확인", caption: "후보/발송" },
+  automation: { label: "자동 처리 현황", caption: "실패/지연" },
+  business: { label: "매장 지표", caption: "월별 흐름" },
+  imports: { label: "원본/오류 확인", caption: "품질 점검" },
+  rules: { label: "운영 기준", caption: "보호 규칙" },
+  settings: { label: "시스템 상태", caption: "연결/권한" },
 };
 
 const NAV_ICONS = {
