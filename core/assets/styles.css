@@ -1744,7 +1744,14 @@ h1 {
 
 .kpis {
   grid-template-columns: repeat(auto-fit, minmax(min(100%, 235px), 1fr));
+  grid-auto-rows: minmax(var(--metric-min-height), auto);
+  align-items: stretch;
   margin-bottom: 24px;
+}
+
+.kpis > .metric {
+  height: auto;
+  min-height: var(--metric-min-height);
 }
 
 .overview-grid {
