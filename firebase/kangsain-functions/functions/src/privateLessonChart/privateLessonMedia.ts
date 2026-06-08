@@ -12,7 +12,7 @@ import { nowTimestamp } from "../utils/date";
 const DRIVE_SCOPE = "https://www.googleapis.com/auth/drive";
 const ROOT_FOLDER_NAME = "ARCHIVE PILATES 프라이빗 리포트 미디어";
 const ROOT_FOLDER_ID = process.env.PRIVATE_LESSON_MEDIA_ROOT_FOLDER_ID || "";
-const CHUNK_SIZE = 1024 * 1024;
+const CHUNK_SIZE = 8 * 1024 * 1024;
 const MAX_UPLOAD_SIZE = 500 * 1024 * 1024;
 const ALLOWED_MIME_PREFIXES = ["image/", "video/"];
 const UPLOAD_SESSION_COLLECTION = "privateLessonChartMediaUploadSessions";

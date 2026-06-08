@@ -619,6 +619,7 @@
         while (offset < file.size) {
           const endExclusive = Math.min(offset + chunkSize, file.size);
           const chunk = file.slice(offset, endExclusive);
+          label.textContent = `업로드 중 ${Math.round((offset / file.size) * 100)}% · ${formatBytes(offset)} / ${formatBytes(file.size)}`;
           const chunkBase64 = await blobToBase64(chunk);
           const result = await postJson({
             action: "uploadMediaChunk",
@@ -632,7 +633,7 @@
           });
           offset = Number(result.bytesUploaded || endExclusive);
           progress.value = Math.round((offset / file.size) * 100);
-          label.textContent = `업로드 중 ${progress.value}%`;
+          label.textContent = `업로드 중 ${progress.value}% · ${formatBytes(offset)} / ${formatBytes(file.size)}`;
         }
         label.textContent = "업로드 완료 · 리포트 자동 포함";
       } catch (error) {
