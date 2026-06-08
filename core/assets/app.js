@@ -189,6 +189,19 @@ function setConnection(label, detail) {
   setText("connectionDetail", detail);
 }
 
+const NAV_ITEMS = {
+  home: { label: "오늘 할 일", caption: "확인 필요" },
+  members: { label: "회원 찾기", caption: "검색/상세" },
+  lessons: { label: "수업 확인", caption: "운영/예외" },
+  private: { label: "개인수업 차트", caption: "4단계 진행" },
+  messages: { label: "알림톡 확인", caption: "후보/발송" },
+  automation: { label: "자동 처리 현황", caption: "실패/지연" },
+  business: { label: "매장 지표", caption: "월별 흐름" },
+  imports: { label: "원본/오류 확인", caption: "품질 점검" },
+  rules: { label: "운영 기준", caption: "보호 규칙" },
+  settings: { label: "시스템 상태", caption: "연결/권한" },
+};
+
 const NAV_ICONS = {
   home: "M3 11.5 12 4l9 7.5M5 10v10h14V10M9 20v-6h6v6",
   members: "M16 19v-1.5A3.5 3.5 0 0 0 12.5 14h-5A3.5 3.5 0 0 0 4 17.5V19M11 8a3 3 0 1 1-6 0 3 3 0 0 1 6 0M20 19v-1a3 3 0 0 0-3-3h-1.2M15 5.2a2.8 2.8 0 0 1 0 5.6",
@@ -215,13 +228,15 @@ function enhanceNav() {
   document.querySelectorAll(".nav a").forEach((link) => {
     if (link.dataset.enhanced === "true") return;
     const section = link.dataset.section || "home";
-    const small = link.querySelector("small")?.textContent?.trim() || "";
-    const label = [...link.childNodes]
+    const navItem = NAV_ITEMS[section];
+    const sourceSmall = link.querySelector("small")?.textContent?.trim() || "";
+    const sourceLabel = [...link.childNodes]
       .filter((node) => node.nodeType === Node.TEXT_NODE)
       .map((node) => node.textContent)
       .join("")
       .trim();
-    const title = label || section;
+    const title = navItem?.label || sourceLabel || section;
+    const small = navItem?.caption || sourceSmall;
     link.setAttribute("aria-label", `${title}${small ? ` · ${small}` : ""}`);
     link.removeAttribute("title");
     link.innerHTML = `
