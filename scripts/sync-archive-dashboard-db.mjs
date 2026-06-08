@@ -1,7 +1,7 @@
 #!/usr/bin/env node
 import { spawnSync } from "node:child_process";
 import { createSign } from "node:crypto";
-import { existsSync, mkdirSync, readFileSync, writeFileSync } from "node:fs";
+import { existsSync, mkdirSync, readdirSync, readFileSync, statSync, writeFileSync } from "node:fs";
 import os from "node:os";
 import path from "node:path";
 
@@ -118,37 +118,80 @@ function discoverSourceFiles() {
   return Object.fromEntries(
     Object.entries(SOURCE_DIRS).map(([key, dir]) => {
       const fullDir = path.join(config.driveRoot, dir);
-      const script = `
-import json, os, re
-folder = ${JSON.stringify(fullDir)}
-month = ${JSON.stringify(config.month)}
-files = []
-for name in os.listdir(folder):
-    if name.startswith("~$") or not name.lower().endswith((".xlsx", ".xls")):
-        continue
-    matched = re.search(r"(20\\d{2}-\\d{2})-\\d{2}~", name)
-    file_month = matched.group(1) if matched else ""
-    if month and file_month != month:
-        continue
-    path = os.path.join(folder, name)
-    files.append({"path": path, "name": name, "month": file_month, "mtime": os.path.getmtime(path)})
-if ${config.includeAllVersions ? "False" : "True"}:
-    latest_by_month = {}
-    for item in files:
-        key = item["month"] or item["name"]
-        current = latest_by_month.get(key)
-        if current is None or (item["mtime"], item["name"]) > (current["mtime"], current["name"]):
-            latest_by_month[key] = item
-    files = list(latest_by_month.values())
-print(json.dumps(sorted(files, key=lambda item: (item["month"], item["name"])), ensure_ascii=False))
-`;
-      const result = spawnSync(config.python, ["-c", script], { encoding: "utf8", maxBuffer: 16 * 1024 * 1024 });
-      if (result.status !== 0) throw new Error(`Failed to list ${fullDir}: ${result.stderr || result.stdout}`);
-      const files = JSON.parse(result.stdout);
+      let files = readdirSync(fullDir)
+        .filter((name) => !name.startsWith("~$") && /\.(xlsx|xls)$/i.test(name))
+        .map((name) => {
+          const parsed = parseSourceFileName(name);
+          const fullPath = path.join(fullDir, name);
+          return { path: fullPath, name, ...parsed, mtime: statSync(fullPath).mtimeMs };
+        })
+        .filter((file) => !config.month || file.month === config.month);
+      if (!config.includeAllVersions) files = selectCanonicalSourceFiles(files);
+      files = files.sort((a, b) => sourceSortKey(a).localeCompare(sourceSortKey(b)));
       if (!files.length) throw new Error(`No source Excel files found in ${fullDir}${config.month ? ` for ${config.month}` : ""}`);
       return [key, files];
     }),
   );
+}
+
+function selectCanonicalSourceFiles(files) {
+  const byMonth = new Map();
+  for (const item of files) {
+    const key = item.month || item.name;
+    byMonth.set(key, [...(byMonth.get(key) || []), item]);
+  }
+  return [...byMonth.values()].map((items) => {
+    const fullMonth = items
+      .filter((item) => item.isFullMonth)
+      .sort(compareSourceFiles)
+      .pop();
+    if (fullMonth) return { ...fullMonth, selectedReason: "full-month-file" };
+    const latestCumulative = [...items].sort(compareSourceFiles).pop();
+    return { ...latestCumulative, selectedReason: "latest-cumulative-file" };
+  });
+}
+
+function parseSourceFileName(name) {
+  const matched = String(name).match(/(20\d{2}-\d{2}-\d{2})~(20\d{2}-\d{2}-\d{2})/);
+  if (!matched) {
+    return { month: "", startDate: "", endDate: "", monthEndDate: "", isFullMonth: false };
+  }
+  const month = matched[1].slice(0, 7);
+  const monthEnd = lastDateOfMonth(month);
+  return {
+    month,
+    startDate: matched[1],
+    endDate: matched[2],
+    monthEndDate: monthEnd,
+    isFullMonth: matched[1] === `${month}-01` && matched[2] === monthEnd,
+  };
+}
+
+function compareSourceFiles(a, b) {
+  return (
+    stringCompare(a.endDate, b.endDate) ||
+    stringCompare(a.startDate, b.startDate) ||
+    numberCompare(a.mtime, b.mtime) ||
+    stringCompare(a.name, b.name)
+  );
+}
+
+function sourceSortKey(item) {
+  return [item.month || "", item.startDate || "", item.endDate || "", item.name || ""].join("\u0001");
+}
+
+function lastDateOfMonth(month) {
+  if (!/^\d{4}-\d{2}$/.test(month)) return "";
+  const lastDay = new Date(Date.UTC(Number(month.slice(0, 4)), Number(month.slice(5, 7)), 0)).getUTCDate();
+  return `${month}-${String(lastDay).padStart(2, "0")}`;
+}
+
+function stringCompare(a, b) {
+  return String(a || "").localeCompare(String(b || ""));
+}
+
+function numberCompare(a, b) {
+  return Number(a || 0) - Number(b || 0);
 }
 
 function readExcelRows(files) {
@@ -156,7 +199,7 @@ function readExcelRows(files) {
 import json
 import pandas as pd
 
-files = ${JSON.stringify(files)}
+files = json.loads(${JSON.stringify(JSON.stringify(files))})
 rows = []
 
 def clean(value):
@@ -185,7 +228,7 @@ print(json.dumps(rows, ensure_ascii=False, default=str))
 function normalizeLessonSalesRow(row) {
   const date = dateKey(row["날짜"]);
   const month = row._원본월 || monthKey(date);
-  const classType = classTypeName(row["수업"]);
+  const classType = classTypeName(row["수업"], row["수강권명"]);
   const attendance = stringValue(row["출결"]);
   const chargedAmount = amount(row["차감 금액"]);
   const unitAmount = amount(row["회당 금액"]);
@@ -406,14 +449,16 @@ function buildDailySettlementPreview(rows, rates) {
       성명: row.강사명,
       그룹수업키: new Set(),
       프라이빗횟수: 0,
-      강사레슨횟수: 0,
+      강사레슨키: new Set(),
       총매출: 0,
     };
     const count = row.차감횟수 || 1;
     const revenue = row.차감금액 || (row.출결 === "출석" ? row.회당금액 * count : 0);
     if (row.수업구분 === "그룹") current.그룹수업키.add([row.수업일자, row.수업시작, row.수업종료].join("\u0001"));
     else if (row.수업구분 === "프라이빗") current.프라이빗횟수 += count;
-    else if (row.수업구분 === "강사레슨") current.강사레슨횟수 += count;
+    else if (row.수업구분 === "강사레슨") {
+      current.강사레슨키.add([row.강사명, row.수업일자, row.수업시작, row.수업종료].join("\u0001"));
+    }
     current.총매출 += revenue;
     map.set(row.강사명, current);
   }
@@ -438,9 +483,10 @@ function buildDailySettlementPreview(rows, rates) {
     .map((row, index) => {
       const rate = rates.byInstructor.get(row.성명) || rates.fallback;
       const groupCount = row.그룹수업키.size;
+      const instructorLessonCount = row.강사레슨키.size;
       const groupPay = groupCount * rate.groupPayPerCount;
       const privatePay = row.프라이빗횟수 * rate.privatePayPerCount;
-      const instructorPay = row.강사레슨횟수 * rate.instructorLessonPayPerCount;
+      const instructorPay = instructorLessonCount * rate.instructorLessonPayPerCount;
       const pretax = groupPay + privatePay + instructorPay;
       const deduction = pretax * 0.033;
       const net = pretax - deduction;
@@ -451,7 +497,7 @@ function buildDailySettlementPreview(rows, rates) {
         row.성명,
         round2(groupCount),
         round2(row.프라이빗횟수),
-        round2(row.강사레슨횟수),
+        round2(instructorLessonCount),
         Math.round(groupPay),
         Math.round(privatePay),
         Math.round(instructorPay),
@@ -526,6 +572,7 @@ function buildDailyRevenue(ticketRows, lessonRows, rates) {
   const pretaxByDate = new Map();
   const privateByDate = new Map();
   const instructorLessonByDate = new Map();
+  const instructorLessonSessionKeysByDate = new Map();
   const groupSessionKeysByDate = new Map();
   const groupReservationByDate = new Map();
   const groupAttendanceByDate = new Map();
@@ -549,8 +596,14 @@ function buildDailyRevenue(ticketRows, lessonRows, rates) {
       addToMap(privateByDate, row.수업일자, count);
       addToMap(pretaxByDate, row.수업일자, count * rate.privatePayPerCount);
     } else if (row.수업구분 === "강사레슨") {
-      addToMap(instructorLessonByDate, row.수업일자, count);
-      addToMap(pretaxByDate, row.수업일자, count * rate.instructorLessonPayPerCount);
+      const sessionKey = [row.강사명, row.수업시작, row.수업종료].join("\u0001");
+      const keys = instructorLessonSessionKeysByDate.get(row.수업일자) || new Set();
+      if (!keys.has(sessionKey)) {
+        keys.add(sessionKey);
+        addToMap(instructorLessonByDate, row.수업일자, 1);
+        addToMap(pretaxByDate, row.수업일자, rate.instructorLessonPayPerCount);
+      }
+      instructorLessonSessionKeysByDate.set(row.수업일자, keys);
     }
   }
   const dates = completeDailyDates([...ticketByDate.keys(), ...lessonByDate.keys()]);
@@ -687,7 +740,21 @@ function buildWarnings({ lessonRows, ticketRows, sourceFiles }) {
   if (latestTicketMonth && latestLessonMonth && latestTicketMonth !== latestLessonMonth) {
     warnings.push(`원본 최신월이 다릅니다: 수강권=${latestTicketMonth}, 수업=${latestLessonMonth}`);
   }
+  for (const [label, files] of [
+    ["수업매출", sourceFiles.lessonSales],
+    ["수강권매출", sourceFiles.ticketSales],
+  ]) {
+    for (const file of files) {
+      if (file.selectedReason === "latest-cumulative-file" && isClosedMonth(file.month)) {
+        warnings.push(`${label} ${file.month} 원본은 전체월 파일이 없어 ${file.name} 부분 누적 파일을 사용했습니다.`);
+      }
+    }
+  }
   return warnings;
+}
+
+function isClosedMonth(month) {
+  return /^\d{4}-\d{2}$/.test(month) && lastDateOfMonth(month) < todayKey();
 }
 
 async function updateSpreadsheet(sheets) {
@@ -1081,12 +1148,15 @@ function parseDate(dateText) {
   return { year: Number(matched[1]), month: Number(matched[2]), day: Number(matched[3]) };
 }
 
-function classTypeName(value) {
+function classTypeName(value, ticketName = "") {
   const text = stringValue(value);
+  const ticketText = stringValue(ticketName);
+  const combined = `${text} ${ticketText}`;
+  if (ticketText.includes("강사") || combined.includes("강사레슨")) return "강사레슨";
   if (text.includes("그룹")) return "그룹";
-  if (text.includes("프라이빗") || text.includes("개인")) return "프라이빗";
-  if (text.includes("강사")) return "강사레슨";
-  return text;
+  if (combined.includes("프라이빗") || combined.includes("개인")) return "프라이빗";
+  if (combined.includes("강사")) return "강사레슨";
+  return text || ticketText;
 }
 
 function dateKey(value) {

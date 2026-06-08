@@ -3,7 +3,7 @@ import crypto from "node:crypto";
 import { createSign } from "node:crypto";
 import { spawnSync } from "node:child_process";
 import { createReadStream } from "node:fs";
-import { copyFile, mkdir, readFile, stat, writeFile } from "node:fs/promises";
+import { copyFile, mkdir, readFile, readdir, stat, writeFile } from "node:fs/promises";
 import os from "node:os";
 import path from "node:path";
 import { acquireStudioMateBrowserLock } from "./lib/studiomate-browser-lock.mjs";
@@ -16,6 +16,9 @@ const kind = valueArg("--kind") || "all";
 const monthArg = valueArg("--month");
 const startArg = valueArg("--start-date");
 const endArg = valueArg("--end-date");
+const cleanupOnly = args.has("--cleanup-only");
+const cleanupClosedMonths = cleanupOnly || args.has("--cleanup-closed-months");
+const cleanupMonth = valueArg("--cleanup-month") || monthArg;
 
 const HOME = os.homedir();
 const DRIVE_ROOT = path.join(
@@ -36,10 +39,17 @@ const config = {
   credentialsPath: expandHome(env("GOOGLE_APPLICATION_CREDENTIALS", DEFAULT_CREDENTIALS)),
   python: expandHome(env("PYTHON", DEFAULT_PYTHON)),
   googleProject: env("GOOGLE_CLOUD_PROJECT", "archive-pilates"),
+  delegatedUser: env("GOOGLE_DELEGATED_USER", "home@archivepilates.com"),
+  driveRootFolderId: env("ARCHIVE_SETTLEMENT_DRIVE_ROOT_FOLDER_ID", "1CpENP74yfKOu4j5TIyKz-m_ER8Jt0Klb"),
   salesPassword: env("STUDIOMATE_SALES_PASSWORD", "") || env("STUDIOMATE_LOGIN_PASSWORD", ""),
   headless: env("HEADLESS", "true") !== "false",
   waitForLogin: env("WAIT_FOR_LOGIN", "false") === "true",
 };
+
+const SALES_SOURCE_TARGETS = [
+  { key: "lessonSales", label: "수업매출", targetDir: "수업매출원본데이터" },
+  { key: "ticketSales", label: "수강권매출", targetDir: "수강권매출원본데이터" },
+];
 
 const range = resolveRange({ monthArg, startArg, endArg });
 const startedAt = new Date();
@@ -51,6 +61,7 @@ const result = {
   range,
   baseUrl: config.baseUrl,
   downloads: {},
+  cleanup: null,
 };
 
 await mkdir(config.profileDir, { recursive: true });
@@ -62,34 +73,38 @@ let releaseBrowserLock = null;
 let context = null;
 
 try {
-  releaseBrowserLock = await acquireStudioMateBrowserLock({ owner: "studiomate-sales-download" });
-  const { chromium } = await import("playwright");
-  context = await chromium.launchPersistentContext(config.profileDir, {
-    acceptDownloads: true,
-    headless: config.headless,
-  });
-  const page = await context.newPage();
-  if (kind === "all" || kind === "lesson-sales") {
-    result.downloads.lessonSales = await downloadSalesExcel(page, {
-      kind: "lesson-sales",
-      titlePattern: /수업\s*매출|수업매출|수업\s*매출\s*현황/,
-      menuTexts: ["매출", "수업매출", "수업 매출", "수업매출 현황"],
-      tabText: "수업 매출",
-      targetDir: "수업매출원본데이터",
-      filePrefix: "수업매출_현황",
+  if (!cleanupOnly) {
+    releaseBrowserLock = await acquireStudioMateBrowserLock({ owner: "studiomate-sales-download" });
+    const { chromium } = await import("playwright");
+    context = await chromium.launchPersistentContext(config.profileDir, {
+      acceptDownloads: true,
+      headless: config.headless,
     });
+    const page = await context.newPage();
+    if (kind === "all" || kind === "lesson-sales") {
+      result.downloads.lessonSales = await downloadSalesExcel(page, {
+        kind: "lesson-sales",
+        titlePattern: /수업\s*매출|수업매출|수업\s*매출\s*현황/,
+        menuTexts: ["매출", "수업매출", "수업 매출", "수업매출 현황"],
+        tabText: "수업 매출",
+        targetDir: "수업매출원본데이터",
+        filePrefix: "수업매출_현황",
+      });
+    }
+    if (kind === "all" || kind === "ticket-sales") {
+      result.downloads.ticketSales = await downloadSalesExcel(page, {
+        kind: "ticket-sales",
+        titlePattern: /수강권\s*매출|수강권매출|수강권\s*매출\s*현황/,
+        menuTexts: ["매출", "수강권매출", "수강권 매출", "수강권매출 현황"],
+        tabText: "수강권 매출",
+        targetDir: "수강권매출원본데이터",
+        filePrefix: "수강권매출_현황",
+      });
+    }
   }
-  if (kind === "all" || kind === "ticket-sales") {
-    result.downloads.ticketSales = await downloadSalesExcel(page, {
-      kind: "ticket-sales",
-      titlePattern: /수강권\s*매출|수강권매출|수강권\s*매출\s*현황/,
-      menuTexts: ["매출", "수강권매출", "수강권 매출", "수강권매출 현황"],
-      tabText: "수강권 매출",
-      targetDir: "수강권매출원본데이터",
-      filePrefix: "수강권매출_현황",
-    });
-  }
-  result.ok = Object.values(result.downloads).every((item) => item?.ok);
+  const downloadsOk = cleanupOnly ? true : Object.values(result.downloads).every((item) => item?.ok);
+  if (cleanupClosedMonths) result.cleanup = await cleanupClosedMonthPartials();
+  result.ok = downloadsOk && (!result.cleanup || result.cleanup.ok);
 } catch (error) {
   result.ok = false;
   result.error = error instanceof Error ? error.message : String(error);
@@ -123,6 +138,149 @@ async function downloadSalesExcel(page, target) {
   const download = await clickExcelDownload(page);
   const saved = await saveDownload(download, target);
   return { ok: true, kind: target.kind, range, ...saved };
+}
+
+async function cleanupClosedMonthPartials() {
+  const targets = SALES_SOURCE_TARGETS.map((target) => ({
+    ...target,
+    dirPath: path.join(config.driveRoot, target.targetDir),
+  }));
+  const byTarget = Object.fromEntries(
+    await Promise.all(
+      targets.map(async (target) => {
+        const files = (await readdir(target.dirPath))
+          .filter((name) => !name.startsWith("~$") && /\.(xlsx|xls)$/i.test(name))
+          .map((name) => ({ ...parseSourceFileName(name), name, path: path.join(target.dirPath, name) }))
+          .filter((file) => file.month);
+        return [target.key, { target, files }];
+      }),
+    ),
+  );
+  const months = cleanupMonth
+    ? [cleanupMonth]
+    : [
+        ...new Set(
+          Object.values(byTarget)
+            .flatMap((entry) => entry.files.map((file) => file.month))
+            .filter((month) => isClosedMonth(month)),
+        ),
+      ].sort();
+  const summary = {
+    ok: true,
+    dryRun,
+    mode: dryRun ? "plan-trash" : "trash",
+    delegatedUser: config.delegatedUser,
+    driveRootFolderId: config.driveRootFolderId,
+    months: [],
+    plannedTrashCount: 0,
+    trashedCount: 0,
+    skipped: [],
+  };
+
+  const key = dryRun ? null : JSON.parse(await readFile(config.credentialsPath, "utf8"));
+  const token = dryRun ? "" : await googleAccessToken(key, ["https://www.googleapis.com/auth/drive"], { delegatedUser: config.delegatedUser });
+  const folderIds = {};
+  if (!dryRun) {
+    for (const entry of Object.values(byTarget)) {
+      folderIds[entry.target.key] = await findDriveFolderId(token, config.driveRootFolderId, entry.target.targetDir);
+    }
+  }
+
+  for (const month of months) {
+    if (!isClosedMonth(month)) {
+      summary.skipped.push({ month, reason: "month is not closed yet" });
+      continue;
+    }
+    const monthEnd = monthEndDate(month);
+    const fullFiles = [];
+    const partials = [];
+    const missingFullTargets = [];
+    for (const entry of Object.values(byTarget)) {
+      const monthFiles = entry.files.filter((file) => file.month === month);
+      const fullFile = monthFiles.find((file) => file.startDate === `${month}-01` && file.endDate === monthEnd);
+      if (fullFile) fullFiles.push({ kind: entry.target.key, label: entry.target.label, name: fullFile.name, path: fullFile.path });
+      else missingFullTargets.push(entry.target.label);
+      partials.push(
+        ...monthFiles
+          .filter((file) => !(file.startDate === `${month}-01` && file.endDate === monthEnd))
+          .map((file) => ({ kind: entry.target.key, label: entry.target.label, name: file.name, path: file.path, startDate: file.startDate, endDate: file.endDate })),
+      );
+    }
+    if (missingFullTargets.length) {
+      summary.skipped.push({ month, reason: "full-month source file missing", missingFullTargets });
+      continue;
+    }
+    const monthSummary = { month, monthEnd, keptFullFiles: fullFiles, plannedTrash: partials, trashed: [] };
+    summary.plannedTrashCount += partials.length;
+    if (!dryRun) {
+      for (const file of partials) {
+        const trashed = await trashDriveFileByName(token, folderIds[file.kind], file.name);
+        monthSummary.trashed.push({ ...file, ...trashed });
+        summary.trashedCount += trashed.trashedCount;
+      }
+    }
+    summary.months.push(monthSummary);
+  }
+  return summary;
+}
+
+function parseSourceFileName(name) {
+  const matched = String(name).match(/(20\d{2}-\d{2}-\d{2})~(20\d{2}-\d{2}-\d{2})/);
+  if (!matched) return { month: "", startDate: "", endDate: "" };
+  return { month: matched[1].slice(0, 7), startDate: matched[1], endDate: matched[2] };
+}
+
+function isClosedMonth(month) {
+  return /^\d{4}-\d{2}$/.test(month) && monthEndDate(month) < kstDate(new Date());
+}
+
+function monthEndDate(month) {
+  const lastDay = new Date(Date.UTC(Number(month.slice(0, 4)), Number(month.slice(5, 7)), 0)).getUTCDate();
+  return `${month}-${String(lastDay).padStart(2, "0")}`;
+}
+
+async function findDriveFolderId(token, parentId, name) {
+  const query = `'${driveQueryValue(parentId)}' in parents and name = '${driveQueryValue(name)}' and mimeType = 'application/vnd.google-apps.folder' and trashed = false`;
+  const body = await driveRequest(token, "GET", `/drive/v3/files?q=${encodeURIComponent(query)}&fields=files(id,name)&supportsAllDrives=true&includeItemsFromAllDrives=true`);
+  const folder = body.files?.[0];
+  if (!folder?.id) throw new Error(`Drive source folder not found under settlement root: ${name}`);
+  return folder.id;
+}
+
+async function trashDriveFileByName(token, parentId, name) {
+  const query = `'${driveQueryValue(parentId)}' in parents and name = '${driveQueryValue(name)}' and trashed = false`;
+  const body = await driveRequest(
+    token,
+    "GET",
+    `/drive/v3/files?q=${encodeURIComponent(query)}&fields=files(id,name,trashed)&supportsAllDrives=true&includeItemsFromAllDrives=true`,
+  );
+  if (!body.files?.length) {
+    return { driveFileIds: [], trashedCount: 0, alreadyTrashedOrMissing: true };
+  }
+  const trashed = [];
+  for (const file of body.files) {
+    await driveRequest(token, "PATCH", `/drive/v3/files/${encodeURIComponent(file.id)}?supportsAllDrives=true`, { trashed: true });
+    trashed.push({ id: file.id, name: file.name });
+  }
+  return { driveFileIds: trashed.map((file) => file.id), trashedCount: trashed.length };
+}
+
+async function driveRequest(token, method, apiPath, body) {
+  const response = await fetch(`https://www.googleapis.com${apiPath}`, {
+    method,
+    headers: {
+      authorization: `Bearer ${token}`,
+      "content-type": "application/json",
+    },
+    body: body == null ? undefined : JSON.stringify(body),
+  });
+  const text = await response.text();
+  if (!response.ok) throw new Error(`Drive API failed ${response.status}: ${text}`);
+  return text ? JSON.parse(text) : {};
+}
+
+function driveQueryValue(value) {
+  return String(value).replace(/\\/g, "\\\\").replace(/'/g, "\\'");
 }
 
 async function downloadLessonSalesExcelFromApi(page, target) {
@@ -359,7 +517,7 @@ async function readSecret(secretName) {
   return Buffer.from(body?.payload?.data || "", "base64").toString("utf8").trim();
 }
 
-async function googleAccessToken(key, scopes) {
+async function googleAccessToken(key, scopes, options = {}) {
   const now = Math.floor(Date.now() / 1000);
   const payload = {
     iss: key.client_email,
@@ -368,6 +526,7 @@ async function googleAccessToken(key, scopes) {
     exp: now + 3600,
     iat: now,
   };
+  if (options.delegatedUser) payload.sub = options.delegatedUser;
   const assertion = `${base64url(JSON.stringify({ alg: "RS256", typ: "JWT" }))}.${base64url(JSON.stringify(payload))}`;
   const signature = createSign("RSA-SHA256").update(assertion).sign(key.private_key);
   const response = await fetch("https://oauth2.googleapis.com/token", {

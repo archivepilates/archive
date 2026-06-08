@@ -1,0 +1,856 @@
+<!doctype html>
+<html lang="ko">
+  <head>
+    <meta charset="utf-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1" />
+    <title>ARCHIVE CORE Current Wireframe</title>
+    <style>
+      :root {
+        --paper: #eef3f7;
+        --surface: #ffffff;
+        --surface-soft: #f8fafc;
+        --line: #d9e2ea;
+        --line-strong: #b9c5d2;
+        --text: #121826;
+        --muted: #657386;
+        --soft: #8b98aa;
+        --accent: #f06418;
+        --accent-soft: #fff1e8;
+        --blue: #2563eb;
+        --blue-soft: #eaf1ff;
+        --green: #0f766e;
+        --green-soft: #e4f7f3;
+        --red: #b42318;
+        --red-soft: #feeceb;
+        --shadow: 0 18px 48px rgba(24, 39, 61, 0.09);
+        --radius: 8px;
+        font-family: -apple-system, BlinkMacSystemFont, "SF Pro Text", "Apple SD Gothic Neo", "Helvetica Neue", Arial, sans-serif;
+        color-scheme: light;
+      }
+
+      * {
+        box-sizing: border-box;
+      }
+
+      html {
+        -webkit-text-size-adjust: 100%;
+      }
+
+      body {
+        margin: 0;
+        background:
+          linear-gradient(135deg, rgba(37, 99, 235, 0.07), rgba(240, 100, 24, 0.05) 48%, transparent 74%),
+          var(--paper);
+        color: var(--text);
+        line-height: 1.55;
+      }
+
+      a {
+        color: inherit;
+      }
+
+      .page {
+        display: grid;
+        gap: 28px;
+        width: min(1440px, 100%);
+        margin: 0 auto;
+        padding: 28px;
+      }
+
+      .hero,
+      .section,
+      .wireframe-card {
+        border: 1px solid rgba(255, 255, 255, 0.72);
+        border-radius: var(--radius);
+        background: rgba(255, 255, 255, 0.86);
+        box-shadow: var(--shadow);
+      }
+
+      .hero {
+        display: grid;
+        grid-template-columns: minmax(0, 1fr) auto;
+        gap: 28px;
+        align-items: end;
+        padding: 32px;
+      }
+
+      .eyebrow {
+        margin: 0 0 6px;
+        color: var(--accent);
+        font-size: 0.78rem;
+        font-weight: 800;
+        letter-spacing: 0;
+        text-transform: uppercase;
+      }
+
+      h1,
+      h2,
+      h3,
+      p {
+        overflow-wrap: anywhere;
+        word-break: keep-all;
+      }
+
+      h1 {
+        margin: 0;
+        font-size: 2.8rem;
+        line-height: 1.04;
+        letter-spacing: 0;
+      }
+
+      h2 {
+        margin: 0 0 8px;
+        font-size: 1.35rem;
+        letter-spacing: 0;
+      }
+
+      h3 {
+        margin: 0;
+        font-size: 1rem;
+      }
+
+      p {
+        margin: 0;
+        color: var(--muted);
+      }
+
+      .hero-meta {
+        display: grid;
+        gap: 10px;
+        min-width: 260px;
+      }
+
+      .meta-box {
+        padding: 14px 16px;
+        border: 1px solid var(--line);
+        border-radius: var(--radius);
+        background: var(--surface);
+      }
+
+      .meta-box span {
+        display: block;
+        color: var(--soft);
+        font-size: 0.78rem;
+        font-weight: 800;
+      }
+
+      .meta-box strong {
+        display: block;
+        margin-top: 2px;
+        font-size: 0.98rem;
+      }
+
+      .section {
+        display: grid;
+        gap: 18px;
+        padding: 24px;
+      }
+
+      .section-header {
+        display: flex;
+        gap: 16px;
+        align-items: flex-start;
+        justify-content: space-between;
+      }
+
+      .pill {
+        display: inline-flex;
+        min-height: 28px;
+        align-items: center;
+        justify-content: center;
+        padding: 5px 10px;
+        border-radius: 999px;
+        background: var(--blue-soft);
+        color: var(--blue);
+        font-size: 0.78rem;
+        font-weight: 800;
+        white-space: nowrap;
+      }
+
+      .pill.good {
+        background: var(--green-soft);
+        color: var(--green);
+      }
+
+      .pill.warn {
+        background: var(--accent-soft);
+        color: var(--accent);
+      }
+
+      .pill.danger {
+        background: var(--red-soft);
+        color: var(--red);
+      }
+
+      .principles {
+        display: grid;
+        grid-template-columns: repeat(auto-fit, minmax(min(100%, 230px), 1fr));
+        gap: 12px;
+      }
+
+      .principle {
+        min-width: 0;
+        padding: 16px;
+        border: 1px solid var(--line);
+        border-radius: var(--radius);
+        background: var(--surface-soft);
+      }
+
+      .principle strong {
+        display: block;
+        margin-bottom: 6px;
+      }
+
+      .layout-map {
+        display: grid;
+        grid-template-columns: 86px minmax(0, 1fr);
+        gap: 18px;
+        min-height: 520px;
+        padding: 18px;
+        border: 1px solid var(--line);
+        border-radius: var(--radius);
+        background: linear-gradient(180deg, #f7fafc, #eef3f7);
+      }
+
+      .sidebar {
+        display: grid;
+        align-content: start;
+        gap: 10px;
+        padding: 12px 8px;
+        border: 1px solid var(--line);
+        border-radius: var(--radius);
+        background: rgba(255, 255, 255, 0.9);
+      }
+
+      .brand {
+        display: grid;
+        width: 48px;
+        height: 48px;
+        place-items: center;
+        margin: 0 auto 8px;
+        border-radius: var(--radius);
+        background: linear-gradient(145deg, #ff7a2c, var(--accent));
+        color: #fff;
+        font-size: 0.78rem;
+        font-weight: 900;
+      }
+
+      .nav-dot {
+        display: grid;
+        width: 52px;
+        min-height: 46px;
+        place-items: center;
+        border: 1px solid var(--line);
+        border-radius: var(--radius);
+        background: #fff;
+        color: var(--muted);
+        font-size: 0.72rem;
+        font-weight: 800;
+      }
+
+      .nav-dot.active {
+        border-color: rgba(240, 100, 24, 0.35);
+        background: var(--accent-soft);
+        color: var(--accent);
+      }
+
+      .main-map {
+        display: grid;
+        gap: 16px;
+        min-width: 0;
+      }
+
+      .wf-topbar,
+      .wf-panel,
+      .wf-card,
+      .wf-table,
+      .wf-board {
+        border: 1px solid var(--line);
+        border-radius: var(--radius);
+        background: rgba(255, 255, 255, 0.92);
+      }
+
+      .wf-topbar {
+        display: grid;
+        grid-template-columns: minmax(0, 1fr) auto;
+        gap: 16px;
+        align-items: center;
+        padding: 18px;
+      }
+
+      .title-lines {
+        display: grid;
+        gap: 8px;
+      }
+
+      .line {
+        height: 12px;
+        border-radius: 999px;
+        background: var(--line);
+      }
+
+      .line.accent {
+        width: 130px;
+        background: var(--accent);
+      }
+
+      .line.title {
+        width: min(440px, 100%);
+        height: 30px;
+        background: var(--text);
+      }
+
+      .line.sub {
+        width: min(680px, 100%);
+      }
+
+      .wf-status {
+        width: 190px;
+        padding: 14px;
+        border: 1px solid var(--line);
+        border-radius: var(--radius);
+        background: #fff;
+      }
+
+      .kpi-row {
+        display: grid;
+        grid-template-columns: repeat(4, minmax(0, 1fr));
+        gap: 14px;
+      }
+
+      .wf-card {
+        display: grid;
+        gap: 18px;
+        min-height: 132px;
+        padding: 16px;
+      }
+
+      .wf-card .number {
+        width: 70px;
+        height: 34px;
+        border-radius: 6px;
+        background: var(--text);
+      }
+
+      .two-col {
+        display: grid;
+        grid-template-columns: minmax(0, 1.45fr) minmax(260px, 0.75fr);
+        gap: 14px;
+      }
+
+      .wf-panel {
+        min-width: 0;
+        min-height: 210px;
+        padding: 16px;
+      }
+
+      .mini-list {
+        display: grid;
+        gap: 10px;
+        margin-top: 18px;
+      }
+
+      .mini-item {
+        min-height: 38px;
+        border: 1px solid var(--line);
+        border-radius: 7px;
+        background: var(--surface-soft);
+      }
+
+      .page-grid {
+        display: grid;
+        grid-template-columns: repeat(auto-fit, minmax(min(100%, 420px), 1fr));
+        gap: 18px;
+      }
+
+      .wireframe-card {
+        display: grid;
+        gap: 14px;
+        min-width: 0;
+        padding: 18px;
+      }
+
+      .wireframe-card header {
+        display: flex;
+        gap: 12px;
+        align-items: flex-start;
+        justify-content: space-between;
+      }
+
+      .mini-wire {
+        display: grid;
+        gap: 10px;
+        padding: 12px;
+        border: 1px solid var(--line);
+        border-radius: var(--radius);
+        background: linear-gradient(180deg, #fbfdff, #f2f6f9);
+      }
+
+      .mini-top {
+        display: grid;
+        grid-template-columns: minmax(0, 1fr) 88px;
+        gap: 10px;
+      }
+
+      .mini-kpis {
+        display: grid;
+        grid-template-columns: repeat(4, minmax(0, 1fr));
+        gap: 8px;
+      }
+
+      .mini-kpi,
+      .mini-block {
+        min-height: 44px;
+        border: 1px solid var(--line);
+        border-radius: 6px;
+        background: #fff;
+      }
+
+      .mini-content {
+        display: grid;
+        grid-template-columns: minmax(0, 1fr) minmax(0, 0.8fr);
+        gap: 8px;
+      }
+
+      .mini-content.one {
+        grid-template-columns: 1fr;
+      }
+
+      .mini-content.four {
+        grid-template-columns: repeat(4, minmax(0, 1fr));
+      }
+
+      .notes {
+        display: grid;
+        gap: 8px;
+        padding-left: 18px;
+        color: var(--muted);
+      }
+
+      .notes li::marker {
+        color: var(--accent);
+      }
+
+      .priority-grid {
+        display: grid;
+        grid-template-columns: repeat(auto-fit, minmax(min(100%, 260px), 1fr));
+        gap: 12px;
+      }
+
+      .priority {
+        padding: 16px;
+        border: 1px solid var(--line);
+        border-radius: var(--radius);
+        background: var(--surface);
+      }
+
+      .priority span {
+        display: inline-flex;
+        width: 26px;
+        height: 26px;
+        align-items: center;
+        justify-content: center;
+        margin-bottom: 10px;
+        border-radius: 999px;
+        background: var(--accent);
+        color: white;
+        font-weight: 900;
+      }
+
+      .flow {
+        display: grid;
+        grid-template-columns: repeat(auto-fit, minmax(min(100%, 180px), 1fr));
+        gap: 10px;
+      }
+
+      .flow-step {
+        position: relative;
+        padding: 16px;
+        border: 1px solid var(--line);
+        border-radius: var(--radius);
+        background: #fff;
+      }
+
+      .flow-step strong {
+        display: block;
+        margin-bottom: 4px;
+      }
+
+      .footer {
+        padding: 20px 0 8px;
+        color: var(--muted);
+        text-align: center;
+      }
+
+      @media (max-width: 980px) {
+        .hero,
+        .layout-map,
+        .two-col,
+        .mini-content {
+          grid-template-columns: 1fr;
+        }
+
+        .sidebar {
+          grid-template-columns: repeat(5, minmax(0, 1fr));
+        }
+
+        .brand,
+        .nav-dot {
+          width: 100%;
+        }
+
+        .kpi-row,
+        .mini-kpis,
+        .mini-content.four {
+          grid-template-columns: repeat(2, minmax(0, 1fr));
+        }
+      }
+
+      @media (max-width: 640px) {
+        .page {
+          padding: 14px;
+        }
+
+        .hero,
+        .section {
+          padding: 18px;
+        }
+
+        h1 {
+          font-size: 2rem;
+        }
+
+        .section-header,
+        .wf-topbar,
+        .wireframe-card header {
+          display: grid;
+          grid-template-columns: 1fr;
+        }
+
+        .kpi-row,
+        .mini-kpis {
+          grid-template-columns: 1fr;
+        }
+
+        .wf-status {
+          width: 100%;
+        }
+      }
+    </style>
+  </head>
+  <body>
+    <main class="page">
+      <section class="hero">
+        <div>
+          <p class="eyebrow">ARCHIVE CORE UI/UX UPGRADE</p>
+          <h1>Current Site Wireframe</h1>
+          <p style="max-width: 760px; margin-top: 14px">
+            ARCHIVE CORE 현재 사이트의 정보구조와 화면 패턴을 GPT와 함께 개선 논의하기 위한 시각 와이어프레임입니다.
+            운영자 전용 콘솔, read-only 판단 화면, canonical source 보호 규칙을 기준으로 정리했습니다.
+          </p>
+        </div>
+        <div class="hero-meta" aria-label="문서 정보">
+          <div class="meta-box"><span>LIVE URL</span><strong>core.archivepilates.com</strong></div>
+          <div class="meta-box"><span>CREATED</span><strong>2026-06-08</strong></div>
+          <div class="meta-box"><span>USE</span><strong>GPT 업그레이드 논의용</strong></div>
+        </div>
+      </section>
+
+      <section class="section">
+        <div class="section-header">
+          <div>
+            <p class="eyebrow">PRODUCT ROLE</p>
+            <h2>운영자 전용 브라우저 콘솔</h2>
+            <p>강사용 앱이나 회원용 앱이 아니라, 운영자가 데이터 상태와 자동화 흐름을 판단하는 내부 운영 플랫폼입니다.</p>
+          </div>
+          <span class="pill good">operator only</span>
+        </div>
+        <div class="principles">
+          <article class="principle"><strong>판단 우선</strong><p>직접 실행보다 확인, 승인, 보호 규칙을 먼저 보여준다.</p></article>
+          <article class="principle"><strong>원천 보호</strong><p>알림톡, 연락처, StudioMate write는 canonical source만 사용한다.</p></article>
+          <article class="principle"><strong>Read-model 분리</strong><p>회원 360, 대시보드 스냅샷은 검토와 분석용으로 사용한다.</p></article>
+          <article class="principle"><strong>운영 흐름</strong><p>원본 수집, 품질 확인, 운영 판단, 외부 실행 순서를 유지한다.</p></article>
+        </div>
+      </section>
+
+      <section class="section">
+        <div class="section-header">
+          <div>
+            <p class="eyebrow">GLOBAL STRUCTURE</p>
+            <h2>공통 Shell Layout</h2>
+            <p>좁은 아이콘 사이드바, 페이지 헤더, KPI 카드, 운영 보드, 보호 규칙 패널이 반복됩니다.</p>
+          </div>
+          <span class="pill">current pattern</span>
+        </div>
+
+        <div class="layout-map" aria-label="공통 레이아웃 와이어프레임">
+          <aside class="sidebar">
+            <div class="brand">CORE</div>
+            <div class="nav-dot active">Home</div>
+            <div class="nav-dot">Mem</div>
+            <div class="nav-dot">Les</div>
+            <div class="nav-dot">Pri</div>
+            <div class="nav-dot">Msg</div>
+            <div class="nav-dot">Auto</div>
+            <div class="nav-dot">Biz</div>
+            <div class="nav-dot">Imp</div>
+            <div class="nav-dot">Rule</div>
+            <div class="nav-dot">Set</div>
+          </aside>
+
+          <section class="main-map">
+            <div class="wf-topbar">
+              <div class="title-lines">
+                <div class="line accent"></div>
+                <div class="line title"></div>
+                <div class="line sub"></div>
+              </div>
+              <div class="wf-status">
+                <div class="line" style="width: 80px"></div>
+                <div class="line" style="width: 135px; height: 18px; margin-top: 10px"></div>
+              </div>
+            </div>
+
+            <div class="kpi-row">
+              <div class="wf-card"><div class="line" style="width: 70%"></div><div class="number"></div><div class="line"></div></div>
+              <div class="wf-card"><div class="line" style="width: 70%"></div><div class="number"></div><div class="line"></div></div>
+              <div class="wf-card"><div class="line" style="width: 70%"></div><div class="number"></div><div class="line"></div></div>
+              <div class="wf-card"><div class="line" style="width: 70%"></div><div class="number"></div><div class="line"></div></div>
+            </div>
+
+            <div class="two-col">
+              <div class="wf-panel">
+                <div class="line title" style="width: 260px; height: 22px"></div>
+                <div class="mini-list">
+                  <div class="mini-item"></div>
+                  <div class="mini-item"></div>
+                  <div class="mini-item"></div>
+                </div>
+              </div>
+              <div class="wf-panel">
+                <div class="line title" style="width: 180px; height: 22px"></div>
+                <div class="mini-list">
+                  <div class="mini-item"></div>
+                  <div class="mini-item"></div>
+                  <div class="mini-item"></div>
+                  <div class="mini-item"></div>
+                </div>
+              </div>
+            </div>
+          </section>
+        </div>
+      </section>
+
+      <section class="section">
+        <div class="section-header">
+          <div>
+            <p class="eyebrow">INFORMATION ARCHITECTURE</p>
+            <h2>메뉴별 현재 와이어프레임</h2>
+            <p>각 페이지는 현재 사이트의 섹션 순서와 운영 역할을 기준으로 요약했습니다.</p>
+          </div>
+          <span class="pill warn">as-is</span>
+        </div>
+
+        <div class="page-grid">
+          <article class="wireframe-card">
+            <header><div><h3>Home</h3><p>오늘의 운영 우선순위와 메뉴 진입</p></div><span class="pill">summary</span></header>
+            <div class="mini-wire">
+              <div class="mini-top"><div class="mini-block"></div><div class="mini-block"></div></div>
+              <div class="mini-kpis"><div class="mini-kpi"></div><div class="mini-kpi"></div><div class="mini-kpi"></div><div class="mini-kpi"></div></div>
+              <div class="mini-content"><div class="mini-block" style="min-height: 120px"></div><div class="mini-block" style="min-height: 120px"></div></div>
+              <div class="mini-content four"><div class="mini-block"></div><div class="mini-block"></div><div class="mini-block"></div><div class="mini-block"></div></div>
+            </div>
+            <ul class="notes">
+              <li>자동화, 원본, 품질, 알림톡 상태를 첫 화면에 노출</li>
+              <li>개선 방향: 오늘 처리해야 할 항목 중심으로 재정렬</li>
+            </ul>
+          </article>
+
+          <article class="wireframe-card">
+            <header><div><h3>Members</h3><p>회원 검색, 필터, 상세 진입</p></div><span class="pill">read-model</span></header>
+            <div class="mini-wire">
+              <div class="mini-top"><div class="mini-block"></div><div class="mini-block"></div></div>
+              <div class="mini-kpis"><div class="mini-kpi"></div><div class="mini-kpi"></div><div class="mini-kpi"></div><div class="mini-kpi"></div></div>
+              <div class="mini-content one"><div class="mini-block" style="min-height: 138px"></div></div>
+              <div class="mini-content"><div class="mini-block"></div><div class="mini-block"></div></div>
+            </div>
+            <ul class="notes">
+              <li>검색, 필터, 20명 페이지네이션 구조</li>
+              <li>개선 방향: 중복 회원 병합 표시와 품질 신호 강화</li>
+            </ul>
+          </article>
+
+          <article class="wireframe-card">
+            <header><div><h3>Member Detail</h3><p>회원 360 요약과 상세 이력</p></div><span class="pill warn">detail</span></header>
+            <div class="mini-wire">
+              <div class="mini-top"><div class="mini-block"></div><div class="mini-block"></div></div>
+              <div class="mini-content one"><div class="mini-block" style="min-height: 66px"></div></div>
+              <div class="mini-kpis"><div class="mini-kpi"></div><div class="mini-kpi"></div><div class="mini-kpi"></div><div class="mini-kpi"></div></div>
+              <div class="mini-content"><div class="mini-block" style="min-height: 120px"></div><div class="mini-block" style="min-height: 120px"></div></div>
+            </div>
+            <ul class="notes">
+              <li>수강권, 구매, 예약, 메모, 알림톡, 품질 이슈를 한 화면에 표시</li>
+              <li>개선 방향: 요약/판단/이력을 탭 또는 접힘 구조로 분리</li>
+            </ul>
+          </article>
+
+          <article class="wireframe-card">
+            <header><div><h3>Lessons</h3><p>수업 운영, 폐강/조정, 원천 상태</p></div><span class="pill">lessons</span></header>
+            <div class="mini-wire">
+              <div class="mini-top"><div class="mini-block"></div><div class="mini-block"></div></div>
+              <div class="mini-kpis"><div class="mini-kpi"></div><div class="mini-kpi"></div><div class="mini-kpi"></div><div class="mini-kpi"></div></div>
+              <div class="mini-content"><div class="mini-block" style="min-height: 112px"></div><div class="mini-block" style="min-height: 112px"></div></div>
+              <div class="mini-content"><div class="mini-block"></div><div class="mini-block"></div></div>
+            </div>
+            <ul class="notes">
+              <li>오늘 수업, 강사별 이번주, 원천 상태, 폐강/조정</li>
+              <li>개선 방향: 문제 있는 수업과 상세 drilldown 우선</li>
+            </ul>
+          </article>
+
+          <article class="wireframe-card">
+            <header><div><h3>Private</h3><p>프라이빗 차트 4단계 진행</p></div><span class="pill good">best pattern</span></header>
+            <div class="mini-wire">
+              <div class="mini-top"><div class="mini-block"></div><div class="mini-block"></div></div>
+              <div class="mini-kpis"><div class="mini-kpi"></div><div class="mini-kpi"></div><div class="mini-kpi"></div><div class="mini-kpi"></div></div>
+              <div class="mini-content one"><div class="mini-block" style="min-height: 72px"></div></div>
+              <div class="mini-content four"><div class="mini-block" style="min-height: 110px"></div><div class="mini-block" style="min-height: 110px"></div><div class="mini-block" style="min-height: 110px"></div><div class="mini-block" style="min-height: 110px"></div></div>
+            </div>
+            <ul class="notes">
+              <li>수업전, 수업후, 리포트 완성, 리포트 전송 단계</li>
+              <li>개선 방향: 다른 메뉴에도 작업 상태 보드 패턴 확장</li>
+            </ul>
+          </article>
+
+          <article class="wireframe-card">
+            <header><div><h3>Messages</h3><p>알림톡 후보, 템플릿, 발송/실패</p></div><span class="pill danger">guardrail</span></header>
+            <div class="mini-wire">
+              <div class="mini-top"><div class="mini-block"></div><div class="mini-block"></div></div>
+              <div class="mini-kpis"><div class="mini-kpi"></div><div class="mini-kpi"></div><div class="mini-kpi"></div><div class="mini-kpi"></div></div>
+              <div class="mini-content"><div class="mini-block" style="min-height: 120px"></div><div class="mini-block" style="min-height: 120px"></div></div>
+              <div class="mini-content one"><div class="mini-block"></div></div>
+            </div>
+            <ul class="notes">
+              <li>오늘 판단, 템플릿 현황, 최근 후보, 발송/실패</li>
+              <li>개선 방향: 템플릿별 중복 방지 기간과 실패 사유 표시</li>
+            </ul>
+          </article>
+
+          <article class="wireframe-card">
+            <header><div><h3>Automation</h3><p>동기화, 다운로드, import 관제</p></div><span class="pill warn">health</span></header>
+            <div class="mini-wire">
+              <div class="mini-top"><div class="mini-block"></div><div class="mini-block"></div></div>
+              <div class="mini-kpis"><div class="mini-kpi"></div><div class="mini-kpi"></div><div class="mini-kpi"></div><div class="mini-kpi"></div></div>
+              <div class="mini-content one"><div class="mini-block" style="min-height: 88px"></div></div>
+              <div class="mini-content one"><div class="mini-block" style="min-height: 92px"></div></div>
+            </div>
+            <ul class="notes">
+              <li>수집, 정규화, 핵심 건강도, 외부 실행 경계</li>
+              <li>개선 방향: 실패/지연/다음 실행 예정 우선</li>
+            </ul>
+          </article>
+
+          <article class="wireframe-card">
+            <header><div><h3>Business</h3><p>경영 지표와 월별 흐름</p></div><span class="pill">metrics</span></header>
+            <div class="mini-wire">
+              <div class="mini-content one"><div class="mini-block" style="min-height: 96px"></div></div>
+              <div class="mini-kpis"><div class="mini-kpi"></div><div class="mini-kpi"></div><div class="mini-kpi"></div><div class="mini-kpi"></div></div>
+              <div class="mini-content"><div class="mini-block" style="min-height: 120px"></div><div class="mini-block" style="min-height: 120px"></div></div>
+              <div class="mini-content"><div class="mini-block"></div><div class="mini-block"></div></div>
+            </div>
+            <ul class="notes">
+              <li>월 총매출, 수업매출, 마진률, 그룹 출석률</li>
+              <li>개선 방향: 비교 기준과 원본 품질 경고 명확화</li>
+            </ul>
+          </article>
+
+          <article class="wireframe-card">
+            <header><div><h3>Imports</h3><p>원본과 데이터 품질</p></div><span class="pill warn">source</span></header>
+            <div class="mini-wire">
+              <div class="mini-top"><div class="mini-block"></div><div class="mini-block"></div></div>
+              <div class="mini-kpis"><div class="mini-kpi"></div><div class="mini-kpi"></div><div class="mini-kpi"></div><div class="mini-kpi"></div></div>
+              <div class="mini-content four"><div class="mini-block"></div><div class="mini-block"></div><div class="mini-block"></div><div class="mini-block"></div></div>
+              <div class="mini-content"><div class="mini-block" style="min-height: 110px"></div><div class="mini-block" style="min-height: 110px"></div></div>
+            </div>
+            <ul class="notes">
+              <li>원본 처리 기록, 열린 품질 이슈, stop rule</li>
+              <li>개선 방향: 원본별 root cause와 최신성 표시</li>
+            </ul>
+          </article>
+
+          <article class="wireframe-card">
+            <header><div><h3>Rules / Settings</h3><p>운영 규칙과 시스템 경계</p></div><span class="pill">static</span></header>
+            <div class="mini-wire">
+              <div class="mini-top"><div class="mini-block"></div><div class="mini-block"></div></div>
+              <div class="mini-content four"><div class="mini-block"></div><div class="mini-block"></div><div class="mini-block"></div><div class="mini-block"></div></div>
+              <div class="mini-content four"><div class="mini-block"></div><div class="mini-block"></div><div class="mini-block"></div><div class="mini-block"></div></div>
+            </div>
+            <ul class="notes">
+              <li>Rules: 외부 액션 원천, workLanes, 중복 데이터, Notion</li>
+              <li>Settings: 도메인, 권한, 배포, write 보호</li>
+            </ul>
+          </article>
+        </div>
+      </section>
+
+      <section class="section">
+        <div class="section-header">
+          <div>
+            <p class="eyebrow">UPGRADE PRIORITIES</p>
+            <h2>UI/UX 개선 우선순위</h2>
+            <p>GPT와 논의할 때 바로 비교 기준으로 쓸 수 있는 개선 후보입니다.</p>
+          </div>
+          <span class="pill good">next</span>
+        </div>
+        <div class="priority-grid">
+          <article class="priority"><span>1</span><h3>Home 재정의</h3><p>전체 요약보다 오늘의 문제, 확인 필요, 운영 우선순위 중심으로 바꾼다.</p></article>
+          <article class="priority"><span>2</span><h3>Private 패턴 확장</h3><p>4단계 진행 보드 구조를 Messages, Automation, Imports에도 적용한다.</p></article>
+          <article class="priority"><span>3</span><h3>Members 병합 표시</h3><p>중복 회원은 목록에서 하나로 보이고 상세에서 alias와 원천을 펼친다.</p></article>
+          <article class="priority"><span>4</span><h3>Lessons 예외 우선</h3><p>정상 수업보다 폐강, 조정, 출결 이상, 예약 이상을 먼저 보여준다.</p></article>
+          <article class="priority"><span>5</span><h3>Business 신뢰도</h3><p>숫자마다 비교 기준, 원본 상태, 품질 경고를 같이 보여준다.</p></article>
+          <article class="priority"><span>6</span><h3>Imports 원인 분석</h3><p>단순 로그가 아니라 원본별 품질 이슈 root cause 보드로 바꾼다.</p></article>
+        </div>
+      </section>
+
+      <section class="section">
+        <div class="section-header">
+          <div>
+            <p class="eyebrow">RECOMMENDED IA</p>
+            <h2>업그레이드 후 권장 흐름</h2>
+            <p>각 메뉴를 보고서가 아니라 운영자가 다음 판단을 내리는 작업판으로 정리합니다.</p>
+          </div>
+          <span class="pill warn">to-be</span>
+        </div>
+        <div class="flow">
+          <article class="flow-step"><strong>Home</strong><p>오늘의 문제, 확인 필요, 경영 변화</p></article>
+          <article class="flow-step"><strong>Members</strong><p>검색, 중복 병합, 회원 상세 360</p></article>
+          <article class="flow-step"><strong>Lessons</strong><p>오늘 수업, 예외, 상세 drilldown</p></article>
+          <article class="flow-step"><strong>Private</strong><p>강사별 미진행, 4단계 진행, 리포트 추적</p></article>
+          <article class="flow-step"><strong>Messages</strong><p>발송 판단, 템플릿, 실패/중복/승인</p></article>
+          <article class="flow-step"><strong>Automation</strong><p>실패/지연, 최근 실행, 다음 실행 예정</p></article>
+          <article class="flow-step"><strong>Business</strong><p>월간 지표, 비교, 수업 품질, ACM</p></article>
+          <article class="flow-step"><strong>Imports</strong><p>원본 최신성, 품질 이슈, canonical 정리</p></article>
+        </div>
+      </section>
+
+      <section class="section">
+        <div class="section-header">
+          <div>
+            <p class="eyebrow">DESIGN NOTES</p>
+            <h2>디자인 개선 메모</h2>
+            <p>현재의 장점은 유지하고, 반복되는 카드와 설명 중심 구조는 줄입니다.</p>
+          </div>
+          <span class="pill">visual guide</span>
+        </div>
+        <div class="principles">
+          <article class="principle"><strong>유지할 점</strong><p>운영자 전용의 차분한 밀도, 주황 accent, 상태 pill, canonical 경계 표시.</p></article>
+          <article class="principle"><strong>줄일 점</strong><p>모든 섹션이 같은 카드처럼 보이는 단조로움과 반복 설명 문구.</p></article>
+          <article class="principle"><strong>고칠 점</strong><p>첫 카드 높이 불일치, 섹션 간격, 모바일 overflow, tooltip z-index 문제.</p></article>
+          <article class="principle"><strong>강화할 점</strong><p>실패/주의/다음 액션을 더 앞에 배치하고 숫자의 원본 신뢰도를 표시.</p></article>
+        </div>
+      </section>
+
+      <p class="footer">ARCHIVE PILATES · ARCHIVE CORE Current Wireframe · 2026-06-08</p>
+    </main>
+  </body>
+</html>

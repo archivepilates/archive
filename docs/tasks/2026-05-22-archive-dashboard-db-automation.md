@@ -40,6 +40,8 @@ Those protected sheets should only be automated after a regression check proves 
 
 The daily preview sheets are rebuilt only for months that are still in progress. They use the existing settlement rate history from `정산대장_Master` where possible, so the dashboard can show current-month instructor and margin cards without replacing the final month-end settlement books.
 
+2026-06-08 correction: when a ticket name contains `강사레슨`, treat it as instructor-lesson even if the StudioMate `수업` column says `그룹`. Instructor-lesson counts must be deduped by `instructor + lesson date + start time + end time`; do not count each member attendance row as a separate instructor-lesson session.
+
 ## Daily cumulative revenue
 
 The new `매출일일누적` sheet is built from `수강권매출원본데이터` using `결제일` and `결제금액합계`.
@@ -119,7 +121,13 @@ Then copied to:
 ~/Library/CloudStorage/GoogleDrive-home@archivepilates.com/내 드라이브/아카이브 정산/수강권매출원본데이터/
 ```
 
-When multiple files exist for the same month, the DB sync uses the newest source file per month by default to avoid duplicate monthly revenue.
+When multiple files exist for the same month, the DB sync selects by the date range in the filename, not by Drive sync modified time:
+
+- closed month with `YYYY-MM-01~YYYY-MM-lastday`: use the full-month file
+- open/current month: use the latest cumulative file
+- closed month without a full-month file: use the latest cumulative file and emit a warning
+
+After a closed month has full-month files in both source folders, the daily runner asks Google Drive to move the older partial cumulative files for that month to Drive Trash. Current-month partial files are kept until the month closes.
 
 The ticket-sales Excel is exported through the StudioMate sales screen. The lesson-sales screen currently renders the export data client-side, so the automation uses the same logged-in StudioMate browser session to call the StudioMate fixed-lecture sales report API and writes the response into the legacy Excel column format before copying it to Drive.
 

@@ -8,6 +8,7 @@ const args = new Set(process.argv.slice(2));
 const apply = args.has("--apply");
 const syncFirebase = args.has("--sync-firebase");
 const skipDownload = args.has("--skip-download");
+const cleanupClosedMonths = !args.has("--no-cleanup-closed-months");
 const month = valueArg("--month");
 const startDate = valueArg("--start-date");
 const endDate = valueArg("--end-date");
@@ -24,6 +25,7 @@ if (!skipDownload) {
       ...(month ? [`--month=${month}`] : []),
       ...(startDate ? [`--start-date=${startDate}`] : []),
       ...(endDate ? [`--end-date=${endDate}`] : []),
+      ...(cleanupClosedMonths ? ["--cleanup-closed-months"] : []),
       ...(apply ? ["--apply"] : ["--dry-run"]),
     ]),
   );
