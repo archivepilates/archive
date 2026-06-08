@@ -64,7 +64,7 @@ export async function privateLessonChartApiHandler(request: any, response: any):
     if (request.method === "GET") {
       const { chartRequest, mode } = await readChartRequestFromRequest(request);
       const record = (await refs.privateLessonChartRecord(chartRequest.requestId).get()).data() || null;
-      response.status(200).json(publicChartRequest(chartRequest, mode, record));
+      response.status(200).json(await publicChartRequest(chartRequest, mode, record));
       return;
     }
     if (request.method === "POST") {
@@ -1052,8 +1052,8 @@ async function submitPrivateLessonChart(
       throw new Error("이미 제출된 수업 후 기록입니다. 기존 기록 보호를 위해 다시 제출할 수 없습니다.");
     }
     const now = nowTimestamp();
-    if (mode === "post" && !cleanReportSentence(answers.nextMemo)) {
-      throw new Error("다음 수업 방향을 입력해 주세요. 회원 리포트에 반영됩니다.");
+    if (mode === "post" && !cleanReportSentence(answers.nextDirection) && !cleanReportSentence(answers.nextMemo)) {
+      throw new Error("다음 수업 방향을 선택해 주세요. 회원 리포트에 반영됩니다.");
     }
     const recordPatch =
       mode === "pre"
@@ -1471,11 +1471,11 @@ async function readChartRequest(requestId: string, token: string): Promise<Priva
   return chartRequest;
 }
 
-function publicChartRequest(
+async function publicChartRequest(
   chartRequest: PrivateLessonChartRequestDoc,
   mode: PrivateLessonChartMode,
   record: PrivateLessonChartRecordDoc | null = null,
-): Record<string, unknown> {
+): Promise<Record<string, unknown>> {
   const approvalStatus = record?.publicReportApproval?.status || "";
   const reportReady = record?.gptStatus === "draft_created" &&
     Boolean(record.publicReportUrl || record.publicReportCanonicalUrl);
@@ -1484,6 +1484,8 @@ function publicChartRequest(
     : reportReady
       ? "ready"
       : record?.gptStatus || "pending";
+  const lessonTemplate = lessonTemplateForChart(chartRequest, record || undefined);
+  const previousRecord = await previousPrivateLessonRecordForRequest(chartRequest);
   return {
     requestId: chartRequest.requestId,
     mode,
@@ -1495,6 +1497,8 @@ function publicChartRequest(
     preStatus: chartRequest.preStatus,
     postStatus: chartRequest.postStatus,
     intakeSummary: chartRequest.intakeSummary || null,
+    lessonTemplate,
+    previousRecord,
     existingAnswers: record
       ? {
         pre: record.prePlan || null,
@@ -1532,6 +1536,107 @@ function publicChartRequest(
         })),
       }
       : { sessionFolderUrl: "", files: [] },
+  };
+}
+
+function lessonTemplateForChart(
+  chartRequest: PrivateLessonChartRequestDoc,
+  record?: PrivateLessonChartRecordDoc,
+): {
+  templateCode: string;
+  label: string;
+  reason: string;
+  reviewDue: boolean;
+} {
+  const explicit = String(record?.postRecord?.templateCode || record?.prePlan?.templateCode || "").trim();
+  const inferred = privateLessonTemplateCode(chartRequest.intakeSummary || {});
+  const templateCode = privateLessonTemplateLabel(explicit) ? explicit : inferred;
+  return {
+    templateCode,
+    label: privateLessonTemplateLabel(templateCode),
+    reason: templateReason(templateCode, chartRequest.intakeSummary || {}),
+    reviewDue: Number(chartRequest.sessionNumber || 0) > 0 && Number(chartRequest.sessionNumber || 0) % 5 === 0,
+  };
+}
+
+function privateLessonTemplateCode(intake: PrivateLessonChartRequestDoc["intakeSummary"] = {}): string {
+  const text = normalizeTemplateText([
+    intake?.goal,
+    intake?.focusArea,
+    intake?.painOrMedicalNote,
+    intake?.concernOrDifficulty,
+    intake?.expectationOrImportantFactor,
+    intake?.lifestyleOrPreviousIssue,
+    intake?.experienceType,
+  ].filter(Boolean).join(" "));
+  const scores: Record<string, number> = {
+    posture: scoreTemplateText(text, ["체형", "자세", "교정", "정렬", "골반", "척추", "라운드", "좌우", "밸런스"]),
+    fitness: scoreTemplateText(text, ["다이어트", "감량", "체중", "라인", "체력", "근력", "근지구력", "탄력", "운동량"]),
+    recovery: scoreTemplateText(text, ["통증", "아픔", "불편", "재활", "회복", "허리", "목", "어깨", "무릎", "디스크"]),
+    condition: scoreTemplateText(text, ["산전", "산후", "임신", "출산", "컨디션", "피로", "순환", "부종", "회복"]),
+  };
+  return Object.entries(scores).sort((a, b) => b[1] - a[1])[0]?.[1] ? Object.entries(scores).sort((a, b) => b[1] - a[1])[0][0] : "posture";
+}
+
+function privateLessonTemplateLabel(code: string): string {
+  const labels: Record<string, string> = {
+    posture: "체형교정/정렬",
+    fitness: "다이어트/체력",
+    recovery: "통증/회복",
+    condition: "산전·산후/컨디션",
+  };
+  return labels[code] || "";
+}
+
+function templateReason(code: string, intake: PrivateLessonChartRequestDoc["intakeSummary"] = {}): string {
+  const label = privateLessonTemplateLabel(code) || "체형교정/정렬";
+  const source = [intake?.goal, intake?.focusArea, intake?.expectationOrImportantFactor].filter(Boolean).join(" · ");
+  return source ? `${label} 목적에 가까운 사전설문 답변: ${source}` : `${label} 기본 템플릿을 적용했습니다.`;
+}
+
+function normalizeTemplateText(value: string): string {
+  return String(value || "").replace(/\s+/g, "").toLowerCase();
+}
+
+function scoreTemplateText(text: string, keywords: string[]): number {
+  return keywords.reduce((score, keyword) => score + (text.includes(normalizeTemplateText(keyword)) ? 1 : 0), 0);
+}
+
+async function previousPrivateLessonRecordForRequest(
+  chartRequest: PrivateLessonChartRequestDoc,
+): Promise<Record<string, unknown> | null> {
+  if (!chartRequest.memberId) return null;
+  const snap = await refs.privateLessonChartRecords().where("memberId", "==", chartRequest.memberId).limit(80).get();
+  const currentTime = chartRequest.lessonStartAt?.toDate?.()?.getTime?.() || 0;
+  const rows = snap.docs
+    .map((doc) => doc.data())
+    .filter((row) => row.recordId !== chartRequest.requestId && (row.prePlan || row.postRecord))
+    .filter((row) => {
+      const time = row.lessonStartAt?.toDate?.()?.getTime?.() || 0;
+      if (currentTime && time) return time < currentTime;
+      return Number(row.sessionNumber || 0) < Number(chartRequest.sessionNumber || 0);
+    })
+    .sort((a, b) => {
+      const at = a.lessonStartAt?.toDate?.()?.getTime?.() || 0;
+      const bt = b.lessonStartAt?.toDate?.()?.getTime?.() || 0;
+      if (at !== bt) return bt - at;
+      return Number(b.sessionNumber || 0) - Number(a.sessionNumber || 0);
+    });
+  const previous = rows[0];
+  if (!previous) return null;
+  return {
+    recordId: previous.recordId,
+    sessionNumber: previous.sessionNumber,
+    sessionLabel: `${Number(previous.sessionNumber || 1)}회차`,
+    lessonDate: previous.lessonDate,
+    lessonTime: previous.lessonStartAt ? lessonTimeText(previous) : previous.lessonDate,
+    templateCode: String(previous.postRecord?.templateCode || previous.prePlan?.templateCode || ""),
+    goals: textArray(previous.prePlan?.goals || []),
+    focusAreas: textArray(previous.prePlan?.focusAreas || []),
+    changes: textArray(previous.postRecord?.changes || []),
+    nextDirection: firstText(previous.postRecord?.nextDirection) || "",
+    nextMemo: cleanReportSentence(previous.postRecord?.nextMemo),
+    reportUrl: previous.publicReportUrl || previous.publicReportCanonicalUrl || "",
   };
 }
 
@@ -1974,24 +2079,35 @@ function privateSurveySummaryForRequest(
 }
 
 function gptPromptBrief(record: PrivateLessonChartRecordDoc, chartRequest: PrivateLessonChartRequestDoc): string {
-  const teacherNextDirection = cleanReportSentence(record.postRecord?.nextMemo);
+  const template = lessonTemplateForChart(chartRequest, record);
+  const selectedNextDirection = firstText(record.postRecord?.nextDirection);
+  const teacherNextDirection = cleanReportSentence(record.postRecord?.nextMemo) || selectedNextDirection;
   return [
     "ARCHIVE PILATES 프라이빗 회원용 수업 리포트 문장을 작성합니다.",
     "톤: 조용하고 전문적이며 따뜻하게. 과장, 진단, 치료 효과 단정, 통증/병력 상세 노출은 금지합니다.",
     "점수, 평균, 등급, 평가처럼 느껴지는 표현은 쓰지 않습니다. 몸 상태의 흐름과 다음 수업 방향만 정리합니다.",
-    "다음 수업 방향은 반드시 강사가 입력한 '강사 다음 수업 방향 원문'만 근거로 합니다. 새 목표나 진단을 추론하지 않습니다.",
+    "다음 수업 방향은 반드시 강사가 선택/입력한 '강사 다음 수업 방향'만 근거로 합니다. 새 목표나 진단을 추론하지 않습니다.",
     "회원이 읽는 문장입니다. 강사용 체크값을 자연스럽고 고급스럽게 정리합니다.",
+    "회원 목적 템플릿별 문장 규칙:",
+    "- 체형교정/정렬: 정렬 인지, 좌우 밸런스, 보상 움직임, 다음 교정 포인트를 중심으로 씁니다.",
+    "- 다이어트/체력: 수행감, 강도 반응, 호흡/근지구력 유지, 다음 강도 계획을 중심으로 씁니다.",
+    "- 통증/회복: 부담 증가 여부, 완화 흐름, 안전하게 진행한 범위, 다음 조절 방향을 중심으로 씁니다.",
+    "- 산전·산후/컨디션: 안정감, 호흡 연결, 무리감 여부, 회복 방향을 중심으로 씁니다.",
+    template.reviewDue
+      ? "이번 회차는 5회 단위 리뷰 권장 회차입니다. 매회 기록보다 누적 관리 흐름이 느껴지도록 최근 변화와 다음 블록 방향을 함께 정리합니다."
+      : "이번 회차는 일반 회차입니다. 오늘 수업의 흐름을 간결하게 정리합니다.",
     `회원: ${record.memberName}`,
     `회차: ${record.sessionNumber}회차`,
     `수업일: ${record.lessonDate}`,
     `강사: ${record.staffName}`,
+    `회원 목적 템플릿: ${template.label} (${template.templateCode})`,
     `사전설문 요약: ${safeJson(chartRequest.intakeSummary || {})}`,
     `수업 전 계획: ${safeJson(record.prePlan || {})}`,
     `수업 후 기록: ${safeJson(record.postRecord || {})}`,
-    `강사 다음 수업 방향 원문: ${teacherNextDirection}`,
+    `강사 다음 수업 방향: ${teacherNextDirection}`,
     "출력은 JSON만 허용합니다.",
     "summary: 1~2문장. 오늘 진행과 관찰된 변화를 평가 없이 따뜻하지만 담백하게 요약합니다.",
-    "nextDirection: 1문장. 강사 다음 수업 방향 원문을 회원용 문장으로만 다듬습니다. 원문에 없는 내용을 추가하지 않습니다.",
+    "nextDirection: 1문장. 강사 다음 수업 방향을 회원용 문장으로만 다듬습니다. 원문에 없는 내용을 추가하지 않습니다.",
   ].join("\n");
 }
 
@@ -2174,6 +2290,7 @@ function renderPrivateLessonReportPage(
   const sessionText = `${Number(record.sessionNumber || 1)}회차`;
   const lessonTime = lessonTimeText(chartRequest);
   const title = `${memberName || "회원"}님 수업 리포트`;
+  const template = lessonTemplateForChart(chartRequest, record);
   const reportSummary = escapeHtml(String(record.gptDraftSummary || "요약이 아직 준비되지 않았습니다."));
   const nextDirection = escapeHtml(String(record.gptDraftNextDirection || "다음 수업 방향이 아직 정리되지 않았습니다."));
   const goals = textArray(record.postRecord?.goals || record.prePlan?.goals || []);
@@ -2184,7 +2301,8 @@ function renderPrivateLessonReportPage(
   const memberResponses = textArray(record.postRecord?.memberResponses || []);
   const condition = firstText(record.postRecord?.condition);
   const painChange = firstText(record.postRecord?.painChange);
-  const nextMemo = cleanReportSentence(record.postRecord?.nextMemo);
+  const selectedNextDirection = firstText(record.postRecord?.nextDirection);
+  const nextMemo = cleanReportSentence(record.postRecord?.nextMemo) || selectedNextDirection;
   const reportUrl = (() => {
     const url = new URL(PRIVATE_LESSON_REPORT_VIEW_BASE_URL);
     url.searchParams.set("recordId", record.recordId);
@@ -2213,7 +2331,7 @@ function renderPrivateLessonReportPage(
       .note{padding:16px;border-left:3px solid var(--accent);background:rgba(255,253,250,.72);color:#312c26;word-break:keep-all}.footer{margin-top:32px;padding-top:16px;border-top:1px solid var(--line);color:var(--muted);font-size:12px}.copy{word-break:break-all}
       @media (min-width:680px){main{padding:38px 28px 72px}.grid{grid-template-columns:repeat(3,minmax(0,1fr))}.media-grid{grid-template-columns:repeat(2,minmax(0,1fr))}h1{font-size:36px}.lead{padding:24px}}
     </style></head><body><main><div class="hero"><p class="brand">ARCHIVE PILATES</p><h1>${escapeHtml(title)}</h1>` +
-    `<p class="meta">${escapeHtml(sessionText)} · ${escapeHtml(lessonTime)} · 담당: ${staffName}</p>` +
+    `<p class="meta">${escapeHtml(sessionText)} · ${escapeHtml(lessonTime)} · 담당: ${staffName} · ${escapeHtml(template.label)}</p>` +
     `<div class="lead"><p>${reportSummary}</p><p class="next">${nextDirection}</p></div>` +
     `<div class="grid"><div class="tile"><small>집중 영역</small><strong>${escapeHtml(focusAreas.slice(0, 2).join(" · ") || "-")}</strong></div>` +
     `<div class="tile"><small>몸 상태 흐름</small><strong>${escapeHtml(flowSummary)}</strong></div>` +
