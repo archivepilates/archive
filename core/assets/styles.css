@@ -1935,6 +1935,23 @@ th {
     gap: 14px;
   }
 
+  .sidebar {
+    padding: 8px;
+  }
+
+  .nav {
+    display: grid;
+    grid-template-columns: repeat(auto-fit, minmax(54px, 1fr));
+    overflow: visible;
+    padding-bottom: 0;
+  }
+
+  .nav a {
+    width: 100%;
+    min-width: 0;
+    flex: initial;
+  }
+
   .topbar,
   .page-hero {
     padding: 22px 18px;
@@ -1975,5 +1992,21 @@ th {
   .menu-card,
   .detail-card {
     border-radius: 20px;
+  }
+
+  .table-wrap {
+    padding: 10px 14px 16px;
+    overflow-x: visible;
+  }
+
+  table {
+    min-width: 0;
+    table-layout: fixed;
+  }
+
+  th,
+  td {
+    padding: 12px 7px;
+    overflow-wrap: anywhere;
   }
 }
