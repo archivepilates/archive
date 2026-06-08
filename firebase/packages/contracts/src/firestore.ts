@@ -9,6 +9,7 @@ export const archiveCollections = {
   privateLessonChartRequests: "privateLessonChartRequests",
   privateLessonChartRecords: "privateLessonChartRecords",
   adminSyncRequests: "adminSyncRequests",
+  studiomateMemberProfileWriteJobs: "studiomateMemberProfileWriteJobs",
   workLanes: "workLanes",
   membersMirror: "members",
   member360CardsMirror: "member360Cards",
@@ -27,6 +28,7 @@ export const sourceOfTruthCollections = [
   archiveCollections.privateLessonChartRequests,
   archiveCollections.privateLessonChartRecords,
   archiveCollections.adminSyncRequests,
+  archiveCollections.studiomateMemberProfileWriteJobs,
 ] as const;
 
 export const mirrorCollections = [archiveCollections.membersMirror, archiveCollections.member360CardsMirror] as const;

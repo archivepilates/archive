@@ -26,8 +26,8 @@
     .label { display:block; color:var(--muted); font-size:12px; line-height:1.4; }
     .value { display:block; margin-top:3px; font-size:15px; font-weight:800; line-height:1.45; overflow-wrap:break-word; }
     .field { display:grid; gap:7px; margin-top:10px; }
-    input[type="text"] { width:100%; min-height:46px; border:1px solid var(--line); border-radius:8px; padding:10px 11px; background:#fff; color:var(--ink); font:inherit; }
-    input[type="text"]:focus { outline:2px solid rgba(183,61,50,.18); border-color:var(--accent); }
+    input[type="text"], select { width:100%; min-height:46px; border:1px solid var(--line); border-radius:8px; padding:10px 11px; background:#fff; color:var(--ink); font:inherit; }
+    input[type="text"]:focus, select:focus { outline:2px solid rgba(183,61,50,.18); border-color:var(--accent); }
     .terms { display:grid; gap:10px; }
     details { border:1px solid var(--line); border-radius:8px; background:#fff; overflow:hidden; }
     summary { min-height:46px; padding:12px; cursor:pointer; font-weight:900; }
@@ -76,11 +76,21 @@
         <div class="grid" id="memberGrid"></div>
         <div class="field">
           <label class="label" for="address">주소</label>
-          <input id="address" name="address" type="text" autocomplete="street-address" placeholder="주소를 입력해 주세요">
+          <input id="address" name="address" type="text" autocomplete="street-address" placeholder="주소를 입력해 주세요" required>
         </div>
         <div class="field">
           <label class="label" for="birthDate">생년월일</label>
-          <input id="birthDate" name="birthDate" type="text" inputmode="numeric" autocomplete="bday" placeholder="예: 1990.01.01">
+          <input id="birthDate" name="birthDate" type="text" inputmode="numeric" autocomplete="bday" placeholder="예: 1990.01.01" required>
+        </div>
+        <div class="field">
+          <label class="label" for="gender">성별</label>
+          <select id="gender" name="gender" autocomplete="sex" required>
+            <option value="">선택해 주세요</option>
+            <option value="여성">여성</option>
+            <option value="남성">남성</option>
+            <option value="기타">기타</option>
+            <option value="응답하지 않음">응답하지 않음</option>
+          </select>
         </div>
         <div class="field">
           <label class="label" for="visitRoute">방문경로</label>
@@ -205,6 +215,7 @@
       ]);
       form.elements.address.value = contract.member.address || '';
       form.elements.birthDate.value = contract.member.birthDate || '';
+      form.elements.gender.value = contract.member.gender || '';
       form.elements.visitRoute.value = contract.member.visitRoute || '';
       form.elements.exercisePurpose.value = contract.member.exercisePurpose || '';
       form.elements.recommender.value = contract.member.recommender || '';
@@ -222,12 +233,15 @@
     form.addEventListener('submit', async (event) => {
       event.preventDefault();
       button.disabled = true;
+      const defaultButtonText = button.textContent;
+      button.textContent = '제출 중입니다...';
       try {
         const payload = {
           contractId,
           accessToken,
           address: form.elements.address.value.trim(),
           birthDate: form.elements.birthDate.value.trim(),
+          gender: form.elements.gender.value.trim(),
           visitRoute: form.elements.visitRoute.value.trim(),
           exercisePurpose: form.elements.exercisePurpose.value.trim(),
           recommender: form.elements.recommender.value.trim(),
@@ -249,6 +263,7 @@
         showMessage(err.message || '제출 중 오류가 발생했습니다. 잠시 후 다시 시도해 주세요.', true);
       } finally {
         button.disabled = false;
+        button.textContent = defaultButtonText;
       }
     });
 

@@ -316,6 +316,7 @@ export interface MemberProfileDoc {
 }
 
 export type MemberSignupContractStatus = "draft" | "opened" | "submitted" | "expired" | "cancelled";
+export type StudioMateMemberProfileWriteStatus = "pending" | "running" | "done" | "retry" | "failed" | "cancelled";
 
 export interface MemberSignupContractDoc {
   contractId: string;
@@ -364,9 +365,38 @@ export interface MemberSignupContractDoc {
   };
   openedAt?: Timestamp | null;
   submittedAt?: Timestamp | null;
+  profileWriteJobId?: string;
+  profileWriteStatus?: StudioMateMemberProfileWriteStatus | "not_required";
+  profileWriteUpdatedAt?: Timestamp | null;
+  profileWriteLastError?: string | null;
   expiresAt?: Timestamp | null;
   createdAt: Timestamp;
   updatedAt: Timestamp;
+}
+
+export interface StudioMateMemberProfileWriteJobDoc {
+  jobId: string;
+  studioId: string;
+  contractId: string;
+  memberId: string;
+  studiomateMemberId?: string;
+  memberName: string;
+  memberPhone: string;
+  status: StudioMateMemberProfileWriteStatus;
+  attempts: number;
+  maxAttempts: number;
+  source: "member_signup_contract";
+  payload: {
+    address: string;
+    birthDate: string;
+    gender: string;
+  };
+  createdAt: Timestamp;
+  updatedAt: Timestamp;
+  startedAt?: Timestamp | null;
+  writtenAt?: Timestamp | null;
+  lastError?: string | null;
+  failureEmailSentAt?: Timestamp | null;
 }
 
 export type OnsiteWelcomeRequestStatus =

@@ -32,6 +32,7 @@ export async function memberSignupContractHandler(request: any, response: any): 
       }
       const submission = normalizeSubmission(body, contract.member.name);
       const signedAt = nowTimestamp();
+      const profileWriteJobId = `member_signup_profile_${contract.contractId}`;
       const signedAtText = new Intl.DateTimeFormat("ko-KR", {
         timeZone: "Asia/Seoul",
         year: "numeric",
@@ -45,6 +46,7 @@ export async function memberSignupContractHandler(request: any, response: any): 
         status: "submitted",
         member: {
           ...contract.member,
+          gender: submission.gender,
           birthDate: submission.birthDate,
           address: submission.address,
           visitRoute: submission.visitRoute,
@@ -62,9 +64,40 @@ export async function memberSignupContractHandler(request: any, response: any): 
           signatureImageHash: sha256(submission.signatureImageDataUrl),
         },
         submittedAt: signedAt,
+        profileWriteJobId,
+        profileWriteStatus: "pending",
+        profileWriteUpdatedAt: signedAt,
+        profileWriteLastError: null,
         updatedAt: signedAt,
       };
-      await refs.memberSignupContract(contract.contractId).set(next, { merge: true });
+      await Promise.all([
+        refs.memberSignupContract(contract.contractId).set(next, { merge: true }),
+        refs.studiomateMemberProfileWriteJob(profileWriteJobId).set(
+          {
+            jobId: profileWriteJobId,
+            studioId: contract.studioId,
+            contractId: contract.contractId,
+            memberId: contract.memberId,
+            memberName: contract.memberName,
+            memberPhone: contract.memberPhone,
+            status: "pending",
+            attempts: 0,
+            maxAttempts: 3,
+            source: "member_signup_contract",
+            payload: {
+              address: submission.address,
+              birthDate: submission.birthDate,
+              gender: submission.gender,
+            },
+            createdAt: signedAt,
+            updatedAt: signedAt,
+            startedAt: null,
+            writtenAt: null,
+            lastError: null,
+          },
+          { merge: true },
+        ),
+      ]);
       response.json({ ok: true, duplicate: false, submittedAtText: signedAtText });
       return;
     }
@@ -111,9 +144,16 @@ function normalizeSubmission(input: Record<string, unknown>, fallbackName: strin
     throw new Error("직접 서명을 입력해주세요.");
   }
   if (signatureImageDataUrl.length > 250000) throw new Error("서명 이미지가 너무 큽니다. 다시 서명해 주세요.");
+  const address = stringValue(input.address).slice(0, 240);
+  const birthDate = normalizeBirthDate(stringValue(input.birthDate));
+  const gender = normalizeGender(input.gender);
+  if (!address) throw new Error("주소를 입력해주세요.");
+  if (!birthDate) throw new Error("생년월일을 입력해주세요.");
+  if (!gender) throw new Error("성별을 선택해주세요.");
   return {
-    birthDate: stringValue(input.birthDate).slice(0, 40),
-    address: stringValue(input.address).slice(0, 240),
+    birthDate,
+    gender,
+    address,
     visitRoute: stringValue(input.visitRoute).slice(0, 80),
     exercisePurpose: stringValue(input.exercisePurpose).slice(0, 120),
     recommender: stringValue(input.recommender).slice(0, 80),
@@ -163,6 +203,34 @@ function booleanValue(value: unknown): boolean {
 
 function stringValue(value: unknown): string {
   return String(value ?? "").trim();
+}
+
+function normalizeGender(value: unknown): string {
+  const raw = stringValue(value);
+  const map: Record<string, string> = {
+    female: "여성",
+    f: "여성",
+    woman: "여성",
+    "여": "여성",
+    "여성": "여성",
+    male: "남성",
+    m: "남성",
+    man: "남성",
+    "남": "남성",
+    "남성": "남성",
+    other: "기타",
+    "기타": "기타",
+    none: "응답하지 않음",
+    unknown: "응답하지 않음",
+    "응답하지 않음": "응답하지 않음",
+  };
+  return map[raw.toLowerCase()] || map[raw] || "";
+}
+
+function normalizeBirthDate(value: string): string {
+  const digits = value.replace(/\D/g, "");
+  if (digits.length === 8) return `${digits.slice(0, 4)}-${digits.slice(4, 6)}-${digits.slice(6, 8)}`;
+  return value.slice(0, 40);
 }
 
 function sha256(value: string): string {

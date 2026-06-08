@@ -15,7 +15,8 @@
     "deploy:affected-functions": "node scripts/deploy-affected-functions.mjs --apply",
     "validate:function-boundaries": "node scripts/validate-functions-boundaries.mjs",
     "deploy:archivein-live": "bash scripts/deploy-archivein-live.sh",
-    "process:admin-emergency-sync": "node scripts/process-admin-emergency-sync-requests.mjs"
+    "process:admin-emergency-sync": "node scripts/process-admin-emergency-sync-requests.mjs",
+    "process:studiomate-profile-write": "node scripts/process-studiomate-member-profile-write-jobs.mjs"
   },
   "dependencies": {
     "chart.js": "^4.4.9",
