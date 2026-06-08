@@ -12,6 +12,7 @@ import type {
   MemberContactIndexDoc,
   MemberSignupContractDoc,
   OnsiteWelcomeRequestDoc,
+  StudioMateMemberProfileWriteJobDoc,
   LectureDoc,
   MemberMemoDoc,
   MemberProfileDoc,
@@ -58,6 +59,9 @@ export const refs = {
   memberSignupContracts: () =>
     db.collection("memberSignupContracts").withConverter(converter<MemberSignupContractDoc>()),
   memberSignupContract: (contractId: string) => refs.memberSignupContracts().doc(contractId),
+  studiomateMemberProfileWriteJobs: () =>
+    db.collection("studiomateMemberProfileWriteJobs").withConverter(converter<StudioMateMemberProfileWriteJobDoc>()),
+  studiomateMemberProfileWriteJob: (jobId: string) => refs.studiomateMemberProfileWriteJobs().doc(jobId),
   onsiteWelcomeRequests: () =>
     db.collection("onsiteWelcomeRequests").withConverter(converter<OnsiteWelcomeRequestDoc>()),
   onsiteWelcomeRequest: (requestId: string) => refs.onsiteWelcomeRequests().doc(requestId),

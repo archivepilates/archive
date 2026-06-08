@@ -39,6 +39,7 @@ export async function memberSignupContractHandler(request: any, response: any): 
       }
       const submission = normalizeSubmission(body, contract.member.name);
       const signedAt = nowTimestamp();
+      const profileWriteJobId = `member_signup_profile_${contract.contractId}`;
       const signedAtText = new Intl.DateTimeFormat("ko-KR", {
         timeZone: "Asia/Seoul",
         year: "numeric",
@@ -52,6 +53,7 @@ export async function memberSignupContractHandler(request: any, response: any): 
         status: "submitted",
         member: {
           ...contract.member,
+          gender: submission.gender,
           birthDate: submission.birthDate,
           address: submission.address,
           visitRoute: submission.visitRoute,
@@ -69,6 +71,10 @@ export async function memberSignupContractHandler(request: any, response: any): 
           signatureImageHash: sha256(submission.signatureImageDataUrl),
         },
         submittedAt: signedAt,
+        profileWriteJobId,
+        profileWriteStatus: "pending",
+        profileWriteUpdatedAt: signedAt,
+        profileWriteLastError: null,
         studiomateProfileSyncStatus: "pending",
         studiomateSyncStatus: "pending",
         studiomateProfileSync: {
@@ -109,6 +115,7 @@ export async function memberSignupContractHandler(request: any, response: any): 
             ...next,
             member: {
               ...current.member,
+              gender: submission.gender,
               birthDate: submission.birthDate,
               address: submission.address,
               visitRoute: submission.visitRoute,
@@ -146,12 +153,9 @@ async function enqueueStudioMateProfileWriteJob(contract: MemberSignupContractDo
   if (contract.status !== "submitted") return;
   const now = nowTimestamp();
   const jobId = `member_signup_profile_${contract.contractId}`;
-  const memoId = `member_signup_memo_${contract.contractId}`;
-  const memoContent = memberSignupMemoContent(contract);
-  await db.collection("studiomateProfileWriteJobs").doc(jobId).set(
+  await refs.studiomateMemberProfileWriteJob(jobId).set(
     {
       jobId,
-      type: "member_signup_profile",
       studioId: contract.studioId,
       contractId: contract.contractId,
       memberId: contract.memberId,
@@ -162,83 +166,18 @@ async function enqueueStudioMateProfileWriteJob(contract: MemberSignupContractDo
       maxAttempts: 3,
       source: "member_signup_contract",
       payload: {
-        member: contract.member || {},
-        agreements: contract.agreements || {},
-        submittedAt: contract.submittedAt || null,
+        address: contract.member?.address || "",
+        birthDate: contract.member?.birthDate || "",
+        gender: contract.member?.gender || "",
       },
       createdAt: now,
       updatedAt: now,
-    },
-    { merge: true },
-  );
-  await refs.memberMemo(memoId).set(
-    {
-      memoId,
-      studioId: contract.studioId,
-      memberId: contract.memberId,
-      memberName: contract.memberName,
-      lectureId: "",
-      bookingId: "",
-      lectureDate: "",
-      staffId: "",
-      staffName: "",
-      memoType: "member_note",
-      visibility: "staff_and_manager",
-      content: memoContent,
-      syncStatus: "pending",
-      createdByUid: "system:member_signup",
-      createdAt: now,
-      updatedAt: now,
-    },
-    { merge: true },
-  );
-  await db.collection("studiomateMemoWriteJobs").doc(memoId).set(
-    {
-      jobId: memoId,
-      studioId: contract.studioId,
-      source: "member_signup",
-      status: "pending",
-      writeMode: "playwright",
-      contractId: contract.contractId,
-      memberId: contract.memberId,
-      memberName: contract.memberName,
-      memberPhone: contract.memberPhone,
-      content: memoContent,
-      attempts: 0,
-      maxAttempts: 3,
       lastError: null,
-      createdAt: now,
-      updatedAt: now,
+      startedAt: null,
+      writtenAt: null,
     },
     { merge: true },
   );
-}
-
-function memberSignupMemoContent(contract: MemberSignupContractDoc): string {
-  const member = contract.member || {};
-  const agreement: NonNullable<MemberSignupContractDoc["agreements"]> = contract.agreements || {
-    refundAndCancellation: false,
-    facilityUse: false,
-    privacyUse: false,
-    finalConfirmation: false,
-  };
-  return [
-    "[ARCHIVE IN 회원가입서 제출]",
-    `제출: ${contract.signature?.signedAtText || "-"}`,
-    `회원: ${contract.memberName || member.name || "-"} / ${formatPhone(contract.memberPhone || member.phone || "")}`,
-    `생년월일: ${member.birthDate || "-"}`,
-    `주소: ${member.address || "-"}`,
-    `방문경로: ${member.visitRoute || "-"}`,
-    `운동목적: ${member.exercisePurpose || "-"}`,
-    `추천인: ${member.recommender || "-"}`,
-    `마케팅 수신동의: ${agreement.marketingAdConsent ? "동의" : "미동의"}`,
-  ].join("\n");
-}
-
-function formatPhone(value: string): string {
-  const digits = stringValue(value).replace(/\D/g, "");
-  if (digits.length === 11) return `${digits.slice(0, 3)}-${digits.slice(3, 7)}-${digits.slice(7)}`;
-  return digits || "-";
 }
 
 async function tryArchiveSubmittedContract(contract: MemberSignupContractDoc): Promise<{
@@ -321,9 +260,16 @@ function normalizeSubmission(input: Record<string, unknown>, fallbackName: strin
     throw new Error("직접 서명을 입력해주세요.");
   }
   if (signatureImageDataUrl.length > 250000) throw new Error("서명 이미지가 너무 큽니다. 다시 서명해 주세요.");
+  const address = stringValue(input.address).slice(0, 240);
+  const birthDate = normalizeBirthDate(stringValue(input.birthDate));
+  const gender = normalizeGender(input.gender);
+  if (!address) throw new Error("주소를 입력해주세요.");
+  if (!birthDate) throw new Error("생년월일을 입력해주세요.");
+  if (!gender) throw new Error("성별을 선택해주세요.");
   return {
-    birthDate: stringValue(input.birthDate).slice(0, 40),
-    address: stringValue(input.address).slice(0, 240),
+    birthDate,
+    gender,
+    address,
     visitRoute: stringValue(input.visitRoute).slice(0, 80),
     exercisePurpose: stringValue(input.exercisePurpose).slice(0, 120),
     recommender: stringValue(input.recommender).slice(0, 80),
@@ -373,6 +319,34 @@ function booleanValue(value: unknown): boolean {
 
 function stringValue(value: unknown): string {
   return String(value ?? "").trim();
+}
+
+function normalizeGender(value: unknown): string {
+  const raw = stringValue(value);
+  const map: Record<string, string> = {
+    female: "여성",
+    f: "여성",
+    woman: "여성",
+    "여": "여성",
+    "여성": "여성",
+    male: "남성",
+    m: "남성",
+    man: "남성",
+    "남": "남성",
+    "남성": "남성",
+    other: "기타",
+    "기타": "기타",
+    none: "응답하지 않음",
+    unknown: "응답하지 않음",
+    "응답하지 않음": "응답하지 않음",
+  };
+  return map[raw.toLowerCase()] || map[raw] || "";
+}
+
+function normalizeBirthDate(value: string): string {
+  const digits = value.replace(/\D/g, "");
+  if (digits.length === 8) return `${digits.slice(0, 4)}-${digits.slice(4, 6)}-${digits.slice(6, 8)}`;
+  return value.slice(0, 40);
 }
 
 function sha256(value: string): string {

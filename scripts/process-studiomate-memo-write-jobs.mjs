@@ -81,6 +81,27 @@ try {
     result.processed += 1;
     const item = { jobId: data.jobId || ref.id, memberName: data.memberName, status: "pending" };
     try {
+      if (isMemberSignupMemoJob(data)) {
+        item.status = "skipped";
+        item.reason = "member_signup_profile_fields_use_dedicated_queue";
+        result.skipped += 1;
+        if (apply) {
+          await ref.set(
+            {
+              status: "skipped",
+              skipReason: "회원가입서 주소/생년월일/성별은 StudioMate 메모가 아니라 회원정보 쓰기 큐에서 처리합니다.",
+              updatedAt: admin.firestore.Timestamp.now(),
+            },
+            { merge: true },
+          );
+          await updateMemberMemoSyncStatus(data.jobId || ref.id, {
+            syncStatus: "skipped",
+            syncError: "회원가입서 정보는 메모 자동화에서 제외됨",
+          });
+        }
+        result.jobs.push(item);
+        continue;
+      }
       if (!apply) {
         item.status = "dry-run";
         result.skipped += 1;
@@ -470,6 +491,12 @@ function bodyContainsMemoContent(body, content) {
   const firstLine = normalizeMemoText(content.split("\n")[0] || "");
   const tail = normalizedContent.slice(-30);
   return Boolean(firstLine && normalizedBody.includes(firstLine) && tail && normalizedBody.includes(tail));
+}
+
+function isMemberSignupMemoJob(job) {
+  const source = String(job.source || "");
+  const content = String(job.content || "");
+  return source === "member_signup_backfill" || content.includes("[ARCHIVE IN 회원가입서 제출]");
 }
 
 function normalizeMemoText(value) {
