@@ -425,7 +425,7 @@
       state.data = data;
       const isPost = data.mode === "post";
       title.textContent = isPost ? "수업 후 기록" : "수업 전 계획";
-      submitButton.textContent = isPost ? "수업 후 기록 제출" : "수업 전 계획 제출";
+      submitButton.textContent = isPost && data.postStatus === "submitted" && !data.locked ? "수정 저장" : isPost ? "수업 후 기록 제출" : "수업 전 계획 제출";
       meta.innerHTML = [
         `<span>${escapeHtml(data.memberName || "-")}님 · ${Number(data.sessionNumber || 1)}회차</span>`,
         `<span>${escapeHtml(data.lessonTime || data.lessonDate || "-")} · 담당 ${escapeHtml(data.staffName || "미정")}</span>`,
@@ -466,10 +466,10 @@
         input.disabled = true;
       });
       submitButton.disabled = true;
-      submitButton.textContent = data.mode === "post" ? "수업 후 기록 제출 완료" : "수업 전 계획 제출 완료";
+      submitButton.textContent = data.mode === "post" ? "회원 발송 완료" : "수업 전 계획 제출 완료";
       const note = document.createElement("p");
       note.className = "locked-note";
-      note.textContent = "이미 제출된 기록입니다. 기존 내용 보호를 위해 다시 제출할 수 없습니다.";
+      note.textContent = data.lockReason || "회원 알림톡 발송 완료 후에는 수정할 수 없습니다.";
       sections.after(note);
     }
 
@@ -480,13 +480,17 @@
         return;
       }
       const report = data.report || {};
-      const approved = ["approved", "queued", "sent"].includes(String(report.status || report.approval?.status || ""));
+      const reportStatus = String(report.status || report.approval?.status || "");
+      const approved = ["approved", "queued", "sent", "processing"].includes(reportStatus);
+      const sent = ["sent", "processing"].includes(reportStatus) || data.locked;
       const ready = Boolean(report.url);
       const submitted = data.postStatus === "submitted" || Boolean(report.postSubmitted);
       const message = ready
-        ? approved
+        ? sent
+          ? "회원 알림톡 발송 이후에는 기록과 리포트가 잠깁니다."
+          : approved
           ? "승인이 반영되었습니다. 회원 알림톡 발송 상태는 운영 큐에서 관리됩니다."
-          : "수업 전/후 기록이 반영된 최종 리포트입니다. 내용을 확인한 뒤 발송 승인해 주세요."
+          : "수업 전/후 기록이 반영된 리포트입니다. 발송 전까지 답변을 수정하거나 리포트를 다시 생성할 수 있습니다."
         : submitted
           ? "수업 전/후 기록을 회원용 리포트로 변환해 주세요."
           : "수업 후 기록 제출 후 회원용 리포트가 생성됩니다.";
@@ -496,12 +500,12 @@
         <p>${escapeHtml(message)}</p>
         ${ready ? `<iframe class="report-frame" title="회원용 리포트 미리보기" src="${escapeAttr(report.url)}"></iframe>` : ""}
         <div class="button-row">
-          ${submitted ? `<button class="${ready ? "secondary" : ""}" type="button" data-convert-report ${approved ? "disabled" : ""}>${ready ? "리포트 변환 완료" : "수업 전/후 기록으로 리포트 변환"}</button>` : ""}
+          ${submitted ? `<button class="${ready ? "secondary" : ""}" type="button" data-convert-report ${sent ? "disabled" : ""}>${ready ? "리포트 다시 생성" : "수업 전/후 기록으로 리포트 변환"}</button>` : ""}
           ${ready ? `<button class="secondary" type="button" data-open-report>리포트 새 창으로 보기</button>` : `<button class="secondary" type="button" data-refresh-report>리포트 상태 새로고침</button>`}
-          ${ready ? `<button type="button" data-approve-report ${approved ? "disabled" : ""}>${approved ? "승인 완료" : "회원 알림톡 발송 승인"}</button>` : ""}
+          ${ready ? `<button type="button" data-approve-report ${approved ? "disabled" : ""}>${sent ? "발송 완료" : approved ? "승인 완료" : "회원 알림톡 발송 승인"}</button>` : ""}
         </div>`;
       const convertButton = reportPanel.querySelector("[data-convert-report]");
-      if (convertButton && !ready) convertButton.addEventListener("click", convertReport);
+      if (convertButton && !sent) convertButton.addEventListener("click", convertReport);
       const openButton = reportPanel.querySelector("[data-open-report]");
       if (openButton) openButton.addEventListener("click", () => window.open(report.url, "_blank", "noopener"));
       const refreshButton = reportPanel.querySelector("[data-refresh-report]");
@@ -564,7 +568,7 @@
       event.preventDefault();
       if (state.loading) return;
       if (state.data?.locked) {
-        setStatus("이미 제출된 기록입니다. 기존 내용 보호를 위해 다시 제출할 수 없습니다.", true);
+        setStatus(state.data.lockReason || "회원 알림톡 발송 완료 후에는 수정할 수 없습니다.", true);
         return;
       }
       state.loading = true;
@@ -580,8 +584,13 @@
         const data = await res.json();
         if (!res.ok || data.ok === false) throw new Error(data.error || "제출에 실패했습니다.");
         setStatus(state.mode === "post" ? "제출되었습니다. 리포트 생성 상태를 확인합니다." : "제출되었습니다. Notion 차트에 반영됩니다.", false);
-        submitButton.textContent = "제출 완료";
-        if (state.mode === "post") await refreshReport();
+        if (state.mode === "post") {
+          const refreshed = await refreshReport();
+          submitButton.disabled = Boolean(refreshed.locked);
+          submitButton.textContent = refreshed.locked ? "회원 발송 완료" : "수정 저장";
+        } else {
+          submitButton.textContent = "제출 완료";
+        }
         state.loading = false;
       } catch (error) {
         state.loading = false;

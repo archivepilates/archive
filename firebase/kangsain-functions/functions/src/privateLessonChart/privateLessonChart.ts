@@ -62,7 +62,7 @@ export async function privateLessonChartApiHandler(request: any, response: any):
     if (request.method === "GET") {
       const { chartRequest, mode } = await readChartRequestFromRequest(request);
       const record = (await refs.privateLessonChartRecord(chartRequest.requestId).get()).data() || null;
-      response.status(200).json(publicChartRequest(chartRequest, mode, record));
+      response.status(200).json(await publicChartRequest(chartRequest, mode, record));
       return;
     }
     if (request.method === "POST") {
@@ -638,23 +638,15 @@ async function convertPrivateLessonReportFromChart(
 }> {
   const record = (await refs.privateLessonChartRecord(chartRequest.requestId).get()).data();
   if (!record) throw new Error("회차 기록을 찾을 수 없습니다.");
+  const deliveryState = await privateLessonReportDeliveryState(record);
+  if (deliveryState.locked) {
+    throw new Error(deliveryState.reason || "회원 알림톡 발송 완료 후에는 리포트를 다시 생성할 수 없습니다.");
+  }
   if (!record.postRecord || !record.postSubmittedAt) {
     throw new Error("수업 후 기록 제출 후 리포트로 변환할 수 있습니다.");
   }
 
-  if (
-    ["draft_created", "approved", "published"].includes(record.gptStatus) &&
-    (record.publicReportUrl || record.publicReportCanonicalUrl)
-  ) {
-    return {
-      recordId: record.recordId,
-      reportStatus: "ready",
-      taskId: record.gptTaskId,
-      reportUrl: record.publicReportUrl || record.publicReportCanonicalUrl || "",
-      message: "이미 변환된 회원용 리포트가 있습니다. 내용을 확인한 뒤 발송 승인해 주세요.",
-    };
-  }
-
+  await resetPrivateLessonReportCandidateForEdit(record.recordId, "리포트 재생성으로 기존 승인/대기 후보 재검수 필요");
   const generated = await generatePrivateLessonReportDraft(record, chartRequest, { force: true });
   const notionSync = await syncPrivateLessonChartRecordToNotion(generated.record, chartRequest);
   await refs.privateLessonChartRecord(record.recordId).set({ notionSync, updatedAt: nowTimestamp() }, { merge: true });
@@ -756,6 +748,58 @@ async function enqueuePrivateLessonReportForRecord(
   await refs.alimtalkCandidate(candidateId).set(candidate, { merge: true });
   if (existing?.status === "failed") return "failed";
   return templateApproved ? "queued" : "template_pending";
+}
+
+async function privateLessonReportDeliveryState(record: PrivateLessonChartRecordDoc | null): Promise<{
+  locked: boolean;
+  status: string;
+  reason: string;
+}> {
+  if (!record) return { locked: false, status: "pending", reason: "" };
+  const candidateId = `private_lesson_report_${record.recordId}`;
+  const [candidateSnap, sendSnap] = await Promise.all([
+    refs.alimtalkCandidate(candidateId).get(),
+    refs.alimtalkSend(candidateId).get(),
+  ]);
+  const candidate = candidateSnap.data();
+  const send = sendSnap.data();
+  const approvalStatus = String(record.publicReportApproval?.status || "");
+  const candidateStatus = String(candidate?.status || "");
+  const sendStatus = String(send?.status || "");
+  if (record.gptStatus === "published" || approvalStatus === "sent" || candidateStatus === "sent" || sendStatus === "done") {
+    return {
+      locked: true,
+      status: "sent",
+      reason: "회원 알림톡 발송 완료 후에는 수업 후 기록과 리포트를 수정할 수 없습니다.",
+    };
+  }
+  if (candidateStatus === "processing") {
+    return {
+      locked: true,
+      status: "processing",
+      reason: "회원 알림톡 발송 처리 중이라 잠시 후 다시 확인해 주세요.",
+    };
+  }
+  return { locked: false, status: candidateStatus || approvalStatus || record.gptStatus || "pending", reason: "" };
+}
+
+async function resetPrivateLessonReportCandidateForEdit(recordId: string, reason: string): Promise<void> {
+  const candidateId = `private_lesson_report_${recordId}`;
+  const candidate = (await refs.alimtalkCandidate(candidateId).get()).data();
+  if (!candidate || candidate.status === "sent") return;
+  if (candidate.status === "processing") {
+    throw new Error("회원 알림톡 발송 처리 중이라 현재 리포트를 수정할 수 없습니다.");
+  }
+  await refs.alimtalkCandidate(candidateId).set(
+    {
+      status: "candidate",
+      reviewedAt: null,
+      sentAt: null,
+      lastError: reason,
+      updatedAt: nowTimestamp(),
+    },
+    { merge: true },
+  );
 }
 
 async function claimNotionWebhookEvent(eventId: string, body: any): Promise<boolean> {
@@ -1045,14 +1089,22 @@ async function submitPrivateLessonChart(
   if (mode === "pre" && (chartRequest.preStatus === "submitted" || base.preSubmittedAt)) {
     throw new Error("이미 제출된 수업 전 계획입니다. 기존 기록 보호를 위해 다시 제출할 수 없습니다.");
   }
-  if (mode === "post" && (chartRequest.postStatus === "submitted" || base.postSubmittedAt)) {
-    throw new Error("이미 제출된 수업 후 기록입니다. 기존 기록 보호를 위해 다시 제출할 수 없습니다.");
+  if (mode === "post") {
+    const deliveryState = await privateLessonReportDeliveryState(base);
+    if (deliveryState.locked) {
+      throw new Error(deliveryState.reason || "회원 알림톡 발송 완료 후에는 수업 후 기록을 수정할 수 없습니다.");
+    }
   }
   const now = nowTimestamp();
   const recordPatch =
     mode === "pre"
       ? { prePlan: answers, preSubmittedAt: now, gptStatus: base.gptStatus || "pending" }
-      : { postRecord: answers, postSubmittedAt: now, gptStatus: "pending" as const };
+      : {
+        postRecord: answers,
+        postSubmittedAt: now,
+        gptStatus: "pending" as const,
+        publicReportApproval: { status: "pending" as const, lastError: null },
+      };
   const nextRecord = {
     ...base,
     ...recordPatch,
@@ -1078,6 +1130,7 @@ async function submitPrivateLessonChart(
 
   let recordForNotion = nextRecord;
   if (mode === "post") {
+    await resetPrivateLessonReportCandidateForEdit(nextRecord.recordId, "수업 후 기록 수정으로 리포트 재검수 필요");
     try {
       recordForNotion = (await generatePrivateLessonReportDraft(nextRecord, chartRequest)).record;
     } catch (err) {
@@ -1447,15 +1500,18 @@ async function readChartRequest(requestId: string, token: string): Promise<Priva
   return chartRequest;
 }
 
-function publicChartRequest(
+async function publicChartRequest(
   chartRequest: PrivateLessonChartRequestDoc,
   mode: PrivateLessonChartMode,
   record: PrivateLessonChartRecordDoc | null = null,
-): Record<string, unknown> {
+): Promise<Record<string, unknown>> {
+  const deliveryState = await privateLessonReportDeliveryState(record);
   const approvalStatus = record?.publicReportApproval?.status || "";
   const reportReady = record?.gptStatus === "draft_created" &&
     Boolean(record.publicReportUrl || record.publicReportCanonicalUrl);
-  const reportStatus = approvalStatus && approvalStatus !== "pending"
+  const reportStatus = deliveryState.status === "sent" || deliveryState.status === "processing"
+    ? deliveryState.status
+    : approvalStatus && approvalStatus !== "pending"
     ? approvalStatus
     : reportReady
       ? "ready"
@@ -1479,7 +1535,8 @@ function publicChartRequest(
       : { pre: null, post: null },
     locked: mode === "pre"
       ? chartRequest.preStatus === "submitted" || Boolean(record?.preSubmittedAt)
-      : chartRequest.postStatus === "submitted" || Boolean(record?.postSubmittedAt),
+      : deliveryState.locked,
+    lockReason: mode === "post" ? deliveryState.reason : "",
     report: record
       ? {
         recordId: record.recordId,
@@ -1490,6 +1547,7 @@ function publicChartRequest(
         summary: record.gptDraftSummary || record.publicSummary || "",
         nextDirection: record.gptDraftNextDirection || record.publicNextDirection || "",
         approval: record.publicReportApproval || null,
+        delivery: deliveryState,
         postSubmitted: Boolean(record.postSubmittedAt),
       }
       : null,
