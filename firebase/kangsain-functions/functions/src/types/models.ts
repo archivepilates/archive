@@ -151,6 +151,14 @@ export interface BookingDoc {
   sourceUpdatedAt: Timestamp | null;
   syncedAt: Timestamp;
   updatedAt: Timestamp;
+  sessionOrder?: {
+    category?: "group" | "private";
+    cumulativeRound?: number | null;
+    groupCumulativeRound?: number | null;
+    privateCumulativeRound?: number | null;
+    computedFrom?: string;
+    computedAt?: Timestamp | null;
+  };
 }
 
 export interface InstructorViewDoc {

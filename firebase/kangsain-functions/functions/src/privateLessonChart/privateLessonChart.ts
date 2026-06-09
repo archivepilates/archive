@@ -1443,6 +1443,8 @@ async function latestPrivateSurveyForBooking(booking: BookingDoc): Promise<Priva
 
 async function nextSessionNumber(booking: BookingDoc): Promise<number> {
   if (!booking.memberId) return 1;
+  const cached = cachedPrivateSessionNumber(booking);
+  if (cached) return cached;
   const snap = await refs.bookings().where("memberId", "==", booking.memberId).limit(500).get();
   const currentStart = booking.lectureStartAt?.toMillis?.() || 0;
   const canonical = canonicalPrivateBookings(snap.docs.map((doc) => doc.data()))
@@ -1453,6 +1455,13 @@ async function nextSessionNumber(booking: BookingDoc): Promise<number> {
   }
   const currentDate = booking.lectureDate || "";
   return canonical.filter((item) => (item.lectureDate || "") < currentDate).length + 1;
+}
+
+function cachedPrivateSessionNumber(booking: BookingDoc): number {
+  const order = booking.sessionOrder || {};
+  if (order.category && order.category !== "private") return 0;
+  const value = Number(order.privateCumulativeRound || order.cumulativeRound || 0);
+  return Number.isFinite(value) && value > 0 ? Math.trunc(value) : 0;
 }
 
 function isPrivateBooking(booking: BookingDoc): boolean {
