@@ -61,7 +61,8 @@ Current-month sales are not written into `수강권매출_Master`, because that 
 
 ## Current-month settlement preview
 
-`정산대장_DailyPreview` and `강사통계_DailyPreview` are generated from the current-month `수업매출원본데이터`.
+`대시보드_EXPORT` is generated from the monthly settlement spreadsheet and is the dashboard sync source.
+The previous local `정산대장_DailyPreview` / `강사통계_DailyPreview` calculation path is deprecated.
 
 The preview is for dashboard visibility only:
 
@@ -82,13 +83,14 @@ npm run run:archive-dashboard-sales-daily
 Download current month sales Excel, apply to `아카이브 DB`, and then trigger Firebase dashboard sync:
 
 ```bash
-npm run run:archive-dashboard-sales-daily -- --apply --sync-firebase
+npm run create:dashboard-export -- --month=2026-05 --apply
+npm run sync:archive-dashboard-db -- --month=2026-05 --apply
 ```
 
 Re-run DB/Firebase sync without downloading again:
 
 ```bash
-npm run run:archive-dashboard-sales-daily -- --apply --sync-firebase --skip-download --month=2026-05
+npm run run:archive-dashboard-sales-daily -- --apply --skip-download --month=2026-05
 ```
 
 Inspect one month in dry-run only:
