@@ -192,10 +192,13 @@ export async function createPrivateLessonChartRequestsForDate(date: string): Pro
   skipped: number;
 }> {
   const snap = await refs.bookings().where("lectureDate", "==", date).limit(500).get();
-  const bookings = canonicalPrivateBookings(snap.docs.map((doc) => doc.data()));
+  const rawBookings = snap.docs.map((doc) => doc.data());
+  const bookings = canonicalPrivateBookings(rawBookings);
   let checked = 0;
   let created = 0;
   let skipped = snap.size - bookings.length;
+  const syncedRequestIds = new Set<string>();
+  const cascadedMembers = new Set<string>();
 
   for (const booking of bookings) {
     checked += 1;
@@ -206,8 +209,41 @@ export async function createPrivateLessonChartRequestsForDate(date: string): Pro
       });
       return null;
     });
+    if (result?.requestId) syncedRequestIds.add(result.requestId);
+    if (result?.changed && result.memberId && result.lessonDate) {
+      const cascadeKey = `${result.memberId}|${result.lessonDate}`;
+      if (!cascadedMembers.has(cascadeKey)) {
+        cascadedMembers.add(cascadeKey);
+        await syncMemberFutureChartRequestsFromDate(result.memberId, result.lessonDate, result.requestId);
+      }
+    }
     if (result?.created) created += 1;
     else skipped += 1;
+  }
+
+  for (const booking of rawBookings) {
+    const requestId = `plc_${booking.bookingId}`;
+    if (syncedRequestIds.has(requestId)) continue;
+    const existing = await refs.privateLessonChartRequest(requestId).get();
+    const chartRequest = existing.data();
+    if (!chartRequest) continue;
+    checked += 1;
+    const syncResult = await syncExistingChartRequestFromBooking(booking, chartRequest).catch((err) => {
+      logger.warn("syncExistingChartRequestFromBooking failed", {
+        requestId,
+        bookingId: booking.bookingId,
+        message: errorMessage(err),
+      });
+      return null;
+    });
+    if (syncResult?.changed && syncResult.memberId && syncResult.lessonDate) {
+      const cascadeKey = `${syncResult.memberId}|${syncResult.lessonDate}`;
+      if (!cascadedMembers.has(cascadeKey)) {
+        cascadedMembers.add(cascadeKey);
+        await syncMemberFutureChartRequestsFromDate(syncResult.memberId, syncResult.lessonDate, requestId);
+      }
+    }
+    skipped += 1;
   }
 
   logger.info("createPrivateLessonChartRequestsForDate completed", { date, checked, created, skipped });
@@ -1002,10 +1038,20 @@ function normalizeNotionId(value: string): string {
     .toLowerCase();
 }
 
-async function ensureChartRequestForBooking(booking: BookingDoc): Promise<{ requestId: string; created: boolean }> {
+async function ensureChartRequestForBooking(booking: BookingDoc): Promise<{
+  requestId: string;
+  created: boolean;
+  changed: boolean;
+  memberId: string;
+  lessonDate: string;
+}> {
   const requestId = `plc_${booking.bookingId}`;
   const existing = await refs.privateLessonChartRequest(requestId).get();
-  if (existing.exists) return { requestId, created: false };
+  const existingRequest = existing.data();
+  if (existingRequest) {
+    const result = await syncExistingChartRequestFromBooking(booking, existingRequest);
+    return { requestId, created: false, ...result };
+  }
 
   const [staffSnap, intakeSummary, sessionNumber] = await Promise.all([
     booking.staffId ? refs.staff(booking.staffId).get() : Promise.resolve(null as any),
@@ -1075,7 +1121,116 @@ async function ensureChartRequestForBooking(booking: BookingDoc): Promise<{ requ
       { merge: true },
     );
   }
-  return { requestId, created: true };
+  return { requestId, created: true, changed: true, memberId: booking.memberId, lessonDate: booking.lectureDate };
+}
+
+async function syncExistingChartRequestFromBooking(
+  booking: BookingDoc,
+  existingRequest: PrivateLessonChartRequestDoc,
+): Promise<{ changed: boolean; memberId: string; lessonDate: string }> {
+  const now = nowTimestamp();
+  const active = isActivePrivateChartBooking(booking);
+  const sessionNumber = active ? await nextSessionNumber(booking, { ignoreCached: true }) : existingRequest.sessionNumber;
+  const staffSnap = booking.staffId ? await refs.staff(booking.staffId).get() : null;
+  const staff = staffSnap?.data?.();
+  const nextStatus = active
+    ? privateChartStatusFromSubmission(existingRequest.preStatus, existingRequest.postStatus, existingRequest.status)
+    : "cancelled";
+  const nextAlimtalk = privateChartAlimtalkForBookingSync(booking, existingRequest, active);
+  const requestPatch: Partial<PrivateLessonChartRequestDoc> = {
+    studioId: booking.studioId || existingRequest.studioId || DEFAULT_STUDIO_ID,
+    bookingId: booking.bookingId,
+    lectureId: booking.lectureId,
+    memberId: booking.memberId,
+    memberName: booking.memberName,
+    memberPhone: booking.memberPhone,
+    memberPhoneLast4: String(booking.memberPhone || "").slice(-4),
+    staffId: booking.staffId,
+    staffName: booking.staffName,
+    staffPhone: String(staff?.phone || existingRequest.staffPhone || ""),
+    lessonDate: booking.lectureDate,
+    lessonStartAt: booking.lectureStartAt || null,
+    lessonEndAt: booking.lectureEndAt || null,
+    sessionNumber,
+    status: nextStatus,
+    alimtalk: nextAlimtalk,
+    updatedAt: now,
+  };
+  const requestChanged = privateChartRequestNeedsBookingSync(existingRequest, requestPatch);
+  if (requestChanged) await refs.privateLessonChartRequest(existingRequest.requestId).set(requestPatch, { merge: true });
+  const chartRequest = { ...existingRequest, ...requestPatch } as PrivateLessonChartRequestDoc;
+
+  const recordRef = refs.privateLessonChartRecord(existingRequest.requestId);
+  const recordSnap = await recordRef.get();
+  const recordPatch: Partial<PrivateLessonChartRecordDoc> = {
+    studioId: chartRequest.studioId,
+    bookingId: chartRequest.bookingId,
+    lectureId: chartRequest.lectureId,
+    memberId: chartRequest.memberId,
+    memberName: chartRequest.memberName,
+    memberPhone: chartRequest.memberPhone,
+    staffId: chartRequest.staffId,
+    staffName: chartRequest.staffName,
+    lessonDate: chartRequest.lessonDate,
+    lessonStartAt: chartRequest.lessonStartAt,
+    sessionNumber: chartRequest.sessionNumber,
+    updatedAt: now,
+  };
+  const existingRecord = recordSnap.data();
+  const recordChanged = !existingRecord || privateChartRecordNeedsBookingSync(existingRecord, recordPatch);
+  const recordForNotion = existingRecord
+    ? ({ ...existingRecord, ...recordPatch } as PrivateLessonChartRecordDoc)
+    : await upsertChartRecordBase(chartRequest);
+  if (existingRecord && recordChanged) await recordRef.set(recordPatch, { merge: true });
+  if (!requestChanged && !recordChanged && existingRecord?.notionSync?.status === "synced") {
+    return { changed: false, memberId: chartRequest.memberId, lessonDate: chartRequest.lessonDate };
+  }
+  const notionSync = await syncPrivateLessonChartRecordToNotion(recordForNotion, chartRequest);
+  await recordRef.set({ notionSync, updatedAt: nowTimestamp() }, { merge: true });
+  return { changed: requestChanged || recordChanged, memberId: chartRequest.memberId, lessonDate: chartRequest.lessonDate };
+}
+
+async function syncMemberFutureChartRequestsFromDate(
+  memberId: string,
+  fromDate: string,
+  excludeRequestId = "",
+): Promise<number> {
+  if (!memberId || !fromDate) return 0;
+  const snap = await refs.privateLessonChartRequests().where("memberId", "==", memberId).limit(500).get();
+  const requests = snap.docs
+    .map((doc) => doc.data())
+    .filter((request) => request.requestId !== excludeRequestId)
+    .filter((request) => String(request.lessonDate || "") >= fromDate)
+    .sort(
+      (a, b) =>
+        (a.lessonStartAt?.toMillis?.() || 0) - (b.lessonStartAt?.toMillis?.() || 0) ||
+        String(a.requestId || "").localeCompare(String(b.requestId || "")),
+    );
+  let changed = 0;
+  for (const request of requests) {
+    if (!request.bookingId) continue;
+    const bookingSnap = await refs.booking(request.bookingId).get();
+    const booking = bookingSnap.data();
+    if (!booking) {
+      logger.warn("syncMemberFutureChartRequestsFromDate skipped missing booking", {
+        requestId: request.requestId,
+        bookingId: request.bookingId,
+        memberId,
+      });
+      continue;
+    }
+    const result = await syncExistingChartRequestFromBooking(booking, request).catch((err) => {
+      logger.warn("syncMemberFutureChartRequestsFromDate failed", {
+        requestId: request.requestId,
+        bookingId: request.bookingId,
+        memberId,
+        message: errorMessage(err),
+      });
+      return null;
+    });
+    if (result?.changed) changed += 1;
+  }
+  return changed;
 }
 
 async function submitPrivateLessonChart(
@@ -1279,28 +1434,33 @@ async function syncPrivateLessonChartRecordToNotion(
         { merge: true },
       );
     }
+    const recordForNotion = {
+      ...record,
+      publicReportUrl: reportResolution.publicReportUrl || record.publicReportUrl,
+      publicReportCanonicalUrl: reportResolution.publicReportCanonicalUrl || record.publicReportCanonicalUrl,
+    } as PrivateLessonChartRecordDoc;
     const reportUrl = reportResolution.publicReportUrl;
     const properties = compactObject({
-      Name: notionTitle(notionSessionTitle(record, chartRequest)),
-      "Session Number": notionNumber(record.sessionNumber),
-      "Chart Request ID": notionText(record.recordId || record.requestId),
+      Name: notionTitle(notionSessionTitle(recordForNotion, chartRequest)),
+      "Session Number": notionNumber(recordForNotion.sessionNumber),
+      "Chart Request ID": notionText(recordForNotion.recordId || recordForNotion.requestId),
       Date: chartRequest.lessonDate ? notionDate(chartRequest.lessonDate) : undefined,
-      Instructor: notionSelect(record.staffName || chartRequest.staffName || "미정"),
+      Instructor: notionSelect(recordForNotion.staffName || chartRequest.staffName || "미정"),
       "Pre Status": notionSelect(chartRequest.preStatus || "pending"),
       "Post Status": notionSelect(chartRequest.postStatus || "pending"),
-      "GPT Status": notionSelect(record.gptStatus || "pending"),
-      "Session Status": notionSelect(notionSessionStatus(record, chartRequest)),
+      "GPT Status": notionSelect(recordForNotion.gptStatus || "pending"),
+      "Session Status": notionSelect(notionSessionStatus(recordForNotion, chartRequest)),
       "회원 리포트": reportUrl ? { url: reportUrl } : undefined,
       발송: { checkbox: false },
       발송상태: notionSelect(reportUrl ? "대기" : ""),
     });
-    const content = notionChartChildren(record, chartRequest);
+    const content = notionChartChildren(recordForNotion, chartRequest);
     const existingPageId = record.notionSync?.pageId;
     if (existingPageId) {
       await notionRequest(`pages/${existingPageId}`, "PATCH", { properties });
-      await appendPageContent(existingPageId, notionUpdateChildren(record, chartRequest));
+      await appendPageContent(existingPageId, notionUpdateChildren(recordForNotion, chartRequest));
       const instructorPage = await syncInstructorMemberChartPage(
-        record,
+        recordForNotion,
         chartRequest,
         record.notionSync?.pageUrl || notionPageUrl(existingPageId),
       );
@@ -1319,7 +1479,7 @@ async function syncPrivateLessonChartRecordToNotion(
       children: content,
     });
     const pageUrl = String(page.url || notionPageUrl(String(page.id)));
-    const instructorPage = await syncInstructorMemberChartPage(record, chartRequest, pageUrl);
+    const instructorPage = await syncInstructorMemberChartPage(recordForNotion, chartRequest, pageUrl);
     return {
       status: "synced",
       pageId: String(page.id),
@@ -1349,8 +1509,13 @@ async function syncInstructorMemberChartPage(
   });
   if (!memberPageId) return null;
   const title = notionSessionTitle(record, chartRequest);
-  const existingPageId = await findChildPageByExactTitle(memberPageId, title);
+  const baseTitle = notionSessionBaseTitle(record, chartRequest);
+  const existingPageId =
+    record.notionSync?.instructorPageId ||
+    (await findChildPageByExactTitle(memberPageId, title)) ||
+    (title !== baseTitle ? await findChildPageByExactTitle(memberPageId, baseTitle) : "");
   if (existingPageId) {
+    await notionRequest(`pages/${existingPageId}`, "PATCH", { properties: notionTitle(title) });
     await appendPageContent(existingPageId, notionInstructorUpdateChildren(record, chartRequest));
     return { pageId: existingPageId, pageUrl: notionPageUrl(existingPageId) };
   }
@@ -1574,9 +1739,9 @@ async function latestPrivateSurveyForBooking(booking: BookingDoc): Promise<Priva
   );
 }
 
-async function nextSessionNumber(booking: BookingDoc): Promise<number> {
+async function nextSessionNumber(booking: BookingDoc, options: { ignoreCached?: boolean } = {}): Promise<number> {
   if (!booking.memberId) return 1;
-  const cached = cachedPrivateSessionNumber(booking);
+  const cached = options.ignoreCached ? 0 : cachedPrivateSessionNumber(booking);
   if (cached) return cached;
   const snap = await refs.bookings().where("memberId", "==", booking.memberId).limit(500).get();
   const currentStart = booking.lectureStartAt?.toMillis?.() || 0;
@@ -1599,10 +1764,110 @@ function cachedPrivateSessionNumber(booking: BookingDoc): number {
 
 function isPrivateBooking(booking: BookingDoc): boolean {
   if (booking.appStatus && booking.appStatus !== "reserved") return false;
+  return hasPrivateLessonIdentity(booking);
+}
+
+function hasPrivateLessonIdentity(booking: BookingDoc): boolean {
   if (booking.lessonType === "group") return false;
   if (booking.lessonType === "private" || booking.lessonType === "semi_private") return true;
   const text = `${booking.ticketName || ""} ${booking.ticketClassType || ""} ${booking.ticketType || ""}`;
   return /프라이빗|개인|1:1|PRIVATE|\bP\b/i.test(text);
+}
+
+function isActivePrivateChartBooking(booking: BookingDoc): boolean {
+  return (
+    isPrivateBooking(booking) &&
+    booking.appStatus === "reserved" &&
+    !["absent", "late_cancel"].includes(booking.attendanceStatus)
+  );
+}
+
+function privateChartStatusFromSubmission(
+  preStatus: PrivateLessonChartRequestDoc["preStatus"],
+  postStatus: PrivateLessonChartRequestDoc["postStatus"],
+  fallback: PrivateLessonChartRequestStatus,
+): PrivateLessonChartRequestStatus {
+  if (preStatus === "submitted" && postStatus === "submitted") return "completed";
+  if (preStatus === "submitted") return "pre_submitted";
+  if (postStatus === "submitted") return "post_submitted";
+  return fallback === "cancelled" ? "pending" : fallback || "pending";
+}
+
+function privateChartBookingStateReason(booking: BookingDoc): string {
+  if (!hasPrivateLessonIdentity(booking)) return "예약 원본이 프라이빗 수업이 아니어서 자동화 차트 취소 처리";
+  return `예약 상태가 ${booking.appStatus}/${booking.attendanceStatus}라 자동화 차트 취소 처리`;
+}
+
+function privateChartAlimtalkForBookingSync(
+  booking: BookingDoc,
+  existingRequest: PrivateLessonChartRequestDoc,
+  active: boolean,
+): PrivateLessonChartRequestDoc["alimtalk"] {
+  const current = existingRequest.alimtalk || {
+    status: "template_pending" as const,
+    templateName: PRIVATE_CHART_TEMPLATE_NAME,
+    lastError: null,
+  };
+  if (active) {
+    const wasSkippedByBookingSync =
+      current.status === "skipped" && String(current.lastError || "").includes("자동화 차트 취소 처리");
+    return wasSkippedByBookingSync
+      ? { ...current, status: "template_pending", lastError: null }
+      : current;
+  }
+  return {
+    ...current,
+    status: current.status === "sent" ? "sent" : "skipped",
+    lastError: privateChartBookingStateReason(booking),
+  };
+}
+
+function privateChartRequestNeedsBookingSync(
+  current: PrivateLessonChartRequestDoc,
+  patch: Partial<PrivateLessonChartRequestDoc>,
+): boolean {
+  return (
+    current.studioId !== patch.studioId ||
+    current.bookingId !== patch.bookingId ||
+    current.lectureId !== patch.lectureId ||
+    current.memberId !== patch.memberId ||
+    current.memberName !== patch.memberName ||
+    current.memberPhone !== patch.memberPhone ||
+    current.memberPhoneLast4 !== patch.memberPhoneLast4 ||
+    current.staffId !== patch.staffId ||
+    current.staffName !== patch.staffName ||
+    current.staffPhone !== patch.staffPhone ||
+    current.lessonDate !== patch.lessonDate ||
+    timestampMillis(current.lessonStartAt) !== timestampMillis(patch.lessonStartAt) ||
+    timestampMillis(current.lessonEndAt) !== timestampMillis(patch.lessonEndAt) ||
+    current.sessionNumber !== patch.sessionNumber ||
+    current.status !== patch.status ||
+    current.alimtalk?.status !== patch.alimtalk?.status ||
+    current.alimtalk?.lastError !== patch.alimtalk?.lastError
+  );
+}
+
+function privateChartRecordNeedsBookingSync(
+  current: PrivateLessonChartRecordDoc,
+  patch: Partial<PrivateLessonChartRecordDoc>,
+): boolean {
+  return (
+    current.studioId !== patch.studioId ||
+    current.bookingId !== patch.bookingId ||
+    current.lectureId !== patch.lectureId ||
+    current.memberId !== patch.memberId ||
+    current.memberName !== patch.memberName ||
+    current.memberPhone !== patch.memberPhone ||
+    current.staffId !== patch.staffId ||
+    current.staffName !== patch.staffName ||
+    current.lessonDate !== patch.lessonDate ||
+    timestampMillis(current.lessonStartAt) !== timestampMillis(patch.lessonStartAt) ||
+    current.sessionNumber !== patch.sessionNumber
+  );
+}
+
+function timestampMillis(value: Timestamp | null | undefined): number {
+  return value?.toMillis?.() || 0;
 }
 
 function privateChartBookingFreshnessError(booking: BookingDoc): string {
@@ -2284,7 +2549,19 @@ function lessonTimeText(chartRequest: Pick<PrivateLessonChartRequestDoc, "lesson
 }
 
 function notionSessionTitle(record: PrivateLessonChartRecordDoc, chartRequest: PrivateLessonChartRequestDoc): string {
+  const title = notionSessionBaseTitle(record, chartRequest);
+  return privateLessonReportGenerated(record) ? `${title} · 완료` : title;
+}
+
+function notionSessionBaseTitle(record: PrivateLessonChartRecordDoc, chartRequest: PrivateLessonChartRequestDoc): string {
   return `${lessonTitleDate(chartRequest)} · ${record.memberName} ${record.sessionNumber}회차(자동화)`;
+}
+
+function privateLessonReportGenerated(record: PrivateLessonChartRecordDoc): boolean {
+  return (
+    Boolean(record.publicReportUrl || record.publicReportCanonicalUrl) ||
+    ["draft_created", "approved", "published"].includes(record.gptStatus)
+  );
 }
 
 function notionSessionStatus(

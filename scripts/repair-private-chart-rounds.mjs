@@ -573,7 +573,13 @@ function isFallbackBookingId(bookingId) {
 }
 
 function notionSessionTitle(record, request) {
-  return `${lessonTitleDate(request)} · ${record.memberName || request.memberName} ${record.sessionNumber}회차(자동화)`;
+  const title = `${lessonTitleDate(request)} · ${record.memberName || request.memberName} ${record.sessionNumber}회차(자동화)`;
+  return privateLessonReportGenerated(record) ? `${title} · 완료` : title;
+}
+
+function privateLessonReportGenerated(record) {
+  return Boolean(record.publicReportUrl || record.publicReportCanonicalUrl) ||
+    ["draft_created", "approved", "published"].includes(String(record.gptStatus || ""));
 }
 
 function lessonTitleDate(request) {
