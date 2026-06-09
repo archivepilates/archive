@@ -1,0 +1,331 @@
+{
+  "scriptId": "1cCjQ8S4Y8fnLZxaRlRJW3Cl9O8-x0n8Abkdh1DOWMAx2Aez5pEEnY1E6",
+  "files": [
+    {
+      "name": "appsscript",
+      "type": "JSON",
+      "source": "{\n  \"timeZone\": \"Asia/Seoul\",\n  \"dependencies\": {\n    \"enabledAdvancedServices\": [\n      {\n        \"userSymbol\": \"Drive\",\n        \"version\": \"v2\",\n        \"serviceId\": \"drive\"\n      }\n    ]\n  },\n  \"exceptionLogging\": \"STACKDRIVER\",\n  \"runtimeVersion\": \"V8\"\n}",
+      "lastModifyUser": {
+        "domain": "archivepilates.com",
+        "email": "home@archivepilates.com",
+        "name": "아카이브필라테스",
+        "photoUrl": "https://lh3.googleusercontent.com/a-/ALV-UjVDblQQ9dkA0pcePOcWRBWwoLy8K9NqMlG7LNuq0JfsOYsytGpNa8rqViH9YpvhGdu4rBYcxM7Rg6Zu_NnKo99khAq0S8y563TQZt2eLdRuySpfQdaUrIK62FQGUACMKAlEqPqNhnXio8KtTLP8eqcjx9FLdJT_4QOz2AP9PL82nipmhgtrXcA1KMWQ1pm-fmnZwHyC-OTIUbhM2zrPng5Yd6rv-6spjh76bfNquhKorWSrolyrNRRtVXNjqPsfYvn5mgGiAyjEK0J2bASzQ2kZBqg52ABBlJ8NZLs-k1LUXQ5KJjRAJPzikMXNA7g4j_hmA_k4v3LmigkdFv4X2w0LkIo7eYxGHmPkp57Gg0iQnMbYiW772yItks_X3PsS9jEteBDlwye49sCJtPz5SupSmSqLNqxa5fMF_z0N5jRtZ9_BuxOR_1djXs0vQpOV-SmaKKEH_lQb0JX8rPTc3B9l6pD_HqLnGSIjjY4o0Za0yAfpk8i7Yq4FgPOLGkt3tSy_rbB8GsPHX0o6asE22w7r1S64fx7QjM3jmPd7fPmjDFVDzj5IS8MGak4sjWovULEi0EhUQWidu-9y9Wj39wwZk8no3o2zitUyWX17duZbIR28nyas-zzGZKML-cLlP0psk9zeDX8rX2OSSwf-K6p7r7YV2vc8b1kbJg062UjzDvaLYRsNXUsTMQGAenCXnUFuv_L5rDuoL93vro_WG45IXBeJ2ZXsR6P6VQdCCv3AXe5RnVBIDzmjP6ZuFYF6dapOed6V5YZaXdFdnXPo6m540qPHb0rnKVsCshB-MevmUOXvhB3DWGll3nwxfMSiGf3xS9QBMmor9Owq-i3MvVLxTL4YIjj05hbu9OfRoJTE70UOgy7SD6mR376YRkUqEMmni_8_exERNVwH2S6UJOZAO3RP2HASHxv0-GVoETRca5VK0NBDkwRXIjfA7Z2PV2yL0sfbe31ExJin26lJzJBCtXTj6tUndeCb3N5Krw5DgkE4-pixuxr7UrQ18HjgM0CmjS8XIrq_7CE9KpxcMTT35D8cl7H_U8M6AF4a1Azjrq5SbkkQ=h128"
+      },
+      "createTime": "2026-04-18T17:36:39.922Z",
+      "updateTime": "2026-06-07T18:21:16.141Z",
+      "functionSet": {}
+    },
+    {
+      "name": "Code",
+      "type": "SERVER_JS",
+      "source": "const CONFIG = {\n  RAW_FOLDER_NAME: '수업매출원본데이터',\n  BACKUP_FOLDER_NAME: '월별정산백업',\n  DASHBOARD_SHEET_NAME: '시트1',\n  PRICE_FILE_NAME: '기간권 차감금액표',\n  RATE_FILE_NAME: '아카이브 강사 보수기준표',\n  SUMMARY_WEBHOOK_URL: '', // 카카오/Make/Zapier 웹훅 URL 입력\n  DB_SYNC_WEBAPP_URL: '',\nDB_SYNC_SECRET_KEY: 'ARCHIVE_SYNC_2026',\n  VAT_DIVISOR: 1.1,\n  WITHHOLDING_RATE: 0.033,\n  DEFAULT_PRIVATE_RATE: 0.45,\n  DEFAULT_LESSON_RATE: 0.55,\n  GROUP_CAPACITY: 5,\n  DEFAULT_GROUP_RATES: [15000, 25000, 25000, 30000, 32000, 35000, 35000, 35000, 35000, 35000, 35000]\n};\n\n/**\n * 준비 사항\n * 1) 자동화 스프레드시트는 '아카이브 정산' 폴더 안에 있어야 함\n * 2) 같은 폴더 안에 '수업매출원본데이터' 폴더가 있어야 함\n * 3) 같은 폴더 안에 아래 기준 파일이 있어야 함\n *    - 기간권 차감금액표\n *    - 아카이브 강사 보수기준표\n * 4) Apps Script > 서비스 > Drive API 고급 서비스 활성화 필요 (중복 추가 금지)\n * 5) 버튼 스크립트 할당: runArchiveMonthlyAutomation\n */\n\nfunction onOpen() {\n  SpreadsheetApp.getUi()\n    .createMenu('아카이브 정산')\n    .addItem('월간 자동화 실행', 'runArchiveMonthlyAutomation')\n    .addItem('대시보드 다시 만들기', 'setupDashboardSheet')\n    .addItem('대시보드 새로고침', 'refreshDashboardLinks')\n    .addToUi();\n}\n\nfunction setupDashboardSheet() {\n  const ss = SpreadsheetApp.getActiveSpreadsheet();\n  const sheet = getOrCreateSheet_(ss, CONFIG.DASHBOARD_SHEET_NAME);\n  clearOtherSheets_(ss, CONFIG.DASHBOARD_SHEET_NAME);\n  sheet.clear();\n\n  sheet.getRange('A1').setValue('아카이브 월간 정산 자동화 대시보드')\n    .setFontSize(16)\n    .setFontWeight('bold');\n\n  const guide = [\n    ['1. 수업매출원본데이터 폴더에 월별 엑셀 파일 업로드'],\n    ['2. 시트 위 버튼 또는 상단 메뉴 > 아카이브 정산 > 월간 자동화 실행'],\n    ['3. 결과 파일은 월별정산백업 폴더에 월별로 저장'],\n    ['4. 아래 목록에서 강사정산 / 리포트 링크 클릭'],\n    ['5. 버튼에는 스크립트 할당: runArchiveMonthlyAutomation']\n  ];\n\n  sheet.getRange(3, 1, guide.length, 1).setValues(guide);\n  sheet.getRange('A3:A7').setFontSize(11);\n\n  sheet.getRange('A9').setValue('버튼 만드는 방법')\n    .setFontWeight('bold')\n    .setBackground('#D9EAD3');\n  sheet.getRange('A10').setValue('삽입 > 드로잉(또는 이미지) > 버튼 만들기 > 우클릭 > 스크립트 할당 > runArchiveMonthlyAutomation');\n\n  sheet.getRange('A12:G12').setValues([['월', '원본파일명', '원본 수정일', '백업상태', '강사정산', '리포트', '백업파일']])\n    .setFontWeight('bold')\n    .setBackground('#E8F0FE')\n    .setHorizontalAlignment('center');\n\n  resizeSheetToFit_(sheet, 30, 7);\n  applySheetColumnWidths_(sheet);\n  sheet.setFrozenRows(12);\n\n  refreshDashboardLinks();\n}\n\nfunction runArchiveMonthlyAutomation() {\n  const result = processAllRawFiles_();\n\n  try {\n    var syncResult = triggerArchiveDbSync_();\n\n    SpreadsheetApp.getUi().alert(\n      '자동화 완료\\n' +\n      '- 대상월: ' + result.targetMonthKey + '\\n' +\n      '- 신규/갱신: ' + result.processedCount + '건\\n' +\n      '- 건너뜀: ' + result.skippedCount + '건\\n' +\n      '- 정산 DB: ' + (syncResult.skipped ? '별도 동기화에서 처리' : '자동 갱신 완료')\n    );\n\n  } catch (err) {\n    SpreadsheetApp.getUi().alert(\n      '정산 자동화는 완료되었지만, 정산 DB 자동 갱신은 실패했습니다.\\n\\n' +\n      '대상월: ' + result.targetMonthKey + '\\n' +\n      '신규/갱신: ' + result.processedCount + '건\\n' +\n      '건너뜀: ' + result.skippedCount + '건\\n\\n' +\n      '오류: ' + err.message\n    );\n  }\n}\n\nfunction refreshDashboardLinks() {\n  const ctx = getContext_();\n  const sheet = getOrCreateSheet_(ctx.ss, CONFIG.DASHBOARD_SHEET_NAME);\n  clearOtherSheets_(ctx.ss, CONFIG.DASHBOARD_SHEET_NAME);\n\n  const rawFiles = getMonthlyRawFiles_(ctx.rawFolder);\n  const backupFolder = getOrCreateFolder_(ctx.rootFolder, CONFIG.BACKUP_FOLDER_NAME);\n  const backupFiles = listBackupFilesByMonth_(backupFolder);\n\n  const startRow = 13;\n  const rows = rawFiles.map(item => {\n    const backup = backupFiles[item.monthKey] || null;\n    const status = backup ? '생성완료' : '미생성';\n\n    return [\n      formatMonthLabel_(item.monthKey),\n      item.file.getName(),\n      Utilities.formatDate(item.file.getLastUpdated(), Session.getScriptTimeZone(), 'yyyy-MM-dd HH:mm'),\n      status,\n      backup ? `=HYPERLINK(\"${backup.url}#gid=${backup.payrollSheetId || 0}\", \"강사정산\")` : '',\n      backup ? `=HYPERLINK(\"${backup.url}#gid=${backup.reportSheetId || 0}\", \"리포트\")` : '',\n      backup ? `=HYPERLINK(\"${backup.url}\", \"${backup.name}\")` : ''\n    ];\n  });\n\n  const requiredRows = Math.max(startRow - 1 + rows.length, 13);\n  resizeSheetToFit_(sheet, requiredRows, 7);\n\n  sheet.getRange('A12:G12').setValues([['월', '원본파일명', '원본 수정일', '백업상태', '강사정산', '리포트', '백업파일']])\n    .setFontWeight('bold')\n    .setBackground('#E8F0FE')\n    .setHorizontalAlignment('center');\n\n  if (rows.length) {\n    sheet.getRange(startRow, 1, rows.length, 7).setValues(rows);\n  }\n\n  applySheetColumnWidths_(sheet);\n}\n\nfunction processAllRawFiles_() {\n  const ctx = getContext_();\n  const refs = loadReferenceTables_(ctx.rootFolder);\n  const backupFolder = getOrCreateFolder_(ctx.rootFolder, CONFIG.BACKUP_FOLDER_NAME);\n\n  const targetMonthKey = getPreviousMonthKey_();\n  const allRawFiles = getMonthlyRawFiles_(ctx.rawFolder);\n  const rawFiles = allRawFiles.filter(item => item.monthKey === targetMonthKey);\n  if (!rawFiles.length) {\n    throw new Error(`${CONFIG.RAW_FOLDER_NAME} 폴더에 ${targetMonthKey} 월별 스프레드시트 파일이 없습니다.`);\n  }\n\n  const backupFiles = listBackupFilesByMonth_(backupFolder);\n  let processedCount = 0;\n  let skippedCount = 0;\n\n  rawFiles.forEach(item => {\n    const rawUpdated = item.file.getLastUpdated().getTime();\n    const existing = backupFiles[item.monthKey];\n    const backupUpdated = existing ? existing.updatedTime : 0;\n\n    if (existing && backupUpdated >= rawUpdated) {\n      skippedCount += 1;\n      return;\n    }\n     Utilities.sleep(500); // ← 추가: 파일 간 0.5초 간격\n\n    const rawRows = loadWorkbookRowsFromFile_(item.file, ctx.rootFolder);\n    const auxRows = buildAuxRows_(rawRows, refs);\n    const payroll = buildPayroll_(auxRows, refs);\n    const report = buildMonthlyReport_(auxRows, payroll.rows);\n\n    const backupFile = createOrReplaceMonthlyBackupFile_(backupFolder, item.monthKey);\n    const backupSs = SpreadsheetApp.openById(backupFile.getId());\n\n    writeAuxSheet_(backupSs, auxRows);\n    writePayrollSheet_(backupSs, payroll.rows);\n    writeReportSheet_(backupSs, report);\n    removeDefaultSheetIfUnused_(backupSs);\n\n    processedCount += 1;\n  });\n\n  refreshDashboardLinks();\n\n  const summaryText = buildBulkSummaryMessage_(targetMonthKey, rawFiles.length, processedCount, skippedCount);\n  sendWebhookSummary_(summaryText);\n\n  return { targetMonthKey, processedCount, skippedCount };\n}\n\nfunction getPreviousMonthKey_() {\n  const now = new Date();\n  const previousMonth = new Date(now.getFullYear(), now.getMonth() - 1, 1);\n  return Utilities.formatDate(previousMonth, Session.getScriptTimeZone(), 'yyyy-MM');\n}\n\nfunction getContext_() {\n  const ss = SpreadsheetApp.getActiveSpreadsheet();\n  const file = DriveApp.getFileById(ss.getId());\n  const parents = file.getParents();\n  if (!parents.hasNext()) throw new Error('현재 스프레드시트의 상위 폴더를 찾을 수 없습니다.');\n\n  const rootFolder = parents.next();\n  const rawFolderIter = rootFolder.getFoldersByName(CONFIG.RAW_FOLDER_NAME);\n  if (!rawFolderIter.hasNext()) {\n    throw new Error(`원본 폴더를 찾을 수 없습니다: ${CONFIG.RAW_FOLDER_NAME}`);\n  }\n\n  return {\n    ss,\n    rootFolder,\n    rawFolder: rawFolderIter.next()\n  };\n}\n\nfunction cleanupDuplicateRawFolders() {\n  const ss = SpreadsheetApp.getActiveSpreadsheet();\n  const file = DriveApp.getFileById(ss.getId());\n  const parents = file.getParents();\n  if (!parents.hasNext()) throw new Error('현재 스프레드시트의 상위 폴더를 찾을 수 없습니다.');\n\n  const rootFolder = parents.next();\n  const result = [\n    trashLegacyFolderIfDuplicated_(rootFolder, '수업원본데이터', '수업매출원본데이터'),\n    trashLegacyFolderIfDuplicated_(rootFolder, '수강권원본데이터', '수강권매출원본데이터')\n  ];\n\n  Logger.log(JSON.stringify(result));\n  return result;\n}\n\nfunction trashLegacyFolderIfDuplicated_(rootFolder, legacyFolderName, canonicalFolderName) {\n  const legacyIter = rootFolder.getFoldersByName(legacyFolderName);\n  if (!legacyIter.hasNext()) {\n    return { legacyFolderName, canonicalFolderName, status: 'legacy_not_found' };\n  }\n\n  const canonicalIter = rootFolder.getFoldersByName(canonicalFolderName);\n  if (!canonicalIter.hasNext()) {\n    throw new Error(`기준 원본 폴더를 찾을 수 없습니다: ${canonicalFolderName}`);\n  }\n\n  const legacyFolder = legacyIter.next();\n  const canonicalFolder = canonicalIter.next();\n  const canonicalNames = listFileNameSetInFolder_(canonicalFolder);\n  const legacyNames = listFileNamesInFolder_(legacyFolder);\n  const missingNames = legacyNames.filter(name => !canonicalNames[name]);\n\n  if (missingNames.length) {\n    throw new Error(`${legacyFolderName} 안에 기준 폴더에 없는 파일이 있습니다: ${missingNames.join(', ')}`);\n  }\n\n  legacyFolder.setTrashed(true);\n  return {\n    legacyFolderName,\n    canonicalFolderName,\n    status: 'trashed',\n    fileCount: legacyNames.length\n  };\n}\n\nfunction listFileNamesInFolder_(folder) {\n  const files = folder.getFiles();\n  const names = [];\n  while (files.hasNext()) {\n    names.push(String(files.next().getName() || ''));\n  }\n  return names;\n}\n\nfunction listFileNameSetInFolder_(folder) {\n  const names = {};\n  listFileNamesInFolder_(folder).forEach(name => {\n    names[name] = true;\n  });\n  return names;\n}\n\nfunction clearOtherSheets_(ss, keepName) {\n  ss.getSheets().forEach(sheet => {\n    if (sheet.getName() !== keepName) ss.deleteSheet(sheet);\n  });\n}\n\nfunction listRawSpreadsheetFiles_(folder) {\n  const files = folder.getFiles();\n  const items = [];\n\n  while (files.hasNext()) {\n    const file = files.next();\n    const name = String(file.getName() || '');\n    if (name.startsWith('[TMP]')) continue;\n    if (!isSpreadsheetFile_(file)) continue;\n    items.push(file);\n  }\n\n  items.sort((a, b) => b.getLastUpdated().getTime() - a.getLastUpdated().getTime());\n  return items;\n}\n\nfunction getMonthlyRawFiles_(folder) {\n  const files = listRawSpreadsheetFiles_(folder);\n  const byMonth = {};\n\n  files.forEach(file => {\n    const name = String(file.getName() || '');\n    if (name.startsWith('[TMP]')) return;\n\n    const monthKey = extractMonthKeyFromFileName_(name);\n    if (!monthKey) return;\n\n    if (!byMonth[monthKey]) {\n      byMonth[monthKey] = { file, monthKey };\n      return;\n    }\n\n    const currentTime = file.getLastUpdated().getTime();\n    const savedTime = byMonth[monthKey].file.getLastUpdated().getTime();\n\n    if (currentTime > savedTime) {\n      byMonth[monthKey] = { file, monthKey };\n    }\n  });\n\n  return Object.values(byMonth).sort((a, b) => a.monthKey.localeCompare(b.monthKey));\n}\n\nfunction extractMonthKeyFromFileName_(fileName) {\n  const text = String(fileName || '');\n  const m = text.match(/(20\\d{2})-(\\d{2})-\\d{2}~(20\\d{2})-(\\d{2})-\\d{2}/);\n  if (m) return `${m[1]}-${m[2]}`;\n\n  const m2 = text.match(/(20\\d{2})-(\\d{2})/);\n  if (m2) return `${m2[1]}-${m2[2]}`;\n\n  return '';\n}\n\nfunction formatMonthLabel_(monthKey) {\n  const parts = String(monthKey || '').split('-');\n  if (parts.length !== 2) return monthKey;\n  return `${Number(parts[0])}년${Number(parts[1])}월`;\n}\n\nfunction isSpreadsheetFile_(file) {\n  const name = String(file.getName() || '').toLowerCase();\n  const mime = String(file.getMimeType() || '').toLowerCase();\n\n  return name.endsWith('.xlsx') ||\n    name.endsWith('.xls') ||\n    mime.indexOf('excel') > -1 ||\n    mime.indexOf('spreadsheetml') > -1 ||\n    mime === MimeType.GOOGLE_SHEETS ||\n    mime === 'application/vnd.google-apps.spreadsheet';\n}\n\nfunction isGoogleSheetsFile_(file) {\n  const mime = String(file.getMimeType() || '').toLowerCase();\n  return mime === MimeType.GOOGLE_SHEETS ||\n    mime === 'application/vnd.google-apps.spreadsheet';\n}\n\nfunction loadWorkbookRowsFromFile_(file, tempParentFolder) {\n  const mime = String(file.getMimeType() || '').toLowerCase();\n  let tempSpreadsheetId = null;\n  let targetSpreadsheetId = null;\n\n  try {\n    if (mime === MimeType.GOOGLE_SHEETS || mime === 'application/vnd.google-apps.spreadsheet') {\n      targetSpreadsheetId = file.getId();\n    } else {\n      targetSpreadsheetId = convertExcelToGoogleSheet_(file, tempParentFolder);\n      tempSpreadsheetId = targetSpreadsheetId;\n    }\n\n    const tempSs = SpreadsheetApp.openById(targetSpreadsheetId);\n    const firstSheet = tempSs.getSheets()[0];\n    const values = firstSheet.getDataRange().getValues();\n    if (values.length < 2) return [];\n\n    const headers = values[0].map(v => String(v || '').trim());\n    return values.slice(1)\n      .map(row => mapRawRow_(headers, row, file.getName()))\n      .filter(row => row.instructorName);\n  } finally {\n    if (tempSpreadsheetId) {\n      DriveApp.getFileById(tempSpreadsheetId).setTrashed(true);\n    }\n  }\n}\n\nfunction convertExcelToGoogleSheet_(file, parentFolder) {\n  return driveFileCopyWithRetry_(file.getId(), `[TMP] ${file.getName()} ${Date.now()}`);\n}\n\n\nfunction moveFileToFolder_(file, targetFolder) {\n  targetFolder.addFile(file);\n  const parents = file.getParents();\n  while (parents.hasNext()) {\n    const p = parents.next();\n    if (p.getId() !== targetFolder.getId()) p.removeFile(file);\n  }\n}\n\n\nfunction getOrCreateFolder_(parentFolder, folderName) {\n  const iter = parentFolder.getFoldersByName(folderName);\n  return iter.hasNext() ? iter.next() : parentFolder.createFolder(folderName);\n}\n\nfunction createOrReplaceMonthlyBackupFile_(backupFolder, monthKey) {\n  const fileName = `아카이브 정산_${monthKey}`;\n  const files = backupFolder.getFiles();\n  while (files.hasNext()) {\n    const file = files.next();\n    const existingMonthKey =\n      extractMonthKeyFromFileName_(file.getName().replace('아카이브 정산_', '')) ||\n      extractMonthKeyFromFileName_(file.getName());\n    if (existingMonthKey === monthKey) {\n      file.setTrashed(true);\n    }\n  }\n\n  const newSs = SpreadsheetApp.create(fileName);\n  const newFile = DriveApp.getFileById(newSs.getId());\n  moveFileToFolder_(newFile, backupFolder);\n  return newFile;\n}\n\n\n\n\nfunction listBackupFilesByMonth_(backupFolder) {\n  const files = backupFolder.getFiles();\n  const result = {};\n\n  while (files.hasNext()) {\n    const file = files.next();\n    if (!isGoogleSheetsFile_(file)) continue;\n\n    const monthKey =\n      extractMonthKeyFromFileName_(file.getName().replace('아카이브 정산_', '')) ||\n      extractMonthKeyFromFileName_(file.getName());\n\n    if (!monthKey) continue;\n\n    let reportSheetId = 0;\n    let payrollSheetId = 0;\n\n    try {\n      const ss = SpreadsheetApp.openById(file.getId());\n      const reportSheet = ss.getSheetByName('월간리포트');\n      const payrollSheet = ss.getSheetByName('정산대장');\n      if (reportSheet) reportSheetId = reportSheet.getSheetId();\n      if (payrollSheet) payrollSheetId = payrollSheet.getSheetId();\n    } catch (e) {}\n\n    result[monthKey] = {\n      id: file.getId(),\n      name: file.getName(),\n      url: file.getUrl(),\n      reportSheetId,\n      payrollSheetId,\n      updatedTime: file.getLastUpdated().getTime()\n    };\n  }\n\n  return result;\n}\n\nfunction mapRawRow_(headers, row, sourceFileName) {\n  const h = getHeaderIndexMap_(headers);\n\n  const classType = getCellByAliases_(row, h, ['수업', '수업구분']);\n  const dateValue = getCellByAliases_(row, h, ['날짜', '수업일자']);\n  const startTime = getCellByAliases_(row, h, ['수업시작', '시간']);\n  const weekday = getCellByAliases_(row, h, ['요일']);\n  const memberName = getCellByAliases_(row, h, ['회원명', '이름']);\n  const ticketName = getCellByAliases_(row, h, ['수강권명']);\n  const revenue = getCellByAliases_(row, h, ['차감 금액', '차감금액']);\n  const instructorName = getCellByAliases_(row, h, ['수업 강사', '강사']);\n  const attendance = getCellByAliases_(row, h, ['출결']);\n\n  const classDate = normalizeDate_(dateValue);\n  const classTime = normalizeTime_(startTime);\n  const originalType = String(classType || '').trim();\n  const finalType = String(ticketName || '').includes('강사레슨') ? '강사레슨' : originalType;\n  const sessionKey = `${classDate}_${classTime}_${String(instructorName || '').trim()}`;\n\n  return {\n    sourceFileName,\n    classDate,\n    weekday: String(weekday || '').trim() || getWeekdayKorean_(classDate),\n    classTime,\n    memberName: String(memberName || '').trim(),\n    instructorName: String(instructorName || '').trim(),\n    originalType,\n    finalType,\n    ticketName: String(ticketName || '').trim(),\n    attendance: String(attendance || '').trim(),\n    revenue: toNumber_(revenue),\n    sessionKey\n  };\n}\n\nfunction loadReferenceTables_(rootFolder) {\n  const priceData = getExternalSheetData_(rootFolder, CONFIG.PRICE_FILE_NAME);\n  const groupRates = getExternalSheetData_(rootFolder, CONFIG.RATE_FILE_NAME, '그룹');\n  const privateRates = getExternalSheetData_(rootFolder, CONFIG.RATE_FILE_NAME, '프라이빗');\n  const lessonRates = getExternalSheetData_(rootFolder, CONFIG.RATE_FILE_NAME, '강사레슨');\n\n  const priceMap = {};\n  priceData.slice(1).forEach(row => {\n    const ticketName = String(row[1] || '').trim();\n    if (ticketName) priceMap[ticketName] = toNumber_(row[2]);\n  });\n\n  const groupMap = {};\n  groupRates.slice(1).forEach(row => {\n    const name = String(row[0] || '').trim();\n    if (name) groupMap[name] = row.slice(1).map(toNumber_);\n  });\n\n  const privateMap = {};\n  privateRates.slice(1).forEach(row => {\n    const name = String(row[0] || '').trim();\n    if (name) privateMap[name] = toNumber_(row[1]);\n  });\n\n  const lessonMap = {};\n  lessonRates.slice(1).forEach(row => {\n    const name = String(row[0] || '').trim();\n    if (name) lessonMap[name] = toNumber_(row[1]);\n  });\n\n  return { priceMap, groupMap, privateMap, lessonMap };\n}\n\nfunction getExternalSheetData_(folder, fileName, sheetName) {\n  const files = folder.getFilesByName(fileName);\n  if (!files.hasNext()) throw new Error(`기준 파일을 찾을 수 없습니다: ${fileName}`);\n\n  const file = files.next();\n  const mime = String(file.getMimeType() || '').toLowerCase();\n  const isGoogleSheets = mime === MimeType.GOOGLE_SHEETS ||\n    mime === 'application/vnd.google-apps.spreadsheet';\n\n  let tempId = null;\n  try {\n    const ssId = isGoogleSheets\n      ? file.getId()\n      : (tempId = driveFileCopyWithRetry_(file.getId(), `[TMP] ${file.getName()} ${Date.now()}`));\n\n    const ss = SpreadsheetApp.openById(ssId);\n    const sheet = sheetName ? ss.getSheetByName(sheetName) : ss.getSheets()[0];\n    if (!sheet) throw new Error(`시트를 찾을 수 없습니다: ${fileName} / ${sheetName}`);\n    return sheet.getDataRange().getValues();\n  } finally {\n    if (tempId) try { DriveApp.getFileById(tempId).setTrashed(true); } catch (e) {}\n  }\n}\nfunction driveFileCopyWithRetry_(fileId, title) {\n  let delay = 1000;\n  for (let attempt = 0; attempt < 5; attempt++) {\n    try {\n      const copied = Drive.Files.copy(\n        { title: title, mimeType: MimeType.GOOGLE_SHEETS },\n        fileId\n      );\n      Utilities.sleep(3000);\n      return copied.id;\n    } catch (e) {\n      if (attempt === 4) throw e;\n      Utilities.sleep(delay + Math.floor(Math.random() * 500));\n      delay *= 2;\n    }\n  }\n}\n\n\n\nfunction buildAuxRows_(rawRows, refs) {\n  return rawRows.map(row => {\n    const attendanceFlag = row.attendance === '출석' ? 1 : 0;\n    const baseRevenue = row.revenue > 0 ? row.revenue : (refs.priceMap[row.ticketName] || 0);\n    const settlementRevenue = attendanceFlag ? baseRevenue : 0;\n\n    let appliedRate = 0;\n    let linePay = 0;\n\n    if (row.finalType === '프라이빗') {\n      appliedRate = refs.privateMap[row.instructorName] || CONFIG.DEFAULT_PRIVATE_RATE;\n      linePay = attendanceFlag ? (settlementRevenue / CONFIG.VAT_DIVISOR) * appliedRate : 0;\n    } else if (row.finalType === '강사레슨') {\n      appliedRate = refs.lessonMap[row.instructorName] || CONFIG.DEFAULT_LESSON_RATE;\n      linePay = attendanceFlag ? (settlementRevenue / CONFIG.VAT_DIVISOR) * appliedRate : 0;\n    }\n\n    return {\n      ...row,\n      attendanceFlag,\n      settlementRevenue,\n      appliedRate,\n      linePay: Math.round(linePay)\n    };\n  });\n}\n\nfunction writeAuxSheet_(ss, auxRows) {\n  const sheet = resetSheet_(ss, '정산보조');\n\n  const header = [[\n    '원본파일명', '수업일자', '요일', '수업시간', '회원명', '강사명',\n    '원래수업구분', '최종수업구분', '수강권명', '출결', '차감금액',\n    '세션키', '정산대상', '정산매출', '적용요율', '행보수'\n  ]];\n\n  const values = auxRows.map(row => [\n    row.sourceFileName, row.classDate, row.weekday, row.classTime, row.memberName, row.instructorName,\n    row.originalType, row.finalType, row.ticketName, row.attendance, row.revenue,\n    row.sessionKey, row.attendanceFlag, row.settlementRevenue, row.appliedRate, row.linePay\n  ]);\n\n  const totalRows = 1 + values.length;\n  resizeSheetToFit_(sheet, totalRows, header[0].length);\n\n  sheet.getRange(1, 1, 1, header[0].length).setValues(header)\n    .setFontWeight('bold')\n    .setBackground('#E8F0FE')\n    .setHorizontalAlignment('center');\n\n  if (values.length) {\n    sheet.getRange(2, 1, values.length, header[0].length).setValues(values);\n  }\n\n  sheet.setFrozenRows(1);\n  applySheetColumnWidths_(sheet);\n}\n\nfunction buildPayroll_(auxRows, refs) {\n  const byInstructor = {};\n  const groupSessions = {};\n  const lessonSessions = {};\n\n  auxRows.forEach(row => {\n    const name = row.instructorName;\n    if (!name) return;\n\n    if (!byInstructor[name]) {\n      byInstructor[name] = {\n        name,\n        groupCount: 0,\n        privateCount: 0,\n        lessonCount: 0,\n        groupPay: 0,\n        privatePay: 0,\n        lessonPay: 0,\n        groupRevenue: 0,\n        privateRevenue: 0,\n        lessonRevenue: 0\n      };\n    }\n\n    if (row.finalType === '그룹') {\n      if (!groupSessions[row.sessionKey]) {\n        groupSessions[row.sessionKey] = {\n          instructorName: name,\n          weekday: row.weekday,\n          classTime: row.classTime,\n          booked: 0,\n          attended: 0,\n          revenue: 0\n        };\n      }\n\n      groupSessions[row.sessionKey].booked += 1;\n      if (row.attendanceFlag) {\n        groupSessions[row.sessionKey].attended += 1;\n        groupSessions[row.sessionKey].revenue += row.settlementRevenue;\n      }\n      return;\n    }\n\n    if (row.finalType === '프라이빗') {\n      if (!row.attendanceFlag) return;\n      byInstructor[name].privateCount += 1;\n      byInstructor[name].privateRevenue += row.settlementRevenue;\n      byInstructor[name].privatePay += row.linePay;\n      return;\n    }\n\n    if (row.finalType === '강사레슨') {\n      if (!lessonSessions[row.sessionKey]) {\n        lessonSessions[row.sessionKey] = {\n          instructorName: name,\n          attended: 0,\n          revenue: 0,\n          pay: 0\n        };\n      }\n\n      if (!row.attendanceFlag) return;\n      lessonSessions[row.sessionKey].attended += 1;\n      lessonSessions[row.sessionKey].revenue += row.settlementRevenue;\n      lessonSessions[row.sessionKey].pay = Math.max(lessonSessions[row.sessionKey].pay, row.linePay);\n    }\n  });\n\n  Object.keys(groupSessions).forEach(key => {\n    const session = groupSessions[key];\n    const name = session.instructorName;\n    byInstructor[name].groupCount += 1;\n    byInstructor[name].groupRevenue += session.revenue;\n\n    const rates = refs.groupMap[name] || CONFIG.DEFAULT_GROUP_RATES;\n    const pay = rates[session.attended] !== undefined ? rates[session.attended] : rates[rates.length - 1];\n    byInstructor[name].groupPay += Math.round(pay);\n  });\n\n  Object.keys(lessonSessions).forEach(key => {\n    const session = lessonSessions[key];\n    if (session.attended <= 0) return;\n    const name = session.instructorName;\n    byInstructor[name].lessonCount += 1;\n    byInstructor[name].lessonRevenue += session.revenue;\n    byInstructor[name].lessonPay += session.pay;\n  });\n\n  const rows = Object.values(byInstructor)\n    .sort((a, b) => a.name.localeCompare(b.name, 'ko'))\n    .map((row, index) => {\n      const totalRevenue = Math.round(row.groupRevenue + row.privateRevenue + row.lessonRevenue);\n      const totalPay = Math.round(row.groupPay + row.privatePay + row.lessonPay);\n      const withholding = Math.floor(totalPay * CONFIG.WITHHOLDING_RATE);\n      const netPay = totalPay - withholding;\n      const marginRate = totalRevenue > 0 ? (totalRevenue - totalPay) / totalRevenue : 0;\n\n      return {\n        no: index + 1,\n        name: row.name,\n        groupCount: row.groupCount,\n        privateCount: row.privateCount,\n        lessonCount: row.lessonCount,\n        groupPay: Math.round(row.groupPay),\n        privatePay: Math.round(row.privatePay),\n        lessonPay: Math.round(row.lessonPay),\n        totalPay,\n        withholding,\n        netPay,\n        totalRevenue,\n        marginRate\n      };\n    });\n\n  return { rows, groupSessions, lessonSessions };\n}\n\nfunction writePayrollSheet_(ss, rows) {\n  const sheet = resetSheet_(ss, '정산대장');\n\n  const header = [[\n    '순번', '성명', '그룹횟수', '프라이빗횟수', '강사레슨횟수',\n    '그룹보수합계', '프라이빗보수합계', '강사레슨보수합계',\n    '세전총액', '공제(3.3%)', '실지급액', '총매출', '수업 마진률'\n  ]];\n\n  const values = rows.map(row => [\n    row.no, row.name, row.groupCount, row.privateCount, row.lessonCount,\n    row.groupPay, row.privatePay, row.lessonPay,\n    row.totalPay, row.withholding, row.netPay, row.totalRevenue, row.marginRate\n  ]);\n\n  const totalRows = 1 + values.length;\n  resizeSheetToFit_(sheet, totalRows, header[0].length);\n\n  sheet.getRange(1, 1, 1, header[0].length).setValues(header)\n    .setFontWeight('bold')\n    .setBackground('#D9EAD3')\n    .setHorizontalAlignment('center');\n\n  if (values.length) {\n    sheet.getRange(2, 1, values.length, header[0].length).setValues(values);\n    sheet.getRange(2, 13, values.length, 1).setNumberFormat('0.0%');\n  }\n\n  sheet.setFrozenRows(1);\n  applySheetColumnWidths_(sheet);\n}\n\nfunction buildMonthlyReport_(auxRows, payrollRows) {\n  const groupRows = auxRows.filter(row => row.finalType === '그룹');\n  const groupSessions = {};\n\n  groupRows.forEach(row => {\n    if (!groupSessions[row.sessionKey]) {\n      groupSessions[row.sessionKey] = {\n        instructorName: row.instructorName,\n        weekday: row.weekday,\n        time: row.classTime,\n        booked: 0,\n        attended: 0\n      };\n    }\n\n    groupSessions[row.sessionKey].booked += 1;\n    if (row.attendanceFlag) groupSessions[row.sessionKey].attended += 1;\n  });\n\n  const sessions = Object.values(groupSessions);\n  const totalSessions = sessions.length;\n  const totalBooked = sessions.reduce((sum, row) => sum + row.booked, 0);\n  const totalAttended = sessions.reduce((sum, row) => sum + row.attended, 0);\n  const avgBooked = totalSessions ? totalBooked / totalSessions : 0;\n  const avgAttended = totalSessions ? totalAttended / totalSessions : 0;\n  const avgBookingRate = CONFIG.GROUP_CAPACITY > 0 ? avgBooked / CONFIG.GROUP_CAPACITY : 0;\n  const avgAttendanceRate = totalBooked ? totalAttended / totalBooked : 0;\n\n  const instructorMap = {};\n  sessions.forEach(session => {\n    if (!instructorMap[session.instructorName]) {\n      instructorMap[session.instructorName] = { sessions: 0, booked: 0, attended: 0 };\n    }\n    instructorMap[session.instructorName].sessions += 1;\n    instructorMap[session.instructorName].booked += session.booked;\n    instructorMap[session.instructorName].attended += session.attended;\n  });\n\n  const instructorStats = Object.keys(instructorMap)\n    .sort((a, b) => a.localeCompare(b, 'ko'))\n    .map(name => {\n      const row = instructorMap[name];\n      return {\n        name,\n        avgBooked: row.sessions ? row.booked / row.sessions : 0,\n        avgAttended: row.sessions ? row.attended / row.sessions : 0,\n        bookingRate: CONFIG.GROUP_CAPACITY > 0 ? (row.booked / row.sessions) / CONFIG.GROUP_CAPACITY : 0,\n        attendanceRate: row.booked ? row.attended / row.booked : 0\n      };\n    });\n\n  const lowSessions = sessions.map(session => ({\n    weekday: session.weekday,\n    time: session.time,\n    instructorName: session.instructorName,\n    booked: session.booked,\n    attended: session.attended,\n    bookingRate: CONFIG.GROUP_CAPACITY > 0 ? session.booked / CONFIG.GROUP_CAPACITY : 0,\n    attendanceRate: session.booked ? session.attended / session.booked : 0\n  }))\n    .sort((a, b) => a.bookingRate - b.bookingRate || a.attendanceRate - b.attendanceRate)\n    .slice(0, 10);\n\n  return {\n    summary: { totalSessions, totalBooked, totalAttended, avgBooked, avgAttended, avgBookingRate, avgAttendanceRate },\n    instructorStats,\n    lowSessions,\n    payrollRows\n  };\n}\n\nfunction writeReportSheet_(ss, report) {\n  const sheet = resetSheet_(ss, '월간리포트');\n  let row = 1;\n\n  sheet.getRange(row, 1).setValue('아카이브 월간 운영 리포트')\n    .setFontSize(14)\n    .setFontWeight('bold');\n  row += 2;\n\n  sheet.getRange(row, 1, 1, 7).setValues([[\n    '전체 그룹 세션 수', '그룹 예약총인원', '그룹 출석총인원',\n    '그룹 예약평균', '그룹 출석평균', '전체 그룹 예약률', '전체 그룹 출석률'\n  ]])\n    .setFontWeight('bold')\n    .setBackground('#FCE5CD');\n  row += 1;\n\n  sheet.getRange(row, 1, 1, 7).setValues([[\n    report.summary.totalSessions,\n    report.summary.totalBooked,\n    report.summary.totalAttended,\n    round2_(report.summary.avgBooked),\n    round2_(report.summary.avgAttended),\n    report.summary.avgBookingRate,\n    report.summary.avgAttendanceRate\n  ]]);\n  sheet.getRange(row, 6, 1, 2).setNumberFormat('0.0%');\n  row += 3;\n\n  sheet.getRange(row, 1, 1, 5).setValues([[\n    '강사명', '그룹 예약평균', '그룹 출석평균', '그룹 예약률', '그룹 출석률'\n  ]])\n    .setFontWeight('bold')\n    .setBackground('#D9EAD3');\n  row += 1;\n\n  const instructorValues = report.instructorStats.map(item => [\n    item.name,\n    round2_(item.avgBooked),\n    round2_(item.avgAttended),\n    item.bookingRate,\n    item.attendanceRate\n  ]);\n\n  if (instructorValues.length) {\n    sheet.getRange(row, 1, instructorValues.length, 5).setValues(instructorValues);\n    sheet.getRange(row, 4, instructorValues.length, 2).setNumberFormat('0.0%');\n    row += instructorValues.length + 2;\n  }\n\n  sheet.getRange(row, 1, 1, 6).setValues([[\n    '비인기 그룹 수업 후보 요일', '시간대', '강사명', '예약수', '예약률', '출석률'\n  ]])\n    .setFontWeight('bold')\n    .setBackground('#F4CCCC');\n  row += 1;\n\n  const lowValues = report.lowSessions.map(item => [\n    item.weekday,\n    item.time,\n    item.instructorName,\n    item.booked,\n    item.bookingRate,\n    item.attendanceRate\n  ]);\n\n  if (lowValues.length) {\n    sheet.getRange(row, 1, lowValues.length, 6).setValues(lowValues);\n    sheet.getRange(row, 5, lowValues.length, 2).setNumberFormat('0.0%');\n    row += lowValues.length + 2;\n  }\n\n  sheet.getRange(row, 1, 1, 6).setValues([[\n    '강사명', '총매출', '총보수', '실지급액', '수업 마진률', '비고'\n  ]])\n    .setFontWeight('bold')\n    .setBackground('#CFE2F3');\n  row += 1;\n\n  const payrollValues = report.payrollRows.map(item => [\n    item.name,\n    item.totalRevenue,\n    item.totalPay,\n    item.netPay,\n    item.marginRate,\n    item.marginRate <= 0.4 ? '마진 낮음 확인 필요' : ''\n  ]);\n\n  if (payrollValues.length) {\n    sheet.getRange(row, 1, payrollValues.length, 6).setValues(payrollValues);\n    sheet.getRange(row, 2, payrollValues.length, 3).setNumberFormat('#,##0');\n    sheet.getRange(row, 5, payrollValues.length, 1).setNumberFormat('0.0%');\n    row += payrollValues.length;\n  }\n\n  resizeSheetToFit_(sheet, row, 8);\n  applySheetColumnWidths_(sheet);\n\n  return { reportSheetId: sheet.getSheetId() };\n}\n\nfunction buildBulkSummaryMessage_(targetMonthKey, totalCount, processedCount, skippedCount) {\n  return [\n    '[아카이브 정산 자동화]',\n    `- 대상월: ${targetMonthKey}`,\n    `- 원본 파일 수: ${totalCount}건`,\n    `- 신규/갱신 백업 생성: ${processedCount}건`,\n    `- 이미 최신이라 건너뜀: ${skippedCount}건`\n  ].join('\\n');\n}\n\nfunction sendWebhookSummary_(text) {\n  if (!CONFIG.SUMMARY_WEBHOOK_URL) return;\n\n  UrlFetchApp.fetch(CONFIG.SUMMARY_WEBHOOK_URL, {\n    method: 'post',\n    contentType: 'application/json',\n    payload: JSON.stringify({ text })\n  });\n}\n\nfunction getHeaderIndexMap_(headers) {\n  const map = {};\n  headers.forEach((header, idx) => {\n    const key = String(header || '').trim();\n    if (key) map[key] = idx;\n  });\n  return map;\n}\n\nfunction getCellByAliases_(row, headerMap, aliases) {\n  for (let i = 0; i < aliases.length; i++) {\n    const idx = headerMap[aliases[i]];\n    if (idx !== undefined && idx >= 0) return row[idx];\n  }\n  return '';\n}\n\nfunction getOrCreateSheet_(ss, name) {\n  return ss.getSheetByName(name) || ss.insertSheet(name);\n}\n\nfunction resetSheet_(ss, name) {\n  const existing = ss.getSheetByName(name);\n  if (existing) {\n    existing.clear();\n    return existing;\n  }\n  return ss.insertSheet(name);\n}\n\nfunction normalizeDate_(value) {\n  if (value instanceof Date) {\n    return Utilities.formatDate(value, Session.getScriptTimeZone(), 'yyyy-MM-dd');\n  }\n  return String(value || '').trim();\n}\n\nfunction normalizeTime_(value) {\n  if (value instanceof Date) {\n    return Utilities.formatDate(value, Session.getScriptTimeZone(), 'HH:mm');\n  }\n  return String(value || '').trim();\n}\n\nfunction getWeekdayKorean_(dateStr) {\n  if (!dateStr) return '';\n  const d = new Date(dateStr);\n  const weekdays = ['일', '월', '화', '수', '목', '금', '토'];\n  return weekdays[d.getDay()] || '';\n}\n\nfunction toNumber_(value) {\n  if (typeof value === 'number') return value;\n  if (value === null || value === undefined || value === '') return 0;\n  return Number(String(value).replace(/,/g, '').trim()) || 0;\n}\n\nfunction round2_(num) {\n  return Math.round(num * 100) / 100;\n}\n\nfunction resizeSheetToFit_(sheet, requiredRows, requiredCols) {\n  const minRows = Math.max(requiredRows, 1);\n  const minCols = Math.max(requiredCols, 1);\n\n  const currentRows = sheet.getMaxRows();\n  const currentCols = sheet.getMaxColumns();\n\n  if (currentRows < minRows) {\n    sheet.insertRowsAfter(currentRows, minRows - currentRows);\n  } else if (currentRows > minRows) {\n    sheet.deleteRows(minRows + 1, currentRows - minRows);\n  }\n\n  if (currentCols < minCols) {\n    sheet.insertColumnsAfter(currentCols, minCols - currentCols);\n  } else if (currentCols > minCols) {\n    sheet.deleteColumns(minCols + 1, currentCols - minCols);\n  }\n}\n\nfunction applySheetColumnWidths_(sheet) {\n  const name = sheet.getName();\n\n  if (name === '시트1') {\n    sheet.setColumnWidth(1, 120);\n    sheet.setColumnWidth(2, 420);\n    sheet.setColumnWidth(3, 170);\n    sheet.setColumnWidth(4, 100);\n    sheet.setColumnWidth(5, 100);\n    sheet.setColumnWidth(6, 100);\n    sheet.setColumnWidth(7, 260);\n    sheet.getRange('B:B').setWrap(true);\n    sheet.getRange('G:G').setWrap(true);\n    return;\n  }\n\n  if (name === '정산보조') {\n    sheet.setColumnWidth(1, 220);\n    sheet.setColumnWidth(2, 110);\n    sheet.setColumnWidth(3, 70);\n    sheet.setColumnWidth(4, 90);\n    sheet.setColumnWidth(5, 120);\n    sheet.setColumnWidth(6, 100);\n    sheet.setColumnWidth(7, 110);\n    sheet.setColumnWidth(8, 110);\n    sheet.setColumnWidth(9, 220);\n    sheet.setColumnWidth(10, 70);\n    sheet.setColumnWidth(11, 100);\n    sheet.setColumnWidth(12, 220);\n    sheet.setColumnWidth(13, 80);\n    sheet.setColumnWidth(14, 100);\n    sheet.setColumnWidth(15, 90);\n    sheet.setColumnWidth(16, 100);\n    sheet.getRange('I:I').setWrap(true);\n    sheet.getRange('L:L').setWrap(true);\n    return;\n  }\n\n  if (name === '정산대장') {\n    for (let col = 1; col <= 13; col++) {\n      sheet.setColumnWidth(col, 110);\n    }\n    sheet.setColumnWidth(2, 100);\n    sheet.setColumnWidth(6, 120);\n    sheet.setColumnWidth(7, 140);\n    sheet.setColumnWidth(8, 140);\n    sheet.setColumnWidth(9, 120);\n    sheet.setColumnWidth(12, 120);\n    sheet.setColumnWidth(13, 120);\n    return;\n  }\n\n  if (name === '월간리포트') {\n    for (let col = 1; col <= 8; col++) {\n      sheet.setColumnWidth(col, 140);\n    }\n  }\n}\nfunction removeDefaultSheetIfUnused_(ss) {\n  const defaultSheet = ss.getSheetByName('시트1');\n  if (!defaultSheet) return;\n\n  const hasOnlyBlankCell =\n    defaultSheet.getLastRow() <= 1 &&\n    defaultSheet.getLastColumn() <= 1 &&\n    String(defaultSheet.getRange(1, 1).getValue() || '').trim() === '';\n\n  if (hasOnlyBlankCell && ss.getSheets().length > 1) {\n    ss.deleteSheet(defaultSheet);\n  }\n}\n/**\n * 정산 DB 웹앱 호출\n */\nfunction triggerArchiveDbSync_() {\n  if (!CONFIG.DB_SYNC_WEBAPP_URL) {\n    return { ok: true, skipped: true, message: '정산 DB 자동 갱신은 별도 동기화에서 처리합니다.' };\n  }\n\n  var payload = {\n    key: CONFIG.DB_SYNC_SECRET_KEY,\n    source: 'archive-automation',\n    requestedAt: new Date().toISOString()\n  };\n\n  var response = UrlFetchApp.fetch(CONFIG.DB_SYNC_WEBAPP_URL, {\n    method: 'post',\n    contentType: 'application/json',\n    payload: JSON.stringify(payload),\n    muteHttpExceptions: true\n  });\n\n  var code = response.getResponseCode();\n  var body = response.getContentText();\n\n  if (code < 200 || code >= 300) {\n    throw new Error('정산 DB 호출 실패 (' + code + '): ' + body);\n  }\n\n  var parsed = {};\n  try {\n    parsed = JSON.parse(body);\n  } catch (e) {\n    throw new Error('정산 DB 응답 파싱 실패: ' + body);\n  }\n\n  if (!parsed.ok) {\n    throw new Error('정산 DB 갱신 실패: ' + parsed.message);\n  }\n\n  return parsed;\n}\n",
+      "lastModifyUser": {
+        "domain": "archivepilates.com",
+        "email": "home@archivepilates.com",
+        "name": "아카이브필라테스",
+        "photoUrl": "https://lh3.googleusercontent.com/a-/ALV-UjVDblQQ9dkA0pcePOcWRBWwoLy8K9NqMlG7LNuq0JfsOYsytGpNa8rqViH9YpvhGdu4rBYcxM7Rg6Zu_NnKo99khAq0S8y563TQZt2eLdRuySpfQdaUrIK62FQGUACMKAlEqPqNhnXio8KtTLP8eqcjx9FLdJT_4QOz2AP9PL82nipmhgtrXcA1KMWQ1pm-fmnZwHyC-OTIUbhM2zrPng5Yd6rv-6spjh76bfNquhKorWSrolyrNRRtVXNjqPsfYvn5mgGiAyjEK0J2bASzQ2kZBqg52ABBlJ8NZLs-k1LUXQ5KJjRAJPzikMXNA7g4j_hmA_k4v3LmigkdFv4X2w0LkIo7eYxGHmPkp57Gg0iQnMbYiW772yItks_X3PsS9jEteBDlwye49sCJtPz5SupSmSqLNqxa5fMF_z0N5jRtZ9_BuxOR_1djXs0vQpOV-SmaKKEH_lQb0JX8rPTc3B9l6pD_HqLnGSIjjY4o0Za0yAfpk8i7Yq4FgPOLGkt3tSy_rbB8GsPHX0o6asE22w7r1S64fx7QjM3jmPd7fPmjDFVDzj5IS8MGak4sjWovULEi0EhUQWidu-9y9Wj39wwZk8no3o2zitUyWX17duZbIR28nyas-zzGZKML-cLlP0psk9zeDX8rX2OSSwf-K6p7r7YV2vc8b1kbJg062UjzDvaLYRsNXUsTMQGAenCXnUFuv_L5rDuoL93vro_WG45IXBeJ2ZXsR6P6VQdCCv3AXe5RnVBIDzmjP6ZuFYF6dapOed6V5YZaXdFdnXPo6m540qPHb0rnKVsCshB-MevmUOXvhB3DWGll3nwxfMSiGf3xS9QBMmor9Owq-i3MvVLxTL4YIjj05hbu9OfRoJTE70UOgy7SD6mR376YRkUqEMmni_8_exERNVwH2S6UJOZAO3RP2HASHxv0-GVoETRca5VK0NBDkwRXIjfA7Z2PV2yL0sfbe31ExJin26lJzJBCtXTj6tUndeCb3N5Krw5DgkE4-pixuxr7UrQ18HjgM0CmjS8XIrq_7CE9KpxcMTT35D8cl7H_U8M6AF4a1Azjrq5SbkkQ=h128"
+      },
+      "createTime": "2026-04-18T17:36:39.922Z",
+      "updateTime": "2026-06-07T18:21:16.141Z",
+      "functionSet": {
+        "values": [
+          {
+            "name": "onOpen"
+          },
+          {
+            "name": "setupDashboardSheet"
+          },
+          {
+            "name": "runArchiveMonthlyAutomation"
+          },
+          {
+            "name": "refreshDashboardLinks"
+          },
+          {
+            "name": "processAllRawFiles_"
+          },
+          {
+            "name": "getPreviousMonthKey_"
+          },
+          {
+            "name": "getContext_"
+          },
+          {
+            "name": "cleanupDuplicateRawFolders"
+          },
+          {
+            "name": "trashLegacyFolderIfDuplicated_",
+            "parameters": [
+              "rootFolder",
+              "legacyFolderName",
+              "canonicalFolderName"
+            ]
+          },
+          {
+            "name": "listFileNamesInFolder_",
+            "parameters": [
+              "folder"
+            ]
+          },
+          {
+            "name": "listFileNameSetInFolder_",
+            "parameters": [
+              "folder"
+            ]
+          },
+          {
+            "name": "clearOtherSheets_",
+            "parameters": [
+              "ss",
+              "keepName"
+            ]
+          },
+          {
+            "name": "listRawSpreadsheetFiles_",
+            "parameters": [
+              "folder"
+            ]
+          },
+          {
+            "name": "getMonthlyRawFiles_",
+            "parameters": [
+              "folder"
+            ]
+          },
+          {
+            "name": "extractMonthKeyFromFileName_",
+            "parameters": [
+              "fileName"
+            ]
+          },
+          {
+            "name": "formatMonthLabel_",
+            "parameters": [
+              "monthKey"
+            ]
+          },
+          {
+            "name": "isSpreadsheetFile_",
+            "parameters": [
+              "file"
+            ]
+          },
+          {
+            "name": "isGoogleSheetsFile_",
+            "parameters": [
+              "file"
+            ]
+          },
+          {
+            "name": "loadWorkbookRowsFromFile_",
+            "parameters": [
+              "file",
+              "tempParentFolder"
+            ]
+          },
+          {
+            "name": "convertExcelToGoogleSheet_",
+            "parameters": [
+              "file",
+              "parentFolder"
+            ]
+          },
+          {
+            "name": "moveFileToFolder_",
+            "parameters": [
+              "file",
+              "targetFolder"
+            ]
+          },
+          {
+            "name": "getOrCreateFolder_",
+            "parameters": [
+              "parentFolder",
+              "folderName"
+            ]
+          },
+          {
+            "name": "createOrReplaceMonthlyBackupFile_",
+            "parameters": [
+              "backupFolder",
+              "monthKey"
+            ]
+          },
+          {
+            "name": "listBackupFilesByMonth_",
+            "parameters": [
+              "backupFolder"
+            ]
+          },
+          {
+            "name": "mapRawRow_",
+            "parameters": [
+              "headers",
+              "row",
+              "sourceFileName"
+            ]
+          },
+          {
+            "name": "loadReferenceTables_",
+            "parameters": [
+              "rootFolder"
+            ]
+          },
+          {
+            "name": "getExternalSheetData_",
+            "parameters": [
+              "folder",
+              "fileName",
+              "sheetName"
+            ]
+          },
+          {
+            "name": "driveFileCopyWithRetry_",
+            "parameters": [
+              "fileId",
+              "title"
+            ]
+          },
+          {
+            "name": "buildAuxRows_",
+            "parameters": [
+              "rawRows",
+              "refs"
+            ]
+          },
+          {
+            "name": "writeAuxSheet_",
+            "parameters": [
+              "ss",
+              "auxRows"
+            ]
+          },
+          {
+            "name": "buildPayroll_",
+            "parameters": [
+              "auxRows",
+              "refs"
+            ]
+          },
+          {
+            "name": "writePayrollSheet_",
+            "parameters": [
+              "ss",
+              "rows"
+            ]
+          },
+          {
+            "name": "buildMonthlyReport_",
+            "parameters": [
+              "auxRows",
+              "payrollRows"
+            ]
+          },
+          {
+            "name": "writeReportSheet_",
+            "parameters": [
+              "ss",
+              "report"
+            ]
+          },
+          {
+            "name": "buildBulkSummaryMessage_",
+            "parameters": [
+              "targetMonthKey",
+              "totalCount",
+              "processedCount",
+              "skippedCount"
+            ]
+          },
+          {
+            "name": "sendWebhookSummary_",
+            "parameters": [
+              "text"
+            ]
+          },
+          {
+            "name": "getHeaderIndexMap_",
+            "parameters": [
+              "headers"
+            ]
+          },
+          {
+            "name": "getCellByAliases_",
+            "parameters": [
+              "row",
+              "headerMap",
+              "aliases"
+            ]
+          },
+          {
+            "name": "getOrCreateSheet_",
+            "parameters": [
+              "ss",
+              "name"
+            ]
+          },
+          {
+            "name": "resetSheet_",
+            "parameters": [
+              "ss",
+              "name"
+            ]
+          },
+          {
+            "name": "normalizeDate_",
+            "parameters": [
+              "value"
+            ]
+          },
+          {
+            "name": "normalizeTime_",
+            "parameters": [
+              "value"
+            ]
+          },
+          {
+            "name": "getWeekdayKorean_",
+            "parameters": [
+              "dateStr"
+            ]
+          },
+          {
+            "name": "toNumber_",
+            "parameters": [
+              "value"
+            ]
+          },
+          {
+            "name": "round2_",
+            "parameters": [
+              "num"
+            ]
+          },
+          {
+            "name": "resizeSheetToFit_",
+            "parameters": [
+              "sheet",
+              "requiredRows",
+              "requiredCols"
+            ]
+          },
+          {
+            "name": "applySheetColumnWidths_",
+            "parameters": [
+              "sheet"
+            ]
+          },
+          {
+            "name": "removeDefaultSheetIfUnused_",
+            "parameters": [
+              "ss"
+            ]
+          },
+          {
+            "name": "triggerArchiveDbSync_"
+          }
+        ]
+      }
+    }
+  ]
+}
