@@ -2,7 +2,7 @@ import { logger } from "firebase-functions";
 import { db } from "../config/firebase";
 import { refs } from "../firestore/refs";
 import { createAlimtalkLogDocument, sendAlimtalkLogEmail } from "../google/driveDocsMailer";
-import type { AlimtalkCandidateDoc } from "../types/models";
+import type { AlimtalkCandidateDoc, AlimtalkSendDoc } from "../types/models";
 import { todayKst } from "../utils/date";
 
 interface QueueSummary {
@@ -28,12 +28,14 @@ export async function sendDailyAlimtalkReport(input: {
   const studioId = input.studioId || "5330";
   const date = input.date || todayKst();
   const candidates = await listDailyCandidates(studioId, date);
+  const failedSends = await listDailyFailedSends(studioId, date);
   const surveyStats = await surveyFlowStats(studioId, date);
   const body = buildReportBody({
     date,
     queueSummary: input.queueSummary,
     processSummary: input.processSummary,
     candidates,
+    failedSends,
     surveyStats,
   });
   const status = reportStatus(input.processSummary, surveyStats);
@@ -71,17 +73,27 @@ async function listDailyCandidates(studioId: string, date: string): Promise<Alim
     );
 }
 
+async function listDailyFailedSends(studioId: string, date: string): Promise<AlimtalkSendDoc[]> {
+  const snap = await refs.alimtalkSends().where("studioId", "==", studioId).where("status", "==", "failed").limit(500).get();
+  return snap.docs
+    .map((doc) => doc.data())
+    .filter((send) => dateText(send.updatedAt) === date || dateText(send.createdAt) === date)
+    .sort((a, b) => `${a.memberName}_${a.sendId}`.localeCompare(`${b.memberName}_${b.sendId}`, "ko"));
+}
+
 function buildReportBody(input: {
   date: string;
   queueSummary: QueueSummary;
   processSummary: ProcessSummary;
   candidates: AlimtalkCandidateDoc[];
+  failedSends: AlimtalkSendDoc[];
   surveyStats: { submitted: number; staffSent: number; memoFailed: number };
 }): string {
   const now = formatKstNow();
   const sent = input.candidates.filter((candidate) => candidate.status === "sent");
   const skipped = input.candidates.filter((candidate) => candidate.status === "skipped");
   const failed = input.candidates.filter((candidate) => candidate.status === "failed");
+  const failureLines = mergedFailureLines(failed, input.failedSends, input.processSummary.failed);
   const remaining = input.candidates.filter((candidate) => !["sent", "skipped", "failed"].includes(candidate.status));
   const autoSent = sent.filter(
     (candidate) => candidate.queuedBy === "auto" || candidate.reviewedByUid?.startsWith("system:"),
@@ -116,10 +128,11 @@ function buildReportBody(input: {
     ...linesOrEmpty(sent.map(candidateLine)),
     "",
     "제외/차단",
-    ...linesOrEmpty(skipped.map(candidateLine)),
+    `- 총 ${skipped.length}건`,
+    "- 상세 명단은 구글드라이브 로그 문서와 Firestore 후보 기록에서 확인",
     "",
     "실패",
-    ...linesOrEmpty(failed.map(candidateLine)),
+    ...linesOrEmpty(failureLines),
     "",
     "미처리/대기",
     ...linesOrEmpty(remaining.map(candidateLine)),
@@ -173,6 +186,36 @@ function candidateLine(candidate: AlimtalkCandidateDoc): string {
   return `- ${candidate.memberName} / ${templateLabel(candidate.type)} / ${candidate.status} / ${mode}${detail}${error}`;
 }
 
+function mergedFailureLines(
+  failedCandidates: AlimtalkCandidateDoc[],
+  failedSends: AlimtalkSendDoc[],
+  expectedFailed: number,
+): string[] {
+  const seen = new Set<string>();
+  const lines: string[] = [];
+  for (const candidate of failedCandidates) {
+    const key = candidate.candidateId;
+    seen.add(key);
+    lines.push(candidateLine(candidate));
+  }
+  for (const send of failedSends) {
+    const key = send.candidateId || send.sendId;
+    if (seen.has(key)) continue;
+    seen.add(key);
+    lines.push(sendLine(send));
+  }
+  if (expectedFailed > 0 && lines.length < expectedFailed) {
+    lines.push(`- 실패 ${expectedFailed}건 중 ${lines.length}건만 상세 로그와 매칭됨 / 나머지는 큐 처리 로그 확인 필요`);
+  }
+  return lines;
+}
+
+function sendLine(send: AlimtalkSendDoc): string {
+  const error = send.lastError ? ` / ${send.lastError}` : "";
+  const attempts = send.attempts ? ` / 시도 ${send.attempts}/${send.maxAttempts || 1}` : "";
+  return `- ${send.memberName || "-"} / ${templateLabelFromCode(send.templateCode)} / failed / ${send.sendId}${attempts}${error}`;
+}
+
 function linesOrEmpty(lines: string[]): string[] {
   return lines.length ? lines : ["- 없음"];
 }
@@ -190,6 +233,27 @@ function templateLabel(type: string): string {
     manual_review: "수동 검토",
   };
   return labels[type] || type;
+}
+
+function templateLabelFromCode(templateCode: string): string {
+  const labels: Record<string, string> = {
+    KA01TP260518023011547VpbovK8MrI9: "수업예약오픈안내",
+    KA01TP260514081318309wQGfeIJxIAJ: "신규회원 웰컴",
+    KA01TP260602101939427lPhGyuDLvFM: "현장 웰컴",
+    KA01TP260514145047261araXgWLVFRs: "그룹 기간 만료",
+    KA01TP260514145047393VpTbcCZKkCV: "그룹 횟수 부족",
+    KA01TP260514152235608d9icGOBotnV: "개인 기간 만료",
+    KA01TP260514153632171uiWXYoeiOLS: "개인 횟수 부족",
+    KA01TP2605210729364330NbhZVAu9zA: "프라이빗 사전설문",
+    KA01TP260514153314927WH270IppWQS: "장기 미출석",
+    KA01TP260524083643752cySb9BoDOjN: "그룹 첫수업 설문",
+    KA01TP260519093416836f1EHZYJ00uM: "강사 프라이빗 설문",
+    KA01TP260522041704111wu4Z0cu9cgl: "강사 그룹 설문",
+    KA01TP260521120040094XcMvYgFTryj: "프라이빗 차트 요청",
+    KA01TP260528081225871Fr92FW901Vo: "프라이빗 회원 리포트",
+    KA01TP260528090148593isshfXtt8vE: "인바디 리포트",
+  };
+  return labels[templateCode] || templateCode || "-";
 }
 
 function statusSort(status: string): number {

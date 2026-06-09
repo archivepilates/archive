@@ -82,6 +82,7 @@ export async function isAlimtalkTemplateApproved(templateCode: string): Promise<
   if (!templateCode) return false;
   const state = await templateState(templateCode);
   if (state?.source === "solapi") return APPROVED_STATUSES.has(String(state.status || "").toUpperCase());
+  if (state?.source === "error") return false;
   return STATIC_APPROVED_ALIMTALK_TEMPLATE_CODES.has(templateCode);
 }
 
