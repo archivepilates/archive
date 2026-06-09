@@ -92,6 +92,13 @@ export async function processAlimtalkQueue(): Promise<{ processed: number; sent:
         },
         { merge: true },
       );
+      await applySentCandidateSideEffects(claimed, result.messageId).catch((err) => {
+        logger.warn("processAlimtalkQueue sent side effect failed", {
+          candidateId: claimed.candidateId,
+          templateCode: claimed.templateCode,
+          message: errorMessage(err),
+        });
+      });
       sent += 1;
     } catch (err) {
       const message = errorMessage(err);
@@ -141,6 +148,30 @@ export async function processAlimtalkQueue(): Promise<{ processed: number; sent:
 
   logger.info("processAlimtalkQueue completed", { processed, sent, failed });
   return { processed, sent, failed };
+}
+
+async function applySentCandidateSideEffects(candidate: AlimtalkCandidateDoc, solapiMessageId: string): Promise<void> {
+  if (candidate.type !== "private_lesson_report") return;
+  const recordId = String(candidate.payload?.recordId || candidate.sourceActionKey || "").trim();
+  if (!recordId) return;
+  const now = nowTimestamp();
+  await refs.privateLessonChartRecord(recordId).set(
+    {
+      gptStatus: "published",
+      publicReportApproval: {
+        status: "sent",
+        candidateId: candidate.candidateId,
+        sentAt: now,
+        solapiMessageId,
+        lastError: null,
+      },
+      notionSync: {
+        needsStatusRefresh: true,
+      },
+      updatedAt: now,
+    },
+    { merge: true },
+  );
 }
 
 async function claimCandidate(candidate: AlimtalkCandidateDoc): Promise<AlimtalkCandidateDoc | null> {

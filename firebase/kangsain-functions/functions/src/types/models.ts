@@ -671,6 +671,8 @@ export interface PrivateLessonChartRecordDoc {
     approvedAt?: Timestamp;
     approvedBy?: string;
     candidateId?: string;
+    sentAt?: Timestamp;
+    solapiMessageId?: string;
     lastError?: string | null;
   };
   notionSync?: {
@@ -679,6 +681,7 @@ export interface PrivateLessonChartRecordDoc {
     pageUrl?: string;
     instructorPageId?: string;
     instructorPageUrl?: string;
+    needsStatusRefresh?: boolean;
     syncedAt?: string;
     error?: string;
   };

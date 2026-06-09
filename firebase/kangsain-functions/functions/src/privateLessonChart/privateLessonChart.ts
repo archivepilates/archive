@@ -471,12 +471,14 @@ export async function generatePendingPrivateLessonChartReports(): Promise<{
   generated: number;
   skipped: number;
   failed: number;
+  notionSynced: number;
 }> {
   const snap = await refs.privateLessonChartRecords().where("gptStatus", "==", "pending").limit(100).get();
   let checked = 0;
   let generated = 0;
   let skipped = 0;
   let failed = 0;
+  let notionSynced = 0;
 
   for (const recordSnap of snap.docs) {
     const record = recordSnap.data();
@@ -498,12 +500,34 @@ export async function generatePendingPrivateLessonChartReports(): Promise<{
       });
       return null;
     });
-    if (result?.generated || result?.ready) generated += 1;
-    else failed += 1;
+    if (result?.generated || result?.ready) {
+      generated += 1;
+      const notionSync = await syncPrivateLessonChartRecordToNotion(result.record, chartRequest);
+      await refs.privateLessonChartRecord(result.record.recordId).set(
+        {
+          notionSync,
+          updatedAt: nowTimestamp(),
+        },
+        { merge: true },
+      );
+      if (notionSync.status === "synced") notionSynced += 1;
+    } else {
+      failed += 1;
+    }
   }
 
-  logger.info("generatePendingPrivateLessonChartReports completed", { checked, generated, skipped, failed });
-  return { checked, generated, skipped, failed };
+  const refresh = await syncPendingPrivateLessonReportNotionRefreshes();
+  notionSynced += refresh.synced;
+
+  logger.info("generatePendingPrivateLessonChartReports completed", {
+    checked,
+    generated,
+    skipped,
+    failed,
+    notionSynced,
+    notionRefresh: refresh,
+  });
+  return { checked, generated, skipped, failed, notionSynced };
 }
 
 export async function enqueueApprovedPrivateLessonReportAlimtalks(): Promise<{
@@ -732,7 +756,39 @@ async function enqueuePrivateLessonReportForRecord(
   const candidateId = `private_lesson_report_${record.recordId}`;
   const existing = (await refs.alimtalkCandidate(candidateId).get()).data();
   if (existing?.status === "sent") {
-    if (notionPageId) await updatePrivateLessonReportNotionStatus(notionPageId, "완료");
+    const request = (record.requestId ? await refs.privateLessonChartRequest(record.requestId).get() : null)?.data();
+    await refs.privateLessonChartRecord(record.recordId).set(
+      {
+        gptStatus: "published",
+        publicReportApproval: {
+          status: "sent",
+          candidateId,
+          sentAt: existing.sentAt || nowTimestamp(),
+          lastError: null,
+        },
+        updatedAt: nowTimestamp(),
+      },
+      { merge: true },
+    );
+    if (request) {
+      const notionSync = await syncPrivateLessonChartRecordToNotion(
+        {
+          ...record,
+          gptStatus: "published",
+          publicReportApproval: {
+            ...(record.publicReportApproval || {}),
+            status: "sent",
+            candidateId,
+            sentAt: existing.sentAt || nowTimestamp(),
+            lastError: null,
+          },
+        },
+        request,
+      );
+      await refs.privateLessonChartRecord(record.recordId).set({ notionSync, updatedAt: nowTimestamp() }, { merge: true });
+    } else if (notionPageId) {
+      await updatePrivateLessonReportNotionStatus(notionPageId, "완료");
+    }
     return "completed";
   }
   if (existing?.status === "queued" || existing?.status === "processing") return "already_queued";
@@ -817,6 +873,54 @@ async function privateLessonReportDeliveryState(record: PrivateLessonChartRecord
     };
   }
   return { locked: false, status: candidateStatus || approvalStatus || record.gptStatus || "pending", reason: "" };
+}
+
+async function syncPendingPrivateLessonReportNotionRefreshes(): Promise<{
+  checked: number;
+  synced: number;
+  skipped: number;
+  failed: number;
+}> {
+  const snap = await refs
+    .privateLessonChartRecords()
+    .where("notionSync.needsStatusRefresh", "==", true)
+    .limit(50)
+    .get();
+  let checked = 0;
+  let synced = 0;
+  let skipped = 0;
+  let failed = 0;
+  for (const recordSnap of snap.docs) {
+    checked += 1;
+    const record = recordSnap.data();
+    const request = (record.requestId ? await refs.privateLessonChartRequest(record.requestId).get() : null)?.data();
+    if (!request) {
+      skipped += 1;
+      continue;
+    }
+    const notionSync = await syncPrivateLessonChartRecordToNotion(record, request);
+    await refs.privateLessonChartRecord(record.recordId).set(
+      {
+        notionSync: {
+          ...(record.notionSync || {}),
+          ...notionSync,
+          needsStatusRefresh: shouldRetryNotionStatusRefresh(notionSync),
+        },
+        updatedAt: nowTimestamp(),
+      },
+      { merge: true },
+    );
+    if (notionSync.status === "synced") synced += 1;
+    else failed += 1;
+  }
+  return { checked, synced, skipped, failed };
+}
+
+function shouldRetryNotionStatusRefresh(notionSync: NonNullable<PrivateLessonChartRecordDoc["notionSync"]>): boolean {
+  if (notionSync.status === "synced") return false;
+  const error = String(notionSync.error || "");
+  if (/archived|Could not find block|Could not find page/i.test(error)) return false;
+  return true;
 }
 
 async function resetPrivateLessonReportCandidateForEdit(recordId: string, reason: string): Promise<void> {
@@ -1439,9 +1543,11 @@ async function syncPrivateLessonChartRecordToNotion(
       publicReportUrl: reportResolution.publicReportUrl || record.publicReportUrl,
       publicReportCanonicalUrl: reportResolution.publicReportCanonicalUrl || record.publicReportCanonicalUrl,
     } as PrivateLessonChartRecordDoc;
+    const deliveryState = await privateLessonReportDeliveryState(recordForNotion);
+    const completionLabel = privateLessonReportCompletionLabel(recordForNotion, deliveryState);
     const reportUrl = reportResolution.publicReportUrl;
     const properties = compactObject({
-      Name: notionTitle(notionSessionTitle(recordForNotion, chartRequest)),
+      Name: notionTitle(notionSessionTitle(recordForNotion, chartRequest, completionLabel)),
       "Session Number": notionNumber(recordForNotion.sessionNumber),
       "Chart Request ID": notionText(recordForNotion.recordId || recordForNotion.requestId),
       Date: chartRequest.lessonDate ? notionDate(chartRequest.lessonDate) : undefined,
@@ -1452,7 +1558,7 @@ async function syncPrivateLessonChartRecordToNotion(
       "Session Status": notionSelect(notionSessionStatus(recordForNotion, chartRequest)),
       "회원 리포트": reportUrl ? { url: reportUrl } : undefined,
       발송: { checkbox: false },
-      발송상태: notionSelect(reportUrl ? "대기" : ""),
+      발송상태: notionSelect(notionReportSendStatus(reportUrl, completionLabel)),
     });
     const content = notionChartChildren(recordForNotion, chartRequest);
     const existingPageId = record.notionSync?.pageId;
@@ -1463,6 +1569,7 @@ async function syncPrivateLessonChartRecordToNotion(
         recordForNotion,
         chartRequest,
         record.notionSync?.pageUrl || notionPageUrl(existingPageId),
+        completionLabel,
       );
       return {
         status: "synced",
@@ -1470,6 +1577,7 @@ async function syncPrivateLessonChartRecordToNotion(
         pageUrl: record.notionSync?.pageUrl || notionPageUrl(existingPageId),
         instructorPageId: instructorPage?.pageId || record.notionSync?.instructorPageId,
         instructorPageUrl: instructorPage?.pageUrl || record.notionSync?.instructorPageUrl,
+        needsStatusRefresh: false,
         syncedAt: new Date().toISOString(),
       };
     }
@@ -1479,13 +1587,14 @@ async function syncPrivateLessonChartRecordToNotion(
       children: content,
     });
     const pageUrl = String(page.url || notionPageUrl(String(page.id)));
-    const instructorPage = await syncInstructorMemberChartPage(recordForNotion, chartRequest, pageUrl);
+    const instructorPage = await syncInstructorMemberChartPage(recordForNotion, chartRequest, pageUrl, completionLabel);
     return {
       status: "synced",
       pageId: String(page.id),
       pageUrl,
       instructorPageId: instructorPage?.pageId,
       instructorPageUrl: instructorPage?.pageUrl,
+      needsStatusRefresh: false,
       syncedAt: new Date().toISOString(),
     };
   } catch (err) {
@@ -1497,6 +1606,7 @@ async function syncInstructorMemberChartPage(
   record: PrivateLessonChartRecordDoc,
   chartRequest: PrivateLessonChartRequestDoc,
   sessionPageUrl: string,
+  completionLabel = privateLessonReportCompletionLabel(record),
 ): Promise<{ pageId: string; pageUrl: string } | null> {
   if (!sessionPageUrl) return null;
   const memberPageId = await findInstructorMemberPageId(record.staffName, record.memberName).catch((err) => {
@@ -1508,12 +1618,14 @@ async function syncInstructorMemberChartPage(
     return "";
   });
   if (!memberPageId) return null;
-  const title = notionSessionTitle(record, chartRequest);
+  const title = notionSessionTitle(record, chartRequest, completionLabel);
   const baseTitle = notionSessionBaseTitle(record, chartRequest);
+  const titleVariants = notionSessionTitleVariants(record, chartRequest).filter((candidate) => candidate !== title);
   const existingPageId =
     record.notionSync?.instructorPageId ||
     (await findChildPageByExactTitle(memberPageId, title)) ||
-    (title !== baseTitle ? await findChildPageByExactTitle(memberPageId, baseTitle) : "");
+    (title !== baseTitle ? await findChildPageByExactTitle(memberPageId, baseTitle) : "") ||
+    (await firstExistingChildPageTitle(memberPageId, titleVariants));
   if (existingPageId) {
     await notionRequest(`pages/${existingPageId}`, "PATCH", { properties: notionTitle(title) });
     await appendPageContent(existingPageId, notionInstructorUpdateChildren(record, chartRequest));
@@ -1559,6 +1671,14 @@ async function findChildPageByExactTitle(parentPageId: string, title: string): P
   const children = await notionBlockChildren(parentPageId);
   const hit = children.find((child) => String(child.child_page?.title || "") === title);
   return hit?.id ? String(hit.id) : "";
+}
+
+async function firstExistingChildPageTitle(parentPageId: string, titles: string[]): Promise<string> {
+  for (const title of titles) {
+    const pageId = await findChildPageByExactTitle(parentPageId, title);
+    if (pageId) return pageId;
+  }
+  return "";
 }
 
 async function notionBlockChildren(blockId: string): Promise<any[]> {
@@ -2548,13 +2668,22 @@ function lessonTimeText(chartRequest: Pick<PrivateLessonChartRequestDoc, "lesson
   }).format(date);
 }
 
-function notionSessionTitle(record: PrivateLessonChartRecordDoc, chartRequest: PrivateLessonChartRequestDoc): string {
+function notionSessionTitle(
+  record: PrivateLessonChartRecordDoc,
+  chartRequest: PrivateLessonChartRequestDoc,
+  completionLabel = privateLessonReportCompletionLabel(record),
+): string {
   const title = notionSessionBaseTitle(record, chartRequest);
-  return privateLessonReportGenerated(record) ? `${title} · 완료` : title;
+  return completionLabel ? `${title} · ${completionLabel}` : title;
 }
 
 function notionSessionBaseTitle(record: PrivateLessonChartRecordDoc, chartRequest: PrivateLessonChartRequestDoc): string {
   return `${lessonTitleDate(chartRequest)} · ${record.memberName} ${record.sessionNumber}회차(자동화)`;
+}
+
+function notionSessionTitleVariants(record: PrivateLessonChartRecordDoc, chartRequest: PrivateLessonChartRequestDoc): string[] {
+  const title = notionSessionBaseTitle(record, chartRequest);
+  return [title, `${title} · 완료 미발송`, `${title} · 완료`];
 }
 
 function privateLessonReportGenerated(record: PrivateLessonChartRecordDoc): boolean {
@@ -2562,6 +2691,32 @@ function privateLessonReportGenerated(record: PrivateLessonChartRecordDoc): bool
     Boolean(record.publicReportUrl || record.publicReportCanonicalUrl) ||
     ["draft_created", "approved", "published"].includes(record.gptStatus)
   );
+}
+
+function privateLessonReportCompletionLabel(
+  record: PrivateLessonChartRecordDoc,
+  deliveryState?: { status: string },
+): "" | "완료 미발송" | "완료" {
+  if (!privateLessonReportGenerated(record)) return "";
+  if (privateLessonReportSent(record, deliveryState)) return "완료";
+  return "완료 미발송";
+}
+
+function privateLessonReportSent(
+  record: PrivateLessonChartRecordDoc,
+  deliveryState?: { status: string },
+): boolean {
+  return (
+    deliveryState?.status === "sent" ||
+    record.gptStatus === "published" ||
+    record.publicReportApproval?.status === "sent"
+  );
+}
+
+function notionReportSendStatus(reportUrl: string, completionLabel: string): string {
+  if (!reportUrl) return "";
+  if (completionLabel === "완료") return "완료";
+  return "대기";
 }
 
 function notionSessionStatus(
