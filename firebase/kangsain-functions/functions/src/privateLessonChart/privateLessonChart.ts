@@ -253,6 +253,30 @@ export async function sendPendingPrivateLessonChartAlimtalksForDate(date: string
       skipped += 1;
       continue;
     }
+    const sendValidation = await validatePrivateChartRequestForSend(request);
+    if (!sendValidation.ok) {
+      await refs.privateLessonChartRequest(request.requestId).set(
+        {
+          ...(sendValidation.requestStatus ? { status: sendValidation.requestStatus } : {}),
+          alimtalk: {
+            ...(request.alimtalk || {}),
+            status: sendValidation.alimtalkStatus,
+            templateName: PRIVATE_CHART_TEMPLATE_NAME,
+            templateId: STAFF_PRIVATE_CHART_TEMPLATE_ID,
+            lastError: sendValidation.reason,
+          },
+          updatedAt: nowTimestamp(),
+        },
+        { merge: true },
+      );
+      skipped += 1;
+      logger.warn("private lesson chart alimtalk skipped before send", {
+        requestId: request.requestId,
+        bookingId: request.bookingId,
+        reason: sendValidation.reason,
+      });
+      continue;
+    }
     checked += 1;
     if (!templateApproved) {
       await refs.privateLessonChartRequest(request.requestId).set(
@@ -362,6 +386,48 @@ export async function sendPendingPrivateLessonChartAlimtalksForDate(date: string
 
   logger.info("sendPendingPrivateLessonChartAlimtalksForDate completed", { date, checked, sent, skipped, failed });
   return { date, checked, sent, skipped, failed };
+}
+
+async function validatePrivateChartRequestForSend(request: PrivateLessonChartRequestDoc): Promise<{
+  ok: boolean;
+  reason: string;
+  alimtalkStatus: NonNullable<PrivateLessonChartRequestDoc["alimtalk"]>["status"];
+  requestStatus?: PrivateLessonChartRequestStatus;
+}> {
+  const bookingSnap = request.bookingId ? await refs.booking(request.bookingId).get() : null;
+  const booking = bookingSnap?.data();
+  if (!booking) {
+    return {
+      ok: false,
+      reason: "예약 원본을 찾지 못해 강사용 프라이빗 차트 알림톡 발송 보류",
+      alimtalkStatus: "template_pending",
+    };
+  }
+  if (!isPrivateBooking(booking)) {
+    return {
+      ok: false,
+      reason: "예약 원본이 프라이빗 활성 예약이 아니어서 강사용 프라이빗 차트 알림톡 발송 제외",
+      alimtalkStatus: "skipped",
+      requestStatus: "cancelled",
+    };
+  }
+  if (booking.appStatus !== "reserved" || ["absent", "late_cancel"].includes(booking.attendanceStatus)) {
+    return {
+      ok: false,
+      reason: `예약 상태가 ${booking.appStatus}/${booking.attendanceStatus}라 강사용 프라이빗 차트 알림톡 발송 제외`,
+      alimtalkStatus: "skipped",
+      requestStatus: "cancelled",
+    };
+  }
+  const freshnessError = privateChartBookingFreshnessError(booking);
+  if (freshnessError) {
+    return {
+      ok: false,
+      reason: freshnessError,
+      alimtalkStatus: "template_pending",
+    };
+  }
+  return { ok: true, reason: "", alimtalkStatus: request.alimtalk.status };
 }
 
 export async function generatePendingPrivateLessonChartReports(): Promise<{
@@ -1162,6 +1228,15 @@ async function syncPrivateLessonChartRecordToNotion(
     }
     const reportUrl = reportResolution.publicReportUrl;
     const properties = compactObject({
+      Name: notionTitle(notionSessionTitle(record, chartRequest)),
+      "Session Number": notionNumber(record.sessionNumber),
+      "Chart Request ID": notionText(record.recordId || record.requestId),
+      Date: chartRequest.lessonDate ? notionDate(chartRequest.lessonDate) : undefined,
+      Instructor: notionSelect(record.staffName || chartRequest.staffName || "미정"),
+      "Pre Status": notionSelect(chartRequest.preStatus || "pending"),
+      "Post Status": notionSelect(chartRequest.postStatus || "pending"),
+      "GPT Status": notionSelect(record.gptStatus || "pending"),
+      "Session Status": notionSelect(notionSessionStatus(record, chartRequest)),
       "회원 리포트": reportUrl ? { url: reportUrl } : undefined,
       발송: { checkbox: false },
       발송상태: notionSelect(reportUrl ? "대기" : ""),
@@ -1472,6 +1547,18 @@ function isPrivateBooking(booking: BookingDoc): boolean {
   return /프라이빗|개인|1:1|PRIVATE|\bP\b/i.test(text);
 }
 
+function privateChartBookingFreshnessError(booking: BookingDoc): string {
+  const syncedAt = booking.sourceUpdatedAt || booking.syncedAt || booking.updatedAt;
+  const date = syncedAt?.toDate?.();
+  if (!date) return "예약 원본 동기화 시각이 없어 강사용 프라이빗 차트 알림톡 발송 보류";
+  const syncedDate = formatDateKst(date);
+  const currentDate = todayKst();
+  if (syncedDate !== currentDate) {
+    return `예약 원본이 오늘 동기화되지 않아 발송 보류: 마지막 동기화 ${syncedDate}`;
+  }
+  return "";
+}
+
 function canonicalPrivateBookings(bookings: BookingDoc[]): BookingDoc[] {
   const grouped = new Map<string, BookingDoc>();
   for (const booking of bookings) {
@@ -1538,6 +1625,7 @@ function isExcelBookingId(bookingId: string): boolean {
 }
 
 function isSendablePrivateChartRequest(request: PrivateLessonChartRequestDoc): boolean {
+  if (request.status === "cancelled") return false;
   if (request.alimtalk?.status !== "template_pending" && request.alimtalk?.status !== "queued") return false;
   if (!request.staffPhone || !normalizePhone(request.staffPhone)) return false;
   if (!request.preShortUrl || !request.postShortUrl || !request.mediaUploadShortUrl) return false;
@@ -2139,6 +2227,18 @@ function lessonTimeText(chartRequest: Pick<PrivateLessonChartRequestDoc, "lesson
 
 function notionSessionTitle(record: PrivateLessonChartRecordDoc, chartRequest: PrivateLessonChartRequestDoc): string {
   return `${lessonTitleDate(chartRequest)} · ${record.memberName} ${record.sessionNumber}회차(자동화)`;
+}
+
+function notionSessionStatus(
+  record: PrivateLessonChartRecordDoc,
+  chartRequest: PrivateLessonChartRequestDoc,
+): string {
+  if (chartRequest.status === "cancelled") return "취소";
+  if (record.postSubmittedAt || chartRequest.postStatus === "submitted") return "출석";
+  const lessonStart = chartRequest.lessonStartAt?.toDate?.();
+  if (lessonStart && lessonStart.getTime() < Date.now()) return "수업완료";
+  if (record.preSubmittedAt || chartRequest.preStatus === "submitted") return "수업전 계획";
+  return "예정";
 }
 
 function lessonTitleDate(chartRequest: Pick<PrivateLessonChartRequestDoc, "lessonDate" | "lessonStartAt">): string {

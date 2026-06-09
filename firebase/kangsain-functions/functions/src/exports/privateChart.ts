@@ -65,7 +65,7 @@ export const scheduledSyncPrivateSurveyNotion = onSchedule(
 export const scheduledCreatePrivateLessonChartRequests = onSchedule(
   {
     ...privateSurveyIntakeOptions,
-    schedule: "0 18 * * *",
+    schedule: "40 18 * * *",
   },
   async () => {
     await createAndSendTomorrowPrivateLessonCharts();
