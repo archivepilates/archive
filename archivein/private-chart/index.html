@@ -665,6 +665,7 @@
     function intakeReferenceHtml(intake) {
       if (!intake) return `<p>연결된 최초 사전설문이 없습니다.</p>`;
       const rows = [
+        ["목적 템플릿", intake.purposeTemplateLabel],
         ["목표", intake.goal],
         ["관심 부위", intake.focusArea],
         ["운동 수준", intake.exerciseLevel],
@@ -867,6 +868,7 @@
     function intakeHtml(intake) {
       if (!intake) return `<h2>사전설문 요약</h2><p>연결된 사전설문이 없습니다.</p>`;
       const rows = [
+        ["목적 템플릿", intake.purposeTemplateLabel],
         ["목표", intake.goal],
         ["신경 부위", intake.focusArea],
         ["운동 수준", intake.exerciseLevel],

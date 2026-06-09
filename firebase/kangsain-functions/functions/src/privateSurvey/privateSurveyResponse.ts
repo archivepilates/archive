@@ -35,6 +35,12 @@ const STAFF_PRIVATE_SURVEY_TEMPLATE_ID = ALIMTALK_TEMPLATES.staff_private_survey
 const STAFF_GROUP_SURVEY_TEMPLATE_ID = ALIMTALK_TEMPLATES.staff_group_survey.code;
 const SOLAPI_SEND_URL = "https://api.solapi.com/messages/v4/send-many/detail";
 const ARCHIVE_LOGO_URL = "https://in.archivepilates.com/logo120.png";
+const PRIVATE_PURPOSE_TEMPLATES: Record<string, string> = {
+  posture: "체형교정/정렬",
+  fitness: "다이어트/체력",
+  recovery: "통증/회복",
+  condition: "산전·산후/컨디션",
+};
 
 interface SurveyIngestPayload {
   spreadsheetId?: string;
@@ -59,6 +65,8 @@ interface NormalizedSurveyPayload {
 }
 
 interface SurveySummary {
+  purposeTemplateCode?: string;
+  purposeTemplateLabel?: string;
   goal: string;
   focusArea: string;
   painOrMedicalNote: string;
@@ -1565,10 +1573,33 @@ function emptyMatch(status: MatchResult["status"], reason: string): MatchResult 
 function summarizeAnswers(payload: NormalizedSurveyPayload): SurveySummary {
   const a = payload.answers;
   const beginner = payload.experienceType.includes("초보");
+  const purposeTemplate = purposeTemplateFromAnswers(a);
   return {
+    purposeTemplateCode: purposeTemplate.code,
+    purposeTemplateLabel: purposeTemplate.label,
     goal: beginner
-      ? a["3. 필라테스를 시작하려는 가장 큰 이유는 무엇인가요?"] || ""
-      : a["8. 현재 운동 목표는 무엇인가요?"] || "",
+      ? firstFilled(a, [
+          "4. 선택한 목적 안에서 가장 개선하고 싶은 점은 무엇인가요?",
+          "선택한 목적 안에서 가장 개선하고 싶은 점은 무엇인가요?",
+          "가장 개선하고 싶은 점",
+          "개인 목표",
+          "3. 필라테스를 시작하려는 가장 큰 이유는 무엇인가요?",
+          "3. 프라이빗 수업 목적 템플릿을 선택해주세요",
+          "3. 프라이빗 수업 목적을 선택해주세요",
+          "프라이빗 수업 목적 템플릿",
+          "프라이빗 수업 목적",
+        ])
+      : firstFilled(a, [
+          "9. 선택한 목적 안에서 가장 개선하고 싶은 점은 무엇인가요?",
+          "선택한 목적 안에서 가장 개선하고 싶은 점은 무엇인가요?",
+          "가장 개선하고 싶은 점",
+          "개인 목표",
+          "8. 현재 운동 목표는 무엇인가요?",
+          "8. 프라이빗 수업 목적 템플릿을 선택해주세요",
+          "8. 프라이빗 수업 목적을 선택해주세요",
+          "프라이빗 수업 목적 템플릿",
+          "프라이빗 수업 목적",
+        ]),
     focusArea: beginner
       ? a["4. 현재 가장 신경 쓰이는 부위는 어디인가요?"] || ""
       : a["6. 현재 불편하거나 개선이 필요한 부위는?"] || "",
@@ -1601,6 +1632,68 @@ function summarizeAnswers(payload: NormalizedSurveyPayload): SurveySummary {
   };
 }
 
+function purposeTemplateFromAnswers(answers: Record<string, string>): { code: string; label: string } {
+  const explicit = firstFilled(answers, [
+    "프라이빗 수업 목적 템플릿",
+    "프라이빗 수업 목적",
+    "프라이빗 목적 템플릿",
+    "회원 목적 템플릿",
+    "3. 프라이빗 수업 목적 템플릿을 선택해주세요",
+    "3. 프라이빗 수업 목적을 선택해주세요",
+    "8. 프라이빗 수업 목적 템플릿을 선택해주세요",
+    "8. 프라이빗 수업 목적을 선택해주세요",
+  ]);
+  const explicitCode = privatePurposeTemplateCode(explicit);
+  if (explicitCode) return { code: explicitCode, label: PRIVATE_PURPOSE_TEMPLATES[explicitCode] };
+
+  const fallbackText = [
+    answers["3. 필라테스를 시작하려는 가장 큰 이유는 무엇인가요?"],
+    answers["8. 현재 운동 목표는 무엇인가요?"],
+    answers["4. 현재 가장 신경 쓰이는 부위는 어디인가요?"],
+    answers["6. 현재 불편하거나 개선이 필요한 부위는?"],
+    answers["5. 통증이나 불편한 부위가 있다면 적어주세요"],
+    answers["7. 통증 / 병력 / 수술 경험이 있다면 작성해주세요"],
+  ]
+    .filter(Boolean)
+    .join(" ");
+  const inferredCode = inferPrivatePurposeTemplateCode(fallbackText);
+  return { code: inferredCode, label: PRIVATE_PURPOSE_TEMPLATES[inferredCode] };
+}
+
+function privatePurposeTemplateCode(value: string): string {
+  const text = normalizePurposeTemplateText(value);
+  if (!text) return "";
+  if (["posture", "fitness", "recovery", "condition"].includes(text)) return text;
+  if (text.includes("체형") || text.includes("자세") || text.includes("정렬") || text.includes("교정")) return "posture";
+  if (text.includes("다이어트") || text.includes("체력") || text.includes("감량") || text.includes("근력")) return "fitness";
+  if (text.includes("통증") || text.includes("회복") || text.includes("재활") || text.includes("불편")) return "recovery";
+  if (text.includes("산전") || text.includes("산후") || text.includes("컨디션") || text.includes("임신") || text.includes("출산")) {
+    return "condition";
+  }
+  return "";
+}
+
+function inferPrivatePurposeTemplateCode(value: string): string {
+  const text = normalizePurposeTemplateText(value);
+  const scores: Record<string, number> = {
+    posture: scorePurposeTemplateText(text, ["체형", "자세", "교정", "정렬", "골반", "척추", "라운드", "좌우", "밸런스"]),
+    fitness: scorePurposeTemplateText(text, ["다이어트", "감량", "체중", "라인", "체력", "근력", "근지구력", "탄력", "운동량"]),
+    recovery: scorePurposeTemplateText(text, ["통증", "아픔", "불편", "재활", "회복", "허리", "목", "어깨", "무릎", "디스크"]),
+    condition: scorePurposeTemplateText(text, ["산전", "산후", "임신", "출산", "컨디션", "피로", "순환", "부종", "회복"]),
+  };
+  return Object.entries(scores).sort((a, b) => b[1] - a[1])[0]?.[1]
+    ? Object.entries(scores).sort((a, b) => b[1] - a[1])[0][0]
+    : "posture";
+}
+
+function normalizePurposeTemplateText(value: string): string {
+  return String(value || "").replace(/\s+/g, "").toLowerCase();
+}
+
+function scorePurposeTemplateText(text: string, keywords: string[]): number {
+  return keywords.reduce((score, keyword) => score + (text.includes(normalizePurposeTemplateText(keyword)) ? 1 : 0), 0);
+}
+
 function parseKoreanTimestamp(value: string): Timestamp | null {
   const match = value.match(/^(\d{4})\.\s*(\d{1,2})\.\s*(\d{1,2})\s*(오전|오후)\s*(\d{1,2}):(\d{2})(?::(\d{2}))?/);
   if (!match) return null;
@@ -1623,7 +1716,9 @@ function renderSurveyPage(doc: PrivateSurveyResponseDoc): string {
       }).format(doc.submittedAt.toDate())
     : doc.submittedAtText;
   const isGroup = doc.surveyType === "group";
+  const summaryWithTemplate = doc.summary as Record<string, unknown>;
   const priorityRows = [
+    [isGroup ? "" : "목적 템플릿", isGroup ? "" : String(summaryWithTemplate.purposeTemplateLabel || "")],
     [isGroup ? "걱정되는 부분" : "운동 목적", doc.summary.goal],
     [isGroup ? "통증/불편 부위" : "신경 부위", doc.summary.focusArea],
     ["통증/병력", doc.summary.painOrMedicalNote],

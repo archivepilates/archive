@@ -100,7 +100,9 @@
       reviewDue: false,
     };
     const intake = {
-      goal: "체형교정과 골반 정렬, 좌우 밸런스를 개선하고 싶어요.",
+      purposeTemplateCode: "posture",
+      purposeTemplateLabel: "체형교정/정렬",
+      goal: "골반 정렬과 좌우 밸런스를 개선하고 싶어요.",
       focusArea: "골반과 흉곽 정렬",
       exerciseLevel: "필라테스 경험 있음",
       expectationOrImportantFactor: "자세가 안정되는 느낌",
@@ -146,7 +148,8 @@
         <div class="sample-note">이 화면은 샘플입니다. 실제 회원 설문은 링크별 토큰으로 열리고 제출 후 강사용 참고 카드와 템플릿 자동 분류에 반영됩니다.</div>
         <section class="panel"><div class="label">회원명</div><div class="value">김아카이브</div></section>
         <div class="grid">
-          ${textField("프라이빗 수업을 시작하는 가장 큰 목적은 무엇인가요?", intake.goal)}
+          ${choiceField("프라이빗 수업 목적 템플릿을 선택해주세요", ["체형교정/정렬", "다이어트/체력", "통증/회복", "산전·산후/컨디션"], intake.purposeTemplateLabel)}
+          ${textField("선택한 목적 안에서 가장 개선하고 싶은 점은 무엇인가요?", intake.goal)}
           ${textField("가장 신경 쓰이는 부위나 움직임은 무엇인가요?", intake.focusArea)}
           ${choiceField("운동 경험은 어느 정도인가요?", ["처음", "조금 있음", "꾸준히 해본 적 있음", "오랜만에 다시 시작"], "꾸준히 해본 적 있음")}
           ${textField("수업에서 중요하게 생각하는 요소는 무엇인가요?", intake.expectationOrImportantFactor)}
@@ -204,6 +207,7 @@
         <article class="reference-card">
           <h3>회원 최초 사전설문 요약</h3>
           <ul class="reference-list">
+            <li><strong>목적 템플릿</strong> · ${escapeHtml(intake.purposeTemplateLabel)}</li>
             <li><strong>목표</strong> · ${escapeHtml(intake.goal)}</li>
             <li><strong>관심 부위</strong> · ${escapeHtml(intake.focusArea)}</li>
             <li><strong>운동 수준</strong> · ${escapeHtml(intake.exerciseLevel)}</li>
@@ -226,6 +230,7 @@
 
     function summaryHtml() {
       return `<div class="summary"><h2>사전설문 요약</h2><dl>
+        <div><dt>목적 템플릿</dt><dd>${escapeHtml(intake.purposeTemplateLabel)}</dd></div>
         <div><dt>목표</dt><dd>${escapeHtml(intake.goal)}</dd></div>
         <div><dt>신경 부위</dt><dd>${escapeHtml(intake.focusArea)}</dd></div>
         <div><dt>운동 수준</dt><dd>${escapeHtml(intake.exerciseLevel)}</dd></div>

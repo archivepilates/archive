@@ -81,6 +81,7 @@
       const matching = data.matching || {};
       const isGroup = data.surveyType === 'group';
       const priorityRows = [
+        [isGroup ? '' : '목적 템플릿', isGroup ? '' : summary.purposeTemplateLabel],
         [isGroup ? '걱정되는 부분' : '운동 목적', summary.goal],
         [isGroup ? '통증/불편 부위' : '신경 부위', summary.focusArea],
         ['통증/병력', summary.painOrMedicalNote],

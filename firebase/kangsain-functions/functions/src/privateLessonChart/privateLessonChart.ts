@@ -1560,6 +1560,11 @@ function lessonTemplateForChart(
 }
 
 function privateLessonTemplateCode(intake: PrivateLessonChartRequestDoc["intakeSummary"] = {}): string {
+  const intakeWithTemplate = intake as Record<string, unknown>;
+  const explicit = privateLessonTemplateCodeFromText(
+    String(intakeWithTemplate.purposeTemplateCode || intakeWithTemplate.purposeTemplateLabel || ""),
+  );
+  if (explicit) return explicit;
   const text = normalizeTemplateText([
     intake?.goal,
     intake?.focusArea,
@@ -1578,6 +1583,19 @@ function privateLessonTemplateCode(intake: PrivateLessonChartRequestDoc["intakeS
   return Object.entries(scores).sort((a, b) => b[1] - a[1])[0]?.[1] ? Object.entries(scores).sort((a, b) => b[1] - a[1])[0][0] : "posture";
 }
 
+function privateLessonTemplateCodeFromText(value: string): string {
+  const text = normalizeTemplateText(value);
+  if (!text) return "";
+  if (["posture", "fitness", "recovery", "condition"].includes(text)) return text;
+  if (text.includes("체형") || text.includes("자세") || text.includes("정렬") || text.includes("교정")) return "posture";
+  if (text.includes("다이어트") || text.includes("체력") || text.includes("감량") || text.includes("근력")) return "fitness";
+  if (text.includes("통증") || text.includes("회복") || text.includes("재활") || text.includes("불편")) return "recovery";
+  if (text.includes("산전") || text.includes("산후") || text.includes("컨디션") || text.includes("임신") || text.includes("출산")) {
+    return "condition";
+  }
+  return "";
+}
+
 function privateLessonTemplateLabel(code: string): string {
   const labels: Record<string, string> = {
     posture: "체형교정/정렬",
@@ -1590,6 +1608,9 @@ function privateLessonTemplateLabel(code: string): string {
 
 function templateReason(code: string, intake: PrivateLessonChartRequestDoc["intakeSummary"] = {}): string {
   const label = privateLessonTemplateLabel(code) || "체형교정/정렬";
+  const intakeWithTemplate = intake as Record<string, unknown>;
+  if (intakeWithTemplate.purposeTemplateLabel)
+    return `회원이 최초 사전설문에서 선택한 목적 템플릿: ${String(intakeWithTemplate.purposeTemplateLabel)}`;
   const source = [intake?.goal, intake?.focusArea, intake?.expectationOrImportantFactor].filter(Boolean).join(" · ");
   return source ? `${label} 목적에 가까운 사전설문 답변: ${source}` : `${label} 기본 템플릿을 적용했습니다.`;
 }
@@ -2063,10 +2084,13 @@ function normalizePhone(value: string): string {
 function privateSurveySummaryForRequest(
   doc: PrivateSurveyResponseDoc,
 ): NonNullable<PrivateLessonChartRequestDoc["intakeSummary"]> {
+  const summaryWithTemplate = doc.summary as Record<string, unknown>;
   return {
     responseId: doc.responseId,
     submittedAtText: doc.submittedAtText,
     experienceType: doc.experienceType,
+    purposeTemplateCode: String(summaryWithTemplate.purposeTemplateCode || ""),
+    purposeTemplateLabel: String(summaryWithTemplate.purposeTemplateLabel || ""),
     goal: doc.summary.goal,
     focusArea: doc.summary.focusArea,
     painOrMedicalNote: doc.summary.painOrMedicalNote,
@@ -2075,7 +2099,7 @@ function privateSurveySummaryForRequest(
     expectationOrImportantFactor: doc.summary.expectationOrImportantFactor,
     referralSource: doc.summary.referralSource,
     lifestyleOrPreviousIssue: doc.summary.lifestyleOrPreviousIssue,
-  };
+  } as NonNullable<PrivateLessonChartRequestDoc["intakeSummary"]>;
 }
 
 function gptPromptBrief(record: PrivateLessonChartRecordDoc, chartRequest: PrivateLessonChartRequestDoc): string {
