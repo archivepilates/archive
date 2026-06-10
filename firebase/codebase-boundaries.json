@@ -25,6 +25,7 @@
         "scheduledProcessStaffSurveyAlimtalks",
         "scheduledSyncPrivateSurveyNotion",
         "scheduledCreatePrivateLessonChartRequests",
+        "scheduledReconcileCurrentMonthPrivateLessonCharts",
         "scheduledGeneratePrivateLessonChartReports",
         "scheduledEnqueuePrivateLessonReportAlimtalks",
         "scheduledPurgeDiscardedMemberSignupContracts",
