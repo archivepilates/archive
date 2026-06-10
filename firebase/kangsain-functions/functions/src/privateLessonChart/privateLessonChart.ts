@@ -14,7 +14,7 @@ import type {
   PrivateLessonChartRequestStatus,
   PrivateSurveyResponseDoc,
 } from "../types/models";
-import { addDays, formatDateKst, nowTimestamp, todayKst } from "../utils/date";
+import { addDays, dateRange, formatDateKst, nowTimestamp, todayKst } from "../utils/date";
 import { errorMessage } from "../utils/errors";
 import { stableHash } from "../utils/hash";
 import { ensureShortLink } from "../utils/shortLinks";
@@ -183,6 +183,85 @@ export async function createAndSendTomorrowPrivateLessonCharts(): Promise<{
   const createSummary = await createPrivateLessonChartRequestsForDate(targetDate);
   const sendSummary = await sendPendingPrivateLessonChartAlimtalksForDate(targetDate);
   return { date: targetDate, createSummary, sendSummary };
+}
+
+export async function reconcileCurrentMonthPrivateLessonCharts(): Promise<{
+  startDate: string;
+  endDate: string;
+  checked: number;
+  created: number;
+  updated: number;
+  cancelled: number;
+  notionSynced: number;
+  skipped: number;
+  failed: number;
+}> {
+  const { startDate, endDate } = currentMonthRangeKst();
+  return reconcilePrivateLessonChartsForDateRange(startDate, endDate);
+}
+
+export async function reconcilePrivateLessonChartsForDateRange(
+  startDate: string,
+  endDate: string,
+): Promise<{
+  startDate: string;
+  endDate: string;
+  checked: number;
+  created: number;
+  updated: number;
+  cancelled: number;
+  notionSynced: number;
+  skipped: number;
+  failed: number;
+}> {
+  let checked = 0;
+  let created = 0;
+  let updated = 0;
+  let cancelled = 0;
+  let notionSynced = 0;
+  let skipped = 0;
+  let failed = 0;
+
+  for (const date of dateRange(startDate, endDate)) {
+    const snap = await refs.bookings().where("lectureDate", "==", date).limit(500).get();
+    const bookings = canonicalPrivateLessonLikeBookings(snap.docs.map((doc) => doc.data()));
+    skipped += snap.size - bookings.length;
+
+    for (const booking of bookings) {
+      checked += 1;
+      const result = await reconcilePrivateLessonChartForBooking(booking).catch((err) => {
+        logger.warn("reconcilePrivateLessonChartForBooking failed", {
+          bookingId: booking.bookingId,
+          memberName: booking.memberName,
+          date,
+          message: errorMessage(err),
+        });
+        return null;
+      });
+      if (!result) {
+        failed += 1;
+        continue;
+      }
+      if (result.created) created += 1;
+      if (result.updated) updated += 1;
+      if (result.cancelled) cancelled += 1;
+      if (result.notionSynced) notionSynced += 1;
+      if (!result.created && !result.updated && !result.cancelled && !result.notionSynced) skipped += 1;
+    }
+  }
+
+  logger.info("reconcilePrivateLessonChartsForDateRange completed", {
+    startDate,
+    endDate,
+    checked,
+    created,
+    updated,
+    cancelled,
+    notionSynced,
+    skipped,
+    failed,
+  });
+  return { startDate, endDate, checked, created, updated, cancelled, notionSynced, skipped, failed };
 }
 
 export async function createPrivateLessonChartRequestsForDate(date: string): Promise<{
@@ -892,15 +971,108 @@ function normalizeNotionId(value: string): string {
     .toLowerCase();
 }
 
-async function ensureChartRequestForBooking(booking: BookingDoc): Promise<{ requestId: string; created: boolean }> {
+async function reconcilePrivateLessonChartForBooking(booking: BookingDoc): Promise<{
+  requestId: string;
+  created: boolean;
+  updated: boolean;
+  cancelled: boolean;
+  notionSynced: boolean;
+}> {
+  if (!isPrivateLessonLikeBooking(booking)) {
+    return { requestId: "", created: false, updated: false, cancelled: false, notionSynced: false };
+  }
+  if (isPrivateBooking(booking)) {
+    const result = await ensureChartRequestForBooking(booking);
+    return {
+      requestId: result.requestId,
+      created: result.created,
+      updated: Boolean(result.updated),
+      cancelled: false,
+      notionSynced: Boolean(result.notionSynced),
+    };
+  }
+
+  const requestId = `plc_${booking.bookingId}`;
+  const requestSnap = await refs.privateLessonChartRequest(requestId).get();
+  const recordSnap = await refs.privateLessonChartRecord(requestId).get();
+  const existingRequest = requestSnap.data();
+  const existingRecord = recordSnap.data();
+  if (!existingRequest && !existingRecord) {
+    return { requestId, created: false, updated: false, cancelled: false, notionSynced: false };
+  }
+
+  const sessionNumber = bookingPrivateSessionNumber(booking) || existingRequest?.sessionNumber || existingRecord?.sessionNumber || 0;
+  const now = nowTimestamp();
+  const requestPatch = compactObject({
+    lessonDate: booking.lectureDate || existingRequest?.lessonDate,
+    lessonStartAt: booking.lectureStartAt || existingRequest?.lessonStartAt || null,
+    lessonEndAt: booking.lectureEndAt || existingRequest?.lessonEndAt || null,
+    staffId: booking.staffId || existingRequest?.staffId || "",
+    staffName: booking.staffName || existingRequest?.staffName || "",
+    sessionNumber: sessionNumber || undefined,
+    status: "cancelled",
+    updatedAt: now,
+  });
+  if (existingRequest) {
+    await refs.privateLessonChartRequest(requestId).set(requestPatch, { merge: true });
+  }
+  if (existingRecord) {
+    await refs.privateLessonChartRecord(requestId).set(
+      compactObject({
+        lessonDate: booking.lectureDate || existingRecord.lessonDate,
+        lessonStartAt: booking.lectureStartAt || existingRecord.lessonStartAt || null,
+        staffId: booking.staffId || existingRecord.staffId || "",
+        staffName: booking.staffName || existingRecord.staffName || "",
+        sessionNumber: sessionNumber || existingRecord.sessionNumber,
+        updatedAt: now,
+      }),
+      { merge: true },
+    );
+  }
+  const nextRequest = {
+    ...(existingRequest || {}),
+    ...requestPatch,
+    requestId,
+    bookingId: booking.bookingId,
+    memberId: booking.memberId || existingRequest?.memberId || existingRecord?.memberId || "",
+    memberName: booking.memberName || existingRequest?.memberName || existingRecord?.memberName || "",
+    lessonDate: booking.lectureDate || existingRequest?.lessonDate || existingRecord?.lessonDate || "",
+    lessonStartAt: booking.lectureStartAt || existingRequest?.lessonStartAt || existingRecord?.lessonStartAt || null,
+    status: "cancelled",
+  } as PrivateLessonChartRequestDoc;
+  const nextRecord = {
+    ...(existingRecord || {}),
+    recordId: requestId,
+    requestId,
+    bookingId: booking.bookingId,
+    memberId: booking.memberId || existingRecord?.memberId || existingRequest?.memberId || "",
+    memberName: booking.memberName || existingRecord?.memberName || existingRequest?.memberName || "",
+    staffId: booking.staffId || existingRecord?.staffId || existingRequest?.staffId || "",
+    staffName: booking.staffName || existingRecord?.staffName || existingRequest?.staffName || "",
+    lessonDate: booking.lectureDate || existingRecord?.lessonDate || existingRequest?.lessonDate || "",
+    lessonStartAt: booking.lectureStartAt || existingRecord?.lessonStartAt || existingRequest?.lessonStartAt || null,
+    sessionNumber: sessionNumber || existingRecord?.sessionNumber || existingRequest?.sessionNumber || 0,
+    gptStatus: existingRecord?.gptStatus || "pending",
+    notionSync: existingRecord?.notionSync || { status: "pending" },
+    createdAt: existingRecord?.createdAt || now,
+    updatedAt: now,
+  } as PrivateLessonChartRecordDoc;
+  const notionSync = await syncPrivateLessonChartRecordToNotion(nextRecord, nextRequest);
+  await refs.privateLessonChartRecord(requestId).set({ notionSync, updatedAt: nowTimestamp() }, { merge: true });
+  return { requestId, created: false, updated: true, cancelled: true, notionSynced: notionSync.status === "synced" };
+}
+
+async function ensureChartRequestForBooking(
+  booking: BookingDoc,
+): Promise<{ requestId: string; created: boolean; updated?: boolean; notionSynced?: boolean }> {
   const requestId = `plc_${booking.bookingId}`;
   const existing = await refs.privateLessonChartRequest(requestId).get();
-  if (existing.exists) return { requestId, created: false };
+  if (existing.exists) return reconcileExistingChartRequestForBooking(booking, existing.data() as PrivateLessonChartRequestDoc);
 
   const [staffSnap, intakeSummary, sessionNumber] = await Promise.all([
     booking.staffId ? refs.staff(booking.staffId).get() : Promise.resolve(null as any),
     latestPrivateSurveyForBooking(booking),
-    nextSessionNumber(booking),
+    sessionNumberForBooking(booking),
   ]);
   const staff = staffSnap?.data?.();
   const token = accessTokenFor(requestId);
@@ -966,6 +1138,69 @@ async function ensureChartRequestForBooking(booking: BookingDoc): Promise<{ requ
     );
   }
   return { requestId, created: true };
+}
+
+async function reconcileExistingChartRequestForBooking(
+  booking: BookingDoc,
+  existing: PrivateLessonChartRequestDoc,
+): Promise<{ requestId: string; created: false; updated: boolean; notionSynced: boolean }> {
+  const requestId = existing.requestId || `plc_${booking.bookingId}`;
+  const sessionNumber = await sessionNumberForBooking(booking);
+  const status: PrivateLessonChartRequestStatus = existing.status === "cancelled" ? "pending" : existing.status || "pending";
+  const patch = compactObject({
+    lectureId: booking.lectureId || existing.lectureId,
+    memberId: booking.memberId || existing.memberId,
+    memberName: booking.memberName || existing.memberName,
+    memberPhone: booking.memberPhone || existing.memberPhone,
+    memberPhoneLast4: String(booking.memberPhone || existing.memberPhone || "").slice(-4),
+    staffId: booking.staffId || existing.staffId,
+    staffName: booking.staffName || existing.staffName,
+    lessonDate: booking.lectureDate,
+    lessonStartAt: booking.lectureStartAt || null,
+    lessonEndAt: booking.lectureEndAt || null,
+    sessionNumber,
+    status,
+    updatedAt: nowTimestamp(),
+  });
+  const changed = chartRequestNeedsPatch(existing, patch);
+  if (changed) {
+    await refs.privateLessonChartRequest(requestId).set(patch, { merge: true });
+  }
+
+  const recordSnap = await refs.privateLessonChartRecord(requestId).get();
+  const record = recordSnap.data();
+  let notionSynced = false;
+  if (record) {
+    const recordPatch = compactObject({
+      memberId: booking.memberId || record.memberId,
+      memberName: booking.memberName || record.memberName,
+      memberPhone: booking.memberPhone || record.memberPhone,
+      staffId: booking.staffId || record.staffId,
+      staffName: booking.staffName || record.staffName,
+      lessonDate: booking.lectureDate,
+      lessonStartAt: booking.lectureStartAt || null,
+      sessionNumber,
+      updatedAt: nowTimestamp(),
+    });
+    const recordChanged = chartRecordNeedsPatch(record, recordPatch);
+    if (recordChanged) {
+      await refs.privateLessonChartRecord(requestId).set(recordPatch, { merge: true });
+    }
+    if (changed || recordChanged || !record.notionSync?.pageUrl || !record.notionSync?.instructorPageUrl) {
+      const nextRecord = { ...record, ...recordPatch } as PrivateLessonChartRecordDoc;
+      const nextRequest = { ...existing, ...patch } as PrivateLessonChartRequestDoc;
+      const notionSync = await syncPrivateLessonChartRecordToNotion(nextRecord, nextRequest);
+      await refs.privateLessonChartRecord(requestId).set({ notionSync, updatedAt: nowTimestamp() }, { merge: true });
+      notionSynced = notionSync.status === "synced";
+    }
+    return { requestId, created: false, updated: changed || recordChanged, notionSynced };
+  }
+
+  const nextRequest = { ...existing, ...patch } as PrivateLessonChartRequestDoc;
+  const baseRecord = await upsertChartRecordBase(nextRequest);
+  const notionSync = await syncPrivateLessonChartRecordToNotion(baseRecord, nextRequest);
+  await refs.privateLessonChartRecord(requestId).set({ notionSync, updatedAt: nowTimestamp() }, { merge: true });
+  return { requestId, created: false, updated: true, notionSynced: notionSync.status === "synced" };
 }
 
 async function submitPrivateLessonChart(
@@ -1211,6 +1446,14 @@ async function syncInstructorMemberChartPage(
   sessionPageUrl: string,
 ): Promise<{ pageId: string; pageUrl: string } | null> {
   if (!sessionPageUrl) return null;
+  const title = notionSessionTitle(record, chartRequest);
+  if (record.notionSync?.instructorPageId) {
+    await notionRequest(`pages/${record.notionSync.instructorPageId}`, "PATCH", {
+      properties: notionTitle(title),
+    });
+    await appendPageContent(record.notionSync.instructorPageId, notionInstructorUpdateChildren(record, chartRequest));
+    return { pageId: record.notionSync.instructorPageId, pageUrl: notionPageUrl(record.notionSync.instructorPageId) };
+  }
   const memberPageId = await findInstructorMemberPageId(record.staffName, record.memberName).catch((err) => {
     logger.warn("findInstructorMemberPageId failed", {
       staffName: record.staffName,
@@ -1220,7 +1463,6 @@ async function syncInstructorMemberChartPage(
     return "";
   });
   if (!memberPageId) return null;
-  const title = notionSessionTitle(record, chartRequest);
   const existingPageId = await findChildPageByExactTitle(memberPageId, title);
   if (existingPageId) {
     await appendPageContent(existingPageId, notionInstructorUpdateChildren(record, chartRequest));
@@ -1455,18 +1697,62 @@ async function nextSessionNumber(booking: BookingDoc): Promise<number> {
   return canonical.filter((item) => (item.lectureDate || "") < currentDate).length + 1;
 }
 
-function isPrivateBooking(booking: BookingDoc): boolean {
-  if (booking.appStatus && booking.appStatus !== "reserved") return false;
+async function sessionNumberForBooking(booking: BookingDoc): Promise<number> {
+  const stored = bookingPrivateSessionNumber(booking);
+  if (stored) return stored;
+  const computed = await nextSessionNumber(booking);
+  await refs.booking(booking.bookingId).set(
+    {
+      sessionOrder: {
+        ...(booking.sessionOrder || {}),
+        category: "private",
+        cumulativeRound: computed,
+        privateCumulativeRound: computed,
+        groupCumulativeRound: booking.sessionOrder?.groupCumulativeRound ?? null,
+        computedFrom: "privateLessonChart.nextSessionNumber",
+        computedAt: nowTimestamp(),
+      },
+      updatedAt: nowTimestamp(),
+    },
+    { merge: true },
+  );
+  return computed;
+}
+
+function bookingPrivateSessionNumber(booking: BookingDoc): number {
+  const value = Number(booking.sessionOrder?.privateCumulativeRound || booking.sessionOrder?.cumulativeRound || 0);
+  return Number.isFinite(value) && value > 0 ? value : 0;
+}
+
+function isPrivateLessonLikeBooking(booking: BookingDoc): boolean {
   if (booking.lessonType === "group") return false;
   if (booking.lessonType === "private" || booking.lessonType === "semi_private") return true;
   const text = `${booking.ticketName || ""} ${booking.ticketClassType || ""} ${booking.ticketType || ""}`;
   return /프라이빗|개인|1:1|PRIVATE|\bP\b/i.test(text);
 }
 
+function isPrivateBooking(booking: BookingDoc): boolean {
+  if (booking.appStatus && booking.appStatus !== "reserved") return false;
+  return isPrivateLessonLikeBooking(booking);
+}
+
 function canonicalPrivateBookings(bookings: BookingDoc[]): BookingDoc[] {
   const grouped = new Map<string, BookingDoc>();
   for (const booking of bookings) {
     if (!isPrivateBooking(booking)) continue;
+    const key = privateLessonOccurrenceKey(booking);
+    const current = grouped.get(key);
+    if (!current || preferCanonicalBooking(booking, current)) grouped.set(key, booking);
+  }
+  return [...grouped.values()].sort(
+    (a, b) => (a.lectureStartAt?.toMillis?.() || 0) - (b.lectureStartAt?.toMillis?.() || 0),
+  );
+}
+
+function canonicalPrivateLessonLikeBookings(bookings: BookingDoc[]): BookingDoc[] {
+  const grouped = new Map<string, BookingDoc>();
+  for (const booking of bookings) {
+    if (!isPrivateLessonLikeBooking(booking)) continue;
     const key = privateLessonOccurrenceKey(booking);
     const current = grouped.get(key);
     if (!current || preferCanonicalBooking(booking, current)) grouped.set(key, booking);
@@ -1486,6 +1772,26 @@ function canonicalChartRequests(requests: PrivateLessonChartRequestDoc[]): Priva
   return [...grouped.values()].sort(
     (a, b) => (a.lessonStartAt?.toMillis?.() || 0) - (b.lessonStartAt?.toMillis?.() || 0),
   );
+}
+
+function chartRequestNeedsPatch(existing: PrivateLessonChartRequestDoc, patch: Record<string, unknown>): boolean {
+  return ["memberId", "memberName", "memberPhone", "staffId", "staffName", "lessonDate", "sessionNumber", "status"].some(
+    (key) => primitiveValue((existing as any)[key]) !== primitiveValue((patch as any)[key]),
+  ) || timestampMillis(existing.lessonStartAt) !== timestampMillis((patch as any).lessonStartAt);
+}
+
+function chartRecordNeedsPatch(existing: PrivateLessonChartRecordDoc, patch: Record<string, unknown>): boolean {
+  return ["memberId", "memberName", "memberPhone", "staffId", "staffName", "lessonDate", "sessionNumber"].some(
+    (key) => primitiveValue((existing as any)[key]) !== primitiveValue((patch as any)[key]),
+  ) || timestampMillis(existing.lessonStartAt) !== timestampMillis((patch as any).lessonStartAt);
+}
+
+function primitiveValue(value: unknown): string {
+  return value == null ? "" : String(value);
+}
+
+function timestampMillis(value: any): number {
+  return value?.toMillis?.() || 0;
 }
 
 function privateLessonOccurrenceKey(
@@ -1529,6 +1835,7 @@ function isExcelBookingId(bookingId: string): boolean {
 }
 
 function isSendablePrivateChartRequest(request: PrivateLessonChartRequestDoc): boolean {
+  if (request.status === "cancelled") return false;
   if (request.alimtalk?.status !== "template_pending" && request.alimtalk?.status !== "queued") return false;
   if (!request.staffPhone || !normalizePhone(request.staffPhone)) return false;
   if (!request.preShortUrl || !request.postShortUrl || !request.mediaUploadShortUrl) return false;
@@ -1929,8 +2236,9 @@ function notionUpdateChildren(
   return [
     divider(),
     heading(3, `자동화 업데이트 ${new Date().toLocaleString("ko-KR", { timeZone: "Asia/Seoul" })}`),
+    ...(chartRequest.status === "cancelled" ? [callout("이 수업은 예약 원본에서 취소로 확인되어 차트 상태를 취소로 보정했습니다.")] : []),
     paragraph(
-      `회차: ${record.sessionNumber}회차 / 수업일: ${lessonTimeText(chartRequest)} / 담당: ${record.staffName || "미정"}`,
+      `상태: ${privateChartStatusText(chartRequest)} / 회차: ${record.sessionNumber}회차 / 수업일: ${lessonTimeText(chartRequest)} / 담당: ${record.staffName || "미정"}`,
     ),
     heading(3, "수업 전 계획"),
     ...bullets([
@@ -1960,7 +2268,7 @@ function notionInstructorChartChildren(
   return [
     callout("이 페이지는 강사용 회차 기록입니다. 회원 발송은 수업 후 기록 링크의 리포트 화면에서 처리합니다."),
     heading(2, `${record.memberName}님 ${record.sessionNumber}회차`),
-    paragraph(`수업일: ${lessonTimeText(chartRequest)} / 담당: ${record.staffName || "미정"}`),
+    paragraph(`상태: ${privateChartStatusText(chartRequest)} / 수업일: ${lessonTimeText(chartRequest)} / 담당: ${record.staffName || "미정"}`),
     heading(2, "사진·영상 업로드"),
     paragraph("이 문장 아래에 수업 사진과 영상을 추가합니다."),
     divider(),
@@ -2004,7 +2312,8 @@ function notionInstructorUpdateChildren(
   return [
     divider(),
     heading(3, `업데이트 ${new Date().toLocaleString("ko-KR", { timeZone: "Asia/Seoul" })}`),
-    paragraph(`수업일: ${lessonTimeText(chartRequest)} / 담당: ${record.staffName || "미정"}`),
+    ...(chartRequest.status === "cancelled" ? [callout("이 수업은 예약 원본에서 취소로 확인되어 차트 상태를 취소로 보정했습니다.")] : []),
+    paragraph(`상태: ${privateChartStatusText(chartRequest)} / 수업일: ${lessonTimeText(chartRequest)} / 담당: ${record.staffName || "미정"}`),
     heading(3, "수업 전 계획"),
     ...bullets([
       `목표: ${textArray(record.prePlan?.goals).join(", ") || "-"}`,
@@ -2129,7 +2438,16 @@ function lessonTimeText(chartRequest: Pick<PrivateLessonChartRequestDoc, "lesson
 }
 
 function notionSessionTitle(record: PrivateLessonChartRecordDoc, chartRequest: PrivateLessonChartRequestDoc): string {
-  return `${lessonTitleDate(chartRequest)} · ${record.memberName} ${record.sessionNumber}회차(자동화)`;
+  const prefix = chartRequest.status === "cancelled" ? "취소 · " : "";
+  return `${prefix}${lessonTitleDate(chartRequest)} · ${record.memberName} ${record.sessionNumber}회차(자동화)`;
+}
+
+function privateChartStatusText(chartRequest: Pick<PrivateLessonChartRequestDoc, "status">): string {
+  if (chartRequest.status === "cancelled") return "취소";
+  if (chartRequest.status === "completed") return "완료";
+  if (chartRequest.status === "pre_submitted") return "수업 전 제출";
+  if (chartRequest.status === "post_submitted") return "수업 후 제출";
+  return "진행";
 }
 
 function lessonTitleDate(chartRequest: Pick<PrivateLessonChartRequestDoc, "lessonDate" | "lessonStartAt">): string {
@@ -2146,6 +2464,15 @@ function lessonTitleDate(chartRequest: Pick<PrivateLessonChartRequestDoc, "lesso
   }).formatToParts(date);
   const value = (type: string) => parts.find((part) => part.type === type)?.value || "";
   return `${value("year")}.${value("month")}.${value("day")} ${value("hour")}:${value("minute")}`;
+}
+
+function currentMonthRangeKst(): { startDate: string; endDate: string } {
+  const today = todayKst();
+  const [year, month] = today.split("-").map((part) => Number(part));
+  const startDate = `${String(year).padStart(4, "0")}-${String(month).padStart(2, "0")}-01`;
+  const lastDay = new Date(year, month, 0).getDate();
+  const endDate = `${String(year).padStart(4, "0")}-${String(month).padStart(2, "0")}-${String(lastDay).padStart(2, "0")}`;
+  return { startDate, endDate };
 }
 
 function normalizeKoreanName(value: string): string {

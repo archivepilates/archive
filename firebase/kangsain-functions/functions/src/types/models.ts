@@ -143,6 +143,14 @@ export interface BookingDoc {
   ticketRemainingCount: number | null;
   ticketExpiresAt: Timestamp | null;
   ticketExpiryLevel: TicketExpiryLevel;
+  sessionOrder?: {
+    category?: "group" | "private" | "unknown" | string;
+    cumulativeRound?: number | null;
+    privateCumulativeRound?: number | null;
+    groupCumulativeRound?: number | null;
+    computedFrom?: string;
+    computedAt?: Timestamp;
+  };
   memberTagIds: string[];
   lastMemoPreview: string;
   lastMemoAt: Timestamp | null;
