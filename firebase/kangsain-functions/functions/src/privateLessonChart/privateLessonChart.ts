@@ -2026,8 +2026,8 @@ async function requestGeminiPrivateLessonDraft(
   }
   const output = extractGeminiText(json);
   const parsed = parseJsonObject(output);
-  const summary = cleanReportSentence(parsed.summary);
-  const nextDirection = cleanReportSentence(parsed.nextDirection);
+  const summary = cleanReportSentence(pickReportValue(parsed, "summary"));
+  const nextDirection = cleanReportSentence(pickReportValue(parsed, "nextDirection"));
   if (!summary || !nextDirection) {
     throw new Error("Gemini 리포트 응답에 summary 또는 nextDirection이 없습니다.");
   }
@@ -2053,8 +2053,31 @@ function parseJsonObject(text: string): Record<string, any> {
     .replace(/^```(?:json)?/i, "")
     .replace(/```$/i, "")
     .trim();
-  const parsed = normalized ? JSON.parse(normalized) : {};
+  const jsonText = normalized.startsWith("{") ? normalized : normalized.match(/\{[\s\S]*\}/)?.[0] || "";
+  const parsed = jsonText ? JSON.parse(jsonText) : {};
   return parsed && typeof parsed === "object" && !Array.isArray(parsed) ? parsed : {};
+}
+
+function pickReportValue(parsed: Record<string, any>, key: "summary" | "nextDirection"): unknown {
+  const aliases =
+    key === "summary"
+      ? ["summary", "요약", "reportSummary", "memberSummary", "publicSummary"]
+      : ["nextDirection", "next_direction", "다음수업방향", "다음 수업 방향", "next", "publicNextDirection"];
+  const containers = [
+    parsed,
+    parsed.report,
+    parsed.memberReport,
+    parsed.privateReport,
+    parsed.result,
+    parsed.data,
+    parsed.output,
+  ].filter((item) => item && typeof item === "object" && !Array.isArray(item));
+  for (const container of containers) {
+    for (const alias of aliases) {
+      if (container[alias]) return container[alias];
+    }
+  }
+  return "";
 }
 
 function cleanReportSentence(value: unknown): string {
