@@ -17,24 +17,398 @@
           <a href="../" data-section="home">Home <small>요약</small></a><a href="../members/" data-section="members">Members <small>회원</small></a><a href="../lessons/" data-section="lessons">Lessons <small>수업</small></a><a href="../private/" data-section="private">Private <small>차트</small></a><a href="../messages/" data-section="messages">Messages <small>알림톡</small></a><a href="../automation/" data-section="automation">Automation <small>관제</small></a><a href="../business/" data-section="business">Business <small>지표</small></a><a href="../imports/" data-section="imports">Imports <small>원본</small></a><a href="./" data-section="rules">Rules <small>규칙</small></a><a href="../settings/" data-section="settings">Settings <small>설정</small></a>
         </nav>
       </aside>
-      <main class="main">
-        <header class="page-hero"><p class="eyebrow">RULES</p><h1>운영 규칙</h1><p class="subtitle">ARCHIVE CORE가 현재 운영 규칙의 단일 기록 화면입니다.</p></header>
-        <section class="panel">
-          <div class="panel-header"><div><h2>운영 원칙 보드</h2><p>ARCHIVE CORE에서 볼 수 있는 것과 실제 실행 가능한 것을 분리합니다.</p></div><span class="pill good">canonical first</span></div>
-          <div class="ops-board">
-            <article class="ops-card"><div class="ops-card-header"><h3>표시/분석</h3><span class="pill">read-model</span></div><p>members, member360Cards, dashboardSnapshots는 운영자 검토와 GPT 분석용입니다.</p></article>
-            <article class="ops-card"><div class="ops-card-header"><h3>알림톡/외부 발송</h3><span class="pill danger">canonical</span></div><p>alimtalkCandidates, alimtalkSends, 승인 큐와 canonical key 기준만 사용합니다.</p></article>
-            <article class="ops-card"><div class="ops-card-header"><h3>StudioMate write</h3><span class="pill warn">queue</span></div><p>Firestore memo queue와 StudioMate 브라우저 lock을 거친 작업만 실행합니다.</p></article>
-            <article class="ops-card"><div class="ops-card-header"><h3>연락처 동기화</h3><span class="pill warn">verified</span></div><p>전화번호와 실제 StudioMate memberId가 확인된 contactSyncJobs만 사용합니다.</p></article>
+      <main class="main rules-page">
+        <header class="page-hero">
+          <p class="eyebrow">RULES</p>
+          <h1>운영 규칙</h1>
+          <p class="subtitle">2026.06.10 기준 현재 유효한 운영 규칙만 정리한 ARCHIVE CORE 단일 운영 허브입니다.</p>
+        </header>
+
+        <section class="panel rules-hero">
+          <div>
+            <span class="pill good">single source</span>
+            <h2>Notion 운영규칙은 폐기하고, 이 화면을 현재 기준으로 사용합니다.</h2>
+            <p>기존 Notion의 운영 규칙, 최근 확정 변경, repo 운영 문서를 대조해 현재 유효한 내용만 이관했습니다. 날짜별 로그, 중복 템플릿 페이지, 샘플/임시 차트는 운영 판단 원칙에서 제외했습니다.</p>
+          </div>
+          <div class="rules-meta">
+            <div><strong>기록 원칙</strong><span>새 규칙은 ARCHIVE CORE 운영규칙 탭에 먼저 기록</span></div>
+            <div><strong>Notion 사용</strong><span>과거 참조 또는 프라이빗 차트처럼 아직 기능이 의존하는 화면에만 한정</span></div>
+            <div><strong>완료 기준</strong><span>구현 상태, 원천, 검증, 다음 액션이 함께 있어야 완료</span></div>
           </div>
         </section>
-        <section class="panel">
-          <div class="panel-header"><div><h2>작업 경계</h2><p>새 기능과 중복 데이터가 실제 운영에 섞이지 않도록 유지하는 규칙입니다.</p></div><span class="pill">guardrail</span></div>
-          <div class="ops-board">
-            <article class="ops-card"><h3>외부 액션 원천</h3><p>알림톡, 연락처, StudioMate write는 승인된 canonical source에서만 실행합니다.</p></article>
-            <article class="ops-card"><h3>workLanes</h3><p>새 스레드와 실험 데이터는 workLanes에 두고, 승격 전까지 원천으로 쓰지 않습니다.</p></article>
-            <article class="ops-card"><h3>중복 데이터</h3><p>real StudioMate/API record를 excel fallback보다 우선 사용합니다.</p></article>
-            <article class="ops-card"><h3>기록 원칙</h3><p>새 운영 규칙은 이 탭에 먼저 기록합니다. Notion 운영규칙은 새 업데이트 대상으로 사용하지 않습니다.</p></article>
+
+        <section class="panel rules-index" aria-labelledby="rulesIndexTitle">
+          <div class="panel-header"><div><h2 id="rulesIndexTitle">운영규칙 위계</h2><p>운영자가 문제를 찾을 때 이 순서로 이동합니다.</p></div><span class="pill">2-click map</span></div>
+          <nav class="rule-anchor-grid" aria-label="운영규칙 목차">
+            <a href="#principles">공통 원칙<span>보안, 원천, 기록</span></a>
+            <a href="#data-sync">데이터·동기화<span>StudioMate Excel, Contacts</span></a>
+            <a href="#alimtalk">알림톡<span>후보, 승인, 중복 차단</span></a>
+            <a href="#private">프라이빗<span>회차, 설문, 리포트</span></a>
+            <a href="#welcome">현장 웰컴<span>가입서, PDF, StudioMate 반영</span></a>
+            <a href="#settlement">정산·지표<span>월별 정산, 대시보드</span></a>
+            <a href="#release">배포·검증<span>배포세트, 실패보고</span></a>
+            <a href="#worklines">워크라인<span>스레드, worktree, 승격</span></a>
+            <a href="#archive">폐기·보관<span>Notion, API 모드, 레거시</span></a>
+          </nav>
+        </section>
+
+        <section class="panel rule-section" id="principles">
+          <div class="panel-header"><div><h2>1. 공통 운영 원칙</h2><p>모든 운영 판단과 자동화 변경에 먼저 적용합니다.</p></div><span class="pill good">active</span></div>
+          <div class="rule-grid">
+            <article class="rule-card">
+              <h3>우선순위</h3>
+              <ul>
+                <li>보안·개인정보가 최우선입니다.</li>
+                <li>계정·권한 변경은 실행 주체와 승인 라인을 남깁니다.</li>
+                <li>운영 연속성, 자동화, 배포, 데이터 동기화는 중단 기준과 복구 조건을 같이 기록합니다.</li>
+              </ul>
+            </article>
+            <article class="rule-card">
+              <h3>원천 보호</h3>
+              <ul>
+                <li>알림톡, 연락처, StudioMate write, 예약·결제 판단은 canonical source에서만 실행합니다.</li>
+                <li>member360Cards, members 하위 컬렉션, dashboardSnapshots는 분석·검토용 read-model입니다.</li>
+                <li>workLanes는 임시 작업 공간이며 외부 발송·쓰기 원천으로 사용하지 않습니다.</li>
+              </ul>
+            </article>
+            <article class="rule-card">
+              <h3>식별과 중복</h3>
+              <ul>
+                <li>회원 매칭은 memberId, 전화번호, 이름 순서로 확인합니다.</li>
+                <li>동명이인은 전화번호나 StudioMate ID 확인 전까지 합치지 않습니다.</li>
+                <li>실제 StudioMate/API record가 있으면 excel_ 또는 usage_booking_ fallback보다 우선합니다.</li>
+              </ul>
+            </article>
+            <article class="rule-card">
+              <h3>기록 형식</h3>
+              <ul>
+                <li>목적, 현재 구현 상태, 운영 규칙, 데이터 원천, 배포 상태, 검증, 차단점, 다음 액션을 함께 남깁니다.</li>
+                <li>새 운영 규칙은 Notion이 아니라 이 탭에 반영합니다.</li>
+                <li>직원 행동이나 회원 커뮤니케이션이 바뀌면 코드 배포와 운영규칙 업데이트를 같은 작업으로 봅니다.</li>
+              </ul>
+            </article>
+          </div>
+        </section>
+
+        <section class="panel rule-section" id="data-sync">
+          <div class="panel-header"><div><h2>2. 데이터·동기화</h2><p>StudioMate API가 아니라 Excel-first 운영을 현재 기본 모드로 사용합니다.</p></div><span class="pill warn">excel-first</span></div>
+          <div class="rule-grid">
+            <article class="rule-card">
+              <h3>StudioMate 동기화</h3>
+              <ul>
+                <li>ARCHIVE PILATES 자사 예약 시스템 운영 전까지 StudioMate API 모드는 사용하지 않습니다.</li>
+                <li>회원목록, 수업예약내역, 삭제된 수업 로그는 Mac mini Playwright Excel 다운로드로 수집합니다.</li>
+                <li>엑셀 다운로드와 Firestore 반영은 1시간 간격 LaunchAgent가 담당합니다.</li>
+                <li>운영자 수동 동기화 버튼도 API가 아니라 Excel 다운로드·반영 요청을 생성합니다.</li>
+              </ul>
+            </article>
+            <article class="rule-card">
+              <h3>회원·수강권</h3>
+              <ul>
+                <li>memberProfiles는 화면과 후속 실행을 위한 정규화 뷰입니다.</li>
+                <li>엑셀에만 있는 회원은 등록 3일 이내이고 활성 수강권이 있을 때만 임시 회원카드를 만듭니다.</li>
+                <li>수강권 없는 상담고객은 회원카드를 만들지 않고 연락처 후보로만 다룹니다.</li>
+                <li>excel_ 임시 회원은 studiomateMemberIdLookupJobs로 실제 StudioMate ID를 찾은 뒤 후속 쓰기를 진행합니다.</li>
+              </ul>
+            </article>
+            <article class="rule-card">
+              <h3>수업·폐강</h3>
+              <ul>
+                <li>오늘부터 예약오픈 종료일, 즉 다음 주 일요일까지의 예약 데이터를 기본 범위로 봅니다.</li>
+                <li>수업예약내역 엑셀에는 신뢰 가능한 최대정원 원천이 없으므로 정원 기반 판단은 쓰지 않습니다.</li>
+                <li>삭제된 수업은 별도 야간 자동화가 아니라 1시간 Excel 동기화 안에서 함께 수집합니다.</li>
+                <li>폐강 집계는 그룹 수업 중 최소 수강인원 미달 또는 제한된 클래스 폐강 조건만 포함합니다.</li>
+              </ul>
+            </article>
+            <article class="rule-card">
+              <h3>Google Contacts</h3>
+              <ul>
+                <li>기준 계정은 home@archivepilates.com입니다.</li>
+                <li>Google Contacts는 원천이 아니라 전화 발신·검색을 위한 보조 저장소입니다.</li>
+                <li>연락처는 memberContactIndex와 contactSyncJobs 기준으로 큐를 만들고, dry-run 후 반영합니다.</li>
+                <li>Google-only 연락처 삭제, 연락처 병합, 대량 이동은 별도 승인 없이는 하지 않습니다.</li>
+              </ul>
+            </article>
+          </div>
+          <div class="rule-note"><strong>현재 확인 위치</strong><span>CORE Imports, Automation, Members / Firestore memberProfiles, bookings, memberContactIndex, contactSyncJobs</span></div>
+        </section>
+
+        <section class="panel rule-section" id="alimtalk">
+          <div class="panel-header"><div><h2>3. 카카오 알림톡</h2><p>대상자 선정, 승인, 발송, 로그를 분리해 오발송을 막습니다.</p></div><span class="pill danger">external send</span></div>
+          <div class="rule-grid">
+            <article class="rule-card">
+              <h3>발송 흐름</h3>
+              <ol>
+                <li>Excel 동기화가 회원, 수강권, 예약 상태를 갱신합니다.</li>
+                <li>Firebase가 canonical source 기준으로 후보를 만듭니다.</li>
+                <li>SOLAPI 템플릿 승인 상태와 변수 매칭을 확인합니다.</li>
+                <li>자동 기준 또는 운영자 승인 후 queued로 전환합니다.</li>
+                <li>SOLAPI 발송 결과를 alimtalkSends와 로그 문서, 메일로 남깁니다.</li>
+              </ol>
+            </article>
+            <article class="rule-card">
+              <h3>자동 발송 기준</h3>
+              <ul>
+                <li>일일 정기 발송 기준 시각은 11:30입니다.</li>
+                <li>대량 발송 가능 후보가 10건 이상이면 자동 발송하지 않고 승인 게이트로 보냅니다.</li>
+                <li>발송 전 중복, 제외 회원, 템플릿 승인, 전화번호를 다시 확인합니다.</li>
+                <li>운영자 화면의 일반 회원 태그에는 알림톡 상태 태그를 표시하지 않습니다.</li>
+              </ul>
+            </article>
+            <article class="rule-card">
+              <h3>제외 규칙</h3>
+              <ul>
+                <li>다른 유효 수업 수강권을 보유한 회원은 수강권 만료·부족 알림에서 제외합니다.</li>
+                <li>양말, 토삭스, 기간연장 등 수업권이 아닌 상품은 제외합니다.</li>
+                <li>전화번호 없음, 상담고객, 템플릿 미승인, 구 템플릿 코드는 발송하지 않습니다.</li>
+                <li>취소되거나 stale인 예약은 프라이빗/그룹 설문 알림 발송 직전에 다시 제외합니다.</li>
+              </ul>
+            </article>
+            <article class="rule-card">
+              <h3>중복 방지</h3>
+              <ul>
+                <li>수강권 알림은 회원, 템플릿, 수강권 식별자 기준으로 막습니다.</li>
+                <li>프라이빗 사전설문과 그룹 첫 수업 설문은 같은 유형 제출 후 1년이 지나야 재후보가 됩니다.</li>
+                <li>수업자료와 회원 리포트는 같은 회원·수업·recordId 단위로 영구 1회만 발송합니다.</li>
+                <li>Notion 웹훅 이벤트 ID와 후보 ID를 고정해 재전송 중복을 막습니다.</li>
+              </ul>
+            </article>
+            <article class="rule-card">
+              <h3>템플릿과 링크</h3>
+              <ul>
+                <li>템플릿별 대상/제외 규칙은 templateTargetRules.ts에서 관리합니다.</li>
+                <li>SOLAPI 버튼 URL은 변수 치환 후 100자 이하여야 합니다.</li>
+                <li>긴 URL은 shortLinks를 만들고 버튼에는 pr-, ir- 같은 짧은 링크 ID를 넣습니다.</li>
+                <li>프라이빗 사전설문은 Google Form이 아니라 ARCHIVE IN 자체 설문을 사용합니다.</li>
+              </ul>
+            </article>
+            <article class="rule-card">
+              <h3>보고 메일</h3>
+              <ul>
+                <li>제목은 [알림톡][상태] 핵심내용 형식을 사용합니다.</li>
+                <li>실패 메일은 실패 대상, 원인, 현재 상태, 다음 조치를 반드시 포함합니다.</li>
+                <li>제외·차단 명단은 긴 리스트 대신 숫자 요약으로 표시합니다.</li>
+                <li>후속 처리가 있는 설문/리포트 알림은 Firestore ID와 상세 링크를 함께 남깁니다.</li>
+              </ul>
+            </article>
+          </div>
+          <div class="rule-note"><strong>현재 확인 위치</strong><span>CORE Messages / Firestore alimtalkCandidates, alimtalkSends, alimtalkTemplateStates, shortLinks</span></div>
+        </section>
+
+        <section class="panel rule-section" id="private">
+          <div class="panel-header"><div><h2>4. 프라이빗 차트·설문·리포트</h2><p>회원 누적 회차, 강사 입력, 회원 리포트, Notion 차트 동기화를 하나의 흐름으로 봅니다.</p></div><span class="pill good">current</span></div>
+          <div class="rule-grid">
+            <article class="rule-card">
+              <h3>회차 원천</h3>
+              <ul>
+                <li>2026.06.01 이후 프라이빗/세미프라이빗 수업은 자동화 차트를 반드시 생성합니다.</li>
+                <li>booking.sessionOrder.privateCumulativeRound를 1순위로 사용하고, 없을 때 계산 후 저장합니다.</li>
+                <li>삭제, 취소, 시간변경은 해당 수업 이후 회차까지 연쇄 재계산합니다.</li>
+                <li>같은 회원, 강사, 시작시간의 중복 예약행은 대표 booking 하나만 차트로 만듭니다.</li>
+              </ul>
+            </article>
+            <article class="rule-card">
+              <h3>Notion 차트 동기화</h3>
+              <ul>
+                <li>운영규칙은 CORE가 기준이지만, 개인레슨 회차 차트는 현재 기능상 Notion 동기화본을 유지합니다.</li>
+                <li>리포트가 없어도 실제 수업 회차는 Notion에 남겨 누락을 확인할 수 있어야 합니다.</li>
+                <li>리포트 생성 시 제목은 완료 미발송, 회원 알림톡 발송 완료 시 완료로 표시합니다.</li>
+                <li>예약 시간이 바뀌거나 취소되면 Notion 제목, 날짜, 상태, 회차도 함께 갱신합니다.</li>
+              </ul>
+            </article>
+            <article class="rule-card">
+              <h3>강사 설문</h3>
+              <ul>
+                <li>회원 최초 프라이빗 사전설문은 ARCHIVE IN 자체 설문을 사용합니다.</li>
+                <li>강사용 수업 전 화면은 회원 사전설문 요약과 지난 리포트 요약을 보여줍니다.</li>
+                <li>수업 후 설문은 점수, 평균, 등급, 1-5 평가 표현을 사용하지 않습니다.</li>
+                <li>다음 수업 방향은 강사가 입력한 내용을 원천으로 하고 Gemini는 문장만 다듬습니다.</li>
+              </ul>
+            </article>
+            <article class="rule-card">
+              <h3>목적 템플릿</h3>
+              <ul>
+                <li>회원은 최초 사전설문에서 체형교정/정렬, 다이어트/체력, 통증/회복, 산전·산후/컨디션 중 하나를 선택합니다.</li>
+                <li>회원 선택값을 우선 적용하고, 과거 서술형 응답은 키워드 기반 자동 분류로 보정합니다.</li>
+                <li>수업 전·후 질문과 리포트 문장 규칙은 목적 템플릿별로 달라집니다.</li>
+                <li>5회 단위 회차는 리뷰 회차로 보고 누적 변화와 다음 블록 방향을 더 의식해 작성합니다.</li>
+              </ul>
+            </article>
+            <article class="rule-card">
+              <h3>미디어</h3>
+              <ul>
+                <li>강사는 수업 후 기록 페이지에서 사진/영상을 첨부합니다.</li>
+                <li>파일은 home@archivepilates.com 권한으로 Google Drive 프라이빗 리포트 미디어 폴더에 저장합니다.</li>
+                <li>Firestore에는 Drive file ID, 링크, mime type, size, 리포트 포함 여부만 저장합니다.</li>
+                <li>현재 기준은 첨부한 미디어를 같은 회차 리포트에 자동 포함하는 단순 운영입니다.</li>
+              </ul>
+            </article>
+            <article class="rule-card">
+              <h3>수정 잠금</h3>
+              <ul>
+                <li>수업 후 설문은 리포트 생성 후에도 회원 알림톡 발송 전까지 수정할 수 있습니다.</li>
+                <li>수정하면 리포트는 재생성 대상이 되고 승인/대기 후보는 다시 검수 상태가 됩니다.</li>
+                <li>회원 리포트 알림톡 발송 완료 이후에는 회차 기록을 잠급니다.</li>
+                <li>발송 처리 중에는 중복과 충돌을 막기 위해 임시 잠금합니다.</li>
+              </ul>
+            </article>
+          </div>
+          <div class="rule-note"><strong>현재 확인 위치</strong><span>CORE Private / Firestore bookings, privateLessonChartRequests, privateLessonChartRecords, privateSessionLedger</span></div>
+        </section>
+
+        <section class="panel rule-section" id="welcome">
+          <div class="panel-header"><div><h2>5. 현장 웰컴·회원가입·연락처</h2><p>회원가입서 제출과 StudioMate 반영을 분리해 실패 지점을 명확히 봅니다.</p></div><span class="pill">onsite</span></div>
+          <div class="rule-grid">
+            <article class="rule-card">
+              <h3>현장 웰컴 알림톡</h3>
+              <ul>
+                <li>StudioMate 단건 조회 후 수강권과 전화번호가 확인된 lookup_ready 상태에서만 발송 버튼을 활성화합니다.</li>
+                <li>같은 전화번호에 현장 웰컴 또는 신규회원 웰컴 성공 발송 이력이 있으면 중복 차단합니다.</li>
+                <li>김기효 테스트 계정 같은 예외는 테스트 목적과 기간을 남긴 뒤 운영에서 제거합니다.</li>
+              </ul>
+            </article>
+            <article class="rule-card">
+              <h3>가입서 제출</h3>
+              <ul>
+                <li>회원 제출은 먼저 memberSignupContracts에 저장합니다.</li>
+                <li>서명 완료 PDF는 home@archivepilates.com Google Drive 가입서 PDF 폴더에 저장합니다.</li>
+                <li>PDF 저장 실패는 회원 제출을 실패시키지 않고 재처리 상태로 남깁니다.</li>
+                <li>현장 웰컴 사이트에는 가입서 PDF 폴더 버튼을 제공합니다.</li>
+              </ul>
+            </article>
+            <article class="rule-card">
+              <h3>StudioMate 반영</h3>
+              <ul>
+                <li>주소, 생년월일, 성별은 StudioMate 회원정보란에 반영해야 합니다.</li>
+                <li>회원가입 정보는 StudioMate 메모란에 자동으로 쓰지 않습니다.</li>
+                <li>반영은 studiomateMemberProfileWriteJobs 큐를 통해 Mac mini Playwright가 처리합니다.</li>
+                <li>기존 memo write queue에 회원가입서 메모 작업이 남아 있으면 skipped로 처리합니다.</li>
+              </ul>
+            </article>
+          </div>
+        </section>
+
+        <section class="panel rule-section" id="settlement">
+          <div class="panel-header"><div><h2>6. 정산·비즈니스 지표</h2><p>대시보드는 정산 자동화 결과를 참조하고 중복 계산을 줄입니다.</p></div><span class="pill">finance</span></div>
+          <div class="rule-grid">
+            <article class="rule-card">
+              <h3>원본 폴더</h3>
+              <ul>
+                <li>Google Drive 아카이브 정산 폴더의 수업매출원본데이터와 수강권매출원본데이터를 사용합니다.</li>
+                <li>정산 자동화는 파일 수정일이 아니라 파일명 날짜 범위로 대상 파일을 고릅니다.</li>
+                <li>닫힌 월은 전체월 파일을 우선 사용하고, 없을 때만 최신 누적 파일을 사용하며 경고를 남깁니다.</li>
+              </ul>
+            </article>
+            <article class="rule-card">
+              <h3>자동화 결과</h3>
+              <ul>
+                <li>Google Apps Script 정산 자동화가 월별 정산 파일과 강사별 HTML 명세서를 만듭니다.</li>
+                <li>노쇼는 수업료 50%, 지급 50% 규칙을 적용합니다.</li>
+                <li>대시보드 DB 동기화는 정산 자동화의 export 결과를 Firestore에 쓰는 ETL로 축소합니다.</li>
+                <li>수업매출과 수강권매출은 서로 다른 지표이므로 화면 라벨을 명확히 구분합니다.</li>
+              </ul>
+            </article>
+            <article class="rule-card">
+              <h3>월별 보관</h3>
+              <ul>
+                <li>매월 1일 전월 정산월 폴더를 생성합니다.</li>
+                <li>강사별 정산명세서에는 총 합계, 전월대비, 그룹 합계, 프라이빗 합계, 총 수업 수, 월 그룹 평균을 표시합니다.</li>
+                <li>일 단위 누적 파일은 최종 월 파일이 만들어진 뒤 휴지통으로 보냅니다.</li>
+              </ul>
+            </article>
+          </div>
+          <div class="rule-note"><strong>현재 확인 위치</strong><span>CORE Business / Google Drive 아카이브 정산 자동화 / Firestore businessSnapshots</span></div>
+        </section>
+
+        <section class="panel rule-section" id="release">
+          <div class="panel-header"><div><h2>7. 배포·검증·보고</h2><p>배포 요청은 검증, commit, deploy, live check, GitHub push를 한 세트로 처리합니다.</p></div><span class="pill warn">release gate</span></div>
+          <div class="rule-grid">
+            <article class="rule-card">
+              <h3>배포세트</h3>
+              <ul>
+                <li>배포, 반영, publish, release 요청은 scoped commit, 필요한 target 배포, 라이브 확인, push까지 포함합니다.</li>
+                <li>UI/static-only 변경은 Hosting만, Functions 변경은 해당 codebase만 우선 배포합니다.</li>
+                <li>배포 전 변경 범위, 테스트, 롤백 기준을 확인합니다.</li>
+                <li>배포 후 실제 URL, callable/API 응답, 브라우저 오류를 확인합니다.</li>
+              </ul>
+            </article>
+            <article class="rule-card">
+              <h3>Functions 경계</h3>
+              <ul>
+                <li>알림톡은 functions-alimtalk, 프라이빗/설문/리포트는 functions-private-chart, 동기화는 functions-sync, 앱 callable은 functions-app으로 나눕니다.</li>
+                <li>contracts 패키지에 collection, event, queue payload, codebase ownership을 먼저 기록합니다.</li>
+                <li>affected-only 감지와 CI 변경 감지 결과를 배포 범위 판단에 사용합니다.</li>
+              </ul>
+            </article>
+            <article class="rule-card">
+              <h3>실패 보고</h3>
+              <ul>
+                <li>운영 자동화, 배포, 외부 서비스 write, production data job 실패는 home@archivepilates.com으로 보고합니다.</li>
+                <li>메일 제목은 [업무영역][상태] 핵심내용 형식을 사용합니다.</li>
+                <li>현장에서 해결된 로컬 테스트 실패, 의도한 dry-run 발견, 단순 dirty status는 실패 메일 대상이 아닙니다.</li>
+              </ul>
+            </article>
+          </div>
+        </section>
+
+        <section class="panel rule-section" id="worklines">
+          <div class="panel-header"><div><h2>8. 인프라·워크라인</h2><p>스레드와 worktree를 분리해 기능 간 충돌을 줄입니다.</p></div><span class="pill">coordination</span></div>
+          <div class="rule-grid">
+            <article class="rule-card">
+              <h3>Mac mini</h3>
+              <ul>
+                <li>Mac mini는 Codex 통합 운영 허브이자 자동화 실행 환경입니다.</li>
+                <li>StudioMate Playwright 공유 프로필은 lock을 잡고 직렬 실행합니다.</li>
+                <li>자동화 실패나 지연은 Firebase 장애와 분리해 LaunchAgent, 로그, 원본 파일부터 확인합니다.</li>
+              </ul>
+            </article>
+            <article class="rule-card">
+              <h3>워크라인</h3>
+              <ul>
+                <li>새 ARCHIVE IN/CORE 작업은 먼저 workLanes에 임시 상태로 둡니다.</li>
+                <li>코드 변경은 기능별 전용 worktree/branch에서 진행합니다.</li>
+                <li>workLanes는 외부 발송, StudioMate write, Contacts write, 결제·예약 판단 원천이 아닙니다.</li>
+                <li>승격 전에는 원천 컬렉션, target, canonical key, 중복 처리, 검증 방식을 기록합니다.</li>
+              </ul>
+            </article>
+            <article class="rule-card">
+              <h3>스레드 운영</h3>
+              <ul>
+                <li>요구사항, 우선순위, 최종 판단, 배포 승인은 ARCHIVE CORE 메인 명령 스레드가 담당합니다.</li>
+                <li>기능별 스레드와 Subagent는 좁은 조사·검증·패치만 맡고 결과를 메인 스레드로 보고합니다.</li>
+                <li>여러 작업이 같은 파일이나 같은 운영 규칙을 동시에 수정하지 않도록 lane을 나눕니다.</li>
+              </ul>
+            </article>
+          </div>
+        </section>
+
+        <section class="panel rule-section" id="archive">
+          <div class="panel-header"><div><h2>9. 폐기·보관 기준</h2><p>더 이상 현재 운영 원칙이 아닌 항목을 명확히 분리합니다.</p></div><span class="pill danger">deprecated</span></div>
+          <div class="rule-grid">
+            <article class="rule-card">
+              <h3>Notion 운영규칙</h3>
+              <ul>
+                <li>Notion 아카이브 운영 규칙은 2026.06.10 이후 현재 운영규칙 업데이트 대상이 아닙니다.</li>
+                <li>기존 내용은 과거 참조로만 사용하고, 새 규칙은 CORE 운영규칙 탭에 기록합니다.</li>
+                <li>프라이빗 개인레슨 차트처럼 기능 자체가 아직 Notion에 의존하는 데이터 화면은 별도 기능 표면으로 유지합니다.</li>
+              </ul>
+            </article>
+            <article class="rule-card">
+              <h3>StudioMate API 모드</h3>
+              <ul>
+                <li>자사 예약 시스템 운영 전까지 기본 동기화 모드로 사용하지 않습니다.</li>
+                <li>출결, 결석, 메모 작성 같은 StudioMate write는 앱에서 차단하고 큐/Playwright 경로만 검토합니다.</li>
+                <li>API 재도입은 별도 설계와 검증 후에만 가능합니다.</li>
+              </ul>
+            </article>
+            <article class="rule-card">
+              <h3>ARCHIVE IN 운영자 앱</h3>
+              <ul>
+                <li>기존 ARCHIVE IN 운영자 콘솔 역할은 ARCHIVE CORE로 이동합니다.</li>
+                <li>ARCHIVE IN은 향후 자사 사이트 예약 시스템 전환 시 회원/강사용 앱 방향으로 재정의합니다.</li>
+                <li>채팅 기능, 알림톡 상태 태그처럼 사용도가 낮거나 혼란을 만든 UI는 숨김 상태를 유지합니다.</li>
+              </ul>
+            </article>
           </div>
         </section>
       </main>

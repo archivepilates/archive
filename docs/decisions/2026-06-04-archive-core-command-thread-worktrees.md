@@ -75,19 +75,19 @@ remaining risks
 handoff needed from another lane
 ```
 
-The main command thread then decides whether to merge, deploy, update Notion, or hand off to another lane.
+The main command thread then decides whether to merge, deploy, update ARCHIVE CORE operating rules, or hand off to another lane.
 
 ## Production Boundary
 
 External sends, StudioMate writes, Google Contacts writes, payment/reservation decisions, data source switching, Firebase deploys, GitHub pushes, and IAM or organization-policy changes still require explicit main command thread approval.
 
-## Notion And Firestore Record
+## Operating Rules And Firestore Record
 
 The same operating map should be recorded in:
 
 ```txt
 Firestore: workLanes/archive-core-transition
-Notion: 아카이브 운영 규칙 / ARCHIVE CORE
+ARCHIVE CORE: /core/rules/
 ```
 
-Notion remains the concise operator-facing rule page. Firestore `workLanes` remains the machine-readable coordination state.
+ARCHIVE CORE `운영규칙` is the concise operator-facing rule page. Firestore `workLanes` remains the machine-readable coordination state. Notion `아카이브 운영 규칙` is legacy reference only and should not receive duplicate current-rule updates unless a specific Notion-dependent workflow still requires it.

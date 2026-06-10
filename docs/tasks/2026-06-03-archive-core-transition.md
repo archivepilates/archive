@@ -28,7 +28,8 @@ Phase 1: read-only operations console foundation.
 - Dedicated worktree: `/Users/archivepilates/codex-worktrees/archive-core-transition`
 - Branch: `codex/mini/archive-core-transition`
 - Firestore lane: `workLanes/archive-core-transition`
-- Notion page: `ARCHIVE CORE 시스템 설계와 Codex 워크라인 운영`
+- Legacy Notion planning page: `ARCHIVE CORE 시스템 설계와 Codex 워크라인 운영`
+- Current operating-rules hub: ARCHIVE CORE `/core/rules/`
 - Hosting route prepared: `/core/** -> /core/index.html`
 
 ## Phase 1 Scope

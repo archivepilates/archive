@@ -80,11 +80,13 @@ Notion에서 `ARCHIVE PILATES 프라이빗 회원 차트 시스템` 페이지 �
 
 ## 로컬 실행
 
+2026-06-10 이후 이 스크립트는 legacy 보정용이다. 현재 운영규칙은 Notion이 아니라 ARCHIVE CORE `/core/rules/`에 기록한다. 아래 명령은 과거 Notion 페이지를 1회 보정해야 할 때만 명시적으로 실행한다.
+
 토큰은 로컬 shell 환경변수 또는 로컬 전용 env 파일에만 둔다.
 
 ```bash
 export NOTION_TOKEN="secret_..."
-node scripts/sync-notion-alimtalk-rules.mjs
+ALLOW_LEGACY_NOTION_RULE_SYNC=1 node scripts/sync-notion-alimtalk-rules.mjs
 ```
 
 선택 env:
@@ -108,4 +110,4 @@ export NOTION_ALIMTALK_TEMPLATE_PAGE_TITLE="카카오 알림톡 템플릿 분류
 - `docs/kakao-alimtalk-automation-handoff.md`
 - `docs/archivein-member-contact-alimtalk-pipeline.md`
 
-현재 스크립트는 위 원본의 핵심 운영 기준을 Notion child page에 요약 반영한다. 원본 문서 전체를 1:1 렌더링하는 목적이 아니라, Notion 운영자가 빠르게 확인할 분류/네이밍/자동화 기준을 유지하는 목적이다.
+현재 스크립트는 legacy Notion child page 보정용으로만 남긴다. 새 운영 기준은 ARCHIVE CORE 운영규칙 탭에 반영한다.

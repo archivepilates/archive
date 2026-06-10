@@ -1284,6 +1284,140 @@ a.rank-row:hover,
   font-size: 0.86rem;
 }
 
+.rules-page {
+  scroll-behavior: smooth;
+}
+
+.rules-hero {
+  display: grid;
+  grid-template-columns: minmax(0, 1.25fr) minmax(280px, 0.75fr);
+  gap: 18px;
+  align-items: start;
+  padding: 24px;
+}
+
+.rules-hero h2 {
+  margin-top: 12px;
+  font-size: 1.55rem;
+  line-height: 1.22;
+}
+
+.rules-hero p {
+  max-width: 72ch;
+  margin: 10px 0 0;
+  color: var(--muted);
+}
+
+.rules-meta {
+  display: grid;
+  gap: 10px;
+}
+
+.rules-meta div,
+.rule-note {
+  display: grid;
+  min-width: 0;
+  gap: 4px;
+  border: 1px solid var(--line-soft);
+  border-radius: 8px;
+  background: rgba(248, 250, 252, 0.86);
+  padding: 12px;
+}
+
+.rules-meta strong,
+.rule-note strong {
+  font-size: 0.84rem;
+}
+
+.rules-meta span,
+.rule-note span {
+  color: var(--muted);
+  font-size: 0.82rem;
+  word-break: keep-all;
+}
+
+.rule-anchor-grid {
+  display: grid;
+  grid-template-columns: repeat(auto-fit, minmax(min(100%, 170px), 1fr));
+  gap: 10px;
+  padding: 0 20px 20px;
+}
+
+.rule-anchor-grid a {
+  display: grid;
+  min-width: 0;
+  min-height: 86px;
+  align-content: center;
+  gap: 5px;
+  border: 1px solid var(--line-soft);
+  border-radius: 8px;
+  background: rgba(248, 250, 252, 0.82);
+  color: var(--text);
+  padding: 14px;
+  text-decoration: none;
+  font-weight: 850;
+}
+
+.rule-anchor-grid a:hover {
+  border-color: rgba(240, 100, 24, 0.24);
+  background: #fff;
+}
+
+.rule-anchor-grid span {
+  color: var(--muted);
+  font-size: 0.78rem;
+  font-weight: 700;
+}
+
+.rule-section {
+  scroll-margin-top: 20px;
+}
+
+.rule-grid {
+  display: grid;
+  grid-template-columns: repeat(auto-fit, minmax(min(100%, 300px), 1fr));
+  gap: 12px;
+  padding: 0 20px 20px;
+}
+
+.rule-card {
+  display: grid;
+  min-width: 0;
+  align-content: start;
+  gap: 10px;
+  border: 1px solid var(--line-soft);
+  border-radius: 8px;
+  background: rgba(248, 250, 252, 0.74);
+  padding: 16px;
+}
+
+.rule-card h3 {
+  min-width: 0;
+  overflow-wrap: anywhere;
+  font-size: 1rem;
+}
+
+.rule-card ul,
+.rule-card ol {
+  display: grid;
+  min-width: 0;
+  gap: 7px;
+  margin: 0;
+  padding-left: 18px;
+}
+
+.rule-card li {
+  min-width: 0;
+  overflow-wrap: anywhere;
+  color: var(--muted);
+  font-size: 0.86rem;
+  word-break: keep-all;
+}
+
+.rule-note {
+  margin: 0 20px 20px;
+}
+
 @media (prefers-reduced-motion: reduce) {
   *,
   *::before,
@@ -1451,6 +1585,7 @@ a.rank-row:hover,
   .rank-list,
   .business-bars,
   .rules,
+  .rules-hero,
   .flow-list,
   .checklist {
     padding: 16px;
@@ -1469,6 +1604,20 @@ a.rank-row:hover,
   .flow-list div {
     grid-template-columns: 1fr;
     gap: 4px;
+  }
+
+  .rules-hero,
+  .rule-grid {
+    grid-template-columns: 1fr;
+  }
+
+  .rule-anchor-grid,
+  .rule-grid {
+    padding: 0 16px 16px;
+  }
+
+  .rule-note {
+    margin: 0 16px 16px;
   }
 
   .panel-header {

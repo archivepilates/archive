@@ -11,10 +11,11 @@ const childPageId = process.env.NOTION_ALIMTALK_TEMPLATE_PAGE_ID
   ? compactId(process.env.NOTION_ALIMTALK_TEMPLATE_PAGE_ID)
   : "";
 const childTitle = process.env.NOTION_ALIMTALK_TEMPLATE_PAGE_TITLE || DEFAULT_CHILD_TITLE;
+const allowLegacySync = process.env.ALLOW_LEGACY_NOTION_RULE_SYNC === "1";
 
 if (process.argv.includes("--help")) {
   console.log(`Usage:
-  NOTION_TOKEN=secret_... node scripts/sync-notion-alimtalk-rules.mjs
+  ALLOW_LEGACY_NOTION_RULE_SYNC=1 NOTION_TOKEN=secret_... node scripts/sync-notion-alimtalk-rules.mjs
 
 Optional env:
   NOTION_ALIMTALK_PARENT_PAGE_ID=${DEFAULT_PARENT_PAGE_ID}
@@ -22,6 +23,13 @@ Optional env:
   NOTION_ALIMTALK_TEMPLATE_PAGE_TITLE="${DEFAULT_CHILD_TITLE}"
 `);
   process.exit(0);
+}
+
+if (!allowLegacySync) {
+  console.error(
+    "Notion operating-rule sync is deprecated. Update ARCHIVE CORE /core/rules/ instead, or set ALLOW_LEGACY_NOTION_RULE_SYNC=1 for a one-off legacy sync."
+  );
+  process.exit(2);
 }
 
 if (!token) {
