@@ -157,29 +157,18 @@
       font-size: 17px;
       line-height: 1.36;
     }
-    .chart {
+    .observations {
       display: grid;
-      gap: 13px;
+      gap: 10px;
     }
-    .bar {
-      display: grid;
-      grid-template-columns: 70px minmax(0, 1fr) 24px;
-      gap: 12px;
-      align-items: center;
-      color: var(--muted);
-      font-size: 13px;
-      font-weight: 700;
-    }
-    .track {
-      height: 8px;
-      overflow: hidden;
-      border-radius: 99px;
+    .observation {
+      padding: 12px 14px;
+      border: 1px solid var(--line);
+      border-radius: var(--radius);
       background: var(--soft);
-    }
-    .fill {
-      height: 100%;
-      border-radius: inherit;
-      background: var(--accent);
+      color: var(--muted);
+      font-size: 14px;
+      font-weight: 750;
     }
     .next {
       padding: 18px;
@@ -231,7 +220,6 @@
       }
       .meta-item:last-child { border-bottom: 0; }
       .summary p { font-size: 18px; }
-      .bar { grid-template-columns: 58px minmax(0, 1fr) 22px; gap: 9px; }
     }
   </style>
 </head>
@@ -272,12 +260,10 @@
 
     <section>
       <div class="section-head"><span class="num">03</span><h2>변화 흐름</h2></div>
-      <div class="chart" aria-label="기능 점수">
-        <div class="bar"><span>코어</span><div class="track"><div class="fill" style="width:20%"></div></div><b>1</b></div>
-        <div class="bar"><span>밸런스</span><div class="track"><div class="fill" style="width:20%"></div></div><b>1</b></div>
-        <div class="bar"><span>호흡</span><div class="track"><div class="fill" style="width:20%"></div></div><b>1</b></div>
-        <div class="bar"><span>가동성</span><div class="track"><div class="fill" style="width:20%"></div></div><b>1</b></div>
-        <div class="bar"><span>유연성</span><div class="track"><div class="fill" style="width:20%"></div></div><b>1</b></div>
+      <div class="observations" aria-label="수업 관찰">
+        <div class="observation">호흡 리듬과 코어 활성 타이밍을 함께 확인했습니다.</div>
+        <div class="observation">허리 안정성을 유지하는 범위를 무리 없이 점검했습니다.</div>
+        <div class="observation">다음 수업에서 이어갈 움직임 기준을 정리했습니다.</div>
       </div>
     </section>
 
