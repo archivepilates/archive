@@ -2,7 +2,14 @@ import { createHmac, randomBytes, timingSafeEqual } from "node:crypto";
 import { Timestamp } from "firebase-admin/firestore";
 import { logger } from "firebase-functions";
 import { DEFAULT_STUDIO_ID } from "../config/constants";
-import { geminiApiKey, notionToken, privateSurveyWebhookSecret, solapiApiKey, solapiApiSecret, solapiPfid } from "../config/secrets";
+import {
+  geminiApiKey,
+  notionToken,
+  privateSurveyWebhookSecret,
+  solapiApiKey,
+  solapiApiSecret,
+  solapiPfid,
+} from "../config/secrets";
 import { db } from "../config/firebase";
 import { refs } from "../firestore/refs";
 import type {
@@ -28,8 +35,8 @@ const NOTION_SESSION_RECORDS_DATABASE_ID =
   process.env.NOTION_PRIVATE_SESSION_RECORDS_DATABASE_ID || "105b17685d914fbe915ef5b65146d993";
 const STAFF_PRIVATE_CHART_TEMPLATE_ID = "KA01TP260527182741301uIuSTL01YQ1";
 const PRIVATE_CHART_TEMPLATE_NAME = "강사용_프라이빗 차트 작성 안내 v2";
-const PRIVATE_LESSON_REPORT_VIEW_BASE_URL = process.env.PRIVATE_LESSON_REPORT_VIEW_BASE_URL ||
-  "https://in.archivepilates.com/api/privateLessonReport";
+const PRIVATE_LESSON_REPORT_VIEW_BASE_URL =
+  process.env.PRIVATE_LESSON_REPORT_VIEW_BASE_URL || "https://in.archivepilates.com/api/privateLessonReport";
 const GEMINI_MODEL = process.env.PRIVATE_LESSON_REPORT_GEMINI_MODEL || "gemini-2.5-flash";
 const GEMINI_FALLBACK_MODELS = (process.env.PRIVATE_LESSON_REPORT_GEMINI_FALLBACK_MODELS || "gemini-2.5-flash-lite")
   .split(",")
@@ -38,6 +45,7 @@ const GEMINI_FALLBACK_MODELS = (process.env.PRIVATE_LESSON_REPORT_GEMINI_FALLBAC
 const GEMINI_GENERATE_URL = "https://generativelanguage.googleapis.com/v1beta/models";
 const SOLAPI_SEND_URL = "https://api.solapi.com/messages/v4/send-many/detail";
 const SOLAPI_TEMPLATE_URL = "https://api.solapi.com/kakao/v2/templates";
+const PRIVATE_SESSION_ORDER_COMPUTED_FROM = "privateLessonChart.canonicalPrivate.v2";
 const NOTION_INSTRUCTOR_CHART_PAGE_IDS: Record<string, string> = {
   "이초림 수석강사": "22cd49eae4bf802ebc89fe094d0c355a",
   이초림: "22cd49eae4bf802ebc89fe094d0c355a",
@@ -577,12 +585,15 @@ async function enqueuePrivateLessonReportForNotionPage(
   ) {
     return "skipped";
   }
-  return enqueuePrivateLessonReportForRecord(record, templateApproved, String(page.id || ""), "system:notion-private-report");
+  return enqueuePrivateLessonReportForRecord(
+    record,
+    templateApproved,
+    String(page.id || ""),
+    "system:notion-private-report",
+  );
 }
 
-async function approvePrivateLessonReportFromChart(
-  chartRequest: PrivateLessonChartRequestDoc,
-): Promise<{
+async function approvePrivateLessonReportFromChart(chartRequest: PrivateLessonChartRequestDoc): Promise<{
   recordId: string;
   reportStatus: string;
   candidateId?: string;
@@ -594,13 +605,21 @@ async function approvePrivateLessonReportFromChart(
   if (!record.postRecord || !record.postSubmittedAt) {
     throw new Error("수업 후 기록 제출 후 승인할 수 있습니다.");
   }
-  if (!["draft_created", "approved", "published"].includes(record.gptStatus) || !(record.publicReportUrl || record.publicReportCanonicalUrl)) {
+  if (
+    !["draft_created", "approved", "published"].includes(record.gptStatus) ||
+    !(record.publicReportUrl || record.publicReportCanonicalUrl)
+  ) {
     throw new Error("회원용 리포트가 아직 생성되지 않았습니다. 잠시 후 다시 확인해 주세요.");
   }
   if (!record.memberPhone) throw new Error("회원 연락처가 없어 발송 후보를 만들 수 없습니다.");
 
   const templateApproved = await isAlimtalkTemplateApproved(ALIMTALK_TEMPLATES.private_lesson_report.code);
-  const result = await enqueuePrivateLessonReportForRecord(record, templateApproved, record.notionSync?.pageId || "", "staff:private-chart");
+  const result = await enqueuePrivateLessonReportForRecord(
+    record,
+    templateApproved,
+    record.notionSync?.pageId || "",
+    "staff:private-chart",
+  );
   const candidateId = `private_lesson_report_${record.recordId}`;
   const status =
     result === "queued" || result === "already_queued"
@@ -640,9 +659,7 @@ async function approvePrivateLessonReportFromChart(
   };
 }
 
-async function convertPrivateLessonReportFromChart(
-  chartRequest: PrivateLessonChartRequestDoc,
-): Promise<{
+async function convertPrivateLessonReportFromChart(chartRequest: PrivateLessonChartRequestDoc): Promise<{
   recordId: string;
   reportStatus: string;
   taskId?: string;
@@ -802,9 +819,7 @@ async function notionApprovedReportPages(): Promise<any[]> {
   return Array.isArray(result.results) ? result.results : [];
 }
 
-async function privateLessonChartRecordByNotionPageId(
-  pageId: string,
-): Promise<PrivateLessonChartRecordDoc | null> {
+async function privateLessonChartRecordByNotionPageId(pageId: string): Promise<PrivateLessonChartRecordDoc | null> {
   if (!pageId) return null;
   const snap = await refs.privateLessonChartRecords().where("notionSync.pageId", "==", pageId).limit(1).get();
   return snap.docs.length ? snap.docs[0].data() : null;
@@ -823,9 +838,9 @@ async function resolveReportShortUrl(record: PrivateLessonChartRecordDoc): Promi
   const requestDoc = requestSnap?.data();
   const canonicalFromRequest = requestDoc
     ? buildPrivateReportCanonicalUrl({
-      recordId: String(record.recordId || ""),
-      accessTokenHash: String(requestDoc.accessTokenHash || ""),
-    })
+        recordId: String(record.recordId || ""),
+        accessTokenHash: String(requestDoc.accessTokenHash || ""),
+      })
     : "";
   const currentShortTarget = isShortPrivateReportUrl(current) ? await resolveShortLinkTarget(current) : "";
   const reportTargetUrl = isSupportedPrivateReportTargetUrl(canonical)
@@ -874,7 +889,10 @@ async function resolveReportShortUrl(record: PrivateLessonChartRecordDoc): Promi
     publicReportUrl: link.shortUrl,
     publicReportCanonicalUrl: normalizedCanonical,
     shouldUpdateRecord:
-      record.publicReportUrl !== link.shortUrl || record.publicReportCanonicalUrl !== normalizedCanonical || shortNeedsRepair || canonicalNeedsRepair,
+      record.publicReportUrl !== link.shortUrl ||
+      record.publicReportCanonicalUrl !== normalizedCanonical ||
+      shortNeedsRepair ||
+      canonicalNeedsRepair,
     shouldUpdateNotion: !isShortPrivateReportUrl(current) || shortNeedsRepair || !record.publicReportCanonicalUrl,
   };
 }
@@ -1001,7 +1019,8 @@ async function reconcilePrivateLessonChartForBooking(booking: BookingDoc): Promi
     return { requestId, created: false, updated: false, cancelled: false, notionSynced: false };
   }
 
-  const sessionNumber = bookingPrivateSessionNumber(booking) || existingRequest?.sessionNumber || existingRecord?.sessionNumber || 0;
+  const sessionNumber =
+    bookingPrivateSessionNumber(booking) || existingRequest?.sessionNumber || existingRecord?.sessionNumber || 0;
   const now = nowTimestamp();
   const requestPatch = compactObject({
     lessonDate: booking.lectureDate || existingRequest?.lessonDate,
@@ -1067,7 +1086,8 @@ async function ensureChartRequestForBooking(
 ): Promise<{ requestId: string; created: boolean; updated?: boolean; notionSynced?: boolean }> {
   const requestId = `plc_${booking.bookingId}`;
   const existing = await refs.privateLessonChartRequest(requestId).get();
-  if (existing.exists) return reconcileExistingChartRequestForBooking(booking, existing.data() as PrivateLessonChartRequestDoc);
+  if (existing.exists)
+    return reconcileExistingChartRequestForBooking(booking, existing.data() as PrivateLessonChartRequestDoc);
 
   const [staffSnap, intakeSummary, sessionNumber] = await Promise.all([
     booking.staffId ? refs.staff(booking.staffId).get() : Promise.resolve(null as any),
@@ -1146,7 +1166,8 @@ async function reconcileExistingChartRequestForBooking(
 ): Promise<{ requestId: string; created: false; updated: boolean; notionSynced: boolean }> {
   const requestId = existing.requestId || `plc_${booking.bookingId}`;
   const sessionNumber = await sessionNumberForBooking(booking);
-  const status: PrivateLessonChartRequestStatus = existing.status === "cancelled" ? "pending" : existing.status || "pending";
+  const status: PrivateLessonChartRequestStatus =
+    existing.status === "cancelled" ? "pending" : existing.status || "pending";
   const patch = compactObject({
     lectureId: booking.lectureId || existing.lectureId,
     memberId: booking.memberId || existing.memberId,
@@ -1214,14 +1235,24 @@ async function submitPrivateLessonChart(
   if (mode === "pre" && (chartRequest.preStatus === "submitted" || base.preSubmittedAt)) {
     throw new Error("이미 제출된 수업 전 계획입니다. 기존 기록 보호를 위해 다시 제출할 수 없습니다.");
   }
-  if (mode === "post" && (chartRequest.postStatus === "submitted" || base.postSubmittedAt)) {
-    throw new Error("이미 제출된 수업 후 기록입니다. 기존 기록 보호를 위해 다시 제출할 수 없습니다.");
+  if (mode === "post" && isPrivateReportLockedForEditing(base)) {
+    throw new Error("회원 리포트 발송 승인 이후에는 수업 후 기록을 수정할 수 없습니다.");
   }
   const now = nowTimestamp();
   const recordPatch =
     mode === "pre"
       ? { prePlan: answers, preSubmittedAt: now, gptStatus: base.gptStatus || "pending" }
-      : { postRecord: answers, postSubmittedAt: now, gptStatus: "pending" as const };
+      : {
+          postRecord: answers,
+          postSubmittedAt: now,
+          gptStatus: "pending" as const,
+          gptDraftSummary: "",
+          gptDraftNextDirection: "",
+          gptSourceHash: "",
+          publicReportUrl: "",
+          publicReportCanonicalUrl: "",
+          publicReportApproval: null,
+        };
   const nextRecord = {
     ...base,
     ...recordPatch,
@@ -1260,7 +1291,12 @@ async function submitPrivateLessonChart(
   const notionSync = await syncPrivateLessonChartRecordToNotion(recordForNotion, chartRequest);
   await recordRef.set({ notionSync, updatedAt: nowTimestamp() }, { merge: true });
 
-  return { requestId: chartRequest.requestId, recordId: recordForNotion.recordId, mode, notionStatus: notionSync.status };
+  return {
+    requestId: chartRequest.requestId,
+    recordId: recordForNotion.recordId,
+    mode,
+    notionStatus: notionSync.status,
+  };
 }
 
 async function upsertChartRecordBase(chartRequest: PrivateLessonChartRequestDoc): Promise<PrivateLessonChartRecordDoc> {
@@ -1620,13 +1656,14 @@ function publicChartRequest(
   record: PrivateLessonChartRecordDoc | null = null,
 ): Record<string, unknown> {
   const approvalStatus = record?.publicReportApproval?.status || "";
-  const reportReady = record?.gptStatus === "draft_created" &&
-    Boolean(record.publicReportUrl || record.publicReportCanonicalUrl);
-  const reportStatus = approvalStatus && approvalStatus !== "pending"
-    ? approvalStatus
-    : reportReady
-      ? "ready"
-      : record?.gptStatus || "pending";
+  const reportReady =
+    record?.gptStatus === "draft_created" && Boolean(record.publicReportUrl || record.publicReportCanonicalUrl);
+  const reportStatus =
+    approvalStatus && approvalStatus !== "pending"
+      ? approvalStatus
+      : reportReady
+        ? "ready"
+        : record?.gptStatus || "pending";
   return {
     requestId: chartRequest.requestId,
     mode,
@@ -1640,27 +1677,33 @@ function publicChartRequest(
     intakeSummary: chartRequest.intakeSummary || null,
     existingAnswers: record
       ? {
-        pre: record.prePlan || null,
-        post: record.postRecord || null,
-      }
+          pre: record.prePlan || null,
+          post: record.postRecord || null,
+        }
       : { pre: null, post: null },
-    locked: mode === "pre"
-      ? chartRequest.preStatus === "submitted" || Boolean(record?.preSubmittedAt)
-      : chartRequest.postStatus === "submitted" || Boolean(record?.postSubmittedAt),
+    locked:
+      mode === "pre"
+        ? chartRequest.preStatus === "submitted" || Boolean(record?.preSubmittedAt)
+        : isPrivateReportLockedForEditing(record),
     report: record
       ? {
-        recordId: record.recordId,
-        status: reportStatus,
-        gptStatus: record.gptStatus,
-        url: record.publicReportUrl || "",
-        canonicalUrl: record.publicReportCanonicalUrl || "",
-        summary: record.gptDraftSummary || record.publicSummary || "",
-        nextDirection: record.gptDraftNextDirection || record.publicNextDirection || "",
-        approval: record.publicReportApproval || null,
-        postSubmitted: Boolean(record.postSubmittedAt),
-      }
+          recordId: record.recordId,
+          status: reportStatus,
+          gptStatus: record.gptStatus,
+          url: record.publicReportUrl || "",
+          canonicalUrl: record.publicReportCanonicalUrl || "",
+          summary: record.gptDraftSummary || record.publicSummary || "",
+          nextDirection: record.gptDraftNextDirection || record.publicNextDirection || "",
+          approval: record.publicReportApproval || null,
+          postSubmitted: Boolean(record.postSubmittedAt),
+        }
       : null,
   };
+}
+
+function isPrivateReportLockedForEditing(record: PrivateLessonChartRecordDoc | null | undefined): boolean {
+  const approvalStatus = String(record?.publicReportApproval?.status || "");
+  return approvalStatus === "queued" || approvalStatus === "sent" || record?.gptStatus === "published";
 }
 
 async function latestPrivateSurveyForBooking(booking: BookingDoc): Promise<PrivateSurveyResponseDoc | null> {
@@ -1685,11 +1728,9 @@ async function latestPrivateSurveyForBooking(booking: BookingDoc): Promise<Priva
 
 async function nextSessionNumber(booking: BookingDoc): Promise<number> {
   if (!booking.memberId) return 1;
-  const snap = await refs.bookings().where("memberId", "==", booking.memberId).limit(500).get();
+  const snap = await refs.bookings().where("memberId", "==", booking.memberId).get();
   const currentStart = booking.lectureStartAt?.toMillis?.() || 0;
-  const canonical = canonicalPrivateBookings(snap.docs.map((doc) => doc.data()))
-    .filter((item) => item.appStatus === "reserved")
-    .filter((item) => !["absent", "late_cancel"].includes(item.attendanceStatus));
+  const canonical = canonicalPrivateBookings(snap.docs.map((doc) => doc.data()));
   if (currentStart) {
     return canonical.filter((item) => (item.lectureStartAt?.toMillis?.() || 0) < currentStart).length + 1;
   }
@@ -1698,7 +1739,7 @@ async function nextSessionNumber(booking: BookingDoc): Promise<number> {
 }
 
 async function sessionNumberForBooking(booking: BookingDoc): Promise<number> {
-  const stored = bookingPrivateSessionNumber(booking);
+  const stored = trustedBookingPrivateSessionNumber(booking);
   if (stored) return stored;
   const computed = await nextSessionNumber(booking);
   await refs.booking(booking.bookingId).set(
@@ -1709,7 +1750,7 @@ async function sessionNumberForBooking(booking: BookingDoc): Promise<number> {
         cumulativeRound: computed,
         privateCumulativeRound: computed,
         groupCumulativeRound: booking.sessionOrder?.groupCumulativeRound ?? null,
-        computedFrom: "privateLessonChart.nextSessionNumber",
+        computedFrom: PRIVATE_SESSION_ORDER_COMPUTED_FROM,
         computedAt: nowTimestamp(),
       },
       updatedAt: nowTimestamp(),
@@ -1719,21 +1760,42 @@ async function sessionNumberForBooking(booking: BookingDoc): Promise<number> {
   return computed;
 }
 
+function trustedBookingPrivateSessionNumber(booking: BookingDoc): number {
+  const value = bookingPrivateSessionNumber(booking);
+  if (!value) return 0;
+  return booking.sessionOrder?.computedFrom === PRIVATE_SESSION_ORDER_COMPUTED_FROM ? value : 0;
+}
+
 function bookingPrivateSessionNumber(booking: BookingDoc): number {
   const value = Number(booking.sessionOrder?.privateCumulativeRound || booking.sessionOrder?.cumulativeRound || 0);
   return Number.isFinite(value) && value > 0 ? value : 0;
 }
 
 function isPrivateLessonLikeBooking(booking: BookingDoc): boolean {
-  if (booking.lessonType === "group") return false;
+  const ticketName = String(booking.ticketName || "");
+  const classText = `${booking.ticketClassType || ""} ${booking.ticketType || ""}`;
+  if (/프라이빗|개인|1:1|PRIVATE|\bP\b/i.test(ticketName)) return true;
   if (booking.lessonType === "private" || booking.lessonType === "semi_private") return true;
-  const text = `${booking.ticketName || ""} ${booking.ticketClassType || ""} ${booking.ticketType || ""}`;
-  return /프라이빗|개인|1:1|PRIVATE|\bP\b/i.test(text);
+  if (booking.lessonType === "group" && isExplicitGroupTicketName(ticketName)) return false;
+  return /프라이빗|개인|1:1|PRIVATE|\bP\b/i.test(classText);
+}
+
+function isExplicitGroupTicketName(ticketName: string): boolean {
+  const text = String(ticketName || "").replace(/\s+/g, "");
+  if (!text) return false;
+  if (/프라이빗|개인|1:1|PRIVATE/i.test(text)) return false;
+  return /그룹|GROUP|10주|주[1-7]회|주\d+회|그룹\d*회|그룹\d*회권|회상품권|보상쿠폰/i.test(text);
 }
 
 function isPrivateBooking(booking: BookingDoc): boolean {
-  if (booking.appStatus && booking.appStatus !== "reserved") return false;
-  return isPrivateLessonLikeBooking(booking);
+  return isPrivateLessonLikeBooking(booking) && !isExcludedPrivateLessonOccurrence(booking);
+}
+
+function isExcludedPrivateLessonOccurrence(booking: BookingDoc): boolean {
+  if (booking.appStatus === "cancel" || booking.appStatus === "wait" || booking.appStatus === "wait_cancel")
+    return true;
+  if (booking.attendanceStatus === "absent" || booking.attendanceStatus === "late_cancel") return true;
+  return false;
 }
 
 function canonicalPrivateBookings(bookings: BookingDoc[]): BookingDoc[] {
@@ -1775,15 +1837,19 @@ function canonicalChartRequests(requests: PrivateLessonChartRequestDoc[]): Priva
 }
 
 function chartRequestNeedsPatch(existing: PrivateLessonChartRequestDoc, patch: Record<string, unknown>): boolean {
-  return ["memberId", "memberName", "memberPhone", "staffId", "staffName", "lessonDate", "sessionNumber", "status"].some(
-    (key) => primitiveValue((existing as any)[key]) !== primitiveValue((patch as any)[key]),
-  ) || timestampMillis(existing.lessonStartAt) !== timestampMillis((patch as any).lessonStartAt);
+  return (
+    ["memberId", "memberName", "memberPhone", "staffId", "staffName", "lessonDate", "sessionNumber", "status"].some(
+      (key) => primitiveValue((existing as any)[key]) !== primitiveValue((patch as any)[key]),
+    ) || timestampMillis(existing.lessonStartAt) !== timestampMillis((patch as any).lessonStartAt)
+  );
 }
 
 function chartRecordNeedsPatch(existing: PrivateLessonChartRecordDoc, patch: Record<string, unknown>): boolean {
-  return ["memberId", "memberName", "memberPhone", "staffId", "staffName", "lessonDate", "sessionNumber"].some(
-    (key) => primitiveValue((existing as any)[key]) !== primitiveValue((patch as any)[key]),
-  ) || timestampMillis(existing.lessonStartAt) !== timestampMillis((patch as any).lessonStartAt);
+  return (
+    ["memberId", "memberName", "memberPhone", "staffId", "staffName", "lessonDate", "sessionNumber"].some(
+      (key) => primitiveValue((existing as any)[key]) !== primitiveValue((patch as any)[key]),
+    ) || timestampMillis(existing.lessonStartAt) !== timestampMillis((patch as any).lessonStartAt)
+  );
 }
 
 function primitiveValue(value: unknown): string {
@@ -1820,7 +1886,24 @@ function privateChartRequestOccurrenceKey(
 }
 
 function preferCanonicalBooking(next: BookingDoc, current: BookingDoc): boolean {
+  const nextSourceScore = privateBookingSourceScore(next.bookingId);
+  const currentSourceScore = privateBookingSourceScore(current.bookingId);
+  if (nextSourceScore !== currentSourceScore) return nextSourceScore > currentSourceScore;
+  const nextAttendanceScore = privateBookingAttendanceScore(next.attendanceStatus);
+  const currentAttendanceScore = privateBookingAttendanceScore(current.attendanceStatus);
+  if (nextAttendanceScore !== currentAttendanceScore) return nextAttendanceScore > currentAttendanceScore;
+  if (next.appStatus !== current.appStatus) {
+    if (next.appStatus === "reserved") return true;
+    if (current.appStatus === "reserved") return false;
+  }
   return preferCanonicalBookingLike(next.bookingId, current.bookingId);
+}
+
+function privateBookingSourceScore(bookingId: string): number {
+  const value = String(bookingId || "");
+  if (value.startsWith("excel_booking_")) return 1;
+  if (value.startsWith("usage_booking_")) return 2;
+  return 3;
 }
 
 function preferCanonicalBookingLike(nextBookingId: string, currentBookingId: string): boolean {
@@ -1828,6 +1911,14 @@ function preferCanonicalBookingLike(nextBookingId: string, currentBookingId: str
   const currentExcel = isExcelBookingId(currentBookingId);
   if (nextExcel !== currentExcel) return !nextExcel;
   return String(nextBookingId || "") < String(currentBookingId || "");
+}
+
+function privateBookingAttendanceScore(status: BookingDoc["attendanceStatus"]): number {
+  if (status === "attended") return 4;
+  if (status === "unchecked") return 3;
+  if (status === "absent") return 2;
+  if (status === "late_cancel") return 1;
+  return 0;
 }
 
 function isExcelBookingId(bookingId: string): boolean {
@@ -2045,7 +2136,10 @@ function delay(ms: number): Promise<void> {
 function extractGeminiText(response: any): string {
   const parts = response?.candidates?.[0]?.content?.parts;
   if (!Array.isArray(parts)) return "";
-  return parts.map((part: any) => String(part?.text || "")).join("").trim();
+  return parts
+    .map((part: any) => String(part?.text || ""))
+    .join("")
+    .trim();
 }
 
 function parseJsonObject(text: string): Record<string, any> {
@@ -2157,9 +2251,11 @@ function notionChartChildren(
 }
 
 function renderPrivateLessonReportMessagePage(message: string): string {
-  return `<!doctype html><html><head><meta charset="utf-8"><meta name="viewport" content="width=device-width,initial-scale=1"/>` +
+  return (
+    `<!doctype html><html><head><meta charset="utf-8"><meta name="viewport" content="width=device-width,initial-scale=1"/>` +
     `<title>ARCHIVE PILATES Private Report</title><style>body{margin:0;padding:24px;font-family:Apple SD Gothic Neo,\"Noto Sans KR\",Arial,sans-serif;background:#f8f6f1;color:#27211b}.card{max-width:760px;margin:0 auto;padding:24px;background:#fff;border:1px solid #e4ded5;border-radius:12px}</style>` +
-    `</head><body><div class="card"><p>${escapeHtml(message)}</p></div></body></html>`;
+    `</head><body><div class="card"><p>${escapeHtml(message)}</p></div></body></html>`
+  );
 }
 
 function renderPrivateLessonReportPage(
@@ -2172,18 +2268,13 @@ function renderPrivateLessonReportPage(
   const lessonTime = lessonTimeText(chartRequest);
   const title = `${memberName || "회원"}님 수업 리포트`;
   const reportSummary = escapeHtml(String(record.gptDraftSummary || "요약이 아직 준비되지 않았습니다."));
-  const nextDirection = escapeHtml(String(record.gptDraftNextDirection || "다음 수업 방향이 아직 정리되지 않았습니다."));
+  const nextDirection = escapeHtml(
+    String(record.gptDraftNextDirection || "다음 수업 방향이 아직 정리되지 않았습니다."),
+  );
   const goals = textArray(record.postRecord?.goals || record.prePlan?.goals || []);
   const focusAreas = textArray(record.postRecord?.focusAreas || record.prePlan?.focusAreas || []);
   const equipment = textArray(record.postRecord?.equipment || record.prePlan?.equipment || []);
   const changes = textArray(record.postRecord?.changes || []);
-  const scores = [
-    [`코어 안정성`, Number(record.postRecord?.coreScore)],
-    [`밸런스`, Number(record.postRecord?.balanceScore)],
-    [`호흡`, Number(record.postRecord?.breathingScore)],
-    [`가동성`, Number(record.postRecord?.mobilityScore)],
-    [`유연성`, Number(record.postRecord?.flexibilityScore)],
-  ].filter((item) => Number.isFinite(item[1]));
   const reportUrl = (() => {
     const url = new URL(PRIVATE_LESSON_REPORT_VIEW_BASE_URL);
     url.searchParams.set("recordId", record.recordId);
@@ -2192,11 +2283,9 @@ function renderPrivateLessonReportPage(
   })();
   const reportShortcutUrl = String(record.publicReportUrl || "").trim();
   const reportVisibleUrl = reportShortcutUrl || reportUrl;
-  const scoreAverage = scores.length
-    ? Math.round((scores.reduce((sum, [, score]) => sum + Number(score || 0), 0) / scores.length) * 10) / 10
-    : 0;
 
-  return `<!doctype html><html lang="ko"><head><meta charset="utf-8"><meta name="viewport" content="width=device-width,initial-scale=1"/>` +
+  return (
+    `<!doctype html><html lang="ko"><head><meta charset="utf-8"><meta name="viewport" content="width=device-width,initial-scale=1"/>` +
     `<title>${title}</title><style>
       :root{color-scheme:light;--bg:#f7f5f2;--surface:#fffdfa;--line:#ded8d0;--text:#201d19;--muted:#6f675f;--soft:#ece7df;--accent:#4f5b4a;--accent2:#8a6f54}
       *{box-sizing:border-box}body{margin:0;background:var(--bg);color:var(--text);font-family:Apple SD Gothic Neo,\"Noto Sans KR\",system-ui,sans-serif;line-height:1.62}
@@ -2206,7 +2295,6 @@ function renderPrivateLessonReportPage(
       .grid{display:grid;gap:12px;margin-top:18px}.tile{padding:16px;background:var(--surface);border:1px solid var(--line);border-radius:8px}.tile small{display:block;color:var(--muted);font-size:12px;font-weight:800}.tile strong{display:block;margin-top:6px;font-size:22px}
       section{margin-top:28px}.section-title{display:flex;align-items:end;justify-content:space-between;gap:12px;margin-bottom:12px}h2{margin:0;font-size:17px;letter-spacing:0}.hint{color:var(--muted);font-size:12px}
       .chips{display:flex;flex-wrap:wrap;gap:8px}.chip{display:inline-flex;align-items:center;min-height:34px;padding:7px 10px;border:1px solid var(--line);border-radius:999px;background:var(--surface);font-size:13px;color:#2d2924}
-      .scores{display:grid;gap:12px}.score-row{display:grid;grid-template-columns:minmax(86px,116px) 1fr 34px;gap:10px;align-items:center}.bar{height:9px;background:var(--soft);border-radius:99px;overflow:hidden}.fill{height:100%;background:linear-gradient(90deg,var(--accent),var(--accent2));border-radius:99px}.score-row span{font-size:13px;color:var(--muted)}.score-row b{text-align:right;font-size:13px}
       .note{padding:16px;border-left:3px solid var(--accent);background:rgba(255,253,250,.72);color:#312c26}.footer{margin-top:32px;padding-top:16px;border-top:1px solid var(--line);color:var(--muted);font-size:12px}.copy{word-break:break-all}
       @media (min-width:680px){main{padding:38px 28px 72px}.grid{grid-template-columns:repeat(3,minmax(0,1fr))}h1{font-size:36px}.lead{padding:24px}}
     </style></head><body><main><div class="hero"><p class="brand">ARCHIVE PILATES</p><h1>${escapeHtml(title)}</h1>` +
@@ -2214,17 +2302,21 @@ function renderPrivateLessonReportPage(
     `<div class="lead"><p>${reportSummary}</p><p class="next">${nextDirection}</p></div>` +
     `<div class="grid"><div class="tile"><small>집중 영역</small><strong>${escapeHtml(focusAreas.slice(0, 2).join(" · ") || "-")}</strong></div>` +
     `<div class="tile"><small>오늘 변화</small><strong>${escapeHtml(changes.slice(0, 2).join(" · ") || "-")}</strong></div>` +
-    `<div class="tile"><small>평균 점수</small><strong>${scoreAverage ? `${escapeHtml(String(scoreAverage))} / 5` : "-"}</strong></div></div></div>` +
+    `<div class="tile"><small>다음 방향</small><strong>${escapeHtml(nextDirection.slice(0, 18) || "-")}</strong></div></div></div>` +
     `<section><div class="section-title"><h2>오늘 진행</h2><span class="hint">목표와 사용 기구</span></div><div class="chips">` +
-    [...goals, ...equipment].slice(0, 12).map((item) => `<span class="chip">${escapeHtml(item)}</span>`).join("") +
+    [...goals, ...equipment]
+      .slice(0, 12)
+      .map((item) => `<span class="chip">${escapeHtml(item)}</span>`)
+      .join("") +
     `</div></section>` +
     `<section><div class="section-title"><h2>변화 흐름</h2><span class="hint">수업 후 관찰</span></div><div class="chips">` +
-    (changes.length ? changes : ["기록된 변화 없음"]).map((item) => `<span class="chip">${escapeHtml(item)}</span>`).join("") +
+    (changes.length ? changes : ["기록된 변화 없음"])
+      .map((item) => `<span class="chip">${escapeHtml(item)}</span>`)
+      .join("") +
     `</div></section>` +
-    `<section><div class="section-title"><h2>기능 점수</h2><span class="hint">1-5 기준</span></div>${scores.length ? `<div class="scores">` +
-    scores.map(([name, score]) => `<div class="score-row"><span>${escapeHtml(String(name))}</span><div class="bar"><div class="fill" style="width:${Math.max(0, Math.min(100, Number(score) * 20))}%"></div></div><b>${escapeHtml(String(score))}</b></div>`).join("") + `</div>` : "<p class=\"note\">아직 입력된 점수가 없습니다.</p>"}</section>` +
     `<p class="footer">본 리포트는 프라이빗 회원 수업 기록 기준으로 생성되었습니다.<br><span class=\"copy\">${escapeHtml(reportVisibleUrl)}</span></p>` +
-    `</main></body></html>`;
+    `</main></body></html>`
+  );
 }
 
 function asTextList(values: unknown[]): string {
@@ -2243,13 +2335,17 @@ function asTextList(values: unknown[]): string {
 }
 
 function escapeHtml(value: string): string {
-  return String(value).replace(/[&<>"']/g, (char) => ({
-    "&": "&amp;",
-    "<": "&lt;",
-    ">": "&gt;",
-    '"': "&quot;",
-    "'": "&#039;",
-  })[char] || char);
+  return String(value).replace(
+    /[&<>"']/g,
+    (char) =>
+      ({
+        "&": "&amp;",
+        "<": "&lt;",
+        ">": "&gt;",
+        '"': "&quot;",
+        "'": "&#039;",
+      })[char] || char,
+  );
 }
 
 function notionUpdateChildren(
@@ -2259,7 +2355,9 @@ function notionUpdateChildren(
   return [
     divider(),
     heading(3, `자동화 업데이트 ${new Date().toLocaleString("ko-KR", { timeZone: "Asia/Seoul" })}`),
-    ...(chartRequest.status === "cancelled" ? [callout("이 수업은 예약 원본에서 취소로 확인되어 차트 상태를 취소로 보정했습니다.")] : []),
+    ...(chartRequest.status === "cancelled"
+      ? [callout("이 수업은 예약 원본에서 취소로 확인되어 차트 상태를 취소로 보정했습니다.")]
+      : []),
     paragraph(
       `상태: ${privateChartStatusText(chartRequest)} / 회차: ${record.sessionNumber}회차 / 수업일: ${lessonTimeText(chartRequest)} / 담당: ${record.staffName || "미정"}`,
     ),
@@ -2291,7 +2389,9 @@ function notionInstructorChartChildren(
   return [
     callout("이 페이지는 강사용 회차 기록입니다. 회원 발송은 수업 후 기록 링크의 리포트 화면에서 처리합니다."),
     heading(2, `${record.memberName}님 ${record.sessionNumber}회차`),
-    paragraph(`상태: ${privateChartStatusText(chartRequest)} / 수업일: ${lessonTimeText(chartRequest)} / 담당: ${record.staffName || "미정"}`),
+    paragraph(
+      `상태: ${privateChartStatusText(chartRequest)} / 수업일: ${lessonTimeText(chartRequest)} / 담당: ${record.staffName || "미정"}`,
+    ),
     heading(2, "사진·영상 업로드"),
     paragraph("이 문장 아래에 수업 사진과 영상을 추가합니다."),
     divider(),
@@ -2321,9 +2421,7 @@ function notionInstructorChartChildren(
         ? "회원용 리포트가 생성되었습니다. 운영자가 검수 후 발송합니다."
         : "회원용 리포트 생성 대기 중입니다.",
     ),
-    ...(reportButtonUrl
-      ? [notionLinkButton("최종 회원 리포트 보기", reportButtonUrl)]
-      : []),
+    ...(reportButtonUrl ? [notionLinkButton("최종 회원 리포트 보기", reportButtonUrl)] : []),
   ];
 }
 
@@ -2335,8 +2433,12 @@ function notionInstructorUpdateChildren(
   return [
     divider(),
     heading(3, `업데이트 ${new Date().toLocaleString("ko-KR", { timeZone: "Asia/Seoul" })}`),
-    ...(chartRequest.status === "cancelled" ? [callout("이 수업은 예약 원본에서 취소로 확인되어 차트 상태를 취소로 보정했습니다.")] : []),
-    paragraph(`상태: ${privateChartStatusText(chartRequest)} / 수업일: ${lessonTimeText(chartRequest)} / 담당: ${record.staffName || "미정"}`),
+    ...(chartRequest.status === "cancelled"
+      ? [callout("이 수업은 예약 원본에서 취소로 확인되어 차트 상태를 취소로 보정했습니다.")]
+      : []),
+    paragraph(
+      `상태: ${privateChartStatusText(chartRequest)} / 수업일: ${lessonTimeText(chartRequest)} / 담당: ${record.staffName || "미정"}`,
+    ),
     heading(3, "수업 전 계획"),
     ...bullets([
       `목표: ${textArray(record.prePlan?.goals).join(", ") || "-"}`,
