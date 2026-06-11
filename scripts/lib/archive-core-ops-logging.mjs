@@ -104,6 +104,9 @@ export async function recordDataQualityIssues(db, issues) {
         updatedAt: now,
         resolvedAt: issue.resolvedAt || "",
         resolution: issue.resolution || "",
+        operatorAction: issue.operatorAction || "",
+        breakdown: issue.breakdown || null,
+        sampleRows: cleanArray(issue.sampleRows),
       }),
       { merge: true },
     );
@@ -118,14 +121,34 @@ export function qualityIssuesFromSummary(summary, importId) {
   const sourcePaths = [summary.sourceFile || summary.sourceFilePath].filter(Boolean);
   const skipped = summary.skipped || {};
   const issues = [];
-  addCountIssue(issues, skipped.rowsWithoutNameOrPhone, {
-    issueType: "missing_phone",
-    severity: "info",
-    title: "회원 원본에 이름/전화번호 누락 행 있음",
-    summary: `${skipped.rowsWithoutNameOrPhone}개 회원목록 행은 이름 또는 전화번호가 없어 회원/연락처 매칭과 외부 실행 원천에서 제외되었습니다.`,
-    sourceImportIds,
-    sourcePaths,
-  });
+  const missingIdentityCount = toNumber(skipped.rowsWithoutNameOrPhone);
+  const missingIdentityReviewRequired = toNumber(skipped.rowsWithoutNameOrPhoneReviewRequired);
+  if (missingIdentityCount > 0) {
+    const reviewedSafe = Math.max(0, missingIdentityCount - missingIdentityReviewRequired);
+    issues.push({
+      issueType: "missing_phone",
+      severity: missingIdentityReviewRequired > 0 ? "warning" : "info",
+      status: missingIdentityReviewRequired > 0 ? "open" : "resolved",
+      title: "회원 원본에 이름/전화번호 누락 행 있음",
+      summary:
+        missingIdentityReviewRequired > 0
+          ? `${missingIdentityReviewRequired}개 회원목록 행은 이름 또는 전화번호가 없어 회원/연락처 매칭과 외부 실행 전 확인이 필요합니다.`
+          : `${missingIdentityCount}개 회원목록 행은 전화번호가 없지만 모두 이용만료 또는 수강권 없는 보조 프로필로 확인되어 외부 실행 원천에서 제외했습니다.`,
+      sourceImportIds,
+      sourcePaths,
+      resolvedAt: missingIdentityReviewRequired > 0 ? "" : new Date().toISOString(),
+      resolution:
+        missingIdentityReviewRequired > 0
+          ? ""
+          : "전화번호 없는 이용만료/상담/보조 프로필 행으로 확인했습니다. 외부 발송과 연락처 동기화에서 제외하는 것이 정상 처리입니다.",
+      operatorAction:
+        missingIdentityReviewRequired > 0
+          ? "StudioMate 원본 전화번호 확인 전 외부 실행 보류"
+          : `추가 조치 없음. 검토 완료 안전 제외 ${reviewedSafe}건은 전화번호 보완 전 외부 발송·연락처 동기화 제외 유지.`,
+      breakdown: summary.missingIdentitySummary || null,
+      sampleRows: summary.missingIdentitySummary?.sampleRows || [],
+    });
+  }
   addCountIssue(issues, skipped.ambiguousExistingPhone, {
     issueType: "duplicate_member",
     severity: "critical",

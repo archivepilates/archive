@@ -64,6 +64,7 @@ const summary = {
   matchedExistingProfiles: plans.filter((plan) => plan.matchType === "existing").length,
   temporaryExcelProfiles: plans.filter((plan) => plan.matchType === "temporary_excel_id").length,
   skipped,
+  missingIdentitySummary: groupedMembers.missingIdentitySummary || null,
   allowNewExcelProfiles,
   newExcelProfileRule: "active_ticket_required_registered_at_not_limited",
   legacyNewExcelProfileMaxAgeDays,
@@ -105,6 +106,8 @@ const { importId } = await recordSourceImport(db, {
     `matchedExistingProfiles=${summary.matchedExistingProfiles}`,
     `temporaryExcelProfiles=${summary.temporaryExcelProfiles}`,
     `queueContactSync=${summary.queueContactSync}`,
+    `missingIdentityReviewRequired=${summary.missingIdentitySummary?.reviewRequired || 0}`,
+    `missingIdentityReviewedSafe=${summary.missingIdentitySummary?.reviewedSafe || 0}`,
   ],
 });
 await recordDataQualityIssues(db, qualityIssuesFromSummary(summary, importId));
@@ -164,12 +167,12 @@ print(json.dumps(rows, ensure_ascii=False))
 
 function groupRows(rows) {
   const groups = new Map();
-  let skippedNoPhone = 0;
-  for (const row of rows) {
+  const missingIdentitySummary = createMissingIdentitySummary();
+  for (const [index, row] of rows.entries()) {
     const name = cleanText(row["이름"]);
     const phone = normalizePhone(row["전화번호"]);
     if (!name || !phone) {
-      skippedNoPhone += 1;
+      addMissingIdentityRow(missingIdentitySummary, row, index);
       continue;
     }
     const key = `${phone}|${normalizeName(name)}`;
@@ -178,7 +181,8 @@ function groupRows(rows) {
     groups.set(key, current);
   }
   const out = [...groups.values()];
-  out.skippedNoPhone = skippedNoPhone;
+  out.skippedNoPhone = missingIdentitySummary.total;
+  out.missingIdentitySummary = missingIdentitySummary;
   return out;
 }
 
@@ -212,6 +216,7 @@ function buildPlans(groups, existingProfiles, existingContacts) {
   let skippedNewProfileTooOld = 0;
   let consultationContacts = 0;
   let skippedNoPhone = groups.skippedNoPhone || 0;
+  const missingIdentitySummary = groups.missingIdentitySummary || createMissingIdentitySummary();
   const plans = [];
   for (const group of groups) {
     if (isProtectedStaffContact(group)) {
@@ -433,6 +438,10 @@ function buildPlans(groups, existingProfiles, existingContacts) {
     plans,
     skipped: {
       rowsWithoutNameOrPhone: skippedNoPhone,
+      rowsWithoutName: missingIdentitySummary.missingName || 0,
+      rowsWithoutPhone: missingIdentitySummary.missingPhone || 0,
+      rowsWithoutNameOrPhoneReviewRequired: missingIdentitySummary.reviewRequired || 0,
+      rowsWithoutNameOrPhoneReviewedSafe: missingIdentitySummary.reviewedSafe || 0,
       ambiguousExistingPhone: skippedAmbiguousPhone,
       noExistingProfile: skippedNoExistingProfile,
       profilesWithoutActiveTicket: skippedNoActiveTicket,
@@ -441,6 +450,61 @@ function buildPlans(groups, existingProfiles, existingContacts) {
       protectedStaffContact: skippedProtectedStaffContact,
       consultationContacts,
     },
+  };
+}
+
+function createMissingIdentitySummary() {
+  return {
+    total: 0,
+    missingName: 0,
+    missingPhone: 0,
+    reviewRequired: 0,
+    reviewedSafe: 0,
+    ticketStatusCounts: {},
+    ticketKindCounts: {},
+    ticketNameCounts: {},
+    sampleRows: [],
+  };
+}
+
+function addMissingIdentityRow(summary, row, index) {
+  const missingName = !cleanText(row["이름"]);
+  const missingPhone = !normalizePhone(row["전화번호"]);
+  const needsReview = missingIdentityNeedsReview(row, { missingName, missingPhone });
+  summary.total += 1;
+  if (missingName) summary.missingName += 1;
+  if (missingPhone) summary.missingPhone += 1;
+  if (needsReview) summary.reviewRequired += 1;
+  else summary.reviewedSafe += 1;
+  incrementCounter(summary.ticketStatusCounts, cleanText(row["수강권상태"]) || "없음");
+  incrementCounter(summary.ticketKindCounts, cleanText(row["수강권종류"]) || "없음");
+  incrementCounter(summary.ticketNameCounts, cleanText(row["수강권명"]) || "없음");
+  if (summary.sampleRows.length < 12) {
+    summary.sampleRows.push(sampleMissingIdentityRow(row, index, needsReview));
+  }
+}
+
+function missingIdentityNeedsReview(row, { missingName, missingPhone }) {
+  if (missingName) return true;
+  if (!missingPhone) return false;
+  const ticketName = cleanText(row["수강권명"]);
+  const ticketStatus = cleanText(row["수강권상태"]);
+  if (!ticketName && !ticketStatus) return false;
+  return !isInactiveTicketStatus(ticketStatus);
+}
+
+function sampleMissingIdentityRow(row, index, needsReview) {
+  return {
+    excelRow: index + 2,
+    name: cleanText(row["이름"]),
+    missingName: !cleanText(row["이름"]),
+    missingPhone: !normalizePhone(row["전화번호"]),
+    ticketName: cleanText(row["수강권명"]),
+    ticketKind: cleanText(row["수강권종류"]),
+    ticketStatus: cleanText(row["수강권상태"]),
+    registeredAt: cleanText(row["등록일"]),
+    recentAttendance: cleanText(row["최근출석일"]),
+    needsReview,
   };
 }
 
@@ -501,6 +565,14 @@ function buildTicketStatusSummary(rows) {
 
 function isHoldingTicketStatus(status) {
   return /정지|중지|홀딩/.test(cleanText(status));
+}
+
+function isInactiveTicketStatus(status) {
+  return /만료|환불|취소|정지|양도|종료|해지/.test(cleanText(status));
+}
+
+function incrementCounter(target, key) {
+  target[key] = (target[key] || 0) + 1;
 }
 
 async function applyPlans(plans) {
