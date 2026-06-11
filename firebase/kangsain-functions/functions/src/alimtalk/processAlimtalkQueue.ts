@@ -120,6 +120,7 @@ async function processClaimedCandidate(claimed: AlimtalkCandidateDoc): Promise<A
       },
       { merge: true },
     );
+    await markPrivateLessonReportSent(claimed);
     return { processed: true, status: "sent", solapiMessageId: result.messageId };
   } catch (err) {
     const message = errorMessage(err);
@@ -165,6 +166,36 @@ async function processClaimedCandidate(claimed: AlimtalkCandidateDoc): Promise<A
     });
     return { processed: true, status: "failed", lastError: message };
   }
+}
+
+async function markPrivateLessonReportSent(candidate: AlimtalkCandidateDoc): Promise<void> {
+  if (candidate.type !== "private_lesson_report") return;
+  const recordId = String(candidate.sourceActionKey || candidate.payload?.recordId || "").trim();
+  if (!recordId) return;
+  await refs.privateLessonChartRecord(recordId).set(
+    {
+      gptStatus: "published",
+      publicReportApproval: {
+        status: "sent",
+        candidateId: candidate.candidateId,
+        lastError: null,
+      },
+      updatedAt: nowTimestamp(),
+    },
+    { merge: true },
+  );
+  await db.collection("privateLessonChartNotionSyncJobs").doc(recordId).set(
+    {
+      jobId: recordId,
+      recordId,
+      reason: "private_report_sent",
+      status: "pending",
+      candidateId: candidate.candidateId,
+      createdAt: nowTimestamp(),
+      updatedAt: nowTimestamp(),
+    },
+    { merge: true },
+  );
 }
 
 async function claimCandidate(candidate: AlimtalkCandidateDoc): Promise<AlimtalkCandidateDoc | null> {

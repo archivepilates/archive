@@ -31,8 +31,6 @@ import { isAlimtalkTemplateApproved } from "../alimtalk/templateStatus";
 const PUBLIC_BASE_URL = process.env.PRIVATE_CHART_BASE_URL || "https://in.archivepilates.com/private-chart/";
 const NOTION_API_VERSION = "2022-06-28";
 const NOTION_MEMBERS_DATABASE_ID = process.env.NOTION_PRIVATE_MEMBERS_DATABASE_ID || "c58a39ceb7ac405ba43b38d3b5871ed3";
-const NOTION_SESSION_RECORDS_DATABASE_ID =
-  process.env.NOTION_PRIVATE_SESSION_RECORDS_DATABASE_ID || "105b17685d914fbe915ef5b65146d993";
 const STAFF_PRIVATE_CHART_TEMPLATE_ID = "KA01TP260527182741301uIuSTL01YQ1";
 const PRIVATE_CHART_TEMPLATE_NAME = "강사용_프라이빗 차트 작성 안내 v2";
 const PRIVATE_LESSON_REPORT_VIEW_BASE_URL =
@@ -46,7 +44,6 @@ const GEMINI_GENERATE_URL = "https://generativelanguage.googleapis.com/v1beta/mo
 const SOLAPI_SEND_URL = "https://api.solapi.com/messages/v4/send-many/detail";
 const SOLAPI_TEMPLATE_URL = "https://api.solapi.com/kakao/v2/templates";
 const PRIVATE_SESSION_ORDER_COMPUTED_FROM = "privateLessonChart.canonicalPrivate.v2";
-let notionSessionRecordTitlePropertyName = "";
 const NOTION_INSTRUCTOR_CHART_PAGE_IDS: Record<string, string> = {
   "이초림 수석강사": "22cd49eae4bf802ebc89fe094d0c355a",
   이초림: "22cd49eae4bf802ebc89fe094d0c355a",
@@ -523,24 +520,35 @@ export async function enqueueApprovedPrivateLessonReportAlimtalks(): Promise<{
   completed: number;
   failed: number;
 }> {
-  const notionPages = await notionApprovedReportPages();
-  const templateApproved = await isAlimtalkTemplateApproved(ALIMTALK_TEMPLATES.private_lesson_report.code);
   let checked = 0;
-  let queued = 0;
+  const queued = 0;
   let skipped = 0;
   let completed = 0;
   let failed = 0;
 
-  for (const page of notionPages) {
+  const jobSnap = await db
+    .collection("privateLessonChartNotionSyncJobs")
+    .where("status", "in", ["pending", "retry"])
+    .limit(100)
+    .get();
+
+  for (const doc of jobSnap.docs) {
     checked += 1;
-    const result = await enqueuePrivateLessonReportForNotionPage(page, templateApproved);
-    if (result === "queued") queued += 1;
-    else if (result === "completed") completed += 1;
+    const job = doc.data();
+    const result = await syncPrivateLessonChartNotionJob(doc.id, job).catch((err) => {
+      logger.warn("syncPrivateLessonChartNotionJob failed", {
+        jobId: doc.id,
+        recordId: job.recordId,
+        message: errorMessage(err),
+      });
+      return "failed" as const;
+    });
+    if (result === "synced") completed += 1;
     else if (result === "failed") failed += 1;
     else skipped += 1;
   }
 
-  logger.info("enqueueApprovedPrivateLessonReportAlimtalks completed", {
+  logger.info("sync sent private lesson report statuses completed", {
     checked,
     queued,
     skipped,
@@ -553,69 +561,17 @@ export async function enqueueApprovedPrivateLessonReportAlimtalks(): Promise<{
 async function handleNotionPrivateLessonReportEvent(body: any): Promise<{ status: string }> {
   const eventId = String(body.id || "");
   if (eventId && !(await claimNotionWebhookEvent(eventId, body))) return { status: "duplicate" };
-  if (String(body.type || "") !== "page.properties_updated") return { status: "ignored_type" };
-
-  const pageId = String(body.entity?.id || "");
-  if (!pageId) return { status: "missing_page" };
-  const updatedProperties = Array.isArray(body.data?.updated_properties)
-    ? body.data.updated_properties.map(String)
-    : [];
-  if (
-    updatedProperties.length &&
-    !updatedProperties.some((name: string) => ["발송", "발송상태", "회원 리포트"].includes(name))
-  ) {
-    return { status: "ignored_property" };
-  }
-
-  const page = await notionRequest(`pages/${pageId}`, "GET");
-  if (!isPrivateSessionRecordPage(page)) return { status: "ignored_page" };
-  const templateApproved = await isAlimtalkTemplateApproved(ALIMTALK_TEMPLATES.private_lesson_report.code);
-  const result = await enqueuePrivateLessonReportForNotionPage(page, templateApproved);
   if (eventId) {
     await db.collection("notionWebhookEvents").doc(eventId).set(
       {
-        status: result,
-        pageId,
+        status: "deprecated",
+        pageId: String(body.entity?.id || ""),
         updatedAt: nowTimestamp(),
       },
       { merge: true },
     );
   }
-  return { status: result };
-}
-
-async function enqueuePrivateLessonReportForNotionPage(
-  page: any,
-  templateApproved: boolean,
-): Promise<"queued" | "completed" | "failed" | "skipped" | "already_queued" | "template_pending"> {
-  if (!notionCheckbox(page.properties?.["발송"])) return "skipped";
-  if (notionSelectName(page.properties?.["발송상태"]) !== "대기") return "skipped";
-  if (!notionUrl(page.properties?.["회원 리포트"])) return "skipped";
-
-  const recordId = notionRichText(page.properties?.["Chart Request ID"]);
-  const pageId = String(page.id || "");
-  if (!pageId) return "skipped";
-  const record =
-    (recordId ? (await refs.privateLessonChartRecord(recordId).get()).data() : null) ||
-    (await privateLessonChartRecordByNotionPageId(pageId));
-  if (!record) {
-    logger.warn("notion private report: record not found", { pageId, recordId });
-    return "skipped";
-  }
-  if (
-    !record.postRecord ||
-    record.gptStatus !== "draft_created" ||
-    !(record.publicReportCanonicalUrl || record.publicReportUrl) ||
-    !record.memberPhone
-  ) {
-    return "skipped";
-  }
-  return enqueuePrivateLessonReportForRecord(
-    record,
-    templateApproved,
-    String(page.id || ""),
-    "system:notion-private-report",
-  );
+  return { status: "deprecated" };
 }
 
 async function approvePrivateLessonReportFromChart(chartRequest: PrivateLessonChartRequestDoc): Promise<{
@@ -656,8 +612,7 @@ async function approvePrivateLessonReportFromChart(chartRequest: PrivateLessonCh
           : result === "failed"
             ? "failed"
             : "approved";
-  await refs.privateLessonChartRecord(record.recordId).set(
-    {
+  const recordPatch = {
       gptStatus: status === "sent" ? "published" : "approved",
       publicReportApproval: {
         status,
@@ -667,9 +622,13 @@ async function approvePrivateLessonReportFromChart(chartRequest: PrivateLessonCh
         lastError: result === "template_pending" ? "프라이빗 회원 리포트 템플릿 승인 대기" : null,
       },
       updatedAt: nowTimestamp(),
-    },
-    { merge: true },
+    } as Partial<PrivateLessonChartRecordDoc>;
+  await refs.privateLessonChartRecord(record.recordId).set(recordPatch, { merge: true });
+  const notionSync = await syncPrivateLessonChartRecordToNotion(
+    { ...record, ...recordPatch } as PrivateLessonChartRecordDoc,
+    chartRequest,
   );
+  await refs.privateLessonChartRecord(record.recordId).set({ notionSync, updatedAt: nowTimestamp() }, { merge: true });
   return {
     recordId: record.recordId,
     reportStatus: status,
@@ -682,6 +641,63 @@ async function approvePrivateLessonReportFromChart(chartRequest: PrivateLessonCh
           ? "이미 발송 완료된 리포트입니다."
           : "승인되었습니다. 템플릿 상태 확인 후 발송됩니다.",
   };
+}
+
+async function syncPrivateLessonChartNotionJob(
+  jobId: string,
+  job: FirebaseFirestore.DocumentData,
+): Promise<"synced" | "skipped" | "failed"> {
+  const recordId = String(job.recordId || "").trim();
+  if (!recordId) {
+    await markPrivateLessonChartNotionJobSkipped(jobId, "recordId 없음");
+    return "skipped";
+  }
+  const record = (await refs.privateLessonChartRecord(recordId).get()).data();
+  if (!record) {
+    await markPrivateLessonChartNotionJobSkipped(jobId, "회차 기록 없음");
+    return "skipped";
+  }
+  const chartRequest = (await refs.privateLessonChartRequest(record.requestId || record.recordId).get()).data();
+  if (!chartRequest) {
+    await markPrivateLessonChartNotionJobSkipped(jobId, "차트 요청 없음");
+    return "skipped";
+  }
+  const recordPatch = {
+    ...(job.reason === "private_report_sent" ? { gptStatus: "published" as const } : {}),
+    publicReportApproval: {
+      ...(record.publicReportApproval || {}),
+      ...(job.reason === "private_report_sent" ? { status: "sent" as const } : {}),
+      ...(job.candidateId ? { candidateId: String(job.candidateId) } : {}),
+      lastError: null,
+    },
+    updatedAt: nowTimestamp(),
+  };
+  const nextRecord = { ...record, ...recordPatch } as PrivateLessonChartRecordDoc;
+  await refs.privateLessonChartRecord(record.recordId).set(recordPatch, { merge: true });
+  const notionSync = await syncPrivateLessonChartRecordToNotion(nextRecord, chartRequest);
+  await refs.privateLessonChartRecord(record.recordId).set({ notionSync, updatedAt: nowTimestamp() }, { merge: true });
+  await db.collection("privateLessonChartNotionSyncJobs").doc(jobId).set(
+    {
+      status: notionSync.status === "synced" ? "completed" : "retry",
+      notionStatus: notionSync.status,
+      notionError: notionSync.error || null,
+      updatedAt: nowTimestamp(),
+      completedAt: notionSync.status === "synced" ? nowTimestamp() : null,
+    },
+    { merge: true },
+  );
+  return notionSync.status === "synced" ? "synced" : "failed";
+}
+
+async function markPrivateLessonChartNotionJobSkipped(jobId: string, reason: string): Promise<void> {
+  await db.collection("privateLessonChartNotionSyncJobs").doc(jobId).set(
+    {
+      status: "skipped",
+      lastError: reason,
+      updatedAt: nowTimestamp(),
+    },
+    { merge: true },
+  );
 }
 
 async function convertPrivateLessonReportFromChart(chartRequest: PrivateLessonChartRequestDoc): Promise<{
@@ -740,26 +756,11 @@ async function enqueuePrivateLessonReportForRecord(
       { merge: true },
     );
   }
-  if (resolved.shouldUpdateNotion && notionPageId) {
-    await notionRequest(`pages/${notionPageId}`, "PATCH", {
-      properties: {
-        "회원 리포트": { url: resolved.publicReportUrl },
-      },
-    }).catch((err) => {
-      logger.warn("session notion report link patch failed", {
-        pageId: notionPageId,
-        memberName: record.memberName,
-        recordId: record.recordId,
-        error: errorMessage(err),
-      });
-    });
-  }
   const reportTargetUrl = resolved.reportTargetUrl;
 
   const candidateId = `private_lesson_report_${record.recordId}`;
   const existing = (await refs.alimtalkCandidate(candidateId).get()).data();
   if (existing?.status === "sent") {
-    if (notionPageId) await updatePrivateLessonReportNotionStatus(notionPageId, "완료");
     return "completed";
   }
   if (existing?.status === "queued" || existing?.status === "processing") return "already_queued";
@@ -828,20 +829,6 @@ async function claimNotionWebhookEvent(eventId: string, body: any): Promise<bool
     });
     return true;
   });
-}
-
-async function notionApprovedReportPages(): Promise<any[]> {
-  const result = await notionRequest(`databases/${NOTION_SESSION_RECORDS_DATABASE_ID}/query`, "POST", {
-    filter: {
-      and: [
-        { property: "발송", checkbox: { equals: true } },
-        { property: "발송상태", select: { equals: "대기" } },
-        { property: "회원 리포트", url: { is_not_empty: true } },
-      ],
-    },
-    page_size: 50,
-  });
-  return Array.isArray(result.results) ? result.results : [];
 }
 
 async function privateLessonChartRecordByNotionPageId(pageId: string): Promise<PrivateLessonChartRecordDoc | null> {
@@ -978,15 +965,6 @@ function isShortPrivateReportUrl(url: string): boolean {
   return /^https:\/\/in\.archivepilates\.com\/s\/[A-Za-z0-9_-]+\/?$/.test(url || "");
 }
 
-async function updatePrivateLessonReportNotionStatus(pageId: string, status: string): Promise<void> {
-  if (!pageId) return;
-  await notionRequest(`pages/${pageId}`, "PATCH", {
-    properties: {
-      발송상태: notionSelect(status),
-    },
-  });
-}
-
 async function verifyNotionWebhookSignature(request: any): Promise<boolean> {
   const signature = String(request.get?.("X-Notion-Signature") || request.headers?.["x-notion-signature"] || "");
   if (!signature.startsWith("sha256=")) return false;
@@ -1001,11 +979,6 @@ async function verifyNotionWebhookSignature(request: any): Promise<boolean> {
   const expected = `sha256=${createHmac("sha256", verificationToken).update(rawBody).digest("hex")}`;
   if (signature.length !== expected.length) return false;
   return timingSafeEqual(Buffer.from(signature), Buffer.from(expected));
-}
-
-function isPrivateSessionRecordPage(page: any): boolean {
-  const parentId = String(page?.parent?.database_id || page?.parent?.data_source_id || "");
-  return normalizeNotionId(parentId) === normalizeNotionId(NOTION_SESSION_RECORDS_DATABASE_ID);
 }
 
 function normalizeNotionId(value: string): string {
@@ -1582,64 +1555,15 @@ async function syncPrivateLessonChartRecordToNotion(
         { merge: true },
       );
     }
-    const reportUrl = reportResolution.publicReportUrl;
-    const isCancelled = chartRequest.status === "cancelled";
-    const titleProperties = await notionSessionRecordTitleProperties(notionSessionTitle(record, chartRequest));
-    const properties = compactObject({
-      ...titleProperties,
-      "Chart Request ID": notionText(record.recordId || chartRequest.requestId),
-      "Session Number": notionNumber(record.sessionNumber || chartRequest.sessionNumber),
-      Date: chartRequest.lessonDate ? notionDate(chartRequest.lessonDate) : undefined,
-      Instructor: notionSelect(record.staffName || chartRequest.staffName || ""),
-      "Session Status": notionSelect(privateChartStatusText(chartRequest)),
-      "Pre Status": notionSelect(chartRequest.preStatus || ""),
-      "Post Status": notionSelect(chartRequest.postStatus || ""),
-      "GPT Status": notionSelect(record.gptStatus || ""),
-      Goal: notionMultiSelect(textArray(record.prePlan?.goals || chartRequest.intakeSummary?.goal || [])),
-      "Focus Area": notionMultiSelect(textArray(record.prePlan?.focusAreas || chartRequest.intakeSummary?.focusArea || [])),
-      "Equipment Used": notionMultiSelect(textArray(record.postRecord?.equipment || record.prePlan?.equipment || [])),
-      Condition: notionSelect(firstText(record.postRecord?.condition)),
-      "Pain 여부": notionSelect(firstText(record.postRecord?.painChange)),
-      "Next Session Memo": notionText(String(record.postRecord?.nextMemo || "")),
-      Notes: notionText(chartNotes(record, chartRequest)),
-      "GPT Draft Summary": notionText(record.gptDraftSummary || ""),
-      "GPT Draft Next Direction": notionText(record.gptDraftNextDirection || ""),
-      "회원 리포트": !isCancelled && reportUrl ? { url: reportUrl } : undefined,
-      발송: { checkbox: false },
-      발송상태: notionSelect(isCancelled ? "취소" : reportUrl ? "대기" : ""),
-    });
     const content = notionChartChildren(record, chartRequest);
-    const existingPageId = record.notionSync?.pageId;
-    if (existingPageId) {
-      await notionRequest(`pages/${existingPageId}`, "PATCH", { properties });
-      await replaceGeneratedNotionPageContent(existingPageId, content);
-      const instructorPage = await syncInstructorMemberChartPage(
-        record,
-        chartRequest,
-        record.notionSync?.pageUrl || notionPageUrl(existingPageId),
-      );
-      return {
-        status: "synced",
-        pageId: existingPageId,
-        pageUrl: record.notionSync?.pageUrl || notionPageUrl(existingPageId),
-        instructorPageId: instructorPage?.pageId || record.notionSync?.instructorPageId,
-        instructorPageUrl: instructorPage?.pageUrl || record.notionSync?.instructorPageUrl,
-        syncedAt: new Date().toISOString(),
-      };
-    }
-    const page = await notionRequest("pages", "POST", {
-      parent: { database_id: NOTION_SESSION_RECORDS_DATABASE_ID },
-      properties,
-      children: content,
-    });
-    const pageUrl = String(page.url || notionPageUrl(String(page.id)));
-    const instructorPage = await syncInstructorMemberChartPage(record, chartRequest, pageUrl);
+    const instructorPage = await syncInstructorMemberChartPage(record, chartRequest, content);
+    if (!instructorPage) throw new Error("Notion 강사별 회원 차트 페이지를 찾거나 생성할 수 없습니다.");
     return {
       status: "synced",
-      pageId: String(page.id),
-      pageUrl,
-      instructorPageId: instructorPage?.pageId,
-      instructorPageUrl: instructorPage?.pageUrl,
+      pageId: instructorPage.pageId,
+      pageUrl: instructorPage.pageUrl,
+      instructorPageId: instructorPage.pageId,
+      instructorPageUrl: instructorPage.pageUrl,
       syncedAt: new Date().toISOString(),
     };
   } catch (err) {
@@ -1650,21 +1574,17 @@ async function syncPrivateLessonChartRecordToNotion(
 async function syncInstructorMemberChartPage(
   record: PrivateLessonChartRecordDoc,
   chartRequest: PrivateLessonChartRequestDoc,
-  sessionPageUrl: string,
+  content = notionInstructorChartChildren(record, chartRequest),
 ): Promise<{ pageId: string; pageUrl: string } | null> {
-  if (!sessionPageUrl) return null;
   const title = notionSessionTitle(record, chartRequest);
   if (record.notionSync?.instructorPageId) {
     await notionRequest(`pages/${record.notionSync.instructorPageId}`, "PATCH", {
       properties: notionTitle(title),
     });
-    await replaceGeneratedNotionPageContent(
-      record.notionSync.instructorPageId,
-      notionInstructorChartChildren(record, chartRequest),
-    );
+    await replaceGeneratedNotionPageContent(record.notionSync.instructorPageId, content);
     return { pageId: record.notionSync.instructorPageId, pageUrl: notionPageUrl(record.notionSync.instructorPageId) };
   }
-  const memberPageId = await findInstructorMemberPageId(record.staffName, record.memberName).catch((err) => {
+  const memberPageId = await ensureInstructorMemberPageId(record.staffName, record.memberName).catch((err) => {
     logger.warn("findInstructorMemberPageId failed", {
       staffName: record.staffName,
       memberName: record.memberName,
@@ -1673,20 +1593,38 @@ async function syncInstructorMemberChartPage(
     return "";
   });
   if (!memberPageId) return null;
-  const existingPageId = await findChildPageByExactTitle(memberPageId, title);
+  const existingPageId =
+    (await findChildPageByExactTitle(memberPageId, title)) ||
+    (await findChildPageBySessionTitlePrefix(memberPageId, notionSessionTitleCore(record, chartRequest)));
   if (existingPageId) {
-    await replaceGeneratedNotionPageContent(existingPageId, notionInstructorChartChildren(record, chartRequest));
+    await notionRequest(`pages/${existingPageId}`, "PATCH", { properties: notionTitle(title) });
+    await replaceGeneratedNotionPageContent(existingPageId, content);
     return { pageId: existingPageId, pageUrl: notionPageUrl(existingPageId) };
   }
   const page = await notionRequest("pages", "POST", {
     parent: { page_id: memberPageId },
     properties: notionTitle(title),
-    children: notionInstructorChartChildren(record, chartRequest),
+    children: content,
   });
   return {
     pageId: String(page.id || ""),
     pageUrl: String(page.url || notionPageUrl(String(page.id || ""))),
   };
+}
+
+async function ensureInstructorMemberPageId(staffName: string, memberName: string): Promise<string> {
+  const existing = await findInstructorMemberPageId(staffName, memberName);
+  if (existing) return existing;
+  const instructorPageId = NOTION_INSTRUCTOR_CHART_PAGE_IDS[staffName];
+  if (!instructorPageId) return "";
+  const page = await notionRequest("pages", "POST", {
+    parent: { page_id: instructorPageId },
+    properties: notionTitle(memberName),
+    children: [
+      callout("프라이빗 차트 자동화가 생성한 회원별 일반 페이지입니다. 회차별 차트는 이 페이지 하위에 생성됩니다."),
+    ],
+  });
+  return String(page.id || "");
 }
 
 async function findInstructorMemberPageId(staffName: string, memberName: string): Promise<string> {
@@ -1718,6 +1656,25 @@ async function findChildPageByExactTitle(parentPageId: string, title: string): P
   const children = await notionBlockChildren(parentPageId);
   const hit = children.find((child) => String(child.child_page?.title || "") === title);
   return hit?.id ? String(hit.id) : "";
+}
+
+async function findChildPageBySessionTitlePrefix(parentPageId: string, titleCore: string): Promise<string> {
+  const children = await notionBlockChildren(parentPageId);
+  const normalizedCore = normalizeSessionPageTitle(titleCore);
+  const hit = children.find((child) => {
+    const title = normalizeSessionPageTitle(String(child.child_page?.title || ""));
+    return title === normalizedCore || title.startsWith(normalizedCore);
+  });
+  return hit?.id ? String(hit.id) : "";
+}
+
+function normalizeSessionPageTitle(title: string): string {
+  return String(title || "")
+    .replace(/^\[[^\]]+\]\s*/g, "")
+    .replace(/\(자동화\)/g, "")
+    .replace(/\s*\(취소\)\s*$/g, "")
+    .replace(/\s+/g, " ")
+    .trim();
 }
 
 async function notionBlockChildren(blockId: string): Promise<any[]> {
@@ -2909,8 +2866,35 @@ function lessonTimeText(chartRequest: Pick<PrivateLessonChartRequestDoc, "lesson
 }
 
 function notionSessionTitle(record: PrivateLessonChartRecordDoc, chartRequest: PrivateLessonChartRequestDoc): string {
+  const stage = privateChartTitleStage(record, chartRequest);
   const suffix = chartRequest.status === "cancelled" ? " (취소)" : "";
-  return `${lessonTitleDate(chartRequest)} · ${record.memberName} ${record.sessionNumber}회차(자동화)${suffix}`;
+  return `[${stage}] ${notionSessionTitleCore(record, chartRequest)}${suffix}`;
+}
+
+function notionSessionTitleCore(record: PrivateLessonChartRecordDoc, chartRequest: PrivateLessonChartRequestDoc): string {
+  return `${lessonTitleDate(chartRequest)} · ${record.memberName} ${record.sessionNumber}회차`;
+}
+
+function privateChartTitleStage(
+  record: PrivateLessonChartRecordDoc,
+  chartRequest: PrivateLessonChartRequestDoc,
+): "작성대기" | "차트작성완료" | "리포트 생성완료" | "발송완료" | "취소" {
+  if (chartRequest.status === "cancelled") return "취소";
+  if (record.publicReportApproval?.status === "sent" || record.gptStatus === "published") return "발송완료";
+  if (
+    ["draft_created", "approved"].includes(record.gptStatus) ||
+    Boolean(record.publicReportUrl || record.publicReportCanonicalUrl)
+  ) {
+    return "리포트 생성완료";
+  }
+  if (
+    chartRequest.status === "completed" ||
+    (chartRequest.preStatus === "submitted" && chartRequest.postStatus === "submitted") ||
+    Boolean(record.prePlan && record.postRecord)
+  ) {
+    return "차트작성완료";
+  }
+  return "작성대기";
 }
 
 function privateChartStatusText(chartRequest: Pick<PrivateLessonChartRequestDoc, "status">): string {
@@ -2984,65 +2968,6 @@ function firstText(value: unknown): string {
 
 function notionTitle(value: string): Record<string, unknown> {
   return { title: [{ text: { content: value.slice(0, 2000) } }] };
-}
-
-async function notionSessionRecordTitleProperties(value: string): Promise<Record<string, unknown>> {
-  const propertyName = await notionSessionRecordTitleProperty();
-  return { [propertyName]: notionTitle(value) };
-}
-
-async function notionSessionRecordTitleProperty(): Promise<string> {
-  if (notionSessionRecordTitlePropertyName) return notionSessionRecordTitlePropertyName;
-  try {
-    const database = await notionRequest(`databases/${NOTION_SESSION_RECORDS_DATABASE_ID}`, "GET");
-    const hit = Object.entries(database?.properties || {}).find(([, property]: [string, any]) => property?.type === "title");
-    notionSessionRecordTitlePropertyName = String(hit?.[0] || "Name");
-  } catch (err) {
-    logger.warn("notionSessionRecordTitleProperty fallback", { message: errorMessage(err) });
-    notionSessionRecordTitlePropertyName = "Name";
-  }
-  return notionSessionRecordTitlePropertyName;
-}
-
-function notionText(value: string): Record<string, unknown> {
-  return { rich_text: value ? [{ text: { content: value.slice(0, 2000) } }] : [] };
-}
-
-function notionRichText(property: any): string {
-  const items = Array.isArray(property?.rich_text) ? property.rich_text : [];
-  return items
-    .map((item: any) => String(item?.plain_text || ""))
-    .join("")
-    .trim();
-}
-
-function notionCheckbox(property: any): boolean {
-  return Boolean(property?.checkbox);
-}
-
-function notionSelectName(property: any): string {
-  return String(property?.select?.name || "");
-}
-
-function notionUrl(property: any): string {
-  return String(property?.url || "");
-}
-
-function notionSelect(value: string): Record<string, unknown> | undefined {
-  return value ? { select: { name: value } } : undefined;
-}
-
-function notionMultiSelect(values: string[]): Record<string, unknown> {
-  return { multi_select: values.map((name) => ({ name })) };
-}
-
-function notionDate(value: string): Record<string, unknown> {
-  return { date: { start: value } };
-}
-
-function notionNumber(value: unknown): Record<string, unknown> | undefined {
-  const number = Number(value);
-  return Number.isFinite(number) ? { number } : undefined;
 }
 
 function compactObject(obj: Record<string, unknown>): Record<string, unknown> {

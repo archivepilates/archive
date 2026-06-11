@@ -37,18 +37,10 @@
 - StudioMate/Firestore 강사명은 직함 없이 `이초림`, `배민진`, `정은영`, `김기효`로 들어올 수 있어 자동화 매핑에 별칭을 함께 둔다.
 - `자동화 회차 차트 템플릿`은 `개인레슨 차트` 바로 아래에 둔다.
 - 운영 기록, DB, 웹훅, Gemini 리포트 생성 규칙은 `아카이브 운영 규칙 > ARCHIVE PILATES 프라이빗 회원 차트 시스템` 아래로 분리한다.
-- `ARCHIVE AI` Notion 연결은 `Private Session Records DB` 접근은 정상이다. 기존 강사별 회원 페이지에 자동 링크를 붙이려면 `개인레슨 차트` 루트 페이지도 `ARCHIVE AI` 연결에 공유되어야 한다.
-- `Private Session Records DB`에 자동화용 속성을 추가했다.
-  - `Chart Request ID`
-  - `Session Number`
-  - `Pre Status`
-  - `Post Status`
-- `GPT Status` (기존 속성명 유지, Gemini 생성 상태 표시)
-- `GPT Draft Summary` (기존 속성명 유지, Gemini 요약문 저장)
-- `GPT Draft Next Direction` (기존 속성명 유지, Gemini 다음 수업 방향 저장)
-- `회원 리포트`
-- `발송`
-- `발송상태`
+- 2026-06-11 이후 회차별 차트는 `Private Session Records DB`가 아니라 기존 강사별 회원 페이지 하위 일반 Notion 페이지로 생성한다.
+- 차트 원천, 상태, 승인, 발송 여부는 Firestore `privateLessonChartRecords`와 `alimtalkCandidates`가 담당한다.
+- Notion 페이지 제목에는 4단계 상태를 표시한다: `[작성대기]`, `[차트작성완료]`, `[리포트 생성완료]`, `[발송완료]`.
+- Notion DB 속성 `발송`, `발송상태`, `회원 리포트` 기반 승인 경로는 deprecated 처리한다.
 
 ## 알림톡 템플릿 초안
 
@@ -129,10 +121,9 @@ Template ID: `KA01TP260528081225871Fr92FW901Vo`
 
 - `privateLessonChartRecords`에 해당 `recordId` 회차 기록이 있음.
 - `postRecord` 제출 완료.
-- `gptStatus`가 `draft_created`.
+- `gptStatus`가 `draft_created` 또는 `approved`.
 - `publicReportUrl` 존재.
-- Notion `발송` 체크박스가 체크됨.
-- Notion `발송상태`가 `대기`.
+- 강사 차트 링크에서 `회원 알림톡 발송 승인`이 완료됨.
 - 회원 전화번호가 있음.
 - 같은 `recordId`로 성공 발송된 이력이 없음.
 
@@ -140,15 +131,11 @@ Template ID: `KA01TP260528081225871Fr92FW901Vo`
 
 - `private_lesson_report:{recordId}`
 
-Notion 웹훅:
+발송 승인:
 
-- Webhook URL: `https://in.archivepilates.com/api/notion/privateLessonReportWebhook`
-- 이벤트: `page.properties_updated`
-- 감지 속성: `발송`, `발송상태`, `회원 리포트`
-- 웹훅은 신호만 받고, Function이 Notion API로 페이지를 재조회해서 조건을 최종 확인한다.
-- 이벤트 ID는 `notionWebhookEvents/{eventId}`에 저장해 Notion 재전송 중복을 막는다.
-- 후보 ID는 `private_lesson_report_{recordId}`로 고정해 같은 회차 중복 발송을 막는다.
-- 누락 복구용 스케줄러는 10분 반복이 아니라 하루 3회만 재조회한다.
+- Notion 웹훅 승인 경로는 더 이상 사용하지 않는다.
+- 강사용 차트 링크의 `회원 알림톡 발송 승인` 버튼이 `private_lesson_report_{recordId}` 후보를 생성한다.
+- 실제 발송 성공 시 `processAlimtalkQueue`가 `privateLessonChartRecords/{recordId}.publicReportApproval.status = sent`로 반영하고, `privateLessonChartNotionSyncJobs/{recordId}`를 생성해 Notion 일반 페이지 제목을 `[발송완료]`로 동기화한다.
 
 ## 남은 운영 단계
 
