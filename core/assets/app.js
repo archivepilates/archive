@@ -252,10 +252,11 @@ async function initFirebase() {
   const config = window.KANGSAIN_FIREBASE_CONFIG;
   if (!config?.apiKey) throw new Error("Firebase 설정을 찾을 수 없습니다.");
 
-  const [{ initializeApp, getApps }, firestore, auth] = await Promise.all([
+  const [{ initializeApp, getApps }, firestore, auth, functions] = await Promise.all([
     import(`https://www.gstatic.com/firebasejs/${FIREBASE_APP_VERSION}/firebase-app.js`),
     import(`https://www.gstatic.com/firebasejs/${FIREBASE_APP_VERSION}/firebase-firestore.js`),
     import(`https://www.gstatic.com/firebasejs/${FIREBASE_APP_VERSION}/firebase-auth.js`),
+    import(`https://www.gstatic.com/firebasejs/${FIREBASE_APP_VERSION}/firebase-functions.js`),
   ]);
 
   const app = getApps().length ? getApps()[0] : initializeApp(config);
@@ -263,6 +264,8 @@ async function initFirebase() {
     app,
     db: firestore.getFirestore(app),
     authClient: auth.getAuth(app),
+    functionsClient: functions.getFunctions(app, config.functionsRegion || "asia-northeast3"),
+    httpsCallable: functions.httpsCallable,
     auth,
     ...firestore,
   };
@@ -1003,6 +1006,72 @@ function renderMessages(candidates, sends) {
         `,
       )
       .join("");
+  }
+}
+
+function setPricingInquiryStatus(message, tone = "") {
+  const element = qs("pricingInquiryStatus");
+  if (!element) return;
+  element.textContent = message;
+  element.className = `form-status ${tone}`.trim();
+}
+
+async function handlePricingInquiryAlimtalkSubmit(event) {
+  event.preventDefault();
+  const phone = normalizePhone(qs("pricingInquiryPhone")?.value || "");
+  const memberName = String(qs("pricingInquiryName")?.value || "").trim();
+  const note = String(qs("pricingInquiryNote")?.value || "").trim();
+  const button = qs("pricingInquirySendButton");
+  if (!/^010\d{8}$/.test(phone)) {
+    setPricingInquiryStatus("휴대폰 번호를 010으로 시작하는 11자리로 입력하세요.", "danger");
+    return;
+  }
+  if (button) {
+    button.disabled = true;
+    button.textContent = "발송 확인 중";
+  }
+  setPricingInquiryStatus("템플릿 승인, 중복 이력, 전화번호를 확인하고 있습니다.", "warn");
+  try {
+    const runtime = await initFirebase();
+    const user = await waitForAuth(runtime);
+    if (!user) {
+      showLoginGate("수강료 안내 발송은 운영자 로그인이 필요합니다.");
+      setPricingInquiryStatus("운영자 로그인 후 다시 시도하세요.", "danger");
+      return;
+    }
+    const sendPricingInquiry = runtime.httpsCallable(runtime.functionsClient, "operatorSendPricingInquiryAlimtalk");
+    const result = await sendPricingInquiry({ phone, memberName, note });
+    const data = result?.data || {};
+    const status = String(data.status || "");
+    const message = String(data.message || "");
+    if (status === "sent") {
+      setPricingInquiryStatus("수강료 안내 알림톡 발송 완료.", "good");
+      qs("pricingInquiryPhone").value = "";
+      qs("pricingInquiryName").value = "";
+      qs("pricingInquiryNote").value = "";
+      await refresh();
+      return;
+    }
+    if (status === "template_pending") {
+      setPricingInquiryStatus(`SOLAPI 템플릿 승인 대기 상태입니다. 승인 후 다시 발송하세요. ${message}`, "warn");
+      await refresh();
+      return;
+    }
+    if (status === "skipped") {
+      setPricingInquiryStatus(message || "중복 발송 차단으로 실제 발송하지 않았습니다.", "warn");
+      await refresh();
+      return;
+    }
+    setPricingInquiryStatus(message || "수강료 안내 발송을 완료하지 못했습니다.", "danger");
+    await refresh();
+  } catch (error) {
+    if (isPermissionDenied(error)) showLoginGate("수강료 안내 발송은 운영자 권한이 필요합니다.");
+    setPricingInquiryStatus(error?.message || "수강료 안내 발송 중 오류가 발생했습니다.", "danger");
+  } finally {
+    if (button) {
+      button.disabled = false;
+      button.textContent = "수강료 안내 발송";
+    }
   }
 }
 
@@ -2051,6 +2120,7 @@ async function refresh() {
 enhanceNav();
 activateNav();
 qs("refreshButton")?.addEventListener("click", refresh);
+qs("pricingInquiryForm")?.addEventListener("submit", handlePricingInquiryAlimtalkSubmit);
 qs("businessMonthSelect")?.addEventListener("change", (event) => renderBusinessMonth(event.target.value));
 qs("memberSearchInput")?.addEventListener("input", (event) => {
   memberSearchTerm = event.target.value.trim();
