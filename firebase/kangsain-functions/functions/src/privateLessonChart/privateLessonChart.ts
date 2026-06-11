@@ -1175,22 +1175,7 @@ async function ensureChartRequestForBooking(
   const baseRecord = await upsertChartRecordBase(doc);
   const notionSync = await syncPrivateLessonChartRecordToNotion(baseRecord, doc);
   await refs.privateLessonChartRecord(requestId).set({ notionSync, updatedAt: nowTimestamp() }, { merge: true });
-  const mediaUploadUrl = notionSync.instructorPageUrl || notionSync.pageUrl;
-  if (mediaUploadUrl) {
-    const mediaUploadShort = await ensureShortLink({
-      type: "private_chart",
-      targetUrl: mediaUploadUrl,
-      sourceId: `${requestId}_media`,
-    });
-    await refs.privateLessonChartRequest(requestId).set(
-      {
-        mediaUploadUrl,
-        mediaUploadShortUrl: mediaUploadShort.shortUrl,
-        updatedAt: nowTimestamp(),
-      },
-      { merge: true },
-    );
-  }
+  await ensureMediaUploadLinkForRequest(doc, notionSync);
   return { requestId, created: true };
 }
 
@@ -1241,11 +1226,13 @@ async function reconcileExistingChartRequestForBooking(
     if (recordChanged) {
       await refs.privateLessonChartRecord(requestId).set(recordPatch, { merge: true });
     }
-    if (changed || recordChanged || !record.notionSync?.pageUrl || !record.notionSync?.instructorPageUrl) {
+    const needsMediaUploadLink = !existing.mediaUploadShortUrl && Boolean(record.notionSync?.instructorPageUrl || record.notionSync?.pageUrl);
+    if (changed || recordChanged || needsMediaUploadLink || !record.notionSync?.pageUrl || !record.notionSync?.instructorPageUrl) {
       const nextRecord = { ...record, ...recordPatch } as PrivateLessonChartRecordDoc;
       const nextRequest = { ...existing, ...patch } as PrivateLessonChartRequestDoc;
       const notionSync = await syncPrivateLessonChartRecordToNotion(nextRecord, nextRequest);
       await refs.privateLessonChartRecord(requestId).set({ notionSync, updatedAt: nowTimestamp() }, { merge: true });
+      await ensureMediaUploadLinkForRequest(nextRequest, notionSync);
       notionSynced = notionSync.status === "synced";
     }
     return { requestId, created: false, updated: changed || recordChanged, notionSynced };
@@ -1255,7 +1242,30 @@ async function reconcileExistingChartRequestForBooking(
   const baseRecord = await upsertChartRecordBase(nextRequest);
   const notionSync = await syncPrivateLessonChartRecordToNotion(baseRecord, nextRequest);
   await refs.privateLessonChartRecord(requestId).set({ notionSync, updatedAt: nowTimestamp() }, { merge: true });
+  await ensureMediaUploadLinkForRequest(nextRequest, notionSync);
   return { requestId, created: false, updated: true, notionSynced: notionSync.status === "synced" };
+}
+
+async function ensureMediaUploadLinkForRequest(
+  request: Pick<PrivateLessonChartRequestDoc, "requestId" | "mediaUploadShortUrl">,
+  notionSync: NonNullable<PrivateLessonChartRecordDoc["notionSync"]>,
+): Promise<void> {
+  if (request.mediaUploadShortUrl) return;
+  const mediaUploadUrl = notionSync.instructorPageUrl || notionSync.pageUrl;
+  if (!mediaUploadUrl) return;
+  const mediaUploadShort = await ensureShortLink({
+    type: "private_chart",
+    targetUrl: mediaUploadUrl,
+    sourceId: `${request.requestId}_media`,
+  });
+  await refs.privateLessonChartRequest(request.requestId).set(
+    {
+      mediaUploadUrl,
+      mediaUploadShortUrl: mediaUploadShort.shortUrl,
+      updatedAt: nowTimestamp(),
+    },
+    { merge: true },
+  );
 }
 
 async function reconcilePrivateSessionOrdersForMembers(memberIds: Set<string>): Promise<{
@@ -1367,6 +1377,9 @@ async function submitPrivateLessonChart(
   mode: PrivateLessonChartMode,
   answers: ChartAnswerMap,
 ): Promise<{ requestId: string; recordId: string; mode: PrivateLessonChartMode; notionStatus: string }> {
+  if (chartRequest.status === "cancelled") {
+    throw new Error("취소되었거나 시간 변경된 수업입니다. 최신 수업 링크를 다시 확인해 주세요.");
+  }
   const recordRef = refs.privateLessonChartRecord(chartRequest.requestId);
   const snap = await recordRef.get();
   const base = snap.data() || (await upsertChartRecordBase(chartRequest));
@@ -1574,6 +1587,23 @@ async function syncPrivateLessonChartRecordToNotion(
     const titleProperties = await notionSessionRecordTitleProperties(notionSessionTitle(record, chartRequest));
     const properties = compactObject({
       ...titleProperties,
+      "Chart Request ID": notionText(record.recordId || chartRequest.requestId),
+      "Session Number": notionNumber(record.sessionNumber || chartRequest.sessionNumber),
+      Date: chartRequest.lessonDate ? notionDate(chartRequest.lessonDate) : undefined,
+      Instructor: notionSelect(record.staffName || chartRequest.staffName || ""),
+      "Session Status": notionSelect(privateChartStatusText(chartRequest)),
+      "Pre Status": notionSelect(chartRequest.preStatus || ""),
+      "Post Status": notionSelect(chartRequest.postStatus || ""),
+      "GPT Status": notionSelect(record.gptStatus || ""),
+      Goal: notionMultiSelect(textArray(record.prePlan?.goals || chartRequest.intakeSummary?.goal || [])),
+      "Focus Area": notionMultiSelect(textArray(record.prePlan?.focusAreas || chartRequest.intakeSummary?.focusArea || [])),
+      "Equipment Used": notionMultiSelect(textArray(record.postRecord?.equipment || record.prePlan?.equipment || [])),
+      Condition: notionSelect(firstText(record.postRecord?.condition)),
+      "Pain 여부": notionSelect(firstText(record.postRecord?.painChange)),
+      "Next Session Memo": notionText(String(record.postRecord?.nextMemo || "")),
+      Notes: notionText(chartNotes(record, chartRequest)),
+      "GPT Draft Summary": notionText(record.gptDraftSummary || ""),
+      "GPT Draft Next Direction": notionText(record.gptDraftNextDirection || ""),
       "회원 리포트": !isCancelled && reportUrl ? { url: reportUrl } : undefined,
       발송: { checkbox: false },
       발송상태: notionSelect(isCancelled ? "취소" : reportUrl ? "대기" : ""),
@@ -1582,7 +1612,7 @@ async function syncPrivateLessonChartRecordToNotion(
     const existingPageId = record.notionSync?.pageId;
     if (existingPageId) {
       await notionRequest(`pages/${existingPageId}`, "PATCH", { properties });
-      await appendPageContent(existingPageId, notionUpdateChildren(record, chartRequest));
+      await replaceGeneratedNotionPageContent(existingPageId, content);
       const instructorPage = await syncInstructorMemberChartPage(
         record,
         chartRequest,
@@ -1628,7 +1658,10 @@ async function syncInstructorMemberChartPage(
     await notionRequest(`pages/${record.notionSync.instructorPageId}`, "PATCH", {
       properties: notionTitle(title),
     });
-    await appendPageContent(record.notionSync.instructorPageId, notionInstructorUpdateChildren(record, chartRequest));
+    await replaceGeneratedNotionPageContent(
+      record.notionSync.instructorPageId,
+      notionInstructorChartChildren(record, chartRequest),
+    );
     return { pageId: record.notionSync.instructorPageId, pageUrl: notionPageUrl(record.notionSync.instructorPageId) };
   }
   const memberPageId = await findInstructorMemberPageId(record.staffName, record.memberName).catch((err) => {
@@ -1642,7 +1675,7 @@ async function syncInstructorMemberChartPage(
   if (!memberPageId) return null;
   const existingPageId = await findChildPageByExactTitle(memberPageId, title);
   if (existingPageId) {
-    await appendPageContent(existingPageId, notionInstructorUpdateChildren(record, chartRequest));
+    await replaceGeneratedNotionPageContent(existingPageId, notionInstructorChartChildren(record, chartRequest));
     return { pageId: existingPageId, pageUrl: notionPageUrl(existingPageId) };
   }
   const page = await notionRequest("pages", "POST", {
@@ -1717,6 +1750,38 @@ async function appendPageContent(pageId: string, children: Record<string, unknow
   await notionRequest(`blocks/${pageId}/children`, "PATCH", { children });
 }
 
+async function replaceGeneratedNotionPageContent(pageId: string, children: Record<string, unknown>[]): Promise<void> {
+  const existing = await notionBlockChildren(pageId);
+  for (const block of existing) {
+    if (!isPreservedNotionBlock(block)) {
+      await archiveNotionBlock(String(block.id || ""));
+    }
+  }
+  await appendPageContent(pageId, children);
+}
+
+function isPreservedNotionBlock(block: any): boolean {
+  const type = String(block?.type || "");
+  return [
+    "image",
+    "video",
+    "file",
+    "pdf",
+    "audio",
+    "child_page",
+    "child_database",
+    "table",
+    "table_row",
+    "column_list",
+    "column",
+  ].includes(type);
+}
+
+async function archiveNotionBlock(blockId: string): Promise<void> {
+  if (!blockId) return;
+  await notionRequest(`blocks/${blockId}`, "PATCH", { archived: true });
+}
+
 function notionPageUrl(pageId: string): string {
   return `https://www.notion.so/${pageId.replaceAll("-", "")}`;
 }
@@ -1788,7 +1853,43 @@ async function readChartRequest(requestId: string, token: string): Promise<Priva
   const chartRequest = snap.data();
   if (!chartRequest || chartRequest.accessTokenHash !== sha256(token))
     throw new Error("차트 링크를 확인할 수 없습니다.");
-  return chartRequest;
+  return resolveActivePrivateChartRequest(chartRequest);
+}
+
+async function resolveActivePrivateChartRequest(
+  chartRequest: PrivateLessonChartRequestDoc,
+): Promise<PrivateLessonChartRequestDoc> {
+  if (!isSupersededPrivateChartRequest(chartRequest)) return chartRequest;
+
+  const booking = chartRequest.bookingId ? (await refs.booking(chartRequest.bookingId).get()).data() : null;
+  const replacementBookingId = String(booking?.sessionOrder?.supersededByBookingId || "");
+  const replacement = replacementBookingId
+    ? (await refs.privateLessonChartRequest(`plc_${replacementBookingId}`).get()).data()
+    : null;
+  if (replacement && isReplacementPrivateChartRequest(chartRequest, replacement)) return replacement;
+
+  const sameMember = await refs.privateLessonChartRequests().where("memberId", "==", chartRequest.memberId).limit(100).get();
+  const candidates = sameMember.docs
+    .map((doc) => doc.data())
+    .filter((candidate) => isReplacementPrivateChartRequest(chartRequest, candidate))
+    .sort((a, b) => (b.lessonStartAt?.toMillis?.() || 0) - (a.lessonStartAt?.toMillis?.() || 0));
+  return candidates[0] || chartRequest;
+}
+
+function isSupersededPrivateChartRequest(chartRequest: PrivateLessonChartRequestDoc): boolean {
+  return chartRequest.status === "cancelled" || chartRequest.cancellationReason === "rescheduled_duplicate";
+}
+
+function isReplacementPrivateChartRequest(
+  original: PrivateLessonChartRequestDoc,
+  candidate: PrivateLessonChartRequestDoc,
+): boolean {
+  if (!candidate || candidate.requestId === original.requestId || candidate.status === "cancelled") return false;
+  if (candidate.memberId !== original.memberId) return false;
+  if (candidate.staffId && original.staffId && candidate.staffId !== original.staffId) return false;
+  if (candidate.lessonDate !== original.lessonDate) return false;
+  if (candidate.sessionNumber !== original.sessionNumber) return false;
+  return true;
 }
 
 function publicChartRequest(
@@ -2494,48 +2595,56 @@ function notionChartChildren(
   record: PrivateLessonChartRecordDoc,
   chartRequest: PrivateLessonChartRequestDoc,
 ): Record<string, unknown>[] {
+  const cancelled = chartRequest.status === "cancelled";
   return [
     heading(2, `${record.memberName}님 개인레슨 차트`),
     paragraph(
       `회차: ${record.sessionNumber}회차 / 수업일: ${lessonTimeText(chartRequest)} / 담당: ${record.staffName || "미정"}`,
     ),
+    ...(cancelled ? [callout(`이 수업은 회차에서 제외되었습니다. 사유: ${privateChartCancellationText(chartRequest)}`)] : []),
     callout(
-      "사진·영상 업로드는 이 페이지 상단에서 바로 처리합니다. 아래 '업로드 위치'에 파일을 드래그하거나 + 버튼으로 사진/영상을 추가하세요.",
-    ),
-    heading(2, "사진·영상 업로드"),
-    paragraph(
-      "업로드 위치: 이 문장 바로 아래에 사진·영상을 추가합니다. 자동화는 이 영역의 기존 미디어 블록을 삭제하지 않습니다.",
+      "사진·영상은 수업 후 기록 설문 페이지에서 첨부합니다. 첨부 파일은 home@archivepilates.com Google Drive의 회원별/회차별 폴더에 저장되고 회원 리포트에 자동 포함됩니다.",
     ),
     divider(),
     heading(3, "오늘의 수업 목적"),
-    ...bullets(textArray(record.prePlan?.goals).length ? textArray(record.prePlan?.goals) : ["수업 전 계획 미작성"]),
+    ...cleanBullets(textArray(record.prePlan?.goals), "수업 전 계획 미작성"),
     divider(),
     heading(3, "사전설문 참고"),
-    ...bullets([
-      `목표: ${chartRequest.intakeSummary?.goal || "-"}`,
-      `신경 부위: ${chartRequest.intakeSummary?.focusArea || "-"}`,
-      `운동 수준: ${chartRequest.intakeSummary?.exerciseLevel || "-"}`,
-      chartRequest.intakeSummary?.painOrMedicalNote ? "주의 내용 확인 필요" : "특별 주의 내용 없음",
-    ]),
+    ...cleanBullets(
+      [
+        withLabel("목표", chartRequest.intakeSummary?.goal),
+        withLabel("신경 부위", chartRequest.intakeSummary?.focusArea),
+        withLabel("운동 수준", chartRequest.intakeSummary?.exerciseLevel),
+        chartRequest.intakeSummary?.painOrMedicalNote ? "주의 내용 확인 필요" : "",
+        !chartRequest.intakeSummary?.painOrMedicalNote && chartRequest.intakeSummary ? "특별 주의 내용 없음" : "",
+      ],
+      "연결된 사전설문 없음",
+    ),
     divider(),
     heading(3, "수업 전 계획"),
-    ...bullets([
-      `집중 부위: ${textArray(record.prePlan?.focusAreas).join(", ") || "-"}`,
-      `예정 기구: ${textArray(record.prePlan?.equipment).join(", ") || "-"}`,
-      `강도 계획: ${firstText(record.prePlan?.intensity) || "-"}`,
-      `주의점: ${textArray(record.prePlan?.cautions).join(", ") || "-"}`,
-      `메모: ${String(record.prePlan?.memo || "-")}`,
-    ]),
+    ...cleanBullets(
+      [
+        withLabel("집중 부위", textArray(record.prePlan?.focusAreas).join(", ")),
+        withLabel("예정 기구", textArray(record.prePlan?.equipment).join(", ")),
+        withLabel("강도 계획", firstText(record.prePlan?.intensity)),
+        withLabel("주의점", textArray(record.prePlan?.cautions).join(", ")),
+        withLabel("메모", record.prePlan?.memo),
+      ],
+      "수업 전 계획 미작성",
+    ),
     divider(),
     heading(3, "수업 후 기록"),
-    ...bullets([
-      `컨디션: ${firstText(record.postRecord?.condition) || "-"}`,
-      `통증 변화: ${firstText(record.postRecord?.painChange) || "-"}`,
-      `진행 부위: ${textArray(record.postRecord?.focusAreas).join(", ") || "-"}`,
-      `사용 기구: ${textArray(record.postRecord?.equipment).join(", ") || "-"}`,
-      `오늘 변화: ${textArray(record.postRecord?.changes).join(", ") || "-"}`,
-      `다음 수업 메모: ${String(record.postRecord?.nextMemo || "-")}`,
-    ]),
+    ...cleanBullets(
+      [
+        withLabel("컨디션", firstText(record.postRecord?.condition)),
+        withLabel("불편감 흐름", firstText(record.postRecord?.painChange)),
+        withLabel("진행 부위", textArray(record.postRecord?.focusAreas).join(", ")),
+        withLabel("사용 기구", textArray(record.postRecord?.equipment).join(", ")),
+        withLabel("오늘 변화", textArray(record.postRecord?.changes).join(", ")),
+        withLabel("다음 수업 메모", record.postRecord?.nextMemo),
+      ],
+      "수업 후 기록 미작성",
+    ),
     divider(),
     heading(3, "회원용 초안"),
     paragraph(record.gptDraftSummary || "Gemini 초안 생성 대기 중입니다."),
@@ -2648,111 +2757,48 @@ function escapeHtml(value: string): string {
   );
 }
 
-function notionUpdateChildren(
-  record: PrivateLessonChartRecordDoc,
-  chartRequest: PrivateLessonChartRequestDoc,
-): Record<string, unknown>[] {
-  return [
-    divider(),
-    heading(3, `자동화 업데이트 ${new Date().toLocaleString("ko-KR", { timeZone: "Asia/Seoul" })}`),
-    ...(chartRequest.status === "cancelled"
-      ? [callout(`이 수업은 예약 원본 기준 회차 제외로 보정했습니다. 사유: ${privateChartCancellationText(chartRequest)}`)]
-      : []),
-    paragraph(
-      `상태: ${privateChartStatusText(chartRequest)} / 회차: ${record.sessionNumber}회차 / 수업일: ${lessonTimeText(chartRequest)} / 담당: ${record.staffName || "미정"}`,
-    ),
-    heading(3, "수업 전 계획"),
-    ...bullets([
-      `목표: ${textArray(record.prePlan?.goals).join(", ") || "-"}`,
-      `집중 부위: ${textArray(record.prePlan?.focusAreas).join(", ") || "-"}`,
-      `예정 기구: ${textArray(record.prePlan?.equipment).join(", ") || "-"}`,
-      `메모: ${String(record.prePlan?.memo || "-")}`,
-    ]),
-    heading(3, "수업 후 기록"),
-    ...bullets([
-      `컨디션: ${firstText(record.postRecord?.condition) || "-"}`,
-      `통증 변화: ${firstText(record.postRecord?.painChange) || "-"}`,
-      `오늘 변화: ${textArray(record.postRecord?.changes).join(", ") || "-"}`,
-      `다음 수업 메모: ${String(record.postRecord?.nextMemo || "-")}`,
-    ]),
-    heading(3, "회원 리포트"),
-    paragraph(record.gptDraftSummary || "Gemini 초안 생성 대기 중입니다."),
-    ...(record.publicReportUrl ? [embed(record.publicReportUrl)] : []),
-  ];
-}
-
 function notionInstructorChartChildren(
   record: PrivateLessonChartRecordDoc,
   chartRequest: PrivateLessonChartRequestDoc,
 ): Record<string, unknown>[] {
   const reportButtonUrl = record.publicReportUrl || record.publicReportCanonicalUrl || "";
+  const cancelled = chartRequest.status === "cancelled";
   return [
     callout("이 페이지는 강사용 회차 기록입니다. 회원 발송은 수업 후 기록 링크의 리포트 화면에서 처리합니다."),
     heading(2, `${record.memberName}님 ${record.sessionNumber}회차`),
     paragraph(
       `상태: ${privateChartStatusText(chartRequest)} / 수업일: ${lessonTimeText(chartRequest)} / 담당: ${record.staffName || "미정"}`,
     ),
+    ...(cancelled ? [callout(`이 수업은 회차에서 제외되었습니다. 사유: ${privateChartCancellationText(chartRequest)}`)] : []),
     heading(2, "사진·영상 업로드"),
     paragraph("이 문장 아래에 수업 사진과 영상을 추가합니다."),
     divider(),
     heading(3, "수업 전 계획"),
-    ...bullets([
-      `목표: ${textArray(record.prePlan?.goals).join(", ") || "-"}`,
-      `집중 부위: ${textArray(record.prePlan?.focusAreas).join(", ") || "-"}`,
-      `예정 기구: ${textArray(record.prePlan?.equipment).join(", ") || "-"}`,
-      `강도 계획: ${firstText(record.prePlan?.intensity) || "-"}`,
-      `주의점: ${textArray(record.prePlan?.cautions).join(", ") || "-"}`,
-      `메모: ${String(record.prePlan?.memo || "-")}`,
-    ]),
+    ...cleanBullets(
+      [
+        withLabel("목표", textArray(record.prePlan?.goals).join(", ")),
+        withLabel("집중 부위", textArray(record.prePlan?.focusAreas).join(", ")),
+        withLabel("예정 기구", textArray(record.prePlan?.equipment).join(", ")),
+        withLabel("강도 계획", firstText(record.prePlan?.intensity)),
+        withLabel("주의점", textArray(record.prePlan?.cautions).join(", ")),
+        withLabel("메모", record.prePlan?.memo),
+      ],
+      "수업 전 계획 미작성",
+    ),
     divider(),
     heading(3, "수업 후 기록"),
-    ...bullets([
-      `컨디션: ${firstText(record.postRecord?.condition) || "-"}`,
-      `통증 변화: ${firstText(record.postRecord?.painChange) || "-"}`,
-      `진행 부위: ${textArray(record.postRecord?.focusAreas).join(", ") || "-"}`,
-      `사용 기구: ${textArray(record.postRecord?.equipment).join(", ") || "-"}`,
-      `오늘 변화: ${textArray(record.postRecord?.changes).join(", ") || "-"}`,
-      `다음 수업 메모: ${String(record.postRecord?.nextMemo || "-")}`,
-    ]),
-    divider(),
-    heading(3, "회원 리포트"),
-    paragraph(
-      record.publicReportUrl
-        ? "회원용 리포트가 생성되었습니다. 운영자가 검수 후 발송합니다."
-        : "회원용 리포트 생성 대기 중입니다.",
+    ...cleanBullets(
+      [
+        withLabel("컨디션", firstText(record.postRecord?.condition)),
+        withLabel("불편감 흐름", firstText(record.postRecord?.painChange)),
+        withLabel("진행 부위", textArray(record.postRecord?.focusAreas).join(", ")),
+        withLabel("사용 기구", textArray(record.postRecord?.equipment).join(", ")),
+        withLabel("오늘 변화", textArray(record.postRecord?.changes).join(", ")),
+        withLabel("다음 수업 메모", record.postRecord?.nextMemo),
+      ],
+      "수업 후 기록 미작성",
     ),
-    ...(reportButtonUrl ? [notionLinkButton("최종 회원 리포트 보기", reportButtonUrl)] : []),
-  ];
-}
-
-function notionInstructorUpdateChildren(
-  record: PrivateLessonChartRecordDoc,
-  chartRequest: PrivateLessonChartRequestDoc,
-): Record<string, unknown>[] {
-  const reportButtonUrl = record.publicReportUrl || record.publicReportCanonicalUrl || "";
-  return [
     divider(),
-    heading(3, `업데이트 ${new Date().toLocaleString("ko-KR", { timeZone: "Asia/Seoul" })}`),
-    ...(chartRequest.status === "cancelled"
-      ? [callout(`이 수업은 예약 원본 기준 회차 제외로 보정했습니다. 사유: ${privateChartCancellationText(chartRequest)}`)]
-      : []),
-    paragraph(
-      `상태: ${privateChartStatusText(chartRequest)} / 수업일: ${lessonTimeText(chartRequest)} / 담당: ${record.staffName || "미정"}`,
-    ),
-    heading(3, "수업 전 계획"),
-    ...bullets([
-      `목표: ${textArray(record.prePlan?.goals).join(", ") || "-"}`,
-      `집중 부위: ${textArray(record.prePlan?.focusAreas).join(", ") || "-"}`,
-      `예정 기구: ${textArray(record.prePlan?.equipment).join(", ") || "-"}`,
-      `메모: ${String(record.prePlan?.memo || "-")}`,
-    ]),
-    heading(3, "수업 후 기록"),
-    ...bullets([
-      `컨디션: ${firstText(record.postRecord?.condition) || "-"}`,
-      `통증 변화: ${firstText(record.postRecord?.painChange) || "-"}`,
-      `오늘 변화: ${textArray(record.postRecord?.changes).join(", ") || "-"}`,
-      `다음 수업 메모: ${String(record.postRecord?.nextMemo || "-")}`,
-    ]),
     heading(3, "회원 리포트"),
     paragraph(
       record.publicReportUrl
@@ -2863,8 +2909,8 @@ function lessonTimeText(chartRequest: Pick<PrivateLessonChartRequestDoc, "lesson
 }
 
 function notionSessionTitle(record: PrivateLessonChartRecordDoc, chartRequest: PrivateLessonChartRequestDoc): string {
-  const prefix = chartRequest.status === "cancelled" ? "취소 · " : "";
-  return `${prefix}${lessonTitleDate(chartRequest)} · ${record.memberName} ${record.sessionNumber}회차(자동화)`;
+  const suffix = chartRequest.status === "cancelled" ? " (취소)" : "";
+  return `${lessonTitleDate(chartRequest)} · ${record.memberName} ${record.sessionNumber}회차(자동화)${suffix}`;
 }
 
 function privateChartStatusText(chartRequest: Pick<PrivateLessonChartRequestDoc, "status">): string {
@@ -3055,6 +3101,16 @@ function bullets(values: string[]): Record<string, unknown>[] {
     type: "bulleted_list_item",
     bulleted_list_item: { rich_text: [{ type: "text", text: { content: String(value).slice(0, 2000) } }] },
   }));
+}
+
+function cleanBullets(values: Array<unknown>, emptyText = "기록 없음"): Record<string, unknown>[] {
+  const cleaned = values.map((value) => String(value || "").trim()).filter(Boolean);
+  return bullets(cleaned.length ? cleaned : [emptyText]);
+}
+
+function withLabel(label: string, value: unknown): string {
+  const text = Array.isArray(value) ? value.map(String).filter(Boolean).join(", ") : String(value || "").trim();
+  return text ? `${label}: ${text}` : "";
 }
 
 function divider(): Record<string, unknown> {
