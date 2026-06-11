@@ -1127,7 +1127,13 @@ function setPricingInquiryStatus(message, tone = "") {
 function pricingInquiryDisplayPhone(item) {
   const phone = normalizePhone(item.memberPhone || item.phone || item.inquiryPhone || "");
   if (!phone) return "전화번호 없음";
-  return `끝자리 ${phone.slice(-4)}`;
+  return formatPhoneNumber(phone);
+}
+
+function formatPhoneNumber(value) {
+  const phone = normalizePhone(value);
+  if (/^010\d{8}$/.test(phone)) return `${phone.slice(0, 3)}-${phone.slice(3, 7)}-${phone.slice(7)}`;
+  return phone || "전화번호 없음";
 }
 
 function pricingInquiryRecentTime(item) {
