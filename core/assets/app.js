@@ -948,8 +948,20 @@ function isFailureStatus(value) {
   return ["failed", "error", "critical", "blocked"].includes(String(value || "").toLowerCase());
 }
 
+function isClosedStatus(value) {
+  return ["resolved", "closed", "done", "completed", "success", "sent", "skipped", "excluded", "ignored"].includes(
+    String(value || "").toLowerCase(),
+  );
+}
+
 function isResolvedOperationalItem(item) {
-  return Boolean(item?.resolvedAt || item?.resolutionStatus === "resolved" || item?.resolved === true);
+  return Boolean(
+    item?.resolvedAt ||
+      item?.resolutionStatus === "resolved" ||
+      item?.resolved === true ||
+      isClosedStatus(item?.status) ||
+      isClosedStatus(item?.sendStatus),
+  );
 }
 
 function isPendingStatus(value) {
@@ -958,12 +970,58 @@ function isPendingStatus(value) {
   );
 }
 
+function communicationActionText(item) {
+  return [
+    item?.status,
+    item?.sendStatus,
+    item?.reason,
+    item?.skipReason,
+    item?.excludeReason,
+    item?.exclusionReason,
+    item?.dedupeReason,
+    item?.dedupePolicy,
+    item?.lastError,
+    item?.errorMessage,
+    item?.operatorAction,
+    item?.nextAction,
+    item?.templateName,
+    item?.templateCode,
+  ]
+    .filter(Boolean)
+    .join(" ")
+    .toLowerCase();
+}
+
+function isNonActionableCommunicationItem(item) {
+  if (isResolvedOperationalItem(item)) return true;
+  const text = communicationActionText(item);
+  return [
+    "skipped",
+    "excluded",
+    "duplicate",
+    "dedupe",
+    "중복",
+    "제외",
+    "차단",
+    "발송 제외",
+    "중복 발송 차단",
+    "운영자 제외",
+    "규칙 제외",
+    "이미 처리",
+    "대체",
+    "중지",
+    "템플릿 삭제",
+    "삭제된",
+    "레거시",
+  ].some((keyword) => text.includes(keyword));
+}
+
 function failedAlimtalkCandidates(items = state.alimtalkCandidates) {
-  return items.filter((item) => isFailureStatus(item.status) && !isResolvedOperationalItem(item));
+  return items.filter((item) => isFailureStatus(item.status) && !isNonActionableCommunicationItem(item));
 }
 
 function failedAlimtalkSends(items = state.alimtalkSends) {
-  return items.filter((item) => isFailureStatus(item.status || item.sendStatus) && !isResolvedOperationalItem(item));
+  return items.filter((item) => isFailureStatus(item.status || item.sendStatus) && !isNonActionableCommunicationItem(item));
 }
 
 function onsiteWelcomeProblems(items = state.onsiteWelcomeRequests) {
@@ -1040,7 +1098,7 @@ function renderMessages(candidates, sends) {
   const failedSends = failedAlimtalkSends(sends);
   const flowProblems = problemRequestRows();
   const totalFailures = failedCandidates.length + failedSends.length + flowProblems.length;
-  const pendingCandidates = candidates.filter((item) => isPendingStatus(item.status));
+  const pendingCandidates = candidates.filter((item) => isPendingStatus(item.status) && !isNonActionableCommunicationItem(item));
   setText("messagesCandidateCount", formatCount(candidates.length));
   setText("messagesSendCount", formatCount(sends.length));
   setText("messagesSentCount", formatCount(sentCandidates.length));
@@ -2108,7 +2166,7 @@ function failedAutomationItems() {
 }
 
 function pendingAlimtalkCandidates() {
-  return state.alimtalkCandidates.filter((item) => isPendingStatus(item.status) && !isResolvedOperationalItem(item));
+  return state.alimtalkCandidates.filter((item) => isPendingStatus(item.status) && !isNonActionableCommunicationItem(item));
 }
 
 function communicationProblemSummary() {
