@@ -346,8 +346,8 @@ h3 {
 
 .kpis {
   grid-template-columns: repeat(auto-fit, minmax(min(100%, 260px), 1fr));
-  grid-auto-rows: 156px;
-  align-items: start;
+  grid-auto-rows: minmax(156px, auto);
+  align-items: stretch;
   margin-bottom: 22px;
 }
 
@@ -476,14 +476,14 @@ a.panel {
   display: flex;
   flex-direction: column;
   align-items: flex-start;
+  height: 100%;
   min-height: 156px;
   padding: 20px;
 }
 
 .kpis > .metric {
-  align-self: start;
-  height: 156px;
-  min-height: 0;
+  align-self: stretch;
+  min-height: 156px;
 }
 
 .metric::before {
@@ -923,6 +923,66 @@ td span {
 
 .ops-card .status-row {
   box-shadow: none;
+}
+
+.diagnostic-panel {
+  margin-top: 18px;
+  background: rgba(255, 255, 255, 0.72);
+  box-shadow: var(--shadow-soft);
+}
+
+.diagnostic-panel summary {
+  display: flex;
+  position: relative;
+  min-height: 64px;
+  align-items: center;
+  justify-content: space-between;
+  gap: 12px;
+  padding: 16px 20px;
+  color: var(--muted);
+  cursor: pointer;
+  font-weight: 800;
+  list-style: none;
+}
+
+.diagnostic-panel summary::-webkit-details-marker {
+  display: none;
+}
+
+.diagnostic-panel summary::after {
+  content: "+";
+  display: inline-grid;
+  width: 28px;
+  height: 28px;
+  flex: 0 0 auto;
+  place-items: center;
+  border-radius: 999px;
+  background: var(--surface-strong);
+  color: var(--accent);
+  font-weight: 900;
+}
+
+.diagnostic-panel[open] summary::after {
+  content: "-";
+}
+
+.diagnostic-panel summary span,
+.diagnostic-panel summary small {
+  min-width: 0;
+}
+
+.diagnostic-panel summary small {
+  color: var(--soft);
+  font-size: 0.82rem;
+  font-weight: 700;
+}
+
+.diagnostic-panel .ops-board {
+  padding-top: 0;
+}
+
+.secondary-home-grid {
+  margin-top: 18px;
 }
 
 .profile-hero {
@@ -1780,6 +1840,18 @@ a.rank-row:hover,
 
   .rule-note {
     margin: 0 16px 16px;
+  }
+
+  .diagnostic-panel summary {
+    align-items: flex-start;
+    flex-direction: column;
+    padding-right: 56px;
+  }
+
+  .diagnostic-panel summary::after {
+    position: absolute;
+    top: 16px;
+    right: 16px;
   }
 
   .panel-header {

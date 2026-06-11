@@ -35,8 +35,8 @@
         <header class="topbar">
           <div class="title-block">
             <p class="eyebrow">OPERATOR CONSOLE · HOME</p>
-            <h1>ARCHIVE CORE 운영 요약</h1>
-            <p class="subtitle">오늘 봐야 할 자동화, 원본, 데이터 품질, 메시지 전환 상태를 한 화면에 모읍니다.</p>
+            <h1>오늘 처리할 운영 큐</h1>
+            <p class="subtitle">운영자가 직접 판단하거나 눌러야 하는 미해결 업무만 먼저 보여줍니다. 내부 진단과 누적 로그는 보조 화면으로 분리합니다.</p>
           </div>
           <div class="top-actions" aria-label="상태 확인">
             <div class="connection-card" aria-live="polite">
@@ -48,25 +48,25 @@
         </header>
 
         <section class="grid kpis" aria-label="운영 요약">
-          <a class="panel metric metric-link" href="./automation/">
-            <div class="metric-label">자동화 관제</div>
-            <div class="metric-value" id="laneStatus">준비</div>
-            <div class="metric-note" id="laneUpdated">workLanes 연결 전</div>
-          </a>
-          <a class="panel metric metric-link" href="./imports/">
-            <div class="metric-label">원본 Import</div>
-            <div class="metric-value" id="importCount">0</div>
-            <div class="metric-note">최근 sourceImports</div>
-          </a>
-          <a class="panel metric metric-link" href="./imports/">
-            <div class="metric-label">데이터 이슈</div>
-            <div class="metric-value" id="qualityCount">0</div>
-            <div class="metric-note">open/review 상태 우선</div>
-          </a>
           <a class="panel metric metric-link" href="./messages/">
-            <div class="metric-label">알림톡 전환</div>
-            <div class="metric-value">보호</div>
-            <div class="metric-note">기존 원천 유지</div>
+            <div class="metric-label">미해결 액션</div>
+            <div class="metric-value" id="homeActionTotal">0건</div>
+            <div class="metric-note" id="homeActionNote">운영자 확인 대기 없음</div>
+          </a>
+          <a class="panel metric metric-link" href="./members/">
+            <div class="metric-label">회원 응대</div>
+            <div class="metric-value" id="homeMemberCareTotal">0건</div>
+            <div class="metric-note" id="homeMemberCareNote">회원가입/수강료 흐름 정상권</div>
+          </a>
+          <a class="panel metric metric-link" href="./private/">
+            <div class="metric-label">프라이빗 진행</div>
+            <div class="metric-value" id="homePrivateTotal">0건</div>
+            <div class="metric-note" id="homePrivateNote">미제출/미발송 없음</div>
+          </a>
+          <a class="panel metric metric-link" href="./automation/">
+            <div class="metric-label">자동화 주의</div>
+            <div class="metric-value" id="homeAutomationTotal">정상권</div>
+            <div class="metric-note" id="homeAutomationNote">실패/중단 신호 낮음</div>
           </a>
         </section>
 
@@ -74,29 +74,29 @@
           <article class="panel">
             <div class="panel-header">
               <div>
-                <h2>오늘의 운영 판단</h2>
-                <p>먼저 볼 위험, 확인할 원본, 지켜야 할 경계를 한곳에 둡니다.</p>
+                <h2>오늘 처리할 일</h2>
+                <p>해결될 때까지 남겨야 하는 업무만 큐로 올립니다.</p>
               </div>
-              <span class="pill good">decision</span>
+              <span class="pill good">operator queue</span>
             </div>
             <div class="list" id="homeDecisionList">
-              <div class="empty-state">Firestore 연결 후 오늘의 판단 항목을 표시합니다.</div>
+              <div class="empty-state">Firestore 연결 후 미해결 운영 큐를 표시합니다.</div>
             </div>
           </article>
 
           <aside class="panel">
             <div class="panel-header">
               <div>
-                <h2>운영 흐름</h2>
-                <p>원본에서 의사결정까지의 기본 순서입니다.</p>
+                <h2>표시 기준</h2>
+                <p>홈에 올라오는 정보와 숨기는 정보를 분리합니다.</p>
               </div>
-              <span class="pill">flow</span>
+              <span class="pill">visibility rule</span>
             </div>
-            <div class="flow-list">
-              <div><strong>1. 원본 수집</strong><span>StudioMate Excel / 정산 원본 / Firebase 로그</span></div>
-              <div><strong>2. 품질 확인</strong><span>중복, 누락, name-only match, excel fallback 분리</span></div>
-              <div><strong>3. 운영 판단</strong><span>회원, 알림톡, 자동화, 경영 탭에서 상태 확인</span></div>
-              <div><strong>4. 외부 실행</strong><span>승인된 canonical source에서만 발송/쓰기 진행</span></div>
+            <div class="flow-list queue-principles">
+              <div><strong>보여줌</strong><span>발송 실패, 회원가입 후속 실패, 프라이빗 미제출/미발송처럼 운영자 액션이 필요한 항목</span></div>
+              <div><strong>남겨둠</strong><span>날짜가 바뀌어도 해결 전까지 사라지면 안 되는 실패·보류 업무</span></div>
+              <div><strong>숨김</strong><span>정상 정규화, 중복 차단, source import row 수 같은 내부 진단 로그</span></div>
+              <div><strong>상승</strong><span>자동 처리 실패 또는 같은 warning 반복 시 운영 큐로 올림</span></div>
             </div>
           </aside>
         </section>
@@ -154,7 +154,7 @@
 
         <section class="panel" aria-label="메뉴별 현황">
           <div class="panel-header">
-            <div><h2>운영 영역별 바로가기</h2><p>각 메뉴는 보고서가 아니라 운영자가 다음 판단을 내리는 작업판입니다.</p></div>
+            <div><h2>업무 영역</h2><p>각 메뉴는 누적 로그가 아니라 운영자가 실제 업무를 처리하는 작업판입니다.</p></div>
             <span class="pill">operator map</span>
           </div>
           <div class="ops-board">
@@ -163,10 +163,10 @@
               <strong id="homeMemberTotal">회원 데이터</strong>
               <p id="homeMemberNote">전체 회원 read-model 연결 상태를 확인합니다.</p>
             </a>
-            <a class="ops-card status-link" href="./imports/">
-              <div class="ops-card-header"><h3>원본/품질</h3><span class="pill warn">Imports</span></div>
-              <strong id="homeImportTotal">원본 데이터</strong>
-              <p id="homeImportNote">회원목록, 예약내역, 삭제 수업 import 상태를 봅니다.</p>
+            <a class="ops-card status-link" href="./private/">
+              <div class="ops-card-header"><h3>프라이빗</h3><span class="pill warn">Private</span></div>
+              <strong id="homePrivateCardTotal">프라이빗 진행</strong>
+              <p id="homePrivateCardNote">설문, 리포트, 발송 상태를 봅니다.</p>
             </a>
             <a class="ops-card status-link" href="./messages/">
               <div class="ops-card-header"><h3>알림톡</h3><span class="pill">Messages</span></div>
@@ -175,18 +175,42 @@
             </a>
             <a class="ops-card status-link" href="./automation/">
               <div class="ops-card-header"><h3>자동화</h3><span class="pill good">Automation</span></div>
-              <strong id="homeAutomationTotal">자동화</strong>
-              <p id="homeAutomationNote">자동화 실패/지연 여부를 먼저 확인합니다.</p>
+              <strong id="homeAutomationCardTotal">자동화</strong>
+              <p id="homeAutomationCardNote">자동화 실패/지연 여부를 먼저 확인합니다.</p>
             </a>
           </div>
         </section>
 
-        <section class="grid overview-grid">
+        <details class="panel diagnostic-panel">
+          <summary>
+            <span>시스템 진단 보기</span>
+            <small>원본 import, 데이터 품질, workLane 상태는 필요할 때만 펼칩니다.</small>
+          </summary>
+          <div class="ops-board">
+            <a class="ops-card status-link" href="./automation/">
+              <div class="ops-card-header"><h3>워크라인</h3><span class="pill">lane</span></div>
+              <strong id="laneStatus">준비</strong>
+              <p id="laneUpdated">workLanes 연결 전</p>
+            </a>
+            <a class="ops-card status-link" href="./imports/">
+              <div class="ops-card-header"><h3>최근 원본</h3><span class="pill">source</span></div>
+              <strong id="homeImportTotal">원본 데이터</strong>
+              <p id="homeImportNote">회원목록, 예약내역, 삭제 수업 import 상태를 봅니다.</p>
+            </a>
+            <a class="ops-card status-link" href="./imports/">
+              <div class="ops-card-header"><h3>품질 진단</h3><span class="pill warn">quality</span></div>
+              <strong id="homeQualityTotal">열린 이슈 없음</strong>
+              <p id="homeQualityNote">운영자 액션이 필요한 이슈만 표시합니다.</p>
+            </a>
+          </div>
+        </details>
+
+        <section class="grid overview-grid secondary-home-grid">
           <article class="panel panel-tall">
             <div class="panel-header">
               <div>
                 <h2>자동화 관제</h2>
-                <p>Mac mini, Firebase, Excel import 작업의 최근 상태입니다.</p>
+                <p>실패/중단이 있을 때만 홈 액션 큐로 올라옵니다.</p>
               </div>
               <span class="pill" id="automationMode">연결 대기</span>
             </div>

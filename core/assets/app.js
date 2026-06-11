@@ -613,8 +613,8 @@ function sourceKindLabel(value) {
 }
 
 function renderQualityIssues(items) {
-  const activeIssues = items.filter((item) => !["resolved", "closed", "done"].includes(String(item.status || "").toLowerCase()));
-  const resolvedIssues = items.filter((item) => ["resolved", "closed", "done"].includes(String(item.status || "").toLowerCase()));
+  const activeIssues = items.filter(isOperatorActionableQualityIssue);
+  const resolvedIssues = items.filter((item) => isResolvedQualityIssue(item) || isExplicitlyHiddenFromOperator(item));
   const latestIssue = activeIssues[0];
   setText("qualityCount", String(activeIssues.length));
   setText("qualityOpenCount", formatCount(activeIssues.length));
@@ -664,8 +664,48 @@ function qualityActionText(item) {
   return "운영자가 원천/매칭 상태 확인";
 }
 
+function hasOperatorActionFlag(item) {
+  const flags = [
+    item.operatorActionRequired,
+    item.requiresOperatorAction,
+    item.reviewRequired,
+    item.operatorVisible,
+    item.needsOperatorReview,
+  ];
+  return flags.some((value) => value === true || (typeof value === "number" && value > 0) || value === "true");
+}
+
+function isExplicitlyHiddenFromOperator(item) {
+  return (
+    item.operatorVisible === false ||
+    item.operatorActionRequired === false ||
+    item.requiresOperatorAction === false ||
+    item.reviewRequired === false ||
+    item.reviewRequired === 0 ||
+    String(item.operatorAction || item.nextAction || "").includes("추가 조치 없음")
+  );
+}
+
+function isResolvedQualityIssue(item) {
+  return ["resolved", "closed", "done", "auto_resolved", "ignored"].includes(String(item.status || "").toLowerCase()) || Boolean(item.resolvedAt);
+}
+
+function isOperatorActionableQualityIssue(item) {
+  if (isResolvedQualityIssue(item) || isExplicitlyHiddenFromOperator(item)) return false;
+  if (hasOperatorActionFlag(item)) return true;
+  const severity = String(item.severity || item.priority || "").toLowerCase();
+  const status = String(item.status || "").toLowerCase();
+  if (["critical", "danger", "error", "failed", "blocked"].includes(severity) || ["review", "reviewing", "needs_action", "blocked"].includes(status)) {
+    return true;
+  }
+  const text = [item.title, item.issueType, item.type, item.summary, item.description].filter(Boolean).join(" ").toLowerCase();
+  return ["전화", "phone", "name-only", "동명이인", "매칭 실패", "누락", "missing", "external"].some((keyword) =>
+    text.includes(keyword),
+  );
+}
+
 function activeQualityIssues() {
-  return state.qualityIssues.filter((item) => !["resolved", "closed", "done"].includes(String(item.status || "").toLowerCase()));
+  return state.qualityIssues.filter(isOperatorActionableQualityIssue);
 }
 
 function normalizePhone(value) {
@@ -1712,6 +1752,26 @@ function privateStage(row) {
   return "complete";
 }
 
+function pendingPrivateProgressRows() {
+  return privateProgressRows(
+    state.privateRequests || [],
+    state.privateRecords || [],
+    state.privateLedgerEntries || [],
+    state.alimtalkCandidates || [],
+    state.alimtalkSends || [],
+  ).filter((row) => privateStage(row) !== "complete");
+}
+
+function privatePendingBreakdown(rows) {
+  return rows.reduce(
+    (acc, row) => {
+      acc[privateStage(row)] += 1;
+      return acc;
+    },
+    { pre: 0, post: 0, report: 0, send: 0 },
+  );
+}
+
 function formatPrivateClassLine(row) {
   const round = row.merged.sessionNumber || row.ledger?.cumulativePrivateRound || row.ledger?.currentTicketRound || "-";
   const date = new Date(timestampMs(row.merged.lessonStartAt || row.merged.lessonDate));
@@ -2041,49 +2101,97 @@ function renderBusinessMemberInsights(items) {
     .join("");
 }
 
+function failedAutomationItems() {
+  return state.automationItems.filter((item) =>
+    ["failed", "error", "critical", "blocked"].includes(String(item.status || item.health || "").toLowerCase()),
+  );
+}
+
+function pendingAlimtalkCandidates() {
+  return state.alimtalkCandidates.filter((item) => isPendingStatus(item.status) && !isResolvedOperationalItem(item));
+}
+
+function communicationProblemSummary() {
+  const failedCandidates = failedAlimtalkCandidates();
+  const failedSends = failedAlimtalkSends();
+  const flowProblems = problemRequestRows();
+  const pendingCandidates = pendingAlimtalkCandidates();
+  return { failedCandidates, failedSends, flowProblems, pendingCandidates };
+}
+
 function renderHomeDecisions() {
   const list = qs("homeDecisionList");
   if (!list) return;
   const openIssues = activeQualityIssues();
-  const failedAutomation = state.automationItems.filter((item) =>
-    ["failed", "error", "critical", "blocked"].includes(String(item.status || item.health || "").toLowerCase()),
-  );
-  const failedCandidates = failedAlimtalkCandidates();
-  const failedSends = failedAlimtalkSends();
-  const flowProblems = problemRequestRows();
-  const communicationProblems = failedCandidates.length + failedSends.length + flowProblems.length;
-  const rows = [
-    {
-      title: communicationProblems ? "알림톡·회원가입 실패 확인" : "알림톡·회원가입 정상권",
-      detail: communicationProblems
-        ? `후보 실패 ${failedCandidates.length}건, 발송 실패 ${failedSends.length}건, 현장 웰컴/가입서/수강료 흐름 문제 ${flowProblems.length}건이 있습니다.`
-        : "최근 후보/발송/현장 웰컴 흐름에서 실패 신호는 보이지 않습니다.",
-      status: communicationProblems ? "failed" : "success",
+  const failedAutomation = failedAutomationItems();
+  const privatePending = pendingPrivateProgressRows();
+  const privateBreakdown = privatePendingBreakdown(privatePending);
+  const { failedCandidates, failedSends, flowProblems, pendingCandidates } = communicationProblemSummary();
+  const sendFailures = failedCandidates.length + failedSends.length;
+  const rows = [];
+
+  if (flowProblems.length) {
+    rows.push({
+      title: "회원 응대 후속 처리",
+      detail: `현장 웰컴/회원가입서/수강료 흐름에서 ${flowProblems.length}건을 확인해야 합니다.`,
+      status: "failed",
       href: "./messages/",
-    },
-    {
-      title: failedAutomation.length ? "자동화 실패 확인" : "자동화 상태 정상권",
-      detail: failedAutomation.length
-        ? `${failedAutomation.length}개 자동화 상태가 실패/중단으로 보입니다. Automation 탭에서 원인을 먼저 확인하세요.`
-        : "최근 자동화 상태에서 실패/중단 신호는 보이지 않습니다.",
-      status: failedAutomation.length ? "failed" : "success",
+    });
+  }
+  if (sendFailures) {
+    rows.push({
+      title: "알림톡 실패",
+      detail: `후보 실패 ${failedCandidates.length}건, 발송 실패 ${failedSends.length}건입니다. 실패 원인을 먼저 확인하세요.`,
+      status: "failed",
+      href: "./messages/",
+    });
+  }
+  if (pendingCandidates.length) {
+    rows.push({
+      title: "알림톡 승인/대기",
+      detail: `${pendingCandidates.length}건이 대기/검토/처리중입니다. 실제 발송 전 중복과 템플릿을 확인하세요.`,
+      status: "warning",
+      href: "./messages/",
+    });
+  }
+  if (privatePending.length) {
+    rows.push({
+      title: "프라이빗 리포트 진행",
+      detail: `미완료 ${privatePending.length}건 · 사전 ${privateBreakdown.pre} · 사후 ${privateBreakdown.post} · 리포트 ${privateBreakdown.report} · 미발송 ${privateBreakdown.send}`,
+      status: "warning",
+      href: "./private/",
+    });
+  }
+  if (failedAutomation.length) {
+    rows.push({
+      title: "자동화 실패/중단",
+      detail: `${failedAutomation.length}개 자동화 상태가 실패/중단입니다. 실패한 작업만 확인하면 됩니다.`,
+      status: "failed",
       href: "./automation/",
-    },
-    {
-      title: openIssues.length ? "데이터 품질 이슈 확인" : "원본 품질 안정권",
-      detail: openIssues.length
-        ? `${openIssues.length}개 열린 이슈가 있습니다. 발송/쓰기 전 Imports 탭에서 매칭 상태를 확인하세요.`
-        : "열린 데이터 품질 이슈가 없습니다.",
-      status: openIssues.length ? "warning" : "success",
+    });
+  }
+  if (openIssues.length) {
+    rows.push({
+      title: "데이터 품질 운영 확인",
+      detail: `${openIssues.length}개 이슈가 운영자 판단 대상으로 남아 있습니다. 발송/쓰기 전 매칭 상태를 확인하세요.`,
+      status: "warning",
       href: "./imports/",
-    },
-    {
-      title: "회원/알림톡은 read-only 확인",
-      detail: "ARCHIVE CORE는 현재 운영 판단 콘솔입니다. 외부 발송/쓰기 원천은 기존 canonical 컬렉션을 유지합니다.",
-      status: "active",
-      href: "./rules/",
-    },
-  ];
+    });
+  }
+
+  if (!rows.length) {
+    list.innerHTML = `
+      <div class="status-row">
+        <div>
+          <strong>현재 운영자가 처리할 미해결 업무가 없습니다.</strong>
+          <p>자동 정규화와 중복 차단 기록은 시스템 진단에만 보관하고 홈에는 누적하지 않습니다.</p>
+        </div>
+        ${pill("success")}
+      </div>
+    `;
+    return;
+  }
+
   list.innerHTML = rows
     .map(
       (row) => `
@@ -2099,16 +2207,36 @@ function renderHomeDecisions() {
 function renderHomeSummary() {
   if (!qs("homeMemberTotal")) return;
   const openIssues = activeQualityIssues();
-  const failedAutomation = state.automationItems.filter((item) =>
-    ["failed", "error", "critical", "blocked"].includes(String(item.status || item.health || "").toLowerCase()),
-  );
+  const failedAutomation = failedAutomationItems();
   const activeMembers = state.members.filter((item) => toNumber(item.activeTicketCount) > 0).length;
-  const pendingCandidates = state.alimtalkCandidates.filter((item) => isPendingStatus(item.status)).length;
-  const failedCandidates = failedAlimtalkCandidates().length;
-  const failedSends = failedAlimtalkSends().length;
-  const flowProblems = problemRequestRows().length;
-  const communicationProblems = failedCandidates + failedSends + flowProblems;
+  const privatePending = pendingPrivateProgressRows();
+  const privateBreakdown = privatePendingBreakdown(privatePending);
+  const { failedCandidates, failedSends, flowProblems, pendingCandidates } = communicationProblemSummary();
+  const communicationProblems = failedCandidates.length + failedSends.length + flowProblems.length;
+  const actionTotal = communicationProblems + pendingCandidates.length + privatePending.length + failedAutomation.length + openIssues.length;
   const latestImport = state.sourceImports[0];
+  setText("homeActionTotal", formatCount(actionTotal));
+  setText(
+    "homeActionNote",
+    actionTotal ? "해결 전까지 홈 큐에 남깁니다." : "운영자 확인 대기 없음",
+  );
+  setText("homeMemberCareTotal", formatCount(flowProblems.length));
+  setText(
+    "homeMemberCareNote",
+    flowProblems.length ? "회원가입/웰컴/수강료 흐름 확인 필요" : "회원가입/수강료 흐름 정상권",
+  );
+  setText("homePrivateTotal", formatCount(privatePending.length));
+  setText(
+    "homePrivateNote",
+    privatePending.length
+      ? `사전 ${privateBreakdown.pre} · 사후 ${privateBreakdown.post} · 리포트 ${privateBreakdown.report} · 미발송 ${privateBreakdown.send}`
+      : "미제출/미발송 없음",
+  );
+  setText("homePrivateCardTotal", privatePending.length ? `${privatePending.length}건 진행` : "진행 정상권");
+  setText(
+    "homePrivateCardNote",
+    privatePending.length ? "프라이빗 탭에서 강사별 미완료 수업 확인" : "미제출/미발송 신호 낮음",
+  );
   setText("homeMemberTotal", formatCount(state.members.length, "명"));
   setText("homeMemberNote", `활성 수강권 ${activeMembers.toLocaleString("ko-KR")}명 · 전체 회원 검색 가능`);
   setText("homeImportTotal", formatCount(state.sourceImports.length));
@@ -2118,20 +2246,27 @@ function renderHomeSummary() {
       ? `${sourceKindLabel(latestImport.sourceKind || latestImport.kind)} · ${formatDate(latestImport.updatedAt || latestImport.importedAt)}`
       : "최근 원본 import 기록 대기",
   );
+  setText("homeQualityTotal", openIssues.length ? `${openIssues.length}건 확인` : "열린 이슈 없음");
+  setText(
+    "homeQualityNote",
+    openIssues.length ? "운영자 액션이 필요한 품질 이슈만 표시합니다." : "자동 처리/정상 정규화 기록은 숨김 처리",
+  );
   setText(
     "homeMessageTotal",
-    communicationProblems ? `${communicationProblems}건 확인` : formatCount(state.alimtalkCandidates.length),
+    communicationProblems ? `${communicationProblems}건 확인` : pendingCandidates.length ? `${pendingCandidates.length}건 대기` : "대기 낮음",
   );
   setText(
     "homeMessageNote",
     communicationProblems
-      ? `후보/발송 실패 ${failedCandidates + failedSends}건 · 가입/수강료 흐름 ${flowProblems}건`
-      : pendingCandidates
-        ? `${pendingCandidates}건 대기/검토 후보 확인`
+      ? `후보/발송 실패 ${failedCandidates.length + failedSends.length}건 · 가입/수강료 흐름 ${flowProblems.length}건`
+      : pendingCandidates.length
+        ? `${pendingCandidates.length}건 대기/검토 후보 확인`
         : "최근 후보 기준 대기 낮음",
   );
   setText("homeAutomationTotal", failedAutomation.length ? `${failedAutomation.length}건 확인` : "정상권");
-  setText("homeAutomationNote", openIssues.length ? `품질 이슈 ${openIssues.length}건과 함께 확인` : "자동화 실패/품질 위험 낮음");
+  setText("homeAutomationNote", failedAutomation.length ? "실패/중단 자동화만 표시" : "실패/중단 신호 낮음");
+  setText("homeAutomationCardTotal", failedAutomation.length ? `${failedAutomation.length}건 확인` : "정상권");
+  setText("homeAutomationCardNote", failedAutomation.length ? "Automation 탭에서 실패한 작업만 확인" : "자동화 실패/지연 신호 낮음");
 }
 
 function renderBusinessFallback(error) {
@@ -2192,7 +2327,7 @@ async function refresh() {
     const shouldLoadMembers = Boolean(qs("membersTable"));
     const shouldLoadMessages = Boolean(qs("messagesCandidateList"));
     const shouldLoadMemberDetail = Boolean(qs("memberDetailName"));
-    const shouldLoadPrivate = Boolean(qs("privateProgressList"));
+    const shouldLoadPrivate = Boolean(qs("privateProgressList")) || shouldLoadHome;
     const shouldLoadLessons = Boolean(qs("lessonsTodayList"));
     const [
       laneSnapshot,
