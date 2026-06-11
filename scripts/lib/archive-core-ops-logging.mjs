@@ -97,6 +97,9 @@ export async function recordDataQualityIssues(db, issues) {
         updatedAt: now,
         resolvedAt: issue.resolvedAt || "",
         resolution: issue.resolution || "",
+        operatorAction: issue.operatorAction || "",
+        breakdown: issue.breakdown || null,
+        sampleRows: cleanArray(issue.sampleRows),
       }),
       { merge: true },
     );

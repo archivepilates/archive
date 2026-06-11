@@ -312,6 +312,7 @@ function normalizeTicketRow(row) {
 
 function buildUsagePlan(rows, sourceImportId) {
   const byCanonical = new Map();
+  const duplicateGroups = new Map();
   let duplicateRows = 0;
   for (const row of rows) {
     const previous = byCanonical.get(row.canonicalUsageKey);
@@ -320,8 +321,12 @@ function buildUsagePlan(rows, sourceImportId) {
       continue;
     }
     duplicateRows += 1;
+    const duplicateGroup = duplicateGroups.get(row.canonicalUsageKey) || [previous];
+    duplicateGroup.push(row);
+    duplicateGroups.set(row.canonicalUsageKey, duplicateGroup);
     byCanonical.set(row.canonicalUsageKey, betterUsageRow(previous, row));
   }
+  const duplicateSummary = summarizeDuplicateUsageGroups(duplicateGroups, duplicateRows);
 
   const now = new Date().toISOString();
   const events = [...byCanonical.values()]
@@ -366,12 +371,52 @@ function buildUsagePlan(rows, sourceImportId) {
   return {
     events,
     duplicateRows,
+    duplicateSummary,
     writes: events.map((event) => ({
       collection: "memberUsageEvents",
       id: event.usageEventId,
       data: event,
     })),
   };
+}
+
+function summarizeDuplicateUsageGroups(groups, duplicateRows) {
+  const summary = {
+    groupCount: groups.size,
+    duplicateRows,
+    reviewRequired: 0,
+    statusConflictGroups: 0,
+    statusPatternCounts: {},
+    winnerStatusCounts: {},
+    affectedMemberCounts: {},
+    examples: [],
+  };
+  for (const [canonicalUsageKey, rows] of groups.entries()) {
+    const statuses = [...new Set(rows.map((row) => row.usageStatus || "unknown"))].sort();
+    const pattern = statuses.join(" + ") || "unknown";
+    const winner = rows.reduce((best, row) => betterUsageRow(best, row));
+    if (statuses.length > 1) summary.statusConflictGroups += 1;
+    if (!winner.usageStatus || winner.usageStatus === "unknown") summary.reviewRequired += 1;
+    addCount(summary.statusPatternCounts, pattern);
+    addCount(summary.winnerStatusCounts, winner.usageStatus || "unknown");
+    addCount(summary.affectedMemberCounts, winner.memberName || winner.memberId || "unknown");
+    if (summary.examples.length < 10) {
+      summary.examples.push({
+        canonicalUsageKey,
+        memberId: winner.memberId,
+        memberName: winner.memberName,
+        lectureDate: winner.lectureDate,
+        startTime: winner.startTime,
+        lessonTitle: winner.title,
+        staffName: winner.staffName,
+        rowCount: rows.length,
+        statusPattern: pattern,
+        selectedStatus: winner.usageStatus,
+        selectedRowKey: winner.rowKey,
+      });
+    }
+  }
+  return summary;
 }
 
 function buildTicketPlan(rows, sourceImportId) {
@@ -642,14 +687,26 @@ function buildQualitySummary({ selectedMemberIds, rawUsageRows, usageRows, usage
     });
   }
   if (usagePlan.duplicateRows) {
-    warnings.push(`duplicate_canonical_usage_rows:${usagePlan.duplicateRows}`);
+    const duplicateReviewRequired = usagePlan.duplicateSummary.reviewRequired || 0;
+    if (duplicateReviewRequired) warnings.push(`duplicate_canonical_usage_rows:${usagePlan.duplicateRows}`);
     issuesForFirestore.push({
       issueType: "duplicate_booking",
-      severity: "warning",
-      status: "open",
+      severity: duplicateReviewRequired ? "warning" : "info",
+      status: duplicateReviewRequired ? "open" : "resolved",
       title: "개인 이용내역 canonical key 중복",
-      summary: `선택 범위에서 ${usagePlan.duplicateRows.toLocaleString("ko-KR")}개 행이 같은 canonicalUsageKey로 묶였습니다. 실제 수업 1건으로 정규화했습니다.`,
+      summary: duplicateReviewRequired
+        ? `선택 범위에서 ${usagePlan.duplicateRows.toLocaleString("ko-KR")}개 행이 같은 canonicalUsageKey로 묶였고, ${duplicateReviewRequired.toLocaleString("ko-KR")}개 그룹은 대표 상태 확인이 필요합니다.`
+        : `선택 범위에서 ${usagePlan.duplicateRows.toLocaleString("ko-KR")}개 행이 같은 canonicalUsageKey로 묶였고, 출석/예약/결석/취소 우선순위로 실제 수업 1건씩 정규화했습니다.`,
       sourcePaths: [config.usageJsonPath],
+      resolvedAt: duplicateReviewRequired ? "" : new Date().toISOString(),
+      resolution: duplicateReviewRequired
+        ? ""
+        : "동일 회원·날짜·시각·수업명·강사 기준 중복 행은 StudioMate 이용내역의 상태 변경 로그로 확인했습니다. 대표 행은 attended > reserved > absent > late_cancel > cancelled > unknown 순서와 최신 statusChangedAt 기준으로 선택합니다.",
+      operatorAction: duplicateReviewRequired
+        ? "canonicalUsageKey별 대표 상태를 확인한 뒤 CORE 이용 이벤트 장부 반영 여부를 판단합니다."
+        : "추가 조치 없음. 같은 수업을 여러 번 세지 않도록 CORE 이용 이벤트 장부에서 1건으로 정규화합니다.",
+      breakdown: usagePlan.duplicateSummary,
+      sampleRows: usagePlan.duplicateSummary.examples,
     });
   }
   if (selectedRowsWithoutMemberId) {
