@@ -1,12 +1,15 @@
 import { logger } from "firebase-functions";
-import { onRequest } from "firebase-functions/v2/https";
+import { onCall, onRequest } from "firebase-functions/v2/https";
 import { onSchedule } from "firebase-functions/v2/scheduler";
 import { approveAlimtalkBatchHandler } from "../alimtalk/approvalGate";
 import { processAlimtalkQueue } from "../alimtalk/processAlimtalkQueue";
+import { operatorSendPricingInquiryAlimtalkHandler } from "../alimtalk/pricingInquiryAlimtalk";
 import { queueDailyAlimtalkCandidates, queueReservationOpenAlimtalkCandidates } from "../alimtalk/queueDailyAlimtalk";
 import { sendDailyAlimtalkReport } from "../alimtalk/sendDailyAlimtalkReport";
 import { syncAlimtalkTemplateStatuses } from "../alimtalk/templateStatus";
-import { publicLongRequestOptions, scheduleOptions } from "../runtime/functionOptions";
+import { callableOptions, publicLongRequestOptions, scheduleOptions } from "../runtime/functionOptions";
+import { requireManager, requireStaff } from "../security/authGuards";
+import { toHttpsError } from "../utils/errors";
 
 export const scheduledProcessAlimtalkQueue = onSchedule(
   {
@@ -79,3 +82,13 @@ export const scheduledSyncAlimtalkTemplateStatuses = onSchedule(
 );
 
 export const approveAlimtalkBatch = onRequest(publicLongRequestOptions, approveAlimtalkBatchHandler);
+
+export const operatorSendPricingInquiryAlimtalk = onCall(callableOptions, async (request) => {
+  try {
+    const staff = await requireStaff(request);
+    requireManager(staff);
+    return await operatorSendPricingInquiryAlimtalkHandler(request, staff);
+  } catch (err) {
+    throw toHttpsError(err);
+  }
+});

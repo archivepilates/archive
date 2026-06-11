@@ -40,6 +40,7 @@ export const GROUP_SURVEY_BUTTON_URL_TEMPLATE =
   "https://in.archivepilates.com/groupSurvey?id=#{설문ID}&token=#{접근토큰}";
 export const METHOD_MATERIAL_BUTTON_URL_TEMPLATE = "https://in.archivepilates.com/method/#{관리번호}";
 export const PRIVATE_REPORT_BUTTON_URL_TEMPLATE = "https://in.archivepilates.com/s/#{리포트링크ID}/";
+export const PRICING_INFO_BUTTON_URL_TEMPLATE = "https://archivepilates.notion.site/";
 
 export const ALIMTALK_TEMPLATE_TARGET_RULES: Partial<Record<AlimtalkCandidateType, AlimtalkTemplateTargetRule>> = {
   reservation_open: {
@@ -115,6 +116,34 @@ export const ALIMTALK_TEMPLATE_TARGET_RULES: Partial<Record<AlimtalkCandidateTyp
       "신규회원 웰컴 v5 템플릿 코드 미설정 또는 미승인",
       "기존 신규회원 웰컴 발송 이력 있음",
       "같은 현장 웰컴 요청 이미 sent/error 처리",
+    ],
+  },
+  pricing_info: {
+    type: "pricing_info",
+    templateCode: ALIMTALK_TEMPLATES.pricing_info.code,
+    templateLabel: ALIMTALK_TEMPLATES.pricing_info.label,
+    sourceDatePolicy: "manual",
+    requiresApprovedTemplate: true,
+    requiresMemberPhone: true,
+    buttonUrlRules: [
+      {
+        label: "수강료 안내 보기 버튼",
+        template: PRICING_INFO_BUTTON_URL_TEMPLATE,
+        maxLength: SOLAPI_BUTTON_URL_MAX_LENGTH,
+      },
+    ],
+    targetRules: [
+      "수강료를 문의한 비회원 또는 회원에게 운영자가 단건 발송",
+      "CORE Messages 탭에서 전화번호를 직접 입력",
+      "SOLAPI 버튼 URL이 공개 Notion 수강료 안내 도메인으로 설정됨",
+      "최근 7일 내 같은 전화번호로 동일 안내 발송 이력 없음",
+    ],
+    exclusionRules: [
+      "전화번호 없음",
+      "수강료 안내 링크 없음",
+      "같은 전화번호 7일 내 수강료 안내 발송 이력 있음",
+      "SOLAPI 미승인 템플릿",
+      "대량 발송 또는 홍보성 일괄 발송",
     ],
   },
   private_survey: {

@@ -16,6 +16,13 @@ import { normalizeInstructorLessonManagementNumber } from "./instructorLessonMan
 const SOLAPI_SEND_URL = "https://api.solapi.com/messages/v4/send-many/detail";
 const PROCESSING_STALE_MS = 10 * 60 * 1000;
 
+export interface AlimtalkCandidateProcessResult {
+  processed: boolean;
+  status: "not_found" | "not_claimed" | "sent" | "skipped" | "failed";
+  lastError?: string | null;
+  solapiMessageId?: string;
+}
+
 export async function processAlimtalkQueue(): Promise<{ processed: number; sent: number; failed: number }> {
   const snap = await refs.alimtalkCandidates().where("status", "in", ["queued", "processing"]).limit(20).get();
 
@@ -27,121 +34,137 @@ export async function processAlimtalkQueue(): Promise<{ processed: number; sent:
     const claimed = await claimCandidate(candidateSnap.data());
     if (!claimed) continue;
     processed += 1;
-    try {
-      const sendabilityIssue = await autoSendabilityIssue(claimed, todayKst());
-      if (sendabilityIssue) {
-        await refs.alimtalkCandidate(claimed.candidateId).set(
-          {
-            status: "skipped",
-            lastError: sendabilityIssue,
-            updatedAt: nowTimestamp(),
-          },
-          { merge: true },
-        );
-        continue;
-      }
-      const dedupeKey = alimtalkDedupeKey(claimed);
-      const dedupePolicy = alimtalkDedupePolicy(claimed.templateCode);
-      const duplicate = await findCompletedDuplicateForCandidate(claimed, dedupeKey, dedupePolicy.windowDays);
-      if (duplicate) {
-        await refs.alimtalkCandidate(claimed.candidateId).set(
-          {
-            status: "skipped",
-            dedupeKey,
-            lastError: `중복 발송 차단(${dedupePolicy.label}): ${duplicate}`,
-            updatedAt: nowTimestamp(),
-          },
-          { merge: true },
-        );
-        continue;
-      }
-      const result = await sendSolapiAlimtalk(claimed);
-      const sendAttempts = (claimed.attempts || 0) + 1;
-      await refs.alimtalkCandidate(claimed.candidateId).set(
-        {
-          status: "sent",
-          dedupeKey,
-          attempts: sendAttempts,
-          maxAttempts: claimed.maxAttempts || 2,
-          sentAt: nowTimestamp(),
-          lastError: null,
-          updatedAt: nowTimestamp(),
-        },
-        { merge: true },
-      );
-      await refs.alimtalkSend(claimed.candidateId).set(
-        {
-          sendId: claimed.candidateId,
-          studioId: claimed.studioId,
-          candidateId: claimed.candidateId,
-          memberId: claimed.memberId,
-          memberName: claimed.memberName,
-          memberPhone: claimed.memberPhone,
-          templateCode: claimed.templateCode,
-          dedupeKey,
-          dedupePolicy: dedupePolicy.label,
-          dedupeWindowDays: dedupePolicy.windowDays,
-          status: "done",
-          attempts: sendAttempts,
-          maxAttempts: claimed.maxAttempts || 2,
-          nextRunAt: nowTimestamp(),
-          solapiMessageId: result.messageId,
-          lastError: null,
-          createdByUid: claimed.reviewedByUid || "system",
-          createdAt: nowTimestamp(),
-          updatedAt: nowTimestamp(),
-        },
-        { merge: true },
-      );
-      sent += 1;
-    } catch (err) {
-      const message = errorMessage(err);
-      const attempts = (claimed.attempts || 0) + 1;
-      const maxAttempts = claimed.maxAttempts || 2;
-      await refs.alimtalkCandidate(claimed.candidateId).set(
-        {
-          status: "failed",
-          attempts,
-          maxAttempts,
-          lastError: message,
-          updatedAt: nowTimestamp(),
-        },
-        { merge: true },
-      );
-      await refs.alimtalkSend(claimed.candidateId).set(
-        {
-          sendId: claimed.candidateId,
-          studioId: claimed.studioId,
-          candidateId: claimed.candidateId,
-          memberId: claimed.memberId,
-          memberName: claimed.memberName,
-          memberPhone: claimed.memberPhone,
-          templateCode: claimed.templateCode,
-          dedupeKey: alimtalkDedupeKey(claimed),
-          dedupePolicy: alimtalkDedupePolicy(claimed.templateCode).label,
-          dedupeWindowDays: alimtalkDedupePolicy(claimed.templateCode).windowDays,
-          status: "failed",
-          attempts,
-          maxAttempts,
-          nextRunAt: nowTimestamp(),
-          lastError: message,
-          createdByUid: claimed.reviewedByUid || "system",
-          createdAt: nowTimestamp(),
-          updatedAt: nowTimestamp(),
-        },
-        { merge: true },
-      );
-      failed += 1;
-      logger.warn("processAlimtalkQueue send failed", {
-        candidateId: claimed.candidateId,
-        templateCode: claimed.templateCode,
-        message,
-      });
-    }
+    const result = await processClaimedCandidate(claimed);
+    if (result.status === "sent") sent += 1;
+    if (result.status === "failed") failed += 1;
   }
 
   logger.info("processAlimtalkQueue completed", { processed, sent, failed });
   return { processed, sent, failed };
+}
+
+export async function processAlimtalkCandidate(candidateId: string): Promise<AlimtalkCandidateProcessResult> {
+  const snap = await refs.alimtalkCandidate(candidateId).get();
+  const candidate = snap.data();
+  if (!candidate) return { processed: false, status: "not_found", lastError: "알림톡 후보가 없습니다" };
+  const claimed = await claimCandidate(candidate);
+  if (!claimed) return { processed: false, status: "not_claimed", lastError: "알림톡 후보를 처리할 수 없습니다" };
+  return processClaimedCandidate(claimed);
+}
+
+async function processClaimedCandidate(claimed: AlimtalkCandidateDoc): Promise<AlimtalkCandidateProcessResult> {
+  try {
+    const sendabilityIssue = await autoSendabilityIssue(claimed, todayKst());
+    if (sendabilityIssue) {
+      await refs.alimtalkCandidate(claimed.candidateId).set(
+        {
+          status: "skipped",
+          lastError: sendabilityIssue,
+          updatedAt: nowTimestamp(),
+        },
+        { merge: true },
+      );
+      return { processed: true, status: "skipped", lastError: sendabilityIssue };
+    }
+    const dedupeKey = alimtalkDedupeKey(claimed);
+    const dedupePolicy = alimtalkDedupePolicy(claimed.templateCode);
+    const duplicate = await findCompletedDuplicateForCandidate(claimed, dedupeKey, dedupePolicy.windowDays);
+    if (duplicate) {
+      const lastError = `중복 발송 차단(${dedupePolicy.label}): ${duplicate}`;
+      await refs.alimtalkCandidate(claimed.candidateId).set(
+        {
+          status: "skipped",
+          dedupeKey,
+          lastError,
+          updatedAt: nowTimestamp(),
+        },
+        { merge: true },
+      );
+      return { processed: true, status: "skipped", lastError };
+    }
+    const result = await sendSolapiAlimtalk(claimed);
+    const sendAttempts = (claimed.attempts || 0) + 1;
+    await refs.alimtalkCandidate(claimed.candidateId).set(
+      {
+        status: "sent",
+        dedupeKey,
+        attempts: sendAttempts,
+        maxAttempts: claimed.maxAttempts || 2,
+        sentAt: nowTimestamp(),
+        lastError: null,
+        updatedAt: nowTimestamp(),
+      },
+      { merge: true },
+    );
+    await refs.alimtalkSend(claimed.candidateId).set(
+      {
+        sendId: claimed.candidateId,
+        studioId: claimed.studioId,
+        candidateId: claimed.candidateId,
+        memberId: claimed.memberId,
+        memberName: claimed.memberName,
+        memberPhone: claimed.memberPhone,
+        templateCode: claimed.templateCode,
+        dedupeKey,
+        dedupePolicy: dedupePolicy.label,
+        dedupeWindowDays: dedupePolicy.windowDays,
+        status: "done",
+        attempts: sendAttempts,
+        maxAttempts: claimed.maxAttempts || 2,
+        nextRunAt: nowTimestamp(),
+        solapiMessageId: result.messageId,
+        lastError: null,
+        createdByUid: claimed.reviewedByUid || "system",
+        createdAt: nowTimestamp(),
+        updatedAt: nowTimestamp(),
+      },
+      { merge: true },
+    );
+    return { processed: true, status: "sent", solapiMessageId: result.messageId };
+  } catch (err) {
+    const message = errorMessage(err);
+    const attempts = (claimed.attempts || 0) + 1;
+    const maxAttempts = claimed.maxAttempts || 2;
+    await refs.alimtalkCandidate(claimed.candidateId).set(
+      {
+        status: "failed",
+        attempts,
+        maxAttempts,
+        lastError: message,
+        updatedAt: nowTimestamp(),
+      },
+      { merge: true },
+    );
+    await refs.alimtalkSend(claimed.candidateId).set(
+      {
+        sendId: claimed.candidateId,
+        studioId: claimed.studioId,
+        candidateId: claimed.candidateId,
+        memberId: claimed.memberId,
+        memberName: claimed.memberName,
+        memberPhone: claimed.memberPhone,
+        templateCode: claimed.templateCode,
+        dedupeKey: alimtalkDedupeKey(claimed),
+        dedupePolicy: alimtalkDedupePolicy(claimed.templateCode).label,
+        dedupeWindowDays: alimtalkDedupePolicy(claimed.templateCode).windowDays,
+        status: "failed",
+        attempts,
+        maxAttempts,
+        nextRunAt: nowTimestamp(),
+        lastError: message,
+        createdByUid: claimed.reviewedByUid || "system",
+        createdAt: nowTimestamp(),
+        updatedAt: nowTimestamp(),
+      },
+      { merge: true },
+    );
+    logger.warn("processAlimtalkQueue send failed", {
+      candidateId: claimed.candidateId,
+      templateCode: claimed.templateCode,
+      message,
+    });
+    return { processed: true, status: "failed", lastError: message };
+  }
 }
 
 async function claimCandidate(candidate: AlimtalkCandidateDoc): Promise<AlimtalkCandidateDoc | null> {
@@ -360,7 +383,7 @@ async function shortLinkIdForCandidate(
           updatedAt: nowTimestamp(),
         },
         { merge: true },
-      );
+    );
     return link.linkId;
   }
   return "";

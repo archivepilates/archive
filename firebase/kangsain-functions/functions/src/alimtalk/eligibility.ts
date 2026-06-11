@@ -26,6 +26,7 @@ export async function autoSendabilityIssue(candidate: AlimtalkCandidateDoc, toda
   if (candidate.type === "reservation_open" && !(candidate.payload?.reservationWeek || candidate.payload?.weekLabel)) {
     return "예약주차 변수 없음";
   }
+  if (candidate.type === "pricing_info" && !candidate.payload?.pricingUrl) return "수강료 안내 링크 없음";
   if (rule?.requiresManagementNumber) {
     const rawManagementNumber = String(
       candidate.payload?.managementNumber || candidate.payload?.materialNumber || candidate.payload?.archiveMethodId || "",
