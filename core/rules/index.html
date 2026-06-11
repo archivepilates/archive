@@ -202,9 +202,9 @@
               <h3>회차 원천</h3>
               <ul>
                 <li>2026.06.01 이후 프라이빗/세미프라이빗 수업은 자동화 차트를 반드시 생성합니다.</li>
-                <li>booking.sessionOrder.privateCumulativeRound를 1순위로 사용하고, 없을 때 계산 후 저장합니다.</li>
-                <li>삭제, 취소, 시간변경은 해당 수업 이후 회차까지 연쇄 재계산합니다.</li>
-                <li>같은 회원, 강사, 시작시간의 중복 예약행은 대표 booking 하나만 차트로 만듭니다.</li>
+                <li>booking.sessionOrder.privateCumulativeRound를 1순위로 사용하되, 예약 원본과 다르면 즉시 재계산해 저장합니다.</li>
+                <li>삭제, 취소, 시간변경은 sessionOrder.counted=false와 제외 사유를 남기고 해당 수업 이후 회차까지 연쇄 재계산합니다.</li>
+                <li>같은 회원, 강사, 날짜, 수강권에서 시간변경 중복이 생기면 출석/최신 예약을 대표 booking으로 두고 나머지는 rescheduled_duplicate로 제외합니다.</li>
               </ul>
             </article>
             <article class="rule-card">
@@ -213,7 +213,7 @@
                 <li>운영규칙은 CORE가 기준이지만, 개인레슨 회차 차트는 현재 기능상 Notion 동기화본을 유지합니다.</li>
                 <li>리포트가 없어도 실제 수업 회차는 Notion에 남겨 누락을 확인할 수 있어야 합니다.</li>
                 <li>리포트 생성 시 제목은 완료 미발송, 회원 알림톡 발송 완료 시 완료로 표시합니다.</li>
-                <li>예약 시간이 바뀌거나 취소되면 Notion 제목, 날짜, 상태, 회차도 함께 갱신합니다.</li>
+                <li>예약 시간이 바뀌거나 취소되면 Notion 제목, 날짜, 상태, 회차, 발송상태를 함께 갱신하고 취소 차트는 회원 발송 후보에서 제외합니다.</li>
               </ul>
             </article>
             <article class="rule-card">
