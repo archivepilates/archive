@@ -18,6 +18,10 @@ const reservationFile = valueArg("--reservation-file");
 const memberFile = valueArg("--member-file");
 const reportDir = path.join(os.homedir(), "ArchiveIN/automation/reports/excel-emergency-mode");
 const PROJECT_ID = process.env.GOOGLE_CLOUD_PROJECT || process.env.GCLOUD_PROJECT || "archive-pilates";
+const FIREBASE_REGION = process.env.FIREBASE_REGION || "asia-northeast3";
+const PRIVATE_CHART_RECONCILE_SCHEDULER_JOB =
+  process.env.PRIVATE_CHART_RECONCILE_SCHEDULER_JOB ||
+  "firebase-schedule-scheduledReconcileCurrentMonthPrivateLessonCharts-asia-northeast3";
 const config = {
   operatorEmail: process.env.ARCHIVE_OPERATOR_EMAIL || "home@archivepilates.com",
   delegatedUser: process.env.GOOGLE_DELEGATED_USER || "home@archivepilates.com",
@@ -80,10 +84,30 @@ if (!downloadFailedWithoutMember) {
       ]),
     );
   }
+
+  if (apply) {
+    steps.push(
+      runCommandStep(
+        "privateChartReconcileNow",
+        [
+          "gcloud",
+          "scheduler",
+          "jobs",
+          "run",
+          PRIVATE_CHART_RECONCILE_SCHEDULER_JOB,
+          "--location",
+          FIREBASE_REGION,
+          "--project",
+          PROJECT_ID,
+        ],
+        { optional: true },
+      ),
+    );
+  }
 }
 
-const failed = steps.filter((step) => step.exitCode && step.exitCode !== 0);
-const warnings = steps.filter((step) => step.stdoutOk === false || step.requiredFailed);
+const failed = steps.filter((step) => step.exitCode && step.exitCode !== 0 && !step.optional);
+const warnings = steps.filter((step) => step.stdoutOk === false || step.requiredFailed || (step.optional && step.exitCode));
 const sourceImportIds = steps
   .map((step) => (step.stdout && typeof step.stdout === "object" ? step.stdout.sourceImportId : ""))
   .filter(Boolean);
@@ -132,7 +156,11 @@ if (failed.length) {
 }
 
 function runStep(name, command) {
-  const result = spawnSync(process.execPath, command, {
+  return runCommandStep(name, [process.execPath, ...command]);
+}
+
+function runCommandStep(name, command, options = {}) {
+  const result = spawnSync(command[0], command.slice(1), {
     cwd: process.cwd(),
     encoding: "utf8",
     env: process.env,
@@ -140,12 +168,13 @@ function runStep(name, command) {
   });
   return {
     name,
-    command: [process.execPath, ...command],
+    command,
     exitCode: result.status ?? 0,
     stdout: parseJsonOrText(result.stdout),
     stderr: result.stderr.trim(),
     stdoutOk: parsedOk(result.stdout),
     requiredFailed: name === "memberProfiles" && parsedOk(result.stdout) === false,
+    optional: Boolean(options.optional),
   };
 }
 

@@ -46,6 +46,7 @@ const GEMINI_GENERATE_URL = "https://generativelanguage.googleapis.com/v1beta/mo
 const SOLAPI_SEND_URL = "https://api.solapi.com/messages/v4/send-many/detail";
 const SOLAPI_TEMPLATE_URL = "https://api.solapi.com/kakao/v2/templates";
 const PRIVATE_SESSION_ORDER_COMPUTED_FROM = "privateLessonChart.canonicalPrivate.v2";
+let notionSessionRecordTitlePropertyName = "";
 const NOTION_INSTRUCTOR_CHART_PAGE_IDS: Record<string, string> = {
   "이초림 수석강사": "22cd49eae4bf802ebc89fe094d0c355a",
   이초림: "22cd49eae4bf802ebc89fe094d0c355a",
@@ -230,9 +231,18 @@ export async function reconcilePrivateLessonChartsForDateRange(
   let skipped = 0;
   let failed = 0;
 
+  const memberIdsToReorder = new Set<string>();
   for (const date of dateRange(startDate, endDate)) {
     const snap = await refs.bookings().where("lectureDate", "==", date).limit(500).get();
-    const bookings = canonicalPrivateLessonLikeBookings(snap.docs.map((doc) => doc.data()));
+    for (const booking of snap.docs.map((doc) => doc.data())) {
+      if (booking.memberId && isPrivateLessonLikeBooking(booking)) memberIdsToReorder.add(booking.memberId);
+    }
+  }
+  const sessionOrderSummary = await reconcilePrivateSessionOrdersForMembers(memberIdsToReorder);
+
+  for (const date of dateRange(startDate, endDate)) {
+    const snap = await refs.bookings().where("lectureDate", "==", date).limit(500).get();
+    const bookings = privateLessonChartReconcileBookings(snap.docs.map((doc) => doc.data()));
     skipped += snap.size - bookings.length;
 
     for (const booking of bookings) {
@@ -261,6 +271,7 @@ export async function reconcilePrivateLessonChartsForDateRange(
   logger.info("reconcilePrivateLessonChartsForDateRange completed", {
     startDate,
     endDate,
+    sessionOrderSummary,
     checked,
     created,
     updated,
@@ -279,14 +290,22 @@ export async function createPrivateLessonChartRequestsForDate(date: string): Pro
   skipped: number;
 }> {
   const snap = await refs.bookings().where("lectureDate", "==", date).limit(500).get();
-  const bookings = canonicalPrivateBookings(snap.docs.map((doc) => doc.data()));
+  const memberIdsToReorder = new Set(
+    snap.docs
+      .map((doc) => doc.data())
+      .filter((booking) => booking.memberId && isPrivateLessonLikeBooking(booking))
+      .map((booking) => booking.memberId),
+  );
+  const sessionOrderSummary = await reconcilePrivateSessionOrdersForMembers(memberIdsToReorder);
+  const refreshedSnap = await refs.bookings().where("lectureDate", "==", date).limit(500).get();
+  const bookings = privateLessonChartReconcileBookings(refreshedSnap.docs.map((doc) => doc.data()));
   let checked = 0;
   let created = 0;
-  let skipped = snap.size - bookings.length;
+  let skipped = refreshedSnap.size - bookings.length;
 
   for (const booking of bookings) {
     checked += 1;
-    const result = await ensureChartRequestForBooking(booking).catch((err) => {
+    const result = await reconcilePrivateLessonChartForBooking(booking).catch((err) => {
       logger.warn("ensureChartRequestForBooking failed", {
         bookingId: booking.bookingId,
         message: errorMessage(err),
@@ -297,7 +316,13 @@ export async function createPrivateLessonChartRequestsForDate(date: string): Pro
     else skipped += 1;
   }
 
-  logger.info("createPrivateLessonChartRequestsForDate completed", { date, checked, created, skipped });
+  logger.info("createPrivateLessonChartRequestsForDate completed", {
+    date,
+    sessionOrderSummary,
+    checked,
+    created,
+    skipped,
+  });
   return { date, checked, created, skipped };
 }
 
@@ -1022,6 +1047,7 @@ async function reconcilePrivateLessonChartForBooking(booking: BookingDoc): Promi
   const sessionNumber =
     bookingPrivateSessionNumber(booking) || existingRequest?.sessionNumber || existingRecord?.sessionNumber || 0;
   const now = nowTimestamp();
+  const cancellationReason = privateLessonCancellationReason(booking);
   const requestPatch = compactObject({
     lessonDate: booking.lectureDate || existingRequest?.lessonDate,
     lessonStartAt: booking.lectureStartAt || existingRequest?.lessonStartAt || null,
@@ -1030,6 +1056,8 @@ async function reconcilePrivateLessonChartForBooking(booking: BookingDoc): Promi
     staffName: booking.staffName || existingRequest?.staffName || "",
     sessionNumber: sessionNumber || undefined,
     status: "cancelled",
+    cancellationReason,
+    cancelledAt: now,
     updatedAt: now,
   });
   if (existingRequest) {
@@ -1043,6 +1071,8 @@ async function reconcilePrivateLessonChartForBooking(booking: BookingDoc): Promi
         staffId: booking.staffId || existingRecord.staffId || "",
         staffName: booking.staffName || existingRecord.staffName || "",
         sessionNumber: sessionNumber || existingRecord.sessionNumber,
+        cancellationReason,
+        cancelledAt: now,
         updatedAt: now,
       }),
       { merge: true },
@@ -1058,6 +1088,8 @@ async function reconcilePrivateLessonChartForBooking(booking: BookingDoc): Promi
     lessonDate: booking.lectureDate || existingRequest?.lessonDate || existingRecord?.lessonDate || "",
     lessonStartAt: booking.lectureStartAt || existingRequest?.lessonStartAt || existingRecord?.lessonStartAt || null,
     status: "cancelled",
+    cancellationReason,
+    cancelledAt: now,
   } as PrivateLessonChartRequestDoc;
   const nextRecord = {
     ...(existingRecord || {}),
@@ -1071,6 +1103,8 @@ async function reconcilePrivateLessonChartForBooking(booking: BookingDoc): Promi
     lessonDate: booking.lectureDate || existingRecord?.lessonDate || existingRequest?.lessonDate || "",
     lessonStartAt: booking.lectureStartAt || existingRecord?.lessonStartAt || existingRequest?.lessonStartAt || null,
     sessionNumber: sessionNumber || existingRecord?.sessionNumber || existingRequest?.sessionNumber || 0,
+    cancellationReason,
+    cancelledAt: now,
     gptStatus: existingRecord?.gptStatus || "pending",
     notionSync: existingRecord?.notionSync || { status: "pending" },
     createdAt: existingRecord?.createdAt || now,
@@ -1222,6 +1256,110 @@ async function reconcileExistingChartRequestForBooking(
   const notionSync = await syncPrivateLessonChartRecordToNotion(baseRecord, nextRequest);
   await refs.privateLessonChartRecord(requestId).set({ notionSync, updatedAt: nowTimestamp() }, { merge: true });
   return { requestId, created: false, updated: true, notionSynced: notionSync.status === "synced" };
+}
+
+async function reconcilePrivateSessionOrdersForMembers(memberIds: Set<string>): Promise<{
+  membersChecked: number;
+  bookingsChecked: number;
+  updated: number;
+  excluded: number;
+}> {
+  let membersChecked = 0;
+  let bookingsChecked = 0;
+  let updated = 0;
+  let excluded = 0;
+  for (const memberId of memberIds) {
+    if (!memberId) continue;
+    membersChecked += 1;
+    const snap = await refs.bookings().where("memberId", "==", memberId).get();
+    const rows = snap.docs.map((doc) => doc.data()).filter(isPrivateLessonLikeBooking);
+    bookingsChecked += rows.length;
+    const plan = privateSessionOrderPlan(rows);
+    const now = nowTimestamp();
+    const batch = db.batch();
+    let writes = 0;
+    for (const booking of rows) {
+      const order = plan.orders.get(booking.bookingId);
+      if (!order) continue;
+      if (!sessionOrderNeedsPatch(booking.sessionOrder || {}, order)) continue;
+      batch.set(
+        refs.booking(booking.bookingId),
+        {
+          sessionOrder: { ...order, computedAt: now },
+          sessionOrderCorrection: privateSessionOrderCorrection(booking, order, now),
+          updatedAt: now,
+        },
+        { merge: true },
+      );
+      writes += 1;
+      if (order.counted === false) excluded += 1;
+    }
+    if (writes) {
+      await batch.commit();
+      updated += writes;
+    }
+  }
+  return { membersChecked, bookingsChecked, updated, excluded };
+}
+
+function privateSessionOrderPlan(bookings: BookingDoc[]): {
+  orders: Map<string, NonNullable<BookingDoc["sessionOrder"]>>;
+} {
+  const orders = new Map<string, NonNullable<BookingDoc["sessionOrder"]>>();
+  const exactCanonical = canonicalPrivateLessonLikeBookings(bookings);
+  const exactCanonicalIds = new Set(exactCanonical.map((booking) => booking.bookingId));
+  const exactCanonicalByKey = new Map(exactCanonical.map((booking) => [privateLessonOccurrenceKey(booking), booking]));
+  for (const booking of bookings) {
+    if (exactCanonicalIds.has(booking.bookingId)) continue;
+    const canonical = exactCanonicalByKey.get(privateLessonOccurrenceKey(booking));
+    orders.set(booking.bookingId, excludedPrivateSessionOrder(booking, "duplicate_source", canonical?.bookingId || null));
+  }
+
+  const active = exactCanonical.filter((booking) => !isOperationallyExcludedPrivateLessonOccurrence(booking));
+  const { counted, excluded } = splitRescheduledPrivateBookings(active);
+  for (const booking of exactCanonical.filter(isOperationallyExcludedPrivateLessonOccurrence)) {
+    orders.set(booking.bookingId, excludedPrivateSessionOrder(booking, privateLessonCancellationReason(booking), null));
+  }
+  for (const [bookingId, exclusion] of excluded) {
+    const booking = active.find((item) => item.bookingId === bookingId);
+    if (!booking) continue;
+    orders.set(bookingId, excludedPrivateSessionOrder(booking, exclusion.reason, exclusion.supersededByBookingId));
+  }
+  counted
+    .sort((a, b) => (a.lectureStartAt?.toMillis?.() || 0) - (b.lectureStartAt?.toMillis?.() || 0))
+    .forEach((booking, index) => {
+      const cumulativeRound = index + 1;
+      orders.set(booking.bookingId, {
+        ...(booking.sessionOrder || {}),
+        category: "private",
+        cumulativeRound,
+        privateCumulativeRound: cumulativeRound,
+        groupCumulativeRound: booking.sessionOrder?.groupCumulativeRound ?? null,
+        counted: true,
+        excludedReason: null,
+        supersededByBookingId: null,
+        computedFrom: PRIVATE_SESSION_ORDER_COMPUTED_FROM,
+      });
+    });
+  return { orders };
+}
+
+function excludedPrivateSessionOrder(
+  booking: BookingDoc,
+  reason: string,
+  supersededByBookingId: string | null,
+): NonNullable<BookingDoc["sessionOrder"]> {
+  return {
+    ...(booking.sessionOrder || {}),
+    category: "private",
+    cumulativeRound: null,
+    privateCumulativeRound: null,
+    groupCumulativeRound: booking.sessionOrder?.groupCumulativeRound ?? null,
+    counted: false,
+    excludedReason: reason,
+    supersededByBookingId,
+    computedFrom: PRIVATE_SESSION_ORDER_COMPUTED_FROM,
+  };
 }
 
 async function submitPrivateLessonChart(
@@ -1432,10 +1570,13 @@ async function syncPrivateLessonChartRecordToNotion(
       );
     }
     const reportUrl = reportResolution.publicReportUrl;
+    const isCancelled = chartRequest.status === "cancelled";
+    const titleProperties = await notionSessionRecordTitleProperties(notionSessionTitle(record, chartRequest));
     const properties = compactObject({
-      "회원 리포트": reportUrl ? { url: reportUrl } : undefined,
+      ...titleProperties,
+      "회원 리포트": !isCancelled && reportUrl ? { url: reportUrl } : undefined,
       발송: { checkbox: false },
-      발송상태: notionSelect(reportUrl ? "대기" : ""),
+      발송상태: notionSelect(isCancelled ? "취소" : reportUrl ? "대기" : ""),
     });
     const content = notionChartChildren(record, chartRequest);
     const existingPageId = record.notionSync?.pageId;
@@ -1750,6 +1891,9 @@ async function sessionNumberForBooking(booking: BookingDoc): Promise<number> {
         cumulativeRound: computed,
         privateCumulativeRound: computed,
         groupCumulativeRound: booking.sessionOrder?.groupCumulativeRound ?? null,
+        counted: true,
+        excludedReason: null,
+        supersededByBookingId: null,
         computedFrom: PRIVATE_SESSION_ORDER_COMPUTED_FROM,
         computedAt: nowTimestamp(),
       },
@@ -1763,6 +1907,7 @@ async function sessionNumberForBooking(booking: BookingDoc): Promise<number> {
 function trustedBookingPrivateSessionNumber(booking: BookingDoc): number {
   const value = bookingPrivateSessionNumber(booking);
   if (!value) return 0;
+  if (booking.sessionOrder?.counted === false) return 0;
   return booking.sessionOrder?.computedFrom === PRIVATE_SESSION_ORDER_COMPUTED_FROM ? value : 0;
 }
 
@@ -1792,8 +1937,14 @@ function isPrivateBooking(booking: BookingDoc): boolean {
 }
 
 function isExcludedPrivateLessonOccurrence(booking: BookingDoc): boolean {
-  if (booking.appStatus === "cancel" || booking.appStatus === "wait" || booking.appStatus === "wait_cancel")
+  if (isOperationallyExcludedPrivateLessonOccurrence(booking)) return true;
+  if (booking.sessionOrder?.computedFrom === PRIVATE_SESSION_ORDER_COMPUTED_FROM && booking.sessionOrder.counted === false)
     return true;
+  return false;
+}
+
+function isOperationallyExcludedPrivateLessonOccurrence(booking: BookingDoc): boolean {
+  if (booking.appStatus === "cancel" || booking.appStatus === "wait" || booking.appStatus === "wait_cancel") return true;
   if (booking.attendanceStatus === "absent" || booking.attendanceStatus === "late_cancel") return true;
   return false;
 }
@@ -1806,7 +1957,7 @@ function canonicalPrivateBookings(bookings: BookingDoc[]): BookingDoc[] {
     const current = grouped.get(key);
     if (!current || preferCanonicalBooking(booking, current)) grouped.set(key, booking);
   }
-  return [...grouped.values()].sort(
+  return splitRescheduledPrivateBookings([...grouped.values()]).counted.sort(
     (a, b) => (a.lectureStartAt?.toMillis?.() || 0) - (b.lectureStartAt?.toMillis?.() || 0),
   );
 }
@@ -1822,6 +1973,84 @@ function canonicalPrivateLessonLikeBookings(bookings: BookingDoc[]): BookingDoc[
   return [...grouped.values()].sort(
     (a, b) => (a.lectureStartAt?.toMillis?.() || 0) - (b.lectureStartAt?.toMillis?.() || 0),
   );
+}
+
+function privateLessonChartReconcileBookings(bookings: BookingDoc[]): BookingDoc[] {
+  const grouped = new Map<string, BookingDoc>();
+  for (const booking of bookings) {
+    if (!isPrivateLessonLikeBooking(booking)) continue;
+    if (isExcludedPrivateLessonOccurrence(booking)) {
+      grouped.set(booking.bookingId, booking);
+      continue;
+    }
+    const key = privateLessonOccurrenceKey(booking);
+    const current = grouped.get(key);
+    if (!current || preferCanonicalBooking(booking, current)) grouped.set(key, booking);
+  }
+  return [...grouped.values()].sort(
+    (a, b) => (a.lectureStartAt?.toMillis?.() || 0) - (b.lectureStartAt?.toMillis?.() || 0),
+  );
+}
+
+function splitRescheduledPrivateBookings(bookings: BookingDoc[]): {
+  counted: BookingDoc[];
+  excluded: Map<string, { reason: string; supersededByBookingId: string | null }>;
+} {
+  const counted: BookingDoc[] = [];
+  const excluded = new Map<string, { reason: string; supersededByBookingId: string | null }>();
+  const grouped = new Map<string, BookingDoc[]>();
+  for (const booking of bookings) {
+    const key = privateLessonRescheduleKey(booking);
+    grouped.set(key, [...(grouped.get(key) || []), booking]);
+  }
+  for (const group of grouped.values()) {
+    if (group.length <= 1) {
+      counted.push(...group);
+      continue;
+    }
+    const attended = group.filter((booking) => booking.attendanceStatus === "attended");
+    if (attended.length > 1) {
+      counted.push(...attended);
+      const primary = attended.reduce(preferredRescheduledBooking);
+      for (const booking of group) {
+        if (attended.some((item) => item.bookingId === booking.bookingId)) continue;
+        excluded.set(booking.bookingId, { reason: "rescheduled_duplicate", supersededByBookingId: primary.bookingId });
+      }
+      continue;
+    }
+    const primary = (attended[0] ? attended : group).reduce(preferredRescheduledBooking);
+    counted.push(primary);
+    for (const booking of group) {
+      if (booking.bookingId === primary.bookingId) continue;
+      excluded.set(booking.bookingId, { reason: "rescheduled_duplicate", supersededByBookingId: primary.bookingId });
+    }
+  }
+  return { counted, excluded };
+}
+
+function preferredRescheduledBooking(current: BookingDoc, next: BookingDoc): BookingDoc {
+  const attendanceDelta = privateBookingAttendanceScore(next.attendanceStatus) - privateBookingAttendanceScore(current.attendanceStatus);
+  if (attendanceDelta > 0) return next;
+  if (attendanceDelta < 0) return current;
+  const sourceDelta = privateBookingSourceScore(next.bookingId) - privateBookingSourceScore(current.bookingId);
+  if (sourceDelta > 0) return next;
+  if (sourceDelta < 0) return current;
+  const updatedDelta = bookingUpdatedMillis(next) - bookingUpdatedMillis(current);
+  if (updatedDelta > 0) return next;
+  if (updatedDelta < 0) return current;
+  const startDelta = (next.lectureStartAt?.toMillis?.() || 0) - (current.lectureStartAt?.toMillis?.() || 0);
+  if (startDelta > 0) return next;
+  if (startDelta < 0) return current;
+  return preferCanonicalBookingLike(next.bookingId, current.bookingId) ? next : current;
+}
+
+function privateLessonRescheduleKey(booking: BookingDoc): string {
+  return [
+    booking.memberId || normalizeKoreanName(booking.memberName || ""),
+    booking.staffId || normalizeKoreanName(booking.staffName || ""),
+    booking.lectureDate || dateFromTimestamp(booking.lectureStartAt),
+    normalizeTicketName(booking.ticketName || booking.ticketType || booking.lessonType || ""),
+  ].join("|");
 }
 
 function canonicalChartRequests(requests: PrivateLessonChartRequestDoc[]): PrivateLessonChartRequestDoc[] {
@@ -1919,6 +2148,77 @@ function privateBookingAttendanceScore(status: BookingDoc["attendanceStatus"]): 
   if (status === "absent") return 2;
   if (status === "late_cancel") return 1;
   return 0;
+}
+
+function bookingUpdatedMillis(booking: BookingDoc): number {
+  return (
+    (booking.updatedAt as any)?.toMillis?.() ||
+    (booking.syncedAt as any)?.toMillis?.() ||
+    (booking.sourceUpdatedAt as any)?.toMillis?.() ||
+    0
+  );
+}
+
+function normalizeTicketName(value: string): string {
+  return String(value || "")
+    .replace(/\s+/g, "")
+    .replace(/\(.*?\)/g, "")
+    .toLowerCase();
+}
+
+function dateFromTimestamp(value: any): string {
+  const date = value?.toDate?.();
+  return date ? formatDateKst(date) : "";
+}
+
+function privateLessonCancellationReason(booking: BookingDoc): string {
+  if (booking.sessionOrder?.excludedReason) return String(booking.sessionOrder.excludedReason);
+  if (booking.appStatus === "cancel") return "cancelled";
+  if (booking.appStatus === "wait_cancel") return "wait_cancelled";
+  if (booking.appStatus === "wait") return "waitlisted";
+  if (booking.attendanceStatus === "absent") return "absent";
+  if (booking.attendanceStatus === "late_cancel") return "late_cancel";
+  return "not_countable";
+}
+
+function sessionOrderNeedsPatch(
+  current: NonNullable<BookingDoc["sessionOrder"]>,
+  next: NonNullable<BookingDoc["sessionOrder"]>,
+): boolean {
+  return [
+    "category",
+    "cumulativeRound",
+    "privateCumulativeRound",
+    "groupCumulativeRound",
+    "counted",
+    "excludedReason",
+    "supersededByBookingId",
+    "computedFrom",
+  ].some((key) => primitiveValue((current as any)[key]) !== primitiveValue((next as any)[key]));
+}
+
+function privateSessionOrderCorrection(
+  booking: BookingDoc,
+  next: NonNullable<BookingDoc["sessionOrder"]>,
+  correctedAt: Timestamp,
+): NonNullable<BookingDoc["sessionOrderCorrection"]> {
+  const current = booking.sessionOrder || {};
+  return {
+    fromPrivateCumulativeRound: positiveRound(current.privateCumulativeRound || current.cumulativeRound),
+    toPrivateCumulativeRound: positiveRound(next.privateCumulativeRound || next.cumulativeRound),
+    fromCounted: typeof current.counted === "boolean" ? current.counted : null,
+    toCounted: typeof next.counted === "boolean" ? next.counted : null,
+    reason:
+      next.counted === false
+        ? String(next.excludedReason || "private_session_order_excluded")
+        : "private_session_order_recomputed",
+    correctedAt,
+  };
+}
+
+function positiveRound(value: unknown): number | null {
+  const round = Number(value || 0);
+  return Number.isFinite(round) && round > 0 ? Math.trunc(round) : null;
 }
 
 function isExcelBookingId(bookingId: string): boolean {
@@ -2356,7 +2656,7 @@ function notionUpdateChildren(
     divider(),
     heading(3, `자동화 업데이트 ${new Date().toLocaleString("ko-KR", { timeZone: "Asia/Seoul" })}`),
     ...(chartRequest.status === "cancelled"
-      ? [callout("이 수업은 예약 원본에서 취소로 확인되어 차트 상태를 취소로 보정했습니다.")]
+      ? [callout(`이 수업은 예약 원본 기준 회차 제외로 보정했습니다. 사유: ${privateChartCancellationText(chartRequest)}`)]
       : []),
     paragraph(
       `상태: ${privateChartStatusText(chartRequest)} / 회차: ${record.sessionNumber}회차 / 수업일: ${lessonTimeText(chartRequest)} / 담당: ${record.staffName || "미정"}`,
@@ -2434,7 +2734,7 @@ function notionInstructorUpdateChildren(
     divider(),
     heading(3, `업데이트 ${new Date().toLocaleString("ko-KR", { timeZone: "Asia/Seoul" })}`),
     ...(chartRequest.status === "cancelled"
-      ? [callout("이 수업은 예약 원본에서 취소로 확인되어 차트 상태를 취소로 보정했습니다.")]
+      ? [callout(`이 수업은 예약 원본 기준 회차 제외로 보정했습니다. 사유: ${privateChartCancellationText(chartRequest)}`)]
       : []),
     paragraph(
       `상태: ${privateChartStatusText(chartRequest)} / 수업일: ${lessonTimeText(chartRequest)} / 담당: ${record.staffName || "미정"}`,
@@ -2575,6 +2875,20 @@ function privateChartStatusText(chartRequest: Pick<PrivateLessonChartRequestDoc,
   return "진행";
 }
 
+function privateChartCancellationText(chartRequest: Pick<PrivateLessonChartRequestDoc, "cancellationReason">): string {
+  const reason = String(chartRequest.cancellationReason || "");
+  const mapped: Record<string, string> = {
+    rescheduled_duplicate: "수업 시간 변경으로 대체 예약이 확인됨",
+    duplicate_source: "동일 수업의 우선 예약 원본이 확인됨",
+    cancelled: "예약 취소",
+    wait_cancelled: "대기 취소",
+    waitlisted: "대기 예약",
+    absent: "결석",
+    late_cancel: "당일 취소",
+  };
+  return mapped[reason] || reason || "예약 원본 기준 회차 제외";
+}
+
 function lessonTitleDate(chartRequest: Pick<PrivateLessonChartRequestDoc, "lessonDate" | "lessonStartAt">): string {
   const date = chartRequest.lessonStartAt?.toDate?.();
   if (!date) return chartRequest.lessonDate.replaceAll("-", ".");
@@ -2624,6 +2938,24 @@ function firstText(value: unknown): string {
 
 function notionTitle(value: string): Record<string, unknown> {
   return { title: [{ text: { content: value.slice(0, 2000) } }] };
+}
+
+async function notionSessionRecordTitleProperties(value: string): Promise<Record<string, unknown>> {
+  const propertyName = await notionSessionRecordTitleProperty();
+  return { [propertyName]: notionTitle(value) };
+}
+
+async function notionSessionRecordTitleProperty(): Promise<string> {
+  if (notionSessionRecordTitlePropertyName) return notionSessionRecordTitlePropertyName;
+  try {
+    const database = await notionRequest(`databases/${NOTION_SESSION_RECORDS_DATABASE_ID}`, "GET");
+    const hit = Object.entries(database?.properties || {}).find(([, property]: [string, any]) => property?.type === "title");
+    notionSessionRecordTitlePropertyName = String(hit?.[0] || "Name");
+  } catch (err) {
+    logger.warn("notionSessionRecordTitleProperty fallback", { message: errorMessage(err) });
+    notionSessionRecordTitlePropertyName = "Name";
+  }
+  return notionSessionRecordTitlePropertyName;
 }
 
 function notionText(value: string): Record<string, unknown> {

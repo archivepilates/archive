@@ -148,8 +148,19 @@ export interface BookingDoc {
     cumulativeRound?: number | null;
     privateCumulativeRound?: number | null;
     groupCumulativeRound?: number | null;
+    counted?: boolean;
+    excludedReason?: string | null;
+    supersededByBookingId?: string | null;
     computedFrom?: string;
     computedAt?: Timestamp;
+  };
+  sessionOrderCorrection?: {
+    fromPrivateCumulativeRound?: number | null;
+    toPrivateCumulativeRound?: number | null;
+    fromCounted?: boolean | null;
+    toCounted?: boolean | null;
+    reason: string;
+    correctedAt: Timestamp;
   };
   memberTagIds: string[];
   lastMemoPreview: string;
@@ -611,6 +622,8 @@ export interface PrivateLessonChartRequestDoc {
   lessonStartAt: Timestamp | null;
   lessonEndAt: Timestamp | null;
   sessionNumber: number;
+  cancellationReason?: string | null;
+  cancelledAt?: Timestamp | null;
   accessTokenHash: string;
   preUrl: string;
   postUrl: string;
@@ -660,6 +673,8 @@ export interface PrivateLessonChartRecordDoc {
   lessonDate: string;
   lessonStartAt: Timestamp | null;
   sessionNumber: number;
+  cancellationReason?: string | null;
+  cancelledAt?: Timestamp | null;
   prePlan?: Record<string, unknown>;
   postRecord?: Record<string, unknown>;
   preSubmittedAt?: Timestamp | null;
