@@ -2654,13 +2654,15 @@ function renderPrivateLessonReportPage(
     `<!doctype html><html lang="ko"><head><meta charset="utf-8"><meta name="viewport" content="width=device-width,initial-scale=1"/>` +
     `<title>${title}</title><style>
       :root{color-scheme:light;--bg:#f7f5f2;--surface:#fffdfa;--line:#ded8d0;--text:#201d19;--muted:#6f675f;--soft:#ece7df;--accent:#4f5b4a;--accent2:#8a6f54}
-      *{box-sizing:border-box}body{margin:0;background:var(--bg);color:var(--text);font-family:Apple SD Gothic Neo,\"Noto Sans KR\",system-ui,sans-serif;line-height:1.62}
+      *{box-sizing:border-box}html{-webkit-text-size-adjust:100%}body{margin:0;background:var(--bg);color:var(--text);font-family:Apple SD Gothic Neo,\"Noto Sans KR\",system-ui,sans-serif;line-height:1.62}
+      main,.hero,.lead,.grid,.tile,section,.section-title,.chips,.chip{min-width:0}
+      p,h1,h2,strong,span,small{overflow-wrap:anywhere;word-break:keep-all}
       main{width:min(100%,820px);margin:0 auto;padding:26px 18px 56px}.brand{margin:0 0 18px;color:var(--muted);font-size:12px;font-weight:800;letter-spacing:0}
       .hero{padding:0 0 22px;border-bottom:1px solid var(--line)}h1{margin:0;font-size:30px;line-height:1.2;letter-spacing:0}.meta{margin-top:12px;color:var(--muted);font-size:14px}
-      .lead{margin-top:22px;padding:20px;background:var(--surface);border:1px solid var(--line);border-radius:8px}.lead p{margin:0;font-size:17px;word-break:keep-all}.next{margin-top:14px;color:#3f493d;font-weight:700}
-      .grid{display:grid;gap:12px;margin-top:18px}.tile{padding:16px;background:var(--surface);border:1px solid var(--line);border-radius:8px}.tile small{display:block;color:var(--muted);font-size:12px;font-weight:800}.tile strong{display:block;margin-top:6px;font-size:22px}
+      .lead{margin-top:22px;padding:20px;background:var(--surface);border:1px solid var(--line);border-radius:8px}.lead p{margin:0;font-size:17px;white-space:pre-wrap}.next{margin-top:14px;color:#3f493d;font-weight:700}
+      .grid{display:grid;gap:12px;margin-top:18px;align-items:stretch}.tile{padding:16px;background:var(--surface);border:1px solid var(--line);border-radius:8px}.tile small{display:block;color:var(--muted);font-size:12px;font-weight:800}.tile strong{display:block;margin-top:6px;font-size:20px;line-height:1.38;white-space:normal}
       section{margin-top:28px}.section-title{display:flex;align-items:end;justify-content:space-between;gap:12px;margin-bottom:12px}h2{margin:0;font-size:17px;letter-spacing:0}.hint{color:var(--muted);font-size:12px}
-      .chips{display:flex;flex-wrap:wrap;gap:8px}.chip{display:inline-flex;align-items:center;min-height:34px;padding:7px 10px;border:1px solid var(--line);border-radius:999px;background:var(--surface);font-size:13px;color:#2d2924}
+      .chips{display:flex;flex-wrap:wrap;gap:8px}.chip{display:inline-flex;align-items:flex-start;max-width:100%;min-height:34px;padding:7px 10px;border:1px solid var(--line);border-radius:12px;background:var(--surface);font-size:13px;color:#2d2924;white-space:normal}
       .note{padding:16px;border-left:3px solid var(--accent);background:rgba(255,253,250,.72);color:#312c26}.footer{margin-top:32px;padding-top:16px;border-top:1px solid var(--line);color:var(--muted);font-size:12px}.copy{word-break:break-all}
       @media (min-width:680px){main{padding:38px 28px 72px}.grid{grid-template-columns:repeat(3,minmax(0,1fr))}h1{font-size:36px}.lead{padding:24px}}
     </style></head><body><main><div class="hero"><p class="brand">ARCHIVE PILATES</p><h1>${escapeHtml(title)}</h1>` +
@@ -2668,7 +2670,7 @@ function renderPrivateLessonReportPage(
     `<div class="lead"><p>${reportSummary}</p><p class="next">${nextDirection}</p></div>` +
     `<div class="grid"><div class="tile"><small>집중 영역</small><strong>${escapeHtml(focusAreas.slice(0, 2).join(" · ") || "-")}</strong></div>` +
     `<div class="tile"><small>오늘 변화</small><strong>${escapeHtml(changes.slice(0, 2).join(" · ") || "-")}</strong></div>` +
-    `<div class="tile"><small>다음 방향</small><strong>${escapeHtml(nextDirection.slice(0, 18) || "-")}</strong></div></div></div>` +
+    `<div class="tile"><small>다음 방향</small><strong>${nextDirection || "-"}</strong></div></div></div>` +
     `<section><div class="section-title"><h2>오늘 진행</h2><span class="hint">목표와 사용 기구</span></div><div class="chips">` +
     [...goals, ...equipment]
       .slice(0, 12)
