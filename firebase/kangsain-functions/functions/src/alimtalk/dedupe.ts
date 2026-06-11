@@ -10,7 +10,7 @@ export async function findCompletedDuplicate(dedupeKey: string, windowDays: numb
     .alimtalkSends()
     .where("dedupeKey", "==", dedupeKey)
     .where("status", "==", "done")
-    .limit(100)
+    .limit(1)
     .get();
   const cutoffMs = windowDays == null ? 0 : Date.now() - windowDays * 24 * 60 * 60 * 1000;
   const duplicate = snap.docs.find((doc) => {
@@ -38,7 +38,7 @@ export async function findCompletedDuplicateForCandidate(
     .where("memberPhone", "==", candidate.memberPhone)
     .where("templateCode", "==", candidate.templateCode)
     .where("status", "==", "done")
-    .limit(100)
+    .limit(20)
     .get();
   for (const sendDoc of snap.docs) {
     const send = sendDoc.data();
@@ -73,9 +73,11 @@ function dedupeScope(candidate: AlimtalkCandidateDoc): Record<string, string> {
   const payload = candidate.payload || {};
   const type = String(candidate.type);
   if (type === "new_member") return { memberId: candidate.memberId };
+  if (type === "onsite_welcome") return { memberId: candidate.memberId };
   if (type === "private_survey") return { memberId: candidate.memberId };
   if (type === "group_survey") return { memberId: candidate.memberId };
   if (type === "long_absence") return { memberId: candidate.memberId };
+  if (type === "pricing_info") return { inquiryPhone: normalizePhone(candidate.memberPhone) };
   if (type === "instructor_lesson_material") {
     return {
       lessonDate: String(payload.lessonDate || payload.classDate || payload.sourceDate || candidate.sourceDate || ""),

@@ -27,6 +27,7 @@ export async function autoSendabilityIssue(candidate: AlimtalkCandidateDoc, toda
   if (candidate.type === "reservation_open" && !(candidate.payload?.reservationWeek || candidate.payload?.weekLabel)) {
     return "예약주차 변수 없음";
   }
+  if (candidate.type === "pricing_info" && !candidate.payload?.pricingUrl) return "수강료 안내 링크 없음";
   if (rule?.requiresManagementNumber) {
     const rawManagementNumber = String(
       candidate.payload?.managementNumber || candidate.payload?.materialNumber || candidate.payload?.archiveMethodId || "",
@@ -75,6 +76,9 @@ function candidateShortLinkId(
 ): string {
   const existing = String(candidate.payload?.shortLinkId || "");
   if (existing) return existing;
+  if (candidate.type === "private_survey" && surveyId && accessToken) {
+    return shortLinkIdForTarget("private_survey", privateSurveyTargetUrl(surveyId, accessToken));
+  }
   if (candidate.type === "group_survey" && surveyId && accessToken) {
     return shortLinkIdForTarget("group_survey", groupSurveyTargetUrl(surveyId, accessToken));
   }
@@ -86,6 +90,13 @@ function candidateShortLinkId(
 
 function groupSurveyTargetUrl(surveyId: string, accessToken: string): string {
   const url = new URL("https://in.archivepilates.com/groupSurvey");
+  url.searchParams.set("id", surveyId);
+  url.searchParams.set("token", accessToken);
+  return url.toString();
+}
+
+function privateSurveyTargetUrl(surveyId: string, accessToken: string): string {
+  const url = new URL("https://in.archivepilates.com/privateSurvey");
   url.searchParams.set("id", surveyId);
   url.searchParams.set("token", accessToken);
   return url.toString();

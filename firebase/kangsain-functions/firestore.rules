@@ -163,6 +163,21 @@ service cloud.firestore {
       allow write: if false;
     }
 
+    match /onsiteWelcomeRequests/{requestId} {
+      allow read: if isManager() && sameStudio(resource.data.studioId);
+      allow write: if false;
+    }
+
+    match /memberSignupContracts/{contractId} {
+      allow read: if isManager() && sameStudio(resource.data.studioId);
+      allow write: if false;
+    }
+
+    match /pricingInquiryAlimtalkRequests/{requestId} {
+      allow read: if isManager() && sameStudio(resource.data.studioId);
+      allow write: if false;
+    }
+
     match /privateSurveyIntakes/{intakeId} {
       allow read: if false;
       allow create: if

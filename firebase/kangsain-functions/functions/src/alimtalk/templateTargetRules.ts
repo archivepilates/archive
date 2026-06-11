@@ -34,10 +34,13 @@ export const SOLAPI_BUTTON_URL_MAX_LENGTH = 100;
 export const SHORT_LINK_BUTTON_URL_TEMPLATE = "https://in.archivepilates.com/s/#{링크ID}/";
 export const SURVEY_DETAIL_BUTTON_URL_TEMPLATE =
   "https://in.archivepilates.com/privateSurveyResponseView?id=#{설문ID}&token=#{접근토큰}";
+export const PRIVATE_SURVEY_BUTTON_URL_TEMPLATE =
+  "https://in.archivepilates.com/privateSurvey?id=#{설문ID}&token=#{접근토큰}";
 export const GROUP_SURVEY_BUTTON_URL_TEMPLATE =
   "https://in.archivepilates.com/groupSurvey?id=#{설문ID}&token=#{접근토큰}";
 export const METHOD_MATERIAL_BUTTON_URL_TEMPLATE = "https://in.archivepilates.com/method/#{관리번호}";
 export const PRIVATE_REPORT_BUTTON_URL_TEMPLATE = "https://in.archivepilates.com/s/#{리포트링크ID}/";
+export const PRICING_INFO_BUTTON_URL_TEMPLATE = "https://archivepilates.notion.site/";
 
 export const ALIMTALK_TEMPLATE_TARGET_RULES: Partial<Record<AlimtalkCandidateType, AlimtalkTemplateTargetRule>> = {
   reservation_open: {
@@ -115,6 +118,34 @@ export const ALIMTALK_TEMPLATE_TARGET_RULES: Partial<Record<AlimtalkCandidateTyp
       "같은 현장 웰컴 요청 이미 sent/error 처리",
     ],
   },
+  pricing_info: {
+    type: "pricing_info",
+    templateCode: ALIMTALK_TEMPLATES.pricing_info.code,
+    templateLabel: ALIMTALK_TEMPLATES.pricing_info.label,
+    sourceDatePolicy: "manual",
+    requiresApprovedTemplate: true,
+    requiresMemberPhone: true,
+    buttonUrlRules: [
+      {
+        label: "수강료 안내 보기 버튼",
+        template: PRICING_INFO_BUTTON_URL_TEMPLATE,
+        maxLength: SOLAPI_BUTTON_URL_MAX_LENGTH,
+      },
+    ],
+    targetRules: [
+      "수강료를 문의한 비회원 또는 회원에게 운영자가 단건 발송",
+      "CORE Messages 탭에서 전화번호를 직접 입력",
+      "SOLAPI 버튼 URL이 공개 Notion 수강료 안내 도메인으로 설정됨",
+      "최근 7일 내 같은 전화번호로 동일 안내 발송 이력 없음",
+    ],
+    exclusionRules: [
+      "전화번호 없음",
+      "수강료 안내 링크 없음",
+      "같은 전화번호 7일 내 수강료 안내 발송 이력 있음",
+      "SOLAPI 미승인 템플릿",
+      "대량 발송 또는 홍보성 일괄 발송",
+    ],
+  },
   private_survey: {
     type: "private_survey",
     templateCode: ALIMTALK_TEMPLATES.private_survey.code,
@@ -123,9 +154,22 @@ export const ALIMTALK_TEMPLATE_TARGET_RULES: Partial<Record<AlimtalkCandidateTyp
     sourceDatePolicy: "today",
     requiresApprovedTemplate: true,
     requiresMemberPhone: true,
+    buttonUrlRules: [
+      {
+        label: "프라이빗 사전설문 작성 버튼",
+        template: PRIVATE_SURVEY_BUTTON_URL_TEMPLATE,
+        maxLength: SOLAPI_BUTTON_URL_MAX_LENGTH,
+      },
+      {
+        label: "프라이빗 사전설문 작성 버튼",
+        template: SHORT_LINK_BUTTON_URL_TEMPLATE,
+        maxLength: SOLAPI_BUTTON_URL_MAX_LENGTH,
+      },
+    ],
     targetRules: [
       "오늘부터 다음 주 일요일까지 예정된 첫 프라이빗 예약이 있음",
       "예약이 강사레슨이 아님",
+      "자체설문 요청 문서와 짧은 링크가 있음",
       "최근 1년 내 프라이빗 사전설문 제출 이력이 없음",
       "과거 프라이빗 출석 완료 이력이 없음",
     ],
@@ -134,6 +178,7 @@ export const ALIMTALK_TEMPLATE_TARGET_RULES: Partial<Record<AlimtalkCandidateTyp
       "전화번호 없음",
       "프라이빗 예약 없음",
       "그룹 또는 강사레슨 예약",
+      "짧은 링크 생성 실패 또는 버튼 URL 치환 후 100자 초과",
       "최근 1년 내 프라이빗 사전설문 제출 이력 있음",
       "과거 프라이빗 출석 완료 이력 있음",
       "SOLAPI 미승인 템플릿",
@@ -330,25 +375,19 @@ export const ALIMTALK_TEMPLATE_TARGET_RULES: Partial<Record<AlimtalkCandidateTyp
         template: PRIVATE_REPORT_BUTTON_URL_TEMPLATE,
         maxLength: SOLAPI_BUTTON_URL_MAX_LENGTH,
       },
-      {
-        label: "프라이빗 인바디 리포트 버튼",
-        template: "https://in.archivepilates.com/s/#{인바디링크ID}/",
-        maxLength: SOLAPI_BUTTON_URL_MAX_LENGTH,
-      },
     ],
     targetRules: [
       "수업 후 기록이 제출된 프라이빗 회차",
       "Gemini 회원용 리포트 초안이 생성됨",
       "회원용 HTML 리포트 URL이 있음",
-      "Notion에서 발송 체크와 발송상태 대기 확인",
-      "최신 인바디 리포트가 있으면 인바디 버튼에 연결하고, 없으면 측정 데이터 없음 안내 화면에 연결",
+      "강사 차트 링크에서 회원 알림톡 발송 승인됨",
     ],
     exclusionRules: [
       "전화번호 없음",
       "수업 후 기록 미제출",
       "회원용 리포트 URL 없음",
-      "Notion 발송 체크 전",
-      "Notion 발송상태가 대기가 아님",
+      "회원 알림톡 발송 승인 전",
+      "프라이빗 리포트 발송 큐 상태가 대기가 아님",
       "같은 회차 리포트 발송 이력 있음",
       "SOLAPI 미승인 템플릿",
     ],

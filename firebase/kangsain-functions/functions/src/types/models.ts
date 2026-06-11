@@ -143,6 +143,25 @@ export interface BookingDoc {
   ticketRemainingCount: number | null;
   ticketExpiresAt: Timestamp | null;
   ticketExpiryLevel: TicketExpiryLevel;
+  sessionOrder?: {
+    category?: "group" | "private" | "unknown" | string;
+    cumulativeRound?: number | null;
+    privateCumulativeRound?: number | null;
+    groupCumulativeRound?: number | null;
+    counted?: boolean;
+    excludedReason?: string | null;
+    supersededByBookingId?: string | null;
+    computedFrom?: string;
+    computedAt?: Timestamp;
+  };
+  sessionOrderCorrection?: {
+    fromPrivateCumulativeRound?: number | null;
+    toPrivateCumulativeRound?: number | null;
+    fromCounted?: boolean | null;
+    toCounted?: boolean | null;
+    reason: string;
+    correctedAt: Timestamp;
+  };
   memberTagIds: string[];
   lastMemoPreview: string;
   lastMemoAt: Timestamp | null;
@@ -461,6 +480,7 @@ export type AlimtalkCandidateType =
   | "private_count_low"
   | "private_ticket_expiring"
   | "long_absence"
+  | "pricing_info"
   | "manual_review";
 export type AlimtalkCandidateStatus =
   | "candidate"
@@ -638,6 +658,8 @@ export interface PrivateLessonChartRequestDoc {
   lessonEndAt: Timestamp | null;
   sessionNumber: number;
   sessionNumberCorrection?: PrivateLessonSessionNumberCorrection;
+  cancellationReason?: string | null;
+  cancelledAt?: Timestamp | null;
   accessTokenHash: string;
   preUrl: string;
   postUrl: string;
@@ -688,6 +710,8 @@ export interface PrivateLessonChartRecordDoc {
   lessonStartAt: Timestamp | null;
   sessionNumber: number;
   sessionNumberCorrection?: PrivateLessonSessionNumberCorrection;
+  cancellationReason?: string | null;
+  cancelledAt?: Timestamp | null;
   prePlan?: Record<string, unknown>;
   postRecord?: Record<string, unknown>;
   preSubmittedAt?: Timestamp | null;

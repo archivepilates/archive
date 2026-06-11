@@ -14,6 +14,9 @@ const state = {
   memberDetail: null,
   alimtalkCandidates: [],
   alimtalkSends: [],
+  onsiteWelcomeRequests: [],
+  memberSignupContracts: [],
+  pricingInquiryAlimtalkRequests: [],
   privateRequests: [],
   privateRecords: [],
   privateUsageEvents: [],
@@ -897,19 +900,109 @@ function renderMembers(items) {
   renderMemberPagination(visibleItems.length);
 }
 
+function isFailureStatus(value) {
+  return ["failed", "error", "critical", "blocked"].includes(String(value || "").toLowerCase());
+}
+
+function isResolvedOperationalItem(item) {
+  return Boolean(item?.resolvedAt || item?.resolutionStatus === "resolved" || item?.resolved === true);
+}
+
+function isPendingStatus(value) {
+  return ["queued", "pending", "review", "reviewed", "processing", "template_pending"].includes(
+    String(value || "").toLowerCase(),
+  );
+}
+
+function failedAlimtalkCandidates(items = state.alimtalkCandidates) {
+  return items.filter((item) => isFailureStatus(item.status) && !isResolvedOperationalItem(item));
+}
+
+function failedAlimtalkSends(items = state.alimtalkSends) {
+  return items.filter((item) => isFailureStatus(item.status || item.sendStatus) && !isResolvedOperationalItem(item));
+}
+
+function onsiteWelcomeProblems(items = state.onsiteWelcomeRequests) {
+  return items.filter((item) => !isResolvedOperationalItem(item) && (isFailureStatus(item.status) || Boolean(item.lastError)));
+}
+
+function signupContractProblems(items = state.memberSignupContracts) {
+  return items.filter(
+    (item) =>
+      !isResolvedOperationalItem(item) &&
+      (isFailureStatus(item.status) ||
+        isFailureStatus(item.syncStatus) ||
+        isFailureStatus(item.studiomateSyncStatus) ||
+      isFailureStatus(item.studiomateProfileSyncStatus) ||
+      isFailureStatus(item.studiomateProfileSync?.status) ||
+      isFailureStatus(item.driveArchive?.status) ||
+        Boolean(item.lastError || item.driveArchive?.lastError)),
+  );
+}
+
+function pricingInquiryProblems(items = state.pricingInquiryAlimtalkRequests) {
+  return items.filter((item) => !isResolvedOperationalItem(item) && (isFailureStatus(item.status) || isFailureStatus(item.sendStatus)));
+}
+
+function problemRequestRows() {
+  return [
+    ...onsiteWelcomeProblems().map((item) => ({
+      ...item,
+      title: "현장 웰컴 준비 실패",
+      memberName: item.memberName || item.name || item.memberNameHint,
+      memberPhone: item.phone || item.memberPhone,
+      reason: item.lastError || item.progressLabel || item.requestId,
+      status: item.status || "error",
+      updatedAt: item.updatedAt || item.createdAt,
+    })),
+    ...signupContractProblems().map((item) => ({
+      ...item,
+      title: "회원가입서 후속 처리 실패",
+      memberName: item.memberName || item.name,
+      memberPhone: item.phone || item.memberPhone,
+      reason:
+        item.lastError ||
+        item.driveArchive?.lastError ||
+        item.syncStatus ||
+        item.studiomateSyncStatus ||
+        item.studiomateProfileSyncStatus ||
+        item.contractId,
+      status:
+        item.status ||
+        item.syncStatus ||
+        item.studiomateSyncStatus ||
+        item.studiomateProfileSyncStatus ||
+        item.studiomateProfileSync?.status ||
+        item.driveArchive?.status ||
+        "error",
+      updatedAt: item.updatedAt || item.submittedAt || item.createdAt,
+    })),
+    ...pricingInquiryProblems().map((item) => ({
+      ...item,
+      title: "수강료 안내 발송 실패",
+      memberName: item.memberName || item.name || item.memberPhone || item.phone,
+      memberPhone: item.memberPhone || item.phone,
+      reason: item.lastError || item.requestId,
+      status: item.status || item.sendStatus || "error",
+      updatedAt: item.updatedAt || item.completedAt || item.createdAt,
+    })),
+  ];
+}
+
 function renderMessages(candidates, sends) {
   if (!qs("messagesCandidateList")) return;
   const sentCandidates = candidates.filter((item) => String(item.status || "").toLowerCase() === "sent");
-  const failedSends = sends.filter((item) => ["failed", "error"].includes(String(item.status || "").toLowerCase()));
-  const pendingCandidates = candidates.filter((item) =>
-    ["queued", "pending", "review", "reviewed", "processing"].includes(String(item.status || "").toLowerCase()),
-  );
+  const failedCandidates = failedAlimtalkCandidates(candidates);
+  const failedSends = failedAlimtalkSends(sends);
+  const flowProblems = problemRequestRows();
+  const totalFailures = failedCandidates.length + failedSends.length + flowProblems.length;
+  const pendingCandidates = candidates.filter((item) => isPendingStatus(item.status));
   setText("messagesCandidateCount", formatCount(candidates.length));
   setText("messagesSendCount", formatCount(sends.length));
   setText("messagesSentCount", formatCount(sentCandidates.length));
-  setText("messagesFailedCount", formatCount(failedSends.length));
+  setText("messagesFailedCount", formatCount(totalFailures));
   setText("messagesPendingDecision", pendingCandidates.length ? `${pendingCandidates.length}건 확인` : "대기 없음");
-  setText("messagesRiskDecision", failedSends.length ? `${failedSends.length}건 실패` : "위험 낮음");
+  setText("messagesRiskDecision", totalFailures ? `${totalFailures}건 실패` : "위험 낮음");
 
   const renderAlimtalkRow = (item, options = {}) => {
     const template = item.title || item.templateName || item.templateCode || item.type || "알림톡";
@@ -934,9 +1027,20 @@ function renderMessages(candidates, sends) {
 
   const sendList = qs("messagesSendList");
   if (sendList) {
-    sendList.innerHTML = sends.length
-      ? sends.map((item) => renderAlimtalkRow(item, { status: (send) => send.status || "done" })).join("")
-      : `<div class="empty-state">최근 alimtalkSends 문서가 없습니다.</div>`;
+    const failureRows = [
+      ...failedCandidates.map((item) => ({
+        ...item,
+        title: item.title || "후보 단계 실패",
+        reason: item.lastError || item.reason || item.candidateId,
+      })),
+      ...flowProblems,
+      ...failedSends,
+    ];
+    sendList.innerHTML = failureRows.length
+      ? failureRows.map((item) => renderAlimtalkRow(item, { status: (row) => row.status || row.sendStatus || "failed" })).join("")
+      : sends.length
+        ? sends.map((item) => renderAlimtalkRow(item, { status: (send) => send.status || "done" })).join("")
+        : `<div class="empty-state">최근 실패 또는 발송 기록이 없습니다.</div>`;
   }
 
   const templateList = qs("messagesTemplateList");
@@ -985,10 +1089,10 @@ function renderMessages(candidates, sends) {
       },
       {
         title: "실패 로그",
-        detail: failedSends.length
-          ? "실패 로그가 있습니다. 템플릿, 전화번호, Solapi 응답을 확인해야 합니다."
-          : "최근 발송 로그에서 실패 상태는 보이지 않습니다.",
-        status: failedSends.length ? "failed" : "success",
+        detail: totalFailures
+          ? `후보 실패 ${failedCandidates.length}건, 발송 실패 ${failedSends.length}건, 회원가입/수강료 흐름 문제 ${flowProblems.length}건을 확인해야 합니다.`
+          : "최근 후보/발송/회원가입 흐름에서 실패 상태는 보이지 않습니다.",
+        status: totalFailures ? "failed" : "success",
       },
       {
         title: "운영 경계",
@@ -1873,7 +1977,19 @@ function renderHomeDecisions() {
   const failedAutomation = state.automationItems.filter((item) =>
     ["failed", "error", "critical", "blocked"].includes(String(item.status || item.health || "").toLowerCase()),
   );
+  const failedCandidates = failedAlimtalkCandidates();
+  const failedSends = failedAlimtalkSends();
+  const flowProblems = problemRequestRows();
+  const communicationProblems = failedCandidates.length + failedSends.length + flowProblems.length;
   const rows = [
+    {
+      title: communicationProblems ? "알림톡·회원가입 실패 확인" : "알림톡·회원가입 정상권",
+      detail: communicationProblems
+        ? `후보 실패 ${failedCandidates.length}건, 발송 실패 ${failedSends.length}건, 현장 웰컴/가입서/수강료 흐름 문제 ${flowProblems.length}건이 있습니다.`
+        : "최근 후보/발송/현장 웰컴 흐름에서 실패 신호는 보이지 않습니다.",
+      status: communicationProblems ? "failed" : "success",
+      href: "./messages/",
+    },
     {
       title: failedAutomation.length ? "자동화 실패 확인" : "자동화 상태 정상권",
       detail: failedAutomation.length
@@ -1916,9 +2032,11 @@ function renderHomeSummary() {
     ["failed", "error", "critical", "blocked"].includes(String(item.status || item.health || "").toLowerCase()),
   );
   const activeMembers = state.members.filter((item) => toNumber(item.activeTicketCount) > 0).length;
-  const pendingCandidates = state.alimtalkCandidates.filter((item) =>
-    ["queued", "pending", "review", "reviewed", "processing"].includes(String(item.status || "").toLowerCase()),
-  ).length;
+  const pendingCandidates = state.alimtalkCandidates.filter((item) => isPendingStatus(item.status)).length;
+  const failedCandidates = failedAlimtalkCandidates().length;
+  const failedSends = failedAlimtalkSends().length;
+  const flowProblems = problemRequestRows().length;
+  const communicationProblems = failedCandidates + failedSends + flowProblems;
   const latestImport = state.sourceImports[0];
   setText("homeMemberTotal", formatCount(state.members.length, "명"));
   setText("homeMemberNote", `활성 수강권 ${activeMembers.toLocaleString("ko-KR")}명 · 전체 회원 검색 가능`);
@@ -1929,8 +2047,18 @@ function renderHomeSummary() {
       ? `${sourceKindLabel(latestImport.sourceKind || latestImport.kind)} · ${formatDate(latestImport.updatedAt || latestImport.importedAt)}`
       : "최근 원본 import 기록 대기",
   );
-  setText("homeMessageTotal", formatCount(state.alimtalkCandidates.length));
-  setText("homeMessageNote", pendingCandidates ? `${pendingCandidates}건 대기/검토 후보 확인` : "최근 후보 기준 대기 낮음");
+  setText(
+    "homeMessageTotal",
+    communicationProblems ? `${communicationProblems}건 확인` : formatCount(state.alimtalkCandidates.length),
+  );
+  setText(
+    "homeMessageNote",
+    communicationProblems
+      ? `후보/발송 실패 ${failedCandidates + failedSends}건 · 가입/수강료 흐름 ${flowProblems}건`
+      : pendingCandidates
+        ? `${pendingCandidates}건 대기/검토 후보 확인`
+        : "최근 후보 기준 대기 낮음",
+  );
   setText("homeAutomationTotal", failedAutomation.length ? `${failedAutomation.length}건 확인` : "정상권");
   setText("homeAutomationNote", openIssues.length ? `품질 이슈 ${openIssues.length}건과 함께 확인` : "자동화 실패/품질 위험 낮음");
 }
@@ -1956,6 +2084,11 @@ function renderFallback(error, options = {}) {
   renderImports([]);
   renderQualityIssues([]);
   renderMembers([]);
+  state.alimtalkCandidates = [];
+  state.alimtalkSends = [];
+  state.onsiteWelcomeRequests = [];
+  state.memberSignupContracts = [];
+  state.pricingInquiryAlimtalkRequests = [];
   renderMessages([], []);
   renderLessons([], [], []);
   renderHomeSummary();
@@ -1998,6 +2131,9 @@ async function refresh() {
       members,
       alimtalkCandidates,
       alimtalkSends,
+      onsiteWelcomeRequests,
+      memberSignupContracts,
+      pricingInquiryAlimtalkRequests,
       memberDetail,
       businessMembers,
       privateRequests,
@@ -2030,6 +2166,27 @@ async function refresh() {
         ? safeRead(
             "alimtalkSends",
             () => getRecentCollectionBy(db, runtime, "alimtalkSends", "updatedAt", shouldLoadPrivate ? 500 : 12),
+            [],
+          )
+        : Promise.resolve([]),
+      shouldLoadMessages || shouldLoadHome
+        ? safeRead(
+            "onsiteWelcomeRequests",
+            () => getOptionalCollectionBy(db, runtime, "onsiteWelcomeRequests", "updatedAt", 20),
+            [],
+          )
+        : Promise.resolve([]),
+      shouldLoadMessages || shouldLoadHome
+        ? safeRead(
+            "memberSignupContracts",
+            () => getOptionalCollectionBy(db, runtime, "memberSignupContracts", "updatedAt", 20),
+            [],
+          )
+        : Promise.resolve([]),
+      shouldLoadMessages || shouldLoadHome
+        ? safeRead(
+            "pricingInquiryAlimtalkRequests",
+            () => getOptionalCollectionBy(db, runtime, "pricingInquiryAlimtalkRequests", "updatedAt", 20),
             [],
           )
         : Promise.resolve([]),
@@ -2078,6 +2235,9 @@ async function refresh() {
     state.members = studioItems(members);
     state.alimtalkCandidates = alimtalkCandidates;
     state.alimtalkSends = alimtalkSends;
+    state.onsiteWelcomeRequests = studioItems(onsiteWelcomeRequests);
+    state.memberSignupContracts = studioItems(memberSignupContracts);
+    state.pricingInquiryAlimtalkRequests = studioItems(pricingInquiryAlimtalkRequests);
     state.memberDetail = memberDetail;
     state.businessMembers = businessMembers;
     state.privateRequests = privateRequests;

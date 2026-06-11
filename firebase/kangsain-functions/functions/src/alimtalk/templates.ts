@@ -28,7 +28,8 @@ export type SendableAlimtalkCandidateType =
   | "remaining_low"
   | "private_count_low"
   | "private_ticket_expiring"
-  | "long_absence";
+  | "long_absence"
+  | "pricing_info";
 
 export const ALIMTALK_TEMPLATES = {
   reservation_open: {
@@ -37,9 +38,9 @@ export const ALIMTALK_TEMPLATES = {
     status: "approved",
   },
   new_member: {
-    code: "KA01TP260514081318309wQGfeIJxIAJ",
-    label: "신규회원 웰컴 v3",
-    status: "approved",
+    code: "",
+    label: "신규회원 웰컴 v3 삭제됨",
+    status: "deleted",
   },
   onsite_welcome: {
     code: process.env.ONSITE_WELCOME_ALIMTALK_TEMPLATE_ID || "KA01TP260602101939427lPhGyuDLvFM",
@@ -79,7 +80,7 @@ export const ALIMTALK_TEMPLATES = {
   long_absence: {
     code: "KA01TP260524083643752cySb9BoDOjN",
     label: "장기 미방문 수업안내 v1",
-    status: "pending",
+    status: "approved",
   },
   staff_private_survey: {
     code: "KA01TP260519093416836f1EHZYJ00uM",
@@ -98,13 +99,18 @@ export const ALIMTALK_TEMPLATES = {
   },
   private_lesson_report: {
     code: "KA01TP260528081225871Fr92FW901Vo",
-    label: "회원용_프라이빗 수업 리포트 안내 v1",
+    label: "프라이빗 회원 리포트 안내 v1",
     status: "approved",
   },
   inbody_report: {
     code: "KA01TP260528090148593isshfXtt8vE",
     label: "회원용 인바디 리포트 안내 v1",
     status: "pending",
+  },
+  pricing_info: {
+    code: process.env.PRICING_INFO_ALIMTALK_TEMPLATE_ID || "KA01TP260611053817155zqYlw27wEOU",
+    label: "회원용_수강료 안내 링크 v1",
+    status: "approved",
   },
 } as const;
 
@@ -126,6 +132,7 @@ export const CANDIDATE_TEMPLATE_CODES: Record<SendableAlimtalkCandidateType, str
   private_count_low: ALIMTALK_TEMPLATES.private_count_low.code,
   private_ticket_expiring: ALIMTALK_TEMPLATES.private_ticket_expiring.code,
   long_absence: ALIMTALK_TEMPLATES.long_absence.code,
+  pricing_info: ALIMTALK_TEMPLATES.pricing_info.code,
 };
 
 export const STATIC_APPROVED_ALIMTALK_TEMPLATE_CODES: ReadonlySet<string> = new Set(
@@ -146,14 +153,22 @@ export const ALIMTALK_DEDUPE_POLICIES_BY_TEMPLATE_CODE: Record<string, AlimtalkD
     label: "예약 오픈 안내 주간 반복",
     windowDays: 6,
   },
-  [ALIMTALK_TEMPLATES.new_member.code]: {
-    label: "신규회원 웰컴 영구 1회",
-    windowDays: null,
-  },
-  [ALIMTALK_TEMPLATES.onsite_welcome.code]: {
-    label: "현장 웰컴 영구 1회",
-    windowDays: null,
-  },
+  ...(ALIMTALK_TEMPLATES.new_member.code
+    ? {
+        [ALIMTALK_TEMPLATES.new_member.code]: {
+          label: "신규회원 웰컴 영구 1회",
+          windowDays: null,
+        },
+      }
+    : {}),
+  ...(ALIMTALK_TEMPLATES.onsite_welcome.code
+    ? {
+        [ALIMTALK_TEMPLATES.onsite_welcome.code]: {
+          label: "현장 웰컴 영구 1회",
+          windowDays: null,
+        },
+      }
+    : {}),
   [ALIMTALK_TEMPLATES.ticket_expiring.code]: {
     label: "수강권별 기간 안내 30일",
     windowDays: 30,
@@ -193,6 +208,10 @@ export const ALIMTALK_DEDUPE_POLICIES_BY_TEMPLATE_CODE: Record<string, AlimtalkD
   [ALIMTALK_TEMPLATES.inbody_report.code]: {
     label: "인바디 리포트별 1회",
     windowDays: null,
+  },
+  [ALIMTALK_TEMPLATES.pricing_info.code]: {
+    label: "수강료 문의 안내 7일",
+    windowDays: 7,
   },
 };
 

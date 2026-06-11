@@ -63,31 +63,18 @@
         <section class="panel">
           <div class="panel-header">
             <div>
-              <h2>수강료 문의 즉시발송</h2>
-              <p>수강료를 문의한 분에게 노션 수강료 안내 링크를 단건 알림톡으로 보냅니다.</p>
+              <h2>수강료 문의 발송 위치</h2>
+              <p>수강료 안내 단건 발송은 홈탭의 빠른 액션으로 이동했습니다.</p>
             </div>
-            <span class="pill">manual</span>
+            <span class="pill good">home</span>
           </div>
-          <form class="action-form" id="pricingInquiryForm">
-            <label>
-              <span>휴대폰 번호</span>
-              <input id="pricingInquiryPhone" name="phone" type="tel" inputmode="numeric" autocomplete="tel" placeholder="010-0000-0000" />
-            </label>
-            <label>
-              <span>이름 또는 메모</span>
-              <input id="pricingInquiryName" name="memberName" type="text" autocomplete="name" placeholder="선택 입력" />
-            </label>
-            <label class="wide">
-              <span>내부 메모</span>
-              <textarea id="pricingInquiryNote" name="note" rows="2" placeholder="문의 경로나 상담 메모를 남깁니다. 알림톡 본문에는 들어가지 않습니다."></textarea>
-            </label>
-            <div class="action-form-footer">
-              <button class="primary-action" id="pricingInquirySendButton" type="submit">수강료 안내 발송</button>
-              <p class="form-status" id="pricingInquiryStatus" role="status" aria-live="polite">
-                SOLAPI 템플릿 승인 후 실제 발송됩니다. 같은 번호는 7일 중복 차단됩니다.
-              </p>
+          <a class="status-row status-link" href="../">
+            <div>
+              <strong>홈탭에서 수강료 안내 발송</strong>
+              <p>전화번호 입력, 7일 중복 차단, 발송 결과 확인을 홈에서 바로 처리합니다.</p>
             </div>
-          </form>
+            <span class="pill">바로가기</span>
+          </a>
         </section>
         <section class="panel">
           <div class="panel-header"><div><h2>발송 전 보호 규칙</h2><p>실제 외부 발송은 기존 canonical 원천과 중복 차단 규칙을 유지합니다.</p></div><span class="pill danger">guardrail</span></div>

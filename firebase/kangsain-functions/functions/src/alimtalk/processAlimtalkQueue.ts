@@ -18,6 +18,13 @@ const SOLAPI_SEND_URL = "https://api.solapi.com/messages/v4/send-many/detail";
 const NOTION_API_VERSION = "2022-06-28";
 const PROCESSING_STALE_MS = 10 * 60 * 1000;
 
+export interface AlimtalkCandidateProcessResult {
+  processed: boolean;
+  status: "not_found" | "not_claimed" | "sent" | "skipped" | "failed";
+  lastError?: string | null;
+  solapiMessageId?: string;
+}
+
 export async function processAlimtalkQueue(): Promise<{ processed: number; sent: number; failed: number }> {
   const snap = await refs.alimtalkCandidates().where("status", "in", ["queued", "processing"]).limit(20).get();
 
@@ -147,6 +154,132 @@ export async function processAlimtalkQueue(): Promise<{ processed: number; sent:
 
   logger.info("processAlimtalkQueue completed", { processed, sent, failed });
   return { processed, sent, failed };
+}
+
+export async function processAlimtalkCandidate(candidateId: string): Promise<AlimtalkCandidateProcessResult> {
+  const snap = await refs.alimtalkCandidate(candidateId).get();
+  const candidate = snap.data();
+  if (!candidate) return { processed: false, status: "not_found", lastError: "알림톡 후보가 없습니다" };
+  const claimed = await claimCandidate(candidate);
+  if (!claimed) return { processed: false, status: "not_claimed", lastError: "알림톡 후보를 처리할 수 없습니다" };
+
+  try {
+    const sendabilityIssue = await autoSendabilityIssue(claimed, todayKst());
+    if (sendabilityIssue) {
+      await refs.alimtalkCandidate(claimed.candidateId).set(
+        {
+          status: "skipped",
+          lastError: sendabilityIssue,
+          updatedAt: nowTimestamp(),
+        },
+        { merge: true },
+      );
+      return { processed: true, status: "skipped", lastError: sendabilityIssue };
+    }
+
+    const dedupeKey = alimtalkDedupeKey(claimed);
+    const dedupePolicy = alimtalkDedupePolicy(claimed.templateCode);
+    const duplicate = isAlimtalkTestRecipient(claimed)
+      ? ""
+      : await findCompletedDuplicateForCandidate(claimed, dedupeKey, dedupePolicy.windowDays);
+    if (duplicate) {
+      const lastError = `중복 발송 차단(${dedupePolicy.label}): ${duplicate}`;
+      await refs.alimtalkCandidate(claimed.candidateId).set(
+        {
+          status: "skipped",
+          dedupeKey,
+          lastError,
+          updatedAt: nowTimestamp(),
+        },
+        { merge: true },
+      );
+      return { processed: true, status: "skipped", lastError };
+    }
+
+    const attempts = (claimed.attempts || 0) + 1;
+    const result = await sendSolapiAlimtalk(claimed);
+    await refs.alimtalkCandidate(claimed.candidateId).set(
+      {
+        status: "sent",
+        dedupeKey,
+        attempts,
+        maxAttempts: claimed.maxAttempts || 2,
+        sentAt: nowTimestamp(),
+        lastError: null,
+        updatedAt: nowTimestamp(),
+      },
+      { merge: true },
+    );
+    await refs.alimtalkSend(claimed.candidateId).set(
+      {
+        sendId: claimed.candidateId,
+        studioId: claimed.studioId,
+        candidateId: claimed.candidateId,
+        memberId: claimed.memberId,
+        memberName: claimed.memberName,
+        memberPhone: claimed.memberPhone,
+        templateCode: claimed.templateCode,
+        dedupeKey,
+        dedupePolicy: dedupePolicy.label,
+        dedupeWindowDays: dedupePolicy.windowDays,
+        status: "done",
+        attempts,
+        maxAttempts: claimed.maxAttempts || 2,
+        nextRunAt: nowTimestamp(),
+        solapiMessageId: result.messageId,
+        lastError: null,
+        createdByUid: claimed.reviewedByUid || "system",
+        createdAt: nowTimestamp(),
+        updatedAt: nowTimestamp(),
+      },
+      { merge: true },
+    );
+    await markPrivateLessonReportSent(claimed);
+    return { processed: true, status: "sent", solapiMessageId: result.messageId };
+  } catch (err) {
+    const message = errorMessage(err);
+    const attempts = (claimed.attempts || 0) + 1;
+    const maxAttempts = claimed.maxAttempts || 2;
+    await refs.alimtalkCandidate(claimed.candidateId).set(
+      {
+        status: "failed",
+        attempts,
+        maxAttempts,
+        lastError: message,
+        updatedAt: nowTimestamp(),
+      },
+      { merge: true },
+    );
+    await refs.alimtalkSend(claimed.candidateId).set(
+      {
+        sendId: claimed.candidateId,
+        studioId: claimed.studioId,
+        candidateId: claimed.candidateId,
+        memberId: claimed.memberId,
+        memberName: claimed.memberName,
+        memberPhone: claimed.memberPhone,
+        templateCode: claimed.templateCode,
+        dedupeKey: alimtalkDedupeKey(claimed),
+        dedupePolicy: alimtalkDedupePolicy(claimed.templateCode).label,
+        dedupeWindowDays: alimtalkDedupePolicy(claimed.templateCode).windowDays,
+        status: "failed",
+        attempts,
+        maxAttempts,
+        nextRunAt: nowTimestamp(),
+        lastError: message,
+        createdByUid: claimed.reviewedByUid || "system",
+        createdAt: nowTimestamp(),
+        updatedAt: nowTimestamp(),
+      },
+      { merge: true },
+    );
+    logger.warn("processAlimtalkCandidate send failed", {
+      candidateId: claimed.candidateId,
+      templateCode: claimed.templateCode,
+      message,
+    });
+    return { processed: true, status: "failed", lastError: message };
+  }
 }
 
 async function markPrivateLessonReportSent(candidate: AlimtalkCandidateDoc): Promise<void> {
