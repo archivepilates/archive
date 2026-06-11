@@ -110,7 +110,7 @@ export const ALIMTALK_TEMPLATES = {
   pricing_info: {
     code: process.env.PRICING_INFO_ALIMTALK_TEMPLATE_ID || "KA01TP260611053817155zqYlw27wEOU",
     label: "회원용_수강료 안내 링크 v1",
-    status: "inspecting",
+    status: "approved",
   },
 } as const;
 
