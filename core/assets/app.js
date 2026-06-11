@@ -142,9 +142,9 @@ function deltaText(current, previous, suffix = "%") {
 
 function normalizeStatus(value) {
   const status = String(value || "unknown").toLowerCase();
-  if (["success", "ok", "healthy", "done", "active", "completed"].includes(status)) return "good";
+  if (["success", "ok", "healthy", "done", "active", "completed", "sent"].includes(status)) return "good";
   if (["failed", "error", "critical", "blocked"].includes(status)) return "danger";
-  if (["running", "pending", "warning", "review", "stale"].includes(status)) return "warn";
+  if (["running", "pending", "warning", "review", "stale", "queued", "skipped", "template_pending"].includes(status)) return "warn";
   return "";
 }
 
@@ -160,6 +160,10 @@ function statusLabel(value) {
     blocked: "중단",
     running: "실행중",
     pending: "대기",
+    queued: "대기",
+    sent: "발송완료",
+    skipped: "차단",
+    template_pending: "승인대기",
     submitted: "제출",
     pre_submitted: "사전 제출",
     post_submitted: "사후 제출",
@@ -1118,6 +1122,67 @@ function setPricingInquiryStatus(message, tone = "") {
   if (!element) return;
   element.textContent = message;
   element.className = `form-status ${tone}`.trim();
+}
+
+function pricingInquiryDisplayPhone(item) {
+  const phone = normalizePhone(item.memberPhone || item.phone || item.inquiryPhone || "");
+  if (!phone) return "전화번호 없음";
+  return `끝자리 ${phone.slice(-4)}`;
+}
+
+function pricingInquiryRecentTime(item) {
+  return item.completedAt || item.sentAt || item.updatedAt || item.createdAt || item.requestedAt;
+}
+
+function renderPricingInquiryRecentList() {
+  const list = qs("pricingInquiryHistoryList");
+  const count = qs("pricingInquiryHistoryCount");
+  if (!list) return;
+  const items = [...(state.pricingInquiryAlimtalkRequests || [])]
+    .sort((a, b) => timestampMs(pricingInquiryRecentTime(b)) - timestampMs(pricingInquiryRecentTime(a)))
+    .slice(0, 20);
+  if (count) count.textContent = `${items.length}건`;
+  if (!items.length) {
+    list.innerHTML = `<div class="empty-state">최근 수강료 안내 발송 이력이 없습니다.</div>`;
+    return;
+  }
+  list.innerHTML = items
+    .map((item) => {
+      const name = item.memberName || item.name || "고객";
+      const phone = pricingInquiryDisplayPhone(item);
+      const status = item.status || item.sendStatus || "unknown";
+      const time = formatDate(pricingInquiryRecentTime(item));
+      const note = item.note || item.payload?.note || "";
+      const error = item.lastError || item.errorMessage || "";
+      const buttonUrl = item.buttonUrl || item.pricingUrl || "";
+      const meta = [phone, time, item.requestedByName ? `처리 ${item.requestedByName}` : "", item.solapiMessageId ? `SOLAPI ${item.solapiMessageId}` : ""]
+        .filter(Boolean)
+        .join(" · ");
+      return `
+        <div class="status-row">
+          <div>
+            <strong>${escapeHtml(name)}</strong>
+            <p class="meta-line">${escapeHtml(meta)}</p>
+            ${note ? `<p class="note-line">메모: ${escapeHtml(note)}</p>` : `<p class="meta-line">내부 메모 없음</p>`}
+            ${error ? `<p class="note-line">확인: ${escapeHtml(error)}</p>` : ""}
+            ${buttonUrl ? `<p class="meta-line">링크: ${escapeHtml(buttonUrl)}</p>` : ""}
+          </div>
+          ${pill(status)}
+        </div>
+      `;
+    })
+    .join("");
+}
+
+function togglePricingInquiryHistory() {
+  const panel = qs("pricingInquiryHistoryPanel");
+  const button = qs("pricingInquiryHistoryToggle");
+  if (!panel || !button) return;
+  const nextOpen = panel.hidden;
+  panel.hidden = !nextOpen;
+  button.setAttribute("aria-expanded", String(nextOpen));
+  button.textContent = nextOpen ? "최근 발송/메모 닫기" : "최근 발송/메모 보기";
+  if (nextOpen) renderPricingInquiryRecentList();
 }
 
 async function handlePricingInquiryAlimtalkSubmit(event) {
@@ -2089,6 +2154,7 @@ function renderFallback(error, options = {}) {
   state.onsiteWelcomeRequests = [];
   state.memberSignupContracts = [];
   state.pricingInquiryAlimtalkRequests = [];
+  renderPricingInquiryRecentList();
   renderMessages([], []);
   renderLessons([], [], []);
   renderHomeSummary();
@@ -2256,6 +2322,7 @@ async function refresh() {
     renderMessages(alimtalkCandidates, alimtalkSends);
     renderHomeSummary();
     renderHomeDecisions();
+    renderPricingInquiryRecentList();
     renderMemberDetail(memberDetail);
     renderPrivate(privateRequests, privateRecords, privateUsageEvents, privateLedgerEntries, alimtalkCandidates, alimtalkSends);
     renderLessons(lessonOccurrences, reservations, [...deletedClassLogs, ...deletedLessons]);
@@ -2281,6 +2348,7 @@ enhanceNav();
 activateNav();
 qs("refreshButton")?.addEventListener("click", refresh);
 qs("pricingInquiryForm")?.addEventListener("submit", handlePricingInquiryAlimtalkSubmit);
+qs("pricingInquiryHistoryToggle")?.addEventListener("click", togglePricingInquiryHistory);
 qs("businessMonthSelect")?.addEventListener("change", (event) => renderBusinessMonth(event.target.value));
 qs("memberSearchInput")?.addEventListener("input", (event) => {
   memberSearchTerm = event.target.value.trim();

@@ -1039,6 +1039,26 @@ td span {
   cursor: pointer;
 }
 
+.secondary-action {
+  display: inline-flex;
+  min-height: 44px;
+  align-items: center;
+  justify-content: center;
+  border: 1px solid var(--line);
+  border-radius: 8px;
+  background: var(--surface-strong);
+  color: var(--text);
+  padding: 0 14px;
+  font-weight: 900;
+  cursor: pointer;
+}
+
+.secondary-action:hover,
+.secondary-action:focus-visible {
+  border-color: rgba(248, 91, 28, 0.38);
+  color: var(--accent);
+}
+
 .primary-action:disabled {
   cursor: progress;
   opacity: 0.62;
@@ -1063,6 +1083,64 @@ td span {
 
 .form-status.danger {
   color: var(--red);
+}
+
+.pricing-history-panel {
+  display: grid;
+  gap: 14px;
+  margin: 0 20px 20px;
+  border-top: 1px solid var(--line-soft);
+  padding-top: 18px;
+}
+
+.pricing-history-panel[hidden] {
+  display: none;
+}
+
+.pricing-history-header {
+  display: flex;
+  min-width: 0;
+  flex-wrap: wrap;
+  align-items: start;
+  justify-content: space-between;
+  gap: 12px;
+}
+
+.pricing-history-header strong {
+  display: block;
+  color: var(--text);
+  font-size: 1rem;
+  font-weight: 900;
+}
+
+.pricing-history-header p {
+  margin: 4px 0 0;
+  color: var(--muted);
+  font-size: 0.86rem;
+  font-weight: 700;
+}
+
+.pricing-history-list {
+  display: grid;
+  gap: 10px;
+}
+
+.pricing-history-list .status-row {
+  align-items: start;
+}
+
+.pricing-history-list .meta-line {
+  margin-top: 2px;
+  color: var(--muted);
+  font-size: 0.82rem;
+  font-weight: 800;
+}
+
+.pricing-history-list .note-line {
+  margin-top: 6px;
+  color: var(--text);
+  font-size: 0.88rem;
+  font-weight: 800;
 }
 
 .flow-list {

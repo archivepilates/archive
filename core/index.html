@@ -124,11 +124,32 @@
             </label>
             <div class="action-form-footer">
               <button class="primary-action" id="pricingInquirySendButton" type="submit">수강료 안내 발송</button>
+              <button
+                class="secondary-action"
+                id="pricingInquiryHistoryToggle"
+                type="button"
+                aria-expanded="false"
+                aria-controls="pricingInquiryHistoryPanel"
+              >
+                최근 발송/메모 보기
+              </button>
               <p class="form-status" id="pricingInquiryStatus" role="status" aria-live="polite">
                 승인된 SOLAPI 템플릿으로 발송합니다. 같은 번호는 7일 중복 차단됩니다.
               </p>
             </div>
           </form>
+          <div class="pricing-history-panel" id="pricingInquiryHistoryPanel" hidden>
+            <div class="pricing-history-header">
+              <div>
+                <strong>최근 수강료 안내 발송</strong>
+                <p>Firestore pricingInquiryAlimtalkRequests 기준입니다. 내부 메모는 알림톡 본문에 포함되지 않습니다.</p>
+              </div>
+              <span class="pill" id="pricingInquiryHistoryCount">0건</span>
+            </div>
+            <div class="pricing-history-list" id="pricingInquiryHistoryList">
+              <div class="empty-state">최근 발송 이력을 불러오면 여기에 표시됩니다.</div>
+            </div>
+          </div>
         </section>
 
         <section class="panel" aria-label="메뉴별 현황">
