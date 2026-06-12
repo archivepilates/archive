@@ -721,6 +721,7 @@ export interface MemberMemoDoc {
   visibility: MemoVisibility;
   content: string;
   syncStatus: SyncStatus;
+  studioMateWriteMode?: "playwright" | "not_required";
   createdByUid: string;
   createdAt: Timestamp;
   updatedAt: Timestamp;

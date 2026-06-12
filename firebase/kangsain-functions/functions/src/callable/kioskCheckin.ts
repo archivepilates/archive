@@ -3,7 +3,6 @@ import { db } from "../config/firebase";
 import { DEFAULT_STUDIO_ID } from "../config/constants";
 import { getBooking } from "../firestore/bookingRepository";
 import { refs } from "../firestore/refs";
-import { enqueueBookingAttendanceJob } from "../queue/enqueueWriteJob";
 import { rebuildInstructorView } from "../sync/rebuildInstructorViews";
 import { requireManager, requireStaff } from "../security/authGuards";
 import type { BookingDoc, MemberProfileDoc } from "../types/models";
@@ -11,6 +10,7 @@ import { todayKst, nowTimestamp } from "../utils/date";
 import { AppError } from "../utils/errors";
 
 const PARKING_DISCOUNT_JOBS = "parkingDiscountJobs";
+const CHECKIN_EVENTS = "checkinEvents";
 const VEHICLE_MAX_COUNT = 4;
 
 type KioskAccess = {
@@ -114,7 +114,9 @@ export async function submitKioskCheckinHandler(request: CallableRequest): Promi
   ok: true;
   bookingId: string;
   attendanceStatus: "attended";
-  attendanceJobId: string;
+  attendanceJobId: null;
+  checkinEventId: string;
+  studioMateWriteStatus: "not_requested";
   parkingDiscountJobId: string | null;
   vehicleSaved: boolean;
 }> {
@@ -154,20 +156,15 @@ export async function submitKioskCheckinHandler(request: CallableRequest): Promi
     parkingDiscountJobId,
   });
 
-  const attendanceJob = await enqueueBookingAttendanceJob({
-    studioId: booking.studioId,
-    bookingId,
-    attendanceStatus: "attended",
-    createdByUid: access.actorUid,
-    allowBeforeStart: true,
-  });
   await rebuildInstructorView({ studioId: booking.studioId, staffId: booking.staffId, date: booking.lectureDate });
 
   return {
     ok: true,
     bookingId,
     attendanceStatus: "attended",
-    attendanceJobId: attendanceJob.jobId,
+    attendanceJobId: null,
+    checkinEventId: checkinEventId(booking.bookingId),
+    studioMateWriteStatus: "not_requested",
     parkingDiscountJobId,
     vehicleSaved,
   };
@@ -311,10 +308,12 @@ async function markBookingCheckedInAndMaybeCreateParkingJob(input: {
   parkingDiscountJobId: string | null;
 }): Promise<void> {
   const bookingRef = db.collection("bookings").doc(input.bookingId);
+  const checkinEventRef = db.collection(CHECKIN_EVENTS).doc(checkinEventId(input.booking.bookingId));
   const jobRef = input.parkingDiscountJobId
     ? db.collection(PARKING_DISCOUNT_JOBS).doc(input.parkingDiscountJobId)
     : null;
   await db.runTransaction(async (tx) => {
+    const checkinEventSnap = await tx.get(checkinEventRef);
     if (jobRef && input.parkingDiscountJobId) {
       const snap = await tx.get(jobRef);
       if (!snap.exists) {
@@ -343,10 +342,12 @@ async function markBookingCheckedInAndMaybeCreateParkingJob(input: {
       bookingRef,
       {
         attendanceStatus: "attended",
-        syncStatus: "pending",
         kioskCheckinAt: input.now,
         kioskCheckinByUid: input.uid,
         kioskCheckinSource: "core_checkin",
+        kioskCheckinWriteMode: "core_only",
+        studioMateAttendanceWriteStatus: "not_requested",
+        studioMateAttendanceWriteReason: "studiomate_api_disabled",
         parkingDiscountJobId: input.parkingDiscountJobId,
         parkingCarLast4: input.carNumber ? carLast4(input.carNumber) : "",
         parkingStatus: input.parkingDiscountJobId ? "pending" : "not_requested",
@@ -355,7 +356,39 @@ async function markBookingCheckedInAndMaybeCreateParkingJob(input: {
       },
       { merge: true },
     );
+    tx.set(
+      checkinEventRef,
+      {
+        eventId: checkinEventRef.id,
+        status: "done",
+        studioId: input.booking.studioId,
+        memberId: input.booking.memberId,
+        memberName: input.booking.memberName,
+        bookingId: input.booking.bookingId,
+        lectureId: input.booking.lectureId,
+        lessonDate: input.booking.lectureDate,
+        lectureStartAt: input.booking.lectureStartAt || null,
+        staffId: input.booking.staffId,
+        staffName: input.booking.staffName,
+        attendanceStatus: "attended",
+        source: "core_checkin",
+        writeMode: "core_only",
+        studioMateWriteStatus: "not_requested",
+        studioMateWriteReason: "studiomate_api_disabled",
+        parkingDiscountJobId: input.parkingDiscountJobId,
+        parkingCarLast4: input.carNumber ? carLast4(input.carNumber) : "",
+        checkedInByUid: input.uid,
+        checkedInAt: input.now,
+        updatedAt: input.now,
+        ...(checkinEventSnap.exists ? { repeatedAt: input.now } : { createdAt: input.now }),
+      },
+      { merge: true },
+    );
   });
+}
+
+function checkinEventId(bookingId: string): string {
+  return `checkin_${safeId(bookingId) || hashSmall(bookingId)}`;
 }
 
 function parkingJobId(bookingId: string, carNumber: string): string {

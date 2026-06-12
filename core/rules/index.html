@@ -89,7 +89,9 @@
                 <strong>출석 체크인</strong
                 ><span
                   >입구 iPad 체크인은 운영자 로그인과 기기 설정 없이 바로
-                  동작하며, 오늘 예약된 bookings만 조회합니다.</span
+                  동작하며, 오늘 예약된 bookings만 조회합니다. 체크인 결과는
+                  CORE 전용 checkinEvents와 bookings에만 기록하고 StudioMate
+                  API 쓰기 큐에는 넣지 않습니다.</span
                 >
               </div>
             </div>
@@ -110,6 +112,16 @@
             <p>
               알림톡, 연락처, StudioMate write는 승인된 canonical source에서만
               실행.
+            </p>
+          </article>
+          <article class="panel detail-card">
+            <span class="pill warn">write guard</span>
+            <h2>StudioMate 쓰기 차단</h2>
+            <p>
+              StudioMate API 기반 scheduledProcessWriteQueue는 중단 상태를
+              유지합니다. 출석 체크인은 CORE 기록과 iParking 주차등록만
+              처리합니다. 회원 메모 복사는 기존 API 큐가 아니라
+              studiomateMemoWriteJobs Playwright 큐로만 처리합니다.
             </p>
           </article>
           <article class="panel detail-card">

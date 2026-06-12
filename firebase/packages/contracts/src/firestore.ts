@@ -10,6 +10,7 @@ export const archiveCollections = {
   privateLessonChartRecords: "privateLessonChartRecords",
   adminSyncRequests: "adminSyncRequests",
   parkingDiscountJobs: "parkingDiscountJobs",
+  checkinEvents: "checkinEvents",
   workLanes: "workLanes",
   membersMirror: "members",
   member360CardsMirror: "member360Cards",
@@ -30,6 +31,7 @@ export const sourceOfTruthCollections = [
   archiveCollections.privateLessonChartRecords,
   archiveCollections.adminSyncRequests,
   archiveCollections.parkingDiscountJobs,
+  archiveCollections.checkinEvents,
 ] as const;
 
 export const mirrorCollections = [

@@ -397,6 +397,11 @@ service cloud.firestore {
       allow write: if false;
     }
 
+    match /checkinEvents/{eventId} {
+      allow read: if isManager() && sameStudio(resource.data.studioId);
+      allow write: if false;
+    }
+
     match /alimtalkTemplateStates/{templateCode} {
       allow read: if isManager();
       allow write: if false;
@@ -404,20 +409,7 @@ service cloud.firestore {
 
     match /writeQueue/{jobId} {
       allow read: if isManager();
-      allow create: if
-        signedIn() &&
-        sameStudio(request.resource.data.studioId) &&
-        request.resource.data.jobId == jobId &&
-        request.resource.data.createdByUid == request.auth.uid &&
-        request.resource.data.status == 'pending' &&
-        request.resource.data.attempts == 0 &&
-        request.resource.data.maxAttempts == 5 &&
-        request.resource.data.lastError == null &&
-        request.resource.data.type in ['bookingAttendanceUpdate', 'memberMemoCreate'] &&
-        request.resource.data.payload is map &&
-        (request.resource.data.type != 'bookingAttendanceUpdate' ||
-          (request.resource.data.payload.bookingId is string &&
-            bookingCanUpdateAttendance(request.resource.data.payload.bookingId)));
+      allow create: if false;
       allow update, delete: if false;
     }
 

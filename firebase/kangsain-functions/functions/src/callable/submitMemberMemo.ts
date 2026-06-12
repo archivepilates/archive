@@ -1,7 +1,7 @@
 import type { CallableRequest } from "firebase-functions/v2/https";
+import { db } from "../config/firebase";
 import { getBooking } from "../firestore/bookingRepository";
 import { refs } from "../firestore/refs";
-import { enqueueMemberMemoJob } from "../queue/enqueueWriteJob";
 import { rebuildInstructorView } from "../sync/rebuildInstructorViews";
 import { requireStaff, assertOwnStaff } from "../security/authGuards";
 import type { MemoType, MemoVisibility } from "../types/models";
@@ -27,6 +27,7 @@ export async function submitMemberMemoHandler(request: CallableRequest): Promise
   if (!booking) throw new AppError("INVALID_ARGUMENT", "예약을 찾을 수 없습니다");
   assertOwnStaff(staff, booking.staffId);
 
+  const now = nowTimestamp();
   const memoRef = refs.memberMemos().doc();
   await memoRef.set({
     memoId: memoRef.id,
@@ -41,26 +42,46 @@ export async function submitMemberMemoHandler(request: CallableRequest): Promise
     memoType,
     visibility,
     content,
-    syncStatus: "pending",
+    syncStatus: memoType === "member_note" ? "pending" : "synced",
+    studioMateWriteMode: memoType === "member_note" ? "playwright" : "not_required",
     createdByUid: request.auth?.uid || "unknown",
-    createdAt: nowTimestamp(),
-    updatedAt: nowTimestamp(),
+    createdAt: now,
+    updatedAt: now,
   });
   await refs
     .booking(bookingId)
     .set(
-      { lastMemoPreview: content.slice(0, 60), lastMemoAt: nowTimestamp(), updatedAt: nowTimestamp() },
+      { lastMemoPreview: content.slice(0, 60), lastMemoAt: now, updatedAt: now },
       { merge: true },
     );
-  const job =
-    memoType === "member_note"
-      ? await enqueueMemberMemoJob({
-          studioId: booking.studioId,
-          memberId,
-          content,
-          createdByUid: request.auth?.uid || "unknown",
-        })
-      : null;
+  const jobId = memoType === "member_note" ? memoRef.id : null;
+  if (jobId) {
+    await db.collection("studiomateMemoWriteJobs").doc(jobId).set(
+      {
+        jobId,
+        studioId: booking.studioId,
+        source: "archive_core_member_memo",
+        status: "pending",
+        writeMode: "playwright",
+        memberId,
+        memberName: booking.memberName,
+        memberPhone: booking.memberPhone || "",
+        bookingId,
+        lectureId,
+        lectureDate: booking.lectureDate,
+        staffId: booking.staffId,
+        staffName: booking.staffName,
+        content,
+        attempts: 0,
+        maxAttempts: 3,
+        lastError: null,
+        createdByUid: request.auth?.uid || "unknown",
+        createdAt: now,
+        updatedAt: now,
+      },
+      { merge: true },
+    );
+  }
   await rebuildInstructorView({ studioId: booking.studioId, staffId: booking.staffId, date: booking.lectureDate });
-  return { ok: true, memoId: memoRef.id, jobId: job?.jobId || null };
+  return { ok: true, memoId: memoRef.id, jobId };
 }
