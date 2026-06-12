@@ -1,0 +1,120 @@
+<!doctype html>
+<html lang="ko">
+  <head>
+    <meta charset="utf-8" />
+    <meta
+      name="viewport"
+      content="width=device-width, initial-scale=1, viewport-fit=cover"
+    />
+    <meta name="theme-color" content="#eef3f7" />
+    <title>출석 체크인 · ARCHIVE CORE</title>
+    <link rel="stylesheet" href="../assets/styles.css" />
+    <script src="../firebase-config.js"></script>
+    <script type="module" src="../assets/app.js"></script>
+  </head>
+  <body data-checkin-app>
+    <main
+      class="checkin-shell"
+      data-checkin-stage="entry"
+      aria-label="ARCHIVE PILATES 출석 체크인"
+    >
+      <section class="checkin-hero">
+        <div class="checkin-brand">
+          <div class="checkin-mark" aria-hidden="true">A</div>
+          <div>
+            <p class="eyebrow">ARCHIVE PILATES</p>
+            <h1>출석 체크인</h1>
+          </div>
+        </div>
+        <div class="checkin-clock">
+          <span id="checkinDateLabel">오늘</span>
+          <strong id="checkinTimeLabel">--:--</strong>
+        </div>
+      </section>
+
+      <section class="checkin-layout">
+        <article
+          class="checkin-card checkin-entry"
+          aria-labelledby="checkinEntryTitle"
+        >
+          <div class="checkin-card-head">
+            <div>
+              <span class="pill">Step 1</span>
+              <h2 id="checkinEntryTitle">휴대폰번호 뒤 4자리</h2>
+            </div>
+            <button
+              class="checkin-ghost-button"
+              type="button"
+              id="checkinResetButton"
+            >
+              처음으로
+            </button>
+          </div>
+
+          <div id="checkinEntryMessage" class="checkin-message">
+            번호를 입력하면 오늘 예약된 수업과 등록 차량을 확인합니다.
+          </div>
+
+          <div class="checkin-digits" aria-label="입력된 번호">
+            <span data-digit-dot></span>
+            <span data-digit-dot></span>
+            <span data-digit-dot></span>
+            <span data-digit-dot></span>
+          </div>
+          <input
+            id="checkinPhoneInput"
+            class="sr-only"
+            inputmode="numeric"
+            autocomplete="off"
+            maxlength="4"
+            aria-label="휴대폰번호 뒤 4자리"
+          />
+
+          <div class="checkin-keypad" aria-label="번호 입력">
+            <button type="button" data-checkin-key="1">1</button>
+            <button type="button" data-checkin-key="2">2</button>
+            <button type="button" data-checkin-key="3">3</button>
+            <button type="button" data-checkin-key="4">4</button>
+            <button type="button" data-checkin-key="5">5</button>
+            <button type="button" data-checkin-key="6">6</button>
+            <button type="button" data-checkin-key="7">7</button>
+            <button type="button" data-checkin-key="8">8</button>
+            <button type="button" data-checkin-key="9">9</button>
+            <button type="button" data-checkin-action="backspace">지움</button>
+            <button type="button" data-checkin-key="0">0</button>
+            <button type="button" data-checkin-action="lookup" class="accent">
+              확인
+            </button>
+          </div>
+        </article>
+
+        <article class="checkin-card checkin-result" aria-live="polite">
+          <div class="checkin-card-head">
+            <div>
+              <span class="pill good">Step 2</span>
+              <h2>예약 확인</h2>
+            </div>
+            <div class="checkin-result-tools">
+              <span class="checkin-state" id="checkinStateLabel"
+                >입력 대기</span
+              >
+              <button
+                class="checkin-ghost-button"
+                type="button"
+                id="checkinResultResetButton"
+              >
+                다시 입력
+              </button>
+            </div>
+          </div>
+
+          <div id="checkinMessage" class="checkin-message">
+            번호를 입력하면 오늘 예약된 수업과 등록 차량을 확인합니다.
+          </div>
+
+          <div id="checkinMatches" class="checkin-matches"></div>
+        </article>
+      </section>
+    </main>
+  </body>
+</html>

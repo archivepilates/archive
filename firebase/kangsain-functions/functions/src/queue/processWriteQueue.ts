@@ -78,7 +78,8 @@ async function processAttendanceJob(job: WriteQueueJobDoc): Promise<void> {
   if (!booking) throw new Error(`Booking not found: ${bookingId}`);
   if (booking.appStatus !== "reserved")
     throw new Error(`Attendance can only be changed for reserved bookings: ${bookingId} (${booking.appStatus})`);
-  if (!canUpdateAttendanceAfterClassStart(booking.lectureStartAt?.toDate()))
+  const allowBeforeStart = job.payload.allowBeforeStart === true;
+  if (!allowBeforeStart && !canUpdateAttendanceAfterClassStart(booking.lectureStartAt?.toDate()))
     throw new Error(`Attendance can only be changed after lecture start: ${bookingId}`);
   const client = new StudioMateClient(job.studioId);
   await client.updateBookingStatus({ bookingId, status: toStudioMateAttendanceStatus(attendanceStatus) });

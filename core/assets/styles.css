@@ -21,8 +21,9 @@
   --sidebar: #ffffff;
   --shadow: 0 20px 55px rgba(20, 35, 55, 0.08);
   --shadow-soft: 0 10px 28px rgba(20, 35, 55, 0.06);
-  --font-system: -apple-system, BlinkMacSystemFont, "SF Pro Text", "SF Pro Display", "Apple SD Gothic Neo",
-    "Helvetica Neue", Arial, sans-serif;
+  --font-system:
+    -apple-system, BlinkMacSystemFont, "SF Pro Text", "SF Pro Display",
+    "Apple SD Gothic Neo", "Helvetica Neue", Arial, sans-serif;
   color-scheme: light;
 }
 
@@ -41,7 +42,12 @@ body {
   min-height: 100dvh;
   overflow-x: clip;
   background:
-    linear-gradient(135deg, rgba(37, 99, 235, 0.08), rgba(240, 100, 24, 0.04) 42%, transparent 70%),
+    linear-gradient(
+      135deg,
+      rgba(37, 99, 235, 0.08),
+      rgba(240, 100, 24, 0.04) 42%,
+      transparent 70%
+    ),
     linear-gradient(180deg, var(--paper), var(--paper-deep));
   color: var(--text);
   font-family: var(--font-system);
@@ -885,7 +891,11 @@ td span {
   position: absolute;
   inset: 0 auto 0 0;
   width: var(--bar-width);
-  background: linear-gradient(90deg, rgba(37, 99, 235, 0.16), rgba(240, 100, 24, 0.06));
+  background: linear-gradient(
+    90deg,
+    rgba(37, 99, 235, 0.16),
+    rgba(240, 100, 24, 0.06)
+  );
 }
 
 .business-bar.active {
@@ -1106,6 +1116,452 @@ a.rank-row:hover,
   font-size: 0.86rem;
 }
 
+.sr-only {
+  position: absolute;
+  width: 1px;
+  height: 1px;
+  overflow: hidden;
+  clip: rect(0, 0, 0, 0);
+  white-space: nowrap;
+}
+
+[data-checkin-app] {
+  min-height: 100dvh;
+  background:
+    linear-gradient(135deg, rgba(240, 100, 24, 0.08), transparent 38%),
+    linear-gradient(160deg, rgba(37, 99, 235, 0.08), transparent 48%),
+    linear-gradient(180deg, var(--paper), var(--paper-deep));
+}
+
+.checkin-shell {
+  display: grid;
+  width: min(100%, 1180px);
+  min-height: 100dvh;
+  margin: 0 auto;
+  gap: clamp(18px, 2.6vw, 28px);
+  padding: max(18px, env(safe-area-inset-top))
+    max(18px, env(safe-area-inset-right)) max(18px, env(safe-area-inset-bottom))
+    max(18px, env(safe-area-inset-left));
+}
+
+.checkin-hero {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 18px;
+  min-width: 0;
+}
+
+.checkin-brand {
+  display: flex;
+  min-width: 0;
+  align-items: center;
+  gap: 14px;
+}
+
+.checkin-mark {
+  display: inline-grid;
+  width: 70px;
+  height: 70px;
+  flex: 0 0 auto;
+  place-items: center;
+  border-radius: 8px;
+  background: linear-gradient(145deg, #ff7a2c, var(--accent));
+  color: #fff;
+  box-shadow: 0 18px 36px rgba(240, 100, 24, 0.24);
+  font-size: 2rem;
+  font-weight: 900;
+}
+
+.checkin-brand h1 {
+  font-size: clamp(2rem, 3.4vw, 3.4rem);
+}
+
+.checkin-clock {
+  display: grid;
+  min-width: 150px;
+  justify-items: end;
+  gap: 2px;
+  color: var(--muted);
+  font-weight: 800;
+}
+
+.checkin-clock strong {
+  color: var(--text);
+  font-size: clamp(1.6rem, 3vw, 2.55rem);
+  line-height: 1;
+}
+
+.checkin-layout {
+  display: grid;
+  grid-template-columns: minmax(320px, 0.78fr) minmax(0, 1.22fr);
+  gap: clamp(18px, 2.4vw, 28px);
+  align-items: start;
+}
+
+.checkin-card {
+  min-width: 0;
+  border: 1px solid rgba(255, 255, 255, 0.74);
+  border-radius: 8px;
+  background: rgba(255, 255, 255, 0.9);
+  box-shadow: var(--shadow);
+  backdrop-filter: blur(18px);
+  padding: clamp(18px, 2.4vw, 28px);
+}
+
+.checkin-entry {
+  position: sticky;
+  top: 18px;
+}
+
+.checkin-card-head,
+.checkin-member-top,
+.checkin-vehicle-title,
+.checkin-actions {
+  display: flex;
+  min-width: 0;
+  align-items: flex-start;
+  justify-content: space-between;
+  gap: 14px;
+}
+
+.checkin-card-head h2 {
+  margin-top: 10px;
+  font-size: clamp(1.28rem, 2.2vw, 1.85rem);
+}
+
+.checkin-ghost-button {
+  min-width: 84px;
+  border: 1px solid var(--line-soft);
+  border-radius: 8px;
+  background: var(--surface-strong);
+  color: var(--muted);
+  cursor: pointer;
+  padding: 0 14px;
+  font-weight: 800;
+}
+
+.checkin-digits {
+  display: grid;
+  grid-template-columns: repeat(4, minmax(0, 1fr));
+  gap: 12px;
+  margin: clamp(20px, 3vw, 32px) 0;
+}
+
+.checkin-digits span {
+  display: grid;
+  aspect-ratio: 1.28 / 1;
+  min-height: 64px;
+  place-items: center;
+  border: 1px solid var(--line);
+  border-radius: 8px;
+  background: var(--surface);
+  color: var(--text);
+  font-size: clamp(1.5rem, 4vw, 2.4rem);
+  font-weight: 900;
+}
+
+.checkin-digits span::after {
+  content: "";
+  width: 12px;
+  height: 12px;
+  border-radius: 999px;
+  background: var(--line);
+}
+
+.checkin-digits span.is-filled::after {
+  display: none;
+}
+
+.checkin-keypad {
+  display: grid;
+  grid-template-columns: repeat(3, minmax(0, 1fr));
+  gap: 10px;
+}
+
+.checkin-keypad button,
+.checkin-submit,
+.checkin-booking,
+.checkin-vehicle {
+  min-width: 0;
+  border: 1px solid var(--line-soft);
+  border-radius: 8px;
+  background: var(--surface-strong);
+  color: var(--text);
+  cursor: pointer;
+  font-weight: 900;
+}
+
+.checkin-keypad button {
+  min-height: clamp(64px, 8vw, 88px);
+  font-size: clamp(1.28rem, 3vw, 2rem);
+}
+
+.checkin-keypad button.accent,
+.checkin-submit.primary {
+  border-color: rgba(240, 100, 24, 0.18);
+  background: var(--accent);
+  color: #fff;
+  box-shadow: 0 12px 28px rgba(240, 100, 24, 0.18);
+}
+
+.checkin-result {
+  display: grid;
+  gap: 16px;
+}
+
+.checkin-state {
+  display: inline-flex;
+  min-height: 34px;
+  align-items: center;
+  border-radius: 999px;
+  background: #eef3f7;
+  color: var(--muted);
+  padding: 5px 12px;
+  font-size: 0.86rem;
+  font-weight: 900;
+  white-space: nowrap;
+}
+
+.checkin-state.good {
+  background: var(--green-soft);
+  color: var(--green);
+}
+
+.checkin-state.warn {
+  background: var(--accent-soft);
+  color: var(--accent);
+}
+
+.checkin-state.danger {
+  background: var(--red-soft);
+  color: var(--red);
+}
+
+.checkin-message {
+  border: 1px solid var(--line-soft);
+  border-radius: 8px;
+  background: var(--surface);
+  color: var(--muted);
+  padding: 14px;
+  font-weight: 800;
+}
+
+.checkin-message.good {
+  border-color: rgba(15, 118, 110, 0.2);
+  background: var(--green-soft);
+  color: var(--green);
+}
+
+.checkin-message.warn {
+  border-color: rgba(240, 100, 24, 0.24);
+  background: var(--accent-soft);
+  color: var(--accent);
+}
+
+.checkin-message.danger {
+  border-color: rgba(180, 35, 24, 0.2);
+  background: var(--red-soft);
+  color: var(--red);
+}
+
+.checkin-matches {
+  display: grid;
+  gap: 14px;
+}
+
+.checkin-member {
+  display: grid;
+  gap: 16px;
+  border: 1px solid var(--line-soft);
+  border-radius: 8px;
+  background: var(--surface-strong);
+  padding: clamp(16px, 2vw, 22px);
+  box-shadow: var(--shadow-soft);
+}
+
+.checkin-member.is-selected {
+  border-color: rgba(240, 100, 24, 0.26);
+}
+
+.checkin-member-top strong {
+  display: block;
+  font-size: clamp(1.28rem, 2.2vw, 1.7rem);
+}
+
+.checkin-member-top span,
+.checkin-member-top em,
+.checkin-vehicle-title span,
+.checkin-car-field span {
+  color: var(--muted);
+  font-size: 0.92rem;
+  font-style: normal;
+  font-weight: 800;
+}
+
+.checkin-bookings,
+.checkin-vehicles {
+  display: grid;
+  gap: 10px;
+}
+
+.checkin-booking {
+  display: grid;
+  grid-template-columns: minmax(86px, 0.34fr) minmax(0, 1fr);
+  gap: 8px 12px;
+  min-height: 76px;
+  align-items: center;
+  padding: 12px;
+  text-align: left;
+}
+
+.checkin-booking span {
+  color: var(--accent);
+  font-size: 1.12rem;
+  font-weight: 900;
+}
+
+.checkin-booking strong {
+  min-width: 0;
+  overflow-wrap: anywhere;
+  font-size: 1.04rem;
+}
+
+.checkin-booking small {
+  grid-column: 2;
+  color: var(--muted);
+  font-size: 0.86rem;
+  font-weight: 800;
+}
+
+.checkin-booking.is-selected,
+.checkin-vehicle.is-selected {
+  border-color: rgba(240, 100, 24, 0.3);
+  background: var(--accent-soft);
+  color: var(--accent);
+}
+
+.checkin-vehicle-box {
+  display: grid;
+  gap: 12px;
+  border-radius: 8px;
+  background: #f6f9fb;
+  padding: 14px;
+}
+
+.checkin-vehicles {
+  grid-template-columns: repeat(auto-fit, minmax(min(100%, 140px), 1fr));
+}
+
+.checkin-vehicle {
+  min-height: 52px;
+  padding: 0 12px;
+}
+
+.checkin-car-field {
+  display: grid;
+  gap: 7px;
+}
+
+.checkin-car-field input {
+  width: 100%;
+  min-height: 56px;
+  border: 1px solid var(--line);
+  border-radius: 8px;
+  background: var(--surface-strong);
+  color: var(--text);
+  padding: 0 14px;
+  font-size: 1.08rem;
+  font-weight: 900;
+}
+
+.checkin-actions {
+  align-items: stretch;
+}
+
+.checkin-submit {
+  flex: 1 1 0;
+  min-height: 60px;
+  padding: 0 14px;
+  font-size: 1rem;
+}
+
+.checkin-submit.secondary {
+  color: var(--muted);
+}
+
+.checkin-submit:disabled {
+  cursor: progress;
+  opacity: 0.58;
+}
+
+.checkin-shell[data-checkin-stage] {
+  display: grid;
+  align-content: start;
+}
+
+.checkin-shell[data-checkin-stage] .checkin-layout {
+  display: grid;
+  grid-template-columns: 1fr;
+  justify-items: center;
+  gap: 0;
+}
+
+.checkin-shell[data-checkin-stage] .checkin-card {
+  width: min(100%, 720px);
+}
+
+.checkin-shell[data-checkin-stage] .checkin-result {
+  width: min(100%, 860px);
+}
+
+.checkin-shell[data-checkin-stage] .checkin-entry {
+  position: static;
+}
+
+.checkin-shell[data-checkin-stage="entry"] .checkin-result,
+.checkin-shell[data-checkin-stage="confirm"] .checkin-entry {
+  display: none;
+}
+
+.checkin-result-tools {
+  display: inline-flex;
+  min-width: 0;
+  align-items: center;
+  justify-content: flex-end;
+  gap: 10px;
+}
+
+.checkin-shell[data-checkin-stage="entry"] .checkin-card-head {
+  align-items: center;
+}
+
+.checkin-shell[data-checkin-stage="entry"] .checkin-entry {
+  padding: clamp(24px, 3.4vw, 38px);
+}
+
+.checkin-shell[data-checkin-stage="entry"] .checkin-digits {
+  margin: clamp(24px, 3.4vw, 38px) 0;
+}
+
+.checkin-shell[data-checkin-stage="confirm"] .checkin-message {
+  min-height: 56px;
+}
+
+.checkin-shell[data-checkin-stage="confirm"] .checkin-member {
+  gap: 18px;
+  padding: clamp(18px, 2.4vw, 28px);
+}
+
+.checkin-shell[data-checkin-stage="confirm"] .checkin-booking {
+  min-height: 92px;
+  padding: 16px;
+}
+
+.checkin-shell[data-checkin-stage="confirm"] .checkin-actions {
+  margin-top: 2px;
+}
+
 @media (prefers-reduced-motion: reduce) {
   *,
   *::before,
@@ -1181,6 +1637,14 @@ a.rank-row:hover,
   [data-member-detail-dashboard] .kpis,
   [data-member-detail-dashboard] .overview-grid {
     grid-template-columns: 1fr 1fr;
+  }
+
+  .checkin-layout {
+    grid-template-columns: 1fr;
+  }
+
+  .checkin-entry {
+    position: static;
   }
 }
 
@@ -1269,11 +1733,11 @@ a.rank-row:hover,
     padding: 16px;
   }
 
-.toolbar {
-  align-items: stretch;
-  flex-direction: column;
-  padding: 16px 16px 0;
-}
+  .toolbar {
+    align-items: stretch;
+    flex-direction: column;
+    padding: 16px 16px 0;
+  }
 
   .search-field {
     width: 100%;
@@ -1286,6 +1750,41 @@ a.rank-row:hover,
 
   .panel-header {
     padding-bottom: 0;
+  }
+
+  .checkin-shell {
+    padding: 12px;
+  }
+
+  .checkin-hero,
+  .checkin-card-head,
+  .checkin-member-top,
+  .checkin-result-tools,
+  .checkin-actions {
+    flex-direction: column;
+    align-items: stretch;
+  }
+
+  .checkin-clock {
+    justify-items: start;
+  }
+
+  .checkin-mark {
+    width: 58px;
+    height: 58px;
+    font-size: 1.58rem;
+  }
+
+  .checkin-card {
+    padding: 16px;
+  }
+
+  .checkin-booking {
+    grid-template-columns: 1fr;
+  }
+
+  .checkin-booking small {
+    grid-column: auto;
   }
 }
 

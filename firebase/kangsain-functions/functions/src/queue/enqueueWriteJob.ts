@@ -10,10 +10,12 @@ export async function enqueueBookingAttendanceJob(input: {
   bookingId: string;
   attendanceStatus: AttendanceStatus;
   createdByUid: string;
+  allowBeforeStart?: boolean;
 }): Promise<WriteQueueJobDoc> {
   return enqueueTypedJob("bookingAttendanceUpdate", input.studioId, input.createdByUid, {
     bookingId: input.bookingId,
     attendanceStatus: input.attendanceStatus,
+    allowBeforeStart: input.allowBeforeStart || false,
   });
 }
 
