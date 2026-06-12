@@ -2003,34 +2003,8 @@ function isCheckinApp() {
   return Boolean(document.querySelector("[data-checkin-app]"));
 }
 
-const CHECKIN_DEVICE_ID_KEY = "archiveCoreCheckinDeviceId";
-const CHECKIN_DEVICE_SECRET_KEY = "archiveCoreCheckinDeviceSecret";
-
-function getCheckinDeviceCredentials() {
-  if (!isCheckinApp()) return null;
-  const params = new URLSearchParams(window.location.search);
-  const incomingId = params.get("deviceId") || params.get("kioskDeviceId");
-  const incomingSecret =
-    params.get("deviceSecret") || params.get("kioskDeviceSecret");
-  if (incomingId && incomingSecret) {
-    window.localStorage.setItem(CHECKIN_DEVICE_ID_KEY, incomingId.trim());
-    window.localStorage.setItem(
-      CHECKIN_DEVICE_SECRET_KEY,
-      incomingSecret.trim(),
-    );
-    const cleanUrl = `${window.location.pathname}${window.location.hash || ""}`;
-    window.history.replaceState({}, "", cleanUrl);
-  }
-  const kioskDeviceId =
-    window.localStorage.getItem(CHECKIN_DEVICE_ID_KEY)?.trim() || "";
-  const kioskDeviceSecret =
-    window.localStorage.getItem(CHECKIN_DEVICE_SECRET_KEY)?.trim() || "";
-  if (!kioskDeviceId || !kioskDeviceSecret) return null;
-  return { kioskDeviceId, kioskDeviceSecret };
-}
-
 function checkinDevicePayload() {
-  return getCheckinDeviceCredentials() || {};
+  return {};
 }
 
 function setCheckinState(label, tone = "") {
@@ -2078,15 +2052,6 @@ function updateCheckinClock() {
 
 async function prepareCheckinDevice() {
   await initFirebase();
-  const credentials = getCheckinDeviceCredentials();
-  if (!credentials) {
-    setCheckinState("기기 설정 필요", "warn");
-    setCheckinMessage(
-      "출석 iPad 등록이 필요합니다. 관리자에게 기기 설정 링크를 요청해 주세요.",
-      "warn",
-    );
-    return false;
-  }
   setCheckinState("입력 대기", "good");
   setCheckinMessage(
     "번호를 입력하면 오늘 예약된 수업과 등록 차량을 확인합니다.",
@@ -2187,7 +2152,7 @@ async function lookupCheckin() {
     setCheckinState("확인 필요", "danger");
     setCheckinMessage(
       authError
-        ? "출석 iPad 기기 인증을 확인해 주세요. 계속 실패하면 직원을 호출해 주세요."
+        ? "예약 조회 권한을 확인하지 못했습니다. 계속 실패하면 직원을 호출해 주세요."
         : error?.message || "예약 조회에 실패했습니다.",
       "danger",
     );
@@ -2339,15 +2304,6 @@ async function submitCheckin(button) {
     );
     return;
   }
-  if (!getCheckinDeviceCredentials()) {
-    setCheckinState("기기 설정 필요", "warn");
-    setCheckinMessage(
-      "출석 iPad 등록이 필요합니다. 관리자에게 기기 설정 링크를 요청해 주세요.",
-      "warn",
-    );
-    return;
-  }
-
   document.querySelectorAll(".checkin-submit").forEach((submitButton) => {
     submitButton.disabled = true;
   });

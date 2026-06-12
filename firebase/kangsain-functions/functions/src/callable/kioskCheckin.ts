@@ -1,5 +1,4 @@
 import type { CallableRequest } from "firebase-functions/v2/https";
-import { createHash, timingSafeEqual } from "crypto";
 import { db } from "../config/firebase";
 import { DEFAULT_STUDIO_ID } from "../config/constants";
 import { getBooking } from "../firestore/bookingRepository";
@@ -12,21 +11,11 @@ import { todayKst, nowTimestamp } from "../utils/date";
 import { AppError } from "../utils/errors";
 
 const PARKING_DISCOUNT_JOBS = "parkingDiscountJobs";
-const KIOSK_DEVICES = "kioskDevices";
 const VEHICLE_MAX_COUNT = 4;
 
 type KioskAccess = {
   studioId: string;
   actorUid: string;
-  deviceId?: string;
-};
-
-type KioskDeviceDoc = {
-  active?: boolean;
-  studioId?: string;
-  label?: string;
-  secretHash?: string;
-  secret?: string;
 };
 
 type VehicleRecord = {
@@ -227,39 +216,10 @@ async function requireKioskAccess(request: CallableRequest): Promise<KioskAccess
       actorUid: request.auth.uid,
     };
   }
-
-  const deviceId = safeId(request.data?.kioskDeviceId || request.data?.deviceId);
-  const secret = stringValue(request.data?.kioskDeviceSecret || request.data?.deviceSecret);
-  if (!deviceId || !secret) throw new AppError("AUTH_REQUIRED", "출석 iPad 기기 설정이 필요합니다");
-
-  const snap = await db.collection(KIOSK_DEVICES).doc(deviceId).get();
-  const device = snap.data() as KioskDeviceDoc | undefined;
-  if (!snap.exists || !device?.active) throw new AppError("PERMISSION_DENIED", "사용 가능한 출석 iPad가 아닙니다");
-  if (!verifyKioskSecret(secret, device)) {
-    throw new AppError("PERMISSION_DENIED", "출석 iPad 인증값이 올바르지 않습니다");
-  }
-
   return {
-    studioId: device.studioId || DEFAULT_STUDIO_ID,
-    actorUid: `kiosk:${deviceId}`,
-    deviceId,
+    studioId: DEFAULT_STUDIO_ID,
+    actorUid: "public-checkin",
   };
-}
-
-function verifyKioskSecret(secret: string, device: KioskDeviceDoc): boolean {
-  if (device.secretHash) return safeEqual(sha256(secret), device.secretHash);
-  return Boolean(device.secret && safeEqual(secret, device.secret));
-}
-
-function sha256(value: string): string {
-  return createHash("sha256").update(value, "utf8").digest("hex");
-}
-
-function safeEqual(left: string, right: string): boolean {
-  const leftBuffer = Buffer.from(left);
-  const rightBuffer = Buffer.from(right);
-  if (leftBuffer.length !== rightBuffer.length) return false;
-  return timingSafeEqual(leftBuffer, rightBuffer);
 }
 
 function publicBooking(booking: BookingDoc): CheckinBookingResult {
