@@ -1484,6 +1484,7 @@ async function generatePrivateLessonReportDraft(
 
   try {
     const draft = await generateGeminiPrivateLessonDraft(record, chartRequest);
+    const publicNextDirection = instructorPublicNextDirection(record) || draft.nextDirection;
     const nextRecord = {
       ...record,
       gptTaskId: taskId,
@@ -1491,7 +1492,7 @@ async function generatePrivateLessonReportDraft(
       gptDraftSummary: draft.summary,
       gptDraftNextDirection: draft.nextDirection,
       publicSummary: draft.summary,
-      publicNextDirection: draft.nextDirection,
+      publicNextDirection,
       updatedAt: nowTimestamp(),
     } as PrivateLessonChartRecordDoc;
     const reportResolution = await resolveReportShortUrl(nextRecord);
@@ -1510,7 +1511,7 @@ async function generatePrivateLessonReportDraft(
         gptDraftSummary: draft.summary,
         gptDraftNextDirection: draft.nextDirection,
         publicSummary: draft.summary,
-        publicNextDirection: draft.nextDirection,
+        publicNextDirection,
         publicReportUrl: readyRecord.publicReportUrl || "",
         publicReportCanonicalUrl: readyRecord.publicReportCanonicalUrl || "",
         publicReportApproval: { status: "pending", lastError: null },
@@ -1544,8 +1545,15 @@ async function syncPrivateLessonChartRecordToNotion(
   chartRequest: PrivateLessonChartRequestDoc,
 ): Promise<NonNullable<PrivateLessonChartRecordDoc["notionSync"]>> {
   try {
-    const reportResolution = await resolveReportShortUrl(record);
-    if (reportResolution.shouldUpdateRecord) {
+    const reportResolution = isPrivateLessonMemberReportGenerated(record) ? await resolveReportShortUrl(record) : null;
+    const syncedRecord = reportResolution?.shouldUpdateRecord
+      ? ({
+          ...record,
+          publicReportUrl: reportResolution.publicReportUrl,
+          publicReportCanonicalUrl: reportResolution.publicReportCanonicalUrl,
+        } as PrivateLessonChartRecordDoc)
+      : record;
+    if (reportResolution?.shouldUpdateRecord) {
       await refs.privateLessonChartRecord(record.recordId).set(
         {
           publicReportUrl: reportResolution.publicReportUrl,
@@ -1555,8 +1563,8 @@ async function syncPrivateLessonChartRecordToNotion(
         { merge: true },
       );
     }
-    const content = notionChartChildren(record, chartRequest);
-    const instructorPage = await syncInstructorMemberChartPage(record, chartRequest, content);
+    const content = notionChartChildren(syncedRecord, chartRequest);
+    const instructorPage = await syncInstructorMemberChartPage(syncedRecord, chartRequest, content);
     if (!instructorPage) throw new Error("Notion 강사별 회원 차트 페이지를 찾거나 생성할 수 없습니다.");
     return {
       status: "synced",
@@ -1849,6 +1857,16 @@ function isReplacementPrivateChartRequest(
   return true;
 }
 
+function postAnswersWithReportFields(record: PrivateLessonChartRecordDoc | null | undefined): Record<string, unknown> | null {
+  if (!record?.postRecord) return null;
+  const post = { ...record.postRecord };
+  if (!firstText(post.publicNextDirection)) {
+    const existingNextDirection = firstText(record.publicNextDirection) || firstText(record.gptDraftNextDirection);
+    if (existingNextDirection) post.publicNextDirection = existingNextDirection;
+  }
+  return post;
+}
+
 function publicChartRequest(
   chartRequest: PrivateLessonChartRequestDoc,
   mode: PrivateLessonChartMode,
@@ -1877,7 +1895,7 @@ function publicChartRequest(
     existingAnswers: record
       ? {
           pre: record.prePlan || null,
-          post: record.postRecord || null,
+          post: postAnswersWithReportFields(record),
         }
       : { pre: null, post: null },
     locked:
@@ -1891,8 +1909,8 @@ function publicChartRequest(
           gptStatus: record.gptStatus,
           url: record.publicReportUrl || "",
           canonicalUrl: record.publicReportCanonicalUrl || "",
-          summary: record.gptDraftSummary || record.publicSummary || "",
-          nextDirection: record.gptDraftNextDirection || record.publicNextDirection || "",
+          summary: record.publicSummary || record.gptDraftSummary || "",
+          nextDirection: memberReportNextDirection(record),
           approval: record.publicReportApproval || null,
           postSubmitted: Boolean(record.postSubmittedAt),
         }
@@ -2539,6 +2557,22 @@ function cleanReportSentence(value: unknown): string {
     .slice(0, 360);
 }
 
+function instructorPublicNextDirection(record: PrivateLessonChartRecordDoc): string {
+  return cleanReportSentence(
+    firstText(record.postRecord?.publicNextDirection) ||
+      firstText(record.postRecord?.reportNextDirection) ||
+      firstText(record.postRecord?.nextDirectionOverride),
+  );
+}
+
+function memberReportNextDirection(record: PrivateLessonChartRecordDoc): string {
+  return (
+    cleanReportSentence(record.publicNextDirection) ||
+    instructorPublicNextDirection(record) ||
+    cleanReportSentence(record.gptDraftNextDirection)
+  );
+}
+
 function gptSourceHash(record: PrivateLessonChartRecordDoc, chartRequest: PrivateLessonChartRequestDoc): string {
   return stableHash({
     requestId: record.requestId,
@@ -2605,6 +2639,8 @@ function notionChartChildren(
     divider(),
     heading(3, "회원용 초안"),
     paragraph(record.gptDraftSummary || "Gemini 초안 생성 대기 중입니다."),
+    paragraph(`자동 생성 다음 방향: ${record.gptDraftNextDirection || "생성 대기 중"}`),
+    paragraph(`최종 다음 방향: ${memberReportNextDirection(record) || "강사 확인 대기 중"}`),
     divider(),
     heading(3, "회원 리포트 검수"),
     paragraph(
@@ -2633,9 +2669,9 @@ function renderPrivateLessonReportPage(
   const sessionText = `${Number(record.sessionNumber || 1)}회차`;
   const lessonTime = lessonTimeText(chartRequest);
   const title = `${memberName || "회원"}님 수업 리포트`;
-  const reportSummary = escapeHtml(String(record.gptDraftSummary || "요약이 아직 준비되지 않았습니다."));
+  const reportSummary = escapeHtml(String(record.publicSummary || record.gptDraftSummary || "요약이 아직 준비되지 않았습니다."));
   const nextDirection = escapeHtml(
-    String(record.gptDraftNextDirection || "다음 수업 방향이 아직 정리되지 않았습니다."),
+    String(memberReportNextDirection(record) || "다음 수업 방향이 아직 정리되지 않았습니다."),
   );
   const goals = textArray(record.postRecord?.goals || record.prePlan?.goals || []);
   const focusAreas = textArray(record.postRecord?.focusAreas || record.prePlan?.focusAreas || []);
@@ -2759,6 +2795,8 @@ function notionInstructorChartChildren(
     ),
     divider(),
     heading(3, "회원 리포트"),
+    paragraph(`자동 생성 다음 방향: ${record.gptDraftNextDirection || "생성 대기 중"}`),
+    paragraph(`최종 다음 방향: ${memberReportNextDirection(record) || "강사 확인 대기 중"}`),
     paragraph(
       record.publicReportUrl
         ? "회원용 리포트가 생성되었습니다. 운영자가 검수 후 발송합니다."
@@ -2880,13 +2918,10 @@ function notionSessionTitleCore(record: PrivateLessonChartRecordDoc, chartReques
 function privateChartTitleStage(
   record: PrivateLessonChartRecordDoc,
   chartRequest: PrivateLessonChartRequestDoc,
-): "작성대기" | "차트작성완료" | "리포트 생성완료" | "발송완료" | "취소" {
+): "작성대기" | "수업 전 설문완료" | "수업 후 설문완료" | "리포트 생성완료" | "리포트 발송완료" | "취소" {
   if (chartRequest.status === "cancelled") return "취소";
-  if (record.publicReportApproval?.status === "sent" || record.gptStatus === "published") return "발송완료";
-  if (
-    ["draft_created", "approved"].includes(record.gptStatus) ||
-    Boolean(record.publicReportUrl || record.publicReportCanonicalUrl)
-  ) {
+  if (isPrivateLessonMemberReportSent(record)) return "리포트 발송완료";
+  if (isPrivateLessonMemberReportGenerated(record)) {
     return "리포트 생성완료";
   }
   if (
@@ -2894,9 +2929,22 @@ function privateChartTitleStage(
     (chartRequest.preStatus === "submitted" && chartRequest.postStatus === "submitted") ||
     Boolean(record.prePlan && record.postRecord)
   ) {
-    return "차트작성완료";
+    return "수업 후 설문완료";
   }
+  if (chartRequest.preStatus === "submitted" || Boolean(record.prePlan)) return "수업 전 설문완료";
   return "작성대기";
+}
+
+function isPrivateLessonMemberReportSent(record: PrivateLessonChartRecordDoc): boolean {
+  return Boolean(record.postRecord && record.postSubmittedAt) && (
+    record.publicReportApproval?.status === "sent" || record.gptStatus === "published"
+  );
+}
+
+function isPrivateLessonMemberReportGenerated(record: PrivateLessonChartRecordDoc): boolean {
+  if (!record.postRecord || !record.postSubmittedAt) return false;
+  if (!["draft_created", "approved", "published"].includes(record.gptStatus)) return false;
+  return Boolean(record.publicReportUrl || record.publicReportCanonicalUrl);
 }
 
 function privateChartStatusText(chartRequest: Pick<PrivateLessonChartRequestDoc, "status">): string {

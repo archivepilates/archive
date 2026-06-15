@@ -188,6 +188,15 @@
         font-size: 15px;
       }
 
+      .field-hint {
+        margin: -4px 0 10px;
+        color: var(--muted);
+        font-size: 13px;
+        line-height: 1.45;
+        word-break: keep-all;
+        overflow-wrap: anywhere;
+      }
+
       .status {
         margin-top: 16px;
         min-height: 22px;
@@ -548,6 +557,13 @@
           options: sets.changes,
         },
         { type: "text", key: "nextMemo", label: "다음 수업 메모" },
+        {
+          type: "text",
+          key: "publicNextDirection",
+          label: "회원 리포트 다음 방향",
+          hint: "회원에게 보이는 다음 방향 문구입니다. 비워두면 자동 생성 문구를 사용합니다.",
+          placeholder: "예: 다음 수업에서는 흉곽 움직임과 호흡 연결을 확인하며 코어 안정성을 이어가겠습니다.",
+        },
       ];
 
       const title = document.getElementById("title");
@@ -726,7 +742,7 @@
 
       function fieldHtml(field) {
         if (field.type === "text") {
-          return `<section><label for="${field.key}"><h2>${escapeHtml(field.label)}</h2></label><textarea id="${field.key}" name="${field.key}" placeholder="필요할 때만 입력"></textarea></section>`;
+          return `<section><label for="${field.key}"><h2>${escapeHtml(field.label)}</h2></label>${field.hint ? `<p class="field-hint">${escapeHtml(field.hint)}</p>` : ""}<textarea id="${field.key}" name="${field.key}" placeholder="${escapeAttr(field.placeholder || "필요할 때만 입력")}"></textarea></section>`;
         }
         if (field.type === "groupedMulti") {
           return `<section><h2>${escapeHtml(field.label)}</h2><div class="purpose-groups">${field.groups
