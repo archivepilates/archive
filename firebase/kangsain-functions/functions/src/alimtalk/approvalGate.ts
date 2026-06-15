@@ -45,8 +45,8 @@ export async function requireApprovalForLargeAlimtalkBatch(input: {
   candidates: AlimtalkCandidateDoc[];
   scope?: string;
 }): Promise<AlimtalkApprovalResult> {
-  if (input.candidates.length < APPROVAL_THRESHOLD) return { required: false, approved: true };
   const scope = input.scope || approvalScopeForCandidates(input.candidates);
+  if (!requiresApproval(scope, input.candidates.length)) return { required: false, approved: true };
   const approvalId = dailyApprovalId(input.studioId, input.today, scope);
   const ref = db.collection(APPROVAL_COLLECTION).doc(approvalId);
   const existing = (await ref.get()).data() as ApprovalDoc | undefined;
@@ -299,4 +299,10 @@ export function alimtalkApprovalThreshold(): number {
 
 export function defaultAlimtalkApprovalStudioId(): string {
   return DEFAULT_STUDIO_ID;
+}
+
+function requiresApproval(scope: string, candidateCount: number): boolean {
+  if (candidateCount <= 0) return false;
+  if (scope === "reservation_open") return true;
+  return candidateCount >= APPROVAL_THRESHOLD;
 }
