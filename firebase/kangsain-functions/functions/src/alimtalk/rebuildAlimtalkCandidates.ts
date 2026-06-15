@@ -1123,8 +1123,8 @@ function normalizedDateText(value: string): string {
 }
 
 function reservationOpenEndDate(baseDate: string): string {
-  const base = new Date(`${baseDate}T00:00:00+09:00`);
-  const daysSinceMonday = (base.getDay() + 6) % 7;
+  const dayOfWeek = dayOfWeekFromDateText(baseDate);
+  const daysSinceMonday = (dayOfWeek + 6) % 7;
   return addDays(baseDate, 13 - daysSinceMonday);
 }
 
@@ -1133,21 +1133,37 @@ function reservationOpenStartDate(baseDate: string): string {
 }
 
 function isReservationOpenSendDate(sourceDate: string): boolean {
-  const date = new Date(`${sourceDate}T00:00:00+09:00`);
-  return !Number.isNaN(date.getTime()) && date.getDay() === 1;
+  return dayOfWeekFromDateText(sourceDate) === 1;
 }
 
 function reservationWeekLabel(startDate: string, endDate: string): string {
-  const start = new Date(`${startDate}T00:00:00+09:00`);
-  const weekNumber = Math.ceil(start.getDate() / 7);
-  return `${start.getMonth() + 1}월${weekNumber}주차(${shortMonthDayWithWeekday(startDate)}~${shortMonthDayWithWeekday(endDate)})`;
+  const start = dateParts(startDate);
+  const weekNumber = start ? Math.ceil(start.day / 7) : "";
+  return `${start ? start.month : ""}월${weekNumber}주차(${shortMonthDayWithWeekday(startDate)}~${shortMonthDayWithWeekday(endDate)})`;
 }
 
 function shortMonthDayWithWeekday(value: string): string {
-  const date = new Date(`${value}T00:00:00+09:00`);
-  if (Number.isNaN(date.getTime())) return value;
+  const parts = dateParts(value);
+  if (!parts) return value;
   const weekdays = ["일", "월", "화", "수", "목", "금", "토"];
-  return `${date.getMonth() + 1}/${date.getDate()}(${weekdays[date.getDay()]})`;
+  return `${parts.month}/${parts.day}(${weekdays[dayOfWeekFromDateText(value)]})`;
+}
+
+function dayOfWeekFromDateText(value: string): number {
+  const parts = dateParts(value);
+  if (!parts) return Number.NaN;
+  return new Date(Date.UTC(parts.year, parts.month - 1, parts.day)).getUTCDay();
+}
+
+function dateParts(value: string): { year: number; month: number; day: number } | null {
+  const match = /^(\d{4})-(\d{2})-(\d{2})$/.exec(String(value || ""));
+  if (!match) return null;
+  const year = Number(match[1]);
+  const month = Number(match[2]);
+  const day = Number(match[3]);
+  if (!Number.isInteger(year) || !Number.isInteger(month) || !Number.isInteger(day)) return null;
+  if (month < 1 || month > 12 || day < 1 || day > 31) return null;
+  return { year, month, day };
 }
 
 async function upsertCandidate(candidate: AlimtalkCandidateDoc): Promise<void> {

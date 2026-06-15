@@ -49,6 +49,7 @@ export const scheduledQueueAndSendAlimtalkDaily = onSchedule(
 export const scheduledQueueAndSendReservationOpenAlimtalk = onSchedule(
   {
     ...scheduleOptions,
+    memory: "1GiB",
     schedule: "30 12 * * 1",
   },
   async () => {
