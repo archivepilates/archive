@@ -21,7 +21,7 @@
         <header class="page-hero">
           <p class="eyebrow">RULES</p>
           <h1>운영 규칙</h1>
-          <p class="subtitle">2026.06.12 기준 현재 유효한 운영 규칙만 정리한 ARCHIVE CORE 단일 운영 허브입니다.</p>
+          <p class="subtitle">2026.06.16 기준 현재 유효한 운영 규칙만 정리한 ARCHIVE CORE 단일 운영 허브입니다.</p>
         </header>
 
         <section class="panel rules-hero">
@@ -111,6 +111,7 @@
                 <li>회원목록, 수업예약내역, 삭제된 수업 로그는 Mac mini Playwright Excel 다운로드로 수집합니다.</li>
                 <li>엑셀 다운로드와 Firestore 반영은 1시간 간격 LaunchAgent가 담당합니다.</li>
                 <li>운영자 수동 동기화 버튼도 API가 아니라 Excel 다운로드·반영 요청을 생성합니다.</li>
+                <li>최신 예약 엑셀 범위에서 사라진 기존 예약은 missing_from_latest_reservation_import로 취소 처리하고 회차 집계에서 제외합니다.</li>
               </ul>
             </article>
             <article class="rule-card">
@@ -228,6 +229,7 @@
                 <li>2026.06.01 이후 프라이빗/세미프라이빗 수업은 자동화 차트를 반드시 생성합니다.</li>
                 <li>booking.sessionOrder.privateCumulativeRound를 1순위로 사용하되, 예약 원본과 다르면 즉시 재계산해 저장합니다.</li>
                 <li>삭제, 취소, 시간변경은 sessionOrder.counted=false와 제외 사유를 남기고 해당 수업 이후 회차까지 연쇄 재계산합니다.</li>
+                <li>강사 설문 알림톡 발송, 설문 링크 열기, 설문 제출, Notion 차트 갱신은 연결된 booking이 active일 때만 진행합니다.</li>
                 <li>같은 회원, 강사, 날짜, 수강권에서 시간변경 중복이 생기면 출석/최신 예약을 대표 booking으로 두고 나머지는 rescheduled_duplicate로 제외합니다.</li>
               </ul>
             </article>

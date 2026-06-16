@@ -64,8 +64,9 @@ const [existingLectures, existingProfiles, existingStaffs] = await Promise.all([
   loadExistingStaffs(),
 ]);
 const { lectures, bookings, skipped } = buildPlans(parsedRows, existingLectures, existingProfiles, existingStaffs);
+const staleBookings = await findStaleBookingsMissingFromLatestImport(dateBounds, parsedRows, bookings);
 const staffDates = uniquePairs(lectures.map((lecture) => ({ staffId: lecture.staffId, date: lecture.date })));
-const plannedWrites = lectures.length + bookings.length + staffDates.length + 1;
+const plannedWrites = lectures.length + bookings.length + staleBookings.length + staffDates.length + 1;
 
 const summary = {
   ok: true,
@@ -78,6 +79,7 @@ const summary = {
   dateRange: dateBounds,
   lectures: lectures.length,
   bookings: bookings.length,
+  staleBookings: staleBookings.length,
   instructorViews: staffDates.length,
   skipped,
   maxWrites,
@@ -88,7 +90,7 @@ if (plannedWrites > maxWrites) {
 }
 
 if (apply) {
-  await applyPlans({ lectures, bookings });
+  await applyPlans({ lectures, bookings, staleBookings });
   await rebuildInstructorViews(staffDates);
   await rebuildAttendanceSummaries(bookings, dateBounds.endDate);
   await db.collection("opsState").doc("studiomateReservationExcelEmergency").set(
@@ -100,6 +102,7 @@ if (apply) {
       importedRows: rows.length,
       importedLectures: lectures.length,
       importedBookings: bookings.length,
+      staleBookings: staleBookings.length,
       skipped,
       updatedAt: admin.firestore.Timestamp.now(),
     },
@@ -123,6 +126,7 @@ const { importId } = await recordSourceImport(db, {
     `dateRange=${summary.dateRange?.startDate || ""}~${summary.dateRange?.endDate || ""}`,
     `lectures=${summary.lectures}`,
     `bookings=${summary.bookings}`,
+    `staleBookings=${summary.staleBookings}`,
   ],
 });
 await recordDataQualityIssues(db, qualityIssuesFromSummary(summary, importId));
@@ -369,6 +373,61 @@ function buildPlans(rows, existingLectures, existingProfiles, existingStaffs) {
   return { lectures, bookings, skipped };
 }
 
+async function findStaleBookingsMissingFromLatestImport(dateBounds, parsedRows, plannedBookings) {
+  if (!dateBounds.startDate || !dateBounds.endDate || !parsedRows.length) return [];
+  const importedBookingIds = new Set(plannedBookings.map((booking) => booking.bookingId).filter(Boolean));
+  const importedPresenceKeys = new Set(
+    parsedRows
+      .filter((row) => row.memberName || row.memberPhone)
+      .map((row) => reservationPresenceKey(row))
+      .filter(Boolean),
+  );
+  const stale = [];
+  for (const date of dateRange(dateBounds.startDate, dateBounds.endDate)) {
+    const snap = await db
+      .collection("bookings")
+      .where("studioId", "==", STUDIO_ID)
+      .where("lectureDate", "==", date)
+      .get();
+    for (const doc of snap.docs) {
+      const booking = doc.data();
+      const bookingId = String(booking.bookingId || doc.id || "");
+      if (!bookingId || importedBookingIds.has(bookingId)) continue;
+      if (String(booking.appStatus || "") !== "reserved") continue;
+      if (importedPresenceKeys.has(reservationPresenceKey(booking))) continue;
+      const now = admin.firestore.Timestamp.now();
+      stale.push({
+        id: doc.id,
+        data: {
+          appStatus: "cancel",
+          sourceStatus: "missing_from_latest_reservation_import",
+          syncStatus: "synced",
+          sessionOrder: {
+            ...(booking.sessionOrder || {}),
+            counted: false,
+            excludedReason: "missing_from_latest_reservation_import",
+            computedFrom: "studiomate_reservation_excel",
+            computedAt: now,
+          },
+          sessionOrderCorrection: {
+            fromPrivateCumulativeRound: booking.sessionOrder?.privateCumulativeRound || null,
+            toPrivateCumulativeRound: booking.sessionOrder?.privateCumulativeRound || null,
+            fromCounted: booking.sessionOrder?.counted ?? null,
+            toCounted: false,
+            reason: "latest reservation import no longer contains this booking",
+            correctedAt: now,
+          },
+          staleSourceFile: sourceFile,
+          staleMarkedAt: now,
+          lastChangedBy: "excel_emergency_missing_reservation_reconcile",
+          updatedAt: now,
+        },
+      });
+    }
+  }
+  return stale;
+}
+
 function matchedLectureDoc(row, existingLectures) {
   const targetStart = parseTimestamp(`${row.date} ${row.startTime}`)?.toMillis();
   const candidates = existingLectures.filter((item) => item.data.date === row.date);
@@ -400,7 +459,7 @@ function matchMember(row, existingProfiles) {
   return byName.length === 1 ? byName[0] : null;
 }
 
-async function applyPlans({ lectures, bookings }) {
+async function applyPlans({ lectures, bookings, staleBookings }) {
   let batch = db.batch();
   let writes = 0;
   const commit = async () => {
@@ -415,6 +474,10 @@ async function applyPlans({ lectures, bookings }) {
   }
   for (const booking of bookings) {
     batch.set(db.collection("bookings").doc(booking.bookingId), booking, { merge: true });
+    if (++writes >= 450) await commit();
+  }
+  for (const booking of staleBookings) {
+    batch.set(db.collection("bookings").doc(booking.id), booking.data, { merge: true });
     if (++writes >= 450) await commit();
   }
   await commit();
@@ -702,6 +765,21 @@ function cleanText(value) {
 
 function normalizeName(value) {
   return cleanText(value).replace(/\s+/g, "").toLowerCase();
+}
+
+function reservationPresenceKey(value) {
+  const date = String(value.date || value.lectureDate || "").slice(0, 10);
+  const start =
+    String(value.startTime || "") ||
+    (value.lectureStartAt?.toDate?.()
+      ? hhmm(value.lectureStartAt.toDate())
+      : value.lectureStartAt?.toMillis?.()
+        ? hhmm(value.lectureStartAt.toDate())
+        : "");
+  const memberPhone = normalizePhone(value.memberPhone || value.phone || "");
+  const memberName = normalizeName(value.memberName || value.name || "");
+  const staffName = normalizeName(value.staffName || value.staff || "");
+  return [date, start, staffName, memberPhone || memberName].join("|");
 }
 
 function hash(value) {

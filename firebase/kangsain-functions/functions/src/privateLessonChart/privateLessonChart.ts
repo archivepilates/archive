@@ -281,6 +281,12 @@ export async function sendPendingPrivateLessonChartAlimtalksForDate(date: string
       skipped += 1;
       continue;
     }
+    const activeBooking = await activePrivateBookingForChartRequest(request);
+    if (!activeBooking.ok) {
+      await cancelPrivateLessonChartRequest(request, activeBooking.reason);
+      skipped += 1;
+      continue;
+    }
     checked += 1;
     if (!templateApproved) {
       await refs.privateLessonChartRequest(request.requestId).set(
@@ -1468,6 +1474,11 @@ async function readChartRequest(requestId: string, token: string): Promise<Priva
   const chartRequest = snap.data();
   if (!chartRequest || chartRequest.accessTokenHash !== sha256(token))
     throw new Error("차트 링크를 확인할 수 없습니다.");
+  const activeBooking = await activePrivateBookingForChartRequest(chartRequest);
+  if (!activeBooking.ok) {
+    await cancelPrivateLessonChartRequest(chartRequest, activeBooking.reason);
+    throw new Error("취소되었거나 변경된 수업입니다. 운영자에게 확인해 주세요.");
+  }
   return chartRequest;
 }
 
@@ -1776,6 +1787,7 @@ function isPrivateBooking(booking: BookingDoc): boolean {
 }
 
 function isCountablePrivateHistoryBooking(booking: BookingDoc): boolean {
+  if (inactivePrivateBookingReason(booking)) return false;
   if (["wait", "wait_cancel", "cancel"].includes(String(booking.appStatus || ""))) return false;
   if (["absent", "late_cancel"].includes(String(booking.attendanceStatus || ""))) return false;
   return true;
@@ -1784,7 +1796,7 @@ function isCountablePrivateHistoryBooking(booking: BookingDoc): boolean {
 function canonicalPrivateBookings(bookings: BookingDoc[]): BookingDoc[] {
   const grouped = new Map<string, BookingDoc>();
   for (const booking of bookings) {
-    if (!isPrivateBooking(booking)) continue;
+    if (inactivePrivateBookingReason(booking)) continue;
     const key = privateLessonOccurrenceKey(booking);
     const current = grouped.get(key);
     if (!current || preferCanonicalBooking(booking, current)) grouped.set(key, booking);
@@ -1859,11 +1871,100 @@ function bookingSourcePriority(bookingId: string): number {
 }
 
 function isSendablePrivateChartRequest(request: PrivateLessonChartRequestDoc): boolean {
+  if (request.status === "cancelled") return false;
   if (request.alimtalk?.status !== "template_pending" && request.alimtalk?.status !== "queued") return false;
   if (!request.staffPhone || !normalizePhone(request.staffPhone)) return false;
   if (!request.preShortUrl || !request.postShortUrl || !request.mediaUploadShortUrl) return false;
   if (!request.memberName || !request.staffName || !request.lessonStartAt) return false;
   return true;
+}
+
+async function activePrivateBookingForChartRequest(
+  request: PrivateLessonChartRequestDoc,
+): Promise<{ ok: true; booking: BookingDoc } | { ok: false; reason: string }> {
+  if (request.status === "cancelled") return { ok: false, reason: request.cancellationReason || "chart_request_cancelled" };
+  if (!request.bookingId) return { ok: false, reason: "missing_booking_id" };
+  const snap = await refs.booking(request.bookingId).get();
+  const booking = snap.data();
+  if (!booking) return { ok: false, reason: "booking_not_found" };
+  const reason = inactivePrivateBookingReason(booking);
+  if (reason) return { ok: false, reason };
+  return { ok: true, booking };
+}
+
+function inactivePrivateBookingReason(booking: BookingDoc): string {
+  if (!booking?.bookingId) return "missing_booking";
+  if ((booking as any).archiveBooking?.isCanonical === false) {
+    return String(booking.sessionOrder?.excludedReason || "duplicate_source");
+  }
+  if (booking.sessionOrder?.counted === false) {
+    return String(booking.sessionOrder.excludedReason || "session_order_excluded");
+  }
+  if (booking.appStatus && booking.appStatus !== "reserved") return `booking_app_status_${booking.appStatus}`;
+  if (["absent", "late_cancel"].includes(String(booking.attendanceStatus || ""))) {
+    return `attendance_status_${booking.attendanceStatus}`;
+  }
+  const sourceStatus = String((booking as any).sourceStatus || "");
+  if (/missing_from_latest_reservation_import|stale/i.test(sourceStatus)) return sourceStatus;
+  if (!isPrivateBooking(booking)) return "not_private_booking";
+  return "";
+}
+
+async function cancelPrivateLessonChartRequest(
+  request: PrivateLessonChartRequestDoc,
+  reason: string,
+): Promise<void> {
+  const now = nowTimestamp();
+  const patch = {
+    status: "cancelled" as const,
+    cancellationReason: reason,
+    cancelledAt: now,
+    alimtalk: {
+      ...(request.alimtalk || {}),
+      status: request.alimtalk?.status === "sent" ? "sent" as const : "skipped" as const,
+      templateName: PRIVATE_CHART_TEMPLATE_NAME,
+      templateId: STAFF_PRIVATE_CHART_TEMPLATE_ID,
+      lastError: `예약 취소/변경 확인: ${reason}`,
+    },
+    updatedAt: now,
+  };
+  await refs.privateLessonChartRequest(request.requestId).set(patch, { merge: true });
+  const recordSnap = await refs.privateLessonChartRecord(request.requestId).get();
+  const record = recordSnap.data();
+  if (!record) return;
+  await refs.privateLessonChartRecord(request.requestId).set(
+    {
+      cancellationReason: reason,
+      cancelledAt: now,
+      updatedAt: now,
+    },
+    { merge: true },
+  );
+  await updateCancelledNotionChartTitle(record, request, reason);
+}
+
+async function updateCancelledNotionChartTitle(
+  record: PrivateLessonChartRecordDoc,
+  request: PrivateLessonChartRequestDoc,
+  reason: string,
+): Promise<void> {
+  const title = `${notionSessionTitle(record, request)} (취소)`;
+  const pageIds = [record.notionSync?.pageId, record.notionSync?.instructorPageId].filter(Boolean) as string[];
+  await Promise.all(
+    pageIds.map(async (pageId) => {
+      await updateNotionPageTitle(pageId, title);
+      await appendPageContent(pageId, [
+        callout(`예약 취소/변경으로 차트 요청을 중단했습니다. 사유: ${reason}`),
+      ]);
+    }),
+  ).catch((err) => {
+    logger.warn("cancelled private lesson notion title update failed", {
+      requestId: request.requestId,
+      bookingId: request.bookingId,
+      reason,
+      message: errorMessage(err),
+    });
+  });
 }
 
 function privateChartAlimtalkVariables(request: PrivateLessonChartRequestDoc): Record<string, string> {
