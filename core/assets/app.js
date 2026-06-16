@@ -740,6 +740,10 @@ function dateKey(value) {
   return `${date.getFullYear()}-${String(date.getMonth() + 1).padStart(2, "0")}-${String(date.getDate()).padStart(2, "0")}`;
 }
 
+function todayStartMs(referenceDate = new Date()) {
+  return startOfLocalDay(referenceDate).getTime();
+}
+
 function startOfLocalDay(value = new Date()) {
   const date = value instanceof Date ? new Date(value) : new Date(timestampMs(value));
   date.setHours(0, 0, 0, 0);
@@ -1811,7 +1815,37 @@ function privateProgressRows(requests, records, ledgerEntries, candidates = [], 
       const send = findPrivateReportSend({ ...merged, ...record }, candidates, sends);
       return { request, record, ledger, send, merged };
     })
-    .sort((a, b) => timestampMs(b.merged.lessonStartAt || b.merged.lessonDate || b.merged.createdAt) - timestampMs(a.merged.lessonStartAt || a.merged.lessonDate || a.merged.createdAt));
+    .sort(
+      (a, b) =>
+        (privateProgressTimeMs(b) || timestampMs(b.merged.createdAt)) -
+        (privateProgressTimeMs(a) || timestampMs(a.merged.createdAt)),
+    );
+}
+
+function privateProgressTimeMs(row) {
+  return [
+    row.merged?.lessonStartAt,
+    row.merged?.lessonDate,
+    row.merged?.startsAt,
+    row.merged?.startAt,
+    row.merged?.scheduledAt,
+    row.request?.lessonStartAt,
+    row.request?.lessonDate,
+    row.request?.startsAt,
+    row.request?.startAt,
+    row.request?.scheduledAt,
+    row.ledger?.startsAt,
+  ]
+    .map(timestampMs)
+    .find(Boolean) || 0;
+}
+
+function currentPrivateProgressRows(rows, referenceDate = new Date()) {
+  const start = todayStartMs(referenceDate);
+  return rows.filter((row) => {
+    const ms = privateProgressTimeMs(row);
+    return ms && ms >= start;
+  });
 }
 
 function privateStage(row) {
@@ -1827,13 +1861,14 @@ function privateStage(row) {
 }
 
 function pendingPrivateProgressRows() {
-  return privateProgressRows(
+  const rows = privateProgressRows(
     state.privateRequests || [],
     state.privateRecords || [],
     state.privateLedgerEntries || [],
     state.alimtalkCandidates || [],
     state.alimtalkSends || [],
-  ).filter((row) => privateStage(row) !== "complete");
+  );
+  return currentPrivateProgressRows(rows).filter((row) => privateStage(row) !== "complete");
 }
 
 function privatePendingBreakdown(rows) {
@@ -1848,7 +1883,7 @@ function privatePendingBreakdown(rows) {
 
 function formatPrivateClassLine(row) {
   const round = row.merged.sessionNumber || row.ledger?.cumulativePrivateRound || row.ledger?.currentTicketRound || "-";
-  const date = new Date(timestampMs(row.merged.lessonStartAt || row.merged.lessonDate));
+  const date = new Date(privateProgressTimeMs(row));
   const dateText = Number.isNaN(date.getTime())
     ? "-"
     : `${String(date.getFullYear()).slice(2)}${String(date.getMonth() + 1).padStart(2, "0")}${String(date.getDate()).padStart(2, "0")} ${String(date.getHours()).padStart(2, "0")}:${String(date.getMinutes()).padStart(2, "0")}`;
@@ -1906,7 +1941,8 @@ function renderPrivateInstructorPending(rows) {
 function renderPrivateProgress(requests, records, ledgerEntries, candidates = [], sends = []) {
   const list = qs("privateProgressList");
   if (!list) return;
-  const rows = privateProgressRows(requests, records, ledgerEntries, candidates, sends);
+  const allRows = privateProgressRows(requests, records, ledgerEntries, candidates, sends);
+  const rows = currentPrivateProgressRows(allRows);
   renderPrivateInstructorPending(rows);
 
   const groups = {
@@ -1941,7 +1977,7 @@ function renderPrivateProgress(requests, records, ledgerEntries, candidates = []
           `,
         )
         .join("")
-    : `<div class="empty-state">최근 privateLessonChartRequests 문서가 없습니다.</div>`;
+    : `<div class="empty-state">오늘 이후 진행 대상 프라이빗 차트가 없습니다.</div>`;
 }
 
 function renderPrivate(requests, records, usageEvents, ledgerEntries, candidates = [], sends = []) {
@@ -2293,13 +2329,13 @@ function renderHomeSummary() {
   setText(
     "homePrivateNote",
     privatePending.length
-      ? `사전 ${privateBreakdown.pre} · 사후 ${privateBreakdown.post} · 리포트 ${privateBreakdown.report} · 미발송 ${privateBreakdown.send}`
-      : "미제출/미발송 없음",
+      ? `오늘 이후 · 사전 ${privateBreakdown.pre} · 사후 ${privateBreakdown.post} · 리포트 ${privateBreakdown.report} · 미발송 ${privateBreakdown.send}`
+      : "오늘 이후 미제출/미발송 없음",
   );
   setText("homePrivateCardTotal", privatePending.length ? `${privatePending.length}건 진행` : "진행 정상권");
   setText(
     "homePrivateCardNote",
-    privatePending.length ? "프라이빗 탭에서 강사별 미완료 수업 확인" : "미제출/미발송 신호 낮음",
+    privatePending.length ? "오늘 이후 수업 기준 강사별 미완료 확인" : "오늘 이후 미제출/미발송 신호 낮음",
   );
   setText("homeMemberTotal", formatCount(state.members.length, "명"));
   setText("homeMemberNote", `활성 수강권 ${activeMembers.toLocaleString("ko-KR")}명 · 전체 회원 검색 가능`);

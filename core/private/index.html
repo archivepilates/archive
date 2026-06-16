@@ -29,10 +29,10 @@
           <article class="panel metric"><div class="metric-label">회차 장부</div><div class="metric-value" id="privateLedgerCount">0</div><div class="metric-note">privateSessionLedger</div></article>
         </section>
         <section class="grid summary-grid">
-          <article class="panel detail-card"><span class="pill warn">미진행</span><h2 id="privatePendingCount">0건</h2><p>아직 완료 단계에 도달하지 않은 프라이빗 차트입니다.</p></article>
-          <article class="panel detail-card"><span class="pill">수업전</span><h2 id="privatePreStageCount">0건</h2><p>강사 사전설문 제출이 필요한 수업입니다.</p></article>
-          <article class="panel detail-card"><span class="pill">수업후</span><h2 id="privatePostStageCount">0건</h2><p>사전설문은 끝났고 수업후 설문이 필요한 수업입니다.</p></article>
-          <article class="panel detail-card"><span class="pill good">완료</span><h2 id="privateCompleteStageCount">0건</h2><p>리포트 전송까지 끝난 수업입니다.</p></article>
+          <article class="panel detail-card"><span class="pill warn">미진행</span><h2 id="privatePendingCount">0건</h2><p>오늘 이후 수업 중 아직 완료 단계에 도달하지 않은 프라이빗 차트입니다.</p></article>
+          <article class="panel detail-card"><span class="pill">수업전</span><h2 id="privatePreStageCount">0건</h2><p>오늘 이후 수업 중 강사 사전설문 제출이 필요한 수업입니다.</p></article>
+          <article class="panel detail-card"><span class="pill">수업후</span><h2 id="privatePostStageCount">0건</h2><p>오늘 이후 수업 중 사전설문은 끝났고 수업후 설문이 필요한 수업입니다.</p></article>
+          <article class="panel detail-card"><span class="pill good">완료</span><h2 id="privateCompleteStageCount">0건</h2><p>오늘 이후 수업 중 리포트 전송까지 끝난 수업입니다.</p></article>
         </section>
         <section class="grid summary-grid">
           <article class="panel detail-card"><span class="pill">기록 상태</span><h2 id="privateRecordHealth">확인 중</h2><p>차트 기록 오류와 읽기 상태를 확인합니다.</p></article>
@@ -41,14 +41,14 @@
         </section>
         <section class="panel">
           <div class="panel-header">
-            <div><h2>강사별 미진행</h2><p>완료 단계에 도달하지 않은 프라이빗 차트를 강사별로 모아 봅니다.</p></div>
+            <div><h2>강사별 미진행</h2><p>오늘 이후 수업 중 완료 단계에 도달하지 않은 프라이빗 차트를 강사별로 모아 봅니다.</p></div>
             <span class="pill warn" id="privateInstructorPendingStatus">집계 대기</span>
           </div>
           <div class="list compact-list" id="privateInstructorPendingList"><div class="empty-state">Firestore 연결 후 표시합니다.</div></div>
         </section>
         <section class="panel">
           <div class="panel-header">
-            <div><h2>4단계 진행 보드</h2><p>각 수업을 현재 멈춰 있는 단계에 배치합니다.</p></div>
+            <div><h2>4단계 진행 보드</h2><p>오늘 이후 수업을 현재 멈춰 있는 단계에 배치합니다.</p></div>
             <span class="pill" id="privateProgressStatus">진행 확인</span>
           </div>
           <div class="stage-board" id="privateProgressList"><div class="empty-state">Firestore 연결 후 표시합니다.</div></div>
