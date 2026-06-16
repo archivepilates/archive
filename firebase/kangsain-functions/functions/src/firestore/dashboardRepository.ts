@@ -1,7 +1,7 @@
 import type { Timestamp } from "firebase-admin/firestore";
 import { refs } from "./refs";
 import { nowTimestamp } from "../utils/date";
-import type { DashboardData, DashboardSnapshotDoc } from "../types/dashboard";
+import type { DashboardData, DashboardMemberRevenueRow, DashboardMonthlyMemberRow, DashboardSnapshotDoc } from "../types/dashboard";
 import { stableHash } from "../utils/hash";
 
 export async function saveDashboardSnapshot(input: {
@@ -101,7 +101,7 @@ async function saveDashboardMetricDocs(
     );
   });
 
-  data.회원별누적매출.forEach((row) => {
+  buildMemberRevenueRows(data).forEach((row) => {
     const metricId = memberSalesMetricId(row.연락처, row.회원명);
     setDoc(
       refs.dashboardMemberSale(metricId),
@@ -115,7 +115,7 @@ async function saveDashboardMetricDocs(
     );
   });
 
-  data.월별회원.forEach((row) => {
+  buildMonthlyMemberRows(data).forEach((row) => {
     const metricId = `${row.구분}_${row.월}`;
     setDoc(
       refs.dashboardMonthlyMember(metricId),
@@ -140,6 +140,32 @@ async function clearCollection(collection: FirebaseFirestore.CollectionReference
     snap.docs.forEach((doc) => batch.delete(doc.ref));
     await batch.commit();
   }
+}
+
+function buildMemberRevenueRows(data: DashboardData): DashboardMemberRevenueRow[] {
+  if (data.회원별누적매출?.length) return data.회원별누적매출;
+  return data.회원매출
+    .map((row) => ({
+      회원명: row.memberName,
+      연락처: row.memberPhone,
+      누적매출: row.totalRevenue,
+      최근결제월: row.lastMonth,
+      최근수강권명: row.recentTicketName || "",
+      최근결제일: row.recentPaymentDate || "",
+      보유수강권요약: row.ticketSummary || "",
+    }))
+    .filter((row) => row.누적매출 > 0 && (row.회원명 || row.연락처));
+}
+
+function buildMonthlyMemberRows(data: DashboardData): DashboardMonthlyMemberRow[] {
+  if (data.월별회원?.length) return data.월별회원;
+  return data.월별이용회원
+    .map((row) => ({
+      월: row.월,
+      구분: "유효" as const,
+      회원수: row.이용회원수,
+    }))
+    .filter((row) => row.월 && row.회원수 > 0);
 }
 
 function memberSalesMetricId(phone: string, memberName: string): string {
