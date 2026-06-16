@@ -27,6 +27,8 @@ import type {
 } from "../types/models";
 import type {
   DashboardInstructorMetricDoc,
+  DashboardMemberSalesDoc,
+  DashboardMonthlyMemberDoc,
   DashboardMonthlyMetricDoc,
   DashboardSnapshotDoc,
   DashboardTicketMetricDoc,
@@ -97,6 +99,11 @@ export const refs = {
     refs.dashboardInstructorMetrics().doc(`${month}_${instructorName}`),
   dashboardTicketMetrics: () => db.collection("dashboardTicketMetrics").withConverter(converter<DashboardTicketMetricDoc>()),
   dashboardTicketMetric: (month: string, rank: number) => refs.dashboardTicketMetrics().doc(`${month}_${rank}`),
+  dashboardMemberSales: () => db.collection("dashboardMemberSales").withConverter(converter<DashboardMemberSalesDoc>()),
+  dashboardMemberSale: (metricId: string) => refs.dashboardMemberSales().doc(metricId),
+  dashboardMonthlyMembers: () =>
+    db.collection("dashboardMonthlyMembers").withConverter(converter<DashboardMonthlyMemberDoc>()),
+  dashboardMonthlyMember: (metricId: string) => refs.dashboardMonthlyMembers().doc(metricId),
   syncState: (syncName: string) => db.collection("syncStates").doc(syncName),
 };
 

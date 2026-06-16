@@ -105,8 +105,11 @@ Message queue before actual send.
 - Keep a persistent browser profile on the Mac mini so the manager can re-login manually if needed.
 - Stop the job and notify the operator if the login page, captcha, security warning, or changed export UI appears.
 - Run at low frequency, such as once per day or when manually triggered.
-- Do not auto-send messages in phase 1.
-- Create message candidates only, and require manager approval.
+- Do not auto-send member/customer messages in phase 1.
+- Create member/customer message candidates only, and require manager approval.
+- Operator completion reports are allowed only for automation run status, sent from `home@archivepilates.com` to `home@archivepilates.com` after verification.
+- Operator completion emails should be collected under the Gmail label `자동화 완료보고`.
+- Operator completion reports must stay concise and must not include individual member names unless an error or manual review requires it.
 - Deduplicate imports using file hash.
 - Deduplicate members by StudioMate member ID first, then phone, then exact name only as fallback.
 - Keep raw Excel files in Drive as source evidence; do not store raw personal data dumps in Git.
@@ -128,7 +131,7 @@ Example local paths:
 
 - Browser profile: `~/ArchiveIN/automation/browser-profile`
 - Download staging: `~/ArchiveIN/automation/downloads`
-- Google Drive archive: `~/Library/CloudStorage/GoogleDrive-*/My Drive/ArchiveIN/StudioMate Excel Archive/YYYY-MM-DD`
+- Google Drive archive: `/Users/archivepilates/Library/CloudStorage/GoogleDrive-home@archivepilates.com/내 드라이브/아카이브 정산/회원원본데이터/YYYY-MM-DD`
 
 ## Browser Automation Flow
 
@@ -142,6 +145,107 @@ Example local paths:
 8. Compute file hash and skip if already imported.
 9. Move the raw Excel file to Google Drive archive.
 10. Run importer.
+
+## Phase 1 CLI
+
+### Member Excel Download
+
+The first local Mac mini member Excel CLI is:
+
+```bash
+npm run studiomate:member-excel
+```
+
+Default behavior is safe inspection only:
+
+```bash
+DRY_RUN=true npm run studiomate:member-excel
+```
+
+Real member Excel download requires an explicit confirmation flag:
+
+```bash
+DRY_RUN=false CONFIRM=true npm run studiomate:member-excel
+```
+
+Useful environment variables:
+
+- `STUDIOMATE_BASE_URL`: defaults to `https://arcpilates.studiomate.kr`
+- `STUDIOMATE_MEMBER_EXPORT_PATH`: defaults to `/users`
+- `STUDIOMATE_PROFILE_DIR`: defaults to `~/ArchiveIN/automation/browser-profile`
+- `STUDIOMATE_DOWNLOAD_DIR`: defaults to `~/ArchiveIN/automation/downloads`
+- `STUDIOMATE_DRIVE_ARCHIVE_DIR`: defaults to `/Users/archivepilates/Library/CloudStorage/GoogleDrive-home@archivepilates.com/내 드라이브/아카이브 정산/회원원본데이터`
+- `STUDIOMATE_IMPORT_RUN_LOG`: defaults to `~/ArchiveIN/automation/member-excel-runs.jsonl`
+- `STUDIOMATE_MEMBER_EXCEL_INCLUDE_POINT`: defaults to `true`, checks `잔여 포인트`
+- `STUDIOMATE_MEMBER_EXCEL_INCLUDE_EXPIRED_TICKETS`: defaults to `true`, checks `만료된 수강권 포함`
+- `HEADLESS`: defaults to `false`
+- `WAIT_FOR_LOGIN`: defaults to `false`
+
+If the persistent browser profile is not logged in, run:
+
+```bash
+HEADLESS=false WAIT_FOR_LOGIN=true DRY_RUN=true npm run studiomate:member-excel
+```
+
+Log in manually in the opened browser. The automation resumes after the member page loads and stores the logged-in session in the persistent browser profile.
+
+### Weekly Reservation Availability Deadline
+
+The local Mac mini CLI for StudioMate `설정 -> 운영정보 -> 07. 예약 가능 기한 설정` is:
+
+```bash
+npm run studiomate:reservation-deadline
+```
+
+Default behavior is safe inspection only:
+
+```bash
+DRY_RUN=true npm run studiomate:reservation-deadline
+```
+
+Real setting changes require explicit confirmation:
+
+```bash
+DRY_RUN=false CONFIRM=true npm run studiomate:reservation-deadline
+```
+
+Default target:
+
+- `프라이빗 수업`
+- `그룹 수업`
+- `예약 가능 일자`: weekly run date, normally that Monday
+- `13` days
+- `13:00`
+
+Example: on Monday `2026. 5. 11.`, set the reservation availability date to `2026. 5. 11.` and auto-extend `13` days at `13:00`. After `13:00`, StudioMate opens reservations through `2026. 5. 24.`.
+
+Useful environment variables:
+
+- `STUDIOMATE_OPERATION_INFO_PATH`: defaults to `/settings/operations`
+- `STUDIOMATE_RESERVATION_AVAILABLE_UNTIL`: optional override such as `2026. 5. 11.`
+- `STUDIOMATE_RESERVATION_EXTENSION_DAYS`: defaults to `13`
+- `STUDIOMATE_RESERVATION_EXTENSION_TIME`: defaults to `13:00`
+- `STUDIOMATE_OUTPUT_DIR`: defaults to `~/ArchiveIN/automation/studiomate-results`
+- `WAIT_FOR_LOGIN`: defaults to `false`
+
+First login/setup run:
+
+```bash
+HEADLESS=false WAIT_FOR_LOGIN=true DRY_RUN=true npm run studiomate:reservation-deadline
+```
+
+Recommended weekly schedule on the Mac mini:
+
+- Every Monday at `12:30`
+- Use the Mac mini local timezone, `Asia/Seoul`
+- Run in `DRY_RUN=true` until the UI path and field selectors are verified once
+- After verification, switch the scheduled command to `DRY_RUN=false CONFIRM=true`
+
+A launchd template is available at:
+
+```bash
+firebase/kangsain-functions/macmini-studiomate/com.archive.studiomate-reservation-deadline.plist
+```
 
 ## Implementation Phases
 
@@ -164,7 +268,7 @@ Example local paths:
 
 ### Phase 3: App UI
 
-- ARCHIVE IN operator app reads `memberCards`.
+- ArchiveIN operator app reads `memberCards`.
 - Member name click shows role-specific card from unified data.
 - Add "new members" and "changed members" action board.
 

@@ -19,7 +19,9 @@
     "deploy:archivein-live": "bash scripts/deploy-archivein-live.sh",
     "process:admin-emergency-sync": "node scripts/process-admin-emergency-sync-requests.mjs",
     "validate:archive-core-hosting": "node scripts/validate-archive-core-hosting-deploy.mjs",
-    "deploy:archive-core-live": "bash scripts/deploy-archive-core-live.sh"
+    "deploy:archive-core-live": "bash scripts/deploy-archive-core-live.sh",
+    "studiomate:member-excel": "node firebase/kangsain-functions/macmini-studiomate/download-member-excel.mjs",
+    "studiomate:reservation-deadline": "node firebase/kangsain-functions/macmini-studiomate/set-reservation-deadline.mjs"
   },
   "dependencies": {
     "chart.js": "^4.4.9",
