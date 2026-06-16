@@ -21,7 +21,8 @@
 - Use the main ARCHIVE IN project chat as the control surface for cross-cutting decisions about the web app, Firebase model, StudioMate sync, Google Contacts, Kakao Alimtalk, and deployment readiness.
 - If a separate chat or agent is used for a narrow subtask, bring the decision/result back into the main ARCHIVE IN chat before treating it as project direction.
 - ARCHIVE CORE transition work uses `workLanes/archive-core-transition` as the shared work lane. New subthreads should read that lane first, update handoffs there, and use lane-specific worktrees for code changes.
-- Current ARCHIVE CORE transition worktree: `/Users/archivepilates/codex-worktrees/archive-core-transition`; branch: `codex/mini/archive-core-transition`.
+- Current ARCHIVE CORE transition integration worktree: `/Users/archivepilates/codex-worktrees/archive-core-transition`.
+- Keep this integration worktree on `main` after merged cleanup/deploy work. For new non-trivial changes, create a temporary `codex/mini/<task-name>` branch, fast-forward/merge it back to `main` after validation, then delete the temporary branch when it is no longer needed.
 - ARCHIVE CORE now uses one main command thread. The main command thread owns requirements, priorities, final judgment, go-live approval, Notion status, and cross-lane handoff decisions.
 - Feature-specific Codex threads or subagents may investigate or implement bounded work, but they must report results back to the main ARCHIVE CORE command thread before their output becomes project direction.
 - Do not repeat cross-cutting instructions across feature threads. Put shared instructions in the command thread, `workLanes/archive-core-transition`, this `AGENTS.md`, and the relevant Notion page.
