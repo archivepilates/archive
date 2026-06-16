@@ -958,7 +958,14 @@ function isResolvedOperationalItem(item) {
   return Boolean(
     item?.resolvedAt ||
       item?.resolutionStatus === "resolved" ||
+      item?.actionStatus === "resolved" ||
+      item?.actionStatus === "completed" ||
+      item?.operatorStatus === "resolved" ||
+      item?.operatorStatus === "completed" ||
+      item?.reviewStatus === "resolved" ||
+      item?.reviewStatus === "completed" ||
       item?.resolved === true ||
+      item?.completed === true ||
       isClosedStatus(item?.status) ||
       isClosedStatus(item?.sendStatus),
   );
@@ -1017,11 +1024,22 @@ function isNonActionableCommunicationItem(item) {
 }
 
 function failedAlimtalkCandidates(items = state.alimtalkCandidates) {
-  return items.filter((item) => isFailureStatus(item.status) && !isNonActionableCommunicationItem(item));
+  return items.filter((item) => hasCommunicationFailureSignal(item) && !isNonActionableCommunicationItem(item));
 }
 
 function failedAlimtalkSends(items = state.alimtalkSends) {
-  return items.filter((item) => isFailureStatus(item.status || item.sendStatus) && !isNonActionableCommunicationItem(item));
+  return items.filter((item) => hasCommunicationFailureSignal(item) && !isNonActionableCommunicationItem(item));
+}
+
+function hasCommunicationFailureSignal(item) {
+  return [
+    item?.status,
+    item?.sendStatus,
+    item?.deliveryStatus,
+    item?.resultStatus,
+    item?.solapiStatus,
+    item?.alimtalkStatus,
+  ].some(isFailureStatus);
 }
 
 function onsiteWelcomeProblems(items = state.onsiteWelcomeRequests) {
@@ -1140,9 +1158,7 @@ function renderMessages(candidates, sends) {
     ];
     sendList.innerHTML = failureRows.length
       ? failureRows.map((item) => renderAlimtalkRow(item, { status: (row) => row.status || row.sendStatus || "failed" })).join("")
-      : sends.length
-        ? sends.map((item) => renderAlimtalkRow(item, { status: (send) => send.status || "done" })).join("")
-        : `<div class="empty-state">최근 실패 또는 발송 기록이 없습니다.</div>`;
+      : `<div class="empty-state">현재 확인할 실패 알림톡이 없습니다.</div>`;
   }
 
   const templateList = qs("messagesTemplateList");
@@ -1154,7 +1170,7 @@ function renderMessages(candidates, sends) {
       if (candidates.includes(item)) current.candidates += 1;
       if (sends.includes(item)) current.sends += 1;
       const status = String(item.status || item.sendStatus || "").toLowerCase();
-      if (["failed", "error"].includes(status)) current.failed += 1;
+      if (["failed", "error"].includes(status) && !isNonActionableCommunicationItem(item)) current.failed += 1;
       if (["sent", "done", "success", "completed"].includes(status)) current.sent += 1;
       templateMap.set(key, current);
     }
@@ -2182,8 +2198,6 @@ function renderHomeDecisions() {
   if (!list) return;
   const openIssues = activeQualityIssues();
   const failedAutomation = failedAutomationItems();
-  const privatePending = pendingPrivateProgressRows();
-  const privateBreakdown = privatePendingBreakdown(privatePending);
   const { failedCandidates, failedSends, flowProblems, pendingCandidates } = communicationProblemSummary();
   const sendFailures = failedCandidates.length + failedSends.length;
   const rows = [];
@@ -2210,14 +2224,6 @@ function renderHomeDecisions() {
       detail: `${pendingCandidates.length}건이 대기/검토/처리중입니다. 실제 발송 전 중복과 템플릿을 확인하세요.`,
       status: "warning",
       href: "./messages/",
-    });
-  }
-  if (privatePending.length) {
-    rows.push({
-      title: "프라이빗 리포트 진행",
-      detail: `미완료 ${privatePending.length}건 · 사전 ${privateBreakdown.pre} · 사후 ${privateBreakdown.post} · 리포트 ${privateBreakdown.report} · 미발송 ${privateBreakdown.send}`,
-      status: "warning",
-      href: "./private/",
     });
   }
   if (failedAutomation.length) {
@@ -2271,12 +2277,12 @@ function renderHomeSummary() {
   const privateBreakdown = privatePendingBreakdown(privatePending);
   const { failedCandidates, failedSends, flowProblems, pendingCandidates } = communicationProblemSummary();
   const communicationProblems = failedCandidates.length + failedSends.length + flowProblems.length;
-  const actionTotal = communicationProblems + pendingCandidates.length + privatePending.length + failedAutomation.length + openIssues.length;
+  const actionTotal = communicationProblems + pendingCandidates.length + failedAutomation.length + openIssues.length;
   const latestImport = state.sourceImports[0];
   setText("homeActionTotal", formatCount(actionTotal));
   setText(
     "homeActionNote",
-    actionTotal ? "해결 전까지 홈 큐에 남깁니다." : "운영자 확인 대기 없음",
+    actionTotal ? "프라이빗 진행은 제외하고 당장 처리할 항목만 합산" : "운영자 확인 대기 없음",
   );
   setText("homeMemberCareTotal", formatCount(flowProblems.length));
   setText(
