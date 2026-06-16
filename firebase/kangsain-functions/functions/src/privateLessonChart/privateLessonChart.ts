@@ -15,7 +15,7 @@ import type {
   PrivateLessonChartRequestStatus,
   PrivateSurveyResponseDoc,
 } from "../types/models";
-import { addDays, formatDateKst, nowTimestamp, todayKst } from "../utils/date";
+import { addDays, dateRange, formatDateKst, nowTimestamp, todayKst } from "../utils/date";
 import { errorMessage } from "../utils/errors";
 import { stableHash } from "../utils/hash";
 import { ensureShortLink } from "../utils/shortLinks";
@@ -240,6 +240,75 @@ export async function createPrivateLessonChartRequestsForDate(date: string): Pro
 
   logger.info("createPrivateLessonChartRequestsForDate completed", { date, checked, created, skipped });
   return { date, checked, created, skipped };
+}
+
+export async function reconcileCurrentMonthPrivateLessonCharts(): Promise<{
+  startDate: string;
+  endDate: string;
+  dates: number;
+  checkedBookings: number;
+  created: number;
+  bookingSkipped: number;
+  checkedRequests: number;
+  cancelled: number;
+  requestSkipped: number;
+  failed: number;
+}> {
+  const { startDate, endDate } = currentMonthRangeKst();
+  let checkedBookings = 0;
+  let created = 0;
+  let bookingSkipped = 0;
+  let checkedRequests = 0;
+  let cancelled = 0;
+  let requestSkipped = 0;
+  let failed = 0;
+
+  for (const date of dateRange(startDate, endDate)) {
+    try {
+      const createSummary = await createPrivateLessonChartRequestsForDate(date);
+      checkedBookings += createSummary.checked;
+      created += createSummary.created;
+      bookingSkipped += createSummary.skipped;
+
+      const snap = await refs.privateLessonChartRequests().where("lessonDate", "==", date).limit(500).get();
+      const canonical = canonicalChartRequests(snap.docs.map((doc) => doc.data()));
+      requestSkipped += snap.size - canonical.length;
+
+      for (const request of canonical) {
+        if (request.status === "cancelled") {
+          requestSkipped += 1;
+          continue;
+        }
+        checkedRequests += 1;
+        const activeBooking = await activePrivateBookingForChartRequest(request);
+        if (!activeBooking.ok) {
+          await cancelPrivateLessonChartRequest(request, activeBooking.reason);
+          cancelled += 1;
+        }
+      }
+    } catch (err) {
+      failed += 1;
+      logger.warn("reconcileCurrentMonthPrivateLessonCharts date failed", {
+        date,
+        message: errorMessage(err),
+      });
+    }
+  }
+
+  const result = {
+    startDate,
+    endDate,
+    dates: dateRange(startDate, endDate).length,
+    checkedBookings,
+    created,
+    bookingSkipped,
+    checkedRequests,
+    cancelled,
+    requestSkipped,
+    failed,
+  };
+  logger.info("reconcileCurrentMonthPrivateLessonCharts completed", result);
+  return result;
 }
 
 export async function sendPendingPrivateLessonChartAlimtalksForDate(date: string): Promise<{
@@ -1585,6 +1654,14 @@ async function nextSessionNumberFromBookings(booking: BookingDoc): Promise<numbe
   }
   const currentDate = booking.lectureDate || "";
   return canonical.filter((item) => (item.lectureDate || "") < currentDate).length + 1;
+}
+
+function currentMonthRangeKst(baseDate = todayKst()): { startDate: string; endDate: string } {
+  const yearMonth = baseDate.slice(0, 7);
+  const startDate = `${yearMonth}-01`;
+  const nextMonthFirst = new Date(`${startDate}T00:00:00.000+09:00`);
+  nextMonthFirst.setMonth(nextMonthFirst.getMonth() + 1);
+  return { startDate, endDate: addDays(formatDateKst(nextMonthFirst), -1) };
 }
 
 async function nextSessionNumberFromPrivateLedger(booking: BookingDoc): Promise<number | null> {

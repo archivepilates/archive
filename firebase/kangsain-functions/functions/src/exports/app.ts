@@ -1,5 +1,11 @@
 import { onCall } from "firebase-functions/v2/https";
+import { onDocumentCreated } from "firebase-functions/v2/firestore";
 import { getInstructorHomeHandler } from "../callable/getInstructorHome";
+import {
+  getKioskParkingJobStatusHandler,
+  lookupKioskCheckinHandler,
+  submitKioskCheckinHandler,
+} from "../callable/kioskCheckin";
 import { getMemberMemoHistoryHandler } from "../callable/getMemberMemoHistory";
 import { registerFcmTokenHandler } from "../callable/registerFcmToken";
 import { searchMembersHandler } from "../callable/searchMembers";
@@ -10,9 +16,25 @@ import {
 } from "../callable/staffPinAuth";
 import { submitBookingAttendanceHandler } from "../callable/submitBookingAttendance";
 import { submitMemberMemoHandler } from "../callable/submitMemberMemo";
+import { REGION } from "../config/constants";
+import {
+  iparkingLoginId,
+  iparkingLoginPassword,
+  iparkingSubLoginId,
+  iparkingSubLoginPassword,
+} from "../parking/iparkingClient";
+import { processParkingDiscountJobSnapshot } from "../parking/processParkingDiscountJob";
 import { callableOptions } from "../runtime/functionOptions";
 import { requireStaff } from "../security/authGuards";
 import { toHttpsError } from "../utils/errors";
+
+const parkingDiscountJobOptions = {
+  region: REGION,
+  document: "parkingDiscountJobs/{jobId}",
+  secrets: [iparkingLoginId, iparkingLoginPassword, iparkingSubLoginId, iparkingSubLoginPassword],
+  timeoutSeconds: 60,
+  memory: "256MiB" as const,
+};
 
 export const getInstructorHome = onCall(callableOptions, async (request) => {
   try {
@@ -70,12 +92,42 @@ export const searchMembers = onCall(callableOptions, async (request) => {
   }
 });
 
+export const lookupKioskCheckin = onCall(callableOptions, async (request) => {
+  try {
+    return await lookupKioskCheckinHandler(request);
+  } catch (err) {
+    throw toHttpsError(err);
+  }
+});
+
+export const submitKioskCheckin = onCall(callableOptions, async (request) => {
+  try {
+    return await submitKioskCheckinHandler(request);
+  } catch (err) {
+    throw toHttpsError(err);
+  }
+});
+
+export const getKioskParkingJobStatus = onCall(callableOptions, async (request) => {
+  try {
+    return await getKioskParkingJobStatusHandler(request);
+  } catch (err) {
+    throw toHttpsError(err);
+  }
+});
+
 export const registerFcmToken = onCall(callableOptions, async (request) => {
   try {
     return await registerFcmTokenHandler(request);
   } catch (err) {
     throw toHttpsError(err);
   }
+});
+
+export const processParkingDiscountJob = onDocumentCreated(parkingDiscountJobOptions, async (event) => {
+  const snap = event.data;
+  if (!snap) return;
+  await processParkingDiscountJobSnapshot(snap);
 });
 
 export const adminIssueStaffTempCode = onCall(callableOptions, async (request) => {

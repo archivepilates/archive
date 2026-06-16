@@ -9,6 +9,7 @@ import {
   notionPrivateLessonReportWebhookHandler,
   privateLessonChartApiHandler,
   privateLessonReportViewHandler,
+  reconcileCurrentMonthPrivateLessonCharts,
 } from "../privateLessonChart/privateLessonChart";
 import {
   ingestPrivateSurveyResponseHandler,
@@ -74,6 +75,16 @@ export const scheduledCreatePrivateLessonChartRequests = onSchedule(
   },
   async () => {
     await createAndSendTomorrowPrivateLessonCharts();
+  },
+);
+
+export const scheduledReconcileCurrentMonthPrivateLessonCharts = onSchedule(
+  {
+    ...privateLessonChartScheduleOptions,
+    schedule: "30 23 * * *",
+  },
+  async () => {
+    await reconcileCurrentMonthPrivateLessonCharts();
   },
 );
 

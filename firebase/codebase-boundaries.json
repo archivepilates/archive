@@ -26,6 +26,7 @@
         "scheduledProcessStaffSurveyAlimtalks",
         "scheduledSyncPrivateSurveyNotion",
         "scheduledCreatePrivateLessonChartRequests",
+        "scheduledReconcileCurrentMonthPrivateLessonCharts",
         "scheduledGeneratePrivateLessonChartReports",
         "scheduledEnqueuePrivateLessonReportAlimtalks",
         "scheduledPurgeDiscardedMemberSignupContracts",
@@ -71,8 +72,12 @@
         "submitMemberMemo",
         "getMemberMemoHistory",
         "searchMembers",
+        "lookupKioskCheckin",
+        "submitKioskCheckin",
+        "getKioskParkingJobStatus",
         "registerFcmToken",
-        "adminIssueStaffTempCode"
+        "adminIssueStaffTempCode",
+        "processParkingDiscountJob"
       ],
       "forbidden": ["scheduled jobs", "external member-facing sends"]
     }
