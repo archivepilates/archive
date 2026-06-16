@@ -261,6 +261,9 @@
     },
     {
       "site": "archive-pilates-core",
+      "predeploy": [
+        "npm run validate:archive-core-hosting"
+      ],
       "public": "core",
       "headers": [
         {

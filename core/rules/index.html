@@ -352,8 +352,9 @@
               <h3>배포세트</h3>
               <ul>
                 <li>배포, 반영, publish, release 요청은 scoped commit, 필요한 target 배포, 라이브 확인, push까지 포함합니다.</li>
-                <li>UI/static-only 변경은 Hosting만, Functions 변경은 해당 codebase만 우선 배포합니다.</li>
+                <li>UI/static-only 변경은 Hosting만, Functions 변경은 해당 codebase만 우선 배포합니다. CORE는 scripts/deploy-archive-core-live.sh 또는 npm run deploy:archive-core-live를 사용합니다.</li>
                 <li>배포 전 변경 범위, 테스트, 롤백 기준을 확인합니다.</li>
+                <li>CORE Hosting은 최신 CORE 작업 기준에서만 배포합니다. 배포 전 validate:archive-core-hosting이 수강료 문의 카드, 최근 발송/메모 패널, KPI 카드 높이 CSS를 확인하고, 빠진 항목이 있으면 배포를 중단합니다.</li>
                 <li>배포 후 실제 URL, callable/API 응답, 브라우저 오류를 확인합니다.</li>
               </ul>
             </article>
