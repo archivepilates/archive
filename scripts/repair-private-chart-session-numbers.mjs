@@ -60,7 +60,7 @@ for (const request of requests) {
       : "",
     current,
     expected,
-    source: expected ? "ledger_usage_with_booking_supplement" : "fallback",
+    source: canonicalSessionNumberFromBooking(booking) ? "booking_session_order" : "ledger_usage_with_booking_supplement",
     needsRepair,
     recordPageId: record?.notionSync?.pageId || "",
     instructorPageId: record?.notionSync?.instructorPageId || "",
@@ -176,6 +176,8 @@ async function updateNotionPages({ request, record, from, to }) {
 
 async function nextSessionNumber(booking) {
   if (!booking.memberId) return 1;
+  const bookingSessionNumber = canonicalSessionNumberFromBooking(booking);
+  if (bookingSessionNumber) return bookingSessionNumber;
   const ledgerNumber = await nextSessionNumberFromPrivateLedger(booking);
   const usageNumber = await nextSessionNumberFromUsageEvents(booking);
   const bookingNumber = await nextSessionNumberFromBookings(booking);
@@ -352,9 +354,15 @@ function isPrivateBooking(booking) {
 }
 
 function isCountablePrivateHistoryBooking(booking) {
+  if (booking.sessionOrder?.counted === false) return false;
   if (["wait", "wait_cancel", "cancel"].includes(String(booking.appStatus || ""))) return false;
   if (["absent", "late_cancel"].includes(String(booking.attendanceStatus || ""))) return false;
   return true;
+}
+
+function canonicalSessionNumberFromBooking(booking) {
+  if (!booking || booking.sessionOrder?.counted === false) return null;
+  return positiveNumber(booking.sessionOrder?.privateCumulativeRound);
 }
 
 function canonicalPrivateBookings(bookings) {
@@ -428,7 +436,24 @@ function normalizeKoreanName(value) {
 }
 
 function notionSessionTitle(record, request) {
-  return `${lessonTitleDate(request)} · ${record.memberName} ${record.sessionNumber}회차(자동화)`;
+  return `${lessonTitleDate(request)} · ${record.memberName} ${record.sessionNumber}회차(${privateLessonChartStageLabel(record, request)})`;
+}
+
+function privateLessonChartStageLabel(record, request) {
+  if (String(request?.status || "") === "cancelled" || String(record?.sessionStatus || "") === "cancelled") return "취소";
+  if (record?.publicReportSentAt || record?.publicReportApproval?.sentAt || String(record?.publicReportApproval?.status || "") === "sent") {
+    return "리포트 발송완료";
+  }
+  if (isPrivateLessonReportGenerated(record)) return "리포트 생성완료";
+  if (record?.postSubmittedAt) return "수업 후 설문완료";
+  if (record?.preSubmittedAt || String(request?.preSurveyStatus || "") === "submitted") return "수업 전 설문완료";
+  return "수업 전 설문대기";
+}
+
+function isPrivateLessonReportGenerated(record) {
+  if (!record?.postSubmittedAt) return false;
+  if (!["draft_created", "approved", "published"].includes(String(record.gptStatus || ""))) return false;
+  return Boolean(record.publicReportUrl || record.publicReportCanonicalUrl);
 }
 
 function lessonTitleDate(request) {

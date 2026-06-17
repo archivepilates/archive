@@ -150,6 +150,10 @@ export async function privateLessonReportViewHandler(request: any, response: any
     response.status(403).send(renderPrivateLessonReportMessagePage("리포트 조회 권한이 없습니다."));
     return;
   }
+  if (!isPrivateLessonReportGenerated(record)) {
+    response.status(409).send(renderPrivateLessonReportMessagePage("회원용 리포트가 아직 생성되지 않았습니다."));
+    return;
+  }
 
   response.status(200).send(renderPrivateLessonReportPage(record, requestDoc));
 }
@@ -599,6 +603,7 @@ async function enqueuePrivateLessonReportForNotionPage(
     !record.postRecord ||
     record.gptStatus !== "draft_created" ||
     !(record.publicReportCanonicalUrl || record.publicReportUrl) ||
+    !record.postSubmittedAt ||
     !record.memberPhone
   ) {
     return "skipped";
@@ -620,7 +625,7 @@ async function approvePrivateLessonReportFromChart(
   if (!record.postRecord || !record.postSubmittedAt) {
     throw new Error("수업 후 기록 제출 후 승인할 수 있습니다.");
   }
-  if (!["draft_created", "approved", "published"].includes(record.gptStatus) || !(record.publicReportUrl || record.publicReportCanonicalUrl)) {
+  if (!isPrivateLessonReportGenerated(record)) {
     throw new Error("회원용 리포트가 아직 생성되지 않았습니다. 잠시 후 다시 확인해 주세요.");
   }
   if (!record.memberPhone) throw new Error("회원 연락처가 없어 발송 후보를 만들 수 없습니다.");
@@ -712,6 +717,7 @@ async function enqueuePrivateLessonReportForRecord(
   notionPageId = "",
   reviewedByUid = "system:private-report",
 ): Promise<"queued" | "completed" | "failed" | "skipped" | "already_queued" | "template_pending"> {
+  if (!isPrivateLessonReportGenerated(record)) return "skipped";
   const resolved = await resolveReportShortUrl(record);
   if (!resolved.reportTargetUrl) return "skipped";
   if (resolved.shouldUpdateRecord) {
@@ -1331,7 +1337,16 @@ async function syncPrivateLessonChartRecordToNotion(
   chartRequest: PrivateLessonChartRequestDoc,
 ): Promise<NonNullable<PrivateLessonChartRecordDoc["notionSync"]>> {
   try {
-    const reportResolution = await resolveReportShortUrl(record);
+    const reportCanBeExposed = canExposePrivateLessonReport(record);
+    const reportResolution = reportCanBeExposed
+      ? await resolveReportShortUrl(record)
+      : {
+        reportTargetUrl: "",
+        publicReportUrl: "",
+        publicReportCanonicalUrl: "",
+        shouldUpdateRecord: Boolean(record.publicReportUrl || record.publicReportCanonicalUrl),
+        shouldUpdateNotion: Boolean(record.publicReportUrl || record.publicReportCanonicalUrl),
+      };
     if (reportResolution.shouldUpdateRecord) {
       await refs.privateLessonChartRecord(record.recordId).set(
         {
@@ -1343,23 +1358,30 @@ async function syncPrivateLessonChartRecordToNotion(
       );
     }
     const reportUrl = reportResolution.publicReportUrl;
+    const recordForNotion = {
+      ...record,
+      publicReportUrl: reportCanBeExposed ? reportResolution.publicReportUrl || record.publicReportUrl || "" : "",
+      publicReportCanonicalUrl: reportCanBeExposed
+        ? reportResolution.publicReportCanonicalUrl || record.publicReportCanonicalUrl || ""
+        : "",
+    } as PrivateLessonChartRecordDoc;
     const newPageProperties = compactObject({
       "회원 리포트": reportUrl ? { url: reportUrl } : undefined,
       발송: { checkbox: false },
       발송상태: notionSelect(reportUrl ? "대기" : ""),
     });
     const existingPageProperties = compactObject({
-      "회원 리포트": reportUrl ? { url: reportUrl } : undefined,
+      "회원 리포트": reportUrl ? { url: reportUrl } : reportResolution.shouldUpdateNotion ? { url: null } : undefined,
     });
-    const content = notionChartChildren(record, chartRequest);
+    const content = notionChartChildren(recordForNotion, chartRequest);
     const existingPageId = record.notionSync?.pageId;
     if (existingPageId) {
       if (Object.keys(existingPageProperties).length) {
         await notionRequest(`pages/${existingPageId}`, "PATCH", { properties: existingPageProperties });
       }
-      await appendPageContent(existingPageId, notionUpdateChildren(record, chartRequest));
+      await appendPageContent(existingPageId, notionUpdateChildren(recordForNotion, chartRequest));
       const instructorPage = await syncInstructorMemberChartPage(
-        record,
+        recordForNotion,
         chartRequest,
         record.notionSync?.pageUrl || notionPageUrl(existingPageId),
       );
@@ -1378,7 +1400,7 @@ async function syncPrivateLessonChartRecordToNotion(
       children: content,
     });
     const pageUrl = String(page.url || notionPageUrl(String(page.id)));
-    const instructorPage = await syncInstructorMemberChartPage(record, chartRequest, pageUrl);
+    const instructorPage = await syncInstructorMemberChartPage(recordForNotion, chartRequest, pageUrl);
     return {
       status: "synced",
       pageId: String(page.id),
@@ -1589,9 +1611,10 @@ function publicChartRequest(
   record: PrivateLessonChartRecordDoc | null = null,
 ): Record<string, unknown> {
   const approvalStatus = record?.publicReportApproval?.status || "";
-  const reportReady = record?.gptStatus === "draft_created" &&
-    Boolean(record.publicReportUrl || record.publicReportCanonicalUrl);
-  const reportStatus = approvalStatus && approvalStatus !== "pending"
+  const reportReady = isPrivateLessonReportGenerated(record);
+  const reportUrl = reportReady ? record?.publicReportUrl || "" : "";
+  const reportCanonicalUrl = reportReady ? record?.publicReportCanonicalUrl || "" : "";
+  const reportStatus = approvalStatus && approvalStatus !== "pending" && reportReady
     ? approvalStatus
     : reportReady
       ? "ready"
@@ -1621,8 +1644,8 @@ function publicChartRequest(
         recordId: record.recordId,
         status: reportStatus,
         gptStatus: record.gptStatus,
-        url: record.publicReportUrl || "",
-        canonicalUrl: record.publicReportCanonicalUrl || "",
+        url: reportUrl,
+        canonicalUrl: reportCanonicalUrl,
         summary: record.gptDraftSummary || record.publicSummary || "",
         nextDirection: record.gptDraftNextDirection || record.publicNextDirection || "",
         approval: record.publicReportApproval || null,
@@ -2351,11 +2374,11 @@ function notionChartChildren(
     divider(),
     heading(3, "회원 리포트 검수"),
     paragraph(
-      record.publicReportUrl
+      isPrivateLessonReportGenerated(record)
         ? "아래 임베드 또는 회원 리포트 URL 속성에서 최종 회원용 리포트를 확인합니다."
         : "회원용 HTML 리포트 생성 대기 중입니다.",
     ),
-    ...(record.publicReportUrl ? [embed(record.publicReportUrl)] : []),
+    ...(isPrivateLessonReportGenerated(record) && record.publicReportUrl ? [embed(record.publicReportUrl)] : []),
   ];
 }
 
@@ -2508,7 +2531,7 @@ function notionUpdateChildren(
     ]),
     heading(3, "회원 리포트"),
     paragraph(record.gptDraftSummary || "Gemini 초안 생성 대기 중입니다."),
-    ...(record.publicReportUrl ? [embed(record.publicReportUrl)] : []),
+    ...(isPrivateLessonReportGenerated(record) && record.publicReportUrl ? [embed(record.publicReportUrl)] : []),
   ];
 }
 
@@ -2516,7 +2539,9 @@ function notionInstructorChartChildren(
   record: PrivateLessonChartRecordDoc,
   chartRequest: PrivateLessonChartRequestDoc,
 ): Record<string, unknown>[] {
-  const reportButtonUrl = record.publicReportUrl || record.publicReportCanonicalUrl || "";
+  const reportButtonUrl = isPrivateLessonReportGenerated(record)
+    ? record.publicReportUrl || record.publicReportCanonicalUrl || ""
+    : "";
   return [
     callout("이 페이지는 강사용 회차 기록입니다. 회원 발송은 수업 후 기록 링크의 리포트 화면에서 처리합니다."),
     heading(2, `${record.memberName}님 ${record.sessionNumber}회차`),
@@ -2548,7 +2573,7 @@ function notionInstructorChartChildren(
     divider(),
     heading(3, "회원 리포트"),
     paragraph(
-      record.publicReportUrl
+      reportButtonUrl
         ? "회원용 리포트가 생성되었습니다. 운영자가 검수 후 발송합니다."
         : "회원용 리포트 생성 대기 중입니다.",
     ),
@@ -2562,7 +2587,9 @@ function notionInstructorUpdateChildren(
   record: PrivateLessonChartRecordDoc,
   chartRequest: PrivateLessonChartRequestDoc,
 ): Record<string, unknown>[] {
-  const reportButtonUrl = record.publicReportUrl || record.publicReportCanonicalUrl || "";
+  const reportButtonUrl = isPrivateLessonReportGenerated(record)
+    ? record.publicReportUrl || record.publicReportCanonicalUrl || ""
+    : "";
   return [
     divider(),
     heading(3, `업데이트 ${new Date().toLocaleString("ko-KR", { timeZone: "Asia/Seoul" })}`),
@@ -2585,7 +2612,7 @@ function notionInstructorUpdateChildren(
     ]),
     heading(3, "회원 리포트"),
     paragraph(
-      record.publicReportUrl
+      reportButtonUrl
         ? "회원용 리포트가 생성되었습니다. 운영자가 검수 후 발송합니다."
         : "회원용 리포트 생성 대기 중입니다.",
     ),
@@ -2693,7 +2720,33 @@ function lessonTimeText(chartRequest: Pick<PrivateLessonChartRequestDoc, "lesson
 }
 
 function notionSessionTitle(record: PrivateLessonChartRecordDoc, chartRequest: PrivateLessonChartRequestDoc): string {
-  return `${lessonTitleDate(chartRequest)} · ${record.memberName} ${record.sessionNumber}회차(자동화)`;
+  return `${lessonTitleDate(chartRequest)} · ${record.memberName} ${record.sessionNumber}회차(${privateLessonChartStageLabel(record, chartRequest)})`;
+}
+
+function privateLessonChartStageLabel(
+  record: PrivateLessonChartRecordDoc,
+  chartRequest?: PrivateLessonChartRequestDoc,
+): string {
+  const approvalStatus = record.publicReportApproval?.status || "";
+  if (approvalStatus === "sent" || record.gptStatus === "published") return "리포트 발송완료";
+  if (isPrivateLessonReportGenerated(record)) return "리포트 생성완료";
+  if (record.postSubmittedAt || chartRequest?.postStatus === "submitted") return "수업 후 설문완료";
+  if (record.preSubmittedAt || chartRequest?.preStatus === "submitted") return "수업 전 설문완료";
+  return "수업 전 설문대기";
+}
+
+function canExposePrivateLessonReport(record: PrivateLessonChartRecordDoc | null | undefined): boolean {
+  return Boolean(
+    record?.postSubmittedAt &&
+    ["draft_created", "approved", "published"].includes(String(record.gptStatus || "")),
+  );
+}
+
+function isPrivateLessonReportGenerated(record: PrivateLessonChartRecordDoc | null | undefined): boolean {
+  return Boolean(
+    canExposePrivateLessonReport(record) &&
+    (record?.publicReportUrl || record?.publicReportCanonicalUrl),
+  );
 }
 
 function lessonTitleDate(chartRequest: Pick<PrivateLessonChartRequestDoc, "lessonDate" | "lessonStartAt">): string {

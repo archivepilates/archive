@@ -1868,13 +1868,23 @@ function currentPrivateProgressRows(rows, referenceDate = new Date()) {
 function privateStage(row) {
   const preDone = privateProgressStatus(row.request.preStatus || row.record?.preSubmittedAt) === "success";
   const postDone = privateProgressStatus(row.request.postStatus || row.record?.postSubmittedAt) === "success";
-  const reportDone = Boolean(row.record?.publicReportUrl || row.record?.publicReportCanonicalUrl);
+  const reportDone = privateReportReady(row);
   const sendDone = ["done", "sent", "success", "completed"].includes(String(row.send?.status || "").toLowerCase());
   if (!preDone) return "pre";
   if (!postDone) return "post";
   if (!reportDone) return "report";
   if (!sendDone) return "send";
   return "complete";
+}
+
+function privateReportReady(row) {
+  const record = row.record || {};
+  const gptStatus = String(record.gptStatus || "").toLowerCase();
+  return Boolean(
+    record.postSubmittedAt &&
+      ["draft_created", "approved", "published"].includes(gptStatus) &&
+      (record.publicReportUrl || record.publicReportCanonicalUrl),
+  );
 }
 
 function pendingPrivateProgressRows() {
@@ -1909,7 +1919,7 @@ function formatPrivateClassLine(row) {
 
 function renderPrivateStageCard(row) {
   const stage = privateStage(row);
-  const reportReady = Boolean(row.record?.publicReportUrl || row.record?.publicReportCanonicalUrl);
+  const reportReady = privateReportReady(row);
   const sendStatus = row.send?.status || "pending";
   return `
     <div class="stage-card">
