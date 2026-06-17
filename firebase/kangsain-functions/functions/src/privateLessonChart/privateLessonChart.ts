@@ -19,6 +19,7 @@ import { addDays, dateRange, formatDateKst, nowTimestamp, todayKst } from "../ut
 import { errorMessage } from "../utils/errors";
 import { stableHash } from "../utils/hash";
 import { ensureShortLink } from "../utils/shortLinks";
+import { bookingSourcePriority, isExcelBookingId } from "../utils/canonicalBooking";
 import { ALIMTALK_TEMPLATES } from "../alimtalk/templates";
 import { isAlimtalkTemplateApproved } from "../alimtalk/templateStatus";
 import { initPrivateLessonMediaUpload, uploadPrivateLessonMediaChunk } from "./privateLessonMedia";
@@ -334,6 +335,7 @@ export async function sendPendingPrivateLessonChartAlimtalksForDate(date: string
           alimtalk: {
             ...(request.alimtalk || {}),
             status: "skipped",
+            reasonCode: "duplicate_booking_source",
             templateName: PRIVATE_CHART_TEMPLATE_NAME,
             templateId: STAFF_PRIVATE_CHART_TEMPLATE_ID,
             lastError: "동일 수업의 실제 예약 ID 요청이 있어 Excel 중복 요청은 발송 제외",
@@ -743,6 +745,36 @@ async function enqueuePrivateLessonReportForRecord(
   if (existing?.status === "sent") {
     if (notionPageId) await updatePrivateLessonReportNotionStatus(notionPageId, "완료");
     return "completed";
+  }
+
+  const chartRequest = (await refs.privateLessonChartRequest(record.requestId || record.recordId).get()).data();
+  if (!chartRequest) return "skipped";
+  const activeBooking = await activePrivateBookingForChartRequest(chartRequest);
+  if (!activeBooking.ok) {
+    if (existing?.status === "queued" || existing?.status === "processing" || existing?.status === "candidate") {
+      await refs.alimtalkCandidate(candidateId).set(
+        {
+          status: "skipped",
+          reasonCode: "inactive_booking",
+          lastError: `예약 취소/변경 확인: ${activeBooking.reason}`,
+          updatedAt: nowTimestamp(),
+        },
+        { merge: true },
+      );
+    }
+    await refs.privateLessonChartRecord(record.recordId).set(
+      {
+        publicReportApproval: {
+          ...(record.publicReportApproval || {}),
+          status: "failed",
+          lastError: `예약 취소/변경 확인: ${activeBooking.reason}`,
+        },
+        updatedAt: nowTimestamp(),
+      },
+      { merge: true },
+    );
+    if (notionPageId) await updatePrivateLessonReportNotionStatus(notionPageId, "실패");
+    return "skipped";
   }
   if (existing?.status === "queued" || existing?.status === "processing") return "already_queued";
 
@@ -1935,18 +1967,6 @@ function preferCanonicalBookingLike(nextBookingId: string, currentBookingId: str
   return String(nextBookingId || "") < String(currentBookingId || "");
 }
 
-function isExcelBookingId(bookingId: string): boolean {
-  return String(bookingId || "").startsWith("excel_booking_");
-}
-
-function bookingSourcePriority(bookingId: string): number {
-  const id = String(bookingId || "");
-  if (id.startsWith("usage_booking_")) return 1;
-  if (id.startsWith("excel_booking_")) return 2;
-  if (id.startsWith("excel_") || id.startsWith("usage_")) return 3;
-  return 0;
-}
-
 function isSendablePrivateChartRequest(request: PrivateLessonChartRequestDoc): boolean {
   if (request.status === "cancelled") return false;
   if (request.alimtalk?.status !== "template_pending" && request.alimtalk?.status !== "queued") return false;
@@ -1982,7 +2002,9 @@ function inactivePrivateBookingReason(booking: BookingDoc): string {
     return `attendance_status_${booking.attendanceStatus}`;
   }
   const sourceStatus = String((booking as any).sourceStatus || "");
-  if (/missing_from_latest_reservation_import|stale/i.test(sourceStatus)) return sourceStatus;
+  if (/missing_from_latest_reservation_import|stale|lecture_deleted|deleted|cancel/i.test(sourceStatus)) {
+    return sourceStatus || "source_inactive";
+  }
   if (!isPrivateBooking(booking)) return "not_private_booking";
   return "";
 }

@@ -528,6 +528,8 @@ export interface AlimtalkCandidateDoc {
   sourceDate: string;
   payload: Record<string, string>;
   dedupeKey?: string;
+  reasonCode?: string;
+  skipCode?: string;
   attempts?: number;
   maxAttempts?: number;
   queuedBy?: "operator" | "auto";
@@ -674,6 +676,7 @@ export interface PrivateLessonChartRequestDoc {
     status: "template_pending" | "queued" | "sent" | "failed" | "skipped";
     templateName: string;
     templateId?: string;
+    reasonCode?: string;
     solapiMessageId?: string;
     sentAt?: Timestamp;
     lastError: string | null;

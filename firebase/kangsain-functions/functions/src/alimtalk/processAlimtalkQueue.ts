@@ -42,6 +42,7 @@ export async function processAlimtalkQueue(): Promise<{ processed: number; sent:
         await refs.alimtalkCandidate(claimed.candidateId).set(
           {
             status: "skipped",
+            reasonCode: "auto_sendability_blocked",
             lastError: sendabilityIssue,
             updatedAt: nowTimestamp(),
           },
@@ -59,6 +60,7 @@ export async function processAlimtalkQueue(): Promise<{ processed: number; sent:
           {
             status: "skipped",
             dedupeKey,
+            reasonCode: "duplicate_send_blocked",
             lastError: `중복 발송 차단(${dedupePolicy.label}): ${duplicate}`,
             updatedAt: nowTimestamp(),
           },
@@ -169,6 +171,7 @@ export async function processAlimtalkCandidate(candidateId: string): Promise<Ali
       await refs.alimtalkCandidate(claimed.candidateId).set(
         {
           status: "skipped",
+          reasonCode: "auto_sendability_blocked",
           lastError: sendabilityIssue,
           updatedAt: nowTimestamp(),
         },
@@ -188,6 +191,7 @@ export async function processAlimtalkCandidate(candidateId: string): Promise<Ali
         {
           status: "skipped",
           dedupeKey,
+          reasonCode: "duplicate_send_blocked",
           lastError,
           updatedAt: nowTimestamp(),
         },

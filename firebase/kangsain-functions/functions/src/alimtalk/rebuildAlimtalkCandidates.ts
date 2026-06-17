@@ -7,6 +7,7 @@ import { refs } from "../firestore/refs";
 import { addDays, dateRange, nowTimestamp } from "../utils/date";
 import { stableHash } from "../utils/hash";
 import { shortLinkIdForTarget, shortUrlForId } from "../utils/shortLinks";
+import { canonicalizeBookings } from "../utils/canonicalBooking";
 import {
   ALIMTALK_MEMBER_EXCLUSION_REASONS,
   CANDIDATE_TEMPLATE_CODES,
@@ -173,62 +174,6 @@ async function loadLectureIndex(studioId: string): Promise<LectureIndex> {
   return index;
 }
 
-function canonicalizeBookings(bookings: BookingDoc[]): BookingDoc[] {
-  const grouped = new Map<string, BookingDoc>();
-  for (const booking of bookings) {
-    const key = bookingOccurrenceKey(booking);
-    const current = grouped.get(key);
-    if (!current || shouldPreferCanonicalBooking(booking, current)) {
-      grouped.set(key, booking);
-    }
-  }
-  return [...grouped.values()].sort((a, b) => {
-    if (a.lectureDate !== b.lectureDate) return a.lectureDate.localeCompare(b.lectureDate);
-    return (a.lectureStartAt?.toMillis?.() || 0) - (b.lectureStartAt?.toMillis?.() || 0);
-  });
-}
-
-function bookingOccurrenceKey(booking: BookingDoc): string {
-  return [
-    booking.memberId || normalizeKoreanName(booking.memberName || ""),
-    booking.staffId || normalizeKoreanName(booking.staffName || ""),
-    booking.lectureStartAt?.toMillis?.() || booking.lectureDate,
-  ].join("|");
-}
-
-function shouldPreferCanonicalBooking(next: BookingDoc, current: BookingDoc): boolean {
-  const nextPriority = bookingSourcePriority(next.bookingId);
-  const currentPriority = bookingSourcePriority(current.bookingId);
-  if (nextPriority !== currentPriority) return nextPriority < currentPriority;
-  const nextAttendanceScore = attendanceScore(next.attendanceStatus);
-  const currentAttendanceScore = attendanceScore(current.attendanceStatus);
-  if (nextAttendanceScore !== currentAttendanceScore) return nextAttendanceScore > currentAttendanceScore;
-  if (next.appStatus !== current.appStatus) {
-    if (next.appStatus === "reserved") return true;
-    if (current.appStatus === "reserved") return false;
-  }
-  return String(next.bookingId || "") < String(current.bookingId || "");
-}
-
-function attendanceScore(status: BookingDoc["attendanceStatus"]): number {
-  if (status === "attended") return 3;
-  if (status === "absent") return 2;
-  if (status === "late_cancel") return 1;
-  return 0;
-}
-
-function bookingSourcePriority(bookingId: string): number {
-  const id = String(bookingId || "");
-  if (id.startsWith("usage_booking_")) return 1;
-  if (id.startsWith("excel_booking_")) return 2;
-  if (id.startsWith("excel_") || id.startsWith("usage_")) return 3;
-  return 0;
-}
-
-function normalizeKoreanName(value: string): string {
-  return value.trim().replace(/\s+/g, "");
-}
-
 function memberBookings(bookingIndex: BookingIndex, memberId: string): BookingDoc[] {
   return bookingIndex.get(memberId) || [];
 }
@@ -254,6 +199,7 @@ async function markStaleCandidatesSkipped(input: {
         refs.alimtalkCandidate(candidate.candidateId).set(
           {
             status: "skipped",
+            reasonCode: "not_current_target",
             lastError: "현재 수강권 상태 재계산 결과 발송 대상 아님",
             updatedAt: nowTimestamp(),
           },

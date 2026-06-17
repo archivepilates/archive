@@ -78,6 +78,10 @@
               <h3>원천 보호</h3>
               <ul>
                 <li>알림톡, 연락처, StudioMate write, 예약·결제 판단은 canonical source에서만 실행합니다.</li>
+                <li>데이터는 source, action, computed, mirror, incubation 5개 층으로만 구분합니다.</li>
+                <li>source는 memberProfiles, memberContactIndex, bookings, lectures, memberMemos, memberTags, privateSurveyResponses입니다.</li>
+                <li>action은 alimtalkCandidates, alimtalkSends, contactSyncJobs, memberSignupContracts, onsiteWelcomeRequests, privateLessonChartRequests, privateLessonChartRecords입니다.</li>
+                <li>computed는 privateSessionLedger, attendanceSummaries, adminActions, instructorViews, dashboardSnapshots입니다.</li>
                 <li>member360Cards, members 하위 컬렉션, dashboardSnapshots는 분석·검토용 read-model입니다.</li>
                 <li>workLanes는 임시 작업 공간이며 외부 발송·쓰기 원천으로 사용하지 않습니다.</li>
               </ul>
@@ -87,7 +91,9 @@
               <ul>
                 <li>회원 매칭은 memberId, 전화번호, 이름 순서로 확인합니다.</li>
                 <li>동명이인은 전화번호나 StudioMate ID 확인 전까지 합치지 않습니다.</li>
-                <li>실제 StudioMate/API record가 있으면 excel_ 또는 usage_booking_ fallback보다 우선합니다.</li>
+                <li>예약 중복은 공통 canonical booking resolver를 사용해 판단합니다.</li>
+                <li>실제 StudioMate/API record가 있으면 usage_booking_, excel_booking_, excel_ fallback보다 우선합니다.</li>
+                <li>후보 생성, 설문, 리포트, 알림톡 발송 전에는 연결 booking이 active인지 확인합니다.</li>
               </ul>
             </article>
             <article class="rule-card">

@@ -985,6 +985,8 @@ function communicationActionText(item) {
   return [
     item?.status,
     item?.sendStatus,
+    item?.reasonCode,
+    item?.skipCode,
     item?.reason,
     item?.skipReason,
     item?.excludeReason,
@@ -1005,6 +1007,21 @@ function communicationActionText(item) {
 
 function isNonActionableCommunicationItem(item) {
   if (isResolvedOperationalItem(item)) return true;
+  const code = String(item?.reasonCode || item?.skipCode || item?.excludeCode || "").toLowerCase();
+  if (
+    [
+      "auto_sendability_blocked",
+      "duplicate_send_blocked",
+      "not_current_target",
+      "duplicate_booking_source",
+      "inactive_booking",
+      "operator_excluded",
+      "template_deleted",
+      "legacy_replaced",
+    ].includes(code)
+  ) {
+    return true;
+  }
   const text = communicationActionText(item);
   return [
     "skipped",
