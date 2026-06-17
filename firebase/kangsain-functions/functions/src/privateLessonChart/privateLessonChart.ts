@@ -2213,7 +2213,7 @@ function gptPromptBrief(record: PrivateLessonChartRecordDoc, chartRequest: Priva
     `수업 후 기록: ${safeJson(record.postRecord || {})}`,
     `강사 다음 수업 방향 원문: ${teacherNextDirection}`,
     "출력은 JSON만 허용합니다.",
-    "summary: 1~2문장. 오늘 진행과 관찰된 변화를 평가 없이 따뜻하지만 담백하게 요약합니다.",
+    "summary: 1문장. 강사가 회원에게 직접 전하는 짧은 코칭 톤으로, 오늘 확인한 변화와 수업 방향을 평가 없이 따뜻하지만 담백하게 요약합니다.",
     "nextDirection: 1문장. 강사 다음 수업 방향 원문을 회원용 문장으로만 다듬습니다. 원문에 없는 내용을 추가하지 않습니다.",
   ].join("\n");
 }
@@ -2397,17 +2397,19 @@ function renderPrivateLessonReportPage(
   const sessionText = `${Number(record.sessionNumber || 1)}회차`;
   const lessonTime = lessonTimeText(chartRequest);
   const title = `${memberName || "회원"}님 수업 리포트`;
-  const reportSummary = escapeHtml(String(record.gptDraftSummary || "요약이 아직 준비되지 않았습니다."));
-  const nextDirection = escapeHtml(String(record.gptDraftNextDirection || "다음 수업 방향이 아직 정리되지 않았습니다."));
+  const reportSummaryText = cleanReportSentence(record.gptDraftSummary) || "오늘 수업 기록을 바탕으로 몸의 변화와 다음 방향을 정리했습니다.";
   const goals = textArray(record.postRecord?.goals || record.prePlan?.goals || []);
   const focusAreas = textArray(record.postRecord?.focusAreas || record.prePlan?.focusAreas || []);
   const equipment = textArray(record.postRecord?.equipment || record.prePlan?.equipment || []);
   const changes = textArray(record.postRecord?.changes || []);
   const movementObservations = textArray(record.postRecord?.movementObservations || []);
   const memberResponses = textArray(record.postRecord?.memberResponses || []);
+  const cautions = textArray(record.postRecord?.cautions || record.prePlan?.cautions || []);
   const condition = firstText(record.postRecord?.condition);
   const painChange = firstText(record.postRecord?.painChange);
   const nextMemo = cleanReportSentence(record.postRecord?.nextMemo);
+  const nextDirectionText = nextMemo || cleanReportSentence(record.gptDraftNextDirection) ||
+    "다음 수업 방향은 담당 강사가 수업 기록을 기준으로 이어서 조정합니다.";
   const reportUrl = (() => {
     const url = new URL(PRIVATE_LESSON_REPORT_VIEW_BASE_URL);
     url.searchParams.set("recordId", record.recordId);
@@ -2417,8 +2419,15 @@ function renderPrivateLessonReportPage(
   const reportShortcutUrl = String(record.publicReportUrl || "").trim();
   const reportVisibleUrl = reportShortcutUrl || reportUrl;
   const flowSummary = [condition, painChange].filter(Boolean).join(" · ") || "수업 기록 기준으로 정리 중";
-  const todayProgress = [...goals, ...equipment].slice(0, 12);
-  const observationItems = [...changes, ...movementObservations, ...memberResponses].slice(0, 16);
+  const todayProgress = uniqueTextItems([...goals, ...focusAreas, ...equipment]).slice(0, 10);
+  const improvementItems = uniqueTextItems(changes.length ? changes : memberResponses).slice(0, 6);
+  const observationItems = uniqueTextItems([...movementObservations, ...memberResponses]).slice(0, 12);
+  const nextCheckItems = privateReportNextCheckItems({
+    condition,
+    painChange,
+    focusAreas,
+    cautions,
+  });
   const mediaFiles = mediaFilesForReport(record);
   const mediaSection = renderPrivateLessonReportMediaSection(mediaFiles, record.media?.sessionFolderUrl || "");
 
@@ -2428,29 +2437,63 @@ function renderPrivateLessonReportPage(
       *{box-sizing:border-box}body{margin:0;background:var(--bg);color:var(--text);font-family:Apple SD Gothic Neo,\"Noto Sans KR\",system-ui,sans-serif;line-height:1.62}
       main{width:min(100%,820px);margin:0 auto;padding:26px 18px 56px}.brand{margin:0 0 18px;color:var(--muted);font-size:12px;font-weight:800;letter-spacing:0}
       .hero{padding:0 0 22px;border-bottom:1px solid var(--line)}h1{margin:0;font-size:30px;line-height:1.2;letter-spacing:0}.meta{margin-top:12px;color:var(--muted);font-size:14px}
-      .lead{margin-top:22px;padding:20px;background:var(--surface);border:1px solid var(--line);border-radius:8px}.lead p{margin:0;font-size:17px;word-break:keep-all}.next{margin-top:14px;color:#3f493d;font-weight:700}
+      .lead{margin-top:22px;padding:20px;background:var(--surface);border:1px solid var(--line);border-radius:8px}.lead small{display:block;margin-bottom:7px;color:var(--accent2);font-size:12px;font-weight:800}.lead p{margin:0;font-size:17px;word-break:keep-all}
       .grid{display:grid;gap:12px;margin-top:18px}.tile{padding:16px;background:var(--surface);border:1px solid var(--line);border-radius:8px}.tile small{display:block;color:var(--muted);font-size:12px;font-weight:800}.tile strong{display:block;margin-top:6px;font-size:22px}
       section{margin-top:28px}.section-title{display:flex;align-items:end;justify-content:space-between;gap:12px;margin-bottom:12px}h2{margin:0;font-size:17px;letter-spacing:0}.hint{color:var(--muted);font-size:12px}
       .chips{display:flex;flex-wrap:wrap;gap:8px}.chip{display:inline-flex;align-items:center;min-height:34px;padding:7px 10px;border:1px solid var(--line);border-radius:999px;background:var(--surface);font-size:13px;color:#2d2924}
+      .soft-list{display:grid;gap:9px;margin:0;padding:0;list-style:none}.soft-list li{padding:13px 14px;background:var(--surface);border:1px solid var(--line);border-radius:8px;word-break:keep-all}
       .media-grid{display:grid;gap:12px}.media-card{overflow:hidden;background:var(--surface);border:1px solid var(--line);border-radius:8px}.media-card iframe{display:block;width:100%;aspect-ratio:16/10;border:0;background:#f0ede8}.media-info{display:flex;align-items:center;justify-content:space-between;gap:10px;padding:10px 12px;color:var(--muted);font-size:12px}.media-info a{color:var(--accent);font-weight:800;text-decoration:none}
-      .note{padding:16px;border-left:3px solid var(--accent);background:rgba(255,253,250,.72);color:#312c26;word-break:keep-all}.footer{margin-top:32px;padding-top:16px;border-top:1px solid var(--line);color:var(--muted);font-size:12px}.copy{word-break:break-all}
+      .note{padding:16px;border-left:3px solid var(--accent);background:rgba(255,253,250,.72);color:#312c26;word-break:keep-all}.footer{margin-top:32px;padding-top:16px;border-top:1px solid var(--line);color:var(--muted);font-size:12px}.report-link{display:inline-flex;align-items:center;min-height:40px;margin-top:10px;padding:8px 13px;border:1px solid var(--line);border-radius:999px;color:var(--accent);font-weight:800;text-decoration:none;background:var(--surface)}
       @media (min-width:680px){main{padding:38px 28px 72px}.grid{grid-template-columns:repeat(3,minmax(0,1fr))}.media-grid{grid-template-columns:repeat(2,minmax(0,1fr))}h1{font-size:36px}.lead{padding:24px}}
     </style></head><body><main><div class="hero"><p class="brand">ARCHIVE PILATES</p><h1>${escapeHtml(title)}</h1>` +
     `<p class="meta">${escapeHtml(sessionText)} · ${escapeHtml(lessonTime)} · 담당: ${staffName}</p>` +
-    `<div class="lead"><p>${reportSummary}</p><p class="next">${nextDirection}</p></div>` +
+    `<div class="lead"><small>오늘의 핵심</small><p>${escapeHtml(reportSummaryText)}</p></div>` +
     `<div class="grid"><div class="tile"><small>집중 영역</small><strong>${escapeHtml(focusAreas.slice(0, 2).join(" · ") || "-")}</strong></div>` +
     `<div class="tile"><small>몸 상태 흐름</small><strong>${escapeHtml(flowSummary)}</strong></div>` +
     `<div class="tile"><small>오늘 변화</small><strong>${escapeHtml(changes.slice(0, 2).join(" · ") || "기록 정리 중")}</strong></div></div></div>` +
-    `<section><div class="section-title"><h2>오늘 진행</h2><span class="hint">목표와 사용 기구</span></div><div class="chips">` +
+    `<section><div class="section-title"><h2>좋아진 점</h2><span class="hint">회원님이 느낄 수 있는 변화</span></div><ul class="soft-list">` +
+    (improvementItems.length ? improvementItems : ["오늘 수업에서 확인한 변화는 다음 기록에서 더 구체적으로 이어가겠습니다."]).map((item) => `<li>${escapeHtml(item)}</li>`).join("") +
+    `</ul></section>` +
+    `<section><div class="section-title"><h2>오늘 확인한 움직임</h2><span class="hint">진행 내용과 관찰</span></div><div class="chips">` +
     (todayProgress.length ? todayProgress : ["기록된 진행 항목 없음"]).map((item) => `<span class="chip">${escapeHtml(item)}</span>`).join("") +
     `</div></section>` +
-    `<section><div class="section-title"><h2>변화 흐름</h2><span class="hint">수업 후 관찰</span></div><div class="chips">` +
-    (observationItems.length ? observationItems : ["기록된 변화 없음"]).map((item) => `<span class="chip">${escapeHtml(item)}</span>`).join("") +
+    `<section><div class="section-title"><h2>수업 중 관찰</h2><span class="hint">담당 강사 기록</span></div><div class="chips">` +
+    (observationItems.length ? observationItems : ["기록된 관찰 항목 없음"]).map((item) => `<span class="chip">${escapeHtml(item)}</span>`).join("") +
     `</div></section>` +
-    `<section><div class="section-title"><h2>다음 수업 방향</h2><span class="hint">이어갈 관리 포인트</span></div><p class="note">${escapeHtml(nextMemo || nextDirection)}</p></section>` +
+    `<section><div class="section-title"><h2>다음 수업 방향</h2><span class="hint">강사 코칭 메모</span></div><p class="note">${escapeHtml(nextDirectionText)}</p></section>` +
+    `<section><div class="section-title"><h2>다음 수업 전 체크</h2><span class="hint">가볍게 확인할 내용</span></div><ul class="soft-list">` +
+    nextCheckItems.map((item) => `<li>${escapeHtml(item)}</li>`).join("") +
+    `</ul></section>` +
     mediaSection +
-    `<p class="footer">본 리포트는 프라이빗 회원 수업 기록 기준으로 생성되었습니다.<br><span class=\"copy\">${escapeHtml(reportVisibleUrl)}</span></p>` +
+    `<p class="footer">본 리포트는 담당 강사의 프라이빗 수업 기록을 바탕으로 정리되었습니다.<br><a class="report-link" href="${escapeAttr(reportVisibleUrl)}">리포트 다시 열기</a></p>` +
     `</main></body></html>`;
+}
+
+function privateReportNextCheckItems(options: {
+  condition: string;
+  painChange: string;
+  focusAreas: string[];
+  cautions: string[];
+}): string[] {
+  const items = uniqueTextItems([
+    options.condition ? `다음 수업 전 컨디션 흐름: ${options.condition}` : "",
+    options.painChange ? `불편감 변화: ${options.painChange}` : "",
+    options.cautions.length ? `주의할 부분: ${options.cautions.slice(0, 2).join(" · ")}` : "",
+    options.focusAreas.length ? `이어갈 감각: ${options.focusAreas.slice(0, 2).join(" · ")}` : "",
+  ]).slice(0, 4);
+  return items.length ? items : ["다음 수업 전 컨디션과 불편감 변화를 가볍게 확인해 주세요."];
+}
+
+function uniqueTextItems(values: unknown[]): string[] {
+  const seen = new Set<string>();
+  const items: string[] = [];
+  for (const value of values) {
+    const text = String(value || "").replace(/\s+/g, " ").trim();
+    if (!text || seen.has(text)) continue;
+    seen.add(text);
+    items.push(text);
+  }
+  return items;
 }
 
 function renderPrivateLessonReportMediaSection(files: PrivateLessonChartMediaFile[], folderUrl: string): string {
