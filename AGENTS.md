@@ -19,6 +19,8 @@
 - Use the main ARCHIVE IN project chat as the control surface for cross-cutting decisions about the web app, Firebase model, StudioMate sync, Google Contacts, Kakao Alimtalk, and deployment readiness.
 - If a separate chat or agent is used for a narrow subtask, bring the decision/result back into the main ARCHIVE IN chat before treating it as project direction.
 - When speed helps and the task can be split safely, use parallel agents, including the Spark model for quick read-only exploration or bounded implementation checks.
+- For deployment, verification, and live-check workflows, treat parallel Spark/Subagent verification as the default. The main thread should run the production command and final judgment, while parallel workers handle UI smoke checks, API/function probes, Firestore/read-model spot checks, deploy-output review, GitHub Actions watch, and ARCHIVE CORE `운영규칙` consistency checks.
+- Do not serialize all verification in the main thread unless the task is tiny, the required tool is unavailable, or a shared browser/session lock makes parallelism unsafe.
 - Use worktrees when a change is non-trivial, experimental, or should be isolated from the current branch.
 - Start live checks with read-only verification of the deployed ARCHIVE IN app, Firebase/Hosting configuration, and visible browser errors before proposing fixes.
 
