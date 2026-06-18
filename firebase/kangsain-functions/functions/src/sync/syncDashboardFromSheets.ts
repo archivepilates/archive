@@ -17,6 +17,7 @@ import { logger } from "firebase-functions";
 type SheetRow = Record<string, unknown>;
 
 const SHEETS = {
+  dashboardExport: "대시보드_EXPORT",
   settlement: "정산대장_Master",
   instructorStats: "강사통계_Long",
   ticketAnalysis: "수강권분석_Master",
@@ -77,6 +78,11 @@ export async function syncDashboardFromSheets(input?: {
 
 async function loadDashboardData(spreadsheetId: string): Promise<{ data: DashboardData; warning?: string }> {
   try {
+    const exportData = await loadDashboardExportData(spreadsheetId);
+    if (exportData) {
+      return { data: exportData };
+    }
+
     const [settlement, instructorStats, ticketAnalysis, ticketSales, ticketSalesRaw, memberSales, dailyRevenue, monthlyActiveMembers] = await Promise.all([
       readSheetRows(spreadsheetId, SHEETS.settlement),
       readSheetRows(spreadsheetId, SHEETS.instructorStats),
@@ -107,6 +113,87 @@ async function loadDashboardData(spreadsheetId: string): Promise<{ data: Dashboa
       data: await fetchLegacyDashboardData(),
       warning: `정산 시트 직접 읽기 실패: ${message}`,
     };
+  }
+}
+
+async function loadDashboardExportData(spreadsheetId: string): Promise<DashboardData | null> {
+  const rows = await readOptionalSheetRows(spreadsheetId, SHEETS.dashboardExport);
+  if (!rows.length) return null;
+  const data = dashboardExportRowsToPayload(rows);
+  if (!data) {
+    logger.warn("Dashboard export sheet exists but did not include a supported payload; using legacy sheet builder", {
+      sheetName: SHEETS.dashboardExport,
+      rows: rows.length,
+    });
+    return null;
+  }
+  logger.info("Dashboard export sheet loaded as canonical dashboard source", {
+    sheetName: SHEETS.dashboardExport,
+    summaryRows: data.summary.length,
+    instructorRows: data.강사별.length,
+    memberSalesRows: data.회원매출.length,
+  });
+  return data;
+}
+
+function dashboardExportRowsToPayload(rows: SheetRow[]): DashboardData | null {
+  const jsonRow = rows.find((row) =>
+    firstValue(row, ["payloadJson", "dashboardJson", "dataJson", "json", "JSON", "payload", "data"]),
+  );
+  if (jsonRow) {
+    const value = firstValue(jsonRow, ["payloadJson", "dashboardJson", "dataJson", "json", "JSON", "payload", "data"]);
+    const parsed = parseJsonObject(value);
+    if (parsed) return normalizeDashboardPayload((parsed.data || parsed) as Partial<DashboardData>);
+  }
+
+  const bySection: Partial<DashboardData> = {};
+  for (const row of rows) {
+    const section = stringValue(firstValue(row, ["section", "섹션", "sheet", "시트", "collection", "name"]));
+    const payload = firstValue(row, ["rowsJson", "rowJson", "payloadJson", "json", "JSON", "rows", "payload", "data"]);
+    if (!section || !payload) continue;
+    const parsed = parseJsonValue(payload);
+    if (!parsed) continue;
+    const normalizedSection = normalizeDashboardSectionName(section);
+    if (normalizedSection && Array.isArray(parsed)) {
+      (bySection as Record<string, unknown>)[normalizedSection] = parsed;
+    }
+  }
+  if (!Object.keys(bySection).length) return null;
+  return normalizeDashboardPayload(bySection);
+}
+
+function normalizeDashboardSectionName(value: string): keyof DashboardData | "" {
+  const name = value.replace(/\s+/g, "");
+  const aliases: Record<string, keyof DashboardData> = {
+    summary: "summary",
+    요약: "summary",
+    강사별: "강사별",
+    강사통계: "강사통계",
+    월별그룹평균가격: "월별그룹평균가격",
+    월별강사평균인원: "월별강사평균인원",
+    월별이용회원: "월별이용회원",
+    수강권TOP5: "수강권TOP5",
+    회원매출: "회원매출",
+    회원별누적매출: "회원별누적매출",
+    월별회원: "월별회원",
+    매출일일누적: "매출일일누적",
+  };
+  return aliases[name] || "";
+}
+
+function parseJsonObject(value: unknown): Record<string, unknown> | null {
+  const parsed = parseJsonValue(value);
+  return parsed && typeof parsed === "object" && !Array.isArray(parsed) ? parsed as Record<string, unknown> : null;
+}
+
+function parseJsonValue(value: unknown): unknown | null {
+  if (value && typeof value === "object") return value;
+  const text = stringValue(value);
+  if (!text) return null;
+  try {
+    return JSON.parse(text);
+  } catch {
+    return null;
   }
 }
 

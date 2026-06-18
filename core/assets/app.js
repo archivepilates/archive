@@ -695,13 +695,30 @@ function isOperatorActionableQualityIssue(item) {
   if (hasOperatorActionFlag(item)) return true;
   const severity = String(item.severity || item.priority || "").toLowerCase();
   const status = String(item.status || "").toLowerCase();
-  if (["critical", "danger", "error", "failed", "blocked"].includes(severity) || ["review", "reviewing", "needs_action", "blocked"].includes(status)) {
+  const text = [item.title, item.issueType, item.type, item.summary, item.description, item.operatorAction, item.nextAction]
+    .filter(Boolean)
+    .join(" ")
+    .toLowerCase();
+  const systemHandled = [
+    "canonical key",
+    "canonicalusagekey",
+    "정규화",
+    "중복",
+    "duplicate",
+    "excluded",
+    "외부 실행 원천에서 제외",
+    "외부 실행 보류",
+    "자동 처리",
+    "자동 정리",
+    "누락 행",
+    "이름/전화번호 누락",
+    "전화번호가 없어",
+  ].some((keyword) => text.includes(keyword));
+  if (systemHandled) return false;
+  if (["critical", "danger", "blocked"].includes(severity) || ["needs_action", "blocked"].includes(status)) {
     return true;
   }
-  const text = [item.title, item.issueType, item.type, item.summary, item.description].filter(Boolean).join(" ").toLowerCase();
-  return ["전화", "phone", "name-only", "동명이인", "매칭 실패", "누락", "missing", "external"].some((keyword) =>
-    text.includes(keyword),
-  );
+  return false;
 }
 
 function activeQualityIssues() {
