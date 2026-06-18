@@ -23,9 +23,9 @@
 - `GEMINI_API_KEY`: Gemini Developer API 호출용 Secret Manager 값. Generative Language API 전용 제한 키를 저장한다.
 - `회원용_프라이빗 수업 리포트 안내 v1`: 수업 후 HTML 리포트를 회원에게 전달하는 별도 알림톡. 강사용 입력 알림톡과 분리한다.
 - `/private-chart/`: 강사용 모바일 입력 화면
-- 수업 하루 전 요청 생성 시점에 `Private Session Records DB` 회차 원본을 만들고, 해당 페이지 URL을 사진·영상 업로드 버튼에 연결한다.
+- 수업 하루 전 요청 생성 시점에 수업 전/후 기록 링크와 사진·영상 업로드 링크를 만든다.
 - 강사용 기존 회원 페이지에는 `YYYY.MM.DD HH:mm · n회차(자동화)` 일반 페이지를 추가한다.
-- 사진·영상 업로드 버튼은 DB 원본이 아니라 강사용 일반 페이지로 연결한다. DB 원본은 웹훅/발송 상태 관리를 위해 내부용으로 유지한다.
+- 사진·영상 업로드 버튼은 Notion이 아니라 ARCHIVE IN 수업 후 기록 페이지의 미디어 영역으로 연결한다. 업로드 파일은 Google Drive에 저장되고 Firestore media 필드를 통해 회원 리포트에 자동 포함된다.
 - StudioMate Excel 보강 데이터로 같은 수업이 숫자 예약 ID와 `excel_booking_...` ID에 중복 존재하면 숫자 예약 ID 요청만 canonical로 사용한다.
 - 강사용 차트 알림톡은 `template_pending` 또는 `queued` 요청만 발송한다. `sent`, `skipped`, 수동 테스트 상태는 자동 발송하지 않는다.
 
@@ -71,7 +71,7 @@ Template ID: `KA01TP260527182741301uIuSTL01YQ1`
 수업 전 계획은 하루 전 작성하고,
 수업 후 기록은 수업 종료 후 작성해주세요.
 
-사진·영상은 회차별 Notion 차트에 바로 업로드할 수 있습니다.
+사진·영상은 수업 후 기록 페이지에서 첨부할 수 있습니다.
 ```
 
 버튼:

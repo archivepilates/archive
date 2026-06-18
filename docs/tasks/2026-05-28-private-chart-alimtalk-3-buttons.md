@@ -31,7 +31,7 @@ Firebase Scheduler `scheduledCreatePrivateLessonChartRequests`가 요청 생성�
 수업 전 계획은 하루 전 작성하고,
 수업 후 기록은 수업 종료 후 작성해주세요.
 
-사진·영상은 회차별 Notion 차트에 바로 업로드할 수 있습니다.
+사진·영상은 수업 후 기록 페이지에서 첨부할 수 있습니다.
 ```
 
 ## 버튼
@@ -47,7 +47,7 @@ Firebase Scheduler `scheduledCreatePrivateLessonChartRequests`가 요청 생성�
 3. `사진·영상 업로드`
    - URL 변수: `#{사진영상업로드URL}`
    - 값 예시: `https://in.archivepilates.com/s/pc-xxxxxxxxxxxx/`
-   - 연결 대상: 해당 회차 Notion 강사용 차트 페이지
+   - 연결 대상: ARCHIVE IN 수업 후 기록 페이지의 사진·영상 업로드 영역
 
 ## 데이터 매핑
 
@@ -77,8 +77,8 @@ Firebase Scheduler `scheduledCreatePrivateLessonChartRequests`가 요청 생성�
 - 수업 후 원본 URL:
   - `https://in.archivepilates.com/private-chart/?mode=post&r={requestId}&t={token}`
 - 사진·영상 업로드 원본 URL:
-  - 해당 회차 Notion 강사용 차트 URL
-  - 수업 하루 전 요청 생성 시 Notion 회차 차트를 먼저 만들고 `notionSync.pageUrl`로 저장합니다.
+  - `https://in.archivepilates.com/private-chart/?mode=post&r={requestId}&t={token}&focus=media`
+  - 수업 후 기록 페이지 안에서 휴대폰 앨범/파일 선택으로 업로드합니다.
 
 ### 짧은 링크
 
@@ -111,14 +111,14 @@ Firebase Scheduler `scheduledCreatePrivateLessonChartRequests`가 요청 생성�
 ### 발송 전 필수 조건
 
 - `preShortUrl`, `postShortUrl`, `mediaUploadShortUrl` 세 값이 모두 있어야 합니다.
-- `mediaUploadShortUrl`은 302로 실제 Notion 회차 차트로 이동해야 합니다.
-- Notion 회차 차트에는 `사진·영상 업로드` 섹션이 있어야 합니다.
+- `mediaUploadShortUrl`은 302로 ARCHIVE IN 수업 후 기록 페이지의 사진·영상 업로드 영역으로 이동해야 합니다.
+- Notion 회차 차트는 수업 기록/검수용이며 사진·영상 업로드 원천으로 사용하지 않습니다.
 - 알림톡 템플릿 승인 전에는 요청 문서의 `alimtalk.status`를 `template_pending`으로 유지합니다.
 - 자동 발송 대상 상태는 `template_pending` 또는 `queued`로 제한합니다. 수동 테스트 상태와 이미 `sent/skipped`된 요청은 제외합니다.
 
 ## 운영 조건
 
-- 3번째 버튼을 쓰기 위해 수업 하루 전 요청 생성 시점에 Notion 회차 차트 페이지를 미리 생성한다.
-- Notion 회차 차트에는 `사진·영상 업로드` 섹션이 있어야 한다.
-- 자동화는 Notion 페이지 갱신 시 기존 사진·영상 업로드 블록을 삭제하지 않는다.
+- 3번째 버튼을 쓰기 위해 수업 하루 전 요청 생성 시점에 수업 후 기록 페이지의 media focus short link를 만든다.
+- 사진·영상은 ARCHIVE IN 수업 후 기록 페이지에서 첨부하고, Google Drive 저장 후 Firestore media 필드로 회원 리포트에 자동 포함한다.
+- Notion 페이지에는 업로드 안내/기록 상태만 남기고 파일 업로드 목적지로 사용하지 않는다.
 - 회원에게 발송되는 최종 결과물은 Notion 페이지가 아니라 HTML 회원 리포트다.

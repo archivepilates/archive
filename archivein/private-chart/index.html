@@ -409,6 +409,8 @@
       requestId: params.get("r") || "",
       token: params.get("t") || "",
       mode: params.get("mode") === "post" ? "post" : "pre",
+      focus: params.get("focus") || "",
+      mediaFocusHandled: false,
       loading: false,
       uploading: 0,
       data: null,
@@ -503,6 +505,7 @@
       renderReportPanel(data);
       form.classList.remove("hidden");
       form.addEventListener("submit", submit);
+      focusMediaUploadPanelIfRequested();
     }
 
     function applyExistingAnswers(data) {
@@ -608,7 +611,7 @@
       mediaPanel.innerHTML = `
         <h2>수업 사진·영상</h2>
         <p>여기에 첨부한 사진과 영상은 같은 회차 회원 리포트에 자동 포함됩니다. 리포트에 넣을 파일만 선택해 주세요.</p>
-        <label class="media-input">
+        <label class="media-input" tabindex="0">
           <span>사진/영상 선택</span>
           <input type="file" id="mediaFiles" accept="image/*,video/*" multiple>
         </label>
@@ -620,6 +623,17 @@
       `;
       const input = mediaPanel.querySelector("#mediaFiles");
       if (input) input.addEventListener("change", handleMediaFiles);
+    }
+
+    function focusMediaUploadPanelIfRequested() {
+      if (state.mediaFocusHandled || state.mode !== "post" || state.focus !== "media") return;
+      state.mediaFocusHandled = true;
+      requestAnimationFrame(() => {
+        mediaPanel.scrollIntoView({ behavior: "smooth", block: "start" });
+        const selector = mediaPanel.querySelector(".media-input");
+        if (selector) selector.focus({ preventScroll: true });
+        setStatus("사진/영상 선택 버튼을 눌러 휴대폰 앨범에서 파일을 선택해 주세요.", false);
+      });
     }
 
     function mediaFileHtml(file) {

@@ -1116,7 +1116,11 @@ async function ensureChartRequestForBooking(booking: BookingDoc): Promise<{ requ
   const requestId = `plc_${booking.bookingId}`;
   const existing = await refs.privateLessonChartRequest(requestId).get();
   if (existing.exists) {
-    await repairExistingChartRequestSessionNumber(booking, existing.data());
+    const existingRequest = existing.data();
+    await Promise.all([
+      repairExistingChartRequestSessionNumber(booking, existingRequest),
+      ensureChartRequestMediaUploadLink(existingRequest),
+    ]);
     return { requestId, created: false };
   }
 
@@ -1172,23 +1176,40 @@ async function ensureChartRequestForBooking(booking: BookingDoc): Promise<{ requ
   const baseRecord = await upsertChartRecordBase(doc);
   const notionSync = await syncPrivateLessonChartRecordToNotion(baseRecord, doc);
   await refs.privateLessonChartRecord(requestId).set({ notionSync, updatedAt: nowTimestamp() }, { merge: true });
-  const mediaUploadUrl = postUrl;
-  if (mediaUploadUrl) {
-    const mediaUploadShort = await ensureShortLink({
-      type: "private_chart",
-      targetUrl: mediaUploadUrl,
-      sourceId: `${requestId}_media`,
-    });
-    await refs.privateLessonChartRequest(requestId).set(
-      {
-        mediaUploadUrl,
-        mediaUploadShortUrl: mediaUploadShort.shortUrl,
-        updatedAt: nowTimestamp(),
-      },
-      { merge: true },
-    );
-  }
+  await ensureChartRequestMediaUploadLink(doc);
   return { requestId, created: true };
+}
+
+async function ensureChartRequestMediaUploadLink(request: PrivateLessonChartRequestDoc | undefined): Promise<void> {
+  if (!request?.requestId) return;
+  const token = accessTokenFor(request.requestId);
+  const mediaUploadUrl = chartUrl("post", request.requestId, token, { focus: "media" });
+  if (!(await shouldRepairMediaUploadLink(request, mediaUploadUrl))) return;
+
+  const mediaUploadShort = await ensureShortLink({
+    type: "private_chart",
+    targetUrl: mediaUploadUrl,
+    sourceId: `${request.requestId}_media`,
+  });
+  await refs.privateLessonChartRequest(request.requestId).set(
+    {
+      mediaUploadUrl,
+      mediaUploadShortUrl: mediaUploadShort.shortUrl,
+      updatedAt: nowTimestamp(),
+    },
+    { merge: true },
+  );
+}
+
+async function shouldRepairMediaUploadLink(
+  request: PrivateLessonChartRequestDoc,
+  expectedTargetUrl: string,
+): Promise<boolean> {
+  if (request.mediaUploadUrl !== expectedTargetUrl) return true;
+  const linkId = shortLinkIdFromUrl(request.mediaUploadShortUrl || "");
+  if (!linkId) return true;
+  const snap = await db.collection("shortLinks").doc(linkId).get();
+  return String(snap.data()?.targetUrl || "") !== expectedTargetUrl;
 }
 
 async function repairExistingChartRequestSessionNumber(
@@ -2804,11 +2825,19 @@ function chartNotes(record: PrivateLessonChartRecordDoc, chartRequest: PrivateLe
     .slice(0, 1900);
 }
 
-function chartUrl(mode: PrivateLessonChartMode, requestId: string, token: string): string {
+function chartUrl(
+  mode: PrivateLessonChartMode,
+  requestId: string,
+  token: string,
+  extraParams: Record<string, string> = {},
+): string {
   const url = new URL(PUBLIC_BASE_URL);
   url.searchParams.set("mode", mode);
   url.searchParams.set("r", requestId);
   url.searchParams.set("t", token);
+  for (const [key, value] of Object.entries(extraParams)) {
+    if (value) url.searchParams.set(key, value);
+  }
   return url.toString();
 }
 
