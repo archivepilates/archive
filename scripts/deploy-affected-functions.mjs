@@ -10,6 +10,9 @@ const apply = args.has("--apply");
 const dryRun = args.has("--dry-run") || !apply;
 const affected = detectAffectedFromCli(process.argv.slice(2));
 
+run("node", ["scripts/validate-release-branch-state.mjs"]);
+run("node", ["scripts/validate-live-release-rollback-guards.mjs"]);
+
 if (!affected.deployOnly) {
   console.log("No Functions codebase changes detected.");
   process.exit(0);
@@ -43,3 +46,8 @@ console.log(
 
 const result = spawnSync(firebaseBin, command, { cwd: repoRoot, stdio: "inherit", env: process.env });
 process.exit(result.status || 0);
+
+function run(commandName, commandArgs) {
+  const result = spawnSync(commandName, commandArgs, { cwd: repoRoot, stdio: "inherit", env: process.env });
+  if (result.status !== 0) process.exit(result.status || 1);
+}

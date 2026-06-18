@@ -72,6 +72,9 @@ jobs:
       - name: Validate private media upload config
         run: npm run validate:private-media-upload-config
 
+      - name: Validate live rollback guards
+        run: npm run validate:live-release-rollback-guards
+
       - name: Summary
         run: |
           {
