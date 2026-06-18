@@ -38,6 +38,8 @@
 - ARCHIVE CORE is an operator-only web platform. It should not be treated as a teacher app, member app, or immediate StudioMate replacement.
 - Keep existing Alimtalk, StudioMate sync, and member-facing writes on their current canonical sources until a shadow-compare migration explicitly approves a source change.
 - When speed helps and the task can be split safely, use parallel agents, including the Spark model for quick read-only exploration or bounded implementation checks.
+- For deployment, verification, and live-check workflows, treat parallel Spark/Subagent verification as the default. The main thread should run the production command and final judgment, while parallel workers handle UI smoke checks, API/function probes, Firestore/read-model spot checks, deploy-output review, GitHub Actions watch, and ARCHIVE CORE `운영규칙` consistency checks.
+- Do not serialize all verification in the main thread unless the task is tiny, the required tool is unavailable, or a shared browser/session lock makes parallelism unsafe.
 - Use worktrees when a change is non-trivial, experimental, or should be isolated from the current branch.
 - Start live checks with read-only verification of the deployed ARCHIVE IN app, Firebase/Hosting configuration, and visible browser errors before proposing fixes.
 
