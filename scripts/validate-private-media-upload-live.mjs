@@ -214,7 +214,7 @@ async function uploadMediaFile(request, file) {
     mimeType: file.mimeType,
     size: file.buffer.length,
   });
-  const chunkSize = Number(init.chunkSize || 8 * 1024 * 1024);
+  const chunkSize = Number(init.chunkSize || 16 * 1024 * 1024);
   if (init.directUpload?.uploadUrl) {
     try {
       const direct = await uploadMediaFileDirect(request, file, init, chunkSize);

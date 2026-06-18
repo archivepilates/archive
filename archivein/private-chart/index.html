@@ -677,7 +677,7 @@
           mimeType: file.type,
           size: file.size,
         });
-        const chunkSize = Number(init.chunkSize || 8 * 1024 * 1024);
+        const chunkSize = Number(init.chunkSize || 16 * 1024 * 1024);
         if (init.directUpload?.uploadUrl) {
           try {
             await uploadMediaFileDirect(file, init, chunkSize, label, progress);

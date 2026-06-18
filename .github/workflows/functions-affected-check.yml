@@ -4,7 +4,9 @@ on:
   pull_request:
     paths:
       - "firebase/**"
+      - "archivein/private-chart/**"
       - "archivein/onsiteWelcome/**"
+      - "core/rules/**"
       - "scripts/**"
       - "package.json"
       - "package-lock.json"
@@ -15,7 +17,9 @@ on:
       - "codex/**"
     paths:
       - "firebase/**"
+      - "archivein/private-chart/**"
       - "archivein/onsiteWelcome/**"
+      - "core/rules/**"
       - "scripts/**"
       - "package.json"
       - "package-lock.json"
@@ -64,6 +68,9 @@ jobs:
 
       - name: Validate onsite welcome release guard
         run: npm run validate:onsite-welcome
+
+      - name: Validate private media upload config
+        run: npm run validate:private-media-upload-config
 
       - name: Summary
         run: |
