@@ -902,6 +902,7 @@ async function enqueuePrivateLessonReportForRecord(
     queuedBy: templateApproved ? "auto" : undefined,
     reviewedByUid: templateApproved ? reviewedByUid : existing?.reviewedByUid,
     reviewedAt: templateApproved ? now : existing?.reviewedAt || null,
+    reasonCode: "",
     lastError: templateApproved ? null : "프라이빗 회원 리포트 템플릿 승인 대기",
     createdAt: existing?.createdAt || now,
     updatedAt: now,
