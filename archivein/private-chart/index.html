@@ -226,6 +226,34 @@
       background: white;
     }
 
+    .report-edit {
+      display: grid;
+      gap: 12px;
+      padding: 14px;
+      border: 1px solid var(--line);
+      border-radius: var(--radius);
+      background: color-mix(in srgb, var(--surface) 72%, var(--bg));
+    }
+
+    .report-edit label {
+      display: grid;
+      gap: 7px;
+      color: var(--muted);
+      font-size: 13px;
+      font-weight: 750;
+    }
+
+    .report-edit textarea {
+      min-height: 90px;
+      background: #fff;
+      color: var(--text);
+      font-weight: 500;
+    }
+
+    .report-edit .report-next-direction {
+      min-height: 128px;
+    }
+
     .media-upload-panel {
       display: grid;
       gap: 12px;
@@ -523,11 +551,13 @@
       const approved = ["approved", "queued"].includes(status);
       const ready = Boolean(report.url);
       const submitted = data.postStatus === "submitted" || Boolean(report.postSubmitted);
+      const canEditReport = ready && !sent && report.canEdit !== false;
+      const previewUrl = ready ? cacheBustedUrl(report.canonicalUrl || report.url) : "";
       const message = ready
         ? sent
           ? "회원 리포트 알림톡 발송이 완료되었습니다. 발송 후에는 기록을 수정할 수 없습니다."
           : approved
-            ? "승인이 반영되었습니다. 발송 전 수정하면 리포트를 다시 생성한 뒤 재승인해 주세요."
+            ? "승인이 반영되었습니다. 발송 전 수정하면 기존 발송 후보를 보류하고 다시 승인해 주세요."
             : "수업 전/후 기록이 반영된 최종 리포트입니다. 내용을 확인한 뒤 발송 승인해 주세요."
         : submitted
           ? "수업 전/후 기록을 회원용 리포트로 변환해 주세요."
@@ -536,12 +566,15 @@
       reportPanel.innerHTML = `
         <h2>회원용 리포트</h2>
         <p>${escapeHtml(message)}</p>
-        ${ready ? `<iframe class="report-frame" title="회원용 리포트 미리보기" src="${escapeAttr(report.url)}"></iframe>` : ""}
+        ${ready ? `<iframe class="report-frame" title="회원용 리포트 미리보기" src="${escapeAttr(previewUrl)}"></iframe>` : ""}
+        ${canEditReport ? reportEditHtml(report) : ""}
         <div class="button-row">
           ${submitted ? `<button class="${ready ? "secondary" : ""}" type="button" data-convert-report ${sent ? "disabled" : ""}>${ready ? "수정 내용으로 리포트 재생성" : "수업 전/후 기록으로 리포트 변환"}</button>` : ""}
           ${ready ? `<button class="secondary" type="button" data-open-report>리포트 새 창으로 보기</button>` : `<button class="secondary" type="button" data-refresh-report>리포트 상태 새로고침</button>`}
           ${ready ? `<button type="button" data-approve-report ${sent ? "disabled" : ""}>${sent ? "발송 완료" : approved ? "회원 알림톡 발송 재승인" : "회원 알림톡 발송 승인"}</button>` : ""}
         </div>`;
+      const saveEditButton = reportPanel.querySelector("[data-save-report-edit]");
+      if (saveEditButton && !sent) saveEditButton.addEventListener("click", saveReportEdit);
       const convertButton = reportPanel.querySelector("[data-convert-report]");
       if (convertButton && !sent) convertButton.addEventListener("click", convertReport);
       const openButton = reportPanel.querySelector("[data-open-report]");
@@ -550,6 +583,18 @@
       if (refreshButton) refreshButton.addEventListener("click", refreshReport);
       const approveButton = reportPanel.querySelector("[data-approve-report]");
       if (approveButton) approveButton.addEventListener("click", approveReport);
+    }
+
+    function reportEditHtml(report) {
+      return `<div class="report-edit">
+        <label>오늘의 핵심
+          <textarea id="reportSummaryEdit" maxlength="900" placeholder="회원에게 보이는 리포트 첫 문장입니다.">${escapeHtml(report.summary || "")}</textarea>
+        </label>
+        <label>다음 수업 방향
+          <textarea id="reportNextDirectionEdit" class="report-next-direction" maxlength="1200" placeholder="회원에게 보이는 다음 수업 방향입니다.">${escapeHtml(report.nextDirection || "")}</textarea>
+        </label>
+        <button type="button" class="secondary" data-save-report-edit>리포트 문장 저장</button>
+      </div>`;
     }
 
     function renderMediaPanel(data) {
@@ -809,6 +854,34 @@
       }
     }
 
+    async function saveReportEdit() {
+      if (state.loading) return;
+      state.loading = true;
+      setStatus("리포트 문장을 저장 중입니다.", false);
+      const button = reportPanel.querySelector("[data-save-report-edit]");
+      if (button) button.disabled = true;
+      const summary = String(reportPanel.querySelector("#reportSummaryEdit")?.value || "").trim();
+      const nextDirection = String(reportPanel.querySelector("#reportNextDirectionEdit")?.value || "").trim();
+      try {
+        if (!summary) throw new Error("오늘의 핵심 문장을 입력해 주세요.");
+        if (!nextDirection) throw new Error("다음 수업 방향 문장을 입력해 주세요.");
+        const data = await postJson({
+          requestId: state.requestId,
+          token: state.token,
+          action: "editReport",
+          summary,
+          nextDirection,
+        });
+        setStatus(data.message || "리포트 문장을 저장했습니다.", false);
+        await refreshReport();
+      } catch (error) {
+        setStatus(error.message || String(error), true);
+        if (button) button.disabled = false;
+      } finally {
+        state.loading = false;
+      }
+    }
+
     function readAnswers(formData) {
       const answers = {};
       const activeFields = state.mode === "post" ? postFields : preFields;
@@ -818,6 +891,12 @@
         if (field.type === "text") answers[field.key] = String(formData.get(field.key) || "");
       }
       return answers;
+    }
+
+    function cacheBustedUrl(url) {
+      if (!url) return "";
+      const joiner = String(url).includes("?") ? "&" : "?";
+      return `${url}${joiner}preview=${Date.now()}`;
     }
 
     function setStatus(message, error) {

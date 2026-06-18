@@ -81,6 +81,14 @@ export async function privateLessonChartApiHandler(request: any, response: any):
         response.status(200).json({ ok: true, ...result });
         return;
       }
+      if (String(body.action || "") === "editReport") {
+        const result = await editPrivateLessonReportFromChart(chartRequest, {
+          summary: body.summary,
+          nextDirection: body.nextDirection,
+        });
+        response.status(200).json({ ok: true, ...result });
+        return;
+      }
       if (String(body.action || "") === "initMediaUpload") {
         const record =
           (await refs.privateLessonChartRecord(chartRequest.requestId).get()).data() ||
@@ -701,6 +709,86 @@ async function convertPrivateLessonReportFromChart(
   };
 }
 
+async function editPrivateLessonReportFromChart(
+  chartRequest: PrivateLessonChartRequestDoc,
+  input: { summary: unknown; nextDirection: unknown },
+): Promise<{
+  recordId: string;
+  reportStatus: string;
+  reportUrl: string;
+  summary: string;
+  nextDirection: string;
+  message: string;
+}> {
+  const record = (await refs.privateLessonChartRecord(chartRequest.requestId).get()).data();
+  if (!record) throw new Error("회차 기록을 찾을 수 없습니다.");
+  if (!record.postRecord || !record.postSubmittedAt) {
+    throw new Error("수업 후 기록 제출 후 리포트를 수정할 수 있습니다.");
+  }
+  if (!isPrivateLessonReportGenerated(record)) {
+    throw new Error("회원용 리포트가 아직 생성되지 않았습니다. 먼저 리포트 변환을 완료해 주세요.");
+  }
+  if (isPrivateLessonReportSent(record)) {
+    throw new Error("회원 리포트 알림톡 발송 완료 후에는 리포트를 수정할 수 없습니다.");
+  }
+
+  const summary = cleanEditableReportText(input.summary, 900);
+  const nextDirection = cleanEditableReportText(input.nextDirection, 1200);
+  if (!summary) throw new Error("오늘의 핵심 문장을 입력해 주세요.");
+  if (!nextDirection) throw new Error("다음 수업 방향 문장을 입력해 주세요.");
+
+  await skipPendingPrivateLessonReportCandidate(
+    record,
+    "리포트 발송 전 회원용 리포트 문장이 수정되어 기존 발송 후보를 보류했습니다.",
+  );
+  const now = nowTimestamp();
+  const nextRecord = {
+    ...record,
+    gptStatus: "draft_created",
+    gptDraftSummary: summary,
+    gptDraftNextDirection: nextDirection,
+    publicSummary: summary,
+    publicNextDirection: nextDirection,
+    publicReportApproval: {
+      status: "pending" as const,
+      approvedAt: null,
+      approvedBy: chartRequest.staffName || "staff",
+      candidateId: "",
+      lastError: null,
+    },
+    manualReportEdit: {
+      editedAt: now,
+      editedBy: chartRequest.staffName || "staff",
+      source: "staff:private-chart",
+    },
+    updatedAt: now,
+  } as PrivateLessonChartRecordDoc;
+  await refs.privateLessonChartRecord(record.recordId).set(
+    {
+      gptStatus: "draft_created",
+      gptDraftSummary: summary,
+      gptDraftNextDirection: nextDirection,
+      publicSummary: summary,
+      publicNextDirection: nextDirection,
+      publicReportApproval: nextRecord.publicReportApproval,
+      manualReportEdit: nextRecord.manualReportEdit,
+      updatedAt: now,
+    },
+    { merge: true },
+  );
+  const notionSync = await syncPrivateLessonChartRecordToNotion(nextRecord, chartRequest);
+  await refs.privateLessonChartRecord(record.recordId).set({ notionSync, updatedAt: nowTimestamp() }, { merge: true });
+
+  return {
+    recordId: record.recordId,
+    reportStatus: "ready",
+    reportUrl: record.publicReportUrl || record.publicReportCanonicalUrl || "",
+    summary,
+    nextDirection,
+    message: "회원 리포트 문장을 저장했습니다. 발송 전까지 다시 수정할 수 있습니다.",
+  };
+}
+
 async function enqueuePrivateLessonReportForRecord(
   record: PrivateLessonChartRecordDoc,
   templateApproved: boolean,
@@ -1214,7 +1302,10 @@ function resetPrivateLessonReportDraftPatch(): Partial<PrivateLessonChartRecordD
   };
 }
 
-async function skipPendingPrivateLessonReportCandidate(record: PrivateLessonChartRecordDoc): Promise<void> {
+async function skipPendingPrivateLessonReportCandidate(
+  record: PrivateLessonChartRecordDoc,
+  lastError = "리포트 발송 전 설문 답변이 수정되어 기존 발송 후보를 보류했습니다.",
+): Promise<void> {
   if (isPrivateLessonReportSent(record)) return;
   const candidateId = `private_lesson_report_${record.recordId}`;
   const existing = (await refs.alimtalkCandidate(candidateId).get()).data();
@@ -1224,7 +1315,7 @@ async function skipPendingPrivateLessonReportCandidate(record: PrivateLessonChar
     {
       status: "skipped",
       reasonCode: "private_report_edited_before_send",
-      lastError: "리포트 발송 전 설문 답변이 수정되어 기존 발송 후보를 보류했습니다.",
+      lastError,
       updatedAt: nowTimestamp(),
     },
     { merge: true },
@@ -2324,6 +2415,15 @@ function cleanReportSentence(value: unknown): string {
     .slice(0, 360);
 }
 
+function cleanEditableReportText(value: unknown, maxLength: number): string {
+  return String(value || "")
+    .replace(/\r\n/g, "\n")
+    .replace(/[ \t]+/g, " ")
+    .replace(/\n{3,}/g, "\n\n")
+    .trim()
+    .slice(0, maxLength);
+}
+
 function gptSourceHash(record: PrivateLessonChartRecordDoc, chartRequest: PrivateLessonChartRequestDoc): string {
   return stableHash({
     requestId: record.requestId,
@@ -2406,7 +2506,8 @@ function renderPrivateLessonReportPage(
   const sessionText = `${Number(record.sessionNumber || 1)}회차`;
   const lessonTime = lessonTimeText(chartRequest);
   const title = `${memberName || "회원"}님 수업 리포트`;
-  const reportSummaryText = cleanReportSentence(record.gptDraftSummary) || "오늘 수업 기록을 바탕으로 몸의 변화와 다음 방향을 정리했습니다.";
+  const reportSummaryText = cleanEditableReportText(record.gptDraftSummary || record.publicSummary, 900) ||
+    "오늘 수업 기록을 바탕으로 몸의 변화와 다음 방향을 정리했습니다.";
   const goals = textArray(record.postRecord?.goals || record.prePlan?.goals || []);
   const focusAreas = textArray(record.postRecord?.focusAreas || record.prePlan?.focusAreas || []);
   const equipment = textArray(record.postRecord?.equipment || record.prePlan?.equipment || []);
@@ -2416,8 +2517,7 @@ function renderPrivateLessonReportPage(
   const cautions = textArray(record.postRecord?.cautions || record.prePlan?.cautions || []);
   const condition = firstText(record.postRecord?.condition);
   const painChange = firstText(record.postRecord?.painChange);
-  const nextDirectionText = cleanReportSentence(record.gptDraftNextDirection) ||
-    cleanReportSentence(record.publicNextDirection) ||
+  const nextDirectionText = cleanEditableReportText(record.gptDraftNextDirection || record.publicNextDirection, 1200) ||
     "다음 수업 방향은 담당 강사가 수업 기록을 기준으로 이어서 조정합니다.";
   const reportUrl = (() => {
     const url = new URL(PRIVATE_LESSON_REPORT_VIEW_BASE_URL);
@@ -2446,13 +2546,13 @@ function renderPrivateLessonReportPage(
       *{box-sizing:border-box}body{margin:0;background:var(--bg);color:var(--text);font-family:Apple SD Gothic Neo,\"Noto Sans KR\",system-ui,sans-serif;line-height:1.62}
       main{width:min(100%,820px);margin:0 auto;padding:26px 18px 56px}.brand{margin:0 0 18px;color:var(--muted);font-size:12px;font-weight:800;letter-spacing:0}
       .hero{padding:0 0 22px;border-bottom:1px solid var(--line)}h1{margin:0;font-size:30px;line-height:1.2;letter-spacing:0}.meta{margin-top:12px;color:var(--muted);font-size:14px}
-      .lead{margin-top:22px;padding:20px;background:var(--surface);border:1px solid var(--line);border-radius:8px}.lead small{display:block;margin-bottom:7px;color:var(--accent2);font-size:12px;font-weight:800}.lead p{margin:0;font-size:17px;word-break:keep-all}
+      .lead{margin-top:22px;padding:20px;background:var(--surface);border:1px solid var(--line);border-radius:8px}.lead small{display:block;margin-bottom:7px;color:var(--accent2);font-size:12px;font-weight:800}.lead p{margin:0;font-size:17px;word-break:keep-all;white-space:pre-line}
       .grid{display:grid;gap:12px;margin-top:18px}.tile{padding:16px;background:var(--surface);border:1px solid var(--line);border-radius:8px}.tile small{display:block;color:var(--muted);font-size:12px;font-weight:800}.tile strong{display:block;margin-top:6px;font-size:22px}
       section{margin-top:28px}.section-title{display:flex;align-items:end;justify-content:space-between;gap:12px;margin-bottom:12px}h2{margin:0;font-size:17px;letter-spacing:0}.hint{color:var(--muted);font-size:12px}
       .chips{display:flex;flex-wrap:wrap;gap:8px}.chip{display:inline-flex;align-items:center;min-height:34px;padding:7px 10px;border:1px solid var(--line);border-radius:999px;background:var(--surface);font-size:13px;color:#2d2924}
       .soft-list{display:grid;gap:9px;margin:0;padding:0;list-style:none}.soft-list li{padding:13px 14px;background:var(--surface);border:1px solid var(--line);border-radius:8px;word-break:keep-all}
       .media-grid{display:grid;gap:12px}.media-card{overflow:hidden;background:var(--surface);border:1px solid var(--line);border-radius:8px}.media-card iframe{display:block;width:100%;aspect-ratio:16/10;border:0;background:#f0ede8}.media-info{display:flex;align-items:center;justify-content:space-between;gap:10px;padding:10px 12px;color:var(--muted);font-size:12px}.media-info a{color:var(--accent);font-weight:800;text-decoration:none}
-      .note{padding:16px;border-left:3px solid var(--accent);background:rgba(255,253,250,.72);color:#312c26;word-break:keep-all}.footer{margin-top:32px;padding-top:16px;border-top:1px solid var(--line);color:var(--muted);font-size:12px}.report-link{display:inline-flex;align-items:center;min-height:40px;margin-top:10px;padding:8px 13px;border:1px solid var(--line);border-radius:999px;color:var(--accent);font-weight:800;text-decoration:none;background:var(--surface)}
+      .note{padding:16px;border-left:3px solid var(--accent);background:rgba(255,253,250,.72);color:#312c26;word-break:keep-all;white-space:pre-line}.footer{margin-top:32px;padding-top:16px;border-top:1px solid var(--line);color:var(--muted);font-size:12px}.report-link{display:inline-flex;align-items:center;min-height:40px;margin-top:10px;padding:8px 13px;border:1px solid var(--line);border-radius:999px;color:var(--accent);font-weight:800;text-decoration:none;background:var(--surface)}
       @media (min-width:680px){main{padding:38px 28px 72px}.grid{grid-template-columns:repeat(3,minmax(0,1fr))}.media-grid{grid-template-columns:repeat(2,minmax(0,1fr))}h1{font-size:36px}.lead{padding:24px}}
     </style></head><body><main><div class="hero"><p class="brand">ARCHIVE PILATES</p><h1>${escapeHtml(title)}</h1>` +
     `<p class="meta">${escapeHtml(sessionText)} · ${escapeHtml(lessonTime)} · 담당: ${staffName}</p>` +

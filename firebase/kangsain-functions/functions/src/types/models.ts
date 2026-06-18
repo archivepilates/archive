@@ -731,6 +731,11 @@ export interface PrivateLessonChartRecordDoc {
   publicReportCanonicalUrl?: string;
   publicSummary?: string;
   publicNextDirection?: string;
+  manualReportEdit?: {
+    editedAt?: Timestamp;
+    editedBy?: string;
+    source?: string;
+  };
   media?: {
     rootFolderId?: string;
     memberFolderId?: string;
@@ -741,9 +746,9 @@ export interface PrivateLessonChartRecordDoc {
   };
   publicReportApproval?: {
     status: "pending" | "approved" | "queued" | "sent" | "failed";
-    approvedAt?: Timestamp;
+    approvedAt?: Timestamp | null;
     approvedBy?: string;
-    candidateId?: string;
+    candidateId?: string | null;
     sentAt?: Timestamp;
     lastError?: string | null;
   };
