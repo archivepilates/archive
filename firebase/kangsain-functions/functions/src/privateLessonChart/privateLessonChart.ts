@@ -22,7 +22,7 @@ import { ensureShortLink } from "../utils/shortLinks";
 import { bookingSourcePriority, isExcelBookingId } from "../utils/canonicalBooking";
 import { ALIMTALK_TEMPLATES } from "../alimtalk/templates";
 import { isAlimtalkTemplateApproved } from "../alimtalk/templateStatus";
-import { initPrivateLessonMediaUpload, uploadPrivateLessonMediaChunk } from "./privateLessonMedia";
+import { completePrivateLessonMediaUpload, initPrivateLessonMediaUpload, uploadPrivateLessonMediaChunk } from "./privateLessonMedia";
 
 const PUBLIC_BASE_URL = process.env.PRIVATE_CHART_BASE_URL || "https://in.archivepilates.com/private-chart/";
 const NOTION_API_VERSION = "2022-06-28";
@@ -111,6 +111,15 @@ export async function privateLessonChartApiHandler(request: any, response: any):
           end: Number(body.end || 0),
           total: Number(body.total || 0),
           chunkBase64: String(body.chunkBase64 || ""),
+        });
+        response.status(200).json({ ok: true, ...result });
+        return;
+      }
+      if (String(body.action || "") === "completeMediaUpload") {
+        const result = await completePrivateLessonMediaUpload({
+          chartRequest,
+          uploadId: String(body.uploadId || ""),
+          driveFile: body.driveFile || {},
         });
         response.status(200).json({ ok: true, ...result });
         return;

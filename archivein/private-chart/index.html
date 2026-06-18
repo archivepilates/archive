@@ -677,7 +677,72 @@
           mimeType: file.type,
           size: file.size,
         });
-        const chunkSize = Number(init.chunkSize || 1024 * 1024);
+        const chunkSize = Number(init.chunkSize || 8 * 1024 * 1024);
+        if (init.directUpload?.uploadUrl) {
+          try {
+            await uploadMediaFileDirect(file, init, chunkSize, label, progress);
+            label.textContent = "업로드 완료 · 리포트 자동 포함";
+            return;
+          } catch (error) {
+            if (progress.value > 0) throw error;
+            label.textContent = "직접 업로드 실패 · 안전 경로로 재시도 중";
+          }
+        }
+        await uploadMediaFileViaFunction(file, init, chunkSize, label, progress);
+        label.textContent = "업로드 완료 · 리포트 자동 포함";
+      } catch (error) {
+        label.textContent = error.message || String(error);
+        item.classList.add("error");
+        throw error;
+      } finally {
+        state.uploading = Math.max(0, state.uploading - 1);
+        if (!state.loading && state.uploading === 0 && !state.data?.locked) {
+          submitButton.disabled = false;
+        }
+      }
+    }
+
+    async function uploadMediaFileDirect(file, init, chunkSize, label, progress) {
+      let offset = 0;
+      let finalDriveFile = null;
+      while (offset < file.size) {
+        const endExclusive = Math.min(offset + chunkSize, file.size);
+        const chunk = file.slice(offset, endExclusive);
+        const response = await fetch(init.directUpload.uploadUrl, {
+          method: "PUT",
+          headers: {
+            "Content-Type": file.type,
+            "Content-Range": `bytes ${offset}-${endExclusive - 1}/${file.size}`,
+          },
+          body: chunk,
+        });
+        if (response.status === 308) {
+          const range = response.headers.get("range") || "";
+          const match = range.match(/bytes=0-(\d+)/i);
+          offset = match ? Number(match[1]) + 1 : endExclusive;
+          progress.value = Math.round((offset / file.size) * 100);
+          label.textContent = `Drive 직접 업로드 중 ${progress.value}%`;
+          continue;
+        }
+        const text = await response.text();
+        const json = text ? JSON.parse(text) : {};
+        if (!response.ok || !json.id) {
+          throw new Error(json?.error?.message || `Drive 직접 업로드 실패 ${response.status}`);
+        }
+        finalDriveFile = json;
+        offset = file.size;
+        progress.value = 100;
+      }
+      await postJson({
+        action: "completeMediaUpload",
+        requestId: state.requestId,
+        token: state.token,
+        uploadId: init.uploadId,
+        driveFile: finalDriveFile,
+      });
+    }
+
+    async function uploadMediaFileViaFunction(file, init, chunkSize, label, progress) {
         let offset = 0;
         while (offset < file.size) {
           const endExclusive = Math.min(offset + chunkSize, file.size);
@@ -697,17 +762,6 @@
           progress.value = Math.round((offset / file.size) * 100);
           label.textContent = `업로드 중 ${progress.value}%`;
         }
-        label.textContent = "업로드 완료 · 리포트 자동 포함";
-      } catch (error) {
-        label.textContent = error.message || String(error);
-        item.classList.add("error");
-        throw error;
-      } finally {
-        state.uploading = Math.max(0, state.uploading - 1);
-        if (!state.loading && state.uploading === 0 && !state.data?.locked) {
-          submitButton.disabled = false;
-        }
-      }
     }
 
     function intakeHtml(intake) {

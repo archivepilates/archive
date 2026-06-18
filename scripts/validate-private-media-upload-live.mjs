@@ -93,6 +93,8 @@ try {
       mediaId: row.file?.mediaId || "",
       fileName: row.file?.fileName || "",
       mimeType: row.file?.mimeType || "",
+      uploadMode: row.uploadMode || "",
+      chunkSize: row.chunkSize || 0,
       driveFileId: row.file?.driveFileId || "",
       driveUrl: row.file?.driveUrl || "",
       previewUrl: row.file?.previewUrl || "",
@@ -212,7 +214,56 @@ async function uploadMediaFile(request, file) {
     mimeType: file.mimeType,
     size: file.buffer.length,
   });
-  const chunkSize = Number(init.chunkSize || 1024 * 1024);
+  const chunkSize = Number(init.chunkSize || 8 * 1024 * 1024);
+  if (init.directUpload?.uploadUrl) {
+    try {
+      const direct = await uploadMediaFileDirect(request, file, init, chunkSize);
+      return { ...direct, uploadMode: "drive_direct", chunkSize };
+    } catch (error) {
+      console.warn(`direct upload failed; falling back to function proxy: ${error instanceof Error ? error.message : String(error)}`);
+    }
+  }
+  const fallback = await uploadMediaFileViaFunction(request, file, init, chunkSize);
+  return { ...fallback, uploadMode: "function_proxy", chunkSize };
+}
+
+async function uploadMediaFileDirect(request, file, init, chunkSize) {
+  let offset = 0;
+  let driveFile = null;
+  while (offset < file.buffer.length) {
+    const endExclusive = Math.min(offset + chunkSize, file.buffer.length);
+    const response = await fetch(init.directUpload.uploadUrl, {
+      method: "PUT",
+      headers: {
+        "Content-Type": file.mimeType,
+        "Content-Range": `bytes ${offset}-${endExclusive - 1}/${file.buffer.length}`,
+      },
+      body: file.buffer.subarray(offset, endExclusive),
+    });
+    if (response.status === 308) {
+      const range = response.headers.get("range") || "";
+      const match = range.match(/bytes=0-(\d+)/i);
+      offset = match ? Number(match[1]) + 1 : endExclusive;
+      continue;
+    }
+    const text = await response.text();
+    const json = text ? JSON.parse(text) : {};
+    if (!response.ok || !json.id) {
+      throw new Error(json?.error?.message || `Drive direct upload failed ${response.status}`);
+    }
+    driveFile = json;
+    offset = file.buffer.length;
+  }
+  return await postChartAction({
+    action: "completeMediaUpload",
+    requestId: request.requestId,
+    token: request.token,
+    uploadId: init.uploadId,
+    driveFile,
+  });
+}
+
+async function uploadMediaFileViaFunction(request, file, init, chunkSize) {
   let offset = 0;
   let result = null;
   while (offset < file.buffer.length) {

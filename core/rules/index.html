@@ -282,6 +282,8 @@
                 <li>파일은 home@archivepilates.com 권한으로 Google Drive 프라이빗 리포트 미디어 폴더에 저장합니다.</li>
                 <li>Firestore에는 Drive file ID, 링크, mime type, size, 리포트 포함 여부만 저장합니다.</li>
                 <li>현재 기준은 첨부한 미디어를 같은 회차 리포트에 자동 포함하는 단순 운영입니다.</li>
+                <li>업로드는 8MB 청크 기준으로 Function이 Drive resumable upload 세션을 발급하고, 브라우저가 Drive로 직접 전송한 뒤 Function이 완료 기록만 남깁니다.</li>
+                <li>Drive 직접 업로드가 브라우저 또는 네트워크 정책에 막히면 첫 청크 전에만 기존 Function 중계 경로로 자동 fallback합니다.</li>
                 <li>배포 전후 검증은 scripts/validate-private-media-upload-live.mjs로 실제 이미지/영상 업로드와 리포트 삽입 여부를 확인합니다.</li>
               </ul>
             </article>
