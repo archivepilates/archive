@@ -744,6 +744,7 @@ export interface PrivateLessonChartRecordDoc {
     approvedAt?: Timestamp;
     approvedBy?: string;
     candidateId?: string;
+    sentAt?: Timestamp;
     lastError?: string | null;
   };
   notionSync?: {

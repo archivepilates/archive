@@ -427,7 +427,7 @@
       { type: "multi", key: "changes", label: "오늘 관찰된 변화", options: sets.changes },
       { type: "multi", key: "movementObservations", label: "움직임 관찰", options: sets.movementObservations },
       { type: "multi", key: "memberResponses", label: "회원 체감/반응", options: sets.memberResponses },
-      { type: "text", key: "nextMemo", label: "다음 수업 방향", required: true, placeholder: "다음 수업에서 이어갈 방향을 회원에게 설명하듯 적어주세요." },
+      { type: "text", key: "nextMemo", label: "다음 수업 준비 메모", required: true, placeholder: "다음 수업 때 강사가 참고할 내부 메모를 적어주세요.", help: "회원 리포트의 다음 수업 방향에는 그대로 노출되지 않습니다." },
     ];
 
     const title = document.getElementById("title");
@@ -504,10 +504,10 @@
         input.disabled = true;
       });
       submitButton.disabled = true;
-      submitButton.textContent = data.mode === "post" ? "수업 후 기록 제출 완료" : "수업 전 계획 제출 완료";
+      submitButton.textContent = "회원 리포트 발송 완료";
       const note = document.createElement("p");
       note.className = "locked-note";
-      note.textContent = "이미 제출된 기록입니다. 기존 내용 보호를 위해 다시 제출할 수 없습니다.";
+      note.textContent = "회원 리포트 알림톡 발송이 완료되어 기록을 수정할 수 없습니다.";
       sections.after(note);
     }
 
@@ -518,13 +518,17 @@
         return;
       }
       const report = data.report || {};
-      const approved = ["approved", "queued", "sent"].includes(String(report.status || report.approval?.status || ""));
+      const status = String(report.status || report.approval?.status || "");
+      const sent = Boolean(report.sent) || status === "sent";
+      const approved = ["approved", "queued"].includes(status);
       const ready = Boolean(report.url);
       const submitted = data.postStatus === "submitted" || Boolean(report.postSubmitted);
       const message = ready
-        ? approved
-          ? "승인이 반영되었습니다. 회원 알림톡 발송 상태는 운영 큐에서 관리됩니다."
-          : "수업 전/후 기록이 반영된 최종 리포트입니다. 내용을 확인한 뒤 발송 승인해 주세요."
+        ? sent
+          ? "회원 리포트 알림톡 발송이 완료되었습니다. 발송 후에는 기록을 수정할 수 없습니다."
+          : approved
+            ? "승인이 반영되었습니다. 발송 전 수정하면 리포트를 다시 생성한 뒤 재승인해 주세요."
+            : "수업 전/후 기록이 반영된 최종 리포트입니다. 내용을 확인한 뒤 발송 승인해 주세요."
         : submitted
           ? "수업 전/후 기록을 회원용 리포트로 변환해 주세요."
           : "수업 후 기록 제출 후 회원용 리포트가 생성됩니다.";
@@ -534,12 +538,12 @@
         <p>${escapeHtml(message)}</p>
         ${ready ? `<iframe class="report-frame" title="회원용 리포트 미리보기" src="${escapeAttr(report.url)}"></iframe>` : ""}
         <div class="button-row">
-          ${submitted ? `<button class="${ready ? "secondary" : ""}" type="button" data-convert-report ${approved ? "disabled" : ""}>${ready ? "리포트 변환 완료" : "수업 전/후 기록으로 리포트 변환"}</button>` : ""}
+          ${submitted ? `<button class="${ready ? "secondary" : ""}" type="button" data-convert-report ${sent ? "disabled" : ""}>${ready ? "수정 내용으로 리포트 재생성" : "수업 전/후 기록으로 리포트 변환"}</button>` : ""}
           ${ready ? `<button class="secondary" type="button" data-open-report>리포트 새 창으로 보기</button>` : `<button class="secondary" type="button" data-refresh-report>리포트 상태 새로고침</button>`}
-          ${ready ? `<button type="button" data-approve-report ${approved ? "disabled" : ""}>${approved ? "승인 완료" : "회원 알림톡 발송 승인"}</button>` : ""}
+          ${ready ? `<button type="button" data-approve-report ${sent ? "disabled" : ""}>${sent ? "발송 완료" : approved ? "회원 알림톡 발송 재승인" : "회원 알림톡 발송 승인"}</button>` : ""}
         </div>`;
       const convertButton = reportPanel.querySelector("[data-convert-report]");
-      if (convertButton && !ready) convertButton.addEventListener("click", convertReport);
+      if (convertButton && !sent) convertButton.addEventListener("click", convertReport);
       const openButton = reportPanel.querySelector("[data-open-report]");
       if (openButton) openButton.addEventListener("click", () => window.open(report.url, "_blank", "noopener"));
       const refreshButton = reportPanel.querySelector("[data-refresh-report]");
@@ -664,7 +668,8 @@
       if (field.type === "text") {
         const required = field.required ? "required" : "";
         const placeholder = field.placeholder || "필요할 때만 입력";
-        const help = field.required ? `<p class="field-help">회원 리포트의 다음 수업 방향 원문으로 사용됩니다.</p>` : "";
+        const helpText = field.help || (field.required ? "회원 리포트의 다음 수업 방향 원문으로 사용됩니다." : "");
+        const help = helpText ? `<p class="field-help">${escapeHtml(helpText)}</p>` : "";
         return `<section><label for="${field.key}"><h2>${escapeHtml(field.label)}</h2></label>${help}<textarea id="${field.key}" name="${field.key}" ${required} placeholder="${escapeAttr(placeholder)}"></textarea></section>`;
       }
       if (field.type === "groupedMulti") {
@@ -690,7 +695,7 @@
       event.preventDefault();
       if (state.loading) return;
       if (state.data?.locked) {
-        setStatus("이미 제출된 기록입니다. 기존 내용 보호를 위해 다시 제출할 수 없습니다.", true);
+        setStatus("회원 리포트 알림톡 발송이 완료되어 기록을 수정할 수 없습니다.", true);
         return;
       }
       state.loading = true;
@@ -700,7 +705,7 @@
         if (state.uploading > 0) throw new Error("사진/영상 업로드가 끝난 뒤 제출해 주세요.");
         const answers = readAnswers(new FormData(form));
         if (state.mode === "post" && !String(answers.nextMemo || "").trim()) {
-          throw new Error("다음 수업 방향을 입력해 주세요. 회원 리포트에 반영됩니다.");
+          throw new Error("다음 수업 준비 메모를 입력해 주세요.");
         }
         const res = await fetch(apiBase, {
           method: "POST",
