@@ -1716,10 +1716,11 @@ async function nextSessionNumber(booking: BookingDoc): Promise<number> {
   const bookingSessionNumber = canonicalSessionNumberFromBooking(booking);
   if (bookingSessionNumber) return bookingSessionNumber;
   const ledgerNumber = await nextSessionNumberFromPrivateLedger(booking);
+  if (ledgerNumber) return ledgerNumber;
   const usageNumber = await nextSessionNumberFromUsageEvents(booking);
+  if (usageNumber) return usageNumber;
   const bookingNumber = await nextSessionNumberFromBookings(booking);
-  const existingChartNumber = await nextSessionNumberFromExistingChartRequests(booking);
-  return Math.max(ledgerNumber || 0, usageNumber || 0, bookingNumber || 0, existingChartNumber || 1);
+  return bookingNumber || 1;
 }
 
 async function nextSessionNumberFromBookings(booking: BookingDoc): Promise<number> {
@@ -1782,28 +1783,6 @@ async function nextSessionNumberFromUsageEvents(booking: BookingDoc): Promise<nu
         ticketName: String(item.ticketName || ""),
         sessionNumber: null,
         sourcePriority: 1,
-      })),
-  );
-  return nextSessionNumberFromTimeline(booking, rows);
-}
-
-async function nextSessionNumberFromExistingChartRequests(booking: BookingDoc): Promise<number | null> {
-  const snap = await refs.privateLessonChartRequests().where("memberId", "==", booking.memberId).get();
-  const rows = canonicalPrivateTimelineRows(
-    snap.docs
-      .map((doc): Record<string, any> => ({ ...(doc.data() || {}), requestId: doc.id }))
-      .filter((item) => String(item.status || "") !== "cancelled")
-      .map((item) => ({
-        id: String(item.requestId || item.bookingId || ""),
-        memberId: String(item.memberId || ""),
-        staffId: String(item.staffId || ""),
-        staffName: String(item.staffName || ""),
-        startsAt: timestampMillisFromValue(item.lessonStartAt),
-        date: String(item.lessonDate || dateFromAnyValue(item.lessonStartAt) || ""),
-        title: "",
-        ticketName: "",
-        sessionNumber: positiveNumber(item.sessionNumber),
-        sourcePriority: bookingSourcePriority(String(item.bookingId || "")),
       })),
   );
   return nextSessionNumberFromTimeline(booking, rows);

@@ -24,6 +24,19 @@ const collectionPattern = (name) =>
   new RegExp(`(?:collection\\s*\\(\\s*[\\"']${name}[\\"']|refs\\.${escapeRegExp(name)}\\s*\\()`);
 
 const violations = [];
+const forbiddenTextPatterns = [
+  {
+    file: "firebase/kangsain-functions/functions/src/privateLessonChart/privateLessonChart.ts",
+    pattern: "nextSessionNumberFromExistingChartRequests",
+    reason: "private chart requests are action records and must not be used as a session-number source",
+  },
+  {
+    file: "scripts/repair-private-chart-session-numbers.mjs",
+    pattern: "nextSessionNumberFromExistingChartRequests",
+    reason: "repair scripts must use bookings/memberUsageEvents/privateSessionLedger, not old chart request values",
+  },
+];
+
 for (const root of actionRoots) {
   for (const file of walk(path.join(repoRoot, root))) {
     const rel = path.relative(repoRoot, file);
@@ -36,11 +49,18 @@ for (const root of actionRoots) {
     }
   }
 }
+for (const item of forbiddenTextPatterns) {
+  const absolutePath = path.join(repoRoot, item.file);
+  const text = fs.existsSync(absolutePath) ? fs.readFileSync(absolutePath, "utf8") : "";
+  if (text.includes(item.pattern)) {
+    violations.push({ file: item.file, collection: item.pattern, reason: item.reason });
+  }
+}
 
 if (violations.length) {
   console.error("validate-data-source-policy failed: member-facing action code must not use mirror/incubation collections directly");
   for (const item of violations) {
-    console.error(`- ${item.file}: ${item.collection}`);
+    console.error(`- ${item.file}: ${item.collection}${item.reason ? ` (${item.reason})` : ""}`);
   }
   process.exit(1);
 }

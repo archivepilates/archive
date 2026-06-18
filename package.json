@@ -21,6 +21,9 @@
     "process:admin-emergency-sync": "node scripts/process-admin-emergency-sync-requests.mjs",
     "validate:archive-core-hosting": "node scripts/validate-archive-core-hosting-deploy.mjs",
     "deploy:archive-core-live": "bash scripts/deploy-archive-core-live.sh",
+    "recompute:private-session-ledger": "node scripts/recompute-private-session-ledger.mjs",
+    "release:promote-main:dry": "node scripts/promote-release-to-main.mjs",
+    "release:promote-main": "node scripts/promote-release-to-main.mjs --apply",
     "studiomate:member-excel": "node firebase/kangsain-functions/macmini-studiomate/download-member-excel.mjs",
     "studiomate:reservation-deadline": "node firebase/kangsain-functions/macmini-studiomate/set-reservation-deadline.mjs"
   },

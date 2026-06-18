@@ -233,8 +233,11 @@
               <h3>회차 원천</h3>
               <ul>
                 <li>2026.06.01 이후 프라이빗/세미프라이빗 수업은 자동화 차트를 반드시 생성합니다.</li>
-                <li>booking.sessionOrder.privateCumulativeRound를 1순위로 사용하되, 예약 원본과 다르면 즉시 재계산해 저장합니다.</li>
+                <li>회차 흐름은 StudioMate/Excel 원본 → bookings 현재 예약 + memberUsageEvents 이용이력 → privateSessionLedger 회차 → 설문/리포트/Notion 표시 순서로 운영합니다.</li>
+                <li>privateSessionLedger가 회차 원천입니다. privateLessonChartRequests, privateLessonChartRecords, Notion 차트는 작업/표시 기록이며 회차 계산 원천으로 사용하지 않습니다.</li>
+                <li>booking.sessionOrder.privateCumulativeRound는 privateSessionLedger에서 내려쓴 캐시입니다. 값이 없거나 원천과 다르면 즉시 재계산해 저장합니다.</li>
                 <li>삭제, 취소, 시간변경은 sessionOrder.counted=false와 제외 사유를 남기고 해당 수업 이후 회차까지 연쇄 재계산합니다.</li>
+                <li>booking.lessonType=group인 수업은 수강권명이 프라이빗처럼 보여도 프라이빗 회차에서 제외합니다. 원본 분류가 틀렸다면 원본 보정 후 다시 반영합니다.</li>
                 <li>강사 설문 알림톡 발송, 설문 링크 열기, 설문 제출, Notion 차트 갱신은 연결된 booking이 active일 때만 진행합니다.</li>
                 <li>같은 회원, 강사, 날짜, 수강권에서 시간변경 중복이 생기면 출석/최신 예약을 대표 booking으로 두고 나머지는 rescheduled_duplicate로 제외합니다.</li>
               </ul>
@@ -368,6 +371,8 @@
                 <li>UI/static-only 변경은 Hosting만, Functions 변경은 해당 codebase만 우선 배포합니다. CORE는 scripts/deploy-archive-core-live.sh 또는 npm run deploy:archive-core-live를 사용합니다.</li>
                 <li>배포 전 변경 범위, 테스트, 롤백 기준을 확인합니다.</li>
                 <li>CORE Hosting은 최신 CORE 작업 기준에서만 배포합니다. 배포 전 validate:archive-core-hosting이 수강료 문의 카드, 최근 발송/메모 패널, KPI 카드 높이 CSS를 확인하고, 빠진 항목이 있으면 배포를 중단합니다.</li>
+                <li>라이브 배포 커밋은 origin/main으로 fast-forward 승격합니다. 배포 완료 보고 전 npm run release:promote-main:dry로 승격 가능성을 확인하고, 검증이 끝나면 npm run release:promote-main을 실행합니다.</li>
+                <li>기능 브랜치만 라이브에 배포되고 main으로 승격되지 않은 상태는 rollback/다른 스레드 덮어쓰기 위험으로 봅니다. 승격이 막히면 차단 원인을 보고하고 별도 정리합니다.</li>
                 <li>배포 후 실제 URL, callable/API 응답, 브라우저 오류를 확인합니다.</li>
               </ul>
             </article>
