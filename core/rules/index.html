@@ -284,7 +284,10 @@
                 <li>현재 기준은 첨부한 미디어를 같은 회차 리포트에 자동 포함하는 단순 운영입니다.</li>
                 <li>업로드는 16MB 청크 기준으로 Function이 Drive resumable upload 세션을 발급하고, 브라우저가 Drive로 직접 전송한 뒤 Function이 완료 기록만 남깁니다.</li>
                 <li>Drive 직접 업로드가 브라우저 또는 네트워크 정책에 막히면 첫 청크 전에만 기존 Function 중계 경로로 자동 fallback합니다.</li>
-                <li>배포 전후 검증은 scripts/validate-private-media-upload-live.mjs로 실제 이미지/영상 업로드와 리포트 삽입 여부를 확인합니다.</li>
+                <li>미디어 업로드만으로는 Gemini 리포트 문장을 다시 생성하지 않습니다. 기존 오늘의 핵심과 다음 수업 방향은 유지하고 미디어 섹션만 다시 렌더링합니다.</li>
+                <li>배포 전후 기본 검증은 scripts/validate-private-media-upload-live.mjs로 실제 이미지/영상 업로드, Drive 직접 업로드, 리포트 미디어 삽입만 확인하며 Gemini를 호출하지 않습니다.</li>
+                <li>Gemini 리포트 생성 검증은 --with-gemini-report 옵션을 붙인 별도 실행에서만 진행합니다.</li>
+                <li>Gemini 쿼터가 막히면 리포트 전체를 실패시키지 않고 template_fallback 문장으로 검수 가능한 임시 리포트를 생성한 뒤 gptError에 원인을 남깁니다.</li>
               </ul>
             </article>
             <article class="rule-card">
