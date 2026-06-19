@@ -26,6 +26,10 @@ import {
 import { processParkingDiscountJobSnapshot } from "../parking/processParkingDiscountJob";
 import { callableOptions } from "../runtime/functionOptions";
 import { requireStaff } from "../security/authGuards";
+import {
+  getInstructorEvaluationQuizHandler,
+  submitInstructorEvaluationQuizHandler,
+} from "../staffEvaluation/instructorEvaluationQuiz";
 import { toHttpsError } from "../utils/errors";
 
 const parkingDiscountJobOptions = {
@@ -119,6 +123,24 @@ export const getKioskParkingJobStatus = onCall(callableOptions, async (request) 
 export const registerFcmToken = onCall(callableOptions, async (request) => {
   try {
     return await registerFcmTokenHandler(request);
+  } catch (err) {
+    throw toHttpsError(err);
+  }
+});
+
+export const getInstructorEvaluationQuiz = onCall(callableOptions, async (request) => {
+  try {
+    const staff = await requireStaff(request);
+    return await getInstructorEvaluationQuizHandler(request, staff);
+  } catch (err) {
+    throw toHttpsError(err);
+  }
+});
+
+export const submitInstructorEvaluationQuiz = onCall(callableOptions, async (request) => {
+  try {
+    const staff = await requireStaff(request);
+    return await submitInstructorEvaluationQuizHandler(request, staff);
   } catch (err) {
     throw toHttpsError(err);
   }

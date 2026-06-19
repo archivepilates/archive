@@ -14,7 +14,7 @@
       <aside class="sidebar" aria-label="ARCHIVE CORE navigation">
         <div class="brand"><div class="brand-mark" aria-hidden="true">CORE</div><strong>ARCHIVE CORE</strong><span>ARCHIVE PILATES Operations Platform</span></div>
         <nav class="nav">
-          <a href="../" data-section="home">Home <small>요약</small></a><a href="../members/" data-section="members">Members <small>회원</small></a><a href="../lessons/" data-section="lessons">Lessons <small>수업</small></a><a href="../private/" data-section="private">Private <small>차트</small></a><a href="../messages/" data-section="messages">Messages <small>알림톡</small></a><a href="../automation/" data-section="automation">Automation <small>관제</small></a><a href="../business/" data-section="business">Business <small>지표</small></a><a href="../imports/" data-section="imports">Imports <small>원본</small></a><a href="./" data-section="rules">Rules <small>규칙</small></a><a href="../settings/" data-section="settings">Settings <small>설정</small></a>
+          <a href="../" data-section="home">Home <small>요약</small></a><a href="../members/" data-section="members">Members <small>회원</small></a><a href="../lessons/" data-section="lessons">Lessons <small>수업</small></a><a href="../private/" data-section="private">Private <small>차트</small></a><a href="../staff/" data-section="staff">Staff <small>강사</small></a><a href="../messages/" data-section="messages">Messages <small>알림톡</small></a><a href="../automation/" data-section="automation">Automation <small>관제</small></a><a href="../business/" data-section="business">Business <small>지표</small></a><a href="../imports/" data-section="imports">Imports <small>원본</small></a><a href="./" data-section="rules">Rules <small>규칙</small></a><a href="../settings/" data-section="settings">Settings <small>설정</small></a>
         </nav>
       </aside>
       <main class="main rules-page">
@@ -44,6 +44,7 @@
             <a href="#data-sync">데이터·동기화<span>StudioMate Excel, Contacts</span></a>
             <a href="#alimtalk">알림톡<span>후보, 승인, 중복 차단</span></a>
             <a href="#private">프라이빗<span>회차, 설문, 리포트</span></a>
+            <a href="#staff-evaluation">강사 평가<span>퀴즈, 인사기록카드</span></a>
             <a href="#welcome">현장 웰컴<span>가입서, PDF, StudioMate 반영</span></a>
             <a href="#settlement">정산·지표<span>월별 정산, 대시보드</span></a>
             <a href="#release">배포·검증<span>배포세트, 실패보고</span></a>
@@ -302,6 +303,54 @@
             </article>
           </div>
           <div class="rule-note"><strong>현재 확인 위치</strong><span>CORE Private / Firestore bookings, privateLessonChartRequests, privateLessonChartRecords, privateSessionLedger</span></div>
+        </section>
+
+        <section class="panel rule-section" id="staff-evaluation">
+          <div class="panel-header"><div><h2>4-1. 강사 평가·인사기록카드</h2><p>기존 Google Form 기반 강사 평가 퀴즈를 Firebase 기반 제출/채점/기록 구조로 전환합니다.</p></div><span class="pill good">staff</span></div>
+          <div class="rule-grid">
+            <article class="rule-card">
+              <h3>운영 흐름</h3>
+              <ol>
+                <li>강사 또는 운영자가 CORE Staff 평가 퀴즈 화면에 로그인합니다.</li>
+                <li>문항은 Firebase Function에서 받아오고, 정답은 브라우저에 노출하지 않습니다.</li>
+                <li>제출하면 Function이 채점하고 staffEvaluationSubmissions에 원본 제출 기록을 저장합니다.</li>
+                <li>강사별 staffHrCards/{staffId}와 하위 quizResults에 최신 결과와 누적 요약을 반영합니다.</li>
+                <li>운영자는 CORE Staff 탭에서 강사별 최신 점수, 통과 여부, 검토 문항을 확인합니다.</li>
+              </ol>
+            </article>
+            <article class="rule-card">
+              <h3>권한과 원천</h3>
+              <ul>
+                <li>퀴즈 제출은 Firestore 직접 쓰기가 아니라 submitInstructorEvaluationQuiz callable로만 처리합니다.</li>
+                <li>일반 강사는 본인 staffId 기준 제출만 가능합니다.</li>
+                <li>운영자와 매니저는 대상 강사를 선택해 제출/검토할 수 있습니다.</li>
+                <li>staffEvaluationSubmissions는 제출 원본, staffHrCards는 인사기록카드 read-model입니다.</li>
+                <li>인사기록카드는 외부 발송, 정산, 예약, 회원 응대 자동화의 원천으로 사용하지 않습니다.</li>
+              </ul>
+            </article>
+            <article class="rule-card">
+              <h3>문항 관리</h3>
+              <ul>
+                <li>현재 문항은 공개 Google Form <strong>ARCHIVE 강사평가 퀴즈 A</strong>에서 확인한 22문항과 선택지 기준입니다.</li>
+                <li>객관식 18문항은 각 4점, 단답형 3문항은 각 6점으로 자동 채점합니다.</li>
+                <li>Q19 서술형 10점 문항은 자동 채점하지 않고 운영자 검토 참고값으로 저장합니다.</li>
+                <li>과거 Google Form 응답은 공식 점수를 보존해 staffHrCards로 이관하고, 새 Firebase 제출은 최신 정답키로 채점합니다.</li>
+                <li>기존 응답 시트에는 Q9 선택지 버전 차이와 Q20 정답키 입력 오류 흔적이 있어 과거 응답을 최신 키로 재채점하지 않습니다.</li>
+                <li>문항 변경 시 기존 제출 결과는 삭제하지 않고 quizVersion으로 구분합니다.</li>
+                <li>자동 채점 합격 기준은 80점 환산이며, 미달 시 CORE Staff 탭에서 검토 필요로 표시합니다.</li>
+              </ul>
+            </article>
+            <article class="rule-card">
+              <h3>차트와 이관</h3>
+              <ul>
+                <li>CORE Staff 탭은 staffEvaluationSubmissions와 staffHrCards의 최신 요약을 함께 읽어 강사별 점수 차트를 표시합니다.</li>
+                <li>공유된 응답 시트의 과거 결과는 import-staff-evaluation-google-results 스크립트로 dry-run 확인 후 이관합니다.</li>
+                <li>이관된 결과는 source=google_form_legacy_import로 표시해 새 Firebase 제출과 구분합니다.</li>
+                <li>인사기록카드 차트는 최신 점수, 최고 점수, 제출 횟수, 검토 상태만 운영자가 빠르게 볼 수 있게 표시합니다.</li>
+              </ul>
+            </article>
+          </div>
+          <div class="rule-note"><strong>현재 확인 위치</strong><span>CORE Staff / Firestore staffs, staffEvaluationSubmissions, staffHrCards, auditLogs</span></div>
         </section>
 
         <section class="panel rule-section" id="welcome">

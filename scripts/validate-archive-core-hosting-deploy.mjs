@@ -17,6 +17,7 @@ const required = [
       "pricingInquiryForm",
       "pricingInquiryHistoryPanel",
       "최근 발송/메모 보기",
+      "Staff <small>강사</small>",
     ],
   },
   {
@@ -27,7 +28,18 @@ const required = [
       "pricingInquiryDisplayPhone",
       "pricingInquiryHistoryPanel",
       "operatorSendPricingInquiryAlimtalk",
+      "submitInstructorEvaluationQuiz",
     ],
+  },
+  {
+    file: "core/staff/index.html",
+    label: "staff HR cards page",
+    markers: ["강사 인사기록카드", "staffHrList", "평가 퀴즈 열기"],
+  },
+  {
+    file: "core/staff/evaluation/index.html",
+    label: "instructor evaluation quiz page",
+    markers: ["instructorEvaluationQuizForm", "evaluationQuizQuestions", "평가 퀴즈 제출"],
   },
   {
     file: "core/assets/styles.css",

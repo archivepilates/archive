@@ -17,6 +17,11 @@ const state = {
   onsiteWelcomeRequests: [],
   memberSignupContracts: [],
   pricingInquiryAlimtalkRequests: [],
+  staffItems: [],
+  staffHrCards: [],
+  staffEvaluationSubmissions: [],
+  instructorEvaluationQuiz: null,
+  instructorEvaluationTargets: [],
   privateRequests: [],
   privateRecords: [],
   privateUsageEvents: [],
@@ -144,7 +149,7 @@ function normalizeStatus(value) {
   const status = String(value || "unknown").toLowerCase();
   if (["success", "ok", "healthy", "done", "active", "completed", "sent"].includes(status)) return "good";
   if (["failed", "error", "critical", "blocked"].includes(status)) return "danger";
-  if (["running", "pending", "warning", "review", "stale", "queued", "skipped", "template_pending"].includes(status)) return "warn";
+  if (["running", "pending", "warning", "review", "review_needed", "stale", "queued", "skipped", "template_pending"].includes(status)) return "warn";
   return "";
 }
 
@@ -165,6 +170,8 @@ function statusLabel(value) {
     skipped: "차단",
     template_pending: "승인대기",
     submitted: "제출",
+    passed: "합격",
+    review_needed: "검토필요",
     pre_submitted: "사전 제출",
     post_submitted: "사후 제출",
     draft_created: "초안 생성",
@@ -201,6 +208,7 @@ const NAV_ICONS = {
   members: "M16 19v-1.5A3.5 3.5 0 0 0 12.5 14h-5A3.5 3.5 0 0 0 4 17.5V19M11 8a3 3 0 1 1-6 0 3 3 0 0 1 6 0M20 19v-1a3 3 0 0 0-3-3h-1.2M15 5.2a2.8 2.8 0 0 1 0 5.6",
   lessons: "M4 6.5h16M4 12h16M4 17.5h9M8 4v16M16 4v10",
   private: "M5 4h14v16H5zM8 8h8M8 12h5M8 16h7",
+  staff: "M12 12a4 4 0 1 0 0-8 4 4 0 0 0 0 8M4 21a8 8 0 0 1 16 0M17.5 7.5l1.5 1.5 3-3",
   messages: "M4 6h16v11H8l-4 3V6zM8 10h8M8 14h5",
   automation: "M12 3v4M12 17v4M4.9 4.9l2.8 2.8M16.3 16.3l2.8 2.8M3 12h4M17 12h4M4.9 19.1l2.8-2.8M16.3 7.7l2.8-2.8M9 12a3 3 0 1 0 6 0 3 3 0 0 0-6 0",
   business: "M4 19h16M6 16V9M12 16V5M18 16v-7",
@@ -2422,6 +2430,382 @@ function renderBusinessFallback(error) {
   renderBusinessMemberInsights([]);
 }
 
+function staffHrCardFor(staffId) {
+  return (state.staffHrCards || []).find((card) => String(card.staffId || card.id) === String(staffId)) || null;
+}
+
+function staffLatestSubmission(staffId) {
+  return (
+    (state.staffEvaluationSubmissions || [])
+      .filter((item) => String(item.staffId || "") === String(staffId))
+      .sort((a, b) => timestampMs(b.submittedAt || b.updatedAt) - timestampMs(a.submittedAt || a.updatedAt))[0] || null
+  );
+}
+
+function staffEvaluationRows() {
+  const rows = new Map();
+  for (const staff of state.staffItems || []) {
+    if (staff.active === false) continue;
+    const key = String(staff.staffId || staff.id || staff.name || "");
+    if (!key) continue;
+    rows.set(key, {
+      key,
+      staffId: staff.staffId || staff.id || "",
+      name: staff.name || "이름 없음",
+      role: staff.role || "instructor",
+      submissions: [],
+      card: null,
+    });
+  }
+
+  for (const card of state.staffHrCards || []) {
+    const key = String(card.staffId || card.id || card.staffName || "");
+    if (!key) continue;
+    if (!rows.has(key)) {
+      rows.set(key, {
+        key,
+        staffId: card.staffId || card.id || "",
+        name: card.staffName || "강사",
+        role: card.staffRole || "instructor",
+        submissions: [],
+        card,
+      });
+    } else {
+      rows.get(key).card = card;
+    }
+  }
+
+  for (const submission of state.staffEvaluationSubmissions || []) {
+    const key = String(submission.staffId || submission.staffName || submission.id || "");
+    if (!key) continue;
+    if (!rows.has(key)) {
+      rows.set(key, {
+        key,
+        staffId: submission.staffId || "",
+        name: submission.staffName || "강사",
+        role: submission.staffRole || "instructor",
+        submissions: [],
+        card: null,
+      });
+    }
+    rows.get(key).submissions.push(submission);
+  }
+
+  return [...rows.values()].map((row) => {
+    const cardLatest =
+      row.card?.latestQuiz && Number.isFinite(Number(row.card.latestQuiz.scorePercent))
+        ? {
+            ...row.card.latestQuiz,
+            staffId: row.staffId,
+            staffName: row.name,
+            staffRole: row.role,
+          }
+        : null;
+    const candidates = cardLatest ? [...row.submissions, cardLatest] : row.submissions;
+    const seen = new Set();
+    const submissions = candidates
+      .filter((item) => Number.isFinite(Number(item.scorePercent)))
+      .filter((item) => {
+        const key = String(item.submissionId || `${item.staffId || row.staffId}_${item.submittedAt || item.updatedAt || item.scorePercent}`);
+        if (seen.has(key)) return false;
+        seen.add(key);
+        return true;
+      })
+      .sort((a, b) => timestampMs(b.submittedAt || b.updatedAt) - timestampMs(a.submittedAt || a.updatedAt));
+    const scores = submissions.map((item) => toNumber(item.scorePercent));
+    const bestFromCard = Number(row.card?.quizSummary?.bestScorePercent);
+    const latest = submissions[0] || null;
+    return {
+      ...row,
+      submissions,
+      latest,
+      latestScore: latest ? Math.round(toNumber(latest.scorePercent)) : null,
+      bestScore: scores.length || Number.isFinite(bestFromCard) ? Math.round(Math.max(...scores, Number.isFinite(bestFromCard) ? bestFromCard : 0)) : null,
+      attempts: Math.max(submissions.length, toNumber(row.card?.quizSummary?.attempts)),
+      status: latest?.status || "pending",
+    };
+  });
+}
+
+function renderStaffEvaluationChart() {
+  const chart = qs("staffEvaluationChart");
+  if (!chart) return;
+  const rows = staffEvaluationRows()
+    .filter((row) => row.latest)
+    .sort((a, b) => (b.latestScore || 0) - (a.latestScore || 0) || String(a.name).localeCompare(String(b.name), "ko"));
+
+  if (!rows.length) {
+    chart.innerHTML = `<div class="empty-state">평가 제출 기록이 생기면 강사별 점수 차트가 표시됩니다.</div>`;
+    return;
+  }
+
+  chart.innerHTML = rows
+    .map((row) => {
+      const latestScore = Math.max(0, Math.min(100, row.latestScore || 0));
+      const bestScore = Math.max(0, Math.min(100, row.bestScore || 0));
+      const points =
+        row.latest?.scoredPointTotal && row.latest?.earnedPointTotal !== undefined
+          ? `${toNumber(row.latest.earnedPointTotal)}/${toNumber(row.latest.scoredPointTotal)}점 자동채점`
+          : `${row.latest?.correctCount || 0}/${row.latest?.scoredQuestionCount || 0}문항`;
+      const note = [formatDate(row.latest.submittedAt || row.latest.updatedAt), `${row.attempts}회 제출`, points]
+        .filter(Boolean)
+        .join(" · ");
+      return `
+        <article class="staff-chart-row">
+          <div class="staff-chart-copy">
+            <strong>${escapeHtml(row.name)}</strong>
+            <span>${escapeHtml(note)}</span>
+          </div>
+          <div class="staff-chart-bars" aria-label="${escapeHtml(row.name)} 평가 점수">
+            <div class="staff-chart-track">
+              <span class="staff-chart-fill" style="width: ${latestScore}%"></span>
+            </div>
+            <div class="staff-chart-best" style="left: ${bestScore}%"></div>
+          </div>
+          <div class="staff-chart-score">
+            <strong>${latestScore}점</strong>
+            <span>최고 ${bestScore}점</span>
+          </div>
+          ${pill(row.status)}
+        </article>
+      `;
+    })
+    .join("");
+}
+
+function renderStaffHr() {
+  const list = qs("staffHrList");
+  if (!list) return;
+  const staffRows = staffEvaluationRows().sort((a, b) => String(a.name || "").localeCompare(String(b.name || ""), "ko"));
+  const staffs = staffRows;
+  const submissions = state.staffEvaluationSubmissions || [];
+  const reviewCount = submissions.filter((item) => item.status === "review_needed").length;
+  const passedCount = submissions.filter((item) => item.status === "passed").length;
+  const activeStaffCount = (state.staffItems || []).filter((item) => item.active !== false).length;
+  const latest = submissions
+    .filter((item) => Number.isFinite(Number(item.scorePercent)))
+    .sort((a, b) => timestampMs(b.submittedAt || b.updatedAt) - timestampMs(a.submittedAt || a.updatedAt))[0];
+
+  setText("staffTotal", formatCount(activeStaffCount || staffs.length, "명"));
+  setText("staffPassedCount", formatCount(passedCount, "건"));
+  setText("staffReviewCount", formatCount(reviewCount, "건"));
+  setText("staffLatestScore", latest ? `${Math.round(toNumber(latest.scorePercent))}점` : "-");
+
+  if (!staffs.length) {
+    list.innerHTML = `<div class="empty-state">강사 데이터를 불러오면 인사기록카드가 표시됩니다.</div>`;
+    renderStaffSubmissionHistory();
+    renderStaffEvaluationChart();
+    return;
+  }
+
+  list.innerHTML = staffs
+    .map((staff) => {
+      const card = staffHrCardFor(staff.staffId);
+      const latestQuiz = card?.latestQuiz || staff.latest || staffLatestSubmission(staff.staffId) || null;
+      const score = latestQuiz ? `${Math.round(toNumber(latestQuiz.scorePercent))}점` : "미응시";
+      const bestScore = Number(card?.quizSummary?.bestScorePercent);
+      const status = latestQuiz?.status || "pending";
+      const meta = [
+        staff.role || "instructor",
+        staff.phoneLast4 ? `끝자리 ${staff.phoneLast4}` : "",
+        latestQuiz?.submittedAt ? `최근 ${formatDate(latestQuiz.submittedAt)}` : "퀴즈 기록 없음",
+      ]
+        .filter(Boolean)
+        .join(" · ");
+      return `
+        <article class="status-row staff-card-row">
+          <div>
+            <strong>${escapeHtml(staff.name || "이름 없음")}</strong>
+            <p class="meta-line">${escapeHtml(meta)}</p>
+            <p class="note-line">최근 평가: ${escapeHtml(score)} · 최고 ${Number.isFinite(bestScore) && bestScore > 0 ? Math.round(bestScore) : "-"}점</p>
+          </div>
+          ${pill(status)}
+        </article>
+      `;
+    })
+    .join("");
+  renderStaffSubmissionHistory();
+  renderStaffEvaluationChart();
+}
+
+function renderStaffSubmissionHistory() {
+  const list = qs("staffEvaluationSubmissionList");
+  if (!list) return;
+  const items = [...(state.staffEvaluationSubmissions || [])]
+    .sort((a, b) => timestampMs(b.submittedAt || b.updatedAt) - timestampMs(a.submittedAt || a.updatedAt))
+    .slice(0, 20);
+  if (!items.length) {
+    list.innerHTML = `<div class="empty-state">최근 강사 평가 퀴즈 제출 이력이 없습니다.</div>`;
+    return;
+  }
+  list.innerHTML = items
+    .map((item) => {
+      const detail = [
+        `${Math.round(toNumber(item.scorePercent))}점`,
+        item.scoredPointTotal ? `${toNumber(item.earnedPointTotal)}/${toNumber(item.scoredPointTotal)}점 자동채점` : "",
+        `${toNumber(item.correctCount)}/${toNumber(item.scoredQuestionCount)}문항`,
+        formatDate(item.submittedAt || item.updatedAt),
+        item.submittedByName ? `제출 ${item.submittedByName}` : "",
+      ]
+        .filter(Boolean)
+        .join(" · ");
+      return `
+        <div class="status-row">
+          <div>
+            <strong>${escapeHtml(item.staffName || "강사")}</strong>
+            <p class="meta-line">${escapeHtml(detail)}</p>
+            ${
+              item.incorrectQuestionIds?.length
+                ? `<p class="note-line">확인 문항: ${escapeHtml(item.incorrectQuestionIds.join(", "))}</p>`
+                : `<p class="meta-line">확인 필요한 오답 없음</p>`
+            }
+          </div>
+          ${pill(item.status || "unknown")}
+        </div>
+      `;
+    })
+    .join("");
+}
+
+function setEvaluationQuizStatus(message, tone = "") {
+  const element = qs("evaluationQuizStatus");
+  if (!element) return;
+  element.textContent = message;
+  element.className = `form-status ${tone}`.trim();
+}
+
+function cssNameSelector(value) {
+  const text = String(value || "");
+  if (window.CSS?.escape) return CSS.escape(text);
+  return text.replace(/["\\]/g, "\\$&");
+}
+
+async function loadInstructorEvaluationQuiz() {
+  const form = qs("instructorEvaluationQuizForm");
+  if (!form) return;
+  try {
+    const runtime = await initFirebase();
+    const user = await waitForAuth(runtime);
+    if (!user) {
+      showLoginGate("강사 평가 퀴즈는 로그인 후 작성할 수 있습니다.");
+      return;
+    }
+    const getQuiz = runtime.httpsCallable(runtime.functionsClient, "getInstructorEvaluationQuiz");
+    const result = await getQuiz({});
+    const data = result?.data || {};
+    state.instructorEvaluationQuiz = data.quiz || null;
+    state.instructorEvaluationTargets = data.targetStaffs || [];
+    renderInstructorEvaluationQuiz();
+  } catch (error) {
+    if (isPermissionDenied(error)) showLoginGate("강사 평가 퀴즈는 사용 가능한 강사 계정이 필요합니다.");
+    setEvaluationQuizStatus(error?.message || "퀴즈를 불러오지 못했습니다.", "danger");
+  }
+}
+
+function renderInstructorEvaluationQuiz() {
+  const quiz = state.instructorEvaluationQuiz;
+  const questionList = qs("evaluationQuizQuestions");
+  const targetSelect = qs("evaluationTargetStaff");
+  if (!quiz || !questionList) return;
+  setText("evaluationQuizTitle", quiz.title || "강사 평가 퀴즈");
+  setText("evaluationQuizDescription", quiz.description || "ARCHIVE PILATES 운영 기준을 확인합니다.");
+  if (targetSelect) {
+    targetSelect.innerHTML = (state.instructorEvaluationTargets || [])
+      .map((staff) => `<option value="${escapeHtml(staff.staffId)}">${escapeHtml(staff.name)} · ${escapeHtml(staff.role || "instructor")}</option>`)
+      .join("");
+  }
+  questionList.innerHTML = (quiz.questions || [])
+    .map((question, index) => {
+      const label = `${index + 1}. ${escapeHtml(question.title)}`;
+      if (question.type === "short_text") {
+        return `
+          <fieldset class="quiz-question">
+            <legend>${label}</legend>
+            ${question.description ? `<p>${escapeHtml(question.description)}</p>` : ""}
+            <textarea name="${escapeHtml(question.questionId)}" rows="4" placeholder="짧게 작성해 주세요."></textarea>
+          </fieldset>
+        `;
+      }
+      if (question.type === "fill_blank") {
+        return `
+          <fieldset class="quiz-question">
+            <legend>${label}</legend>
+            ${question.description ? `<p>${escapeHtml(question.description)}</p>` : ""}
+            <input type="text" name="${escapeHtml(question.questionId)}" placeholder="정답을 입력해 주세요." ${question.required ? "required" : ""} />
+          </fieldset>
+        `;
+      }
+      return `
+        <fieldset class="quiz-question">
+          <legend>${label}</legend>
+          ${question.description ? `<p>${escapeHtml(question.description)}</p>` : ""}
+          <div class="quiz-options">
+            ${(question.options || [])
+              .map(
+                (option) => `
+                  <label>
+                    <input type="radio" name="${escapeHtml(question.questionId)}" value="${escapeHtml(option.optionId)}" ${question.required ? "required" : ""} />
+                    <span>${escapeHtml(option.label)}</span>
+                  </label>
+                `,
+              )
+              .join("")}
+          </div>
+        </fieldset>
+      `;
+    })
+    .join("");
+  setEvaluationQuizStatus(`합격 기준 ${toNumber(quiz.passScore)}점입니다. 제출 결과는 강사별 인사기록카드에 저장됩니다.`);
+}
+
+async function handleInstructorEvaluationQuizSubmit(event) {
+  event.preventDefault();
+  const quiz = state.instructorEvaluationQuiz;
+  const button = qs("evaluationQuizSubmit");
+  if (!quiz) {
+    setEvaluationQuizStatus("퀴즈를 먼저 불러와 주세요.", "danger");
+    return;
+  }
+  const form = qs("instructorEvaluationQuizForm");
+  const answers = {};
+  for (const question of quiz.questions || []) {
+    if (question.type === "short_text" || question.type === "fill_blank") {
+      answers[question.questionId] = String(form?.elements?.[question.questionId]?.value || "").trim();
+    } else {
+      const checked = document.querySelector(`input[name="${cssNameSelector(question.questionId)}"]:checked`);
+      answers[question.questionId] = checked?.value || "";
+    }
+  }
+  if (button) {
+    button.disabled = true;
+    button.textContent = "제출 중";
+  }
+  setEvaluationQuizStatus("정답 채점과 인사기록카드 반영을 진행합니다.", "warn");
+  try {
+    const runtime = await initFirebase();
+    const submitQuiz = runtime.httpsCallable(runtime.functionsClient, "submitInstructorEvaluationQuiz");
+    const result = await submitQuiz({
+      staffId: qs("evaluationTargetStaff")?.value || "",
+      answers,
+    });
+    const data = result?.data || {};
+    const passed = Boolean(data.passed);
+    setEvaluationQuizStatus(
+      `${data.staffName || "강사"} 평가 퀴즈 저장 완료 · ${Math.round(toNumber(data.scorePercent))}점 · ${passed ? "합격" : "검토 필요"}`,
+      passed ? "good" : "warn",
+    );
+    await refresh();
+  } catch (error) {
+    if (isPermissionDenied(error)) showLoginGate("강사 평가 퀴즈 제출 권한을 확인해 주세요.");
+    setEvaluationQuizStatus(error?.message || "퀴즈 제출에 실패했습니다.", "danger");
+  } finally {
+    if (button) {
+      button.disabled = false;
+      button.textContent = "평가 퀴즈 제출";
+    }
+  }
+}
+
 function renderFallback(error, options = {}) {
   const reason = isPermissionDenied(error)
     ? options.requireLogin
@@ -2439,8 +2823,12 @@ function renderFallback(error, options = {}) {
   state.onsiteWelcomeRequests = [];
   state.memberSignupContracts = [];
   state.pricingInquiryAlimtalkRequests = [];
+  state.staffItems = [];
+  state.staffHrCards = [];
+  state.staffEvaluationSubmissions = [];
   renderPricingInquiryRecentList();
   renderMessages([], []);
+  renderStaffHr();
   renderLessons([], [], []);
   renderHomeSummary();
   renderHomeDecisions();
@@ -2473,6 +2861,7 @@ async function refresh() {
     const shouldLoadMemberDetail = Boolean(qs("memberDetailName"));
     const shouldLoadPrivate = Boolean(qs("privateProgressList")) || shouldLoadHome;
     const shouldLoadLessons = Boolean(qs("lessonsTodayList"));
+    const shouldLoadStaffDashboard = Boolean(qs("staffHrList"));
     const [
       laneSnapshot,
       automationItems,
@@ -2495,6 +2884,9 @@ async function refresh() {
       reservations,
       deletedClassLogs,
       deletedLessons,
+      staffItems,
+      staffHrCards,
+      staffEvaluationSubmissions,
     ] = await Promise.all([
       safeRead("workLanes", () => getDoc(doc(db, "workLanes", WORK_LANE_ID)), null),
       safeRead("automationStatus", () => getRecentCollection(db, runtime, "automationStatus"), []),
@@ -2577,6 +2969,13 @@ async function refresh() {
       shouldLoadLessons
         ? safeRead("deletedLessons", () => getOptionalCollectionBy(db, runtime, "deletedLessons", "updatedAt", 100), [])
         : Promise.resolve([]),
+      shouldLoadStaffDashboard ? safeRead("staffs", () => getCollectionBy(db, runtime, "staffs", "updatedAt", 200), []) : Promise.resolve([]),
+      shouldLoadStaffDashboard
+        ? safeRead("staffHrCards", () => getOptionalCollectionBy(db, runtime, "staffHrCards", "updatedAt", 200), [])
+        : Promise.resolve([]),
+      shouldLoadStaffDashboard
+        ? safeRead("staffEvaluationSubmissions", () => getOptionalCollectionBy(db, runtime, "staffEvaluationSubmissions", "submittedAt", 100), [])
+        : Promise.resolve([]),
     ]);
 
     state.lane = laneSnapshot?.exists?.() ? laneSnapshot.data() : { status: "active" };
@@ -2599,12 +2998,16 @@ async function refresh() {
     state.reservations = reservations;
     state.deletedClassLogs = deletedClassLogs;
     state.deletedLessons = deletedLessons;
+    state.staffItems = studioItems(staffItems);
+    state.staffHrCards = studioItems(staffHrCards);
+    state.staffEvaluationSubmissions = studioItems(staffEvaluationSubmissions);
     renderLane(state.lane);
     renderAutomation(automationItems);
     renderImports(state.sourceImports);
     renderQualityIssues(state.qualityIssues);
     renderMembers(state.members);
     renderMessages(alimtalkCandidates, alimtalkSends);
+    renderStaffHr();
     renderHomeSummary();
     renderHomeDecisions();
     renderPricingInquiryRecentList();
@@ -2616,6 +3019,7 @@ async function refresh() {
       else renderBusinessFallback(new Error("dashboardSnapshots/current 문서가 없습니다."));
       renderBusinessMemberInsights(businessMembers);
     }
+    if (qs("instructorEvaluationQuizForm")) await loadInstructorEvaluationQuiz();
     setConnection(
       state.readWarnings.length ? "부분 연결" : "연결됨",
       state.readWarnings.length
@@ -2634,6 +3038,7 @@ activateNav();
 qs("refreshButton")?.addEventListener("click", refresh);
 qs("pricingInquiryForm")?.addEventListener("submit", handlePricingInquiryAlimtalkSubmit);
 qs("pricingInquiryHistoryToggle")?.addEventListener("click", togglePricingInquiryHistory);
+qs("instructorEvaluationQuizForm")?.addEventListener("submit", handleInstructorEvaluationQuizSubmit);
 qs("businessMonthSelect")?.addEventListener("change", (event) => renderBusinessMonth(event.target.value));
 qs("memberSearchInput")?.addEventListener("input", (event) => {
   memberSearchTerm = event.target.value.trim();

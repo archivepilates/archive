@@ -62,6 +62,21 @@ service cloud.firestore {
       allow write: if false;
     }
 
+    match /staffHrCards/{staffId} {
+      allow read: if isManager() || isInstructor(staffId);
+      allow write: if false;
+
+      match /quizResults/{resultId} {
+        allow read: if isManager() || isInstructor(staffId);
+        allow write: if false;
+      }
+    }
+
+    match /staffEvaluationSubmissions/{submissionId} {
+      allow read: if isManager() || isInstructor(resource.data.staffId);
+      allow write: if false;
+    }
+
     match /lectures/{lectureId} {
       allow read: if isManager() || isInstructor(resource.data.staffId);
       allow write: if false;

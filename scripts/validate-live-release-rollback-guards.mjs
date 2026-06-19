@@ -19,6 +19,7 @@ const guardGroups = [
           "pricingInquiryForm",
           "pricingInquiryHistoryPanel",
           "최근 발송/메모 보기",
+          "Staff <small>강사</small>",
         ],
       },
       {
@@ -29,11 +30,34 @@ const guardGroups = [
           "pricingInquiryHistoryPanel",
           "operatorSendPricingInquiryAlimtalk",
           "homeActionTotal",
+          "submitInstructorEvaluationQuiz",
         ],
       },
       {
         file: "core/assets/styles.css",
         markers: [".kpis > .metric", "min-height: 156px"],
+      },
+    ],
+  },
+  {
+    id: "staff-evaluation-quiz",
+    reason: "Firebase 기반 강사 평가 퀴즈와 강사별 인사기록카드가 예전 구글폼 의존 구조로 되돌아가는 것을 막습니다.",
+    files: [
+      {
+        file: "core/staff/index.html",
+        markers: ["강사 인사기록카드", "staffHrList", "staffEvaluationSubmissionList"],
+      },
+      {
+        file: "core/staff/evaluation/index.html",
+        markers: ["instructorEvaluationQuizForm", "evaluationQuizQuestions", "evaluationQuizSubmit"],
+      },
+      {
+        file: "firebase/kangsain-functions/functions/src/staffEvaluation/instructorEvaluationQuiz.ts",
+        markers: ["staffEvaluationSubmissions", "staffHrCards", "submitInstructorEvaluationQuizHandler"],
+      },
+      {
+        file: "firebase/kangsain-functions/functions/src/exports/app.ts",
+        markers: ["getInstructorEvaluationQuiz", "submitInstructorEvaluationQuiz"],
       },
     ],
   },
