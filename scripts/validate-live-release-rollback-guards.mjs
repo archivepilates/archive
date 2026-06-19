@@ -53,7 +53,7 @@ const guardGroups = [
       },
       {
         file: "archivein/instructor-evaluation/index.html",
-        markers: ["ARCHIVE PILATES 입사시험", "시험 시작", "20분 제한", "instructorApplicantEvaluation"],
+        markers: ["ARCHIVE PILATES 강사 테스트", "강사 테스트", "시험 시작", "20분 제한", "instructorApplicantEvaluation"],
       },
       {
         file: "firebase/kangsain-functions/functions/src/staffEvaluation/instructorEvaluationQuiz.ts",

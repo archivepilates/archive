@@ -5,7 +5,7 @@
   <meta name="viewport" content="width=device-width, initial-scale=1">
   <meta name="robots" content="noindex,nofollow">
   <meta name="theme-color" content="#f7f2ec">
-  <title>ARCHIVE PILATES 입사시험</title>
+  <title>ARCHIVE PILATES 강사 테스트</title>
   <style>
     :root {
       color-scheme: light;
@@ -377,8 +377,8 @@
           <div class="timer" aria-hidden="true"><span>제한시간</span><strong>20:00</strong></div>
         </div>
         <div>
-          <p class="eyebrow">ARCHIVE PILATES · Instructor Entrance Test</p>
-          <h1>강사 입사시험</h1>
+          <p class="eyebrow">ARCHIVE PILATES</p>
+          <h1>강사 테스트</h1>
         </div>
         <p class="lead">시험 시작 버튼을 누르면 20분 제한시간이 시작됩니다. 이름과 연락처를 정확히 입력한 뒤 조용한 환경에서 응시해 주세요.</p>
         <div class="meta">
@@ -411,7 +411,7 @@
       <div class="exam-shell">
         <header class="exam-header">
           <div class="exam-heading">
-            <h1 id="quizTitle">강사 입사시험</h1>
+            <h1 id="quizTitle">강사 테스트</h1>
             <p class="status" id="quizStatus">타이머가 시작되었습니다. 모든 문항을 작성한 뒤 제출해 주세요.</p>
           </div>
           <div class="timer" id="timer" aria-live="polite"><span>남은 시간</span><strong>20:00</strong></div>
@@ -500,7 +500,7 @@
     });
 
     function renderQuiz(data) {
-      quizTitle.textContent = data.title || 'ARCHIVE 강사평가 퀴즈 A';
+      quizTitle.textContent = '강사 테스트';
       quizForm.innerHTML = data.questions.map((question, index) => renderQuestion(question, index)).join('') + `
         <div class="sticky-actions">
           <button class="primary" type="submit">답안 제출</button>
