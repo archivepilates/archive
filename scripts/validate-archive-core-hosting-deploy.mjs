@@ -34,7 +34,7 @@ const required = [
   {
     file: "core/staff/index.html",
     label: "staff HR cards page",
-    markers: ["강사 인사기록카드", "staffHrList", "평가 퀴즈 열기"],
+    markers: ["강사 인사기록카드", "staffHrList", "강사별 평가 차트", "지원자 시험"],
   },
   {
     file: "core/staff/evaluation/index.html",

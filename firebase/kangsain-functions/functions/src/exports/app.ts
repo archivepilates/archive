@@ -1,4 +1,4 @@
-import { onCall } from "firebase-functions/v2/https";
+import { onCall, onRequest } from "firebase-functions/v2/https";
 import { onDocumentCreated } from "firebase-functions/v2/firestore";
 import { getInstructorHomeHandler } from "../callable/getInstructorHome";
 import {
@@ -24,10 +24,11 @@ import {
   iparkingSubLoginPassword,
 } from "../parking/iparkingClient";
 import { processParkingDiscountJobSnapshot } from "../parking/processParkingDiscountJob";
-import { callableOptions } from "../runtime/functionOptions";
+import { callableOptions, publicRequestOptions } from "../runtime/functionOptions";
 import { requireStaff } from "../security/authGuards";
 import {
   getInstructorEvaluationQuizHandler,
+  instructorApplicantEvaluationApiHandler,
   submitInstructorEvaluationQuizHandler,
 } from "../staffEvaluation/instructorEvaluationQuiz";
 import { toHttpsError } from "../utils/errors";
@@ -145,6 +146,8 @@ export const submitInstructorEvaluationQuiz = onCall(callableOptions, async (req
     throw toHttpsError(err);
   }
 });
+
+export const instructorApplicantEvaluationApi = onRequest(publicRequestOptions, instructorApplicantEvaluationApiHandler);
 
 export const processParkingDiscountJob = onDocumentCreated(parkingDiscountJobOptions, async (event) => {
   const snap = event.data;

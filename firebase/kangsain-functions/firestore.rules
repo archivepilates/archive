@@ -77,6 +77,16 @@ service cloud.firestore {
       allow write: if false;
     }
 
+    match /staffApplicantEvaluationSessions/{sessionId} {
+      allow read: if isManager();
+      allow write: if false;
+    }
+
+    match /staffApplicantEvaluationSubmissions/{submissionId} {
+      allow read: if isManager();
+      allow write: if false;
+    }
+
     match /lectures/{lectureId} {
       allow read: if isManager() || isInstructor(resource.data.staffId);
       allow write: if false;

@@ -52,12 +52,26 @@ const guardGroups = [
         markers: ["instructorEvaluationQuizForm", "evaluationQuizQuestions", "evaluationQuizSubmit"],
       },
       {
+        file: "archivein/instructor-evaluation/index.html",
+        markers: ["ARCHIVE PILATES 입사시험", "시험 시작", "20분 제한", "instructorApplicantEvaluation"],
+      },
+      {
         file: "firebase/kangsain-functions/functions/src/staffEvaluation/instructorEvaluationQuiz.ts",
-        markers: ["staffEvaluationSubmissions", "staffHrCards", "submitInstructorEvaluationQuizHandler"],
+        markers: [
+          "staffEvaluationSubmissions",
+          "staffHrCards",
+          "submitInstructorEvaluationQuizHandler",
+          "instructorApplicantEvaluationApiHandler",
+          "APPLICANT_TIME_LIMIT_SECONDS",
+        ],
       },
       {
         file: "firebase/kangsain-functions/functions/src/exports/app.ts",
-        markers: ["getInstructorEvaluationQuiz", "submitInstructorEvaluationQuiz"],
+        markers: ["getInstructorEvaluationQuiz", "submitInstructorEvaluationQuiz", "instructorApplicantEvaluationApi"],
+      },
+      {
+        file: "firebase.json",
+        markers: ["/api/instructorApplicantEvaluation", "instructorApplicantEvaluationApi", "/instructor-evaluation/**"],
       },
     ],
   },

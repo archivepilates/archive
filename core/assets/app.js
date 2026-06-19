@@ -2455,6 +2455,7 @@ function staffEvaluationRows() {
       role: staff.role || "instructor",
       submissions: [],
       card: null,
+      applicantEvaluation: false,
     });
   }
 
@@ -2469,9 +2470,11 @@ function staffEvaluationRows() {
         role: card.staffRole || "instructor",
         submissions: [],
         card,
+        applicantEvaluation: Boolean(card.applicantEvaluation || card.staffRole === "applicant"),
       });
     } else {
       rows.get(key).card = card;
+      rows.get(key).applicantEvaluation = Boolean(card.applicantEvaluation || card.staffRole === "applicant");
     }
   }
 
@@ -2486,9 +2489,11 @@ function staffEvaluationRows() {
         role: submission.staffRole || "instructor",
         submissions: [],
         card: null,
+        applicantEvaluation: Boolean(submission.applicantEvaluation || submission.staffRole === "applicant"),
       });
     }
     rows.get(key).submissions.push(submission);
+    if (submission.applicantEvaluation || submission.staffRole === "applicant") rows.get(key).applicantEvaluation = true;
   }
 
   return [...rows.values()].map((row) => {
@@ -2605,8 +2610,9 @@ function renderStaffHr() {
       const score = latestQuiz ? `${Math.round(toNumber(latestQuiz.scorePercent))}점` : "미응시";
       const bestScore = Number(card?.quizSummary?.bestScorePercent);
       const status = latestQuiz?.status || "pending";
+      const roleLabel = staff.applicantEvaluation || staff.role === "applicant" ? "지원자" : staff.role || "instructor";
       const meta = [
-        staff.role || "instructor",
+        roleLabel,
         staff.phoneLast4 ? `끝자리 ${staff.phoneLast4}` : "",
         latestQuiz?.submittedAt ? `최근 ${formatDate(latestQuiz.submittedAt)}` : "퀴즈 기록 없음",
       ]

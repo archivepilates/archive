@@ -315,6 +315,7 @@
                 <li>문항은 Firebase Function에서 받아오고, 정답은 브라우저에 노출하지 않습니다.</li>
                 <li>제출하면 Function이 채점하고 staffEvaluationSubmissions에 원본 제출 기록을 저장합니다.</li>
                 <li>강사별 staffHrCards/{staffId}와 하위 quizResults에 최신 결과와 누적 요약을 반영합니다.</li>
+                <li>입사지원자는 별도 공개 시험 사이트에서 이름과 연락처 입력 후 20분 제한시간으로 응시합니다.</li>
                 <li>운영자는 CORE Staff 탭에서 강사별 최신 점수, 통과 여부, 검토 문항을 확인합니다.</li>
               </ol>
             </article>
@@ -324,7 +325,9 @@
                 <li>퀴즈 제출은 Firestore 직접 쓰기가 아니라 submitInstructorEvaluationQuiz callable로만 처리합니다.</li>
                 <li>일반 강사는 본인 staffId 기준 제출만 가능합니다.</li>
                 <li>운영자와 매니저는 대상 강사를 선택해 제출/검토할 수 있습니다.</li>
+                <li>지원자 입사시험은 instructorApplicantEvaluationApi HTTP Function으로만 시작/제출하며 Firestore 직접 쓰기는 허용하지 않습니다.</li>
                 <li>staffEvaluationSubmissions는 제출 원본, staffHrCards는 인사기록카드 read-model입니다.</li>
+                <li>지원자 원본은 staffApplicantEvaluationSessions와 staffApplicantEvaluationSubmissions에 별도로 보관합니다.</li>
                 <li>인사기록카드는 외부 발송, 정산, 예약, 회원 응대 자동화의 원천으로 사용하지 않습니다.</li>
               </ul>
             </article>
@@ -346,11 +349,12 @@
                 <li>CORE Staff 탭은 staffEvaluationSubmissions와 staffHrCards의 최신 요약을 함께 읽어 강사별 점수 차트를 표시합니다.</li>
                 <li>공유된 응답 시트의 과거 결과는 import-staff-evaluation-google-results 스크립트로 dry-run 확인 후 이관합니다.</li>
                 <li>이관된 결과는 source=google_form_legacy_import로 표시해 새 Firebase 제출과 구분합니다.</li>
+                <li>지원자 제출 결과는 staffRole=applicant로 표시하고, 연락처는 채용 검토용으로만 사용합니다.</li>
                 <li>인사기록카드 차트는 최신 점수, 최고 점수, 제출 횟수, 검토 상태만 운영자가 빠르게 볼 수 있게 표시합니다.</li>
               </ul>
             </article>
           </div>
-          <div class="rule-note"><strong>현재 확인 위치</strong><span>CORE Staff / Firestore staffs, staffEvaluationSubmissions, staffHrCards, auditLogs</span></div>
+          <div class="rule-note"><strong>현재 확인 위치</strong><span>CORE Staff / 공개 시험 https://in.archivepilates.com/instructor-evaluation/ / Firestore staffs, staffEvaluationSubmissions, staffApplicantEvaluationSubmissions, staffHrCards, auditLogs</span></div>
         </section>
 
         <section class="panel rule-section" id="welcome">

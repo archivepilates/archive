@@ -1,4 +1,6 @@
+import { createHash, randomBytes } from "node:crypto";
 import type { CallableRequest } from "firebase-functions/v2/https";
+import { Timestamp } from "firebase-admin/firestore";
 import { db } from "../config/firebase";
 import { DEFAULT_STUDIO_ID } from "../config/constants";
 import { getActiveStaffs, getStaffById } from "../firestore/staffRepository";
@@ -202,6 +204,52 @@ const QUIZ = {
     },
   ] satisfies QuizQuestion[],
 };
+
+const APPLICANT_TIME_LIMIT_SECONDS = 20 * 60;
+const APPLICANT_LATE_GRACE_SECONDS = 5 * 60;
+
+export async function instructorApplicantEvaluationApiHandler(request: any, response: any): Promise<void> {
+  setCors(response);
+  if (request.method === "OPTIONS") {
+    response.status(204).send("");
+    return;
+  }
+
+  try {
+    if (request.method === "GET") {
+      response.set("Cache-Control", "no-store");
+      response.status(200).json({
+        ok: true,
+        quiz: publicQuiz(),
+        timeLimitSeconds: APPLICANT_TIME_LIMIT_SECONDS,
+      });
+      return;
+    }
+
+    if (request.method !== "POST") {
+      response.set("Allow", "GET, POST, OPTIONS").status(405).json({ ok: false, error: "Method not allowed" });
+      return;
+    }
+
+    const body = request.body || {};
+    const action = String(body.action || "");
+    if (action === "start") {
+      const result = await startApplicantEvaluation(body);
+      response.status(200).json({ ok: true, ...result });
+      return;
+    }
+    if (action === "submit") {
+      const result = await submitApplicantEvaluation(body);
+      response.status(200).json({ ok: true, ...result });
+      return;
+    }
+    throw new AppError("INVALID_ARGUMENT", "지원하지 않는 요청입니다.");
+  } catch (err) {
+    const status = err instanceof AppError && err.code === "INVALID_ARGUMENT" ? 400 : 500;
+    response.status(status).json({ ok: false, error: err instanceof Error ? err.message : String(err) });
+  }
+}
+
 export async function getInstructorEvaluationQuizHandler(
   _request: CallableRequest,
   staff: StaffDoc,
@@ -351,6 +399,234 @@ export async function submitInstructorEvaluationQuizHandler(
   };
 }
 
+async function startApplicantEvaluation(data: Record<string, unknown>): Promise<Record<string, unknown>> {
+  const applicantName = cleanDisplayName(data.name || data.applicantName);
+  const applicantPhone = cleanPhone(data.phone || data.applicantPhone);
+  if (!applicantName) throw new AppError("INVALID_ARGUMENT", "이름을 입력해 주세요.");
+  if (!/^01\d{8,9}$/.test(applicantPhone)) throw new AppError("INVALID_ARGUMENT", "휴대폰 번호를 정확히 입력해 주세요.");
+
+  const now = nowTimestamp();
+  const sessionToken = randomBytes(24).toString("base64url");
+  const applicantId = applicantCardId(applicantPhone);
+  const sessionId = `staff_applicant_eval_${Date.now()}_${stableHash({
+    applicantName,
+    applicantPhone,
+    nonce: randomBytes(8).toString("hex"),
+  }).slice(0, 12)}`;
+  const expiresAt = Timestamp.fromMillis(now.toMillis() + (APPLICANT_TIME_LIMIT_SECONDS + APPLICANT_LATE_GRACE_SECONDS) * 1000);
+
+  const session = {
+    sessionId,
+    studioId: DEFAULT_STUDIO_ID,
+    applicantId,
+    applicantName,
+    applicantPhone,
+    phoneLast4: applicantPhone.slice(-4),
+    quizId: QUIZ.quizId,
+    quizVersion: QUIZ.version,
+    quizTitle: QUIZ.title,
+    status: "started",
+    source: "public_applicant_evaluation_site",
+    timeLimitSeconds: APPLICANT_TIME_LIMIT_SECONDS,
+    accessTokenHash: sha256(sessionToken),
+    startedAt: now,
+    expiresAt,
+    createdAt: now,
+    updatedAt: now,
+  };
+
+  await db.collection("staffApplicantEvaluationSessions").doc(sessionId).set(session, { merge: true });
+
+  return {
+    sessionId,
+    sessionToken,
+    applicantId,
+    applicantName,
+    phoneLast4: applicantPhone.slice(-4),
+    startedAt: now.toDate().toISOString(),
+    expiresAt: expiresAt.toDate().toISOString(),
+    timeLimitSeconds: APPLICANT_TIME_LIMIT_SECONDS,
+    quiz: publicQuiz(),
+  };
+}
+
+async function submitApplicantEvaluation(data: Record<string, unknown>): Promise<Record<string, unknown>> {
+  const sessionId = cleanId(String(data.sessionId || ""));
+  const sessionToken = cleanAnswer(String(data.sessionToken || data.token || ""));
+  if (!sessionId || !sessionToken) throw new AppError("INVALID_ARGUMENT", "시험 세션이 올바르지 않습니다.");
+
+  const sessionRef = db.collection("staffApplicantEvaluationSessions").doc(sessionId);
+  const sessionSnap = await sessionRef.get();
+  const session = sessionSnap.data() || null;
+  if (!session || session.accessTokenHash !== sha256(sessionToken)) {
+    throw new AppError("INVALID_ARGUMENT", "시험 세션을 확인할 수 없습니다.");
+  }
+  if (session.status === "submitted" || session.submissionId) {
+    throw new AppError("INVALID_ARGUMENT", "이미 제출된 시험입니다.");
+  }
+
+  const now = nowTimestamp();
+  const startedAtMs = session.startedAt?.toMillis?.() || now.toMillis();
+  const elapsedSeconds = Math.max(0, Math.round((now.toMillis() - startedAtMs) / 1000));
+  const timeExpired = elapsedSeconds > APPLICANT_TIME_LIMIT_SECONDS;
+  if (elapsedSeconds > APPLICANT_TIME_LIMIT_SECONDS + APPLICANT_LATE_GRACE_SECONDS) {
+    throw new AppError("INVALID_ARGUMENT", "제한시간이 지나 제출할 수 없습니다.");
+  }
+  const rawAnswers = normalizeAnswers(data.answers);
+  const graded = gradeAnswers(rawAnswers);
+  const applicantId = String(session.applicantId || applicantCardId(session.applicantPhone || ""));
+  const applicantName = cleanDisplayName(session.applicantName || data.name);
+  const applicantPhone = cleanPhone(session.applicantPhone || data.phone);
+  const submissionId = `staff_applicant_eval_${applicantId}_${Date.now()}_${stableHash({
+    sessionId,
+    answers: rawAnswers,
+  }).slice(0, 10)}`;
+  const status = graded.passed && !timeExpired ? "passed" : "review_needed";
+  const reasonCodes = [
+    ...(graded.passed ? [] : ["score_below_pass"]),
+    ...(timeExpired ? ["time_expired"] : []),
+    ...(graded.manualReviewQuestionIds.length ? ["manual_review_question"] : []),
+  ];
+  const submission = {
+    submissionId,
+    sessionId,
+    studioId: DEFAULT_STUDIO_ID,
+    staffId: applicantId,
+    staffName: applicantName,
+    staffRole: "applicant",
+    applicantId,
+    applicantName,
+    applicantPhone,
+    phoneLast4: applicantPhone.slice(-4),
+    quizId: QUIZ.quizId,
+    quizVersion: QUIZ.version,
+    quizTitle: QUIZ.title,
+    source: "public_applicant_evaluation_site",
+    applicantEvaluation: true,
+    status,
+    reasonCodes,
+    scorePercent: graded.scorePercent,
+    earnedPointTotal: graded.earnedPointTotal,
+    scoredPointTotal: graded.scoredPointTotal,
+    correctCount: graded.correctCount,
+    scoredQuestionCount: graded.scoredQuestionCount,
+    manualReviewQuestionIds: graded.manualReviewQuestionIds,
+    passScore: QUIZ.passScore,
+    timeLimitSeconds: APPLICANT_TIME_LIMIT_SECONDS,
+    elapsedSeconds,
+    timeExpired,
+    answers: graded.answers,
+    openResponses: graded.openResponses,
+    incorrectQuestionIds: graded.incorrectQuestionIds,
+    submittedAt: now,
+    updatedAt: now,
+  };
+
+  const cardRef = db.collection("staffHrCards").doc(applicantId);
+  const submissionRef = db.collection("staffEvaluationSubmissions").doc(submissionId);
+  const applicantSubmissionRef = db.collection("staffApplicantEvaluationSubmissions").doc(submissionId);
+  const cardResultRef = cardRef.collection("quizResults").doc(submissionId);
+  const cardSnap = await cardRef.get();
+  const current = cardSnap.data() || {};
+  const previousBest = Number(current.quizSummary?.bestScorePercent || 0);
+  const attempts = Number(current.quizSummary?.attempts || 0) + 1;
+
+  await db.runTransaction(async (transaction) => {
+    transaction.set(submissionRef, submission);
+    transaction.set(applicantSubmissionRef, submission);
+    transaction.set(cardResultRef, submission);
+    transaction.set(
+      cardRef,
+      {
+        staffId: applicantId,
+        staffName: applicantName,
+        staffRole: "applicant",
+        applicantId,
+        applicantName,
+        applicantPhone,
+        phoneLast4: applicantPhone.slice(-4),
+        studioId: DEFAULT_STUDIO_ID,
+        active: false,
+        source: "public_applicant_evaluation_site",
+        applicantEvaluation: true,
+        latestQuiz: {
+          submissionId,
+          quizId: QUIZ.quizId,
+          quizVersion: QUIZ.version,
+          source: "public_applicant_evaluation_site",
+          scorePercent: graded.scorePercent,
+          earnedPointTotal: graded.earnedPointTotal,
+          scoredPointTotal: graded.scoredPointTotal,
+          correctCount: graded.correctCount,
+          scoredQuestionCount: graded.scoredQuestionCount,
+          status,
+          reasonCodes,
+          elapsedSeconds,
+          timeExpired,
+          submittedAt: now,
+          submittedByName: applicantName,
+        },
+        quizSummary: {
+          attempts,
+          bestScorePercent: Math.max(previousBest, graded.scorePercent),
+          lastScorePercent: graded.scorePercent,
+          lastStatus: status,
+          lastSubmittedAt: now,
+        },
+        updatedAt: now,
+        createdAt: current.createdAt || now,
+      },
+      { merge: true },
+    );
+    transaction.set(
+      sessionRef,
+      {
+        status: "submitted",
+        submissionId,
+        scorePercent: graded.scorePercent,
+        elapsedSeconds,
+        timeExpired,
+        submittedAt: now,
+        updatedAt: now,
+      },
+      { merge: true },
+    );
+    transaction.set(
+      db.collection("auditLogs").doc(`staff_applicant_eval_${submissionId}`),
+      {
+        auditId: `staff_applicant_eval_${submissionId}`,
+        studioId: DEFAULT_STUDIO_ID,
+        type: "staff_applicant_evaluation_submitted",
+        staffId: applicantId,
+        staffName: applicantName,
+        applicantPhone,
+        scorePercent: graded.scorePercent,
+        elapsedSeconds,
+        timeExpired,
+        createdAt: now,
+        updatedAt: now,
+      },
+      { merge: true },
+    );
+  });
+
+  return {
+    submissionId,
+    applicantId,
+    applicantName,
+    phoneLast4: applicantPhone.slice(-4),
+    scorePercent: graded.scorePercent,
+    earnedPointTotal: graded.earnedPointTotal,
+    scoredPointTotal: graded.scoredPointTotal,
+    correctCount: graded.correctCount,
+    scoredQuestionCount: graded.scoredQuestionCount,
+    passed: graded.passed && !timeExpired,
+    status,
+    elapsedSeconds,
+    timeExpired,
+  };
+}
+
 function publicQuiz(): Record<string, unknown> {
   return {
     quizId: QUIZ.quizId,
@@ -480,4 +756,29 @@ function cleanAnswer(value: string): string {
     .trim()
     .replace(/\s+/g, " ")
     .slice(0, 1000);
+}
+
+function cleanDisplayName(value: unknown): string {
+  return String(value || "")
+    .trim()
+    .replace(/\s+/g, " ")
+    .slice(0, 40);
+}
+
+function cleanPhone(value: unknown): string {
+  return String(value || "").replace(/\D/g, "").slice(0, 20);
+}
+
+function applicantCardId(phone: string): string {
+  return `applicant_${stableHash({ phone }).slice(0, 18)}`;
+}
+
+function sha256(value: string): string {
+  return createHash("sha256").update(value).digest("hex");
+}
+
+function setCors(response: any): void {
+  response.set("Access-Control-Allow-Origin", "*");
+  response.set("Access-Control-Allow-Methods", "GET,POST,OPTIONS");
+  response.set("Access-Control-Allow-Headers", "Content-Type");
 }
