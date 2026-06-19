@@ -173,7 +173,7 @@ const QUIZ = {
       area: "principles",
       title: "Q19. \"imprint의 정의를 설명하고, 언제 사용하는지 서술하시오.\"",
       description: "서술형 10점 문항입니다. 현재 Firebase 자동 채점에서는 운영자 검토 참고값으로 저장합니다.",
-      required: true,
+      required: false,
     },
     {
       questionId: "q20_spine_extension",
@@ -182,7 +182,7 @@ const QUIZ = {
       title: "Q20. Spine extension 동작에서 요추 대신 흉추에서 움직임을 유도하기 위해서는 우선적으로 (    ) 의 가동성을 확보해야 한다.",
       acceptedAnswers: ["흉추", "thoracic spine", "t spine", "t-spine", "thoracic"],
       points: 6,
-      required: true,
+      required: false,
     },
     {
       questionId: "q21_core_stabilization",
@@ -191,7 +191,7 @@ const QUIZ = {
       title: "Q21. 필라테스에서 코어 안정화는 횡격막, 복횡근, 다열근, (    )의 협응으로 이루어진다.",
       acceptedAnswers: ["골반저근", "골반저", "골반저근육", "pelvic floor", "pelvic floor muscles"],
       points: 6,
-      required: true,
+      required: false,
     },
     {
       questionId: "q22_psis",
@@ -200,7 +200,7 @@ const QUIZ = {
       title: "Q22. 중립 척추에서 골반 정렬은 ASIS와 (    )이 동일한 수평면에 위치하는 상태를 의미한다.",
       acceptedAnswers: ["psis", "PSIS", "후상장골극", "posterior superior iliac spine"],
       points: 6,
-      required: true,
+      required: false,
     },
   ] satisfies QuizQuestion[],
 };
