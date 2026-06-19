@@ -243,6 +243,8 @@
     }
     .question {
       display: grid;
+      width: 100%;
+      min-width: 0;
       gap: 12px;
       border: 1px solid rgba(229, 221, 211, .95);
       border-radius: 8px;
@@ -264,11 +266,14 @@
     }
     .options {
       display: grid;
+      min-width: 0;
       gap: 8px;
     }
     .option {
       display: grid;
-      grid-template-columns: 22px 1fr;
+      width: 100%;
+      min-width: 0;
+      grid-template-columns: 22px minmax(0, 1fr);
       gap: 10px;
       align-items: start;
       border: 1px solid var(--line);
@@ -279,6 +284,9 @@
       line-height: 1.5;
       word-break: keep-all;
       overflow-wrap: anywhere;
+    }
+    .option span {
+      min-width: 0;
     }
     .option input {
       width: 18px;
@@ -361,7 +369,15 @@
         align-items: flex-start;
         flex-direction: column;
       }
-      .question { padding: 14px; }
+      .question {
+        gap: 10px;
+        padding: 14px;
+      }
+      .option {
+        grid-template-columns: 20px minmax(0, 1fr);
+        gap: 9px;
+        padding: 10px;
+      }
     }
     @media (prefers-reduced-motion: reduce) {
       *, *::before, *::after { animation: none !important; transition: none !important; }
@@ -514,10 +530,10 @@
       const pointText = question.points ? `${question.points}점` : '검토 문항';
       if (question.type === 'single_choice') {
         return `
-          <fieldset class="question">
-            <legend class="question-title">${escapeHtml(question.title)}</legend>
+          <section class="question">
+            <p class="question-title" id="${escapeAttr(question.questionId)}-title">${escapeHtml(question.title)}</p>
             <div class="question-meta">${pointText}</div>
-            <div class="options">
+            <div class="options" role="radiogroup" aria-labelledby="${escapeAttr(question.questionId)}-title">
               ${(question.options || []).map((option) => `
                 <label class="option">
                   <input type="radio" name="${escapeAttr(question.questionId)}" value="${escapeAttr(option.optionId)}" required>
@@ -525,13 +541,13 @@
                 </label>
               `).join('')}
             </div>
-          </fieldset>
+          </section>
         `;
       }
       const tag = question.type === 'short_text' ? 'textarea' : 'input';
       const input = tag === 'textarea'
-        ? `<textarea name="${escapeAttr(question.questionId)}" required placeholder="답안을 입력해 주세요"></textarea>`
-        : `<input name="${escapeAttr(question.questionId)}" required placeholder="정답을 입력해 주세요">`;
+        ? `<textarea name="${escapeAttr(question.questionId)}" placeholder="필요하면 답안을 입력해 주세요"></textarea>`
+        : `<input name="${escapeAttr(question.questionId)}" placeholder="필요하면 입력해 주세요">`;
       return `
         <section class="question">
           <p class="question-title">${escapeHtml(question.title)}</p>
