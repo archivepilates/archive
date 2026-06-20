@@ -65,13 +65,38 @@
             </div>
           </article>
 
-          <aside class="panel">
+          <aside class="panel staff-detail-panel">
+            <div class="panel-header">
+              <div><h2 id="staffDetailTitle">강사 세부 지표</h2><p id="staffDetailSubtitle">강사 이름을 선택하면 퀴즈 답변과 월별 운영 지표가 표시됩니다.</p></div>
+              <span class="pill">HR detail</span>
+            </div>
+            <div id="staffDetailCard" class="staff-detail-card">
+              <div class="empty-state">강사 리스트에서 이름을 선택해 주세요.</div>
+            </div>
+          </aside>
+        </section>
+
+        <section class="grid overview-grid">
+          <article class="panel">
             <div class="panel-header">
               <div><h2>최근 평가 제출</h2><p>구글폼 대신 Firebase에 저장된 제출 기록입니다.</p></div>
               <span class="pill">quiz</span>
             </div>
             <div class="list" id="staffEvaluationSubmissionList">
               <div class="empty-state">최근 제출 이력이 없습니다.</div>
+            </div>
+          </article>
+
+          <aside class="panel">
+            <div class="panel-header">
+              <div><h2>강사지표 원천</h2><p>현재 연결된 지표와 연결 대기 중인 지표를 구분합니다.</p></div>
+              <span class="pill good">read-model</span>
+            </div>
+            <div class="flow-list staff-rule-list">
+              <div><strong>퀴즈 답변</strong><span>staffEvaluationSubmissions / staffHrCards quizResults</span></div>
+              <div><strong>월별 그룹 예약률</strong><span>dashboardSnapshots/current · 강사통계</span></div>
+              <div><strong>월 수업 개수</strong><span>강사통계 원천에 수업 수 필드 추가 후 연결</span></div>
+              <div><strong>만족도·클레임</strong><span>설문/클레임 원천 확정 후 강사카드에 연결</span></div>
             </div>
           </aside>
         </section>
@@ -85,7 +110,7 @@
             <div><strong>제출</strong><span>강사/운영자가 로그인 후 평가 퀴즈 작성</span></div>
             <div><strong>채점</strong><span>브라우저가 아니라 Firebase Function이 정답 기준으로 채점</span></div>
             <div><strong>저장</strong><span>staffEvaluationSubmissions와 staffHrCards/{staffId}/quizResults에 기록</span></div>
-            <div><strong>활용</strong><span>CORE Staff 탭에서 강사별 최신 점수, 통과 여부, 검토 문항 확인</span></div>
+            <div><strong>활용</strong><span>CORE Staff 탭에서 강사별 퀴즈 답변, 월별 그룹 지표, 검토 문항 확인</span></div>
           </div>
         </section>
       </main>

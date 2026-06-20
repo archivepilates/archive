@@ -20,6 +20,7 @@ const state = {
   staffItems: [],
   staffHrCards: [],
   staffEvaluationSubmissions: [],
+  staffEvaluationRows: [],
   instructorEvaluationQuiz: null,
   instructorEvaluationTargets: [],
   privateRequests: [],
@@ -38,6 +39,7 @@ const state = {
 let memberSearchTerm = "";
 let memberFilter = "all";
 let memberPage = 1;
+let selectedStaffKey = "";
 
 const MEMBER_PAGE_SIZE = 20;
 
@@ -2073,8 +2075,25 @@ function normalizeBusinessSnapshot(data) {
       month: normMonth(row.월),
       name: String(row.강사 || ""),
       revenue: toNumber(row.총매출),
+      pretaxAmount: toNumber(row.세전총액),
+      payoutAmount: toNumber(row.실지급액),
     }))
     .filter((row) => row.month && row.name);
+
+  const instructorStats = (data?.강사통계 || [])
+    .map((row) => ({
+      month: normMonth(row.월),
+      name: String(row.강사 || ""),
+      reservationRate: toNumber(row.그룹예약률),
+      attendanceRate: toNumber(row.그룹출석률),
+      averageGroupMembers: toNumber(row.그룹평균인원),
+      groupLessonCount: (() => {
+        const source = row.그룹수업수 ?? row.그룹수업 ?? row.그룹횟수 ?? row.월수업수 ?? row.수업수;
+        return source === undefined || source === null || source === "" ? null : toNumber(source);
+      })(),
+    }))
+    .filter((row) => row.month && row.name)
+    .sort((a, b) => a.month.localeCompare(b.month));
 
   const ticketTop = (data?.수강권TOP5 || [])
     .map((row) => ({
@@ -2104,6 +2123,7 @@ function normalizeBusinessSnapshot(data) {
   return {
     summary,
     instructorRevenue,
+    instructorStats,
     ticketTop,
     dailyRevenue,
     updatedAt: data?.updatedAt || data?.syncedAt || null,
@@ -2532,6 +2552,211 @@ function staffEvaluationRows() {
   });
 }
 
+function normalizeStaffMatchName(value) {
+  return String(value || "")
+    .replace(/\s+/g, "")
+    .trim();
+}
+
+function sameStaffName(left, right) {
+  const a = normalizeStaffMatchName(left);
+  const b = normalizeStaffMatchName(right);
+  return Boolean(a && b && a === b);
+}
+
+function staffMonthlyMetrics(row) {
+  const snapshot = state.businessSnapshot || {};
+  const stats = (snapshot.instructorStats || []).filter((item) => sameStaffName(item.name, row.name));
+  const sales = (snapshot.instructorRevenue || []).filter((item) => sameStaffName(item.name, row.name));
+  const byMonth = new Map();
+  for (const item of stats) {
+    byMonth.set(item.month, {
+      month: item.month,
+      reservationRate: item.reservationRate,
+      attendanceRate: item.attendanceRate,
+      averageGroupMembers: item.averageGroupMembers,
+      groupLessonCount: item.groupLessonCount,
+    });
+  }
+  for (const item of sales) {
+    const current = byMonth.get(item.month) || { month: item.month };
+    byMonth.set(item.month, {
+      ...current,
+      revenue: item.revenue,
+      pretaxAmount: item.pretaxAmount,
+      payoutAmount: item.payoutAmount,
+    });
+  }
+  return [...byMonth.values()].sort((a, b) => a.month.localeCompare(b.month));
+}
+
+function formatMetricRate(value) {
+  return Number.isFinite(Number(value)) ? `${toNumber(value).toFixed(1).replace(/\.0$/, "")}%` : "연결 대기";
+}
+
+function formatMetricNumber(value, suffix = "") {
+  return Number.isFinite(Number(value)) ? `${toNumber(value).toLocaleString("ko-KR")}${suffix}` : "연결 대기";
+}
+
+function renderStaffDetail(row) {
+  const container = qs("staffDetailCard");
+  if (!container) return;
+  if (!row) {
+    setText("staffDetailTitle", "강사 세부 지표");
+    setText("staffDetailSubtitle", "강사 이름을 선택하면 퀴즈 답변과 월별 운영 지표가 표시됩니다.");
+    container.innerHTML = `<div class="empty-state">강사 리스트에서 이름을 선택해 주세요.</div>`;
+    return;
+  }
+
+  const metrics = staffMonthlyMetrics(row);
+  const latestMetric = metrics.at(-1) || null;
+  const latestQuiz = row.latest || row.card?.latestQuiz || null;
+  const q19 = latestQuiz ? staffEssayScoreInfo(latestQuiz) : null;
+  const recentSubmissions = row.submissions.slice(0, 5);
+  const lastUpdated = latestMetric?.month ? `${formatMonth(latestMetric.month)} 운영 지표` : "운영 지표 연결 대기";
+
+  setText("staffDetailTitle", `${row.name || "강사"} 세부 지표`);
+  setText(
+    "staffDetailSubtitle",
+    [row.role || "instructor", latestQuiz ? `최근 평가 ${Math.round(toNumber(latestQuiz.scorePercent))}점` : "평가 기록 없음", lastUpdated]
+      .filter(Boolean)
+      .join(" · "),
+  );
+
+  const metricCards = [
+    {
+      label: "최근 평가 점수",
+      value: latestQuiz ? `${Math.round(toNumber(latestQuiz.scorePercent))}점` : "미응시",
+      note: latestQuiz?.submittedAt ? formatDate(latestQuiz.submittedAt) : "퀴즈 제출 대기",
+    },
+    {
+      label: "월별 그룹 예약률",
+      value: latestMetric ? formatMetricRate(latestMetric.reservationRate) : "연결 대기",
+      note: latestMetric?.month ? formatMonth(latestMetric.month) : "dashboardSnapshots/current",
+    },
+    {
+      label: "월별 그룹 평균인원",
+      value: latestMetric ? formatMetricNumber(latestMetric.averageGroupMembers, "명") : "연결 대기",
+      note: latestMetric?.month ? "강사통계 기준" : "강사통계 원천 대기",
+    },
+    {
+      label: "월 수업 개수",
+      value: latestMetric?.groupLessonCount === null || latestMetric?.groupLessonCount === undefined ? "연결 대기" : formatMetricNumber(latestMetric.groupLessonCount, "개"),
+      note: latestMetric?.groupLessonCount === null || latestMetric?.groupLessonCount === undefined ? "원천 필드 추가 필요" : "강사통계 기준",
+    },
+  ];
+
+  const metricRows = metrics.slice(-6).reverse();
+  container.innerHTML = `
+    <div class="staff-detail-kpis">
+      ${metricCards
+        .map(
+          (item) => `
+            <div class="staff-detail-kpi">
+              <span>${escapeHtml(item.label)}</span>
+              <strong>${escapeHtml(item.value)}</strong>
+              <em>${escapeHtml(item.note)}</em>
+            </div>
+          `,
+        )
+        .join("")}
+    </div>
+
+    <div class="staff-detail-section">
+      <h3>최근 퀴즈 답변</h3>
+      ${
+        latestQuiz
+          ? `
+            <div class="staff-detail-quiz">
+              <div>
+                <strong>${escapeHtml(`${Math.round(toNumber(latestQuiz.scorePercent))}점`)}</strong>
+                <span>${escapeHtml(
+                  [
+                    latestQuiz.scoredPointTotal ? `${toNumber(latestQuiz.earnedPointTotal)}/${toNumber(latestQuiz.scoredPointTotal)}점` : "",
+                    `${toNumber(latestQuiz.correctCount)}/${toNumber(latestQuiz.scoredQuestionCount)}문항`,
+                    formatDate(latestQuiz.submittedAt || latestQuiz.updatedAt),
+                  ]
+                    .filter(Boolean)
+                    .join(" · "),
+                )}</span>
+              </div>
+              ${pill(latestQuiz.status || "unknown")}
+            </div>
+            ${
+              q19
+                ? `<div class="essay-answer-preview staff-detail-answer"><strong>Q19 서술형</strong><br />${escapeHtml(q19.text || "답변 없음")}</div>`
+                : ""
+            }
+          `
+          : `<div class="empty-state">아직 퀴즈 제출 기록이 없습니다.</div>`
+      }
+    </div>
+
+    <div class="staff-detail-section">
+      <h3>월별 그룹 운영 지표</h3>
+      ${
+        metricRows.length
+          ? `
+            <div class="staff-metric-table" role="table" aria-label="${escapeHtml(row.name)} 월별 그룹 운영 지표">
+              <div role="row">
+                <span role="columnheader">월</span>
+                <span role="columnheader">예약률</span>
+                <span role="columnheader">출석률</span>
+                <span role="columnheader">평균인원</span>
+                <span role="columnheader">수업수</span>
+              </div>
+              ${metricRows
+                .map(
+                  (item) => `
+                    <div role="row">
+                      <strong role="cell">${escapeHtml(formatMonth(item.month))}</strong>
+                      <span role="cell">${escapeHtml(formatMetricRate(item.reservationRate))}</span>
+                      <span role="cell">${escapeHtml(formatMetricRate(item.attendanceRate))}</span>
+                      <span role="cell">${escapeHtml(formatMetricNumber(item.averageGroupMembers, "명"))}</span>
+                      <span role="cell">${escapeHtml(
+                        item.groupLessonCount === null || item.groupLessonCount === undefined
+                          ? "연결 대기"
+                          : formatMetricNumber(item.groupLessonCount, "개"),
+                      )}</span>
+                    </div>
+                  `,
+                )
+                .join("")}
+            </div>
+          `
+          : `<div class="empty-state">이 강사의 월별 그룹 지표가 아직 연결되지 않았습니다.</div>`
+      }
+    </div>
+
+    <div class="staff-detail-section">
+      <h3>평가 제출 이력</h3>
+      ${
+        recentSubmissions.length
+          ? recentSubmissions
+              .map(
+                (item) => `
+                  <div class="staff-detail-history">
+                    <strong>${escapeHtml(`${Math.round(toNumber(item.scorePercent))}점`)}</strong>
+                    <span>${escapeHtml(formatDate(item.submittedAt || item.updatedAt))}</span>
+                    ${pill(item.status || "unknown")}
+                  </div>
+                `,
+              )
+              .join("")
+          : `<div class="empty-state">평가 제출 이력이 없습니다.</div>`
+      }
+    </div>
+
+    <div class="staff-detail-section">
+      <h3>만족도 · 클레임</h3>
+      <div class="staff-signal-grid">
+        <div><strong>회원만족도</strong><span>설문 원천 연결 대기</span></div>
+        <div><strong>클레임 현황</strong><span>클레임 기록 원천 연결 대기</span></div>
+      </div>
+    </div>
+  `;
+}
+
 function renderStaffEvaluationChart() {
   const chart = qs("staffEvaluationChart");
   if (!chart) return;
@@ -2583,6 +2808,7 @@ function renderStaffHr() {
   if (!list) return;
   const staffRows = staffEvaluationRows().sort((a, b) => String(a.name || "").localeCompare(String(b.name || ""), "ko"));
   const staffs = staffRows;
+  state.staffEvaluationRows = staffRows;
   const submissions = state.staffEvaluationSubmissions || [];
   const reviewCount = submissions.filter((item) => item.status === "review_needed").length;
   const passedCount = submissions.filter((item) => item.status === "passed").length;
@@ -2598,10 +2824,13 @@ function renderStaffHr() {
 
   if (!staffs.length) {
     list.innerHTML = `<div class="empty-state">강사 데이터를 불러오면 인사기록카드가 표시됩니다.</div>`;
+    renderStaffDetail(null);
     renderStaffSubmissionHistory();
     renderStaffEvaluationChart();
     return;
   }
+
+  if (!selectedStaffKey || !staffs.some((staff) => staff.key === selectedStaffKey)) selectedStaffKey = staffs[0].key;
 
   list.innerHTML = staffs
     .map((staff) => {
@@ -2618,18 +2847,20 @@ function renderStaffHr() {
       ]
         .filter(Boolean)
         .join(" · ");
+      const active = staff.key === selectedStaffKey ? " is-active" : "";
       return `
-        <article class="status-row staff-card-row">
-          <div>
+        <article class="status-row staff-card-row${active}">
+          <button class="staff-card-button" type="button" data-staff-detail-key="${escapeHtml(staff.key)}" aria-label="${escapeHtml(staff.name || "강사")} 세부 지표 보기">
             <strong>${escapeHtml(staff.name || "이름 없음")}</strong>
             <p class="meta-line">${escapeHtml(meta)}</p>
             <p class="note-line">최근 평가: ${escapeHtml(score)} · 최고 ${Number.isFinite(bestScore) && bestScore > 0 ? Math.round(bestScore) : "-"}점</p>
-          </div>
+          </button>
           ${pill(status)}
         </article>
       `;
     })
     .join("");
+  renderStaffDetail(staffs.find((staff) => staff.key === selectedStaffKey) || staffs[0]);
   renderStaffSubmissionHistory();
   renderStaffEvaluationChart();
 }
@@ -2953,6 +3184,7 @@ async function refresh() {
     const shouldLoadPrivate = Boolean(qs("privateProgressList")) || shouldLoadHome;
     const shouldLoadLessons = Boolean(qs("lessonsTodayList"));
     const shouldLoadStaffDashboard = Boolean(qs("staffHrList"));
+    const shouldLoadBusinessSnapshot = shouldLoadBusiness || shouldLoadStaffDashboard;
     const [
       laneSnapshot,
       automationItems,
@@ -2983,7 +3215,7 @@ async function refresh() {
       safeRead("automationStatus", () => getRecentCollection(db, runtime, "automationStatus"), []),
       safeRead("sourceImports", () => getCollectionBy(db, runtime, "sourceImports", "updatedAt", 50), []),
       safeRead("dataQualityIssues", () => getCollectionBy(db, runtime, "dataQualityIssues", "updatedAt", 100), []),
-      shouldLoadBusiness
+      shouldLoadBusinessSnapshot
         ? safeRead("dashboardSnapshots/current", () => getDoc(doc(db, "dashboardSnapshots", "current")), null)
         : Promise.resolve(null),
       shouldLoadMembers || shouldLoadHome
@@ -3092,6 +3324,7 @@ async function refresh() {
     state.staffItems = studioItems(staffItems);
     state.staffHrCards = studioItems(staffHrCards);
     state.staffEvaluationSubmissions = studioItems(staffEvaluationSubmissions);
+    state.businessSnapshot = dashboardSnapshot?.exists?.() ? normalizeBusinessSnapshot(dashboardSnapshot.data()) : null;
     renderLane(state.lane);
     renderAutomation(automationItems);
     renderImports(state.sourceImports);
@@ -3106,7 +3339,7 @@ async function refresh() {
     renderPrivate(privateRequests, privateRecords, privateUsageEvents, privateLedgerEntries, alimtalkCandidates, alimtalkSends);
     renderLessons(lessonOccurrences, reservations, [...deletedClassLogs, ...deletedLessons]);
     if (shouldLoadBusiness) {
-      if (dashboardSnapshot?.exists()) renderBusiness(normalizeBusinessSnapshot(dashboardSnapshot.data()));
+      if (state.businessSnapshot) renderBusiness(state.businessSnapshot);
       else renderBusinessFallback(new Error("dashboardSnapshots/current 문서가 없습니다."));
       renderBusinessMemberInsights(businessMembers);
     }
@@ -3135,6 +3368,12 @@ document.addEventListener("submit", (event) => {
   const form = event.target.closest?.("[data-staff-essay-score-form]");
   if (!form) return;
   handleStaffEssayScoreAdjustSubmit(event, form);
+});
+document.addEventListener("click", (event) => {
+  const button = event.target.closest?.("[data-staff-detail-key]");
+  if (!button) return;
+  selectedStaffKey = button.getAttribute("data-staff-detail-key") || "";
+  renderStaffHr();
 });
 qs("memberSearchInput")?.addEventListener("input", (event) => {
   memberSearchTerm = event.target.value.trim();

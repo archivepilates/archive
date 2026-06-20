@@ -45,11 +45,11 @@ const guardGroups = [
     files: [
       {
         file: "core/staff/index.html",
-        markers: ["강사 인사기록카드", "staffHrList", "staffEvaluationSubmissionList"],
+        markers: ["강사 인사기록카드", "staffHrList", "staffDetailCard", "강사지표 원천"],
       },
       {
         file: "core/assets/app.js",
-        markers: ["staffEssayScoreInfo", "adjustInstructorEvaluationEssayScore", "서술형 점수 저장"],
+        markers: ["staffEssayScoreInfo", "adjustInstructorEvaluationEssayScore", "staffMonthlyMetrics", "renderStaffDetail", "서술형 점수 저장"],
       },
       {
         file: "core/staff/evaluation/index.html",
