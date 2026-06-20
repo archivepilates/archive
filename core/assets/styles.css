@@ -1164,6 +1164,74 @@ td span {
   min-height: 96px;
 }
 
+.staff-score-adjust {
+  display: grid;
+  grid-template-columns: minmax(0, 1fr);
+  gap: 8px;
+  margin-top: 12px;
+  padding: 12px;
+  border: 1px solid var(--line-soft);
+  border-radius: 8px;
+  background: rgba(248, 250, 252, 0.82);
+}
+
+.staff-score-adjust-copy {
+  display: flex;
+  min-width: 0;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: 8px;
+}
+
+.staff-score-adjust-copy span,
+.staff-score-adjust-copy em {
+  margin: 0;
+  color: var(--muted);
+  font-size: 0.78rem;
+  font-style: normal;
+  font-weight: 800;
+}
+
+.staff-score-adjust-copy strong {
+  margin: 0;
+  color: var(--text);
+}
+
+.staff-score-adjust label {
+  display: grid;
+  min-width: 0;
+  gap: 5px;
+}
+
+.staff-score-adjust label span {
+  color: var(--muted);
+  font-size: 0.76rem;
+  font-weight: 800;
+}
+
+.staff-score-adjust input {
+  width: 100%;
+  min-width: 0;
+  min-height: 40px;
+  border: 1px solid var(--line);
+  border-radius: 8px;
+  background: var(--surface-strong);
+  color: var(--text);
+  padding: 8px 10px;
+}
+
+.staff-score-adjust .secondary-action {
+  width: 100%;
+}
+
+.essay-answer-preview {
+  max-height: 96px;
+  overflow: auto;
+  border-left: 3px solid rgba(248, 91, 28, 0.32);
+  padding-left: 10px;
+  white-space: pre-line;
+}
+
 .staff-rule-list {
   padding: 18px 20px 20px;
 }

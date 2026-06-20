@@ -313,10 +313,10 @@
               <ol>
                 <li>강사 또는 운영자가 CORE Staff 평가 퀴즈 화면에 로그인합니다.</li>
                 <li>문항은 Firebase Function에서 받아오고, 정답은 브라우저에 노출하지 않습니다.</li>
-                <li>제출하면 Function이 채점하고 staffEvaluationSubmissions에 원본 제출 기록을 저장합니다.</li>
+                <li>제출하면 Function이 객관식·단답형·서술형을 채점하고 staffEvaluationSubmissions에 원본 제출 기록을 저장합니다.</li>
                 <li>강사별 staffHrCards/{staffId}와 하위 quizResults에 최신 결과와 누적 요약을 반영합니다.</li>
                 <li>입사지원자는 별도 공개 시험 사이트에서 이름과 연락처 입력 후 20분 제한시간으로 응시합니다.</li>
-                <li>운영자는 CORE Staff 탭에서 강사별 최신 점수, 통과 여부, 검토 문항을 확인합니다.</li>
+                <li>운영자는 CORE Staff 탭에서 강사별 최신 점수, 통과 여부, 서술형 답변과 점수를 확인하고 필요 시 수정합니다.</li>
               </ol>
             </article>
             <article class="rule-card">
@@ -324,7 +324,7 @@
               <ul>
                 <li>퀴즈 제출은 Firestore 직접 쓰기가 아니라 submitInstructorEvaluationQuiz callable로만 처리합니다.</li>
                 <li>일반 강사는 본인 staffId 기준 제출만 가능합니다.</li>
-                <li>운영자와 매니저는 대상 강사를 선택해 제출/검토할 수 있습니다.</li>
+                <li>운영자와 매니저는 대상 강사를 선택해 제출/검토할 수 있고, Q19 서술형 점수를 조정할 수 있습니다.</li>
                 <li>지원자 입사시험은 instructorApplicantEvaluationApi HTTP Function으로만 시작/제출하며 Firestore 직접 쓰기는 허용하지 않습니다.</li>
                 <li>staffEvaluationSubmissions는 제출 원본, staffHrCards는 인사기록카드 read-model입니다.</li>
                 <li>지원자 원본은 staffApplicantEvaluationSessions와 staffApplicantEvaluationSubmissions에 별도로 보관합니다.</li>
@@ -335,8 +335,9 @@
               <h3>문항 관리</h3>
               <ul>
                 <li>현재 문항은 공개 Google Form <strong>ARCHIVE 강사평가 퀴즈 A</strong>에서 확인한 22문항과 선택지 기준입니다.</li>
-                <li>객관식 18문항은 각 4점, 단답형 3문항은 각 6점으로 자동 채점합니다.</li>
-                <li>Q19 서술형 10점 문항은 자동 채점하지 않고 운영자 검토 참고값으로 저장합니다.</li>
+                <li>객관식 18문항은 각 4점, 단답형 3문항은 각 6점, Q19 서술형은 10점으로 채점합니다.</li>
+                <li>Q19 서술형은 imprint 정의, 골반 후방경사, 요추/매트 정렬, 코어 안정, 사용 상황, 주의점을 기준으로 1차 자동 루브릭 채점합니다.</li>
+                <li>운영자가 Q19 점수를 수정하면 staffEvaluationSubmissions, staffApplicantEvaluationSubmissions, staffHrCards/{staffId}/quizResults, staffHrCards 최신 요약을 함께 갱신합니다.</li>
                 <li>과거 Google Form 응답은 공식 점수를 보존해 staffHrCards로 이관하고, 새 Firebase 제출은 최신 정답키로 채점합니다.</li>
                 <li>기존 응답 시트에는 Q9 선택지 버전 차이와 Q20 정답키 입력 오류 흔적이 있어 과거 응답을 최신 키로 재채점하지 않습니다.</li>
                 <li>문항 변경 시 기존 제출 결과는 삭제하지 않고 quizVersion으로 구분합니다.</li>

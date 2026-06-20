@@ -2634,6 +2634,24 @@ function renderStaffHr() {
   renderStaffEvaluationChart();
 }
 
+function staffEssayScoreInfo(item) {
+  const answer = (item.answers || []).find((entry) => entry?.questionId === "q19_imprint_description");
+  if (!answer) return null;
+  const points = toNumber(answer.points || 10);
+  const earnedPoints = Number.isFinite(Number(answer.earnedPoints)) ? toNumber(answer.earnedPoints) : 0;
+  const manual = answer.manualOverride || item.manualScoreOverrides?.q19_imprint_description || null;
+  const text = item.openResponses?.q19_imprint_description || answer.answerText || "";
+  const feedback = answer.rubricScore?.feedback || "";
+  return {
+    questionId: "q19_imprint_description",
+    points,
+    earnedPoints,
+    text,
+    feedback,
+    manual,
+  };
+}
+
 function renderStaffSubmissionHistory() {
   const list = qs("staffEvaluationSubmissionList");
   if (!list) return;
@@ -2646,9 +2664,10 @@ function renderStaffSubmissionHistory() {
   }
   list.innerHTML = items
     .map((item) => {
+      const essay = staffEssayScoreInfo(item);
       const detail = [
         `${Math.round(toNumber(item.scorePercent))}점`,
-        item.scoredPointTotal ? `${toNumber(item.earnedPointTotal)}/${toNumber(item.scoredPointTotal)}점 자동채점` : "",
+        item.scoredPointTotal ? `${toNumber(item.earnedPointTotal)}/${toNumber(item.scoredPointTotal)}점 채점` : "",
         `${toNumber(item.correctCount)}/${toNumber(item.scoredQuestionCount)}문항`,
         formatDate(item.submittedAt || item.updatedAt),
         item.submittedByName ? `제출 ${item.submittedByName}` : "",
@@ -2665,12 +2684,78 @@ function renderStaffSubmissionHistory() {
                 ? `<p class="note-line">확인 문항: ${escapeHtml(item.incorrectQuestionIds.join(", "))}</p>`
                 : `<p class="meta-line">확인 필요한 오답 없음</p>`
             }
+            ${
+              essay
+                ? `
+                  <form class="staff-score-adjust" data-staff-essay-score-form data-submission-id="${escapeHtml(item.submissionId || item.id || "")}" data-question-id="${escapeHtml(essay.questionId)}">
+                    <div class="staff-score-adjust-copy">
+                      <span>서술형 Q19</span>
+                      <strong>${escapeHtml(`${essay.earnedPoints}/${essay.points}점`)}</strong>
+                      ${essay.manual ? `<em>관리자 수정됨 · ${escapeHtml(essay.manual.adjustedByName || "")}</em>` : `<em>1차 자동채점</em>`}
+                    </div>
+                    ${essay.feedback ? `<p class="note-line">${escapeHtml(essay.feedback)}</p>` : ""}
+                    ${essay.text ? `<p class="essay-answer-preview">${escapeHtml(essay.text)}</p>` : `<p class="meta-line">서술형 답변 없음</p>`}
+                    <label>
+                      <span>수정 점수</span>
+                      <input type="number" name="earnedPoints" min="0" max="${escapeHtml(essay.points)}" step="0.5" value="${escapeHtml(essay.earnedPoints)}" />
+                    </label>
+                    <label>
+                      <span>수정 메모</span>
+                      <input type="text" name="note" maxlength="120" placeholder="예: 핵심 정의 보완 인정" />
+                    </label>
+                    <button class="secondary-action" type="submit">서술형 점수 저장</button>
+                    <p class="form-status" data-staff-essay-score-status></p>
+                  </form>
+                `
+                : ""
+            }
           </div>
           ${pill(item.status || "unknown")}
         </div>
       `;
     })
     .join("");
+}
+
+async function handleStaffEssayScoreAdjustSubmit(event, form) {
+  event.preventDefault();
+  const button = form.querySelector("button[type='submit']");
+  const status = form.querySelector("[data-staff-essay-score-status]");
+  const submissionId = form.dataset.submissionId || "";
+  const questionId = form.dataset.questionId || "q19_imprint_description";
+  const earnedPoints = Number(form.elements.earnedPoints?.value || "");
+  const note = String(form.elements.note?.value || "").trim();
+  if (!submissionId || !Number.isFinite(earnedPoints)) {
+    if (status) status.textContent = "제출 기록과 점수를 확인해 주세요.";
+    return;
+  }
+  if (button) {
+    button.disabled = true;
+    button.textContent = "저장 중";
+  }
+  if (status) status.textContent = "서술형 점수를 저장하고 인사기록카드를 갱신합니다.";
+  try {
+    const runtime = await initFirebase();
+    const adjustScore = runtime.httpsCallable(runtime.functionsClient, "adjustInstructorEvaluationEssayScore");
+    const result = await adjustScore({ submissionId, questionId, earnedPoints, note });
+    const data = result?.data || {};
+    if (status) {
+      status.textContent = `저장 완료 · 총점 ${Math.round(toNumber(data.scorePercent))}점 · ${statusLabel(data.status)}`;
+      status.className = "form-status good";
+    }
+    await refresh();
+  } catch (error) {
+    if (isPermissionDenied(error)) showLoginGate("서술형 점수 수정은 운영자 권한이 필요합니다.");
+    if (status) {
+      status.textContent = error?.message || "서술형 점수를 저장하지 못했습니다.";
+      status.className = "form-status danger";
+    }
+  } finally {
+    if (button) {
+      button.disabled = false;
+      button.textContent = "서술형 점수 저장";
+    }
+  }
 }
 
 function setEvaluationQuizStatus(message, tone = "") {
@@ -3046,6 +3131,11 @@ qs("pricingInquiryForm")?.addEventListener("submit", handlePricingInquiryAlimtal
 qs("pricingInquiryHistoryToggle")?.addEventListener("click", togglePricingInquiryHistory);
 qs("instructorEvaluationQuizForm")?.addEventListener("submit", handleInstructorEvaluationQuizSubmit);
 qs("businessMonthSelect")?.addEventListener("change", (event) => renderBusinessMonth(event.target.value));
+document.addEventListener("submit", (event) => {
+  const form = event.target.closest?.("[data-staff-essay-score-form]");
+  if (!form) return;
+  handleStaffEssayScoreAdjustSubmit(event, form);
+});
 qs("memberSearchInput")?.addEventListener("input", (event) => {
   memberSearchTerm = event.target.value.trim();
   memberPage = 1;

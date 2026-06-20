@@ -27,6 +27,7 @@ import { processParkingDiscountJobSnapshot } from "../parking/processParkingDisc
 import { callableOptions, publicRequestOptions } from "../runtime/functionOptions";
 import { requireStaff } from "../security/authGuards";
 import {
+  adjustInstructorEvaluationEssayScoreHandler,
   getInstructorEvaluationQuizHandler,
   instructorApplicantEvaluationApiHandler,
   submitInstructorEvaluationQuizHandler,
@@ -142,6 +143,15 @@ export const submitInstructorEvaluationQuiz = onCall(callableOptions, async (req
   try {
     const staff = await requireStaff(request);
     return await submitInstructorEvaluationQuizHandler(request, staff);
+  } catch (err) {
+    throw toHttpsError(err);
+  }
+});
+
+export const adjustInstructorEvaluationEssayScore = onCall(callableOptions, async (request) => {
+  try {
+    const staff = await requireStaff(request);
+    return await adjustInstructorEvaluationEssayScoreHandler(request, staff);
   } catch (err) {
     throw toHttpsError(err);
   }

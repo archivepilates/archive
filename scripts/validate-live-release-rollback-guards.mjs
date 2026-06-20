@@ -48,6 +48,10 @@ const guardGroups = [
         markers: ["강사 인사기록카드", "staffHrList", "staffEvaluationSubmissionList"],
       },
       {
+        file: "core/assets/app.js",
+        markers: ["staffEssayScoreInfo", "adjustInstructorEvaluationEssayScore", "서술형 점수 저장"],
+      },
+      {
         file: "core/staff/evaluation/index.html",
         markers: ["instructorEvaluationQuizForm", "evaluationQuizQuestions", "evaluationQuizSubmit"],
       },
@@ -61,13 +65,15 @@ const guardGroups = [
           "staffEvaluationSubmissions",
           "staffHrCards",
           "submitInstructorEvaluationQuizHandler",
+          "adjustInstructorEvaluationEssayScoreHandler",
           "instructorApplicantEvaluationApiHandler",
+          "scoreShortTextAnswer",
           "APPLICANT_TIME_LIMIT_SECONDS",
         ],
       },
       {
         file: "firebase/kangsain-functions/functions/src/exports/app.ts",
-        markers: ["getInstructorEvaluationQuiz", "submitInstructorEvaluationQuiz", "instructorApplicantEvaluationApi"],
+        markers: ["getInstructorEvaluationQuiz", "submitInstructorEvaluationQuiz", "adjustInstructorEvaluationEssayScore", "instructorApplicantEvaluationApi"],
       },
       {
         file: "firebase.json",

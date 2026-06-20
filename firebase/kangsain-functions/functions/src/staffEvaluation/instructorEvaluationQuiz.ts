@@ -8,7 +8,7 @@ import type { StaffDoc } from "../types/models";
 import { nowTimestamp } from "../utils/date";
 import { AppError } from "../utils/errors";
 import { stableHash } from "../utils/hash";
-import { assertOwnStaff, isManagerRole } from "../security/authGuards";
+import { assertOwnStaff, isManagerRole, requireManager } from "../security/authGuards";
 
 type QuizQuestionType = "single_choice" | "fill_blank" | "short_text";
 
@@ -172,7 +172,8 @@ const QUIZ = {
       type: "short_text",
       area: "principles",
       title: "Q19. \"imprint의 정의를 설명하고, 언제 사용하는지 서술하시오.\"",
-      description: "서술형 10점 문항입니다. 현재 Firebase 자동 채점에서는 운영자 검토 참고값으로 저장합니다.",
+      description: "서술형 10점 문항입니다. 1차 자동 루브릭 채점 후 운영자가 점수를 조정할 수 있습니다.",
+      points: 10,
       required: false,
     },
     {
@@ -396,6 +397,134 @@ export async function submitInstructorEvaluationQuizHandler(
     scoredQuestionCount: graded.scoredQuestionCount,
     passed: graded.passed,
     status: submission.status,
+  };
+}
+
+export async function adjustInstructorEvaluationEssayScoreHandler(
+  request: CallableRequest,
+  staff: StaffDoc,
+): Promise<Record<string, unknown>> {
+  requireManager(staff);
+  const data = (request.data || {}) as Record<string, unknown>;
+  const submissionId = cleanId(String(data.submissionId || ""));
+  const questionId = cleanId(String(data.questionId || "q19_imprint_description"));
+  const note = cleanAnswer(String(data.note || ""));
+  const earnedPoints = normalizeManualScore(data.earnedPoints ?? data.score);
+  if (!submissionId) throw new AppError("INVALID_ARGUMENT", "제출 기록을 선택하세요.");
+  if (!questionId) throw new AppError("INVALID_ARGUMENT", "문항을 선택하세요.");
+
+  const submissionRef = db.collection("staffEvaluationSubmissions").doc(submissionId);
+  const submissionSnap = await submissionRef.get();
+  if (!submissionSnap.exists) throw new AppError("NOT_FOUND", "제출 기록을 찾을 수 없습니다.");
+  const submission = submissionSnap.data() || {};
+  const question = QUIZ.questions.find((item) => item.questionId === questionId);
+  if (!question || question.type !== "short_text") throw new AppError("INVALID_ARGUMENT", "서술형 문항만 수정할 수 있습니다.");
+  const maxPoints = Number(question.points || 0);
+  if (!Number.isFinite(earnedPoints) || earnedPoints < 0 || earnedPoints > maxPoints) {
+    throw new AppError("INVALID_ARGUMENT", `점수는 0~${maxPoints}점 사이로 입력하세요.`);
+  }
+
+  const now = nowTimestamp();
+  const adjusted = recalculateSubmissionWithEssayScore(submission, {
+    question,
+    earnedPoints,
+    adjustedByStaffId: staff.staffId,
+    adjustedByName: staff.name,
+    adjustedAt: now,
+    note,
+  });
+  const staffId = cleanId(String(submission.staffId || ""));
+  const cardRef = db.collection("staffHrCards").doc(staffId);
+  const cardResultRef = cardRef.collection("quizResults").doc(submissionId);
+  const applicantSubmissionRef = db.collection("staffApplicantEvaluationSubmissions").doc(submissionId);
+  const [cardSnap, resultSnap, applicantSubmissionSnap, cardResultsSnap] = await Promise.all([
+    cardRef.get(),
+    cardResultRef.get(),
+    applicantSubmissionRef.get(),
+    cardRef.collection("quizResults").get(),
+  ]);
+  const card = cardSnap.data() || {};
+  const bestScorePercent = Math.max(
+    adjusted.scorePercent,
+    ...cardResultsSnap.docs.map((doc) =>
+      doc.id === submissionId ? adjusted.scorePercent : Number(doc.data().scorePercent || 0),
+    ),
+  );
+  const latestQuizPatch =
+    card.latestQuiz?.submissionId === submissionId
+      ? {
+          latestQuiz: {
+            ...card.latestQuiz,
+            scorePercent: adjusted.scorePercent,
+            earnedPointTotal: adjusted.earnedPointTotal,
+            scoredPointTotal: adjusted.scoredPointTotal,
+            correctCount: adjusted.correctCount,
+            scoredQuestionCount: adjusted.scoredQuestionCount,
+            status: adjusted.status,
+            reasonCodes: adjusted.reasonCodes,
+            adjustedAt: now,
+            adjustedByName: staff.name,
+          },
+        }
+      : {};
+  const quizSummaryPatch = {
+    quizSummary: {
+      ...(card.quizSummary || {}),
+      bestScorePercent,
+      ...(card.latestQuiz?.submissionId === submissionId
+        ? {
+            lastScorePercent: adjusted.scorePercent,
+            lastStatus: adjusted.status,
+            lastSubmittedAt: submission.submittedAt || card.quizSummary?.lastSubmittedAt || now,
+          }
+        : {}),
+    },
+  };
+
+  const writes: Promise<unknown>[] = [
+    submissionRef.set(adjusted.patch, { merge: true }),
+    cardRef.set(
+      {
+        ...latestQuizPatch,
+        ...quizSummaryPatch,
+        updatedAt: now,
+      },
+      { merge: true },
+    ),
+    db.collection("auditLogs").doc(`staff_eval_score_adjust_${submissionId}_${questionId}`).set(
+      {
+        auditId: `staff_eval_score_adjust_${submissionId}_${questionId}`,
+        studioId: submission.studioId || DEFAULT_STUDIO_ID,
+        type: "staff_evaluation_essay_score_adjusted",
+        staffId,
+        staffName: submission.staffName || "",
+        submissionId,
+        questionId,
+        earnedPoints,
+        maxPoints,
+        adjustedByStaffId: staff.staffId,
+        adjustedByName: staff.name,
+        note,
+        createdAt: now,
+        updatedAt: now,
+      },
+      { merge: true },
+    ),
+  ];
+  if (resultSnap.exists) writes.push(cardResultRef.set(adjusted.patch, { merge: true }));
+  if (applicantSubmissionSnap.exists) writes.push(applicantSubmissionRef.set(adjusted.patch, { merge: true }));
+  await Promise.all(writes);
+
+  return {
+    ok: true,
+    submissionId,
+    questionId,
+    earnedPoints,
+    maxPoints,
+    scorePercent: adjusted.scorePercent,
+    earnedPointTotal: adjusted.earnedPointTotal,
+    scoredPointTotal: adjusted.scoredPointTotal,
+    status: adjusted.status,
   };
 }
 
@@ -672,16 +801,28 @@ function gradeAnswers(rawAnswers: Record<string, string>) {
     const answer = rawAnswers[question.questionId] || "";
     if (question.required && !answer) throw new AppError("INVALID_ARGUMENT", `${question.title} 문항을 입력하세요.`);
     if (question.type === "short_text") {
+      const questionPoints = Number(question.points || 0);
+      const rubric = scoreShortTextAnswer(question, answer);
       if (answer) openResponses[question.questionId] = answer;
       manualReviewQuestionIds.push(question.questionId);
+      scoredQuestionCount += 1;
+      scoredPointTotal += questionPoints;
+      earnedPointTotal += rubric.earnedPoints;
+      const correct = rubric.earnedPoints >= Math.ceil(questionPoints * 0.7);
+      if (correct) correctCount += 1;
+      else incorrectQuestionIds.push(question.questionId);
       answers.push({
         questionId: question.questionId,
         type: question.type,
         title: question.title,
         area: question.area,
         answerText: answer,
-        points: 0,
-        scored: false,
+        points: questionPoints,
+        earnedPoints: rubric.earnedPoints,
+        correct,
+        scored: true,
+        autoScored: true,
+        rubricScore: rubric,
       });
       continue;
     }
@@ -731,6 +872,179 @@ function gradeAnswers(rawAnswers: Record<string, string>) {
   };
 }
 
+function scoreShortTextAnswer(question: QuizQuestion, answer: string): Record<string, unknown> & { earnedPoints: number } {
+  const maxPoints = Number(question.points || 0);
+  const normalized = normalizeRubricText(answer);
+  if (!answer || !normalized || question.questionId !== "q19_imprint_description") {
+    return {
+      earnedPoints: 0,
+      maxPoints,
+      matchedCriteria: [],
+      missingCriteria: ["정의", "정렬 변화", "코어 안정", "사용 상황", "주의점"],
+      feedback: "서술형 답변이 없어 0점으로 1차 산정했습니다.",
+      method: "rule_based_rubric_v1",
+    };
+  }
+  const criteria = [
+    {
+      id: "pelvic_posterior_tilt",
+      label: "골반 후방경사 또는 골반을 말아내는 정렬 변화",
+      points: 3,
+      terms: ["후방경사", "골반말", "골반을말", "골반을뒤", "posteriorpelvictilt", "posteriortilt"],
+    },
+    {
+      id: "lumbar_imprint",
+      label: "요추/허리 공간이 매트 쪽으로 가까워지는 설명",
+      points: 2,
+      terms: ["요추굴곡", "허리공간", "허리를바닥", "허리가바닥", "허리매트", "매트에붙", "lumbarflexion", "lowback"],
+    },
+    {
+      id: "core_control",
+      label: "복부·복횡근·코어 안정과 연결",
+      points: 2,
+      terms: ["복부", "복횡근", "코어", "복압", "abdominal", "transversus", "core"],
+    },
+    {
+      id: "use_case",
+      label: "초보자, 허리 부담, 누운 자세, 테이블탑 등 사용 상황",
+      points: 2,
+      terms: ["초보", "허리통증", "허리부담", "테이블탑", "상체말", "hundred", "백번", "누운", "supine", "안정", "중립유지"],
+    },
+    {
+      id: "safety_nuance",
+      label: "과도한 압박을 피하거나 중립과 구분하는 주의점",
+      points: 1,
+      terms: ["과도", "무리", "중립", "neutral", "억지", "필요시", "상황에따라", "장시간"],
+    },
+  ];
+  const matchedCriteria: Array<{ id: string; label: string; points: number }> = [];
+  const missingCriteria: string[] = [];
+  let earnedPoints = 0;
+  for (const criterion of criteria) {
+    const matched = criterion.terms.some((term) => normalized.includes(normalizeRubricText(term)));
+    if (matched) {
+      earnedPoints += criterion.points;
+      matchedCriteria.push({ id: criterion.id, label: criterion.label, points: criterion.points });
+    } else {
+      missingCriteria.push(criterion.label);
+    }
+  }
+  return {
+    earnedPoints: Math.min(maxPoints, earnedPoints),
+    maxPoints,
+    matchedCriteria,
+    missingCriteria,
+    feedback: missingCriteria.length
+      ? `1차 자동채점: ${earnedPoints}/${maxPoints}점. 보완 필요: ${missingCriteria.join(", ")}`
+      : `1차 자동채점: ${maxPoints}/${maxPoints}점. 핵심 기준을 모두 포함했습니다.`,
+    method: "rule_based_rubric_v1",
+  };
+}
+
+function recalculateSubmissionWithEssayScore(
+  submission: Record<string, any>,
+  adjustment: {
+    question: QuizQuestion;
+    earnedPoints: number;
+    adjustedByStaffId: string;
+    adjustedByName: string;
+    adjustedAt: Timestamp;
+    note: string;
+  },
+): any {
+  const questionId = adjustment.question.questionId;
+  const maxPoints = Number(adjustment.question.points || 0);
+  const answers = Array.isArray(submission.answers) ? [...submission.answers] : [];
+  const answerIndex = answers.findIndex((item) => item?.questionId === questionId);
+  const previous = answerIndex >= 0 ? answers[answerIndex] || {} : {};
+  const updatedAnswer = {
+    ...previous,
+    questionId,
+    type: "short_text",
+    title: previous.title || adjustment.question.title,
+    area: previous.area || adjustment.question.area,
+    answerText: previous.answerText || "",
+    points: maxPoints,
+    earnedPoints: adjustment.earnedPoints,
+    correct: adjustment.earnedPoints >= Math.ceil(maxPoints * 0.7),
+    scored: true,
+    autoScored: previous.autoScored ?? true,
+    manualOverride: {
+      earnedPoints: adjustment.earnedPoints,
+      maxPoints,
+      previousEarnedPoints: Number(previous.earnedPoints || 0),
+      adjustedByStaffId: adjustment.adjustedByStaffId,
+      adjustedByName: adjustment.adjustedByName,
+      adjustedAt: adjustment.adjustedAt,
+      note: adjustment.note,
+    },
+  };
+  if (answerIndex >= 0) answers[answerIndex] = updatedAnswer;
+  else answers.push(updatedAnswer);
+
+  let earnedPointTotal = 0;
+  let scoredPointTotal = 0;
+  let correctCount = 0;
+  let scoredQuestionCount = 0;
+  const incorrectQuestionIds: string[] = [];
+  for (const answer of answers) {
+    if (!answer?.scored) continue;
+    const points = Number(answer.points || 0);
+    const earned = Number(answer.earnedPoints || 0);
+    scoredQuestionCount += 1;
+    scoredPointTotal += points;
+    earnedPointTotal += earned;
+    if (answer.correct === true || earned >= Math.ceil(points * 0.7)) correctCount += 1;
+    else incorrectQuestionIds.push(String(answer.questionId || ""));
+  }
+  const scorePercent = scoredPointTotal ? Math.round((earnedPointTotal / scoredPointTotal) * 100) : 0;
+  const passScore = Number(submission.passScore || QUIZ.passScore);
+  const timeExpired = Boolean(submission.timeExpired);
+  const status = scorePercent >= passScore && !timeExpired ? "passed" : "review_needed";
+  const reasonCodes = [
+    ...(scorePercent >= passScore ? [] : ["score_below_pass"]),
+    ...(timeExpired ? ["time_expired"] : []),
+    "manual_score_override",
+  ];
+  const manualScoreOverrides = {
+    ...(submission.manualScoreOverrides || {}),
+    [questionId]: updatedAnswer.manualOverride,
+  };
+  return {
+    scorePercent,
+    earnedPointTotal,
+    scoredPointTotal,
+    correctCount,
+    scoredQuestionCount,
+    incorrectQuestionIds: incorrectQuestionIds.filter(Boolean),
+    status,
+    reasonCodes,
+    patch: {
+      answers,
+      manualScoreOverrides,
+      scoreAdjusted: true,
+      adjustedAt: adjustment.adjustedAt,
+      adjustedByStaffId: adjustment.adjustedByStaffId,
+      adjustedByName: adjustment.adjustedByName,
+      scorePercent,
+      earnedPointTotal,
+      scoredPointTotal,
+      correctCount,
+      scoredQuestionCount,
+      incorrectQuestionIds: incorrectQuestionIds.filter(Boolean),
+      status,
+      reasonCodes,
+      updatedAt: adjustment.adjustedAt,
+    },
+  };
+}
+
+function normalizeManualScore(value: unknown): number {
+  if (value === null || value === undefined || value === "") return Number.NaN;
+  const score = Number(value);
+  return Number.isFinite(score) ? Math.round(score * 10) / 10 : Number.NaN;
+}
+
 function isAcceptedTextAnswer(answer: string, acceptedAnswers: string[]): boolean {
   const normalizedAnswer = normalizeTextAnswer(answer);
   return Boolean(normalizedAnswer) && acceptedAnswers.some((accepted) => normalizeTextAnswer(accepted) === normalizedAnswer);
@@ -742,6 +1056,14 @@ function normalizeTextAnswer(value: string): string {
     .toLowerCase()
     .replace(/[()\[\]{}.,_\-]/g, " ")
     .replace(/\s+/g, " ");
+}
+
+function normalizeRubricText(value: string): string {
+  return String(value || "")
+    .trim()
+    .toLowerCase()
+    .replace(/[()\[\]{}.,_\-·'"“”‘’\s]/g, "")
+    .replace(/pelvicfloor/g, "골반저근");
 }
 
 function cleanId(value: string): string {
