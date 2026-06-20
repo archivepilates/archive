@@ -1164,9 +1164,42 @@ td span {
   min-height: 96px;
 }
 
+.staff-card-group {
+  display: grid;
+  gap: 10px;
+}
+
+.staff-card-group + .staff-card-group {
+  margin-top: 8px;
+  border-top: 1px solid var(--line-soft);
+  padding-top: 14px;
+}
+
+.staff-card-group-title {
+  display: grid;
+  gap: 3px;
+  min-width: 0;
+  padding: 2px 2px 4px;
+}
+
+.staff-card-group-title strong {
+  color: var(--text);
+  font-size: 0.95rem;
+}
+
+.staff-card-group-title span {
+  color: var(--muted);
+  font-size: 0.78rem;
+  font-weight: 800;
+}
+
 .staff-card-row.is-active {
   border-color: rgba(248, 91, 28, 0.38);
   background: rgba(255, 247, 237, 0.72);
+}
+
+.staff-card-group.is-archived .staff-card-row {
+  background: rgba(248, 250, 252, 0.72);
 }
 
 .staff-card-button {
@@ -1185,6 +1218,14 @@ td span {
 .staff-card-button:focus-visible {
   outline: 2px solid var(--accent);
   outline-offset: 4px;
+}
+
+.staff-card-badges {
+  display: inline-flex;
+  min-width: 0;
+  flex-wrap: wrap;
+  justify-content: flex-end;
+  gap: 6px;
 }
 
 .staff-detail-card {

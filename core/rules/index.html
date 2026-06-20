@@ -318,6 +318,7 @@
                 <li>입사지원자는 별도 공개 시험 사이트에서 이름과 연락처 입력 후 20분 제한시간으로 응시합니다.</li>
                 <li>운영자는 CORE Staff 탭에서 강사별 최신 점수, 통과 여부, 서술형 답변과 점수를 확인하고 필요 시 수정합니다.</li>
                 <li>강사 이름을 선택하면 해당 강사의 퀴즈 답변과 월별 그룹 예약률, 출석률, 평균인원, 수업매출을 세부 카드로 확인합니다.</li>
+                <li>강사 리스트는 현재 근무중 강사와 입사시험 지원자/퇴사/비활성 기록을 분리해서 표시합니다.</li>
               </ol>
             </article>
             <article class="rule-card">
@@ -329,6 +330,7 @@
                 <li>지원자 입사시험은 instructorApplicantEvaluationApi HTTP Function으로만 시작/제출하며 Firestore 직접 쓰기는 허용하지 않습니다.</li>
                 <li>staffEvaluationSubmissions는 제출 원본, staffHrCards는 인사기록카드 read-model입니다.</li>
                 <li>지원자 원본은 staffApplicantEvaluationSessions와 staffApplicantEvaluationSubmissions에 별도로 보관합니다.</li>
+                <li>현재 근무중 여부는 staffs.active와 staffRole 기준으로 판단합니다. active인 instructor/owner는 현재 근무중, manager/viewer는 운영자 계정, staffHrCards나 제출 기록만 있는 대상은 비근무/지원자 기록으로 보관합니다.</li>
                 <li>인사기록카드는 외부 발송, 정산, 예약, 회원 응대 자동화의 원천으로 사용하지 않습니다.</li>
               </ul>
             </article>

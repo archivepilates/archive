@@ -2465,23 +2465,30 @@ function staffLatestSubmission(staffId) {
 function staffEvaluationRows() {
   const rows = new Map();
   for (const staff of state.staffItems || []) {
-    if (staff.active === false) continue;
     const key = String(staff.staffId || staff.id || staff.name || "");
     if (!key) continue;
+    const applicantEvaluation = Boolean(staff.applicantEvaluation || staff.role === "applicant");
+    const role = staff.role || "instructor";
+    const isTeachingRole = ["instructor", "owner"].includes(String(role));
+    const isCurrentStaff = staff.active !== false && !applicantEvaluation && isTeachingRole;
     rows.set(key, {
       key,
       staffId: staff.staffId || staff.id || "",
       name: staff.name || "이름 없음",
-      role: staff.role || "instructor",
+      role,
       submissions: [],
       card: null,
-      applicantEvaluation: false,
+      applicantEvaluation,
+      staffActive: staff.active !== false,
+      isCurrentStaff,
+      employmentSource: "staffs",
     });
   }
 
   for (const card of state.staffHrCards || []) {
     const key = String(card.staffId || card.id || card.staffName || "");
     if (!key) continue;
+    const applicantEvaluation = Boolean(card.applicantEvaluation || card.staffRole === "applicant");
     if (!rows.has(key)) {
       rows.set(key, {
         key,
@@ -2490,17 +2497,26 @@ function staffEvaluationRows() {
         role: card.staffRole || "instructor",
         submissions: [],
         card,
-        applicantEvaluation: Boolean(card.applicantEvaluation || card.staffRole === "applicant"),
+        applicantEvaluation,
+        staffActive: false,
+        isCurrentStaff: false,
+        employmentSource: "hrCard",
       });
     } else {
-      rows.get(key).card = card;
-      rows.get(key).applicantEvaluation = Boolean(card.applicantEvaluation || card.staffRole === "applicant");
+      const row = rows.get(key);
+      row.card = card;
+      row.applicantEvaluation = Boolean(row.applicantEvaluation || applicantEvaluation);
+      if (applicantEvaluation) {
+        row.isCurrentStaff = false;
+        row.role = "applicant";
+      }
     }
   }
 
   for (const submission of state.staffEvaluationSubmissions || []) {
     const key = String(submission.staffId || submission.staffName || submission.id || "");
     if (!key) continue;
+    const applicantEvaluation = Boolean(submission.applicantEvaluation || submission.staffRole === "applicant");
     if (!rows.has(key)) {
       rows.set(key, {
         key,
@@ -2509,11 +2525,19 @@ function staffEvaluationRows() {
         role: submission.staffRole || "instructor",
         submissions: [],
         card: null,
-        applicantEvaluation: Boolean(submission.applicantEvaluation || submission.staffRole === "applicant"),
+        applicantEvaluation,
+        staffActive: false,
+        isCurrentStaff: false,
+        employmentSource: "submission",
       });
     }
     rows.get(key).submissions.push(submission);
-    if (submission.applicantEvaluation || submission.staffRole === "applicant") rows.get(key).applicantEvaluation = true;
+    if (applicantEvaluation) {
+      const row = rows.get(key);
+      row.applicantEvaluation = true;
+      row.isCurrentStaff = false;
+      row.role = "applicant";
+    }
   }
 
   return [...rows.values()].map((row) => {
@@ -2548,8 +2572,30 @@ function staffEvaluationRows() {
       bestScore: scores.length || Number.isFinite(bestFromCard) ? Math.round(Math.max(...scores, Number.isFinite(bestFromCard) ? bestFromCard : 0)) : null,
       attempts: Math.max(submissions.length, toNumber(row.card?.quizSummary?.attempts)),
       status: latest?.status || "pending",
+      employmentState: staffEmploymentState(row),
     };
   });
+}
+
+function staffEmploymentState(row) {
+  if (row.applicantEvaluation || row.role === "applicant") return "applicant";
+  if (row.isCurrentStaff) return "current";
+  if (["manager", "viewer"].includes(String(row.role || ""))) return "operator";
+  return "inactive";
+}
+
+function staffEmploymentLabel(row) {
+  const state = row.employmentState || staffEmploymentState(row);
+  if (state === "current") return "현재 근무중";
+  if (state === "operator") return "운영자 계정";
+  if (state === "applicant") return "지원자/시험 기록";
+  return "비근무/퇴사 기록";
+}
+
+function staffEmploymentPill(row) {
+  const state = row.employmentState || staffEmploymentState(row);
+  const tone = state === "current" ? "good" : state === "applicant" ? "warn" : "muted";
+  return `<span class="pill ${tone}">${escapeHtml(staffEmploymentLabel(row))}</span>`;
 }
 
 function normalizeStaffMatchName(value) {
@@ -2618,7 +2664,12 @@ function renderStaffDetail(row) {
   setText("staffDetailTitle", `${row.name || "강사"} 세부 지표`);
   setText(
     "staffDetailSubtitle",
-    [row.role || "instructor", latestQuiz ? `최근 평가 ${Math.round(toNumber(latestQuiz.scorePercent))}점` : "평가 기록 없음", lastUpdated]
+    [
+      staffEmploymentLabel(row),
+      row.role || "instructor",
+      latestQuiz ? `최근 평가 ${Math.round(toNumber(latestQuiz.scorePercent))}점` : "평가 기록 없음",
+      lastUpdated,
+    ]
       .filter(Boolean)
       .join(" · "),
   );
@@ -2649,6 +2700,11 @@ function renderStaffDetail(row) {
   const metricRows = metrics.slice(-6).reverse();
   container.innerHTML = `
     <div class="staff-detail-kpis">
+      <div class="staff-detail-kpi staff-detail-kpi-status">
+        <span>근무 상태</span>
+        <strong>${escapeHtml(staffEmploymentLabel(row))}</strong>
+        <em>${escapeHtml(row.employmentSource === "staffs" ? "staffs active 기준" : "기록 보존 기준")}</em>
+      </div>
       ${metricCards
         .map(
           (item) => `
@@ -2761,11 +2817,11 @@ function renderStaffEvaluationChart() {
   const chart = qs("staffEvaluationChart");
   if (!chart) return;
   const rows = staffEvaluationRows()
-    .filter((row) => row.latest)
+    .filter((row) => row.latest && row.employmentState === "current")
     .sort((a, b) => (b.latestScore || 0) - (a.latestScore || 0) || String(a.name).localeCompare(String(b.name), "ko"));
 
   if (!rows.length) {
-    chart.innerHTML = `<div class="empty-state">평가 제출 기록이 생기면 강사별 점수 차트가 표시됩니다.</div>`;
+    chart.innerHTML = `<div class="empty-state">현재 근무중 강사의 평가 제출 기록이 생기면 점수 차트가 표시됩니다.</div>`;
     return;
   }
 
@@ -2812,12 +2868,12 @@ function renderStaffHr() {
   const submissions = state.staffEvaluationSubmissions || [];
   const reviewCount = submissions.filter((item) => item.status === "review_needed").length;
   const passedCount = submissions.filter((item) => item.status === "passed").length;
-  const activeStaffCount = (state.staffItems || []).filter((item) => item.active !== false).length;
+  const activeStaffCount = staffs.filter((item) => item.employmentState === "current").length;
   const latest = submissions
     .filter((item) => Number.isFinite(Number(item.scorePercent)))
     .sort((a, b) => timestampMs(b.submittedAt || b.updatedAt) - timestampMs(a.submittedAt || a.updatedAt))[0];
 
-  setText("staffTotal", formatCount(activeStaffCount || staffs.length, "명"));
+  setText("staffTotal", formatCount(activeStaffCount, "명"));
   setText("staffPassedCount", formatCount(passedCount, "건"));
   setText("staffReviewCount", formatCount(reviewCount, "건"));
   setText("staffLatestScore", latest ? `${Math.round(toNumber(latest.scorePercent))}점` : "-");
@@ -2830,36 +2886,59 @@ function renderStaffHr() {
     return;
   }
 
-  if (!selectedStaffKey || !staffs.some((staff) => staff.key === selectedStaffKey)) selectedStaffKey = staffs[0].key;
+  const currentStaffs = staffs.filter((staff) => staff.employmentState === "current");
+  const inactiveStaffs = staffs.filter((staff) => staff.employmentState !== "current");
+  const defaultStaff = currentStaffs[0] || staffs[0];
+  if (!selectedStaffKey || !staffs.some((staff) => staff.key === selectedStaffKey)) selectedStaffKey = defaultStaff.key;
 
-  list.innerHTML = staffs
-    .map((staff) => {
-      const card = staffHrCardFor(staff.staffId);
-      const latestQuiz = card?.latestQuiz || staff.latest || staffLatestSubmission(staff.staffId) || null;
-      const score = latestQuiz ? `${Math.round(toNumber(latestQuiz.scorePercent))}점` : "미응시";
-      const bestScore = Number(card?.quizSummary?.bestScorePercent);
-      const status = latestQuiz?.status || "pending";
-      const roleLabel = staff.applicantEvaluation || staff.role === "applicant" ? "지원자" : staff.role || "instructor";
-      const meta = [
-        roleLabel,
-        staff.phoneLast4 ? `끝자리 ${staff.phoneLast4}` : "",
-        latestQuiz?.submittedAt ? `최근 ${formatDate(latestQuiz.submittedAt)}` : "퀴즈 기록 없음",
-      ]
-        .filter(Boolean)
-        .join(" · ");
-      const active = staff.key === selectedStaffKey ? " is-active" : "";
-      return `
+  const renderStaffRows = (groupRows) =>
+    groupRows
+      .map((staff) => {
+        const card = staff.card || staffHrCardFor(staff.staffId);
+        const latestQuiz = card?.latestQuiz || staff.latest || staffLatestSubmission(staff.staffId) || null;
+        const score = latestQuiz ? `${Math.round(toNumber(latestQuiz.scorePercent))}점` : "미응시";
+        const bestScore = Number(card?.quizSummary?.bestScorePercent);
+        const status = latestQuiz?.status || "pending";
+        const roleLabel = staff.applicantEvaluation || staff.role === "applicant" ? "지원자" : staff.role || "instructor";
+        const meta = [
+          staffEmploymentLabel(staff),
+          roleLabel,
+          staff.phoneLast4 ? `끝자리 ${staff.phoneLast4}` : "",
+          latestQuiz?.submittedAt ? `최근 ${formatDate(latestQuiz.submittedAt)}` : "퀴즈 기록 없음",
+        ]
+          .filter(Boolean)
+          .join(" · ");
+        const active = staff.key === selectedStaffKey ? " is-active" : "";
+        return `
         <article class="status-row staff-card-row${active}">
           <button class="staff-card-button" type="button" data-staff-detail-key="${escapeHtml(staff.key)}" aria-label="${escapeHtml(staff.name || "강사")} 세부 지표 보기">
             <strong>${escapeHtml(staff.name || "이름 없음")}</strong>
             <p class="meta-line">${escapeHtml(meta)}</p>
             <p class="note-line">최근 평가: ${escapeHtml(score)} · 최고 ${Number.isFinite(bestScore) && bestScore > 0 ? Math.round(bestScore) : "-"}점</p>
           </button>
-          ${pill(status)}
+          <div class="staff-card-badges">
+            ${staffEmploymentPill(staff)}
+            ${pill(status)}
+          </div>
         </article>
       `;
-    })
-    .join("");
+      })
+      .join("");
+
+  const renderStaffGroup = (title, description, groupRows, tone = "") => `
+    <section class="staff-card-group ${tone}">
+      <div class="staff-card-group-title">
+        <strong>${escapeHtml(title)}</strong>
+        <span>${escapeHtml(description)}</span>
+      </div>
+      ${groupRows.length ? renderStaffRows(groupRows) : `<div class="empty-state">해당 기록이 없습니다.</div>`}
+    </section>
+  `;
+
+  list.innerHTML = [
+    renderStaffGroup("현재 근무중", "staffs active 기준으로 현재 운영 중인 강사입니다.", currentStaffs, "is-current"),
+    renderStaffGroup("비근무 · 지원자 · 운영자 기록", "입사시험 제출자, 퇴사/비활성 강사, 운영자 계정, 기록만 남은 대상을 분리 보관합니다.", inactiveStaffs, "is-archived"),
+  ].join("");
   renderStaffDetail(staffs.find((staff) => staff.key === selectedStaffKey) || staffs[0]);
   renderStaffSubmissionHistory();
   renderStaffEvaluationChart();
