@@ -1,6 +1,6 @@
 import { createHash, randomBytes } from "node:crypto";
 import type { CallableRequest } from "firebase-functions/v2/https";
-import { Timestamp } from "firebase-admin/firestore";
+import { Timestamp, type DocumentReference } from "firebase-admin/firestore";
 import { db } from "../config/firebase";
 import { DEFAULT_STUDIO_ID } from "../config/constants";
 import { getActiveStaffs, getStaffById } from "../firestore/staffRepository";
@@ -9,6 +9,7 @@ import { nowTimestamp } from "../utils/date";
 import { AppError } from "../utils/errors";
 import { stableHash } from "../utils/hash";
 import { assertOwnStaff, isManagerRole, requireManager } from "../security/authGuards";
+import { DelegatedGoogleClient } from "../google/delegatedGoogleClient";
 
 type QuizQuestionType = "single_choice" | "fill_blank" | "short_text";
 
@@ -208,6 +209,10 @@ const QUIZ = {
 
 const APPLICANT_TIME_LIMIT_SECONDS = 20 * 60;
 const APPLICANT_LATE_GRACE_SECONDS = 5 * 60;
+const STAFF_EVALUATION_SPREADSHEET_ID = "1VwOS7s8u6BX9t1dAWm7WOVmrigXbpoMZL7k4TGsce58";
+const STAFF_EVALUATION_RAW_SHEET_NAME = "설문지 응답 시트1";
+const STAFF_EVALUATION_SUMMARY_SHEET_NAME = "참가자별_최종_결과";
+const SHEETS_SCOPE = "https://www.googleapis.com/auth/spreadsheets";
 
 export async function instructorApplicantEvaluationApiHandler(request: any, response: any): Promise<void> {
   setCors(response);
@@ -384,6 +389,7 @@ export async function submitInstructorEvaluationQuizHandler(
       { merge: true },
     );
   });
+  await syncEvaluationSubmissionToGoogleSheet(submission, [submissionRef, cardResultRef]);
 
   return {
     ok: true,
@@ -738,6 +744,7 @@ async function submitApplicantEvaluation(data: Record<string, unknown>): Promise
       { merge: true },
     );
   });
+  await syncEvaluationSubmissionToGoogleSheet(submission, [submissionRef, applicantSubmissionRef, cardResultRef]);
 
   return {
     submissionId,
@@ -754,6 +761,161 @@ async function submitApplicantEvaluation(data: Record<string, unknown>): Promise
     elapsedSeconds,
     timeExpired,
   };
+}
+
+async function syncEvaluationSubmissionToGoogleSheet(
+  submission: Record<string, any>,
+  refs: Array<DocumentReference<Record<string, any>>>,
+): Promise<void> {
+  const syncStartedAt = nowTimestamp();
+  try {
+    const client = new DelegatedGoogleClient([SHEETS_SCOPE]);
+    const raw = await appendSheetValues(client, STAFF_EVALUATION_RAW_SHEET_NAME, [googleFormRawRow(submission)]);
+    const summary = await appendSheetValues(client, STAFF_EVALUATION_SUMMARY_SHEET_NAME, [googleFormSummaryRow(submission)]);
+    await markGoogleSheetSync(refs, {
+      status: "synced",
+      spreadsheetId: STAFF_EVALUATION_SPREADSHEET_ID,
+      rawSheetName: STAFF_EVALUATION_RAW_SHEET_NAME,
+      summarySheetName: STAFF_EVALUATION_SUMMARY_SHEET_NAME,
+      rawUpdatedRange: raw.updatedRange || "",
+      summaryUpdatedRange: summary.updatedRange || "",
+      syncedAt: nowTimestamp(),
+      updatedAt: nowTimestamp(),
+    });
+  } catch (error) {
+    await markGoogleSheetSync(refs, {
+      status: "failed",
+      spreadsheetId: STAFF_EVALUATION_SPREADSHEET_ID,
+      rawSheetName: STAFF_EVALUATION_RAW_SHEET_NAME,
+      summarySheetName: STAFF_EVALUATION_SUMMARY_SHEET_NAME,
+      error: error instanceof Error ? error.message : String(error),
+      attemptedAt: syncStartedAt,
+      updatedAt: nowTimestamp(),
+    });
+  }
+}
+
+async function appendSheetValues(
+  client: DelegatedGoogleClient,
+  sheetName: string,
+  values: string[][],
+): Promise<{ updatedRange?: string }> {
+  const encodedRange = encodeURIComponent(`'${sheetName}'!A1`);
+  const url = `https://sheets.googleapis.com/v4/spreadsheets/${encodeURIComponent(
+    STAFF_EVALUATION_SPREADSHEET_ID,
+  )}/values/${encodedRange}:append?valueInputOption=USER_ENTERED&insertDataOption=INSERT_ROWS`;
+  return client.request<{ updates?: { updatedRange?: string } }>(url, {
+    method: "POST",
+    body: JSON.stringify({ majorDimension: "ROWS", values }),
+  }).then((result) => result.updates || {});
+}
+
+async function markGoogleSheetSync(
+  refs: Array<DocumentReference<Record<string, any>>>,
+  googleSheetSync: Record<string, unknown>,
+): Promise<void> {
+  await Promise.all(
+    refs.map((ref) =>
+      ref.set(
+        {
+          googleSheetSync,
+          updatedAt: nowTimestamp(),
+        },
+        { merge: true },
+      ),
+    ),
+  );
+}
+
+function googleFormRawRow(submission: Record<string, any>): string[] {
+  const answers = answersByQuestionId(submission.answers || []);
+  return [
+    formatSheetTimestamp(submission.submittedAt, true),
+    sheetSourceLabel(submission),
+    `${Number(submission.scorePercent || 0)} / 100`,
+    cleanAnswer(String(submission.staffName || submission.applicantName || "")),
+    submission.applicantEvaluation ? "지원자" : "CORE 강사 평가",
+    ...QUIZ.questions.map((question) => sheetAnswerText(question, answers[question.questionId] || {})),
+    `Firebase: ${cleanId(String(submission.submissionId || ""))}`,
+  ];
+}
+
+function googleFormSummaryRow(submission: Record<string, any>): string[] {
+  return [
+    formatSheetTimestamp(submission.submittedAt, false),
+    sheetSourceLabel(submission),
+    cleanAnswer(String(submission.staffName || submission.applicantName || "")),
+    `${Number(submission.correctCount || 0)} / ${Number(submission.scoredQuestionCount || QUIZ.questions.length)} 개\n(${Number(
+      submission.scorePercent || 0,
+    )}점)`,
+    wrongAnswerNote(submission),
+  ];
+}
+
+function wrongAnswerNote(submission: Record<string, any>): string {
+  const answers = Array.isArray(submission.answers) ? submission.answers : [];
+  const wrong = answers.filter((answer) => answer && answer.scored !== false && answer.correct !== true);
+  const label = submission.applicantEvaluation ? "지원자" : "CORE 강사 평가";
+  const lines = [`구분: ${label}`, "-------------------------"];
+  for (const answer of wrong) {
+    const question = QUIZ.questions.find((item) => item.questionId === answer.questionId);
+    if (!question) continue;
+    lines.push(
+      "",
+      `Q. ${question.title}`,
+      `   내 답변: ${sheetAnswerText(question, answer) || "공백"}`,
+      question.type === "short_text"
+        ? `   채점: 루브릭 기준 ${Number(answer.earnedPoints || 0)} / ${Number(question.points || 0)}점`
+        : `   정답: ${correctAnswerText(question)}`,
+    );
+  }
+  if (wrong.length === 0) lines.push("", "오답 없음");
+  return `${lines.join("\n")}\n`;
+}
+
+function answersByQuestionId(answers: unknown[]): Record<string, Record<string, any>> {
+  const map: Record<string, Record<string, any>> = {};
+  for (const answer of answers) {
+    if (!answer || typeof answer !== "object") continue;
+    const item = answer as Record<string, any>;
+    const questionId = cleanId(String(item.questionId || ""));
+    if (questionId) map[questionId] = item;
+  }
+  return map;
+}
+
+function sheetAnswerText(question: QuizQuestion, answer: Record<string, any>): string {
+  if (question.type === "single_choice") return cleanAnswer(String(answer.selectedLabel || ""));
+  return cleanAnswer(String(answer.answerText || ""));
+}
+
+function correctAnswerText(question: QuizQuestion): string {
+  if (question.type === "single_choice") {
+    return cleanAnswer(String(question.options?.find((option) => option.optionId === question.correctOptionId)?.label || ""));
+  }
+  return cleanAnswer(String(question.acceptedAnswers?.[0] || ""));
+}
+
+function sheetSourceLabel(submission: Record<string, any>): string {
+  if (submission.applicantEvaluation) return `Firebase 공개시험(${cleanAnswer(String(submission.phoneLast4 || ""))})`;
+  const submittedByName = cleanAnswer(String(submission.submittedByName || ""));
+  return submittedByName ? `Firebase CORE(${submittedByName})` : "Firebase CORE";
+}
+
+function formatSheetTimestamp(value: unknown, includeTime: boolean): string {
+  const date =
+    value instanceof Timestamp
+      ? value.toDate()
+      : value && typeof value === "object" && "toDate" in value && typeof (value as { toDate?: unknown }).toDate === "function"
+        ? (value as { toDate: () => Date }).toDate()
+        : new Date();
+  return new Intl.DateTimeFormat("ko-KR", {
+    timeZone: "Asia/Seoul",
+    year: "numeric",
+    month: "numeric",
+    day: "numeric",
+    ...(includeTime ? { hour: "numeric", minute: "2-digit", second: "2-digit", hour12: true } : {}),
+  }).format(date);
 }
 
 function publicQuiz(): Record<string, unknown> {

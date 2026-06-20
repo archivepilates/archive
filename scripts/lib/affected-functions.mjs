@@ -55,7 +55,12 @@ function codebasesForFile(file) {
   ) {
     return ["functions-sync"];
   }
-  if (normalized.includes("/callable/") || normalized.includes("/security/") || normalized.endsWith("/exports/app.ts")) {
+  if (
+    normalized.includes("/callable/") ||
+    normalized.includes("/security/") ||
+    normalized.includes("/staffEvaluation/") ||
+    normalized.endsWith("/exports/app.ts")
+  ) {
     return ["functions-app"];
   }
   return [];

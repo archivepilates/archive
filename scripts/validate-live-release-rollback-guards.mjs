@@ -45,7 +45,13 @@ const guardGroups = [
     files: [
       {
         file: "core/staff/index.html",
-        markers: ["강사 인사기록카드", "staffHrList", "staffDetailCard", "강사지표 원천"],
+        markers: [
+          "강사 인사기록카드",
+          "staffHrList",
+          "staffDetailCard",
+          "강사지표 원천",
+          "1VwOS7s8u6BX9t1dAWm7WOVmrigXbpoMZL7k4TGsce58",
+        ],
       },
       {
         file: "core/assets/app.js",
@@ -77,6 +83,9 @@ const guardGroups = [
           "instructorApplicantEvaluationApiHandler",
           "scoreShortTextAnswer",
           "APPLICANT_TIME_LIMIT_SECONDS",
+          "STAFF_EVALUATION_SPREADSHEET_ID",
+          "1VwOS7s8u6BX9t1dAWm7WOVmrigXbpoMZL7k4TGsce58",
+          "googleSheetSync",
         ],
       },
       {
