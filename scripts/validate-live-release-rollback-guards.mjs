@@ -49,7 +49,15 @@ const guardGroups = [
       },
       {
         file: "core/assets/app.js",
-        markers: ["staffEssayScoreInfo", "adjustInstructorEvaluationEssayScore", "staffMonthlyMetrics", "renderStaffDetail", "서술형 점수 저장"],
+        markers: [
+          "staffEssayScoreInfo",
+          "adjustInstructorEvaluationEssayScore",
+          "staffMonthlyMetrics",
+          "renderStaffDetail",
+          "staffCompositeScore",
+          "비근무 · 지원자 · 운영자 기록",
+          "서술형 점수 저장",
+        ],
       },
       {
         file: "core/staff/evaluation/index.html",

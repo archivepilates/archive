@@ -1177,9 +1177,30 @@ td span {
 
 .staff-card-group-title {
   display: grid;
+  cursor: pointer;
   gap: 3px;
   min-width: 0;
+  min-height: 44px;
+  align-content: center;
   padding: 2px 2px 4px;
+  list-style: none;
+}
+
+.staff-card-group-title::-webkit-details-marker {
+  display: none;
+}
+
+.staff-card-group-title::after {
+  content: "펼치기";
+  justify-self: start;
+  margin-top: 3px;
+  color: var(--accent);
+  font-size: 0.74rem;
+  font-weight: 900;
+}
+
+.staff-card-group[open] > .staff-card-group-title::after {
+  content: "접기";
 }
 
 .staff-card-group-title strong {
@@ -1191,6 +1212,11 @@ td span {
   color: var(--muted);
   font-size: 0.78rem;
   font-weight: 800;
+}
+
+.staff-card-group-body {
+  display: grid;
+  gap: 10px;
 }
 
 .staff-card-row.is-active {
@@ -1232,6 +1258,73 @@ td span {
   display: grid;
   gap: 16px;
   padding: 20px;
+}
+
+.staff-composite-card {
+  display: grid;
+  gap: 12px;
+  border: 1px solid rgba(248, 91, 28, 0.2);
+  border-radius: 8px;
+  background: linear-gradient(135deg, rgba(255, 247, 237, 0.9), rgba(255, 255, 255, 0.86));
+  padding: 16px;
+}
+
+.staff-composite-head {
+  display: grid;
+  grid-template-columns: minmax(0, 1fr) auto;
+  gap: 12px;
+  align-items: start;
+}
+
+.staff-composite-head > div {
+  display: grid;
+  min-width: 0;
+  gap: 5px;
+}
+
+.staff-composite-head span,
+.staff-composite-head em,
+.staff-composite-card p {
+  margin: 0;
+  color: var(--muted);
+  font-size: 0.8rem;
+  font-style: normal;
+  font-weight: 800;
+}
+
+.staff-composite-head strong {
+  color: var(--text);
+  font-size: clamp(2rem, 1.4rem + 1vw, 2.8rem);
+  line-height: 1;
+}
+
+.staff-score-rules {
+  display: grid;
+  grid-template-columns: repeat(2, minmax(0, 1fr));
+  gap: 8px;
+}
+
+.staff-score-rules > div {
+  display: grid;
+  min-width: 0;
+  gap: 4px;
+  border: 1px solid var(--line-soft);
+  border-radius: 8px;
+  background: rgba(255, 255, 255, 0.78);
+  padding: 10px;
+}
+
+.staff-score-rules span,
+.staff-score-rules em {
+  color: var(--muted);
+  font-size: 0.74rem;
+  font-style: normal;
+  font-weight: 800;
+}
+
+.staff-score-rules strong {
+  color: var(--text);
+  font-size: 1rem;
 }
 
 .staff-detail-kpis {
@@ -2178,6 +2271,10 @@ a.rank-row:hover,
   .staff-signal-grid {
     grid-template-columns: 1fr;
   }
+
+  .staff-score-rules {
+    grid-template-columns: 1fr;
+  }
 }
 
 @media (max-width: 720px) {
@@ -2229,7 +2326,8 @@ a.rank-row:hover,
   }
 
   .staff-detail-quiz,
-  .staff-detail-history {
+  .staff-detail-history,
+  .staff-composite-head {
     grid-template-columns: 1fr;
   }
 

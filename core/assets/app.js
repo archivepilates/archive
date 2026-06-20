@@ -2644,6 +2644,71 @@ function formatMetricNumber(value, suffix = "") {
   return Number.isFinite(Number(value)) ? `${toNumber(value).toLocaleString("ko-KR")}${suffix}` : "연결 대기";
 }
 
+function scoreBand(score) {
+  if (!Number.isFinite(Number(score))) return { label: "산출 대기", tone: "muted" };
+  if (score >= 85) return { label: "우수", tone: "good" };
+  if (score >= 75) return { label: "안정", tone: "good" };
+  if (score >= 65) return { label: "관찰", tone: "warn" };
+  return { label: "개선필요", tone: "danger" };
+}
+
+function normalizeGroupAverageScore(value) {
+  if (!Number.isFinite(Number(value))) return null;
+  const targetAverage = 4.5;
+  return Math.max(0, Math.min(100, Math.round((toNumber(value) / targetAverage) * 100)));
+}
+
+function staffCompositeScore(row, metrics, latestQuiz) {
+  const latestMetric = metrics.at(-1) || null;
+  const definitions = [
+    {
+      key: "quiz",
+      label: "평가 퀴즈",
+      weight: 35,
+      value: latestQuiz ? Math.max(0, Math.min(100, toNumber(latestQuiz.scorePercent))) : null,
+      display: latestQuiz ? `${Math.round(toNumber(latestQuiz.scorePercent))}점` : "미응시",
+    },
+    {
+      key: "reservation",
+      label: "그룹 예약률",
+      weight: 30,
+      value: latestMetric && Number.isFinite(Number(latestMetric.reservationRate)) ? Math.max(0, Math.min(100, toNumber(latestMetric.reservationRate))) : null,
+      display: latestMetric ? formatMetricRate(latestMetric.reservationRate) : "연결 대기",
+    },
+    {
+      key: "averageMembers",
+      label: "그룹 평균인원",
+      weight: 25,
+      value: latestMetric ? normalizeGroupAverageScore(latestMetric.averageGroupMembers) : null,
+      display: latestMetric ? formatMetricNumber(latestMetric.averageGroupMembers, "명") : "연결 대기",
+    },
+    {
+      key: "attendance",
+      label: "그룹 출석률",
+      weight: 10,
+      value: latestMetric && Number.isFinite(Number(latestMetric.attendanceRate)) ? Math.max(0, Math.min(100, toNumber(latestMetric.attendanceRate))) : null,
+      display: latestMetric ? formatMetricRate(latestMetric.attendanceRate) : "연결 대기",
+    },
+  ];
+  const active = definitions.filter((item) => Number.isFinite(Number(item.value)));
+  const totalWeight = active.reduce((sum, item) => sum + item.weight, 0);
+  const score = totalWeight
+    ? Math.round(active.reduce((sum, item) => sum + item.value * item.weight, 0) / totalWeight)
+    : null;
+  return {
+    score,
+    band: scoreBand(score),
+    components: definitions,
+    activeCount: active.length,
+    totalCount: definitions.length,
+    coverage: totalWeight,
+    note:
+      row.employmentState === "current"
+        ? "현재 연결된 항목만 100점으로 환산합니다."
+        : "비근무/지원자/운영자 기록은 참고 점수로만 표시합니다.",
+  };
+}
+
 function renderStaffDetail(row) {
   const container = qs("staffDetailCard");
   if (!container) return;
@@ -2660,6 +2725,7 @@ function renderStaffDetail(row) {
   const q19 = latestQuiz ? staffEssayScoreInfo(latestQuiz) : null;
   const recentSubmissions = row.submissions.slice(0, 5);
   const lastUpdated = latestMetric?.month ? `${formatMonth(latestMetric.month)} 운영 지표` : "운영 지표 연결 대기";
+  const composite = staffCompositeScore(row, metrics, latestQuiz);
 
   setText("staffDetailTitle", `${row.name || "강사"} 세부 지표`);
   setText(
@@ -2699,6 +2765,32 @@ function renderStaffDetail(row) {
 
   const metricRows = metrics.slice(-6).reverse();
   container.innerHTML = `
+    <div class="staff-composite-card">
+      <div class="staff-composite-head">
+        <div>
+          <span>강사 평가 종합 점수</span>
+          <strong>${composite.score === null ? "산출 대기" : `${composite.score}점`}</strong>
+          <em>v1 산식 · 연결 항목 ${composite.activeCount}/${composite.totalCount} · 가중치 ${composite.coverage}%</em>
+        </div>
+        <span class="pill ${escapeHtml(composite.band.tone)}">${escapeHtml(composite.band.label)}</span>
+      </div>
+      <p>${escapeHtml(composite.note)}</p>
+      <div class="staff-score-rules">
+        ${composite.components
+          .map(
+            (item) => `
+              <div>
+                <span>${escapeHtml(item.label)}</span>
+                <strong>${escapeHtml(`${item.weight}%`)}</strong>
+                <em>${escapeHtml(item.display)}</em>
+              </div>
+            `,
+          )
+          .join("")}
+      </div>
+      <p class="meta-line">추후 원천 연결 후 월 수업수, 회원만족도, 클레임 현황을 산식 v2에 반영합니다.</p>
+    </div>
+
     <div class="staff-detail-kpis">
       <div class="staff-detail-kpi staff-detail-kpi-status">
         <span>근무 상태</span>
@@ -2925,19 +3017,28 @@ function renderStaffHr() {
       })
       .join("");
 
-  const renderStaffGroup = (title, description, groupRows, tone = "") => `
-    <section class="staff-card-group ${tone}">
-      <div class="staff-card-group-title">
+  const renderStaffGroup = (title, description, groupRows, tone = "", open = false) => `
+    <details class="staff-card-group ${tone}" ${open ? "open" : ""}>
+      <summary class="staff-card-group-title">
         <strong>${escapeHtml(title)}</strong>
-        <span>${escapeHtml(description)}</span>
+        <span>${escapeHtml(description)} · ${groupRows.length}명</span>
+      </summary>
+      <div class="staff-card-group-body">
+        ${groupRows.length ? renderStaffRows(groupRows) : `<div class="empty-state">해당 기록이 없습니다.</div>`}
       </div>
-      ${groupRows.length ? renderStaffRows(groupRows) : `<div class="empty-state">해당 기록이 없습니다.</div>`}
-    </section>
+    </details>
   `;
 
+  const inactiveContainsSelected = inactiveStaffs.some((staff) => staff.key === selectedStaffKey);
   list.innerHTML = [
-    renderStaffGroup("현재 근무중", "staffs active 기준으로 현재 운영 중인 강사입니다.", currentStaffs, "is-current"),
-    renderStaffGroup("비근무 · 지원자 · 운영자 기록", "입사시험 제출자, 퇴사/비활성 강사, 운영자 계정, 기록만 남은 대상을 분리 보관합니다.", inactiveStaffs, "is-archived"),
+    renderStaffGroup("현재 근무중", "staffs active 기준으로 현재 운영 중인 강사입니다.", currentStaffs, "is-current", true),
+    renderStaffGroup(
+      "비근무 · 지원자 · 운영자 기록",
+      "입사시험 제출자, 퇴사/비활성 강사, 운영자 계정, 기록만 남은 대상을 분리 보관합니다.",
+      inactiveStaffs,
+      "is-archived",
+      inactiveContainsSelected,
+    ),
   ].join("");
   renderStaffDetail(staffs.find((staff) => staff.key === selectedStaffKey) || staffs[0]);
   renderStaffSubmissionHistory();
