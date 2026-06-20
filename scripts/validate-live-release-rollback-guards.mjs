@@ -20,7 +20,13 @@ const guardGroups = [
           "pricingInquiryHistoryPanel",
           "최근 발송/메모 보기",
           "Staff <small>강사</small>",
+          "/site.webmanifest?v=1",
+          "/icons/archive-pilates-icon-192.png?v=1",
         ],
+      },
+      {
+        file: "core/site.webmanifest",
+        markers: ["ARCHIVE CORE", "ARCHIVE PILATES Operations Platform", "/icons/archive-pilates-icon-512.png?v=1"],
       },
       {
         file: "core/assets/app.js",
