@@ -684,7 +684,8 @@
             label.textContent = "업로드 완료 · 리포트 자동 포함";
             return;
           } catch (error) {
-            if (progress.value > 0) throw error;
+            if (!error.allowFunctionFallback) throw error;
+            progress.value = 0;
             label.textContent = "직접 업로드 실패 · 안전 경로로 재시도 중";
           }
         }
@@ -705,29 +706,38 @@
     async function uploadMediaFileDirect(file, init, chunkSize, label, progress) {
       let offset = 0;
       let finalDriveFile = null;
+      const startedAt = Date.now();
       while (offset < file.size) {
         const endExclusive = Math.min(offset + chunkSize, file.size);
         const chunk = file.slice(offset, endExclusive);
-        const response = await fetch(init.directUpload.uploadUrl, {
-          method: "PUT",
-          headers: {
-            "Content-Type": file.type,
-            "Content-Range": `bytes ${offset}-${endExclusive - 1}/${file.size}`,
-          },
-          body: chunk,
-        });
+        let response;
+        try {
+          response = await uploadDriveChunkWithProgress(
+            init.directUpload.uploadUrl,
+            file.type,
+            chunk,
+            offset,
+            endExclusive,
+            file.size,
+            (loaded) => updateDirectUploadProgress(file, offset + loaded, startedAt, label, progress),
+          );
+        } catch (error) {
+          error.allowFunctionFallback = offset === 0;
+          throw error;
+        }
         if (response.status === 308) {
-          const range = response.headers.get("range") || "";
+          const range = response.range || "";
           const match = range.match(/bytes=0-(\d+)/i);
           offset = match ? Number(match[1]) + 1 : endExclusive;
-          progress.value = Math.round((offset / file.size) * 100);
-          label.textContent = `Drive 직접 업로드 중 ${progress.value}%`;
+          updateDirectUploadProgress(file, offset, startedAt, label, progress);
           continue;
         }
-        const text = await response.text();
+        const text = response.text || "";
         const json = text ? JSON.parse(text) : {};
         if (!response.ok || !json.id) {
-          throw new Error(json?.error?.message || `Drive 직접 업로드 실패 ${response.status}`);
+          const error = new Error(json?.error?.message || `Drive 직접 업로드 실패 ${response.status}`);
+          error.allowFunctionFallback = offset === 0;
+          throw error;
         }
         finalDriveFile = json;
         offset = file.size;
@@ -740,6 +750,42 @@
         uploadId: init.uploadId,
         driveFile: finalDriveFile,
       });
+    }
+
+    function uploadDriveChunkWithProgress(uploadUrl, mimeType, chunk, offset, endExclusive, total, onProgress) {
+      return new Promise((resolve, reject) => {
+        const xhr = new XMLHttpRequest();
+        xhr.open("PUT", uploadUrl);
+        xhr.setRequestHeader("Content-Type", mimeType || "application/octet-stream");
+        xhr.setRequestHeader("Content-Range", `bytes ${offset}-${endExclusive - 1}/${total}`);
+        xhr.upload.onprogress = (event) => {
+          if (!event.lengthComputable) return;
+          onProgress(Math.min(chunk.size, event.loaded));
+        };
+        xhr.onload = () => {
+          resolve({
+            status: xhr.status,
+            ok: xhr.status >= 200 && xhr.status < 300,
+            text: xhr.responseText || "",
+            range: xhr.getResponseHeader("range") || "",
+          });
+        };
+        xhr.onerror = () => reject(new Error("Drive 직접 업로드 네트워크 오류"));
+        xhr.onabort = () => reject(new Error("Drive 직접 업로드가 중단되었습니다."));
+        xhr.send(chunk);
+      });
+    }
+
+    function updateDirectUploadProgress(file, uploadedBytes, startedAt, label, progress) {
+      const uploaded = Math.min(file.size, Math.max(0, uploadedBytes));
+      const percent = uploaded >= file.size ? 100 : Math.min(99, Math.floor((uploaded / file.size) * 100));
+      progress.value = percent;
+      const elapsedSeconds = Math.max(0.1, (Date.now() - startedAt) / 1000);
+      const bytesPerSecond = uploaded / elapsedSeconds;
+      const etaSeconds = bytesPerSecond > 0 ? (file.size - uploaded) / bytesPerSecond : NaN;
+      const speedText = bytesPerSecond > 0 ? `${formatBytes(bytesPerSecond)}/s` : "속도 계산 중";
+      const etaText = Number.isFinite(etaSeconds) && etaSeconds > 1 ? ` · 남은 ${formatDuration(etaSeconds)}` : "";
+      label.textContent = `Drive 직접 업로드 중 ${percent}% · ${speedText}${etaText}`;
     }
 
     async function uploadMediaFileViaFunction(file, init, chunkSize, label, progress) {
@@ -872,6 +918,15 @@
       if (!value) return "크기 미상";
       if (value < 1024 * 1024) return `${Math.round(value / 1024)}KB`;
       return `${(value / 1024 / 1024).toFixed(1)}MB`;
+    }
+
+    function formatDuration(seconds) {
+      if (!Number.isFinite(seconds) || seconds <= 0) return "계산 중";
+      if (seconds < 60) return `${Math.max(1, Math.round(seconds))}초`;
+      if (seconds < 3600) return `${Math.round(seconds / 60)}분`;
+      const hours = Math.floor(seconds / 3600);
+      const minutes = Math.round((seconds % 3600) / 60);
+      return minutes ? `${hours}시간 ${minutes}분` : `${hours}시간`;
     }
 
     async function convertReport() {

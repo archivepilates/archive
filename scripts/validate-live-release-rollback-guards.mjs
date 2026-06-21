@@ -104,6 +104,8 @@ const guardGroups = [
         markers: [
           "init.chunkSize || 16 * 1024 * 1024",
           "uploadMediaFileDirect",
+          "uploadDriveChunkWithProgress",
+          "updateDirectUploadProgress",
           "completeMediaUpload",
           "Drive 직접 업로드 중",
         ],
