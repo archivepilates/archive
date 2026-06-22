@@ -65,6 +65,14 @@
 - Service account key path: `/Users/archivepilates/ArchiveIN/secrets/google/archive-codex-operator.json`
 - Service account email: `archive-codex-operator@archive-pilates.iam.gserviceaccount.com`
 
+Before starting automation, system-health, or production-error triage work, check the Codex action queue:
+
+```bash
+npm run codex:queue
+```
+
+`codexActionQueue` contains unresolved `critical` or `action_required` findings from the Mac mini health checker that need Codex follow-up. Treat it as triage evidence, not permission to run production writes, member-facing sends, deploys, or destructive fixes.
+
 Firebase CLI may prefer a stale signed-in user token. For service-account-backed CLI reads or approved deploys, generate an access token in the current shell:
 
 ```bash
