@@ -171,7 +171,7 @@ function runCommandStep(name, command, options = {}) {
     command,
     exitCode: result.status ?? 0,
     stdout: parseJsonOrText(result.stdout),
-    stderr: result.stderr.trim(),
+    stderr: String(result.stderr || result.error?.message || "").trim(),
     stdoutOk: parsedOk(result.stdout),
     requiredFailed: name === "memberProfiles" && parsedOk(result.stdout) === false,
     optional: Boolean(options.optional),
