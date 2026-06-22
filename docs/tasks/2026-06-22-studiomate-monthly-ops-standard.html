@@ -159,9 +159,9 @@
             </tr>
             <tr>
               <td>1. 프리플라이트</td>
-              <td>StudioMate 로그인, 회원 검색, 일괄예약 화면, 수업카드 셀렉터 확인</td>
+              <td>StudioMate 로그인, 회원 검색, 일괄예약 화면, 수업카드 셀렉터, 수강권 상태 확인</td>
               <td>샘플 회원 2명 이상에서 일괄예약 화면과 수업카드가 확인됨</td>
-              <td><code>surface_failed</code>로 분리하고 예약 쓰기 금지</td>
+              <td><code>surface_failed</code>로 분리하고, 예약 안 된 회원은 수강권 만료·정지·횟수 사유를 함께 기록</td>
             </tr>
             <tr>
               <td>2. 수업 생성</td>
@@ -200,6 +200,7 @@
             <li>프리플라이트가 <code>ready</code>면 수업 생성 dry-run을 만들고, 중복 수업이 없을 때만 생성합니다.</li>
             <li>수업 생성 후 주제·기구 입력을 적용하고, 생성된 수업 상세와 원본표를 대조합니다.</li>
             <li>고정회원 예약은 회원별 일괄예약으로만 진행하고, 수업상세 예약회원 목록으로 후검증합니다.</li>
+            <li>예약 안 된 회원은 <code>ticketStatus</code>에 수강권 기간만료, 정지기간, 횟수/예약가능 0 여부를 같이 남깁니다.</li>
             <li>결과 시트에는 실패/확인필요 건만 남깁니다. 성공 건은 요약 숫자로만 기록합니다.</li>
           </ol>
         </article>
@@ -210,6 +211,7 @@
             <li><strong>surface_failed</strong>: 일괄예약 화면 진입 실패</li>
             <li><strong>exact_match_missing</strong>: 해당 날짜/시간/강사 카드 없음</li>
             <li><strong>exact_match_blocked</strong>: 카드 존재, 선택 불가 또는 정원마감</li>
+            <li><strong>ticketStatus.issue</strong>: 예약 실패와 별도로 수강권 기간만료, 정지기간, 횟수/예약가능 0 같은 운영 사유가 확인됨</li>
             <li><strong>detail_not_reflected</strong>: StudioMate 성공 메시지 후 수업상세 미반영</li>
             <li><strong>completed</strong>: 수업상세 예약회원 목록에서 확인</li>
           </ul>

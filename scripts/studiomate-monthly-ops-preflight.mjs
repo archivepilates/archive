@@ -82,33 +82,40 @@ async function runStudioMateReadOnlyPreflight(groups, input = {}) {
         status: "pending",
         reason: "",
         bulkSurface: null,
+        ticketStatus: null,
         exactMatches: [],
       };
       try {
         result.memberUrl = await openMemberDetail(page, group);
+        result.ticketStatus = await inspectTicketStatus(page, group.rows, { surface: "member_detail" });
         result.bulkSurface = await openBulkBookingSurface(page);
+        result.ticketStatus = mergeTicketStatuses(
+          result.ticketStatus,
+          await inspectTicketStatus(page, group.rows, { surface: "bulk_booking" }),
+        );
         if (result.bulkSurface.status !== "opened") {
           result.status = "surface_failed";
-          result.reason = result.bulkSurface.reason;
+          result.reason = withTicketReason(result.bulkSurface.reason, result.ticketStatus);
           results.push(result);
           continue;
         }
         result.exactMatches = await collectExactMatches(page, group.rows);
+        result.ticketStatus = mergeTicketStatuses(result.ticketStatus, ticketStatusFromExactMatches(result.exactMatches, group.rows));
         const missing = result.exactMatches.filter((match) => match.matchCount === 0);
         const blocked = result.exactMatches.filter((match) => match.blockedCount > 0 && match.availableCount === 0);
         if (missing.length) {
           result.status = "exact_match_missing";
-          result.reason = `${missing.length}개 대상 수업이 일괄예약 화면에 없습니다.`;
+          result.reason = withTicketReason(`${missing.length}개 대상 수업이 일괄예약 화면에 없습니다.`, result.ticketStatus);
         } else if (blocked.length) {
           result.status = "exact_match_blocked";
-          result.reason = `${blocked.length}개 대상 수업은 있으나 선택 불가/정원마감 상태입니다.`;
+          result.reason = withTicketReason(`${blocked.length}개 대상 수업은 있으나 선택 불가/정원마감 상태입니다.`, result.ticketStatus);
         } else {
           result.status = "ready";
-          result.reason = "샘플 회원의 일괄예약 화면과 정확 매칭 수업카드가 확인되었습니다.";
+          result.reason = withTicketReason("샘플 회원의 일괄예약 화면과 정확 매칭 수업카드가 확인되었습니다.", result.ticketStatus);
         }
       } catch (error) {
         result.status = "error";
-        result.reason = error?.message || String(error);
+        result.reason = withTicketReason(error?.message || String(error), result.ticketStatus);
       }
       results.push(result);
     }
@@ -251,7 +258,8 @@ async function collectExactMatches(page, rows) {
         card.text.includes(row.timeRange) &&
         card.text.includes(`${row.teacher} 강사`),
     );
-    const available = exact.filter((card) => !String(card.className || "").includes("full"));
+    const blockedReasons = exact.map(cardUnavailableReason).filter(Boolean);
+    const available = exact.filter((card) => !cardUnavailableReason(card));
     return {
       date: row.date,
       day: row.day,
@@ -260,9 +268,194 @@ async function collectExactMatches(page, rows) {
       matchCount: exact.length,
       availableCount: available.length,
       blockedCount: exact.length - available.length,
+      blockedReasons: [...new Set(blockedReasons)],
       sample: exact.slice(0, 2).map((card) => card.text.replace(/\n/g, " | ")),
     };
   });
+}
+
+function cardUnavailableReason(card) {
+  const text = normalizeText(card.text);
+  const className = normalizeText(card.className);
+  if (/정지|일시정지|pause|suspend/.test(text)) return "ticket_paused";
+  if (/기간만료|수강권만료|만료|expired/.test(text)) return "ticket_expired";
+  if (/예약가능\s*0|잔여\s*0\s*회|잔여횟수\s*0|남은횟수\s*0|0\s*회\s*(잔여|남음)/.test(text)) return "ticket_count_exhausted";
+  if (/정원마감|마감|full/.test(text) || className.includes("full")) return "class_full";
+  if (/예약불가|선택불가|불가|disabled|disable|unavailable|impossible/.test(text) || /disabled|disable|unavailable|impossible/.test(className)) {
+    return "booking_unavailable";
+  }
+  return "";
+}
+
+function normalizeText(value) {
+  return String(value || "").replace(/\s+/g, " ").trim();
+}
+
+async function inspectTicketStatus(page, rows, input = {}) {
+  const body = await page.locator("body").innerText().catch(() => "");
+  const ticketTexts = await collectTicketTexts(page);
+  return analyzeTicketText([body, ...ticketTexts].join("\n"), rows, input.surface || "unknown");
+}
+
+async function collectTicketTexts(page) {
+  return page
+    .locator("body")
+    .evaluate((body) =>
+      [...body.querySelectorAll("button,a,div,li,span,p,td")]
+        .map((node) => (node.innerText || node.textContent || "").replace(/\s+/g, " ").trim())
+        .filter(Boolean)
+        .filter((text) => text.length <= 600)
+        .filter((text) => /수강권|기간제|횟수제|사용중|사용예정|만료|정지|잔여|예약가능|회권|그룹형|프라이빗|듀엣/.test(text))
+        .slice(0, 300),
+    )
+    .catch(() => []);
+}
+
+function analyzeTicketText(text, rows, surface) {
+  const target = targetDateWindow(rows);
+  const lines = String(text || "")
+    .split(/\n+/)
+    .map((line) => line.replace(/\s+/g, " ").trim())
+    .filter(Boolean);
+  const compact = normalizeText(lines.join(" "));
+  const reasons = [];
+  const add = (code, label, evidence = []) => {
+    if (reasons.some((reason) => reason.code === code)) return;
+    reasons.push({ code, label, evidence: evidence.slice(0, 3) });
+  };
+
+  const explicitExpiryLines = contextLines(lines, ["기간만료", "수강권 만료", "만료된 수강권"]);
+  const ticketDateLines = lines
+    .filter((line) => /기간제|횟수제|수강권\s*선택|사용중|사용예정|그룹형|프라이빗|듀엣|회권/.test(line))
+    .filter((line) => extractIsoDates(line).length >= 2 || line.includes("~"));
+  const expiryLines = [...explicitExpiryLines, ...ticketDateLines];
+  const expiryDates = expiryLines.flatMap(extractIsoDates);
+  const latestExpiryDate = maxIsoDate(expiryDates);
+  if (explicitExpiryLines.length || /기간만료|수강권\s*만료|만료된\s*수강권|expired/.test(explicitExpiryLines.join(" "))) {
+    add("ticket_expired", "수강권 기간만료", expiryLines);
+  } else if (latestExpiryDate && target.endIso && latestExpiryDate < target.endIso) {
+    add("ticket_expired", "수강권 기간만료", expiryLines);
+  }
+
+  const pauseLines = contextLines(lines, ["정지기간", "수강권 정지", "일시정지", "정지 중", "정지중"]);
+  if (pauseLines.length) {
+    const pauseDates = pauseLines.flatMap(extractIsoDates);
+    const pauseStart = minIsoDate(pauseDates);
+    const pauseEnd = maxIsoDate(pauseDates);
+    if (!pauseStart || !pauseEnd || dateRangesOverlap(pauseStart, pauseEnd, target.startIso, target.endIso)) {
+      add("ticket_paused", "수강권 정지기간", pauseLines);
+    }
+  }
+
+  const countLines = contextLines(lines, ["예약가능", "잔여", "잔여횟수", "남은횟수", "남은 횟수"]);
+  if (/예약가능\s*0|잔여\s*0\s*회|잔여횟수\s*0|남은횟수\s*0|0\s*회\s*(잔여|남음)/.test(compact)) {
+    add("ticket_count_exhausted", "수강권 횟수/예약가능 0", countLines);
+  }
+
+  const noTicketLines = contextLines(lines, ["사용중인 수강권이 없습니다", "사용 가능한 수강권", "예약 가능한 수강권", "수강권을 찾을 수"]);
+  if (/사용중인\s*수강권이\s*없|사용\s*가능한\s*수강권이\s*없|예약\s*가능한\s*수강권이\s*없|수강권을\s*찾을\s*수\s*없/.test(compact)) {
+    add("no_usable_ticket", "사용 가능한 수강권 없음", noTicketLines);
+  }
+
+  return {
+    surface,
+    status: reasons.length ? "issue" : compact.includes("수강권") || compact.includes("예약가능") ? "checked_no_issue" : "unknown",
+    targetDateRange: target.startIso && target.endIso ? `${target.startIso}~${target.endIso}` : "",
+    summary: reasons.map((reason) => reason.label).join(", "),
+    reasons,
+  };
+}
+
+function ticketStatusFromExactMatches(matches, rows) {
+  const target = targetDateWindow(rows);
+  const labels = {
+    ticket_expired: "수강권 기간만료",
+    ticket_paused: "수강권 정지기간",
+    ticket_count_exhausted: "수강권 횟수/예약가능 0",
+    no_usable_ticket: "사용 가능한 수강권 없음",
+  };
+  const reasons = [];
+  for (const match of matches) {
+    for (const code of match.blockedReasons || []) {
+      if (!labels[code] || reasons.some((reason) => reason.code === code)) continue;
+      reasons.push({
+        code,
+        label: labels[code],
+        evidence: [`${match.date} ${match.timeRange} ${match.teacher} ${code}`],
+      });
+    }
+  }
+  return {
+    surface: "exact_match_cards",
+    status: reasons.length ? "issue" : "unknown",
+    targetDateRange: target.startIso && target.endIso ? `${target.startIso}~${target.endIso}` : "",
+    summary: reasons.map((reason) => reason.label).join(", "),
+    reasons,
+  };
+}
+
+function mergeTicketStatuses(...statuses) {
+  const usable = statuses.filter(Boolean);
+  if (!usable.length) return null;
+  const reasonMap = new Map();
+  const surfaces = [];
+  for (const status of usable) {
+    if (status.surface) surfaces.push(status.surface);
+    for (const reason of status.reasons || []) {
+      if (!reasonMap.has(reason.code)) reasonMap.set(reason.code, { ...reason, evidence: [...(reason.evidence || [])] });
+      else {
+        const existing = reasonMap.get(reason.code);
+        existing.evidence = [...new Set([...(existing.evidence || []), ...(reason.evidence || [])])].slice(0, 5);
+      }
+    }
+  }
+  const reasons = [...reasonMap.values()];
+  const firstRange = usable.find((status) => status.targetDateRange)?.targetDateRange || "";
+  return {
+    surface: [...new Set(surfaces)].join(","),
+    status: reasons.length ? "issue" : usable.some((status) => status.status === "checked_no_issue") ? "checked_no_issue" : "unknown",
+    targetDateRange: firstRange,
+    summary: reasons.map((reason) => reason.label).join(", "),
+    reasons,
+  };
+}
+
+function withTicketReason(reason, ticketStatus) {
+  if (!ticketStatus || ticketStatus.status !== "issue" || !ticketStatus.summary) return reason;
+  return `${reason} 수강권 확인: ${ticketStatus.summary}.`;
+}
+
+function contextLines(lines, keywords) {
+  return lines.filter((line) => keywords.some((keyword) => line.includes(keyword))).slice(0, 8);
+}
+
+function extractIsoDates(value) {
+  const dates = [];
+  const regex = /(\d{4})\s*[.\-/년]\s*(\d{1,2})\s*[.\-/월]\s*(\d{1,2})/g;
+  let match;
+  while ((match = regex.exec(String(value || "")))) {
+    const [, year, month, day] = match;
+    dates.push(`${year}-${month.padStart(2, "0")}-${day.padStart(2, "0")}`);
+  }
+  return dates;
+}
+
+function targetDateWindow(rows) {
+  const dates = rows.map((row) => row.date).filter(Boolean).sort();
+  return { startIso: dates[0] || "", endIso: dates.at(-1) || "" };
+}
+
+function minIsoDate(dates) {
+  return dates.length ? [...dates].sort()[0] : "";
+}
+
+function maxIsoDate(dates) {
+  return dates.length ? [...dates].sort().at(-1) : "";
+}
+
+function dateRangesOverlap(startA, endA, startB, endB) {
+  if (!startA || !endA || !startB || !endB) return false;
+  return startA <= endB && startB <= endA;
 }
 
 async function readSheetValues(spreadsheetId, sheetTitle, range) {
