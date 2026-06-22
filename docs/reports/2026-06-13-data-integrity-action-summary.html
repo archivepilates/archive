@@ -1,0 +1,147 @@
+<!doctype html>
+<html lang="ko">
+<head>
+  <meta charset="utf-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1" />
+  <title>ARCHIVE PILATES 데이터 정합성 자동정리 결과</title>
+  <style>
+    :root {
+      color-scheme: light;
+      --bg: #f6f3ef;
+      --paper: #fffdf9;
+      --ink: #161616;
+      --muted: #6f767d;
+      --line: #e7dfd6;
+      --accent: #f15a24;
+      --ok: #147a5c;
+      --warn: #a45b12;
+      --soft: #fff2ea;
+    }
+    * { box-sizing: border-box; }
+    body {
+      margin: 0;
+      padding: 32px 18px;
+      background: var(--bg);
+      color: var(--ink);
+      font-family: -apple-system, BlinkMacSystemFont, "Apple SD Gothic Neo", "Pretendard", sans-serif;
+      line-height: 1.58;
+    }
+    main {
+      max-width: 860px;
+      margin: 0 auto;
+      background: var(--paper);
+      border: 1px solid var(--line);
+      border-radius: 18px;
+      padding: clamp(22px, 4vw, 40px);
+      box-shadow: 0 18px 60px rgba(28, 24, 20, 0.08);
+    }
+    h1, h2, h3, p { margin-top: 0; }
+    h1 { font-size: 28px; line-height: 1.22; margin-bottom: 10px; }
+    h2 { font-size: 18px; margin: 34px 0 12px; }
+    .eyebrow {
+      color: var(--accent);
+      font-weight: 800;
+      letter-spacing: .02em;
+      margin-bottom: 8px;
+    }
+    .meta {
+      color: var(--muted);
+      font-size: 14px;
+      margin-bottom: 22px;
+    }
+    .summary {
+      display: grid;
+      grid-template-columns: repeat(auto-fit, minmax(min(100%, 220px), 1fr));
+      gap: 12px;
+      margin: 20px 0 26px;
+    }
+    .card {
+      border: 1px solid var(--line);
+      border-radius: 14px;
+      padding: 16px;
+      background: #fff;
+      min-width: 0;
+    }
+    .card strong {
+      display: block;
+      font-size: 24px;
+      line-height: 1.2;
+      margin-top: 6px;
+    }
+    .label {
+      color: var(--muted);
+      font-size: 13px;
+      font-weight: 700;
+    }
+    .ok { color: var(--ok); }
+    .warn { color: var(--warn); }
+    ul {
+      margin: 0;
+      padding-left: 19px;
+    }
+    li { margin: 8px 0; }
+    .callout {
+      border: 1px solid #ffd8c6;
+      background: var(--soft);
+      border-radius: 14px;
+      padding: 16px;
+      margin: 18px 0;
+    }
+    code {
+      background: #f1ece5;
+      border-radius: 6px;
+      padding: 1px 5px;
+      font-family: ui-monospace, SFMono-Regular, Menlo, monospace;
+      font-size: .92em;
+    }
+    .small { font-size: 13px; color: var(--muted); }
+  </style>
+</head>
+<body>
+  <main>
+    <div class="eyebrow">DATA INTEGRITY</div>
+    <h1>데이터 정합성 자동정리 결과</h1>
+    <p class="meta">처리시각: 2026-06-13 12:31 KST · 기준 리포트: 2026-06-13 데이터 정합성 감사</p>
+
+    <div class="summary">
+      <section class="card">
+        <div class="label">자동 처리</div>
+        <strong class="ok">2개 영역</strong>
+      </section>
+      <section class="card">
+        <div class="label">프라이빗 보정 실패</div>
+        <strong class="ok">0건</strong>
+      </section>
+      <section class="card">
+        <div class="label">운영자 판단 필요</div>
+        <strong class="warn">2건</strong>
+      </section>
+    </div>
+
+    <h2>자동 처리 완료</h2>
+    <ul>
+      <li><strong>회원 360 미러 재생성</strong>: `members` / `member360Cards` read-model을 원천 컬렉션에서 다시 생성했습니다. 외부 발송, StudioMate 쓰기, 알림톡 전송은 실행하지 않았습니다.</li>
+      <li><strong>적용 규모</strong>: `members` 873명, 계획/적용 write 13,972건. 수강권 구매이력 2,903건은 모두 StudioMate memberId 기준으로 매칭되었습니다.</li>
+      <li><strong>샘플 검증</strong>: `memberProfiles` 표본 20명 모두 `member360Cards` 존재 확인. 현재 count는 `members` 873, `member360Cards` 917입니다.</li>
+      <li><strong>프라이빗 현재월 reconcile</strong>: 2026-06-01부터 2026-06-30까지 5일 단위로 쪼개 실행했습니다. 전체 실패 0건, 업데이트 4건, 취소 반영 4건, Notion 동기화 13건입니다.</li>
+    </ul>
+
+    <h2>자동 처리하지 않은 항목</h2>
+    <div class="callout">
+      아래 2건은 운영 데이터 원천 구조나 월중 정산 기준에 영향을 주므로, Codex가 임의로 대량 수정하지 않았습니다.
+    </div>
+    <ul>
+      <li><strong>예약 canonical key 전체 마이그레이션</strong>: 기존 `bookings` 67,614건에 `canonicalBookingKey`가 비어 있고, fallback 우선순위 위반 후보가 362그룹입니다. 대량 원천 컬렉션 수정이므로 별도 마이그레이션 설계 후 진행하는 편이 안전합니다.</li>
+      <li><strong>6월 대시보드 최신화 기준</strong>: 매출 원본 엑셀은 2026-06-12까지 다운로드됐지만, Firestore 대시보드는 `아카이브 정산_2026-05`의 `대시보드_EXPORT`를 다시 반영해 `매출일일누적`이 2026-06-09에서 멈춰 있습니다. 월중 6월 정산/export 파일을 만들지, 월말 확정 전까지 현행 기준을 유지할지 결정이 필요합니다.</li>
+    </ul>
+
+    <h2>다음 권장</h2>
+    <ul>
+      <li>프라이빗 reconcile 스케줄러는 월 전체 단일 실행이 9분 제한에 걸렸으므로, 배포 변경 시 5일 단위 청크 실행 구조로 바꾸는 것이 좋습니다.</li>
+      <li>알림톡 후보/발송은 현재 중복 완료 발송은 0그룹으로 확인되어 즉시 대량 조치 대상은 아닙니다. 오래된 후보 필드 누락은 별도 legacy cleanup으로 낮은 우선순위 처리하면 됩니다.</li>
+    </ul>
+
+    <p class="small">생성 파일: `docs/reports/2026-06-13-data-integrity-action-summary.html`</p>
+  </main>
+</body>
+</html>

@@ -95,6 +95,20 @@ ARCHIVE IN은 데이터 원천별 책임을 명확히 나눈다.
 
 동기화 이슈를 조사할 때는 "어느 원천에서 틀렸는지"를 먼저 분리한다.
 
+### 예약 중복판별 ID 기준
+
+`bookings/{bookingId}`의 `bookingId`는 원천에서 확보한 예약 ID 또는 Excel/usage fallback 문서 ID로 보존한다. `archiveBookingId`는 이 원천 ID를 대체하지 않는 ARCHIVE PILATES 운영용 예약 중복판별 ID다.
+
+기준:
+
+1. 같은 회원, 같은 강사, 같은 수업 시작시각, 같은 수업 구분으로 보이는 예약은 같은 `archiveBookingId`를 가진다.
+2. `canonicalBookingKey`는 기존 로직 호환을 위해 `archiveBookingId`와 같은 값으로 둔다.
+3. 중복 묶음의 대표 여부는 `archiveBooking.isCanonical`로 표시한다.
+4. 대표 문서 선택은 실제 운영 상태를 먼저 본다. 우선순위는 `출석 완료 -> 예약/미확인 -> 예약/결석 -> 결석 -> 늦은취소 -> 대기 -> 취소`이고, 같은 상태일 때 원천 우선순위 `StudioMate 예약 ID -> usage history -> Excel fallback -> 기타 fallback`을 적용한다.
+5. 중복 source 문서는 삭제하지 않는다. `archiveBooking.isCanonical=false`, `archiveBooking.supersededByBookingId`, `archiveBooking.duplicateReason=duplicate_source`로 표시해 감사 추적을 남긴다.
+
+알림톡, 프라이빗 차트, 출석, 정산 등 회원에게 영향을 주는 흐름은 `archiveBookingId`를 바로 원천으로 삼지 않는다. 기존 원천 선택 로직과 샘플 검증을 거친 뒤, 중복 차단/표시용으로 점진 적용한다.
+
 ### 회원 프로필/연락처 동기화 기준
 
 회원카드 연락처, Google 주소록, 알림톡 발송 대상은 모두 같은 StudioMate 엑셀 동기화 결과를 기준으로 한다. 엑셀에서 내려받은 회원명단과 앱 회원카드가 서로 다른 기준으로 움직이면 동명이인, 연락처 변경, 신규회원 판단이 꼬이기 쉽다.
@@ -139,6 +153,12 @@ Firebase 주소록 동기화는 `home@archivepilates.com`을 Google People API �
 3. StudioMate 웹 엑셀 원본과 비교한다.
 4. 아카이브DB 기준 지표라면 시트 갱신 시각과 정산 기준을 확인한다.
 5. 맥미니 자동화가 필요한 흐름이면 자동화 실행 로그와 결과 파일을 확인한다.
+
+### 월중 대시보드 기준
+
+월말 정산 파일이 확정되기 전이라도 운영 대시보드의 현재월 값은 최신 원본 엑셀의 월초부터 최신일자까지 누적값을 기준으로 표시한다. 예를 들어 최신 수업매출/수강권매출 원본이 `2026-06-01~2026-06-12`이면 ARCHIVE CORE와 ARCHIVE IN 대시보드의 6월 현재월 지표도 6월 12일까지의 누적값을 표시한다.
+
+정산 확정 전 current-month preview는 `수업매출원본데이터`, `수강권매출원본데이터`의 최신 월중 누적 파일을 사용한다. 이때 `정산대장_Master`와 `강사통계_Long` 같은 월말 확정 시트는 덮어쓰지 않는다. 월말 정산 완료 후에는 `아카이브 정산_YYYY-MM`의 `대시보드_EXPORT`를 기준으로 확정값을 반영한다.
 
 ### StudioMate 예약 가능 기한 설정 자동화
 

@@ -1,0 +1,276 @@
+<!doctype html>
+<html lang="ko">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1">
+  <title>ARCHIVE PILATES 주간 데이터 정합성 감사 2026-06-20</title>
+  <style>
+    body{font-family:-apple-system,BlinkMacSystemFont,"Segoe UI",sans-serif;margin:0;background:#f7f7f4;color:#20201d;line-height:1.55}
+    main{max-width:1120px;margin:0 auto;padding:32px 20px 56px}
+    h1{font-size:28px;margin:0 0 8px}
+    h2{font-size:18px;margin:28px 0 10px}
+    .meta{color:#66645d;margin-bottom:24px}
+    .grid{display:grid;grid-template-columns:repeat(auto-fit,minmax(260px,1fr));gap:14px}
+    .card{background:white;border:1px solid #dedbd2;border-radius:8px;padding:16px}
+    .status{display:inline-block;border-radius:999px;padding:3px 10px;font-size:13px;font-weight:700}
+    .정상{background:#e7f4ea;color:#1c6b35}.주의{background:#fff1cf;color:#7a4d00}.수정필요{background:#fde2df;color:#a3271c}
+    table{width:100%;border-collapse:collapse;background:white;border:1px solid #dedbd2}
+    th,td{padding:9px 10px;border-bottom:1px solid #ebe8df;text-align:left;vertical-align:top;font-size:14px}
+    th{background:#f0eee7;font-weight:700}
+    code{font-family:ui-monospace,SFMono-Regular,Menlo,monospace;font-size:12px}
+    ul{padding-left:20px;margin:8px 0}
+    .small{font-size:13px;color:#66645d}
+  </style>
+</head>
+<body>
+<main>
+  <h1>ARCHIVE PILATES 주간 데이터 정합성 감사</h1>
+  <div class="meta">기준일 2026-06-20 · Firestore project archive-pilates · 상태 확인필요</div>
+  <div class="grid">
+    <div class="card"><h2>예약 중복 <span class="status 수정필요">수정필요</span></h2><ul><li>예약 68,078건 중 활성 추정 42,964건을 집계했습니다.</li><li>canonicalBookingKey 누락 460건입니다.</li><li>memberId+staffId+startAt 활성 중복 2,009그룹, fallback 우선순위 위반 384그룹입니다.</li></ul><p class="small">동일 시간대 real booking과 excel/usage fallback이 함께 활성인 그룹을 먼저 non-counting/superseded 처리 대상으로 검토하세요.</p></div><div class="card"><h2>개인레슨 회차 <span class="status 수정필요">수정필요</span></h2><ul><li>최근 30일 프라이빗 예약 246건, countable 추정 218건입니다.</li><li>회차 누락 3건, 역전 0건, 동일 회원 회차 중복 56그룹입니다.</li><li>chart request/record와 booking 회차 불일치 0건, Notion sync 누락 25건입니다.</li></ul><p class="small">booking.sessionOrder.privateCumulativeRound를 우선 기준으로 request/record/Notion status를 재대조하고, 직접 수정 전 표본 bookingId로 재현하세요.</p></div><div class="card"><h2>Alimtalk <span class="status 수정필요">수정필요</span></h2><ul><li>후보 2188건, 발송 700건을 확인했습니다.</li><li>필수키 누락 후보 1690건, 발송 3건입니다.</li><li>dedupeKey 기준 완료 발송 중복 0그룹, failed/error 세부내역 누락 0건입니다.</li></ul><p class="small">누락 필수키는 생성 단계에서 차단하고, failed/error는 lastError와 운영 메일 링크를 함께 남기도록 보강하세요.</p></div><div class="card"><h2>회원 데이터 <span class="status 수정필요">수정필요</span></h2><ul><li>memberProfiles 882건, members mirror 873건, member360Cards 917건입니다.</li><li>동일 memberId의 이름/전화 불일치 1건, 동일 전화 다중 profile 0그룹입니다.</li><li>김기효 profile 후보는 1건입니다.</li></ul><p class="small">memberProfiles를 기준으로 members/member360Cards를 재빌드하고, 김기효처럼 동일 이름/전화 alias는 실제 StudioMate memberId를 기준으로 병합 여부를 검토하세요.</p></div><div class="card"><h2>StudioMate 원본 <span class="status 정상">정상</span></h2><ul><li>정산 Drive root: /Users/archivepilates/Library/CloudStorage/GoogleDrive-home@archivepilates.com/내 드라이브/아카이브 정산</li><li>최신 수업매출/수강권매출 원본 범위는 2026-06-01~2026-06-19 / 2026-06-01~2026-06-19입니다.</li><li>누락 또는 최신성 주의 파일 그룹 0개입니다.</li></ul><p class="small">현 상태 유지.</p></div><div class="card"><h2>정산 <span class="status 주의">주의</span></h2><ul><li>2026-06-01~2026-06-19 원본 표본: 수업매출 748행, 수강권매출 59행입니다.</li><li>프라이빗 노쇼/결석 50% 규칙 불일치 표본 0건, 동일 회원/수업 중복 행 6그룹입니다.</li><li>대시보드 최신일은 2026-06-12이고 원본은 2026-06-19까지 있어 최신성 주의가 필요합니다.</li></ul><p class="small">정산 Apps Script와 dashboard export가 같은 raw 금액을 중복 합산하지 않는지 2026-06-19 행으로 재현하세요.</p></div>
+  </div>
+  <h2>예약 중복 상세</h2>
+      <table><tbody>
+        <tr><th>상태</th><td><span class="status 수정필요">수정필요</span></td></tr>
+        <tr><th>지표</th><td><pre><code>{
+  &quot;totalBookings&quot;: 68078,
+  &quot;activeBookings&quot;: 42964,
+  &quot;missingCanonicalBookingKey&quot;: 460,
+  &quot;canonicalDuplicateGroups&quot;: 4496,
+  &quot;memberStaffStartDuplicateGroups&quot;: 2009,
+  &quot;fallbackPriorityViolationGroups&quot;: 384
+}</code></pre></td></tr>
+        <tr><th>표본</th><td><pre><code>[
+  {
+    &quot;key&quot;: &quot;sample-1&quot;,
+    &quot;ids&quot;: [
+      &quot;154528164&quot;,
+      &quot;155952399&quot;
+    ]
+  },
+  {
+    &quot;key&quot;: &quot;sample-2&quot;,
+    &quot;ids&quot;: [
+      &quot;156331298&quot;,
+      &quot;156523014&quot;
+    ]
+  },
+  {
+    &quot;key&quot;: &quot;sample-3&quot;,
+    &quot;ids&quot;: [
+      &quot;156530160&quot;,
+      &quot;usage_booking_28006da79ff8ea7cada6&quot;
+    ]
+  }
+]</code></pre></td></tr>
+        <tr><th>권장 조치</th><td>동일 시간대 real booking과 excel/usage fallback이 함께 활성인 그룹을 먼저 non-counting/superseded 처리 대상으로 검토하세요.</td></tr>
+      </tbody></table><h2>개인레슨 회차 상세</h2>
+      <table><tbody>
+        <tr><th>상태</th><td><span class="status 수정필요">수정필요</span></td></tr>
+        <tr><th>지표</th><td><pre><code>{
+  &quot;recentPrivateBookings&quot;: 246,
+  &quot;countablePrivateBookings&quot;: 218,
+  &quot;missingPrivateCumulativeRound&quot;: 3,
+  &quot;invertedRoundCases&quot;: 0,
+  &quot;duplicateRoundGroups&quot;: 56,
+  &quot;requestRoundMismatch&quot;: 0,
+  &quot;recordRoundMismatch&quot;: 0,
+  &quot;countableBookingsMissingRequest&quot;: 78,
+  &quot;countableBookingsMissingRecord&quot;: 78,
+  &quot;notionDuplicatePageGroups&quot;: 7,
+  &quot;notionMissingOrUnsyncedRecords&quot;: 25
+}</code></pre></td></tr>
+        <tr><th>표본</th><td><pre><code>[
+  {
+    &quot;key&quot;: &quot;sample-1&quot;,
+    &quot;ids&quot;: [
+      &quot;258964203&quot;
+    ]
+  },
+  {
+    &quot;key&quot;: &quot;sample-2&quot;,
+    &quot;ids&quot;: [
+      &quot;258964204&quot;
+    ]
+  },
+  {
+    &quot;key&quot;: &quot;sample-3&quot;,
+    &quot;ids&quot;: [
+      &quot;excel_booking_d5ecedc08f2032c074&quot;
+    ]
+  }
+]</code></pre></td></tr>
+        <tr><th>권장 조치</th><td>booking.sessionOrder.privateCumulativeRound를 우선 기준으로 request/record/Notion status를 재대조하고, 직접 수정 전 표본 bookingId로 재현하세요.</td></tr>
+      </tbody></table><h2>Alimtalk 상세</h2>
+      <table><tbody>
+        <tr><th>상태</th><td><span class="status 수정필요">수정필요</span></td></tr>
+        <tr><th>지표</th><td><pre><code>{
+  &quot;candidates&quot;: 2188,
+  &quot;sends&quot;: 700,
+  &quot;candidateMissingRequiredFields&quot;: 1690,
+  &quot;sendMissingRequiredFields&quot;: 3,
+  &quot;duplicateCandidateSourceActionGroups&quot;: 72,
+  &quot;duplicateDoneSendDedupeGroups&quot;: 0,
+  &quot;failedWithoutMailOrErrorDetail&quot;: 0
+}</code></pre></td></tr>
+        <tr><th>표본</th><td><pre><code>[
+  {
+    &quot;key&quot;: &quot;sample-1&quot;,
+    &quot;ids&quot;: [
+      &quot;group_survey_1985970_2026-05-23&quot;
+    ]
+  },
+  {
+    &quot;key&quot;: &quot;sample-2&quot;,
+    &quot;ids&quot;: [
+      &quot;group_survey_1989452_2026-05-23&quot;
+    ]
+  },
+  {
+    &quot;key&quot;: &quot;sample-3&quot;,
+    &quot;ids&quot;: [
+      &quot;group_survey_1999438_2026-05-23&quot;
+    ]
+  }
+]</code></pre></td></tr>
+        <tr><th>권장 조치</th><td>누락 필수키는 생성 단계에서 차단하고, failed/error는 lastError와 운영 메일 링크를 함께 남기도록 보강하세요.</td></tr>
+      </tbody></table><h2>회원 데이터 상세</h2>
+      <table><tbody>
+        <tr><th>상태</th><td><span class="status 수정필요">수정필요</span></td></tr>
+        <tr><th>지표</th><td><pre><code>{
+  &quot;memberProfiles&quot;: 882,
+  &quot;membersMirror&quot;: 873,
+  &quot;member360Cards&quot;: 917,
+  &quot;mirrorNamePhoneMismatch&quot;: 1,
+  &quot;samePhoneMultipleProfileGroups&quot;: 0,
+  &quot;sameNameDifferentPhoneGroups&quot;: 1,
+  &quot;missingAnyMirrorSurface&quot;: 83,
+  &quot;kimKihyoProfileCandidates&quot;: [
+    {
+      &quot;id&quot;: &quot;1982133&quot;,
+      &quot;phoneLast4&quot;: &quot;8585&quot;
+    }
+  ]
+}</code></pre></td></tr>
+        <tr><th>표본</th><td><pre><code>[
+  {
+    &quot;key&quot;: &quot;sample-1&quot;,
+    &quot;ids&quot;: [
+      &quot;excel_dd2998d12fd329c8&quot;,
+      &quot;excel_dd2998d12fd329c8&quot;,
+      &quot;excel_dd2998d12fd329c8&quot;
+    ]
+  },
+  {
+    &quot;key&quot;: &quot;sample-2&quot;,
+    &quot;ids&quot;: [
+      &quot;3230373&quot;,
+      &quot;4536824&quot;
+    ]
+  }
+]</code></pre></td></tr>
+        <tr><th>권장 조치</th><td>memberProfiles를 기준으로 members/member360Cards를 재빌드하고, 김기효처럼 동일 이름/전화 alias는 실제 StudioMate memberId를 기준으로 병합 여부를 검토하세요.</td></tr>
+      </tbody></table><h2>StudioMate 원본 상세</h2>
+      <table><tbody>
+        <tr><th>상태</th><td><span class="status 정상">정상</span></td></tr>
+        <tr><th>지표</th><td><pre><code>{
+  &quot;latest&quot;: {
+    &quot;member&quot;: {
+      &quot;path&quot;: &quot;/Users/archivepilates/ArchiveIN/emergency/downloads/2026-06-20T01-01-02-510Z-member-회원목록_20260620_1001.xlsx&quot;,
+      &quot;name&quot;: &quot;2026-06-20T01-01-02-510Z-member-회원목록_20260620_1001.xlsx&quot;,
+      &quot;mtime&quot;: &quot;2026-06-20T01:01:02.530Z&quot;,
+      &quot;range&quot;: &quot;&quot;,
+      &quot;rangeEnd&quot;: &quot;&quot;
+    },
+    &quot;reservation&quot;: {
+      &quot;path&quot;: &quot;/Users/archivepilates/ArchiveIN/emergency/downloads/2026-06-20T01-01-07-425Z-reservation-예약내역_2026-06-20_2026-06-28.xlsx&quot;,
+      &quot;name&quot;: &quot;2026-06-20T01-01-07-425Z-reservation-예약내역_2026-06-20_2026-06-28.xlsx&quot;,
+      &quot;mtime&quot;: &quot;2026-06-20T01:01:08.472Z&quot;,
+      &quot;range&quot;: &quot;&quot;,
+      &quot;rangeEnd&quot;: &quot;&quot;
+    },
+    &quot;deleted&quot;: {
+      &quot;path&quot;: &quot;/Users/archivepilates/ArchiveIN/emergency/archive/deleted-class/2026-06-20/삭제된수업_2026-06-20_2026-06-28-619c1c18941f.xlsx&quot;,
+      &quot;name&quot;: &quot;삭제된수업_2026-06-20_2026-06-28-619c1c18941f.xlsx&quot;,
+      &quot;mtime&quot;: &quot;2026-06-20T01:01:13.407Z&quot;,
+      &quot;range&quot;: &quot;&quot;,
+      &quot;rangeEnd&quot;: &quot;&quot;
+    },
+    &quot;lessonSales&quot;: {
+      &quot;path&quot;: &quot;/Users/archivepilates/Library/CloudStorage/GoogleDrive-home@archivepilates.com/내 드라이브/아카이브 정산/수업매출원본데이터/수업매출_현황2026-06-01~2026-06-19.xlsx&quot;,
+      &quot;name&quot;: &quot;수업매출_현황2026-06-01~2026-06-19.xlsx&quot;,
+      &quot;mtime&quot;: &quot;2026-06-19T14:00:39.705Z&quot;,
+      &quot;range&quot;: &quot;2026-06-01~2026-06-19&quot;,
+      &quot;rangeEnd&quot;: &quot;2026-06-19&quot;
+    },
+    &quot;ticketSales&quot;: {
+      &quot;path&quot;: &quot;/Users/archivepilates/Library/CloudStorage/GoogleDrive-home@archivepilates.com/내 드라이브/아카이브 정산/수강권매출원본데이터/수강권매출_현황2026-06-01~2026-06-19.xlsx&quot;,
+      &quot;name&quot;: &quot;수강권매출_현황2026-06-01~2026-06-19.xlsx&quot;,
+      &quot;mtime&quot;: &quot;2026-06-19T14:00:50.393Z&quot;,
+      &quot;range&quot;: &quot;2026-06-01~2026-06-19&quot;,
+      &quot;rangeEnd&quot;: &quot;2026-06-19&quot;
+    }
+  },
+  &quot;folderRisks&quot;: {
+    &quot;settlementRoot&quot;: &quot;/Users/archivepilates/Library/CloudStorage/GoogleDrive-home@archivepilates.com/내 드라이브/아카이브 정산&quot;,
+    &quot;oldLessonFolderExists&quot;: false,
+    &quot;oldTicketFolderExists&quot;: false,
+    &quot;lessonSalesFolderExists&quot;: true,
+    &quot;ticketSalesFolderExists&quot;: true
+  },
+  &quot;staleOrMissingGroups&quot;: []
+}</code></pre></td></tr>
+        <tr><th>표본</th><td><pre><code>[]</code></pre></td></tr>
+        <tr><th>권장 조치</th><td>현 상태 유지.</td></tr>
+      </tbody></table><h2>정산 상세</h2>
+      <table><tbody>
+        <tr><th>상태</th><td><span class="status 주의">주의</span></td></tr>
+        <tr><th>지표</th><td><pre><code>{
+  &quot;lessonRows&quot;: 748,
+  &quot;ticketRows&quot;: 59,
+  &quot;uniqueSessionKeys&quot;: 225,
+  &quot;absentRows&quot;: 0,
+  &quot;noShowHalfChargeMismatches&quot;: 0,
+  &quot;instructorLessonRows&quot;: 0,
+  &quot;duplicateMemberLessonGroups&quot;: 6,
+  &quot;dashboardChecks&quot;: {
+    &quot;latestDashboardDay&quot;: &quot;2026-06-12&quot;,
+    &quot;sourceRangeEnd&quot;: &quot;2026-06-19&quot;,
+    &quot;dashboardStaleAgainstSource&quot;: true,
+    &quot;dashboardMonthRevenue&quot;: 20229400,
+    &quot;dashboardLessonRevenue&quot;: 8603653,
+    &quot;rawTicketRevenue&quot;: 18411400,
+    &quot;rawLessonRevenue&quot;: 9117864,
+    &quot;rawTicketPlusLesson&quot;: 27529264,
+    &quot;dashboardWithinRawEnvelope&quot;: true
+  }
+}</code></pre></td></tr>
+        <tr><th>표본</th><td><pre><code>[
+  {
+    &quot;key&quot;: &quot;settlement-sample-1&quot;,
+    &quot;ids&quot;: [
+      &quot;2026-06-06 10:00&quot;,
+      &quot;2026-06-06 10:00&quot;
+    ]
+  },
+  {
+    &quot;key&quot;: &quot;settlement-sample-2&quot;,
+    &quot;ids&quot;: [
+      &quot;2026-06-11 19:30&quot;,
+      &quot;2026-06-11 19:30&quot;
+    ]
+  },
+  {
+    &quot;key&quot;: &quot;settlement-sample-3&quot;,
+    &quot;ids&quot;: [
+      &quot;2026-06-13 10:00&quot;,
+      &quot;2026-06-13 10:00&quot;,
+      &quot;2026-06-13 10:00&quot;
+    ]
+  }
+]</code></pre></td></tr>
+        <tr><th>권장 조치</th><td>정산 Apps Script와 dashboard export가 같은 raw 금액을 중복 합산하지 않는지 2026-06-19 행으로 재현하세요.</td></tr>
+      </tbody></table>
+</main>
+</body>
+</html>

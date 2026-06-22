@@ -1,0 +1,298 @@
+{
+  "generatedAt": "2026-06-13T01:48:27.238Z",
+  "projectId": "archive-pilates",
+  "scope": {
+    "firestoreCollections": {
+      "bookings": 67614,
+      "privateLessonChartRequests": 121,
+      "privateLessonChartRecords": 120,
+      "alimtalkCandidates": 2056,
+      "alimtalkSends": 537,
+      "memberProfiles": 880,
+      "members": 852,
+      "member360Cards": 904
+    },
+    "recentWindow": "2026-05-14~2026-06-13",
+    "directWrites": "none except report files"
+  },
+  "sections": {
+    "bookings": {
+      "status": "수정필요",
+      "summary": [
+        "예약 67,614건 중 활성 추정 42,678건을 집계했습니다.",
+        "canonicalBookingKey 누락 67,614건입니다.",
+        "memberId+staffId+startAt 활성 중복 1,984그룹, fallback 우선순위 위반 362그룹입니다."
+      ],
+      "metrics": {
+        "totalBookings": 67614,
+        "activeBookings": 42678,
+        "missingCanonicalBookingKey": 67614,
+        "canonicalDuplicateGroups": 0,
+        "memberStaffStartDuplicateGroups": 1984,
+        "fallbackPriorityViolationGroups": 362
+      },
+      "samples": [
+        {
+          "key": "sample-1",
+          "ids": [
+            "182889422",
+            "182889431"
+          ]
+        },
+        {
+          "key": "sample-2",
+          "ids": [
+            "193051691",
+            "193051897"
+          ]
+        },
+        {
+          "key": "sample-3",
+          "ids": [
+            "225469793",
+            "usage_booking_2f59baadb99602db9021"
+          ]
+        }
+      ],
+      "action": "동일 시간대 real booking과 excel/usage fallback이 함께 활성인 그룹을 먼저 non-counting/superseded 처리 대상으로 검토하세요.",
+      "checkedAt": "2026-06-13T01:48:27.408Z"
+    },
+    "privateLessons": {
+      "status": "수정필요",
+      "summary": [
+        "최근 30일 프라이빗 예약 248건, countable 추정 164건입니다.",
+        "회차 누락 8건, 역전 0건, 동일 회원 회차 중복 0그룹입니다.",
+        "chart request/record와 booking 회차 불일치 0건, Notion sync 누락 0건입니다."
+      ],
+      "metrics": {
+        "recentPrivateBookings": 248,
+        "countablePrivateBookings": 164,
+        "missingPrivateCumulativeRound": 8,
+        "invertedRoundCases": 0,
+        "duplicateRoundGroups": 0,
+        "requestRoundMismatch": 0,
+        "recordRoundMismatch": 0,
+        "countableBookingsMissingRequest": 58,
+        "countableBookingsMissingRecord": 58,
+        "notionDuplicatePageGroups": 3,
+        "notionMissingOrUnsyncedRecords": 0
+      },
+      "samples": [
+        {
+          "key": "sample-1",
+          "ids": [
+            "excel_booking_5d753a6cfa95c13d28"
+          ]
+        },
+        {
+          "key": "sample-2",
+          "ids": [
+            "excel_booking_97a8baf268008dea43"
+          ]
+        },
+        {
+          "key": "sample-3",
+          "ids": [
+            "excel_booking_aa5d5233383be956fc"
+          ]
+        }
+      ],
+      "action": "booking.sessionOrder.privateCumulativeRound를 우선 기준으로 request/record/Notion status를 재대조하고, 직접 수정 전 표본 bookingId로 재현하세요.",
+      "checkedAt": "2026-06-13T01:48:27.454Z"
+    },
+    "alimtalk": {
+      "status": "수정필요",
+      "summary": [
+        "후보 2056건, 발송 537건을 확인했습니다.",
+        "필수키 누락 후보 1565건, 발송 3건입니다.",
+        "dedupeKey 기준 완료 발송 중복 0그룹, failed/error 세부내역 누락 0건입니다."
+      ],
+      "metrics": {
+        "candidates": 2056,
+        "sends": 537,
+        "candidateMissingRequiredFields": 1565,
+        "sendMissingRequiredFields": 3,
+        "duplicateCandidateSourceActionGroups": 72,
+        "duplicateDoneSendDedupeGroups": 0,
+        "failedWithoutMailOrErrorDetail": 0
+      },
+      "samples": [
+        {
+          "key": "sample-1",
+          "ids": [
+            "group_survey_1985970_2026-05-23"
+          ]
+        },
+        {
+          "key": "sample-2",
+          "ids": [
+            "group_survey_1989452_2026-05-23"
+          ]
+        },
+        {
+          "key": "sample-3",
+          "ids": [
+            "group_survey_1999438_2026-05-23"
+          ]
+        }
+      ],
+      "action": "누락 필수키는 생성 단계에서 차단하고, failed/error는 lastError와 운영 메일 링크를 함께 남기도록 보강하세요.",
+      "checkedAt": "2026-06-13T01:48:27.455Z"
+    },
+    "members": {
+      "status": "수정필요",
+      "summary": [
+        "memberProfiles 880건, members mirror 852건, member360Cards 904건입니다.",
+        "동일 memberId의 이름/전화 불일치 2건, 동일 전화 다중 profile 0그룹입니다.",
+        "김기효 profile 후보는 1건입니다."
+      ],
+      "metrics": {
+        "memberProfiles": 880,
+        "membersMirror": 852,
+        "member360Cards": 904,
+        "mirrorNamePhoneMismatch": 2,
+        "samePhoneMultipleProfileGroups": 0,
+        "sameNameDifferentPhoneGroups": 1,
+        "missingAnyMirrorSurface": 82,
+        "kimKihyoProfileCandidates": [
+          {
+            "id": "1982133",
+            "phoneLast4": "8585"
+          }
+        ]
+      },
+      "samples": [
+        {
+          "key": "sample-1",
+          "ids": [
+            "4586668",
+            "4586668",
+            "4586668"
+          ]
+        },
+        {
+          "key": "sample-2",
+          "ids": [
+            "4680240",
+            "4680240",
+            "4680240"
+          ]
+        },
+        {
+          "key": "sample-3",
+          "ids": [
+            "3230373",
+            "4536824"
+          ]
+        }
+      ],
+      "action": "memberProfiles를 기준으로 members/member360Cards를 재빌드하고, 김기효처럼 동일 이름/전화 alias는 실제 StudioMate memberId를 기준으로 병합 여부를 검토하세요.",
+      "checkedAt": "2026-06-13T01:48:27.458Z"
+    },
+    "sourceFiles": {
+      "status": "정상",
+      "summary": [
+        "정산 Drive root: /Users/archivepilates/Library/CloudStorage/GoogleDrive-home@archivepilates.com/내 드라이브/아카이브 정산",
+        "최신 수업매출/수강권매출 원본 범위는 2026-06-01~2026-06-12 / 2026-06-01~2026-06-12입니다.",
+        "누락 또는 최신성 주의 파일 그룹 0개입니다."
+      ],
+      "metrics": {
+        "latest": {
+          "member": {
+            "path": "/Users/archivepilates/ArchiveIN/emergency/downloads/2026-06-13T01-39-30-773Z-member-회원목록_20260613_1039.xlsx",
+            "name": "2026-06-13T01-39-30-773Z-member-회원목록_20260613_1039.xlsx",
+            "mtime": "2026-06-13T01:39:30.789Z",
+            "range": "",
+            "rangeEnd": ""
+          },
+          "reservation": {
+            "path": "/Users/archivepilates/ArchiveIN/emergency/downloads/2026-06-13T01-39-36-262Z-reservation-예약내역_2026-06-13_2026-06-21.xlsx",
+            "name": "2026-06-13T01-39-36-262Z-reservation-예약내역_2026-06-13_2026-06-21.xlsx",
+            "mtime": "2026-06-13T01:39:37.316Z",
+            "range": "",
+            "rangeEnd": ""
+          },
+          "deleted": {
+            "path": "/Users/archivepilates/ArchiveIN/emergency/archive/deleted-class/2026-06-13/삭제된수업_2026-06-13_2026-06-21-5284924adbf9.xlsx",
+            "name": "삭제된수업_2026-06-13_2026-06-21-5284924adbf9.xlsx",
+            "mtime": "2026-06-13T01:39:42.777Z",
+            "range": "",
+            "rangeEnd": ""
+          },
+          "lessonSales": {
+            "path": "/Users/archivepilates/Library/CloudStorage/GoogleDrive-home@archivepilates.com/내 드라이브/아카이브 정산/수업매출원본데이터/수업매출_현황2026-06-01~2026-06-12.xlsx",
+            "name": "수업매출_현황2026-06-01~2026-06-12.xlsx",
+            "mtime": "2026-06-12T14:00:51.739Z",
+            "range": "2026-06-01~2026-06-12",
+            "rangeEnd": "2026-06-12"
+          },
+          "ticketSales": {
+            "path": "/Users/archivepilates/Library/CloudStorage/GoogleDrive-home@archivepilates.com/내 드라이브/아카이브 정산/수강권매출원본데이터/수강권매출_현황2026-06-01~2026-06-12.xlsx",
+            "name": "수강권매출_현황2026-06-01~2026-06-12.xlsx",
+            "mtime": "2026-06-12T14:01:02.408Z",
+            "range": "2026-06-01~2026-06-12",
+            "rangeEnd": "2026-06-12"
+          }
+        },
+        "folderRisks": {
+          "settlementRoot": "/Users/archivepilates/Library/CloudStorage/GoogleDrive-home@archivepilates.com/내 드라이브/아카이브 정산",
+          "oldLessonFolderExists": false,
+          "oldTicketFolderExists": false,
+          "lessonSalesFolderExists": true,
+          "ticketSalesFolderExists": true
+        },
+        "staleOrMissingGroups": []
+      },
+      "samples": [],
+      "action": "현 상태 유지.",
+      "checkedAt": "2026-06-13T01:48:27.500Z"
+    },
+    "settlement": {
+      "status": "주의",
+      "summary": [
+        "6월 1~12일 원본 표본: 수업매출 470행, 수강권매출 49행입니다.",
+        "프라이빗 노쇼/결석 50% 규칙 불일치 표본 0건, 동일 회원/수업 중복 행 2그룹입니다.",
+        "대시보드 최신일은 2026-06-09이고 원본은 2026-06-12까지 있어 최신성 주의가 필요합니다."
+      ],
+      "metrics": {
+        "lessonRows": 470,
+        "ticketRows": 49,
+        "uniqueSessionKeys": 141,
+        "absentRows": 0,
+        "noShowHalfChargeMismatches": 0,
+        "instructorLessonRows": 0,
+        "duplicateMemberLessonGroups": 2,
+        "dashboardChecks": {
+          "latestDashboardDay": "2026-06-09",
+          "sourceRangeEnd": "2026-06-12",
+          "dashboardStaleAgainstSource": true,
+          "dashboardMonthRevenue": 16042400,
+          "dashboardLessonRevenue": 6386930,
+          "rawTicketRevenue": 14224400,
+          "rawLessonRevenue": 6386930,
+          "rawTicketPlusLesson": 20611330,
+          "dashboardWithinRawEnvelope": true
+        }
+      },
+      "samples": [
+        {
+          "key": "settlement-sample-1",
+          "ids": [
+            "2026-06-06 10:00",
+            "2026-06-06 10:00"
+          ]
+        },
+        {
+          "key": "settlement-sample-2",
+          "ids": [
+            "2026-06-11 19:30",
+            "2026-06-11 19:30"
+          ]
+        }
+      ],
+      "action": "정산 Apps Script와 dashboard export가 같은 raw 금액을 중복 합산하지 않는지 2026-06-12 행으로 재현하세요.",
+      "checkedAt": "2026-06-13T01:48:27.528Z"
+    }
+  },
+  "overallStatus": "확인필요"
+}
