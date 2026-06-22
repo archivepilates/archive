@@ -1,16 +1,19 @@
-# ArchiveIN 테스트 계정 및 스모크 테스트 시나리오 초안
+# ARCHIVE IN 레거시/링크 스모크 테스트 시나리오
 
-마지막 업데이트: 2026-05-14
+마지막 업데이트: 2026-06-23
 
 ## 1. 목적
 
-이 문서는 ArchiveIN 배포 전후 최소 확인 항목을 정리한다. 목표는 앱 코드 변경 없이도 운영자가 실제로 쓰는 핵심 흐름이 살아 있는지 빠르게 판단하는 것이다.
+이 문서는 ARCHIVE IN 배포 전후 최소 확인 항목을 정리한다.
+2026-06-23부터 ARCHIVE IN 루트 운영자 앱은 ARCHIVE CORE로 역할이 이전되었고, ARCHIVE IN은 설문, 회원가입서, 프라이빗 차트, 리포트, short link 호환 호스트로 유지한다.
 
 검증 대상 URL:
 
-- 우선 확인: `https://archive-pilates.web.app/archivein/`
+- 운영자 업무 기준: `https://core.archivepilates.com/`
+- ARCHIVE IN 레거시 안내: `https://archive-pilates.web.app/archivein/`
+- ARCHIVE IN 운영 도메인 안내: `https://in.archivepilates.com/`
+- 유지 경로: `https://in.archivepilates.com/privateSurvey/`, `https://in.archivepilates.com/private-chart/`, `https://in.archivepilates.com/onsiteWelcome/`, `https://in.archivepilates.com/memberSignup/`, `https://in.archivepilates.com/s/...`
 - 레거시 리다이렉트 확인: `https://archive-pilates.web.app/kangsain/`
-- GitHub Pages 확인이 필요한 경우: `https://archivepilates.github.io/archive/archivein/`
 
 ## 2. 테스트 계정 관리 기준
 
@@ -40,19 +43,22 @@
 
 ## 4. 강사용 핵심 스모크 테스트
 
+아래 강사용 앱 테스트는 2026-06-23 이후 기본 스모크 대상이 아니다.
+강사는 StudioMate 강사용 앱을 사용하고, ARCHIVE IN의 강사용 화면은 프라이빗 차트 입력 링크처럼 개별 플로우 단위로만 검증한다.
+
 ### A. 로그인
 
 절차:
 
 1. `https://archive-pilates.web.app/archivein/` 접속.
-2. 강사 테스트 계정 이메일/비밀번호로 로그인.
-3. 로그인 후 강사 홈 화면으로 이동하는지 확인.
+2. ARCHIVE CORE 이동 안내가 표시되는지 확인.
+3. 기존 운영자/강사용 모놀리식 앱 로그인 화면이 보이면 실패로 본다.
 
 기대 결과:
 
-- 로그인 화면의 앱 명칭은 아카이브IN/ARCHIVE IN 맥락을 유지한다.
-- 로그인 실패 시 원인을 알 수 있는 실패 상태가 표시된다.
-- 로그인 성공 후 새로고침해도 세션이 유지된다.
+- ARCHIVE IN 루트는 종료 안내 화면만 보여준다.
+- ARCHIVE CORE 이동 버튼이 보인다.
+- 프라이빗 사전설문, 강사용 프라이빗 차트, 현장 웰컴, 회원가입서 링크가 보인다.
 
 ### B. 날짜 이동과 수업 목록
 

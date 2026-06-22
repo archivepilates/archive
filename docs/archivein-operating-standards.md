@@ -1,6 +1,14 @@
 # ARCHIVE IN 운영 기준 초안
 
-마지막 업데이트: 2026-05-14
+마지막 업데이트: 2026-06-23
+
+## 2026-06-23 역할 변경
+
+ARCHIVE IN 루트 운영자 앱은 ARCHIVE CORE로 역할이 이전되었다.
+`https://in.archivepilates.com/` 및 `https://archive-pilates.web.app/archivein/` 루트는 운영자 작업 공간이 아니라 종료 안내와 호환 링크 허브로 유지한다.
+
+계속 유지되는 ARCHIVE IN 경로는 프라이빗 사전설문, 강사용 프라이빗 차트, 프라이빗 리포트, 현장 웰컴, 회원가입서, short link, method/material 링크다.
+구 모놀리식 운영자 앱을 되살리는 작업은 롤백 계획과 사용자 승인 없이 진행하지 않는다.
 
 ## 1. 제품 원칙
 

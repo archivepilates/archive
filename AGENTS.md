@@ -3,7 +3,7 @@
 ## Project
 
 - Name: archive-in
-- Canonical live app: `https://archive-pilates.web.app/archivein/`
+- Canonical live surfaces: `https://in.archivepilates.com/` for ARCHIVE IN links/forms/reports and `https://core.archivepilates.com/` for operator work.
 - Firebase/GCP project: `archive-pilates`
 - Primary rule: preserve existing user work and avoid production-impacting commands unless explicitly requested.
 
@@ -19,6 +19,8 @@
 ## ARCHIVE IN Work Coordination
 
 - Use the main ARCHIVE IN project chat as the control surface for cross-cutting decisions about the web app, Firebase model, StudioMate sync, Google Contacts, Kakao Alimtalk, and deployment readiness.
+- The former ARCHIVE IN operator app root (`/archivein/` or `https://in.archivepilates.com/`) is retired as an operator workspace. It should remain only as a legacy notice and compatibility host for active subpaths such as private survey, private chart, onsite welcome, member signup, private reports, short links, and method links.
+- Do not restore the old monolithic `archivein/index.html` operator app unless the user explicitly approves a rollback plan. The archived source copy lives under `docs/legacy/archivein-operator-app-2026-06-23.html`.
 - If a separate chat or agent is used for a narrow subtask, bring the decision/result back into the main ARCHIVE IN chat before treating it as project direction.
 - New ARCHIVE IN threads and exploratory lanes should attach first to the shared `workLanes/{laneId}` incubation structure unless they are clearly a narrow patch to an already promoted lane. Use `workLanes` for inputs, outputs, reports, decisions, jobs, and handoffs while the lane is still provisional.
 - New ARCHIVE IN threads that require code edits must use their own dedicated worktree or branch. Data lane separation does not isolate Git file changes, so do not add new thread code into an already dirty shared deploy worktree.

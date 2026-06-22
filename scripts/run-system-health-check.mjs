@@ -169,7 +169,7 @@ async function checkWebSurfaces() {
   const targets = [
     { area: "core", title: "ARCHIVE CORE home", url: "https://core.archivepilates.com/" },
     { area: "core", title: "ARCHIVE CORE staff", url: "https://core.archivepilates.com/staff/" },
-    { area: "archivein", title: "ARCHIVE IN operator", url: "https://archive-pilates.web.app/archivein/" },
+    { area: "archivein", title: "ARCHIVE IN legacy notice", url: "https://archive-pilates.web.app/archivein/" },
     { area: "archivein", title: "ARCHIVE IN domain", url: "https://in.archivepilates.com/" },
     { area: "private", title: "Private survey", url: "https://in.archivepilates.com/privateSurvey/" },
     { area: "private", title: "Private chart", url: "https://in.archivepilates.com/private-chart/" },

@@ -143,7 +143,7 @@
           ]
         },
         {
-          "source": "/dashboard/**",
+          "source": "/archivein/manifest.webmanifest",
           "headers": [
             {
               "key": "Cache-Control",
@@ -236,17 +236,47 @@
       "redirects": [
         {
           "source": "/kangsain",
-          "destination": "/archivein/",
+          "destination": "https://core.archivepilates.com/",
           "type": 301
         },
         {
           "source": "/kangsain/",
-          "destination": "/archivein/",
+          "destination": "https://core.archivepilates.com/",
           "type": 301
         },
         {
           "source": "/kangsain/**",
-          "destination": "/archivein/",
+          "destination": "https://core.archivepilates.com/",
+          "type": 301
+        },
+        {
+          "source": "/dashboard",
+          "destination": "https://core.archivepilates.com/",
+          "type": 301
+        },
+        {
+          "source": "/dashboard/",
+          "destination": "https://core.archivepilates.com/",
+          "type": 301
+        },
+        {
+          "source": "/dashboard/**",
+          "destination": "https://core.archivepilates.com/",
+          "type": 301
+        },
+        {
+          "source": "/archive-method",
+          "destination": "/method/",
+          "type": 301
+        },
+        {
+          "source": "/archive-method/",
+          "destination": "/method/",
+          "type": 301
+        },
+        {
+          "source": "/archive-method/**",
+          "destination": "/method/",
           "type": 301
         }
       ],
@@ -348,6 +378,15 @@
         },
         {
           "source": "/sw.js",
+          "headers": [
+            {
+              "key": "Cache-Control",
+              "value": "no-cache, no-store, must-revalidate"
+            }
+          ]
+        },
+        {
+          "source": "/manifest.webmanifest",
           "headers": [
             {
               "key": "Cache-Control",
