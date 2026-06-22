@@ -1,0 +1,120 @@
+<!doctype html>
+<html lang="ko">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1">
+  <title>ARCHIVE PILATES 온라인 영상 상품 비교</title>
+  <style>
+    *{box-sizing:border-box}
+    body{margin:0;background:#fbfaf7;color:#191817;font-family:-apple-system,BlinkMacSystemFont,"Apple SD Gothic Neo","Noto Sans KR",sans-serif;line-height:1.62}
+    main{max-width:1120px;margin:0 auto;padding:44px 20px 72px}
+    h1{margin:0 0 12px;font-size:30px;line-height:1.2;letter-spacing:0}
+    h2{margin:34px 0 12px;font-size:20px;line-height:1.35}
+    p{margin:0 0 12px;color:#4d4944}
+    a{color:#191817;text-decoration-thickness:1px;text-underline-offset:3px}
+    .meta{font-size:13px;color:#7b746c;text-transform:uppercase;letter-spacing:.04em}
+    .lead{font-size:17px;color:#252220;max-width:820px}
+    .grid{display:grid;grid-template-columns:repeat(4,minmax(0,1fr));gap:12px;margin:24px 0}
+    .stat{background:#fff;border:1px solid #e8e0d6;padding:16px;min-height:108px}
+    .stat strong{display:block;font-size:28px;line-height:1.1;color:#191817}
+    .stat span{display:block;margin-top:8px;color:#6b625b;font-size:13px}
+    .panel{background:#fff;border:1px solid #e8e0d6;padding:18px;margin:16px 0}
+    .ok,.warn,.risk{display:inline-block;margin:0 0 8px;padding:4px 8px;font-size:12px;font-weight:800;border:1px solid}
+    .ok{background:#edf6ea;color:#23451f;border-color:#bfd8b6}
+    .warn{background:#fff3cf;color:#5e4600;border-color:#e0c76a}
+    .risk{background:#f7ded8;color:#6b251d;border-color:#dfaaa0}
+    table{width:100%;border-collapse:collapse;background:#fff;border:1px solid #e8e0d6;font-size:14px}
+    th,td{padding:10px;border-bottom:1px solid #eee7dd;text-align:left;vertical-align:top}
+    th{background:#f3eee6;color:#34302c;font-weight:800}
+    tr:last-child td{border-bottom:0}
+    code{background:#f3eee6;padding:2px 5px;border-radius:2px}
+    ul{margin:0 0 0 18px;padding:0}
+    li{margin:6px 0}
+    .small{font-size:13px;color:#6b625b}
+    .nowrap{white-space:nowrap}
+    @media (max-width:820px){
+      main{padding:32px 14px 56px}
+      .grid{grid-template-columns:repeat(2,minmax(0,1fr))}
+      table{display:block;overflow-x:auto;white-space:nowrap}
+      .lead{font-size:16px}
+    }
+  </style>
+</head>
+<body>
+<main>
+  <p class="meta">2026-06-14 KST · Notion 원본 vs Imweb 공개 상품</p>
+  <h1>온라인 영상 판매 목록 비교</h1>
+  <p class="lead">Notion의 <strong>아카이브 강사레슨 유료 영상 안내</strong>와 현재 아임웹 온라인 상품 노출 상태를 비교했다. 결론은 간단하다. 현재 아임웹에는 영상별 상품 20개가 올라와 있고, Notion 원본의 기구+주제 조합 기준으로는 3개가 아직 상품화되지 않았다.</p>
+
+  <div class="grid">
+    <div class="stat"><strong>23</strong><span>Notion 원본 기구+주제 조합</span></div>
+    <div class="stat"><strong>20</strong><span>아임웹 개별 온라인 영상 상품</span></div>
+    <div class="stat"><strong>3</strong><span>미등록 또는 영상자료 미확인</span></div>
+    <div class="stat"><strong>15,000원</strong><span>Notion 기준 1편 가격</span></div>
+  </div>
+
+  <section class="panel">
+    <span class="warn">결제 테스트 전 확인</span>
+    <h2>운영 판단</h2>
+    <ul>
+      <li>결제모듈을 붙인 뒤에는 실제 주문, 구매자 권한, 40일 시청기간, 환불/취소 시 권한 회수까지 테스트해야 한다.</li>
+      <li>현재 <code>/17</code> 온라인 클래스 목록에는 개별 영상 20개와 대표 온라인 상품 1개가 페이지네이션으로 노출된다.</li>
+      <li><code>/16</code> 전체 Shop에는 0원 테스트 상품 <code>[TEST] ARCHIVE 40D 영상 권한 테스트</code>도 보인다. 공개 판매 전에는 숨김 또는 테스트 전용 위치로 정리해야 한다.</li>
+      <li>Notion의 기존 안내는 Gmail을 받아 영상 링크를 발송하는 흐름이지만, 현재 설계는 구매자 로그인 기반 임베드 페이지 권한 부여 흐름으로 가는 것이 맞다.</li>
+    </ul>
+  </section>
+
+  <h2>누락 후보</h2>
+  <table>
+    <thead>
+      <tr><th>Notion 행</th><th>기구</th><th>주제</th><th>상태</th><th>다음 확인</th></tr>
+    </thead>
+    <tbody>
+      <tr><td class="nowrap">4</td><td>리포머</td><td>순환</td><td>아임웹 개별 상품 없음</td><td>YouTube 풀영상 존재 여부 확인 후 AR4 계열 상품 생성 여부 결정</td></tr>
+      <tr><td class="nowrap">4</td><td>바렐</td><td>전신 근막 FLOW</td><td>아임웹 개별 상품 없음</td><td>YouTube 풀영상 존재 여부 확인 후 AB4 계열 상품 생성 여부 결정</td></tr>
+      <tr><td class="nowrap">8</td><td>바렐</td><td>순환</td><td>아임웹 개별 상품 없음</td><td>YouTube 풀영상 존재 여부 확인 후 AB8 계열 상품 생성 여부 결정</td></tr>
+    </tbody>
+  </table>
+
+  <h2>매칭 완료</h2>
+  <table>
+    <thead>
+      <tr><th>Notion</th><th>아임웹 상품</th><th>가격</th><th>공개 위치</th></tr>
+    </thead>
+    <tbody>
+      <tr><td>리포머 · 척추 정렬 코어 컨트롤</td><td>[온라인] ARCHIVE METHOD 리포머 척추 정렬 &amp; 코어 컨트롤 (AR1)</td><td>15,000원</td><td>/17 page 1</td></tr>
+      <tr><td>바렐 · 척추 신장 흉곽 안정화</td><td>[온라인] ARCHIVE METHOD 바렐 척추 신장 &amp; 흉곽 안정화 (AB1)</td><td>15,000원</td><td>/17 page 1</td></tr>
+      <tr><td>체어 · 골반 &amp; 체간안정화 척추 유연성</td><td>[온라인] ARCHIVE METHOD 체어 골반 &amp; 체간 안정화 + 척추 유연성 (ACH1)</td><td>15,000원</td><td>/17 page 1</td></tr>
+      <tr><td>캐딜락 · 암스프링 단 하나로 보상패턴 바로잡기</td><td>[온라인] ARCHIVE METHOD 캐딜락 암스프링 단 하나로 보상패턴 바로잡기 (ACA1)</td><td>15,000원</td><td>/17 page 1</td></tr>
+      <tr><td>리포머 · 챌린지동작을 만드는 빌드업 시퀀스</td><td>[온라인] ARCHIVE METHOD 리포머 챌린지 동작 빌드업 시퀀스 (AR2-1)</td><td>15,000원</td><td>/17 page 2</td></tr>
+      <tr><td>바렐 · 척추 신장 복부 컨트롤</td><td>[온라인] ARCHIVE METHOD 바렐 척추 신장 &amp; 복부 컨트롤 (AB2)</td><td>15,000원</td><td>/17 page 1</td></tr>
+      <tr><td>체어 · 림프 순환 척추 컨트롤</td><td>[온라인] ARCHIVE METHOD 체어 림프 순환 &amp; 척추 컨트롤 (ACH2)</td><td>15,000원</td><td>/17 page 1</td></tr>
+      <tr><td>캐딜락 · 경추 보호 코어 강화</td><td>[온라인] ARCHIVE METHOD 캐딜락 경추보호 코어강화 (ACA2)</td><td>15,000원</td><td>/17 page 2</td></tr>
+      <tr><td>리포머 · 요추안정화</td><td>[온라인] ARCHIVE METHOD 리포머 요추안정화 (AR3)</td><td>15,000원</td><td>/17 page 2</td></tr>
+      <tr><td>바렐 · 척추 유연성 어깨 안정화</td><td>[온라인] ARCHIVE METHOD 바렐 척추 유연성 &amp; 어깨 안정화 (AB3)</td><td>15,000원</td><td>/17 page 1</td></tr>
+      <tr><td>체어 · 정렬 인지 체간 안정화</td><td>[온라인] ARCHIVE METHOD 체어 정렬 인지 &amp; 체간 안정화 (ACH3)</td><td>15,000원</td><td>/17 page 1</td></tr>
+      <tr><td>캐딜락 · 고강도 필라테스</td><td>[온라인] ARCHIVE METHOD 캐딜락 고강도필라테스 (ACA3)</td><td>15,000원</td><td>/17 page 2</td></tr>
+      <tr><td>체어 · 골반 안정화 비대칭 교정</td><td>[온라인] ARCHIVE METHOD 체어 골반 안정화 &amp; 비대칭 교정 (ACH4)</td><td>15,000원</td><td>/17 page 1</td></tr>
+      <tr><td>캐딜락 · 흉추가동성</td><td>[온라인] ARCHIVE METHOD 캐딜락 흉추가동성 (ACA4)</td><td>15,000원</td><td>/17 page 2</td></tr>
+      <tr><td>바렐 · 크로스패턴 체간.자세교정</td><td>[온라인] ARCHIVE METHOD 바렐 크로스패턴 (AB5)</td><td>15,000원</td><td>/17 page 1</td></tr>
+      <tr><td>체어 · 고강도 필라테스</td><td>[온라인] ARCHIVE METHOD 체어 고강도필라테스 (ACH5)</td><td>15,000원</td><td>/17 page 2</td></tr>
+      <tr><td>바렐 · 직장인 증후군</td><td>[온라인] ARCHIVE METHOD 바렐 직장인 증후군 (AB6)</td><td>15,000원</td><td>/17 page 2</td></tr>
+      <tr><td>체어 · 직장인 증후군</td><td>[온라인] ARCHIVE METHOD 체어 직장인 증후군 (ACH6)</td><td>15,000원</td><td>/17 page 2</td></tr>
+      <tr><td>바렐 · 요추안정화</td><td>[온라인] ARCHIVE METHOD 바렐 요추안정화 (AB7)</td><td>15,000원</td><td>/17 page 2</td></tr>
+      <tr><td>체어 · 흉추가동성</td><td>[온라인] ARCHIVE METHOD 체어 흉추가동성 (AC7)</td><td>15,000원</td><td>/17 page 2</td></tr>
+    </tbody>
+  </table>
+
+  <h2>검증 경로</h2>
+  <div class="panel">
+    <ul>
+      <li>Notion page: <a href="https://app.notion.com/p/257d49eae4bf8048a2bcf4f83200a07e">아카이브 강사레슨 유료 영상 안내</a></li>
+      <li>Notion data source: <code>collection://2cdd49ea-e4bf-807c-92cf-000b955a05c8</code></li>
+      <li>아임웹 온라인 클래스: <a href="https://archivepilates.imweb.me/17">https://archivepilates.imweb.me/17</a>, <a href="https://archivepilates.imweb.me/17?page=2">page 2</a>, <a href="https://archivepilates.imweb.me/17?page=3">page 3</a></li>
+      <li>아임웹 전체 Shop: <a href="https://archivepilates.imweb.me/16">https://archivepilates.imweb.me/16</a></li>
+      <li class="small">Notion data-source SQL query tool은 이번에도 런타임에서 사용할 수 없어서, 검색으로 찾은 8개 행을 개별 fetch해 비교했다.</li>
+    </ul>
+  </div>
+</main>
+</body>
+</html>

@@ -1,0 +1,153 @@
+<!doctype html>
+<html lang="ko">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1">
+  <title>2026년 5월 정산 차이 재점검</title>
+  <style>
+    :root {
+      color-scheme: light;
+      --bg: #f7f4ef;
+      --panel: #fffdfa;
+      --ink: #171717;
+      --muted: #6f6a63;
+      --line: #e6ded3;
+      --accent: #f36b21;
+      --good: #13795b;
+      --warn: #ad6b00;
+      --bad: #bb2d3b;
+    }
+    * { box-sizing: border-box; }
+    body {
+      margin: 0;
+      font-family: -apple-system, BlinkMacSystemFont, "Apple SD Gothic Neo", "Pretendard", sans-serif;
+      background: var(--bg);
+      color: var(--ink);
+      line-height: 1.55;
+    }
+    main { max-width: 1120px; margin: 0 auto; padding: 36px 20px 56px; }
+    h1 { margin: 0 0 10px; font-size: 28px; letter-spacing: 0; }
+    h2 { margin: 0 0 14px; font-size: 20px; }
+    p { margin: 0 0 12px; color: var(--muted); }
+    .eyebrow { color: var(--accent); font-weight: 800; font-size: 13px; text-transform: uppercase; }
+    section {
+      background: var(--panel);
+      border: 1px solid var(--line);
+      border-radius: 16px;
+      padding: 22px;
+      margin-top: 18px;
+      box-shadow: 0 16px 36px rgba(43, 33, 22, 0.06);
+    }
+    .grid { display: grid; grid-template-columns: repeat(auto-fit, minmax(min(100%, 240px), 1fr)); gap: 14px; }
+    .card { border: 1px solid var(--line); border-radius: 12px; padding: 16px; background: #fff; }
+    .label { color: var(--muted); font-size: 13px; font-weight: 700; }
+    .value { font-size: 24px; font-weight: 850; margin-top: 4px; }
+    .good { color: var(--good); }
+    .warn { color: var(--warn); }
+    .bad { color: var(--bad); }
+    table { width: 100%; border-collapse: collapse; margin-top: 10px; font-size: 14px; }
+    th, td { border-bottom: 1px solid var(--line); padding: 10px 8px; text-align: right; vertical-align: top; }
+    th:first-child, td:first-child { text-align: left; }
+    th { color: var(--muted); font-size: 12px; }
+    code { background: #f2ece4; padding: 2px 5px; border-radius: 5px; }
+    ul { margin: 8px 0 0; padding-left: 20px; }
+    li { margin: 6px 0; }
+  </style>
+</head>
+<body>
+<main>
+  <div class="eyebrow">ARCHIVE PILATES Settlement Check</div>
+  <h1>2026년 5월 정산 차이 재점검</h1>
+  <p>자동화 파일 <code>아카이브 정산_2026-05</code>와 수기 파일 <code>아카이브 정산명세서 202605.xlsx</code>를 노쇼 50% 정책 기준으로 다시 비교했습니다.</p>
+
+  <section>
+    <h2>결론</h2>
+    <div class="grid">
+      <div class="card">
+        <div class="label">노쇼 정책</div>
+        <div class="value">50%</div>
+        <p>2026-05-26 안희지 / 이초림 프라이빗 노쇼는 차감금액 60,000원의 50%만 정산 대상입니다.</p>
+      </div>
+      <div class="card">
+        <div class="label">자동화 보정 필요</div>
+        <div class="value bad">+13,636</div>
+        <p>자동화는 해당 노쇼를 0원 처리했습니다. 세전 보수 기준 13,636원이 부족합니다.</p>
+      </div>
+      <div class="card">
+        <div class="label">수기 파일 상태</div>
+        <div class="value warn">100%</div>
+        <p>수기 파일은 이초림 프라이빗 17회/463,636원으로 노쇼를 100% 반영한 상태입니다.</p>
+      </div>
+    </div>
+  </section>
+
+  <section>
+    <h2>노쇼 외 금액 차이 원인</h2>
+    <table>
+      <thead>
+        <tr>
+          <th>항목</th>
+          <th>영향</th>
+          <th>확인 내용</th>
+        </tr>
+      </thead>
+      <tbody>
+        <tr>
+          <td>그룹 보수 계산</td>
+          <td class="bad">배민진 -24,562<br>정은영 -16,128</td>
+          <td>자동화가 수업별 출석 인원 보수표가 아니라 강사별 고정 평균 단가처럼 계산했습니다. 수기 파일은 출석 인원 기준 보수표와 일치합니다.</td>
+        </tr>
+        <tr>
+          <td>프라이빗 보수 계산</td>
+          <td class="bad">배민진 -6,892<br>정은영 +98,014</td>
+          <td>자동화가 각 행의 <code>차감금액 ÷ 1.1 × 요율</code>이 아니라 강사별 고정 행보수로 계산했습니다. 정은영은 수업권 금액이 섞여 있어 차이가 크게 커졌습니다.</td>
+        </tr>
+        <tr>
+          <td>강사레슨 처리</td>
+          <td class="warn">자동화: 배민진 157,500 / 정은영 157,500<br>수기: 정은영 조정내용 175,000</td>
+          <td>자동화는 강사레슨을 별도 보수로 배분했고, 수기는 정은영 조정내용에만 포함했습니다. 운영 정책을 하나로 고정해야 합니다.</td>
+        </tr>
+        <tr>
+          <td>정은영 정규직 조정</td>
+          <td class="warn">수기 전용 조정</td>
+          <td>수기 파일에는 <code>정규직급여 (2,156,880) / 강사 레슨 175,000</code> 조정이 있습니다. 자동화 최종 비교 시 이 조정을 별도 규칙으로 반영해야 합니다.</td>
+        </tr>
+      </tbody>
+    </table>
+  </section>
+
+  <section>
+    <h2>강사별 핵심 차이</h2>
+    <table>
+      <thead>
+        <tr>
+          <th>강사</th>
+          <th>정책 그룹</th>
+          <th>자동 그룹</th>
+          <th>정책 프라이빗</th>
+          <th>자동 프라이빗</th>
+          <th>수기 프라이빗</th>
+        </tr>
+      </thead>
+      <tbody>
+        <tr><td>김민지</td><td>450,000</td><td>450,000</td><td>0</td><td>0</td><td>0</td></tr>
+        <tr><td>김아영</td><td>450,000</td><td>450,000</td><td>0</td><td>0</td><td>0</td></tr>
+        <tr><td>배민진</td><td>1,743,000</td><td class="bad">1,718,438</td><td>1,127,500</td><td class="bad">1,120,608</td><td>1,127,500</td></tr>
+        <tr><td>이초림</td><td>900,000</td><td>900,000</td><td>450,000</td><td class="bad">436,368</td><td class="warn">463,636</td></tr>
+        <tr><td>정은영</td><td>3,222,000</td><td class="bad">3,205,872</td><td>1,032,250</td><td class="bad">1,130,264</td><td>1,032,250</td></tr>
+      </tbody>
+    </table>
+  </section>
+
+  <section>
+    <h2>수정 방향</h2>
+    <ul>
+      <li>Apps Script 원본에서 노쇼는 <code>정산매출 = 차감금액 × 0.5</code>, <code>프라이빗보수 = 차감금액 ÷ 1.1 × 요율 × 0.5</code>로 처리합니다.</li>
+      <li>그룹 보수는 강사별 평균 단가가 아니라 수업별 출석 인원 수로 <code>아카이브 강사 보수기준표 / 그룹</code>을 조회해야 합니다.</li>
+      <li>프라이빗 보수는 강사별 고정 행보수가 아니라 각 행의 차감금액과 프라이빗 요율로 계산해야 합니다.</li>
+      <li>강사레슨은 보수 제외/별도 조정/강사별 배분 중 하나로 정책을 고정해야 합니다. 현재 수기와 자동화가 다릅니다.</li>
+    </ul>
+  </section>
+</main>
+</body>
+</html>

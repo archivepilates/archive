@@ -1,0 +1,556 @@
+<!doctype html>
+<html lang="ko">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>ARCHIVE PILATES 주간 데이터 정합성 감사 2026-06-13</title>
+<style>
+*{box-sizing:border-box} body{margin:0;background:#f7f4ef;color:#24211d;font:15px/1.55 -apple-system,BlinkMacSystemFont,"Segoe UI",sans-serif} main{max-width:1120px;margin:0 auto;padding:32px 20px 48px} h1{font-size:28px;margin:0 0 6px} h2{font-size:18px;margin:28px 0 10px} .meta{color:#665f55;margin:0 0 24px}.summary{display:grid;grid-template-columns:repeat(auto-fit,minmax(180px,1fr));gap:12px;margin:20px 0}.tile{background:#fffdfa;border:1px solid #ded7cc;border-radius:8px;padding:14px}.tile b{display:block;font-size:22px}.status{display:inline-block;border-radius:999px;padding:3px 9px;font-size:12px;font-weight:700}.ok{background:#e9f5ed;color:#1e6b3c}.caution{background:#fff4d6;color:#83610a}.action{background:#fbe2df;color:#9d2c20} table{width:100%;border-collapse:collapse;background:#fffdfa;border:1px solid #ded7cc;border-radius:8px;overflow:hidden} th,td{border-bottom:1px solid #e9e2d8;padding:10px;vertical-align:top;text-align:left} th{font-size:12px;text-transform:uppercase;color:#746b60;background:#f1ece4} pre{white-space:pre-wrap;word-break:break-word;background:#fffdfa;border:1px solid #ded7cc;border-radius:8px;padding:14px;max-height:560px;overflow:auto} .note{color:#665f55} @media(max-width:700px){main{padding:22px 12px} table{display:block;overflow-x:auto} h1{font-size:23px}}
+</style>
+</head>
+<body>
+<main>
+<h1>ARCHIVE PILATES 주간 데이터 정합성 감사</h1>
+<p class="meta">실행일 2026-06-13 · 읽기/집계 중심 · Firestore/Notion/Google Drive/StudioMate/Google Contacts/Alimtalk 쓰기 없음</p>
+<div class="summary">
+<div class="tile"><span>종합</span><b>수정필요</b></div>
+<div class="tile"><span>수정필요</span><b>4</b></div>
+<div class="tile"><span>주의</span><b>1</b></div>
+<div class="tile"><span>정상</span><b>1</b></div>
+</div>
+<h2>판정</h2>
+<table><thead><tr><th>영역</th><th>상태</th><th>결과</th><th>근거</th><th>권장 조치</th></tr></thead><tbody><tr><td>bookings 중복</td><td><span class="status action">수정필요</span></td><td>실예약과 fallback 예약이 같은 시간 키에서 함께 활성 상태입니다.</td><td>532개 그룹에서 real booking과 excel/usage fallback이 동시에 counted 후보로 남아 있습니다.</td><td>각 그룹의 real StudioMate/API booking을 우선으로 두고 fallback booking은 skipped/superseded 상태와 excludedReason을 기록하십시오.</td></tr>
+<tr><td>개인레슨 회차</td><td><span class="status action">수정필요</span></td><td>최근 30일 개인레슨 회차 정합성에 수정 후보가 있습니다.</td><td>booking 회차 누락 11, 역전 0, request/record/booking 불일치 0, record 중복 7건입니다.</td><td>booking.sessionOrder.privateCumulativeRound를 기준으로 request/record를 재대조하고, 취소/변경 booking은 counted=false와 supersededByBookingId를 명시하십시오.</td></tr>
+<tr><td>Alimtalk</td><td><span class="status action">수정필요</span></td><td>Alimtalk 후보/발송 로그에 보완이 필요한 필드 또는 중복 후보가 있습니다.</td><td>필수 필드 누락 후보 2036건, 발송 537건, 후보 중복 217그룹, 발송 중복 11그룹, 실패 상세 누락 0건입니다.</td><td>발송 자체를 재시도하지 말고, sourceActionKey/dedupeKey/memberPhone/templateCode 저장 경로와 실패 메일 상세 생성 경로를 먼저 보강하십시오.</td></tr>
+<tr><td>회원 데이터</td><td><span class="status action">수정필요</span></td><td>회원 source/mirror 간 이름·전화·memberId 충돌 후보가 있습니다.</td><td>cross-collection 충돌 2건, 같은 전화 다중 ID 19건, 같은 이름+전화 다중 ID 18건입니다.</td><td>memberProfiles를 기준으로 real StudioMate memberId를 확인하고, member360Cards/members mirror는 canonical id로 재생성하거나 alias 테이블에 명시하십시오.</td></tr>
+<tr><td>StudioMate Excel 원본</td><td><span class="status caution">주의</span></td><td>일부 원본 최신성 또는 Drive 폴더명 확인이 필요합니다.</td><td>로컬 stale 0종, 범위 위험 0종, Drive 폴더 위험 1건입니다.</td><td>예약/삭제 수업 원본은 오늘 이후 범위를 포함하는 최신 파일을 유지하고, 정산 원본 폴더명은 수업매출원본데이터/수강권원본데이터 기준으로 고정하십시오.</td></tr>
+<tr><td>정산</td><td><span class="status ok">정상</span></td><td>정산 dashboard sync는 단일 원천 경로를 유지하고 있습니다.</td><td>dashboardSnapshots/current source=아카이브 정산_2026-05, syncMode=dashboard_export_etl, 표본 원본 1052행입니다.</td><td>-</td></tr></tbody></table>
+<h2>집계 근거</h2>
+<p class="note">표본 회원명은 보고서 본문에서 3명 이하로 제한했고, 전화번호는 끝 4자리 중심으로 마스킹했습니다.</p>
+<pre>{
+  &quot;bookings&quot;: {
+    &quot;total&quot;: 67613,
+    &quot;canonicalDuplicateGroups&quot;: 0,
+    &quot;timeDuplicateGroups&quot;: 7439,
+    &quot;priorityViolations&quot;: 532,
+    &quot;samples&quot;: {
+      &quot;canonicalDupes&quot;: [],
+      &quot;timeDupes&quot;: [
+        {
+          &quot;key&quot;: &quot;3058647|2222464|2024-08-12&quot;,
+          &quot;ids&quot;: [
+            &quot;154528164&quot;,
+            &quot;155952399&quot;,
+            &quot;156655740&quot;
+          ],
+          &quot;statuses&quot;: [
+            &quot;&quot;,
+            &quot;&quot;,
+            &quot;&quot;
+          ]
+        },
+        {
+          &quot;key&quot;: &quot;2439158|2222464|2024-08-12&quot;,
+          &quot;ids&quot;: [
+            &quot;155528417&quot;,
+            &quot;155604600&quot;
+          ],
+          &quot;statuses&quot;: [
+            &quot;&quot;,
+            &quot;&quot;
+          ]
+        },
+        {
+          &quot;key&quot;: &quot;3097294|2222464|2024-08-12&quot;,
+          &quot;ids&quot;: [
+            &quot;155528792&quot;,
+            &quot;155529445&quot;
+          ],
+          &quot;statuses&quot;: [
+            &quot;&quot;,
+            &quot;&quot;
+          ]
+        }
+      ],
+      &quot;priorityViolations&quot;: [
+        {
+          &quot;key&quot;: &quot;2022993|2015109|2024-08-11&quot;,
+          &quot;ids&quot;: [
+            &quot;155667330&quot;,
+            &quot;usage_booking_96108c6535db19fb8d33&quot;
+          ]
+        },
+        {
+          &quot;key&quot;: &quot;2960090|2015109|2024-08-11&quot;,
+          &quot;ids&quot;: [
+            &quot;156200625&quot;,
+            &quot;usage_booking_a9dac72ee19af204e140&quot;
+          ]
+        },
+        {
+          &quot;key&quot;: &quot;3229254|1983525|2024-08-11&quot;,
+          &quot;ids&quot;: [
+            &quot;156530160&quot;,
+            &quot;usage_booking_28006da79ff8ea7cada6&quot;
+          ]
+        }
+      ]
+    }
+  },
+  &quot;privateLessons&quot;: {
+    &quot;recentPrivateBookings&quot;: 238,
+    &quot;missingRounds&quot;: 11,
+    &quot;reversals&quot;: 0,
+    &quot;duplicateRounds&quot;: 0,
+    &quot;recentRequests&quot;: 121,
+    &quot;recentRecords&quot;: 120,
+    &quot;missingRecords&quot;: 1,
+    &quot;requestRecordMismatches&quot;: 0,
+    &quot;duplicateRecords&quot;: 7,
+    &quot;notionMissing&quot;: 0,
+    &quot;notionCheck&quot;: {
+      &quot;checked&quot;: 12,
+      &quot;ok&quot;: 12,
+      &quot;missingOrInaccessible&quot;: 0,
+      &quot;skippedReason&quot;: &quot;&quot;
+    },
+    &quot;samples&quot;: {
+      &quot;missingRounds&quot;: [
+        {
+          &quot;id&quot;: &quot;excel_booking_97a8baf268008dea43&quot;,
+          &quot;name&quot;: &quot;이광민&quot;,
+          &quot;date&quot;: &quot;2026-05-15&quot;,
+          &quot;staff&quot;: &quot;정은영&quot;
+        },
+        {
+          &quot;id&quot;: &quot;excel_booking_a79c3896683163c904&quot;,
+          &quot;name&quot;: &quot;김윤영&quot;,
+          &quot;date&quot;: &quot;2026-05-19&quot;,
+          &quot;staff&quot;: &quot;배민진&quot;
+        },
+        {
+          &quot;id&quot;: &quot;usage_booking_526e999b0c2bb4a74d3f&quot;,
+          &quot;name&quot;: &quot;유초이&quot;,
+          &quot;date&quot;: &quot;2026-05-19&quot;,
+          &quot;staff&quot;: &quot;배민진&quot;
+        }
+      ],
+      &quot;requestRecordMismatches&quot;: [],
+      &quot;duplicateRecords&quot;: [
+        {
+          &quot;key&quot;: &quot;2570715|2026-05-29|63&quot;,
+          &quot;ids&quot;: [
+            &quot;plc_254373389&quot;,
+            &quot;plc_excel_booking_c4c0d95e33c725499b&quot;
+          ]
+        },
+        {
+          &quot;key&quot;: &quot;2279016|2026-05-29|121&quot;,
+          &quot;ids&quot;: [
+            &quot;plc_254431160&quot;,
+            &quot;plc_excel_booking_e7164cf201a236019d&quot;
+          ]
+        },
+        {
+          &quot;key&quot;: &quot;excel_a9c53c983d396914|2026-06-10|3&quot;,
+          &quot;ids&quot;: [
+            &quot;plc_256216069&quot;,
+            &quot;plc_257452365&quot;
+          ]
+        }
+      ],
+      &quot;notionMissing&quot;: []
+    }
+  },
+  &quot;alimtalk&quot;: {
+    &quot;recentCandidates&quot;: 2056,
+    &quot;recentSends&quot;: 537,
+    &quot;missingCandidateFields&quot;: 2036,
+    &quot;missingSendFields&quot;: 537,
+    &quot;duplicateCandidateGroups&quot;: 217,
+    &quot;duplicateSendGroups&quot;: 11,
+    &quot;failedMissingDetail&quot;: 0,
+    &quot;samples&quot;: {
+      &quot;missingCandidateFields&quot;: [
+        {
+          &quot;id&quot;: &quot;action_00f3757d59dc193f7c6d2e1c&quot;,
+          &quot;status&quot;: &quot;skipped&quot;,
+          &quot;type&quot;: &quot;remaining_low&quot;,
+          &quot;templateCode&quot;: &quot;KA01TP260513132546352nPdudb2yHnG&quot;
+        },
+        {
+          &quot;id&quot;: &quot;action_011065b1ce8f71719eac4d95&quot;,
+          &quot;status&quot;: &quot;skipped&quot;,
+          &quot;type&quot;: &quot;ticket_expiring&quot;,
+          &quot;templateCode&quot;: &quot;KA01TP260513132546274Sp5VtNf2pv7&quot;
+        },
+        {
+          &quot;id&quot;: &quot;action_018e8cfa47820b4935644b69&quot;,
+          &quot;status&quot;: &quot;skipped&quot;,
+          &quot;type&quot;: &quot;ticket_expiring&quot;,
+          &quot;templateCode&quot;: &quot;KA01TP260514145047261araXgWLVFRs&quot;
+        }
+      ],
+      &quot;duplicateSends&quot;: [
+        {
+          &quot;key&quot;: &quot;KA01TP260521120040094XcMvYgFTryj|717831ddcbdb03e024c3933b17c105e29e71f267b49b54ab7c605549ab709318|01074764056&quot;,
+          &quot;ids&quot;: [
+            &quot;instructor_lesson_material_11d468286c69494df1cd3e97&quot;,
+            &quot;instructor_lesson_material_dd5af6a22b720bfa66cf2765&quot;
+          ],
+          &quot;statuses&quot;: [
+            &quot;done&quot;,
+            &quot;failed&quot;
+          ]
+        },
+        {
+          &quot;key&quot;: &quot;KA01TP260521120040094XcMvYgFTryj|6f7c3e06f1ac6c289d8d443fe3c31ecb304d10b47844f6f05b3fe9e356b9d30b|01028068267&quot;,
+          &quot;ids&quot;: [
+            &quot;instructor_lesson_material_18c1476f4f51a868eb8ffec4&quot;,
+            &quot;instructor_lesson_material_d799e035e215c6a8c621b8c7&quot;
+          ],
+          &quot;statuses&quot;: [
+            &quot;done&quot;,
+            &quot;failed&quot;
+          ]
+        },
+        {
+          &quot;key&quot;: &quot;KA01TP260521120040094XcMvYgFTryj|7c03f8d16f99cb9bb711bae88a27efb52104f0699b6996e994b712fe00172200|01080302353&quot;,
+          &quot;ids&quot;: [
+            &quot;instructor_lesson_material_24fbd94f5f5432802ddec9df&quot;,
+            &quot;instructor_lesson_material_4a270338e51e169aeb1d0aa5&quot;
+          ],
+          &quot;statuses&quot;: [
+            &quot;done&quot;,
+            &quot;failed&quot;
+          ]
+        }
+      ],
+      &quot;failedMissingDetail&quot;: []
+    }
+  },
+  &quot;members&quot;: {
+    &quot;memberProfiles&quot;: 880,
+    &quot;member360Cards&quot;: 904,
+    &quot;membersMirror&quot;: 852,
+    &quot;crossConflicts&quot;: 2,
+    &quot;phoneCollisions&quot;: 19,
+    &quot;namePhoneCollisions&quot;: 18,
+    &quot;kimGiHyoRecords&quot;: 13,
+    &quot;kimGiHyoDistinctIds&quot;: 6,
+    &quot;samples&quot;: {
+      &quot;crossConflicts&quot;: [
+        {
+          &quot;id&quot;: &quot;4586668&quot;,
+          &quot;names&quot;: [
+            &quot;김지수2&quot;,
+            &quot;김지수&quot;
+          ],
+          &quot;phones&quot;: [
+            &quot;01086233343&quot;
+          ],
+          &quot;sources&quot;: [
+            &quot;memberProfiles&quot;,
+            &quot;member360Cards&quot;,
+            &quot;members&quot;
+          ]
+        },
+        {
+          &quot;id&quot;: &quot;4680240&quot;,
+          &quot;names&quot;: [
+            &quot;이혜진2&quot;,
+            &quot;이혜진&quot;
+          ],
+          &quot;phones&quot;: [
+            &quot;01035176945&quot;
+          ],
+          &quot;sources&quot;: [
+            &quot;memberProfiles&quot;,
+            &quot;member360Cards&quot;,
+            &quot;members&quot;
+          ]
+        }
+      ],
+      &quot;phoneCollisions&quot;: [
+        {
+          &quot;phoneLast4&quot;: &quot;8585&quot;,
+          &quot;ids&quot;: [
+            &quot;1982133&quot;,
+            &quot;1979746&quot;,
+            &quot;temp_김기효_테스트&quot;,
+            &quot;test_kihyo_member&quot;,
+            &quot;test_kihyo_private_296462&quot;,
+            &quot;test_kim_kihyo&quot;
+          ]
+        },
+        {
+          &quot;phoneLast4&quot;: &quot;3249&quot;,
+          &quot;ids&quot;: [
+            &quot;1992206&quot;,
+            &quot;1983525&quot;,
+            &quot;temp_baminjin_test&quot;
+          ]
+        },
+        {
+          &quot;phoneLast4&quot;: &quot;0513&quot;,
+          &quot;ids&quot;: [
+            &quot;2022993&quot;,
+            &quot;2222464&quot;,
+            &quot;temp_jeongyoung_test&quot;
+          ]
+        }
+      ],
+      &quot;namePhoneCollisions&quot;: [
+        {
+          &quot;key&quot;: &quot;김기효|*******8585&quot;,
+          &quot;ids&quot;: [
+            &quot;1982133&quot;,
+            &quot;1979746&quot;,
+            &quot;temp_김기효_테스트&quot;,
+            &quot;test_kihyo_member&quot;,
+            &quot;test_kihyo_private_296462&quot;,
+            &quot;test_kim_kihyo&quot;
+          ]
+        },
+        {
+          &quot;key&quot;: &quot;배민진|*******3249&quot;,
+          &quot;ids&quot;: [
+            &quot;1992206&quot;,
+            &quot;1983525&quot;,
+            &quot;temp_baminjin_test&quot;
+          ]
+        },
+        {
+          &quot;key&quot;: &quot;정은영|*******0513&quot;,
+          &quot;ids&quot;: [
+            &quot;2022993&quot;,
+            &quot;2222464&quot;,
+            &quot;temp_jeongyoung_test&quot;
+          ]
+        }
+      ],
+      &quot;kimGiHyo&quot;: [
+        {
+          &quot;source&quot;: &quot;memberProfiles&quot;,
+          &quot;id&quot;: &quot;1982133&quot;,
+          &quot;phoneLast4&quot;: &quot;8585&quot;
+        },
+        {
+          &quot;source&quot;: &quot;member360Cards&quot;,
+          &quot;id&quot;: &quot;1979746&quot;,
+          &quot;phoneLast4&quot;: &quot;8585&quot;
+        },
+        {
+          &quot;source&quot;: &quot;member360Cards&quot;,
+          &quot;id&quot;: &quot;1982133&quot;,
+          &quot;phoneLast4&quot;: &quot;8585&quot;
+        }
+      ]
+    }
+  },
+  &quot;excelSources&quot;: {
+    &quot;member&quot;: {
+      &quot;path&quot;: &quot;/Users/archivepilates/ArchiveIN/emergency/downloads/2026-06-13T00-38-03-500Z-member-회원목록_20260613_0938.xlsx&quot;,
+      &quot;mtime&quot;: &quot;2026-06-13T00:38:03.526Z&quot;,
+      &quot;daysOld&quot;: 0,
+      &quot;range&quot;: null
+    },
+    &quot;reservation&quot;: {
+      &quot;path&quot;: &quot;/Users/archivepilates/ArchiveIN/emergency/downloads/2026-06-13T00-38-09-120Z-reservation-예약내역_2026-06-13_2026-06-21.xlsx&quot;,
+      &quot;mtime&quot;: &quot;2026-06-13T00:38:09.696Z&quot;,
+      &quot;daysOld&quot;: 0,
+      &quot;range&quot;: {
+        &quot;start&quot;: &quot;2026-06-13&quot;,
+        &quot;end&quot;: &quot;2026-06-21&quot;
+      }
+    },
+    &quot;deletedClass&quot;: {
+      &quot;path&quot;: &quot;/Users/archivepilates/ArchiveIN/emergency/downloads/2026-06-13T00-38-14-480Z-deleted-class-삭제된수업_2026-06-13_2026-06-21.xlsx&quot;,
+      &quot;mtime&quot;: &quot;2026-06-13T00:38:14.685Z&quot;,
+      &quot;daysOld&quot;: 0,
+      &quot;range&quot;: {
+        &quot;start&quot;: &quot;2026-06-13&quot;,
+        &quot;end&quot;: &quot;2026-06-21&quot;
+      }
+    },
+    &quot;lessonSales&quot;: {
+      &quot;path&quot;: &quot;/Users/archivepilates/ArchiveIN/automation/downloads/sales/2026-06-12T14-00-50-659Z-lesson-sales-수업매출_현황2026-06-01~2026-06-12.xlsx&quot;,
+      &quot;mtime&quot;: &quot;2026-06-12T14:00:51.715Z&quot;,
+      &quot;daysOld&quot;: 0,
+      &quot;range&quot;: {
+        &quot;start&quot;: &quot;2026-06-01&quot;,
+        &quot;end&quot;: &quot;2026-06-12&quot;
+      }
+    },
+    &quot;ticketSales&quot;: {
+      &quot;path&quot;: &quot;/Users/archivepilates/ArchiveIN/automation/downloads/sales/2026-06-12T14-01-01-901Z-ticket-sales-수강권매출_현황2026-06-01~2026-06-30.xlsx&quot;,
+      &quot;mtime&quot;: &quot;2026-06-12T14:01:01.903Z&quot;,
+      &quot;daysOld&quot;: 0,
+      &quot;range&quot;: {
+        &quot;start&quot;: &quot;2026-06-01&quot;,
+        &quot;end&quot;: &quot;2026-06-30&quot;
+      }
+    },
+    &quot;drive&quot;: {
+      &quot;found&quot;: {
+        &quot;수업매출원본데이터&quot;: [
+          {
+            &quot;mimeType&quot;: &quot;application/vnd.google-apps.folder&quot;,
+            &quot;webViewLink&quot;: &quot;https://drive.google.com/drive/folders/1eXFq_uSTN_GdcJ0MS6poCKtwyj31nVCW&quot;,
+            &quot;id&quot;: &quot;1eXFq_uSTN_GdcJ0MS6poCKtwyj31nVCW&quot;,
+            &quot;name&quot;: &quot;수업매출원본데이터&quot;,
+            &quot;modifiedTime&quot;: &quot;2026-06-12T14:00:51.739Z&quot;
+          }
+        ],
+        &quot;수강권원본데이터&quot;: [],
+        &quot;수업원본데이터&quot;: [],
+        &quot;아카이브 정산_2026-05&quot;: [
+          {
+            &quot;mimeType&quot;: &quot;application/vnd.google-apps.spreadsheet&quot;,
+            &quot;webViewLink&quot;: &quot;https://docs.google.com/spreadsheets/d/1FKbsgaEQKNhM1N12D4dT-Y6zKeJ-_8kbnRlNQpZ4UA8/edit?usp=drivesdk&quot;,
+            &quot;id&quot;: &quot;1FKbsgaEQKNhM1N12D4dT-Y6zKeJ-_8kbnRlNQpZ4UA8&quot;,
+            &quot;name&quot;: &quot;아카이브 정산_2026-05&quot;,
+            &quot;modifiedTime&quot;: &quot;2026-06-09T17:15:52.655Z&quot;
+          }
+        ]
+      },
+      &quot;folderRisks&quot;: [
+        &quot;수강권원본데이터 folder not found&quot;
+      ]
+    }
+  },
+  &quot;settlement&quot;: {
+    &quot;dashboardSnapshotExists&quot;: true,
+    &quot;sourceSpreadsheetName&quot;: &quot;아카이브 정산_2026-05&quot;,
+    &quot;sourceSpreadsheetId&quot;: &quot;1FKbsgaEQKNhM1N12D4dT-Y6zKeJ-_8kbnRlNQpZ4UA8&quot;,
+    &quot;syncMode&quot;: &quot;dashboard_export_etl&quot;,
+    &quot;updatedAt&quot;: &quot;2026-06-12T14:01:05.706Z&quot;,
+    &quot;duplicateMonthBuckets&quot;: {
+      &quot;summary&quot;: 0,
+      &quot;강사별&quot;: 0,
+      &quot;강사통계&quot;: 0,
+      &quot;월별강사평균인원&quot;: 0,
+      &quot;수강권TOP5&quot;: 0,
+      &quot;회원매출&quot;: 0
+    },
+    &quot;localSettlement&quot;: &quot;/Users/archivepilates/Documents/ARCHIVE-IN/artifacts/settlement-compare/auto_archive_settlement_2026-05.xlsx&quot;,
+    &quot;localSettlementExists&quot;: true,
+    &quot;settlementRows&quot;: 1052,
+    &quot;lessonSalesPath&quot;: &quot;/Users/archivepilates/ArchiveIN/automation/downloads/sales/2026-05-31T14-00-51-139Z-lesson-sales-수업매출_현황2026-05-01~2026-05-31.xlsx&quot;,
+    &quot;lessonSalesRows&quot;: 1052,
+    &quot;lessonSalesHeaders&quot;: [
+      &quot;수업&quot;,
+      &quot;수강권&quot;,
+      &quot;날짜&quot;,
+      &quot;수업시작&quot;,
+      &quot;수업종료&quot;,
+      &quot;요일&quot;,
+      &quot;회원명&quot;,
+      &quot;수강권명&quot;,
+      &quot;회당 금액&quot;,
+      &quot;전체 횟수&quot;,
+      &quot;차감 금액&quot;,
+      &quot;차감 횟수&quot;,
+      &quot;누적사용 금액&quot;,
+      &quot;누적사용 횟수&quot;,
+      &quot;미수업금&quot;,
+      &quot;잔여 횟수&quot;,
+      &quot;결제 금액&quot;,
+      &quot;수업 강사&quot;,
+      &quot;출결&quot;
+    ],
+    &quot;noShowSampleCount&quot;: 1,
+    &quot;instructorLessonSampleCount&quot;: 20,
+    &quot;noShowSamples&quot;: [
+      {
+        &quot;수업&quot;: &quot;프라이빗&quot;,
+        &quot;수강권&quot;: &quot;횟수제&quot;,
+        &quot;날짜&quot;: &quot;2026-05-26&quot;,
+        &quot;수업시작&quot;: &quot;15:00&quot;,
+        &quot;수업종료&quot;: &quot;15:50&quot;,
+        &quot;요일&quot;: &quot;화&quot;,
+        &quot;회원명&quot;: &quot;안*&quot;,
+        &quot;수강권명&quot;: &quot;프라이빗 1회권 (체험)&quot;,
+        &quot;회당 금액&quot;: &quot;60000&quot;,
+        &quot;전체 횟수&quot;: &quot;1&quot;,
+        &quot;차감 금액&quot;: &quot;60000&quot;,
+        &quot;차감 횟수&quot;: &quot;1&quot;,
+        &quot;누적사용 금액&quot;: &quot;60000&quot;,
+        &quot;누적사용 횟수&quot;: &quot;1&quot;,
+        &quot;미수업금&quot;: &quot;0&quot;,
+        &quot;잔여 횟수&quot;: &quot;0&quot;,
+        &quot;결제 금액&quot;: &quot;60000&quot;,
+        &quot;수업 강사&quot;: &quot;이초림&quot;,
+        &quot;출결&quot;: &quot;노쇼&quot;
+      }
+    ],
+    &quot;instructorLessonSamples&quot;: [
+      {
+        &quot;수업&quot;: &quot;그룹&quot;,
+        &quot;수강권&quot;: &quot;횟수제&quot;,
+        &quot;날짜&quot;: &quot;2026-05-30&quot;,
+        &quot;수업시작&quot;: &quot;13:00&quot;,
+        &quot;수업종료&quot;: &quot;13:50&quot;,
+        &quot;요일&quot;: &quot;토&quot;,
+        &quot;회원명&quot;: &quot;이*&quot;,
+        &quot;수강권명&quot;: &quot;강사레슨 (2T)&quot;,
+        &quot;회당 금액&quot;: &quot;35000&quot;,
+        &quot;전체 횟수&quot;: &quot;2&quot;,
+        &quot;차감 금액&quot;: &quot;35000&quot;,
+        &quot;차감 횟수&quot;: &quot;1&quot;,
+        &quot;누적사용 금액&quot;: &quot;35000&quot;,
+        &quot;누적사용 횟수&quot;: &quot;1&quot;,
+        &quot;미수업금&quot;: &quot;35000&quot;,
+        &quot;잔여 횟수&quot;: &quot;1&quot;,
+        &quot;결제 금액&quot;: &quot;70000&quot;,
+        &quot;수업 강사&quot;: &quot;정은영&quot;,
+        &quot;출결&quot;: &quot;출석&quot;
+      },
+      {
+        &quot;수업&quot;: &quot;그룹&quot;,
+        &quot;수강권&quot;: &quot;횟수제&quot;,
+        &quot;날짜&quot;: &quot;2026-05-30&quot;,
+        &quot;수업시작&quot;: &quot;13:00&quot;,
+        &quot;수업종료&quot;: &quot;13:50&quot;,
+        &quot;요일&quot;: &quot;토&quot;,
+        &quot;회원명&quot;: &quot;노*&quot;,
+        &quot;수강권명&quot;: &quot;강사레슨 (2T)&quot;,
+        &quot;회당 금액&quot;: &quot;35000&quot;,
+        &quot;전체 횟수&quot;: &quot;2&quot;,
+        &quot;차감 금액&quot;: &quot;35000&quot;,
+        &quot;차감 횟수&quot;: &quot;1&quot;,
+        &quot;누적사용 금액&quot;: &quot;35000&quot;,
+        &quot;누적사용 횟수&quot;: &quot;1&quot;,
+        &quot;미수업금&quot;: &quot;35000&quot;,
+        &quot;잔여 횟수&quot;: &quot;1&quot;,
+        &quot;결제 금액&quot;: &quot;70000&quot;,
+        &quot;수업 강사&quot;: &quot;정은영&quot;,
+        &quot;출결&quot;: &quot;출석&quot;
+      },
+      {
+        &quot;수업&quot;: &quot;그룹&quot;,
+        &quot;수강권&quot;: &quot;횟수제&quot;,
+        &quot;날짜&quot;: &quot;2026-05-30&quot;,
+        &quot;수업시작&quot;: &quot;13:00&quot;,
+        &quot;수업종료&quot;: &quot;13:50&quot;,
+        &quot;요일&quot;: &quot;토&quot;,
+        &quot;회원명&quot;: &quot;변*&quot;,
+        &quot;수강권명&quot;: &quot;강사레슨 (2T)&quot;,
+        &quot;회당 금액&quot;: &quot;35000&quot;,
+        &quot;전체 횟수&quot;: &quot;2&quot;,
+        &quot;차감 금액&quot;: &quot;35000&quot;,
+        &quot;차감 횟수&quot;: &quot;1&quot;,
+        &quot;누적사용 금액&quot;: &quot;35000&quot;,
+        &quot;누적사용 횟수&quot;: &quot;1&quot;,
+        &quot;미수업금&quot;: &quot;35000&quot;,
+        &quot;잔여 횟수&quot;: &quot;1&quot;,
+        &quot;결제 금액&quot;: &quot;70000&quot;,
+        &quot;수업 강사&quot;: &quot;정은영&quot;,
+        &quot;출결&quot;: &quot;출석&quot;
+      }
+    ]
+  }
+}</pre>
+</main>
+</body>
+</html>

@@ -565,3 +565,103 @@ location: https://archivepilates.imweb.me/
 final status: 200
 final content: ARCHIVE PILATES INSTRUCTOR CLASS
 ```
+
+Custom-domain follow-up on 2026-06-21 KST:
+
+- Goal: make `archivepilates.com` remain in the browser address bar instead of using a Cloudflare 302 redirect to `archivepilates.imweb.me`.
+- Current Cloudflare state:
+  - Authoritative nameservers remain `kara.ns.cloudflare.com` and `stan.ns.cloudflare.com`.
+  - Root and `www` still use proxied A records pointing to `121.254.178.238`.
+  - Dynamic redirect rule `redirect-root-www-to-imweb-home` is still enabled and redirects root/www to `https://archivepilates.imweb.me/`.
+- Direct origin test result:
+  - `curl -k --resolve archivepilates.com:443:121.254.178.238 https://archivepilates.com/` returns a broken placeholder HTML with a blank `http://` refresh.
+  - TLS SNI against `121.254.178.238` serves a `*.gabia.com` certificate, not an `archivepilates.com` certificate.
+  - Therefore, simply disabling the Cloudflare redirect would break the root site.
+- Official Imweb path checked:
+  - Standard third-party domain connection requires switching nameservers to the Imweb/HostCocoa nameservers assigned in Imweb Admin.
+  - Imweb CNAME alias is the safer path if Cloudflare must remain authoritative, but it requires Imweb CNAME permission/verification and issuance of the `cf` domain alias from Imweb Admin or Imweb support.
+- Safe next action:
+  - Keep the Cloudflare redirect enabled until Imweb issues a CNAME alias or the user intentionally chooses full nameserver migration.
+  - After Imweb CNAME alias is issued, add the required verification record and alias records in Cloudflare, then disable the Cloudflare redirect and verify `https://archivepilates.com/`, `https://www.archivepilates.com/`, `/sitemap.xml`, and raw SEO metadata.
+
+Imweb admin completion attempt on 2026-06-21 KST:
+
+- Tried to continue the CNAME-alias path from the Mac mini.
+- Chrome was on the macOS lock screen, and the Imweb admin tabs were not authenticated.
+- Copied Chrome profiles to temporary Playwright user-data dirs without printing cookie/session values and checked `Default`, `Profile 1`, `Profile 2`, and `Profile 3`; all reached the Imweb admin email/password login screen.
+- Imweb OpenAPI does not expose domain-management operations. Official developer docs list Site-Info read operations only, and direct probes for domain/SEO paths returned 404.
+- Current blocker: Imweb must first issue/enable CNAME alias from authenticated Imweb Admin or Imweb support chat. Until that alias exists, keep the Cloudflare redirect rule enabled.
+
+Imweb admin recheck after home-profile access on 2026-06-21 11:59 KST:
+
+- Chrome home profile was authenticated in Imweb Admin.
+- Domain admin state:
+  - `archivepilates.com` is already connected in Imweb and selected as the representative domain.
+  - Current nameservers shown in Imweb: `kara.ns.cloudflare.com`, `stan.ns.cloudflare.com`.
+  - Assigned Imweb/HostCocoa nameservers: `cns1.hostcocoa.com`, `cns2.hostcocoa.com`, `cns3.hostcocoa.com`, `cns4.hostcocoa.com`.
+  - Imweb still shows that personal-domain SSL is not automatically applied.
+- SEO admin state:
+  - `검색 엔진과 AI에 검색 허용` is on.
+  - `아임웹 기본 도메인만 검색되지 않도록 합니다` is selected, which is the correct personal-domain SEO setting once `archivepilates.com` serves the Imweb site directly.
+- Current production risk:
+  - `archivepilates.com` still reaches the site through the Cloudflare 302 redirect to `https://archivepilates.imweb.me/`.
+  - Because the Imweb default domain is intentionally noindexed, this redirect path keeps exposing a raw noindex page to crawlers.
+- Safe next action:
+  - Request/enable Imweb CNAME alias permission and obtain the verification record plus cf-domain alias.
+  - Add those records in Cloudflare.
+  - Only after CNAME/SSL works, disable the Cloudflare redirect rule `redirect-root-www-to-imweb-home`.
+  - Do not move nameservers from Cloudflare to HostCocoa unless the user explicitly chooses full nameserver migration after exporting/importing all active Cloudflare records.
+
+Imweb CNAME alias request sent on 2026-06-21 KST:
+
+- Attempted to continue through the Imweb admin/customer-support route in the Chrome home profile.
+- Admin login screen appeared again; saved password dots were visible but not accepted as an actual submitted password, and no matching `imweb.me` item was found in macOS Keychain by direct service lookup.
+- Sent the CNAME alias request by Gmail from `home@archivepilates.com` to Imweb support `help@imweb.me`.
+- Gmail sent message id: `19eea150d56dc4f8`.
+- Request asked Imweb to keep Cloudflare nameservers and issue/enable CNAME alias connection for:
+  - `archivepilates.com`
+  - `www.archivepilates.com`
+- Requested reply payload:
+  - required verification record
+  - CNAME/cf-domain alias target
+- Next action after Imweb replies:
+  - Add the issued verification/alias records in Cloudflare.
+  - Verify direct `https://archivepilates.com/` and `https://www.archivepilates.com/` HTTPS behavior.
+  - Disable the Cloudflare redirect only after direct custom-domain SSL is working.
+
+Imweb CNAME alias retry on 2026-06-22 KST:
+
+- Checked Gmail for the prior request.
+- Imweb replied from `help@imweb.me` with subject `Re: [도메인] archivepilates.com CNAME 별칭 연결 허용 요청`.
+- Reply result:
+  - The old `help@imweb.me` email path no longer handles support 상담.
+  - Imweb now requires logged-in real-time chat through `https://imweb.me`, the lower-right purple headset icon, `내 사이트`, or `고객지원`.
+- Retried Imweb admin/customer-support access using the `home@archivepilates.com` route and local Keychain credentials without printing the password.
+- Imweb account/site context observed during the retry:
+  - Site/account: `ARCHIVE PILATES`
+  - Imweb domain: `archivepilates.imweb.me`
+  - Main domain: `archivepilates.com`
+  - Plan/member type: `Pro`
+  - Personal-domain SSL state observed by Imweb: not active
+- Automation blocker:
+  - The Channel.io support script loaded on the Imweb customer page.
+  - The chat iframe `ch-plugin-script-iframe` remained `0x0` and did not open a visible messenger after `show`, `showMessenger`, and `CHPlugin.show()` attempts.
+  - The automated page exposed only the `고객지원` page link, not a usable chat compose surface.
+- No CNAME alias, cf-domain alias target, or verification record has been received yet.
+- No Cloudflare DNS or redirect changes were made.
+- Keep the Cloudflare redirect enabled until Imweb provides the alias/verification values and direct HTTPS for `archivepilates.com` and `www.archivepilates.com` is verified.
+
+Prepared support-chat request text:
+
+```text
+안녕하세요. ARCHIVE PILATES 사이트 도메인 연결 관련 문의드립니다.
+
+사이트: archivepilates.imweb.me
+연결 도메인: archivepilates.com, www.archivepilates.com
+
+현재 archivepilates.com 네임서버는 Cloudflare(kara.ns.cloudflare.com, stan.ns.cloudflare.com)를 사용 중입니다. Google Workspace MX, 여러 하위도메인, 검증 TXT 레코드가 Cloudflare에서 운영 중이라 HostCocoa 네임서버로 전체 이전하지 않고 Cloudflare를 유지하려고 합니다.
+
+archivepilates.com / www.archivepilates.com을 아임웹 사이트에 직접 연결해서 주소창에 archivepilates.com이 유지되도록 CNAME 별칭 연결을 허용/발급해 주세요.
+
+필요한 도메인 소유권 검증 레코드와 CNAME 또는 cf-domain alias target 값을 알려주시면 Cloudflare DNS에 반영하겠습니다.
+```

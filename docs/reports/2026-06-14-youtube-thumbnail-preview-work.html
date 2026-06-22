@@ -1,0 +1,206 @@
+<!doctype html>
+<html lang="ko">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1">
+  <title>ARCHIVE PILATES 온라인 영상 썸네일/미리보기 작업 결과</title>
+  <style>
+    :root {
+      --bg: #fbfaf7;
+      --paper: #fff;
+      --ink: #171717;
+      --muted: #66615b;
+      --line: #e5ded5;
+      --accent: #f8de59;
+      --warn-bg: #fff8f5;
+      --warn: #8f2f1f;
+    }
+    * { box-sizing: border-box; }
+    body {
+      margin: 0;
+      background: var(--bg);
+      color: var(--ink);
+      font-family: -apple-system, BlinkMacSystemFont, "Apple SD Gothic Neo", "Pretendard", "Noto Sans KR", sans-serif;
+      line-height: 1.65;
+    }
+    main {
+      width: min(960px, calc(100% - 32px));
+      margin: 0 auto;
+      padding: 48px 0 64px;
+    }
+    header {
+      border-bottom: 1px solid var(--line);
+      padding-bottom: 24px;
+      margin-bottom: 28px;
+    }
+    .kicker {
+      display: inline-block;
+      background: var(--accent);
+      border: 1px solid #dfc63b;
+      padding: 6px 10px;
+      font-size: 13px;
+      font-weight: 800;
+      margin-bottom: 14px;
+    }
+    h1 {
+      margin: 0 0 8px;
+      font-size: clamp(30px, 5vw, 44px);
+      line-height: 1.15;
+      letter-spacing: 0;
+    }
+    h2 {
+      margin: 32px 0 12px;
+      font-size: 22px;
+      line-height: 1.3;
+    }
+    p { margin: 0 0 12px; }
+    ul { margin: 0; padding-left: 20px; }
+    li + li { margin-top: 6px; }
+    a { color: inherit; text-underline-offset: 3px; }
+    code {
+      background: #f3efe8;
+      padding: 2px 5px;
+      border-radius: 3px;
+      word-break: break-all;
+    }
+    .summary {
+      display: grid;
+      grid-template-columns: repeat(3, minmax(0, 1fr));
+      gap: 12px;
+      margin-top: 24px;
+    }
+    .metric, .section {
+      background: var(--paper);
+      border: 1px solid var(--line);
+    }
+    .metric { padding: 18px; }
+    .metric strong {
+      display: block;
+      font-size: 30px;
+      line-height: 1;
+      margin-bottom: 8px;
+    }
+    .section {
+      padding: 22px;
+      margin-top: 16px;
+    }
+    table {
+      width: 100%;
+      border-collapse: collapse;
+      font-size: 15px;
+    }
+    th, td {
+      text-align: left;
+      vertical-align: top;
+      border-bottom: 1px solid var(--line);
+      padding: 11px 9px;
+    }
+    th {
+      color: var(--muted);
+      font-size: 13px;
+      font-weight: 800;
+    }
+    .warn {
+      background: var(--warn-bg);
+      border-color: #e9c2b7;
+      color: var(--warn);
+    }
+    .muted { color: var(--muted); }
+    @media (max-width: 720px) {
+      main { width: min(100% - 24px, 960px); padding-top: 32px; }
+      .summary { grid-template-columns: 1fr; }
+      .section { padding: 18px; }
+      table, tbody, tr, th, td { display: block; width: 100%; }
+      thead { display: none; }
+      tr { border-bottom: 1px solid var(--line); padding: 10px 0; }
+      td { border: 0; padding: 4px 0; }
+      td::before {
+        content: attr(data-label);
+        display: block;
+        color: var(--muted);
+        font-size: 12px;
+        font-weight: 800;
+      }
+    }
+  </style>
+</head>
+<body>
+  <main>
+    <header>
+      <span class="kicker">2026-06-14 작업 결과</span>
+      <h1>온라인 영상 썸네일과 미리보기 반영 완료</h1>
+      <p class="muted">AC7처럼 기존 양식과 다른 온라인 영상 상품 썸네일을 ARCHIVE PILATES 보라색 라벨 양식으로 맞추고, 미리보기가 없던 4개 상품에는 실제 수업 장면 기반 미리보기를 추가했습니다.</p>
+      <div class="summary">
+        <div class="metric"><strong>19</strong>추가 썸네일 생성/반영</div>
+        <div class="metric"><strong>23</strong>온라인 상품 카드 검증</div>
+        <div class="metric"><strong>4</strong>미리보기 업로드/반영</div>
+      </div>
+    </header>
+
+    <section class="section">
+      <h2>완료</h2>
+      <ul>
+        <li>이미 정리된 AR4, AB4, AB5, AB8을 제외한 19개 온라인 풀영상 썸네일을 생성했습니다.</li>
+        <li>YouTube API로 19개 private full 영상에 커스텀 썸네일을 반영했습니다.</li>
+        <li>Imweb API로 상품 3-19, 21-22 대표이미지를 새 YouTube 썸네일 기준으로 패치했습니다.</li>
+        <li>Imweb readback에서 19개 모두 <code>sale</code>, <code>온라인 클래스</code> 카테고리, 새 CDN 이미지로 확인했습니다.</li>
+        <li>공개 온라인 클래스 페이지 1-3의 모바일 렌더 스크린샷을 저장했습니다.</li>
+        <li>YouTube Studio에서 관리자 계정으로 누락 4개 풀영상을 다운로드해 59초 미리보기 클립을 만들었습니다.</li>
+        <li>새 미리보기 4개를 YouTube에 <code>unlisted</code>로 업로드하고 아임웹 상품 9, 20, 24, 26 상세에 임베드했습니다.</li>
+      </ul>
+    </section>
+
+    <section class="section">
+      <h2>검증 링크</h2>
+      <ul>
+        <li>온라인 클래스 페이지 1: <a href="https://archivepilates.imweb.me/17">https://archivepilates.imweb.me/17</a></li>
+        <li>온라인 클래스 페이지 2: <a href="https://archivepilates.imweb.me/17?mode=shop&amp;page=2">https://archivepilates.imweb.me/17?mode=shop&amp;page=2</a></li>
+        <li>온라인 클래스 페이지 3: <a href="https://archivepilates.imweb.me/17?mode=shop&amp;page=3">https://archivepilates.imweb.me/17?mode=shop&amp;page=3</a></li>
+      </ul>
+    </section>
+
+    <section class="section">
+      <h2>추가된 미리보기</h2>
+      <p>풀영상 ID는 상품 상세 HTML에 노출하지 않았고, 구매 전 확인용 미리보기 ID만 임베드했습니다.</p>
+      <table>
+        <thead>
+          <tr>
+            <th>상품</th>
+            <th>미리보기 ID</th>
+            <th>상태</th>
+          </tr>
+        </thead>
+        <tbody>
+          <tr><td data-label="상품">AR2-1 리포머 챌린지 동작 빌드업</td><td data-label="미리보기 ID"><code>HPvfL99EN5s</code></td><td data-label="상태">YouTube 처리 완료 / 상품 9 반영</td></tr>
+          <tr><td data-label="상품">AB5 바렐 크로스패턴</td><td data-label="미리보기 ID"><code>ntp7ZQfhUe8</code></td><td data-label="상태">YouTube 처리 완료 / 상품 20 반영</td></tr>
+          <tr><td data-label="상품">AR4 리포머 순환</td><td data-label="미리보기 ID"><code>Sksd2TXhP9k</code></td><td data-label="상태">YouTube 처리 완료 / 상품 24 반영</td></tr>
+          <tr><td data-label="상품">AB8 바렐 순환</td><td data-label="미리보기 ID"><code>hGBpA4IIfWY</code></td><td data-label="상태">YouTube 처리 완료 / 상품 26 반영</td></tr>
+        </tbody>
+      </table>
+    </section>
+
+    <section class="section">
+      <h2>확인한 경로</h2>
+      <ul>
+        <li>로컬 영상 파일 길이 스캔 결과, 두 파일만 근접했지만 프레임 확인상 누락 4개와 안전하게 매칭되지 않았습니다.</li>
+        <li>Google Drive에서 코드명/주제명/풀영상 키워드로 검색했지만 원본 영상 파일을 찾지 못했습니다.</li>
+        <li>Chrome 쿠키 기반 private YouTube 구간 다운로드는 쿠키 추출 단계에서 멈춰 중단했습니다.</li>
+        <li>YouTube Studio의 <code>오프라인 저장</code> 메뉴로 채널 소유 풀영상을 내려받는 경로를 확인했고, 이 경로로 4개 원본을 확보했습니다.</li>
+      </ul>
+    </section>
+
+    <section class="section">
+      <h2>산출물</h2>
+      <ul>
+        <li>작업 노트: <code>/Users/archivepilates/Documents/ARCHIVE-IN/docs/tasks/2026-06-13-imweb-online-video-products.md</code></li>
+        <li>생성 썸네일 접촉지: <code>/Users/archivepilates/Documents/ARCHIVE-IN/artifacts/youtube-thumbnail-standardization-2026-06-14/generated/generated-thumbnail-contact-sheet.jpg</code></li>
+        <li>YouTube 썸네일 반영 결과: <code>/Users/archivepilates/Documents/ARCHIVE-IN/artifacts/youtube-thumbnail-standardization-2026-06-14/youtube-thumbnail-set-batch-2026-06-14.json</code></li>
+        <li>Imweb 패치 결과: <code>/Users/archivepilates/Documents/ARCHIVE-IN/artifacts/youtube-thumbnail-standardization-2026-06-14/imweb-thumbnail-patch-batch-2026-06-14.json</code></li>
+        <li>미리보기 원본 확인 결과: <code>/Users/archivepilates/Documents/ARCHIVE-IN/artifacts/preview-video-work-2026-06-14/local-video-duration-candidates.json</code></li>
+        <li>미리보기 업로드 결과: <code>/Users/archivepilates/Documents/ARCHIVE-IN/artifacts/preview-video-work-2026-06-14/youtube-preview-upload-results-2026-06-14.json</code></li>
+        <li>아임웹 미리보기 임베드 패치 결과: <code>/Users/archivepilates/Documents/ARCHIVE-IN/artifacts/preview-video-work-2026-06-14/imweb-preview-embed-patch-2026-06-14.json</code></li>
+      </ul>
+    </section>
+  </main>
+</body>
+</html>
