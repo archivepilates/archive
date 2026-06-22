@@ -19,7 +19,14 @@ const guardGroups = [
           "pricingInquiryForm",
           "pricingInquiryHistoryPanel",
           "최근 발송/메모 보기",
+          "Staff <small>강사</small>",
+          "/site.webmanifest?v=1",
+          "/icons/archive-pilates-icon-192.png?v=1",
         ],
+      },
+      {
+        file: "core/site.webmanifest",
+        markers: ["ARCHIVE CORE", "ARCHIVE PILATES Operations Platform", "/icons/archive-pilates-icon-512.png?v=1"],
       },
       {
         file: "core/assets/app.js",
@@ -29,11 +36,71 @@ const guardGroups = [
           "pricingInquiryHistoryPanel",
           "operatorSendPricingInquiryAlimtalk",
           "homeActionTotal",
+          "submitInstructorEvaluationQuiz",
         ],
       },
       {
         file: "core/assets/styles.css",
         markers: [".kpis > .metric", "min-height: 156px"],
+      },
+    ],
+  },
+  {
+    id: "staff-evaluation-quiz",
+    reason: "Firebase 기반 강사 평가 퀴즈와 강사별 인사기록카드가 예전 구글폼 의존 구조로 되돌아가는 것을 막습니다.",
+    files: [
+      {
+        file: "core/staff/index.html",
+        markers: [
+          "강사 인사기록카드",
+          "staffHrList",
+          "staffDetailCard",
+          "강사지표 원천",
+          "1VwOS7s8u6BX9t1dAWm7WOVmrigXbpoMZL7k4TGsce58",
+        ],
+      },
+      {
+        file: "core/assets/app.js",
+        markers: [
+          "staffEssayScoreInfo",
+          "adjustInstructorEvaluationEssayScore",
+          "staffMonthlyMetrics",
+          "renderStaffDetail",
+          "staffCompositeScore",
+          "비근무 · 지원자 · 운영자 기록",
+          "서술형 점수 저장",
+        ],
+      },
+      {
+        file: "core/staff/evaluation/index.html",
+        markers: ["instructorEvaluationQuizForm", "evaluationQuizQuestions", "evaluationQuizSubmit"],
+      },
+      {
+        file: "archivein/instructor-evaluation/index.html",
+        markers: ["ARCHIVE PILATES 강사 테스트", "강사 테스트", "시험 시작", "20분 제한", "instructorApplicantEvaluation"],
+      },
+      {
+        file: "firebase/kangsain-functions/functions/src/staffEvaluation/instructorEvaluationQuiz.ts",
+        markers: [
+          "staffEvaluationSubmissions",
+          "staffHrCards",
+          "submitInstructorEvaluationQuizHandler",
+          "adjustInstructorEvaluationEssayScoreHandler",
+          "instructorApplicantEvaluationApiHandler",
+          "scoreShortTextAnswer",
+          "APPLICANT_TIME_LIMIT_SECONDS",
+          "STAFF_EVALUATION_SPREADSHEET_ID",
+          "1VwOS7s8u6BX9t1dAWm7WOVmrigXbpoMZL7k4TGsce58",
+          "googleSheetSync",
+        ],
+      },
+      {
+        file: "firebase/kangsain-functions/functions/src/exports/app.ts",
+        markers: ["getInstructorEvaluationQuiz", "submitInstructorEvaluationQuiz", "adjustInstructorEvaluationEssayScore", "instructorApplicantEvaluationApi"],
+      },
+      {
+        file: "firebase.json",
+        markers: ["/api/instructorApplicantEvaluation", "instructorApplicantEvaluationApi", "/instructor-evaluation/**"],
       },
     ],
   },

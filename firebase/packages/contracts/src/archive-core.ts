@@ -19,6 +19,10 @@ export const archiveCoreCollections = {
   dataQualityIssues: "dataQualityIssues",
   auditLogs: "auditLogs",
   staffs: "staffs",
+  staffHrCards: "staffHrCards",
+  staffEvaluationSubmissions: "staffEvaluationSubmissions",
+  staffApplicantEvaluationSessions: "staffApplicantEvaluationSessions",
+  staffApplicantEvaluationSubmissions: "staffApplicantEvaluationSubmissions",
   memberSummaries: "memberSummaries",
   memberPrivateStats: "memberPrivateStats",
   memberRevenueStats: "memberRevenueStats",
@@ -48,6 +52,10 @@ export const archiveCoreSourceCollections = [
   archiveCoreCollections.dataQualityIssues,
   archiveCoreCollections.auditLogs,
   archiveCoreCollections.staffs,
+  archiveCoreCollections.staffHrCards,
+  archiveCoreCollections.staffEvaluationSubmissions,
+  archiveCoreCollections.staffApplicantEvaluationSessions,
+  archiveCoreCollections.staffApplicantEvaluationSubmissions,
 ] as const;
 
 export const archiveCoreComputedCollections = [

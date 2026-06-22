@@ -17,7 +17,15 @@ const required = [
       "pricingInquiryForm",
       "pricingInquiryHistoryPanel",
       "최근 발송/메모 보기",
+      "Staff <small>강사</small>",
+      "/site.webmanifest?v=1",
+      "/icons/archive-pilates-icon-192.png?v=1",
     ],
+  },
+  {
+    file: "core/site.webmanifest",
+    label: "ARCHIVE CORE app icon manifest",
+    markers: ["ARCHIVE CORE", "ARCHIVE PILATES Operations Platform", "/icons/archive-pilates-icon-512.png?v=1"],
   },
   {
     file: "core/assets/app.js",
@@ -27,7 +35,18 @@ const required = [
       "pricingInquiryDisplayPhone",
       "pricingInquiryHistoryPanel",
       "operatorSendPricingInquiryAlimtalk",
+      "submitInstructorEvaluationQuiz",
     ],
+  },
+  {
+    file: "core/staff/index.html",
+    label: "staff HR cards page",
+    markers: ["강사 인사기록카드", "staffHrList", "강사별 평가 차트", "지원자 시험"],
+  },
+  {
+    file: "core/staff/evaluation/index.html",
+    label: "instructor evaluation quiz page",
+    markers: ["instructorEvaluationQuizForm", "evaluationQuizQuestions", "평가 퀴즈 제출"],
   },
   {
     file: "core/assets/styles.css",
@@ -43,6 +62,16 @@ for (const item of required) {
   for (const marker of item.markers) {
     if (!content.includes(marker)) {
       failures.push({ file: item.file, label: item.label, missing: marker });
+    }
+  }
+}
+
+for (const file of collectHtmlFiles(path.join(repoRoot, "core"))) {
+  const relative = path.relative(repoRoot, file);
+  const content = fs.readFileSync(file, "utf8");
+  for (const marker of ["/site.webmanifest?v=1", "/icons/favicon-32.png?v=1", "/icons/apple-touch-icon.png?v=1"]) {
+    if (!content.includes(marker)) {
+      failures.push({ file: relative, label: "ARCHIVE CORE app icon links", missing: marker });
     }
   }
 }
@@ -76,3 +105,16 @@ console.log(
     2,
   ),
 );
+
+function collectHtmlFiles(dir) {
+  const files = [];
+  for (const entry of fs.readdirSync(dir, { withFileTypes: true })) {
+    const absolutePath = path.join(dir, entry.name);
+    if (entry.isDirectory()) {
+      files.push(...collectHtmlFiles(absolutePath));
+      continue;
+    }
+    if (entry.isFile() && entry.name.endsWith(".html")) files.push(absolutePath);
+  }
+  return files;
+}

@@ -706,7 +706,7 @@ async function convertPrivateLessonReportFromChart(
     throw new Error("회원 리포트 알림톡 발송 완료 후에는 리포트를 다시 생성할 수 없습니다.");
   }
 
-  const generated = await generatePrivateLessonReportDraft(record, chartRequest, { force: true });
+  const generated = await generatePrivateLessonReportDraft(record, chartRequest);
   const notionSync = await syncPrivateLessonChartRecordToNotion(generated.record, chartRequest);
   await refs.privateLessonChartRecord(record.recordId).set({ notionSync, updatedAt: nowTimestamp() }, { merge: true });
   return {
@@ -1456,6 +1456,51 @@ async function generatePrivateLessonReportDraft(
     return { taskId, generated: true, ready: true, record: readyRecord };
   } catch (err) {
     const message = errorMessage(err);
+    if (isGeminiQuotaError(message)) {
+      const fallbackDraft = templatePrivateLessonReportDraft(record, chartRequest);
+      const nextRecord = {
+        ...record,
+        gptTaskId: taskId,
+        gptStatus: "draft_created",
+        gptDraftSummary: fallbackDraft.summary,
+        gptDraftNextDirection: fallbackDraft.nextDirection,
+        publicSummary: fallbackDraft.summary,
+        publicNextDirection: fallbackDraft.nextDirection,
+        updatedAt: nowTimestamp(),
+      } as PrivateLessonChartRecordDoc;
+      const reportResolution = await resolveReportShortUrl(nextRecord);
+      const readyRecord = {
+        ...nextRecord,
+        publicReportUrl: reportResolution.publicReportUrl || nextRecord.publicReportUrl,
+        publicReportCanonicalUrl: reportResolution.publicReportCanonicalUrl || nextRecord.publicReportCanonicalUrl,
+      } as PrivateLessonChartRecordDoc;
+      await refs.privateLessonChartRecord(record.recordId).set(
+        {
+          gptTaskId: taskId,
+          gptStatus: "draft_created",
+          gptProvider: "template_fallback",
+          gptModel: "template-fallback",
+          gptSourceHash: sourceHash,
+          gptDraftSummary: fallbackDraft.summary,
+          gptDraftNextDirection: fallbackDraft.nextDirection,
+          publicSummary: fallbackDraft.summary,
+          publicNextDirection: fallbackDraft.nextDirection,
+          publicReportUrl: readyRecord.publicReportUrl || "",
+          publicReportCanonicalUrl: readyRecord.publicReportCanonicalUrl || "",
+          publicReportApproval: { status: "pending", lastError: null },
+          gptError: message,
+          gptFallbackReason: "gemini_quota_exhausted",
+          updatedAt: nowTimestamp(),
+        },
+        { merge: true },
+      );
+      logger.warn("generatePrivateLessonReportDraft used template fallback", {
+        recordId: record.recordId,
+        taskId,
+        message,
+      });
+      return { taskId, generated: true, ready: true, record: readyRecord };
+    }
     await refs.privateLessonChartRecord(record.recordId).set(
       {
         gptTaskId: taskId,
@@ -1471,6 +1516,39 @@ async function generatePrivateLessonReportDraft(
     );
     throw err;
   }
+}
+
+function templatePrivateLessonReportDraft(
+  record: PrivateLessonChartRecordDoc,
+  chartRequest: PrivateLessonChartRequestDoc,
+): { summary: string; nextDirection: string } {
+  const focus = uniqueTextItems([
+    ...textArray(record.postRecord?.focusAreas),
+    ...textArray(record.prePlan?.focusAreas),
+    chartRequest.intakeSummary?.focusArea,
+  ]).slice(0, 2).join(", ") || "몸의 움직임";
+  const changes = uniqueTextItems([
+    ...textArray(record.postRecord?.changes),
+    ...textArray(record.postRecord?.movementObservations),
+    ...textArray(record.postRecord?.memberResponses),
+  ]).slice(0, 2).join(", ");
+  const condition = firstText(record.postRecord?.condition);
+  const summaryTail = changes
+    ? `${changes} 흐름을 함께 확인했습니다.`
+    : condition
+      ? `${condition} 컨디션에 맞춰 움직임을 확인했습니다.`
+      : "컨디션에 맞춰 움직임의 흐름을 확인했습니다.";
+  const nextFocus = uniqueTextItems([
+    ...textArray(record.postRecord?.goals),
+    ...textArray(record.postRecord?.focusAreas),
+    ...textArray(record.prePlan?.goals),
+  ]).slice(0, 2).join(", ") || focus;
+  return {
+    summary: cleanReportSentence(`오늘 수업에서는 ${focus}을 중심으로 ${summaryTail}`),
+    nextDirection: cleanReportSentence(
+      `다음 수업에서는 ${nextFocus}을 이어가며 회원님의 컨디션에 맞춰 강도와 정렬을 조절하겠습니다.`,
+    ),
+  };
 }
 
 async function syncPrivateLessonChartRecordToNotion(
@@ -2418,6 +2496,10 @@ async function requestGeminiPrivateLessonDraft(
 
 function isRetryableGeminiError(message: string): boolean {
   return /\b(429|500|502|503|504)\b|RESOURCE_EXHAUSTED|UNAVAILABLE|high demand/i.test(message);
+}
+
+function isGeminiQuotaError(message: string): boolean {
+  return /\b429\b|RESOURCE_EXHAUSTED|quota|free_tier_requests|exceeded your current quota/i.test(message);
 }
 
 function delay(ms: number): Promise<void> {

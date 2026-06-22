@@ -76,6 +76,10 @@
         "submitKioskCheckin",
         "getKioskParkingJobStatus",
         "registerFcmToken",
+        "getInstructorEvaluationQuiz",
+        "submitInstructorEvaluationQuiz",
+        "adjustInstructorEvaluationEssayScore",
+        "instructorApplicantEvaluationApi",
         "adminIssueStaffTempCode",
         "processParkingDiscountJob"
       ],

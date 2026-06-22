@@ -1,4 +1,4 @@
-import { onCall } from "firebase-functions/v2/https";
+import { onCall, onRequest } from "firebase-functions/v2/https";
 import { onDocumentCreated } from "firebase-functions/v2/firestore";
 import { getInstructorHomeHandler } from "../callable/getInstructorHome";
 import {
@@ -24,8 +24,14 @@ import {
   iparkingSubLoginPassword,
 } from "../parking/iparkingClient";
 import { processParkingDiscountJobSnapshot } from "../parking/processParkingDiscountJob";
-import { callableOptions } from "../runtime/functionOptions";
+import { callableOptions, publicRequestOptions } from "../runtime/functionOptions";
 import { requireStaff } from "../security/authGuards";
+import {
+  adjustInstructorEvaluationEssayScoreHandler,
+  getInstructorEvaluationQuizHandler,
+  instructorApplicantEvaluationApiHandler,
+  submitInstructorEvaluationQuizHandler,
+} from "../staffEvaluation/instructorEvaluationQuiz";
 import { toHttpsError } from "../utils/errors";
 
 const parkingDiscountJobOptions = {
@@ -123,6 +129,35 @@ export const registerFcmToken = onCall(callableOptions, async (request) => {
     throw toHttpsError(err);
   }
 });
+
+export const getInstructorEvaluationQuiz = onCall(callableOptions, async (request) => {
+  try {
+    const staff = await requireStaff(request);
+    return await getInstructorEvaluationQuizHandler(request, staff);
+  } catch (err) {
+    throw toHttpsError(err);
+  }
+});
+
+export const submitInstructorEvaluationQuiz = onCall(callableOptions, async (request) => {
+  try {
+    const staff = await requireStaff(request);
+    return await submitInstructorEvaluationQuizHandler(request, staff);
+  } catch (err) {
+    throw toHttpsError(err);
+  }
+});
+
+export const adjustInstructorEvaluationEssayScore = onCall(callableOptions, async (request) => {
+  try {
+    const staff = await requireStaff(request);
+    return await adjustInstructorEvaluationEssayScoreHandler(request, staff);
+  } catch (err) {
+    throw toHttpsError(err);
+  }
+});
+
+export const instructorApplicantEvaluationApi = onRequest(publicRequestOptions, instructorApplicantEvaluationApiHandler);
 
 export const processParkingDiscountJob = onDocumentCreated(parkingDiscountJobOptions, async (event) => {
   const snap = event.data;

@@ -4,6 +4,11 @@
     <meta charset="utf-8" />
     <meta name="viewport" content="width=device-width, initial-scale=1" />
     <meta name="theme-color" content="#f8f5ef" />
+    <link rel="icon" type="image/png" sizes="32x32" href="/icons/favicon-32.png?v=1" />
+    <link rel="shortcut icon" type="image/png" href="/favicon.png?v=1" />
+    <link rel="icon" type="image/png" sizes="192x192" href="/icons/archive-pilates-icon-192.png?v=1" />
+    <link rel="apple-touch-icon" sizes="180x180" href="/icons/apple-touch-icon.png?v=1" />
+    <link rel="manifest" href="/site.webmanifest?v=1" />
     <title>Rules · ARCHIVE CORE</title>
     <link rel="stylesheet" href="../assets/styles.css" />
     <script src="../firebase-config.js"></script>
@@ -14,7 +19,7 @@
       <aside class="sidebar" aria-label="ARCHIVE CORE navigation">
         <div class="brand"><div class="brand-mark" aria-hidden="true">CORE</div><strong>ARCHIVE CORE</strong><span>ARCHIVE PILATES Operations Platform</span></div>
         <nav class="nav">
-          <a href="../" data-section="home">Home <small>요약</small></a><a href="../members/" data-section="members">Members <small>회원</small></a><a href="../lessons/" data-section="lessons">Lessons <small>수업</small></a><a href="../private/" data-section="private">Private <small>차트</small></a><a href="../messages/" data-section="messages">Messages <small>알림톡</small></a><a href="../automation/" data-section="automation">Automation <small>관제</small></a><a href="../business/" data-section="business">Business <small>지표</small></a><a href="../imports/" data-section="imports">Imports <small>원본</small></a><a href="./" data-section="rules">Rules <small>규칙</small></a><a href="../settings/" data-section="settings">Settings <small>설정</small></a>
+          <a href="../" data-section="home">Home <small>요약</small></a><a href="../members/" data-section="members">Members <small>회원</small></a><a href="../lessons/" data-section="lessons">Lessons <small>수업</small></a><a href="../private/" data-section="private">Private <small>차트</small></a><a href="../staff/" data-section="staff">Staff <small>강사</small></a><a href="../messages/" data-section="messages">Messages <small>알림톡</small></a><a href="../automation/" data-section="automation">Automation <small>관제</small></a><a href="../business/" data-section="business">Business <small>지표</small></a><a href="../imports/" data-section="imports">Imports <small>원본</small></a><a href="./" data-section="rules">Rules <small>규칙</small></a><a href="../settings/" data-section="settings">Settings <small>설정</small></a>
         </nav>
       </aside>
       <main class="main rules-page">
@@ -44,6 +49,7 @@
             <a href="#data-sync">데이터·동기화<span>StudioMate Excel, Contacts</span></a>
             <a href="#alimtalk">알림톡<span>후보, 승인, 중복 차단</span></a>
             <a href="#private">프라이빗<span>회차, 설문, 리포트</span></a>
+            <a href="#staff-evaluation">강사 평가<span>퀴즈, 인사기록카드</span></a>
             <a href="#welcome">현장 웰컴<span>가입서, PDF, StudioMate 반영</span></a>
             <a href="#settlement">정산·지표<span>월별 정산, 대시보드</span></a>
             <a href="#release">배포·검증<span>배포세트, 실패보고</span></a>
@@ -304,7 +310,10 @@
                 <li>현재 기준은 첨부한 미디어를 같은 회차 리포트에 자동 포함하는 단순 운영입니다.</li>
                 <li>업로드는 16MB 청크 기준으로 Function이 Drive resumable upload 세션을 발급하고, 브라우저가 Drive로 직접 전송한 뒤 Function이 완료 기록만 남깁니다.</li>
                 <li>Drive 직접 업로드가 브라우저 또는 네트워크 정책에 막히면 첫 청크 전에만 기존 Function 중계 경로로 자동 fallback합니다.</li>
-                <li>배포 전후 검증은 scripts/validate-private-media-upload-live.mjs로 실제 이미지/영상 업로드와 리포트 삽입 여부를 확인합니다.</li>
+                <li>미디어 업로드만으로는 Gemini 리포트 문장을 다시 생성하지 않습니다. 기존 오늘의 핵심과 다음 수업 방향은 유지하고 미디어 섹션만 다시 렌더링합니다.</li>
+                <li>배포 전후 기본 검증은 scripts/validate-private-media-upload-live.mjs로 실제 이미지/영상 업로드, Drive 직접 업로드, 리포트 미디어 삽입만 확인하며 Gemini를 호출하지 않습니다.</li>
+                <li>Gemini 리포트 생성 검증은 --with-gemini-report 옵션을 붙인 별도 실행에서만 진행합니다.</li>
+                <li>Gemini 쿼터가 막히면 리포트 전체를 실패시키지 않고 template_fallback 문장으로 검수 가능한 임시 리포트를 생성한 뒤 gptError에 원인을 남깁니다.</li>
               </ul>
             </article>
             <article class="rule-card">
@@ -319,6 +328,69 @@
             </article>
           </div>
           <div class="rule-note"><strong>현재 확인 위치</strong><span>CORE Private / Firestore bookings, privateLessonChartRequests, privateLessonChartRecords, privateSessionLedger</span></div>
+        </section>
+
+        <section class="panel rule-section" id="staff-evaluation">
+          <div class="panel-header"><div><h2>4-1. 강사 평가·인사기록카드</h2><p>기존 Google Form 기반 강사 평가 퀴즈를 Firebase 기반 제출/채점/기록 구조로 전환합니다.</p></div><span class="pill good">staff</span></div>
+          <div class="rule-grid">
+            <article class="rule-card">
+              <h3>운영 흐름</h3>
+              <ol>
+                <li>강사 또는 운영자가 CORE Staff 평가 퀴즈 화면에 로그인합니다.</li>
+                <li>문항은 Firebase Function에서 받아오고, 정답은 브라우저에 노출하지 않습니다.</li>
+                <li>제출하면 Function이 객관식·단답형·서술형을 채점하고 staffEvaluationSubmissions에 원본 제출 기록을 저장합니다.</li>
+                <li>강사별 staffHrCards/{staffId}와 하위 quizResults에 최신 결과와 누적 요약을 반영합니다.</li>
+                <li>입사지원자는 별도 공개 시험 사이트에서 이름과 연락처 입력 후 20분 제한시간으로 응시합니다.</li>
+                <li>운영자는 CORE Staff 탭에서 강사별 최신 점수, 통과 여부, 서술형 답변과 점수를 확인하고 필요 시 수정합니다.</li>
+                <li>강사 이름을 선택하면 해당 강사의 퀴즈 답변과 월별 그룹 예약률, 출석률, 평균인원, 수업매출을 세부 카드로 확인합니다.</li>
+                <li>강사 인사기록카드 상단에는 종합 점수와 산출 기준을 먼저 표시합니다.</li>
+                <li>강사 리스트는 현재 근무중 강사와 입사시험 지원자/퇴사/비활성 기록을 분리해서 표시합니다. 비근무·지원자·운영자 기록은 기본 접힘 상태로 둡니다.</li>
+              </ol>
+            </article>
+            <article class="rule-card">
+              <h3>권한과 원천</h3>
+              <ul>
+                <li>퀴즈 제출은 Firestore 직접 쓰기가 아니라 submitInstructorEvaluationQuiz callable로만 처리합니다.</li>
+                <li>일반 강사는 본인 staffId 기준 제출만 가능합니다.</li>
+                <li>운영자와 매니저는 대상 강사를 선택해 제출/검토할 수 있고, Q19 서술형 점수를 조정할 수 있습니다.</li>
+                <li>지원자 입사시험은 instructorApplicantEvaluationApi HTTP Function으로만 시작/제출하며 Firestore 직접 쓰기는 허용하지 않습니다.</li>
+                <li>staffEvaluationSubmissions는 제출 원본, staffHrCards는 인사기록카드 read-model입니다.</li>
+                <li>지원자 원본은 staffApplicantEvaluationSessions와 staffApplicantEvaluationSubmissions에 별도로 보관합니다.</li>
+                <li>현재 근무중 여부는 staffs.active와 staffRole 기준으로 판단합니다. active인 instructor/owner는 현재 근무중, manager/viewer는 운영자 계정, staffHrCards나 제출 기록만 있는 대상은 비근무/지원자 기록으로 보관합니다.</li>
+                <li>인사기록카드는 외부 발송, 정산, 예약, 회원 응대 자동화의 원천으로 사용하지 않습니다.</li>
+              </ul>
+            </article>
+            <article class="rule-card">
+              <h3>문항 관리</h3>
+              <ul>
+                <li>현재 문항은 공개 Google Form <strong>ARCHIVE 강사평가 퀴즈 A</strong>에서 확인한 22문항과 선택지 기준입니다.</li>
+                <li>객관식 18문항은 각 4점, 단답형 3문항은 각 6점, Q19 서술형은 10점으로 채점합니다.</li>
+                <li>Q19 서술형은 imprint 정의, 골반 후방경사, 요추/매트 정렬, 코어 안정, 사용 상황, 주의점을 기준으로 1차 자동 루브릭 채점합니다.</li>
+                <li>운영자가 Q19 점수를 수정하면 staffEvaluationSubmissions, staffApplicantEvaluationSubmissions, staffHrCards/{staffId}/quizResults, staffHrCards 최신 요약을 함께 갱신합니다.</li>
+                <li>기존 Google Form 응답은 새 Google Sheet <strong>ARCHIVE 강사평가 퀴즈 A Firebase 기록</strong>으로 이관해 보관합니다.</li>
+                <li>Firebase 제출은 새 Google Sheet의 원본 응답 탭과 참가자별 최종 결과 탭에도 보조 기록합니다. 실패해도 시험 제출은 유지하고 제출 문서에 googleSheetSync=failed로 남깁니다.</li>
+                <li>월별 그룹 예약률, 출석률, 평균인원, 수업매출은 dashboardSnapshots/current의 강사통계·강사별 데이터를 읽기 전용으로 표시합니다.</li>
+                <li>월 수업 개수, 회원만족도, 클레임 현황은 원천 컬렉션이 확정되기 전까지 연결 대기로 표시하고 인사 판단의 자동 원천으로 쓰지 않습니다.</li>
+                <li>종합 점수 v1은 평가 퀴즈 35%, 그룹 예약률 30%, 그룹 평균인원 25%, 그룹 출석률 10% 기준입니다. 아직 연결되지 않은 항목은 제외하고 연결된 항목의 가중치만 100점 기준으로 환산합니다.</li>
+                <li>그룹 평균인원은 4.5명을 100점 기준 목표치로 환산합니다. 월 수업수, 회원만족도, 클레임 현황은 원천이 확정되면 v2 산식에 반영합니다.</li>
+                <li>과거 Google Form 응답은 공식 점수를 보존해 staffHrCards로 이관하고, 새 Firebase 제출은 최신 정답키로 채점합니다.</li>
+                <li>기존 응답 시트에는 Q9 선택지 버전 차이와 Q20 정답키 입력 오류 흔적이 있어 과거 응답을 최신 키로 재채점하지 않습니다.</li>
+                <li>문항 변경 시 기존 제출 결과는 삭제하지 않고 quizVersion으로 구분합니다.</li>
+                <li>자동 채점 합격 기준은 80점 환산이며, 미달 시 CORE Staff 탭에서 검토 필요로 표시합니다.</li>
+              </ul>
+            </article>
+            <article class="rule-card">
+              <h3>차트와 이관</h3>
+              <ul>
+                <li>CORE Staff 탭은 staffEvaluationSubmissions와 staffHrCards의 최신 요약을 함께 읽어 강사별 점수 차트를 표시합니다.</li>
+                <li>공유된 응답 시트의 과거 결과는 import-staff-evaluation-google-results 스크립트로 dry-run 확인 후 이관합니다.</li>
+                <li>이관된 결과는 source=google_form_legacy_import로 표시해 새 Firebase 제출과 구분합니다.</li>
+                <li>지원자 제출 결과는 staffRole=applicant로 표시하고, 연락처는 채용 검토용으로만 사용합니다.</li>
+                <li>인사기록카드 차트는 최신 점수, 최고 점수, 제출 횟수, 검토 상태만 운영자가 빠르게 볼 수 있게 표시합니다.</li>
+              </ul>
+            </article>
+          </div>
+          <div class="rule-note"><strong>현재 확인 위치</strong><span>CORE Staff / 공개 시험 https://in.archivepilates.com/instructor-evaluation/ / Firestore staffs, staffEvaluationSubmissions, staffApplicantEvaluationSubmissions, staffHrCards, auditLogs</span></div>
         </section>
 
         <section class="panel rule-section" id="welcome">

@@ -23,6 +23,7 @@ const TEST_MEMBER = {
 };
 
 const confirmed = hasArg("--confirm-live-media-test");
+const validateGeminiReport = hasArg("--with-gemini-report");
 const webhookSecret = process.env.PRIVATE_SURVEY_WEBHOOK_SECRET || "";
 const runId = new Date().toISOString().replace(/[:.]/g, "-");
 
@@ -38,8 +39,15 @@ let validationRequest = null;
 try {
   validationRequest = await createTestRequest();
   const request = validationRequest;
-  await postChartAction({ requestId: request.requestId, token: request.token, mode: "pre", answers: preAnswers() });
-  await postChartAction({ requestId: request.requestId, token: request.token, mode: "post", answers: postAnswers() });
+  console.error(
+    `[private-media-live] mode=${validateGeminiReport ? "with-gemini-report" : "media-only"} request=${request.requestId}`,
+  );
+  if (validateGeminiReport) {
+    await postChartAction({ requestId: request.requestId, token: request.token, mode: "pre", answers: preAnswers() });
+    await postChartAction({ requestId: request.requestId, token: request.token, mode: "post", answers: postAnswers() });
+  } else {
+    await seedMediaOnlyReportRecord(request);
+  }
 
   const files = [
     {
@@ -59,34 +67,51 @@ try {
 
   const uploads = [];
   for (const file of files) uploads.push(await uploadMediaFile(request, file));
-  const convert = await postChartActionWithRetry(
-    {
-      requestId: request.requestId,
-      token: request.token,
-      action: "convertReport",
-    },
-    { attempts: 3, retryMs: 8000 },
-  );
-  const record = await readRecord(request.requestId);
-  const reportUrl = record?.publicReportCanonicalUrl || record?.publicReportUrl || convert.reportUrl || "";
+  let convert = null;
+  let record = await readRecord(request.requestId);
+  if (validateGeminiReport && !(record?.publicReportCanonicalUrl || record?.publicReportUrl)) {
+    convert = await postChartActionWithRetry(
+      {
+        requestId: request.requestId,
+        token: request.token,
+        action: "convertReport",
+      },
+      { attempts: 3, retryMs: 8000 },
+    );
+    record = await readRecord(request.requestId);
+  }
+  const reportUrl = record?.publicReportCanonicalUrl || record?.publicReportUrl || convert?.reportUrl || "";
   const reportHtml = reportUrl ? await fetchText(reportUrl) : "";
   const reportContainsMedia =
+    Boolean(reportHtml) &&
     reportHtml.includes("수업 사진·영상") &&
     files.every((file) => reportHtml.includes(file.fileName));
+  const uploadedMediaCount = (record?.media?.files || []).filter((file) =>
+    files.some((expected) => expected.fileName === file.fileName && file.driveFileId && file.previewUrl),
+  ).length;
   const cleanup = await cleanupValidationDocs(request);
 
   const final = {
     ok:
       uploads.length === files.length &&
       uploads.every((row) => row.done && row.file?.driveFileId && row.file?.previewUrl) &&
-      record?.media?.files?.length >= files.length &&
+      uploadedMediaCount >= files.length &&
       reportContainsMedia,
+    mode: validateGeminiReport ? "with-gemini-report" : "media-only",
+    geminiReportValidation: validateGeminiReport,
     projectId: PROJECT_ID,
     generatedAt: new Date().toISOString(),
     apiUrl: PRIVATE_CHART_API_URL,
     requestId: request.requestId,
     bookingId: request.bookingId,
     reportUrl,
+    convertReport: convert
+      ? {
+        reportStatus: convert.reportStatus || "",
+        taskId: convert.taskId || "",
+        message: convert.message || "",
+      }
+      : null,
     uploads: uploads.map((row) => ({
       done: row.done,
       bytesUploaded: row.bytesUploaded,
@@ -106,6 +131,7 @@ try {
       driveFileId: file.driveFileId,
       previewUrl: file.previewUrl,
     })),
+    uploadedMediaCount,
     reportContainsMedia,
     cleanup,
   };
@@ -203,6 +229,48 @@ async function createTestRequest() {
   await db.collection("bookings").doc(bookingId).set(booking);
   await db.collection("privateLessonChartRequests").doc(requestId).set(chartRequest);
   return { ...chartRequest, token, bookingId };
+}
+
+async function seedMediaOnlyReportRecord(request) {
+  const now = Timestamp.now();
+  const reportUrl = reportViewUrlFor(request);
+  await db.collection("privateLessonChartRecords").doc(request.requestId).set(
+    {
+      recordId: request.requestId,
+      requestId: request.requestId,
+      bookingId: request.bookingId,
+      studioId: request.studioId || "5330",
+      memberId: request.memberId,
+      memberName: request.memberName,
+      memberPhone: request.memberPhone,
+      staffId: request.staffId,
+      staffName: request.staffName,
+      lessonDate: request.lessonDate,
+      lessonStartAt: request.lessonStartAt,
+      sessionNumber: request.sessionNumber || 1,
+      prePlan: preAnswers(),
+      postRecord: postAnswers(),
+      preSubmittedAt: now,
+      postSubmittedAt: now,
+      gptStatus: "draft_created",
+      gptTaskId: `media_only_${request.requestId}`,
+      gptProvider: "codex_validation_seed",
+      gptModel: "media-only",
+      gptSourceHash: `media-only-${request.requestId}`,
+      gptError: null,
+      gptDraftSummary: "미디어 업로드 라이브 검증용 리포트 문장입니다.",
+      gptDraftNextDirection: "다음 수업에서는 업로드된 사진과 영상이 리포트에 함께 표시되는지 확인합니다.",
+      publicSummary: "미디어 업로드 라이브 검증용 리포트 문장입니다.",
+      publicNextDirection: "다음 수업에서는 업로드된 사진과 영상이 리포트에 함께 표시되는지 확인합니다.",
+      publicReportCanonicalUrl: reportUrl,
+      publicReportUrl: reportUrl,
+      publicReportApproval: { status: "pending", lastError: null },
+      notionSync: { status: "pending" },
+      createdAt: now,
+      updatedAt: now,
+    },
+    { merge: true },
+  );
 }
 
 async function uploadMediaFile(request, file) {
@@ -326,7 +394,9 @@ async function postChartActionWithRetry(body, options) {
       return await postChartAction(body);
     } catch (error) {
       lastError = error;
-      const retryable = /503|high demand|temporar/i.test(error instanceof Error ? error.message : String(error));
+      const retryable = /429|500|502|503|504|RESOURCE_EXHAUSTED|quota|high demand|temporar/i.test(
+        error instanceof Error ? error.message : String(error),
+      );
       if (!retryable || attempt >= options.attempts) break;
       await sleep(options.retryMs);
     }
@@ -416,6 +486,13 @@ function chartUrl(mode, requestId, token, extra = {}) {
   url.searchParams.set("r", requestId);
   url.searchParams.set("t", token);
   for (const [key, value] of Object.entries(extra)) url.searchParams.set(key, value);
+  return url.toString();
+}
+
+function reportViewUrlFor(request) {
+  const url = new URL(process.env.PRIVATE_LESSON_REPORT_URL || "https://in.archivepilates.com/api/privateLessonReport");
+  url.searchParams.set("recordId", request.requestId);
+  url.searchParams.set("token", request.accessTokenHash || tokenHashFor(request.token));
   return url.toString();
 }
 

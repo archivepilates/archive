@@ -725,6 +725,7 @@ export interface PrivateLessonChartRecordDoc {
   gptModel?: string;
   gptSourceHash?: string;
   gptError?: string | null;
+  gptFallbackReason?: string | null;
   gptDraftSummary?: string;
   gptDraftNextDirection?: string;
   publicReportUrl?: string;
