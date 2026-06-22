@@ -375,6 +375,11 @@ service cloud.firestore {
       allow write: if false;
     }
 
+    match /codexActionQueue/{queueId} {
+      allow read: if isManager();
+      allow write: if false;
+    }
+
     match /systemHealthRuns/{runId} {
       allow read: if isManager();
       allow write: if false;

@@ -577,6 +577,9 @@ async function checkGitAndCi() {
 }
 
 async function writeResults() {
+  const queueSyncResult = await syncCodexActionQueue(findings);
+  checked.push({ id: "codex-action-queue", ...queueSyncResult });
+
   const severityRank = { info: 0, warning: 1, action_required: 2, critical: 3 };
   const worst = findings.reduce((max, item) => Math.max(max, effectiveSeverityRank(item, severityRank)), 0);
   const status = worst >= 3 ? "critical" : worst >= 2 ? "action_required" : worst >= 1 ? "warning" : "success";
@@ -594,6 +597,7 @@ async function writeResults() {
     criticalCount: openFindings.filter((item) => item.severity === "critical").length,
     actionRequiredCount: openFindings.filter((item) => item.severity === "action_required").length,
     warningCount: findings.filter((item) => effectiveSeverityRank(item, severityRank) === severityRank.warning).length,
+    codexActionCount: findings.filter(needsCodexAction).length,
     repairedCount: repairs.filter((item) => item.ok).length,
     checked,
     findings,
@@ -630,6 +634,64 @@ async function writeResults() {
   });
   console.log(JSON.stringify({ ...summary, reportPath }, null, 2));
   if (status === "critical") process.exitCode = 2;
+}
+
+async function syncCodexActionQueue(currentFindings) {
+  const actionable = currentFindings.filter(needsCodexAction);
+  const activeIds = new Set(actionable.map((finding) => finding.findingId));
+  for (const finding of actionable) {
+    const ref = db.collection("codexActionQueue").doc(finding.findingId);
+    const existing = await ref.get();
+    await ref.set({
+      queueId: finding.findingId,
+      source: "system-health-check",
+      sourceType: "systemHealthFinding",
+      sourceRunId: runId,
+      sourceFindingId: finding.findingId,
+      status: existing.exists && ["in_progress", "blocked"].includes(String(existing.data()?.status || ""))
+        ? String(existing.data()?.status || "open")
+        : "open",
+      owner: "codex",
+      priority: finding.severity === "critical" ? "high" : "normal",
+      area: finding.area,
+      title: finding.title,
+      cause: finding.cause,
+      impact: finding.impact,
+      suggestedAction: finding.suggestedAction,
+      sourceRefs: finding.sourceRefs || [],
+      repairStatus: finding.repairStatus || "",
+      firstSeenAt: existing.exists ? existing.data()?.firstSeenAt || FieldValue.serverTimestamp() : FieldValue.serverTimestamp(),
+      lastSeenAt: FieldValue.serverTimestamp(),
+      updatedAt: FieldValue.serverTimestamp(),
+    }, { merge: true });
+  }
+
+  const openSnap = await db.collection("codexActionQueue")
+    .where("source", "==", "system-health-check")
+    .where("status", "in", ["open", "in_progress", "blocked"])
+    .limit(100)
+    .get()
+    .catch(() => null);
+  const batch = db.batch();
+  let resolved = 0;
+  for (const doc of openSnap?.docs || []) {
+    if (activeIds.has(doc.id)) continue;
+    batch.set(doc.ref, {
+      status: "resolved",
+      resolvedReason: "not_detected_in_latest_health_check",
+      resolvedRunId: runId,
+      resolvedAt: FieldValue.serverTimestamp(),
+      updatedAt: FieldValue.serverTimestamp(),
+    }, { merge: true });
+    resolved += 1;
+  }
+  if (resolved) await batch.commit();
+  return { opened: actionable.length, autoResolved: resolved };
+}
+
+function needsCodexAction(finding) {
+  if (finding.repairStatus === "repaired") return false;
+  return ["critical", "action_required"].includes(String(finding.severity || ""));
 }
 
 function effectiveSeverityRank(item, severityRank) {

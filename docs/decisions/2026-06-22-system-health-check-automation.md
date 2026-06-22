@@ -54,6 +54,22 @@ The health check must not automatically:
 - `systemHealthRuns/{runId}` stores each run summary.
 - `systemHealthFindings/{findingId}` stores actionable findings.
 - `automationStatus/{automationId}` stores the latest automation state shown by operator dashboards.
+- `codexActionQueue/{findingId}` stores unresolved `critical` or `action_required` findings that require Codex follow-up.
+
+## Codex Action Queue
+
+Safe auto-repaired findings are not kept as operator tasks.
+When a health check still sees a `critical` or `action_required` issue after repair attempts, the same finding id is upserted into `codexActionQueue` with `status=open`.
+
+When a later health check no longer detects that issue, the queue item is marked `resolved` with `resolvedReason=not_detected_in_latest_health_check`.
+
+Codex should run this before starting automation/system-error work:
+
+```bash
+npm run codex:queue
+```
+
+The queue is evidence for Codex triage. It does not grant permission to run production writes, member-facing sends, deploys, or destructive fixes.
 
 ## HohoYoga
 
