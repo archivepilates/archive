@@ -61,6 +61,33 @@
           </div>
         </section>
         <section class="panel">
+          <div class="panel-header">
+            <div><h2>수강료 문의 즉시발송</h2><p>회원이 아닌 문의 고객에게 수강료 안내 링크를 알림톡 버튼으로 보냅니다.</p></div>
+            <span class="pill">operator send</span>
+          </div>
+          <form class="action-form" id="pricingInquiryAlimtalkForm">
+            <label>
+              <span>문의 전화번호</span>
+              <input id="pricingInquiryPhone" type="tel" inputmode="numeric" autocomplete="tel" placeholder="01012345678" required />
+            </label>
+            <label>
+              <span>고객명 선택</span>
+              <input id="pricingInquiryName" type="text" autocomplete="name" placeholder="이름 없으면 고객님" />
+            </label>
+            <label class="wide-field">
+              <span>메모 선택</span>
+              <input id="pricingInquiryNote" type="text" placeholder="문의 경로나 상담 메모가 있으면 입력" />
+            </label>
+            <button class="primary-action" id="pricingInquirySendButton" type="submit">알림톡 전송</button>
+          </form>
+          <div class="form-status" id="pricingInquiryStatus" role="status" aria-live="polite"></div>
+          <div class="notice-box">
+            <strong>템플릿 문안</strong>
+            <p>#{이름}님, ARCHIVE PILATES 수강료 안내입니다. 아래 버튼에서 현재 수강권 구성과 상담 안내를 확인해 주세요.</p>
+            <p>버튼: 수강료 안내 보기 · 변수: #{수강료링크}</p>
+          </div>
+        </section>
+        <section class="panel">
           <div class="panel-header"><div><h2>발송 전 보호 규칙</h2><p>실제 외부 발송은 기존 canonical 원천과 중복 차단 규칙을 유지합니다.</p></div><span class="pill danger">guardrail</span></div>
           <div class="ops-board">
             <article class="ops-card"><h3>후보</h3><p>alimtalkCandidates 기준. 검증 전 새 read-model에서 직접 후보를 만들지 않습니다.</p></article>

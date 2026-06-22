@@ -28,7 +28,8 @@ export type SendableAlimtalkCandidateType =
   | "remaining_low"
   | "private_count_low"
   | "private_ticket_expiring"
-  | "long_absence";
+  | "long_absence"
+  | "pricing_info";
 
 export const ALIMTALK_TEMPLATES = {
   reservation_open: {
@@ -106,6 +107,11 @@ export const ALIMTALK_TEMPLATES = {
     label: "회원용 인바디 리포트 안내 v1",
     status: "pending",
   },
+  pricing_info: {
+    code: process.env.PRICING_INFO_ALIMTALK_TEMPLATE_ID || "",
+    label: "비회원 수강료 안내 v1",
+    status: "pending",
+  },
 } as const;
 
 export const ALIMTALK_TEMPLATE_CHANNEL_IDS: Readonly<Record<string, string>> = {
@@ -126,6 +132,7 @@ export const CANDIDATE_TEMPLATE_CODES: Record<SendableAlimtalkCandidateType, str
   private_count_low: ALIMTALK_TEMPLATES.private_count_low.code,
   private_ticket_expiring: ALIMTALK_TEMPLATES.private_ticket_expiring.code,
   long_absence: ALIMTALK_TEMPLATES.long_absence.code,
+  pricing_info: ALIMTALK_TEMPLATES.pricing_info.code,
 };
 
 export const STATIC_APPROVED_ALIMTALK_TEMPLATE_CODES: ReadonlySet<string> = new Set(
@@ -193,6 +200,10 @@ export const ALIMTALK_DEDUPE_POLICIES_BY_TEMPLATE_CODE: Record<string, AlimtalkD
   [ALIMTALK_TEMPLATES.inbody_report.code]: {
     label: "인바디 리포트별 1회",
     windowDays: null,
+  },
+  [ALIMTALK_TEMPLATES.pricing_info.code]: {
+    label: "수강료 문의 안내 30일",
+    windowDays: 30,
   },
 };
 

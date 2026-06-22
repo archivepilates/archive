@@ -1,0 +1,148 @@
+<!doctype html>
+<html lang="ko">
+  <head>
+    <meta charset="utf-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1" />
+    <meta name="theme-color" content="#fffaf6" />
+    <title>수강료 안내 · ARCHIVE PILATES</title>
+    <style>
+      :root {
+        --bg: #fffaf6;
+        --surface: #ffffff;
+        --text: #151515;
+        --muted: #706a64;
+        --line: #ece4dc;
+        --accent: #f06418;
+        font-family: -apple-system, BlinkMacSystemFont, "Apple SD Gothic Neo", "Helvetica Neue", Arial, sans-serif;
+      }
+
+      *,
+      *::before,
+      *::after {
+        box-sizing: border-box;
+      }
+
+      body {
+        margin: 0;
+        min-height: 100dvh;
+        overflow-x: clip;
+        background: var(--bg);
+        color: var(--text);
+        line-height: 1.6;
+      }
+
+      main {
+        display: grid;
+        min-height: 100dvh;
+        place-items: center;
+        padding: 28px 18px;
+      }
+
+      .page {
+        display: grid;
+        width: min(100%, 720px);
+        gap: 22px;
+      }
+
+      .hero,
+      .card {
+        border: 1px solid var(--line);
+        border-radius: 8px;
+        background: var(--surface);
+        box-shadow: 0 20px 60px rgba(90, 65, 45, 0.08);
+      }
+
+      .hero {
+        padding: clamp(28px, 6vw, 54px);
+      }
+
+      .eyebrow {
+        margin: 0 0 12px;
+        color: var(--accent);
+        font-weight: 900;
+        letter-spacing: 0;
+      }
+
+      h1 {
+        margin: 0;
+        font-size: clamp(2rem, 5vw, 3.7rem);
+        line-height: 1.1;
+        letter-spacing: 0;
+      }
+
+      .lead {
+        max-width: 58ch;
+        margin: 18px 0 0;
+        color: var(--muted);
+        font-size: 1.05rem;
+      }
+
+      .card {
+        display: grid;
+        gap: 14px;
+        padding: 22px;
+      }
+
+      .row {
+        display: grid;
+        grid-template-columns: minmax(110px, 0.38fr) minmax(0, 1fr);
+        gap: 14px;
+        padding: 14px 0;
+        border-top: 1px solid var(--line);
+      }
+
+      .row:first-child {
+        border-top: 0;
+      }
+
+      .row strong {
+        color: var(--text);
+      }
+
+      .row span {
+        min-width: 0;
+        color: var(--muted);
+      }
+
+      .cta {
+        display: inline-flex;
+        width: fit-content;
+        min-height: 46px;
+        align-items: center;
+        justify-content: center;
+        border-radius: 8px;
+        background: var(--accent);
+        color: #fff;
+        padding: 0 18px;
+        font-weight: 900;
+        text-decoration: none;
+      }
+
+      @media (max-width: 520px) {
+        .row {
+          grid-template-columns: 1fr;
+          gap: 4px;
+        }
+      }
+    </style>
+  </head>
+  <body>
+    <main>
+      <div class="page">
+        <section class="hero">
+          <p class="eyebrow">ARCHIVE PILATES</p>
+          <h1>수강료 안내</h1>
+          <p class="lead">
+            ARCHIVE PILATES 수강권은 운동 목적, 수업 방식, 주간 이용 횟수에 따라 상담 후 가장 적합한 구성을 안내드립니다.
+          </p>
+        </section>
+        <section class="card" aria-label="수강권 안내">
+          <div class="row"><strong>그룹 수업</strong><span>정기적인 운동 루틴을 만들기 위한 그룹 수강권을 안내합니다.</span></div>
+          <div class="row"><strong>프라이빗 수업</strong><span>체형교정, 통증관리, 산전산후, 목표관리처럼 개인 목적에 맞춘 수업입니다.</span></div>
+          <div class="row"><strong>첫 방문 상담</strong><span>현재 컨디션과 운동 경험을 확인한 뒤 추천 수강권을 안내드립니다.</span></div>
+          <a class="cta" href="https://pf.kakao.com/_bxaHLn/chat" rel="noopener">카카오채널로 문의</a>
+        </section>
+      </div>
+    </main>
+  </body>
+</html>

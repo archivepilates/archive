@@ -491,6 +491,7 @@ export type AlimtalkCandidateType =
   | "private_count_low"
   | "private_ticket_expiring"
   | "long_absence"
+  | "pricing_info"
   | "manual_review";
 export type AlimtalkCandidateStatus =
   | "candidate"

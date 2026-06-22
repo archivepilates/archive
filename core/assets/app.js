@@ -1021,6 +1021,64 @@ function renderMessages(candidates, sends) {
   }
 }
 
+async function handlePricingInquiryAlimtalkSubmit(event) {
+  event.preventDefault();
+  const phoneInput = qs("pricingInquiryPhone");
+  const nameInput = qs("pricingInquiryName");
+  const noteInput = qs("pricingInquiryNote");
+  const button = qs("pricingInquirySendButton");
+  const status = qs("pricingInquiryStatus");
+  const phone = phoneInput?.value.replace(/\D/g, "") || "";
+  const name = nameInput?.value.trim() || "";
+  const note = noteInput?.value.trim() || "";
+  if (!/^010\d{8}$/.test(phone)) {
+    status.textContent = "010으로 시작하는 휴대폰번호 11자리를 입력하세요.";
+    status.className = "form-status error";
+    return;
+  }
+  if (button) button.disabled = true;
+  status.textContent = "알림톡 발송 요청 중입니다.";
+  status.className = "form-status";
+  try {
+    const runtime = await initFirebase();
+    const user = await waitForAuth(runtime);
+    if (!user) {
+      showLoginGate("수강료 안내 알림톡 발송은 운영자 로그인이 필요합니다.");
+      throw new Error("운영자 로그인이 필요합니다.");
+    }
+    const token = await user.getIdToken();
+    const response = await fetch("/api/pricingInquiryAlimtalk", {
+      method: "POST",
+      headers: {
+        Authorization: `Bearer ${token}`,
+        "Content-Type": "application/json",
+      },
+      body: JSON.stringify({ phone, name, note }),
+    });
+    const result = await response.json().catch(() => ({}));
+    if (!response.ok || result.ok === false) throw new Error(result.error || "알림톡 발송 요청에 실패했습니다.");
+    const label = {
+      sent: "발송 완료",
+      queued: "발송 대기",
+      skipped: "중복 차단",
+      template_pending: "템플릿 승인 대기",
+    }[result.status] || "요청 완료";
+    status.textContent = `${label} · ${result.requestId || ""}`;
+    status.className = result.status === "sent" ? "form-status success" : "form-status warn";
+    if (result.status === "sent") {
+      phoneInput.value = "";
+      if (nameInput) nameInput.value = "";
+      if (noteInput) noteInput.value = "";
+    }
+    await refresh();
+  } catch (error) {
+    status.textContent = error?.message || "알림톡 발송 요청에 실패했습니다.";
+    status.className = "form-status error";
+  } finally {
+    if (button) button.disabled = false;
+  }
+}
+
 function lessonTypeLabel(value) {
   const type = String(value || "").toLowerCase();
   if (type.includes("semi")) return "세미";
@@ -2066,6 +2124,7 @@ async function refresh() {
 enhanceNav();
 activateNav();
 qs("refreshButton")?.addEventListener("click", refresh);
+qs("pricingInquiryAlimtalkForm")?.addEventListener("submit", handlePricingInquiryAlimtalkSubmit);
 qs("businessMonthSelect")?.addEventListener("change", (event) => renderBusinessMonth(event.target.value));
 qs("memberSearchInput")?.addEventListener("input", (event) => {
   memberSearchTerm = event.target.value.trim();

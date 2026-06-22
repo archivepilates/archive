@@ -330,6 +330,7 @@ async function templateVariables(candidate: AlimtalkCandidateDoc): Promise<Recor
     "#{링크ID}": shortLinkId,
     "#{리포트링크ID}": reportLinkId,
     "#{인바디링크ID}": inbodyLinkId,
+    "#{수강료링크}": String(payload.pricingUrl || ""),
   };
 }
 

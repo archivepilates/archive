@@ -57,6 +57,7 @@ function candidateTemplateVariables(candidate: AlimtalkCandidateDoc): Record<str
   );
   const reportLinkId = String(payload.reportLinkId || "");
   const inbodyLinkId = String(payload.inbodyLinkId || "");
+  const pricingUrl = String(payload.pricingUrl || "");
   return {
     "#{설문ID}": surveyId,
     "#{접근토큰}": accessToken,
@@ -64,6 +65,7 @@ function candidateTemplateVariables(candidate: AlimtalkCandidateDoc): Record<str
     "#{링크ID}": candidateShortLinkId(candidate, surveyId, accessToken, managementNumber),
     "#{리포트링크ID}": reportLinkId,
     "#{인바디링크ID}": inbodyLinkId,
+    "#{수강료링크}": pricingUrl,
   };
 }
 

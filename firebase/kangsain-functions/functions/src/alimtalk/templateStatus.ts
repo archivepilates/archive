@@ -31,6 +31,7 @@ export async function syncAlimtalkTemplateStatuses(): Promise<{ checked: number;
   let approved = 0;
   let failed = 0;
   for (const template of Object.values(ALIMTALK_TEMPLATES)) {
+    if (!template.code) continue;
     checked += 1;
     try {
       const remote = await fetchSolapiTemplate(template.code);

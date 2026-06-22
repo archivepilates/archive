@@ -99,6 +99,11 @@ function dedupeScope(candidate: AlimtalkCandidateDoc): Record<string, string> {
       reservationWeek: String(payload.reservationWeek || payload.weekLabel || ""),
     };
   }
+  if (type === "pricing_info") {
+    return {
+      inquiryPhone: normalizePhone(candidate.memberPhone),
+    };
+  }
   if (["ticket_expiring", "remaining_low", "private_count_low", "private_ticket_expiring"].includes(type)) {
     return {
       ticketIdentity: ticketReminderFingerprint(candidate),

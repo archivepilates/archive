@@ -2,6 +2,7 @@ import { logger } from "firebase-functions";
 import { onRequest } from "firebase-functions/v2/https";
 import { onSchedule } from "firebase-functions/v2/scheduler";
 import { approveAlimtalkBatchHandler } from "../alimtalk/approvalGate";
+import { pricingInquiryAlimtalkHandler } from "../alimtalk/pricingInquiryAlimtalk";
 import { processAlimtalkQueue } from "../alimtalk/processAlimtalkQueue";
 import { queueDailyAlimtalkCandidates, queueReservationOpenAlimtalkCandidates } from "../alimtalk/queueDailyAlimtalk";
 import { sendDailyAlimtalkReport } from "../alimtalk/sendDailyAlimtalkReport";
@@ -90,3 +91,4 @@ export const scheduledSyncAlimtalkTemplateStatuses = onSchedule(
 );
 
 export const approveAlimtalkBatch = onRequest(alimtalkQueueRequestOptions, approveAlimtalkBatchHandler);
+export const pricingInquiryAlimtalk = onRequest(alimtalkQueueRequestOptions, pricingInquiryAlimtalkHandler);

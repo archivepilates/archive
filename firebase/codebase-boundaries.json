@@ -13,7 +13,8 @@
         "scheduledQueueAndSendAlimtalkDaily",
         "scheduledQueueAndSendReservationOpenAlimtalk",
         "scheduledSyncAlimtalkTemplateStatuses",
-        "approveAlimtalkBatch"
+        "approveAlimtalkBatch",
+        "pricingInquiryAlimtalk"
       ],
       "forbidden": ["StudioMate writes", "Google Contacts writes", "private chart generation"]
     },

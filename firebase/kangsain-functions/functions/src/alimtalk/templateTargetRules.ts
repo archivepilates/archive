@@ -38,6 +38,7 @@ export const GROUP_SURVEY_BUTTON_URL_TEMPLATE =
   "https://in.archivepilates.com/groupSurvey?id=#{설문ID}&token=#{접근토큰}";
 export const METHOD_MATERIAL_BUTTON_URL_TEMPLATE = "https://in.archivepilates.com/method/#{관리번호}";
 export const PRIVATE_REPORT_BUTTON_URL_TEMPLATE = "https://in.archivepilates.com/s/#{리포트링크ID}/";
+export const PRICING_INFO_BUTTON_URL_TEMPLATE = "#{수강료링크}";
 
 export const ALIMTALK_TEMPLATE_TARGET_RULES: Partial<Record<AlimtalkCandidateType, AlimtalkTemplateTargetRule>> = {
   reservation_open: {
@@ -380,6 +381,33 @@ export const ALIMTALK_TEMPLATE_TARGET_RULES: Partial<Record<AlimtalkCandidateTyp
       "같은 측정 또는 리포트 발송 이력 있음",
       "운영자 승인 전 또는 자동 발송 조건 미충족",
       "SOLAPI 미승인 템플릿",
+    ],
+  },
+  pricing_info: {
+    type: "pricing_info",
+    templateCode: ALIMTALK_TEMPLATES.pricing_info.code,
+    templateLabel: ALIMTALK_TEMPLATES.pricing_info.label,
+    sourceDatePolicy: "manual",
+    requiresApprovedTemplate: true,
+    requiresMemberPhone: true,
+    buttonUrlRules: [
+      {
+        label: "수강료 안내 버튼",
+        template: PRICING_INFO_BUTTON_URL_TEMPLATE,
+        maxLength: SOLAPI_BUTTON_URL_MAX_LENGTH,
+      },
+    ],
+    targetRules: [
+      "수강료 문의 고객 전화번호를 운영자가 CORE에서 직접 입력",
+      "고객명이 없으면 고객님으로 발송",
+      "수강료 안내 링크가 systemSettings 또는 기본 링크로 설정되어 있음",
+      "비회원 문의 안내 30일 내 같은 전화번호 발송 이력이 없음",
+    ],
+    exclusionRules: [
+      "전화번호 없음 또는 형식 오류",
+      "수강료 안내 링크 없음",
+      "비회원 수강료 안내 템플릿 코드 미설정 또는 미승인",
+      "동일 전화번호 30일 내 수강료 안내 발송 이력 있음",
     ],
   },
 };
