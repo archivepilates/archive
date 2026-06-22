@@ -14,13 +14,28 @@ const config = {
   dryRun: env("DRY_RUN", "true") !== "false",
   confirm: env("CONFIRM", "false") === "true",
   availableUntil: env("STUDIOMATE_RESERVATION_AVAILABLE_UNTIL", ""),
-  extensionDays: Number(env("STUDIOMATE_RESERVATION_EXTENSION_DAYS", "0")),
-  extensionTime: env("STUDIOMATE_RESERVATION_EXTENSION_TIME", "13:00"),
+  restoreExpectedExtensionDays: env("STUDIOMATE_RESERVATION_RESTORE_EXTENSION_DAYS", "true") === "true",
+  expectedPrivateExtensionDays: Number(env("STUDIOMATE_PRIVATE_RESERVATION_EXTENSION_DAYS", "60")),
+  expectedGroupExtensionDays: Number(env("STUDIOMATE_GROUP_RESERVATION_EXTENSION_DAYS", "13")),
   allowFutureVisibleUntil: env("STUDIOMATE_RESERVATION_ALLOW_FUTURE_VISIBLE_UNTIL", "false") === "true",
 };
 
 const startedAt = new Date();
 const targetAvailableUntil = config.availableUntil || formatKoreanDate(startedAt);
+const reservationDeadlineTabs = [
+  {
+    key: "private",
+    label: "프라이빗 수업",
+    tabPattern: /프라이빗\s*수업|프라이빗|개인|Private/i,
+    expectedExtensionDays: config.expectedPrivateExtensionDays,
+  },
+  {
+    key: "group",
+    label: "그룹 수업",
+    tabPattern: /그룹\s*수업|그룹|Group/i,
+    expectedExtensionDays: config.expectedGroupExtensionDays,
+  },
+];
 const result = {
   ok: false,
   dryRun: config.dryRun,
@@ -31,10 +46,16 @@ const result = {
   profileDir: config.profileDir,
   outputDir: config.outputDir,
   target: {
-    appliesTo: ["프라이빗 수업", "그룹 수업"],
+    appliesTo: reservationDeadlineTabs.map((item) => item.label),
     availableUntil: targetAvailableUntil,
-    extensionDays: config.extensionDays,
-    extensionTime: config.extensionTime
+    mode: "date-only",
+    preserveExtensionTime: true,
+    restoreExpectedExtensionDays: config.restoreExpectedExtensionDays,
+    lessons: reservationDeadlineTabs.map((item) => ({
+      key: item.key,
+      label: item.label,
+      expectedExtensionDays: item.expectedExtensionDays,
+    })),
   }
 };
 
@@ -69,7 +90,7 @@ try {
 
   result.screen = await inspectScreen(page);
   result.preview = {
-    message: `Set private/group reservation availability until ${targetAvailableUntil}; StudioMate visible member deadline must also be ${targetAvailableUntil}.`,
+    message: `Set reservation availability date only until ${targetAvailableUntil}; preserve private/group auto-extension values.`,
     currentUrl: page.url()
   };
 
@@ -156,32 +177,37 @@ async function hasOperationInfoSection(page) {
 
 async function updateReservationDeadlineSetting(page) {
   await scrollReservationDeadlineIntoView(page);
-  const inputs = await visibleInputMeta(page);
-  const date = inputs.find((input) => /예약\s*가능\s*일자/.test(input.placeholder) || /^\d{4}\.\s*\d{1,2}\.\s*\d{1,2}\.?$/.test(input.value));
-  if (!date) throw new Error("Reservation availability date input not found.");
+  const changes = [];
 
-  const time = inputs.find((input) => input.index > date.index && /^\d{1,2}:\d{2}$/.test(input.value));
-  if (!time) throw new Error("Reservation auto-extension time input not found.");
+  for (const target of reservationDeadlineTabs) {
+    await selectReservationDeadlineTab(page, target);
+    const before = await currentReservationDeadlineState(page, target);
+    await page.locator("input").nth(before.indices.date).fill(targetAvailableUntil);
 
-  const days = inputs.find((input) => input.index > time.index && /^\d+$/.test(input.value));
-  if (!days) throw new Error("Reservation auto-extension days input not found.");
-
-  await page.locator("input").nth(date.index).fill(targetAvailableUntil);
-  await page.locator("input").nth(time.index).fill(config.extensionTime);
-  await page.locator("input").nth(days.index).fill(String(config.extensionDays));
-
-  return {
-    before: {
-      availableUntil: date.value,
-      extensionTime: time.value,
-      extensionDays: days.value
-    },
-    after: {
-      availableUntil: targetAvailableUntil,
-      extensionTime: config.extensionTime,
-      extensionDays: String(config.extensionDays)
+    let restoredExtensionDays = false;
+    const expectedExtensionDays = String(target.expectedExtensionDays);
+    if (
+      config.restoreExpectedExtensionDays &&
+      before.indices.days >= 0 &&
+      before.extensionDays &&
+      before.extensionDays !== expectedExtensionDays
+    ) {
+      await page.locator("input").nth(before.indices.days).fill(expectedExtensionDays);
+      restoredExtensionDays = true;
     }
-  };
+
+    const after = await currentReservationDeadlineState(page, target);
+    changes.push({
+      key: target.key,
+      label: target.label,
+      before: stripIndices(before),
+      after: stripIndices(after),
+      expectedExtensionDays: target.expectedExtensionDays,
+      restoredExtensionDays,
+    });
+  }
+
+  return changes;
 }
 
 async function clickSave(page) {
@@ -202,6 +228,9 @@ async function inspectScreen(page) {
   const inputs = await visibleInputMeta(page).catch(() => []);
   const deadlineFields = reservationDeadlineInputState(inputs);
   const visibleMemberAvailability = extractVisibleMemberAvailability(text) || deadlineFields.effectiveAvailableUntil;
+  const deadlineTabs = await inspectReservationDeadlineTabs(page).catch((error) => ({
+    error: error.message,
+  }));
   return {
     currentUrl: page.url(),
     hasOperationInfo: /운영정보/.test(text),
@@ -210,6 +239,7 @@ async function inspectScreen(page) {
     hasGroupLesson: /그룹|Group/.test(text),
     visibleMemberAvailability,
     deadlineFields,
+    deadlineTabs,
     visibleInputs: inputs
       .filter((input) => /예약\s*가능\s*일자/.test(input.placeholder) || /^\d{4}\.|^\d{1,2}:\d{2}$|^\d+$/.test(input.value))
       .slice(0, 10),
@@ -218,15 +248,40 @@ async function inspectScreen(page) {
 }
 
 function assertVisibleMemberAvailability(screen) {
-  const visibleDate = screen?.visibleMemberAvailability || screen?.deadlineFields?.effectiveAvailableUntil || "";
-  if (!visibleDate) {
-    throw new Error("StudioMate visible member reservation deadline text was not found after save.");
+  const tabs = Array.isArray(screen?.deadlineTabs) ? screen.deadlineTabs : [];
+  if (!tabs.length) {
+    throw new Error("StudioMate private/group reservation deadline tab state was not found after save.");
   }
-  if (normalizeDateText(visibleDate) === normalizeDateText(targetAvailableUntil)) return;
+  const failures = [];
+  for (const tab of tabs) {
+    const expectedDates = acceptablePostSaveAvailableUntilValues(tab);
+    if (!expectedDates.some((value) => normalizeDateText(value) === normalizeDateText(tab.availableUntil))) {
+      failures.push(`${tab.label} date expected ${expectedDates.join(" or ")}, got ${tab.availableUntil || "(blank)"}`);
+    }
+    if (String(tab.extensionDays || "") !== String(tab.expectedExtensionDays)) {
+      failures.push(`${tab.label} extension days expected ${tab.expectedExtensionDays}, got ${tab.extensionDays || "(blank)"}`);
+    }
+  }
+  if (!failures.length) return;
   if (config.allowFutureVisibleUntil) return;
-  throw new Error(
-    `StudioMate visible member reservation deadline mismatch: expected ${targetAvailableUntil}, got ${visibleDate}.`
-  );
+  throw new Error(`StudioMate reservation deadline mismatch: ${failures.join("; ")}`);
+}
+
+function acceptablePostSaveAvailableUntilValues(tab) {
+  const values = [targetAvailableUntil];
+  if (isAfterAutoExtensionMoment(tab)) {
+    const autoExtended = addDaysToKoreanDate(targetAvailableUntil, Number(tab.expectedExtensionDays));
+    if (autoExtended) values.push(autoExtended);
+  }
+  return values;
+}
+
+function isAfterAutoExtensionMoment(tab) {
+  const date = parseKoreanDate(targetAvailableUntil);
+  const time = String(tab.extensionTime || "").match(/^(\d{1,2}):(\d{2})$/);
+  if (!date || !time) return false;
+  date.setHours(Number(time[1]), Number(time[2]), 0, 0);
+  return Date.now() >= date.getTime();
 }
 
 function extractVisibleMemberAvailability(text) {
@@ -246,15 +301,82 @@ function reservationDeadlineInputState(inputs) {
     extensionTime: time?.value || "",
     extensionDays: days?.value || "",
     effectiveAvailableUntil,
+    indices: {
+      date: date?.index ?? -1,
+      time: time?.index ?? -1,
+      days: days?.index ?? -1,
+    },
   };
 }
 
+async function inspectReservationDeadlineTabs(page) {
+  const out = [];
+  for (const target of reservationDeadlineTabs) {
+    await selectReservationDeadlineTab(page, target);
+    const state = await currentReservationDeadlineState(page, target);
+    out.push(stripIndices(state));
+  }
+  return out;
+}
+
+async function currentReservationDeadlineState(page, target) {
+  await scrollReservationDeadlineIntoView(page);
+  const inputs = await visibleInputMeta(page);
+  const state = reservationDeadlineInputState(inputs);
+  if (state.indices.date < 0) throw new Error(`${target.label} reservation availability date input not found.`);
+  if (state.indices.time < 0) throw new Error(`${target.label} reservation auto-extension time input not found.`);
+  if (state.indices.days < 0) throw new Error(`${target.label} reservation auto-extension days input not found.`);
+  return {
+    key: target.key,
+    label: target.label,
+    expectedExtensionDays: target.expectedExtensionDays,
+    availableUntil: state.availableUntil,
+    extensionTime: state.extensionTime,
+    extensionDays: state.extensionDays,
+    effectiveAvailableUntil: state.effectiveAvailableUntil,
+    indices: state.indices,
+  };
+}
+
+async function selectReservationDeadlineTab(page, target) {
+  await scrollReservationDeadlineIntoView(page);
+  const candidates = [
+    page.getByRole("tab", { name: target.tabPattern }).first(),
+    page.locator("[role='tab']").filter({ hasText: target.tabPattern }).first(),
+    page.locator(".el-tabs__item").filter({ hasText: target.tabPattern }).first(),
+    page.locator("button, a, label").filter({ hasText: target.tabPattern }).first(),
+  ];
+
+  for (const candidate of candidates) {
+    if (await candidate.isVisible().catch(() => false)) {
+      await candidate.scrollIntoViewIfNeeded().catch(() => {});
+      await candidate.click({ timeout: 5000 }).catch(() => {});
+      await page.waitForTimeout(500);
+      await scrollReservationDeadlineIntoView(page);
+      return;
+    }
+  }
+
+  if (target.key === "private") return;
+  throw new Error(`${target.label} reservation deadline tab not found.`);
+}
+
+function stripIndices(value) {
+  const { indices, ...rest } = value;
+  return rest;
+}
+
 function addDaysToKoreanDate(value, days) {
-  const match = String(value || "").match(/(20\d{2})\.\s*(\d{1,2})\.\s*(\d{1,2})\.?/);
-  if (!match) return "";
-  const date = new Date(Number(match[1]), Number(match[2]) - 1, Number(match[3]));
+  const date = parseKoreanDate(value);
+  if (!date) return "";
   date.setDate(date.getDate() + days);
   return formatKoreanDate(date);
+}
+
+function parseKoreanDate(value) {
+  const match = String(value || "").match(/(20\d{2})\.\s*(\d{1,2})\.\s*(\d{1,2})\.?/);
+  if (!match) return null;
+  return new Date(Number(match[1]), Number(match[2]) - 1, Number(match[3]));
 }
 
 function normalizeDateText(value) {

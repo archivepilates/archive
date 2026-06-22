@@ -51,13 +51,11 @@ try {
 
 function successBody(latest) {
   const targetDate = latest.target?.availableUntil || latest.target?.dateText || latest.targetDateText || "실행일 월요일";
-  const time = latest.target?.time || latest.extensionTime || "13:00";
-  const days = latest.target?.extensionDays ?? latest.target?.days ?? latest.extensionDays ?? "0";
-  const visibleUntil = latest.postSave?.visibleMemberAvailability || latest.screen?.visibleMemberAvailability || "확인 안됨";
+  const rows = reservationDeadlineRows(latest);
   return [
-    "대상: 프라이빗/그룹",
-    `설정: ${targetDate} / ${time} / ${days}일`,
-    `회원 표시문구: ${visibleUntil}까지 예약 가능`,
+    "대상: 프라이빗/그룹 예약 가능 기한",
+    `설정일자: ${targetDate}`,
+    ...rows,
     "결과: 성공",
     "자동화: 매주 월요일 12:30 활성",
   ].join("\n");
@@ -112,8 +110,7 @@ async function runDeadlineSequence(prefix) {
     HEADLESS: "true",
     DRY_RUN: "false",
     CONFIRM: "true",
-    STUDIOMATE_RESERVATION_EXTENSION_DAYS: "0",
-    STUDIOMATE_RESERVATION_EXTENSION_TIME: "13:00",
+    STUDIOMATE_RESERVATION_RESTORE_EXTENSION_DAYS: "true",
   });
   result.steps.push({ name: `${suffix}save`, ok: realRun.code === 0, code: realRun.code, output: realRun.output });
   if (realRun.code !== 0) throw new Error(extractError(realRun.output) || "StudioMate reservation deadline save failed.");
@@ -121,6 +118,23 @@ async function runDeadlineSequence(prefix) {
   const latest = await readJson(LAST_RESULT);
   if (!latest.ok) throw new Error(latest.error || "Latest reservation deadline result is not ok.");
   return latest;
+}
+
+function reservationDeadlineRows(latest) {
+  const changed = Array.isArray(latest.changed) ? latest.changed : [];
+  const tabs = Array.isArray(latest.postSave?.deadlineTabs)
+    ? latest.postSave.deadlineTabs
+    : Array.isArray(latest.screen?.deadlineTabs)
+      ? latest.screen.deadlineTabs
+      : [];
+  const source = changed.length ? changed.map((item) => item.after || item) : tabs;
+  if (!source.length) return ["탭별 상태: 확인 안됨"];
+
+  return source.map((item) => {
+    const restored = changed.find((change) => change.key === item.key)?.restoredExtensionDays;
+    const restorationText = restored ? " · 깨진 연장일 복구" : "";
+    return `${item.label || item.key}: ${item.availableUntil || "날짜 확인 안됨"} / ${item.extensionTime || "시간 확인 안됨"} / ${item.extensionDays || "일수 확인 안됨"}일 유지${restorationText}`;
+  });
 }
 
 async function runRecoveryAttempt(initialMessage) {
