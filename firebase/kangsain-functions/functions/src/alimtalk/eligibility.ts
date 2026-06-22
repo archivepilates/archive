@@ -8,11 +8,18 @@ import { isValidInstructorLessonManagementNumber, normalizeInstructorLessonManag
 
 export async function autoSendabilityIssue(candidate: AlimtalkCandidateDoc, today: string): Promise<string> {
   const rule = alimtalkTemplateTargetRule(candidate.type);
+  const templateCode = String(candidate.templateCode || "").trim();
   if (rule?.requiresMemberPhone && !candidate.memberPhone) return "전화번호 없음";
   if (ALIMTALK_MEMBER_EXCLUSION_REASONS[candidate.memberId])
     return ALIMTALK_MEMBER_EXCLUSION_REASONS[candidate.memberId];
-  if (rule?.requiresApprovedTemplate && !(await isAlimtalkTemplateApproved(candidate.templateCode)))
-    return `승인 템플릿 코드 아님: ${candidate.templateCode}`;
+  if (rule?.requiresApprovedTemplate) {
+    const configuredTemplateCode = String(rule.templateCode || "").trim();
+    if (!configuredTemplateCode) return `${rule.templateLabel} 템플릿 코드 미설정`;
+    if (!templateCode) return `${rule.templateLabel} 후보 템플릿 코드 없음`;
+    if (templateCode !== configuredTemplateCode)
+      return `${rule.templateLabel} 후보 템플릿 코드 불일치: ${templateCode}`;
+    if (!(await isAlimtalkTemplateApproved(templateCode))) return `승인 템플릿 코드 아님: ${templateCode}`;
+  }
   if ((candidate.attempts || 0) >= (candidate.maxAttempts || 2)) return "발송 실패 재시도 한도 초과";
   if (candidate.sourceDate && candidate.sourceDate > today) return "대상일이 발송 기준일 이후";
   if (rule?.minSourceDate && candidate.sourceDate < rule.minSourceDate) return `${rule.templateLabel} 시작일 이전 후보`;
@@ -43,6 +50,8 @@ export async function autoSendabilityIssue(candidate: AlimtalkCandidateDoc, toda
     variables: candidateTemplateVariables(candidate),
   });
   if (buttonUrlIssue) return buttonUrlIssue;
+  const missingVariable = missingRequiredVariable(rule?.requiredVariables, candidateTemplateVariables(candidate));
+  if (missingVariable) return `템플릿 변수 없음: ${missingVariable}`;
   if (rule?.blocksTooLateGroupSurvey && candidate.payload?.groupSurveyDeliveryMode === "too_late")
     return "수업 시작 30분 미만 첫 그룹수업은 설문 발송 대신 현장 확인";
   return "";
@@ -58,6 +67,10 @@ function candidateTemplateVariables(candidate: AlimtalkCandidateDoc): Record<str
   const reportLinkId = String(payload.reportLinkId || "");
   const inbodyLinkId = String(payload.inbodyLinkId || "");
   return {
+    "#{이름}": String(payload.memberName || candidate.memberName || ""),
+    "#{회원명}": String(payload.memberName || candidate.memberName || ""),
+    "#{예약주차}": String(payload.reservationWeek || payload.weekLabel || ""),
+    "#{수강료안내링크}": String(payload.pricingUrl || ""),
     "#{설문ID}": surveyId,
     "#{접근토큰}": accessToken,
     "#{관리번호}": managementNumber,
@@ -65,6 +78,13 @@ function candidateTemplateVariables(candidate: AlimtalkCandidateDoc): Record<str
     "#{리포트링크ID}": reportLinkId,
     "#{인바디링크ID}": inbodyLinkId,
   };
+}
+
+function missingRequiredVariable(requiredVariables: string[] | undefined, variables: Record<string, string>): string {
+  for (const variable of requiredVariables || []) {
+    if (!String(variables[variable] || "").trim()) return variable;
+  }
+  return "";
 }
 
 function candidateShortLinkId(

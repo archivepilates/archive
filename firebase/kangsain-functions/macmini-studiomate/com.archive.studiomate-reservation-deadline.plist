@@ -1,0 +1,41 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<!DOCTYPE plist PUBLIC "-//Apple//DTD PLIST 1.0//EN" "https://www.apple.com/DTDs/PropertyList-1.0.dtd">
+<plist version="1.0">
+<dict>
+  <key>Label</key>
+  <string>com.archive.studiomate-reservation-deadline</string>
+
+  <key>ProgramArguments</key>
+  <array>
+    <string>/usr/bin/caffeinate</string>
+    <string>-s</string>
+    <string>/bin/zsh</string>
+    <string>-lc</string>
+    <string>cd '/Users/archivepilates/codex-worktrees/archivein-live-setup' &amp;&amp; /opt/homebrew/bin/node firebase/kangsain-functions/macmini-studiomate/run-reservation-deadline-job.mjs</string>
+  </array>
+
+  <key>EnvironmentVariables</key>
+  <dict>
+    <key>PATH</key>
+    <string>/usr/local/bin:/opt/homebrew/bin:/usr/bin:/bin:/usr/sbin:/sbin</string>
+    <key>TZ</key>
+    <string>Asia/Seoul</string>
+  </dict>
+
+  <key>StartCalendarInterval</key>
+  <dict>
+    <key>Weekday</key>
+    <integer>1</integer>
+    <key>Hour</key>
+    <integer>12</integer>
+    <key>Minute</key>
+    <integer>30</integer>
+  </dict>
+
+  <key>StandardOutPath</key>
+  <string>/Users/archivepilates/ArchiveIN/automation/logs/studiomate-reservation-deadline.out.log</string>
+
+  <key>StandardErrorPath</key>
+  <string>/Users/archivepilates/ArchiveIN/automation/logs/studiomate-reservation-deadline.err.log</string>
+</dict>
+</plist>

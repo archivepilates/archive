@@ -137,7 +137,7 @@ export const CANDIDATE_TEMPLATE_CODES: Record<SendableAlimtalkCandidateType, str
 
 export const STATIC_APPROVED_ALIMTALK_TEMPLATE_CODES: ReadonlySet<string> = new Set(
   Object.values(ALIMTALK_TEMPLATES)
-    .filter((template) => template.status === "approved")
+    .filter((template) => template.status === "approved" && Boolean(template.code))
     .map((template) => template.code),
 );
 

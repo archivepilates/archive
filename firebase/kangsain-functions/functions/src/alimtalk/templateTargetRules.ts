@@ -21,6 +21,7 @@ export interface AlimtalkTemplateTargetRule {
   requiresMemberPhone: boolean;
   requiresManagementNumber?: boolean;
   blocksTooLateGroupSurvey?: boolean;
+  requiredVariables?: string[];
   buttonUrlRules?: AlimtalkButtonUrlRule[];
 }
 
@@ -50,6 +51,7 @@ export const ALIMTALK_TEMPLATE_TARGET_RULES: Partial<Record<AlimtalkCandidateTyp
     sourceDatePolicy: "today",
     requiresApprovedTemplate: true,
     requiresMemberPhone: true,
+    requiredVariables: ["#{예약주차}"],
     targetRules: [
       "월요일 예약 오픈 안내일",
       "예약 오픈 주간에 유효한 그룹 또는 혼합 수강권 보유",

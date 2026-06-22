@@ -298,6 +298,8 @@ function reservationOpenCandidateForDate(profile: MemberProfileDoc, sourceDate: 
   if (!isReservationOpenSendDate(sourceDate)) return null;
   if (!profile.memberId || !profile.name || !profile.phone) return null;
   if (ALIMTALK_MEMBER_EXCLUSION_REASONS[profile.memberId]) return null;
+  const templateCode = CANDIDATE_TEMPLATE_CODES.reservation_open;
+  if (!templateCode) return null;
   const reservationStartDate = reservationOpenStartDate(sourceDate);
   const reservationEndDate = reservationOpenEndDate(sourceDate);
   const eligibleTickets = reservationOpenEligibleGroupTickets(profile, reservationStartDate, reservationEndDate);
@@ -312,7 +314,7 @@ function reservationOpenCandidateForDate(profile: MemberProfileDoc, sourceDate: 
     memberPhone: profile.phone,
     type: "reservation_open",
     status: "candidate",
-    templateCode: CANDIDATE_TEMPLATE_CODES.reservation_open,
+    templateCode,
     title: "예약 안내",
     reason: `예약 오픈 안내 · ${reservationWeek}`,
     sourceDate,
