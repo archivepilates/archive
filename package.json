@@ -5,6 +5,7 @@
     "download:studiomate-sales": "node scripts/download-studiomate-sales-excels.mjs",
     "run:archive-dashboard-sales-daily": "node scripts/run-archive-dashboard-sales-daily.mjs",
     "sync:archive-dashboard-db": "node scripts/sync-archive-dashboard-db.mjs",
+    "sync:automation-observability": "node scripts/sync-automation-observability.mjs",
     "rebuild:member-360": "node scripts/rebuild-member-360-db.mjs",
     "prepare:archive-core-transition": "node scripts/prepare-archive-core-transition-data.mjs",
     "verify:archivein-admin": "node scripts/verify-archivein-admin-firestore-access.mjs",

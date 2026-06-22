@@ -126,7 +126,7 @@ function runStep(name, command) {
     command: [process.execPath, ...command],
     exitCode: result.status ?? 0,
     stdout: parseJsonOrText(result.stdout),
-    stderr: result.stderr.trim(),
+    stderr: String(result.stderr || result.error?.message || "").trim(),
     stdoutOk: parsedOk(result.stdout),
     requiredFailed: name === "memberProfiles" && parsedOk(result.stdout) === false,
   };

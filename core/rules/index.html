@@ -150,6 +150,15 @@
               </ul>
             </article>
             <article class="rule-card">
+              <h3>자동화 관제</h3>
+              <ul>
+                <li>안정적인 정기 실행은 Mac mini LaunchAgent를 기본 주체로 둡니다.</li>
+                <li>Codex 앱 자동화는 테스트, 리뷰, 수동 fallback 용도이며 LaunchAgent와 같은 작업을 동시에 ACTIVE로 두지 않습니다.</li>
+                <li>ARCHIVE CORE 자동화 관제 탭은 Firestore automationStatus를 표시하므로, 새 자동화는 실행 주체와 상태를 automationStatus에 기록해야 합니다.</li>
+                <li>LaunchAgent와 Codex 자동화 정의는 sync:automation-observability로 점검해 CORE 관제에 반영합니다.</li>
+              </ul>
+            </article>
+            <article class="rule-card">
               <h3>Google Contacts</h3>
               <ul>
                 <li>기준 계정은 home@archivepilates.com입니다.</li>

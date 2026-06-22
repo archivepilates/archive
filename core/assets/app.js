@@ -482,6 +482,12 @@ function renderAutomation(items) {
   const failedItems = items.filter((item) =>
     ["failed", "error", "critical", "blocked"].includes(String(item.status || item.health || "").toLowerCase()),
   );
+  const launchAgentItems = items.filter((item) => String(item.runner || item.source || "").toLowerCase().includes("launchagent"));
+  const codexItems = items.filter((item) => String(item.runner || item.source || "").toLowerCase().includes("codex"));
+  const knownAutomationItems = [...launchAgentItems, ...codexItems];
+  const knownAutomationIds = new Set(knownAutomationItems.map((item) => item.id || item.automationId || item.title || item.name));
+  const otherStatusItems = items.filter((item) => !knownAutomationIds.has(item.id || item.automationId || item.title || item.name));
+  const activeCodexItems = codexItems.filter((item) => ["active", "healthy"].includes(String(item.status || "").toLowerCase()));
   const latestItem = [...items].sort((a, b) => {
     const left = new Date(a.updatedAt?.toDate?.() || a.updatedAt || a.lastRunAt || a.checkedAt || 0).getTime();
     const right = new Date(b.updatedAt?.toDate?.() || b.updatedAt || b.lastRunAt || b.checkedAt || 0).getTime();
@@ -492,14 +498,23 @@ function renderAutomation(items) {
     automationMode.textContent = failedItems.length ? "확인 필요" : items.length ? "연결" : "기록 대기";
     automationMode.className = `pill ${failedItems.length ? "danger" : items.length ? "good" : "warn"}`;
   }
-  setText("automationStatusCount", formatCount(items.length));
+  setText("automationStatusCount", formatCount(knownAutomationItems.length || items.length));
   setText("automationFailedCount", formatCount(failedItems.length));
   setText("automationRecentRun", latestItem ? formatDate(latestItem.updatedAt || latestItem.lastRunAt || latestItem.checkedAt) : "기록 대기");
   setText("automationConnectedState", items.length ? "상태 문서 연결됨" : "컬렉션 연결 · 기록 없음");
   setText(
+    "automationRunnerCount",
+    `LaunchAgent ${launchAgentItems.length} · Codex ${codexItems.length}${
+      otherStatusItems.length ? ` · 기타 ${otherStatusItems.length}` : ""
+    }`,
+  );
+  setText("automationCodexActiveCount", formatCount(activeCodexItems.length));
+  setText(
     "automationNextAction",
     items.length
-      ? "최근 문서 기준으로 상태를 표시합니다."
+      ? activeCodexItems.length
+        ? "Codex ACTIVE 자동화는 LaunchAgent와 중복 실행되지 않는지 먼저 확인합니다."
+        : "안정적인 정기 실행은 Mac mini LaunchAgent 기준으로 관리합니다."
       : "Mac mini / Excel / 알림톡 작업이 automationStatus에 결과를 쓰도록 연결해야 합니다.",
   );
 
@@ -510,17 +525,22 @@ function renderAutomation(items) {
     return;
   }
 
-  list.innerHTML = items
+  const orderedItems = [...knownAutomationItems, ...otherStatusItems];
+  list.innerHTML = orderedItems
     .map((item) => {
       const name = item.title || item.name || item.id;
       const detail = item.summary || item.message || item.lastResult || item.description || "상세 기록 없음";
       const updated = formatDate(item.updatedAt || item.lastRunAt || item.checkedAt);
       const nextRun = item.nextRunAt || item.nextScheduledAt ? ` · 다음 ${formatDate(item.nextRunAt || item.nextScheduledAt)}` : "";
       const error = item.lastError || item.errorMessage ? ` · ${item.lastError || item.errorMessage}` : "";
+      const runner = item.runner || item.source || item.kind || "runner 미기록";
+      const schedule = item.schedule || item.rrule || "";
+      const owner = item.ownerArea ? ` · ${item.ownerArea}` : "";
       return `
         <div class="status-row">
           <div>
             <strong>${escapeHtml(name)}</strong>
+            <p>${escapeHtml(runner)}${escapeHtml(owner)}${schedule ? ` · ${escapeHtml(schedule)}` : ""}</p>
             <p>${escapeHtml(detail)} · ${escapeHtml(updated)}${escapeHtml(nextRun)}${escapeHtml(error)}</p>
           </div>
           ${pill(item.status || item.health)}
@@ -533,19 +553,19 @@ function renderAutomation(items) {
   if (healthList) {
     const flows = [
       {
-        title: "StudioMate Excel 동기화",
-        source: items.find((item) => item.id === "studiomate-excel-sync") || items[0],
-        detail: "회원목록, 예약내역, 삭제 수업 원본을 가져와 CORE 표시용 상태를 갱신합니다.",
+        title: "Mac mini LaunchAgent",
+        source: launchAgentItems.find((item) => ["failed", "warning"].includes(String(item.status || "").toLowerCase())) || launchAgentItems[0],
+        detail: "안정적인 정기 실행의 기본 주체입니다.",
       },
       {
-        title: "알림톡 자동발송",
-        source: items.find((item) => String(item.id || "").includes("alimtalk")),
-        detail: "후보 선정과 실제 발송은 기존 canonical 컬렉션 기준으로 유지합니다.",
+        title: "Codex 자동화",
+        source: activeCodexItems[0] || codexItems[0],
+        detail: "기본은 테스트, 리뷰, fallback입니다. ACTIVE 항목은 중복 여부를 확인합니다.",
       },
       {
-        title: "Google Contacts 동기화",
-        source: items.find((item) => String(item.id || "").includes("contact")),
-        detail: "연락처 write는 승인된 동기화 큐와 매칭 규칙만 사용합니다.",
+        title: "운영 상태 기록",
+        source: items[0],
+        detail: "새 자동화는 automationStatus에 상태를 써야 CORE 관제에 표시됩니다.",
       },
     ];
     healthList.innerHTML = flows

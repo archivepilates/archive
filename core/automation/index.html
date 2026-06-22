@@ -23,10 +23,10 @@
           <div class="top-actions"><div class="connection-card" aria-live="polite"><span id="connectionLabel">로딩</span><strong id="connectionDetail">Firestore 연결 준비 중</strong></div><button class="refresh-button" id="refreshButton" type="button">새로고침</button></div>
         </header>
         <section class="grid kpis">
-          <article class="panel metric"><div class="metric-label">상태 문서</div><div class="metric-value" id="automationStatusCount">0건</div><div class="metric-note">automationStatus</div></article>
+          <article class="panel metric"><div class="metric-label">등록 자동화</div><div class="metric-value" id="automationStatusCount">0건</div><div class="metric-note" id="automationRunnerCount">LaunchAgent / Codex</div></article>
           <article class="panel metric"><div class="metric-label">실패/중단</div><div class="metric-value" id="automationFailedCount">0건</div><div class="metric-note">먼저 확인할 작업</div></article>
           <article class="panel metric"><div class="metric-label">최근 실행</div><div class="metric-value compact" id="automationRecentRun">확인 중</div><div class="metric-note" id="automationConnectedState">Firestore read</div></article>
-          <article class="panel metric"><div class="metric-label">운영 원칙</div><div class="metric-value compact">read-only</div><div class="metric-note">실행 버튼은 별도 승인 후 추가</div></article>
+          <article class="panel metric"><div class="metric-label">Codex ACTIVE</div><div class="metric-value compact" id="automationCodexActiveCount">0건</div><div class="metric-note">LaunchAgent 중복 여부 확인</div></article>
         </section>
         <section class="panel">
           <div class="panel-header"><div><h2>자동화 운영 보드</h2><p>수집, 정규화, 표시, 외부 실행 상태를 운영자가 확인할 순서로 봅니다.</p></div><span class="pill" id="automationMode">연결 대기</span></div>
@@ -50,7 +50,7 @@
           </div>
         </section>
         <section class="panel panel-tall">
-          <div class="panel-header"><div><h2>최근 자동화 상태</h2><p>automationStatus 문서 기준으로 실패/지연 작업을 먼저 봅니다.</p></div><span class="pill">status log</span></div>
+          <div class="panel-header"><div><h2>등록 자동화 상태</h2><p>LaunchAgent와 Codex 자동화 정의를 automationStatus 문서로 모아 실패/중복 위험을 먼저 봅니다.</p></div><span class="pill">status log</span></div>
           <div class="list" id="automationList"><div class="empty-state">Firestore 연결 후 automationStatus를 표시합니다.</div></div>
         </section>
       </main>
