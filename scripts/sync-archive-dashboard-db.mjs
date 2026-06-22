@@ -339,8 +339,10 @@ function buildTicketAnalysis(rows) {
       차감매출합계: 0,
     };
     current.사용횟수 += row.차감횟수;
-    if (row.출결 === "출석" && (row.차감금액 > 0 || row.회당금액 > 0)) current.유료출석건수 += row.차감횟수 || 1;
-    current.차감매출합계 += row.차감금액 || (row.출결 === "출석" ? row.회당금액 : 0);
+    const settledCount = settlementCountForRow(row);
+    const settledRevenue = settlementRevenueForRow(row);
+    if (settledCount > 0 && settledRevenue > 0) current.유료출석건수 += settledCount;
+    current.차감매출합계 += settledRevenue;
     map.set(key, current);
   }
   const headers = ["기준월", "수업구분", "수강권명", "사용횟수", "유료출석건수", "차감매출합계"];
@@ -409,8 +411,8 @@ function buildDailySettlementPreview(rows, rates) {
       강사레슨횟수: 0,
       총매출: 0,
     };
-    const count = row.차감횟수 || 1;
-    const revenue = row.차감금액 || (row.출결 === "출석" ? row.회당금액 * count : 0);
+    const count = settlementCountForRow(row);
+    const revenue = settlementRevenueForRow(row);
     if (row.수업구분 === "그룹") current.그룹수업키.add([row.수업일자, row.수업시작, row.수업종료].join("\u0001"));
     else if (row.수업구분 === "프라이빗") current.프라이빗횟수 += count;
     else if (row.수업구분 === "강사레슨") current.강사레슨횟수 += count;
@@ -531,8 +533,8 @@ function buildDailyRevenue(ticketRows, lessonRows, rates) {
   const groupAttendanceByDate = new Map();
   for (const row of lessonRows) {
     if (!row.수업일자) continue;
-    const count = row.차감횟수 || 1;
-    const revenue = row.차감금액 || (row.출결 === "출석" ? row.회당금액 * count : 0);
+    const count = settlementCountForRow(row);
+    const revenue = settlementRevenueForRow(row);
     if (revenue > 0) addToMap(lessonByDate, row.수업일자, revenue);
     const rate = rates.byInstructor.get(row.강사명) || rates.fallback;
     if (row.수업구분 === "그룹") {
@@ -645,6 +647,21 @@ function buildDailyRevenue(ticketRows, lessonRows, rates) {
       ];
     }),
   ];
+}
+
+function settlementCountForRow(row) {
+  const rawCount = row.차감횟수 || 1;
+  if (row.출결 === "출석") return rawCount;
+  if (row.출결 === "노쇼") return rawCount * 0.5;
+  return 0;
+}
+
+function settlementRevenueForRow(row) {
+  const rawCount = row.차감횟수 || 1;
+  const baseRevenue = row.차감금액 || row.회당금액 * rawCount;
+  if (row.출결 === "출석") return baseRevenue;
+  if (row.출결 === "노쇼") return baseRevenue * 0.5;
+  return 0;
 }
 
 function addToMap(map, key, value) {
