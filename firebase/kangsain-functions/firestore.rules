@@ -474,5 +474,25 @@ service cloud.firestore {
       allow read: if isManager();
       allow write: if false;
     }
+
+    match /automationStatus/{automationId} {
+      allow read: if isManager();
+      allow write: if false;
+    }
+
+    match /dataQualityIssues/{issueId} {
+      allow read: if isManager();
+      allow write: if false;
+    }
+
+    match /systemHealthRuns/{runId} {
+      allow read: if isManager();
+      allow write: if false;
+    }
+
+    match /systemHealthFindings/{findingId} {
+      allow read: if isManager();
+      allow write: if false;
+    }
   }
 }
