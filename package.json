@@ -28,7 +28,8 @@
     "release:promote-main:dry": "node scripts/promote-release-to-main.mjs",
     "release:promote-main": "node scripts/promote-release-to-main.mjs --apply",
     "studiomate:member-excel": "node firebase/kangsain-functions/macmini-studiomate/download-member-excel.mjs",
-    "studiomate:reservation-deadline": "node firebase/kangsain-functions/macmini-studiomate/set-reservation-deadline.mjs"
+    "studiomate:reservation-deadline": "node firebase/kangsain-functions/macmini-studiomate/set-reservation-deadline.mjs",
+    "studiomate:monthly-preflight": "node scripts/studiomate-monthly-ops-preflight.mjs"
   },
   "dependencies": {
     "chart.js": "^4.4.9",

@@ -1,0 +1,284 @@
+<!doctype html>
+<html lang="ko">
+  <head>
+    <meta charset="utf-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1" />
+    <title>StudioMate 월간 운영 세트 표준화</title>
+    <style>
+      :root {
+        --bg: #f7f3ed;
+        --panel: #fffdf9;
+        --ink: #151821;
+        --muted: #667085;
+        --line: #e5dfd6;
+        --accent: #f26a21;
+        --good: #13795b;
+        --warn: #a15c00;
+        --bad: #b42318;
+      }
+      * { box-sizing: border-box; }
+      body {
+        margin: 0;
+        background: var(--bg);
+        color: var(--ink);
+        font-family: -apple-system, BlinkMacSystemFont, "Apple SD Gothic Neo", "Pretendard", "Segoe UI", sans-serif;
+        line-height: 1.6;
+      }
+      main {
+        width: min(1120px, calc(100% - 32px));
+        margin: 0 auto;
+        padding: 40px 0 64px;
+      }
+      header {
+        padding: 28px 0 20px;
+      }
+      .eyebrow {
+        margin: 0 0 8px;
+        color: var(--accent);
+        font-weight: 800;
+        letter-spacing: .02em;
+      }
+      h1 {
+        margin: 0;
+        font-size: 40px;
+        line-height: 1.15;
+      }
+      h2, h3 { margin: 0 0 10px; line-height: 1.25; }
+      p { margin: 0; color: var(--muted); }
+      .grid {
+        display: grid;
+        grid-template-columns: repeat(auto-fit, minmax(min(100%, 280px), 1fr));
+        gap: 16px;
+        margin: 20px 0;
+      }
+      .panel {
+        background: var(--panel);
+        border: 1px solid var(--line);
+        border-radius: 14px;
+        padding: 22px;
+        box-shadow: 0 18px 40px rgba(41, 33, 24, .06);
+      }
+      .panel strong { color: var(--ink); }
+      .status {
+        display: inline-flex;
+        align-items: center;
+        min-height: 28px;
+        padding: 4px 10px;
+        border-radius: 999px;
+        font-size: 13px;
+        font-weight: 800;
+        background: #fff1e8;
+        color: var(--accent);
+      }
+      .status.good { background: #e7f6ef; color: var(--good); }
+      .status.warn { background: #fff7e8; color: var(--warn); }
+      .status.bad { background: #fff0ee; color: var(--bad); }
+      table {
+        width: 100%;
+        border-collapse: collapse;
+        margin-top: 12px;
+        background: var(--panel);
+        border: 1px solid var(--line);
+        border-radius: 12px;
+        overflow: hidden;
+      }
+      th, td {
+        padding: 12px 14px;
+        border-bottom: 1px solid var(--line);
+        vertical-align: top;
+        text-align: left;
+      }
+      th { color: var(--muted); font-size: 13px; }
+      tr:last-child td { border-bottom: 0; }
+      code {
+        padding: 2px 6px;
+        border-radius: 6px;
+        background: #f0ebe3;
+        color: #20242e;
+        font-size: 13px;
+      }
+      ul, ol { margin: 10px 0 0; padding-left: 22px; }
+      li + li { margin-top: 6px; }
+      .split {
+        display: grid;
+        grid-template-columns: minmax(0, 1.2fr) minmax(280px, .8fr);
+        gap: 16px;
+        align-items: start;
+      }
+      @media (max-width: 780px) {
+        main { width: min(100% - 24px, 1120px); padding-top: 24px; }
+        h1 { font-size: 30px; }
+        .split { grid-template-columns: 1fr; }
+        th, td { padding: 10px; }
+      }
+    </style>
+  </head>
+  <body>
+    <main>
+      <header>
+        <p class="eyebrow">ARCHIVE PILATES · StudioMate Monthly Set</p>
+        <h1>월간 그룹수업 생성·주제입력·고정예약 세트 운영 표준</h1>
+        <p>작성일 2026-06-22 · 다음달 작업부터 수업 생성, 주제/기구 입력, 고정회원 예약을 한 세트로 묶어 실행합니다.</p>
+      </header>
+
+      <section class="grid">
+        <article class="panel">
+          <span class="status good">목표</span>
+          <h2>한 번의 월간 작업으로 끝내기</h2>
+          <p>월 그룹수업 생성, 주제·기구 입력, 고정회원 예약, 상세 검증, 결과 시트 기록을 하나의 운영 세트로 실행합니다.</p>
+        </article>
+        <article class="panel">
+          <span class="status warn">교훈</span>
+          <h2>화면 진입 실패와 예약 불가를 분리</h2>
+          <p>일괄예약 카드가 보이지 않을 때는 수강권 문제로 단정하지 않고, 먼저 StudioMate 화면 진입과 셀렉터 상태를 검증합니다.</p>
+        </article>
+        <article class="panel">
+          <span class="status">원칙</span>
+          <h2>정확매칭만 실행</h2>
+          <p>날짜, 시간, 강사가 모두 맞는 수업만 선택합니다. 가까운 시간이나 같은 주제 수업으로 대체하지 않습니다.</p>
+        </article>
+      </section>
+
+      <section class="panel">
+        <h2>월간 실행 게이트</h2>
+        <table>
+          <thead>
+            <tr>
+              <th>게이트</th>
+              <th>작업</th>
+              <th>통과 기준</th>
+              <th>실패 시 처리</th>
+            </tr>
+          </thead>
+          <tbody>
+            <tr>
+              <td>0. 입력 확정</td>
+              <td>다음달 시간표, 주제/기구표, 고정회원 시트 확인</td>
+              <td>월, 강사, 요일, 시간, 전화번호, 시수 컬럼이 모두 존재</td>
+              <td>원본 시트에 <code>입력오류</code>로 남기고 쓰기 중단</td>
+            </tr>
+            <tr>
+              <td>1. 프리플라이트</td>
+              <td>StudioMate 로그인, 회원 검색, 일괄예약 화면, 수업카드 셀렉터 확인</td>
+              <td>샘플 회원 2명 이상에서 일괄예약 화면과 수업카드가 확인됨</td>
+              <td><code>surface_failed</code>로 분리하고 예약 쓰기 금지</td>
+            </tr>
+            <tr>
+              <td>2. 수업 생성</td>
+              <td>다음달 그룹수업 생성</td>
+              <td>월별 예상 수업 수와 생성 후 StudioMate 수업 수가 일치</td>
+              <td>중복·누락 수업만 따로 시트 기록 후 재시도</td>
+            </tr>
+            <tr>
+              <td>3. 주제·기구 입력</td>
+              <td>생성된 수업에 주차별 주제와 기구 입력</td>
+              <td>월 전체 수업의 제목/기구가 원본표와 일치</td>
+              <td>수업별 <code>주제입력확인필요</code> 기록</td>
+            </tr>
+            <tr>
+              <td>4. 고정회원 예약</td>
+              <td>회원 상세의 일괄예약 화면에서 정확매칭 카드 선택</td>
+              <td>예약 성공 메시지와 수업상세 예약회원 목록 둘 다 확인</td>
+              <td>메시지 성공이어도 상세 미반영이면 <code>상세미반영</code>으로 남김</td>
+            </tr>
+            <tr>
+              <td>5. 결과 검증</td>
+              <td>모든 대상 수업 상세를 다시 열어 예약회원 목록 확인</td>
+              <td>고정예약 시트 대상 전체가 완료 또는 사유 있는 실패 상태</td>
+              <td>이슈 건만 결과 탭에 남기고 성공 건은 숨김</td>
+            </tr>
+          </tbody>
+        </table>
+      </section>
+
+      <section class="split">
+        <article class="panel">
+          <h2>다음달부터의 작업 순서</h2>
+          <ol>
+            <li>다음달 원본 시트 3개를 확정합니다: 시간표, 주제/기구표, 고정회원 리스트.</li>
+            <li><code>npm run studiomate:monthly-preflight -- --month=YYYY-MM --source-sheet="N월 고정수업 리스트" --samples="김진선,심유정"</code>로 읽기 전용 테스트를 먼저 실행합니다.</li>
+            <li>프리플라이트가 <code>ready</code>면 수업 생성 dry-run을 만들고, 중복 수업이 없을 때만 생성합니다.</li>
+            <li>수업 생성 후 주제·기구 입력을 적용하고, 생성된 수업 상세와 원본표를 대조합니다.</li>
+            <li>고정회원 예약은 회원별 일괄예약으로만 진행하고, 수업상세 예약회원 목록으로 후검증합니다.</li>
+            <li>결과 시트에는 실패/확인필요 건만 남깁니다. 성공 건은 요약 숫자로만 기록합니다.</li>
+          </ol>
+        </article>
+        <article class="panel">
+          <h2>상태값 표준</h2>
+          <ul>
+            <li><strong>ready</strong>: 쓰기 전 샘플 검증 통과</li>
+            <li><strong>surface_failed</strong>: 일괄예약 화면 진입 실패</li>
+            <li><strong>exact_match_missing</strong>: 해당 날짜/시간/강사 카드 없음</li>
+            <li><strong>exact_match_blocked</strong>: 카드 존재, 선택 불가 또는 정원마감</li>
+            <li><strong>detail_not_reflected</strong>: StudioMate 성공 메시지 후 수업상세 미반영</li>
+            <li><strong>completed</strong>: 수업상세 예약회원 목록에서 확인</li>
+          </ul>
+        </article>
+      </section>
+
+      <section class="panel">
+        <h2>백그라운드 단일 큐 운영</h2>
+        <p>StudioMate 월간 작업은 여러 Codex 채팅에서 즉석으로 브라우저를 여는 방식보다 Mac mini 백그라운드 큐에서 직렬 실행하는 편이 안전합니다. 단, 회원 예약과 수업 생성은 운영 영향이 있으므로 승인 단계는 분리합니다.</p>
+        <table>
+          <thead>
+            <tr>
+              <th>단계</th>
+              <th>실행 방식</th>
+              <th>자동 실행 가능 여부</th>
+              <th>충돌 방지 장치</th>
+            </tr>
+          </thead>
+          <tbody>
+            <tr>
+              <td>프리플라이트</td>
+              <td>백그라운드 read-only job</td>
+              <td><span class="status good">가능</span></td>
+              <td>공유 브라우저 lock, 시트 구조 검증, 일괄예약 화면 진입 검증</td>
+            </tr>
+            <tr>
+              <td>수업 생성 dry-run</td>
+              <td>백그라운드 plan 생성</td>
+              <td><span class="status good">가능</span></td>
+              <td>기존 수업 중복 검출, 예상 수업 수 대조</td>
+            </tr>
+            <tr>
+              <td>수업 생성 apply</td>
+              <td>승인 후 같은 큐에서 실행</td>
+              <td><span class="status warn">승인 필요</span></td>
+              <td>월 단위 job id, 생성 전 재검증, 실패 시 중단</td>
+            </tr>
+            <tr>
+              <td>주제·기구 입력 apply</td>
+              <td>승인된 수업 생성 결과에 이어 실행</td>
+              <td><span class="status warn">승인 필요</span></td>
+              <td>수업 id 기준 입력, 제목/기구 후검증</td>
+            </tr>
+            <tr>
+              <td>고정회원 예약 apply</td>
+              <td>승인 후 같은 큐에서 실행</td>
+              <td><span class="status warn">승인 필요</span></td>
+              <td>회원별 일괄예약 직렬 처리, 성공 메시지와 수업상세 이중 검증</td>
+            </tr>
+          </tbody>
+        </table>
+        <ul>
+          <li>큐 저장 위치는 <code>~/ArchiveIN/automation/monthly-studiomate/jobs/YYYY-MM.json</code>로 고정합니다.</li>
+          <li>작업 상태는 <code>planned</code>, <code>preflight_passed</code>, <code>approval_required</code>, <code>applying</code>, <code>verified</code>, <code>attention_required</code>로 관리합니다.</li>
+          <li>백그라운드 job은 StudioMate 공유 브라우저 lock을 잡고 하나씩만 실행합니다.</li>
+          <li>운영자가 승인하지 않은 상태에서는 StudioMate write 버튼을 누르지 않습니다.</li>
+        </ul>
+      </section>
+
+      <section class="panel">
+        <h2>재발 방지 규칙</h2>
+        <ul>
+          <li>일괄예약 화면을 못 열었을 때는 회원 수강권 문제라고 쓰지 않습니다. 먼저 <code>surface_failed</code>로 기록합니다.</li>
+          <li>자동화는 알림 피드 텍스트를 예약 화면으로 판정하지 않습니다.</li>
+          <li>예약 성공 메시지는 충분 조건이 아닙니다. 최종 완료는 수업상세의 예약회원 목록으로만 확정합니다.</li>
+          <li>월간 작업 중 StudioMate 공유 브라우저 프로필은 lock을 잡고 직렬 실행합니다.</li>
+          <li>쓰기 작업 전에는 샘플 회원 2명 이상에서 일괄예약 카드와 정확매칭 결과를 확인해야 합니다.</li>
+        </ul>
+      </section>
+    </main>
+  </body>
+</html>
