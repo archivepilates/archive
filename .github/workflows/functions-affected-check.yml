@@ -4,8 +4,12 @@ on:
   pull_request:
     paths:
       - "firebase/**"
+      - "archivein/index.html"
+      - "archivein/manifest.webmanifest"
+      - "archivein/sw.js"
       - "archivein/private-chart/**"
       - "archivein/onsiteWelcome/**"
+      - "core/**"
       - "core/rules/**"
       - "scripts/**"
       - "package.json"
@@ -17,8 +21,12 @@ on:
       - "codex/**"
     paths:
       - "firebase/**"
+      - "archivein/index.html"
+      - "archivein/manifest.webmanifest"
+      - "archivein/sw.js"
       - "archivein/private-chart/**"
       - "archivein/onsiteWelcome/**"
+      - "core/**"
       - "core/rules/**"
       - "scripts/**"
       - "package.json"
@@ -74,6 +82,9 @@ jobs:
 
       - name: Validate live rollback guards
         run: npm run validate:live-release-rollback-guards
+
+      - name: Validate release manifest writer
+        run: npm run write:release-manifest -- --surface archivein --surface core --allow-non-main
 
       - name: Summary
         run: |

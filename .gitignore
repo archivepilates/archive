@@ -25,6 +25,11 @@ artifacts/*/node_modules_deps
 .DS_Store
 firebase/.DS_Store
 
+# Generated immediately before Firebase Hosting deploys.
+/release.json
+/archivein/release.json
+/core/release.json
+
 # Local service account keys. Never commit these.
 .secrets/
 secrets/

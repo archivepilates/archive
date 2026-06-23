@@ -1,0 +1,76 @@
+name: Firebase Hosting Release
+
+on:
+  workflow_dispatch:
+    inputs:
+      surface:
+        description: "Hosting surface to release"
+        required: true
+        default: "archivein"
+        type: choice
+        options:
+          - archivein
+          - core
+
+jobs:
+  hosting-release:
+    if: github.ref == 'refs/heads/main'
+    runs-on: ubuntu-latest
+    permissions:
+      contents: read
+    steps:
+      - name: Checkout main
+        uses: actions/checkout@v5
+        with:
+          fetch-depth: 0
+
+      - name: Setup Node
+        uses: actions/setup-node@v5
+        with:
+          node-version: 22
+
+      - name: Install root dependencies
+        run: npm ci
+
+      - name: Install Functions dependencies for Firebase CLI
+        run: npm --prefix firebase/kangsain-functions/functions ci
+
+      - name: Validate release state
+        run: node scripts/validate-release-branch-state.mjs --skip-fetch --require-origin-main
+
+      - name: Validate rollback guards
+        run: npm run validate:live-release-rollback-guards
+
+      - name: Validate surface
+        run: |
+          if [ "${{ inputs.surface }}" = "archivein" ]; then
+            npm run validate:onsite-welcome
+          else
+            npm run validate:archive-core-hosting
+          fi
+
+      - name: Write release manifest
+        run: npm run write:release-manifest -- --surface "${{ inputs.surface }}"
+
+      - name: Prepare Firebase credentials
+        env:
+          FIREBASE_SERVICE_ACCOUNT_ARCHIVE_PILATES: ${{ secrets.FIREBASE_SERVICE_ACCOUNT_ARCHIVE_PILATES }}
+        run: |
+          if [ -z "$FIREBASE_SERVICE_ACCOUNT_ARCHIVE_PILATES" ]; then
+            echo "Missing FIREBASE_SERVICE_ACCOUNT_ARCHIVE_PILATES GitHub secret." >&2
+            exit 1
+          fi
+          printf '%s' "$FIREBASE_SERVICE_ACCOUNT_ARCHIVE_PILATES" > "$RUNNER_TEMP/archive-pilates-service-account.json"
+          echo "GOOGLE_APPLICATION_CREDENTIALS=$RUNNER_TEMP/archive-pilates-service-account.json" >> "$GITHUB_ENV"
+
+      - name: Deploy Hosting
+        run: |
+          FIREBASE_BIN="$GITHUB_WORKSPACE/firebase/kangsain-functions/functions/node_modules/.bin/firebase"
+          if [ "${{ inputs.surface }}" = "archivein" ]; then
+            "$FIREBASE_BIN" deploy --project archive-pilates --config firebase.json --only hosting:archive-pilates,hosting:archive-pilates-in --non-interactive
+          else
+            "$FIREBASE_BIN" deploy --project archive-pilates --config firebase.json --only hosting:archive-pilates-core --non-interactive
+          fi
+
+      - name: Live canary
+        run: npm run validate:live-release-canary -- --surface "${{ inputs.surface }}" --sha "$GITHUB_SHA"

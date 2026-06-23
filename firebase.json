@@ -89,6 +89,18 @@
           ]
         },
         {
+          "source": "/archivein/release.json",
+          "headers": [
+            { "key": "Cache-Control", "value": "no-cache, no-store, must-revalidate" }
+          ]
+        },
+        {
+          "source": "/core/release.json",
+          "headers": [
+            { "key": "Cache-Control", "value": "no-cache, no-store, must-revalidate" }
+          ]
+        },
+        {
           "source": "/archivein/onsiteWelcome/",
           "headers": [
             { "key": "Cache-Control", "value": "no-cache, no-store, must-revalidate" }
@@ -336,6 +348,12 @@
         },
         {
           "source": "/sw.js",
+          "headers": [
+            { "key": "Cache-Control", "value": "no-cache, no-store, must-revalidate" }
+          ]
+        },
+        {
+          "source": "/release.json",
           "headers": [
             { "key": "Cache-Control", "value": "no-cache, no-store, must-revalidate" }
           ]

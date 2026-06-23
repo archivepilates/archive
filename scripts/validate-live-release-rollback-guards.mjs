@@ -38,6 +38,63 @@ const guardGroups = [
     ],
   },
   {
+    id: "deploy-release-safety",
+    reason: "오래된 브랜치나 배포 스냅샷이 live Hosting을 덮어쓰는 것을 배포 스크립트 단계에서 차단합니다.",
+    files: [
+      {
+        file: "scripts/validate-release-branch-state.mjs",
+        markers: [
+          "--require-origin-main",
+          "Deploy guard requires HEAD to match origin/main exactly",
+          "exactOriginMain",
+        ],
+      },
+      {
+        file: "scripts/write-release-manifest.mjs",
+        markers: [
+          "archivein/release.json",
+          "core/release.json",
+          "requiresOriginMain",
+          "criticalMarkers",
+        ],
+      },
+      {
+        file: "scripts/validate-live-release-canary.mjs",
+        markers: [
+          "live-release-canary",
+          "private-chart-upload-custom-domain",
+          "core-home-actions-custom-domain",
+          "sha_mismatch",
+        ],
+      },
+      {
+        file: "scripts/deploy-archivein-live.sh",
+        markers: [
+          "validate-release-branch-state.mjs --require-origin-main",
+          "write-release-manifest.mjs --surface archivein",
+          "validate-live-release-canary.mjs --surface archivein",
+        ],
+      },
+      {
+        file: "scripts/deploy-archive-core-live.sh",
+        markers: [
+          "validate-release-branch-state.mjs --require-origin-main",
+          "write-release-manifest.mjs --surface core",
+          "validate-live-release-canary.mjs --surface core",
+        ],
+      },
+      {
+        file: ".github/workflows/firebase-hosting-release.yml",
+        markers: [
+          "Firebase Hosting Release",
+          "workflow_dispatch",
+          "FIREBASE_SERVICE_ACCOUNT_ARCHIVE_PILATES",
+          "validate:live-release-canary",
+        ],
+      },
+    ],
+  },
+  {
     id: "archive-core-home-actions",
     reason: "ARCHIVE CORE 홈 액션 보드와 수강료 문의 즉시발송 UI가 예전 번들로 되돌아가는 것을 막습니다.",
     files: [
@@ -136,6 +193,7 @@ const guardGroups = [
       {
         file: "archivein/private-chart/index.html",
         markers: [
+          "input type=\"file\" id=\"mediaFiles\" accept=\"image/*,video/*\" multiple",
           "init.chunkSize || 16 * 1024 * 1024",
           "uploadMediaFileDirect",
           "completeMediaUpload",
@@ -212,6 +270,11 @@ for (const group of guardGroups) {
     for (const marker of item.markers) {
       if (!content.includes(marker)) {
         failures.push({ group: group.id, reason: group.reason, file: item.file, missing: marker });
+      }
+    }
+    for (const marker of item.forbiddenMarkers || []) {
+      if (content.includes(marker)) {
+        failures.push({ group: group.id, reason: group.reason, file: item.file, forbidden: marker });
       }
     }
   }

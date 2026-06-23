@@ -4,6 +4,8 @@ import { spawnSync } from "node:child_process";
 const args = new Set(process.argv.slice(2));
 const skipFetch = args.has("--skip-fetch");
 const allowDirty = args.has("--allow-dirty");
+const requireOriginMain = args.has("--require-origin-main");
+const requireMainBranch = args.has("--require-main-branch");
 
 if (!skipFetch) run("git", ["fetch", "origin", "main"]);
 
@@ -19,6 +21,12 @@ if (ancestor.status !== 0) {
 }
 if (!allowDirty && status.trim()) {
   failures.push("Worktree has uncommitted changes. Commit scoped changes before deploying.");
+}
+if (requireOriginMain && head !== originMain) {
+  failures.push("Deploy guard requires HEAD to match origin/main exactly. Push or fast-forward main before deploying.");
+}
+if (requireMainBranch && branch !== "main") {
+  failures.push("Deploy guard requires the local branch name to be main.");
 }
 
 if (failures.length) {
@@ -49,6 +57,9 @@ console.log(
       originMain: originMain.slice(0, 7),
       clean: !status.trim(),
       descendantOfOriginMain: true,
+      exactOriginMain: head === originMain,
+      requireOriginMain,
+      requireMainBranch,
     },
     null,
     2,

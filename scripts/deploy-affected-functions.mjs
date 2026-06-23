@@ -10,7 +10,9 @@ const apply = args.has("--apply");
 const dryRun = args.has("--dry-run") || !apply;
 const affected = detectAffectedFromCli(process.argv.slice(2));
 
-run("node", ["scripts/validate-release-branch-state.mjs"]);
+run("node", apply
+  ? ["scripts/validate-release-branch-state.mjs", "--require-origin-main"]
+  : ["scripts/validate-release-branch-state.mjs"]);
 run("node", ["scripts/validate-live-release-rollback-guards.mjs"]);
 
 if (!affected.deployOnly) {
