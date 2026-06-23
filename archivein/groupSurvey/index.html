@@ -24,6 +24,9 @@
     .options { display:grid; gap:8px; }
     label.option { display:grid; grid-template-columns:22px 1fr; gap:8px; align-items:start; min-height:32px; font-size:15px; line-height:1.48; }
     input[type="radio"], input[type="checkbox"] { width:18px; height:18px; margin:2px 0 0; accent-color:var(--accent); }
+    .other-answer { margin:-2px 0 2px 30px; }
+    .other-answer[hidden] { display:none; }
+    .other-answer textarea { min-height:76px; }
     textarea { width:100%; min-height:92px; resize:vertical; border:1px solid var(--line); border-radius:8px; padding:11px 12px; background:#fff; color:var(--ink); font:inherit; line-height:1.55; }
     textarea:focus { outline:2px solid rgba(201,57,47,.18); border-color:var(--accent); }
     .actions { position:sticky; bottom:0; margin:0 -14px -36px; padding:12px 14px 18px; background:linear-gradient(to top,#f6f1eb 82%,rgba(246,241,235,0)); }
@@ -93,13 +96,20 @@
     const message = document.getElementById('message');
     const button = form.querySelector('button');
     const choices = {
-      exerciseExperience: ['필라테스 처음이에요', '필라테스 경험은 있지만 오랜만이에요', '필라테스를 꾸준히 해본 적 있어요', '다른 운동 경험은 있어요'],
-      painAreas: ['없음', '목/어깨', '허리', '골반/고관절', '무릎/발목', '손목/팔꿈치', '기타'],
-      cautionTypes: ['없음', '임신/출산 관련', '수술/시술 이력', '디스크/측만/관절 질환', '고혈압/어지럼/호흡 관련', '기타 질환 또는 주의사항'],
-      concern: ['동작을 못 따라갈까 걱정돼요', '통증이 생길까 걱정돼요', '체력이 부족할까 걱정돼요', '자세를 잘 모르겠어요', '특별히 걱정되는 부분은 없어요']
+      exerciseExperience: ['필라테스 처음이에요', '필라테스 경험은 있지만 오랜만이에요', '필라테스를 꾸준히 해본 적 있어요', '다른 운동 경험은 있어요', '기타'],
+      painAreas: ['없음', '목', '어깨', '허리', '골반/고관절', '무릎/발목', '손목/팔꿈치', '기타'],
+      cautionTypes: ['없음', '임신/출산 관련', '수술/시술 이력', '디스크/측만/관절 질환', '고혈압/어지럼/호흡 관련', '기타'],
+      concern: ['동작을 못 따라갈까 걱정돼요', '통증이 생길까 걱정돼요', '체력이 부족할까 걱정돼요', '자세를 잘 모르겠어요', '특별히 걱정되는 부분은 없어요', '기타']
+    };
+    const choiceLabels = {
+      exerciseExperience: '운동 경험',
+      painAreas: '통증/불편 부위',
+      cautionTypes: '수업 전 주의사항',
+      concern: '첫 수업 걱정'
     };
 
     init();
+    form.addEventListener('change', syncOtherAnswers);
 
     async function init() {
       renderChoices();
@@ -130,17 +140,20 @@
         const root = document.querySelector(`[data-${type === 'checkbox' ? 'check' : 'radio'}="${name}"]`);
         root.innerHTML = values.map((value) => `
           <label class="option">
-            <input type="${type}" name="${name}" value="${escapeAttr(value)}">
+            <input type="${type}" name="${name}" value="${escapeAttr(value)}" ${isOtherChoice(value) ? 'data-other-trigger="1"' : ''}>
             <span>${escapeHtml(value)}</span>
           </label>
+          ${isOtherChoice(value) ? `<div class="other-answer" data-other-for="${escapeAttr(name)}" hidden><textarea name="${escapeAttr(name)}Other" maxlength="300" placeholder="기타 내용을 적어주세요"></textarea></div>` : ''}
         `).join('');
       }
+      syncOtherAnswers();
     }
 
     form.addEventListener('submit', async (event) => {
       event.preventDefault();
       button.disabled = true;
       try {
+        validateOtherAnswers();
         const payload = {
           requestId,
           accessToken,
@@ -168,11 +181,42 @@
     });
 
     function valueOf(name) {
-      return form.querySelector(`input[name="${name}"]:checked`)?.value || '';
+      const input = form.querySelector(`input[name="${name}"]:checked`);
+      return input ? normalizeChoiceValue(name, input.value) : '';
     }
 
     function valuesOf(name) {
-      return Array.from(form.querySelectorAll(`input[name="${name}"]:checked`)).map((input) => input.value);
+      return Array.from(form.querySelectorAll(`input[name="${name}"]:checked`)).map((input) => normalizeChoiceValue(name, input.value));
+    }
+
+    function isOtherChoice(value) {
+      return String(value || '').trim() === '기타';
+    }
+
+    function normalizeChoiceValue(name, value) {
+      if (!isOtherChoice(value)) return value;
+      const text = String(form.elements[`${name}Other`]?.value || '').trim();
+      return text ? `기타: ${text}` : '기타';
+    }
+
+    function syncOtherAnswers() {
+      form.querySelectorAll('[data-other-for]').forEach((wrap) => {
+        const name = wrap.getAttribute('data-other-for');
+        const selected = Boolean(form.querySelector(`input[name="${name}"][data-other-trigger="1"]:checked`));
+        wrap.hidden = !selected;
+        if (!selected) {
+          const textarea = wrap.querySelector('textarea');
+          if (textarea) textarea.value = '';
+        }
+      });
+    }
+
+    function validateOtherAnswers() {
+      for (const name of Object.keys(choices)) {
+        const selected = form.querySelector(`input[name="${name}"][data-other-trigger="1"]:checked`);
+        const text = String(form.elements[`${name}Other`]?.value || '').trim();
+        if (selected && !text) throw new Error(`${choiceLabels[name] || '객관식 항목'}의 기타 내용을 적어주세요.`);
+      }
     }
 
     async function requestJson(url, options) {

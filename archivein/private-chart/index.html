@@ -152,6 +152,22 @@
       background: var(--accent-weak);
     }
 
+    .other-answer {
+      width: 100%;
+      display: grid;
+      gap: 6px;
+      margin-top: 2px;
+    }
+
+    .other-answer[hidden] {
+      display: none;
+    }
+
+    .other-answer textarea {
+      min-height: 86px;
+      background: #fff;
+    }
+
     .purpose-groups {
       display: grid;
       gap: 12px;
@@ -420,17 +436,17 @@
       : "/api/privateChart";
 
     const sets = {
-      goals: ["코어 안정성", "골반 정렬", "흉곽/호흡", "목/어깨 긴장 완화", "허리 안정화", "하지 정렬", "유연성", "체력/근지구력", "밸런스", "통증 관리"],
+      goals: ["코어 안정성", "골반 정렬", "흉곽/호흡", "목 긴장 완화", "어깨 긴장 완화", "허리 안정화", "하지 정렬", "유연성", "체력/근지구력", "밸런스", "통증 관리"],
       purposeCategories: [
         { label: "신체 부위별 강화 · 안정화", options: ["코어 안정화", "둔부 강화", "고관절 안정화", "견갑 안정화", "하체 정렬", "발목 안정화", "밸런스 안정화"] },
         { label: "산전 · 산후 회복", options: ["호흡 회복", "복압 조절", "골반저근 인지", "체간 재활성", "부종/순환 관리"] },
-        { label: "통증 완화", options: ["허리 부담 완화", "목/어깨 긴장 완화", "고관절 불편감 완화", "무릎 부담 완화", "통증 관리"] },
+        { label: "통증 완화", options: ["허리 부담 완화", "목 긴장 완화", "어깨 긴장 완화", "고관절 불편감 완화", "무릎 부담 완화", "통증 관리"] },
         { label: "컨디셔닝", options: ["전신 순환", "피로 회복", "가벼운 움직임 회복", "리듬 회복", "호흡 안정"] },
         { label: "자세교정", options: ["골반 정렬", "흉곽 정렬", "라운드숄더 개선", "좌우 밸런스", "스탠딩 정렬"] },
         { label: "다이어트 · 체형관리", options: ["전신 근지구력", "하체 라인", "복부 활성", "유산소성 흐름", "대사 활성"] },
         { label: "유연성 향상", options: ["햄스트링 유연성", "고관절 가동성", "흉추 가동성", "어깨 가동성", "척추 분절"] },
       ],
-      focusAreas: ["목/어깨", "흉곽", "허리", "골반", "복부", "둔부", "고관절", "하체", "발/발목", "전신"],
+      focusAreas: ["목", "어깨", "흉곽", "허리", "골반", "복부", "둔부", "고관절", "하체", "발/발목", "전신"],
       equipment: ["리포머", "캐딜락", "체어", "바렐", "매트", "소도구", "미정"],
       cautions: ["통증 확인 필요", "강도 낮게 시작", "호흡 먼저 체크", "좌우 차이 확인", "피로도 확인", "관절 가동범위 확인", "특별 주의 없음"],
       changes: ["정렬 인지 향상", "호흡 리듬 안정", "골반 중립 유지 시간 증가", "어깨 긴장 완화", "흉곽 움직임 개선", "좌우 밸런스 개선", "하지 정렬 개선", "코어 연결감 향상", "불편감 완화", "가동범위 향상", "피로 누적", "집중 유지 어려움", "큰 변화보다 유지에 집중"],
@@ -501,10 +517,15 @@
       sections.innerHTML = (isPost ? postFields : preFields).map(fieldHtml).join("");
       renderMediaPanel(data);
       applyExistingAnswers(data);
+      syncOtherAnswers();
       applyLockedState(data);
       renderReportPanel(data);
       form.classList.remove("hidden");
       form.addEventListener("submit", submit);
+      if (!form.dataset.otherAnswerBound) {
+        form.addEventListener("change", syncOtherAnswers);
+        form.dataset.otherAnswerBound = "1";
+      }
       focusMediaUploadPanelIfRequested();
     }
 
@@ -512,15 +533,18 @@
       const answers = data.mode === "post" ? data.existingAnswers?.post : data.existingAnswers?.pre;
       if (!answers || typeof answers !== "object") return;
       for (const [key, value] of Object.entries(answers)) {
-        const values = Array.isArray(value) ? value.map(String) : [String(value ?? "")];
+        const values = (Array.isArray(value) ? value.map(String) : [String(value ?? "")]).flatMap((item) => expandLegacyChoiceValue(key, item));
         const field = form.elements[key];
         if (!field) continue;
         if (field instanceof RadioNodeList) {
           values.forEach((item) => {
-            const input = Array.from(field).find((node) => node.value === item);
-            if (input) input.checked = true;
+            const input = Array.from(field).find((node) => node.value === item || (isStoredOtherValue(item) && isOtherChoice(node.value)));
+            if (input) {
+              input.checked = true;
+              if (isStoredOtherValue(item)) setOtherAnswerText(key, item);
+            }
           });
-          if ("value" in field && values.length === 1) field.value = values[0];
+          if ("value" in field && values.length === 1 && !isStoredOtherValue(values[0])) field.value = values[0];
           continue;
         }
         if (field instanceof HTMLTextAreaElement || field instanceof HTMLInputElement) {
@@ -786,22 +810,86 @@
         return `<section><label for="${field.key}"><h2>${escapeHtml(field.label)}</h2></label>${help}<textarea id="${field.key}" name="${field.key}" ${required} placeholder="${escapeAttr(placeholder)}"></textarea></section>`;
       }
       if (field.type === "groupedMulti") {
-        return `<section><h2>${escapeHtml(field.label)}</h2><div class="purpose-groups">${field.groups.map((group) => `
+        const groups = field.groups.map((group) => `
           <div class="purpose-group">
             <p class="purpose-title">${escapeHtml(group.label)}</p>
-            <div class="choices">${group.options.map((option) => `
-              <label class="choice">
-                <input type="checkbox" name="${field.key}" value="${escapeHtml(option)}">
-                <span>${escapeHtml(option)}</span>
-              </label>`).join("")}</div>
-          </div>`).join("")}</div></section>`;
+            <div class="choices">${group.options.map((option) => choiceInputHtml(field.key, "checkbox", option)).join("")}</div>
+          </div>`).join("");
+        return `<section><h2>${escapeHtml(field.label)}</h2><div class="purpose-groups">${groups}
+          <div class="purpose-group">
+            <p class="purpose-title">기타</p>
+            <div class="choices">${choiceInputHtml(field.key, "checkbox", "기타")}</div>
+            ${otherAnswerHtml(field.key)}
+          </div>
+        </div></section>`;
       }
       const inputType = field.type === "single" ? "radio" : "checkbox";
-      return `<section><h2>${escapeHtml(field.label)}</h2><div class="choices">${field.options.map((option) => `
+      return `<section><h2>${escapeHtml(field.label)}</h2><div class="choices">${withOtherChoice(field.options).map((option) => choiceInputHtml(field.key, inputType, option)).join("")}</div>${otherAnswerHtml(field.key)}</section>`;
+    }
+
+    function choiceInputHtml(fieldKey, inputType, option) {
+      return `
         <label class="choice">
-          <input type="${inputType}" name="${field.key}" value="${escapeHtml(option)}">
+          <input type="${inputType}" name="${fieldKey}" value="${escapeAttr(option)}" ${isOtherChoice(option) ? 'data-other-trigger="1"' : ''}>
           <span>${escapeHtml(option)}</span>
-        </label>`).join("")}</div></section>`;
+        </label>`;
+    }
+
+    function otherAnswerHtml(fieldKey) {
+      return `<div class="other-answer" data-other-for="${escapeAttr(fieldKey)}" hidden><textarea name="${escapeAttr(fieldKey)}Other" maxlength="500" placeholder="기타 내용을 적어주세요"></textarea></div>`;
+    }
+
+    function withOtherChoice(options) {
+      const values = Array.isArray(options) ? options.map(String) : [];
+      return [...values.filter((value) => !isOtherChoice(value)), "기타"];
+    }
+
+    function isOtherChoice(value) {
+      return String(value || "").trim() === "기타";
+    }
+
+    function isStoredOtherValue(value) {
+      const text = String(value || "").trim();
+      return text === "기타" || text.startsWith("기타:");
+    }
+
+    function setOtherAnswerText(fieldKey, value) {
+      const textarea = form.elements[`${fieldKey}Other`];
+      if (!textarea) return;
+      textarea.value = String(value || "").replace(/^기타:?\s*/, "");
+    }
+
+    function expandLegacyChoiceValue(fieldKey, value) {
+      if (fieldKey === "focusAreas" && value === "목/어깨") return ["목", "어깨"];
+      if (fieldKey === "goals" && value === "목/어깨 긴장 완화") return ["목 긴장 완화", "어깨 긴장 완화"];
+      return [value];
+    }
+
+    function normalizeChoiceValue(fieldKey, value) {
+      if (!isOtherChoice(value)) return value;
+      const text = String(form.elements[`${fieldKey}Other`]?.value || "").trim();
+      return text ? `기타: ${text}` : "기타";
+    }
+
+    function syncOtherAnswers() {
+      form.querySelectorAll("[data-other-for]").forEach((wrap) => {
+        const fieldKey = wrap.getAttribute("data-other-for");
+        const selected = Boolean(form.querySelector(`input[name="${fieldKey}"][data-other-trigger="1"]:checked`));
+        wrap.hidden = !selected;
+        if (!selected) {
+          const textarea = wrap.querySelector("textarea");
+          if (textarea) textarea.value = "";
+        }
+      });
+    }
+
+    function validateOtherAnswers(fields) {
+      for (const field of fields) {
+        if (field.type === "text") continue;
+        const selected = form.querySelector(`input[name="${field.key}"][data-other-trigger="1"]:checked`);
+        const text = String(form.elements[`${field.key}Other`]?.value || "").trim();
+        if (selected && !text) throw new Error(`${field.label}의 기타 내용을 적어주세요.`);
+      }
     }
 
     async function submit(event) {
@@ -816,7 +904,9 @@
       setStatus("제출 중입니다.", false);
       try {
         if (state.uploading > 0) throw new Error("사진/영상 업로드가 끝난 뒤 제출해 주세요.");
-        const answers = readAnswers(new FormData(form));
+        const activeFields = state.mode === "post" ? postFields : preFields;
+        validateOtherAnswers(activeFields);
+        const answers = readAnswers(new FormData(form), activeFields);
         if (state.mode === "post" && !String(answers.nextMemo || "").trim()) {
           throw new Error("다음 수업 준비 메모를 입력해 주세요.");
         }
@@ -961,12 +1051,11 @@
       return summary || nextDirection ? { summary, nextDirection } : {};
     }
 
-    function readAnswers(formData) {
+    function readAnswers(formData, activeFields = state.mode === "post" ? postFields : preFields) {
       const answers = {};
-      const activeFields = state.mode === "post" ? postFields : preFields;
       for (const field of activeFields) {
-        if (field.type === "multi" || field.type === "groupedMulti") answers[field.key] = formData.getAll(field.key).map(String);
-        if (field.type === "single") answers[field.key] = String(formData.get(field.key) || "");
+        if (field.type === "multi" || field.type === "groupedMulti") answers[field.key] = formData.getAll(field.key).map(String).map((value) => normalizeChoiceValue(field.key, value));
+        if (field.type === "single") answers[field.key] = normalizeChoiceValue(field.key, String(formData.get(field.key) || ""));
         if (field.type === "text") answers[field.key] = String(formData.get(field.key) || "");
       }
       return answers;
