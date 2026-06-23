@@ -38,22 +38,37 @@
       </aside>
 
       <main class="main">
-        <header class="topbar">
-          <div class="title-block">
-            <p class="eyebrow">OPERATOR CONSOLE · HOME</p>
-            <h1>오늘 처리할 운영 큐</h1>
-            <p class="subtitle">운영자가 직접 판단하거나 눌러야 하는 미해결 업무만 먼저 보여줍니다. 내부 진단과 누적 로그는 보조 화면으로 분리합니다.</p>
+        <header class="command-hero">
+          <div class="command-copy">
+            <p class="eyebrow">OPERATOR COMMAND CENTER · HOME</p>
+            <h1>오늘 운영을 빠르게 판단하고 실행합니다</h1>
+            <p class="subtitle">미해결 업무, 빠른 실행, 검색을 한 화면에 모았습니다. 내부 진단은 접어두고 운영자가 지금 움직일 항목만 먼저 보여줍니다.</p>
+            <button class="command-search-button" id="commandPaletteOpen" type="button" aria-haspopup="dialog" aria-controls="commandPalette">
+              <span>회원명, 전화번호, 알림톡, 수업, 오류 ID 검색</span>
+              <kbd>⌘K</kbd>
+            </button>
+            <div class="quick-action-row" aria-label="빠른 실행">
+              <a class="quick-action" href="#pricingInquiryForm">수강료 안내</a>
+              <a class="quick-action" href="./private/">프라이빗 진행</a>
+              <a class="quick-action" href="./messages/">알림톡 확인</a>
+              <a class="quick-action" href="./automation/">자동화 관제</a>
+            </div>
           </div>
-          <div class="top-actions" aria-label="상태 확인">
+          <aside class="command-context-card" aria-label="오늘 운영 요약">
+            <div>
+              <span class="context-label">오늘 우선순위</span>
+              <strong id="commandQueueStatus">운영 큐 확인 중</strong>
+              <p id="commandQueueNote">Firestore 연결 후 미해결 업무를 계산합니다.</p>
+            </div>
             <div class="connection-card" aria-live="polite">
               <span id="connectionLabel">로딩</span>
               <strong id="connectionDetail">Firestore 연결 준비 중</strong>
             </div>
             <button class="refresh-button" id="refreshButton" type="button">새로고침</button>
-          </div>
+          </aside>
         </header>
 
-        <section class="grid kpis" aria-label="운영 요약">
+        <section class="grid kpis command-kpis" aria-label="운영 요약">
           <a class="panel metric metric-link" href="./messages/">
             <div class="metric-label">미해결 액션</div>
             <div class="metric-value" id="homeActionTotal">0건</div>
@@ -90,20 +105,20 @@
             </div>
           </article>
 
-          <aside class="panel">
+          <aside class="panel command-context-panel">
             <div class="panel-header">
               <div>
-                <h2>표시 기준</h2>
-                <p>홈에 올라오는 정보와 숨기는 정보를 분리합니다.</p>
+                <h2>운영 컨텍스트</h2>
+                <p>오늘 판단에 필요한 상태만 짧게 묶어봅니다.</p>
               </div>
-              <span class="pill">visibility rule</span>
+              <span class="pill">context</span>
             </div>
-            <div class="flow-list queue-principles">
-              <div><strong>보여줌</strong><span>발송 실패, 회원가입 후속 실패, 자동화 실패처럼 운영자가 당장 처리해야 하는 항목</span></div>
-              <div><strong>분리</strong><span>프라이빗 리포트 진행 건은 미해결 총합에 넣지 않고 프라이빗 카드와 Private 탭에서 확인</span></div>
-              <div><strong>남겨둠</strong><span>날짜가 바뀌어도 해결 전까지 사라지면 안 되는 실패·보류 업무</span></div>
-              <div><strong>숨김</strong><span>정상 정규화, 중복 차단, source import row 수 같은 내부 진단 로그</span></div>
-              <div><strong>상승</strong><span>자동 처리 실패 또는 같은 warning 반복 시 운영 큐로 올림</span></div>
+            <div class="context-list">
+              <div><span>회원 응대</span><strong id="homeContextMemberCare">정상권</strong></div>
+              <div><span>프라이빗</span><strong id="homeContextPrivate">진행 확인 중</strong></div>
+              <div><span>알림톡</span><strong id="homeContextMessages">대기 낮음</strong></div>
+              <div><span>최근 원본</span><strong id="homeContextImport">원본 대기</strong></div>
+              <div><span>품질/자동화</span><strong id="homeContextQuality">주의 낮음</strong></div>
             </div>
           </aside>
         </section>
@@ -195,9 +210,16 @@
 
         <details class="panel diagnostic-panel">
           <summary>
-            <span>시스템 진단 보기</span>
-            <small>원본 import, 데이터 품질, workLane 상태는 필요할 때만 펼칩니다.</small>
+            <span>시스템 진단과 표시 기준 보기</span>
+            <small>원본 import, 데이터 품질, workLane, 홈 노출 규칙은 필요할 때만 펼칩니다.</small>
           </summary>
+          <div class="flow-list queue-principles">
+            <div><strong>보여줌</strong><span>발송 실패, 회원가입 후속 실패, 자동화 실패처럼 운영자가 당장 처리해야 하는 항목</span></div>
+            <div><strong>분리</strong><span>프라이빗 리포트 진행 건은 미해결 총합에 넣지 않고 프라이빗 카드와 Private 탭에서 확인</span></div>
+            <div><strong>남겨둠</strong><span>날짜가 바뀌어도 해결 전까지 사라지면 안 되는 실패·보류 업무</span></div>
+            <div><strong>숨김</strong><span>정상 정규화, 중복 차단, source import row 수 같은 내부 진단 로그</span></div>
+            <div><strong>상승</strong><span>자동 처리 실패 또는 같은 warning 반복 시 운영 큐로 올림</span></div>
+          </div>
           <div class="ops-board">
             <a class="ops-card status-link" href="./automation/">
               <div class="ops-card-header"><h3>워크라인</h3><span class="pill">lane</span></div>
@@ -230,6 +252,21 @@
           </div>
         </section>
       </main>
+    </div>
+
+    <div class="command-palette" id="commandPalette" role="dialog" aria-modal="true" aria-label="ARCHIVE CORE 빠른 검색" hidden>
+      <div class="command-palette-card">
+        <label class="command-palette-search">
+          <span>빠른 검색</span>
+          <input id="commandPaletteInput" type="search" autocomplete="off" placeholder="회원명, 전화번호, 알림톡, 수업, 오류 ID" />
+        </label>
+        <div class="command-palette-results" id="commandPaletteResults">
+          <a href="./members/"><strong>회원 검색</strong><span>회원명, 전화번호, 수강권 상태 확인</span></a>
+          <a href="./messages/"><strong>알림톡 확인</strong><span>후보, 발송, 실패 상태 확인</span></a>
+          <a href="./private/"><strong>프라이빗 진행</strong><span>사전/사후/리포트/발송 단계 확인</span></a>
+          <a href="./automation/"><strong>자동화 관제</strong><span>LaunchAgent, 실패, 지연 상태 확인</span></a>
+        </div>
+      </div>
     </div>
   </body>
 </html>

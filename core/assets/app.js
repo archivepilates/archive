@@ -42,6 +42,56 @@ let memberPage = 1;
 let selectedStaffKey = "";
 
 const MEMBER_PAGE_SIZE = 20;
+const COMMAND_ITEMS = [
+  {
+    title: "회원 검색",
+    detail: "회원명, 전화번호, 수강권, 최근 방문 확인",
+    href: "./members/",
+    keywords: "member 회원 검색 전화번호 수강권 방문",
+  },
+  {
+    title: "수강료 안내 발송",
+    detail: "문의 전화번호 입력 후 승인 템플릿으로 즉시 발송",
+    href: "#pricingInquiryForm",
+    keywords: "수강료 가격 문의 알림톡 발송 상담",
+  },
+  {
+    title: "프라이빗 진행",
+    detail: "사전 설문, 사후 설문, 리포트, 발송 단계 확인",
+    href: "./private/",
+    keywords: "private 프라이빗 차트 리포트 설문 회차",
+  },
+  {
+    title: "알림톡 확인",
+    detail: "후보, 발송, 실패, 대기 상태 확인",
+    href: "./messages/",
+    keywords: "alimtalk 알림톡 실패 후보 발송 카카오",
+  },
+  {
+    title: "자동화 관제",
+    detail: "LaunchAgent, 실패, 지연, 중복 실행 확인",
+    href: "./automation/",
+    keywords: "automation 자동화 launchagent 실패 지연",
+  },
+  {
+    title: "운영규칙",
+    detail: "현재 유효한 운영 규칙과 데이터 원천 정책 확인",
+    href: "./rules/",
+    keywords: "rules 규칙 운영규칙 원천 정책",
+  },
+  {
+    title: "원본 데이터",
+    detail: "회원목록, 예약내역, 삭제 수업 import 상태 확인",
+    href: "./imports/",
+    keywords: "imports 원본 데이터 엑셀 예약 회원목록",
+  },
+  {
+    title: "강사 인사기록",
+    detail: "강사 평가, 퀴즈, 월별 지표 확인",
+    href: "./staff/",
+    keywords: "staff 강사 평가 인사기록 퀴즈",
+  },
+];
 
 function qs(id) {
   return document.getElementById(id);
@@ -203,6 +253,76 @@ function escapeHtml(value) {
 function setConnection(label, detail) {
   setText("connectionLabel", label);
   setText("connectionDetail", detail);
+}
+
+function commandSearchText(item) {
+  return [item.title, item.detail, item.keywords, item.phone, item.memberName, item.name, item.id]
+    .filter(Boolean)
+    .join(" ")
+    .toLowerCase();
+}
+
+function commandPaletteEntries() {
+  const memberEntries = state.members.slice(0, 80).map((member) => {
+    const memberId = member.memberId || member.id || "";
+    const name = member.name || member.memberName || memberId || "회원";
+    const phone = normalizePhone(member.phone || member.memberPhone || "");
+    const ticketCount = toNumber(member.activeTicketCount || member.currentTicketsSummary?.activeCount);
+    return {
+      title: `${name} 회원`,
+      detail: `${phone ? formatPhoneNumber(phone) : "전화번호 없음"} · 활성 수강권 ${ticketCount.toLocaleString("ko-KR")}개`,
+      href: memberId ? `./members/detail/?id=${encodeURIComponent(memberId)}` : "./members/",
+      keywords: "member 회원 상세 수강권 방문",
+      phone,
+      memberName: name,
+      id: memberId,
+    };
+  });
+  return [...COMMAND_ITEMS, ...memberEntries];
+}
+
+function renderCommandPaletteResults() {
+  const list = qs("commandPaletteResults");
+  const input = qs("commandPaletteInput");
+  if (!list) return;
+  const term = String(input?.value || "").trim().toLowerCase();
+  const entries = commandPaletteEntries()
+    .filter((item) => !term || commandSearchText(item).includes(term))
+    .slice(0, 9);
+  if (!entries.length) {
+    list.innerHTML = `<div class="command-palette-empty">검색 결과가 없습니다. 회원명, 전화번호 끝자리, 메뉴명을 다시 입력하세요.</div>`;
+    return;
+  }
+  list.innerHTML = entries
+    .map(
+      (item) => `
+        <a href="${escapeHtml(item.href)}">
+          <strong>${escapeHtml(item.title)}</strong>
+          <span>${escapeHtml(item.detail)}</span>
+        </a>
+      `,
+    )
+    .join("");
+}
+
+function openCommandPalette() {
+  const palette = qs("commandPalette");
+  const input = qs("commandPaletteInput");
+  if (!palette || !input) return;
+  palette.hidden = false;
+  palette.classList.add("open");
+  renderCommandPaletteResults();
+  window.setTimeout(() => {
+    input.focus();
+    input.select();
+  }, 20);
+}
+
+function closeCommandPalette() {
+  const palette = qs("commandPalette");
+  if (!palette) return;
+  palette.classList.remove("open");
+  palette.hidden = true;
 }
 
 const NAV_ICONS = {
@@ -2387,7 +2507,7 @@ function renderHomeDecisions() {
   list.innerHTML = rows
     .map(
       (row) => `
-        <a class="status-row status-link" href="${row.href}">
+        <a class="status-row status-link home-action-card" href="${row.href}">
           <div><strong>${escapeHtml(row.title)}</strong><p>${escapeHtml(row.detail)}</p></div>
           ${pill(row.status)}
         </a>
@@ -2407,6 +2527,13 @@ function renderHomeSummary() {
   const communicationProblems = failedCandidates.length + failedSends.length + flowProblems.length;
   const actionTotal = communicationProblems + pendingCandidates.length + failedAutomation.length + openIssues.length;
   const latestImport = state.sourceImports[0];
+  setText("commandQueueStatus", actionTotal ? `${actionTotal}건 확인 필요` : "오늘 처리할 큐 없음");
+  setText(
+    "commandQueueNote",
+    actionTotal
+      ? "회원 응대, 알림톡, 자동화, 품질 이슈 중 운영자 판단이 필요한 항목입니다."
+      : "발송 실패, 후속 처리 실패, 자동화 중단 신호가 보이지 않습니다.",
+  );
   setText("homeActionTotal", formatCount(actionTotal));
   setText(
     "homeActionNote",
@@ -2459,6 +2586,27 @@ function renderHomeSummary() {
   setText("homeAutomationNote", failedAutomation.length ? "실패/중단 자동화만 표시" : "실패/중단 신호 낮음");
   setText("homeAutomationCardTotal", failedAutomation.length ? `${failedAutomation.length}건 확인` : "정상권");
   setText("homeAutomationCardNote", failedAutomation.length ? "Automation 탭에서 실패한 작업만 확인" : "자동화 실패/지연 신호 낮음");
+  setText("homeContextMemberCare", flowProblems.length ? `${flowProblems.length}건 확인` : "정상권");
+  setText(
+    "homeContextPrivate",
+    privatePending.length ? `사전 ${privateBreakdown.pre} · 사후 ${privateBreakdown.post} · 발송 ${privateBreakdown.send}` : "진행 정상권",
+  );
+  setText(
+    "homeContextMessages",
+    communicationProblems ? `${communicationProblems}건 확인` : pendingCandidates.length ? `${pendingCandidates.length}건 대기` : "대기 낮음",
+  );
+  setText(
+    "homeContextImport",
+    latestImport
+      ? `${sourceKindLabel(latestImport.sourceKind || latestImport.kind)} · ${formatDate(latestImport.updatedAt || latestImport.importedAt)}`
+      : "원본 대기",
+  );
+  setText(
+    "homeContextQuality",
+    openIssues.length || failedAutomation.length
+      ? `품질 ${openIssues.length} · 자동화 ${failedAutomation.length}`
+      : "주의 낮음",
+  );
 }
 
 function renderBusinessFallback(error) {
@@ -3562,6 +3710,12 @@ activateNav();
 qs("refreshButton")?.addEventListener("click", refresh);
 qs("pricingInquiryForm")?.addEventListener("submit", handlePricingInquiryAlimtalkSubmit);
 qs("pricingInquiryHistoryToggle")?.addEventListener("click", togglePricingInquiryHistory);
+qs("commandPaletteOpen")?.addEventListener("click", openCommandPalette);
+qs("commandPaletteInput")?.addEventListener("input", renderCommandPaletteResults);
+qs("commandPalette")?.addEventListener("click", (event) => {
+  if (event.target === qs("commandPalette")) closeCommandPalette();
+  if (event.target.closest?.(".command-palette-results a")) closeCommandPalette();
+});
 qs("instructorEvaluationQuizForm")?.addEventListener("submit", handleInstructorEvaluationQuizSubmit);
 qs("businessMonthSelect")?.addEventListener("change", (event) => renderBusinessMonth(event.target.value));
 document.addEventListener("submit", (event) => {
@@ -3574,6 +3728,15 @@ document.addEventListener("click", (event) => {
   if (!button) return;
   selectedStaffKey = button.getAttribute("data-staff-detail-key") || "";
   renderStaffHr();
+});
+window.addEventListener("keydown", (event) => {
+  const isCommandSearch = (event.metaKey || event.ctrlKey) && event.key.toLowerCase() === "k";
+  if (isCommandSearch) {
+    event.preventDefault();
+    openCommandPalette();
+    return;
+  }
+  if (event.key === "Escape") closeCommandPalette();
 });
 qs("memberSearchInput")?.addEventListener("input", (event) => {
   memberSearchTerm = event.target.value.trim();
