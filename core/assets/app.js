@@ -17,6 +17,12 @@ const state = {
   onsiteWelcomeRequests: [],
   memberSignupContracts: [],
   pricingInquiryAlimtalkRequests: [],
+  staffItems: [],
+  staffHrCards: [],
+  staffEvaluationSubmissions: [],
+  staffEvaluationRows: [],
+  instructorEvaluationQuiz: null,
+  instructorEvaluationTargets: [],
   privateRequests: [],
   privateRecords: [],
   privateUsageEvents: [],
@@ -33,6 +39,7 @@ const state = {
 let memberSearchTerm = "";
 let memberFilter = "all";
 let memberPage = 1;
+let selectedStaffKey = "";
 
 const MEMBER_PAGE_SIZE = 20;
 
@@ -144,7 +151,7 @@ function normalizeStatus(value) {
   const status = String(value || "unknown").toLowerCase();
   if (["success", "ok", "healthy", "done", "active", "completed", "sent"].includes(status)) return "good";
   if (["failed", "error", "critical", "blocked"].includes(status)) return "danger";
-  if (["running", "pending", "warning", "review", "stale", "queued", "skipped", "template_pending"].includes(status)) return "warn";
+  if (["running", "pending", "warning", "review", "review_needed", "stale", "queued", "skipped", "template_pending"].includes(status)) return "warn";
   return "";
 }
 
@@ -165,6 +172,8 @@ function statusLabel(value) {
     skipped: "차단",
     template_pending: "승인대기",
     submitted: "제출",
+    passed: "합격",
+    review_needed: "검토필요",
     pre_submitted: "사전 제출",
     post_submitted: "사후 제출",
     draft_created: "초안 생성",
@@ -201,6 +210,7 @@ const NAV_ICONS = {
   members: "M16 19v-1.5A3.5 3.5 0 0 0 12.5 14h-5A3.5 3.5 0 0 0 4 17.5V19M11 8a3 3 0 1 1-6 0 3 3 0 0 1 6 0M20 19v-1a3 3 0 0 0-3-3h-1.2M15 5.2a2.8 2.8 0 0 1 0 5.6",
   lessons: "M4 6.5h16M4 12h16M4 17.5h9M8 4v16M16 4v10",
   private: "M5 4h14v16H5zM8 8h8M8 12h5M8 16h7",
+  staff: "M12 12a4 4 0 1 0 0-8 4 4 0 0 0 0 8M4 21a8 8 0 0 1 16 0M17.5 7.5l1.5 1.5 3-3",
   messages: "M4 6h16v11H8l-4 3V6zM8 10h8M8 14h5",
   automation: "M12 3v4M12 17v4M4.9 4.9l2.8 2.8M16.3 16.3l2.8 2.8M3 12h4M17 12h4M4.9 19.1l2.8-2.8M16.3 7.7l2.8-2.8M9 12a3 3 0 1 0 6 0 3 3 0 0 0-6 0",
   business: "M4 19h16M6 16V9M12 16V5M18 16v-7",
@@ -482,6 +492,12 @@ function renderAutomation(items) {
   const failedItems = items.filter((item) =>
     ["failed", "error", "critical", "blocked"].includes(String(item.status || item.health || "").toLowerCase()),
   );
+  const launchAgentItems = items.filter((item) => String(item.runner || item.source || "").toLowerCase().includes("launchagent"));
+  const codexItems = items.filter((item) => String(item.runner || item.source || "").toLowerCase().includes("codex"));
+  const knownAutomationItems = [...launchAgentItems, ...codexItems];
+  const knownAutomationIds = new Set(knownAutomationItems.map((item) => item.id || item.automationId || item.title || item.name));
+  const otherStatusItems = items.filter((item) => !knownAutomationIds.has(item.id || item.automationId || item.title || item.name));
+  const activeCodexItems = codexItems.filter((item) => ["active", "healthy"].includes(String(item.status || "").toLowerCase()));
   const latestItem = [...items].sort((a, b) => {
     const left = new Date(a.updatedAt?.toDate?.() || a.updatedAt || a.lastRunAt || a.checkedAt || 0).getTime();
     const right = new Date(b.updatedAt?.toDate?.() || b.updatedAt || b.lastRunAt || b.checkedAt || 0).getTime();
@@ -492,14 +508,23 @@ function renderAutomation(items) {
     automationMode.textContent = failedItems.length ? "확인 필요" : items.length ? "연결" : "기록 대기";
     automationMode.className = `pill ${failedItems.length ? "danger" : items.length ? "good" : "warn"}`;
   }
-  setText("automationStatusCount", formatCount(items.length));
+  setText("automationStatusCount", formatCount(knownAutomationItems.length || items.length));
   setText("automationFailedCount", formatCount(failedItems.length));
   setText("automationRecentRun", latestItem ? formatDate(latestItem.updatedAt || latestItem.lastRunAt || latestItem.checkedAt) : "기록 대기");
   setText("automationConnectedState", items.length ? "상태 문서 연결됨" : "컬렉션 연결 · 기록 없음");
   setText(
+    "automationRunnerCount",
+    `LaunchAgent ${launchAgentItems.length} · Codex ${codexItems.length}${
+      otherStatusItems.length ? ` · 기타 ${otherStatusItems.length}` : ""
+    }`,
+  );
+  setText("automationCodexActiveCount", formatCount(activeCodexItems.length));
+  setText(
     "automationNextAction",
     items.length
-      ? "최근 문서 기준으로 상태를 표시합니다."
+      ? activeCodexItems.length
+        ? "Codex ACTIVE 자동화는 LaunchAgent와 중복 실행되지 않는지 먼저 확인합니다."
+        : "안정적인 정기 실행은 Mac mini LaunchAgent 기준으로 관리합니다."
       : "Mac mini / Excel / 알림톡 작업이 automationStatus에 결과를 쓰도록 연결해야 합니다.",
   );
 
@@ -510,17 +535,22 @@ function renderAutomation(items) {
     return;
   }
 
-  list.innerHTML = items
+  const orderedItems = [...knownAutomationItems, ...otherStatusItems];
+  list.innerHTML = orderedItems
     .map((item) => {
       const name = item.title || item.name || item.id;
       const detail = item.summary || item.message || item.lastResult || item.description || "상세 기록 없음";
       const updated = formatDate(item.updatedAt || item.lastRunAt || item.checkedAt);
       const nextRun = item.nextRunAt || item.nextScheduledAt ? ` · 다음 ${formatDate(item.nextRunAt || item.nextScheduledAt)}` : "";
       const error = item.lastError || item.errorMessage ? ` · ${item.lastError || item.errorMessage}` : "";
+      const runner = item.runner || item.source || item.kind || "runner 미기록";
+      const schedule = item.schedule || item.rrule || "";
+      const owner = item.ownerArea ? ` · ${item.ownerArea}` : "";
       return `
         <div class="status-row">
           <div>
             <strong>${escapeHtml(name)}</strong>
+            <p>${escapeHtml(runner)}${escapeHtml(owner)}${schedule ? ` · ${escapeHtml(schedule)}` : ""}</p>
             <p>${escapeHtml(detail)} · ${escapeHtml(updated)}${escapeHtml(nextRun)}${escapeHtml(error)}</p>
           </div>
           ${pill(item.status || item.health)}
@@ -533,19 +563,19 @@ function renderAutomation(items) {
   if (healthList) {
     const flows = [
       {
-        title: "StudioMate Excel 동기화",
-        source: items.find((item) => item.id === "studiomate-excel-sync") || items[0],
-        detail: "회원목록, 예약내역, 삭제 수업 원본을 가져와 CORE 표시용 상태를 갱신합니다.",
+        title: "Mac mini LaunchAgent",
+        source: launchAgentItems.find((item) => ["failed", "warning"].includes(String(item.status || "").toLowerCase())) || launchAgentItems[0],
+        detail: "안정적인 정기 실행의 기본 주체입니다.",
       },
       {
-        title: "알림톡 자동발송",
-        source: items.find((item) => String(item.id || "").includes("alimtalk")),
-        detail: "후보 선정과 실제 발송은 기존 canonical 컬렉션 기준으로 유지합니다.",
+        title: "Codex 자동화",
+        source: activeCodexItems[0] || codexItems[0],
+        detail: "기본은 테스트, 리뷰, fallback입니다. ACTIVE 항목은 중복 여부를 확인합니다.",
       },
       {
-        title: "Google Contacts 동기화",
-        source: items.find((item) => String(item.id || "").includes("contact")),
-        detail: "연락처 write는 승인된 동기화 큐와 매칭 규칙만 사용합니다.",
+        title: "운영 상태 기록",
+        source: items[0],
+        detail: "새 자동화는 automationStatus에 상태를 써야 CORE 관제에 표시됩니다.",
       },
     ];
     healthList.innerHTML = flows
@@ -2065,8 +2095,25 @@ function normalizeBusinessSnapshot(data) {
       month: normMonth(row.월),
       name: String(row.강사 || ""),
       revenue: toNumber(row.총매출),
+      pretaxAmount: toNumber(row.세전총액),
+      payoutAmount: toNumber(row.실지급액),
     }))
     .filter((row) => row.month && row.name);
+
+  const instructorStats = (data?.강사통계 || [])
+    .map((row) => ({
+      month: normMonth(row.월),
+      name: String(row.강사 || ""),
+      reservationRate: toNumber(row.그룹예약률),
+      attendanceRate: toNumber(row.그룹출석률),
+      averageGroupMembers: toNumber(row.그룹평균인원),
+      groupLessonCount: (() => {
+        const source = row.그룹수업수 ?? row.그룹수업 ?? row.그룹횟수 ?? row.월수업수 ?? row.수업수;
+        return source === undefined || source === null || source === "" ? null : toNumber(source);
+      })(),
+    }))
+    .filter((row) => row.month && row.name)
+    .sort((a, b) => a.month.localeCompare(b.month));
 
   const ticketTop = (data?.수강권TOP5 || [])
     .map((row) => ({
@@ -2096,6 +2143,7 @@ function normalizeBusinessSnapshot(data) {
   return {
     summary,
     instructorRevenue,
+    instructorStats,
     ticketTop,
     dailyRevenue,
     updatedAt: data?.updatedAt || data?.syncedAt || null,
@@ -2422,6 +2470,864 @@ function renderBusinessFallback(error) {
   renderBusinessMemberInsights([]);
 }
 
+function staffHrCardFor(staffId) {
+  return (state.staffHrCards || []).find((card) => String(card.staffId || card.id) === String(staffId)) || null;
+}
+
+function staffLatestSubmission(staffId) {
+  return (
+    (state.staffEvaluationSubmissions || [])
+      .filter((item) => String(item.staffId || "") === String(staffId))
+      .sort((a, b) => timestampMs(b.submittedAt || b.updatedAt) - timestampMs(a.submittedAt || a.updatedAt))[0] || null
+  );
+}
+
+function staffEvaluationRows() {
+  const rows = new Map();
+  for (const staff of state.staffItems || []) {
+    const key = String(staff.staffId || staff.id || staff.name || "");
+    if (!key) continue;
+    const applicantEvaluation = Boolean(staff.applicantEvaluation || staff.role === "applicant");
+    const role = staff.role || "instructor";
+    const isTeachingRole = ["instructor", "owner"].includes(String(role));
+    const isCurrentStaff = staff.active !== false && !applicantEvaluation && isTeachingRole;
+    rows.set(key, {
+      key,
+      staffId: staff.staffId || staff.id || "",
+      name: staff.name || "이름 없음",
+      role,
+      submissions: [],
+      card: null,
+      applicantEvaluation,
+      staffActive: staff.active !== false,
+      isCurrentStaff,
+      employmentSource: "staffs",
+    });
+  }
+
+  for (const card of state.staffHrCards || []) {
+    const key = String(card.staffId || card.id || card.staffName || "");
+    if (!key) continue;
+    const applicantEvaluation = Boolean(card.applicantEvaluation || card.staffRole === "applicant");
+    if (!rows.has(key)) {
+      rows.set(key, {
+        key,
+        staffId: card.staffId || card.id || "",
+        name: card.staffName || "강사",
+        role: card.staffRole || "instructor",
+        submissions: [],
+        card,
+        applicantEvaluation,
+        staffActive: false,
+        isCurrentStaff: false,
+        employmentSource: "hrCard",
+      });
+    } else {
+      const row = rows.get(key);
+      row.card = card;
+      row.applicantEvaluation = Boolean(row.applicantEvaluation || applicantEvaluation);
+      if (applicantEvaluation) {
+        row.isCurrentStaff = false;
+        row.role = "applicant";
+      }
+    }
+  }
+
+  for (const submission of state.staffEvaluationSubmissions || []) {
+    const key = String(submission.staffId || submission.staffName || submission.id || "");
+    if (!key) continue;
+    const applicantEvaluation = Boolean(submission.applicantEvaluation || submission.staffRole === "applicant");
+    if (!rows.has(key)) {
+      rows.set(key, {
+        key,
+        staffId: submission.staffId || "",
+        name: submission.staffName || "강사",
+        role: submission.staffRole || "instructor",
+        submissions: [],
+        card: null,
+        applicantEvaluation,
+        staffActive: false,
+        isCurrentStaff: false,
+        employmentSource: "submission",
+      });
+    }
+    rows.get(key).submissions.push(submission);
+    if (applicantEvaluation) {
+      const row = rows.get(key);
+      row.applicantEvaluation = true;
+      row.isCurrentStaff = false;
+      row.role = "applicant";
+    }
+  }
+
+  return [...rows.values()].map((row) => {
+    const cardLatest =
+      row.card?.latestQuiz && Number.isFinite(Number(row.card.latestQuiz.scorePercent))
+        ? {
+            ...row.card.latestQuiz,
+            staffId: row.staffId,
+            staffName: row.name,
+            staffRole: row.role,
+          }
+        : null;
+    const candidates = cardLatest ? [...row.submissions, cardLatest] : row.submissions;
+    const seen = new Set();
+    const submissions = candidates
+      .filter((item) => Number.isFinite(Number(item.scorePercent)))
+      .filter((item) => {
+        const key = String(item.submissionId || `${item.staffId || row.staffId}_${item.submittedAt || item.updatedAt || item.scorePercent}`);
+        if (seen.has(key)) return false;
+        seen.add(key);
+        return true;
+      })
+      .sort((a, b) => timestampMs(b.submittedAt || b.updatedAt) - timestampMs(a.submittedAt || a.updatedAt));
+    const scores = submissions.map((item) => toNumber(item.scorePercent));
+    const bestFromCard = Number(row.card?.quizSummary?.bestScorePercent);
+    const latest = submissions[0] || null;
+    return {
+      ...row,
+      submissions,
+      latest,
+      latestScore: latest ? Math.round(toNumber(latest.scorePercent)) : null,
+      bestScore: scores.length || Number.isFinite(bestFromCard) ? Math.round(Math.max(...scores, Number.isFinite(bestFromCard) ? bestFromCard : 0)) : null,
+      attempts: Math.max(submissions.length, toNumber(row.card?.quizSummary?.attempts)),
+      status: latest?.status || "pending",
+      employmentState: staffEmploymentState(row),
+    };
+  });
+}
+
+function staffEmploymentState(row) {
+  if (row.applicantEvaluation || row.role === "applicant") return "applicant";
+  if (row.isCurrentStaff) return "current";
+  if (["manager", "viewer"].includes(String(row.role || ""))) return "operator";
+  return "inactive";
+}
+
+function staffEmploymentLabel(row) {
+  const state = row.employmentState || staffEmploymentState(row);
+  if (state === "current") return "현재 근무중";
+  if (state === "operator") return "운영자 계정";
+  if (state === "applicant") return "지원자/시험 기록";
+  return "비근무/퇴사 기록";
+}
+
+function staffEmploymentPill(row) {
+  const state = row.employmentState || staffEmploymentState(row);
+  const tone = state === "current" ? "good" : state === "applicant" ? "warn" : "muted";
+  return `<span class="pill ${tone}">${escapeHtml(staffEmploymentLabel(row))}</span>`;
+}
+
+function normalizeStaffMatchName(value) {
+  return String(value || "")
+    .replace(/\s+/g, "")
+    .trim();
+}
+
+function sameStaffName(left, right) {
+  const a = normalizeStaffMatchName(left);
+  const b = normalizeStaffMatchName(right);
+  return Boolean(a && b && a === b);
+}
+
+function staffMonthlyMetrics(row) {
+  const snapshot = state.businessSnapshot || {};
+  const stats = (snapshot.instructorStats || []).filter((item) => sameStaffName(item.name, row.name));
+  const sales = (snapshot.instructorRevenue || []).filter((item) => sameStaffName(item.name, row.name));
+  const byMonth = new Map();
+  for (const item of stats) {
+    byMonth.set(item.month, {
+      month: item.month,
+      reservationRate: item.reservationRate,
+      attendanceRate: item.attendanceRate,
+      averageGroupMembers: item.averageGroupMembers,
+      groupLessonCount: item.groupLessonCount,
+    });
+  }
+  for (const item of sales) {
+    const current = byMonth.get(item.month) || { month: item.month };
+    byMonth.set(item.month, {
+      ...current,
+      revenue: item.revenue,
+      pretaxAmount: item.pretaxAmount,
+      payoutAmount: item.payoutAmount,
+    });
+  }
+  return [...byMonth.values()].sort((a, b) => a.month.localeCompare(b.month));
+}
+
+function formatMetricRate(value) {
+  return Number.isFinite(Number(value)) ? `${toNumber(value).toFixed(1).replace(/\.0$/, "")}%` : "연결 대기";
+}
+
+function formatMetricNumber(value, suffix = "") {
+  return Number.isFinite(Number(value)) ? `${toNumber(value).toLocaleString("ko-KR")}${suffix}` : "연결 대기";
+}
+
+function scoreBand(score) {
+  if (!Number.isFinite(Number(score))) return { label: "산출 대기", tone: "muted" };
+  if (score >= 85) return { label: "우수", tone: "good" };
+  if (score >= 75) return { label: "안정", tone: "good" };
+  if (score >= 65) return { label: "관찰", tone: "warn" };
+  return { label: "개선필요", tone: "danger" };
+}
+
+function normalizeGroupAverageScore(value) {
+  if (!Number.isFinite(Number(value))) return null;
+  const targetAverage = 4.5;
+  return Math.max(0, Math.min(100, Math.round((toNumber(value) / targetAverage) * 100)));
+}
+
+function staffCompositeScore(row, metrics, latestQuiz) {
+  const latestMetric = metrics.at(-1) || null;
+  const definitions = [
+    {
+      key: "quiz",
+      label: "평가 퀴즈",
+      weight: 35,
+      value: latestQuiz ? Math.max(0, Math.min(100, toNumber(latestQuiz.scorePercent))) : null,
+      display: latestQuiz ? `${Math.round(toNumber(latestQuiz.scorePercent))}점` : "미응시",
+    },
+    {
+      key: "reservation",
+      label: "그룹 예약률",
+      weight: 30,
+      value: latestMetric && Number.isFinite(Number(latestMetric.reservationRate)) ? Math.max(0, Math.min(100, toNumber(latestMetric.reservationRate))) : null,
+      display: latestMetric ? formatMetricRate(latestMetric.reservationRate) : "연결 대기",
+    },
+    {
+      key: "averageMembers",
+      label: "그룹 평균인원",
+      weight: 25,
+      value: latestMetric ? normalizeGroupAverageScore(latestMetric.averageGroupMembers) : null,
+      display: latestMetric ? formatMetricNumber(latestMetric.averageGroupMembers, "명") : "연결 대기",
+    },
+    {
+      key: "attendance",
+      label: "그룹 출석률",
+      weight: 10,
+      value: latestMetric && Number.isFinite(Number(latestMetric.attendanceRate)) ? Math.max(0, Math.min(100, toNumber(latestMetric.attendanceRate))) : null,
+      display: latestMetric ? formatMetricRate(latestMetric.attendanceRate) : "연결 대기",
+    },
+  ];
+  const active = definitions.filter((item) => Number.isFinite(Number(item.value)));
+  const totalWeight = active.reduce((sum, item) => sum + item.weight, 0);
+  const score = totalWeight
+    ? Math.round(active.reduce((sum, item) => sum + item.value * item.weight, 0) / totalWeight)
+    : null;
+  return {
+    score,
+    band: scoreBand(score),
+    components: definitions,
+    activeCount: active.length,
+    totalCount: definitions.length,
+    coverage: totalWeight,
+    note:
+      row.employmentState === "current"
+        ? "현재 연결된 항목만 100점으로 환산합니다."
+        : "비근무/지원자/운영자 기록은 참고 점수로만 표시합니다.",
+  };
+}
+
+function renderStaffDetail(row) {
+  const container = qs("staffDetailCard");
+  if (!container) return;
+  if (!row) {
+    setText("staffDetailTitle", "강사 세부 지표");
+    setText("staffDetailSubtitle", "강사 이름을 선택하면 퀴즈 답변과 월별 운영 지표가 표시됩니다.");
+    container.innerHTML = `<div class="empty-state">강사 리스트에서 이름을 선택해 주세요.</div>`;
+    return;
+  }
+
+  const metrics = staffMonthlyMetrics(row);
+  const latestMetric = metrics.at(-1) || null;
+  const latestQuiz = row.latest || row.card?.latestQuiz || null;
+  const q19 = latestQuiz ? staffEssayScoreInfo(latestQuiz) : null;
+  const recentSubmissions = row.submissions.slice(0, 5);
+  const lastUpdated = latestMetric?.month ? `${formatMonth(latestMetric.month)} 운영 지표` : "운영 지표 연결 대기";
+  const composite = staffCompositeScore(row, metrics, latestQuiz);
+
+  setText("staffDetailTitle", `${row.name || "강사"} 세부 지표`);
+  setText(
+    "staffDetailSubtitle",
+    [
+      staffEmploymentLabel(row),
+      row.role || "instructor",
+      latestQuiz ? `최근 평가 ${Math.round(toNumber(latestQuiz.scorePercent))}점` : "평가 기록 없음",
+      lastUpdated,
+    ]
+      .filter(Boolean)
+      .join(" · "),
+  );
+
+  const metricCards = [
+    {
+      label: "최근 평가 점수",
+      value: latestQuiz ? `${Math.round(toNumber(latestQuiz.scorePercent))}점` : "미응시",
+      note: latestQuiz?.submittedAt ? formatDate(latestQuiz.submittedAt) : "퀴즈 제출 대기",
+    },
+    {
+      label: "월별 그룹 예약률",
+      value: latestMetric ? formatMetricRate(latestMetric.reservationRate) : "연결 대기",
+      note: latestMetric?.month ? formatMonth(latestMetric.month) : "dashboardSnapshots/current",
+    },
+    {
+      label: "월별 그룹 평균인원",
+      value: latestMetric ? formatMetricNumber(latestMetric.averageGroupMembers, "명") : "연결 대기",
+      note: latestMetric?.month ? "강사통계 기준" : "강사통계 원천 대기",
+    },
+    {
+      label: "월 수업 개수",
+      value: latestMetric?.groupLessonCount === null || latestMetric?.groupLessonCount === undefined ? "연결 대기" : formatMetricNumber(latestMetric.groupLessonCount, "개"),
+      note: latestMetric?.groupLessonCount === null || latestMetric?.groupLessonCount === undefined ? "원천 필드 추가 필요" : "강사통계 기준",
+    },
+  ];
+
+  const metricRows = metrics.slice(-6).reverse();
+  container.innerHTML = `
+    <div class="staff-composite-card">
+      <div class="staff-composite-head">
+        <div>
+          <span>강사 평가 종합 점수</span>
+          <strong>${composite.score === null ? "산출 대기" : `${composite.score}점`}</strong>
+          <em>v1 산식 · 연결 항목 ${composite.activeCount}/${composite.totalCount} · 가중치 ${composite.coverage}%</em>
+        </div>
+        <span class="pill ${escapeHtml(composite.band.tone)}">${escapeHtml(composite.band.label)}</span>
+      </div>
+      <p>${escapeHtml(composite.note)}</p>
+      <div class="staff-score-rules">
+        ${composite.components
+          .map(
+            (item) => `
+              <div>
+                <span>${escapeHtml(item.label)}</span>
+                <strong>${escapeHtml(`${item.weight}%`)}</strong>
+                <em>${escapeHtml(item.display)}</em>
+              </div>
+            `,
+          )
+          .join("")}
+      </div>
+      <p class="meta-line">추후 원천 연결 후 월 수업수, 회원만족도, 클레임 현황을 산식 v2에 반영합니다.</p>
+    </div>
+
+    <div class="staff-detail-kpis">
+      <div class="staff-detail-kpi staff-detail-kpi-status">
+        <span>근무 상태</span>
+        <strong>${escapeHtml(staffEmploymentLabel(row))}</strong>
+        <em>${escapeHtml(row.employmentSource === "staffs" ? "staffs active 기준" : "기록 보존 기준")}</em>
+      </div>
+      ${metricCards
+        .map(
+          (item) => `
+            <div class="staff-detail-kpi">
+              <span>${escapeHtml(item.label)}</span>
+              <strong>${escapeHtml(item.value)}</strong>
+              <em>${escapeHtml(item.note)}</em>
+            </div>
+          `,
+        )
+        .join("")}
+    </div>
+
+    <div class="staff-detail-section">
+      <h3>최근 퀴즈 답변</h3>
+      ${
+        latestQuiz
+          ? `
+            <div class="staff-detail-quiz">
+              <div>
+                <strong>${escapeHtml(`${Math.round(toNumber(latestQuiz.scorePercent))}점`)}</strong>
+                <span>${escapeHtml(
+                  [
+                    latestQuiz.scoredPointTotal ? `${toNumber(latestQuiz.earnedPointTotal)}/${toNumber(latestQuiz.scoredPointTotal)}점` : "",
+                    `${toNumber(latestQuiz.correctCount)}/${toNumber(latestQuiz.scoredQuestionCount)}문항`,
+                    formatDate(latestQuiz.submittedAt || latestQuiz.updatedAt),
+                  ]
+                    .filter(Boolean)
+                    .join(" · "),
+                )}</span>
+              </div>
+              ${pill(latestQuiz.status || "unknown")}
+            </div>
+            ${
+              q19
+                ? `<div class="essay-answer-preview staff-detail-answer"><strong>Q19 서술형</strong><br />${escapeHtml(q19.text || "답변 없음")}</div>`
+                : ""
+            }
+          `
+          : `<div class="empty-state">아직 퀴즈 제출 기록이 없습니다.</div>`
+      }
+    </div>
+
+    <div class="staff-detail-section">
+      <h3>월별 그룹 운영 지표</h3>
+      ${
+        metricRows.length
+          ? `
+            <div class="staff-metric-table" role="table" aria-label="${escapeHtml(row.name)} 월별 그룹 운영 지표">
+              <div role="row">
+                <span role="columnheader">월</span>
+                <span role="columnheader">예약률</span>
+                <span role="columnheader">출석률</span>
+                <span role="columnheader">평균인원</span>
+                <span role="columnheader">수업수</span>
+              </div>
+              ${metricRows
+                .map(
+                  (item) => `
+                    <div role="row">
+                      <strong role="cell">${escapeHtml(formatMonth(item.month))}</strong>
+                      <span role="cell">${escapeHtml(formatMetricRate(item.reservationRate))}</span>
+                      <span role="cell">${escapeHtml(formatMetricRate(item.attendanceRate))}</span>
+                      <span role="cell">${escapeHtml(formatMetricNumber(item.averageGroupMembers, "명"))}</span>
+                      <span role="cell">${escapeHtml(
+                        item.groupLessonCount === null || item.groupLessonCount === undefined
+                          ? "연결 대기"
+                          : formatMetricNumber(item.groupLessonCount, "개"),
+                      )}</span>
+                    </div>
+                  `,
+                )
+                .join("")}
+            </div>
+          `
+          : `<div class="empty-state">이 강사의 월별 그룹 지표가 아직 연결되지 않았습니다.</div>`
+      }
+    </div>
+
+    <div class="staff-detail-section">
+      <h3>평가 제출 이력</h3>
+      ${
+        recentSubmissions.length
+          ? recentSubmissions
+              .map(
+                (item) => `
+                  <div class="staff-detail-history">
+                    <strong>${escapeHtml(`${Math.round(toNumber(item.scorePercent))}점`)}</strong>
+                    <span>${escapeHtml(formatDate(item.submittedAt || item.updatedAt))}</span>
+                    ${pill(item.status || "unknown")}
+                  </div>
+                `,
+              )
+              .join("")
+          : `<div class="empty-state">평가 제출 이력이 없습니다.</div>`
+      }
+    </div>
+
+    <div class="staff-detail-section">
+      <h3>만족도 · 클레임</h3>
+      <div class="staff-signal-grid">
+        <div><strong>회원만족도</strong><span>설문 원천 연결 대기</span></div>
+        <div><strong>클레임 현황</strong><span>클레임 기록 원천 연결 대기</span></div>
+      </div>
+    </div>
+  `;
+}
+
+function renderStaffEvaluationChart() {
+  const chart = qs("staffEvaluationChart");
+  if (!chart) return;
+  const rows = staffEvaluationRows()
+    .filter((row) => row.latest && row.employmentState === "current")
+    .sort((a, b) => (b.latestScore || 0) - (a.latestScore || 0) || String(a.name).localeCompare(String(b.name), "ko"));
+
+  if (!rows.length) {
+    chart.innerHTML = `<div class="empty-state">현재 근무중 강사의 평가 제출 기록이 생기면 점수 차트가 표시됩니다.</div>`;
+    return;
+  }
+
+  chart.innerHTML = rows
+    .map((row) => {
+      const latestScore = Math.max(0, Math.min(100, row.latestScore || 0));
+      const bestScore = Math.max(0, Math.min(100, row.bestScore || 0));
+      const points =
+        row.latest?.scoredPointTotal && row.latest?.earnedPointTotal !== undefined
+          ? `${toNumber(row.latest.earnedPointTotal)}/${toNumber(row.latest.scoredPointTotal)}점 자동채점`
+          : `${row.latest?.correctCount || 0}/${row.latest?.scoredQuestionCount || 0}문항`;
+      const note = [formatDate(row.latest.submittedAt || row.latest.updatedAt), `${row.attempts}회 제출`, points]
+        .filter(Boolean)
+        .join(" · ");
+      return `
+        <article class="staff-chart-row">
+          <div class="staff-chart-copy">
+            <strong>${escapeHtml(row.name)}</strong>
+            <span>${escapeHtml(note)}</span>
+          </div>
+          <div class="staff-chart-bars" aria-label="${escapeHtml(row.name)} 평가 점수">
+            <div class="staff-chart-track">
+              <span class="staff-chart-fill" style="width: ${latestScore}%"></span>
+            </div>
+            <div class="staff-chart-best" style="left: ${bestScore}%"></div>
+          </div>
+          <div class="staff-chart-score">
+            <strong>${latestScore}점</strong>
+            <span>최고 ${bestScore}점</span>
+          </div>
+          ${pill(row.status)}
+        </article>
+      `;
+    })
+    .join("");
+}
+
+function renderStaffHr() {
+  const list = qs("staffHrList");
+  if (!list) return;
+  const staffRows = staffEvaluationRows().sort((a, b) => String(a.name || "").localeCompare(String(b.name || ""), "ko"));
+  const staffs = staffRows;
+  state.staffEvaluationRows = staffRows;
+  const submissions = state.staffEvaluationSubmissions || [];
+  const reviewCount = submissions.filter((item) => item.status === "review_needed").length;
+  const passedCount = submissions.filter((item) => item.status === "passed").length;
+  const activeStaffCount = staffs.filter((item) => item.employmentState === "current").length;
+  const latest = submissions
+    .filter((item) => Number.isFinite(Number(item.scorePercent)))
+    .sort((a, b) => timestampMs(b.submittedAt || b.updatedAt) - timestampMs(a.submittedAt || a.updatedAt))[0];
+
+  setText("staffTotal", formatCount(activeStaffCount, "명"));
+  setText("staffPassedCount", formatCount(passedCount, "건"));
+  setText("staffReviewCount", formatCount(reviewCount, "건"));
+  setText("staffLatestScore", latest ? `${Math.round(toNumber(latest.scorePercent))}점` : "-");
+
+  if (!staffs.length) {
+    list.innerHTML = `<div class="empty-state">강사 데이터를 불러오면 인사기록카드가 표시됩니다.</div>`;
+    renderStaffDetail(null);
+    renderStaffSubmissionHistory();
+    renderStaffEvaluationChart();
+    return;
+  }
+
+  const currentStaffs = staffs.filter((staff) => staff.employmentState === "current");
+  const inactiveStaffs = staffs.filter((staff) => staff.employmentState !== "current");
+  const defaultStaff = currentStaffs[0] || staffs[0];
+  if (!selectedStaffKey || !staffs.some((staff) => staff.key === selectedStaffKey)) selectedStaffKey = defaultStaff.key;
+
+  const renderStaffRows = (groupRows) =>
+    groupRows
+      .map((staff) => {
+        const card = staff.card || staffHrCardFor(staff.staffId);
+        const latestQuiz = card?.latestQuiz || staff.latest || staffLatestSubmission(staff.staffId) || null;
+        const score = latestQuiz ? `${Math.round(toNumber(latestQuiz.scorePercent))}점` : "미응시";
+        const bestScore = Number(card?.quizSummary?.bestScorePercent);
+        const status = latestQuiz?.status || "pending";
+        const roleLabel = staff.applicantEvaluation || staff.role === "applicant" ? "지원자" : staff.role || "instructor";
+        const meta = [
+          staffEmploymentLabel(staff),
+          roleLabel,
+          staff.phoneLast4 ? `끝자리 ${staff.phoneLast4}` : "",
+          latestQuiz?.submittedAt ? `최근 ${formatDate(latestQuiz.submittedAt)}` : "퀴즈 기록 없음",
+        ]
+          .filter(Boolean)
+          .join(" · ");
+        const active = staff.key === selectedStaffKey ? " is-active" : "";
+        return `
+        <article class="status-row staff-card-row${active}">
+          <button class="staff-card-button" type="button" data-staff-detail-key="${escapeHtml(staff.key)}" aria-label="${escapeHtml(staff.name || "강사")} 세부 지표 보기">
+            <strong>${escapeHtml(staff.name || "이름 없음")}</strong>
+            <p class="meta-line">${escapeHtml(meta)}</p>
+            <p class="note-line">최근 평가: ${escapeHtml(score)} · 최고 ${Number.isFinite(bestScore) && bestScore > 0 ? Math.round(bestScore) : "-"}점</p>
+          </button>
+          <div class="staff-card-badges">
+            ${staffEmploymentPill(staff)}
+            ${pill(status)}
+          </div>
+        </article>
+      `;
+      })
+      .join("");
+
+  const renderStaffGroup = (title, description, groupRows, tone = "", open = false) => `
+    <details class="staff-card-group ${tone}" ${open ? "open" : ""}>
+      <summary class="staff-card-group-title">
+        <strong>${escapeHtml(title)}</strong>
+        <span>${escapeHtml(description)} · ${groupRows.length}명</span>
+      </summary>
+      <div class="staff-card-group-body">
+        ${groupRows.length ? renderStaffRows(groupRows) : `<div class="empty-state">해당 기록이 없습니다.</div>`}
+      </div>
+    </details>
+  `;
+
+  const inactiveContainsSelected = inactiveStaffs.some((staff) => staff.key === selectedStaffKey);
+  list.innerHTML = [
+    renderStaffGroup("현재 근무중", "staffs active 기준으로 현재 운영 중인 강사입니다.", currentStaffs, "is-current", true),
+    renderStaffGroup(
+      "비근무 · 지원자 · 운영자 기록",
+      "입사시험 제출자, 퇴사/비활성 강사, 운영자 계정, 기록만 남은 대상을 분리 보관합니다.",
+      inactiveStaffs,
+      "is-archived",
+      inactiveContainsSelected,
+    ),
+  ].join("");
+  renderStaffDetail(staffs.find((staff) => staff.key === selectedStaffKey) || staffs[0]);
+  renderStaffSubmissionHistory();
+  renderStaffEvaluationChart();
+}
+
+function staffEssayScoreInfo(item) {
+  const answer = (item.answers || []).find((entry) => entry?.questionId === "q19_imprint_description");
+  if (!answer) return null;
+  const points = toNumber(answer.points || 10);
+  const earnedPoints = Number.isFinite(Number(answer.earnedPoints)) ? toNumber(answer.earnedPoints) : 0;
+  const manual = answer.manualOverride || item.manualScoreOverrides?.q19_imprint_description || null;
+  const text = item.openResponses?.q19_imprint_description || answer.answerText || "";
+  const feedback = answer.rubricScore?.feedback || "";
+  return {
+    questionId: "q19_imprint_description",
+    points,
+    earnedPoints,
+    text,
+    feedback,
+    manual,
+  };
+}
+
+function renderStaffSubmissionHistory() {
+  const list = qs("staffEvaluationSubmissionList");
+  if (!list) return;
+  const items = [...(state.staffEvaluationSubmissions || [])]
+    .sort((a, b) => timestampMs(b.submittedAt || b.updatedAt) - timestampMs(a.submittedAt || a.updatedAt))
+    .slice(0, 20);
+  if (!items.length) {
+    list.innerHTML = `<div class="empty-state">최근 강사 평가 퀴즈 제출 이력이 없습니다.</div>`;
+    return;
+  }
+  list.innerHTML = items
+    .map((item) => {
+      const essay = staffEssayScoreInfo(item);
+      const detail = [
+        `${Math.round(toNumber(item.scorePercent))}점`,
+        item.scoredPointTotal ? `${toNumber(item.earnedPointTotal)}/${toNumber(item.scoredPointTotal)}점 채점` : "",
+        `${toNumber(item.correctCount)}/${toNumber(item.scoredQuestionCount)}문항`,
+        formatDate(item.submittedAt || item.updatedAt),
+        item.submittedByName ? `제출 ${item.submittedByName}` : "",
+      ]
+        .filter(Boolean)
+        .join(" · ");
+      return `
+        <div class="status-row">
+          <div>
+            <strong>${escapeHtml(item.staffName || "강사")}</strong>
+            <p class="meta-line">${escapeHtml(detail)}</p>
+            ${
+              item.incorrectQuestionIds?.length
+                ? `<p class="note-line">확인 문항: ${escapeHtml(item.incorrectQuestionIds.join(", "))}</p>`
+                : `<p class="meta-line">확인 필요한 오답 없음</p>`
+            }
+            ${
+              essay
+                ? `
+                  <form class="staff-score-adjust" data-staff-essay-score-form data-submission-id="${escapeHtml(item.submissionId || item.id || "")}" data-question-id="${escapeHtml(essay.questionId)}">
+                    <div class="staff-score-adjust-copy">
+                      <span>서술형 Q19</span>
+                      <strong>${escapeHtml(`${essay.earnedPoints}/${essay.points}점`)}</strong>
+                      ${essay.manual ? `<em>관리자 수정됨 · ${escapeHtml(essay.manual.adjustedByName || "")}</em>` : `<em>1차 자동채점</em>`}
+                    </div>
+                    ${essay.feedback ? `<p class="note-line">${escapeHtml(essay.feedback)}</p>` : ""}
+                    ${essay.text ? `<p class="essay-answer-preview">${escapeHtml(essay.text)}</p>` : `<p class="meta-line">서술형 답변 없음</p>`}
+                    <label>
+                      <span>수정 점수</span>
+                      <input type="number" name="earnedPoints" min="0" max="${escapeHtml(essay.points)}" step="0.5" value="${escapeHtml(essay.earnedPoints)}" />
+                    </label>
+                    <label>
+                      <span>수정 메모</span>
+                      <input type="text" name="note" maxlength="120" placeholder="예: 핵심 정의 보완 인정" />
+                    </label>
+                    <button class="secondary-action" type="submit">서술형 점수 저장</button>
+                    <p class="form-status" data-staff-essay-score-status></p>
+                  </form>
+                `
+                : ""
+            }
+          </div>
+          ${pill(item.status || "unknown")}
+        </div>
+      `;
+    })
+    .join("");
+}
+
+async function handleStaffEssayScoreAdjustSubmit(event, form) {
+  event.preventDefault();
+  const button = form.querySelector("button[type='submit']");
+  const status = form.querySelector("[data-staff-essay-score-status]");
+  const submissionId = form.dataset.submissionId || "";
+  const questionId = form.dataset.questionId || "q19_imprint_description";
+  const earnedPoints = Number(form.elements.earnedPoints?.value || "");
+  const note = String(form.elements.note?.value || "").trim();
+  if (!submissionId || !Number.isFinite(earnedPoints)) {
+    if (status) status.textContent = "제출 기록과 점수를 확인해 주세요.";
+    return;
+  }
+  if (button) {
+    button.disabled = true;
+    button.textContent = "저장 중";
+  }
+  if (status) status.textContent = "서술형 점수를 저장하고 인사기록카드를 갱신합니다.";
+  try {
+    const runtime = await initFirebase();
+    const adjustScore = runtime.httpsCallable(runtime.functionsClient, "adjustInstructorEvaluationEssayScore");
+    const result = await adjustScore({ submissionId, questionId, earnedPoints, note });
+    const data = result?.data || {};
+    if (status) {
+      status.textContent = `저장 완료 · 총점 ${Math.round(toNumber(data.scorePercent))}점 · ${statusLabel(data.status)}`;
+      status.className = "form-status good";
+    }
+    await refresh();
+  } catch (error) {
+    if (isPermissionDenied(error)) showLoginGate("서술형 점수 수정은 운영자 권한이 필요합니다.");
+    if (status) {
+      status.textContent = error?.message || "서술형 점수를 저장하지 못했습니다.";
+      status.className = "form-status danger";
+    }
+  } finally {
+    if (button) {
+      button.disabled = false;
+      button.textContent = "서술형 점수 저장";
+    }
+  }
+}
+
+function setEvaluationQuizStatus(message, tone = "") {
+  const element = qs("evaluationQuizStatus");
+  if (!element) return;
+  element.textContent = message;
+  element.className = `form-status ${tone}`.trim();
+}
+
+function cssNameSelector(value) {
+  const text = String(value || "");
+  if (window.CSS?.escape) return CSS.escape(text);
+  return text.replace(/["\\]/g, "\\$&");
+}
+
+async function loadInstructorEvaluationQuiz() {
+  const form = qs("instructorEvaluationQuizForm");
+  if (!form) return;
+  try {
+    const runtime = await initFirebase();
+    const user = await waitForAuth(runtime);
+    if (!user) {
+      showLoginGate("강사 평가 퀴즈는 로그인 후 작성할 수 있습니다.");
+      return;
+    }
+    const getQuiz = runtime.httpsCallable(runtime.functionsClient, "getInstructorEvaluationQuiz");
+    const result = await getQuiz({});
+    const data = result?.data || {};
+    state.instructorEvaluationQuiz = data.quiz || null;
+    state.instructorEvaluationTargets = data.targetStaffs || [];
+    renderInstructorEvaluationQuiz();
+  } catch (error) {
+    if (isPermissionDenied(error)) showLoginGate("강사 평가 퀴즈는 사용 가능한 강사 계정이 필요합니다.");
+    setEvaluationQuizStatus(error?.message || "퀴즈를 불러오지 못했습니다.", "danger");
+  }
+}
+
+function renderInstructorEvaluationQuiz() {
+  const quiz = state.instructorEvaluationQuiz;
+  const questionList = qs("evaluationQuizQuestions");
+  const targetSelect = qs("evaluationTargetStaff");
+  if (!quiz || !questionList) return;
+  setText("evaluationQuizTitle", quiz.title || "강사 평가 퀴즈");
+  setText("evaluationQuizDescription", quiz.description || "ARCHIVE PILATES 운영 기준을 확인합니다.");
+  if (targetSelect) {
+    targetSelect.innerHTML = (state.instructorEvaluationTargets || [])
+      .map((staff) => `<option value="${escapeHtml(staff.staffId)}">${escapeHtml(staff.name)} · ${escapeHtml(staff.role || "instructor")}</option>`)
+      .join("");
+  }
+  questionList.innerHTML = (quiz.questions || [])
+    .map((question, index) => {
+      const label = `${index + 1}. ${escapeHtml(question.title)}`;
+      if (question.type === "short_text") {
+        return `
+          <fieldset class="quiz-question">
+            <legend>${label}</legend>
+            ${question.description ? `<p>${escapeHtml(question.description)}</p>` : ""}
+            <textarea name="${escapeHtml(question.questionId)}" rows="4" placeholder="짧게 작성해 주세요."></textarea>
+          </fieldset>
+        `;
+      }
+      if (question.type === "fill_blank") {
+        return `
+          <fieldset class="quiz-question">
+            <legend>${label}</legend>
+            ${question.description ? `<p>${escapeHtml(question.description)}</p>` : ""}
+            <input type="text" name="${escapeHtml(question.questionId)}" placeholder="정답을 입력해 주세요." ${question.required ? "required" : ""} />
+          </fieldset>
+        `;
+      }
+      return `
+        <fieldset class="quiz-question">
+          <legend>${label}</legend>
+          ${question.description ? `<p>${escapeHtml(question.description)}</p>` : ""}
+          <div class="quiz-options">
+            ${(question.options || [])
+              .map(
+                (option) => `
+                  <label>
+                    <input type="radio" name="${escapeHtml(question.questionId)}" value="${escapeHtml(option.optionId)}" ${question.required ? "required" : ""} />
+                    <span>${escapeHtml(option.label)}</span>
+                  </label>
+                `,
+              )
+              .join("")}
+          </div>
+        </fieldset>
+      `;
+    })
+    .join("");
+  setEvaluationQuizStatus(`합격 기준 ${toNumber(quiz.passScore)}점입니다. 제출 결과는 강사별 인사기록카드에 저장됩니다.`);
+}
+
+async function handleInstructorEvaluationQuizSubmit(event) {
+  event.preventDefault();
+  const quiz = state.instructorEvaluationQuiz;
+  const button = qs("evaluationQuizSubmit");
+  if (!quiz) {
+    setEvaluationQuizStatus("퀴즈를 먼저 불러와 주세요.", "danger");
+    return;
+  }
+  const form = qs("instructorEvaluationQuizForm");
+  const answers = {};
+  for (const question of quiz.questions || []) {
+    if (question.type === "short_text" || question.type === "fill_blank") {
+      answers[question.questionId] = String(form?.elements?.[question.questionId]?.value || "").trim();
+    } else {
+      const checked = document.querySelector(`input[name="${cssNameSelector(question.questionId)}"]:checked`);
+      answers[question.questionId] = checked?.value || "";
+    }
+  }
+  if (button) {
+    button.disabled = true;
+    button.textContent = "제출 중";
+  }
+  setEvaluationQuizStatus("정답 채점과 인사기록카드 반영을 진행합니다.", "warn");
+  try {
+    const runtime = await initFirebase();
+    const submitQuiz = runtime.httpsCallable(runtime.functionsClient, "submitInstructorEvaluationQuiz");
+    const result = await submitQuiz({
+      staffId: qs("evaluationTargetStaff")?.value || "",
+      answers,
+    });
+    const data = result?.data || {};
+    const passed = Boolean(data.passed);
+    setEvaluationQuizStatus(
+      `${data.staffName || "강사"} 평가 퀴즈 저장 완료 · ${Math.round(toNumber(data.scorePercent))}점 · ${passed ? "합격" : "검토 필요"}`,
+      passed ? "good" : "warn",
+    );
+    await refresh();
+  } catch (error) {
+    if (isPermissionDenied(error)) showLoginGate("강사 평가 퀴즈 제출 권한을 확인해 주세요.");
+    setEvaluationQuizStatus(error?.message || "퀴즈 제출에 실패했습니다.", "danger");
+  } finally {
+    if (button) {
+      button.disabled = false;
+      button.textContent = "평가 퀴즈 제출";
+    }
+  }
+}
+
 function renderFallback(error, options = {}) {
   const reason = isPermissionDenied(error)
     ? options.requireLogin
@@ -2439,8 +3345,12 @@ function renderFallback(error, options = {}) {
   state.onsiteWelcomeRequests = [];
   state.memberSignupContracts = [];
   state.pricingInquiryAlimtalkRequests = [];
+  state.staffItems = [];
+  state.staffHrCards = [];
+  state.staffEvaluationSubmissions = [];
   renderPricingInquiryRecentList();
   renderMessages([], []);
+  renderStaffHr();
   renderLessons([], [], []);
   renderHomeSummary();
   renderHomeDecisions();
@@ -2473,6 +3383,8 @@ async function refresh() {
     const shouldLoadMemberDetail = Boolean(qs("memberDetailName"));
     const shouldLoadPrivate = Boolean(qs("privateProgressList")) || shouldLoadHome;
     const shouldLoadLessons = Boolean(qs("lessonsTodayList"));
+    const shouldLoadStaffDashboard = Boolean(qs("staffHrList"));
+    const shouldLoadBusinessSnapshot = shouldLoadBusiness || shouldLoadStaffDashboard;
     const [
       laneSnapshot,
       automationItems,
@@ -2495,12 +3407,15 @@ async function refresh() {
       reservations,
       deletedClassLogs,
       deletedLessons,
+      staffItems,
+      staffHrCards,
+      staffEvaluationSubmissions,
     ] = await Promise.all([
       safeRead("workLanes", () => getDoc(doc(db, "workLanes", WORK_LANE_ID)), null),
       safeRead("automationStatus", () => getRecentCollection(db, runtime, "automationStatus"), []),
       safeRead("sourceImports", () => getCollectionBy(db, runtime, "sourceImports", "updatedAt", 50), []),
       safeRead("dataQualityIssues", () => getCollectionBy(db, runtime, "dataQualityIssues", "updatedAt", 100), []),
-      shouldLoadBusiness
+      shouldLoadBusinessSnapshot
         ? safeRead("dashboardSnapshots/current", () => getDoc(doc(db, "dashboardSnapshots", "current")), null)
         : Promise.resolve(null),
       shouldLoadMembers || shouldLoadHome
@@ -2577,6 +3492,13 @@ async function refresh() {
       shouldLoadLessons
         ? safeRead("deletedLessons", () => getOptionalCollectionBy(db, runtime, "deletedLessons", "updatedAt", 100), [])
         : Promise.resolve([]),
+      shouldLoadStaffDashboard ? safeRead("staffs", () => getCollectionBy(db, runtime, "staffs", "updatedAt", 200), []) : Promise.resolve([]),
+      shouldLoadStaffDashboard
+        ? safeRead("staffHrCards", () => getOptionalCollectionBy(db, runtime, "staffHrCards", "updatedAt", 200), [])
+        : Promise.resolve([]),
+      shouldLoadStaffDashboard
+        ? safeRead("staffEvaluationSubmissions", () => getOptionalCollectionBy(db, runtime, "staffEvaluationSubmissions", "submittedAt", 100), [])
+        : Promise.resolve([]),
     ]);
 
     state.lane = laneSnapshot?.exists?.() ? laneSnapshot.data() : { status: "active" };
@@ -2599,12 +3521,17 @@ async function refresh() {
     state.reservations = reservations;
     state.deletedClassLogs = deletedClassLogs;
     state.deletedLessons = deletedLessons;
+    state.staffItems = studioItems(staffItems);
+    state.staffHrCards = studioItems(staffHrCards);
+    state.staffEvaluationSubmissions = studioItems(staffEvaluationSubmissions);
+    state.businessSnapshot = dashboardSnapshot?.exists?.() ? normalizeBusinessSnapshot(dashboardSnapshot.data()) : null;
     renderLane(state.lane);
     renderAutomation(automationItems);
     renderImports(state.sourceImports);
     renderQualityIssues(state.qualityIssues);
     renderMembers(state.members);
     renderMessages(alimtalkCandidates, alimtalkSends);
+    renderStaffHr();
     renderHomeSummary();
     renderHomeDecisions();
     renderPricingInquiryRecentList();
@@ -2612,10 +3539,11 @@ async function refresh() {
     renderPrivate(privateRequests, privateRecords, privateUsageEvents, privateLedgerEntries, alimtalkCandidates, alimtalkSends);
     renderLessons(lessonOccurrences, reservations, [...deletedClassLogs, ...deletedLessons]);
     if (shouldLoadBusiness) {
-      if (dashboardSnapshot?.exists()) renderBusiness(normalizeBusinessSnapshot(dashboardSnapshot.data()));
+      if (state.businessSnapshot) renderBusiness(state.businessSnapshot);
       else renderBusinessFallback(new Error("dashboardSnapshots/current 문서가 없습니다."));
       renderBusinessMemberInsights(businessMembers);
     }
+    if (qs("instructorEvaluationQuizForm")) await loadInstructorEvaluationQuiz();
     setConnection(
       state.readWarnings.length ? "부분 연결" : "연결됨",
       state.readWarnings.length
@@ -2634,7 +3562,19 @@ activateNav();
 qs("refreshButton")?.addEventListener("click", refresh);
 qs("pricingInquiryForm")?.addEventListener("submit", handlePricingInquiryAlimtalkSubmit);
 qs("pricingInquiryHistoryToggle")?.addEventListener("click", togglePricingInquiryHistory);
+qs("instructorEvaluationQuizForm")?.addEventListener("submit", handleInstructorEvaluationQuizSubmit);
 qs("businessMonthSelect")?.addEventListener("change", (event) => renderBusinessMonth(event.target.value));
+document.addEventListener("submit", (event) => {
+  const form = event.target.closest?.("[data-staff-essay-score-form]");
+  if (!form) return;
+  handleStaffEssayScoreAdjustSubmit(event, form);
+});
+document.addEventListener("click", (event) => {
+  const button = event.target.closest?.("[data-staff-detail-key]");
+  if (!button) return;
+  selectedStaffKey = button.getAttribute("data-staff-detail-key") || "";
+  renderStaffHr();
+});
 qs("memberSearchInput")?.addEventListener("input", (event) => {
   memberSearchTerm = event.target.value.trim();
   memberPage = 1;

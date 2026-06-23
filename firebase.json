@@ -131,6 +131,12 @@
           ]
         },
         {
+          "source": "/archivein/instructor-evaluation/**",
+          "headers": [
+            { "key": "Cache-Control", "value": "no-cache, no-store, must-revalidate" }
+          ]
+        },
+        {
           "source": "/dashboard/**",
           "headers": [
             {
@@ -244,6 +250,13 @@
           "source": "/archivein/api/notion/privateLessonReportWebhook",
           "function": {
             "functionId": "notionPrivateLessonReportWebhook",
+            "region": "asia-northeast3"
+          }
+        },
+        {
+          "source": "/archivein/api/instructorApplicantEvaluation",
+          "function": {
+            "functionId": "instructorApplicantEvaluationApi",
             "region": "asia-northeast3"
           }
         },
@@ -411,6 +424,12 @@
           "headers": [
             { "key": "Cache-Control", "value": "no-cache, no-store, must-revalidate" }
           ]
+        },
+        {
+          "source": "/instructor-evaluation/**",
+          "headers": [
+            { "key": "Cache-Control", "value": "no-cache, no-store, must-revalidate" }
+          ]
         }
       ],
       "ignore": [
@@ -461,6 +480,13 @@
           "source": "/api/notion/privateLessonReportWebhook",
           "function": {
             "functionId": "notionPrivateLessonReportWebhook",
+            "region": "asia-northeast3"
+          }
+        },
+        {
+          "source": "/api/instructorApplicantEvaluation",
+          "function": {
+            "functionId": "instructorApplicantEvaluationApi",
             "region": "asia-northeast3"
           }
         },

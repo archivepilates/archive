@@ -4,6 +4,11 @@
     <meta charset="utf-8" />
     <meta name="viewport" content="width=device-width, initial-scale=1" />
     <meta name="theme-color" content="#f8f5ef" />
+    <link rel="icon" type="image/png" sizes="32x32" href="/icons/favicon-32.png?v=1" />
+    <link rel="shortcut icon" type="image/png" href="/favicon.png?v=1" />
+    <link rel="icon" type="image/png" sizes="192x192" href="/icons/archive-pilates-icon-192.png?v=1" />
+    <link rel="apple-touch-icon" sizes="180x180" href="/icons/apple-touch-icon.png?v=1" />
+    <link rel="manifest" href="/site.webmanifest?v=1" />
     <title>Rules · ARCHIVE CORE</title>
     <link rel="stylesheet" href="../assets/styles.css" />
     <script src="../firebase-config.js"></script>
@@ -14,14 +19,14 @@
       <aside class="sidebar" aria-label="ARCHIVE CORE navigation">
         <div class="brand"><div class="brand-mark" aria-hidden="true">CORE</div><strong>ARCHIVE CORE</strong><span>ARCHIVE PILATES Operations Platform</span></div>
         <nav class="nav">
-          <a href="../" data-section="home">Home <small>요약</small></a><a href="../members/" data-section="members">Members <small>회원</small></a><a href="../lessons/" data-section="lessons">Lessons <small>수업</small></a><a href="../private/" data-section="private">Private <small>차트</small></a><a href="../messages/" data-section="messages">Messages <small>알림톡</small></a><a href="../automation/" data-section="automation">Automation <small>관제</small></a><a href="../business/" data-section="business">Business <small>지표</small></a><a href="../imports/" data-section="imports">Imports <small>원본</small></a><a href="./" data-section="rules">Rules <small>규칙</small></a><a href="../settings/" data-section="settings">Settings <small>설정</small></a>
+          <a href="../" data-section="home">Home <small>요약</small></a><a href="../members/" data-section="members">Members <small>회원</small></a><a href="../lessons/" data-section="lessons">Lessons <small>수업</small></a><a href="../private/" data-section="private">Private <small>차트</small></a><a href="../staff/" data-section="staff">Staff <small>강사</small></a><a href="../messages/" data-section="messages">Messages <small>알림톡</small></a><a href="../automation/" data-section="automation">Automation <small>관제</small></a><a href="../business/" data-section="business">Business <small>지표</small></a><a href="../imports/" data-section="imports">Imports <small>원본</small></a><a href="./" data-section="rules">Rules <small>규칙</small></a><a href="../settings/" data-section="settings">Settings <small>설정</small></a>
         </nav>
       </aside>
       <main class="main rules-page">
         <header class="page-hero">
           <p class="eyebrow">RULES</p>
           <h1>운영 규칙</h1>
-          <p class="subtitle">2026.06.18 기준 현재 유효한 운영 규칙만 정리한 ARCHIVE CORE 단일 운영 허브입니다.</p>
+          <p class="subtitle">2026.06.22 기준 현재 유효한 운영 규칙만 정리한 ARCHIVE CORE 단일 운영 허브입니다.</p>
         </header>
 
         <section class="panel rules-hero">
@@ -44,6 +49,7 @@
             <a href="#data-sync">데이터·동기화<span>StudioMate Excel, Contacts</span></a>
             <a href="#alimtalk">알림톡<span>후보, 승인, 중복 차단</span></a>
             <a href="#private">프라이빗<span>회차, 설문, 리포트</span></a>
+            <a href="#staff-evaluation">강사 평가<span>퀴즈, 인사기록카드</span></a>
             <a href="#welcome">현장 웰컴<span>가입서, PDF, StudioMate 반영</span></a>
             <a href="#settlement">정산·지표<span>월별 정산, 대시보드</span></a>
             <a href="#release">배포·검증<span>배포세트, 실패보고</span></a>
@@ -136,6 +142,26 @@
                 <li>수업예약내역 엑셀에는 신뢰 가능한 최대정원 원천이 없으므로 정원 기반 판단은 쓰지 않습니다.</li>
                 <li>삭제된 수업은 별도 야간 자동화가 아니라 1시간 Excel 동기화 안에서 함께 수집합니다.</li>
                 <li>폐강 집계는 그룹 수업 중 최소 수강인원 미달 또는 제한된 클래스 폐강 조건만 포함합니다.</li>
+              </ul>
+            </article>
+            <article class="rule-card">
+              <h3>월간 StudioMate 운영 세트</h3>
+              <ul>
+                <li>다음달 그룹수업 생성, 주제·기구 입력, 고정회원 예약은 하나의 월간 작업 세트로 실행합니다.</li>
+                <li>쓰기 전 프리플라이트에서 원본 시트 구조, StudioMate 로그인, 회원 검색, 일괄예약 화면 진입, 정확매칭 수업카드를 먼저 확인합니다.</li>
+                <li>일괄예약 화면을 못 열었을 때는 수강권 문제로 단정하지 않고 surface_failed로 분리해 재시도합니다.</li>
+                <li>예약 완료 판정은 StudioMate 성공 메시지가 아니라 수업상세 예약회원 목록에서 회원명·전화번호가 확인될 때만 확정합니다.</li>
+                <li>결과 시트에는 운영자가 확인해야 하는 실패·보류 건만 남기고, 성공 건은 요약 숫자로 관리합니다.</li>
+                <li>프리플라이트와 dry-run은 백그라운드 단일 큐에서 실행하고, 수업 생성·주제 입력·고정예약 apply는 운영자 승인 후 같은 큐에서 직렬 실행합니다.</li>
+              </ul>
+            </article>
+            <article class="rule-card">
+              <h3>자동화 관제</h3>
+              <ul>
+                <li>안정적인 정기 실행은 Mac mini LaunchAgent를 기본 주체로 둡니다.</li>
+                <li>Codex 앱 자동화는 테스트, 리뷰, 수동 fallback 용도이며 LaunchAgent와 같은 작업을 동시에 ACTIVE로 두지 않습니다.</li>
+                <li>ARCHIVE CORE 자동화 관제 탭은 Firestore automationStatus를 표시하므로, 새 자동화는 실행 주체와 상태를 automationStatus에 기록해야 합니다.</li>
+                <li>LaunchAgent와 Codex 자동화 정의는 sync:automation-observability로 점검해 CORE 관제에 반영합니다.</li>
               </ul>
             </article>
             <article class="rule-card">
@@ -284,7 +310,10 @@
                 <li>현재 기준은 첨부한 미디어를 같은 회차 리포트에 자동 포함하는 단순 운영입니다.</li>
                 <li>업로드는 16MB 청크 기준으로 Function이 Drive resumable upload 세션을 발급하고, 브라우저가 Drive로 직접 전송한 뒤 Function이 완료 기록만 남깁니다.</li>
                 <li>Drive 직접 업로드가 브라우저 또는 네트워크 정책에 막히면 첫 청크 전에만 기존 Function 중계 경로로 자동 fallback합니다.</li>
-                <li>배포 전후 검증은 scripts/validate-private-media-upload-live.mjs로 실제 이미지/영상 업로드와 리포트 삽입 여부를 확인합니다.</li>
+                <li>미디어 업로드만으로는 Gemini 리포트 문장을 다시 생성하지 않습니다. 기존 오늘의 핵심과 다음 수업 방향은 유지하고 미디어 섹션만 다시 렌더링합니다.</li>
+                <li>배포 전후 기본 검증은 scripts/validate-private-media-upload-live.mjs로 실제 이미지/영상 업로드, Drive 직접 업로드, 리포트 미디어 삽입만 확인하며 Gemini를 호출하지 않습니다.</li>
+                <li>Gemini 리포트 생성 검증은 --with-gemini-report 옵션을 붙인 별도 실행에서만 진행합니다.</li>
+                <li>Gemini 쿼터가 막히면 리포트 전체를 실패시키지 않고 template_fallback 문장으로 검수 가능한 임시 리포트를 생성한 뒤 gptError에 원인을 남깁니다.</li>
               </ul>
             </article>
             <article class="rule-card">
@@ -299,6 +328,69 @@
             </article>
           </div>
           <div class="rule-note"><strong>현재 확인 위치</strong><span>CORE Private / Firestore bookings, privateLessonChartRequests, privateLessonChartRecords, privateSessionLedger</span></div>
+        </section>
+
+        <section class="panel rule-section" id="staff-evaluation">
+          <div class="panel-header"><div><h2>4-1. 강사 평가·인사기록카드</h2><p>기존 Google Form 기반 강사 평가 퀴즈를 Firebase 기반 제출/채점/기록 구조로 전환합니다.</p></div><span class="pill good">staff</span></div>
+          <div class="rule-grid">
+            <article class="rule-card">
+              <h3>운영 흐름</h3>
+              <ol>
+                <li>강사 또는 운영자가 CORE Staff 평가 퀴즈 화면에 로그인합니다.</li>
+                <li>문항은 Firebase Function에서 받아오고, 정답은 브라우저에 노출하지 않습니다.</li>
+                <li>제출하면 Function이 객관식·단답형·서술형을 채점하고 staffEvaluationSubmissions에 원본 제출 기록을 저장합니다.</li>
+                <li>강사별 staffHrCards/{staffId}와 하위 quizResults에 최신 결과와 누적 요약을 반영합니다.</li>
+                <li>입사지원자는 별도 공개 시험 사이트에서 이름과 연락처 입력 후 20분 제한시간으로 응시합니다.</li>
+                <li>운영자는 CORE Staff 탭에서 강사별 최신 점수, 통과 여부, 서술형 답변과 점수를 확인하고 필요 시 수정합니다.</li>
+                <li>강사 이름을 선택하면 해당 강사의 퀴즈 답변과 월별 그룹 예약률, 출석률, 평균인원, 수업매출을 세부 카드로 확인합니다.</li>
+                <li>강사 인사기록카드 상단에는 종합 점수와 산출 기준을 먼저 표시합니다.</li>
+                <li>강사 리스트는 현재 근무중 강사와 입사시험 지원자/퇴사/비활성 기록을 분리해서 표시합니다. 비근무·지원자·운영자 기록은 기본 접힘 상태로 둡니다.</li>
+              </ol>
+            </article>
+            <article class="rule-card">
+              <h3>권한과 원천</h3>
+              <ul>
+                <li>퀴즈 제출은 Firestore 직접 쓰기가 아니라 submitInstructorEvaluationQuiz callable로만 처리합니다.</li>
+                <li>일반 강사는 본인 staffId 기준 제출만 가능합니다.</li>
+                <li>운영자와 매니저는 대상 강사를 선택해 제출/검토할 수 있고, Q19 서술형 점수를 조정할 수 있습니다.</li>
+                <li>지원자 입사시험은 instructorApplicantEvaluationApi HTTP Function으로만 시작/제출하며 Firestore 직접 쓰기는 허용하지 않습니다.</li>
+                <li>staffEvaluationSubmissions는 제출 원본, staffHrCards는 인사기록카드 read-model입니다.</li>
+                <li>지원자 원본은 staffApplicantEvaluationSessions와 staffApplicantEvaluationSubmissions에 별도로 보관합니다.</li>
+                <li>현재 근무중 여부는 staffs.active와 staffRole 기준으로 판단합니다. active인 instructor/owner는 현재 근무중, manager/viewer는 운영자 계정, staffHrCards나 제출 기록만 있는 대상은 비근무/지원자 기록으로 보관합니다.</li>
+                <li>인사기록카드는 외부 발송, 정산, 예약, 회원 응대 자동화의 원천으로 사용하지 않습니다.</li>
+              </ul>
+            </article>
+            <article class="rule-card">
+              <h3>문항 관리</h3>
+              <ul>
+                <li>현재 문항은 공개 Google Form <strong>ARCHIVE 강사평가 퀴즈 A</strong>에서 확인한 22문항과 선택지 기준입니다.</li>
+                <li>객관식 18문항은 각 4점, 단답형 3문항은 각 6점, Q19 서술형은 10점으로 채점합니다.</li>
+                <li>Q19 서술형은 imprint 정의, 골반 후방경사, 요추/매트 정렬, 코어 안정, 사용 상황, 주의점을 기준으로 1차 자동 루브릭 채점합니다.</li>
+                <li>운영자가 Q19 점수를 수정하면 staffEvaluationSubmissions, staffApplicantEvaluationSubmissions, staffHrCards/{staffId}/quizResults, staffHrCards 최신 요약을 함께 갱신합니다.</li>
+                <li>기존 Google Form 응답은 새 Google Sheet <strong>ARCHIVE 강사평가 퀴즈 A Firebase 기록</strong>으로 이관해 보관합니다.</li>
+                <li>Firebase 제출은 새 Google Sheet의 원본 응답 탭과 참가자별 최종 결과 탭에도 보조 기록합니다. 실패해도 시험 제출은 유지하고 제출 문서에 googleSheetSync=failed로 남깁니다.</li>
+                <li>월별 그룹 예약률, 출석률, 평균인원, 수업매출은 dashboardSnapshots/current의 강사통계·강사별 데이터를 읽기 전용으로 표시합니다.</li>
+                <li>월 수업 개수, 회원만족도, 클레임 현황은 원천 컬렉션이 확정되기 전까지 연결 대기로 표시하고 인사 판단의 자동 원천으로 쓰지 않습니다.</li>
+                <li>종합 점수 v1은 평가 퀴즈 35%, 그룹 예약률 30%, 그룹 평균인원 25%, 그룹 출석률 10% 기준입니다. 아직 연결되지 않은 항목은 제외하고 연결된 항목의 가중치만 100점 기준으로 환산합니다.</li>
+                <li>그룹 평균인원은 4.5명을 100점 기준 목표치로 환산합니다. 월 수업수, 회원만족도, 클레임 현황은 원천이 확정되면 v2 산식에 반영합니다.</li>
+                <li>과거 Google Form 응답은 공식 점수를 보존해 staffHrCards로 이관하고, 새 Firebase 제출은 최신 정답키로 채점합니다.</li>
+                <li>기존 응답 시트에는 Q9 선택지 버전 차이와 Q20 정답키 입력 오류 흔적이 있어 과거 응답을 최신 키로 재채점하지 않습니다.</li>
+                <li>문항 변경 시 기존 제출 결과는 삭제하지 않고 quizVersion으로 구분합니다.</li>
+                <li>자동 채점 합격 기준은 80점 환산이며, 미달 시 CORE Staff 탭에서 검토 필요로 표시합니다.</li>
+              </ul>
+            </article>
+            <article class="rule-card">
+              <h3>차트와 이관</h3>
+              <ul>
+                <li>CORE Staff 탭은 staffEvaluationSubmissions와 staffHrCards의 최신 요약을 함께 읽어 강사별 점수 차트를 표시합니다.</li>
+                <li>공유된 응답 시트의 과거 결과는 import-staff-evaluation-google-results 스크립트로 dry-run 확인 후 이관합니다.</li>
+                <li>이관된 결과는 source=google_form_legacy_import로 표시해 새 Firebase 제출과 구분합니다.</li>
+                <li>지원자 제출 결과는 staffRole=applicant로 표시하고, 연락처는 채용 검토용으로만 사용합니다.</li>
+                <li>인사기록카드 차트는 최신 점수, 최고 점수, 제출 횟수, 검토 상태만 운영자가 빠르게 볼 수 있게 표시합니다.</li>
+              </ul>
+            </article>
+          </div>
+          <div class="rule-note"><strong>현재 확인 위치</strong><span>CORE Staff / 공개 시험 https://in.archivepilates.com/instructor-evaluation/ / Firestore staffs, staffEvaluationSubmissions, staffApplicantEvaluationSubmissions, staffHrCards, auditLogs</span></div>
         </section>
 
         <section class="panel rule-section" id="welcome">
@@ -378,11 +470,9 @@
                 <li>UI/static-only 변경은 Hosting만, Functions 변경은 해당 codebase만 우선 배포합니다. CORE는 scripts/deploy-archive-core-live.sh 또는 npm run deploy:archive-core-live를 사용합니다.</li>
                 <li>배포 전 변경 범위, 테스트, 롤백 기준을 확인합니다.</li>
                 <li>CORE Hosting은 최신 CORE 작업 기준에서만 배포합니다. 배포 전 validate:archive-core-hosting이 수강료 문의 카드, 최근 발송/메모 패널, KPI 카드 높이 CSS를 확인하고, 빠진 항목이 있으면 배포를 중단합니다.</li>
-                <li>라이브 배포는 HEAD가 origin/main과 정확히 같은 커밋일 때만 진행합니다. 기능 브랜치가 앞서 있거나 오래된 브랜치면 deploy script가 중단합니다.</li>
-                <li>ARCHIVE IN과 ARCHIVE CORE Hosting 배포 직전 release.json을 생성해 배포 SHA, 생성 시각, hosting surface, 핵심 마커를 라이브에 남깁니다.</li>
-                <li>배포 후 validate-live-release-canary가 실제 URL의 release.json SHA, private-chart 업로드 UI, CORE 홈 액션 UI, service worker 캐시 정리 마커를 확인합니다.</li>
-                <li>기능 브랜치만 라이브에 배포되고 main으로 승격되지 않은 상태는 rollback/다른 스레드 덮어쓰기 위험으로 봅니다. 승격이 막히면 배포하지 않고 차단 원인을 보고합니다.</li>
-                <li>GitHub Actions Firebase Hosting Release는 main에서만 수동 실행합니다. 안정화 후 main push 자동 배포로 전환할 수 있습니다.</li>
+                <li>라이브 배포 커밋은 origin/main으로 fast-forward 승격합니다. 배포 완료 보고 전 npm run release:promote-main:dry로 승격 가능성을 확인하고, 검증이 끝나면 npm run release:promote-main을 실행합니다.</li>
+                <li>기능 브랜치만 라이브에 배포되고 main으로 승격되지 않은 상태는 rollback/다른 스레드 덮어쓰기 위험으로 봅니다. 승격이 막히면 차단 원인을 보고하고 별도 정리합니다.</li>
+                <li>배포 후 실제 URL, callable/API 응답, 브라우저 오류를 확인합니다.</li>
               </ul>
             </article>
             <article class="rule-card">
