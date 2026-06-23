@@ -108,15 +108,21 @@ if (!downloadFailedWithoutMember) {
 
 const failed = steps.filter((step) => step.exitCode && step.exitCode !== 0 && !step.optional);
 const warnings = steps.filter((step) => step.stdoutOk === false || step.requiredFailed || (step.optional && step.exitCode));
+const maintenanceOnly = failed.length > 0 && failed.every(isStudioMateMaintenanceStep);
 const sourceImportIds = steps
   .map((step) => (step.stdout && typeof step.stdout === "object" ? step.stdout.sourceImportId : ""))
   .filter(Boolean);
 const summary = {
-  ok: failed.length === 0,
+  ok: failed.length === 0 || maintenanceOnly,
   mode: apply ? "apply" : "dry-run",
   download,
   source: "studiomate_excel_emergency_mode",
-  skippedImports: downloadFailedWithoutMember ? "download failed or produced no member Excel file" : "",
+  skippedImports: maintenanceOnly
+    ? "StudioMate maintenance window; next scheduled run will retry"
+    : downloadFailedWithoutMember
+      ? "download failed or produced no member Excel file"
+      : "",
+  maintenanceOnly,
   sourceImportIds,
   steps,
   finishedAt: new Date().toISOString(),
@@ -129,8 +135,10 @@ await recordAutomationStatus(db, {
   automationId: "studiomate-excel-sync",
   title: "StudioMate Excel sync",
   ownerArea: "studiomate",
-  status: failed.length ? "failed" : warnings.length ? "warning" : "healthy",
-  lastResult: failed.length
+  status: maintenanceOnly ? "maintenance" : failed.length ? "failed" : warnings.length ? "warning" : "healthy",
+  lastResult: maintenanceOnly
+    ? maintenanceResultText(failed)
+    : failed.length
     ? `${failed.length}개 단계 실패: ${failed.map((step) => step.name).join(", ")}`
     : warnings.length
       ? `${warnings.length}개 단계 확인 필요: ${warnings.map((step) => step.name).join(", ")}`
@@ -138,13 +146,14 @@ await recordAutomationStatus(db, {
   sourceImportIds,
   runId: path.basename(reportPath, ".json"),
   warnings: [
-    downloadFailedWithoutMember ? "download failed or produced no member Excel file" : "",
+    maintenanceOnly ? maintenanceResultText(failed) : "",
+    !maintenanceOnly && downloadFailedWithoutMember ? "download failed or produced no member Excel file" : "",
     ...warnings.map((step) => `${step.name}: ok=false`),
     ...steps.filter((step) => step.stderr).map((step) => `${step.name}: ${step.stderr.slice(0, 180)}`),
   ].filter(Boolean),
 });
 console.log(JSON.stringify({ ...summary, reportPath }, null, 2));
-if (failed.length) {
+if (failed.length && !maintenanceOnly) {
   if (apply) {
     try {
       await sendFailureEmail({ summary, failed, reportPath });
@@ -153,6 +162,27 @@ if (failed.length) {
     }
   }
   process.exitCode = 1;
+}
+
+function isStudioMateMaintenanceStep(step) {
+  const stdout = step.stdout && typeof step.stdout === "object" ? step.stdout : {};
+  const errorText = [
+    stdout.error,
+    stdout.errorCode,
+    stdout.maintenance?.message,
+    stdout.maintenance?.startTime,
+    stdout.maintenance?.endTime,
+    step.stderr,
+  ]
+    .filter(Boolean)
+    .join(" ");
+  return /STUDIOMATE_MAINTENANCE|서비스\s*점검중|service\s*maintenance/i.test(errorText);
+}
+
+function maintenanceResultText(steps) {
+  const maintenance = steps.map((step) => step.stdout?.maintenance).find(Boolean);
+  const windowText = maintenance ? [maintenance.startTime, maintenance.endTime].filter(Boolean).join(" ~ ") : "";
+  return `StudioMate 점검중으로 회원동기화 보류${windowText ? ` (${windowText})` : ""}`;
 }
 
 function runStep(name, command) {

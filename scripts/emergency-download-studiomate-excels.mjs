@@ -49,6 +49,7 @@ await mkdir(path.dirname(config.runLogPath), { recursive: true });
 let releaseBrowserLock = null;
 let context = null;
 let capturedAuthorization = "";
+const studiomateMaintenanceSignals = [];
 
 try {
   releaseBrowserLock = await acquireStudioMateBrowserLock({ owner: "studiomate-excel-emergency-mode" });
@@ -61,6 +62,9 @@ try {
   page.on("request", (request) => {
     if (!request.url().includes("api.studiomate.kr")) return;
     capturedAuthorization = request.headers().authorization || capturedAuthorization;
+  });
+  page.on("response", (response) => {
+    void recordStudioMateMaintenanceSignal(response);
   });
   if (kind === "all" || kind === "member") {
     result.downloads.member = await downloadMemberExcel(page);
@@ -75,6 +79,8 @@ try {
 } catch (error) {
   result.ok = false;
   result.error = error instanceof Error ? error.message : String(error);
+  result.errorCode = error?.code || "";
+  result.maintenance = error?.maintenance || latestStudioMateMaintenanceSignal() || null;
   process.exitCode = 1;
 } finally {
   result.finishedAt = new Date().toISOString();
@@ -89,12 +95,16 @@ async function downloadMemberExcel(page) {
   await page.goto(new URL("/users", config.baseUrl).toString(), { waitUntil: "networkidle", timeout: 60000 });
   await closeNoticeDialog(page);
   await assertLoggedIn(page);
+  await refreshCapturedAuthorizationFromPage(page);
+  await throwIfStudioMateMaintenance("member page load");
   if (result.dryRun) return inspectOnly(page, "member", /회원/);
 
   const button = locatorByText(page, /엑셀\s*다운로드|엑셀다운로드|엑셀\s*다운/i);
   if (!(await button.isVisible().catch(() => false))) throw new Error("Member Excel download button not found.");
   await button.click();
   await page.waitForTimeout(800);
+  await refreshCapturedAuthorizationFromPage(page);
+  await throwIfStudioMateMaintenance("member excel dialog");
   await tryEnsureCheckbox(page, "잔여 포인트");
   await tryEnsureCheckbox(page, "만료된 수강권 포함");
   const download = await clickDownloadConfirmation(page);
@@ -237,6 +247,89 @@ async function clickExactTextByScript(page, text) {
 
 function locatorByText(page, pattern) {
   return page.locator("button, a, [role=button], .el-tabs__item, .menu-item, li").filter({ hasText: pattern }).first();
+}
+
+async function recordStudioMateMaintenanceSignal(response) {
+  if (response.status() !== 503 || !response.url().includes("api.studiomate.kr")) return;
+  const text = await response.text().catch(() => "");
+  let parsed = {};
+  try {
+    parsed = JSON.parse(text);
+  } catch {
+    parsed = {};
+  }
+  const message = parsed.message || text;
+  if (!/서비스\s*점검중|service\s*maintenance/i.test(message)) return;
+  studiomateMaintenanceSignals.push({
+    message: parsed.message || "StudioMate service maintenance",
+    startTime: parsed["start-time"] || "",
+    endTime: parsed["end-time"] || "",
+    status: response.status(),
+    url: response.url(),
+  });
+}
+
+async function throwIfStudioMateMaintenance(contextLabel) {
+  await new Promise((resolve) => setTimeout(resolve, 300));
+  const signal = latestStudioMateMaintenanceSignal() || (await probeStudioMateMaintenance());
+  if (!signal) return;
+  const windowText = [signal.startTime, signal.endTime].filter(Boolean).join(" ~ ");
+  const error = new Error(
+    `StudioMate service maintenance detected during ${contextLabel}${windowText ? ` (${windowText})` : ""}: ${signal.message}`,
+  );
+  error.code = "STUDIOMATE_MAINTENANCE";
+  error.maintenance = signal;
+  throw error;
+}
+
+function latestStudioMateMaintenanceSignal() {
+  return studiomateMaintenanceSignals.at(-1) || null;
+}
+
+async function refreshCapturedAuthorizationFromPage(page) {
+  if (capturedAuthorization) return;
+  const token = await page
+    .evaluate(() => {
+      const raw = localStorage.getItem("accessToken") || "";
+      try {
+        return JSON.parse(raw);
+      } catch {
+        return raw;
+      }
+    })
+    .catch(() => "");
+  if (token) capturedAuthorization = `Bearer ${String(token).replace(/^Bearer\s+/i, "")}`;
+}
+
+async function probeStudioMateMaintenance() {
+  if (!capturedAuthorization) return null;
+  const response = await fetch("https://api.studiomate.kr/v2/staff/members?page=1&limit=1&sort_name=asc", {
+    headers: {
+      authorization: capturedAuthorization,
+      accept: "application/json",
+      origin: config.baseUrl,
+      referer: new URL("/users", config.baseUrl).toString(),
+    },
+  }).catch(() => null);
+  if (!response || response.status !== 503) return null;
+  const text = await response.text().catch(() => "");
+  let parsed = {};
+  try {
+    parsed = JSON.parse(text);
+  } catch {
+    parsed = {};
+  }
+  const message = parsed.message || text;
+  if (!/서비스\s*점검중|service\s*maintenance/i.test(message)) return null;
+  const signal = {
+    message: parsed.message || "StudioMate service maintenance",
+    startTime: parsed["start-time"] || "",
+    endTime: parsed["end-time"] || "",
+    status: response.status,
+    url: response.url,
+  };
+  studiomateMaintenanceSignals.push(signal);
+  return signal;
 }
 
 async function hasExcelButton(page) {
