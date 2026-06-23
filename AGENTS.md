@@ -14,6 +14,10 @@
 - Prefer read-only checks before live automation or deploy actions.
 - Do not run `git push`, deploy commands, StudioMate writes, Google Contacts writes, Secret Manager writes, or SOLAPI sends without explicit approval.
 - Treat go-live language such as `배포`, `배포해줘`, `반영`, `publish`, or `release` as explicit approval for the full scoped sequence: validation, commit if needed, deploy, live verification, and GitHub push. Do not split deploy and push unless the user explicitly says deploy-only/local-only or a blocker applies.
+- For production-facing ARCHIVE PILATES code changes, a task is not complete merely because the local fix works. Once the user has asked for the change to go live, carry it through the complete set in the same work session: scoped validation, scoped commit, push/main promotion when appropriate, scoped deploy, live verification, GitHub Actions check, and final clean status.
+- Do not leave completed production fixes only in a local branch, unpushed worktree, or deployed-but-not-main state. If a blocker prevents commit, deploy, push, or main promotion, report that blocker explicitly before calling the task complete.
+- When several requests arrive in a row, preserve this finish discipline per finished change. Batch compatible changes when safe, but before switching to an unrelated task, either complete the deploy/push set for the current production change or clearly report that it remains local/unreleased.
+- Continue to stop before deploy/push when the user explicitly says `로컬만`, `검토만`, `배포하지마`, `push 하지마`, or when production target, auth, secrets, member privacy, payment/reservation policy, or unrelated dirty changes make the safe scope unclear.
 - Put task notes under `docs/tasks/`, durable decisions under `docs/decisions/`, and generated outputs under `artifacts/`.
 
 ## ARCHIVE IN Work Coordination
