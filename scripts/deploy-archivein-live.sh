@@ -22,6 +22,10 @@ firebase deploy \
   --only firestore:rules,hosting:archive-pilates,hosting:archive-pilates-in
 
 echo "== ARCHIVE IN live deploy: operator access verification =="
+if [ ! -d "$ROOT_DIR/node_modules/playwright" ]; then
+  echo "== ARCHIVE IN live deploy: installing root verification dependencies =="
+  npm ci
+fi
 npm run verify:archivein-admin
 node scripts/validate-live-release-canary.mjs --surface archivein
 
