@@ -1,11 +1,11 @@
 {
-  "name": "아카이브IN",
-  "short_name": "아카이브IN",
+  "name": "ARCHIVE IN 운영자 앱 종료 안내",
+  "short_name": "ARCHIVE IN",
   "start_url": "./",
   "scope": "./",
   "display": "standalone",
-  "background_color": "#ffffff",
-  "theme_color": "#ffffff",
+  "background_color": "#f8f5ef",
+  "theme_color": "#f8f5ef",
   "orientation": "portrait",
   "icons": [
     {

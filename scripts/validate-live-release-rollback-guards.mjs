@@ -8,6 +8,36 @@ const repoRoot = path.resolve(__dirname, "..");
 
 const guardGroups = [
   {
+    id: "archive-in-retired-operator-root",
+    reason: "ARCHIVE IN 운영자 루트가 예전 앱 화면으로 되돌아가고 private-chart 최신 화면을 덮는 것을 막습니다.",
+    files: [
+      {
+        file: "archivein/index.html",
+        markers: [
+          "ARCHIVE IN 운영자 앱 종료 안내",
+          "ARCHIVE CORE",
+          "private-chart",
+          "onsiteWelcome",
+        ],
+      },
+      {
+        file: "archivein/manifest.webmanifest",
+        markers: [
+          "ARCHIVE IN 운영자 앱 종료 안내",
+          "\"short_name\": \"ARCHIVE IN\"",
+        ],
+      },
+      {
+        file: "archivein/sw.js",
+        markers: [
+          "LEGACY_CACHE_PREFIX",
+          "archive-in-",
+          "caches.delete",
+        ],
+      },
+    ],
+  },
+  {
     id: "archive-core-home-actions",
     reason: "ARCHIVE CORE 홈 액션 보드와 수강료 문의 즉시발송 UI가 예전 번들로 되돌아가는 것을 막습니다.",
     files: [
