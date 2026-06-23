@@ -19,8 +19,10 @@ gcloud config set project "$PROJECT_ID" >/dev/null
 export GOOGLE_APPLICATION_CREDENTIALS="$KEY_FILE"
 export GOOGLE_CLOUD_PROJECT="$PROJECT_ID"
 export GCLOUD_PROJECT="$PROJECT_ID"
-export FIREBASE_TOKEN
-FIREBASE_TOKEN="$(gcloud auth print-access-token)"
+# Firebase CLI now supports Application Default Credentials directly.
+# Keeping FIREBASE_TOKEN in the environment makes firebase-tools print a
+# deprecation warning and can make auth behavior harder to reason about.
+unset FIREBASE_TOKEN
 
 echo "ArchiveIN Firebase service account ready for project $PROJECT_ID."
-echo "Use: firebase --token \"\$FIREBASE_TOKEN\" --project $PROJECT_ID <command>"
+echo "Use: firebase --project $PROJECT_ID <command>"
