@@ -72,7 +72,10 @@ export async function privateLessonChartApiHandler(request: any, response: any):
       const body = request.body || {};
       const chartRequest = await readChartRequest(String(body.requestId || ""), String(body.token || ""));
       if (String(body.action || "") === "convertReport") {
-        const result = await convertPrivateLessonReportFromChart(chartRequest);
+        const reportInput: { summary?: unknown; nextDirection?: unknown } = {};
+        if (Object.prototype.hasOwnProperty.call(body, "summary")) reportInput.summary = body.summary;
+        if (Object.prototype.hasOwnProperty.call(body, "nextDirection")) reportInput.nextDirection = body.nextDirection;
+        const result = await convertPrivateLessonReportFromChart(chartRequest, reportInput);
         response.status(200).json({ ok: true, ...result });
         return;
       }
@@ -690,6 +693,7 @@ async function approvePrivateLessonReportFromChart(
 
 async function convertPrivateLessonReportFromChart(
   chartRequest: PrivateLessonChartRequestDoc,
+  input: { summary?: unknown; nextDirection?: unknown } = {},
 ): Promise<{
   recordId: string;
   reportStatus: string;
@@ -706,7 +710,18 @@ async function convertPrivateLessonReportFromChart(
     throw new Error("회원 리포트 알림톡 발송 완료 후에는 리포트를 다시 생성할 수 없습니다.");
   }
 
-  const generated = await generatePrivateLessonReportDraft(record, chartRequest, { force: true });
+  let sourceRecord = record;
+  if (hasEditableReportInput(input)) {
+    const summary = cleanEditableReportText(input.summary, 900);
+    const nextDirection = cleanEditableReportText(input.nextDirection, 1200);
+    if (!summary) throw new Error("오늘의 핵심 문장을 입력해 주세요.");
+    if (!nextDirection) throw new Error("다음 수업 방향 문장을 입력해 주세요.");
+    sourceRecord = await saveManualPrivateLessonReportEdit(sourceRecord, chartRequest, summary, nextDirection);
+  }
+
+  const generated = hasManualPrivateLessonReportText(sourceRecord)
+    ? await regenerateManualPrivateLessonReport(sourceRecord, chartRequest)
+    : await generatePrivateLessonReportDraft(sourceRecord, chartRequest, { force: true });
   const notionSync = await syncPrivateLessonChartRecordToNotion(generated.record, chartRequest);
   await refs.privateLessonChartRecord(record.recordId).set({ notionSync, updatedAt: nowTimestamp() }, { merge: true });
   return {
@@ -746,6 +761,26 @@ async function editPrivateLessonReportFromChart(
   if (!summary) throw new Error("오늘의 핵심 문장을 입력해 주세요.");
   if (!nextDirection) throw new Error("다음 수업 방향 문장을 입력해 주세요.");
 
+  const nextRecord = await saveManualPrivateLessonReportEdit(record, chartRequest, summary, nextDirection);
+  const notionSync = await syncPrivateLessonChartRecordToNotion(nextRecord, chartRequest);
+  await refs.privateLessonChartRecord(record.recordId).set({ notionSync, updatedAt: nowTimestamp() }, { merge: true });
+
+  return {
+    recordId: record.recordId,
+    reportStatus: "ready",
+    reportUrl: record.publicReportUrl || record.publicReportCanonicalUrl || "",
+    summary,
+    nextDirection,
+    message: "회원 리포트 문장을 저장했습니다. 발송 전까지 다시 수정할 수 있습니다.",
+  };
+}
+
+async function saveManualPrivateLessonReportEdit(
+  record: PrivateLessonChartRecordDoc,
+  chartRequest: PrivateLessonChartRequestDoc,
+  summary: string,
+  nextDirection: string,
+): Promise<PrivateLessonChartRecordDoc> {
   await skipPendingPrivateLessonReportCandidate(
     record,
     "리포트 발송 전 회원용 리포트 문장이 수정되어 기존 발송 후보를 보류했습니다.",
@@ -785,17 +820,7 @@ async function editPrivateLessonReportFromChart(
     },
     { merge: true },
   );
-  const notionSync = await syncPrivateLessonChartRecordToNotion(nextRecord, chartRequest);
-  await refs.privateLessonChartRecord(record.recordId).set({ notionSync, updatedAt: nowTimestamp() }, { merge: true });
-
-  return {
-    recordId: record.recordId,
-    reportStatus: "ready",
-    reportUrl: record.publicReportUrl || record.publicReportCanonicalUrl || "",
-    summary,
-    nextDirection,
-    message: "회원 리포트 문장을 저장했습니다. 발송 전까지 다시 수정할 수 있습니다.",
-  };
+  return nextRecord;
 }
 
 async function enqueuePrivateLessonReportForRecord(
@@ -1471,6 +1496,66 @@ async function generatePrivateLessonReportDraft(
     );
     throw err;
   }
+}
+
+async function regenerateManualPrivateLessonReport(
+  record: PrivateLessonChartRecordDoc,
+  chartRequest: PrivateLessonChartRequestDoc,
+): Promise<{ taskId: string; generated: boolean; ready: boolean; record: PrivateLessonChartRecordDoc }> {
+  const sourceHash = gptSourceHash(record, chartRequest);
+  const taskId = `manual_${record.recordId}_${sourceHash.slice(0, 12)}`;
+  const summary = cleanEditableReportText(record.gptDraftSummary || record.publicSummary, 900);
+  const nextDirection = cleanEditableReportText(record.gptDraftNextDirection || record.publicNextDirection, 1200);
+  if (!summary || !nextDirection) {
+    return generatePrivateLessonReportDraft(record, chartRequest, { force: true });
+  }
+  const nextRecord = {
+    ...record,
+    gptTaskId: taskId,
+    gptStatus: "draft_created",
+    gptDraftSummary: summary,
+    gptDraftNextDirection: nextDirection,
+    publicSummary: summary,
+    publicNextDirection: nextDirection,
+    publicReportApproval: { status: "pending" as const, lastError: null },
+    updatedAt: nowTimestamp(),
+  } as PrivateLessonChartRecordDoc;
+  const reportResolution = await resolveReportShortUrl(nextRecord);
+  const readyRecord = {
+    ...nextRecord,
+    publicReportUrl: reportResolution.publicReportUrl || nextRecord.publicReportUrl,
+    publicReportCanonicalUrl: reportResolution.publicReportCanonicalUrl || nextRecord.publicReportCanonicalUrl,
+  } as PrivateLessonChartRecordDoc;
+  await refs.privateLessonChartRecord(record.recordId).set(
+    {
+      gptTaskId: taskId,
+      gptStatus: "draft_created",
+      gptSourceHash: sourceHash,
+      gptDraftSummary: summary,
+      gptDraftNextDirection: nextDirection,
+      publicSummary: summary,
+      publicNextDirection: nextDirection,
+      publicReportUrl: readyRecord.publicReportUrl || "",
+      publicReportCanonicalUrl: readyRecord.publicReportCanonicalUrl || "",
+      publicReportApproval: readyRecord.publicReportApproval,
+      gptError: null,
+      updatedAt: nowTimestamp(),
+    },
+    { merge: true },
+  );
+  return { taskId, generated: false, ready: true, record: readyRecord };
+}
+
+function hasEditableReportInput(input: { summary?: unknown; nextDirection?: unknown }): boolean {
+  return Object.prototype.hasOwnProperty.call(input, "summary") || Object.prototype.hasOwnProperty.call(input, "nextDirection");
+}
+
+function hasManualPrivateLessonReportText(record: PrivateLessonChartRecordDoc): boolean {
+  return Boolean(
+    record.manualReportEdit &&
+    cleanEditableReportText(record.gptDraftSummary || record.publicSummary, 900) &&
+    cleanEditableReportText(record.gptDraftNextDirection || record.publicNextDirection, 1200)
+  );
 }
 
 async function syncPrivateLessonChartRecordToNotion(

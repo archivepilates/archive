@@ -881,10 +881,11 @@
       const button = reportPanel.querySelector("[data-convert-report]");
       if (button) button.disabled = true;
       try {
+        const reportEdit = currentReportEditPayload();
         const res = await fetch(apiBase, {
           method: "POST",
           headers: { "Content-Type": "application/json" },
-          body: JSON.stringify({ requestId: state.requestId, token: state.token, action: "convertReport" }),
+          body: JSON.stringify({ requestId: state.requestId, token: state.token, action: "convertReport", ...reportEdit }),
         });
         const data = await res.json();
         if (!res.ok || data.ok === false) throw new Error(data.error || "리포트 변환 요청에 실패했습니다.");
@@ -928,11 +929,8 @@
       setStatus("리포트 문장을 저장 중입니다.", false);
       const button = reportPanel.querySelector("[data-save-report-edit]");
       if (button) button.disabled = true;
-      const summary = String(reportPanel.querySelector("#reportSummaryEdit")?.value || "").trim();
-      const nextDirection = String(reportPanel.querySelector("#reportNextDirectionEdit")?.value || "").trim();
       try {
-        if (!summary) throw new Error("오늘의 핵심 문장을 입력해 주세요.");
-        if (!nextDirection) throw new Error("다음 수업 방향 문장을 입력해 주세요.");
+        const { summary, nextDirection } = currentReportEditPayload({ requireFields: true });
         const data = await postJson({
           requestId: state.requestId,
           token: state.token,
@@ -948,6 +946,19 @@
       } finally {
         state.loading = false;
       }
+    }
+
+    function currentReportEditPayload(options = {}) {
+      const summaryInput = reportPanel.querySelector("#reportSummaryEdit");
+      const nextDirectionInput = reportPanel.querySelector("#reportNextDirectionEdit");
+      if (!summaryInput && !nextDirectionInput) return {};
+      const summary = String(summaryInput?.value || "").trim();
+      const nextDirection = String(nextDirectionInput?.value || "").trim();
+      if (options.requireFields || summary || nextDirection) {
+        if (!summary) throw new Error("오늘의 핵심 문장을 입력해 주세요.");
+        if (!nextDirection) throw new Error("다음 수업 방향 문장을 입력해 주세요.");
+      }
+      return summary || nextDirection ? { summary, nextDirection } : {};
     }
 
     function readAnswers(formData) {
