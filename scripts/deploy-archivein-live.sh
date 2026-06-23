@@ -22,11 +22,15 @@ firebase deploy \
   --only firestore:rules,hosting:archive-pilates,hosting:archive-pilates-in
 
 echo "== ARCHIVE IN live deploy: operator access verification =="
-if [ ! -d "$ROOT_DIR/node_modules/playwright" ]; then
-  echo "== ARCHIVE IN live deploy: installing root verification dependencies =="
-  npm ci
+if [ "${RUN_ARCHIVEIN_ADMIN_VERIFY:-0}" = "1" ]; then
+  if [ ! -d "$ROOT_DIR/node_modules/playwright" ]; then
+    echo "== ARCHIVE IN live deploy: installing root verification dependencies =="
+    npm ci
+  fi
+  npm run verify:archivein-admin
+else
+  echo "Skipping retired ARCHIVE IN operator root verification. Set RUN_ARCHIVEIN_ADMIN_VERIFY=1 to run the legacy admin probe."
 fi
-npm run verify:archivein-admin
 node scripts/validate-live-release-canary.mjs --surface archivein
 
 echo "== ARCHIVE IN live deploy complete =="
