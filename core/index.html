@@ -217,36 +217,17 @@
           </div>
         </details>
 
-        <section class="grid overview-grid secondary-home-grid">
-          <article class="panel panel-tall">
-            <div class="panel-header">
-              <div>
-                <h2>자동화 관제</h2>
-                <p>실패/중단이 있을 때만 홈 액션 큐로 올라옵니다.</p>
-              </div>
-              <span class="pill" id="automationMode">연결 대기</span>
+        <section class="panel" aria-label="자동화 관제">
+          <div class="panel-header">
+            <div>
+              <h2>자동화 관제</h2>
+              <p>실패/중단이 있을 때만 홈 액션 큐로 올라옵니다.</p>
             </div>
-            <div class="list" id="automationList" aria-live="polite">
-              <div class="empty-state">Firestore 연결 후 automationStatus를 표시합니다.</div>
-            </div>
-          </article>
-
-          <aside class="panel panel-tall">
-            <div class="panel-header">
-              <div>
-                <h2>전환 체크리스트</h2>
-                <p>운영 영향 없이 CORE로 옮기기 위한 현재 순서입니다.</p>
-              </div>
-              <span class="pill warn">Phase 1</span>
-            </div>
-            <ol class="checklist">
-              <li><span class="check done">완료</span><strong>전용 worktree와 workLane 분리</strong></li>
-              <li><span class="check done">완료</span><strong>/core 운영자 콘솔 배포</strong></li>
-              <li><span class="check done">완료</span><strong>메뉴별 페이지 구조 전환</strong></li>
-              <li><span class="check done">완료</span><strong>샘플 CORE 장부 적용</strong></li>
-              <li><span class="check active">진행</span><strong>개인 이용내역 최신화 후 전체 전환 검토</strong></li>
-            </ol>
-          </aside>
+            <span class="pill" id="automationMode">연결 대기</span>
+          </div>
+          <div class="list" id="automationList" aria-live="polite">
+            <div class="empty-state">Firestore 연결 후 automationStatus를 표시합니다.</div>
+          </div>
         </section>
       </main>
     </div>
