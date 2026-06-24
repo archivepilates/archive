@@ -27,6 +27,7 @@ const SNAPSHOT_PATH_ARG = args["snapshot-path"] ? expandHome(String(args["snapsh
 const REPORT_DIR = expandHome(String(args["report-dir"] || process.env.HOHOYOGA_REPORT_DIR || "~/ArchiveIN/automation/reports/hohoyoga-monitor"));
 const ARTIFACT_DIR = path.join(ROOT, "artifacts/hohoyoga-monitor");
 const RUN_AT = kstDateTime(new Date());
+const CENTER_SALE_LIMIT = Number(args["center-sale-limit"] || process.env.HOHOYOGA_CENTER_BUY_LIMIT || 0);
 
 const SHEETS = {
   posts: "구인글",
@@ -89,6 +90,10 @@ const CENTER_SALE_HEADERS = [
   "등급근거",
   "매물유형",
   "확인필요",
+  "추정센터",
+  "소유자/게시자그룹",
+  "특정근거",
+  "정밀등급메모",
 ];
 
 await main();
@@ -192,7 +197,8 @@ async function ensureHeader(token, sheetName, headers) {
   );
   const row = current.values?.[0] || [];
   if (headers.every((header, index) => row[index] === header)) return;
-  await sheetsRequest(token, "PUT", `/v4/spreadsheets/${SHEET_ID}/values/${encodeURIComponent(quotedRange(sheetName, "A1:Z1"))}?valueInputOption=USER_ENTERED`, {
+  const endColumn = columnName(headers.length);
+  await sheetsRequest(token, "PUT", `/v4/spreadsheets/${SHEET_ID}/values/${encodeURIComponent(quotedRange(sheetName, `A1:${endColumn}1`))}?valueInputOption=USER_ENTERED`, {
     values: [headers],
   });
 }
@@ -201,7 +207,7 @@ async function readSheetObjects(token, sheetName) {
   const result = await sheetsRequest(
     token,
     "GET",
-    `/v4/spreadsheets/${SHEET_ID}/values/${encodeURIComponent(quotedRange(sheetName, "A:Z"))}`,
+    `/v4/spreadsheets/${SHEET_ID}/values/${encodeURIComponent(quotedRange(sheetName, "A:AZ"))}`,
   );
   const [headers = [], ...rows] = result.values || [];
   return {
@@ -333,6 +339,7 @@ function buildCenterSalePlan(snapshot, existingById) {
       }
       continue;
     }
+    if (CENTER_SALE_LIMIT > 0 && existingById.size + newRows.length >= CENTER_SALE_LIMIT) continue;
     newRows.push(centerSaleRowFromItem(item));
   }
 
@@ -388,7 +395,7 @@ async function appendRows(token, sheetName, rows) {
   await sheetsRequest(
     token,
     "POST",
-    `/v4/spreadsheets/${SHEET_ID}/values/${encodeURIComponent(quotedRange(sheetName, "A:Z"))}:append?valueInputOption=USER_ENTERED&insertDataOption=INSERT_ROWS`,
+    `/v4/spreadsheets/${SHEET_ID}/values/${encodeURIComponent(quotedRange(sheetName, "A:AZ"))}:append?valueInputOption=USER_ENTERED&insertDataOption=INSERT_ROWS`,
     { values: rows },
   );
 }
@@ -430,6 +437,7 @@ function postRowFromExisting(row) {
 
 function centerSaleRowFromItem(item) {
   const grade = gradeCenterSale(item);
+  const identity = identifyCenterSale(item);
   return [
     item.documentSrl || "",
     item.postedDate || "",
@@ -454,6 +462,10 @@ function centerSaleRowFromItem(item) {
     grade.reason,
     grade.type,
     grade.checkNeeded,
+    identity.centerName,
+    identity.ownerGroup,
+    identity.evidence,
+    identity.memo,
   ];
 }
 
@@ -474,6 +486,11 @@ function updateCenterSaleRowFromItem(row, item, memo) {
   row[20] = grade.reason;
   row[21] = grade.type;
   row[22] = grade.checkNeeded;
+  const identity = identifyCenterSale(item);
+  row[23] = identity.centerName;
+  row[24] = identity.ownerGroup;
+  row[25] = identity.evidence;
+  row[26] = identity.memo;
   return row;
 }
 
@@ -490,6 +507,7 @@ function gradeCenterSale(item) {
   const text = `${title}\n${content}`;
   const hasPhone = Boolean(String(item.phone || "").trim());
   const hasFinancialInfo = /보증금|월세|권리금|무권리|매매금액|가격|금액|협의/.test(text);
+  const identity = identifyCenterSale(item);
   const isMemberWanted = /회원\s*인수합니다|회원권?\s*인수합니다|회원\s*인수\s*원합니다/.test(title);
   const isCollaboration = /샵인샵|교육협업|원장\(강사\)님 모집|강사\)님 모집/.test(text);
   if (isMemberWanted || isCollaboration) {
@@ -521,6 +539,7 @@ function gradeCenterSale(item) {
   if (/\d+\s*평|평대|대형|기구|시설|사진첨부|리포머|캐딜락|체어|바렐/.test(text)) add(6, "규모/시설 정보");
   if (hasPhone) add(4, "연락처 있음");
   if (content.length >= 350) add(5, "본문 정보 충분");
+  if (identity.centerName) add(8, "센터 특정 완료");
 
   if (!hasPhone) sub(8, "연락처 확인 필요");
   if (!hasFinancialInfo) sub(8, "금액 조건 부족");
@@ -545,6 +564,53 @@ function gradeCenterSale(item) {
     reason: reasons.slice(0, 5).join(" · "),
     checkNeeded,
   };
+}
+
+function identifyCenterSale(item) {
+  const title = String(item.title || "");
+  const content = String(item.content || item.contentPreview || "");
+  const text = `${title}\n${content}`;
+  const phone = normalizePhone(item.phone);
+  const author = String(item.author || "").trim();
+
+  if (phone === "01039758713") {
+    const ownerGroup = `${author || "두부가계부"} / 010-3975-8713 / 동일 소유자 확인`;
+    if (/강서구|명지|서부권|87평/.test(text)) {
+      return {
+        centerName: "대기구필라테스청담 명지점",
+        ownerGroup,
+        evidence: "운영자 확인 + 동일 작성자/연락처 + 강서구/명지권 87평 매물 정보",
+        memo: "센터 특정 완료. 명지점 실매출, 회원 유지 조건, 권리금 협상 여지 우선 확인",
+      };
+    }
+    if (/부산진구|당감|68평/.test(text)) {
+      return {
+        centerName: "대기구필라테스청담 당감동 지점",
+        ownerGroup,
+        evidence: "운영자 확인 + 동일 작성자/연락처 + 부산진구/당감동 68평 매물 정보",
+        memo: "센터 특정 완료. 당감동 지점의 회원 구성, 재등록률, 인건비 구조 우선 확인",
+      };
+    }
+    return {
+      centerName: "",
+      ownerGroup,
+      evidence: "동일 작성자/연락처 매물 그룹",
+      memo: "같은 소유자 매물 가능성. 지점 특정 추가 확인 필요",
+    };
+  }
+
+  return {
+    centerName: "",
+    ownerGroup: author || phone ? [author, phone].filter(Boolean).join(" / ") : "",
+    evidence: "",
+    memo: "",
+  };
+}
+
+function normalizePhone(value = "") {
+  const digits = String(value || "").replace(/\D/g, "");
+  if (digits.length === 10 && digits.startsWith("10")) return `0${digits}`;
+  return digits;
 }
 
 function columnName(index) {
