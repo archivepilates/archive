@@ -6,6 +6,7 @@ const BASE_URL = "https://www.hohoyoga.com";
 const USER_AGENT =
   "Mozilla/5.0 (Macintosh; Intel Mac OS X 10_15_7) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/149.0.0.0 Safari/537.36";
 const BOARD_SLUG = process.env.BOARD_SLUG || "job_pilates_gyeongsang";
+const BOARD_KIND = process.env.BOARD_KIND || (BOARD_SLUG === "center_buy" ? "centerSale" : "job");
 const LOOKBACK_DAYS = Number(process.env.LOOKBACK_DAYS || 45);
 const MAX_PAGES = Number(process.env.MAX_PAGES || 80);
 const DETAIL_DELAY_MS = Number(process.env.DETAIL_DELAY_MS || 80);
@@ -149,6 +150,26 @@ function parseListRows(html, slug) {
         "";
       if (!documentSrl) continue;
       const tds = extractAll(/<td[\s\S]*?<\/td>/gi, row).map((match) => match[0]);
+      if (BOARD_KIND === "centerSale") {
+        const authorCell = row.match(/<td[^>]+class="author"[\s\S]*?<\/td>/i)?.[0] || tds[2] || "";
+        const dateCell = row.match(/<td[^>]+class="time"[\s\S]*?<\/td>/i)?.[0] || tds[3] || "";
+        const readCell = row.match(/<td[^>]+class="m_no"[\s\S]*?<\/td>/i)?.[0] || tds[4] || "";
+        rows.push({
+          documentSrl,
+          sourceUrl: new URL(href, BASE_URL).toString(),
+          listStatus: "게시중",
+          listArea: "",
+          listPostedDate: cleanText(dateCell),
+          listReadCount: cleanText(readCell),
+          title: cleanText(link[2] || ""),
+          author: cleanText(authorCell)
+            .replace(/\[레벨:\d+\]/g, "")
+            .replace(/포인트:[^)]+\)/g, "")
+            .trim(),
+          authorMemberSrl: authorCell.match(/member_(\d+)/)?.[1] || "",
+        });
+        continue;
+      }
       const authorCell = tds[4] || "";
       rows.push({
         documentSrl,
@@ -169,17 +190,24 @@ function parseListRows(html, slug) {
 
 function parseDetail(detailHtml, listRow) {
   const dateText =
-    extractFirst(/<span class="date m_no">([\s\S]*?)<\/span>/i, detailHtml) ||
-    extractFirst(/<span class="date">([\s\S]*?)<\/span>/i, detailHtml);
+    BOARD_KIND === "centerSale"
+      ? listRow.listPostedDate ||
+        extractFirst(/<span class="date m_no">([\s\S]*?)<\/span>/i, detailHtml) ||
+        extractFirst(/<span class="date">([\s\S]*?)<\/span>/i, detailHtml)
+      : extractFirst(/<span class="date m_no">([\s\S]*?)<\/span>/i, detailHtml) ||
+        extractFirst(/<span class="date">([\s\S]*?)<\/span>/i, detailHtml);
   const postedAt = parseLocalDateTime(dateText);
   const status =
     extractFirst(/<span class="ico_secret"[^>]*>([\s\S]*?)<\/span>/i, detailHtml) ||
     extractFirst(/<th[^>]*>\s*모집여부\s*<\/th>\s*<td[^>]*>([\s\S]*?)<\/td>/i, detailHtml) ||
-    listRow.listStatus;
+    listRow.listStatus ||
+    (BOARD_KIND === "centerSale" ? "게시중" : "");
   const title =
     cleanText(extractFirst(/<h1[^>]*>[\s\S]*?<a[^>]*>([\s\S]*?)<\/a>\s*<\/h1>/i, detailHtml)) ||
     listRow.title;
-  const authorHtml = detailHtml.match(/<a[^>]+class="nick member_\d+"[\s\S]*?<\/a>/i)?.[0] || "";
+  const authorHtml =
+    detailHtml.match(/<a[^>]+class="nick member_\d+"[\s\S]*?<\/a>/i)?.[0] ||
+    (BOARD_KIND === "centerSale" ? "" : detailHtml.match(/<a[^>]+class="[^"]*member_\d+[^"]*"[\s\S]*?<\/a>/i)?.[0] || "");
   const author = cleanText(authorHtml)
     .replace(/\[레벨:\d+\]/g, "")
     .replace(/포인트:[^)]+\)/g, "")
@@ -208,12 +236,16 @@ function parseDetail(detailHtml, listRow) {
 
   return {
     boardSlug: BOARD_SLUG,
+    boardKind: BOARD_KIND,
     documentSrl: listRow.documentSrl,
     sourceUrl: listRow.sourceUrl,
     postedAt: formatDateTime(postedAt),
     postedDate: formatDate(postedAt),
     status,
-    isCompleted: status === "완료" || contentStatus === "숨김_모집완료",
+    isCompleted:
+      status === "완료" ||
+      contentStatus === "숨김_모집완료" ||
+      (BOARD_KIND === "centerSale" && /(?:거래|매매|양도)?\s*완료|완료됐|완료되었/.test(`${title}\n${content}`)),
     contentStatus,
     detailMessage,
     title,
@@ -228,21 +260,33 @@ function parseDetail(detailHtml, listRow) {
     phone: [...phoneMatches].join(", "),
     email: [...emailMatches].join(", "),
     profileRequired: extra["프로필 필수여부"] || "",
+    readCount: listRow.listReadCount || "",
     content,
     contentPreview: content.slice(0, 500),
   };
 }
 
 async function request(jar, url, options = {}) {
-  const response = await fetch(url, {
-    redirect: "manual",
-    ...options,
-    headers: {
-      "user-agent": USER_AGENT,
-      cookie: jar.header(),
-      ...options.headers,
-    },
-  });
+  let response;
+  let lastError;
+  for (let attempt = 1; attempt <= 3; attempt += 1) {
+    try {
+      response = await fetch(url, {
+        redirect: "manual",
+        ...options,
+        headers: {
+          "user-agent": USER_AGENT,
+          cookie: jar.header(),
+          ...options.headers,
+        },
+      });
+      break;
+    } catch (error) {
+      lastError = error;
+      if (attempt === 3) throw lastError;
+      await sleep(500 * attempt);
+    }
+  }
   jar.add(response.headers.getSetCookie());
   if ([301, 302, 303, 307, 308].includes(response.status)) {
     const location = response.headers.get("location");
@@ -295,11 +339,29 @@ async function login() {
   return jar;
 }
 
-async function scrapeDetail(jar, documentSrl, referer = `${BASE_URL}/${BOARD_SLUG}`) {
+async function scrapeDetail(jar, rowOrId, referer = `${BASE_URL}/${BOARD_SLUG}`) {
   await sleep(DETAIL_DELAY_MS);
-  const sourceUrl = `${BASE_URL}/${BOARD_SLUG}/${documentSrl}`;
+  const listRow =
+    typeof rowOrId === "string"
+      ? { documentSrl: rowOrId, sourceUrl: `${BASE_URL}/${BOARD_SLUG}/${rowOrId}`, title: "", listStatus: "", listArea: "" }
+      : rowOrId;
+  const sourceUrl = listRow.sourceUrl || `${BASE_URL}/${BOARD_SLUG}/${listRow.documentSrl}`;
   const { text } = await requestText(jar, sourceUrl, { headers: { referer } });
-  return parseDetail(text, { documentSrl, sourceUrl, title: "", listStatus: "", listArea: "" });
+  return parseDetail(text, listRow);
+}
+
+function shouldCollectDetail(detail) {
+  if (BOARD_KIND === "centerSale") {
+    return detail.contentStatus === "본문확보" && !detail.isCompleted;
+  }
+  return detail.status === "진행중" && detail.contentStatus === "본문확보";
+}
+
+function shouldFetchListRowDetail(row) {
+  if (BOARD_KIND !== "centerSale") return true;
+  if (process.env.HOHOYOGA_CENTER_BUY_PREFILTER === "0") return true;
+  const text = [row.title, row.listArea].join("\n");
+  return /부산|부산광역시|부산시|해운대|센텀|민락|수영구|동래구|연제구|부산진구|서면|사하구|사상구|금정구|기장|영도구|장전|북구|강서구|남구|동구|서구|중구/.test(text);
 }
 
 async function main() {
@@ -332,15 +394,23 @@ async function main() {
     for (const row of rows) {
       if (seen.has(row.documentSrl)) continue;
       seen.add(row.documentSrl);
-      const detail = await scrapeDetail(jar, row.documentSrl, pageUrl);
+      let countedDate = false;
+      const rowPostedAt = parseLocalDateTime(row.listPostedDate);
+      if (rowPostedAt) {
+        countedDate = true;
+        pageKnownDates += 1;
+        if (rowPostedAt < cutoff) pageOlder += 1;
+      }
+      if (!shouldFetchListRowDetail(row)) continue;
+      const detail = await scrapeDetail(jar, row, pageUrl);
       boardStats.detailChecked += 1;
       listStatuses.push(detail);
       const postedAt = parseLocalDateTime(detail.postedAt);
-      if (postedAt) {
+      if (!countedDate && postedAt) {
         pageKnownDates += 1;
         if (postedAt < cutoff) pageOlder += 1;
       }
-      if (detail.status === "진행중" && detail.contentStatus === "본문확보") {
+      if (shouldCollectDetail(detail)) {
         activePosts.push(detail);
       }
     }
