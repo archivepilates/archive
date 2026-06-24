@@ -8,6 +8,7 @@ import { syncLecturesRange } from "../sync/syncLecturesRange";
 import { pollManagerNotices } from "../sync/pollManagerNotices";
 import { processContactSyncJobs } from "../sync/processContactSyncJobs";
 import { processWriteQueue } from "../queue/processWriteQueue";
+import { createDueParkingDiscountJobs } from "../parking/parkingOperations";
 import { preSecurityRawMirror } from "../sync/preSecurityRawMirror";
 import { syncManagerStaffs } from "../sync/syncManagerStaffs";
 import { sendAttendanceReminder } from "../push/sendAttendanceReminder";
@@ -64,6 +65,19 @@ export const scheduledAttendanceReminder = onSchedule(
   },
   async () => {
     await sendAttendanceReminder();
+  },
+);
+
+export const scheduledCreateParkingDiscountJobs = onSchedule(
+  {
+    ...scheduleOptions,
+    schedule: "every 10 minutes",
+  },
+  async () => {
+    await createDueParkingDiscountJobs({
+      source: "core_parking_scheduler",
+      requestedByUid: "scheduler",
+    });
   },
 );
 

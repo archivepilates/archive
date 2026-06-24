@@ -50,6 +50,7 @@
             <a href="#alimtalk">알림톡<span>후보, 승인, 중복 차단</span></a>
             <a href="#private">프라이빗<span>회차, 설문, 리포트</span></a>
             <a href="#staff-evaluation">강사 평가<span>퀴즈, 인사기록카드</span></a>
+            <a href="#parking">주차등록<span>차량, 아이파킹, 자동 할인</span></a>
             <a href="#welcome">현장 웰컴<span>가입서, PDF, StudioMate 반영</span></a>
             <a href="#settlement">정산·지표<span>월별 정산, 대시보드</span></a>
             <a href="#release">배포·검증<span>배포세트, 실패보고</span></a>
@@ -393,8 +394,41 @@
           <div class="rule-note"><strong>현재 확인 위치</strong><span>CORE Staff / 공개 시험 https://in.archivepilates.com/instructor-evaluation/ / Firestore staffs, staffEvaluationSubmissions, staffApplicantEvaluationSubmissions, staffHrCards, auditLogs</span></div>
         </section>
 
+        <section class="panel rule-section" id="parking">
+          <div class="panel-header"><div><h2>5. 주차등록</h2><p>ARCHIVE CORE 홈에서 차량을 등록하고 수업 시간표 기준으로 주차권을 자동 적용합니다.</p></div><span class="pill good">active</span></div>
+          <div class="rule-grid">
+            <article class="rule-card">
+              <h3>운영 규칙</h3>
+              <ul>
+                <li>회원/강사 차량은 ARCHIVE CORE 홈의 주차등록 섹션에서 이름, 연락처, 차량번호로 등록합니다.</li>
+                <li>차량 원천은 parkingVehicles 컬렉션입니다. 회원카드와 강사카드에는 기본 차량만 표시용으로 미러링합니다.</li>
+                <li>오늘 예약된 수업 시작 10분 뒤, 등록 차량이 있는 회원/강사를 대상으로 parkingDiscountJobs를 자동 생성합니다.</li>
+                <li>같은 날 같은 사람·차량은 하나의 안정적인 job id로 묶어 중복 주차권 생성을 막습니다.</li>
+              </ul>
+            </article>
+            <article class="rule-card">
+              <h3>아이파킹 적용</h3>
+              <ul>
+                <li>아이파킹 계정 2개를 사용해 2시간 할인권을 계정별 1개씩 적용합니다.</li>
+                <li>자동 적용 최대 시간은 4시간입니다. 기본 할인권명은 2시간 할인입니다.</li>
+                <li>차량 입차 기록이 없거나 후보가 여러 건이면 수동확인 상태로 남기고 자동 적용하지 않습니다.</li>
+                <li>적용 결과는 parkingDiscountJobs와 연결 bookings 문서의 parkingStatus에 기록합니다.</li>
+              </ul>
+            </article>
+            <article class="rule-card">
+              <h3>검증 위치</h3>
+              <ul>
+                <li>홈 주차등록 섹션에서 등록 차량과 최근 주차권 작업을 확인합니다.</li>
+                <li>자동화는 scheduledCreateParkingDiscountJobs가 작업을 만들고 processParkingDiscountJob이 실제 아이파킹 적용을 수행합니다.</li>
+                <li>문제 발생 시 수동확인 또는 error job만 운영자가 확인합니다.</li>
+              </ul>
+            </article>
+          </div>
+          <div class="rule-note"><strong>현재 확인 위치</strong><span>CORE Home / Firestore parkingVehicles, parkingDiscountJobs, bookings parkingStatus</span></div>
+        </section>
+
         <section class="panel rule-section" id="welcome">
-          <div class="panel-header"><div><h2>5. 현장 웰컴·회원가입·연락처</h2><p>회원가입서 제출과 StudioMate 반영을 분리해 실패 지점을 명확히 봅니다.</p></div><span class="pill">onsite</span></div>
+          <div class="panel-header"><div><h2>6. 현장 웰컴·회원가입·연락처</h2><p>회원가입서 제출과 StudioMate 반영을 분리해 실패 지점을 명확히 봅니다.</p></div><span class="pill">onsite</span></div>
           <div class="rule-grid">
             <article class="rule-card">
               <h3>현장 웰컴 알림톡</h3>
@@ -428,7 +462,7 @@
         </section>
 
         <section class="panel rule-section" id="settlement">
-          <div class="panel-header"><div><h2>6. 정산·비즈니스 지표</h2><p>대시보드는 정산 자동화 결과를 참조하고 중복 계산을 줄입니다.</p></div><span class="pill">finance</span></div>
+          <div class="panel-header"><div><h2>7. 정산·비즈니스 지표</h2><p>대시보드는 정산 자동화 결과를 참조하고 중복 계산을 줄입니다.</p></div><span class="pill">finance</span></div>
           <div class="rule-grid">
             <article class="rule-card">
               <h3>원본 폴더</h3>
@@ -461,7 +495,7 @@
         </section>
 
         <section class="panel rule-section" id="release">
-          <div class="panel-header"><div><h2>7. 배포·검증·보고</h2><p>배포 요청은 검증, commit, deploy, live check, GitHub push를 한 세트로 처리합니다.</p></div><span class="pill warn">release gate</span></div>
+          <div class="panel-header"><div><h2>8. 배포·검증·보고</h2><p>배포 요청은 검증, commit, deploy, live check, GitHub push를 한 세트로 처리합니다.</p></div><span class="pill warn">release gate</span></div>
           <div class="rule-grid">
             <article class="rule-card">
               <h3>배포세트</h3>
@@ -495,7 +529,7 @@
         </section>
 
         <section class="panel rule-section" id="worklines">
-          <div class="panel-header"><div><h2>8. 인프라·워크라인</h2><p>스레드와 worktree를 분리해 기능 간 충돌을 줄입니다.</p></div><span class="pill">coordination</span></div>
+          <div class="panel-header"><div><h2>9. 인프라·워크라인</h2><p>스레드와 worktree를 분리해 기능 간 충돌을 줄입니다.</p></div><span class="pill">coordination</span></div>
           <div class="rule-grid">
             <article class="rule-card">
               <h3>Mac mini</h3>
@@ -526,7 +560,7 @@
         </section>
 
         <section class="panel rule-section" id="archive">
-          <div class="panel-header"><div><h2>9. 폐기·보관 기준</h2><p>더 이상 현재 운영 원칙이 아닌 항목을 명확히 분리합니다.</p></div><span class="pill danger">deprecated</span></div>
+          <div class="panel-header"><div><h2>10. 폐기·보관 기준</h2><p>더 이상 현재 운영 원칙이 아닌 항목을 명확히 분리합니다.</p></div><span class="pill danger">deprecated</span></div>
           <div class="rule-grid">
             <article class="rule-card">
               <h3>Notion 운영규칙</h3>

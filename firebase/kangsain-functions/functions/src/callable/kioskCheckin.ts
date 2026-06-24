@@ -12,6 +12,8 @@ import { AppError } from "../utils/errors";
 const PARKING_DISCOUNT_JOBS = "parkingDiscountJobs";
 const CHECKIN_EVENTS = "checkinEvents";
 const VEHICLE_MAX_COUNT = 4;
+const PARKING_DISCOUNT_UNIT_HOURS = 2;
+const PARKING_MAX_AUTO_DISCOUNT_HOURS = 4;
 
 type KioskAccess = {
   studioId: string;
@@ -331,6 +333,9 @@ async function markBookingCheckedInAndMaybeCreateParkingJob(input: {
           carNumberLast4: carLast4(input.carNumber),
           expectedCarNumber: input.carNumber,
           discountName: "2시간 할인",
+          requestedDiscountHours: PARKING_MAX_AUTO_DISCOUNT_HOURS,
+          maxAutoDiscountHours: PARKING_MAX_AUTO_DISCOUNT_HOURS,
+          discountUnitHours: PARKING_DISCOUNT_UNIT_HOURS,
           requestedBy: input.uid,
           source: "core_checkin",
           createdAt: input.now,

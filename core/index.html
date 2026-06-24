@@ -49,6 +49,7 @@
             </button>
             <div class="quick-action-row" aria-label="빠른 실행">
               <a class="quick-action" href="#pricingInquiryForm">수강료 안내</a>
+              <a class="quick-action" href="#parkingRegistrationForm">주차등록</a>
               <a class="quick-action" href="./private/">프라이빗 진행</a>
               <a class="quick-action" href="./messages/">알림톡 확인</a>
               <a class="quick-action" href="./automation/">자동화 관제</a>
@@ -121,6 +122,74 @@
               <div><span>품질/자동화</span><strong id="homeContextQuality">주의 낮음</strong></div>
             </div>
           </aside>
+        </section>
+
+        <section class="panel parking-panel">
+          <div class="panel-header">
+            <div>
+              <h2>주차등록</h2>
+              <p>회원/강사 차량을 한 번 등록하면 오늘 수업 10분 뒤 아이파킹 2시간권을 2개 계정으로 최대 4시간까지 자동 적용합니다.</p>
+            </div>
+            <span class="pill good" id="parkingPolicyPill">2시간 × 2계정</span>
+          </div>
+          <form class="action-form parking-form" id="parkingRegistrationForm">
+            <label>
+              <span>구분</span>
+              <select id="parkingOwnerType" name="ownerType">
+                <option value="member">회원</option>
+                <option value="staff">강사</option>
+              </select>
+            </label>
+            <label>
+              <span>이름</span>
+              <input id="parkingOwnerName" name="ownerName" type="text" autocomplete="name" placeholder="회원명 또는 강사명" />
+            </label>
+            <label>
+              <span>연락처</span>
+              <input id="parkingOwnerPhone" name="ownerPhone" type="tel" inputmode="numeric" autocomplete="tel" placeholder="010-0000-0000" />
+            </label>
+            <label>
+              <span>차량번호</span>
+              <input id="parkingCarNumber" name="carNumber" type="text" autocomplete="off" placeholder="241고2299" />
+            </label>
+            <label class="wide">
+              <span>내부 메모</span>
+              <textarea id="parkingNote" name="note" rows="2" placeholder="차량 변경 사유, 가족차량 여부 등 운영 메모를 남깁니다."></textarea>
+            </label>
+            <div class="action-form-footer">
+              <button class="primary-action" id="parkingRegisterButton" type="submit">차량 등록</button>
+              <button class="secondary-action" id="parkingAutoApplyButton" type="button">오늘 자동적용 실행</button>
+              <p class="form-status" id="parkingStatus" role="status" aria-live="polite">
+                등록 차량이 있는 오늘 수업의 회원/강사를 자동 주차권 대상으로 봅니다.
+              </p>
+            </div>
+          </form>
+          <div class="parking-dashboard">
+            <article>
+              <div class="pricing-history-header">
+                <div>
+                  <strong>등록 차량</strong>
+                  <p>parkingVehicles 원천 기준입니다. 회원/강사 카드에는 기본 차량만 미러링합니다.</p>
+                </div>
+                <span class="pill" id="parkingVehicleCount">0대</span>
+              </div>
+              <div class="pricing-history-list" id="parkingVehicleList">
+                <div class="empty-state">등록된 차량을 불러오면 여기에 표시됩니다.</div>
+              </div>
+            </article>
+            <article>
+              <div class="pricing-history-header">
+                <div>
+                  <strong>최근 주차권 작업</strong>
+                  <p>수업 10분 뒤 생성되는 parkingDiscountJobs 상태입니다.</p>
+                </div>
+                <span class="pill" id="parkingJobCount">0건</span>
+              </div>
+              <div class="pricing-history-list" id="parkingJobList">
+                <div class="empty-state">최근 주차권 작업을 불러오면 여기에 표시됩니다.</div>
+              </div>
+            </article>
+          </div>
         </section>
 
         <section class="panel">

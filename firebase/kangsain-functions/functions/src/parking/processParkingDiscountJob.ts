@@ -15,6 +15,9 @@ const PARKING_DISCOUNT_JOBS = "parkingDiscountJobs";
 const DEFAULT_DISCOUNT_NAME = "2시간 할인";
 const DEFAULT_IPARKING_STOR_SEQ = Number(process.env.IPARKING_STOR_SEQ || "287798");
 const DEFAULT_IPARKING_PARK_SEQ = Number(process.env.IPARKING_PARK_SEQ || "5068");
+const DEFAULT_DISCOUNT_UNIT_HOURS = 2;
+const DEFAULT_REQUESTED_DISCOUNT_HOURS = 2;
+const MAX_AUTO_DISCOUNT_HOURS = 4;
 
 type ParkingDiscountJob = {
   status?: string;
@@ -27,6 +30,9 @@ type ParkingDiscountJob = {
   expectedCarNumber?: string;
   expectedEnterDatetime?: string;
   discountName?: string;
+  requestedDiscountHours?: number | string;
+  maxAutoDiscountHours?: number | string;
+  discountUnitHours?: number | string;
   memberId?: string;
   memberName?: string;
   bookingId?: string;
@@ -114,6 +120,12 @@ function numericSetting(value: unknown, fallback: number, label: string): number
   return numberValue;
 }
 
+function boundedDiscountHours(value: unknown, fallback: number, max: number): number {
+  const numberValue = Number(value || fallback);
+  if (!Number.isFinite(numberValue) || numberValue <= 0) return fallback;
+  return Math.min(Math.ceil(numberValue), max);
+}
+
 function elapsedMetric(name: string, startedAt: number): Record<string, unknown> {
   return { name, ms: Date.now() - startedAt };
 }
@@ -198,6 +210,129 @@ async function setJobStatus(ref: FirebaseFirestore.DocumentReference, patch: Sta
   }
 }
 
+async function applyDiscountAcrossAccounts(params: {
+  car: IparkingCarInfo;
+  storSeq: number;
+  parkSeq: number;
+  discountName: string;
+  targetHours: number;
+  unitHours: number;
+  shouldApply: boolean;
+  metrics: Record<string, unknown>[];
+  requestedAt: number;
+}): Promise<{
+  appliedHours: number;
+  alreadyAppliedHours: number;
+  attempts: Record<string, unknown>[];
+  products: Record<string, unknown>[];
+}> {
+  const accounts = getIparkingAccountConfigs();
+  const attempts: Record<string, unknown>[] = [];
+  const products: Record<string, unknown>[] = [];
+  let appliedHours = 0;
+  let alreadyAppliedHours = 0;
+
+  for (const account of accounts) {
+    if (appliedHours + alreadyAppliedHours >= params.targetHours) break;
+    const client = new IparkingClient(account);
+    try {
+      const loginStartedAt = Date.now();
+      await client.login();
+      params.metrics.push({ account: account.label, ...elapsedMetric("login_for_apply", loginStartedAt) });
+
+      const productStartedAt = Date.now();
+      const accountProducts = await client.listProducts({
+        storSeq: params.storSeq,
+        parkSeq: params.parkSeq,
+        inotSeq: Number(params.car.inot_seq),
+      });
+      params.metrics.push({ account: account.label, ...elapsedMetric("product_list", productStartedAt) });
+      const product = selectProduct(accountProducts, params.discountName);
+      if (!product) {
+        attempts.push({
+          account: account.label,
+          status: "skipped",
+          reason: "discount_ticket_not_found",
+        });
+        continue;
+      }
+      products.push({ account: account.label, ...publicProduct(product) });
+
+      const resolvedStorSeq = Number(product.stor_seq || params.storSeq);
+      const resolvedParkSeq = Number(product.park_seq || params.parkSeq);
+      if (!Number.isFinite(resolvedStorSeq) || !Number.isFinite(resolvedParkSeq)) {
+        attempts.push({
+          account: account.label,
+          status: "skipped",
+          reason: "invalid_product_location",
+        });
+        continue;
+      }
+
+      const appliedStartedAt = Date.now();
+      const applied = await client.listAppliedDiscounts({
+        storSeq: resolvedStorSeq,
+        parkSeq: resolvedParkSeq,
+        inotSeq: Number(params.car.inot_seq),
+        searchOption: 1,
+      });
+      params.metrics.push({ account: account.label, ...elapsedMetric("applied_list", appliedStartedAt) });
+
+      const sameAccountDiscount = applied.find((item) => item.discount_key === product.discount_key);
+      if (sameAccountDiscount) {
+        alreadyAppliedHours += params.unitHours;
+        attempts.push({
+          account: account.label,
+          status: "already_applied",
+          hours: params.unitHours,
+          product: publicProduct(product),
+          appliedDiscounts: applied,
+        });
+        continue;
+      }
+
+      if (!params.shouldApply) {
+        attempts.push({
+          account: account.label,
+          status: "eligible",
+          hours: params.unitHours,
+          product: publicProduct(product),
+          appliedDiscounts: applied,
+        });
+        continue;
+      }
+
+      const applyStartedAt = Date.now();
+      await client.applyDiscount({
+        storSeq: resolvedStorSeq,
+        parkSeq: resolvedParkSeq,
+        inotSeq: Number(params.car.inot_seq),
+        carNumber: params.car.car_number,
+        product,
+        memo: `ARCHIVE PILATES 자동 주차등록 ${params.unitHours}시간`,
+      });
+      params.metrics.push({ account: account.label, ...elapsedMetric("apply_discount", applyStartedAt) });
+      appliedHours += params.unitHours;
+      attempts.push({
+        account: account.label,
+        status: "applied",
+        hours: params.unitHours,
+        product: publicProduct(product),
+        appliedDiscounts: applied,
+      });
+    } catch (error) {
+      attempts.push({
+        account: account.label,
+        status: "error",
+        message: errorMessage(error),
+        retryable: error instanceof IparkingApiError ? error.retryable : false,
+      });
+    }
+  }
+
+  return { appliedHours, alreadyAppliedHours, attempts, products };
+}
+
 export async function processParkingDiscountJobSnapshot(snap: QueryDocumentSnapshot): Promise<void> {
   const ref = snap.ref;
   const job = snap.data() as ParkingDiscountJob;
@@ -212,6 +347,13 @@ export async function processParkingDiscountJobSnapshot(snap: QueryDocumentSnaps
   const last4 = String(job.carNumberLast4 || carLast4(rawCarNumber));
   const storSeq = numericSetting(job.storSeq, DEFAULT_IPARKING_STOR_SEQ, "iParking storSeq");
   const defaultParkSeq = numericSetting(job.parkSeq, DEFAULT_IPARKING_PARK_SEQ, "iParking parkSeq");
+  const maxAutoDiscountHours = boundedDiscountHours(job.maxAutoDiscountHours, MAX_AUTO_DISCOUNT_HOURS, MAX_AUTO_DISCOUNT_HOURS);
+  const requestedDiscountHours = boundedDiscountHours(
+    job.requestedDiscountHours,
+    DEFAULT_REQUESTED_DISCOUNT_HOURS,
+    maxAutoDiscountHours,
+  );
+  const discountUnitHours = boundedDiscountHours(job.discountUnitHours, DEFAULT_DISCOUNT_UNIT_HOURS, maxAutoDiscountHours);
   const shouldApply = job.dryRun === false;
 
   try {
@@ -264,107 +406,55 @@ export async function processParkingDiscountJobSnapshot(snap: QueryDocumentSnaps
     const parkSeq = Number(car.park_seq || defaultParkSeq);
     if (!Number.isFinite(parkSeq)) throw new Error("주차장 ID를 확인할 수 없습니다");
 
-    const productStartedAt = Date.now();
-    const products = await client.listProducts({ storSeq, parkSeq, inotSeq: Number(car.inot_seq) });
-    const product = selectProduct(products, discountName);
-    metrics.push(elapsedMetric("product_list", productStartedAt));
-    if (!product) {
-      await setJobStatus(ref, {
-        status: "manual_review",
-        reason: "discount_ticket_not_found",
-        lastError: `${discountName} 할인권을 찾지 못했습니다`,
-        result: {
-          car: publicCar(car),
-          products: products.map(publicProduct),
-          metrics,
-          totalMs: Date.now() - requestedAt,
-        },
-      });
-      return;
-    }
-
-    const resolvedStorSeq = Number(product.stor_seq || storSeq);
-    const resolvedParkSeq = Number(product.park_seq || parkSeq);
-    if (!Number.isFinite(resolvedStorSeq) || !Number.isFinite(resolvedParkSeq)) {
-      throw new Error("할인권 적용에 필요한 상점/주차장 ID가 없습니다");
-    }
-
-    const appliedStartedAt = Date.now();
-    const applied = await client.listAppliedDiscounts({
-      storSeq: resolvedStorSeq,
-      parkSeq: resolvedParkSeq,
-      inotSeq: Number(car.inot_seq),
-      searchOption: 1,
+    const discountResult = await applyDiscountAcrossAccounts({
+      car,
+      storSeq,
+      parkSeq,
+      discountName,
+      targetHours: requestedDiscountHours,
+      unitHours: discountUnitHours,
+      shouldApply,
+      metrics,
+      requestedAt,
     });
-    metrics.push(elapsedMetric("applied_list", appliedStartedAt));
-
-    const sameDiscount = applied.find(
-      (item) => item.discount_key === product.discount_key || item.disc_name === product.disc_name,
-    );
-    if (sameDiscount) {
-      await setJobStatus(ref, {
-        status: "success",
-        reason: "already_applied",
-        lastError: null,
-        result: {
-          alreadyApplied: true,
-          car: publicCar(car),
-          product: publicProduct(product),
-          appliedDiscounts: applied,
-          metrics,
-          totalMs: Date.now() - requestedAt,
-        },
-      });
-      return;
-    }
-    if (applied.length > 0) {
-      await setJobStatus(ref, {
-        status: "manual_review",
-        reason: "existing_discount_conflict",
-        lastError: "이미 다른 주차 할인이 적용되어 있습니다",
-        result: {
-          car: publicCar(car),
-          product: publicProduct(product),
-          appliedDiscounts: applied,
-          metrics,
-          totalMs: Date.now() - requestedAt,
-        },
-      });
-      return;
-    }
-
+    const totalSatisfiedHours = discountResult.appliedHours + discountResult.alreadyAppliedHours;
+    const result = {
+      car: publicCar(car),
+      requestedDiscountHours,
+      maxAutoDiscountHours,
+      discountUnitHours,
+      appliedHours: discountResult.appliedHours,
+      alreadyAppliedHours: discountResult.alreadyAppliedHours,
+      totalSatisfiedHours,
+      attempts: discountResult.attempts,
+      products: discountResult.products,
+      metrics,
+      totalMs: Date.now() - requestedAt,
+    };
     if (!shouldApply) {
       await setJobStatus(ref, {
         status: "eligible",
         reason: "dry_run",
         lastError: null,
-        result: { car: publicCar(car), product: publicProduct(product), metrics, totalMs: Date.now() - requestedAt },
+        result,
       });
       return;
     }
-
-    const applyStartedAt = Date.now();
-    await client.applyDiscount({
-      storSeq: resolvedStorSeq,
-      parkSeq: resolvedParkSeq,
-      inotSeq: Number(car.inot_seq),
-      carNumber: car.car_number,
-      product,
-      memo: "ARCHIVE PILATES 출석체크 자동 주차등록",
-    });
-    metrics.push(elapsedMetric("apply_discount", applyStartedAt));
-
+    if (totalSatisfiedHours >= requestedDiscountHours) {
+      await setJobStatus(ref, {
+        status: "success",
+        reason: discountResult.appliedHours > 0 ? "applied" : "already_applied",
+        lastError: null,
+        result,
+      });
+      return;
+    }
     await setJobStatus(ref, {
-      status: "success",
-      reason: "applied",
-      lastError: null,
-      result: {
-        alreadyApplied: false,
-        car: publicCar(car),
-        product: publicProduct(product),
-        metrics,
-        totalMs: Date.now() - requestedAt,
-      },
+      status: discountResult.appliedHours > 0 ? "manual_review" : "error",
+      reason: discountResult.appliedHours > 0 ? "partial_discount_applied" : "discount_apply_failed",
+      retryable: discountResult.attempts.some((attempt) => Boolean(attempt.retryable)),
+      lastError: `${requestedDiscountHours}시간 중 ${totalSatisfiedHours}시간만 적용/확인되었습니다`,
+      result,
     });
   } catch (err) {
     const retryable = err instanceof IparkingApiError ? err.retryable : false;
@@ -389,6 +479,9 @@ export async function createParkingDiscountJobForTest(data: ParkingDiscountJob):
     status: data.status || "pending",
     dryRun: data.dryRun ?? true,
     discountName: data.discountName || DEFAULT_DISCOUNT_NAME,
+    requestedDiscountHours: data.requestedDiscountHours || DEFAULT_REQUESTED_DISCOUNT_HOURS,
+    maxAutoDiscountHours: data.maxAutoDiscountHours || MAX_AUTO_DISCOUNT_HOURS,
+    discountUnitHours: data.discountUnitHours || DEFAULT_DISCOUNT_UNIT_HOURS,
     source: data.source || "manual_test",
     createdAt: FieldValue.serverTimestamp(),
     updatedAt: FieldValue.serverTimestamp(),

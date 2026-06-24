@@ -17,6 +17,9 @@ const state = {
   onsiteWelcomeRequests: [],
   memberSignupContracts: [],
   pricingInquiryAlimtalkRequests: [],
+  parkingVehicles: [],
+  parkingJobs: [],
+  parkingConfig: null,
   staffItems: [],
   staffHrCards: [],
   staffEvaluationSubmissions: [],
@@ -54,6 +57,12 @@ const COMMAND_ITEMS = [
     detail: "문의 전화번호 입력 후 승인 템플릿으로 즉시 발송",
     href: "#pricingInquiryForm",
     keywords: "수강료 가격 문의 알림톡 발송 상담",
+  },
+  {
+    title: "주차등록",
+    detail: "회원/강사 차량 등록과 오늘 자동 주차권 적용",
+    href: "#parkingRegistrationForm",
+    keywords: "parking 주차 차량 등록 할인권 아이파킹",
   },
   {
     title: "프라이빗 진행",
@@ -112,7 +121,8 @@ function setPillText(id, value) {
 function formatDate(value) {
   if (!value) return "-";
   if (Array.isArray(value) && !value.length) return "-";
-  const raw = typeof value?.toDate === "function" ? value.toDate() : new Date(value);
+  const ms = timestampMs(value);
+  const raw = ms ? new Date(ms) : typeof value?.toDate === "function" ? value.toDate() : new Date(value);
   if (Number.isNaN(raw.getTime())) return String(value);
   return new Intl.DateTimeFormat("ko-KR", {
     month: "numeric",
@@ -199,9 +209,12 @@ function deltaText(current, previous, suffix = "%") {
 
 function normalizeStatus(value) {
   const status = String(value || "unknown").toLowerCase();
-  if (["success", "ok", "healthy", "done", "active", "completed", "sent"].includes(status)) return "good";
+  if (["success", "ok", "healthy", "done", "active", "completed", "sent", "eligible"].includes(status)) return "good";
   if (["failed", "error", "critical", "blocked"].includes(status)) return "danger";
-  if (["running", "pending", "warning", "review", "review_needed", "stale", "queued", "skipped", "template_pending"].includes(status)) return "warn";
+  if (
+    ["running", "pending", "warning", "review", "manual_review", "review_needed", "stale", "queued", "skipped", "template_pending"].includes(status)
+  )
+    return "warn";
   return "";
 }
 
@@ -217,6 +230,8 @@ function statusLabel(value) {
     blocked: "중단",
     running: "실행중",
     pending: "대기",
+    manual_review: "수동확인",
+    eligible: "적용가능",
     queued: "대기",
     sent: "발송완료",
     skipped: "차단",
@@ -896,6 +911,8 @@ function timestampMs(value) {
   if (!value) return 0;
   if (Array.isArray(value) && !value.length) return 0;
   if (typeof value?.toDate === "function") return value.toDate().getTime() || 0;
+  if (Number.isFinite(Number(value?.seconds))) return Number(value.seconds) * 1000 + Math.floor(Number(value.nanoseconds || 0) / 1000000);
+  if (Number.isFinite(Number(value?._seconds))) return Number(value._seconds) * 1000 + Math.floor(Number(value._nanoseconds || 0) / 1000000);
   const date = new Date(value);
   return Number.isNaN(date.getTime()) ? 0 : date.getTime();
 }
@@ -1491,6 +1508,186 @@ function togglePricingInquiryHistory() {
   button.setAttribute("aria-expanded", String(nextOpen));
   button.textContent = nextOpen ? "최근 발송/메모 닫기" : "최근 발송/메모 보기";
   if (nextOpen) renderPricingInquiryRecentList();
+}
+
+function setParkingStatus(message, tone = "") {
+  const element = qs("parkingStatus");
+  if (!element) return;
+  element.textContent = message;
+  element.className = `form-status ${tone}`.trim();
+}
+
+function normalizeCarNumber(value) {
+  return String(value || "").replace(/[\s-]/g, "").toUpperCase();
+}
+
+function renderParkingDashboard() {
+  const vehicleList = qs("parkingVehicleList");
+  const jobList = qs("parkingJobList");
+  const vehicleCount = qs("parkingVehicleCount");
+  const jobCount = qs("parkingJobCount");
+  if (!vehicleList && !jobList) return;
+  const vehicles = [...(state.parkingVehicles || [])].sort((a, b) => timestampMs(b.updatedAt) - timestampMs(a.updatedAt));
+  const jobs = [...(state.parkingJobs || [])].sort((a, b) => timestampMs(b.updatedAt || b.createdAt) - timestampMs(a.updatedAt || a.createdAt));
+  if (vehicleCount) vehicleCount.textContent = `${vehicles.length}대`;
+  if (jobCount) jobCount.textContent = `${jobs.length}건`;
+
+  if (vehicleList) {
+    vehicleList.innerHTML = vehicles.length
+      ? vehicles
+          .slice(0, 20)
+          .map((item) => {
+            const role = item.ownerType === "staff" ? "강사" : "회원";
+            const phone = formatPhoneNumber(item.ownerPhone || "");
+            return `
+              <div class="status-row">
+                <div>
+                  <strong>${escapeHtml(item.ownerName || "이름 없음")} · ${escapeHtml(item.carNumber || item.label || "")}</strong>
+                  <p>${escapeHtml(role)} · ${escapeHtml(phone)} · ${escapeHtml(formatDate(item.updatedAt))}</p>
+                </div>
+                ${pill(item.status || "active")}
+              </div>
+            `;
+          })
+          .join("")
+      : `<div class="empty-state">등록된 차량이 없습니다. 이름, 연락처, 차량번호를 입력해 먼저 등록하세요.</div>`;
+  }
+
+  if (jobList) {
+    jobList.innerHTML = jobs.length
+      ? jobs
+          .slice(0, 20)
+          .map((item) => {
+            const name = item.memberName || item.staffName || item.ownerName || "대상";
+            const result = item.result || {};
+            const hours =
+              result.totalSatisfiedHours || result.appliedHours || item.requestedDiscountHours
+                ? `${result.totalSatisfiedHours || result.appliedHours || 0}/${item.requestedDiscountHours || 4}시간`
+                : "4시간 요청";
+            const reason = item.lastError || item.reason || item.jobId || item.id;
+            return `
+              <div class="status-row">
+                <div>
+                  <strong>${escapeHtml(name)} · 끝자리 ${escapeHtml(item.carNumberLast4 || "")}</strong>
+                  <p>${escapeHtml(hours)} · ${escapeHtml(formatDate(item.updatedAt || item.createdAt))}${reason ? ` · ${escapeHtml(reason)}` : ""}</p>
+                </div>
+                ${pill(item.status || "pending")}
+              </div>
+            `;
+          })
+          .join("")
+      : `<div class="empty-state">최근 주차권 작업이 없습니다. 오늘 자동적용 실행 후 상태가 표시됩니다.</div>`;
+  }
+}
+
+async function loadParkingDashboard(runtime) {
+  if (!qs("parkingRegistrationForm")) return;
+  try {
+    const getParkingDashboard = runtime.httpsCallable(runtime.functionsClient, "getParkingDashboard");
+    const result = await getParkingDashboard({});
+    const data = result?.data || {};
+    state.parkingVehicles = Array.isArray(data.vehicles) ? data.vehicles : [];
+    state.parkingJobs = Array.isArray(data.jobs) ? data.jobs : [];
+    state.parkingConfig = data.config || null;
+    const config = state.parkingConfig;
+    if (config?.discountUnitHours && config?.maxAutoDiscountHours) {
+      setText("parkingPolicyPill", `${config.discountUnitHours}시간 × ${Math.floor(config.maxAutoDiscountHours / config.discountUnitHours)}계정`);
+    }
+  } catch (error) {
+    state.readWarnings.push({ label: "parkingDashboard", message: error?.message || String(error) });
+    state.parkingVehicles = [];
+    state.parkingJobs = [];
+    setParkingStatus("주차등록 데이터를 불러오지 못했습니다. 운영자 권한 또는 Functions 배포 상태를 확인하세요.", "danger");
+  }
+  renderParkingDashboard();
+}
+
+async function handleParkingVehicleSubmit(event) {
+  event.preventDefault();
+  const ownerType = String(qs("parkingOwnerType")?.value || "member");
+  const ownerName = String(qs("parkingOwnerName")?.value || "").trim();
+  const ownerPhone = normalizePhone(qs("parkingOwnerPhone")?.value || "");
+  const carNumber = normalizeCarNumber(qs("parkingCarNumber")?.value || "");
+  const note = String(qs("parkingNote")?.value || "").trim();
+  const button = qs("parkingRegisterButton");
+  if (!ownerName && !ownerPhone) {
+    setParkingStatus("이름 또는 연락처를 입력하세요.", "danger");
+    return;
+  }
+  if (!/\d{4}$/.test(carNumber) || carNumber.length < 6) {
+    setParkingStatus("차량번호를 다시 확인하세요. 예: 241고2299", "danger");
+    return;
+  }
+  if (button) {
+    button.disabled = true;
+    button.textContent = "등록 중";
+  }
+  setParkingStatus("회원/강사 매칭 후 차량을 등록하고 있습니다.", "warn");
+  try {
+    const runtime = await initFirebase();
+    const user = await waitForAuth(runtime);
+    if (!user) {
+      showLoginGate("주차등록은 운영자 로그인이 필요합니다.");
+      setParkingStatus("운영자 로그인 후 다시 시도하세요.", "danger");
+      return;
+    }
+    const registerParkingVehicle = runtime.httpsCallable(runtime.functionsClient, "registerParkingVehicle");
+    const result = await registerParkingVehicle({ ownerType, ownerName, ownerPhone, carNumber, note });
+    const data = result?.data || {};
+    const vehicle = data.vehicle || {};
+    const matchStatus = String(data.matchStatus || "");
+    setParkingStatus(
+      matchStatus === "matched"
+        ? `${vehicle.ownerName || ownerName} 차량 등록 완료. 오늘 수업 10분 뒤 자동 적용 대상이 됩니다.`
+        : "차량은 등록했지만 회원/강사 매칭은 확인 필요입니다. 이름/연락처를 다시 확인하세요.",
+      matchStatus === "matched" ? "good" : "warn",
+    );
+    qs("parkingCarNumber").value = "";
+    qs("parkingNote").value = "";
+    await refresh();
+  } catch (error) {
+    if (isPermissionDenied(error)) showLoginGate("주차등록은 운영자 권한이 필요합니다.");
+    setParkingStatus(error?.message || "차량 등록 중 오류가 발생했습니다.", "danger");
+  } finally {
+    if (button) {
+      button.disabled = false;
+      button.textContent = "차량 등록";
+    }
+  }
+}
+
+async function handleParkingAutoApplyClick() {
+  const button = qs("parkingAutoApplyButton");
+  if (button) {
+    button.disabled = true;
+    button.textContent = "작업 생성 중";
+  }
+  setParkingStatus("오늘 예약과 등록 차량을 비교해 주차권 작업을 만들고 있습니다.", "warn");
+  try {
+    const runtime = await initFirebase();
+    const user = await waitForAuth(runtime);
+    if (!user) {
+      showLoginGate("주차권 자동적용은 운영자 로그인이 필요합니다.");
+      setParkingStatus("운영자 로그인 후 다시 시도하세요.", "danger");
+      return;
+    }
+    const runParkingAutoApplyNow = runtime.httpsCallable(runtime.functionsClient, "runParkingAutoApplyNow");
+    const result = await runParkingAutoApplyNow({});
+    const data = result?.data || {};
+    setParkingStatus(
+      `오늘 후보 ${data.candidates || 0}건 중 새 작업 ${data.created || 0}건, 기존 작업 ${data.existing || 0}건입니다.`,
+      "good",
+    );
+    await refresh();
+  } catch (error) {
+    if (isPermissionDenied(error)) showLoginGate("주차권 자동적용은 운영자 권한이 필요합니다.");
+    setParkingStatus(error?.message || "주차권 자동적용 작업 생성 중 오류가 발생했습니다.", "danger");
+  } finally {
+    if (button) {
+      button.disabled = false;
+      button.textContent = "오늘 자동적용 실행";
+    }
+  }
 }
 
 async function handlePricingInquiryAlimtalkSubmit(event) {
@@ -3493,6 +3690,9 @@ function renderFallback(error, options = {}) {
   state.onsiteWelcomeRequests = [];
   state.memberSignupContracts = [];
   state.pricingInquiryAlimtalkRequests = [];
+  state.parkingVehicles = [];
+  state.parkingJobs = [];
+  state.parkingConfig = null;
   state.staffItems = [];
   state.staffHrCards = [];
   state.staffEvaluationSubmissions = [];
@@ -3502,6 +3702,7 @@ function renderFallback(error, options = {}) {
   renderLessons([], [], []);
   renderHomeSummary();
   renderHomeDecisions();
+  renderParkingDashboard();
   renderMemberDetail(null);
   renderPrivate([], [], [], []);
   renderBusinessFallback(error);
@@ -3528,6 +3729,7 @@ async function refresh() {
     const shouldLoadHome = Boolean(qs("homeMemberTotal"));
     const shouldLoadMembers = Boolean(qs("membersTable"));
     const shouldLoadMessages = Boolean(qs("messagesCandidateList"));
+    const shouldLoadParking = Boolean(qs("parkingRegistrationForm"));
     const shouldLoadMemberDetail = Boolean(qs("memberDetailName"));
     const shouldLoadPrivate = Boolean(qs("privateProgressList")) || shouldLoadHome;
     const shouldLoadLessons = Boolean(qs("lessonsTodayList"));
@@ -3673,6 +3875,7 @@ async function refresh() {
     state.staffHrCards = studioItems(staffHrCards);
     state.staffEvaluationSubmissions = studioItems(staffEvaluationSubmissions);
     state.businessSnapshot = dashboardSnapshot?.exists?.() ? normalizeBusinessSnapshot(dashboardSnapshot.data()) : null;
+    if (shouldLoadParking) await loadParkingDashboard(runtime);
     renderLane(state.lane);
     renderAutomation(automationItems);
     renderImports(state.sourceImports);
@@ -3682,6 +3885,7 @@ async function refresh() {
     renderStaffHr();
     renderHomeSummary();
     renderHomeDecisions();
+    renderParkingDashboard();
     renderPricingInquiryRecentList();
     renderMemberDetail(memberDetail);
     renderPrivate(privateRequests, privateRecords, privateUsageEvents, privateLedgerEntries, alimtalkCandidates, alimtalkSends);
@@ -3710,6 +3914,8 @@ activateNav();
 qs("refreshButton")?.addEventListener("click", refresh);
 qs("pricingInquiryForm")?.addEventListener("submit", handlePricingInquiryAlimtalkSubmit);
 qs("pricingInquiryHistoryToggle")?.addEventListener("click", togglePricingInquiryHistory);
+qs("parkingRegistrationForm")?.addEventListener("submit", handleParkingVehicleSubmit);
+qs("parkingAutoApplyButton")?.addEventListener("click", handleParkingAutoApplyClick);
 qs("commandPaletteOpen")?.addEventListener("click", openCommandPalette);
 qs("commandPaletteInput")?.addEventListener("input", renderCommandPaletteResults);
 qs("commandPalette")?.addEventListener("click", (event) => {

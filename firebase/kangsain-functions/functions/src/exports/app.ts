@@ -23,6 +23,11 @@ import {
   iparkingSubLoginId,
   iparkingSubLoginPassword,
 } from "../parking/iparkingClient";
+import {
+  getParkingDashboardHandler,
+  registerParkingVehicleHandler,
+  runParkingAutoApplyNowHandler,
+} from "../parking/parkingOperations";
 import { processParkingDiscountJobSnapshot } from "../parking/processParkingDiscountJob";
 import { callableOptions, publicRequestOptions } from "../runtime/functionOptions";
 import { requireStaff } from "../security/authGuards";
@@ -117,6 +122,30 @@ export const submitKioskCheckin = onCall(callableOptions, async (request) => {
 export const getKioskParkingJobStatus = onCall(callableOptions, async (request) => {
   try {
     return await getKioskParkingJobStatusHandler(request);
+  } catch (err) {
+    throw toHttpsError(err);
+  }
+});
+
+export const registerParkingVehicle = onCall(callableOptions, async (request) => {
+  try {
+    return await registerParkingVehicleHandler(request);
+  } catch (err) {
+    throw toHttpsError(err);
+  }
+});
+
+export const getParkingDashboard = onCall(callableOptions, async (request) => {
+  try {
+    return await getParkingDashboardHandler(request);
+  } catch (err) {
+    throw toHttpsError(err);
+  }
+});
+
+export const runParkingAutoApplyNow = onCall(callableOptions, async (request) => {
+  try {
+    return await runParkingAutoApplyNowHandler(request);
   } catch (err) {
     throw toHttpsError(err);
   }
