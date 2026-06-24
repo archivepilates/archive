@@ -15,7 +15,7 @@ const DISCOUNT_UNIT_HOURS = 2;
 const MAX_AUTO_DISCOUNT_HOURS = 4;
 const APPLY_AFTER_START_MINUTES = 10;
 
-type ParkingOwnerType = "member" | "staff";
+type ParkingOwnerType = "member" | "staff" | "visitor";
 
 type ParkingVehicleDoc = {
   vehicleId: string;
@@ -28,6 +28,7 @@ type ParkingVehicleDoc = {
   ownerPhoneLast4: string;
   memberId?: string;
   staffId?: string;
+  validDate?: string;
   carNumber: string;
   carNumberLast4: string;
   label: string;
@@ -57,6 +58,7 @@ type ParkingDashboardVehicle = Pick<
   | "ownerPhone"
   | "memberId"
   | "staffId"
+  | "validDate"
   | "carNumber"
   | "carNumberLast4"
   | "label"
@@ -73,6 +75,7 @@ type ParkingDashboardJob = {
   ownerType?: string;
   memberName?: string;
   staffName?: string;
+  ownerName?: string;
   carNumberLast4?: string;
   requestedDiscountHours?: number;
   result?: Record<string, unknown>;
@@ -88,19 +91,22 @@ export async function registerParkingVehicleHandler(request: CallableRequest): P
   matchReason: string;
 }> {
   const staff = await requireManagerAccess(request);
-  const ownerType = stringValue(request.data?.ownerType) === "staff" ? "staff" : "member";
-  const ownerName = stringValue(request.data?.ownerName || request.data?.name);
+  const ownerType = parseOwnerType(request.data?.ownerType);
+  const ownerName = stringValue(request.data?.ownerName || request.data?.name) || (ownerType === "visitor" ? "방문객" : "");
   const ownerPhone = digitsOnly(request.data?.ownerPhone || request.data?.phone);
   const carNumber = normalizeCarNumber(request.data?.carNumber);
   const note = stringValue(request.data?.note);
+  const validDate = todayKst();
 
-  if (!ownerName && !ownerPhone) throw new AppError("INVALID_ARGUMENT", "이름 또는 연락처가 필요합니다");
+  if (ownerType !== "visitor" && !ownerName && !ownerPhone) throw new AppError("INVALID_ARGUMENT", "이름 또는 연락처가 필요합니다");
   if (!validCarNumber(carNumber)) throw new AppError("INVALID_ARGUMENT", "차량번호를 다시 확인하세요");
 
   const resolved =
     ownerType === "staff"
       ? await resolveStaffOwner({ staff, ownerName, ownerPhone })
-      : await resolveMemberOwner({ staff, ownerName, ownerPhone });
+      : ownerType === "visitor"
+        ? resolveVisitorOwner({ ownerName, ownerPhone, carNumber, validDate })
+        : await resolveMemberOwner({ staff, ownerName, ownerPhone });
   const now = nowTimestamp();
   const vehicleId = parkingVehicleId(ownerType, resolved.ownerId, carNumber);
   const vehicle: ParkingVehicleDoc = {
@@ -114,6 +120,7 @@ export async function registerParkingVehicleHandler(request: CallableRequest): P
     ownerPhoneLast4: digitsOnly(resolved.ownerPhone || ownerPhone).slice(-4),
     memberId: resolved.memberId,
     staffId: resolved.staffId,
+    validDate: ownerType === "visitor" ? validDate : undefined,
     carNumber,
     carNumberLast4: carLast4(carNumber),
     label: maskCarNumber(carNumber),
@@ -187,6 +194,9 @@ export async function runParkingAutoApplyNowHandler(request: CallableRequest): P
   skippedNotDue: number;
   skippedNoVehicle: number;
   candidates: number;
+  visitorCandidates: number;
+  visitorCreated: number;
+  visitorExisting: number;
 }> {
   const staff = await requireManagerAccess(request);
   return await createDueParkingDiscountJobs({
@@ -194,6 +204,7 @@ export async function runParkingAutoApplyNowHandler(request: CallableRequest): P
     requestedByUid: request.auth?.uid || "operator",
     source: "core_parking_manual_run",
     date: String(request.data?.date || todayKst()),
+    includeVisitors: true,
   });
 }
 
@@ -202,6 +213,7 @@ export async function createDueParkingDiscountJobs(input: {
   requestedByUid?: string;
   source?: string;
   date?: string;
+  includeVisitors?: boolean;
 }): Promise<{
   ok: true;
   date: string;
@@ -210,12 +222,15 @@ export async function createDueParkingDiscountJobs(input: {
   skippedNotDue: number;
   skippedNoVehicle: number;
   candidates: number;
+  visitorCandidates: number;
+  visitorCreated: number;
+  visitorExisting: number;
 }> {
   const studioId = input.studioId || DEFAULT_STUDIO_ID;
   const date = input.date || todayKst();
   const now = nowTimestamp();
   const nowMs = now.toMillis();
-  const vehicles = await loadParkingVehicles(studioId);
+  const vehicles = await loadParkingVehicles(studioId, date);
   const bookingSnap = await db
     .collection("bookings")
     .where("studioId", "==", studioId)
@@ -228,6 +243,7 @@ export async function createDueParkingDiscountJobs(input: {
 
   const memberVehicles = vehicles.filter((vehicle) => vehicle.ownerType === "member");
   const staffVehicles = vehicles.filter((vehicle) => vehicle.ownerType === "staff");
+  const visitorVehicles = vehicles.filter((vehicle) => vehicle.ownerType === "visitor" && vehicle.validDate === date);
   const queuedMemberKeys = new Set<string>();
   const queuedStaffKeys = new Set<string>();
   let created = 0;
@@ -235,6 +251,9 @@ export async function createDueParkingDiscountJobs(input: {
   let skippedNotDue = 0;
   let skippedNoVehicle = 0;
   let candidates = 0;
+  let visitorCandidates = 0;
+  let visitorCreated = 0;
+  let visitorExisting = 0;
 
   for (const booking of bookings) {
     const startMs = timestampMs(booking.lectureStartAt);
@@ -286,7 +305,41 @@ export async function createDueParkingDiscountJobs(input: {
     }
   }
 
-  return { ok: true, date, created, existing, skippedNotDue, skippedNoVehicle, candidates };
+  if (input.includeVisitors) {
+    visitorCandidates = visitorVehicles.length;
+    candidates += visitorCandidates;
+    for (const vehicle of visitorVehicles) {
+      const key = `${date}_${vehicle.vehicleId}`;
+      const result = await createVisitorParkingJob({
+        date,
+        vehicle,
+        jobId: `parking_auto_v_${safeId(key) || hashSmall(key)}`,
+        source: input.source || "core_parking_manual_run",
+        requestedByUid: input.requestedByUid || "operator",
+        now,
+      });
+      if (result === "created") {
+        created += 1;
+        visitorCreated += 1;
+      } else {
+        existing += 1;
+        visitorExisting += 1;
+      }
+    }
+  }
+
+  return {
+    ok: true,
+    date,
+    created,
+    existing,
+    skippedNotDue,
+    skippedNoVehicle,
+    candidates,
+    visitorCandidates,
+    visitorCreated,
+    visitorExisting,
+  };
 }
 
 async function requireManagerAccess(request: CallableRequest): Promise<StaffDoc> {
@@ -404,6 +457,22 @@ function unresolvedOwner(ownerType: ParkingOwnerType, name: string, phone: strin
   };
 }
 
+function resolveVisitorOwner(input: {
+  ownerName: string;
+  ownerPhone: string;
+  carNumber: string;
+  validDate: string;
+}): ResolvedOwner {
+  const raw = [input.validDate, input.carNumber].filter(Boolean).join("_");
+  return {
+    ownerId: `visitor_${input.validDate}_${hashSmall(raw)}`,
+    ownerName: input.ownerName || "방문객",
+    ownerPhone: input.ownerPhone,
+    matchStatus: "matched",
+    matchReason: "visitor_one_day",
+  };
+}
+
 function upsertOwnerVehicleMirror(
   tx: FirebaseFirestore.Transaction,
   ref: FirebaseFirestore.DocumentReference,
@@ -433,10 +502,11 @@ function upsertOwnerVehicleMirror(
   );
 }
 
-async function loadParkingVehicles(studioId: string): Promise<ParkingVehicleDoc[]> {
+async function loadParkingVehicles(studioId: string, date = todayKst()): Promise<ParkingVehicleDoc[]> {
   const snap = await db.collection(PARKING_VEHICLES).where("studioId", "==", studioId).where("status", "==", "active").limit(500).get();
   return snap.docs
     .map((doc) => doc.data() as ParkingVehicleDoc)
+    .filter((vehicle) => vehicle.ownerType !== "visitor" || vehicle.validDate === date)
     .sort((a, b) => timestampMs(b.updatedAt) - timestampMs(a.updatedAt));
 }
 
@@ -504,6 +574,43 @@ async function createParkingJob(input: {
   return "created";
 }
 
+async function createVisitorParkingJob(input: {
+  date: string;
+  vehicle: ParkingVehicleDoc;
+  jobId: string;
+  source: string;
+  requestedByUid: string;
+  now: FirebaseFirestore.Timestamp;
+}): Promise<"created" | "existing"> {
+  const ref = db.collection(PARKING_DISCOUNT_JOBS).doc(input.jobId);
+  const snap = await ref.get();
+  if (snap.exists) return "existing";
+  await ref.create({
+    jobId: input.jobId,
+    status: "pending",
+    dryRun: false,
+    studioId: input.vehicle.studioId,
+    ownerType: "visitor",
+    ownerId: input.vehicle.ownerId,
+    ownerName: input.vehicle.ownerName || "방문객",
+    visitorName: input.vehicle.ownerName || "방문객",
+    lessonDate: input.date,
+    carNumber: input.vehicle.carNumber,
+    carNumberLast4: input.vehicle.carNumberLast4,
+    expectedCarNumber: input.vehicle.carNumber,
+    discountName: DISCOUNT_NAME,
+    requestedDiscountHours: MAX_AUTO_DISCOUNT_HOURS,
+    maxAutoDiscountHours: MAX_AUTO_DISCOUNT_HOURS,
+    discountUnitHours: DISCOUNT_UNIT_HOURS,
+    requestedBy: input.requestedByUid,
+    source: input.source,
+    validDate: input.vehicle.validDate || input.date,
+    createdAt: input.now,
+    updatedAt: input.now,
+  });
+  return "created";
+}
+
 function publicVehicle(vehicle: ParkingVehicleDoc): ParkingDashboardVehicle {
   return {
     vehicleId: vehicle.vehicleId,
@@ -512,12 +619,19 @@ function publicVehicle(vehicle: ParkingVehicleDoc): ParkingDashboardVehicle {
     ownerPhone: vehicle.ownerPhone,
     memberId: vehicle.memberId,
     staffId: vehicle.staffId,
+    validDate: vehicle.validDate,
     carNumber: vehicle.carNumber,
     carNumberLast4: vehicle.carNumberLast4,
     label: vehicle.label,
     status: vehicle.status,
     updatedAt: vehicle.updatedAt,
   };
+}
+
+function parseOwnerType(value: unknown): ParkingOwnerType {
+  const raw = stringValue(value);
+  if (raw === "staff" || raw === "visitor") return raw;
+  return "member";
 }
 
 function dueTimestamp(value: FirebaseFirestore.Timestamp | null | undefined): FirebaseFirestore.Timestamp | null {

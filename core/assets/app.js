@@ -1537,13 +1537,14 @@ function renderParkingDashboard() {
       ? vehicles
           .slice(0, 20)
           .map((item) => {
-            const role = item.ownerType === "staff" ? "강사" : "회원";
+            const role = item.ownerType === "staff" ? "강사" : item.ownerType === "visitor" ? "방문" : "회원";
             const phone = formatPhoneNumber(item.ownerPhone || "");
+            const validDate = item.ownerType === "visitor" && item.validDate ? ` · ${escapeHtml(item.validDate)}` : "";
             return `
               <div class="status-row">
                 <div>
                   <strong>${escapeHtml(item.ownerName || "이름 없음")} · ${escapeHtml(item.carNumber || item.label || "")}</strong>
-                  <p>${escapeHtml(role)} · ${escapeHtml(phone)} · ${escapeHtml(formatDate(item.updatedAt))}</p>
+                  <p>${escapeHtml(role)} · ${escapeHtml(phone || "연락처 없음")}${validDate} · ${escapeHtml(formatDate(item.updatedAt))}</p>
                 </div>
                 ${pill(item.status || "active")}
               </div>
@@ -1558,7 +1559,7 @@ function renderParkingDashboard() {
       ? jobs
           .slice(0, 20)
           .map((item) => {
-            const name = item.memberName || item.staffName || item.ownerName || "대상";
+            const name = item.memberName || item.staffName || item.ownerName || item.visitorName || "대상";
             const result = item.result || {};
             const hours =
               result.totalSatisfiedHours || result.appliedHours || item.requestedDiscountHours
@@ -1610,7 +1611,7 @@ async function handleParkingVehicleSubmit(event) {
   const carNumber = normalizeCarNumber(qs("parkingCarNumber")?.value || "");
   const note = String(qs("parkingNote")?.value || "").trim();
   const button = qs("parkingRegisterButton");
-  if (!ownerName && !ownerPhone) {
+  if (ownerType !== "visitor" && !ownerName && !ownerPhone) {
     setParkingStatus("이름 또는 연락처를 입력하세요.", "danger");
     return;
   }
@@ -1622,7 +1623,10 @@ async function handleParkingVehicleSubmit(event) {
     button.disabled = true;
     button.textContent = "등록 중";
   }
-  setParkingStatus("회원/강사 매칭 후 차량을 등록하고 있습니다.", "warn");
+  setParkingStatus(
+    ownerType === "visitor" ? "오늘 방문 차량으로 등록하고 있습니다." : "회원/강사 매칭 후 차량을 등록하고 있습니다.",
+    "warn",
+  );
   try {
     const runtime = await initFirebase();
     const user = await waitForAuth(runtime);
@@ -1636,11 +1640,14 @@ async function handleParkingVehicleSubmit(event) {
     const data = result?.data || {};
     const vehicle = data.vehicle || {};
     const matchStatus = String(data.matchStatus || "");
+    const isVisitor = ownerType === "visitor";
     setParkingStatus(
-      matchStatus === "matched"
+      isVisitor
+        ? `${vehicle.ownerName || ownerName || "방문객"} 방문 차량 등록 완료. 오늘 자동적용 실행을 누르면 주차권 작업이 생성됩니다.`
+        : matchStatus === "matched"
         ? `${vehicle.ownerName || ownerName} 차량 등록 완료. 오늘 수업 10분 뒤 자동 적용 대상이 됩니다.`
         : "차량은 등록했지만 회원/강사 매칭은 확인 필요입니다. 이름/연락처를 다시 확인하세요.",
-      matchStatus === "matched" ? "good" : "warn",
+      isVisitor || matchStatus === "matched" ? "good" : "warn",
     );
     qs("parkingCarNumber").value = "";
     qs("parkingNote").value = "";
@@ -1662,7 +1669,7 @@ async function handleParkingAutoApplyClick() {
     button.disabled = true;
     button.textContent = "작업 생성 중";
   }
-  setParkingStatus("오늘 예약과 등록 차량을 비교해 주차권 작업을 만들고 있습니다.", "warn");
+  setParkingStatus("오늘 예약과 오늘 방문 차량을 비교해 주차권 작업을 만들고 있습니다.", "warn");
   try {
     const runtime = await initFirebase();
     const user = await waitForAuth(runtime);
@@ -1674,8 +1681,9 @@ async function handleParkingAutoApplyClick() {
     const runParkingAutoApplyNow = runtime.httpsCallable(runtime.functionsClient, "runParkingAutoApplyNow");
     const result = await runParkingAutoApplyNow({});
     const data = result?.data || {};
+    const visitorText = data.visitorCandidates ? `, 방문 ${data.visitorCandidates || 0}건` : "";
     setParkingStatus(
-      `오늘 후보 ${data.candidates || 0}건 중 새 작업 ${data.created || 0}건, 기존 작업 ${data.existing || 0}건입니다.`,
+      `오늘 후보 ${data.candidates || 0}건${visitorText} 중 새 작업 ${data.created || 0}건, 기존 작업 ${data.existing || 0}건입니다.`,
       "good",
     );
     await refresh();

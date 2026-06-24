@@ -395,14 +395,15 @@
         </section>
 
         <section class="panel rule-section" id="parking">
-          <div class="panel-header"><div><h2>5. 주차등록</h2><p>ARCHIVE CORE 홈에서 차량을 등록하고 수업 시간표 기준으로 주차권을 자동 적용합니다.</p></div><span class="pill good">active</span></div>
+          <div class="panel-header"><div><h2>5. 주차등록</h2><p>ARCHIVE CORE 홈에서 회원, 강사, 방문 차량을 등록하고 주차권을 적용합니다.</p></div><span class="pill good">active</span></div>
           <div class="rule-grid">
             <article class="rule-card">
               <h3>운영 규칙</h3>
               <ul>
-                <li>회원/강사 차량은 ARCHIVE CORE 홈의 주차등록 섹션에서 이름, 연락처, 차량번호로 등록합니다.</li>
-                <li>차량 원천은 parkingVehicles 컬렉션입니다. 회원카드와 강사카드에는 기본 차량만 표시용으로 미러링합니다.</li>
+                <li>회원/강사/방문 차량은 ARCHIVE CORE 홈의 주차등록 섹션에서 구분, 이름, 연락처, 차량번호로 등록합니다.</li>
+                <li>차량 원천은 parkingVehicles 컬렉션입니다. 회원카드와 강사카드에는 기본 차량만 표시용으로 미러링하고, 방문 차량은 오늘 날짜 일회성 차량으로 보관합니다.</li>
                 <li>오늘 예약된 수업 시작 10분 뒤, 등록 차량이 있는 회원/강사를 대상으로 parkingDiscountJobs를 자동 생성합니다.</li>
+                <li>방문 차량은 수업 예약과 매칭하지 않고, 오늘 자동적용 실행 버튼을 눌렀을 때 당일 방문 차량으로 parkingDiscountJobs를 생성합니다.</li>
                 <li>같은 날 같은 사람·차량은 하나의 안정적인 job id로 묶어 중복 주차권 생성을 막습니다.</li>
               </ul>
             </article>
@@ -418,7 +419,7 @@
             <article class="rule-card">
               <h3>검증 위치</h3>
               <ul>
-                <li>홈 주차등록 섹션에서 등록 차량과 최근 주차권 작업을 확인합니다.</li>
+                <li>홈 주차등록 섹션에서 회원/강사/방문 등록 차량과 최근 주차권 작업을 확인합니다.</li>
                 <li>자동화는 scheduledCreateParkingDiscountJobs가 작업을 만들고 processParkingDiscountJob이 실제 아이파킹 적용을 수행합니다.</li>
                 <li>문제 발생 시 수동확인 또는 error job만 운영자가 확인합니다.</li>
               </ul>

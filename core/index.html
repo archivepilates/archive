@@ -128,7 +128,7 @@
           <div class="panel-header">
             <div>
               <h2>주차등록</h2>
-              <p>회원/강사 차량을 한 번 등록하면 오늘 수업 10분 뒤 아이파킹 2시간권을 2개 계정으로 최대 4시간까지 자동 적용합니다.</p>
+              <p>회원/강사 차량은 오늘 수업 10분 뒤, 방문 차량은 오늘 자동적용 실행 시 아이파킹 2시간권을 2개 계정으로 최대 4시간까지 적용합니다.</p>
             </div>
             <span class="pill good" id="parkingPolicyPill">2시간 × 2계정</span>
           </div>
@@ -138,11 +138,12 @@
               <select id="parkingOwnerType" name="ownerType">
                 <option value="member">회원</option>
                 <option value="staff">강사</option>
+                <option value="visitor">방문</option>
               </select>
             </label>
             <label>
               <span>이름</span>
-              <input id="parkingOwnerName" name="ownerName" type="text" autocomplete="name" placeholder="회원명 또는 강사명" />
+              <input id="parkingOwnerName" name="ownerName" type="text" autocomplete="name" placeholder="회원명, 강사명, 방문객명" />
             </label>
             <label>
               <span>연락처</span>
@@ -154,13 +155,13 @@
             </label>
             <label class="wide">
               <span>내부 메모</span>
-              <textarea id="parkingNote" name="note" rows="2" placeholder="차량 변경 사유, 가족차량 여부 등 운영 메모를 남깁니다."></textarea>
+              <textarea id="parkingNote" name="note" rows="2" placeholder="차량 변경 사유, 가족차량, 방문 목적 등 운영 메모를 남깁니다."></textarea>
             </label>
             <div class="action-form-footer">
               <button class="primary-action" id="parkingRegisterButton" type="submit">차량 등록</button>
               <button class="secondary-action" id="parkingAutoApplyButton" type="button">오늘 자동적용 실행</button>
               <p class="form-status" id="parkingStatus" role="status" aria-live="polite">
-                등록 차량이 있는 오늘 수업의 회원/강사를 자동 주차권 대상으로 봅니다.
+                등록 차량이 있는 오늘 수업의 회원/강사와 오늘 방문 차량을 자동 주차권 대상으로 봅니다.
               </p>
             </div>
           </form>
