@@ -1322,22 +1322,42 @@ td span {
 .parking-dashboard {
   display: grid;
   grid-template-columns: repeat(auto-fit, minmax(min(100%, 320px), 1fr));
-  gap: 16px;
+  gap: 18px;
   border-top: 1px solid var(--line-soft);
-  padding: 20px;
+  padding: 18px 20px 20px;
 }
 
 .parking-dashboard article {
+  display: grid;
+  min-height: 220px;
   min-width: 0;
-  overflow: clip;
-  border: 1px solid var(--line-soft);
-  border-radius: 12px;
-  background: rgba(255, 255, 255, 0.7);
+  align-content: start;
+  border: 1px solid rgba(226, 232, 240, 0.88);
+  border-radius: 8px;
+  background: rgba(255, 255, 255, 0.62);
+  padding: 14px;
 }
 
 .parking-dashboard .pricing-history-list {
+  gap: 8px;
   max-height: 360px;
   overflow: auto;
+  padding-top: 10px;
+}
+
+.parking-dashboard .pricing-history-header {
+  align-items: center;
+  border-bottom: 1px solid var(--line-soft);
+  padding-bottom: 10px;
+}
+
+.parking-dashboard .status-row {
+  box-shadow: none;
+  padding: 12px;
+}
+
+.parking-dashboard .empty-state {
+  padding: 14px;
 }
 
 .action-form-footer {
