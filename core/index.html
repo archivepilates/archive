@@ -59,11 +59,11 @@
             <div>
               <span class="context-label">오늘 우선순위</span>
               <strong id="commandQueueStatus">운영 큐 확인 중</strong>
-              <p id="commandQueueNote">Firestore 연결 후 미해결 업무를 계산합니다.</p>
+              <p id="commandQueueNote">데이터 연결 후 미해결 업무를 계산합니다.</p>
             </div>
             <div class="connection-card" aria-live="polite">
               <span id="connectionLabel">로딩</span>
-              <strong id="connectionDetail">Firestore 연결 준비 중</strong>
+              <strong id="connectionDetail">데이터 연결 준비 중</strong>
             </div>
             <button class="refresh-button" id="refreshButton" type="button">새로고침</button>
           </aside>
@@ -102,7 +102,7 @@
               <span class="pill good">operator queue</span>
             </div>
             <div class="list" id="homeDecisionList">
-              <div class="empty-state">Firestore 연결 후 미해결 운영 큐를 표시합니다.</div>
+              <div class="empty-state">데이터 연결 후 미해결 운영 큐를 표시합니다.</div>
             </div>
           </article>
 
@@ -231,7 +231,7 @@
             <div class="pricing-history-header">
               <div>
                 <strong>최근 수강료 안내 발송</strong>
-                <p>Firestore pricingInquiryAlimtalkRequests 기준입니다. 내부 메모는 알림톡 본문에 포함되지 않습니다.</p>
+                <p>내부 메모와 최근 발송 결과를 함께 확인합니다.</p>
               </div>
               <span class="pill" id="pricingInquiryHistoryCount">0건</span>
             </div>
@@ -250,7 +250,7 @@
             <a class="ops-card status-link" href="./members/">
               <div class="ops-card-header"><h3>회원</h3><span class="pill">Members</span></div>
               <strong id="homeMemberTotal">회원 데이터</strong>
-              <p id="homeMemberNote">전체 회원 read-model 연결 상태를 확인합니다.</p>
+              <p id="homeMemberNote">전체 회원 목록과 상태를 확인합니다.</p>
             </a>
             <a class="ops-card status-link" href="./private/">
               <div class="ops-card-header"><h3>프라이빗</h3><span class="pill warn">Private</span></div>
@@ -315,7 +315,7 @@
             <span class="pill" id="automationMode">연결 대기</span>
           </div>
           <div class="list" id="automationList" aria-live="polite">
-            <div class="empty-state">Firestore 연결 후 automationStatus를 표시합니다.</div>
+            <div class="empty-state">연결 후 자동화 상태를 표시합니다.</div>
           </div>
         </section>
       </main>

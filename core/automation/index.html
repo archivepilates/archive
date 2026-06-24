@@ -25,12 +25,12 @@
       <main class="main">
         <header class="topbar">
           <div class="title-block"><p class="eyebrow">AUTOMATION</p><h1>자동화 관제</h1><p class="subtitle">동기화, 다운로드, import, 알림톡, 보고 작업의 상태를 모읍니다.</p></div>
-          <div class="top-actions"><div class="connection-card" aria-live="polite"><span id="connectionLabel">로딩</span><strong id="connectionDetail">Firestore 연결 준비 중</strong></div><button class="refresh-button" id="refreshButton" type="button">새로고침</button></div>
+          <div class="top-actions"><div class="connection-card" aria-live="polite"><span id="connectionLabel">로딩</span><strong id="connectionDetail">데이터 연결 준비 중</strong></div><button class="refresh-button" id="refreshButton" type="button">새로고침</button></div>
         </header>
         <section class="grid kpis">
           <article class="panel metric"><div class="metric-label">등록 자동화</div><div class="metric-value" id="automationStatusCount">0건</div><div class="metric-note" id="automationRunnerCount">LaunchAgent / Codex</div></article>
           <article class="panel metric"><div class="metric-label">실패/중단</div><div class="metric-value" id="automationFailedCount">0건</div><div class="metric-note">먼저 확인할 작업</div></article>
-          <article class="panel metric"><div class="metric-label">최근 실행</div><div class="metric-value compact" id="automationRecentRun">확인 중</div><div class="metric-note" id="automationConnectedState">Firestore read</div></article>
+          <article class="panel metric"><div class="metric-label">최근 실행</div><div class="metric-value compact" id="automationRecentRun">확인 중</div><div class="metric-note" id="automationConnectedState">상태 확인 중</div></article>
           <article class="panel metric"><div class="metric-label">Codex ACTIVE</div><div class="metric-value compact" id="automationCodexActiveCount">0건</div><div class="metric-note">LaunchAgent 중복 여부 확인</div></article>
         </section>
         <section class="panel">
@@ -42,11 +42,11 @@
             </article>
             <article class="ops-card">
               <div class="ops-card-header"><h3>2. 정규화</h3><span class="pill">import</span></div>
-              <p>sourceImports와 dataQualityIssues 기록이 남아야 CORE 화면 판단이 가능합니다.</p>
+              <p>원본 처리와 품질 이슈 기록이 남아야 CORE 화면에서 상태를 판단할 수 있습니다.</p>
             </article>
             <article class="ops-card">
               <div class="ops-card-header"><h3>3. 핵심 건강도</h3><span class="pill warn">health</span></div>
-              <div class="list compact-list" id="automationHealthList"><div class="empty-state">Firestore 연결 후 핵심 자동화 상태를 표시합니다.</div></div>
+              <div class="list compact-list" id="automationHealthList"><div class="empty-state">데이터 연결 후 핵심 자동화 상태를 표시합니다.</div></div>
             </article>
             <article class="ops-card">
               <div class="ops-card-header"><h3>4. 외부 실행</h3><span class="pill danger">guardrail</span></div>
@@ -55,8 +55,8 @@
           </div>
         </section>
         <section class="panel panel-tall">
-          <div class="panel-header"><div><h2>등록 자동화 상태</h2><p>LaunchAgent와 Codex 자동화 정의를 automationStatus 문서로 모아 실패/중복 위험을 먼저 봅니다.</p></div><span class="pill">status log</span></div>
-          <div class="list" id="automationList"><div class="empty-state">Firestore 연결 후 automationStatus를 표시합니다.</div></div>
+          <div class="panel-header"><div><h2>등록 자동화 상태</h2><p>실행 중인 자동화를 모아 실패와 중복 위험을 먼저 봅니다.</p></div><span class="pill">status log</span></div>
+          <div class="list" id="automationList"><div class="empty-state">데이터 연결 후 자동화 상태를 표시합니다.</div></div>
         </section>
       </main>
     </div>

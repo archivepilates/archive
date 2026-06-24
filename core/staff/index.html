@@ -33,7 +33,7 @@
           <div class="top-actions" aria-label="상태 확인">
             <div class="connection-card" aria-live="polite">
               <span id="connectionLabel">로딩</span>
-              <strong id="connectionDetail">Firestore 연결 준비 중</strong>
+              <strong id="connectionDetail">데이터 연결 준비 중</strong>
             </div>
             <button class="refresh-button" id="refreshButton" type="button">새로고침</button>
           </div>
@@ -67,7 +67,7 @@
               </div>
             </div>
             <div class="list staff-list" id="staffHrList">
-              <div class="empty-state">Firestore 연결 후 강사별 카드가 표시됩니다.</div>
+              <div class="empty-state">데이터 연결 후 강사별 카드가 표시됩니다.</div>
             </div>
           </article>
 
@@ -85,7 +85,7 @@
         <section class="grid overview-grid">
           <article class="panel">
             <div class="panel-header">
-              <div><h2>최근 평가 제출</h2><p>Firebase에 저장된 제출 기록입니다. 보조 기록은 응답 시트에서도 확인합니다.</p></div>
+              <div><h2>최근 평가 제출</h2><p>최근 제출된 평가 기록입니다. 보조 기록은 응답 시트에서도 확인합니다.</p></div>
               <span class="pill">quiz</span>
             </div>
             <div class="list" id="staffEvaluationSubmissionList">
@@ -95,21 +95,21 @@
 
           <aside class="panel">
             <div class="panel-header">
-              <div><h2>강사지표 원천</h2><p>현재 연결된 지표와 연결 대기 중인 지표를 구분합니다.</p></div>
-              <span class="pill good">read-model</span>
+              <div><h2>강사지표</h2><p>현재 볼 수 있는 지표와 아직 준비 중인 지표를 구분합니다.</p></div>
+              <span class="pill good">metrics</span>
             </div>
             <div class="flow-list staff-rule-list">
-              <div><strong>퀴즈 답변</strong><span>staffEvaluationSubmissions / staffHrCards quizResults</span></div>
-              <div><strong>월별 그룹 예약률</strong><span>dashboardSnapshots/current · 강사통계</span></div>
-              <div><strong>월 수업 개수</strong><span>강사통계 원천에 수업 수 필드 추가 후 연결</span></div>
-              <div><strong>만족도·클레임</strong><span>설문/클레임 원천 확정 후 강사카드에 연결</span></div>
+              <div><strong>퀴즈 답변</strong><span>최근 제출 답안과 점수</span></div>
+              <div><strong>월별 그룹 예약률</strong><span>월별 강사 운영 지표</span></div>
+              <div><strong>월 수업 개수</strong><span>강사별 월 수업수 준비 중</span></div>
+              <div><strong>만족도·클레임</strong><span>설문/클레임 기록 연결 준비 중</span></div>
             </div>
           </aside>
         </section>
 
         <section class="panel">
           <div class="panel-header">
-            <div><h2>운영 기준</h2><p>인사기록카드는 평가 결과를 보관하는 read-model입니다. 실제 제출, 채점, 서술형 점수 수정은 Functions callable에서만 처리합니다.</p></div>
+            <div><h2>운영 기준</h2><p>평가 제출, 채점, 서술형 점수 수정은 안전한 서버 처리로만 진행합니다.</p></div>
             <span class="pill good">guarded write</span>
           </div>
           <div class="flow-list staff-rule-list">

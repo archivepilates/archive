@@ -84,9 +84,9 @@ const COMMAND_ITEMS = [
   },
   {
     title: "운영규칙",
-    detail: "현재 유효한 운영 규칙과 데이터 원천 정책 확인",
+    detail: "현재 유효한 운영 규칙과 데이터 기준 확인",
     href: "./rules/",
-    keywords: "rules 규칙 운영규칙 원천 정책",
+    keywords: "rules 규칙 운영규칙 데이터 정책",
   },
   {
     title: "원본 데이터",
@@ -646,7 +646,7 @@ function renderAutomation(items) {
   setText("automationStatusCount", formatCount(knownAutomationItems.length || items.length));
   setText("automationFailedCount", formatCount(failedItems.length));
   setText("automationRecentRun", latestItem ? formatDate(latestItem.updatedAt || latestItem.lastRunAt || latestItem.checkedAt) : "기록 대기");
-  setText("automationConnectedState", items.length ? "상태 문서 연결됨" : "컬렉션 연결 · 기록 없음");
+  setText("automationConnectedState", items.length ? "상태 기록 연결됨" : "기록 대기");
   setText(
     "automationRunnerCount",
     `LaunchAgent ${launchAgentItems.length} · Codex ${codexItems.length}${
@@ -666,7 +666,7 @@ function renderAutomation(items) {
   const list = qs("automationList");
   if (!list) return;
   if (!items.length) {
-    list.innerHTML = `<div class="empty-state">automationStatus 컬렉션은 읽었지만 최근 기록 문서가 없습니다. 자동화 작업 결과 저장 연결이 다음 단계입니다.</div>`;
+    list.innerHTML = `<div class="empty-state">최근 자동화 기록이 없습니다. 작업 결과 저장 연결이 다음 단계입니다.</div>`;
     return;
   }
 
@@ -705,7 +705,7 @@ function renderAutomation(items) {
       {
         title: "Codex 자동화",
         source: activeCodexItems[0] || codexItems[0],
-        detail: "기본은 테스트, 리뷰, fallback입니다. ACTIVE 항목은 중복 여부를 확인합니다.",
+        detail: "기본은 테스트와 리뷰입니다. ACTIVE 항목은 중복 여부를 확인합니다.",
       },
       {
         title: "운영 상태 기록",
@@ -735,7 +735,7 @@ function renderAutomation(items) {
 function renderImports(items) {
   setText("importCount", String(items.length));
   setText("sourceImportCount", formatCount(items.length));
-  setText("importConnectionState", items.length ? "최근 원본 처리 기록 연결됨" : "sourceImports 기록 대기");
+  setText("importConnectionState", items.length ? "최근 원본 처리 기록 연결됨" : "원본 처리 기록 대기");
   const latest = items[0];
   setText("latestImportKind", latest ? sourceKindLabel(latest.sourceKind || latest.kind || latest.fileName || latest.id) : "원본 대기");
   setText(
@@ -747,7 +747,7 @@ function renderImports(items) {
   const table = qs("importsTable");
   if (!table) return;
   if (!items.length) {
-    table.innerHTML = `<tr><td colspan="4">sourceImports 컬렉션은 읽었지만 최근 원본 처리 문서가 없습니다.</td></tr>`;
+    table.innerHTML = `<tr><td colspan="4">최근 원본 처리 기록이 없습니다.</td></tr>`;
     return;
   }
 
@@ -823,10 +823,10 @@ function renderQualityIssues(items) {
 function qualityActionText(item) {
   const type = String(item.issueType || item.type || item.title || "").toLowerCase();
   if (type.includes("phone") || type.includes("전화")) return "전화번호 확인 전 외부 실행 보류";
-  if (type.includes("duplicate") || type.includes("중복")) return "canonical key 기준 우선순위 확인";
+  if (type.includes("duplicate") || type.includes("중복")) return "중복 기준 우선순위 확인";
   if (type.includes("name") || type.includes("동명이인")) return "이름 단독 매칭 금지, 전화번호/StudioMate ID 확인";
   if (type.includes("excel")) return "실제 StudioMate memberId 해소 후 사용";
-  return "운영자가 원천/매칭 상태 확인";
+  return "운영자가 매칭 상태 확인";
 }
 
 function hasOperatorActionFlag(item) {
@@ -1096,7 +1096,7 @@ function renderMembers(items) {
   setText("membersRevenueCount", String(visibleItems.filter((item) => toNumber(item.totalRevenue) > 0).length));
 
   if (!items.length) {
-    table.innerHTML = `<tr><td colspan="4">member360Cards 문서가 없거나 권한 확인이 필요합니다.</td></tr>`;
+    table.innerHTML = `<tr><td colspan="4">회원 데이터가 없거나 권한 확인이 필요합니다.</td></tr>`;
     renderMemberPagination(0);
     return;
   }
@@ -1419,7 +1419,7 @@ function renderMessages(candidates, sends) {
       },
       {
         title: "운영 경계",
-        detail: "이 탭은 확인용입니다. 후보 선정과 발송 원천은 기존 alimtalkCandidates/alimtalkSends를 유지합니다.",
+        detail: "이 탭은 확인용입니다. 실제 발송 전에는 대상자와 템플릿을 다시 확인합니다.",
         status: "active",
       },
     ];
@@ -1821,7 +1821,7 @@ function renderLessons(lessons, reservations, deletedLogs) {
   if (todayList) {
     todayList.innerHTML = todayLessons.length
       ? todayLessons.slice(0, 12).map(renderLessonRow).join("")
-      : `<div class="empty-state">오늘 기준 lessonOccurrences 수업이 없습니다. 원천 기간 또는 import 상태를 확인하세요.</div>`;
+      : `<div class="empty-state">오늘 기준 수업이 없습니다. 가져온 데이터 기간 또는 처리 상태를 확인하세요.</div>`;
   }
 
   const byInstructor = new Map();
@@ -1862,16 +1862,16 @@ function renderLessons(lessons, reservations, deletedLogs) {
     sourceList.innerHTML = `
       <div class="status-row">
         <div>
-          <strong>lessonOccurrences ${items.length.toLocaleString("ko-KR")}개</strong>
-          <p>이번주 표시 ${weekLessons.length.toLocaleString("ko-KR")}개 · reservations 샘플 ${reservationItems.length.toLocaleString("ko-KR")}개</p>
-          <p>${escapeHtml(sourceKinds.join(", ") || "sourceKind 없음")}</p>
+          <strong>수업 데이터 ${items.length.toLocaleString("ko-KR")}개</strong>
+          <p>이번주 표시 ${weekLessons.length.toLocaleString("ko-KR")}개 · 예약 샘플 ${reservationItems.length.toLocaleString("ko-KR")}개</p>
+          <p>${escapeHtml(sourceKinds.join(", ") || "분류 없음")}</p>
         </div>
         ${pill(items.length ? "success" : "warning")}
       </div>
       <div class="status-row">
         <div>
           <strong>운영 경계</strong>
-          <p>이 탭은 read-only 현황입니다. 알림톡, 연락처, StudioMate write 대상 선정에는 사용하지 않습니다.</p>
+          <p>이 탭은 현황 확인용입니다. 발송이나 외부 반영 전에는 별도 승인 흐름을 사용합니다.</p>
         </div>
         ${pill("warning")}
       </div>
@@ -1886,7 +1886,7 @@ function renderLessons(lessons, reservations, deletedLogs) {
         <div class="status-row">
           <div>
             <strong>삭제 수업 로그 미수집</strong>
-            <p>현재 deletedClassLogs 원천이 비어 있어 인원미달 폐강과 시간표 조정을 자동 분류하지 않습니다.</p>
+            <p>삭제 수업 로그가 비어 있어 인원미달 폐강과 시간표 조정을 자동 분류하지 않습니다.</p>
           </div>
           ${pill("warning")}
         </div>
@@ -1923,7 +1923,7 @@ function renderMemberDetail(detail) {
   if (!qs("memberDetailName")) return;
   if (detail?.missingId) {
     setText("memberDetailName", "회원 선택 필요");
-    setText("memberDetailSubtitle", "Members 목록에서 회원을 선택하면 상세 read-model을 표시합니다.");
+    setText("memberDetailSubtitle", "Members 목록에서 회원을 선택하면 상세 정보를 표시합니다.");
     return;
   }
   if (detail?.missing) {
@@ -1971,7 +1971,7 @@ function renderMemberDetail(detail) {
   if (relatedIssues.length) {
     setPillText("memberDetailPrimaryActionTone", "warning");
     setText("memberDetailPrimaryAction", "품질 이슈 먼저 확인");
-    setText("memberDetailPrimaryActionNote", "전화번호, 임시 ID, 중복 fallback 여부를 확인하기 전에는 외부 실행으로 넘기지 않습니다.");
+    setText("memberDetailPrimaryActionNote", "전화번호, 임시 ID, 중복 기록 여부를 확인하기 전에는 외부 실행으로 넘기지 않습니다.");
   } else if (openSignals.length) {
     setPillText("memberDetailPrimaryActionTone", "warning");
     setText("memberDetailPrimaryAction", "주의 신호 확인");
@@ -1979,7 +1979,7 @@ function renderMemberDetail(detail) {
   } else {
     setPillText("memberDetailPrimaryActionTone", "success");
     setText("memberDetailPrimaryAction", "긴급 신호 낮음");
-    setText("memberDetailPrimaryActionNote", "현재 read-model 기준으로 즉시 멈춰야 할 품질/주의 신호는 보이지 않습니다.");
+    setText("memberDetailPrimaryActionNote", "현재 기준으로 즉시 멈춰야 할 품질/주의 신호는 보이지 않습니다.");
   }
   setPillText("memberDetailCareActionTone", activeTicketCount ? "active" : "warning");
   setText("memberDetailCareAction", activeTicketCount ? "수강권 기반 케어" : "수강권 상태 확인");
@@ -1990,8 +1990,8 @@ function renderMemberDetail(detail) {
       : `활성 수강권 요약 없음 · 최근 방문 ${lastVisitText} · 상담/만료/미등록 여부 확인`,
   );
   setPillText("memberDetailGuardrailTone", "success");
-  setText("memberDetailGuardrail", "검토용 read-model");
-  setText("memberDetailGuardrailNote", "알림톡, 연락처, StudioMate write는 canonical source에서만 대상자를 선정합니다.");
+  setText("memberDetailGuardrail", "검토용");
+  setText("memberDetailGuardrailNote", "알림톡, 연락처, StudioMate 반영 전에는 회원 매칭 상태를 다시 확인합니다.");
 
   const signalList = qs("memberDetailSignals");
   if (signalList) {
@@ -2013,7 +2013,7 @@ function renderMemberDetail(detail) {
         title: openSignals.length ? "주의 신호 확인" : "주의 신호 낮음",
         detail: openSignals.length
           ? `${openSignals.length}개 신호가 있습니다. 수강권, 메모, 알림톡 상태를 먼저 확인하세요.`
-          : "현재 read-model 기준 긴급 신호는 보이지 않습니다.",
+          : "현재 기준 긴급 신호는 보이지 않습니다.",
         status: openSignals.length ? "warning" : "success",
       },
       {
@@ -2026,7 +2026,7 @@ function renderMemberDetail(detail) {
       {
         title: relatedIssues.length ? "데이터 품질 이슈 있음" : "품질 이슈 없음",
         detail: relatedIssues.length
-          ? "전화번호, 임시 ID, 중복 fallback 등 외부 실행 전 확인이 필요합니다."
+          ? "전화번호, 임시 ID, 중복 기록 등 외부 실행 전 확인이 필요합니다."
           : "최근 열린 품질 이슈와 직접 연결된 항목은 보이지 않습니다.",
         status: relatedIssues.length ? "warning" : "success",
       },
@@ -2484,7 +2484,7 @@ function renderBusinessBars(summary, selectedMonth) {
   if (!container) return;
   const rows = summary.slice(-8);
   if (!rows.length) {
-    container.innerHTML = `<div class="empty-state">dashboardSnapshots/current summary 데이터가 없습니다.</div>`;
+    container.innerHTML = `<div class="empty-state">월별 요약 데이터가 없습니다.</div>`;
     return;
   }
   const maxRevenue = Math.max(...rows.map((row) => row.totalRevenue), 1);
@@ -2553,7 +2553,7 @@ function renderBusinessMonth(month) {
   setText("businessHeroValue", `${formatManwon(current.totalRevenue)} 총매출`);
   setText(
     "businessHeroNote",
-    daily ? `${daily.date} 누적 기준 · 기존 현황판 원천` : "월 summary 기준 · 기존 현황판 원천",
+    daily ? `${daily.date} 누적 기준` : "월 요약 기준",
   );
   setText("businessTotalRevenue", formatManwon(daily?.totalRevenue || current.totalRevenue));
   setText("businessLessonRevenue", formatManwon(daily?.lessonRevenue || current.lessonRevenue));
@@ -2606,9 +2606,9 @@ function renderBusiness(snapshot) {
 function renderBusinessMemberInsights(items) {
   const list = qs("businessMemberInsightList");
   if (!list) return;
-  setText("businessMemberSummary", items.length ? `${items.length}명 read-model` : "회원 지표 대기");
+  setText("businessMemberSummary", items.length ? `${items.length}명` : "회원 지표 대기");
   if (!items.length) {
-    list.innerHTML = `<div class="empty-state">member360Cards 또는 members의 누적 매출 요약을 읽지 못했습니다.</div>`;
+    list.innerHTML = `<div class="empty-state">회원 누적 매출 요약을 읽지 못했습니다.</div>`;
     return;
   }
   list.innerHTML = items
@@ -2690,7 +2690,7 @@ function renderHomeDecisions() {
   if (openIssues.length) {
     rows.push({
       title: "데이터 품질 운영 확인",
-      detail: `${openIssues.length}개 이슈가 운영자 판단 대상으로 남아 있습니다. 발송/쓰기 전 매칭 상태를 확인하세요.`,
+      detail: `${openIssues.length}개 이슈가 운영자 판단 대상으로 남아 있습니다. 발송이나 반영 전 매칭 상태를 확인하세요.`,
       status: "warning",
       href: "./imports/",
     });
@@ -2819,7 +2819,7 @@ function renderBusinessFallback(error) {
   qs("businessSnapshotStatus").textContent = error ? "권한 확인" : "대기";
   qs("businessSnapshotStatus").className = "pill warn";
   setText("businessHeroValue", "데이터 연결 대기");
-  setText("businessHeroNote", error?.message || "Firestore 권한 또는 snapshot 문서 확인이 필요합니다.");
+  setText("businessHeroNote", error?.message || "데이터 권한 또는 월별 요약 확인이 필요합니다.");
   renderBusinessMemberInsights([]);
 }
 
@@ -3122,17 +3122,17 @@ function renderStaffDetail(row) {
     {
       label: "월별 그룹 예약률",
       value: latestMetric ? formatMetricRate(latestMetric.reservationRate) : "연결 대기",
-      note: latestMetric?.month ? formatMonth(latestMetric.month) : "dashboardSnapshots/current",
+      note: latestMetric?.month ? formatMonth(latestMetric.month) : "월별 강사 지표",
     },
     {
       label: "월별 그룹 평균인원",
       value: latestMetric ? formatMetricNumber(latestMetric.averageGroupMembers, "명") : "연결 대기",
-      note: latestMetric?.month ? "강사통계 기준" : "강사통계 원천 대기",
+      note: latestMetric?.month ? "강사통계 기준" : "강사통계 연결 대기",
     },
     {
       label: "월 수업 개수",
       value: latestMetric?.groupLessonCount === null || latestMetric?.groupLessonCount === undefined ? "연결 대기" : formatMetricNumber(latestMetric.groupLessonCount, "개"),
-      note: latestMetric?.groupLessonCount === null || latestMetric?.groupLessonCount === undefined ? "원천 필드 추가 필요" : "강사통계 기준",
+      note: latestMetric?.groupLessonCount === null || latestMetric?.groupLessonCount === undefined ? "수업수 연결 필요" : "강사통계 기준",
     },
   ];
 
@@ -3161,7 +3161,7 @@ function renderStaffDetail(row) {
           )
           .join("")}
       </div>
-      <p class="meta-line">추후 원천 연결 후 월 수업수, 회원만족도, 클레임 현황을 산식 v2에 반영합니다.</p>
+      <p class="meta-line">추후 월 수업수, 회원만족도, 클레임 현황이 연결되면 산식 v2에 반영합니다.</p>
     </div>
 
     <div class="staff-detail-kpis">
@@ -3271,8 +3271,8 @@ function renderStaffDetail(row) {
     <div class="staff-detail-section">
       <h3>만족도 · 클레임</h3>
       <div class="staff-signal-grid">
-        <div><strong>회원만족도</strong><span>설문 원천 연결 대기</span></div>
-        <div><strong>클레임 현황</strong><span>클레임 기록 원천 연결 대기</span></div>
+        <div><strong>회원만족도</strong><span>설문 연결 대기</span></div>
+        <div><strong>클레임 현황</strong><span>클레임 기록 연결 대기</span></div>
       </div>
     </div>
   `;
@@ -3686,7 +3686,7 @@ function renderFallback(error, options = {}) {
     ? options.requireLogin
       ? "로그인 권한 필요"
       : "데이터 권한 확인 필요"
-    : "Firestore 읽기 실패";
+    : "데이터 읽기 실패";
   setConnection(reason, error?.message || "정적 화면으로 표시합니다.");
   renderLane({ status: "active" });
   renderAutomation([]);
@@ -3720,7 +3720,7 @@ function renderFallback(error, options = {}) {
 async function refresh() {
   const refreshButton = qs("refreshButton");
   if (refreshButton) refreshButton.disabled = true;
-  setConnection("연결 중", "Firestore 읽기 확인 중");
+  setConnection("연결 중", "데이터 읽기 확인 중");
 
   try {
     const runtime = await initFirebase();
@@ -3900,14 +3900,14 @@ async function refresh() {
     renderLessons(lessonOccurrences, reservations, [...deletedClassLogs, ...deletedLessons]);
     if (shouldLoadBusiness) {
       if (state.businessSnapshot) renderBusiness(state.businessSnapshot);
-      else renderBusinessFallback(new Error("dashboardSnapshots/current 문서가 없습니다."));
+      else renderBusinessFallback(new Error("월별 요약 데이터가 없습니다."));
       renderBusinessMemberInsights(businessMembers);
     }
     if (qs("instructorEvaluationQuizForm")) await loadInstructorEvaluationQuiz();
     setConnection(
       state.readWarnings.length ? "부분 연결" : "연결됨",
       state.readWarnings.length
-        ? `${state.readWarnings.length}개 원천 읽기 확인 필요 · ${formatDate(new Date())}`
+        ? `${state.readWarnings.length}개 데이터 읽기 확인 필요 · ${formatDate(new Date())}`
         : `archive-pilates · ${formatDate(new Date())}`,
     );
   } catch (error) {

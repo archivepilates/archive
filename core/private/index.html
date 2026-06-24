@@ -25,13 +25,13 @@
       <main class="main">
         <header class="topbar">
           <div class="title-block"><p class="eyebrow">PRIVATE</p><h1>프라이빗 차트 진행</h1><p class="subtitle">강사 사전설문, 수업후설문, 리포트 완성, 리포트 전송까지 회차별 진행 상태를 봅니다.</p></div>
-          <div class="top-actions" aria-label="상태 확인"><div class="connection-card" aria-live="polite"><span id="connectionLabel">로딩</span><strong id="connectionDetail">Firestore 연결 준비 중</strong></div><button class="refresh-button" id="refreshButton" type="button">새로고침</button></div>
+          <div class="top-actions" aria-label="상태 확인"><div class="connection-card" aria-live="polite"><span id="connectionLabel">로딩</span><strong id="connectionDetail">데이터 연결 준비 중</strong></div><button class="refresh-button" id="refreshButton" type="button">새로고침</button></div>
         </header>
         <section class="grid kpis">
-          <article class="panel metric"><div class="metric-label">차트 요청</div><div class="metric-value" id="privateRequestCount">0</div><div class="metric-note">privateLessonChartRequests</div></article>
-          <article class="panel metric"><div class="metric-label">차트 기록</div><div class="metric-value" id="privateRecordCount">0</div><div class="metric-note">privateLessonChartRecords</div></article>
-          <article class="panel metric"><div class="metric-label">이용 이력</div><div class="metric-value" id="privateUsageCount">0</div><div class="metric-note">memberUsageEvents</div></article>
-          <article class="panel metric"><div class="metric-label">회차 장부</div><div class="metric-value" id="privateLedgerCount">0</div><div class="metric-note">privateSessionLedger</div></article>
+          <article class="panel metric"><div class="metric-label">차트 요청</div><div class="metric-value" id="privateRequestCount">0</div><div class="metric-note">진행 중 요청</div></article>
+          <article class="panel metric"><div class="metric-label">차트 기록</div><div class="metric-value" id="privateRecordCount">0</div><div class="metric-note">작성된 기록</div></article>
+          <article class="panel metric"><div class="metric-label">이용 이력</div><div class="metric-value" id="privateUsageCount">0</div><div class="metric-note">수업 이용 내역</div></article>
+          <article class="panel metric"><div class="metric-label">회차 장부</div><div class="metric-value" id="privateLedgerCount">0</div><div class="metric-note">회차 계산 기록</div></article>
         </section>
         <section class="grid summary-grid">
           <article class="panel detail-card"><span class="pill warn">미진행</span><h2 id="privatePendingCount">0건</h2><p>오늘 이후 수업 중 아직 완료 단계에 도달하지 않은 프라이빗 차트입니다.</p></article>
@@ -49,20 +49,20 @@
             <div><h2>강사별 미진행</h2><p>오늘 이후 수업 중 완료 단계에 도달하지 않은 프라이빗 차트를 강사별로 모아 봅니다.</p></div>
             <span class="pill warn" id="privateInstructorPendingStatus">집계 대기</span>
           </div>
-          <div class="list compact-list" id="privateInstructorPendingList"><div class="empty-state">Firestore 연결 후 표시합니다.</div></div>
+          <div class="list compact-list" id="privateInstructorPendingList"><div class="empty-state">데이터 연결 후 표시합니다.</div></div>
         </section>
         <section class="panel">
           <div class="panel-header">
             <div><h2>4단계 진행 보드</h2><p>오늘 이후 수업을 현재 멈춰 있는 단계에 배치합니다.</p></div>
             <span class="pill" id="privateProgressStatus">진행 확인</span>
           </div>
-          <div class="stage-board" id="privateProgressList"><div class="empty-state">Firestore 연결 후 표시합니다.</div></div>
+          <div class="stage-board" id="privateProgressList"><div class="empty-state">데이터 연결 후 표시합니다.</div></div>
         </section>
         <section class="grid data-grid">
-          <article class="panel detail-card"><span class="pill danger">우선</span><h2>memberUsageEvents</h2><p>회원별 이용내역 엑셀 기반 누적 이용 이력. 프라이빗 회차 계산의 1순위 후보.</p></article>
-          <article class="panel detail-card"><span class="pill warn">계산 장부</span><h2>privateSessionLedger</h2><p>회원 누적 회차와 현재 수강권 회차를 분리해 저장하는 계산 결과.</p></article>
+          <article class="panel detail-card"><span class="pill danger">우선</span><h2>이용 이력</h2><p>회원별 실제 프라이빗 이용 기록을 기준으로 회차를 확인합니다.</p></article>
+          <article class="panel detail-card"><span class="pill warn">계산 장부</span><h2>회차 기록</h2><p>회원 누적 회차와 현재 수강권 회차를 구분해 봅니다.</p></article>
           <article class="panel detail-card"><span class="pill">샘플 검증</span><h2>방지숙 케이스</h2><p>누적 회차와 현재 수강권 회차가 달라지는 대표 샘플로 dry-run 검증.</p></article>
-          <article class="panel detail-card"><span class="pill good">보호</span><h2>기존 차트 유지</h2><p>검증 전까지 프라이빗 차트 발송/요청 원천은 기존 canonical source 유지.</p></article>
+          <article class="panel detail-card"><span class="pill good">보호</span><h2>발송 전 확인</h2><p>회차와 수업 상태가 맞는지 확인한 뒤 리포트를 발송합니다.</p></article>
         </section>
       </main>
     </div>
