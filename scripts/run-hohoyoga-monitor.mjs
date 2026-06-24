@@ -84,6 +84,11 @@ const CENTER_SALE_HEADERS = [
   "현재상태",
   "신규추가여부",
   "모니터링메모",
+  "등급",
+  "점수",
+  "등급근거",
+  "매물유형",
+  "확인필요",
 ];
 
 await main();
@@ -310,12 +315,7 @@ function buildCenterSalePlan(snapshot, existingById) {
     const existing = existingById.get(id);
     if (!existing) continue;
     const row = centerSaleRowFromExisting(existing.row);
-    row[10] = item.contentStatus || row[10] || "";
-    row[11] = item.contentPreview || row[11] || "";
-    row[12] = item.content || row[12] || "";
-    row[14] = RUN_AT;
-    row[15] = item.isCompleted ? "완료" : "게시중";
-    row[17] = item.isCompleted ? "완료 감지" : "상태 확인";
+    updateCenterSaleRowFromItem(row, item, item.isCompleted ? "완료 감지" : "상태 확인");
     rowUpdates.push({ rowNumber: existing.rowNumber, row });
   }
 
@@ -328,12 +328,7 @@ function buildCenterSalePlan(snapshot, existingById) {
       duplicatesSkipped += 1;
       if (!seenUpdateIds.has(id)) {
         const row = centerSaleRowFromExisting(existing.row);
-        row[10] = item.contentStatus || row[10] || "";
-        row[11] = item.contentPreview || row[11] || "";
-        row[12] = item.content || row[12] || "";
-        row[14] = RUN_AT;
-        row[15] = item.isCompleted ? "완료" : "게시중";
-        row[17] = "중복 스킵, 상태 확인";
+        updateCenterSaleRowFromItem(row, item, "중복 스킵, 상태 확인");
         rowUpdates.push({ rowNumber: existing.rowNumber, row });
       }
       continue;
@@ -374,7 +369,10 @@ async function applyPlan(token, plan) {
 async function applyCenterSalePlan(token, plan) {
   const data = [];
   for (const update of plan.rowUpdates) {
-    data.push({ range: quotedRange(SHEETS.centerSale, `A${update.rowNumber}:R${update.rowNumber}`), values: [update.row] });
+    data.push({
+      range: quotedRange(SHEETS.centerSale, `A${update.rowNumber}:${columnName(CENTER_SALE_HEADERS.length)}${update.rowNumber}`),
+      values: [update.row],
+    });
   }
   if (data.length) {
     await sheetsRequest(token, "POST", `/v4/spreadsheets/${SHEET_ID}/values:batchUpdate`, {
@@ -431,6 +429,7 @@ function postRowFromExisting(row) {
 }
 
 function centerSaleRowFromItem(item) {
+  const grade = gradeCenterSale(item);
   return [
     item.documentSrl || "",
     item.postedDate || "",
@@ -450,6 +449,11 @@ function centerSaleRowFromItem(item) {
     item.isCompleted ? "완료" : "게시중",
     "신규",
     "자동 추가",
+    grade.grade,
+    grade.score,
+    grade.reason,
+    grade.type,
+    grade.checkNeeded,
   ];
 }
 
@@ -457,11 +461,101 @@ function centerSaleRowFromExisting(row) {
   return CENTER_SALE_HEADERS.map((header) => row[header] ?? "");
 }
 
+function updateCenterSaleRowFromItem(row, item, memo) {
+  const grade = gradeCenterSale(item);
+  row[10] = item.contentStatus || row[10] || "";
+  row[11] = item.contentPreview || row[11] || "";
+  row[12] = item.content || row[12] || "";
+  row[14] = RUN_AT;
+  row[15] = item.isCompleted ? "완료" : "게시중";
+  row[17] = memo || row[17] || "상태 확인";
+  row[18] = grade.grade;
+  row[19] = grade.score;
+  row[20] = grade.reason;
+  row[21] = grade.type;
+  row[22] = grade.checkNeeded;
+  return row;
+}
+
 function isBusanCenterSale(item) {
   const title = String(item.title || "");
   const text = [item.title, item.area, item.address, item.contentPreview, item.content].join("\n");
   if (/부산|부산광역시|부산시/.test(text)) return true;
   return /해운대|센텀|민락|수영구|동래구|연제구|부산진구|서면|사하구|사상구|금정구|기장|영도구|장전|부산하단|하단동|동아대/.test(title);
+}
+
+function gradeCenterSale(item) {
+  const title = String(item.title || "");
+  const content = String(item.content || item.contentPreview || "");
+  const text = `${title}\n${content}`;
+  const hasPhone = Boolean(String(item.phone || "").trim());
+  const hasFinancialInfo = /보증금|월세|권리금|무권리|매매금액|가격|금액|협의/.test(text);
+  const isMemberWanted = /회원\s*인수합니다|회원권?\s*인수합니다|회원\s*인수\s*원합니다/.test(title);
+  const isCollaboration = /샵인샵|교육협업|원장\(강사\)님 모집|강사\)님 모집/.test(text);
+  if (isMemberWanted || isCollaboration) {
+    return {
+      grade: "F",
+      score: 25,
+      type: isMemberWanted ? "회원 인수/매입 요청" : "협업/모집성 글",
+      reason: isMemberWanted ? "센터 매물보다 회원 인수 요청 성격이 강함" : "센터 매물보다 협업/모집 성격이 강함",
+      checkNeeded: "매물 검토 대상에서 제외 권장",
+    };
+  }
+
+  let score = 50;
+  const reasons = [];
+  const add = (points, reason) => {
+    score += points;
+    reasons.push(reason);
+  };
+  const sub = (points, reason) => {
+    score -= points;
+    reasons.push(reason);
+  };
+
+  if (/양도|매매|인수하실 분|매물|권리금|보증금|월세/.test(text)) add(10, "실제 양도/매매 정보");
+  if (/부산|해운대|센텀|민락|수영구|동래구|연제구|부산진구|서면|사하구|사상구|금정구|기장|영도구|장전|하단|명지/.test(text)) add(6, "부산 내 위치 확인");
+  if (/역세권|메인상권|대단지|대로|아파트|상가|독점상권|마린시티|국제신도시/.test(text)) add(10, "입지 강점");
+  if (/무권리|권리금\s*무|권리금\s*없|권리금파격|권리금\s*협의|저렴|지원|인하/.test(text)) add(12, "권리금/조건 우호적");
+  if (/회원\s*유지|즉시\s*운영|바로\s*운영|성업|오토운영|수익|운영\s*가능/.test(text)) add(10, "운영 연속성 정보");
+  if (/\d+\s*평|평대|대형|기구|시설|사진첨부|리포머|캐딜락|체어|바렐/.test(text)) add(6, "규모/시설 정보");
+  if (hasPhone) add(4, "연락처 있음");
+  if (content.length >= 350) add(5, "본문 정보 충분");
+
+  if (!hasPhone) sub(8, "연락처 확인 필요");
+  if (!hasFinancialInfo) sub(8, "금액 조건 부족");
+  if (content.length < 160) sub(8, "본문 정보 부족");
+
+  if (!hasPhone) score = Math.min(score, 82);
+  if (!hasFinancialInfo) score = Math.min(score, 84);
+  if (content.length < 160) score = Math.min(score, 70);
+  score = Math.max(0, Math.min(100, score));
+  const grade = score >= 92 ? "S" : score >= 82 ? "A" : score >= 72 ? "B" : score >= 62 ? "C" : score >= 50 ? "D" : "F";
+  const type = /요가/.test(text) && !/필라테스/.test(text) ? "요가원/전환 가능" : "필라테스/운동센터 매물";
+  const checkNeeded = [
+    !hasPhone ? "연락처" : "",
+    !hasFinancialInfo ? "금액조건" : "",
+    /인수하실 분 찾습니다/.test(text) ? "표현상 매도/매수 방향" : "",
+  ].filter(Boolean).join(", ") || "없음";
+
+  return {
+    grade,
+    score,
+    type,
+    reason: reasons.slice(0, 5).join(" · "),
+    checkNeeded,
+  };
+}
+
+function columnName(index) {
+  let name = "";
+  let n = index;
+  while (n > 0) {
+    const remainder = (n - 1) % 26;
+    name = String.fromCharCode(65 + remainder) + name;
+    n = Math.floor((n - 1) / 26);
+  }
+  return name;
 }
 
 function postedToCompleteDays(postedDate, completedAt) {
