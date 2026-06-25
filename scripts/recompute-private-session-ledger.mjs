@@ -442,17 +442,25 @@ function mergeTimelineRow(timeline, next) {
     timeline.set(key, next);
     return;
   }
+  const preferred = preferredTimelineSource(current, next);
+  const fallback = preferred === current ? next : current;
   timeline.set(key, {
     ...current,
     ...next,
     status: betterStatus(current.status, next.status),
-    bookingId: next.bookingId || current.bookingId,
+    bookingId: preferred.bookingId || fallback.bookingId || "",
     usageEventId: current.usageEventId || next.usageEventId,
     canonicalUsageKey: current.canonicalUsageKey || next.canonicalUsageKey,
-    ticketName: next.ticketName || current.ticketName,
-    memberName: next.memberName || current.memberName,
+    ticketName: preferred.ticketName || fallback.ticketName,
+    memberName: preferred.memberName || fallback.memberName,
     sourcePriority: Math.min(current.sourcePriority, next.sourcePriority),
   });
+}
+
+function preferredTimelineSource(a, b) {
+  if ((b.sourcePriority ?? 9) !== (a.sourcePriority ?? 9)) return (b.sourcePriority ?? 9) < (a.sourcePriority ?? 9) ? b : a;
+  if (b.status !== a.status) return betterStatus(a.status, b.status) === b.status ? b : a;
+  return String(b.bookingId || "").localeCompare(String(a.bookingId || "")) < 0 ? b : a;
 }
 
 function timelineRowFromBooking(booking) {
