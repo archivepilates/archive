@@ -111,6 +111,28 @@
       overflow-wrap: anywhere;
     }
 
+    .previous-report {
+      margin-top: 4px;
+      padding-top: 12px;
+      border-top: 1px solid var(--line);
+    }
+
+    .previous-report p {
+      color: var(--muted);
+      font-size: 14px;
+      line-height: 1.55;
+      white-space: pre-wrap;
+      word-break: keep-all;
+      overflow-wrap: anywhere;
+    }
+
+    .previous-report a {
+      color: var(--accent);
+      font-size: 13px;
+      font-weight: 800;
+      text-decoration: none;
+    }
+
     section {
       margin-top: 18px;
       padding-top: 18px;
@@ -473,6 +495,9 @@
       { type: "multi", key: "changes", label: "오늘 관찰된 변화", options: sets.changes },
       { type: "multi", key: "movementObservations", label: "움직임 관찰", options: sets.movementObservations },
       { type: "multi", key: "memberResponses", label: "회원 체감/반응", options: sets.memberResponses },
+      { type: "text", key: "summaryKeywords", label: "오늘의 핵심 키워드", placeholder: "회원 리포트의 오늘의 핵심 문장에 꼭 들어가야 할 키워드를 적어주세요. 예: 흉곽 움직임, 코어 연결", help: "작성하면 회원 리포트의 오늘의 핵심 문장에 자연스럽게 반영됩니다." },
+      { type: "text", key: "nextDirectionKeywords", label: "다음 수업 방향 키워드", placeholder: "회원 리포트의 다음 수업 방향 문장에 꼭 들어가야 할 키워드를 적어주세요. 예: 호흡-흉곽 연계, 고관절 안정화", help: "작성하면 회원 리포트의 다음 수업 방향 문장에 자연스럽게 반영됩니다." },
+      { type: "text", key: "homework", label: "홈워크", placeholder: "숙제가 있을 때만 입력해 주세요. 예: 자기 전 3분 흉곽 호흡, 벽 기대어 어깨 긴장 풀기", help: "작성한 내용은 회원 리포트의 홈워크 섹션에 표시됩니다." },
       { type: "text", key: "nextMemo", label: "다음 수업 준비 메모", required: true, placeholder: "다음 수업 때 강사가 참고할 내부 메모를 적어주세요.", help: "회원 리포트의 다음 수업 방향에는 그대로 노출되지 않습니다." },
     ];
 
@@ -513,7 +538,10 @@
         `<span>${escapeHtml(data.memberName || "-")}님 · ${Number(data.sessionNumber || 1)}회차</span>`,
         `<span>${escapeHtml(data.lessonTime || data.lessonDate || "-")} · 담당 ${escapeHtml(data.staffName || "미정")}</span>`,
       ].join("");
-      summary.innerHTML = intakeHtml(data.intakeSummary);
+      summary.innerHTML = [
+        intakeHtml(data.intakeSummary),
+        isPost ? "" : previousReportHtml(data.previousReport),
+      ].filter(Boolean).join("");
       sections.innerHTML = (isPost ? postFields : preFields).map(fieldHtml).join("");
       renderMediaPanel(data);
       applyExistingAnswers(data);
@@ -799,6 +827,20 @@
         ["주의", intake.painOrMedicalNote ? "상세 내용은 강사용 기록에서 확인" : "특별 주의 내용 없음"],
       ];
       return `<h2>사전설문 요약</h2><dl>${rows.map(([k, v]) => `<div><dt>${escapeHtml(k)}</dt><dd>${escapeHtml(v || "-")}</dd></div>`).join("")}</dl>`;
+    }
+
+    function previousReportHtml(report) {
+      if (!report) {
+        return `<div class="previous-report"><h2>직전회차 리포트</h2><p>아직 연결된 직전회차 리포트가 없습니다.</p></div>`;
+      }
+      const lessonText = [report.sessionNumber ? `${Number(report.sessionNumber)}회차` : "", report.lessonTime || report.lessonDate || ""].filter(Boolean).join(" · ");
+      const rows = [
+        ["회차", lessonText || "-"],
+        ["오늘의 핵심", report.summary || "-"],
+        ["다음 수업 방향", report.nextDirection || "-"],
+        ["홈워크", report.homework || "-"],
+      ];
+      return `<div class="previous-report"><h2>직전회차 리포트 참고</h2><dl>${rows.map(([k, v]) => `<div><dt>${escapeHtml(k)}</dt><dd>${escapeHtml(v || "-")}</dd></div>`).join("")}</dl>${report.url ? `<p><a href="${escapeAttr(report.url)}" target="_blank" rel="noopener">직전 리포트 열기</a></p>` : ""}</div>`;
     }
 
     function fieldHtml(field) {

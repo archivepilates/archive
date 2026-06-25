@@ -65,7 +65,7 @@ export async function privateLessonChartApiHandler(request: any, response: any):
     if (request.method === "GET") {
       const { chartRequest, mode } = await readChartRequestFromRequest(request);
       const record = (await refs.privateLessonChartRecord(chartRequest.requestId).get()).data() || null;
-      response.status(200).json(publicChartRequest(chartRequest, mode, record));
+      response.status(200).json(await publicChartRequest(chartRequest, mode, record));
       return;
     }
     if (request.method === "POST") {
@@ -1442,7 +1442,10 @@ async function generatePrivateLessonReportDraft(
   );
 
   try {
-    const draft = await generateGeminiPrivateLessonDraft(record, chartRequest);
+    const draft = applyPrivateLessonReportKeywords(
+      await generateGeminiPrivateLessonDraft(record, chartRequest),
+      record,
+    );
     const nextRecord = {
       ...record,
       gptTaskId: taskId,
@@ -1831,11 +1834,11 @@ async function readChartRequest(requestId: string, token: string): Promise<Priva
   return chartRequest;
 }
 
-function publicChartRequest(
+async function publicChartRequest(
   chartRequest: PrivateLessonChartRequestDoc,
   mode: PrivateLessonChartMode,
   record: PrivateLessonChartRecordDoc | null = null,
-): Record<string, unknown> {
+): Promise<Record<string, unknown>> {
   const approvalStatus = record?.publicReportApproval?.status || "";
   const reportReady = isPrivateLessonReportGenerated(record);
   const reportSent = isPrivateLessonReportSent(record);
@@ -1846,6 +1849,9 @@ function publicChartRequest(
     : reportReady
       ? "ready"
       : record?.gptStatus || "pending";
+  const previousReport = mode === "pre"
+    ? await previousPrivateLessonReportSummary(chartRequest)
+    : null;
   return {
     requestId: chartRequest.requestId,
     mode,
@@ -1857,6 +1863,7 @@ function publicChartRequest(
     preStatus: chartRequest.preStatus,
     postStatus: chartRequest.postStatus,
     intakeSummary: chartRequest.intakeSummary || null,
+    previousReport,
     existingAnswers: record
       ? {
         pre: record.prePlan || null,
@@ -1895,6 +1902,46 @@ function publicChartRequest(
         })),
       }
       : { sessionFolderUrl: "", files: [] },
+  };
+}
+
+async function previousPrivateLessonReportSummary(
+  chartRequest: PrivateLessonChartRequestDoc,
+): Promise<Record<string, unknown> | null> {
+  if (!chartRequest.memberId) return null;
+  const currentOrder = privateLessonOrderMillis(chartRequest);
+  const currentSession = Number(chartRequest.sessionNumber || 0);
+  const snap = await refs.privateLessonChartRecords()
+    .where("memberId", "==", chartRequest.memberId)
+    .limit(120)
+    .get();
+  const previous = snap.docs
+    .map((doc) => doc.data())
+    .filter((record) => record.recordId !== chartRequest.requestId)
+    .filter((record) => isPrivateLessonReportGenerated(record))
+    .filter((record) => {
+      const order = privateLessonOrderMillis(record);
+      const session = Number(record.sessionNumber || 0);
+      if (currentOrder && order) return order < currentOrder;
+      if (currentSession && session) return session < currentSession;
+      return false;
+    })
+    .sort((a, b) => {
+      const orderDiff = privateLessonOrderMillis(b) - privateLessonOrderMillis(a);
+      if (orderDiff) return orderDiff;
+      return Number(b.sessionNumber || 0) - Number(a.sessionNumber || 0);
+    })[0];
+  if (!previous) return null;
+  const url = previous.publicReportUrl || previous.publicReportCanonicalUrl || "";
+  return {
+    recordId: previous.recordId,
+    sessionNumber: previous.sessionNumber || null,
+    lessonDate: previous.lessonDate || "",
+    lessonTime: lessonTimeText(previous),
+    summary: cleanEditableReportText(previous.gptDraftSummary || previous.publicSummary, 900),
+    nextDirection: cleanEditableReportText(previous.gptDraftNextDirection || previous.publicNextDirection, 1200),
+    homework: cleanEditableReportText(previous.postRecord?.homework, 900),
+    url,
   };
 }
 
@@ -2414,11 +2461,17 @@ function privateSurveySummaryForRequest(
 function gptPromptBrief(record: PrivateLessonChartRecordDoc, chartRequest: PrivateLessonChartRequestDoc): string {
   const postRecord = { ...(record.postRecord || {}) };
   delete (postRecord as Record<string, unknown>).nextMemo;
+  const summaryKeywords = reportKeywordList(record.postRecord?.summaryKeywords);
+  const nextDirectionKeywords = reportKeywordList(record.postRecord?.nextDirectionKeywords);
+  const homework = cleanEditableReportText(record.postRecord?.homework, 900);
   return [
     "ARCHIVE PILATES 프라이빗 회원용 수업 리포트 문장을 작성합니다.",
     "톤: 조용하고 전문적이며 따뜻하게. 과장, 진단, 치료 효과 단정, 통증/병력 상세 노출은 금지합니다.",
     "점수, 평균, 등급, 평가처럼 느껴지는 표현은 쓰지 않습니다. 몸 상태의 흐름과 다음 수업 방향만 정리합니다.",
-    "다음 수업 방향은 수업 후 기록의 목표, 진행 부위, 관찰 변화, 주의사항을 바탕으로 회원용 1문장으로 정리합니다.",
+    "다음 수업 방향은 수업 후 기록의 목표, 진행 부위, 관찰 변화, 주의사항, 다음 수업 방향 키워드를 바탕으로 회원용 1문장으로 정리합니다.",
+    "오늘의 핵심 키워드가 있으면 summary 문장에 자연스럽게 반드시 포함합니다.",
+    "다음 수업 방향 키워드가 있으면 nextDirection 문장에 자연스럽게 반드시 포함합니다.",
+    "홈워크는 별도 섹션에 노출되므로 summary나 nextDirection에 억지로 반복하지 않습니다.",
     "강사의 다음 수업 준비 메모는 내부 참고용이므로 회원용 다음 수업 방향 문장에 그대로 복사하지 않습니다.",
     "회원이 읽는 문장입니다. 강사용 체크값을 자연스럽고 고급스럽게 정리합니다.",
     `회원: ${record.memberName}`,
@@ -2428,6 +2481,9 @@ function gptPromptBrief(record: PrivateLessonChartRecordDoc, chartRequest: Priva
     `사전설문 요약: ${safeJson(chartRequest.intakeSummary || {})}`,
     `수업 전 계획: ${safeJson(record.prePlan || {})}`,
     `수업 후 기록: ${safeJson(postRecord)}`,
+    `오늘의 핵심 키워드: ${summaryKeywords.join(", ") || "-"}`,
+    `다음 수업 방향 키워드: ${nextDirectionKeywords.join(", ") || "-"}`,
+    `홈워크: ${homework || "-"}`,
     "출력은 JSON만 허용합니다.",
     "summary: 1문장. 강사가 회원에게 직접 전하는 짧은 코칭 톤으로, 오늘 확인한 변화와 수업 방향을 평가 없이 따뜻하지만 담백하게 요약합니다.",
     "nextDirection: 1문장. 오늘 기록에서 이어갈 다음 수업 방향을 회원이 이해하기 쉬운 코칭 문장으로 정리합니다.",
@@ -2499,6 +2555,43 @@ async function requestGeminiPrivateLessonDraft(
     throw new Error("Gemini 리포트 응답에 summary가 없습니다.");
   }
   return { summary, nextDirection };
+}
+
+function applyPrivateLessonReportKeywords(
+  draft: { summary: string; nextDirection: string },
+  record: PrivateLessonChartRecordDoc,
+): { summary: string; nextDirection: string } {
+  return {
+    summary: ensureKeywordsInReportSentence(
+      draft.summary,
+      reportKeywordList(record.postRecord?.summaryKeywords),
+      "summary",
+    ),
+    nextDirection: ensureKeywordsInReportSentence(
+      draft.nextDirection,
+      reportKeywordList(record.postRecord?.nextDirectionKeywords),
+      "nextDirection",
+    ),
+  };
+}
+
+function ensureKeywordsInReportSentence(
+  sentence: string,
+  keywords: string[],
+  target: "summary" | "nextDirection",
+): string {
+  const clean = cleanReportSentence(sentence);
+  const missing = uniqueTextItems(keywords).filter((keyword) => !clean.includes(keyword)).slice(0, 4);
+  if (!missing.length) return clean;
+  const joined = missing.join(", ");
+  if (!clean) {
+    return target === "summary"
+      ? `${joined}를 중심으로 오늘 수업의 흐름을 정리했습니다.`
+      : `다음 수업에서는 ${joined}를 중심으로 몸 상태에 맞게 이어가겠습니다.`;
+  }
+  return target === "summary"
+    ? cleanReportSentence(`${clean} 특히 ${joined}를 함께 확인했습니다.`)
+    : cleanReportSentence(`${clean} 다음 수업에서는 ${joined}도 함께 이어가겠습니다.`);
 }
 
 function isRetryableGeminiError(message: string): boolean {
@@ -2591,6 +2684,9 @@ function notionChartChildren(
       `오늘 변화: ${textArray(record.postRecord?.changes).join(", ") || "-"}`,
       `움직임 관찰: ${textArray(record.postRecord?.movementObservations).join(", ") || "-"}`,
       `회원 체감/반응: ${textArray(record.postRecord?.memberResponses).join(", ") || "-"}`,
+      `오늘의 핵심 키워드: ${reportKeywordList(record.postRecord?.summaryKeywords).join(", ") || "-"}`,
+      `다음 수업 방향 키워드: ${reportKeywordList(record.postRecord?.nextDirectionKeywords).join(", ") || "-"}`,
+      `홈워크: ${cleanEditableReportText(record.postRecord?.homework, 900) || "-"}`,
       `다음 수업 준비 메모(내부): ${String(record.postRecord?.nextMemo || "-")}`,
     ]),
     divider(),
@@ -2635,6 +2731,7 @@ function renderPrivateLessonReportPage(
   const painChange = firstText(record.postRecord?.painChange);
   const nextDirectionText = cleanEditableReportText(record.gptDraftNextDirection || record.publicNextDirection, 1200) ||
     "다음 수업 방향은 담당 강사가 수업 기록을 기준으로 이어서 조정합니다.";
+  const homeworkText = cleanEditableReportText(record.postRecord?.homework, 900);
   const reportUrl = (() => {
     const url = new URL(PRIVATE_LESSON_REPORT_VIEW_BASE_URL);
     url.searchParams.set("recordId", record.recordId);
@@ -2688,6 +2785,9 @@ function renderPrivateLessonReportPage(
     (observationItems.length ? observationItems : ["기록된 관찰 항목 없음"]).map((item) => `<span class="chip">${escapeHtml(item)}</span>`).join("") +
     `</div></section>` +
     `<section><div class="section-title"><h2>다음 수업 방향</h2><span class="hint">강사 입력 반영</span></div><p class="note">${escapeHtml(nextDirectionText)}</p></section>` +
+    (homeworkText
+      ? `<section><div class="section-title"><h2>홈워크</h2><span class="hint">다음 수업 전 가볍게</span></div><p class="note">${escapeHtml(homeworkText)}</p></section>`
+      : "") +
     `<section><div class="section-title"><h2>다음 수업 전 체크</h2><span class="hint">가볍게 확인할 내용</span></div><ul class="soft-list">` +
     nextCheckItems.map((item) => `<li>${escapeHtml(item)}</li>`).join("") +
     `</ul></section>` +
@@ -2797,6 +2897,9 @@ function notionUpdateChildren(
       `오늘 변화: ${textArray(record.postRecord?.changes).join(", ") || "-"}`,
       `움직임 관찰: ${textArray(record.postRecord?.movementObservations).join(", ") || "-"}`,
       `회원 체감/반응: ${textArray(record.postRecord?.memberResponses).join(", ") || "-"}`,
+      `오늘의 핵심 키워드: ${reportKeywordList(record.postRecord?.summaryKeywords).join(", ") || "-"}`,
+      `다음 수업 방향 키워드: ${reportKeywordList(record.postRecord?.nextDirectionKeywords).join(", ") || "-"}`,
+      `홈워크: ${cleanEditableReportText(record.postRecord?.homework, 900) || "-"}`,
       `다음 수업 준비 메모(내부): ${String(record.postRecord?.nextMemo || "-")}`,
     ]),
     heading(3, "회원 리포트"),
@@ -2838,6 +2941,9 @@ function notionInstructorChartChildren(
       `오늘 변화: ${textArray(record.postRecord?.changes).join(", ") || "-"}`,
       `움직임 관찰: ${textArray(record.postRecord?.movementObservations).join(", ") || "-"}`,
       `회원 체감/반응: ${textArray(record.postRecord?.memberResponses).join(", ") || "-"}`,
+      `오늘의 핵심 키워드: ${reportKeywordList(record.postRecord?.summaryKeywords).join(", ") || "-"}`,
+      `다음 수업 방향 키워드: ${reportKeywordList(record.postRecord?.nextDirectionKeywords).join(", ") || "-"}`,
+      `홈워크: ${cleanEditableReportText(record.postRecord?.homework, 900) || "-"}`,
       `다음 수업 준비 메모(내부): ${String(record.postRecord?.nextMemo || "-")}`,
     ]),
     divider(),
@@ -2878,6 +2984,9 @@ function notionInstructorUpdateChildren(
       `오늘 변화: ${textArray(record.postRecord?.changes).join(", ") || "-"}`,
       `움직임 관찰: ${textArray(record.postRecord?.movementObservations).join(", ") || "-"}`,
       `회원 체감/반응: ${textArray(record.postRecord?.memberResponses).join(", ") || "-"}`,
+      `오늘의 핵심 키워드: ${reportKeywordList(record.postRecord?.summaryKeywords).join(", ") || "-"}`,
+      `다음 수업 방향 키워드: ${reportKeywordList(record.postRecord?.nextDirectionKeywords).join(", ") || "-"}`,
+      `홈워크: ${cleanEditableReportText(record.postRecord?.homework, 900) || "-"}`,
       `다음 수업 준비 메모(내부): ${String(record.postRecord?.nextMemo || "-")}`,
     ]),
     heading(3, "회원 리포트"),
@@ -2984,6 +3093,13 @@ function setCors(response: any): void {
   response.set("Access-Control-Allow-Headers", "Content-Type");
 }
 
+function privateLessonOrderMillis(chartRequest: Pick<PrivateLessonChartRequestDoc, "lessonDate" | "lessonStartAt">): number {
+  const date = chartRequest.lessonStartAt?.toDate?.();
+  if (date) return date.getTime();
+  const parsed = Date.parse(`${chartRequest.lessonDate || ""}T00:00:00+09:00`);
+  return Number.isFinite(parsed) ? parsed : 0;
+}
+
 function lessonTimeText(chartRequest: Pick<PrivateLessonChartRequestDoc, "lessonDate" | "lessonStartAt">): string {
   const date = chartRequest.lessonStartAt?.toDate?.();
   if (!date) return chartRequest.lessonDate;
@@ -3072,6 +3188,15 @@ function textArray(value: unknown): string[] {
     .split(",")
     .map((item) => item.trim())
     .filter(Boolean);
+}
+
+function reportKeywordList(value: unknown): string[] {
+  const raw = Array.isArray(value) ? value.join(",") : String(value || "");
+  return raw
+    .split(/[\n,，·]+/g)
+    .map((item) => item.trim())
+    .filter(Boolean)
+    .slice(0, 8);
 }
 
 function firstText(value: unknown): string {

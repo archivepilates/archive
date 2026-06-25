@@ -393,6 +393,9 @@ function postAnswers() {
     changes: ["움직임 흐름이 안정적으로 기록됨"],
     movementObservations: ["흉곽 호흡이 자연스럽게 이어짐"],
     memberResponses: ["동작 이해가 좋았음"],
+    summaryKeywords: "흉곽 호흡, 중심 안정",
+    nextDirectionKeywords: "호흡과 골반 정렬",
+    homework: "자기 전 3분 흉곽 호흡을 편안하게 이어갑니다.",
     nextMemo: "다음 수업에서는 호흡과 골반 정렬을 이어서 확인합니다.",
   };
 }
