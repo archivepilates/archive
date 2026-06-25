@@ -126,6 +126,7 @@
                 <li>엑셀 다운로드와 Firestore 반영은 1시간 간격 LaunchAgent가 담당합니다.</li>
                 <li>운영자 수동 동기화 버튼도 API가 아니라 Excel 다운로드·반영 요청을 생성합니다.</li>
                 <li>수업예약내역 엑셀은 다운로드 기간의 최신 예약 스냅샷으로 보고 bookings를 reconcile합니다.</li>
+                <li>예약 회원 매칭은 StudioMate 예약 원천의 연락처만 1순위로 사용합니다. 엑셀에서 010 번호가 숫자형으로 바뀐 경우도 010 형식으로 복원한 뒤 매칭합니다. 같은 연락처 회원카드가 여러 개면 이름 일치, 활성 수강권, 실제 StudioMate ID 보유 여부로 대표 회원을 고릅니다. 연락처가 있지만 회원카드가 없으면 회차·예약 집계용 예약 전용 프로필을 만들고 외부 발송/쓰기 원천으로는 쓰지 않습니다.</li>
                 <li>회원목록·수업예약내역 엑셀이 Firestore memberProfiles/bookings에 성공 반영되면 Mac mini 로컬 원본 파일은 즉시 삭제합니다. Google Drive에서 직접 선택한 원본은 자동 삭제하지 않습니다.</li>
                 <li>같은 회원·시간·강사·수업으로 판단되는 예약은 canonicalBookingKey를 기준으로 1개만 active로 남기고, 과거 excel_booking_ 중복 문서는 superseded_by_latest_reservation_import로 회차와 알림톡 대상에서 제외합니다.</li>
                 <li>최신 예약 엑셀 범위에서 사라진 기존 예약은 missing_from_latest_reservation_import로 취소 처리하고 회차 집계에서 제외합니다.</li>

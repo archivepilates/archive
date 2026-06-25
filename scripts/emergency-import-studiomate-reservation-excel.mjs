@@ -66,11 +66,11 @@ const [existingLectures, existingProfiles, existingStaffs] = await Promise.all([
   loadExistingProfiles(),
   loadExistingStaffs(),
 ]);
-const { lectures, bookings, skipped } = buildPlans(parsedRows, existingLectures, existingProfiles, existingStaffs);
+const { lectures, bookings, reservationOnlyProfiles, skipped } = buildPlans(parsedRows, existingLectures, existingProfiles, existingStaffs);
 const staleCandidates = await findStaleBookingsMissingFromLatestImport(dateBounds, parsedRows, bookings);
 const staleBookings = staleCandidates.filter((item) => missingPolicy !== "report-only" || item.data?.reconcileStatus !== "missing_from_latest_reservation_import");
 const staffDates = uniquePairs(lectures.map((lecture) => ({ staffId: lecture.staffId, date: lecture.date })));
-const plannedWrites = lectures.length + bookings.length + staleBookings.length + staffDates.length + 1;
+const plannedWrites = lectures.length + bookings.length + reservationOnlyProfiles.length + staleBookings.length + staffDates.length + 1;
 const staleCandidateBreakdown = countBy(staleCandidates, (item) => item.data?.reconcileStatus || item.data?.sourceStatus || "unknown");
 const staleBreakdown = countBy(staleBookings, (item) => item.data?.reconcileStatus || item.data?.sourceStatus || "unknown");
 
@@ -86,6 +86,7 @@ const summary = {
   dateRange: dateBounds,
   lectures: lectures.length,
   bookings: bookings.length,
+  reservationOnlyProfiles: reservationOnlyProfiles.length,
   staleCandidates: staleCandidates.length,
   staleCandidateBreakdown,
   staleBookings: staleBookings.length,
@@ -101,7 +102,7 @@ if (plannedWrites > maxWrites) {
 }
 
 if (apply) {
-  await applyPlans({ lectures, bookings, staleBookings });
+  await applyPlans({ lectures, bookings, reservationOnlyProfiles, staleBookings });
   await rebuildInstructorViews(staffDates);
   await rebuildAttendanceSummaries(bookings, dateBounds.endDate);
   await db.collection("opsState").doc("studiomateReservationExcelEmergency").set(
@@ -114,6 +115,7 @@ if (apply) {
       importedRows: rows.length,
       importedLectures: lectures.length,
       importedBookings: bookings.length,
+      importedReservationOnlyProfiles: reservationOnlyProfiles.length,
       staleBookings: staleBookings.length,
       skipped,
       updatedAt: admin.firestore.Timestamp.now(),
@@ -138,6 +140,7 @@ const { importId } = await recordSourceImport(db, {
     `dateRange=${summary.dateRange?.startDate || ""}~${summary.dateRange?.endDate || ""}`,
     `lectures=${summary.lectures}`,
     `bookings=${summary.bookings}`,
+    `reservationOnlyProfiles=${summary.reservationOnlyProfiles}`,
     `staleCandidates=${summary.staleCandidates}`,
     `staleBookings=${summary.staleBookings}`,
     `supersededBookings=${summary.staleBreakdown?.superseded_by_latest_reservation_import || 0}`,
@@ -231,7 +234,7 @@ function normalizeReservationRow(row) {
   const roomName = pick(row, ["장소", "강의실", "룸", "room"]);
   const divisionName = pick(row, ["구분", "수업구분", "종류", "division", "type"]);
   const memberName = pick(row, ["회원명", "회원", "예약자", "이름", "name", "memberName"]);
-  const memberPhone = normalizePhone(pick(row, ["전화번호", "휴대폰", "연락처", "핸드폰", "mobile", "phone"]));
+  const memberPhone = normalizePhone(pick(row, ["전화번호", "휴대폰번호", "휴대폰", "연락처", "핸드폰", "mobile", "phone"]));
   const capacity = nullableNumber(pickExact(row, ["정원", "수업정원", "예약정원", "수강정원", "capacity"]));
   const bookingStatus = pick(row, ["예약상태", "상태", "예약구분", "status"]);
   const attendanceText = pick(row, ["출결", "출석", "출석상태", "출결상태", "attendance"]);
@@ -279,19 +282,25 @@ async function loadExistingLectures(startDate, endDate) {
 async function loadExistingProfiles() {
   const snap = await db.collection("memberProfiles").where("studioId", "==", STUDIO_ID).get();
   const byPhoneName = new Map();
+  const byPhone = new Map();
   const byName = new Map();
   for (const doc of snap.docs) {
     const data = doc.data();
     const phone = normalizePhone(data.phone || "");
     const name = normalizeName(data.name || "");
     if (phone && name) byPhoneName.set(`${phone}|${name}`, { id: doc.id, data });
+    if (phone) {
+      const list = byPhone.get(phone) || [];
+      list.push({ id: doc.id, data });
+      byPhone.set(phone, list);
+    }
     if (name) {
       const list = byName.get(name) || [];
       list.push({ id: doc.id, data });
       byName.set(name, list);
     }
   }
-  return { byPhoneName, byName };
+  return { byPhoneName, byPhone, byName };
 }
 
 async function loadExistingStaffs() {
@@ -317,6 +326,7 @@ function buildPlans(rows, existingLectures, existingProfiles, existingStaffs) {
   }
   const lectures = [];
   const bookings = [];
+  const reservationOnlyProfiles = new Map();
   for (const group of grouped.values()) {
     const base = group.row;
     const matchedLecture = matchedLectureDoc(base, existingLectures);
@@ -332,6 +342,7 @@ function buildPlans(rows, existingLectures, existingProfiles, existingStaffs) {
         else skipped.memberAmbiguousName += 1;
         continue;
       }
+      if (member.reservationOnlyProfile) mergeReservationOnlyProfile(reservationOnlyProfiles, member, row);
       const sourceBookingId = pick(row.raw, ["예약ID", "예약번호", "bookingId", "id"]);
       const canonicalBookingKey = buildCanonicalBookingKey({
         date: base.date,
@@ -413,7 +424,7 @@ function buildPlans(rows, existingLectures, existingProfiles, existingStaffs) {
       emergencySourceFile: sourceFile,
     });
   }
-  return { lectures, bookings, skipped };
+  return { lectures, bookings, reservationOnlyProfiles: [...reservationOnlyProfiles.values()], skipped };
 }
 
 async function findStaleBookingsMissingFromLatestImport(dateBounds, parsedRows, plannedBookings) {
@@ -530,15 +541,90 @@ function matchedLectureDoc(row, existingLectures) {
 
 function matchMember(row, existingProfiles) {
   const name = normalizeName(row.memberName);
-  if (row.memberPhone && name) {
-    const exact = existingProfiles.byPhoneName.get(`${row.memberPhone}|${name}`);
-    if (exact) return exact;
+  if (row.memberPhone) {
+    const phoneMatches = existingProfiles.byPhone.get(row.memberPhone) || [];
+    if (phoneMatches.length === 1) return phoneMatches[0];
+    if (phoneMatches.length > 1) return bestPhoneMatch(phoneMatches, name);
+    return reservationOnlyMember(row);
   }
   const byName = existingProfiles.byName.get(name) || [];
   return byName.length === 1 ? byName[0] : null;
 }
 
-async function applyPlans({ lectures, bookings, staleBookings }) {
+function reservationOnlyMember(row) {
+  const memberId = `reservation_phone_${hash({ studioId: STUDIO_ID, phone: row.memberPhone }).slice(0, 18)}`;
+  const now = admin.firestore.Timestamp.now();
+  return {
+    id: memberId,
+    reservationOnlyProfile: true,
+    data: {
+      memberId,
+      studioId: STUDIO_ID,
+      name: row.memberName || "",
+      phone: row.memberPhone,
+      phoneLast4: row.memberPhone.slice(-4),
+      status: "reservation_only",
+      profileKind: "reservation_only",
+      memberProfileQuality: "reservation_only",
+      externalActionEligible: false,
+      activeTickets: [],
+      source: "studiomate_reservation_excel",
+      sourcePolicy: "booking_history_reference_only",
+      sourceWarnings: ["no_studiomate_member_profile_match_by_phone"],
+      firstSeenLectureDate: row.date || "",
+      lastSeenLectureDate: row.date || "",
+      aliasNames: row.memberName ? [row.memberName] : [],
+      createdAt: now,
+      updatedAt: now,
+    },
+  };
+}
+
+function mergeReservationOnlyProfile(map, member, row) {
+  const current = map.get(member.id) || member.data || {};
+  const names = new Set([...(Array.isArray(current.aliasNames) ? current.aliasNames : []), row.memberName].filter(Boolean));
+  map.set(member.id, {
+    ...current,
+    name: current.name || row.memberName || "",
+    phone: row.memberPhone || current.phone || "",
+    phoneLast4: (row.memberPhone || current.phone || "").slice(-4),
+    firstSeenLectureDate:
+      current.firstSeenLectureDate && row.date
+        ? [current.firstSeenLectureDate, row.date].sort()[0]
+        : current.firstSeenLectureDate || row.date || "",
+    lastSeenLectureDate:
+      current.lastSeenLectureDate && row.date
+        ? [current.lastSeenLectureDate, row.date].sort().at(-1)
+        : current.lastSeenLectureDate || row.date || "",
+    aliasNames: [...names].slice(0, 20),
+    updatedAt: admin.firestore.Timestamp.now(),
+  });
+}
+
+function bestPhoneMatch(matches, normalizedName) {
+  const exactNameMatches = normalizedName
+    ? matches.filter((item) => normalizeName(item.data?.name || "") === normalizedName)
+    : [];
+  const candidates = exactNameMatches.length ? exactNameMatches : matches;
+  return [...candidates].sort(compareMemberProfilePriority)[0] || null;
+}
+
+function compareMemberProfilePriority(a, b) {
+  return memberProfilePriority(a) - memberProfilePriority(b) || String(a.id).localeCompare(String(b.id));
+}
+
+function memberProfilePriority(item) {
+  const data = item?.data || {};
+  const id = String(item?.id || data.memberId || "");
+  let score = 0;
+  if (id.startsWith("excel_") || id.startsWith("consultation_excel_")) score += 100;
+  if (!data.memberId && !data.studiomateMemberId) score += 20;
+  if (Array.isArray(data.activeTickets) && data.activeTickets.length) score -= 10;
+  if (String(data.status || "").includes("퇴") || String(data.status || "").toLowerCase().includes("inactive")) score += 20;
+  return score;
+}
+
+async function applyPlans({ lectures, bookings, reservationOnlyProfiles, staleBookings }) {
   let batch = db.batch();
   let writes = 0;
   const commit = async () => {
@@ -549,6 +635,10 @@ async function applyPlans({ lectures, bookings, staleBookings }) {
   };
   for (const lecture of lectures) {
     batch.set(db.collection("lectures").doc(lecture.lectureId), lecture, { merge: true });
+    if (++writes >= 450) await commit();
+  }
+  for (const profile of reservationOnlyProfiles) {
+    batch.set(db.collection("memberProfiles").doc(profile.memberId), profile, { merge: true });
     if (++writes >= 450) await commit();
   }
   for (const booking of bookings) {
@@ -786,7 +876,13 @@ function normalizeTime(value) {
 }
 
 function normalizePhone(value) {
-  let digits = cleanText(value).replace(/\D+/g, "");
+  let text = cleanText(value);
+  if (/^\d+\.0+$/.test(text)) text = text.replace(/\.0+$/, "");
+  if (/^\d+(?:\.\d+)?e\+?\d+$/i.test(text)) {
+    const parsed = Number(text);
+    if (Number.isFinite(parsed)) text = String(Math.trunc(parsed));
+  }
+  let digits = text.replace(/\D+/g, "");
   if (digits.startsWith("82") && digits.length >= 11) digits = `0${digits.slice(2)}`;
   if (digits.length === 10 && digits.startsWith("10")) digits = `0${digits}`;
   return digits;
