@@ -221,6 +221,43 @@ const guardGroups = [
     ],
   },
   {
+    id: "bookings-single-source-private-session-ledger",
+    reason: "프라이빗 회차가 memberUsageEvents나 과거 미체크 예약으로 부풀려지는 것을 막고 bookings 단일 예약 원천 정책을 유지합니다.",
+    files: [
+      {
+        file: "scripts/recompute-private-session-ledger.mjs",
+        markers: [
+          "computedFrom: [\"bookings\"]",
+          "bookings_single_reservation_snapshot_attended_or_today_future",
+          "past_unchecked_attendance",
+        ],
+      },
+      {
+        file: "firebase/kangsain-functions/functions/src/privateLessonChart/privateLessonChart.ts",
+        markers: [
+          "isPastUncheckedBooking",
+          "past_unchecked_attendance",
+          "nextSessionNumberFromPrivateLedger",
+        ],
+      },
+      {
+        file: "scripts/validate-data-source-policy.mjs",
+        markers: [
+          "memberUsageEvents is legacy audit data, not a live source",
+          "privateSessionLedger must be recomputed from the single bookings reservation source",
+        ],
+      },
+      {
+        file: "core/rules/index.html",
+        markers: [
+          "예약·출석·프라이빗 회차 판단의 단일 예약 원천은 bookings입니다.",
+          "memberUsageEvents는 legacy 검증·백필 자료로만 보관",
+          "StudioMate 수업예약내역 Excel → bookings 단일 예약 원천 → privateSessionLedger 회차",
+        ],
+      },
+    ],
+  },
+  {
     id: "private-session-reschedule-reconcile",
     reason: "프라이빗 수업 시간변경/취소 시 기존 설문 링크와 Notion 차트가 과거 예약으로 롤백되는 것을 막습니다.",
     files: [

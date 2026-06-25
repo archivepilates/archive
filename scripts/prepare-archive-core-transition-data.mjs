@@ -145,6 +145,8 @@ async function main() {
     guardrails: [
       "This script writes only ARCHIVE CORE collections when --apply is used.",
       "It does not write bookings, lectures, alimtalkCandidates, contactSyncJobs, StudioMate, or Google Contacts.",
+      "memberUsageEvents is legacy audit/backfill data only and must not be used as a live reservation or private-round source.",
+      "Private session ledger is now recomputed from bookings by scripts/recompute-private-session-ledger.mjs.",
       "External sends and writes must continue using existing canonical sources until operator-approved shadow compare.",
     ],
   };
@@ -551,56 +553,11 @@ function buildLessonAndReservationPlan(events, sourceImportId) {
   };
 }
 
-function buildPrivateLedgerPlan(events, ticketsByMember, sourceImportId, sourceSnapshot) {
-  const now = new Date().toISOString();
-  const sourceStale = sourceSnapshot.ageDays !== null && sourceSnapshot.ageDays > 3;
-  const byMember = new Map();
-  for (const event of events) {
-    if (!["private", "semi_private"].includes(event.lessonType)) continue;
-    if (!PRIVATE_LEDGER_STATUSES.has(event.usageStatus)) continue;
-    pushMap(byMember, event.memberId, event);
-  }
-
-  const ledgerEntries = [];
-  for (const [memberId, memberEvents] of byMember.entries()) {
-    const sorted = memberEvents.sort((a, b) => `${a.startsAt}|${a.usageEventId}`.localeCompare(`${b.startsAt}|${b.usageEventId}`));
-    const ticketCounts = new Map();
-    sorted.forEach((event, index) => {
-      const ticketName = event.ticketName || "";
-      const ticketCount = (ticketCounts.get(ticketName) || 0) + 1;
-      ticketCounts.set(ticketName, ticketCount);
-      const totalRounds = ticketTotalRounds(event.ticketName, ticketsByMember.get(memberId) || []);
-      const ledgerId = `private_ledger_${hash(event.canonicalUsageKey).slice(0, 24)}`;
-      ledgerEntries.push({
-        ledgerId,
-        studioId: config.studioId,
-        memberId,
-        memberName: event.memberName,
-        usageEventId: event.usageEventId,
-        canonicalUsageKey: event.canonicalUsageKey,
-        startsAt: event.startsAt,
-        staffName: event.staffName,
-        ticketName: event.ticketName,
-        cumulativePrivateRound: index + 1,
-        currentTicketRound: totalRounds ? ((ticketCount - 1) % totalRounds) + 1 : ticketCount,
-        currentTicketTotalRounds: totalRounds || undefined,
-        status: event.usageStatus,
-        computation: {
-          computedAt: now,
-          computedFrom: ["memberUsageEvents"],
-          sourceImportIds: [sourceImportId],
-          sourceVersion: sourceSnapshot.snapshotDate || config.reportDate,
-          stale: sourceStale,
-          warnings: [...(totalRounds ? [] : ["ticket_total_rounds_unknown"]), ...(sourceStale ? ["usage_source_snapshot_stale"] : [])],
-        },
-        createdAt: now,
-        updatedAt: now,
-      });
-    });
-  }
+function buildPrivateLedgerPlan(_events, _ticketsByMember, _sourceImportId, _sourceSnapshot) {
   return {
-    ledgerEntries,
-    writes: ledgerEntries.map((entry) => ({ collection: "privateSessionLedger", id: entry.ledgerId, data: removeUndefined(entry) })),
+    ledgerEntries: [],
+    writes: [],
+    skippedReason: "privateSessionLedger is computed from bookings single reservation source, not memberUsageEvents",
   };
 }
 

@@ -37,7 +37,6 @@ export const archiveCoreSourceCollections = [
   archiveCoreCollections.memberPaymentEvents,
   archiveCoreCollections.lessonOccurrences,
   archiveCoreCollections.reservations,
-  archiveCoreCollections.memberUsageEvents,
   archiveCoreCollections.communicationCandidates,
   archiveCoreCollections.communicationApprovals,
   archiveCoreCollections.communicationSends,
@@ -60,6 +59,10 @@ export const archiveCoreComputedCollections = [
   archiveCoreCollections.memberAttendanceStats,
   archiveCoreCollections.dailyOperationSnapshots,
   archiveCoreCollections.businessSnapshots,
+] as const;
+
+export const archiveCoreLegacyAuditCollections = [
+  archiveCoreCollections.memberUsageEvents,
 ] as const;
 
 export type ArchiveCoreSourceKind =

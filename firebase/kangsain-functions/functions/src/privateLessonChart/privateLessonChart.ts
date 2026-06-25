@@ -2097,8 +2097,6 @@ async function nextSessionNumber(booking: BookingDoc): Promise<number> {
   if (bookingSessionNumber) return bookingSessionNumber;
   const ledgerNumber = await nextSessionNumberFromPrivateLedger(booking);
   if (ledgerNumber) return ledgerNumber;
-  const usageNumber = await nextSessionNumberFromUsageEvents(booking);
-  if (usageNumber) return usageNumber;
   const bookingNumber = await nextSessionNumberFromBookings(booking);
   return bookingNumber || 1;
 }
@@ -2139,29 +2137,6 @@ async function nextSessionNumberFromPrivateLedger(booking: BookingDoc): Promise<
         title: "",
         ticketName: String(item.ticketName || ""),
         sessionNumber: positiveNumber(item.cumulativePrivateRound),
-        sourcePriority: 1,
-      })),
-  );
-  return nextSessionNumberFromTimeline(booking, rows);
-}
-
-async function nextSessionNumberFromUsageEvents(booking: BookingDoc): Promise<number | null> {
-  const snap = await db.collection("memberUsageEvents").where("memberId", "==", booking.memberId).get();
-  const rows = canonicalPrivateTimelineRows(
-    snap.docs
-      .map((doc): Record<string, any> => ({ id: doc.id, ...(doc.data() || {}) }))
-      .filter((item) => ["private", "semi_private"].includes(String(item.lessonType || "")))
-      .filter((item) => ["attended", "reserved"].includes(String(item.usageStatus || "")))
-      .map((item) => ({
-        id: String(item.usageEventId || item.id || ""),
-        memberId: String(item.memberId || ""),
-        staffId: "",
-        staffName: String(item.staffName || ""),
-        startsAt: timestampMillisFromValue(item.startsAt),
-        date: dateFromAnyValue(item.startsAt),
-        title: String(item.title || ""),
-        ticketName: String(item.ticketName || ""),
-        sessionNumber: null,
         sourcePriority: 1,
       })),
   );
@@ -2485,12 +2460,19 @@ function inactivePrivateBookingReason(booking: BookingDoc): string {
   if (["absent", "late_cancel"].includes(String(booking.attendanceStatus || ""))) {
     return `attendance_status_${booking.attendanceStatus}`;
   }
+  if (isPastUncheckedBooking(booking)) return "past_unchecked_attendance";
   const sourceStatus = String((booking as any).sourceStatus || "");
   if (/missing_from_latest_reservation_import|stale|lecture_deleted|deleted|cancel/i.test(sourceStatus)) {
     return sourceStatus || "source_inactive";
   }
   if (!isPrivateBooking(booking)) return "not_private_booking";
   return "";
+}
+
+function isPastUncheckedBooking(booking: BookingDoc): boolean {
+  if (String(booking.attendanceStatus || "unchecked") === "attended") return false;
+  const date = booking.lectureDate || dateFromAnyValue(booking.lectureStartAt);
+  return Boolean(date && date < todayKst());
 }
 
 async function cancelPrivateLessonChartRequest(

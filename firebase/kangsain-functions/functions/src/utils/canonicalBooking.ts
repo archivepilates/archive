@@ -43,7 +43,7 @@ export function bookingOccurrenceKey(booking: BookingDoc): string {
   return [
     booking.memberId || normalizeKoreanName(booking.memberName || ""),
     booking.staffId || normalizeKoreanName(booking.staffName || ""),
-    booking.lectureStartAt?.toMillis?.() || booking.lectureDate,
+    timestampMillisFromValue(booking.lectureStartAt) || booking.lectureDate,
   ].join("|");
 }
 
@@ -80,7 +80,7 @@ export function isExcelBookingId(bookingId: string): boolean {
 
 function compareBookingsByTime(a: BookingDoc, b: BookingDoc): number {
   if (a.lectureDate !== b.lectureDate) return a.lectureDate.localeCompare(b.lectureDate);
-  return (a.lectureStartAt?.toMillis?.() || 0) - (b.lectureStartAt?.toMillis?.() || 0);
+  return timestampMillisFromValue(a.lectureStartAt) - timestampMillisFromValue(b.lectureStartAt);
 }
 
 function duplicateExclusionReason(booking: BookingDoc, winner?: BookingDoc): string {
@@ -100,4 +100,14 @@ function attendanceScore(status: BookingDoc["attendanceStatus"]): number {
 
 function normalizeKoreanName(value: string): string {
   return value.trim().replace(/\s+/g, "");
+}
+
+function timestampMillisFromValue(value: unknown): number {
+  if (!value) return 0;
+  if (typeof (value as any).toMillis === "function") return (value as any).toMillis();
+  if (typeof (value as any).toDate === "function") return (value as any).toDate().getTime();
+  if (typeof value === "number") return value;
+  if (value instanceof Date) return value.getTime();
+  const parsed = Date.parse(String(value));
+  return Number.isFinite(parsed) ? parsed : 0;
 }

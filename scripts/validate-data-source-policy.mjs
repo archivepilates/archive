@@ -31,9 +31,24 @@ const forbiddenTextPatterns = [
     reason: "private chart requests are action records and must not be used as a session-number source",
   },
   {
+    file: "firebase/kangsain-functions/functions/src/privateLessonChart/privateLessonChart.ts",
+    pattern: "nextSessionNumberFromUsageEvents",
+    reason: "private chart session numbers must use bookings/privateSessionLedger; memberUsageEvents is legacy audit data, not a live source",
+  },
+  {
     file: "scripts/repair-private-chart-session-numbers.mjs",
     pattern: "nextSessionNumberFromExistingChartRequests",
-    reason: "repair scripts must use bookings/memberUsageEvents/privateSessionLedger, not old chart request values",
+    reason: "repair scripts must use bookings/privateSessionLedger, not old chart request values",
+  },
+  {
+    file: "scripts/repair-private-chart-session-numbers.mjs",
+    pattern: "nextSessionNumberFromUsageEvents",
+    reason: "repair scripts must use bookings/privateSessionLedger; memberUsageEvents is legacy audit data, not a live source",
+  },
+  {
+    file: "scripts/recompute-private-session-ledger.mjs",
+    pattern: "memberUsageEvents",
+    reason: "privateSessionLedger must be recomputed from the single bookings reservation source",
   },
 ];
 

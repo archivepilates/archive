@@ -86,28 +86,13 @@ async function loadMembers() {
 }
 
 async function recomputeMember(member) {
-  const [usageSnap, bookingSnap, ledgerSnap, requestSnap] = await Promise.all([
-    db.collection("memberUsageEvents").where("memberId", "==", member.memberId).get(),
+  const [bookingSnap, ledgerSnap, requestSnap] = await Promise.all([
     db.collection("bookings").where("memberId", "==", member.memberId).get(),
     db.collection("privateSessionLedger").where("memberId", "==", member.memberId).get(),
     db.collection("privateLessonChartRequests").where("memberId", "==", member.memberId).get(),
   ]);
   const bookings = bookingSnap.docs.map((doc) => ({ id: doc.id, ...(doc.data() || {}) }));
-  const invalidBookingKeys = new Set(
-    bookings
-      .filter((booking) => !isCountablePrivateBooking(booking))
-      .map((booking) => occurrenceKey(timelineRowFromBooking(booking)))
-      .filter(Boolean),
-  );
   const timeline = new Map();
-  for (const doc of usageSnap.docs) {
-    const data = { id: doc.id, ...(doc.data() || {}) };
-    if (!isCountablePrivateUsage(data)) continue;
-    const row = timelineRowFromUsage(data);
-    const key = occurrenceKey(row);
-    if (!key || invalidBookingKeys.has(key)) continue;
-    mergeTimelineRow(timeline, row);
-  }
   for (const booking of bookings) {
     if (!isCountablePrivateBooking(booking)) continue;
     mergeTimelineRow(timeline, timelineRowFromBooking(booking));
@@ -130,7 +115,6 @@ async function recomputeMember(member) {
     memberId: member.memberId,
     memberName: member.name || ordered[0]?.memberName || "",
     sourceCounts: {
-      usageEvents: usageSnap.size,
       bookings: bookingSnap.size,
       previousLedger: ledgerSnap.size,
       chartRequests: requestSnap.size,
@@ -147,8 +131,12 @@ function buildBookingPatches(bookings, ledgerByKey, ledgerByBookingId) {
   const now = admin.firestore.Timestamp.now();
   const patches = [];
   for (const booking of bookings) {
+    const bookingId = String(booking.bookingId || booking.id || "");
     const key = occurrenceKey(timelineRowFromBooking(booking));
-    const expected = ledgerByBookingId.get(String(booking.bookingId || booking.id || "")) || ledgerByKey.get(key);
+    const expectedByBooking = ledgerByBookingId.get(bookingId);
+    const expectedByKey = ledgerByKey.get(key);
+    const duplicateOfLedger = Boolean(expectedByKey?.bookingId && expectedByKey.bookingId !== bookingId);
+    const expected = expectedByBooking || (duplicateOfLedger ? null : expectedByKey);
     if (expected) {
       const currentRound = positiveNumber(booking.sessionOrder?.privateCumulativeRound);
       const currentCounted = booking.sessionOrder?.counted;
@@ -183,7 +171,7 @@ function buildBookingPatches(bookings, ledgerByKey, ledgerByBookingId) {
       continue;
     }
     if (booking.sessionOrder?.counted === true || positiveNumber(booking.sessionOrder?.privateCumulativeRound)) {
-      const reason = inactivePrivateBookingReason(booking) || "not_in_private_session_ledger";
+      const reason = duplicateOfLedger ? "duplicate_source" : inactivePrivateBookingReason(booking) || "not_in_private_session_ledger";
       patches.push({
         bookingId: booking.bookingId || booking.id,
         reason,
@@ -438,8 +426,8 @@ function ledgerEntryFromTimeline(member, row, round) {
     status: row.status || "reserved",
     computation: {
       computedAt: new Date().toISOString(),
-      computedFrom: ["memberUsageEvents", "bookings"],
-      policy: "source_usage_plus_current_bookings_without_chart_request_max",
+      computedFrom: ["bookings"],
+      policy: "bookings_single_reservation_snapshot_attended_or_today_future",
     },
     createdAt: admin.firestore.Timestamp.now(),
     updatedAt: admin.firestore.Timestamp.now(),
@@ -465,20 +453,6 @@ function mergeTimelineRow(timeline, next) {
     memberName: next.memberName || current.memberName,
     sourcePriority: Math.min(current.sourcePriority, next.sourcePriority),
   });
-}
-
-function timelineRowFromUsage(item) {
-  return {
-    memberId: String(item.memberId || ""),
-    memberName: String(item.memberName || ""),
-    usageEventId: String(item.usageEventId || item.id || ""),
-    canonicalUsageKey: String(item.canonicalUsageKey || ""),
-    startsAt: timestampMillisFromValue(item.startsAt),
-    staffName: String(item.staffName || ""),
-    ticketName: String(item.ticketName || ""),
-    status: String(item.usageStatus || ""),
-    sourcePriority: 1,
-  };
 }
 
 function timelineRowFromBooking(booking) {
@@ -507,12 +481,6 @@ function timelineRowFromRequest(request) {
   };
 }
 
-function isCountablePrivateUsage(item) {
-  const lessonType = String(item.lessonType || "");
-  if (!["private", "semi_private"].includes(lessonType)) return false;
-  return ["attended", "reserved"].includes(String(item.usageStatus || ""));
-}
-
 function isCountablePrivateBooking(booking) {
   if (inactivePrivateBookingReason(booking)) return false;
   return true;
@@ -526,10 +494,17 @@ function inactivePrivateBookingReason(booking) {
   }
   if (booking.appStatus && String(booking.appStatus) !== "reserved") return `booking_app_status_${booking.appStatus}`;
   if (["absent", "late_cancel"].includes(String(booking.attendanceStatus || ""))) return `attendance_status_${booking.attendanceStatus}`;
+  if (isPastUncheckedBooking(booking)) return "past_unchecked_attendance";
   const sourceStatus = String(booking.sourceStatus || "");
   if (/missing_from_latest_reservation_import|stale|lecture_deleted|deleted|cancel/i.test(sourceStatus)) return sourceStatus;
   if (!isPrivateBooking(booking)) return "not_private_booking";
   return "";
+}
+
+function isPastUncheckedBooking(booking) {
+  if (String(booking.attendanceStatus || "unchecked") === "attended") return false;
+  const date = String(booking.lectureDate || dateFromTimestampLike(booking.lectureStartAt) || "");
+  return Boolean(date && date < todayKst());
 }
 
 function isPrivateBooking(booking) {
@@ -579,9 +554,22 @@ function timestampMillisFromValue(value) {
   return Number.isFinite(parsed) ? parsed : 0;
 }
 
+function dateFromTimestampLike(value) {
+  const millis = timestampMillisFromValue(value);
+  return millis ? new Intl.DateTimeFormat("en-CA", { timeZone: "Asia/Seoul" }).format(new Date(millis)) : "";
+}
+
+function todayKst() {
+  return new Intl.DateTimeFormat("en-CA", { timeZone: "Asia/Seoul" }).format(new Date());
+}
+
 function positiveNumber(value) {
   const num = Number(value || 0);
   return Number.isFinite(num) && num > 0 ? num : null;
+}
+
+function staffOccurrenceIdentity(staffId, staffName) {
+  return normalizeName(staffName || "") || String(staffId || "");
 }
 
 function roundFromText(value) {

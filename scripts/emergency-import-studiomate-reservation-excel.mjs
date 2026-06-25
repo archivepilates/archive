@@ -72,6 +72,7 @@ const summary = {
   ok: true,
   mode: apply ? "apply" : "dry-run",
   source: "studiomate_reservation_excel_emergency",
+  snapshotPolicy: "bookings_single_source_reconcile_import_range",
   sourceFile,
   studioId: STUDIO_ID,
   readRows: rows.length,
@@ -99,6 +100,7 @@ if (apply) {
       sourceFile,
       studioId: STUDIO_ID,
       dateRange: dateBounds,
+      snapshotPolicy: "bookings_single_source_reconcile_import_range",
       importedRows: rows.length,
       importedLectures: lectures.length,
       importedBookings: bookings.length,
@@ -127,6 +129,7 @@ const { importId } = await recordSourceImport(db, {
     `lectures=${summary.lectures}`,
     `bookings=${summary.bookings}`,
     `staleBookings=${summary.staleBookings}`,
+    `snapshotPolicy=${summary.snapshotPolicy}`,
   ],
 });
 await recordDataQualityIssues(db, qualityIssuesFromSummary(summary, importId));

@@ -60,7 +60,7 @@ for (const request of requests) {
       : "",
     current,
     expected,
-    source: canonicalSessionNumberFromBooking(booking) ? "booking_session_order" : "ledger_usage_with_booking_supplement",
+    source: canonicalSessionNumberFromBooking(booking) ? "booking_session_order" : "bookings_single_source_ledger",
     needsRepair,
     recordPageId: record?.notionSync?.pageId || "",
     instructorPageId: record?.notionSync?.instructorPageId || "",
@@ -131,7 +131,7 @@ async function applyRepair(request, record, expected) {
   const correction = {
     from: current || null,
     to: expected,
-    reason: "privateSessionLedger/memberUsageEvents 이후 bookings 보강 기준 회차 재계산",
+    reason: "bookings 단일 예약 원천 기준 프라이빗 회차 재계산",
     correctedAt: now,
   };
   await Promise.all([
@@ -180,8 +180,6 @@ async function nextSessionNumber(booking) {
   if (bookingSessionNumber) return bookingSessionNumber;
   const ledgerNumber = await nextSessionNumberFromPrivateLedger(booking);
   if (ledgerNumber) return ledgerNumber;
-  const usageNumber = await nextSessionNumberFromUsageEvents(booking);
-  if (usageNumber) return usageNumber;
   const bookingNumber = await nextSessionNumberFromBookings(booking);
   return bookingNumber || 1;
 }
@@ -210,29 +208,6 @@ async function nextSessionNumberFromPrivateLedger(booking) {
         title: "",
         ticketName: String(item.ticketName || ""),
         sessionNumber: positiveNumber(item.cumulativePrivateRound),
-        sourcePriority: 1,
-      })),
-  );
-  return nextSessionNumberFromTimeline(booking, rows);
-}
-
-async function nextSessionNumberFromUsageEvents(booking) {
-  const snap = await db.collection("memberUsageEvents").where("memberId", "==", booking.memberId).get();
-  const rows = canonicalPrivateTimelineRows(
-    snap.docs
-      .map((doc) => ({ id: doc.id, ...(doc.data() || {}) }))
-      .filter((item) => ["private", "semi_private"].includes(String(item.lessonType || "")))
-      .filter((item) => ["attended", "reserved"].includes(String(item.usageStatus || "")))
-      .map((item) => ({
-        id: String(item.usageEventId || item.id || ""),
-        memberId: String(item.memberId || ""),
-        staffId: "",
-        staffName: String(item.staffName || ""),
-        startsAt: timestampMillisFromValue(item.startsAt),
-        date: dateFromAnyValue(item.startsAt),
-        title: String(item.title || ""),
-        ticketName: String(item.ticketName || ""),
-        sessionNumber: null,
         sourcePriority: 1,
       })),
   );
@@ -333,15 +308,33 @@ function isPrivateBooking(booking) {
 }
 
 function isCountablePrivateHistoryBooking(booking) {
-  if (booking.sessionOrder?.counted === false) return false;
+  if (inactivePrivateBookingReason(booking)) return false;
   if (["wait", "wait_cancel", "cancel"].includes(String(booking.appStatus || ""))) return false;
   if (["absent", "late_cancel"].includes(String(booking.attendanceStatus || ""))) return false;
   return true;
 }
 
 function canonicalSessionNumberFromBooking(booking) {
-  if (!booking || booking.sessionOrder?.counted === false) return null;
+  if (!booking || inactivePrivateBookingReason(booking)) return null;
   return positiveNumber(booking.sessionOrder?.privateCumulativeRound);
+}
+
+function inactivePrivateBookingReason(booking) {
+  if (!booking) return "missing_booking";
+  if (booking.sessionOrder?.counted === false) return String(booking.sessionOrder.excludedReason || "session_order_excluded");
+  if (booking.appStatus && String(booking.appStatus) !== "reserved") return `booking_app_status_${booking.appStatus}`;
+  if (["absent", "late_cancel"].includes(String(booking.attendanceStatus || ""))) return `attendance_status_${booking.attendanceStatus}`;
+  if (isPastUncheckedBooking(booking)) return "past_unchecked_attendance";
+  const sourceStatus = String(booking.sourceStatus || "");
+  if (/missing_from_latest_reservation_import|stale|lecture_deleted|deleted|cancel/i.test(sourceStatus)) return sourceStatus;
+  if (!isPrivateBooking(booking)) return "not_private_booking";
+  return "";
+}
+
+function isPastUncheckedBooking(booking) {
+  if (String(booking.attendanceStatus || "unchecked") === "attended") return false;
+  const date = String(booking.lectureDate || dateFromAnyValue(booking.lectureStartAt) || "");
+  return Boolean(date && date < todayKst());
 }
 
 function canonicalPrivateBookings(bookings) {

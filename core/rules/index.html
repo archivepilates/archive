@@ -87,6 +87,7 @@
                 <li>알림톡, 연락처, StudioMate write, 예약·결제 판단은 canonical source에서만 실행합니다.</li>
                 <li>데이터는 source, action, computed, mirror, incubation 5개 층으로만 구분합니다.</li>
                 <li>source는 memberProfiles, memberContactIndex, bookings, lectures, memberMemos, memberTags, privateSurveyResponses입니다.</li>
+                <li>예약·출석·프라이빗 회차 판단의 단일 예약 원천은 bookings입니다. memberUsageEvents는 legacy 검증·백필 자료로만 보관하고 운영 원천으로 사용하지 않습니다.</li>
                 <li>action은 alimtalkCandidates, alimtalkSends, contactSyncJobs, memberSignupContracts, onsiteWelcomeRequests, privateLessonChartRequests, privateLessonChartRecords입니다.</li>
                 <li>computed는 privateSessionLedger, attendanceSummaries, adminActions, instructorViews, dashboardSnapshots입니다.</li>
                 <li>member360Cards, members 하위 컬렉션, dashboardSnapshots는 분석·검토용 read-model입니다.</li>
@@ -124,7 +125,9 @@
                 <li>회원목록, 수업예약내역, 삭제된 수업 로그는 Mac mini Playwright Excel 다운로드로 수집합니다.</li>
                 <li>엑셀 다운로드와 Firestore 반영은 1시간 간격 LaunchAgent가 담당합니다.</li>
                 <li>운영자 수동 동기화 버튼도 API가 아니라 Excel 다운로드·반영 요청을 생성합니다.</li>
+                <li>수업예약내역 엑셀은 다운로드 기간의 최신 예약 스냅샷으로 보고 bookings를 reconcile합니다.</li>
                 <li>최신 예약 엑셀 범위에서 사라진 기존 예약은 missing_from_latest_reservation_import로 취소 처리하고 회차 집계에서 제외합니다.</li>
+                <li>다운로드 기간 밖의 과거 예약은 기존 상태를 확정 상태로 두되, 과거 미체크 예약은 프라이빗 확정 회차에 세지 않고 출석확인필요로 봅니다.</li>
               </ul>
             </article>
             <article class="rule-card">
@@ -260,8 +263,9 @@
               <h3>회차 원천</h3>
               <ul>
                 <li>2026.06.01 이후 프라이빗/세미프라이빗 수업은 자동화 차트를 반드시 생성합니다.</li>
-                <li>회차 흐름은 StudioMate/Excel 원본 → bookings 현재 예약 + memberUsageEvents 이용이력 → privateSessionLedger 회차 → 설문/리포트/Notion 표시 순서로 운영합니다.</li>
-                <li>privateSessionLedger가 회차 원천입니다. privateLessonChartRequests, privateLessonChartRecords, Notion 차트는 작업/표시 기록이며 회차 계산 원천으로 사용하지 않습니다.</li>
+                <li>회차 흐름은 StudioMate 수업예약내역 Excel → bookings 단일 예약 원천 → privateSessionLedger 회차 → 설문/리포트/Notion 표시 순서로 운영합니다.</li>
+                <li>privateSessionLedger는 bookings에서 계산한 회차 장부입니다. privateLessonChartRequests, privateLessonChartRecords, Notion 차트, memberUsageEvents는 회차 계산 원천으로 사용하지 않습니다.</li>
+                <li>어제 이전 예약확정/출석미체크 수업은 확정 회차로 세지 않습니다. 오늘 이후 예약은 예정 회차로만 이어 세고, 출석 완료가 반영되면 확정 회차가 됩니다.</li>
                 <li>booking.sessionOrder.privateCumulativeRound는 privateSessionLedger에서 내려쓴 캐시입니다. 값이 없거나 원천과 다르면 즉시 재계산해 저장합니다.</li>
                 <li>삭제, 취소, 시간변경은 sessionOrder.counted=false와 제외 사유를 남기고 해당 수업 이후 회차까지 연쇄 재계산합니다.</li>
                 <li>booking.lessonType=group인 수업은 수강권명이 프라이빗처럼 보여도 프라이빗 회차에서 제외합니다. 원본 분류가 틀렸다면 원본 보정 후 다시 반영합니다.</li>

@@ -28,7 +28,6 @@ const state = {
   instructorEvaluationTargets: [],
   privateRequests: [],
   privateRecords: [],
-  privateUsageEvents: [],
   privateLedgerEntries: [],
   lessonOccurrences: [],
   reservations: [],
@@ -2379,11 +2378,11 @@ function renderPrivateProgress(requests, records, ledgerEntries, candidates = []
     : `<div class="empty-state">오늘 이후 진행 대상 프라이빗 차트가 없습니다.</div>`;
 }
 
-function renderPrivate(requests, records, usageEvents, ledgerEntries, candidates = [], sends = []) {
+function renderPrivate(requests, records, ledgerEntries, candidates = [], sends = []) {
   if (!qs("privateProgressList")) return;
   setText("privateRequestCount", String(requests.length));
   setText("privateRecordCount", String(records.length));
-  setText("privateUsageCount", String(usageEvents.length));
+  setText("privateUsageCount", String(requests.filter((item) => item.bookingId).length));
   setText("privateLedgerCount", String(ledgerEntries.length));
   const recordFailures = records.filter((item) =>
     ["failed", "error"].includes(String(item.gptStatus || item.status || "").toLowerCase()),
@@ -3759,7 +3758,6 @@ async function refresh() {
       businessMembers,
       privateRequests,
       privateRecords,
-      privateUsageEvents,
       privateLedgerEntries,
       lessonOccurrences,
       reservations,
@@ -3833,9 +3831,6 @@ async function refresh() {
           )
         : Promise.resolve([]),
       shouldLoadPrivate
-        ? safeRead("memberUsageEvents", () => getRecentCollectionBy(db, runtime, "memberUsageEvents", "updatedAt", 8), [])
-        : Promise.resolve([]),
-      shouldLoadPrivate
         ? safeRead("privateSessionLedger", () => getRecentCollectionBy(db, runtime, "privateSessionLedger", "updatedAt", 8), [])
         : Promise.resolve([]),
       shouldLoadLessons
@@ -3873,7 +3868,6 @@ async function refresh() {
     state.businessMembers = businessMembers;
     state.privateRequests = privateRequests;
     state.privateRecords = privateRecords;
-    state.privateUsageEvents = privateUsageEvents;
     state.privateLedgerEntries = privateLedgerEntries;
     state.lessonOccurrences = lessonOccurrences;
     state.reservations = reservations;
@@ -3896,7 +3890,7 @@ async function refresh() {
     renderParkingDashboard();
     renderPricingInquiryRecentList();
     renderMemberDetail(memberDetail);
-    renderPrivate(privateRequests, privateRecords, privateUsageEvents, privateLedgerEntries, alimtalkCandidates, alimtalkSends);
+    renderPrivate(privateRequests, privateRecords, privateLedgerEntries, alimtalkCandidates, alimtalkSends);
     renderLessons(lessonOccurrences, reservations, [...deletedClassLogs, ...deletedLessons]);
     if (shouldLoadBusiness) {
       if (state.businessSnapshot) renderBusiness(state.businessSnapshot);
