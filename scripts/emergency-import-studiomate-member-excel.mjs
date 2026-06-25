@@ -5,6 +5,7 @@ import { existsSync } from "node:fs";
 import path from "node:path";
 import { createRequire } from "node:module";
 import { qualityIssuesFromSummary, recordDataQualityIssues, recordSourceImport } from "./lib/archive-core-ops-logging.mjs";
+import { cleanupImportedSourceFiles } from "./lib/imported-source-retention.mjs";
 
 const require = createRequire(import.meta.url);
 const admin = require("../firebase/kangsain-functions/functions/node_modules/firebase-admin");
@@ -32,6 +33,7 @@ const PROTECTED_STAFF_CONTACTS = [
 const args = new Set(process.argv.slice(2));
 const fileArg = valueArg("--file");
 const apply = args.has("--apply");
+const keepSourceFile = args.has("--keep-source-file");
 const allowNewExcelProfiles = args.has("--allow-new-excel-profiles");
 const legacyNewExcelProfileMaxAgeDays = valueArg("--new-excel-profile-max-age-days") || process.env.ARCHIVEIN_NEW_EXCEL_PROFILE_MAX_AGE_DAYS || "";
 const queueContactSync = args.has("--queue-contact-sync");
@@ -111,6 +113,14 @@ const { importId } = await recordSourceImport(db, {
   ],
 });
 await recordDataQualityIssues(db, qualityIssuesFromSummary(summary, importId));
+summary.sourceFileRetention = await cleanupImportedSourceFiles({
+  apply,
+  db,
+  importId,
+  kind: "memberProfiles",
+  paths: [sourceFile],
+  keep: keepSourceFile,
+});
 
 console.log(JSON.stringify({ ...summary, sourceImportId: importId }, null, 2));
 

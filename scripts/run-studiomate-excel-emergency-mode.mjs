@@ -7,6 +7,7 @@ import { createRequire } from "node:module";
 import os from "node:os";
 import path from "node:path";
 import { recordAutomationStatus } from "./lib/archive-core-ops-logging.mjs";
+import { cleanupImportedSourceFiles } from "./lib/imported-source-retention.mjs";
 
 const require = createRequire(import.meta.url);
 const admin = require("../firebase/kangsain-functions/functions/node_modules/firebase-admin");
@@ -112,6 +113,7 @@ const maintenanceOnly = failed.length > 0 && failed.every(isStudioMateMaintenanc
 const sourceImportIds = steps
   .map((step) => (step.stdout && typeof step.stdout === "object" ? step.stdout.sourceImportId : ""))
   .filter(Boolean);
+const sourceFileCleanup = await cleanupDownloadedCounterparts();
 const summary = {
   ok: failed.length === 0 || maintenanceOnly,
   mode: apply ? "apply" : "dry-run",
@@ -124,6 +126,7 @@ const summary = {
       : "",
   maintenanceOnly,
   sourceImportIds,
+  sourceFileCleanup,
   steps,
   finishedAt: new Date().toISOString(),
 };
@@ -229,6 +232,39 @@ function parseJsonOrText(value) {
 function parsedOk(value) {
   const parsed = parseJsonOrText(value);
   return parsed && typeof parsed === "object" && "ok" in parsed ? parsed.ok : undefined;
+}
+
+async function cleanupDownloadedCounterparts() {
+  if (!download || !apply) return [];
+  const downloadStep = steps.find((step) => step.name === "download");
+  const downloads = downloadStep?.stdout?.downloads || {};
+  const cleanupTargets = [
+    {
+      importStep: "memberProfiles",
+      kind: "memberProfiles_download_counterparts",
+      paths: [downloads.member?.stagingPath, downloads.member?.archivePath],
+    },
+    {
+      importStep: "reservations",
+      kind: "bookings_download_counterparts",
+      paths: [downloads.reservation?.stagingPath, downloads.reservation?.archivePath],
+    },
+  ];
+  const results = [];
+  for (const target of cleanupTargets) {
+    const step = steps.find((item) => item.name === target.importStep);
+    if (!step || step.exitCode !== 0 || step.stdoutOk === false) continue;
+    results.push(
+      await cleanupImportedSourceFiles({
+        apply,
+        db,
+        importId: "",
+        kind: target.kind,
+        paths: target.paths,
+      }),
+    );
+  }
+  return results;
 }
 
 async function sendFailureEmail({ summary, failed, reportPath }) {
