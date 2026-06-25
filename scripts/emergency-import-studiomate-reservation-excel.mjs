@@ -6,6 +6,7 @@ import os from "node:os";
 import path from "node:path";
 import { createRequire } from "node:module";
 import { qualityIssuesFromSummary, recordDataQualityIssues, recordSourceImport } from "./lib/archive-core-ops-logging.mjs";
+import { cleanupImportedSourceFiles } from "./lib/imported-source-retention.mjs";
 
 const require = createRequire(import.meta.url);
 const admin = require("../firebase/kangsain-functions/functions/node_modules/firebase-admin");
@@ -33,6 +34,7 @@ const args = new Set(process.argv.slice(2));
 const fileArg = valueArg("--file");
 const apply = args.has("--apply");
 const requireFile = args.has("--require-file");
+const keepSourceFile = args.has("--keep-source-file");
 const startDateArg = valueArg("--start-date");
 const endDateArg = valueArg("--end-date");
 const maxWrites = Number(valueArg("--max-writes") || process.env.ARCHIVEIN_EMERGENCY_MAX_WRITES || "10000");
@@ -133,6 +135,15 @@ const { importId } = await recordSourceImport(db, {
   ],
 });
 await recordDataQualityIssues(db, qualityIssuesFromSummary(summary, importId));
+summary.sourceFileRetention = await cleanupImportedSourceFiles({
+  apply,
+  db,
+  importId,
+  kind: "bookings",
+  paths: [sourceFile],
+  keep: keepSourceFile,
+});
+writeFileSync(reportPath, `${JSON.stringify(summary, null, 2)}\n`);
 
 console.log(JSON.stringify({ ...summary, reportPath, sourceImportId: importId }, null, 2));
 

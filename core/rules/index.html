@@ -126,6 +126,7 @@
                 <li>엑셀 다운로드와 Firestore 반영은 1시간 간격 LaunchAgent가 담당합니다.</li>
                 <li>운영자 수동 동기화 버튼도 API가 아니라 Excel 다운로드·반영 요청을 생성합니다.</li>
                 <li>수업예약내역 엑셀은 다운로드 기간의 최신 예약 스냅샷으로 보고 bookings를 reconcile합니다.</li>
+                <li>회원목록·수업예약내역 엑셀이 Firestore memberProfiles/bookings에 성공 반영되면 Mac mini 로컬 원본 파일은 즉시 삭제합니다. Google Drive에서 직접 선택한 원본은 자동 삭제하지 않습니다.</li>
                 <li>최신 예약 엑셀 범위에서 사라진 기존 예약은 missing_from_latest_reservation_import로 취소 처리하고 회차 집계에서 제외합니다.</li>
                 <li>다운로드 기간 밖의 과거 예약은 기존 상태를 확정 상태로 두되, 과거 미체크 예약은 프라이빗 확정 회차에 세지 않고 출석확인필요로 봅니다.</li>
               </ul>
