@@ -1151,11 +1151,24 @@ async function ensureChartRequestForBooking(booking: BookingDoc): Promise<{ requ
   const existing = await refs.privateLessonChartRequest(requestId).get();
   if (existing.exists) {
     const existingRequest = existing.data();
-    await Promise.all([
-      repairExistingChartRequestSessionNumber(booking, existingRequest),
-      ensureChartRequestMediaUploadLink(existingRequest),
-    ]);
-    return { requestId, created: false };
+    const syncedRequest = await syncChartRequestToActiveBooking(
+      existingRequest,
+      booking,
+      "active_booking_repair",
+    );
+    await ensureChartRequestMediaUploadLink(syncedRequest);
+    return { requestId: syncedRequest.requestId, created: false };
+  }
+
+  const reusableRequest = await findReusableChartRequestForBooking(booking);
+  if (reusableRequest) {
+    const syncedRequest = await syncChartRequestToActiveBooking(
+      reusableRequest,
+      booking,
+      "rescheduled_booking_reuse",
+    );
+    await ensureChartRequestMediaUploadLink(syncedRequest);
+    return { requestId: syncedRequest.requestId, created: false };
   }
 
   const [staffSnap, intakeSummary, sessionNumber] = await Promise.all([
@@ -1214,6 +1227,41 @@ async function ensureChartRequestForBooking(booking: BookingDoc): Promise<{ requ
   return { requestId, created: true };
 }
 
+async function findReusableChartRequestForBooking(
+  booking: BookingDoc,
+): Promise<PrivateLessonChartRequestDoc | null> {
+  if (!booking.memberId || !booking.lectureDate) return null;
+  const snap = await refs.privateLessonChartRequests()
+    .where("memberId", "==", booking.memberId)
+    .where("lessonDate", "==", booking.lectureDate)
+    .limit(50)
+    .get();
+  const candidates: PrivateLessonChartRequestDoc[] = [];
+  for (const doc of snap.docs) {
+    const request = doc.data();
+    if (!request || request.requestId === `plc_${booking.bookingId}`) continue;
+    if (request.bookingId === booking.bookingId) continue;
+    if (request.status === "cancelled" && !isAutoBookingCancellationReason(request.cancellationReason)) continue;
+    if (staffOccurrenceIdentity(request.staffId, request.staffName) !== staffOccurrenceIdentity(booking.staffId, booking.staffName)) {
+      continue;
+    }
+    const linkedBooking = request.bookingId ? (await refs.booking(request.bookingId).get()).data() : null;
+    if (linkedBooking && !inactivePrivateBookingReason(linkedBooking)) continue;
+    candidates.push(request);
+  }
+  if (candidates.length !== 1) return null;
+  return candidates.sort((a, b) => chartRequestReuseScore(b) - chartRequestReuseScore(a))[0] || null;
+}
+
+function chartRequestReuseScore(request: PrivateLessonChartRequestDoc): number {
+  let score = 0;
+  if (request.preStatus === "submitted") score += 20;
+  if (request.postStatus === "submitted") score += 30;
+  if (request.alimtalk?.status === "sent") score += 10;
+  if (request.status !== "cancelled") score += 5;
+  return score;
+}
+
 async function ensureChartRequestMediaUploadLink(request: PrivateLessonChartRequestDoc | undefined): Promise<void> {
   if (!request?.requestId) return;
   const token = accessTokenFor(request.requestId);
@@ -1246,38 +1294,108 @@ async function shouldRepairMediaUploadLink(
   return String(snap.data()?.targetUrl || "") !== expectedTargetUrl;
 }
 
-async function repairExistingChartRequestSessionNumber(
-  booking: BookingDoc,
+async function syncChartRequestToActiveBooking(
   request: PrivateLessonChartRequestDoc | undefined,
-): Promise<void> {
-  if (!request) return;
+  booking: BookingDoc,
+  reason: string,
+): Promise<PrivateLessonChartRequestDoc> {
+  if (!request) throw new Error("missing_private_chart_request");
   const sessionNumber = await nextSessionNumber(booking);
-  if (!sessionNumber || Number(request.sessionNumber || 0) === sessionNumber) return;
   const now = nowTimestamp();
+  const sessionChanged = Number(request.sessionNumber || 0) !== sessionNumber;
+  const bookingChanged =
+    request.bookingId !== booking.bookingId ||
+    request.lectureId !== booking.lectureId ||
+    request.lessonDate !== booking.lectureDate ||
+    (request.lessonStartAt?.toMillis?.() || 0) !== (booking.lectureStartAt?.toMillis?.() || 0) ||
+    (request.lessonEndAt?.toMillis?.() || 0) !== (booking.lectureEndAt?.toMillis?.() || 0);
+  const shouldReactivate = request.status === "cancelled" && isAutoBookingCancellationReason(request.cancellationReason);
+  if (request.status === "cancelled" && !shouldReactivate) return request;
+  if (!sessionChanged && !bookingChanged && !shouldReactivate) return request;
+
   const correction = {
-    from: request.sessionNumber || null,
-    to: sessionNumber,
-    reason: "memberUsageEvents/privateSessionLedger 기준 회차 재계산",
+    fromBookingId: request.bookingId || null,
+    toBookingId: booking.bookingId || null,
+    fromLessonStartAt: request.lessonStartAt || null,
+    toLessonStartAt: booking.lectureStartAt || null,
+    fromSessionNumber: Number(request.sessionNumber || 0) || null,
+    toSessionNumber: sessionNumber,
+    reason,
     correctedAt: now,
   };
+  const sessionNumberCorrection = sessionChanged
+    ? {
+      from: Number(request.sessionNumber || 0) || null,
+      to: sessionNumber,
+      reason: "privateSessionLedger canonical round",
+      correctedAt: now,
+    }
+    : request.sessionNumberCorrection;
+  const requestPatch = compactObject({
+    bookingId: booking.bookingId,
+    lectureId: booking.lectureId,
+    staffId: booking.staffId,
+    staffName: booking.staffName,
+    lessonDate: booking.lectureDate,
+    lessonStartAt: booking.lectureStartAt || null,
+    lessonEndAt: booking.lectureEndAt || null,
+    sessionNumber,
+    sessionNumberCorrection,
+    rescheduleCorrection: correction,
+    cancellationReason: null,
+    cancelledAt: null,
+    status: shouldReactivate ? chartRequestStatusFromSubmissions(request) : request.status,
+    updatedAt: now,
+  }) as Partial<PrivateLessonChartRequestDoc>;
+  const updatedRequest = { ...request, ...requestPatch } as PrivateLessonChartRequestDoc;
+  const recordSnap = await refs.privateLessonChartRecord(request.requestId).get();
+  const currentRecord = recordSnap.data() || chartRecordBase(updatedRequest);
+  const recordPatch = compactObject({
+    bookingId: booking.bookingId,
+    lectureId: booking.lectureId,
+    staffId: booking.staffId,
+    staffName: booking.staffName,
+    lessonDate: booking.lectureDate,
+    lessonStartAt: booking.lectureStartAt || null,
+    sessionNumber,
+    sessionNumberCorrection,
+    rescheduleCorrection: correction,
+    cancellationReason: null,
+    cancelledAt: null,
+    updatedAt: now,
+  }) as Partial<PrivateLessonChartRecordDoc>;
+  const updatedRecord = { ...currentRecord, ...recordPatch } as PrivateLessonChartRecordDoc;
+  const recordWrite = recordSnap.exists ? recordPatch : compactObject(updatedRecord as unknown as Record<string, unknown>);
   await Promise.all([
-    refs.privateLessonChartRequest(request.requestId).set(
-      {
-        sessionNumber,
-        sessionNumberCorrection: correction,
-        updatedAt: now,
-      },
-      { merge: true },
-    ),
-    refs.privateLessonChartRecord(request.requestId).set(
-      {
-        sessionNumber,
-        sessionNumberCorrection: correction,
-        updatedAt: now,
-      },
-      { merge: true },
-    ),
+    refs.privateLessonChartRequest(request.requestId).set(requestPatch, { merge: true }),
+    refs.privateLessonChartRecord(request.requestId).set(recordWrite, { merge: true }),
   ]);
+
+  if (updatedRecord.notionSync?.pageId || updatedRecord.notionSync?.instructorPageId) {
+    try {
+      const notionSync = await syncPrivateLessonChartRecordToNotion(updatedRecord, updatedRequest);
+      await refs.privateLessonChartRecord(request.requestId).set({ notionSync, updatedAt: nowTimestamp() }, { merge: true });
+    } catch (err) {
+      logger.warn("private chart request booking sync notion update failed", {
+        requestId: request.requestId,
+        previousBookingId: request.bookingId,
+        nextBookingId: booking.bookingId,
+        message: errorMessage(err),
+      });
+    }
+  }
+  return updatedRequest;
+}
+
+function isAutoBookingCancellationReason(value: unknown): boolean {
+  return /^(booking_not_in_private_session_ledger|chart_request_not_in_private_session_ledger|missing_from_latest_reservation_import|stale|lecture_deleted|deleted|source_inactive|missing_booking|booking_not_found|booking_app_status_cancel|rescheduled_duplicate|duplicate_source|fallback_source_superseded|session_order_excluded|not_in_private_session_ledger)/i.test(String(value || ""));
+}
+
+function chartRequestStatusFromSubmissions(request: PrivateLessonChartRequestDoc): PrivateLessonChartRequestStatus {
+  if (request.preStatus === "submitted" && request.postStatus === "submitted") return "completed";
+  if (request.preStatus === "submitted") return "pre_submitted";
+  if (request.postStatus === "submitted") return "post_submitted";
+  return "pending";
 }
 
 async function submitPrivateLessonChart(
@@ -1605,6 +1723,14 @@ async function syncPrivateLessonChartRecordToNotion(
     const content = notionChartChildren(recordForNotion, chartRequest);
     const existingPageId = record.notionSync?.pageId;
     if (existingPageId) {
+      await updateNotionPageTitle(existingPageId, notionSessionTitle(recordForNotion, chartRequest)).catch((err) => {
+        logger.warn("update private session record page title failed", {
+          pageId: existingPageId,
+          requestId: chartRequest.requestId,
+          title: notionSessionTitle(recordForNotion, chartRequest),
+          message: errorMessage(err),
+        });
+      });
       if (Object.keys(existingPageProperties).length) {
         await notionRequest(`pages/${existingPageId}`, "PATCH", { properties: existingPageProperties });
       }
@@ -2205,11 +2331,24 @@ function canonicalChartRequests(requests: PrivateLessonChartRequestDoc[]): Priva
   for (const request of requests) {
     const key = privateChartRequestOccurrenceKey(request);
     const current = grouped.get(key);
-    if (!current || preferCanonicalBookingLike(request.bookingId, current.bookingId)) grouped.set(key, request);
+    if (!current || preferCanonicalChartRequest(request, current)) grouped.set(key, request);
   }
   return [...grouped.values()].sort(
     (a, b) => (a.lessonStartAt?.toMillis?.() || 0) - (b.lessonStartAt?.toMillis?.() || 0),
   );
+}
+
+function preferCanonicalChartRequest(
+  next: PrivateLessonChartRequestDoc,
+  current: PrivateLessonChartRequestDoc,
+): boolean {
+  const nextPriority = bookingSourcePriority(next.bookingId);
+  const currentPriority = bookingSourcePriority(current.bookingId);
+  if (nextPriority !== currentPriority) return nextPriority < currentPriority;
+  const nextScore = chartRequestReuseScore(next);
+  const currentScore = chartRequestReuseScore(current);
+  if (nextScore !== currentScore) return nextScore > currentScore;
+  return String(next.requestId || "") < String(current.requestId || "");
 }
 
 function privateLessonOccurrenceKey(
@@ -2270,8 +2409,68 @@ async function activePrivateBookingForChartRequest(
   const booking = snap.data();
   if (!booking) return { ok: false, reason: "booking_not_found" };
   const reason = inactivePrivateBookingReason(booking);
-  if (reason) return { ok: false, reason };
+  if (reason) {
+    const replacement = await findReplacementPrivateBookingForChartRequest(request, reason);
+    if (replacement) {
+      const updatedRequest = await syncChartRequestToActiveBooking(
+        request,
+        replacement,
+        `rescheduled_from_inactive_booking:${reason}`,
+      );
+      Object.assign(request, updatedRequest);
+      return { ok: true, booking: replacement };
+    }
+    return { ok: false, reason };
+  }
+  const updatedRequest = await syncChartRequestToActiveBooking(request, booking, "active_booking_repair");
+  Object.assign(request, updatedRequest);
   return { ok: true, booking };
+}
+
+async function findReplacementPrivateBookingForChartRequest(
+  request: PrivateLessonChartRequestDoc,
+  reason: string,
+): Promise<BookingDoc | null> {
+  if (!request.memberId || !request.lessonDate) return null;
+  const snap = await refs.bookings()
+    .where("memberId", "==", request.memberId)
+    .where("lectureDate", "==", request.lessonDate)
+    .limit(50)
+    .get();
+  const requestStart = request.lessonStartAt?.toMillis?.() || 0;
+  const candidates = snap.docs
+    .map((doc) => doc.data())
+    .filter((booking) => booking.bookingId !== request.bookingId)
+    .filter((booking) => !inactivePrivateBookingReason(booking))
+    .filter((booking) =>
+      staffOccurrenceIdentity(booking.staffId, booking.staffName) === staffOccurrenceIdentity(request.staffId, request.staffName),
+    )
+    .sort((a, b) => {
+      const aDistance = Math.abs((a.lectureStartAt?.toMillis?.() || 0) - requestStart);
+      const bDistance = Math.abs((b.lectureStartAt?.toMillis?.() || 0) - requestStart);
+      return aDistance - bDistance || bookingSourcePriority(a.bookingId) - bookingSourcePriority(b.bookingId);
+    });
+  if (candidates.length !== 1) {
+    if (candidates.length > 1) {
+      logger.warn("private chart replacement booking ambiguous", {
+        requestId: request.requestId,
+        previousBookingId: request.bookingId,
+        candidateBookingIds: candidates.map((booking) => booking.bookingId),
+        reason,
+      });
+    }
+    return null;
+  }
+  const replacement = candidates[0] || null;
+  if (replacement) {
+    logger.info("private chart request resolved to replacement booking", {
+      requestId: request.requestId,
+      previousBookingId: request.bookingId,
+      replacementBookingId: replacement.bookingId,
+      reason,
+    });
+  }
+  return replacement;
 }
 
 function inactivePrivateBookingReason(booking: BookingDoc): string {

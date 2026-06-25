@@ -266,6 +266,7 @@
                 <li>삭제, 취소, 시간변경은 sessionOrder.counted=false와 제외 사유를 남기고 해당 수업 이후 회차까지 연쇄 재계산합니다.</li>
                 <li>booking.lessonType=group인 수업은 수강권명이 프라이빗처럼 보여도 프라이빗 회차에서 제외합니다. 원본 분류가 틀렸다면 원본 보정 후 다시 반영합니다.</li>
                 <li>강사 설문 알림톡 발송, 설문 링크 열기, 설문 제출, Notion 차트 갱신은 연결된 booking이 active일 때만 진행합니다.</li>
+                <li>수업 시간이 변경되어 기존 설문 링크만 남아 있으면 같은 회원, 강사, 날짜의 active booking으로 요청과 차트를 자동 이관합니다.</li>
                 <li>같은 회원, 강사, 날짜, 수강권에서 시간변경 중복이 생기면 출석/최신 예약을 대표 booking으로 두고 나머지는 rescheduled_duplicate로 제외합니다.</li>
               </ul>
             </article>

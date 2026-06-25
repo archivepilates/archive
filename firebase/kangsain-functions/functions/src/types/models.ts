@@ -660,6 +660,16 @@ export interface PrivateLessonChartRequestDoc {
   lessonEndAt: Timestamp | null;
   sessionNumber: number;
   sessionNumberCorrection?: PrivateLessonSessionNumberCorrection;
+  rescheduleCorrection?: {
+    fromBookingId?: string | null;
+    toBookingId?: string | null;
+    fromLessonStartAt?: Timestamp | null;
+    toLessonStartAt?: Timestamp | null;
+    fromSessionNumber?: number | null;
+    toSessionNumber?: number | null;
+    reason: string;
+    correctedAt: Timestamp;
+  };
   cancellationReason?: string | null;
   cancelledAt?: Timestamp | null;
   accessTokenHash: string;
@@ -713,6 +723,16 @@ export interface PrivateLessonChartRecordDoc {
   lessonStartAt: Timestamp | null;
   sessionNumber: number;
   sessionNumberCorrection?: PrivateLessonSessionNumberCorrection;
+  rescheduleCorrection?: {
+    fromBookingId?: string | null;
+    toBookingId?: string | null;
+    fromLessonStartAt?: Timestamp | null;
+    toLessonStartAt?: Timestamp | null;
+    fromSessionNumber?: number | null;
+    toSessionNumber?: number | null;
+    reason: string;
+    correctedAt: Timestamp;
+  };
   cancellationReason?: string | null;
   cancelledAt?: Timestamp | null;
   prePlan?: Record<string, unknown>;

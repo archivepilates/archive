@@ -118,7 +118,7 @@ async function recomputeMember(member) {
   const ledgerByKey = new Map(ledgerEntries.map((entry) => [entry.occurrenceKey, entry]));
   const ledgerByBookingId = new Map(ledgerEntries.filter((entry) => entry.bookingId).map((entry) => [entry.bookingId, entry]));
   const bookingPatches = buildBookingPatches(bookings, ledgerByKey, ledgerByBookingId);
-  const requestPatches = await buildRequestPatches(requestSnap.docs, ledgerByKey, ledgerByBookingId);
+  const requestPatches = await buildRequestPatches(requestSnap.docs, bookings, ledgerByKey, ledgerByBookingId);
   const staleLedgerDeletes = ledgerSnap.docs.map((doc) => doc.id);
   const plannedWrites = ledgerEntries.length + staleLedgerDeletes.length + bookingPatches.length * 2 + requestPatches.length * 2;
 
@@ -215,7 +215,7 @@ function buildBookingPatches(bookings, ledgerByKey, ledgerByBookingId) {
   return patches;
 }
 
-async function buildRequestPatches(requestDocs, ledgerByKey, ledgerByBookingId) {
+async function buildRequestPatches(requestDocs, bookings, ledgerByKey, ledgerByBookingId) {
   const now = admin.firestore.Timestamp.now();
   const patches = [];
   for (const doc of requestDocs) {
@@ -224,6 +224,84 @@ async function buildRequestPatches(requestDocs, ledgerByKey, ledgerByBookingId) 
     const ledger = ledgerByBookingId.get(String(request.bookingId || "")) || ledgerByKey.get(key);
     if (String(request.status || "") === "cancelled") continue;
     if (!ledger) {
+      const replacement = replacementBookingForRequest(request, bookings, ledgerByKey, ledgerByBookingId);
+      if (replacement) {
+        const replacementKey = occurrenceKey(timelineRowFromBooking(replacement));
+        const replacementLedger =
+          ledgerByBookingId.get(String(replacement.bookingId || replacement.id || "")) ||
+          ledgerByKey.get(replacementKey);
+        const sessionNumber =
+          replacementLedger?.cumulativePrivateRound || positiveNumber(replacement.sessionOrder?.privateCumulativeRound) || 1;
+        patches.push({
+          requestId: request.requestId,
+          recordId: request.requestId,
+          reason: "migrate_chart_request_to_rescheduled_booking",
+          before: {
+            sessionNumber: request.sessionNumber,
+            status: request.status,
+            bookingId: request.bookingId,
+            lessonStartAt: request.lessonStartAt?.toDate?.()?.toISOString?.() || request.lessonStartAt || null,
+          },
+          requestPatch: {
+            bookingId: replacement.bookingId || replacement.id,
+            lectureId: replacement.lectureId || "",
+            staffId: replacement.staffId || request.staffId || "",
+            staffName: replacement.staffName || request.staffName || "",
+            lessonDate: replacement.lectureDate || "",
+            lessonStartAt: replacement.lectureStartAt || null,
+            lessonEndAt: replacement.lectureEndAt || null,
+            sessionNumber,
+            sessionNumberCorrection: {
+              from: positiveNumber(request.sessionNumber),
+              to: sessionNumber,
+              reason: "privateSessionLedger canonical round",
+              correctedAt: now,
+            },
+            rescheduleCorrection: {
+              fromBookingId: request.bookingId || null,
+              toBookingId: replacement.bookingId || replacement.id || null,
+              fromLessonStartAt: request.lessonStartAt || null,
+              toLessonStartAt: replacement.lectureStartAt || null,
+              fromSessionNumber: positiveNumber(request.sessionNumber),
+              toSessionNumber: sessionNumber,
+              reason: "rescheduled booking matched during privateSessionLedger recompute",
+              correctedAt: now,
+            },
+            cancellationReason: null,
+            cancelledAt: null,
+            updatedAt: now,
+          },
+          recordPatch: {
+            bookingId: replacement.bookingId || replacement.id,
+            lectureId: replacement.lectureId || "",
+            staffId: replacement.staffId || request.staffId || "",
+            staffName: replacement.staffName || request.staffName || "",
+            lessonDate: replacement.lectureDate || "",
+            lessonStartAt: replacement.lectureStartAt || null,
+            sessionNumber,
+            sessionNumberCorrection: {
+              from: positiveNumber(request.sessionNumber),
+              to: sessionNumber,
+              reason: "privateSessionLedger canonical round",
+              correctedAt: now,
+            },
+            rescheduleCorrection: {
+              fromBookingId: request.bookingId || null,
+              toBookingId: replacement.bookingId || replacement.id || null,
+              fromLessonStartAt: request.lessonStartAt || null,
+              toLessonStartAt: replacement.lectureStartAt || null,
+              fromSessionNumber: positiveNumber(request.sessionNumber),
+              toSessionNumber: sessionNumber,
+              reason: "rescheduled booking matched during privateSessionLedger recompute",
+              correctedAt: now,
+            },
+            cancellationReason: null,
+            cancelledAt: null,
+            updatedAt: now,
+          },
+        });
+        continue;
+      }
       patches.push({
         requestId: request.requestId,
         recordId: request.requestId,
@@ -279,6 +357,26 @@ async function buildRequestPatches(requestDocs, ledgerByKey, ledgerByBookingId) 
     }
   }
   return patches;
+}
+
+function replacementBookingForRequest(request, bookings, ledgerByKey, ledgerByBookingId) {
+  const requestStaff = staffOccurrenceIdentity(request.staffId, request.staffName);
+  const requestStart = timestampMillisFromValue(request.lessonStartAt);
+  const candidates = bookings
+    .filter((booking) => String(booking.bookingId || booking.id || "") !== String(request.bookingId || ""))
+    .filter((booking) => String(booking.lectureDate || "") === String(request.lessonDate || ""))
+    .filter((booking) => staffOccurrenceIdentity(booking.staffId, booking.staffName) === requestStaff)
+    .filter((booking) => isCountablePrivateBooking(booking))
+    .filter((booking) => {
+      const key = occurrenceKey(timelineRowFromBooking(booking));
+      return Boolean(ledgerByBookingId.get(String(booking.bookingId || booking.id || "")) || ledgerByKey.get(key));
+    })
+    .sort((a, b) => {
+      const aDistance = Math.abs(timestampMillisFromValue(a.lectureStartAt) - requestStart);
+      const bDistance = Math.abs(timestampMillisFromValue(b.lectureStartAt) - requestStart);
+      return aDistance - bDistance || bookingSourcePriority(String(a.bookingId || a.id || "")) - bookingSourcePriority(String(b.bookingId || b.id || ""));
+    });
+  return candidates.length === 1 ? candidates[0] : null;
 }
 
 async function applyMemberPlan({ member, ledgerEntries, staleLedgerDeletes, bookingPatches, requestPatches }) {

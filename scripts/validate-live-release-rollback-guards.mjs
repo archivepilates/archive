@@ -221,6 +221,38 @@ const guardGroups = [
     ],
   },
   {
+    id: "private-session-reschedule-reconcile",
+    reason: "프라이빗 수업 시간변경/취소 시 기존 설문 링크와 Notion 차트가 과거 예약으로 롤백되는 것을 막습니다.",
+    files: [
+      {
+        file: "firebase/kangsain-functions/functions/src/privateLessonChart/privateLessonChart.ts",
+        markers: [
+          "findReplacementPrivateBookingForChartRequest",
+          "syncChartRequestToActiveBooking",
+          "rescheduled_from_inactive_booking",
+          "rescheduled_booking_reuse",
+          "update private session record page title failed",
+        ],
+      },
+      {
+        file: "scripts/recompute-private-session-ledger.mjs",
+        markers: [
+          "migrate_chart_request_to_rescheduled_booking",
+          "replacementBookingForRequest",
+          "rescheduled booking matched during privateSessionLedger recompute",
+        ],
+      },
+      {
+        file: "core/rules/index.html",
+        markers: [
+          "삭제, 취소, 시간변경은 sessionOrder.counted=false와 제외 사유를 남기고 해당 수업 이후 회차까지 연쇄 재계산합니다.",
+          "기존 설문 링크만 남아 있으면 같은 회원, 강사, 날짜의 active booking으로 요청과 차트를 자동 이관",
+          "예약 시간이 바뀌거나 취소되면 Notion 제목, 날짜, 상태, 회차, 발송상태를 함께 갱신",
+        ],
+      },
+    ],
+  },
+  {
     id: "onsite-welcome-current-flow",
     reason: "현장 웰컴 가입서 알림톡과 StudioMate 후속 처리 흐름이 예전 코드로 되돌아가는 것을 막습니다.",
     files: [
