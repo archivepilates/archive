@@ -56,6 +56,13 @@ if (!downloadFailedWithoutMember) {
   );
 
   steps.push(
+    runStep("memberPhoneDedupe", [
+      "scripts/reconcile-member-phone-duplicates.mjs",
+      ...(apply ? ["--apply"] : []),
+    ]),
+  );
+
+  steps.push(
     runStep("reservations", [
       "scripts/emergency-import-studiomate-reservation-excel.mjs",
       ...(reservationFile || downloadedReservationFile ? ["--file", reservationFile || downloadedReservationFile] : []),
