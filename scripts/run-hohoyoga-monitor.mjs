@@ -32,6 +32,7 @@ const CENTER_SALE_LIMIT = Number(args["center-sale-limit"] || process.env.HOHOYO
 const SHEETS = {
   posts: "구인글",
   centerSale: "센터매매_부산",
+  centerSaleReview: "센터매매_검토뷰",
   history: "상태이력",
   log: "모니터링로그",
 };
@@ -95,6 +96,23 @@ const CENTER_SALE_HEADERS = [
   "특정근거",
   "정밀등급메모",
 ];
+const CENTER_SALE_REVIEW_HEADERS = [
+  "등급",
+  "점수",
+  "추정센터",
+  "제목",
+  "게시일",
+  "연락처",
+  "매물유형",
+  "확인필요",
+  "등급근거",
+  "정밀등급메모",
+  "본문요약",
+  "원문URL",
+  "글번호",
+  "소유자/게시자그룹",
+];
+const CENTER_SALE_REVIEW_FORMULA = `=QUERY({ARRAYFORMULA(SWITCH('${SHEETS.centerSale}'!S2:S,"S",1,"A",2,"B",3,"C",4,"D",5,"F",6,9)),'${SHEETS.centerSale}'!S2:S,'${SHEETS.centerSale}'!T2:T,'${SHEETS.centerSale}'!X2:X,'${SHEETS.centerSale}'!D2:D,'${SHEETS.centerSale}'!B2:B,'${SHEETS.centerSale}'!H2:H,'${SHEETS.centerSale}'!V2:V,'${SHEETS.centerSale}'!W2:W,'${SHEETS.centerSale}'!U2:U,'${SHEETS.centerSale}'!AA2:AA,ARRAYFORMULA(LEFT('${SHEETS.centerSale}'!M2:M,180)),'${SHEETS.centerSale}'!J2:J,'${SHEETS.centerSale}'!A2:A,'${SHEETS.centerSale}'!Y2:Y},"select Col2,Col3,Col4,Col5,Col6,Col7,Col8,Col9,Col10,Col11,Col12,Col13,Col14,Col15 where Col14 is not null order by Col1 asc, Col3 desc",0)`;
 
 await main();
 
@@ -187,8 +205,32 @@ async function main() {
 async function ensureHeaders(token) {
   await ensureHeader(token, SHEETS.posts, POST_HEADERS);
   await ensureHeader(token, SHEETS.centerSale, CENTER_SALE_HEADERS);
+  await ensureHeader(token, SHEETS.centerSaleReview, CENTER_SALE_REVIEW_HEADERS);
+  await ensureCenterSaleReviewFormula(token);
   await ensureHeader(token, SHEETS.history, HISTORY_HEADERS);
   await ensureHeader(token, SHEETS.log, LOG_HEADERS);
+}
+
+async function ensureCenterSaleReviewFormula(token) {
+  const current = await sheetsRequest(
+    token,
+    "GET",
+    `/v4/spreadsheets/${SHEET_ID}/values/${encodeURIComponent(quotedRange(SHEETS.centerSaleReview, "A2"))}?valueRenderOption=FORMULA`,
+  );
+  const formula = current.values?.[0]?.[0] || "";
+  if (formula === CENTER_SALE_REVIEW_FORMULA) return;
+  await sheetsRequest(
+    token,
+    "POST",
+    `/v4/spreadsheets/${SHEET_ID}/values/${encodeURIComponent(quotedRange(SHEETS.centerSaleReview, "A2:N1000"))}:clear`,
+    {},
+  );
+  await sheetsRequest(
+    token,
+    "PUT",
+    `/v4/spreadsheets/${SHEET_ID}/values/${encodeURIComponent(quotedRange(SHEETS.centerSaleReview, "A2"))}?valueInputOption=USER_ENTERED`,
+    { values: [[CENTER_SALE_REVIEW_FORMULA]] },
+  );
 }
 
 async function ensureHeader(token, sheetName, headers) {
@@ -415,7 +457,7 @@ function postRowFromItem(item) {
     item.weekdays || "",
     item.deadline || "",
     item.address || "",
-    item.phone || "",
+    phoneForSheet(item.phone),
     item.email || "",
     item.profileRequired || "",
     item.sourceUrl || "",
@@ -448,7 +490,7 @@ function centerSaleRowFromItem(item) {
     item.author || "",
     item.address || item.area || "",
     item.readCount || "",
-    item.phone || "",
+    phoneForSheet(item.phone),
     item.email || "",
     item.sourceUrl || "",
     item.contentStatus || "",
@@ -472,11 +514,61 @@ function centerSaleRowFromItem(item) {
 }
 
 function centerSaleRowFromExisting(row) {
+  if (isShiftedCenterSaleRow(row)) return normalizeShiftedCenterSaleRow(row);
   return CENTER_SALE_HEADERS.map((header) => row[header] ?? "");
+}
+
+function isShiftedCenterSaleRow(row) {
+  return /^https?:\/\//.test(String(row["연락처"] || "").trim()) && !/^https?:\/\//.test(String(row["원문URL"] || "").trim());
+}
+
+function normalizeShiftedCenterSaleRow(row) {
+  const recentCheckedAt = looksLikeKstDateTime(row["최근확인일"]) ? row["최근확인일"] : RUN_AT;
+  const newFlag = /^[SABCDF]$/.test(String(row["신규추가여부"] || "").trim())
+    ? "시트 규칙 보정"
+    : row["신규추가여부"] || "시트 규칙 보정";
+  return [
+    row["글번호"] || "",
+    row["게시일"] || "",
+    row["지역필터"] || "부산",
+    row["제목"] || "",
+    row["작성자"] || "",
+    "",
+    row["주소/지역"] || "",
+    phoneForSheet(row["조회수"]),
+    "",
+    row["연락처"] || "",
+    row["이메일"] || "",
+    row["원문URL"] || "",
+    row["원문본문"] || "",
+    recentCheckedAt,
+    recentCheckedAt,
+    row["현재상태"] || row["첫수집일"] || "게시중",
+    newFlag,
+    row["모니터링메모"] || "시트 규칙 보정",
+    row["등급"] || "",
+    row["점수"] || "",
+    row["등급근거"] || "",
+    row["매물유형"] || "",
+    row["확인필요"] || "",
+    row["추정센터"] || "",
+    row["소유자/게시자그룹"] || "",
+    row["특정근거"] || "",
+    row["정밀등급메모"] || "",
+  ];
+}
+
+function looksLikeKstDateTime(value) {
+  return /^20\d{2}-\d{2}-\d{2}\s+\d{2}:\d{2}/.test(String(value || "").trim());
 }
 
 function updateCenterSaleRowFromItem(row, item, memo) {
   const grade = gradeCenterSale(item);
+  row[5] = item.address || item.area || row[5] || "";
+  row[6] = item.readCount || row[6] || "";
+  row[7] = phoneForSheet(item.phone || row[7] || "");
+  row[8] = item.email || row[8] || "";
+  row[9] = item.sourceUrl || row[9] || "";
   row[10] = item.contentStatus || row[10] || "";
   row[11] = item.contentPreview || row[11] || "";
   row[12] = item.content || row[12] || "";
@@ -494,6 +586,13 @@ function updateCenterSaleRowFromItem(row, item, memo) {
   row[25] = identity.evidence;
   row[26] = identity.memo;
   return row;
+}
+
+function phoneForSheet(value) {
+  const text = String(value || "").trim();
+  if (!text || text.startsWith("'")) return text;
+  const digits = text.replace(/\D/g, "");
+  return digits.startsWith("0") && digits.length >= 9 ? `'${text}` : text;
 }
 
 function isBusanCenterSale(item) {
