@@ -38,7 +38,7 @@ export const scheduledQueueAndSendAlimtalkDaily = onSchedule(
     schedule: "30 11 * * *",
   },
   async () => {
-    await syncAlimtalkTemplateStatuses();
+    await syncAlimtalkTemplateStatusesSafely("scheduledQueueAndSendAlimtalkDaily");
     const queueSummary = await queueDailyAlimtalkCandidates();
     const processSummary = { processed: 0, sent: 0, failed: 0 };
     for (let index = 0; index < 10; index += 1) {
@@ -63,7 +63,7 @@ export const scheduledQueueAndSendReservationOpenAlimtalk = onSchedule(
     schedule: "30 12 * * 1",
   },
   async () => {
-    await syncAlimtalkTemplateStatuses();
+    await syncAlimtalkTemplateStatusesSafely("scheduledQueueAndSendReservationOpenAlimtalk");
     const queueSummary = await queueReservationOpenAlimtalkCandidates();
     const processSummary = { processed: 0, sent: 0, failed: 0 };
     for (let index = 0; index < 10; index += 1) {
@@ -88,7 +88,7 @@ export const scheduledSyncAlimtalkTemplateStatuses = onSchedule(
     schedule: "0 10 * * *",
   },
   async () => {
-    await syncAlimtalkTemplateStatuses();
+    await syncAlimtalkTemplateStatusesSafely("scheduledSyncAlimtalkTemplateStatuses");
   },
 );
 
@@ -103,3 +103,12 @@ export const operatorSendPricingInquiryAlimtalk = onCall(callableOptions, async 
     throw toHttpsError(err);
   }
 });
+
+async function syncAlimtalkTemplateStatusesSafely(context: string): Promise<void> {
+  try {
+    await syncAlimtalkTemplateStatuses();
+  } catch (err) {
+    const message = err instanceof Error ? err.message : String(err);
+    logger.error("Alimtalk template status sync failed; continuing scheduled job", { context, message });
+  }
+}

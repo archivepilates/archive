@@ -31,17 +31,19 @@ export async function syncAlimtalkTemplateStatuses(): Promise<{ checked: number;
   let approved = 0;
   let failed = 0;
   for (const template of Object.values(ALIMTALK_TEMPLATES)) {
+    const templateCode = normalizeTemplateCode(template.code);
+    if (!templateCode) continue;
     checked += 1;
     try {
-      const remote = await fetchSolapiTemplate(template.code);
+      const remote = await fetchSolapiTemplate(templateCode);
       const status = String(remote?.status || template.status || "").toUpperCase();
       if (APPROVED_STATUSES.has(status)) approved += 1;
       await db
         .collection("alimtalkTemplateStates")
-        .doc(template.code)
+        .doc(templateCode)
         .set(
           {
-            templateCode: template.code,
+            templateCode,
             label: template.label,
             name: remote?.name || template.label,
             status,
@@ -57,10 +59,10 @@ export async function syncAlimtalkTemplateStatuses(): Promise<{ checked: number;
       const message = err instanceof Error ? err.message : String(err);
       await db
         .collection("alimtalkTemplateStates")
-        .doc(template.code)
+        .doc(templateCode)
         .set(
           {
-            templateCode: template.code,
+            templateCode,
             label: template.label,
             name: template.label,
             status: String(template.status || "").toUpperCase(),
@@ -71,7 +73,7 @@ export async function syncAlimtalkTemplateStatuses(): Promise<{ checked: number;
           },
           { merge: true },
         );
-      logger.warn("syncAlimtalkTemplateStatuses failed for template", { templateCode: template.code, message });
+      logger.warn("syncAlimtalkTemplateStatuses failed for template", { templateCode, message });
     }
   }
   logger.info("syncAlimtalkTemplateStatuses completed", { checked, approved, failed });
@@ -79,25 +81,28 @@ export async function syncAlimtalkTemplateStatuses(): Promise<{ checked: number;
 }
 
 export async function isAlimtalkTemplateApproved(templateCode: string): Promise<boolean> {
-  if (!templateCode) return false;
-  const state = await templateState(templateCode);
+  const normalizedTemplateCode = normalizeTemplateCode(templateCode);
+  if (!normalizedTemplateCode) return false;
+  const state = await templateState(normalizedTemplateCode);
   if (state?.source === "solapi") return APPROVED_STATUSES.has(String(state.status || "").toUpperCase());
-  return STATIC_APPROVED_ALIMTALK_TEMPLATE_CODES.has(templateCode);
+  return STATIC_APPROVED_ALIMTALK_TEMPLATE_CODES.has(normalizedTemplateCode);
 }
 
 async function templateState(templateCode: string): Promise<TemplateState | null> {
-  const ref = db.collection("alimtalkTemplateStates").doc(templateCode);
+  const normalizedTemplateCode = normalizeTemplateCode(templateCode);
+  if (!normalizedTemplateCode) return null;
+  const ref = db.collection("alimtalkTemplateStates").doc(normalizedTemplateCode);
   const snap = await ref.get();
   const state = snap.data() as TemplateState | undefined;
   const syncedAt = state?.syncedAt?.toMillis?.() || 0;
   if (state && Date.now() - syncedAt < TEMPLATE_STATUS_CACHE_MS) return state;
 
-  const template = Object.values(ALIMTALK_TEMPLATES).find((item) => item.code === templateCode);
+  const template = Object.values(ALIMTALK_TEMPLATES).find((item) => normalizeTemplateCode(item.code) === normalizedTemplateCode);
   if (!template) return state || null;
   try {
-    const remote = await fetchSolapiTemplate(templateCode);
+    const remote = await fetchSolapiTemplate(normalizedTemplateCode);
     const next = {
-      templateCode,
+      templateCode: normalizedTemplateCode,
       label: template.label,
       name: remote?.name || template.label,
       status: String(remote?.status || template.status || "").toUpperCase(),
@@ -112,7 +117,7 @@ async function templateState(templateCode: string): Promise<TemplateState | null
     const message = err instanceof Error ? err.message : String(err);
     await ref.set(
       {
-        templateCode,
+        templateCode: normalizedTemplateCode,
         label: template.label,
         name: template.label,
         status: String(template.status || "").toUpperCase(),
@@ -125,6 +130,10 @@ async function templateState(templateCode: string): Promise<TemplateState | null
     );
     return state || null;
   }
+}
+
+function normalizeTemplateCode(value: unknown): string {
+  return String(value || "").trim();
 }
 
 async function fetchSolapiTemplate(templateCode: string): Promise<SolapiTemplate | null> {
