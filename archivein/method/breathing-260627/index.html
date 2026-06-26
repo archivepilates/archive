@@ -258,6 +258,8 @@ document.body.classList.add('locked');
 const startTime = new Date(document.body.dataset.lessonStart);
 const gate = document.querySelector('.lesson-gate');
 const content = document.querySelector('.lesson-content');
+const previewCode = new URLSearchParams(window.location.search).get('preview');
+const isStaffPreview = previewCode === 'breathing260627';
 
 function applyLessonGate(){
   if (Number.isNaN(startTime.getTime()) || !gate || !content) {
@@ -266,7 +268,7 @@ function applyLessonGate(){
   }
 
   const now = new Date();
-  const isUnlocked = now >= startTime;
+  const isUnlocked = isStaffPreview || now >= startTime;
   document.body.classList.toggle('locked', !isUnlocked);
 }
 
