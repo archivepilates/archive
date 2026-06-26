@@ -24,6 +24,8 @@ export async function autoSendabilityIssue(candidate: AlimtalkCandidateDoc, toda
       return `${rule.templateLabel}은 등록 ${rule.maxAgeDays}일 이내 후보만 발송`;
     }
   }
+  const payloadIssue = requiredPayloadIssue(candidate);
+  if (payloadIssue) return payloadIssue;
   if (candidate.type === "reservation_open" && !(candidate.payload?.reservationWeek || candidate.payload?.weekLabel)) {
     return "예약주차 변수 없음";
   }
@@ -46,6 +48,22 @@ export async function autoSendabilityIssue(candidate: AlimtalkCandidateDoc, toda
   if (buttonUrlIssue) return buttonUrlIssue;
   if (rule?.blocksTooLateGroupSurvey && candidate.payload?.groupSurveyDeliveryMode === "too_late")
     return "수업 시작 30분 미만 첫 그룹수업은 설문 발송 대신 현장 확인";
+  return "";
+}
+
+function requiredPayloadIssue(candidate: AlimtalkCandidateDoc): string {
+  const payload = candidate.payload || {};
+  if (candidate.type === "onsite_welcome" && !payload.shortLinkId) return "회원가입서 짧은 링크 없음";
+  if (candidate.type === "private_survey" || candidate.type === "group_survey") {
+    if (!(payload.surveyId || payload.responseId) || !payload.accessToken) return "설문 링크 변수 없음";
+  }
+  if (candidate.type === "private_lesson_report") {
+    if (!(payload.reportLinkId || payload.reportShortUrl || payload.publicReportUrl)) return "회원용 리포트 URL 없음";
+  }
+  if (candidate.type === "inbody_report") {
+    if (!(payload.inbodyLinkId || payload.reportLinkId || payload.inbodyReportUrl || payload.publicReportUrl))
+      return "인바디 리포트 URL 없음";
+  }
   return "";
 }
 

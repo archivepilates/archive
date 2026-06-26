@@ -70,7 +70,7 @@ export async function rebuildAlimtalkCandidatesForRange(input: {
     }
   }
 
-  if (mode === "daily") {
+  if (mode === "daily" && CANDIDATE_TEMPLATE_CODES.new_member) {
     for (const profile of profiles.filter(
       (profile) =>
         profile.isNewMember &&
