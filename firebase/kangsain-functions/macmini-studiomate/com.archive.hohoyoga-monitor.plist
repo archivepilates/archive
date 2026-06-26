@@ -16,8 +16,6 @@
   <dict>
     <key>GOOGLE_APPLICATION_CREDENTIALS</key>
     <string>/Users/archivepilates/ArchiveIN/secrets/google/archive-codex-operator.json</string>
-    <key>GOOGLE_DELEGATED_USER</key>
-    <string>home@archivepilates.com</string>
     <key>HOHOYOGA_SNAPSHOT_SCRIPT</key>
     <string>/Users/archivepilates/Documents/ARCHIVE-IN/scripts/hohoyoga-monitor-snapshot.mjs</string>
     <key>HOHOYOGA_SPREADSHEET_ID</key>

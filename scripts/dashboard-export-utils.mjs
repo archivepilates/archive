@@ -132,7 +132,7 @@ export async function googleAccessToken({ credentialsPath, scopes, delegatedUser
     grant_type: "urn:ietf:params:oauth:grant-type:jwt-bearer",
     assertion: `${assertion}.${base64url(signature)}`,
   });
-  const result = await fetch("https://oauth2.googleapis.com/token", { method: "POST", body });
+  const result = await fetchWithRetry("https://oauth2.googleapis.com/token", { method: "POST", body });
   if (!result.ok) throw new Error(`Google token request failed ${result.status}: ${await result.text()}`);
   const json = await result.json();
   if (!json.access_token) throw new Error("Google token response did not include access_token");
@@ -140,7 +140,7 @@ export async function googleAccessToken({ credentialsPath, scopes, delegatedUser
 }
 
 export async function sheetsRequest(token, method, apiPath, body) {
-  const result = await fetch(`https://sheets.googleapis.com${apiPath}`, {
+  const result = await fetchWithRetry(`https://sheets.googleapis.com${apiPath}`, {
     method,
     headers: {
       authorization: `Bearer ${token}`,
@@ -154,7 +154,7 @@ export async function sheetsRequest(token, method, apiPath, body) {
 }
 
 export async function driveRequest(token, apiPath) {
-  const result = await fetch(`https://www.googleapis.com/drive/v3${apiPath}`, {
+  const result = await fetchWithRetry(`https://www.googleapis.com/drive/v3${apiPath}`, {
     headers: { authorization: `Bearer ${token}` },
   });
   const text = await result.text();
@@ -178,4 +178,29 @@ export async function ensureSheets(token, spreadsheetId, sheetNames) {
 
 function base64url(value) {
   return Buffer.from(value).toString("base64url");
+}
+
+async function fetchWithRetry(url, options = {}, maxAttempts = 4) {
+  let lastError;
+  for (let attempt = 1; attempt <= maxAttempts; attempt += 1) {
+    try {
+      const response = await fetch(url, options);
+      if (![408, 429, 500, 502, 503, 504].includes(response.status) || attempt === maxAttempts) return response;
+      lastError = new Error(`Retryable HTTP ${response.status}`);
+    } catch (error) {
+      lastError = error;
+      if (!isRetryableFetchError(error) || attempt === maxAttempts) throw error;
+    }
+    await sleep(500 * 2 ** (attempt - 1));
+  }
+  throw lastError || new Error("fetch failed");
+}
+
+function isRetryableFetchError(error) {
+  const code = error?.cause?.code || error?.code || "";
+  return ["UND_ERR_SOCKET", "ECONNRESET", "ETIMEDOUT", "EAI_AGAIN", "ENOTFOUND"].includes(code);
+}
+
+function sleep(ms) {
+  return new Promise((resolve) => setTimeout(resolve, ms));
 }

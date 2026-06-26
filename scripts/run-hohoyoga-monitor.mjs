@@ -17,7 +17,7 @@ const APPLY = Boolean(args.apply);
 const CENTER_SALE_ONLY = Boolean(args["center-sale-only"]);
 const SHEET_ID = String(args["spreadsheet-id"] || process.env.HOHOYOGA_SPREADSHEET_ID || "1bP0m8_h6-jMFEHN9-_9LptuLoxZZE4Thbr0Fqpxk6tc");
 const CREDENTIALS = expandHome(String(args.credentials || process.env.GOOGLE_APPLICATION_CREDENTIALS || path.join(HOME, "ArchiveIN/secrets/google/archive-codex-operator.json")));
-const DELEGATED_USER = String(args["delegated-user"] || process.env.GOOGLE_DELEGATED_USER || "home@archivepilates.com");
+const DELEGATED_USER = String(args["delegated-user"] || process.env.HOHOYOGA_GOOGLE_DELEGATED_USER || "");
 const SNAPSHOT_SCRIPT = String(
   args["snapshot-script"] ||
     process.env.HOHOYOGA_SNAPSHOT_SCRIPT ||
@@ -108,6 +108,7 @@ async function main() {
     credentialsPath: CREDENTIALS,
     scopes: ["https://www.googleapis.com/auth/spreadsheets", "https://www.googleapis.com/auth/drive.metadata.readonly"],
     delegatedUser: DELEGATED_USER,
+    delegated: Boolean(DELEGATED_USER),
   });
   await ensureSheets(token, SHEET_ID, Object.values(SHEETS));
   await ensureHeaders(token);
@@ -160,6 +161,7 @@ async function main() {
     source: "hohoyoga_monitor",
     spreadsheetId: SHEET_ID,
     spreadsheetUrl: `https://docs.google.com/spreadsheets/d/${SHEET_ID}/edit`,
+    googleAuthMode: DELEGATED_USER ? `service_account_delegated:${DELEGATED_USER}` : "service_account_direct",
     runAt: RUN_AT,
     snapshotPath,
     stats: snapshot.stats || {},
