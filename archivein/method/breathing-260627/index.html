@@ -84,11 +84,21 @@ section{padding:30px 0;border-bottom:1px solid var(--line)}
 .cue-list li:first-child{border-top:0}
 .cue-list b{color:var(--ink)}
 .survey{position:relative;overflow:hidden;margin-top:28px;padding:24px;border-radius:18px;background:var(--dark);color:#fff}
-.survey:after{content:"";position:absolute;right:-70px;top:-80px;width:190px;height:190px;border-radius:50%;background:rgba(191,77,43,.14)}
 .survey h2{position:relative;margin:6px 0 8px;font-size:21px}
 .survey p{position:relative;margin:0 0 18px;color:rgba(255,255,255,.66)}
-.btn{position:relative;display:block;width:100%;padding:15px;border-radius:12px;background:var(--accent);color:#fff;text-align:center;text-decoration:none;font-weight:900;letter-spacing:.07em}
-.btn small{display:block;margin-top:2px;font-size:10px;font-weight:500;letter-spacing:.1em;color:rgba(255,255,255,.75)}
+.review-form{position:relative;display:grid;gap:16px}
+.review-field{display:grid;gap:8px}
+.review-label{color:rgba(255,255,255,.82);font-size:12px;font-weight:900;letter-spacing:.08em;text-transform:uppercase}
+.star-row{display:grid;grid-template-columns:repeat(5,minmax(0,46px));gap:8px;align-items:center}
+.star{position:relative;display:grid;place-items:center;width:100%;aspect-ratio:1;border:1px solid rgba(255,255,255,.18);border-radius:12px;background:rgba(255,255,255,.08);color:rgba(255,255,255,.38);font-size:24px;line-height:1;cursor:pointer;transition:.16s}
+.star input{position:absolute;inset:0;opacity:0;cursor:pointer}
+.star.on,.star:has(input:focus-visible){border-color:var(--accent);background:rgba(191,77,43,.22);color:#fff}
+.review-textarea{width:100%;min-height:104px;padding:13px 14px;border:1px solid rgba(255,255,255,.16);border-radius:12px;background:rgba(255,255,255,.08);color:#fff;font:inherit;resize:vertical}
+.review-textarea::placeholder{color:rgba(255,255,255,.38)}
+.review-submit{width:100%;min-height:48px;border:0;border-radius:12px;background:var(--accent);color:#fff;font:900 13px "Pretendard",system-ui,sans-serif;letter-spacing:.07em}
+.review-submit:disabled{opacity:.62}
+.review-status{min-height:20px;margin:0;color:rgba(255,255,255,.72);font-size:12px;font-weight:800}
+.review-sink{position:absolute;width:1px;height:1px;border:0;opacity:0;pointer-events:none}
 footer{padding-top:22px;color:var(--quiet);font-size:11px;font-weight:700;letter-spacing:.12em;text-transform:uppercase}
 .topbtn{position:fixed;right:18px;bottom:24px;width:44px;height:44px;border:0;border-radius:50%;background:var(--dark);color:#fff;font-weight:900;box-shadow:var(--shadow);opacity:0;transform:translateY(10px);transition:.2s}
 .topbtn.on{opacity:1;transform:none}
@@ -100,6 +110,7 @@ body.locked .lesson-content{display:none}
 body.locked footer{display:none}
 body.locked .topbtn{display:none}
 @media(max-width:390px){.page{padding-left:14px;padding-right:14px}.summary-row{grid-template-columns:1fr;gap:4px}.card{padding:16px}.block{padding:16px}.tab{font-size:12px}.tab span{font-size:9px}.phase-card{grid-template-columns:48px 1fr}.phase-body{padding:13px 14px}}
+@media(max-width:360px){.star-row{gap:6px}}
 </style>
 </head>
 <body data-lesson-start="2026-06-27T13:00:00+09:00" class="locked">
@@ -245,9 +256,28 @@ body.locked .topbtn{display:none}
 
     <div class="survey">
       <div class="tag">Archive Method Feedback</div>
-      <h2>수업 직후 인사이트를 남겨주세요.</h2>
-      <p>오늘 수업에서 설명 가능해진 문장과 아직 헷갈리는 지점을 짧게 기록합니다.</p>
-      <a class="btn" href="https://docs.google.com/forms/d/e/1FAIpQLSfqhr1lMpXtTUja6Jvp1D_Iee6AwVGmhjHYDthKr5RVtdWMNA/viewform" target="_blank" rel="noopener">피드백 남기기<small>Instructor Lesson Reflection</small></a>
+      <h2>오늘 수업은 어땠나요?</h2>
+      <p>별점과 짧은 리뷰만 남기면 제출됩니다.</p>
+      <form class="review-form" action="https://docs.google.com/forms/d/e/1FAIpQLSfqhr1lMpXtTUja6Jvp1D_Iee6AwVGmhjHYDthKr5RVtdWMNA/formResponse" method="POST" target="reviewSink" onsubmit="handleReviewSubmit(event)">
+        <input type="hidden" name="entry.78614827" value="breathing-260627 큐카드 인라인 리뷰">
+        <div class="review-field">
+          <div class="review-label">별점</div>
+          <div class="star-row" role="radiogroup" aria-label="오늘 수업 별점">
+            <label class="star" data-value="1" aria-label="1점"><input type="radio" name="entry.626272305" value="1" required>★</label>
+            <label class="star" data-value="2" aria-label="2점"><input type="radio" name="entry.626272305" value="2">★</label>
+            <label class="star" data-value="3" aria-label="3점"><input type="radio" name="entry.626272305" value="3">★</label>
+            <label class="star" data-value="4" aria-label="4점"><input type="radio" name="entry.626272305" value="4">★</label>
+            <label class="star" data-value="5" aria-label="5점"><input type="radio" name="entry.626272305" value="5">★</label>
+          </div>
+        </div>
+        <label class="review-field">
+          <span class="review-label">서술형 리뷰</span>
+          <textarea class="review-textarea" name="entry.1909102503" placeholder="오늘 수업에서 좋았던 점, 남는 큐잉, 더 배우고 싶은 지점을 짧게 남겨주세요." required></textarea>
+        </label>
+        <button class="review-submit" type="submit">리뷰 제출</button>
+        <p class="review-status" aria-live="polite"></p>
+      </form>
+      <iframe class="review-sink" name="reviewSink" title="리뷰 제출"></iframe>
     </div>
   </div>
 
@@ -274,6 +304,31 @@ function applyLessonGate(){
 
 applyLessonGate();
 setInterval(applyLessonGate, 30000);
+
+function updateRating() {
+  const selected = Number(document.querySelector('input[name="entry.626272305"]:checked')?.value || 0);
+  document.querySelectorAll('.star').forEach((star) => {
+    star.classList.toggle('on', Number(star.dataset.value) <= selected);
+  });
+}
+
+document.querySelectorAll('input[name="entry.626272305"]').forEach((input) => {
+  input.addEventListener('change', updateRating);
+});
+
+function handleReviewSubmit(event) {
+  const form = event.currentTarget;
+  const status = form.querySelector('.review-status');
+  const button = form.querySelector('.review-submit');
+  button.disabled = true;
+  status.textContent = '제출 중입니다.';
+  setTimeout(() => {
+    status.textContent = '리뷰가 제출되었습니다. 감사합니다.';
+    form.reset();
+    updateRating();
+    button.disabled = false;
+  }, 900);
+}
 
 function switchTab(id, btn) {
   document.querySelectorAll('.pane').forEach((pane) => pane.classList.remove('on'));
