@@ -8,13 +8,15 @@ export const archiveCollections = {
   contactSyncJobs: "contactSyncJobs",
   privateLessonChartRequests: "privateLessonChartRequests",
   privateLessonChartRecords: "privateLessonChartRecords",
+  methodCueCardReviews: "methodCueCardReviews",
   adminSyncRequests: "adminSyncRequests",
   workLanes: "workLanes",
   membersMirror: "members",
   member360CardsMirror: "member360Cards",
 } as const;
 
-export type ArchiveCollectionName = (typeof archiveCollections)[keyof typeof archiveCollections];
+export type ArchiveCollectionName =
+  (typeof archiveCollections)[keyof typeof archiveCollections];
 
 export const sourceOfTruthCollections = [
   archiveCollections.memberProfiles,
@@ -26,9 +28,13 @@ export const sourceOfTruthCollections = [
   archiveCollections.contactSyncJobs,
   archiveCollections.privateLessonChartRequests,
   archiveCollections.privateLessonChartRecords,
+  archiveCollections.methodCueCardReviews,
   archiveCollections.adminSyncRequests,
 ] as const;
 
-export const mirrorCollections = [archiveCollections.membersMirror, archiveCollections.member360CardsMirror] as const;
+export const mirrorCollections = [
+  archiveCollections.membersMirror,
+  archiveCollections.member360CardsMirror,
+] as const;
 
 export const incubationCollections = [archiveCollections.workLanes] as const;

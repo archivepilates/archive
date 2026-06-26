@@ -25,7 +25,9 @@ import {
   purgeUnsignedDiscardedMemberSignupContracts,
 } from "../memberSignup/memberSignupContract";
 import { onsiteWelcomeRequestHandler } from "../memberSignup/onsiteWelcomeRequest";
+import { methodCueCardReviewHandler } from "../method/methodCueCardReview";
 import {
+  methodCueCardReviewOptions,
   privateLessonChartRequestOptions,
   privateLessonChartScheduleOptions,
   privateSurveyIngestOptions,
@@ -138,6 +140,8 @@ export const privateLessonReportView = onRequest(publicRequestOptions, privateLe
 export const memberSignupContract = onRequest(publicRequestOptions, memberSignupContractHandler);
 
 export const onsiteWelcomeRequest = onRequest(publicRequestOptions, onsiteWelcomeRequestHandler);
+
+export const methodCueCardReview = onRequest(methodCueCardReviewOptions, methodCueCardReviewHandler);
 
 export const notionPrivateLessonReportWebhook = onRequest(
   privateLessonChartRequestOptions,

@@ -98,7 +98,6 @@ section{padding:30px 0;border-bottom:1px solid var(--line)}
 .review-submit{width:100%;min-height:48px;border:0;border-radius:12px;background:var(--accent);color:#fff;font:900 13px "Pretendard",system-ui,sans-serif;letter-spacing:.07em}
 .review-submit:disabled{opacity:.62}
 .review-status{min-height:20px;margin:0;color:rgba(255,255,255,.72);font-size:12px;font-weight:800}
-.review-sink{position:absolute;width:1px;height:1px;border:0;opacity:0;pointer-events:none}
 footer{padding-top:22px;color:var(--quiet);font-size:11px;font-weight:700;letter-spacing:.12em;text-transform:uppercase}
 .topbtn{position:fixed;right:18px;bottom:24px;width:44px;height:44px;border:0;border-radius:50%;background:var(--dark);color:#fff;font-weight:900;box-shadow:var(--shadow);opacity:0;transform:translateY(10px);transition:.2s}
 .topbtn.on{opacity:1;transform:none}
@@ -258,26 +257,24 @@ body.locked .topbtn{display:none}
       <div class="tag">Archive Method Feedback</div>
       <h2>오늘 수업은 어땠나요?</h2>
       <p>별점과 전하고 싶은 말을 가볍게 남기면 제출됩니다.</p>
-      <form class="review-form" action="https://docs.google.com/forms/d/e/1FAIpQLSfqhr1lMpXtTUja6Jvp1D_Iee6AwVGmhjHYDthKr5RVtdWMNA/formResponse" method="POST" target="reviewSink" onsubmit="handleReviewSubmit(event)">
-        <input type="hidden" name="entry.78614827" value="breathing-260627 큐카드 인라인 리뷰">
+      <form class="review-form" data-lesson-id="breathing-260627" data-lesson-title="호흡" onsubmit="handleReviewSubmit(event)">
         <div class="review-field">
           <div class="review-label">별점</div>
           <div class="star-row" role="radiogroup" aria-label="오늘 수업 별점">
-            <label class="star" data-value="1" aria-label="1점"><input type="radio" name="entry.626272305" value="1" required>★</label>
-            <label class="star" data-value="2" aria-label="2점"><input type="radio" name="entry.626272305" value="2">★</label>
-            <label class="star" data-value="3" aria-label="3점"><input type="radio" name="entry.626272305" value="3">★</label>
-            <label class="star" data-value="4" aria-label="4점"><input type="radio" name="entry.626272305" value="4">★</label>
-            <label class="star" data-value="5" aria-label="5점"><input type="radio" name="entry.626272305" value="5">★</label>
+            <label class="star" data-value="1" aria-label="1점"><input type="radio" name="rating" value="1" required>★</label>
+            <label class="star" data-value="2" aria-label="2점"><input type="radio" name="rating" value="2">★</label>
+            <label class="star" data-value="3" aria-label="3점"><input type="radio" name="rating" value="3">★</label>
+            <label class="star" data-value="4" aria-label="4점"><input type="radio" name="rating" value="4">★</label>
+            <label class="star" data-value="5" aria-label="5점"><input type="radio" name="rating" value="5">★</label>
           </div>
         </div>
         <label class="review-field">
           <span class="review-label">전하고 싶은 말</span>
-          <textarea class="review-textarea" name="entry.1909102503" placeholder="오늘 수업을 듣고 남는 말이나 전하고 싶은 내용을 짧게 남겨주세요." required></textarea>
+          <textarea class="review-textarea" name="message" placeholder="오늘 수업을 듣고 남는 말이나 전하고 싶은 내용을 짧게 남겨주세요." required></textarea>
         </label>
-        <button class="review-submit" type="submit">리뷰 제출</button>
+        <button class="review-submit" type="submit">남기기</button>
         <p class="review-status" aria-live="polite"></p>
       </form>
-      <iframe class="review-sink" name="reviewSink" title="리뷰 제출"></iframe>
     </div>
   </div>
 
@@ -306,28 +303,48 @@ applyLessonGate();
 setInterval(applyLessonGate, 30000);
 
 function updateRating() {
-  const selected = Number(document.querySelector('input[name="entry.626272305"]:checked')?.value || 0);
+  const selected = Number(document.querySelector('input[name="rating"]:checked')?.value || 0);
   document.querySelectorAll('.star').forEach((star) => {
     star.classList.toggle('on', Number(star.dataset.value) <= selected);
   });
 }
 
-document.querySelectorAll('input[name="entry.626272305"]').forEach((input) => {
+document.querySelectorAll('input[name="rating"]').forEach((input) => {
   input.addEventListener('change', updateRating);
 });
 
-function handleReviewSubmit(event) {
+async function handleReviewSubmit(event) {
+  event.preventDefault();
   const form = event.currentTarget;
   const status = form.querySelector('.review-status');
   const button = form.querySelector('.review-submit');
+  const payload = {
+    lessonId: form.dataset.lessonId,
+    lessonTitle: form.dataset.lessonTitle,
+    rating: Number(form.querySelector('input[name="rating"]:checked')?.value || 0),
+    message: form.querySelector('textarea[name="message"]').value.trim(),
+    pageUrl: window.location.href,
+    preview: isStaffPreview,
+    clientSubmittedAt: new Date().toISOString()
+  };
   button.disabled = true;
   status.textContent = '제출 중입니다.';
-  setTimeout(() => {
-    status.textContent = '리뷰가 제출되었습니다. 감사합니다.';
+  try {
+    const response = await fetch('/api/methodCueCardReview', {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify(payload)
+    });
+    const result = await response.json().catch(() => ({}));
+    if (!response.ok || !result.ok) throw new Error(result.error || 'submit_failed');
+    status.textContent = '남겨주셔서 감사합니다.';
     form.reset();
     updateRating();
+  } catch (err) {
+    status.textContent = '제출이 완료되지 않았습니다. 잠시 후 다시 시도해주세요.';
+  } finally {
     button.disabled = false;
-  }, 900);
+  }
 }
 
 function switchTab(id, btn) {

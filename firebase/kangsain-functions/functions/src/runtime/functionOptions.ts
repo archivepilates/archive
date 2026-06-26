@@ -1,5 +1,5 @@
 import { REGION, TIMEZONE } from "../config/constants";
-import { allSecrets, geminiApiKey, notionToken } from "../config/secrets";
+import { allSecrets, geminiApiKey, googleDwdServiceAccountJson, notionToken } from "../config/secrets";
 
 export const callableOptions = { region: REGION, secrets: allSecrets, invoker: "public" as const };
 export const longCallableOptions = { ...callableOptions, timeoutSeconds: 540, memory: "512MiB" as const };
@@ -46,6 +46,14 @@ export const privateLessonChartScheduleOptions = {
 
 export const publicRequestOptions = {
   region: REGION,
+  timeoutSeconds: 60,
+  memory: "256MiB" as const,
+  invoker: "public" as const,
+};
+
+export const methodCueCardReviewOptions = {
+  region: REGION,
+  secrets: [googleDwdServiceAccountJson],
   timeoutSeconds: 60,
   memory: "256MiB" as const,
   invoker: "public" as const,

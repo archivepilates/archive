@@ -16,7 +16,11 @@
         "approveAlimtalkBatch",
         "operatorSendPricingInquiryAlimtalk"
       ],
-      "forbidden": ["StudioMate writes", "Google Contacts writes", "private chart generation"]
+      "forbidden": [
+        "StudioMate writes",
+        "Google Contacts writes",
+        "private chart generation"
+      ]
     },
     "functions-private-chart": {
       "physicalSource": "firebase/function-codebases/private-chart",
@@ -36,11 +40,16 @@
         "privateLessonReportView",
         "memberSignupContract",
         "onsiteWelcomeRequest",
+        "methodCueCardReview",
         "notionPrivateLessonReportWebhook",
         "redirectShortLink",
         "processPrivateSurveyIntake"
       ],
-      "forbidden": ["daily Alimtalk candidate selection", "StudioMate writes", "Google Contacts writes"]
+      "forbidden": [
+        "daily Alimtalk candidate selection",
+        "StudioMate writes",
+        "Google Contacts writes"
+      ]
     },
     "functions-sync": {
       "physicalSource": "firebase/function-codebases/sync",
