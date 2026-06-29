@@ -1005,8 +1005,7 @@ function normalizedDateText(value: string): string {
 }
 
 function reservationOpenEndDate(baseDate: string): string {
-  const base = new Date(`${baseDate}T00:00:00+09:00`);
-  const daysSinceMonday = (base.getDay() + 6) % 7;
+  const daysSinceMonday = (kstWeekday(baseDate) + 6) % 7;
   return addDays(baseDate, 13 - daysSinceMonday);
 }
 
@@ -1015,21 +1014,29 @@ function reservationOpenStartDate(baseDate: string): string {
 }
 
 function isReservationOpenSendDate(sourceDate: string): boolean {
-  const date = new Date(`${sourceDate}T00:00:00+09:00`);
-  return !Number.isNaN(date.getTime()) && date.getDay() === 1;
+  return kstWeekday(sourceDate) === 1;
 }
 
 function reservationWeekLabel(startDate: string, endDate: string): string {
-  const start = new Date(`${startDate}T00:00:00+09:00`);
-  const weekNumber = Math.ceil(start.getDate() / 7);
-  return `${start.getMonth() + 1}월${weekNumber}주차(${shortMonthDayWithWeekday(startDate)}~${shortMonthDayWithWeekday(endDate)})`;
+  const start = kstNoonDate(startDate);
+  const weekNumber = Math.ceil(start.getUTCDate() / 7);
+  return `${start.getUTCMonth() + 1}월${weekNumber}주차(${shortMonthDayWithWeekday(startDate)}~${shortMonthDayWithWeekday(endDate)})`;
 }
 
 function shortMonthDayWithWeekday(value: string): string {
-  const date = new Date(`${value}T00:00:00+09:00`);
+  const date = kstNoonDate(value);
   if (Number.isNaN(date.getTime())) return value;
   const weekdays = ["일", "월", "화", "수", "목", "금", "토"];
-  return `${date.getMonth() + 1}/${date.getDate()}(${weekdays[date.getDay()]})`;
+  return `${date.getUTCMonth() + 1}/${date.getUTCDate()}(${weekdays[date.getUTCDay()]})`;
+}
+
+function kstWeekday(value: string): number {
+  const date = kstNoonDate(value);
+  return Number.isNaN(date.getTime()) ? Number.NaN : date.getUTCDay();
+}
+
+function kstNoonDate(value: string): Date {
+  return new Date(`${value}T12:00:00+09:00`);
 }
 
 async function upsertCandidate(candidate: AlimtalkCandidateDoc): Promise<void> {
