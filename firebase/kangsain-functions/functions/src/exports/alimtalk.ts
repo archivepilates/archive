@@ -17,6 +17,11 @@ const alimtalkQueueScheduleOptions = {
   secrets: [...scheduleOptions.secrets, notionToken],
 };
 
+const alimtalkBulkQueueScheduleOptions = {
+  ...alimtalkQueueScheduleOptions,
+  memory: "1GiB" as const,
+};
+
 const alimtalkQueueRequestOptions = {
   ...publicLongRequestOptions,
   secrets: [...publicLongRequestOptions.secrets, notionToken],
@@ -34,7 +39,7 @@ export const scheduledProcessAlimtalkQueue = onSchedule(
 
 export const scheduledQueueAndSendAlimtalkDaily = onSchedule(
   {
-    ...alimtalkQueueScheduleOptions,
+    ...alimtalkBulkQueueScheduleOptions,
     schedule: "30 11 * * *",
   },
   async () => {
@@ -59,7 +64,7 @@ export const scheduledQueueAndSendAlimtalkDaily = onSchedule(
 
 export const scheduledQueueAndSendReservationOpenAlimtalk = onSchedule(
   {
-    ...alimtalkQueueScheduleOptions,
+    ...alimtalkBulkQueueScheduleOptions,
     schedule: "30 12 * * 1",
   },
   async () => {
