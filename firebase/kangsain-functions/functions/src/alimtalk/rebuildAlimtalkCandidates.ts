@@ -30,11 +30,11 @@ export async function rebuildAlimtalkCandidatesForRange(input: {
   mode?: "daily" | "reservation_open";
 }): Promise<{ candidates: number; candidateIds: string[] }> {
   const mode = input.mode || "daily";
-  const [profilesSnap, bookingIndex, lectureIndex] = await Promise.all([
-    refs.memberProfiles().where("studioId", "==", input.studioId).get(),
-    loadBookingIndex(input.studioId),
-    loadLectureIndex(input.studioId),
-  ]);
+  const profilesPromise = refs.memberProfiles().where("studioId", "==", input.studioId).get();
+  const [profilesSnap, bookingIndex, lectureIndex] =
+    mode === "reservation_open"
+      ? [await profilesPromise, new Map<string, BookingDoc[]>(), new Map<string, LectureDoc>()]
+      : await Promise.all([profilesPromise, loadBookingIndex(input.studioId), loadLectureIndex(input.studioId)]);
 
   const writes: Array<Promise<unknown>> = [];
   const candidateIds: string[] = [];
