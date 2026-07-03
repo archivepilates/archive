@@ -71,6 +71,12 @@
       "public": ".",
       "headers": [
         {
+          "source": "/assets/imweb-home/**",
+          "headers": [
+            { "key": "Cache-Control", "value": "public, max-age=31536000, immutable" }
+          ]
+        },
+        {
           "source": "/archivein/index.html",
           "headers": [
             { "key": "Cache-Control", "value": "no-cache, no-store, must-revalidate" }
