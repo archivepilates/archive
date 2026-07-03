@@ -168,6 +168,14 @@ Firebase 주소록 동기화는 `home@archivepilates.com`을 Google People API �
 
 정산 확정 전 current-month preview는 `수업매출원본데이터`, `수강권매출원본데이터`의 최신 월중 누적 파일을 사용한다. 이때 `정산대장_Master`와 `강사통계_Long` 같은 월말 확정 시트는 덮어쓰지 않는다. 월말 정산 완료 후에는 `아카이브 정산_YYYY-MM`의 `대시보드_EXPORT`를 기준으로 확정값을 반영한다.
 
+### 월말 정산 자동화
+
+맥미니 LaunchAgent `com.archive.monthly-settlement-statements`는 매월 1일 09:30에 전월 `YYYYMM` 기준으로 `scripts/generate-monthly-settlement-statements.mjs --apply`를 실행한다.
+
+이 스크립트는 `월별정산백업/아카이브 정산_YYYY-MM.gsheet`가 있으면 서비스계정으로 xlsx export 후 `아카이브 월말정산/YYYYMM`에 `아카이브 정산 YYYYMM.xlsx`, `아카이브 정산명세서 YYYYMM.xlsx`, 강사별 HTML 명세서와 INDEX를 생성한다. 백업 gsheet가 아직 없으면 `수업매출원본데이터`의 전월 전체 범위 파일을 사용해 정산 workbook을 생성한 뒤 같은 명세서 생성 과정을 진행한다.
+
+실패 시 우선 확인 순서는 `~/ArchiveIN/emergency/logs/monthly-settlement-statements.err.log`, 전월 전체 범위 원본 엑셀, 월별정산백업 gsheet, `아카이브 월말정산/YYYYMM` 출력물이다.
+
 ### StudioMate 예약 가능 기한 설정 자동화
 
 매주 월요일 12:30에 수행하는 StudioMate 예약 가능 기한 설정 변경은 현재 Mac mini 브라우저 자동화 기준이다. ARCHIVE IN Firebase Functions의 StudioMate API 클라이언트에는 아직 이 설정 변경 전용 endpoint가 확인되어 있지 않다.
