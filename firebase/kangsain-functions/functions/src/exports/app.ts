@@ -29,7 +29,7 @@ import {
   runParkingAutoApplyNowHandler,
 } from "../parking/parkingOperations";
 import { processParkingDiscountJobSnapshot } from "../parking/processParkingDiscountJob";
-import { callableOptions, publicRequestOptions } from "../runtime/functionOptions";
+import { callableOptions, publicDriveRequestOptions } from "../runtime/functionOptions";
 import { requireStaff } from "../security/authGuards";
 import {
   adjustInstructorEvaluationEssayScoreHandler,
@@ -186,7 +186,7 @@ export const adjustInstructorEvaluationEssayScore = onCall(callableOptions, asyn
   }
 });
 
-export const instructorApplicantEvaluationApi = onRequest(publicRequestOptions, instructorApplicantEvaluationApiHandler);
+export const instructorApplicantEvaluationApi = onRequest(publicDriveRequestOptions, instructorApplicantEvaluationApiHandler);
 
 export const processParkingDiscountJob = onDocumentCreated(parkingDiscountJobOptions, async (event) => {
   const snap = event.data;
