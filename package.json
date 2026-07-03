@@ -34,7 +34,8 @@
   },
   "dependencies": {
     "chart.js": "^4.4.9",
-    "firebase": "^10.14.1"
+    "firebase": "^10.14.1",
+    "xlsx": "^0.18.5"
   },
   "devDependencies": {
     "esbuild": "^0.25.12",
