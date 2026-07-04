@@ -563,7 +563,7 @@ function normalizeStatementRow(raw, previousInfo) {
 
   return {
     ...raw,
-    role: info.role || "",
+    role: instructorRole(raw.name, info.role),
     groupGrade: info.groupGrade || "",
     privateGrade: info.privateGrade || "",
     bank: info.bank || "",
@@ -580,6 +580,14 @@ function normalizeStatementRow(raw, previousInfo) {
     regularPayout,
     finalPayout: combinedPayout || freelancerPayout,
   };
+}
+
+function defaultInstructorRole(name) {
+  return clean(name) === "정은영" ? "부원장" : "강사";
+}
+
+function instructorRole(name, role) {
+  return clean(name) === "정은영" ? "부원장" : clean(role) || defaultInstructorRole(name);
 }
 
 function readGroupAverageByName(wb) {
@@ -606,7 +614,7 @@ function buildInstructorInfoSheetRows(instructors, previousInfo) {
     ["", "", "", "", "", "은행", "계좌번호", "예금주", ""],
     ...instructors.map((row, idx) => {
       const info = previousInfo.get(row.name) || row;
-      return [idx + 1, row.name, row.role || info.role || "", row.groupGrade || "", row.privateGrade || "", row.bank || "", row.account || "", row.accountHolder || row.name, ""];
+      return [idx + 1, row.name, instructorRole(row.name, row.role || info.role), row.groupGrade || "", row.privateGrade || "", row.bank || "", row.account || "", row.accountHolder || row.name, ""];
     }),
   ];
 }
@@ -614,24 +622,25 @@ function buildInstructorInfoSheetRows(instructors, previousInfo) {
 function buildStatementLedgerRows(instructors) {
   const total = instructors.reduce(
     (acc, row) => {
-      for (const key of ["groupCount", "privateCount", "groupPay", "privatePay", "adjustmentAmount", "pretaxPay", "deductionTotal", "incomeTax", "localTax", "freelancerPayout"]) {
+      for (const key of ["groupCount", "privateCount", "lessonCount", "groupPay", "privatePay", "adjustmentAmount", "pretaxPay", "deductionTotal", "incomeTax", "localTax", "freelancerPayout"]) {
         acc[key] += number(row[key]);
       }
       return acc;
     },
-    { groupCount: 0, privateCount: 0, groupPay: 0, privatePay: 0, adjustmentAmount: 0, pretaxPay: 0, deductionTotal: 0, incomeTax: 0, localTax: 0, freelancerPayout: 0 },
+    { groupCount: 0, privateCount: 0, lessonCount: 0, groupPay: 0, privatePay: 0, adjustmentAmount: 0, pretaxPay: 0, deductionTotal: 0, incomeTax: 0, localTax: 0, freelancerPayout: 0 },
   );
   return [
-    [`${ym.slice(0, 4)}년 ${Number(ym.slice(4, 6))}월 정산`, "", "", "", "", "", "", "", "", "", "", "", "", "", "", "", ""],
-    ["", "", "", "", "", "", "", "", "", "", "", "", "", "", "", "", ""],
-    ["순번", "성 명", "직 책", "그룹", "프라이빗", "그룹평균", "수업보수\n(그룹)", "수업보수\n(프라이빗)", "조정금액", "조정내용", "세전 보수총액", "", "", "", "", "", ""],
-    ["", "", "", "", "", "", "", "", "", "", "", "공제합계", "소득세(3%)", "주민세(0.3%)", "지급액", "실지급 합산", "정규직 실지급"],
+    [`${ym.slice(0, 4)}년 ${Number(ym.slice(4, 6))}월 정산`, "", "", "", "", "", "", "", "", "", "", "", "", "", "", "", "", ""],
+    ["", "", "", "", "", "", "", "", "", "", "", "", "", "", "", "", "", ""],
+    ["순번", "성 명", "직 책", "그룹", "프라이빗", "강사레슨", "그룹평균", "수업보수\n(그룹)", "수업보수\n(프라이빗)", "조정금액", "조정내용", "세전 보수총액", "", "", "", "", "", ""],
+    ["", "", "", "", "", "", "", "", "", "", "", "", "공제합계", "소득세(3%)", "주민세(0.3%)", "지급액", "실지급 합산", "정규직 실지급"],
     ...instructors.map((row) => [
       row.no,
       row.name,
       row.role,
       row.groupCount,
       row.privateCount,
+      row.lessonCount,
       row.groupAverage,
       row.groupPay,
       row.privatePay,
@@ -645,7 +654,7 @@ function buildStatementLedgerRows(instructors) {
       row.combinedPayout || "",
       row.regularPayout || "",
     ]),
-    ["", "합  계", "", total.groupCount, total.privateCount, total.groupCount + total.privateCount, total.groupPay, total.privatePay, total.adjustmentAmount || "", "", total.pretaxPay, total.deductionTotal, total.incomeTax, total.localTax, total.freelancerPayout, "", ""],
+    ["", "합  계", "", total.groupCount, total.privateCount, total.lessonCount, total.groupCount + total.privateCount + total.lessonCount, total.groupPay, total.privatePay, total.adjustmentAmount || "", "", total.pretaxPay, total.deductionTotal, total.incomeTax, total.localTax, total.freelancerPayout, "", ""],
   ];
 }
 
@@ -658,6 +667,7 @@ function buildSimpleStatementSheetRows(instructors) {
       ["", "프라이빗 보수", row.privatePay, "", "", "", "", ""],
       ["", "그룹", row.groupCount, "", "", "", "", ""],
       ["", "프라이빗", row.privateCount, "", "", "", "", ""],
+      ["", "강사레슨", row.lessonCount, "", "", "", "", ""],
       ["", "조정금액", row.adjustmentAmount || 0, row.adjustmentText || "", "", "", "", ""],
       ["", "세전 보수총액", row.pretaxPay, "", "", "", "", ""],
       ["", "지급액", row.finalPayout, "", "", "", "", ""],
@@ -700,25 +710,40 @@ function readStatementWorkbook(filePath) {
     .slice(4)
     .filter((row) => /^\d+$/.test(clean(row[0])) && clean(row[1]))
     .map((row) => {
+      const hasLessonCountColumn = clean(ledger[2]?.[5]) === "강사레슨";
+      const groupAverageIndex = hasLessonCountColumn ? 6 : 5;
+      const groupPayIndex = hasLessonCountColumn ? 7 : 6;
+      const privatePayIndex = hasLessonCountColumn ? 8 : 7;
+      const adjustmentAmountIndex = hasLessonCountColumn ? 9 : 8;
+      const adjustmentTextIndex = hasLessonCountColumn ? 10 : 9;
+      const pretaxPayIndex = hasLessonCountColumn ? 11 : 10;
+      const deductionTotalIndex = hasLessonCountColumn ? 12 : 11;
+      const incomeTaxIndex = hasLessonCountColumn ? 13 : 12;
+      const localTaxIndex = hasLessonCountColumn ? 14 : 13;
+      const freelancerPayoutIndex = hasLessonCountColumn ? 15 : 14;
+      const combinedPayoutIndex = hasLessonCountColumn ? 16 : 15;
+      const regularPayoutIndex = hasLessonCountColumn ? 17 : 16;
       const name = clean(row[1]);
       const base = infoByName.get(name) || { name, role: clean(row[2]) };
-      const freelancerPayout = money(row[14]);
-      const combinedPayout = money(row[15]);
-      const regularPayout = money(row[16]);
+      const freelancerPayout = money(row[freelancerPayoutIndex]);
+      const combinedPayout = money(row[combinedPayoutIndex]);
+      const regularPayout = money(row[regularPayoutIndex]);
       const finalPayout = combinedPayout || freelancerPayout;
       return {
         ...base,
+        role: instructorRole(name, base.role),
         groupCount: number(row[3]),
         privateCount: number(row[4]),
-        groupAverage: number(row[5]),
-        groupPay: money(row[6]),
-        privatePay: money(row[7]),
-        adjustmentAmount: money(row[8]),
-        adjustmentText: clean(row[9]),
-        pretaxPay: money(row[10]),
-        deductionTotal: money(row[11]),
-        incomeTax: money(row[12]),
-        localTax: money(row[13]),
+        lessonCount: hasLessonCountColumn ? number(row[5]) : 0,
+        groupAverage: number(row[groupAverageIndex]),
+        groupPay: money(row[groupPayIndex]),
+        privatePay: money(row[privatePayIndex]),
+        adjustmentAmount: money(row[adjustmentAmountIndex]),
+        adjustmentText: clean(row[adjustmentTextIndex]),
+        pretaxPay: money(row[pretaxPayIndex]),
+        deductionTotal: money(row[deductionTotalIndex]),
+        incomeTax: money(row[incomeTaxIndex]),
+        localTax: money(row[localTaxIndex]),
         freelancerPayout,
         combinedPayout,
         regularPayout,
@@ -859,6 +884,8 @@ function renderIndexHtml({ ym, summary, files, generatedAt }) {
 
 function renderInstructorHtml({ ym, instructor, generatedAt }) {
   const title = `ARCHIVE PILATES 정산명세서 ${ym} ${instructor.name}`;
+  const displayRole = instructorRole(instructor.name, instructor.role);
+  const totalClassCount = number(instructor.groupCount) + number(instructor.privateCount) + number(instructor.lessonCount);
   const adjustmentRows = parseAdjustmentRows(instructor);
   const rows = [
     detailRow("그룹 보수", `${formatCount(instructor.groupCount)}회 · 평균 ${formatNumber(instructor.groupAverage, 2)}명`, instructor.groupPay),
@@ -897,9 +924,9 @@ function renderInstructorHtml({ ym, instructor, generatedAt }) {
     </header>
     <section class="person">
       <div class="panel">
-        <div class="label">강사</div>
+        <div class="label">${escapeHtml(displayRole)}</div>
         <div class="name">${escapeHtml(instructor.name)}</div>
-        <div class="role">${escapeHtml([instructor.role, `그룹 ${instructor.groupGrade || "-"}`, `프라이빗 ${instructor.privateGrade || "-"}`].filter(Boolean).join(" · "))}</div>
+        <div class="role">총 수업 ${formatCount(totalClassCount)}회</div>
       </div>
       <div class="panel">
         <div class="label">최종 지급 기준액</div>
@@ -944,8 +971,8 @@ function parseAdjustmentRows(instructor) {
   if (!instructor.adjustmentAmount && !instructor.adjustmentText) return [];
   const text = instructor.adjustmentText || "정산 조정 반영";
   const rows = [];
-  const salary = text.match(/정규직급여\\s*\\(([-,\\d]+)\\)/);
-  const lesson = text.match(/강사\\s*레슨\\s*([-,\\d]+)/);
+  const salary = text.match(/정규직급여\s*\(([-,\d]+)\)/);
+  const lesson = text.match(/강사\s*레슨\s*([-,\d]+)/);
   if (salary) rows.push(detailRow("정규직 급여 공제", "프리랜서 수업 보수에서 차감", -Math.abs(money(salary[1]))));
   if (lesson) rows.push(detailRow("강사 레슨 조정", "정산 조정 반영", money(lesson[1])));
   if (!rows.length) rows.push(detailRow("조정금액", text, instructor.adjustmentAmount));
