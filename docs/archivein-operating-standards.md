@@ -146,6 +146,8 @@ Firebase 주소록 동기화는 `home@archivepilates.com`을 Google People API �
 
 이 스크립트는 `월별정산백업/아카이브 정산_YYYY-MM.gsheet`가 있으면 서비스계정으로 xlsx export 후 `아카이브 월말정산/YYYYMM`에 `아카이브 정산 YYYYMM.xlsx`, `아카이브 정산명세서 YYYYMM.xlsx`, 강사별 HTML 명세서와 INDEX를 생성한다. 백업 gsheet가 아직 없으면 `수업매출원본데이터`의 전월 전체 범위 파일을 사용해 정산 workbook을 생성한 뒤 같은 명세서 생성 과정을 진행한다.
 
+강사레슨 정산은 프라이빗 정산 요율을 그대로 적용한다. 강사레슨 별도 요율표나 그룹식 1회 고정 보수로 계산하지 않는다. 여러 회원이 참여한 강사레슨은 같은 세션 안의 참여자별 정산대상 행보수를 모두 합산하고, 세션 수는 수업 1건으로만 센다.
+
 실패 시 우선 확인 순서는 `~/ArchiveIN/emergency/logs/monthly-settlement-statements.err.log`, 전월 전체 범위 원본 엑셀, 월별정산백업 gsheet, `아카이브 월말정산/YYYYMM` 출력물이다.
 
 ### StudioMate 예약 가능 기한 설정 자동화
