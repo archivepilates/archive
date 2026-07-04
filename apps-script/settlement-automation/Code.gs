@@ -11,7 +11,6 @@ DB_SYNC_SECRET_KEY: 'ARCHIVE_SYNC_2026',
   VAT_DIVISOR: 1.1,
   WITHHOLDING_RATE: 0.033,
   DEFAULT_PRIVATE_RATE: 0.45,
-  DEFAULT_LESSON_RATE: 0.55,
   GROUP_CAPACITY: 5,
   DEFAULT_GROUP_RATES: [15000, 25000, 25000, 30000, 32000, 35000, 35000, 35000, 35000, 35000, 35000]
 };
@@ -530,7 +529,6 @@ function loadReferenceTables_(rootFolder) {
   const priceData = getExternalSheetData_(rootFolder, CONFIG.PRICE_FILE_NAME);
   const groupRates = getExternalSheetData_(rootFolder, CONFIG.RATE_FILE_NAME, '그룹');
   const privateRates = getExternalSheetData_(rootFolder, CONFIG.RATE_FILE_NAME, '프라이빗');
-  const lessonRates = getExternalSheetData_(rootFolder, CONFIG.RATE_FILE_NAME, '강사레슨');
 
   const priceMap = {};
   priceData.slice(1).forEach(row => {
@@ -550,13 +548,7 @@ function loadReferenceTables_(rootFolder) {
     if (name) privateMap[name] = toNumber_(row[1]);
   });
 
-  const lessonMap = {};
-  lessonRates.slice(1).forEach(row => {
-    const name = String(row[0] || '').trim();
-    if (name) lessonMap[name] = toNumber_(row[1]);
-  });
-
-  return { priceMap, groupMap, privateMap, lessonMap };
+  return { priceMap, groupMap, privateMap };
 }
 
 function getExternalSheetData_(folder, fileName, sheetName) {
@@ -616,7 +608,7 @@ function buildAuxRows_(rawRows, refs) {
       appliedRate = refs.privateMap[row.instructorName] || CONFIG.DEFAULT_PRIVATE_RATE;
       linePay = settlementCount ? (settlementRevenue / CONFIG.VAT_DIVISOR) * appliedRate : 0;
     } else if (row.finalType === '강사레슨') {
-      appliedRate = refs.lessonMap[row.instructorName] || CONFIG.DEFAULT_LESSON_RATE;
+      appliedRate = refs.privateMap[row.instructorName] || CONFIG.DEFAULT_PRIVATE_RATE;
       linePay = settlementCount ? (settlementRevenue / CONFIG.VAT_DIVISOR) * appliedRate : 0;
     }
 
@@ -727,7 +719,7 @@ function buildPayroll_(auxRows, refs) {
       if (!row.settlementCount) return;
       lessonSessions[row.sessionKey].attended += row.settlementCount;
       lessonSessions[row.sessionKey].revenue += row.settlementRevenue;
-      lessonSessions[row.sessionKey].pay = Math.max(lessonSessions[row.sessionKey].pay, row.linePay);
+      lessonSessions[row.sessionKey].pay += row.linePay;
     }
   });
 

@@ -133,7 +133,6 @@ async function loadReferenceTables() {
   const priceMap = {};
   const groupMap = {};
   const privateMap = {};
-  const lessonMap = {};
 
   if (priceFile) {
     const priceRows = await readSheetValues(token, priceFile, "A:Z");
@@ -154,14 +153,9 @@ async function loadReferenceTables() {
       const name = clean(row[0]);
       if (name) privateMap[name] = number(row[1]);
     }
-    const lessonRows = await readSheetValues(token, rateFile, "'강사레슨'!A:Z");
-    for (const row of lessonRows.slice(1)) {
-      const name = clean(row[0]);
-      if (name) lessonMap[name] = number(row[1]);
-    }
   }
 
-  return { priceMap, groupMap, privateMap, lessonMap };
+  return { priceMap, groupMap, privateMap };
 }
 
 async function readSheetValues(token, spreadsheetId, range) {
@@ -231,7 +225,7 @@ function buildAuxRows(rawRows, refs) {
       appliedRate = refs.privateMap[row.instructorName] || 0.45;
       linePay = settlementCount ? (settlementRevenue / 1.1) * appliedRate : 0;
     } else if (row.finalType === "강사레슨") {
-      appliedRate = refs.lessonMap[row.instructorName] || 0.55;
+      appliedRate = refs.privateMap[row.instructorName] || 0.45;
       linePay = settlementCount ? (settlementRevenue / 1.1) * appliedRate : 0;
     }
     return {
@@ -294,7 +288,7 @@ function buildPayrollRows(auxRows, refs) {
       const session = lessonSessions.get(row.sessionKey);
       session.attended += row.settlementCount;
       session.revenue += row.settlementRevenue;
-      session.pay = Math.max(session.pay, row.linePay);
+      session.pay += row.linePay;
     }
   }
 
