@@ -98,29 +98,15 @@
     .brand {
       display: inline-flex;
       align-items: center;
-      gap: 11px;
       text-decoration: none;
       min-width: 0;
-      font-weight: 900;
+      flex: 0 0 auto;
     }
 
-    .brand-mark {
-      width: 28px;
-      height: 28px;
-      display: grid;
-      place-items: center;
-      background: var(--accent);
-      color: #fff;
-      font-size: 0.75rem;
-      line-height: 1;
-      font-weight: 900;
-    }
-
-    .brand-name {
+    .brand-logo {
       display: block;
-      font-size: 1.05rem;
-      line-height: 1;
-      white-space: nowrap;
+      width: clamp(138px, 15vw, 176px);
+      height: auto;
     }
 
     .nav-links {
@@ -149,7 +135,7 @@
       outline: none;
     }
 
-    .nav-links .shop-link {
+    .nav-links .nav-cta {
       background: var(--black);
       color: #fff;
       padding: 0 18px;
@@ -519,6 +505,31 @@
       font-size: 0.92rem;
     }
 
+    .careers {
+      background: var(--bg);
+      border-top: 1px solid var(--line);
+    }
+
+    .careers-inner {
+      max-width: var(--max);
+      margin: 0 auto;
+      display: grid;
+      grid-template-columns: 1fr 1fr;
+      gap: 36px;
+      align-items: end;
+    }
+
+    .careers-inner p {
+      margin: 18px 0 0;
+      color: var(--muted);
+      font-size: 1.05rem;
+    }
+
+    .careers-inner .actions {
+      justify-content: flex-end;
+      margin-top: 0;
+    }
+
     .site-footer {
       padding: 48px 22px calc(52px + env(safe-area-inset-bottom));
       background: #0f0e0d;
@@ -579,7 +590,7 @@
       }
       .nav-links::-webkit-scrollbar { display: none; }
       .nav-links a { padding: 0 12px; font-size: 0.9rem; }
-      .nav-links .shop-link { margin-left: 0; }
+      .nav-links .nav-cta { margin-left: 0; }
       .hero { min-height: 760px; }
       .hero-inner { padding: 72px 22px 66px; }
       h1 { font-size: 3.1rem; }
@@ -591,13 +602,14 @@
       .band-copy { padding: 50px 24px 58px; }
       .studio-photo { min-height: 380px; }
       .social-links { grid-template-columns: 1fr; }
+      .careers-inner { grid-template-columns: 1fr; gap: 22px; }
+      .careers-inner .actions { justify-content: flex-start; }
       .footer-inner { grid-template-columns: 1fr; }
     }
 
     @media (max-width: 640px) {
       section { padding: 72px 18px; }
-      .brand-mark { width: 25px; height: 25px; }
-      .brand-name { font-size: 0.96rem; }
+      .brand-logo { width: 142px; }
       .hero {
         min-height: 710px;
         align-items: end;
@@ -664,15 +676,13 @@
   <header class="site-header" aria-label="사이트 상단">
     <nav class="nav">
       <a class="brand" href="/" aria-label="ARCHIVE PILATES 홈">
-        <span class="brand-mark" aria-hidden="true">AP</span>
-        <span class="brand-name">ARCHIVE PILATES</span>
+        <img class="brand-logo" src="/assets/archive-wordmark.png" alt="ARCHIVE PILATES" width="489" height="102">
       </a>
       <div class="nav-links" aria-label="주요 메뉴">
-        <a href="#philosophy">철학</a>
-        <a href="#classes">클래스</a>
-        <a href="#studio">스튜디오</a>
-        <a href="https://www.youtube.com/@archivepilates">YouTube</a>
-        <a class="shop-link" href="/shop">Shop</a>
+        <a href="#teams">Teams</a>
+        <a href="/offline">강사레슨</a>
+        <a class="nav-cta" href="/videos">영상구매</a>
+        <a href="#careers">Careers</a>
       </div>
     </nav>
   </header>
@@ -688,8 +698,8 @@
         <h1>ARCHIVE PILATES</h1>
         <p class="hero-lead">강사의 수업을 기록하고, 레슨의 기준을 다시 세웁니다. 부산 명지에서 5:1 오프라인 강사레슨과 온라인 ARCHIVE METHOD 클래스를 운영합니다.</p>
         <div class="actions" aria-label="클래스 바로가기">
-          <a class="button primary" href="/offline">오프라인 강사레슨 보기</a>
-          <a class="button ghost" href="/online">온라인 클래스 보기</a>
+          <a class="button primary" href="/offline">강사레슨 보기</a>
+          <a class="button ghost" href="/videos">영상구매 보기</a>
         </div>
       </div>
     </section>
@@ -749,7 +759,7 @@
             <p class="section-kicker">Class Route</p>
             <h2>오프라인에서 체감하고, 온라인에서 반복합니다.</h2>
           </div>
-          <p>강사레슨은 현장 피드백의 밀도를 높이고, 온라인 클래스는 기구별 ARCHIVE METHOD 수업을 40일 동안 반복 학습할 수 있도록 구성합니다.</p>
+          <p>강사레슨은 현장 피드백의 밀도를 높이고, 영상구매 상품은 기구별 ARCHIVE METHOD 수업을 40일 동안 반복 학습할 수 있도록 구성합니다.</p>
         </div>
         <div class="class-grid">
           <a class="class-card reveal" href="/offline">
@@ -761,32 +771,32 @@
               <p class="type">Offline Lesson</p>
               <h3>5:1 오프라인 강사레슨</h3>
               <p>매월 마지막 주 토요일, 부산 명지 스튜디오에서 수업 관찰과 피드백 중심으로 진행합니다.</p>
-              <span class="more">오프라인 클래스 목록 보기</span>
+              <span class="more">강사레슨 상품 보기</span>
             </div>
           </a>
-          <a class="class-card reveal" href="/online">
+          <a class="class-card reveal" href="/videos">
             <picture>
               <source srcset="/assets/online-class.webp" type="image/webp">
               <img src="/assets/online-class.jpg" alt="ARCHIVE METHOD 온라인 클래스 촬영 장면" width="1200" height="1000" loading="lazy">
             </picture>
             <div class="class-body">
-              <p class="type">Online Class</p>
-              <h3>기구별 온라인 클래스</h3>
+              <p class="type">Video Class</p>
+              <h3>기구별 영상구매</h3>
               <p>체어, 바렐, 리포머, 캐딜락 수업을 구매 계정으로 시청하고 반복 학습합니다.</p>
-              <span class="more">온라인 클래스 목록 보기</span>
+              <span class="more">영상구매 목록 보기</span>
             </div>
           </a>
         </div>
       </div>
     </section>
 
-    <section id="studio" class="studio">
+    <section id="teams" class="studio">
       <div class="wrap">
         <div class="studio-grid">
           <div class="studio-copy reveal">
-            <p class="section-kicker">Myeongji Studio</p>
-            <h2>부산 명지, 수업을 깊게 보기 위한 공간.</h2>
-            <p>ARCHIVE PILATES는 부산 강서구 명지에 위치한 필라테스 스튜디오입니다. 강사와 예비 강사가 수업의 언어, 시퀀스, 피드백을 더 구체적으로 다듬을 수 있도록 오프라인 강사레슨과 온라인 클래스를 함께 운영합니다.</p>
+            <p class="section-kicker">Teams</p>
+            <h2>부산 명지, 수업을 깊게 보는 팀.</h2>
+            <p>ARCHIVE PILATES는 부산 강서구 명지에 위치한 필라테스 스튜디오입니다. 강사와 예비 강사가 수업의 언어, 시퀀스, 피드백을 더 구체적으로 다듬을 수 있도록 오프라인 강사레슨과 영상구매 클래스를 함께 운영합니다.</p>
             <div class="actions">
               <a class="button dark" href="http://pf.kakao.com/_AHdvn/chat">카카오톡 문의</a>
               <a class="button" href="https://www.instagram.com/minjin.vibe/">Instagram</a>
@@ -809,7 +819,7 @@
             <p class="section-kicker">Archive Channel</p>
             <h2>수업 기록은 채널에서도 이어집니다.</h2>
           </div>
-          <p>유튜브와 인스타그램에서 공개 수업 기록, 쇼츠, 스튜디오 소식을 확인할 수 있습니다. 구매와 시청은 Shop에서 진행됩니다.</p>
+          <p>유튜브와 인스타그램에서 공개 수업 기록, 쇼츠, 스튜디오 소식을 확인할 수 있습니다. 구매와 시청은 영상구매 메뉴에서 진행됩니다.</p>
         </div>
         <div class="social-links">
           <a class="reveal" href="https://www.youtube.com/@archivepilates">
@@ -824,6 +834,19 @@
             <strong>KakaoTalk</strong>
             <span>오프라인 강사레슨 상담</span>
           </a>
+        </div>
+      </div>
+    </section>
+
+    <section id="careers" class="careers">
+      <div class="careers-inner reveal">
+        <div>
+          <p class="section-kicker">Careers</p>
+          <h2>수업의 기준을 함께 만들 강사를 기다립니다.</h2>
+          <p>ARCHIVE PILATES는 움직임을 관찰하고, 기록하고, 다음 수업으로 축적하는 강사와 함께 성장합니다. 팀 합류와 협업 문의는 카카오톡으로 남겨주세요.</p>
+        </div>
+        <div class="actions">
+          <a class="button primary" href="http://pf.kakao.com/_AHdvn/chat">Careers 문의</a>
         </div>
       </div>
     </section>

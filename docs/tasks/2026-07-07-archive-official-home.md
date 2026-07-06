@@ -8,6 +8,7 @@ Date: 2026-07-07
 - Imweb remains the commerce/member system.
 - Commerce entry points from the homepage redirect to the existing Imweb site:
   - `/shop` -> `https://archivepilates.imweb.me/16`
+  - `/videos` -> `https://archivepilates.imweb.me/17`
   - `/online` -> `https://archivepilates.imweb.me/17`
   - `/offline` -> `https://archivepilates.imweb.me/18`
 - Planned DNS shape:
@@ -47,6 +48,7 @@ Date: 2026-07-07
   - Firebase ownership TXT and ACME TXT records were added.
   - Existing Google Workspace, Google Search Console, and OpenAI TXT records were preserved.
 - `shop.archivepilates.com` was configured as a Cloudflare proxied redirect to `https://archivepilates.imweb.me/16`.
+- The official homepage menu was refined to `Teams / 강사레슨 / 영상구매 / Careers`, with `영상구매` using the clearer `/videos` redirect instead of exposing `Shop` as the main label.
 - Firebase custom domain state reached `HOST_ACTIVE`, `OWNERSHIP_ACTIVE`, and `CERT_PROPAGATING` for root and `www`.
 
 ## Verification

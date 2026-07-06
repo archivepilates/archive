@@ -12,6 +12,12 @@
         ]
       },
       {
+        "source": "/",
+        "headers": [
+          { "key": "Cache-Control", "value": "no-cache, no-store, must-revalidate" }
+        ]
+      },
+      {
         "source": "/index.html",
         "headers": [
           { "key": "Cache-Control", "value": "no-cache, no-store, must-revalidate" }
@@ -46,6 +52,11 @@
       {
         "source": "/shop",
         "destination": "https://archivepilates.imweb.me/16",
+        "type": 302
+      },
+      {
+        "source": "/videos",
+        "destination": "https://archivepilates.imweb.me/17",
         "type": 302
       },
       {
