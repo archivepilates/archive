@@ -49,6 +49,15 @@ Date: 2026-07-07
   - Existing Google Workspace, Google Search Console, and OpenAI TXT records were preserved.
 - `shop.archivepilates.com` was configured as a Cloudflare proxied redirect to `https://archivepilates.imweb.me/16`.
 - The official homepage menu was refined to `Teams / 강사레슨 / 영상구매 / Careers`, with `영상구매` using the clearer `/videos` redirect instead of exposing `Shop` as the main label.
+- App icons were added to match the Imweb red circular ARCHIVE symbol style:
+  - `favicon.ico`
+  - `favicon-32x32.png`
+  - `apple-touch-icon.png`
+  - `apple-touch-icon-precomposed.png`
+  - `icon-192.png`
+  - `icon-196.png`
+  - `icon-512.png`
+  - `site.webmanifest`
 - Firebase custom domain state reached `HOST_ACTIVE`, `OWNERSHIP_ACTIVE`, and `CERT_PROPAGATING` for root and `www`.
 
 ## Verification
