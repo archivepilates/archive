@@ -1,0 +1,87 @@
+<!doctype html>
+<html lang="ko">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1">
+  <title>ARCHIVE PILATES SEO 검색 노출 조정 리포트</title>
+  <style>
+    :root{color-scheme:light;--bg:#f7f4ef;--paper:#fffdf9;--ink:#1f1c19;--muted:#706a63;--line:#ded7cd;--accent:#e85d1f;--ok:#147a43;--warn:#a45a00}
+    *{box-sizing:border-box}
+    body{margin:0;background:var(--bg);color:var(--ink);font-family:-apple-system,BlinkMacSystemFont,"Segoe UI",sans-serif;line-height:1.65}
+    main{max-width:920px;margin:0 auto;padding:44px 20px 64px}
+    article{background:var(--paper);border:1px solid var(--line);border-radius:8px;padding:34px}
+    h1{font-size:28px;line-height:1.25;margin:0 0 10px;letter-spacing:0}
+    h2{font-size:18px;margin:34px 0 12px}
+    p{margin:0 0 12px}
+    ul{margin:0;padding-left:20px}
+    li{margin:6px 0}
+    .eyebrow{font-size:12px;font-weight:800;letter-spacing:.12em;color:var(--accent);text-transform:uppercase;margin-bottom:10px}
+    .summary{font-size:17px;color:#2b2824;margin-top:16px}
+    .grid{display:grid;grid-template-columns:repeat(2,minmax(0,1fr));gap:12px;margin-top:16px}
+    .card{border:1px solid var(--line);border-radius:8px;padding:16px;background:#fff}
+    .label{display:block;font-size:12px;color:var(--muted);font-weight:700;margin-bottom:4px}
+    code{font-family:ui-monospace,SFMono-Regular,Menlo,monospace;font-size:.93em;background:#f1ece5;padding:2px 5px;border-radius:4px}
+    .ok{color:var(--ok);font-weight:800}
+    .warn{color:var(--warn);font-weight:800}
+    table{width:100%;border-collapse:collapse;margin-top:10px;font-size:14px}
+    th,td{border-bottom:1px solid var(--line);padding:10px;text-align:left;vertical-align:top}
+    th{width:210px;color:var(--muted);font-weight:700}
+    a{color:var(--accent)}
+    @media (max-width:680px){article{padding:24px 18px}.grid{grid-template-columns:1fr}h1{font-size:24px}th,td{display:block;width:100%;padding:8px 0}}
+  </style>
+</head>
+<body>
+<main>
+  <article>
+    <div class="eyebrow">ARCHIVE PILATES · SEO</div>
+    <h1>검색 노출 조정 결과</h1>
+    <p class="summary">2026-07-04 11:52 KST 기준, 아임웹 SEO 설정에서 검색 차단을 해제하고 Google Search Console 소유권 인증과 사이트맵 제출까지 완료했다.</p>
+
+    <div class="grid">
+      <section class="card">
+        <span class="label">핵심 원인</span>
+        <p>아임웹 기본 도메인이 검색되지 않도록 설정되어 서버 HTML에 <code>noindex, nofollow</code>가 내려오고 있었다.</p>
+      </section>
+      <section class="card">
+        <span class="label">현재 상태</span>
+        <p><span class="ok">색인 허용 상태</span>. 공개 HTML에서 <code>noindex</code>가 사라졌고, 설명/키워드/Google 인증 태그가 확인된다.</p>
+      </section>
+    </div>
+
+    <h2>적용한 변경</h2>
+    <ul>
+      <li>아임웹 SEO 권한 설정에서 기본 도메인 <code>archivepilates.imweb.me</code> 검색 허용으로 변경.</li>
+      <li>메타 설명 추가: 부산 명지 5:1 오프라인 강사레슨, 온라인 클래스, 움직임 관찰, 티칭 언어, 수업 기록 중심.</li>
+      <li>메타 키워드 보강: <code>아카이브필라테스</code>, 강사레슨, 부산/명지 필라테스, 강사교육 등.</li>
+      <li>Google Search Console URL 접두어 속성 <code>https://archivepilates.imweb.me/</code> 생성 및 HTML 태그 인증 완료.</li>
+      <li>아임웹 Header Code 상단에 Google 인증 메타태그와 canonical 보정 스크립트 추가.</li>
+      <li>Google Search Console에 <code>sitemap.xml</code> 제출.</li>
+    </ul>
+
+    <h2>최종 검증</h2>
+    <table>
+      <tr><th>대상 URL</th><td><code>https://archivepilates.imweb.me/</code></td></tr>
+      <tr><th>title</th><td><code>아카이브필라테스</code></td></tr>
+      <tr><th>robots</th><td><span class="ok">noindex 없음</span></td></tr>
+      <tr><th>description</th><td>ARCHIVE PILATES는 부산 명지에서 5:1 오프라인 강사레슨과 온라인 필라테스 클래스를 운영합니다. 움직임 관찰, 티칭 언어, 수업 기록을 바탕으로 강사의 레슨 기준을 세웁니다.</td></tr>
+      <tr><th>canonical</th><td><code>https://archivepilates.imweb.me/</code></td></tr>
+      <tr><th>Google verification</th><td><span class="ok">확인됨</span></td></tr>
+      <tr><th>sitemap</th><td><code>https://archivepilates.imweb.me/sitemap.xml</code> XML 200 응답, 37개 URL 포함.</td></tr>
+    </table>
+
+    <h2>남은 작업</h2>
+    <ul>
+      <li><span class="warn">네이버 서치어드바이저</span>: 네이버 로그인 세션이 없어 등록이 중단됐다. 네이버 로그인 후 사이트 등록, HTML 태그 인증, 사이트맵 제출이 필요하다.</li>
+      <li><span class="warn">Google 사이트맵 상태</span>: 제출 직후 테이블에는 <code>가져올 수 없음</code>으로 보일 수 있다. 실제 사이트맵은 200 XML이므로 24-48시간 후 Search Console에서 재확인한다.</li>
+      <li><span class="warn">도메인 표시</span>: 현재 <code>archivepilates.com</code>은 포워딩 구조라 검색 결과는 최종 도착 주소인 <code>archivepilates.imweb.me</code>로 노출될 가능성이 높다. 검색 결과에 <code>archivepilates.com</code>을 계속 남기려면 향후 아임웹 개인도메인/SSL 직접 연결이 필요하다.</li>
+    </ul>
+
+    <h2>참고</h2>
+    <ul>
+      <li>Google 공식 문서: 사이트맵 제출은 Search Console 또는 robots.txt의 Sitemap 라인으로 알릴 수 있으며, 제출은 색인 보장을 의미하지 않는다.</li>
+      <li>네이버 공식 문서: 웹마스터도구에 RSS/사이트맵을 제출하면 네이버 검색로봇이 주요 URL을 재방문하는 창구로 활용한다.</li>
+    </ul>
+  </article>
+</main>
+</body>
+</html>

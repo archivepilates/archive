@@ -237,14 +237,42 @@ Do not put the real API key or secret in Git, docs, or chat logs.
 ## Recommended Next Step
 
 1. User or Codex refreshes YouTube OAuth for `archivepilates@gmail.com`.
-2. User creates/checks Imweb `온라인 강의` category in admin if category creation is not available via API.
-3. Re-run YouTube inventory.
-4. Rebuild candidates from fresh inventory.
-5. Review the 20 hidden products in Imweb admin.
-6. Connect order completion to the buyer-access grant flow for embedded pages.
-7. Create or confirm the Imweb member group/page access setup for online lessons.
-8. Test whether `prod_type=subscribe`, `subscribe_group_code`, and `subscribe_period=40` removes shipping UI natively and grants the target access group.
-9. Complete an end-to-end paid order test for one online video product and confirm that the buyer receives the intended embedded-page access.
+2. Convert/verify each paid full video as `unlisted` or public and embeddable before adding that code to `artifacts/imweb-buyer-video-access/youtube-ready-codes.json`.
+3. After the payment module is fully available, run one real member-order E2E test and confirm automatic group grant, buyer watch page access, and buyer notice delivery.
+
+## Buyer Watch Pages And Access Test - 2026-06-29
+
+- Imweb design-mode buyer-only watch pages were created and published for all 23 ARCHIVE METHOD online video codes:
+  - `AC7`, `ACA4`, `AB7`, `AR3`, `AB6`, `ACH6`, `AR2-1`, `ACH5`, `ACA2`, `ACA3`, `ACA1`, `AB3`, `ACH2`, `AB2`, `ACH1`, `ACH4`, `ACH3`, `AB5`, `AB1`, `AR1`, `AR4`, `AB4`, `AB8`.
+- Page pattern:
+  - URL: `https://archivepilates.imweb.me/archive-method-watch-{code}`
+  - Menu state: hidden menu.
+  - Access state: login required and only the matching `ARCHIVE METHOD {code} 40D` member group is allowed.
+  - Page rendering: shared body script renders the matching buyer-only YouTube embed page after the allowed member logs in.
+- Public logged-out verification:
+  - All 23 watch URLs returned first response `HTTP/2 302`.
+  - All 23 redirected to `https://archivepilates.imweb.me/login?back_url=...`.
+  - `BAD_COUNT 0`; no watch URL returned 404.
+- Product detail readback:
+  - Products `27-49` all contain their matching watch path.
+  - Products `27-49` all contain purchase-after guidance with `구매 후 시청`, `마이페이지`, and `주문조회`.
+- Member group verification:
+  - `scripts/imweb_buyer_video_access.py verify-groups` confirmed all 23 expected group titles and group codes match Imweb.
+- Purchase-notice generation test:
+  - Local dry test generated AR1, AB4, and AC7 delivery bodies without sending mail.
+  - Each generated notice includes the watch URL, the Imweb-member login guide, and the Kakao channel link.
+  - This session did not create a new recurring send automation and did not send a new live customer notice.
+  - To make future paid-member orders fully automatic, re-enable a controlled order-processing job after the payment module and YouTube-ready list are finalized.
+- Current real order state:
+  - `scripts/imweb_buyer_video_access.py process-orders --limit 20` read-only result found order `202606282038199` for `AR1`.
+  - Status: `needs_member_signup`.
+  - Reason: the order is not currently tied to an Imweb member UID, so the buyer-only group cannot be granted automatically.
+  - A signup notice for that order was already queued and sent on 2026-06-28 UTC according to `sent-notices.jsonl`.
+- YouTube-ready update:
+  - `AR1` full video `hqmbqTHgO6s` was changed to unlisted by the operator.
+  - Verification on 2026-06-29 UTC: YouTube embed URL returned HTTP `200`, and YouTube oEmbed returned the AR1 full-video title/iframe payload.
+  - `artifacts/imweb-buyer-video-access/youtube-ready-codes.json` now marks `AR1` and `AB4` as YouTube-ready.
+  - Future member orders for non-ready codes should not auto-grant until the corresponding YouTube video is verified.
 
 ## Live Visibility Update - 2026-06-13
 
@@ -699,3 +727,551 @@ Remaining risks:
   - Retry the two blocked playlist covers later, or apply the generated square files manually in YouTube Studio:
     - `/Users/archivepilates/Documents/ARCHIVE-IN/artifacts/youtube-playlist-apply-2026-06-21/playlist-thumbnails-square/archive-method-barrel-full-square.jpg`
     - `/Users/archivepilates/Documents/ARCHIVE-IN/artifacts/youtube-playlist-apply-2026-06-21/playlist-thumbnails-square/archive-method-cadillac-full-square.jpg`
+
+## AR1 Native Imweb Pass Pilot - 2026-06-29 KST
+
+- Canonical AR1 sales product changed from old normal product `22` to native subscription product `27`.
+- Product `27` readback:
+  - `prodType=subscribe`
+  - `prodStatus=sale`
+  - `prodDigitalData.type=subscribe`
+  - `subscribeData.group_code=g2026062802f1f8a665b83`
+  - `subscribeData.period=40`
+  - URL: `https://archivepilates.imweb.me/shop_view/27`
+- Product `22` was changed to `prodStatus=nosale`; public direct URL now returns `404`.
+- `scripts/imweb_buyer_video_access.py` now uses product `27` for AR1 and keeps product `22` as a legacy purchase alias.
+- Live buyer-watch body script now maps AR1 to `/shop_view/27` and does not expose exact full-video IDs as plain strings in global script source.
+- Verification:
+  - AR1 product `27`: `200`, purchase UI visible, 40D pass text visible.
+  - AR1 product `22`: `404`.
+  - AR1 watch page unauthenticated HTTP request redirects to Imweb login.
+  - Current test-member browser session renders the AR1 buyer page and points `상품 상세` to `/shop_view/27`.
+- AR1 YouTube readiness update:
+  - On 2026-06-29 UTC, the operator changed AR1 full video `hqmbqTHgO6s` to unlisted.
+  - Live checks passed: YouTube embed URL returned HTTP `200`, and YouTube oEmbed returned the AR1 title/iframe payload.
+  - `artifacts/imweb-buyer-video-access/youtube-ready-codes.json` now includes `AR1`.
+  - Remaining first-order blocker is no longer YouTube readiness; it is that order `202606282038199` is still not associated with an Imweb member UID.
+
+## All Native Imweb Video Pass Products - 2026-06-29 KST
+
+- Converted the remaining paid-video sales products to the same native Imweb subscription/pass model as AR1.
+  - Canonical online product set is now product `27` through `49`.
+  - Product `27` is AR1; products `28` through `49` cover the remaining paid ARCHIVE METHOD videos.
+  - All 23 canonical products are `prodType=subscribe`, `prodStatus=sale`, mapped to their exact `ARCHIVE METHOD {CODE} 40D` member group, and set to `subscribeData.period=40`.
+- Old normal-product online sales records were removed from the customer-facing flow.
+  - A direct OpenAPI/CLI hard delete was not available in this session, so old normal online products `2-22,24-26` were changed to `prodStatus=nosale`.
+  - Final readback: `24/24` old normal online products are `nosale`; no old normal online product remains `sale`.
+  - Public sample check: old normal product `/shop_view/3` now returns `404`.
+- Live Imweb buyer-watch body script was updated so the product detail links use the new canonical subscription products.
+  - Old product-link leftovers: `0`.
+  - New product-link missing count: `0`.
+- Local buyer-access script was updated so purchases map to the new subscription products while old normal product numbers remain as legacy aliases for historical order handling.
+- Verification artifacts:
+  - `/Users/archivepilates/Documents/ARCHIVE-IN/artifacts/imweb-buyer-video-access/final-product-state-2026-06-29.json`
+  - `/Users/archivepilates/Documents/ARCHIVE-IN/artifacts/imweb-buyer-video-access/old-normal-products-backup-2026-06-29.json`
+  - `/Users/archivepilates/Documents/ARCHIVE-IN/artifacts/imweb-buyer-video-access/old-normal-products-status-after-hide-2026-06-29.json`
+  - `/Users/archivepilates/Documents/ARCHIVE-IN/artifacts/imweb-buyer-video-access/body-script-after-new-product-links-2026-06-29.json`
+- Checks run:
+  - `python3 -m py_compile scripts/imweb_buyer_video_access.py`
+  - `python3 scripts/imweb_buyer_video_access.py verify-groups`
+  - Public product samples: `/shop_view/28` and `/shop_view/48` returned `200`; old `/shop_view/3` returned `404`.
+- Buyer-watch page follow-up on 2026-06-29:
+  - Resolved. Dedicated hidden buyer-watch pages were created and published for all 23 video codes.
+  - Public logged-out check: all 23 watch URLs return `HTTP/2 302` to login; no 404 remained.
+  - Remaining blocker is YouTube readiness per code, not Imweb page-shell coverage.
+
+## Imweb Product Thumbnail Logo Refresh - 2026-06-29 KST
+
+- Target:
+  - Current canonical online sales products: `27-49`.
+  - Site: `ARCHIVE PILATES` / `archivepilates.imweb.me`.
+- Source logo:
+  - Used the provided high-resolution ARCHIVE PILATES red symbol source.
+  - The source file is a `1080x1080` RGBA image even though the filename extension is `.jpg`.
+  - Cropped the visible red symbol area to avoid shrinking the mark together with the large transparent/white canvas.
+- Change:
+  - Downloaded the current Imweb CDN product images for all `23` canonical online-class products.
+  - Generated new `1280x720` product thumbnails that preserve the existing class footage and purple ARCHIVE METHOD text layout.
+  - Added a crisp red ARCHIVE PILATES symbol mark at the lower-left of each thumbnail.
+  - Updated all `23` Imweb product representative images through the Imweb product API using `data:image/jpeg;base64` upload payloads.
+- Verification:
+  - Imweb API patch result: `23/23` returned `SUCCESS`.
+  - Imweb readback: `23/23` product image URLs changed.
+  - CDN readback: `23/23` new image URLs downloaded successfully.
+  - Live online-class category check:
+    - `https://archivepilates.imweb.me/17?mode=shop` renders products `27-49`.
+    - DOM readback confirmed all product image URLs are new `cdn-optimized.imweb.me/upload/...jpg?w=800` URLs.
+    - Mobile screenshot shows the refreshed red logo mark on visible product thumbnails.
+  - Known unrelated console message on the Imweb page: `MagnetShell: manifest-url is required`.
+- YouTube thumbnail note:
+  - YouTube OAuth token at `/Users/archivepilates/Documents/ARCHIVE-G/.youtube-gcloud/youtube-token.local.json` currently fails refresh with `invalid_grant: Token has been expired or revoked`.
+  - Therefore this pass updated Imweb shop/product thumbnails only.
+  - YouTube channel thumbnails can be refreshed with the same generated files after `archivepilates@gmail.com` YouTube OAuth is reauthorized.
+- Evidence artifacts:
+  - `/Users/archivepilates/Documents/ARCHIVE-IN/artifacts/thumbnail-logo-refresh-2026-06-29/generated-logo-refresh-contact-sheet.jpg`
+  - `/Users/archivepilates/Documents/ARCHIVE-IN/artifacts/thumbnail-logo-refresh-2026-06-29/after-imweb-cdn-logo-refresh-contact-sheet.jpg`
+  - `/Users/archivepilates/Documents/ARCHIVE-IN/artifacts/thumbnail-logo-refresh-2026-06-29/imweb-logo-refresh-patch-results.json`
+  - `/Users/archivepilates/Documents/ARCHIVE-IN/artifacts/thumbnail-logo-refresh-2026-06-29/imweb-logo-refresh-readback-after.json`
+  - `/Users/archivepilates/Documents/ARCHIVE-IN/output/playwright/imweb-online-category-logo-refresh-mobile.png`
+  - `/Users/archivepilates/Documents/ARCHIVE-IN/output/playwright/imweb-online-category-logo-refresh-desktop.png`
+
+## Breathing Video Registration - 2026-06-29 KST
+
+- Live account targets:
+  - YouTube OAuth: `archivepilates@gmail.com`.
+  - Imweb admin/API: `home@archivepilates.com`, site `archivepilates.imweb.me`.
+- New YouTube full videos found and standardized:
+  - ACH7 `_pTvw4neHZk`: `체어 호흡 풀영상 (ACH7) | ARCHIVE METHOD · 민진쌤`, duration `01:00:50`, privacy `unlisted`.
+  - ACA5 `ranZEI7SAYg`: `캐딜락 호흡 풀영상 (ACA5) | ARCHIVE METHOD · 은영쌤`, duration `53:56`, privacy `unlisted`.
+  - Both descriptions and tags now follow the paid ARCHIVE METHOD format: class code, apparatus, 호흡 topic, instructor, 40-day buyer-only access, and no-redistribution notice.
+- Imweb membership groups created:
+  - `ARCHIVE METHOD ACH7 40D`: `g2026062956772b09976a1`.
+  - `ARCHIVE METHOD ACA5 40D`: `g202606290bc066cba328e`.
+- Imweb sale products created:
+  - Product `50`: `[온라인] ARCHIVE METHOD 체어 호흡 (ACH7) 40D 이용권`, `15000`, category `온라인 클래스`, `prodType=subscribe`, group `g2026062956772b09976a1`, period `40`.
+  - Product `51`: `[온라인] ARCHIVE METHOD 캐딜락 호흡 (ACA5) 40D 이용권`, `15000`, category `온라인 클래스`, `prodType=subscribe`, group `g202606290bc066cba328e`, period `40`.
+- Buyer-watch flow:
+  - Added ACH7 and ACA5 to `scripts/imweb_buyer_video_access.py`.
+  - Added ACH7 and ACA5 to `/Users/archivepilates/Documents/ARCHIVE-IN/artifacts/imweb-buyer-video-access/youtube-ready-codes.json`.
+  - Added a small Imweb footer script for only ACH7/ACA5 because the main body-script update was blocked by Imweb CLI script-size quota.
+  - Created and published hidden, search-blocked watch page shells:
+    - `https://archivepilates.imweb.me/archive-method-watch-ach7`
+    - `https://archivepilates.imweb.me/archive-method-watch-aca5`
+- Notion product inventory:
+  - Updated the Notion data source `아카이브 유튜브 영상 리스트`.
+  - Added `호흡` as a select option under both `체어` and `캐딜락`.
+  - Created row `NO. 9` with ACH7 and ACA5 full-video/product/watch-page details.
+  - Notion row URL: `https://app.notion.com/p/38ed49eae4bf810ca7b0f2b70e6df9a1`.
+- Verification:
+  - `python3 -m py_compile scripts/imweb_buyer_video_access.py`
+  - `python3 scripts/imweb_buyer_video_access.py verify-groups`
+  - YouTube embed and oEmbed checks returned HTTP `200` for `_pTvw4neHZk` and `ranZEI7SAYg`.
+  - Public product pages returned HTTP `200`:
+    - `https://archivepilates.imweb.me/shop_view/50`
+    - `https://archivepilates.imweb.me/shop_view/51`
+  - Logged-out watch URLs redirect to Imweb login and no longer return 403/404.
+  - Logged-in browser render confirmed the ACH7/ACA5 watch pages render `.ap-watch` and the correct YouTube embed IDs.
+- Evidence artifacts:
+  - `/Users/archivepilates/Documents/ARCHIVE-IN/artifacts/youtube-breathing-2026-06-29/`
+- Notes:
+  - Notion SQL data-source query remains blocked by Notion plan limitation, so the final Notion verification used direct page fetch/readback.
+  - The ACA5 watch page was created under the footer menu area in Imweb design mode, but it is hidden and search-blocked; the public URL shell works as intended.
+
+## ACH7 YouTube Studio Cut Edit - 2026-07-01 KST
+
+- Target:
+  - YouTube account/channel: `archivepilates@gmail.com` / `아카이브필라테스`.
+  - Video code: `ACH7`.
+  - YouTube video id: `_pTvw4neHZk`.
+  - Title: `체어 호흡 풀영상 (ACH7) | ARCHIVE METHOD · 민진쌤`.
+- Requested cut ranges applied through YouTube Studio Editor:
+  - `0:02:52-0:03:12`
+  - `0:07:42-0:07:49`
+  - `0:13:21-0:13:29`
+  - `0:15:08-0:15:29`
+  - `0:18:59-0:20:19`
+  - `0:22:41-0:22:51`
+  - `0:29:48-0:29:51`
+  - `0:30:06-0:30:10`
+  - `0:30:21-0:30:30`
+  - `0:33:45-0:33:56`
+  - `0:38:58-0:39:01`
+  - `0:41:40-0:41:53`
+  - `0:43:56-0:44:04`
+  - `0:47:06-0:47:36`
+  - `0:48:03-0:48:08`
+  - `0:49:50-0:50:03`
+  - `0:51:28-0:51:35`
+  - `0:52:42-0:52:53`
+  - `0:53:13-0:53:50`
+- Save state:
+  - YouTube Studio confirmation dialog showed new length `55:49`.
+  - Permanent-change checkbox was confirmed.
+  - `변경사항 확인` was submitted.
+  - Final Studio state after submit: `동영상 편집 진행 중...`.
+- Operating note:
+  - YouTube says processing can take from minutes to hours; while processing, viewers continue to see the current version and editor functions may be unavailable.
+
+## ACH7/ACA5 Buyer-Watch Access Hotfix - 2026-07-01 KST
+
+- Issue:
+  - Recent breathing videos `ACH7` and `ACA5` were added through a separate Imweb `footer` global script because the main body buyer-watch script hit the Imweb script-size limit.
+  - This was weaker than the original buyer-only model because the renderer was not fully tied to the matching `ARCHIVE METHOD {code} 40D` page permission.
+  - Logged-out requests still redirected to Imweb login, but a logged-in non-buyer could potentially render the watch page if the page permission was broader than the product group.
+- Emergency mitigation:
+  - Backed up the footer script to:
+    - `/Users/archivepilates/Documents/ARCHIVE-IN/artifacts/imweb-watch-access-hotfix-2026-07-01/footer-script-before.html`
+  - Deleted the Imweb `footer` script containing `data-ap-buyer-watch-breathing="2026-06-29"`.
+  - Imweb CLI delete result: `statusCode=200`, `data=true`.
+- Verification:
+  - Imweb script list now has only `body` and `header` scripts.
+  - `data-ap-buyer-watch-breathing` is no longer present in the live script list.
+  - Logged-out checks for `/archive-method-watch-ach7` and `/archive-method-watch-aca5` still land on `/login?back_url=...`.
+  - The final login pages no longer contain `체어 호흡` or `캐딜락 호흡` from the removed footer renderer.
+- Follow-up:
+  - Re-enable ACH7/ACA5 only after each watch page is verified as a hidden Imweb page restricted to its matching group:
+    - `ARCHIVE METHOD ACH7 40D`
+    - `ARCHIVE METHOD ACA5 40D`
+  - The safer long-term fix is to create/verify dedicated page shells with group-only permission instead of relying on a separate global footer renderer.
+
+## All Online Video Buyer-Watch Fail-Closed Hotfix - 2026-07-01 KST
+
+- Issue:
+  - A full audit found the remaining Imweb `body` global script still contained `data-ap-buyer-watch-all="2026-06-28"` for 23 watch URLs.
+  - That renderer selected the video only from `location.pathname`, so it could bypass the intended page permission if a logged-in non-buyer stayed on a matching `/archive-method-watch-{code}` path.
+  - Client-side global rendering is not acceptable for paid full videos because the embed ids are shipped to every page before Imweb page permission can be trusted.
+- Live mitigation:
+  - Backed up the live body script to:
+    - `/Users/archivepilates/Documents/ARCHIVE-IN/artifacts/imweb-watch-access-audit-2026-07-01/body-script-before-renderer-removal.html`
+  - Updated Imweb `body` script and removed only the buyer-watch renderer block.
+  - Preserved the home copy/address patch and Kakao button contrast patch.
+  - Imweb CLI update result: `statusCode=200`, `data=true`.
+- Verification:
+  - Current live Imweb script list:
+    - `body`: `data-ap-buyer-watch-all=false`, `data-ap-buyer-watch-breathing=false`, `data-archive-pilates-home-copy-patch=true`, `data-ap-kakao-fix=true`
+    - `header`: SEO patch only, no buyer-watch renderer.
+  - Product API readback checked all 25 online video products:
+    - `AC7`, `ACA4`, `AB7`, `AR3`, `AB6`, `ACH6`, `ACH7`, `AR2-1`, `ACH5`, `ACA2`, `ACA3`, `ACA5`, `ACA1`, `AB3`, `ACH2`, `AB2`, `ACH1`, `ACH4`, `ACH3`, `AB5`, `AB1`, `AR1`, `AR4`, `AB4`, `AB8`.
+    - All 25 read as `prodType=subscribe` and `prodStatus=sale`.
+  - Public unauthenticated URL audit checked all 25 `/archive-method-watch-{code}` URLs:
+    - All 25 land on `/login?back_url=...`.
+    - Matching YouTube video id exposure: `0`.
+    - Buyer renderer marker exposure: `0`.
+    - Fetch errors: `0`.
+- Current state:
+  - Unauthorized viewing risk from global scripts is closed.
+  - Buyer viewing is intentionally fail-closed until each watch page is rebuilt/verified with the video embed inside an Imweb page/code widget that is restricted to the matching `ARCHIVE METHOD {code} 40D` group.
+  - Do not restore a global buyer-watch renderer for paid videos.
+- Restore preparation:
+  - Generated 25 page-local Imweb code-widget snippets for rebuilding the watch pages without a global renderer.
+  - Manifest:
+    - `/Users/archivepilates/Documents/ARCHIVE-IN/artifacts/imweb-watch-page-widgets-2026-07-01/manifest.json`
+  - Each snippet must be placed only inside the matching hidden watch page after confirming the page permission is restricted to its exact `ARCHIVE METHOD {code} 40D` group.
+- Evidence:
+  - `/Users/archivepilates/Documents/ARCHIVE-IN/artifacts/imweb-watch-access-audit-2026-07-01/script-list-after-body-renderer-removal.json`
+  - `/Users/archivepilates/Documents/ARCHIVE-IN/artifacts/imweb-watch-access-audit-2026-07-01/watch-url-public-access-after-body-renderer-removal-summary.json`
+  - `/Users/archivepilates/Documents/ARCHIVE-IN/artifacts/imweb-watch-access-audit-2026-07-01/product-readback-summary.json`
+
+## ACA3/AR1 Buyer-Watch Emergency Restore - 2026-07-01 KST
+
+- Reason:
+  - The full global buyer-watch renderer was removed correctly to close non-buyer bypass risk, but that also made real buyers temporarily unable to watch.
+  - Current Imweb member-group readback shows active group members only for:
+    - `ACA3`: 2 members
+    - `AR1`: 1 test member
+- Emergency live change:
+  - Updated the Imweb `body` script with a restricted emergency renderer for only:
+    - `/archive-method-watch-aca3`
+    - `/archive-method-watch-ar1`
+  - The full 25-video renderer remains removed.
+  - The emergency renderer does not include the plain YouTube ids, but it still ships reversible client-side tokens, so this is not the final secure structure.
+  - The renderer refuses to run when the page is `/login`, shows guest/login/signup UI, or contains access-permission denial text.
+- Verification:
+  - Imweb script readback after update:
+    - `data-ap-buyer-watch-emergency="2026-07-01"` present.
+    - `data-ap-buyer-watch-all` absent.
+    - Plain `ACA3` and `AR1` YouTube ids absent from the live script content.
+  - Logged-out Playwright checks:
+    - `ACA3` final URL: `/login?back_url=...`, `.ap-watch=0`, YouTube iframe count `0`.
+    - `AR1` final URL: `/login?back_url=...`, `.ap-watch=0`, YouTube iframe count `0`.
+- Remaining risk:
+  - This is a conservative emergency bridge, not the desired final state.
+  - Final restore still needs page-local code widgets inside each hidden Imweb watch page restricted to the exact matching `ARCHIVE METHOD {code} 40D` group.
+  - Browser editor access was unstable during this restore, so buyer-side authenticated rendering could not be directly checked with a real ACA3 buyer login in this session.
+- Evidence:
+  - `/Users/archivepilates/Documents/ARCHIVE-IN/artifacts/imweb-watch-access-audit-2026-07-01/video-group-member-counts-redacted-2026-07-01.json`
+  - `/Users/archivepilates/Documents/ARCHIVE-IN/artifacts/imweb-watch-access-audit-2026-07-01/body-script-emergency-buyer-restore-payload.json`
+  - `/Users/archivepilates/Documents/ARCHIVE-IN/artifacts/imweb-watch-access-audit-2026-07-01/body-script-emergency-buyer-restore-update-result.json`
+  - `/Users/archivepilates/Documents/ARCHIVE-IN/artifacts/imweb-watch-access-audit-2026-07-01/script-list-after-emergency-buyer-restore.json`
+  - `/Users/archivepilates/Documents/ARCHIVE-IN/output/playwright/imweb-watch-access-2026-07-01/aca3-public-dom-check.json`
+  - `/Users/archivepilates/Documents/ARCHIVE-IN/output/playwright/imweb-watch-access-2026-07-01/ar1-public-dom-check.json`
+
+## Native Buyer-Watch Finalization Check - 2026-07-01 KST
+
+- Target direction:
+  - Remove global video rendering for paid full videos.
+  - Use Imweb native `회원그룹 이용권` products.
+  - Keep each full video inside its matching hidden/group-only watch page as a page-local code/widget embed.
+- Live global-script state:
+  - Removed the temporary `data-ap-buyer-watch-emergency="2026-07-01"` renderer from the Imweb `body` script.
+  - Current global Imweb scripts contain no `data-ap-buyer-watch*` renderer and no page-local watch marker.
+  - Preserved the existing home copy/address patch, Kakao button contrast patch, and header SEO patch.
+- Product/group readback:
+  - Rechecked all 25 online class products from the page-widget manifest.
+  - All 25 are `prodType=subscribe`, `prodStatus=sale`, `period=40`.
+  - All 25 product `group_code` values match their expected `ARCHIVE METHOD {CODE} 40D` member group.
+  - All 25 product detail pages include the native-pass guide marker and the matching watch-page link.
+- Public/non-member verification:
+  - Fresh browser check covered all 25 `/archive-method-watch-{code}` URLs.
+  - Result: `25/25` redirected to Imweb login.
+  - Exposed full-video YouTube IDs: `0`.
+  - Exposed YouTube embed iframes: `0`.
+  - Exposed buyer-watch/page-local markers: `0`.
+- Page-local widget state:
+  - `ACA3` was rebuilt in Imweb design mode with the page-local code widget and published.
+  - The admin/owner Chrome session renders the ACA3 page-local widget, but that session is not a valid buyer/non-buyer test because it can bypass normal page restrictions.
+  - `AR1` was selected in Imweb design mode and confirmed as an empty hidden page; it still needs a page-local code/widget added before buyer viewing is restored there.
+  - Remaining non-ACA3 watch pages are intentionally fail-closed until their matching page-local widgets are inserted and published.
+- Member-state verification:
+  - 비회원: verified. All 25 watch URLs are gated and do not expose videos.
+  - 미구매 회원: not fully verified in browser in this session because no usable logged-in non-buyer front-site member session was available.
+  - 구매회원: API confirms current ACA3 group members exist, but real buyer-browser verification still needs an actual logged-in buyer session or a dedicated test member flow.
+- Do not restore:
+  - Do not restore a global body/footer buyer-watch renderer for paid videos.
+  - Do not grant or alter real member groups only for testing unless the operator explicitly approves the exact test account flow.
+- Evidence:
+  - `/Users/archivepilates/Documents/ARCHIVE-IN/artifacts/imweb-watch-finalize-2026-07-01/script-list-after-remove-global.json`
+  - `/Users/archivepilates/Documents/ARCHIVE-IN/artifacts/imweb-watch-finalize-2026-07-01/guest-all-watch-url-result.json`
+  - `/Users/archivepilates/Documents/ARCHIVE-IN/artifacts/imweb-watch-finalize-2026-07-01/product-subscribe-group-readback-2026-07-01.json`
+  - `/Users/archivepilates/Documents/ARCHIVE-IN/artifacts/imweb-watch-finalize-2026-07-01/aca3-group-members.json`
+  - `/Users/archivepilates/Documents/ARCHIVE-IN/artifacts/imweb-watch-page-widgets-2026-07-01/manifest.json`
+
+## Product Detail Watch CTA Visibility Hotfix - 2026-07-01 KST
+
+- Issue:
+  - The product detail pages technically contained watch-page guidance, but the buyer-facing `구매 후 시청 페이지` entry was too low/weak to find reliably.
+  - The first attempted Imweb CLI `product update info` path returned `200` but did not persist the `content` field. Treat that command as unsuitable for product-detail HTML updates.
+- Live change:
+  - Patched all `25` canonical online video products through the older Imweb v2 product API.
+  - Removed the old trailing `data-archive-pilates-native-pass="2026-06-29"` block.
+  - Inserted a prominent `data-archive-pilates-watch-cta="2026-07-01"` block directly below the product subtitle on every product detail page.
+  - Each CTA links to the matching `https://archivepilates.imweb.me/archive-method-watch-{code}` watch page and explains:
+    - the matching `ARCHIVE METHOD {CODE} 40D` group is granted after purchase;
+    - the page can be found again from My Page > order detail;
+    - non-members or non-buyers remain on login/permission flow.
+- API verification:
+  - Product readback after patch:
+    - `25/25` contain `data-archive-pilates-watch-cta="2026-07-01"`.
+    - `25/25` contain the matching watch path.
+    - `25/25` contain literal `구매 후 시청 페이지`.
+    - Old `data-archive-pilates-native-pass` blocks: `0`.
+- Public/live verification:
+  - Raw public product HTML:
+    - `25/25` product pages returned HTTP `200`.
+    - `25/25` include the CTA marker, literal text, and matching watch path.
+  - Playwright DOM check:
+    - Product detail pages: `25/25` CTA blocks visible.
+    - CTA href matches: `25/25`.
+    - Mobile spot checks: `3/3` visible and linked correctly.
+  - Watch-page gate recheck:
+    - `25/25` watch URLs redirect unauthenticated visitors to Imweb login.
+    - YouTube embed iframes exposed publicly: `0`.
+    - Full-video YouTube IDs exposed publicly: `0`.
+- Evidence:
+  - `scripts/imweb_patch_product_watch_cta.py`
+  - `artifacts/imweb-product-watch-cta-2026-07-01/product-content-before.json`
+  - `artifacts/imweb-product-watch-cta-2026-07-01/product-watch-cta-plan.json`
+  - `artifacts/imweb-product-watch-cta-2026-07-01/product-watch-cta-apply-results.json`
+  - `artifacts/imweb-product-watch-cta-2026-07-01/product-watch-cta-readback.json`
+  - `artifacts/imweb-product-watch-cta-2026-07-01/public-product-html-check.json`
+  - `output/playwright/imweb-product-watch-cta-2026-07-01/summary.json`
+
+## Imweb API Capability Recheck - 2026-07-01 KST
+
+- Product detail API control: confirmed.
+  - Current AR1 product readback through the authenticated Imweb CLI shows:
+    - `prodNo=27`
+    - `prodType=subscribe`
+    - `prodStatus=sale`
+    - `content` contains the visible `data-archive-pilates-watch-cta="2026-07-01"` block.
+    - `prodDigitalData.subscribeData.group_code=g2026062802f1f8a665b83`
+    - `prodDigitalData.subscribeData.period=40`
+  - A no-op dry-run for AR1 product detail content generated a write confirmation token for:
+    - command: `product update info`
+    - method: `PATCH`
+    - path: `/products/27`
+    - body keys: `content`, `unitCode`, `version`
+  - Reliable live product-detail HTML writes should continue to use the older Imweb v2 product API path used by `scripts/imweb_patch_product_watch_cta.py --transport legacy-v2`.
+  - Treat CLI `product update info` as a request-shape/dry-run confirmation path for `content` until a future live retry proves that it persists product HTML reliably.
+  - The older Imweb v2 product API and official product add/update documentation also support product `content`, `prod_type=subscribe`, `subscribe_group_code`, `subscribe_period`, categories, images, price, status, SEO, and options.
+- Product category API control: confirmed.
+  - Current category readback includes:
+    - `클래스`: `s2026051668d24d49ef360`
+    - `온라인 클래스`: `s20260613848c8356b9c73`
+    - `오프라인 클래스`: `s20260613a41f3d6464dfe`
+- Member group / entitlement API state:
+  - CLI capability catalog includes `member groups list`, `member groups members`, and `member update groups`.
+  - Product-level buyer entitlement is already represented by subscribe products and `prodDigitalData.subscribeData`.
+  - Do not manually alter real member group state for testing without an explicitly approved test account flow.
+- General Imweb design/page/widget API control: not confirmed.
+  - CLI capability catalog exposes `product`, `member`, `order`, `script`, `site`, `community`, `payment`, and `promotion`; it does not expose a `menu`, `page`, `design`, or `widget` domain.
+  - Read-only raw endpoint probes returned `404 target_invalid` for:
+    - `/menus`, `/menu`, `/site/menus`, `/site/menu`
+    - `/pages`, `/page`
+    - `/design`
+    - `/widgets`, `/widget`
+  - Treat hidden watch-page shell creation, page permissions, and page-local code-widget insertion as Imweb design-mode/browser work unless a supported private/internal endpoint is deliberately reverse-engineered and tested separately.
+- Working rule:
+  - Use API for product creation, product detail HTML, category mapping, product images, SEO, sale status, subscribe group mapping, and product CTA fixes.
+  - Do not use global `script` injection to render paid full videos.
+  - Use page-local widgets inside the matching hidden/group-only watch page for paid full-video embeds.
+- Evidence:
+  - `artifacts/imweb-api-capability-check-2026-07-01/product-27-readback.json`
+  - `artifacts/imweb-api-capability-check-2026-07-01/product-27-content-noop-dry-run.json`
+  - `artifacts/imweb-api-capability-check-2026-07-01/product-categories-readback.json`
+  - `artifacts/imweb-api-capability-check-2026-07-01/site-capabilities.json`
+  - `artifacts/imweb-api-capability-check-2026-07-01/command-capabilities.json`
+  - `artifacts/imweb-api-capability-check-2026-07-01/page-endpoint-probes/`
+
+## Page-Local Buyer Watch Widgets Finalization - 2026-07-01 KST
+
+- Supersedes the earlier 2026-07-01 pending note that only `ACA3` had a page-local widget.
+- Live change:
+  - Inserted/saved page-local Imweb `code` widgets for all `25` canonical online video watch pages from `artifacts/imweb-watch-page-widgets-2026-07-01/manifest.json`.
+  - Published the Imweb design after the bulk widget save.
+  - Corrected the two watch pages that still had an empty group list:
+    - `ACH7` -> `ARCHIVE METHOD ACH7 40D` / `g2026062956772b09976a1`
+    - `ACA5` -> `ARCHIVE METHOD ACA5 40D` / `g202606290bc066cba328e`
+- Final saved-data verification:
+  - `25/25` page-local widgets saved successfully.
+  - `25/25` saved widget HTML contains the matching `data-archive-pilates-watch-code="{CODE}"` marker.
+  - `25/25` saved widget HTML contains the matching full-video YouTube ID.
+  - `25/25` hidden watch-page menu permissions now match `permission_type=group`, `is_hide=Y`, and the expected `ARCHIVE METHOD {CODE} 40D` group.
+- Public/non-member verification:
+  - Fresh logged-out Playwright check covered all `25` watch URLs.
+  - Result: `25/25` showed the Imweb login flow.
+  - Public exposed full-video YouTube IDs: `0`.
+  - Public exposed YouTube embed iframes: `0`.
+  - Public exposed page-local watch markers: `0`.
+  - Public global buyer-watch renderer markers: `0`.
+- Global script state:
+  - Re-read live Imweb `script list` after the page-local widget finalization.
+  - `header` and `body` scripts contain no `data-ap-buyer-watch*`, `data-archive-pilates-buyer-watch`, `data-ap-buyer-watch-all`, or `data-ap-buyer-watch-emergency` renderer.
+  - The body script still preserves the home copy/address patch and Kakao button color fix.
+- Buyer-session note:
+  - The background Imweb admin session is not a front-site buyer session; it still lands on the login flow for watch URLs.
+  - Real `구매회원` browser rendering should be checked later with an actual member account that has a matching purchased `ARCHIVE METHOD {CODE} 40D` group.
+  - Do not grant or alter real customer groups just for testing unless an explicit test account flow is approved.
+- Operating rule for future uploads:
+  - Product creation/update, product detail CTA, images, price/status, category, SEO, and `subscribe_group_code + subscribe_period=40` are API work.
+  - Hidden watch-page page-local code widget insertion and page permission checks remain Imweb design-mode/browser work.
+  - Never restore global body/footer JavaScript as the paid full-video renderer.
+- Evidence:
+  - `artifacts/imweb-watch-page-browser-2026-07-01/bulk-watch-widget-save-publish-result.json`
+  - `artifacts/imweb-watch-page-browser-2026-07-01/bulk-publish-confirm-result-v2.json`
+  - `artifacts/imweb-watch-page-browser-2026-07-01/guest-watch-page-verification-summary.json`
+  - `artifacts/imweb-watch-page-browser-2026-07-01/final-watch-widget-summary.json`
+  - `artifacts/imweb-watch-page-browser-2026-07-01/script-list-current-after-page-widgets.json`
+
+## Test Member Access Matrix - 2026-07-01 KST
+
+- Created and used dedicated Imweb front-site test members; generated passwords are stored in local macOS Keychain and are not written to docs.
+- Buyer test member:
+  - Email: `codex.imweb.test.202607011138@archivepilates.com`
+  - Confirmed Imweb member exists.
+  - Assigned group: `ARCHIVE METHOD AR1 40D` / `g2026062802f1f8a665b83`
+- Non-buyer test member:
+  - Email: `codex.imweb.nobuyer.202607011145@archivepilates.com`
+  - Confirmed Imweb member exists.
+  - Group list: empty.
+- AR1 duplicate widget correction:
+  - Buyer-browser verification initially found duplicate AR1 watch blocks: `2` AR1 watch markers and `2` YouTube embeds.
+  - The duplicate old AR1 code widget `w202607012c387df895096` was saved as an empty code widget.
+  - Final buyer-browser verification after the correction: `1` AR1 watch marker and `1` YouTube embed.
+- Final live access matrix:
+  - Logged-out visitor -> `/archive-method-watch-ar1` redirects to login; YouTube iframes `0`.
+  - Logged-in non-buyer -> `/archive-method-watch-ar1` shows Imweb permission-denied surface; YouTube iframes `0`.
+  - Logged-in AR1 buyer test member -> `/archive-method-watch-ar1` shows the AR1 buyer page; YouTube iframes `1`.
+  - Same AR1 buyer test member -> `/archive-method-watch-ab4` shows Imweb permission-denied surface; YouTube iframes `0`.
+- Result:
+  - The native Imweb model is working for the tested path: `회원그룹 이용권` group assignment controls the matching hidden watch page, and other video pages remain blocked.
+  - Keep future paid-video validation in this same order: logged-out, logged-in no-group, logged-in matching-group, logged-in wrong-video.
+- Evidence:
+  - `artifacts/imweb-test-account-access-2026-07-01/final-access-matrix-after-ar1-duplicate-fix.json`
+  - `artifacts/imweb-test-account-access-2026-07-01/50-ar1-after-empty-old-widget-live-recheck.json`
+  - `artifacts/imweb-test-account-access-2026-07-01/nonbuyer-test-summary.json`
+  - `artifacts/imweb-test-account-access-2026-07-01/precise-login-summary.json`
+
+## All Product Read-Only Access Audit - 2026-07-01 KST
+
+- Scope:
+  - Covered all `25` canonical ARCHIVE METHOD online video watch pages.
+  - Test surfaces:
+    - Logged-out visitor.
+    - Logged-in non-buyer test member.
+    - Logged-in buyer test member with the current `AR1` group only.
+    - Product API subscribe/pass settings.
+    - Imweb member-group master data.
+    - Saved watch-page widget and page-permission summary from the page-local widget finalization pass.
+- Live Playwright result:
+  - Logged-out visitor: `25/25` blocked; full-video markers/IDs exposed `0`.
+  - Logged-in non-buyer: `25/25` blocked; full-video markers/IDs exposed `0`.
+  - Current AR1 buyer test member: `25/25` passed; AR1 opened, the other `24` pages stayed blocked.
+  - Failure count: `0`.
+- Product/API result:
+  - `25/25` video products are `prodType=subscribe`.
+  - `25/25` `prodDigitalData.type=subscribe`.
+  - `25/25` `subscribeData.group_code` matches the expected `ARCHIVE METHOD {CODE} 40D` group.
+  - `25/25` `subscribeData.period=40`.
+  - `25/25` product detail content contains the matching buyer watch-page CTA URL.
+- Group/page structure result:
+  - `25/25` expected member groups exist and match the configured group codes.
+  - `25/25` saved watch widgets contain the matching `data-archive-pilates-watch-code="{CODE}"` marker and full-video YouTube ID.
+  - `25/25` hidden watch-page permissions were already verified as group-restricted in the finalization artifact.
+- Full buyer-write matrix completed:
+  - CLI local write safety quota could not be safely disabled; deleted/alternate quota state is detected as tampering by the Imweb CLI.
+  - Added a direct official OpenAPI write path to the matrix script with `--direct-openapi-writes`.
+  - The direct path updates only the test buyer's member-group list through `PUT /member-info/members/{uid}/groups`; it does not print or persist API tokens.
+  - Fixed the remaining ACA3 duplicate watch block by emptying old code widget `w202607015909be28eafde`, keeping `w202607011bae1a4edd1d7`, and publishing the Imweb design through the gateway design publish API.
+  - Full matrix result after publish: logged-out `25/25` blocked, logged-in non-buyer `25/25` blocked, buyer assignment `25/25` correct, buyer isolation `625/625` correct, failure count `0`.
+  - The buyer test member was confirmed restored to its original `AR1` group after the full matrix.
+- Evidence:
+  - `artifacts/imweb-full-video-access-matrix-2026-07-01/full-access-matrix.json`
+  - `artifacts/imweb-full-video-access-matrix-2026-07-01/aca3-captured-token-gateway-publish-result.json`
+  - `artifacts/imweb-full-video-access-matrix-2026-07-01/quick-aca3-after-publish.json`
+  - `artifacts/imweb-full-video-access-matrix-2026-07-01/product-subscribe-settings.json`
+  - `artifacts/imweb-watch-page-browser-2026-07-01/final-watch-widget-summary.json`
+  - `scripts/imweb_full_video_access_matrix.mjs`
+
+## No-Text Product Thumbnail Refresh - 2026-07-03 KST
+
+- Scope:
+  - Replaced representative images for all `25` canonical online-class products, product `27-51`.
+  - Source images are direct video-frame captures from the matching full-video IDs, with YouTube captions/player overlays removed.
+  - Final thumbnail files are stored under `output/imweb-thumbnail-refresh-2026-07-03/final-jpg-no-text-tightcrop/`.
+- Change:
+  - Updated Imweb product images through the legacy v2 product API with `images: [data:image/jpeg;base64,...]`.
+  - The current OpenAPI `product update info` path did not persist `productImages`, and `product images upload` rejected JPG uploads with error `30046`; keep the v2 data-URL path as the working image-update method for now.
+- Verification:
+  - API patch result: `25/25` returned `SUCCESS`.
+  - Imweb readback: `25/25` product image URLs changed from the previous CDN URLs.
+  - CDN readback: `25/25` new images downloaded successfully.
+  - Live online-class category DOM: `25` products and `25` unique optimized image URLs detected on `https://archivepilates.imweb.me/17?mode=shop`.
+  - Mobile and desktop Playwright checks loaded all images successfully.
+- Evidence:
+  - `artifacts/imweb-thumbnail-refresh-2026-07-03/imweb-no-text-thumbnail-v2-patch-results.json`
+  - `artifacts/imweb-thumbnail-refresh-2026-07-03/imweb-no-text-thumbnail-readback-after.json`
+  - `artifacts/imweb-thumbnail-refresh-2026-07-03/imweb-no-text-thumbnail-cdn-readback-summary.json`
+  - `output/imweb-thumbnail-refresh-2026-07-03/contact-sheet-after-imweb-cdn-no-text.jpg`
+  - `output/playwright/imweb-online-category-no-text-thumbnails-mobile-loaded.png`
+  - `output/playwright/imweb-online-category-no-text-thumbnails-desktop-loaded.png`
+
+## Purchase Flow, Access, And ACH7/ACH8 Watch Map Fix - 2026-07-04 KST
+
+- Scope:
+  - Re-checked the live Imweb purchase flow from home -> online/offline category -> product detail.
+  - Re-checked all `25` online video products and the offline lesson product.
+  - Re-checked buyer-only watch-page access by logged-out, logged-in non-buyer, and buyer states.
+- Change:
+  - Corrected local automation mapping for product `28` from old `AC7` to `ACH7`.
+  - Corrected local automation mapping for product `50` from old `ACH7` to `ACH8`.
+  - Updated `scripts/imweb_buyer_video_access.py`, `scripts/imweb_full_video_access_matrix.mjs`, and the local watch-widget manifest so future automation uses the live ACH7/ACH8 codes.
+  - Applied a live Imweb body script patch `data-archive-pilates-watch-map-fix="2026-07-04"` that corrects ACH7/ACH8 buyer-watch page title/code/group/product-link text without putting full YouTube video IDs into global public HTML.
+- Verification:
+  - Home flow: mobile and desktop both passed.
+  - Product detail: online product body, watch CTA, 40-day period, refund copy, and offline lesson service-date/instructor/refund copy passed.
+  - Group master data: `25/25` expected Imweb member groups matched.
+  - Public watch URLs for ACH7/ACH8 redirect to login and do not expose the full video IDs.
+  - Buyer own-page test: `25/25` online video groups opened their matching watch page.
+  - Access matrix: logged-out visitor `25/25` blocked, logged-in non-buyer `25/25` blocked, current AR1 buyer check `25/25` passed, failure count `0`.
+  - Test buyer member was restored to its original AR1 group after write-based checks.
+- Notes:
+  - `simpleContent` still lacks the video code on `21` product cards. The current Imweb API returns success but does not persist that field, so this remains a browser/admin or Imweb API-support follow-up. Product names, product detail body, and SEO stored fields already contain the codes.
+  - Recent order dry-run returned one AR1 order as `needs_member_signup`; no live grant was applied.
+- Evidence:
+  - `docs/reports/2026-07-04-imweb-purchase-flow-access-seo.html`
+  - `artifacts/imweb-purchase-flow-2026-07-04/home-to-checkout-flow-audit.json`
+  - `artifacts/imweb-purchase-flow-2026-07-04/product-detail-consistency-audit.json`
+  - `artifacts/imweb-purchase-flow-2026-07-04/buyer-video-group-verify.json`
+  - `artifacts/imweb-purchase-flow-2026-07-04/buyer-own-page-access-final.json`
+  - `artifacts/imweb-full-video-access-matrix-2026-07-04-skip/full-access-matrix.json`

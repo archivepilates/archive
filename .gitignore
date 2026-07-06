@@ -5,3 +5,8 @@ firebase/kangsain-functions/functions/.env
 firebase/kangsain-functions/.firebase/
 firebase/kangsain-functions/firebase-debug.log
 firebase/kangsain-functions/firebase-debug.*.log
+
+# Local/generated Codex and browser evidence.
+.playwright-cli/
+output/
+artifacts/

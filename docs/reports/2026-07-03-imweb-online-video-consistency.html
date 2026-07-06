@@ -1,0 +1,35 @@
+<!doctype html>
+<html lang="ko"><head><meta charset="utf-8"><meta name="viewport" content="width=device-width,initial-scale=1"><title>ARCHIVE PILATES 온라인 영상 정합성 정리</title><style>
+*{box-sizing:border-box}body{margin:0;background:#fffdfa;color:#191715;font:15px/1.65 -apple-system,BlinkMacSystemFont,"Segoe UI",sans-serif;padding:28px}main{max-width:1120px;margin:0 auto}h1{font-size:30px;line-height:1.2;margin:0 0 8px}h2{font-size:20px;margin:0 0 12px}.eyebrow{font-size:12px;letter-spacing:.12em;font-weight:800;color:#8c3425;margin:0 0 10px}.muted{color:#6f665f}.grid{display:grid;grid-template-columns:repeat(auto-fit,minmax(180px,1fr));gap:12px}.card,section{background:#fff;border:1px solid #e6ddd4;padding:18px;margin:14px 0}.card strong{display:block;font-size:28px;line-height:1;margin-bottom:8px}table{width:100%;border-collapse:collapse;background:#fff;margin-top:10px;font-size:13px}th,td{border-bottom:1px solid #eee3da;text-align:left;vertical-align:top;padding:9px 10px}th{background:#fbf7f1;color:#6f665f;font-size:12px}code{font-family:ui-monospace,SFMono-Regular,Menlo,monospace;font-size:12px}.ok{color:#155d2b;font-weight:800}.warn{color:#9a4b00;font-weight:800}.bad{color:#9b1c1c;font-weight:800}@media(max-width:760px){body{padding:16px}table{display:block;overflow-x:auto;white-space:nowrap}.grid{grid-template-columns:1fr}}
+</style></head><body><main>
+<p class="eyebrow">ARCHIVE PILATES · IMWEB CONSISTENCY</p><h1>온라인 영상 상품 정합성 정리</h1><p class="muted">생성 시각: 2026. 7. 3. 오전 1:32:14 · 대상: 아임웹 온라인 상품 25개, 유튜브 상품/시청 영상 44개</p>
+<section><h2>결론</h2><div class="grid"><div class="card"><strong>0</strong>상품 핵심 불일치</div><div class="card"><strong>44/44</strong>유튜브 일부공개</div><div class="card"><strong>0</strong>임베드 불가 영상</div><div class="card"><strong>21</strong>간단설명 코드 누락</div></div><p>상품명, SEO, 구매 후 시청페이지 경로, ACH7/ACH8 코드, 유튜브 공개상태는 현재 기준으로 맞습니다. 간단설명 코드 누락은 아임웹 API가 실제 반영하지 않아 브라우저 관리자 UI 작업 병목으로 남겼습니다.</p></section>
+<section><h2>적용/정리한 내용</h2><ul><li><code>scripts/imweb_full_video_access_matrix.mjs</code>의 상품 28 코드를 <code>AC7</code>에서 <code>ACH7</code>로 정리했습니다.</li><li>상품 50 호흡편 코드를 <code>ACH7</code>에서 <code>ACH8</code>로 정리했습니다.</li><li>유튜브 44개 영상은 최종 조회 기준 모두 <code>unlisted</code>, 임베드 가능 상태입니다.</li><li>로그아웃 상태 기준 예전 <code>/archive-method-watch-ac7</code>은 404, 현재 <code>/archive-method-watch-ach7</code>/<code>/archive-method-watch-ach8</code>은 로그인으로 이동합니다.</li></ul></section>
+<section><h2>병목</h2><p class="warn">간단설명 21건은 아임웹 API가 반영하지 않았습니다.</p><p>시도 결과: <code>product update info</code>는 200 응답이지만 값 미변경, <code>additional-info</code>는 400, <code>etc-info</code>는 <code>data:false</code>로 미변경입니다. 상품명/SEO/본문에는 코드가 들어가 있으므로 구매 흐름에는 영향이 작고, 목록 카드의 보조 문구 정돈만 남은 상태입니다.</p></section>
+<section><h2>상품 매트릭스</h2><table><thead><tr><th>상품번호</th><th>코드</th><th>상품명</th><th>핵심</th><th>간단설명</th><th>시청 경로</th></tr></thead><tbody><tr><td>28</td><td>ACH7</td><td>[온라인] ARCHIVE METHOD 체어 흉추가동성 (ACH7) 40D 이용권</td><td>정상</td><td>정상</td><td>/archive-method-watch-ach7</td></tr>
+<tr><td>29</td><td>ACA4</td><td>[온라인] ARCHIVE METHOD 캐딜락 흉추가동성 (ACA4) 40D 이용권</td><td>정상</td><td>간단설명 코드 없음</td><td>/archive-method-watch-aca4</td></tr>
+<tr><td>30</td><td>AB7</td><td>[온라인] ARCHIVE METHOD 바렐 요추안정화 (AB7) 40D 이용권</td><td>정상</td><td>간단설명 코드 없음</td><td>/archive-method-watch-ab7</td></tr>
+<tr><td>31</td><td>AR3</td><td>[온라인] ARCHIVE METHOD 리포머 요추안정화 (AR3) 40D 이용권</td><td>정상</td><td>간단설명 코드 없음</td><td>/archive-method-watch-ar3</td></tr>
+<tr><td>32</td><td>AB6</td><td>[온라인] ARCHIVE METHOD 바렐 직장인 증후군 (AB6) 40D 이용권</td><td>정상</td><td>간단설명 코드 없음</td><td>/archive-method-watch-ab6</td></tr>
+<tr><td>33</td><td>ACH6</td><td>[온라인] ARCHIVE METHOD 체어 직장인 증후군 (ACH6) 40D 이용권</td><td>정상</td><td>간단설명 코드 없음</td><td>/archive-method-watch-ach6</td></tr>
+<tr><td>50</td><td>ACH8</td><td>[온라인] ARCHIVE METHOD 체어 호흡 (ACH8) 40D 이용권</td><td>정상</td><td>정상</td><td>/archive-method-watch-ach8</td></tr>
+<tr><td>34</td><td>AR2-1</td><td>[온라인] ARCHIVE METHOD 리포머 챌린지 동작 빌드업 시퀀스 (AR2-1) 40D 이용권</td><td>정상</td><td>간단설명 코드 없음</td><td>/archive-method-watch-ar2-1</td></tr>
+<tr><td>35</td><td>ACH5</td><td>[온라인] ARCHIVE METHOD 체어 고강도필라테스 (ACH5) 40D 이용권</td><td>정상</td><td>간단설명 코드 없음</td><td>/archive-method-watch-ach5</td></tr>
+<tr><td>36</td><td>ACA2</td><td>[온라인] ARCHIVE METHOD 캐딜락 경추보호 코어강화 (ACA2) 40D 이용권</td><td>정상</td><td>간단설명 코드 없음</td><td>/archive-method-watch-aca2</td></tr>
+<tr><td>37</td><td>ACA3</td><td>[온라인] ARCHIVE METHOD 캐딜락 고강도필라테스 (ACA3) 40D 이용권</td><td>정상</td><td>간단설명 코드 없음</td><td>/archive-method-watch-aca3</td></tr>
+<tr><td>51</td><td>ACA5</td><td>[온라인] ARCHIVE METHOD 캐딜락 호흡 (ACA5) 40D 이용권</td><td>정상</td><td>정상</td><td>/archive-method-watch-aca5</td></tr>
+<tr><td>38</td><td>ACA1</td><td>[온라인] ARCHIVE METHOD 캐딜락 암스프링 단 하나로 보상패턴 바로잡기 (ACA1) 40D 이용권</td><td>정상</td><td>간단설명 코드 없음</td><td>/archive-method-watch-aca1</td></tr>
+<tr><td>39</td><td>AB3</td><td>[온라인] ARCHIVE METHOD 바렐 척추 유연성 &amp; 어깨 안정화 (AB3) 40D 이용권</td><td>정상</td><td>간단설명 코드 없음</td><td>/archive-method-watch-ab3</td></tr>
+<tr><td>40</td><td>ACH2</td><td>[온라인] ARCHIVE METHOD 체어 림프 순환 &amp; 척추 컨트롤 (ACH2) 40D 이용권</td><td>정상</td><td>간단설명 코드 없음</td><td>/archive-method-watch-ach2</td></tr>
+<tr><td>41</td><td>AB2</td><td>[온라인] ARCHIVE METHOD 바렐 척추 신장 &amp; 복부 컨트롤 (AB2) 40D 이용권</td><td>정상</td><td>간단설명 코드 없음</td><td>/archive-method-watch-ab2</td></tr>
+<tr><td>42</td><td>ACH1</td><td>[온라인] ARCHIVE METHOD 체어 골반 &amp; 체간 안정화 + 척추 유연성 (ACH1) 40D 이용권</td><td>정상</td><td>간단설명 코드 없음</td><td>/archive-method-watch-ach1</td></tr>
+<tr><td>43</td><td>ACH4</td><td>[온라인] ARCHIVE METHOD 체어 골반 안정화 &amp; 비대칭 교정 (ACH4) 40D 이용권</td><td>정상</td><td>간단설명 코드 없음</td><td>/archive-method-watch-ach4</td></tr>
+<tr><td>44</td><td>ACH3</td><td>[온라인] ARCHIVE METHOD 체어 정렬 인지 &amp; 체간 안정화 (ACH3) 40D 이용권</td><td>정상</td><td>간단설명 코드 없음</td><td>/archive-method-watch-ach3</td></tr>
+<tr><td>45</td><td>AB5</td><td>[온라인] ARCHIVE METHOD 바렐 크로스패턴 (AB5) 40D 이용권</td><td>정상</td><td>간단설명 코드 없음</td><td>/archive-method-watch-ab5</td></tr>
+<tr><td>46</td><td>AB1</td><td>[온라인] ARCHIVE METHOD 바렐 척추 신장 &amp; 흉곽 안정화 (AB1) 40D 이용권</td><td>정상</td><td>간단설명 코드 없음</td><td>/archive-method-watch-ab1</td></tr>
+<tr><td>27</td><td>AR1</td><td>[온라인] ARCHIVE METHOD 리포머 척추 정렬 &amp; 코어 컨트롤 (AR1) 40D 이용권</td><td>정상</td><td>정상</td><td>/archive-method-watch-ar1</td></tr>
+<tr><td>47</td><td>AR4</td><td>[온라인] ARCHIVE METHOD 리포머 순환 (AR4) 40D 이용권</td><td>정상</td><td>간단설명 코드 없음</td><td>/archive-method-watch-ar4</td></tr>
+<tr><td>48</td><td>AB4</td><td>[온라인] ARCHIVE METHOD 바렐 전신 근막 FLOW (AB4) 40D 이용권</td><td>정상</td><td>간단설명 코드 없음</td><td>/archive-method-watch-ab4</td></tr>
+<tr><td>49</td><td>AB8</td><td>[온라인] ARCHIVE METHOD 바렐 순환 (AB8) 40D 이용권</td><td>정상</td><td>간단설명 코드 없음</td><td>/archive-method-watch-ab8</td></tr></tbody></table></section>
+<section><h2>근거 파일</h2><p><code>artifacts/imweb-consistency-2026-07-03/live-consistency-audit.json</code><br><code>artifacts/imweb-consistency-2026-07-03/youtube-live-status-after.json</code><br><code>artifacts/imweb-consistency-2026-07-03/imweb-simple-content-code-cleanup.json</code></p></section>
+</main></body></html>
