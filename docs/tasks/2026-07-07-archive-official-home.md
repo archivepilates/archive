@@ -92,3 +92,8 @@ Date: 2026-07-07
   - `https://archivepilates.com/` returns HTTP 200 and serves the official ARCHIVE PILATES homepage.
   - `https://www.archivepilates.com/` returns HTTP 301 to `https://archivepilates.com/`.
   - `https://shop.archivepilates.com/` returns HTTP 302 to `https://archivepilates.imweb.me/16`.
+
+## 2026-07-07 Header Follow-up
+
+- Live mobile check confirmed the header itself was not clipping the logo container, but the navigation logo was replaced with a taller padded asset for safer rendering on mobile browsers.
+- `팀아카이브` top navigation and the homepage Team Archive CTA now link directly to `https://archive-team.notion.site/`.
