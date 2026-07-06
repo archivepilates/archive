@@ -35,3 +35,26 @@ Date: 2026-07-07
 - Verify default URL `https://archive-pilates-home.web.app/`.
 - Create/attach Firebase custom domains for `archivepilates.com` and `www.archivepilates.com`.
 - After Firebase provides DNS requirements, update Cloudflare root/www DNS and keep `shop.archivepilates.com` as redirect-only.
+
+## 2026-07-07 Result
+
+- Firebase Hosting site `archive-pilates-home` was created and deployed.
+- Default Firebase URL is live: `https://archive-pilates-home.web.app/`.
+- Cloudflare DNS was updated:
+  - `archivepilates.com` A -> `199.36.158.100`, DNS-only.
+  - `www.archivepilates.com` CNAME -> `archive-pilates-home.web.app`, DNS-only.
+  - Firebase ownership TXT and ACME TXT records were added.
+  - Existing Google Workspace, Google Search Console, and OpenAI TXT records were preserved.
+- `shop.archivepilates.com` was configured as a Cloudflare proxied redirect to `https://archivepilates.imweb.me/16`.
+- Firebase custom domain state reached `HOST_ACTIVE` and `OWNERSHIP_ACTIVE` for root and `www`.
+- As of the last check, Firebase SSL issuance is still `CERT_VALIDATING`.
+
+## Verification
+
+- Local responsive QA passed at 320, 390, 768, and 1280px widths.
+- Live default URL returned HTTP 200.
+- `shop.archivepilates.com` returned HTTP 302 to the Imweb Shop page.
+- Public DNS readback:
+  - `archivepilates.com` resolves to `199.36.158.100`.
+  - `www.archivepilates.com` resolves to `archive-pilates-home.web.app`.
+- Root domain content is already served by Firebase when bypassing certificate validation, but normal HTTPS must wait for Firebase certificate activation.
