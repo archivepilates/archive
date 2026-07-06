@@ -1,0 +1,865 @@
+<!doctype html>
+<html lang="ko">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover">
+  <title>아카이브필라테스 | 부산 명지 강사레슨 · 온라인 클래스</title>
+  <meta name="description" content="부산 명지 필라테스 강사레슨과 온라인 ARCHIVE METHOD 클래스. 움직임 관찰, 큐잉, 수업 기록을 배웁니다.">
+  <meta name="robots" content="index,follow,max-image-preview:large">
+  <link rel="canonical" href="https://archivepilates.com/">
+  <meta property="og:type" content="website">
+  <meta property="og:locale" content="ko_KR">
+  <meta property="og:site_name" content="ARCHIVE PILATES">
+  <meta property="og:title" content="아카이브필라테스">
+  <meta property="og:description" content="부산 명지 5:1 오프라인 강사레슨과 온라인 ARCHIVE METHOD 클래스.">
+  <meta property="og:url" content="https://archivepilates.com/">
+  <meta property="og:image" content="https://archivepilates.com/assets/hero.jpg">
+  <meta name="twitter:card" content="summary_large_image">
+  <meta name="theme-color" content="#faf8f5">
+  <link rel="preload" as="image" href="/assets/hero.webp" imagesrcset="/assets/hero.webp" fetchpriority="high">
+  <script>
+    document.documentElement.classList.add("js-reveal-ready");
+  </script>
+  <style>
+    :root {
+      color-scheme: light;
+      --bg: #faf8f5;
+      --paper: #fffdfa;
+      --ink: #171412;
+      --muted: #675f58;
+      --soft: #efe8df;
+      --line: #ded6cc;
+      --accent: #f06b1a;
+      --accent-dark: #9a3324;
+      --black: #11100f;
+      --shadow: 0 18px 48px rgba(33, 25, 18, 0.12);
+      --max: 1180px;
+      --header-h: 74px;
+    }
+
+    * { box-sizing: border-box; }
+
+    html {
+      background: var(--bg);
+      scroll-behavior: smooth;
+    }
+
+    body {
+      margin: 0;
+      background: var(--bg);
+      color: var(--ink);
+      font-family: -apple-system, BlinkMacSystemFont, "Apple SD Gothic Neo", "Noto Sans KR", "Segoe UI", sans-serif;
+      line-height: 1.65;
+      letter-spacing: 0;
+      word-break: keep-all;
+      overflow-x: clip;
+    }
+
+    img, picture, video { max-width: 100%; display: block; }
+
+    a { color: inherit; }
+
+    .skip-link {
+      position: fixed;
+      left: 12px;
+      top: 12px;
+      z-index: 30;
+      transform: translateY(-140%);
+      background: var(--ink);
+      color: #fff;
+      padding: 10px 14px;
+      text-decoration: none;
+      font-weight: 800;
+    }
+
+    .skip-link:focus { transform: translateY(0); }
+
+    .site-header {
+      position: sticky;
+      top: 0;
+      z-index: 20;
+      min-height: calc(var(--header-h) + env(safe-area-inset-top));
+      padding: env(safe-area-inset-top) 18px 0;
+      background: rgba(250, 248, 245, 0.92);
+      border-bottom: 1px solid rgba(222, 214, 204, 0.88);
+      backdrop-filter: blur(14px);
+    }
+
+    .nav {
+      max-width: var(--max);
+      min-height: var(--header-h);
+      margin: 0 auto;
+      display: flex;
+      align-items: center;
+      justify-content: space-between;
+      gap: 18px;
+    }
+
+    .brand {
+      display: inline-flex;
+      align-items: center;
+      gap: 11px;
+      text-decoration: none;
+      min-width: 0;
+      font-weight: 900;
+    }
+
+    .brand-mark {
+      width: 28px;
+      height: 28px;
+      display: grid;
+      place-items: center;
+      background: var(--accent);
+      color: #fff;
+      font-size: 0.75rem;
+      line-height: 1;
+      font-weight: 900;
+    }
+
+    .brand-name {
+      display: block;
+      font-size: 1.05rem;
+      line-height: 1;
+      white-space: nowrap;
+    }
+
+    .nav-links {
+      display: flex;
+      align-items: center;
+      justify-content: flex-end;
+      gap: 2px;
+      min-width: 0;
+    }
+
+    .nav-links a {
+      min-height: 44px;
+      display: inline-flex;
+      align-items: center;
+      padding: 0 13px;
+      text-decoration: none;
+      font-size: 0.94rem;
+      font-weight: 750;
+      color: #2a2521;
+      white-space: nowrap;
+    }
+
+    .nav-links a:hover,
+    .nav-links a:focus-visible {
+      color: var(--accent-dark);
+      outline: none;
+    }
+
+    .nav-links .shop-link {
+      background: var(--black);
+      color: #fff;
+      padding: 0 18px;
+      margin-left: 4px;
+    }
+
+    .hero {
+      position: relative;
+      min-height: calc(100svh - var(--header-h));
+      display: grid;
+      align-items: center;
+      isolation: isolate;
+      overflow: hidden;
+      background: #181512;
+    }
+
+    .hero::after {
+      content: "";
+      position: absolute;
+      inset: 0;
+      z-index: -1;
+      background:
+        linear-gradient(90deg, rgba(11, 10, 9, 0.78), rgba(11, 10, 9, 0.36) 54%, rgba(11, 10, 9, 0.2)),
+        linear-gradient(0deg, rgba(11, 10, 9, 0.42), rgba(11, 10, 9, 0.05) 38%, rgba(11, 10, 9, 0.18));
+    }
+
+    .hero picture,
+    .hero img {
+      position: absolute;
+      inset: 0;
+      z-index: -2;
+      width: 100%;
+      height: 100%;
+    }
+
+    .hero img { object-fit: cover; object-position: center; }
+
+    .hero-inner {
+      width: min(100%, var(--max));
+      margin: 0 auto;
+      padding: 82px 22px 76px;
+      color: #fff;
+    }
+
+    .eyebrow {
+      margin: 0 0 18px;
+      color: var(--accent);
+      font-size: 0.78rem;
+      font-weight: 900;
+      letter-spacing: 0;
+      text-transform: uppercase;
+    }
+
+    h1, h2, h3, p { letter-spacing: 0; }
+
+    h1 {
+      max-width: 780px;
+      margin: 0;
+      font-size: 4.25rem;
+      line-height: 0.98;
+      font-weight: 900;
+    }
+
+    .hero-lead {
+      max-width: 620px;
+      margin: 26px 0 0;
+      font-size: 1.25rem;
+      line-height: 1.75;
+      color: rgba(255, 255, 255, 0.88);
+    }
+
+    .actions {
+      display: flex;
+      flex-wrap: wrap;
+      gap: 12px;
+      margin-top: 34px;
+    }
+
+    .button {
+      min-height: 50px;
+      display: inline-flex;
+      align-items: center;
+      justify-content: center;
+      gap: 10px;
+      padding: 0 22px;
+      border: 1px solid currentColor;
+      text-decoration: none;
+      font-weight: 900;
+      color: var(--ink);
+      background: #fff;
+    }
+
+    .button.primary {
+      border-color: var(--accent);
+      background: var(--accent);
+      color: #120f0d;
+    }
+
+    .button.dark {
+      border-color: var(--black);
+      background: var(--black);
+      color: #fff;
+    }
+
+    .button.ghost {
+      background: rgba(255, 255, 255, 0.06);
+      color: #fff;
+      border-color: rgba(255, 255, 255, 0.72);
+    }
+
+    section {
+      padding: 94px 22px;
+    }
+
+    .wrap {
+      max-width: var(--max);
+      margin: 0 auto;
+    }
+
+    .section-head {
+      display: grid;
+      grid-template-columns: minmax(0, 0.75fr) minmax(0, 1fr);
+      gap: 36px;
+      align-items: end;
+      margin-bottom: 38px;
+    }
+
+    .section-kicker {
+      margin: 0 0 10px;
+      color: var(--accent-dark);
+      font-size: 0.78rem;
+      font-weight: 900;
+      text-transform: uppercase;
+    }
+
+    h2 {
+      margin: 0;
+      font-size: 2.65rem;
+      line-height: 1.16;
+      font-weight: 880;
+    }
+
+    .section-head p {
+      margin: 0;
+      color: var(--muted);
+      font-size: 1.05rem;
+    }
+
+    .philosophy {
+      background: var(--paper);
+    }
+
+    .values {
+      display: grid;
+      grid-template-columns: repeat(5, minmax(0, 1fr));
+      border-top: 1px solid var(--line);
+      border-left: 1px solid var(--line);
+      background: var(--paper);
+    }
+
+    .value {
+      min-width: 0;
+      padding: 24px 20px 26px;
+      border-right: 1px solid var(--line);
+      border-bottom: 1px solid var(--line);
+    }
+
+    .value strong {
+      display: block;
+      margin-bottom: 14px;
+      font-size: 1.25rem;
+      line-height: 1.25;
+    }
+
+    .value p {
+      margin: 0;
+      color: var(--muted);
+      font-size: 0.98rem;
+    }
+
+    .image-band {
+      padding: 0;
+      background: var(--black);
+      color: #fff;
+    }
+
+    .image-band-inner {
+      display: grid;
+      grid-template-columns: minmax(0, 1.1fr) minmax(280px, 0.9fr);
+      min-height: 520px;
+    }
+
+    .image-band picture,
+    .image-band img {
+      width: 100%;
+      height: 100%;
+    }
+
+    .image-band img {
+      object-fit: cover;
+      object-position: center;
+    }
+
+    .band-copy {
+      display: grid;
+      align-content: center;
+      padding: 58px min(7vw, 84px);
+    }
+
+    .band-copy h2 {
+      font-size: 2.5rem;
+      color: #fff;
+    }
+
+    .band-copy p {
+      max-width: 520px;
+      margin: 22px 0 0;
+      color: rgba(255, 255, 255, 0.76);
+      font-size: 1.06rem;
+    }
+
+    .classes {
+      background: #f3eee7;
+    }
+
+    .class-grid {
+      display: grid;
+      grid-template-columns: repeat(2, minmax(0, 1fr));
+      gap: 18px;
+    }
+
+    .class-card {
+      min-width: 0;
+      display: grid;
+      grid-template-rows: auto 1fr;
+      background: var(--paper);
+      border: 1px solid var(--line);
+      text-decoration: none;
+      overflow: hidden;
+      box-shadow: 0 14px 38px rgba(33, 25, 18, 0.08);
+    }
+
+    .class-card picture {
+      aspect-ratio: 6 / 4.4;
+      overflow: hidden;
+      background: #ddd3c7;
+    }
+
+    .class-card img {
+      width: 100%;
+      height: 100%;
+      object-fit: cover;
+      object-position: center;
+      transition: transform 600ms ease;
+    }
+
+    .class-card:hover img,
+    .class-card:focus-visible img {
+      transform: scale(1.025);
+    }
+
+    .class-body {
+      padding: 28px 26px 30px;
+    }
+
+    .class-body .type {
+      margin: 0 0 10px;
+      color: var(--accent-dark);
+      font-size: 0.78rem;
+      font-weight: 900;
+      text-transform: uppercase;
+    }
+
+    .class-body h3 {
+      margin: 0;
+      font-size: 1.65rem;
+      line-height: 1.25;
+    }
+
+    .class-body p {
+      margin: 14px 0 0;
+      color: var(--muted);
+    }
+
+    .class-body .more {
+      display: inline-flex;
+      margin-top: 22px;
+      font-weight: 900;
+      color: var(--ink);
+    }
+
+    .studio {
+      background: var(--bg);
+    }
+
+    .studio-grid {
+      display: grid;
+      grid-template-columns: 1fr 1fr;
+      gap: 18px;
+      align-items: stretch;
+    }
+
+    .studio-copy {
+      min-width: 0;
+      display: grid;
+      align-content: center;
+      padding: 44px;
+      background: var(--paper);
+      border: 1px solid var(--line);
+    }
+
+    .studio-copy p {
+      margin: 18px 0 0;
+      color: var(--muted);
+      font-size: 1.05rem;
+    }
+
+    .studio-photo {
+      min-height: 480px;
+      background: #ddd3c7;
+      overflow: hidden;
+    }
+
+    .studio-photo picture,
+    .studio-photo img {
+      width: 100%;
+      height: 100%;
+    }
+
+    .studio-photo img {
+      object-fit: cover;
+      object-position: center;
+    }
+
+    .social {
+      background: var(--black);
+      color: #fff;
+    }
+
+    .social .section-head p { color: rgba(255, 255, 255, 0.7); }
+    .social h2 { color: #fff; }
+
+    .social-links {
+      display: grid;
+      grid-template-columns: repeat(3, minmax(0, 1fr));
+      gap: 12px;
+    }
+
+    .social-links a {
+      min-height: 148px;
+      display: grid;
+      align-content: space-between;
+      padding: 22px;
+      background: #1d1a18;
+      border: 1px solid rgba(255, 255, 255, 0.14);
+      color: #fff;
+      text-decoration: none;
+    }
+
+    .social-links strong {
+      font-size: 1.2rem;
+      line-height: 1.25;
+    }
+
+    .social-links span {
+      color: rgba(255, 255, 255, 0.68);
+      font-size: 0.92rem;
+    }
+
+    .site-footer {
+      padding: 48px 22px calc(52px + env(safe-area-inset-bottom));
+      background: #0f0e0d;
+      color: rgba(255, 255, 255, 0.72);
+      border-top: 1px solid rgba(255, 255, 255, 0.1);
+    }
+
+    .footer-inner {
+      max-width: var(--max);
+      margin: 0 auto;
+      display: grid;
+      grid-template-columns: 0.8fr 1.2fr;
+      gap: 24px;
+    }
+
+    .footer-brand {
+      color: #fff;
+      font-weight: 900;
+      font-size: 1.12rem;
+    }
+
+    .footer-info {
+      margin: 0;
+      display: grid;
+      gap: 6px;
+      font-size: 0.92rem;
+    }
+
+    .footer-info a { color: inherit; text-decoration-thickness: 1px; text-underline-offset: 3px; }
+
+    .reveal {
+      opacity: 1;
+      transform: none;
+    }
+
+    .js-reveal-ready .reveal {
+      opacity: 0;
+      transform: translateY(24px);
+      transition: opacity 640ms ease, transform 640ms ease;
+    }
+
+    .js-reveal-ready .reveal.is-visible {
+      opacity: 1;
+      transform: translateY(0);
+    }
+
+    @media (max-width: 920px) {
+      :root { --header-h: 66px; }
+      .site-header { padding-left: 14px; padding-right: 14px; }
+      .nav { align-items: stretch; flex-direction: column; gap: 0; padding: 10px 0 8px; }
+      .brand { justify-content: center; min-height: 38px; }
+      .nav-links {
+        width: 100%;
+        justify-content: flex-start;
+        overflow-x: auto;
+        scrollbar-width: none;
+        padding-top: 6px;
+      }
+      .nav-links::-webkit-scrollbar { display: none; }
+      .nav-links a { padding: 0 12px; font-size: 0.9rem; }
+      .nav-links .shop-link { margin-left: 0; }
+      .hero { min-height: 760px; }
+      .hero-inner { padding: 72px 22px 66px; }
+      h1 { font-size: 3.1rem; }
+      h2, .band-copy h2 { font-size: 2.08rem; }
+      .section-head { grid-template-columns: 1fr; gap: 14px; }
+      .values { grid-template-columns: repeat(2, minmax(0, 1fr)); }
+      .image-band-inner, .studio-grid { grid-template-columns: 1fr; }
+      .image-band picture { min-height: 360px; }
+      .band-copy { padding: 50px 24px 58px; }
+      .studio-photo { min-height: 380px; }
+      .social-links { grid-template-columns: 1fr; }
+      .footer-inner { grid-template-columns: 1fr; }
+    }
+
+    @media (max-width: 640px) {
+      section { padding: 72px 18px; }
+      .brand-mark { width: 25px; height: 25px; }
+      .brand-name { font-size: 0.96rem; }
+      .hero {
+        min-height: 710px;
+        align-items: end;
+      }
+      .hero::after {
+        background:
+          linear-gradient(0deg, rgba(11, 10, 9, 0.9), rgba(11, 10, 9, 0.58) 58%, rgba(11, 10, 9, 0.2)),
+          linear-gradient(90deg, rgba(11, 10, 9, 0.56), rgba(11, 10, 9, 0.12));
+      }
+      .hero img { object-position: 48% center; }
+      .hero-inner { padding: 52px 20px 54px; }
+      h1 { font-size: 2.62rem; line-height: 1.04; }
+      .hero-lead { font-size: 1.05rem; line-height: 1.72; }
+      .actions { display: grid; grid-template-columns: 1fr; }
+      .button { width: 100%; }
+      .values { grid-template-columns: 1fr; }
+      .class-grid { grid-template-columns: 1fr; }
+      .class-card:hover img,
+      .class-card:focus-visible img { transform: none; }
+      .class-body { padding: 24px 20px 26px; }
+      .studio-copy { padding: 30px 22px; }
+      .studio-photo { min-height: 340px; }
+    }
+
+    @media (prefers-reduced-motion: reduce) {
+      html { scroll-behavior: auto; }
+      *, *::before, *::after {
+        animation-duration: 0.001ms !important;
+        animation-iteration-count: 1 !important;
+        transition-duration: 0.001ms !important;
+      }
+      .reveal {
+        opacity: 1;
+        transform: none;
+      }
+    }
+  </style>
+  <script type="application/ld+json">
+    {
+      "@context": "https://schema.org",
+      "@type": "SportsActivityLocation",
+      "name": "ARCHIVE PILATES",
+      "alternateName": "아카이브필라테스",
+      "url": "https://archivepilates.com/",
+      "image": "https://archivepilates.com/assets/hero.jpg",
+      "telephone": "+82-10-2924-4425",
+      "address": {
+        "@type": "PostalAddress",
+        "addressCountry": "KR",
+        "addressRegion": "부산광역시",
+        "addressLocality": "강서구",
+        "streetAddress": "명지국제2로28번길 34, 7층 704호"
+      },
+      "sameAs": [
+        "https://www.youtube.com/@archivepilates",
+        "https://www.instagram.com/minjin.vibe/",
+        "http://pf.kakao.com/_AHdvn/chat"
+      ]
+    }
+  </script>
+</head>
+<body>
+  <a class="skip-link" href="#main">본문으로 이동</a>
+  <header class="site-header" aria-label="사이트 상단">
+    <nav class="nav">
+      <a class="brand" href="/" aria-label="ARCHIVE PILATES 홈">
+        <span class="brand-mark" aria-hidden="true">AP</span>
+        <span class="brand-name">ARCHIVE PILATES</span>
+      </a>
+      <div class="nav-links" aria-label="주요 메뉴">
+        <a href="#philosophy">철학</a>
+        <a href="#classes">클래스</a>
+        <a href="#studio">스튜디오</a>
+        <a href="https://www.youtube.com/@archivepilates">YouTube</a>
+        <a class="shop-link" href="/shop">Shop</a>
+      </div>
+    </nav>
+  </header>
+
+  <main id="main">
+    <section class="hero" aria-label="ARCHIVE PILATES 공식 홈페이지">
+      <picture>
+        <source srcset="/assets/hero.webp" type="image/webp">
+        <img src="/assets/hero.jpg" alt="부산 명지 ARCHIVE PILATES 스튜디오 수업 장면" width="2400" height="1600" fetchpriority="high">
+      </picture>
+      <div class="hero-inner reveal">
+        <p class="eyebrow">Movement archived, life refined</p>
+        <h1>ARCHIVE PILATES</h1>
+        <p class="hero-lead">강사의 수업을 기록하고, 레슨의 기준을 다시 세웁니다. 부산 명지에서 5:1 오프라인 강사레슨과 온라인 ARCHIVE METHOD 클래스를 운영합니다.</p>
+        <div class="actions" aria-label="클래스 바로가기">
+          <a class="button primary" href="/offline">오프라인 강사레슨 보기</a>
+          <a class="button ghost" href="/online">온라인 클래스 보기</a>
+        </div>
+      </div>
+    </section>
+
+    <section id="philosophy" class="philosophy">
+      <div class="wrap">
+        <div class="section-head reveal">
+          <div>
+            <p class="section-kicker">Studio Philosophy</p>
+            <h2>몸을 먼저 보고, 수업의 방향을 조정합니다.</h2>
+          </div>
+          <p>ARCHIVE PILATES는 정해진 시퀀스를 밀어붙이는 수업보다, 오늘의 몸을 읽고 필요한 움직임을 선택하는 수업을 지향합니다. 수업의 기록은 다음 수업의 기준이 됩니다.</p>
+        </div>
+        <div class="values">
+          <article class="value reveal">
+            <strong>관찰</strong>
+            <p>회원의 몸을 먼저 보고, 오늘 필요한 방향을 읽습니다.</p>
+          </article>
+          <article class="value reveal">
+            <strong>조정</strong>
+            <p>정해진 수업보다 회원의 상태에 맞는 선택을 우선합니다.</p>
+          </article>
+          <article class="value reveal">
+            <strong>FLOW</strong>
+            <p>동작, 설명, 호흡, 회복이 끊기지 않고 이어지도록 설계합니다.</p>
+          </article>
+          <article class="value reveal">
+            <strong>축적</strong>
+            <p>한 번의 수업으로 끝내지 않고 변화가 다음 수업으로 이어지게 합니다.</p>
+          </article>
+          <article class="value reveal">
+            <strong>책임감</strong>
+            <p>회원의 몸을 맡는 사람으로서 변화의 방향을 함께 책임집니다.</p>
+          </article>
+        </div>
+      </div>
+    </section>
+
+    <section class="image-band" aria-label="수업 기록">
+      <div class="image-band-inner">
+        <picture>
+          <source srcset="/assets/field-record.webp" type="image/webp">
+          <img src="/assets/field-record.jpg" alt="필라테스 강사레슨 현장 기록 장면" width="2400" height="1000" loading="lazy">
+        </picture>
+        <div class="band-copy reveal">
+          <p class="section-kicker">Class Record</p>
+          <h2>현장에서 보고, 기록으로 남깁니다.</h2>
+          <p>오프라인 강사레슨은 움직임 관찰과 피드백을 중심으로 진행합니다. 수업의 흐름, 큐잉, 보상 패턴을 기록해 다시 볼 수 있는 기준으로 만듭니다.</p>
+        </div>
+      </div>
+    </section>
+
+    <section id="classes" class="classes">
+      <div class="wrap">
+        <div class="section-head reveal">
+          <div>
+            <p class="section-kicker">Class Route</p>
+            <h2>오프라인에서 체감하고, 온라인에서 반복합니다.</h2>
+          </div>
+          <p>강사레슨은 현장 피드백의 밀도를 높이고, 온라인 클래스는 기구별 ARCHIVE METHOD 수업을 40일 동안 반복 학습할 수 있도록 구성합니다.</p>
+        </div>
+        <div class="class-grid">
+          <a class="class-card reveal" href="/offline">
+            <picture>
+              <source srcset="/assets/offline-class.webp" type="image/webp">
+              <img src="/assets/offline-class.jpg" alt="ARCHIVE PILATES 오프라인 강사레슨 현장" width="1200" height="1000" loading="lazy">
+            </picture>
+            <div class="class-body">
+              <p class="type">Offline Lesson</p>
+              <h3>5:1 오프라인 강사레슨</h3>
+              <p>매월 마지막 주 토요일, 부산 명지 스튜디오에서 수업 관찰과 피드백 중심으로 진행합니다.</p>
+              <span class="more">오프라인 클래스 목록 보기</span>
+            </div>
+          </a>
+          <a class="class-card reveal" href="/online">
+            <picture>
+              <source srcset="/assets/online-class.webp" type="image/webp">
+              <img src="/assets/online-class.jpg" alt="ARCHIVE METHOD 온라인 클래스 촬영 장면" width="1200" height="1000" loading="lazy">
+            </picture>
+            <div class="class-body">
+              <p class="type">Online Class</p>
+              <h3>기구별 온라인 클래스</h3>
+              <p>체어, 바렐, 리포머, 캐딜락 수업을 구매 계정으로 시청하고 반복 학습합니다.</p>
+              <span class="more">온라인 클래스 목록 보기</span>
+            </div>
+          </a>
+        </div>
+      </div>
+    </section>
+
+    <section id="studio" class="studio">
+      <div class="wrap">
+        <div class="studio-grid">
+          <div class="studio-copy reveal">
+            <p class="section-kicker">Myeongji Studio</p>
+            <h2>부산 명지, 수업을 깊게 보기 위한 공간.</h2>
+            <p>ARCHIVE PILATES는 부산 강서구 명지에 위치한 필라테스 스튜디오입니다. 강사와 예비 강사가 수업의 언어, 시퀀스, 피드백을 더 구체적으로 다듬을 수 있도록 오프라인 강사레슨과 온라인 클래스를 함께 운영합니다.</p>
+            <div class="actions">
+              <a class="button dark" href="http://pf.kakao.com/_AHdvn/chat">카카오톡 문의</a>
+              <a class="button" href="https://www.instagram.com/minjin.vibe/">Instagram</a>
+            </div>
+          </div>
+          <div class="studio-photo reveal">
+            <picture>
+              <source srcset="/assets/topic-content.webp" type="image/webp">
+              <img src="/assets/topic-content.jpg" alt="ARCHIVE PILATES 수업 콘텐츠 기록 장면" width="1200" height="1000" loading="lazy">
+            </picture>
+          </div>
+        </div>
+      </div>
+    </section>
+
+    <section class="social">
+      <div class="wrap">
+        <div class="section-head reveal">
+          <div>
+            <p class="section-kicker">Archive Channel</p>
+            <h2>수업 기록은 채널에서도 이어집니다.</h2>
+          </div>
+          <p>유튜브와 인스타그램에서 공개 수업 기록, 쇼츠, 스튜디오 소식을 확인할 수 있습니다. 구매와 시청은 Shop에서 진행됩니다.</p>
+        </div>
+        <div class="social-links">
+          <a class="reveal" href="https://www.youtube.com/@archivepilates">
+            <strong>YouTube</strong>
+            <span>ARCHIVE METHOD 영상과 쇼츠</span>
+          </a>
+          <a class="reveal" href="https://www.instagram.com/minjin.vibe/">
+            <strong>Instagram</strong>
+            <span>스튜디오 기록과 수업 장면</span>
+          </a>
+          <a class="reveal" href="http://pf.kakao.com/_AHdvn/chat">
+            <strong>KakaoTalk</strong>
+            <span>오프라인 강사레슨 상담</span>
+          </a>
+        </div>
+      </div>
+    </section>
+  </main>
+
+  <footer class="site-footer">
+    <div class="footer-inner">
+      <div class="footer-brand">ARCHIVE PILATES</div>
+      <p class="footer-info">
+        <span>아카이브필라테스 | 대표자: 배민진 | 소재지: 부산광역시 강서구 명지국제2로28번길 34, 7층 704호</span>
+        <span>사업자 등록번호: 366-18-01791 | 통신판매신고번호: 제2024-부산강서구-0370호</span>
+        <span>개인정보관리책임자: 김기효 | 문의: <a href="tel:010-2924-4425">010-2924-4425</a></span>
+      </p>
+    </div>
+  </footer>
+
+  <script>
+    (() => {
+      const items = Array.from(document.querySelectorAll(".reveal"));
+      if (!items.length || window.matchMedia("(prefers-reduced-motion: reduce)").matches) {
+        items.forEach((item) => item.classList.add("is-visible"));
+        return;
+      }
+      const observer = new IntersectionObserver((entries) => {
+        entries.forEach((entry) => {
+          if (entry.isIntersecting) {
+            entry.target.classList.add("is-visible");
+            observer.unobserve(entry.target);
+          }
+        });
+      }, { rootMargin: "160px 0px 160px 0px", threshold: 0.01 });
+      items.forEach((item, index) => {
+        item.style.transitionDelay = `${Math.min(index % 5, 4) * 70}ms`;
+        observer.observe(item);
+      });
+    })();
+  </script>
+</body>
+</html>

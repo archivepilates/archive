@@ -1,0 +1,74 @@
+{
+  "hosting": {
+    "site": "archive-pilates-home",
+    "public": "official-home",
+    "cleanUrls": true,
+    "trailingSlash": false,
+    "headers": [
+      {
+        "source": "/assets/**",
+        "headers": [
+          { "key": "Cache-Control", "value": "public, max-age=31536000, immutable" }
+        ]
+      },
+      {
+        "source": "/index.html",
+        "headers": [
+          { "key": "Cache-Control", "value": "no-cache, no-store, must-revalidate" }
+        ]
+      },
+      {
+        "source": "/404.html",
+        "headers": [
+          { "key": "Cache-Control", "value": "no-cache, no-store, must-revalidate" }
+        ]
+      },
+      {
+        "source": "/robots.txt",
+        "headers": [
+          { "key": "Cache-Control", "value": "no-cache, no-store, must-revalidate" }
+        ]
+      },
+      {
+        "source": "/sitemap.xml",
+        "headers": [
+          { "key": "Cache-Control", "value": "no-cache, no-store, must-revalidate" }
+        ]
+      },
+      {
+        "source": "**",
+        "headers": [
+          { "key": "X-Content-Type-Options", "value": "nosniff" }
+        ]
+      }
+    ],
+    "redirects": [
+      {
+        "source": "/shop",
+        "destination": "https://archivepilates.imweb.me/16",
+        "type": 302
+      },
+      {
+        "source": "/online",
+        "destination": "https://archivepilates.imweb.me/17",
+        "type": 302
+      },
+      {
+        "source": "/offline",
+        "destination": "https://archivepilates.imweb.me/18",
+        "type": 302
+      },
+      {
+        "source": "/my-classroom",
+        "destination": "https://archivepilates.imweb.me/my-page",
+        "type": 302
+      }
+    ],
+    "rewrites": [
+      {
+        "source": "**",
+        "destination": "/index.html"
+      }
+    ]
+  }
+}
