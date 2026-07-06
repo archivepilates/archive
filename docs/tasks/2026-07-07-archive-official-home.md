@@ -58,6 +58,14 @@ Date: 2026-07-07
   - `icon-196.png`
   - `icon-512.png`
   - `site.webmanifest`
+- Top navigation was localized to Korean-first labels:
+  - `팀아카이브`
+  - `강사레슨`
+  - `영상구매`
+  - `채용`
+- The same navigation labels switch to short English labels on hover/focus for desktop users while remaining Korean-first on touch screens.
+- Added `/teams` as a separate Team Archive page and connected its Notion guide CTA to the currently public ARCHIVE PILATES Notion lesson guide.
+- Added `/careers` as a first-party redirect to the existing ARCHIVE IN instructor evaluation page.
 - Firebase custom domain state reached `HOST_ACTIVE`, `OWNERSHIP_ACTIVE`, and `CERT_PROPAGATING` for root and `www`.
 
 ## Verification

@@ -24,6 +24,12 @@
         ]
       },
       {
+        "source": "/teams.html",
+        "headers": [
+          { "key": "Cache-Control", "value": "no-cache, no-store, must-revalidate" }
+        ]
+      },
+      {
         "source": "/404.html",
         "headers": [
           { "key": "Cache-Control", "value": "no-cache, no-store, must-revalidate" }
@@ -89,12 +95,21 @@
         "type": 302
       },
       {
+        "source": "/careers",
+        "destination": "https://in.archivepilates.com/instructor-evaluation/",
+        "type": 302
+      },
+      {
         "source": "/my-classroom",
         "destination": "https://archivepilates.imweb.me/my-page",
         "type": 302
       }
     ],
     "rewrites": [
+      {
+        "source": "/teams",
+        "destination": "/teams.html"
+      },
       {
         "source": "**",
         "destination": "/index.html"
