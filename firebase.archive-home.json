@@ -96,7 +96,7 @@
       },
       {
         "source": "/careers",
-        "destination": "https://in.archivepilates.com/instructor-evaluation/",
+        "destination": "https://apply.archivepilates.com/",
         "type": 302
       },
       {
