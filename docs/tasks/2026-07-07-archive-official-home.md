@@ -66,7 +66,7 @@ Date: 2026-07-07
 - The same navigation labels switch to short English labels on hover/focus for desktop users while remaining Korean-first on touch screens.
 - Added `/teams` as a separate Team Archive page and connected its Notion guide CTA to the currently public ARCHIVE PILATES Notion lesson guide.
 - Added `/careers` as a first-party redirect to the existing ARCHIVE IN instructor evaluation page.
-- Firebase custom domain state reached `HOST_ACTIVE`, `OWNERSHIP_ACTIVE`, and `CERT_PROPAGATING` for root and `www`.
+- Firebase custom domain state reached `HOST_ACTIVE`, `OWNERSHIP_ACTIVE`, and `CERT_ACTIVE` for root and `www`.
 
 ## Verification
 
@@ -78,3 +78,15 @@ Date: 2026-07-07
   - `www.archivepilates.com` resolves to `archive-pilates-home.web.app`.
 - `https://archivepilates.com/` returns normal HTTPS 200.
 - `https://www.archivepilates.com/` returns HTTP 301 to `https://archivepilates.com/`.
+
+## 2026-07-07 SSL Activation Check
+
+- Firebase custom domain readback:
+  - `archivepilates.com`: `HOST_ACTIVE`, `OWNERSHIP_ACTIVE`, `CERT_ACTIVE`, no issues.
+  - `www.archivepilates.com`: `HOST_ACTIVE`, `OWNERSHIP_ACTIVE`, `CERT_ACTIVE`, no issues.
+- Public DNS:
+  - `archivepilates.com` A -> `199.36.158.100`.
+- Live routing:
+  - `https://archivepilates.com/` returns HTTP 200 and serves the official ARCHIVE PILATES homepage.
+  - `https://www.archivepilates.com/` returns HTTP 301 to `https://archivepilates.com/`.
+  - `https://shop.archivepilates.com/` returns HTTP 302 to `https://archivepilates.imweb.me/16`.
