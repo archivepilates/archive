@@ -46,8 +46,7 @@ Date: 2026-07-07
   - Firebase ownership TXT and ACME TXT records were added.
   - Existing Google Workspace, Google Search Console, and OpenAI TXT records were preserved.
 - `shop.archivepilates.com` was configured as a Cloudflare proxied redirect to `https://archivepilates.imweb.me/16`.
-- Firebase custom domain state reached `HOST_ACTIVE` and `OWNERSHIP_ACTIVE` for root and `www`.
-- As of the last check, Firebase SSL issuance is still `CERT_VALIDATING`.
+- Firebase custom domain state reached `HOST_ACTIVE`, `OWNERSHIP_ACTIVE`, and `CERT_PROPAGATING` for root and `www`.
 
 ## Verification
 
@@ -57,4 +56,5 @@ Date: 2026-07-07
 - Public DNS readback:
   - `archivepilates.com` resolves to `199.36.158.100`.
   - `www.archivepilates.com` resolves to `archive-pilates-home.web.app`.
-- Root domain content is already served by Firebase when bypassing certificate validation, but normal HTTPS must wait for Firebase certificate activation.
+- `https://archivepilates.com/` returns normal HTTPS 200.
+- `https://www.archivepilates.com/` still returns Firebase 404 while the custom-domain edge mapping finishes propagating; the scheduled SSL/domain check should verify it again.
