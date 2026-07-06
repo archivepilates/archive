@@ -11,7 +11,8 @@ Date: 2026-07-07
   - `/online` -> `https://archivepilates.imweb.me/17`
   - `/offline` -> `https://archivepilates.imweb.me/18`
 - Planned DNS shape:
-  - `archivepilates.com` and `www.archivepilates.com`: Firebase Hosting site `archive-pilates-home`.
+- `archivepilates.com`: Firebase Hosting site `archive-pilates-home`.
+- `www.archivepilates.com`: Cloudflare 301 redirect to `https://archivepilates.com/`.
   - `shop.archivepilates.com`: Cloudflare redirect to the existing Imweb shop surface.
 
 ## Implementation
@@ -42,7 +43,7 @@ Date: 2026-07-07
 - Default Firebase URL is live: `https://archive-pilates-home.web.app/`.
 - Cloudflare DNS was updated:
   - `archivepilates.com` A -> `199.36.158.100`, DNS-only.
-  - `www.archivepilates.com` CNAME -> `archive-pilates-home.web.app`, DNS-only.
+  - `www.archivepilates.com` CNAME -> `archive-pilates-home.web.app`, proxied for Cloudflare redirect.
   - Firebase ownership TXT and ACME TXT records were added.
   - Existing Google Workspace, Google Search Console, and OpenAI TXT records were preserved.
 - `shop.archivepilates.com` was configured as a Cloudflare proxied redirect to `https://archivepilates.imweb.me/16`.
@@ -57,4 +58,4 @@ Date: 2026-07-07
   - `archivepilates.com` resolves to `199.36.158.100`.
   - `www.archivepilates.com` resolves to `archive-pilates-home.web.app`.
 - `https://archivepilates.com/` returns normal HTTPS 200.
-- `https://www.archivepilates.com/` still returns Firebase 404 while the custom-domain edge mapping finishes propagating; the scheduled SSL/domain check should verify it again.
+- `https://www.archivepilates.com/` returns HTTP 301 to `https://archivepilates.com/`.
