@@ -98,3 +98,4 @@ Date: 2026-07-07
 - Live mobile check confirmed the header itself was not clipping the logo container, but the navigation logo was replaced with a taller padded asset for safer rendering on mobile browsers.
 - `팀아카이브` top navigation and the homepage Team Archive CTA now link directly to `https://archive-team.notion.site/`.
 - The header logo was updated again from the supplied cropped ARCHIVE wordmark source and exported with safe horizontal/vertical padding for the live navigation.
+- For the priority query `아카이브필라테스`, the official homepage description and Open Graph description were updated to start with the Korean brand keyword while staying under Naver's short-description guidance.
