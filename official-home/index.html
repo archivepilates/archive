@@ -153,8 +153,9 @@
 
     .nav-swap[data-nav="team"] { --nav-w: 92px; }
     .nav-swap[data-nav="lesson"] { --nav-w: 78px; }
-    .nav-swap[data-nav="video"] { --nav-w: 86px; }
     .nav-swap[data-nav="career"] { --nav-w: 58px; }
+    .nav-swap[data-nav="products"] { --nav-w: 78px; }
+    .nav-swap[data-nav="video"] { --nav-w: 86px; }
 
     .nav-swap .nav-ko,
     .nav-swap .nav-en {
@@ -653,6 +654,13 @@
     @media (max-width: 640px) {
       section { padding: 72px 18px; }
       .brand-logo { width: 142px; }
+      .nav-links { justify-content: center; }
+      .nav-links a { padding: 0 4px; font-size: 0.84rem; }
+      .nav-swap[data-nav="team"] { --nav-w: 74px; }
+      .nav-swap[data-nav="lesson"] { --nav-w: 66px; }
+      .nav-swap[data-nav="career"] { --nav-w: 42px; }
+      .nav-swap[data-nav="products"] { --nav-w: 68px; }
+      .nav-swap[data-nav="video"] { --nav-w: 70px; }
       .hero {
         min-height: 710px;
         align-items: end;
@@ -675,6 +683,10 @@
       .class-body { padding: 24px 20px 26px; }
       .studio-copy { padding: 30px 22px; }
       .studio-photo { min-height: 340px; }
+    }
+
+    @media (max-width: 360px) {
+      .nav-links { justify-content: flex-start; }
     }
 
     @media (prefers-reduced-motion: reduce) {
@@ -730,13 +742,17 @@
           <span class="nav-ko">강사레슨</span>
           <span class="nav-en" aria-hidden="true">LESSON</span>
         </a>
-        <a class="nav-swap" data-nav="video" href="/videos" aria-label="영상구매">
-          <span class="nav-ko">영상구매</span>
-          <span class="nav-en" aria-hidden="true">VIDEO</span>
-        </a>
         <a class="nav-swap" data-nav="career" href="/careers" aria-label="채용">
           <span class="nav-ko">채용</span>
           <span class="nav-en" aria-hidden="true">CAREERS</span>
+        </a>
+        <a class="nav-swap" data-nav="products" href="/shop" aria-label="판매상품">
+          <span class="nav-ko">판매상품</span>
+          <span class="nav-en" aria-hidden="true">PRODUCTS</span>
+        </a>
+        <a class="nav-swap" data-nav="video" href="/videos" aria-label="영상구매">
+          <span class="nav-ko">영상구매</span>
+          <span class="nav-en" aria-hidden="true">VIDEO</span>
         </a>
       </div>
     </nav>
