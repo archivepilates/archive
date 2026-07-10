@@ -44,6 +44,8 @@ const GEMINI_GENERATE_URL = "https://generativelanguage.googleapis.com/v1beta/mo
 const SOLAPI_SEND_URL = "https://api.solapi.com/messages/v4/send-many/detail";
 const SOLAPI_TEMPLATE_URL = "https://api.solapi.com/kakao/v2/templates";
 const PRIVATE_SESSION_ORDER_COMPUTED_FROM = "privateLessonChart.canonicalPrivate.v2";
+const NOTION_REQUEST_INTERVAL_MS = 450;
+let lastNotionRequestAt = 0;
 const NOTION_INSTRUCTOR_CHART_PAGE_IDS: Record<string, string> = {
   "이초림 수석강사": "22cd49eae4bf802ebc89fe094d0c355a",
   이초림: "22cd49eae4bf802ebc89fe094d0c355a",
@@ -546,6 +548,7 @@ export async function enqueueApprovedPrivateLessonReportAlimtalks(): Promise<{
     if (result === "synced") completed += 1;
     else if (result === "failed") failed += 1;
     else skipped += 1;
+    if (checked < jobSnap.size) await delay(700);
   }
 
   logger.info("sync sent private lesson report statuses completed", {
@@ -1784,19 +1787,33 @@ async function notionRequest(
   method: "GET" | "POST" | "PATCH" | "DELETE",
   body?: Record<string, unknown>,
 ): Promise<any> {
-  const response = await fetch(`https://api.notion.com/v1/${path}`, {
-    method,
-    headers: {
-      Authorization: `Bearer ${notionToken.value()}`,
-      "Content-Type": "application/json",
-      "Notion-Version": NOTION_API_VERSION,
-    },
-    body: body ? JSON.stringify(body) : undefined,
-  });
-  const text = await response.text();
-  const parsed = text ? JSON.parse(text) : {};
-  if (!response.ok) throw new Error(`Notion API ${path} failed ${response.status}: ${parsed.message || text}`);
-  return parsed;
+  for (let attempt = 1; attempt <= 5; attempt += 1) {
+    await throttleNotionRequest();
+    const response = await fetch(`https://api.notion.com/v1/${path}`, {
+      method,
+      headers: {
+        Authorization: `Bearer ${notionToken.value()}`,
+        "Content-Type": "application/json",
+        "Notion-Version": NOTION_API_VERSION,
+      },
+      body: body ? JSON.stringify(body) : undefined,
+    });
+    const text = await response.text();
+    const parsed = text ? JSON.parse(text) : {};
+    if (response.ok) return parsed;
+    if (response.status === 429 && attempt < 5) {
+      const retryAfterSeconds = Number(response.headers.get("retry-after") || 0);
+      await delay((Number.isFinite(retryAfterSeconds) && retryAfterSeconds > 0 ? retryAfterSeconds * 1000 : 3500 * attempt) + 500);
+      continue;
+    }
+    throw new Error(`Notion API ${path} failed ${response.status}: ${parsed.message || text}`);
+  }
+}
+
+async function throttleNotionRequest(): Promise<void> {
+  const elapsed = Date.now() - lastNotionRequestAt;
+  if (elapsed < NOTION_REQUEST_INTERVAL_MS) await delay(NOTION_REQUEST_INTERVAL_MS - elapsed);
+  lastNotionRequestAt = Date.now();
 }
 
 async function readChartRequestFromRequest(
