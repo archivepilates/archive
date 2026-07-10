@@ -159,6 +159,25 @@ function buildMemberRevenueRows(data: DashboardData): DashboardMemberRevenueRow[
 }
 
 function buildMonthlyMemberRows(data: DashboardData): DashboardMonthlyMemberRow[] {
+  if (data.월별회원지표?.length) {
+    return data.월별회원지표.flatMap((row) => [
+      {
+        월: row.월,
+        구분: "수강권보유" as const,
+        회원수: row.수강권보유회원수,
+      },
+      {
+        월: row.월,
+        구분: "예약이용" as const,
+        회원수: row.예약이용회원수,
+      },
+      {
+        월: row.월,
+        구분: "출석" as const,
+        회원수: row.출석회원수,
+      },
+    ]).filter((row) => row.월 && row.회원수 > 0);
+  }
   if (data.월별회원?.length) return data.월별회원;
   return data.월별이용회원
     .map((row) => ({

@@ -47,9 +47,11 @@ async function main() {
   const exportValues = await readExport(sheetToken, source.id);
   const exported = exportRowsToDashboardData(exportValues);
   const paymentRevenueByMonth = await loadPaymentRevenueByMonth(sheetToken, config.dashboardDbSpreadsheetId);
-  const current = config.apply ? await fetchFirestoreDashboard() : {};
+  const current = await fetchFirestoreDashboard();
   const next = mergeDashboardData(current, exported, source);
   const paymentRevenuePatch = augmentSummaryRevenue(next, paymentRevenueByMonth);
+  const bookingMemberMetrics = await loadBookingMemberMetrics(next);
+  if (bookingMemberMetrics.rows.length) next.월별회원지표 = bookingMemberMetrics.rows;
   const firestorePatch = config.apply ? await writeFirestoreDashboard(next) : null;
   const report = {
     ok: !firestorePatch || firestorePatch.ok,
@@ -59,9 +61,10 @@ async function main() {
     exportSheetName: EXPORT_SHEET_NAME,
     rows: Math.max(0, exportValues.length - 1),
     paymentRevenuePatch,
+    bookingMemberMetrics: bookingMemberMetrics.summary,
     updatedAt: next.updatedAt,
     firestorePatch,
-    note: "대시보드_EXPORT를 기본으로 반영하되, 총매출은 아카이브 DB 수강권매출 원천으로 보강합니다.",
+    note: "대시보드_EXPORT를 기본으로 반영하되, 총매출은 아카이브 DB 수강권매출 원천으로, 회원수는 bookings 예약 원천으로 보강합니다.",
   };
   console.log(JSON.stringify({ ...report, reportPath: writeReport(report) }, null, 2));
   if (firestorePatch && !firestorePatch.ok) process.exitCode = 1;
@@ -104,7 +107,7 @@ function mergeDashboardData(current, exported, source) {
     const exportMonths = new Set(exportedRows.map((row) => monthKey(row.월 || row.기준월)).filter(Boolean));
     next[field] = exportMonths.size ? replaceMonths(currentRows, exportedRows, exportMonths) : currentRows;
   }
-  for (const field of ["월별그룹평균가격", "월별이용회원", "수강권TOP5", "회원매출"]) {
+  for (const field of ["월별그룹평균가격", "월별이용회원", "월별회원지표", "수강권TOP5", "회원매출"]) {
     if (!(field in next)) next[field] = [];
   }
   next.updatedAt = new Date().toISOString();
@@ -181,6 +184,278 @@ function augmentSummaryRevenue(exported, paymentRevenueByMonth) {
     patched.push({ month, previousTotal, nextTotal: row.총매출, source: payment.source, rows: payment.rows });
   }
   return patched;
+}
+
+async function loadBookingMemberMetrics(dashboardData) {
+  const months = dashboardMetricMonths(dashboardData);
+  if (!months.length) return { rows: [], summary: { months: 0, rows: 0 } };
+  const token = await googleAccessToken({
+    credentialsPath: config.credentialsPath,
+    scopes: ["https://www.googleapis.com/auth/datastore"],
+    delegated: false,
+  });
+  const sheetMembersByMonth = new Map(
+    (dashboardData.월별이용회원 || [])
+      .map((row) => [monthKey(row.월), amount(row.이용회원수)])
+      .filter(([month]) => month),
+  );
+  const rows = [];
+  for (const month of months) {
+    const bookings = await fetchBookingsForMonth(token, month);
+    rows.push(summarizeBookingMemberMetric(month, bookings, sheetMembersByMonth.get(month) || 0));
+  }
+  return {
+    rows,
+    summary: {
+      months: rows.length,
+      rows: rows.reduce((sum, row) => sum + row.원본예약행수, 0),
+      latest: rows.at(-1) || null,
+      comparison: rows.filter((row) => ["2025-06", "2026-06", rows.at(-1)?.월].includes(row.월)),
+      note: "수강권 보유회원은 기존 월별이용회원 시트값, 예약/출석 회원은 Firestore bookings 기준입니다.",
+    },
+  };
+}
+
+function dashboardMetricMonths(dashboardData) {
+  const currentMonth = monthKey(new Date().toLocaleDateString("sv-SE", { timeZone: "Asia/Seoul" }));
+  const months = new Set();
+  for (const row of dashboardData.summary || []) months.add(monthKey(row.월 || row.기준월));
+  for (const row of dashboardData.월별이용회원 || []) months.add(monthKey(row.월 || row.기준월));
+  return [...months]
+    .filter((month) => month && month >= "2025-01" && month <= currentMonth)
+    .sort();
+}
+
+async function fetchBookingsForMonth(token, month) {
+  const start = `${month}-01`;
+  const end = nextMonth(month);
+  const body = {
+    structuredQuery: {
+      from: [{ collectionId: "bookings" }],
+      where: {
+        compositeFilter: {
+          op: "AND",
+          filters: [
+            {
+              fieldFilter: {
+                field: { fieldPath: "lectureDate" },
+                op: "GREATER_THAN_OR_EQUAL",
+                value: { stringValue: start },
+              },
+            },
+            {
+              fieldFilter: {
+                field: { fieldPath: "lectureDate" },
+                op: "LESS_THAN",
+                value: { stringValue: end },
+              },
+            },
+          ],
+        },
+      },
+      orderBy: [{ field: { fieldPath: "lectureDate" }, direction: "ASCENDING" }],
+    },
+  };
+  const result = await fetch("https://firestore.googleapis.com/v1/projects/archive-pilates/databases/(default)/documents:runQuery", {
+    method: "POST",
+    headers: {
+      authorization: `Bearer ${token}`,
+      "content-type": "application/json",
+    },
+    body: JSON.stringify(body),
+  });
+  const text = await result.text();
+  if (!result.ok) throw new Error(`Firestore bookings query failed ${result.status}: ${text}`);
+  return (safeJson(text) || [])
+    .map((row) => row.document)
+    .filter(Boolean)
+    .map((document) => ({
+      id: String(document.name || "").split("/").pop() || "",
+      ...decodeFirestoreFields(document.fields || {}),
+    }));
+}
+
+function summarizeBookingMemberMetric(month, bookings, ticketMemberCount) {
+  const deduped = dedupeBookings(bookings);
+  const activeMembers = new Set();
+  const attendedMembers = new Set();
+  let excludedCancelOrSupersededRows = 0;
+  let nonReservationRows = 0;
+  let instructorLessonRows = 0;
+  let activeReservationRows = 0;
+  let attendedRows = 0;
+  let absentRows = 0;
+
+  for (const booking of deduped) {
+    if (isCancelledOrSupersededBooking(booking)) {
+      excludedCancelOrSupersededRows += 1;
+      continue;
+    }
+    if (isInstructorLessonBooking(booking)) {
+      instructorLessonRows += 1;
+      continue;
+    }
+    if (!isActiveReservationBooking(booking)) {
+      nonReservationRows += 1;
+      continue;
+    }
+    const memberKey = bookingMemberKey(booking);
+    if (!memberKey) continue;
+    activeReservationRows += 1;
+    activeMembers.add(memberKey);
+    if (String(booking.attendanceStatus || "").toLowerCase() === "attended") {
+      attendedRows += 1;
+      attendedMembers.add(memberKey);
+    }
+    if (["absent", "no_show"].includes(String(booking.attendanceStatus || "").toLowerCase())) absentRows += 1;
+  }
+
+  return {
+    월: month,
+    수강권보유회원수: Math.round(ticketMemberCount),
+    예약이용회원수: activeMembers.size,
+    출석회원수: attendedMembers.size,
+    원본예약행수: bookings.length,
+    정규화예약건수: deduped.length,
+    중복정리행수: Math.max(0, bookings.length - deduped.length),
+    취소제외행수: excludedCancelOrSupersededRows,
+    비예약제외행수: nonReservationRows,
+    강사레슨제외행수: instructorLessonRows,
+    유효예약행수: activeReservationRows,
+    출석예약행수: attendedRows,
+    결석예약행수: absentRows,
+    산출원천: "bookings",
+    산출기준: "전화번호 우선 고유회원, 취소/시간변경 중복/강사레슨 제외",
+  };
+}
+
+function dedupeBookings(bookings) {
+  const byKey = new Map();
+  for (const booking of bookings) {
+    const key = bookingCanonicalKey(booking);
+    const previous = byKey.get(key);
+    if (!previous || bookingPriority(booking) > bookingPriority(previous)) byKey.set(key, booking);
+  }
+  return [...byKey.values()];
+}
+
+function bookingCanonicalKey(booking) {
+  return [
+    stringValue(booking.canonicalBookingKey || booking.bookingCanonicalKey),
+    stringValue(booking.memberId || booking.studioMateMemberId),
+    normalizePhone(booking.memberPhone || booking.phone),
+    normalizeName(booking.memberName || booking.name),
+    stringValue(booking.lectureDate),
+    startTimeText(booking),
+    normalizeName(booking.staffId || booking.staffName),
+    normalizeName(booking.title || booking.lessonTitle || booking.ticketName),
+  ]
+    .filter(Boolean)
+    .join("|");
+}
+
+function bookingPriority(booking) {
+  const status = String(booking.appStatus || "").toLowerCase();
+  const attendance = String(booking.attendanceStatus || "").toLowerCase();
+  let score = 0;
+  if (status === "reserved") score += 80;
+  if (attendance === "attended") score += 40;
+  if (attendance === "absent") score += 20;
+  if (!isGeneratedFallbackId(booking.id || booking.bookingId)) score += 8;
+  if (!isCancelledOrSupersededBooking(booking)) score += 8;
+  score += Math.min(7, Math.floor(timestampMs(booking.updatedAt || booking.importedAt || booking.syncedAt) / 10 ** 12));
+  return score;
+}
+
+function isCancelledOrSupersededBooking(booking) {
+  const text = [
+    booking.appStatus,
+    booking.attendanceStatus,
+    booking.status,
+    booking.sourceStatus,
+    booking.importStatus,
+    booking.syncStatus,
+    booking.excludedReason,
+    booking.supersededBy,
+    booking.canonicalStatus,
+  ]
+    .filter(Boolean)
+    .join(" ")
+    .toLowerCase();
+  return /cancel|cancelled|canceled|deleted|removed|superseded|duplicate|rescheduled_duplicate|취소|삭제|제외|중복/.test(text) || text.includes("late_cancel");
+}
+
+function isActiveReservationBooking(booking) {
+  const appStatus = String(booking.appStatus || "").toLowerCase();
+  const attendanceStatus = String(booking.attendanceStatus || "").toLowerCase();
+  if (appStatus === "reserved") return true;
+  if (!appStatus && ["attended", "absent"].includes(attendanceStatus)) return true;
+  return false;
+}
+
+function isInstructorLessonBooking(booking) {
+  const text = [
+    booking.title,
+    booking.lessonTitle,
+    booking.ticketName,
+    booking.lessonType,
+    booking.classType,
+    booking.ticketClassType,
+    booking.memo,
+  ]
+    .filter(Boolean)
+    .join(" ")
+    .toLowerCase();
+  return /강사\s*레슨|강사레슨|staff\s*lesson|instructor\s*lesson/.test(text);
+}
+
+function bookingMemberKey(booking) {
+  const phone = normalizePhone(booking.memberPhone || booking.phone);
+  if (phone) return `phone:${phone}`;
+  const memberId = stringValue(booking.memberId || booking.studioMateMemberId);
+  if (memberId) return `member:${memberId}`;
+  const name = normalizeName(booking.memberName || booking.name);
+  return name ? `name:${name}` : "";
+}
+
+function isGeneratedFallbackId(value) {
+  return /^(excel_|excel_booking_|usage_booking_|booking_fallback_)/.test(String(value || ""));
+}
+
+function startTimeText(booking) {
+  const direct = stringValue(booking.startTime || booking.lectureStartTime || booking.time);
+  if (direct) return direct.replace(/\s+/g, "");
+  const timestamp = stringValue(booking.lectureStartAt || booking.startsAt || booking.startAt);
+  const matched = timestamp.match(/T(\d{2}):(\d{2})/);
+  return matched ? `${matched[1]}:${matched[2]}` : "";
+}
+
+function normalizePhone(value) {
+  const digits = String(value || "").replace(/\D/g, "");
+  if (!digits) return "";
+  if (digits.length === 9 && digits.startsWith("10")) return `0${digits}`;
+  if (digits.length === 10 && digits.startsWith("10")) return `0${digits}`;
+  if (digits.length === 11 && digits.startsWith("010")) return digits;
+  if (digits.length > 11 && digits.endsWith("10")) return digits;
+  return digits;
+}
+
+function normalizeName(value) {
+  return String(value || "").trim().replace(/\s+/g, "").toLowerCase();
+}
+
+function nextMonth(month) {
+  const [year, monthNumber] = month.split("-").map(Number);
+  const date = new Date(Date.UTC(year, monthNumber, 1));
+  return `${date.getUTCFullYear()}-${String(date.getUTCMonth() + 1).padStart(2, "0")}-01`;
+}
+
+function timestampMs(value) {
+  if (!value) return 0;
+  if (typeof value === "number") return value;
+  if (value?._seconds) return value._seconds * 1000;
+  const ms = Date.parse(String(value));
+  return Number.isFinite(ms) ? ms : 0;
 }
 
 function firstValue(row, keys) {

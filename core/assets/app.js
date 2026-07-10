@@ -206,6 +206,15 @@ function deltaText(current, previous, suffix = "%") {
   return `${marker} ${sign}${diff.toFixed(1)}${suffix} vs 전월`;
 }
 
+function memberCountDeltaText(current, previous, label = "전년동월") {
+  if (!Number.isFinite(current) || !Number.isFinite(previous) || previous === 0) return `${label} 비교 대기`;
+  const diff = current - previous;
+  const percent = (diff / previous) * 100;
+  const marker = diff >= 0 ? "▲" : "▼";
+  const sign = diff >= 0 ? "+" : "";
+  return `${marker} ${sign}${diff.toLocaleString("ko-KR")}명 · ${sign}${percent.toFixed(1)}% vs ${label}`;
+}
+
 function normalizeStatus(value) {
   const status = String(value || "unknown").toLowerCase();
   if (["success", "ok", "healthy", "done", "active", "completed", "sent", "eligible"].includes(status)) return "good";
@@ -2448,6 +2457,20 @@ function normalizeBusinessSnapshot(data) {
     }))
     .filter((row) => row.month && row.label);
 
+  const memberMetrics = (data?.월별회원지표 || [])
+    .map((row) => ({
+      month: normMonth(row.월),
+      ticketMembers: toNumber(row.수강권보유회원수),
+      bookingMembers: toNumber(row.예약이용회원수),
+      attendedMembers: toNumber(row.출석회원수),
+      activeReservationRows: toNumber(row.유효예약행수),
+      normalizedReservationRows: toNumber(row.정규화예약건수),
+      source: String(row.산출원천 || "bookings"),
+      rule: String(row.산출기준 || ""),
+    }))
+    .filter((row) => row.month)
+    .sort((a, b) => a.month.localeCompare(b.month));
+
   const dailyRevenue = (data?.매출일일누적 || [])
     .map((row) => ({
       month: normMonth(row.기준월 || row.월),
@@ -2469,6 +2492,7 @@ function normalizeBusinessSnapshot(data) {
     instructorRevenue,
     instructorStats,
     ticketTop,
+    memberMetrics,
     dailyRevenue,
     updatedAt: data?.updatedAt || data?.syncedAt || null,
   };
@@ -2546,6 +2570,9 @@ function renderBusinessMonth(month) {
   if (!current) return;
   const previousIndex = snapshot.summary.findIndex((row) => row.month === current.month) - 1;
   const previous = previousIndex >= 0 ? snapshot.summary[previousIndex] : null;
+  const currentMember = snapshot.memberMetrics.find((row) => row.month === current.month);
+  const previousYearMonth = `${Number(current.month.slice(0, 4)) - 1}-${current.month.slice(5, 7)}`;
+  const previousYearMember = snapshot.memberMetrics.find((row) => row.month === previousYearMonth);
   const daily = latestDailyForMonth(snapshot, current.month);
 
   setText("businessMonthLabel", `${formatMonth(current.month)} 기준`);
@@ -2575,6 +2602,21 @@ function renderBusinessMonth(month) {
     daily?.previousAttendanceRate
       ? deltaText(daily.attendanceRate, daily.previousAttendanceRate, "%p")
       : deltaText(current.attendanceRate, previous?.attendanceRate, "%p"),
+  );
+  setText("businessTicketMembers", currentMember ? formatCount(currentMember.ticketMembers, "명") : "-");
+  setText("businessBookingMembers", currentMember ? formatCount(currentMember.bookingMembers, "명") : "-");
+  setText("businessAttendedMembers", currentMember ? formatCount(currentMember.attendedMembers, "명") : "-");
+  setText(
+    "businessTicketMembersNote",
+    currentMember ? memberCountDeltaText(currentMember.ticketMembers, previousYearMember?.ticketMembers, "전년동월") : "정산 시트 기준",
+  );
+  setText(
+    "businessBookingMembersNote",
+    currentMember ? memberCountDeltaText(currentMember.bookingMembers, previousYearMember?.bookingMembers, "전년동월") : "예약 원천 기준",
+  );
+  setText(
+    "businessAttendedMembersNote",
+    currentMember ? memberCountDeltaText(currentMember.attendedMembers, previousYearMember?.attendedMembers, "전년동월") : "출석 완료 기준",
   );
   renderBusinessBars(snapshot.summary, current.month);
   renderBusinessRanks(snapshot, current.month);

@@ -495,6 +495,7 @@
                 <li>대시보드 DB 동기화는 정산 자동화의 대시보드_EXPORT 탭을 우선 읽어 Firestore에 쓰는 ETL로 축소합니다.</li>
                 <li>대시보드_EXPORT가 없거나 지원 형식이 아니면 기존 Master 시트 계산으로 임시 fallback하고 경고 로그를 남깁니다.</li>
                 <li>수업매출과 수강권매출은 서로 다른 지표이므로 화면 라벨을 명확히 구분합니다.</li>
+                <li>회원수는 단일 유효회원으로 표시하지 않습니다. 수강권 보유회원은 정산 시트 기준, 예약 이용회원과 출석 회원은 Firestore bookings 예약 원천 기준으로 분리합니다.</li>
               </ul>
             </article>
             <article class="rule-card">

@@ -660,6 +660,25 @@ function normalizeDashboardPayload(input: Partial<DashboardData>): DashboardData
         이용회원수: numberValue(row.이용회원수),
       }))
       .filter((row) => row.월 && row.이용회원수 > 0),
+    월별회원지표: (input.월별회원지표 || [])
+      .map((row) => ({
+        월: monthKey(row.월),
+        수강권보유회원수: numberValue(row.수강권보유회원수),
+        예약이용회원수: numberValue(row.예약이용회원수),
+        출석회원수: numberValue(row.출석회원수),
+        원본예약행수: numberValue(row.원본예약행수),
+        정규화예약건수: numberValue(row.정규화예약건수),
+        중복정리행수: numberValue(row.중복정리행수),
+        취소제외행수: numberValue(row.취소제외행수),
+        비예약제외행수: numberValue(row.비예약제외행수),
+        강사레슨제외행수: numberValue(row.강사레슨제외행수),
+        유효예약행수: numberValue(row.유효예약행수),
+        출석예약행수: numberValue(row.출석예약행수),
+        결석예약행수: numberValue(row.결석예약행수),
+        산출원천: stringValue(row.산출원천),
+        산출기준: stringValue(row.산출기준),
+      }))
+      .filter((row) => row.월),
     수강권TOP5: (input.수강권TOP5 || [])
       .map((row) => ({
         월: monthKey(row.월),
