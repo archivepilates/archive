@@ -8,11 +8,12 @@ export async function saveDashboardSnapshot(input: {
   data: DashboardData;
   sourceSpreadsheetId: string;
 }): Promise<DashboardSnapshotDoc> {
+  const snapshotData = compactDashboardSnapshotData(input.data);
   const doc: DashboardSnapshotDoc = {
     snapshotId: "current",
     sourceSpreadsheetId: input.sourceSpreadsheetId,
     syncedAt: nowTimestamp(),
-    ...input.data,
+    ...snapshotData,
   };
   await refs.dashboardSnapshot("current").set(doc, { merge: true });
   await saveDashboardMetricDocs(input.data, input.sourceSpreadsheetId, doc.syncedAt);
@@ -172,4 +173,14 @@ function memberSalesMetricId(phone: string, memberName: string): string {
   const digits = phone.replace(/\D/g, "");
   if (digits) return `phone_${digits}`;
   return `name_${stableHash(memberName).slice(0, 20)}`;
+}
+
+function compactDashboardSnapshotData(data: DashboardData): DashboardData {
+  return {
+    ...data,
+    회원매출: [...(data.회원매출 || [])].sort((a, b) => b.totalRevenue - a.totalRevenue).slice(0, 500),
+    매출일일누적: [...(data.매출일일누적 || [])]
+      .sort((a, b) => a.기준일.localeCompare(b.기준일))
+      .slice(-180),
+  };
 }

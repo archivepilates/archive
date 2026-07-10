@@ -17,6 +17,10 @@ export function parseArgs(argv) {
 }
 
 export function monthKey(value) {
+  if (typeof value === "number" && Number.isFinite(value)) {
+    const date = googleSerialDateKey(value);
+    return date ? date.slice(0, 7) : "";
+  }
   const text = String(value || "").trim();
   const monthOnly = text.match(/^(20\d{2})[-./년\s]+(\d{1,2})\s*월?$/);
   if (monthOnly) return `${monthOnly[1]}-${monthOnly[2].padStart(2, "0")}`;
@@ -26,9 +30,16 @@ export function monthKey(value) {
 
 export function dateKey(value) {
   if (value == null || value === "") return "";
+  if (typeof value === "number" && Number.isFinite(value)) return googleSerialDateKey(value);
   const text = String(value).trim();
   const matched = text.match(/(20\d{2})[-./년\s]+(\d{1,2})[-./월\s]+(\d{1,2})/);
   return matched ? `${matched[1]}-${matched[2].padStart(2, "0")}-${matched[3].padStart(2, "0")}` : "";
+}
+
+function googleSerialDateKey(value) {
+  if (value < 20000 || value > 90000) return "";
+  const date = new Date(Math.round((value - 25569) * 86400 * 1000));
+  return `${date.getUTCFullYear()}-${String(date.getUTCMonth() + 1).padStart(2, "0")}-${String(date.getUTCDate()).padStart(2, "0")}`;
 }
 
 export function stringValue(value) {

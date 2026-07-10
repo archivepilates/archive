@@ -35,8 +35,16 @@ const downloadFailed = steps.some((step) => step.name === "downloadSalesExcels" 
 const shouldRunDbSync = skipDownload || apply;
 if (!downloadFailed && shouldRunDbSync) {
   steps.push(
-    runStep("syncArchiveDashboardDb", [
+    runStep("syncArchiveDashboardDbFromExcels", [
       "scripts/sync-archive-dashboard-db.mjs",
+      ...(month ? [`--month=${month}`, "--allow-partial-overwrite"] : []),
+      ...(apply ? ["--apply"] : []),
+      ...(syncFirebase ? ["--sync-firebase"] : []),
+    ]),
+  );
+  steps.push(
+    runStep("syncArchiveDashboardDbFromExport", [
+      "scripts/sync-archive-dashboard-db-export.mjs",
       ...(month ? [`--month=${month}`] : []),
       ...(apply ? ["--apply"] : []),
       ...(apply && syncFirebase ? ["--sync-firebase"] : []),

@@ -219,6 +219,7 @@ export function buildDashboardData(input: {
   const ticketAnalysis = input.ticketAnalysis.map(normalizeTicketAnalysisRow).filter((row) => row.월);
   const ticketSales = input.ticketSales.map(normalizeTicketSalesRow).filter((row) => row.월);
   const ticketSalesRaw = (input.ticketSalesRaw || []).map(normalizeTicketSalesRow).filter((row) => row.월);
+  const summaryTicketSales = ticketSales.length ? ticketSales : ticketSalesRaw;
   const memberSales = (input.memberSales || []).map(normalizeMemberSalesRow).filter(
     (row) => row.totalRevenue > 0 && (row.memberId || row.memberName || row.memberPhone),
   );
@@ -228,7 +229,7 @@ export function buildDashboardData(input: {
     .filter((row) => row.월 && row.이용회원수 > 0);
 
   return {
-    summary: buildSummary(settlement, instructorStats, ticketSales),
+    summary: buildSummary(settlement, instructorStats, summaryTicketSales),
     강사별: settlement
       .filter((row) => row.강사)
       .map((row) => ({
@@ -375,6 +376,7 @@ function buildSummary(
     .map((row) => ({
       ...row,
       총매출: round0(row.총매출),
+      수강권매출: round0(row.총매출),
       수업매출: round0(row.수업매출),
       실지급액: round0(row.실지급액),
       세전총액: round0(row.세전총액),
@@ -606,6 +608,10 @@ function normalizeDashboardPayload(input: Partial<DashboardData>): DashboardData
       .map((row) => ({
         월: monthKey(row.월),
         총매출: numberValue(row.총매출),
+        수강권매출: numberValue(row.수강권매출),
+        수강권총결제: numberValue(row.수강권총결제),
+        수강권환불: numberValue(row.수강권환불),
+        수강권매출원천: stringValue(row.수강권매출원천),
         수업매출: numberValue(row.수업매출),
         실지급액: numberValue(row.실지급액),
         세전총액: numberValue(row.세전총액),

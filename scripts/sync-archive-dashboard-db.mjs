@@ -810,17 +810,17 @@ async function syncFirebaseDashboard({ dailyRevenueSheet, settlementPreviewSheet
   }));
   const settlementPreview = sheetRowsToObjects(settlementPreviewSheet);
   const instructorPreview = sheetRowsToObjects(instructorPreviewSheet);
-  const idToken = await googleIdentityToken(config.syncEndpoint);
-  const result = await fetch(config.syncEndpoint, {
-    method: "POST",
-    headers: { authorization: `Bearer ${idToken}` },
-  });
-  const text = await result.text();
-  const functionResult = { ok: result.ok, status: result.status, body: safeJson(text) || text.slice(0, 2000) };
+  const functionResult = {
+    ok: true,
+    status: 0,
+    skipped: true,
+    body: "Skipped full Cloud Function snapshot sync; scoped Firestore dashboard patch is the scheduled source.",
+  };
   const firestorePatch = await patchDashboardCurrentPreview({ dailyRevenue, settlementPreview, instructorPreview });
   return {
-    ok: functionResult.ok || Boolean(firestorePatch.ok),
+    ok: Boolean(firestorePatch.ok),
     status: firestorePatch.ok ? firestorePatch.status : functionResult.status,
+    warning: "",
     functionResult,
     dailyRevenueRows: dailyRevenue.length,
     settlementPreviewRows: settlementPreview.length,
@@ -1161,12 +1161,17 @@ function classTypeName(value, ticketName = "") {
 
 function dateKey(value) {
   if (value == null || value === "") return "";
+  if (typeof value === "number" && Number.isFinite(value)) return googleSerialDateKey(value);
   const text = String(value).trim();
   const matched = text.match(/(20\d{2})[-./년\s]+(\d{1,2})[-./월\s]+(\d{1,2})/);
   return matched ? `${matched[1]}-${matched[2].padStart(2, "0")}-${matched[3].padStart(2, "0")}` : "";
 }
 
 function monthKey(value) {
+  if (typeof value === "number" && Number.isFinite(value)) {
+    const date = googleSerialDateKey(value);
+    return date ? date.slice(0, 7) : "";
+  }
   const text = String(value || "").trim();
   const monthOnly = text.match(/^(20\d{2})[-./년\s]+(\d{1,2})\s*월?$/);
   if (monthOnly) return `${monthOnly[1]}-${monthOnly[2].padStart(2, "0")}`;
@@ -1174,6 +1179,12 @@ function monthKey(value) {
   if (date) return date.slice(0, 7);
   const matched = text.match(/(20\d{2})[-./년\s]+(\d{1,2})/);
   return matched ? `${matched[1]}-${matched[2].padStart(2, "0")}` : "";
+}
+
+function googleSerialDateKey(value) {
+  if (value < 20000 || value > 90000) return "";
+  const date = new Date(Math.round((value - 25569) * 86400 * 1000));
+  return `${date.getUTCFullYear()}-${String(date.getUTCMonth() + 1).padStart(2, "0")}-${String(date.getUTCDate()).padStart(2, "0")}`;
 }
 
 function maxMonth(files) {

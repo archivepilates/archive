@@ -3,6 +3,10 @@ import type { Timestamp } from "firebase-admin/firestore";
 export interface DashboardSummaryRow {
   월: string;
   총매출: number;
+  수강권매출?: number;
+  수강권총결제?: number;
+  수강권환불?: number;
+  수강권매출원천?: string;
   수업매출: number;
   실지급액: number;
   세전총액: number;
