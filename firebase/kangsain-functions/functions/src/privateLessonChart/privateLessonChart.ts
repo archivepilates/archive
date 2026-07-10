@@ -1017,8 +1017,7 @@ async function reconcilePrivateLessonChartForBooking(booking: BookingDoc): Promi
     return { requestId, created: false, updated: false, cancelled: false, notionSynced: false };
   }
 
-  const sessionNumber =
-    bookingPrivateSessionNumber(booking) || existingRequest?.sessionNumber || existingRecord?.sessionNumber || 0;
+  const sessionNumber = await excludedPrivateSessionNumberForBooking(booking);
   const now = nowTimestamp();
   const cancellationReason = privateLessonCancellationReason(booking);
   const requestPatch = compactObject({
@@ -1027,7 +1026,7 @@ async function reconcilePrivateLessonChartForBooking(booking: BookingDoc): Promi
     lessonEndAt: booking.lectureEndAt || existingRequest?.lessonEndAt || null,
     staffId: booking.staffId || existingRequest?.staffId || "",
     staffName: booking.staffName || existingRequest?.staffName || "",
-    sessionNumber: sessionNumber || undefined,
+    sessionNumber,
     status: "cancelled",
     cancellationReason,
     cancelledAt: now,
@@ -1043,7 +1042,7 @@ async function reconcilePrivateLessonChartForBooking(booking: BookingDoc): Promi
         lessonStartAt: booking.lectureStartAt || existingRecord.lessonStartAt || null,
         staffId: booking.staffId || existingRecord.staffId || "",
         staffName: booking.staffName || existingRecord.staffName || "",
-        sessionNumber: sessionNumber || existingRecord.sessionNumber,
+        sessionNumber,
         cancellationReason,
         cancelledAt: now,
         updatedAt: now,
@@ -1075,7 +1074,7 @@ async function reconcilePrivateLessonChartForBooking(booking: BookingDoc): Promi
     staffName: booking.staffName || existingRecord?.staffName || existingRequest?.staffName || "",
     lessonDate: booking.lectureDate || existingRecord?.lessonDate || existingRequest?.lessonDate || "",
     lessonStartAt: booking.lectureStartAt || existingRecord?.lessonStartAt || existingRequest?.lessonStartAt || null,
-    sessionNumber: sessionNumber || existingRecord?.sessionNumber || existingRequest?.sessionNumber || 0,
+    sessionNumber,
     cancellationReason,
     cancelledAt: now,
     gptStatus: existingRecord?.gptStatus || "pending",
@@ -1980,6 +1979,14 @@ async function sessionNumberForBooking(booking: BookingDoc): Promise<number> {
   return computed;
 }
 
+async function excludedPrivateSessionNumberForBooking(booking: BookingDoc): Promise<number> {
+  if (!isPrivateLessonLikeBooking(booking)) return 0;
+  const stored = bookingPrivateSessionNumber(booking);
+  if (stored && booking.sessionOrder?.computedFrom === PRIVATE_SESSION_ORDER_COMPUTED_FROM && booking.sessionOrder?.counted !== false)
+    return stored;
+  return nextSessionNumber(booking);
+}
+
 function trustedBookingPrivateSessionNumber(booking: BookingDoc): number {
   const value = bookingPrivateSessionNumber(booking);
   if (!value) return 0;
@@ -1995,9 +2002,10 @@ function bookingPrivateSessionNumber(booking: BookingDoc): number {
 function isPrivateLessonLikeBooking(booking: BookingDoc): boolean {
   const ticketName = String(booking.ticketName || "");
   const classText = `${booking.ticketClassType || ""} ${booking.ticketType || ""}`;
+  if (booking.lessonType === "group") return false;
   if (/프라이빗|개인|1:1|PRIVATE|\bP\b/i.test(ticketName)) return true;
   if (booking.lessonType === "private" || booking.lessonType === "semi_private") return true;
-  if (booking.lessonType === "group" && isExplicitGroupTicketName(ticketName)) return false;
+  if (isExplicitGroupTicketName(ticketName)) return false;
   return /프라이빗|개인|1:1|PRIVATE|\bP\b/i.test(classText);
 }
 
@@ -2590,7 +2598,7 @@ function notionChartChildren(
   return [
     heading(2, `${record.memberName}님 개인레슨 차트`),
     paragraph(
-      `회차: ${record.sessionNumber}회차 / 수업일: ${lessonTimeText(chartRequest)} / 담당: ${record.staffName || "미정"}`,
+      `회차: ${privateSessionDisplayLabel(record, chartRequest)} / 수업일: ${lessonTimeText(chartRequest)} / 담당: ${record.staffName || "미정"}`,
     ),
     ...(cancelled ? [callout(`이 수업은 회차에서 제외되었습니다. 사유: ${privateChartCancellationText(chartRequest)}`)] : []),
     callout(
@@ -2760,7 +2768,7 @@ function notionInstructorChartChildren(
   const cancelled = chartRequest.status === "cancelled";
   return [
     callout("이 페이지는 강사용 회차 기록입니다. 회원 발송은 수업 후 기록 링크의 리포트 화면에서 처리합니다."),
-    heading(2, `${record.memberName}님 ${record.sessionNumber}회차`),
+    heading(2, `${record.memberName}님 ${privateSessionDisplayLabel(record, chartRequest)}`),
     paragraph(
       `상태: ${privateChartStatusText(chartRequest)} / 수업일: ${lessonTimeText(chartRequest)} / 담당: ${record.staffName || "미정"}`,
     ),
@@ -2822,7 +2830,7 @@ function notionLinkButton(text: string, url: string): Record<string, unknown> {
 
 function chartNotes(record: PrivateLessonChartRecordDoc, chartRequest: PrivateLessonChartRequestDoc): string {
   return [
-    `[${record.sessionNumber}회차] ${lessonTimeText(chartRequest)}`,
+    `[${privateSessionDisplayLabel(record, chartRequest)}] ${lessonTimeText(chartRequest)}`,
     "",
     "사전설문 요약",
     safeJson(chartRequest.intakeSummary || {}),
@@ -2912,7 +2920,13 @@ function notionSessionTitle(record: PrivateLessonChartRecordDoc, chartRequest: P
 }
 
 function notionSessionTitleCore(record: PrivateLessonChartRecordDoc, chartRequest: PrivateLessonChartRequestDoc): string {
-  return `${lessonTitleDate(chartRequest)} · ${record.memberName} ${record.sessionNumber}회차`;
+  return `${lessonTitleDate(chartRequest)} · ${record.memberName} ${privateSessionDisplayLabel(record, chartRequest)}`;
+}
+
+function privateSessionDisplayLabel(record: PrivateLessonChartRecordDoc, chartRequest: PrivateLessonChartRequestDoc): string {
+  const sessionNumber = Number(record.sessionNumber || 0);
+  if (Number.isFinite(sessionNumber) && sessionNumber > 0) return `${sessionNumber}회차`;
+  return chartRequest.status === "cancelled" ? "회차 제외" : "회차 미정";
 }
 
 function privateChartTitleStage(

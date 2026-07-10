@@ -103,7 +103,7 @@ async function recomputeMember(member) {
   const ledgerByKey = new Map(ledgerEntries.map((entry) => [entry.occurrenceKey, entry]));
   const ledgerByBookingId = new Map(ledgerEntries.filter((entry) => entry.bookingId).map((entry) => [entry.bookingId, entry]));
   const bookingPatches = buildBookingPatches(bookings, ledgerByKey, ledgerByBookingId);
-  const requestPatches = await buildRequestPatches(requestSnap.docs, bookings, ledgerByKey, ledgerByBookingId);
+  const requestPatches = await buildRequestPatches(requestSnap.docs, bookings, ledgerEntries, ledgerByKey, ledgerByBookingId);
   const staleLedgerDeletes = ledgerSnap.docs.map((doc) => doc.id);
   const plannedWrites = ledgerEntries.length + staleLedgerDeletes.length + bookingPatches.length * 2 + requestPatches.length * 2;
 
@@ -203,14 +203,45 @@ function buildBookingPatches(bookings, ledgerByKey, ledgerByBookingId) {
   return patches;
 }
 
-async function buildRequestPatches(requestDocs, bookings, ledgerByKey, ledgerByBookingId) {
+async function buildRequestPatches(requestDocs, bookings, ledgerEntries, ledgerByKey, ledgerByBookingId) {
   const now = admin.firestore.Timestamp.now();
   const patches = [];
   for (const doc of requestDocs) {
     const request = { requestId: doc.id, ...(doc.data() || {}) };
     const key = occurrenceKey(timelineRowFromRequest(request));
     const ledger = ledgerByBookingId.get(String(request.bookingId || "")) || ledgerByKey.get(key);
-    if (String(request.status || "") === "cancelled") continue;
+    if (String(request.status || "") === "cancelled") {
+      const sessionNumber = cancelledRequestSessionNumber(request, bookings, ledgerEntries);
+      if (Number(request.sessionNumber || 0) !== sessionNumber) {
+        patches.push({
+          requestId: request.requestId,
+          recordId: request.requestId,
+          reason: "sync_cancelled_chart_request_display_round",
+          before: { sessionNumber: request.sessionNumber, status: request.status, bookingId: request.bookingId },
+          requestPatch: {
+            sessionNumber,
+            sessionNumberCorrection: {
+              from: positiveNumber(request.sessionNumber),
+              to: sessionNumber || null,
+              reason: sessionNumber ? "cancelled private booking would-be round" : "cancelled non-private booking excluded from private rounds",
+              correctedAt: now,
+            },
+            updatedAt: now,
+          },
+          recordPatch: {
+            sessionNumber,
+            sessionNumberCorrection: {
+              from: positiveNumber(request.sessionNumber),
+              to: sessionNumber || null,
+              reason: sessionNumber ? "cancelled private booking would-be round" : "cancelled non-private booking excluded from private rounds",
+              correctedAt: now,
+            },
+            updatedAt: now,
+          },
+        });
+      }
+      continue;
+    }
     if (!ledger) {
       const replacement = replacementBookingForRequest(request, bookings, ledgerByKey, ledgerByBookingId);
       if (replacement) {
@@ -365,6 +396,14 @@ function replacementBookingForRequest(request, bookings, ledgerByKey, ledgerByBo
       return aDistance - bDistance || bookingSourcePriority(String(a.bookingId || a.id || "")) - bookingSourcePriority(String(b.bookingId || b.id || ""));
     });
   return candidates.length === 1 ? candidates[0] : null;
+}
+
+function cancelledRequestSessionNumber(request, bookings, ledgerEntries) {
+  const booking = bookings.find((item) => String(item.bookingId || item.id || "") === String(request.bookingId || ""));
+  if (booking && !isPrivateBooking(booking)) return 0;
+  const startsAt = timestampMillisFromValue(request.lessonStartAt) || timestampMillisFromValue(booking?.lectureStartAt);
+  if (!startsAt) return Number(request.sessionNumber || 0) || 0;
+  return ledgerEntries.filter((entry) => timestampMillisFromValue(entry.startsAt) < startsAt).length + 1;
 }
 
 async function applyMemberPlan({ member, ledgerEntries, staleLedgerDeletes, bookingPatches, requestPatches }) {
