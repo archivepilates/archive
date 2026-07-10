@@ -99,3 +99,13 @@ Date: 2026-07-07
 - `팀아카이브` top navigation and the homepage Team Archive CTA now link directly to `https://archive-team.notion.site/`.
 - The header logo was updated again from the supplied cropped ARCHIVE wordmark source and exported with safe horizontal/vertical padding for the live navigation.
 - For the priority query `아카이브필라테스`, the official homepage description and Open Graph description were updated to start with the Korean brand keyword while staying under Naver's short-description guidance.
+
+## 2026-07-10 Google Favicon Follow-up
+
+- Added an explicit `favicon-48x48.png` asset for Google Search favicon eligibility.
+- Updated official homepage and Team Archive page head links with `shortcut icon`, `48x48`, and `192x192` favicon declarations.
+- Added the `48x48` icon to `site.webmanifest`.
+- Live verification target after deploy:
+  - `https://archivepilates.com/favicon-48x48.png` returns HTTP 200.
+  - `https://archivepilates.com/` head includes the 48px and 192px favicon links.
+  - Google Search result icon still depends on Google recrawling and processing the homepage.
