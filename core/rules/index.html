@@ -91,7 +91,7 @@
                 <li>예약·출석·프라이빗 회차 판단의 단일 예약 원천은 bookings입니다. memberUsageEvents는 legacy 검증·백필 자료로만 보관하고 운영 원천으로 사용하지 않습니다.</li>
                 <li>action은 alimtalkCandidates, alimtalkSends, contactSyncJobs, memberSignupContracts, onsiteWelcomeRequests, privateLessonChartRequests, privateLessonChartRecords입니다.</li>
                 <li>computed는 privateSessionLedger, attendanceSummaries, adminActions, instructorViews, dashboardSnapshots입니다.</li>
-                <li>member360Cards, members 하위 컬렉션, dashboardSnapshots는 분석·검토용 read-model입니다.</li>
+                <li>member360Cards, members 하위 컬렉션, dashboardSnapshots는 분석·검토용 read-model입니다. 현재 수강권, 재등록 후보, 외부 실행 대상 판단은 최신 memberProfiles를 우선합니다.</li>
                 <li>workLanes는 임시 작업 공간이며 외부 발송·쓰기 원천으로 사용하지 않습니다.</li>
               </ul>
             </article>
@@ -138,6 +138,10 @@
               <h3>회원·수강권</h3>
               <ul>
                 <li>memberProfiles는 화면과 후속 실행을 위한 정규화 뷰입니다.</li>
+                <li>현재 활성 수강권 판단은 memberProfiles.activeTickets를 우선합니다. member360Cards나 members 하위 summary가 더 오래된 경우 CORE 화면은 memberProfiles 값으로 덮어 표시합니다.</li>
+                <li>구매금액과 누적매출은 member360Cards와 members/{memberId}/purchases의 분석용 미러입니다. 결제금액 원천이 끊기면 임의 추정하지 않고 StudioMate 회원목록/수강권 결제 컬럼을 재수집해 미러를 재생성합니다.</li>
+                <li>회원목록 Excel import는 활성 수강권 안에 결제금액, 결제일시, 결제방법을 함께 보존합니다. 로컬 원본 파일을 삭제하더라도 Firestore에 필요한 결제 메타데이터가 남아야 합니다.</li>
+                <li>CORE 데이터 검증은 audit:archive-core-data로 실행하며, 수강권 미러 지연·구매금액 미러 누락·회원 360 미러 누락을 운영자 액션 1건으로 요약합니다.</li>
                 <li>엑셀에만 있는 회원은 등록 3일 이내이고 활성 수강권이 있을 때만 임시 회원카드를 만듭니다.</li>
                 <li>수강권 없는 상담고객은 회원카드를 만들지 않고 연락처 후보로만 다룹니다.</li>
                 <li>같은 연락처의 회원카드는 대표 회원카드 1개만 유지합니다. 중복이 생기면 전화번호 병합 가드가 실제 StudioMate ID, 활성 수강권, 정식 프로필을 우선 대표로 고르고 나머지는 mergedInto로 표시한 뒤 예약, 회차, 알림톡, 메모, 주차 참조를 대표 카드로 이동합니다.</li>
@@ -200,7 +204,7 @@
             <article class="rule-card">
               <h3>후보 산정</h3>
               <ul>
-                <li>기본 원천은 member360Cards의 currentTicketsSummary입니다. 화면 표시용 read-model을 사용하되, 실제 발송과 외부 쓰기는 기존 canonical source 규칙을 따릅니다.</li>
+                <li>기본 원천은 memberProfiles.activeTickets입니다. member360Cards.currentTicketsSummary는 매출·상세 검토용 미러로만 사용하며, 최신 memberProfiles와 다르면 CORE 화면은 memberProfiles 값을 우선 표시합니다.</li>
                 <li>수강권 만료 30일 이내, 잔여 횟수 부족, 최근 방문 후 활성 수강권 공백 회원을 후보로 봅니다.</li>
                 <li>그룹·일반 수업권은 잔여 5회 이하, 프라이빗은 잔여 3회 이하를 관리 후보로 봅니다.</li>
                 <li>7일 이내 만료 또는 매우 낮은 잔여 횟수는 오늘 확인 후보로 올립니다.</li>
@@ -225,7 +229,7 @@
               </ul>
             </article>
           </div>
-          <div class="rule-note"><strong>현재 확인 위치</strong><span>CORE Home > 재등록 관리 / Firestore member360Cards.currentTicketsSummary</span></div>
+          <div class="rule-note"><strong>현재 확인 위치</strong><span>CORE Home > 재등록 관리 / Firestore memberProfiles.activeTickets 우선, member360Cards는 구매·매출 미러</span></div>
         </section>
 
         <section class="panel rule-section" id="alimtalk">

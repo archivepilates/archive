@@ -35,6 +35,8 @@ const required = [
     markers: [
       "renewalCandidateRows",
       "renderRenewalPipeline",
+      "mergeMemberCardsWithProfiles",
+      "coreDataHealthIssues",
       "pricingInquiryAlimtalkRequests",
       "pricingInquiryDisplayPhone",
       "pricingInquiryHistoryPanel",

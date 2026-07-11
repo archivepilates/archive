@@ -111,6 +111,8 @@ function buildManifest(surface) {
       "재등록 관리",
       "renewalPipelineList",
       "renewalCandidateRows",
+      "mergeMemberCardsWithProfiles",
+      "coreDataHealthIssues",
       "수강료 문의 즉시발송",
       "pricingInquiryHistoryPanel",
       "privateInstructorPendingList",

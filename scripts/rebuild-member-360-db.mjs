@@ -197,6 +197,22 @@ function buildIndexes(input) {
     }
   }
 
+  const existingPurchaseKeys = new Set();
+  for (const [memberId, purchases] of purchasesByMember.entries()) {
+    for (const purchase of purchases) existingPurchaseKeys.add(canonicalPurchaseKey(memberId, purchase));
+  }
+  for (const profile of profileById.values()) {
+    const memberId = cleanString(profile.memberId || profile.id);
+    if (!memberId) continue;
+    for (const purchase of profileActiveTicketPurchases(profile)) {
+      const key = canonicalPurchaseKey(memberId, purchase);
+      if (existingPurchaseKeys.has(key)) continue;
+      existingPurchaseKeys.add(key);
+      pushMap(purchasesByMember, memberId, { ...purchase, matchType: "member_profile_active_ticket" });
+      purchaseMatchStats.matchedByMemberId += 1;
+    }
+  }
+
   return {
     profileById,
     bookingsByMember,
@@ -208,6 +224,65 @@ function buildIndexes(input) {
     purchaseMatchStats,
     purchaseIssues,
   };
+}
+
+function profileActiveTicketPurchases(profile) {
+  const memberId = cleanString(profile.memberId || profile.id);
+  return (profile.activeTickets || [])
+    .map((ticket, index) => {
+      const amountTotal = money(ticket.paymentAmount ?? ticket.amountTotal ?? ticket.price ?? "");
+      const paymentDate = dateKeyFromAny(ticket.paymentAt || ticket.paymentDate || ticket.purchasedAt);
+      if (!amountTotal && !paymentDate) return null;
+      const ticketName = cleanString(ticket.ticketName || ticket.name || "");
+      const startDate = dateKeyFromAny(ticket.availableFrom || ticket.startDate || ticket.issuedAt);
+      const endDate = dateKeyFromAny(ticket.expiresAt || ticket.endDate || ticket.expireAt);
+      const purchaseId =
+        cleanString(ticket.purchaseId) ||
+        `profile_active_ticket_${hash([memberId, ticketName, paymentDate, amountTotal, startDate, endDate, index].join("|")).slice(0, 20)}`;
+      return {
+        purchaseId,
+        memberId,
+        memberPhone: normalizePhone(profile.phone || ""),
+        sourcePath: `memberProfiles/${memberId}.activeTickets`,
+        sourceMonth: monthKey(paymentDate || startDate),
+        paymentDate,
+        category: cleanString(ticket.paymentType || "현재 수강권"),
+        classType: classTypeName(ticket.classType || ticket.lessonType || ""),
+        memberName: cleanString(profile.name || ""),
+        normalizedName: normalizeName(profile.name || ""),
+        ticketName,
+        amountTotal,
+        paymentMethod: cleanString(ticket.paymentMethod || ""),
+        startDate,
+        endDate,
+        issuedAt: dateKeyFromAny(ticket.issuedAt),
+        maxCount: numberValue(ticket.maxCount ?? ticket.totalCount ?? ticket.usableCount ?? ""),
+        remainingCount: numberValue(ticket.remainingCount ?? ticket.remaining ?? ""),
+        usableCount: numberValue(ticket.usableCount ?? ""),
+        cancelableCount: numberValue(ticket.cancelableCount ?? ""),
+        ticketStatus: cleanString(ticket.status || ticket.ticketStatus || ""),
+        isActiveTicket: true,
+        isFamilyTicket: cleanString(ticket.isFamilyTicket || ""),
+        usageTotal: 0,
+        usageAttended: 0,
+        usageAbsent: 0,
+        usageCancel: 0,
+        usageWait: 0,
+        usageReservedUnchecked: 0,
+      };
+    })
+    .filter(Boolean);
+}
+
+function canonicalPurchaseKey(memberId, purchase) {
+  return [
+    cleanString(memberId || purchase.memberId),
+    cleanString(purchase.ticketName),
+    cleanString(purchase.paymentDate),
+    Number(purchase.amountTotal || 0),
+    cleanString(purchase.startDate),
+    cleanString(purchase.endDate),
+  ].join("|");
 }
 
 function buildMemberPlans(indexes) {
@@ -754,6 +829,10 @@ function dateKey(value) {
   const matched = text.match(/(20\d{2})[-./년 ]\s*(\d{1,2})[-./월 ]\s*(\d{1,2})/);
   if (matched) return `${matched[1]}-${matched[2].padStart(2, "0")}-${matched[3].padStart(2, "0")}`;
   return text.slice(0, 10);
+}
+
+function dateKeyFromAny(value) {
+  return dateFromTimestamp(value) || dateKey(value);
 }
 
 function monthKey(date) {

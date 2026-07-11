@@ -463,6 +463,7 @@ function buildActiveTickets(rows) {
     if (!name) continue;
     const expiresAt = parseKstTimestamp(row["수강권종료일"]);
     const availableFrom = parseKstTimestamp(row["수강권시작일"]);
+    const paymentAt = parseKstTimestamp(row["결제일시"]);
     const remainingCount = nullableNumber(row["잔여횟수"]);
     if (expiresAt && kstDate(expiresAt.toDate()) < today) continue;
     if (remainingCount != null && Number.isFinite(Number(remainingCount)) && Number(remainingCount) <= 0) continue;
@@ -478,6 +479,10 @@ function buildActiveTickets(rows) {
       expiryLevel: ticketExpiryLevel(expiresAt),
       status,
       classType: cleanText(row["수강권종류"]),
+      paymentAmount: moneyValue(row["결제금액"]),
+      paymentAt,
+      paymentMethod: cleanText(row["결제방법"]),
+      paymentType: cleanText(row["결제구분"]),
     });
   }
   const byKey = new Map();
@@ -656,6 +661,13 @@ function nullableNumber(value) {
   if (!cleaned) return null;
   const number = Number(cleaned);
   return Number.isFinite(number) ? number : null;
+}
+
+function moneyValue(value) {
+  const cleaned = cleanText(value).replace(/[^0-9.-]+/g, "");
+  if (!cleaned) return 0;
+  const number = Number(cleaned);
+  return Number.isFinite(number) ? Math.round(number) : 0;
 }
 
 function hash(value) {

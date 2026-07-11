@@ -120,6 +120,8 @@ const guardGroups = [
           "homeActionTotal",
           "renewalCandidateRows",
           "renderRenewalPipeline",
+          "mergeMemberCardsWithProfiles",
+          "coreDataHealthIssues",
         ],
       },
       {

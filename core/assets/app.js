@@ -11,6 +11,8 @@ const state = {
   businessMonths: [],
   businessMembers: [],
   members: [],
+  memberCards: [],
+  memberProfiles: [],
   memberDetail: null,
   alimtalkCandidates: [],
   alimtalkSends: [],
@@ -602,8 +604,9 @@ async function getLimitedSubcollection(db, firestore, memberId, subcollection, m
 async function loadMemberDetail(runtime, memberId) {
   if (!memberId) return { missingId: true };
   const { db, doc, getDoc } = runtime;
-  const [memberSnapshot, cardSnapshot, summarySnapshot, tickets, purchases, bookings, memos, alimtalkLogs, tags] =
+  const [profileSnapshot, memberSnapshot, cardSnapshot, summarySnapshot, tickets, purchases, bookings, memos, alimtalkLogs, tags] =
     await Promise.all([
+      getDoc(doc(db, "memberProfiles", memberId)),
       getDoc(doc(db, "members", memberId)),
       getDoc(doc(db, "member360Cards", memberId)),
       getDoc(doc(db, "members", memberId, "summary", "current")),
@@ -616,7 +619,8 @@ async function loadMemberDetail(runtime, memberId) {
     ]);
   return {
     id: memberId,
-    missing: !memberSnapshot.exists() && !cardSnapshot.exists(),
+    missing: !profileSnapshot.exists() && !memberSnapshot.exists() && !cardSnapshot.exists(),
+    profile: profileSnapshot.exists() ? { id: profileSnapshot.id, ...profileSnapshot.data() } : null,
     member: memberSnapshot.exists() ? { id: memberSnapshot.id, ...memberSnapshot.data() } : null,
     card: cardSnapshot.exists() ? { id: cardSnapshot.id, ...cardSnapshot.data() } : null,
     summary: summarySnapshot.exists() ? summarySnapshot.data() : null,
@@ -975,6 +979,74 @@ function uniqueTickets(items) {
   return tickets;
 }
 
+function memberStableId(item) {
+  return String(item?.memberId || item?.id || "").trim();
+}
+
+function profileActiveTickets(profile) {
+  return Array.isArray(profile?.activeTickets) ? profile.activeTickets.filter(isCurrentProfileTicket) : [];
+}
+
+function hasProfileActiveTicketsField(profile) {
+  return Boolean(profile && Array.isArray(profile.activeTickets));
+}
+
+function isCurrentProfileTicket(ticket) {
+  const expiresMs = ticketExpiresMs(ticket);
+  if (expiresMs && expiresMs + 24 * 60 * 60 * 1000 < Date.now()) return false;
+  return true;
+}
+
+function currentTicketSummaryFromProfile(profile, fallback = []) {
+  const activeTickets = profileActiveTickets(profile);
+  if (hasProfileActiveTicketsField(profile)) return activeTickets;
+  return fallback || [];
+}
+
+function mergeMemberCardsWithProfiles(cards = [], profiles = []) {
+  const cardsById = new Map();
+  for (const card of cards) {
+    const id = memberStableId(card);
+    if (id) cardsById.set(id, card);
+  }
+  const mergedById = new Map();
+  for (const card of cards) {
+    const id = memberStableId(card);
+    if (id) mergedById.set(id, { ...card, dataSources: { ...(card.dataSources || {}), card: "member360Cards" } });
+  }
+  for (const profile of profiles) {
+    const id = memberStableId(profile);
+    if (!id) continue;
+    const card = cardsById.get(id) || {};
+    const activeTickets = profileActiveTickets(profile);
+    mergedById.set(id, {
+      ...card,
+      ...profile,
+      id,
+      memberId: profile.memberId || card.memberId || id,
+      totalRevenue: toNumber(card.totalRevenue),
+      purchaseCount: toNumber(card.purchaseCount),
+      bookingCount: toNumber(card.bookingCount),
+      attendedCount: toNumber(card.attendedCount),
+      absentCount: toNumber(card.absentCount),
+      recentPurchases: card.recentPurchases || [],
+      recentBookings: card.recentBookings || [],
+      recentMemos: card.recentMemos || [],
+      signals: card.signals || [],
+      currentTicketsSummary: currentTicketSummaryFromProfile(profile, card.currentTicketsSummary || []),
+      activeTicketCount: hasProfileActiveTicketsField(profile) ? activeTickets.length : toNumber(card.activeTicketCount),
+      sourceProfileUpdatedAt: profile.updatedAt || profile.syncedAt || card.sourceProfileUpdatedAt || null,
+      cardRebuiltAt: card.rebuiltAt || null,
+      dataSources: {
+        ...(card.dataSources || {}),
+        card: card.id ? "member360Cards" : "",
+        profile: "memberProfiles",
+      },
+    });
+  }
+  return [...mergedById.values()];
+}
+
 const RENEWAL_EXCLUDED_TICKET_KEYWORDS = ["강사레슨", "강사용", "직원", "상담", "체험", "락커", "양말", "토삭스", "상품권"];
 
 function ticketNameText(ticket) {
@@ -1150,6 +1222,120 @@ function renewalCandidateRows(referenceDate = new Date()) {
       timestampMs(b.member.recentVisitAt) - timestampMs(a.member.recentVisitAt) ||
       toNumber(b.member.totalRevenue) - toNumber(a.member.totalRevenue),
   );
+}
+
+function ticketFingerprint(tickets = []) {
+  return (tickets || [])
+    .filter((ticket) => ticket && typeof ticket !== "string")
+    .map((ticket) =>
+      [
+        ticketNameText(ticket),
+        renewalTicketKind(ticket),
+        ticketRemainingCount(ticket),
+        ticketExpiresMs(ticket),
+        ticketMaxCount(ticket),
+      ].join("|"),
+    )
+    .sort()
+    .join(";");
+}
+
+function latestPurchaseDateMs(member) {
+  return Math.max(
+    0,
+    ...(member?.recentPurchases || []).map((purchase) => timestampMs(purchase.paymentDate || purchase.purchasedAt || purchase.createdAt)),
+  );
+}
+
+function latestActiveTicketStartMs(profile) {
+  return Math.max(0, ...profileActiveTickets(profile).map((ticket) => timestampMs(ticket.availableFrom || ticket.startDate || ticket.issuedAt)));
+}
+
+function latestActiveTicketPaymentMs(profile) {
+  return Math.max(0, ...profileActiveTickets(profile).map((ticket) => timestampMs(ticket.paymentAt || ticket.paymentDate || ticket.purchasedAt)));
+}
+
+function hasActiveTicketPaymentEvidence(profile) {
+  return profileActiveTickets(profile).some(
+    (ticket) =>
+      timestampMs(ticket.paymentAt || ticket.paymentDate || ticket.purchasedAt) ||
+      toNumber(ticket.paymentAmount ?? ticket.amountTotal ?? ticket.price),
+  );
+}
+
+function coreDataHealthIssues() {
+  const cardsById = new Map(state.memberCards.map((card) => [memberStableId(card), card]).filter(([id]) => id));
+  const issues = [];
+  for (const profile of state.memberProfiles || []) {
+    const memberId = memberStableId(profile);
+    if (!memberId) continue;
+    const card = cardsById.get(memberId);
+    const profileUpdatedAt = timestampMs(profile.updatedAt || profile.syncedAt);
+    if (!card) {
+      issues.push({
+        memberId,
+        memberName: profile.name || profile.memberName || memberId,
+        level: "warning",
+        type: "missing_member360_card",
+        label: "CORE 회원 미러 없음",
+        detail: "memberProfiles는 있지만 member360Cards가 없어 CORE 상세/매출 화면이 불완전합니다.",
+      });
+      continue;
+    }
+    const cardUpdatedAt = timestampMs(card.rebuiltAt || card.updatedAt || card.sourceProfileUpdatedAt);
+    const profileTickets = ticketFingerprint(profileActiveTickets(profile));
+    const cardTickets = ticketFingerprint(card.currentTicketsSummary || []);
+    if (profileUpdatedAt && cardUpdatedAt && profileUpdatedAt > cardUpdatedAt + 5 * 60 * 1000 && profileTickets !== cardTickets) {
+      issues.push({
+        memberId,
+        memberName: profile.name || profile.memberName || memberId,
+        level: "warning",
+        type: "stale_member360_ticket_summary",
+        label: "CORE 수강권 미러 지연",
+        detail: "memberProfiles 최신 수강권과 member360Cards 수강권 요약이 다릅니다.",
+      });
+    }
+    const latestTicketStart = latestActiveTicketStartMs(profile);
+    const latestPurchase = Math.max(latestPurchaseDateMs(card), latestActiveTicketPaymentMs(profile));
+    if (latestTicketStart && !hasActiveTicketPaymentEvidence(profile) && (!latestPurchase || latestTicketStart > latestPurchase + 30 * 24 * 60 * 60 * 1000)) {
+      issues.push({
+        memberId,
+        memberName: profile.name || profile.memberName || memberId,
+        level: "warning",
+        type: "missing_recent_purchase_amount",
+        label: "최근 구매금액 미러 누락",
+        detail: "활성 수강권 시작일 이후 구매 이력이 없어 금액 표시가 최신 원천과 맞지 않을 수 있습니다.",
+      });
+    }
+  }
+  return issues.sort((a, b) => String(a.memberName).localeCompare(String(b.memberName), "ko"));
+}
+
+function purchaseRowsWithProfileTickets(purchases = [], profile = {}) {
+  const out = [...(purchases || [])];
+  const seen = new Set(
+    out.map((item) =>
+      [item.ticketName || item.productName || item.name || "", item.paymentDate || item.purchasedAt || item.createdAt || "", toNumber(item.amountTotal ?? item.price ?? item.amount ?? item.revenue)].join("|"),
+    ),
+  );
+  for (const ticket of profileActiveTickets(profile)) {
+    const amountTotal = toNumber(ticket.paymentAmount ?? ticket.amountTotal ?? ticket.price);
+    const paymentDate = ticket.paymentAt || ticket.paymentDate || ticket.purchasedAt;
+    if (!amountTotal && !paymentDate) continue;
+    const key = [ticket.ticketName || ticket.name || "", paymentDate || "", amountTotal].join("|");
+    if (seen.has(key)) continue;
+    seen.add(key);
+    out.unshift({
+      id: `active_ticket_payment_${key}`,
+      ticketName: ticket.ticketName || ticket.name || "현재 수강권",
+      paymentDate,
+      amountTotal,
+      paymentMethod: ticket.paymentMethod || "",
+      category: ticket.paymentType || "현재 수강권",
+      status: ticket.status || "현재 수강권",
+    });
+  }
+  return out;
 }
 
 function memberRank(item) {
@@ -2123,12 +2309,22 @@ function renderMemberDetail(detail) {
     return;
   }
 
-  const member = detail?.member || detail?.card || {};
+  const profile = detail?.profile || {};
+  const member = { ...(detail?.card || {}), ...(detail?.member || {}), ...profile };
   const summary = detail?.summary || {};
-  const merged = { ...detail?.card, ...member, ...summary };
+  const merged = {
+    ...detail?.card,
+    ...(detail?.member || {}),
+    ...summary,
+    ...profile,
+    currentTicketsSummary: hasProfileActiveTicketsField(profile)
+      ? profileActiveTickets(profile)
+      : summary.currentTicketsSummary || detail?.card?.currentTicketsSummary || detail?.member?.currentTicketsSummary || [],
+  };
   const signals = merged.signals || detail?.card?.signals || [];
-  const tickets = detail?.tickets?.length ? detail.tickets : merged.currentTicketsSummary || [];
-  const purchases = detail?.purchases?.length ? detail.purchases : merged.recentPurchases || [];
+  const tickets = hasProfileActiveTicketsField(profile) ? profileActiveTickets(profile) : detail?.tickets?.length ? detail.tickets : merged.currentTicketsSummary || [];
+  const activeTicketCount = hasProfileActiveTicketsField(profile) ? tickets.length : toNumber(member.activeTicketCount || tickets.length);
+  const purchases = purchaseRowsWithProfileTickets(detail?.purchases?.length ? detail.purchases : merged.recentPurchases || [], profile);
   const bookings = detail?.bookings?.length ? detail.bookings : merged.recentBookings || [];
   const memos = detail?.memos?.length ? detail.memos : merged.recentMemos || [];
   const alimtalkLogs = detail?.alimtalkLogs?.length ? detail.alimtalkLogs : merged.recentAlimtalk || [];
@@ -2148,7 +2344,7 @@ function renderMemberDetail(detail) {
     `${member.memberId || detail?.id || "-"} · ${member.phoneLast4 ? `끝자리 ${member.phoneLast4}` : "전화번호 요약 없음"} · ${statusLabel(member.status || "active")}`,
   );
   setText("memberDetailRevenue", formatManwon(toNumber(member.totalRevenue)));
-  setText("memberDetailTickets", formatCount(member.activeTicketCount || tickets.length, "개"));
+  setText("memberDetailTickets", formatCount(activeTicketCount, "개"));
   setText("memberDetailBookings", formatCount(member.bookingCount || bookings.length));
   setText("memberDetailRecentVisit", compactDateTime(member.recentVisitAt));
   setText("memberDetailRegisteredAt", shortDate(member.registeredAt));
@@ -2157,7 +2353,6 @@ function renderMemberDetail(detail) {
   setText("memberDetailAlimtalkCount", formatCount(alimtalkLogs.length));
   setText("memberDetailQualityCount", formatCount(relatedIssues.length));
 
-  const activeTicketCount = toNumber(member.activeTicketCount || tickets.length);
   const lastVisitText = member.recentVisitAt ? compactDateTime(member.recentVisitAt) : "최근 방문 없음";
   if (relatedIssues.length) {
     setPillText("memberDetailPrimaryActionTone", "warning");
@@ -2208,11 +2403,11 @@ function renderMemberDetail(detail) {
         status: openSignals.length ? "warning" : "success",
       },
       {
-        title: toNumber(member.activeTicketCount || tickets.length) ? "수강권 보유" : "수강권 확인 필요",
-        detail: toNumber(member.activeTicketCount || tickets.length)
+        title: activeTicketCount ? "수강권 보유" : "수강권 확인 필요",
+        detail: activeTicketCount
           ? "현재 수강권 요약이 있어 최근 예약/출석과 함께 보면 됩니다."
           : "활성 수강권 요약이 없으므로 상담/미등록/만료 상태를 확인하세요.",
-        status: toNumber(member.activeTicketCount || tickets.length) ? "active" : "warning",
+        status: activeTicketCount ? "active" : "warning",
       },
       {
         title: relatedIssues.length ? "데이터 품질 이슈 있음" : "품질 이슈 없음",
@@ -2275,11 +2470,11 @@ function renderMemberDetail(detail) {
   renderMiniList("memberDetailPurchasesList", purchases, {
     empty: "최근 구매/수강권 이력이 없습니다.",
     title: (item) => item.ticketName || item.productName || item.name || item.id,
-    detail: (item) =>
-      [shortDate(item.purchasedAt || item.createdAt), formatManwon(toNumber(item.price || item.amount || item.revenue))]
-        .filter(Boolean)
-        .join(" · "),
-    status: (item) => item.status,
+    detail: (item) => {
+      const amount = toNumber(item.amountTotal ?? item.price ?? item.amount ?? item.revenue);
+      return [shortDate(item.paymentDate || item.purchasedAt || item.createdAt), amount ? formatManwon(amount) : ""].filter(Boolean).join(" · ");
+    },
+    status: (item) => item.status || item.ticketStatus || item.paymentMethod || item.category,
   });
   renderMiniList("memberDetailBookingsList", bookings, {
     empty: "최근 예약/출석 이력이 없습니다.",
@@ -2875,6 +3070,7 @@ function renderHomeDecisions() {
   if (!list) return;
   const openIssues = activeQualityIssues();
   const failedAutomation = failedAutomationItems();
+  const dataHealthIssues = coreDataHealthIssues();
   const { failedCandidates, failedSends, flowProblems, pendingCandidates } = communicationProblemSummary();
   const renewalRows = renewalCandidateRows();
   const renewalUrgent = renewalRows.filter((row) => row.priority === "urgent").length;
@@ -2923,6 +3119,16 @@ function renderHomeDecisions() {
       href: "./automation/",
     });
   }
+  if (dataHealthIssues.length) {
+    const purchaseMissing = dataHealthIssues.filter((issue) => issue.type === "missing_recent_purchase_amount").length;
+    const staleTickets = dataHealthIssues.filter((issue) => issue.type === "stale_member360_ticket_summary").length;
+    rows.push({
+      title: "CORE 데이터 검증",
+      detail: `수강권 미러 지연 ${staleTickets}명, 최근 구매금액 누락 ${purchaseMissing}명입니다. 최신 원천 재생성이 필요합니다.`,
+      status: "warning",
+      href: "./imports/",
+    });
+  }
   if (openIssues.length) {
     rows.push({
       title: "데이터 품질 운영 확인",
@@ -2961,6 +3167,7 @@ function renderHomeSummary() {
   if (!qs("homeMemberTotal")) return;
   const openIssues = activeQualityIssues();
   const failedAutomation = failedAutomationItems();
+  const dataHealthIssues = coreDataHealthIssues();
   const activeMembers = state.members.filter((item) => toNumber(item.activeTicketCount) > 0).length;
   const renewalRows = renewalCandidateRows();
   const renewalUrgent = renewalRows.filter((row) => row.priority === "urgent").length;
@@ -2971,7 +3178,8 @@ function renderHomeSummary() {
   const { failedCandidates, failedSends, flowProblems, pendingCandidates } = communicationProblemSummary();
   const communicationProblems = failedCandidates.length + failedSends.length + flowProblems.length;
   const memberCareTotal = flowProblems.length + renewalUrgent;
-  const actionTotal = communicationProblems + pendingCandidates.length + failedAutomation.length + openIssues.length + renewalUrgent;
+  const actionTotal =
+    communicationProblems + pendingCandidates.length + failedAutomation.length + openIssues.length + (dataHealthIssues.length ? 1 : 0) + renewalUrgent;
   const latestImport = state.sourceImports[0];
   setText("commandQueueStatus", actionTotal ? `${actionTotal}건 확인 필요` : "오늘 처리할 큐 없음");
   setText(
@@ -3058,6 +3266,8 @@ function renderHomeSummary() {
     "homeContextQuality",
     openIssues.length || failedAutomation.length
       ? `품질 ${openIssues.length} · 자동화 ${failedAutomation.length}`
+      : dataHealthIssues.length
+        ? `CORE 데이터 ${dataHealthIssues.length}`
       : "주의 낮음",
   );
   renderRenewalPipeline(renewalRows, { urgent: renewalUrgent, soon: renewalSoon, waiting: renewalWaiting });
@@ -4035,6 +4245,7 @@ async function refresh() {
       qualityIssues,
       dashboardSnapshot,
       members,
+      memberProfiles,
       alimtalkCandidates,
       alimtalkSends,
       onsiteWelcomeRequests,
@@ -4062,6 +4273,9 @@ async function refresh() {
         : Promise.resolve(null),
       shouldLoadMembers || shouldLoadHome
         ? safeRead("member360Cards", () => getCollectionBy(db, runtime, "member360Cards", "totalRevenue", 2000), [])
+        : Promise.resolve([]),
+      shouldLoadMembers || shouldLoadHome
+        ? safeRead("memberProfiles", () => getCollectionBy(db, runtime, "memberProfiles", "updatedAt", 2000), [])
         : Promise.resolve([]),
       shouldLoadMessages || shouldLoadHome || shouldLoadPrivate
         ? safeRead(
@@ -4144,7 +4358,9 @@ async function refresh() {
     state.automationItems = automationItems;
     state.sourceImports = studioItems(sourceImports);
     state.qualityIssues = studioItems(qualityIssues);
-    state.members = studioItems(members);
+    state.memberCards = studioItems(members);
+    state.memberProfiles = studioItems(memberProfiles);
+    state.members = mergeMemberCardsWithProfiles(state.memberCards, state.memberProfiles);
     state.alimtalkCandidates = alimtalkCandidates;
     state.alimtalkSends = alimtalkSends;
     state.onsiteWelcomeRequests = studioItems(onsiteWelcomeRequests);
