@@ -58,6 +58,12 @@ const COMMAND_ITEMS = [
     keywords: "수강료 가격 문의 알림톡 발송 상담",
   },
   {
+    title: "재등록 관리",
+    detail: "만료 임박, 잔여 부족, 재등록 대기 회원 확인",
+    href: "#renewalPipeline",
+    keywords: "renewal 재등록 만료 잔여 수강권 상담",
+  },
+  {
     title: "주차등록",
     detail: "회원/강사 차량 등록과 오늘 자동 주차권 적용",
     href: "#parkingRegistrationForm",
@@ -967,6 +973,183 @@ function uniqueTickets(items) {
       tickets.push(ticket);
     });
   return tickets;
+}
+
+const RENEWAL_EXCLUDED_TICKET_KEYWORDS = ["강사레슨", "강사용", "직원", "상담", "체험", "락커", "양말", "토삭스", "상품권"];
+
+function ticketNameText(ticket) {
+  return String(ticketLabel(ticket) || "").trim();
+}
+
+function ticketClassText(ticket) {
+  return String(ticket?.classType || ticket?.ticketClassType || ticket?.lessonType || ticket?.ticketType || "").trim();
+}
+
+function renewalTicketKind(ticket) {
+  const text = `${ticketClassText(ticket)} ${ticketNameText(ticket)}`.toLowerCase();
+  if (/프라이빗|개인|1:1|private|semi/.test(text)) return "private";
+  if (/그룹|group|소그룹|duet|듀엣/.test(text)) return "group";
+  return "lesson";
+}
+
+function isRenewalManagedTicket(ticket) {
+  const name = ticketNameText(ticket);
+  if (!name) return false;
+  return !RENEWAL_EXCLUDED_TICKET_KEYWORDS.some((keyword) => name.includes(keyword));
+}
+
+function ticketRemainingCount(ticket) {
+  const value = ticket?.remainingCount ?? ticket?.remaining ?? ticket?.remainCount;
+  if (value === null || value === undefined || value === "") return Number.NaN;
+  return Number(value);
+}
+
+function ticketMaxCount(ticket) {
+  const value = ticket?.maxCount ?? ticket?.totalCount ?? ticket?.usableCount;
+  if (value === null || value === undefined || value === "") return Number.NaN;
+  return Number(value);
+}
+
+function ticketExpiresMs(ticket) {
+  return timestampMs(ticket?.expiresAt || ticket?.expireAt || ticket?.endAt || ticket?.expiryDate);
+}
+
+function daysUntilDate(ms, referenceDate = new Date()) {
+  if (!ms) return Number.POSITIVE_INFINITY;
+  const start = todayStartMs(referenceDate);
+  const target = startOfLocalDay(new Date(ms)).getTime();
+  return Math.ceil((target - start) / (24 * 60 * 60 * 1000));
+}
+
+function renewalCountThreshold(kind) {
+  return kind === "private" ? 3 : 5;
+}
+
+function renewalTicketIdentity(ticket) {
+  return [
+    ticket?.userTicketId,
+    ticket?.ticketId,
+    ticketNameText(ticket),
+    ticketExpiresMs(ticket),
+    ticketRemainingCount(ticket),
+  ]
+    .filter((value) => value !== undefined && value !== null && value !== "" && !Number.isNaN(value))
+    .join("|");
+}
+
+function isHealthyBackupTicket(ticket, referenceDate = new Date()) {
+  if (!isRenewalManagedTicket(ticket)) return false;
+  const kind = renewalTicketKind(ticket);
+  const remaining = ticketRemainingCount(ticket);
+  const days = daysUntilDate(ticketExpiresMs(ticket), referenceDate);
+  if (Number.isFinite(remaining) && remaining <= renewalCountThreshold(kind)) return false;
+  if (Number.isFinite(days) && days <= 30) return false;
+  return true;
+}
+
+function hasSameKindBackupTicket(tickets, target, referenceDate = new Date()) {
+  const targetKind = renewalTicketKind(target);
+  const targetIdentity = renewalTicketIdentity(target);
+  return tickets.some((ticket) => {
+    if (renewalTicketIdentity(ticket) === targetIdentity) return false;
+    if (renewalTicketKind(ticket) !== targetKind) return false;
+    return isHealthyBackupTicket(ticket, referenceDate);
+  });
+}
+
+function renewalTicketRisk(ticket, tickets, referenceDate = new Date()) {
+  if (!isRenewalManagedTicket(ticket)) return null;
+  const kind = renewalTicketKind(ticket);
+  const remaining = ticketRemainingCount(ticket);
+  const maxCount = ticketMaxCount(ticket);
+  const days = daysUntilDate(ticketExpiresMs(ticket), referenceDate);
+  const reasons = [];
+  if (Number.isFinite(days) && days < 0) reasons.push("기간 만료");
+  else if (Number.isFinite(days) && days <= 30) reasons.push(`만료 D-${days}`);
+  if (Number.isFinite(remaining) && remaining <= renewalCountThreshold(kind)) reasons.push(`잔여 ${remaining}회`);
+  if (!reasons.length) return null;
+  if (hasSameKindBackupTicket(tickets, ticket, referenceDate)) return null;
+  const urgent =
+    (Number.isFinite(days) && days <= 7) ||
+    (Number.isFinite(remaining) && remaining <= (kind === "private" ? 1 : 2));
+  const warning =
+    urgent ||
+    (Number.isFinite(days) && days <= 14) ||
+    (Number.isFinite(remaining) && remaining <= (kind === "private" ? 2 : 3));
+  return {
+    ticket,
+    kind,
+    days,
+    remaining,
+    maxCount,
+    priority: urgent ? "urgent" : warning ? "warning" : "follow",
+    reason: reasons.join(" · "),
+  };
+}
+
+function renewalStatusValue(priority) {
+  if (priority === "urgent") return "critical";
+  if (priority === "warning" || priority === "waiting") return "warning";
+  return "reviewing";
+}
+
+function renewalActionText(candidate) {
+  if (candidate.priority === "waiting") return "최근 방문 이력 기준 복귀 연락";
+  if (candidate.priority === "urgent") return "오늘 수업 전후 현장 상담";
+  if (candidate.topRisk?.kind === "private") return "프라이빗 다음 블록 상담";
+  return "그룹권 재등록/소진 플랜 상담";
+}
+
+function renewalCandidateRows(referenceDate = new Date()) {
+  const mergedMembers = mergeDuplicateMembers(state.members || []);
+  const rows = [];
+  for (const member of mergedMembers) {
+    const memberId = member.memberId || member.id || "";
+    const name = member.name || member.memberName || memberId || "회원";
+    const tickets = (member.currentTicketsSummary || member.activeTicketNames || []).filter((ticket) => typeof ticket !== "string");
+    const activeTicketCount = toNumber(member.activeTicketCount || tickets.length);
+    const risks = tickets
+      .map((ticket) => renewalTicketRisk(ticket, tickets, referenceDate))
+      .filter(Boolean)
+      .sort((a, b) => {
+        const priorityRank = { urgent: 3, warning: 2, follow: 1 };
+        return (
+          (priorityRank[b.priority] || 0) - (priorityRank[a.priority] || 0) ||
+          (Number.isFinite(a.days) ? a.days : 9999) - (Number.isFinite(b.days) ? b.days : 9999) ||
+          (Number.isFinite(a.remaining) ? a.remaining : 9999) - (Number.isFinite(b.remaining) ? b.remaining : 9999)
+        );
+      });
+    const recentVisitMs = timestampMs(member.recentVisitAt);
+    const recentVisitDays = recentVisitMs ? Math.max(0, Math.floor((todayStartMs(referenceDate) - startOfLocalDay(new Date(recentVisitMs)).getTime()) / (24 * 60 * 60 * 1000))) : Number.POSITIVE_INFINITY;
+    const recentlyVisited = recentVisitDays <= 45;
+    if (!risks.length && !(activeTicketCount === 0 && recentlyVisited && toNumber(member.totalRevenue) > 0)) continue;
+    const topRisk = risks[0] || null;
+    const priority = topRisk?.priority || "waiting";
+    const phone = normalizePhone(member.phone || member.memberPhone || member.phoneNumber || "");
+    const ticketName = topRisk ? ticketNameText(topRisk.ticket) : "활성 수강권 없음";
+    const reason = topRisk ? topRisk.reason : `최근 방문 ${recentVisitDays}일 전`;
+    rows.push({
+      member,
+      memberId,
+      name,
+      phone,
+      priority,
+      topRisk,
+      ticketName,
+      reason,
+      recentVisitDays,
+      activeTicketCount,
+      href: memberId ? `./members/detail/?id=${encodeURIComponent(memberId)}` : "./members/",
+      action: renewalActionText({ priority, topRisk }),
+    });
+  }
+  const priorityRank = { urgent: 4, warning: 3, waiting: 2, follow: 1 };
+  return rows.sort(
+    (a, b) =>
+      (priorityRank[b.priority] || 0) - (priorityRank[a.priority] || 0) ||
+      timestampMs(b.member.recentVisitAt) - timestampMs(a.member.recentVisitAt) ||
+      toNumber(b.member.totalRevenue) - toNumber(a.member.totalRevenue),
+  );
 }
 
 function memberRank(item) {
@@ -2693,9 +2876,21 @@ function renderHomeDecisions() {
   const openIssues = activeQualityIssues();
   const failedAutomation = failedAutomationItems();
   const { failedCandidates, failedSends, flowProblems, pendingCandidates } = communicationProblemSummary();
+  const renewalRows = renewalCandidateRows();
+  const renewalUrgent = renewalRows.filter((row) => row.priority === "urgent").length;
   const sendFailures = failedCandidates.length + failedSends.length;
   const rows = [];
 
+  if (renewalRows.length) {
+    rows.push({
+      title: "재등록 관리",
+      detail: renewalUrgent
+        ? `오늘 확인 ${renewalUrgent}명, 전체 후보 ${renewalRows.length}명입니다. 현장 상담과 복귀 연락을 먼저 처리하세요.`
+        : `30일 내 만료/잔여 부족/재등록 대기 ${renewalRows.length}명을 관리합니다.`,
+      status: renewalUrgent ? "critical" : "warning",
+      href: "#renewalPipeline",
+    });
+  }
   if (flowProblems.length) {
     rows.push({
       title: "회원 응대 후속 처리",
@@ -2767,11 +2962,16 @@ function renderHomeSummary() {
   const openIssues = activeQualityIssues();
   const failedAutomation = failedAutomationItems();
   const activeMembers = state.members.filter((item) => toNumber(item.activeTicketCount) > 0).length;
+  const renewalRows = renewalCandidateRows();
+  const renewalUrgent = renewalRows.filter((row) => row.priority === "urgent").length;
+  const renewalSoon = renewalRows.filter((row) => row.priority === "warning" || row.priority === "follow").length;
+  const renewalWaiting = renewalRows.filter((row) => row.priority === "waiting").length;
   const privatePending = pendingPrivateProgressRows();
   const privateBreakdown = privatePendingBreakdown(privatePending);
   const { failedCandidates, failedSends, flowProblems, pendingCandidates } = communicationProblemSummary();
   const communicationProblems = failedCandidates.length + failedSends.length + flowProblems.length;
-  const actionTotal = communicationProblems + pendingCandidates.length + failedAutomation.length + openIssues.length;
+  const memberCareTotal = flowProblems.length + renewalUrgent;
+  const actionTotal = communicationProblems + pendingCandidates.length + failedAutomation.length + openIssues.length + renewalUrgent;
   const latestImport = state.sourceImports[0];
   setText("commandQueueStatus", actionTotal ? `${actionTotal}건 확인 필요` : "오늘 처리할 큐 없음");
   setText(
@@ -2783,12 +2983,16 @@ function renderHomeSummary() {
   setText("homeActionTotal", formatCount(actionTotal));
   setText(
     "homeActionNote",
-    actionTotal ? "프라이빗 진행은 제외하고 당장 처리할 항목만 합산" : "운영자 확인 대기 없음",
+    actionTotal ? "프라이빗 진행은 제외하고 재등록 긴급 후보와 당장 처리할 항목만 합산" : "운영자 확인 대기 없음",
   );
-  setText("homeMemberCareTotal", formatCount(flowProblems.length));
+  setText("homeMemberCareTotal", formatCount(memberCareTotal));
   setText(
     "homeMemberCareNote",
-    flowProblems.length ? "회원가입/웰컴/수강료 흐름 확인 필요" : "회원가입/수강료 흐름 정상권",
+    flowProblems.length
+      ? "회원가입/웰컴/수강료 흐름 확인 필요"
+      : renewalUrgent
+        ? `오늘 재등록 확인 ${renewalUrgent}명`
+        : "회원가입/수강료 흐름 정상권",
   );
   setText("homePrivateTotal", formatCount(privatePending.length));
   setText(
@@ -2832,7 +3036,10 @@ function renderHomeSummary() {
   setText("homeAutomationNote", failedAutomation.length ? "실패/중단 자동화만 표시" : "실패/중단 신호 낮음");
   setText("homeAutomationCardTotal", failedAutomation.length ? `${failedAutomation.length}건 확인` : "정상권");
   setText("homeAutomationCardNote", failedAutomation.length ? "Automation 탭에서 실패한 작업만 확인" : "자동화 실패/지연 신호 낮음");
-  setText("homeContextMemberCare", flowProblems.length ? `${flowProblems.length}건 확인` : "정상권");
+  setText(
+    "homeContextMemberCare",
+    flowProblems.length ? `${flowProblems.length}건 확인` : renewalRows.length ? `재등록 ${renewalRows.length}명` : "정상권",
+  );
   setText(
     "homeContextPrivate",
     privatePending.length ? `사전 ${privateBreakdown.pre} · 사후 ${privateBreakdown.post} · 발송 ${privateBreakdown.send}` : "진행 정상권",
@@ -2853,6 +3060,43 @@ function renderHomeSummary() {
       ? `품질 ${openIssues.length} · 자동화 ${failedAutomation.length}`
       : "주의 낮음",
   );
+  renderRenewalPipeline(renewalRows, { urgent: renewalUrgent, soon: renewalSoon, waiting: renewalWaiting });
+}
+
+function renderRenewalPipeline(rows = renewalCandidateRows(), counts = null) {
+  const list = qs("renewalPipelineList");
+  if (!list) return;
+  const computedCounts =
+    counts || {
+      urgent: rows.filter((row) => row.priority === "urgent").length,
+      soon: rows.filter((row) => row.priority === "warning" || row.priority === "follow").length,
+      waiting: rows.filter((row) => row.priority === "waiting").length,
+    };
+  setText("renewalUrgentCount", formatCount(computedCounts.urgent, "명"));
+  setText("renewalSoonCount", formatCount(computedCounts.soon, "명"));
+  setText("renewalWaitingCount", formatCount(computedCounts.waiting, "명"));
+  setText("renewalPipelineCount", formatCount(rows.length, "명"));
+  if (!rows.length) {
+    list.innerHTML = `<div class="empty-state">현재 30일 내 만료, 잔여 부족, 재등록 대기 후보가 없습니다.</div>`;
+    return;
+  }
+  list.innerHTML = rows
+    .slice(0, 10)
+    .map((row) => {
+      const phone = row.phone ? formatPhoneNumber(row.phone) : "전화번호 없음";
+      const visit = row.member.recentVisitAt ? `최근 방문 ${compactDateTime(row.member.recentVisitAt)}` : "최근 방문 없음";
+      const detail = `${row.reason} · ${row.ticketName} · ${visit} · ${row.action}`;
+      return `
+        <a class="status-row status-link renewal-row ${row.priority}" href="${escapeHtml(row.href)}">
+          <div>
+            <strong>${escapeHtml(row.name)}<small>${escapeHtml(phone)}</small></strong>
+            <p>${escapeHtml(detail)}</p>
+          </div>
+          ${pill(renewalStatusValue(row.priority))}
+        </a>
+      `;
+    })
+    .join("");
 }
 
 function renderBusinessFallback(error) {

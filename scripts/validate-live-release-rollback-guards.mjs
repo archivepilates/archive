@@ -102,6 +102,8 @@ const guardGroups = [
         file: "core/index.html",
         markers: [
           "homeActionTotal",
+          "재등록 관리",
+          "renewalPipelineList",
           "수강료 문의 즉시발송",
           "pricingInquiryForm",
           "pricingInquiryHistoryPanel",
@@ -116,6 +118,8 @@ const guardGroups = [
           "pricingInquiryHistoryPanel",
           "operatorSendPricingInquiryAlimtalk",
           "homeActionTotal",
+          "renewalCandidateRows",
+          "renderRenewalPipeline",
         ],
       },
       {

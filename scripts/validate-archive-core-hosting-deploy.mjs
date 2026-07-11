@@ -13,6 +13,8 @@ const required = [
     markers: [
       "homeActionTotal",
       "회원 응대",
+      "재등록 관리",
+      "renewalPipelineList",
       "수강료 문의 즉시발송",
       "pricingInquiryForm",
       "pricingInquiryHistoryPanel",
@@ -31,6 +33,8 @@ const required = [
     file: "core/assets/app.js",
     label: "pricing inquiry send history runtime",
     markers: [
+      "renewalCandidateRows",
+      "renderRenewalPipeline",
       "pricingInquiryAlimtalkRequests",
       "pricingInquiryDisplayPhone",
       "pricingInquiryHistoryPanel",

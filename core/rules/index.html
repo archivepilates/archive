@@ -47,6 +47,7 @@
           <nav class="rule-anchor-grid" aria-label="운영규칙 목차">
             <a href="#principles">공통 원칙<span>보안, 원천, 기록</span></a>
             <a href="#data-sync">데이터·동기화<span>StudioMate Excel, Contacts</span></a>
+            <a href="#renewal">재등록 관리<span>만료, 잔여, 상담 후보</span></a>
             <a href="#alimtalk">알림톡<span>후보, 승인, 중복 차단</span></a>
             <a href="#private">프라이빗<span>회차, 설문, 리포트</span></a>
             <a href="#staff-evaluation">강사 평가<span>퀴즈, 인사기록카드</span></a>
@@ -185,8 +186,50 @@
           <div class="rule-note"><strong>현재 확인 위치</strong><span>CORE Imports, Automation, Members / Firestore memberProfiles, bookings, memberContactIndex, contactSyncJobs</span></div>
         </section>
 
+        <section class="panel rule-section" id="renewal">
+          <div class="panel-header"><div><h2>3. 재등록 관리</h2><p>회원이 끊기기 전에 운영자가 확인할 재등록 후보를 관리합니다.</p></div><span class="pill warn">operator action</span></div>
+          <div class="rule-grid">
+            <article class="rule-card">
+              <h3>관리 목적</h3>
+              <ul>
+                <li>재등록 관리는 알림톡 자동발송이 아니라 현장 상담, 전화, 카카오톡 응대를 위한 운영자 확인 세션입니다.</li>
+                <li>홈 미해결 액션에는 오늘 바로 확인해야 하는 긴급 후보만 더합니다.</li>
+                <li>30일 내 관리 후보는 홈 재등록 관리 섹션에 별도로 표시하고, 실패나 오류로 누적하지 않습니다.</li>
+              </ul>
+            </article>
+            <article class="rule-card">
+              <h3>후보 산정</h3>
+              <ul>
+                <li>기본 원천은 member360Cards의 currentTicketsSummary입니다. 화면 표시용 read-model을 사용하되, 실제 발송과 외부 쓰기는 기존 canonical source 규칙을 따릅니다.</li>
+                <li>수강권 만료 30일 이내, 잔여 횟수 부족, 최근 방문 후 활성 수강권 공백 회원을 후보로 봅니다.</li>
+                <li>그룹·일반 수업권은 잔여 5회 이하, 프라이빗은 잔여 3회 이하를 관리 후보로 봅니다.</li>
+                <li>7일 이내 만료 또는 매우 낮은 잔여 횟수는 오늘 확인 후보로 올립니다.</li>
+              </ul>
+            </article>
+            <article class="rule-card">
+              <h3>제외와 중복 방지</h3>
+              <ul>
+                <li>상담, 체험, 강사레슨, 직원용, 락커, 양말, 상품권처럼 재등록 상담 대상이 아닌 수강권은 제외합니다.</li>
+                <li>같은 유형의 건강한 다른 수강권을 이미 보유한 회원은 만료·부족 후보에서 제외합니다.</li>
+                <li>전화번호가 없는 후보는 외부 발송 원천으로 쓰지 않고, 운영자 화면에서만 보조 확인 대상으로 봅니다.</li>
+                <li>재등록 알림톡 후보를 만들 때는 별도로 수강권 canonical key와 중복발송 방지 규칙을 다시 확인합니다.</li>
+              </ul>
+            </article>
+            <article class="rule-card">
+              <h3>운영 단계</h3>
+              <ul>
+                <li>오늘 확인: 만료 또는 잔여가 임박해 당일 현장 상담·전화가 필요한 상태입니다.</li>
+                <li>이번 주 상담: 곧 만료되거나 잔여가 낮아 수업 전후 안내하면 좋은 상태입니다.</li>
+                <li>만료 전 관리: 30일 안에 미리 안내하면 이탈을 줄일 수 있는 상태입니다.</li>
+                <li>재등록 대기: 최근 방문 이력이 있지만 현재 활성 수강권이 없어 복귀 상담 대상입니다.</li>
+              </ul>
+            </article>
+          </div>
+          <div class="rule-note"><strong>현재 확인 위치</strong><span>CORE Home > 재등록 관리 / Firestore member360Cards.currentTicketsSummary</span></div>
+        </section>
+
         <section class="panel rule-section" id="alimtalk">
-          <div class="panel-header"><div><h2>3. 카카오 알림톡</h2><p>대상자 선정, 승인, 발송, 로그를 분리해 오발송을 막습니다.</p></div><span class="pill danger">external send</span></div>
+          <div class="panel-header"><div><h2>4. 카카오 알림톡</h2><p>대상자 선정, 승인, 발송, 로그를 분리해 오발송을 막습니다.</p></div><span class="pill danger">external send</span></div>
           <div class="rule-grid">
             <article class="rule-card">
               <h3>발송 흐름</h3>
@@ -264,7 +307,7 @@
         </section>
 
         <section class="panel rule-section" id="private">
-          <div class="panel-header"><div><h2>4. 프라이빗 차트·설문·리포트</h2><p>회원 누적 회차, 강사 입력, 회원 리포트, Notion 차트 동기화를 하나의 흐름으로 봅니다.</p></div><span class="pill good">current</span></div>
+          <div class="panel-header"><div><h2>5. 프라이빗 차트·설문·리포트</h2><p>회원 누적 회차, 강사 입력, 회원 리포트, Notion 차트 동기화를 하나의 흐름으로 봅니다.</p></div><span class="pill good">current</span></div>
           <div class="rule-grid">
             <article class="rule-card">
               <h3>회차 원천</h3>
@@ -409,7 +452,7 @@
         </section>
 
         <section class="panel rule-section" id="parking">
-          <div class="panel-header"><div><h2>5. 주차등록</h2><p>ARCHIVE CORE 홈에서 회원, 강사, 방문 차량을 등록하고 주차권을 적용합니다.</p></div><span class="pill good">active</span></div>
+          <div class="panel-header"><div><h2>6. 주차등록</h2><p>ARCHIVE CORE 홈에서 회원, 강사, 방문 차량을 등록하고 주차권을 적용합니다.</p></div><span class="pill good">active</span></div>
           <div class="rule-grid">
             <article class="rule-card">
               <h3>운영 규칙</h3>
@@ -443,7 +486,7 @@
         </section>
 
         <section class="panel rule-section" id="welcome">
-          <div class="panel-header"><div><h2>6. 현장 웰컴·회원가입·연락처</h2><p>회원가입서 제출과 StudioMate 반영을 분리해 실패 지점을 명확히 봅니다.</p></div><span class="pill">onsite</span></div>
+          <div class="panel-header"><div><h2>7. 현장 웰컴·회원가입·연락처</h2><p>회원가입서 제출과 StudioMate 반영을 분리해 실패 지점을 명확히 봅니다.</p></div><span class="pill">onsite</span></div>
           <div class="rule-grid">
             <article class="rule-card">
               <h3>현장 웰컴 알림톡</h3>
@@ -477,7 +520,7 @@
         </section>
 
         <section class="panel rule-section" id="settlement">
-          <div class="panel-header"><div><h2>7. 정산·비즈니스 지표</h2><p>대시보드는 정산 자동화 결과를 참조하고 중복 계산을 줄입니다.</p></div><span class="pill">finance</span></div>
+          <div class="panel-header"><div><h2>8. 정산·비즈니스 지표</h2><p>대시보드는 정산 자동화 결과를 참조하고 중복 계산을 줄입니다.</p></div><span class="pill">finance</span></div>
           <div class="rule-grid">
             <article class="rule-card">
               <h3>원본 폴더</h3>
@@ -511,7 +554,7 @@
         </section>
 
         <section class="panel rule-section" id="release">
-          <div class="panel-header"><div><h2>8. 배포·검증·보고</h2><p>배포 요청은 검증, commit, deploy, live check, GitHub push를 한 세트로 처리합니다.</p></div><span class="pill warn">release gate</span></div>
+          <div class="panel-header"><div><h2>9. 배포·검증·보고</h2><p>배포 요청은 검증, commit, deploy, live check, GitHub push를 한 세트로 처리합니다.</p></div><span class="pill warn">release gate</span></div>
           <div class="rule-grid">
             <article class="rule-card">
               <h3>배포세트</h3>
@@ -545,7 +588,7 @@
         </section>
 
         <section class="panel rule-section" id="worklines">
-          <div class="panel-header"><div><h2>9. 인프라·워크라인</h2><p>스레드와 worktree를 분리해 기능 간 충돌을 줄입니다.</p></div><span class="pill">coordination</span></div>
+          <div class="panel-header"><div><h2>10. 인프라·워크라인</h2><p>스레드와 worktree를 분리해 기능 간 충돌을 줄입니다.</p></div><span class="pill">coordination</span></div>
           <div class="rule-grid">
             <article class="rule-card">
               <h3>Mac mini</h3>
@@ -576,7 +619,7 @@
         </section>
 
         <section class="panel rule-section" id="archive">
-          <div class="panel-header"><div><h2>10. 폐기·보관 기준</h2><p>더 이상 현재 운영 원칙이 아닌 항목을 명확히 분리합니다.</p></div><span class="pill danger">deprecated</span></div>
+          <div class="panel-header"><div><h2>11. 폐기·보관 기준</h2><p>더 이상 현재 운영 원칙이 아닌 항목을 명확히 분리합니다.</p></div><span class="pill danger">deprecated</span></div>
           <div class="rule-grid">
             <article class="rule-card">
               <h3>Notion 운영규칙</h3>

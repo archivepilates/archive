@@ -108,6 +108,9 @@ function buildManifest(surface) {
     canonicalUrls: ["https://core.archivepilates.com/release.json", "https://archive-pilates.web.app/core/release.json"],
     criticalMarkers: [
       "homeActionTotal",
+      "재등록 관리",
+      "renewalPipelineList",
+      "renewalCandidateRows",
       "수강료 문의 즉시발송",
       "pricingInquiryHistoryPanel",
       "privateInstructorPendingList",

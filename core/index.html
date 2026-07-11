@@ -49,6 +49,7 @@
             </button>
             <div class="quick-action-row" aria-label="빠른 실행">
               <a class="quick-action" href="#pricingInquiryForm">수강료 안내</a>
+              <a class="quick-action" href="#renewalPipeline">재등록 관리</a>
               <a class="quick-action" href="#parkingRegistrationForm">주차등록</a>
               <a class="quick-action" href="./private/">프라이빗 진행</a>
               <a class="quick-action" href="./messages/">알림톡 확인</a>
@@ -122,6 +123,24 @@
               <div><span>품질/자동화</span><strong id="homeContextQuality">주의 낮음</strong></div>
             </div>
           </aside>
+        </section>
+
+        <section class="panel renewal-panel" id="renewalPipeline">
+          <div class="panel-header">
+            <div>
+              <h2>재등록 관리</h2>
+              <p>만료 임박, 잔여 부족, 최근 방문 후 수강권 공백 회원을 한곳에서 관리합니다.</p>
+            </div>
+            <span class="pill" id="renewalPipelineCount">0명</span>
+          </div>
+          <div class="renewal-summary-grid" aria-label="재등록 후보 요약">
+            <div><span>오늘 확인</span><strong id="renewalUrgentCount">0명</strong></div>
+            <div><span>30일 내 관리</span><strong id="renewalSoonCount">0명</strong></div>
+            <div><span>재등록 대기</span><strong id="renewalWaitingCount">0명</strong></div>
+          </div>
+          <div class="list compact-list renewal-list" id="renewalPipelineList" aria-live="polite">
+            <div class="empty-state">데이터 연결 후 재등록 후보를 표시합니다.</div>
+          </div>
         </section>
 
         <section class="panel parking-panel">
