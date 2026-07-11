@@ -50,6 +50,21 @@ async function main() {
     if (profileUpdatedAt && cardUpdatedAt && profileUpdatedAt > cardUpdatedAt + 5 * 60 * 1000 && profileTickets !== cardTickets) {
       issues.push(issue("stale_member360_ticket_summary", profile, card, "최신 수강권 원천과 CORE 수강권 미러가 다릅니다."));
     }
+    for (const activeTicket of activeTickets) {
+      if (hasPaymentMetadata(activeTicket)) continue;
+      const cardTicket = findMatchingTicket(card.currentTicketsSummary || [], activeTicket);
+      if (cardTicket && hasPaymentMetadata(cardTicket)) {
+        issues.push(
+          issue(
+            "profile_active_ticket_payment_metadata_missing",
+            profile,
+            card,
+            "최신 회원 프로필의 현재 수강권에서 결제일/결제금액 메타데이터가 사라졌습니다.",
+          ),
+        );
+        break;
+      }
+    }
     const latestTicketStart = Math.max(0, ...activeTickets.map((ticket) => millis(ticket.availableFrom || ticket.startDate || ticket.issuedAt)));
     const latestPurchase = Math.max(
       0,
@@ -140,6 +155,34 @@ function ticketFingerprint(tickets) {
     )
     .sort()
     .join(";");
+}
+
+function findMatchingTicket(tickets, target) {
+  const strictKey = paymentMetadataKey(target, true);
+  const looseKey = paymentMetadataKey(target, false);
+  return (tickets || []).find((ticket) => paymentMetadataKey(ticket, true) === strictKey) || (tickets || []).find((ticket) => paymentMetadataKey(ticket, false) === looseKey);
+}
+
+function paymentMetadataKey(ticket, strict) {
+  return [
+    String(ticket.name || ticket.ticketName || "").replace(/\s+/g, "").toLowerCase(),
+    ticket.classType || ticket.lessonType || "",
+    strict ? millis(ticket.availableFrom || ticket.startDate || ticket.issuedAt) : "",
+    millis(ticket.expiresAt || ticket.endDate || ticket.expireAt),
+    strict ? Number(ticket.maxCount ?? ticket.totalCount ?? ticket.usableCount ?? 0) : "",
+  ].join("|");
+}
+
+function hasPaymentMetadata(ticket) {
+  return Boolean(
+    Number(ticket.paymentAmount || ticket.amountTotal || ticket.price || 0) ||
+      ticket.paymentAt ||
+      ticket.paymentDate ||
+      ticket.purchasedAt ||
+      ticket.paymentMethod ||
+      ticket.paymentType ||
+      ticket.category,
+  );
 }
 
 function currentProfileTickets(profile) {

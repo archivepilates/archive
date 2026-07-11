@@ -140,7 +140,7 @@
                 <li>memberProfiles는 화면과 후속 실행을 위한 정규화 뷰입니다.</li>
                 <li>현재 활성 수강권 판단은 memberProfiles.activeTickets를 우선합니다. member360Cards나 members 하위 summary가 더 오래된 경우 CORE 화면은 memberProfiles 값으로 덮어 표시합니다.</li>
                 <li>구매금액과 누적매출은 member360Cards와 members/{memberId}/purchases의 분석용 미러입니다. 결제금액 원천이 끊기면 임의 추정하지 않고 StudioMate 회원목록/수강권 결제 컬럼을 재수집해 미러를 재생성합니다.</li>
-                <li>회원목록 Excel import는 활성 수강권 안에 결제금액, 결제일시, 결제방법을 함께 보존합니다. 로컬 원본 파일을 삭제하더라도 Firestore에 필요한 결제 메타데이터가 남아야 합니다.</li>
+                <li>회원목록 Excel import는 활성 수강권 안에 결제금액, 결제일시, 결제방법을 함께 보존합니다. 새 엑셀 행의 결제 칼럼이 비어 있더라도 같은 수강권의 기존 결제 메타데이터를 지우지 않습니다.</li>
                 <li>CORE 데이터 검증은 audit:archive-core-data로 실행하며, 수강권 미러 지연·구매금액 미러 누락·회원 360 미러 누락을 운영자 액션 1건으로 요약합니다.</li>
                 <li>엑셀에만 있는 회원은 등록 3일 이내이고 활성 수강권이 있을 때만 임시 회원카드를 만듭니다.</li>
                 <li>수강권 없는 상담고객은 회원카드를 만들지 않고 연락처 후보로만 다룹니다.</li>

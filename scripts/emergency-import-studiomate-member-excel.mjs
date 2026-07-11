@@ -310,10 +310,13 @@ function buildPlans(groups, existingProfiles, existingContacts) {
     const exact = existing.filter((item) => normalizeName(item.data.name || "") === group.normalizedName);
     let memberId = "";
     let matchType = "temporary_excel_id";
+    let matchedProfile = null;
     if (exact.length === 1) {
+      matchedProfile = exact[0];
       memberId = exact[0].id;
       matchType = "existing";
     } else if (existing.length === 1) {
+      matchedProfile = existing[0];
       memberId = existing[0].id;
       matchType = "existing";
     } else if (existing.length > 1) {
@@ -329,6 +332,10 @@ function buildPlans(groups, existingProfiles, existingContacts) {
       skippedNoExistingProfile += 1;
       continue;
     }
+    const activeTicketsWithPreservedPayment = preserveActiveTicketPaymentMetadata(
+      activeTickets,
+      matchedProfile?.data?.activeTickets || [],
+    );
     if (!activeTickets.length) skippedNoActiveTicket += 1;
     const profileDoc = {
       memberId,
@@ -341,9 +348,9 @@ function buildPlans(groups, existingProfiles, existingContacts) {
       birthDate,
       gender,
       memoPreview,
-      activeTicketNames: activeTickets.map((ticket) => ticket.name),
-      activeTicketCount: activeTickets.length,
-      activeTickets,
+      activeTicketNames: activeTicketsWithPreservedPayment.map((ticket) => ticket.name),
+      activeTicketCount: activeTicketsWithPreservedPayment.length,
+      activeTickets: activeTicketsWithPreservedPayment,
       ticketStatusSummary,
       isNewMember: registeredAt ? daysBetween(kstDate(registeredAt.toDate()), today) <= 3 : false,
       newMemberBasis: registeredAt ? "registered_at" : "unknown",
@@ -386,7 +393,7 @@ function buildPlans(groups, existingProfiles, existingContacts) {
       phone: group.phone,
       phoneLast4: group.phone.slice(-4),
       registeredAt,
-      activeTicketCount: activeTickets.length,
+      activeTicketCount: activeTicketsWithPreservedPayment.length,
       activeTicketNames: profileDoc.activeTicketNames,
       source: "studiomate_excel_emergency",
       contactHash,
@@ -512,6 +519,55 @@ function buildTicketStatusSummary(rows) {
     holdingTicketCount: holdingTickets.length,
     holdingTickets,
   };
+}
+
+function preserveActiveTicketPaymentMetadata(activeTickets, previousTickets = []) {
+  if (!activeTickets.length || !previousTickets.length) return activeTickets;
+  const previousByStrictKey = new Map(previousTickets.map((ticket) => [activeTicketPaymentKey(ticket, true), ticket]));
+  const previousByLooseKey = new Map(previousTickets.map((ticket) => [activeTicketPaymentKey(ticket, false), ticket]));
+  return activeTickets.map((ticket) => {
+    if (hasPaymentMetadata(ticket)) return ticket;
+    const previous = previousByStrictKey.get(activeTicketPaymentKey(ticket, true)) || previousByLooseKey.get(activeTicketPaymentKey(ticket, false));
+    if (!previous || !hasPaymentMetadata(previous)) return ticket;
+    return {
+      ...ticket,
+      paymentAmount: moneyValue(ticket.paymentAmount) || moneyValue(previous.paymentAmount ?? previous.amountTotal ?? previous.price),
+      paymentAt: ticket.paymentAt || previous.paymentAt || previous.paymentDate || previous.purchasedAt || null,
+      paymentMethod: ticket.paymentMethod || previous.paymentMethod || "",
+      paymentType: ticket.paymentType || previous.paymentType || previous.category || "",
+      purchaseId: ticket.purchaseId || previous.purchaseId || "",
+    };
+  });
+}
+
+function activeTicketPaymentKey(ticket, strict) {
+  return [
+    normalizeName(ticket.name || ticket.ticketName || ""),
+    cleanText(ticket.classType || ticket.lessonType || ""),
+    strict ? timestampKey(ticket.availableFrom || ticket.startDate || ticket.issuedAt) : "",
+    timestampKey(ticket.expiresAt || ticket.endDate || ticket.expireAt),
+    strict ? nullableNumber(ticket.maxCount ?? ticket.totalCount ?? ticket.usableCount) ?? "" : "",
+  ].join("|");
+}
+
+function hasPaymentMetadata(ticket) {
+  return Boolean(
+    moneyValue(ticket.paymentAmount ?? ticket.amountTotal ?? ticket.price) ||
+      ticket.paymentAt ||
+      ticket.paymentDate ||
+      ticket.purchasedAt ||
+      ticket.paymentMethod ||
+      ticket.paymentType ||
+      ticket.category,
+  );
+}
+
+function timestampKey(value) {
+  if (!value) return "";
+  if (typeof value.toDate === "function") return compactDate(value);
+  if (typeof value === "object" && typeof value.seconds === "number") return compactDate(admin.firestore.Timestamp.fromMillis(value.seconds * 1000));
+  const parsed = parseKstTimestamp(value);
+  return parsed ? compactDate(parsed) : cleanText(value).slice(0, 10);
 }
 
 function isHoldingTicketStatus(status) {
