@@ -56,7 +56,7 @@ const COMMAND_ITEMS = [
   {
     title: "수강료 안내 발송",
     detail: "문의 전화번호 입력 후 승인 템플릿으로 즉시 발송",
-    href: "#pricingInquiryForm",
+    href: "#pricingInquiry",
     keywords: "수강료 가격 문의 알림톡 발송 상담",
   },
   {
@@ -68,7 +68,7 @@ const COMMAND_ITEMS = [
   {
     title: "주차등록",
     detail: "회원/강사 차량 등록과 오늘 자동 주차권 적용",
-    href: "#parkingRegistrationForm",
+    href: "#parkingTools",
     keywords: "parking 주차 차량 등록 할인권 아이파킹",
   },
   {
@@ -85,7 +85,7 @@ const COMMAND_ITEMS = [
   },
   {
     title: "자동화 관제",
-    detail: "LaunchAgent, 실패, 지연, 중복 실행 확인",
+    detail: "실패, 지연, 중복 실행 확인",
     href: "./automation/",
     keywords: "automation 자동화 launchagent 실패 지연",
   },
@@ -356,6 +356,37 @@ function closeCommandPalette() {
   palette.hidden = true;
 }
 
+function setRuleSectionOpen(section, open) {
+  if (!section) return;
+  section.classList.toggle("is-collapsed", !open);
+  const button = section.querySelector(":scope > .panel-header .reference-toggle");
+  if (!button) return;
+  button.setAttribute("aria-expanded", String(open));
+  button.textContent = open ? "접기" : "보기";
+}
+
+function enhanceRuleSections() {
+  document.querySelectorAll(".rule-section").forEach((section) => {
+    const header = section.querySelector(":scope > .panel-header");
+    if (!header || header.querySelector(".reference-toggle")) return;
+    const button = document.createElement("button");
+    button.className = "reference-toggle";
+    button.type = "button";
+    button.addEventListener("click", () => setRuleSectionOpen(section, section.classList.contains("is-collapsed")));
+    header.appendChild(button);
+    setRuleSectionOpen(section, window.location.hash === `#${section.id}`);
+  });
+}
+
+function revealHashTarget() {
+  const id = window.location.hash.replace(/^#/, "");
+  if (!id) return;
+  const target = document.getElementById(id);
+  if (target?.classList?.contains("rule-section")) setRuleSectionOpen(target, true);
+  const details = target?.matches?.("details") ? target : target?.closest?.("details");
+  if (details) details.open = true;
+}
+
 const NAV_ICONS = {
   home: "M3 11.5 12 4l9 7.5M5 10v10h14V10M9 20v-6h6v6",
   members: "M16 19v-1.5A3.5 3.5 0 0 0 12.5 14h-5A3.5 3.5 0 0 0 4 17.5V19M11 8a3 3 0 1 1-6 0 3 3 0 0 1 6 0M20 19v-1a3 3 0 0 0-3-3h-1.2M15 5.2a2.8 2.8 0 0 1 0 5.6",
@@ -379,8 +410,35 @@ function navIcon(section) {
   `;
 }
 
+const SECONDARY_NAV_SECTIONS = new Set(["automation", "business", "imports", "rules", "settings"]);
+const NAV_LABELS = {
+  home: "홈",
+  members: "회원",
+  lessons: "수업",
+  private: "프라이빗",
+  staff: "강사",
+  messages: "알림톡",
+  automation: "자동화",
+  business: "경영",
+  imports: "원본",
+  rules: "운영규칙",
+  settings: "설정",
+};
+
+function setAdminNavOpen(open) {
+  document.body.classList.toggle("admin-nav-open", open);
+  const button = document.querySelector(".nav-more-button");
+  if (!button) return;
+  button.setAttribute("aria-expanded", String(open));
+  const label = button.querySelector(".nav-label span");
+  if (label) label.textContent = open ? "관리 메뉴 닫기" : "관리 메뉴";
+}
+
 function enhanceNav() {
-  document.querySelectorAll(".nav a").forEach((link) => {
+  const nav = document.querySelector(".nav");
+  if (!nav) return;
+  const links = [...nav.querySelectorAll("a")];
+  links.forEach((link) => {
     if (link.dataset.enhanced === "true") return;
     const section = link.dataset.section || "home";
     const small = link.querySelector("small")?.textContent?.trim() || "";
@@ -389,30 +447,50 @@ function enhanceNav() {
       .map((node) => node.textContent)
       .join("")
       .trim();
-    const title = label || section;
-    link.setAttribute("aria-label", `${title}${small ? ` · ${small}` : ""}`);
+    const title = NAV_LABELS[section] || small || label || section;
+    link.setAttribute("aria-label", title);
     link.removeAttribute("title");
     link.innerHTML = `
       ${navIcon(section)}
       <span class="nav-label">
         <span>${escapeHtml(title)}</span>
-        ${small ? `<small>${escapeHtml(small)}</small>` : ""}
       </span>
     `;
+    if (SECONDARY_NAV_SECTIONS.has(section)) link.classList.add("nav-secondary");
     link.dataset.enhanced = "true";
   });
+
+  if (!nav.querySelector(".nav-more-button")) {
+    const firstSecondary = nav.querySelector(".nav-secondary");
+    const button = document.createElement("button");
+    button.className = "nav-more-button";
+    button.type = "button";
+    button.setAttribute("aria-expanded", "false");
+    button.setAttribute("aria-label", "관리 메뉴");
+    button.innerHTML = `
+      ${navIcon("settings")}
+      <span class="nav-label"><span>관리 메뉴</span></span>
+    `;
+    button.addEventListener("click", () => setAdminNavOpen(!document.body.classList.contains("admin-nav-open")));
+    nav.insertBefore(button, firstSecondary);
+  }
 }
 
 function activateNav() {
   const path = window.location.pathname.replace(/\/+$/, "");
+  let secondaryPage = false;
   document.querySelectorAll(".nav a").forEach((link) => {
     const href = new URL(link.getAttribute("href"), window.location.href);
     const hrefPath = href.pathname.replace(/\/+$/, "");
     const isRoot = link.dataset.section === "home" && (path.endsWith("/core") || path === "");
     const isActive = isRoot || (link.dataset.section && hrefPath && path.endsWith(hrefPath));
-    if (isActive) link.setAttribute("aria-current", "page");
+    if (isActive) {
+      link.setAttribute("aria-current", "page");
+      secondaryPage ||= SECONDARY_NAV_SECTIONS.has(link.dataset.section);
+    }
     else link.removeAttribute("aria-current");
   });
+  setAdminNavOpen(secondaryPage);
 }
 
 async function initFirebase() {
@@ -3070,7 +3148,6 @@ function renderHomeDecisions() {
   if (!list) return;
   const openIssues = activeQualityIssues();
   const failedAutomation = failedAutomationItems();
-  const dataHealthIssues = coreDataHealthIssues();
   const { failedCandidates, failedSends, flowProblems, pendingCandidates } = communicationProblemSummary();
   const renewalRows = renewalCandidateRows();
   const renewalUrgent = renewalRows.filter((row) => row.priority === "urgent").length;
@@ -3119,16 +3196,6 @@ function renderHomeDecisions() {
       href: "./automation/",
     });
   }
-  if (dataHealthIssues.length) {
-    const purchaseMissing = dataHealthIssues.filter((issue) => issue.type === "missing_recent_purchase_amount").length;
-    const staleTickets = dataHealthIssues.filter((issue) => issue.type === "stale_member360_ticket_summary").length;
-    rows.push({
-      title: "CORE 데이터 검증",
-      detail: `수강권 미러 지연 ${staleTickets}명, 최근 구매금액 누락 ${purchaseMissing}명입니다. 최신 원천 재생성이 필요합니다.`,
-      status: "warning",
-      href: "./imports/",
-    });
-  }
   if (openIssues.length) {
     rows.push({
       title: "데이터 품질 운영 확인",
@@ -3142,8 +3209,8 @@ function renderHomeDecisions() {
     list.innerHTML = `
       <div class="status-row">
         <div>
-          <strong>현재 운영자가 처리할 미해결 업무가 없습니다.</strong>
-          <p>자동 정규화와 중복 차단 기록은 시스템 진단에만 보관하고 홈에는 누적하지 않습니다.</p>
+          <strong>오늘 처리할 일이 없습니다.</strong>
+          <p>새 업무가 생기면 여기에 표시됩니다.</p>
         </div>
         ${pill("success")}
       </div>
@@ -3164,111 +3231,23 @@ function renderHomeDecisions() {
 }
 
 function renderHomeSummary() {
-  if (!qs("homeMemberTotal")) return;
+  if (!qs("commandQueueStatus")) return;
   const openIssues = activeQualityIssues();
   const failedAutomation = failedAutomationItems();
-  const dataHealthIssues = coreDataHealthIssues();
-  const activeMembers = state.members.filter((item) => toNumber(item.activeTicketCount) > 0).length;
   const renewalRows = renewalCandidateRows();
   const renewalUrgent = renewalRows.filter((row) => row.priority === "urgent").length;
   const renewalSoon = renewalRows.filter((row) => row.priority === "warning" || row.priority === "follow").length;
   const renewalWaiting = renewalRows.filter((row) => row.priority === "waiting").length;
-  const privatePending = pendingPrivateProgressRows();
-  const privateBreakdown = privatePendingBreakdown(privatePending);
   const { failedCandidates, failedSends, flowProblems, pendingCandidates } = communicationProblemSummary();
   const communicationProblems = failedCandidates.length + failedSends.length + flowProblems.length;
-  const memberCareTotal = flowProblems.length + renewalUrgent;
   const actionTotal =
-    communicationProblems + pendingCandidates.length + failedAutomation.length + openIssues.length + (dataHealthIssues.length ? 1 : 0) + renewalUrgent;
-  const latestImport = state.sourceImports[0];
+    communicationProblems + pendingCandidates.length + failedAutomation.length + openIssues.length + renewalUrgent;
   setText("commandQueueStatus", actionTotal ? `${actionTotal}건 확인 필요` : "오늘 처리할 큐 없음");
   setText(
     "commandQueueNote",
     actionTotal
-      ? "회원 응대, 알림톡, 자동화, 품질 이슈 중 운영자 판단이 필요한 항목입니다."
-      : "발송 실패, 후속 처리 실패, 자동화 중단 신호가 보이지 않습니다.",
-  );
-  setText("homeActionTotal", formatCount(actionTotal));
-  setText(
-    "homeActionNote",
-    actionTotal ? "프라이빗 진행은 제외하고 재등록 긴급 후보와 당장 처리할 항목만 합산" : "운영자 확인 대기 없음",
-  );
-  setText("homeMemberCareTotal", formatCount(memberCareTotal));
-  setText(
-    "homeMemberCareNote",
-    flowProblems.length
-      ? "회원가입/웰컴/수강료 흐름 확인 필요"
-      : renewalUrgent
-        ? `오늘 재등록 확인 ${renewalUrgent}명`
-        : "회원가입/수강료 흐름 정상권",
-  );
-  setText("homePrivateTotal", formatCount(privatePending.length));
-  setText(
-    "homePrivateNote",
-    privatePending.length
-      ? `오늘 이후 · 사전 ${privateBreakdown.pre} · 사후 ${privateBreakdown.post} · 리포트 ${privateBreakdown.report} · 미발송 ${privateBreakdown.send}`
-      : "오늘 이후 미제출/미발송 없음",
-  );
-  setText("homePrivateCardTotal", privatePending.length ? `${privatePending.length}건 진행` : "진행 정상권");
-  setText(
-    "homePrivateCardNote",
-    privatePending.length ? "오늘 이후 수업 기준 강사별 미완료 확인" : "오늘 이후 미제출/미발송 신호 낮음",
-  );
-  setText("homeMemberTotal", formatCount(state.members.length, "명"));
-  setText("homeMemberNote", `활성 수강권 ${activeMembers.toLocaleString("ko-KR")}명 · 전체 회원 검색 가능`);
-  setText("homeImportTotal", formatCount(state.sourceImports.length));
-  setText(
-    "homeImportNote",
-    latestImport
-      ? `${sourceKindLabel(latestImport.sourceKind || latestImport.kind)} · ${formatDate(latestImport.updatedAt || latestImport.importedAt)}`
-      : "최근 원본 import 기록 대기",
-  );
-  setText("homeQualityTotal", openIssues.length ? `${openIssues.length}건 확인` : "열린 이슈 없음");
-  setText(
-    "homeQualityNote",
-    openIssues.length ? "운영자 액션이 필요한 품질 이슈만 표시합니다." : "자동 처리/정상 정규화 기록은 숨김 처리",
-  );
-  setText(
-    "homeMessageTotal",
-    communicationProblems ? `${communicationProblems}건 확인` : pendingCandidates.length ? `${pendingCandidates.length}건 대기` : "대기 낮음",
-  );
-  setText(
-    "homeMessageNote",
-    communicationProblems
-      ? `후보/발송 실패 ${failedCandidates.length + failedSends.length}건 · 가입/수강료 흐름 ${flowProblems.length}건`
-      : pendingCandidates.length
-        ? `${pendingCandidates.length}건 대기/검토 후보 확인`
-        : "최근 후보 기준 대기 낮음",
-  );
-  setText("homeAutomationTotal", failedAutomation.length ? `${failedAutomation.length}건 확인` : "정상권");
-  setText("homeAutomationNote", failedAutomation.length ? "실패/중단 자동화만 표시" : "실패/중단 신호 낮음");
-  setText("homeAutomationCardTotal", failedAutomation.length ? `${failedAutomation.length}건 확인` : "정상권");
-  setText("homeAutomationCardNote", failedAutomation.length ? "Automation 탭에서 실패한 작업만 확인" : "자동화 실패/지연 신호 낮음");
-  setText(
-    "homeContextMemberCare",
-    flowProblems.length ? `${flowProblems.length}건 확인` : renewalRows.length ? `재등록 ${renewalRows.length}명` : "정상권",
-  );
-  setText(
-    "homeContextPrivate",
-    privatePending.length ? `사전 ${privateBreakdown.pre} · 사후 ${privateBreakdown.post} · 발송 ${privateBreakdown.send}` : "진행 정상권",
-  );
-  setText(
-    "homeContextMessages",
-    communicationProblems ? `${communicationProblems}건 확인` : pendingCandidates.length ? `${pendingCandidates.length}건 대기` : "대기 낮음",
-  );
-  setText(
-    "homeContextImport",
-    latestImport
-      ? `${sourceKindLabel(latestImport.sourceKind || latestImport.kind)} · ${formatDate(latestImport.updatedAt || latestImport.importedAt)}`
-      : "원본 대기",
-  );
-  setText(
-    "homeContextQuality",
-    openIssues.length || failedAutomation.length
-      ? `품질 ${openIssues.length} · 자동화 ${failedAutomation.length}`
-      : dataHealthIssues.length
-        ? `CORE 데이터 ${dataHealthIssues.length}`
-      : "주의 낮음",
+      ? "회원 응대, 알림톡, 자동화 중 확인할 항목입니다."
+      : "오늘 확인할 문제가 없습니다.",
   );
   renderRenewalPipeline(renewalRows, { urgent: renewalUrgent, soon: renewalSoon, waiting: renewalWaiting });
 }
@@ -4415,6 +4394,9 @@ async function refresh() {
 
 enhanceNav();
 activateNav();
+enhanceRuleSections();
+revealHashTarget();
+window.addEventListener("hashchange", revealHashTarget);
 qs("refreshButton")?.addEventListener("click", refresh);
 qs("pricingInquiryForm")?.addEventListener("submit", handlePricingInquiryAlimtalkSubmit);
 qs("pricingInquiryHistoryToggle")?.addEventListener("click", togglePricingInquiryHistory);

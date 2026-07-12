@@ -11,15 +11,17 @@ const required = [
     file: "core/index.html",
     label: "ARCHIVE CORE home latest action dashboard",
     markers: [
-      "homeActionTotal",
-      "회원 응대",
+      "오늘 처리할 일",
+      "homeDecisionList",
       "재등록 관리",
       "renewalPipelineList",
-      "수강료 문의 즉시발송",
+      "주차등록",
+      "parkingRegistrationForm",
+      "수강료 문의",
       "pricingInquiryForm",
       "pricingInquiryHistoryPanel",
       "최근 발송/메모 보기",
-      "Staff <small>강사</small>",
+      "data-section=\"staff\"",
       "/site.webmanifest?v=1",
       "/icons/archive-pilates-icon-192.png?v=1",
     ],
@@ -42,12 +44,44 @@ const required = [
       "pricingInquiryHistoryPanel",
       "operatorSendPricingInquiryAlimtalk",
       "submitInstructorEvaluationQuiz",
+      "SECONDARY_NAV_SECTIONS",
+      "enhanceRuleSections",
     ],
   },
   {
     file: "core/staff/index.html",
     label: "staff HR cards page",
-    markers: ["강사 인사기록카드", "staffHrList", "강사별 평가 차트", "지원자 시험"],
+    markers: ["강사 현황", "staffHrList", "강사별 평가 차트", "지원자 시험"],
+  },
+  {
+    file: "core/members/index.html",
+    label: "member search page",
+    markers: ["회원 찾기", "memberSearchInput", "membersTable", "memberPagination"],
+  },
+  {
+    file: "core/members/detail/index.html",
+    label: "member detail page",
+    markers: ["memberDetailPrimaryAction", "memberDetailTicketsList", "memberDetailPurchasesList", "member-history-disclosure"],
+  },
+  {
+    file: "core/lessons/index.html",
+    label: "lesson operations page",
+    markers: ["오늘 수업", "lessonsTodayList", "lessonsInstructorList", "lessonsDeletedList"],
+  },
+  {
+    file: "core/private/index.html",
+    label: "private lesson progress page",
+    markers: ["진행 현황", "privateInstructorPendingList", "privateProgressList"],
+  },
+  {
+    file: "core/messages/index.html",
+    label: "alimtalk operations page",
+    markers: ["발송 관리", "messagesDecisionList", "messagesTemplateList", "messagesSendList"],
+  },
+  {
+    file: "core/automation/index.html",
+    label: "automation status page",
+    markers: ["자동화 상태", "automationHealthList", "automationList"],
   },
   {
     file: "core/staff/evaluation/index.html",
@@ -57,7 +91,13 @@ const required = [
   {
     file: "core/assets/styles.css",
     label: "stable KPI card sizing",
-    markers: [".kpis > .metric", "min-height: 156px"],
+    markers: [
+      ".kpis > .metric",
+      "min-height: 156px",
+      ".action-disclosure",
+      ".nav-secondary",
+      ".admin-nav-open .nav-secondary",
+    ],
   },
 ];
 

@@ -96,15 +96,17 @@ const guardGroups = [
   },
   {
     id: "archive-core-home-actions",
-    reason: "ARCHIVE CORE 홈 액션 보드와 수강료 문의 즉시발송 UI가 예전 번들로 되돌아가는 것을 막습니다.",
+    reason: "ARCHIVE CORE 오늘 업무 큐와 재등록·주차·수강료 발송 UI가 예전 번들로 되돌아가는 것을 막습니다.",
     files: [
       {
         file: "core/index.html",
         markers: [
-          "homeActionTotal",
+          "오늘 처리할 일",
+          "homeDecisionList",
           "재등록 관리",
           "renewalPipelineList",
-          "수강료 문의 즉시발송",
+          "parkingRegistrationForm",
+          "수강료 문의",
           "pricingInquiryForm",
           "pricingInquiryHistoryPanel",
           "최근 발송/메모 보기",
@@ -117,7 +119,7 @@ const guardGroups = [
           "pricingInquiryDisplayPhone",
           "pricingInquiryHistoryPanel",
           "operatorSendPricingInquiryAlimtalk",
-          "homeActionTotal",
+          "commandQueueStatus",
           "renewalCandidateRows",
           "renderRenewalPipeline",
           "mergeMemberCardsWithProfiles",
@@ -126,7 +128,13 @@ const guardGroups = [
       },
       {
         file: "core/assets/styles.css",
-        markers: [".kpis > .metric", "min-height: 156px"],
+        markers: [
+          ".kpis > .metric",
+          "min-height: 156px",
+          ".action-disclosure",
+          ".nav-secondary",
+          ".admin-nav-open .nav-secondary",
+        ],
       },
     ],
   },
