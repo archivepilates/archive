@@ -93,6 +93,8 @@ function buildManifest(surface) {
       canonicalUrls: ["https://in.archivepilates.com/release.json", "https://archive-pilates.web.app/archivein/release.json"],
       criticalMarkers: [
         "ARCHIVE IN 운영자 앱 종료 안내",
+        "ARCHIVE PILATES 프라이빗 사전설문",
+        "api/privateSurveySubmit",
         "uploadMediaFileDirect",
         "completeMediaUpload",
         "Drive 직접 업로드 중",

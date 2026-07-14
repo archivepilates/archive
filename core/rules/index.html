@@ -282,6 +282,8 @@
                 <li>설문ID, 접근토큰, shortLinkId, reportLinkId 같은 필수 링크 변수가 비어 있으면 후보가 생성되어 있어도 queued 또는 sent로 전환하지 않습니다.</li>
                 <li>삭제된 신규회원 웰컴 v3 템플릿은 후보 재생성 대상에서 제외하고, 현장 웰컴 v5 흐름만 사용합니다.</li>
                 <li>프라이빗 사전설문은 Google Form이 아니라 ARCHIVE IN 자체 설문을 사용합니다.</li>
+                <li>회원 작성 링크는 https://in.archivepilates.com/privateSurvey/를 사용하며, Hosting 배포에는 설문 페이지와 privateSurveySubmit API rewrite가 함께 있어야 합니다.</li>
+                <li>배포 전 롤백 가드와 배포 후 라이브 canary가 설문 페이지 및 제출 API 연결을 필수로 확인합니다.</li>
               </ul>
             </article>
             <article class="rule-card">

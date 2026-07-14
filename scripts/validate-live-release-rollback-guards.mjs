@@ -38,6 +38,37 @@ const guardGroups = [
     ],
   },
   {
+    id: "private-survey-native-form",
+    reason: "회원 프라이빗 사전설문 페이지와 제출 API rewrite가 main 승격 과정에서 빠지는 것을 막습니다.",
+    files: [
+      {
+        file: "archivein/privateSurvey/index.html",
+        markers: [
+          "ARCHIVE PILATES 프라이빗 사전설문",
+          "id=\"surveyForm\"",
+          "api/privateSurveySubmit",
+          "제출이 완료되었습니다.",
+        ],
+      },
+      {
+        file: "firebase.json",
+        markers: [
+          "\"source\": \"/archivein/api/privateSurveySubmit\"",
+          "\"source\": \"/archivein/privateSurvey/**\"",
+          "\"source\": \"/api/privateSurveySubmit\"",
+          "\"source\": \"/privateSurvey/**\"",
+        ],
+      },
+      {
+        file: "scripts/validate-live-release-canary.mjs",
+        markers: [
+          "private-survey-form-custom-domain",
+          "private-survey-form-webapp-path",
+        ],
+      },
+    ],
+  },
+  {
     id: "deploy-release-safety",
     reason: "오래된 브랜치나 배포 스냅샷이 live Hosting을 덮어쓰는 것을 배포 스크립트 단계에서 차단합니다.",
     files: [

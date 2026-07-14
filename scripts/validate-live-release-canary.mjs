@@ -35,6 +35,16 @@ if (selectedSurfaces.includes("archivein")) {
       "Drive 직접 업로드 중",
       "focusMediaUploadPanelIfRequested",
     ]),
+    textCheck("private-survey-form-custom-domain", "https://in.archivepilates.com/privateSurvey/", [
+      "ARCHIVE PILATES 프라이빗 사전설문",
+      "surveyForm",
+      "api/privateSurveySubmit",
+    ]),
+    textCheck("private-survey-form-webapp-path", "https://archive-pilates.web.app/archivein/privateSurvey/", [
+      "ARCHIVE PILATES 프라이빗 사전설문",
+      "surveyForm",
+      "api/privateSurveySubmit",
+    ]),
     textCheck("archivein-service-worker-cache-clear-custom-domain", "https://in.archivepilates.com/sw.js", [
       "LEGACY_CACHE_PREFIX",
       "caches.delete",

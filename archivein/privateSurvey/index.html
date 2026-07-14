@@ -1,0 +1,220 @@
+<!doctype html>
+<html lang="ko">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1">
+  <meta name="robots" content="noindex,nofollow">
+  <title>ARCHIVE PILATES 프라이빗 사전설문</title>
+  <style>
+    :root { color-scheme:light; --ink:#181512; --muted:#746b62; --line:#e8e0d7; --paper:#fffdf9; --accent:#c9392f; --good:#2f6f68; --bad:#9d2f24; }
+    * { box-sizing:border-box; }
+    body { margin:0; font-family:-apple-system,BlinkMacSystemFont,"Apple SD Gothic Neo","Noto Sans KR",sans-serif; background:#f6f1eb; color:var(--ink); }
+    main { width:min(720px,100%); margin:0 auto; padding:18px 14px 36px; }
+    .top { display:grid; grid-template-columns:1fr auto; gap:16px; align-items:start; padding:18px 2px 14px; border-bottom:1px solid rgba(24,21,18,.08); }
+    .brand { width:52px; height:52px; border-radius:50%; object-fit:contain; }
+    .eyebrow { font-size:12px; font-weight:800; color:var(--accent); }
+    h1 { margin:6px 0 10px; font-size:27px; line-height:1.18; letter-spacing:0; }
+    .lead { margin:0; color:var(--muted); font-size:14px; line-height:1.66; word-break:keep-all; overflow-wrap:break-word; }
+    .meta { display:flex; flex-wrap:wrap; gap:6px; margin-top:10px; color:var(--muted); font-size:13px; line-height:1.5; }
+    .chip { display:inline-flex; align-items:center; min-height:28px; padding:4px 9px; border:1px solid var(--line); border-radius:999px; background:rgba(255,253,249,.72); }
+    form { display:grid; gap:12px; margin-top:16px; }
+    fieldset, .field, .message { margin:0; padding:15px 16px; border:1px solid var(--line); border-radius:8px; background:var(--paper); }
+    legend, .label { padding:0; margin:0 0 10px; font-size:14px; font-weight:900; color:#3e3831; }
+    .hint { margin:6px 0 0; color:var(--muted); font-size:12px; line-height:1.5; }
+    .options { display:grid; gap:8px; }
+    label.option { display:grid; grid-template-columns:22px 1fr; gap:8px; align-items:start; min-height:32px; font-size:15px; line-height:1.48; }
+    input[type="radio"], input[type="checkbox"] { width:18px; height:18px; margin:2px 0 0; accent-color:var(--accent); }
+    textarea { width:100%; min-height:92px; resize:vertical; border:1px solid var(--line); border-radius:8px; padding:11px 12px; background:#fff; color:var(--ink); font:inherit; line-height:1.55; }
+    textarea:focus { outline:2px solid rgba(201,57,47,.18); border-color:var(--accent); }
+    .actions { position:sticky; bottom:0; margin:0 -14px -36px; padding:12px 14px 18px; background:linear-gradient(to top,#f6f1eb 82%,rgba(246,241,235,0)); }
+    button { width:100%; min-height:48px; border:0; border-radius:8px; background:var(--accent); color:#fff; font-size:15px; font-weight:900; cursor:pointer; }
+    button:disabled { opacity:.55; cursor:wait; }
+    .message { margin-top:16px; line-height:1.7; word-break:keep-all; overflow-wrap:break-word; }
+    .message.good { border-color:#bcd7d2; background:#f2faf8; color:var(--good); }
+    .message.bad { border-color:#f0c9c1; background:#fff7f4; color:var(--bad); }
+    @media (max-width:560px) {
+      main { padding:14px 12px 34px; }
+      .top { grid-template-columns:1fr 44px; gap:12px; padding-top:12px; }
+      .brand { width:44px; height:44px; }
+      h1 { font-size:24px; }
+      fieldset, .field, .message { padding:14px; }
+      .actions { margin-left:-12px; margin-right:-12px; padding-left:12px; padding-right:12px; }
+    }
+  </style>
+</head>
+<body>
+  <main>
+    <section class="top">
+      <div>
+        <div class="eyebrow">ARCHIVE PILATES</div>
+        <h1>프라이빗 사전설문</h1>
+        <p class="lead">예약하신 첫 프라이빗 수업을 더 정확하게 준비하기 위한 사전 설문입니다. 현재 몸 상태, 운동 목표, 수업에서 중요하게 생각하는 부분을 간단히 작성해 주세요.</p>
+        <div class="meta" id="meta"><span class="chip">설문 정보를 확인하는 중</span></div>
+      </div>
+      <img class="brand" src="../logo120.png" alt="ARCHIVE PILATES">
+    </section>
+    <form id="surveyForm" hidden>
+      <fieldset>
+        <legend>필라테스 운동경험이 있으신가요?</legend>
+        <div class="options" data-radio="experienceType"></div>
+      </fieldset>
+      <fieldset>
+        <legend>현재 운동 목표를 선택해 주세요</legend>
+        <div class="options" data-check="goals"></div>
+        <p class="hint">여러 개 선택할 수 있어요.</p>
+      </fieldset>
+      <fieldset>
+        <legend>현재 가장 신경 쓰이는 부위가 있나요?</legend>
+        <div class="options" data-check="focusAreas"></div>
+      </fieldset>
+      <div class="field">
+        <div class="label">통증이나 불편한 부위가 있다면 자세히 적어주세요</div>
+        <textarea name="painNote" maxlength="600" placeholder="예: 오래 앉으면 허리가 불편해요 / 오른쪽 어깨가 자주 긴장돼요"></textarea>
+      </div>
+      <fieldset>
+        <legend>평소 생활패턴에 가까운 내용을 선택해 주세요</legend>
+        <div class="options" data-check="lifestyle"></div>
+      </fieldset>
+      <fieldset>
+        <legend>최근 운동 경험은 어떤 편인가요?</legend>
+        <div class="options" data-radio="exerciseLevel"></div>
+      </fieldset>
+      <fieldset>
+        <legend>운동을 시작할 때 가장 걱정되는 부분은 무엇인가요?</legend>
+        <div class="options" data-radio="concern"></div>
+      </fieldset>
+      <div class="field">
+        <div class="label">프라이빗 수업에서 중요하게 생각하는 내용이 있나요?</div>
+        <textarea name="requestNote" maxlength="600" placeholder="예: 설명을 자세히 들으며 진행하고 싶어요 / 통증이 생기지 않게 천천히 시작하고 싶어요"></textarea>
+      </div>
+      <fieldset>
+        <legend>ARCHIVE PILATES를 알게 된 경로를 선택해 주세요</legend>
+        <div class="options" data-radio="referralSource"></div>
+      </fieldset>
+      <div class="actions">
+        <button type="submit">제출하기</button>
+      </div>
+    </form>
+    <section id="message" class="message" hidden></section>
+  </main>
+  <script>
+    const params = new URLSearchParams(location.search);
+    const requestId = String(params.get('id') || '').trim();
+    const accessToken = String(params.get('token') || '').trim();
+    const form = document.getElementById('surveyForm');
+    const meta = document.getElementById('meta');
+    const message = document.getElementById('message');
+    const button = form.querySelector('button');
+    const choices = {
+      experienceType: ['처음이에요', '3개월 미만 경험이 있어요', '3개월~1년 정도 경험이 있어요', '1년 이상 꾸준히 해본 적 있어요'],
+      goals: ['자세 교정', '체형 개선', '통증 완화', '근력/체력 향상', '유연성 향상', '운동 습관 만들기', '산전/산후 회복'],
+      focusAreas: ['없음', '목/어깨', '등/흉추', '허리', '골반/고관절', '복부', '엉덩이/하체', '무릎/발목', '기타'],
+      lifestyle: ['앉아있는 시간이 많아요', '서있는 시간이 많아요', '육아/가사 시간이 많아요', '운동량이 적은 편이에요', '스트레스나 수면 부족이 있어요', '특별히 해당 없음'],
+      exerciseLevel: ['거의 운동하지 않아요', '가끔 운동해요', '꾸준히 운동하는 편이에요', '재활/치료 운동 경험이 있어요'],
+      concern: ['자세가 맞는지 걱정돼요', '통증이 생길까 걱정돼요', '체력이 부족할까 걱정돼요', '수업 난이도가 걱정돼요', '특별히 걱정되는 부분은 없어요'],
+      referralSource: ['네이버 검색', '지인 소개', '인스타그램', '기존 회원/StudioMate 안내', '기타']
+    };
+
+    init();
+
+    async function init() {
+      renderChoices();
+      if (!/^psr-[a-z0-9-]{8,80}$/i.test(requestId) || !/^[a-f0-9]{16,80}$/i.test(accessToken)) {
+        showMessage('설문 링크가 올바르지 않습니다. 받은 알림톡 링크를 다시 확인해 주세요.', true);
+        return;
+      }
+      try {
+        const info = await requestJson(`../api/privateSurveySubmit?id=${encodeURIComponent(requestId)}&token=${encodeURIComponent(accessToken)}`);
+        meta.innerHTML = [
+          `<span class="chip">${escapeHtml(info.memberName || '회원')}님</span>`,
+          info.memberPhone ? `<span class="chip">예약 연락처 ${escapeHtml(info.memberPhone)}</span>` : '',
+          `<span class="chip">${escapeHtml(info.lessonTime || '첫 프라이빗 수업')}</span>`,
+          info.staffName ? `<span class="chip">수업 강사 ${escapeHtml(info.staffName)}</span>` : ''
+        ].filter(Boolean).join('');
+        if (info.status === 'submitted') {
+          showMessage('이미 제출이 완료되었습니다. 작성해 주신 내용은 수업 강사가 수업 준비를 위해 확인합니다.');
+          return;
+        }
+        form.hidden = false;
+      } catch (err) {
+        showMessage(err.message || '설문 정보를 불러오지 못했습니다.', true);
+      }
+    }
+
+    function renderChoices() {
+      for (const [name, values] of Object.entries(choices)) {
+        const type = ['goals', 'focusAreas', 'lifestyle'].includes(name) ? 'checkbox' : 'radio';
+        const root = document.querySelector(`[data-${type === 'checkbox' ? 'check' : 'radio'}="${name}"]`);
+        root.innerHTML = values.map((value) => `
+          <label class="option">
+            <input type="${type}" name="${name}" value="${escapeAttr(value)}">
+            <span>${escapeHtml(value)}</span>
+          </label>
+        `).join('');
+      }
+    }
+
+    form.addEventListener('submit', async (event) => {
+      event.preventDefault();
+      button.disabled = true;
+      try {
+        const payload = {
+          requestId,
+          accessToken,
+          experienceType: valueOf('experienceType'),
+          goals: valuesOf('goals'),
+          focusAreas: valuesOf('focusAreas'),
+          painNote: form.elements.painNote.value.trim(),
+          lifestyle: valuesOf('lifestyle'),
+          exerciseLevel: valueOf('exerciseLevel'),
+          concern: valueOf('concern'),
+          requestNote: form.elements.requestNote.value.trim(),
+          referralSource: valueOf('referralSource')
+        };
+        const result = await requestJson('../api/privateSurveySubmit', {
+          method: 'POST',
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify(payload)
+        });
+        form.hidden = true;
+        showMessage(result.duplicate
+          ? '이미 제출이 완료되었습니다. 작성해 주신 내용은 수업 강사가 수업 준비를 위해 확인합니다.'
+          : '제출이 완료되었습니다. 작성해 주신 내용은 수업 강사가 수업 준비를 위해 확인합니다.');
+      } catch (err) {
+        showMessage(err.message || '제출 중 오류가 발생했습니다. 잠시 후 다시 시도해 주세요.', true);
+      } finally {
+        button.disabled = false;
+      }
+    });
+
+    function valueOf(name) {
+      return form.querySelector(`input[name="${name}"]:checked`)?.value || '';
+    }
+
+    function valuesOf(name) {
+      return Array.from(form.querySelectorAll(`input[name="${name}"]:checked`)).map((input) => input.value);
+    }
+
+    async function requestJson(url, options) {
+      const response = await fetch(url, options);
+      const data = await response.json().catch(() => ({}));
+      if (!response.ok || data.ok === false) throw new Error(data.error || `HTTP ${response.status}`);
+      return data;
+    }
+
+    function showMessage(text, warn = false) {
+      message.hidden = false;
+      message.className = `message ${warn ? 'bad' : 'good'}`;
+      message.textContent = text;
+    }
+
+    function escapeHtml(value) {
+      return String(value == null ? '' : value).replace(/[&<>"']/g, (char) => ({ '&':'&amp;', '<':'&lt;', '>':'&gt;', '"':'&quot;', "'":'&#39;' })[char] || char);
+    }
+
+    function escapeAttr(value) {
+      return escapeHtml(value).replace(/`/g, '&#96;');
+    }
+  </script>
+</body>
+</html>
