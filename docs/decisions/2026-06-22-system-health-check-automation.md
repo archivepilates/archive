@@ -93,3 +93,4 @@ Email is sent only for `critical` or `action_required` findings.
 - Dirty worktrees remain visible in check evidence but do not affect the operational health status.
 - The retired ARCHIVE IN operator page is not an active service-health target. Active ARCHIVE IN member/private/welcome routes remain monitored.
 - Runtime LaunchAgent source moves to a stable Git worktree under `~/dev`; temporary feature worktrees must not be production runtime paths.
+- Worktree cleanup is an interactive Codex maintenance command, not a LaunchAgent. The canonical repository Git metadata is under `Documents`, where background shell access is blocked by macOS TCC.

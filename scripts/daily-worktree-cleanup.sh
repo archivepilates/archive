@@ -1,7 +1,7 @@
 #!/bin/zsh
 set -euo pipefail
 
-ROOT="${ARCHIVE_RUNTIME_ROOT:-/Users/archivepilates/dev/archive-in-runtime}"
+ROOT="${ARCHIVE_SOURCE_REPO:-/Users/archivepilates/Documents/ARCHIVE-IN}"
 WORKTREE_ROOT="/Users/archivepilates/codex-worktrees"
 LAUNCH_AGENTS="/Users/archivepilates/Library/LaunchAgents"
 LOCK_DIR="/Users/archivepilates/ArchiveIN/automation/locks/worktree-cleanup.lock"
@@ -56,7 +56,7 @@ is_safe_playwright_cache() {
 log "daily worktree cleanup started mode=$([[ "$APPLY" == "1" ]] && echo apply || echo audit)"
 
 if ! git -C "$ROOT" rev-parse --git-dir >/dev/null 2>&1; then
-  log "failed: runtime root is not accessible as a git repository: $ROOT"
+  log "failed: source repository is not accessible: $ROOT"
   exit 73
 fi
 

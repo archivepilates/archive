@@ -111,16 +111,6 @@ const AUTOMATIONS = [
     repair: "none",
   },
   {
-    id: "daily-worktree-cleanup",
-    label: "com.archive.daily-worktree-cleanup",
-    title: "Daily worktree cleanup",
-    area: "git",
-    reportDir: path.join(HOME, "ArchiveIN/automation/logs/worktree-cleanup"),
-    maxAgeMinutes: 26 * 60,
-    plist: path.join(PLIST_DIR, "com.archive.daily-worktree-cleanup.plist"),
-    repair: "none",
-  },
-  {
     id: "archive-ai-server",
     label: "com.archive.archive-ai-server",
     title: "Archive AI server",
