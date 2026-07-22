@@ -17,6 +17,12 @@ const reservationFile = valueArg("--reservation-file");
 const memberFile = valueArg("--member-file");
 const reportDir = path.join(os.homedir(), "ArchiveIN/automation/reports/excel-emergency-mode");
 const PROJECT_ID = process.env.GOOGLE_CLOUD_PROJECT || process.env.GCLOUD_PROJECT || "archive-pilates";
+const STUDIO_ID = process.env.STUDIOMATE_STUDIO_ID || "5330";
+const FIREBASE_REGION = process.env.FIREBASE_REGION || "asia-northeast3";
+const GCLOUD = process.env.GCLOUD_BIN || "/opt/homebrew/bin/gcloud";
+const PRIVATE_CHART_RECONCILE_SCHEDULER_JOB =
+  process.env.PRIVATE_CHART_RECONCILE_SCHEDULER_JOB ||
+  "firebase-schedule-scheduledReconcileCurrentMonthPrivateLessonCharts-asia-northeast3";
 
 if (!admin.apps.length) admin.initializeApp({ projectId: PROJECT_ID });
 const db = admin.firestore();
@@ -49,8 +55,7 @@ if (!downloadFailedWithoutMember) {
       "scripts/emergency-import-studiomate-member-excel.mjs",
       ...(memberFile || downloadedMemberFile ? ["--file", memberFile || downloadedMemberFile] : []),
       "--allow-new-excel-profiles",
-      "--new-excel-profile-max-age-days",
-      "3",
+      "--queue-contact-sync",
       ...(apply ? ["--apply"] : []),
     ]),
   );
@@ -79,6 +84,25 @@ if (!downloadFailedWithoutMember) {
         ...(apply ? ["--apply"] : []),
       ]),
     );
+  }
+
+  if (apply) {
+    const trigger = runCommandStep("privateChartReconcileTrigger", [
+      GCLOUD,
+      "scheduler",
+      "jobs",
+      "run",
+      PRIVATE_CHART_RECONCILE_SCHEDULER_JOB,
+      "--location",
+      FIREBASE_REGION,
+      "--project",
+      PROJECT_ID,
+    ]);
+    steps.push(trigger);
+    if (trigger.exitCode === 0) {
+      const reservationStep = steps.find((step) => step.name === "reservations");
+      steps.push(await waitForPrivateChartReconcile(reservationStep?.stdout?.dateRange));
+    }
   }
 }
 
@@ -125,7 +149,11 @@ console.log(JSON.stringify({ ...summary, reportPath }, null, 2));
 if (failed.length) process.exitCode = 1;
 
 function runStep(name, command) {
-  const result = spawnSync(process.execPath, command, {
+  return runCommandStep(name, [process.execPath, ...command]);
+}
+
+function runCommandStep(name, command) {
+  const result = spawnSync(command[0], command.slice(1), {
     cwd: process.cwd(),
     encoding: "utf8",
     env: process.env,
@@ -133,13 +161,145 @@ function runStep(name, command) {
   });
   return {
     name,
-    command: [process.execPath, ...command],
-    exitCode: result.status ?? 0,
+    command,
+    exitCode: result.status ?? (result.error ? 1 : 0),
     stdout: parseJsonOrText(result.stdout),
-    stderr: result.stderr.trim(),
+    stderr: String(result.error?.message || result.stderr || "").trim(),
     stdoutOk: parsedOk(result.stdout),
     requiredFailed: name === "memberProfiles" && parsedOk(result.stdout) === false,
   };
+}
+
+async function waitForPrivateChartReconcile(dateRange) {
+  const range = currentMonthIntersection(dateRange);
+  if (!range) {
+    return {
+      name: "privateChartReconcileVerify",
+      command: ["firestore", "bookings", "sessionOrder"],
+      exitCode: 0,
+      stdout: { ok: true, skipped: "import range is outside current month" },
+      stderr: "",
+      stdoutOk: true,
+      requiredFailed: false,
+    };
+  }
+  let result = null;
+  for (let attempt = 1; attempt <= 20; attempt += 1) {
+    result = await inspectPrivateSessionOrders(range);
+    if (result.ok) break;
+    await sleep(3000);
+  }
+  return {
+    name: "privateChartReconcileVerify",
+    command: ["firestore", "bookings", "sessionOrder", range.startDate, range.endDate],
+    exitCode: result?.ok ? 0 : 1,
+    stdout: result || { ok: false, error: "verification did not run" },
+    stderr: result?.ok ? "" : "private session order reconcile verification failed",
+    stdoutOk: Boolean(result?.ok),
+    requiredFailed: !result?.ok,
+  };
+}
+
+async function inspectPrivateSessionOrders(range) {
+  const docs = [];
+  for (const date of dateRange(range.startDate, range.endDate)) {
+    const snap = await db.collection("bookings").where("studioId", "==", STUDIO_ID).where("lectureDate", "==", date).get();
+    docs.push(...snap.docs.map((doc) => ({ id: doc.id, data: doc.data() })));
+  }
+  const privateDocs = docs.filter((doc) => isPrivateBooking(doc.data));
+  const countable = privateDocs.filter((doc) => !isExcludedPrivateBooking(doc.data));
+  const excluded = privateDocs.filter((doc) => isExcludedPrivateBooking(doc.data));
+  const missingOrder = countable.filter((doc) => !positiveNumber(doc.data?.sessionOrder?.privateCumulativeRound));
+  const excludedWithOrder = excluded.filter((doc) => positiveNumber(doc.data?.sessionOrder?.privateCumulativeRound));
+  const duplicateRounds = duplicatePrivateRounds(countable);
+  return {
+    ok: missingOrder.length === 0 && excludedWithOrder.length === 0 && duplicateRounds.length === 0,
+    startDate: range.startDate,
+    endDate: range.endDate,
+    privateBookings: privateDocs.length,
+    missingOrder: missingOrder.length,
+    excludedWithOrder: excludedWithOrder.length,
+    duplicateRounds: duplicateRounds.length,
+    sourceRefs: [
+      ...missingOrder.slice(0, 5).map((doc) => `bookings/${doc.id}`),
+      ...excludedWithOrder.slice(0, 5).map((doc) => `bookings/${doc.id}`),
+      ...duplicateRounds.slice(0, 5).map((doc) => `bookings/${doc.id}`),
+    ],
+  };
+}
+
+function currentMonthIntersection(input) {
+  const startDate = String(input?.startDate || "");
+  const endDate = String(input?.endDate || "");
+  if (!/^\d{4}-\d{2}-\d{2}$/.test(startDate) || !/^\d{4}-\d{2}-\d{2}$/.test(endDate)) return null;
+  const currentMonth = new Intl.DateTimeFormat("en-CA", {
+    timeZone: "Asia/Seoul",
+    year: "numeric",
+    month: "2-digit",
+  }).format(new Date());
+  const monthStart = `${currentMonth}-01`;
+  const monthEndDate = new Date(`${monthStart}T00:00:00+09:00`);
+  monthEndDate.setMonth(monthEndDate.getMonth() + 1);
+  monthEndDate.setDate(0);
+  const monthEnd = new Intl.DateTimeFormat("en-CA", {
+    timeZone: "Asia/Seoul",
+    year: "numeric",
+    month: "2-digit",
+    day: "2-digit",
+  }).format(monthEndDate);
+  const intersectStart = startDate > monthStart ? startDate : monthStart;
+  const intersectEnd = endDate < monthEnd ? endDate : monthEnd;
+  return intersectStart <= intersectEnd ? { startDate: intersectStart, endDate: intersectEnd } : null;
+}
+
+function dateRange(startDate, endDate) {
+  const result = [];
+  const cursor = new Date(`${startDate}T00:00:00+09:00`);
+  const end = new Date(`${endDate}T00:00:00+09:00`);
+  while (cursor <= end) {
+    result.push(new Intl.DateTimeFormat("en-CA", {
+      timeZone: "Asia/Seoul",
+      year: "numeric",
+      month: "2-digit",
+      day: "2-digit",
+    }).format(cursor));
+    cursor.setDate(cursor.getDate() + 1);
+  }
+  return result;
+}
+
+function isPrivateBooking(data) {
+  const text = [data?.lessonType, data?.ticketClassType, data?.ticketName, data?.title, data?.lectureTitle, data?.divisionName]
+    .join(" ")
+    .toLowerCase();
+  return /private|semi_private|프라이빗|개인|1:1|세미/.test(text);
+}
+
+function isExcludedPrivateBooking(data) {
+  if (data?.sessionOrder?.counted === false) return true;
+  if (["cancel", "wait", "wait_cancel", "superseded"].includes(String(data?.appStatus || ""))) return true;
+  if (["cancelled", "canceled", "superseded"].includes(String(data?.status || ""))) return true;
+  return ["absent", "late_cancel"].includes(String(data?.attendanceStatus || ""));
+}
+
+function duplicatePrivateRounds(bookings) {
+  const byKey = new Map();
+  for (const doc of bookings) {
+    const round = positiveNumber(doc.data?.sessionOrder?.privateCumulativeRound);
+    if (!round) continue;
+    const key = `${doc.data.memberId || doc.data.memberPhone || doc.data.memberName}|${round}`;
+    byKey.set(key, [...(byKey.get(key) || []), doc]);
+  }
+  return [...byKey.values()].filter((items) => items.length > 1).flat();
+}
+
+function positiveNumber(value) {
+  const number = Number(value || 0);
+  return Number.isFinite(number) && number > 0 ? number : 0;
+}
+
+function sleep(ms) {
+  return new Promise((resolve) => setTimeout(resolve, ms));
 }
 
 function valueArg(name) {

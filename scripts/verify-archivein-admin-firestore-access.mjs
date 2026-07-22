@@ -141,6 +141,11 @@ try {
   const url = new URL(targetUrl);
   url.searchParams.set("verify-admin", String(Date.now()));
   await page.goto(url.toString(), { waitUntil: "networkidle" });
+  const firebaseConfigUrl = url.pathname.startsWith("/archivein/")
+    ? `${url.origin}/archivein/firebase-config.js`
+    : `${url.origin}/firebase-config.js`;
+  await page.addScriptTag({ url: firebaseConfigUrl });
+  await page.waitForFunction(() => !!window.KANGSAIN_FIREBASE_CONFIG);
 
   const result = await page.evaluate(async ({ token, adminReadLabels }) => {
     const { initializeApp, getApps } = await import("https://www.gstatic.com/firebasejs/10.14.1/firebase-app.js");
@@ -215,18 +220,16 @@ try {
     verifyStaffId: staffId
   });
 
-  await page.waitForTimeout(8000);
   const screen = await page.evaluate(() => ({
     title: document.title,
-    hasOperatorTitle: document.body.innerText.includes("아카이브IN 운영자"),
     hasPermissionError: document.body.innerText.includes("Missing or insufficient permissions"),
-    hasActionNeeded: document.body.innerText.includes("액션 필요"),
-    hasInstructorTitle: /^IN\s*강사/m.test(document.body.innerText)
+    hasRetiredRootCopy: document.body.innerText.includes("ARCHIVE IN 운영자 화면은 ARCHIVE CORE로 역할이 이전되었습니다."),
+    hasInstructorTitle: /^IN\s*강사/m.test(document.body.innerText),
   }));
   await page.screenshot({ path: "/tmp/archivein-admin-verify.png", fullPage: true });
 
   const failedReads = probes.filter((item) => !item.ok);
-  const failedScreen = !screen.hasOperatorTitle || screen.hasPermissionError || screen.hasInstructorTitle;
+  const failedScreen = screen.hasPermissionError || screen.hasInstructorTitle;
   const summary = {
     ok: failedReads.length === 0 && !failedScreen,
     targetUrl,

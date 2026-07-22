@@ -36,7 +36,6 @@ The health check may automatically perform only low-risk repair actions:
 
 - reload or kickstart a missing/stale LaunchAgent;
 - move stale queue documents from stuck `running`/`processing` to `pending` or `retry`;
-- trigger private current-month reconcile when booking/session-order mismatch is detected;
 - trigger stale source or dashboard jobs by LaunchAgent kickstart.
 
 ## Forbidden Auto Repairs
@@ -84,3 +83,13 @@ HohoYoga monitoring is restored as a separate data-collection automation, not pa
 
 Routine successes are recorded to Firestore and JSON reports only.
 Email is sent only for `critical` or `action_required` findings.
+
+## 2026-07-23 Stabilization
+
+- LaunchAgent checks use both evidence freshness and the actual `last exit code`.
+- A command that never starts (`ENOENT`, `status=null`) is a failure, never exit code 0.
+- Private session-order reconciliation belongs to the StudioMate Excel sync flow. The health check only verifies residual mismatch and does not start a second reconcile.
+- Bookings intentionally excluded by `sessionOrder.counted=false`, superseded state, cancellation, wait state, absence, or late cancellation are not reported as missing rounds.
+- Dirty worktrees remain visible in check evidence but do not affect the operational health status.
+- The retired ARCHIVE IN operator page is not an active service-health target. Active ARCHIVE IN member/private/welcome routes remain monitored.
+- Runtime LaunchAgent source moves to a stable Git worktree under `~/dev`; temporary feature worktrees must not be production runtime paths.

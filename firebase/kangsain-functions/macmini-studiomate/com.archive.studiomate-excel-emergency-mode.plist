@@ -7,16 +7,18 @@
   <key>ProgramArguments</key>
   <array>
     <string>/opt/homebrew/bin/node</string>
-    <string>/Users/archivepilates/codex-worktrees/archivein-live-setup/scripts/run-studiomate-excel-emergency-mode.mjs</string>
+    <string>/Users/archivepilates/dev/archive-in-runtime/scripts/run-studiomate-excel-emergency-mode.mjs</string>
     <string>--download</string>
     <string>--apply</string>
   </array>
   <key>WorkingDirectory</key>
-  <string>/Users/archivepilates/codex-worktrees/archivein-live-setup</string>
+  <string>/Users/archivepilates/dev/archive-in-runtime</string>
   <key>StartInterval</key>
   <integer>3600</integer>
   <key>EnvironmentVariables</key>
   <dict>
+    <key>PATH</key>
+    <string>/opt/homebrew/bin:/usr/local/bin:/usr/bin:/bin:/usr/sbin:/sbin</string>
     <key>TZ</key>
     <string>Asia/Seoul</string>
     <key>HEADLESS</key>

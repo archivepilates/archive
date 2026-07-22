@@ -5,16 +5,18 @@
   <key>Label</key>
   <string>com.archive.system-health-check</string>
   <key>WorkingDirectory</key>
-  <string>/Users/archivepilates/codex-worktrees/archivein-live-setup</string>
+  <string>/Users/archivepilates/dev/archive-in-runtime</string>
   <key>ProgramArguments</key>
   <array>
     <string>/opt/homebrew/bin/node</string>
-    <string>/Users/archivepilates/codex-worktrees/archivein-live-setup/scripts/run-system-health-check.mjs</string>
+    <string>/Users/archivepilates/dev/archive-in-runtime/scripts/run-system-health-check.mjs</string>
     <string>--mode=quick</string>
     <string>--repair</string>
   </array>
   <key>EnvironmentVariables</key>
   <dict>
+    <key>PATH</key>
+    <string>/opt/homebrew/bin:/usr/local/bin:/usr/bin:/bin:/usr/sbin:/sbin</string>
     <key>GOOGLE_APPLICATION_CREDENTIALS</key>
     <string>/Users/archivepilates/ArchiveIN/secrets/google/archive-codex-operator.json</string>
     <key>GOOGLE_CLOUD_PROJECT</key>

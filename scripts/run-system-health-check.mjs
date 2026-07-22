@@ -17,7 +17,7 @@ const KEY_FILE =
 const REPORT_DIR = path.join(HOME, "ArchiveIN/automation/reports/system-health-check");
 const PLIST_DIR = path.join(HOME, "Library/LaunchAgents");
 const UID = String(process.getuid?.() || execText("id", ["-u"]).trim() || "501");
-const GCLOUD = process.env.GCLOUD_BIN || "/opt/homebrew/bin/gcloud";
+const GH = process.env.GH_BIN || "/opt/homebrew/bin/gh";
 const args = parseArgs(process.argv.slice(2));
 const MODE = String(args.mode || "quick");
 const REPAIR = Boolean(args.repair);
@@ -118,7 +118,7 @@ const AUTOMATIONS = [
     reportDir: path.join(HOME, "ArchiveIN/automation/logs/worktree-cleanup"),
     maxAgeMinutes: 26 * 60,
     plist: path.join(PLIST_DIR, "com.archive.daily-worktree-cleanup.plist"),
-    repair: "kickstart",
+    repair: "none",
   },
   {
     id: "archive-ai-server",
@@ -169,7 +169,6 @@ async function checkWebSurfaces() {
   const targets = [
     { area: "core", title: "ARCHIVE CORE home", url: "https://core.archivepilates.com/" },
     { area: "core", title: "ARCHIVE CORE staff", url: "https://core.archivepilates.com/staff/" },
-    { area: "archivein", title: "ARCHIVE IN operator", url: "https://archive-pilates.web.app/archivein/" },
     { area: "archivein", title: "ARCHIVE IN domain", url: "https://in.archivepilates.com/" },
     { area: "private", title: "Private survey", url: "https://in.archivepilates.com/privateSurvey/" },
     { area: "private", title: "Private chart", url: "https://in.archivepilates.com/private-chart/" },
@@ -203,7 +202,7 @@ async function checkWebSurfaces() {
 
 async function checkAdminAccess() {
   if (!["weekly", "deep", "e2e"].includes(MODE)) return;
-  const result = spawnSync("npm", ["run", "verify:archivein-admin"], {
+  const result = spawnSync(process.execPath, ["scripts/verify-archivein-admin-firestore-access.mjs"], {
     cwd: ROOT,
     encoding: "utf8",
     env: process.env,
@@ -212,15 +211,17 @@ async function checkAdminAccess() {
   checked.push({
     id: "archivein-admin-access",
     ok: result.status === 0,
-    code: result.status ?? 0,
+    code: result.status ?? 1,
+    signal: result.signal || "",
+    error: result.error?.message || "",
   });
   if (result.status !== 0) {
     addFinding({
-      area: "archivein",
+      area: "core",
       severity: "critical",
-      title: "ARCHIVE IN 관리자 권한/Firestore rules 검증 실패",
-      cause: String(result.stderr || result.stdout || "").slice(0, 800),
-      impact: "운영자 로그인 후 데이터가 비거나 수업 없는 강사처럼 보이는 회귀가 재발할 수 있습니다.",
+      title: "운영자 Firestore 권한 검증 실패",
+      cause: String(result.error?.message || result.stderr || result.stdout || `exit=${result.status} signal=${result.signal || ""}`).slice(0, 800),
+      impact: "ARCHIVE CORE 또는 운영 도구에서 필요한 데이터 읽기가 실패할 수 있습니다.",
       suggestedAction: "Firestore rules 배포 상태, 관리자 custom claims, 운영자 read 컬렉션을 함께 확인하세요.",
       sourceRefs: ["scripts/verify-archivein-admin-firestore-access.mjs"],
       autoRepairable: false,
@@ -244,7 +245,17 @@ async function checkLaunchAgents() {
       plistExists,
       evidencePath: latest.path || "",
       evidenceAgeMinutes: latest.ageMinutes ?? null,
+      state: launchState.state,
+      runs: launchState.runs,
+      lastExitCode: launchState.lastExitCode,
     });
+
+    const executionFailed =
+      launchState.loaded &&
+      launchState.state !== "running" &&
+      launchState.runs > 0 &&
+      launchState.lastExitCode !== null &&
+      launchState.lastExitCode !== 0;
 
     if (!plistExists) {
       addFinding({
@@ -275,6 +286,19 @@ async function checkLaunchAgents() {
       });
     }
 
+    if (executionFailed) {
+      addFinding({
+        area: item.area,
+        severity: "warning",
+        title: `${item.title} 최근 실행 실패`,
+        cause: `LaunchAgent last exit code ${launchState.lastExitCode}`,
+        impact: `${item.title}의 최근 예약 실행이 정상 완료되지 않았습니다.`,
+        suggestedAction: "stdout/stderr와 실행 결과 파일을 확인한 뒤 원인을 수정하세요.",
+        sourceRefs: [latest.path || item.plist],
+        autoRepairable: false,
+      });
+    }
+
     if (stale || missingEvidence) {
       const repaired = REPAIR && item.repair === "kickstart" ? kickstartLaunchAgent(item) : null;
       addFinding({
@@ -296,17 +320,24 @@ async function checkLaunchAgents() {
       automationId: item.id,
       title: item.title,
       ownerArea: item.area,
-      status: !plistExists || !launchState.loaded ? "failed" : stale || missingEvidence ? "warning" : "healthy",
+      status: !plistExists || !launchState.loaded || executionFailed ? "failed" : stale || missingEvidence ? "warning" : "healthy",
       lastRunAt: latest.mtimeIso || new Date().toISOString(),
       runId,
       lastResult: !plistExists
         ? "LaunchAgent plist 없음"
         : !launchState.loaded
           ? "LaunchAgent 미로드"
+          : executionFailed
+            ? `최근 실행 실패 · exit ${launchState.lastExitCode}`
           : stale
             ? `최근 결과 ${Math.round(latest.ageMinutes)}분 전`
             : "Health Check 통과",
-      warnings: [launchState.error, stale ? "stale evidence" : "", missingEvidence ? "missing evidence" : ""].filter(Boolean),
+      warnings: [
+        launchState.error,
+        executionFailed ? `last exit code ${launchState.lastExitCode}` : "",
+        stale ? "stale evidence" : "",
+        missingEvidence ? "missing evidence" : "",
+      ].filter(Boolean),
     });
   }
 }
@@ -405,10 +436,11 @@ async function inspectQueue(input) {
 async function checkPrivateLessonConsistency() {
   const recentBookings = await loadRecentBookings(700);
   const privateBookings = recentBookings.filter((doc) => isPrivateBooking(doc.data));
-  const nonCancelled = privateBookings.filter((doc) => !isCancelledBooking(doc.data));
-  const missingOrder = nonCancelled.filter((doc) => !positiveNumber(doc.data?.sessionOrder?.privateCumulativeRound));
-  const cancelledWithOrder = privateBookings.filter((doc) => isCancelledBooking(doc.data) && positiveNumber(doc.data?.sessionOrder?.privateCumulativeRound));
-  const duplicateRounds = duplicatePrivateRounds(nonCancelled);
+  const countable = privateBookings.filter((doc) => !isExcludedPrivateBooking(doc.data));
+  const excluded = privateBookings.filter((doc) => isExcludedPrivateBooking(doc.data));
+  const missingOrder = countable.filter((doc) => !positiveNumber(doc.data?.sessionOrder?.privateCumulativeRound));
+  const cancelledWithOrder = excluded.filter((doc) => positiveNumber(doc.data?.sessionOrder?.privateCumulativeRound));
+  const duplicateRounds = duplicatePrivateRounds(countable);
   checked.push({
     id: "private-session-order",
     privateBookings: privateBookings.length,
@@ -418,9 +450,6 @@ async function checkPrivateLessonConsistency() {
   });
 
   const needsReconcile = missingOrder.length || cancelledWithOrder.length || duplicateRounds.length;
-  let repair = null;
-  if (needsReconcile && REPAIR) repair = runPrivateChartReconcile();
-
   if (needsReconcile) {
     addFinding({
       area: "private",
@@ -432,16 +461,14 @@ async function checkPrivateLessonConsistency() {
         duplicateRounds.length ? `동일 회원 회차 중복 ${duplicateRounds.length}건` : "",
       ].filter(Boolean).join(", "),
       impact: "강사용 설문, 노션 차트, 회원 리포트 회차가 틀어질 수 있습니다.",
-      suggestedAction: repair?.ok
-        ? "current-month private chart reconcile을 자동 실행했습니다. 다음 점검에서 재확인합니다."
-        : "예약 원천 최신화 후 private chart reconcile을 실행하세요.",
+      suggestedAction: "StudioMate Excel 동기화의 privateChartReconcile 결과와 사후 검증을 확인하세요.",
       sourceRefs: [
         ...missingOrder.slice(0, 3).map((doc) => `bookings/${doc.id}`),
         ...cancelledWithOrder.slice(0, 3).map((doc) => `bookings/${doc.id}`),
         ...duplicateRounds.slice(0, 3).map((row) => `bookings/${row.bookingId}`),
       ],
       autoRepairable: true,
-      repairStatus: repair?.ok ? "repaired" : REPAIR ? "failed" : "not_attempted",
+      repairStatus: "not_attempted",
     });
   }
 
@@ -541,26 +568,22 @@ async function checkDataSourceAndReports() {
 async function checkGitAndCi() {
   const worktrees = gitWorktrees();
   const dirty = worktrees.filter((wt) => wt.path && gitDirty(wt.path));
-  if (dirty.length) {
-    addFinding({
-      area: "git",
-      severity: "warning",
-      title: `dirty worktree ${dirty.length}개`,
-      cause: "작업트리에 커밋/정리되지 않은 변경이 있습니다.",
-      impact: "배포 시 다른 작업 변경이 섞이거나 롤백처럼 보이는 문제가 재발할 수 있습니다.",
-      suggestedAction: "작업별 브랜치에서 커밋/백업/폐기 기준으로 정리하세요.",
-      sourceRefs: dirty.map((wt) => wt.path).slice(0, 6),
-      autoRepairable: false,
-    });
-  }
-  const gh = spawnSync("gh", ["run", "list", "--limit", "10", "--json", "databaseId,conclusion,status,workflowName,headBranch,displayTitle"], {
+  checked.push({
+    id: "git-worktrees",
+    dirtyCount: dirty.length,
+    dirtyPaths: dirty.map((wt) => wt.path).slice(0, 12),
+    operationalFinding: false,
+  });
+  const gh = spawnSync(GH, ["run", "list", "--limit", "10", "--json", "databaseId,conclusion,status,workflowName,headBranch,displayTitle"], {
     cwd: ROOT,
     encoding: "utf8",
     env: process.env,
   });
   if (gh.status === 0) {
     const runs = safeJson(gh.stdout, []);
-    const failed = runs.filter((run) => run.conclusion === "failure" || run.status === "failure");
+    const failed = runs.filter(
+      (run) => run.headBranch === "main" && (run.conclusion === "failure" || run.status === "failure"),
+    );
     if (failed.length) {
       addFinding({
         area: "github",
@@ -745,7 +768,17 @@ function fileEvidence(file) {
 
 function launchAgentState(label) {
   const result = spawnSync("launchctl", ["print", `gui/${UID}/${label}`], { encoding: "utf8" });
-  return { loaded: result.status === 0, error: result.status === 0 ? "" : String(result.stderr || result.stdout || "").trim().slice(0, 300) };
+  const output = String(result.stdout || "");
+  const state = output.match(/^\s*state = (.+)$/m)?.[1]?.trim() || "";
+  const runs = Number(output.match(/^\s*runs = (\d+)$/m)?.[1] || 0);
+  const exitMatch = output.match(/^\s*last exit code = (-?\d+)$/m);
+  return {
+    loaded: result.status === 0,
+    state,
+    runs,
+    lastExitCode: exitMatch ? Number(exitMatch[1]) : null,
+    error: result.status === 0 ? "" : String(result.error?.message || result.stderr || result.stdout || "").trim().slice(0, 300),
+  };
 }
 
 function repairLaunchAgent(item) {
@@ -782,20 +815,6 @@ async function repairStaleQueue(input, staleDocs) {
   const result = { item: input.collection, action: "stale-queue-retry", ok: true, updated };
   repairs.push(result);
   return result;
-}
-
-function runPrivateChartReconcile() {
-  const job =
-    process.env.PRIVATE_CHART_RECONCILE_SCHEDULER_JOB ||
-    "firebase-schedule-scheduledReconcileCurrentMonthPrivateLessonCharts-asia-northeast3";
-  const result = spawnSync(GCLOUD, ["scheduler", "jobs", "run", job, "--location", "asia-northeast3", "--project", PROJECT_ID], {
-    cwd: ROOT,
-    encoding: "utf8",
-    env: process.env,
-  });
-  const repair = { item: "private-chart-reconcile", action: "gcloud-scheduler-run", ok: result.status === 0, code: result.status ?? 0, stderr: String(result.stderr || result.stdout || "").trim().slice(0, 700) };
-  repairs.push(repair);
-  return repair;
 }
 
 async function loadStatusDocs(collectionName, statuses, limit) {
@@ -843,8 +862,11 @@ function isPrivateBooking(data) {
   return /private|semi_private|프라이빗|개인|1:1|세미/.test(text);
 }
 
-function isCancelledBooking(data) {
-  return ["cancel", "wait_cancel"].includes(String(data?.appStatus || "")) || ["cancelled", "canceled"].includes(String(data?.status || ""));
+function isExcludedPrivateBooking(data) {
+  if (data?.sessionOrder?.counted === false) return true;
+  if (["cancel", "wait", "wait_cancel", "superseded"].includes(String(data?.appStatus || ""))) return true;
+  if (["cancelled", "canceled", "superseded"].includes(String(data?.status || ""))) return true;
+  return ["absent", "late_cancel"].includes(String(data?.attendanceStatus || ""));
 }
 
 function positiveNumber(value) {

@@ -26,7 +26,7 @@
         <header class="page-hero">
           <p class="eyebrow">RULES</p>
           <h1>운영 규칙</h1>
-          <p class="subtitle">2026.06.26 기준 현재 유효한 운영 규칙만 정리한 ARCHIVE CORE 단일 운영 허브입니다.</p>
+          <p class="subtitle">2026.07.23 기준 현재 유효한 운영 규칙만 정리한 ARCHIVE CORE 단일 운영 허브입니다.</p>
         </header>
 
         <section class="panel rules-hero">
@@ -175,6 +175,10 @@
                 <li>Codex 앱 자동화는 테스트, 리뷰, 수동 fallback 용도이며 LaunchAgent와 같은 작업을 동시에 ACTIVE로 두지 않습니다.</li>
                 <li>ARCHIVE CORE 자동화 관제 탭은 Firestore automationStatus를 표시하므로, 새 자동화는 실행 주체와 상태를 automationStatus에 기록해야 합니다.</li>
                 <li>LaunchAgent와 Codex 자동화 정의는 sync:automation-observability로 점검해 CORE 관제에 반영합니다.</li>
+                <li>LaunchAgent는 로그 최신성뿐 아니라 실제 last exit code를 확인하며, 실행 실패를 최신 로그 생성으로 정상 처리하지 않습니다.</li>
+                <li>프라이빗 회차 보정은 StudioMate Excel 동기화 직후 한 번 실행하고, 시스템 점검은 잔여 오류만 검증합니다.</li>
+                <li>superseded, 취소, 대기, 결석 및 sessionOrder.counted=false 예약은 프라이빗 회차 누락 대상으로 보지 않습니다.</li>
+                <li>dirty worktree는 개발 정리 대상으로 별도 기록하며 회원·운영 시스템 장애 점수에는 포함하지 않습니다.</li>
               </ul>
             </article>
             <article class="rule-card">
