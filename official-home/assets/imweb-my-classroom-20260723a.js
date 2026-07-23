@@ -1,5 +1,5 @@
 (function(){
-  var VERSION="2026-07-23a";
+  var VERSION="2026-07-23b";
   var path=String(location.pathname||"").replace(/\/$/,"");
   if(path!=="/48"&&path!=="/my-classroom")return;
 
@@ -101,7 +101,7 @@
 
   function run(){
     if(document.documentElement.getAttribute("data-ap-classroom-v2-ready"))return;
-    var host=document.getElementById("doz_content");
+    var host=document.getElementById("doz_content")||document.querySelector("main")||document.body;
     if(!host){setTimeout(run,60);return}
     document.documentElement.setAttribute("data-ap-classroom-v2-ready",VERSION);
     host.innerHTML='<section class="apc"><div class="apc-in"><p class="apc-ey">ARCHIVE PILATES · MY CLASSROOM</p><h1>내 강의실</h1><p class="apc-lead">구매했거나 수동으로 권한이 부여된 온라인 클래스만 표시됩니다.</p><div class="apc-loading">시청 가능한 수업을 확인하고 있습니다.</div><div class="apc-grid" hidden></div></div></section>';
