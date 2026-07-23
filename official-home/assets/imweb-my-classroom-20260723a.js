@@ -1,5 +1,5 @@
 (function(){
-  var VERSION="2026-07-23b";
+  var VERSION="2026-07-23c";
   var path=String(location.pathname||"").replace(/\/$/,"");
   if(path!=="/48"&&path!=="/my-classroom")return;
 
@@ -55,7 +55,7 @@
       ".apc-loading{color:#756a62}.apc-grid{display:grid;grid-template-columns:repeat(3,minmax(0,1fr));gap:14px}",
       ".apc-card{display:flex;min-width:0;min-height:150px;flex-direction:column;justify-content:space-between;padding:20px;border:1px solid #ded5cb;background:#fff;color:#181614!important;text-decoration:none!important;transition:transform .22s ease,border-color .22s ease}",
       ".apc-card:hover{transform:translateY(-3px);border-color:#1e1b18}.apc-code{font-size:12px;letter-spacing:.1em;font-weight:900;color:#8c3425}.apc-card strong{font-size:18px;line-height:1.4;letter-spacing:0}.apc-card span:last-child{color:#756a62;font-weight:800}",
-      ".apc-empty{max-width:720px;padding:24px 26px;border:1px solid #e3d8ce;background:#fbf7f1;line-height:1.75;color:#1e1b18}.apc-empty strong{display:block;margin:0 0 8px;font-size:18px;line-height:1.45}.apc-empty-help{margin:0 0 4px;color:#675d55}.apc-account{margin:10px 0 0;font-size:13px;color:#7d7168}",
+      ".apc-empty{max-width:720px;padding:24px 26px;border:1px solid #e3d8ce;background:#fbf7f1;line-height:1.75;color:#1e1b18}.apc-empty strong{display:block;margin:0 0 8px;font-size:18px;line-height:1.45}.apc-empty-help{margin:0 0 4px;color:#675d55}.apc-account{margin:10px 0 0;font-size:13px;color:#7d7168;overflow-wrap:anywhere;word-break:break-word}",
       ".apc-actions{display:flex;gap:10px;flex-wrap:wrap;margin-top:18px}.apc-btn{display:inline-flex;align-items:center;justify-content:center;min-height:44px;padding:10px 14px;border:1px solid #1e1b18;background:#1e1b18;color:#fff!important;text-decoration:none!important;font-weight:800}.apc-btn.sub{border-color:#d8cec3;background:#fff;color:#1e1b18!important}",
       "@media(max-width:760px){.apc{padding:84px 15px 60px}.apc h1{font-size:28px}.apc-grid{grid-template-columns:1fr}.apc-card{min-height:142px}.apc-empty{padding:20px 18px}.apc-btn{width:100%}}",
       "@media(prefers-reduced-motion:reduce){.apc-card{transition:none!important}}"
