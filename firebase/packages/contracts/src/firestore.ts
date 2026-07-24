@@ -13,6 +13,7 @@ export const archiveCollections = {
   privateSurveyResponses: "privateSurveyResponses",
   privateLessonChartRequests: "privateLessonChartRequests",
   privateLessonChartRecords: "privateLessonChartRecords",
+  methodCueCardReviews: "methodCueCardReviews",
   adminSyncRequests: "adminSyncRequests",
   privateSessionLedger: "privateSessionLedger",
   attendanceSummaries: "attendanceSummaries",
@@ -36,6 +37,7 @@ export const sourceOfTruthCollections = [
   archiveCollections.contactSyncJobs,
   archiveCollections.privateLessonChartRequests,
   archiveCollections.privateLessonChartRecords,
+  archiveCollections.methodCueCardReviews,
   archiveCollections.adminSyncRequests,
 ] as const;
 

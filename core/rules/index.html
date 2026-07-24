@@ -578,6 +578,7 @@
                 <li>CORE Hosting은 최신 CORE 작업 기준에서만 배포합니다. 배포 전 validate:archive-core-hosting이 수강료 문의 카드, 최근 발송/메모 패널, KPI 카드 높이 CSS를 확인하고, 빠진 항목이 있으면 배포를 중단합니다.</li>
                 <li>라이브 배포 커밋은 origin/main으로 fast-forward 승격합니다. 배포 완료 보고 전 npm run release:promote-main:dry로 승격 가능성을 확인하고, 검증이 끝나면 npm run release:promote-main을 실행합니다.</li>
                 <li>기능 브랜치만 라이브에 배포되고 main으로 승격되지 않은 상태는 rollback/다른 스레드 덮어쓰기 위험으로 봅니다. 승격이 막히면 차단 원인을 보고하고 별도 정리합니다.</li>
+                <li>ARCHIVE METHOD 강사레슨 큐카드는 HTML, 검토 저장 Function, Hosting rewrite를 한 배포 단위로 관리하며 배포 전 롤백 가드와 배포 후 라이브 canary가 페이지와 API를 함께 확인합니다.</li>
                 <li>배포 후 실제 URL, callable/API 응답, 브라우저 오류를 확인합니다.</li>
               </ul>
             </article>

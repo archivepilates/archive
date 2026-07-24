@@ -36,6 +36,7 @@
         "privateLessonReportView",
         "memberSignupContract",
         "onsiteWelcomeRequest",
+        "methodCueCardReview",
         "notionPrivateLessonReportWebhook",
         "redirectShortLink",
         "processPrivateSurveyIntake"

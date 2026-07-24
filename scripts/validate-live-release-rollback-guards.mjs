@@ -69,6 +69,83 @@ const guardGroups = [
     ],
   },
   {
+    id: "archive-method-breathing-cue-card",
+    reason: "ARCHIVE METHOD 호흡 강사레슨 큐카드와 검토 저장 API가 main 승격이나 Hosting 배포에서 빠지는 것을 막습니다.",
+    files: [
+      {
+        file: "archivein/method/breathing-260627/index.html",
+        markers: [
+          "호흡 큐카드 | ARCHIVE METHOD",
+          "data-lesson-id=\"breathing-260627\"",
+          "archive.method.review.",
+          "window.location.pathname.startsWith('/archivein/')",
+          "fetch(reviewEndpoint",
+        ],
+      },
+      {
+        file: "firebase/kangsain-functions/functions/src/method/methodCueCardReview.ts",
+        markers: [
+          "methodCueCardReviewHandler",
+          "methodCueCardReviews",
+          "METHOD_CUE_CARD_REVIEW_SPREADSHEET_ID",
+          "ALLOWED_LESSON_IDS",
+          "invalid_submission_id",
+          "isAlreadyExistsError",
+        ],
+      },
+      {
+        file: "firebase/kangsain-functions/functions/src/exports/privateChart.ts",
+        markers: [
+          "methodCueCardReviewHandler",
+          "export const methodCueCardReview",
+        ],
+      },
+      {
+        file: "firebase/codebase-boundaries.json",
+        markers: [
+          "\"methodCueCardReview\"",
+        ],
+      },
+      {
+        file: "firebase/packages/contracts/src/firestore.ts",
+        markers: [
+          "methodCueCardReviews: \"methodCueCardReviews\"",
+          "archiveCollections.methodCueCardReviews",
+        ],
+      },
+      {
+        file: "scripts/lib/affected-functions.mjs",
+        markers: [
+          "firebase/kangsain-functions/functions/src/method/",
+        ],
+      },
+      {
+        file: ".github/workflows/functions-affected-check.yml",
+        markers: [
+          "archivein/method/**",
+        ],
+      },
+      {
+        file: "firebase.json",
+        markers: [
+          "\"source\": \"/archivein/method/**\"",
+          "\"source\": \"/archivein/api/methodCueCardReview\"",
+          "\"source\": \"/method/**\"",
+          "\"source\": \"/api/methodCueCardReview\"",
+        ],
+      },
+      {
+        file: "scripts/validate-live-release-canary.mjs",
+        markers: [
+          "method-breathing-cue-card-custom-domain",
+          "method-breathing-cue-card-webapp-path",
+          "method-cue-card-review-api-custom-domain",
+          "method-cue-card-review-api-webapp-path",
+        ],
+      },
+    ],
+  },
+  {
     id: "deploy-release-safety",
     reason: "오래된 브랜치나 배포 스냅샷이 live Hosting을 덮어쓰는 것을 배포 스크립트 단계에서 차단합니다.",
     files: [

@@ -45,6 +45,18 @@ if (selectedSurfaces.includes("archivein")) {
       "surveyForm",
       "api/privateSurveySubmit",
     ]),
+    textCheck("method-breathing-cue-card-custom-domain", "https://in.archivepilates.com/method/breathing-260627/", [
+      "호흡 큐카드 | ARCHIVE METHOD",
+      "data-lesson-id=\"breathing-260627\"",
+      "api/methodCueCardReview",
+    ]),
+    textCheck("method-breathing-cue-card-webapp-path", "https://archive-pilates.web.app/archivein/method/breathing-260627/", [
+      "호흡 큐카드 | ARCHIVE METHOD",
+      "data-lesson-id=\"breathing-260627\"",
+      "api/methodCueCardReview",
+    ]),
+    statusCheck("method-cue-card-review-api-custom-domain", "https://in.archivepilates.com/api/methodCueCardReview", [405]),
+    statusCheck("method-cue-card-review-api-webapp-path", "https://archive-pilates.web.app/archivein/api/methodCueCardReview", [405]),
     textCheck("archivein-service-worker-cache-clear-custom-domain", "https://in.archivepilates.com/sw.js", [
       "LEGACY_CACHE_PREFIX",
       "caches.delete",
@@ -131,6 +143,17 @@ async function runCheck(check) {
       redirect: "follow",
     });
     const body = await response.text();
+    if (check.type === "status") {
+      const ok = check.statuses.includes(response.status);
+      return {
+        id: check.id,
+        url: check.url,
+        ok,
+        status: response.status,
+        expectedStatuses: check.statuses,
+        reason: ok ? undefined : "unexpected_status",
+      };
+    }
     if (!response.ok) {
       return { id: check.id, url: check.url, ok: false, status: response.status, reason: "http_status" };
     }
@@ -164,6 +187,10 @@ function jsonCheck(id, url, predicate) {
 
 function textCheck(id, url, markers) {
   return { id, url, type: "text", markers };
+}
+
+function statusCheck(id, url, statuses) {
+  return { id, url, type: "status", statuses };
 }
 
 function withCacheBust(url) {

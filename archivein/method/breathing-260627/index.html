@@ -1,0 +1,389 @@
+<!doctype html>
+<html lang="ko">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover">
+<title>호흡 큐카드 | ARCHIVE METHOD</title>
+<meta name="theme-color" content="#fbfaf7">
+<meta name="description" content="ARCHIVE METHOD 강사레슨 큐카드 - 호흡">
+<link rel="icon" href="/favicon.png">
+<link rel="apple-touch-icon" href="/apple-touch-icon.png">
+<link rel="preconnect" href="https://cdn.jsdelivr.net">
+<link rel="stylesheet" href="https://cdn.jsdelivr.net/gh/orioncactus/pretendard/dist/web/static/pretendard.css">
+<style>
+:root{--bg:#fbfaf7;--paper:#fff;--ink:#1f1d1a;--muted:#716b63;--quiet:#9c9389;--line:#e7dfd6;--soft:#f3eee8;--accent:#bf4d2b;--dark:#211d19;--green:#4e7461;--blue:#526d87;--radius:14px;--shadow:0 10px 32px rgba(44,37,30,.08)}
+*{box-sizing:border-box}
+html{scroll-behavior:smooth}
+body{margin:0;background:var(--bg);color:var(--ink);font-family:"Pretendard",-apple-system,BlinkMacSystemFont,system-ui,sans-serif;font-size:15px;line-height:1.62;word-break:keep-all;-webkit-font-smoothing:antialiased}
+.page{max-width:720px;margin:0 auto;padding:28px 18px 92px}
+.progress{position:fixed;inset:0 auto auto 0;height:3px;width:0;background:var(--accent);z-index:50}
+.top{padding:22px 0 20px;border-bottom:1px solid var(--line)}
+.kicker{color:var(--accent);font-size:11px;font-weight:900;letter-spacing:.15em;text-transform:uppercase}
+.title{margin:10px 0 6px;font-size:clamp(34px,11vw,62px);line-height:.98;letter-spacing:0}
+.sub{margin:0;color:var(--muted);font-size:14px}
+.meta{display:flex;flex-wrap:wrap;gap:8px;margin-top:18px}
+.pill{display:inline-flex;align-items:center;min-height:31px;padding:6px 11px;border:1px solid var(--line);border-radius:999px;background:var(--paper);color:var(--muted);font-size:12px;font-weight:800}
+.hero-note{margin-top:18px;padding:16px;border:1px solid var(--line);border-radius:var(--radius);background:var(--paper);box-shadow:var(--shadow)}
+.hero-note strong{display:block;margin-bottom:6px;font-size:15px}
+.hero-note p{margin:0;color:var(--muted)}
+section{padding:30px 0;border-bottom:1px solid var(--line)}
+.section-head{display:flex;align-items:center;gap:12px;margin-bottom:16px}
+.section-num{color:var(--accent);font-size:11px;font-weight:900;letter-spacing:.14em}
+.section-title{margin:0;font-size:20px;line-height:1.25}
+.grid{display:grid;gap:12px}
+.two{grid-template-columns:1fr}
+@media(min-width:640px){.two{grid-template-columns:1fr 1fr}}
+.card{padding:18px;border:1px solid var(--line);border-radius:var(--radius);background:var(--paper);box-shadow:0 1px 6px rgba(44,37,30,.05)}
+.card.dark{background:var(--dark);border-color:var(--dark);color:#fff}
+.card h3{margin:0 0 7px;font-size:17px}
+.card p{margin:0;color:var(--muted)}
+.dark p{color:rgba(255,255,255,.72)}
+.tag{display:inline-flex;margin-bottom:10px;color:var(--accent);font-size:10px;font-weight:900;letter-spacing:.13em;text-transform:uppercase}
+.summary{display:grid;gap:10px}
+.summary-row{display:grid;grid-template-columns:88px 1fr;gap:12px;padding:14px 0;border-top:1px solid var(--line)}
+.summary-row:first-child{border-top:0}
+.summary-label{color:var(--quiet);font-size:11px;font-weight:900;letter-spacing:.12em;text-transform:uppercase}
+.summary-text{color:var(--ink);font-weight:750}
+.flow{display:grid;grid-template-columns:1fr;gap:8px}
+@media(min-width:640px){.flow{grid-template-columns:repeat(5,1fr)}}
+.flow-step{min-width:0;padding:14px;border:1px solid var(--line);border-radius:12px;background:var(--paper)}
+.flow-step b{display:block;margin-bottom:5px;color:var(--accent);font-size:11px;font-weight:900;letter-spacing:.08em;text-transform:uppercase}
+.flow-step span{display:block;color:var(--muted);font-size:13px;font-weight:750;line-height:1.45}
+.tabs{display:grid;grid-template-columns:1fr 1fr;overflow:hidden;border:1px solid var(--line);border-radius:14px 14px 0 0}
+.tab{min-height:58px;border:0;border-right:1px solid var(--line);background:var(--soft);color:var(--muted);font:800 13px "Pretendard",system-ui,sans-serif}
+.tab:last-child{border-right:0}
+.tab span{display:block;margin-top:2px;font-size:10px;font-weight:700;letter-spacing:.08em;color:var(--quiet)}
+.tab.active{background:var(--accent);color:#fff}
+.tab.active span{color:rgba(255,255,255,.78)}
+.pane{display:none;border:1px solid var(--line);border-top:0;border-radius:0 0 14px 14px;background:var(--paper);overflow:hidden}
+.pane.on{display:block}
+.block{padding:18px;border-top:1px solid var(--line)}
+.block:first-child{border-top:0}
+.block-title{display:flex;align-items:center;gap:8px;margin:0 0 12px;font-size:14px}
+.block-title:before{content:attr(data-mark);color:var(--accent);font-size:11px;font-weight:900;letter-spacing:.08em}
+.phase-list{display:grid;gap:1px;overflow:hidden;border:1px solid var(--line);border-radius:12px;background:var(--line)}
+.phase-card{display:grid;grid-template-columns:56px 1fr;background:var(--paper)}
+.phase-mark{display:flex;align-items:flex-start;justify-content:center;padding:15px 10px;color:var(--accent);font-size:11px;font-weight:900;letter-spacing:.1em;background:var(--soft)}
+.phase-body{min-width:0;padding:14px 16px}
+.phase-name{margin:0 0 8px;font-size:14px}
+.move-list{list-style:none;margin:0;padding:0}
+.move-list li{padding:6px 0;border-top:1px solid #f0ebe6;color:var(--muted)}
+.move-list li:first-child{border-top:0}
+.move-list small{display:block;margin-top:2px;color:var(--quiet);font-weight:650;line-height:1.45}
+.mini-grid{display:grid;gap:10px}
+.mini{padding:13px 14px;border-radius:12px;background:var(--soft);color:var(--muted)}
+.mini b{display:block;margin-bottom:4px;color:var(--ink)}
+.question{padding:16px 0;border-top:1px solid var(--line)}
+.question:first-child{border-top:0}
+.q-label{color:var(--accent);font-size:11px;font-weight:900;letter-spacing:.12em}
+.q-text{margin-top:4px;font-weight:800}
+.takeaways{counter-reset:take}
+.take{display:grid;grid-template-columns:32px 1fr;gap:12px;padding:14px 0;border-top:1px solid var(--line)}
+.take:first-child{border-top:0}
+.take:before{counter-increment:take;content:counter(take,decimal-leading-zero);color:var(--accent);font-size:12px;font-weight:900;letter-spacing:.08em}
+.cue-list{list-style:none;margin:0;padding:0}
+.cue-list li{padding:9px 0;border-top:1px solid var(--line);color:var(--muted)}
+.cue-list li:first-child{border-top:0}
+.cue-list b{color:var(--ink)}
+.survey{position:relative;overflow:hidden;margin-top:28px;padding:24px;border-radius:18px;background:var(--dark);color:#fff}
+.survey h2{position:relative;margin:6px 0 8px;font-size:21px}
+.survey p{position:relative;margin:0 0 18px;color:rgba(255,255,255,.66)}
+.review-form{position:relative;display:grid;gap:16px}
+.review-field{display:grid;gap:8px}
+.review-label{color:rgba(255,255,255,.82);font-size:12px;font-weight:900;letter-spacing:.08em;text-transform:uppercase}
+.star-row{display:grid;grid-template-columns:repeat(5,minmax(0,46px));gap:8px;align-items:center}
+.star{position:relative;display:grid;place-items:center;width:100%;aspect-ratio:1;border:1px solid rgba(255,255,255,.18);border-radius:12px;background:rgba(255,255,255,.08);color:rgba(255,255,255,.38);font-size:24px;line-height:1;cursor:pointer;transition:.16s}
+.star input{position:absolute;inset:0;opacity:0;cursor:pointer}
+.star.on,.star:has(input:focus-visible){border-color:var(--accent);background:rgba(191,77,43,.22);color:#fff}
+.review-textarea{width:100%;min-height:104px;padding:13px 14px;border:1px solid rgba(255,255,255,.16);border-radius:12px;background:rgba(255,255,255,.08);color:#fff;font:inherit;resize:vertical}
+.review-textarea::placeholder{color:rgba(255,255,255,.38)}
+.review-submit{width:100%;min-height:48px;border:0;border-radius:12px;background:var(--accent);color:#fff;font:900 13px "Pretendard",system-ui,sans-serif;letter-spacing:.07em}
+.review-submit:disabled{opacity:.62}
+.review-status{min-height:20px;margin:0;color:rgba(255,255,255,.72);font-size:12px;font-weight:800}
+footer{padding-top:22px;color:var(--quiet);font-size:11px;font-weight:700;letter-spacing:.12em;text-transform:uppercase}
+.topbtn{position:fixed;right:18px;bottom:24px;width:44px;height:44px;border:0;border-radius:50%;background:var(--dark);color:#fff;font-weight:900;box-shadow:var(--shadow);opacity:0;transform:translateY(10px);transition:.2s}
+.topbtn.on{opacity:1;transform:none}
+.lesson-gate{display:none;margin:28px 0 0;padding:18px;border:1px solid var(--line);border-radius:var(--radius);background:var(--paper);box-shadow:var(--shadow);font-weight:900;color:var(--muted);line-height:1.5}
+.lesson-gate p{margin:0;color:var(--ink)}
+.lesson-content{display:block}
+body.locked .lesson-gate{display:block}
+body.locked .lesson-content{display:none}
+body.locked footer{display:none}
+body.locked .topbtn{display:none}
+@media(max-width:390px){.page{padding-left:14px;padding-right:14px}.summary-row{grid-template-columns:1fr;gap:4px}.card{padding:16px}.block{padding:16px}.tab{font-size:12px}.tab span{font-size:9px}.phase-card{grid-template-columns:48px 1fr}.phase-body{padding:13px 14px}}
+@media(max-width:360px){.star-row{gap:6px}}
+</style>
+</head>
+<body data-lesson-start="2026-06-27T13:00:00+09:00" class="locked">
+<div class="progress" id="progress"></div>
+<button class="topbtn" id="topbtn" onclick="window.scrollTo({top:0,behavior:'smooth'})" aria-label="맨 위로">↑</button>
+<main class="page">
+  <div class="lesson-gate">
+    <p>6/27(토) 오후1시에 공개됩니다.</p>
+  </div>
+  <div class="lesson-content">
+    <header class="top">
+      <div class="kicker">ARCHIVE METHOD · 큐카드 2606</div>
+      <h1 class="title">호흡</h1>
+      <p class="sub">체어 민진T · 캐딜락 은영T · 피드백 큐카드</p>
+      <div class="meta">
+        <span class="pill">강사레슨</span>
+        <span class="pill">큐카드</span>
+        <span class="pill">6/27 13:00 공개</span>
+      </div>
+      <div class="hero-note">
+        <strong>오늘의 핵심</strong>
+        <p>호흡하는 방법만 알려주는 수업이 아니라, 움직임 속에서 호흡의 리듬을 잃지 않고 이어갈 수 있는 방법을 알려주는 수업입니다.</p>
+      </div>
+    </header>
+
+    <section>
+      <div class="section-head"><div class="section-num">01</div><h2 class="section-title">30초 요약</h2></div>
+      <div class="card">
+        <div class="summary">
+          <div class="summary-row"><div class="summary-label">정의</div><div class="summary-text">호흡은 몸통의 공간과 압력을 움직임에 맞게 조절하는 능력입니다.</div></div>
+          <div class="summary-row"><div class="summary-label">민진T</div><div class="summary-text">체어의 저항과 템포 안에서 호흡이 끊기지 않는지 확인합니다.</div></div>
+          <div class="summary-row"><div class="summary-label">은영T</div><div class="summary-text">어깨·흉곽·척추·상지 지지를 통해 호흡을 큰 움직임으로 확장합니다.</div></div>
+        </div>
+      </div>
+    </section>
+
+    <section>
+      <div class="section-head"><div class="section-num">02</div><h2 class="section-title">수업 흐름</h2></div>
+      <div class="flow">
+        <div class="flow-step"><b>Open</b><span>흉곽과 후면·측면 공간을 연다.</span></div>
+        <div class="flow-step"><b>Pump</b><span>횡격막과 골반 펌프를 깨운다.</span></div>
+        <div class="flow-step"><b>Pressurize</b><span>저항 속 몸통 압력을 만든다.</span></div>
+        <div class="flow-step"><b>Move</b><span>굴곡·신전·회전·측굴 속 호흡을 유지한다.</span></div>
+        <div class="flow-step"><b>Recover</b><span>강한 동작 후 안정 호흡으로 돌아온다.</span></div>
+      </div>
+    </section>
+
+    <section>
+      <div class="section-head"><div class="section-num">03</div><h2 class="section-title">수업 시퀀스와 피드백</h2></div>
+      <div class="tabs">
+        <button class="tab active" type="button" onclick="switchTab('mj', this)">민진T · 체어<span>저항 속 호흡</span></button>
+        <button class="tab" type="button" onclick="switchTab('ey', this)">은영T · 캐딜락<span>상지 지지와 확장</span></button>
+      </div>
+
+      <div id="tab-mj" class="pane on">
+        <div class="block">
+          <h3 class="block-title" data-mark="SEQ">Sequence</h3>
+          <div class="phase-list">
+            <div class="phase-card"><div class="phase-mark">W</div><div class="phase-body"><h4 class="phase-name">Warm-up</h4><ul class="move-list"><li>Posterior Lateral Line + Chest Stretch</li><li>Kneeling Roll Down &amp; Cat-Cow</li><li>Single Leg Press</li><li>Single Leg Pull Up</li></ul></div></div>
+            <div class="phase-card"><div class="phase-mark">M1</div><div class="phase-body"><h4 class="phase-name">Footwork Breath Challenge</h4><ul class="move-list"><li>Parallel Heels</li><li>Arches</li><li>Wide Heels</li></ul></div></div>
+            <div class="phase-card"><div class="phase-mark">M2</div><div class="phase-body"><h4 class="phase-name">Control Under Resistance</h4><ul class="move-list"><li>Pike Variation</li><li>Roll Down &amp; Neck Pull Variation</li><li>Pedal Assisted Short Box Series<small>Round Back · Flat Back · Lean Back · Around World</small></li></ul></div></div>
+            <div class="phase-card"><div class="phase-mark">M3</div><div class="phase-body"><h4 class="phase-name">Extension &amp; Posterior Line Series</h4><ul class="move-list"><li>Head Support Elongation</li><li>T-Pull</li><li>Swimming</li></ul></div></div>
+            <div class="phase-card"><div class="phase-mark">C</div><div class="phase-body"><h4 class="phase-name">Cool-down</h4><ul class="move-list"><li>Mermaid Side Bend</li><li>Diagonal Reach to Curl In</li><li>Arm Circle</li></ul></div></div>
+          </div>
+        </div>
+        <div class="block">
+          <h3 class="block-title" data-mark="TEACH">Teaching Point</h3>
+          <div class="mini-grid">
+            <div class="mini"><b>공간</b>하부 흉곽을 조이기보다 옆구리와 등 뒤쪽의 호흡 공간을 남깁니다.</div>
+            <div class="mini"><b>저항</b>페달이 무거워져도 숨이 멈추지 않고, 몸통 압력이 무너지지 않는지 봅니다.</div>
+            <div class="mini"><b>회복</b>강한 구간 뒤 조용한 호흡으로 돌아오는 능력까지 확인합니다.</div>
+          </div>
+        </div>
+        <div class="block">
+          <h3 class="block-title" data-mark="ASK">Feedback Question</h3>
+          <div class="question"><div class="q-label">Q1</div><div class="q-text">체어의 저항이 커졌을 때 호흡이 가장 먼저 끊긴 구간은 어디였나요?</div></div>
+          <div class="question"><div class="q-label">Q2</div><div class="q-text">“넓게 숨 쉬기”와 “몸통 압력 유지”를 회원에게 한 문장으로 설명한다면?</div></div>
+        </div>
+      </div>
+
+      <div id="tab-ey" class="pane">
+        <div class="block">
+          <h3 class="block-title" data-mark="SEQ">Sequence</h3>
+          <div class="phase-list">
+            <div class="phase-card"><div class="phase-mark">W1</div><div class="phase-body"><h4 class="phase-name">Seated Shoulder Press Flow</h4><ul class="move-list"><li>Shoulder Press</li><li>Behind Neck Press</li><li>Single Arm Press</li></ul></div></div>
+            <div class="phase-card"><div class="phase-mark">W2</div><div class="phase-body"><h4 class="phase-name">Standing Shoulder Press Flow</h4><ul class="move-list"><li>Heel Raise Plié</li><li>Roll Down</li></ul></div></div>
+            <div class="phase-card"><div class="phase-mark">W3</div><div class="phase-body"><h4 class="phase-name">Spinal Mobility Series</h4><ul class="move-list"><li>Rolling Like a Ball</li><li>Roll Over</li></ul></div></div>
+            <div class="phase-card"><div class="phase-mark">M1</div><div class="phase-body"><h4 class="phase-name">Single Leg Lunge</h4><ul class="move-list"><li>Lunge</li></ul></div></div>
+            <div class="phase-card"><div class="phase-mark">M2</div><div class="phase-body"><h4 class="phase-name">Closed Chain Shoulder Stability</h4><ul class="move-list"><li>Push Bar Plank</li><li>Hip Pike &amp; Drop</li></ul></div></div>
+            <div class="phase-card"><div class="phase-mark">M3</div><div class="phase-body"><h4 class="phase-name">Lateral Stability &amp; Rotation</h4><ul class="move-list"><li>Side Plank</li><li>Side Plank Thoracic Rotation</li></ul></div></div>
+            <div class="phase-card"><div class="phase-mark">M4</div><div class="phase-body"><h4 class="phase-name">Extension Integration</h4><ul class="move-list"><li>Swan</li></ul></div></div>
+            <div class="phase-card"><div class="phase-mark">C</div><div class="phase-body"><h4 class="phase-name">Cool-down</h4><ul class="move-list"><li>Monkey</li><li>Guillotine</li><li>Occipital Release</li></ul></div></div>
+          </div>
+        </div>
+        <div class="block">
+          <h3 class="block-title" data-mark="TEACH">Teaching Point</h3>
+          <div class="mini-grid">
+            <div class="mini"><b>어깨와 흉곽</b>어깨가 올라가는 숨이 아니라, 갈비뼈 아래쪽과 등 뒤가 넓어지는 숨을 만듭니다.</div>
+            <div class="mini"><b>상지 지지</b>Push Bar Plank와 Side Plank에서 몸통 전체의 360도 지지가 유지되는지 봅니다.</div>
+            <div class="mini"><b>확장</b>신전 동작에서 허리와 목으로 보상하지 않고 후면 흉곽이 길어지는지 확인합니다.</div>
+          </div>
+        </div>
+        <div class="block">
+          <h3 class="block-title" data-mark="ASK">Feedback Question</h3>
+          <div class="question"><div class="q-label">Q1</div><div class="q-text">상지 지지 동작에서 호흡이 막힌 순간은 어느 구간이었나요?</div></div>
+          <div class="question"><div class="q-label">Q2</div><div class="q-text">어깨와 흉곽이 연결되어야 호흡이 막히지 않는다는 말을 어떻게 설명할 수 있나요?</div></div>
+        </div>
+      </div>
+    </section>
+
+    <section>
+      <div class="section-head"><div class="section-num">04</div><h2 class="section-title">큐잉 기준</h2></div>
+      <div class="grid two">
+        <article class="card">
+          <div class="tag">권장 큐</div>
+          <ul class="cue-list">
+            <li><b>넓게</b> 숨을 크게 마시기보다 넓게 마셔볼게요.</li>
+            <li><b>공간</b> 앞쪽 갈비뼈는 부드럽게 정리하고, 옆구리와 등 뒤쪽 공간은 남겨주세요.</li>
+            <li><b>압력</b> 배를 집어넣기보다 몸통 전체를 넓고 단단하게 만들어주세요.</li>
+            <li><b>리듬</b> 페달이 무거워져도 숨은 계속 흐르게 해볼게요.</li>
+          </ul>
+        </article>
+        <article class="card dark">
+          <div class="tag">주의할 큐</div>
+          <ul class="cue-list">
+            <li>갈비뼈를 무조건 닫으세요.</li>
+            <li>배꼽을 척추에 붙이세요.</li>
+            <li>계속 배에 힘을 꽉 주세요.</li>
+            <li>숨 참으세요.</li>
+          </ul>
+        </article>
+      </div>
+    </section>
+
+    <section>
+      <div class="section-head"><div class="section-num">05</div><h2 class="section-title">복습 문장 3개</h2></div>
+      <div class="card takeaways">
+        <div class="take">깊게 쉬는 것보다 넓게 숨 쉬는 것이 먼저입니다.</div>
+        <div class="take">세게 조이는 것보다 필요한 만큼 압력을 조절하는 것이 중요합니다.</div>
+        <div class="take">호흡은 정지된 상태에서 완성되는 기술이 아니라, 움직임 속에서 유지되어야 하는 조절 능력입니다.</div>
+      </div>
+    </section>
+
+    <div class="survey">
+      <div class="tag">Archive Method Feedback</div>
+      <h2>오늘 수업은 어땠나요?</h2>
+      <p>별점과 전하고 싶은 말을 가볍게 남기면 제출됩니다.</p>
+      <form class="review-form" data-lesson-id="breathing-260627" data-lesson-title="호흡" onsubmit="handleReviewSubmit(event)">
+        <div class="review-field">
+          <div class="review-label">별점</div>
+          <div class="star-row" role="radiogroup" aria-label="오늘 수업 별점">
+            <label class="star" data-value="1" aria-label="1점"><input type="radio" name="rating" value="1" required>★</label>
+            <label class="star" data-value="2" aria-label="2점"><input type="radio" name="rating" value="2">★</label>
+            <label class="star" data-value="3" aria-label="3점"><input type="radio" name="rating" value="3">★</label>
+            <label class="star" data-value="4" aria-label="4점"><input type="radio" name="rating" value="4">★</label>
+            <label class="star" data-value="5" aria-label="5점"><input type="radio" name="rating" value="5">★</label>
+          </div>
+        </div>
+        <label class="review-field">
+          <span class="review-label">전하고 싶은 말</span>
+          <textarea class="review-textarea" name="message" placeholder="오늘 수업을 듣고 남는 말이나 전하고 싶은 내용을 짧게 남겨주세요." required></textarea>
+        </label>
+        <button class="review-submit" type="submit">남기기</button>
+        <p class="review-status" aria-live="polite"></p>
+      </form>
+    </div>
+  </div>
+
+  <footer>ARCHIVE PILATES · ARCHIVE METHOD · 2606</footer>
+</main>
+<script>
+document.body.classList.add('locked');
+const startTime = new Date(document.body.dataset.lessonStart);
+const gate = document.querySelector('.lesson-gate');
+const content = document.querySelector('.lesson-content');
+const previewCode = new URLSearchParams(window.location.search).get('preview');
+const isStaffPreview = previewCode === 'breathing260627';
+
+function applyLessonGate(){
+  if (Number.isNaN(startTime.getTime()) || !gate || !content) {
+    document.body.classList.remove('locked');
+    return;
+  }
+
+  const now = new Date();
+  const isUnlocked = isStaffPreview || now >= startTime;
+  document.body.classList.toggle('locked', !isUnlocked);
+}
+
+applyLessonGate();
+setInterval(applyLessonGate, 30000);
+
+function updateRating() {
+  const selected = Number(document.querySelector('input[name="rating"]:checked')?.value || 0);
+  document.querySelectorAll('.star').forEach((star) => {
+    star.classList.toggle('on', Number(star.dataset.value) <= selected);
+  });
+}
+
+document.querySelectorAll('input[name="rating"]').forEach((input) => {
+  input.addEventListener('change', updateRating);
+});
+
+async function handleReviewSubmit(event) {
+  event.preventDefault();
+  const form = event.currentTarget;
+  const status = form.querySelector('.review-status');
+  const button = form.querySelector('.review-submit');
+  const submissionId = getReviewSubmissionId(form.dataset.lessonId);
+  const payload = {
+    lessonId: form.dataset.lessonId,
+    lessonTitle: form.dataset.lessonTitle,
+    submissionId,
+    rating: Number(form.querySelector('input[name="rating"]:checked')?.value || 0),
+    message: form.querySelector('textarea[name="message"]').value.trim(),
+    pageUrl: window.location.href,
+    preview: isStaffPreview,
+    clientSubmittedAt: new Date().toISOString()
+  };
+  button.disabled = true;
+  status.textContent = '제출 중입니다.';
+  try {
+    const reviewEndpoint = window.location.pathname.startsWith('/archivein/')
+      ? '/archivein/api/methodCueCardReview'
+      : '/api/methodCueCardReview';
+    const response = await fetch(reviewEndpoint, {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify(payload)
+    });
+    const result = await response.json().catch(() => ({}));
+    if (!response.ok || !result.ok) throw new Error(result.error || 'submit_failed');
+    status.textContent = '남겨주셔서 감사합니다.';
+    form.reset();
+    updateRating();
+  } catch (err) {
+    status.textContent = '제출이 완료되지 않았습니다. 잠시 후 다시 시도해주세요.';
+  } finally {
+    button.disabled = false;
+  }
+}
+
+function getReviewSubmissionId(lessonId) {
+  const storageKey = `archive.method.review.${lessonId}`;
+  try {
+    const existing = localStorage.getItem(storageKey);
+    if (/^[a-z0-9][a-z0-9-]{7,79}$/.test(existing || '')) return existing;
+    const created = typeof crypto !== 'undefined' && typeof crypto.randomUUID === 'function'
+      ? crypto.randomUUID()
+      : `${Date.now()}-${Math.random().toString(36).slice(2, 14)}`;
+    localStorage.setItem(storageKey, created);
+    return created;
+  } catch {
+    return `${Date.now()}-${Math.random().toString(36).slice(2, 14)}`;
+  }
+}
+
+function switchTab(id, btn) {
+  document.querySelectorAll('.pane').forEach((pane) => pane.classList.remove('on'));
+  document.querySelectorAll('.tab').forEach((button) => button.classList.remove('active'));
+  document.getElementById('tab-' + id).classList.add('on');
+  btn.classList.add('active');
+}
+
+const progress = document.getElementById('progress');
+const topbtn = document.getElementById('topbtn');
+window.addEventListener('scroll', () => {
+  const scroll = scrollY;
+  const height = document.documentElement.scrollHeight - innerHeight;
+  progress.style.width = (height > 0 ? scroll / height * 100 : 0) + '%';
+  topbtn.classList.toggle('on', scroll > 260);
+}, { passive: true });
+</script>
+</body>
+</html>

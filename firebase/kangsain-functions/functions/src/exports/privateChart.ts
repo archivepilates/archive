@@ -25,6 +25,7 @@ import {
   purgeUnsignedDiscardedMemberSignupContracts,
 } from "../memberSignup/memberSignupContract";
 import { onsiteWelcomeRequestHandler } from "../memberSignup/onsiteWelcomeRequest";
+import { methodCueCardReviewHandler } from "../method/methodCueCardReview";
 import {
   privateLessonChartRequestOptions,
   privateLessonChartScheduleOptions,
@@ -140,6 +141,8 @@ export const privateLessonReportView = onRequest(publicRequestOptions, privateLe
 export const memberSignupContract = onRequest(publicDriveRequestOptions, memberSignupContractHandler);
 
 export const onsiteWelcomeRequest = onRequest(publicSolapiRequestOptions, onsiteWelcomeRequestHandler);
+
+export const methodCueCardReview = onRequest(publicDriveRequestOptions, methodCueCardReviewHandler);
 
 export const notionPrivateLessonReportWebhook = onRequest(
   privateLessonChartRequestOptions,

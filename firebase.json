@@ -137,6 +137,12 @@
           ]
         },
         {
+          "source": "/archivein/method/**",
+          "headers": [
+            { "key": "Cache-Control", "value": "no-cache, no-store, must-revalidate" }
+          ]
+        },
+        {
           "source": "/dashboard/**",
           "headers": [
             {
@@ -250,6 +256,13 @@
           "source": "/archivein/api/onsiteWelcomeRequest",
           "function": {
             "functionId": "onsiteWelcomeRequest",
+            "region": "asia-northeast3"
+          }
+        },
+        {
+          "source": "/archivein/api/methodCueCardReview",
+          "function": {
+            "functionId": "methodCueCardReview",
             "region": "asia-northeast3"
           }
         },
@@ -441,6 +454,12 @@
           "headers": [
             { "key": "Cache-Control", "value": "no-cache, no-store, must-revalidate" }
           ]
+        },
+        {
+          "source": "/method/**",
+          "headers": [
+            { "key": "Cache-Control", "value": "no-cache, no-store, must-revalidate" }
+          ]
         }
       ],
       "ignore": [
@@ -491,6 +510,13 @@
           "source": "/api/onsiteWelcomeRequest",
           "function": {
             "functionId": "onsiteWelcomeRequest",
+            "region": "asia-northeast3"
+          }
+        },
+        {
+          "source": "/api/methodCueCardReview",
+          "function": {
+            "functionId": "methodCueCardReview",
             "region": "asia-northeast3"
           }
         },
