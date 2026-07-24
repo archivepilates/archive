@@ -15,6 +15,8 @@ StudioMate API 모드는 ARCHIVE PILATES 자사 사이트 운영 전까지 사�
 - 알림톡 후보 원천은 엑셀 동기화가 갱신한 `memberProfiles.activeTickets`이며, 실발송은 운영자 승인과 중복/제외 최종 확인 뒤 처리한다.
 - 기존 23:00 회원목록 다운로드 자동화 `com.archive.studiomate-member-excel`는 실패 메일 혼선을 막기 위해 삭제했다. 회원목록 엑셀은 엑셀 동기화 전용 브라우저 자동화가 받는다.
 - 엑셀 다운로드/반영은 1시간 간격으로 실행한다.
+- 매 실행은 정규화된 회원·연락처·수업·예약 해시를 이전 반영값과 비교하고 변경 문서만 Firestore에 쓴다. 파일명과 다운로드 시각이 달라도 내용이 같으면 본문 쓰기를 생략한다.
+- 예약 변경으로 영향을 받은 프라이빗 회원만 `privateSessionLedger`를 즉시 다시 계산한다. 전체 월간 프라이빗 보정은 매일 23:30 안전 점검으로만 유지하며 1시간 동기화에서는 호출하지 않는다.
 - 브라우저 자동화로 받은 회원목록 엑셀을 회원카드/수강권 보정에 사용한다.
 - 수업 예약 화면 복구에는 브라우저 자동화로 받은 수업예약내역 엑셀을 함께 사용한다.
 - 수업예약내역과 삭제된 수업 로그는 `오늘 ~ 예약오픈 종료일` 범위로 받는다. 예약오픈 종료일은 ARCHIVE IN 액션 기준과 동일하게 이번 주를 포함한 다음 주 일요일이다.
@@ -39,7 +41,7 @@ StudioMate API 모드는 ARCHIVE PILATES 자사 사이트 운영 전까지 사�
 ## 실행 명령
 
 ```bash
-cd /Users/archivepilates/codex-worktrees/archivein-live-setup
+cd /Users/archivepilates/dev/archive-in-runtime
 source scripts/use-archivein-firebase-service-account.sh >/dev/null
 node scripts/emergency-import-studiomate-member-excel.mjs
 ```
@@ -53,7 +55,7 @@ node scripts/run-studiomate-excel-emergency-mode.mjs
 주간 강사탭 스캔:
 
 ```bash
-cd /Users/archivepilates/codex-worktrees/archivein-live-setup
+cd /Users/archivepilates/dev/archive-in-runtime
 source scripts/use-archivein-firebase-service-account.sh >/dev/null
 node scripts/sync-studiomate-staffs-from-browser.mjs
 node scripts/sync-studiomate-staffs-from-browser.mjs --apply

@@ -176,7 +176,9 @@
                 <li>ARCHIVE CORE 자동화 관제 탭은 Firestore automationStatus를 표시하므로, 새 자동화는 실행 주체와 상태를 automationStatus에 기록해야 합니다.</li>
                 <li>LaunchAgent와 Codex 자동화 정의는 sync:automation-observability로 점검해 CORE 관제에 반영합니다.</li>
                 <li>LaunchAgent는 로그 최신성뿐 아니라 실제 last exit code를 확인하며, 실행 실패를 최신 로그 생성으로 정상 처리하지 않습니다.</li>
-                <li>프라이빗 회차 보정은 StudioMate Excel 동기화 직후 한 번 실행하고, 시스템 점검은 잔여 오류만 검증합니다.</li>
+                <li>시간별 StudioMate Excel 동기화는 이전 반영 해시와 비교해 변경된 회원·수강권·예약·수업 문서만 씁니다. 같은 원본을 다시 내려받아도 변경 문서가 없으면 Firestore 본문을 다시 쓰지 않습니다.</li>
+                <li>프라이빗 회차는 변경된 프라이빗 예약의 회원만 동기화 직후 보정합니다. 전체 월간 보정은 매일 23:30 안전 점검으로만 실행하며 시간별 동기화에서 다시 호출하지 않습니다.</li>
+                <li>설문 미제출 점검은 최근 프라이빗 설문 후보만 조회하고, 이미 확인 메일을 만든 요청은 회원 응답·예약을 다시 조회하지 않습니다.</li>
                 <li>superseded, 취소, 대기, 결석 및 sessionOrder.counted=false 예약은 프라이빗 회차 누락 대상으로 보지 않습니다.</li>
                 <li>dirty worktree는 개발 정리 대상으로 별도 기록하며 회원·운영 시스템 장애 점수에는 포함하지 않습니다.</li>
                 <li>worktree 정리는 macOS Documents 권한 때문에 LaunchAgent에서 실행하지 않고, Codex 사용자 세션에서 감사 후 수행합니다.</li>

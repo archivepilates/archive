@@ -52,6 +52,15 @@ const rows = readMemberRows(sourceFile);
 const groupedMembers = groupRows(rows);
 const [existingProfiles, existingContacts] = await Promise.all([loadExistingProfiles(), loadExistingContacts()]);
 const { plans, skipped } = buildPlans(groupedMembers, existingProfiles, existingContacts);
+const plannedProfileWrites = plans.filter((plan) => plan.profileDoc && plan.writeProfile).length;
+const plannedContactIndexWrites = plans.filter((plan) => plan.writeContactIndex).length;
+const plannedContactSyncJobs = plans.filter((plan) => plan.contactSyncJobDoc).length;
+const plannedStudiomateMemberIdLookupJobs = plans.filter((plan) => plan.studiomateMemberIdLookupJobDoc).length;
+const plannedWrites =
+  plannedProfileWrites +
+  plannedContactIndexWrites +
+  plannedContactSyncJobs +
+  plannedStudiomateMemberIdLookupJobs;
 const summary = {
   ok: true,
   mode: apply ? "apply" : "dry-run",
@@ -60,9 +69,14 @@ const summary = {
   studioId: STUDIO_ID,
   readRows: rows.length,
   groupedMembers: groupedMembers.length,
-  plannedWrites: plans.length,
-  plannedContactSyncJobs: plans.filter((plan) => plan.contactSyncJobDoc).length,
-  plannedStudiomateMemberIdLookupJobs: plans.filter((plan) => plan.studiomateMemberIdLookupJobDoc).length,
+  plannedMembers: plans.length,
+  plannedWrites,
+  plannedProfileWrites,
+  plannedContactIndexWrites,
+  unchangedProfiles: plans.filter((plan) => plan.profileDoc && !plan.writeProfile).length,
+  unchangedContactIndexes: plans.filter((plan) => !plan.writeContactIndex).length,
+  plannedContactSyncJobs,
+  plannedStudiomateMemberIdLookupJobs,
   matchedExistingProfiles: plans.filter((plan) => plan.matchType === "existing").length,
   temporaryExcelProfiles: plans.filter((plan) => plan.matchType === "temporary_excel_id").length,
   skipped,
@@ -73,8 +87,8 @@ const summary = {
   maxWrites,
 };
 
-if (plans.length > maxWrites) {
-  throw new Error(`Planned writes ${plans.length} exceeds --max-writes ${maxWrites}.`);
+if (plannedWrites > maxWrites) {
+  throw new Error(`Planned writes ${plannedWrites} exceeds --max-writes ${maxWrites}.`);
 }
 
 if (apply) {
@@ -86,6 +100,8 @@ if (apply) {
       studioId: STUDIO_ID,
       importedRows: rows.length,
       importedMembers: plans.length,
+      changedProfiles: plannedProfileWrites,
+      changedContactIndexes: plannedContactIndexWrites,
       skippedMembers: skipped,
       queueContactSync,
       updatedAt: admin.firestore.Timestamp.now(),
@@ -303,7 +319,17 @@ function buildPlans(groups, existingProfiles, existingContacts) {
           }
         : null;
       consultationContacts += 1;
-      plans.push({ memberId, matchType: "consultation_excel", contactIndexDoc, contactSyncJobDoc });
+      const writeContactIndex =
+        !previousContact ||
+        previousContact.contactHash !== contactHash ||
+        shouldQueueHomeSync;
+      plans.push({
+        memberId,
+        matchType: "consultation_excel",
+        contactIndexDoc,
+        writeContactIndex,
+        contactSyncJobDoc,
+      });
       continue;
     }
     const existing = existingProfiles.get(group.phone) || [];
@@ -362,6 +388,10 @@ function buildPlans(groups, existingProfiles, existingContacts) {
       emergencySourceFile: sourceFile,
       emergencyLastAttendance: latestAttendance,
     };
+    profileDoc.emergencyImportHash = memberProfileImportHash(profileDoc);
+    const writeProfile =
+      !matchedProfile ||
+      matchedProfile.data.emergencyImportHash !== profileDoc.emergencyImportHash;
     const contactDisplayName = [group.name, "회원", compactDate(registeredAt)].filter(Boolean).join(" ");
     const contactHash = hash({
       name: group.name,
@@ -405,6 +435,10 @@ function buildPlans(groups, existingProfiles, existingContacts) {
       syncedAt: admin.firestore.Timestamp.now(),
       updatedAt: admin.firestore.Timestamp.now(),
     };
+    const writeContactIndex =
+      !previousContact ||
+      previousContact.contactHash !== contactHash ||
+      shouldQueueHomeSync;
     const contactSyncJobDoc = shouldQueueHomeSync
       ? {
           jobId,
@@ -444,7 +478,16 @@ function buildPlans(groups, existingProfiles, existingContacts) {
             lastError: null,
           }
         : null;
-    plans.push({ memberId, matchType, profileDoc, contactIndexDoc, contactSyncJobDoc, studiomateMemberIdLookupJobDoc });
+    plans.push({
+      memberId,
+      matchType,
+      profileDoc,
+      writeProfile,
+      contactIndexDoc,
+      writeContactIndex,
+      contactSyncJobDoc,
+      studiomateMemberIdLookupJobDoc,
+    });
   }
   return {
     plans,
@@ -578,12 +621,14 @@ async function applyPlans(plans) {
   let batch = db.batch();
   let count = 0;
   for (const plan of plans) {
-    if (plan.profileDoc) {
+    if (plan.profileDoc && plan.writeProfile) {
       batch.set(db.collection("memberProfiles").doc(plan.memberId), plan.profileDoc, { merge: true });
       count += 1;
     }
-    batch.set(db.collection("memberContactIndex").doc(plan.memberId), plan.contactIndexDoc, { merge: true });
-    count += 1;
+    if (plan.writeContactIndex) {
+      batch.set(db.collection("memberContactIndex").doc(plan.memberId), plan.contactIndexDoc, { merge: true });
+      count += 1;
+    }
     if (plan.contactSyncJobDoc) {
       batch.set(db.collection("contactSyncJobs").doc(plan.contactSyncJobDoc.jobId), plan.contactSyncJobDoc, {
         merge: true,
@@ -605,6 +650,55 @@ async function applyPlans(plans) {
     }
   }
   if (count) await batch.commit();
+}
+
+function memberProfileImportHash(profile) {
+  return hash({
+    memberId: profile.memberId,
+    studioId: profile.studioId,
+    name: profile.name,
+    normalizedName: profile.normalizedName,
+    phone: profile.phone,
+    email: profile.email,
+    birthDate: profile.birthDate,
+    gender: profile.gender,
+    memoPreview: profile.memoPreview,
+    activeTicketNames: profile.activeTicketNames,
+    activeTicketCount: profile.activeTicketCount,
+    activeTickets: (profile.activeTickets || []).map((ticket) => ({
+      userTicketId: ticket.userTicketId || "",
+      ticketId: ticket.ticketId || "",
+      name: ticket.name || "",
+      remainingCount: ticket.remainingCount ?? null,
+      usableCount: ticket.usableCount ?? null,
+      maxCount: ticket.maxCount ?? null,
+      availableFrom: timestampKey(ticket.availableFrom),
+      expiresAt: timestampKey(ticket.expiresAt),
+      expiryLevel: ticket.expiryLevel || "",
+      status: ticket.status || "",
+      classType: ticket.classType || "",
+      paymentAmount: ticket.paymentAmount || 0,
+      paymentAt: timestampKey(ticket.paymentAt),
+      paymentMethod: ticket.paymentMethod || "",
+      paymentType: ticket.paymentType || "",
+      purchaseId: ticket.purchaseId || "",
+    })),
+    ticketStatusSummary: {
+      hasHoldingTicket: Boolean(profile.ticketStatusSummary?.hasHoldingTicket),
+      holdingTicketCount: Number(profile.ticketStatusSummary?.holdingTicketCount || 0),
+      holdingTickets: (profile.ticketStatusSummary?.holdingTickets || []).map((ticket) => ({
+        name: ticket.name || "",
+        status: ticket.status || "",
+        availableFrom: timestampKey(ticket.availableFrom),
+        expiresAt: timestampKey(ticket.expiresAt),
+        updatedAtText: ticket.updatedAtText || "",
+      })),
+    },
+    isNewMember: Boolean(profile.isNewMember),
+    newMemberBasis: profile.newMemberBasis || "",
+    registeredAt: timestampKey(profile.registeredAt),
+    emergencyLastAttendance: profile.emergencyLastAttendance || "",
+  });
 }
 
 function isUsableTicketStatus(status) {

@@ -21,6 +21,7 @@
     "deploy:affected-functions": "node scripts/deploy-affected-functions.mjs --apply",
     "validate:function-boundaries": "node scripts/validate-functions-boundaries.mjs",
     "validate:data-source-policy": "node scripts/validate-data-source-policy.mjs",
+    "validate:gcp-cost-guards": "node scripts/validate-gcp-cost-guards.mjs",
     "validate:private-media-upload-config": "node scripts/validate-private-media-upload-config.mjs",
     "validate:live-release-rollback-guards": "node scripts/validate-live-release-rollback-guards.mjs",
     "write:release-manifest": "node scripts/write-release-manifest.mjs",

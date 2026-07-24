@@ -74,6 +74,9 @@ jobs:
       - name: Validate data source policy
         run: npm run validate:data-source-policy
 
+      - name: Validate GCP cost regression guards
+        run: npm run validate:gcp-cost-guards
+
       - name: Validate onsite welcome release guard
         run: npm run validate:onsite-welcome
 

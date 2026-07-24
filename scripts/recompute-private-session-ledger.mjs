@@ -13,10 +13,15 @@ const STUDIO_ID = process.env.STUDIOMATE_STUDIO_ID || process.env.MANAGER_STUDIO
 const DEFAULT_OUT_DIR = path.join(os.homedir(), "ArchiveIN/automation/reports/private-session-ledger");
 
 const args = parseArgs(process.argv.slice(2));
+const memberIds = cleanString(args["member-ids"] || "")
+  .split(",")
+  .map(cleanString)
+  .filter(Boolean);
 const config = {
   apply: Boolean(args.apply),
   all: Boolean(args.all),
   memberId: cleanString(args["member-id"] || args.member || ""),
+  memberIds: [...new Set(memberIds)],
   memberName: cleanString(args.name || ""),
   memberPhone: normalizePhone(args.phone || ""),
   outDir: expandHome(cleanString(args["out-dir"] || DEFAULT_OUT_DIR)),
@@ -32,8 +37,8 @@ main().catch((err) => {
 });
 
 async function main() {
-  if (!config.all && !config.memberId && !config.memberName && !config.memberPhone) {
-    throw new Error("Set --member-id, --name, --phone, or --all.");
+  if (!config.all && !config.memberId && !config.memberIds.length && !config.memberName && !config.memberPhone) {
+    throw new Error("Set --member-id, --member-ids, --name, --phone, or --all.");
   }
   const members = await loadMembers();
   if (!members.length) throw new Error("No members matched.");
@@ -69,6 +74,14 @@ async function main() {
 }
 
 async function loadMembers() {
+  if (config.memberIds.length) {
+    const snaps = await db.getAll(...config.memberIds.map((memberId) => db.collection("memberProfiles").doc(memberId)));
+    return snaps.map((snap, index) =>
+      snap.exists
+        ? { memberId: snap.id, ...(snap.data() || {}) }
+        : { memberId: config.memberIds[index], name: "", phone: "" },
+    );
+  }
   if (config.memberId) {
     const snap = await db.collection("memberProfiles").doc(config.memberId).get();
     if (snap.exists) return [{ memberId: snap.id, ...(snap.data() || {}) }];

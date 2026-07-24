@@ -167,6 +167,16 @@
       ]
     },
     {
+      "collectionGroup": "alimtalkCandidates",
+      "queryScope": "COLLECTION",
+      "fields": [
+        { "fieldPath": "studioId", "order": "ASCENDING" },
+        { "fieldPath": "status", "order": "ASCENDING" },
+        { "fieldPath": "type", "order": "ASCENDING" },
+        { "fieldPath": "sourceDate", "order": "DESCENDING" }
+      ]
+    },
+    {
       "collectionGroup": "memberMemos",
       "queryScope": "COLLECTION",
       "fields": [

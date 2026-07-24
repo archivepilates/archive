@@ -18,6 +18,12 @@ This is not a private API scraper. It should operate like a logged-in manager us
 6. Firestore member cards and member events are updated.
 7. New member / changed member / message candidate records are created.
 
+Cost and idempotency rule:
+
+- Repeated downloads of the same normalized member, ticket, lecture, or booking data must not rewrite unchanged Firestore documents.
+- The hourly runner recalculates `privateSessionLedger` only for members whose private booking source changed.
+- Full current-month private chart reconciliation remains a daily 23:30 safety job and must not be invoked by every hourly Excel import.
+
 ## Recommended Flow
 
 ```mermaid

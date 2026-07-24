@@ -18,11 +18,6 @@ const memberFile = valueArg("--member-file");
 const reportDir = path.join(os.homedir(), "ArchiveIN/automation/reports/excel-emergency-mode");
 const PROJECT_ID = process.env.GOOGLE_CLOUD_PROJECT || process.env.GCLOUD_PROJECT || "archive-pilates";
 const STUDIO_ID = process.env.STUDIOMATE_STUDIO_ID || "5330";
-const FIREBASE_REGION = process.env.FIREBASE_REGION || "asia-northeast3";
-const GCLOUD = process.env.GCLOUD_BIN || "/opt/homebrew/bin/gcloud";
-const PRIVATE_CHART_RECONCILE_SCHEDULER_JOB =
-  process.env.PRIVATE_CHART_RECONCILE_SCHEDULER_JOB ||
-  "firebase-schedule-scheduledReconcileCurrentMonthPrivateLessonCharts-asia-northeast3";
 
 if (!admin.apps.length) admin.initializeApp({ projectId: PROJECT_ID });
 const db = admin.firestore();
@@ -87,21 +82,21 @@ if (!downloadFailedWithoutMember) {
   }
 
   if (apply) {
-    const trigger = runCommandStep("privateChartReconcileTrigger", [
-      GCLOUD,
-      "scheduler",
-      "jobs",
-      "run",
-      PRIVATE_CHART_RECONCILE_SCHEDULER_JOB,
-      "--location",
-      FIREBASE_REGION,
-      "--project",
-      PROJECT_ID,
-    ]);
-    steps.push(trigger);
-    if (trigger.exitCode === 0) {
-      const reservationStep = steps.find((step) => step.name === "reservations");
-      steps.push(await waitForPrivateChartReconcile(reservationStep?.stdout?.dateRange));
+    const reservationStep = steps.find((step) => step.name === "reservations");
+    const affectedPrivateMemberIds = stringArray(reservationStep?.stdout?.affectedPrivateMemberIds);
+    if (affectedPrivateMemberIds.length) {
+      const delta = runStep("privateSessionLedgerDelta", [
+        "scripts/recompute-private-session-ledger.mjs",
+        "--member-ids",
+        affectedPrivateMemberIds.join(","),
+        "--apply",
+      ]);
+      steps.push(delta);
+      if (delta.exitCode === 0) {
+        steps.push(await verifyPrivateSessionOrderDelta(affectedPrivateMemberIds));
+      }
+    } else {
+      steps.push(skippedStep("privateSessionLedgerDelta", "no changed private bookings"));
     }
   }
 }
@@ -170,40 +165,27 @@ function runCommandStep(name, command) {
   };
 }
 
-async function waitForPrivateChartReconcile(dateRange) {
-  const range = currentMonthIntersection(dateRange);
-  if (!range) {
-    return {
-      name: "privateChartReconcileVerify",
-      command: ["firestore", "bookings", "sessionOrder"],
-      exitCode: 0,
-      stdout: { ok: true, skipped: "import range is outside current month" },
-      stderr: "",
-      stdoutOk: true,
-      requiredFailed: false,
-    };
-  }
-  let result = null;
-  for (let attempt = 1; attempt <= 20; attempt += 1) {
-    result = await inspectPrivateSessionOrders(range);
-    if (result.ok) break;
-    await sleep(3000);
-  }
+async function verifyPrivateSessionOrderDelta(memberIds) {
+  const result = await inspectPrivateSessionOrders(memberIds);
   return {
-    name: "privateChartReconcileVerify",
-    command: ["firestore", "bookings", "sessionOrder", range.startDate, range.endDate],
-    exitCode: result?.ok ? 0 : 1,
-    stdout: result || { ok: false, error: "verification did not run" },
-    stderr: result?.ok ? "" : "private session order reconcile verification failed",
-    stdoutOk: Boolean(result?.ok),
-    requiredFailed: !result?.ok,
+    name: "privateSessionLedgerDeltaVerify",
+    command: ["firestore", "bookings", "sessionOrder", ...memberIds],
+    exitCode: result.ok ? 0 : 1,
+    stdout: result,
+    stderr: result.ok ? "" : "private session order delta verification failed",
+    stdoutOk: result.ok,
+    requiredFailed: !result.ok,
   };
 }
 
-async function inspectPrivateSessionOrders(range) {
+async function inspectPrivateSessionOrders(memberIds) {
   const docs = [];
-  for (const date of dateRange(range.startDate, range.endDate)) {
-    const snap = await db.collection("bookings").where("studioId", "==", STUDIO_ID).where("lectureDate", "==", date).get();
+  for (const memberId of memberIds) {
+    const snap = await db
+      .collection("bookings")
+      .where("studioId", "==", STUDIO_ID)
+      .where("memberId", "==", memberId)
+      .get();
     docs.push(...snap.docs.map((doc) => ({ id: doc.id, data: doc.data() })));
   }
   const privateDocs = docs.filter((doc) => isPrivateBooking(doc.data));
@@ -214,8 +196,7 @@ async function inspectPrivateSessionOrders(range) {
   const duplicateRounds = duplicatePrivateRounds(countable);
   return {
     ok: missingOrder.length === 0 && excludedWithOrder.length === 0 && duplicateRounds.length === 0,
-    startDate: range.startDate,
-    endDate: range.endDate,
+    memberIds,
     privateBookings: privateDocs.length,
     missingOrder: missingOrder.length,
     excludedWithOrder: excludedWithOrder.length,
@@ -226,46 +207,6 @@ async function inspectPrivateSessionOrders(range) {
       ...duplicateRounds.slice(0, 5).map((doc) => `bookings/${doc.id}`),
     ],
   };
-}
-
-function currentMonthIntersection(input) {
-  const startDate = String(input?.startDate || "");
-  const endDate = String(input?.endDate || "");
-  if (!/^\d{4}-\d{2}-\d{2}$/.test(startDate) || !/^\d{4}-\d{2}-\d{2}$/.test(endDate)) return null;
-  const currentMonth = new Intl.DateTimeFormat("en-CA", {
-    timeZone: "Asia/Seoul",
-    year: "numeric",
-    month: "2-digit",
-  }).format(new Date());
-  const monthStart = `${currentMonth}-01`;
-  const monthEndDate = new Date(`${monthStart}T00:00:00+09:00`);
-  monthEndDate.setMonth(monthEndDate.getMonth() + 1);
-  monthEndDate.setDate(0);
-  const monthEnd = new Intl.DateTimeFormat("en-CA", {
-    timeZone: "Asia/Seoul",
-    year: "numeric",
-    month: "2-digit",
-    day: "2-digit",
-  }).format(monthEndDate);
-  const intersectStart = startDate > monthStart ? startDate : monthStart;
-  const intersectEnd = endDate < monthEnd ? endDate : monthEnd;
-  return intersectStart <= intersectEnd ? { startDate: intersectStart, endDate: intersectEnd } : null;
-}
-
-function dateRange(startDate, endDate) {
-  const result = [];
-  const cursor = new Date(`${startDate}T00:00:00+09:00`);
-  const end = new Date(`${endDate}T00:00:00+09:00`);
-  while (cursor <= end) {
-    result.push(new Intl.DateTimeFormat("en-CA", {
-      timeZone: "Asia/Seoul",
-      year: "numeric",
-      month: "2-digit",
-      day: "2-digit",
-    }).format(cursor));
-    cursor.setDate(cursor.getDate() + 1);
-  }
-  return result;
 }
 
 function isPrivateBooking(data) {
@@ -298,16 +239,28 @@ function positiveNumber(value) {
   return Number.isFinite(number) && number > 0 ? number : 0;
 }
 
-function sleep(ms) {
-  return new Promise((resolve) => setTimeout(resolve, ms));
-}
-
 function valueArg(name) {
   const prefix = `${name}=`;
   const inline = process.argv.slice(2).find((arg) => arg.startsWith(prefix));
   if (inline) return inline.slice(prefix.length);
   const index = process.argv.indexOf(name);
   return index >= 0 ? process.argv[index + 1] : "";
+}
+
+function stringArray(value) {
+  return Array.isArray(value) ? [...new Set(value.map((item) => String(item || "").trim()).filter(Boolean))] : [];
+}
+
+function skippedStep(name, reason) {
+  return {
+    name,
+    command: [],
+    exitCode: 0,
+    stdout: { ok: true, skipped: reason },
+    stderr: "",
+    stdoutOk: true,
+    requiredFailed: false,
+  };
 }
 
 function parseJsonOrText(value) {

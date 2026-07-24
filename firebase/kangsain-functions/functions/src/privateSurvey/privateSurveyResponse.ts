@@ -881,19 +881,38 @@ async function processMissingPrivateSurveySubmissionAlerts(): Promise<{
   due: number;
   emailed: number;
 }> {
-  const snap = await refs.alimtalkCandidates().where("status", "==", "sent").limit(500).get();
+  const nowMs = Date.now();
+  const sourceDateCutoff = formatDate(new Date(nowMs - 60 * 24 * 60 * 60 * 1000));
+  const sourceDateToday = formatDate(new Date(nowMs));
+  const snap = await refs
+    .alimtalkCandidates()
+    .where("studioId", "==", DEFAULT_STUDIO_ID)
+    .where("status", "==", "sent")
+    .where("type", "==", "private_survey")
+    .where("sourceDate", ">=", sourceDateCutoff)
+    .where("sourceDate", "<=", sourceDateToday)
+    .orderBy("sourceDate", "desc")
+    .limit(100)
+    .get();
   let checked = 0;
   let due = 0;
   let emailed = 0;
-  const nowMs = Date.now();
+  const dueCandidates: Array<{ candidate: AlimtalkCandidateDoc; dueAt: Timestamp }> = [];
 
   for (const docSnap of snap.docs) {
     const candidate = docSnap.data();
-    if (candidate.type !== "private_survey") continue;
     checked += 1;
     const dueAt = privateSurveyMissingSubmissionDueAt(candidate);
     if (!dueAt || dueAt.toMillis() > nowMs) continue;
     due += 1;
+    dueCandidates.push({ candidate, dueAt });
+  }
+
+  const existingAlertIds = await existingSurveySubmissionAlertIds(
+    dueCandidates.map(({ candidate }) => `private_${candidate.candidateId}`),
+  );
+  for (const { candidate, dueAt } of dueCandidates) {
+    if (existingAlertIds.has(`private_${candidate.candidateId}`)) continue;
     if (await hasSubmittedPrivateSurvey(candidate.memberId, candidate.memberPhone)) continue;
     const booking = await bookingForSurveyCandidate(candidate);
     const sent = await sendMissingSurveySubmissionEmailOnce({
@@ -925,10 +944,14 @@ async function processMissingGroupSurveySubmissionAlerts(): Promise<{
   let due = 0;
   let emailed = 0;
   const nowMs = Date.now();
+  const existingAlertIds = await existingSurveySubmissionAlertIds(
+    snap.docs.map((docSnap) => `group_${(docSnap.data() as GroupSurveyRequestDoc).requestId || docSnap.id}`),
+  );
 
   for (const docSnap of snap.docs) {
     const groupRequest = docSnap.data() as GroupSurveyRequestDoc;
     checked += 1;
+    if (existingAlertIds.has(`group_${groupRequest.requestId}`)) continue;
     const matching = await groupSurveyMatch(groupRequest);
     const dueAt = groupSurveyMissingSubmissionDueAt(matching);
     if (!dueAt || dueAt.toMillis() > nowMs) continue;
@@ -950,6 +973,22 @@ async function processMissingGroupSurveySubmissionAlerts(): Promise<{
   }
 
   return { checked, due, emailed };
+}
+
+async function existingSurveySubmissionAlertIds(alertIds: string[]): Promise<Set<string>> {
+  const existing = new Set<string>();
+  const uniqueIds = [...new Set(alertIds.filter(Boolean))];
+  for (let index = 0; index < uniqueIds.length; index += 200) {
+    const refsToRead = uniqueIds
+      .slice(index, index + 200)
+      .map((alertId) => db.collection("surveySubmissionAlerts").doc(alertId));
+    if (!refsToRead.length) continue;
+    const snapshots = await db.getAll(...refsToRead);
+    for (const snapshot of snapshots) {
+      if (snapshot.exists) existing.add(snapshot.id);
+    }
+  }
+  return existing;
 }
 
 function privateSurveyMissingSubmissionDueAt(candidate: AlimtalkCandidateDoc): Timestamp | null {
