@@ -26,6 +26,7 @@ const steps = [];
 let downloadedMemberFile = "";
 let downloadedReservationFile = "";
 let downloadedDeletedClassFile = "";
+let downloadedReservationRange = null;
 
 let downloadFailedWithoutMember = false;
 if (download) {
@@ -39,6 +40,7 @@ if (download) {
   downloadedMemberFile = downloadStep.stdout?.downloads?.member?.archivePath || downloadStep.stdout?.downloads?.member?.stagingPath || "";
   downloadedReservationFile =
     downloadStep.stdout?.downloads?.reservation?.archivePath || downloadStep.stdout?.downloads?.reservation?.stagingPath || "";
+  downloadedReservationRange = downloadStep.stdout?.downloads?.reservation?.range || null;
   downloadedDeletedClassFile =
     downloadStep.stdout?.downloads?.deletedClass?.archivePath || downloadStep.stdout?.downloads?.deletedClass?.stagingPath || "";
   downloadFailedWithoutMember = apply && !downloadedMemberFile;
@@ -66,6 +68,8 @@ if (!downloadFailedWithoutMember) {
     runStep("reservations", [
       "scripts/emergency-import-studiomate-reservation-excel.mjs",
       ...(reservationFile || downloadedReservationFile ? ["--file", reservationFile || downloadedReservationFile] : []),
+      ...(downloadedReservationRange?.startDate ? ["--start-date", downloadedReservationRange.startDate] : []),
+      ...(downloadedReservationRange?.endDate ? ["--end-date", downloadedReservationRange.endDate] : []),
       ...(apply ? ["--apply"] : []),
     ]),
   );

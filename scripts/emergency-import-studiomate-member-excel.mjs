@@ -540,7 +540,11 @@ function buildActiveTickets(rows) {
     const key = `${ticket.name}|${ticket.expiresAt?.toMillis() || ""}|${ticket.remainingCount ?? ""}`;
     byKey.set(key, ticket);
   }
-  return [...byKey.values()].sort((a, b) => (a.expiresAt?.toMillis() || Number.MAX_SAFE_INTEGER) - (b.expiresAt?.toMillis() || Number.MAX_SAFE_INTEGER));
+  return [...byKey.values()].sort(
+    (a, b) =>
+      (a.expiresAt?.toMillis() || Number.MAX_SAFE_INTEGER) - (b.expiresAt?.toMillis() || Number.MAX_SAFE_INTEGER) ||
+      memberTicketSortKey(a).localeCompare(memberTicketSortKey(b)),
+  );
 }
 
 function buildTicketStatusSummary(rows) {
@@ -560,7 +564,7 @@ function buildTicketStatusSummary(rows) {
   return {
     hasHoldingTicket: holdingTickets.length > 0,
     holdingTicketCount: holdingTickets.length,
-    holdingTickets,
+    holdingTickets: holdingTickets.sort((a, b) => memberTicketSortKey(a).localeCompare(memberTicketSortKey(b))),
   };
 }
 
@@ -699,6 +703,18 @@ function memberProfileImportHash(profile) {
     registeredAt: timestampKey(profile.registeredAt),
     emergencyLastAttendance: profile.emergencyLastAttendance || "",
   });
+}
+
+function memberTicketSortKey(ticket) {
+  return [
+    ticket.name || "",
+    ticket.status || "",
+    ticket.classType || "",
+    timestampKey(ticket.availableFrom),
+    timestampKey(ticket.expiresAt),
+    ticket.remainingCount ?? "",
+    ticket.maxCount ?? "",
+  ].join("|");
 }
 
 function isUsableTicketStatus(status) {

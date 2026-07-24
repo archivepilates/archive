@@ -892,7 +892,6 @@ async function processMissingPrivateSurveySubmissionAlerts(): Promise<{
     .where("sourceDate", ">=", sourceDateCutoff)
     .where("sourceDate", "<=", sourceDateToday)
     .orderBy("sourceDate", "desc")
-    .limit(100)
     .get();
   let checked = 0;
   let due = 0;
@@ -949,7 +948,11 @@ async function processMissingGroupSurveySubmissionAlerts(): Promise<{
   );
 
   for (const docSnap of snap.docs) {
-    const groupRequest = docSnap.data() as GroupSurveyRequestDoc;
+    const rawGroupRequest = docSnap.data() as GroupSurveyRequestDoc;
+    const groupRequest = {
+      ...rawGroupRequest,
+      requestId: rawGroupRequest.requestId || docSnap.id,
+    };
     checked += 1;
     if (existingAlertIds.has(`group_${groupRequest.requestId}`)) continue;
     const matching = await groupSurveyMatch(groupRequest);

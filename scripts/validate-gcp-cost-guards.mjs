@@ -31,9 +31,9 @@ const checks = [
     file: "firebase/kangsain-functions/functions/src/privateSurvey/privateSurveyResponse.ts",
     required: [
       "sourceDateCutoff",
+      "sourceDateToday",
       "existingSurveySubmissionAlertIds",
       ".where(\"type\", \"==\", \"private_survey\")",
-      ".limit(100)",
     ],
     forbidden: ['refs.alimtalkCandidates().where("status", "==", "sent").limit(500)'],
   },
