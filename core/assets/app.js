@@ -2001,7 +2001,16 @@ function renderParkingDashboard() {
                   <strong>${escapeHtml(item.ownerName || "이름 없음")} · ${escapeHtml(item.carNumber || item.label || "")}</strong>
                   <p>${escapeHtml(role)} · ${escapeHtml(phone || "연락처 없음")}${validDate} · ${escapeHtml(formatDate(item.updatedAt))}</p>
                 </div>
-                ${pill(item.status || "active")}
+                <div class="parking-row-actions">
+                  ${pill(item.status || "active")}
+                  <button
+                    class="parking-delete-button"
+                    type="button"
+                    data-parking-vehicle-id="${escapeHtml(item.vehicleId || "")}"
+                    aria-label="${escapeHtml(item.ownerName || "등록")} 차량 삭제"
+                    title="등록 차량 삭제"
+                  >삭제</button>
+                </div>
               </div>
             `;
           })
@@ -2056,6 +2065,46 @@ async function loadParkingDashboard(runtime) {
     setParkingStatus("주차등록 데이터를 불러오지 못했습니다. 운영자 권한 또는 Functions 배포 상태를 확인하세요.", "danger");
   }
   renderParkingDashboard();
+}
+
+async function handleParkingVehicleListClick(event) {
+  const button = event.target?.closest?.("[data-parking-vehicle-id]");
+  if (!button) return;
+  const vehicleId = String(button.dataset.parkingVehicleId || "");
+  const vehicle = (state.parkingVehicles || []).find((item) => item.vehicleId === vehicleId);
+  if (!vehicle) {
+    setParkingStatus("삭제할 차량을 목록에서 다시 확인하세요.", "danger");
+    return;
+  }
+  const label = `${vehicle.ownerName || "이름 없음"} · ${vehicle.carNumber || vehicle.label || ""}`;
+  if (!window.confirm(`${label} 차량을 삭제할까요?\n향후 자동 주차권 적용 대상에서 제외됩니다.`)) return;
+
+  const originalText = button.textContent;
+  button.disabled = true;
+  button.textContent = "삭제 중";
+  setParkingStatus(`${label} 차량을 삭제하고 회원/강사 카드 연결을 정리하고 있습니다.`, "warn");
+  try {
+    const runtime = await initFirebase();
+    const user = await waitForAuth(runtime);
+    if (!user) {
+      showLoginGate("등록 차량 삭제는 운영자 로그인이 필요합니다.");
+      setParkingStatus("운영자 로그인 후 다시 시도하세요.", "danger");
+      return;
+    }
+    const removeParkingVehicle = runtime.httpsCallable(runtime.functionsClient, "removeParkingVehicle");
+    await removeParkingVehicle({ vehicleId });
+    state.parkingVehicles = (state.parkingVehicles || []).filter((item) => item.vehicleId !== vehicleId);
+    renderParkingDashboard();
+    setParkingStatus(`${label} 차량을 삭제했습니다. 앞으로 자동 주차권을 적용하지 않습니다.`, "good");
+  } catch (error) {
+    if (isPermissionDenied(error)) showLoginGate("등록 차량 삭제는 운영자 권한이 필요합니다.");
+    setParkingStatus(error?.message || "등록 차량 삭제 중 오류가 발생했습니다.", "danger");
+  } finally {
+    if (button.isConnected) {
+      button.disabled = false;
+      button.textContent = originalText;
+    }
+  }
 }
 
 async function handleParkingVehicleSubmit(event) {
@@ -4402,6 +4451,7 @@ qs("pricingInquiryForm")?.addEventListener("submit", handlePricingInquiryAlimtal
 qs("pricingInquiryHistoryToggle")?.addEventListener("click", togglePricingInquiryHistory);
 qs("parkingRegistrationForm")?.addEventListener("submit", handleParkingVehicleSubmit);
 qs("parkingAutoApplyButton")?.addEventListener("click", handleParkingAutoApplyClick);
+qs("parkingVehicleList")?.addEventListener("click", handleParkingVehicleListClick);
 qs("commandPaletteOpen")?.addEventListener("click", openCommandPalette);
 qs("commandPaletteInput")?.addEventListener("input", renderCommandPaletteResults);
 qs("commandPalette")?.addEventListener("click", (event) => {

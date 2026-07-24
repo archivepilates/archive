@@ -26,6 +26,7 @@ import {
 import {
   getParkingDashboardHandler,
   registerParkingVehicleHandler,
+  removeParkingVehicleHandler,
   runParkingAutoApplyNowHandler,
 } from "../parking/parkingOperations";
 import { processParkingDiscountJobSnapshot } from "../parking/processParkingDiscountJob";
@@ -138,6 +139,14 @@ export const registerParkingVehicle = onCall(callableOptions, async (request) =>
 export const getParkingDashboard = onCall(callableOptions, async (request) => {
   try {
     return await getParkingDashboardHandler(request);
+  } catch (err) {
+    throw toHttpsError(err);
+  }
+});
+
+export const removeParkingVehicle = onCall(callableOptions, async (request) => {
+  try {
+    return await removeParkingVehicleHandler(request);
   } catch (err) {
     throw toHttpsError(err);
   }
