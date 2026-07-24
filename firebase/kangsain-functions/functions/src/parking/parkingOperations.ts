@@ -6,13 +6,16 @@ import { requireManager, requireStaff } from "../security/authGuards";
 import type { BookingDoc, StaffDoc } from "../types/models";
 import { nowTimestamp, todayKst } from "../utils/date";
 import { AppError } from "../utils/errors";
+import {
+  PARKING_DISCOUNT_UNIT_HOURS as DISCOUNT_UNIT_HOURS,
+  PARKING_MAX_AUTO_DISCOUNT_HOURS as MAX_AUTO_DISCOUNT_HOURS,
+  STAFF_REQUIRED_DISCOUNT_HOURS,
+} from "./parkingDiscountPolicy";
 
 const PARKING_VEHICLES = "parkingVehicles";
 const PARKING_DISCOUNT_JOBS = "parkingDiscountJobs";
 const VEHICLE_MAX_COUNT = 4;
 const DISCOUNT_NAME = "2시간 할인";
-const DISCOUNT_UNIT_HOURS = 2;
-const MAX_AUTO_DISCOUNT_HOURS = 4;
 const APPLY_AFTER_START_MINUTES = 10;
 const SCHEDULED_BOOKING_LOOKBACK_MINUTES = 75;
 
@@ -698,6 +701,8 @@ async function createParkingJob(input: {
   const ref = db.collection(PARKING_DISCOUNT_JOBS).doc(input.jobId);
   const snap = await ref.get();
   if (snap.exists) return "existing";
+  const requestedDiscountHours =
+    input.ownerType === "staff" ? STAFF_REQUIRED_DISCOUNT_HOURS : MAX_AUTO_DISCOUNT_HOURS;
   await ref.create({
     jobId: input.jobId,
     status: "pending",
@@ -716,7 +721,8 @@ async function createParkingJob(input: {
     carNumberLast4: input.vehicle.carNumberLast4,
     expectedCarNumber: input.vehicle.carNumber,
     discountName: DISCOUNT_NAME,
-    requestedDiscountHours: MAX_AUTO_DISCOUNT_HOURS,
+    parkingPolicy: input.ownerType === "staff" ? "staff_fixed_4h" : "standard",
+    requestedDiscountHours,
     maxAutoDiscountHours: MAX_AUTO_DISCOUNT_HOURS,
     discountUnitHours: DISCOUNT_UNIT_HOURS,
     requestedBy: input.requestedByUid,
