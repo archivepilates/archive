@@ -96,8 +96,9 @@ export async function registerParkingVehicleHandler(request: CallableRequest): P
 }> {
   const staff = await requireManagerAccess(request);
   const ownerType = parseOwnerType(request.data?.ownerType);
-  const ownerName = stringValue(request.data?.ownerName || request.data?.name) || (ownerType === "visitor" ? "방문객" : "");
-  const ownerPhone = digitsOnly(request.data?.ownerPhone || request.data?.phone);
+  const ownerName =
+    ownerType === "visitor" ? "방문객" : stringValue(request.data?.ownerName || request.data?.name);
+  const ownerPhone = ownerType === "visitor" ? "" : digitsOnly(request.data?.ownerPhone || request.data?.phone);
   const carNumber = normalizeCarNumber(request.data?.carNumber);
   const note = stringValue(request.data?.note);
   const validDate = todayKst();

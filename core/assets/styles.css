@@ -1557,6 +1557,18 @@ td span {
   padding-right: 34px;
 }
 
+.action-form label.is-disabled span {
+  color: #98a1ad;
+}
+
+.action-form label.is-disabled input:disabled {
+  border-color: #dfe3e8;
+  background: #eef1f4;
+  color: #8a939f;
+  cursor: not-allowed;
+  opacity: 1;
+}
+
 .parking-dashboard {
   display: grid;
   grid-template-columns: repeat(auto-fit, minmax(min(100%, 320px), 1fr));

@@ -1995,11 +1995,12 @@ function renderParkingDashboard() {
             const role = item.ownerType === "staff" ? "강사" : item.ownerType === "visitor" ? "방문" : "회원";
             const phone = formatPhoneNumber(item.ownerPhone || "");
             const validDate = item.ownerType === "visitor" && item.validDate ? ` · ${escapeHtml(item.validDate)}` : "";
+            const contact = item.ownerType === "visitor" ? "일회성" : phone || "연락처 없음";
             return `
               <div class="status-row">
                 <div>
                   <strong>${escapeHtml(item.ownerName || "이름 없음")} · ${escapeHtml(item.carNumber || item.label || "")}</strong>
-                  <p>${escapeHtml(role)} · ${escapeHtml(phone || "연락처 없음")}${validDate} · ${escapeHtml(formatDate(item.updatedAt))}</p>
+                  <p>${escapeHtml(role)} · ${escapeHtml(contact)}${validDate} · ${escapeHtml(formatDate(item.updatedAt))}</p>
                 </div>
                 <div class="parking-row-actions">
                   ${pill(item.status || "active")}
@@ -2015,7 +2016,7 @@ function renderParkingDashboard() {
             `;
           })
           .join("")
-      : `<div class="empty-state">등록된 차량이 없습니다. 이름, 연락처, 차량번호를 입력해 먼저 등록하세요.</div>`;
+      : `<div class="empty-state">등록된 차량이 없습니다. 회원·강사는 이름 또는 연락처를, 방문 차량은 차량번호를 입력하세요.</div>`;
   }
 
   if (jobList) {
@@ -2067,6 +2068,30 @@ async function loadParkingDashboard(runtime) {
   renderParkingDashboard();
 }
 
+function syncParkingVisitorFields() {
+  const isVisitor = String(qs("parkingOwnerType")?.value || "member") === "visitor";
+  const fields = [
+    {
+      field: qs("parkingOwnerNameField"),
+      input: qs("parkingOwnerName"),
+      placeholder: "회원명 또는 강사명",
+    },
+    {
+      field: qs("parkingOwnerPhoneField"),
+      input: qs("parkingOwnerPhone"),
+      placeholder: "010-0000-0000",
+    },
+  ];
+
+  fields.forEach(({ field, input, placeholder }) => {
+    if (!input) return;
+    if (isVisitor) input.value = "";
+    input.disabled = isVisitor;
+    input.placeholder = isVisitor ? "방문 차량은 입력하지 않음" : placeholder;
+    field?.classList.toggle("is-disabled", isVisitor);
+  });
+}
+
 async function handleParkingVehicleListClick(event) {
   const button = event.target?.closest?.("[data-parking-vehicle-id]");
   if (!button) return;
@@ -2110,8 +2135,9 @@ async function handleParkingVehicleListClick(event) {
 async function handleParkingVehicleSubmit(event) {
   event.preventDefault();
   const ownerType = String(qs("parkingOwnerType")?.value || "member");
-  const ownerName = String(qs("parkingOwnerName")?.value || "").trim();
-  const ownerPhone = normalizePhone(qs("parkingOwnerPhone")?.value || "");
+  const isVisitor = ownerType === "visitor";
+  const ownerName = isVisitor ? "" : String(qs("parkingOwnerName")?.value || "").trim();
+  const ownerPhone = isVisitor ? "" : normalizePhone(qs("parkingOwnerPhone")?.value || "");
   const carNumber = normalizeCarNumber(qs("parkingCarNumber")?.value || "");
   const note = String(qs("parkingNote")?.value || "").trim();
   const button = qs("parkingRegisterButton");
@@ -2144,7 +2170,6 @@ async function handleParkingVehicleSubmit(event) {
     const data = result?.data || {};
     const vehicle = data.vehicle || {};
     const matchStatus = String(data.matchStatus || "");
-    const isVisitor = ownerType === "visitor";
     setParkingStatus(
       isVisitor
         ? `${vehicle.ownerName || ownerName || "방문객"} 방문 차량 등록 완료. 오늘 자동적용 실행을 누르면 주차권 작업이 생성됩니다.`
@@ -4450,6 +4475,7 @@ qs("refreshButton")?.addEventListener("click", refresh);
 qs("pricingInquiryForm")?.addEventListener("submit", handlePricingInquiryAlimtalkSubmit);
 qs("pricingInquiryHistoryToggle")?.addEventListener("click", togglePricingInquiryHistory);
 qs("parkingRegistrationForm")?.addEventListener("submit", handleParkingVehicleSubmit);
+qs("parkingOwnerType")?.addEventListener("change", syncParkingVisitorFields);
 qs("parkingAutoApplyButton")?.addEventListener("click", handleParkingAutoApplyClick);
 qs("parkingVehicleList")?.addEventListener("click", handleParkingVehicleListClick);
 qs("commandPaletteOpen")?.addEventListener("click", openCommandPalette);
@@ -4507,4 +4533,5 @@ document.addEventListener("click", (event) => {
   if (select) select.value = month;
   renderBusinessMonth(month);
 });
+syncParkingVisitorFields();
 if (document.querySelector("[data-firestore-dashboard]")) refresh();
