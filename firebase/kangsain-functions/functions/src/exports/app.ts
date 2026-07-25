@@ -18,6 +18,7 @@ import { submitBookingAttendanceHandler } from "../callable/submitBookingAttenda
 import { submitMemberMemoHandler } from "../callable/submitMemberMemo";
 import { REGION } from "../config/constants";
 import {
+  iparkingAccountPoolJson,
   iparkingLoginId,
   iparkingLoginPassword,
   iparkingSubLoginId,
@@ -43,7 +44,13 @@ import { toHttpsError } from "../utils/errors";
 const parkingDiscountJobOptions = {
   region: REGION,
   document: "parkingDiscountJobs/{jobId}",
-  secrets: [iparkingLoginId, iparkingLoginPassword, iparkingSubLoginId, iparkingSubLoginPassword],
+  secrets: [
+    iparkingAccountPoolJson,
+    iparkingLoginId,
+    iparkingLoginPassword,
+    iparkingSubLoginId,
+    iparkingSubLoginPassword,
+  ],
   timeoutSeconds: 60,
   memory: "256MiB" as const,
 };
@@ -195,7 +202,10 @@ export const adjustInstructorEvaluationEssayScore = onCall(callableOptions, asyn
   }
 });
 
-export const instructorApplicantEvaluationApi = onRequest(publicRequestOptions, instructorApplicantEvaluationApiHandler);
+export const instructorApplicantEvaluationApi = onRequest(
+  publicRequestOptions,
+  instructorApplicantEvaluationApiHandler,
+);
 
 export const processParkingDiscountJob = onDocumentCreated(parkingDiscountJobOptions, async (event) => {
   const snap = event.data;

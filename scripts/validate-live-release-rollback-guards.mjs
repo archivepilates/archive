@@ -334,6 +334,28 @@ const guardGroups = [
         markers: [
           "resolveParkingDiscountPolicy(job)",
           "parkingPolicy: parkingPolicy.policy",
+          "resolveIparkingAccountStoreSeq(account, params.storSeq)",
+          "role: account.role",
+          "product_store_mismatch",
+          "applied_verify",
+        ],
+      },
+      {
+        file: "firebase/kangsain-functions/functions/src/parking/iparkingClient.ts",
+        markers: [
+          "IPARKING_ACCOUNT_POOL_JSON",
+          "parseIparkingAccountPool",
+          "resolveIparkingAccountStoreSeq",
+          "role: \"main\" | \"sub\"",
+          "storeSeq?: number",
+        ],
+      },
+      {
+        file: "firebase/kangsain-functions/functions/src/exports/app.ts",
+        markers: [
+          "iparkingAccountPoolJson,",
+          "const parkingDiscountJobOptions",
+          "secrets: [",
         ],
       },
       {
@@ -349,6 +371,9 @@ const guardGroups = [
         markers: [
           "강사 차량은 수업 종류와 수업 시간에 관계없이",
           "총 4시간을 적용합니다.",
+          "메인 계정은 704호와 705호",
+          "서브 계정은 504호부터 508호",
+          "각 계정의 고유 상점 번호",
         ],
       },
     ],

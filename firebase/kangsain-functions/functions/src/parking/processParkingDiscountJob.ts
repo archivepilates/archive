@@ -9,6 +9,7 @@ import {
   IparkingCarInfo,
   IparkingClient,
   IparkingDiscountProduct,
+  resolveIparkingAccountStoreSeq,
 } from "./iparkingClient";
 import {
   PARKING_DISCOUNT_UNIT_HOURS,
@@ -153,12 +154,20 @@ async function searchCarsAcrossAccounts(params: {
     try {
       const loginStartedAt = Date.now();
       await client.login();
-      metrics.push({ account: account.label, ...elapsedMetric("login", loginStartedAt) });
-
-      const searchStartedAt = Date.now();
-      const cars = await client.searchCars(params);
+      const accountStoreSeq = resolveIparkingAccountStoreSeq(account, params.storSeq);
       metrics.push({
         account: account.label,
+        role: account.role,
+        storeSeq: accountStoreSeq,
+        ...elapsedMetric("login", loginStartedAt),
+      });
+
+      const searchStartedAt = Date.now();
+      const cars = await client.searchCars({ ...params, storSeq: accountStoreSeq });
+      metrics.push({
+        account: account.label,
+        role: account.role,
+        storeSeq: accountStoreSeq,
         count: cars.length,
         ...elapsedMetric("car_search", searchStartedAt),
       });
@@ -238,31 +247,58 @@ async function applyDiscountAcrossAccounts(params: {
     try {
       const loginStartedAt = Date.now();
       await client.login();
-      params.metrics.push({ account: account.label, ...elapsedMetric("login_for_apply", loginStartedAt) });
+      const accountStoreSeq = resolveIparkingAccountStoreSeq(account, params.storSeq);
+      params.metrics.push({
+        account: account.label,
+        role: account.role,
+        storeSeq: accountStoreSeq,
+        ...elapsedMetric("login_for_apply", loginStartedAt),
+      });
 
       const productStartedAt = Date.now();
       const accountProducts = await client.listProducts({
-        storSeq: params.storSeq,
+        storSeq: accountStoreSeq,
         parkSeq: params.parkSeq,
         inotSeq: Number(params.car.inot_seq),
       });
-      params.metrics.push({ account: account.label, ...elapsedMetric("product_list", productStartedAt) });
+      params.metrics.push({
+        account: account.label,
+        role: account.role,
+        storeSeq: accountStoreSeq,
+        ...elapsedMetric("product_list", productStartedAt),
+      });
       const product = selectProduct(accountProducts, params.discountName);
       if (!product) {
         attempts.push({
           account: account.label,
+          role: account.role,
+          storeSeq: accountStoreSeq,
           status: "skipped",
           reason: "discount_ticket_not_found",
         });
         continue;
       }
-      products.push({ account: account.label, ...publicProduct(product) });
+      products.push({ account: account.label, role: account.role, ...publicProduct(product) });
 
-      const resolvedStorSeq = Number(product.stor_seq || params.storSeq);
+      const productStoreSeq = Number(product.stor_seq || accountStoreSeq);
+      if (productStoreSeq !== accountStoreSeq) {
+        attempts.push({
+          account: account.label,
+          role: account.role,
+          storeSeq: accountStoreSeq,
+          status: "skipped",
+          reason: "product_store_mismatch",
+          productStoreSeq,
+        });
+        continue;
+      }
+      const resolvedStorSeq = accountStoreSeq;
       const resolvedParkSeq = Number(product.park_seq || params.parkSeq);
       if (!Number.isFinite(resolvedStorSeq) || !Number.isFinite(resolvedParkSeq)) {
         attempts.push({
           account: account.label,
+          role: account.role,
+          storeSeq: accountStoreSeq,
           status: "skipped",
           reason: "invalid_product_location",
         });
@@ -283,6 +319,8 @@ async function applyDiscountAcrossAccounts(params: {
         alreadyAppliedHours += params.unitHours;
         attempts.push({
           account: account.label,
+          role: account.role,
+          storeSeq: resolvedStorSeq,
           status: "already_applied",
           hours: params.unitHours,
           product: publicProduct(product),
@@ -294,6 +332,8 @@ async function applyDiscountAcrossAccounts(params: {
       if (!params.shouldApply) {
         attempts.push({
           account: account.label,
+          role: account.role,
+          storeSeq: resolvedStorSeq,
           status: "eligible",
           hours: params.unitHours,
           product: publicProduct(product),
@@ -312,17 +352,35 @@ async function applyDiscountAcrossAccounts(params: {
         memo: `ARCHIVE PILATES 자동 주차등록 ${params.unitHours}시간`,
       });
       params.metrics.push({ account: account.label, ...elapsedMetric("apply_discount", applyStartedAt) });
+
+      const verifyStartedAt = Date.now();
+      const appliedAfter = await client.listAppliedDiscounts({
+        storSeq: resolvedStorSeq,
+        parkSeq: resolvedParkSeq,
+        inotSeq: Number(params.car.inot_seq),
+        searchOption: 1,
+      });
+      params.metrics.push({ account: account.label, ...elapsedMetric("applied_verify", verifyStartedAt) });
+      if (!appliedAfter.some((item) => item.discount_key === product.discount_key)) {
+        throw new IparkingApiError(`${account.label} 할인 적용 결과를 확인할 수 없습니다`, undefined, true);
+      }
+
       appliedHours += params.unitHours;
       attempts.push({
         account: account.label,
+        role: account.role,
+        storeSeq: resolvedStorSeq,
         status: "applied",
         hours: params.unitHours,
         product: publicProduct(product),
-        appliedDiscounts: applied,
+        appliedDiscountsBefore: applied,
+        appliedDiscountsAfter: appliedAfter,
       });
     } catch (error) {
       attempts.push({
         account: account.label,
+        role: account.role,
+        storeSeq: resolveIparkingAccountStoreSeq(account, params.storSeq),
         status: "error",
         message: errorMessage(error),
         retryable: error instanceof IparkingApiError ? error.retryable : false,
