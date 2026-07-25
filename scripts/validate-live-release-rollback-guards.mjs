@@ -206,6 +206,9 @@ const guardGroups = [
           "mergeMemberCardsWithProfiles",
           "coreDataHealthIssues",
           "syncParkingVisitorFields",
+          "if (isVisitor) input.value = \"\"",
+          "input.disabled = isVisitor",
+          "addEventListener(\"change\", syncParkingVisitorFields)",
         ],
       },
       {
@@ -275,6 +278,8 @@ const guardGroups = [
           "scanMode === \"full_day\"",
           "ownerType === \"visitor\" ? \"방문객\"",
           "ownerType === \"visitor\" ? \"\"",
+          "ownerName: isVisitor ? \"방문객\" : vehicle.ownerName",
+          "ownerPhone: isVisitor ? \"\" : vehicle.ownerPhone",
         ],
       },
       {

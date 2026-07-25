@@ -774,11 +774,12 @@ async function createVisitorParkingJob(input: {
 }
 
 function publicVehicle(vehicle: ParkingVehicleDoc): ParkingDashboardVehicle {
+  const isVisitor = vehicle.ownerType === "visitor";
   return {
     vehicleId: vehicle.vehicleId,
     ownerType: vehicle.ownerType,
-    ownerName: vehicle.ownerName,
-    ownerPhone: vehicle.ownerPhone,
+    ownerName: isVisitor ? "방문객" : vehicle.ownerName,
+    ownerPhone: isVisitor ? "" : vehicle.ownerPhone,
     memberId: vehicle.memberId,
     staffId: vehicle.staffId,
     validDate: vehicle.validDate,
