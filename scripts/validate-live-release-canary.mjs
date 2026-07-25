@@ -110,6 +110,8 @@ if (selectedSurfaces.includes("core")) {
       "privateInstructorPendingList",
       "commandQueueStatus",
       "SECONDARY_NAV_SECTIONS",
+      "removeParkingVehicle",
+      "data-parking-vehicle-id",
     ]),
     textCheck("core-app-bundle-webapp-path", "https://archive-pilates.web.app/core/assets/app.js", [
       "pricingInquiryAlimtalkRequests",
@@ -117,6 +119,8 @@ if (selectedSurfaces.includes("core")) {
       "privateInstructorPendingList",
       "commandQueueStatus",
       "SECONDARY_NAV_SECTIONS",
+      "removeParkingVehicle",
+      "data-parking-vehicle-id",
     ]),
   );
 }

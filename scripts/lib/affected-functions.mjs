@@ -56,6 +56,8 @@ function codebasesForFile(file) {
   ) {
     return ["functions-sync"];
   }
+  if (normalized.endsWith("/parking/parkingOperations.ts")) return ["functions-app", "functions-sync"];
+  if (normalized.includes("/parking/")) return ["functions-app"];
   if (normalized.includes("/callable/") || normalized.includes("/security/") || normalized.endsWith("/exports/app.ts")) {
     return ["functions-app"];
   }

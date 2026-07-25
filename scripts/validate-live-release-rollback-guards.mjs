@@ -240,6 +240,120 @@ const guardGroups = [
     ],
   },
   {
+    id: "core-parking-vehicle-removal",
+    reason: "등록 차량 삭제와 회원/강사 카드 미러 정리가 후속 CORE 또는 Functions 배포에서 빠지는 것을 막습니다.",
+    files: [
+      {
+        file: "core/assets/app.js",
+        markers: [
+          "handleParkingVehicleListClick",
+          "data-parking-vehicle-id",
+          "removeParkingVehicle",
+          "앞으로 자동 주차권을 적용하지 않습니다.",
+        ],
+      },
+      {
+        file: "core/assets/styles.css",
+        markers: [
+          ".parking-row-actions",
+          ".parking-delete-button",
+        ],
+      },
+      {
+        file: "firebase/kangsain-functions/functions/src/parking/parkingOperations.ts",
+        markers: [
+          "removeParkingVehicleHandler",
+          "status: \"archived\"",
+          "defaultVehicleNumber: FieldValue.delete()",
+          "ownerVehicleMirror",
+          "SCHEDULED_BOOKING_LOOKBACK_MINUTES",
+          "loadParkingCandidateBookings",
+          "scanMode === \"full_day\"",
+        ],
+      },
+      {
+        file: "firebase/kangsain-functions/functions/src/exports/app.ts",
+        markers: [
+          "removeParkingVehicleHandler",
+          "export const removeParkingVehicle",
+        ],
+      },
+      {
+        file: "firebase/codebase-boundaries.json",
+        markers: [
+          "\"removeParkingVehicle\"",
+        ],
+      },
+      {
+        file: "scripts/lib/affected-functions.mjs",
+        markers: [
+          "parking/parkingOperations.ts",
+          "[\"functions-app\", \"functions-sync\"]",
+        ],
+      },
+      {
+        file: "firebase/kangsain-functions/functions/src/exports/sync.ts",
+        markers: [
+          "scheduledCreateParkingDiscountJobs",
+          "scanMode: \"scheduled_window\"",
+        ],
+      },
+      {
+        file: "firebase/kangsain-functions/firestore.indexes.json",
+        markers: [
+          "\"fieldPath\": \"appStatus\"",
+          "\"fieldPath\": \"lectureStartAt\"",
+        ],
+      },
+      {
+        file: "core/rules/index.html",
+        markers: [
+          "차량을 보관 상태로 전환",
+          "최근 75분 구간만 읽습니다.",
+          "오늘 자동적용 실행만 누락 복구를 위해 오늘 전체를 확인합니다.",
+        ],
+      },
+    ],
+  },
+  {
+    id: "parking-staff-fixed-four-hours",
+    reason: "강사 차량의 4시간 고정 할인 규칙이 다른 주차 또는 Functions 배포에서 2시간으로 되돌아가는 것을 막습니다.",
+    files: [
+      {
+        file: "firebase/kangsain-functions/functions/src/parking/parkingDiscountPolicy.ts",
+        markers: [
+          "PARKING_DISCOUNT_UNIT_HOURS = 2",
+          "STAFF_REQUIRED_DISCOUNT_HOURS = 4",
+          "isStaffParkingJob",
+          "policy: \"staff_fixed_4h\"",
+          "requestedDiscountHours: STAFF_REQUIRED_DISCOUNT_HOURS",
+        ],
+      },
+      {
+        file: "firebase/kangsain-functions/functions/src/parking/processParkingDiscountJob.ts",
+        markers: [
+          "resolveParkingDiscountPolicy(job)",
+          "parkingPolicy: parkingPolicy.policy",
+        ],
+      },
+      {
+        file: "firebase/kangsain-functions/functions/src/parking/parkingOperations.ts",
+        markers: [
+          "STAFF_REQUIRED_DISCOUNT_HOURS,",
+          "input.ownerType === \"staff\" ? STAFF_REQUIRED_DISCOUNT_HOURS",
+          "parkingPolicy: input.ownerType === \"staff\" ? \"staff_fixed_4h\" : \"standard\"",
+        ],
+      },
+      {
+        file: "core/rules/index.html",
+        markers: [
+          "강사 차량은 수업 종류와 수업 시간에 관계없이",
+          "총 4시간을 적용합니다.",
+        ],
+      },
+    ],
+  },
+  {
     id: "private-chart-edit-before-send",
     reason: "프라이빗 리포트 발송 전 수정 기능과 다음수업 메모 분리 정책이 롤백되는 것을 막습니다.",
     files: [

@@ -79,6 +79,7 @@
         "getKioskParkingJobStatus",
         "registerParkingVehicle",
         "getParkingDashboard",
+        "removeParkingVehicle",
         "runParkingAutoApplyNow",
         "registerFcmToken",
         "getInstructorEvaluationQuiz",

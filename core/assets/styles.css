@@ -1594,6 +1594,36 @@ td span {
   padding: 12px;
 }
 
+.parking-row-actions {
+  display: inline-flex;
+  min-width: 0;
+  align-items: center;
+  justify-content: flex-end;
+  gap: 8px;
+}
+
+.parking-delete-button {
+  min-height: 44px;
+  border: 1px solid rgba(180, 35, 24, 0.22);
+  border-radius: 8px;
+  background: var(--red-soft);
+  color: var(--red);
+  padding: 0 12px;
+  font-weight: 900;
+  cursor: pointer;
+}
+
+.parking-delete-button:hover,
+.parking-delete-button:focus-visible {
+  border-color: rgba(180, 35, 24, 0.46);
+  background: #fff;
+}
+
+.parking-delete-button:disabled {
+  cursor: progress;
+  opacity: 0.62;
+}
+
 .parking-dashboard .empty-state {
   padding: 14px;
 }

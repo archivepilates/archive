@@ -77,6 +77,7 @@ export const scheduledCreateParkingDiscountJobs = onSchedule(
     await createDueParkingDiscountJobs({
       source: "core_parking_scheduler",
       requestedByUid: "scheduler",
+      scanMode: "scheduled_window",
     });
   },
 );

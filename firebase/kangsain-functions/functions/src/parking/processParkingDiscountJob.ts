@@ -10,14 +10,17 @@ import {
   IparkingClient,
   IparkingDiscountProduct,
 } from "./iparkingClient";
+import {
+  PARKING_DISCOUNT_UNIT_HOURS,
+  PARKING_MAX_AUTO_DISCOUNT_HOURS,
+  resolveParkingDiscountPolicy,
+} from "./parkingDiscountPolicy";
 
 const PARKING_DISCOUNT_JOBS = "parkingDiscountJobs";
 const DEFAULT_DISCOUNT_NAME = "2시간 할인";
 const DEFAULT_IPARKING_STOR_SEQ = Number(process.env.IPARKING_STOR_SEQ || "287798");
 const DEFAULT_IPARKING_PARK_SEQ = Number(process.env.IPARKING_PARK_SEQ || "5068");
-const DEFAULT_DISCOUNT_UNIT_HOURS = 2;
 const DEFAULT_REQUESTED_DISCOUNT_HOURS = 2;
-const MAX_AUTO_DISCOUNT_HOURS = 4;
 
 type ParkingDiscountJob = {
   status?: string;
@@ -33,8 +36,11 @@ type ParkingDiscountJob = {
   requestedDiscountHours?: number | string;
   maxAutoDiscountHours?: number | string;
   discountUnitHours?: number | string;
+  ownerType?: string;
   memberId?: string;
   memberName?: string;
+  staffId?: string;
+  staffName?: string;
   bookingId?: string;
   requestedBy?: string;
   source?: string;
@@ -118,12 +124,6 @@ function numericSetting(value: unknown, fallback: number, label: string): number
     throw new Error(`${label} 설정값이 올바르지 않습니다`);
   }
   return numberValue;
-}
-
-function boundedDiscountHours(value: unknown, fallback: number, max: number): number {
-  const numberValue = Number(value || fallback);
-  if (!Number.isFinite(numberValue) || numberValue <= 0) return fallback;
-  return Math.min(Math.ceil(numberValue), max);
 }
 
 function elapsedMetric(name: string, startedAt: number): Record<string, unknown> {
@@ -347,13 +347,8 @@ export async function processParkingDiscountJobSnapshot(snap: QueryDocumentSnaps
   const last4 = String(job.carNumberLast4 || carLast4(rawCarNumber));
   const storSeq = numericSetting(job.storSeq, DEFAULT_IPARKING_STOR_SEQ, "iParking storSeq");
   const defaultParkSeq = numericSetting(job.parkSeq, DEFAULT_IPARKING_PARK_SEQ, "iParking parkSeq");
-  const maxAutoDiscountHours = boundedDiscountHours(job.maxAutoDiscountHours, MAX_AUTO_DISCOUNT_HOURS, MAX_AUTO_DISCOUNT_HOURS);
-  const requestedDiscountHours = boundedDiscountHours(
-    job.requestedDiscountHours,
-    DEFAULT_REQUESTED_DISCOUNT_HOURS,
-    maxAutoDiscountHours,
-  );
-  const discountUnitHours = boundedDiscountHours(job.discountUnitHours, DEFAULT_DISCOUNT_UNIT_HOURS, maxAutoDiscountHours);
+  const parkingPolicy = resolveParkingDiscountPolicy(job);
+  const { requestedDiscountHours, maxAutoDiscountHours, discountUnitHours } = parkingPolicy;
   const shouldApply = job.dryRun === false;
 
   try {
@@ -365,6 +360,10 @@ export async function processParkingDiscountJobSnapshot(snap: QueryDocumentSnaps
         updatedAt: FieldValue.serverTimestamp(),
         attempts: FieldValue.increment(1),
         lastError: null,
+        parkingPolicy: parkingPolicy.policy,
+        requestedDiscountHours,
+        maxAutoDiscountHours,
+        discountUnitHours,
       },
       { merge: true },
     );
@@ -480,8 +479,8 @@ export async function createParkingDiscountJobForTest(data: ParkingDiscountJob):
     dryRun: data.dryRun ?? true,
     discountName: data.discountName || DEFAULT_DISCOUNT_NAME,
     requestedDiscountHours: data.requestedDiscountHours || DEFAULT_REQUESTED_DISCOUNT_HOURS,
-    maxAutoDiscountHours: data.maxAutoDiscountHours || MAX_AUTO_DISCOUNT_HOURS,
-    discountUnitHours: data.discountUnitHours || DEFAULT_DISCOUNT_UNIT_HOURS,
+    maxAutoDiscountHours: data.maxAutoDiscountHours || PARKING_MAX_AUTO_DISCOUNT_HOURS,
+    discountUnitHours: data.discountUnitHours || PARKING_DISCOUNT_UNIT_HOURS,
     source: data.source || "manual_test",
     createdAt: FieldValue.serverTimestamp(),
     updatedAt: FieldValue.serverTimestamp(),
