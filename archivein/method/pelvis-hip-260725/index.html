@@ -6,8 +6,8 @@
 <title>골반.고관절 큐카드 | ARCHIVE METHOD</title>
 <meta name="theme-color" content="#fbfaf7">
 <meta name="description" content="ARCHIVE METHOD 강사레슨 큐카드 - 골반.고관절">
-<link rel="icon" href="/favicon.png">
-<link rel="apple-touch-icon" href="/apple-touch-icon.png">
+<link rel="icon" href="../../logo120.png">
+<link rel="apple-touch-icon" href="../../apple-touch-icon.png">
 <link rel="preconnect" href="https://cdn.jsdelivr.net">
 <link rel="stylesheet" href="https://cdn.jsdelivr.net/gh/orioncactus/pretendard/dist/web/static/pretendard.css">
 <style>
@@ -91,26 +91,17 @@ body.sequence-locked .sequence-gate{display:block}
 .cue-list li{padding:9px 0;border-top:1px solid var(--line);color:var(--muted)}
 .cue-list li:first-child{border-top:0}
 .cue-list b{color:var(--ink)}
-.survey{position:relative;overflow:hidden;margin-top:28px;padding:24px;border-radius:18px;background:var(--dark);color:#fff}
-.survey h2{position:relative;margin:6px 0 8px;font-size:21px}
-.survey p{position:relative;margin:0 0 18px;color:rgba(255,255,255,.66)}
-.review-form{position:relative;display:grid;gap:16px}
-.review-field{display:grid;gap:8px}
-.review-label{color:rgba(255,255,255,.82);font-size:12px;font-weight:900;letter-spacing:.08em;text-transform:uppercase}
-.star-row{display:grid;grid-template-columns:repeat(5,minmax(0,46px));gap:8px;align-items:center}
-.star{position:relative;display:grid;place-items:center;width:100%;aspect-ratio:1;border:1px solid rgba(255,255,255,.18);border-radius:12px;background:rgba(255,255,255,.08);color:rgba(255,255,255,.38);font-size:24px;line-height:1;cursor:pointer;transition:.16s}
-.star input{position:absolute;inset:0;opacity:0;cursor:pointer}
-.star.on,.star:has(input:focus-visible){border-color:var(--accent);background:rgba(154,78,56,.28);color:#fff}
-.review-textarea{width:100%;min-height:104px;padding:13px 14px;border:1px solid rgba(255,255,255,.16);border-radius:12px;background:rgba(255,255,255,.08);color:#fff;font:inherit;resize:vertical}
-.review-textarea::placeholder{color:rgba(255,255,255,.38)}
-.review-submit{width:100%;min-height:48px;border:0;border-radius:12px;background:var(--accent);color:#fff;font-weight:900;font-size:13px;letter-spacing:.07em}
-.review-submit:disabled{opacity:.62}
-.review-status{min-height:20px;margin:0;color:rgba(255,255,255,.72);font-size:12px;font-weight:800}
+.video-cta{position:relative;overflow:hidden;margin-top:28px;padding:24px;border-radius:18px;background:var(--dark);color:#fff}
+.video-cta h2{position:relative;margin:6px 0 8px;font-size:21px}
+.video-cta p{position:relative;margin:0 0 18px;color:rgba(255,255,255,.66)}
+.join-actions{position:relative;display:grid;gap:10px}
+.join-button{display:flex;align-items:center;justify-content:center;min-height:50px;padding:0 18px;border-radius:12px;background:var(--accent);color:#fff;text-decoration:none;font-size:13px;font-weight:900;letter-spacing:.05em;text-align:center}
+.join-button:focus-visible{outline:3px solid rgba(255,255,255,.55);outline-offset:3px}
+.join-note{margin:0;color:rgba(255,255,255,.72);font-size:12px;font-weight:800;line-height:1.6}
 footer{padding-top:22px;color:var(--quiet);font-size:11px;font-weight:700;letter-spacing:.12em;text-transform:uppercase}
 .topbtn{position:fixed;right:18px;bottom:24px;width:44px;height:44px;border:0;border-radius:50%;background:var(--dark);color:#fff;font-weight:900;box-shadow:var(--shadow);opacity:0;transform:translateY(10px);transition:.2s}
 .topbtn.on{opacity:1;transform:none}
 @media(max-width:390px){.page{padding-left:14px;padding-right:14px}.title{font-size:38px}.summary-row{grid-template-columns:1fr;gap:4px}.card{padding:16px}.block{padding:16px}.tab{font-size:12px}.tab span{font-size:9px}.phase-card{grid-template-columns:48px 1fr}.phase-body{padding:13px 14px}}
-@media(max-width:360px){.star-row{gap:6px}}
 </style>
 </head>
 <body data-sequence-open="2026-07-25T13:00:00+09:00" class="sequence-locked">
@@ -250,28 +241,14 @@ footer{padding-top:22px;color:var(--quiet);font-size:11px;font-weight:700;letter
     </div>
   </section>
 
-  <div class="survey">
-    <div class="tag">ARCHIVE METHOD FEEDBACK</div>
-    <h2>오늘 수업은 어땠나요?</h2>
-    <p>별점과 전하고 싶은 말을 가볍게 남기면 제출됩니다.</p>
-    <form class="review-form" data-lesson-id="pelvis-hip-260725" data-lesson-title="골반.고관절" onsubmit="handleReviewSubmit(event)">
-      <div class="review-field">
-        <div class="review-label">별점</div>
-        <div class="star-row" role="radiogroup" aria-label="오늘 수업 별점">
-          <label class="star" data-value="1" aria-label="1점"><input type="radio" name="rating" value="1" required>★</label>
-          <label class="star" data-value="2" aria-label="2점"><input type="radio" name="rating" value="2">★</label>
-          <label class="star" data-value="3" aria-label="3점"><input type="radio" name="rating" value="3">★</label>
-          <label class="star" data-value="4" aria-label="4점"><input type="radio" name="rating" value="4">★</label>
-          <label class="star" data-value="5" aria-label="5점"><input type="radio" name="rating" value="5">★</label>
-        </div>
-      </div>
-      <label class="review-field">
-        <span class="review-label">전하고 싶은 말</span>
-        <textarea class="review-textarea" name="message" placeholder="오늘 수업을 듣고 남는 말이나 전하고 싶은 내용을 짧게 남겨주세요." required></textarea>
-      </label>
-      <button class="review-submit" type="submit">남기기</button>
-      <p class="review-status" aria-live="polite"></p>
-    </form>
+  <div class="video-cta">
+    <div class="tag">ARCHIVE METHOD VIDEO</div>
+    <h2>수업 후 영상 시청 준비</h2>
+    <p>수업촬영영상은 ARCHIVE PILATES 홈페이지 가입 후 권한이 연결되면 내 강의실에서 확인할 수 있습니다.</p>
+    <div class="join-actions">
+      <a class="join-button" href="https://archivepilates.imweb.me/?mode=join&amp;back_url=LzQ4" target="_blank" rel="noopener">ARCHIVE PILATES 홈페이지 가입하기</a>
+      <p class="join-note">가입을 완료하면 스텝이 수업 영상 시청 권한을 연결합니다.</p>
+    </div>
   </div>
 
   <footer>ARCHIVE PILATES · ARCHIVE METHOD · 2607</footer>
@@ -312,50 +289,6 @@ window.addEventListener('scroll', () => {
   topbtn.classList.toggle('on', scrollTop > 260);
 }, { passive: true });
 
-function updateRating() {
-  const selected = Number(document.querySelector('input[name="rating"]:checked')?.value || 0);
-  document.querySelectorAll('.star').forEach((star) => {
-    star.classList.toggle('on', Number(star.dataset.value) <= selected);
-  });
-}
-
-document.querySelectorAll('input[name="rating"]').forEach((input) => {
-  input.addEventListener('change', updateRating);
-});
-
-async function handleReviewSubmit(event) {
-  event.preventDefault();
-  const form = event.currentTarget;
-  const status = form.querySelector('.review-status');
-  const button = form.querySelector('.review-submit');
-  const payload = {
-    lessonId: form.dataset.lessonId,
-    lessonTitle: form.dataset.lessonTitle,
-    rating: Number(form.querySelector('input[name="rating"]:checked')?.value || 0),
-    message: form.querySelector('textarea[name="message"]').value.trim(),
-    pageUrl: window.location.href,
-    preview: isStaffPreview,
-    clientSubmittedAt: new Date().toISOString()
-  };
-  button.disabled = true;
-  status.textContent = '제출 중입니다.';
-  try {
-    const response = await fetch('/api/methodCueCardReview', {
-      method: 'POST',
-      headers: { 'Content-Type': 'application/json' },
-      body: JSON.stringify(payload)
-    });
-    const result = await response.json().catch(() => ({}));
-    if (!response.ok || !result.ok) throw new Error(result.error || 'submit_failed');
-    status.textContent = '남겨주셔서 감사합니다.';
-    form.reset();
-    updateRating();
-  } catch (error) {
-    status.textContent = '제출이 되지 않았습니다. 잠시 후 다시 시도해주세요.';
-  } finally {
-    button.disabled = false;
-  }
-}
 </script>
 </body>
 </html>

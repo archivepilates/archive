@@ -69,54 +69,27 @@ const guardGroups = [
     ],
   },
   {
-    id: "archive-method-breathing-cue-card",
-    reason: "ARCHIVE METHOD 호흡 강사레슨 큐카드와 검토 저장 API가 main 승격이나 Hosting 배포에서 빠지는 것을 막습니다.",
+    id: "archive-method-cue-card-video-cta",
+    reason: "ARCHIVE METHOD 강사레슨 큐카드의 수업촬영영상 시청용 아임웹 가입 CTA가 main 승격이나 Hosting 배포에서 빠지는 것을 막습니다.",
     files: [
       {
         file: "archivein/method/breathing-260627/index.html",
         markers: [
           "호흡 큐카드 | ARCHIVE METHOD",
-          "data-lesson-id=\"breathing-260627\"",
-          "archive.method.review.",
-          "window.location.pathname.startsWith('/archivein/')",
-          "fetch(reviewEndpoint",
+          "ARCHIVE METHOD VIDEO",
+          "ARCHIVE PILATES 홈페이지 가입하기",
+          "archivepilates.imweb.me/?mode=join&amp;back_url=LzQ4",
+          "../../logo120.png",
         ],
       },
       {
-        file: "firebase/kangsain-functions/functions/src/method/methodCueCardReview.ts",
+        file: "archivein/method/pelvis-hip-260725/index.html",
         markers: [
-          "methodCueCardReviewHandler",
-          "methodCueCardReviews",
-          "METHOD_CUE_CARD_REVIEW_SPREADSHEET_ID",
-          "ALLOWED_LESSON_IDS",
-          "invalid_submission_id",
-          "isAlreadyExistsError",
-        ],
-      },
-      {
-        file: "firebase/kangsain-functions/functions/src/exports/privateChart.ts",
-        markers: [
-          "methodCueCardReviewHandler",
-          "export const methodCueCardReview",
-        ],
-      },
-      {
-        file: "firebase/codebase-boundaries.json",
-        markers: [
-          "\"methodCueCardReview\"",
-        ],
-      },
-      {
-        file: "firebase/packages/contracts/src/firestore.ts",
-        markers: [
-          "methodCueCardReviews: \"methodCueCardReviews\"",
-          "archiveCollections.methodCueCardReviews",
-        ],
-      },
-      {
-        file: "scripts/lib/affected-functions.mjs",
-        markers: [
-          "firebase/kangsain-functions/functions/src/method/",
+          "골반.고관절 큐카드 | ARCHIVE METHOD",
+          "ARCHIVE METHOD VIDEO",
+          "ARCHIVE PILATES 홈페이지 가입하기",
+          "archivepilates.imweb.me/?mode=join&amp;back_url=LzQ4",
+          "../../logo120.png",
         ],
       },
       {
@@ -129,9 +102,7 @@ const guardGroups = [
         file: "firebase.json",
         markers: [
           "\"source\": \"/archivein/method/**\"",
-          "\"source\": \"/archivein/api/methodCueCardReview\"",
           "\"source\": \"/method/**\"",
-          "\"source\": \"/api/methodCueCardReview\"",
         ],
       },
       {
@@ -139,8 +110,8 @@ const guardGroups = [
         markers: [
           "method-breathing-cue-card-custom-domain",
           "method-breathing-cue-card-webapp-path",
-          "method-cue-card-review-api-custom-domain",
-          "method-cue-card-review-api-webapp-path",
+          "method-pelvis-hip-cue-card-custom-domain",
+          "method-pelvis-hip-cue-card-webapp-path",
         ],
       },
     ],
