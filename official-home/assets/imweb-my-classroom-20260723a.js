@@ -1,5 +1,5 @@
 (function(){
-  var VERSION="2026-07-23c";
+  var VERSION="2026-07-26a";
   var path=String(location.pathname||"").replace(/\/$/,"");
   if(path!=="/48"&&path!=="/my-classroom")return;
 
@@ -33,6 +33,10 @@
     {"code":"AB8","path":"/archive-method-watch-ab8","title":"바렐 순환 (AB8)"},
     {"code":"ACH8","path":"/archive-method-watch-ach8","title":"체어 호흡 (ACH8)"},
     {"code":"ACA5","path":"/archive-method-watch-aca5","title":"캐딜락 호흡 (ACA5)"},
+    {"code":"AB9","path":"/archive-method-watch-ab9","title":"바렐 골반·고관절 (AB9)"},
+    {"code":"AR5","path":"/archive-method-watch-ar5","title":"리포머 골반·고관절 (AR5)"},
+    {"code":"B260725-BARREL","path":"/private-lesson-pelvis-hip-b-barrel-260725","title":"7/25 골반·고관절 B팀 · 바렐","group":"PRIVATE LESSON PELVIS HIP B 260725 40D","private":true},
+    {"code":"B260725-REFORMER","path":"/private-lesson-pelvis-hip-b-reformer-260725","title":"7/25 골반·고관절 B팀 · 리포머","group":"PRIVATE LESSON PELVIS HIP B 260725 40D","private":true},
     {"code":"JEY260718","path":"/private-lesson-jey-260718","title":"정은영 프라이빗 강사레슨 260718","group":"PRIVATE LESSON JEY 260718 40D","private":true}
   ];
   var M={
