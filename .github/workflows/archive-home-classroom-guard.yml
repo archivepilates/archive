@@ -1,0 +1,41 @@
+name: Archive Home Classroom Guard
+
+on:
+  workflow_dispatch:
+  pull_request:
+    paths:
+      - ".github/workflows/archive-home-classroom-guard.yml"
+      - "firebase.archive-home.json"
+      - "official-home/assets/imweb-my-classroom-20260723a.js"
+      - "package.json"
+      - "scripts/imweb/imweb-my-classroom-loader.html"
+      - "scripts/validate-archive-home-classroom-asset.mjs"
+      - "scripts/validate-imweb-classroom-loader-fallback.mjs"
+      - "scripts/verify-archive-home-classroom-live.mjs"
+  push:
+    paths:
+      - ".github/workflows/archive-home-classroom-guard.yml"
+      - "firebase.archive-home.json"
+      - "official-home/assets/imweb-my-classroom-20260723a.js"
+      - "package.json"
+      - "scripts/imweb/imweb-my-classroom-loader.html"
+      - "scripts/validate-archive-home-classroom-asset.mjs"
+      - "scripts/validate-imweb-classroom-loader-fallback.mjs"
+      - "scripts/verify-archive-home-classroom-live.mjs"
+
+jobs:
+  classroom-guard:
+    runs-on: ubuntu-latest
+    permissions:
+      contents: read
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v5
+
+      - name: Setup Node
+        uses: actions/setup-node@v5
+        with:
+          node-version: 22
+
+      - name: Validate classroom release inputs
+        run: npm run validate:archive-home-classroom

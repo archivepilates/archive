@@ -9,6 +9,7 @@ if (!fs.existsSync(assetPath)) {
 
 const source = fs.readFileSync(assetPath, "utf8");
 const requiredMarkers = [
+  'VERSION="2026-07-28c"',
   'data-ap-classroom-v2',
   '"/archive-method-watch-ach8"',
   '"/archive-method-watch-ab9"',

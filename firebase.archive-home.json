@@ -2,7 +2,10 @@
   "hosting": {
     "site": "archive-pilates-home",
     "predeploy": [
-      "node scripts/validate-archive-home-classroom-asset.mjs"
+      "npm run validate:archive-home-classroom"
+    ],
+    "postdeploy": [
+      "npm run verify:archive-home-classroom-live"
     ],
     "public": "official-home",
     "cleanUrls": true,

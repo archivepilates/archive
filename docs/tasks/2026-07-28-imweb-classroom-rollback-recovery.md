@@ -40,3 +40,14 @@
 
 - A separate logged-in non-buyer browser session was not available in the current browser profiles.
 - The logged-out denial, live buyer-group membership, and authenticated classroom rendering were verified independently.
+
+## Recurrence prevention
+
+- The Imweb loader no longer sets `data-ap-classroom` before the external asset executes.
+  - If the asset loads normally, the current renderer takes over.
+  - If the asset is missing, blocked, or slow, the existing inline renderer remains available instead of leaving a blank classroom.
+- The loader records separate success and failure markers for live diagnosis.
+- Firebase Hosting now runs:
+  - a predeploy asset and fallback-behavior validation;
+  - a postdeploy live SHA, content-type, cache-policy, and anonymous-gate canary.
+- GitHub Actions runs the same static release checks whenever classroom deployment files change.
