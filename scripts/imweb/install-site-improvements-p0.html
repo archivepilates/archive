@@ -1,0 +1,45 @@
+<script data-archive-pilates-site-improvements="2026-07-28a">
+(function () {
+  "use strict";
+
+  var VERSION = "2026-07-28a";
+  var ORIGIN = "https://archivepilates.com";
+  var currentPath = String(window.location.pathname || "/").replace(/\/+$/, "") || "/";
+  var redirects = {
+    "/studio": ORIGIN + "/#philosophy",
+    "/15": "https://archivepilates.imweb.me/16?ap_shop=all"
+  };
+
+  function setMeta(name, content) {
+    var meta = document.querySelector('meta[name="' + name + '"]');
+    if (!meta) {
+      meta = document.createElement("meta");
+      meta.name = name;
+      (document.head || document.documentElement).appendChild(meta);
+    }
+    meta.content = content;
+  }
+
+  if (redirects[currentPath]) {
+    setMeta("robots", "noindex,follow");
+    var canonical = document.querySelector('link[rel="canonical"]');
+    if (!canonical) {
+      canonical = document.createElement("link");
+      canonical.rel = "canonical";
+      (document.head || document.documentElement).appendChild(canonical);
+    }
+    canonical.href = redirects[currentPath];
+    document.documentElement.setAttribute("data-archive-pilates-retired-route", currentPath);
+    window.location.replace(redirects[currentPath]);
+    return;
+  }
+
+  if (!document.querySelector('script[data-archive-pilates-site-improvements-asset="' + VERSION + '"]')) {
+    var script = document.createElement("script");
+    script.src = ORIGIN + "/assets/imweb-site-improvements-20260728a.js?v=" + VERSION;
+    script.defer = true;
+    script.setAttribute("data-archive-pilates-site-improvements-asset", VERSION);
+    (document.head || document.documentElement).appendChild(script);
+  }
+})();
+</script>

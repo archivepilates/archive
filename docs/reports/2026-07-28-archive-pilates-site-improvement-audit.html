@@ -1,0 +1,566 @@
+<!doctype html>
+<html lang="ko">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1">
+  <link rel="icon" href="data:,">
+  <title>ARCHIVE PILATES 사이트 개선 진단 · 2026-07-28</title>
+  <style>
+    :root {
+      --paper: #fffdfa;
+      --ink: #171513;
+      --muted: #6c6761;
+      --line: #ddd7d0;
+      --soft: #f5f1ec;
+      --dark: #171717;
+      --orange: #ff6b18;
+      --red: #b83b2e;
+      --green: #1f6b55;
+      --blue: #315b7d;
+      --max: 1120px;
+    }
+    * { box-sizing: border-box; }
+    html { color-scheme: light; }
+    body {
+      margin: 0;
+      background: var(--paper);
+      color: var(--ink);
+      font-family: -apple-system, BlinkMacSystemFont, "Pretendard", "Noto Sans KR", "Segoe UI", sans-serif;
+      font-size: 16px;
+      line-height: 1.65;
+      word-break: keep-all;
+    }
+    a { color: inherit; text-underline-offset: 3px; }
+    header, section, footer { width: 100%; }
+    .wrap { width: min(calc(100% - 40px), var(--max)); margin: 0 auto; }
+    .hero {
+      padding: 70px 0 56px;
+      border-bottom: 1px solid var(--line);
+      background: var(--paper);
+    }
+    .eyebrow {
+      margin: 0 0 14px;
+      color: var(--red);
+      font-size: 0.78rem;
+      font-weight: 800;
+      letter-spacing: 0;
+      text-transform: uppercase;
+    }
+    h1, h2, h3 { margin: 0; line-height: 1.2; letter-spacing: 0; }
+    h1 { max-width: 900px; font-size: clamp(2.3rem, 5vw, 5rem); }
+    h2 { font-size: clamp(1.65rem, 3vw, 2.5rem); }
+    h3 { font-size: 1.12rem; }
+    .lead {
+      max-width: 760px;
+      margin: 22px 0 0;
+      color: #3d3935;
+      font-size: 1.08rem;
+    }
+    .meta {
+      display: flex;
+      flex-wrap: wrap;
+      gap: 9px;
+      margin-top: 28px;
+    }
+    .tag {
+      display: inline-flex;
+      align-items: center;
+      min-height: 34px;
+      padding: 5px 10px;
+      border: 1px solid var(--line);
+      border-radius: 4px;
+      background: #fff;
+      color: #4c4741;
+      font-size: 0.8rem;
+      font-weight: 700;
+    }
+    .band { padding: 56px 0; border-bottom: 1px solid var(--line); }
+    .band.dark { background: var(--dark); color: #fff; border-color: var(--dark); }
+    .band.soft { background: var(--soft); }
+    .section-head {
+      display: grid;
+      grid-template-columns: minmax(0, 0.8fr) minmax(0, 1.2fr);
+      gap: 28px;
+      align-items: end;
+      margin-bottom: 28px;
+    }
+    .section-head p { margin: 0; color: var(--muted); }
+    .dark .section-head p { color: #c9c4bd; }
+    .verdict {
+      display: grid;
+      grid-template-columns: repeat(3, minmax(0, 1fr));
+      gap: 1px;
+      border: 1px solid var(--line);
+      background: var(--line);
+    }
+    .verdict article { min-width: 0; padding: 24px; background: #fff; }
+    .verdict strong { display: block; margin-bottom: 8px; font-size: 1.03rem; }
+    .verdict p { margin: 0; color: var(--muted); font-size: 0.92rem; }
+    .score-grid {
+      display: grid;
+      grid-template-columns: repeat(3, minmax(0, 1fr));
+      gap: 12px;
+    }
+    .score {
+      padding: 22px;
+      border: 1px solid #3c3c3c;
+      border-radius: 6px;
+      background: #202020;
+    }
+    .score .name { color: #cbc7c1; font-size: 0.82rem; font-weight: 750; }
+    .score .numbers {
+      display: grid;
+      grid-template-columns: repeat(4, 1fr);
+      gap: 8px;
+      margin-top: 16px;
+    }
+    .score .numbers div { min-width: 0; }
+    .score b { display: block; font-size: 1.5rem; line-height: 1; }
+    .score small { color: #aaa59f; font-size: 0.69rem; }
+    .score .metrics { margin: 18px 0 0; color: #dad6d0; font-size: 0.82rem; }
+    .note { margin: 18px 0 0; color: #aaa59f; font-size: 0.8rem; }
+    .priority-list { display: grid; gap: 14px; }
+    .priority {
+      display: grid;
+      grid-template-columns: 82px minmax(0, 1fr) 158px;
+      gap: 22px;
+      padding: 24px 0;
+      border-top: 1px solid var(--line);
+    }
+    .priority:first-child { border-top: 0; padding-top: 0; }
+    .level {
+      width: fit-content;
+      height: fit-content;
+      padding: 4px 8px;
+      border-radius: 3px;
+      color: #fff;
+      font-size: 0.74rem;
+      font-weight: 850;
+    }
+    .p0 { background: var(--red); }
+    .p1 { background: var(--orange); color: #1a100a; }
+    .p2 { background: var(--blue); }
+    .priority p { margin: 8px 0 0; color: var(--muted); font-size: 0.93rem; }
+    .priority ul { margin: 12px 0 0; padding-left: 19px; }
+    .priority li + li { margin-top: 5px; }
+    .effect {
+      align-self: start;
+      padding-left: 16px;
+      border-left: 2px solid var(--line);
+      color: #504b45;
+      font-size: 0.83rem;
+    }
+    .effect b { display: block; margin-bottom: 5px; color: var(--ink); }
+    table { width: 100%; border-collapse: collapse; font-size: 0.88rem; }
+    th, td { padding: 13px 12px; border-bottom: 1px solid var(--line); text-align: left; vertical-align: top; }
+    th { color: #4e4943; font-size: 0.76rem; text-transform: uppercase; }
+    code {
+      padding: 1px 4px;
+      border-radius: 3px;
+      background: #eee9e3;
+      font-family: ui-monospace, SFMono-Regular, Menlo, Consolas, monospace;
+      font-size: 0.88em;
+      word-break: break-all;
+    }
+    .good-grid {
+      display: grid;
+      grid-template-columns: repeat(2, minmax(0, 1fr));
+      gap: 12px;
+    }
+    .good {
+      padding: 20px;
+      border: 1px solid var(--line);
+      border-radius: 6px;
+      background: #fff;
+    }
+    .good b { color: var(--green); }
+    .good p { margin: 6px 0 0; color: var(--muted); font-size: 0.9rem; }
+    .roadmap {
+      display: grid;
+      grid-template-columns: repeat(2, minmax(0, 1fr));
+      gap: 24px;
+    }
+    .roadmap article { border-top: 3px solid var(--orange); padding-top: 18px; }
+    .roadmap ol { margin: 14px 0 0; padding-left: 22px; }
+    .roadmap li + li { margin-top: 7px; }
+    .callout {
+      padding: 22px;
+      border-left: 4px solid var(--orange);
+      background: #fff;
+    }
+    .callout p { margin: 6px 0 0; color: var(--muted); }
+    footer { padding: 34px 0 52px; color: var(--muted); font-size: 0.8rem; }
+    @media (max-width: 780px) {
+      .hero { padding: 44px 0 38px; }
+      .band { padding: 42px 0; }
+      .section-head, .priority { grid-template-columns: 1fr; }
+      .verdict, .score-grid, .good-grid, .roadmap { grid-template-columns: 1fr; }
+      .priority { gap: 10px; }
+      .effect { padding: 12px 0 0; border-left: 0; border-top: 2px solid var(--line); }
+      .score .numbers { grid-template-columns: repeat(4, minmax(0, 1fr)); }
+      table { display: block; overflow-x: auto; white-space: nowrap; }
+    }
+    @media print {
+      body { background: #fff; }
+      .band { break-inside: avoid; }
+      .dark { color-adjust: exact; -webkit-print-color-adjust: exact; }
+    }
+  </style>
+</head>
+<body>
+  <header class="hero">
+    <div class="wrap">
+      <p class="eyebrow">Live site audit · 2026-07-28</p>
+      <h1>ARCHIVE PILATES<br>사이트 개선 진단</h1>
+      <p class="lead">공식홈은 브랜드와 검색의 중심으로 이미 안정적입니다. 지금 가장 큰 개선 여지는 아임웹 판매 화면의 전역 스크립트 누적, 불필요한 이미지 로드, 상품 탐색 밀도, 오래된 검색 노출 페이지에 있습니다.</p>
+      <div class="meta">
+        <span class="tag">공식홈 + 아임웹</span>
+        <span class="tag">모바일 320·390</span>
+        <span class="tag">태블릿 768</span>
+        <span class="tag">데스크톱 1440</span>
+        <span class="tag">Playwright + Lighthouse</span>
+        <span class="tag">운영 데이터 변경 없음</span>
+      </div>
+    </div>
+  </header>
+
+  <section class="band">
+    <div class="wrap">
+      <div class="section-head">
+        <h2>한 줄 결론</h2>
+        <p>새로 디자인하기보다, 공식홈은 유지하고 아임웹의 누적 패치를 정리하는 편이 투자 대비 효과가 큽니다.</p>
+      </div>
+      <div class="verdict">
+        <article>
+          <strong>공식홈: 유지하며 가볍게 다듬기</strong>
+          <p>구조, 반응형, 접근성, 검색 메타가 좋습니다. 이미지 전달량만 줄이면 됩니다.</p>
+        </article>
+        <article>
+          <strong>아임웹: 커스텀 런타임 정리가 핵심</strong>
+          <p>플랫폼 자체보다 전역 이미지 선로딩과 28개 누적 스크립트가 먼저 해결할 부분입니다.</p>
+        </article>
+        <article>
+          <strong>전환: 예약 상태와 CTA를 일치시키기</strong>
+          <p>“강사레슨 예약”이 현재 품절 화면으로 연결됩니다. 마감 시 대기신청 흐름이 필요합니다.</p>
+        </article>
+      </div>
+    </div>
+  </section>
+
+  <section class="band dark">
+    <div class="wrap">
+      <div class="section-head">
+        <h2>성능 스냅샷</h2>
+        <p>Lighthouse 13.4.1 모바일 환경 1회 측정값입니다. 절대 속도보다 세 화면의 상대 차이를 보는 지표입니다.</p>
+      </div>
+      <div class="score-grid">
+        <article class="score">
+          <div class="name">공식홈 · archivepilates.com</div>
+          <div class="numbers">
+            <div><b>80</b><small>성능</small></div>
+            <div><b>100</b><small>접근성</small></div>
+            <div><b>100</b><small>권장사항</small></div>
+            <div><b>100</b><small>SEO</small></div>
+          </div>
+          <p class="metrics">FCP 0.9초 · LCP 5.2초 · CLS 0 · TBT 0ms</p>
+        </article>
+        <article class="score">
+          <div class="name">판매상품 목록 · /16?ap_shop=all</div>
+          <div class="numbers">
+            <div><b>29</b><small>성능</small></div>
+            <div><b>83</b><small>접근성</small></div>
+            <div><b>77</b><small>권장사항</small></div>
+            <div><b>100</b><small>SEO</small></div>
+          </div>
+          <p class="metrics">FCP 8.2초 · LCP 28.0초 · CLS 0.484 · 7.5MB</p>
+        </article>
+        <article class="score">
+          <div class="name">온라인 상품 상세 · AB5</div>
+          <div class="numbers">
+            <div><b>16</b><small>성능</small></div>
+            <div><b>75</b><small>접근성</small></div>
+            <div><b>77</b><small>권장사항</small></div>
+            <div><b>92</b><small>SEO</small></div>
+          </div>
+          <p class="metrics">FCP 9.5초 · LCP 27.7초 · CLS 0.243 · 6.1MB</p>
+        </article>
+      </div>
+      <p class="note">직접 접속 환경에서는 공식홈 약 0.35초, 아임웹 목록 약 1.1초, 상품 상세 약 2.7초에 load가 완료됐습니다. Lighthouse는 느린 모바일 조건을 적용해 병목을 더 선명하게 드러냅니다.</p>
+    </div>
+  </section>
+
+  <section class="band">
+    <div class="wrap">
+      <div class="section-head">
+        <h2>P0 · 먼저 고칠 것</h2>
+        <p>효과가 크고 운영 위험이 낮은 항목입니다. 이 네 가지를 첫 작업 묶음으로 권합니다.</p>
+      </div>
+      <div class="priority-list">
+        <article class="priority">
+          <div><span class="level p0">P0-1</span></div>
+          <div>
+            <h3>홈 이미지를 홈에서만 불러오기</h3>
+            <p>현재 아임웹 전역 스크립트의 <code>preloadHomeImages()</code>가 로그인, 상품 목록, 상품 상세까지 공식홈 이미지 6개를 모두 선로딩합니다.</p>
+            <ul>
+              <li>비홈 페이지에서 약 1.16MB의 불필요한 이미지 요청 제거</li>
+              <li>홈에서는 오래된 <code>archive-pilates.web.app</code> 주소 6개를 직접 새 주소로 교체</li>
+              <li>현재 홈에서 먼저 발생하는 404 요청 6개 제거</li>
+            </ul>
+          </div>
+          <div class="effect"><b>예상 효과</b>모든 아임웹 페이지의 초기 전송량 감소<br>난이도 낮음 · 회귀 위험 낮음</div>
+        </article>
+
+        <article class="priority">
+          <div><span class="level p0">P0-2</span></div>
+          <div>
+            <h3>품절 상태와 “강사레슨 예약” 문구 맞추기</h3>
+            <p>공식홈의 “강사레슨 예약”은 <code>/offline</code>을 거쳐 현재 “7월마감 · SOLDOUT” 상품 한 개가 있는 화면으로 연결됩니다.</p>
+            <ul>
+              <li>마감 중에는 “다음 강사레슨 알림 신청” 또는 “강사레슨 일정 확인”으로 변경</li>
+              <li>카카오 문의가 아니라 이름·연락처를 남기는 대기신청 흐름을 우선 제공</li>
+              <li>다음 일정이 열리면 다시 “예약”으로 전환</li>
+            </ul>
+          </div>
+          <div class="effect"><b>예상 효과</b>클릭 후 실망 감소<br>마감 수요를 다음 회차로 축적</div>
+        </article>
+
+        <article class="priority">
+          <div><span class="level p0">P0-3</span></div>
+          <div>
+            <h3>구형 <code>/studio</code>와 빈 <code>/15</code> 검색 노출 정리</h3>
+            <p>아임웹 사이트맵에는 65개 URL이 있으며, 구형 스튜디오 페이지와 내용이 없는 페이지도 포함됩니다. <code>/studio</code>에는 현재 방향과 다른 “1:1 · 듀엣 · 3~4인 일반회원 수업” 문구가 남아 있습니다.</p>
+            <ul>
+              <li><code>/studio</code>는 공식홈 철학 섹션으로 영구 이동하거나 검색 제외</li>
+              <li><code>/15</code>는 삭제 또는 검색 제외</li>
+              <li>아임웹 홈 <code>/index</code>도 브랜드 검색 경쟁을 피하려면 검색 제외 검토</li>
+            </ul>
+          </div>
+          <div class="effect"><b>예상 효과</b>공식홈 검색 집중<br>오래된 브랜드 설명 제거</div>
+        </article>
+
+        <article class="priority">
+          <div><span class="level p0">P0-4</span></div>
+          <div>
+            <h3>데스크톱 상품 목록을 더 촘촘하게</h3>
+            <p>판매상품 목록은 현재 1440px 화면에서도 카드 폭이 625px인 2열입니다. 27개 상품이 약 7,300px 이상 이어져 비교와 탐색이 느립니다.</p>
+            <ul>
+              <li>니티도: 데스크톱 4열 · 태블릿 3열 · 모바일 2열</li>
+              <li>온라인 영상: 데스크톱 3열 · 태블릿 2열 · 모바일 2열</li>
+              <li>목록 상단에 “판매상품” 또는 “온라인 클래스” 제목과 상품 수 표시</li>
+            </ul>
+          </div>
+          <div class="effect"><b>예상 효과</b>한 화면 비교량 2배<br>페이지 길이 약 40~50% 감소</div>
+        </article>
+      </div>
+    </div>
+  </section>
+
+  <section class="band soft">
+    <div class="wrap">
+      <div class="section-head">
+        <h2>P1 · 구조를 안정화할 것</h2>
+        <p>P0 이후에 진행할 중간 규모 개선입니다. 과거 패치가 다시 충돌하지 않게 만드는 작업이 중심입니다.</p>
+      </div>
+      <div class="priority-list">
+        <article class="priority">
+          <div><span class="level p1">P1-1</span></div>
+          <div>
+            <h3>28개 전역 커스텀 스크립트를 하나의 런타임으로 통합</h3>
+            <p>라이브 HTML에서 ARCHIVE 커스텀 스크립트 마커 28개가 확인됩니다. 헤더, 모바일 안전영역, 메뉴, 내 강의실, 홈 이미지, 니티도, 관심상품 패치가 서로 다른 시점에 DOM을 다시 만집니다.</p>
+            <ul>
+              <li>작은 인라인 로더 1개 + 버전된 외부 런타임 1개로 통합</li>
+              <li><code>home</code>, <code>shop</code>, <code>video</code>, <code>classroom</code>, <code>product-detail</code> 모듈을 경로별 실행</li>
+              <li>구버전 마커와 중복 MutationObserver 제거</li>
+              <li>현재 정상인 헤더 스크롤, 니티도 이동, 관심상품, 내 강의실을 회귀 테스트한 뒤 교체</li>
+            </ul>
+          </div>
+          <div class="effect"><b>예상 효과</b>헤더 떨림 재발 방지<br>다음 수정 속도 향상<br>난이도 중상</div>
+        </article>
+
+        <article class="priority">
+          <div><span class="level p1">P1-2</span></div>
+          <div>
+            <h3>니티도 목록 이미지 전달량 줄이기</h3>
+            <p>Lighthouse는 판매상품 목록에서 이미지 약 3.2MB를 줄일 수 있다고 추정했습니다. 321px로 보이는 카드에 750~800px JPG가 전달되는 사례가 반복됩니다.</p>
+            <ul>
+              <li>목록용 480~600px WebP와 상세용 원본을 분리</li>
+              <li>아임웹 CDN이 허용하면 목록 URL 크기 파라미터를 480~600으로 조정</li>
+              <li>첫 행만 우선 로드하고 나머지는 현재처럼 lazy load 유지</li>
+            </ul>
+          </div>
+          <div class="effect"><b>예상 효과</b>모바일 데이터 절감<br>목록 LCP 개선<br>상품 사진 선명도 유지</div>
+        </article>
+
+        <article class="priority">
+          <div><span class="level p1">P1-3</span></div>
+          <div>
+            <h3>상품 상세의 미리보기를 클릭 후 로드</h3>
+            <p>온라인 상품 상세는 유튜브·네이버 플레이어 코드까지 초기에 불러옵니다. 미리보기 두 블록도 시각적으로 중복되어 상세페이지가 길어집니다.</p>
+            <ul>
+              <li>정적 포스터 1개를 먼저 표시하고 재생 시 iframe 생성</li>
+              <li>대표 미리보기 한 개만 상단에 유지</li>
+              <li>나머지는 “수업 구성” 아래 챕터 이미지로 전환</li>
+            </ul>
+          </div>
+          <div class="effect"><b>예상 효과</b>초기 JS·쿠키·네트워크 감소<br>상세페이지 집중도 향상</div>
+        </article>
+
+        <article class="priority">
+          <div><span class="level p1">P1-4</span></div>
+          <div>
+            <h3>접근성 기본값 보완</h3>
+            <p>공식홈은 Lighthouse 접근성 100점이지만 아임웹은 목록 83점, 상품 상세 75점입니다.</p>
+            <ul>
+              <li>햄버거·공유·빈 링크에 접근 가능한 이름 추가</li>
+              <li>장바구니·검색·로그인·나가기 터치 영역을 최소 44×44px로 확대</li>
+              <li>온라인 카테고리 활성 색상 대비 개선</li>
+              <li>가능하면 확대를 막는 <code>user-scalable=no</code> 제거</li>
+            </ul>
+          </div>
+          <div class="effect"><b>예상 효과</b>모바일 오조작 감소<br>키보드·보조기기 이용성 개선</div>
+        </article>
+
+        <article class="priority">
+          <div><span class="level p1">P1-5</span></div>
+          <div>
+            <h3>기구별 카테고리 SEO를 고유하게</h3>
+            <p><code>/44</code>~<code>/47</code>은 정상 상품 목록이지만 페이지 제목이 모두 “아카이브필라테스”이고 H1이 없습니다. 상품 목록 이미지도 대부분 빈 alt입니다.</p>
+            <ul>
+              <li>“리포머 온라인 클래스 | 아카이브필라테스”처럼 고유 title·description·H1 적용</li>
+              <li>상품 이미지 alt를 상품명으로 채우기</li>
+              <li>실제 구매평이 생긴 뒤에만 review·aggregateRating 구조화 데이터 사용</li>
+            </ul>
+          </div>
+          <div class="effect"><b>예상 효과</b>기구명 장기 검색 유입<br>이미지 검색·접근성 개선</div>
+        </article>
+      </div>
+    </div>
+  </section>
+
+  <section class="band">
+    <div class="wrap">
+      <div class="section-head">
+        <h2>P2 · 성장 단계 개선</h2>
+        <p>현재 기능을 건드리지 않고 브랜드 품질과 운영 측정력을 높이는 작업입니다.</p>
+      </div>
+      <div class="priority-list">
+        <article class="priority">
+          <div><span class="level p2">P2-1</span></div>
+          <div>
+            <h3>공식홈 반응형 이미지 세트</h3>
+            <p>공식홈은 이미 빠르지만 Lighthouse가 약 417KB의 이미지 절감 여지를 찾았습니다. hero 재압축, AVIF/WebP, <code>srcset</code>을 적용하면 모바일 LCP를 더 낮출 수 있습니다.</p>
+          </div>
+          <div class="effect"><b>예상 효과</b>공식홈 성능 80점대 후반 기대<br>브랜드 화면은 그대로 유지</div>
+        </article>
+        <article class="priority">
+          <div><span class="level p2">P2-2</span></div>
+          <div>
+            <h3>팀아카이브 이미지와 전환 연결</h3>
+            <p>팀 페이지 첫 방문은 좋지만 전체 팀 사진이 약 1.2MB입니다. 카드용 WebP를 따로 만들고, 강사별 프로필에서 해당 강사의 강사레슨 또는 관련 영상으로 연결하면 소개가 구매까지 이어집니다.</p>
+          </div>
+          <div class="effect"><b>예상 효과</b>팀 페이지 로드 절감<br>프로필의 전환 기여도 향상</div>
+        </article>
+        <article class="priority">
+          <div><span class="level p2">P2-3</span></div>
+          <div>
+            <h3>공식홈에서 아임웹까지 전환 측정</h3>
+            <p>“강사레슨 예약”, “영상구매”, “판매상품”, “팀아카이브” 클릭을 이벤트로 기록하고 아임웹 주문 데이터와 주 단위로 비교합니다. 새 디자인보다 먼저 어느 경로가 실제 구매로 이어지는지 알 수 있습니다.</p>
+          </div>
+          <div class="effect"><b>예상 효과</b>개선 우선순위를 감이 아닌 데이터로 결정</div>
+        </article>
+        <article class="priority">
+          <div><span class="level p2">P2-4</span></div>
+          <div>
+            <h3>구매자 시청 접근 스모크 테스트 정례화</h3>
+            <p>공개 상태에서는 <code>/48</code>이 로그인으로 정상 이동했습니다. 다만 이번 진단은 주문을 만들지 않았으므로 비회원·미구매 회원·구매회원 전체 권한 검증은 별도 테스트 계정으로 정례화해야 합니다.</p>
+          </div>
+          <div class="effect"><b>예상 효과</b>상품 추가 후 “내 강의실에 안 보임” 재발 방지</div>
+        </article>
+      </div>
+    </div>
+  </section>
+
+  <section class="band soft">
+    <div class="wrap">
+      <div class="section-head">
+        <h2>지금 잘되는 부분</h2>
+        <p>아래는 유지해야 할 기준입니다. 개선 작업이 이 동작을 되돌리면 안 됩니다.</p>
+      </div>
+      <div class="good-grid">
+        <article class="good"><b>공식홈 검색 기반</b><p>루트 200, canonical, robots, sitemap, 지역 사업 구조화 데이터가 정상입니다. <code>www</code>는 루트로 301 이동합니다.</p></article>
+        <article class="good"><b>공식홈 품질</b><p>320·390·768·1440px에서 가로 넘침이 없고 Lighthouse 접근성·권장사항·SEO가 모두 100점입니다.</p></article>
+        <article class="good"><b>메뉴와 하위 카테고리</b><p>공식홈 주요 링크가 모두 살아 있고, 아임웹 온라인 기구 메뉴는 스크롤 시 안정적으로 상단에 고정됩니다.</p></article>
+        <article class="good"><b>니티도 브랜드 페이지</b><p>브랜드 소개, H1, 단체 사진, 아카이브 관점의 글과 제품 연결이 일관되고 완성도가 높습니다.</p></article>
+        <article class="good"><b>상품 상세의 필수 고지</b><p>40일 이용, 회원그룹 권한, 환불 기준, 구매 버튼이 한 페이지에 존재하고 상품별 canonical도 정상입니다.</p></article>
+        <article class="good"><b>내 강의실 공개 차단</b><p>로그아웃 상태에서 <code>/48</code>은 로그인 화면으로 이동해 공개 노출되지 않습니다.</p></article>
+      </div>
+    </div>
+  </section>
+
+  <section class="band">
+    <div class="wrap">
+      <div class="section-head">
+        <h2>검증 근거</h2>
+        <p>운영 데이터를 바꾸지 않는 공개 화면 진단으로 진행했습니다.</p>
+      </div>
+      <table>
+        <thead>
+          <tr><th>영역</th><th>검증 경로</th><th>결과</th></tr>
+        </thead>
+        <tbody>
+          <tr><td>공식홈</td><td><code>archivepilates.com</code>, <code>/teams</code>, 강사 프로필</td><td>200, 이미지·콘솔 오류 없음, 가로 넘침 없음</td></tr>
+          <tr><td>공식 리다이렉트</td><td><code>/offline</code>, <code>/videos</code>, <code>/shop</code>, <code>/careers</code></td><td>모두 목표 화면으로 이동</td></tr>
+          <tr><td>아임웹 홈</td><td><code>/index</code></td><td>화면 표시 정상, 오래된 이미지 404 요청 6개</td></tr>
+          <tr><td>판매상품</td><td><code>/16?ap_shop=all</code>, <code>ap_shop=knitido</code></td><td>상품·가격 정상, 데스크톱 2열 과대 배치</td></tr>
+          <tr><td>온라인 클래스</td><td><code>/17</code>, AB5 상세</td><td>기구 메뉴·구매 버튼 정상, 상세 CLS 및 초기 JS 부담 큼</td></tr>
+          <tr><td>오프라인 클래스</td><td><code>/18</code></td><td>7월마감·품절 상태 확인</td></tr>
+          <tr><td>내 강의실</td><td><code>/48</code></td><td>로그아웃 사용자는 로그인으로 이동</td></tr>
+          <tr><td>검색</td><td>공식·아임웹 robots/sitemap/canonical</td><td>공식 정상, 아임웹 구형·빈 페이지가 sitemap에 남음</td></tr>
+        </tbody>
+      </table>
+      <p class="note">제외 범위: 실제 결제 생성, 환불, 관리자 설정 변경, 구매회원 개인정보 열람, 로그인 회원별 영상 권한 변경. 구매자 권한은 별도 테스트 계정으로 검증해야 합니다.</p>
+    </div>
+  </section>
+
+  <section class="band dark">
+    <div class="wrap">
+      <div class="section-head">
+        <h2>권장 실행 순서</h2>
+        <p>첫 주에는 가벼운 수정으로 효과를 확인하고, 둘째 주에 전역 스크립트를 통합하는 편이 안전합니다.</p>
+      </div>
+      <div class="roadmap">
+        <article>
+          <h3>1차 · 빠른 개선</h3>
+          <ol>
+            <li>비홈 홈 이미지 preload 차단</li>
+            <li>홈의 오래된 이미지 주소 6개 직접 교체</li>
+            <li>마감 중 강사레슨 CTA를 대기신청으로 변경</li>
+            <li><code>/studio</code>, <code>/15</code> 검색 정리</li>
+            <li>상품 목록 데스크톱 열 수 조정</li>
+          </ol>
+        </article>
+        <article>
+          <h3>2차 · 안정화</h3>
+          <ol>
+            <li>커스텀 스크립트 28개 기능 목록 작성</li>
+            <li>경로별 단일 런타임으로 통합</li>
+            <li>이미지 크기·미리보기 로딩 최적화</li>
+            <li>접근성 이름·터치 영역·대비 보완</li>
+            <li>기구별 SEO와 전환 이벤트 적용</li>
+          </ol>
+        </article>
+      </div>
+      <div class="callout" style="margin-top:28px;color:var(--ink)">
+        <h3>추천 판단</h3>
+        <p>아임웹을 버리거나 전체를 다시 만드는 단계는 아닙니다. 공식홈은 브랜드·검색, 아임웹은 결제·회원·상품이라는 현재 역할을 유지하면서, 아임웹의 누적 패치와 목록 밀도부터 정리하는 것이 가장 효율적입니다.</p>
+      </div>
+    </div>
+  </section>
+
+  <footer>
+    <div class="wrap">
+      ARCHIVE PILATES 사이트 개선 진단 · 2026-07-28 · 공개 화면 라이브 검증 기준
+    </div>
+  </footer>
+</body>
+</html>

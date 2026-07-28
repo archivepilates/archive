@@ -1,0 +1,60 @@
+<script data-archive-pilates-logo-official-home="2026-07-28a">
+(function () {
+  "use strict";
+
+  var VERSION = "2026-07-28a";
+  var OFFICIAL_HOME = "https://archivepilates.com/";
+
+  function isArchiveLogoAnchor(anchor) {
+    if (!anchor || !anchor.querySelector) return false;
+    if ((anchor.getAttribute("aria-label") || "").trim() === "ARCHIVE PILATES") return true;
+    if (anchor.querySelector(".ap-mobile-header-logo-img")) return true;
+    if (anchor.querySelector('img[src*="0193d9754476a"]')) return true;
+    return false;
+  }
+
+  function patchLogoAnchors() {
+    Array.prototype.slice.call(document.querySelectorAll('a[aria-label="ARCHIVE PILATES"], a[href="/"], a[href="/index"], a[href$="/index"]')).forEach(function (anchor) {
+      if (!isArchiveLogoAnchor(anchor)) return;
+      anchor.setAttribute("href", OFFICIAL_HOME);
+      anchor.setAttribute("data-archive-pilates-logo-official-home", VERSION);
+      anchor.removeAttribute("target");
+      anchor.removeAttribute("rel");
+    });
+  }
+
+  document.addEventListener("click", function (event) {
+    var target = event.target;
+    var anchor = target && target.closest ? target.closest("a") : null;
+    if (!isArchiveLogoAnchor(anchor)) return;
+    event.preventDefault();
+    event.stopPropagation();
+    if (event.stopImmediatePropagation) event.stopImmediatePropagation();
+    window.location.assign(OFFICIAL_HOME);
+  }, true);
+
+  if (document.readyState === "loading") {
+    document.addEventListener("DOMContentLoaded", patchLogoAnchors, { once: true });
+  } else {
+    patchLogoAnchors();
+  }
+  [120, 350, 800, 1500, 3000, 5000].forEach(function (delay) {
+    window.setTimeout(patchLogoAnchors, delay);
+  });
+  try {
+    var pending = false;
+    var observer = new MutationObserver(function () {
+      if (pending) return;
+      pending = true;
+      window.setTimeout(function () {
+        pending = false;
+        patchLogoAnchors();
+      }, 120);
+    });
+    observer.observe(document.documentElement, { childList: true, subtree: true });
+    window.setTimeout(function () {
+      observer.disconnect();
+    }, 9000);
+  } catch (error) {}
+})();
+</script>
