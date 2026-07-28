@@ -13,7 +13,7 @@ Date: 2026-07-28
 
 - Official icon source: the high-resolution transparent ARCHIVE PILATES symbol in Google Drive branding assets.
 - Icon canvas: warm white with the red symbol occupying about 90% of the square.
-- Imweb UI asset: `/assets/imweb-wishlist-20260728c.js`.
+- Imweb UI asset: `/assets/imweb-wishlist-20260728d.js`.
 - Imweb loader and favicon override source: `scripts/imweb/install-wishlist-and-icons.html`.
 - The versioned loader is appended to the existing global header script without replacing prior header behavior.
 
@@ -52,3 +52,9 @@ Date: 2026-07-28
   - reduced motion used no animation or transform and retained the ARCHIVE PILATES red fill.
   - both original detail wishlist buttons and all wishlist counts remained hidden.
 - Authenticated-member add/remove persistence was not mutated during this release; the controls call the same Imweb native wishlist endpoint and read server-rendered member state.
+
+## Detail-only Follow-up
+
+- Product-card hearts were removed after visual review showed the image area felt crowded.
+- Version `2026-07-28d` keeps one native wishlist control beside the product-detail title only.
+- The cleanup also unwraps any custom KNITIDO card shells left by an older in-page version.
