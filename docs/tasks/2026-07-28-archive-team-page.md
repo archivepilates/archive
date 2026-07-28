@@ -28,4 +28,9 @@
 
 ## 배포
 
-- 아직 배포하지 않음
+- 2026-07-28 Firebase Hosting `archive-pilates-home` 배포 완료
+- 기본 URL `https://archive-pilates-home.web.app/teams` HTTP 200
+- 공식 도메인 `https://archivepilates.com/teams` HTTP 200
+- 공식 도메인의 목록·프로필 6개 경로를 4개 화면 폭에서 재검증, 24개 조합 실패 0건
+- 실사이트 브라우저 콘솔 오류 0건
+- `/shop`, `/videos`, `/offline`, `/careers`, `www` redirect 정상 유지
