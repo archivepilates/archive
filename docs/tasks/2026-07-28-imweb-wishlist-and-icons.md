@@ -27,4 +27,28 @@ Date: 2026-07-28
   - Reduced-motion emulation reported no heart animation or transform; only the red selected color remained.
 - Live v1 verification found an Imweb detail-title color rule overriding the selected heart. Version `2026-07-28b` adds scoped color/fill precedence.
 - Live responsive verification found Imweb applying `body { zoom: .85 }` in its tablet layout. Version `2026-07-28c` compensates at `768-1099px` so the rendered touch target stays at least `44px`.
-- Pending live asset deployment, Imweb header save, and authenticated-member persistence check.
+
+## Live Result
+
+- Firebase Hosting target `archive-pilates-home` deployed successfully.
+- Live `imweb-wishlist-20260728c.js` SHA-256 matched the committed file.
+- Live favicon:
+  - `HTTP 200`
+  - `48 x 48`
+  - opaque warm-white canvas
+  - source and live SHA-256 matched.
+- Imweb global header:
+  - saved at `2026-07-28T06:19:14Z`
+  - length `8838`
+  - contains only loader version `2026-07-28c`.
+- Public Imweb checks:
+  - 30 native listing controls installed on the all-products route.
+  - 27 KNITIDO custom-card controls installed on the KNITIDO route.
+  - rendered target sizes were `44px` at `320`, `390`, `1100`, and `1440`; `44.1875px` at the Imweb-scaled `768` and `1024` layouts.
+  - no horizontal overflow at the checked widths.
+  - four visible cards completed member-specific state synchronization from their detail markup.
+  - anonymous card and detail clicks opened the native Imweb login dialog without showing a false selected state.
+  - normal motion used a `0.34s` scale animation.
+  - reduced motion used no animation or transform and retained the ARCHIVE PILATES red fill.
+  - both original detail wishlist buttons and all wishlist counts remained hidden.
+- Authenticated-member add/remove persistence was not mutated during this release; the controls call the same Imweb native wishlist endpoint and read server-rendered member state.
