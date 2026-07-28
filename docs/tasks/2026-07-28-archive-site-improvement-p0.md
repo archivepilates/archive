@@ -62,4 +62,39 @@ Rollback is a script update using the matching backed-up `header.html`, `body.ht
 
 ## Live Result
 
-Pending deployment and post-deploy verification.
+- Firebase Hosting site `archive-pilates-home` deployed successfully.
+- Versioned listing asset:
+  - Live URL returned `HTTP 200`.
+  - Local/live SHA-256 matched: `7734d70b095315995b45884319fdb282d27a8a6fa75cef4c100aa1e6b376fd97`.
+- Official home:
+  - `https://archivepilates.com/` returned `HTTP 200`.
+  - Both visible instructor-lesson CTAs read `강사레슨 일정 확인`.
+  - `/offline` retained its `302` redirect to the Imweb offline category.
+- Imweb saved script verification:
+  - Header: exact match, SHA-256 `dff181c485e419e94d37f91ee29327984897e428bd14e5e9c5068603f80d9085`, saved `2026-07-28T10:03:56Z`.
+  - Body: exact match, SHA-256 `a33cfee6fe82dd2baf21430afe0b53e73127c22052ca27e69a1c11a8a19aa0a8`, saved `2026-07-28T09:59:52Z`.
+  - Footer: exact match, SHA-256 `325cc03ebed7d275b04dfecc606d15af08a5fe855b216b345cf50816f958f189`, saved `2026-07-28T09:59:52Z`.
+- Imweb home network check:
+  - All six official-home images returned `HTTP 200` from `archivepilates.com`.
+  - Zero requests used the legacy `archive-pilates.web.app/assets/imweb-home/v2/` path.
+  - Zero global home-image preload links remained.
+- Non-home network check:
+  - The video listing requested none of the six home images.
+  - Zero global home-image preload links remained.
+- Retired routes:
+  - `/studio` moved to `https://archivepilates.com/#philosophy`.
+  - `/15` moved to `https://archivepilates.imweb.me/16?ap_shop=all`.
+  - The early header script applies `noindex,follow` and replacement canonical metadata before the client redirect.
+  - Imweb's vendor-generated sitemap still lists both source paths; route-level search exclusion takes effect when a rendering crawler revisits them.
+- Responsive live checks at `320`, `390`, `768`, and `1440px`:
+  - Sale products: `2 / 2 / 3 / 4` columns.
+  - Video products: `2 / 2 / 2 / 3` columns.
+  - Zero horizontal overflow.
+  - KNITIDO retained its existing brand heading and 27 custom cards without a duplicate generic heading.
+- Detail regression check:
+  - Product routes with an `idx` query do not receive a listing heading or listing-density attribute.
+  - The checked video product retained one `44 x 44px` detail wishlist control at all four widths.
+  - No visible native duplicate wishlist control and no browser console errors were found.
+- Offline product check:
+  - The public card remained `[오프라인] ARCHIVE METHOD 5:1 강사레슨 7월마감`.
+  - `SOLDOUT` remained visible at mobile and desktop widths.
