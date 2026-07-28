@@ -21,6 +21,11 @@ const required = [
       "pricingInquiryForm",
       "pricingInquiryHistoryPanel",
       "최근 발송/메모 보기",
+      "data-core-external-shortcuts",
+      "https://archivepilates.imweb.me/admin",
+      "https://mail.google.com/mail/?authuser=home@archivepilates.com",
+      "https://new.smartplace.naver.com/",
+      "https://arcpilates.studiomate.kr/",
       "data-section=\"staff\"",
       "/site.webmanifest?v=1",
       "/icons/archive-pilates-icon-192.png?v=1",
@@ -98,6 +103,8 @@ const required = [
       "min-height: 156px",
       ".action-disclosure",
       ".parking-delete-button",
+      ".external-tool-grid",
+      ".external-tool-link",
       ".nav-secondary",
       ".admin-nav-open .nav-secondary",
     ],
@@ -111,6 +118,49 @@ for (const item of required) {
   for (const marker of item.markers) {
     if (!content.includes(marker)) {
       failures.push({ file: item.file, label: item.label, missing: marker });
+    }
+  }
+}
+
+const externalToolLinks = [
+  {
+    id: "imweb",
+    href: "https://archivepilates.imweb.me/admin",
+    label: "아임웹 관리자, 새 창에서 열기",
+  },
+  {
+    id: "gmail",
+    href: "https://mail.google.com/mail/?authuser=home@archivepilates.com",
+    label: "공식 이메일, 새 창에서 열기",
+  },
+  {
+    id: "smartplace",
+    href: "https://new.smartplace.naver.com/",
+    label: "스마트플레이스, 새 창에서 열기",
+  },
+  {
+    id: "studiomate",
+    href: "https://arcpilates.studiomate.kr/",
+    label: "StudioMate, 새 창에서 열기",
+  },
+];
+const coreHomeHtml = fs.readFileSync(path.join(repoRoot, "core/index.html"), "utf8");
+for (const tool of externalToolLinks) {
+  const openingTag =
+    coreHomeHtml.match(new RegExp(`<a\\b[^>]*data-external-tool="${tool.id}"[^>]*>`, "i"))?.[0] || "";
+  const requiredAttributes = [
+    `href="${tool.href}"`,
+    'target="_blank"',
+    'rel="noopener noreferrer"',
+    `aria-label="${tool.label}"`,
+  ];
+  for (const attribute of requiredAttributes) {
+    if (!openingTag.includes(attribute)) {
+      failures.push({
+        file: "core/index.html",
+        label: `external operation shortcut: ${tool.id}`,
+        missing: attribute,
+      });
     }
   }
 }
