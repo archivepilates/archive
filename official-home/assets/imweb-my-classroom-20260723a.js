@@ -1,5 +1,5 @@
 (function(){
-  var VERSION="2026-07-28c";
+  var VERSION="2026-07-28d";
   var path=String(location.pathname||"").replace(/\/$/,"");
   if(path!=="/48"&&path!=="/my-classroom")return;
 

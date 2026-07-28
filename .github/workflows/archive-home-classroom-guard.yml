@@ -10,6 +10,7 @@ on:
       - "package.json"
       - "scripts/imweb/imweb-my-classroom-loader.html"
       - "scripts/validate-archive-home-classroom-asset.mjs"
+      - "scripts/validate-archive-home-classroom-release-config.mjs"
       - "scripts/validate-imweb-classroom-loader-fallback.mjs"
       - "scripts/verify-archive-home-classroom-live.mjs"
   push:
@@ -20,6 +21,7 @@ on:
       - "package.json"
       - "scripts/imweb/imweb-my-classroom-loader.html"
       - "scripts/validate-archive-home-classroom-asset.mjs"
+      - "scripts/validate-archive-home-classroom-release-config.mjs"
       - "scripts/validate-imweb-classroom-loader-fallback.mjs"
       - "scripts/verify-archive-home-classroom-live.mjs"
 

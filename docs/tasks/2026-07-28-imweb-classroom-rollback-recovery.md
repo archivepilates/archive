@@ -48,6 +48,9 @@
   - If the asset is missing, blocked, or slow, the existing inline renderer remains available instead of leaving a blank classroom.
 - The loader records separate success and failure markers for live diagnosis.
 - Firebase Hosting now runs:
-  - a predeploy asset and fallback-behavior validation;
-  - a postdeploy live SHA, content-type, cache-policy, and anonymous-gate canary.
+  - a predeploy release-config, asset, and fallback-behavior validation;
+  - a postdeploy live SHA, content-type, cache-policy, Imweb-loader, inline-fallback, and anonymous-gate canary.
 - GitHub Actions runs the same static release checks whenever classroom deployment files change.
+- A 12-second renderer watchdog performs one fallback-only reload if the external asset
+  claims the page but never completes. The reload skips the external asset once so the
+  existing inline renderer can recover the classroom instead of leaving it blank.

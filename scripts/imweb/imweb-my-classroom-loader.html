@@ -1,23 +1,62 @@
-<script data-archive-pilates-my-classroom-v2="2026-07-28c">(function(){
-  var VERSION="2026-07-28c";
+<script data-archive-pilates-my-classroom-v2="2026-07-28d">(function(){
+  var VERSION="2026-07-28d";
+  var RECOVERY_KEY="ap_classroom_asset_skip_once";
   var path=String(location.pathname||"").replace(/\/$/,"");
   if(path!=="/48"&&path!=="/my-classroom")return;
 
-  document.documentElement.setAttribute("data-ap-classroom-v2-loader",VERSION);
+  var root=document.documentElement;
+  try{
+    if(sessionStorage.getItem(RECOVERY_KEY)==="1"){
+      sessionStorage.removeItem(RECOVERY_KEY);
+      root.setAttribute("data-ap-classroom-v2-loader-fallback",VERSION);
+      return;
+    }
+  }catch(e){}
+
+  root.setAttribute("data-ap-classroom-v2-loader",VERSION);
 
   function load(){
     if(document.querySelector("script[data-ap-classroom-v2-asset]"))return;
     var script=document.createElement("script");
-    script.src="https://archivepilates.com/assets/imweb-my-classroom-20260723a.js?v=20260728c";
+    script.src="https://archivepilates.com/assets/imweb-my-classroom-20260723a.js?v=20260728d";
     script.async=false;
     script.setAttribute("data-ap-classroom-v2-asset",VERSION);
     script.onload=function(){
-      document.documentElement.setAttribute("data-ap-classroom-v2-asset-loaded",VERSION);
+      root.setAttribute("data-ap-classroom-v2-asset-loaded",VERSION);
     };
     script.onerror=function(){
-      document.documentElement.setAttribute("data-ap-classroom-v2-asset-error",VERSION);
+      root.setAttribute("data-ap-classroom-v2-asset-error",VERSION);
     };
     (document.head||document.documentElement).appendChild(script);
+
+    setTimeout(function(){
+      if(root.getAttribute("data-ap-classroom-v2-complete")===VERSION)return;
+      var claim=root.getAttribute("data-ap-classroom");
+      if(claim&&claim!==VERSION){
+        root.setAttribute("data-ap-classroom-v2-fallback-active",VERSION);
+        return;
+      }
+      if(claim!==VERSION)return;
+
+      root.setAttribute("data-ap-classroom-v2-runtime-error",VERSION);
+      [
+        "data-ap-classroom",
+        "data-ap-classroom-v2",
+        "data-ap-classroom-v2-ready",
+        "data-ap-classroom-v2-complete"
+      ].forEach(function(name){root.removeAttribute(name)});
+
+      try{
+        sessionStorage.setItem(RECOVERY_KEY,"1");
+        if(sessionStorage.getItem(RECOVERY_KEY)==="1"){
+          root.setAttribute("data-ap-classroom-v2-recovery-reload",VERSION);
+          location.reload();
+          return;
+        }
+      }catch(e){}
+
+      root.setAttribute("data-ap-classroom-v2-recovery-unavailable",VERSION);
+    },12000);
   }
 
   load();
