@@ -1,0 +1,35 @@
+<script data-archive-pilates-wishlist-loader="2026-07-28a">
+(function () {
+  "use strict";
+
+  var VERSION = "2026-07-28a";
+  var ORIGIN = "https://archivepilates.com";
+
+  function addIcon(rel, href, sizes, type) {
+    var link = document.createElement("link");
+    link.rel = rel;
+    link.href = href;
+    if (sizes) link.sizes = sizes;
+    if (type) link.type = type;
+    link.setAttribute("data-archive-pilates-icon", VERSION);
+    document.head.appendChild(link);
+  }
+
+  Array.prototype.slice.call(document.querySelectorAll("link[data-archive-pilates-icon]")).forEach(function (link) {
+    link.remove();
+  });
+  addIcon("shortcut icon", ORIGIN + "/favicon.ico?v=" + VERSION);
+  addIcon("icon", ORIGIN + "/favicon-48x48.png?v=" + VERSION, "48x48", "image/png");
+  addIcon("icon", ORIGIN + "/icon-192.png?v=" + VERSION, "192x192", "image/png");
+  addIcon("apple-touch-icon", ORIGIN + "/apple-touch-icon.png?v=" + VERSION, "180x180", "image/png");
+  addIcon("apple-touch-icon-precomposed", ORIGIN + "/apple-touch-icon-precomposed.png?v=" + VERSION, "152x152", "image/png");
+
+  if (!document.querySelector('script[data-archive-pilates-wishlist-asset="' + VERSION + '"]')) {
+    var script = document.createElement("script");
+    script.src = ORIGIN + "/assets/imweb-wishlist-20260728a.js?v=" + VERSION;
+    script.defer = true;
+    script.setAttribute("data-archive-pilates-wishlist-asset", VERSION);
+    document.head.appendChild(script);
+  }
+})();
+</script>
