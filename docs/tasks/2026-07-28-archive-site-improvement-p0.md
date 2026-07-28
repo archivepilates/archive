@@ -91,6 +91,7 @@ Rollback is a script update using the matching backed-up `header.html`, `body.ht
   - Video products: `2 / 2 / 2 / 3` columns.
   - Zero horizontal overflow.
   - KNITIDO retained its existing brand heading and 27 custom cards without a duplicate generic heading.
+  - At `390px`, the relative header scrolled out of view before the video subnavigation settled at `top: 0`; their rectangles did not overlap.
 - Detail regression check:
   - Product routes with an `idx` query do not receive a listing heading or listing-density attribute.
   - The checked video product retained one `44 x 44px` detail wishlist control at all four widths.
