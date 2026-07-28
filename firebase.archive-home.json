@@ -1,10 +1,20 @@
 {
   "hosting": {
     "site": "archive-pilates-home",
+    "predeploy": [
+      "node scripts/validate-archive-home-classroom-asset.mjs"
+    ],
     "public": "official-home",
     "cleanUrls": true,
     "trailingSlash": false,
     "headers": [
+      {
+        "source": "/assets/imweb-my-classroom-20260723a.js",
+        "headers": [
+          { "key": "Cache-Control", "value": "no-cache, no-store, must-revalidate" },
+          { "key": "Content-Type", "value": "application/javascript; charset=utf-8" }
+        ]
+      },
       {
         "source": "/assets/**",
         "headers": [
