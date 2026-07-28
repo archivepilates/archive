@@ -146,6 +146,34 @@ export const ALIMTALK_TEMPLATE_TARGET_RULES: Partial<Record<AlimtalkCandidateTyp
       "대량 발송 또는 홍보성 일괄 발송",
     ],
   },
+  recommended_meal_survey: {
+    type: "recommended_meal_survey",
+    templateCode: ALIMTALK_TEMPLATES.recommended_meal_survey.code,
+    templateLabel: ALIMTALK_TEMPLATES.recommended_meal_survey.label,
+    sourceDatePolicy: "manual",
+    requiresApprovedTemplate: true,
+    requiresMemberPhone: true,
+    buttonUrlRules: [
+      {
+        label: "추천식단 설문 작성 버튼",
+        template: SHORT_LINK_BUTTON_URL_TEMPLATE,
+        maxLength: SOLAPI_BUTTON_URL_MAX_LENGTH,
+      },
+    ],
+    targetRules: [
+      "ARCHIVE CORE에서 운영자가 회원 전화번호와 이름을 확인한 단건 발송",
+      "memberProfiles 또는 memberContactIndex의 전화번호 기준 회원 매칭",
+      "추천식단 전용 요청과 14일 유효 짧은 링크가 있음",
+      "최근 30일 내 같은 회원에게 동일 설문 발송 이력 없음",
+    ],
+    exclusionRules: [
+      "회원 전화번호 또는 회원카드 매칭 없음",
+      "같은 전화번호에 서로 다른 이름의 회원이 있어 운영자 확인 필요",
+      "추천식단 설문 짧은 링크 없음",
+      "최근 30일 내 같은 회원에게 동일 설문 발송 이력 있음",
+      "SOLAPI 미승인 템플릿",
+    ],
+  },
   private_survey: {
     type: "private_survey",
     templateCode: ALIMTALK_TEMPLATES.private_survey.code,

@@ -48,6 +48,7 @@
             </button>
             <div class="quick-action-row" aria-label="빠른 실행">
               <a class="quick-action" href="#pricingInquiry">수강료 안내</a>
+              <a class="quick-action" href="#recommendedMealProgram">추천식단 설문</a>
               <a class="quick-action" href="#renewalPipeline">재등록 관리</a>
               <a class="quick-action" href="#parkingTools">주차등록</a>
               <a class="quick-action" href="./private/">프라이빗 진행</a>
@@ -283,6 +284,56 @@
               <div class="empty-state">최근 발송 이력을 불러오면 여기에 표시됩니다.</div>
             </div>
           </div>
+          </div>
+        </details>
+
+        <details class="panel action-disclosure" id="recommendedMealProgram">
+          <summary>
+            <span><strong>추천식단 프로그램</strong><small>회원 확인 후 생활·식습관 설문 알림톡 발송</small></span>
+            <span class="pill">단건 발송</span>
+          </summary>
+          <div class="disclosure-body">
+            <form class="action-form" id="recommendedMealProgramForm">
+              <label>
+                <span>회원 휴대폰 번호</span>
+                <input id="recommendedMealPhone" name="phone" type="tel" inputmode="numeric" autocomplete="tel" placeholder="010-0000-0000" />
+              </label>
+              <label>
+                <span>회원명</span>
+                <input id="recommendedMealName" name="memberName" type="text" autocomplete="name" placeholder="동일 번호 구분을 위해 입력 권장" />
+              </label>
+              <label class="wide">
+                <span>내부 메모</span>
+                <textarea id="recommendedMealNote" name="note" rows="2" placeholder="회원 목표나 상담 배경을 적습니다. 설문과 알림톡 본문에는 포함되지 않습니다."></textarea>
+              </label>
+              <div class="action-form-footer">
+                <button class="primary-action" id="recommendedMealSendButton" type="submit">추천식단 설문 발송</button>
+                <button
+                  class="secondary-action"
+                  id="recommendedMealHistoryToggle"
+                  type="button"
+                  aria-expanded="false"
+                  aria-controls="recommendedMealHistoryPanel"
+                >
+                  최근 요청 보기
+                </button>
+                <p class="form-status" id="recommendedMealStatus" role="status" aria-live="polite">
+                  회원카드와 최신 InBody 기록을 확인한 뒤 14일 유효 설문 링크를 발송합니다.
+                </p>
+              </div>
+            </form>
+            <div class="pricing-history-panel" id="recommendedMealHistoryPanel" hidden>
+              <div class="pricing-history-header">
+                <div>
+                  <strong>최근 추천식단 요청</strong>
+                  <p>발송, 설문 제출, InBody 확인 상태만 표시합니다. 민감한 설문 답변은 여기에 노출하지 않습니다.</p>
+                </div>
+                <span class="pill" id="recommendedMealHistoryCount">0건</span>
+              </div>
+              <div class="pricing-history-list" id="recommendedMealHistoryList">
+                <div class="empty-state">최근 추천식단 요청을 불러오면 여기에 표시됩니다.</div>
+              </div>
+            </div>
           </div>
         </details>
       </main>

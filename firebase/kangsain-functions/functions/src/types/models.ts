@@ -481,6 +481,7 @@ export type AlimtalkCandidateType =
   | "private_ticket_expiring"
   | "long_absence"
   | "pricing_info"
+  | "recommended_meal_survey"
   | "manual_review";
 export type AlimtalkCandidateStatus =
   | "candidate"

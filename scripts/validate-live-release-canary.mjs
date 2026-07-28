@@ -45,6 +45,16 @@ if (selectedSurfaces.includes("archivein")) {
       "surveyForm",
       "api/privateSurveySubmit",
     ]),
+    textCheck("recommended-meal-survey-custom-domain", "https://in.archivepilates.com/recommendedMealSurvey/", [
+      "ARCHIVE PILATES 추천식단 프로그램",
+      "mealSurveyForm",
+      "api/recommendedMealSurvey",
+    ]),
+    textCheck(
+      "recommended-meal-survey-webapp-path",
+      "https://archive-pilates.web.app/archivein/recommendedMealSurvey/",
+      ["ARCHIVE PILATES 추천식단 프로그램", "mealSurveyForm", "api/recommendedMealSurvey"],
+    ),
     textCheck("method-breathing-cue-card-custom-domain", "https://in.archivepilates.com/method/breathing-260627/", [
       "호흡 큐카드 | ARCHIVE METHOD",
       "ARCHIVE METHOD VIDEO",
@@ -102,6 +112,8 @@ if (selectedSurfaces.includes("core")) {
       "수강료 문의",
       "pricingInquiryForm",
       "pricingInquiryHistoryPanel",
+      "recommendedMealProgramForm",
+      "recommendedMealHistoryPanel",
     ]),
     textCheck("core-home-actions-webapp-path", "https://archive-pilates.web.app/core/", [
       "오늘 처리할 일",
@@ -111,9 +123,13 @@ if (selectedSurfaces.includes("core")) {
       "수강료 문의",
       "pricingInquiryForm",
       "pricingInquiryHistoryPanel",
+      "recommendedMealProgramForm",
+      "recommendedMealHistoryPanel",
     ]),
     textCheck("core-app-bundle-custom-domain", "https://core.archivepilates.com/assets/app.js", [
       "pricingInquiryAlimtalkRequests",
+      "recommendedMealProgramRequests",
+      "operatorSendRecommendedMealProgramAlimtalk",
       "pendingPrivateProgressRows",
       "privateInstructorPendingList",
       "commandQueueStatus",
@@ -129,6 +145,8 @@ if (selectedSurfaces.includes("core")) {
     ]),
     textCheck("core-app-bundle-webapp-path", "https://archive-pilates.web.app/core/assets/app.js", [
       "pricingInquiryAlimtalkRequests",
+      "recommendedMealProgramRequests",
+      "operatorSendRecommendedMealProgramAlimtalk",
       "pendingPrivateProgressRows",
       "privateInstructorPendingList",
       "commandQueueStatus",

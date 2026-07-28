@@ -78,6 +78,7 @@ function dedupeScope(candidate: AlimtalkCandidateDoc): Record<string, string> {
   if (type === "group_survey") return { memberId: candidate.memberId };
   if (type === "long_absence") return { memberId: candidate.memberId };
   if (type === "pricing_info") return { inquiryPhone: normalizePhone(candidate.memberPhone) };
+  if (type === "recommended_meal_survey") return { memberPhone: normalizePhone(candidate.memberPhone) };
   if (type === "instructor_lesson_material") {
     return {
       lessonDate: String(payload.lessonDate || payload.classDate || payload.sourceDate || candidate.sourceDate || ""),

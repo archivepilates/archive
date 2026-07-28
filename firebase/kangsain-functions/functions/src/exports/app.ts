@@ -30,6 +30,7 @@ import {
   removeParkingVehicleHandler,
   runParkingAutoApplyNowHandler,
 } from "../parking/parkingOperations";
+import { recommendedMealSurveyApiHandler } from "../mealPlan/recommendedMealSurvey";
 import { processParkingDiscountJobSnapshot } from "../parking/processParkingDiscountJob";
 import { callableOptions, publicRequestOptions } from "../runtime/functionOptions";
 import { requireStaff } from "../security/authGuards";
@@ -206,6 +207,8 @@ export const instructorApplicantEvaluationApi = onRequest(
   publicRequestOptions,
   instructorApplicantEvaluationApiHandler,
 );
+
+export const recommendedMealSurveyApi = onRequest(publicRequestOptions, recommendedMealSurveyApiHandler);
 
 export const processParkingDiscountJob = onDocumentCreated(parkingDiscountJobOptions, async (event) => {
   const snap = event.data;

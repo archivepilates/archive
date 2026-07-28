@@ -29,7 +29,8 @@ export type SendableAlimtalkCandidateType =
   | "private_count_low"
   | "private_ticket_expiring"
   | "long_absence"
-  | "pricing_info";
+  | "pricing_info"
+  | "recommended_meal_survey";
 
 export const ALIMTALK_TEMPLATES = {
   reservation_open: {
@@ -112,6 +113,12 @@ export const ALIMTALK_TEMPLATES = {
     label: "회원용_수강료 안내 링크 v1",
     status: "approved",
   },
+  recommended_meal_survey: {
+    code:
+      process.env.RECOMMENDED_MEAL_ALIMTALK_TEMPLATE_ID || "KA01TP260728111926523p2JzzTgHsS8",
+    label: "ARCHIVE 추천식단 프로그램 설문 안내 v1",
+    status: "pending",
+  },
 } as const;
 
 export const ALIMTALK_TEMPLATE_CHANNEL_IDS: Readonly<Record<string, string>> = {
@@ -133,6 +140,7 @@ export const CANDIDATE_TEMPLATE_CODES: Record<SendableAlimtalkCandidateType, str
   private_ticket_expiring: ALIMTALK_TEMPLATES.private_ticket_expiring.code,
   long_absence: ALIMTALK_TEMPLATES.long_absence.code,
   pricing_info: ALIMTALK_TEMPLATES.pricing_info.code,
+  recommended_meal_survey: ALIMTALK_TEMPLATES.recommended_meal_survey.code,
 };
 
 export const STATIC_APPROVED_ALIMTALK_TEMPLATE_CODES: ReadonlySet<string> = new Set(
@@ -213,6 +221,14 @@ export const ALIMTALK_DEDUPE_POLICIES_BY_TEMPLATE_CODE: Record<string, AlimtalkD
     label: "수강료 문의 안내 7일",
     windowDays: 7,
   },
+  ...(ALIMTALK_TEMPLATES.recommended_meal_survey.code
+    ? {
+        [ALIMTALK_TEMPLATES.recommended_meal_survey.code]: {
+          label: "추천식단 프로그램 설문 30일",
+          windowDays: 30,
+        },
+      }
+    : {}),
 };
 
 export function alimtalkDedupePolicy(templateCode: string): AlimtalkDedupePolicy {

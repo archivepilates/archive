@@ -178,6 +178,16 @@ service cloud.firestore {
       allow write: if false;
     }
 
+    match /recommendedMealProgramRequests/{requestId} {
+      allow read: if isManager() && sameStudio(resource.data.studioId);
+      allow write: if false;
+    }
+
+    match /recommendedMealProgramResponses/{responseId} {
+      allow read: if isManager() && sameStudio(resource.data.studioId);
+      allow write: if false;
+    }
+
     match /privateSurveyIntakes/{intakeId} {
       allow read: if false;
       allow create: if

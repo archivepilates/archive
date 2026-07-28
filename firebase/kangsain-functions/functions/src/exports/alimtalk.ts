@@ -4,6 +4,7 @@ import { onSchedule } from "firebase-functions/v2/scheduler";
 import { approveAlimtalkBatchHandler } from "../alimtalk/approvalGate";
 import { processAlimtalkQueue } from "../alimtalk/processAlimtalkQueue";
 import { operatorSendPricingInquiryAlimtalkHandler } from "../alimtalk/pricingInquiryAlimtalk";
+import { operatorSendRecommendedMealProgramAlimtalkHandler } from "../mealPlan/recommendedMealAlimtalk";
 import { queueDailyAlimtalkCandidates, queueReservationOpenAlimtalkCandidates } from "../alimtalk/queueDailyAlimtalk";
 import { sendDailyAlimtalkReport } from "../alimtalk/sendDailyAlimtalkReport";
 import { syncAlimtalkTemplateStatuses } from "../alimtalk/templateStatus";
@@ -104,6 +105,16 @@ export const operatorSendPricingInquiryAlimtalk = onCall(callableOptions, async 
     const staff = await requireStaff(request);
     requireManager(staff);
     return await operatorSendPricingInquiryAlimtalkHandler(request, staff);
+  } catch (err) {
+    throw toHttpsError(err);
+  }
+});
+
+export const operatorSendRecommendedMealProgramAlimtalk = onCall(callableOptions, async (request) => {
+  try {
+    const staff = await requireStaff(request);
+    requireManager(staff);
+    return await operatorSendRecommendedMealProgramAlimtalkHandler(request, staff);
   } catch (err) {
     throw toHttpsError(err);
   }

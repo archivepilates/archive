@@ -30,6 +30,8 @@ export async function autoSendabilityIssue(candidate: AlimtalkCandidateDoc, toda
     return "예약주차 변수 없음";
   }
   if (candidate.type === "pricing_info" && !candidate.payload?.pricingUrl) return "수강료 안내 링크 없음";
+  if (candidate.type === "recommended_meal_survey" && !candidate.payload?.shortLinkId)
+    return "추천식단 설문 짧은 링크 없음";
   if (rule?.requiresManagementNumber) {
     const rawManagementNumber = String(
       candidate.payload?.managementNumber || candidate.payload?.materialNumber || candidate.payload?.archiveMethodId || "",
@@ -54,6 +56,8 @@ export async function autoSendabilityIssue(candidate: AlimtalkCandidateDoc, toda
 function requiredPayloadIssue(candidate: AlimtalkCandidateDoc): string {
   const payload = candidate.payload || {};
   if (candidate.type === "onsite_welcome" && !payload.shortLinkId) return "회원가입서 짧은 링크 없음";
+  if (candidate.type === "recommended_meal_survey" && !payload.shortLinkId)
+    return "추천식단 설문 짧은 링크 없음";
   if (candidate.type === "private_survey" || candidate.type === "group_survey") {
     if (!(payload.surveyId || payload.responseId) || !payload.accessToken) return "설문 링크 변수 없음";
   }

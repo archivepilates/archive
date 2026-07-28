@@ -69,6 +69,46 @@ const guardGroups = [
     ],
   },
   {
+    id: "recommended-meal-program",
+    reason: "추천식단 설문, API, CORE 단건 발송, SOLAPI 짧은 링크 연결이 다른 배포에서 빠지는 것을 막습니다.",
+    files: [
+      {
+        file: "archivein/recommendedMealSurvey/index.html",
+        markers: [
+          "ARCHIVE PILATES 추천식단 프로그램",
+          "id=\"mealSurveyForm\"",
+          "api/recommendedMealSurvey",
+          "설문 제출이 완료되었습니다.",
+        ],
+      },
+      {
+        file: "firebase.json",
+        markers: [
+          "\"source\": \"/archivein/api/recommendedMealSurvey\"",
+          "\"source\": \"/archivein/recommendedMealSurvey/**\"",
+          "\"source\": \"/api/recommendedMealSurvey\"",
+          "\"source\": \"/recommendedMealSurvey/**\"",
+        ],
+      },
+      {
+        file: "firebase/kangsain-functions/functions/src/mealPlan/recommendedMealAlimtalk.ts",
+        markers: [
+          "operatorSendRecommendedMealProgramAlimtalkHandler",
+          "RECOMMENDED_MEAL_REQUEST_COLLECTION",
+          "recommended_meal_survey",
+        ],
+      },
+      {
+        file: "firebase/kangsain-functions/functions/src/mealPlan/recommendedMealSurvey.ts",
+        markers: [
+          "recommendedMealSurveyApiHandler",
+          "recommendedMealProgramResponses",
+          "review_required",
+        ],
+      },
+    ],
+  },
+  {
     id: "archive-method-cue-card-video-cta",
     reason: "ARCHIVE METHOD 강사레슨 큐카드의 수업촬영영상 시청용 아임웹 가입 CTA가 main 승격이나 Hosting 배포에서 빠지는 것을 막습니다.",
     files: [
@@ -217,6 +257,9 @@ const guardGroups = [
           "pricingInquiryForm",
           "pricingInquiryHistoryPanel",
           "최근 발송/메모 보기",
+          "recommendedMealProgramForm",
+          "recommendedMealHistoryPanel",
+          "추천식단 프로그램",
           "data-core-external-shortcuts",
           "https://archivepilates.imweb.me/admin",
           "https://mail.google.com/mail/?authuser=home@archivepilates.com",
@@ -234,6 +277,8 @@ const guardGroups = [
           "pricingInquiryDisplayPhone",
           "pricingInquiryHistoryPanel",
           "operatorSendPricingInquiryAlimtalk",
+          "recommendedMealProgramRequests",
+          "operatorSendRecommendedMealProgramAlimtalk",
           "commandQueueStatus",
           "renewalCandidateRows",
           "renderRenewalPipeline",

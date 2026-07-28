@@ -20,6 +20,7 @@ const state = {
   onsiteWelcomeRequests: [],
   memberSignupContracts: [],
   pricingInquiryAlimtalkRequests: [],
+  recommendedMealProgramRequests: [],
   parkingVehicles: [],
   parkingJobs: [],
   parkingConfig: null,
@@ -61,6 +62,12 @@ const COMMAND_ITEMS = [
     detail: "문의 전화번호 입력 후 승인 템플릿으로 즉시 발송",
     href: "#pricingInquiry",
     keywords: "수강료 가격 문의 알림톡 발송 상담",
+  },
+  {
+    title: "추천식단 설문 발송",
+    detail: "회원카드와 InBody 기록 확인 후 생활·식습관 설문 발송",
+    href: "#recommendedMealProgram",
+    keywords: "추천식단 식단 다이어트 설문 인바디 alimtalk",
   },
   {
     title: "재등록 관리",
@@ -2214,6 +2221,73 @@ function togglePricingInquiryHistory() {
   if (nextOpen) renderPricingInquiryRecentList();
 }
 
+function setRecommendedMealStatus(message, tone = "") {
+  const element = qs("recommendedMealStatus");
+  if (!element) return;
+  element.textContent = message;
+  element.className = `form-status ${tone}`.trim();
+}
+
+function recommendedMealRecentTime(item) {
+  return item.submittedAt || item.completedAt || item.updatedAt || item.createdAt;
+}
+
+function renderRecommendedMealRecentList() {
+  const list = qs("recommendedMealHistoryList");
+  const count = qs("recommendedMealHistoryCount");
+  if (!list) return;
+  const items = [...(state.recommendedMealProgramRequests || [])]
+    .sort((a, b) => timestampMs(recommendedMealRecentTime(b)) - timestampMs(recommendedMealRecentTime(a)))
+    .slice(0, 20);
+  if (count) count.textContent = `${items.length}건`;
+  if (!items.length) {
+    list.innerHTML = `<div class="empty-state">최근 추천식단 요청이 없습니다.</div>`;
+    return;
+  }
+  list.innerHTML = items
+    .map((item) => {
+      const status = String(item.status || "pending");
+      const inbody = item.inbody?.status === "available" ? "InBody 연결" : "InBody 확인 필요";
+      const recommendation =
+        item.recommendationStatus === "review_required"
+          ? "운영자 검토 필요"
+          : item.recommendationStatus === "ready_for_draft"
+            ? "식단 초안 준비 가능"
+            : "설문 대기";
+      const meta = [
+        formatPhoneNumber(item.memberPhone || ""),
+        formatDate(recommendedMealRecentTime(item)),
+        inbody,
+        recommendation,
+      ]
+        .filter(Boolean)
+        .join(" · ");
+      return `
+        <div class="status-row">
+          <div>
+            <strong>${escapeHtml(item.memberName || "회원")}</strong>
+            <p class="meta-line">${escapeHtml(meta)}</p>
+            ${item.note ? `<p class="note-line">메모: ${escapeHtml(item.note)}</p>` : ""}
+            ${item.lastError ? `<p class="note-line">확인: ${escapeHtml(item.lastError)}</p>` : ""}
+          </div>
+          ${pill(status)}
+        </div>
+      `;
+    })
+    .join("");
+}
+
+function toggleRecommendedMealHistory() {
+  const panel = qs("recommendedMealHistoryPanel");
+  const button = qs("recommendedMealHistoryToggle");
+  if (!panel || !button) return;
+  const nextOpen = panel.hidden;
+  panel.hidden = !nextOpen;
+  button.setAttribute("aria-expanded", String(nextOpen));
+  button.textContent = nextOpen ? "최근 요청 닫기" : "최근 요청 보기";
+  if (nextOpen) renderRecommendedMealRecentList();
+}
+
 function setParkingStatus(message, tone = "") {
   const element = qs("parkingStatus");
   if (!element) return;
@@ -2531,6 +2605,71 @@ async function handlePricingInquiryAlimtalkSubmit(event) {
     if (button) {
       button.disabled = false;
       button.textContent = "수강료 안내 발송";
+    }
+  }
+}
+
+async function handleRecommendedMealProgramSubmit(event) {
+  event.preventDefault();
+  const phone = normalizePhone(qs("recommendedMealPhone")?.value || "");
+  const memberName = String(qs("recommendedMealName")?.value || "").trim();
+  const note = String(qs("recommendedMealNote")?.value || "").trim();
+  const button = qs("recommendedMealSendButton");
+  if (!/^010\d{8}$/.test(phone)) {
+    setRecommendedMealStatus("회원 휴대폰 번호를 010으로 시작하는 11자리로 입력하세요.", "danger");
+    return;
+  }
+  if (button) {
+    button.disabled = true;
+    button.textContent = "회원·InBody 확인 중";
+  }
+  setRecommendedMealStatus("회원카드, 최신 InBody 기록, 템플릿 승인과 중복 이력을 확인하고 있습니다.", "warn");
+  try {
+    const runtime = await initFirebase();
+    const user = await waitForAuth(runtime);
+    if (!user) {
+      showLoginGate("추천식단 설문 발송은 운영자 로그인이 필요합니다.");
+      setRecommendedMealStatus("운영자 로그인 후 다시 시도하세요.", "danger");
+      return;
+    }
+    const sendRecommendedMeal = runtime.httpsCallable(
+      runtime.functionsClient,
+      "operatorSendRecommendedMealProgramAlimtalk",
+    );
+    const result = await sendRecommendedMeal({ phone, memberName, note });
+    const data = result?.data || {};
+    const status = String(data.status || "");
+    const detail = String(data.message || "");
+    if (status === "sent") {
+      setRecommendedMealStatus("추천식단 프로그램 설문 알림톡을 발송했습니다.", "good");
+      qs("recommendedMealPhone").value = "";
+      qs("recommendedMealName").value = "";
+      qs("recommendedMealNote").value = "";
+      await refresh();
+      return;
+    }
+    if (status === "template_pending") {
+      setRecommendedMealStatus(
+        "설문 링크 준비는 완료됐지만 SOLAPI 템플릿이 심사 중이라 실제 발송하지 않았습니다.",
+        "warn",
+      );
+      await refresh();
+      return;
+    }
+    if (status === "skipped") {
+      setRecommendedMealStatus(detail || "최근 30일 동일 설문 발송 이력이 있어 중복 발송을 차단했습니다.", "warn");
+      await refresh();
+      return;
+    }
+    setRecommendedMealStatus(detail || "추천식단 설문 발송을 완료하지 못했습니다.", "danger");
+    await refresh();
+  } catch (error) {
+    if (isPermissionDenied(error)) showLoginGate("추천식단 설문 발송은 운영자 권한이 필요합니다.");
+    setRecommendedMealStatus(error?.message || "추천식단 설문 준비 중 오류가 발생했습니다.", "danger");
+  } finally {
+    if (button) {
+      button.disabled = false;
+      button.textContent = "추천식단 설문 발송";
     }
   }
 }
@@ -4604,6 +4743,7 @@ function renderFallback(error, options = {}) {
   state.onsiteWelcomeRequests = [];
   state.memberSignupContracts = [];
   state.pricingInquiryAlimtalkRequests = [];
+  state.recommendedMealProgramRequests = [];
   state.parkingVehicles = [];
   state.parkingJobs = [];
   state.parkingConfig = null;
@@ -4611,6 +4751,7 @@ function renderFallback(error, options = {}) {
   state.staffHrCards = [];
   state.staffEvaluationSubmissions = [];
   renderPricingInquiryRecentList();
+  renderRecommendedMealRecentList();
   renderMessages([], []);
   renderStaffHr();
   renderLessons([], [], []);
@@ -4671,6 +4812,7 @@ async function refresh() {
       onsiteWelcomeRequests,
       memberSignupContracts,
       pricingInquiryAlimtalkRequests,
+      recommendedMealProgramRequests,
       memberDetail,
       businessMembers,
       privateRequests,
@@ -4732,6 +4874,13 @@ async function refresh() {
             [],
           )
         : Promise.resolve([]),
+      shouldLoadHome
+        ? safeRead(
+            "recommendedMealProgramRequests",
+            () => getOptionalCollectionBy(db, runtime, "recommendedMealProgramRequests", "updatedAt", 20),
+            [],
+          )
+        : Promise.resolve([]),
       shouldLoadMemberDetail ? safeRead("memberDetail", () => loadMemberDetail(runtime, memberDetailId()), null) : Promise.resolve(null),
       shouldLoadBusiness
         ? safeRead("businessMembers", () => getRecentCollectionBy(db, runtime, "member360Cards", "totalRevenue", 8), [])
@@ -4784,6 +4933,7 @@ async function refresh() {
     state.onsiteWelcomeRequests = studioItems(onsiteWelcomeRequests);
     state.memberSignupContracts = studioItems(memberSignupContracts);
     state.pricingInquiryAlimtalkRequests = studioItems(pricingInquiryAlimtalkRequests);
+    state.recommendedMealProgramRequests = studioItems(recommendedMealProgramRequests);
     state.memberDetail = memberDetail;
     state.businessMembers = businessMembers;
     state.privateRequests = privateRequests;
@@ -4810,6 +4960,7 @@ async function refresh() {
     renderHomeDecisions();
     renderParkingDashboard();
     renderPricingInquiryRecentList();
+    renderRecommendedMealRecentList();
     renderMemberDetail(memberDetail);
     renderPrivate(privateRequests, privateRecords, privateLedgerEntries, alimtalkCandidates, alimtalkSends);
     renderLessons(lessonOccurrences, bookings, [...deletedClassLogs, ...deletedLessons]);
@@ -4835,6 +4986,8 @@ window.addEventListener("hashchange", revealHashTarget);
 qs("refreshButton")?.addEventListener("click", refresh);
 qs("pricingInquiryForm")?.addEventListener("submit", handlePricingInquiryAlimtalkSubmit);
 qs("pricingInquiryHistoryToggle")?.addEventListener("click", togglePricingInquiryHistory);
+qs("recommendedMealProgramForm")?.addEventListener("submit", handleRecommendedMealProgramSubmit);
+qs("recommendedMealHistoryToggle")?.addEventListener("click", toggleRecommendedMealHistory);
 qs("parkingRegistrationForm")?.addEventListener("submit", handleParkingVehicleSubmit);
 qs("parkingOwnerType")?.addEventListener("change", syncParkingVisitorFields);
 qs("parkingAutoApplyButton")?.addEventListener("click", handleParkingAutoApplyClick);

@@ -286,12 +286,23 @@
           }
         },
         {
+          "source": "/archivein/api/recommendedMealSurvey",
+          "function": {
+            "functionId": "recommendedMealSurveyApi",
+            "region": "asia-northeast3"
+          }
+        },
+        {
           "source": "/archivein/private-chart/**",
           "destination": "/archivein/private-chart/index.html"
         },
         {
           "source": "/archivein/privateSurvey/**",
           "destination": "/archivein/privateSurvey/index.html"
+        },
+        {
+          "source": "/archivein/recommendedMealSurvey/**",
+          "destination": "/archivein/recommendedMealSurvey/index.html"
         },
         {
           "source": "/core/**",
@@ -456,6 +467,12 @@
           ]
         },
         {
+          "source": "/recommendedMealSurvey/**",
+          "headers": [
+            { "key": "Cache-Control", "value": "no-cache, no-store, must-revalidate" }
+          ]
+        },
+        {
           "source": "/instructor-evaluation/**",
           "headers": [
             { "key": "Cache-Control", "value": "no-cache, no-store, must-revalidate" }
@@ -541,12 +558,23 @@
           }
         },
         {
+          "source": "/api/recommendedMealSurvey",
+          "function": {
+            "functionId": "recommendedMealSurveyApi",
+            "region": "asia-northeast3"
+          }
+        },
+        {
           "source": "/private-chart/**",
           "destination": "/private-chart/index.html"
         },
         {
           "source": "/privateSurvey/**",
           "destination": "/privateSurvey/index.html"
+        },
+        {
+          "source": "/recommendedMealSurvey/**",
+          "destination": "/recommendedMealSurvey/index.html"
         },
         {
           "source": "/api/inbody/webhook",
