@@ -5,7 +5,8 @@ Date: 2026-07-28
 ## Scope
 
 - Use the official ARCHIVE PILATES symbol for both the official homepage and Imweb icons.
-- Place an Imweb native wishlist control on product cards and next to the product-detail title.
+- Place one Imweb native wishlist control next to the product-detail title.
+- Keep product-card and thumbnail areas free of wishlist controls.
 - Keep wishlist counts hidden.
 - Preserve the Imweb member login and native wishlist data flow.
 
@@ -28,7 +29,9 @@ Date: 2026-07-28
 - Live v1 verification found an Imweb detail-title color rule overriding the selected heart. Version `2026-07-28b` adds scoped color/fill precedence.
 - Live responsive verification found Imweb applying `body { zoom: .85 }` in its tablet layout. Version `2026-07-28c` compensates at `768-1099px` so the rendered touch target stays at least `44px`.
 
-## Live Result
+## Initial Live Result
+
+The listing-card controls below describe the superseded `2026-07-28c` rollout and are retained as deployment history.
 
 - Firebase Hosting target `archive-pilates-home` deployed successfully.
 - Live `imweb-wishlist-20260728c.js` SHA-256 matched the committed file.
@@ -58,3 +61,14 @@ Date: 2026-07-28
 - Product-card hearts were removed after visual review showed the image area felt crowded.
 - Version `2026-07-28d` keeps one native wishlist control beside the product-detail title only.
 - The cleanup also unwraps any custom KNITIDO card shells left by an older in-page version.
+- Firebase Hosting target `archive-pilates-home` deployed the new asset successfully, and the live SHA-256 matched the committed file.
+- The Imweb global header was saved at `2026-07-28T06:54:31Z` and contains only wishlist loader version `2026-07-28d`.
+- Public listing verification:
+  - all-products, KNITIDO, online-class, and offline-class routes showed zero wishlist controls.
+  - the KNITIDO route retained all 27 custom product cards with no leftover wrapper shells.
+- Public detail verification:
+  - KNITIDO product `idx=78` and online-class product `idx=80` each showed exactly one title-adjacent wishlist control and no card control.
+  - the original two Imweb detail controls and wishlist counts remained hidden.
+  - anonymous detail clicks opened the native Imweb login dialog.
+  - the rendered touch target stayed at least `44px` at `320`, `390`, `768`, `1024`, and `1440` widths with no horizontal overflow or title clipping.
+  - reduced-motion mode kept the ARCHIVE PILATES red selected state while disabling scale animation and transform.
