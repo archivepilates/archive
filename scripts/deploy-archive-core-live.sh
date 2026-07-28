@@ -10,6 +10,7 @@ echo "== ARCHIVE CORE live deploy: guard =="
 node scripts/validate-release-branch-state.mjs --require-origin-main
 npm run validate:live-release-rollback-guards
 npm run validate:archive-core-hosting
+npm run verify:archive-core-responsive
 node scripts/write-release-manifest.mjs --surface core --surface archivein
 
 echo "== ARCHIVE CORE live deploy: hosting dry-run =="
@@ -49,12 +50,20 @@ grep -q "memberDetailPrimaryAction" "$TMP_DIR/member-detail.html"
 grep -q "memberDetailTicketsList" "$TMP_DIR/member-detail.html"
 grep -q "lessonsTodayList" "$TMP_DIR/lessons.html"
 grep -q "lessonsDeletedList" "$TMP_DIR/lessons.html"
+grep -q "connectionLabel" "$TMP_DIR/lessons.html"
 grep -q "privateInstructorPendingList" "$TMP_DIR/private.html"
 grep -q "privateProgressList" "$TMP_DIR/private.html"
 grep -q "messagesDecisionList" "$TMP_DIR/messages.html"
 grep -q "messagesSendList" "$TMP_DIR/messages.html"
 grep -q "staffHrList" "$TMP_DIR/staff.html"
 grep -q "automationHealthList" "$TMP_DIR/automation.html"
+grep -q "CORE_RUNTIME_CONTRACT_VERSION" "$TMP_DIR/app.js"
+grep -q "renderReadHealth" "$TMP_DIR/app.js"
+grep -q "getBookingsForLessonWindow" "$TMP_DIR/app.js"
+grep -q "deriveLessonOccurrencesFromBookings" "$TMP_DIR/app.js"
+grep -q "normalizedLessonKind" "$TMP_DIR/app.js"
+grep -q "operatorLifecycle" "$TMP_DIR/app.js"
+ARCHIVE_CORE_BASE_URL=https://core.archivepilates.com npm run verify:archive-core-responsive
 node scripts/validate-live-release-canary.mjs --surface core
 
 echo "== ARCHIVE CORE live deploy complete =="

@@ -30,6 +30,7 @@
     "deploy:archivein-live": "bash scripts/deploy-archivein-live.sh",
     "process:admin-emergency-sync": "node scripts/process-admin-emergency-sync-requests.mjs",
     "validate:archive-core-hosting": "node scripts/validate-archive-core-hosting-deploy.mjs",
+    "verify:archive-core-responsive": "node scripts/verify-archive-core-responsive.mjs",
     "audit:archive-core-data": "node scripts/audit-archive-core-data-validity.mjs",
     "reconcile:archive-core-member-mirrors": "node scripts/reconcile-archive-core-member-profile-mirrors.mjs",
     "deploy:archive-core-live": "bash scripts/deploy-archive-core-live.sh",

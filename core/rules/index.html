@@ -26,7 +26,7 @@
         <header class="page-hero">
           <p class="eyebrow">RULES</p>
           <h1>운영 규칙</h1>
-          <p class="subtitle">2026.07.23 기준 현재 유효한 운영 규칙만 정리한 ARCHIVE CORE 단일 운영 허브입니다.</p>
+          <p class="subtitle">2026.07.28 기준 현재 유효한 운영 규칙만 정리한 ARCHIVE CORE 단일 운영 허브입니다.</p>
         </header>
 
         <section class="panel rules-hero">
@@ -47,6 +47,7 @@
           <nav class="rule-anchor-grid" aria-label="운영규칙 목차">
             <a href="#principles">공통 원칙<span>보안, 원천, 기록</span></a>
             <a href="#data-sync">데이터·동기화<span>StudioMate Excel, Contacts</span></a>
+            <a href="#data-trust">데이터 신뢰<span>신선도, 화면 상태, 액션 수명주기</span></a>
             <a href="#renewal">재등록 관리<span>만료, 잔여, 상담 후보</span></a>
             <a href="#alimtalk">알림톡<span>후보, 승인, 중복 차단</span></a>
             <a href="#private">프라이빗<span>회차, 설문, 리포트</span></a>
@@ -111,6 +112,16 @@
                 <li>목적, 현재 구현 상태, 운영 규칙, 데이터 원천, 배포 상태, 검증, 차단점, 다음 액션을 함께 남깁니다.</li>
                 <li>새 운영 규칙은 Notion이 아니라 이 탭에 반영합니다.</li>
                 <li>직원 행동이나 회원 커뮤니케이션이 바뀌면 코드 배포와 운영규칙 업데이트를 같은 작업으로 봅니다.</li>
+              </ul>
+            </article>
+            <article class="rule-card">
+              <h3>운영 액션 수명주기</h3>
+              <ul>
+                <li>홈에는 canonicalActionKey 기준으로 중복을 제거한 미해결 액션만 표시합니다.</li>
+                <li>상태는 open, acknowledged, in_progress, blocked, resolved 순서로 관리합니다.</li>
+                <li>resolved 항목은 홈과 미해결 KPI에서 즉시 제외하고 이력 화면에서만 확인합니다.</li>
+                <li>운영자 판단이 필요한 액션에는 owner, dueAt, resolutionCode, resolvedBy, resolvedAt을 기록합니다.</li>
+                <li>자동 복구된 원본 중복, 정규화, 캐시 지연은 홈 액션으로 올리지 않고 진단 로그에만 남깁니다.</li>
               </ul>
             </article>
           </div>
@@ -191,6 +202,17 @@
                 <li>Google Contacts는 원천이 아니라 전화 발신·검색을 위한 보조 저장소입니다.</li>
                 <li>연락처는 memberContactIndex와 contactSyncJobs 기준으로 큐를 만들고, dry-run 후 반영합니다.</li>
                 <li>Google-only 연락처 삭제, 연락처 병합, 대량 이동은 별도 승인 없이는 하지 않습니다.</li>
+              </ul>
+            </article>
+            <article class="rule-card" id="data-trust">
+              <h3>원천 신선도와 화면 상태</h3>
+              <ul>
+                <li>CORE 수업 화면의 현재 원천은 bookings입니다. lessonOccurrences와 reservations는 전환기 보조 자료로만 사용합니다.</li>
+                <li>회원 최근 방문은 memberProfiles.emergencyLastAttendance, lastAttendanceAt, recentVisitAt과 member360Cards.recentVisitAt 중 가장 최신 값을 표시합니다.</li>
+                <li>모든 주요 화면은 정상, 빈 데이터, 원천 지연, 권한 오류를 서로 다른 상태로 표시합니다. 읽기 실패를 0건으로 표시하지 않습니다.</li>
+                <li>원천 갱신 시각과 현재 시각의 차이를 표시하고, 오래된 데이터는 운영 판단 전에 재동기화하도록 경고합니다.</li>
+                <li>강사 지표는 최근 2개월 자료만 현재 평가에 반영하고, 100%를 넘는 예약률처럼 해석이 불가능한 값은 원본 확인 상태로 둡니다.</li>
+                <li>배포 전 validate:archive-core-hosting과 live rollback guard로 bookings 원천, 상태 표시, 외부 도구 바로가기, 운영 액션 필터가 보존되는지 확인합니다.</li>
               </ul>
             </article>
           </div>

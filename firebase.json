@@ -68,6 +68,11 @@
   "hosting": [
     {
       "site": "archive-pilates",
+      "predeploy": [
+        "node scripts/validate-release-branch-state.mjs --require-origin-main",
+        "npm run validate:onsite-welcome",
+        "npm run validate:archive-core-hosting"
+      ],
       "public": ".",
       "headers": [
         {
@@ -311,6 +316,7 @@
     {
       "site": "archive-pilates-core",
       "predeploy": [
+        "node scripts/validate-release-branch-state.mjs --require-origin-main",
         "npm run validate:archive-core-hosting"
       ],
       "public": "core",

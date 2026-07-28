@@ -106,7 +106,8 @@ function buildManifest(surface) {
     ...base,
     product: "ARCHIVE CORE",
     surface,
-    hostingSites: ["archive-pilates-core"],
+    runtimeContractVersion: "2026-07-28.1",
+    hostingSites: ["archive-pilates", "archive-pilates-core"],
     canonicalUrls: ["https://core.archivepilates.com/release.json", "https://archive-pilates.web.app/core/release.json"],
     criticalMarkers: [
       "homeActionTotal",
@@ -118,6 +119,12 @@ function buildManifest(surface) {
       "수강료 문의 즉시발송",
       "pricingInquiryHistoryPanel",
       "privateInstructorPendingList",
+      "CORE_RUNTIME_CONTRACT_VERSION",
+      "renderReadHealth",
+      "getBookingsForLessonWindow",
+      "deriveLessonOccurrencesFromBookings",
+      "normalizedLessonKind",
+      "operatorLifecycle",
     ],
   };
 }

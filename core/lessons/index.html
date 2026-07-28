@@ -23,7 +23,13 @@
         </nav>
       </aside>
       <main class="main">
-        <header class="page-hero"><p class="eyebrow">수업</p><h1>오늘 수업</h1></header>
+        <header class="topbar">
+          <div class="title-block"><p class="eyebrow">수업</p><h1>오늘 수업</h1></div>
+          <div class="top-actions" aria-label="상태 확인">
+            <div class="connection-card" aria-live="polite"><span id="connectionLabel">로딩</span><strong id="connectionDetail">예약 원본 확인 중</strong></div>
+            <button class="refresh-button" id="refreshButton" type="button">새로고침</button>
+          </div>
+        </header>
         <section class="grid kpis">
           <article class="panel metric"><div class="metric-label">오늘 전체</div><div class="metric-value" id="lessonsTodayCount">0</div></article>
           <article class="panel metric"><div class="metric-label">이번 주</div><div class="metric-value" id="lessonsWeekCount">0</div></article>

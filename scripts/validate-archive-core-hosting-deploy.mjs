@@ -53,6 +53,13 @@ const required = [
       "submitInstructorEvaluationQuiz",
       "SECONDARY_NAV_SECTIONS",
       "enhanceRuleSections",
+      "CORE_RUNTIME_CONTRACT_VERSION",
+      "renderReadHealth",
+      "getBookingsForLessonWindow",
+      "deriveLessonOccurrencesFromBookings",
+      "normalizedLessonKind",
+      "operatorLifecycle",
+      "emergencyLastAttendance",
     ],
   },
   {
@@ -73,7 +80,7 @@ const required = [
   {
     file: "core/lessons/index.html",
     label: "lesson operations page",
-    markers: ["오늘 수업", "lessonsTodayList", "lessonsInstructorList", "lessonsDeletedList"],
+    markers: ["오늘 수업", "connectionLabel", "lessonsTodayList", "lessonsInstructorList", "lessonsDeletedList"],
   },
   {
     file: "core/private/index.html",
@@ -100,7 +107,8 @@ const required = [
     label: "stable KPI card sizing",
     markers: [
       ".kpis > .metric",
-      "min-height: 156px",
+      "grid-auto-rows: 148px",
+      "min-height: 148px",
       ".action-disclosure",
       ".parking-delete-button",
       ".external-tool-grid",
@@ -108,6 +116,11 @@ const required = [
       ".nav-secondary",
       ".admin-nav-open .nav-secondary",
     ],
+  },
+  {
+    file: "core/rules/index.html",
+    label: "ARCHIVE CORE source health and operator lifecycle rules",
+    markers: ["2026.07.28", "운영 액션 수명주기", "원천 신선도와 화면 상태", "canonicalActionKey"],
   },
 ];
 

@@ -1,4 +1,5 @@
 const FIREBASE_APP_VERSION = "10.14.1";
+const CORE_RUNTIME_CONTRACT_VERSION = "2026-07-28.1";
 const WORK_LANE_ID = "archive-core-transition";
 const STUDIO_ID = "5330";
 
@@ -32,12 +33,14 @@ const state = {
   privateRecords: [],
   privateLedgerEntries: [],
   lessonOccurrences: [],
+  bookings: [],
   reservations: [],
   deletedClassLogs: [],
   deletedLessons: [],
   lane: null,
   authReady: null,
   readWarnings: [],
+  readStates: {},
 };
 
 let memberSearchTerm = "";
@@ -284,6 +287,147 @@ function escapeHtml(value) {
 function setConnection(label, detail) {
   setText("connectionLabel", label);
   setText("connectionDetail", detail);
+}
+
+const READ_TIMESTAMP_FIELDS = [
+  "sourceUpdatedAt",
+  "syncedAt",
+  "updatedAt",
+  "importedAt",
+  "rebuiltAt",
+  "generatedAt",
+  "submittedAt",
+  "createdAt",
+];
+
+function readValueCount(value) {
+  if (Array.isArray(value)) return value.length;
+  if (typeof value?.exists === "function") return value.exists() ? 1 : 0;
+  return value === null || value === undefined ? 0 : 1;
+}
+
+function readValueRows(value) {
+  if (Array.isArray(value)) return value;
+  if (typeof value?.exists === "function" && value.exists()) return [value.data()];
+  return [];
+}
+
+function latestReadSourceMs(value) {
+  return readValueRows(value).reduce((latest, item) => {
+    const itemLatest = READ_TIMESTAMP_FIELDS.reduce((current, field) => Math.max(current, timestampMs(item?.[field])), 0);
+    return Math.max(latest, itemLatest);
+  }, 0);
+}
+
+function setReadState(label, status, details = {}) {
+  state.readStates[label] = {
+    label,
+    status,
+    checkedAt: Date.now(),
+    count: details.count ?? 0,
+    sourceUpdatedAtMs: details.sourceUpdatedAtMs ?? 0,
+    message: details.message || "",
+  };
+}
+
+function readState(label) {
+  return state.readStates[label] || { label, status: "idle", count: 0, sourceUpdatedAtMs: 0, message: "" };
+}
+
+function readUnavailable(label) {
+  return ["unavailable", "permission-denied"].includes(readState(label).status);
+}
+
+function hoursSince(value) {
+  const ms = Number(value || 0);
+  return ms ? Math.max(0, (Date.now() - ms) / (60 * 60 * 1000)) : Number.POSITIVE_INFINITY;
+}
+
+function sourceAgeText(value) {
+  const ageHours = hoursSince(value);
+  if (!Number.isFinite(ageHours)) return "원본 시각 없음";
+  if (ageHours < 1) return `${Math.max(1, Math.round(ageHours * 60))}분 전`;
+  if (ageHours < 48) return `${Math.round(ageHours)}시간 전`;
+  return `${Math.round(ageHours / 24)}일 전`;
+}
+
+function currentReadRequirements() {
+  if (qs("lessonsTodayList")) return [{ label: "bookings", title: "예약 원본", staleAfterHours: 30 }];
+  if (qs("membersTable")) {
+    return [
+      { label: "memberProfiles", title: "회원 원본", staleAfterHours: 30 },
+      { label: "member360Cards", title: "회원 요약", staleAfterHours: 72 },
+    ];
+  }
+  if (qs("staffHrList")) {
+    return [
+      { label: "staffs", title: "강사 명단", staleAfterHours: 24 * 14 },
+      { label: "dashboardSnapshots/current", title: "강사 지표", staleAfterHours: 24 * 35 },
+    ];
+  }
+  if (qs("messagesCandidateList")) {
+    return [
+      { label: "alimtalkCandidates", title: "알림톡 후보", staleAfterHours: null },
+      { label: "alimtalkSends", title: "알림톡 발송", staleAfterHours: null },
+    ];
+  }
+  if (qs("privateProgressList")) {
+    return [{ label: "privateLessonChartRequests", title: "프라이빗 진행", staleAfterHours: 48 }];
+  }
+  if (qs("homeDecisionList")) {
+    return [
+      { label: "automationStatus", title: "자동화 상태", staleAfterHours: 30 },
+      { label: "sourceImports", title: "StudioMate 원본", staleAfterHours: 36 },
+      { label: "memberProfiles", title: "회원 원본", staleAfterHours: 30 },
+    ];
+  }
+  return [];
+}
+
+function renderReadHealth() {
+  const requirements = currentReadRequirements();
+  if (!requirements.length) {
+    setConnection(state.readWarnings.length ? "부분 연결" : "연결됨", `화면 조회 ${formatDate(new Date())}`);
+    return;
+  }
+
+  const unavailable = requirements.filter((item) => readUnavailable(item.label));
+  if (unavailable.length) {
+    document.body.dataset.sourceHealth = "unavailable";
+    setConnection(
+      "원본 확인 필요",
+      `${unavailable.map((item) => item.title).join(", ")} 읽기 실패 · 화면의 0은 확정값이 아닙니다.`,
+    );
+    return;
+  }
+
+  const stale = requirements
+    .map((item) => ({ ...item, state: readState(item.label) }))
+    .filter(
+      (item) =>
+        Number.isFinite(item.staleAfterHours) &&
+        item.state.count > 0 &&
+        hoursSince(item.state.sourceUpdatedAtMs) > item.staleAfterHours,
+    )
+    .sort((a, b) => hoursSince(b.state.sourceUpdatedAtMs) - hoursSince(a.state.sourceUpdatedAtMs));
+  if (stale.length) {
+    const oldest = stale[0];
+    document.body.dataset.sourceHealth = "stale";
+    setConnection("원본 지연", `${oldest.title} ${sourceAgeText(oldest.state.sourceUpdatedAtMs)} · 최신화 전 외부 판단 보류`);
+    return;
+  }
+
+  const nonEmpty = requirements
+    .map((item) => ({ ...item, state: readState(item.label) }))
+    .filter((item) => item.state.count > 0)
+    .sort((a, b) => b.state.sourceUpdatedAtMs - a.state.sourceUpdatedAtMs);
+  document.body.dataset.sourceHealth = nonEmpty.length ? "current" : "empty";
+  if (!nonEmpty.length) {
+    setConnection("조회 완료 · 0건", "원본 읽기는 성공했고 현재 표시할 기록이 없습니다.");
+    return;
+  }
+  const latest = nonEmpty[0];
+  setConnection("원본 연결됨", `${latest.title} ${sourceAgeText(latest.state.sourceUpdatedAtMs)} · 화면 조회 ${formatDate(new Date())}`);
 }
 
 function commandSearchText(item) {
@@ -599,9 +743,18 @@ async function waitForAuth(runtime) {
 
 async function safeRead(label, operation, fallback) {
   try {
-    return await operation();
+    const value = await operation();
+    const count = readValueCount(value);
+    setReadState(label, count ? "success" : "empty", {
+      count,
+      sourceUpdatedAtMs: latestReadSourceMs(value),
+    });
+    return value;
   } catch (error) {
     state.readWarnings.push({ label, message: error?.message || String(error) });
+    setReadState(label, isPermissionDenied(error) ? "permission-denied" : "unavailable", {
+      message: error?.message || String(error),
+    });
     console.warn(`ARCHIVE CORE read skipped: ${label}`, error);
     return fallback;
   }
@@ -657,10 +810,26 @@ async function getOptionalCollectionBy(db, firestore, collectionName, orderField
   } catch (error) {
     if (isPermissionDenied(error)) {
       console.warn(`ARCHIVE CORE optional collection skipped: ${collectionName}`, error);
-      return [];
+      throw error;
     }
     throw error;
   }
+}
+
+async function getBookingsForLessonWindow(db, firestore) {
+  const rangeStart = startOfLocalDay(new Date());
+  rangeStart.setDate(rangeStart.getDate() - 1);
+  const rangeEnd = startOfLocalDay(new Date());
+  rangeEnd.setDate(rangeEnd.getDate() + 8);
+  const snapshot = await firestore.getDocs(
+    firestore.query(
+      firestore.collection(db, "bookings"),
+      firestore.where("lectureDate", ">=", dateKey(rangeStart)),
+      firestore.where("lectureDate", "<=", dateKey(rangeEnd)),
+      firestore.limit(2000),
+    ),
+  );
+  return snapshot.docs.map((docSnapshot) => ({ id: docSnapshot.id, ...docSnapshot.data() }));
 }
 
 function studioItems(items) {
@@ -1097,6 +1266,9 @@ function mergeMemberCardsWithProfiles(cards = [], profiles = []) {
     if (!id) continue;
     const card = cardsById.get(id) || {};
     const activeTickets = profileActiveTickets(profile);
+    const profileVisitAt = profile.emergencyLastAttendance || profile.lastAttendanceAt || profile.recentVisitAt;
+    const cardVisitAt = card.recentVisitAt || card.lastAttendanceAt;
+    const recentVisitAt = timestampMs(profileVisitAt) >= timestampMs(cardVisitAt) ? profileVisitAt || cardVisitAt : cardVisitAt;
     mergedById.set(id, {
       ...card,
       ...profile,
@@ -1111,6 +1283,7 @@ function mergeMemberCardsWithProfiles(cards = [], profiles = []) {
       recentBookings: card.recentBookings || [],
       recentMemos: card.recentMemos || [],
       signals: card.signals || [],
+      recentVisitAt,
       currentTicketsSummary: currentTicketSummaryFromProfile(profile, card.currentTicketsSummary || []),
       activeTicketCount: hasProfileActiveTicketsField(profile) ? activeTickets.length : toNumber(card.activeTicketCount),
       sourceProfileUpdatedAt: profile.updatedAt || profile.syncedAt || card.sourceProfileUpdatedAt || null,
@@ -1539,6 +1712,12 @@ function renderMemberPagination(totalItems) {
 function renderMembers(items) {
   const table = qs("membersTable");
   if (!table) return;
+  if (readUnavailable("memberProfiles") && readUnavailable("member360Cards")) {
+    ["membersVisibleCount", "membersActiveTicketCount", "membersRecentVisitCount", "membersRevenueCount"].forEach((id) => setText(id, "-"));
+    table.innerHTML = `<tr><td colspan="4"><span class="error-state">회원 원본과 요약을 읽지 못했습니다. 현재 0명으로 판단하지 않습니다.</span></td></tr>`;
+    renderMemberPagination(0);
+    return;
+  }
   const mergedItems = mergeDuplicateMembers(items);
   renderMemberFilterButtons(mergedItems);
   const visibleItems = mergedItems.filter(matchesMemberSearch).filter(matchesMemberFilter);
@@ -1614,6 +1793,54 @@ function isResolvedOperationalItem(item) {
   );
 }
 
+function operatorLifecycle(item) {
+  if (isResolvedOperationalItem(item)) return "resolved";
+  const values = [
+    item?.operatorStatus,
+    item?.actionStatus,
+    item?.resolutionStatus,
+    item?.reviewStatus,
+    item?.sendStatus,
+    item?.status,
+    item?.health,
+  ]
+    .filter(Boolean)
+    .map((value) => String(value).toLowerCase());
+  if (values.some((value) => ["blocked", "critical"].includes(value))) return "blocked";
+  if (values.some((value) => ["failed", "error"].includes(value))) return "blocked";
+  if (values.some((value) => ["running", "processing", "in_progress"].includes(value))) return "in_progress";
+  if (values.some((value) => ["acknowledged", "reviewed"].includes(value))) return "acknowledged";
+  return "open";
+}
+
+function operatorActionKey(item, domain = "action") {
+  const explicitKey =
+    item?.canonicalActionKey ||
+    item?.canonicalBookingKey ||
+    item?.dedupeKey ||
+    item?.candidateId ||
+    item?.requestId ||
+    item?.jobId ||
+    item?.automationId ||
+    item?.id;
+  if (explicitKey) return String(explicitKey);
+  const memberKey = item?.memberId || item?.memberName || "";
+  const actionKey = item?.templateCode || item?.title || item?.name || "";
+  return memberKey || actionKey ? `${domain}:${memberKey}:${actionKey}` : "";
+}
+
+function uniqueOperatorItems(items = [], domain = "action") {
+  const byKey = new Map();
+  for (const [index, item] of items.entries()) {
+    const key = operatorActionKey(item, domain) || `${domain}:unkeyed:${index}`;
+    const current = byKey.get(key);
+    const itemMs = timestampMs(item.updatedAt || item.createdAt || item.lastRunAt || item.sentAt);
+    const currentMs = timestampMs(current?.updatedAt || current?.createdAt || current?.lastRunAt || current?.sentAt);
+    if (!current || itemMs >= currentMs) byKey.set(key, item);
+  }
+  return [...byKey.values()];
+}
+
 function isPendingStatus(value) {
   return ["queued", "pending", "review", "reviewed", "processing", "template_pending"].includes(
     String(value || "").toLowerCase(),
@@ -1684,11 +1911,17 @@ function isNonActionableCommunicationItem(item) {
 }
 
 function failedAlimtalkCandidates(items = state.alimtalkCandidates) {
-  return items.filter((item) => hasCommunicationFailureSignal(item) && !isNonActionableCommunicationItem(item));
+  return uniqueOperatorItems(
+    items.filter((item) => hasCommunicationFailureSignal(item) && !isNonActionableCommunicationItem(item)),
+    "alimtalk-candidate",
+  );
 }
 
 function failedAlimtalkSends(items = state.alimtalkSends) {
-  return items.filter((item) => hasCommunicationFailureSignal(item) && !isNonActionableCommunicationItem(item));
+  return uniqueOperatorItems(
+    items.filter((item) => hasCommunicationFailureSignal(item) && !isNonActionableCommunicationItem(item)),
+    "alimtalk-send",
+  );
 }
 
 function hasCommunicationFailureSignal(item) {
@@ -1725,7 +1958,8 @@ function pricingInquiryProblems(items = state.pricingInquiryAlimtalkRequests) {
 }
 
 function problemRequestRows() {
-  return [
+  return uniqueOperatorItems(
+    [
     ...onsiteWelcomeProblems().map((item) => ({
       ...item,
       title: "현장 웰컴 준비 실패",
@@ -1766,18 +2000,33 @@ function problemRequestRows() {
       status: item.status || item.sendStatus || "error",
       updatedAt: item.updatedAt || item.completedAt || item.createdAt,
     })),
-  ];
+    ],
+    "communication-flow",
+  );
 }
 
 function renderMessages(candidates, sends) {
   if (!qs("messagesCandidateList")) return;
+  if (readUnavailable("alimtalkCandidates") && readUnavailable("alimtalkSends")) {
+    ["messagesCandidateCount", "messagesSendCount", "messagesSentCount", "messagesFailedCount"].forEach((id) => setText(id, "-"));
+    setPillText("messagesPendingDecision", "blocked");
+    setPillText("messagesRiskDecision", "blocked");
+    ["messagesDecisionList", "messagesTemplateList", "messagesCandidateList", "messagesSendList"].forEach((id) => {
+      const element = qs(id);
+      if (element) element.innerHTML = `<div class="empty-state error-state">알림톡 원본을 읽지 못했습니다. 0건으로 판단하지 않습니다.</div>`;
+    });
+    return;
+  }
   const sentCandidates = candidates.filter((item) => String(item.status || "").toLowerCase() === "sent");
   const failedCandidates = failedAlimtalkCandidates(candidates);
   const failedSends = failedAlimtalkSends(sends);
   const flowProblems = problemRequestRows();
   const totalFailures = failedCandidates.length + failedSends.length + flowProblems.length;
-  const pendingCandidates = candidates.filter((item) => isPendingStatus(item.status) && !isNonActionableCommunicationItem(item));
-  setText("messagesCandidateCount", formatCount(candidates.length));
+  const pendingCandidates = uniqueOperatorItems(
+    candidates.filter((item) => isPendingStatus(item.status) && !isNonActionableCommunicationItem(item)),
+    "alimtalk-candidate",
+  );
+  setText("messagesCandidateCount", formatCount(pendingCandidates.length));
   setText("messagesSendCount", formatCount(sends.length));
   setText("messagesSentCount", formatCount(sentCandidates.length));
   setText("messagesFailedCount", formatCount(totalFailures));
@@ -2302,6 +2551,89 @@ function lessonStatusTone(item) {
   return "active";
 }
 
+function activeBookingForLesson(item) {
+  const status = String(item.appStatus || item.bookingStatus || item.status || "").toLowerCase();
+  const sourceStatus = String(item.sourceStatus || item.reconcileStatus || "").toLowerCase();
+  if (["cancel", "canceled", "cancelled", "deleted", "inactive", "wait", "waiting", "취소", "대기"].includes(status)) return false;
+  if (
+    [
+      "missing_from_latest_reservation_import",
+      "superseded_by_latest_reservation_import",
+      "duplicate",
+      "취소",
+      "대기",
+    ].includes(sourceStatus)
+  ) {
+    return false;
+  }
+  return item.active !== false;
+}
+
+function lessonBookingStart(item) {
+  return item.lectureStartAt || item.startsAt || item.startAt || `${item.lectureDate || item.date || ""} ${item.startTime || "00:00"}`;
+}
+
+function lessonOccurrenceKey(item) {
+  const lectureId = String(item.lectureId || "").trim();
+  const lessonDate = dateKey(lessonBookingStart(item)) || item.lectureDate || item.date;
+  const lessonTime = item.startTime || compactDateTime(lessonBookingStart(item));
+  return [
+    lectureId ? `lecture:${lectureId}` : "lecture:unknown",
+    lessonDate,
+    lessonTime,
+    item.staffId || item.staffName || item.instructorName,
+    item.lectureTitle || item.lessonTitle || item.title,
+  ]
+    .filter(Boolean)
+    .join("|");
+}
+
+function deriveLessonOccurrencesFromBookings(bookings = []) {
+  const grouped = new Map();
+  for (const booking of studioItems(bookings).filter(activeBookingForLesson)) {
+    const key = lessonOccurrenceKey(booking);
+    if (!key) continue;
+    const current = grouped.get(key) || {
+      id: key,
+      studioId: booking.studioId || STUDIO_ID,
+      startsAt: lessonBookingStart(booking),
+      lessonDate: booking.lectureDate || booking.lessonDate || booking.date,
+      lessonTitle: booking.lectureTitle || booking.lessonTitle || booking.title || "수업명 없음",
+      staffId: booking.staffId || "",
+      staffName: booking.staffName || booking.instructorName || "강사 미지정",
+      lessonType: booking.lessonType || booking.ticketClassType || normalizedLessonKind(booking),
+      roomName: booking.roomName || booking.room || "",
+      capacity: toNumber(booking.capacity || booking.maxCapacity || booking.lectureCapacity),
+      reservationCount: 0,
+      sourceKind: "bookings",
+      sourceUpdatedAt: booking.sourceUpdatedAt || booking.syncedAt || booking.updatedAt,
+    };
+    current.reservationCount += 1;
+    if (timestampMs(booking.sourceUpdatedAt || booking.syncedAt || booking.updatedAt) > timestampMs(current.sourceUpdatedAt)) {
+      current.sourceUpdatedAt = booking.sourceUpdatedAt || booking.syncedAt || booking.updatedAt;
+    }
+    grouped.set(key, current);
+  }
+  return [...grouped.values()];
+}
+
+function normalizedLessonKind(item) {
+  const text = [
+    item?.lessonType,
+    item?.ticketClassType,
+    item?.ticketType,
+    item?.lectureTitle,
+    item?.lessonTitle,
+    item?.title,
+  ]
+    .filter(Boolean)
+    .join(" ")
+    .toLowerCase();
+  if (["private", "semi", "프라이빗", "세미", "개인", "1:1"].some((token) => text.includes(token))) return "private";
+  if (["group", "그룹"].some((token) => text.includes(token))) return "group";
+  return "other";
+}
+
 function renderLessonRow(item) {
   const startsAt = item.startsAt || item.lessonDate || item.startAt;
   const title = item.lessonTitle || item.lectureTitle || item.title || "수업명 없음";
@@ -2324,17 +2656,25 @@ function renderLessonRow(item) {
 
 function renderLessons(lessons, reservations, deletedLogs) {
   if (!qs("lessonsTodayList")) return;
-  const items = studioItems(lessons)
+  const bookingsState = readState("bookings");
+  if (readUnavailable("bookings")) {
+    ["lessonsTodayCount", "lessonsWeekCount", "lessonsGroupCount", "lessonsPrivateCount"].forEach((id) => setText(id, "-"));
+    setPillText("lessonsTodayStatus", "blocked");
+    setPillText("lessonsInstructorStatus", "blocked");
+    qs("lessonsTodayList").innerHTML = `<div class="empty-state error-state">예약 원본을 읽지 못했습니다. 0건으로 판단하지 말고 권한과 동기화 상태를 확인하세요.</div>`;
+    qs("lessonsInstructorList").innerHTML = `<div class="empty-state error-state">예약 원본 연결 후 강사별 수업을 표시합니다.</div>`;
+    qs("lessonsSourceList").innerHTML = `<div class="empty-state error-state">${escapeHtml(bookingsState.message || "bookings 읽기 실패")}</div>`;
+    return;
+  }
+  const bookingLessons = deriveLessonOccurrencesFromBookings(reservations);
+  const items = bookingLessons
     .filter((item) => timestampMs(item.startsAt || item.lessonDate || item.startAt))
     .sort((a, b) => timestampMs(a.startsAt || a.lessonDate || a.startAt) - timestampMs(b.startsAt || b.lessonDate || b.startAt));
   const now = new Date();
   const todayLessons = items.filter((item) => dateKey(item.startsAt || item.lessonDate || item.startAt) === dateKey(now));
   const weekLessons = items.filter((item) => isWithinDays(item.startsAt || item.lessonDate || item.startAt, now, 7));
-  const groupLessons = weekLessons.filter((item) => String(item.lessonType || "").toLowerCase().includes("group"));
-  const privateLessons = weekLessons.filter((item) => {
-    const type = String(item.lessonType || "").toLowerCase();
-    return type.includes("private") || type.includes("semi");
-  });
+  const groupLessons = todayLessons.filter((item) => normalizedLessonKind(item) === "group");
+  const privateLessons = todayLessons.filter((item) => normalizedLessonKind(item) === "private");
   const reservationItems = studioItems(reservations);
   const deletedItems = studioItems(deletedLogs);
 
@@ -2359,9 +2699,9 @@ function renderLessons(lessons, reservations, deletedLogs) {
     const current = byInstructor.get(staff) || { count: 0, reservations: 0, group: 0, private: 0 };
     current.count += 1;
     current.reservations += toNumber(item.reservationCount);
-    const type = String(item.lessonType || "").toLowerCase();
-    if (type.includes("private") || type.includes("semi")) current.private += 1;
-    else current.group += 1;
+    const type = normalizedLessonKind(item);
+    if (type === "private") current.private += 1;
+    else if (type === "group") current.group += 1;
     byInstructor.set(staff, current);
   });
   const instructorList = qs("lessonsInstructorList");
@@ -2388,21 +2728,15 @@ function renderLessons(lessons, reservations, deletedLogs) {
   const sourceList = qs("lessonsSourceList");
   if (sourceList) {
     const sourceKinds = [...new Set(weekLessons.map((item) => item.sourceKind).filter(Boolean))];
+    const sourceUpdatedAt = Math.max(...items.map((item) => timestampMs(item.sourceUpdatedAt || item.updatedAt)), 0);
     sourceList.innerHTML = `
       <div class="status-row">
         <div>
-          <strong>수업 데이터 ${items.length.toLocaleString("ko-KR")}개</strong>
-          <p>이번주 표시 ${weekLessons.length.toLocaleString("ko-KR")}개 · 예약 샘플 ${reservationItems.length.toLocaleString("ko-KR")}개</p>
-          <p>${escapeHtml(sourceKinds.join(", ") || "분류 없음")}</p>
+          <strong>예약 원본에서 수업 ${items.length.toLocaleString("ko-KR")}개 구성</strong>
+          <p>이번주 ${weekLessons.length.toLocaleString("ko-KR")}개 · 예약 행 ${reservationItems.length.toLocaleString("ko-KR")}개 · ${escapeHtml(sourceAgeText(sourceUpdatedAt))}</p>
+          <p>${escapeHtml(sourceKinds.join(", ") || "bookings")}</p>
         </div>
         ${pill(items.length ? "success" : "warning")}
-      </div>
-      <div class="status-row">
-        <div>
-          <strong>운영 경계</strong>
-          <p>이 탭은 현황 확인용입니다. 발송이나 외부 반영 전에는 별도 승인 흐름을 사용합니다.</p>
-        </div>
-        ${pill("warning")}
       </div>
     `;
   }
@@ -3200,13 +3534,17 @@ function renderBusinessMemberInsights(items) {
 }
 
 function failedAutomationItems() {
-  return state.automationItems.filter((item) =>
-    ["failed", "error", "critical", "blocked"].includes(String(item.status || item.health || "").toLowerCase()),
+  return uniqueOperatorItems(
+    state.automationItems.filter((item) => ["failed", "blocked"].includes(operatorLifecycle(item))),
+    "automation",
   );
 }
 
 function pendingAlimtalkCandidates() {
-  return state.alimtalkCandidates.filter((item) => isPendingStatus(item.status) && !isNonActionableCommunicationItem(item));
+  return uniqueOperatorItems(
+    state.alimtalkCandidates.filter((item) => isPendingStatus(item.status) && !isNonActionableCommunicationItem(item)),
+    "alimtalk-candidate",
+  );
 }
 
 function communicationProblemSummary() {
@@ -3220,7 +3558,6 @@ function communicationProblemSummary() {
 function renderHomeDecisions() {
   const list = qs("homeDecisionList");
   if (!list) return;
-  const openIssues = activeQualityIssues();
   const failedAutomation = failedAutomationItems();
   const { failedCandidates, failedSends, flowProblems, pendingCandidates } = communicationProblemSummary();
   const renewalRows = renewalCandidateRows();
@@ -3270,15 +3607,6 @@ function renderHomeDecisions() {
       href: "./automation/",
     });
   }
-  if (openIssues.length) {
-    rows.push({
-      title: "데이터 품질 운영 확인",
-      detail: `${openIssues.length}개 이슈가 운영자 판단 대상으로 남아 있습니다. 발송이나 반영 전 매칭 상태를 확인하세요.`,
-      status: "warning",
-      href: "./imports/",
-    });
-  }
-
   if (!rows.length) {
     list.innerHTML = `
       <div class="status-row">
@@ -3306,7 +3634,6 @@ function renderHomeDecisions() {
 
 function renderHomeSummary() {
   if (!qs("commandQueueStatus")) return;
-  const openIssues = activeQualityIssues();
   const failedAutomation = failedAutomationItems();
   const renewalRows = renewalCandidateRows();
   const renewalUrgent = renewalRows.filter((row) => row.priority === "urgent").length;
@@ -3314,8 +3641,7 @@ function renderHomeSummary() {
   const renewalWaiting = renewalRows.filter((row) => row.priority === "waiting").length;
   const { failedCandidates, failedSends, flowProblems, pendingCandidates } = communicationProblemSummary();
   const communicationProblems = failedCandidates.length + failedSends.length + flowProblems.length;
-  const actionTotal =
-    communicationProblems + pendingCandidates.length + failedAutomation.length + openIssues.length + renewalUrgent;
+  const actionTotal = communicationProblems + pendingCandidates.length + failedAutomation.length + renewalUrgent;
   setText("commandQueueStatus", actionTotal ? `${actionTotal}건 확인 필요` : "오늘 처리할 큐 없음");
   setText(
     "commandQueueNote",
@@ -3557,8 +3883,27 @@ function staffMonthlyMetrics(row) {
   return [...byMonth.values()].sort((a, b) => a.month.localeCompare(b.month));
 }
 
+function metricMonthAge(value, referenceDate = new Date()) {
+  const month = normMonth(value);
+  if (!month) return Number.POSITIVE_INFINITY;
+  const [year, monthNumber] = month.split("-").map(Number);
+  return (referenceDate.getFullYear() - year) * 12 + (referenceDate.getMonth() + 1 - monthNumber);
+}
+
+function currentStaffMetric(metrics = []) {
+  const latest = metrics.at(-1) || null;
+  return latest && metricMonthAge(latest.month) <= 2 ? latest : null;
+}
+
+function validMetricRate(value) {
+  if (!Number.isFinite(Number(value))) return null;
+  const numeric = toNumber(value);
+  return numeric >= 0 && numeric <= 100 ? numeric : null;
+}
+
 function formatMetricRate(value) {
-  return Number.isFinite(Number(value)) ? `${toNumber(value).toFixed(1).replace(/\.0$/, "")}%` : "연결 대기";
+  const numeric = validMetricRate(value);
+  return numeric === null ? (Number.isFinite(Number(value)) ? "원본 확인" : "연결 대기") : `${numeric.toFixed(1).replace(/\.0$/, "")}%`;
 }
 
 function formatMetricNumber(value, suffix = "") {
@@ -3580,7 +3925,7 @@ function normalizeGroupAverageScore(value) {
 }
 
 function staffCompositeScore(row, metrics, latestQuiz) {
-  const latestMetric = metrics.at(-1) || null;
+  const latestMetric = currentStaffMetric(metrics);
   const definitions = [
     {
       key: "quiz",
@@ -3593,7 +3938,7 @@ function staffCompositeScore(row, metrics, latestQuiz) {
       key: "reservation",
       label: "그룹 예약률",
       weight: 30,
-      value: latestMetric && Number.isFinite(Number(latestMetric.reservationRate)) ? Math.max(0, Math.min(100, toNumber(latestMetric.reservationRate))) : null,
+      value: latestMetric ? validMetricRate(latestMetric.reservationRate) : null,
       display: latestMetric ? formatMetricRate(latestMetric.reservationRate) : "연결 대기",
     },
     {
@@ -3607,13 +3952,13 @@ function staffCompositeScore(row, metrics, latestQuiz) {
       key: "attendance",
       label: "그룹 출석률",
       weight: 10,
-      value: latestMetric && Number.isFinite(Number(latestMetric.attendanceRate)) ? Math.max(0, Math.min(100, toNumber(latestMetric.attendanceRate))) : null,
+      value: latestMetric ? validMetricRate(latestMetric.attendanceRate) : null,
       display: latestMetric ? formatMetricRate(latestMetric.attendanceRate) : "연결 대기",
     },
   ];
   const active = definitions.filter((item) => Number.isFinite(Number(item.value)));
   const totalWeight = active.reduce((sum, item) => sum + item.weight, 0);
-  const score = totalWeight
+  const score = latestQuiz && latestMetric && active.length >= 3 && totalWeight >= 65
     ? Math.round(active.reduce((sum, item) => sum + item.value * item.weight, 0) / totalWeight)
     : null;
   return {
@@ -3641,11 +3986,16 @@ function renderStaffDetail(row) {
   }
 
   const metrics = staffMonthlyMetrics(row);
-  const latestMetric = metrics.at(-1) || null;
+  const historicalLatestMetric = metrics.at(-1) || null;
+  const latestMetric = currentStaffMetric(metrics);
   const latestQuiz = row.latest || row.card?.latestQuiz || null;
   const q19 = latestQuiz ? staffEssayScoreInfo(latestQuiz) : null;
   const recentSubmissions = row.submissions.slice(0, 5);
-  const lastUpdated = latestMetric?.month ? `${formatMonth(latestMetric.month)} 운영 지표` : "운영 지표 연결 대기";
+  const lastUpdated = latestMetric?.month
+    ? `${formatMonth(latestMetric.month)} 운영 지표`
+    : historicalLatestMetric?.month
+      ? `${formatMonth(historicalLatestMetric.month)} 이후 지표 지연`
+      : "운영 지표 연결 대기";
   const composite = staffCompositeScore(row, metrics, latestQuiz);
 
   setText("staffDetailTitle", `${row.name || "강사"} 세부 지표`);
@@ -3875,6 +4225,14 @@ function renderStaffEvaluationChart() {
 function renderStaffHr() {
   const list = qs("staffHrList");
   if (!list) return;
+  if (readUnavailable("staffs")) {
+    ["staffTotal", "staffPassedCount", "staffReviewCount", "staffLatestScore"].forEach((id) => setText(id, "-"));
+    list.innerHTML = `<div class="empty-state error-state">강사 명단 원본을 읽지 못했습니다. 0명으로 판단하지 않습니다.</div>`;
+    renderStaffDetail(null);
+    renderStaffSubmissionHistory();
+    renderStaffEvaluationChart();
+    return;
+  }
   const staffRows = staffEvaluationRows().sort((a, b) => String(a.name || "").localeCompare(String(b.name || ""), "ko"));
   const staffs = staffRows;
   state.staffEvaluationRows = staffRows;
@@ -4262,6 +4620,14 @@ function renderFallback(error, options = {}) {
   renderMemberDetail(null);
   renderPrivate([], [], [], []);
   renderBusinessFallback(error);
+  document.querySelectorAll(".metric-value").forEach((element) => {
+    element.textContent = "-";
+  });
+  document.querySelectorAll(".empty-state").forEach((element) => {
+    if (!element.textContent.includes("로그인")) {
+      element.classList.add("error-state");
+    }
+  });
   if (options.requireLogin) showLoginGate();
 }
 
@@ -4273,6 +4639,7 @@ async function refresh() {
   try {
     const runtime = await initFirebase();
     state.readWarnings = [];
+    state.readStates = {};
     const user = await waitForAuth(runtime);
     if (!user) {
       const error = new Error("운영자 로그인이 필요합니다.");
@@ -4282,7 +4649,7 @@ async function refresh() {
     hideLoginGate();
     const { db, doc, getDoc } = runtime;
     const shouldLoadBusiness = Boolean(qs("businessMonthSelect"));
-    const shouldLoadHome = Boolean(qs("homeMemberTotal"));
+    const shouldLoadHome = Boolean(qs("homeDecisionList"));
     const shouldLoadMembers = Boolean(qs("membersTable"));
     const shouldLoadMessages = Boolean(qs("messagesCandidateList"));
     const shouldLoadParking = Boolean(qs("parkingRegistrationForm"));
@@ -4310,7 +4677,7 @@ async function refresh() {
       privateRecords,
       privateLedgerEntries,
       lessonOccurrences,
-      reservations,
+      bookings,
       deletedClassLogs,
       deletedLessons,
       staffItems,
@@ -4389,9 +4756,7 @@ async function refresh() {
       shouldLoadLessons
         ? safeRead("lessonOccurrences", () => getOptionalCollectionBy(db, runtime, "lessonOccurrences", "startsAt", 1000), [])
         : Promise.resolve([]),
-      shouldLoadLessons
-        ? safeRead("reservations", () => getOptionalCollectionBy(db, runtime, "reservations", "startsAt", 1000), [])
-        : Promise.resolve([]),
+      shouldLoadLessons ? safeRead("bookings", () => getBookingsForLessonWindow(db, runtime), []) : Promise.resolve([]),
       shouldLoadLessons
         ? safeRead("deletedClassLogs", () => getOptionalCollectionBy(db, runtime, "deletedClassLogs", "updatedAt", 100), [])
         : Promise.resolve([]),
@@ -4425,7 +4790,8 @@ async function refresh() {
     state.privateRecords = privateRecords;
     state.privateLedgerEntries = privateLedgerEntries;
     state.lessonOccurrences = lessonOccurrences;
-    state.reservations = reservations;
+    state.bookings = bookings;
+    state.reservations = bookings;
     state.deletedClassLogs = deletedClassLogs;
     state.deletedLessons = deletedLessons;
     state.staffItems = studioItems(staffItems);
@@ -4446,19 +4812,14 @@ async function refresh() {
     renderPricingInquiryRecentList();
     renderMemberDetail(memberDetail);
     renderPrivate(privateRequests, privateRecords, privateLedgerEntries, alimtalkCandidates, alimtalkSends);
-    renderLessons(lessonOccurrences, reservations, [...deletedClassLogs, ...deletedLessons]);
+    renderLessons(lessonOccurrences, bookings, [...deletedClassLogs, ...deletedLessons]);
     if (shouldLoadBusiness) {
       if (state.businessSnapshot) renderBusiness(state.businessSnapshot);
       else renderBusinessFallback(new Error("월별 요약 데이터가 없습니다."));
       renderBusinessMemberInsights(businessMembers);
     }
     if (qs("instructorEvaluationQuizForm")) await loadInstructorEvaluationQuiz();
-    setConnection(
-      state.readWarnings.length ? "부분 연결" : "연결됨",
-      state.readWarnings.length
-        ? `${state.readWarnings.length}개 데이터 읽기 확인 필요 · ${formatDate(new Date())}`
-        : `archive-pilates · ${formatDate(new Date())}`,
-    );
+    renderReadHealth();
   } catch (error) {
     renderFallback(error, { requireLogin: !state.firebaseRuntime?.authClient?.currentUser });
   } finally {

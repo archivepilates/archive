@@ -84,8 +84,16 @@ if (selectedSurfaces.includes("archivein")) {
 
 if (selectedSurfaces.includes("core")) {
   checks.push(
-    jsonCheck("core-release-custom-domain", "https://core.archivepilates.com/release.json", (json) => json?.source?.head === expectedSha),
-    jsonCheck("core-release-webapp-path", "https://archive-pilates.web.app/core/release.json", (json) => json?.source?.head === expectedSha),
+    jsonCheck(
+      "core-release-custom-domain",
+      "https://core.archivepilates.com/release.json",
+      (json) => json?.source?.head === expectedSha && json?.runtimeContractVersion === "2026-07-28.1",
+    ),
+    jsonCheck(
+      "core-release-webapp-path",
+      "https://archive-pilates.web.app/core/release.json",
+      (json) => json?.source?.head === expectedSha && json?.runtimeContractVersion === "2026-07-28.1",
+    ),
     textCheck("core-home-actions-custom-domain", "https://core.archivepilates.com/", [
       "오늘 처리할 일",
       "homeDecisionList",
@@ -112,6 +120,12 @@ if (selectedSurfaces.includes("core")) {
       "SECONDARY_NAV_SECTIONS",
       "removeParkingVehicle",
       "data-parking-vehicle-id",
+      "CORE_RUNTIME_CONTRACT_VERSION",
+      "renderReadHealth",
+      "getBookingsForLessonWindow",
+      "deriveLessonOccurrencesFromBookings",
+      "normalizedLessonKind",
+      "operatorLifecycle",
     ]),
     textCheck("core-app-bundle-webapp-path", "https://archive-pilates.web.app/core/assets/app.js", [
       "pricingInquiryAlimtalkRequests",
@@ -121,6 +135,12 @@ if (selectedSurfaces.includes("core")) {
       "SECONDARY_NAV_SECTIONS",
       "removeParkingVehicle",
       "data-parking-vehicle-id",
+      "CORE_RUNTIME_CONTRACT_VERSION",
+      "renderReadHealth",
+      "getBookingsForLessonWindow",
+      "deriveLessonOccurrencesFromBookings",
+      "normalizedLessonKind",
+      "operatorLifecycle",
     ]),
   );
 }
