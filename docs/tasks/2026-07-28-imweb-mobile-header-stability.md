@@ -38,3 +38,21 @@ Date: 2026-07-28
   - `1024` and `1440px` retained the desktop layout with the mobile subnavigation hidden.
   - Reduced-motion mode removed the remaining subnavigation transition.
 - Re-running the stabilizer after a resize produced zero child-list mutations once the DOM was already correct.
+
+## Live Result
+
+- Imweb site `S20260516852c71a014d08` saved the global header at `2026-07-28T07:11:22Z`.
+- The saved `11,627`-character header matched the prepared payload exactly and retained wishlist loader `2026-07-28d`.
+- Fresh mobile WebKit verification on AB5 product `idx=45`:
+  - live marker `2026-07-28a` loaded.
+  - the header remained `81px`, the subnavigation remained `44px`, and the subnavigation used `position: sticky`.
+  - down-and-up samples at `0`, `40`, `80`, `160`, and `320px` reproduced the same geometry with no horizontal overflow.
+  - document overscroll was `none`, the product image started below the subnavigation, and the detail wishlist retained exactly one control.
+  - the checked product route had zero console errors.
+- Fresh mobile Chromium verification:
+  - `320`, `390`, and `430px` retained the stable `81px` and `44px` layout.
+  - `768px` retained Imweb's scaled tablet layout without overflow.
+  - desktop widths kept the mobile subnavigation hidden and unchanged.
+  - reduced-motion mode removed header and subnavigation transitions.
+- Online equipment navigation retained all five links, and the reformer link navigated to the expected filtered route.
+- All-products, offline-class, and home routes kept the closed subnavigation fixed and hidden without adding a layout gap.
