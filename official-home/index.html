@@ -154,9 +154,9 @@
       overflow: hidden;
     }
 
-    .nav-swap[data-nav="team"] { --nav-w: 92px; }
+    .nav-swap[data-nav="team"] { --nav-w: 100px; }
     .nav-swap[data-nav="lesson"] { --nav-w: 78px; }
-    .nav-swap[data-nav="career"] { --nav-w: 58px; }
+    .nav-swap[data-nav="career"] { --nav-w: 64px; }
     .nav-swap[data-nav="products"] { --nav-w: 78px; }
     .nav-swap[data-nav="video"] { --nav-w: 86px; }
 
@@ -692,6 +692,20 @@
       .nav-links { justify-content: flex-start; }
     }
 
+    @media (hover: none), (pointer: coarse) {
+      .nav-swap:hover .nav-ko,
+      .nav-swap:focus-visible .nav-ko {
+        opacity: 1;
+        transform: none;
+      }
+
+      .nav-swap:hover .nav-en,
+      .nav-swap:focus-visible .nav-en {
+        opacity: 0;
+        transform: translateY(5px);
+      }
+    }
+
     @media (prefers-reduced-motion: reduce) {
       html { scroll-behavior: auto; }
       *, *::before, *::after {
@@ -737,7 +751,7 @@
         <img class="brand-logo" src="/assets/archive-wordmark-nav-crop.png" alt="ARCHIVE PILATES" width="513" height="126">
       </a>
       <div class="nav-links" aria-label="주요 메뉴">
-        <a class="nav-swap" data-nav="team" href="https://archive-team.notion.site/" aria-label="팀아카이브">
+        <a class="nav-swap" data-nav="team" href="/teams" aria-label="팀아카이브">
           <span class="nav-ko">팀아카이브</span>
           <span class="nav-en" aria-hidden="true">TEAM ARCHIVE</span>
         </a>
@@ -872,7 +886,7 @@
             <h2>부산 명지, 수업을 깊게 보는 팀.</h2>
             <p>ARCHIVE PILATES는 부산 강서구 명지에 위치한 필라테스 스튜디오입니다. 강사와 예비 강사가 수업의 언어, 시퀀스, 피드백을 더 구체적으로 다듬을 수 있도록 오프라인 강사레슨과 영상구매 클래스를 함께 운영합니다.</p>
             <div class="actions">
-              <a class="button dark" href="https://archive-team.notion.site/">팀아카이브 보기</a>
+              <a class="button dark" href="/teams">팀아카이브 보기</a>
               <a class="button" href="https://www.instagram.com/minjin.vibe/">Instagram</a>
             </div>
           </div>
