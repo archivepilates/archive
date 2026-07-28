@@ -1,7 +1,7 @@
 (function () {
   "use strict";
 
-  var VERSION = "2026-07-28a";
+  var VERSION = "2026-07-28b";
   var STYLE_ID = "archive-pilates-wishlist-style";
   var RED = "#e1261c";
   var syncPromises = {};
@@ -17,14 +17,14 @@
     style.setAttribute("data-archive-pilates-wishlist-style", VERSION);
     style.textContent = [
       ":root{--ap-wish-red:" + RED + "}",
-      ".ap-wish-button{appearance:none;-webkit-appearance:none;display:inline-flex;align-items:center;justify-content:center;flex:0 0 44px;width:44px;height:44px;min-width:44px;min-height:44px;padding:0;border:1px solid rgba(17,17,17,.13);border-radius:50%;background:rgba(255,255,255,.94);color:#111;box-shadow:0 3px 14px rgba(17,17,17,.08);cursor:pointer;line-height:1;touch-action:manipulation;-webkit-tap-highlight-color:transparent;transition:color .16s ease,border-color .16s ease,background-color .16s ease,box-shadow .16s ease}",
+      ".ap-wish-button{appearance:none;-webkit-appearance:none;display:inline-flex;align-items:center;justify-content:center;flex:0 0 44px;width:44px;height:44px;min-width:44px;min-height:44px;padding:0;border:1px solid rgba(17,17,17,.13);border-radius:50%;background:rgba(255,255,255,.94);color:#111!important;box-shadow:0 3px 14px rgba(17,17,17,.08);cursor:pointer;line-height:1;touch-action:manipulation;-webkit-tap-highlight-color:transparent;transition:color .16s ease,border-color .16s ease,background-color .16s ease,box-shadow .16s ease}",
       ".ap-wish-button:hover{border-color:rgba(17,17,17,.28);box-shadow:0 5px 18px rgba(17,17,17,.13)}",
       ".ap-wish-button:focus-visible{outline:2px solid var(--ap-wish-red);outline-offset:3px}",
       ".ap-wish-button:disabled{cursor:wait;opacity:.62}",
-      ".ap-wish-button.is-active{color:var(--ap-wish-red);border-color:rgba(225,38,28,.34);background:#fff}",
+      ".ap-wish-button.is-active{color:var(--ap-wish-red)!important;border-color:rgba(225,38,28,.34);background:#fff}",
       ".ap-wish-button svg{display:block;width:22px;height:22px;overflow:visible;pointer-events:none}",
-      ".ap-wish-button path{fill:transparent;stroke:currentColor;stroke-width:1.85;stroke-linecap:round;stroke-linejoin:round;transition:fill .16s ease,stroke .16s ease}",
-      ".ap-wish-button.is-active path{fill:currentColor}",
+      ".ap-wish-button path{fill:transparent!important;stroke:currentColor!important;stroke-width:1.85;stroke-linecap:round;stroke-linejoin:round;transition:fill .16s ease,stroke .16s ease}",
+      ".ap-wish-button.is-active path{fill:currentColor!important}",
       ".ap-wish-button.is-popping svg{animation:ap-wish-pop .34s cubic-bezier(.2,.85,.35,1)}",
       "@keyframes ap-wish-pop{0%{transform:scale(1)}45%{transform:scale(1.18)}100%{transform:scale(1)}}",
       ".ap-wish-native-hidden{display:none!important}",
