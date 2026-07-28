@@ -1,7 +1,7 @@
 (function () {
   "use strict";
 
-  var VERSION = "2026-07-28a";
+  var VERSION = "2026-07-28b";
   var STYLE_ID = "archive-pilates-listing-layout-style";
   var INTRO_CLASS = "ap-listing-intro";
   var pending = false;
@@ -12,9 +12,11 @@
 
   function route() {
     var currentPath = path();
+    var params = new URLSearchParams(window.location.search || "");
+    if (params.has("idx")) return "";
     if (currentPath === "/17") return "video";
     if (currentPath === "/16") {
-      var mode = new URLSearchParams(window.location.search || "").get("ap_shop") || "all";
+      var mode = params.get("ap_shop") || "all";
       if (mode === "all") return "shop";
     }
     return "";

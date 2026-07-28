@@ -89,7 +89,7 @@ const combined = header + body + footer;
 const requiredMarkers = [
   'data-archive-pilates-wishlist-loader="2026-07-28d"',
   'data-archive-pilates-mobile-header-stability="2026-07-28a"',
-  'data-archive-pilates-site-improvements="2026-07-28a"',
+  'data-archive-pilates-site-improvements="2026-07-28b"',
   'data-archive-pilates-logo-official-home="2026-07-28a"',
   'data-archive-pilates-home-images="2026-07-28a"'
 ];

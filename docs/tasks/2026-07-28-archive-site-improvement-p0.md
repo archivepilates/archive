@@ -31,7 +31,7 @@ Rollback is a script update using the matching backed-up `header.html`, `body.ht
 
 - `official-home/index.html`
   - `강사레슨 예약` and `강사레슨 상품 보기` become `강사레슨 일정 확인`.
-- `official-home/assets/imweb-site-improvements-20260728a.js`
+- `official-home/assets/imweb-site-improvements-20260728b.js`
   - Adds `판매상품` and `영상구매` list headings.
   - Uses four/three/two columns for sale products at desktop/tablet/mobile widths.
   - Uses three/two/two columns for video products at desktop/tablet/mobile widths.

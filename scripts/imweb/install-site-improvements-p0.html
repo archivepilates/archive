@@ -1,8 +1,8 @@
-<script data-archive-pilates-site-improvements="2026-07-28a">
+<script data-archive-pilates-site-improvements="2026-07-28b">
 (function () {
   "use strict";
 
-  var VERSION = "2026-07-28a";
+  var VERSION = "2026-07-28b";
   var ORIGIN = "https://archivepilates.com";
   var currentPath = String(window.location.pathname || "/").replace(/\/+$/, "") || "/";
   var redirects = {
@@ -36,7 +36,7 @@
 
   if (!document.querySelector('script[data-archive-pilates-site-improvements-asset="' + VERSION + '"]')) {
     var script = document.createElement("script");
-    script.src = ORIGIN + "/assets/imweb-site-improvements-20260728a.js?v=" + VERSION;
+    script.src = ORIGIN + "/assets/imweb-site-improvements-20260728b.js?v=" + VERSION;
     script.defer = true;
     script.setAttribute("data-archive-pilates-site-improvements-asset", VERSION);
     (document.head || document.documentElement).appendChild(script);
