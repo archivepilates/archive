@@ -13,7 +13,7 @@ Date: 2026-07-28
 
 - Official icon source: the high-resolution transparent ARCHIVE PILATES symbol in Google Drive branding assets.
 - Icon canvas: warm white with the red symbol occupying about 90% of the square.
-- Imweb UI asset: `/assets/imweb-wishlist-20260728b.js`.
+- Imweb UI asset: `/assets/imweb-wishlist-20260728c.js`.
 - Imweb loader and favicon override source: `scripts/imweb/install-wishlist-and-icons.html`.
 - The versioned loader is appended to the existing global header script without replacing prior header behavior.
 
@@ -26,4 +26,5 @@ Date: 2026-07-28
   - `390px` mobile and `1440px` desktop checks had no horizontal overflow.
   - Reduced-motion emulation reported no heart animation or transform; only the red selected color remained.
 - Live v1 verification found an Imweb detail-title color rule overriding the selected heart. Version `2026-07-28b` adds scoped color/fill precedence.
+- Live responsive verification found Imweb applying `body { zoom: .85 }` in its tablet layout. Version `2026-07-28c` compensates at `768-1099px` so the rendered touch target stays at least `44px`.
 - Pending live asset deployment, Imweb header save, and authenticated-member persistence check.

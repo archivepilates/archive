@@ -1,7 +1,7 @@
 (function () {
   "use strict";
 
-  var VERSION = "2026-07-28b";
+  var VERSION = "2026-07-28c";
   var STYLE_ID = "archive-pilates-wishlist-style";
   var RED = "#e1261c";
   var syncPromises = {};
@@ -34,6 +34,7 @@
       "h1.ap-wish-detail-title{position:relative!important;display:block!important;min-height:44px!important;padding-right:56px!important}",
       "h1.ap-wish-detail-title>.ap-wish-button{position:absolute;top:50%;right:0;transform:translateY(-50%);vertical-align:middle}",
       "@media(max-width:767px){.ap-wish-card-host>.ap-wish-button,.ap-wish-custom-shell>.ap-wish-button{top:8px;right:8px}.ap-wish-button{box-shadow:0 2px 10px rgba(17,17,17,.09)}}",
+      "@media(min-width:768px) and (max-width:1099px){.ap-wish-button{width:52px;height:52px;min-width:52px;min-height:52px;flex-basis:52px}.ap-wish-button svg{width:25px;height:25px}h1.ap-wish-detail-title{min-height:52px!important;padding-right:64px!important}}",
       "@media(prefers-reduced-motion:reduce){.ap-wish-button,.ap-wish-button path{transition-property:color,fill,stroke,border-color,background-color!important}.ap-wish-button.is-popping svg{animation:none!important}}"
     ].join("");
     (document.head || document.documentElement).appendChild(style);
