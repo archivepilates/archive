@@ -1,0 +1,75 @@
+<script data-archive-pilates-mobile-header-stability="2026-07-28a">
+(function () {
+  "use strict";
+
+  var VERSION = "2026-07-28a";
+  var STYLE_ID = "archive-pilates-mobile-header-stability-style";
+  var SUBNAV_ID = "archive-pilates-mobile-online-subnav";
+  var pending = false;
+
+  function installStyle() {
+    var style = document.getElementById(STYLE_ID);
+    var css = [
+      "@media(max-width:860px){",
+      "html,body{overscroll-behavior-y:none!important}",
+      "#doz_header_wrap,#inline_header_mobile,#doz_header{transition:none!important;animation:none!important}",
+      "body.ap-mobile-online-subnav-open #" + SUBNAV_ID + "{position:sticky!important;top:0!important;left:auto!important;right:auto!important;width:100%!important;transform:none!important;transition:opacity .16s ease,visibility 0s!important}",
+      "}",
+      "@media(max-width:860px) and (prefers-reduced-motion:reduce){",
+      "body.ap-mobile-online-subnav-open #" + SUBNAV_ID + "{transition:none!important}",
+      "}"
+    ].join("");
+    if (!style) {
+      style = document.createElement("style");
+      style.id = STYLE_ID;
+      (document.head || document.documentElement).appendChild(style);
+    }
+    if (style.getAttribute("data-archive-pilates-mobile-header-stability-style") !== VERSION) {
+      style.setAttribute("data-archive-pilates-mobile-header-stability-style", VERSION);
+    }
+    if (style.textContent !== css) style.textContent = css;
+  }
+
+  function anchorSubnav() {
+    var header = document.getElementById("doz_header_wrap");
+    var bar = document.getElementById(SUBNAV_ID);
+    if (!header || !bar || !header.parentNode) return;
+    if (bar.parentNode !== header.parentNode || bar.previousElementSibling !== header) {
+      header.parentNode.insertBefore(bar, header.nextSibling);
+    }
+    bar.setAttribute("data-archive-pilates-stable-subnav", VERSION);
+    document.documentElement.setAttribute("data-archive-pilates-mobile-header-stability", VERSION);
+  }
+
+  function run() {
+    pending = false;
+    installStyle();
+    anchorSubnav();
+  }
+
+  function schedule() {
+    if (pending) return;
+    pending = true;
+    window.requestAnimationFrame(run);
+  }
+
+  installStyle();
+  if (document.readyState === "loading") {
+    document.addEventListener("DOMContentLoaded", run, { once: true });
+  } else {
+    run();
+  }
+  window.addEventListener("pageshow", run);
+  window.addEventListener("resize", schedule, { passive: true });
+  [120, 500, 1200, 2500].forEach(function (delay) {
+    window.setTimeout(run, delay);
+  });
+  try {
+    var observer = new MutationObserver(schedule);
+    observer.observe(document.documentElement, { childList: true, subtree: true });
+    window.setTimeout(function () {
+      observer.disconnect();
+    }, 6000);
+  } catch (error) {}
+})();
+</script>
