@@ -18,15 +18,19 @@
 
 - Firebase Hosting deployment restored the asset and ran the new predeploy validator.
 - Live asset SHA-256 matched the committed file and returned JavaScript content.
+- Live asset cache policy was corrected to `no-cache, no-store, must-revalidate`.
 - Imweb header loader was updated to cache key `20260728b`.
 - Authenticated owner session:
   - My Classroom renderer completed as `2026-07-28b`.
   - 30 cards rendered.
   - AB9, AR5, and ACH8 cards were present.
   - The normal Imweb header/footer did not leak into the standalone classroom.
+  - At 390px, all 30 cards rendered in one column with no horizontal overflow.
+  - The AB9 watch page rendered its protected watch component and video iframe with no console error.
 - Logged-out session:
   - `/48` redirected to the login page.
   - No class card or watch iframe was exposed.
+  - A direct AB9 watch-page request also redirected to login with no watch component or iframe.
 - Recent completed online orders:
   - All four recent AB9 purchaser accounts were present in the AB9 access group.
   - Both recent AR5 purchaser accounts were present in the AR5 access group.
