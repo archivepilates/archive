@@ -51,7 +51,25 @@ for (const codebase of affected.codebases) {
   if (dryRun) command.push("--dry-run");
   else command.push("--force");
   console.log(`Deploying Functions codebase: ${codebase} (${dryRun ? "dry-run" : "apply"})`);
-  const result = spawnSync(firebaseBin, command, { cwd: repoRoot, stdio: "inherit", env: process.env });
+  const result = spawnSync(firebaseBin, command, {
+    cwd: repoRoot,
+    encoding: "utf8",
+    env: process.env,
+    maxBuffer: 64 * 1024 * 1024,
+  });
+  if (result.stdout) process.stdout.write(result.stdout);
+  if (result.stderr) process.stderr.write(result.stderr);
+  const output = `${result.stdout || ""}\n${result.stderr || ""}`;
+  const firebaseReportedFailure = [
+    "failed to update function",
+    "failed to create function",
+    "failed to delete function",
+    "unable to queue the operation",
+  ].some((marker) => output.includes(marker));
+  if (firebaseReportedFailure) {
+    console.error(`Firebase reported an incomplete Functions deployment for ${codebase}.`);
+    process.exit(1);
+  }
   if (result.status !== 0) process.exit(result.status || 1);
 }
 

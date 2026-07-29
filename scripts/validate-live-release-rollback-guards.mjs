@@ -211,6 +211,8 @@ const guardGroups = [
           "`functions:${codebase}`",
           "command.push(\"--force\")",
           "Deploying Functions codebase:",
+          "failed to update function",
+          "Firebase reported an incomplete Functions deployment",
         ],
       },
       {
