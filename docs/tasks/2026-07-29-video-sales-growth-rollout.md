@@ -100,3 +100,11 @@ The follow-up rollout changes no live member communication yet, so ARCHIVE CORE 
   - logged out: classroom and watch page redirect to login
 
 The public analytics runtime is deployed in a disabled state marked `pending-public-stream`. The Chrome Analytics session was `archivepilates@gmail.com`, not the intended operational account `home@archivepilates.com`, and no public property existed. No GA4 property was created and no ARCHIVE IN measurement id was reused.
+
+## Follow-up Monitor
+
+- Automation: `영상 구매 후속 후보 점검`
+- Automation id: `automation-2`
+- Schedule: every day at 10:30 KST
+- Mode: read-only candidate audit in this task
+- Member sends and Imweb writes: disabled
