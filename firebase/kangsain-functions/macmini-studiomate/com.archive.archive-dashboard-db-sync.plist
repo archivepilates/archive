@@ -7,12 +7,12 @@
   <key>ProgramArguments</key>
   <array>
     <string>/opt/homebrew/bin/node</string>
-    <string>/Users/archivepilates/codex-worktrees/archivein-live-setup/scripts/run-archive-dashboard-sales-daily.mjs</string>
+    <string>/Users/archivepilates/dev/archive-in-runtime/scripts/run-archive-dashboard-sales-daily.mjs</string>
     <string>--apply</string>
     <string>--sync-firebase</string>
   </array>
   <key>WorkingDirectory</key>
-  <string>/Users/archivepilates/codex-worktrees/archivein-live-setup</string>
+  <string>/Users/archivepilates/dev/archive-in-runtime</string>
   <key>StartCalendarInterval</key>
   <dict>
     <key>Hour</key>

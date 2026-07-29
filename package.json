@@ -9,6 +9,7 @@
     "prepare:archive-core-transition": "node scripts/prepare-archive-core-transition-data.mjs",
     "health:system": "node scripts/run-system-health-check.mjs",
     "health:system:repair": "node scripts/run-system-health-check.mjs --mode=quick --repair",
+    "test:operational-retention": "node --test scripts/tests/operational-retention.test.mjs",
     "codex:queue": "node scripts/list-codex-action-queue.mjs",
     "monitor:hohoyoga": "node scripts/run-hohoyoga-monitor.mjs",
     "verify:archivein-admin": "node scripts/verify-archivein-admin-firestore-access.mjs",

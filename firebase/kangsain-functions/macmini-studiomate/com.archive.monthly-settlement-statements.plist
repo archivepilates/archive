@@ -7,7 +7,7 @@
   <key>ProgramArguments</key>
   <array>
     <string>/opt/homebrew/bin/node</string>
-    <string>/Users/archivepilates/codex-worktrees/archivein-live-setup/scripts/generate-monthly-settlement-statements.mjs</string>
+    <string>/Users/archivepilates/dev/archive-in-runtime/scripts/generate-monthly-settlement-statements.mjs</string>
     <string>--apply</string>
   </array>
   <key>StartCalendarInterval</key>
@@ -24,6 +24,6 @@
   <key>StandardErrorPath</key>
   <string>/Users/archivepilates/ArchiveIN/emergency/logs/monthly-settlement-statements.err.log</string>
   <key>WorkingDirectory</key>
-  <string>/Users/archivepilates/codex-worktrees/archivein-live-setup</string>
+  <string>/Users/archivepilates/dev/archive-in-runtime</string>
 </dict>
 </plist>

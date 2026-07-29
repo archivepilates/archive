@@ -1,4 +1,5 @@
 import { logger } from "firebase-functions";
+import { Timestamp } from "firebase-admin/firestore";
 import { db } from "../config/firebase";
 import { nowTimestamp } from "./date";
 
@@ -14,8 +15,11 @@ export async function logApiCall(entry: {
   errorMessage?: string;
 }): Promise<void> {
   logger.info("external api call", entry);
+  const createdAt = nowTimestamp();
+  const retentionDays = entry.status === "failed" ? 180 : 30;
   await db.collection("apiLogs").add({
     ...entry,
-    createdAt: nowTimestamp(),
+    createdAt,
+    expireAt: Timestamp.fromMillis(createdAt.toMillis() + retentionDays * 24 * 60 * 60 * 1000),
   });
 }

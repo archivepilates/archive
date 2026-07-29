@@ -9,7 +9,6 @@ import { pollManagerNotices } from "../sync/pollManagerNotices";
 import { processContactSyncJobs } from "../sync/processContactSyncJobs";
 import { processWriteQueue } from "../queue/processWriteQueue";
 import { createDueParkingDiscountJobs } from "../parking/parkingOperations";
-import { preSecurityRawMirror } from "../sync/preSecurityRawMirror";
 import { syncManagerStaffs } from "../sync/syncManagerStaffs";
 import { sendAttendanceReminder } from "../push/sendAttendanceReminder";
 import { getStaffByUid } from "../firestore/staffRepository";
@@ -89,16 +88,6 @@ export const scheduledSyncDashboardDaily = onSchedule(
   },
   async () => {
     await syncDashboardFromSheets();
-  },
-);
-
-export const scheduledPreSecurityRawMirror = onSchedule(
-  {
-    ...scheduleOptions,
-    schedule: "20 12 12 5 *",
-  },
-  async () => {
-    await preSecurityRawMirror();
   },
 );
 

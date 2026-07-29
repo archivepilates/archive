@@ -222,6 +222,21 @@ const guardGroups = [
         ],
       },
       {
+        file: "scripts/reject-legacy-functions-deploy.mjs",
+        markers: [
+          "legacy firebase/kangsain-functions default Functions deploy is retired",
+          "deploy-affected-functions.mjs",
+          "process.exit(1)",
+        ],
+      },
+      {
+        file: "firebase/kangsain-functions/firebase.json",
+        markers: [
+          "reject-legacy-functions-deploy.mjs",
+          "\"codebase\": \"default\"",
+        ],
+      },
+      {
         file: "scripts/verify-archive-core-responsive.mjs",
         markers: [
           "mobile-320",

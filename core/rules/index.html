@@ -26,7 +26,7 @@
         <header class="page-hero">
           <p class="eyebrow">RULES</p>
           <h1>운영 규칙</h1>
-          <p class="subtitle">2026.07.29 기준 현재 유효한 운영 규칙만 정리한 ARCHIVE CORE 단일 운영 허브입니다.</p>
+          <p class="subtitle">2026.07.30 기준 현재 유효한 운영 규칙만 정리한 ARCHIVE CORE 단일 운영 허브입니다.</p>
         </header>
 
         <section class="panel rules-hero">
@@ -188,6 +188,10 @@
                 <li>ARCHIVE CORE 자동화 관제 탭은 Firestore automationStatus를 표시하므로, 새 자동화는 실행 주체와 상태를 automationStatus에 기록해야 합니다.</li>
                 <li>LaunchAgent와 Codex 자동화 정의는 sync:automation-observability로 점검해 CORE 관제에 반영합니다.</li>
                 <li>LaunchAgent는 로그 최신성뿐 아니라 실제 last exit code를 확인하며, 실행 실패를 최신 로그 생성으로 정상 처리하지 않습니다.</li>
+                <li>운영 LaunchAgent는 임시 worktree가 아니라 최신 main을 반영한 /Users/archivepilates/dev/archive-in-runtime만 실행합니다.</li>
+                <li>대기 작업이 없는 큐 폴러는 실행마다 보고서를 만들지 않고 15~30분 간격의 단일 idle heartbeat만 남깁니다.</li>
+                <li>종료된 승인 확인 heartbeat, 비활성 plist, 합성 E2E 데이터와 반영 완료 원본 파일은 검증 후 정리하고 실제 회원·예약·발송 원천은 보존합니다.</li>
+                <li>일반 자동복구 옵션은 Firestore 삭제 권한을 포함하지 않습니다. 만료 운영 데이터 정리는 주간 점검의 명시적 purge 플래그와 엄격한 보존 조건을 모두 통과할 때만 실행합니다.</li>
                 <li>시간별 StudioMate Excel 동기화는 이전 반영 해시와 비교해 변경된 회원·수강권·예약·수업 문서만 씁니다. 같은 원본을 다시 내려받아도 변경 문서가 없으면 Firestore 본문을 다시 쓰지 않습니다.</li>
                 <li>프라이빗 회차는 변경된 프라이빗 예약의 회원만 동기화 직후 보정합니다. 전체 월간 보정은 매일 23:30 안전 점검으로만 실행하며 시간별 동기화에서 다시 호출하지 않습니다.</li>
                 <li>설문 미제출 점검은 최근 프라이빗 설문 후보만 조회하고, 이미 확인 메일을 만든 요청은 회원 응답·예약을 다시 조회하지 않습니다.</li>
@@ -307,6 +311,8 @@
               <ul>
                 <li>템플릿별 대상/제외 규칙은 templateTargetRules.ts에서 관리합니다.</li>
                 <li>SOLAPI 버튼 URL은 변수 치환 후 100자 이하여야 합니다.</li>
+                <li>강사레슨 수업자료 안내는 수업자료 보기, 수업배정 안내, 방문안내 보기 버튼을 함께 검수합니다.</li>
+                <li>강사레슨 수업배정 안내는 StudioMate 예약 스케줄의 수업일, 시간, 강사, 기구, 예약자 기준으로 만들고 수기 이미지나 임의 명단을 원천으로 쓰지 않습니다.</li>
                 <li>긴 URL은 shortLinks를 만들고 버튼에는 pr-, ir- 같은 짧은 링크 ID를 넣습니다.</li>
                 <li>발송 직전에는 템플릿 승인 상태, 전화번호, 대상일, 재시도 한도, 설문/가입서/리포트 필수 링크 변수를 다시 확인합니다.</li>
                 <li>설문ID, 접근토큰, shortLinkId, reportLinkId 같은 필수 링크 변수가 비어 있으면 후보가 생성되어 있어도 queued 또는 sent로 전환하지 않습니다.</li>

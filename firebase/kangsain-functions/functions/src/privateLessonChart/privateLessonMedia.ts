@@ -1,5 +1,5 @@
 import { randomBytes } from "node:crypto";
-import { Timestamp } from "firebase-admin/firestore";
+import { FieldValue, Timestamp } from "firebase-admin/firestore";
 import { db } from "../config/firebase";
 import { DelegatedGoogleClient } from "../google/delegatedGoogleClient";
 import type {
@@ -63,6 +63,7 @@ interface UploadSessionDoc {
   lastError?: string;
   createdAt: Timestamp;
   updatedAt: Timestamp;
+  expireAt?: Timestamp;
 }
 
 export async function initPrivateLessonMediaUpload(input: {
@@ -136,6 +137,7 @@ export async function initPrivateLessonMediaUpload(input: {
     uploadMode: "drive_direct",
     createdAt: now,
     updatedAt: now,
+    expireAt: Timestamp.fromMillis(now.toMillis() + 7 * 24 * 60 * 60 * 1000),
   } satisfies UploadSessionDoc);
 
   return {
@@ -490,6 +492,7 @@ async function finalizeMediaAttachment(
         driveFileId: file.driveFileId,
         driveUrl: file.driveUrl,
         lastError: null,
+        expireAt: FieldValue.delete(),
         updatedAt: nowTimestamp(),
       },
       { merge: true },

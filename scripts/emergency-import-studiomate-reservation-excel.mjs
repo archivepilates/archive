@@ -960,6 +960,7 @@ function timestampMillis(value) {
 }
 
 function isPrivateImportRecord(record) {
+  if (!record || typeof record !== "object") return false;
   const text = [record.lessonType, record.ticketClassType, record.ticketName].join(" ").toLowerCase();
   return /private|semi_private|프라이빗|개인|1:1|세미/.test(text);
 }

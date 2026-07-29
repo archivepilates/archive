@@ -87,11 +87,9 @@ com.archive.archivein-admin-emergency-sync
 
 ARCHIVE IN 운영자 모드의 동기화 버튼은 StudioMate API 동기화를 직접 실행하지 않는다. `adminSyncRequests`에 `requestMode: emergency_excel` 요청을 만들고, 맥미니 LaunchAgent `com.archive.archivein-admin-emergency-sync`가 최대 30초 안에 요청을 받아 `scripts/run-studiomate-excel-emergency-mode.mjs --download --apply`를 실행한다. 앱 버튼은 요청 완료 전까지 잠기며 Firestore의 `progressPercent`, `progressLabel`을 기준으로 진행률을 보여준다.
 
-1시간 간격 연락처 동기화 LaunchAgent:
-
-```text
-com.archive.studiomate-emergency-contacts-sync
-```
+연락처 동기화는 별도 Mac mini LaunchAgent를 두지 않습니다. 1시간 Excel
+동기화가 `contactSyncJobs`를 만들고 Firebase
+`scheduledProcessContactSyncJobs`가 큐를 처리합니다.
 
 삭제된 수업 로그는 `com.archive.studiomate-excel-emergency-mode` 안에서 회원목록, 수업예약내역과 함께 받는다. 원본 파일은 `~/ArchiveIN/emergency/archive/deleted-class/YYYY-MM-DD/`에 보관하고, 엑셀 행은 `studiomateDeletedClassLogs`에 원본 컬럼과 함께 적재한다.
 
@@ -108,7 +106,7 @@ com.archive.studiomate-emergency-contacts-sync
 | 예약/수강권 사유 취소 | 삭제이유가 `예약취소`, `수강권 환불`, `수강권 사용불가 처리`, `예약 실패` 등 | 제외 |
 | 그룹 삭제수업 확인필요 | 그룹 수업이고 삭제이유가 일반 `수업 삭제`이며 수업일 7일 미만 전에 삭제됨 | 운영자 확인 후 결정 |
 
-실행 내용:
+수동 복구가 필요한 경우에만 아래 스크립트를 사용합니다.
 
 ```bash
 node scripts/run-emergency-contacts-hourly-sync.mjs
@@ -117,9 +115,9 @@ node scripts/run-emergency-contacts-hourly-sync.mjs
 동작:
 
 1. 최신 회원목록 엑셀을 `--apply --queue-contact-sync`로 반영한다.
-2. `scheduledProcessContactSyncJobs` Scheduler job을 잠깐 `resume`/`run`한다.
+2. `scheduledProcessContactSyncJobs`를 확인하고 필요한 큐를 처리한다.
 3. `home_archivepilates` 연락처 큐가 0건이 될 때까지 필요한 횟수만 반복 실행한다.
-4. 작업 후 Scheduler job을 다시 `PAUSED`로 돌린다.
+4. 자동 스케줄 상태는 변경하지 않는다.
 
 로그:
 

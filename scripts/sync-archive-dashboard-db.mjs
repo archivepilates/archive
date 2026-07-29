@@ -1,7 +1,17 @@
 #!/usr/bin/env node
 import { spawnSync } from "node:child_process";
 import { createSign } from "node:crypto";
-import { existsSync, mkdirSync, readdirSync, readFileSync, statSync, writeFileSync } from "node:fs";
+import {
+  copyFileSync,
+  existsSync,
+  mkdirSync,
+  mkdtempSync,
+  readdirSync,
+  readFileSync,
+  rmSync,
+  statSync,
+  writeFileSync,
+} from "node:fs";
 import os from "node:os";
 import path from "node:path";
 
@@ -195,11 +205,17 @@ function numberCompare(a, b) {
 }
 
 function readExcelRows(files) {
+  const stagingDir = mkdtempSync(path.join(os.tmpdir(), "archive-dashboard-excel-"));
+  const stagedFiles = files.map((item, index) => {
+    const stagedPath = path.join(stagingDir, `${String(index).padStart(3, "0")}-${path.basename(item.path)}`);
+    copyFileWithRetry(item.path, stagedPath);
+    return { ...item, path: stagedPath };
+  });
   const script = `
 import json
 import pandas as pd
 
-files = json.loads(${JSON.stringify(JSON.stringify(files))})
+files = json.loads(${JSON.stringify(JSON.stringify(stagedFiles))})
 rows = []
 
 def clean(value):
@@ -220,9 +236,36 @@ for item in files:
 
 print(json.dumps(rows, ensure_ascii=False, default=str))
 `;
-  const result = spawnSync(config.python, ["-c", script], { encoding: "utf8", maxBuffer: 256 * 1024 * 1024 });
-  if (result.status !== 0) throw new Error(`Excel read failed: ${result.stderr || result.stdout}`);
-  return JSON.parse(result.stdout);
+  try {
+    const result = spawnSync(config.python, ["-c", script], { encoding: "utf8", maxBuffer: 256 * 1024 * 1024 });
+    if (result.status !== 0) throw new Error(`Excel read failed: ${result.stderr || result.stdout}`);
+    return JSON.parse(result.stdout);
+  } finally {
+    rmSync(stagingDir, { recursive: true, force: true });
+  }
+}
+
+function copyFileWithRetry(sourcePath, targetPath) {
+  let lastError;
+  for (let attempt = 1; attempt <= 4; attempt += 1) {
+    try {
+      copyFileSync(sourcePath, targetPath);
+      if (statSync(targetPath).size <= 0) throw new Error("staged file is empty");
+      return;
+    } catch (error) {
+      lastError = error;
+      if (attempt < 4) sleepSync(attempt * 1000);
+    }
+  }
+  throw new Error(
+    `Excel staging failed for ${path.basename(sourcePath)}: ${
+      lastError instanceof Error ? lastError.message : String(lastError)
+    }`,
+  );
+}
+
+function sleepSync(ms) {
+  Atomics.wait(new Int32Array(new SharedArrayBuffer(4)), 0, 0, ms);
 }
 
 function normalizeLessonSalesRow(row) {

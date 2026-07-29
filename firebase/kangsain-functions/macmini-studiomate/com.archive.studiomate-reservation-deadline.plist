@@ -7,10 +7,22 @@
 
   <key>ProgramArguments</key>
   <array>
-    <string>/bin/zsh</string>
-    <string>-lc</string>
-    <string>cd /Users/archivepilates/Documents/Codex/2026-05-07/archive &amp;&amp; TZ=Asia/Seoul DRY_RUN=true HEADLESS=true npm run studiomate:reservation-deadline</string>
+    <string>/usr/bin/caffeinate</string>
+    <string>-s</string>
+    <string>/opt/homebrew/bin/node</string>
+    <string>/Users/archivepilates/dev/archive-in-runtime/firebase/kangsain-functions/macmini-studiomate/run-reservation-deadline-job.mjs</string>
   </array>
+
+  <key>WorkingDirectory</key>
+  <string>/Users/archivepilates/dev/archive-in-runtime</string>
+
+  <key>EnvironmentVariables</key>
+  <dict>
+    <key>PATH</key>
+    <string>/usr/local/bin:/opt/homebrew/bin:/usr/bin:/bin:/usr/sbin:/sbin</string>
+    <key>TZ</key>
+    <string>Asia/Seoul</string>
+  </dict>
 
   <key>StartCalendarInterval</key>
   <dict>

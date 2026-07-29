@@ -5,6 +5,7 @@ import { createRequire } from "node:module";
 import os from "node:os";
 import path from "node:path";
 import { recordAutomationStatus } from "./lib/archive-core-ops-logging.mjs";
+import { shouldApplyOperationalDataPurge } from "./lib/operational-data-retention-policy.mjs";
 
 const require = createRequire(import.meta.url);
 const admin = require("../firebase/kangsain-functions/functions/node_modules/firebase-admin");
@@ -22,6 +23,7 @@ const args = parseArgs(process.argv.slice(2));
 const MODE = String(args.mode || "quick");
 const REPAIR = Boolean(args.repair);
 const APPLY = Boolean(args.apply || REPAIR);
+const PURGE_OPERATIONAL_DATA = shouldApplyOperationalDataPurge(args);
 const NO_EMAIL = Boolean(args["no-email"]);
 const now = new Date();
 const RECENT_FAILURE_MINUTES = 7 * 24 * 60;
@@ -144,6 +146,7 @@ await main();
 
 async function main() {
   mkdirSync(REPORT_DIR, { recursive: true });
+  await refreshRuntimeCheckout();
   await checkLaunchAgents();
   await checkWebSurfaces();
   await checkAdminAccess();
@@ -152,7 +155,123 @@ async function main() {
   await checkAlimtalk();
   await checkDataSourceAndReports();
   await checkGitAndCi();
+  await runWeeklyArtifactRetention();
   await writeResults();
+}
+
+async function refreshRuntimeCheckout() {
+  const runtimeRoot = path.join(HOME, "dev/archive-in-runtime");
+  if (path.resolve(ROOT) !== runtimeRoot) return;
+  if (["weekly", "deep", "e2e"].includes(MODE)) {
+    spawnSync("git", ["fetch", "origin", "main", "--prune"], {
+      cwd: ROOT,
+      encoding: "utf8",
+      env: process.env,
+    });
+  }
+  const dirty = gitDirty(ROOT);
+  const counts = execText("git", ["rev-list", "--left-right", "--count", "HEAD...origin/main"], ROOT)
+    .trim()
+    .split(/\s+/)
+    .map(Number);
+  const [ahead = 0, behind = 0] = counts;
+  if (!dirty && ahead === 0 && behind > 0 && REPAIR) {
+    const update = spawnSync("git", ["merge", "--ff-only", "origin/main"], {
+      cwd: ROOT,
+      encoding: "utf8",
+      env: process.env,
+    });
+    const ok = update.status === 0;
+    repairs.push({
+      findingId: "runtime-checkout-current",
+      action: "git merge --ff-only origin/main",
+      ok,
+      output: String(update.stderr || update.stdout || "").slice(0, 800),
+    });
+    checked.push({ id: "runtime-checkout", dirty, ahead, behind, repaired: ok });
+    if (ok) return;
+  } else {
+    checked.push({ id: "runtime-checkout", dirty, ahead, behind, repaired: false });
+  }
+  if (dirty || ahead > 0 || behind > 0) {
+    addFinding({
+      id: "runtime-checkout-current",
+      area: "automation",
+      severity: dirty || ahead > 0 ? "action_required" : "warning",
+      title: "Mac mini 자동화 런타임이 origin/main과 다름",
+      cause: `dirty=${dirty}, ahead=${ahead}, behind=${behind}`,
+      impact: "LaunchAgent가 최신 검증 코드를 사용하지 않거나 로컬 전용 변경을 실행할 수 있습니다.",
+      suggestedAction: "런타임 전용 변경을 main에 승격한 뒤 깨끗한 origin/main으로 fast-forward하세요.",
+      sourceRefs: [runtimeRoot],
+      autoRepairable: !dirty && ahead === 0 && behind > 0,
+    });
+  }
+}
+
+async function runWeeklyArtifactRetention() {
+  if (!["weekly", "deep", "e2e"].includes(MODE)) return;
+  const command = ["scripts/prune-operational-artifacts.mjs", ...(APPLY ? ["--apply"] : [])];
+  const run = spawnSync(process.execPath, command, {
+    cwd: ROOT,
+    encoding: "utf8",
+    env: process.env,
+    maxBuffer: 16 * 1024 * 1024,
+  });
+  const payload = safeJson(run.stdout, {});
+  checked.push({
+    id: "operational-artifact-retention",
+    ok: run.status === 0 && payload.ok !== false,
+    mode: payload.mode || (APPLY ? "apply" : "dry-run"),
+    emptyAdminReports: payload.emptyAdminReports || null,
+    jsonlCompaction: payload.jsonlCompaction || [],
+    logTrims: payload.logTrims || [],
+  });
+  if (run.status !== 0 || payload.ok === false) {
+    addFinding({
+      area: "automation",
+      severity: "warning",
+      title: "운영 로그 보존 정리 실패",
+      cause: String(run.stderr || run.stdout || `exit=${run.status}`).slice(0, 800),
+      impact: "빈 실행 보고서와 장기 로그가 계속 누적될 수 있습니다.",
+      suggestedAction: "prune-operational-artifacts dry-run 결과와 파일 권한을 확인하세요.",
+      sourceRefs: ["scripts/prune-operational-artifacts.mjs"],
+      autoRepairable: false,
+    });
+  }
+
+  const dataCommand = [
+    "scripts/purge-expired-operational-data.mjs",
+    ...(PURGE_OPERATIONAL_DATA ? ["--apply"] : []),
+  ];
+  const dataRun = spawnSync(process.execPath, dataCommand, {
+    cwd: ROOT,
+    encoding: "utf8",
+    env: process.env,
+    maxBuffer: 16 * 1024 * 1024,
+  });
+  const dataPayload = safeJson(dataRun.stdout, {});
+  checked.push({
+    id: "expired-operational-data-retention",
+    ok: dataRun.status === 0 && dataPayload.ok !== false,
+    mode: dataPayload.mode || (PURGE_OPERATIONAL_DATA ? "apply" : "dry-run"),
+    liveValidation: dataPayload.liveValidation || null,
+    mediaUploadSessions: dataPayload.mediaUploadSessions || null,
+    unsignedSignupContracts: dataPayload.unsignedSignupContracts || null,
+    plannedDeletes: dataPayload.plannedDeletes || 0,
+    appliedDeletes: dataPayload.appliedDeletes || 0,
+  });
+  if (dataRun.status !== 0 || dataPayload.ok === false) {
+    addFinding({
+      area: "data",
+      severity: "warning",
+      title: "만료 운영 데이터 정리 실패",
+      cause: String(dataRun.stderr || dataRun.stdout || `exit=${dataRun.status}`).slice(0, 800),
+      impact: "합성 E2E 문서와 만료된 업로드 세션이 계속 남을 수 있습니다.",
+      suggestedAction: "purge-expired-operational-data dry-run 조건과 Firestore 권한을 확인하세요.",
+      sourceRefs: ["scripts/purge-expired-operational-data.mjs"],
+      autoRepairable: false,
+    });
+  }
 }
 
 async function checkWebSurfaces() {

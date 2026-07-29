@@ -56,7 +56,6 @@
         "scheduledAttendanceReminder",
         "scheduledCreateParkingDiscountJobs",
         "scheduledSyncDashboardDaily",
-        "scheduledPreSecurityRawMirror",
         "syncDashboardNow",
         "adminSyncLecturesRange",
         "adminSyncManagerStaffs",

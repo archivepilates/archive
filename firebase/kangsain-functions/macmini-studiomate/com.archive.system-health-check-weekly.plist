@@ -12,6 +12,7 @@
     <string>/Users/archivepilates/dev/archive-in-runtime/scripts/run-system-health-check.mjs</string>
     <string>--mode=weekly</string>
     <string>--repair</string>
+    <string>--purge-operational-data</string>
   </array>
   <key>EnvironmentVariables</key>
   <dict>

@@ -54,13 +54,6 @@ If historical raw data is needed:
 
 ## 2026-05-13 StudioMate Security Hardening Snapshot
 
-StudioMate announced security hardening at `2026-05-13 02:00`.
-ArchiveIN has a guarded one-time lunch-window mirror job:
-
-- Function: `scheduledPreSecurityRawMirror`
-- Schedule: `2026-05-12 12:20 Asia/Seoul`
-- Guard: function body only runs when KST date is `2026-05-12`
-- Range: current production sync range, `today - 30 days` through `today + 14 days`
-
-This job reuses the normal sync flow and does not crawl unknown endpoints.
-After confirming the hardening window is past, remove or leave the guarded function inert.
+The guarded one-time `scheduledPreSecurityRawMirror` job ran only for the
+2026-05-12 security transition window. It was retired in July 2026 after the
+StudioMate Excel pipeline became the canonical operating mode.

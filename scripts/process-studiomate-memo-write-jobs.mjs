@@ -6,6 +6,7 @@ import { createRequire } from "node:module";
 import { createSign } from "node:crypto";
 import { acquireStudioMateBrowserLock } from "./lib/studiomate-browser-lock.mjs";
 import { ensureStudioMateLoggedIn } from "./lib/studiomate-login.mjs";
+import { appendIdleHeartbeatIfDue } from "./lib/idle-heartbeat.mjs";
 
 const require = createRequire(import.meta.url);
 const admin = require("../firebase/kangsain-functions/functions/node_modules/firebase-admin");
@@ -52,8 +53,7 @@ const jobs = await loadPendingJobs(limit);
 if (!jobs.length) {
   result.ok = true;
   result.finishedAt = new Date().toISOString();
-  await appendFile(config.runLogPath, `${JSON.stringify(result)}\n`);
-  console.log(JSON.stringify(result, null, 2));
+  appendIdleHeartbeatIfDue(config.runLogPath, result, 15 * 60 * 1000);
   process.exit(0);
 }
 
