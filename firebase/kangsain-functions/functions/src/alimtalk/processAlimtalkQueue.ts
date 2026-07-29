@@ -1,7 +1,7 @@
 import { createHmac, randomBytes } from "node:crypto";
 import { logger } from "firebase-functions";
 import { db } from "../config/firebase";
-import { notionToken, solapiApiKey, solapiApiSecret, solapiPfid } from "../config/secrets";
+import { solapiApiKey, solapiApiSecret, solapiPfid } from "../config/secrets";
 import { refs } from "../firestore/refs";
 import type { AlimtalkCandidateDoc } from "../types/models";
 import { errorMessage } from "../utils/errors";
@@ -13,9 +13,9 @@ import { alimtalkDedupeKey, findCompletedDuplicateForCandidate, normalizePhone }
 import { isAlimtalkTemplateApproved } from "./templateStatus";
 import { normalizeInstructorLessonManagementNumber } from "./instructorLessonManagement";
 import { isAlimtalkTestRecipient } from "./testRecipients";
+import { currentPrivateLessonReportRevision } from "../privateLessonChart/privateLessonReportRevision";
 
 const SOLAPI_SEND_URL = "https://api.solapi.com/messages/v4/send-many/detail";
-const NOTION_API_VERSION = "2022-06-28";
 const PROCESSING_STALE_MS = 10 * 60 * 1000;
 
 export interface AlimtalkCandidateProcessResult {
@@ -68,6 +68,20 @@ export async function processAlimtalkQueue(): Promise<{ processed: number; sent:
         );
         continue;
       }
+      const privateReportIssue = await lockPrivateLessonReportForSend(claimed);
+      if (privateReportIssue) {
+        await markPrivateLessonReportFailed(claimed, privateReportIssue);
+        await refs.alimtalkCandidate(claimed.candidateId).set(
+          {
+            status: "skipped",
+            reasonCode: "private_report_revision_blocked",
+            lastError: privateReportIssue,
+            updatedAt: nowTimestamp(),
+          },
+          { merge: true },
+        );
+        continue;
+      }
       const attempts = (claimed.attempts || 0) + 1;
       const result = await sendSolapiAlimtalk(claimed);
       await refs.alimtalkCandidate(claimed.candidateId).set(
@@ -110,6 +124,7 @@ export async function processAlimtalkQueue(): Promise<{ processed: number; sent:
       sent += 1;
     } catch (err) {
       const message = errorMessage(err);
+      await markPrivateLessonReportFailed(claimed, message);
       const attempts = (claimed.attempts || 0) + 1;
       const maxAttempts = claimed.maxAttempts || 2;
       await refs.alimtalkCandidate(claimed.candidateId).set(
@@ -200,6 +215,20 @@ export async function processAlimtalkCandidate(candidateId: string): Promise<Ali
       return { processed: true, status: "skipped", lastError };
     }
 
+    const privateReportIssue = await lockPrivateLessonReportForSend(claimed);
+    if (privateReportIssue) {
+      await markPrivateLessonReportFailed(claimed, privateReportIssue);
+      await refs.alimtalkCandidate(claimed.candidateId).set(
+        {
+          status: "skipped",
+          reasonCode: "private_report_revision_blocked",
+          lastError: privateReportIssue,
+          updatedAt: nowTimestamp(),
+        },
+        { merge: true },
+      );
+      return { processed: true, status: "skipped", lastError: privateReportIssue };
+    }
     const attempts = (claimed.attempts || 0) + 1;
     const result = await sendSolapiAlimtalk(claimed);
     await refs.alimtalkCandidate(claimed.candidateId).set(
@@ -242,6 +271,7 @@ export async function processAlimtalkCandidate(candidateId: string): Promise<Ali
     return { processed: true, status: "sent", solapiMessageId: result.messageId };
   } catch (err) {
     const message = errorMessage(err);
+    await markPrivateLessonReportFailed(claimed, message);
     const attempts = (claimed.attempts || 0) + 1;
     const maxAttempts = claimed.maxAttempts || 2;
     await refs.alimtalkCandidate(claimed.candidateId).set(
@@ -289,57 +319,105 @@ export async function processAlimtalkCandidate(candidateId: string): Promise<Ali
 async function markPrivateLessonReportSent(candidate: AlimtalkCandidateDoc): Promise<void> {
   if (candidate.type !== "private_lesson_report") return;
   const recordId = String(candidate.payload?.recordId || candidate.sourceActionKey || "").trim();
-  const notionPageId = String(candidate.payload?.notionPageId || "").trim();
+  const reportRevision = String(candidate.payload?.reportRevision || "").trim();
   const sentAt = nowTimestamp();
   if (recordId) {
-    await refs.privateLessonChartRecord(recordId).set(
-      {
-        gptStatus: "published",
-        publicReportApproval: {
-          status: "sent",
-          candidateId: candidate.candidateId,
-          lastError: null,
+    await db.runTransaction(async (tx) => {
+      const ref = refs.privateLessonChartRecord(recordId);
+      const snap = await tx.get(ref);
+      const record = snap.data();
+      if (!record) return;
+      const snapshot =
+        reportRevision && record.approvedReportSnapshot?.revision === reportRevision
+          ? record.approvedReportSnapshot
+          : record.approvedReportSnapshot || null;
+      tx.set(
+        ref,
+        {
+          gptStatus: "published",
+          sentRevision: reportRevision || record.approvedRevision || "",
+          sentReportSnapshot: snapshot,
+          publicReportApproval: {
+            ...(record.publicReportApproval || {}),
+            status: "sent",
+            candidateId: candidate.candidateId,
+            sentAt,
+            lastError: null,
+          },
+          updatedAt: sentAt,
         },
-        updatedAt: sentAt,
-      },
-      { merge: true },
-    );
-  }
-  if (notionPageId) {
-    await updatePrivateLessonReportNotionStatus(notionPageId, "완료").catch((err) => {
-      logger.warn("private lesson report notion sent status update failed", {
-        candidateId: candidate.candidateId,
-        recordId,
-        notionPageId,
-        message: errorMessage(err),
-      });
+        { merge: true },
+      );
     });
   }
 }
 
-async function updatePrivateLessonReportNotionStatus(pageId: string, status: string): Promise<void> {
-  await notionRequest(`pages/${pageId}`, "PATCH", {
-    properties: {
-      발송: { checkbox: true },
-      발송상태: { select: { name: status } },
-    },
+async function lockPrivateLessonReportForSend(candidate: AlimtalkCandidateDoc): Promise<string> {
+  if (candidate.type !== "private_lesson_report") return "";
+  const recordId = String(candidate.payload?.recordId || candidate.sourceActionKey || "").trim();
+  const revision = String(candidate.payload?.reportRevision || "").trim();
+  if (!recordId || !revision) return "승인된 리포트 리비전 정보가 없습니다.";
+  return db.runTransaction(async (tx) => {
+    const candidateRef = refs.alimtalkCandidate(candidate.candidateId);
+    const recordRef = refs.privateLessonChartRecord(recordId);
+    const requestId = String(candidate.payload?.requestId || recordId);
+    const requestRef = refs.privateLessonChartRequest(requestId);
+    const [candidateSnap, recordSnap, requestSnap] = await Promise.all([
+      tx.get(candidateRef),
+      tx.get(recordRef),
+      tx.get(requestRef),
+    ]);
+    const currentCandidate = candidateSnap.data();
+    const record = recordSnap.data();
+    const chartRequest = requestSnap.data();
+    if (currentCandidate?.status !== "processing") return "발송 후보 상태가 변경되었습니다.";
+    if (!record || !chartRequest) return "프라이빗 수업 기록을 찾을 수 없습니다.";
+    if (chartRequest.status === "cancelled" || chartRequest.cancelledAt) return "취소된 수업입니다.";
+    const booking = chartRequest.bookingId ? (await tx.get(refs.booking(chartRequest.bookingId))).data() : undefined;
+    if (!booking || booking.appStatus !== "reserved" || /cancel|deleted|inactive/i.test(String(booking.sourceStatus || ""))) {
+      return "예약 취소 또는 시간변경 상태를 다시 확인해야 합니다.";
+    }
+    if (record.approvedRevision !== revision || record.approvedReportSnapshot?.revision !== revision) {
+      return "승인본과 발송 후보의 리비전이 다릅니다.";
+    }
+    if (currentPrivateLessonReportRevision(record) !== revision) {
+      return "승인 후 리포트 내용이 변경되었습니다.";
+    }
+    tx.set(
+      recordRef,
+      {
+        publicReportApproval: {
+          ...(record.publicReportApproval || {}),
+          status: "processing",
+          candidateId: candidate.candidateId,
+          lastError: null,
+        },
+        updatedAt: nowTimestamp(),
+      },
+      { merge: true },
+    );
+    return "";
   });
 }
 
-async function notionRequest(path: string, method: "GET" | "POST" | "PATCH" | "DELETE", body?: Record<string, unknown>): Promise<any> {
-  const response = await fetch(`https://api.notion.com/v1/${path}`, {
-    method,
-    headers: {
-      Authorization: `Bearer ${notionToken.value()}`,
-      "Content-Type": "application/json",
-      "Notion-Version": NOTION_API_VERSION,
+async function markPrivateLessonReportFailed(candidate: AlimtalkCandidateDoc, message: string): Promise<void> {
+  if (candidate.type !== "private_lesson_report") return;
+  const recordId = String(candidate.payload?.recordId || candidate.sourceActionKey || "").trim();
+  if (!recordId) return;
+  const record = (await refs.privateLessonChartRecord(recordId).get()).data();
+  if (!record || record.publicReportApproval?.status === "sent") return;
+  await refs.privateLessonChartRecord(recordId).set(
+    {
+      publicReportApproval: {
+        ...(record.publicReportApproval || {}),
+        status: "failed",
+        candidateId: candidate.candidateId,
+        lastError: message,
+      },
+      updatedAt: nowTimestamp(),
     },
-    body: body ? JSON.stringify(body) : undefined,
-  });
-  const text = await response.text();
-  const parsed = text ? JSON.parse(text) : {};
-  if (!response.ok) throw new Error(`Notion API ${path} failed ${response.status}: ${parsed.message || text}`);
-  return parsed;
+    { merge: true },
+  );
 }
 
 async function claimCandidate(candidate: AlimtalkCandidateDoc): Promise<AlimtalkCandidateDoc | null> {
@@ -557,7 +635,23 @@ async function shortLinkIdForCandidate(
   managementNumber: string,
 ): Promise<string> {
   const existing = String(candidate.payload?.shortLinkId || "");
-  if (candidate.type !== "instructor_lesson_material" && existing) return existing;
+  if (candidate.type === "private_survey" && surveyId && accessToken) {
+    const link = await ensureShortLink({
+      type: "private_survey",
+      targetUrl: privateSurveyTargetUrl(surveyId, accessToken),
+      sourceId: candidate.candidateId,
+    });
+    if (!existing) {
+      await refs.alimtalkCandidate(candidate.candidateId).set(
+        {
+          payload: { ...candidate.payload, shortLinkId: link.linkId, shortUrl: link.shortUrl },
+          updatedAt: nowTimestamp(),
+        },
+        { merge: true },
+      );
+    }
+    return link.linkId;
+  }
   if (candidate.type === "group_survey" && surveyId && accessToken) {
     const link = await ensureShortLink({
       type: "group_survey",
@@ -577,6 +671,7 @@ async function shortLinkIdForCandidate(
     }
     return link.linkId;
   }
+  if (existing) return existing;
   if (candidate.type === "instructor_lesson_material" && managementNumber) {
     const link = await ensureShortLink({
       type: "method_material",
@@ -595,6 +690,13 @@ async function shortLinkIdForCandidate(
     return link.linkId;
   }
   return "";
+}
+
+function privateSurveyTargetUrl(surveyId: string, accessToken: string): string {
+  const url = new URL("https://in.archivepilates.com/privateSurvey");
+  url.searchParams.set("id", surveyId);
+  url.searchParams.set("token", accessToken);
+  return url.toString();
 }
 
 function groupSurveyTargetUrl(surveyId: string, accessToken: string): string {

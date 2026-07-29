@@ -8,6 +8,7 @@ on:
       - "archivein/manifest.webmanifest"
       - "archivein/sw.js"
       - "archivein/private-chart/**"
+      - "archivein/privateSurvey/**"
       - "archivein/method/**"
       - "archivein/onsiteWelcome/**"
       - "core/**"
@@ -26,6 +27,7 @@ on:
       - "archivein/manifest.webmanifest"
       - "archivein/sw.js"
       - "archivein/private-chart/**"
+      - "archivein/privateSurvey/**"
       - "archivein/method/**"
       - "archivein/onsiteWelcome/**"
       - "core/**"
@@ -84,6 +86,12 @@ jobs:
 
       - name: Validate private media upload config
         run: npm run validate:private-media-upload-config
+
+      - name: Validate private flow contract
+        run: npm run validate:private-flow-contract
+
+      - name: Test private flow state and revision contract
+        run: npm run test:private-flow
 
       - name: Validate live rollback guards
         run: npm run validate:live-release-rollback-guards

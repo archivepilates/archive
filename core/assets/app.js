@@ -33,6 +33,7 @@ const state = {
   privateRequests: [],
   privateRecords: [],
   privateLedgerEntries: [],
+  privateSessions: [],
   lessonOccurrences: [],
   bookings: [],
   reservations: [],
@@ -791,6 +792,30 @@ async function getRecentCollectionBy(db, firestore, collectionName, orderField =
     return snapshot.docs
       .map((docSnapshot) => ({ id: docSnapshot.id, ...docSnapshot.data() }))
       .sort((a, b) => String(b[orderField] || "").localeCompare(String(a[orderField] || "")))
+      .slice(0, maxItems);
+  }
+}
+
+async function getCurrentPrivateLessonSessions(db, firestore, maxItems = 500) {
+  const start = new Date();
+  start.setHours(0, 0, 0, 0);
+  try {
+    const snapshot = await firestore.getDocs(
+      firestore.query(
+        firestore.collection(db, "privateLessonSessions"),
+        firestore.where("lessonStartAt", ">=", start),
+        firestore.orderBy("lessonStartAt", "asc"),
+        firestore.limit(maxItems),
+      ),
+    );
+    return snapshot.docs.map((docSnapshot) => ({ id: docSnapshot.id, ...docSnapshot.data() }));
+  } catch (error) {
+    if (String(error?.code || error?.message || "").includes("permission")) throw error;
+    const snapshot = await firestore.getDocs(firestore.collection(db, "privateLessonSessions"));
+    return snapshot.docs
+      .map((docSnapshot) => ({ id: docSnapshot.id, ...docSnapshot.data() }))
+      .filter((session) => timestampMs(session.lessonStartAt || session.lessonDate) >= start.getTime())
+      .sort((a, b) => timestampMs(a.lessonStartAt || a.lessonDate) - timestampMs(b.lessonStartAt || b.lessonDate))
       .slice(0, maxItems);
   }
 }
@@ -3271,6 +3296,11 @@ function privateReportReady(row) {
 }
 
 function pendingPrivateProgressRows() {
+  if ((state.privateSessions || []).length) {
+    return currentPrivateSessionRows(state.privateSessions).filter(
+      (session) => !["delivered", "cancelled"].includes(String(session.workflowStage || "")),
+    );
+  }
   const rows = privateProgressRows(
     state.privateRequests || [],
     state.privateRecords || [],
@@ -3279,6 +3309,100 @@ function pendingPrivateProgressRows() {
     state.alimtalkSends || [],
   );
   return currentPrivateProgressRows(rows).filter((row) => privateStage(row) !== "complete");
+}
+
+function currentPrivateSessionRows(sessions, referenceDate = new Date()) {
+  const start = todayStartMs(referenceDate);
+  return [...sessions]
+    .filter((session) => {
+      const ms = timestampMs(session.lessonStartAt || session.lessonDate);
+      return ms && ms >= start;
+    })
+    .sort((a, b) => timestampMs(a.lessonStartAt || a.lessonDate) - timestampMs(b.lessonStartAt || b.lessonDate));
+}
+
+function privateSessionLine(session) {
+  const round = Number(session.sessionNumber || 0) > 0 ? `${session.sessionNumber}회차` : "회차 확인";
+  const ms = timestampMs(session.lessonStartAt || session.lessonDate);
+  const date = new Date(ms);
+  const dateText = Number.isNaN(date.getTime())
+    ? "-"
+    : `${String(date.getFullYear()).slice(2)}${String(date.getMonth() + 1).padStart(2, "0")}${String(date.getDate()).padStart(2, "0")} ${String(date.getHours()).padStart(2, "0")}:${String(date.getMinutes()).padStart(2, "0")}`;
+  return `${session.memberName || session.memberId || session.sessionId} ${round} ${dateText} ${session.staffName || "강사 미지정"}`;
+}
+
+function renderPrivateSessionCard(session) {
+  return `
+    <div class="stage-card">
+      <strong>${escapeHtml(privateSessionLine(session))}</strong>
+      <p>${escapeHtml(session.nextAction || "상태 확인")}</p>
+      <div class="tag-row">
+        <span class="pill ${session.roundVerified === false ? "warn" : "good"}">${session.roundVerified === false ? "회차 확인" : "회차 확인됨"}</span>
+        ${session.lastError ? `<span class="pill warn">오류 확인</span>` : ""}
+      </div>
+    </div>
+  `;
+}
+
+function renderPrivateSessions(sessions) {
+  const list = qs("privateProgressList");
+  if (!list) return;
+  const rows = currentPrivateSessionRows(sessions);
+  const activeRows = rows.filter((row) => row.workflowStage !== "cancelled");
+  const groups = {
+    preparation: activeRows.filter((row) => ["preparation", "needs_review"].includes(row.workflowStage)),
+    recording: activeRows.filter((row) => row.workflowStage === "recording"),
+    report_review: activeRows.filter((row) => row.workflowStage === "report_review"),
+    delivered: activeRows.filter((row) => row.workflowStage === "delivered"),
+  };
+  const pendingRows = activeRows.filter((row) => row.workflowStage !== "delivered");
+  setText("privatePendingCount", formatCount(pendingRows.length));
+  setText("privatePreStageCount", formatCount(groups.preparation.length));
+  setText("privatePostStageCount", formatCount(groups.recording.length));
+  setText("privateCompleteStageCount", formatCount(groups.delivered.length));
+  setPillText("privateProgressStatus", pendingRows.length ? "warning" : "success");
+
+  const byStaff = new Map();
+  pendingRows.forEach((row) => {
+    const staff = row.staffName || "강사 미지정";
+    if (!byStaff.has(staff)) byStaff.set(staff, []);
+    byStaff.get(staff).push(row);
+  });
+  setPillText("privateInstructorPendingStatus", pendingRows.length ? "warning" : "success");
+  const staffList = qs("privateInstructorPendingList");
+  if (staffList) {
+    staffList.innerHTML = pendingRows.length
+      ? [...byStaff.entries()]
+          .sort((a, b) => b[1].length - a[1].length)
+          .map(
+            ([staff, staffRows]) => `
+              <div class="status-row">
+                <div><strong>${escapeHtml(staff)} · ${staffRows.length.toLocaleString("ko-KR")}건</strong><p>${escapeHtml(staffRows.slice(0, 4).map(privateSessionLine).join(" / "))}</p></div>
+                ${pill("warning")}
+              </div>
+            `,
+          )
+          .join("")
+      : `<div class="empty-state">진행 안 된 프라이빗 수업이 없습니다.</div>`;
+  }
+
+  list.innerHTML = [
+    ["preparation", "수업 준비", groups.preparation],
+    ["recording", "수업 기록", groups.recording],
+    ["report_review", "리포트 확인", groups.report_review],
+    ["delivered", "전달 완료", groups.delivered],
+  ]
+    .map(
+      ([key, title, stageRows]) => `
+        <article class="stage-column stage-${key}">
+          <div class="stage-column-header"><strong>${escapeHtml(title)}</strong><span>${stageRows.length.toLocaleString("ko-KR")}건</span></div>
+          <div class="stage-card-list">
+            ${stageRows.length ? stageRows.slice(0, 20).map(renderPrivateSessionCard).join("") : `<div class="empty-state">해당 단계 수업 없음</div>`}
+          </div>
+        </article>
+      `,
+    )
+    .join("");
 }
 
 function privatePendingBreakdown(rows) {
@@ -3390,8 +3514,19 @@ function renderPrivateProgress(requests, records, ledgerEntries, candidates = []
     : `<div class="empty-state">오늘 이후 진행 대상 프라이빗 차트가 없습니다.</div>`;
 }
 
-function renderPrivate(requests, records, ledgerEntries, candidates = [], sends = []) {
+function renderPrivate(requests, records, ledgerEntries, candidates = [], sends = [], sessions = []) {
   if (!qs("privateProgressList")) return;
+  if (sessions.length) {
+    setText("privateRequestCount", String(sessions.length));
+    setText("privateRecordCount", String(sessions.filter((item) => item.postStatus === "submitted").length));
+    setText("privateUsageCount", String(sessions.filter((item) => item.bookingId).length));
+    setText("privateLedgerCount", String(sessions.filter((item) => item.roundVerified).length));
+    setText("privateRecordHealth", sessions.some((item) => item.lastError) ? "확인할 오류 있음" : "진행 데이터 정상");
+    setText("privateSubmittedCount", formatCount(sessions.filter((item) => item.preStatus === "submitted").length));
+    setText("privateCorrectionCount", formatCount(sessions.filter((item) => item.roundVerified === false).length));
+    renderPrivateSessions(sessions);
+    return;
+  }
   setText("privateRequestCount", String(requests.length));
   setText("privateRecordCount", String(records.length));
   setText("privateUsageCount", String(requests.filter((item) => item.bookingId).length));
@@ -4815,6 +4950,7 @@ async function refresh() {
       recommendedMealProgramRequests,
       memberDetail,
       businessMembers,
+      privateSessions,
       privateRequests,
       privateRecords,
       privateLedgerEntries,
@@ -4887,6 +5023,13 @@ async function refresh() {
         : Promise.resolve([]),
       shouldLoadPrivate
         ? safeRead(
+            "privateLessonSessions",
+            () => getCurrentPrivateLessonSessions(db, runtime, 500),
+            [],
+          )
+        : Promise.resolve([]),
+      shouldLoadPrivate
+        ? safeRead(
             "privateLessonChartRequests",
             () => getRecentCollectionBy(db, runtime, "privateLessonChartRequests", "createdAt", 100),
             [],
@@ -4936,6 +5079,7 @@ async function refresh() {
     state.recommendedMealProgramRequests = studioItems(recommendedMealProgramRequests);
     state.memberDetail = memberDetail;
     state.businessMembers = businessMembers;
+    state.privateSessions = privateSessions;
     state.privateRequests = privateRequests;
     state.privateRecords = privateRecords;
     state.privateLedgerEntries = privateLedgerEntries;
@@ -4962,7 +5106,14 @@ async function refresh() {
     renderPricingInquiryRecentList();
     renderRecommendedMealRecentList();
     renderMemberDetail(memberDetail);
-    renderPrivate(privateRequests, privateRecords, privateLedgerEntries, alimtalkCandidates, alimtalkSends);
+    renderPrivate(
+      privateRequests,
+      privateRecords,
+      privateLedgerEntries,
+      alimtalkCandidates,
+      alimtalkSends,
+      privateSessions,
+    );
     renderLessons(lessonOccurrences, bookings, [...deletedClassLogs, ...deletedLessons]);
     if (shouldLoadBusiness) {
       if (state.businessSnapshot) renderBusiness(state.businessSnapshot);

@@ -45,6 +45,8 @@ if (selectedSurfaces.includes("archivein")) {
       "surveyForm",
       "api/privateSurveySubmit",
     ]),
+    statusCheck("private-survey-api-custom-domain", "https://in.archivepilates.com/api/privateSurveySubmit", [403]),
+    statusCheck("private-survey-api-webapp-path", "https://archive-pilates.web.app/archivein/api/privateSurveySubmit", [403]),
     textCheck("recommended-meal-survey-custom-domain", "https://in.archivepilates.com/recommendedMealSurvey/", [
       "ARCHIVE PILATES 추천식단 프로그램",
       "mealSurveyForm",
@@ -142,6 +144,9 @@ if (selectedSurfaces.includes("core")) {
       "deriveLessonOccurrencesFromBookings",
       "normalizedLessonKind",
       "operatorLifecycle",
+      "privateLessonSessions",
+      '"preparation", "수업 준비"',
+      '"delivered", "전달 완료"',
     ]),
     textCheck("core-app-bundle-webapp-path", "https://archive-pilates.web.app/core/assets/app.js", [
       "pricingInquiryAlimtalkRequests",
@@ -159,6 +164,9 @@ if (selectedSurfaces.includes("core")) {
       "deriveLessonOccurrencesFromBookings",
       "normalizedLessonKind",
       "operatorLifecycle",
+      "privateLessonSessions",
+      '"preparation", "수업 준비"',
+      '"delivered", "전달 완료"',
     ]),
   );
 }

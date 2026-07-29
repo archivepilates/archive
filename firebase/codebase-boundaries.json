@@ -29,7 +29,6 @@
         "scheduledCreatePrivateLessonChartRequests",
         "scheduledReconcileCurrentMonthPrivateLessonCharts",
         "scheduledGeneratePrivateLessonChartReports",
-        "scheduledEnqueuePrivateLessonReportAlimtalks",
         "scheduledPurgeDiscardedMemberSignupContracts",
         "ingestPrivateSurveyResponse",
         "privateSurveyResponseView",
@@ -40,7 +39,9 @@
         "methodCueCardReview",
         "notionPrivateLessonReportWebhook",
         "redirectShortLink",
-        "processPrivateSurveyIntake"
+        "processPrivateSurveyIntake",
+        "syncPrivateLessonSessionFromRequest",
+        "syncPrivateLessonSessionFromRecord"
       ],
       "forbidden": ["daily Alimtalk candidate selection", "StudioMate writes", "Google Contacts writes"]
     },

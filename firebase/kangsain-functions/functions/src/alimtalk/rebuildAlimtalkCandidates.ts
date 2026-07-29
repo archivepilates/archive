@@ -1,4 +1,5 @@
 import { createHash, createHmac } from "node:crypto";
+import { Timestamp } from "firebase-admin/firestore";
 import { logger } from "firebase-functions";
 import type { AlimtalkCandidateDoc, BookingDoc, LectureDoc, MemberProfileDoc } from "../types/models";
 import { db } from "../config/firebase";
@@ -53,7 +54,8 @@ export async function rebuildAlimtalkCandidatesForRange(input: {
       }
       const privateSurveyCandidate = await privateSurveyCandidateForDate(profile, sourceDate, bookingIndex);
       if (privateSurveyCandidate) {
-        await enqueueSendableCandidate(privateSurveyCandidate, candidateIds, writes);
+        const enqueued = await enqueueSendableCandidate(privateSurveyCandidate, candidateIds, writes);
+        if (enqueued) writes.push(upsertPrivateSurveyRequest(privateSurveyCandidate));
       }
       const groupSurveyCandidate = await groupSurveyCandidateForDate(profile, sourceDate, bookingIndex);
       if (groupSurveyCandidate) {
@@ -541,6 +543,10 @@ async function privateSurveyCandidateForDate(
   if (!booking) return null;
   if (await hasSubmittedPrivateSurvey(profile.memberId, profile.phone)) return null;
   if (hasAttendedPrivateBookingOnOrBefore(profile.memberId, sourceDate, bookingIndex)) return null;
+  const requestId = privateSurveyRequestId(profile.memberId, booking.bookingId);
+  const accessToken = privateSurveyAccessToken(requestId);
+  const targetUrl = privateSurveyTargetUrl(requestId, accessToken);
+  const shortLinkId = shortLinkIdForTarget("private_survey", targetUrl);
   return {
     candidateId: `private_survey_${profile.memberId}_${sourceDate}`,
     studioId: profile.studioId,
@@ -559,6 +565,13 @@ async function privateSurveyCandidateForDate(
       bookingId: booking.bookingId,
       lectureId: booking.lectureId,
       lectureDate: booking.lectureDate,
+      staffId: booking.staffId,
+      staffName: booking.staffName,
+      surveyId: requestId,
+      responseId: requestId,
+      accessToken,
+      shortLinkId,
+      shortUrl: shortUrlForId(shortLinkId),
       privateSurveyWindowEndDate: reservationOpenEndDate(sourceDate),
     },
     attempts: 0,
@@ -567,6 +580,68 @@ async function privateSurveyCandidateForDate(
     createdAt: nowTimestamp(),
     updatedAt: nowTimestamp(),
   };
+}
+
+function privateSurveyRequestId(memberId: string, bookingId: string): string {
+  return `psr-${stableHash({ memberId, bookingId }).slice(0, 12)}`;
+}
+
+function privateSurveyAccessToken(requestId: string): string {
+  return createHmac("sha256", privateSurveyWebhookSecret.value())
+    .update(`native-private-survey:${requestId}`)
+    .digest("hex")
+    .slice(0, 32);
+}
+
+function privateSurveyTargetUrl(requestId: string, accessToken: string): string {
+  const url = new URL("https://in.archivepilates.com/privateSurvey");
+  url.searchParams.set("id", requestId);
+  url.searchParams.set("token", accessToken);
+  return url.toString();
+}
+
+async function upsertPrivateSurveyRequest(candidate: AlimtalkCandidateDoc): Promise<void> {
+  const requestId = String(candidate.payload.surveyId || candidate.payload.responseId || "");
+  const accessToken = String(candidate.payload.accessToken || "");
+  if (!requestId || !accessToken) return;
+  const ref = refs.privateSurveyRequest(requestId);
+  const previous = (await ref.get()).data();
+  if (previous?.status === "submitted") {
+    await ref.set({ updatedAt: nowTimestamp() }, { merge: true });
+    return;
+  }
+  const bookingId = String(candidate.payload.bookingId || "");
+  const booking = bookingId ? (await refs.booking(bookingId).get()).data() : undefined;
+  const expiresAt = booking?.lectureStartAt
+    ? Timestamp.fromMillis(booking.lectureStartAt.toMillis() + 24 * 60 * 60 * 1000)
+    : null;
+  await ref.set(
+    {
+      requestId,
+      schemaVersion: 1,
+      studioId: candidate.studioId,
+      memberId: candidate.memberId,
+      memberName: candidate.memberName,
+      memberPhone: candidate.memberPhone,
+      memberPhoneLast4: candidate.memberPhone.slice(-4),
+      bookingId,
+      lectureId: candidate.payload.lectureId || "",
+      lectureDate: booking?.lectureDate || candidate.payload.lectureDate || "",
+      lessonStartAt: booking?.lectureStartAt || null,
+      staffId: booking?.staffId || candidate.payload.staffId || "",
+      staffName: booking?.staffName || candidate.payload.staffName || "",
+      sourceCandidateId: candidate.candidateId,
+      shortLinkId: candidate.payload.shortLinkId || "",
+      shortUrl: candidate.payload.shortUrl || "",
+      accessTokenHash: sha256(accessToken),
+      tokenVersion: 1,
+      status: previous?.status || "pending",
+      expiresAt,
+      createdAt: previous?.createdAt || nowTimestamp(),
+      updatedAt: nowTimestamp(),
+    },
+    { merge: true },
+  );
 }
 
 async function longAbsenceCandidateForDate(
@@ -670,13 +745,13 @@ async function hasSubmittedPrivateSurvey(memberId: string, memberPhone: string):
   const byMember = await refs.privateSurveyResponses().where("matching.memberId", "==", memberId).limit(10).get();
   if (
     byMember.docs.some(
-      (doc) => (doc.data().surveyType || "private") === "private" && isRecentSurveyResponse(doc.data()),
+      (doc) => (doc.data().surveyType || "private") === "private",
     )
   )
     return true;
   const byPhone = await refs.privateSurveyResponses().where("memberPhone", "==", memberPhone).limit(10).get();
   return byPhone.docs.some(
-    (doc) => (doc.data().surveyType || "private") === "private" && isRecentSurveyResponse(doc.data()),
+    (doc) => (doc.data().surveyType || "private") === "private",
   );
 }
 

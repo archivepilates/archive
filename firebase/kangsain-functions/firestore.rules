@@ -217,6 +217,11 @@ service cloud.firestore {
       allow write: if false;
     }
 
+    match /privateSurveyRequests/{requestId} {
+      allow read: if isManager() && sameStudio(resource.data.studioId);
+      allow write: if false;
+    }
+
     match /inbodyWebhookEvents/{eventId} {
       allow read: if isManager() && sameStudio(resource.data.studioId);
       allow write: if false;
@@ -388,6 +393,11 @@ service cloud.firestore {
     }
 
     match /privateLessonChartRecords/{recordId} {
+      allow read: if isManager();
+      allow write: if false;
+    }
+
+    match /privateLessonSessions/{sessionId} {
       allow read: if isManager();
       allow write: if false;
     }

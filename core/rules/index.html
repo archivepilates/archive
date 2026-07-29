@@ -89,10 +89,10 @@
               <ul>
                 <li>알림톡, 연락처, StudioMate write, 예약·결제 판단은 canonical source에서만 실행합니다.</li>
                 <li>데이터는 source, action, computed, mirror, incubation 5개 층으로만 구분합니다.</li>
-                <li>source는 memberProfiles, memberContactIndex, bookings, lectures, memberMemos, memberTags, privateSurveyResponses입니다.</li>
+                <li>source는 memberProfiles, memberContactIndex, bookings, lectures, memberMemos, memberTags, privateSurveyRequests, privateSurveyResponses입니다.</li>
                 <li>예약·출석·프라이빗 회차 판단의 단일 예약 원천은 bookings입니다. memberUsageEvents는 legacy 검증·백필 자료로만 보관하고 운영 원천으로 사용하지 않습니다.</li>
                 <li>action은 alimtalkCandidates, alimtalkSends, contactSyncJobs, memberSignupContracts, onsiteWelcomeRequests, privateLessonChartRequests, privateLessonChartRecords입니다.</li>
-                <li>computed는 privateSessionLedger, attendanceSummaries, adminActions, instructorViews, dashboardSnapshots입니다.</li>
+                <li>computed는 privateSessionLedger, privateLessonSessions, attendanceSummaries, adminActions, instructorViews, dashboardSnapshots입니다.</li>
                 <li>member360Cards, members 하위 컬렉션, dashboardSnapshots는 분석·검토용 read-model입니다. 현재 수강권, 재등록 후보, 외부 실행 대상 판단은 최신 memberProfiles를 우선합니다.</li>
                 <li>workLanes는 임시 작업 공간이며 외부 발송·쓰기 원천으로 사용하지 않습니다.</li>
               </ul>
@@ -297,9 +297,9 @@
               <h3>중복 방지</h3>
               <ul>
                 <li>수강권 알림은 회원, 템플릿, 수강권 식별자 기준으로 막습니다.</li>
-                <li>프라이빗 사전설문과 그룹 첫 수업 설문은 같은 유형 제출 후 1년이 지나야 재후보가 됩니다.</li>
+                <li>프라이빗 최초 사전설문은 회원별 영구 1회입니다. 그룹 첫 수업 설문은 같은 유형 제출 후 1년이 지나야 재후보가 됩니다.</li>
                 <li>수업자료와 회원 리포트는 같은 회원·수업·recordId 단위로 영구 1회만 발송합니다.</li>
-                <li>Notion 웹훅 이벤트 ID와 후보 ID를 고정해 재전송 중복을 막습니다.</li>
+                <li>회원 리포트는 승인한 revision과 후보 ID를 고정해 수정본과 발송본이 섞이지 않게 합니다.</li>
               </ul>
             </article>
             <article class="rule-card">
@@ -356,20 +356,28 @@
         </section>
 
         <section class="panel rule-section" id="private">
-          <div class="panel-header"><div><h2>5. 프라이빗 차트·설문·리포트</h2><p>회원 누적 회차, 강사 입력, 회원 리포트, Notion 차트 동기화를 하나의 흐름으로 봅니다.</p></div><span class="pill good">current</span></div>
+          <div class="panel-header"><div><h2>5. 프라이빗 수업 기록·리포트</h2><p>한 수업을 준비, 기록, 검수, 전달의 네 단계로 관리합니다.</p></div><span class="pill good">current</span></div>
           <div class="rule-grid">
             <article class="rule-card">
-              <h3>회차 원천</h3>
+              <h3>단일 흐름</h3>
               <ul>
-                <li>2026.06.01 이후 프라이빗/세미프라이빗 수업은 자동화 차트를 반드시 생성합니다.</li>
-                <li>회차 흐름은 StudioMate 수업예약내역 Excel → bookings 단일 예약 원천 → privateSessionLedger 회차 → 설문/리포트/Notion 표시 순서로 운영합니다.</li>
-                <li>privateSessionLedger는 bookings에서 계산한 회차 장부입니다. privateLessonChartRequests, privateLessonChartRecords, Notion 차트, memberUsageEvents는 회차 계산 원천으로 사용하지 않습니다.</li>
+                <li>운영자는 CORE Private에서 수업 준비, 수업 기록, 리포트 검수, 전달 완료 네 단계만 확인합니다.</li>
+                <li>privateLessonSessions가 단계, 다음 작업, 오류를 보여주는 운영 장부입니다. 예약과 회차를 다시 계산하는 원천으로는 사용하지 않습니다.</li>
+                <li>예약 원천은 bookings, 회차 원천은 bookings에서 계산한 privateSessionLedger입니다.</li>
+                <li>privateLessonChartRequests와 privateLessonChartRecords는 기존 설문 링크와 기록을 유지하는 호환 문서입니다.</li>
+                <li>2026.06.01 이후 프라이빗/세미프라이빗 수업은 자동 기록 페이지를 생성합니다.</li>
+              </ul>
+            </article>
+            <article class="rule-card">
+              <h3>회차·예약 보정</h3>
+              <ul>
                 <li>어제 이전 예약확정/출석미체크 수업은 확정 회차로 세지 않습니다. 오늘 이후 예약은 예정 회차로만 이어 세고, 출석 완료가 반영되면 확정 회차가 됩니다.</li>
                 <li>booking.sessionOrder.privateCumulativeRound는 privateSessionLedger에서 내려쓴 캐시입니다. 값이 없거나 원천과 다르면 즉시 재계산해 저장합니다.</li>
                 <li>삭제, 취소, 시간변경은 sessionOrder.counted=false와 제외 사유를 남기고 해당 수업 이후 회차까지 연쇄 재계산합니다.</li>
+                <li>usage_booking_ 같은 이용내역 fallback 예약은 실예약 장부와 회차 계산에서 제외합니다.</li>
                 <li>booking.lessonType=group인 수업은 수강권명이 프라이빗처럼 보여도 프라이빗 회차에서 제외합니다. 원본 분류가 틀렸다면 원본 보정 후 다시 반영합니다.</li>
                 <li>강사 설문 알림톡 발송, 설문 링크 열기, 설문 제출, Notion 차트 갱신은 연결된 booking이 active일 때만 진행합니다.</li>
-                <li>수업 시간이 변경되어 기존 설문 링크만 남아 있으면 같은 회원, 강사, 날짜의 active booking으로 요청과 차트를 자동 이관합니다.</li>
+                <li>수업 시간이 변경되면 supersededByBookingId를 우선 따라 같은 수업 세션으로 이관하고, 연결이 불명확하면 자동 발송하지 않고 확인필요로 둡니다.</li>
                 <li>같은 회원, 강사, 날짜, 수강권에서 시간변경 중복이 생기면 출석/최신 예약을 대표 booking으로 두고 나머지는 rescheduled_duplicate로 제외합니다.</li>
               </ul>
             </article>
@@ -377,19 +385,22 @@
               <h3>Notion 차트 동기화</h3>
               <ul>
                 <li>운영규칙은 CORE가 기준이지만, 개인레슨 회차 차트는 강사별 회원 페이지 하위의 Notion 일반 페이지로 유지합니다.</li>
-                <li>Private Session Records DB는 사용하지 않습니다. 차트 상태와 발송 승인은 Firestore privateLessonChartRecords가 원천입니다.</li>
+                <li>Notion은 표시·열람용입니다. Private Session Records DB, 웹훅 승인, 예약 스케줄러는 사용하지 않습니다.</li>
+                <li>차트 상태와 발송 승인은 Firestore privateLessonChartRecords, 운영 진행상태는 privateLessonSessions가 원천입니다.</li>
                 <li>리포트가 없어도 실제 수업 회차는 Notion 일반 페이지로 남겨 누락을 확인할 수 있어야 합니다.</li>
-                <li>차트 제목에는 수업 전 설문대기, 수업 전 설문완료, 수업 후 설문완료, 리포트 생성완료, 리포트 발송완료 단계를 표시합니다.</li>
+                <li>차트 제목에는 수업 준비, 수업 기록, 리포트 검수, 전달 완료 단계를 표시합니다.</li>
                 <li>리포트 생성완료는 수업 후 설문 제출, GPT 리포트 생성 상태, 회원용 리포트 URL 준비가 모두 확인된 경우에만 표시합니다.</li>
                 <li>회원용 리포트는 오늘의 핵심, 좋아진 점, 오늘 확인한 움직임, 다음 수업 방향, 홈워크, 다음 수업 전 체크 순서의 코칭 카드형 화면으로 제공합니다. 홈워크는 강사가 입력한 경우에만 노출합니다.</li>
                 <li>다음 수업 준비 메모는 내부 코칭 참고용으로 보관하고, 회원용 다음 수업 방향 문장에 그대로 노출하지 않습니다.</li>
                 <li>예약 시간이 바뀌거나 취소되면 Notion 제목, 날짜, 상태, 회차, 발송상태를 함께 갱신하고 취소 차트는 회원 발송 후보에서 제외합니다.</li>
+                <li>자동화가 관리하는 차트 본문은 갱신할 때 교체하며 같은 내용이 반복해서 쌓이지 않게 합니다.</li>
               </ul>
             </article>
             <article class="rule-card">
               <h3>강사 설문</h3>
               <ul>
-                <li>회원 최초 프라이빗 사전설문은 ARCHIVE IN 자체 설문을 사용합니다.</li>
+                <li>회원 최초 프라이빗 사전설문은 예약별 토큰을 가진 ARCHIVE IN 자체 설문을 사용하며 회원별 영구 1회만 받습니다.</li>
+                <li>취소·변경되었거나 active 상태가 아닌 예약 링크는 열기와 제출을 모두 막습니다.</li>
                 <li>강사용 수업 전 화면은 회원 사전설문 요약과 지난 리포트 요약을 보여줍니다.</li>
                 <li>수업 후 설문은 점수, 평균, 등급, 1-5 평가 표현을 사용하지 않습니다.</li>
                 <li>수업 전/후 객관식 항목은 운영자가 미리 정한 보기와 함께 기타 서술형을 허용합니다.</li>
@@ -427,14 +438,15 @@
               <h3>수정 잠금</h3>
               <ul>
                 <li>수업 후 설문은 리포트 생성 후에도 회원 알림톡 발송 전까지 수정할 수 있습니다.</li>
-                <li>수정하면 리포트는 재생성 대상이 되고 승인/대기 후보는 다시 검수 상태가 됩니다.</li>
+                <li>문장이나 미디어를 수정하면 reportRevision을 새로 만들고 기존 승인/대기 후보는 다시 검수 상태가 됩니다.</li>
                 <li>회원 리포트 자체의 오늘의 핵심, 다음 수업 방향 문장도 알림톡 발송 전까지 직접 수정할 수 있습니다. 수정하면 기존 발송 후보는 보류하고 다시 승인합니다.</li>
+                <li>승인 시점의 문장과 미디어를 immutable snapshot으로 고정하며 발송 URL도 해당 revision을 가리킵니다.</li>
                 <li>회원 리포트 알림톡 발송 완료 이후에는 회차 기록을 잠급니다.</li>
                 <li>발송 처리 중에는 중복과 충돌을 막기 위해 임시 잠금합니다.</li>
               </ul>
             </article>
           </div>
-          <div class="rule-note"><strong>현재 확인 위치</strong><span>CORE Private / Firestore bookings, privateLessonChartRequests, privateLessonChartRecords, privateSessionLedger</span></div>
+          <div class="rule-note"><strong>현재 확인 위치</strong><span>CORE Private / Firestore bookings, privateSessionLedger, privateLessonSessions, privateLessonChartRequests, privateLessonChartRecords</span></div>
         </section>
 
         <section class="panel rule-section" id="staff-evaluation">

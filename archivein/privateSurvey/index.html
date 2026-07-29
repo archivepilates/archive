@@ -8,6 +8,7 @@
   <style>
     :root { color-scheme:light; --ink:#181512; --muted:#746b62; --line:#e8e0d7; --paper:#fffdf9; --accent:#c9392f; --good:#2f6f68; --bad:#9d2f24; }
     * { box-sizing:border-box; }
+    [hidden] { display:none !important; }
     body { margin:0; font-family:-apple-system,BlinkMacSystemFont,"Apple SD Gothic Neo","Noto Sans KR",sans-serif; background:#f6f1eb; color:var(--ink); }
     main { width:min(720px,100%); margin:0 auto; padding:18px 14px 36px; }
     .top { display:grid; grid-template-columns:1fr auto; gap:16px; align-items:start; padding:18px 2px 14px; border-bottom:1px solid rgba(24,21,18,.08); }
@@ -17,7 +18,7 @@
     .lead { margin:0; color:var(--muted); font-size:14px; line-height:1.66; word-break:keep-all; overflow-wrap:break-word; }
     .meta { display:flex; flex-wrap:wrap; gap:6px; margin-top:10px; color:var(--muted); font-size:13px; line-height:1.5; }
     .chip { display:inline-flex; align-items:center; min-height:28px; padding:4px 9px; border:1px solid var(--line); border-radius:999px; background:rgba(255,253,249,.72); }
-    form { display:grid; gap:12px; margin-top:16px; }
+    form { display:grid; gap:12px; margin-top:16px; padding-bottom:76px; }
     fieldset, .field, .message { margin:0; padding:15px 16px; border:1px solid var(--line); border-radius:8px; background:var(--paper); }
     legend, .label { padding:0; margin:0 0 10px; font-size:14px; font-weight:900; color:#3e3831; }
     .hint { margin:6px 0 0; color:var(--muted); font-size:12px; line-height:1.5; }
@@ -25,7 +26,8 @@
     label.option { display:grid; grid-template-columns:22px 1fr; gap:8px; align-items:start; min-height:32px; font-size:15px; line-height:1.48; }
     input[type="radio"], input[type="checkbox"] { width:18px; height:18px; margin:2px 0 0; accent-color:var(--accent); }
     textarea { width:100%; min-height:92px; resize:vertical; border:1px solid var(--line); border-radius:8px; padding:11px 12px; background:#fff; color:var(--ink); font:inherit; line-height:1.55; }
-    textarea:focus { outline:2px solid rgba(201,57,47,.18); border-color:var(--accent); }
+    input[type="text"] { width:100%; min-height:44px; margin-top:8px; border:1px solid var(--line); border-radius:8px; padding:10px 12px; background:#fff; color:var(--ink); font:inherit; }
+    textarea:focus, input[type="text"]:focus { outline:2px solid rgba(201,57,47,.18); border-color:var(--accent); }
     .actions { position:sticky; bottom:0; margin:0 -14px -36px; padding:12px 14px 18px; background:linear-gradient(to top,#f6f1eb 82%,rgba(246,241,235,0)); }
     button { width:100%; min-height:48px; border:0; border-radius:8px; background:var(--accent); color:#fff; font-size:15px; font-weight:900; cursor:pointer; }
     button:disabled { opacity:.55; cursor:wait; }
@@ -59,13 +61,14 @@
         <div class="options" data-radio="experienceType"></div>
       </fieldset>
       <fieldset>
-        <legend>현재 운동 목표를 선택해 주세요</legend>
-        <div class="options" data-check="goals"></div>
-        <p class="hint">여러 개 선택할 수 있어요.</p>
+        <legend>가장 중요한 운동 목표를 하나 선택해 주세요</legend>
+        <div class="options" data-radio="primaryGoal"></div>
+        <p class="hint">선택한 목표에 맞춰 수업 전·후 기록과 리포트 구성이 달라집니다.</p>
       </fieldset>
       <fieldset>
         <legend>현재 가장 신경 쓰이는 부위가 있나요?</legend>
         <div class="options" data-check="focusAreas"></div>
+        <input type="text" name="focusOther" maxlength="300" placeholder="기타 부위를 적어 주세요" hidden>
       </fieldset>
       <div class="field">
         <div class="label">통증이나 불편한 부위가 있다면 자세히 적어주세요</div>
@@ -74,6 +77,7 @@
       <fieldset>
         <legend>평소 생활패턴에 가까운 내용을 선택해 주세요</legend>
         <div class="options" data-check="lifestyle"></div>
+        <input type="text" name="lifestyleOther" maxlength="300" placeholder="기타 생활패턴을 적어 주세요" hidden>
       </fieldset>
       <fieldset>
         <legend>최근 운동 경험은 어떤 편인가요?</legend>
@@ -82,6 +86,7 @@
       <fieldset>
         <legend>운동을 시작할 때 가장 걱정되는 부분은 무엇인가요?</legend>
         <div class="options" data-radio="concern"></div>
+        <input type="text" name="concernOther" maxlength="300" placeholder="기타 걱정 내용을 적어 주세요" hidden>
       </fieldset>
       <div class="field">
         <div class="label">프라이빗 수업에서 중요하게 생각하는 내용이 있나요?</div>
@@ -90,6 +95,7 @@
       <fieldset>
         <legend>ARCHIVE PILATES를 알게 된 경로를 선택해 주세요</legend>
         <div class="options" data-radio="referralSource"></div>
+        <input type="text" name="referralOther" maxlength="300" placeholder="기타 경로를 적어 주세요" hidden>
       </fieldset>
       <div class="actions">
         <button type="submit">제출하기</button>
@@ -107,11 +113,11 @@
     const button = form.querySelector('button');
     const choices = {
       experienceType: ['처음이에요', '3개월 미만 경험이 있어요', '3개월~1년 정도 경험이 있어요', '1년 이상 꾸준히 해본 적 있어요'],
-      goals: ['자세 교정', '체형 개선', '통증 완화', '근력/체력 향상', '유연성 향상', '운동 습관 만들기', '산전/산후 회복'],
-      focusAreas: ['없음', '목/어깨', '등/흉추', '허리', '골반/고관절', '복부', '엉덩이/하체', '무릎/발목', '기타'],
-      lifestyle: ['앉아있는 시간이 많아요', '서있는 시간이 많아요', '육아/가사 시간이 많아요', '운동량이 적은 편이에요', '스트레스나 수면 부족이 있어요', '특별히 해당 없음'],
+      primaryGoal: ['체형교정·자세 개선', '다이어트·체력 향상', '통증·회복 관리', '산전·산후·컨디션 관리'],
+      focusAreas: ['없음', '목', '어깨', '등/흉추', '허리', '골반/고관절', '복부', '엉덩이/하체', '무릎/발목', '기타'],
+      lifestyle: ['앉아있는 시간이 많아요', '서있는 시간이 많아요', '육아/가사 시간이 많아요', '운동량이 적은 편이에요', '스트레스나 수면 부족이 있어요', '특별히 해당 없음', '기타'],
       exerciseLevel: ['거의 운동하지 않아요', '가끔 운동해요', '꾸준히 운동하는 편이에요', '재활/치료 운동 경험이 있어요'],
-      concern: ['자세가 맞는지 걱정돼요', '통증이 생길까 걱정돼요', '체력이 부족할까 걱정돼요', '수업 난이도가 걱정돼요', '특별히 걱정되는 부분은 없어요'],
+      concern: ['자세가 맞는지 걱정돼요', '통증이 생길까 걱정돼요', '체력이 부족할까 걱정돼요', '수업 난이도가 걱정돼요', '특별히 걱정되는 부분은 없어요', '기타'],
       referralSource: ['네이버 검색', '지인 소개', '인스타그램', '기존 회원/StudioMate 안내', '기타']
     };
 
@@ -119,6 +125,7 @@
 
     async function init() {
       renderChoices();
+      bindOtherDetails();
       if (!/^psr-[a-z0-9-]{8,80}$/i.test(requestId) || !/^[a-f0-9]{16,80}$/i.test(accessToken)) {
         showMessage('설문 링크가 올바르지 않습니다. 받은 알림톡 링크를 다시 확인해 주세요.', true);
         return;
@@ -143,7 +150,7 @@
 
     function renderChoices() {
       for (const [name, values] of Object.entries(choices)) {
-        const type = ['goals', 'focusAreas', 'lifestyle'].includes(name) ? 'checkbox' : 'radio';
+        const type = ['focusAreas', 'lifestyle'].includes(name) ? 'checkbox' : 'radio';
         const root = document.querySelector(`[data-${type === 'checkbox' ? 'check' : 'radio'}="${name}"]`);
         root.innerHTML = values.map((value) => `
           <label class="option">
@@ -154,22 +161,47 @@
       }
     }
 
+    function bindOtherDetails() {
+      const pairs = [
+        ['focusAreas', 'focusOther'],
+        ['lifestyle', 'lifestyleOther'],
+        ['concern', 'concernOther'],
+        ['referralSource', 'referralOther']
+      ];
+      for (const [choiceName, detailName] of pairs) {
+        const detail = form.elements[detailName];
+        const update = () => {
+          const selected = valuesOf(choiceName).includes('기타');
+          detail.hidden = !selected;
+          detail.required = selected;
+          if (!selected) detail.value = '';
+        };
+        form.querySelectorAll(`input[name="${choiceName}"]`).forEach((input) => input.addEventListener('change', update));
+        update();
+      }
+    }
+
     form.addEventListener('submit', async (event) => {
       event.preventDefault();
       button.disabled = true;
+      button.textContent = '제출 중...';
       try {
         const payload = {
           requestId,
           accessToken,
           experienceType: valueOf('experienceType'),
-          goals: valuesOf('goals'),
+          primaryGoal: valueOf('primaryGoal'),
           focusAreas: valuesOf('focusAreas'),
+          focusOther: form.elements.focusOther.value.trim(),
           painNote: form.elements.painNote.value.trim(),
           lifestyle: valuesOf('lifestyle'),
+          lifestyleOther: form.elements.lifestyleOther.value.trim(),
           exerciseLevel: valueOf('exerciseLevel'),
           concern: valueOf('concern'),
+          concernOther: form.elements.concernOther.value.trim(),
           requestNote: form.elements.requestNote.value.trim(),
-          referralSource: valueOf('referralSource')
+          referralSource: valueOf('referralSource'),
+          referralOther: form.elements.referralOther.value.trim()
         };
         const result = await requestJson('../api/privateSurveySubmit', {
           method: 'POST',
@@ -184,6 +216,7 @@
         showMessage(err.message || '제출 중 오류가 발생했습니다. 잠시 후 다시 시도해 주세요.', true);
       } finally {
         button.disabled = false;
+        button.textContent = '제출하기';
       }
     });
 

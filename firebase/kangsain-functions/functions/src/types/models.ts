@@ -137,6 +137,7 @@ export interface BookingDoc {
   appStatus: AppBookingStatus;
   attendanceStatus: AttendanceStatus;
   syncStatus: SyncStatus;
+  supersededByBookingId?: string | null;
   ticketName: string;
   ticketClassType?: string;
   ticketType?: string;
@@ -570,6 +571,7 @@ export interface PrivateSurveyResponseDoc {
   studioId: string;
   surveyType?: "private" | "group";
   source: {
+    kind?: "google_sheet" | "native";
     spreadsheetId: string;
     sheetName: string;
     rowNumber: number;
@@ -618,6 +620,33 @@ export interface PrivateSurveyResponseDoc {
     error?: string;
   } | null;
   accessTokenHash: string;
+  createdAt: Timestamp;
+  updatedAt: Timestamp;
+}
+
+export interface PrivateSurveyRequestDoc {
+  requestId: string;
+  schemaVersion: 1;
+  studioId: string;
+  memberId: string;
+  memberName: string;
+  memberPhone: string;
+  memberPhoneLast4: string;
+  bookingId: string;
+  lectureId: string;
+  lectureDate: string;
+  lessonStartAt: Timestamp | null;
+  staffId: string;
+  staffName: string;
+  sourceCandidateId: string;
+  shortLinkId: string;
+  shortUrl: string;
+  accessTokenHash: string;
+  tokenVersion: 1;
+  status: "pending" | "submitted" | "expired" | "cancelled";
+  responseId?: string;
+  expiresAt: Timestamp | null;
+  submittedAt?: Timestamp | null;
   createdAt: Timestamp;
   updatedAt: Timestamp;
 }
@@ -766,13 +795,18 @@ export interface PrivateLessonChartRecordDoc {
     updatedAt?: Timestamp;
   };
   publicReportApproval?: {
-    status: "pending" | "approved" | "queued" | "sent" | "failed";
+    status: "pending" | "approved" | "queued" | "processing" | "sent" | "failed";
     approvedAt?: Timestamp | null;
     approvedBy?: string;
     candidateId?: string | null;
     sentAt?: Timestamp;
     lastError?: string | null;
   };
+  reportRevision?: string;
+  approvedRevision?: string;
+  sentRevision?: string;
+  approvedReportSnapshot?: PrivateLessonReportSnapshot | null;
+  sentReportSnapshot?: PrivateLessonReportSnapshot | null;
   notionSync?: {
     status: "pending" | "synced" | "failed";
     pageId?: string;
@@ -780,6 +814,66 @@ export interface PrivateLessonChartRecordDoc {
     instructorPageId?: string;
     instructorPageUrl?: string;
     syncedAt?: string;
+    error?: string;
+  };
+  createdAt: Timestamp;
+  updatedAt: Timestamp;
+}
+
+export interface PrivateLessonReportSnapshot {
+  revision: string;
+  summary: string;
+  nextDirection: string;
+  homework: string;
+  includedMedia: PrivateLessonChartMediaFile[];
+  memberName: string;
+  staffName: string;
+  lessonDate: string;
+  lessonStartAt: Timestamp | null;
+  sessionNumber: number;
+  createdAt: Timestamp;
+}
+
+export type PrivateLessonWorkflowStage =
+  | "preparation"
+  | "recording"
+  | "report_review"
+  | "delivered"
+  | "cancelled"
+  | "needs_review";
+
+export interface PrivateLessonSessionDoc {
+  sessionId: string;
+  studioId: string;
+  bookingId: string;
+  bookingAliases: string[];
+  occurrenceId: string;
+  memberId: string;
+  memberName: string;
+  staffId: string;
+  staffName: string;
+  lessonDate: string;
+  lessonStartAt: Timestamp | null;
+  sessionNumber: number | null;
+  roundVerified: boolean;
+  workflowStage: PrivateLessonWorkflowStage;
+  preStatus: "pending" | "submitted";
+  postStatus: "pending" | "submitted";
+  reportStatus: "pending" | "draft" | "approved" | "processing" | "sent" | "failed";
+  deliveryStatus: "pending" | "queued" | "processing" | "sent" | "failed";
+  reportRevision: string;
+  approvedRevision: string;
+  sentRevision: string;
+  nextAction: string;
+  cancellationReason: string;
+  lastError: string;
+  legacyRequestId: string;
+  legacyRecordId: string;
+  notionProjection?: {
+    status: "pending" | "synced" | "failed";
+    pageId?: string;
+    pageUrl?: string;
+    updatedAt?: Timestamp;
     error?: string;
   };
   createdAt: Timestamp;

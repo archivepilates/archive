@@ -8,6 +8,10 @@ import type {
   PrivateLessonChartRequestDoc,
 } from "../types/models";
 import { nowTimestamp } from "../utils/date";
+import {
+  currentPrivateLessonReportRevision,
+  privateLessonReportMutationLockReason,
+} from "./privateLessonReportRevision";
 
 const DRIVE_SCOPE = "https://www.googleapis.com/auth/drive";
 const ROOT_FOLDER_NAME = "ARCHIVE PILATES 프라이빗 리포트 미디어";
@@ -78,6 +82,8 @@ export async function initPrivateLessonMediaUpload(input: {
     uploadUrl: string;
   };
 }> {
+  const lockReason = privateLessonReportMutationLockReason(input.record);
+  if (lockReason) throw new Error(lockReason);
   const fileName = normalizeFileName(input.fileName);
   const mimeType = normalizeMimeType(input.mimeType);
   const size = normalizeSize(input.size);
@@ -158,6 +164,7 @@ export async function uploadPrivateLessonMediaChunk(input: {
   if (!session || session.requestId !== input.chartRequest.requestId) {
     throw new Error("미디어 업로드 세션을 찾을 수 없습니다.");
   }
+  await assertPrivateLessonMediaMutable(session.recordId);
   if (session.status === "uploaded") {
     return { done: true, bytesUploaded: session.bytesUploaded, file: await mediaFileFromSession(session) };
   }
@@ -233,6 +240,7 @@ export async function completePrivateLessonMediaUpload(input: {
   if (!session || session.requestId !== input.chartRequest.requestId) {
     throw new Error("미디어 업로드 세션을 찾을 수 없습니다.");
   }
+  await assertPrivateLessonMediaMutable(session.recordId);
   if (session.status === "uploaded") {
     const existing = await mediaFileFromSession(session);
     if (!existing) throw new Error("업로드 완료 파일 기록을 찾을 수 없습니다.");
@@ -373,21 +381,46 @@ async function attachMediaFileToRecord(recordId: string, session: UploadSessionD
   await db.runTransaction(async (tx) => {
     const snap = await tx.get(recordRef);
     const record = snap.data() as PrivateLessonChartRecordDoc | undefined;
+    const lockReason = privateLessonReportMutationLockReason(record);
+    if (lockReason) throw new Error(lockReason);
     const currentFiles = Array.isArray(record?.media?.files) ? record!.media!.files! : [];
     const nextFiles = currentFiles.filter((item) => item.mediaId !== file.mediaId).concat(file);
+    const nextMedia = {
+      ...(record?.media || {}),
+      rootFolderId: session.rootFolderId,
+      memberFolderId: session.memberFolderId,
+      sessionFolderId: session.sessionFolderId,
+      sessionFolderUrl: session.sessionFolderUrl,
+      files: nextFiles,
+      updatedAt: nowTimestamp(),
+    };
+    const reportRevision = currentPrivateLessonReportRevision({
+      ...(record || {}),
+      media: nextMedia,
+    } as PrivateLessonChartRecordDoc);
     tx.set(recordRef, {
-      media: {
-        ...(record?.media || {}),
-        rootFolderId: session.rootFolderId,
-        memberFolderId: session.memberFolderId,
-        sessionFolderId: session.sessionFolderId,
-        sessionFolderUrl: session.sessionFolderUrl,
-        files: nextFiles,
-        updatedAt: nowTimestamp(),
+      media: nextMedia,
+      reportRevision,
+      approvedRevision: "",
+      approvedReportSnapshot: null,
+      publicReportApproval: {
+        ...(record?.publicReportApproval || {}),
+        status: "pending",
+        approvedAt: null,
+        candidateId: null,
+        lastError: null,
       },
       updatedAt: nowTimestamp(),
     }, { merge: true });
   });
+}
+
+async function assertPrivateLessonMediaMutable(recordId: string): Promise<void> {
+  const record = (await db.collection("privateLessonChartRecords").doc(recordId).get()).data() as
+    | PrivateLessonChartRecordDoc
+    | undefined;
+  const lockReason = privateLessonReportMutationLockReason(record);
+  if (lockReason) throw new Error(lockReason);
 }
 
 async function driveFileWithMetadata(

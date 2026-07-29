@@ -489,7 +489,7 @@ const guardGroups = [
           "data-save-report-edit",
           "회원 리포트 알림톡 발송이 완료되어 기록을 수정할 수 없습니다.",
           "다음 수업 준비 메모",
-          "회원 리포트의 다음 수업 방향에는 그대로 노출되지 않습니다.",
+          "회원에게는 노출되지 않습니다.",
           "오늘의 핵심 키워드",
           "다음 수업 방향 키워드",
           "홈워크",
@@ -583,7 +583,7 @@ const guardGroups = [
         markers: [
           "예약·출석·프라이빗 회차 판단의 단일 예약 원천은 bookings입니다.",
           "memberUsageEvents는 legacy 검증·백필 자료로만 보관",
-          "StudioMate 수업예약내역 Excel → bookings 단일 예약 원천 → privateSessionLedger 회차",
+          "예약 원천은 bookings, 회차 원천은 bookings에서 계산한 privateSessionLedger입니다.",
         ],
       },
     ],
@@ -599,7 +599,8 @@ const guardGroups = [
           "syncChartRequestToActiveBooking",
           "rescheduled_from_inactive_booking",
           "rescheduled_booking_reuse",
-          "update private session record page title failed",
+          "supersededByBookingId",
+          "replacePageContent",
         ],
       },
       {
@@ -614,7 +615,7 @@ const guardGroups = [
         file: "core/rules/index.html",
         markers: [
           "삭제, 취소, 시간변경은 sessionOrder.counted=false와 제외 사유를 남기고 해당 수업 이후 회차까지 연쇄 재계산합니다.",
-          "기존 설문 링크만 남아 있으면 같은 회원, 강사, 날짜의 active booking으로 요청과 차트를 자동 이관",
+          "supersededByBookingId를 우선 따라 같은 수업 세션으로 이관",
           "예약 시간이 바뀌거나 취소되면 Notion 제목, 날짜, 상태, 회차, 발송상태를 함께 갱신",
         ],
       },
@@ -660,7 +661,7 @@ const guardGroups = [
         markers: [
           "운영규칙",
           "수강료 문의 즉시발송",
-          "Private Session Records DB는 사용하지 않습니다",
+          "Notion은 표시·열람용입니다. Private Session Records DB, 웹훅 승인, 예약 스케줄러는 사용하지 않습니다.",
           "업로드는 16MB 청크 기준",
           "기능 브랜치만 라이브에 배포되고 main으로 승격되지 않은 상태는 rollback",
         ],

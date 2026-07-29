@@ -1,9 +1,8 @@
 import { onRequest } from "firebase-functions/v2/https";
-import { onDocumentCreated } from "firebase-functions/v2/firestore";
+import { onDocumentCreated, onDocumentWritten } from "firebase-functions/v2/firestore";
 import { onSchedule } from "firebase-functions/v2/scheduler";
 import { receiveInBodyWebhookHandler } from "../inbody/inbodyWebhook";
 import {
-  enqueueApprovedPrivateLessonReportAlimtalks,
   createAndSendTomorrowPrivateLessonCharts,
   generatePendingPrivateLessonChartReports,
   notionPrivateLessonReportWebhookHandler,
@@ -11,6 +10,10 @@ import {
   privateLessonReportViewHandler,
   reconcileCurrentMonthPrivateLessonCharts,
 } from "../privateLessonChart/privateLessonChart";
+import {
+  syncPrivateLessonSessionOnRecordWrite,
+  syncPrivateLessonSessionOnRequestWrite,
+} from "../privateLessonChart/privateLessonSession";
 import {
   ingestPrivateSurveyResponseHandler,
   processDueStaffSurveyAlimtalks,
@@ -99,16 +102,6 @@ export const scheduledGeneratePrivateLessonChartReports = onSchedule(
   },
 );
 
-export const scheduledEnqueuePrivateLessonReportAlimtalks = onSchedule(
-  {
-    ...privateSurveyIntakeOptions,
-    schedule: "10 9,15,21 * * *",
-  },
-  async () => {
-    await enqueueApprovedPrivateLessonReportAlimtalks();
-  },
-);
-
 export const scheduledPurgeDiscardedMemberSignupContracts = onSchedule(
   {
     ...privateSurveyIntakeOptions,
@@ -157,4 +150,20 @@ export const processPrivateSurveyIntake = onDocumentCreated(
     document: "privateSurveyIntakes/{intakeId}",
   },
   processPrivateSurveyIntakeHandler,
+);
+
+export const syncPrivateLessonSessionFromRequest = onDocumentWritten(
+  {
+    ...privateSurveyIntakeOptions,
+    document: "privateLessonChartRequests/{requestId}",
+  },
+  syncPrivateLessonSessionOnRequestWrite,
+);
+
+export const syncPrivateLessonSessionFromRecord = onDocumentWritten(
+  {
+    ...privateSurveyIntakeOptions,
+    document: "privateLessonChartRecords/{recordId}",
+  },
+  syncPrivateLessonSessionOnRecordWrite,
 );

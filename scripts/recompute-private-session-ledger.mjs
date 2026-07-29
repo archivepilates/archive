@@ -19,6 +19,7 @@ const memberIds = cleanString(args["member-ids"] || "")
   .filter(Boolean);
 const config = {
   apply: Boolean(args.apply),
+  pruneStale: Boolean(args["prune-stale"]),
   all: Boolean(args.all),
   memberId: cleanString(args["member-id"] || args.member || ""),
   memberIds: [...new Set(memberIds)],
@@ -63,6 +64,8 @@ async function main() {
     affectedBookings: rows.reduce((sum, row) => sum + row.bookingPatches.length, 0),
     affectedRequests: rows.reduce((sum, row) => sum + row.requestPatches.length, 0),
     ledgerEntries: rows.reduce((sum, row) => sum + row.ledgerEntries.length, 0),
+    ledgerUpserts: rows.reduce((sum, row) => sum + row.ledgerUpserts.length, 0),
+    staleLedgerDeletes: rows.reduce((sum, row) => sum + row.staleLedgerDeletes.length, 0),
   };
   mkdirSync(config.outDir, { recursive: true });
   const reportPath = path.join(
@@ -113,15 +116,29 @@ async function recomputeMember(member) {
 
   const ordered = [...timeline.values()].sort(compareTimelineRows);
   const ledgerEntries = ordered.map((row, index) => ledgerEntryFromTimeline(member, row, index + 1));
+  const currentLedgerById = new Map(
+    ledgerSnap.docs.map((doc) => [doc.id, { ledgerId: doc.id, ...(doc.data() || {}) }]),
+  );
+  const ledgerUpserts = ledgerEntries.filter((entry) => ledgerNeedsUpsert(entry, currentLedgerById.get(entry.ledgerId)));
   const ledgerByKey = new Map(ledgerEntries.map((entry) => [entry.occurrenceKey, entry]));
   const ledgerByBookingId = new Map(ledgerEntries.filter((entry) => entry.bookingId).map((entry) => [entry.bookingId, entry]));
   const bookingPatches = buildBookingPatches(bookings, ledgerByKey, ledgerByBookingId);
   const requestPatches = await buildRequestPatches(requestSnap.docs, bookings, ledgerByKey, ledgerByBookingId);
-  const staleLedgerDeletes = ledgerSnap.docs.map((doc) => doc.id);
-  const plannedWrites = ledgerEntries.length + staleLedgerDeletes.length + bookingPatches.length * 2 + requestPatches.length * 2;
+  const expectedLedgerIds = new Set(ledgerEntries.map((entry) => entry.ledgerId));
+  const staleLedgerDeletes = config.pruneStale
+    ? ledgerSnap.docs.filter((doc) => !expectedLedgerIds.has(doc.id)).map((doc) => doc.id)
+    : [];
+  const plannedWrites = ledgerUpserts.length + staleLedgerDeletes.length + bookingPatches.length * 2 + requestPatches.length * 2;
 
   if (config.apply) {
-    await applyMemberPlan({ member, ledgerEntries, staleLedgerDeletes, bookingPatches, requestPatches });
+    await applyMemberPlan({
+      member,
+      ledgerEntries: ledgerUpserts,
+      totalLedgerEntries: ledgerEntries.length,
+      staleLedgerDeletes,
+      bookingPatches,
+      requestPatches,
+    });
   }
 
   return {
@@ -133,6 +150,8 @@ async function recomputeMember(member) {
       chartRequests: requestSnap.size,
     },
     ledgerEntries,
+    ledgerUpserts,
+    staleLedgerDeletes,
     bookingPatches,
     requestPatches,
     plannedWrites,
@@ -361,6 +380,18 @@ async function buildRequestPatches(requestDocs, bookings, ledgerByKey, ledgerByB
 }
 
 function replacementBookingForRequest(request, bookings, ledgerByKey, ledgerByBookingId) {
+  const linkedBooking = bookings.find(
+    (booking) => String(booking.bookingId || booking.id || "") === String(request.bookingId || ""),
+  );
+  const explicitReplacementId = String(
+    linkedBooking?.supersededByBookingId || linkedBooking?.sessionOrder?.supersededByBookingId || "",
+  );
+  if (explicitReplacementId) {
+    const explicitReplacement = bookings.find(
+      (booking) => String(booking.bookingId || booking.id || "") === explicitReplacementId,
+    );
+    if (explicitReplacement && isCountablePrivateBooking(explicitReplacement)) return explicitReplacement;
+  }
   const requestStaff = staffOccurrenceIdentity(request.staffId, request.staffName);
   const requestStart = timestampMillisFromValue(request.lessonStartAt);
   const candidates = bookings
@@ -380,7 +411,14 @@ function replacementBookingForRequest(request, bookings, ledgerByKey, ledgerByBo
   return candidates.length === 1 ? candidates[0] : null;
 }
 
-async function applyMemberPlan({ member, ledgerEntries, staleLedgerDeletes, bookingPatches, requestPatches }) {
+async function applyMemberPlan({
+  member,
+  ledgerEntries,
+  totalLedgerEntries,
+  staleLedgerDeletes,
+  bookingPatches,
+  requestPatches,
+}) {
   const chunks = [];
   const ledgerBatch = [];
   for (const id of staleLedgerDeletes) {
@@ -408,7 +446,9 @@ async function applyMemberPlan({ member, ledgerEntries, staleLedgerDeletes, book
       studioId: STUDIO_ID,
       memberId: member.memberId,
       memberName: member.name || "",
-      ledgerEntries: ledgerEntries.length,
+      ledgerEntries: totalLedgerEntries,
+      ledgerUpserts: ledgerEntries.length,
+      staleLedgerDeletes: staleLedgerDeletes.length,
       bookingPatches: bookingPatches.length,
       requestPatches: requestPatches.length,
       updatedAt: admin.firestore.Timestamp.now(),
@@ -503,8 +543,23 @@ function timelineRowFromRequest(request) {
 }
 
 function isCountablePrivateBooking(booking) {
+  const bookingId = String(booking?.bookingId || booking?.id || "");
+  if (bookingId.startsWith("usage_booking_")) return false;
   if (inactivePrivateBookingReason(booking)) return false;
   return true;
+}
+
+function ledgerNeedsUpsert(next, current) {
+  if (!current) return true;
+  return [
+    "bookingId",
+    "memberId",
+    "staffName",
+    "status",
+    "cumulativePrivateRound",
+    "ticketName",
+  ].some((key) => String(next[key] ?? "") !== String(current[key] ?? "")) ||
+    timestampMillisFromValue(next.startsAt) !== timestampMillisFromValue(current.startsAt);
 }
 
 function inactivePrivateBookingReason(booking) {
@@ -648,18 +703,20 @@ function removeUndefined(value) {
 }
 
 function redactForReport(row) {
+  const redactLedgerEntry = (entry) => ({
+    ledgerId: entry.ledgerId,
+    bookingId: entry.bookingId,
+    usageEventId: entry.usageEventId,
+    startsAt: entry.startsAt?.toDate?.()?.toISOString?.() || entry.startsAt,
+    staffName: entry.staffName,
+    ticketName: entry.ticketName,
+    cumulativePrivateRound: entry.cumulativePrivateRound,
+    status: entry.status,
+  });
   return {
     ...row,
-    ledgerEntries: row.ledgerEntries.map((entry) => ({
-      ledgerId: entry.ledgerId,
-      bookingId: entry.bookingId,
-      usageEventId: entry.usageEventId,
-      startsAt: entry.startsAt?.toDate?.()?.toISOString?.() || entry.startsAt,
-      staffName: entry.staffName,
-      ticketName: entry.ticketName,
-      cumulativePrivateRound: entry.cumulativePrivateRound,
-      status: entry.status,
-    })),
+    ledgerEntries: row.ledgerEntries.map(redactLedgerEntry),
+    ledgerUpserts: row.ledgerUpserts.map(redactLedgerEntry),
   };
 }
 
