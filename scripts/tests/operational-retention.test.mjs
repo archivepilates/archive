@@ -120,6 +120,13 @@ test("private-session verification uses the same countability policy as the ledg
   assert.equal(isPrivateBooking({ lessonType: "group", ticketName: "프라이빗 오표기" }), false);
 });
 
+test("HohoYoga snapshot retries transient response-body failures", () => {
+  const source = readFileSync(path.resolve("scripts/hohoyoga-monitor-snapshot.mjs"), "utf8");
+  assert.match(source, /connection:\s*"close"/);
+  assert.match(source, /async function requestText[\s\S]*attempt <= 5/);
+  assert.match(source, /isTransientNetworkError[\s\S]*EPIPE/);
+});
+
 test("local artifact compaction keeps work and failure records", () => {
   const home = mkdtempSync(path.join(tmpdir(), "archive-retention-"));
   const reportDir = path.join(home, "ArchiveIN/automation/reports/admin-emergency-sync");

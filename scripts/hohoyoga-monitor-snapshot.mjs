@@ -276,6 +276,7 @@ async function request(jar, url, options = {}) {
         ...options,
         headers: {
           "user-agent": USER_AGENT,
+          connection: "close",
           cookie: jar.header(),
           ...options.headers,
         },
@@ -301,8 +302,23 @@ async function request(jar, url, options = {}) {
 }
 
 async function requestText(jar, url, options = {}) {
-  const response = await request(jar, url, options);
-  return { response, text: await response.text() };
+  let lastError;
+  for (let attempt = 1; attempt <= 5; attempt += 1) {
+    try {
+      const response = await request(jar, url, options);
+      return { response, text: await response.text() };
+    } catch (error) {
+      lastError = error;
+      if (!isTransientNetworkError(error) || attempt === 5) throw error;
+      await sleep(700 * attempt);
+    }
+  }
+  throw lastError;
+}
+
+function isTransientNetworkError(error) {
+  const text = `${error?.message || ""} ${error?.cause?.message || ""} ${error?.cause?.code || ""}`;
+  return /EPIPE|fetch failed|ECONNRESET|ETIMEDOUT|ENETUNREACH|EAI_AGAIN|socket|terminated/i.test(text);
 }
 
 async function login() {
