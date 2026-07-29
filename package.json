@@ -25,6 +25,7 @@
     "verify:archive-home-classroom-live": "node scripts/verify-archive-home-classroom-live.mjs",
     "validate:video-sales-growth": "node --check official-home/assets/archive-analytics-20260729a.js && node --check official-home/assets/imweb-video-sales-20260729a.js && node --check scripts/imweb/apply-video-sales-growth.mjs && node scripts/validate-video-sales-growth.mjs",
     "verify:video-sales-growth-ui": "bash scripts/run-video-sales-growth-ui.sh",
+    "validate:knitido-shipping-review": "node --check official-home/assets/imweb-knitido-shipping-review-20260729b.js && node --check scripts/imweb/apply-knitido-shipping-review.mjs && node scripts/validate-knitido-shipping-review.mjs",
     "validate:video-followups": "python3 scripts/imweb_video_followup_candidates.py --self-test",
     "validate:release-branch-state": "node scripts/validate-release-branch-state.mjs",
     "deploy:archivein-live": "bash scripts/deploy-archivein-live.sh",

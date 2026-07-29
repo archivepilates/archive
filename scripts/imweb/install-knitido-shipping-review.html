@@ -1,0 +1,36 @@
+<script data-archive-pilates-knitido-shipping-review="2026-07-29b">
+(function () {
+  "use strict";
+
+  var VERSION = "2026-07-29b";
+  var SOURCE =
+    "https://archivepilates.com/assets/imweb-knitido-shipping-review-20260729b.js?v=" +
+    VERSION;
+  var selector = 'script[data-archive-pilates-knitido-shipping-review-asset="' + VERSION + '"]';
+
+  function isKnitidoTarget() {
+    var path = String(window.location.pathname || "").replace(/\/$/, "");
+    var params;
+    try {
+      params = new URLSearchParams(window.location.search || "");
+    } catch (error) {
+      return false;
+    }
+    if ((path === "/16" || path === "/shop") && params.get("ap_shop") === "knitido") {
+      return true;
+    }
+    if (path !== "/shop_view") return false;
+    var productNumber = Number(params.get("idx"));
+    return Number.isInteger(productNumber) && productNumber >= 52 && productNumber <= 78;
+  }
+
+  if (!isKnitidoTarget()) return;
+  if (document.querySelector(selector)) return;
+
+  var script = document.createElement("script");
+  script.src = SOURCE;
+  script.async = true;
+  script.setAttribute("data-archive-pilates-knitido-shipping-review-asset", VERSION);
+  (document.head || document.documentElement).appendChild(script);
+})();
+</script>

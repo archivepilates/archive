@@ -3,7 +3,8 @@
     "site": "archive-pilates-home",
     "predeploy": [
       "npm run validate:archive-home-classroom",
-      "npm run validate:video-sales-growth"
+      "npm run validate:video-sales-growth",
+      "npm run validate:knitido-shipping-review"
     ],
     "postdeploy": [
       "npm run verify:archive-home-classroom-live"
