@@ -61,23 +61,32 @@ requireMarkers("firebase/kangsain-functions/functions/src/alimtalk/templateStatu
   'state?.source === "solapi"',
   "SOLAPI template not found",
   "templateReadinessFromState",
+  "alimtalkImageTemplateContractIssue",
+  '"IMAGE"',
+  "imageId",
 ]);
 requireMarkers("firebase/kangsain-functions/functions/src/alimtalk/templates.ts", [
   "LEGACY_PRIVATE_SURVEY_ALIMTALK_TEMPLATE_CODE",
   "LEGACY_STAFF_PRIVATE_CHART_ALIMTALK_TEMPLATE_CODE",
   "PRIVATE_SURVEY_ALIMTALK_TEMPLATE_ID",
   "STAFF_PRIVATE_CHART_ALIMTALK_TEMPLATE_ID",
+  "NATIVE_PRIVATE_SURVEY_ALIMTALK_IMAGE_ID",
+  "NATIVE_STAFF_PRIVATE_CHART_ALIMTALK_IMAGE_ID",
 ]);
 requireMarkers("firebase/kangsain-functions/functions/src/alimtalk/eligibility.ts", [
   "privateSurveyTemplateContractIssue",
   "프라이빗 자체설문 링크형 v2 템플릿 승인·설정 전",
   "프라이빗 사전설문 템플릿 자체설문 버튼 URL 불일치",
+  "NATIVE_PRIVATE_SURVEY_ALIMTALK_IMAGE_ID",
   "RETRYABLE_TEMPLATE_STATUS_PREFIX",
 ]);
 requireMarkers("scripts/create-private-survey-solapi-template.mjs", [
   "Refusing to create a SOLAPI template without --apply.",
   "https://in.archivepilates.com/s/#{링크ID}/",
   "PRIVATE_SURVEY_ALIMTALK_TEMPLATE_ID",
+  "referenceImageContract",
+  "inspection/cancel",
+  "emphasizeType: imageContract.emphasizeType",
 ]);
 requireMarkers("scripts/create-staff-private-chart-solapi-template.mjs", [
   "Refusing to create a SOLAPI template without --apply.",
@@ -86,6 +95,9 @@ requireMarkers("scripts/create-staff-private-chart-solapi-template.mjs", [
   "https://in.archivepilates.com/s/#{사진영상업로드링크ID}/",
   "legacy Notion copy remains",
   "STAFF_PRIVATE_CHART_ALIMTALK_TEMPLATE_ID",
+  "referenceImageContract",
+  "inspection/cancel",
+  "emphasizeType: imageContract.emphasizeType",
 ]);
 requireMarkers("scripts/verify-private-flow-ui.mjs", [
   "native member survey completion state",
@@ -101,6 +113,8 @@ requireMarkers("scripts/audit-private-alimtalk-templates.mjs", [
   '"member_private_survey"',
   '"staff_private_chart"',
   '"member_private_report"',
+  "expectedEmphasizeType",
+  "expectedImageId",
   "--strict",
 ]);
 requireMarkers("firebase/kangsain-functions/functions/src/privateLessonChart/privateLessonSession.ts", [
@@ -149,8 +163,8 @@ requireMarkers("core/rules/index.html", [
   "Notion은 표시·열람용입니다.",
   "immutable snapshot",
   "supersededByBookingId",
-  "자체설문 링크형 v2 템플릿 승인·설정 전까지 발송하지 않습니다.",
-  "구형 Notion 안내 문구가 없는 v3 템플릿 승인·설정 전에는 발송하지 않습니다.",
+  "자체설문 링크형 v2는 기존 ARCHIVE PILATES 로고 이미지형 양식을 유지하며",
+  "v3도 기존 ARCHIVE PILATES 로고 이미지형 양식을 유지하며",
 ]);
 
 const trackedStaticPrivateArtifacts = gitLines([

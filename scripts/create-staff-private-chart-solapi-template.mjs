@@ -38,36 +38,49 @@ const reference = await solapiRequest(`${API_BASE}/${encodeURIComponent(REFERENC
 const channelId = String(reference.channelId || "").trim();
 const categoryCode = String(reference.categoryCode || "004001").trim();
 if (!channelId) throw new Error("Reference template channelId is missing.");
+const imageContract = referenceImageContract(reference);
+const templatePayload = {
+  name: TEMPLATE_NAME,
+  content: TEMPLATE_CONTENT,
+  categoryCode,
+  buttons: BUTTON_URLS.map(([buttonName, url]) => ({
+    buttonType: "WL",
+    buttonName,
+    linkMo: url,
+    linkPc: url,
+    targetOut: true,
+  })),
+  quickReplies: [],
+  messageType: imageContract.messageType,
+  emphasizeType: imageContract.emphasizeType,
+  imageId: imageContract.imageId,
+  securityFlag: Boolean(reference.securityFlag),
+};
 
 const existingSummary = await findExistingTemplate(channelId);
 const existing = existingSummary
   ? await solapiRequest(`${API_BASE}/${encodeURIComponent(existingSummary.templateId)}`)
   : null;
-if (existing) assertTemplateContract(existing, channelId);
-const created =
-  existing ||
-  (await solapiRequest(API_BASE, {
+let current = existing;
+let repaired = false;
+if (current && templateContractIssues(current, channelId, imageContract).length) {
+  current = await prepareTemplateForUpdate(current);
+  current = await solapiRequest(`${API_BASE}/${encodeURIComponent(current.templateId)}`, {
+    method: "PUT",
+    body: JSON.stringify(templatePayload),
+  });
+  repaired = true;
+}
+if (!current) {
+  current = await solapiRequest(API_BASE, {
     method: "POST",
     body: JSON.stringify({
       channelId,
-      name: TEMPLATE_NAME,
-      content: TEMPLATE_CONTENT,
-      categoryCode,
-      buttons: BUTTON_URLS.map(([buttonName, url]) => ({
-        buttonType: "WL",
-        buttonName,
-        linkMo: url,
-        linkPc: url,
-        targetOut: false,
-      })),
-      quickReplies: [],
-      messageType: "BA",
-      emphasizeType: "NONE",
-      securityFlag: false,
+      ...templatePayload,
     }),
-  }));
+  });
+}
 
-let current = created;
 if (String(current.status || "").toUpperCase() === "PENDING") {
   current = await solapiRequest(`${API_BASE}/${encodeURIComponent(current.templateId)}/inspection`, {
     method: "PUT",
@@ -79,7 +92,7 @@ if (String(current.status || "").toUpperCase() === "PENDING") {
 }
 
 const finalTemplate = await solapiRequest(`${API_BASE}/${encodeURIComponent(current.templateId)}`);
-assertTemplateContract(finalTemplate, channelId);
+assertTemplateContract(finalTemplate, channelId, imageContract);
 console.log(
   JSON.stringify(
     {
@@ -88,7 +101,11 @@ console.log(
       status: finalTemplate.status,
       channelId: finalTemplate.channelId,
       buttons: finalTemplate.buttons,
+      messageType: finalTemplate.messageType,
+      emphasizeType: finalTemplate.emphasizeType,
+      imageId: finalTemplate.imageId,
       reused: Boolean(existing),
+      repaired,
       firebaseRuntimeEnv: `STAFF_PRIVATE_CHART_ALIMTALK_TEMPLATE_ID=${finalTemplate.templateId}`,
     },
     null,
@@ -96,7 +113,12 @@ console.log(
   ),
 );
 
-function assertTemplateContract(template, expectedChannelId) {
+function assertTemplateContract(template, expectedChannelId, expectedImageContract) {
+  const issues = templateContractIssues(template, expectedChannelId, expectedImageContract);
+  if (issues.length) throw new Error(`Existing SOLAPI template contract mismatch: ${issues.join(", ")}`);
+}
+
+function templateContractIssues(template, expectedChannelId, expectedImageContract) {
   const issues = [];
   if (String(template.channelId || "") !== expectedChannelId) issues.push("channelId mismatch");
   if (String(template.content || "").trim() !== TEMPLATE_CONTENT.trim()) issues.push("content mismatch");
@@ -108,7 +130,43 @@ function assertTemplateContract(template, expectedChannelId) {
   for (const [, url] of BUTTON_URLS) {
     if (!urls.includes(url)) issues.push(`button URL missing: ${url}`);
   }
-  if (issues.length) throw new Error(`Existing SOLAPI template contract mismatch: ${issues.join(", ")}`);
+  if (String(template.messageType || "").toUpperCase() !== expectedImageContract.messageType) {
+    issues.push("messageType mismatch");
+  }
+  if (String(template.emphasizeType || "").toUpperCase() !== expectedImageContract.emphasizeType) {
+    issues.push("image emphasizeType mismatch");
+  }
+  if (String(template.imageId || "") !== expectedImageContract.imageId) issues.push("ARCHIVE imageId mismatch");
+  return issues;
+}
+
+function referenceImageContract(template) {
+  const messageType = String(template.messageType || "").toUpperCase();
+  const emphasizeType = String(template.emphasizeType || "").toUpperCase();
+  const imageId = String(template.imageId || "").trim();
+  if (messageType !== "BA" || emphasizeType !== "IMAGE" || !imageId) {
+    throw new Error(
+      `Reference template is not the expected ARCHIVE image template: ${messageType}/${emphasizeType}/${imageId || "missing imageId"}`,
+    );
+  }
+  return { messageType, emphasizeType, imageId };
+}
+
+async function prepareTemplateForUpdate(template) {
+  const templateId = String(template.templateId || "").trim();
+  if (!templateId) throw new Error("Existing SOLAPI templateId is missing.");
+  let current = template;
+  const status = String(current.status || "").toUpperCase();
+  if (status === "INSPECTING") {
+    current = await solapiRequest(`${API_BASE}/${encodeURIComponent(templateId)}/inspection/cancel`, {
+      method: "PUT",
+    });
+  }
+  const editableStatus = String(current.status || "").toUpperCase();
+  if (!["PENDING", "REJECTED"].includes(editableStatus)) {
+    throw new Error(`Refusing to modify template ${templateId} in ${editableStatus || "UNKNOWN"} status.`);
+  }
+  return current;
 }
 
 async function findExistingTemplate(channelId) {

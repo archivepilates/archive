@@ -19,6 +19,9 @@ export interface AlimtalkTemplateState {
   channelId?: string;
   content?: string;
   buttonUrls?: string[];
+  messageType?: string;
+  emphasizeType?: string;
+  imageId?: string;
   syncedAt?: FirebaseFirestore.Timestamp;
 }
 
@@ -29,6 +32,9 @@ interface SolapiTemplate {
   status?: string;
   channelId?: string;
   content?: string;
+  messageType?: string;
+  emphasizeType?: string;
+  imageId?: string;
   buttons?: Array<{
     buttonName?: string;
     buttonType?: string;
@@ -69,6 +75,9 @@ export async function syncAlimtalkTemplateStatuses(): Promise<{ checked: number;
             channelId: String(remote.channelId || ""),
             content: String(remote.content || ""),
             buttonUrls: templateButtonUrls(remote),
+            messageType: normalizeTemplateType(remote.messageType),
+            emphasizeType: normalizeTemplateType(remote.emphasizeType),
+            imageId: String(remote.imageId || ""),
             syncedAt: nowTimestamp(),
             updatedAt: nowTimestamp(),
           },
@@ -91,6 +100,9 @@ export async function syncAlimtalkTemplateStatuses(): Promise<{ checked: number;
             channelId: "",
             content: "",
             buttonUrls: [],
+            messageType: "",
+            emphasizeType: "",
+            imageId: "",
             syncedAt: nowTimestamp(),
             updatedAt: nowTimestamp(),
           },
@@ -125,6 +137,24 @@ export function templateReadinessFromState(
   };
 }
 
+export function alimtalkImageTemplateContractIssue(
+  state: AlimtalkTemplateState,
+  expectedImageId: string,
+  label: string,
+): string {
+  if (normalizeTemplateType(state.messageType) !== "BA") {
+    return `${label} 메시지 유형이 기본형(BA)이 아님`;
+  }
+  if (normalizeTemplateType(state.emphasizeType) !== "IMAGE") {
+    return `${label}이 ARCHIVE 이미지형 템플릿이 아님`;
+  }
+  if (!String(state.imageId || "").trim()) return `${label} 이미지 ID 없음`;
+  if (String(state.imageId || "").trim() !== String(expectedImageId || "").trim()) {
+    return `${label} ARCHIVE 이미지 ID 불일치`;
+  }
+  return "";
+}
+
 async function templateState(templateCode: string): Promise<AlimtalkTemplateState | null> {
   const normalizedTemplateCode = normalizeTemplateCode(templateCode);
   if (!normalizedTemplateCode) return null;
@@ -148,6 +178,9 @@ async function templateState(templateCode: string): Promise<AlimtalkTemplateStat
       channelId: String(remote.channelId || ""),
       content: String(remote.content || ""),
       buttonUrls: templateButtonUrls(remote),
+      messageType: normalizeTemplateType(remote.messageType),
+      emphasizeType: normalizeTemplateType(remote.emphasizeType),
+      imageId: String(remote.imageId || ""),
       syncedAt: nowTimestamp(),
       updatedAt: nowTimestamp(),
     };
@@ -165,6 +198,9 @@ async function templateState(templateCode: string): Promise<AlimtalkTemplateStat
       channelId: "",
       content: "",
       buttonUrls: [],
+      messageType: "",
+      emphasizeType: "",
+      imageId: "",
       syncedAt: nowTimestamp(),
       updatedAt: nowTimestamp(),
     };
@@ -175,6 +211,10 @@ async function templateState(templateCode: string): Promise<AlimtalkTemplateStat
 
 function normalizeTemplateCode(value: unknown): string {
   return String(value || "").trim();
+}
+
+function normalizeTemplateType(value: unknown): string {
+  return String(value || "").trim().toUpperCase();
 }
 
 async function fetchSolapiTemplate(templateCode: string): Promise<SolapiTemplate> {

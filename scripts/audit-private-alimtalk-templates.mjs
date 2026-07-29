@@ -13,6 +13,9 @@ const templates = [
     id: process.env.PRIVATE_SURVEY_ALIMTALK_TEMPLATE_ID || "KA01TP260729144645970fv13He8mfsK",
     requiredButtonFragments: ["https://in.archivepilates.com/s/#{링크ID}/"],
     requiredVariables: ["#{이름}", "#{링크ID}"],
+    expectedMessageType: "BA",
+    expectedEmphasizeType: "IMAGE",
+    expectedImageId: "ST01FZ2605141601264576AUwmK3Bqgl",
   },
   {
     key: "staff_intake_summary",
@@ -40,6 +43,9 @@ const templates = [
       "#{사진영상업로드링크ID}",
     ],
     forbiddenContentFragments: ["Notion"],
+    expectedMessageType: "BA",
+    expectedEmphasizeType: "IMAGE",
+    expectedImageId: "ST01FZ260527183751162YVedKZ3LQIu",
   },
   {
     key: "member_private_report",
@@ -69,6 +75,21 @@ for (const expected of templates) {
   if (String(template.channelId || "") !== expectedChannelId) {
     issues.push(`channelId mismatch: ${template.channelId || "missing"}`);
   }
+  if (
+    expected.expectedMessageType &&
+    String(template.messageType || "").toUpperCase() !== expected.expectedMessageType
+  ) {
+    issues.push(`messageType mismatch: ${template.messageType || "missing"}`);
+  }
+  if (
+    expected.expectedEmphasizeType &&
+    String(template.emphasizeType || "").toUpperCase() !== expected.expectedEmphasizeType
+  ) {
+    issues.push(`emphasizeType mismatch: ${template.emphasizeType || "missing"}`);
+  }
+  if (expected.expectedImageId && String(template.imageId || "") !== expected.expectedImageId) {
+    issues.push(`imageId mismatch: ${template.imageId || "missing"}`);
+  }
   for (const fragment of expected.requiredButtonFragments) {
     if (!buttonUrls.some((url) => url.includes(fragment))) {
       issues.push(`button URL is missing ${fragment}`);
@@ -89,6 +110,9 @@ for (const expected of templates) {
     name: template.name,
     status: template.status,
     channelId: template.channelId,
+    messageType: template.messageType,
+    emphasizeType: template.emphasizeType,
+    imageId: template.imageId,
     content: template.content,
     buttons: (template.buttons || []).map((button) => ({
       name: button.buttonName,

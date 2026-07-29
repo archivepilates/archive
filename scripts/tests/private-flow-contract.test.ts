@@ -17,8 +17,14 @@ import {
   isRetryableTemplateStatusIssue,
   privateSurveyTemplateContractIssue,
 } from "../../firebase/kangsain-functions/functions/src/alimtalk/eligibility";
-import { templateReadinessFromState } from "../../firebase/kangsain-functions/functions/src/alimtalk/templateStatus";
-import { LEGACY_PRIVATE_SURVEY_ALIMTALK_TEMPLATE_CODE } from "../../firebase/kangsain-functions/functions/src/alimtalk/templates";
+import {
+  alimtalkImageTemplateContractIssue,
+  templateReadinessFromState,
+} from "../../firebase/kangsain-functions/functions/src/alimtalk/templateStatus";
+import {
+  LEGACY_PRIVATE_SURVEY_ALIMTALK_TEMPLATE_CODE,
+  NATIVE_PRIVATE_SURVEY_ALIMTALK_IMAGE_ID,
+} from "../../firebase/kangsain-functions/functions/src/alimtalk/templates";
 
 const nowDate = new Date("2026-07-29T03:00:00.000Z");
 const now = {
@@ -228,6 +234,9 @@ test("legacy private survey template is blocked until the native-link v2 templat
         channelId: "channel-1",
         content: "#{이름}님, 사전설문을 작성해 주세요.",
         buttonUrls: ["https://in.archivepilates.com/s/#{링크ID}/"],
+        messageType: "BA",
+        emphasizeType: "IMAGE",
+        imageId: NATIVE_PRIVATE_SURVEY_ALIMTALK_IMAGE_ID,
       },
       configuredTemplateCode,
     ),
@@ -246,10 +255,59 @@ test("legacy private survey template is blocked until the native-link v2 templat
         channelId: "channel-1",
         content: "#{이름}님, 사전설문을 작성해 주세요.",
         buttonUrls: ["https://forms.gle/legacy"],
+        messageType: "BA",
+        emphasizeType: "IMAGE",
+        imageId: NATIVE_PRIVATE_SURVEY_ALIMTALK_IMAGE_ID,
       },
       configuredTemplateCode,
     ),
     /버튼 URL 불일치/,
+  );
+});
+
+test("private survey template requires the preserved ARCHIVE image contract", () => {
+  const baseState = {
+    templateCode: "template-image",
+    label: "프라이빗 사전설문 안내 v2",
+    name: "프라이빗 사전설문 안내 v2",
+    status: "APPROVED",
+    source: "solapi",
+    lastError: null,
+    messageType: "BA",
+    emphasizeType: "IMAGE",
+    imageId: NATIVE_PRIVATE_SURVEY_ALIMTALK_IMAGE_ID,
+  } as const;
+  assert.equal(
+    alimtalkImageTemplateContractIssue(
+      baseState,
+      NATIVE_PRIVATE_SURVEY_ALIMTALK_IMAGE_ID,
+      "프라이빗 사전설문 템플릿",
+    ),
+    "",
+  );
+  assert.match(
+    alimtalkImageTemplateContractIssue(
+      { ...baseState, emphasizeType: "NONE" },
+      NATIVE_PRIVATE_SURVEY_ALIMTALK_IMAGE_ID,
+      "프라이빗 사전설문 템플릿",
+    ),
+    /이미지형/,
+  );
+  assert.match(
+    alimtalkImageTemplateContractIssue(
+      { ...baseState, imageId: "different-image" },
+      NATIVE_PRIVATE_SURVEY_ALIMTALK_IMAGE_ID,
+      "프라이빗 사전설문 템플릿",
+    ),
+    /이미지 ID 불일치/,
+  );
+  assert.match(
+    alimtalkImageTemplateContractIssue(
+      { ...baseState, messageType: "EX" },
+      NATIVE_PRIVATE_SURVEY_ALIMTALK_IMAGE_ID,
+      "프라이빗 사전설문 템플릿",
+    ),
+    /기본형/,
   );
 });
 

@@ -2,11 +2,13 @@ import { addDays } from "../utils/date";
 import {
   ALIMTALK_MEMBER_EXCLUSION_REASONS,
   LEGACY_PRIVATE_SURVEY_ALIMTALK_TEMPLATE_CODE,
+  NATIVE_PRIVATE_SURVEY_ALIMTALK_IMAGE_ID,
   NATIVE_PRIVATE_SURVEY_ALIMTALK_TEMPLATE_CODE,
 } from "./templates";
 import type { AlimtalkCandidateDoc } from "../types/models";
 import { shortLinkIdForTarget } from "../utils/shortLinks";
 import {
+  alimtalkImageTemplateContractIssue,
   alimtalkTemplateReadiness,
   type AlimtalkTemplateState,
 } from "./templateStatus";
@@ -93,6 +95,12 @@ export function privateSurveyTemplateContractIssue(
     return `프라이빗 사전설문 템플릿 설정 불일치: ${candidate.templateCode}`;
   }
   if (!state) return "";
+  const imageContractIssue = alimtalkImageTemplateContractIssue(
+    state,
+    NATIVE_PRIVATE_SURVEY_ALIMTALK_IMAGE_ID,
+    "프라이빗 사전설문 템플릿",
+  );
+  if (imageContractIssue) return imageContractIssue;
   if (!state.channelId) return "프라이빗 사전설문 템플릿 채널 ID 없음";
   if (!String(state.content || "").includes("#{이름}")) {
     return "프라이빗 사전설문 템플릿 회원명 변수 없음";

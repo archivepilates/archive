@@ -23,9 +23,14 @@ import { bookingSourcePriority, isExcelBookingId } from "../utils/canonicalBooki
 import {
   ALIMTALK_TEMPLATES,
   LEGACY_STAFF_PRIVATE_CHART_ALIMTALK_TEMPLATE_CODE,
+  NATIVE_STAFF_PRIVATE_CHART_ALIMTALK_IMAGE_ID,
   NATIVE_STAFF_PRIVATE_CHART_ALIMTALK_TEMPLATE_CODE,
 } from "../alimtalk/templates";
-import { alimtalkTemplateReadiness, isAlimtalkTemplateApproved } from "../alimtalk/templateStatus";
+import {
+  alimtalkImageTemplateContractIssue,
+  alimtalkTemplateReadiness,
+  isAlimtalkTemplateApproved,
+} from "../alimtalk/templateStatus";
 import { completePrivateLessonMediaUpload, initPrivateLessonMediaUpload, uploadPrivateLessonMediaChunk } from "./privateLessonMedia";
 import { invalidatePendingPrivateLessonReportCandidates } from "./privateLessonReportCandidates";
 import {
@@ -2670,6 +2675,15 @@ async function isStaffPrivateChartTemplateApproved(): Promise<boolean> {
   }
   const readiness = await alimtalkTemplateReadiness(STAFF_PRIVATE_CHART_TEMPLATE_ID);
   if (!readiness.approved || !readiness.state) return false;
+  if (
+    alimtalkImageTemplateContractIssue(
+      readiness.state,
+      NATIVE_STAFF_PRIVATE_CHART_ALIMTALK_IMAGE_ID,
+      "강사용 프라이빗 차트 템플릿",
+    )
+  ) {
+    return false;
+  }
   const content = String(readiness.state.content || "");
   if (/Notion/i.test(content)) return false;
   for (const variable of ["#{강사명}", "#{회원명}", "#{회차}", "#{수업일시}"]) {
