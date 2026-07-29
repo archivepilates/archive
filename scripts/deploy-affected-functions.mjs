@@ -15,24 +15,12 @@ run("node", apply
   : ["scripts/validate-release-branch-state.mjs"]);
 run("node", ["scripts/validate-live-release-rollback-guards.mjs"]);
 
-if (!affected.deployOnly) {
+if (!affected.codebases.length) {
   console.log("No Functions codebase changes detected.");
   process.exit(0);
 }
 
 const firebaseBin = path.join(repoRoot, "firebase", "kangsain-functions", "functions", "node_modules", ".bin", "firebase");
-const command = [
-  "--config",
-  "firebase.json",
-  "--project",
-  "archive-pilates",
-  "deploy",
-  "--only",
-  affected.deployOnly,
-  "--non-interactive",
-];
-if (dryRun) command.push("--dry-run");
-
 console.log(
   JSON.stringify(
     {
@@ -46,8 +34,26 @@ console.log(
   ),
 );
 
-const result = spawnSync(firebaseBin, command, { cwd: repoRoot, stdio: "inherit", env: process.env });
-process.exit(result.status || 0);
+// Firebase CLI 15.x can package multiple selected codebases and still exit 0
+// without creating deployment operations. Deploy one codebase per process so
+// an affected deployment cannot be reported as successful without an update.
+for (const codebase of affected.codebases) {
+  const command = [
+    "--config",
+    "firebase.json",
+    "--project",
+    "archive-pilates",
+    "deploy",
+    "--only",
+    `functions:${codebase}`,
+    "--non-interactive",
+  ];
+  if (dryRun) command.push("--dry-run");
+  else command.push("--force");
+  console.log(`Deploying Functions codebase: ${codebase} (${dryRun ? "dry-run" : "apply"})`);
+  const result = spawnSync(firebaseBin, command, { cwd: repoRoot, stdio: "inherit", env: process.env });
+  if (result.status !== 0) process.exit(result.status || 1);
+}
 
 function run(commandName, commandArgs) {
   const result = spawnSync(commandName, commandArgs, { cwd: repoRoot, stdio: "inherit", env: process.env });

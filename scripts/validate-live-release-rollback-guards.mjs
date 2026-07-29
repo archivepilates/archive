@@ -205,6 +205,15 @@ const guardGroups = [
         ],
       },
       {
+        file: "scripts/deploy-affected-functions.mjs",
+        markers: [
+          "for (const codebase of affected.codebases)",
+          "`functions:${codebase}`",
+          "command.push(\"--force\")",
+          "Deploying Functions codebase:",
+        ],
+      },
+      {
         file: "scripts/verify-archive-core-responsive.mjs",
         markers: [
           "mobile-320",
