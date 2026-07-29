@@ -8,7 +8,7 @@
   <string>/Users/archivepilates/dev/archive-in-runtime</string>
   <key>ProgramArguments</key>
   <array>
-    <string>/opt/homebrew/bin/node</string>
+    <string>/usr/local/bin/node</string>
     <string>/Users/archivepilates/dev/archive-in-runtime/scripts/run-hohoyoga-monitor.mjs</string>
     <string>--apply</string>
   </array>
