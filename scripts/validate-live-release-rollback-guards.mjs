@@ -193,6 +193,9 @@ const guardGroups = [
           "write-release-manifest.mjs --surface archivein",
           "validate-live-release-canary.mjs --surface archivein",
         ],
+        forbiddenMarkers: [
+          "write-release-manifest.mjs --surface archivein --surface core",
+        ],
       },
       {
         file: "scripts/deploy-archive-core-live.sh",
@@ -202,6 +205,9 @@ const guardGroups = [
           "validate-live-release-canary.mjs --surface core",
           "verify:archive-core-responsive",
           "ARCHIVE_CORE_BASE_URL=https://core.archivepilates.com",
+        ],
+        forbiddenMarkers: [
+          "write-release-manifest.mjs --surface core --surface archivein",
         ],
       },
       {

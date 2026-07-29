@@ -11,7 +11,7 @@ node scripts/validate-release-branch-state.mjs --require-origin-main
 npm run validate:live-release-rollback-guards
 npm run validate:archive-core-hosting
 npm run verify:archive-core-responsive
-node scripts/write-release-manifest.mjs --surface core --surface archivein
+node scripts/write-release-manifest.mjs --surface core
 
 echo "== ARCHIVE CORE live deploy: hosting dry-run =="
 firebase deploy --project archive-pilates --config firebase.json --only hosting:archive-pilates,hosting:archive-pilates-core --dry-run --non-interactive
