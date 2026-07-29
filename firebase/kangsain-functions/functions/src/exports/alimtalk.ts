@@ -46,13 +46,14 @@ export const scheduledQueueAndSendAlimtalkDaily = onSchedule(
   async () => {
     await syncAlimtalkTemplateStatusesSafely("scheduledQueueAndSendAlimtalkDaily");
     const queueSummary = await queueDailyAlimtalkCandidates();
-    const processSummary = { processed: 0, sent: 0, failed: 0 };
+    const processSummary = { processed: 0, sent: 0, failed: 0, deferred: 0 };
     for (let index = 0; index < 10; index += 1) {
       const result = await processAlimtalkQueue();
       processSummary.processed += result.processed;
       processSummary.sent += result.sent;
       processSummary.failed += result.failed;
-      if (!result.processed) break;
+      processSummary.deferred += result.deferred;
+      if (!result.processed || result.processed === result.deferred) break;
     }
     try {
       await sendDailyAlimtalkReport({ queueSummary, processSummary });
@@ -71,13 +72,14 @@ export const scheduledQueueAndSendReservationOpenAlimtalk = onSchedule(
   async () => {
     await syncAlimtalkTemplateStatusesSafely("scheduledQueueAndSendReservationOpenAlimtalk");
     const queueSummary = await queueReservationOpenAlimtalkCandidates();
-    const processSummary = { processed: 0, sent: 0, failed: 0 };
+    const processSummary = { processed: 0, sent: 0, failed: 0, deferred: 0 };
     for (let index = 0; index < 10; index += 1) {
       const result = await processAlimtalkQueue();
       processSummary.processed += result.processed;
       processSummary.sent += result.sent;
       processSummary.failed += result.failed;
-      if (!result.processed) break;
+      processSummary.deferred += result.deferred;
+      if (!result.processed || result.processed === result.deferred) break;
     }
     try {
       await sendDailyAlimtalkReport({ queueSummary, processSummary });

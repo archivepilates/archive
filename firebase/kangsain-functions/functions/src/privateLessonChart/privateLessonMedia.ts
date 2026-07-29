@@ -12,6 +12,7 @@ import {
   currentPrivateLessonReportRevision,
   privateLessonReportMutationLockReason,
 } from "./privateLessonReportRevision";
+import { invalidatePendingPrivateLessonReportCandidates } from "./privateLessonReportCandidates";
 
 const DRIVE_SCOPE = "https://www.googleapis.com/auth/drive";
 const ROOT_FOLDER_NAME = "ARCHIVE PILATES 프라이빗 리포트 미디어";
@@ -30,6 +31,8 @@ interface DriveFile {
   webContentLink?: string;
   thumbnailLink?: string;
   iconLink?: string;
+  parents?: string[];
+  trashed?: boolean;
 }
 
 interface DriveFolder {
@@ -52,7 +55,7 @@ interface UploadSessionDoc {
   mimeType: string;
   size: number;
   staffName: string;
-  status: "pending" | "uploaded" | "failed";
+  status: "pending" | "uploaded_to_drive" | "attached" | "uploaded" | "failed";
   bytesUploaded: number;
   driveFileId?: string;
   driveUrl?: string;
@@ -165,8 +168,9 @@ export async function uploadPrivateLessonMediaChunk(input: {
     throw new Error("미디어 업로드 세션을 찾을 수 없습니다.");
   }
   await assertPrivateLessonMediaMutable(session.recordId);
-  if (session.status === "uploaded") {
-    return { done: true, bytesUploaded: session.bytesUploaded, file: await mediaFileFromSession(session) };
+  if (["uploaded_to_drive", "attached", "uploaded"].includes(session.status)) {
+    const file = await resumeMediaAttachment(session);
+    return { done: true, bytesUploaded: session.bytesUploaded, file };
   }
   if (session.status === "failed") {
     throw new Error(session.lastError || "이전 업로드 실패로 다시 시작이 필요합니다.");
@@ -214,19 +218,20 @@ export async function uploadPrivateLessonMediaChunk(input: {
     throw new Error(message);
   }
 
-  await ensureAnyoneReaderPermission(client, json.id);
-  const file = mediaFileFromDriveFile(session, json);
+  const file = await driveFileWithMetadata(client, json.id, session);
   await uploadSessionRef(session.uploadId).set(
     {
-      status: "uploaded",
+      status: "uploaded_to_drive",
       bytesUploaded: total,
       driveFileId: file.driveFileId,
       driveUrl: file.driveUrl,
+      lastError: null,
       updatedAt: nowTimestamp(),
     },
     { merge: true },
   );
-  await attachMediaFileToRecord(session.recordId, session, file);
+  await ensureAnyoneReaderPermission(client, file.driveFileId);
+  await finalizeMediaAttachment(session, file);
   return { done: true, bytesUploaded: total, file };
 }
 
@@ -240,10 +245,14 @@ export async function completePrivateLessonMediaUpload(input: {
   if (!session || session.requestId !== input.chartRequest.requestId) {
     throw new Error("미디어 업로드 세션을 찾을 수 없습니다.");
   }
-  await assertPrivateLessonMediaMutable(session.recordId);
-  if (session.status === "uploaded") {
+  if (["attached", "uploaded"].includes(session.status)) {
     const existing = await mediaFileFromSession(session);
     if (!existing) throw new Error("업로드 완료 파일 기록을 찾을 수 없습니다.");
+    return { done: true, bytesUploaded: session.bytesUploaded, file: existing };
+  }
+  await assertPrivateLessonMediaMutable(session.recordId);
+  if (session.status === "uploaded_to_drive") {
+    const existing = await resumeMediaAttachment(session);
     return { done: true, bytesUploaded: session.bytesUploaded, file: existing };
   }
   if (session.status === "failed") {
@@ -253,20 +262,21 @@ export async function completePrivateLessonMediaUpload(input: {
   if (!driveFileId) throw new Error("Drive 업로드 완료 파일 ID를 받지 못했습니다.");
 
   const client = new DelegatedGoogleClient([DRIVE_SCOPE]);
-  const file = await driveFileWithMetadata(client, driveFileId, session, input.driveFile);
-  await ensureAnyoneReaderPermission(client, file.driveFileId);
+  const file = await driveFileWithMetadata(client, driveFileId, session);
   await uploadSessionRef(session.uploadId).set(
     {
-      status: "uploaded",
+      status: "uploaded_to_drive",
       bytesUploaded: file.size || session.size,
       driveFileId: file.driveFileId,
       driveUrl: file.driveUrl,
       uploadMode: "drive_direct",
+      lastError: null,
       updatedAt: nowTimestamp(),
     },
     { merge: true },
   );
-  await attachMediaFileToRecord(session.recordId, session, file);
+  await ensureAnyoneReaderPermission(client, file.driveFileId);
+  await finalizeMediaAttachment(session, file);
   return { done: true, bytesUploaded: file.size || session.size, file };
 }
 
@@ -413,6 +423,10 @@ async function attachMediaFileToRecord(recordId: string, session: UploadSessionD
       updatedAt: nowTimestamp(),
     }, { merge: true });
   });
+  await invalidatePendingPrivateLessonReportCandidates(
+    recordId,
+    "리포트 발송 전 사진·영상이 변경되어 기존 발송 후보를 보류했습니다.",
+  );
 }
 
 async function assertPrivateLessonMediaMutable(recordId: string): Promise<void> {
@@ -427,16 +441,71 @@ async function driveFileWithMetadata(
   client: DelegatedGoogleClient,
   driveFileId: string,
   session: UploadSessionDoc,
-  uploadedFile: DriveFile,
 ): Promise<PrivateLessonChartMediaFile> {
-  const needsMetadata = !uploadedFile.webViewLink || !uploadedFile.mimeType || !uploadedFile.size;
-  if (!needsMetadata) return mediaFileFromDriveFile(session, uploadedFile);
   const file = await client.request<DriveFile>(
     `https://www.googleapis.com/drive/v3/files/${encodeURIComponent(
       driveFileId,
-    )}?fields=id,name,mimeType,size,webViewLink,webContentLink,thumbnailLink,iconLink&supportsAllDrives=true`,
+    )}?fields=id,name,mimeType,size,parents,trashed,webViewLink,webContentLink,thumbnailLink,iconLink&supportsAllDrives=true`,
   );
-  return mediaFileFromDriveFile(session, { ...uploadedFile, ...file, id: driveFileId });
+  if (file.id !== driveFileId) throw new Error("Drive 업로드 완료 파일 ID가 일치하지 않습니다.");
+  if (file.trashed) throw new Error("휴지통으로 이동된 파일은 첨부할 수 없습니다.");
+  if (!file.parents?.includes(session.sessionFolderId)) {
+    throw new Error("프라이빗 회차 폴더에 업로드된 파일만 첨부할 수 있습니다.");
+  }
+  if (String(file.name || "") !== session.fileName) {
+    throw new Error("업로드 파일명이 요청 정보와 일치하지 않습니다.");
+  }
+  if (String(file.mimeType || "") !== session.mimeType) {
+    throw new Error("업로드 파일 형식이 요청 정보와 일치하지 않습니다.");
+  }
+  if (Number(file.size || 0) !== session.size) {
+    throw new Error("업로드 파일 크기가 요청 정보와 일치하지 않습니다.");
+  }
+  return mediaFileFromDriveFile(session, file);
+}
+
+async function resumeMediaAttachment(session: UploadSessionDoc): Promise<PrivateLessonChartMediaFile> {
+  const file = await mediaFileFromSession(session);
+  if (!file) throw new Error("업로드 완료 파일 기록을 찾을 수 없습니다.");
+  if (session.status !== "attached" && session.status !== "uploaded") {
+    const client = new DelegatedGoogleClient([DRIVE_SCOPE]);
+    const verified = await driveFileWithMetadata(client, file.driveFileId, session);
+    await ensureAnyoneReaderPermission(client, verified.driveFileId);
+    await finalizeMediaAttachment(session, verified);
+    return verified;
+  }
+  return file;
+}
+
+async function finalizeMediaAttachment(
+  session: UploadSessionDoc,
+  file: PrivateLessonChartMediaFile,
+): Promise<void> {
+  try {
+    await attachMediaFileToRecord(session.recordId, session, file);
+    await uploadSessionRef(session.uploadId).set(
+      {
+        status: "attached",
+        bytesUploaded: file.size || session.size,
+        driveFileId: file.driveFileId,
+        driveUrl: file.driveUrl,
+        lastError: null,
+        updatedAt: nowTimestamp(),
+      },
+      { merge: true },
+    );
+  } catch (err) {
+    const message = err instanceof Error ? err.message : String(err);
+    await uploadSessionRef(session.uploadId).set(
+      {
+        status: "uploaded_to_drive",
+        lastError: `Drive 업로드 완료 · 리포트 첨부 재시도 필요: ${message}`,
+        updatedAt: nowTimestamp(),
+      },
+      { merge: true },
+    );
+    throw err;
+  }
 }
 
 async function mediaFileFromSession(session: UploadSessionDoc): Promise<PrivateLessonChartMediaFile | undefined> {

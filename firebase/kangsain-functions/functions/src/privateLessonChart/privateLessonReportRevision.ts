@@ -8,6 +8,12 @@ import { stableHash } from "../utils/hash";
 
 export function currentPrivateLessonReportRevision(record: PrivateLessonChartRecordDoc): string {
   return stableHash({
+    bookingId: cleanText(record.bookingId),
+    lessonDate: cleanText(record.lessonDate),
+    lessonStartAtMs: timestampMillis(record.lessonStartAt),
+    sessionNumber: Number(record.sessionNumber || 0),
+    staffId: cleanText(record.staffId),
+    staffName: cleanText(record.staffName),
     summary: cleanText(record.publicSummary || record.gptDraftSummary),
     nextDirection: cleanText(record.publicNextDirection || record.gptDraftNextDirection),
     homework: cleanText(record.postRecord?.homework),
@@ -39,6 +45,49 @@ export function createPrivateLessonReportSnapshot(
   };
 }
 
+export function privateLessonReportSnapshotForView(
+  record: PrivateLessonChartRecordDoc,
+  requestedRevision = "",
+): PrivateLessonReportSnapshot | null {
+  const revision = cleanText(requestedRevision);
+  if (revision) {
+    if (record.sentReportSnapshot?.revision === revision) return record.sentReportSnapshot;
+    if (record.approvedReportSnapshot?.revision === revision) return record.approvedReportSnapshot;
+    return null;
+  }
+  if (
+    record.sentReportSnapshot?.revision &&
+    (!record.sentRevision || record.sentReportSnapshot.revision === record.sentRevision)
+  ) {
+    return record.sentReportSnapshot;
+  }
+  if (
+    record.approvedReportSnapshot?.revision &&
+    (!record.approvedRevision || record.approvedReportSnapshot.revision === record.approvedRevision)
+  ) {
+    return record.approvedReportSnapshot;
+  }
+  if (!revision && record.legacySentReportSnapshot?.revision) return record.legacySentReportSnapshot;
+  return null;
+}
+
+export function privateLessonReportSourceChangePatch(): Partial<PrivateLessonChartRecordDoc> {
+  return {
+    gptStatus: "pending",
+    gptTaskId: "",
+    gptError: null,
+    gptDraftSummary: "",
+    gptDraftNextDirection: "",
+    publicSummary: "",
+    publicNextDirection: "",
+    reportRevision: "",
+    approvedRevision: "",
+    approvedReportSnapshot: null,
+    manualReportEdit: null,
+    publicReportApproval: { status: "pending", lastError: null },
+  };
+}
+
 export function privateLessonReportMutationLockReason(
   record: PrivateLessonChartRecordDoc | null | undefined,
 ): string {
@@ -62,6 +111,10 @@ export function reportUrlForRevision(rawUrl: string, revision: string): string {
   return url.toString();
 }
 
+export function privateLessonReportCandidateId(recordId: string, revision: string): string {
+  return `private_lesson_report_${cleanText(recordId)}_${cleanText(revision)}`;
+}
+
 function includedMedia(record: PrivateLessonChartRecordDoc): PrivateLessonChartMediaFile[] {
   return (record.media?.files || [])
     .filter((file) => file.includeInReport !== false)
@@ -70,4 +123,13 @@ function includedMedia(record: PrivateLessonChartRecordDoc): PrivateLessonChartM
 
 function cleanText(value: unknown): string {
   return String(value == null ? "" : value).trim();
+}
+
+function timestampMillis(value: unknown): number {
+  const timestamp = value as { toMillis?: () => number; toDate?: () => Date } | null | undefined;
+  if (typeof timestamp?.toMillis === "function") return timestamp.toMillis();
+  if (typeof timestamp?.toDate === "function") return timestamp.toDate().getTime();
+  if (value instanceof Date) return value.getTime();
+  const parsed = Date.parse(String(value || ""));
+  return Number.isFinite(parsed) ? parsed : 0;
 }

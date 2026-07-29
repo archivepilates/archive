@@ -1,26 +1,45 @@
 import type {
+  BookingDoc,
   PrivateLessonChartRecordDoc,
   PrivateLessonChartRequestDoc,
   PrivateLessonSessionDoc,
   PrivateLessonWorkflowStage,
 } from "../types/models";
+import { db } from "../config/firebase";
 import { refs } from "../firestore/refs";
 import { nowTimestamp } from "../utils/date";
 import { currentPrivateLessonReportRevision } from "./privateLessonReportRevision";
 
 export async function syncPrivateLessonSessionByRequestId(requestId: string): Promise<void> {
   if (!requestId) return;
-  const [requestSnap, recordSnap, sessionSnap] = await Promise.all([
-    refs.privateLessonChartRequest(requestId).get(),
-    refs.privateLessonChartRecord(requestId).get(),
-    refs.privateLessonSession(requestId).get(),
-  ]);
-  const request = requestSnap.data();
-  const record = recordSnap.data();
-  if (!request && !record) return;
-  const previous = sessionSnap.data();
-  const session = privateLessonSessionProjection(requestId, request, record, previous);
-  await refs.privateLessonSession(requestId).set(session, { merge: true });
+  await db.runTransaction(async (tx) => {
+    const requestRef = refs.privateLessonChartRequest(requestId);
+    const recordRef = refs.privateLessonChartRecord(requestId);
+    const sessionRef = refs.privateLessonSession(requestId);
+    const [requestSnap, recordSnap, sessionSnap] = await Promise.all([
+      tx.get(requestRef),
+      tx.get(recordRef),
+      tx.get(sessionRef),
+    ]);
+    const request = requestSnap.data();
+    const record = recordSnap.data();
+    if (!request && !record) {
+      if (sessionSnap.exists) tx.delete(sessionRef);
+      return;
+    }
+    const bookingId = String(request?.bookingId || record?.bookingId || "");
+    const booking = bookingId ? (await tx.get(refs.booking(bookingId))).data() : undefined;
+    const sessionNumber = positiveNumber(request?.sessionNumber || record?.sessionNumber);
+    const roundVerified = privateLessonRoundVerified(booking, sessionNumber);
+    const session = privateLessonSessionProjection(
+      requestId,
+      request,
+      record,
+      sessionSnap.data(),
+      { roundVerified },
+    );
+    tx.set(sessionRef, session, { merge: true });
+  });
 }
 
 export async function syncPrivateLessonSessionOnRequestWrite(event: any): Promise<void> {
@@ -36,11 +55,16 @@ export function privateLessonSessionProjection(
   request: PrivateLessonChartRequestDoc | undefined,
   record: PrivateLessonChartRecordDoc | undefined,
   previous?: PrivateLessonSessionDoc,
+  options: { roundVerified?: boolean } = {},
 ): PrivateLessonSessionDoc {
   const now = nowTimestamp();
   const approvalStatus = String(record?.publicReportApproval?.status || "");
   const reportRevision = record ? currentPrivateLessonReportRevision(record) : "";
-  const workflowStage = privateLessonWorkflowStage(request, record);
+  const roundVerified = options.roundVerified ?? Boolean(
+    positiveNumber(request?.sessionNumber || record?.sessionNumber) &&
+    !String(request?.bookingId || record?.bookingId || "").startsWith("usage_booking_"),
+  );
+  const workflowStage = privateLessonWorkflowStage(request, record, roundVerified);
   const bookingId = String(request?.bookingId || record?.bookingId || previous?.bookingId || "");
   const bookingAliases = uniqueStrings([
     ...(previous?.bookingAliases || []),
@@ -76,10 +100,7 @@ export function privateLessonSessionProjection(
     lessonDate: String(request?.lessonDate || record?.lessonDate || previous?.lessonDate || ""),
     lessonStartAt: request?.lessonStartAt || record?.lessonStartAt || previous?.lessonStartAt || null,
     sessionNumber: positiveNumber(request?.sessionNumber || record?.sessionNumber || previous?.sessionNumber),
-    roundVerified: Boolean(
-      positiveNumber(request?.sessionNumber || record?.sessionNumber) &&
-      !String(request?.bookingId || record?.bookingId || "").startsWith("usage_booking_"),
-    ),
+    roundVerified,
     workflowStage,
     preStatus: request?.preStatus || (record?.preSubmittedAt ? "submitted" : "pending"),
     postStatus: request?.postStatus || (record?.postSubmittedAt ? "submitted" : "pending"),
@@ -108,9 +129,10 @@ export function privateLessonSessionProjection(
 function privateLessonWorkflowStage(
   request: PrivateLessonChartRequestDoc | undefined,
   record: PrivateLessonChartRecordDoc | undefined,
+  roundVerified: boolean,
 ): PrivateLessonWorkflowStage {
   if (request?.status === "cancelled" || request?.cancelledAt || record?.cancelledAt) return "cancelled";
-  if (!positiveNumber(request?.sessionNumber || record?.sessionNumber)) return "needs_review";
+  if (!positiveNumber(request?.sessionNumber || record?.sessionNumber) || !roundVerified) return "needs_review";
   if (
     record?.publicReportApproval?.status === "sent" ||
     record?.publicReportApproval?.sentAt ||
@@ -128,6 +150,17 @@ function privateLessonWorkflowStage(
   }
   if (record?.preSubmittedAt || request?.preStatus === "submitted") return "recording";
   return "preparation";
+}
+
+export function privateLessonRoundVerified(
+  booking: BookingDoc | undefined,
+  sessionNumber: number | null,
+): boolean {
+  return Boolean(
+    booking &&
+    booking.sessionOrder?.counted !== false &&
+    positiveNumber(booking.sessionOrder?.privateCumulativeRound) === positiveNumber(sessionNumber),
+  );
 }
 
 function reportStatusFor(

@@ -3,8 +3,12 @@ import { mkdirSync, writeFileSync } from "node:fs";
 import os from "node:os";
 import path from "node:path";
 import { db } from "../firebase/kangsain-functions/functions/src/config/firebase";
-import { privateLessonSessionProjection } from "../firebase/kangsain-functions/functions/src/privateLessonChart/privateLessonSession";
+import {
+  privateLessonRoundVerified,
+  privateLessonSessionProjection,
+} from "../firebase/kangsain-functions/functions/src/privateLessonChart/privateLessonSession";
 import type {
+  BookingDoc,
   PrivateLessonChartRecordDoc,
   PrivateLessonChartRequestDoc,
   PrivateLessonSessionDoc,
@@ -50,16 +54,56 @@ async function main(): Promise<void> {
   const sourceIds = [...new Set([...requests.keys(), ...records.keys()])].sort();
   const ids = all ? sourceIds : sourceIds.filter((id) => requestedIds.includes(id));
   if (!ids.length) throw new Error("No private lesson session source documents matched.");
+  const bookingIds = [
+    ...new Set(
+      ids
+        .map((id) => String(requests.get(id)?.bookingId || records.get(id)?.bookingId || ""))
+        .filter(Boolean),
+    ),
+  ];
+  const bookings = await loadBookings(bookingIds);
   const changed: PrivateLessonSessionDoc[] = [];
+  const changedFieldCounts: Record<string, number> = {};
   const stageCounts: Record<string, number> = {};
   const stageSamples: Record<string, string[]> = {};
+  const needsReviewDetails: Array<Record<string, unknown>> = [];
 
   for (const id of ids) {
-    const next = privateLessonSessionProjection(id, requests.get(id), records.get(id), sessions.get(id));
+    const request = requests.get(id);
+    const record = records.get(id);
+    const bookingId = String(request?.bookingId || record?.bookingId || "");
+    const sessionNumber = Number(request?.sessionNumber || record?.sessionNumber || 0) || null;
+    const booking = bookings.get(bookingId);
+    const next = privateLessonSessionProjection(id, request, record, sessions.get(id), {
+      roundVerified: privateLessonRoundVerified(booking, sessionNumber),
+    });
+    if (next.workflowStage === "needs_review" && needsReviewDetails.length < 50) {
+      needsReviewDetails.push({
+        sessionId: id,
+        bookingId,
+        memberName: next.memberName,
+        staffName: next.staffName,
+        lessonDate: next.lessonDate,
+        sessionNumber,
+        bookingRound: booking?.sessionOrder?.privateCumulativeRound || null,
+        bookingCounted: booking?.sessionOrder?.counted ?? null,
+        reason: !booking
+          ? "booking_missing"
+          : booking.sessionOrder?.counted === false
+            ? booking.sessionOrder?.excludedReason || "booking_not_counted"
+            : "round_mismatch",
+      });
+    }
     stageCounts[next.workflowStage] = (stageCounts[next.workflowStage] || 0) + 1;
     stageSamples[next.workflowStage] ||= [];
     if (stageSamples[next.workflowStage].length < 5) stageSamples[next.workflowStage].push(id);
-    if (sessionChanged(next, sessions.get(id))) changed.push(next);
+    const current = sessions.get(id);
+    if (sessionChanged(next, current)) {
+      changed.push(next);
+      for (const field of changedTopLevelFields(next, current)) {
+        changedFieldCounts[field] = (changedFieldCounts[field] || 0) + 1;
+      }
+    }
   }
 
   if (changed.length > writeLimit) {
@@ -86,9 +130,13 @@ async function main(): Promise<void> {
     sourceSessionIds: sourceIds.length,
     selectedSessionIds: ids.length,
     plannedWrites: changed.length,
+    changedFieldCounts: Object.fromEntries(
+      Object.entries(changedFieldCounts).sort((left, right) => right[1] - left[1] || left[0].localeCompare(right[0])),
+    ),
     changedSessionSamples: changed.slice(0, 20).map((session) => session.sessionId),
     stageCounts,
     stageSamples,
+    needsReviewDetails,
   };
   mkdirSync(outDir, { recursive: true });
   const reportPath = path.join(
@@ -99,9 +147,33 @@ async function main(): Promise<void> {
   console.log(JSON.stringify({ summary, reportPath }, null, 2));
 }
 
+async function loadBookings(ids: string[]): Promise<Map<string, BookingDoc>> {
+  const result = new Map<string, BookingDoc>();
+  for (let index = 0; index < ids.length; index += 250) {
+    const refs = ids.slice(index, index + 250).map((id) => db.collection("bookings").doc(id));
+    const snaps = refs.length ? await db.getAll(...refs) : [];
+    for (const snap of snaps) {
+      if (snap.exists) result.set(snap.id, snap.data() as BookingDoc);
+    }
+  }
+  return result;
+}
+
 function sessionChanged(next: PrivateLessonSessionDoc, current?: PrivateLessonSessionDoc): boolean {
   if (!current) return true;
   return stableStringify(comparable(next)) !== stableStringify(comparable(current));
+}
+
+function changedTopLevelFields(
+  next: PrivateLessonSessionDoc,
+  current?: PrivateLessonSessionDoc,
+): string[] {
+  if (!current) return ["document_missing"];
+  const nextComparable = comparable(next);
+  const currentComparable = comparable(current);
+  return [...new Set([...Object.keys(nextComparable), ...Object.keys(currentComparable)])]
+    .filter((field) => stableStringify(nextComparable[field]) !== stableStringify(currentComparable[field]))
+    .sort();
 }
 
 function comparable(session: PrivateLessonSessionDoc): Record<string, unknown> {

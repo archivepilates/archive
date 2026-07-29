@@ -599,6 +599,7 @@ export async function submitNativePrivateSurveyResponseHandler(request: any, res
     );
     if (surveyRequest.status === "submitted") {
       const existing = (await refs.privateSurveyResponse(surveyRequest.responseId || surveyRequest.requestId).get()).data();
+      if (existing) await finalizeNativePrivateSurveySubmission(existing, accessToken);
       response.status(200).json({
         ok: true,
         duplicate: true,
@@ -637,6 +638,8 @@ export async function submitNativePrivateSurveyResponseHandler(request: any, res
         alimtalkReason: "강사 알림톡 발송 대기",
       },
       accessTokenHash: sha256(accessToken),
+      finalizationStatus: "pending",
+      finalizationError: null,
       createdAt: now,
       updatedAt: now,
     };
@@ -667,6 +670,7 @@ export async function submitNativePrivateSurveyResponseHandler(request: any, res
 
     if (!created) {
       const existing = (await refs.privateSurveyResponse(responseId).get()).data();
+      if (existing) await finalizeNativePrivateSurveySubmission(existing, accessToken);
       response.status(200).json({
         ok: true,
         duplicate: true,
@@ -676,8 +680,7 @@ export async function submitNativePrivateSurveyResponseHandler(request: any, res
       return;
     }
 
-    await writePublicSurveyDoc(surveyDoc, accessToken, surveyDoc.delivery);
-    await enqueueSurveyMemoOutputs(surveyDoc);
+    await finalizeNativePrivateSurveySubmission(surveyDoc, accessToken);
     response.status(200).json({
       ok: true,
       duplicate: false,
@@ -691,6 +694,75 @@ export async function submitNativePrivateSurveyResponseHandler(request: any, res
     const status = /권한|올바르지/.test(message) ? 403 : /취소|만료|제출할 수 없는/.test(message) ? 410 : 400;
     response.status(status).json({ ok: false, error: message });
   }
+}
+
+async function finalizeNativePrivateSurveySubmission(
+  doc: PrivateSurveyResponseDoc,
+  accessToken: string,
+): Promise<void> {
+  const claimed = await claimNativePrivateSurveyFinalization(doc.responseId);
+  if (!claimed) return;
+  try {
+    await writePublicSurveyDoc(claimed, accessToken, claimed.delivery);
+    await enqueueSurveyMemoOutputs(claimed);
+    await refs.privateSurveyResponse(claimed.responseId).set(
+      {
+        finalizationStatus: "ready",
+        finalizationError: null,
+        finalizedAt: nowTimestamp(),
+        updatedAt: nowTimestamp(),
+      },
+      { merge: true },
+    );
+  } catch (err) {
+    const message = err instanceof Error ? err.message : String(err);
+    await refs.privateSurveyResponse(claimed.responseId).set(
+      {
+        finalizationStatus: "failed",
+        finalizationError: message,
+        updatedAt: nowTimestamp(),
+      },
+      { merge: true },
+    );
+    throw err;
+  }
+}
+
+async function claimNativePrivateSurveyFinalization(
+  responseId: string,
+): Promise<PrivateSurveyResponseDoc | null> {
+  const staleMs = 10 * 60 * 1000;
+  return db.runTransaction(async (tx) => {
+    const ref = refs.privateSurveyResponse(responseId);
+    const snap = await tx.get(ref);
+    const current = snap.data();
+    if (!current || current.finalizationStatus === "ready") return null;
+    const startedAt = current.finalizationStartedAt?.toMillis?.() || 0;
+    if (
+      current.finalizationStatus === "processing" &&
+      startedAt &&
+      Date.now() - startedAt < staleMs
+    ) {
+      return null;
+    }
+    const now = nowTimestamp();
+    tx.set(
+      ref,
+      {
+        finalizationStatus: "processing",
+        finalizationStartedAt: now,
+        finalizationError: null,
+        updatedAt: now,
+      },
+      { merge: true },
+    );
+    return {
+      ...current,
+      finalizationStatus: "processing",
+      finalizationStartedAt: now,
+      updatedAt: now,
+    };
+  });
 }
 
 function setCors(response: any): void {
@@ -767,6 +839,19 @@ async function activePrivateSurveyBooking(surveyRequest: PrivateSurveyRequestDoc
     throw new Error("연결된 프라이빗 예약을 확인할 수 없습니다.");
   }
   if (booking.appStatus !== "reserved" || /cancel|deleted|inactive/i.test(String(booking.sourceStatus || ""))) {
+    const replacementId = String(
+      booking.supersededByBookingId || booking.sessionOrder?.supersededByBookingId || "",
+    );
+    const replacement = replacementId ? (await refs.booking(replacementId).get()).data() : undefined;
+    if (
+      replacement &&
+      replacement.memberId === surveyRequest.memberId &&
+      isPrivateBookingTicket(replacement) &&
+      replacement.appStatus === "reserved" &&
+      !/cancel|deleted|inactive/i.test(String(replacement.sourceStatus || ""))
+    ) {
+      return replacement;
+    }
     throw new Error("취소되었거나 변경된 수업의 설문입니다.");
   }
   return booking;
@@ -1102,8 +1187,24 @@ export async function processDueStaffSurveyAlimtalks(): Promise<{ checked: numbe
   const nowMs = Date.now();
 
   for (const docSnap of snap.docs) {
-    const doc = docSnap.data();
+    let doc = docSnap.data();
     checked += 1;
+    const bookingState = await refreshSurveyBookingForStaffDelivery(doc);
+    if (bookingState.issue) {
+      await docSnap.ref.set(
+        {
+          delivery: {
+            ...doc.delivery,
+            alimtalkStatus: "skipped",
+            alimtalkReason: bookingState.issue,
+          },
+          updatedAt: nowTimestamp(),
+        },
+        { merge: true },
+      );
+      continue;
+    }
+    doc = bookingState.doc;
     if (isStaffSurveyAlimtalkMissed(doc, nowMs)) {
       await docSnap.ref.set(
         {
@@ -1136,6 +1237,7 @@ export async function processDueStaffSurveyAlimtalks(): Promise<{ checked: numbe
       continue;
     }
 
+    await writePublicSurveyDoc(doc, accessToken, doc.delivery);
     const delivery = await deliverStaffSurveyAlimtalk(doc, accessToken);
     if (delivery.alimtalkStatus === "sent") sent += 1;
     if (delivery.alimtalkStatus === "failed") failed += 1;
@@ -1145,6 +1247,36 @@ export async function processDueStaffSurveyAlimtalks(): Promise<{ checked: numbe
 
   logger.info("processDueStaffSurveyAlimtalks completed", { checked, sent, failed });
   return { checked, sent, failed };
+}
+
+async function refreshSurveyBookingForStaffDelivery(
+  doc: PrivateSurveyResponseDoc,
+): Promise<{ doc: PrivateSurveyResponseDoc; issue: string }> {
+  const bookingId = String(doc.matching?.bookingId || "");
+  const booking = bookingId ? (await refs.booking(bookingId).get()).data() : undefined;
+  const active = booking && isSurveyBookingActive(doc, booking);
+  if (active) return { doc, issue: "" };
+  const replacementId = String(
+    booking?.supersededByBookingId || booking?.sessionOrder?.supersededByBookingId || "",
+  );
+  const replacement = replacementId ? (await refs.booking(replacementId).get()).data() : undefined;
+  if (replacement && replacement.memberId === doc.matching.memberId && isSurveyBookingActive(doc, replacement)) {
+    const matching = matchFromBooking(replacement);
+    const nextDoc = { ...doc, matching, updatedAt: nowTimestamp() };
+    await refs.privateSurveyResponse(doc.responseId).set({ matching, updatedAt: nextDoc.updatedAt }, { merge: true });
+    return { doc: nextDoc, issue: "" };
+  }
+  return {
+    doc,
+    issue: "연결된 수업이 취소·삭제·변경되어 강사 설문 알림톡을 발송하지 않았습니다.",
+  };
+}
+
+function isSurveyBookingActive(doc: PrivateSurveyResponseDoc, booking: BookingDoc): boolean {
+  if (booking.appStatus !== "reserved") return false;
+  if (/cancel|deleted|inactive|stale|missing/i.test(String(booking.sourceStatus || ""))) return false;
+  if ((doc.surveyType || "private") === "private" && !isPrivateBookingTicket(booking)) return false;
+  return true;
 }
 
 export async function processMissingSurveySubmissionAlerts(): Promise<{
@@ -1637,7 +1769,8 @@ async function enqueueSurveyMemoOutputs(
   const kind = surveyMemoKind(doc);
   const memoId = `${kind}_${doc.responseId}`;
   const memoRef = refs.memberMemos().doc(memoId);
-  await memoRef.set(
+  await createDocumentIfMissing(
+    memoRef,
     {
       memoId: memoRef.id,
       studioId: doc.studioId,
@@ -1656,7 +1789,6 @@ async function enqueueSurveyMemoOutputs(
       createdAt: nowTimestamp(),
       updatedAt: nowTimestamp(),
     },
-    { merge: true },
   );
   if (doc.matching.bookingId) {
     await refs
@@ -1666,7 +1798,8 @@ async function enqueueSurveyMemoOutputs(
         { merge: true },
       );
   }
-  await db.collection("studiomateMemoWriteJobs").doc(memoId).set(
+  await createDocumentIfMissing(
+    db.collection("studiomateMemoWriteJobs").doc(memoId),
     {
       jobId: memoId,
       studioId: doc.studioId,
@@ -1688,8 +1821,19 @@ async function enqueueSurveyMemoOutputs(
       createdAt: nowTimestamp(),
       updatedAt: nowTimestamp(),
     },
-    { merge: true },
   );
+}
+
+async function createDocumentIfMissing(
+  ref: FirebaseFirestore.DocumentReference,
+  data: Record<string, unknown>,
+): Promise<boolean> {
+  return db.runTransaction(async (tx) => {
+    const snap = await tx.get(ref);
+    if (snap.exists) return false;
+    tx.create(ref, data);
+    return true;
+  });
 }
 
 function surveyMemoKind(doc: PrivateSurveyResponseDoc): "group_survey" | "private_survey" {

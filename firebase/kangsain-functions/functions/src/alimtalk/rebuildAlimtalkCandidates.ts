@@ -1117,14 +1117,26 @@ function kstNoonDate(value: string): Date {
 async function upsertCandidate(candidate: AlimtalkCandidateDoc): Promise<void> {
   const ref = refs.alimtalkCandidate(candidate.candidateId);
   const previous = (await ref.get()).data();
-  if (previous && ["queued", "sent", "skipped"].includes(previous.status)) {
+  const recoverPrivateSurvey =
+    candidate.type === "private_survey" &&
+    previous?.status === "skipped" &&
+    ["auto_sendability_blocked", "private_survey_booking_blocked"].includes(
+      String(previous.reasonCode || ""),
+    );
+  if (previous && ["queued", "sent"].includes(previous.status)) {
+    await ref.set({ updatedAt: nowTimestamp() }, { merge: true });
+    return;
+  }
+  if (previous?.status === "skipped" && !recoverPrivateSurvey) {
     await ref.set({ updatedAt: nowTimestamp() }, { merge: true });
     return;
   }
   await ref.set(
     {
       ...candidate,
-      status: previous?.status || candidate.status,
+      status: recoverPrivateSurvey ? candidate.status : previous?.status || candidate.status,
+      reasonCode: recoverPrivateSurvey ? "" : previous?.reasonCode || candidate.reasonCode || "",
+      lastError: recoverPrivateSurvey ? null : previous?.lastError ?? candidate.lastError,
       createdAt: previous?.createdAt || candidate.createdAt,
       updatedAt: nowTimestamp(),
     },

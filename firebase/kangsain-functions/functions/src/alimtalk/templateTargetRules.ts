@@ -198,7 +198,7 @@ export const ALIMTALK_TEMPLATE_TARGET_RULES: Partial<Record<AlimtalkCandidateTyp
       "오늘부터 다음 주 일요일까지 예정된 첫 프라이빗 예약이 있음",
       "예약이 강사레슨이 아님",
       "자체설문 요청 문서와 짧은 링크가 있음",
-      "최근 1년 내 프라이빗 사전설문 제출 이력이 없음",
+      "과거 프라이빗 사전설문 제출 이력이 없음(회원별 영구 1회)",
       "과거 프라이빗 출석 완료 이력이 없음",
     ],
     exclusionRules: [
@@ -207,7 +207,7 @@ export const ALIMTALK_TEMPLATE_TARGET_RULES: Partial<Record<AlimtalkCandidateTyp
       "프라이빗 예약 없음",
       "그룹 또는 강사레슨 예약",
       "짧은 링크 생성 실패 또는 버튼 URL 치환 후 100자 초과",
-      "최근 1년 내 프라이빗 사전설문 제출 이력 있음",
+      "과거 프라이빗 사전설문 제출 이력 있음",
       "과거 프라이빗 출석 완료 이력 있음",
       "SOLAPI 미승인 템플릿",
     ],
@@ -406,7 +406,7 @@ export const ALIMTALK_TEMPLATE_TARGET_RULES: Partial<Record<AlimtalkCandidateTyp
     ],
     targetRules: [
       "수업 후 기록이 제출된 프라이빗 회차",
-      "Gemini 회원용 리포트 초안이 생성됨",
+      "회원용 리포트 초안이 생성됨(자동 생성 또는 강사 수정본)",
       "회원용 HTML 리포트 URL이 있음",
       "강사 차트 링크에서 회원 알림톡 발송 승인됨",
     ],

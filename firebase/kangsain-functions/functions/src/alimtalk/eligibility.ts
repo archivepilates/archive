@@ -1,19 +1,37 @@
 import { addDays } from "../utils/date";
-import { ALIMTALK_MEMBER_EXCLUSION_REASONS } from "./templates";
+import {
+  ALIMTALK_MEMBER_EXCLUSION_REASONS,
+  LEGACY_PRIVATE_SURVEY_ALIMTALK_TEMPLATE_CODE,
+} from "./templates";
 import type { AlimtalkCandidateDoc } from "../types/models";
 import { shortLinkIdForTarget } from "../utils/shortLinks";
-import { isAlimtalkTemplateApproved } from "./templateStatus";
+import {
+  alimtalkTemplateReadiness,
+  type AlimtalkTemplateState,
+} from "./templateStatus";
 import { alimtalkTemplateTargetRule, solapiButtonUrlLengthIssue } from "./templateTargetRules";
 import { isValidInstructorLessonManagementNumber, normalizeInstructorLessonManagementNumber } from "./instructorLessonManagement";
 import { isAlimtalkTestRecipient } from "./testRecipients";
+
+export const RETRYABLE_TEMPLATE_STATUS_PREFIX = "템플릿 상태 확인 일시 실패:";
+const PRIVATE_SURVEY_BUTTON_URL = "https://in.archivepilates.com/s/#{링크ID}/";
 
 export async function autoSendabilityIssue(candidate: AlimtalkCandidateDoc, today: string): Promise<string> {
   const rule = alimtalkTemplateTargetRule(candidate.type);
   if (rule?.requiresMemberPhone && !candidate.memberPhone) return "전화번호 없음";
   if (ALIMTALK_MEMBER_EXCLUSION_REASONS[candidate.memberId] && !isAlimtalkTestRecipient(candidate))
     return ALIMTALK_MEMBER_EXCLUSION_REASONS[candidate.memberId];
-  if (rule?.requiresApprovedTemplate && !(await isAlimtalkTemplateApproved(candidate.templateCode)))
-    return `승인 템플릿 코드 아님: ${candidate.templateCode}`;
+  const templateContractIssue = privateSurveyTemplateContractIssue(candidate);
+  if (templateContractIssue) return templateContractIssue;
+  if (rule?.requiresApprovedTemplate) {
+    const readiness = await alimtalkTemplateReadiness(candidate.templateCode);
+    if (readiness.retryable) {
+      return `${RETRYABLE_TEMPLATE_STATUS_PREFIX} ${candidate.templateCode}`;
+    }
+    if (!readiness.approved) return `승인 템플릿 코드 아님: ${candidate.templateCode}`;
+    const remoteContractIssue = privateSurveyTemplateContractIssue(candidate, readiness.state);
+    if (remoteContractIssue) return remoteContractIssue;
+  }
   if ((candidate.attempts || 0) >= (candidate.maxAttempts || 2)) return "발송 실패 재시도 한도 초과";
   if (candidate.sourceDate && candidate.sourceDate > today) return "대상일이 발송 기준일 이후";
   if (rule?.minSourceDate && candidate.sourceDate < rule.minSourceDate) return `${rule.templateLabel} 시작일 이전 후보`;
@@ -50,6 +68,34 @@ export async function autoSendabilityIssue(candidate: AlimtalkCandidateDoc, toda
   if (buttonUrlIssue) return buttonUrlIssue;
   if (rule?.blocksTooLateGroupSurvey && candidate.payload?.groupSurveyDeliveryMode === "too_late")
     return "수업 시작 30분 미만 첫 그룹수업은 설문 발송 대신 현장 확인";
+  return "";
+}
+
+export function isRetryableTemplateStatusIssue(issue: string): boolean {
+  return String(issue || "").startsWith(RETRYABLE_TEMPLATE_STATUS_PREFIX);
+}
+
+export function privateSurveyTemplateContractIssue(
+  candidate: AlimtalkCandidateDoc,
+  state: AlimtalkTemplateState | null = null,
+  configuredTemplateCode = String(process.env.PRIVATE_SURVEY_ALIMTALK_TEMPLATE_ID || "").trim(),
+): string {
+  if (candidate.type !== "private_survey") return "";
+  if (candidate.templateCode === LEGACY_PRIVATE_SURVEY_ALIMTALK_TEMPLATE_CODE) {
+    return "프라이빗 자체설문 링크형 v2 템플릿 승인·설정 전";
+  }
+  if (!configuredTemplateCode) return "프라이빗 자체설문 링크형 v2 템플릿 런타임 설정 없음";
+  if (candidate.templateCode !== configuredTemplateCode) {
+    return `프라이빗 사전설문 템플릿 설정 불일치: ${candidate.templateCode}`;
+  }
+  if (!state) return "";
+  if (!state.channelId) return "프라이빗 사전설문 템플릿 채널 ID 없음";
+  if (!String(state.content || "").includes("#{이름}")) {
+    return "프라이빗 사전설문 템플릿 회원명 변수 없음";
+  }
+  if (!(state.buttonUrls || []).includes(PRIVATE_SURVEY_BUTTON_URL)) {
+    return "프라이빗 사전설문 템플릿 자체설문 버튼 URL 불일치";
+  }
   return "";
 }
 

@@ -125,7 +125,8 @@ const required = [
   {
     file: "core/rules/index.html",
     label: "ARCHIVE CORE source health and operator lifecycle rules",
-    markers: ["2026.07.28", "운영 액션 수명주기", "원천 신선도와 화면 상태", "canonicalActionKey"],
+    markers: ["운영 액션 수명주기", "원천 신선도와 화면 상태", "canonicalActionKey"],
+    patterns: [{ pattern: /\d{4}\.\d{2}\.\d{2} 기준/, label: "current rules date" }],
   },
 ];
 
@@ -136,6 +137,11 @@ for (const item of required) {
   for (const marker of item.markers) {
     if (!content.includes(marker)) {
       failures.push({ file: item.file, label: item.label, missing: marker });
+    }
+  }
+  for (const expected of item.patterns || []) {
+    if (!expected.pattern.test(content)) {
+      failures.push({ file: item.file, label: item.label, missing: expected.label });
     }
   }
 }

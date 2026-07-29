@@ -619,6 +619,10 @@ export interface PrivateSurveyResponseDoc {
     syncedAt?: string;
     error?: string;
   } | null;
+  finalizationStatus?: "pending" | "processing" | "ready" | "failed";
+  finalizationError?: string | null;
+  finalizationStartedAt?: Timestamp | null;
+  finalizedAt?: Timestamp | null;
   accessTokenHash: string;
   createdAt: Timestamp;
   updatedAt: Timestamp;
@@ -785,7 +789,7 @@ export interface PrivateLessonChartRecordDoc {
     editedAt?: Timestamp;
     editedBy?: string;
     source?: string;
-  };
+  } | null;
   media?: {
     rootFolderId?: string;
     memberFolderId?: string;
@@ -807,6 +811,7 @@ export interface PrivateLessonChartRecordDoc {
   sentRevision?: string;
   approvedReportSnapshot?: PrivateLessonReportSnapshot | null;
   sentReportSnapshot?: PrivateLessonReportSnapshot | null;
+  legacySentReportSnapshot?: PrivateLessonReportSnapshot | null;
   notionSync?: {
     status: "pending" | "synced" | "failed";
     pageId?: string;

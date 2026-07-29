@@ -52,12 +52,14 @@ export async function findCompletedDuplicateForCandidate(
 }
 
 export function alimtalkDedupeKey(candidate: AlimtalkCandidateDoc): string {
+  const memberPhone = candidate.type === "private_survey" ? "" : normalizePhone(candidate.memberPhone);
+  const templateCode = candidate.type === "private_survey" ? "" : candidate.templateCode;
   return stableHash({
     studioId: candidate.studioId,
     memberId: candidate.memberId,
-    memberPhone: normalizePhone(candidate.memberPhone),
+    memberPhone,
     type: candidate.type,
-    templateCode: candidate.templateCode,
+    templateCode,
     scope: dedupeScope(candidate),
   });
 }

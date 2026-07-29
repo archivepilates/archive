@@ -8,29 +8,36 @@ import { errorMessage } from "../utils/errors";
 import { nowTimestamp, todayKst } from "../utils/date";
 import { ensureShortLink } from "../utils/shortLinks";
 import { ALIMTALK_TEMPLATE_CHANNEL_IDS, alimtalkDedupePolicy } from "./templates";
-import { autoSendabilityIssue } from "./eligibility";
+import { autoSendabilityIssue, isRetryableTemplateStatusIssue } from "./eligibility";
 import { alimtalkDedupeKey, findCompletedDuplicateForCandidate, normalizePhone } from "./dedupe";
 import { isAlimtalkTemplateApproved } from "./templateStatus";
 import { normalizeInstructorLessonManagementNumber } from "./instructorLessonManagement";
 import { isAlimtalkTestRecipient } from "./testRecipients";
 import { currentPrivateLessonReportRevision } from "../privateLessonChart/privateLessonReportRevision";
+import { privateSurveySendabilityIssue } from "./privateSurveySendGuard";
 
 const SOLAPI_SEND_URL = "https://api.solapi.com/messages/v4/send-many/detail";
 const PROCESSING_STALE_MS = 10 * 60 * 1000;
 
 export interface AlimtalkCandidateProcessResult {
   processed: boolean;
-  status: "not_found" | "not_claimed" | "sent" | "skipped" | "failed";
+  status: "not_found" | "not_claimed" | "sent" | "skipped" | "deferred" | "failed";
   lastError?: string | null;
   solapiMessageId?: string;
 }
 
-export async function processAlimtalkQueue(): Promise<{ processed: number; sent: number; failed: number }> {
+export async function processAlimtalkQueue(): Promise<{
+  processed: number;
+  sent: number;
+  failed: number;
+  deferred: number;
+}> {
   const snap = await refs.alimtalkCandidates().where("status", "in", ["queued", "processing"]).limit(20).get();
 
   let processed = 0;
   let sent = 0;
   let failed = 0;
+  let deferred = 0;
 
   for (const candidateSnap of snap.docs) {
     const claimed = await claimCandidate(candidateSnap.data());
@@ -39,11 +46,29 @@ export async function processAlimtalkQueue(): Promise<{ processed: number; sent:
     try {
       const sendabilityIssue = await autoSendabilityIssue(claimed, todayKst());
       if (sendabilityIssue) {
+        if (isRetryableTemplateStatusIssue(sendabilityIssue)) {
+          await deferCandidateForTemplateStatus(claimed, sendabilityIssue);
+          deferred += 1;
+          continue;
+        }
         await refs.alimtalkCandidate(claimed.candidateId).set(
           {
             status: "skipped",
             reasonCode: "auto_sendability_blocked",
             lastError: sendabilityIssue,
+            updatedAt: nowTimestamp(),
+          },
+          { merge: true },
+        );
+        continue;
+      }
+      const privateSurveyIssue = await privateSurveySendabilityIssue(claimed);
+      if (privateSurveyIssue) {
+        await refs.alimtalkCandidate(claimed.candidateId).set(
+          {
+            status: "skipped",
+            reasonCode: "private_survey_booking_blocked",
+            lastError: privateSurveyIssue,
             updatedAt: nowTimestamp(),
           },
           { merge: true },
@@ -76,6 +101,20 @@ export async function processAlimtalkQueue(): Promise<{ processed: number; sent:
             status: "skipped",
             reasonCode: "private_report_revision_blocked",
             lastError: privateReportIssue,
+            updatedAt: nowTimestamp(),
+          },
+          { merge: true },
+        );
+        continue;
+      }
+      const finalPrivateReportIssue = await finalPrivateLessonReportSendabilityIssue(claimed);
+      if (finalPrivateReportIssue) {
+        await markPrivateLessonReportFailed(claimed, finalPrivateReportIssue);
+        await refs.alimtalkCandidate(claimed.candidateId).set(
+          {
+            status: "skipped",
+            reasonCode: "private_report_final_guard_blocked",
+            lastError: finalPrivateReportIssue,
             updatedAt: nowTimestamp(),
           },
           { merge: true },
@@ -169,8 +208,8 @@ export async function processAlimtalkQueue(): Promise<{ processed: number; sent:
     }
   }
 
-  logger.info("processAlimtalkQueue completed", { processed, sent, failed });
-  return { processed, sent, failed };
+  logger.info("processAlimtalkQueue completed", { processed, sent, failed, deferred });
+  return { processed, sent, failed, deferred };
 }
 
 export async function processAlimtalkCandidate(candidateId: string): Promise<AlimtalkCandidateProcessResult> {
@@ -183,6 +222,10 @@ export async function processAlimtalkCandidate(candidateId: string): Promise<Ali
   try {
     const sendabilityIssue = await autoSendabilityIssue(claimed, todayKst());
     if (sendabilityIssue) {
+      if (isRetryableTemplateStatusIssue(sendabilityIssue)) {
+        await deferCandidateForTemplateStatus(claimed, sendabilityIssue);
+        return { processed: true, status: "deferred", lastError: sendabilityIssue };
+      }
       await refs.alimtalkCandidate(claimed.candidateId).set(
         {
           status: "skipped",
@@ -193,6 +236,20 @@ export async function processAlimtalkCandidate(candidateId: string): Promise<Ali
         { merge: true },
       );
       return { processed: true, status: "skipped", lastError: sendabilityIssue };
+    }
+
+    const privateSurveyIssue = await privateSurveySendabilityIssue(claimed);
+    if (privateSurveyIssue) {
+      await refs.alimtalkCandidate(claimed.candidateId).set(
+        {
+          status: "skipped",
+          reasonCode: "private_survey_booking_blocked",
+          lastError: privateSurveyIssue,
+          updatedAt: nowTimestamp(),
+        },
+        { merge: true },
+      );
+      return { processed: true, status: "skipped", lastError: privateSurveyIssue };
     }
 
     const dedupeKey = alimtalkDedupeKey(claimed);
@@ -228,6 +285,20 @@ export async function processAlimtalkCandidate(candidateId: string): Promise<Ali
         { merge: true },
       );
       return { processed: true, status: "skipped", lastError: privateReportIssue };
+    }
+    const finalPrivateReportIssue = await finalPrivateLessonReportSendabilityIssue(claimed);
+    if (finalPrivateReportIssue) {
+      await markPrivateLessonReportFailed(claimed, finalPrivateReportIssue);
+      await refs.alimtalkCandidate(claimed.candidateId).set(
+        {
+          status: "skipped",
+          reasonCode: "private_report_final_guard_blocked",
+          lastError: finalPrivateReportIssue,
+          updatedAt: nowTimestamp(),
+        },
+        { merge: true },
+      );
+      return { processed: true, status: "skipped", lastError: finalPrivateReportIssue };
     }
     const attempts = (claimed.attempts || 0) + 1;
     const result = await sendSolapiAlimtalk(claimed);
@@ -316,6 +387,21 @@ export async function processAlimtalkCandidate(candidateId: string): Promise<Ali
   }
 }
 
+async function deferCandidateForTemplateStatus(
+  candidate: AlimtalkCandidateDoc,
+  issue: string,
+): Promise<void> {
+  await refs.alimtalkCandidate(candidate.candidateId).set(
+    {
+      status: "queued",
+      reasonCode: "template_status_retry",
+      lastError: issue,
+      updatedAt: nowTimestamp(),
+    },
+    { merge: true },
+  );
+}
+
 async function markPrivateLessonReportSent(candidate: AlimtalkCandidateDoc): Promise<void> {
   if (candidate.type !== "private_lesson_report") return;
   const recordId = String(candidate.payload?.recordId || candidate.sourceActionKey || "").trim();
@@ -374,7 +460,13 @@ async function lockPrivateLessonReportForSend(candidate: AlimtalkCandidateDoc): 
     if (!record || !chartRequest) return "프라이빗 수업 기록을 찾을 수 없습니다.";
     if (chartRequest.status === "cancelled" || chartRequest.cancelledAt) return "취소된 수업입니다.";
     const booking = chartRequest.bookingId ? (await tx.get(refs.booking(chartRequest.bookingId))).data() : undefined;
-    if (!booking || booking.appStatus !== "reserved" || /cancel|deleted|inactive/i.test(String(booking.sourceStatus || ""))) {
+    if (
+      !booking ||
+      booking.appStatus !== "reserved" ||
+      booking.sessionOrder?.counted === false ||
+      ["absent", "late_cancel"].includes(String(booking.attendanceStatus || "")) ||
+      /cancel|deleted|inactive/i.test(String(booking.sourceStatus || ""))
+    ) {
       return "예약 취소 또는 시간변경 상태를 다시 확인해야 합니다.";
     }
     if (record.approvedRevision !== revision || record.approvedReportSnapshot?.revision !== revision) {
@@ -398,6 +490,45 @@ async function lockPrivateLessonReportForSend(candidate: AlimtalkCandidateDoc): 
     );
     return "";
   });
+}
+
+async function finalPrivateLessonReportSendabilityIssue(
+  candidate: AlimtalkCandidateDoc,
+): Promise<string> {
+  if (candidate.type !== "private_lesson_report") return "";
+  const recordId = String(candidate.payload?.recordId || candidate.sourceActionKey || "").trim();
+  const requestId = String(candidate.payload?.requestId || recordId).trim();
+  const revision = String(candidate.payload?.reportRevision || "").trim();
+  const [candidateSnap, recordSnap, requestSnap] = await Promise.all([
+    refs.alimtalkCandidate(candidate.candidateId).get(),
+    refs.privateLessonChartRecord(recordId).get(),
+    refs.privateLessonChartRequest(requestId).get(),
+  ]);
+  const currentCandidate = candidateSnap.data();
+  const record = recordSnap.data();
+  const chartRequest = requestSnap.data();
+  if (currentCandidate?.status !== "processing") return "발송 직전 후보 상태가 변경되었습니다.";
+  if (!record || !chartRequest) return "발송 직전 프라이빗 수업 기록을 찾을 수 없습니다.";
+  if (chartRequest.status === "cancelled" || chartRequest.cancelledAt) return "발송 직전 취소된 수업입니다.";
+  const booking = chartRequest.bookingId ? (await refs.booking(chartRequest.bookingId).get()).data() : undefined;
+  if (
+    !booking ||
+    booking.appStatus !== "reserved" ||
+    booking.sessionOrder?.counted === false ||
+    ["absent", "late_cancel"].includes(String(booking.attendanceStatus || "")) ||
+    /cancel|deleted|inactive|stale|missing/i.test(String(booking.sourceStatus || ""))
+  ) {
+    return "발송 직전 예약 취소 또는 시간변경 상태입니다.";
+  }
+  if (
+    record.publicReportApproval?.status !== "processing" ||
+    record.approvedRevision !== revision ||
+    record.approvedReportSnapshot?.revision !== revision ||
+    currentPrivateLessonReportRevision(record) !== revision
+  ) {
+    return "발송 직전 승인본 리비전이 변경되었습니다.";
+  }
+  return "";
 }
 
 async function markPrivateLessonReportFailed(candidate: AlimtalkCandidateDoc, message: string): Promise<void> {

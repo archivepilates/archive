@@ -36,8 +36,72 @@ requireMarkers("firebase/kangsain-functions/functions/src/alimtalk/rebuildAlimta
 requireMarkers("firebase/kangsain-functions/functions/src/privateLessonChart/privateLessonReportRevision.ts", [
   "currentPrivateLessonReportRevision",
   "createPrivateLessonReportSnapshot",
+  "privateLessonReportSnapshotForView",
+  "privateLessonReportSourceChangePatch",
+  "privateLessonReportCandidateId",
   "privateLessonReportMutationLockReason",
   "reportUrlForRevision",
+  "record.legacySentReportSnapshot?.revision",
+]);
+requireMarkers("firebase/kangsain-functions/functions/src/privateLessonChart/privateLessonMedia.ts", [
+  '"uploaded_to_drive"',
+  '"attached"',
+  "resumeMediaAttachment",
+  "프라이빗 회차 폴더에 업로드된 파일만 첨부할 수 있습니다.",
+  "invalidatePendingPrivateLessonReportCandidates",
+]);
+requireMarkers("firebase/kangsain-functions/functions/src/alimtalk/privateSurveySendGuard.ts", [
+  "privateSurveySendabilityIssue",
+  "privateSurveySourceIssue",
+  "취소·삭제·변경된 프라이빗 예약입니다.",
+  "effectiveBooking.sessionOrder?.counted === false",
+  "supersededByBookingId",
+]);
+requireMarkers("firebase/kangsain-functions/functions/src/alimtalk/templateStatus.ts", [
+  'state?.source === "solapi"',
+  "SOLAPI template not found",
+  "templateReadinessFromState",
+]);
+requireMarkers("firebase/kangsain-functions/functions/src/alimtalk/templates.ts", [
+  "LEGACY_PRIVATE_SURVEY_ALIMTALK_TEMPLATE_CODE",
+  "LEGACY_STAFF_PRIVATE_CHART_ALIMTALK_TEMPLATE_CODE",
+  "PRIVATE_SURVEY_ALIMTALK_TEMPLATE_ID",
+  "STAFF_PRIVATE_CHART_ALIMTALK_TEMPLATE_ID",
+]);
+requireMarkers("firebase/kangsain-functions/functions/src/alimtalk/eligibility.ts", [
+  "privateSurveyTemplateContractIssue",
+  "프라이빗 자체설문 링크형 v2 템플릿 승인·설정 전",
+  "프라이빗 사전설문 템플릿 자체설문 버튼 URL 불일치",
+  "RETRYABLE_TEMPLATE_STATUS_PREFIX",
+]);
+requireMarkers("scripts/create-private-survey-solapi-template.mjs", [
+  "Refusing to create a SOLAPI template without --apply.",
+  "https://in.archivepilates.com/s/#{링크ID}/",
+  "PRIVATE_SURVEY_ALIMTALK_TEMPLATE_ID",
+]);
+requireMarkers("scripts/create-staff-private-chart-solapi-template.mjs", [
+  "Refusing to create a SOLAPI template without --apply.",
+  "https://in.archivepilates.com/s/#{수업전계획링크ID}/",
+  "https://in.archivepilates.com/s/#{수업후기록링크ID}/",
+  "https://in.archivepilates.com/s/#{사진영상업로드링크ID}/",
+  "legacy Notion copy remains",
+  "STAFF_PRIVATE_CHART_ALIMTALK_TEMPLATE_ID",
+]);
+requireMarkers("scripts/verify-private-flow-ui.mjs", [
+  "native member survey completion state",
+  "media picker presence",
+  "320/390/768/1440px horizontal overflow",
+]);
+requireMarkers("scripts/audit-private-report-runtime.ts", [
+  '"read-only"',
+  "legacyActionableSurveyCandidates",
+  "staleActionableReportCandidates",
+]);
+requireMarkers("scripts/audit-private-alimtalk-templates.mjs", [
+  '"member_private_survey"',
+  '"staff_private_chart"',
+  '"member_private_report"',
+  "--strict",
 ]);
 requireMarkers("firebase/kangsain-functions/functions/src/privateLessonChart/privateLessonSession.ts", [
   "privateLessonSessionProjection",
@@ -50,6 +114,10 @@ requireMarkers("firebase/kangsain-functions/functions/src/alimtalk/processAlimta
   "lockPrivateLessonReportForSend",
   "approvedRevision",
   "approvedReportSnapshot",
+  "privateSurveySendabilityIssue",
+  "deferCandidateForTemplateStatus",
+  "finalPrivateLessonReportSendabilityIssue",
+  "booking.sessionOrder?.counted === false",
   "reportRevision",
   "sentRevision",
 ]);
@@ -81,6 +149,8 @@ requireMarkers("core/rules/index.html", [
   "Notion은 표시·열람용입니다.",
   "immutable snapshot",
   "supersededByBookingId",
+  "자체설문 링크형 v2 템플릿 승인·설정 전까지 발송하지 않습니다.",
+  "구형 Notion 안내 문구가 없는 v3 템플릿 승인·설정 전에는 발송하지 않습니다.",
 ]);
 
 const trackedStaticPrivateArtifacts = gitLines([
@@ -114,6 +184,7 @@ console.log(
         "four-stage private session projection",
         "immutable report revision",
         "send-time booking lock",
+        "native-link Alimtalk template contract",
         "Notion display-only projection",
         "no static private member artifacts",
       ],

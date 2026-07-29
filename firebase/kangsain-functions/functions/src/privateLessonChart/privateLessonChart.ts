@@ -20,21 +20,28 @@ import { errorMessage } from "../utils/errors";
 import { stableHash } from "../utils/hash";
 import { ensureShortLink } from "../utils/shortLinks";
 import { bookingSourcePriority, isExcelBookingId } from "../utils/canonicalBooking";
-import { ALIMTALK_TEMPLATES } from "../alimtalk/templates";
-import { isAlimtalkTemplateApproved } from "../alimtalk/templateStatus";
+import {
+  ALIMTALK_TEMPLATES,
+  LEGACY_STAFF_PRIVATE_CHART_ALIMTALK_TEMPLATE_CODE,
+} from "../alimtalk/templates";
+import { alimtalkTemplateReadiness, isAlimtalkTemplateApproved } from "../alimtalk/templateStatus";
 import { completePrivateLessonMediaUpload, initPrivateLessonMediaUpload, uploadPrivateLessonMediaChunk } from "./privateLessonMedia";
+import { invalidatePendingPrivateLessonReportCandidates } from "./privateLessonReportCandidates";
 import {
   createPrivateLessonReportSnapshot,
   currentPrivateLessonReportRevision,
+  privateLessonReportCandidateId,
   privateLessonReportMutationLockReason,
+  privateLessonReportSnapshotForView,
+  privateLessonReportSourceChangePatch,
   reportUrlForRevision,
 } from "./privateLessonReportRevision";
 
 const PUBLIC_BASE_URL = process.env.PRIVATE_CHART_BASE_URL || "https://in.archivepilates.com/private-chart/";
 const NOTION_API_VERSION = "2022-06-28";
 const NOTION_MEMBERS_DATABASE_ID = process.env.NOTION_PRIVATE_MEMBERS_DATABASE_ID || "c58a39ceb7ac405ba43b38d3b5871ed3";
-const STAFF_PRIVATE_CHART_TEMPLATE_ID = "KA01TP260527182741301uIuSTL01YQ1";
-const PRIVATE_CHART_TEMPLATE_NAME = "강사용_프라이빗 차트 작성 안내 v2";
+const STAFF_PRIVATE_CHART_TEMPLATE_ID = ALIMTALK_TEMPLATES.staff_private_chart.code;
+const PRIVATE_CHART_TEMPLATE_NAME = ALIMTALK_TEMPLATES.staff_private_chart.label;
 const PRIVATE_LESSON_REPORT_VIEW_BASE_URL = process.env.PRIVATE_LESSON_REPORT_VIEW_BASE_URL ||
   "https://in.archivepilates.com/api/privateLessonReport";
 const GEMINI_MODEL = process.env.PRIVATE_LESSON_REPORT_GEMINI_MODEL || "gemini-2.5-flash";
@@ -44,7 +51,6 @@ const GEMINI_FALLBACK_MODELS = (process.env.PRIVATE_LESSON_REPORT_GEMINI_FALLBAC
   .filter(Boolean);
 const GEMINI_GENERATE_URL = "https://generativelanguage.googleapis.com/v1beta/models";
 const SOLAPI_SEND_URL = "https://api.solapi.com/messages/v4/send-many/detail";
-const SOLAPI_TEMPLATE_URL = "https://api.solapi.com/kakao/v2/templates";
 const NOTION_INSTRUCTOR_CHART_PAGE_IDS: Record<string, string> = {
   "이초림 수석강사": "22cd49eae4bf802ebc89fe094d0c355a",
   이초림: "22cd49eae4bf802ebc89fe094d0c355a",
@@ -179,13 +185,9 @@ export async function privateLessonReportViewHandler(request: any, response: any
     response.status(409).send(renderPrivateLessonReportMessagePage("회원용 리포트가 아직 생성되지 않았습니다."));
     return;
   }
+  record = await ensureLegacySentReportSnapshot(record);
 
-  const snapshot =
-    requestedRevision && record.sentReportSnapshot?.revision === requestedRevision
-      ? record.sentReportSnapshot
-      : requestedRevision && record.approvedReportSnapshot?.revision === requestedRevision
-        ? record.approvedReportSnapshot
-        : null;
+  const snapshot = privateLessonReportSnapshotForView(record, requestedRevision);
   if (requestedRevision && !snapshot) {
     response.status(409).send(renderPrivateLessonReportMessagePage("승인된 리포트 버전을 찾을 수 없습니다."));
     return;
@@ -207,6 +209,40 @@ export async function privateLessonReportViewHandler(request: any, response: any
     } as PrivateLessonChartRecordDoc)
     : record;
   response.status(200).send(renderPrivateLessonReportPage(recordForView, requestDoc));
+}
+
+async function ensureLegacySentReportSnapshot(
+  record: PrivateLessonChartRecordDoc,
+): Promise<PrivateLessonChartRecordDoc> {
+  if (
+    record.sentReportSnapshot?.revision ||
+    record.approvedReportSnapshot?.revision ||
+    record.legacySentReportSnapshot?.revision ||
+    !(
+      record.publicReportApproval?.status === "sent" ||
+      record.publicReportApproval?.sentAt ||
+      record.gptStatus === "published"
+    )
+  ) {
+    return record;
+  }
+  return db.runTransaction(async (tx) => {
+    const ref = refs.privateLessonChartRecord(record.recordId);
+    const snap = await tx.get(ref);
+    const current = snap.data() || record;
+    if (current.legacySentReportSnapshot?.revision) return current;
+    const revision = `legacy-${currentPrivateLessonReportRevision(current)}`;
+    const legacySentReportSnapshot = createPrivateLessonReportSnapshot(current, revision);
+    tx.set(
+      ref,
+      {
+        legacySentReportSnapshot,
+        updatedAt: nowTimestamp(),
+      },
+      { merge: true },
+    );
+    return { ...current, legacySentReportSnapshot };
+  });
 }
 
 export async function notionPrivateLessonReportWebhookHandler(request: any, response: any): Promise<void> {
@@ -542,53 +578,68 @@ async function approvePrivateLessonReportFromChart(
   reportUrl?: string;
   message?: string;
 }> {
-  const record = (await refs.privateLessonChartRecord(chartRequest.requestId).get()).data();
-  if (!record) throw new Error("회차 기록을 찾을 수 없습니다.");
-  if (!record.postRecord || !record.postSubmittedAt) {
-    throw new Error("수업 후 기록 제출 후 승인할 수 있습니다.");
+  const initialRecord = (await refs.privateLessonChartRecord(chartRequest.requestId).get()).data();
+  if (!initialRecord) throw new Error("회차 기록을 찾을 수 없습니다.");
+  const activeBooking = await activePrivateBookingForChartRequest(chartRequest);
+  if (!activeBooking.ok) {
+    const message = `예약 취소/변경 확인: ${activeBooking.reason}`;
+    await refs.privateLessonChartRecord(chartRequest.requestId).set(
+      {
+        publicReportApproval: { status: "failed", lastError: message },
+        updatedAt: nowTimestamp(),
+      },
+      { merge: true },
+    );
+    throw new Error(message);
   }
-  if (!isPrivateLessonReportGenerated(record)) {
-    throw new Error("회원용 리포트가 아직 생성되지 않았습니다. 잠시 후 다시 확인해 주세요.");
-  }
-  if (!record.memberPhone) throw new Error("회원 연락처가 없어 발송 후보를 만들 수 없습니다.");
-  const lockReason = privateLessonReportMutationLockReason(record);
-  if (lockReason) throw new Error(lockReason);
-
-  const revision = currentPrivateLessonReportRevision(record);
-  const snapshot = createPrivateLessonReportSnapshot(record, revision);
-  const approvedAt = nowTimestamp();
-  const approvedRecord: PrivateLessonChartRecordDoc = {
-    ...record,
-    reportRevision: revision,
-    approvedRevision: revision,
-    approvedReportSnapshot: snapshot,
-    publicReportApproval: {
-      status: "approved",
-      approvedAt,
-      approvedBy: chartRequest.staffName || "staff",
-      candidateId: null,
-      lastError: null,
-    },
-    updatedAt: approvedAt,
-  };
-  await refs.privateLessonChartRecord(record.recordId).set(
-    {
+  const approvedRecord = await db.runTransaction(async (tx) => {
+    const recordRef = refs.privateLessonChartRecord(chartRequest.requestId);
+    const snap = await tx.get(recordRef);
+    const current = snap.data();
+    if (!current) throw new Error("회차 기록을 찾을 수 없습니다.");
+    if (!current.postRecord || !current.postSubmittedAt) {
+      throw new Error("수업 후 기록 제출 후 승인할 수 있습니다.");
+    }
+    if (!isPrivateLessonReportGenerated(current)) {
+      throw new Error("회원용 리포트가 아직 생성되지 않았습니다. 잠시 후 다시 확인해 주세요.");
+    }
+    if (!current.memberPhone) throw new Error("회원 연락처가 없어 발송 후보를 만들 수 없습니다.");
+    const lockReason = privateLessonReportMutationLockReason(current);
+    if (lockReason) throw new Error(lockReason);
+    const revision = currentPrivateLessonReportRevision(current);
+    const snapshot = createPrivateLessonReportSnapshot(current, revision);
+    const approvedAt = nowTimestamp();
+    const nextRecord: PrivateLessonChartRecordDoc = {
+      ...current,
       reportRevision: revision,
       approvedRevision: revision,
       approvedReportSnapshot: snapshot,
-      publicReportApproval: approvedRecord.publicReportApproval,
+      publicReportApproval: {
+        status: "approved",
+        approvedAt,
+        approvedBy: chartRequest.staffName || "staff",
+        candidateId: null,
+        lastError: null,
+      },
       updatedAt: approvedAt,
-    },
-    { merge: true },
-  );
+    };
+    tx.set(
+      recordRef,
+      {
+        reportRevision: revision,
+        approvedRevision: revision,
+        approvedReportSnapshot: snapshot,
+        publicReportApproval: nextRecord.publicReportApproval,
+        updatedAt: approvedAt,
+      },
+      { merge: true },
+    );
+    return nextRecord;
+  });
+  const revision = approvedRecord.approvedRevision || "";
+  const candidateId = privateLessonReportCandidateId(approvedRecord.recordId, revision);
   const templateApproved = await isAlimtalkTemplateApproved(ALIMTALK_TEMPLATES.private_lesson_report.code);
-  const result = await enqueuePrivateLessonReportForRecord(
-    approvedRecord,
-    templateApproved,
-    "",
-    "staff:private-chart",
-  );
-  const candidateId = `private_lesson_report_${record.recordId}_${revision}`;
+  const result = await enqueuePrivateLessonReportForRecord(approvedRecord, templateApproved, "staff:private-chart");
   const status =
     result === "queued" || result === "already_queued"
       ? "queued"
@@ -596,33 +647,26 @@ async function approvePrivateLessonReportFromChart(
         ? "sent"
         : result === "template_pending"
           ? "approved"
-          : result === "failed"
+          : result === "failed" || result === "inactive"
             ? "failed"
-            : "approved";
-  await refs.privateLessonChartRecord(record.recordId).set(
-    {
-      gptStatus: status === "sent" ? "published" : "approved",
-      publicReportApproval: {
-        ...approvedRecord.publicReportApproval,
-        status,
-        candidateId,
-        lastError: result === "template_pending" ? "프라이빗 회원 리포트 템플릿 승인 대기" : null,
-      },
-      updatedAt: nowTimestamp(),
-    },
-    { merge: true },
-  );
+            : result === "stale"
+              ? "pending"
+              : "approved";
   return {
-    recordId: record.recordId,
+    recordId: approvedRecord.recordId,
     reportStatus: status,
     candidateId,
-    reportUrl: record.publicReportUrl || record.publicReportCanonicalUrl || "",
+    reportUrl: approvedRecord.publicReportUrl || approvedRecord.publicReportCanonicalUrl || "",
     message:
       status === "queued"
         ? "회원 알림톡 발송 후보에 등록되었습니다."
         : status === "sent"
           ? "이미 발송 완료된 리포트입니다."
-          : "승인되었습니다. 템플릿 상태 확인 후 발송됩니다.",
+          : status === "pending"
+            ? "리포트 내용이 변경되어 발송 후보를 만들지 않았습니다. 최신 내용을 확인한 뒤 다시 승인해 주세요."
+            : status === "failed"
+              ? "예약 상태를 확인할 수 없어 발송 후보를 만들지 않았습니다."
+              : "승인되었습니다. 템플릿 상태 확인 후 발송됩니다.",
   };
 }
 
@@ -654,6 +698,8 @@ async function convertPrivateLessonReportFromChart(
     if (!summary) throw new Error("오늘의 핵심 문장을 입력해 주세요.");
     if (!nextDirection) throw new Error("다음 수업 방향 문장을 입력해 주세요.");
     sourceRecord = await saveManualPrivateLessonReportEdit(sourceRecord, chartRequest, summary, nextDirection);
+  } else {
+    sourceRecord = await preparePrivateLessonReportRegeneration(sourceRecord, chartRequest);
   }
 
   const generated = hasManualPrivateLessonReportText(sourceRecord)
@@ -720,63 +766,125 @@ async function saveManualPrivateLessonReportEdit(
   summary: string,
   nextDirection: string,
 ): Promise<PrivateLessonChartRecordDoc> {
-  await skipPendingPrivateLessonReportCandidate(
-    record,
-    "리포트 발송 전 회원용 리포트 문장이 수정되어 기존 발송 후보를 보류했습니다.",
-  );
-  const now = nowTimestamp();
-  const nextRecordBase = {
-    ...record,
-    gptStatus: "draft_created",
-    gptDraftSummary: summary,
-    gptDraftNextDirection: nextDirection,
-    publicSummary: summary,
-    publicNextDirection: nextDirection,
-    publicReportApproval: {
-      status: "pending" as const,
-      approvedAt: null,
-      approvedBy: chartRequest.staffName || "staff",
-      candidateId: "",
-      lastError: null,
-    },
-    approvedRevision: "",
-    sentRevision: "",
-    approvedReportSnapshot: null,
-    sentReportSnapshot: null,
-    manualReportEdit: {
-      editedAt: now,
-      editedBy: chartRequest.staffName || "staff",
-      source: "staff:private-chart",
-    },
-    updatedAt: now,
-  } as PrivateLessonChartRecordDoc;
-  const revision = currentPrivateLessonReportRevision(nextRecordBase);
-  const nextRecord = { ...nextRecordBase, reportRevision: revision };
-  await refs.privateLessonChartRecord(record.recordId).set(
-    {
+  const lastError = "리포트 발송 전 회원용 리포트 문장이 수정되어 기존 발송 후보를 보류했습니다.";
+  const nextRecord = await db.runTransaction(async (tx) => {
+    const recordRef = refs.privateLessonChartRecord(record.recordId);
+    const snap = await tx.get(recordRef);
+    const current = snap.data();
+    if (!current) throw new Error("회차 기록을 찾을 수 없습니다.");
+    const lockReason = privateLessonReportMutationLockReason(current);
+    if (lockReason) throw new Error(lockReason);
+    const candidateId = String(current.publicReportApproval?.candidateId || "");
+    const candidateRef = candidateId ? refs.alimtalkCandidate(candidateId) : null;
+    const candidate = candidateRef ? (await tx.get(candidateRef)).data() : undefined;
+    if (candidate?.status === "processing") throw new Error("알림톡 발송이 시작되어 리포트를 수정할 수 없습니다.");
+    if (candidate?.status === "sent") throw new Error("알림톡 발송 완료 후에는 리포트를 수정할 수 없습니다.");
+    const now = nowTimestamp();
+    const nextRecordBase = {
+      ...current,
       gptStatus: "draft_created",
       gptDraftSummary: summary,
       gptDraftNextDirection: nextDirection,
       publicSummary: summary,
       publicNextDirection: nextDirection,
-      reportRevision: revision,
+      publicReportApproval: {
+        status: "pending" as const,
+        approvedAt: null,
+        approvedBy: chartRequest.staffName || "staff",
+        candidateId: "",
+        lastError: null,
+      },
+      approvedRevision: "",
+      sentRevision: "",
+      approvedReportSnapshot: null,
+      sentReportSnapshot: null,
+      manualReportEdit: {
+        editedAt: now,
+        editedBy: chartRequest.staffName || "staff",
+        source: "staff:private-chart",
+      },
+      updatedAt: now,
+    } as PrivateLessonChartRecordDoc;
+    const next = {
+      ...nextRecordBase,
+      reportRevision: currentPrivateLessonReportRevision(nextRecordBase),
+    };
+    if (candidateRef && candidate && ["candidate", "queued", "failed"].includes(candidate.status)) {
+      tx.set(
+        candidateRef,
+        {
+          status: "skipped",
+          reasonCode: "private_report_changed_before_send",
+          lastError,
+          updatedAt: now,
+        },
+        { merge: true },
+      );
+    }
+    tx.set(recordRef, next, { merge: true });
+    return next;
+  });
+  await invalidatePendingPrivateLessonReportCandidates(record.recordId, lastError);
+  return nextRecord;
+}
+
+async function preparePrivateLessonReportRegeneration(
+  record: PrivateLessonChartRecordDoc,
+  chartRequest: PrivateLessonChartRequestDoc,
+): Promise<PrivateLessonChartRecordDoc> {
+  const lastError = "리포트가 다시 생성되어 기존 발송 후보를 보류했습니다.";
+  const nextRecord = await db.runTransaction(async (tx) => {
+    const recordRef = refs.privateLessonChartRecord(record.recordId);
+    const snap = await tx.get(recordRef);
+    const current = snap.data();
+    if (!current) throw new Error("회차 기록을 찾을 수 없습니다.");
+    const lockReason = privateLessonReportMutationLockReason(current);
+    if (lockReason) throw new Error(lockReason);
+    const candidateId = String(current.publicReportApproval?.candidateId || "");
+    const candidateRef = candidateId ? refs.alimtalkCandidate(candidateId) : null;
+    const candidate = candidateRef ? (await tx.get(candidateRef)).data() : undefined;
+    if (candidate?.status === "processing") throw new Error("알림톡 발송이 시작되어 리포트를 다시 생성할 수 없습니다.");
+    if (candidate?.status === "sent") throw new Error("알림톡 발송 완료 후에는 리포트를 다시 생성할 수 없습니다.");
+    const now = nowTimestamp();
+    const patch = {
+      gptStatus: "pending" as const,
       approvedRevision: "",
       approvedReportSnapshot: null,
-      publicReportApproval: nextRecord.publicReportApproval,
-      manualReportEdit: nextRecord.manualReportEdit,
+      publicReportApproval: {
+        status: "pending" as const,
+        approvedAt: null,
+        approvedBy: chartRequest.staffName || "staff",
+        candidateId: "",
+        lastError: null,
+      },
       updatedAt: now,
-    },
-    { merge: true },
-  );
+    };
+    if (candidateRef && candidate && ["candidate", "queued", "failed"].includes(candidate.status)) {
+      tx.set(
+        candidateRef,
+        {
+          status: "skipped",
+          reasonCode: "private_report_changed_before_send",
+          lastError,
+          updatedAt: now,
+        },
+        { merge: true },
+      );
+    }
+    tx.set(recordRef, patch, { merge: true });
+    return { ...current, ...patch } as PrivateLessonChartRecordDoc;
+  });
+  await invalidatePendingPrivateLessonReportCandidates(record.recordId, lastError);
   return nextRecord;
 }
 
 async function enqueuePrivateLessonReportForRecord(
   record: PrivateLessonChartRecordDoc,
   templateApproved: boolean,
-  _notionPageId = "",
   reviewedByUid = "system:private-report",
-): Promise<"queued" | "completed" | "failed" | "skipped" | "already_queued" | "template_pending"> {
+): Promise<
+  "queued" | "completed" | "failed" | "skipped" | "already_queued" | "template_pending" | "stale" | "inactive"
+> {
   if (!isPrivateLessonReportGenerated(record)) return "skipped";
   const revision = String(record.approvedRevision || "");
   if (!revision || record.approvedReportSnapshot?.revision !== revision) return "skipped";
@@ -794,25 +902,12 @@ async function enqueuePrivateLessonReportForRecord(
   }
   const reportTargetUrl = reportUrlForRevision(resolved.reportTargetUrl, revision);
 
-  const candidateId = `private_lesson_report_${record.recordId}_${revision}`;
-  const existing = (await refs.alimtalkCandidate(candidateId).get()).data();
-  if (existing?.status === "sent") return "completed";
+  const candidateId = privateLessonReportCandidateId(record.recordId, revision);
 
   const chartRequest = (await refs.privateLessonChartRequest(record.requestId || record.recordId).get()).data();
   if (!chartRequest) return "skipped";
   const activeBooking = await activePrivateBookingForChartRequest(chartRequest);
   if (!activeBooking.ok) {
-    if (existing?.status === "queued" || existing?.status === "processing" || existing?.status === "candidate") {
-      await refs.alimtalkCandidate(candidateId).set(
-        {
-          status: "skipped",
-          reasonCode: "inactive_booking",
-          lastError: `예약 취소/변경 확인: ${activeBooking.reason}`,
-          updatedAt: nowTimestamp(),
-        },
-        { merge: true },
-      );
-    }
     await refs.privateLessonChartRecord(record.recordId).set(
       {
         publicReportApproval: {
@@ -824,9 +919,8 @@ async function enqueuePrivateLessonReportForRecord(
       },
       { merge: true },
     );
-    return "skipped";
+    return "inactive";
   }
-  if (existing?.status === "queued" || existing?.status === "processing") return "already_queued";
 
   const link = await ensureShortLink({
     type: "private_report",
@@ -835,48 +929,90 @@ async function enqueuePrivateLessonReportForRecord(
   });
   const now = nowTimestamp();
   const nextStatus: AlimtalkCandidateDoc["status"] = templateApproved ? "queued" : "candidate";
-  const candidate: AlimtalkCandidateDoc = {
-    candidateId,
-    studioId: record.studioId || DEFAULT_STUDIO_ID,
-    memberId: record.memberId,
-    memberName: record.memberName,
-    memberPhone: record.memberPhone,
-    type: "private_lesson_report",
-    status: nextStatus,
-    templateCode: ALIMTALK_TEMPLATES.private_lesson_report.code,
-    title: "프라이빗 회원 리포트",
-    reason: `${record.memberName} ${record.sessionNumber}회차 회원 리포트 검수 완료`,
-    sourceActionKey: record.recordId,
-    sourceDate: record.lessonDate,
-    payload: {
+  return db.runTransaction(async (tx) => {
+    const recordRef = refs.privateLessonChartRecord(record.recordId);
+    const candidateRef = refs.alimtalkCandidate(candidateId);
+    const [recordSnap, candidateSnap] = await Promise.all([tx.get(recordRef), tx.get(candidateRef)]);
+    const current = recordSnap.data();
+    const existing = candidateSnap.data();
+    if (existing?.status === "sent") return "completed";
+    if (existing?.status === "queued" || existing?.status === "processing") return "already_queued";
+    if (
+      !current ||
+      current.approvedRevision !== revision ||
+      current.approvedReportSnapshot?.revision !== revision ||
+      currentPrivateLessonReportRevision(current) !== revision
+    ) {
+      if (existing && ["candidate", "queued"].includes(existing.status)) {
+        tx.set(
+          candidateRef,
+          {
+            status: "skipped",
+            reasonCode: "stale_report_revision",
+            lastError: "승인 후 리포트 내용이 변경되어 발송 후보를 무효화했습니다.",
+            updatedAt: now,
+          },
+          { merge: true },
+        );
+      }
+      return "stale";
+    }
+    const candidate: AlimtalkCandidateDoc = {
+      candidateId,
+      studioId: record.studioId || DEFAULT_STUDIO_ID,
+      memberId: record.memberId,
       memberName: record.memberName,
-      sessionNumberText: `${record.sessionNumber}회차`,
-      sessionLabel: `${record.sessionNumber}회차`,
-      lessonDate: record.lessonDate,
-      lessonDateTime: lessonTimeText(record),
-      staffName: record.staffName,
-      instructorName: record.staffName,
-      recordId: record.recordId,
-      requestId: record.requestId,
-      publicReportUrl: reportTargetUrl,
-      reportLinkId: link.linkId,
-      reportShortUrl: link.shortUrl,
-      reportRevision: revision,
-      notionPageId: "",
-    },
-    attempts: existing?.attempts || 0,
-    maxAttempts: existing?.maxAttempts || 2,
-    queuedBy: templateApproved ? "auto" : undefined,
-    reviewedByUid: templateApproved ? reviewedByUid : existing?.reviewedByUid,
-    reviewedAt: templateApproved ? now : existing?.reviewedAt || null,
-    reasonCode: "",
-    lastError: templateApproved ? null : "프라이빗 회원 리포트 템플릿 승인 대기",
-    createdAt: existing?.createdAt || now,
-    updatedAt: now,
-  };
-  await refs.alimtalkCandidate(candidateId).set(candidate, { merge: true });
-  if (existing?.status === "failed") return "failed";
-  return templateApproved ? "queued" : "template_pending";
+      memberPhone: record.memberPhone,
+      type: "private_lesson_report",
+      status: nextStatus,
+      templateCode: ALIMTALK_TEMPLATES.private_lesson_report.code,
+      title: "프라이빗 회원 리포트",
+      reason: `${record.memberName} ${record.sessionNumber}회차 회원 리포트 검수 완료`,
+      sourceActionKey: record.recordId,
+      sourceDate: record.lessonDate,
+      payload: {
+        memberName: record.memberName,
+        sessionNumberText: `${record.sessionNumber}회차`,
+        sessionLabel: `${record.sessionNumber}회차`,
+        lessonDate: record.lessonDate,
+        lessonDateTime: lessonTimeText(record),
+        staffName: record.staffName,
+        instructorName: record.staffName,
+        recordId: record.recordId,
+        requestId: record.requestId,
+        publicReportUrl: reportTargetUrl,
+        reportLinkId: link.linkId,
+        reportShortUrl: link.shortUrl,
+        reportRevision: revision,
+        notionPageId: "",
+      },
+      attempts: existing?.attempts || 0,
+      maxAttempts: existing?.maxAttempts || 2,
+      queuedBy: templateApproved ? "auto" : undefined,
+      reviewedByUid: templateApproved ? reviewedByUid : existing?.reviewedByUid,
+      reviewedAt: templateApproved ? now : existing?.reviewedAt || null,
+      reasonCode: "",
+      lastError: templateApproved ? null : "프라이빗 회원 리포트 템플릿 승인 대기",
+      createdAt: existing?.createdAt || now,
+      updatedAt: now,
+    };
+    tx.set(candidateRef, candidate, { merge: true });
+    tx.set(
+      recordRef,
+      {
+        gptStatus: "approved",
+        publicReportApproval: {
+          ...(current.publicReportApproval || {}),
+          status: templateApproved ? "queued" : "approved",
+          candidateId,
+          lastError: templateApproved ? null : "프라이빗 회원 리포트 템플릿 승인 대기",
+        },
+        updatedAt: now,
+      },
+      { merge: true },
+    );
+    return templateApproved ? "queued" : "template_pending";
+  });
 }
 
 async function resolveReportShortUrl(record: PrivateLessonChartRecordDoc): Promise<{
@@ -1159,77 +1295,155 @@ async function syncChartRequestToActiveBooking(
 ): Promise<PrivateLessonChartRequestDoc> {
   if (!request) throw new Error("missing_private_chart_request");
   const sessionNumber = await nextSessionNumber(booking);
-  const now = nowTimestamp();
-  const sessionChanged = Number(request.sessionNumber || 0) !== sessionNumber;
-  const bookingChanged =
-    request.bookingId !== booking.bookingId ||
-    request.lectureId !== booking.lectureId ||
-    request.lessonDate !== booking.lectureDate ||
-    (request.lessonStartAt?.toMillis?.() || 0) !== (booking.lectureStartAt?.toMillis?.() || 0) ||
-    (request.lessonEndAt?.toMillis?.() || 0) !== (booking.lectureEndAt?.toMillis?.() || 0);
-  const shouldReactivate = request.status === "cancelled" && isAutoBookingCancellationReason(request.cancellationReason);
-  if (request.status === "cancelled" && !shouldReactivate) return request;
-  if (!sessionChanged && !bookingChanged && !shouldReactivate) return request;
-
-  const correction = {
-    fromBookingId: request.bookingId || null,
-    toBookingId: booking.bookingId || null,
-    fromLessonStartAt: request.lessonStartAt || null,
-    toLessonStartAt: booking.lectureStartAt || null,
-    fromSessionNumber: Number(request.sessionNumber || 0) || null,
-    toSessionNumber: sessionNumber,
-    reason,
-    correctedAt: now,
-  };
-  const sessionNumberCorrection = sessionChanged
-    ? {
-      from: Number(request.sessionNumber || 0) || null,
-      to: sessionNumber,
-      reason: "privateSessionLedger canonical round",
-      correctedAt: now,
+  const syncResult = await db.runTransaction(async (tx) => {
+    const requestRef = refs.privateLessonChartRequest(request.requestId);
+    const recordRef = refs.privateLessonChartRecord(request.requestId);
+    const [requestSnap, recordSnap] = await Promise.all([tx.get(requestRef), tx.get(recordRef)]);
+    const currentRequest = requestSnap.data() || request;
+    const shouldReactivate =
+      currentRequest.status === "cancelled" &&
+      isAutoBookingCancellationReason(currentRequest.cancellationReason);
+    if (currentRequest.status === "cancelled" && !shouldReactivate) {
+      return { changed: false, updatedRequest: currentRequest, updatedRecord: recordSnap.data() || null, invalidated: false };
     }
-    : request.sessionNumberCorrection;
-  const requestPatch = compactObject({
-    bookingId: booking.bookingId,
-    lectureId: booking.lectureId,
-    staffId: booking.staffId,
-    staffName: booking.staffName,
-    lessonDate: booking.lectureDate,
-    lessonStartAt: booking.lectureStartAt || null,
-    lessonEndAt: booking.lectureEndAt || null,
-    sessionNumber,
-    sessionNumberCorrection,
-    rescheduleCorrection: correction,
-    cancellationReason: null,
-    cancelledAt: null,
-    status: shouldReactivate ? chartRequestStatusFromSubmissions(request) : request.status,
-    updatedAt: now,
-  }) as Partial<PrivateLessonChartRequestDoc>;
-  const updatedRequest = { ...request, ...requestPatch } as PrivateLessonChartRequestDoc;
-  const recordSnap = await refs.privateLessonChartRecord(request.requestId).get();
-  const currentRecord = recordSnap.data() || chartRecordBase(updatedRequest);
-  const recordPatch = compactObject({
-    bookingId: booking.bookingId,
-    lectureId: booking.lectureId,
-    staffId: booking.staffId,
-    staffName: booking.staffName,
-    lessonDate: booking.lectureDate,
-    lessonStartAt: booking.lectureStartAt || null,
-    sessionNumber,
-    sessionNumberCorrection,
-    rescheduleCorrection: correction,
-    cancellationReason: null,
-    cancelledAt: null,
-    updatedAt: now,
-  }) as Partial<PrivateLessonChartRecordDoc>;
-  const updatedRecord = { ...currentRecord, ...recordPatch } as PrivateLessonChartRecordDoc;
-  const recordWrite = recordSnap.exists ? recordPatch : compactObject(updatedRecord as unknown as Record<string, unknown>);
-  await Promise.all([
-    refs.privateLessonChartRequest(request.requestId).set(requestPatch, { merge: true }),
-    refs.privateLessonChartRecord(request.requestId).set(recordWrite, { merge: true }),
-  ]);
+    const sessionChanged = Number(currentRequest.sessionNumber || 0) !== sessionNumber;
+    const bookingChanged =
+      currentRequest.bookingId !== booking.bookingId ||
+      currentRequest.lectureId !== booking.lectureId ||
+      currentRequest.staffId !== booking.staffId ||
+      currentRequest.staffName !== booking.staffName ||
+      currentRequest.lessonDate !== booking.lectureDate ||
+      (currentRequest.lessonStartAt?.toMillis?.() || 0) !== (booking.lectureStartAt?.toMillis?.() || 0) ||
+      (currentRequest.lessonEndAt?.toMillis?.() || 0) !== (booking.lectureEndAt?.toMillis?.() || 0);
+    if (!sessionChanged && !bookingChanged && !shouldReactivate) {
+      return { changed: false, updatedRequest: currentRequest, updatedRecord: recordSnap.data() || null, invalidated: false };
+    }
 
-  if (updatedRecord.notionSync?.pageId || updatedRecord.notionSync?.instructorPageId) {
+    const now = nowTimestamp();
+    const correction = {
+      fromBookingId: currentRequest.bookingId || null,
+      toBookingId: booking.bookingId || null,
+      fromLessonStartAt: currentRequest.lessonStartAt || null,
+      toLessonStartAt: booking.lectureStartAt || null,
+      fromSessionNumber: Number(currentRequest.sessionNumber || 0) || null,
+      toSessionNumber: sessionNumber,
+      reason,
+      correctedAt: now,
+    };
+    const sessionNumberCorrection = sessionChanged
+      ? {
+        from: Number(currentRequest.sessionNumber || 0) || null,
+        to: sessionNumber,
+        reason: "privateSessionLedger canonical round",
+        correctedAt: now,
+      }
+      : currentRequest.sessionNumberCorrection;
+    const scheduleNotice =
+      bookingChanged && currentRequest.alimtalk?.status === "sent"
+        ? {
+          alimtalk: {
+            ...currentRequest.alimtalk,
+            status: "sent" as const,
+            reasonCode: "schedule_changed_after_send",
+            lastError: "강사 알림톡 발송 후 수업 일정이 변경되었습니다. 링크는 최신 일정으로 연결됩니다.",
+          },
+        }
+        : {};
+    const requestPatch = compactObject({
+      bookingId: booking.bookingId,
+      lectureId: booking.lectureId,
+      staffId: booking.staffId,
+      staffName: booking.staffName,
+      lessonDate: booking.lectureDate,
+      lessonStartAt: booking.lectureStartAt || null,
+      lessonEndAt: booking.lectureEndAt || null,
+      sessionNumber,
+      sessionNumberCorrection,
+      rescheduleCorrection: correction,
+      cancellationReason: null,
+      cancelledAt: null,
+      status: shouldReactivate ? chartRequestStatusFromSubmissions(currentRequest) : currentRequest.status,
+      ...scheduleNotice,
+      updatedAt: now,
+    }) as Partial<PrivateLessonChartRequestDoc>;
+    const updatedRequest = { ...currentRequest, ...requestPatch } as PrivateLessonChartRequestDoc;
+    const currentRecord = recordSnap.data() || chartRecordBase(updatedRequest);
+    const recordPatch = compactObject({
+      bookingId: booking.bookingId,
+      lectureId: booking.lectureId,
+      staffId: booking.staffId,
+      staffName: booking.staffName,
+      lessonDate: booking.lectureDate,
+      lessonStartAt: booking.lectureStartAt || null,
+      sessionNumber,
+      sessionNumberCorrection,
+      rescheduleCorrection: correction,
+      cancellationReason: null,
+      cancelledAt: null,
+      updatedAt: now,
+    }) as Partial<PrivateLessonChartRecordDoc>;
+    const recordWithSchedule = { ...currentRecord, ...recordPatch } as PrivateLessonChartRecordDoc;
+    const shouldInvalidateApproval =
+      (sessionChanged || bookingChanged) &&
+      !isPrivateLessonReportSent(currentRecord) &&
+      Boolean(currentRecord.approvedRevision || currentRecord.publicReportApproval?.candidateId);
+    const reportStatePatch: Partial<PrivateLessonChartRecordDoc> = shouldInvalidateApproval
+      ? {
+        reportRevision: currentPrivateLessonReportRevision(recordWithSchedule),
+        approvedRevision: "",
+        approvedReportSnapshot: null,
+        publicReportApproval: {
+          status: "pending",
+          approvedAt: null,
+          approvedBy: currentRecord.publicReportApproval?.approvedBy,
+          candidateId: null,
+          lastError: "수업 일정 또는 회차가 변경되어 리포트 재승인이 필요합니다.",
+        },
+      }
+      : {};
+    const updatedRecord = { ...recordWithSchedule, ...reportStatePatch } as PrivateLessonChartRecordDoc;
+    const candidateId = shouldInvalidateApproval
+      ? String(currentRecord.publicReportApproval?.candidateId || "")
+      : "";
+    const candidateRef = candidateId ? refs.alimtalkCandidate(candidateId) : null;
+    const candidate = candidateRef ? (await tx.get(candidateRef)).data() : undefined;
+    tx.set(requestRef, requestPatch, { merge: true });
+    tx.set(
+      recordRef,
+      recordSnap.exists
+        ? { ...recordPatch, ...reportStatePatch }
+        : compactObject(updatedRecord as unknown as Record<string, unknown>),
+      { merge: true },
+    );
+    if (candidateRef && candidate && ["candidate", "queued", "processing", "failed"].includes(candidate.status)) {
+      tx.set(
+        candidateRef,
+        {
+          status: "skipped",
+          reasonCode: "private_report_schedule_changed",
+          lastError: "수업 일정 또는 회차가 변경되어 기존 리포트 발송 후보를 보류했습니다.",
+          updatedAt: now,
+        },
+        { merge: true },
+      );
+    }
+    return {
+      changed: true,
+      updatedRequest,
+      updatedRecord,
+      invalidated: shouldInvalidateApproval,
+    };
+  });
+  const { updatedRequest, updatedRecord } = syncResult;
+  if (!syncResult.changed) return updatedRequest;
+  if (syncResult.invalidated) {
+    await invalidatePendingPrivateLessonReportCandidates(
+      updatedRecord?.recordId || request.requestId,
+      "수업 일정 또는 회차가 변경되어 기존 리포트 발송 후보를 보류했습니다.",
+    );
+  }
+
+  if (updatedRecord && (updatedRecord.notionSync?.pageId || updatedRecord.notionSync?.instructorPageId)) {
     try {
       const notionSync = await syncPrivateLessonChartRecordToNotion(updatedRecord, updatedRequest);
       await refs.privateLessonChartRecord(request.requestId).set({ notionSync, updatedAt: nowTimestamp() }, { merge: true });
@@ -1271,7 +1485,7 @@ async function submitPrivateLessonChart(
     const lockReason = privateLessonReportMutationLockReason(base);
     if (lockReason) throw new Error(lockReason);
     const now = nowTimestamp();
-    const reportResetPatch = resetPrivateLessonReportDraftPatch();
+    const reportResetPatch = privateLessonReportSourceChangePatch();
     const recordPatch =
       mode === "pre"
         ? { prePlan: answers, preSubmittedAt: now, ...reportResetPatch }
@@ -1317,51 +1531,12 @@ async function submitPrivateLessonChart(
   return { requestId: chartRequest.requestId, recordId: recordForNotion.recordId, mode, notionStatus: notionSync.status };
 }
 
-function resetPrivateLessonReportDraftPatch(): Partial<PrivateLessonChartRecordDoc> {
-  return {
-    gptStatus: "pending",
-    gptTaskId: "",
-    gptError: null,
-    gptDraftSummary: "",
-    gptDraftNextDirection: "",
-    publicSummary: "",
-    publicNextDirection: "",
-    reportRevision: "",
-    approvedRevision: "",
-    approvedReportSnapshot: null,
-    publicReportApproval: { status: "pending", lastError: null },
-  };
-}
-
 async function skipPendingPrivateLessonReportCandidate(
   record: PrivateLessonChartRecordDoc,
   lastError = "리포트 발송 전 설문 답변이 수정되어 기존 발송 후보를 보류했습니다.",
 ): Promise<void> {
   if (isPrivateLessonReportSent(record)) return;
-  const [legacySnap, revisionSnap] = await Promise.all([
-    refs.alimtalkCandidate(`private_lesson_report_${record.recordId}`).get(),
-    refs.alimtalkCandidates().where("sourceActionKey", "==", record.recordId).limit(20).get(),
-  ]);
-  const candidates = new Map<string, AlimtalkCandidateDoc>();
-  if (legacySnap.data()) candidates.set(legacySnap.id, legacySnap.data()!);
-  for (const doc of revisionSnap.docs) candidates.set(doc.id, doc.data());
-  await Promise.all(
-    [...candidates.entries()]
-      .filter(([, candidate]) =>
-        ["candidate", "queued", "failed"].includes(String(candidate.status || "")),
-      )
-      .map(([candidateId]) =>
-        refs.alimtalkCandidate(candidateId).set(
-          {
-            status: "skipped",
-            reasonCode: "private_report_edited_before_send",
-            lastError,
-            updatedAt: nowTimestamp(),
-          },
-          { merge: true },
-        ),
-      ),
-  );
+  await invalidatePendingPrivateLessonReportCandidates(record.recordId, lastError);
 }
 
 async function upsertChartRecordBase(chartRequest: PrivateLessonChartRequestDoc): Promise<PrivateLessonChartRecordDoc> {
@@ -1600,6 +1775,9 @@ async function syncPrivateLessonChartRecordToNotion(
         : "",
     } as PrivateLessonChartRecordDoc;
     const instructorPage = await syncInstructorMemberChartPage(recordForNotion, chartRequest);
+    if (!instructorPage) {
+      throw new Error(`Notion 강사 차트 위치를 찾을 수 없습니다: ${record.staffName || "강사 미확인"}`);
+    }
     return {
       status: "synced",
       pageId: record.notionSync?.pageId,
@@ -1826,9 +2004,18 @@ async function publicChartRequest(
     : reportReady
       ? "ready"
       : record?.gptStatus || "pending";
-  const previousReport = mode === "pre"
-    ? await previousPrivateLessonReportSummary(chartRequest)
-    : null;
+  const [previousReport, latestIntake] = await Promise.all([
+    mode === "pre" ? previousPrivateLessonReportSummary(chartRequest) : Promise.resolve(null),
+    mode === "pre"
+      ? latestPrivateSurveyForBooking({
+        memberId: chartRequest.memberId,
+        memberPhone: chartRequest.memberPhone,
+      })
+      : Promise.resolve(null),
+  ]);
+  const intakeSummary = latestIntake
+    ? privateSurveySummaryForRequest(latestIntake)
+    : chartRequest.intakeSummary || null;
   return {
     requestId: chartRequest.requestId,
     mode,
@@ -1839,7 +2026,7 @@ async function publicChartRequest(
     sessionNumber: chartRequest.sessionNumber,
     preStatus: chartRequest.preStatus,
     postStatus: chartRequest.postStatus,
-    intakeSummary: chartRequest.intakeSummary || null,
+    intakeSummary,
     previousReport,
     existingAnswers: record
       ? {
@@ -1922,7 +2109,9 @@ async function previousPrivateLessonReportSummary(
   };
 }
 
-async function latestPrivateSurveyForBooking(booking: BookingDoc): Promise<PrivateSurveyResponseDoc | null> {
+async function latestPrivateSurveyForBooking(
+  booking: Pick<BookingDoc, "memberId" | "memberPhone">,
+): Promise<PrivateSurveyResponseDoc | null> {
   const byMember = booking.memberId
     ? await refs.privateSurveyResponses().where("matching.memberId", "==", booking.memberId).limit(10).get()
     : null;
@@ -2229,7 +2418,12 @@ function isSendablePrivateChartRequest(request: PrivateLessonChartRequestDoc): b
 async function activePrivateBookingForChartRequest(
   request: PrivateLessonChartRequestDoc,
 ): Promise<{ ok: true; booking: BookingDoc } | { ok: false; reason: string }> {
-  if (request.status === "cancelled") return { ok: false, reason: request.cancellationReason || "chart_request_cancelled" };
+  if (
+    request.status === "cancelled" &&
+    !isAutoBookingCancellationReason(request.cancellationReason)
+  ) {
+    return { ok: false, reason: request.cancellationReason || "chart_request_cancelled" };
+  }
   if (!request.bookingId) return { ok: false, reason: "missing_booking_id" };
   const snap = await refs.booking(request.bookingId).get();
   const booking = snap.data();
@@ -2266,9 +2460,7 @@ async function findReplacementPrivateBookingForChartRequest(
     const explicitReplacement = (await refs.booking(explicitReplacementId).get()).data();
     if (
       explicitReplacement?.memberId === request.memberId &&
-      !inactivePrivateBookingReason(explicitReplacement) &&
-      staffOccurrenceIdentity(explicitReplacement.staffId, explicitReplacement.staffName) ===
-        staffOccurrenceIdentity(request.staffId, request.staffName)
+      !inactivePrivateBookingReason(explicitReplacement)
     ) {
       return explicitReplacement;
     }
@@ -2464,14 +2656,27 @@ async function sendStaffPrivateChartAlimtalk(
 }
 
 async function isStaffPrivateChartTemplateApproved(): Promise<boolean> {
-  const response = await fetch(`${SOLAPI_TEMPLATE_URL}/${encodeURIComponent(STAFF_PRIVATE_CHART_TEMPLATE_ID)}`, {
-    headers: {
-      Authorization: solapiAuthHeader(),
-    },
-  });
-  if (!response.ok) return isAlimtalkTemplateApproved(STAFF_PRIVATE_CHART_TEMPLATE_ID);
-  const body = (await response.json().catch(() => ({}))) as { status?: string };
-  return String(body.status || "").toUpperCase() === "APPROVED";
+  const configured = String(process.env.STAFF_PRIVATE_CHART_ALIMTALK_TEMPLATE_ID || "").trim();
+  if (
+    !configured ||
+    STAFF_PRIVATE_CHART_TEMPLATE_ID === LEGACY_STAFF_PRIVATE_CHART_ALIMTALK_TEMPLATE_CODE ||
+    STAFF_PRIVATE_CHART_TEMPLATE_ID !== configured
+  ) {
+    return false;
+  }
+  const readiness = await alimtalkTemplateReadiness(STAFF_PRIVATE_CHART_TEMPLATE_ID);
+  if (!readiness.approved || !readiness.state) return false;
+  const content = String(readiness.state.content || "");
+  if (/Notion/i.test(content)) return false;
+  for (const variable of ["#{강사명}", "#{회원명}", "#{회차}", "#{수업일시}"]) {
+    if (!content.includes(variable)) return false;
+  }
+  const buttonUrls = readiness.state.buttonUrls || [];
+  return [
+    "https://in.archivepilates.com/s/#{수업전계획링크ID}/",
+    "https://in.archivepilates.com/s/#{수업후기록링크ID}/",
+    "https://in.archivepilates.com/s/#{사진영상업로드링크ID}/",
+  ].every((url) => buttonUrls.includes(url));
 }
 
 function solapiAuthHeader(): string {
@@ -2756,14 +2961,14 @@ function renderPrivateLessonReportMessagePage(message: string): string {
     `</head><body><div class="card"><p>${escapeHtml(message)}</p></div></body></html>`;
 }
 
-function renderPrivateLessonReportPage(
+export function renderPrivateLessonReportPage(
   record: PrivateLessonChartRecordDoc,
   chartRequest: PrivateLessonChartRequestDoc,
 ): string {
   const memberName = escapeHtml(record.memberName || "");
   const staffName = escapeHtml(record.staffName || "미정");
   const sessionText = `${Number(record.sessionNumber || 1)}회차`;
-  const lessonTime = lessonTimeText(chartRequest);
+  const lessonTime = lessonTimeText(record);
   const title = `${memberName || "회원"}님 수업 리포트`;
   const reportSummaryText = cleanEditableReportText(record.gptDraftSummary || record.publicSummary, 900) ||
     "오늘 수업 기록을 바탕으로 몸의 변화와 다음 방향을 정리했습니다.";
@@ -2787,7 +2992,7 @@ function renderPrivateLessonReportPage(
   })();
   const reportShortcutUrl = String(record.publicReportUrl || "").trim();
   const reportVisibleUrl = reportShortcutUrl || reportUrl;
-  const flowSummary = [condition, painChange].filter(Boolean).join(" · ") || "수업 기록 기준으로 정리 중";
+  const flowSummary = [condition, painChange].filter(Boolean).join(" · ");
   const todayProgress = uniqueTextItems([...goals, ...focusAreas, ...equipment]).slice(0, 10);
   const improvementItems = uniqueTextItems(changes.length ? changes : memberResponses).slice(0, 6);
   const observationItems = uniqueTextItems([...movementObservations, ...memberResponses]).slice(0, 12);
@@ -2799,6 +3004,38 @@ function renderPrivateLessonReportPage(
   });
   const mediaFiles = mediaFilesForReport(record);
   const mediaSection = renderPrivateLessonReportMediaSection(mediaFiles, record.media?.sessionFolderUrl || "");
+  const metricTiles = [
+    focusAreas.length
+      ? `<div class="tile"><small>집중 영역</small><strong>${escapeHtml(focusAreas.slice(0, 2).join(" · "))}</strong></div>`
+      : "",
+    flowSummary
+      ? `<div class="tile"><small>몸 상태 흐름</small><strong>${escapeHtml(flowSummary)}</strong></div>`
+      : "",
+    changes.length
+      ? `<div class="tile"><small>오늘 변화</small><strong>${escapeHtml(changes.slice(0, 2).join(" · "))}</strong></div>`
+      : "",
+  ].filter(Boolean);
+  const metricGrid = metricTiles.length ? `<div class="grid">${metricTiles.join("")}</div>` : "";
+  const improvementSection = improvementItems.length
+    ? `<section><div class="section-title"><h2>좋아진 점</h2><span class="hint">회원님이 느낄 수 있는 변화</span></div><ul class="soft-list">${improvementItems
+      .map((item) => `<li>${escapeHtml(item)}</li>`)
+      .join("")}</ul></section>`
+    : "";
+  const progressSection = todayProgress.length
+    ? `<section><div class="section-title"><h2>오늘 확인한 움직임</h2><span class="hint">진행 내용</span></div><div class="chips">${todayProgress
+      .map((item) => `<span class="chip">${escapeHtml(item)}</span>`)
+      .join("")}</div></section>`
+    : "";
+  const observationSection = observationItems.length
+    ? `<section><div class="section-title"><h2>수업 중 관찰</h2><span class="hint">담당 강사 기록</span></div><div class="chips">${observationItems
+      .map((item) => `<span class="chip">${escapeHtml(item)}</span>`)
+      .join("")}</div></section>`
+    : "";
+  const nextCheckSection = nextCheckItems.length
+    ? `<section><div class="section-title"><h2>다음 수업 전 체크</h2><span class="hint">가볍게 확인할 내용</span></div><ul class="soft-list">${nextCheckItems
+      .map((item) => `<li>${escapeHtml(item)}</li>`)
+      .join("")}</ul></section>`
+    : "";
 
   return `<!doctype html><html lang="ko"><head><meta charset="utf-8"><meta name="viewport" content="width=device-width,initial-scale=1"/>` +
     `<title>${title}</title><style>
@@ -2819,25 +3056,15 @@ function renderPrivateLessonReportPage(
     </style></head><body><main><div class="hero"><p class="brand">ARCHIVE PILATES</p><h1>${escapeHtml(title)}</h1>` +
     `<p class="meta">${escapeHtml(sessionText)} · ${escapeHtml(lessonTime)} · 담당: ${staffName}</p>` +
     `<div class="lead"><small>오늘의 핵심</small><p>${escapeHtml(reportSummaryText)}</p></div>` +
-    `<div class="grid"><div class="tile"><small>집중 영역</small><strong>${escapeHtml(focusAreas.slice(0, 2).join(" · ") || "-")}</strong></div>` +
-    `<div class="tile"><small>몸 상태 흐름</small><strong>${escapeHtml(flowSummary)}</strong></div>` +
-    `<div class="tile"><small>오늘 변화</small><strong>${escapeHtml(changes.slice(0, 2).join(" · ") || "기록 정리 중")}</strong></div></div></div>` +
-    `<section><div class="section-title"><h2>좋아진 점</h2><span class="hint">회원님이 느낄 수 있는 변화</span></div><ul class="soft-list">` +
-    (improvementItems.length ? improvementItems : ["오늘 수업에서 확인한 변화는 다음 기록에서 더 구체적으로 이어가겠습니다."]).map((item) => `<li>${escapeHtml(item)}</li>`).join("") +
-    `</ul></section>` +
-    `<section><div class="section-title"><h2>오늘 확인한 움직임</h2><span class="hint">진행 내용과 관찰</span></div><div class="chips">` +
-    (todayProgress.length ? todayProgress : ["기록된 진행 항목 없음"]).map((item) => `<span class="chip">${escapeHtml(item)}</span>`).join("") +
-    `</div></section>` +
-    `<section><div class="section-title"><h2>수업 중 관찰</h2><span class="hint">담당 강사 기록</span></div><div class="chips">` +
-    (observationItems.length ? observationItems : ["기록된 관찰 항목 없음"]).map((item) => `<span class="chip">${escapeHtml(item)}</span>`).join("") +
-    `</div></section>` +
+    `${metricGrid}</div>` +
+    improvementSection +
+    progressSection +
+    observationSection +
     `<section><div class="section-title"><h2>다음 수업 방향</h2><span class="hint">강사 입력 반영</span></div><p class="note">${escapeHtml(nextDirectionText)}</p></section>` +
     (homeworkText
       ? `<section><div class="section-title"><h2>홈워크</h2><span class="hint">다음 수업 전 가볍게</span></div><p class="note">${escapeHtml(homeworkText)}</p></section>`
       : "") +
-    `<section><div class="section-title"><h2>다음 수업 전 체크</h2><span class="hint">가볍게 확인할 내용</span></div><ul class="soft-list">` +
-    nextCheckItems.map((item) => `<li>${escapeHtml(item)}</li>`).join("") +
-    `</ul></section>` +
+    nextCheckSection +
     mediaSection +
     `<p class="footer">본 리포트는 담당 강사의 프라이빗 수업 기록을 바탕으로 정리되었습니다.<br><a class="report-link" href="${escapeAttr(reportVisibleUrl)}">리포트 다시 열기</a></p>` +
     `</main></body></html>`;
@@ -2855,7 +3082,7 @@ function privateReportNextCheckItems(options: {
     options.cautions.length ? `주의할 부분: ${options.cautions.slice(0, 2).join(" · ")}` : "",
     options.focusAreas.length ? `이어갈 감각: ${options.focusAreas.slice(0, 2).join(" · ")}` : "",
   ]).slice(0, 4);
-  return items.length ? items : ["다음 수업 전 컨디션과 불편감 변화를 가볍게 확인해 주세요."];
+  return items;
 }
 
 function uniqueTextItems(values: unknown[]): string[] {

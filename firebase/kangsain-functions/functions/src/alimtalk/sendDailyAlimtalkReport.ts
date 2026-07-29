@@ -17,6 +17,7 @@ interface ProcessSummary {
   processed: number;
   sent: number;
   failed: number;
+  deferred?: number;
 }
 
 export async function sendDailyAlimtalkReport(input: {
@@ -105,6 +106,7 @@ function buildReportBody(input: {
     `- 큐 처리: ${input.processSummary.processed}건`,
     `- 발송 성공: ${input.processSummary.sent}건`,
     `- 발송 실패: ${input.processSummary.failed}건`,
+    `- 템플릿 상태 재시도 대기: ${input.processSummary.deferred || 0}건`,
     `- 중복/예외 차단: ${skipped.length}건`,
     `- 자동화 발송 성공: ${autoSent.length}건`,
     `- 운영자 승인 발송 성공: ${operatorSent.length}건`,

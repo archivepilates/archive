@@ -117,13 +117,14 @@ export async function approveAlimtalkBatchHandler(request: Request, response: Re
   }
 
   const queued = await queueApprovedCandidates(approval);
-  const processSummary = { processed: 0, sent: 0, failed: 0 };
+  const processSummary = { processed: 0, sent: 0, failed: 0, deferred: 0 };
   for (let index = 0; index < 10; index += 1) {
     const result = await processAlimtalkQueue();
     processSummary.processed += result.processed;
     processSummary.sent += result.sent;
     processSummary.failed += result.failed;
-    if (!result.processed) break;
+    processSummary.deferred += result.deferred;
+    if (!result.processed || result.processed === result.deferred) break;
   }
 
   logger.info("approveAlimtalkBatch completed", {
@@ -134,7 +135,7 @@ export async function approveAlimtalkBatchHandler(request: Request, response: Re
   response
     .status(200)
     .send(
-      `ARCHIVE IN 알림톡 발송 승인 완료\n\n큐 전환: ${queued}건\n처리: ${processSummary.processed}건\n발송 성공: ${processSummary.sent}건\n발송 실패: ${processSummary.failed}건`,
+      `ARCHIVE IN 알림톡 발송 승인 완료\n\n큐 전환: ${queued}건\n처리: ${processSummary.processed}건\n발송 성공: ${processSummary.sent}건\n발송 실패: ${processSummary.failed}건\n템플릿 상태 재시도 대기: ${processSummary.deferred}건`,
     );
 }
 
