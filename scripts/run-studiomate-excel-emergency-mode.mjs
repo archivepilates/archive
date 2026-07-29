@@ -6,6 +6,10 @@ import path from "node:path";
 import { createRequire } from "node:module";
 import { recordAutomationStatus } from "./lib/archive-core-ops-logging.mjs";
 import { cleanupImportedSourceFiles } from "./lib/imported-source-retention.mjs";
+import {
+  isExcludedPrivateBooking,
+  isPrivateBooking,
+} from "./lib/private-session-order-policy.mjs";
 
 const require = createRequire(import.meta.url);
 const admin = require("../firebase/kangsain-functions/functions/node_modules/firebase-admin");
@@ -211,20 +215,6 @@ async function inspectPrivateSessionOrders(memberIds) {
       ...duplicateRounds.slice(0, 5).map((doc) => `bookings/${doc.id}`),
     ],
   };
-}
-
-function isPrivateBooking(data) {
-  const text = [data?.lessonType, data?.ticketClassType, data?.ticketName, data?.title, data?.lectureTitle, data?.divisionName]
-    .join(" ")
-    .toLowerCase();
-  return /private|semi_private|프라이빗|개인|1:1|세미/.test(text);
-}
-
-function isExcludedPrivateBooking(data) {
-  if (data?.sessionOrder?.counted === false) return true;
-  if (["cancel", "wait", "wait_cancel", "superseded"].includes(String(data?.appStatus || ""))) return true;
-  if (["cancelled", "canceled", "superseded"].includes(String(data?.status || ""))) return true;
-  return ["absent", "late_cancel"].includes(String(data?.attendanceStatus || ""));
 }
 
 function duplicatePrivateRounds(bookings) {

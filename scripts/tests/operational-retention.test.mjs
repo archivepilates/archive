@@ -12,6 +12,11 @@ import {
   isLiveValidationBookingEligible,
   shouldApplyOperationalDataPurge,
 } from "../lib/operational-data-retention-policy.mjs";
+import {
+  inactivePrivateBookingReason,
+  isExcludedPrivateBooking,
+  isPrivateBooking,
+} from "../lib/private-session-order-policy.mjs";
 
 const cleanup = { sourceStatus: "live_validation_cleanup_test" };
 
@@ -78,6 +83,41 @@ test("Firestore purge requires its explicit flag and attached media clears TTL",
     mediaSource,
     /status:\s*"attached"[\s\S]{0,260}expireAt:\s*FieldValue\.delete\(\)/,
   );
+});
+
+test("private-session verification uses the same countability policy as the ledger", () => {
+  const futurePrivate = {
+    lessonType: "private",
+    appStatus: "reserved",
+    attendanceStatus: "unchecked",
+    lectureDate: "2026-08-01",
+  };
+  assert.equal(isPrivateBooking(futurePrivate), true);
+  assert.equal(isExcludedPrivateBooking(futurePrivate, { todayKst: "2026-07-30" }), false);
+
+  const pastUnchecked = { ...futurePrivate, lectureDate: "2026-07-29" };
+  assert.equal(
+    inactivePrivateBookingReason(pastUnchecked, { todayKst: "2026-07-30" }),
+    "past_unchecked_attendance",
+  );
+  assert.equal(isExcludedPrivateBooking(pastUnchecked, { todayKst: "2026-07-30" }), true);
+
+  const pastAttended = { ...pastUnchecked, attendanceStatus: "attended" };
+  assert.equal(isExcludedPrivateBooking(pastAttended, { todayKst: "2026-07-30" }), false);
+
+  assert.equal(
+    isExcludedPrivateBooking({ ...futurePrivate, sourceStatus: "missing_from_latest_reservation_import" }),
+    true,
+  );
+  assert.equal(
+    isExcludedPrivateBooking({ ...futurePrivate, archiveBooking: { isCanonical: false } }),
+    true,
+  );
+  assert.equal(
+    isExcludedPrivateBooking({ ...futurePrivate, bookingId: "usage_booking_history_mirror" }),
+    true,
+  );
+  assert.equal(isPrivateBooking({ lessonType: "group", ticketName: "프라이빗 오표기" }), false);
 });
 
 test("local artifact compaction keeps work and failure records", () => {

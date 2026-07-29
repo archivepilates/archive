@@ -592,7 +592,14 @@ const guardGroups = [
         markers: [
           "computedFrom: [\"bookings\"]",
           "bookings_single_reservation_snapshot_attended_or_today_future",
+        ],
+      },
+      {
+        file: "scripts/lib/private-session-order-policy.mjs",
+        markers: [
           "past_unchecked_attendance",
+          "usage_booking_",
+          "missing_from_latest_reservation_import",
         ],
       },
       {

@@ -4,6 +4,10 @@ import { mkdirSync, writeFileSync } from "node:fs";
 import os from "node:os";
 import path from "node:path";
 import { createRequire } from "node:module";
+import {
+  inactivePrivateBookingReason,
+  isPrivateBooking,
+} from "./lib/private-session-order-policy.mjs";
 
 const require = createRequire(import.meta.url);
 const admin = require("../firebase/kangsain-functions/functions/node_modules/firebase-admin");
@@ -562,34 +566,6 @@ function ledgerNeedsUpsert(next, current) {
     timestampMillisFromValue(next.startsAt) !== timestampMillisFromValue(current.startsAt);
 }
 
-function inactivePrivateBookingReason(booking) {
-  if (!booking) return "missing_booking";
-  if (booking.archiveBooking?.isCanonical === false) return String(booking.sessionOrder?.excludedReason || "duplicate_source");
-  if (booking.sessionOrder?.counted === false && /duplicate|missing|stale|cancel|superseded/i.test(String(booking.sessionOrder?.excludedReason || ""))) {
-    return String(booking.sessionOrder.excludedReason || "session_order_excluded");
-  }
-  if (booking.appStatus && String(booking.appStatus) !== "reserved") return `booking_app_status_${booking.appStatus}`;
-  if (["absent", "late_cancel"].includes(String(booking.attendanceStatus || ""))) return `attendance_status_${booking.attendanceStatus}`;
-  if (isPastUncheckedBooking(booking)) return "past_unchecked_attendance";
-  const sourceStatus = String(booking.sourceStatus || "");
-  if (/missing_from_latest_reservation_import|stale|lecture_deleted|deleted|cancel/i.test(sourceStatus)) return sourceStatus;
-  if (!isPrivateBooking(booking)) return "not_private_booking";
-  return "";
-}
-
-function isPastUncheckedBooking(booking) {
-  if (String(booking.attendanceStatus || "unchecked") === "attended") return false;
-  const date = String(booking.lectureDate || dateFromTimestampLike(booking.lectureStartAt) || "");
-  return Boolean(date && date < todayKst());
-}
-
-function isPrivateBooking(booking) {
-  if (String(booking.lessonType || "") === "group") return false;
-  if (["private", "semi_private"].includes(String(booking.lessonType || ""))) return true;
-  const text = `${booking.ticketName || ""} ${booking.ticketClassType || ""} ${booking.ticketType || ""} ${booking.title || ""} ${booking.lectureTitle || ""}`;
-  return /프라이빗|개인|1:1|PRIVATE|\bP\b/i.test(text);
-}
-
 function occurrenceKey(row) {
   if (!row.memberId || !row.startsAt) return "";
   return [row.memberId, normalizeName(row.staffName), row.startsAt].join("|");
@@ -628,15 +604,6 @@ function timestampMillisFromValue(value) {
   if (typeof value === "number") return value;
   const parsed = Date.parse(String(value));
   return Number.isFinite(parsed) ? parsed : 0;
-}
-
-function dateFromTimestampLike(value) {
-  const millis = timestampMillisFromValue(value);
-  return millis ? new Intl.DateTimeFormat("en-CA", { timeZone: "Asia/Seoul" }).format(new Date(millis)) : "";
-}
-
-function todayKst() {
-  return new Intl.DateTimeFormat("en-CA", { timeZone: "Asia/Seoul" }).format(new Date());
 }
 
 function positiveNumber(value) {
