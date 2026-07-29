@@ -78,3 +78,25 @@ The current rollout adds `scripts/imweb_video_followup_candidates.py`. It:
 - Live read-only candidate audit: 32 recent orders scanned, one D7 review candidate held, one unpaid/cancelled/refunded order excluded, zero member sends
 
 The follow-up rollout changes no live member communication yet, so ARCHIVE CORE operating rules are not changed in this release. Add the rule when an approved template and real send automation are enabled.
+
+## Production Result
+
+- Source commit deployed: `5ca81d0`
+- Firebase target: project `archive-pilates`, Hosting site `archive-pilates-home`
+- Official home: HTTP 200; three video-purchase links point directly to Imweb `/17`
+- New public assets: HTTP 200 with the expected versioned SHA-256 values
+- Existing My Classroom asset: SHA-256 unchanged at `d558c8cf656e47c9c5a9d6342b0432c6f228a8e3e29b91f8fe9cdec36e7d161c`
+- Imweb header exact change:
+  - before: 14,800 bytes, SHA-256 `edbb2a0b04f4406a91a1ece00d2707d88c4f995ab5f2115b6354988812701b10`
+  - after: 15,387 bytes, SHA-256 `d927e64f83c77da11cb87bdcb5ac8c965575924f769da8fbe800a2aa85d29e8b`
+- Live `/17` at 390px and 1,440px:
+  - Best cards: 3
+  - learning paths: 4
+  - native products: 27
+  - horizontal overflow: 0
+- Post-Imweb My Classroom:
+  - authorized staff/owner: 27 sale videos plus 3 private lessons, total 30
+  - KakaoPay review non-buyer: 0 cards and expected empty state
+  - logged out: classroom and watch page redirect to login
+
+The public analytics runtime is deployed in a disabled state marked `pending-public-stream`. The Chrome Analytics session was `archivepilates@gmail.com`, not the intended operational account `home@archivepilates.com`, and no public property existed. No GA4 property was created and no ARCHIVE IN measurement id was reused.
