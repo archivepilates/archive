@@ -9,6 +9,8 @@ export const GROUP_SURVEY_ALIMTALK_START_DATE = "2026-05-21";
 export const LONG_ABSENCE_ALIMTALK_START_DATE = "2026-05-24";
 export const LEGACY_PRIVATE_SURVEY_ALIMTALK_TEMPLATE_CODE = "KA01TP260514153632171uiWXYoeiOLS";
 export const LEGACY_STAFF_PRIVATE_CHART_ALIMTALK_TEMPLATE_CODE = "KA01TP260527182741301uIuSTL01YQ1";
+export const NATIVE_PRIVATE_SURVEY_ALIMTALK_TEMPLATE_CODE = "KA01TP260729144645970fv13He8mfsK";
+export const NATIVE_STAFF_PRIVATE_CHART_ALIMTALK_TEMPLATE_CODE = "KA01TP260729144657202OV26yAD15wR";
 
 export const ALIMTALK_MEMBER_EXCLUSION_REASONS: Record<string, string> = {
   "1982133": "스텝 계정 알림톡 제외",
@@ -68,10 +70,8 @@ export const ALIMTALK_TEMPLATES = {
   private_survey: {
     code:
       process.env.PRIVATE_SURVEY_ALIMTALK_TEMPLATE_ID ||
-      LEGACY_PRIVATE_SURVEY_ALIMTALK_TEMPLATE_CODE,
-    label: process.env.PRIVATE_SURVEY_ALIMTALK_TEMPLATE_ID
-      ? "프라이빗 사전설문 안내 v2"
-      : "프라이빗 사전설문 안내 v1 (구글폼 링크)",
+      NATIVE_PRIVATE_SURVEY_ALIMTALK_TEMPLATE_CODE,
+    label: "프라이빗 사전설문 안내 v2",
     status: "approved",
   },
   group_survey: {
@@ -97,10 +97,8 @@ export const ALIMTALK_TEMPLATES = {
   staff_private_chart: {
     code:
       process.env.STAFF_PRIVATE_CHART_ALIMTALK_TEMPLATE_ID ||
-      LEGACY_STAFF_PRIVATE_CHART_ALIMTALK_TEMPLATE_CODE,
-    label: process.env.STAFF_PRIVATE_CHART_ALIMTALK_TEMPLATE_ID
-      ? "강사용 프라이빗 차트 작성 안내 v3"
-      : "강사용 프라이빗 차트 작성 안내 v2 (Notion 문구)",
+      NATIVE_STAFF_PRIVATE_CHART_ALIMTALK_TEMPLATE_CODE,
+    label: "강사용 프라이빗 차트 작성 안내 v3",
     status: "approved",
   },
   staff_group_survey: {

@@ -10,7 +10,7 @@ const strict = process.argv.includes("--strict");
 const templates = [
   {
     key: "member_private_survey",
-    id: process.env.PRIVATE_SURVEY_ALIMTALK_TEMPLATE_ID || "KA01TP260514153632171uiWXYoeiOLS",
+    id: process.env.PRIVATE_SURVEY_ALIMTALK_TEMPLATE_ID || "KA01TP260729144645970fv13He8mfsK",
     requiredButtonFragments: ["https://in.archivepilates.com/s/#{링크ID}/"],
     requiredVariables: ["#{이름}", "#{링크ID}"],
   },
@@ -24,7 +24,7 @@ const templates = [
     key: "staff_private_chart",
     id:
       process.env.STAFF_PRIVATE_CHART_ALIMTALK_TEMPLATE_ID ||
-      "KA01TP260527182741301uIuSTL01YQ1",
+      "KA01TP260729144657202OV26yAD15wR",
     requiredButtonFragments: [
       "#{수업전계획링크ID}",
       "#{수업후기록링크ID}",

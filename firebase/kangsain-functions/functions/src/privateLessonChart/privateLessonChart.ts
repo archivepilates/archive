@@ -23,6 +23,7 @@ import { bookingSourcePriority, isExcelBookingId } from "../utils/canonicalBooki
 import {
   ALIMTALK_TEMPLATES,
   LEGACY_STAFF_PRIVATE_CHART_ALIMTALK_TEMPLATE_CODE,
+  NATIVE_STAFF_PRIVATE_CHART_ALIMTALK_TEMPLATE_CODE,
 } from "../alimtalk/templates";
 import { alimtalkTemplateReadiness, isAlimtalkTemplateApproved } from "../alimtalk/templateStatus";
 import { completePrivateLessonMediaUpload, initPrivateLessonMediaUpload, uploadPrivateLessonMediaChunk } from "./privateLessonMedia";
@@ -2656,7 +2657,10 @@ async function sendStaffPrivateChartAlimtalk(
 }
 
 async function isStaffPrivateChartTemplateApproved(): Promise<boolean> {
-  const configured = String(process.env.STAFF_PRIVATE_CHART_ALIMTALK_TEMPLATE_ID || "").trim();
+  const configured = String(
+    process.env.STAFF_PRIVATE_CHART_ALIMTALK_TEMPLATE_ID ||
+      NATIVE_STAFF_PRIVATE_CHART_ALIMTALK_TEMPLATE_CODE,
+  ).trim();
   if (
     !configured ||
     STAFF_PRIVATE_CHART_TEMPLATE_ID === LEGACY_STAFF_PRIVATE_CHART_ALIMTALK_TEMPLATE_CODE ||

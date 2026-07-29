@@ -2,6 +2,7 @@ import { addDays } from "../utils/date";
 import {
   ALIMTALK_MEMBER_EXCLUSION_REASONS,
   LEGACY_PRIVATE_SURVEY_ALIMTALK_TEMPLATE_CODE,
+  NATIVE_PRIVATE_SURVEY_ALIMTALK_TEMPLATE_CODE,
 } from "./templates";
 import type { AlimtalkCandidateDoc } from "../types/models";
 import { shortLinkIdForTarget } from "../utils/shortLinks";
@@ -78,7 +79,10 @@ export function isRetryableTemplateStatusIssue(issue: string): boolean {
 export function privateSurveyTemplateContractIssue(
   candidate: AlimtalkCandidateDoc,
   state: AlimtalkTemplateState | null = null,
-  configuredTemplateCode = String(process.env.PRIVATE_SURVEY_ALIMTALK_TEMPLATE_ID || "").trim(),
+  configuredTemplateCode = String(
+    process.env.PRIVATE_SURVEY_ALIMTALK_TEMPLATE_ID ||
+      NATIVE_PRIVATE_SURVEY_ALIMTALK_TEMPLATE_CODE,
+  ).trim(),
 ): string {
   if (candidate.type !== "private_survey") return "";
   if (candidate.templateCode === LEGACY_PRIVATE_SURVEY_ALIMTALK_TEMPLATE_CODE) {
