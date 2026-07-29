@@ -81,7 +81,7 @@ if (!before.includes('data-archive-pilates-site-improvements="2026-07-28b"')) {
 }
 
 const after = replaceMarkedScript(before);
-if (!after.includes(`${MARKER}="2026-07-29b"`)) {
+if (!after.includes(`${MARKER}="2026-07-29c"`)) {
   throw new Error("prepared header is missing the Knitido shipping-review loader");
 }
 

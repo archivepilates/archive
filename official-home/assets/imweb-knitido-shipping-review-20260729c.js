@@ -1,7 +1,7 @@
 (function () {
   "use strict";
 
-  var VERSION = "2026-07-29b";
+  var VERSION = "2026-07-29c";
   var STYLE_ID = "archive-pilates-knitido-shipping-style";
   var CATEGORY_NOTICE_ID = "archive-pilates-knitido-shipping-notice";
   var DETAIL_NOTICE_ATTR = "data-archive-pilates-knitido-shipping-detail";
@@ -50,7 +50,7 @@
     var facts = [
       ["평균 배송일", "결제 완료 후 영업일 기준 2~3일"],
       ["출고 일정", "재고 확인 후 영업일 기준 1~2일 이내"],
-      ["최대 배송 완료일", "결제일로부터 1개월 이내"]
+      ["최대 배송 완료일", "결제일로부터 14일 이내"]
     ];
     if (includeFee) facts.push(["기본 배송비", "3,000원 · 조건부 무료배송 없음"]);
 
@@ -81,7 +81,7 @@
       '<p class="ap-knitido-shipping-notice-label">배송 안내</p>' +
       '<h2 id="archive-pilates-knitido-shipping-title">니티도 실물상품 배송 기준</h2>' +
       shippingFactsHtml(true) +
-      '<p class="ap-knitido-shipping-note">주말·공휴일 주문, 도서산간 지역 및 택배사 사정에 따라 배송이 지연될 수 있습니다. 지연이 예상되면 사전에 안내하며, 결제일로부터 1개월 이내 배송이 어려운 경우 취소·환불을 지원합니다.</p>' +
+      '<p class="ap-knitido-shipping-note">주말·공휴일 주문, 도서산간 지역 및 택배사 사정에 따라 배송이 지연될 수 있습니다. 지연이 예상되면 사전에 안내하며, 결제일로부터 14일 이내 배송이 어려운 경우 취소·환불을 지원합니다.</p>' +
       "</section>"
     );
   }
@@ -116,7 +116,7 @@
       VERSION +
       '" role="note">' +
       shippingFactsHtml(false) +
-      '<p>주말·공휴일 주문, 도서산간 지역 및 택배사 사정에 따라 배송이 지연될 수 있습니다. 지연이 예상되면 사전에 안내하며, 결제일로부터 1개월 이내 배송이 어려운 경우 취소·환불을 지원합니다.</p>' +
+      '<p>주말·공휴일 주문, 도서산간 지역 및 택배사 사정에 따라 배송이 지연될 수 있습니다. 지연이 예상되면 사전에 안내하며, 결제일로부터 14일 이내 배송이 어려운 경우 취소·환불을 지원합니다.</p>' +
       "</div>"
     );
   }
@@ -144,7 +144,7 @@
         var sectionText = String(section.textContent || "").replace(/\s+/g, " ");
         if (
           sectionText.indexOf("평균 배송일") !== -1 &&
-          sectionText.indexOf("결제일로부터 1개월 이내") !== -1
+          sectionText.indexOf("결제일로부터 14일 이내") !== -1
         ) {
           return;
         }

@@ -3,7 +3,7 @@ import path from "node:path";
 
 const ROOT = path.resolve(path.dirname(new URL(import.meta.url).pathname), "..");
 const asset = fs.readFileSync(
-  path.join(ROOT, "official-home/assets/imweb-knitido-shipping-review-20260729b.js"),
+  path.join(ROOT, "official-home/assets/imweb-knitido-shipping-review-20260729c.js"),
   "utf8"
 );
 const installer = fs.readFileSync(
@@ -16,11 +16,11 @@ const applyScript = fs.readFileSync(
 );
 
 const requiredAssetText = [
-  "2026-07-29b",
+  "2026-07-29c",
   "평균 배송일",
   "결제 완료 후 영업일 기준 2~3일",
   "재고 확인 후 영업일 기준 1~2일 이내",
-  "결제일로부터 1개월 이내",
+  "결제일로부터 14일 이내",
   "3,000원 · 조건부 무료배송 없음",
   ".archive-knitido-product",
   "ap_shop"
@@ -29,10 +29,10 @@ const requiredAssetText = [
 for (const text of requiredAssetText) {
   if (!asset.includes(text)) throw new Error(`shipping asset is missing: ${text}`);
 }
-if (!installer.includes("imweb-knitido-shipping-review-20260729b.js")) {
+if (!installer.includes("imweb-knitido-shipping-review-20260729c.js")) {
   throw new Error("installer does not load the versioned shipping-review asset");
 }
-if (!installer.includes('data-archive-pilates-knitido-shipping-review="2026-07-29b"')) {
+if (!installer.includes('data-archive-pilates-knitido-shipping-review="2026-07-29c"')) {
   throw new Error("installer marker/version mismatch");
 }
 for (const scopeGuard of ['path === "/16"', 'path !== "/shop_view"', "productNumber >= 52", "productNumber <= 78"]) {
@@ -57,11 +57,11 @@ process.stdout.write(
   JSON.stringify(
     {
       ok: true,
-      version: "2026-07-29b",
+      version: "2026-07-29c",
       categoryNotice: true,
       detailSelector: ".archive-knitido-product",
       deliveryWindow: "영업일 기준 2~3일",
-      maximumCompletion: "결제일로부터 1개월 이내"
+      maximumCompletion: "결제일로부터 14일 이내"
     },
     null,
     2
