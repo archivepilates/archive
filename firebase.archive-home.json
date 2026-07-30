@@ -2,6 +2,7 @@
   "hosting": {
     "site": "archive-pilates-home",
     "predeploy": [
+      "npm run validate:archive-home-team",
       "npm run validate:archive-home-classroom",
       "npm run validate:video-sales-growth"
     ],
@@ -94,6 +95,11 @@
       }
     ],
     "redirects": [
+      {
+        "source": "/teams/ayoung",
+        "destination": "/teams",
+        "type": 301
+      },
       {
         "source": "/shop",
         "destination": "https://archivepilates.imweb.me/16",
