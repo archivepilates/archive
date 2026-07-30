@@ -7,7 +7,7 @@ const analytics = fs.readFileSync(
   "utf8"
 );
 const sales = fs.readFileSync(
-  path.join(ROOT, "official-home/assets/imweb-video-sales-20260729a.js"),
+  path.join(ROOT, "official-home/assets/imweb-video-sales-20260730b.js"),
   "utf8"
 );
 const installer = fs.readFileSync(
@@ -44,7 +44,15 @@ assert(
   }
 );
 assert(
-  installer.includes("imweb-video-sales-20260729a.js"),
+  sales.includes('{ idx: 44, label: "BEST 01"'),
+  "BEST 01 must be ACH3."
+);
+assert(
+  sales.includes("ACA5: 44"),
+  "The post-ACA5 recommendation must be ACH3."
+);
+assert(
+  installer.includes("imweb-video-sales-20260730b.js"),
   "Imweb loader does not reference the versioned sales asset."
 );
 assert(

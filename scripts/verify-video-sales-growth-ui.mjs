@@ -14,7 +14,7 @@ const { chromium } = require("playwright");
 const fixtureImage =
   "data:image/gif;base64,R0lGODlhAQABAIAAAAAAAP///ywAAAAAAQABAAACAUwAOw==";
 const asset = fs.readFileSync(
-  path.join(ROOT, "official-home/assets/imweb-video-sales-20260729a.js"),
+  path.join(ROOT, "official-home/assets/imweb-video-sales-20260730b.js"),
   "utf8"
 );
 
@@ -52,7 +52,7 @@ function fixture(pathname) {
   const classroom =
     pathname === "/48"
       ? `<main><section class="apc"><div class="apc-grid">
-          <a class="apc-card" href="/archive-method-watch-ach8"><span class="apc-code">ACH8</span><strong>체어 호흡</strong></a>
+          <a class="apc-card" href="/archive-method-watch-aca5"><span class="apc-code">ACA5</span><strong>캐딜락 호흡</strong></a>
         </div></section></main>`
       : "";
   const listing =
@@ -126,6 +126,13 @@ try {
       .waitFor({ state: "visible" });
     const best = page.getByRole("link", { name: /BEST 0[1-3]/ });
     if ((await best.count()) !== 3) throw new Error(`${width}px: expected three best links`);
+    const firstBest = best.nth(0);
+    if (!(await firstBest.getAttribute("href"))?.includes("idx=44")) {
+      throw new Error(`${width}px: BEST 01 must link to ACH3 product 44`);
+    }
+    if (!(await firstBest.innerText()).includes("체어 정렬 인지 & 체간 안정화")) {
+      throw new Error(`${width}px: BEST 01 must display the ACH3 title`);
+    }
     const result = await page.evaluate(() => ({
       overflow: document.documentElement.scrollWidth - document.documentElement.clientWidth,
       routeCount: document.querySelectorAll(".ap-video-sales__route").length,
@@ -146,7 +153,10 @@ try {
   const classroomPage = await browser.newPage({ viewport: { width: 390, height: 844 } });
   await classroomPage.goto(`${base}/48`, { waitUntil: "domcontentloaded" });
   await classroomPage
-    .getByRole("heading", { name: "다음 추천 · 캐딜락 호흡", exact: true })
+    .getByRole("heading", {
+      name: "다음 추천 · 체어 정렬 인지 & 체간 안정화",
+      exact: true
+    })
     .waitFor({ state: "visible" });
   const recommendation = classroomPage.getByRole("link", {
     name: "추천 영상 보기",
@@ -154,6 +164,9 @@ try {
   });
   if ((await recommendation.count()) !== 1) {
     throw new Error("My Classroom expected exactly one recommendation.");
+  }
+  if (!(await recommendation.getAttribute("href"))?.includes("idx=44")) {
+    throw new Error("My Classroom recommendation must link to ACH3 product 44.");
   }
   await classroomPage.screenshot({
     path: path.join(OUTPUT, "classroom-next-390.png"),
