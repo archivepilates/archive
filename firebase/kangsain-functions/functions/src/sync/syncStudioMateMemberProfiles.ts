@@ -3,10 +3,11 @@ import type { Timestamp } from "firebase-admin/firestore";
 import type { BookingDoc, ContactSyncJobDoc, MemberProfileDoc, TicketExpiryLevel } from "../types/models";
 import { refs } from "../firestore/refs";
 import { saveRawMirrorBatch } from "../firestore/rawMirrorRepository";
+import { getActiveStaffs } from "../firestore/staffRepository";
 import { StudioMateClient } from "../studiomate/studiomateClient";
 import { addDays, nowTimestamp, parseStudioMateDateTime, todayKst } from "../utils/date";
 import { stableHash } from "../utils/hash";
-import { isProtectedStaffContact } from "./protectedContactRules";
+import { buildActiveStaffContactIndex, isProtectedStaffContact } from "./protectedContactRules";
 
 export async function syncStudioMateMemberProfiles(input: {
   studioId: string;
@@ -15,6 +16,7 @@ export async function syncStudioMateMemberProfiles(input: {
   const members = uniqueMembers(input.bookings);
   const ticketSummaryByMember = buildTicketSummaryByMember(input.bookings);
   const client = new StudioMateClient(input.studioId);
+  const activeStaffContacts = buildActiveStaffContactIndex(await getActiveStaffs(input.studioId));
 
   for (let index = 0; index < members.length; index += 5) {
     const chunk = members.slice(index, index + 5);
@@ -77,7 +79,44 @@ export async function syncStudioMateMemberProfiles(input: {
           updatedAt: nowTimestamp(),
         };
         await refs.memberProfile(member.memberId).set(doc, { merge: true });
-        if (phone && !isProtectedStaffContact({ name: doc.name, phone })) {
+        if (phone && isProtectedStaffContact({ name: doc.name, phone }, activeStaffContacts)) {
+          const contactDisplayName = `${doc.name} 강사님`;
+          const contactHash = stableHash({
+            name: doc.name,
+            contactDisplayName,
+            contactMemo,
+            phone,
+            activeStaffContact: true,
+          });
+          const previousContact = (await refs.memberContactIndexDoc(member.memberId).get()).data();
+          await refs.memberContactIndexDoc(member.memberId).set(
+            {
+              memberId: member.memberId,
+              studioId: input.studioId,
+              name: doc.name,
+              contactDisplayName,
+              contactMemo,
+              phone,
+              phoneLast4: phone.slice(-4),
+              registeredAt,
+              activeTicketCount: ticketSummary.activeTicketCount,
+              activeTicketNames: ticketSummary.activeTicketNames,
+              contactHash,
+              source: "studiomate_api",
+              contactTargets: {
+                archivepilates_gmail: previousContact?.contactTargets?.archivepilates_gmail || "skipped",
+                home_archivepilates: "skipped",
+              },
+              homeContactResourceName: previousContact?.homeContactResourceName || "",
+              lastContactSyncJobId: previousContact?.lastContactSyncJobId || "",
+              contactLastError: null,
+              contactUpdatedAt: previousContact?.contactUpdatedAt || null,
+              syncedAt: nowTimestamp(),
+              updatedAt: nowTimestamp(),
+            },
+            { merge: true },
+          );
+        } else if (phone) {
           const contactDisplayName = formatMemberContactDisplayName(doc.name, registeredAt);
           const contactHash = stableHash({
             name: doc.name,

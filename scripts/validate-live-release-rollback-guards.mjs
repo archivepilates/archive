@@ -8,6 +8,66 @@ const repoRoot = path.resolve(__dirname, "..");
 
 const guardGroups = [
   {
+    id: "staff-member-contact-precedence",
+    reason: "현재 근무 강사와 회원이 같은 전화번호를 쓸 때 회원 동기화가 Google 연락처의 강사명을 덮는 회귀를 막습니다.",
+    files: [
+      {
+        file: "firebase/kangsain-functions/functions/src/sync/protectedContactRules.ts",
+        markers: [
+          "buildActiveStaffContactIndex",
+          "staff_profile_refresh",
+          "activeStaffs.phones.has(phone)",
+        ],
+      },
+      {
+        file: "firebase/kangsain-functions/functions/src/sync/processContactSyncJobs.ts",
+        markers: [
+          "loadActiveStaffContactsByStudio",
+          "finishProtectedStaffJob",
+          "home_archivepilates: \"skipped\"",
+        ],
+      },
+      {
+        file: "firebase/kangsain-functions/functions/src/sync/queueStaffContactSync.ts",
+        markers: [
+          "queueActiveStaffContactSync",
+          "sourceReason: \"staff_profile_refresh\"",
+          "home_archivepilates: \"pending\"",
+        ],
+      },
+      {
+        file: "firebase/kangsain-functions/functions/src/exports/sync.ts",
+        markers: [
+          "export const queueStaffContactSync = onDocumentWritten",
+          "document: \"staffs/{staffId}\"",
+        ],
+      },
+      {
+        file: "scripts/emergency-import-studiomate-member-excel.mjs",
+        markers: [
+          "loadActiveStaffContacts",
+          "const protectedStaffContact",
+          "`${group.name} 강사님`",
+        ],
+      },
+      {
+        file: "scripts/sync-studiomate-staffs-from-browser.mjs",
+        markers: [
+          "const staffIdScope = valueArg(\"--staff-id\")",
+          "retireMissing: !staffIdScope",
+          "if (options.retireMissing !== false)",
+        ],
+      },
+      {
+        file: "core/rules/index.html",
+        markers: [
+          "회원카드는 유지하고 Google 연락처 이름만 강사명을 우선합니다.",
+          "active staffs의 전화번호로 판단",
+        ],
+      },
+    ],
+  },
+  {
     id: "archive-in-retired-operator-root",
     reason: "ARCHIVE IN 운영자 루트가 예전 앱 화면으로 되돌아가고 private-chart 최신 화면을 덮는 것을 막습니다.",
     files: [

@@ -50,8 +50,12 @@ if (!sourceFile) {
 
 const rows = readMemberRows(sourceFile);
 const groupedMembers = groupRows(rows);
-const [existingProfiles, existingContacts] = await Promise.all([loadExistingProfiles(), loadExistingContacts()]);
-const { plans, skipped } = buildPlans(groupedMembers, existingProfiles, existingContacts);
+const [existingProfiles, existingContacts, activeStaffContacts] = await Promise.all([
+  loadExistingProfiles(),
+  loadExistingContacts(),
+  loadActiveStaffContacts(),
+]);
+const { plans, skipped } = buildPlans(groupedMembers, existingProfiles, existingContacts, activeStaffContacts);
 const plannedProfileWrites = plans.filter((plan) => plan.profileDoc && plan.writeProfile).length;
 const plannedContactIndexWrites = plans.filter((plan) => plan.writeContactIndex).length;
 const plannedContactSyncJobs = plans.filter((plan) => plan.contactSyncJobDoc).length;
@@ -229,7 +233,19 @@ async function loadExistingContacts() {
   return out;
 }
 
-function buildPlans(groups, existingProfiles, existingContacts) {
+async function loadActiveStaffContacts() {
+  const snap = await db
+    .collection("staffs")
+    .where("studioId", "==", STUDIO_ID)
+    .where("active", "==", true)
+    .get();
+  return {
+    phones: new Set(snap.docs.map((doc) => normalizePhone(doc.data().phone || "")).filter(Boolean)),
+    names: new Set(snap.docs.map((doc) => normalizeName(doc.data().name || "")).filter(Boolean)),
+  };
+}
+
+function buildPlans(groups, existingProfiles, existingContacts, activeStaffContacts) {
   let skippedNoActiveTicket = 0;
   let skippedAmbiguousPhone = 0;
   let skippedNoExistingProfile = 0;
@@ -240,10 +256,8 @@ function buildPlans(groups, existingProfiles, existingContacts) {
   let skippedNoPhone = groups.skippedNoPhone || 0;
   const plans = [];
   for (const group of groups) {
-    if (isProtectedStaffContact(group)) {
-      skippedProtectedStaffContact += 1;
-      continue;
-    }
+    const protectedStaffContact = isProtectedStaffContact(group, activeStaffContacts);
+    if (protectedStaffContact) skippedProtectedStaffContact += 1;
     const activeTickets = buildActiveTickets(group.rows);
     const ticketStatusSummary = buildTicketStatusSummary(group.rows);
     const registeredAt = parseKstTimestamp(bestDate(group.rows, "등록일"));
@@ -254,6 +268,7 @@ function buildPlans(groups, existingProfiles, existingContacts) {
     const contactMemo = cleanContactMemo(firstNonEmpty(group.rows, "메모"));
     const memoPreview = contactMemo.slice(0, 120);
     if (isConsultationGroup(group, activeTickets)) {
+      if (protectedStaffContact) continue;
       const consultationDate = parseKstTimestamp(consultationDateText(group.rows));
       const memberId = `consultation_excel_${hash(`${group.phone}|${group.normalizedName}`).slice(0, 16)}`;
       const contactDisplayName = [group.name, "상담", compactDate(consultationDate)].filter(Boolean).join(" ");
@@ -392,7 +407,9 @@ function buildPlans(groups, existingProfiles, existingContacts) {
     const writeProfile =
       !matchedProfile ||
       matchedProfile.data.emergencyImportHash !== profileDoc.emergencyImportHash;
-    const contactDisplayName = [group.name, "회원", compactDate(registeredAt)].filter(Boolean).join(" ");
+    const contactDisplayName = protectedStaffContact
+      ? `${group.name} 강사님`
+      : [group.name, "회원", compactDate(registeredAt)].filter(Boolean).join(" ");
     const contactHash = hash({
       name: group.name,
       contactDisplayName,
@@ -403,6 +420,7 @@ function buildPlans(groups, existingProfiles, existingContacts) {
     });
     const previousContact = existingContacts.get(memberId);
     const shouldQueueHomeSync =
+      !protectedStaffContact &&
       queueContactSync &&
       (!previousContact ||
         previousContact.contactHash !== contactHash ||
@@ -411,7 +429,9 @@ function buildPlans(groups, existingProfiles, existingContacts) {
       archivepilates_gmail: previousContact?.contactTargets?.archivepilates_gmail || "skipped",
       home_archivepilates: shouldQueueHomeSync
         ? "pending"
-        : previousContact?.contactTargets?.home_archivepilates || "skipped",
+        : protectedStaffContact
+          ? "skipped"
+          : previousContact?.contactTargets?.home_archivepilates || "skipped",
     };
     const jobId = `contact_${memberId}_home_${contactHash.slice(0, 16)}`;
     const contactIndexDoc = {
@@ -813,13 +833,16 @@ function normalizePhone(value) {
   return digits;
 }
 
-function isProtectedStaffContact(input) {
+function isProtectedStaffContact(input, activeStaffContacts) {
   const phone = normalizePhone(input.phone || "");
   const name = normalizeName(input.name || "");
-  return PROTECTED_STAFF_CONTACTS.some((contact) => {
-    if (phone && phone === contact.phone) return true;
-    return name === normalizeName(contact.name);
-  });
+  if (activeStaffContacts) {
+    if (phone) return activeStaffContacts.phones.has(phone);
+    return Boolean(name && activeStaffContacts.names.has(name));
+  }
+  if (phone) return PROTECTED_STAFF_CONTACTS.some((contact) => phone === contact.phone);
+  if (!name) return false;
+  return PROTECTED_STAFF_CONTACTS.some((contact) => name === normalizeName(contact.name));
 }
 
 function nullableNumber(value) {

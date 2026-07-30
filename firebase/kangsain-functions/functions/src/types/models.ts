@@ -923,6 +923,7 @@ export interface ContactSyncJobDoc {
   };
   sourceReason:
     | "member_profile_refresh"
+    | "staff_profile_refresh"
     | "notice_member_signup"
     | "notice_ticket_update"
     | "consultation_schedule"

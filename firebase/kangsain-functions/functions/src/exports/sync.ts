@@ -1,6 +1,6 @@
 import { logger } from "firebase-functions";
 import { onCall, onRequest, HttpsError } from "firebase-functions/v2/https";
-import { onDocumentCreated } from "firebase-functions/v2/firestore";
+import { onDocumentCreated, onDocumentWritten } from "firebase-functions/v2/firestore";
 import { onSchedule } from "firebase-functions/v2/scheduler";
 import { syncDashboardFromSheets } from "../sync/syncDashboardFromSheets";
 import { syncLecturesDaily } from "../sync/syncLecturesDaily";
@@ -16,6 +16,8 @@ import { isManagerRole, requireManager, requireStaff } from "../security/authGua
 import { nowTimestamp } from "../utils/date";
 import { toHttpsError } from "../utils/errors";
 import { callableOptions, longCallableOptions, longRequestOptions, scheduleOptions } from "../runtime/functionOptions";
+import type { StaffDoc } from "../types/models";
+import { queueActiveStaffContactSync, staffContactIdentityChanged } from "../sync/queueStaffContactSync";
 
 export const scheduledSyncLecturesDaily = onSchedule(
   {
@@ -54,6 +56,19 @@ export const scheduledProcessContactSyncJobs = onSchedule(
   },
   async () => {
     await processContactSyncJobs();
+  },
+);
+
+export const queueStaffContactSync = onDocumentWritten(
+  {
+    ...scheduleOptions,
+    document: "staffs/{staffId}",
+  },
+  async (event) => {
+    const before = event.data?.before.data() as StaffDoc | undefined;
+    const after = event.data?.after.data() as StaffDoc | undefined;
+    if (!after || !staffContactIdentityChanged(before, after)) return;
+    await queueActiveStaffContactSync(after);
   },
 );
 

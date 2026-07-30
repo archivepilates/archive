@@ -206,6 +206,9 @@
                 <li>기준 계정은 home@archivepilates.com입니다.</li>
                 <li>Google Contacts는 원천이 아니라 전화 발신·검색을 위한 보조 저장소입니다.</li>
                 <li>연락처는 memberContactIndex와 contactSyncJobs 기준으로 큐를 만들고, dry-run 후 반영합니다.</li>
+                <li>같은 전화번호가 회원과 현재 근무 강사에 함께 등록되면 회원카드는 유지하고 Google 연락처 이름만 강사명을 우선합니다.</li>
+                <li>강사 우선 여부는 active staffs의 전화번호로 판단하며, 전화번호가 없는 경우에만 이름을 보조 기준으로 사용합니다.</li>
+                <li>강사 보호로 건너뛴 회원 연락처 작업은 synced가 아니라 skipped로 기록하고, 새 강사는 회원 연락처 동기화 전에 active staffs에 먼저 등록합니다.</li>
                 <li>Google-only 연락처 삭제, 연락처 병합, 대량 이동은 별도 승인 없이는 하지 않습니다.</li>
               </ul>
             </article>

@@ -78,6 +78,9 @@ jobs:
       - name: Validate data source policy
         run: npm run validate:data-source-policy
 
+      - name: Test staff and member contact precedence
+        run: npm run test:contact-staff-precedence
+
       - name: Validate GCP cost regression guards
         run: npm run validate:gcp-cost-guards
 

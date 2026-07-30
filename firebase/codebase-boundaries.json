@@ -53,6 +53,7 @@
         "scheduledPollManagerNotices",
         "scheduledProcessWriteQueue",
         "scheduledProcessContactSyncJobs",
+        "queueStaffContactSync",
         "scheduledAttendanceReminder",
         "scheduledCreateParkingDiscountJobs",
         "scheduledSyncDashboardDaily",
