@@ -11,11 +11,13 @@ import {
 import { privateLessonSessionProjection } from "../../firebase/kangsain-functions/functions/src/privateLessonChart/privateLessonSession";
 import { privateLessonRoundVerified } from "../../firebase/kangsain-functions/functions/src/privateLessonChart/privateLessonSession";
 import { renderPrivateLessonReportPage } from "../../firebase/kangsain-functions/functions/src/privateLessonChart/privateLessonChart";
+import { alimtalkApprovalId } from "../../firebase/kangsain-functions/functions/src/alimtalk/approvalGate";
 import { alimtalkDedupeKey } from "../../firebase/kangsain-functions/functions/src/alimtalk/dedupe";
 import { privateSurveySourceIssue } from "../../firebase/kangsain-functions/functions/src/alimtalk/privateSurveySendGuard";
 import {
   isRetryableTemplateStatusIssue,
   privateSurveyTemplateContractIssue,
+  reservationOpenTemplateContractIssue,
 } from "../../firebase/kangsain-functions/functions/src/alimtalk/eligibility";
 import {
   alimtalkImageTemplateContractIssue,
@@ -24,6 +26,8 @@ import {
 import {
   LEGACY_PRIVATE_SURVEY_ALIMTALK_TEMPLATE_CODE,
   NATIVE_PRIVATE_SURVEY_ALIMTALK_IMAGE_ID,
+  RESERVATION_OPEN_ALIMTALK_IMAGE_ID,
+  RESERVATION_OPEN_ALIMTALK_TEMPLATE_CODE,
 } from "../../firebase/kangsain-functions/functions/src/alimtalk/templates";
 
 const nowDate = new Date("2026-07-29T03:00:00.000Z");
@@ -208,6 +212,33 @@ test("permanent private survey dedupe survives phone changes", () => {
   );
 });
 
+test("reservation open dedupe survives template and phone changes within the same week", () => {
+  const base = reservationOpenCandidate();
+  assert.equal(
+    alimtalkDedupeKey(base),
+    alimtalkDedupeKey({
+      ...base,
+      templateCode: "KA01TP260518023011547VpbovK8MrI9",
+      memberPhone: "01099998888",
+    }),
+  );
+  assert.notEqual(
+    alimtalkDedupeKey(base),
+    alimtalkDedupeKey({
+      ...base,
+      payload: { ...base.payload, reservationWeek: "8월 3주차" },
+    }),
+  );
+});
+
+test("reservation open approval is isolated from the daily Alimtalk approval", () => {
+  assert.equal(alimtalkApprovalId("5330", "2026-08-03", "daily"), "5330_2026-08-03");
+  assert.equal(
+    alimtalkApprovalId("5330", "2026-08-03", "reservation_open"),
+    "5330_2026-08-03_reservation_open",
+  );
+});
+
 test("legacy private survey template is blocked until the native-link v2 template is configured", () => {
   const candidate = privateSurveyCandidate();
   const configuredTemplateCode = "KA01TP_PRIVATE_SURVEY_NATIVE_V2";
@@ -308,6 +339,76 @@ test("private survey template requires the preserved ARCHIVE image contract", ()
       "프라이빗 사전설문 템플릿",
     ),
     /기본형/,
+  );
+});
+
+test("reservation open candidates use only the approved v4 template contract", () => {
+  const candidate = reservationOpenCandidate();
+  assert.match(
+    reservationOpenTemplateContractIssue({
+      ...candidate,
+      templateCode: "KA01TP260518023011547VpbovK8MrI9",
+    }),
+    /템플릿 설정 불일치/,
+  );
+  assert.equal(
+    reservationOpenTemplateContractIssue(candidate, {
+      templateCode: RESERVATION_OPEN_ALIMTALK_TEMPLATE_CODE,
+      label: "스튜디오메이트 예약 안내 v4",
+      name: "아카이브 스튜디오메이트 예약 안내 v4",
+      status: "APPROVED",
+      source: "solapi",
+      lastError: null,
+      channelId: "channel-1",
+      content: "#{이름}님, #{예약주차} 예약이 열립니다.",
+      buttonUrls: [
+        "https://archivepilates.notion.site/notice",
+        "https://archivepilates.notion.site/studiomate",
+      ],
+      messageType: "BA",
+      emphasizeType: "IMAGE",
+      imageId: RESERVATION_OPEN_ALIMTALK_IMAGE_ID,
+    }),
+    "",
+  );
+});
+
+test("reservation open v4 blocks image, variable, and button contract drift", () => {
+  const candidate = reservationOpenCandidate();
+  const baseState = {
+    templateCode: RESERVATION_OPEN_ALIMTALK_TEMPLATE_CODE,
+    label: "스튜디오메이트 예약 안내 v4",
+    name: "아카이브 스튜디오메이트 예약 안내 v4",
+    status: "APPROVED",
+    source: "solapi",
+    lastError: null,
+    channelId: "channel-1",
+    content: "#{이름}님, #{예약주차} 예약이 열립니다.",
+    buttonUrls: [
+      "https://archivepilates.notion.site/notice",
+      "https://archivepilates.notion.site/studiomate",
+    ],
+    messageType: "BA",
+    emphasizeType: "IMAGE",
+    imageId: RESERVATION_OPEN_ALIMTALK_IMAGE_ID,
+  } as const;
+  assert.match(
+    reservationOpenTemplateContractIssue(candidate, { ...baseState, imageId: "different-image" }),
+    /이미지 ID 불일치/,
+  );
+  assert.match(
+    reservationOpenTemplateContractIssue(candidate, {
+      ...baseState,
+      content: "#{이름}님, 예약이 열립니다.",
+    }),
+    /예약주차 변수 없음/,
+  );
+  assert.match(
+    reservationOpenTemplateContractIssue(candidate, {
+      ...baseState,
+      buttonUrls: ["https://archivepilates.notion.site/notice"],
+    }),
+    /예약방법 버튼 URL 불일치/,
   );
 });
 
@@ -529,6 +630,27 @@ function privateSurveyCandidate(): any {
     reason: "첫 수업",
     sourceDate: "2026-07-29",
     payload: { surveyId: "psr-test", bookingId: "booking-1" },
+    attempts: 0,
+    maxAttempts: 2,
+    createdAt: now,
+    updatedAt: now,
+  };
+}
+
+function reservationOpenCandidate(): any {
+  return {
+    candidateId: "reservation_open_member-1_2026-08-10",
+    studioId: "5330",
+    memberId: "member-1",
+    memberName: "테스트회원",
+    memberPhone: "01011112222",
+    type: "reservation_open",
+    status: "queued",
+    templateCode: RESERVATION_OPEN_ALIMTALK_TEMPLATE_CODE,
+    title: "예약 안내",
+    reason: "예약 오픈",
+    sourceDate: "2026-08-03",
+    payload: { reservationWeek: "8월 2주차" },
     attempts: 0,
     maxAttempts: 2,
     createdAt: now,

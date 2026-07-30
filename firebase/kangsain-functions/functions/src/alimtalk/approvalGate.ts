@@ -27,6 +27,7 @@ interface ApprovalDoc {
   approvalId: string;
   studioId: string;
   sourceDate: string;
+  approvalScope?: "daily" | "reservation_open";
   status: "pending" | "approved";
   candidateIds: string[];
   candidateCount: number;
@@ -42,9 +43,11 @@ export async function requireApprovalForLargeAlimtalkBatch(input: {
   studioId: string;
   today: string;
   candidates: AlimtalkCandidateDoc[];
+  approvalScope?: "daily" | "reservation_open";
 }): Promise<AlimtalkApprovalResult> {
   if (input.candidates.length < APPROVAL_THRESHOLD) return { required: false, approved: true };
-  const approvalId = dailyApprovalId(input.studioId, input.today);
+  const approvalScope = input.approvalScope || "daily";
+  const approvalId = alimtalkApprovalId(input.studioId, input.today, approvalScope);
   const ref = db.collection(APPROVAL_COLLECTION).doc(approvalId);
   const existing = (await ref.get()).data() as ApprovalDoc | undefined;
   if (existing?.status === "approved") return { required: true, approved: true, approvalId };
@@ -58,6 +61,7 @@ export async function requireApprovalForLargeAlimtalkBatch(input: {
         approvalId,
         studioId: input.studioId,
         sourceDate: input.today,
+        approvalScope,
         status: "pending",
         candidateIds: input.candidates.map((candidate) => candidate.candidateId),
         candidateCount: input.candidates.length,
@@ -239,8 +243,12 @@ function approvalHtml(input: { date: string; count: number; lines: string[]; app
   ].join("");
 }
 
-function dailyApprovalId(studioId: string, date: string): string {
-  return `${studioId}_${date}`;
+export function alimtalkApprovalId(
+  studioId: string,
+  date: string,
+  approvalScope: "daily" | "reservation_open" = "daily",
+): string {
+  return approvalScope === "daily" ? `${studioId}_${date}` : `${studioId}_${date}_${approvalScope}`;
 }
 
 function tokenHash(value: string): string {

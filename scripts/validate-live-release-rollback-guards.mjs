@@ -692,6 +692,60 @@ const guardGroups = [
     ],
   },
   {
+    id: "reservation-open-alimtalk-v4",
+    reason: "삭제된 예약안내 v3가 다시 연결되거나 승인된 v4의 이미지·변수·버튼 계약이 빠지는 것을 막습니다.",
+    files: [
+      {
+        file: "firebase/kangsain-functions/functions/src/alimtalk/templates.ts",
+        markers: [
+          "KA01TP26072806273194229P2ZesQwPp",
+          "ST01FZ260728062730347ZXJsa4lUJuP",
+          "스튜디오메이트 예약 안내 v4",
+        ],
+        forbiddenMarkers: [
+          "KA01TP260518023011547VpbovK8MrI9",
+          "스튜디오메이트 예약 안내 v3",
+        ],
+      },
+      {
+        file: "firebase/kangsain-functions/functions/src/alimtalk/eligibility.ts",
+        markers: [
+          "reservationOpenTemplateContractIssue",
+          "예약오픈 안내 템플릿 예약주차 변수 없음",
+          "https://archivepilates.notion.site/notice",
+          "https://archivepilates.notion.site/studiomate",
+        ],
+      },
+      {
+        file: "firebase/kangsain-functions/functions/src/alimtalk/dedupe.ts",
+        markers: [
+          "\"private_survey\", \"reservation_open\"",
+          "sameWeekSend",
+        ],
+      },
+      {
+        file: "firebase/kangsain-functions/functions/src/alimtalk/approvalGate.ts",
+        markers: [
+          "alimtalkApprovalId",
+          "reservation_open",
+        ],
+      },
+      {
+        file: "firebase/kangsain-functions/functions/src/alimtalk/queueDailyAlimtalk.ts",
+        markers: [
+          "approvalScope: \"reservation_open\"",
+        ],
+      },
+      {
+        file: "core/rules/index.html",
+        markers: [
+          "스튜디오메이트 예약 안내 v4",
+          "동일 예약주차 기준 6일",
+        ],
+      },
+    ],
+  },
+  {
     id: "core-operating-rules",
     reason: "Notion 대신 ARCHIVE CORE 운영규칙 탭을 기준으로 쓰는 운영 정책이 빠지는 것을 막습니다.",
     files: [

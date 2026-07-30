@@ -223,7 +223,7 @@ async function fetchSolapiTemplate(templateCode: string): Promise<SolapiTemplate
   });
   if (direct.ok) return (await direct.json()) as SolapiTemplate;
   const list = await fetch(
-    `${SOLAPI_TEMPLATE_URL}?templateId=${encodeURIComponent(templateCode)}&pfId=${encodeURIComponent(solapiPfid.value())}`,
+    `${SOLAPI_TEMPLATE_URL}?channelId=${encodeURIComponent(solapiPfid.value())}&limit=100`,
     {
       headers: { Authorization: solapiAuthHeader() },
     },

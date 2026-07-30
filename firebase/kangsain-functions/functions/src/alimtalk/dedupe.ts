@@ -30,6 +30,17 @@ export async function findCompletedDuplicateForCandidate(
   if (isAlimtalkTestRecipient(candidate)) return "";
   const exact = await findCompletedDuplicate(dedupeKey, windowDays);
   if (exact) return exact;
+  if (candidate.type === "reservation_open") {
+    const sameWeekSend = await refs.alimtalkSend(candidate.candidateId).get();
+    if (sameWeekSend.exists) {
+      const send = sameWeekSend.data();
+      const sentMs = send?.createdAt?.toMillis?.() || send?.updatedAt?.toMillis?.() || 0;
+      const cutoffMs = windowDays == null ? 0 : Date.now() - windowDays * 24 * 60 * 60 * 1000;
+      if (send?.status === "done" && (!windowDays || !sentMs || sentMs >= cutoffMs)) {
+        return sameWeekSend.id;
+      }
+    }
+  }
   if (!isTicketReminder(candidate)) return "";
 
   const cutoffMs = windowDays == null ? 0 : Date.now() - windowDays * 24 * 60 * 60 * 1000;
@@ -52,8 +63,9 @@ export async function findCompletedDuplicateForCandidate(
 }
 
 export function alimtalkDedupeKey(candidate: AlimtalkCandidateDoc): string {
-  const memberPhone = candidate.type === "private_survey" ? "" : normalizePhone(candidate.memberPhone);
-  const templateCode = candidate.type === "private_survey" ? "" : candidate.templateCode;
+  const versionIndependent = ["private_survey", "reservation_open"].includes(String(candidate.type));
+  const memberPhone = versionIndependent ? "" : normalizePhone(candidate.memberPhone);
+  const templateCode = versionIndependent ? "" : candidate.templateCode;
   return stableHash({
     studioId: candidate.studioId,
     memberId: candidate.memberId,

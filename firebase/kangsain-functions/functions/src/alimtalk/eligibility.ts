@@ -1,9 +1,11 @@
 import { addDays } from "../utils/date";
 import {
   ALIMTALK_MEMBER_EXCLUSION_REASONS,
+  ALIMTALK_TEMPLATES,
   LEGACY_PRIVATE_SURVEY_ALIMTALK_TEMPLATE_CODE,
   NATIVE_PRIVATE_SURVEY_ALIMTALK_IMAGE_ID,
   NATIVE_PRIVATE_SURVEY_ALIMTALK_TEMPLATE_CODE,
+  RESERVATION_OPEN_ALIMTALK_IMAGE_ID,
 } from "./templates";
 import type { AlimtalkCandidateDoc } from "../types/models";
 import { shortLinkIdForTarget } from "../utils/shortLinks";
@@ -18,13 +20,17 @@ import { isAlimtalkTestRecipient } from "./testRecipients";
 
 export const RETRYABLE_TEMPLATE_STATUS_PREFIX = "템플릿 상태 확인 일시 실패:";
 const PRIVATE_SURVEY_BUTTON_URL = "https://in.archivepilates.com/s/#{링크ID}/";
+const RESERVATION_NOTICE_BUTTON_URL = "https://archivepilates.notion.site/notice";
+const RESERVATION_METHOD_BUTTON_URL = "https://archivepilates.notion.site/studiomate";
 
 export async function autoSendabilityIssue(candidate: AlimtalkCandidateDoc, today: string): Promise<string> {
   const rule = alimtalkTemplateTargetRule(candidate.type);
   if (rule?.requiresMemberPhone && !candidate.memberPhone) return "전화번호 없음";
   if (ALIMTALK_MEMBER_EXCLUSION_REASONS[candidate.memberId] && !isAlimtalkTestRecipient(candidate))
     return ALIMTALK_MEMBER_EXCLUSION_REASONS[candidate.memberId];
-  const templateContractIssue = privateSurveyTemplateContractIssue(candidate);
+  const templateContractIssue =
+    privateSurveyTemplateContractIssue(candidate) ||
+    reservationOpenTemplateContractIssue(candidate);
   if (templateContractIssue) return templateContractIssue;
   if (rule?.requiresApprovedTemplate) {
     const readiness = await alimtalkTemplateReadiness(candidate.templateCode);
@@ -32,7 +38,9 @@ export async function autoSendabilityIssue(candidate: AlimtalkCandidateDoc, toda
       return `${RETRYABLE_TEMPLATE_STATUS_PREFIX} ${candidate.templateCode}`;
     }
     if (!readiness.approved) return `승인 템플릿 코드 아님: ${candidate.templateCode}`;
-    const remoteContractIssue = privateSurveyTemplateContractIssue(candidate, readiness.state);
+    const remoteContractIssue =
+      privateSurveyTemplateContractIssue(candidate, readiness.state) ||
+      reservationOpenTemplateContractIssue(candidate, readiness.state);
     if (remoteContractIssue) return remoteContractIssue;
   }
   if ((candidate.attempts || 0) >= (candidate.maxAttempts || 2)) return "발송 실패 재시도 한도 초과";
@@ -107,6 +115,34 @@ export function privateSurveyTemplateContractIssue(
   }
   if (!(state.buttonUrls || []).includes(PRIVATE_SURVEY_BUTTON_URL)) {
     return "프라이빗 사전설문 템플릿 자체설문 버튼 URL 불일치";
+  }
+  return "";
+}
+
+export function reservationOpenTemplateContractIssue(
+  candidate: AlimtalkCandidateDoc,
+  state: AlimtalkTemplateState | null = null,
+): string {
+  if (candidate.type !== "reservation_open") return "";
+  if (candidate.templateCode !== ALIMTALK_TEMPLATES.reservation_open.code) {
+    return `예약오픈 안내 템플릿 설정 불일치: ${candidate.templateCode}`;
+  }
+  if (!state) return "";
+  const imageContractIssue = alimtalkImageTemplateContractIssue(
+    state,
+    RESERVATION_OPEN_ALIMTALK_IMAGE_ID,
+    "예약오픈 안내 템플릿",
+  );
+  if (imageContractIssue) return imageContractIssue;
+  const contractText = String(state.content || "");
+  if (!contractText.includes("#{이름}")) return "예약오픈 안내 템플릿 회원명 변수 없음";
+  if (!contractText.includes("#{예약주차}")) return "예약오픈 안내 템플릿 예약주차 변수 없음";
+  const buttonUrls = state.buttonUrls || [];
+  if (!buttonUrls.includes(RESERVATION_NOTICE_BUTTON_URL)) {
+    return "예약오픈 안내 템플릿 예약안내 버튼 URL 불일치";
+  }
+  if (!buttonUrls.includes(RESERVATION_METHOD_BUTTON_URL)) {
+    return "예약오픈 안내 템플릿 예약방법 버튼 URL 불일치";
   }
   return "";
 }

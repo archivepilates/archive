@@ -78,7 +78,7 @@ GET https://api.solapi.com/messages/v4/groups/{groupId}
 
 | 목적 | Template ID | 현재 상태 | 변수 |
 |---|---|---|---|
-| 예약 안내 v2 | `KA01TP2605131325462341f8ACO2THW6` | `APPROVED` | `#{이름}`, `#{예약주차}` |
+| 스튜디오메이트 예약 안내 v4 | `KA01TP26072806273194229P2ZesQwPp` | `APPROVED` | `#{이름}`, `#{예약주차}` |
 | 신규회원 웰컴 v3 | `KA01TP260514081318309wQGfeIJxIAJ` | `APPROVED` | `#{이름}` |
 
 주의:
