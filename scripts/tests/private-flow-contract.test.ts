@@ -17,6 +17,7 @@ import { privateSurveySourceIssue } from "../../firebase/kangsain-functions/func
 import {
   isRetryableTemplateStatusIssue,
   privateSurveyTemplateContractIssue,
+  recommendedMealTemplateContractIssue,
   reservationOpenTemplateContractIssue,
 } from "../../firebase/kangsain-functions/functions/src/alimtalk/eligibility";
 import {
@@ -30,6 +31,9 @@ import {
 import {
   LEGACY_PRIVATE_SURVEY_ALIMTALK_TEMPLATE_CODE,
   NATIVE_PRIVATE_SURVEY_ALIMTALK_IMAGE_ID,
+  RECOMMENDED_MEAL_ALIMTALK_CHANNEL_ID,
+  RECOMMENDED_MEAL_ALIMTALK_IMAGE_ID,
+  RECOMMENDED_MEAL_ALIMTALK_TEMPLATE_CODE,
   RESERVATION_OPEN_ALIMTALK_IMAGE_ID,
   RESERVATION_OPEN_ALIMTALK_TEMPLATE_CODE,
 } from "../../firebase/kangsain-functions/functions/src/alimtalk/templates";
@@ -455,6 +459,56 @@ test("template status errors fail closed but remain retryable", () => {
   );
 });
 
+test("approved recommended meal template keeps the image and survey-link contract", () => {
+  const candidate = recommendedMealCandidate();
+  const state = {
+    templateCode: RECOMMENDED_MEAL_ALIMTALK_TEMPLATE_CODE,
+    label: "아카이브 추천식단 프로그램",
+    name: "아카이브 추천식단 프로그램",
+    status: "APPROVED",
+    source: "solapi",
+    lastError: null,
+    channelId: RECOMMENDED_MEAL_ALIMTALK_CHANNEL_ID,
+    content: "#{이름}님, 식단 프로그램 설문을 보내드립니다.",
+    buttonUrls: ["https://in.archivepilates.com/s/#{링크ID}/"],
+    buttons: [
+      {
+        name: "식단 설문 작성",
+        type: "WL",
+        mobileUrl: "https://in.archivepilates.com/s/#{링크ID}/",
+        desktopUrl: "https://in.archivepilates.com/s/#{링크ID}/",
+      },
+    ],
+    messageType: "BA",
+    emphasizeType: "IMAGE",
+    imageId: RECOMMENDED_MEAL_ALIMTALK_IMAGE_ID,
+  } as const;
+  assert.equal(recommendedMealTemplateContractIssue(candidate, state), "");
+  assert.match(
+    recommendedMealTemplateContractIssue(candidate, { ...state, imageId: "different-image" }),
+    /이미지 ID 불일치/,
+  );
+  assert.match(
+    recommendedMealTemplateContractIssue(candidate, { ...state, content: "설문을 보내드립니다." }),
+    /회원명 변수 없음/,
+  );
+  assert.match(
+    recommendedMealTemplateContractIssue(candidate, { ...state, buttonUrls: [] }),
+    /설문 버튼 URL 불일치/,
+  );
+  assert.match(
+    recommendedMealTemplateContractIssue(candidate, {
+      ...state,
+      buttons: [{ ...state.buttons[0], type: "AL" }],
+    }),
+    /설문 버튼 계약 불일치/,
+  );
+  assert.match(
+    recommendedMealTemplateContractIssue(candidate, { ...state, channelId: "wrong-channel" }),
+    /채널 ID 불일치/,
+  );
+});
+
 test("private survey send guard blocks cancelled bookings at send time", () => {
   const candidate = privateSurveyCandidate();
   const request = privateSurveyRequest();
@@ -676,6 +730,27 @@ function reservationOpenCandidate(): any {
     payload: { reservationWeek: "8월 2주차" },
     attempts: 0,
     maxAttempts: 2,
+    createdAt: now,
+    updatedAt: now,
+  };
+}
+
+function recommendedMealCandidate(): any {
+  return {
+    candidateId: "recommended_meal_member-1_2026-07-31",
+    studioId: "5330",
+    memberId: "member-1",
+    memberName: "테스트회원",
+    memberPhone: "01011112222",
+    type: "recommended_meal_survey",
+    status: "queued",
+    templateCode: RECOMMENDED_MEAL_ALIMTALK_TEMPLATE_CODE,
+    title: "ARCHIVE 추천식단 프로그램",
+    reason: "운영자 승인 단건 발송",
+    sourceDate: "2026-07-31",
+    payload: { shortLinkId: "meal-link-1" },
+    attempts: 0,
+    maxAttempts: 1,
     createdAt: now,
     updatedAt: now,
   };

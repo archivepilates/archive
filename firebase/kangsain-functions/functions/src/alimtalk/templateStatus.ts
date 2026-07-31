@@ -22,6 +22,12 @@ export interface AlimtalkTemplateState {
   messageType?: string;
   emphasizeType?: string;
   imageId?: string;
+  buttons?: Array<{
+    name: string;
+    type: string;
+    mobileUrl: string;
+    desktopUrl: string;
+  }>;
   syncedAt?: FirebaseFirestore.Timestamp;
 }
 
@@ -75,6 +81,7 @@ export async function syncAlimtalkTemplateStatuses(): Promise<{ checked: number;
             channelId: String(remote.channelId || ""),
             content: String(remote.content || ""),
             buttonUrls: templateButtonUrls(remote),
+            buttons: templateButtons(remote),
             messageType: normalizeTemplateType(remote.messageType),
             emphasizeType: normalizeTemplateType(remote.emphasizeType),
             imageId: String(remote.imageId || ""),
@@ -100,6 +107,7 @@ export async function syncAlimtalkTemplateStatuses(): Promise<{ checked: number;
             channelId: "",
             content: "",
             buttonUrls: [],
+            buttons: [],
             messageType: "",
             emphasizeType: "",
             imageId: "",
@@ -178,6 +186,7 @@ async function templateState(templateCode: string): Promise<AlimtalkTemplateStat
       channelId: String(remote.channelId || ""),
       content: String(remote.content || ""),
       buttonUrls: templateButtonUrls(remote),
+      buttons: templateButtons(remote),
       messageType: normalizeTemplateType(remote.messageType),
       emphasizeType: normalizeTemplateType(remote.emphasizeType),
       imageId: String(remote.imageId || ""),
@@ -198,6 +207,7 @@ async function templateState(templateCode: string): Promise<AlimtalkTemplateStat
       channelId: "",
       content: "",
       buttonUrls: [],
+      buttons: [],
       messageType: "",
       emphasizeType: "",
       imageId: "",
@@ -243,6 +253,15 @@ function templateButtonUrls(template: SolapiTemplate): string[] {
     .flatMap((button) => [button.linkMo, button.linkPc])
     .map((value) => String(value || "").trim())
     .filter(Boolean);
+}
+
+function templateButtons(template: SolapiTemplate): AlimtalkTemplateState["buttons"] {
+  return (template.buttons || []).map((button) => ({
+    name: String(button.buttonName || "").trim(),
+    type: normalizeTemplateType(button.buttonType),
+    mobileUrl: String(button.linkMo || "").trim(),
+    desktopUrl: String(button.linkPc || "").trim(),
+  }));
 }
 
 function solapiAuthHeader(): string {

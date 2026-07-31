@@ -32,6 +32,7 @@ curl -fsSL https://core.archivepilates.com/private/ -o "$TMP_DIR/private.html"
 curl -fsSL https://core.archivepilates.com/messages/ -o "$TMP_DIR/messages.html"
 curl -fsSL https://core.archivepilates.com/staff/ -o "$TMP_DIR/staff.html"
 curl -fsSL https://core.archivepilates.com/automation/ -o "$TMP_DIR/automation.html"
+curl -fsSL https://core.archivepilates.com/rules/ -o "$TMP_DIR/rules.html"
 grep -q "오늘 처리할 일" "$TMP_DIR/core.html"
 grep -q "homeDecisionList" "$TMP_DIR/core.html"
 grep -q "재등록 관리" "$TMP_DIR/core.html"
@@ -66,6 +67,8 @@ grep -q "getBookingsForLessonWindow" "$TMP_DIR/app.js"
 grep -q "deriveLessonOccurrencesFromBookings" "$TMP_DIR/app.js"
 grep -q "normalizedLessonKind" "$TMP_DIR/app.js"
 grep -q "operatorLifecycle" "$TMP_DIR/app.js"
+grep -q "KA01TP260728111926523p2JzzTgHsS8" "$TMP_DIR/rules.html"
+grep -q "APPROVED·BA·IMAGE" "$TMP_DIR/rules.html"
 ARCHIVE_CORE_BASE_URL=https://core.archivepilates.com npm run verify:archive-core-responsive
 node scripts/validate-live-release-canary.mjs --surface core
 

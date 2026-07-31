@@ -168,6 +168,16 @@ if (selectedSurfaces.includes("core")) {
       '"preparation", "수업 준비"',
       '"delivered", "전달 완료"',
     ]),
+    textCheck("core-rules-recommended-meal-custom-domain", "https://core.archivepilates.com/rules/", [
+      "2026.07.31 기준",
+      "KA01TP260728111926523p2JzzTgHsS8",
+      "APPROVED·BA·IMAGE",
+    ]),
+    textCheck("core-rules-recommended-meal-webapp-path", "https://archive-pilates.web.app/core/rules/", [
+      "2026.07.31 기준",
+      "KA01TP260728111926523p2JzzTgHsS8",
+      "APPROVED·BA·IMAGE",
+    ]),
   );
 }
 

@@ -159,6 +159,32 @@ const guardGroups = [
         ],
       },
       {
+        file: "firebase/kangsain-functions/functions/src/alimtalk/templates.ts",
+        markers: [
+          "KA01TP260728111926523p2JzzTgHsS8",
+          "ST01FZ260730122108103pEzxH5jOOpU",
+          "KA01PF260511123220162lk0NUjstpVl",
+          "label: \"아카이브 추천식단 프로그램\"",
+          "status: \"approved\"",
+        ],
+      },
+      {
+        file: "firebase/kangsain-functions/functions/src/alimtalk/eligibility.ts",
+        markers: [
+          "recommendedMealTemplateContractIssue",
+          "추천식단 템플릿 설문 버튼 계약 불일치",
+          "추천식단 템플릿 설문 버튼 URL 불일치",
+        ],
+      },
+      {
+        file: "scripts/audit-recommended-meal-alimtalk-template.mjs",
+        markers: [
+          "KA01TP260728111926523p2JzzTgHsS8",
+          "ST01FZ260730122108103pEzxH5jOOpU",
+          "survey short-link button mismatch",
+        ],
+      },
+      {
         file: "firebase/kangsain-functions/functions/src/mealPlan/recommendedMealSurvey.ts",
         markers: [
           "recommendedMealSurveyApiHandler",

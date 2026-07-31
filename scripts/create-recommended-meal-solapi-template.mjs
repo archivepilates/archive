@@ -5,15 +5,16 @@ import { execFileSync } from "node:child_process";
 
 const PROJECT_ID = "archive-pilates";
 const REFERENCE_TEMPLATE_ID = "KA01TP260729144645970fv13He8mfsK";
+const APPROVED_TEMPLATE_ID = "KA01TP260728111926523p2JzzTgHsS8";
+const APPROVED_IMAGE_ID = "ST01FZ260730122108103pEzxH5jOOpU";
 const TEMPLATE_NAME = "아카이브 추천식단 프로그램";
-const TEMPLATE_CONTENT = `#{이름}님,
-ARCHIVE 추천식단 프로그램을 위한
+const TEMPLATE_CONTENT = `#{이름}님, 요청주신
+식단 프로그램을 위한
 생활·식습관 설문을 보내드립니다.
 
-기상·취침 시간, 업무 활동량,
-식사 습관과 섭취가 어려운 음식을 확인해
-ARCHIVE에서 측정한 InBody 자료와 함께
-맞춤 식단 구성에 참고합니다.
+설문내용을
+확인해 맞춤 식단 구성에
+참고합니다.
 
 아래 버튼에서 설문을 작성해 주세요.`;
 const BUTTON_URL = "https://in.archivepilates.com/s/#{링크ID}/";
@@ -52,7 +53,8 @@ const created =
       ],
       quickReplies: [],
       messageType: "BA",
-      emphasizeType: "NONE",
+      emphasizeType: "IMAGE",
+      imageId: APPROVED_IMAGE_ID,
       securityFlag: false,
     }),
   }));
@@ -85,6 +87,8 @@ console.log(
 );
 
 async function findExistingTemplate(channelId) {
+  const approved = await solapiRequest(`${API_BASE}/${encodeURIComponent(APPROVED_TEMPLATE_ID)}`).catch(() => null);
+  if (approved && !approved.isDeleted && String(approved.channelId || "") === channelId) return approved;
   const query = new URLSearchParams({ channelId, limit: "100" });
   const result = await solapiRequest(`${API_BASE}?${query}`);
   const rows = Array.isArray(result)

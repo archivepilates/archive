@@ -5,6 +5,9 @@ import {
   LEGACY_PRIVATE_SURVEY_ALIMTALK_TEMPLATE_CODE,
   NATIVE_PRIVATE_SURVEY_ALIMTALK_IMAGE_ID,
   NATIVE_PRIVATE_SURVEY_ALIMTALK_TEMPLATE_CODE,
+  RECOMMENDED_MEAL_ALIMTALK_CHANNEL_ID,
+  RECOMMENDED_MEAL_ALIMTALK_IMAGE_ID,
+  RECOMMENDED_MEAL_ALIMTALK_TEMPLATE_CODE,
   RESERVATION_OPEN_ALIMTALK_IMAGE_ID,
 } from "./templates";
 import type { AlimtalkCandidateDoc } from "../types/models";
@@ -20,6 +23,7 @@ import { isAlimtalkTestRecipient } from "./testRecipients";
 
 export const RETRYABLE_TEMPLATE_STATUS_PREFIX = "템플릿 상태 확인 일시 실패:";
 const PRIVATE_SURVEY_BUTTON_URL = "https://in.archivepilates.com/s/#{링크ID}/";
+const RECOMMENDED_MEAL_BUTTON_URL = "https://in.archivepilates.com/s/#{링크ID}/";
 const RESERVATION_NOTICE_BUTTON_URL = "https://archivepilates.notion.site/notice";
 const RESERVATION_METHOD_BUTTON_URL = "https://archivepilates.notion.site/studiomate";
 
@@ -30,6 +34,7 @@ export async function autoSendabilityIssue(candidate: AlimtalkCandidateDoc, toda
     return ALIMTALK_MEMBER_EXCLUSION_REASONS[candidate.memberId];
   const templateContractIssue =
     privateSurveyTemplateContractIssue(candidate) ||
+    recommendedMealTemplateContractIssue(candidate) ||
     reservationOpenTemplateContractIssue(candidate);
   if (templateContractIssue) return templateContractIssue;
   if (rule?.requiresApprovedTemplate) {
@@ -40,6 +45,7 @@ export async function autoSendabilityIssue(candidate: AlimtalkCandidateDoc, toda
     if (!readiness.approved) return `승인 템플릿 코드 아님: ${candidate.templateCode}`;
     const remoteContractIssue =
       privateSurveyTemplateContractIssue(candidate, readiness.state) ||
+      recommendedMealTemplateContractIssue(candidate, readiness.state) ||
       reservationOpenTemplateContractIssue(candidate, readiness.state);
     if (remoteContractIssue) return remoteContractIssue;
   }
@@ -143,6 +149,43 @@ export function reservationOpenTemplateContractIssue(
   }
   if (!buttonUrls.includes(RESERVATION_METHOD_BUTTON_URL)) {
     return "예약오픈 안내 템플릿 예약방법 버튼 URL 불일치";
+  }
+  return "";
+}
+
+export function recommendedMealTemplateContractIssue(
+  candidate: AlimtalkCandidateDoc,
+  state: AlimtalkTemplateState | null = null,
+): string {
+  if (candidate.type !== "recommended_meal_survey") return "";
+  if (candidate.templateCode !== RECOMMENDED_MEAL_ALIMTALK_TEMPLATE_CODE) {
+    return `추천식단 템플릿 설정 불일치: ${candidate.templateCode}`;
+  }
+  if (!state) return "";
+  const imageContractIssue = alimtalkImageTemplateContractIssue(
+    state,
+    RECOMMENDED_MEAL_ALIMTALK_IMAGE_ID,
+    "추천식단 템플릿",
+  );
+  if (imageContractIssue) return imageContractIssue;
+  if (state.channelId !== RECOMMENDED_MEAL_ALIMTALK_CHANNEL_ID) {
+    return "추천식단 템플릿 채널 ID 불일치";
+  }
+  if (!String(state.content || "").includes("#{이름}")) {
+    return "추천식단 템플릿 회원명 변수 없음";
+  }
+  if (!(state.buttonUrls || []).includes(RECOMMENDED_MEAL_BUTTON_URL)) {
+    return "추천식단 템플릿 설문 버튼 URL 불일치";
+  }
+  const buttons = state.buttons || [];
+  if (
+    buttons.length !== 1 ||
+    buttons[0]?.name !== "식단 설문 작성" ||
+    buttons[0]?.type !== "WL" ||
+    buttons[0]?.mobileUrl !== RECOMMENDED_MEAL_BUTTON_URL ||
+    buttons[0]?.desktopUrl !== RECOMMENDED_MEAL_BUTTON_URL
+  ) {
+    return "추천식단 템플릿 설문 버튼 계약 불일치";
   }
   return "";
 }
