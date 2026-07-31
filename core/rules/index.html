@@ -323,6 +323,8 @@
                 <li>설문ID, 접근토큰, shortLinkId, reportLinkId 같은 필수 링크 변수가 비어 있으면 후보가 생성되어 있어도 queued 또는 sent로 전환하지 않습니다.</li>
                 <li>삭제된 신규회원 웰컴 v3 템플릿은 후보 재생성 대상에서 제외하고, 현장 웰컴 v5 흐름만 사용합니다.</li>
                 <li>프라이빗 사전설문은 Google Form이 아니라 ARCHIVE PILATES 자체 설문을 사용합니다.</li>
+                <li>프라이빗 회원 사전설문은 v2 <code>KA01TP260729144645970fv13He8mfsK</code>, 강사 기록은 v3 <code>KA01TP260729144657202OV26yAD15wR</code>, 회원 리포트는 v1 <code>KA01TP260528081225871Fr92FW901Vo</code>만 사용합니다.</li>
+                <li>구 프라이빗 사전설문 v1과 강사용 차트 v2는 2026.07.31 SOLAPI에서 삭제했으며, 과거 발송 기록 식별 외에는 다시 참조하지 않습니다.</li>
                 <li>회원 작성 링크는 https://in.archivepilates.com/privateSurvey/를 사용하며, Hosting 배포에는 설문 페이지와 privateSurveySubmit API rewrite가 함께 있어야 합니다.</li>
                 <li>배포 전 롤백 가드와 배포 후 라이브 canary가 설문 페이지 및 제출 API 연결을 필수로 확인합니다.</li>
               </ul>
@@ -397,6 +399,7 @@
               <ul>
                 <li>운영규칙은 CORE가 기준이지만, 개인레슨 회차 차트는 강사별 회원 페이지 하위의 Notion 일반 페이지로 유지합니다.</li>
                 <li>Notion은 표시·열람용입니다. Private Session Records DB, 웹훅 승인, 예약 스케줄러는 사용하지 않습니다.</li>
+                <li>개인레슨 차트 상단은 현재 진행 흐름과 강사별 차트만 우선 표시합니다. 자동화 테스트 차트와 기타 자료는 접힌 보관 영역에 분리하고, 이전 DB 기반 운영 문서는 보관 처리합니다.</li>
                 <li>차트 상태와 발송 승인은 Firestore privateLessonChartRecords, 운영 진행상태는 privateLessonSessions가 원천입니다.</li>
                 <li>리포트가 없어도 실제 수업 회차는 Notion 일반 페이지로 남겨 누락을 확인할 수 있어야 합니다.</li>
                 <li>차트 제목에는 수업 준비, 수업 기록, 리포트 검수, 전달 완료 단계를 표시합니다.</li>

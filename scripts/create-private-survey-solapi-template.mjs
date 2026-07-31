@@ -4,7 +4,7 @@ import { createHmac, randomBytes } from "node:crypto";
 import { execFileSync } from "node:child_process";
 
 const PROJECT_ID = "archive-pilates";
-const REFERENCE_TEMPLATE_ID = "KA01TP260514153632171uiWXYoeiOLS";
+const REFERENCE_TEMPLATE_ID = "KA01TP260729144645970fv13He8mfsK";
 const TEMPLATE_NAME = "프라이빗 사전설문 안내 v2";
 const TEMPLATE_CONTENT = `#{이름}님,
 ARCHIVE PILATES 프라이빗 수업을 준비하기 위한 사전설문입니다.

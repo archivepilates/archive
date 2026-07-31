@@ -81,6 +81,7 @@ requireMarkers("firebase/kangsain-functions/functions/src/alimtalk/eligibility.t
   "RETRYABLE_TEMPLATE_STATUS_PREFIX",
 ]);
 requireMarkers("scripts/create-private-survey-solapi-template.mjs", [
+  'REFERENCE_TEMPLATE_ID = "KA01TP260729144645970fv13He8mfsK"',
   "Refusing to create a SOLAPI template without --apply.",
   "https://in.archivepilates.com/s/#{링크ID}/",
   "PRIVATE_SURVEY_ALIMTALK_TEMPLATE_ID",
@@ -89,6 +90,7 @@ requireMarkers("scripts/create-private-survey-solapi-template.mjs", [
   "emphasizeType: imageContract.emphasizeType",
 ]);
 requireMarkers("scripts/create-staff-private-chart-solapi-template.mjs", [
+  'REFERENCE_TEMPLATE_ID = "KA01TP260729144657202OV26yAD15wR"',
   "Refusing to create a SOLAPI template without --apply.",
   "https://in.archivepilates.com/s/#{수업전계획링크ID}/",
   "https://in.archivepilates.com/s/#{수업후기록링크ID}/",
@@ -110,6 +112,7 @@ requireMarkers("scripts/audit-private-report-runtime.ts", [
   "staleActionableReportCandidates",
 ]);
 requireMarkers("scripts/audit-private-alimtalk-templates.mjs", [
+  'REFERENCE_TEMPLATE_ID = "KA01TP260729144645970fv13He8mfsK"',
   '"member_private_survey"',
   '"staff_private_chart"',
   '"member_private_report"',

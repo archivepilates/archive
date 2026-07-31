@@ -4,7 +4,7 @@ import { createHmac, randomBytes } from "node:crypto";
 import { execFileSync } from "node:child_process";
 
 const PROJECT_ID = "archive-pilates";
-const REFERENCE_TEMPLATE_ID = "KA01TP260514153632171uiWXYoeiOLS";
+const REFERENCE_TEMPLATE_ID = "KA01TP260729144645970fv13He8mfsK";
 const TEMPLATE_NAME = "아카이브 추천식단 프로그램";
 const TEMPLATE_CONTENT = `#{이름}님,
 ARCHIVE 추천식단 프로그램을 위한

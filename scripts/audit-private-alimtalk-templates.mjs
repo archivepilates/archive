@@ -5,7 +5,7 @@ import { execFileSync } from "node:child_process";
 
 const PROJECT_ID = "archive-pilates";
 const API_BASE = "https://api.solapi.com/kakao/v2/templates";
-const REFERENCE_TEMPLATE_ID = "KA01TP260514153632171uiWXYoeiOLS";
+const REFERENCE_TEMPLATE_ID = "KA01TP260729144645970fv13He8mfsK";
 const strict = process.argv.includes("--strict");
 const templates = [
   {
