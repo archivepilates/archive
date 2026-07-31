@@ -34,8 +34,6 @@ export const SOLAPI_BUTTON_URL_MAX_LENGTH = 100;
 export const SHORT_LINK_BUTTON_URL_TEMPLATE = "https://in.archivepilates.com/s/#{링크ID}/";
 export const SURVEY_DETAIL_BUTTON_URL_TEMPLATE =
   "https://in.archivepilates.com/privateSurveyResponseView?id=#{설문ID}&token=#{접근토큰}";
-export const PRIVATE_SURVEY_BUTTON_URL_TEMPLATE =
-  "https://in.archivepilates.com/privateSurvey?id=#{설문ID}&token=#{접근토큰}";
 export const GROUP_SURVEY_BUTTON_URL_TEMPLATE =
   "https://in.archivepilates.com/groupSurvey?id=#{설문ID}&token=#{접근토큰}";
 export const METHOD_MATERIAL_BUTTON_URL_TEMPLATE = "https://in.archivepilates.com/method/#{관리번호}";
@@ -183,11 +181,6 @@ export const ALIMTALK_TEMPLATE_TARGET_RULES: Partial<Record<AlimtalkCandidateTyp
     requiresApprovedTemplate: true,
     requiresMemberPhone: true,
     buttonUrlRules: [
-      {
-        label: "프라이빗 사전설문 작성 버튼",
-        template: PRIVATE_SURVEY_BUTTON_URL_TEMPLATE,
-        maxLength: SOLAPI_BUTTON_URL_MAX_LENGTH,
-      },
       {
         label: "프라이빗 사전설문 작성 버튼",
         template: SHORT_LINK_BUTTON_URL_TEMPLATE,

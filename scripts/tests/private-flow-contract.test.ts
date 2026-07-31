@@ -20,6 +20,10 @@ import {
   reservationOpenTemplateContractIssue,
 } from "../../firebase/kangsain-functions/functions/src/alimtalk/eligibility";
 import {
+  alimtalkTemplateTargetRule,
+  solapiButtonUrlLengthIssue,
+} from "../../firebase/kangsain-functions/functions/src/alimtalk/templateTargetRules";
+import {
   alimtalkImageTemplateContractIssue,
   templateReadinessFromState,
 } from "../../firebase/kangsain-functions/functions/src/alimtalk/templateStatus";
@@ -293,6 +297,25 @@ test("legacy private survey template is blocked until the native-link v2 templat
       configuredTemplateCode,
     ),
     /버튼 URL 불일치/,
+  );
+});
+
+test("private survey v2 validates only the approved short-link button", () => {
+  const rule = alimtalkTemplateTargetRule("private_survey");
+  assert.deepEqual(
+    rule?.buttonUrlRules?.map(({ template }) => template),
+    ["https://in.archivepilates.com/s/#{링크ID}/"],
+  );
+  assert.equal(
+    solapiButtonUrlLengthIssue({
+      rules: rule?.buttonUrlRules,
+      variables: {
+        "#{설문ID}": "psr-e2e-123456789012",
+        "#{접근토큰}": "12345678901234567890123456789012",
+        "#{링크ID}": "ps-e2e-123456789012",
+      },
+    }),
+    "",
   );
 });
 
