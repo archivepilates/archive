@@ -39,6 +39,7 @@ const state = {
   reservations: [],
   deletedClassLogs: [],
   deletedLessons: [],
+  instagramDashboard: null,
   lane: null,
   authReady: null,
   readWarnings: [],
@@ -93,6 +94,12 @@ const COMMAND_ITEMS = [
     detail: "후보, 발송, 실패, 대기 상태 확인",
     href: "./messages/",
     keywords: "alimtalk 알림톡 실패 후보 발송 카카오",
+  },
+  {
+    title: "Instagram 콘텐츠",
+    detail: "게시물 초안, 승인, 예약 발행, 성과 확인",
+    href: "./content/",
+    keywords: "instagram 인스타그램 콘텐츠 게시물 릴스 예약 발행",
   },
   {
     title: "자동화 관제",
@@ -236,10 +243,10 @@ function memberCountDeltaText(current, previous, label = "전년동월") {
 
 function normalizeStatus(value) {
   const status = String(value || "unknown").toLowerCase();
-  if (["success", "ok", "healthy", "done", "active", "completed", "sent", "eligible"].includes(status)) return "good";
+  if (["success", "ok", "healthy", "done", "active", "completed", "sent", "eligible", "published"].includes(status)) return "good";
   if (["failed", "error", "critical", "blocked"].includes(status)) return "danger";
   if (
-    ["running", "pending", "warning", "review", "manual_review", "review_needed", "stale", "queued", "skipped", "template_pending"].includes(status)
+    ["running", "pending", "warning", "review", "manual_review", "review_needed", "stale", "queued", "skipped", "template_pending", "held", "publishing", "blocked_config"].includes(status)
   )
     return "warn";
   return "";
@@ -269,6 +276,13 @@ function statusLabel(value) {
     pre_submitted: "사전 제출",
     post_submitted: "사후 제출",
     draft_created: "초안 생성",
+    draft: "초안",
+    review: "승인 필요",
+    held: "보류",
+    publishing: "발행 중",
+    published: "발행 완료",
+    blocked_config: "연결 필요",
+    cancelled: "취소",
     warning: "주의",
     stale: "지연",
     reviewing: "검토",
@@ -546,6 +560,7 @@ const NAV_ICONS = {
   private: "M5 4h14v16H5zM8 8h8M8 12h5M8 16h7",
   staff: "M12 12a4 4 0 1 0 0-8 4 4 0 0 0 0 8M4 21a8 8 0 0 1 16 0M17.5 7.5l1.5 1.5 3-3",
   messages: "M4 6h16v11H8l-4 3V6zM8 10h8M8 14h5",
+  content: "M5 4h14v16H5zM8 8h8M8 12h5M8 16h7M16.5 15.5l2.5 2.5",
   automation: "M12 3v4M12 17v4M4.9 4.9l2.8 2.8M16.3 16.3l2.8 2.8M3 12h4M17 12h4M4.9 19.1l2.8-2.8M16.3 7.7l2.8-2.8M9 12a3 3 0 1 0 6 0 3 3 0 0 0-6 0",
   business: "M4 19h16M6 16V9M12 16V5M18 16v-7",
   imports: "M12 3v11M7 9l5 5 5-5M5 19h14",
@@ -570,6 +585,7 @@ const NAV_LABELS = {
   private: "프라이빗",
   staff: "강사",
   messages: "알림톡",
+  content: "콘텐츠",
   automation: "자동화",
   business: "경영",
   imports: "원본",
@@ -4861,6 +4877,335 @@ async function handleInstructorEvaluationQuizSubmit(event) {
   }
 }
 
+const INSTAGRAM_CONTENT_TYPE_LABELS = {
+  image: "이미지",
+  carousel: "캐러셀",
+  reel: "릴스",
+};
+
+const INSTAGRAM_PILLAR_LABELS = {
+  brand_method: "브랜드·메소드",
+  local_operations: "명지점·현장",
+  promotion: "프로모션·전환",
+  people_community: "사람·커뮤니티",
+};
+
+function instagramItemTime(item) {
+  return item.publishedAt || item.publishAt || item.updatedAt || item.createdAt;
+}
+
+function instagramContentTypeLabel(value) {
+  return INSTAGRAM_CONTENT_TYPE_LABELS[String(value || "")] || "게시물";
+}
+
+function instagramPillarLabel(value) {
+  return INSTAGRAM_PILLAR_LABELS[String(value || "")] || "콘텐츠";
+}
+
+function instagramHttpsUrl(value) {
+  try {
+    const url = new URL(String(value || ""));
+    return url.protocol === "https:" ? url.toString() : "";
+  } catch {
+    return "";
+  }
+}
+
+function instagramMediaRowsFromForm() {
+  const contentType = String(qs("instagramContentType")?.value || "image");
+  const altText = String(qs("instagramAltText")?.value || "").trim();
+  return String(qs("instagramMediaInput")?.value || "")
+    .split(/\r?\n/)
+    .map((line) => line.trim())
+    .filter(Boolean)
+    .map((line, index) => {
+      const explicitVideo = /^(video|영상)\s*[:|]\s*/i.test(line);
+      const explicitImage = /^(image|이미지)\s*[:|]\s*/i.test(line);
+      const url = line.replace(/^(video|영상|image|이미지)\s*[:|]\s*/i, "").trim();
+      const path = url.split(/[?#]/)[0].toLowerCase();
+      const inferredVideo = /\.(mp4|mov|m4v|webm)$/.test(path);
+      return {
+        type: contentType === "reel" || explicitVideo || (!explicitImage && inferredVideo) ? "video" : "image",
+        url,
+        altText: index === 0 ? altText : "",
+      };
+    });
+}
+
+function instagramDraftPayload(intent = "draft") {
+  return {
+    contentId: String(qs("instagramContentId")?.value || "").trim(),
+    contentType: String(qs("instagramContentType")?.value || "image"),
+    pillar: String(qs("instagramPillar")?.value || "brand_method"),
+    publishAt: String(qs("instagramPublishAt")?.value || ""),
+    location: String(qs("instagramLocation")?.value || "").trim(),
+    media: instagramMediaRowsFromForm(),
+    altText: String(qs("instagramAltText")?.value || "").trim(),
+    caption: String(qs("instagramCaption")?.value || "").trim(),
+    cta: String(qs("instagramCta")?.value || "").trim(),
+    intent,
+  };
+}
+
+function setInstagramFormStatus(message, tone = "") {
+  const element = qs("instagramFormStatus");
+  if (!element) return;
+  element.textContent = message;
+  element.className = `form-status ${tone}`.trim();
+}
+
+function setDefaultInstagramPublishAt() {
+  const input = qs("instagramPublishAt");
+  if (!input || input.value) return;
+  const date = new Date();
+  date.setDate(date.getDate() + 1);
+  date.setHours(12, 0, 0, 0);
+  input.value = localDateTimeInputValue(date);
+}
+
+function localDateTimeInputValue(value) {
+  const date = value instanceof Date ? value : new Date(timestampMs(value));
+  if (Number.isNaN(date.getTime())) return "";
+  const pad = (number) => String(number).padStart(2, "0");
+  return `${date.getFullYear()}-${pad(date.getMonth() + 1)}-${pad(date.getDate())}T${pad(date.getHours())}:${pad(date.getMinutes())}`;
+}
+
+function instagramContentById(contentId) {
+  return (state.instagramDashboard?.items || []).find((item) => item.contentId === contentId) || null;
+}
+
+function instagramMediaInputValue(item) {
+  return (item.media || [])
+    .map((asset) => `${asset.type === "video" ? "영상" : "이미지"}: ${asset.url || ""}`)
+    .join("\n");
+}
+
+function editInstagramContent(item) {
+  if (!item) return;
+  const composer = qs("instagramComposer");
+  if (composer) composer.open = true;
+  if (qs("instagramContentId")) qs("instagramContentId").value = item.contentId || "";
+  if (qs("instagramContentType")) qs("instagramContentType").value = item.contentType || "image";
+  if (qs("instagramPillar")) qs("instagramPillar").value = item.pillar || "brand_method";
+  if (qs("instagramPublishAt")) qs("instagramPublishAt").value = localDateTimeInputValue(item.publishAt);
+  if (qs("instagramLocation")) qs("instagramLocation").value = item.location || "부산 명지";
+  if (qs("instagramMediaInput")) qs("instagramMediaInput").value = instagramMediaInputValue(item);
+  if (qs("instagramAltText")) qs("instagramAltText").value = item.media?.[0]?.altText || "";
+  if (qs("instagramCaption")) qs("instagramCaption").value = item.caption || "";
+  if (qs("instagramCta")) qs("instagramCta").value = item.cta || "";
+  setInstagramFormStatus("내용을 수정한 뒤 초안 저장 또는 검토 요청을 선택하세요.", "warn");
+  composer?.scrollIntoView({ behavior: "smooth", block: "start" });
+}
+
+function instagramItemActions(item, connectionConfigured) {
+  const actions = [];
+  const permalink = instagramHttpsUrl(item.permalink);
+  if (["draft", "review", "held", "failed"].includes(item.status)) {
+    actions.push(
+      `<button class="secondary-action" type="button" data-instagram-action="edit" data-content-id="${escapeHtml(item.contentId)}">수정</button>`,
+    );
+  }
+  if (item.status === "review") {
+    actions.push(
+      `<button class="primary-action" type="button" data-instagram-action="approve" data-content-id="${escapeHtml(item.contentId)}" ${
+        connectionConfigured ? "" : 'disabled aria-disabled="true" title="Meta 연결 후 승인할 수 있습니다."'
+      }>승인·예약</button>`,
+    );
+  }
+  if (["review", "queued"].includes(item.status)) {
+    actions.push(
+      `<button class="secondary-action" type="button" data-instagram-action="hold" data-content-id="${escapeHtml(item.contentId)}">보류</button>`,
+    );
+  }
+  if (item.status === "published" && permalink) {
+    actions.push(
+      `<a class="secondary-action" href="${escapeHtml(permalink)}" target="_blank" rel="noopener noreferrer">Instagram 열기</a>`,
+    );
+  }
+  return actions.join("");
+}
+
+function instagramItemMarkup(item, connectionConfigured, options = {}) {
+  const media = item.media?.[0] || null;
+  const mediaUrl = instagramHttpsUrl(media?.url);
+  const description = item.caption || "캡션 없음";
+  const error = item.lastError || item.holdReason || "";
+  return `
+    <article class="social-item">
+      <div class="social-item-media" aria-hidden="true">
+        ${
+          mediaUrl
+            ? media.type === "video"
+              ? `<video src="${escapeHtml(mediaUrl)}" muted preload="metadata"></video>`
+              : `<img src="${escapeHtml(mediaUrl)}" alt="" loading="lazy" />`
+            : `<span>${escapeHtml(instagramContentTypeLabel(item.contentType))}</span>`
+        }
+      </div>
+      <div class="social-item-main">
+        <div class="social-item-meta">
+          ${pill(item.status)}
+          <span>${escapeHtml(instagramContentTypeLabel(item.contentType))}</span>
+          <span>${escapeHtml(instagramPillarLabel(item.pillar))}</span>
+        </div>
+        <strong>${escapeHtml(formatDate(instagramItemTime(item)))}</strong>
+        <p class="social-caption-clamp">${escapeHtml(description)}</p>
+        ${error ? `<p class="social-item-error">${escapeHtml(error)}</p>` : ""}
+      </div>
+      ${
+        options.showActions === false
+          ? ""
+          : `<div class="social-item-actions">${instagramItemActions(item, connectionConfigured)}</div>`
+      }
+    </article>
+  `;
+}
+
+function renderInstagramApprovalList(items, connectionConfigured) {
+  const list = qs("instagramApprovalList");
+  if (!list) return;
+  const reviewItems = items.filter((item) => item.status === "review");
+  list.innerHTML = reviewItems.length
+    ? reviewItems.map((item) => instagramItemMarkup(item, connectionConfigured)).join("")
+    : `<div class="empty-state">지금 승인할 콘텐츠가 없습니다.</div>`;
+}
+
+function renderInstagramScheduleList(items, connectionConfigured) {
+  const list = qs("instagramScheduleList");
+  if (!list) return;
+  const scheduledItems = items
+    .filter((item) => ["queued", "publishing"].includes(item.status))
+    .sort((a, b) => timestampMs(a.publishAt) - timestampMs(b.publishAt));
+  list.innerHTML = scheduledItems.length
+    ? scheduledItems.map((item) => instagramItemMarkup(item, connectionConfigured)).join("")
+    : `<div class="empty-state">예약된 발행 일정이 없습니다.</div>`;
+}
+
+function renderInstagramHistoryList(items, connectionConfigured) {
+  const list = qs("instagramHistoryList");
+  if (!list) return;
+  const filter = String(qs("instagramStatusFilter")?.value || "all");
+  const visible = items
+    .filter((item) => filter === "all" || item.status === filter)
+    .sort((a, b) => timestampMs(instagramItemTime(b)) - timestampMs(instagramItemTime(a)));
+  list.innerHTML = visible.length
+    ? visible.map((item) => instagramItemMarkup(item, connectionConfigured)).join("")
+    : `<div class="empty-state">선택한 상태의 발행 기록이 없습니다.</div>`;
+}
+
+function renderInstagramContentDashboard(dashboard) {
+  const items = Array.isArray(dashboard?.items) ? dashboard.items : [];
+  const counts = dashboard?.counts || {};
+  const connection = dashboard?.connection || {};
+  const configured = Boolean(connection.configured);
+  setText("instagramApprovalCount", `${toNumber(counts.review)}건`);
+  setText("instagramScheduledCount", `${toNumber(counts.scheduled)}건`);
+  setText("instagramPublishedCount", `${toNumber(counts.published)}건`);
+  setText("instagramAttentionCount", `${toNumber(counts.attention)}건`);
+  setText(
+    "instagramConnectionTitle",
+    !dashboard
+      ? "콘텐츠 API 연결을 확인하세요."
+      : configured
+      ? `@${connection.username || connection.accountHandle || "archivepilates_official"} 연결됨`
+      : connection.message || "Meta 연결이 필요합니다.",
+  );
+  setPillText("instagramConnectionPill", configured ? "active" : "blocked_config");
+  renderInstagramApprovalList(items, configured);
+  renderInstagramScheduleList(items, configured);
+  renderInstagramHistoryList(items, configured);
+  setDefaultInstagramPublishAt();
+}
+
+async function loadInstagramContentDashboard(runtime, verifyConnection = false) {
+  const getDashboard = runtime.httpsCallable(runtime.functionsClient, "getInstagramContentDashboard");
+  const response = await getDashboard({ limit: 120, verifyConnection });
+  return response?.data || null;
+}
+
+async function handleInstagramDraftSubmit(event) {
+  event.preventDefault();
+  const submitter = event.submitter;
+  const intent = submitter?.dataset?.socialIntent === "review" ? "review" : "draft";
+  const buttons = [qs("instagramSaveButton"), qs("instagramReviewButton")].filter(Boolean);
+  buttons.forEach((button) => {
+    button.disabled = true;
+  });
+  setInstagramFormStatus(intent === "review" ? "검토 요청을 저장하고 있습니다." : "초안을 저장하고 있습니다.", "warn");
+  try {
+    const runtime = await initFirebase();
+    const user = await waitForAuth(runtime);
+    if (!user) {
+      showLoginGate("Instagram 콘텐츠를 저장하려면 운영자 로그인이 필요합니다.");
+      throw new Error("운영자 로그인이 필요합니다.");
+    }
+    const saveDraft = runtime.httpsCallable(runtime.functionsClient, "saveInstagramContentDraft");
+    const response = await saveDraft(instagramDraftPayload(intent));
+    const item = response?.data?.item || null;
+    setInstagramFormStatus(intent === "review" ? "검토 요청으로 저장했습니다." : "초안을 저장했습니다.", "good");
+    if (qs("instagramContentId") && item?.contentId) qs("instagramContentId").value = item.contentId;
+    await refresh();
+  } catch (error) {
+    if (isPermissionDenied(error)) showLoginGate("Instagram 콘텐츠 운영 권한을 확인해 주세요.");
+    setInstagramFormStatus(error?.message || "콘텐츠 저장에 실패했습니다.", "danger");
+  } finally {
+    buttons.forEach((button) => {
+      button.disabled = false;
+    });
+  }
+}
+
+function openInstagramPreview() {
+  const payload = instagramDraftPayload("draft");
+  const media = payload.media[0];
+  const mediaUrl = instagramHttpsUrl(media?.url);
+  const mediaContainer = qs("instagramPreviewMedia");
+  if (mediaContainer) {
+    mediaContainer.innerHTML = mediaUrl
+      ? media.type === "video"
+        ? `<video src="${escapeHtml(mediaUrl)}" controls playsinline preload="metadata"></video>`
+        : `<img src="${escapeHtml(mediaUrl)}" alt="${escapeHtml(media.altText || "")}" />`
+      : `<div class="empty-state">미디어 URL을 입력하세요.</div>`;
+  }
+  setText("instagramPreviewCaption", [payload.caption, payload.cta].filter(Boolean).join("\n\n"));
+  const dialog = qs("instagramPreviewDialog");
+  if (dialog?.showModal) dialog.showModal();
+}
+
+function closeInstagramPreview() {
+  qs("instagramPreviewDialog")?.close?.();
+}
+
+async function handleInstagramListAction(event) {
+  const button = event.target.closest?.("[data-instagram-action]");
+  if (!button || button.disabled) return;
+  const contentId = button.getAttribute("data-content-id") || "";
+  const item = instagramContentById(contentId);
+  const action = button.getAttribute("data-instagram-action");
+  if (action === "edit") {
+    editInstagramContent(item);
+    return;
+  }
+  if (!item || !["approve", "hold"].includes(action)) return;
+  button.disabled = true;
+  try {
+    const runtime = await initFirebase();
+    const callableName = action === "approve" ? "approveInstagramContent" : "holdInstagramContent";
+    const callable = runtime.httpsCallable(runtime.functionsClient, callableName);
+    await callable(
+      action === "approve"
+        ? { contentId }
+        : { contentId, reason: "운영자 보류" },
+    );
+    setInstagramFormStatus(action === "approve" ? "발행 예약을 승인했습니다." : "콘텐츠를 보류했습니다.", "good");
+    await refresh();
+  } catch (error) {
+    if (isPermissionDenied(error)) showLoginGate("Instagram 콘텐츠 승인 권한을 확인해 주세요.");
+    setInstagramFormStatus(error?.message || "콘텐츠 상태 변경에 실패했습니다.", "danger");
+  } finally {
+    button.disabled = false;
+  }
+}
+
 function renderFallback(error, options = {}) {
   const reason = isPermissionDenied(error)
     ? options.requireLogin
@@ -4885,6 +5230,7 @@ function renderFallback(error, options = {}) {
   state.staffItems = [];
   state.staffHrCards = [];
   state.staffEvaluationSubmissions = [];
+  state.instagramDashboard = null;
   renderPricingInquiryRecentList();
   renderRecommendedMealRecentList();
   renderMessages([], []);
@@ -4893,6 +5239,7 @@ function renderFallback(error, options = {}) {
   renderHomeSummary();
   renderHomeDecisions();
   renderParkingDashboard();
+  renderInstagramContentDashboard(null);
   renderMemberDetail(null);
   renderPrivate([], [], [], []);
   renderBusinessFallback(error);
@@ -4933,6 +5280,7 @@ async function refresh() {
     const shouldLoadPrivate = Boolean(qs("privateProgressList")) || shouldLoadHome;
     const shouldLoadLessons = Boolean(qs("lessonsTodayList"));
     const shouldLoadStaffDashboard = Boolean(qs("staffHrList"));
+    const shouldLoadInstagram = Boolean(qs("instagramApprovalList"));
     const shouldLoadBusinessSnapshot = shouldLoadBusiness || shouldLoadStaffDashboard;
     const [
       laneSnapshot,
@@ -5093,6 +5441,13 @@ async function refresh() {
     state.staffEvaluationSubmissions = studioItems(staffEvaluationSubmissions);
     state.businessSnapshot = dashboardSnapshot?.exists?.() ? normalizeBusinessSnapshot(dashboardSnapshot.data()) : null;
     if (shouldLoadParking) await loadParkingDashboard(runtime);
+    if (shouldLoadInstagram) {
+      state.instagramDashboard = await safeRead(
+        "socialContent",
+        () => loadInstagramContentDashboard(runtime, true),
+        null,
+      );
+    }
     renderLane(state.lane);
     renderAutomation(automationItems);
     renderImports(state.sourceImports);
@@ -5103,6 +5458,7 @@ async function refresh() {
     renderHomeSummary();
     renderHomeDecisions();
     renderParkingDashboard();
+    renderInstagramContentDashboard(state.instagramDashboard);
     renderPricingInquiryRecentList();
     renderRecommendedMealRecentList();
     renderMemberDetail(memberDetail);
@@ -5150,6 +5506,21 @@ qs("commandPalette")?.addEventListener("click", (event) => {
   if (event.target.closest?.(".command-palette-results a")) closeCommandPalette();
 });
 qs("instructorEvaluationQuizForm")?.addEventListener("submit", handleInstructorEvaluationQuizSubmit);
+qs("instagramDraftForm")?.addEventListener("submit", handleInstagramDraftSubmit);
+qs("instagramPreviewButton")?.addEventListener("click", openInstagramPreview);
+qs("instagramPreviewClose")?.addEventListener("click", closeInstagramPreview);
+qs("instagramPreviewDialog")?.addEventListener("click", (event) => {
+  if (event.target === qs("instagramPreviewDialog")) closeInstagramPreview();
+});
+qs("instagramApprovalList")?.addEventListener("click", handleInstagramListAction);
+qs("instagramScheduleList")?.addEventListener("click", handleInstagramListAction);
+qs("instagramHistoryList")?.addEventListener("click", handleInstagramListAction);
+qs("instagramStatusFilter")?.addEventListener("change", () =>
+  renderInstagramHistoryList(
+    state.instagramDashboard?.items || [],
+    Boolean(state.instagramDashboard?.connection?.configured),
+  ),
+);
 qs("businessMonthSelect")?.addEventListener("change", (event) => renderBusinessMonth(event.target.value));
 document.addEventListener("submit", (event) => {
   const form = event.target.closest?.("[data-staff-essay-score-form]");

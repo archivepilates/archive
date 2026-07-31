@@ -1,0 +1,177 @@
+<!doctype html>
+<html lang="ko">
+  <head>
+    <meta charset="utf-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1" />
+    <meta name="theme-color" content="#f8f5ef" />
+    <link rel="icon" type="image/png" sizes="32x32" href="/icons/favicon-32.png?v=1" />
+    <link rel="shortcut icon" type="image/png" href="/favicon.png?v=1" />
+    <link rel="icon" type="image/png" sizes="192x192" href="/icons/archive-pilates-icon-192.png?v=1" />
+    <link rel="apple-touch-icon" sizes="180x180" href="/icons/apple-touch-icon.png?v=1" />
+    <link rel="manifest" href="/site.webmanifest?v=1" />
+    <title>콘텐츠 · ARCHIVE CORE</title>
+    <link rel="stylesheet" href="../assets/styles.css" />
+    <script src="../firebase-config.js"></script>
+    <script type="module" src="../assets/app.js"></script>
+  </head>
+  <body data-firestore-dashboard data-instagram-dashboard>
+    <div class="shell">
+      <aside class="sidebar" aria-label="ARCHIVE CORE navigation">
+        <div class="brand"><div class="brand-mark" aria-hidden="true">CORE</div><strong>ARCHIVE CORE</strong><span>ARCHIVE PILATES Operations Platform</span></div>
+        <nav class="nav">
+          <a href="../" data-section="home">Home <small>요약</small></a><a href="../members/" data-section="members">Members <small>회원</small></a><a href="../lessons/" data-section="lessons">Lessons <small>수업</small></a><a href="../private/" data-section="private">Private <small>차트</small></a><a href="../staff/" data-section="staff">Staff <small>강사</small></a><a href="../messages/" data-section="messages">Messages <small>알림톡</small></a><a href="./" data-section="content">Content <small>콘텐츠</small></a><a href="../automation/" data-section="automation">Automation <small>관제</small></a><a href="../business/" data-section="business">Business <small>지표</small></a><a href="../imports/" data-section="imports">Imports <small>원본</small></a><a href="../rules/" data-section="rules">Rules <small>규칙</small></a><a href="../settings/" data-section="settings">Settings <small>설정</small></a>
+        </nav>
+      </aside>
+
+      <main class="main">
+        <header class="topbar">
+          <div class="title-block">
+            <p class="eyebrow">콘텐츠</p>
+            <h1>Instagram 운영</h1>
+          </div>
+          <div class="top-actions" aria-label="상태 확인">
+            <div class="connection-card" aria-live="polite">
+              <span id="connectionLabel">로딩</span>
+              <strong id="connectionDetail">데이터 연결 준비 중</strong>
+            </div>
+            <button class="refresh-button" id="refreshButton" type="button">새로고침</button>
+          </div>
+        </header>
+
+        <section class="grid kpis">
+          <article class="panel metric"><div class="metric-label">승인 필요</div><div class="metric-value" id="instagramApprovalCount">0건</div></article>
+          <article class="panel metric"><div class="metric-label">예약 발행</div><div class="metric-value" id="instagramScheduledCount">0건</div></article>
+          <article class="panel metric"><div class="metric-label">발행 완료</div><div class="metric-value" id="instagramPublishedCount">0건</div></article>
+          <article class="panel metric"><div class="metric-label">확인 필요</div><div class="metric-value" id="instagramAttentionCount">0건</div></article>
+        </section>
+
+        <section class="panel social-connection-strip" aria-live="polite">
+          <div>
+            <span class="eyebrow">@archivepilates_official</span>
+            <strong id="instagramConnectionTitle">Meta 연결 확인 중</strong>
+          </div>
+          <span class="pill warn" id="instagramConnectionPill">확인 중</span>
+        </section>
+
+        <section class="social-work-grid">
+          <article class="panel">
+            <div class="panel-header">
+              <div><h2>승인할 콘텐츠</h2></div>
+              <span class="pill warn">검토</span>
+            </div>
+            <div class="social-list" id="instagramApprovalList" aria-live="polite">
+              <div class="empty-state">승인 대상을 확인합니다.</div>
+            </div>
+          </article>
+
+          <article class="panel">
+            <div class="panel-header">
+              <div><h2>이번 주 발행 일정</h2></div>
+              <span class="pill">일정</span>
+            </div>
+            <div class="social-list" id="instagramScheduleList" aria-live="polite">
+              <div class="empty-state">예약 발행 일정을 확인합니다.</div>
+            </div>
+          </article>
+        </section>
+
+        <details class="panel action-disclosure social-composer" id="instagramComposer">
+          <summary>
+            <span><strong>콘텐츠 작성</strong><small>초안 저장 또는 검토 요청</small></span>
+            <span class="pill">작성</span>
+          </summary>
+          <div class="disclosure-body">
+            <form class="action-form social-content-form" id="instagramDraftForm">
+              <input id="instagramContentId" name="contentId" type="hidden" />
+              <label>
+                <span>유형</span>
+                <select id="instagramContentType" name="contentType">
+                  <option value="image">이미지</option>
+                  <option value="carousel">캐러셀</option>
+                  <option value="reel">릴스</option>
+                </select>
+              </label>
+              <label>
+                <span>목적</span>
+                <select id="instagramPillar" name="pillar">
+                  <option value="brand_method">브랜드·메소드</option>
+                  <option value="local_operations">명지점·현장</option>
+                  <option value="promotion">프로모션·전환</option>
+                  <option value="people_community">사람·커뮤니티</option>
+                </select>
+              </label>
+              <label>
+                <span>발행 일시</span>
+                <input id="instagramPublishAt" name="publishAt" type="datetime-local" required />
+              </label>
+              <label>
+                <span>지역 메모</span>
+                <input id="instagramLocation" name="location" type="text" value="부산 명지" autocomplete="off" />
+              </label>
+              <label class="wide">
+                <span>미디어 URL</span>
+                <textarea id="instagramMediaInput" name="media" rows="3" required placeholder="https://..."></textarea>
+              </label>
+              <label class="wide">
+                <span>대체 텍스트</span>
+                <textarea id="instagramAltText" name="altText" rows="2" placeholder="사진 또는 영상의 핵심 장면"></textarea>
+              </label>
+              <label class="wide">
+                <span>캡션</span>
+                <textarea id="instagramCaption" name="caption" rows="8" maxlength="2200" required></textarea>
+              </label>
+              <label class="wide">
+                <span>CTA</span>
+                <input id="instagramCta" name="cta" type="text" maxlength="160" placeholder="프로필 링크에서 상담 예약" />
+              </label>
+              <div class="action-form-footer">
+                <button class="secondary-action" id="instagramPreviewButton" type="button">미리보기</button>
+                <button class="secondary-action" id="instagramSaveButton" type="submit" data-social-intent="draft">초안 저장</button>
+                <button class="primary-action" id="instagramReviewButton" type="submit" data-social-intent="review">검토 요청</button>
+                <p class="form-status" id="instagramFormStatus" role="status" aria-live="polite"></p>
+              </div>
+            </form>
+          </div>
+        </details>
+
+        <details class="panel action-disclosure">
+          <summary>
+            <span><strong>발행 이력</strong><small>초안, 보류, 완료, 확인 필요 기록</small></span>
+            <span class="pill">기록</span>
+          </summary>
+          <div class="disclosure-body">
+            <div class="toolbar social-history-toolbar">
+              <label class="search-field">
+                <span>상태</span>
+                <select id="instagramStatusFilter">
+                  <option value="all">전체</option>
+                  <option value="draft">초안</option>
+                  <option value="review">승인 필요</option>
+                  <option value="queued">예약</option>
+                  <option value="published">발행 완료</option>
+                  <option value="failed">확인 필요</option>
+                  <option value="held">보류</option>
+                </select>
+              </label>
+            </div>
+            <div class="social-list social-history-list" id="instagramHistoryList" aria-live="polite">
+              <div class="empty-state">발행 기록을 확인합니다.</div>
+            </div>
+          </div>
+        </details>
+      </main>
+    </div>
+
+    <dialog class="social-preview-dialog" id="instagramPreviewDialog" aria-labelledby="instagramPreviewTitle">
+      <div class="social-preview-head">
+        <div>
+          <span class="eyebrow">@archivepilates_official</span>
+          <h2 id="instagramPreviewTitle">게시물 미리보기</h2>
+        </div>
+        <button class="secondary-action" id="instagramPreviewClose" type="button" aria-label="미리보기 닫기">닫기</button>
+      </div>
+      <div class="social-preview-media" id="instagramPreviewMedia"></div>
+      <p class="social-preview-caption" id="instagramPreviewCaption"></p>
+    </dialog>
+  </body>
+</html>

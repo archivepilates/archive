@@ -1778,6 +1778,217 @@ td span {
   color: var(--red);
 }
 
+.social-connection-strip {
+  display: flex;
+  min-height: 76px;
+  align-items: center;
+  justify-content: space-between;
+  gap: 16px;
+  margin-bottom: 18px;
+  padding: 18px 20px;
+}
+
+.social-connection-strip > div {
+  display: grid;
+  min-width: 0;
+  gap: 4px;
+}
+
+.social-connection-strip strong {
+  overflow-wrap: anywhere;
+  font-size: 1rem;
+}
+
+.social-work-grid {
+  display: grid;
+  grid-template-columns: repeat(2, minmax(0, 1fr));
+  gap: 18px;
+  align-items: start;
+}
+
+.social-work-grid > .panel {
+  min-height: 330px;
+}
+
+.social-list {
+  display: grid;
+  min-width: 0;
+  padding: 0 20px 20px;
+}
+
+.social-list > .empty-state {
+  margin-top: 12px;
+}
+
+.social-item {
+  display: grid;
+  min-width: 0;
+  grid-template-columns: 76px minmax(0, 1fr);
+  gap: 14px;
+  align-items: start;
+  border-top: 1px solid var(--line-soft);
+  padding: 16px 0;
+}
+
+.social-item:first-child {
+  border-top: 0;
+}
+
+.social-item-media {
+  display: grid;
+  width: 76px;
+  aspect-ratio: 4 / 5;
+  place-items: center;
+  overflow: hidden;
+  border: 1px solid var(--line-soft);
+  border-radius: 6px;
+  background: var(--paper);
+  color: var(--muted);
+  font-size: 0.72rem;
+  font-weight: 900;
+}
+
+.social-item-media img,
+.social-item-media video {
+  width: 100%;
+  height: 100%;
+  object-fit: cover;
+}
+
+.social-item-main {
+  display: grid;
+  min-width: 0;
+  gap: 6px;
+}
+
+.social-item-main > strong {
+  font-size: 0.93rem;
+}
+
+.social-item-meta {
+  display: flex;
+  min-width: 0;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: 6px 8px;
+  color: var(--muted);
+  font-size: 0.76rem;
+  font-weight: 800;
+}
+
+.social-caption-clamp {
+  display: -webkit-box;
+  overflow: hidden;
+  margin: 0;
+  color: var(--muted);
+  font-size: 0.86rem;
+  -webkit-box-orient: vertical;
+  -webkit-line-clamp: 3;
+  overflow-wrap: anywhere;
+  white-space: pre-line;
+}
+
+.social-item-error {
+  margin: 0;
+  color: var(--red);
+  font-size: 0.8rem;
+  font-weight: 800;
+  overflow-wrap: anywhere;
+}
+
+.social-item-actions {
+  display: flex;
+  min-width: 0;
+  grid-column: 1 / -1;
+  flex-wrap: wrap;
+  justify-content: flex-end;
+  gap: 8px;
+}
+
+.social-item-actions a {
+  text-decoration: none;
+}
+
+.social-item-actions .primary-action:disabled {
+  cursor: not-allowed;
+}
+
+.social-composer,
+.social-work-grid + .social-composer {
+  margin-top: 18px;
+}
+
+.social-content-form {
+  border-top: 1px solid var(--line-soft);
+}
+
+.social-history-toolbar {
+  padding-top: 0;
+}
+
+.social-history-list {
+  padding-top: 0;
+}
+
+.social-preview-dialog {
+  width: min(92vw, 520px);
+  max-height: min(88dvh, 880px);
+  overflow: auto;
+  border: 1px solid var(--line);
+  border-radius: 8px;
+  background: var(--surface-strong);
+  color: var(--text);
+  padding: 0;
+  box-shadow: var(--shadow);
+}
+
+.social-preview-dialog::backdrop {
+  background: rgba(13, 13, 15, 0.56);
+}
+
+.social-preview-head {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 16px;
+  padding: 18px 20px;
+}
+
+.social-preview-head > div {
+  display: grid;
+  min-width: 0;
+  gap: 2px;
+}
+
+.social-preview-head h2 {
+  font-size: 1.15rem;
+}
+
+.social-preview-media {
+  display: grid;
+  width: 100%;
+  aspect-ratio: 4 / 5;
+  place-items: center;
+  overflow: hidden;
+  border-block: 1px solid var(--line-soft);
+  background: var(--paper);
+}
+
+.social-preview-media img,
+.social-preview-media video {
+  width: 100%;
+  height: 100%;
+  object-fit: contain;
+  background: #000;
+}
+
+.social-preview-caption {
+  margin: 0;
+  padding: 20px;
+  overflow-wrap: anywhere;
+  white-space: pre-line;
+}
+
 .staff-list {
   padding-top: 12px;
 }
@@ -3042,6 +3253,10 @@ a.rank-row:hover,
   .staff-score-rules {
     grid-template-columns: 1fr;
   }
+
+  .social-work-grid {
+    grid-template-columns: 1fr;
+  }
 }
 
 @media (max-width: 720px) {
@@ -3225,6 +3440,48 @@ a.rank-row:hover,
 
   .panel {
     border-radius: 8px;
+  }
+
+  .social-connection-strip {
+    align-items: flex-start;
+    flex-direction: column;
+    padding: 16px;
+  }
+
+  .social-list {
+    padding: 0 16px 16px;
+  }
+
+  .social-item {
+    grid-template-columns: 64px minmax(0, 1fr);
+    gap: 12px;
+  }
+
+  .social-item-media {
+    width: 64px;
+  }
+
+  .social-item-actions {
+    display: grid;
+    grid-template-columns: repeat(auto-fit, minmax(min(100%, 128px), 1fr));
+  }
+
+  .social-item-actions > * {
+    width: 100%;
+  }
+
+  .social-content-form .action-form-footer {
+    display: grid;
+    grid-template-columns: 1fr;
+  }
+
+  .social-content-form .action-form-footer > * {
+    width: 100%;
+  }
+
+  .social-preview-dialog {
+    width: calc(100% - 20px);
+    max-height: calc(100dvh - 20px);
   }
 
   .metric,

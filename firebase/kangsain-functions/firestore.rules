@@ -163,6 +163,26 @@ service cloud.firestore {
       allow write: if false;
     }
 
+    match /socialContentDrafts/{contentId} {
+      allow read: if isManager() && sameStudio(resource.data.studioId);
+      allow write: if false;
+    }
+
+    match /socialPublishJobs/{jobId} {
+      allow read: if isManager() && sameStudio(resource.data.studioId);
+      allow write: if false;
+    }
+
+    match /socialPublishLogs/{logId} {
+      allow read: if isManager() && sameStudio(resource.data.studioId);
+      allow write: if false;
+    }
+
+    match /socialInsightsSnapshots/{snapshotId} {
+      allow read: if isManager() && sameStudio(resource.data.studioId);
+      allow write: if false;
+    }
+
     match /onsiteWelcomeRequests/{requestId} {
       allow read: if isManager() && sameStudio(resource.data.studioId);
       allow write: if false;

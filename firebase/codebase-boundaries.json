@@ -93,6 +93,25 @@
         "processParkingDiscountJob"
       ],
       "forbidden": ["scheduled jobs", "external member-facing sends"]
+    },
+    "functions-social": {
+      "physicalSource": "firebase/function-codebases/social",
+      "sourceEntrypoint": "firebase/kangsain-functions/functions/src/exports/social.ts",
+      "owns": [
+        "getInstagramContentDashboard",
+        "saveInstagramContentDraft",
+        "approveInstagramContent",
+        "holdInstagramContent",
+        "scheduledPublishInstagramContent",
+        "scheduledSyncInstagramInsights"
+      ],
+      "forbidden": [
+        "SOLAPI sends",
+        "member target selection",
+        "StudioMate writes",
+        "Google Contacts writes",
+        "private chart generation"
+      ]
     }
   },
   "migrationRule": "Deploy physical codebases one at a time after prepare/build/validate and dry-run. Do not restore the default all-in-one source unless a rollback is intentional."

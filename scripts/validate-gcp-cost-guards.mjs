@@ -49,6 +49,16 @@ const checks = [
     forbidden: [],
   },
   {
+    file: "firebase/kangsain-functions/functions/src/social/socialContentOperations.ts",
+    required: [
+      'where("status", "in", ["pending", "retry", "processing"]).limit(30)',
+      'where("status", "==", "published").limit(50)',
+      "socialPublishIdempotencyKey",
+      'status: "manual_review"',
+    ],
+    forbidden: [],
+  },
+  {
     file: "core/rules/index.html",
     required: ["변경된 프라이빗 예약의 회원만", "매일 23:30 안전 점검", "이미 확인 메일을 만든 요청"],
     forbidden: [],
@@ -92,6 +102,7 @@ console.log(
         "instructor views do not depend on the latest source file name",
         "survey alert scans are bounded and idempotent",
         "parking scheduler scans only the recent due-time window",
+        "Instagram publishing and insight scans are bounded and idempotent",
       ],
     },
     null,

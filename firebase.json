@@ -59,6 +59,21 @@
         "firebase-debug.log",
         "firebase-debug.*.log"
       ]
+    },
+    {
+      "source": "firebase/function-codebases/social",
+      "codebase": "functions-social",
+      "runtime": "nodejs22",
+      "predeploy": [
+        "node scripts/prepare-functions-codebase.mjs \"$RESOURCE_DIR\"",
+        "node firebase/kangsain-functions/functions/node_modules/typescript/bin/tsc -p \"$RESOURCE_DIR/tsconfig.json\""
+      ],
+      "ignore": [
+        "node_modules",
+        ".git",
+        "firebase-debug.log",
+        "firebase-debug.*.log"
+      ]
     }
   ],
   "firestore": {

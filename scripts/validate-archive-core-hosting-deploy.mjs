@@ -30,6 +30,8 @@ const required = [
       "https://new.smartplace.naver.com/",
       "https://arcpilates.studiomate.kr/",
       "data-section=\"staff\"",
+      "data-section=\"content\"",
+      "Instagram 운영",
       "/site.webmanifest?v=1",
       "/icons/archive-pilates-icon-192.png?v=1",
     ],
@@ -65,6 +67,23 @@ const required = [
       "normalizedLessonKind",
       "operatorLifecycle",
       "emergencyLastAttendance",
+      "getInstagramContentDashboard",
+      "saveInstagramContentDraft",
+      "approveInstagramContent",
+      "holdInstagramContent",
+      "renderInstagramContentDashboard",
+    ],
+  },
+  {
+    file: "core/content/index.html",
+    label: "Instagram content operations page",
+    markers: [
+      "Instagram 운영",
+      "instagramApprovalList",
+      "instagramScheduleList",
+      "instagramDraftForm",
+      "instagramPreviewDialog",
+      "instagramHistoryList",
     ],
   },
   {
@@ -120,12 +139,15 @@ const required = [
       ".external-tool-link",
       ".nav-secondary",
       ".admin-nav-open .nav-secondary",
+      ".social-work-grid",
+      ".social-item",
+      ".social-preview-dialog",
     ],
   },
   {
     file: "core/rules/index.html",
     label: "ARCHIVE CORE source health and operator lifecycle rules",
-    markers: ["운영 액션 수명주기", "원천 신선도와 화면 상태", "canonicalActionKey"],
+    markers: ["운영 액션 수명주기", "원천 신선도와 화면 상태", "canonicalActionKey", "Instagram 콘텐츠 운영"],
     patterns: [{ pattern: /\d{4}\.\d{2}\.\d{2} 기준/, label: "current rules date" }],
   },
 ];
@@ -196,6 +218,9 @@ for (const file of collectHtmlFiles(path.join(repoRoot, "core"))) {
     if (!content.includes(marker)) {
       failures.push({ file: relative, label: "ARCHIVE CORE app icon links", missing: marker });
     }
+  }
+  if (!content.includes('data-section="content"')) {
+    failures.push({ file: relative, label: "ARCHIVE CORE content navigation", missing: 'data-section="content"' });
   }
 }
 

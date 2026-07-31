@@ -23,6 +23,7 @@ const routes = [
   { name: "private", path: "/private/" },
   { name: "staff", path: "/staff/" },
   { name: "messages", path: "/messages/" },
+  { name: "content", path: "/content/" },
   { name: "automation", path: "/automation/" },
   { name: "business", path: "/business/" },
   { name: "imports", path: "/imports/" },
@@ -67,7 +68,7 @@ try {
           }));
         const touchTargets = [
           ...document.querySelectorAll(
-            ".nav a, .nav-more-button, .quick-action, .external-tool-link, .filter-button, .text-link, .reference-toggle, a.rank-row, .rank-link",
+            ".nav a, .nav-more-button, .quick-action, .external-tool-link, .filter-button, .text-link, .reference-toggle, a.rank-row, .rank-link, .primary-action, .secondary-action",
           ),
         ]
           .filter((element) => element.offsetParent !== null)

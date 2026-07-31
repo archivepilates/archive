@@ -19,7 +19,8 @@
       <aside class="sidebar" aria-label="ARCHIVE CORE navigation">
         <div class="brand"><div class="brand-mark" aria-hidden="true">CORE</div><strong>ARCHIVE CORE</strong><span>ARCHIVE PILATES Operations Platform</span></div>
         <nav class="nav">
-          <a href="../" data-section="home">Home <small>요약</small></a><a href="../members/" data-section="members">Members <small>회원</small></a><a href="../lessons/" data-section="lessons">Lessons <small>수업</small></a><a href="../private/" data-section="private">Private <small>차트</small></a><a href="../staff/" data-section="staff">Staff <small>강사</small></a><a href="../messages/" data-section="messages">Messages <small>알림톡</small></a><a href="../automation/" data-section="automation">Automation <small>관제</small></a><a href="../business/" data-section="business">Business <small>지표</small></a><a href="../imports/" data-section="imports">Imports <small>원본</small></a><a href="./" data-section="rules">Rules <small>규칙</small></a><a href="../settings/" data-section="settings">Settings <small>설정</small></a>
+          <a href="../" data-section="home">Home <small>요약</small></a><a href="../members/" data-section="members">Members <small>회원</small></a><a href="../lessons/" data-section="lessons">Lessons <small>수업</small></a><a href="../private/" data-section="private">Private <small>차트</small></a><a href="../staff/" data-section="staff">Staff <small>강사</small></a><a href="../messages/" data-section="messages">Messages <small>알림톡</small></a>
+          <a href="../content/" data-section="content">Content <small>콘텐츠</small></a><a href="../automation/" data-section="automation">Automation <small>관제</small></a><a href="../business/" data-section="business">Business <small>지표</small></a><a href="../imports/" data-section="imports">Imports <small>원본</small></a><a href="./" data-section="rules">Rules <small>규칙</small></a><a href="../settings/" data-section="settings">Settings <small>설정</small></a>
         </nav>
       </aside>
       <main class="main rules-page">
@@ -50,6 +51,7 @@
             <a href="#data-trust">데이터 신뢰<span>신선도, 화면 상태, 액션 수명주기</span></a>
             <a href="#renewal">재등록 관리<span>만료, 잔여, 상담 후보</span></a>
             <a href="#alimtalk">알림톡<span>후보, 승인, 중복 차단</span></a>
+            <a href="#social-content">Instagram<span>초안, 승인, 예약 발행</span></a>
             <a href="#meal-plan">추천식단<span>설문, InBody, 안전 검토</span></a>
             <a href="#private">프라이빗<span>회차, 설문, 리포트</span></a>
             <a href="#staff-evaluation">강사 평가<span>퀴즈, 인사기록카드</span></a>
@@ -369,6 +371,58 @@
           <div class="rule-note"><strong>현재 확인 위치</strong><span>CORE Messages / Firestore pricingInquiryAlimtalkRequests, alimtalkCandidates, alimtalkSends, alimtalkTemplateStates, shortLinks</span></div>
         </section>
 
+        <section class="panel rule-section" id="social-content">
+          <div class="panel-header"><div><h2>4-1. Instagram 콘텐츠 운영</h2><p>ARCHIVE PILATES 공식 계정의 초안, 승인, 예약 발행과 성과를 한곳에서 관리합니다.</p></div><span class="pill warn">approval required</span></div>
+          <div class="rule-grid">
+            <article class="rule-card">
+              <h3>계정 방향</h3>
+              <ul>
+                <li>공식 계정은 ARCHIVE PILATES 본사 성격의 브랜드 채널로 운영합니다.</li>
+                <li>콘텐츠 축은 브랜드·메소드, 명지점·현장, 프로모션·전환, 사람·커뮤니티 네 가지입니다.</li>
+                <li>지역 운영정보와 상담 전환을 다루되 과장된 효능, 회원 개인정보, 건강정보는 게시하지 않습니다.</li>
+              </ul>
+            </article>
+            <article class="rule-card">
+              <h3>발행 흐름</h3>
+              <ol>
+                <li>운영자 또는 자동화가 socialContentDrafts에 초안을 저장합니다.</li>
+                <li>운영자가 캡션, 미디어, 발행시각을 검토하고 승인합니다.</li>
+                <li>승인 후 socialPublishJobs에 예약 작업을 만들고 Functions가 Meta API로 발행합니다.</li>
+                <li>결과는 socialPublishLogs와 socialInsightsSnapshots에 남겨 CORE 콘텐츠 탭에서 확인합니다.</li>
+              </ol>
+            </article>
+            <article class="rule-card">
+              <h3>운영 리듬</h3>
+              <ul>
+                <li>주 3회를 기본으로 릴스 1건, 정보형 캐러셀 1건, 명지점 현장 소식 1건을 준비합니다.</li>
+                <li>프로모션만 반복하지 않고 네 가지 콘텐츠 축이 한 달 안에 고르게 보이도록 조정합니다.</li>
+                <li>성과는 팔로워 수만 보지 않고 도달 대비 팔로우, 프로필 방문, 링크 클릭, 상담 전환을 월 단위로 함께 확인합니다.</li>
+              </ul>
+            </article>
+            <article class="rule-card">
+              <h3>안전 규칙</h3>
+              <ul>
+                <li>자동화는 초안과 검토 요청까지만 만들며 운영자 승인 없이 실제 게시하지 않습니다.</li>
+                <li>콘텐츠 본문, 미디어, 발행시각으로 만든 idempotency key가 같으면 중복 작업을 만들지 않습니다.</li>
+                <li>Meta 발행 요청 이후 결과가 불명확하면 자동 재시도하지 않고 수동확인으로 전환합니다.</li>
+                <li>Meta 연결 정보가 없거나 검증되지 않으면 승인 버튼과 예약 발행을 차단합니다.</li>
+                <li>승인 시점과 실제 발행 직전에 연결 계정이 archivepilates_official인지 다시 확인합니다.</li>
+                <li>Instagram 운영은 회원 선정, 알림톡, StudioMate, 연락처 쓰기의 원천으로 사용하지 않습니다.</li>
+                <li>Meta Secret이 not-configured 상태이면 초안 작성·검토만 허용하고 승인, 예약 발행, 성과 동기화는 차단합니다.</li>
+              </ul>
+            </article>
+            <article class="rule-card">
+              <h3>현재 상태</h3>
+              <ul>
+                <li>Functions codebase는 functions-social로 분리해 다른 운영 기능과 배포 경계를 나눕니다.</li>
+                <li>미디어는 Meta가 읽을 수 있는 공개 HTTPS 주소만 사용할 수 있습니다.</li>
+                <li>Meta 전문 계정 연결과 권한 검증 전에는 로컬 구현 상태이며 실제 발행 테스트를 하지 않습니다.</li>
+              </ul>
+            </article>
+          </div>
+          <div class="rule-note"><strong>현재 확인 위치</strong><span>CORE Content / Firestore socialContentDrafts, socialPublishJobs, socialPublishLogs, socialInsightsSnapshots</span></div>
+        </section>
+
         <section class="panel rule-section" id="private">
           <div class="panel-header"><div><h2>5. 프라이빗 수업 기록·리포트</h2><p>한 수업을 준비, 기록, 검수, 전달의 네 단계로 관리합니다.</p></div><span class="pill good">current</span></div>
           <div class="rule-grid">
@@ -471,7 +525,7 @@
         </section>
 
         <section class="panel rule-section" id="staff-evaluation">
-          <div class="panel-header"><div><h2>4-1. 강사 평가·인사기록카드</h2><p>기존 Google Form 기반 강사 평가 퀴즈를 Firebase 기반 제출/채점/기록 구조로 전환합니다.</p></div><span class="pill good">staff</span></div>
+          <div class="panel-header"><div><h2>5-1. 강사 평가·인사기록카드</h2><p>기존 Google Form 기반 강사 평가 퀴즈를 Firebase 기반 제출/채점/기록 구조로 전환합니다.</p></div><span class="pill good">staff</span></div>
           <div class="rule-grid">
             <article class="rule-card">
               <h3>운영 흐름</h3>
