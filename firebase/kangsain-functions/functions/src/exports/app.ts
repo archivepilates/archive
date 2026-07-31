@@ -31,9 +31,21 @@ import {
   runParkingAutoApplyNowHandler,
 } from "../parking/parkingOperations";
 import { recommendedMealSurveyApiHandler } from "../mealPlan/recommendedMealSurvey";
+import {
+  generateRecommendedMealProgramDraftForSubmittedResponse,
+  generateRecommendedMealProgramDraftHandler,
+  getRecommendedMealProgramReviewHandler,
+  recommendedMealPlanApiHandler,
+  saveRecommendedMealProgramDraftHandler,
+} from "../mealPlan/recommendedMealProgram";
 import { processParkingDiscountJobSnapshot } from "../parking/processParkingDiscountJob";
-import { callableOptions, publicRequestOptions } from "../runtime/functionOptions";
-import { requireStaff } from "../security/authGuards";
+import {
+  callableOptions,
+  publicRequestOptions,
+  recommendedMealCallableOptions,
+  recommendedMealEventOptions,
+} from "../runtime/functionOptions";
+import { requireManager, requireStaff } from "../security/authGuards";
 import {
   adjustInstructorEvaluationEssayScoreHandler,
   getInstructorEvaluationQuizHandler,
@@ -209,6 +221,50 @@ export const instructorApplicantEvaluationApi = onRequest(
 );
 
 export const recommendedMealSurveyApi = onRequest(publicRequestOptions, recommendedMealSurveyApiHandler);
+
+export const recommendedMealPlanApi = onRequest(publicRequestOptions, recommendedMealPlanApiHandler);
+
+export const getRecommendedMealProgramReview = onCall(callableOptions, async (request) => {
+  try {
+    const staff = await requireStaff(request);
+    requireManager(staff);
+    return await getRecommendedMealProgramReviewHandler(request, staff);
+  } catch (err) {
+    throw toHttpsError(err);
+  }
+});
+
+export const generateRecommendedMealProgramDraft = onCall(recommendedMealCallableOptions, async (request) => {
+  try {
+    const staff = await requireStaff(request);
+    requireManager(staff);
+    return await generateRecommendedMealProgramDraftHandler(request, staff);
+  } catch (err) {
+    throw toHttpsError(err);
+  }
+});
+
+export const saveRecommendedMealProgramDraft = onCall(callableOptions, async (request) => {
+  try {
+    const staff = await requireStaff(request);
+    requireManager(staff);
+    return await saveRecommendedMealProgramDraftHandler(request, staff);
+  } catch (err) {
+    throw toHttpsError(err);
+  }
+});
+
+export const generateRecommendedMealDraftOnSurveySubmitted = onDocumentCreated(
+  {
+    ...recommendedMealEventOptions,
+    document: "recommendedMealProgramResponses/{responseId}",
+  },
+  async (event) => {
+    const response = event.data?.data();
+    if (!response) return;
+    await generateRecommendedMealProgramDraftForSubmittedResponse(event.params.responseId, response);
+  },
+);
 
 export const processParkingDiscountJob = onDocumentCreated(parkingDiscountJobOptions, async (event) => {
   const snap = event.data;

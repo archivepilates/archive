@@ -93,6 +93,9 @@ function dedupeScope(candidate: AlimtalkCandidateDoc): Record<string, string> {
   if (type === "long_absence") return { memberId: candidate.memberId };
   if (type === "pricing_info") return { inquiryPhone: normalizePhone(candidate.memberPhone) };
   if (type === "recommended_meal_survey") return { memberPhone: normalizePhone(candidate.memberPhone) };
+  if (type === "recommended_meal_report") {
+    return { reportId: String(payload.reportId || candidate.sourceActionKey || candidate.candidateId || "") };
+  }
   if (type === "instructor_lesson_material") {
     return {
       lessonDate: String(payload.lessonDate || payload.classDate || payload.sourceDate || candidate.sourceDate || ""),

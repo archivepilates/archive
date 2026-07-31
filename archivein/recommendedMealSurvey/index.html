@@ -553,7 +553,7 @@
       <div class="consent">
         <label class="option">
           <input type="checkbox" name="consent" value="yes" required>
-          <span>추천식단 준비를 위해 위 생활·식습관·건강정보를 저장하고 ARCHIVE에서 측정한 최신 InBody 기록과 함께 검토하는 데 동의합니다.</span>
+          <span>추천식단 준비를 위해 위 생활·식습관·건강정보를 저장하고 최신 InBody 기록과 함께 식단 초안 자동 생성 및 ARCHIVE PILATES 운영자 검토에 활용하는 데 동의합니다. AI 초안에는 회원명·전화번호·InBody 내부 ID를 제외합니다.</span>
         </label>
         <p>응답은 ARCHIVE PILATES 운영자만 확인하며 알림톡 본문에는 포함되지 않습니다.</p>
       </div>
@@ -595,7 +595,7 @@
           `<span class="chip">약 7분</span>`
         ].join("");
         if (info.status === "submitted") {
-          showMessage("이미 설문 제출이 완료되었습니다. ARCHIVE PILATES에서 내용을 확인한 뒤 추천식단을 준비합니다.");
+          showMessage("이미 설문 제출이 완료되었습니다. 설문과 최신 InBody를 반영한 식단 초안을 준비 중이며, 운영자 검토가 끝나면 알림톡으로 보내드립니다.");
           return;
         }
         form.hidden = false;
@@ -659,7 +659,7 @@
           body: JSON.stringify(payload)
         });
         form.hidden = true;
-        showMessage("설문 제출이 완료되었습니다. 생활 패턴과 최신 InBody 기록을 함께 확인한 뒤 ARCHIVE PILATES에서 추천식단을 준비합니다.");
+        showMessage("설문 제출이 완료되었습니다. 설문과 최신 InBody를 반영한 식단 초안을 자동으로 준비하며, 운영자 검토가 끝나면 알림톡으로 보내드립니다.");
         window.scrollTo({ top: 0, behavior: "smooth" });
       } catch (error) {
         showMessage(error.message || "제출 중 오류가 발생했습니다. 잠시 후 다시 시도해 주세요.", true);

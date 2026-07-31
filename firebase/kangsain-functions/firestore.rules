@@ -227,6 +227,16 @@ service cloud.firestore {
       allow write: if false;
     }
 
+    match /recommendedMealProgramDrafts/{draftId} {
+      allow read: if isManager() && sameStudio(resource.data.studioId);
+      allow write: if false;
+    }
+
+    match /recommendedMealProgramReports/{reportId} {
+      allow read: if isManager() && sameStudio(resource.data.studioId);
+      allow write: if false;
+    }
+
     match /privateSurveyIntakes/{intakeId} {
       allow read: if false;
       allow create: if

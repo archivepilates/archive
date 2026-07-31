@@ -172,6 +172,34 @@ export const ALIMTALK_TEMPLATE_TARGET_RULES: Partial<Record<AlimtalkCandidateTyp
       "SOLAPI 미승인 템플릿",
     ],
   },
+  recommended_meal_report: {
+    type: "recommended_meal_report",
+    templateCode: ALIMTALK_TEMPLATES.recommended_meal_report.code,
+    templateLabel: ALIMTALK_TEMPLATES.recommended_meal_report.label,
+    sourceDatePolicy: "manual",
+    requiresApprovedTemplate: true,
+    requiresMemberPhone: true,
+    buttonUrlRules: [
+      {
+        label: "추천식단 보기 버튼",
+        template: SHORT_LINK_BUTTON_URL_TEMPLATE,
+        maxLength: SOLAPI_BUTTON_URL_MAX_LENGTH,
+      },
+    ],
+    targetRules: [
+      "ARCHIVE CORE에서 운영자가 설문과 InBody를 검토하고 최종 식단을 승인",
+      "승인된 revision과 발송 candidate의 revision이 일치",
+      "추천식단 전용 짧은 링크가 있음",
+      "같은 추천식단 reportId는 1회만 발송",
+    ],
+    exclusionRules: [
+      "운영자 검토 미완료 또는 주의 응답 미확인",
+      "승인 후 식단 내용이 변경됨",
+      "추천식단 짧은 링크 없음",
+      "동일 reportId 발송 이력 있음",
+      "SOLAPI 미승인 템플릿",
+    ],
+  },
   private_survey: {
     type: "private_survey",
     templateCode: ALIMTALK_TEMPLATES.private_survey.code,

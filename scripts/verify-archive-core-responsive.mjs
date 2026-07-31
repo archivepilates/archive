@@ -22,6 +22,7 @@ const routes = [
   { name: "lessons", path: "/lessons/" },
   { name: "private", path: "/private/" },
   { name: "staff", path: "/staff/" },
+  { name: "recommended-meals", path: "/recommended-meals/" },
   { name: "messages", path: "/messages/" },
   { name: "content", path: "/content/" },
   { name: "automation", path: "/automation/" },

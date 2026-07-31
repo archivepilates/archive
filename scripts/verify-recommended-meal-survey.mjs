@@ -77,11 +77,7 @@ try {
   await page.getByLabel("현재 복용 중인 약물이나 보충제").fill("없음");
   await page.getByRole("group", { name: "임신·수유 관련 해당 사항" }).getByLabel("해당 없음").check();
   await page.getByRole("group", { name: "섭식장애 또는 식사 관련 치료 경험이 있나요?" }).getByLabel("없음").check();
-  await page
-    .getByLabel(
-      "추천식단 준비를 위해 위 생활·식습관·건강정보를 저장하고 ARCHIVE에서 측정한 최신 InBody 기록과 함께 검토하는 데 동의합니다.",
-    )
-    .check();
+  await page.getByLabel(/추천식단 준비를 위해.*활용하는 데 동의합니다/).check();
   await page.getByRole("button", { name: "설문 제출하기" }).click();
   await page.getByText("설문 제출이 완료되었습니다.").waitFor();
   await page.close();

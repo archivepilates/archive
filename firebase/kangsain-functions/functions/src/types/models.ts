@@ -483,6 +483,7 @@ export type AlimtalkCandidateType =
   | "long_absence"
   | "pricing_info"
   | "recommended_meal_survey"
+  | "recommended_meal_report"
   | "manual_review";
 export type AlimtalkCandidateStatus =
   | "candidate"

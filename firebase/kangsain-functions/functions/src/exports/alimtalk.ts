@@ -5,6 +5,7 @@ import { approveAlimtalkBatchHandler } from "../alimtalk/approvalGate";
 import { processAlimtalkQueue } from "../alimtalk/processAlimtalkQueue";
 import { operatorSendPricingInquiryAlimtalkHandler } from "../alimtalk/pricingInquiryAlimtalk";
 import { operatorSendRecommendedMealProgramAlimtalkHandler } from "../mealPlan/recommendedMealAlimtalk";
+import { operatorApproveAndSendRecommendedMealPlanHandler } from "../mealPlan/recommendedMealReportAlimtalk";
 import { queueDailyAlimtalkCandidates, queueReservationOpenAlimtalkCandidates } from "../alimtalk/queueDailyAlimtalk";
 import { sendDailyAlimtalkReport } from "../alimtalk/sendDailyAlimtalkReport";
 import { syncAlimtalkTemplateStatuses } from "../alimtalk/templateStatus";
@@ -117,6 +118,16 @@ export const operatorSendRecommendedMealProgramAlimtalk = onCall(callableOptions
     const staff = await requireStaff(request);
     requireManager(staff);
     return await operatorSendRecommendedMealProgramAlimtalkHandler(request, staff);
+  } catch (err) {
+    throw toHttpsError(err);
+  }
+});
+
+export const operatorApproveAndSendRecommendedMealPlan = onCall(callableOptions, async (request) => {
+  try {
+    const staff = await requireStaff(request);
+    requireManager(staff);
+    return await operatorApproveAndSendRecommendedMealPlanHandler(request, staff);
   } catch (err) {
     throw toHttpsError(err);
   }

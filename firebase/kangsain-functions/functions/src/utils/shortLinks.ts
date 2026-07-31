@@ -15,7 +15,8 @@ export type ShortLinkType =
   | "private_chart"
   | "private_report"
   | "inbody_report"
-  | "recommended_meal_survey";
+  | "recommended_meal_survey"
+  | "recommended_meal_report";
 
 export function shortLinkIdForTarget(type: ShortLinkType, targetUrl: string): string {
   const prefix =
@@ -35,6 +36,8 @@ export function shortLinkIdForTarget(type: ShortLinkType, targetUrl: string): st
                   ? "ir"
                   : type === "recommended_meal_survey"
                     ? "rm"
+                    : type === "recommended_meal_report"
+                      ? "mr"
                   : "mt";
   return `${prefix}-${stableHash({ type, targetUrl }).slice(0, 12)}`;
 }

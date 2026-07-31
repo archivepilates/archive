@@ -8,6 +8,7 @@ import {
   RECOMMENDED_MEAL_ALIMTALK_CHANNEL_ID,
   RECOMMENDED_MEAL_ALIMTALK_IMAGE_ID,
   RECOMMENDED_MEAL_ALIMTALK_TEMPLATE_CODE,
+  RECOMMENDED_MEAL_REPORT_ALIMTALK_TEMPLATE_CODE,
   RESERVATION_OPEN_ALIMTALK_IMAGE_ID,
 } from "./templates";
 import type { AlimtalkCandidateDoc } from "../types/models";
@@ -35,6 +36,7 @@ export async function autoSendabilityIssue(candidate: AlimtalkCandidateDoc, toda
   const templateContractIssue =
     privateSurveyTemplateContractIssue(candidate) ||
     recommendedMealTemplateContractIssue(candidate) ||
+    recommendedMealReportTemplateContractIssue(candidate) ||
     reservationOpenTemplateContractIssue(candidate);
   if (templateContractIssue) return templateContractIssue;
   if (rule?.requiresApprovedTemplate) {
@@ -46,6 +48,7 @@ export async function autoSendabilityIssue(candidate: AlimtalkCandidateDoc, toda
     const remoteContractIssue =
       privateSurveyTemplateContractIssue(candidate, readiness.state) ||
       recommendedMealTemplateContractIssue(candidate, readiness.state) ||
+      recommendedMealReportTemplateContractIssue(candidate, readiness.state) ||
       reservationOpenTemplateContractIssue(candidate, readiness.state);
     if (remoteContractIssue) return remoteContractIssue;
   }
@@ -67,6 +70,8 @@ export async function autoSendabilityIssue(candidate: AlimtalkCandidateDoc, toda
   if (candidate.type === "pricing_info" && !candidate.payload?.pricingUrl) return "수강료 안내 링크 없음";
   if (candidate.type === "recommended_meal_survey" && !candidate.payload?.shortLinkId)
     return "추천식단 설문 짧은 링크 없음";
+  if (candidate.type === "recommended_meal_report" && !candidate.payload?.shortLinkId)
+    return "추천식단 리포트 짧은 링크 없음";
   if (rule?.requiresManagementNumber) {
     const rawManagementNumber = String(
       candidate.payload?.managementNumber || candidate.payload?.materialNumber || candidate.payload?.archiveMethodId || "",
@@ -190,11 +195,50 @@ export function recommendedMealTemplateContractIssue(
   return "";
 }
 
+export function recommendedMealReportTemplateContractIssue(
+  candidate: AlimtalkCandidateDoc,
+  state: AlimtalkTemplateState | null = null,
+): string {
+  if (candidate.type !== "recommended_meal_report") return "";
+  if (candidate.templateCode !== RECOMMENDED_MEAL_REPORT_ALIMTALK_TEMPLATE_CODE) {
+    return `추천식단 리포트 템플릿 설정 불일치: ${candidate.templateCode}`;
+  }
+  if (!state) return "";
+  const imageContractIssue = alimtalkImageTemplateContractIssue(
+    state,
+    RECOMMENDED_MEAL_ALIMTALK_IMAGE_ID,
+    "추천식단 리포트 템플릿",
+  );
+  if (imageContractIssue) return imageContractIssue;
+  if (state.channelId !== RECOMMENDED_MEAL_ALIMTALK_CHANNEL_ID) {
+    return "추천식단 리포트 템플릿 채널 ID 불일치";
+  }
+  if (!String(state.content || "").includes("#{이름}")) {
+    return "추천식단 리포트 템플릿 회원명 변수 없음";
+  }
+  if (!(state.buttonUrls || []).includes(RECOMMENDED_MEAL_BUTTON_URL)) {
+    return "추천식단 리포트 버튼 URL 불일치";
+  }
+  const buttons = state.buttons || [];
+  if (
+    buttons.length !== 1 ||
+    buttons[0]?.name !== "추천식단 보기" ||
+    buttons[0]?.type !== "WL" ||
+    buttons[0]?.mobileUrl !== RECOMMENDED_MEAL_BUTTON_URL ||
+    buttons[0]?.desktopUrl !== RECOMMENDED_MEAL_BUTTON_URL
+  ) {
+    return "추천식단 리포트 버튼 계약 불일치";
+  }
+  return "";
+}
+
 function requiredPayloadIssue(candidate: AlimtalkCandidateDoc): string {
   const payload = candidate.payload || {};
   if (candidate.type === "onsite_welcome" && !payload.shortLinkId) return "회원가입서 짧은 링크 없음";
   if (candidate.type === "recommended_meal_survey" && !payload.shortLinkId)
     return "추천식단 설문 짧은 링크 없음";
+  if (candidate.type === "recommended_meal_report" && !payload.shortLinkId)
+    return "추천식단 리포트 짧은 링크 없음";
   if (candidate.type === "private_survey" || candidate.type === "group_survey") {
     if (!(payload.surveyId || payload.responseId) || !payload.accessToken) return "설문 링크 변수 없음";
   }

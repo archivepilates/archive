@@ -11,6 +11,18 @@ import {
 
 export const callableOptions = { region: REGION, secrets: allSecrets, invoker: "public" as const };
 export const longCallableOptions = { ...callableOptions, timeoutSeconds: 540, memory: "512MiB" as const };
+export const recommendedMealCallableOptions = {
+  ...callableOptions,
+  secrets: [...allSecrets, geminiApiKey],
+  timeoutSeconds: 120,
+  memory: "512MiB" as const,
+};
+export const recommendedMealEventOptions = {
+  region: REGION,
+  secrets: [geminiApiKey],
+  timeoutSeconds: 120,
+  memory: "512MiB" as const,
+};
 
 export const longRequestOptions = {
   region: REGION,

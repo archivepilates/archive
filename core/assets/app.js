@@ -66,6 +66,7 @@ const state = {
   memberSignupContracts: [],
   pricingInquiryAlimtalkRequests: [],
   recommendedMealProgramRequests: [],
+  recommendedMealReview: null,
   parkingVehicles: [],
   parkingJobs: [],
   parkingConfig: null,
@@ -95,6 +96,8 @@ let memberSearchTerm = "";
 let memberFilter = "all";
 let memberPage = 1;
 let selectedStaffKey = "";
+let selectedMealRequestId = "";
+let mealQueueFilter = "active";
 
 const MEMBER_PAGE_SIZE = 20;
 const COMMAND_ITEMS = [
@@ -111,10 +114,10 @@ const COMMAND_ITEMS = [
     keywords: "수강료 가격 문의 알림톡 발송 상담",
   },
   {
-    title: "추천식단 설문 발송",
-    detail: "회원카드와 InBody 기록 확인 후 생활·식습관 설문 발송",
-    href: "#recommendedMealProgram",
-    keywords: "추천식단 식단 다이어트 설문 인바디 alimtalk",
+    title: "추천식단 관리",
+    detail: "설문·InBody 기반 식단 초안 검토와 승인 발송",
+    href: "./recommended-meals/",
+    keywords: "추천식단 식단 다이어트 설문 인바디 검토 발송 alimtalk",
   },
   {
     title: "재등록 관리",
@@ -609,6 +612,7 @@ const NAV_ICONS = {
   members: "M16 19v-1.5A3.5 3.5 0 0 0 12.5 14h-5A3.5 3.5 0 0 0 4 17.5V19M11 8a3 3 0 1 1-6 0 3 3 0 0 1 6 0M20 19v-1a3 3 0 0 0-3-3h-1.2M15 5.2a2.8 2.8 0 0 1 0 5.6",
   lessons: "M4 6.5h16M4 12h16M4 17.5h9M8 4v16M16 4v10",
   private: "M5 4h14v16H5zM8 8h8M8 12h5M8 16h7",
+  "recommended-meals": "M5 5h14v14H5zM8 9h8M8 13h8M8 17h5",
   staff: "M12 12a4 4 0 1 0 0-8 4 4 0 0 0 0 8M4 21a8 8 0 0 1 16 0M17.5 7.5l1.5 1.5 3-3",
   messages: "M4 6h16v11H8l-4 3V6zM8 10h8M8 14h5",
   content: "M5 4h14v16H5zM8 8h8M8 12h5M8 16h7M16.5 15.5l2.5 2.5",
@@ -634,6 +638,7 @@ const NAV_LABELS = {
   members: "회원",
   lessons: "수업",
   private: "프라이빗",
+  "recommended-meals": "추천식단",
   staff: "강사",
   messages: "알림톡",
   content: "콘텐츠",
@@ -656,6 +661,15 @@ function setAdminNavOpen(open) {
 function enhanceNav() {
   const nav = document.querySelector(".nav");
   if (!nav) return;
+  if (!nav.querySelector('[data-section="recommended-meals"]')) {
+    const homeHref = nav.querySelector('[data-section="home"]')?.getAttribute("href") || "./";
+    const link = document.createElement("a");
+    link.href = `${homeHref.replace(/\/?$/, "/")}recommended-meals/`;
+    link.dataset.section = "recommended-meals";
+    link.innerHTML = "Meals <small>추천식단</small>";
+    const before = nav.querySelector('[data-section="messages"]');
+    nav.insertBefore(link, before || null);
+  }
   const links = [...nav.querySelectorAll("a")];
   links.forEach((link) => {
     if (link.dataset.enhanced === "true") return;
@@ -2454,6 +2468,371 @@ function toggleRecommendedMealHistory() {
   button.setAttribute("aria-expanded", String(nextOpen));
   button.textContent = nextOpen ? "최근 요청 닫기" : "최근 요청 보기";
   if (nextOpen) renderRecommendedMealRecentList();
+}
+
+function mealFlowStatus(item) {
+  const status = String(item.recommendationStatus || item.status || "");
+  if (status === "sent") return { label: "발송 완료", tone: "success", stage: "sent" };
+  if (status === "send_failed") return { label: "발송 실패", tone: "danger", stage: "review" };
+  if (status === "approved") return { label: "승인·발송 중", tone: "active", stage: "review" };
+  if (["awaiting_operator_review", "draft_ready", "operator_edited"].includes(status)) {
+    return { label: "운영자 검토", tone: "warning", stage: "review" };
+  }
+  if (status === "review_required") return { label: "주의 응답 확인", tone: "danger", stage: "review" };
+  if (status === "ready_for_draft") return { label: "초안 가능", tone: "active", stage: "ready" };
+  if (status === "submitted") return { label: "설문 제출", tone: "active", stage: "ready" };
+  return { label: "설문 대기", tone: "neutral", stage: "awaiting" };
+}
+
+function mealQueueItems() {
+  const rows = [...(state.recommendedMealProgramRequests || [])].sort(
+    (a, b) => timestampMs(recommendedMealRecentTime(b)) - timestampMs(recommendedMealRecentTime(a)),
+  );
+  if (mealQueueFilter === "sent") return rows.filter((item) => mealFlowStatus(item).stage === "sent");
+  if (mealQueueFilter === "review") return rows.filter((item) => mealFlowStatus(item).stage === "review");
+  return rows.filter((item) => mealFlowStatus(item).stage !== "sent");
+}
+
+function renderRecommendedMealQueue() {
+  const list = qs("recommendedMealQueue");
+  if (!list) return;
+  const all = state.recommendedMealProgramRequests || [];
+  const grouped = all.reduce(
+    (acc, item) => {
+      const stage = mealFlowStatus(item).stage;
+      acc[stage] = (acc[stage] || 0) + 1;
+      return acc;
+    },
+    {},
+  );
+  setText("mealAwaitingCount", grouped.awaiting || 0);
+  setText("mealReadyCount", grouped.ready || 0);
+  setText("mealReviewCount", grouped.review || 0);
+  setText("mealSentCount", grouped.sent || 0);
+  const items = mealQueueItems();
+  setText("mealQueueCount", `${items.length}건`);
+  if (!items.length) {
+    list.innerHTML = `<div class="empty-state">선택한 상태의 추천식단 요청이 없습니다.</div>`;
+    return;
+  }
+  list.innerHTML = items
+    .map((item) => {
+      const flow = mealFlowStatus(item);
+      const selected = item.requestId === selectedMealRequestId ? " is-active" : "";
+      const meta = [
+        formatPhoneNumber(item.memberPhone || ""),
+        item.inbody?.status === "available" ? "InBody 있음" : "InBody 없음",
+        formatDate(recommendedMealRecentTime(item)),
+      ]
+        .filter(Boolean)
+        .join(" · ");
+      return `<button class="status-row meal-queue-button${selected}" type="button" data-meal-request-id="${escapeHtml(item.requestId || item.id || "")}">
+        <span><strong>${escapeHtml(item.memberName || "회원")}</strong><small>${escapeHtml(meta)}</small></span>
+        ${pill(flow.label, flow.tone)}
+      </button>`;
+    })
+    .join("");
+}
+
+function mealReviewSetMessage(message, tone = "") {
+  const element = qs("mealReviewMessage");
+  if (!element) return;
+  element.textContent = message;
+  element.className = `form-status ${tone}`.trim();
+}
+
+function mealAnswerLabel(key) {
+  return {
+    primaryGoal: "식단 목표",
+    goalDetail: "목표 상세",
+    targetTimeline: "목표 기간",
+    wakeTime: "기상 시간",
+    sleepTime: "취침 시간",
+    sleepQuality: "수면 상태",
+    workType: "업무 형태",
+    workIntensity: "업무 강도",
+    workSchedule: "업무 시간",
+    mealBreakWindow: "식사 가능 시간",
+    exerciseSchedule: "운동 일정",
+    mealsPerDay: "하루 식사 횟수",
+    breakfastPattern: "아침 식사",
+    regularMealPattern: "평소 식사",
+    snackPattern: "간식",
+    lateNightFrequency: "야식",
+    eatingOutFrequency: "외식",
+    cookingAccess: "식사 준비 환경",
+    mealBudget: "식비",
+    allergies: "알레르기",
+    avoidFoods: "섭취 어려운 음식",
+    preferredFoods: "선호 음식",
+    alcoholFrequency: "음주 빈도",
+    alcoholAmount: "음주량",
+    smokingStatus: "흡연",
+    medicalConditions: "질환·주의사항",
+    medications: "복용 약물",
+    pregnancyStatus: "임신·수유",
+    eatingDisorderHistory: "섭식 관련 치료 경험",
+    weekendDifference: "주말 패턴",
+    additionalNote: "추가 메모",
+  }[key] || key;
+}
+
+function renderMealSource(review) {
+  const inbody = review?.inbody;
+  const inbodyElement = qs("mealInbodySummary");
+  if (inbodyElement) {
+    if (!inbody) {
+      inbodyElement.innerHTML = `<p class="meal-source-warning">연결된 InBody 측정값이 없습니다. 식단 확정 전 확인하세요.</p>`;
+    } else {
+      const metrics = [
+        ["측정일", inbody.testAt ? formatDate(inbody.testAt) : "-"],
+        ["체중", Number.isFinite(Number(inbody.weightKg)) ? `${inbody.weightKg}kg` : "-"],
+        ["골격근량", Number.isFinite(Number(inbody.skeletalMuscleMassKg)) ? `${inbody.skeletalMuscleMassKg}kg` : "-"],
+        ["체지방률", Number.isFinite(Number(inbody.percentBodyFat)) ? `${inbody.percentBodyFat}%` : "-"],
+        ["기초대사량", Number.isFinite(Number(inbody.basalMetabolicRateKcal)) ? `${inbody.basalMetabolicRateKcal}kcal` : "-"],
+        ["목표체중", Number.isFinite(Number(inbody.targetWeightKg)) ? `${inbody.targetWeightKg}kg` : "-"],
+      ];
+      inbodyElement.innerHTML = `<dl class="meal-source-list">${metrics
+        .map(([label, value]) => `<div><dt>${escapeHtml(label)}</dt><dd>${escapeHtml(value)}</dd></div>`)
+        .join("")}</dl>`;
+    }
+  }
+  const answers = review?.response?.answers || {};
+  const surveyElement = qs("mealSurveySummary");
+  if (surveyElement) {
+    const rows = Object.entries(answers)
+      .filter(([key, value]) => key !== "consent" && value != null && String(value).trim())
+      .map(([key, value]) => [mealAnswerLabel(key), Array.isArray(value) ? value.join(", ") : String(value)]);
+    surveyElement.innerHTML = rows.length
+      ? `<dl class="meal-answer-list">${rows
+          .map(([label, value]) => `<div><dt>${escapeHtml(label)}</dt><dd>${escapeHtml(value)}</dd></div>`)
+          .join("")}</dl>`
+      : `<p>설문 제출 전입니다.</p>`;
+  }
+}
+
+function mealDayEditorHtml(day, index) {
+  const row = day || {};
+  const fields = [
+    ["breakfast", "아침", row.breakfast],
+    ["lunch", "점심", row.lunch],
+    ["dinner", "저녁", row.dinner],
+    ["snack", "간식", row.snack],
+    ["timingTip", "타이밍 팁", row.timingTip],
+  ];
+  return `<fieldset class="meal-day-editor" data-meal-day="${index}">
+    <legend>${index + 1}일차</legend>
+    ${fields
+      .map(
+        ([key, label, value]) => `<label><span>${label}</span><textarea rows="2" maxlength="500" data-meal-day-field="${key}" ${["breakfast", "lunch", "dinner"].includes(key) ? "required" : ""}>${escapeHtml(value || "")}</textarea></label>`,
+      )
+      .join("")}
+  </fieldset>`;
+}
+
+function fillMealDraftForm(draft) {
+  const form = qs("mealDraftForm");
+  const content = draft?.publicContent;
+  if (!form || !content) {
+    if (form) form.hidden = true;
+    return;
+  }
+  form.hidden = false;
+  qs("mealTitle").value = content.title || "";
+  qs("mealGoal").value = content.goal || "";
+  qs("mealSummary").value = content.summary || "";
+  qs("mealMetricsSummary").value = content.metricsSummary || "";
+  qs("mealPrinciples").value = (content.principles || []).join("\n");
+  qs("mealHydration").value = content.hydration || "";
+  qs("mealExerciseNutrition").value = content.exerciseNutrition || "";
+  qs("mealWeekendStrategy").value = content.weekendStrategy || "";
+  qs("mealCaution").value = content.caution || "";
+  qs("mealDaysEditor").innerHTML = Array.from({ length: 7 }, (_, index) => mealDayEditorHtml(content.days?.[index], index)).join("");
+  const reasons = draft.reviewReasons || [];
+  qs("mealReviewCheckWrap").hidden = !reasons.length;
+  qs("mealReviewAcknowledged").checked = Boolean(draft.reviewAcknowledged);
+  form.querySelectorAll("input, textarea, button").forEach((element) => {
+    element.disabled = state.recommendedMealReview?.report?.publicationStatus === "sent";
+  });
+  const sent = state.recommendedMealReview?.report?.publicationStatus === "sent";
+  qs("mealDraftMeta").textContent = sent
+    ? `발송 완료 · ${formatDate(state.recommendedMealReview.report.sentAt)}`
+    : `${draft.provider || "draft"} · ${draft.model || ""} · ${draft.revision?.slice(0, 10) || ""}`;
+}
+
+function renderRecommendedMealReview(review) {
+  state.recommendedMealReview = review;
+  const body = qs("mealReviewBody");
+  const empty = qs("mealReviewEmpty");
+  if (!review) {
+    if (body) body.hidden = true;
+    if (empty) empty.hidden = false;
+    return;
+  }
+  if (body) body.hidden = false;
+  if (empty) empty.hidden = true;
+  const flow = mealFlowStatus(review.request || {});
+  setText("mealReviewTitle", `${review.request?.memberName || "회원"} 추천식단`);
+  setText(
+    "mealReviewMeta",
+    [formatPhoneNumber(review.request?.memberPhone || ""), review.response?.submittedAt ? `설문 ${formatDate(review.response.submittedAt)}` : "설문 대기"]
+      .filter(Boolean)
+      .join(" · "),
+  );
+  const status = qs("mealReviewStatus");
+  if (status) {
+    status.textContent = flow.label;
+    status.className = `pill ${flow.tone}`;
+  }
+  renderMealSource(review);
+  fillMealDraftForm(review.draft);
+  qs("mealGenerateButton").disabled = !review.response || review.report?.publicationStatus === "sent";
+  if (!review.response) mealReviewSetMessage("회원 설문 제출을 기다리고 있습니다.", "warn");
+  else if (!review.draft) mealReviewSetMessage("설문 제출 후 식단을 자동 생성하고 있습니다. 잠시 뒤 새로고침하세요.", "warn");
+  else if (review.report?.publicationStatus === "sent") mealReviewSetMessage("회원에게 발송 완료되어 수정이 잠겼습니다.", "good");
+  else if ((review.draft.reviewReasons || []).length && !review.draft.reviewAcknowledged) {
+    mealReviewSetMessage("주의 응답을 확인하고 체크한 뒤 저장해야 발송할 수 있습니다.", "warn");
+  } else mealReviewSetMessage("내용을 수정·저장한 뒤 최종 발송할 수 있습니다.");
+}
+
+async function loadRecommendedMealReview(requestId) {
+  selectedMealRequestId = requestId;
+  renderRecommendedMealQueue();
+  mealReviewSetMessage("설문, InBody, 식단 초안을 불러오고 있습니다.", "warn");
+  try {
+    const runtime = await initFirebase();
+    const getReview = runtime.httpsCallable(runtime.functionsClient, "getRecommendedMealProgramReview");
+    const result = await getReview({ requestId });
+    renderRecommendedMealReview(result?.data || null);
+  } catch (error) {
+    mealReviewSetMessage(error?.message || "추천식단 검토 자료를 불러오지 못했습니다.", "danger");
+  }
+}
+
+async function handleMealGenerate() {
+  if (!selectedMealRequestId) return;
+  const button = qs("mealGenerateButton");
+  if (button) {
+    button.disabled = true;
+    button.textContent = "초안 생성 중";
+  }
+  mealReviewSetMessage("설문과 최신 InBody를 반영해 7일 식단 초안을 만들고 있습니다.", "warn");
+  try {
+    const runtime = await initFirebase();
+    const generate = runtime.httpsCallable(runtime.functionsClient, "generateRecommendedMealProgramDraft");
+    await generate({ requestId: selectedMealRequestId });
+    await loadRecommendedMealReview(selectedMealRequestId);
+  } catch (error) {
+    mealReviewSetMessage(error?.message || "추천식단 초안 생성에 실패했습니다.", "danger");
+  } finally {
+    if (button) {
+      button.disabled = false;
+      button.textContent = "AI 식단 다시 생성";
+    }
+  }
+}
+
+function collectMealPublicContent() {
+  const days = [...document.querySelectorAll("[data-meal-day]")].map((fieldset, index) => {
+    const value = (key) => fieldset.querySelector(`[data-meal-day-field="${key}"]`)?.value?.trim() || "";
+    return {
+      day: index + 1,
+      label: `${index + 1}일차`,
+      breakfast: value("breakfast"),
+      lunch: value("lunch"),
+      dinner: value("dinner"),
+      snack: value("snack"),
+      timingTip: value("timingTip"),
+    };
+  });
+  return {
+    title: qs("mealTitle")?.value?.trim() || "",
+    summary: qs("mealSummary")?.value?.trim() || "",
+    goal: qs("mealGoal")?.value?.trim() || "",
+    metricsSummary: qs("mealMetricsSummary")?.value?.trim() || "",
+    principles: (qs("mealPrinciples")?.value || "").split("\n").map((value) => value.trim()).filter(Boolean),
+    days,
+    hydration: qs("mealHydration")?.value?.trim() || "",
+    exerciseNutrition: qs("mealExerciseNutrition")?.value?.trim() || "",
+    weekendStrategy: qs("mealWeekendStrategy")?.value?.trim() || "",
+    caution: qs("mealCaution")?.value?.trim() || "",
+  };
+}
+
+async function saveMealDraft({ quiet = false } = {}) {
+  if (!selectedMealRequestId) throw new Error("검토할 추천식단 요청을 선택하세요.");
+  const runtime = await initFirebase();
+  const saveDraft = runtime.httpsCallable(runtime.functionsClient, "saveRecommendedMealProgramDraft");
+  const result = await saveDraft({
+    requestId: selectedMealRequestId,
+    publicContent: collectMealPublicContent(),
+    reviewAcknowledged: Boolean(qs("mealReviewAcknowledged")?.checked),
+  });
+  if (!quiet) mealReviewSetMessage("추천식단 수정 내용을 저장했습니다.", "good");
+  return result?.data || {};
+}
+
+async function handleMealDraftSubmit(event) {
+  event.preventDefault();
+  const button = qs("mealSaveButton");
+  if (button) {
+    button.disabled = true;
+    button.textContent = "저장 중";
+  }
+  try {
+    await saveMealDraft();
+    await loadRecommendedMealReview(selectedMealRequestId);
+  } catch (error) {
+    mealReviewSetMessage(error?.message || "추천식단 저장에 실패했습니다.", "danger");
+  } finally {
+    if (button) {
+      button.disabled = false;
+      button.textContent = "수정 저장";
+    }
+  }
+}
+
+async function handleMealApproveAndSend() {
+  if (!selectedMealRequestId) return;
+  if (!window.confirm("현재 식단을 최종 승인하고 회원에게 알림톡으로 발송할까요? 발송 후에는 수정할 수 없습니다.")) return;
+  const button = qs("mealSendButton");
+  if (button) {
+    button.disabled = true;
+    button.textContent = "저장·발송 중";
+  }
+  mealReviewSetMessage("최종 수정 내용을 저장하고 승인 revision을 확인하고 있습니다.", "warn");
+  try {
+    await saveMealDraft({ quiet: true });
+    const runtime = await initFirebase();
+    const send = runtime.httpsCallable(runtime.functionsClient, "operatorApproveAndSendRecommendedMealPlan");
+    const result = await send({ requestId: selectedMealRequestId, confirmSend: true });
+    const data = result?.data || {};
+    if (data.status === "sent") mealReviewSetMessage("추천식단 알림톡 발송을 완료했습니다.", "good");
+    else if (data.status === "template_pending") mealReviewSetMessage("추천식단 도착 템플릿이 심사 중이라 발송하지 않았습니다.", "warn");
+    else mealReviewSetMessage(data.message || "추천식단 발송을 완료하지 못했습니다.", data.status === "skipped" ? "warn" : "danger");
+    await refresh();
+    await loadRecommendedMealReview(selectedMealRequestId);
+  } catch (error) {
+    mealReviewSetMessage(error?.message || "추천식단 승인·발송에 실패했습니다.", "danger");
+  } finally {
+    if (button) {
+      button.disabled = false;
+      button.textContent = "검토 완료 후 알림톡 발송";
+    }
+  }
+}
+
+function handleMealQueueClick(event) {
+  const button = event.target.closest("[data-meal-request-id]");
+  if (button) loadRecommendedMealReview(button.dataset.mealRequestId || "");
+}
+
+function handleMealFilterClick(event) {
+  const button = event.target.closest("[data-meal-filter]");
+  if (!button) return;
+  mealQueueFilter = button.dataset.mealFilter || "active";
+  document.querySelectorAll("[data-meal-filter]").forEach((item) => item.classList.toggle("is-active", item === button));
+  renderRecommendedMealQueue();
 }
 
 function setParkingStatus(message, tone = "") {
@@ -5553,6 +5932,7 @@ function renderFallback(error, options = {}) {
   state.memberSignupContracts = [];
   state.pricingInquiryAlimtalkRequests = [];
   state.recommendedMealProgramRequests = [];
+  state.recommendedMealReview = null;
   state.parkingVehicles = [];
   state.parkingJobs = [];
   state.parkingConfig = null;
@@ -5562,6 +5942,8 @@ function renderFallback(error, options = {}) {
   state.instagramDashboard = null;
   renderPricingInquiryRecentList();
   renderRecommendedMealRecentList();
+  renderRecommendedMealQueue();
+  renderRecommendedMealReview(null);
   renderMessages([], []);
   renderStaffHr();
   renderLessons([], [], []);
@@ -5603,6 +5985,7 @@ async function refresh() {
     const shouldLoadBusiness = Boolean(qs("businessMonthSelect"));
     const shouldLoadTicketLiability = Boolean(qs("ticketLiabilityTableBody"));
     const shouldLoadHome = Boolean(qs("homeDecisionList"));
+    const shouldLoadRecommendedMeals = Boolean(qs("recommendedMealQueue"));
     const shouldLoadMembers = Boolean(qs("membersTable"));
     const shouldLoadMessages = Boolean(qs("messagesCandidateList"));
     const shouldLoadParking = Boolean(qs("parkingRegistrationForm"));
@@ -5693,10 +6076,10 @@ async function refresh() {
             [],
           )
         : Promise.resolve([]),
-      shouldLoadHome
+      shouldLoadHome || shouldLoadRecommendedMeals
         ? safeRead(
             "recommendedMealProgramRequests",
-            () => getOptionalCollectionBy(db, runtime, "recommendedMealProgramRequests", "updatedAt", 20),
+            () => getOptionalCollectionBy(db, runtime, "recommendedMealProgramRequests", "updatedAt", shouldLoadRecommendedMeals ? 100 : 20),
             [],
           )
         : Promise.resolve([]),
@@ -5801,6 +6184,7 @@ async function refresh() {
     renderInstagramContentDashboard(state.instagramDashboard);
     renderPricingInquiryRecentList();
     renderRecommendedMealRecentList();
+    renderRecommendedMealQueue();
     renderMemberDetail(memberDetail);
     renderPrivate(
       privateRequests,
@@ -5836,6 +6220,11 @@ qs("pricingInquiryForm")?.addEventListener("submit", handlePricingInquiryAlimtal
 qs("pricingInquiryHistoryToggle")?.addEventListener("click", togglePricingInquiryHistory);
 qs("recommendedMealProgramForm")?.addEventListener("submit", handleRecommendedMealProgramSubmit);
 qs("recommendedMealHistoryToggle")?.addEventListener("click", toggleRecommendedMealHistory);
+qs("recommendedMealQueue")?.addEventListener("click", handleMealQueueClick);
+qs("mealFilterBar")?.addEventListener("click", handleMealFilterClick);
+qs("mealGenerateButton")?.addEventListener("click", handleMealGenerate);
+qs("mealDraftForm")?.addEventListener("submit", handleMealDraftSubmit);
+qs("mealSendButton")?.addEventListener("click", handleMealApproveAndSend);
 qs("parkingRegistrationForm")?.addEventListener("submit", handleParkingVehicleSubmit);
 qs("parkingOwnerType")?.addEventListener("change", syncParkingVisitorFields);
 qs("parkingAutoApplyButton")?.addEventListener("click", handleParkingAutoApplyClick);

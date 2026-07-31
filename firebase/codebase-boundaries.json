@@ -15,7 +15,8 @@
         "scheduledSyncAlimtalkTemplateStatuses",
         "approveAlimtalkBatch",
         "operatorSendPricingInquiryAlimtalk",
-        "operatorSendRecommendedMealProgramAlimtalk"
+        "operatorSendRecommendedMealProgramAlimtalk",
+        "operatorApproveAndSendRecommendedMealPlan"
       ],
       "forbidden": ["StudioMate writes", "Google Contacts writes", "private chart generation"]
     },
@@ -89,6 +90,11 @@
         "adjustInstructorEvaluationEssayScore",
         "instructorApplicantEvaluationApi",
         "recommendedMealSurveyApi",
+        "recommendedMealPlanApi",
+        "getRecommendedMealProgramReview",
+        "generateRecommendedMealProgramDraft",
+        "generateRecommendedMealDraftOnSurveySubmitted",
+        "saveRecommendedMealProgramDraft",
         "adminIssueStaffTempCode",
         "processParkingDiscountJob"
       ],

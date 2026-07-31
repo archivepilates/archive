@@ -44,6 +44,8 @@
     "validate:ticket-liability-price": "node --test scripts/tests/ticket-liability-price-policy.test.mjs",
     "verify:archive-core-responsive": "node scripts/verify-archive-core-responsive.mjs",
     "verify:recommended-meal-survey": "node scripts/verify-recommended-meal-survey.mjs",
+    "audit:recommended-meal-report-template": "node scripts/audit-recommended-meal-report-alimtalk-template.mjs",
+    "validate:recommended-meal-program": "node scripts/validate-recommended-meal-program.mjs",
     "audit:archive-core-data": "node scripts/audit-archive-core-data-validity.mjs",
     "reconcile:archive-core-member-mirrors": "node scripts/reconcile-archive-core-member-profile-mirrors.mjs",
     "deploy:archive-core-live": "bash scripts/deploy-archive-core-live.sh",

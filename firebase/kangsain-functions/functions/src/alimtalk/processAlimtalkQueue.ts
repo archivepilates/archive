@@ -16,9 +16,15 @@ import { isAlimtalkTestRecipient } from "./testRecipients";
 import { currentPrivateLessonReportRevision } from "../privateLessonChart/privateLessonReportRevision";
 import { privateSurveySendabilityIssue } from "./privateSurveySendGuard";
 import { renewalCandidateSendabilityIssue } from "./renewalSendGuard";
+import {
+  RECOMMENDED_MEAL_DRAFT_COLLECTION,
+  RECOMMENDED_MEAL_REPORT_COLLECTION,
+} from "../mealPlan/recommendedMealProgram";
+import { RECOMMENDED_MEAL_REQUEST_COLLECTION } from "../mealPlan/recommendedMealSurvey";
 
 const SOLAPI_SEND_URL = "https://api.solapi.com/messages/v4/send-many/detail";
 const PROCESSING_STALE_MS = 10 * 60 * 1000;
+const RECOMMENDED_MEAL_ALREADY_SENT = "추천식단 이미 발송 완료";
 
 export interface AlimtalkCandidateProcessResult {
   processed: boolean;
@@ -135,6 +141,25 @@ export async function processAlimtalkQueue(): Promise<{
         );
         continue;
       }
+      const mealReportIssue = await recommendedMealReportSendabilityIssue(claimed);
+      if (mealReportIssue) {
+        if (mealReportIssue !== RECOMMENDED_MEAL_ALREADY_SENT) {
+          await markRecommendedMealReportFailed(claimed, mealReportIssue);
+        }
+        await refs.alimtalkCandidate(claimed.candidateId).set(
+          {
+            status: "skipped",
+            reasonCode:
+              mealReportIssue === RECOMMENDED_MEAL_ALREADY_SENT
+                ? "recommended_meal_already_sent"
+                : "recommended_meal_revision_blocked",
+            lastError: mealReportIssue,
+            updatedAt: nowTimestamp(),
+          },
+          { merge: true },
+        );
+        continue;
+      }
       const attempts = (claimed.attempts || 0) + 1;
       const result = await sendSolapiAlimtalk(claimed);
       await refs.alimtalkCandidate(claimed.candidateId).set(
@@ -174,10 +199,12 @@ export async function processAlimtalkQueue(): Promise<{
         { merge: true },
       );
       await markPrivateLessonReportSent(claimed);
+      await markRecommendedMealReportSent(claimed);
       sent += 1;
     } catch (err) {
       const message = errorMessage(err);
       await markPrivateLessonReportFailed(claimed, message);
+      await markRecommendedMealReportFailed(claimed, message);
       const attempts = (claimed.attempts || 0) + 1;
       const maxAttempts = claimed.maxAttempts || 2;
       await refs.alimtalkCandidate(claimed.candidateId).set(
@@ -328,6 +355,25 @@ export async function processAlimtalkCandidate(candidateId: string): Promise<Ali
       );
       return { processed: true, status: "skipped", lastError: finalPrivateReportIssue };
     }
+    const mealReportIssue = await recommendedMealReportSendabilityIssue(claimed);
+    if (mealReportIssue) {
+      if (mealReportIssue !== RECOMMENDED_MEAL_ALREADY_SENT) {
+        await markRecommendedMealReportFailed(claimed, mealReportIssue);
+      }
+      await refs.alimtalkCandidate(claimed.candidateId).set(
+        {
+          status: "skipped",
+          reasonCode:
+            mealReportIssue === RECOMMENDED_MEAL_ALREADY_SENT
+              ? "recommended_meal_already_sent"
+              : "recommended_meal_revision_blocked",
+          lastError: mealReportIssue,
+          updatedAt: nowTimestamp(),
+        },
+        { merge: true },
+      );
+      return { processed: true, status: "skipped", lastError: mealReportIssue };
+    }
     const attempts = (claimed.attempts || 0) + 1;
     const result = await sendSolapiAlimtalk(claimed);
     await refs.alimtalkCandidate(claimed.candidateId).set(
@@ -367,10 +413,12 @@ export async function processAlimtalkCandidate(candidateId: string): Promise<Ali
       { merge: true },
     );
     await markPrivateLessonReportSent(claimed);
+    await markRecommendedMealReportSent(claimed);
     return { processed: true, status: "sent", solapiMessageId: result.messageId };
   } catch (err) {
     const message = errorMessage(err);
     await markPrivateLessonReportFailed(claimed, message);
+    await markRecommendedMealReportFailed(claimed, message);
     const attempts = (claimed.attempts || 0) + 1;
     const maxAttempts = claimed.maxAttempts || 2;
     await refs.alimtalkCandidate(claimed.candidateId).set(
@@ -464,6 +512,71 @@ async function markPrivateLessonReportSent(candidate: AlimtalkCandidateDoc): Pro
       );
     });
   }
+}
+
+async function recommendedMealReportSendabilityIssue(candidate: AlimtalkCandidateDoc): Promise<string> {
+  if (candidate.type !== "recommended_meal_report") return "";
+  const reportId = String(candidate.payload?.reportId || candidate.sourceActionKey || "").trim();
+  const revision = String(candidate.payload?.reportRevision || "").trim();
+  if (!reportId || !revision) return "추천식단 reportId 또는 revision 없음";
+  const [reportSnap, draftSnap] = await Promise.all([
+    db.collection(RECOMMENDED_MEAL_REPORT_COLLECTION).doc(reportId).get(),
+    db.collection(RECOMMENDED_MEAL_DRAFT_COLLECTION).doc(reportId).get(),
+  ]);
+  const report = reportSnap.data();
+  const draft = draftSnap.data();
+  if (!report || !draft) return "추천식단 승인 문서 없음";
+  if (report.publicationStatus === "sent") return RECOMMENDED_MEAL_ALREADY_SENT;
+  if (report.approvalStatus !== "approved") return "추천식단 운영자 승인 없음";
+  if (String(report.approvedRevision || "") !== revision) return "추천식단 승인 revision 불일치";
+  if (String(report.reportRevision || "") !== revision) return "추천식단 현재 revision 불일치";
+  if (String(draft.revision || "") !== revision) return "추천식단 초안 revision 변경됨";
+  if (String(report.approvedSnapshot?.revision || "") !== revision) return "추천식단 승인 스냅샷 불일치";
+  if (!candidate.payload?.shortLinkId) return "추천식단 짧은 링크 없음";
+  return "";
+}
+
+async function markRecommendedMealReportSent(candidate: AlimtalkCandidateDoc): Promise<void> {
+  if (candidate.type !== "recommended_meal_report") return;
+  const reportId = String(candidate.payload?.reportId || candidate.sourceActionKey || "").trim();
+  const revision = String(candidate.payload?.reportRevision || "").trim();
+  if (!reportId) return;
+  const sentAt = nowTimestamp();
+  await db.runTransaction(async (tx) => {
+    const reportRef = db.collection(RECOMMENDED_MEAL_REPORT_COLLECTION).doc(reportId);
+    const requestRef = db.collection(RECOMMENDED_MEAL_REQUEST_COLLECTION).doc(reportId);
+    const reportSnap = await tx.get(reportRef);
+    const report = reportSnap.data();
+    if (!report || String(report.approvedRevision || "") !== revision) return;
+    tx.set(
+      reportRef,
+      {
+        sentRevision: revision,
+        sentSnapshot: report.approvedSnapshot || null,
+        approvalStatus: "sent",
+        publicationStatus: "sent",
+        sentAt,
+        lastError: null,
+        updatedAt: sentAt,
+      },
+      { merge: true },
+    );
+    tx.set(
+      requestRef,
+      { recommendationStatus: "sent", completedAt: sentAt, updatedAt: sentAt },
+      { merge: true },
+    );
+  });
+}
+
+async function markRecommendedMealReportFailed(candidate: AlimtalkCandidateDoc, message: string): Promise<void> {
+  if (candidate.type !== "recommended_meal_report") return;
+  const reportId = String(candidate.payload?.reportId || candidate.sourceActionKey || "").trim();
+  if (!reportId) return;
+  await db.collection(RECOMMENDED_MEAL_REPORT_COLLECTION).doc(reportId).set(
+    { publicationStatus: "send_failed", lastError: message.slice(0, 500), updatedAt: nowTimestamp() },
+    { merge: true },
+  );
 }
 
 async function lockPrivateLessonReportForSend(candidate: AlimtalkCandidateDoc): Promise<string> {

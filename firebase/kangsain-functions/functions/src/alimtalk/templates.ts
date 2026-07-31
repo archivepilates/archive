@@ -18,6 +18,8 @@ export const NATIVE_STAFF_PRIVATE_CHART_ALIMTALK_IMAGE_ID = "ST01FZ2605271837511
 export const RECOMMENDED_MEAL_ALIMTALK_TEMPLATE_CODE = "KA01TP260728111926523p2JzzTgHsS8";
 export const RECOMMENDED_MEAL_ALIMTALK_IMAGE_ID = "ST01FZ260730122108103pEzxH5jOOpU";
 export const RECOMMENDED_MEAL_ALIMTALK_CHANNEL_ID = "KA01PF260511123220162lk0NUjstpVl";
+export const RECOMMENDED_MEAL_REPORT_ALIMTALK_TEMPLATE_CODE =
+  process.env.RECOMMENDED_MEAL_REPORT_ALIMTALK_TEMPLATE_ID || "KA01TP260731123545629Sx4N5CZa5BF";
 
 export const ALIMTALK_MEMBER_EXCLUSION_REASONS: Record<string, string> = {
   "1982133": "스텝 계정 알림톡 제외",
@@ -41,7 +43,8 @@ export type SendableAlimtalkCandidateType =
   | "private_ticket_expiring"
   | "long_absence"
   | "pricing_info"
-  | "recommended_meal_survey";
+  | "recommended_meal_survey"
+  | "recommended_meal_report";
 
 export const ALIMTALK_TEMPLATES = {
   reservation_open: {
@@ -138,10 +141,17 @@ export const ALIMTALK_TEMPLATES = {
     label: "아카이브 추천식단 프로그램",
     status: "approved",
   },
+  recommended_meal_report: {
+    code: RECOMMENDED_MEAL_REPORT_ALIMTALK_TEMPLATE_CODE,
+    label: "아카이브 추천식단 도착 안내 v1",
+    status: "pending",
+  },
 } as const;
 
 export const ALIMTALK_TEMPLATE_CHANNEL_IDS: Readonly<Record<string, string>> = {
   [ALIMTALK_TEMPLATES.instructor_lesson_material.code]: INSTRUCTOR_LESSON_ALIMTALK_CHANNEL_ID,
+  [ALIMTALK_TEMPLATES.recommended_meal_survey.code]: RECOMMENDED_MEAL_ALIMTALK_CHANNEL_ID,
+  [ALIMTALK_TEMPLATES.recommended_meal_report.code]: RECOMMENDED_MEAL_ALIMTALK_CHANNEL_ID,
 };
 
 export const CANDIDATE_TEMPLATE_CODES: Record<SendableAlimtalkCandidateType, string> = {
@@ -160,6 +170,7 @@ export const CANDIDATE_TEMPLATE_CODES: Record<SendableAlimtalkCandidateType, str
   long_absence: ALIMTALK_TEMPLATES.long_absence.code,
   pricing_info: ALIMTALK_TEMPLATES.pricing_info.code,
   recommended_meal_survey: ALIMTALK_TEMPLATES.recommended_meal_survey.code,
+  recommended_meal_report: ALIMTALK_TEMPLATES.recommended_meal_report.code,
 };
 
 export const STATIC_APPROVED_ALIMTALK_TEMPLATE_CODES: ReadonlySet<string> = new Set(
@@ -245,6 +256,14 @@ export const ALIMTALK_DEDUPE_POLICIES_BY_TEMPLATE_CODE: Record<string, AlimtalkD
         [ALIMTALK_TEMPLATES.recommended_meal_survey.code]: {
           label: "추천식단 프로그램 설문 30일",
           windowDays: 30,
+        },
+      }
+    : {}),
+  ...(ALIMTALK_TEMPLATES.recommended_meal_report.code
+    ? {
+        [ALIMTALK_TEMPLATES.recommended_meal_report.code]: {
+          label: "추천식단 리포트별 1회",
+          windowDays: null,
         },
       }
     : {}),

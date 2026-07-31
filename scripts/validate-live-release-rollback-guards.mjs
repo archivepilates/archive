@@ -192,6 +192,41 @@ const guardGroups = [
           "review_required",
         ],
       },
+      {
+        file: "firebase/kangsain-functions/functions/src/mealPlan/recommendedMealProgram.ts",
+        markers: [
+          "generateRecommendedMealProgramDraftHandler",
+          "generateRecommendedMealProgramDraftForSubmittedResponse",
+          "saveRecommendedMealProgramDraftHandler",
+          "recommendedMealPlanApiHandler",
+          "approvedMealPlanSnapshot",
+          "reviewGateIssue",
+        ],
+      },
+      {
+        file: "firebase/kangsain-functions/functions/src/mealPlan/recommendedMealReportAlimtalk.ts",
+        markers: [
+          "operatorApproveAndSendRecommendedMealPlanHandler",
+          "confirmSend",
+          "processAlimtalkCandidate",
+        ],
+      },
+      {
+        file: "core/recommended-meals/index.html",
+        markers: [
+          "추천식단 검토",
+          "AI 식단 다시 생성",
+          "검토 완료 후 알림톡 발송",
+        ],
+      },
+      {
+        file: "archivein/recommendedMealPlan/index.html",
+        markers: [
+          "noindex,nofollow,noarchive",
+          "no-referrer",
+          "/api/recommendedMealPlan",
+        ],
+      },
     ],
   },
   {
