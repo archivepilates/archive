@@ -3853,6 +3853,7 @@ function renderTicketLiabilityMonth(month) {
   const report = selected.report;
   const totals = report.totals || {};
   const coverage = report.coverage || {};
+  const unitPriceAverages = report.unitPriceAverages || {};
   const rows = Array.isArray(report.rows) ? report.rows : [];
   const previous = reports.find((item) => item.month === previousMonthKey(selected.month));
   const currentValue = toNumber(totals.estimatedResidualValue);
@@ -3873,6 +3874,20 @@ function renderTicketLiabilityMonth(month) {
     setText("ticketLiabilityDeltaRate", `${formatMonth(previousMonthKey(selected.month))} 스냅샷 없음`);
   }
   setText("ticketLiabilityCoverage", `${(toNumber(coverage.directPriceCoverage) * 100).toFixed(1)}%`);
+  for (const [key, id, basisId] of [
+    ["group", "ticketLiabilityGroupAverage", "ticketLiabilityGroupAverageBasis"],
+    ["private", "ticketLiabilityPrivateAverage", "ticketLiabilityPrivateAverageBasis"],
+  ]) {
+    const average = unitPriceAverages[key] || {};
+    const value = Number(average.averageUnitPrice);
+    setText(id, Number.isFinite(value) && value > 0 ? formatWon(value) : "산정 대기");
+    setText(
+      basisId,
+      Number.isFinite(value) && value > 0
+        ? `0원 제외 · ${formatCount(average.pricedTicketRows, "건")} / ${formatCount(average.purchasedSessionCount, "회")}`
+        : "0원 제외 · 집계 없음",
+    );
+  }
   setText(
     "ticketLiabilityMeta",
     `${formatMonth(selected.month)} · ${formatDate(report.asOfDate)} 기준 · ${report.source?.sourceFileName || "StudioMate 회원목록"}`,
@@ -3925,6 +3940,10 @@ function renderTicketLiabilityFallback(error) {
     status.className = "pill warn";
   }
   setText("ticketLiabilityMeta", error?.message || "첫 월말 자동 집계 후 표시됩니다.");
+  setText("ticketLiabilityGroupAverage", "산정 대기");
+  setText("ticketLiabilityPrivateAverage", "산정 대기");
+  setText("ticketLiabilityGroupAverageBasis", "0원 제외 · 집계 없음");
+  setText("ticketLiabilityPrivateAverageBasis", "0원 제외 · 집계 없음");
   table.innerHTML = `<tr><td colspan="5"><div class="empty-state">월말 집계 데이터가 아직 없습니다.</div></td></tr>`;
 }
 

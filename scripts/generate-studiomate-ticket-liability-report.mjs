@@ -108,7 +108,7 @@ async function publishSummary(summary) {
   const report = {
     ...summary,
     schemaVersion: 1,
-    calculationVersion: "ticket-liability-v1",
+    calculationVersion: "ticket-liability-v2",
     reportId: REPORT_MONTH,
     reportMonth: REPORT_MONTH,
     reportKind: "studiomate_ticket_liability",
@@ -271,6 +271,10 @@ function summarizeTickets(tickets, historyUnitPrices, profileCount, sourceImport
   const estimatedResidualValue = rows.reduce((sum, row) => sum + row.estimatedResidualValue, 0);
   const confirmedResidualValue = rows.reduce((sum, row) => sum + row.confirmedResidualValue, 0);
   const memberWeightedResidualValue = rows.reduce((sum, row) => sum + row.memberWeightedResidualValue, 0);
+  const unitPriceAverages = {
+    group: summarizeUnitPriceAverage(enriched, "group"),
+    private: summarizeUnitPriceAverage(enriched, "private"),
+  };
 
   return {
     generatedAt: new Date().toISOString(),
@@ -305,6 +309,7 @@ function summarizeTickets(tickets, historyUnitPrices, profileCount, sourceImport
       estimatedResidualValue,
       estimatedAdjustment: estimatedResidualValue - confirmedResidualValue,
     },
+    unitPriceAverages,
     coverage: {
       directPricedRows: directPriced,
       directPriceCoverage: ratio(directPriced, enriched.length),
@@ -317,6 +322,31 @@ function summarizeTickets(tickets, historyUnitPrices, profileCount, sourceImport
     },
     rows,
   };
+}
+
+function summarizeUnitPriceAverage(tickets, category) {
+  const categoryTickets = tickets.filter((ticket) => ticketCategory(ticket) === category);
+  const pricedTickets = categoryTickets.filter((ticket) => ticket.unitPrice > 0 && ticket.denominator > 0);
+  const purchasedSessionCount = pricedTickets.reduce((sum, ticket) => sum + ticket.denominator, 0);
+  const estimatedPurchaseValue = pricedTickets.reduce((sum, ticket) => sum + ticket.unitPrice * ticket.denominator, 0);
+  return {
+    averageUnitPrice: purchasedSessionCount > 0 ? Math.round(estimatedPurchaseValue / purchasedSessionCount) : null,
+    pricedTicketRows: pricedTickets.length,
+    purchasedSessionCount: round1(purchasedSessionCount),
+    estimatedPurchaseValue: Math.round(estimatedPurchaseValue),
+    zeroPriceExcludedRows: categoryTickets.filter((ticket) => ticket.unitPrice === 0).length,
+    unavailablePriceExcludedRows: categoryTickets.filter((ticket) => ticket.unitPrice == null || !(ticket.denominator > 0)).length,
+  };
+}
+
+function ticketCategory(ticket) {
+  const classType = clean(ticket.classType).toLowerCase();
+  if (/프라이빗|개인|듀엣|세미|private|semi|1\s*:\s*1/.test(classType)) return "private";
+  if (/그룹|group/.test(classType)) return "group";
+  const name = clean(ticket.name).toLowerCase();
+  if (/프라이빗|개인|듀엣|세미|private|semi|1\s*:\s*1/.test(name)) return "private";
+  if (/그룹|group|회권|주\s*\d+\s*회/.test(name)) return "group";
+  return "other";
 }
 
 async function loadHistoricalUnitPrices(targetNames, profileIds) {
@@ -416,7 +446,7 @@ function renderHtml(summary) {
   <title>수강권 잔여금액 통계 · ${summary.asOfDate}</title>
   <style>
     :root{--ink:#121212;--muted:#69655f;--line:#ddd8d0;--paper:#f4f2ed;--card:#fff;--accent:#ff4d22;--blue:#2f65f5;--green:#0f7b68;--amber:#ae6f00}
-    *{box-sizing:border-box}html{-webkit-text-size-adjust:100%}body{margin:0;background:var(--paper);color:var(--ink);font-family:-apple-system,BlinkMacSystemFont,"Pretendard","Apple SD Gothic Neo",sans-serif;line-height:1.5;overflow-x:clip}main{width:min(1180px,calc(100% - 32px));margin:0 auto;padding:40px 0 72px}h1,h2,p{margin:0}h1{font-size:clamp(2rem,5vw,4rem);line-height:1.05;letter-spacing:0}.eyebrow{color:var(--accent);font-weight:800;font-size:.82rem;margin-bottom:14px}.lead{max-width:72ch;color:var(--muted);font-size:1rem;margin-top:16px}.source{margin-top:18px;color:var(--muted);font-size:.84rem}.metrics{display:grid;grid-template-columns:repeat(4,minmax(0,1fr));gap:12px;margin:30px 0}.metric,.panel{background:var(--card);border:1px solid var(--line);border-radius:8px}.metric{padding:22px;min-height:142px}.metric span{display:block;color:var(--muted);font-size:.82rem;font-weight:700}.metric strong{display:block;margin-top:18px;font-size:clamp(1.65rem,3vw,2.5rem);line-height:1}.metric small{display:block;margin-top:10px;color:var(--muted)}.panel{padding:24px;margin-top:16px}.section-head{display:flex;align-items:end;justify-content:space-between;gap:16px;margin-bottom:20px}.section-head h2{font-size:1.35rem}.section-head p{color:var(--muted);font-size:.85rem}.grid{display:grid;grid-template-columns:minmax(0,1.15fr) minmax(280px,.85fr);gap:16px}.bar-row{padding:10px 0}.bar-head{display:flex;justify-content:space-between;gap:16px;font-size:.88rem}.bar-track{height:8px;background:#edeae4;border-radius:99px;margin:8px 0 5px;overflow:hidden}.bar-track span{display:block;height:100%;background:var(--blue);border-radius:inherit}.bar-row small{color:var(--muted)}.method-list{display:grid;gap:12px}.method{border-top:1px solid var(--line);padding-top:12px}.method:first-child{border-top:0;padding-top:0}.method strong{display:block;font-size:.9rem}.method p{color:var(--muted);font-size:.85rem;margin-top:3px}.table-wrap{overflow:auto;border:1px solid var(--line);border-radius:8px;background:#fff}table{width:100%;border-collapse:collapse;min-width:900px}th,td{text-align:left;padding:14px 12px;border-bottom:1px solid #ebe7e0;vertical-align:top}th{position:sticky;top:0;background:#f8f7f4;color:var(--muted);font-size:.78rem;z-index:1}td{font-size:.88rem}td small{display:block;color:var(--muted);margin-top:3px}.coverage{display:inline-flex;padding:3px 8px;border-radius:99px;font-weight:800;font-size:.75rem}.coverage.good{color:var(--green);background:#e4f5ef}.coverage.warn{color:var(--amber);background:#fff0ce}.note{color:var(--muted);font-size:.84rem;margin-top:14px}.callout{border-left:4px solid var(--accent);padding:4px 0 4px 14px;margin-top:18px}.callout strong{display:block}.callout p{color:var(--muted);font-size:.86rem;margin-top:4px}@media(max-width:900px){.metrics{grid-template-columns:repeat(2,minmax(0,1fr))}.grid{grid-template-columns:1fr}}@media(max-width:520px){main{width:min(100% - 24px,1180px);padding-top:24px}.metrics{grid-template-columns:1fr 1fr;gap:8px}.metric{padding:16px;min-height:126px}.metric strong{font-size:1.45rem}.panel{padding:18px}.section-head{align-items:start;flex-direction:column}.lead{font-size:.94rem}}@media(prefers-reduced-motion:reduce){*{scroll-behavior:auto!important}}
+    *{box-sizing:border-box}html{-webkit-text-size-adjust:100%}body{margin:0;background:var(--paper);color:var(--ink);font-family:-apple-system,BlinkMacSystemFont,"Pretendard","Apple SD Gothic Neo",sans-serif;line-height:1.5;overflow-x:clip}main{width:min(1180px,calc(100% - 32px));margin:0 auto;padding:40px 0 72px}h1,h2,p{margin:0}h1{font-size:clamp(2rem,5vw,4rem);line-height:1.05;letter-spacing:0}.eyebrow{color:var(--accent);font-weight:800;font-size:.82rem;margin-bottom:14px}.lead{max-width:72ch;color:var(--muted);font-size:1rem;margin-top:16px}.source{margin-top:18px;color:var(--muted);font-size:.84rem}.metrics{display:grid;grid-template-columns:repeat(3,minmax(0,1fr));gap:12px;margin:30px 0}.metric,.panel{background:var(--card);border:1px solid var(--line);border-radius:8px}.metric{padding:22px;min-height:142px}.metric span{display:block;color:var(--muted);font-size:.82rem;font-weight:700}.metric strong{display:block;margin-top:18px;font-size:clamp(1.65rem,3vw,2.5rem);line-height:1}.metric small{display:block;margin-top:10px;color:var(--muted)}.panel{padding:24px;margin-top:16px}.section-head{display:flex;align-items:end;justify-content:space-between;gap:16px;margin-bottom:20px}.section-head h2{font-size:1.35rem}.section-head p{color:var(--muted);font-size:.85rem}.grid{display:grid;grid-template-columns:minmax(0,1.15fr) minmax(280px,.85fr);gap:16px}.bar-row{padding:10px 0}.bar-head{display:flex;justify-content:space-between;gap:16px;font-size:.88rem}.bar-track{height:8px;background:#edeae4;border-radius:99px;margin:8px 0 5px;overflow:hidden}.bar-track span{display:block;height:100%;background:var(--blue);border-radius:inherit}.bar-row small{color:var(--muted)}.method-list{display:grid;gap:12px}.method{border-top:1px solid var(--line);padding-top:12px}.method:first-child{border-top:0;padding-top:0}.method strong{display:block;font-size:.9rem}.method p{color:var(--muted);font-size:.85rem;margin-top:3px}.table-wrap{overflow:auto;border:1px solid var(--line);border-radius:8px;background:#fff}table{width:100%;border-collapse:collapse;min-width:900px}th,td{text-align:left;padding:14px 12px;border-bottom:1px solid #ebe7e0;vertical-align:top}th{position:sticky;top:0;background:#f8f7f4;color:var(--muted);font-size:.78rem;z-index:1}td{font-size:.88rem}td small{display:block;color:var(--muted);margin-top:3px}.coverage{display:inline-flex;padding:3px 8px;border-radius:99px;font-weight:800;font-size:.75rem}.coverage.good{color:var(--green);background:#e4f5ef}.coverage.warn{color:var(--amber);background:#fff0ce}.note{color:var(--muted);font-size:.84rem;margin-top:14px}.callout{border-left:4px solid var(--accent);padding:4px 0 4px 14px;margin-top:18px}.callout strong{display:block}.callout p{color:var(--muted);font-size:.86rem;margin-top:4px}@media(max-width:900px){.metrics{grid-template-columns:repeat(2,minmax(0,1fr))}.grid{grid-template-columns:1fr}}@media(max-width:520px){main{width:min(100% - 24px,1180px);padding-top:24px}.metrics{grid-template-columns:1fr 1fr;gap:8px}.metric{padding:16px;min-height:126px}.metric strong{font-size:1.45rem}.panel{padding:18px}.section-head{align-items:start;flex-direction:column}.lead{font-size:.94rem}}@media(prefers-reduced-motion:reduce){*{scroll-behavior:auto!important}}
   </style>
 </head>
 <body>
@@ -433,6 +463,8 @@ function renderHtml(summary) {
     <article class="metric"><span>환산 잔여회차</span><strong>${formatCount(summary.totals.remainingCountEquivalent)}회</strong><small>기간권 회차 환산 포함</small></article>
     <article class="metric"><span>전체 잔여금액</span><strong>${won(summary.totals.estimatedResidualValue)}</strong><small>보정 포함 추정치</small></article>
     <article class="metric"><span>직접 결제 커버리지</span><strong>${percent(summary.coverage.directPriceCoverage)}</strong><small>${summary.coverage.directPricedRows}/${summary.totals.activeTicketRows}건</small></article>
+    <article class="metric"><span>그룹 평균 회당가격</span><strong>${won(summary.unitPriceAverages.group.averageUnitPrice)}</strong><small>0원 제외 · ${summary.unitPriceAverages.group.pricedTicketRows}건 / ${formatCount(summary.unitPriceAverages.group.purchasedSessionCount)}회</small></article>
+    <article class="metric"><span>프라이빗 평균 회당가격</span><strong>${won(summary.unitPriceAverages.private.averageUnitPrice)}</strong><small>0원 제외 · ${summary.unitPriceAverages.private.pricedTicketRows}건 / ${formatCount(summary.unitPriceAverages.private.purchasedSessionCount)}회</small></article>
   </section>
 
   <section class="grid">
@@ -448,6 +480,7 @@ function renderHtml(summary) {
         <div class="method"><strong>기간권</strong><p>${escapeHtml(summary.methodology.periodTicket)}</p></div>
         <div class="method"><strong>사용예정 기간권</strong><p>${escapeHtml(summary.methodology.scheduledPeriodTicket)}</p></div>
         <div class="method"><strong>결제금액 누락</strong><p>${escapeHtml(summary.methodology.missingPrice)}</p></div>
+        <div class="method"><strong>그룹·프라이빗 평균</strong><p>0원 수강권을 제외한 환산 결제금액 합계 ÷ 총 약정회차입니다.</p></div>
       </div>
       <div class="callout"><strong>대표단가 적용 ${won(summary.totals.estimatedResidualValue)}</strong><p>동일 수강권의 현재 실결제 회당금액 중앙값을 전체 잔여회차에 적용했습니다. 회원별 실결제 연결액 합계는 ${won(summary.totals.confirmedResidualValue)}, 누락 단가를 보정한 회원별 합계는 ${won(summary.totals.memberWeightedResidualValue)}입니다.</p></div>
       <p class="note">명시적 무료 보상쿠폰 ${summary.coverage.zeroPricedRows}건은 0원으로 처리했습니다. 산정불가 ${summary.coverage.unpricedRows}건, 미산정 잔여 ${formatCount(summary.coverage.unpricedRemainingCount)}회입니다. 기준일 이전 만료 ${summary.coverage.expiredExcluded}건은 제외했습니다.</p>

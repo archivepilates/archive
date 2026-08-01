@@ -688,6 +688,39 @@ body[data-source-health="unavailable"] .connection-card {
   border-bottom: 1px solid var(--line-soft);
 }
 
+.ticket-liability-unit-summary {
+  display: grid;
+  grid-template-columns: repeat(2, minmax(0, 1fr));
+  border-bottom: 1px solid var(--line-soft);
+}
+
+.ticket-liability-unit-summary > div {
+  display: grid;
+  min-width: 0;
+  gap: 8px;
+  padding: 18px 20px;
+}
+
+.ticket-liability-unit-summary > div + div {
+  border-left: 1px solid var(--line-soft);
+}
+
+.ticket-liability-unit-summary span,
+.ticket-liability-unit-summary small {
+  color: var(--muted);
+}
+
+.ticket-liability-unit-summary strong {
+  overflow-wrap: anywhere;
+  font-size: 1.4rem;
+}
+
+.ticket-liability-unit-summary small {
+  overflow-wrap: anywhere;
+  font-size: 0.76rem;
+  font-weight: 750;
+}
+
 .ticket-liability-summary > div {
   display: grid;
   min-width: 0;
@@ -3480,6 +3513,15 @@ a.rank-row:hover,
 
   .ticket-liability-summary > div:last-child {
     grid-column: 1 / -1;
+    border-left: 0;
+  }
+
+  .ticket-liability-unit-summary {
+    grid-template-columns: 1fr;
+  }
+
+  .ticket-liability-unit-summary > div + div {
+    border-top: 1px solid var(--line-soft);
     border-left: 0;
   }
 
