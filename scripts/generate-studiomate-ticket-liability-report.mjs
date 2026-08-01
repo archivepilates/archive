@@ -1,5 +1,5 @@
 #!/usr/bin/env node
-import { mkdirSync, writeFileSync } from "node:fs";
+import { existsSync, mkdirSync, readdirSync, writeFileSync } from "node:fs";
 import { createRequire } from "node:module";
 import os from "node:os";
 import path from "node:path";
@@ -15,6 +15,7 @@ const DEFAULT_CREDENTIALS = path.join(os.homedir(), "ArchiveIN/secrets/google/ar
 const NOW = args.now ? new Date(String(args.now)) : new Date();
 const MONTH_END_ONLY = Boolean(args["month-end-only"]);
 const PUBLISH = Boolean(args.publish || args.apply);
+const DRIVE_COPY = Boolean(args["drive-copy"]);
 const AS_OF_DATE = String(args.date || kstDateKey(NOW));
 const REPORT_MONTH = AS_OF_DATE.slice(0, 7);
 const REPORT_PATH = path.resolve(args.report || `docs/reports/${AS_OF_DATE}-studiomate-ticket-liability.html`);
@@ -63,11 +64,13 @@ async function main() {
   const profileIds = new Set(profilesSnap.docs.map((doc) => doc.id));
   const historyUnitPrices = await loadHistoricalUnitPrices(new Set(tickets.map((ticket) => ticket.name)), profileIds);
   const summary = summarizeTickets(tickets, historyUnitPrices, profilesSnap.size, sourceImport, expiredExcluded);
+  const html = renderHtml(summary);
 
   mkdirSync(path.dirname(REPORT_PATH), { recursive: true });
   mkdirSync(path.dirname(JSON_PATH), { recursive: true });
   writeFileSync(JSON_PATH, `${JSON.stringify(summary, null, 2)}\n`);
-  writeFileSync(REPORT_PATH, renderHtml(summary));
+  writeFileSync(REPORT_PATH, html);
+  const driveReportPath = DRIVE_COPY ? writeDriveReport(html) : "";
   if (PUBLISH) await publishSummary(summary);
   console.log(
     JSON.stringify(
@@ -77,6 +80,7 @@ async function main() {
         reportMonth: REPORT_MONTH,
         reportPath: REPORT_PATH,
         jsonPath: JSON_PATH,
+        driveReportPath,
         totals: summary.totals,
         coverage: summary.coverage,
       },
@@ -84,6 +88,34 @@ async function main() {
       2,
     ),
   );
+}
+
+function writeDriveReport(html) {
+  const targetDirectory = resolveDriveReportDirectory();
+  mkdirSync(targetDirectory, { recursive: true });
+  const targetPath = path.join(targetDirectory, `${REPORT_MONTH.replace("-", "").slice(2)} 잔여수강권.html`);
+  writeFileSync(targetPath, html);
+  return targetPath;
+}
+
+function resolveDriveReportDirectory() {
+  if (args["drive-report-dir"] || process.env.TICKET_REPORT_DRIVE_DIR) {
+    return path.resolve(String(args["drive-report-dir"] || process.env.TICKET_REPORT_DRIVE_DIR));
+  }
+  const driveRoot = path.join(os.homedir(), "Library/CloudStorage/GoogleDrive-home@archivepilates.com");
+  if (!existsSync(driveRoot)) throw new Error(`home Google Drive 연결 경로를 찾지 못했습니다: ${driveRoot}`);
+  const myDrive = findNormalizedDirectory(driveRoot, "내 드라이브");
+  const settlement = findNormalizedDirectory(myDrive, "아카이브 정산");
+  return path.join(settlement, "잔여수강권");
+}
+
+function findNormalizedDirectory(parent, expectedName) {
+  const expected = expectedName.normalize("NFC");
+  const match = readdirSync(parent, { withFileTypes: true }).find(
+    (entry) => entry.isDirectory() && entry.name.normalize("NFC") === expected,
+  );
+  if (!match) throw new Error(`Google Drive 폴더를 찾지 못했습니다: ${expectedName}`);
+  return path.join(parent, match.name);
 }
 
 function assertPublishableSource(sourceImport) {

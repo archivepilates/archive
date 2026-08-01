@@ -10,6 +10,7 @@
     <string>/Users/archivepilates/dev/archive-in-runtime/scripts/generate-studiomate-ticket-liability-report.mjs</string>
     <string>--month-end-only</string>
     <string>--publish</string>
+    <string>--drive-copy</string>
     <string>--report</string>
     <string>/Users/archivepilates/ArchiveIN/automation/reports/ticket-liability/latest.html</string>
     <string>--json</string>
@@ -18,9 +19,9 @@
   <key>StartCalendarInterval</key>
   <dict>
     <key>Hour</key>
-    <integer>23</integer>
+    <integer>22</integer>
     <key>Minute</key>
-    <integer>50</integer>
+    <integer>0</integer>
   </dict>
   <key>EnvironmentVariables</key>
   <dict>

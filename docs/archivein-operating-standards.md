@@ -152,11 +152,11 @@ Firebase 주소록 동기화는 `home@archivepilates.com`을 Google People API �
 
 ### 월말 수강권 잔여금액 자동화
 
-Mac mini LaunchAgent `com.archive.monthly-ticket-liability`는 매일 23:50에 기동하고, `scripts/generate-studiomate-ticket-liability-report.mjs --month-end-only --publish`가 KST 월말인 날에만 실제 집계를 수행한다. 월 길이와 윤년은 스크립트가 판정하며, 말일이 아닌 날에는 Firestore를 읽지 않고 즉시 종료한다.
+Mac mini LaunchAgent `com.archive.monthly-ticket-liability`는 매일 22:00에 기동하고, `scripts/generate-studiomate-ticket-liability-report.mjs --month-end-only --publish --drive-copy`가 KST 월말인 날에만 실제 집계를 수행한다. 월 길이와 윤년은 스크립트가 판정하며, 말일이 아닌 날에는 Firestore를 읽지 않고 즉시 종료한다.
 
 집계 원천은 최신 적용 완료 StudioMate 회원목록과 `memberProfiles.activeTickets`다. 게시 시점 기준 회원목록이 3시간보다 오래됐거나 다른 스튜디오 원천이면 게시를 중단한다. 횟수권은 잔여횟수, 기간권은 잔여일수와 주당횟수를 이용해 환산 잔여횟수를 계산하고, 동일 수강권 실결제 회당금액 중앙값을 대표값으로 사용한다.
 
-집계 결과는 `ticketLiabilityReports/current`와 `ticketLiabilityReports/{YYYY-MM}`에 월별 스냅샷으로 보관한다. 운영자는 `https://core.archivepilates.com/business/#ticketLiability`에서 최신 결과와 과거 월을 확인한다. 이 컬렉션은 경영 검토용 computed 데이터이며 알림톡 대상, 예약, 결제, 환불 또는 StudioMate 쓰기 원천으로 사용하지 않는다.
+집계 결과는 `ticketLiabilityReports/current`와 `ticketLiabilityReports/{YYYY-MM}`에 월별 스냅샷으로 보관한다. 같은 HTML 보고서를 home 계정 Google Drive의 `아카이브 정산/잔여수강권`에 `YYMM 잔여수강권.html` 이름으로 저장하며, 같은 달 재실행 시 해당 파일을 교체한다. 운영자는 `https://core.archivepilates.com/business/#ticketLiability`에서 최신 결과와 과거 월을 확인한다. 이 컬렉션은 경영 검토용 computed 데이터이며 알림톡 대상, 예약, 결제, 환불 또는 StudioMate 쓰기 원천으로 사용하지 않는다.
 
 자동화 상태는 `automationStatus/monthly-ticket-liability`, 결과 파일은 `~/ArchiveIN/automation/reports/ticket-liability/latest.json`, 로그는 `~/ArchiveIN/emergency/logs/monthly-ticket-liability.*.log`에서 확인한다.
 
