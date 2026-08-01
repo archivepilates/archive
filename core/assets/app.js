@@ -3838,6 +3838,13 @@ function ticketLiabilityMonths(items) {
     .sort((a, b) => b.month.localeCompare(a.month));
 }
 
+function previousMonthKey(month) {
+  const [year, monthNumber] = String(month || "").split("-").map(Number);
+  if (!year || !monthNumber) return "";
+  const previous = new Date(Date.UTC(year, monthNumber - 2, 1));
+  return `${previous.getUTCFullYear()}-${String(previous.getUTCMonth() + 1).padStart(2, "0")}`;
+}
+
 function renderTicketLiabilityMonth(month) {
   const reports = ticketLiabilityMonths(state.ticketLiabilityReports);
   const selected = reports.find((item) => item.month === month) || reports[0];
@@ -3847,10 +3854,24 @@ function renderTicketLiabilityMonth(month) {
   const totals = report.totals || {};
   const coverage = report.coverage || {};
   const rows = Array.isArray(report.rows) ? report.rows : [];
+  const previous = reports.find((item) => item.month === previousMonthKey(selected.month));
+  const currentValue = toNumber(totals.estimatedResidualValue);
+  const previousValue = toNumber(previous?.report?.totals?.estimatedResidualValue);
 
   setText("ticketLiabilityHolders", formatCount(totals.activeHolders, "명"));
   setText("ticketLiabilityRemaining", formatCount(toNumber(totals.remainingCountEquivalent).toFixed(1), "회"));
-  setText("ticketLiabilityValue", formatWon(totals.estimatedResidualValue));
+  setText("ticketLiabilityValue", formatWon(currentValue));
+  if (previous && previousValue > 0) {
+    const delta = currentValue - previousValue;
+    const deltaRate = (delta / previousValue) * 100;
+    const direction = delta > 0 ? "▲" : delta < 0 ? "▼" : "―";
+    const sign = delta > 0 ? "+" : delta < 0 ? "-" : "";
+    setText("ticketLiabilityDelta", `${direction} ${sign}${formatWon(Math.abs(delta))}`);
+    setText("ticketLiabilityDeltaRate", `${deltaRate > 0 ? "+" : ""}${deltaRate.toFixed(1)}% · ${formatMonth(previous.month)} 대비`);
+  } else {
+    setText("ticketLiabilityDelta", "비교 대기");
+    setText("ticketLiabilityDeltaRate", `${formatMonth(previousMonthKey(selected.month))} 스냅샷 없음`);
+  }
   setText("ticketLiabilityCoverage", `${(toNumber(coverage.directPriceCoverage) * 100).toFixed(1)}%`);
   setText(
     "ticketLiabilityMeta",

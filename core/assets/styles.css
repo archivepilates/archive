@@ -683,7 +683,7 @@ body[data-source-health="unavailable"] .connection-card {
 
 .ticket-liability-summary {
   display: grid;
-  grid-template-columns: repeat(4, minmax(0, 1fr));
+  grid-template-columns: repeat(5, minmax(0, 1fr));
   border-top: 1px solid var(--line-soft);
   border-bottom: 1px solid var(--line-soft);
 }
@@ -700,8 +700,15 @@ body[data-source-health="unavailable"] .connection-card {
 }
 
 .ticket-liability-summary span,
+.ticket-liability-summary small,
 .ticket-liability-meta p {
   color: var(--muted);
+}
+
+.ticket-liability-summary small {
+  overflow-wrap: anywhere;
+  font-size: 0.76rem;
+  font-weight: 750;
 }
 
 .ticket-liability-summary strong {
@@ -3316,6 +3323,18 @@ a.rank-row:hover,
   .social-work-grid {
     grid-template-columns: 1fr;
   }
+
+  .ticket-liability-summary {
+    grid-template-columns: repeat(3, minmax(0, 1fr));
+  }
+
+  .ticket-liability-summary > div:nth-child(4) {
+    border-left: 0;
+  }
+
+  .ticket-liability-summary > div:nth-child(n + 4) {
+    border-top: 1px solid var(--line-soft);
+  }
 }
 
 @media (max-width: 720px) {
@@ -3447,12 +3466,21 @@ a.rank-row:hover,
     grid-template-columns: repeat(2, minmax(0, 1fr));
   }
 
-  .ticket-liability-summary > div:nth-child(3) {
+  .ticket-liability-summary > div:nth-child(2n + 3) {
     border-left: 0;
+  }
+
+  .ticket-liability-summary > div:nth-child(4) {
+    border-left: 1px solid var(--line-soft);
   }
 
   .ticket-liability-summary > div:nth-child(n + 3) {
     border-top: 1px solid var(--line-soft);
+  }
+
+  .ticket-liability-summary > div:last-child {
+    grid-column: 1 / -1;
+    border-left: 0;
   }
 
   .compact-month-control {

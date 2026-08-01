@@ -88,6 +88,8 @@ const required = [
       "ticketLiabilityHolders",
       "ticketLiabilityRemaining",
       "ticketLiabilityValue",
+      "ticketLiabilityDelta",
+      "ticketLiabilityDeltaRate",
       "ticketLiabilityCoverage",
       "ticketLiabilityTableBody",
     ],
