@@ -22,6 +22,7 @@ export const archiveCollections = {
   adminActions: "adminActions",
   instructorViews: "instructorViews",
   dashboardSnapshots: "dashboardSnapshots",
+  ticketLiabilityReports: "ticketLiabilityReports",
   workLanes: "workLanes",
   membersMirror: "members",
   member360CardsMirror: "member360Cards",

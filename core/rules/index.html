@@ -27,7 +27,7 @@
         <header class="page-hero">
           <p class="eyebrow">RULES</p>
           <h1>운영 규칙</h1>
-          <p class="subtitle">2026.07.31 기준 현재 유효한 운영 규칙만 정리한 ARCHIVE CORE 단일 운영 허브입니다.</p>
+          <p class="subtitle">2026.08.01 기준 현재 유효한 운영 규칙만 정리한 ARCHIVE CORE 단일 운영 허브입니다.</p>
         </header>
 
         <section class="panel rules-hero">
@@ -691,8 +691,18 @@
                 <li>일 단위 누적 파일은 최종 월 파일이 만들어진 뒤 휴지통으로 보냅니다.</li>
               </ul>
             </article>
+            <article class="rule-card">
+              <h3>수강권 잔여금액</h3>
+              <ul>
+                <li>Mac mini LaunchAgent는 매일 23:50에 기동하고 KST 월말인 날에만 집계를 게시합니다.</li>
+                <li>최신 적용 완료 StudioMate 회원목록과 memberProfiles.activeTickets를 사용하며, 3시간보다 오래된 원천이면 게시를 중단합니다.</li>
+                <li>횟수권은 잔여횟수, 기간권은 잔여일수와 주당횟수를 이용해 환산 잔여횟수를 계산합니다.</li>
+                <li>결과는 ticketLiabilityReports/current와 월별 문서에 보관하고 CORE Business 고정 링크에서 확인합니다.</li>
+                <li>잔여금액은 경영 검토용 계산값이며 알림톡, 예약, 결제, 환불 등 외부 실행 원천으로 사용하지 않습니다.</li>
+              </ul>
+            </article>
           </div>
-          <div class="rule-note"><strong>현재 확인 위치</strong><span>CORE Business / Google Drive 아카이브 정산 자동화 / Firestore businessSnapshots</span></div>
+          <div class="rule-note"><strong>현재 확인 위치</strong><span>CORE Business / Google Drive 아카이브 정산 자동화 / Firestore businessSnapshots / ticketLiabilityReports</span></div>
         </section>
 
         <section class="panel rule-section" id="release">

@@ -673,6 +673,65 @@ body[data-source-health="unavailable"] .connection-card {
   margin-top: 18px;
 }
 
+.ticket-liability-panel {
+  margin-top: 18px;
+}
+
+.compact-month-control {
+  width: min(100%, 210px);
+}
+
+.ticket-liability-summary {
+  display: grid;
+  grid-template-columns: repeat(4, minmax(0, 1fr));
+  border-top: 1px solid var(--line-soft);
+  border-bottom: 1px solid var(--line-soft);
+}
+
+.ticket-liability-summary > div {
+  display: grid;
+  min-width: 0;
+  gap: 8px;
+  padding: 18px 20px;
+}
+
+.ticket-liability-summary > div + div {
+  border-left: 1px solid var(--line-soft);
+}
+
+.ticket-liability-summary span,
+.ticket-liability-meta p {
+  color: var(--muted);
+}
+
+.ticket-liability-summary strong {
+  overflow-wrap: anywhere;
+  font-size: 1.4rem;
+}
+
+.ticket-liability-meta {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 10px;
+  align-items: center;
+  padding: 16px 20px 0;
+}
+
+.ticket-liability-meta p {
+  margin: 0;
+  font-size: 0.84rem;
+}
+
+.liability-table td strong,
+.liability-table td span {
+  display: block;
+  overflow-wrap: anywhere;
+}
+
+.liability-table td span {
+  margin-top: 4px;
+}
+
 .business-hero {
   display: grid;
   grid-template-columns: minmax(0, 1fr) minmax(180px, 240px);
@@ -3384,6 +3443,22 @@ a.rank-row:hover,
     font-size: 1.55rem;
   }
 
+  .ticket-liability-summary {
+    grid-template-columns: repeat(2, minmax(0, 1fr));
+  }
+
+  .ticket-liability-summary > div:nth-child(3) {
+    border-left: 0;
+  }
+
+  .ticket-liability-summary > div:nth-child(n + 3) {
+    border-top: 1px solid var(--line-soft);
+  }
+
+  .compact-month-control {
+    width: 100%;
+  }
+
   h1 {
     font-size: 1.62rem;
     word-break: keep-all;
@@ -3598,6 +3673,12 @@ a.rank-row:hover,
   .core-table td[colspan]::before {
     content: none;
   }
+
+  .liability-table td:nth-child(1)::before { content: "수강권"; }
+  .liability-table td:nth-child(2)::before { content: "보유"; }
+  .liability-table td:nth-child(3)::before { content: "잔여"; }
+  .liability-table td:nth-child(4)::before { content: "회당금액"; }
+  .liability-table td:nth-child(5)::before { content: "잔여금액"; }
 
   .members-table td:nth-child(1)::before {
     content: "회원";

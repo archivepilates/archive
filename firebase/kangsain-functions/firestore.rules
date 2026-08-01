@@ -447,6 +447,11 @@ service cloud.firestore {
       allow write: if false;
     }
 
+    match /ticketLiabilityReports/{reportId} {
+      allow read: if isManager() && sameStudio(resource.data.studioId);
+      allow write: if false;
+    }
+
     match /dashboardMonthlyMetrics/{metricId} {
       allow read: if isManager();
       allow write: if false;

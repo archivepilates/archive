@@ -1,5 +1,5 @@
 const FIREBASE_APP_VERSION = "10.14.1";
-const CORE_RUNTIME_CONTRACT_VERSION = "2026-07-28.1";
+const CORE_RUNTIME_CONTRACT_VERSION = "2026-08-01.1";
 const WORK_LANE_ID = "archive-core-transition";
 const STUDIO_ID = "5330";
 
@@ -11,6 +11,7 @@ const state = {
   businessSnapshot: null,
   businessMonths: [],
   businessMembers: [],
+  ticketLiabilityReports: [],
   members: [],
   memberCards: [],
   memberProfiles: [],
@@ -106,6 +107,12 @@ const COMMAND_ITEMS = [
     detail: "실패, 지연, 중복 실행 확인",
     href: "./automation/",
     keywords: "automation 자동화 launchagent 실패 지연",
+  },
+  {
+    title: "수강권 잔여금액",
+    detail: "월말 수강권별 환산 잔여횟수와 잔여금액 확인",
+    href: "./business/#ticketLiability",
+    keywords: "ticket liability 수강권 잔여금액 잔여횟수 월말",
   },
   {
     title: "운영규칙",
@@ -862,6 +869,19 @@ async function getOptionalCollectionBy(db, firestore, collectionName, orderField
     }
     throw error;
   }
+}
+
+async function getStudioCollectionBy(db, firestore, collectionName, orderField = "updatedAt", maxItems = 1000) {
+  const snapshot = await firestore.getDocs(
+    firestore.query(
+      firestore.collection(db, collectionName),
+      firestore.where("studioId", "==", STUDIO_ID),
+      firestore.limit(maxItems),
+    ),
+  );
+  return snapshot.docs
+    .map((docSnapshot) => ({ id: docSnapshot.id, ...docSnapshot.data() }))
+    .sort((a, b) => String(b[orderField] || "").localeCompare(String(a[orderField] || "")));
 }
 
 async function getBookingsForLessonWindow(db, firestore) {
@@ -3798,6 +3818,95 @@ function renderBusiness(snapshot) {
   renderBusinessMonth(latestMonth);
 }
 
+function formatWon(value) {
+  const amount = toNumber(value);
+  if (!Number.isFinite(amount)) return "-";
+  return `${Math.round(amount).toLocaleString("ko-KR")}원`;
+}
+
+function ticketLiabilityMonths(items) {
+  const byMonth = new Map();
+  for (const item of items || []) {
+    if (item.reportKind !== "studiomate_ticket_liability" || item.status !== "ready") continue;
+    const month = normMonth(item.reportMonth || item.asOfDate);
+    if (!month) continue;
+    const existing = byMonth.get(month);
+    if (!existing || (existing.id === "current" && item.id !== "current")) byMonth.set(month, item);
+  }
+  return [...byMonth.entries()]
+    .map(([month, report]) => ({ month, report }))
+    .sort((a, b) => b.month.localeCompare(a.month));
+}
+
+function renderTicketLiabilityMonth(month) {
+  const reports = ticketLiabilityMonths(state.ticketLiabilityReports);
+  const selected = reports.find((item) => item.month === month) || reports[0];
+  const table = qs("ticketLiabilityTableBody");
+  if (!selected || !table) return renderTicketLiabilityFallback();
+  const report = selected.report;
+  const totals = report.totals || {};
+  const coverage = report.coverage || {};
+  const rows = Array.isArray(report.rows) ? report.rows : [];
+
+  setText("ticketLiabilityHolders", formatCount(totals.activeHolders, "명"));
+  setText("ticketLiabilityRemaining", formatCount(toNumber(totals.remainingCountEquivalent).toFixed(1), "회"));
+  setText("ticketLiabilityValue", formatWon(totals.estimatedResidualValue));
+  setText("ticketLiabilityCoverage", `${(toNumber(coverage.directPriceCoverage) * 100).toFixed(1)}%`);
+  setText(
+    "ticketLiabilityMeta",
+    `${formatMonth(selected.month)} · ${formatDate(report.asOfDate)} 기준 · ${report.source?.sourceFileName || "StudioMate 회원목록"}`,
+  );
+  const status = qs("ticketLiabilityStatus");
+  if (status) {
+    status.textContent = report.id === "current" ? "최신" : "월말 확정";
+    status.className = "pill good";
+  }
+
+  table.innerHTML = rows.length
+    ? rows
+        .map((row) => {
+          const remaining = row.kind === "기간권"
+            ? `${formatCount(row.remainingDays, "일")} / ${formatCount(toNumber(row.remainingCount).toFixed(1), "회 환산")}`
+            : formatCount(row.remainingCount, "회");
+          return `
+            <tr>
+              <td><strong>${escapeHtml(row.name || "수강권")}</strong><span>${escapeHtml(row.kind || "-")} · ${escapeHtml((row.classTypes || []).join(", ") || "구분 없음")}</span></td>
+              <td>${escapeHtml(formatCount(row.holderCount, "명"))}<span>${escapeHtml(formatCount(row.ticketCount, "개"))}</span></td>
+              <td>${escapeHtml(remaining)}</td>
+              <td>${escapeHtml(formatWon(row.unitPrice))}<span>${escapeHtml(row.representativePriceSource || "대표값")}</span></td>
+              <td><strong>${escapeHtml(formatWon(row.estimatedResidualValue))}</strong></td>
+            </tr>
+          `;
+        })
+        .join("")
+    : `<tr><td colspan="5"><div class="empty-state">선택 월 수강권 집계가 없습니다.</div></td></tr>`;
+}
+
+function renderTicketLiabilityReports(items) {
+  const select = qs("ticketLiabilityMonthSelect");
+  if (!select) return;
+  state.ticketLiabilityReports = studioItems(items || []);
+  const reports = ticketLiabilityMonths(state.ticketLiabilityReports);
+  if (!reports.length) return renderTicketLiabilityFallback();
+  select.innerHTML = reports
+    .map(({ month }) => `<option value="${escapeHtml(month)}">${escapeHtml(formatMonth(month))}</option>`)
+    .join("");
+  select.value = reports[0].month;
+  renderTicketLiabilityMonth(reports[0].month);
+}
+
+function renderTicketLiabilityFallback(error) {
+  const table = qs("ticketLiabilityTableBody");
+  if (!table) return;
+  const status = qs("ticketLiabilityStatus");
+  if (status) {
+    status.textContent = error ? "확인 필요" : "집계 대기";
+    status.className = "pill warn";
+  }
+  setText("ticketLiabilityMeta", error?.message || "첫 월말 자동 집계 후 표시됩니다.");
+  table.innerHTML = `<tr><td colspan="5"><div class="empty-state">월말 집계 데이터가 아직 없습니다.</div></td></tr>`;
+}
+
 function renderBusinessMemberInsights(items) {
   const list = qs("businessMemberInsightList");
   if (!list) return;
@@ -5272,6 +5381,7 @@ async function refresh() {
     hideLoginGate();
     const { db, doc, getDoc } = runtime;
     const shouldLoadBusiness = Boolean(qs("businessMonthSelect"));
+    const shouldLoadTicketLiability = Boolean(qs("ticketLiabilityTableBody"));
     const shouldLoadHome = Boolean(qs("homeDecisionList"));
     const shouldLoadMembers = Boolean(qs("membersTable"));
     const shouldLoadMessages = Boolean(qs("messagesCandidateList"));
@@ -5298,6 +5408,7 @@ async function refresh() {
       recommendedMealProgramRequests,
       memberDetail,
       businessMembers,
+      ticketLiabilityReports,
       privateSessions,
       privateRequests,
       privateRecords,
@@ -5369,6 +5480,9 @@ async function refresh() {
       shouldLoadBusiness
         ? safeRead("businessMembers", () => getRecentCollectionBy(db, runtime, "member360Cards", "totalRevenue", 8), [])
         : Promise.resolve([]),
+      shouldLoadTicketLiability
+        ? safeRead("ticketLiabilityReports", () => getStudioCollectionBy(db, runtime, "ticketLiabilityReports", "asOfDate", 24), [])
+        : Promise.resolve([]),
       shouldLoadPrivate
         ? safeRead(
             "privateLessonSessions",
@@ -5427,6 +5541,7 @@ async function refresh() {
     state.recommendedMealProgramRequests = studioItems(recommendedMealProgramRequests);
     state.memberDetail = memberDetail;
     state.businessMembers = businessMembers;
+    state.ticketLiabilityReports = studioItems(ticketLiabilityReports);
     state.privateSessions = privateSessions;
     state.privateRequests = privateRequests;
     state.privateRecords = privateRecords;
@@ -5475,6 +5590,7 @@ async function refresh() {
       if (state.businessSnapshot) renderBusiness(state.businessSnapshot);
       else renderBusinessFallback(new Error("월별 요약 데이터가 없습니다."));
       renderBusinessMemberInsights(businessMembers);
+      renderTicketLiabilityReports(state.ticketLiabilityReports);
     }
     if (qs("instructorEvaluationQuizForm")) await loadInstructorEvaluationQuiz();
     renderReadHealth();
@@ -5522,6 +5638,7 @@ qs("instagramStatusFilter")?.addEventListener("change", () =>
   ),
 );
 qs("businessMonthSelect")?.addEventListener("change", (event) => renderBusinessMonth(event.target.value));
+qs("ticketLiabilityMonthSelect")?.addEventListener("change", (event) => renderTicketLiabilityMonth(event.target.value));
 document.addEventListener("submit", (event) => {
   const form = event.target.closest?.("[data-staff-essay-score-form]");
   if (!form) return;

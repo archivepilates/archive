@@ -38,6 +38,7 @@ export const archiveComputedCollections = [
   archiveCollections.adminActions,
   archiveCollections.instructorViews,
   archiveCollections.dashboardSnapshots,
+  archiveCollections.ticketLiabilityReports,
 ] as const;
 
 export const archiveMirrorCollections = [

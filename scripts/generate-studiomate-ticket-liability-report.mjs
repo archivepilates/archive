@@ -3,6 +3,7 @@ import { mkdirSync, writeFileSync } from "node:fs";
 import { createRequire } from "node:module";
 import os from "node:os";
 import path from "node:path";
+import { recordAutomationStatus } from "./lib/archive-core-ops-logging.mjs";
 
 const require = createRequire(import.meta.url);
 const admin = require("../firebase/kangsain-functions/functions/node_modules/firebase-admin");
@@ -11,37 +12,125 @@ const args = parseArgs(process.argv.slice(2));
 const PROJECT_ID = process.env.GOOGLE_CLOUD_PROJECT || process.env.GCLOUD_PROJECT || "archive-pilates";
 const STUDIO_ID = String(args["studio-id"] || process.env.STUDIOMATE_STUDIO_ID || process.env.MANAGER_STUDIO_ID || "5330");
 const DEFAULT_CREDENTIALS = path.join(os.homedir(), "ArchiveIN/secrets/google/archive-codex-operator.json");
-const AS_OF_DATE = String(args.date || kstDateKey(new Date()));
+const NOW = args.now ? new Date(String(args.now)) : new Date();
+const MONTH_END_ONLY = Boolean(args["month-end-only"]);
+const PUBLISH = Boolean(args.publish || args.apply);
+const AS_OF_DATE = String(args.date || kstDateKey(NOW));
+const REPORT_MONTH = AS_OF_DATE.slice(0, 7);
 const REPORT_PATH = path.resolve(args.report || `docs/reports/${AS_OF_DATE}-studiomate-ticket-liability.html`);
 const JSON_PATH = path.resolve(args.json || `artifacts/${AS_OF_DATE}-studiomate-ticket-liability.json`);
+const SOURCE_MAX_AGE_HOURS = positiveNumber(args["source-max-age-hours"] || process.env.TICKET_REPORT_SOURCE_MAX_AGE_HOURS) || 3;
+const AUTOMATION_ID = "monthly-ticket-liability";
 const DAY_MS = 86_400_000;
 
 if (!process.env.GOOGLE_APPLICATION_CREDENTIALS) process.env.GOOGLE_APPLICATION_CREDENTIALS = DEFAULT_CREDENTIALS;
 if (!admin.apps.length) admin.initializeApp({ projectId: PROJECT_ID });
 const db = admin.firestore();
 
-main().catch((error) => {
+main().catch(async (error) => {
+  if (PUBLISH) {
+    await recordAutomationStatus(db, {
+      automationId: AUTOMATION_ID,
+      title: "월말 수강권 잔여금액",
+      ownerArea: "business",
+      status: "failed",
+      lastRunAt: NOW.toISOString(),
+      lastResult: error instanceof Error ? error.message : String(error),
+      warnings: ["월말 집계 게시 실패"],
+    }).catch(() => {});
+  }
   console.error(error instanceof Error ? error.stack || error.message : String(error));
   process.exitCode = 1;
 });
 
 async function main() {
+  if (MONTH_END_ONLY && !isKstMonthEnd(NOW)) {
+    console.log(JSON.stringify({ ok: true, skipped: true, reason: "not_kst_month_end", checkedAt: NOW.toISOString() }));
+    return;
+  }
   const [profilesSnap, latestImportSnap] = await Promise.all([
     db.collection("memberProfiles").where("studioId", "==", STUDIO_ID).get(),
     db.collection("sourceImports").orderBy("importedAt", "desc").limit(30).get(),
   ]);
 
-  const sourceImportDoc = latestImportSnap.docs.find((doc) => doc.data().sourceKind === "studiomate_member_excel");
+  const sourceImportDoc = latestImportSnap.docs.find((doc) => {
+    const row = doc.data();
+    return row.sourceKind === "studiomate_member_excel" && (!row.studioId || String(row.studioId) === STUDIO_ID);
+  });
   const sourceImport = sourceImportDoc ? { id: sourceImportDoc.id, ...sourceImportDoc.data() } : null;
+  if (PUBLISH) assertPublishableSource(sourceImport);
   const { tickets, expiredExcluded } = collectTickets(profilesSnap.docs, AS_OF_DATE);
-  const historyUnitPrices = await loadHistoricalUnitPrices(new Set(tickets.map((ticket) => ticket.name)));
+  const profileIds = new Set(profilesSnap.docs.map((doc) => doc.id));
+  const historyUnitPrices = await loadHistoricalUnitPrices(new Set(tickets.map((ticket) => ticket.name)), profileIds);
   const summary = summarizeTickets(tickets, historyUnitPrices, profilesSnap.size, sourceImport, expiredExcluded);
 
   mkdirSync(path.dirname(REPORT_PATH), { recursive: true });
   mkdirSync(path.dirname(JSON_PATH), { recursive: true });
   writeFileSync(JSON_PATH, `${JSON.stringify(summary, null, 2)}\n`);
   writeFileSync(REPORT_PATH, renderHtml(summary));
-  console.log(JSON.stringify({ ok: true, reportPath: REPORT_PATH, jsonPath: JSON_PATH, totals: summary.totals, coverage: summary.coverage }, null, 2));
+  if (PUBLISH) await publishSummary(summary);
+  console.log(
+    JSON.stringify(
+      {
+        ok: true,
+        published: PUBLISH,
+        reportMonth: REPORT_MONTH,
+        reportPath: REPORT_PATH,
+        jsonPath: JSON_PATH,
+        totals: summary.totals,
+        coverage: summary.coverage,
+      },
+      null,
+      2,
+    ),
+  );
+}
+
+function assertPublishableSource(sourceImport) {
+  if (!sourceImport || sourceImport.status !== "applied") {
+    throw new Error("최신 StudioMate 회원목록 반영 원천을 찾지 못했습니다.");
+  }
+  if (sourceImport.studioId && String(sourceImport.studioId) !== STUDIO_ID) {
+    throw new Error(`회원목록 스튜디오가 ${sourceImport.studioId}로 현재 스튜디오 ${STUDIO_ID}와 다릅니다.`);
+  }
+  if (!(number(sourceImport.rowCount) > 0)) {
+    throw new Error("최신 StudioMate 회원목록의 원본 행 수가 비어 있습니다.");
+  }
+  const importedAtMs = millis(sourceImport.importedAt || sourceImport.updatedAt);
+  const ageHours = importedAtMs > 0 ? Math.max(0, (NOW.getTime() - importedAtMs) / 3_600_000) : Number.POSITIVE_INFINITY;
+  if (ageHours > SOURCE_MAX_AGE_HOURS) {
+    throw new Error(`StudioMate 회원목록이 ${ageHours.toFixed(1)}시간 전 자료라 월말 게시를 중단했습니다.`);
+  }
+}
+
+async function publishSummary(summary) {
+  const publishedAt = NOW.toISOString();
+  const report = {
+    ...summary,
+    schemaVersion: 1,
+    calculationVersion: "ticket-liability-v1",
+    reportId: REPORT_MONTH,
+    reportMonth: REPORT_MONTH,
+    reportKind: "studiomate_ticket_liability",
+    dataLayer: "computed",
+    status: "ready",
+    publishedAt,
+    updatedAt: publishedAt,
+  };
+  const batch = db.batch();
+  batch.set(db.collection("ticketLiabilityReports").doc(REPORT_MONTH), report);
+  batch.set(db.collection("ticketLiabilityReports").doc("current"), report);
+  await batch.commit();
+  await recordAutomationStatus(db, {
+    automationId: AUTOMATION_ID,
+    title: "월말 수강권 잔여금액",
+    ownerArea: "business",
+    status: "healthy",
+    lastRunAt: publishedAt,
+    nextRunAt: nextMonthEndRunIso(NOW),
+    lastResult: `${REPORT_MONTH} · ${summary.totals.activeHolders}명 · ${won(summary.totals.estimatedResidualValue)}`,
+    sourceImportIds: [summary.source.importId].filter(Boolean),
+  });
 }
 
 function collectTickets(profileDocs, asOfDate) {
@@ -230,12 +319,15 @@ function summarizeTickets(tickets, historyUnitPrices, profileCount, sourceImport
   };
 }
 
-async function loadHistoricalUnitPrices(targetNames) {
+async function loadHistoricalUnitPrices(targetNames, profileIds) {
   const result = new Map();
   if (!targetNames.size) return result;
   const snapshot = await db.collectionGroup("purchases").get();
   for (const doc of snapshot.docs) {
     const row = doc.data();
+    const memberId = doc.ref.parent.parent?.id || "";
+    if (!profileIds.has(memberId)) continue;
+    if (row.studioId && String(row.studioId) !== STUDIO_ID) continue;
     const name = clean(row.ticketName || row.name || row.productName);
     if (!targetNames.has(name)) continue;
     const amount = money(row.amountTotal ?? row.paymentAmount ?? row.price);
@@ -433,6 +525,20 @@ function round1(value) {
 
 function kstDateKey(date) {
   return new Intl.DateTimeFormat("en-CA", { timeZone: "Asia/Seoul", year: "numeric", month: "2-digit", day: "2-digit" }).format(date);
+}
+
+function isKstMonthEnd(date) {
+  const today = kstDateKey(date);
+  const tomorrow = kstDateKey(new Date(Date.parse(`${today}T12:00:00+09:00`) + DAY_MS));
+  return tomorrow.endsWith("-01");
+}
+
+function nextMonthEndRunIso(date) {
+  const current = kstDateKey(date);
+  const pivot = new Date(Date.parse(`${current}T12:00:00+09:00`) + (isKstMonthEnd(date) ? DAY_MS * 2 : 0));
+  const [year, month] = kstDateKey(pivot).split("-").map(Number);
+  const nextMonthEnd = new Date(Date.UTC(year, month, 0, 14, 50, 0));
+  return nextMonthEnd.toISOString();
 }
 
 function kstDateTime(value) {

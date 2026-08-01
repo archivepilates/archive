@@ -26,6 +26,7 @@ export const archiveCoreCollections = {
   memberAttendanceStats: "memberAttendanceStats",
   dailyOperationSnapshots: "dailyOperationSnapshots",
   businessSnapshots: "businessSnapshots",
+  ticketLiabilityReports: "ticketLiabilityReports",
 } as const;
 
 export type ArchiveCoreCollectionName = (typeof archiveCoreCollections)[keyof typeof archiveCoreCollections];
@@ -59,6 +60,7 @@ export const archiveCoreComputedCollections = [
   archiveCoreCollections.memberAttendanceStats,
   archiveCoreCollections.dailyOperationSnapshots,
   archiveCoreCollections.businessSnapshots,
+  archiveCoreCollections.ticketLiabilityReports,
 ] as const;
 
 export const archiveCoreLegacyAuditCollections = [

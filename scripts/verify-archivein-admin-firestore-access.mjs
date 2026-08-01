@@ -75,7 +75,8 @@ const adminReads = [
     "memberContactIndex",
     "alimtalkCandidates",
     "privateSurveyResponses",
-    "studiomateMemoWriteJobs"
+    "studiomateMemoWriteJobs",
+    "ticketLiabilityReports"
   ].map((collectionName) => ({
     label: `${collectionName} query`,
     run: async ({ db, getDocs, collection, query, where, limit }) => ({
@@ -205,6 +206,7 @@ try {
       "alimtalkCandidates query": () => getDocs(query(collection(db, "alimtalkCandidates"), where("studioId", "==", verifyStudioId), limit(1))).then((snap) => ({ size: snap.size })),
       "privateSurveyResponses query": () => getDocs(query(collection(db, "privateSurveyResponses"), where("studioId", "==", verifyStudioId), limit(1))).then((snap) => ({ size: snap.size })),
       "studiomateMemoWriteJobs query": () => getDocs(query(collection(db, "studiomateMemoWriteJobs"), where("studioId", "==", verifyStudioId), limit(1))).then((snap) => ({ size: snap.size })),
+      "ticketLiabilityReports query": () => getDocs(query(collection(db, "ticketLiabilityReports"), where("studioId", "==", verifyStudioId), limit(1))).then((snap) => ({ size: snap.size })),
       "alimtalkTemplateStates query": () => getDocs(query(collection(db, "alimtalkTemplateStates"), limit(1))).then((snap) => ({ size: snap.size })),
       "adminActions doc": () => getDoc(doc(db, "adminActions", `${verifyStudioId}_${verifyDate}`)).then((snap) => ({ exists: snap.exists() })),
       "syncStates doc": () => getDoc(doc(db, "syncStates", `lecturesRange_${verifyStudioId}`)).then((snap) => ({ exists: snap.exists() })),

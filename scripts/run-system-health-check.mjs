@@ -117,6 +117,16 @@ const AUTOMATIONS = [
     repair: "none",
   },
   {
+    id: "monthly-ticket-liability",
+    label: "com.archive.monthly-ticket-liability",
+    title: "Monthly ticket liability",
+    area: "business",
+    resultFile: path.join(HOME, "ArchiveIN/automation/reports/ticket-liability/latest.json"),
+    maxAgeMinutes: 35 * 24 * 60,
+    plist: path.join(PLIST_DIR, "com.archive.monthly-ticket-liability.plist"),
+    repair: "none",
+  },
+  {
     id: "archive-ai-server",
     label: "com.archive.archive-ai-server",
     title: "Archive AI server",
