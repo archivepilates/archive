@@ -1,10 +1,17 @@
 import assert from "node:assert/strict";
 import test from "node:test";
 import {
+  residualValueShare,
   resolveTicketUnitPrice,
   summarizeUnitPriceAverage,
   ticketPriceCategory,
 } from "../lib/ticket-liability-price-policy.mjs";
+
+test("computes each ticket's share of the total remaining value", () => {
+  assert.equal(residualValueShare(25_000_000, 100_000_000), 0.25);
+  assert.equal(residualValueShare(0, 100_000_000), 0);
+  assert.equal(residualValueShare(10_000, 0), 0);
+});
 
 test("separates one-to-one, duet, group, and staff lesson tickets", () => {
   assert.equal(ticketPriceCategory({ name: "프라이빗 20회", classType: "프라이빗" }), "private");

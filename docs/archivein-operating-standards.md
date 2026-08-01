@@ -158,6 +158,8 @@ Mac mini LaunchAgent `com.archive.monthly-ticket-liability`는 매일 22:00에 �
 
 집계 결과는 `ticketLiabilityReports/current`와 `ticketLiabilityReports/{YYYY-MM}`에 월별 스냅샷으로 보관한다. 같은 HTML 보고서를 home 계정 Google Drive의 `아카이브 정산/잔여수강권`에 `YYMM 잔여수강권.html` 이름으로 저장하며, 같은 달 재실행 시 해당 파일을 교체한다. 운영자는 `https://core.archivepilates.com/business/#ticketLiability`에서 최신 결과와 과거 월을 확인한다. 이 컬렉션은 경영 검토용 computed 데이터이며 알림톡 대상, 예약, 결제, 환불 또는 StudioMate 쓰기 원천으로 사용하지 않는다.
 
+수강권별 상세표의 `잔여금액 비율`은 수강권별 잔여금액을 전체 잔여금액으로 나눈 값이다. 가격 커버리지는 운영자 표에서 숨기되 원본 품질 검증을 위해 Firestore 계산 데이터에는 유지한다.
+
 자동화 상태는 `automationStatus/monthly-ticket-liability`, 결과 파일은 `~/ArchiveIN/automation/reports/ticket-liability/latest.json`, 로그는 `~/ArchiveIN/emergency/logs/monthly-ticket-liability.*.log`에서 확인한다.
 
 ### StudioMate 예약 가능 기한 설정 자동화

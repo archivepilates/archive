@@ -5,6 +5,7 @@ import os from "node:os";
 import path from "node:path";
 import { recordAutomationStatus } from "./lib/archive-core-ops-logging.mjs";
 import {
+  residualValueShare,
   resolveTicketUnitPrice,
   summarizeUnitPriceAverage,
   ticketPriceCategory,
@@ -145,7 +146,7 @@ async function publishSummary(summary) {
   const report = {
     ...summary,
     schemaVersion: 1,
-    calculationVersion: "ticket-liability-v3",
+    calculationVersion: "ticket-liability-v4",
     reportId: REPORT_MONTH,
     reportMonth: REPORT_MONTH,
     reportKind: "studiomate_ticket_liability",
@@ -323,6 +324,9 @@ function summarizeTickets(tickets, purchasePriceIndex, profileCount, sourceImpor
   const countTickets = enriched.filter((ticket) => ticket.kind === "횟수권");
   const periodTickets = enriched.filter((ticket) => ticket.kind === "기간권");
   const estimatedResidualValue = rows.reduce((sum, row) => sum + row.estimatedResidualValue, 0);
+  for (const row of rows) {
+    row.residualValueShare = residualValueShare(row.estimatedResidualValue, estimatedResidualValue);
+  }
   const confirmedResidualValue = rows.reduce((sum, row) => sum + row.confirmedResidualValue, 0);
   const memberWeightedResidualValue = rows.reduce((sum, row) => sum + row.memberWeightedResidualValue, 0);
   const unitPriceAverages = {
@@ -492,7 +496,7 @@ function renderHtml(summary) {
           <td>${row.kind === "기간권" ? `${formatCount(row.remainingDays)}일<small>${formatCount(row.remainingCount)}회 환산</small>` : `${formatCount(row.remainingCount)}회`}</td>
           <td>${row.unitPrice != null ? won(row.unitPrice) : "산정불가"}${range}</td>
           <td><strong>${won(row.estimatedResidualValue)}</strong><small>${row.representativePriceSource} · ${sourceText || "가격 없음"}</small></td>
-          <td><span class="coverage ${row.valuedCoverage === 1 ? "good" : "warn"}">${percent(row.valuedCoverage)}</span></td>
+          <td><span class="share">${percent1(row.residualValueShare)}</span></td>
         </tr>`;
     })
     .join("");
@@ -505,7 +509,7 @@ function renderHtml(summary) {
   <title>수강권 잔여금액 통계 · ${summary.asOfDate}</title>
   <style>
     :root{--ink:#121212;--muted:#69655f;--line:#ddd8d0;--paper:#f4f2ed;--card:#fff;--accent:#ff4d22;--blue:#2f65f5;--green:#0f7b68;--amber:#ae6f00}
-    *{box-sizing:border-box}html{-webkit-text-size-adjust:100%}body{margin:0;background:var(--paper);color:var(--ink);font-family:-apple-system,BlinkMacSystemFont,"Pretendard","Apple SD Gothic Neo",sans-serif;line-height:1.5;overflow-x:clip}main{width:min(1180px,calc(100% - 32px));margin:0 auto;padding:40px 0 72px}h1,h2,p{margin:0}h1{font-size:clamp(2rem,5vw,4rem);line-height:1.05;letter-spacing:0}.eyebrow{color:var(--accent);font-weight:800;font-size:.82rem;margin-bottom:14px}.lead{max-width:72ch;color:var(--muted);font-size:1rem;margin-top:16px}.source{margin-top:18px;color:var(--muted);font-size:.84rem}.metrics{display:grid;grid-template-columns:repeat(3,minmax(0,1fr));gap:12px;margin:30px 0}.metric,.panel{background:var(--card);border:1px solid var(--line);border-radius:8px}.metric{padding:22px;min-height:142px}.metric span{display:block;color:var(--muted);font-size:.82rem;font-weight:700}.metric strong{display:block;margin-top:18px;font-size:clamp(1.65rem,3vw,2.5rem);line-height:1}.metric small{display:block;margin-top:10px;color:var(--muted)}.panel{padding:24px;margin-top:16px}.section-head{display:flex;align-items:end;justify-content:space-between;gap:16px;margin-bottom:20px}.section-head h2{font-size:1.35rem}.section-head p{color:var(--muted);font-size:.85rem}.grid{display:grid;grid-template-columns:minmax(0,1.15fr) minmax(280px,.85fr);gap:16px}.bar-row{padding:10px 0}.bar-head{display:flex;justify-content:space-between;gap:16px;font-size:.88rem}.bar-track{height:8px;background:#edeae4;border-radius:99px;margin:8px 0 5px;overflow:hidden}.bar-track span{display:block;height:100%;background:var(--blue);border-radius:inherit}.bar-row small{color:var(--muted)}.method-list{display:grid;gap:12px}.method{border-top:1px solid var(--line);padding-top:12px}.method:first-child{border-top:0;padding-top:0}.method strong{display:block;font-size:.9rem}.method p{color:var(--muted);font-size:.85rem;margin-top:3px}.table-wrap{overflow:auto;border:1px solid var(--line);border-radius:8px;background:#fff}table{width:100%;border-collapse:collapse;min-width:900px}th,td{text-align:left;padding:14px 12px;border-bottom:1px solid #ebe7e0;vertical-align:top}th{position:sticky;top:0;background:#f8f7f4;color:var(--muted);font-size:.78rem;z-index:1}td{font-size:.88rem}td small{display:block;color:var(--muted);margin-top:3px}.coverage{display:inline-flex;padding:3px 8px;border-radius:99px;font-weight:800;font-size:.75rem}.coverage.good{color:var(--green);background:#e4f5ef}.coverage.warn{color:var(--amber);background:#fff0ce}.note{color:var(--muted);font-size:.84rem;margin-top:14px}.callout{border-left:4px solid var(--accent);padding:4px 0 4px 14px;margin-top:18px}.callout strong{display:block}.callout p{color:var(--muted);font-size:.86rem;margin-top:4px}@media(max-width:900px){.metrics{grid-template-columns:repeat(2,minmax(0,1fr))}.grid{grid-template-columns:1fr}}@media(max-width:520px){main{width:min(100% - 24px,1180px);padding-top:24px}.metrics{grid-template-columns:1fr 1fr;gap:8px}.metric{padding:16px;min-height:126px}.metric strong{font-size:1.45rem}.panel{padding:18px}.section-head{align-items:start;flex-direction:column}.lead{font-size:.94rem}}@media(prefers-reduced-motion:reduce){*{scroll-behavior:auto!important}}
+    *{box-sizing:border-box}html{-webkit-text-size-adjust:100%}body{margin:0;background:var(--paper);color:var(--ink);font-family:-apple-system,BlinkMacSystemFont,"Pretendard","Apple SD Gothic Neo",sans-serif;line-height:1.5;overflow-x:clip}main{width:min(1180px,calc(100% - 32px));margin:0 auto;padding:40px 0 72px}h1,h2,p{margin:0}h1{font-size:clamp(2rem,5vw,4rem);line-height:1.05;letter-spacing:0}.eyebrow{color:var(--accent);font-weight:800;font-size:.82rem;margin-bottom:14px}.lead{max-width:72ch;color:var(--muted);font-size:1rem;margin-top:16px}.source{margin-top:18px;color:var(--muted);font-size:.84rem}.metrics{display:grid;grid-template-columns:repeat(3,minmax(0,1fr));gap:12px;margin:30px 0}.metric,.panel{background:var(--card);border:1px solid var(--line);border-radius:8px}.metric{padding:22px;min-height:142px}.metric span{display:block;color:var(--muted);font-size:.82rem;font-weight:700}.metric strong{display:block;margin-top:18px;font-size:clamp(1.65rem,3vw,2.5rem);line-height:1}.metric small{display:block;margin-top:10px;color:var(--muted)}.panel{padding:24px;margin-top:16px}.section-head{display:flex;align-items:end;justify-content:space-between;gap:16px;margin-bottom:20px}.section-head h2{font-size:1.35rem}.section-head p{color:var(--muted);font-size:.85rem}.grid{display:grid;grid-template-columns:minmax(0,1.15fr) minmax(280px,.85fr);gap:16px}.bar-row{padding:10px 0}.bar-head{display:flex;justify-content:space-between;gap:16px;font-size:.88rem}.bar-track{height:8px;background:#edeae4;border-radius:99px;margin:8px 0 5px;overflow:hidden}.bar-track span{display:block;height:100%;background:var(--blue);border-radius:inherit}.bar-row small{color:var(--muted)}.method-list{display:grid;gap:12px}.method{border-top:1px solid var(--line);padding-top:12px}.method:first-child{border-top:0;padding-top:0}.method strong{display:block;font-size:.9rem}.method p{color:var(--muted);font-size:.85rem;margin-top:3px}.table-wrap{overflow:auto;border:1px solid var(--line);border-radius:8px;background:#fff}table{width:100%;border-collapse:collapse;min-width:900px}th,td{text-align:left;padding:14px 12px;border-bottom:1px solid #ebe7e0;vertical-align:top}th{position:sticky;top:0;background:#f8f7f4;color:var(--muted);font-size:.78rem;z-index:1}td{font-size:.88rem}td small{display:block;color:var(--muted);margin-top:3px}.share{display:inline-flex;padding:3px 8px;border-radius:99px;color:var(--blue);background:#edf2ff;font-weight:800;font-size:.75rem}.note{color:var(--muted);font-size:.84rem;margin-top:14px}.callout{border-left:4px solid var(--accent);padding:4px 0 4px 14px;margin-top:18px}.callout strong{display:block}.callout p{color:var(--muted);font-size:.86rem;margin-top:4px}@media(max-width:900px){.metrics{grid-template-columns:repeat(2,minmax(0,1fr))}.grid{grid-template-columns:1fr}}@media(max-width:520px){main{width:min(100% - 24px,1180px);padding-top:24px}.metrics{grid-template-columns:1fr 1fr;gap:8px}.metric{padding:16px;min-height:126px}.metric strong{font-size:1.45rem}.panel{padding:18px}.section-head{align-items:start;flex-direction:column}.lead{font-size:.94rem}}@media(prefers-reduced-motion:reduce){*{scroll-behavior:auto!important}}
   </style>
 </head>
 <body>
@@ -550,11 +554,11 @@ function renderHtml(summary) {
     <div class="section-head"><div><h2>수강권별 상세</h2><p>${summary.totals.ticketTypes}개 수강권 · ${summary.totals.activeTicketRows}건</p></div></div>
     <div class="table-wrap">
       <table>
-        <thead><tr><th>수강권</th><th>보유</th><th>잔여</th><th>대표 회당금액</th><th>전체 잔여금액</th><th>가격 커버리지</th></tr></thead>
+        <thead><tr><th>수강권</th><th>보유</th><th>잔여</th><th>대표 회당금액</th><th>전체 잔여금액</th><th>잔여금액 비율</th></tr></thead>
         <tbody>${tableRows}</tbody>
       </table>
     </div>
-    <p class="note">대표 회당금액은 동일 수강권 보유 건의 실결제 회당금액 중앙값입니다. 할인·분할결제로 회원별 실제 회당금액 범위가 다를 수 있으며, 전체 잔여금액은 각 회원 수강권 건별 금액을 계산한 뒤 합산했습니다.</p>
+    <p class="note">대표 회당금액은 동일 수강권 보유 건의 실결제 회당금액 중앙값입니다. 할인·분할결제로 회원별 실제 회당금액 범위가 다를 수 있으며, 잔여금액 비율은 해당 수강권 잔여금액 ÷ 전체 잔여금액입니다.</p>
   </section>
 </main>
 </body>
@@ -656,6 +660,10 @@ function won(value) {
 
 function percent(value) {
   return `${Math.round((value || 0) * 100)}%`;
+}
+
+function percent1(value) {
+  return `${((value || 0) * 100).toFixed(1)}%`;
 }
 
 function escapeHtml(value) {

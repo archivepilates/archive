@@ -97,6 +97,7 @@ const required = [
       "ticketLiabilityPrivateAverageBasis",
       "ticketLiabilityDuetAverage",
       "ticketLiabilityDuetAverageBasis",
+      "잔여금액 비율",
       "ticketLiabilityTableBody",
     ],
   },

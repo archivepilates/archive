@@ -56,6 +56,13 @@ export function summarizeUnitPriceAverage(tickets, category) {
   };
 }
 
+export function residualValueShare(value, total) {
+  const numerator = Number(value);
+  const denominator = Number(total);
+  if (!Number.isFinite(numerator) || !Number.isFinite(denominator) || denominator <= 0) return 0;
+  return Math.max(0, numerator / denominator);
+}
+
 function shouldUseReference({ raw, reference, rawPriceSource, paymentType, status, profileKind }) {
   if (profileKind === "reservation_only") return true;
   if (raw == null) return true;

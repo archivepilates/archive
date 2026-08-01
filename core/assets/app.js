@@ -3911,6 +3911,9 @@ function renderTicketLiabilityMonth(month) {
           const remaining = row.kind === "기간권"
             ? `${formatCount(row.remainingDays, "일")} / ${formatCount(toNumber(row.remainingCount).toFixed(1), "회 환산")}`
             : formatCount(row.remainingCount, "회");
+          const share = Number.isFinite(Number(row.residualValueShare))
+            ? Number(row.residualValueShare)
+            : (toNumber(totals.estimatedResidualValue) > 0 ? toNumber(row.estimatedResidualValue) / toNumber(totals.estimatedResidualValue) : 0);
           return `
             <tr>
               <td><strong>${escapeHtml(row.name || "수강권")}</strong><span>${escapeHtml(row.kind || "-")} · ${escapeHtml((row.classTypes || []).join(", ") || "구분 없음")}</span></td>
@@ -3918,11 +3921,12 @@ function renderTicketLiabilityMonth(month) {
               <td>${escapeHtml(remaining)}</td>
               <td>${escapeHtml(formatWon(row.unitPrice))}<span>${escapeHtml(row.representativePriceSource || "대표값")}</span></td>
               <td><strong>${escapeHtml(formatWon(row.estimatedResidualValue))}</strong></td>
+              <td><strong>${escapeHtml(`${(share * 100).toFixed(1)}%`)}</strong></td>
             </tr>
           `;
         })
         .join("")
-    : `<tr><td colspan="5"><div class="empty-state">선택 월 수강권 집계가 없습니다.</div></td></tr>`;
+    : `<tr><td colspan="6"><div class="empty-state">선택 월 수강권 집계가 없습니다.</div></td></tr>`;
 }
 
 function renderTicketLiabilityReports(items) {

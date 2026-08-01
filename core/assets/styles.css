@@ -3749,6 +3749,7 @@ a.rank-row:hover,
   .liability-table td:nth-child(3)::before { content: "잔여"; }
   .liability-table td:nth-child(4)::before { content: "회당금액"; }
   .liability-table td:nth-child(5)::before { content: "잔여금액"; }
+  .liability-table td:nth-child(6)::before { content: "전체 대비"; }
 
   .members-table td:nth-child(1)::before {
     content: "회원";

@@ -439,8 +439,9 @@ const guardGroups = [
         markers: [
           "loadPurchasePriceIndex",
           "ticketCycleKey",
-          "ticket-liability-v3",
+          "ticket-liability-v4",
           "1:1 프라이빗 평균 회당가격",
+          "잔여금액 비율",
         ],
       },
       {
@@ -458,6 +459,7 @@ const guardGroups = [
           "1:1 프라이빗 평균 회당가격",
           "ticketLiabilityDuetAverage",
           "ticketLiabilityDuetAverageBasis",
+          "잔여금액 비율",
         ],
       },
       {
