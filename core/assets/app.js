@@ -3877,14 +3877,21 @@ function renderTicketLiabilityMonth(month) {
   for (const [key, id, basisId] of [
     ["group", "ticketLiabilityGroupAverage", "ticketLiabilityGroupAverageBasis"],
     ["private", "ticketLiabilityPrivateAverage", "ticketLiabilityPrivateAverageBasis"],
+    ["duet", "ticketLiabilityDuetAverage", "ticketLiabilityDuetAverageBasis"],
   ]) {
     const average = unitPriceAverages[key] || {};
     const value = Number(average.averageUnitPrice);
+    const adjustedRows = toNumber(average.adjustedPriceRows);
+    const estimatedRows = toNumber(average.estimatedPriceRows);
+    const correctionParts = [];
+    if (adjustedRows > 0) correctionParts.push(`보정 ${formatCount(adjustedRows, "건")}`);
+    if (estimatedRows > 0) correctionParts.push(`기준가 ${formatCount(estimatedRows, "건")}`);
+    const correctionText = correctionParts.length ? `${correctionParts.join(" · ")} · ` : "";
     setText(id, Number.isFinite(value) && value > 0 ? formatWon(value) : "산정 대기");
     setText(
       basisId,
       Number.isFinite(value) && value > 0
-        ? `0원 제외 · ${formatCount(average.pricedTicketRows, "건")} / ${formatCount(average.purchasedSessionCount, "회")}`
+        ? `${correctionText}0원 제외 · ${formatCount(average.pricedTicketRows, "건")} / ${formatCount(average.purchasedSessionCount, "회")}`
         : "0원 제외 · 집계 없음",
     );
   }

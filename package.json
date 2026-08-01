@@ -41,6 +41,7 @@
     "deploy:archivein-live": "bash scripts/deploy-archivein-live.sh",
     "process:admin-emergency-sync": "node scripts/process-admin-emergency-sync-requests.mjs",
     "validate:archive-core-hosting": "node scripts/validate-archive-core-hosting-deploy.mjs",
+    "validate:ticket-liability-price": "node --test scripts/tests/ticket-liability-price-policy.test.mjs",
     "verify:archive-core-responsive": "node scripts/verify-archive-core-responsive.mjs",
     "verify:recommended-meal-survey": "node scripts/verify-recommended-meal-survey.mjs",
     "audit:archive-core-data": "node scripts/audit-archive-core-data-validity.mjs",

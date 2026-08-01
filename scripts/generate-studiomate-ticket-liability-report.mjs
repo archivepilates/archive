@@ -4,6 +4,11 @@ import { createRequire } from "node:module";
 import os from "node:os";
 import path from "node:path";
 import { recordAutomationStatus } from "./lib/archive-core-ops-logging.mjs";
+import {
+  resolveTicketUnitPrice,
+  summarizeUnitPriceAverage,
+  ticketPriceCategory,
+} from "./lib/ticket-liability-price-policy.mjs";
 
 const require = createRequire(import.meta.url);
 const admin = require("../firebase/kangsain-functions/functions/node_modules/firebase-admin");
@@ -62,8 +67,8 @@ async function main() {
   if (PUBLISH) assertPublishableSource(sourceImport);
   const { tickets, expiredExcluded } = collectTickets(profilesSnap.docs, AS_OF_DATE);
   const profileIds = new Set(profilesSnap.docs.map((doc) => doc.id));
-  const historyUnitPrices = await loadHistoricalUnitPrices(new Set(tickets.map((ticket) => ticket.name)), profileIds);
-  const summary = summarizeTickets(tickets, historyUnitPrices, profilesSnap.size, sourceImport, expiredExcluded);
+  const purchasePriceIndex = await loadPurchasePriceIndex(new Set(tickets.map((ticket) => ticket.name)), profileIds);
+  const summary = summarizeTickets(tickets, purchasePriceIndex, profilesSnap.size, sourceImport, expiredExcluded);
   const html = renderHtml(summary);
 
   mkdirSync(path.dirname(REPORT_PATH), { recursive: true });
@@ -140,7 +145,7 @@ async function publishSummary(summary) {
   const report = {
     ...summary,
     schemaVersion: 1,
-    calculationVersion: "ticket-liability-v2",
+    calculationVersion: "ticket-liability-v3",
     reportId: REPORT_MONTH,
     reportMonth: REPORT_MONTH,
     reportKind: "studiomate_ticket_liability",
@@ -185,12 +190,16 @@ function collectTickets(profileDocs, asOfDate) {
       const paymentAmount = money(raw.paymentAmount ?? raw.amountTotal ?? raw.price);
       tickets.push({
         memberId: doc.id,
+        profileKind: clean(profile.profileKind),
         name,
         classType: clean(raw.classType || raw.lessonType) || "미분류",
         status: clean(raw.status || raw.ticketStatus),
+        paymentType: clean(raw.paymentType || raw.category),
         kind: period ? "기간권" : "횟수권",
         paymentAmount,
         denominator,
+        startDate: dateKey(raw.availableFrom || raw.startDate || raw.issuedAt),
+        endDate: dateKey(raw.expiresAt || raw.endDate || raw.expireAt),
         remainingCount: remaining.count,
         remainingDays: remaining.days,
         period,
@@ -200,10 +209,12 @@ function collectTickets(profileDocs, asOfDate) {
   return { tickets, expiredExcluded };
 }
 
-function summarizeTickets(tickets, historyUnitPrices, profileCount, sourceImport, expiredExcluded) {
+function summarizeTickets(tickets, purchasePriceIndex, profileCount, sourceImport, expiredExcluded) {
   const currentUnitsByName = new Map();
   for (const ticket of tickets) {
-    const unit = directUnitPrice(ticket);
+    if (ticket.profileKind === "reservation_only" || /사용\s*예정/.test(ticket.status)) continue;
+    const aggregate = purchasePriceIndex.ticketTotals.get(ticketCycleKey(ticket));
+    const unit = aggregate?.unitPrice ?? (/미수금/.test(ticket.paymentType) ? null : directUnitPrice(ticket));
     if (unit == null) continue;
     const rows = currentUnitsByName.get(ticket.name) || [];
     rows.push(unit);
@@ -211,17 +222,27 @@ function summarizeTickets(tickets, historyUnitPrices, profileCount, sourceImport
   }
 
   const enriched = tickets.map((ticket) => {
-    const directUnit = directUnitPrice(ticket);
+    const aggregate = purchasePriceIndex.ticketTotals.get(ticketCycleKey(ticket));
+    const directUnit = aggregate?.unitPrice ?? directUnitPrice(ticket);
+    const directSource = aggregate ? "purchase_aggregate" : "active_ticket";
     const currentMedian = median(currentUnitsByName.get(ticket.name) || []);
-    const historicalMedian = median(historyUnitPrices.get(ticket.name) || []);
+    const historicalMedian = median(purchasePriceIndex.unitPricesByName.get(ticket.name) || []);
+    const referenceUnit = currentMedian ?? historicalMedian;
     const free = isExplicitFreeTicket(ticket.name);
-    const unitPrice = directUnit ?? currentMedian ?? historicalMedian ?? (free ? 0 : null);
-    const priceSource = directUnit != null ? "실결제" : currentMedian != null ? "동일권종 중앙값" : historicalMedian != null ? "구매이력 중앙값" : free ? "무료 보상권" : "산정불가";
+    const resolved = resolveTicketUnitPrice({
+      rawUnitPrice: directUnit,
+      referenceUnitPrice: referenceUnit,
+      rawPriceSource: directSource,
+      paymentType: ticket.paymentType,
+      status: ticket.status,
+      profileKind: ticket.profileKind,
+      explicitFree: free,
+    });
     return {
       ...ticket,
-      unitPrice,
-      priceSource,
-      residualValue: unitPrice == null ? null : Math.round(ticket.remainingCount * unitPrice),
+      ...resolved,
+      priceCategory: ticketPriceCategory(ticket),
+      residualValue: resolved.unitPrice == null ? null : Math.round(ticket.remainingCount * resolved.unitPrice),
     };
   });
 
@@ -251,10 +272,9 @@ function summarizeTickets(tickets, historyUnitPrices, profileCount, sourceImport
     group.ticketCount += 1;
     group.remainingDays += ticket.remainingDays || 0;
     group.remainingCount += ticket.remainingCount || 0;
-    const directUnit = directUnitPrice(ticket);
-    if (directUnit != null) {
-      group.directUnitPrices.push(directUnit);
-      group.confirmedResidualValue += Math.round(ticket.remainingCount * directUnit);
+    if (ticket.priceQuality === "confirmed") {
+      group.directUnitPrices.push(ticket.unitPrice);
+      group.confirmedResidualValue += Math.round(ticket.remainingCount * ticket.unitPrice);
     }
     if (ticket.unitPrice != null) {
       group.allUnitPrices.push(ticket.unitPrice);
@@ -294,9 +314,11 @@ function summarizeTickets(tickets, historyUnitPrices, profileCount, sourceImport
     })
     .sort((a, b) => b.estimatedResidualValue - a.estimatedResidualValue || b.remainingCount - a.remainingCount || a.name.localeCompare(b.name, "ko"));
 
-  const directPriced = enriched.filter((ticket) => directUnitPrice(ticket) != null).length;
+  const directPriced = enriched.filter((ticket) => ticket.priceQuality === "confirmed").length;
   const valued = enriched.filter((ticket) => ticket.unitPrice != null).length;
-  const zeroPriced = enriched.filter((ticket) => ticket.priceSource === "무료 보상권").length;
+  const zeroPriced = enriched.filter((ticket) => ticket.priceQuality === "free").length;
+  const adjustedPriced = enriched.filter((ticket) => ticket.priceQuality === "adjusted").length;
+  const estimatedPriced = enriched.filter((ticket) => ticket.priceQuality === "estimated").length;
   const holderIds = new Set(enriched.map((ticket) => ticket.memberId));
   const countTickets = enriched.filter((ticket) => ticket.kind === "횟수권");
   const periodTickets = enriched.filter((ticket) => ticket.kind === "기간권");
@@ -306,6 +328,7 @@ function summarizeTickets(tickets, historyUnitPrices, profileCount, sourceImport
   const unitPriceAverages = {
     group: summarizeUnitPriceAverage(enriched, "group"),
     private: summarizeUnitPriceAverage(enriched, "private"),
+    duet: summarizeUnitPriceAverage(enriched, "duet"),
   };
 
   return {
@@ -322,11 +345,12 @@ function summarizeTickets(tickets, historyUnitPrices, profileCount, sourceImport
       status: sourceImport?.status || "",
     },
     methodology: {
-      representativeUnit: "동일 수강권의 현재 실결제 회당금액 중앙값",
+      representativeUnit: "동일 수강권·이용기간의 결제이력 합산 후 현재 정상 회당금액 중앙값",
       countTicket: "수강권별 총 잔여횟수 × 대표 회당금액",
       periodTicket: "min(전체 약정회차, 잔여일수 ÷ 7 × 주당횟수) × 대표 회당금액",
       scheduledPeriodTicket: "사용예정 기간권은 전체 약정회차로 계산",
-      missingPrice: "동일권종 현재 실결제 회당금액 중앙값 → 구매이력 중앙값 → 명시적 무료 보상권 0원 → 산정불가",
+      missingPrice: "미수금·분할결제·임시 프로필·가격 이상치는 동일권종 기준가로 보정 → 명시적 무료 보상권 0원 → 산정불가",
+      averageCategories: "그룹·1:1 프라이빗·듀엣을 분리하고 강사레슨은 평균 회당가격에서 제외",
     },
     totals: {
       activeHolders: holderIds.size,
@@ -345,6 +369,8 @@ function summarizeTickets(tickets, historyUnitPrices, profileCount, sourceImport
     coverage: {
       directPricedRows: directPriced,
       directPriceCoverage: ratio(directPriced, enriched.length),
+      adjustedPriceRows: adjustedPriced,
+      estimatedPriceRows: estimatedPriced,
       valuedRows: valued,
       valuedCoverage: ratio(valued, enriched.length),
       zeroPricedRows: zeroPriced,
@@ -356,35 +382,12 @@ function summarizeTickets(tickets, historyUnitPrices, profileCount, sourceImport
   };
 }
 
-function summarizeUnitPriceAverage(tickets, category) {
-  const categoryTickets = tickets.filter((ticket) => ticketCategory(ticket) === category);
-  const pricedTickets = categoryTickets.filter((ticket) => ticket.unitPrice > 0 && ticket.denominator > 0);
-  const purchasedSessionCount = pricedTickets.reduce((sum, ticket) => sum + ticket.denominator, 0);
-  const estimatedPurchaseValue = pricedTickets.reduce((sum, ticket) => sum + ticket.unitPrice * ticket.denominator, 0);
-  return {
-    averageUnitPrice: purchasedSessionCount > 0 ? Math.round(estimatedPurchaseValue / purchasedSessionCount) : null,
-    pricedTicketRows: pricedTickets.length,
-    purchasedSessionCount: round1(purchasedSessionCount),
-    estimatedPurchaseValue: Math.round(estimatedPurchaseValue),
-    zeroPriceExcludedRows: categoryTickets.filter((ticket) => ticket.unitPrice === 0).length,
-    unavailablePriceExcludedRows: categoryTickets.filter((ticket) => ticket.unitPrice == null || !(ticket.denominator > 0)).length,
-  };
-}
-
-function ticketCategory(ticket) {
-  const classType = clean(ticket.classType).toLowerCase();
-  if (/프라이빗|개인|듀엣|세미|private|semi|1\s*:\s*1/.test(classType)) return "private";
-  if (/그룹|group/.test(classType)) return "group";
-  const name = clean(ticket.name).toLowerCase();
-  if (/프라이빗|개인|듀엣|세미|private|semi|1\s*:\s*1/.test(name)) return "private";
-  if (/그룹|group|회권|주\s*\d+\s*회/.test(name)) return "group";
-  return "other";
-}
-
-async function loadHistoricalUnitPrices(targetNames, profileIds) {
-  const result = new Map();
-  if (!targetNames.size) return result;
+async function loadPurchasePriceIndex(targetNames, profileIds) {
+  const ticketTotals = new Map();
+  const unitPricesByName = new Map();
+  if (!targetNames.size) return { ticketTotals, unitPricesByName };
   const snapshot = await db.collectionGroup("purchases").get();
+  const purchaseCycles = new Map();
   for (const doc of snapshot.docs) {
     const row = doc.data();
     const memberId = doc.ref.parent.parent?.id || "";
@@ -395,13 +398,37 @@ async function loadHistoricalUnitPrices(targetNames, profileIds) {
     const amount = money(row.amountTotal ?? row.paymentAmount ?? row.price);
     const period = periodPolicy(name);
     const denominator = period?.totalCount || positiveNumber(row.maxCount ?? row.totalCount ?? row.usableCount);
-    if (!(amount > 0) || !(denominator > 0)) continue;
-    const unit = amount / denominator;
-    const rows = result.get(name) || [];
-    rows.push(unit);
-    result.set(name, rows);
+    if (!(denominator > 0)) continue;
+    const cycle = {
+      memberId,
+      name,
+      denominator,
+      startDate: dateKey(row.startDate || row.availableFrom || row.issuedAt),
+      endDate: dateKey(row.endDate || row.expiresAt || row.expireAt),
+    };
+    const key = ticketCycleKey(cycle);
+    const group = purchaseCycles.get(key) || { ...cycle, studiomateRows: [], fallbackRows: [] };
+    const target = row.source === "studiomate_member_ticket_history" ? group.studiomateRows : group.fallbackRows;
+    target.push({ id: doc.id, amount });
+    purchaseCycles.set(key, group);
   }
-  return result;
+
+  for (const [key, cycle] of purchaseCycles) {
+    const sourceRows = cycle.studiomateRows.length ? cycle.studiomateRows : cycle.fallbackRows;
+    const uniqueRows = [...new Map(sourceRows.map((row) => [row.id, row])).values()];
+    const totalPayment = uniqueRows.reduce((sum, row) => sum + (row.amount || 0), 0);
+    if (!(totalPayment > 0) || !(cycle.denominator > 0)) continue;
+    const unitPrice = totalPayment / cycle.denominator;
+    ticketTotals.set(key, { totalPayment, unitPrice, paymentRows: uniqueRows.length });
+    const units = unitPricesByName.get(cycle.name) || [];
+    units.push(unitPrice);
+    unitPricesByName.set(cycle.name, units);
+  }
+  return { ticketTotals, unitPricesByName };
+}
+
+function ticketCycleKey(ticket) {
+  return [ticket.memberId, clean(ticket.name), ticket.startDate || "", ticket.endDate || "", number(ticket.denominator)].join("|");
 }
 
 function directUnitPrice(ticket) {
@@ -494,9 +521,9 @@ function renderHtml(summary) {
     <article class="metric"><span>수강권 보유 회원</span><strong>${numberFormat(summary.totals.activeHolders)}명</strong><small>현재·사용예정 포함</small></article>
     <article class="metric"><span>환산 잔여회차</span><strong>${formatCount(summary.totals.remainingCountEquivalent)}회</strong><small>기간권 회차 환산 포함</small></article>
     <article class="metric"><span>전체 잔여금액</span><strong>${won(summary.totals.estimatedResidualValue)}</strong><small>보정 포함 추정치</small></article>
-    <article class="metric"><span>직접 결제 커버리지</span><strong>${percent(summary.coverage.directPriceCoverage)}</strong><small>${summary.coverage.directPricedRows}/${summary.totals.activeTicketRows}건</small></article>
-    <article class="metric"><span>그룹 평균 회당가격</span><strong>${won(summary.unitPriceAverages.group.averageUnitPrice)}</strong><small>0원 제외 · ${summary.unitPriceAverages.group.pricedTicketRows}건 / ${formatCount(summary.unitPriceAverages.group.purchasedSessionCount)}회</small></article>
-    <article class="metric"><span>프라이빗 평균 회당가격</span><strong>${won(summary.unitPriceAverages.private.averageUnitPrice)}</strong><small>0원 제외 · ${summary.unitPriceAverages.private.pricedTicketRows}건 / ${formatCount(summary.unitPriceAverages.private.purchasedSessionCount)}회</small></article>
+    <article class="metric"><span>확정 결제 연결률</span><strong>${percent(summary.coverage.directPriceCoverage)}</strong><small>${summary.coverage.directPricedRows}/${summary.totals.activeTicketRows}건</small></article>
+    <article class="metric"><span>그룹 평균 회당가격</span><strong>${won(summary.unitPriceAverages.group.averageUnitPrice)}</strong><small>보정 ${summary.unitPriceAverages.group.adjustedPriceRows}건 · 0원 제외 · ${summary.unitPriceAverages.group.pricedTicketRows}건 / ${formatCount(summary.unitPriceAverages.group.purchasedSessionCount)}회</small></article>
+    <article class="metric"><span>1:1 프라이빗 평균 회당가격</span><strong>${won(summary.unitPriceAverages.private.averageUnitPrice)}</strong><small>보정 ${summary.unitPriceAverages.private.adjustedPriceRows}건 · 듀엣 별도 ${won(summary.unitPriceAverages.duet.averageUnitPrice)} · ${summary.unitPriceAverages.private.pricedTicketRows}건 / ${formatCount(summary.unitPriceAverages.private.purchasedSessionCount)}회</small></article>
   </section>
 
   <section class="grid">
@@ -512,10 +539,10 @@ function renderHtml(summary) {
         <div class="method"><strong>기간권</strong><p>${escapeHtml(summary.methodology.periodTicket)}</p></div>
         <div class="method"><strong>사용예정 기간권</strong><p>${escapeHtml(summary.methodology.scheduledPeriodTicket)}</p></div>
         <div class="method"><strong>결제금액 누락</strong><p>${escapeHtml(summary.methodology.missingPrice)}</p></div>
-        <div class="method"><strong>그룹·프라이빗 평균</strong><p>0원 수강권을 제외한 환산 결제금액 합계 ÷ 총 약정회차입니다.</p></div>
+        <div class="method"><strong>평균 회당가격</strong><p>${escapeHtml(summary.methodology.averageCategories)} 0원 수강권을 제외한 환산 결제금액 합계 ÷ 총 약정회차입니다.</p></div>
       </div>
-      <div class="callout"><strong>대표단가 적용 ${won(summary.totals.estimatedResidualValue)}</strong><p>동일 수강권의 현재 실결제 회당금액 중앙값을 전체 잔여회차에 적용했습니다. 회원별 실결제 연결액 합계는 ${won(summary.totals.confirmedResidualValue)}, 누락 단가를 보정한 회원별 합계는 ${won(summary.totals.memberWeightedResidualValue)}입니다.</p></div>
-      <p class="note">명시적 무료 보상쿠폰 ${summary.coverage.zeroPricedRows}건은 0원으로 처리했습니다. 산정불가 ${summary.coverage.unpricedRows}건, 미산정 잔여 ${formatCount(summary.coverage.unpricedRemainingCount)}회입니다. 기준일 이전 만료 ${summary.coverage.expiredExcluded}건은 제외했습니다.</p>
+      <div class="callout"><strong>대표단가 적용 ${won(summary.totals.estimatedResidualValue)}</strong><p>동일 수강권의 결제이력을 합산하고 불완전 결제는 현재 기준가로 보정했습니다. 회원별 확인 결제 연결액 합계는 ${won(summary.totals.confirmedResidualValue)}, 보정 포함 회원별 합계는 ${won(summary.totals.memberWeightedResidualValue)}입니다.</p></div>
+      <p class="note">가격 보정 ${summary.coverage.adjustedPriceRows}건, 기준가 추정 ${summary.coverage.estimatedPriceRows}건입니다. 명시적 무료 보상쿠폰 ${summary.coverage.zeroPricedRows}건은 0원으로 처리했습니다. 산정불가 ${summary.coverage.unpricedRows}건, 미산정 잔여 ${formatCount(summary.coverage.unpricedRemainingCount)}회입니다. 기준일 이전 만료 ${summary.coverage.expiredExcluded}건은 제외했습니다.</p>
     </article>
   </section>
 
@@ -576,6 +603,11 @@ function millis(value) {
   return Number.isFinite(parsed) ? parsed : 0;
 }
 
+function dateKey(value) {
+  const valueMs = millis(value);
+  return valueMs > 0 ? kstDateKey(new Date(valueMs)) : "";
+}
+
 function clean(value) {
   return String(value ?? "").replace(/\s+/g, " ").trim();
 }
@@ -602,7 +634,7 @@ function nextMonthEndRunIso(date) {
   const current = kstDateKey(date);
   const pivot = new Date(Date.parse(`${current}T12:00:00+09:00`) + (isKstMonthEnd(date) ? DAY_MS * 2 : 0));
   const [year, month] = kstDateKey(pivot).split("-").map(Number);
-  const nextMonthEnd = new Date(Date.UTC(year, month, 0, 14, 50, 0));
+  const nextMonthEnd = new Date(Date.UTC(year, month, 0, 13, 0, 0));
   return nextMonthEnd.toISOString();
 }
 

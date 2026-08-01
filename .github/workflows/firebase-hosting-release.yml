@@ -47,6 +47,7 @@ jobs:
             npm run validate:onsite-welcome
           else
             npm run validate:archive-core-hosting
+            npm run validate:ticket-liability-price
           fi
 
       - name: Write release manifest

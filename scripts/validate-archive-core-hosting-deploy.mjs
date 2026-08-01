@@ -95,6 +95,8 @@ const required = [
       "ticketLiabilityGroupAverageBasis",
       "ticketLiabilityPrivateAverage",
       "ticketLiabilityPrivateAverageBasis",
+      "ticketLiabilityDuetAverage",
+      "ticketLiabilityDuetAverageBasis",
       "ticketLiabilityTableBody",
     ],
   },

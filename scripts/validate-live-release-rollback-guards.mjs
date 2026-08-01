@@ -290,6 +290,7 @@ const guardGroups = [
           "write-release-manifest.mjs --surface core",
           "validate-live-release-canary.mjs --surface core",
           "verify:archive-core-responsive",
+          "validate:ticket-liability-price",
           "ARCHIVE_CORE_BASE_URL=https://core.archivepilates.com",
         ],
         forbiddenMarkers: [
@@ -425,6 +426,45 @@ const guardGroups = [
           ".action-form label.is-disabled input:disabled",
           ".nav-secondary",
           ".admin-nav-open .nav-secondary",
+        ],
+      },
+    ],
+  },
+  {
+    id: "ticket-liability-price-quality",
+    reason: "수강권 잔여금액 보고서가 분할결제를 회당가로 오인하거나 듀엣·강사레슨을 프라이빗·그룹 평균에 다시 섞는 회귀를 막습니다.",
+    files: [
+      {
+        file: "scripts/generate-studiomate-ticket-liability-report.mjs",
+        markers: [
+          "loadPurchasePriceIndex",
+          "ticketCycleKey",
+          "ticket-liability-v3",
+          "1:1 프라이빗 평균 회당가격",
+        ],
+      },
+      {
+        file: "scripts/lib/ticket-liability-price-policy.mjs",
+        markers: [
+          "ticketPriceCategory",
+          "reservation_only",
+          "동일권종 기준가 보정",
+          "adjustedPriceRows",
+        ],
+      },
+      {
+        file: "core/business/index.html",
+        markers: [
+          "1:1 프라이빗 평균 회당가격",
+          "ticketLiabilityDuetAverage",
+          "ticketLiabilityDuetAverageBasis",
+        ],
+      },
+      {
+        file: "core/assets/app.js",
+        markers: [
+          "ticketLiabilityDuetAverage",
+          "ticketLiabilityDuetAverageBasis",
         ],
       },
     ],

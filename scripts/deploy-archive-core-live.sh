@@ -10,6 +10,7 @@ echo "== ARCHIVE CORE live deploy: guard =="
 node scripts/validate-release-branch-state.mjs --require-origin-main
 npm run validate:live-release-rollback-guards
 npm run validate:archive-core-hosting
+npm run validate:ticket-liability-price
 npm run verify:archive-core-responsive
 node scripts/write-release-manifest.mjs --surface core
 
