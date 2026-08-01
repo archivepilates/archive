@@ -48,6 +48,26 @@ try {
       await page.evaluate(() => {
         document.querySelectorAll(".login-gate").forEach((element) => element.remove());
       });
+      if (route.name === "home") {
+        await page.evaluate(() => {
+          const panel = document.querySelector("#renewalPipeline");
+          const list = document.querySelector("#renewalPipelineList");
+          if (panel) panel.open = true;
+          if (list) {
+            list.innerHTML = `
+              <article class="status-row renewal-row warning">
+                <div>
+                  <strong><a class="renewal-member-link" href="#">긴이름재등록테스트회원</a><small>010-1234-5678</small></strong>
+                  <p>잔여 3회 · 매우 긴 프라이빗 수강권 이름 · 주 2.5회 · 예상 소진 2026-08-14 · 다음 예약 2026-08-03 · 프라이빗 30회 중심 상담</p>
+                  <div class="renewal-actions">
+                    <button type="button">연락완료</button><button type="button">고민중</button><button type="button">7일 후</button><button type="button">재등록완료</button>
+                  </div>
+                </div>
+                <span class="pill reviewing">확인</span>
+              </article>`;
+          }
+        });
+      }
       await page.evaluate(() => document.fonts?.ready);
 
       const check = await page.evaluate(() => {
@@ -68,7 +88,7 @@ try {
           }));
         const touchTargets = [
           ...document.querySelectorAll(
-            ".nav a, .nav-more-button, .quick-action, .external-tool-link, .filter-button, .text-link, .reference-toggle, a.rank-row, .rank-link, .primary-action, .secondary-action",
+            ".nav a, .nav-more-button, .quick-action, .external-tool-link, .filter-button, .text-link, .reference-toggle, a.rank-row, .rank-link, .primary-action, .secondary-action, .renewal-actions button",
           ),
         ]
           .filter((element) => element.offsetParent !== null)

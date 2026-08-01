@@ -235,7 +235,8 @@
             <article class="rule-card">
               <h3>관리 목적</h3>
               <ul>
-                <li>재등록 관리는 알림톡 자동발송이 아니라 현장 상담, 전화, 카카오톡 응대를 위한 운영자 확인 세션입니다.</li>
+                <li>재등록 관리는 기존 잔여횟수·기간만료 알림톡 자동발송과 운영자 상담을 함께 관리하는 세션입니다.</li>
+                <li>알림톡은 승인된 기존 템플릿과 30일 중복 차단을 유지하고, 개인화 계산값은 대상 검토와 상담 추천에만 사용합니다.</li>
                 <li>홈 미해결 액션에는 오늘 바로 확인해야 하는 긴급 후보만 더합니다.</li>
                 <li>30일 내 관리 후보는 홈 재등록 관리 섹션에 별도로 표시하고, 실패나 오류로 누적하지 않습니다.</li>
               </ul>
@@ -245,8 +246,9 @@
               <ul>
                 <li>기본 원천은 memberProfiles.activeTickets입니다. member360Cards.currentTicketsSummary는 매출·상세 검토용 미러로만 사용하며, 최신 memberProfiles와 다르면 CORE 화면은 memberProfiles 값을 우선 표시합니다.</li>
                 <li>수강권 만료 30일 이내, 잔여 횟수 부족, 최근 방문 후 활성 수강권 공백 회원을 후보로 봅니다.</li>
-                <li>그룹·일반 수업권은 잔여 5회 이하, 프라이빗은 잔여 3회 이하를 관리 후보로 봅니다.</li>
-                <li>7일 이내 만료 또는 매우 낮은 잔여 횟수는 오늘 확인 후보로 올립니다.</li>
+                <li>최근 8주 출석·결석·당일취소의 실제 소진 속도를 계산해 예상 소진일이 30일 이내인 회원도 관리 후보로 봅니다.</li>
+                <li>그룹은 잔여 5회 이하, 프라이빗과 듀엣은 잔여 3회 이하를 기본 임계값으로 사용합니다.</li>
+                <li>7일 이내 만료·예상 소진 또는 매우 낮은 잔여 횟수는 오늘 확인 후보로 올립니다.</li>
               </ul>
             </article>
             <article class="rule-card">
@@ -256,6 +258,7 @@
                 <li>같은 유형의 건강한 다른 수강권을 이미 보유한 회원은 만료·부족 후보에서 제외합니다.</li>
                 <li>전화번호가 없는 후보는 외부 발송 원천으로 쓰지 않고, 운영자 화면에서만 보조 확인 대상으로 봅니다.</li>
                 <li>재등록 알림톡 후보를 만들 때는 별도로 수강권 canonical key와 중복발송 방지 규칙을 다시 확인합니다.</li>
+                <li>같은 회원·수강유형의 renewalCases 장부는 하나만 유지하며, 새 수강권이 확인되면 기존 건은 자동 완료 처리합니다.</li>
               </ul>
             </article>
             <article class="rule-card">
@@ -265,10 +268,11 @@
                 <li>이번 주 상담: 곧 만료되거나 잔여가 낮아 수업 전후 안내하면 좋은 상태입니다.</li>
                 <li>만료 전 관리: 30일 안에 미리 안내하면 이탈을 줄일 수 있는 상태입니다.</li>
                 <li>재등록 대기: 최근 방문 이력이 있지만 현재 활성 수강권이 없어 복귀 상담 대상입니다.</li>
+                <li>운영자는 연락완료, 고민중, 7일 후 재확인, 재등록완료 상태를 기록하며 완료·제외 건은 현재 목록에서 숨깁니다.</li>
               </ul>
             </article>
           </div>
-          <div class="rule-note"><strong>현재 확인 위치</strong><span>CORE Home > 재등록 관리 / Firestore memberProfiles.activeTickets 우선, member360Cards는 구매·매출 미러</span></div>
+          <div class="rule-note"><strong>현재 확인 위치</strong><span>CORE Home > 재등록 관리 / 원천 memberProfiles + canonical bookings / 운영상태 renewalCases</span></div>
         </section>
 
         <section class="panel rule-section" id="alimtalk">

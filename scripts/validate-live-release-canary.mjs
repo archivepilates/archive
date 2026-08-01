@@ -99,12 +99,12 @@ if (selectedSurfaces.includes("core")) {
     jsonCheck(
       "core-release-custom-domain",
       "https://core.archivepilates.com/release.json",
-      (json) => json?.source?.head === expectedSha && json?.runtimeContractVersion === "2026-07-28.1",
+      (json) => json?.source?.head === expectedSha && json?.runtimeContractVersion === "2026-08-01.1",
     ),
     jsonCheck(
       "core-release-webapp-path",
       "https://archive-pilates.web.app/core/release.json",
-      (json) => json?.source?.head === expectedSha && json?.runtimeContractVersion === "2026-07-28.1",
+      (json) => json?.source?.head === expectedSha && json?.runtimeContractVersion === "2026-08-01.1",
     ),
     textCheck("core-home-actions-custom-domain", "https://core.archivepilates.com/", [
       "오늘 처리할 일",
@@ -135,6 +135,8 @@ if (selectedSurfaces.includes("core")) {
       "pendingPrivateProgressRows",
       "privateInstructorPendingList",
       "commandQueueStatus",
+      "renewalCases",
+      "handleRenewalActionClick",
       "SECONDARY_NAV_SECTIONS",
       "removeParkingVehicle",
       "data-parking-vehicle-id",
@@ -155,6 +157,8 @@ if (selectedSurfaces.includes("core")) {
       "pendingPrivateProgressRows",
       "privateInstructorPendingList",
       "commandQueueStatus",
+      "renewalCases",
+      "handleRenewalActionClick",
       "SECONDARY_NAV_SECTIONS",
       "removeParkingVehicle",
       "data-parking-vehicle-id",

@@ -106,7 +106,7 @@ function buildManifest(surface) {
     ...base,
     product: "ARCHIVE CORE",
     surface,
-    runtimeContractVersion: "2026-07-28.1",
+    runtimeContractVersion: "2026-08-01.1",
     hostingSites: ["archive-pilates", "archive-pilates-core"],
     canonicalUrls: ["https://core.archivepilates.com/release.json", "https://archive-pilates.web.app/core/release.json"],
     criticalMarkers: [

@@ -566,6 +566,38 @@ export interface AlimtalkSendDoc {
   updatedAt: Timestamp;
 }
 
+export type RenewalWorkflowStatus = "open" | "contacted" | "considering" | "snoozed" | "resolved" | "excluded";
+
+export interface RenewalCaseDoc {
+  caseId: string;
+  studioId: string;
+  memberId: string;
+  memberName: string;
+  kind: "group" | "private" | "lesson";
+  active: boolean;
+  workflowStatus: RenewalWorkflowStatus;
+  ticketIdentity: string;
+  ticketName: string;
+  priority: "urgent" | "warning" | "follow" | "waiting";
+  reason: string;
+  remainingCount: number | null;
+  remainingDays: number | null;
+  predictedDepletionDate: string;
+  weeklyUsagePace: number;
+  nextBookingDate: string;
+  recommendation: string;
+  sourceDate: string;
+  sourceCollection: "memberProfiles";
+  sourceCandidateId?: string;
+  operatorNote?: string;
+  nextActionAt?: Timestamp | null;
+  operatorUpdatedAt?: Timestamp | null;
+  operatorUpdatedByUid?: string;
+  autoResolvedReason?: string;
+  createdAt: Timestamp;
+  updatedAt: Timestamp;
+}
+
 export interface PrivateSurveyResponseDoc {
   responseId: string;
   studioId: string;

@@ -24,6 +24,7 @@ export const archiveSourceCollections = [
 export const archiveActionCollections = [
   archiveCollections.alimtalkCandidates,
   archiveCollections.alimtalkSends,
+  archiveCollections.renewalCases,
   archiveCollections.contactSyncJobs,
   archiveCollections.adminSyncRequests,
   archiveCollections.memberSignupContracts,
@@ -53,6 +54,7 @@ export const archiveExternalProjectionTargets = ["notionPrivateCharts", "googleD
 export const memberFacingActionForbiddenSourceCollections = [
   ...archiveMirrorCollections,
   ...archiveIncubationCollections,
+  archiveCollections.renewalCases,
 ] as const;
 
 export const archiveCanonicalSourcePolicy = {

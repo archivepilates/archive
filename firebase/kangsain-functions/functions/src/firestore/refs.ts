@@ -15,6 +15,7 @@ import type {
   LectureDoc,
   MemberMemoDoc,
   MemberProfileDoc,
+  RenewalCaseDoc,
   MemberTagDoc,
   NoticeDoc,
   OtherScheduleDoc,
@@ -57,6 +58,8 @@ export const refs = {
   memberTag: (memberId: string) => refs.memberTags().doc(memberId),
   memberProfiles: () => db.collection("memberProfiles").withConverter(converter<MemberProfileDoc>()),
   memberProfile: (memberId: string) => refs.memberProfiles().doc(memberId),
+  renewalCases: () => db.collection("renewalCases").withConverter(converter<RenewalCaseDoc>()),
+  renewalCase: (caseId: string) => refs.renewalCases().doc(caseId),
   memberContactIndex: () => db.collection("memberContactIndex").withConverter(converter<MemberContactIndexDoc>()),
   memberContactIndexDoc: (memberId: string) => refs.memberContactIndex().doc(memberId),
   memberSignupContracts: () =>

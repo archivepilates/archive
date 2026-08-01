@@ -133,6 +133,25 @@ service cloud.firestore {
       allow write: if false;
     }
 
+    match /renewalCases/{caseId} {
+      allow read: if isManager() && sameStudio(resource.data.studioId);
+      allow update: if isManager() &&
+        sameStudio(resource.data.studioId) &&
+        request.resource.data.diff(resource.data).affectedKeys().hasOnly([
+          'workflowStatus',
+          'operatorNote',
+          'nextActionAt',
+          'operatorUpdatedAt',
+          'operatorUpdatedByUid',
+          'updatedAt'
+        ]) &&
+        request.resource.data.workflowStatus in ['open', 'contacted', 'considering', 'snoozed', 'resolved', 'excluded'] &&
+        request.resource.data.operatorUpdatedByUid == request.auth.uid &&
+        request.resource.data.operatorUpdatedAt is timestamp &&
+        request.resource.data.updatedAt is timestamp;
+      allow create, delete: if false;
+    }
+
     match /memberContactIndex/{memberId} {
       allow read: if isManager() && sameStudio(resource.data.studioId);
       allow write: if false;

@@ -49,6 +49,9 @@ const required = [
     markers: [
       "renewalCandidateRows",
       "renderRenewalPipeline",
+      "renewalCases",
+      "handleRenewalActionClick",
+      "predictedDepletionDate",
       "mergeMemberCardsWithProfiles",
       "coreDataHealthIssues",
       "pricingInquiryAlimtalkRequests",
@@ -161,6 +164,7 @@ const required = [
       "grid-auto-rows: 148px",
       "min-height: 148px",
       ".action-disclosure",
+      ".renewal-actions",
       ".parking-delete-button",
       ".external-tool-grid",
       ".external-tool-link",
@@ -176,7 +180,16 @@ const required = [
   {
     file: "core/rules/index.html",
     label: "ARCHIVE CORE source health and operator lifecycle rules",
-    markers: ["운영 액션 수명주기", "원천 신선도와 화면 상태", "canonicalActionKey", "Instagram 콘텐츠 운영", "수강권 잔여금액", "ticketLiabilityReports"],
+    markers: [
+      "운영 액션 수명주기",
+      "원천 신선도와 화면 상태",
+      "canonicalActionKey",
+      "Instagram 콘텐츠 운영",
+      "수강권 잔여금액",
+      "ticketLiabilityReports",
+      "최근 8주",
+      "renewalCases",
+    ],
     patterns: [{ pattern: /\d{4}\.\d{2}\.\d{2} 기준/, label: "current rules date" }],
   },
 ];

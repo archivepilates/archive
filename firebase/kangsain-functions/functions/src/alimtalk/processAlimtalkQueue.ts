@@ -15,6 +15,7 @@ import { normalizeInstructorLessonManagementNumber } from "./instructorLessonMan
 import { isAlimtalkTestRecipient } from "./testRecipients";
 import { currentPrivateLessonReportRevision } from "../privateLessonChart/privateLessonReportRevision";
 import { privateSurveySendabilityIssue } from "./privateSurveySendGuard";
+import { renewalCandidateSendabilityIssue } from "./renewalSendGuard";
 
 const SOLAPI_SEND_URL = "https://api.solapi.com/messages/v4/send-many/detail";
 const PROCESSING_STALE_MS = 10 * 60 * 1000;
@@ -69,6 +70,19 @@ export async function processAlimtalkQueue(): Promise<{
             status: "skipped",
             reasonCode: "private_survey_booking_blocked",
             lastError: privateSurveyIssue,
+            updatedAt: nowTimestamp(),
+          },
+          { merge: true },
+        );
+        continue;
+      }
+      const renewalIssue = await renewalCandidateSendabilityIssue(claimed);
+      if (renewalIssue) {
+        await refs.alimtalkCandidate(claimed.candidateId).set(
+          {
+            status: "skipped",
+            reasonCode: "renewal_source_recheck_blocked",
+            lastError: renewalIssue,
             updatedAt: nowTimestamp(),
           },
           { merge: true },
@@ -250,6 +264,20 @@ export async function processAlimtalkCandidate(candidateId: string): Promise<Ali
         { merge: true },
       );
       return { processed: true, status: "skipped", lastError: privateSurveyIssue };
+    }
+
+    const renewalIssue = await renewalCandidateSendabilityIssue(claimed);
+    if (renewalIssue) {
+      await refs.alimtalkCandidate(claimed.candidateId).set(
+        {
+          status: "skipped",
+          reasonCode: "renewal_source_recheck_blocked",
+          lastError: renewalIssue,
+          updatedAt: nowTimestamp(),
+        },
+        { merge: true },
+      );
+      return { processed: true, status: "skipped", lastError: renewalIssue };
     }
 
     const dedupeKey = alimtalkDedupeKey(claimed);

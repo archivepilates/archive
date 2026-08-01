@@ -1,7 +1,7 @@
 import { createHash, createHmac } from "node:crypto";
 import { Timestamp } from "firebase-admin/firestore";
 import { logger } from "firebase-functions";
-import type { AlimtalkCandidateDoc, BookingDoc, LectureDoc, MemberProfileDoc } from "../types/models";
+import type { AlimtalkCandidateDoc, BookingDoc, LectureDoc, MemberProfileDoc, RenewalCaseDoc } from "../types/models";
 import { db } from "../config/firebase";
 import { privateSurveyWebhookSecret } from "../config/secrets";
 import { refs } from "../firestore/refs";
@@ -23,6 +23,14 @@ import {
 import { alimtalkDedupeKey, findCompletedDuplicateForCandidate } from "./dedupe";
 import { isValidInstructorLessonManagementNumber as isValidInstructorLessonManagementNumberFromUtil } from "./instructorLessonManagement";
 import { isAlimtalkTestRecipient } from "./testRecipients";
+import {
+  assessRenewalTicket,
+  isRenewalManagedTicket,
+  renewalBookingKind,
+  renewalSourceTicketKey,
+  renewalTicketKind,
+  renewalUsageSummary,
+} from "../renewal/renewalPolicy";
 
 export async function rebuildAlimtalkCandidatesForRange(input: {
   studioId: string;
@@ -49,7 +57,7 @@ export async function rebuildAlimtalkCandidatesForRange(input: {
         }
         continue;
       }
-      for (const candidate of directTicketCandidates(profile, sourceDate)) {
+      for (const candidate of directTicketCandidates(profile, sourceDate, memberBookings(bookingIndex, profile.memberId))) {
         await enqueueSendableCandidate(candidate, candidateIds, writes);
       }
       const privateSurveyCandidate = await privateSurveyCandidateForDate(profile, sourceDate, bookingIndex);
@@ -119,6 +127,7 @@ export async function rebuildAlimtalkCandidatesForRange(input: {
   }
 
   await Promise.all(writes);
+  if (mode === "daily") await syncRenewalCases(profiles, bookingIndex, input.endDate);
   await markStaleCandidatesSkipped({
     studioId: input.studioId,
     startDate: input.startDate,
@@ -232,11 +241,15 @@ async function enqueueSendableCandidate(
   return true;
 }
 
-function directTicketCandidates(profile: MemberProfileDoc, sourceDate: string): AlimtalkCandidateDoc[] {
+function directTicketCandidates(
+  profile: MemberProfileDoc,
+  sourceDate: string,
+  bookings: BookingDoc[],
+): AlimtalkCandidateDoc[] {
   if (!profile.memberId || !profile.name || !profile.phone) return [];
   if (ALIMTALK_MEMBER_EXCLUSION_REASONS[profile.memberId] && !isAlimtalkTestRecipient(profile)) return [];
   return currentLessonProfileTickets(profile, sourceDate)
-    .map((ticket) => directTicketCandidate(profile, ticket, sourceDate))
+    .map((ticket) => directTicketCandidate(profile, ticket, sourceDate, bookings))
     .filter((candidate): candidate is AlimtalkCandidateDoc => Boolean(candidate));
 }
 
@@ -449,7 +462,7 @@ function hasAttendedGroupBookingOnOrBefore(
 function isGroupAttendanceHistory(booking: BookingDoc): boolean {
   if (isInstructorLessonBooking(booking)) return false;
   if (booking.lessonType === "private" || booking.lessonType === "semi_private") return false;
-  if (/프라이빗|개인|1:1/i.test(booking.ticketName || "")) return false;
+  if (/프라이빗|개인|1:1|듀엣|duet|세미/i.test(booking.ticketName || "")) return false;
   return true;
 }
 
@@ -460,8 +473,8 @@ function isGroupBooking(booking: BookingDoc): boolean {
   const ticketKind = bookingTicketKind(booking);
   if (ticketKind === "group") return true;
   if (ticketKind === "private" || ticketKind === "instructor") return false;
-  if (/프라이빗|개인|1:1/i.test(booking.ticketName || "")) return false;
-  return /그룹|체험|듀엣|소그룹/i.test(booking.ticketName || "") || booking.ticketName === "";
+  if (/프라이빗|개인|1:1|듀엣|duet|세미/i.test(booking.ticketName || "")) return false;
+  return /그룹|체험|소그룹/i.test(booking.ticketName || "") || booking.ticketName === "";
 }
 
 function groupSurveyTiming(
@@ -794,8 +807,8 @@ function bookingTicketKind(booking: BookingDoc): "group" | "private" | "instruct
   for (const value of values) {
     const upper = value.toUpperCase();
     if (!upper) continue;
-    if (upper === "P" || upper === "PRIVATE" || /프라이빗|개인|1:1/i.test(value)) return "private";
-    if (upper === "G" || upper === "GROUP" || /그룹|체험|듀엣|소그룹/i.test(value)) return "group";
+    if (upper === "P" || upper === "PRIVATE" || /프라이빗|개인|1:1|듀엣|duet|세미/i.test(value)) return "private";
+    if (upper === "G" || upper === "GROUP" || /그룹|체험|소그룹/i.test(value)) return "group";
     if (upper === "I" || upper === "INSTRUCTOR" || /강사레슨/i.test(value)) return "instructor";
   }
   return "";
@@ -810,6 +823,7 @@ function directTicketCandidate(
   profile: MemberProfileDoc,
   ticket: NonNullable<MemberProfileDoc["activeTickets"]>[number],
   sourceDate: string,
+  bookings: BookingDoc[] = [],
 ): AlimtalkCandidateDoc | null {
   if (hasOtherActiveTicket(profile, ticket, sourceDate)) return null;
   const memberId = profile.memberId;
@@ -821,6 +835,13 @@ function directTicketCandidate(
   const templateCode = CANDIDATE_TEMPLATE_CODES[type];
   if (!templateCode) return null;
   const payload = ticketPayload(ticket, sourceDate);
+  const assessment = assessRenewalTicket({ ticket, bookings, sourceDate });
+  const ticketKind = renewalTicketKind(ticket);
+  const renewalCaseId = renewalCaseIdFor(
+    profile.memberId,
+    ticketKind,
+    renewalSourceTicketKey(profile.memberId, ticketKind, ticket),
+  );
   const candidateId = `ticket_${stableHash({
     date: sourceDate,
     memberId,
@@ -843,6 +864,11 @@ function directTicketCandidate(
       memberName: profile.name,
       reason: ticketReason(type, payload),
       date: sourceDate,
+      renewalCaseId,
+      predictedDepletionDate: assessment?.predictedDepletionDate || "",
+      weeklyUsagePace: assessment ? String(assessment.usage.weeklyPace) : "",
+      nextBookingDate: assessment?.usage.nextBookingDate || "",
+      recommendation: assessment?.recommendation || "",
       ...payload,
     },
     attempts: 0,
@@ -881,8 +907,9 @@ function hasOtherActiveTicket(
   sourceDate: string,
 ): boolean {
   const targetKey = profileTicketIdentity(target);
+  const targetKind = renewalTicketKind(target);
   return currentOrUpcomingLessonProfileTickets(profile, sourceDate).some(
-    (ticket) => profileTicketIdentity(ticket) !== targetKey,
+    (ticket) => profileTicketIdentity(ticket) !== targetKey && renewalTicketKind(ticket) === targetKind,
   );
 }
 
@@ -962,14 +989,207 @@ function isGroupOrMixedProfileTicket(ticket: NonNullable<MemberProfileDoc["activ
   const classType = String(ticket.classType || "").toUpperCase();
   const name = String(ticket.name || "");
   if (classType === "G" || classType === "GROUP") return true;
-  if (/그룹|듀엣|소그룹|혼합/.test(name)) return true;
+  if (/듀엣|duet|세미/i.test(name)) return false;
+  if (/그룹|소그룹|혼합/.test(name)) return true;
   return !isPrivateProfileTicket(ticket);
 }
 
 function isPrivateProfileTicket(ticket: NonNullable<MemberProfileDoc["activeTickets"]>[number]): boolean {
-  const classType = String(ticket.classType || "").toUpperCase();
-  const name = String(ticket.name || "");
-  return classType === "P" || classType === "PRIVATE" || /프라이빗|개인/.test(name);
+  return renewalTicketKind(ticket) === "private";
+}
+
+async function syncRenewalCases(
+  profiles: MemberProfileDoc[],
+  bookingIndex: BookingIndex,
+  sourceDate: string,
+): Promise<void> {
+  if (!profiles.length) return;
+  const studioId = profiles[0]?.studioId || "";
+  if (!studioId) return;
+  const existingSnap = await refs.renewalCases().where("studioId", "==", studioId).get();
+  const existingById = new Map(existingSnap.docs.map((doc) => [doc.id, doc.data()]));
+  const currentCaseIds = new Set<string>();
+  const currentMemberKinds = new Set<string>();
+  const freshMemberIds = new Set(
+    profiles.filter((profile) => memberProfileIsFresh(profile)).map((profile) => profile.memberId),
+  );
+  const writes: Array<Promise<unknown>> = [];
+
+  for (const profile of profiles) {
+    if (!profile.memberId || !profile.name) continue;
+    const bookings = memberBookings(bookingIndex, profile.memberId);
+    const tickets = currentLessonProfileTickets(profile, sourceDate).filter(isRenewalManagedTicket);
+    const assessments = tickets
+      .map((ticket) => ({ ticket, assessment: assessRenewalTicket({ ticket, bookings, sourceDate }) }))
+      .filter(
+        (item): item is { ticket: NonNullable<MemberProfileDoc["activeTickets"]>[number]; assessment: NonNullable<ReturnType<typeof assessRenewalTicket>> } =>
+          Boolean(item.assessment) && !hasSameKindActiveBackup(tickets, item.ticket, sourceDate),
+      );
+
+    const bestByKind = new Map<string, (typeof assessments)[number]>();
+    for (const item of assessments) {
+      const current = bestByKind.get(item.assessment.kind);
+      if (!current || renewalAssessmentRank(item.assessment) > renewalAssessmentRank(current.assessment)) {
+        bestByKind.set(item.assessment.kind, item);
+      }
+    }
+
+    for (const { ticket, assessment } of bestByKind.values()) {
+      const ticketIdentity = renewalSourceTicketKey(profile.memberId, assessment.kind, ticket);
+      const caseId = renewalCaseIdFor(profile.memberId, assessment.kind, ticketIdentity);
+      const existing = existingById.get(caseId);
+      const sourceCandidate = directTicketCandidate(profile, ticket, sourceDate, bookings);
+      const value: Partial<RenewalCaseDoc> = {
+        caseId,
+        studioId: profile.studioId,
+        memberId: profile.memberId,
+        memberName: profile.name,
+        kind: assessment.kind,
+        active: true,
+        ticketIdentity,
+        ticketName: ticket.name,
+        priority: assessment.priority,
+        reason: assessment.reason,
+        remainingCount: assessment.remainingCount,
+        remainingDays: assessment.remainingDays,
+        predictedDepletionDate: assessment.predictedDepletionDate,
+        weeklyUsagePace: assessment.usage.weeklyPace,
+        nextBookingDate: assessment.usage.nextBookingDate,
+        recommendation: assessment.recommendation,
+        sourceDate,
+        sourceCollection: "memberProfiles",
+        sourceCandidateId: sourceCandidate?.candidateId || "",
+        autoResolvedReason: "",
+        updatedAt: nowTimestamp(),
+      };
+      if (!existing) {
+        Object.assign(value, {
+          workflowStatus: "open",
+          operatorNote: "",
+          nextActionAt: null,
+          operatorUpdatedAt: null,
+          operatorUpdatedByUid: "",
+          createdAt: nowTimestamp(),
+        });
+      }
+      currentCaseIds.add(caseId);
+      currentMemberKinds.add(`${profile.memberId}|${assessment.kind}`);
+      writes.push(refs.renewalCase(caseId).set(value, { merge: true }));
+    }
+
+    if (!tickets.length) {
+      const lastBooking = bookings
+        .filter(
+          (booking) =>
+            booking.lectureDate <= sourceDate &&
+            ["attended", "absent", "late_cancel"].includes(String(booking.attendanceStatus || "")),
+        )
+        .sort((a, b) => b.lectureDate.localeCompare(a.lectureDate))[0];
+      if (lastBooking && daysBetweenDateStrings(lastBooking.lectureDate, sourceDate) <= 45) {
+        const kind = renewalBookingKind(lastBooking);
+        const ticketIdentity = `waiting:${lastBooking.bookingId || lastBooking.lectureDate}`;
+        const caseId = renewalCaseIdFor(profile.memberId, kind, ticketIdentity);
+        const existing = existingById.get(caseId);
+        const usage = renewalUsageSummary(bookings, kind, sourceDate);
+        currentCaseIds.add(caseId);
+        currentMemberKinds.add(`${profile.memberId}|${kind}`);
+        writes.push(
+          refs.renewalCase(caseId).set(
+            {
+              caseId,
+              studioId: profile.studioId,
+              memberId: profile.memberId,
+              memberName: profile.name,
+              kind,
+              active: true,
+              ticketIdentity,
+              ticketName: "활성 수강권 없음",
+              priority: "waiting",
+              reason: `최근 이용 ${lastBooking.lectureDate}`,
+              remainingCount: null,
+              remainingDays: null,
+              predictedDepletionDate: "",
+              weeklyUsagePace: usage.weeklyPace,
+              nextBookingDate: usage.nextBookingDate,
+              recommendation: kind === "private" ? "프라이빗 복귀 상담" : "그룹 복귀 상담",
+              sourceDate,
+              sourceCollection: "memberProfiles",
+              sourceCandidateId: "",
+              autoResolvedReason: "",
+              ...(existing
+                ? {}
+                : {
+                    workflowStatus: "open" as const,
+                    operatorNote: "",
+                    nextActionAt: null,
+                    operatorUpdatedAt: null,
+                    operatorUpdatedByUid: "",
+                    createdAt: nowTimestamp(),
+                  }),
+              updatedAt: nowTimestamp(),
+            },
+            { merge: true },
+          ),
+        );
+      }
+    }
+  }
+
+  for (const [caseId, existing] of existingById.entries()) {
+    if (!existing.active || currentCaseIds.has(caseId)) continue;
+    if (!freshMemberIds.has(existing.memberId)) continue;
+    const replacementExists = currentMemberKinds.has(`${existing.memberId}|${existing.kind}`);
+    writes.push(
+      refs.renewalCase(caseId).set(
+        {
+          active: false,
+          autoResolvedReason: replacementExists
+            ? "동일 유형 새 수강권 확인"
+            : "최신 수강권·예약 상태에서 재등록 관리 대상 해소",
+          updatedAt: nowTimestamp(),
+        },
+        { merge: true },
+      ),
+    );
+  }
+  await Promise.all(writes);
+}
+
+function renewalCaseIdFor(memberId: string, kind: string, sourceTicketKey: string): string {
+  return `renewal_${stableHash({ memberId, kind, sourceTicketKey }).slice(0, 24)}`;
+}
+
+function memberProfileIsFresh(profile: MemberProfileDoc): boolean {
+  const updatedAt = profile.sourceUpdatedAt || profile.syncedAt || profile.updatedAt;
+  const updatedAtMs = updatedAt?.toMillis?.() || 0;
+  return updatedAtMs > 0 && Date.now() - updatedAtMs <= 72 * 60 * 60 * 1000;
+}
+
+function renewalAssessmentRank(assessment: NonNullable<ReturnType<typeof assessRenewalTicket>>): number {
+  const priority = { urgent: 3000, warning: 2000, follow: 1000 }[assessment.priority] || 0;
+  const depletion = assessment.predictedDepletionDays == null ? 999 : assessment.predictedDepletionDays;
+  const expiry = assessment.remainingDays == null ? 999 : assessment.remainingDays;
+  return priority + Math.max(0, 999 - Math.min(depletion, expiry));
+}
+
+function hasSameKindActiveBackup(
+  tickets: NonNullable<MemberProfileDoc["activeTickets"]>,
+  target: NonNullable<MemberProfileDoc["activeTickets"]>[number],
+  sourceDate: string,
+): boolean {
+  const targetIdentity = profileTicketIdentity(target);
+  const targetKind = renewalTicketKind(target);
+  return tickets.some((ticket) => {
+    if (profileTicketIdentity(ticket) === targetIdentity || renewalTicketKind(ticket) !== targetKind) return false;
+    const remaining = ticket.remainingCount == null ? Number.NaN : Number(ticket.remainingCount);
+    const days = Number(remainingDays(ticket.expiresAt, sourceDate));
+    return (!Number.isFinite(remaining) || remaining > renewalCountThresholdForKind(targetKind)) &&
+      (!Number.isFinite(days) || days > 30);
+  });
+}
+
+function renewalCountThresholdForKind(kind: string): number {
+  return kind === "private" ? 3 : 5;
 }
 
 function profileTicketIdentity(ticket: NonNullable<MemberProfileDoc["activeTickets"]>[number]): string {

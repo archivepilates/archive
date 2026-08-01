@@ -7,6 +7,7 @@ export const archiveCollections = {
   memberTags: "memberTags",
   alimtalkCandidates: "alimtalkCandidates",
   alimtalkSends: "alimtalkSends",
+  renewalCases: "renewalCases",
   contactSyncJobs: "contactSyncJobs",
   memberSignupContracts: "memberSignupContracts",
   onsiteWelcomeRequests: "onsiteWelcomeRequests",

@@ -401,6 +401,9 @@ const guardGroups = [
           "commandQueueStatus",
           "renewalCandidateRows",
           "renderRenewalPipeline",
+          "renewalCases",
+          "handleRenewalActionClick",
+          "predictedDepletionDate",
           "mergeMemberCardsWithProfiles",
           "coreDataHealthIssues",
           "CORE_RUNTIME_CONTRACT_VERSION",
@@ -423,6 +426,7 @@ const guardGroups = [
           "grid-auto-rows: 148px",
           "min-height: 148px",
           ".action-disclosure",
+          ".renewal-actions",
           ".action-form label.is-disabled input:disabled",
           ".nav-secondary",
           ".admin-nav-open .nav-secondary",
@@ -468,6 +472,33 @@ const guardGroups = [
           "ticketLiabilityDuetAverage",
           "ticketLiabilityDuetAverageBasis",
         ],
+      },
+    ],
+  },
+  {
+    id: "renewal-personalization",
+    reason: "재등록 듀엣 분류, 예상 소진일, 상담 장부, 발송 직전 재등록 차단이 후속 배포에서 빠지는 것을 막습니다.",
+    files: [
+      {
+        file: "firebase/kangsain-functions/functions/src/renewal/renewalPolicy.ts",
+        markers: [
+          "renewalSourceTicketKey",
+          "predictedDepletionDate",
+          "weeklyPace",
+          "듀엣|duet|세미",
+        ],
+      },
+      {
+        file: "firebase/kangsain-functions/functions/src/alimtalk/renewalSendGuard.ts",
+        markers: [
+          "renewalCandidateSendabilityIssue",
+          "동일 유형 후속 수강권 보유",
+          "renewalCandidateProfileIssue",
+        ],
+      },
+      {
+        file: "firebase/kangsain-functions/firestore.rules",
+        markers: ["match /renewalCases/{caseId}", "operatorUpdatedByUid", "nextActionAt"],
       },
     ],
   },

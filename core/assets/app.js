@@ -15,6 +15,7 @@ const state = {
   members: [],
   memberCards: [],
   memberProfiles: [],
+  renewalCases: [],
   memberDetail: null,
   alimtalkCandidates: [],
   alimtalkSends: [],
@@ -1378,8 +1379,8 @@ function ticketClassText(ticket) {
 
 function renewalTicketKind(ticket) {
   const text = `${ticketClassText(ticket)} ${ticketNameText(ticket)}`.toLowerCase();
-  if (/프라이빗|개인|1:1|private|semi/.test(text)) return "private";
-  if (/그룹|group|소그룹|duet|듀엣/.test(text)) return "group";
+  if (/프라이빗|개인|1:1|private|semi|세미|duet|듀엣/.test(text)) return "private";
+  if (/그룹|group|소그룹/.test(text)) return "group";
   return "lesson";
 }
 
@@ -1492,6 +1493,8 @@ function renewalActionText(candidate) {
 }
 
 function renewalCandidateRows(referenceDate = new Date()) {
+  const syncedRows = renewalCaseRows(referenceDate);
+  if (syncedRows) return syncedRows;
   const mergedMembers = mergeDuplicateMembers(state.members || []);
   const rows = [];
   for (const member of mergedMembers) {
@@ -1540,6 +1543,44 @@ function renewalCandidateRows(referenceDate = new Date()) {
       (priorityRank[b.priority] || 0) - (priorityRank[a.priority] || 0) ||
       timestampMs(b.member.recentVisitAt) - timestampMs(a.member.recentVisitAt) ||
       toNumber(b.member.totalRevenue) - toNumber(a.member.totalRevenue),
+  );
+}
+
+function renewalCaseRows(referenceDate = new Date()) {
+  if (!state.renewalCases.length) return null;
+  const memberById = new Map((state.members || []).map((member) => [String(member.memberId || member.id || ""), member]));
+  const now = referenceDate.getTime();
+  const rows = state.renewalCases
+    .filter((item) => item.active !== false && !["resolved", "excluded"].includes(String(item.workflowStatus || "open")))
+    .filter((item) => item.workflowStatus !== "snoozed" || !timestampMs(item.nextActionAt) || timestampMs(item.nextActionAt) <= now)
+    .map((item) => {
+      const member = memberById.get(String(item.memberId || "")) || {};
+      const memberId = item.memberId || member.memberId || member.id || "";
+      return {
+        member,
+        memberId,
+        name: item.memberName || member.name || "회원",
+        phone: normalizePhone(member.phone || member.memberPhone || member.phoneNumber || ""),
+        priority: item.priority || "follow",
+        topRisk: { kind: item.kind || "lesson" },
+        ticketName: item.ticketName || "수강권 확인",
+        reason: item.reason || "재등록 확인",
+        recentVisitDays: Number.POSITIVE_INFINITY,
+        activeTicketCount: toNumber(member.activeTicketCount),
+        href: memberId ? `./members/detail/?id=${encodeURIComponent(memberId)}` : "./members/",
+        action: item.recommendation || "최근 이용 패턴 기준 재등록 상담",
+        predictedDepletionDate: item.predictedDepletionDate || "",
+        weeklyUsagePace: toNumber(item.weeklyUsagePace),
+        nextBookingDate: item.nextBookingDate || "",
+        workflowStatus: item.workflowStatus || "open",
+        renewalCaseId: item.caseId || item.id || "",
+      };
+    });
+  const priorityRank = { urgent: 4, warning: 3, waiting: 2, follow: 1 };
+  return rows.sort(
+    (a, b) =>
+      (priorityRank[b.priority] || 0) - (priorityRank[a.priority] || 0) ||
+      String(a.predictedDepletionDate || "9999-12-31").localeCompare(String(b.predictedDepletionDate || "9999-12-31")),
   );
 }
 
@@ -4120,22 +4161,80 @@ function renderRenewalPipeline(rows = renewalCandidateRows(), counts = null) {
     return;
   }
   list.innerHTML = rows
-    .slice(0, 10)
     .map((row) => {
       const phone = row.phone ? formatPhoneNumber(row.phone) : "전화번호 없음";
       const visit = row.member.recentVisitAt ? `최근 방문 ${compactDateTime(row.member.recentVisitAt)}` : "최근 방문 없음";
-      const detail = `${row.reason} · ${row.ticketName} · ${visit} · ${row.action}`;
+      const pace = row.weeklyUsagePace ? `주 ${row.weeklyUsagePace}회` : "이용속도 확인 전";
+      const depletion = row.predictedDepletionDate ? `예상 소진 ${row.predictedDepletionDate}` : "예상 소진일 없음";
+      const nextBooking = row.nextBookingDate ? `다음 예약 ${row.nextBookingDate}` : visit;
+      const detail = `${row.reason} · ${row.ticketName} · ${pace} · ${depletion} · ${nextBooking} · ${row.action}`;
+      const actions = row.renewalCaseId
+        ? `<div class="renewal-actions" aria-label="${escapeHtml(row.name)} 재등록 상태 변경">
+            <button type="button" data-renewal-action="contacted" data-renewal-case-id="${escapeHtml(row.renewalCaseId)}">연락완료</button>
+            <button type="button" data-renewal-action="considering" data-renewal-case-id="${escapeHtml(row.renewalCaseId)}">고민중</button>
+            <button type="button" data-renewal-action="snoozed" data-renewal-case-id="${escapeHtml(row.renewalCaseId)}">7일 후</button>
+            <button type="button" data-renewal-action="resolved" data-renewal-case-id="${escapeHtml(row.renewalCaseId)}">재등록완료</button>
+          </div>`
+        : "";
       return `
-        <a class="status-row status-link renewal-row ${row.priority}" href="${escapeHtml(row.href)}">
+        <article class="status-row renewal-row ${row.priority}">
           <div>
-            <strong>${escapeHtml(row.name)}<small>${escapeHtml(phone)}</small></strong>
+            <strong><a class="renewal-member-link" href="${escapeHtml(row.href)}">${escapeHtml(row.name)}</a><small>${escapeHtml(phone)}</small></strong>
             <p>${escapeHtml(detail)}</p>
+            ${actions}
           </div>
-          ${pill(renewalStatusValue(row.priority))}
-        </a>
+          ${pill(row.workflowStatus ? renewalWorkflowStatusLabel(row.workflowStatus) : renewalStatusValue(row.priority))}
+        </article>
       `;
     })
     .join("");
+}
+
+function renewalWorkflowStatusLabel(status) {
+  return (
+    {
+      open: "확인",
+      contacted: "연락완료",
+      considering: "고민중",
+      snoozed: "재확인예약",
+      resolved: "완료",
+      excluded: "제외",
+    }[status] || "확인"
+  );
+}
+
+async function handleRenewalActionClick(event) {
+  const button = event.target.closest("[data-renewal-action]");
+  if (!button) return;
+  const caseId = String(button.dataset.renewalCaseId || "");
+  const workflowStatus = String(button.dataset.renewalAction || "");
+  if (!caseId || !["contacted", "considering", "snoozed", "resolved"].includes(workflowStatus)) return;
+  button.disabled = true;
+  try {
+    const runtime = await initFirebase();
+    const user = await waitForAuth(runtime);
+    if (!user) throw new Error("운영자 로그인이 필요합니다.");
+    const now = new Date();
+    const update = {
+      workflowStatus,
+      operatorUpdatedAt: runtime.serverTimestamp(),
+      operatorUpdatedByUid: user.uid,
+      updatedAt: runtime.serverTimestamp(),
+    };
+    if (workflowStatus === "snoozed") {
+      const next = new Date(now);
+      next.setDate(next.getDate() + 7);
+      update.nextActionAt = runtime.Timestamp.fromDate(next);
+    } else {
+      update.nextActionAt = null;
+    }
+    await runtime.updateDoc(runtime.doc(runtime.db, "renewalCases", caseId), update);
+    await refresh();
+  } catch (error) {
+    window.alert(error?.message || "재등록 상태를 저장하지 못했습니다.");
+  } finally {
+    button.disabled = false;
+  }
 }
 
 function renderBusinessFallback(error) {
@@ -5451,6 +5550,7 @@ async function refresh() {
       dashboardSnapshot,
       members,
       memberProfiles,
+      renewalCases,
       alimtalkCandidates,
       alimtalkSends,
       onsiteWelcomeRequests,
@@ -5484,6 +5584,9 @@ async function refresh() {
         : Promise.resolve([]),
       shouldLoadMembers || shouldLoadHome
         ? safeRead("memberProfiles", () => getCollectionBy(db, runtime, "memberProfiles", "updatedAt", 2000), [])
+        : Promise.resolve([]),
+      shouldLoadHome
+        ? safeRead("renewalCases", () => getOptionalCollectionBy(db, runtime, "renewalCases", "updatedAt", 1000), [])
         : Promise.resolve([]),
       shouldLoadMessages || shouldLoadHome || shouldLoadPrivate
         ? safeRead(
@@ -5584,6 +5687,7 @@ async function refresh() {
     state.memberCards = studioItems(members);
     state.memberProfiles = studioItems(memberProfiles);
     state.members = mergeMemberCardsWithProfiles(state.memberCards, state.memberProfiles);
+    state.renewalCases = studioItems(renewalCases);
     state.alimtalkCandidates = alimtalkCandidates;
     state.alimtalkSends = alimtalkSends;
     state.onsiteWelcomeRequests = studioItems(onsiteWelcomeRequests);
@@ -5666,6 +5770,7 @@ qs("parkingRegistrationForm")?.addEventListener("submit", handleParkingVehicleSu
 qs("parkingOwnerType")?.addEventListener("change", syncParkingVisitorFields);
 qs("parkingAutoApplyButton")?.addEventListener("click", handleParkingAutoApplyClick);
 qs("parkingVehicleList")?.addEventListener("click", handleParkingVehicleListClick);
+qs("renewalPipelineList")?.addEventListener("click", handleRenewalActionClick);
 qs("commandPaletteOpen")?.addEventListener("click", openCommandPalette);
 qs("commandPaletteInput")?.addEventListener("input", renderCommandPaletteResults);
 qs("commandPalette")?.addEventListener("click", (event) => {

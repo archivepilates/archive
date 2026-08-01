@@ -1253,6 +1253,46 @@ td span {
   font-weight: 800;
 }
 
+.renewal-member-link {
+  color: inherit;
+  text-decoration: none;
+}
+
+.renewal-member-link:hover {
+  color: var(--accent);
+}
+
+.renewal-actions {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 8px;
+  margin-top: 12px;
+}
+
+.renewal-actions button {
+  min-height: 44px;
+  padding: 8px 12px;
+  border: 1px solid var(--line-soft);
+  border-radius: 8px;
+  background: #ffffff;
+  color: var(--text);
+  font: inherit;
+  font-size: 0.8rem;
+  font-weight: 800;
+  cursor: pointer;
+}
+
+.renewal-actions button:hover,
+.renewal-actions button:focus-visible {
+  border-color: var(--accent);
+  color: var(--accent);
+}
+
+.renewal-actions button:disabled {
+  cursor: wait;
+  opacity: 0.55;
+}
+
 .status-row strong {
   display: block;
   overflow-wrap: anywhere;
