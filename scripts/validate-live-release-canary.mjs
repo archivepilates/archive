@@ -146,6 +146,10 @@ if (selectedSurfaces.includes("core")) {
       "deriveLessonOccurrencesFromBookings",
       "normalizedLessonKind",
       "operatorLifecycle",
+      "data-renewal-action=\"excluded\"",
+      "재등록 의사 없음",
+      "alimtalkTemplateTitle",
+      "강사용 프라이빗 차트 작성 안내 v3",
       "privateLessonSessions",
       '"preparation", "수업 준비"',
       '"delivered", "전달 완료"',
@@ -174,12 +178,14 @@ if (selectedSurfaces.includes("core")) {
     ]),
     textCheck("core-rules-recommended-meal-custom-domain", "https://core.archivepilates.com/rules/", [
       "2026.07.31 기준",
-      "KA01TP260728111926523p2JzzTgHsS8",
+      "아카이브 추천식단 프로그램",
+      "강사용 프라이빗 차트 작성 안내 v3",
       "APPROVED·BA·IMAGE",
     ]),
     textCheck("core-rules-recommended-meal-webapp-path", "https://archive-pilates.web.app/core/rules/", [
       "2026.07.31 기준",
-      "KA01TP260728111926523p2JzzTgHsS8",
+      "아카이브 추천식단 프로그램",
+      "강사용 프라이빗 차트 작성 안내 v3",
       "APPROVED·BA·IMAGE",
     ]),
   );
