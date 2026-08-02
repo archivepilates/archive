@@ -403,6 +403,8 @@ const guardGroups = [
           "renderRenewalPipeline",
           "renewalCases",
           "handleRenewalActionClick",
+          "data-renewal-action=\"excluded\"",
+          "재등록 의사 없음",
           "predictedDepletionDate",
           "mergeMemberCardsWithProfiles",
           "coreDataHealthIssues",

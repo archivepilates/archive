@@ -4170,6 +4170,7 @@ function renderRenewalPipeline(rows = renewalCandidateRows(), counts = null) {
             <button type="button" data-renewal-action="considering" data-renewal-case-id="${escapeHtml(row.renewalCaseId)}">고민중</button>
             <button type="button" data-renewal-action="snoozed" data-renewal-case-id="${escapeHtml(row.renewalCaseId)}">7일 후</button>
             <button type="button" data-renewal-action="resolved" data-renewal-case-id="${escapeHtml(row.renewalCaseId)}">재등록완료</button>
+            <button type="button" data-renewal-action="excluded" data-renewal-case-id="${escapeHtml(row.renewalCaseId)}">재등록 의사 없음</button>
           </div>`
         : "";
       return `
@@ -4193,8 +4194,8 @@ function renewalWorkflowStatusLabel(status) {
       contacted: "연락완료",
       considering: "고민중",
       snoozed: "재확인예약",
-      resolved: "완료",
-      excluded: "제외",
+      resolved: "재등록완료",
+      excluded: "재등록 의사 없음",
     }[status] || "확인"
   );
 }
@@ -4204,7 +4205,8 @@ async function handleRenewalActionClick(event) {
   if (!button) return;
   const caseId = String(button.dataset.renewalCaseId || "");
   const workflowStatus = String(button.dataset.renewalAction || "");
-  if (!caseId || !["contacted", "considering", "snoozed", "resolved"].includes(workflowStatus)) return;
+  if (!caseId || !["contacted", "considering", "snoozed", "resolved", "excluded"].includes(workflowStatus)) return;
+  if (workflowStatus === "excluded" && !window.confirm("재등록 의사 없음으로 처리할까요? 현재 재등록 목록에서 숨겨집니다.")) return;
   button.disabled = true;
   try {
     const runtime = await initFirebase();

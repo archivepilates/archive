@@ -1288,6 +1288,16 @@ td span {
   color: var(--accent);
 }
 
+.renewal-actions button[data-renewal-action="excluded"] {
+  color: var(--muted);
+}
+
+.renewal-actions button[data-renewal-action="excluded"]:hover,
+.renewal-actions button[data-renewal-action="excluded"]:focus-visible {
+  border-color: var(--red);
+  color: var(--red);
+}
+
 .renewal-actions button:disabled {
   cursor: wait;
   opacity: 0.55;

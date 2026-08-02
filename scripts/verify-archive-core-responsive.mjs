@@ -60,7 +60,7 @@ try {
                   <strong><a class="renewal-member-link" href="#">긴이름재등록테스트회원</a><small>010-1234-5678</small></strong>
                   <p>잔여 3회 · 매우 긴 프라이빗 수강권 이름 · 주 2.5회 · 예상 소진 2026-08-14 · 다음 예약 2026-08-03 · 프라이빗 30회 중심 상담</p>
                   <div class="renewal-actions">
-                    <button type="button">연락완료</button><button type="button">고민중</button><button type="button">7일 후</button><button type="button">재등록완료</button>
+                    <button type="button" data-renewal-action="contacted">연락완료</button><button type="button" data-renewal-action="considering">고민중</button><button type="button" data-renewal-action="snoozed">7일 후</button><button type="button" data-renewal-action="resolved">재등록완료</button><button type="button" data-renewal-action="excluded">재등록 의사 없음</button>
                   </div>
                 </div>
                 <span class="pill reviewing">확인</span>
