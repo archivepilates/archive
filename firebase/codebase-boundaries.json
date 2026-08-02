@@ -16,7 +16,7 @@
         "approveAlimtalkBatch",
         "operatorSendPricingInquiryAlimtalk",
         "operatorSendRecommendedMealProgramAlimtalk",
-        "operatorApproveAndSendRecommendedMealPlan"
+        "operatorPublishRecommendedMealPlan"
       ],
       "forbidden": ["StudioMate writes", "Google Contacts writes", "private chart generation"]
     },

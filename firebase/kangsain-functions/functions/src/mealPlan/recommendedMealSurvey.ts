@@ -9,6 +9,7 @@ import { AppError } from "../utils/errors";
 export const RECOMMENDED_MEAL_REQUEST_COLLECTION = "recommendedMealProgramRequests";
 export const RECOMMENDED_MEAL_RESPONSE_COLLECTION = "recommendedMealProgramResponses";
 export const RECOMMENDED_MEAL_SURVEY_EXPIRES_DAYS = 14;
+const RECOMMENDED_MEAL_REPORT_COLLECTION = "recommendedMealProgramReports";
 
 export interface RecommendedMealMemberMatch {
   memberId: string;
@@ -182,12 +183,16 @@ async function handleGet(request: Request, response: Response): Promise<void> {
   const requestId = cleanRequestId(request.query.id);
   const accessToken = cleanAccessToken(request.query.token);
   const surveyRequest = await verifiedRequest(requestId, accessToken);
+  const report = (await db.collection(RECOMMENDED_MEAL_REPORT_COLLECTION).doc(requestId).get()).data();
+  const publicationStatus = String(report?.publicationStatus || "");
   response.set("Cache-Control", "no-store");
   response.status(200).json({
     ok: true,
     requestId,
     memberName: String(surveyRequest.memberName || "회원"),
     status: String(surveyRequest.status || "pending"),
+    recommendationStatus: String(surveyRequest.recommendationStatus || ""),
+    reportReady: ["published", "approved", "sent"].includes(publicationStatus),
     expiresAt: timestampIso(surveyRequest.expiresAt),
     inbodyStatus: surveyRequest.inbody?.status === "available" ? "available" : "missing",
     inbodyMeasuredAt: timestampIso(surveyRequest.inbody?.testAt),

@@ -21,6 +21,7 @@ import {
   RECOMMENDED_MEAL_REQUEST_COLLECTION,
   RECOMMENDED_MEAL_SURVEY_EXPIRES_DAYS,
 } from "./recommendedMealSurvey";
+import { recommendedMealReportUrl } from "./recommendedMealProgram";
 
 const SURVEY_BASE_URL = "https://in.archivepilates.com/recommendedMealSurvey/";
 
@@ -51,6 +52,12 @@ export async function operatorSendRecommendedMealProgramAlimtalkHandler(
     targetUrl: surveyUrl,
     sourceId: requestId,
   });
+  const reportUrl = recommendedMealReportUrl(requestId, accessToken);
+  const reportShortLink = await ensureShortLink({
+    type: "recommended_meal_report",
+    targetUrl: reportUrl,
+    sourceId: `${requestId}-report`,
+  });
   const inbody = await latestRecommendedMealInbodyReference(member);
   const requestRef = db.collection(RECOMMENDED_MEAL_REQUEST_COLLECTION).doc(requestId);
   const now = nowTimestamp();
@@ -67,6 +74,9 @@ export async function operatorSendRecommendedMealProgramAlimtalkHandler(
     surveyUrl,
     shortLinkId: shortLink.linkId,
     shortUrl: shortLink.shortUrl,
+    reportUrl,
+    reportShortLinkId: reportShortLink.linkId,
+    reportShortUrl: reportShortLink.shortUrl,
     inbody,
     recommendationStatus: inbody.status === "available" ? "awaiting_survey" : "inbody_required",
     requestedByUid: staff.uid || "",
@@ -96,6 +106,9 @@ export async function operatorSendRecommendedMealProgramAlimtalkHandler(
     templateCode,
     shortLinkId: shortLink.linkId,
     shortUrl: shortLink.shortUrl,
+    reportLinkId: reportShortLink.linkId,
+    reportShortUrl: reportShortLink.shortUrl,
+    reportUrl,
     surveyUrl,
     note,
     member,
@@ -152,6 +165,9 @@ function recommendedMealCandidate(input: {
   templateCode: string;
   shortLinkId: string;
   shortUrl: string;
+  reportLinkId: string;
+  reportShortUrl: string;
+  reportUrl: string;
   surveyUrl: string;
   note: string;
   member: {
@@ -181,6 +197,9 @@ function recommendedMealCandidate(input: {
       accessToken: input.accessToken,
       shortLinkId: input.shortLinkId,
       shortUrl: input.shortUrl,
+      reportLinkId: input.reportLinkId,
+      reportShortUrl: input.reportShortUrl,
+      reportUrl: input.reportUrl,
       surveyUrl: input.surveyUrl,
       note: input.note,
       requestedByStaffId: input.staff.staffId,

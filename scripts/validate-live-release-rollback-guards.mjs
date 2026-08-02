@@ -206,9 +206,9 @@ const guardGroups = [
       {
         file: "firebase/kangsain-functions/functions/src/mealPlan/recommendedMealReportAlimtalk.ts",
         markers: [
-          "operatorApproveAndSendRecommendedMealPlanHandler",
-          "confirmSend",
-          "processAlimtalkCandidate",
+          "operatorPublishRecommendedMealPlanHandler",
+          "confirmPublish",
+          "does not create a second Alimtalk candidate",
         ],
       },
       {
@@ -216,7 +216,7 @@ const guardGroups = [
         markers: [
           "추천식단 검토",
           "AI 식단 다시 생성",
-          "검토 완료 후 알림톡 발송",
+          "검토 완료 후 리포트 공개",
         ],
       },
       {

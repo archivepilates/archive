@@ -28,31 +28,13 @@ const checks = [
   {
     file: "firebase/kangsain-functions/functions/src/mealPlan/recommendedMealReportAlimtalk.ts",
     markers: [
-      "operatorApproveAndSendRecommendedMealPlanHandler",
-      "confirmSend",
-      "isAlimtalkTemplateApproved",
+      "operatorPublishRecommendedMealPlanHandler",
+      "confirmPublish",
+      "does not create a second Alimtalk candidate",
       "reviewGateIssue",
       "approvedSnapshot",
       "accessTokenHash",
-      "processAlimtalkCandidate",
-    ],
-  },
-  {
-    file: "firebase/kangsain-functions/functions/src/alimtalk/processAlimtalkQueue.ts",
-    markers: [
-      "recommendedMealReportSendabilityIssue",
-      "RECOMMENDED_MEAL_ALREADY_SENT",
-      "markRecommendedMealReportSent",
-      "markRecommendedMealReportFailed",
-      "추천식단 승인 revision 불일치",
-    ],
-  },
-  {
-    file: "firebase/kangsain-functions/functions/src/alimtalk/eligibility.ts",
-    markers: [
-      "recommendedMealReportTemplateContractIssue",
-      "추천식단 리포트 버튼 계약 불일치",
-      "추천식단 리포트 짧은 링크 없음",
+      'publicationStatus: "published"',
     ],
   },
   {
@@ -71,7 +53,7 @@ const checks = [
   },
   {
     file: "firebase/kangsain-functions/functions/src/exports/alimtalk.ts",
-    markers: ["operatorApproveAndSendRecommendedMealPlan"],
+    markers: ["operatorPublishRecommendedMealPlan"],
   },
   {
     file: "core/recommended-meals/index.html",
@@ -79,7 +61,7 @@ const checks = [
       "추천식단 검토",
       "AI 식단 다시 생성",
       "민감 설문 응답 확인",
-      "검토 완료 후 알림톡 발송",
+      "검토 완료 후 리포트 공개",
     ],
   },
   {
@@ -88,8 +70,8 @@ const checks = [
       "getRecommendedMealProgramReview",
       "generateRecommendedMealProgramDraft",
       "saveRecommendedMealProgramDraft",
-      "operatorApproveAndSendRecommendedMealPlan",
-      "발송 후에는 수정할 수 없습니다.",
+      "operatorPublishRecommendedMealPlan",
+      "공개 후에는 수정할 수 없습니다.",
     ],
   },
   {
@@ -102,13 +84,8 @@ const checks = [
     ],
   },
   {
-    file: "scripts/audit-recommended-meal-report-alimtalk-template.mjs",
-    markers: [
-      "KA01TP260731123545629Sx4N5CZa5BF",
-      "아카이브 추천식단 도착 안내 v1",
-      "report button contract mismatch",
-      "mode: \"read-only\"",
-    ],
+    file: "archivein/recommendedMealSurvey/index.html",
+    markers: ["mealReportLink", "추천식단 리포트 보기", "info.reportReady"],
   },
   {
     file: "firebase/kangsain-functions/firestore.rules",
@@ -148,4 +125,4 @@ if (failures.length) {
   process.exit(1);
 }
 
-console.log(JSON.stringify({ ok: true, checkedFiles: checks.length, guard: "recommended-meal-review-approve-send" }, null, 2));
+console.log(JSON.stringify({ ok: true, checkedFiles: checks.length, guard: "recommended-meal-review-publish-link" }, null, 2));

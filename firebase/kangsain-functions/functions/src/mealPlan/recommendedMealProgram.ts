@@ -112,8 +112,8 @@ async function generateRecommendedMealProgramDraftForRequest(
 ): Promise<Record<string, unknown>> {
   const bundle = await loadReviewBundle(requestId, actor);
   if (!bundle.response) throw new AppError("INVALID_ARGUMENT", "회원 설문 제출 후 식단 초안을 만들 수 있습니다.");
-  if (bundle.report?.publicationStatus === "sent") {
-    throw new AppError("INVALID_ARGUMENT", "이미 발송한 추천식단은 다시 생성할 수 없습니다.");
+  if (["published", "sent"].includes(String(bundle.report?.publicationStatus || ""))) {
+    throw new AppError("INVALID_ARGUMENT", "이미 공개한 추천식단은 다시 생성할 수 없습니다.");
   }
 
   const answers = objectValue(bundle.response.answers);
@@ -207,8 +207,8 @@ export async function saveRecommendedMealProgramDraftHandler(
   const requestId = cleanRequestId(data.requestId);
   const bundle = await loadReviewBundle(requestId, staff);
   if (!bundle.draft) throw new AppError("INVALID_ARGUMENT", "먼저 추천식단 초안을 생성하세요.");
-  if (bundle.report?.publicationStatus === "sent") {
-    throw new AppError("INVALID_ARGUMENT", "회원에게 발송한 추천식단은 수정할 수 없습니다.");
+  if (["published", "sent"].includes(String(bundle.report?.publicationStatus || ""))) {
+    throw new AppError("INVALID_ARGUMENT", "회원에게 공개한 추천식단은 수정할 수 없습니다.");
   }
   const publicContent = normalizePublicContent(data.publicContent, bundle.draft.publicContent);
   const revision = mealPlanRevision(cleanText(bundle.draft.sourceResponseHash, 128), publicContent);
@@ -270,15 +270,23 @@ export async function recommendedMealPlanApiHandler(request: Request, response: 
   try {
     const reportId = cleanRequestId(request.query.id);
     const token = cleanReportToken(request.query.token);
-    const snap = await db.collection(RECOMMENDED_MEAL_REPORT_COLLECTION).doc(reportId).get();
-    const report = snap.data();
-    if (!report || !secureHashEquals(reportTokenHash(token), cleanText(report.accessTokenHash, 128))) {
+    const [reportSnap, requestSnap] = await Promise.all([
+      db.collection(RECOMMENDED_MEAL_REPORT_COLLECTION).doc(reportId).get(),
+      db.collection(RECOMMENDED_MEAL_REQUEST_COLLECTION).doc(reportId).get(),
+    ]);
+    const report = reportSnap.data();
+    const mealRequest = requestSnap.data();
+    const actualHash = reportTokenHash(token);
+    const tokenMatches = [report?.accessTokenHash, mealRequest?.accessTokenHash]
+      .map((value) => cleanText(value, 128))
+      .some((expectedHash) => secureHashEquals(actualHash, expectedHash));
+    if (!report || !tokenMatches) {
       throw new Error("추천식단을 찾지 못했습니다.");
     }
     const expiresAt = report.expiresAt instanceof Timestamp ? report.expiresAt.toMillis() : 0;
     if (expiresAt && expiresAt < Date.now()) throw new Error("추천식단 링크가 만료되었습니다.");
-    const snapshot = report.sentSnapshot || report.approvedSnapshot;
-    if (!snapshot?.publicContent || !["approved", "sent"].includes(String(report.publicationStatus || ""))) {
+    const snapshot = report.publishedSnapshot || report.sentSnapshot || report.approvedSnapshot;
+    if (!snapshot?.publicContent || !["published", "approved", "sent"].includes(String(report.publicationStatus || ""))) {
       throw new Error("추천식단이 아직 준비되지 않았습니다.");
     }
     response.set("Cache-Control", "private, no-store, max-age=0");
@@ -289,6 +297,7 @@ export async function recommendedMealPlanApiHandler(request: Request, response: 
       revision: cleanText(snapshot.revision, 128),
       content: normalizePublicContent(snapshot.publicContent, snapshot.publicContent),
       approvedAt: timestampIso(report.approvedAt),
+      publishedAt: timestampIso(report.publishedAt),
       sentAt: timestampIso(report.sentAt),
     });
   } catch (err) {
@@ -641,6 +650,7 @@ function safeReportForOperator(data: FirebaseFirestore.DocumentData | null): Rec
     shortUrl: cleanText(data.shortUrl, 400),
     lastError: cleanText(data.lastError, 400),
     approvedAt: timestampIso(data.approvedAt),
+    publishedAt: timestampIso(data.publishedAt),
     sentAt: timestampIso(data.sentAt),
   };
 }

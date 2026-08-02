@@ -24,6 +24,7 @@
           <a href="../staff/" data-section="staff">Staff <small>강사</small></a>
           <a href="./" data-section="recommended-meals">Meals <small>추천식단</small></a>
           <a href="../messages/" data-section="messages">Messages <small>알림톡</small></a>
+          <a href="../content/" data-section="content">Content <small>콘텐츠</small></a>
           <a href="../automation/" data-section="automation">Automation <small>관제</small></a>
           <a href="../business/" data-section="business">Business <small>지표</small></a>
           <a href="../imports/" data-section="imports">Imports <small>원본</small></a>
@@ -48,7 +49,7 @@
           <article class="panel metric"><div class="metric-label">설문 대기</div><div class="metric-value" id="mealAwaitingCount">0</div></article>
           <article class="panel metric"><div class="metric-label">초안 가능</div><div class="metric-value" id="mealReadyCount">0</div></article>
           <article class="panel metric"><div class="metric-label">검토 필요</div><div class="metric-value" id="mealReviewCount">0</div></article>
-          <article class="panel metric"><div class="metric-label">발송 완료</div><div class="metric-value" id="mealSentCount">0</div></article>
+          <article class="panel metric"><div class="metric-label">리포트 공개</div><div class="metric-value" id="mealSentCount">0</div></article>
         </section>
 
         <section class="meal-workspace">
@@ -60,7 +61,7 @@
             <div class="filter-bar" id="mealFilterBar" aria-label="추천식단 상태 필터">
               <button class="filter-button is-active" type="button" data-meal-filter="active">진행 중</button>
               <button class="filter-button" type="button" data-meal-filter="review">검토 필요</button>
-              <button class="filter-button" type="button" data-meal-filter="sent">발송 완료</button>
+              <button class="filter-button" type="button" data-meal-filter="sent">리포트 공개</button>
             </div>
             <div class="status-list meal-queue" id="recommendedMealQueue"><div class="empty-state">데이터 연결 후 표시합니다.</div></div>
           </article>
@@ -110,7 +111,7 @@
                 </label>
                 <div class="meal-form-actions">
                   <button class="secondary-button" id="mealSaveButton" type="submit">수정 저장</button>
-                  <button class="primary-button" id="mealSendButton" type="button">검토 완료 후 알림톡 발송</button>
+                  <button class="primary-button" id="mealSendButton" type="button">검토 완료 후 리포트 공개</button>
                 </div>
               </form>
             </div>

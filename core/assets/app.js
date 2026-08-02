@@ -21,6 +21,7 @@ const ALIMTALK_TEMPLATE_LABELS_BY_CODE = Object.freeze({
   KA01TP260611053817155zqYlw27wEOU: "회원용 수강료 안내 링크 v1",
   KA01TP26072806273194229P2ZesQwPp: "스튜디오메이트 예약 안내 v4",
   KA01TP260728111926523p2JzzTgHsS8: "아카이브 추천식단 프로그램",
+  KA01TP260731123545629Sx4N5CZa5BF: "아카이브 추천식단 도착 안내 v1 (미사용)",
   KA01TP260729144645970fv13He8mfsK: "프라이빗 사전설문 안내 v2",
   KA01TP260729144657202OV26yAD15wR: "강사용 프라이빗 차트 작성 안내 v3",
 });
@@ -2472,9 +2473,9 @@ function toggleRecommendedMealHistory() {
 
 function mealFlowStatus(item) {
   const status = String(item.recommendationStatus || item.status || "");
-  if (status === "sent") return { label: "발송 완료", tone: "success", stage: "sent" };
-  if (status === "send_failed") return { label: "발송 실패", tone: "danger", stage: "review" };
-  if (status === "approved") return { label: "승인·발송 중", tone: "active", stage: "review" };
+  if (["published", "sent"].includes(status)) return { label: "리포트 공개", tone: "success", stage: "sent" };
+  if (status === "send_failed") return { label: "공개 실패", tone: "danger", stage: "review" };
+  if (status === "approved") return { label: "공개 준비", tone: "active", stage: "review" };
   if (["awaiting_operator_review", "draft_ready", "operator_edited"].includes(status)) {
     return { label: "운영자 검토", tone: "warning", stage: "review" };
   }
@@ -2651,12 +2652,12 @@ function fillMealDraftForm(draft) {
   const reasons = draft.reviewReasons || [];
   qs("mealReviewCheckWrap").hidden = !reasons.length;
   qs("mealReviewAcknowledged").checked = Boolean(draft.reviewAcknowledged);
+  const published = ["published", "sent"].includes(state.recommendedMealReview?.report?.publicationStatus);
   form.querySelectorAll("input, textarea, button").forEach((element) => {
-    element.disabled = state.recommendedMealReview?.report?.publicationStatus === "sent";
+    element.disabled = published;
   });
-  const sent = state.recommendedMealReview?.report?.publicationStatus === "sent";
-  qs("mealDraftMeta").textContent = sent
-    ? `발송 완료 · ${formatDate(state.recommendedMealReview.report.sentAt)}`
+  qs("mealDraftMeta").textContent = published
+    ? `리포트 공개 · ${formatDate(state.recommendedMealReview.report.publishedAt || state.recommendedMealReview.report.sentAt)}`
     : `${draft.provider || "draft"} · ${draft.model || ""} · ${draft.revision?.slice(0, 10) || ""}`;
 }
 
@@ -2686,13 +2687,14 @@ function renderRecommendedMealReview(review) {
   }
   renderMealSource(review);
   fillMealDraftForm(review.draft);
-  qs("mealGenerateButton").disabled = !review.response || review.report?.publicationStatus === "sent";
+  const published = ["published", "sent"].includes(review.report?.publicationStatus);
+  qs("mealGenerateButton").disabled = !review.response || published;
   if (!review.response) mealReviewSetMessage("회원 설문 제출을 기다리고 있습니다.", "warn");
   else if (!review.draft) mealReviewSetMessage("설문 제출 후 식단을 자동 생성하고 있습니다. 잠시 뒤 새로고침하세요.", "warn");
-  else if (review.report?.publicationStatus === "sent") mealReviewSetMessage("회원에게 발송 완료되어 수정이 잠겼습니다.", "good");
+  else if (published) mealReviewSetMessage("리포트가 공개되어 수정이 잠겼습니다. 회원은 최초 설문 링크에서 확인할 수 있습니다.", "good");
   else if ((review.draft.reviewReasons || []).length && !review.draft.reviewAcknowledged) {
-    mealReviewSetMessage("주의 응답을 확인하고 체크한 뒤 저장해야 발송할 수 있습니다.", "warn");
-  } else mealReviewSetMessage("내용을 수정·저장한 뒤 최종 발송할 수 있습니다.");
+    mealReviewSetMessage("주의 응답을 확인하고 체크한 뒤 저장해야 공개할 수 있습니다.", "warn");
+  } else mealReviewSetMessage("내용을 수정·저장한 뒤 회원 확인 링크에 공개할 수 있습니다.");
 }
 
 async function loadRecommendedMealReview(requestId) {
@@ -2794,30 +2796,29 @@ async function handleMealDraftSubmit(event) {
 
 async function handleMealApproveAndSend() {
   if (!selectedMealRequestId) return;
-  if (!window.confirm("현재 식단을 최종 승인하고 회원에게 알림톡으로 발송할까요? 발송 후에는 수정할 수 없습니다.")) return;
+  if (!window.confirm("현재 식단을 최종 승인하고 최초 설문 링크에 공개할까요? 공개 후에는 수정할 수 없습니다.")) return;
   const button = qs("mealSendButton");
   if (button) {
     button.disabled = true;
-    button.textContent = "저장·발송 중";
+    button.textContent = "저장·공개 중";
   }
   mealReviewSetMessage("최종 수정 내용을 저장하고 승인 revision을 확인하고 있습니다.", "warn");
   try {
     await saveMealDraft({ quiet: true });
     const runtime = await initFirebase();
-    const send = runtime.httpsCallable(runtime.functionsClient, "operatorApproveAndSendRecommendedMealPlan");
-    const result = await send({ requestId: selectedMealRequestId, confirmSend: true });
+    const publish = runtime.httpsCallable(runtime.functionsClient, "operatorPublishRecommendedMealPlan");
+    const result = await publish({ requestId: selectedMealRequestId, confirmPublish: true });
     const data = result?.data || {};
-    if (data.status === "sent") mealReviewSetMessage("추천식단 알림톡 발송을 완료했습니다.", "good");
-    else if (data.status === "template_pending") mealReviewSetMessage("추천식단 도착 템플릿이 심사 중이라 발송하지 않았습니다.", "warn");
-    else mealReviewSetMessage(data.message || "추천식단 발송을 완료하지 못했습니다.", data.status === "skipped" ? "warn" : "danger");
+    if (data.status === "published") mealReviewSetMessage("추천식단을 공개했습니다. 회원은 최초 설문 알림톡 링크에서 확인할 수 있습니다.", "good");
+    else mealReviewSetMessage(data.message || "추천식단 공개를 완료하지 못했습니다.", "danger");
     await refresh();
     await loadRecommendedMealReview(selectedMealRequestId);
   } catch (error) {
-    mealReviewSetMessage(error?.message || "추천식단 승인·발송에 실패했습니다.", "danger");
+    mealReviewSetMessage(error?.message || "추천식단 승인·공개에 실패했습니다.", "danger");
   } finally {
     if (button) {
       button.disabled = false;
-      button.textContent = "검토 완료 후 알림톡 발송";
+      button.textContent = "검토 완료 후 리포트 공개";
     }
   }
 }
