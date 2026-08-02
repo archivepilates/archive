@@ -1547,8 +1547,7 @@ function renewalCaseRows(referenceDate = new Date()) {
       const sameKindTickets = tickets.filter(
         (ticket) => renewalTicketKind(ticket) === String(item.kind || "lesson") && isRenewalManagedTicket(ticket),
       );
-      if (sameKindTickets.length < 2) return true;
-      return !sameKindTickets.some((ticket) => isHealthyBackupTicket(ticket, referenceDate));
+      return sameKindTickets.length < 2;
     })
     .map((item) => {
       const member = memberById.get(String(item.memberId || "")) || {};

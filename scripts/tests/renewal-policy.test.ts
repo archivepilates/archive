@@ -129,7 +129,7 @@ test("same-name ticket records are still treated as separate follow-up tickets",
     expiresAt: timestamp("2026-12-31T23:59:59+09:00"),
     expiryLevel: "normal",
   };
-  assert.equal(hasSameKindAlternativeTicket([expiring, followUp], expiring, "2026-08-01"), true);
+  assert.equal(hasSameKindAlternativeTicket([expiring, followUp], expiring), true);
 });
 
 test("compensation coupons are not renewal tickets or replacement tickets", () => {
@@ -147,7 +147,7 @@ test("compensation coupons are not renewal tickets or replacement tickets", () =
     expiresAt: timestamp("2026-08-17T23:59:59+09:00"),
     expiryLevel: "warning",
   };
-  assert.equal(hasSameKindAlternativeTicket([expiring, coupon], expiring, "2026-08-01"), false);
+  assert.equal(hasSameKindAlternativeTicket([expiring, coupon], expiring), false);
   assert.equal(assessRenewalTicket({ ticket: coupon, bookings: [], sourceDate: "2026-08-01" }), null);
 });
 
