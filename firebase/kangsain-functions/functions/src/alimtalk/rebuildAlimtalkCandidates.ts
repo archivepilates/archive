@@ -25,6 +25,7 @@ import { isValidInstructorLessonManagementNumber as isValidInstructorLessonManag
 import { isAlimtalkTestRecipient } from "./testRecipients";
 import {
   assessRenewalTicket,
+  hasSameKindAlternativeTicket,
   isRenewalManagedTicket,
   renewalBookingKind,
   renewalSourceTicketKey,
@@ -906,11 +907,7 @@ function hasOtherActiveTicket(
   target: NonNullable<MemberProfileDoc["activeTickets"]>[number],
   sourceDate: string,
 ): boolean {
-  const targetKey = profileTicketIdentity(target);
-  const targetKind = renewalTicketKind(target);
-  return currentOrUpcomingLessonProfileTickets(profile, sourceDate).some(
-    (ticket) => profileTicketIdentity(ticket) !== targetKey && renewalTicketKind(ticket) === targetKind,
-  );
+  return hasSameKindAlternativeTicket(currentOrUpcomingLessonProfileTickets(profile, sourceDate), target);
 }
 
 function hasHoldingTicket(profile: MemberProfileDoc | undefined): boolean {
@@ -1177,10 +1174,9 @@ function hasSameKindActiveBackup(
   target: NonNullable<MemberProfileDoc["activeTickets"]>[number],
   sourceDate: string,
 ): boolean {
-  const targetIdentity = profileTicketIdentity(target);
   const targetKind = renewalTicketKind(target);
   return tickets.some((ticket) => {
-    if (profileTicketIdentity(ticket) === targetIdentity || renewalTicketKind(ticket) !== targetKind) return false;
+    if (ticket === target || renewalTicketKind(ticket) !== targetKind) return false;
     const remaining = ticket.remainingCount == null ? Number.NaN : Number(ticket.remainingCount);
     const days = Number(remainingDays(ticket.expiresAt, sourceDate));
     return (!Number.isFinite(remaining) || remaining > renewalCountThresholdForKind(targetKind)) &&
@@ -1190,12 +1186,6 @@ function hasSameKindActiveBackup(
 
 function renewalCountThresholdForKind(kind: string): number {
   return kind === "private" ? 3 : 5;
-}
-
-function profileTicketIdentity(ticket: NonNullable<MemberProfileDoc["activeTickets"]>[number]): string {
-  if (ticket.userTicketId) return `user:${ticket.userTicketId}`;
-  const expiresAt = ticket.expiresAt?.toMillis() || "";
-  return [ticket.ticketId || "", ticket.name || "", expiresAt].filter(Boolean).join("|");
 }
 
 function ticketPayload(

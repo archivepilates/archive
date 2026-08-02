@@ -3,6 +3,7 @@ import test from "node:test";
 import type { AlimtalkCandidateDoc, BookingDoc, MemberProfileDoc } from "../../firebase/kangsain-functions/functions/src/types/models";
 import {
   assessRenewalTicket,
+  hasSameKindAlternativeTicket,
   renewalBookingKind,
   renewalRecommendation,
   renewalSourceTicketKey,
@@ -112,6 +113,25 @@ test("renewal source key does not change when expiry or remaining count is corre
   assert.equal(renewalSourceTicketKey("member-1", "group", ticket), before);
 });
 
+test("same-name ticket records are still treated as separate follow-up tickets", () => {
+  const expiring: Ticket = {
+    name: "그룹 30회",
+    classType: "G",
+    remainingCount: 3,
+    expiresAt: timestamp("2026-08-20T23:59:59+09:00"),
+    expiryLevel: "warning",
+  };
+  const followUp: Ticket = {
+    name: "그룹 30회",
+    classType: "G",
+    remainingCount: 30,
+    availableFrom: timestamp("2026-08-21T00:00:00+09:00"),
+    expiresAt: timestamp("2026-12-31T23:59:59+09:00"),
+    expiryLevel: "normal",
+  };
+  assert.equal(hasSameKindAlternativeTicket([expiring, followUp], expiring), true);
+});
+
 test("send guard blocks a stale candidate after a follow-up ticket is added", () => {
   const target: Ticket = {
     userTicketId: "target",
@@ -169,4 +189,54 @@ test("send guard blocks a stale candidate after a follow-up ticket is added", ()
     expiryLevel: "normal",
   });
   assert.equal(renewalCandidateProfileIssue(candidate, profile), "현재 또는 사용예정 동일 유형 후속 수강권 보유");
+});
+
+test("send guard blocks a same-name follow-up ticket without stable ticket ids", () => {
+  const profile: MemberProfileDoc = {
+    memberId: "member-1",
+    studioId: "5330",
+    name: "테스트",
+    phone: "01000000000",
+    registeredAt: null,
+    activeTickets: [
+      {
+        name: "그룹 30회",
+        classType: "G",
+        remainingCount: 3,
+        expiresAt: timestamp("2026-08-20T23:59:59+09:00"),
+        expiryLevel: "warning",
+      },
+      {
+        name: "그룹 30회",
+        classType: "G",
+        remainingCount: 30,
+        availableFrom: timestamp("2026-08-21T00:00:00+09:00"),
+        expiresAt: timestamp("2026-12-31T23:59:59+09:00"),
+        expiryLevel: "normal",
+      },
+    ],
+    syncedAt: timestamp(),
+    updatedAt: timestamp(),
+  };
+  const candidate: AlimtalkCandidateDoc = {
+    candidateId: "candidate-same-name",
+    studioId: "5330",
+    memberId: "member-1",
+    memberName: "테스트",
+    memberPhone: "01000000000",
+    type: "remaining_low",
+    status: "queued",
+    templateCode: "template",
+    title: "수강권",
+    reason: "잔여횟수 부족",
+    sourceDate: "2026-08-01",
+    payload: { ticketName: "그룹 30회", remainingCount: "3" },
+    lastError: null,
+    createdAt: timestamp(),
+    updatedAt: timestamp(),
+  };
+  assert.equal(
+    renewalCandidateProfileIssue(candidate, profile),
+    "현재 또는 사용예정 동일 유형 후속 수강권 보유",
+  );
 });

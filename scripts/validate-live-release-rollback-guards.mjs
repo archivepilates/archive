@@ -482,6 +482,7 @@ const guardGroups = [
       {
         file: "firebase/kangsain-functions/functions/src/renewal/renewalPolicy.ts",
         markers: [
+          "hasSameKindAlternativeTicket",
           "renewalSourceTicketKey",
           "predictedDepletionDate",
           "weeklyPace",

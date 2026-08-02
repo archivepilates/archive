@@ -53,6 +53,11 @@ export function renewalCountThreshold(kind: RenewalTicketKind): number {
   return kind === "private" ? 3 : 5;
 }
 
+export function hasSameKindAlternativeTicket(tickets: ActiveTicket[], target: ActiveTicket): boolean {
+  const targetKind = renewalTicketKind(target);
+  return tickets.some((ticket) => ticket !== target && renewalTicketKind(ticket) === targetKind);
+}
+
 export function renewalSourceTicketKey(
   memberId: string,
   kind: RenewalTicketKind,
