@@ -15,6 +15,7 @@ const RENEWAL_EXCLUDED_TICKET_KEYWORDS = [
   "양말",
   "토삭스",
   "상품권",
+  "쿠폰",
 ];
 
 export interface RenewalUsageSummary {
@@ -53,9 +54,19 @@ export function renewalCountThreshold(kind: RenewalTicketKind): number {
   return kind === "private" ? 3 : 5;
 }
 
-export function hasSameKindAlternativeTicket(tickets: ActiveTicket[], target: ActiveTicket): boolean {
+export function hasSameKindAlternativeTicket(
+  tickets: ActiveTicket[],
+  target: ActiveTicket,
+  sourceDate: string,
+): boolean {
   const targetKind = renewalTicketKind(target);
-  return tickets.some((ticket) => ticket !== target && renewalTicketKind(ticket) === targetKind);
+  return tickets.some((ticket) => {
+    if (ticket === target || !isRenewalManagedTicket(ticket) || renewalTicketKind(ticket) !== targetKind) return false;
+    const remaining = finiteNumber(ticket.remainingCount);
+    const remainingDays = ticket.expiresAt ? daysBetween(sourceDate, dateText(ticket.expiresAt.toDate())) : null;
+    return (remaining == null || remaining > renewalCountThreshold(targetKind)) &&
+      (remainingDays == null || remainingDays > 30);
+  });
 }
 
 export function renewalSourceTicketKey(

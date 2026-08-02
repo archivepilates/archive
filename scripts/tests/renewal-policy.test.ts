@@ -129,7 +129,26 @@ test("same-name ticket records are still treated as separate follow-up tickets",
     expiresAt: timestamp("2026-12-31T23:59:59+09:00"),
     expiryLevel: "normal",
   };
-  assert.equal(hasSameKindAlternativeTicket([expiring, followUp], expiring), true);
+  assert.equal(hasSameKindAlternativeTicket([expiring, followUp], expiring, "2026-08-01"), true);
+});
+
+test("compensation coupons are not renewal tickets or replacement tickets", () => {
+  const expiring: Ticket = {
+    name: "그룹 30회",
+    classType: "G",
+    remainingCount: 3,
+    expiresAt: timestamp("2026-08-20T23:59:59+09:00"),
+    expiryLevel: "warning",
+  };
+  const coupon: Ticket = {
+    name: "2026' 여름휴가 보상 쿠폰",
+    classType: "G",
+    remainingCount: 1,
+    expiresAt: timestamp("2026-08-17T23:59:59+09:00"),
+    expiryLevel: "warning",
+  };
+  assert.equal(hasSameKindAlternativeTicket([expiring, coupon], expiring, "2026-08-01"), false);
+  assert.equal(assessRenewalTicket({ ticket: coupon, bookings: [], sourceDate: "2026-08-01" }), null);
 });
 
 test("send guard blocks a stale candidate after a follow-up ticket is added", () => {

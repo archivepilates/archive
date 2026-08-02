@@ -483,6 +483,7 @@ const guardGroups = [
         file: "firebase/kangsain-functions/functions/src/renewal/renewalPolicy.ts",
         markers: [
           "hasSameKindAlternativeTicket",
+          '"쿠폰"',
           "renewalSourceTicketKey",
           "predictedDepletionDate",
           "weeklyPace",
@@ -496,6 +497,10 @@ const guardGroups = [
           "동일 유형 후속 수강권 보유",
           "renewalCandidateProfileIssue",
         ],
+      },
+      {
+        file: "core/assets/app.js",
+        markers: ['"쿠폰"', "sameKindTickets.length < 2", "isHealthyBackupTicket"],
       },
       {
         file: "firebase/kangsain-functions/firestore.rules",

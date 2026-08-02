@@ -907,7 +907,7 @@ function hasOtherActiveTicket(
   target: NonNullable<MemberProfileDoc["activeTickets"]>[number],
   sourceDate: string,
 ): boolean {
-  return hasSameKindAlternativeTicket(currentOrUpcomingLessonProfileTickets(profile, sourceDate), target);
+  return hasSameKindAlternativeTicket(currentOrUpcomingLessonProfileTickets(profile, sourceDate), target, sourceDate);
 }
 
 function hasHoldingTicket(profile: MemberProfileDoc | undefined): boolean {
@@ -1174,18 +1174,7 @@ function hasSameKindActiveBackup(
   target: NonNullable<MemberProfileDoc["activeTickets"]>[number],
   sourceDate: string,
 ): boolean {
-  const targetKind = renewalTicketKind(target);
-  return tickets.some((ticket) => {
-    if (ticket === target || renewalTicketKind(ticket) !== targetKind) return false;
-    const remaining = ticket.remainingCount == null ? Number.NaN : Number(ticket.remainingCount);
-    const days = Number(remainingDays(ticket.expiresAt, sourceDate));
-    return (!Number.isFinite(remaining) || remaining > renewalCountThresholdForKind(targetKind)) &&
-      (!Number.isFinite(days) || days > 30);
-  });
-}
-
-function renewalCountThresholdForKind(kind: string): number {
-  return kind === "private" ? 3 : 5;
+  return hasSameKindAlternativeTicket(tickets, target, sourceDate);
 }
 
 function ticketPayload(

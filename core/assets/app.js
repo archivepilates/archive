@@ -1367,7 +1367,7 @@ function mergeMemberCardsWithProfiles(cards = [], profiles = []) {
   return [...mergedById.values()];
 }
 
-const RENEWAL_EXCLUDED_TICKET_KEYWORDS = ["강사레슨", "강사용", "직원", "상담", "체험", "락커", "양말", "토삭스", "상품권"];
+const RENEWAL_EXCLUDED_TICKET_KEYWORDS = ["강사레슨", "강사용", "직원", "상담", "체험", "락커", "양말", "토삭스", "상품권", "쿠폰"];
 
 function ticketNameText(ticket) {
   return String(ticketLabel(ticket) || "").trim();
@@ -1417,18 +1417,6 @@ function renewalCountThreshold(kind) {
   return kind === "private" ? 3 : 5;
 }
 
-function renewalTicketIdentity(ticket) {
-  return [
-    ticket?.userTicketId,
-    ticket?.ticketId,
-    ticketNameText(ticket),
-    ticketExpiresMs(ticket),
-    ticketRemainingCount(ticket),
-  ]
-    .filter((value) => value !== undefined && value !== null && value !== "" && !Number.isNaN(value))
-    .join("|");
-}
-
 function isHealthyBackupTicket(ticket, referenceDate = new Date()) {
   if (!isRenewalManagedTicket(ticket)) return false;
   const kind = renewalTicketKind(ticket);
@@ -1441,9 +1429,8 @@ function isHealthyBackupTicket(ticket, referenceDate = new Date()) {
 
 function hasSameKindBackupTicket(tickets, target, referenceDate = new Date()) {
   const targetKind = renewalTicketKind(target);
-  const targetIdentity = renewalTicketIdentity(target);
   return tickets.some((ticket) => {
-    if (renewalTicketIdentity(ticket) === targetIdentity) return false;
+    if (ticket === target) return false;
     if (renewalTicketKind(ticket) !== targetKind) return false;
     return isHealthyBackupTicket(ticket, referenceDate);
   });
@@ -1553,6 +1540,16 @@ function renewalCaseRows(referenceDate = new Date()) {
   const rows = state.renewalCases
     .filter((item) => item.active !== false && !["resolved", "excluded"].includes(String(item.workflowStatus || "open")))
     .filter((item) => item.workflowStatus !== "snoozed" || !timestampMs(item.nextActionAt) || timestampMs(item.nextActionAt) <= now)
+    .filter((item) => {
+      if (!isRenewalManagedTicket({ name: item.ticketName || "" })) return false;
+      const member = memberById.get(String(item.memberId || "")) || {};
+      const tickets = (member.currentTicketsSummary || []).filter((ticket) => ticket && typeof ticket !== "string");
+      const sameKindTickets = tickets.filter(
+        (ticket) => renewalTicketKind(ticket) === String(item.kind || "lesson") && isRenewalManagedTicket(ticket),
+      );
+      if (sameKindTickets.length < 2) return true;
+      return !sameKindTickets.some((ticket) => isHealthyBackupTicket(ticket, referenceDate));
+    })
     .map((item) => {
       const member = memberById.get(String(item.memberId || "")) || {};
       const memberId = item.memberId || member.memberId || member.id || "";
