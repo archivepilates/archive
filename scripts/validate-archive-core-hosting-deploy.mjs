@@ -51,6 +51,10 @@ const required = [
       "renderRenewalPipeline",
       "renewalCases",
       "handleRenewalActionClick",
+      "ALIMTALK_TEMPLATE_LABELS_BY_CODE",
+      "alimtalkTemplateTitle",
+      "humanizeAlimtalkTemplateText",
+      "강사용 프라이빗 차트 작성 안내 v3",
       "predictedDepletionDate",
       "mergeMemberCardsWithProfiles",
       "coreDataHealthIssues",
@@ -251,6 +255,30 @@ for (const tool of externalToolLinks) {
       });
     }
   }
+}
+
+const coreAppSource = fs.readFileSync(path.join(repoRoot, "core/assets/app.js"), "utf8");
+const alimtalkTemplateSource = fs.readFileSync(
+  path.join(repoRoot, "firebase/kangsain-functions/functions/src/alimtalk/templates.ts"),
+  "utf8",
+);
+const knownTemplateCodes = [...new Set(alimtalkTemplateSource.match(/KA\d{2}TP[0-9A-Za-z]+/g) || [])];
+for (const templateCode of knownTemplateCodes) {
+  if (!coreAppSource.includes(`${templateCode}:`)) {
+    failures.push({
+      file: "core/assets/app.js",
+      label: "ARCHIVE CORE Korean Alimtalk template title map",
+      missing: templateCode,
+    });
+  }
+}
+const coreRulesSource = fs.readFileSync(path.join(repoRoot, "core/rules/index.html"), "utf8");
+if (/KA\d{2}TP[0-9A-Za-z]+/.test(coreRulesSource)) {
+  failures.push({
+    file: "core/rules/index.html",
+    label: "operator-facing Korean Alimtalk template titles",
+    missing: "remove raw SOLAPI template IDs from visible rules",
+  });
 }
 
 for (const file of collectHtmlFiles(path.join(repoRoot, "core"))) {

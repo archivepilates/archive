@@ -1,7 +1,50 @@
 const FIREBASE_APP_VERSION = "10.14.1";
-const CORE_RUNTIME_CONTRACT_VERSION = "2026-08-01.1";
+const CORE_RUNTIME_CONTRACT_VERSION = "2026-08-02.1";
 const WORK_LANE_ID = "archive-core-transition";
 const STUDIO_ID = "5330";
+
+const ALIMTALK_TEMPLATE_LABELS_BY_CODE = Object.freeze({
+  KA01TP260514145047261araXgWLVFRs: "그룹 기간권 잔여기간 안내 v3",
+  KA01TP260514145047393VpTbcCZKkCV: "그룹 횟수권 잔여횟수 안내 v3",
+  KA01TP260514152235608d9icGOBotnV: "프라이빗 횟수권 잔여횟수 안내 v1",
+  KA01TP260514153314927WH270IppWQS: "프라이빗 기간권 잔여기간 안내 v1",
+  KA01TP260514153632171uiWXYoeiOLS: "프라이빗 사전설문 안내 v1 (미사용)",
+  KA01TP260519093416836f1EHZYJ00uM: "담당강사 사전설문 제출 안내 v1",
+  KA01TP2605210729364330NbhZVAu9zA: "그룹 첫 수업 사전확인 안내 v1",
+  KA01TP260521120040094XcMvYgFTryj: "강사레슨 수업자료 안내 v1",
+  KA01TP260522041704111wu4Z0cu9cgl: "첫 그룹수업 회원 확인 v1",
+  KA01TP260524083643752cySb9BoDOjN: "장기 미방문 수업안내 v1",
+  KA01TP260527182741301uIuSTL01YQ1: "강사용 프라이빗 차트 작성 안내 v2 (미사용)",
+  KA01TP260528081225871Fr92FW901Vo: "프라이빗 회원 리포트 안내 v1",
+  KA01TP260528090148593isshfXtt8vE: "회원용 인바디 리포트 안내 v1",
+  KA01TP260602101939427lPhGyuDLvFM: "신규회원 웰컴 v5",
+  KA01TP260611053817155zqYlw27wEOU: "회원용 수강료 안내 링크 v1",
+  KA01TP26072806273194229P2ZesQwPp: "스튜디오메이트 예약 안내 v4",
+  KA01TP260728111926523p2JzzTgHsS8: "아카이브 추천식단 프로그램",
+  KA01TP260729144645970fv13He8mfsK: "프라이빗 사전설문 안내 v2",
+  KA01TP260729144657202OV26yAD15wR: "강사용 프라이빗 차트 작성 안내 v3",
+});
+
+const ALIMTALK_TEMPLATE_LABELS_BY_TYPE = Object.freeze({
+  reservation_open: "스튜디오메이트 예약 안내",
+  new_member: "신규회원 안내",
+  onsite_welcome: "신규회원 웰컴",
+  ticket_expiring: "그룹 기간권 잔여기간 안내",
+  remaining_low: "그룹 횟수권 잔여횟수 안내",
+  private_count_low: "프라이빗 횟수권 잔여횟수 안내",
+  private_survey: "프라이빗 사전설문 안내",
+  group_survey: "그룹 첫 수업 사전확인 안내",
+  private_ticket_expiring: "프라이빗 기간권 잔여기간 안내",
+  long_absence: "장기 미방문 수업안내",
+  staff_private_survey: "담당강사 사전설문 제출 안내",
+  staff_private_chart: "강사용 프라이빗 차트 작성 안내",
+  staff_group_survey: "첫 그룹수업 회원 확인",
+  instructor_lesson_material: "강사레슨 수업자료 안내",
+  private_lesson_report: "프라이빗 회원 리포트 안내",
+  inbody_report: "회원용 인바디 리포트 안내",
+  pricing_info: "회원용 수강료 안내",
+  recommended_meal_survey: "아카이브 추천식단 프로그램",
+});
 
 const state = {
   firebaseRuntime: null,
@@ -1952,6 +1995,31 @@ function isPendingStatus(value) {
   );
 }
 
+function isAlimtalkTemplateIdentifier(value) {
+  return /^KA\d{2}TP[0-9A-Za-z]+$/.test(String(value || "").trim());
+}
+
+function alimtalkTemplateTitle(item = {}) {
+  const templateCode = String(item.templateCode || item.templateId || "").trim();
+  const explicitName = String(item.templateName || "").trim();
+  if (explicitName && !isAlimtalkTemplateIdentifier(explicitName)) return explicitName;
+  if (ALIMTALK_TEMPLATE_LABELS_BY_CODE[templateCode]) return ALIMTALK_TEMPLATE_LABELS_BY_CODE[templateCode];
+  const candidateType = String(item.candidateType || item.type || "").trim().toLowerCase();
+  if (ALIMTALK_TEMPLATE_LABELS_BY_TYPE[candidateType]) return ALIMTALK_TEMPLATE_LABELS_BY_TYPE[candidateType];
+  return "알림톡 템플릿";
+}
+
+function alimtalkRowTitle(item = {}) {
+  const title = String(item.title || "").trim();
+  return title && !isAlimtalkTemplateIdentifier(title) ? title : alimtalkTemplateTitle(item);
+}
+
+function humanizeAlimtalkTemplateText(value) {
+  return String(value || "").replace(/KA\d{2}TP[0-9A-Za-z]+/g, (templateCode) => {
+    return ALIMTALK_TEMPLATE_LABELS_BY_CODE[templateCode] || "알림톡 템플릿";
+  });
+}
+
 function communicationActionText(item) {
   return [
     item?.status,
@@ -2139,15 +2207,17 @@ function renderMessages(candidates, sends) {
   setText("messagesRiskDecision", totalFailures ? `${totalFailures}건 실패` : "위험 낮음");
 
   const renderAlimtalkRow = (item, options = {}) => {
-    const template = item.title || item.templateName || item.templateCode || item.type || "알림톡";
+    const title = alimtalkRowTitle(item);
+    const template = alimtalkTemplateTitle(item);
     const member = item.memberName || item.name || item.memberId || item.id;
     const date = formatDate(item.sentAt || item.updatedAt || item.createdAt || item.sourceDate);
-    const reason = item.reason || item.lastError || item.dedupePolicy || item.candidateId || "";
+    const reason = humanizeAlimtalkTemplateText(item.reason || item.lastError || item.dedupePolicy || item.candidateId || "");
+    const templateContext = title !== template ? `${template} · ` : "";
     return `
       <div class="status-row">
         <div>
           <strong>${escapeHtml(member)}</strong>
-          <p>${escapeHtml(template)} · ${escapeHtml(date)}${reason ? ` · ${escapeHtml(reason)}` : ""}</p>
+          <p>${escapeHtml(title)} · ${escapeHtml(templateContext)}${escapeHtml(date)}${reason ? ` · ${escapeHtml(reason)}` : ""}</p>
         </div>
         ${pill(options.status?.(item) || item.status || item.sendStatus)}
       </div>
@@ -2179,7 +2249,7 @@ function renderMessages(candidates, sends) {
   if (templateList) {
     const templateMap = new Map();
     for (const item of [...candidates, ...sends]) {
-      const key = item.title || item.templateName || item.templateCode || item.type || "알림톡";
+      const key = alimtalkTemplateTitle(item);
       const current = templateMap.get(key) || { label: key, candidates: 0, sends: 0, failed: 0, sent: 0 };
       if (candidates.includes(item)) current.candidates += 1;
       if (sends.includes(item)) current.sends += 1;
@@ -3216,9 +3286,11 @@ function renderMemberDetail(detail) {
   });
   renderMiniList("memberDetailAlimtalkList", alimtalkLogs, {
     empty: "최근 알림톡 기록이 없습니다.",
-    title: (item) => item.templateName || item.templateCode || item.candidateType || item.id,
+    title: (item) => alimtalkTemplateTitle(item),
     detail: (item) =>
-      [shortDate(item.sentAt || item.createdAt), item.reason || item.message || item.managementNumber].filter(Boolean).join(" · "),
+      [shortDate(item.sentAt || item.createdAt), humanizeAlimtalkTemplateText(item.reason || item.message || item.managementNumber)]
+        .filter(Boolean)
+        .join(" · "),
     status: (item) => item.status || item.sendStatus,
   });
 
