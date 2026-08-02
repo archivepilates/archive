@@ -68,7 +68,8 @@ grep -q "getBookingsForLessonWindow" "$TMP_DIR/app.js"
 grep -q "deriveLessonOccurrencesFromBookings" "$TMP_DIR/app.js"
 grep -q "normalizedLessonKind" "$TMP_DIR/app.js"
 grep -q "operatorLifecycle" "$TMP_DIR/app.js"
-grep -q "KA01TP260728111926523p2JzzTgHsS8" "$TMP_DIR/rules.html"
+grep -q "아카이브 추천식단 프로그램" "$TMP_DIR/rules.html"
+grep -q "강사용 프라이빗 차트 작성 안내 v3" "$TMP_DIR/rules.html"
 grep -q "APPROVED·BA·IMAGE" "$TMP_DIR/rules.html"
 ARCHIVE_CORE_BASE_URL=https://core.archivepilates.com npm run verify:archive-core-responsive
 node scripts/validate-live-release-canary.mjs --surface core
