@@ -38,6 +38,29 @@ const checks = [
     forbidden: ['refs.alimtalkCandidates().where("status", "==", "sent").limit(500)'],
   },
   {
+    file: "firebase/kangsain-functions/functions/src/privateLessonChart/privateLessonChart.ts",
+    required: ['gptStatus: "waiting_post"', 'where("gptStatus", "==", "pending").limit(100)'],
+    forbidden: [],
+  },
+  {
+    file: "firebase/kangsain-functions/functions/src/exports/privateChart.ts",
+    required: [
+      "scheduledProcessMissingSurveySubmissionAlerts",
+      'schedule: "every 60 minutes"',
+      'schedule: "0 6,14,22 * * *"',
+    ],
+    forbidden: [],
+  },
+  {
+    file: "firebase/kangsain-functions/functions/src/sync/processContactSyncJobs.ts",
+    required: [
+      '.where("target", "==", "home_archivepilates")',
+      '.where("nextRunAt", "<=", now)',
+      '.orderBy("nextRunAt", "asc")',
+    ],
+    forbidden: ['where("status", "in", ["pending", "retry"]).limit(100)'],
+  },
+  {
     file: "firebase/kangsain-functions/functions/src/parking/parkingOperations.ts",
     required: [
       "SCHEDULED_BOOKING_LOOKBACK_MINUTES",
@@ -101,6 +124,9 @@ console.log(
         "unchanged member and reservation documents are skipped",
         "instructor views do not depend on the latest source file name",
         "survey alert scans are bounded and idempotent",
+        "pre-lesson records stay out of report generation scans",
+        "Notion recovery and missing-survey scans use reduced schedules",
+        "contact sync reads only due home-account jobs",
         "parking scheduler scans only the recent due-time window",
         "Instagram publishing and insight scans are bounded and idempotent",
       ],

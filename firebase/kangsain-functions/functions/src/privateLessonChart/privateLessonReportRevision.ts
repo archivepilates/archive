@@ -1,5 +1,6 @@
 import type {
   PrivateLessonChartMediaFile,
+  PrivateLessonChartGptStatus,
   PrivateLessonChartRecordDoc,
   PrivateLessonReportSnapshot,
 } from "../types/models";
@@ -71,9 +72,11 @@ export function privateLessonReportSnapshotForView(
   return null;
 }
 
-export function privateLessonReportSourceChangePatch(): Partial<PrivateLessonChartRecordDoc> {
+export function privateLessonReportSourceChangePatch(
+  gptStatus: Extract<PrivateLessonChartGptStatus, "waiting_post" | "pending"> = "pending",
+): Partial<PrivateLessonChartRecordDoc> {
   return {
-    gptStatus: "pending",
+    gptStatus,
     gptTaskId: "",
     gptError: null,
     gptDraftSummary: "",

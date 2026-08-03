@@ -26,6 +26,7 @@
       "owns": [
         "scheduledSyncPrivateSurveyResponses",
         "scheduledProcessStaffSurveyAlimtalks",
+        "scheduledProcessMissingSurveySubmissionAlerts",
         "scheduledSyncPrivateSurveyNotion",
         "scheduledCreatePrivateLessonChartRequests",
         "scheduledReconcileCurrentMonthPrivateLessonCharts",
@@ -50,8 +51,6 @@
       "physicalSource": "firebase/function-codebases/sync",
       "sourceEntrypoint": "firebase/kangsain-functions/functions/src/exports/sync.ts",
       "owns": [
-        "scheduledSyncLecturesDaily",
-        "scheduledPollManagerNotices",
         "scheduledProcessWriteQueue",
         "scheduledProcessContactSyncJobs",
         "queueStaffContactSync",

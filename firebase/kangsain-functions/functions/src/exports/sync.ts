@@ -3,7 +3,6 @@ import { onCall, onRequest, HttpsError } from "firebase-functions/v2/https";
 import { onDocumentCreated, onDocumentWritten } from "firebase-functions/v2/firestore";
 import { onSchedule } from "firebase-functions/v2/scheduler";
 import { syncDashboardFromSheets } from "../sync/syncDashboardFromSheets";
-import { syncLecturesDaily } from "../sync/syncLecturesDaily";
 import { syncLecturesRange } from "../sync/syncLecturesRange";
 import { pollManagerNotices } from "../sync/pollManagerNotices";
 import { processContactSyncJobs } from "../sync/processContactSyncJobs";
@@ -18,26 +17,6 @@ import { toHttpsError } from "../utils/errors";
 import { callableOptions, longCallableOptions, longRequestOptions, scheduleOptions } from "../runtime/functionOptions";
 import type { StaffDoc } from "../types/models";
 import { queueActiveStaffContactSync, staffContactIdentityChanged } from "../sync/queueStaffContactSync";
-
-export const scheduledSyncLecturesDaily = onSchedule(
-  {
-    ...scheduleOptions,
-    schedule: "5 0 * * *",
-  },
-  async () => {
-    await syncLecturesDaily();
-  },
-);
-
-export const scheduledPollManagerNotices = onSchedule(
-  {
-    ...scheduleOptions,
-    schedule: "every 10 minutes",
-  },
-  async () => {
-    await pollManagerNotices();
-  },
-);
 
 export const scheduledProcessWriteQueue = onSchedule(
   {

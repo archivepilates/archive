@@ -173,6 +173,12 @@ test("survey answer changes invalidate manual report and approval state", () => 
   assert.equal(patch.publicReportApproval?.status, "pending");
 });
 
+test("pre-lesson changes wait for a post record before report generation", () => {
+  const patch = privateLessonReportSourceChangePatch("waiting_post");
+  assert.equal(patch.gptStatus, "waiting_post");
+  assert.equal(patch.publicReportApproval?.status, "pending");
+});
+
 test("report is editable before send and locked while processing or after send", () => {
   assert.equal(privateLessonReportMutationLockReason(reportRecord()), "");
   assert.match(

@@ -645,7 +645,7 @@ export interface PrivateSurveyResponseDoc {
     alimtalkReason: string;
   };
   notionSync?: {
-    status: "synced" | "skipped" | "failed";
+    status: "pending" | "synced" | "skipped" | "failed";
     action?: "created" | "updated";
     memberPageId?: string;
     intakePageId?: string;
@@ -696,6 +696,7 @@ export type PrivateLessonChartRequestStatus =
   | "completed"
   | "cancelled";
 export type PrivateLessonChartGptStatus =
+  | "waiting_post"
   | "pending"
   | "processing"
   | "draft_created"

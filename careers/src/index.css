@@ -1,0 +1,19 @@
+@import url('https://fonts.googleapis.com/css2?family=Cormorant+Garamond:ital,wght@0,300;0,400;0,500;0,600;0,700;1,300;1,400;1,500;1,600;1,700&family=Public+Sans:ital,wght@0,100..900;1,100..900&display=swap');
+@import "tailwindcss";
+
+@theme {
+  --font-headline: "Cormorant Garamond", serif;
+  --font-body: "Public Sans", sans-serif;
+
+  --color-primary: #e31e24;
+  --color-primary-container: #ff4d4d;
+  --color-surface: #fcf9f6;
+  --color-on-surface: #1c1c1a;
+  --color-secondary: #7a1a1a;
+}
+
+@layer base {
+  body {
+    @apply bg-surface text-on-surface font-body antialiased;
+  }
+}

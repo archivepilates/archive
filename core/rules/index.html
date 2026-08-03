@@ -58,6 +58,7 @@
             <a href="#parking">주차등록<span>차량, 아이파킹, 자동 할인</span></a>
             <a href="#welcome">현장 웰컴<span>가입서, PDF, StudioMate 반영</span></a>
             <a href="#settlement">정산·지표<span>월별 정산, 대시보드</span></a>
+            <a href="#cloud-cost">클라우드 비용<span>예산, 과금, 자원 정리</span></a>
             <a href="#release">배포·검증<span>배포세트, 실패보고</span></a>
             <a href="#worklines">워크라인<span>스레드, worktree, 승격</span></a>
             <a href="#archive">폐기·보관<span>Notion, API 모드, 레거시</span></a>
@@ -719,8 +720,42 @@
           <div class="rule-note"><strong>현재 확인 위치</strong><span>CORE Business / Google Drive 아카이브 정산 자동화 / Firestore businessSnapshots / ticketLiabilityReports</span></div>
         </section>
 
+        <section class="panel rule-section" id="cloud-cost">
+          <div class="panel-header"><div><h2>9. 클라우드 비용</h2><p>운영 기능을 유지하면서 사용하지 않는 상시 자원과 반복 읽기를 먼저 줄입니다.</p></div><span class="pill good">optimized</span></div>
+          <div class="rule-grid">
+            <article class="rule-card">
+              <h3>현재 운영 기준</h3>
+              <ul>
+                <li>ARCHIVE PILATES 운영 데이터는 Firestore와 Google Drive 원천을 사용하며 Firebase Data Connect와 Cloud SQL은 사용하지 않습니다.</li>
+                <li>사용 목적, 데이터 소유자, 종료 기준이 없는 유료 상시 자원은 만들지 않습니다.</li>
+                <li>새 Cloud SQL, Data Connect, 최소 인스턴스, CPU 상시 할당은 비용 추정과 종료 계획을 먼저 남긴 뒤 승인합니다.</li>
+                <li>채용 사이트 Cloud Run은 최소 인스턴스 0, 요청 처리 중 CPU 할당 방식으로 운영합니다.</li>
+              </ul>
+            </article>
+            <article class="rule-card">
+              <h3>반복 작업 기준</h3>
+              <ul>
+                <li>Firestore 예약·연락처·설문 작업은 전체 문서 폴링보다 상태와 dueAt/nextRunAt 조건 쿼리를 우선합니다.</li>
+                <li>프라이빗 리포트는 수업 후 기록이 들어오기 전에는 waiting_post로 보관하고 정기 생성 대상에서 제외합니다.</li>
+                <li>운영 영향이 작은 누락 설문 확인은 시간 단위, Notion 백필은 하루 3회로 제한합니다.</li>
+                <li>사용하지 않는 Scheduler와 Secret은 참조·대체 수단을 확인한 뒤 삭제합니다.</li>
+              </ul>
+            </article>
+            <article class="rule-card">
+              <h3>관제와 검증</h3>
+              <ul>
+                <li>Cloud Billing 상세 내보내기는 archive-pilates.archive_billing_export 데이터셋을 사용합니다.</li>
+                <li>월별 비용은 프로젝트, 서비스, SKU, 리전 순으로 확인하고 전월 같은 날짜 대비 급증 항목부터 원인을 찾습니다.</li>
+                <li>비용 절감 변경도 기능 배포와 동일하게 빌드, 라이브 URL, Scheduler 상태, Firestore 상태를 함께 검증합니다.</li>
+                <li>운영 기능을 줄여야 하는 경우에는 자동으로 중단하지 않고 운영자 확인 대상으로 올립니다.</li>
+              </ul>
+            </article>
+          </div>
+          <div class="rule-note"><strong>현재 확인 위치</strong><span>Google Cloud Billing / BigQuery archive_billing_export / Cloud Run Careers / Firebase Functions Scheduler</span></div>
+        </section>
+
         <section class="panel rule-section" id="release">
-          <div class="panel-header"><div><h2>9. 배포·검증·보고</h2><p>배포 요청은 검증, commit, deploy, live check, GitHub push를 한 세트로 처리합니다.</p></div><span class="pill warn">release gate</span></div>
+          <div class="panel-header"><div><h2>10. 배포·검증·보고</h2><p>배포 요청은 검증, commit, deploy, live check, GitHub push를 한 세트로 처리합니다.</p></div><span class="pill warn">release gate</span></div>
           <div class="rule-grid">
             <article class="rule-card">
               <h3>배포세트</h3>
@@ -755,7 +790,7 @@
         </section>
 
         <section class="panel rule-section" id="worklines">
-          <div class="panel-header"><div><h2>10. 인프라·워크라인</h2><p>스레드와 worktree를 분리해 기능 간 충돌을 줄입니다.</p></div><span class="pill">coordination</span></div>
+          <div class="panel-header"><div><h2>11. 인프라·워크라인</h2><p>스레드와 worktree를 분리해 기능 간 충돌을 줄입니다.</p></div><span class="pill">coordination</span></div>
           <div class="rule-grid">
             <article class="rule-card">
               <h3>Mac mini</h3>
@@ -786,7 +821,7 @@
         </section>
 
         <section class="panel rule-section" id="archive">
-          <div class="panel-header"><div><h2>11. 폐기·보관 기준</h2><p>더 이상 현재 운영 원칙이 아닌 항목을 명확히 분리합니다.</p></div><span class="pill danger">deprecated</span></div>
+          <div class="panel-header"><div><h2>12. 폐기·보관 기준</h2><p>더 이상 현재 운영 원칙이 아닌 항목을 명확히 분리합니다.</p></div><span class="pill danger">deprecated</span></div>
           <div class="rule-grid">
             <article class="rule-card">
               <h3>Notion 운영규칙</h3>

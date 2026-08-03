@@ -25,6 +25,7 @@
     "validate:function-boundaries": "node scripts/validate-functions-boundaries.mjs",
     "validate:data-source-policy": "node scripts/validate-data-source-policy.mjs",
     "validate:gcp-cost-guards": "node scripts/validate-gcp-cost-guards.mjs",
+    "migrate:private-report-waiting-post": "node scripts/migrate-private-report-waiting-post.mjs",
     "validate:private-media-upload-config": "node scripts/validate-private-media-upload-config.mjs",
     "validate:private-flow-contract": "node scripts/validate-private-flow-contract.mjs",
     "test:private-flow": "firebase/kangsain-functions/functions/node_modules/.bin/tsx --test scripts/tests/private-flow-contract.test.ts",

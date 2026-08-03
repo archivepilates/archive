@@ -1491,7 +1491,9 @@ async function submitPrivateLessonChart(
     const lockReason = privateLessonReportMutationLockReason(base);
     if (lockReason) throw new Error(lockReason);
     const now = nowTimestamp();
-    const reportResetPatch = privateLessonReportSourceChangePatch();
+    const reportResetPatch = privateLessonReportSourceChangePatch(
+      mode === "post" || Boolean(base.postSubmittedAt) ? "pending" : "waiting_post",
+    );
     const recordPatch =
       mode === "pre"
         ? { prePlan: answers, preSubmittedAt: now, ...reportResetPatch }
@@ -1569,7 +1571,7 @@ function chartRecordBase(chartRequest: PrivateLessonChartRequestDoc): PrivateLes
     sessionNumber: chartRequest.sessionNumber,
     preSubmittedAt: null,
     postSubmittedAt: null,
-    gptStatus: "pending",
+    gptStatus: "waiting_post",
     notionSync: { status: "pending" },
     createdAt: now,
     updatedAt: now,

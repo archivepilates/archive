@@ -18,16 +18,20 @@ import {
 
 export async function processContactSyncJobs(): Promise<{ processed: number }> {
   const now = Timestamp.now();
-  const nowMillis = now.toMillis();
-  const due = await refs.contactSyncJobs().where("status", "in", ["pending", "retry"]).limit(100).get();
+  const due = await refs
+    .contactSyncJobs()
+    .where("target", "==", "home_archivepilates")
+    .where("status", "in", ["pending", "retry"])
+    .where("nextRunAt", "<=", now)
+    .orderBy("nextRunAt", "asc")
+    .limit(100)
+    .get();
 
   const dueJobs: Array<{ job: ContactSyncJobDoc; nextRunAtMillis: number }> = [];
   let malformed = 0;
 
   for (const snap of due.docs) {
     const job = snap.data();
-    if (job.target !== "home_archivepilates") continue;
-
     const nextRunAtMillis = timestampMillis(job.nextRunAt);
     if (nextRunAtMillis === null) {
       malformed++;
@@ -39,9 +43,7 @@ export async function processContactSyncJobs(): Promise<{ processed: number }> {
       continue;
     }
 
-    if (nextRunAtMillis <= nowMillis) {
-      dueJobs.push({ job, nextRunAtMillis });
-    }
+    dueJobs.push({ job, nextRunAtMillis });
   }
 
   const runnableJobs = chooseRunnableContactJobs(dueJobs);

@@ -57,15 +57,24 @@ export const scheduledProcessStaffSurveyAlimtalks = onSchedule(
     schedule: "every 10 minutes",
   },
   async () => {
-    await processMissingSurveySubmissionAlerts();
     await processDueStaffSurveyAlimtalks();
+  },
+);
+
+export const scheduledProcessMissingSurveySubmissionAlerts = onSchedule(
+  {
+    ...scheduleOptions,
+    schedule: "every 60 minutes",
+  },
+  async () => {
+    await processMissingSurveySubmissionAlerts();
   },
 );
 
 export const scheduledSyncPrivateSurveyNotion = onSchedule(
   {
     ...privateSurveyIntakeOptions,
-    schedule: "every 30 minutes",
+    schedule: "0 6,14,22 * * *",
   },
   async () => {
     await syncPrivateSurveyNotionBackfill();
@@ -95,7 +104,7 @@ export const scheduledReconcileCurrentMonthPrivateLessonCharts = onSchedule(
 export const scheduledGeneratePrivateLessonChartReports = onSchedule(
   {
     ...privateLessonChartScheduleOptions,
-    schedule: "every 10 minutes",
+    schedule: "every 60 minutes",
   },
   async () => {
     await generatePendingPrivateLessonChartReports();

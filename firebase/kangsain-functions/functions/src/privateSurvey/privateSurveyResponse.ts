@@ -322,7 +322,11 @@ export async function syncPrivateSurveyNotionBackfill(): Promise<{
     return { checked: 0, synced: 0, failed: 0, skipped: 0, configured: false };
   }
 
-  const snap = await refs.privateSurveyResponses().orderBy("updatedAt", "desc").limit(200).get();
+  const snap = await refs
+    .privateSurveyResponses()
+    .where("notionSync.status", "in", ["pending", "failed"])
+    .limit(50)
+    .get();
   let checked = 0;
   let synced = 0;
   let failed = 0;
@@ -1099,6 +1103,7 @@ async function buildSurveyDoc(input: {
       alimtalkStatus: "pending",
       alimtalkReason: "강사 알림톡 발송 대기",
     },
+    notionSync: { status: "pending" },
     accessTokenHash: sha256(input.accessToken),
     createdAt: now,
     updatedAt: now,
