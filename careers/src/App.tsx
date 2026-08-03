@@ -316,10 +316,9 @@ export default function App() {
           className="absolute inset-0"
         >
           <img
-            src="https://images.unsplash.com/photo-1518611012118-296172062dd2?q=80&w=2070&auto=format&fit=crop"
+            src="/philosophy.png"
             alt="Pilates Studio"
             className="w-full h-full object-cover grayscale opacity-40"
-            referrerPolicy="no-referrer"
           />
           <div className="absolute inset-0 bg-gradient-to-b from-surface/20 via-transparent to-surface" />
         </motion.div>
