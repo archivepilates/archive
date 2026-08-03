@@ -69,6 +69,24 @@ try {
           }
         });
       }
+      if (route.name === "recommended-meals") {
+        await page.evaluate(() => {
+          const reviewBody = document.querySelector("#mealReviewBody");
+          const reviewEmpty = document.querySelector("#mealReviewEmpty");
+          const draftForm = document.querySelector("#mealDraftForm");
+          const inbody = document.querySelector("#mealInbodySummary");
+          const survey = document.querySelector("#mealSurveySummary");
+          const days = document.querySelector("#mealDaysEditor");
+          if (reviewEmpty) reviewEmpty.hidden = true;
+          if (reviewBody) reviewBody.hidden = false;
+          if (draftForm) draftForm.hidden = false;
+          if (inbody) inbody.innerHTML = '<dl class="meal-source-list"><div><dt>체중</dt><dd>검토용 데이터</dd></div><div><dt>체지방률</dt><dd>긴 설명이 있어도 영역을 침범하지 않는지 확인합니다.</dd></div></dl>';
+          if (survey) survey.innerHTML = '<dl class="meal-answer-list"><div><dt>생활 패턴</dt><dd>업무 시간과 운동 일정을 함께 반영한 검토용 답변입니다.</dd></div><div><dt>제외 음식</dt><dd>알레르기 및 선호 정보를 확인합니다.</dd></div></dl>';
+          if (days) {
+            days.innerHTML = Array.from({ length: 2 }, (_, index) => `<fieldset class="meal-day-editor" data-meal-day="${index}"><legend>${index + 1}일차</legend><label><span>아침</span><textarea rows="2">단백질과 채소 중심 식사</textarea></label><label><span>점심</span><textarea rows="2">일정에 맞춘 균형 식사</textarea></label></fieldset>`).join("");
+          }
+        });
+      }
       await page.evaluate(() => document.fonts?.ready);
 
       const check = await page.evaluate(() => {
@@ -98,6 +116,23 @@ try {
           const rect = element.getBoundingClientRect();
           return rect.left < -1 || rect.right > viewportWidth + 1;
         });
+        const mealPanel = document.querySelector(".meal-queue-panel");
+        const mealHeader = mealPanel?.querySelector(".panel-header");
+        const mealFilter = mealPanel?.querySelector(".filter-bar");
+        const mealList = mealPanel?.querySelector(".meal-queue");
+        const mealHeaderContent = mealHeader?.firstElementChild;
+        const mealFilterContent = mealFilter?.firstElementChild;
+        const mealListContent = mealList?.firstElementChild;
+        const mealTextareas = [...document.querySelectorAll(".meal-draft-form textarea")];
+        const mealLayout = mealPanel
+          ? {
+              filterAligned:
+                Math.abs((mealHeaderContent?.getBoundingClientRect().left || 0) - (mealFilterContent?.getBoundingClientRect().left || 0)) <= 1,
+              listAligned:
+                Math.abs((mealHeaderContent?.getBoundingClientRect().left || 0) - (mealListContent?.getBoundingClientRect().left || 0)) <= 1,
+              editorPadding: mealTextareas.every((element) => Number.parseFloat(getComputedStyle(element).paddingLeft) >= 10),
+            }
+          : null;
         return {
           documentWidth,
           viewportWidth,
@@ -109,6 +144,7 @@ try {
           metricValues,
           navOutsideViewport,
           shortTouchTarget: touchTargets.some((height) => height < 44),
+          mealLayout,
         };
       });
 
@@ -119,6 +155,10 @@ try {
       if (check.metricValues.some((item) => item.clippedX || item.clippedY)) routeFailures.push("KPI value text is clipped");
       if (check.navOutsideViewport) routeFailures.push("navigation extends outside viewport");
       if (check.shortTouchTarget) routeFailures.push("interactive target below 44px");
+      if (check.mealLayout && (!check.mealLayout.filterAligned || !check.mealLayout.listAligned)) {
+        routeFailures.push("recommended-meal panel content is not aligned with its header");
+      }
+      if (check.mealLayout && !check.mealLayout.editorPadding) routeFailures.push("recommended-meal editor text touches its control border");
 
       const screenshot = path.join(outputDir, `${route.name}-${viewport.name}.png`);
       await page.screenshot({ path: screenshot, fullPage: true });
