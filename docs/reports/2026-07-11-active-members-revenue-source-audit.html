@@ -1,0 +1,53 @@
+<!doctype html>
+<html lang="ko">
+<head>
+<meta charset="utf-8" />
+<meta name="viewport" content="width=device-width, initial-scale=1" />
+<title>ARCHIVE PILATES 유효회원·매출 원천 감사</title>
+<style>
+:root{--bg:#f5f4f1;--card:#fffdfa;--ink:#14171f;--muted:#6e7685;--line:#e4e0d8;--orange:#ff5f1f;--green:#098b72;--blue:#315cf6;--red:#c2410c}*{box-sizing:border-box}body{margin:0;background:var(--bg);color:var(--ink);font-family:-apple-system,BlinkMacSystemFont,"Apple SD Gothic Neo","Pretendard",system-ui,sans-serif;line-height:1.58}.wrap{max-width:1180px;margin:0 auto;padding:42px 22px 64px}.hero{padding:34px 0 28px;border-bottom:1px solid var(--line)}.eyebrow{color:var(--orange);font-weight:800;letter-spacing:.02em;font-size:14px}.hero h1{font-size:clamp(34px,5vw,64px);line-height:1.02;margin:10px 0 16px;letter-spacing:0}.lead{max-width:880px;color:#4d5562;font-size:18px;margin:0}.meta{display:flex;flex-wrap:wrap;gap:8px;margin-top:22px}.pill{border:1px solid var(--line);background:rgba(255,255,255,.65);border-radius:999px;padding:8px 12px;font-size:13px;color:#555f70}.grid{display:grid;gap:16px}.cards{grid-template-columns:repeat(auto-fit,minmax(min(100%,240px),1fr));margin:26px 0}.card,.section{background:var(--card);border:1px solid var(--line);border-radius:22px;box-shadow:0 18px 45px rgba(20,23,31,.06)}.card{padding:24px;min-height:154px;display:flex;flex-direction:column;justify-content:space-between}.label{font-size:14px;color:var(--muted);font-weight:750}.value{font-size:34px;font-weight:850;line-height:1.05}.sub{font-size:14px;color:var(--muted)}.up{color:var(--green)}.down{color:var(--red)}.section{padding:28px;margin-top:18px}.section h2{font-size:24px;margin:0 0 10px}.section p{color:#596274;margin:0 0 18px}.tablewrap{overflow-x:auto;border:1px solid var(--line);border-radius:16px;background:#fff}table{width:100%;border-collapse:collapse;min-width:760px}th,td{padding:14px 16px;border-bottom:1px solid #ece8e1;text-align:left;vertical-align:top}th{font-size:13px;color:#6b7280;background:#fbfaf8}.num{text-align:right;font-variant-numeric:tabular-nums}.strong{font-weight:850}.notegrid{display:grid;grid-template-columns:repeat(auto-fit,minmax(min(100%,260px),1fr));gap:14px}.note{border:1px solid var(--line);background:#fff;border-radius:16px;padding:18px}.note b{display:block;margin-bottom:8px}.note p{margin:0;color:#606b7a}.warn{border-color:#ffd4bf;background:#fff8f4}.ok{border-color:#bfe8dc;background:#f5fffb}.chart{width:100%;height:auto;display:block;margin-top:14px}.bar{height:12px;border-radius:999px;background:#ece8e1;overflow:hidden}.bar span{display:block;height:100%}.code{font-family:ui-monospace,SFMono-Regular,Menlo,monospace;font-size:13px;color:#374151;background:#f3f4f6;border-radius:8px;padding:2px 6px}.footer{color:#7b8494;font-size:13px;margin-top:24px}@media(max-width:560px){.wrap{padding:28px 14px 44px}.section,.card{border-radius:18px;padding:20px}.value{font-size:30px}th,td{padding:12px 10px}}
+</style>
+</head>
+<body><main class="wrap">
+<section class="hero"><div class="eyebrow">ARCHIVE PILATES · DATA SOURCE AUDIT</div><h1>유효회원 감소 원인 재검증<br>매출 원천 자동화 수정</h1><p class="lead">결제매출은 Google Drive의 아카이브 정산 원본과 아카이브 DB를 기준으로 다시 적재했고, 유효회원은 정산 시트 수치와 Firestore 예약 원천 수치를 분리해 검증했습니다.</p><div class="meta"><span class="pill">수정시각: 2026-07-11 01:26 KST</span><span class="pill">Firestore updatedAt: 2026-07-10T16:26:09.933Z</span><span class="pill">원천: 아카이브 DB + 아카이브 정산_2026-06 + Firestore bookings</span></div></section>
+<section class="grid cards">
+<div class="card"><div class="label">2026.06 수강권 결제매출</div><div class="value up">30,555,800원</div><div class="sub">전년동월 대비 7,529,100원 · +32.7%</div></div>
+<div class="card"><div class="label">2026.06 수업매출</div><div class="value up">24,380,376원</div><div class="sub">전년동월 대비 1,520,045원 · +6.6%</div></div>
+<div class="card"><div class="label">시트 유효회원 차이</div><div class="value down">-103명</div><div class="sub">231명 → 128명 · -44.6%</div></div>
+<div class="card"><div class="label">예약 원천 이용회원 차이</div><div class="value down">-22명</div><div class="sub">175명 → 153명 · -12.6%</div></div>
+</section>
+<section class="section"><h2>결론</h2><div class="notegrid">
+<div class="note ok"><b>매출 감소는 확인되지 않음</b><p>2026년 6월은 수강권 결제매출과 수업매출 모두 2025년 6월보다 높습니다. 매출 하락 원인 분석은 현재 수치로는 성립하지 않습니다.</p></div>
+<div class="note warn"><b>유효회원 수치가 과장되어 보임</b><p>정산 시트의 유효회원은 -103명으로 보이지만, 예약 원천의 실제 이용회원은 -22명입니다. 2025년 수치가 과대 또는 2026년 수치가 과소 집계됐을 가능성이 큽니다.</p></div>
+<div class="note"><b>월별 이용 강도는 증가</b><p>유효 예약/출석 행은 992건에서 1,030건으로 증가했습니다. 회원 수가 소폭 줄었더라도 남아 있는 회원의 이용 빈도는 낮아지지 않았습니다.</p></div>
+<div class="note"><b>대시보드 원천 분리 필요</b><p><span class="code">수강권보유회원</span>과 <span class="code">예약/출석 이용회원</span>을 같은 유효회원으로 섞으면 운영 판단이 흔들립니다.</p></div>
+</div></section>
+<section class="section"><h2>원인 분석</h2><div class="tablewrap"><table><thead><tr><th>문제</th><th>확인 내용</th><th>수정</th></tr></thead><tbody>
+<tr><td class="strong">총매출 자동화 누락</td><td>매일 23:00 자동화는 Excel 다운로드 후 <span class="code">대시보드_EXPORT</span>만 Firestore에 반영했습니다. Google Drive 원본 → 아카이브 DB 적재 단계가 실행되지 않았습니다.</td><td><span class="code">run-archive-dashboard-sales-daily.mjs</span>가 DB 적재 후 export ETL을 실행하도록 보강했습니다.</td></tr>
+<tr><td class="strong">총매출 정의 오류</td><td>정산 export의 총매출이 수강권 결제매출이 아니라 수업매출과 같게 들어갔습니다.</td><td><span class="code">수강권매출_Master</span>를 우선 원천으로 총매출/수강권매출을 보강합니다.</td></tr>
+<tr><td class="strong">일일 매출 삭제 위험</td><td>export에 없는 섹션까지 월 기준으로 통째 교체하면서 기존 <span class="code">매출일일누적</span>이 사라질 수 있었습니다.</td><td>필드별로 export 월만 교체하고, export에 없는 필드는 보존하도록 수정했습니다.</td></tr>
+<tr><td class="strong">Google 날짜 시리얼</td><td>월별 유효회원 시트의 날짜가 Google serial number로 들어와 일부 로컬 export 유틸에서 월 파싱이 깨질 수 있었습니다.</td><td><span class="code">monthKey/dateKey</span>가 Google serial date를 처리하도록 수정했습니다.</td></tr>
+<tr><td class="strong">Firestore 1MB 제한</td><td>Function이 전체 일별/회원매출 스냅샷을 한 문서에 쓰면 1MB 제한을 넘었습니다.</td><td>Function 저장 시 일별 매출은 최근 180행, 회원매출은 상위 500행으로 compact하고 상세 월별 지표는 별도 metric 문서에 계속 저장합니다.</td></tr>
+</tbody></table></div></section>
+<section class="section"><h2>전년 동월 비교</h2><div class="tablewrap"><table><thead><tr><th>지표</th><th class="num">2025.06</th><th class="num">2026.06</th><th class="num">차이</th><th class="num">증감률</th><th>해석</th></tr></thead><tbody>
+<tr><td>수강권 결제매출</td><td class="num">23,026,700원</td><td class="num">30,555,800원</td><td class="num up">7,529,100원</td><td class="num up">+32.7%</td><td>결제매출은 상승</td></tr>
+<tr><td>수업매출</td><td class="num">22,860,331원</td><td class="num">24,380,376원</td><td class="num up">1,520,045원</td><td class="num up">+6.6%</td><td>수업 소화 매출도 상승</td></tr>
+<tr><td>정산 시트 유효회원</td><td class="num">231명</td><td class="num">128명</td><td class="num down">-103명</td><td class="num down">-44.6%</td><td>과도한 감소로 보이며 원천 재정의 필요</td></tr>
+<tr><td>예약 원천 이용회원</td><td class="num">175명</td><td class="num">153명</td><td class="num down">-22명</td><td class="num down">-12.6%</td><td>실제 이용자 감소는 제한적</td></tr>
+<tr><td>예약/출석 유효 행</td><td class="num">992건</td><td class="num">1,030건</td><td class="num up">38건</td><td class="num up">+3.8%</td><td>이용 빈도는 오히려 증가</td></tr>
+<tr><td>그룹 이용회원</td><td class="num">160명</td><td class="num">130명</td><td class="num down">-30명</td><td class="num down">-18.8%</td><td>감소 대부분은 그룹 쪽</td></tr>
+<tr><td>프라이빗 이용회원</td><td class="num">37명</td><td class="num">35명</td><td class="num down">-2명</td><td class="num down">-5.4%</td><td>프라이빗은 거의 유지</td></tr>
+</tbody></table></div></section>
+<section class="section"><h2>해결 방안</h2><div class="notegrid">
+<div class="note"><b>1. 대시보드 지표명 변경</b><p>현재 <span class="code">월별이용회원</span>은 정산 시트 기반이라, 이름을 <span class="code">수강권보유회원</span>으로 분리하고 예약 원천의 <span class="code">실이용회원</span>을 별도 KPI로 두는 것이 안전합니다.</p></div>
+<div class="note"><b>2. 매출 원천 고정</b><p>총매출/수강권매출은 <span class="code">아카이브 DB 수강권매출_Master</span>, 수업매출은 월 정산 <span class="code">정산대장/대시보드_EXPORT</span>를 원천으로 사용합니다.</p></div>
+<div class="note"><b>3. 유효회원 재정의</b><p>경영 분석에서는 월중 예약/출석 고유회원, CRM에서는 월말 수강권 보유회원으로 분리해야 합니다. 둘을 한 선 그래프에 섞지 않는 것이 핵심입니다.</p></div>
+<div class="note"><b>4. StudioMate 재수집 판단</b><p>예약 원천에는 2025.06/2026.06 비교가 가능한 수준의 데이터가 있습니다. 다만 월말 수강권 보유회원 지표를 확정하려면 StudioMate 회원/수강권 스냅샷을 다시 받아 별도 검증하는 것이 좋습니다.</p></div>
+</div></section>
+<section class="section"><h2>현재 반영 상태</h2><p>Firestore <span class="code">dashboardSnapshots/current</span>는 2026-07-11 01:26 KST 기준으로 결제매출 보강이 반영되었습니다. 2026년 7월은 7월 10일까지의 누적입니다.</p><div class="tablewrap"><table><thead><tr><th>월</th><th class="num">수강권 결제매출</th><th class="num">수업매출</th><th>원천</th></tr></thead><tbody>
+<tr><td>2025.06</td><td class="num">23,026,700원</td><td class="num">22,860,331원</td><td>수강권매출_Master / 정산 export</td></tr>
+<tr><td>2026.06</td><td class="num">30,555,800원</td><td class="num">24,380,376원</td><td>수강권매출_Master / 정산 export</td></tr>
+<tr><td>2026.07 MTD</td><td class="num">5,736,000원</td><td class="num">7,819,100원</td><td>수강권매출_원본 / 일일 수업매출 (2026-07-10)</td></tr>
+</tbody></table></div></section>
+<div class="footer">Generated by Codex · 2026-07-10T16:23:42.945Z</div>
+</main></body></html>

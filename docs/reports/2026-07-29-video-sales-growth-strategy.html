@@ -1,0 +1,1102 @@
+<!doctype html>
+<html lang="ko">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1">
+  <meta name="color-scheme" content="light">
+  <title>ARCHIVE PILATES 영상 판매 성장 전략</title>
+  <style>
+    :root {
+      --paper: #fffdfa;
+      --surface: #ffffff;
+      --ink: #171717;
+      --muted: #66625e;
+      --line: #ded9d3;
+      --red: #a14335;
+      --orange: #ff6f1f;
+      --green: #315f50;
+      --blue: #345a78;
+      --soft-red: #f6ebe7;
+      --soft-green: #eaf1ee;
+      --soft-blue: #eaf0f4;
+    }
+
+    * {
+      box-sizing: border-box;
+    }
+
+    html {
+      scroll-behavior: smooth;
+    }
+
+    body {
+      margin: 0;
+      background: var(--paper);
+      color: var(--ink);
+      font-family: -apple-system, BlinkMacSystemFont, "Apple SD Gothic Neo",
+        "Noto Sans KR", "Segoe UI", sans-serif;
+      line-height: 1.65;
+      letter-spacing: 0;
+      word-break: keep-all;
+      overflow-wrap: anywhere;
+    }
+
+    a {
+      color: inherit;
+      text-underline-offset: 3px;
+    }
+
+    .page {
+      width: min(1120px, calc(100% - 40px));
+      margin: 0 auto;
+      padding: 56px 0 96px;
+    }
+
+    .eyebrow {
+      margin: 0 0 12px;
+      color: var(--red);
+      font-size: 13px;
+      font-weight: 800;
+      text-transform: uppercase;
+    }
+
+    h1,
+    h2,
+    h3,
+    p {
+      margin-top: 0;
+    }
+
+    h1 {
+      max-width: 900px;
+      margin-bottom: 20px;
+      font-size: clamp(36px, 6vw, 72px);
+      line-height: 1.06;
+      font-weight: 800;
+    }
+
+    h2 {
+      margin-bottom: 16px;
+      font-size: clamp(26px, 4vw, 40px);
+      line-height: 1.2;
+    }
+
+    h3 {
+      margin-bottom: 8px;
+      font-size: 19px;
+      line-height: 1.35;
+    }
+
+    .lead {
+      max-width: 760px;
+      margin-bottom: 0;
+      color: #403d39;
+      font-size: 19px;
+    }
+
+    .meta {
+      display: flex;
+      flex-wrap: wrap;
+      gap: 10px 18px;
+      margin-top: 28px;
+      color: var(--muted);
+      font-size: 13px;
+    }
+
+    .summary {
+      display: grid;
+      grid-template-columns: 1.4fr 0.9fr;
+      gap: 32px;
+      margin-top: 52px;
+      padding: 36px 0;
+      border-top: 1px solid var(--ink);
+      border-bottom: 1px solid var(--ink);
+    }
+
+    .summary strong {
+      color: var(--red);
+    }
+
+    .summary-box {
+      align-self: start;
+      padding: 22px;
+      background: var(--ink);
+      color: #fff;
+      border-radius: 6px;
+    }
+
+    .summary-box p:last-child {
+      margin-bottom: 0;
+    }
+
+    section {
+      padding: 70px 0 0;
+    }
+
+    .section-intro {
+      max-width: 760px;
+      color: var(--muted);
+    }
+
+    .metrics {
+      display: grid;
+      grid-template-columns: repeat(4, minmax(0, 1fr));
+      gap: 1px;
+      margin-top: 28px;
+      background: var(--line);
+      border: 1px solid var(--line);
+    }
+
+    .metric {
+      min-width: 0;
+      padding: 22px 18px;
+      background: var(--surface);
+    }
+
+    .metric span {
+      display: block;
+      color: var(--muted);
+      font-size: 12px;
+      font-weight: 700;
+    }
+
+    .metric b {
+      display: block;
+      margin-top: 5px;
+      font-size: 28px;
+      line-height: 1.2;
+    }
+
+    .metric small {
+      display: block;
+      margin-top: 5px;
+      color: var(--muted);
+      font-size: 12px;
+    }
+
+    .signal-grid {
+      display: grid;
+      grid-template-columns: repeat(3, minmax(0, 1fr));
+      gap: 18px;
+      margin-top: 30px;
+    }
+
+    .signal {
+      padding: 22px;
+      border: 1px solid var(--line);
+      border-top: 4px solid var(--red);
+      background: var(--surface);
+      border-radius: 6px;
+    }
+
+    .signal:nth-child(2) {
+      border-top-color: var(--green);
+    }
+
+    .signal:nth-child(3) {
+      border-top-color: var(--blue);
+    }
+
+    .signal p {
+      margin-bottom: 0;
+      color: var(--muted);
+      font-size: 14px;
+    }
+
+    .bar-list {
+      margin-top: 32px;
+      padding: 0;
+      list-style: none;
+    }
+
+    .bar-row {
+      display: grid;
+      grid-template-columns: minmax(180px, 1.4fr) 3fr 80px;
+      align-items: center;
+      gap: 16px;
+      padding: 10px 0;
+      border-bottom: 1px solid var(--line);
+    }
+
+    .bar-label {
+      font-size: 14px;
+      font-weight: 700;
+    }
+
+    .bar-track {
+      height: 12px;
+      background: #ece8e3;
+      border-radius: 2px;
+      overflow: hidden;
+    }
+
+    .bar-fill {
+      height: 100%;
+      background: var(--red);
+    }
+
+    .bar-value {
+      text-align: right;
+      font-variant-numeric: tabular-nums;
+      font-weight: 700;
+    }
+
+    .diagnosis {
+      margin-top: 34px;
+      padding: 26px;
+      background: var(--soft-red);
+      border-left: 5px solid var(--red);
+    }
+
+    .diagnosis p:last-child {
+      margin-bottom: 0;
+    }
+
+    .priority-list {
+      display: grid;
+      gap: 28px;
+      margin-top: 34px;
+    }
+
+    .priority {
+      display: grid;
+      grid-template-columns: 58px minmax(0, 1fr);
+      gap: 20px;
+      padding-bottom: 28px;
+      border-bottom: 1px solid var(--line);
+    }
+
+    .priority-number {
+      display: grid;
+      place-items: center;
+      width: 52px;
+      height: 52px;
+      background: var(--ink);
+      color: #fff;
+      font-size: 20px;
+      font-weight: 800;
+      border-radius: 50%;
+    }
+
+    .priority ul,
+    .action-panel ul {
+      margin: 10px 0 0;
+      padding-left: 20px;
+    }
+
+    .priority li,
+    .action-panel li {
+      margin-bottom: 7px;
+    }
+
+    .route-grid {
+      display: grid;
+      grid-template-columns: repeat(4, minmax(0, 1fr));
+      gap: 12px;
+      margin-top: 24px;
+    }
+
+    .route {
+      padding: 18px;
+      border: 1px solid var(--line);
+      background: var(--surface);
+      border-radius: 6px;
+    }
+
+    .route b {
+      display: block;
+      margin-bottom: 7px;
+      color: var(--red);
+    }
+
+    .route p {
+      margin-bottom: 0;
+      color: var(--muted);
+      font-size: 14px;
+    }
+
+    .funnel {
+      display: grid;
+      grid-template-columns: repeat(5, minmax(0, 1fr));
+      gap: 10px;
+      margin-top: 30px;
+    }
+
+    .funnel-step {
+      position: relative;
+      min-height: 132px;
+      padding: 18px;
+      border: 1px solid var(--line);
+      background: var(--surface);
+      border-radius: 6px;
+    }
+
+    .funnel-step:not(:last-child)::after {
+      content: "→";
+      position: absolute;
+      top: 50%;
+      right: -15px;
+      z-index: 2;
+      width: 20px;
+      color: var(--red);
+      text-align: center;
+      font-weight: 800;
+      transform: translateY(-50%);
+    }
+
+    .funnel-step span {
+      display: block;
+      margin-bottom: 6px;
+      color: var(--red);
+      font-size: 12px;
+      font-weight: 800;
+    }
+
+    .funnel-step p {
+      margin-bottom: 0;
+      color: var(--muted);
+      font-size: 13px;
+    }
+
+    .action-grid {
+      display: grid;
+      grid-template-columns: repeat(2, minmax(0, 1fr));
+      gap: 18px;
+      margin-top: 28px;
+    }
+
+    .action-panel {
+      padding: 24px;
+      background: var(--surface);
+      border: 1px solid var(--line);
+      border-radius: 6px;
+    }
+
+    .action-panel[data-tone="green"] {
+      background: var(--soft-green);
+      border-color: #cbdcd5;
+    }
+
+    .action-panel[data-tone="blue"] {
+      background: var(--soft-blue);
+      border-color: #cbd8e1;
+    }
+
+    table {
+      width: 100%;
+      margin-top: 28px;
+      border-collapse: collapse;
+      background: var(--surface);
+      font-size: 14px;
+    }
+
+    th,
+    td {
+      padding: 14px 12px;
+      border-bottom: 1px solid var(--line);
+      text-align: left;
+      vertical-align: top;
+    }
+
+    th {
+      color: var(--muted);
+      font-size: 12px;
+      font-weight: 800;
+    }
+
+    td strong {
+      color: var(--red);
+    }
+
+    .timeline {
+      display: grid;
+      grid-template-columns: repeat(4, minmax(0, 1fr));
+      gap: 1px;
+      margin-top: 28px;
+      border: 1px solid var(--line);
+      background: var(--line);
+    }
+
+    .week {
+      padding: 22px;
+      background: var(--surface);
+    }
+
+    .week span {
+      display: block;
+      margin-bottom: 7px;
+      color: var(--red);
+      font-size: 12px;
+      font-weight: 800;
+    }
+
+    .week ul {
+      margin: 10px 0 0;
+      padding-left: 18px;
+      color: var(--muted);
+      font-size: 14px;
+    }
+
+    .avoid {
+      display: grid;
+      grid-template-columns: repeat(3, minmax(0, 1fr));
+      gap: 12px;
+      margin-top: 24px;
+    }
+
+    .avoid div {
+      padding: 18px;
+      border: 1px dashed #b8b1aa;
+      background: var(--surface);
+      border-radius: 6px;
+    }
+
+    .avoid b {
+      display: block;
+      margin-bottom: 6px;
+    }
+
+    .avoid p {
+      margin-bottom: 0;
+      color: var(--muted);
+      font-size: 13px;
+    }
+
+    .decision {
+      margin-top: 70px;
+      padding: 34px;
+      background: var(--ink);
+      color: #fff;
+      border-radius: 6px;
+    }
+
+    .decision h2 {
+      color: #fff;
+    }
+
+    .decision p {
+      max-width: 760px;
+      margin-bottom: 0;
+      color: #d8d3ce;
+    }
+
+    .sources {
+      margin-top: 70px;
+      padding-top: 24px;
+      border-top: 1px solid var(--line);
+      color: var(--muted);
+      font-size: 12px;
+    }
+
+    .sources ul {
+      padding-left: 18px;
+    }
+
+    @media (max-width: 860px) {
+      .summary,
+      .signal-grid,
+      .action-grid {
+        grid-template-columns: 1fr;
+      }
+
+      .metrics {
+        grid-template-columns: repeat(2, minmax(0, 1fr));
+      }
+
+      .route-grid,
+      .timeline {
+        grid-template-columns: repeat(2, minmax(0, 1fr));
+      }
+
+      .funnel {
+        grid-template-columns: 1fr;
+      }
+
+      .funnel-step {
+        min-height: auto;
+      }
+
+      .funnel-step:not(:last-child)::after {
+        content: "↓";
+        top: auto;
+        right: 50%;
+        bottom: -18px;
+        transform: translateX(50%);
+      }
+    }
+
+    @media (max-width: 560px) {
+      .page {
+        width: min(100% - 28px, 1120px);
+        padding-top: 34px;
+      }
+
+      h1 {
+        font-size: 38px;
+      }
+
+      .lead {
+        font-size: 17px;
+      }
+
+      section {
+        padding-top: 56px;
+      }
+
+      .metrics,
+      .route-grid,
+      .timeline,
+      .avoid {
+        grid-template-columns: 1fr;
+      }
+
+      .priority {
+        grid-template-columns: 44px minmax(0, 1fr);
+        gap: 14px;
+      }
+
+      .priority-number {
+        width: 40px;
+        height: 40px;
+        font-size: 16px;
+      }
+
+      .bar-row {
+        grid-template-columns: 1fr 56px;
+      }
+
+      .bar-track {
+        grid-column: 1 / -1;
+        grid-row: 2;
+      }
+
+      table {
+        display: block;
+        overflow-x: auto;
+        white-space: nowrap;
+      }
+    }
+
+    @media print {
+      body {
+        background: #fff;
+      }
+
+      .page {
+        width: 100%;
+        padding: 0;
+      }
+
+      section,
+      .decision {
+        break-inside: avoid;
+      }
+    }
+  </style>
+</head>
+<body>
+  <main class="page">
+    <header>
+      <p class="eyebrow">ARCHIVE PILATES · Growth Strategy</p>
+      <h1>영상 판매량을 늘리는 가장 짧은 경로</h1>
+      <p class="lead">
+        상품 수는 이미 충분합니다. 지금 필요한 것은 더 많은 영상을 올리는 일이 아니라,
+        처음 온 강사가 고르기 쉽게 만들고 구매한 강사가 다음 영상까지 자연스럽게 이어 보게 하는 구조입니다.
+      </p>
+      <div class="meta">
+        <span>작성일 2026-07-29</span>
+        <span>주문 분석 기간 2026-06-28 ~ 2026-07-28</span>
+        <span>개인정보 제외 집계</span>
+      </div>
+    </header>
+
+    <div class="summary">
+      <div>
+        <p class="eyebrow">Executive Answer</p>
+        <h2>첫 구매는 문제별 큐레이션으로, 매출 증가는 2편 묶음과 후속 추천으로 만든다.</h2>
+        <p>
+          현재 온라인 영상 매출은 약 <strong>48만원</strong>입니다. 구매자 13명 중 7명이 재구매했고,
+          온라인 매출의 약 <strong>78%</strong>가 재구매자에게서 나왔습니다.
+          반면 30건 중 28건은 한 번에 1편만 샀습니다. 따라서 가장 큰 기회는 광고비를 먼저 쓰는 것이 아니라
+          <strong>선택 부담을 줄이고 객단가와 재구매 연결률을 올리는 것</strong>입니다.
+        </p>
+      </div>
+      <aside class="summary-box">
+        <p class="eyebrow">90-Day Goal</p>
+        <h3>월 영상 매출 100만원</h3>
+        <p>
+          15,000원 단품만으로는 월 67편이 필요합니다. 신규 구매자 확대와 함께
+          2편 세트, 다음 영상 추천, 만료 전 재구매를 적용해 객단가를 22,000원 수준으로 올리는 것이 현실적입니다.
+        </p>
+      </aside>
+    </div>
+
+    <section>
+      <p class="eyebrow">01 · Current State</p>
+      <h2>지금의 판매 구조</h2>
+      <p class="section-intro">
+        아임웹 주문 32건과 상품 59개를 읽기 전용으로 점검했습니다.
+        온라인 판매 상품은 27개이며, 현재 영상구매 페이지는 이 상품들을 최신순으로 한 번에 보여줍니다.
+      </p>
+
+      <div class="metrics">
+        <div class="metric">
+          <span>온라인 순매출</span>
+          <b>480,000원</b>
+          <small>완료 주문·환불 반영 기준</small>
+        </div>
+        <div class="metric">
+          <span>온라인 주문 / 판매 편수</span>
+          <b>30 / 32</b>
+          <small>주문당 1.07편</small>
+        </div>
+        <div class="metric">
+          <span>구매자 / 재구매자</span>
+          <b>13 / 7명</b>
+          <small>재구매자 비율 53.8%</small>
+        </div>
+        <div class="metric">
+          <span>현재 객단가</span>
+          <b>16,000원</b>
+          <small>온라인 주문 매출 기준</small>
+        </div>
+        <div class="metric">
+          <span>판매 상품 / 판매 발생</span>
+          <b>27 / 13개</b>
+          <small>14개는 아직 완료 판매 없음</small>
+        </div>
+        <div class="metric">
+          <span>구매평</span>
+          <b>0건</b>
+          <small>27개 판매 상품 합계</small>
+        </div>
+        <div class="metric">
+          <span>1편 주문</span>
+          <b>28건</b>
+          <small>30건 중 93.3%</small>
+        </div>
+        <div class="metric">
+          <span>재구매자 매출 비중</span>
+          <b>78.1%</b>
+          <small>소표본·1명 고빈도 구매 영향 포함</small>
+        </div>
+      </div>
+
+      <div class="signal-grid">
+        <article class="signal">
+          <h3>수요는 주제 중심이다</h3>
+          <p>
+            호흡 2편과 골반·고관절 2편이 총 17편 판매되어 전체 판매량의 53%를 차지했습니다.
+            기구보다 해결하려는 수업 주제가 첫 선택을 만든다는 신호입니다.
+          </p>
+        </article>
+        <article class="signal">
+          <h3>신작 전환력이 강하다</h3>
+          <p>
+            AB9 바렐 골반·고관절은 공개 직후 이틀 사이 5편 판매됐습니다.
+            월 강사레슨 직후 48시간 안에 미리보기와 상품을 함께 공개하는 방식이 유효합니다.
+          </p>
+        </article>
+        <article class="signal">
+          <h3>재구매 기반은 이미 있다</h3>
+          <p>
+            13명 중 7명이 두 번 이상 구매했습니다. 다만 10회 구매자 1명의 영향이 크므로,
+            반복 구매 구조를 전체 구매자에게 확장하는 것이 다음 과제입니다.
+          </p>
+        </article>
+      </div>
+
+      <ul class="bar-list" aria-label="상품 판매량">
+        <li class="bar-row">
+          <span class="bar-label">ACH8 체어 호흡</span>
+          <span class="bar-track"><span class="bar-fill" style="width:100%"></span></span>
+          <span class="bar-value">7편</span>
+        </li>
+        <li class="bar-row">
+          <span class="bar-label">AB9 바렐 골반·고관절</span>
+          <span class="bar-track"><span class="bar-fill" style="width:71.4%"></span></span>
+          <span class="bar-value">5편</span>
+        </li>
+        <li class="bar-row">
+          <span class="bar-label">AR4 리포머 순환</span>
+          <span class="bar-track"><span class="bar-fill" style="width:42.9%"></span></span>
+          <span class="bar-value">3편</span>
+        </li>
+        <li class="bar-row">
+          <span class="bar-label">AB8 바렐 순환</span>
+          <span class="bar-track"><span class="bar-fill" style="width:42.9%"></span></span>
+          <span class="bar-value">3편</span>
+        </li>
+        <li class="bar-row">
+          <span class="bar-label">ACA5 캐딜락 호흡</span>
+          <span class="bar-track"><span class="bar-fill" style="width:42.9%"></span></span>
+          <span class="bar-value">3편</span>
+        </li>
+      </ul>
+
+      <div class="diagnosis">
+        <h3>핵심 진단</h3>
+        <p>
+          현재 페이지는 27개 상품을 동일한 무게로 보여줍니다. 상품명은 정확하지만 길고 전문적이며,
+          “무엇부터 봐야 하는지”를 안내하는 베스트·입문·주제별 경로와 구매평이 없습니다.
+          좋은 콘텐츠가 부족한 문제가 아니라, 좋은 콘텐츠를 고르게 해주는 편집이 부족한 상태입니다.
+        </p>
+      </div>
+    </section>
+
+    <section>
+      <p class="eyebrow">02 · Strategic Priorities</p>
+      <h2>판매량을 키울 5개 우선순위</h2>
+
+      <div class="priority-list">
+        <article class="priority">
+          <div class="priority-number">1</div>
+          <div>
+            <h3>27개 목록 앞에 ‘처음 보는 강사’를 위한 선택 화면을 둔다</h3>
+            <p>
+              기구별 목록을 없애는 것이 아니라, 첫 화면의 우선순위를 문제별 학습 경로로 바꿉니다.
+              베스트 3편, 새 수업 기록, 네 가지 주제 경로를 먼저 보여주고 전체 목록은 그 아래에 둡니다.
+            </p>
+            <div class="route-grid">
+              <div class="route">
+                <b>호흡과 중심</b>
+                <p>ACH8 → ACA5<br>가장 검증된 입문 경로</p>
+              </div>
+              <div class="route">
+                <b>골반·고관절</b>
+                <p>AB9 → AR5<br>신작 수요가 가장 빠른 경로</p>
+              </div>
+              <div class="route">
+                <b>순환과 FLOW</b>
+                <p>AB8 → AR4<br>기구 간 시퀀스 확장 경로</p>
+              </div>
+              <div class="route">
+                <b>정렬과 코어</b>
+                <p>AR1 → ACH3<br>보상 패턴 관찰 경로</p>
+              </div>
+            </div>
+          </div>
+        </article>
+
+        <article class="priority">
+          <div class="priority-number">2</div>
+          <div>
+            <h3>상품 상세를 ‘이용 안내’에서 ‘수업 선택 근거’ 중심으로 바꾼다</h3>
+            <p>
+              현재 ACH8 상세는 권한·환불 안내는 충분하지만, 구매 전에 판단할 학습 내용은 짧습니다.
+              상위 6개 상품부터 아래 요소를 동일한 템플릿으로 적용합니다.
+            </p>
+            <ul>
+              <li>45~60초 미리보기: 문제 장면 → 핵심 큐잉 → FLOW 장면 순서</li>
+              <li>이런 강사에게: 수업 설계 고민을 3개 문장으로 제시</li>
+              <li>배우는 것 3가지: 기구 세팅, 관찰 포인트, 큐잉 또는 시퀀스 연결</li>
+              <li>수업 흐름: 도입·메인·회복의 큰 구간과 전체 길이</li>
+              <li>다음 추천: 같은 주제의 다른 기구 1편</li>
+              <li>공개 상세의 ‘구매 후 시청 페이지 열기’는 설명형 문구로 바꿔 혼선을 줄임</li>
+            </ul>
+          </div>
+        </article>
+
+        <article class="priority">
+          <div class="priority-number">3</div>
+          <div>
+            <h3>단품 가격은 유지하고, 주제별 2편 세트로 객단가를 올린다</h3>
+            <p>
+              15,000원은 진입 가격으로 충분히 낮습니다. 전 상품 할인보다 이미 같이 사는 경향이 있는 주제를
+              묶어 명확한 다음 선택을 제공하는 편이 낫습니다.
+            </p>
+            <ul>
+              <li>호흡 2편 세트: ACH8 + ACA5, 권장가 27,000원</li>
+              <li>골반·고관절 2편 세트: AB9 + AR5, 권장가 27,000원</li>
+              <li>순환 2편 세트: AB8 + AR4, 권장가 27,000원</li>
+              <li>세트 전용 회원그룹 1개가 두 시청 페이지를 모두 열도록 권한 매핑 후 테스트</li>
+            </ul>
+          </div>
+        </article>
+
+        <article class="priority">
+          <div class="priority-number">4</div>
+          <div>
+            <h3>구매 이후 40일을 ‘다음 구매 기간’으로 사용한다</h3>
+            <p>
+              재구매 수요는 이미 확인됐습니다. 구매 완료 안내로 끝내지 말고 시청 시점에 맞춘 세 번의 후속 접점을 둡니다.
+            </p>
+            <ul>
+              <li>결제 직후: 내 강의실 링크 + 같은 주제 다음 영상 1편</li>
+              <li>7일째: 수업 적용 질문 + 구매평 요청, 구매평 작성 혜택</li>
+              <li>30일째: 만료 10일 전 알림 + 다음 단계 영상 또는 세트 제안</li>
+              <li>내 강의실 카드 하단: ‘다음 추천 영상’ 한 개만 노출</li>
+            </ul>
+          </div>
+        </article>
+
+        <article class="priority">
+          <div class="priority-number">5</div>
+          <div>
+            <h3>쇼츠를 판매 링크가 아니라 ‘미리보기로 보내는 입구’로 설계한다</h3>
+            <p>
+              YouTube Shorts 설명과 댓글의 URL은 클릭할 수 없으므로, 쇼츠에서 바로 상품 링크를 기대하면 전환이 끊깁니다.
+              각 쇼츠의 관련 영상으로 공개 미리보기 영상을 연결하고, 미리보기 설명·고정 댓글에서 상품 상세로 보냅니다.
+            </p>
+            <div class="funnel" aria-label="콘텐츠 판매 퍼널">
+              <div class="funnel-step">
+                <span>01 SHORT</span>
+                <b>문제 장면</b>
+                <p>강사가 바로 알아보는 한 가지 수업 고민</p>
+              </div>
+              <div class="funnel-step">
+                <span>02 PREVIEW</span>
+                <b>60~90초 미리보기</b>
+                <p>핵심 큐잉과 FLOW를 짧게 증명</p>
+              </div>
+              <div class="funnel-step">
+                <span>03 PRODUCT</span>
+                <b>상품 상세</b>
+                <p>배울 내용과 추천 대상을 명확히 제시</p>
+              </div>
+              <div class="funnel-step">
+                <span>04 CLASSROOM</span>
+                <b>내 강의실</b>
+                <p>구매 즉시 시청하고 반복 학습</p>
+              </div>
+              <div class="funnel-step">
+                <span>05 NEXT</span>
+                <b>다음 추천</b>
+                <p>같은 주제의 다른 기구로 연결</p>
+              </div>
+            </div>
+          </div>
+        </article>
+      </div>
+    </section>
+
+    <section>
+      <p class="eyebrow">03 · Content Engine</p>
+      <h2>월 강사레슨을 판매 콘텐츠 엔진으로 만든다</h2>
+      <p class="section-intro">
+        AB9·AR5의 빠른 판매는 새 수업의 현장성이 구매 이유가 된다는 신호입니다.
+        매월 마지막 주 토요일 강사레슨을 기준으로 사전 관심 확보부터 판매 후속까지 한 사이클로 운영합니다.
+      </p>
+
+      <div class="action-grid">
+        <article class="action-panel" data-tone="green">
+          <h3>수업 7일 전</h3>
+          <ul>
+            <li>이번 수업의 문제 주제 1개 공개</li>
+            <li>인스타그램 질문 스티커로 강사 고민 수집</li>
+            <li>‘영상 공개 알림 받기’ 대기 목록 확보</li>
+          </ul>
+        </article>
+        <article class="action-panel" data-tone="blue">
+          <h3>수업 당일</h3>
+          <ul>
+            <li>세팅 장면, 한 문장 큐잉, FLOW 장면 촬영</li>
+            <li>A팀 판매본과 B팀 비판매 공유본을 촬영 단계부터 분리</li>
+            <li>참여 강사에게 완성 영상 구매 혜택 안내</li>
+          </ul>
+        </article>
+        <article class="action-panel">
+          <h3>수업 후 48시간</h3>
+          <ul>
+            <li>판매 영상·미리보기·상품 상세를 동시에 공개</li>
+            <li>쇼츠 2개와 인스타그램 릴스 2개 발행</li>
+            <li>기존 구매자에게 같은 주제 신작 알림</li>
+          </ul>
+        </article>
+        <article class="action-panel">
+          <h3>공개 후 7일</h3>
+          <ul>
+            <li>가장 반응이 좋았던 장면으로 후속 쇼츠 발행</li>
+            <li>구매자에게 적용 후기 요청</li>
+            <li>단품과 2편 세트의 전환율 비교</li>
+          </ul>
+        </article>
+      </div>
+    </section>
+
+    <section>
+      <p class="eyebrow">04 · Measurement</p>
+      <h2>판매가 안 된 이유를 알 수 있게 측정한다</h2>
+      <p class="section-intro">
+        현재 주문 결과는 확인할 수 있지만 방문자 수, 미리보기 재생, 상품 조회, 결제 시작의 분모가 없습니다.
+        공식홈과 아임웹이 서로 다른 도메인이므로 같은 GA4 태그와 교차 도메인 측정이 필요합니다.
+      </p>
+
+      <table>
+        <thead>
+          <tr>
+            <th>단계</th>
+            <th>필수 이벤트</th>
+            <th>판단할 질문</th>
+            <th>우선 목표</th>
+          </tr>
+        </thead>
+        <tbody>
+          <tr>
+            <td>유입</td>
+            <td>UTM, source / medium</td>
+            <td>유튜브·인스타·카카오 중 어디서 구매자가 오는가?</td>
+            <td>주문 90% 이상 출처 식별</td>
+          </tr>
+          <tr>
+            <td>목록</td>
+            <td>view_item_list, select_item</td>
+            <td>문제별 경로와 기구별 목록 중 어느 쪽을 더 누르는가?</td>
+            <td>상품 선택률 20% 이상</td>
+          </tr>
+          <tr>
+            <td>상세</td>
+            <td>view_item, preview_25/75</td>
+            <td>미리보기를 본 사람이 더 많이 결제하는가?</td>
+            <td>상세→결제 시작 8% 이상</td>
+          </tr>
+          <tr>
+            <td>결제</td>
+            <td>begin_checkout, purchase</td>
+            <td>결제 과정에서 이탈하는가?</td>
+            <td>결제 시작→완료 70% 이상</td>
+          </tr>
+          <tr>
+            <td>재구매</td>
+            <td>next_product_click, repeat_purchase</td>
+            <td>어떤 다음 추천이 두 번째 구매를 만드는가?</td>
+            <td>30일 재구매율 40% 이상</td>
+          </tr>
+        </tbody>
+      </table>
+    </section>
+
+    <section>
+      <p class="eyebrow">05 · 30/60/90 Days</p>
+      <h2>실행 목표</h2>
+      <table>
+        <thead>
+          <tr>
+            <th>기간</th>
+            <th>매출 목표</th>
+            <th>핵심 변화</th>
+            <th>검증 기준</th>
+          </tr>
+        </thead>
+        <tbody>
+          <tr>
+            <td><strong>30일</strong></td>
+            <td>65만원</td>
+            <td>문제별 첫 화면, 상위 6개 상세 개선, GA4 측정</td>
+            <td>구매평 8건, 객단가 18,000원</td>
+          </tr>
+          <tr>
+            <td><strong>60일</strong></td>
+            <td>80만원</td>
+            <td>2편 세트 3개, 7일·30일 후속 추천</td>
+            <td>객단가 20,000원, 신규 구매자 20명</td>
+          </tr>
+          <tr>
+            <td><strong>90일</strong></td>
+            <td>100만원+</td>
+            <td>월 강사레슨 콘텐츠 사이클 정착, 채널별 전환 최적화</td>
+            <td>객단가 22,000원, 월 구매자 25명 이상</td>
+          </tr>
+        </tbody>
+      </table>
+
+      <div class="timeline">
+        <div class="week">
+          <span>WEEK 1</span>
+          <h3>선택 구조</h3>
+          <ul>
+            <li>베스트·신작·주제 경로</li>
+            <li>GA4·UTM 기본 측정</li>
+            <li>상위 6개 상세 템플릿</li>
+          </ul>
+        </div>
+        <div class="week">
+          <span>WEEK 2</span>
+          <h3>전환 자산</h3>
+          <ul>
+            <li>상위 6개 미리보기</li>
+            <li>학습 결과·추천 대상</li>
+            <li>구매평 요청 설계</li>
+          </ul>
+        </div>
+        <div class="week">
+          <span>WEEK 3</span>
+          <h3>객단가</h3>
+          <ul>
+            <li>2편 세트 3개</li>
+            <li>권한 매핑 테스트</li>
+            <li>다음 추천 카드</li>
+          </ul>
+        </div>
+        <div class="week">
+          <span>WEEK 4</span>
+          <h3>유입 실험</h3>
+          <ul>
+            <li>쇼츠·릴스 12개</li>
+            <li>오프라인 교차 판매</li>
+            <li>첫 월간 전환 리뷰</li>
+          </ul>
+        </div>
+      </div>
+    </section>
+
+    <section>
+      <p class="eyebrow">06 · Guardrails</p>
+      <h2>지금 하지 않을 것</h2>
+      <div class="avoid">
+        <div>
+          <b>전 상품 가격 인하</b>
+          <p>15,000원은 충분히 접근 가능한 가격입니다. 할인보다 세트의 이유와 다음 학습 경로가 먼저입니다.</p>
+        </div>
+        <div>
+          <b>상품 수부터 늘리기</b>
+          <p>현재 판매 상품의 절반 이상에 판매가 없습니다. 기존 콘텐츠의 미리보기·큐레이션을 먼저 보강합니다.</p>
+        </div>
+        <div>
+          <b>바로 광고 집행</b>
+          <p>유입·상세·결제 전환을 측정할 수 있게 만든 뒤, 전환이 검증된 2~3개 상품에만 광고를 붙입니다.</p>
+        </div>
+        <div>
+          <b>과도한 선택지</b>
+          <p>첫 방문자에게 27개를 동일하게 보여주지 않습니다. 베스트 3개와 네 가지 주제 경로로 시작합니다.</p>
+        </div>
+        <div>
+          <b>가짜 마감·상시 세일</b>
+          <p>실제 월 강사레슨과 신작 공개 일정을 사용합니다. 신뢰를 깎는 임의의 카운트다운은 쓰지 않습니다.</p>
+        </div>
+        <div>
+          <b>즉시 영상 호스팅 이전</b>
+          <p>월 영상 매출 100만원 전까지 YouTube 방식을 유지하고, 초과 시 Vimeo 테스트를 시작합니다.</p>
+        </div>
+      </div>
+    </section>
+
+    <div class="decision">
+      <p class="eyebrow">Recommended First Move</p>
+      <h2>첫 작업은 영상구매 첫 화면 개편이다.</h2>
+      <p>
+        ACH8·AB9·AR4를 베스트로 올리고, 호흡·골반/고관절·순환/FLOW·정렬/코어의 네 경로를 배치합니다.
+        동시에 ACH8·AB9·AR5·ACA5·AR4·AB8 여섯 상품의 미리보기와 상세 설명을 보강합니다.
+        이 작업이 끝난 뒤 2편 세트와 후속 메시지를 연결하는 순서가 가장 빠르고 안전합니다.
+      </p>
+    </div>
+
+    <footer class="sources">
+      <p><strong>근거와 범위</strong></p>
+      <ul>
+        <li>아임웹 사이트 프로필의 상품·주문 데이터를 2026-07-29에 읽기 전용으로 집계했습니다. 고객 식별정보는 리포트에 포함하지 않았습니다.</li>
+        <li>라이브 영상구매 목록과 ACH8 상세페이지를 직접 점검했습니다.</li>
+        <li><a href="https://archivepilates.com/">ARCHIVE PILATES 공식홈</a></li>
+        <li><a href="https://support.google.com/youtube/answer/14075157?hl=en">YouTube Shorts 관련 영상 공식 도움말</a></li>
+        <li><a href="https://support.google.com/youtube/answer/13748639">YouTube 링크 공유 공식 도움말</a></li>
+        <li><a href="https://support.google.com/analytics/answer/10071811?hl=en-GB">GA4 교차 도메인 측정 공식 도움말</a></li>
+        <li><a href="https://support.google.com/analytics/answer/12200568?hl=en">GA4 전자상거래 이벤트 공식 도움말</a></li>
+      </ul>
+      <p>
+        방문·상품조회·결제시작 데이터는 현재 확인되지 않아 전환율 목표는 초기 가설입니다.
+        GA4 연결 후 2주 데이터를 기준으로 다시 조정해야 합니다.
+      </p>
+    </footer>
+  </main>
+</body>
+</html>

@@ -24,6 +24,14 @@
 - Use worktrees when a change is non-trivial, experimental, or should be isolated from the current branch.
 - Start live checks with read-only verification of the deployed ARCHIVE IN app, Firebase/Hosting configuration, and visible browser errors before proposing fixes.
 
+## StudioMate Monthly Fixed Booking Verification
+
+- Keep the existing StudioMate bulk-booking procedure.
+- After each monthly fixed-booking run, download `수업 > 예약내역` for the entire target month and compare it with the request plan by normalized `phone + lesson date + start time + instructor`.
+- Do not mark the job complete until expected bookings exist exactly once, intentional holds remain absent, and the job created no missing, duplicate, adjacent-time, wrong-instructor, or otherwise unexpected reservations.
+- Treat the monthly reservation Excel as the final verification source. A StudioMate success message or intended-class-only check is not sufficient proof.
+- Record mismatches as `확인필요` and resolve them before reporting completion.
+
 ## Brand Writing Rules
 
 - Always write the app/product name as `ARCHIVE IN` in new chat responses, UI text, reports, documents, commit summaries, and operator-facing materials.

@@ -1,0 +1,264 @@
+<!doctype html>
+<html lang="ko">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1">
+  <title>명지필라테스 네이버 플레이스 노출 점검</title>
+  <style>
+    :root {
+      --bg: #f5f1ea;
+      --paper: #fffdfa;
+      --ink: #1d1b19;
+      --muted: #6f6962;
+      --line: #ddd5ca;
+      --accent: #a8262d;
+      --soft: #f3e9e8;
+      --good: #2f6b4f;
+    }
+    * { box-sizing: border-box; }
+    body {
+      margin: 0;
+      background: var(--bg);
+      color: var(--ink);
+      font-family: -apple-system, BlinkMacSystemFont, "Apple SD Gothic Neo", "Noto Sans KR", sans-serif;
+      font-size: 16px;
+      line-height: 1.65;
+      word-break: keep-all;
+      overflow-wrap: anywhere;
+    }
+    main {
+      width: min(100% - 28px, 960px);
+      margin: 32px auto 72px;
+    }
+    header, section {
+      background: var(--paper);
+      border: 1px solid var(--line);
+      border-radius: 18px;
+      padding: clamp(22px, 4vw, 40px);
+      margin-bottom: 16px;
+    }
+    .eyebrow {
+      margin: 0 0 8px;
+      color: var(--accent);
+      font-weight: 800;
+      letter-spacing: .08em;
+      font-size: 12px;
+    }
+    h1, h2, h3 { line-height: 1.25; letter-spacing: -.025em; }
+    h1 { margin: 0; font-size: clamp(28px, 5vw, 46px); }
+    h2 { margin: 0 0 18px; font-size: clamp(22px, 3vw, 30px); }
+    h3 { margin: 24px 0 8px; font-size: 18px; }
+    p { margin: 8px 0 0; }
+    .lede {
+      margin-top: 18px;
+      max-width: 68ch;
+      color: var(--muted);
+      font-size: 18px;
+    }
+    .verdict {
+      margin-top: 24px;
+      padding: 18px 20px;
+      border-left: 4px solid var(--accent);
+      background: var(--soft);
+      border-radius: 8px;
+      font-weight: 700;
+    }
+    .grid {
+      display: grid;
+      grid-template-columns: repeat(auto-fit, minmax(210px, 1fr));
+      gap: 12px;
+      margin-top: 20px;
+    }
+    .metric {
+      padding: 18px;
+      border: 1px solid var(--line);
+      border-radius: 14px;
+      min-width: 0;
+    }
+    .metric small { display: block; color: var(--muted); }
+    .metric strong { display: block; margin-top: 4px; font-size: 24px; }
+    .bad { color: var(--accent); }
+    .good { color: var(--good); }
+    .table-wrap { overflow-x: auto; }
+    table {
+      width: 100%;
+      border-collapse: collapse;
+      min-width: 780px;
+      font-size: 14px;
+    }
+    th, td {
+      padding: 13px 12px;
+      text-align: left;
+      vertical-align: top;
+      border-bottom: 1px solid var(--line);
+    }
+    th { color: var(--muted); font-size: 12px; letter-spacing: .04em; }
+    tr.highlight { background: #fff6f5; }
+    ol, ul { margin: 10px 0 0; padding-left: 22px; }
+    li + li { margin-top: 9px; }
+    .priority {
+      display: inline-block;
+      min-width: 28px;
+      margin-right: 7px;
+      color: #fff;
+      background: var(--accent);
+      border-radius: 999px;
+      text-align: center;
+      font-size: 12px;
+      font-weight: 800;
+    }
+    .note {
+      padding: 16px 18px;
+      background: #f7f5f2;
+      border: 1px solid var(--line);
+      border-radius: 12px;
+      color: var(--muted);
+    }
+    a { color: var(--accent); text-underline-offset: 3px; }
+    footer { color: var(--muted); font-size: 13px; padding: 8px 4px; }
+    @media (max-width: 560px) {
+      main { width: min(100% - 18px, 960px); margin-top: 10px; }
+      header, section { border-radius: 14px; }
+    }
+  </style>
+</head>
+<body>
+<main>
+  <header>
+    <p class="eyebrow">아카이브 필라테스 명지점 · LIVE NAVER AUDIT</p>
+    <h1>“명지필라테스” 네이버 플레이스 노출 점검</h1>
+    <p class="lede">2026년 7월 25일, 로그아웃된 PC 통합검색과 네이버 지도에서 실제 노출 결과와 주요 경쟁 플레이스 상세를 비교했다.</p>
+    <p class="verdict">결론: 네이버 등록 업체명 “아카이브 필라테스 명지점”의 평점과 기본 정보는 경쟁력이 있지만, 현재 “명지필라테스” 플레이스 1페이지에는 없다. 가장 큰 약점은 리뷰 총량 자체보다 검색어 관련성·최근 콘텐츠·이용자 반응 신호를 지속적으로 만드는 운영 리듬이다.</p>
+    <div class="grid">
+      <div class="metric"><small>현재 플레이스 1페이지</small><strong class="bad">미노출</strong></div>
+      <div class="metric"><small>아카이브 필라테스 명지점 평점</small><strong class="good">4.95</strong></div>
+      <div class="metric"><small>아카이브 필라테스 명지점 리뷰</small><strong>392</strong></div>
+      <div class="metric"><small>자연노출 강자 리뷰</small><strong>1,653</strong></div>
+    </div>
+  </header>
+
+  <section>
+    <h2>현재 검색 결과</h2>
+    <p><strong>플레이스 광고 상단 3곳:</strong> 마인드휘트니스 부산명지점 → 필라테리아 → 수 필라테스 명지국제신도시점</p>
+    <p><strong>확인된 비광고 1페이지:</strong> 에스에프짐 명지점 → 대기구필라테스청담 명지점 → 바레라인 → 판테온짐 국제점 → BB필라테스 명지점</p>
+    <p class="note">순위는 위치·기기·로그인 상태·시간에 따라 달라진다. 네이버도 업체 연관성, 정보의 질, 추이도 등을 종합하며 특정 업체의 고정 노출을 보장하지 않는다고 안내한다.</p>
+  </section>
+
+  <section>
+    <h2>경쟁 플레이스 비교</h2>
+    <div class="table-wrap">
+      <table>
+        <thead>
+          <tr>
+            <th>업체</th>
+            <th>현재 위치</th>
+            <th>평점 / 리뷰</th>
+            <th>최근·차별화 신호</th>
+            <th>판단</th>
+          </tr>
+        </thead>
+        <tbody>
+          <tr class="highlight">
+            <td><strong>아카이브 필라테스 명지점</strong></td>
+            <td>플레이스 1페이지 미노출</td>
+            <td>4.95 / 392</td>
+            <td>7/1 소식, 예약·톡톡, 상세 가격표, 공식 홈페이지·인스타·블로그·유튜브, 주말수업·강사교육센터·PMA NCPT 강조</td>
+            <td>정보 완성도와 평점은 강점. 검색 결과에서 최근 외부 콘텐츠와 반복적인 “명지필라테스” 관련성이 약함.</td>
+          </tr>
+          <tr>
+            <td><strong>대기구필라테스청담 명지점</strong></td>
+            <td>비광고 1페이지</td>
+            <td>4.81 / 1,653</td>
+            <td>키즈·임산부·바레·8:1·남성 그룹 등 검색 수요별 상품 분화</td>
+            <td>리뷰 총량이 아카이브 필라테스 명지점의 약 4.2배. 폭넓은 수요 키워드가 강함.</td>
+          </tr>
+          <tr>
+            <td><strong>BB필라테스 명지점</strong></td>
+            <td>비광고 1페이지</td>
+            <td>평점 미표시 / 184</td>
+            <td>7/7 임산부 3:1 그룹 소식, 7/9 온누리상품권 소식, 블로그·인스타·홈페이지·카페</td>
+            <td>리뷰 수는 아카이브 필라테스 명지점보다 적다. 리뷰 수만으로 순위가 결정되지 않는 직접 증거다.</td>
+          </tr>
+          <tr>
+            <td><strong>마인드·필라테리아·수 필라테스</strong></td>
+            <td>광고 상단</td>
+            <td>목록에서 미확인</td>
+            <td>할인·체험·시설 차별화 문구와 예약 버튼</td>
+            <td>즉시 상단 점유는 유료 광고의 영향. 자연노출 개선과 분리해 평가해야 한다.</td>
+          </tr>
+        </tbody>
+      </table>
+    </div>
+  </section>
+
+  <section>
+    <h2>발견된 핵심 문제</h2>
+    <ol>
+      <li><strong>자연 플레이스 1페이지 밖:</strong> 현재 한글 검색어 “명지필라테스”에서는 아카이브 필라테스 명지점이 첫 화면 후보군에 포함되지 않았다.</li>
+      <li><strong>콘텐츠 신선도 격차:</strong> “명지필라테스” 통합검색의 아카이브 필라테스 관련 블로그 결과는 2025년 6월 28일 글이었다. 반면 메디앤컬 관련 글은 점검 시점 기준 3일 전·5일 전 콘텐츠가 상단에 보였다.</li>
+      <li><strong>명확한 수요별 콘텐츠 부족:</strong> 경쟁사는 임산부·키즈·바레·다이어트·개인/그룹 등 사용자가 실제로 찾는 세부 수요를 소식과 상품명에 반복적으로 연결한다.</li>
+      <li><strong>리뷰 이벤트 위험:</strong> 홈에서 “리뷰 작성시 기간 2주 추가” 쿠폰이 확인됐다. 네이버는 대가성·광고성 리뷰가 추천 상단에서 제한될 수 있고 비정상·대행 리뷰는 미노출될 수 있다고 안내한다. 표현과 운영방식을 즉시 정책 검토하는 편이 안전하다.</li>
+      <li><strong>유입 대비 행동 전환 점검 필요:</strong> 7/20~7/22 과거 스마트플레이스 스냅샷은 플레이스 유입 91, 요청 1, 전화 0, 리뷰 0이었다. 짧은 기간이지만 클릭 이후 예약·문의 전환도 같이 개선해야 한다.</li>
+    </ol>
+  </section>
+
+  <section>
+    <h2>상위노출을 위한 우선 실행안</h2>
+    <h3><span class="priority">1</span>오늘: 플레이스 관련성 정리</h3>
+    <ul>
+      <li>업체명은 실제 상호 그대로 유지하고 키워드 삽입용 상호 변경은 하지 않는다.</li>
+      <li>소개 첫 문장을 “부산 강서구 명지국제신도시의 1:1·2:1·5:1 기구필라테스…”처럼 지역·업종·핵심상품이 자연스럽게 연결되도록 수정한다.</li>
+      <li>가격표를 “명지 개인필라테스 체험”, “명지 그룹필라테스 체험”, “주말 그룹수업”처럼 실제 상품을 찾는 언어로 명확히 정리하되 반복 키워드 도배는 피한다.</li>
+      <li>대표사진 순서를 외관/입구 → 전체 공간 → 그룹수업 → 개인수업 → 기구·강사진으로 정리한다.</li>
+      <li>“리뷰 작성시 기간 2주 추가” 쿠폰은 중단 또는 정책 적합 문구로 교체한다.</li>
+    </ul>
+
+    <h3><span class="priority">2</span>8주: 최신 콘텐츠 운영</h3>
+    <ul>
+      <li>스마트플레이스 소식 주 1회: 수업표, 주말수업, 체험안내, 강사 전문성, 주차, 실제 프로그램 중 하나만 선명하게 다룬다.</li>
+      <li>네이버 블로그 주 1~2회: “명지필라테스 개인 vs 그룹”, “명지 주말 필라테스”, “명지 임산부/초보 필라테스”, “명지 국제신도시 주차 편한 필라테스”처럼 실제 고객 질문을 해결한다.</li>
+      <li>각 글은 직접 촬영한 사진, 담당 강사, 실제 수업 구성, 위치·주차, 플레이스 예약 링크를 포함한다. 비슷한 문구를 복제한 대량 글은 피한다.</li>
+      <li>월 12~20장의 고품질 신규 사진을 플레이스에 추가한다. 최근 네이버 개편은 양질의 방문자 리뷰·사진이 쌓일수록 더 좋은 사진이 노출될 가능성이 높다고 안내한다.</li>
+    </ul>
+
+    <h3><span class="priority">3</span>매월: 정상 리뷰와 전환 신호</h3>
+    <ul>
+      <li>목표는 월 15~25건의 실제 방문 인증 리뷰. 보상·문구 강요 없이 수업 직후 QR이나 안내 메시지로 솔직한 경험 작성을 요청한다.</li>
+      <li>리뷰 수보다 최근성·사진·구체적인 경험이 중요하다. 네이버는 추천 리뷰에 품질, 작성자 활동, 방문 시점 등을 고려한다고 밝힌다.</li>
+      <li>모든 최근 리뷰에 48시간 이내 답글을 달고, 문의·예약 버튼과 체험상품을 항상 최신 상태로 유지한다. 답글 자체의 순위 효과는 공개되지 않았지만 전환 신뢰도에는 도움이 된다.</li>
+    </ul>
+
+    <h3><span class="priority">4</span>병행: 4주 플레이스 광고 테스트</h3>
+    <ul>
+      <li>현재 상단 3칸이 광고이므로 자연노출 개선 기간에는 플레이스 광고를 별도 테스트한다.</li>
+      <li>후보 키워드: 명지필라테스, 명지기구필라테스, 명지국제신도시필라테스, 명지개인필라테스, 명지그룹필라테스.</li>
+      <li>노출·클릭이 아니라 예약 완료, 톡톡 문의, 전화, 체험 결제로 성과를 판단한다. 예산과 입찰가는 광고주센터 키워드 도구의 실제 수치를 보고 정한다.</li>
+    </ul>
+  </section>
+
+  <section>
+    <h2>측정 기준</h2>
+    <ul>
+      <li>매주 같은 요일·시간에 로그아웃 PC, 모바일, 네이버 지도 앱을 각각 확인한다.</li>
+      <li>“명지필라테스”뿐 아니라 명지기구필라테스·명지개인필라테스·명지그룹필라테스 순위를 함께 기록한다.</li>
+      <li>스마트플레이스에서 검색 유입어, 상세 진입, 예약, 전화, 톡톡, 길찾기를 주간 단위로 본다.</li>
+      <li>8주 목표: 자연 플레이스 1페이지 진입 빈도 증가, 유입 대비 예약·문의율 상승, 최근 30일 실제 리뷰의 안정적 증가.</li>
+    </ul>
+  </section>
+
+  <section>
+    <h2>근거 링크</h2>
+    <ul>
+      <li><a href="https://search.naver.com/search.naver?query=%EB%AA%85%EC%A7%80%ED%95%84%EB%9D%BC%ED%85%8C%EC%8A%A4">네이버 “명지필라테스” 통합검색</a></li>
+      <li><a href="https://map.naver.com/p/search/%EC%95%84%EC%B9%B4%EC%9D%B4%EB%B8%8C%20%ED%95%84%EB%9D%BC%ED%85%8C%EC%8A%A4%20%EB%AA%85%EC%A7%80%EC%A0%90">“아카이브 필라테스 명지점” 네이버 지도 검색</a></li>
+      <li><a href="https://help.naver.com/service/5626/contents/1424?lang=ko&amp;osType=COMMONOS">네이버 검색 노출 순서 기준</a></li>
+      <li><a href="https://new.smartplace.naver.com/introduction/smartplace">네이버 스마트플레이스 소개</a></li>
+      <li><a href="https://help.naver.com/service/30026/contents/20499?osType=COMMONOS">방문자 리뷰 노출 기준</a></li>
+      <li><a href="https://new.smartplace.naver.com/notices/1040">2026년 플레이스 검색 화면 개편 안내</a></li>
+    </ul>
+  </section>
+
+  <footer>본 점검은 2026-07-25 로그아웃 PC 환경의 한 시점 결과다. 네이버 검색 순위는 사용자 위치·기기·행동·시간에 따라 달라질 수 있다.</footer>
+</main>
+</body>
+</html>

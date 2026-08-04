@@ -1,0 +1,208 @@
+<!doctype html>
+<html lang="ko">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1">
+  <title>ACA5 캐딜락 호흡 자동자막 반복어 분석</title>
+  <style>
+    :root {
+      --paper: #fffdfa;
+      --ink: #191715;
+      --muted: #706862;
+      --line: #ded6cf;
+      --red: #a13b2d;
+      --soft: #f6f0ea;
+      --black: #171513;
+    }
+    * { box-sizing: border-box; }
+    html { background: var(--paper); color: var(--ink); font-family: -apple-system, BlinkMacSystemFont, "Apple SD Gothic Neo", "Noto Sans KR", sans-serif; }
+    body { margin: 0; }
+    main { width: min(1080px, calc(100% - 36px)); margin: 0 auto; padding: 72px 0 96px; }
+    header { border-top: 4px solid var(--red); padding: 28px 0 32px; border-bottom: 1px solid var(--line); }
+    .eyebrow { margin: 0 0 12px; color: var(--red); font-size: 12px; font-weight: 800; letter-spacing: .12em; }
+    h1 { margin: 0; font-size: 38px; line-height: 1.25; letter-spacing: 0; }
+    .lead { max-width: 720px; margin: 18px 0 0; color: var(--muted); font-size: 16px; line-height: 1.8; }
+    .meta { display: flex; flex-wrap: wrap; gap: 8px 18px; margin-top: 22px; font-size: 13px; color: var(--muted); }
+    section { padding: 44px 0; border-bottom: 1px solid var(--line); }
+    h2 { margin: 0 0 18px; font-size: 25px; line-height: 1.35; }
+    h3 { margin: 0 0 12px; font-size: 17px; }
+    p { line-height: 1.75; }
+    .summary { display: grid; grid-template-columns: repeat(4, minmax(0, 1fr)); gap: 10px; }
+    .metric { min-height: 128px; padding: 20px; border: 1px solid var(--line); background: #fff; }
+    .metric strong { display: block; font-size: 28px; line-height: 1.2; }
+    .metric span { display: block; margin-top: 10px; color: var(--muted); font-size: 13px; line-height: 1.5; }
+    .grid-2 { display: grid; grid-template-columns: 1fr 1fr; gap: 28px; }
+    table { width: 100%; border-collapse: collapse; font-size: 14px; }
+    th, td { padding: 11px 10px; border-bottom: 1px solid var(--line); text-align: left; }
+    th { color: var(--muted); font-size: 12px; font-weight: 700; }
+    td:last-child, th:last-child { text-align: right; }
+    .bars { display: grid; gap: 10px; }
+    .bar-row { display: grid; grid-template-columns: 90px 1fr 52px; gap: 10px; align-items: center; font-size: 14px; }
+    .track { height: 8px; background: var(--soft); overflow: hidden; }
+    .fill { height: 100%; background: var(--red); }
+    .bar-row b { text-align: right; }
+    .note { margin: 18px 0 0; padding: 16px 18px; background: var(--soft); color: #514a45; font-size: 14px; line-height: 1.7; }
+    .findings { display: grid; grid-template-columns: repeat(3, minmax(0, 1fr)); gap: 12px; }
+    .finding { padding: 22px; border: 1px solid var(--line); background: #fff; }
+    .finding strong { display: block; margin-bottom: 10px; color: var(--red); font-size: 14px; }
+    .finding p { margin: 0; font-size: 14px; color: #514a45; }
+    .links { display: flex; flex-wrap: wrap; gap: 10px; }
+    .links a { display: inline-flex; min-height: 44px; align-items: center; padding: 10px 14px; border: 1px solid var(--black); color: var(--black); text-decoration: none; font-weight: 700; font-size: 13px; }
+    .links a:first-child { background: var(--black); color: #fff; }
+    .fine { color: var(--muted); font-size: 12px; }
+    @media (max-width: 760px) {
+      main { width: min(100% - 28px, 680px); padding-top: 34px; }
+      h1 { font-size: 29px; }
+      section { padding: 34px 0; }
+      .summary, .findings { grid-template-columns: 1fr 1fr; }
+      .grid-2 { grid-template-columns: 1fr; }
+    }
+    @media (max-width: 480px) {
+      .summary, .findings { grid-template-columns: 1fr; }
+      .metric { min-height: 0; }
+      .bar-row { grid-template-columns: 72px 1fr 44px; }
+    }
+  </style>
+</head>
+<body>
+  <main>
+    <header>
+      <p class="eyebrow">ARCHIVE PILATES · TEACHING LANGUAGE REVIEW</p>
+      <h1>ACA5 캐딜락 호흡<br>자동자막 반복어 분석</h1>
+      <p class="lead">정은영 강사편의 한국어 자동 생성 자막을 내려받아 조사와 어미를 분리하고, 진행 습관어·동작 큐·신체 부위·반복 표현으로 나눠 집계했습니다.</p>
+      <div class="meta">
+        <span>영상 코드 ACA5</span>
+        <span>분석일 2026-08-04</span>
+        <span>영상 길이 약 53분 58초</span>
+        <span>자동자막 구간 1,242개</span>
+      </div>
+    </header>
+
+    <section>
+      <div class="summary">
+        <div class="metric"><strong>4,833</strong><span>분석된 내용 형태소</span></div>
+        <div class="metric"><strong>670</strong><span>고유 단어 원형</span></div>
+        <div class="metric"><strong>229회</strong><span>가장 잦은 진행어 ‘자’</span></div>
+        <div class="metric"><strong>85회</strong><span>호흡 관련 핵심어 합계</span></div>
+      </div>
+    </section>
+
+    <section>
+      <h2>가장 많이 반복된 말</h2>
+      <div class="grid-2">
+        <div>
+          <h3>진행·피드백 표현</h3>
+          <div class="bars">
+            <div class="bar-row"><span>자</span><span class="track"><i class="fill" style="width:100%"></i></span><b>229</b></div>
+            <div class="bar-row"><span>더</span><span class="track"><i class="fill" style="width:83%"></i></span><b>190</b></div>
+            <div class="bar-row"><span>다시</span><span class="track"><i class="fill" style="width:64%"></i></span><b>146</b></div>
+            <div class="bar-row"><span>좋다</span><span class="track"><i class="fill" style="width:53%"></i></span><b>122</b></div>
+            <div class="bar-row"><span>이제</span><span class="track"><i class="fill" style="width:24%"></i></span><b>56</b></div>
+            <div class="bar-row"><span>좀</span><span class="track"><i class="fill" style="width:21%"></i></span><b>47</b></div>
+            <div class="bar-row"><span>계속</span><span class="track"><i class="fill" style="width:15%"></i></span><b>34</b></div>
+            <div class="bar-row"><span>음</span><span class="track"><i class="fill" style="width:11%"></i></span><b>25</b></div>
+          </div>
+          <p class="note">분당 환산하면 ‘자’ 4.2회, ‘더’ 3.5회, ‘다시’ 2.7회, ‘좋다’ 2.3회입니다. ‘좋다’는 긍정 피드백이라 유지 가치가 있지만, 일부를 구체적 변화 피드백으로 바꾸면 수업 언어가 더 선명해집니다.</p>
+        </div>
+        <div>
+          <h3>동작·수업 핵심어</h3>
+          <table>
+            <thead><tr><th>단어 원형</th><th>횟수</th></tr></thead>
+            <tbody>
+              <tr><td>힘</td><td>89</td></tr>
+              <tr><td>밀다</td><td>70</td></tr>
+              <tr><td>많이</td><td>64</td></tr>
+              <tr><td>유지</td><td>58</td></tr>
+              <tr><td>들다</td><td>49</td></tr>
+              <tr><td>내려가다</td><td>45</td></tr>
+              <tr><td>천천히</td><td>41</td></tr>
+              <tr><td>누르다</td><td>40</td></tr>
+              <tr><td>마시다</td><td>40</td></tr>
+              <tr><td>올리다</td><td>30</td></tr>
+              <tr><td>호흡</td><td>29</td></tr>
+              <tr><td>내리다</td><td>27</td></tr>
+            </tbody>
+          </table>
+        </div>
+      </div>
+    </section>
+
+    <section>
+      <h2>수업 언어의 중심</h2>
+      <div class="findings">
+        <article class="finding"><strong>압력·저항 215회</strong><p>힘 89, 밀다 70, 누르다 40, 당기다 12 등이 중심입니다. 호흡을 움직임과 저항 조절 안에서 설명하는 수업입니다.</p></article>
+        <article class="finding"><strong>호흡 85회</strong><p>마시다 40, 호흡 29, 들이마시다 8, 내쉬다 8로 집계됐습니다.</p></article>
+        <article class="finding"><strong>안정화·지지 60회</strong><p>유지 58, 버티다 2로 나타납니다. 자세를 만든 뒤 유지시키는 큐가 매우 분명합니다.</p></article>
+      </div>
+    </section>
+
+    <section>
+      <h2>가장 자주 언급한 신체 부위</h2>
+      <table>
+        <thead><tr><th>순위</th><th>신체 부위</th><th>횟수</th></tr></thead>
+        <tbody>
+          <tr><td>1</td><td>엉덩이</td><td>54</td></tr>
+          <tr><td>2</td><td>팔</td><td>50</td></tr>
+          <tr><td>3</td><td>어깨</td><td>40</td></tr>
+          <tr><td>4</td><td>무릎</td><td>37</td></tr>
+          <tr><td>5</td><td>발</td><td>34</td></tr>
+          <tr><td>6</td><td>손</td><td>33</td></tr>
+          <tr><td>7</td><td>머리</td><td>28</td></tr>
+          <tr><td>8</td><td>골반</td><td>22</td></tr>
+          <tr><td>9</td><td>가슴·등</td><td>각 16</td></tr>
+          <tr><td>10</td><td>복부·허리·다리</td><td>각 15</td></tr>
+        </tbody>
+      </table>
+    </section>
+
+    <section>
+      <h2>반복된 2단어 표현</h2>
+      <div class="grid-2">
+        <table>
+          <thead><tr><th>표현</th><th>횟수</th></tr></thead>
+          <tbody>
+            <tr><td>좀 더</td><td>15</td></tr>
+            <tr><td>다시 천천히</td><td>14</td></tr>
+            <tr><td>더 밀다</td><td>14</td></tr>
+            <tr><td>더 더</td><td>14</td></tr>
+            <tr><td>조금 더</td><td>12</td></tr>
+            <tr><td>어깨 힘</td><td>10</td></tr>
+          </tbody>
+        </table>
+        <table>
+          <thead><tr><th>표현</th><th>횟수</th></tr></thead>
+          <tbody>
+            <tr><td>정면 바라보다</td><td>9</td></tr>
+            <tr><td>복부 힘</td><td>8</td></tr>
+            <tr><td>밀어내다 힘</td><td>8</td></tr>
+            <tr><td>힘 주다</td><td>5</td></tr>
+            <tr><td>팔 구부리다</td><td>5</td></tr>
+            <tr><td>천천히 내려오다</td><td>5</td></tr>
+          </tbody>
+        </table>
+      </div>
+    </section>
+
+    <section>
+      <h2>짧은 해석</h2>
+      <div class="findings">
+        <article class="finding"><strong>강한 반복 리듬</strong><p>‘자 → 더 → 다시 → 좋습니다’가 수업 박자를 만드는 핵심 패턴입니다.</p></article>
+        <article class="finding"><strong>구체화 여지</strong><p>‘더’와 ‘다시’ 일부를 방향·부위·목적이 포함된 문장으로 바꾸면 영상 학습자에게 더 정확한 큐가 됩니다.</p></article>
+        <article class="finding"><strong>피드백 정밀도</strong><p>‘좋습니다’ 일부를 ‘어깨 힘이 빠졌어요’, ‘골반 높이 유지됐어요’처럼 관찰 결과로 바꾸는 방법이 좋습니다.</p></article>
+      </div>
+      <p class="note">본 수치는 YouTube 한국어 자동자막 기준입니다. ‘화이팅’을 ‘하이팅’으로 인식하거나 ‘푸시바’를 ‘푸시 바’로 나누는 오류가 있어, 완전한 발화 전사 통계라기보다 반복 경향을 보는 자료로 사용하는 것이 적절합니다.</p>
+    </section>
+
+    <section>
+      <h2>산출물</h2>
+      <div class="links">
+        <a href="../../artifacts/2026-08-04-aca5-caption-analysis/aca5-auto-ko.txt">자동자막 원문</a>
+        <a href="../../artifacts/2026-08-04-aca5-caption-analysis/aca5-top-meaningful-words.csv">단어 통계 CSV</a>
+        <a href="../../artifacts/2026-08-04-aca5-caption-analysis/aca5-top-bigrams.csv">2단어 표현 CSV</a>
+        <a href="../../artifacts/2026-08-04-aca5-caption-analysis/aca5-word-stats.json">전체 통계 JSON</a>
+      </div>
+      <p class="fine">분석 방식: YouTube 자동자막 다운로드 → HTML/효과음 표기 제거 → Kiwi 형태소 분석 → 조사·어미 제외 → 활용어 원형 정규화 → 단어·2단어 표현 집계.</p>
+    </section>
+  </main>
+</body>
+</html>

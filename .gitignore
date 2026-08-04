@@ -7,6 +7,8 @@ firebase/kangsain-functions/firebase-debug.log
 firebase/kangsain-functions/firebase-debug.*.log
 
 # Local/generated Codex and browser evidence.
+.DS_Store
 .playwright-cli/
 output/
+outputs/
 artifacts/
