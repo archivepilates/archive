@@ -4,7 +4,7 @@ import { createHmac, randomBytes } from "node:crypto";
 import { execFileSync } from "node:child_process";
 
 const PROJECT_ID = "archive-pilates";
-const REFERENCE_TEMPLATE_ID = "KA01TP260728111926523p2JzzTgHsS8";
+const REFERENCE_TEMPLATE_ID = "KA01TP260802163827071E2TTuX6CsWp";
 const TEMPLATE_NAME = "아카이브 추천식단 프로그램 v2";
 const SURVEY_BUTTON_URL = "https://in.archivepilates.com/s/#{링크ID}/";
 const REPORT_BUTTON_URL = "https://in.archivepilates.com/s/#{리포트링크ID}/";

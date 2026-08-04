@@ -1,5 +1,5 @@
 const FIREBASE_APP_VERSION = "10.14.1";
-const CORE_RUNTIME_CONTRACT_VERSION = "2026-08-02.1";
+const CORE_RUNTIME_CONTRACT_VERSION = "2026-08-04.1";
 const WORK_LANE_ID = "archive-core-transition";
 const STUDIO_ID = "5330";
 
@@ -20,7 +20,8 @@ const ALIMTALK_TEMPLATE_LABELS_BY_CODE = Object.freeze({
   KA01TP260602101939427lPhGyuDLvFM: "신규회원 웰컴 v5",
   KA01TP260611053817155zqYlw27wEOU: "회원용 수강료 안내 링크 v1",
   KA01TP26072806273194229P2ZesQwPp: "스튜디오메이트 예약 안내 v4",
-  KA01TP260728111926523p2JzzTgHsS8: "아카이브 추천식단 프로그램",
+  KA01TP260728111926523p2JzzTgHsS8: "아카이브 추천식단 프로그램 v1 (삭제됨)",
+  KA01TP260802163827071E2TTuX6CsWp: "아카이브 추천식단 프로그램 v2",
   KA01TP260731123545629Sx4N5CZa5BF: "아카이브 추천식단 도착 안내 v1 (미사용)",
   KA01TP260729144645970fv13He8mfsK: "프라이빗 사전설문 안내 v2",
   KA01TP260729144657202OV26yAD15wR: "강사용 프라이빗 차트 작성 안내 v3",
@@ -44,7 +45,7 @@ const ALIMTALK_TEMPLATE_LABELS_BY_TYPE = Object.freeze({
   private_lesson_report: "프라이빗 회원 리포트 안내",
   inbody_report: "회원용 인바디 리포트 안내",
   pricing_info: "회원용 수강료 안내",
-  recommended_meal_survey: "아카이브 추천식단 프로그램",
+  recommended_meal_survey: "아카이브 추천식단 프로그램 v2",
 });
 
 const state = {

@@ -38,6 +38,8 @@ export const GROUP_SURVEY_BUTTON_URL_TEMPLATE =
   "https://in.archivepilates.com/groupSurvey?id=#{설문ID}&token=#{접근토큰}";
 export const METHOD_MATERIAL_BUTTON_URL_TEMPLATE = "https://in.archivepilates.com/method/#{관리번호}";
 export const PRIVATE_REPORT_BUTTON_URL_TEMPLATE = "https://in.archivepilates.com/s/#{리포트링크ID}/";
+export const RECOMMENDED_MEAL_REPORT_BUTTON_URL_TEMPLATE =
+  "https://in.archivepilates.com/s/#{리포트링크ID}/";
 export const PRICING_INFO_BUTTON_URL_TEMPLATE = "https://archivepilates.notion.site/";
 
 export const ALIMTALK_TEMPLATE_TARGET_RULES: Partial<Record<AlimtalkCandidateType, AlimtalkTemplateTargetRule>> = {
@@ -157,17 +159,23 @@ export const ALIMTALK_TEMPLATE_TARGET_RULES: Partial<Record<AlimtalkCandidateTyp
         template: SHORT_LINK_BUTTON_URL_TEMPLATE,
         maxLength: SOLAPI_BUTTON_URL_MAX_LENGTH,
       },
+      {
+        label: "추천식단 확인 버튼",
+        template: RECOMMENDED_MEAL_REPORT_BUTTON_URL_TEMPLATE,
+        maxLength: SOLAPI_BUTTON_URL_MAX_LENGTH,
+      },
     ],
     targetRules: [
       "ARCHIVE CORE에서 운영자가 회원 전화번호와 이름을 확인한 단건 발송",
       "memberProfiles 또는 memberContactIndex의 전화번호 기준 회원 매칭",
-      "추천식단 전용 요청과 14일 유효 짧은 링크가 있음",
+      "추천식단 전용 요청과 설문·리포트 짧은 링크가 있음",
       "최근 30일 내 같은 회원에게 동일 설문 발송 이력 없음",
     ],
     exclusionRules: [
       "회원 전화번호 또는 회원카드 매칭 없음",
       "같은 전화번호에 서로 다른 이름의 회원이 있어 운영자 확인 필요",
       "추천식단 설문 짧은 링크 없음",
+      "추천식단 리포트 짧은 링크 없음",
       "최근 30일 내 같은 회원에게 동일 설문 발송 이력 있음",
       "SOLAPI 미승인 템플릿",
     ],

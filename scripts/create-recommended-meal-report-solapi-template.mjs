@@ -4,7 +4,7 @@ import { createHmac, randomBytes } from "node:crypto";
 import { execFileSync } from "node:child_process";
 
 const PROJECT_ID = "archive-pilates";
-const REFERENCE_TEMPLATE_ID = "KA01TP260728111926523p2JzzTgHsS8";
+const REFERENCE_TEMPLATE_ID = "KA01TP260802163827071E2TTuX6CsWp";
 const IMAGE_ID = "ST01FZ260730122108103pEzxH5jOOpU";
 const TEMPLATE_NAME = "아카이브 추천식단 도착 안내 v1";
 const TEMPLATE_CONTENT = `#{이름}님, 설문과 InBody 기록을 반영한

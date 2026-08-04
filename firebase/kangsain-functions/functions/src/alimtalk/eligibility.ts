@@ -24,7 +24,8 @@ import { isAlimtalkTestRecipient } from "./testRecipients";
 
 export const RETRYABLE_TEMPLATE_STATUS_PREFIX = "템플릿 상태 확인 일시 실패:";
 const PRIVATE_SURVEY_BUTTON_URL = "https://in.archivepilates.com/s/#{링크ID}/";
-const RECOMMENDED_MEAL_BUTTON_URL = "https://in.archivepilates.com/s/#{링크ID}/";
+const RECOMMENDED_MEAL_SURVEY_BUTTON_URL = "https://in.archivepilates.com/s/#{링크ID}/";
+const RECOMMENDED_MEAL_REPORT_BUTTON_URL = "https://in.archivepilates.com/s/#{리포트링크ID}/";
 const RESERVATION_NOTICE_BUTTON_URL = "https://archivepilates.notion.site/notice";
 const RESERVATION_METHOD_BUTTON_URL = "https://archivepilates.notion.site/studiomate";
 
@@ -68,8 +69,10 @@ export async function autoSendabilityIssue(candidate: AlimtalkCandidateDoc, toda
     return "예약주차 변수 없음";
   }
   if (candidate.type === "pricing_info" && !candidate.payload?.pricingUrl) return "수강료 안내 링크 없음";
-  if (candidate.type === "recommended_meal_survey" && !candidate.payload?.shortLinkId)
-    return "추천식단 설문 짧은 링크 없음";
+  if (candidate.type === "recommended_meal_survey") {
+    if (!candidate.payload?.shortLinkId) return "추천식단 설문 짧은 링크 없음";
+    if (!candidate.payload?.reportLinkId) return "추천식단 리포트 짧은 링크 없음";
+  }
   if (candidate.type === "recommended_meal_report" && !candidate.payload?.shortLinkId)
     return "추천식단 리포트 짧은 링크 없음";
   if (rule?.requiresManagementNumber) {
@@ -179,18 +182,25 @@ export function recommendedMealTemplateContractIssue(
   if (!String(state.content || "").includes("#{이름}")) {
     return "추천식단 템플릿 회원명 변수 없음";
   }
-  if (!(state.buttonUrls || []).includes(RECOMMENDED_MEAL_BUTTON_URL)) {
+  if (!(state.buttonUrls || []).includes(RECOMMENDED_MEAL_SURVEY_BUTTON_URL)) {
     return "추천식단 템플릿 설문 버튼 URL 불일치";
+  }
+  if (!(state.buttonUrls || []).includes(RECOMMENDED_MEAL_REPORT_BUTTON_URL)) {
+    return "추천식단 템플릿 리포트 버튼 URL 불일치";
   }
   const buttons = state.buttons || [];
   if (
-    buttons.length !== 1 ||
+    buttons.length !== 2 ||
     buttons[0]?.name !== "식단 설문 작성" ||
     buttons[0]?.type !== "WL" ||
-    buttons[0]?.mobileUrl !== RECOMMENDED_MEAL_BUTTON_URL ||
-    buttons[0]?.desktopUrl !== RECOMMENDED_MEAL_BUTTON_URL
+    buttons[0]?.mobileUrl !== RECOMMENDED_MEAL_SURVEY_BUTTON_URL ||
+    buttons[0]?.desktopUrl !== RECOMMENDED_MEAL_SURVEY_BUTTON_URL ||
+    buttons[1]?.name !== "추천식단 확인" ||
+    buttons[1]?.type !== "WL" ||
+    buttons[1]?.mobileUrl !== RECOMMENDED_MEAL_REPORT_BUTTON_URL ||
+    buttons[1]?.desktopUrl !== RECOMMENDED_MEAL_REPORT_BUTTON_URL
   ) {
-    return "추천식단 템플릿 설문 버튼 계약 불일치";
+    return "추천식단 템플릿 2버튼 계약 불일치";
   }
   return "";
 }
@@ -216,7 +226,7 @@ export function recommendedMealReportTemplateContractIssue(
   if (!String(state.content || "").includes("#{이름}")) {
     return "추천식단 리포트 템플릿 회원명 변수 없음";
   }
-  if (!(state.buttonUrls || []).includes(RECOMMENDED_MEAL_BUTTON_URL)) {
+  if (!(state.buttonUrls || []).includes(RECOMMENDED_MEAL_SURVEY_BUTTON_URL)) {
     return "추천식단 리포트 버튼 URL 불일치";
   }
   const buttons = state.buttons || [];
@@ -224,8 +234,8 @@ export function recommendedMealReportTemplateContractIssue(
     buttons.length !== 1 ||
     buttons[0]?.name !== "추천식단 보기" ||
     buttons[0]?.type !== "WL" ||
-    buttons[0]?.mobileUrl !== RECOMMENDED_MEAL_BUTTON_URL ||
-    buttons[0]?.desktopUrl !== RECOMMENDED_MEAL_BUTTON_URL
+    buttons[0]?.mobileUrl !== RECOMMENDED_MEAL_SURVEY_BUTTON_URL ||
+    buttons[0]?.desktopUrl !== RECOMMENDED_MEAL_SURVEY_BUTTON_URL
   ) {
     return "추천식단 리포트 버튼 계약 불일치";
   }
@@ -235,8 +245,10 @@ export function recommendedMealReportTemplateContractIssue(
 function requiredPayloadIssue(candidate: AlimtalkCandidateDoc): string {
   const payload = candidate.payload || {};
   if (candidate.type === "onsite_welcome" && !payload.shortLinkId) return "회원가입서 짧은 링크 없음";
-  if (candidate.type === "recommended_meal_survey" && !payload.shortLinkId)
-    return "추천식단 설문 짧은 링크 없음";
+  if (candidate.type === "recommended_meal_survey") {
+    if (!payload.shortLinkId) return "추천식단 설문 짧은 링크 없음";
+    if (!payload.reportLinkId) return "추천식단 리포트 짧은 링크 없음";
+  }
   if (candidate.type === "recommended_meal_report" && !payload.shortLinkId)
     return "추천식단 리포트 짧은 링크 없음";
   if (candidate.type === "private_survey" || candidate.type === "group_survey") {

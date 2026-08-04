@@ -465,24 +465,33 @@ test("template status errors fail closed but remain retryable", () => {
   );
 });
 
-test("approved recommended meal template keeps the image and survey-link contract", () => {
+test("approved recommended meal v2 template keeps the image and dual-link contract", () => {
   const candidate = recommendedMealCandidate();
   const state = {
     templateCode: RECOMMENDED_MEAL_ALIMTALK_TEMPLATE_CODE,
-    label: "아카이브 추천식단 프로그램",
-    name: "아카이브 추천식단 프로그램",
+    label: "아카이브 추천식단 프로그램 v2",
+    name: "아카이브 추천식단 프로그램 v2",
     status: "APPROVED",
     source: "solapi",
     lastError: null,
     channelId: RECOMMENDED_MEAL_ALIMTALK_CHANNEL_ID,
     content: "#{이름}님, 식단 프로그램 설문을 보내드립니다.",
-    buttonUrls: ["https://in.archivepilates.com/s/#{링크ID}/"],
+    buttonUrls: [
+      "https://in.archivepilates.com/s/#{링크ID}/",
+      "https://in.archivepilates.com/s/#{리포트링크ID}/",
+    ],
     buttons: [
       {
         name: "식단 설문 작성",
         type: "WL",
         mobileUrl: "https://in.archivepilates.com/s/#{링크ID}/",
         desktopUrl: "https://in.archivepilates.com/s/#{링크ID}/",
+      },
+      {
+        name: "추천식단 확인",
+        type: "WL",
+        mobileUrl: "https://in.archivepilates.com/s/#{리포트링크ID}/",
+        desktopUrl: "https://in.archivepilates.com/s/#{리포트링크ID}/",
       },
     ],
     messageType: "BA",
@@ -505,9 +514,16 @@ test("approved recommended meal template keeps the image and survey-link contrac
   assert.match(
     recommendedMealTemplateContractIssue(candidate, {
       ...state,
-      buttons: [{ ...state.buttons[0], type: "AL" }],
+      buttonUrls: ["https://in.archivepilates.com/s/#{링크ID}/"],
     }),
-    /설문 버튼 계약 불일치/,
+    /리포트 버튼 URL 불일치/,
+  );
+  assert.match(
+    recommendedMealTemplateContractIssue(candidate, {
+      ...state,
+      buttons: [state.buttons[0], { ...state.buttons[1], type: "AL" }],
+    }),
+    /2버튼 계약 불일치/,
   );
   assert.match(
     recommendedMealTemplateContractIssue(candidate, { ...state, channelId: "wrong-channel" }),
@@ -754,7 +770,7 @@ function recommendedMealCandidate(): any {
     title: "ARCHIVE 추천식단 프로그램",
     reason: "운영자 승인 단건 발송",
     sourceDate: "2026-07-31",
-    payload: { shortLinkId: "meal-link-1" },
+    payload: { shortLinkId: "meal-link-1", reportLinkId: "meal-report-link-1" },
     attempts: 0,
     maxAttempts: 1,
     createdAt: now,

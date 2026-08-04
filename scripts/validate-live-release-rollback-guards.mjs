@@ -156,15 +156,17 @@ const guardGroups = [
           "operatorSendRecommendedMealProgramAlimtalkHandler",
           "RECOMMENDED_MEAL_REQUEST_COLLECTION",
           "recommended_meal_survey",
+          "reportLinkId",
+          "reportShortUrl",
         ],
       },
       {
         file: "firebase/kangsain-functions/functions/src/alimtalk/templates.ts",
         markers: [
-          "KA01TP260728111926523p2JzzTgHsS8",
+          "KA01TP260802163827071E2TTuX6CsWp",
           "ST01FZ260730122108103pEzxH5jOOpU",
           "KA01PF260511123220162lk0NUjstpVl",
-          "label: \"아카이브 추천식단 프로그램\"",
+          "label: \"아카이브 추천식단 프로그램 v2\"",
           "status: \"approved\"",
         ],
       },
@@ -172,16 +174,19 @@ const guardGroups = [
         file: "firebase/kangsain-functions/functions/src/alimtalk/eligibility.ts",
         markers: [
           "recommendedMealTemplateContractIssue",
-          "추천식단 템플릿 설문 버튼 계약 불일치",
+          "추천식단 템플릿 2버튼 계약 불일치",
           "추천식단 템플릿 설문 버튼 URL 불일치",
+          "추천식단 템플릿 리포트 버튼 URL 불일치",
         ],
       },
       {
         file: "scripts/audit-recommended-meal-alimtalk-template.mjs",
         markers: [
-          "KA01TP260728111926523p2JzzTgHsS8",
+          "KA01TP260802163827071E2TTuX6CsWp",
           "ST01FZ260730122108103pEzxH5jOOpU",
           "survey short-link button mismatch",
+          "report short-link button mismatch",
+          "dual-link button contract mismatch",
         ],
       },
       {
