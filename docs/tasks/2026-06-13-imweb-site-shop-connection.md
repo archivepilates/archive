@@ -1230,3 +1230,22 @@ These need Imweb admin/builder access, not only the public API.
   - `output/playwright/imweb-navigation-jump-2026-07-06/from-home-click-studio-after-patch.png`
   - `output/playwright/imweb-navigation-jump-2026-07-06/from-home-click-online-after-patch.png`
   - `output/playwright/imweb-navigation-jump-2026-07-06/desktop-hover-after-patch.png`
+
+## Offline Lesson July Soldout Update - 2026-07-09 KST
+
+- Scope:
+  - Updated Imweb product `1`, `[오프라인] ARCHIVE METHOD 5:1 강사레슨`.
+- Change:
+  - Product name changed to `[오프라인] ARCHIVE METHOD 5:1 강사레슨 7월마감`.
+  - Product status changed from `sale` to `soldout`.
+- Verification:
+  - Imweb product readback confirms `prodStatus=soldout` and the updated product name.
+  - Live desktop detail page shows `SOLDOUT` and `품절된 상품입니다.` instead of the purchase button.
+  - Live mobile detail page shows the updated name and `SOLDOUT`; tapping the sticky purchase area opens the bottom sheet but the final action is blocked as `품절된 상품입니다.` with no navigation to checkout.
+  - Offline category mobile page shows the updated `7월마감` name and `SOLDOUT` badge.
+- Evidence:
+  - `artifacts/imweb-offline-lesson-soldout-2026-07-09/product-1-after-legacy-v2-patch.json`
+  - `artifacts/imweb-offline-lesson-soldout-2026-07-09/legacy-v2-name-status-patch-result.json`
+  - `output/playwright/imweb-offline-lesson-soldout-2026-07-09/offline-detail-desktop.png`
+  - `output/playwright/imweb-offline-lesson-soldout-2026-07-09/offline-detail-mobile-after-purchase-click.png`
+  - `output/playwright/imweb-offline-lesson-soldout-2026-07-09/offline-category-mobile.png`

@@ -1275,3 +1275,24 @@ Remaining risks:
   - `artifacts/imweb-purchase-flow-2026-07-04/buyer-video-group-verify.json`
   - `artifacts/imweb-purchase-flow-2026-07-04/buyer-own-page-access-final.json`
   - `artifacts/imweb-full-video-access-matrix-2026-07-04-skip/full-access-matrix.json`
+
+## ACA2 Representative Thumbnail Replacement - 2026-07-09 KST
+
+- Scope:
+  - Replaced product `36` representative image for `[온라인] ARCHIVE METHOD 캐딜락 경추보호 코어강화 (ACA2) 40D 이용권`.
+  - New image uses a wider class scene from the full ACA2 video instead of a close-up face frame.
+- Change:
+  - Captured clean textless candidate frames from video `5gNW6DS1ITc`.
+  - Applied the selected 2993s frame through the legacy Imweb v2 product API.
+  - Product image changed from `1e38bdccc1d89.jpg` to `c8129e639839c.jpg`.
+- Verification:
+  - Legacy v2 API patch returned `SUCCESS`.
+  - Imweb product readback shows the new CDN image.
+  - CDN image downloaded successfully at `1280x720`.
+  - Live product detail page and online class category loaded with the new representative image on mobile and desktop checks.
+- Evidence:
+  - `artifacts/imweb-thumbnail-refresh-2026-07-09/aca2-product-36-legacy-v2-patch-result-q78.json`
+  - `artifacts/imweb-thumbnail-refresh-2026-07-09/aca2-product-36-after-legacy-v2-patch-q78.json`
+  - `artifacts/imweb-thumbnail-refresh-2026-07-09/aca2-product-36-live-cdn-image.jpg`
+  - `artifacts/imweb-thumbnail-refresh-2026-07-09/live-verify/detail-mobile.png`
+  - `artifacts/imweb-thumbnail-refresh-2026-07-09/live-verify/detail-desktop.png`

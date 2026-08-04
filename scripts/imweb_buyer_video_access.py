@@ -16,6 +16,7 @@ import base64
 import json
 import subprocess
 import sys
+import time
 from dataclasses import dataclass
 from datetime import datetime, timezone
 from pathlib import Path
@@ -112,10 +113,22 @@ LEGACY_PRODUCT_ALIASES: dict[int, str] = {
 
 def run_imweb(args: list[str]) -> Any:
     cmd = [str(IMWEB), "--output", "json", *args]
-    result = subprocess.run(cmd, cwd=ROOT, text=True, capture_output=True, check=False)
-    if result.returncode != 0:
-        raise RuntimeError(f"imweb command failed: {' '.join(args)}\n{result.stderr or result.stdout}")
-    return json.loads(result.stdout)
+    last_output = ""
+    for attempt in range(5):
+        result = subprocess.run(cmd, cwd=ROOT, text=True, capture_output=True, check=False)
+        if result.returncode == 0:
+            return json.loads(result.stdout)
+        last_output = result.stderr or result.stdout
+        retryable = (
+            "rate_limited_retryable" in last_output
+            or '"error_code": "30086"' in last_output
+            or '"status_code": 429' in last_output
+            or "너무 많은 요청" in last_output
+        )
+        if not retryable or attempt == 4:
+            break
+        time.sleep(1.5 * (attempt + 1))
+    raise RuntimeError(f"imweb command failed: {' '.join(args)}\n{last_output}")
 
 
 def run_imweb_write(args: list[str], body: dict[str, Any]) -> Any:
@@ -167,14 +180,19 @@ def append_signup_notice(delivery: dict[str, Any]) -> None:
 
 
 def is_paid(order: dict[str, Any]) -> bool:
-    if order.get("orderStatus") != "OPEN":
-        return False
     payments = order.get("payments") or []
-    return any(
+    has_completed_payment = any(
         payment.get("paymentStatus") == "PAYMENT_COMPLETE"
         and payment.get("isCancel") != "Y"
         and float(payment.get("paidPrice") or 0) > 0
         for payment in payments
+    )
+    if has_completed_payment:
+        return True
+    return (
+        float(order.get("totalPaymentPrice") or 0) > 0
+        and float(order.get("totalRefundedPrice") or 0) == 0
+        and order.get("isCancelReq") != "Y"
     )
 
 
@@ -226,6 +244,7 @@ def load_group_codes_by_member(video_products: list[VideoProduct]) -> dict[str, 
     by_member: dict[str, set[str]] = {}
     for video in video_products:
         members = run_imweb(["member", "groups", "members", video.group_code, "--all", "--max-pages", "20"])
+        time.sleep(0.15)
         for member in members if isinstance(members, list) else members.get("data", {}).get("list", []):
             uid = member.get("uid")
             if isinstance(uid, str) and uid:
@@ -366,7 +385,7 @@ def process_orders(args: argparse.Namespace) -> int:
     state = load_state()
     state.setdefault("processed", {})
     youtube_ready_codes = load_youtube_ready_codes()
-    member_groups = load_group_codes_by_member(VIDEO_PRODUCTS) if args.apply else {}
+    member_groups = load_group_codes_by_member(VIDEO_PRODUCTS)
 
     listing = run_imweb(["order", "list", "--limit", str(args.limit)])
     rows = listing.get("data", {}).get("list", [])
@@ -377,6 +396,7 @@ def process_orders(args: argparse.Namespace) -> int:
         if not order_no:
             continue
         detail = run_imweb(["order", "get", order_no]).get("data", {})
+        time.sleep(0.15)
         if not is_paid(detail):
             results.append({"orderNo": order_no, "status": "skip_unpaid_or_closed"})
             continue
@@ -393,6 +413,25 @@ def process_orders(args: argparse.Namespace) -> int:
             key = f"{order_no}:{video.prod_no}:{member_uid or 'guest'}"
             if state["processed"].get(key, {}).get("status") == "granted":
                 results.append({"orderNo": order_no, "code": video.code, "status": "already_granted"})
+                continue
+            current = member_groups.get(member_uid, set())
+            if video.group_code in current:
+                state["processed"][key] = {
+                    "status": "already_has_access",
+                    "productNo": video.prod_no,
+                    "code": video.code,
+                    "watchUrl": video.watch_url,
+                    "resolvedGuestOrder": resolved_guest,
+                    "updatedAt": datetime.now(timezone.utc).isoformat(),
+                }
+                results.append(
+                    {
+                        "orderNo": order_no,
+                        "code": video.code,
+                        "status": "already_has_access",
+                        "resolvedGuestOrder": resolved_guest,
+                    }
+                )
                 continue
             if not member_uid:
                 already_pending = state["processed"].get(key, {}).get("status") == "needs_member_signup"
@@ -419,7 +458,6 @@ def process_orders(args: argparse.Namespace) -> int:
                 }
                 results.append({"orderNo": order_no, "code": video.code, "status": "youtube_not_ready"})
                 continue
-            current = member_groups.get(member_uid, set())
             target_codes = sorted(current | {video.group_code})
             if args.apply:
                 run_imweb_write(["member", "update", "groups", member_uid], {"groupCodes": target_codes})
