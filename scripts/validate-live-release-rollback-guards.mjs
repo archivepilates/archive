@@ -139,6 +139,18 @@ const guardGroups = [
           "id=\"mealSurveyForm\"",
           "api/recommendedMealSurvey",
           "설문 제출이 완료되었습니다.",
+          ".option:has(input:checked)",
+          ".section > :is(.field, fieldset, .grid-2)",
+          "min-height: 46px",
+        ],
+      },
+      {
+        file: "scripts/verify-recommended-meal-survey.mjs",
+        markers: [
+          "minimumOptionHeight",
+          "minimumFieldLabelFontSize",
+          "option target below 44px",
+          "-viewport.png",
         ],
       },
       {

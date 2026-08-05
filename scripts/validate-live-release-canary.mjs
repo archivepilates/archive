@@ -51,11 +51,19 @@ if (selectedSurfaces.includes("archivein")) {
       "ARCHIVE PILATES 추천식단 프로그램",
       "mealSurveyForm",
       "api/recommendedMealSurvey",
+      ".option:has(input:checked)",
+      "min-height: 46px",
     ]),
     textCheck(
       "recommended-meal-survey-webapp-path",
       "https://archive-pilates.web.app/archivein/recommendedMealSurvey/",
-      ["ARCHIVE PILATES 추천식단 프로그램", "mealSurveyForm", "api/recommendedMealSurvey"],
+      [
+        "ARCHIVE PILATES 추천식단 프로그램",
+        "mealSurveyForm",
+        "api/recommendedMealSurvey",
+        ".option:has(input:checked)",
+        "min-height: 46px",
+      ],
     ),
     textCheck("method-breathing-cue-card-custom-domain", "https://in.archivepilates.com/method/breathing-260627/", [
       "호흡 큐카드 | ARCHIVE METHOD",

@@ -36,7 +36,9 @@ try {
       const width = document.documentElement.clientWidth;
       const documentWidth = Math.max(document.documentElement.scrollWidth, document.body.scrollWidth);
       const submit = document.querySelector(".submit-button");
-      const overflowingFields = [...document.querySelectorAll("input, select, textarea, fieldset, .section")].filter(
+      const options = [...document.querySelectorAll(".option")];
+      const fieldLabels = [...document.querySelectorAll(".field > span, fieldset legend")];
+      const overflowingFields = [...document.querySelectorAll("input, select, textarea, fieldset, .section, .option, .notice, .consent")].filter(
         (element) => element.scrollWidth > element.clientWidth + 1,
       ).length;
       return {
@@ -44,12 +46,21 @@ try {
         documentWidth,
         horizontalOverflow: documentWidth > width + 1,
         submitHeight: submit ? Math.round(submit.getBoundingClientRect().height) : 0,
+        minimumOptionHeight: options.length
+          ? Math.min(...options.map((option) => Math.round(option.getBoundingClientRect().height)))
+          : 0,
+        minimumFieldLabelFontSize: fieldLabels.length
+          ? Math.min(...fieldLabels.map((label) => Number.parseFloat(getComputedStyle(label).fontSize)))
+          : 0,
         overflowingFields,
       };
     });
     if (check.horizontalOverflow) failures.push(`${viewport.name}: horizontal overflow`);
     if (check.submitHeight < 44) failures.push(`${viewport.name}: submit target below 44px`);
+    if (check.minimumOptionHeight < 44) failures.push(`${viewport.name}: option target below 44px`);
+    if (check.minimumFieldLabelFontSize < 15) failures.push(`${viewport.name}: field label below 15px`);
     if (check.overflowingFields) failures.push(`${viewport.name}: ${check.overflowingFields} fields overflow`);
+    await page.screenshot({ path: path.join(outputDir, `${viewport.name}-viewport.png`) });
     await page.screenshot({ path: path.join(outputDir, `${viewport.name}.png`), fullPage: true });
     await page.close();
   }
