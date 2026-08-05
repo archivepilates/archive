@@ -94,7 +94,7 @@ if (triggerQueue) {
 }
 
 const finalCandidate = triggerQueue
-  ? await pollCandidate(`private_lesson_report_${request.requestId}`)
+  ? await pollCandidate(request.requestId)
   : await readCandidate(request.requestId);
 const sentLocked = triggerQueue ? await expectEditLocked(request) : { ok: null, skipped: true };
 const finalRecord = await readRecord(request.requestId);
@@ -105,7 +105,7 @@ const final = {
   ok:
     candidateAfterFirstApprove.status === "queued" &&
     candidateAfterEdit.status === "skipped" &&
-    candidateAfterEdit.reasonCode === "private_report_edited_before_send" &&
+    candidateAfterEdit.reasonCode === "private_report_changed_before_send" &&
     candidateAfterSecondApprove.status === "queued" &&
     !candidateAfterSecondApprove.reasonCode &&
     (!triggerQueue ||
@@ -292,17 +292,24 @@ async function readChartPageState(request) {
 }
 
 async function readCandidate(requestId) {
-  const candidateId = `private_lesson_report_${requestId}`;
-  const snap = await db.collection("alimtalkCandidates").doc(candidateId).get();
-  return { candidateId, ...(snap.data() || {}) };
+  const record = await readRecord(requestId);
+  const approvedCandidateId = String(record?.publicReportApproval?.candidateId || "");
+  if (approvedCandidateId) {
+    const approvedSnap = await db.collection("alimtalkCandidates").doc(approvedCandidateId).get();
+    if (approvedSnap.exists) return { candidateId: approvedSnap.id, ...(approvedSnap.data() || {}) };
+  }
+  const snap = await db.collection("alimtalkCandidates").where("sourceActionKey", "==", requestId).get();
+  const candidates = snap.docs
+    .map((doc) => ({ candidateId: doc.id, ...(doc.data() || {}) }))
+    .sort((left, right) => timestampMillis(right.updatedAt) - timestampMillis(left.updatedAt));
+  return candidates[0] || { candidateId: "" };
 }
 
-async function pollCandidate(candidateId) {
+async function pollCandidate(requestId) {
   const deadline = Date.now() + 120000;
   let row = {};
   while (Date.now() < deadline) {
-    const snap = await db.collection("alimtalkCandidates").doc(candidateId).get();
-    row = { candidateId, ...(snap.data() || {}) };
+    row = await readCandidate(requestId);
     if (["sent", "failed", "skipped"].includes(String(row.status || ""))) return row;
     await sleep(4000);
   }
@@ -321,6 +328,10 @@ async function readRecord(requestId) {
 
 async function cleanupValidationDocs(request) {
   const now = Timestamp.now();
+  const candidateSnap = await db
+    .collection("alimtalkCandidates")
+    .where("sourceActionKey", "==", request.requestId)
+    .get();
   const batch = db.batch();
   batch.set(
     db.collection("bookings").doc(request.bookingId),
@@ -369,8 +380,28 @@ async function cleanupValidationDocs(request) {
     },
     { merge: true },
   );
+  for (const candidate of candidateSnap.docs) {
+    if (!["candidate", "queued", "processing", "failed"].includes(String(candidate.data().status || ""))) continue;
+    batch.set(
+      candidate.ref,
+      {
+        status: "skipped",
+        reasonCode: "live_validation_cleanup",
+        lastError: "라이브 검증 종료 후 발송 차단",
+        updatedAt: now,
+      },
+      { merge: true },
+    );
+  }
   await batch.commit();
   return { status: "excluded", reason: "live_validation_cleanup" };
+}
+
+function timestampMillis(value) {
+  if (typeof value?.toMillis === "function") return value.toMillis();
+  if (value instanceof Date) return value.getTime();
+  const parsed = Date.parse(String(value || ""));
+  return Number.isFinite(parsed) ? parsed : 0;
 }
 
 function preAnswers() {

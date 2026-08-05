@@ -65,7 +65,10 @@ async function main(): Promise<void> {
     record.publicReportApproval?.status === "sent" || Boolean(record.sentRevision),
   );
   const sentMissingSnapshot = sentRecords.filter(
-    (record) => !record.sentRevision || record.sentReportSnapshot?.revision !== record.sentRevision,
+    (record) =>
+      !record.sentReportSnapshot?.revision &&
+      !record.approvedReportSnapshot?.revision &&
+      !record.legacySentReportSnapshot?.revision,
   );
   const mutableApprovedRecords = [...records.values()].filter((record) =>
     ["approved", "queued", "processing"].includes(String(record.publicReportApproval?.status || "")),
@@ -110,6 +113,12 @@ async function main(): Promise<void> {
   const surveyCandidateStatusCounts = countBy(surveyCandidates.map((candidate) => candidate.status || "unknown"));
 
   const attention = [
+    requestOnly.length
+      ? `${requestOnly.length}개 프라이빗 요청에 대응하는 리포트 레코드가 없음`
+      : "",
+    recordOnly.length
+      ? `${recordOnly.length}개 프라이빗 리포트 레코드에 대응하는 요청이 없음`
+      : "",
     legacySurveyCandidates.length
       ? `${legacySurveyCandidates.length}개 프라이빗 사전설문 후보가 구글폼 버튼형 v1 템플릿을 참조 중`
       : "",
@@ -118,6 +127,9 @@ async function main(): Promise<void> {
       : "",
     approvalRevisionMismatch.length
       ? `${approvalRevisionMismatch.length}개 승인/처리중 리포트의 승인 스냅샷이 현재 버전과 불일치`
+      : "",
+    sessionRevisionMismatch.length
+      ? `${sessionRevisionMismatch.length}개 운영 장부의 리포트 버전이 원천 레코드와 불일치`
       : "",
     Number(mediaStatusCounts.uploaded_to_drive || 0)
       ? `${mediaStatusCounts.uploaded_to_drive}개 미디어가 Drive 업로드 후 리포트 첨부 대기`
@@ -144,12 +156,17 @@ async function main(): Promise<void> {
           recordOnly: recordOnly.length,
           sentRecords: sentRecords.length,
           sentMissingImmutableSnapshot: sentMissingSnapshot.length,
+          legacySentSnapshots: [...records.values()].filter(
+            (record) => Boolean(record.legacySentReportSnapshot?.revision),
+          ).length,
           approvalRevisionMismatch: approvalRevisionMismatch.length,
           sessionRevisionMismatch: sessionRevisionMismatch.length,
           staleActionableReportCandidates: staleReportCandidates.length,
           legacyActionableSurveyCandidates: legacySurveyCandidates.length,
         },
         attentionSamples: {
+          requestOnly: requestOnly.slice(0, 10),
+          recordOnly: recordOnly.slice(0, 10),
           approvalRevisionMismatch: approvalRevisionMismatch.slice(0, 10).map((record) => record.recordId),
           staleActionableReportCandidates: staleReportCandidates.slice(0, 10).map((candidate) => candidate.candidateId),
           legacyActionableSurveyCandidates: legacySurveyCandidates.slice(0, 10).map((candidate) => candidate.candidateId),

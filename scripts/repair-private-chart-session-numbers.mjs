@@ -134,7 +134,28 @@ async function applyRepair(request, record, expected) {
     reason: "bookings 단일 예약 원천 기준 프라이빗 회차 재계산",
     correctedAt: now,
   };
-  await Promise.all([
+  const sent = Boolean(
+    record?.publicReportApproval?.status === "sent" ||
+    record?.publicReportApproval?.sentAt ||
+    record?.sentRevision ||
+    record?.gptStatus === "published",
+  );
+  const candidateId = sent ? "" : String(record?.publicReportApproval?.candidateId || "");
+  const reportPatch = sent
+    ? {}
+    : {
+      reportRevision: "",
+      approvedRevision: "",
+      approvedReportSnapshot: null,
+      publicReportApproval: {
+        ...(record?.publicReportApproval || {}),
+        status: "pending",
+        approvedAt: null,
+        candidateId: null,
+        lastError: "회차가 변경되어 리포트 재검수가 필요합니다.",
+      },
+    };
+  const writes = [
     db.collection("privateLessonChartRequests").doc(request.requestId).set(
       {
         sessionNumber: expected,
@@ -147,11 +168,26 @@ async function applyRepair(request, record, expected) {
       {
         sessionNumber: expected,
         sessionNumberCorrection: correction,
+        ...reportPatch,
         updatedAt: now,
       },
       { merge: true },
     ),
-  ]);
+  ];
+  if (candidateId) {
+    writes.push(
+      db.collection("alimtalkCandidates").doc(candidateId).set(
+        {
+          status: "skipped",
+          reasonCode: "private_report_round_changed",
+          lastError: "회차가 변경되어 기존 리포트 발송 후보를 보류했습니다.",
+          updatedAt: now,
+        },
+        { merge: true },
+      ),
+    );
+  }
+  await Promise.all(writes);
 }
 
 async function updateNotionPages({ request, record, from, to }) {

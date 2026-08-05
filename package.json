@@ -53,6 +53,8 @@
     "deploy:archive-core-live": "bash scripts/deploy-archive-core-live.sh",
     "recompute:private-session-ledger": "node scripts/recompute-private-session-ledger.mjs",
     "backfill:private-lesson-sessions": "firebase/kangsain-functions/functions/node_modules/.bin/tsx scripts/backfill-private-lesson-sessions.ts",
+    "repair:private-report-runtime": "firebase/kangsain-functions/functions/node_modules/.bin/tsx scripts/repair-private-report-runtime.ts",
+    "cleanup:private-live-validation": "firebase/kangsain-functions/functions/node_modules/.bin/tsx scripts/cleanup-private-live-validation.ts",
     "release:promote-main:dry": "node scripts/promote-release-to-main.mjs",
     "release:promote-main": "node scripts/promote-release-to-main.mjs --apply",
     "studiomate:member-excel": "node firebase/kangsain-functions/macmini-studiomate/download-member-excel.mjs",
