@@ -10,6 +10,8 @@ const BOARD_KIND = process.env.BOARD_KIND || (BOARD_SLUG === "center_buy" ? "cen
 const LOOKBACK_DAYS = Number(process.env.LOOKBACK_DAYS || 45);
 const MAX_PAGES = Number(process.env.MAX_PAGES || 80);
 const DETAIL_DELAY_MS = Number(process.env.DETAIL_DELAY_MS || 80);
+const REQUEST_TIMEOUT_MS = Math.max(5_000, Number(process.env.HOHOYOGA_REQUEST_TIMEOUT_MS || 30_000));
+const REQUEST_MAX_ATTEMPTS = Math.max(1, Number(process.env.HOHOYOGA_REQUEST_MAX_ATTEMPTS || 6));
 const OUTPUT_PATH = process.env.OUTPUT_PATH || "";
 const USER_ID = process.env.HOHO_USER_ID || process.env.HOHO_ACCOUNT || "kihyo2215";
 const PASSWORD = process.env.HOHO_PASSWORD || readKeychainPassword(USER_ID);
@@ -267,27 +269,16 @@ function parseDetail(detailHtml, listRow) {
 }
 
 async function request(jar, url, options = {}) {
-  let response;
-  let lastError;
-  for (let attempt = 1; attempt <= 3; attempt += 1) {
-    try {
-      response = await fetch(url, {
-        redirect: "manual",
-        ...options,
-        headers: {
-          "user-agent": USER_AGENT,
-          connection: "close",
-          cookie: jar.header(),
-          ...options.headers,
-        },
-      });
-      break;
-    } catch (error) {
-      lastError = error;
-      if (attempt === 3) throw lastError;
-      await sleep(500 * attempt);
-    }
-  }
+  const response = await fetch(url, {
+    redirect: "manual",
+    ...options,
+    signal: options.signal || AbortSignal.timeout(REQUEST_TIMEOUT_MS),
+    headers: {
+      "user-agent": USER_AGENT,
+      cookie: jar.header(),
+      ...options.headers,
+    },
+  });
   jar.add(response.headers.getSetCookie());
   if ([301, 302, 303, 307, 308].includes(response.status)) {
     const location = response.headers.get("location");
@@ -303,14 +294,18 @@ async function request(jar, url, options = {}) {
 
 async function requestText(jar, url, options = {}) {
   let lastError;
-  for (let attempt = 1; attempt <= 5; attempt += 1) {
+  for (let attempt = 1; attempt <= REQUEST_MAX_ATTEMPTS; attempt += 1) {
     try {
       const response = await request(jar, url, options);
+      if ([429, 500, 502, 503, 504].includes(response.status)) {
+        await response.arrayBuffer().catch(() => {});
+        throw new Error(`HohoYoga transient HTTP ${response.status}`);
+      }
       return { response, text: await response.text() };
     } catch (error) {
       lastError = error;
-      if (!isTransientNetworkError(error) || attempt === 5) throw error;
-      await sleep(700 * attempt);
+      if (!isTransientNetworkError(error) || attempt === REQUEST_MAX_ATTEMPTS) throw error;
+      await sleep(Math.min(30_000, 1_200 * (2 ** (attempt - 1))));
     }
   }
   throw lastError;
@@ -318,7 +313,7 @@ async function requestText(jar, url, options = {}) {
 
 function isTransientNetworkError(error) {
   const text = `${error?.message || ""} ${error?.cause?.message || ""} ${error?.cause?.code || ""}`;
-  return /EPIPE|fetch failed|ECONNRESET|ETIMEDOUT|ENETUNREACH|EAI_AGAIN|socket|terminated/i.test(text);
+  return /EPIPE|fetch failed|ECONNRESET|ETIMEDOUT|ENETUNREACH|EAI_AGAIN|socket|terminated|transient HTTP/i.test(text);
 }
 
 async function login() {

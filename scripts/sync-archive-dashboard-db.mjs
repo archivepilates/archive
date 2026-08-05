@@ -1,13 +1,16 @@
 #!/usr/bin/env node
 import { spawnSync } from "node:child_process";
-import { createSign } from "node:crypto";
+import { createHash, createSign } from "node:crypto";
 import {
+  closeSync,
   copyFileSync,
   existsSync,
   mkdirSync,
-  mkdtempSync,
+  openSync,
+  readSync,
   readdirSync,
   readFileSync,
+  renameSync,
   rmSync,
   statSync,
   writeFileSync,
@@ -27,6 +30,7 @@ const DEFAULT_PYTHON = path.join(
   ".cache/codex-runtimes/codex-primary-runtime/dependencies/python/bin/python3",
 );
 const REPORT_DIR = path.join(HOME, "ArchiveIN/automation/reports/archive-dashboard-db-sync");
+const EXCEL_CACHE_DIR = path.join(HOME, "ArchiveIN/automation/cache/archive-dashboard-excels");
 
 const args = parseArgs(process.argv.slice(2));
 const config = {
@@ -205,10 +209,19 @@ function numberCompare(a, b) {
 }
 
 function readExcelRows(files) {
-  const stagingDir = mkdtempSync(path.join(os.tmpdir(), "archive-dashboard-excel-"));
+  mkdirSync(EXCEL_CACHE_DIR, { recursive: true });
   const stagedFiles = files.map((item, index) => {
-    const stagedPath = path.join(stagingDir, `${String(index).padStart(3, "0")}-${path.basename(item.path)}`);
-    copyFileWithRetry(item.path, stagedPath);
+    const stagedPath = cachedExcelPath(item, index);
+    if (!existsSync(stagedPath) || statSync(stagedPath).size <= 0) {
+      const partialPath = `${stagedPath}.partial-${process.pid}`;
+      rmSync(partialPath, { force: true });
+      try {
+        copyFileWithRetry(item.path, partialPath);
+        renameSync(partialPath, stagedPath);
+      } finally {
+        rmSync(partialPath, { force: true });
+      }
+    }
     return { ...item, path: stagedPath };
   });
   const script = `
@@ -236,25 +249,34 @@ for item in files:
 
 print(json.dumps(rows, ensure_ascii=False, default=str))
 `;
-  try {
-    const result = spawnSync(config.python, ["-c", script], { encoding: "utf8", maxBuffer: 256 * 1024 * 1024 });
-    if (result.status !== 0) throw new Error(`Excel read failed: ${result.stderr || result.stdout}`);
-    return JSON.parse(result.stdout);
-  } finally {
-    rmSync(stagingDir, { recursive: true, force: true });
-  }
+  const result = spawnSync(config.python, ["-c", script], { encoding: "utf8", maxBuffer: 256 * 1024 * 1024 });
+  if (result.status !== 0) throw new Error(`Excel read failed: ${result.stderr || result.stdout}`);
+  return JSON.parse(result.stdout);
+}
+
+function cachedExcelPath(item, index) {
+  const sourceStats = statSync(item.path);
+  const sourceKey = createHash("sha256")
+    .update([item.path, sourceStats.size, sourceStats.mtimeMs].join("\u0001"))
+    .digest("hex")
+    .slice(0, 16);
+  const label = `${item.month || "unknown"}-${String(index).padStart(3, "0")}-${sourceKey}`;
+  return path.join(EXCEL_CACHE_DIR, `${label}-${path.basename(item.path)}`);
 }
 
 function copyFileWithRetry(sourcePath, targetPath) {
   let lastError;
-  for (let attempt = 1; attempt <= 4; attempt += 1) {
+  const maxAttempts = 12;
+  for (let attempt = 1; attempt <= maxAttempts; attempt += 1) {
     try {
       copyFileSync(sourcePath, targetPath);
       if (statSync(targetPath).size <= 0) throw new Error("staged file is empty");
       return;
     } catch (error) {
       lastError = error;
-      if (attempt < 4) sleepSync(attempt * 1000);
+      rmSync(targetPath, { force: true });
+      materializeCloudFile(sourcePath);
+      if (attempt < maxAttempts) sleepSync(Math.min(15_000, attempt * 2_000));
     }
   }
   throw new Error(
@@ -262,6 +284,18 @@ function copyFileWithRetry(sourcePath, targetPath) {
       lastError instanceof Error ? lastError.message : String(lastError)
     }`,
   );
+}
+
+function materializeCloudFile(sourcePath) {
+  let descriptor;
+  try {
+    descriptor = openSync(sourcePath, "r");
+    readSync(descriptor, Buffer.alloc(1), 0, 1, 0);
+  } catch {
+    // Google Drive File Provider may return EAGAIN while downloading an online-only file.
+  } finally {
+    if (descriptor !== undefined) closeSync(descriptor);
+  }
 }
 
 function sleepSync(ms) {

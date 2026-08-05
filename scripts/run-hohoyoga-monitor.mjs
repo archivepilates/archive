@@ -24,10 +24,18 @@ const SNAPSHOT_SCRIPT = String(
     path.join(ROOT, "scripts/hohoyoga-monitor-snapshot.mjs"),
 );
 const SNAPSHOT_PATH_ARG = args["snapshot-path"] ? expandHome(String(args["snapshot-path"])) : "";
+const CENTER_SALE_SNAPSHOT_PATH_ARG = args["center-sale-snapshot-path"]
+  ? expandHome(String(args["center-sale-snapshot-path"]))
+  : "";
 const REPORT_DIR = expandHome(String(args["report-dir"] || process.env.HOHOYOGA_REPORT_DIR || "~/ArchiveIN/automation/reports/hohoyoga-monitor"));
 const ARTIFACT_DIR = path.join(ROOT, "artifacts/hohoyoga-monitor");
 const RUN_AT = kstDateTime(new Date());
 const CENTER_SALE_LIMIT = Number(args["center-sale-limit"] || process.env.HOHOYOGA_CENTER_BUY_LIMIT || 0);
+const TRACKED_STATUS_LIMIT = Math.max(0, Number(process.env.HOHOYOGA_TRACKED_STATUS_LIMIT || "180"));
+const CENTER_SALE_TRACKED_STATUS_LIMIT = Math.max(
+  0,
+  Number(process.env.HOHOYOGA_CENTER_BUY_TRACKED_STATUS_LIMIT || "50"),
+);
 
 const SHEETS = {
   posts: "구인글",
@@ -131,16 +139,19 @@ async function main() {
   await ensureSheets(token, SHEET_ID, Object.values(SHEETS));
   await ensureHeaders(token);
 
-  const existingRows = await readSheetObjects(token, SHEETS.posts);
+  const existingRows = CENTER_SALE_ONLY ? { rows: [] } : await readSheetObjects(token, SHEETS.posts);
   const existingById = new Map(existingRows.rows.map((row, index) => [String(row["글번호"] || "").trim(), { row, rowNumber: index + 2 }]).filter(([id]) => id));
   const trackedIds = existingRows.rows
     .filter((row) => String(row["현재상태"] || row["상태"] || "").trim() !== "완료")
     .map((row) => String(row["글번호"] || "").trim())
     .filter(Boolean);
+  const trackedIdsForCheck = rotatingTrackedBatch(trackedIds, TRACKED_STATUS_LIMIT, RUN_AT.slice(0, 10));
   const snapshotPath = SNAPSHOT_PATH_ARG || path.join(ARTIFACT_DIR, `${kstDate(new Date())}-snapshot.json`);
-  const snapshot = SNAPSHOT_PATH_ARG && existsSync(SNAPSHOT_PATH_ARG)
-    ? JSON.parse(readFileSync(SNAPSHOT_PATH_ARG, "utf8"))
-    : runSnapshot(snapshotPath, trackedIds, {
+  const snapshot = CENTER_SALE_ONLY
+    ? emptySnapshot("job_pilates_gyeongsang")
+    : SNAPSHOT_PATH_ARG && existsSync(SNAPSHOT_PATH_ARG)
+      ? JSON.parse(readFileSync(SNAPSHOT_PATH_ARG, "utf8"))
+      : runSnapshot(snapshotPath, trackedIdsForCheck, {
         boardSlug: "job_pilates_gyeongsang",
         boardKind: "job",
         lookbackDays: process.env.HOHOYOGA_LOOKBACK_DAYS || "21",
@@ -158,13 +169,20 @@ async function main() {
     .filter((row) => String(row["현재상태"] || "").trim() !== "완료")
     .map((row) => String(row["글번호"] || "").trim())
     .filter(Boolean);
+  const centerSaleTrackedIdsForCheck = rotatingTrackedBatch(
+    centerSaleTrackedIds,
+    CENTER_SALE_TRACKED_STATUS_LIMIT,
+    RUN_AT.slice(0, 10),
+  );
   const centerSaleSnapshotPath = path.join(ARTIFACT_DIR, `${kstDate(new Date())}-center-buy-snapshot.json`);
-  const centerSaleSnapshot = runSnapshot(centerSaleSnapshotPath, centerSaleTrackedIds, {
-    boardSlug: "center_buy",
-    boardKind: "centerSale",
-    lookbackDays: process.env.HOHOYOGA_CENTER_BUY_LOOKBACK_DAYS || "7",
-    maxPages: process.env.HOHOYOGA_CENTER_BUY_MAX_PAGES || "35",
-  });
+  const centerSaleSnapshot = CENTER_SALE_SNAPSHOT_PATH_ARG && existsSync(CENTER_SALE_SNAPSHOT_PATH_ARG)
+    ? JSON.parse(readFileSync(CENTER_SALE_SNAPSHOT_PATH_ARG, "utf8"))
+    : runSnapshot(centerSaleSnapshotPath, centerSaleTrackedIdsForCheck, {
+        boardSlug: "center_buy",
+        boardKind: "centerSale",
+        lookbackDays: process.env.HOHOYOGA_CENTER_BUY_LOOKBACK_DAYS || "7",
+        maxPages: process.env.HOHOYOGA_CENTER_BUY_MAX_PAGES || "35",
+      });
   const centerSalePlan = buildCenterSalePlan(centerSaleSnapshot, centerSaleById);
 
   if (APPLY) {
@@ -184,13 +202,15 @@ async function main() {
     snapshotPath,
     stats: snapshot.stats || {},
     trackedIds: trackedIds.length,
+    trackedIdsChecked: trackedIdsForCheck.length,
     newRows: plan.newRows.length,
     updatedRows: plan.rowUpdates.length,
     completedRows: plan.completedHistoryRows.length,
     duplicatesSkipped: plan.duplicatesSkipped,
-    centerSaleSnapshotPath,
+    centerSaleSnapshotPath: CENTER_SALE_SNAPSHOT_PATH_ARG || centerSaleSnapshotPath,
     centerSaleStats: centerSaleSnapshot.stats || {},
     centerSaleTrackedIds: centerSaleTrackedIds.length,
+    centerSaleTrackedIdsChecked: centerSaleTrackedIdsForCheck.length,
     centerSaleNewRows: centerSalePlan.newRows.length,
     centerSaleUpdatedRows: centerSalePlan.rowUpdates.length,
     centerSaleDuplicatesSkipped: centerSalePlan.duplicatesSkipped,
@@ -277,7 +297,7 @@ function runSnapshot(outputPath, trackedIds, options = {}) {
         BOARD_KIND: options.boardKind || process.env.BOARD_KIND || "",
         LOOKBACK_DAYS: options.lookbackDays || process.env.HOHOYOGA_LOOKBACK_DAYS || "21",
         MAX_PAGES: options.maxPages || process.env.HOHOYOGA_MAX_PAGES || "40",
-        DETAIL_DELAY_MS: process.env.HOHOYOGA_DETAIL_DELAY_MS || "80",
+        DETAIL_DELAY_MS: process.env.HOHOYOGA_DETAIL_DELAY_MS || "160",
       },
       maxBuffer: 64 * 1024 * 1024,
     });
@@ -292,6 +312,29 @@ function runSnapshot(outputPath, trackedIds, options = {}) {
     sleepSync(attempt * 3000);
   }
   throw new Error(`HohoYoga snapshot failed: ${lastOutput}`);
+}
+
+function rotatingTrackedBatch(ids, limit, dateKey) {
+  const normalized = [...new Set(ids.map((value) => String(value || "").trim()).filter(Boolean))]
+    .sort((a, b) => a.localeCompare(b));
+  if (!limit || normalized.length <= limit) return normalized;
+  const chunkCount = Math.ceil(normalized.length / limit);
+  const matched = String(dateKey || "").match(/^(\d{4})-(\d{2})-(\d{2})$/);
+  const dayNumber = matched
+    ? Math.floor(Date.UTC(Number(matched[1]), Number(matched[2]) - 1, Number(matched[3])) / 86_400_000)
+    : 0;
+  const chunkIndex = dayNumber % chunkCount;
+  return normalized.slice(chunkIndex * limit, Math.min(normalized.length, (chunkIndex + 1) * limit));
+}
+
+function emptySnapshot(boardSlug) {
+  return {
+    runAt: RUN_AT,
+    boardSlug,
+    stats: { pages: 0, listRows: 0, detailChecked: 0, stopped: "center_sale_only" },
+    activePosts: [],
+    trackedStatuses: [],
+  };
 }
 
 function sleepSync(ms) {
