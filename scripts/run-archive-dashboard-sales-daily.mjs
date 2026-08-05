@@ -35,22 +35,23 @@ const downloadStep = steps.find((step) => step.name === "downloadSalesExcels");
 const downloadFailed = Boolean(downloadStep && !stepSucceeded(downloadStep));
 const shouldRunDbSync = skipDownload || apply;
 if (!downloadFailed && shouldRunDbSync) {
-  steps.push(
-    runStep("syncArchiveDashboardDbFromExcels", [
-      "scripts/sync-archive-dashboard-db.mjs",
-      ...(month ? [`--month=${month}`, "--allow-partial-overwrite"] : []),
-      ...(apply ? ["--apply"] : []),
-      ...(syncFirebase ? ["--sync-firebase"] : []),
-    ]),
-  );
-  steps.push(
-    runStep("syncArchiveDashboardDbFromExport", [
-      "scripts/sync-archive-dashboard-db-export.mjs",
-      ...(month ? [`--month=${month}`] : []),
-      ...(apply ? ["--apply"] : []),
-      ...(apply && syncFirebase ? ["--sync-firebase"] : []),
-    ]),
-  );
+  const directSyncStep = runStep("syncArchiveDashboardDbFromExcels", [
+    "scripts/sync-archive-dashboard-db.mjs",
+    ...(month ? [`--month=${month}`, "--allow-partial-overwrite"] : []),
+    ...(apply ? ["--apply"] : []),
+    ...(syncFirebase ? ["--sync-firebase"] : []),
+  ]);
+  steps.push(directSyncStep);
+  if (!stepSucceeded(directSyncStep)) {
+    steps.push(
+      runStep("syncArchiveDashboardDbFromExport", [
+        "scripts/sync-archive-dashboard-db-export.mjs",
+        ...(month ? [`--month=${month}`] : []),
+        ...(apply ? ["--apply"] : []),
+        ...(apply && syncFirebase ? ["--sync-firebase"] : []),
+      ]),
+    );
+  }
 }
 
 const dbSyncSteps = steps.filter((step) => step.name.startsWith("syncArchiveDashboardDb"));
