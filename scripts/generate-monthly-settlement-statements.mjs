@@ -4,11 +4,15 @@ import os from "node:os";
 import path from "node:path";
 import XLSX from "xlsx";
 import { googleAccessToken, sheetsRequest } from "./dashboard-export-utils.mjs";
+import {
+  calculateSplitCompensation,
+  readRegularCompensationCarryForward,
+} from "./lib/monthly-settlement-compensation.mjs";
 
 const HOME = os.homedir();
 const DEFAULT_ROOT = path.join(
   HOME,
-  "Library/CloudStorage/GoogleDrive-kihyo2215@gmail.com/내 드라이브/10_업무/아카이브필라테스/아카이브필라테스/03_재무_대출_정산/아카이브 월말정산",
+  "Library/CloudStorage/GoogleDrive-home@archivepilates.com/내 드라이브/아카이브필라테스/아카이브필라테스/03_재무_대출_정산/아카이브 월말정산",
 );
 const DEFAULT_BACKUP_ROOT = path.join(HOME, "Library/CloudStorage/GoogleDrive-home@archivepilates.com/내 드라이브/아카이브 정산/월별정산백업");
 const DEFAULT_SETTLEMENT_DRIVE_ROOT = path.dirname(DEFAULT_BACKUP_ROOT);
@@ -482,8 +486,9 @@ function readPreviousInstructorInfo(root, currentYm) {
       const name = clean(row[1]);
       if (!name) continue;
       const current = result.get(name) || { name };
-      current.regularPayout = money(row[16]);
-      current.regularGrossDeduction = parseRegularGrossDeduction(clean(row[9]));
+      const compensation = readRegularCompensationCarryForward(ledgerRows, row);
+      current.regularPayout = compensation.regularPayout;
+      current.regularGrossDeduction = compensation.regularGrossDeduction;
       result.set(name, current);
     }
 
@@ -551,15 +556,15 @@ function normalizeStatementRow(raw, previousInfo) {
   const info = previousInfo.get(raw.name) || { name: raw.name };
   const regularGrossDeduction = info.regularPayout ? info.regularGrossDeduction || 0 : 0;
   const lessonPay = raw.lessonPay || 0;
-  const adjustmentAmount = regularGrossDeduction ? lessonPay - regularGrossDeduction : lessonPay;
+  const compensation = calculateSplitCompensation({
+    groupPay: raw.groupPay,
+    privatePay: raw.privatePay,
+    lessonPay,
+    regularPayout: info.regularPayout || 0,
+    regularGrossDeduction,
+  });
+  const { adjustmentAmount } = compensation;
   const adjustmentText = buildAdjustmentText({ regularGrossDeduction, lessonPay });
-  const pretaxPay = raw.groupPay + raw.privatePay + adjustmentAmount;
-  const incomeTax = pretaxPay > 0 ? pretaxPay * 0.03 : 0;
-  const localTax = pretaxPay > 0 ? pretaxPay * 0.003 : 0;
-  const deductionTotal = incomeTax + localTax;
-  const freelancerPayout = pretaxPay - deductionTotal;
-  const regularPayout = info.regularPayout || 0;
-  const combinedPayout = regularPayout ? freelancerPayout + regularPayout : 0;
 
   return {
     ...raw,
@@ -571,14 +576,7 @@ function normalizeStatementRow(raw, previousInfo) {
     accountHolder: info.accountHolder || raw.name,
     adjustmentAmount,
     adjustmentText,
-    pretaxPay,
-    deductionTotal,
-    incomeTax,
-    localTax,
-    freelancerPayout,
-    combinedPayout,
-    regularPayout,
-    finalPayout: combinedPayout || freelancerPayout,
+    ...compensation,
   };
 }
 
@@ -674,11 +672,6 @@ function buildSimpleStatementSheetRows(instructors) {
       ["", "", "", "", "", "", "", ""],
     ]),
   ];
-}
-
-function parseRegularGrossDeduction(text) {
-  const matched = String(text || "").match(/정규직급여\s*\(([-,\d]+)\)/);
-  return matched ? Math.abs(money(matched[1])) : 0;
 }
 
 function buildAdjustmentText({ regularGrossDeduction, lessonPay }) {
