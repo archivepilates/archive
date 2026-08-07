@@ -51,6 +51,12 @@
         ]
       },
       {
+        "source": "/video-guide{,/**}",
+        "headers": [
+          { "key": "Cache-Control", "value": "no-cache, no-store, must-revalidate" }
+        ]
+      },
+      {
         "source": "/404.html",
         "headers": [
           { "key": "Cache-Control", "value": "no-cache, no-store, must-revalidate" }
@@ -127,11 +133,15 @@
       },
       {
         "source": "/my-classroom",
-        "destination": "https://archivepilates.imweb.me/my-page",
+        "destination": "https://archivepilates.imweb.me/48",
         "type": 302
       }
     ],
     "rewrites": [
+      {
+        "source": "/video-guide",
+        "destination": "/video-guide/index.html"
+      },
       {
         "source": "/teams",
         "destination": "/teams/index.html"
