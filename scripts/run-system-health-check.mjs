@@ -6,6 +6,7 @@ import os from "node:os";
 import path from "node:path";
 import { recordAutomationStatus } from "./lib/archive-core-ops-logging.mjs";
 import { shouldApplyOperationalDataPurge } from "./lib/operational-data-retention-policy.mjs";
+import { isActionableAlimtalkFailure } from "./lib/system-health-alimtalk.mjs";
 import {
   isExcludedPrivateBooking,
   isPrivateBooking,
@@ -612,7 +613,9 @@ async function checkPrivateLessonConsistency() {
 
 async function checkAlimtalk() {
   const active = await loadStatusDocs("alimtalkCandidates", ["queued", "processing"], 200).catch(() => []);
-  const failedAll = await loadStatusDocs("alimtalkSends", ["failed", "error"], 80).catch(() => []);
+  const failedSample = await loadStatusDocs("alimtalkSends", ["failed", "error"], 80).catch(() => []);
+  const failedAll = failedSample.filter((doc) => isActionableAlimtalkFailure(doc.data));
+  const resolvedFailureSample = failedSample.length - failedAll.length;
   const failed = recentOrUndatedDocs(failedAll, RECENT_FAILURE_MINUTES);
   const missingDedupe = active.filter((doc) => !doc.data?.dedupeKey && !doc.data?.sourceActionKey);
   checked.push({
@@ -620,6 +623,8 @@ async function checkAlimtalk() {
     active: active.length,
     failedRecent: failed.length,
     failedTotalSample: failedAll.length,
+    rawFailureSample: failedSample.length,
+    resolvedFailureSample,
     missingDedupe: missingDedupe.length,
   });
 

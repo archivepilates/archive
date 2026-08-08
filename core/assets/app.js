@@ -10,6 +10,7 @@ const ALIMTALK_TEMPLATE_LABELS_BY_CODE = Object.freeze({
   KA01TP260514153314927WH270IppWQS: "프라이빗 기간권 잔여기간 안내 v1",
   KA01TP260514153632171uiWXYoeiOLS: "프라이빗 사전설문 안내 v1 (미사용)",
   KA01TP260519093416836f1EHZYJ00uM: "담당강사 사전설문 제출 안내 v1",
+  KA01TP260808034937468FF5LLYH823H: "담당강사 사전설문 제출 안내 v2",
   KA01TP2605210729364330NbhZVAu9zA: "그룹 첫 수업 사전확인 안내 v1",
   KA01TP260521120040094XcMvYgFTryj: "강사레슨 수업자료 안내 v1",
   KA01TP260522041704111wu4Z0cu9cgl: "첫 그룹수업 회원 확인 v1",

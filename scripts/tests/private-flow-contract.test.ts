@@ -23,6 +23,7 @@ import {
 import {
   alimtalkTemplateTargetRule,
   solapiButtonUrlLengthIssue,
+  surveyDetailButtonUrlLengthIssue,
 } from "../../firebase/kangsain-functions/functions/src/alimtalk/templateTargetRules";
 import {
   alimtalkImageTemplateContractIssue,
@@ -31,6 +32,7 @@ import {
 import {
   LEGACY_PRIVATE_SURVEY_ALIMTALK_TEMPLATE_CODE,
   NATIVE_PRIVATE_SURVEY_ALIMTALK_IMAGE_ID,
+  NATIVE_STAFF_PRIVATE_SURVEY_ALIMTALK_TEMPLATE_CODE,
   RECOMMENDED_MEAL_ALIMTALK_CHANNEL_ID,
   RECOMMENDED_MEAL_ALIMTALK_IMAGE_ID,
   RECOMMENDED_MEAL_ALIMTALK_TEMPLATE_CODE,
@@ -326,6 +328,28 @@ test("private survey v2 validates only the approved short-link button", () => {
       },
     }),
     "",
+  );
+});
+
+test("staff private survey v2 uses a short link even when the legacy detail URL exceeds 100 characters", () => {
+  assert.equal(NATIVE_STAFF_PRIVATE_SURVEY_ALIMTALK_TEMPLATE_CODE, "KA01TP260808034937468FF5LLYH823H");
+  assert.equal(
+    surveyDetailButtonUrlLengthIssue(
+      "psr-bd6de316d12a",
+      "12345678901234567890123456789012",
+      "sv-ae419981b162",
+      "short_link",
+    ),
+    "",
+  );
+  assert.match(
+    surveyDetailButtonUrlLengthIssue(
+      "psr-bd6de316d12a",
+      "12345678901234567890123456789012",
+      "sv-ae419981b162",
+      "legacy_direct",
+    ),
+    /100자 이하/,
   );
 });
 

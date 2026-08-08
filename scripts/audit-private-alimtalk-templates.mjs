@@ -19,9 +19,15 @@ const templates = [
   },
   {
     key: "staff_intake_summary",
-    id: "KA01TP260519093416836f1EHZYJ00uM",
-    requiredButtonFragments: ["#{설문ID}", "#{접근토큰}"],
-    requiredVariables: ["#{강사명}", "#{회원명}", "#{수업일시}", "#{설문ID}", "#{접근토큰}"],
+    id:
+      process.env.STAFF_PRIVATE_SURVEY_ALIMTALK_TEMPLATE_ID ||
+      "KA01TP260808034937468FF5LLYH823H",
+    requiredButtonFragments: ["https://in.archivepilates.com/s/#{링크ID}/"],
+    forbiddenButtonFragments: ["#{설문ID}", "#{접근토큰}"],
+    requiredVariables: ["#{강사명}", "#{회원명}", "#{수업일시}", "#{링크ID}"],
+    expectedMessageType: "BA",
+    expectedEmphasizeType: "IMAGE",
+    expectedImageId: "ST01FZ260519100248889zeDKvUsc33O",
   },
   {
     key: "staff_private_chart",
@@ -93,6 +99,11 @@ for (const expected of templates) {
   for (const fragment of expected.requiredButtonFragments) {
     if (!buttonUrls.some((url) => url.includes(fragment))) {
       issues.push(`button URL is missing ${fragment}`);
+    }
+  }
+  for (const fragment of expected.forbiddenButtonFragments || []) {
+    if (buttonUrls.some((url) => url.includes(fragment))) {
+      issues.push(`button URL still contains ${fragment}`);
     }
   }
   const contractText = [String(template.content || ""), ...buttonUrls].join("\n");

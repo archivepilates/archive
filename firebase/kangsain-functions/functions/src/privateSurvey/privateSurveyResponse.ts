@@ -1696,6 +1696,7 @@ async function deliverStaffSurveyAlimtalk(
       responseId: doc.responseId,
       accessToken,
       templateId,
+      buttonUrlMode: doc.surveyType === "group" ? "legacy_direct" : "short_link",
     });
     await sendRef.set(
       {
@@ -1893,6 +1894,7 @@ async function sendStaffPrivateSurveyAlimtalk(input: {
   responseId: string;
   accessToken: string;
   templateId: string;
+  buttonUrlMode: "short_link" | "legacy_direct";
 }): Promise<{ messageId: string; variables: Record<string, string> }> {
   const detailUrl = detailUrlFor(input.responseId, input.accessToken);
   const shortLink = await ensureShortLink({
@@ -1900,15 +1902,23 @@ async function sendStaffPrivateSurveyAlimtalk(input: {
     targetUrl: detailUrl,
     sourceId: input.responseId,
   });
-  const variables = {
+  const variables: Record<string, string> = {
     "#{강사명}": input.staffName,
     "#{회원명}": input.memberName,
     "#{수업일시}": input.lessonTime,
-    "#{설문ID}": input.responseId,
-    "#{접근토큰}": input.accessToken,
-    "#{링크ID}": shortLink.linkId,
+    ...(input.buttonUrlMode === "legacy_direct"
+      ? {
+          "#{설문ID}": input.responseId,
+          "#{접근토큰}": input.accessToken,
+        }
+      : { "#{링크ID}": shortLink.linkId }),
   };
-  const buttonUrlIssue = surveyDetailButtonUrlLengthIssue(input.responseId, input.accessToken, shortLink.linkId);
+  const buttonUrlIssue = surveyDetailButtonUrlLengthIssue(
+    input.responseId,
+    input.accessToken,
+    shortLink.linkId,
+    input.buttonUrlMode,
+  );
   if (buttonUrlIssue) throw new Error(buttonUrlIssue);
   const body = {
     messages: [

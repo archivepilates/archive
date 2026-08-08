@@ -504,20 +504,25 @@ export function surveyDetailButtonUrlLengthIssue(
   responseId: string,
   accessToken: string,
   shortLinkId = "sv-000000000000",
+  mode: "short_link" | "legacy_direct" = "short_link",
 ): string {
   return solapiButtonUrlLengthIssue({
-    rules: [
-      {
-        label: "설문 확인하기 버튼",
-        template: SURVEY_DETAIL_BUTTON_URL_TEMPLATE,
-        maxLength: SOLAPI_BUTTON_URL_MAX_LENGTH,
-      },
-      {
-        label: "설문 확인하기 버튼",
-        template: SHORT_LINK_BUTTON_URL_TEMPLATE,
-        maxLength: SOLAPI_BUTTON_URL_MAX_LENGTH,
-      },
-    ],
+    rules:
+      mode === "legacy_direct"
+        ? [
+            {
+              label: "설문 확인하기 버튼",
+              template: SURVEY_DETAIL_BUTTON_URL_TEMPLATE,
+              maxLength: SOLAPI_BUTTON_URL_MAX_LENGTH,
+            },
+          ]
+        : [
+            {
+              label: "설문 확인하기 버튼",
+              template: SHORT_LINK_BUTTON_URL_TEMPLATE,
+              maxLength: SOLAPI_BUTTON_URL_MAX_LENGTH,
+            },
+          ],
     variables: {
       "#{설문ID}": responseId,
       "#{접근토큰}": accessToken,
