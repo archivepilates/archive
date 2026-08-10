@@ -9,7 +9,10 @@ import { nowTimestamp } from "../utils/date";
 import { errorMessage } from "../utils/errors";
 import { nextRetryAt } from "../queue/retryPolicy";
 import { assertSingleExistingContact, chooseRunnableContactJobs } from "./contactJobSelection";
-import { resolveQueuedMemberContactDisplayName } from "./memberContactDisplayName";
+import {
+  buildInstructorLessonContactGroupNames,
+  resolveQueuedMemberContactDisplayName,
+} from "./memberContactDisplayName";
 import {
   type ActiveStaffContactIndex,
   buildActiveStaffContactIndex,
@@ -153,12 +156,13 @@ async function processJob(
       await finishJob(job, { action: "skipped", resourceName: existing[0]?.resourceName });
       return;
     }
-    const effectiveDisplayName = await latestMemberContactDisplayName(job);
+    const effectivePolicy = await latestMemberContactPolicy(job);
     const result = await client.upsertByPhone({
       existing,
-      name: effectiveDisplayName,
+      name: effectivePolicy.contactDisplayName,
       phone: job.memberPhone,
       memo: job.contactMemo,
+      groupNames: effectivePolicy.contactGroupNames,
     });
     await finishJob(job, result);
   } catch (err) {
@@ -166,32 +170,53 @@ async function processJob(
   }
 }
 
-async function latestMemberContactDisplayName(job: ContactSyncJobDoc): Promise<string> {
+async function latestMemberContactPolicy(job: ContactSyncJobDoc): Promise<{
+  contactDisplayName: string;
+  contactGroupNames: string[];
+}> {
   const queuedDisplayName = job.contactDisplayName || job.memberName;
-  if (!isMemberProfileContactJob(job.sourceReason) || !job.memberId) return queuedDisplayName;
+  const queuedGroupNames = job.contactGroupNames || [];
+  if (!isMemberProfileContactJob(job.sourceReason) || !job.memberId) {
+    return { contactDisplayName: queuedDisplayName, contactGroupNames: queuedGroupNames };
+  }
   const profile = (await refs.memberProfile(job.memberId).get()).data();
-  if (!profile) return queuedDisplayName;
+  if (!profile) return { contactDisplayName: queuedDisplayName, contactGroupNames: queuedGroupNames };
   const effectiveDisplayName = resolveQueuedMemberContactDisplayName(
     queuedDisplayName,
     profile.name || job.memberName,
     profile.memberGrade || "",
+    profile.registeredAt || null,
   );
-  if (effectiveDisplayName === queuedDisplayName) return effectiveDisplayName;
+  const effectiveGroupNames = profile.instructorLessonDates?.length
+    ? buildInstructorLessonContactGroupNames(profile.instructorLessonDates)
+    : queuedGroupNames;
+  if (effectiveDisplayName === queuedDisplayName && sameStrings(effectiveGroupNames, queuedGroupNames)) {
+    return { contactDisplayName: effectiveDisplayName, contactGroupNames: effectiveGroupNames };
+  }
   await Promise.all([
     refs.contactSyncJob(job.jobId).set(
-      { contactDisplayName: effectiveDisplayName, updatedAt: nowTimestamp() },
+      {
+        contactDisplayName: effectiveDisplayName,
+        contactGroupNames: effectiveGroupNames,
+        updatedAt: nowTimestamp(),
+      },
       { merge: true },
     ),
     refs.memberContactIndexDoc(job.memberId).set(
       {
         contactDisplayName: effectiveDisplayName,
         memberGrade: profile.memberGrade || "",
+        contactGroupNames: effectiveGroupNames,
         updatedAt: nowTimestamp(),
       },
       { merge: true },
     ),
   ]);
-  return effectiveDisplayName;
+  return { contactDisplayName: effectiveDisplayName, contactGroupNames: effectiveGroupNames };
+}
+
+function sameStrings(left: string[], right: string[]): boolean {
+  return JSON.stringify([...left].sort()) === JSON.stringify([...right].sort());
 }
 
 function isMemberProfileContactJob(sourceReason: ContactSyncJobDoc["sourceReason"]): boolean {

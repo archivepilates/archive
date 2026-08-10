@@ -8,8 +8,10 @@ export function formatMemberContactDisplayName(
   memberGrade: string,
 ): string {
   const normalizedName = name.trim();
-  if (isInstructorMemberGrade(memberGrade)) return `${normalizedName} 강사회원`;
   const compactRegisteredAt = registeredAt ? compactDateKst(registeredAt.toDate()) : "";
+  if (isInstructorMemberGrade(memberGrade)) {
+    return [normalizedName, "강사회원", compactRegisteredAt].filter(Boolean).join(" ");
+  }
   return [normalizedName, "회원", compactRegisteredAt].filter(Boolean).join(" ");
 }
 
@@ -21,9 +23,16 @@ export function resolveQueuedMemberContactDisplayName(
   queuedDisplayName: string,
   memberName: string,
   memberGrade: string,
+  registeredAt: Timestamp | null,
 ): string {
   if (!isInstructorMemberGrade(memberGrade)) return queuedDisplayName.trim() || memberName.trim();
-  return `${memberName.trim()} 강사회원`;
+  return formatMemberContactDisplayName(memberName, registeredAt, memberGrade);
+}
+
+export function buildInstructorLessonContactGroupNames(dates: string[]): string[] {
+  const normalizedDates = [...new Set(dates.map(normalizeIsoDate).filter(Boolean))].sort();
+  if (!normalizedDates.length) return [];
+  return ["강사레슨", ...normalizedDates.map((date) => `강사레슨 ${date}`)];
 }
 
 export function isInstructorMemberGrade(value: string): boolean {
@@ -42,4 +51,13 @@ function compactDateKst(date: Date): string {
     day: "2-digit",
   });
   return formatter.format(date).replace(/^20/, "").replaceAll("-", "");
+}
+
+function normalizeIsoDate(value: string): string {
+  const match = String(value || "")
+    .trim()
+    .replaceAll(".", "-")
+    .match(/^(20\d{2})-(\d{1,2})-(\d{1,2})/);
+  if (!match) return "";
+  return `${match[1]}-${match[2].padStart(2, "0")}-${match[3].padStart(2, "0")}`;
 }

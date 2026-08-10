@@ -9,7 +9,9 @@ import { addDays, nowTimestamp, parseStudioMateDateTime, todayKst } from "../uti
 import { stableHash } from "../utils/hash";
 import { buildActiveStaffContactIndex, isProtectedStaffContact } from "./protectedContactRules";
 import {
+  buildInstructorLessonContactGroupNames,
   formatMemberContactDisplayName,
+  isInstructorMemberGrade,
   normalizeMemberGrade,
   resolveMemberGrade,
 } from "./memberContactDisplayName";
@@ -80,6 +82,10 @@ export async function syncStudioMateMemberProfiles(input: {
           ),
         );
         const memberGrade = resolveMemberGrade(sourceMemberGrade, previousProfile?.memberGrade || "");
+        const instructorLessonDates = isInstructorMemberGrade(memberGrade)
+          ? mergeInstructorLessonDates(previousProfile?.instructorLessonDates || [], ticketSummary.activeTickets || [])
+          : [];
+        const contactGroupNames = buildInstructorLessonContactGroupNames(instructorLessonDates);
         const doc: MemberProfileDoc = {
           memberId: member.memberId,
           studioId: input.studioId,
@@ -91,6 +97,7 @@ export async function syncStudioMateMemberProfiles(input: {
           birthDate: stringValue(firstValue(data, ["birth", "birthday", "birth_date", "birthDate"])),
           gender: stringValue(firstValue(data, ["gender", "sex"])),
           memberGrade,
+          instructorLessonDates,
           memoPreview: contactMemo.slice(0, 120),
           activeTicketNames: ticketSummary.activeTicketNames,
           activeTicketCount: ticketSummary.activeTicketCount,
@@ -120,6 +127,7 @@ export async function syncStudioMateMemberProfiles(input: {
               contactDisplayName,
               contactMemo,
               memberGrade,
+              contactGroupNames,
               phone,
               phoneLast4: phone.slice(-4),
               registeredAt,
@@ -149,6 +157,7 @@ export async function syncStudioMateMemberProfiles(input: {
             phone,
             registeredAt: registeredAt?.toMillis() || null,
             activeTicketNames: ticketSummary.activeTicketNames,
+            contactGroupNames,
           });
           const shouldQueueHomeSync =
             !previousContact ||
@@ -169,6 +178,7 @@ export async function syncStudioMateMemberProfiles(input: {
               contactDisplayName,
               contactMemo,
               memberGrade,
+              contactGroupNames,
               phone,
               phoneLast4: phone.slice(-4),
               registeredAt,
@@ -194,6 +204,7 @@ export async function syncStudioMateMemberProfiles(input: {
               memberName: doc.name,
               contactDisplayName,
               contactMemo,
+              contactGroupNames,
               memberPhone: phone,
               target: "home_archivepilates",
               status: "pending",
@@ -220,6 +231,26 @@ export async function syncStudioMateMemberProfiles(input: {
 
   logger.info("syncStudioMateMemberProfiles completed", { studioId: input.studioId, members: members.length });
   return { members: members.length };
+}
+
+function mergeInstructorLessonDates(
+  previousDates: string[],
+  tickets: NonNullable<MemberProfileDoc["activeTickets"]>,
+): string[] {
+  const nextDates = tickets
+    .filter((ticket) => /강사\s*레슨/i.test(ticket.name))
+    .map((ticket) => (ticket.availableFrom ? kstDate(ticket.availableFrom.toDate()) : ""))
+    .filter(Boolean);
+  return [...new Set([...previousDates, ...nextDates])].sort();
+}
+
+function kstDate(date: Date): string {
+  return new Intl.DateTimeFormat("en-CA", {
+    timeZone: "Asia/Seoul",
+    year: "numeric",
+    month: "2-digit",
+    day: "2-digit",
+  }).format(date);
 }
 
 function buildTicketSummaryByMember(bookings: BookingDoc[]): Map<

@@ -7,9 +7,11 @@ import { createRequire } from "node:module";
 import { qualityIssuesFromSummary, recordDataQualityIssues, recordSourceImport } from "./lib/archive-core-ops-logging.mjs";
 import { cleanupImportedSourceFiles } from "./lib/imported-source-retention.mjs";
 import {
+  buildInstructorLessonContactGroupNames,
   formatExcelMemberContactDisplayName,
   INSTRUCTOR_MEMBER_GRADE,
   normalizeMemberGrade,
+  resolveInstructorLessonDates,
   resolveMemberGrade,
 } from "./lib/member-contact-display-name-policy.mjs";
 
@@ -390,6 +392,11 @@ function buildPlans(groups, existingProfiles, existingContacts, activeStaffConta
       activeTickets,
       matchedProfile?.data?.activeTickets || [],
     );
+    const instructorLessonDates =
+      memberGrade === INSTRUCTOR_MEMBER_GRADE
+        ? resolveInstructorLessonDates(group.rows, matchedProfile?.data?.instructorLessonDates || [])
+        : [];
+    const contactGroupNames = buildInstructorLessonContactGroupNames(instructorLessonDates);
     if (!activeTickets.length) skippedNoActiveTicket += 1;
     const profileDoc = {
       memberId,
@@ -402,6 +409,7 @@ function buildPlans(groups, existingProfiles, existingContacts, activeStaffConta
       birthDate,
       gender,
       memberGrade,
+      instructorLessonDates,
       memoPreview,
       activeTicketNames: activeTicketsWithPreservedPayment.map((ticket) => ticket.name),
       activeTicketCount: activeTicketsWithPreservedPayment.length,
@@ -421,7 +429,8 @@ function buildPlans(groups, existingProfiles, existingContacts, activeStaffConta
     const writeProfile =
       !matchedProfile ||
       matchedProfile.data.emergencyImportHash !== profileDoc.emergencyImportHash ||
-      normalizeMemberGrade(matchedProfile.data.memberGrade || "") !== memberGrade;
+      normalizeMemberGrade(matchedProfile.data.memberGrade || "") !== memberGrade ||
+      JSON.stringify(matchedProfile.data.instructorLessonDates || []) !== JSON.stringify(instructorLessonDates);
     const contactDisplayName = formatExcelMemberContactDisplayName({
       name: group.name,
       compactRegisteredAt: compactDate(registeredAt),
@@ -435,6 +444,7 @@ function buildPlans(groups, existingProfiles, existingContacts, activeStaffConta
       phone: group.phone,
       registeredAt: registeredAt?.toMillis() || null,
       activeTicketNames: profileDoc.activeTicketNames,
+      contactGroupNames,
     });
     const previousContact = existingContacts.get(memberId);
     const shouldQueueHomeSync =
@@ -459,6 +469,7 @@ function buildPlans(groups, existingProfiles, existingContacts, activeStaffConta
       contactDisplayName,
       contactMemo,
       memberGrade,
+      contactGroupNames,
       phone: group.phone,
       phoneLast4: group.phone.slice(-4),
       registeredAt,
@@ -487,6 +498,7 @@ function buildPlans(groups, existingProfiles, existingContacts, activeStaffConta
           memberName: group.name,
           contactDisplayName,
           contactMemo,
+          contactGroupNames,
           memberPhone: group.phone,
           target: "home_archivepilates",
           status: "pending",

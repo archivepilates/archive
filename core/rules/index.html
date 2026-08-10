@@ -210,7 +210,8 @@
                 <li>Google Contacts는 원천이 아니라 전화 발신·검색을 위한 보조 저장소입니다.</li>
                 <li>연락처는 memberContactIndex와 contactSyncJobs 기준으로 큐를 만들고, dry-run 후 반영합니다.</li>
                 <li>현재 근무 중인 강사·스텝 연락처는 <strong>이름 아카이브</strong>로 저장합니다.</li>
-                <li>현재 근무 스텝이 아니면서 StudioMate 등급이 강사회원인 연락처는 <strong>이름 강사회원</strong>으로 저장합니다.</li>
+                <li>현재 근무 스텝이 아니면서 StudioMate 등급이 강사회원인 연락처는 <strong>이름 강사회원 가입일</strong>로 저장합니다.</li>
+                <li>강사회원의 강사레슨 수강권 시작일은 <strong>강사레슨</strong>과 <strong>강사레슨 YYYY-MM-DD</strong> Google 연락처 태그로 저장합니다.</li>
                 <li>연락처 작업 실행 직전에 최신 회원등급을 다시 확인해 오래된 신규회원 작업이 강사회원 이름을 덮지 못하게 합니다.</li>
                 <li>같은 전화번호가 회원과 현재 근무 강사에 함께 등록되면 회원카드는 유지하고 Google 연락처 이름만 강사명을 우선합니다.</li>
                 <li>강사 우선 여부는 active staffs의 전화번호로 판단하며, 전화번호가 없는 경우에만 이름을 보조 기준으로 사용합니다.</li>

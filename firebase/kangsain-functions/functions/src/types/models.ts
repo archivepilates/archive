@@ -301,6 +301,7 @@ export interface MemberProfileDoc {
   birthDate?: string;
   gender?: string;
   memberGrade?: string;
+  instructorLessonDates?: string[];
   memoPreview?: string;
   activeTicketNames?: string[];
   activeTicketCount?: number;
@@ -502,6 +503,7 @@ export interface MemberContactIndexDoc {
   contactDisplayName?: string;
   contactMemo?: string;
   memberGrade?: string;
+  contactGroupNames?: string[];
   phone: string;
   phoneLast4: string;
   registeredAt: Timestamp | null;
@@ -946,6 +948,7 @@ export interface ContactSyncJobDoc {
   memberName: string;
   contactDisplayName?: string;
   contactMemo?: string;
+  contactGroupNames?: string[];
   memberPhone: string;
   target: ContactSyncTarget;
   status: QueueStatus;

@@ -14,12 +14,15 @@ import {
 } from "../../firebase/kangsain-functions/functions/src/sync/protectedContactRules";
 import { formatStaffContactDisplayName } from "../../firebase/kangsain-functions/functions/src/sync/queueStaffContactSync";
 import {
+  buildInstructorLessonContactGroupNames as buildRuntimeInstructorLessonContactGroupNames,
   formatMemberContactDisplayName,
   resolveMemberGrade as resolveRuntimeMemberGrade,
   resolveQueuedMemberContactDisplayName,
 } from "../../firebase/kangsain-functions/functions/src/sync/memberContactDisplayName";
 import {
+  buildInstructorLessonContactGroupNames,
   formatExcelMemberContactDisplayName,
+  resolveInstructorLessonDates,
   resolveMemberGrade,
 } from "../lib/member-contact-display-name-policy.mjs";
 
@@ -117,7 +120,7 @@ test("StudioMate instructor members use the instructor-member suffix", () => {
       memberGrade: "강사회원",
       activeStaff: false,
     }),
-    "테스트 회원 강사회원",
+    "테스트 회원 강사회원 260810",
   );
   assert.equal(resolveMemberGrade([{ 등급: "VIP" }, { 등급: "강사회원" }]), "강사회원");
 });
@@ -129,13 +132,26 @@ test("member sync preserves an existing instructor-member grade when the detail 
 
 test("a stale queued member name is upgraded from the latest instructor-member profile", () => {
   assert.equal(
-    resolveQueuedMemberContactDisplayName("김윤화 회원 260810", "김윤화", "강사회원"),
+    resolveQueuedMemberContactDisplayName("김윤화 회원 260810", "김윤화", "강사회원", null),
     "김윤화 강사회원",
   );
   assert.equal(
-    resolveQueuedMemberContactDisplayName("홍길동 회원 260810", "홍길동", "VIP"),
+    resolveQueuedMemberContactDisplayName("홍길동 회원 260810", "홍길동", "VIP", null),
     "홍길동 회원 260810",
   );
+});
+
+test("instructor lesson ticket dates become generic and dated Google contact tags", () => {
+  const dates = resolveInstructorLessonDates([
+    { 수강권명: "강사레슨 (2T)", 수강권시작일: "2026-08-30" },
+    { 수강권명: "일반 그룹 10회", 수강권시작일: "2026-09-01" },
+  ]);
+  assert.deepEqual(dates, ["2026-08-30"]);
+  assert.deepEqual(buildInstructorLessonContactGroupNames(dates), ["강사레슨", "강사레슨 2026-08-30"]);
+  assert.deepEqual(buildRuntimeInstructorLessonContactGroupNames(dates), [
+    "강사레슨",
+    "강사레슨 2026-08-30",
+  ]);
 });
 
 test("active staff precedence remains above instructor-member grade", () => {
@@ -225,6 +241,6 @@ test("member source paths preserve profiles and record protected jobs as skipped
     queueSource,
     /finishProtectedStaffJob[\s\S]*home_archivepilates: "skipped"/,
   );
-  assert.match(queueSource, /latestMemberContactDisplayName[\s\S]*profile\.memberGrade/);
+  assert.match(queueSource, /latestMemberContactPolicy[\s\S]*profile\.memberGrade/);
   assert.match(memberSyncSource, /resolveMemberGrade\(sourceMemberGrade, previousProfile\?\.memberGrade \|\| ""\)/);
 });

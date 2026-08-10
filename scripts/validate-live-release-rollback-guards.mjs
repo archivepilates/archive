@@ -25,8 +25,9 @@ const guardGroups = [
           "loadActiveStaffContactsByStudio",
           "finishProtectedStaffJob",
           "home_archivepilates: \"skipped\"",
-          "latestMemberContactDisplayName",
+          "latestMemberContactPolicy",
           "profile.memberGrade",
+          "groupNames: effectivePolicy.contactGroupNames",
         ],
       },
       {
@@ -34,6 +35,7 @@ const guardGroups = [
         markers: [
           "resolveMemberGrade(sourceMemberGrade, previousProfile?.memberGrade || \"\")",
           "formatMemberContactDisplayName(doc.name, registeredAt, memberGrade)",
+          "buildInstructorLessonContactGroupNames(instructorLessonDates)",
         ],
       },
       {
@@ -59,6 +61,8 @@ const guardGroups = [
           "formatExcelMemberContactDisplayName",
           "activeStaff: protectedStaffContact",
           "memberGrade",
+          "resolveInstructorLessonDates",
+          "contactGroupNames",
         ],
       },
       {
@@ -66,7 +70,17 @@ const guardGroups = [
         markers: [
           "if (activeStaff) return `${normalizedName} 아카이브`",
           "INSTRUCTOR_MEMBER_GRADE = \"강사회원\"",
-          "return `${normalizedName} 강사회원`",
+          "[normalizedName, \"강사회원\", compactRegisteredAt]",
+          "`강사레슨 ${date}`",
+        ],
+      },
+      {
+        file: "firebase/kangsain-functions/functions/src/google/peopleClient.ts",
+        markers: [
+          "memberships,metadata",
+          "contactGroupsByName",
+          "resourceNamesToAdd",
+          "contactGroups",
         ],
       },
       {
@@ -82,6 +96,7 @@ const guardGroups = [
         markers: [
           "회원카드는 유지하고 Google 연락처 이름만 강사명을 우선합니다.",
           "active staffs의 전화번호로 판단",
+          "강사레슨 YYYY-MM-DD",
         ],
       },
     ],
