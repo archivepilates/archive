@@ -9,6 +9,7 @@ import { nowTimestamp } from "../utils/date";
 import { errorMessage } from "../utils/errors";
 import { nextRetryAt } from "../queue/retryPolicy";
 import { assertSingleExistingContact, chooseRunnableContactJobs } from "./contactJobSelection";
+import { resolveQueuedMemberContactDisplayName } from "./memberContactDisplayName";
 import {
   type ActiveStaffContactIndex,
   buildActiveStaffContactIndex,
@@ -152,9 +153,10 @@ async function processJob(
       await finishJob(job, { action: "skipped", resourceName: existing[0]?.resourceName });
       return;
     }
+    const effectiveDisplayName = await latestMemberContactDisplayName(job);
     const result = await client.upsertByPhone({
       existing,
-      name: job.contactDisplayName || job.memberName,
+      name: effectiveDisplayName,
       phone: job.memberPhone,
       memo: job.contactMemo,
     });
@@ -162,6 +164,40 @@ async function processJob(
   } catch (err) {
     await failJob(job, err);
   }
+}
+
+async function latestMemberContactDisplayName(job: ContactSyncJobDoc): Promise<string> {
+  const queuedDisplayName = job.contactDisplayName || job.memberName;
+  if (!isMemberProfileContactJob(job.sourceReason) || !job.memberId) return queuedDisplayName;
+  const profile = (await refs.memberProfile(job.memberId).get()).data();
+  if (!profile) return queuedDisplayName;
+  const effectiveDisplayName = resolveQueuedMemberContactDisplayName(
+    queuedDisplayName,
+    profile.name || job.memberName,
+    profile.memberGrade || "",
+  );
+  if (effectiveDisplayName === queuedDisplayName) return effectiveDisplayName;
+  await Promise.all([
+    refs.contactSyncJob(job.jobId).set(
+      { contactDisplayName: effectiveDisplayName, updatedAt: nowTimestamp() },
+      { merge: true },
+    ),
+    refs.memberContactIndexDoc(job.memberId).set(
+      {
+        contactDisplayName: effectiveDisplayName,
+        memberGrade: profile.memberGrade || "",
+        updatedAt: nowTimestamp(),
+      },
+      { merge: true },
+    ),
+  ]);
+  return effectiveDisplayName;
+}
+
+function isMemberProfileContactJob(sourceReason: ContactSyncJobDoc["sourceReason"]): boolean {
+  return ["member_profile_refresh", "notice_member_signup", "notice_ticket_update", "manual_resync"].includes(
+    sourceReason,
+  );
 }
 
 async function finishProtectedStaffJob(job: ContactSyncJobDoc, resourceName?: string): Promise<void> {

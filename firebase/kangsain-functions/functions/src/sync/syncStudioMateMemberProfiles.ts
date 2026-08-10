@@ -8,7 +8,11 @@ import { StudioMateClient } from "../studiomate/studiomateClient";
 import { addDays, nowTimestamp, parseStudioMateDateTime, todayKst } from "../utils/date";
 import { stableHash } from "../utils/hash";
 import { buildActiveStaffContactIndex, isProtectedStaffContact } from "./protectedContactRules";
-import { formatMemberContactDisplayName, normalizeMemberGrade } from "./memberContactDisplayName";
+import {
+  formatMemberContactDisplayName,
+  normalizeMemberGrade,
+  resolveMemberGrade,
+} from "./memberContactDisplayName";
 
 export async function syncStudioMateMemberProfiles(input: {
   studioId: string;
@@ -58,7 +62,11 @@ export async function syncStudioMateMemberProfiles(input: {
         const contactMemo = cleanContactMemo(
           firstValue(data, ["memo", "note", "notes", "member_memo", "memberMemo", "description", "remark", "remarks"]),
         );
-        const memberGrade = normalizeMemberGrade(
+        const [previousProfile, previousContact] = await Promise.all([
+          refs.memberProfile(member.memberId).get().then((snap) => snap.data()),
+          refs.memberContactIndexDoc(member.memberId).get().then((snap) => snap.data()),
+        ]);
+        const sourceMemberGrade = normalizeMemberGrade(
           stringValue(
             firstValue(data, [
               "grade",
@@ -71,6 +79,7 @@ export async function syncStudioMateMemberProfiles(input: {
             ]),
           ),
         );
+        const memberGrade = resolveMemberGrade(sourceMemberGrade, previousProfile?.memberGrade || "");
         const doc: MemberProfileDoc = {
           memberId: member.memberId,
           studioId: input.studioId,
@@ -103,7 +112,6 @@ export async function syncStudioMateMemberProfiles(input: {
             phone,
             activeStaffContact: true,
           });
-          const previousContact = (await refs.memberContactIndexDoc(member.memberId).get()).data();
           await refs.memberContactIndexDoc(member.memberId).set(
             {
               memberId: member.memberId,
@@ -142,7 +150,6 @@ export async function syncStudioMateMemberProfiles(input: {
             registeredAt: registeredAt?.toMillis() || null,
             activeTicketNames: ticketSummary.activeTicketNames,
           });
-          const previousContact = (await refs.memberContactIndexDoc(member.memberId).get()).data();
           const shouldQueueHomeSync =
             !previousContact ||
             previousContact.contactHash !== contactHash ||

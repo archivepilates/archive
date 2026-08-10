@@ -13,7 +13,11 @@ import {
   shouldSkipProtectedStaffContactJob,
 } from "../../firebase/kangsain-functions/functions/src/sync/protectedContactRules";
 import { formatStaffContactDisplayName } from "../../firebase/kangsain-functions/functions/src/sync/queueStaffContactSync";
-import { formatMemberContactDisplayName } from "../../firebase/kangsain-functions/functions/src/sync/memberContactDisplayName";
+import {
+  formatMemberContactDisplayName,
+  resolveMemberGrade as resolveRuntimeMemberGrade,
+  resolveQueuedMemberContactDisplayName,
+} from "../../firebase/kangsain-functions/functions/src/sync/memberContactDisplayName";
 import {
   formatExcelMemberContactDisplayName,
   resolveMemberGrade,
@@ -118,6 +122,22 @@ test("StudioMate instructor members use the instructor-member suffix", () => {
   assert.equal(resolveMemberGrade([{ 등급: "VIP" }, { 등급: "강사회원" }]), "강사회원");
 });
 
+test("member sync preserves an existing instructor-member grade when the detail API omits it", () => {
+  assert.equal(resolveRuntimeMemberGrade("", "강사회원"), "강사회원");
+  assert.equal(resolveRuntimeMemberGrade("VIP", "강사회원"), "VIP");
+});
+
+test("a stale queued member name is upgraded from the latest instructor-member profile", () => {
+  assert.equal(
+    resolveQueuedMemberContactDisplayName("김윤화 회원 260810", "김윤화", "강사회원"),
+    "김윤화 강사회원",
+  );
+  assert.equal(
+    resolveQueuedMemberContactDisplayName("홍길동 회원 260810", "홍길동", "VIP"),
+    "홍길동 회원 260810",
+  );
+});
+
 test("active staff precedence remains above instructor-member grade", () => {
   assert.equal(
     formatExcelMemberContactDisplayName({
@@ -205,4 +225,6 @@ test("member source paths preserve profiles and record protected jobs as skipped
     queueSource,
     /finishProtectedStaffJob[\s\S]*home_archivepilates: "skipped"/,
   );
+  assert.match(queueSource, /latestMemberContactDisplayName[\s\S]*profile\.memberGrade/);
+  assert.match(memberSyncSource, /resolveMemberGrade\(sourceMemberGrade, previousProfile\?\.memberGrade \|\| ""\)/);
 });

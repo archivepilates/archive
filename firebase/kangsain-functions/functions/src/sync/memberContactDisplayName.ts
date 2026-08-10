@@ -13,6 +13,19 @@ export function formatMemberContactDisplayName(
   return [normalizedName, "회원", compactRegisteredAt].filter(Boolean).join(" ");
 }
 
+export function resolveMemberGrade(sourceValue: string, previousValue: string): string {
+  return normalizeMemberGrade(sourceValue) || normalizeMemberGrade(previousValue);
+}
+
+export function resolveQueuedMemberContactDisplayName(
+  queuedDisplayName: string,
+  memberName: string,
+  memberGrade: string,
+): string {
+  if (!isInstructorMemberGrade(memberGrade)) return queuedDisplayName.trim() || memberName.trim();
+  return `${memberName.trim()} 강사회원`;
+}
+
 export function isInstructorMemberGrade(value: string): boolean {
   return normalizeMemberGrade(value) === INSTRUCTOR_MEMBER_GRADE;
 }

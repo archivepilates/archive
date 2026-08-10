@@ -25,6 +25,15 @@ const guardGroups = [
           "loadActiveStaffContactsByStudio",
           "finishProtectedStaffJob",
           "home_archivepilates: \"skipped\"",
+          "latestMemberContactDisplayName",
+          "profile.memberGrade",
+        ],
+      },
+      {
+        file: "firebase/kangsain-functions/functions/src/sync/syncStudioMateMemberProfiles.ts",
+        markers: [
+          "resolveMemberGrade(sourceMemberGrade, previousProfile?.memberGrade || \"\")",
+          "formatMemberContactDisplayName(doc.name, registeredAt, memberGrade)",
         ],
       },
       {
