@@ -9,9 +9,15 @@ import {
 import {
   buildActiveStaffContactIndex,
   isProtectedStaffContact,
+  shouldPreserveExistingContactName,
   shouldSkipProtectedStaffContactJob,
 } from "../../firebase/kangsain-functions/functions/src/sync/protectedContactRules";
 import { formatStaffContactDisplayName } from "../../firebase/kangsain-functions/functions/src/sync/queueStaffContactSync";
+import { formatMemberContactDisplayName } from "../../firebase/kangsain-functions/functions/src/sync/memberContactDisplayName";
+import {
+  formatExcelMemberContactDisplayName,
+  resolveMemberGrade,
+} from "../lib/member-contact-display-name-policy.mjs";
 
 const activeStaffContacts = buildActiveStaffContactIndex([
   {
@@ -96,6 +102,46 @@ test("member jobs are blocked but an explicit staff refresh is allowed", () => {
 test("active staff contacts use the ARCHIVE suffix regardless of staff role", () => {
   assert.equal(formatStaffContactDisplayName({ name: "테스트 강사" }), "테스트 강사 아카이브");
   assert.equal(formatStaffContactDisplayName({ name: "  테스트 스텝  " }), "테스트 스텝 아카이브");
+});
+
+test("StudioMate instructor members use the instructor-member suffix", () => {
+  assert.equal(formatMemberContactDisplayName("테스트 회원", null, "강사회원"), "테스트 회원 강사회원");
+  assert.equal(
+    formatExcelMemberContactDisplayName({
+      name: "테스트 회원",
+      compactRegisteredAt: "260810",
+      memberGrade: "강사회원",
+      activeStaff: false,
+    }),
+    "테스트 회원 강사회원",
+  );
+  assert.equal(resolveMemberGrade([{ 등급: "VIP" }, { 등급: "강사회원" }]), "강사회원");
+});
+
+test("active staff precedence remains above instructor-member grade", () => {
+  assert.equal(
+    formatExcelMemberContactDisplayName({
+      name: "테스트 강사",
+      compactRegisteredAt: "260810",
+      memberGrade: "강사회원",
+      activeStaff: true,
+    }),
+    "테스트 강사 아카이브",
+  );
+});
+
+test("ordinary member naming stays unchanged and instructor-member names are protected", () => {
+  assert.equal(formatMemberContactDisplayName("홍길동", null, "VIP"), "홍길동 회원");
+  assert.equal(
+    formatExcelMemberContactDisplayName({
+      name: "홍길동",
+      compactRegisteredAt: "260810",
+      memberGrade: "VIP",
+      activeStaff: false,
+    }),
+    "홍길동 회원 260810",
+  );
+  assert.equal(shouldPreserveExistingContactName("테스트 강사회원"), true);
 });
 
 test("a staff refresh wins when staff and member jobs share one phone", () => {

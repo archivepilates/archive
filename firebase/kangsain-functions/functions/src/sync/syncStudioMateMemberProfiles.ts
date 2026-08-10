@@ -8,6 +8,7 @@ import { StudioMateClient } from "../studiomate/studiomateClient";
 import { addDays, nowTimestamp, parseStudioMateDateTime, todayKst } from "../utils/date";
 import { stableHash } from "../utils/hash";
 import { buildActiveStaffContactIndex, isProtectedStaffContact } from "./protectedContactRules";
+import { formatMemberContactDisplayName, normalizeMemberGrade } from "./memberContactDisplayName";
 
 export async function syncStudioMateMemberProfiles(input: {
   studioId: string;
@@ -57,6 +58,19 @@ export async function syncStudioMateMemberProfiles(input: {
         const contactMemo = cleanContactMemo(
           firstValue(data, ["memo", "note", "notes", "member_memo", "memberMemo", "description", "remark", "remarks"]),
         );
+        const memberGrade = normalizeMemberGrade(
+          stringValue(
+            firstValue(data, [
+              "grade",
+              "member_grade",
+              "memberGrade",
+              "member_type",
+              "memberType",
+              "등급",
+              "회원구분",
+            ]),
+          ),
+        );
         const doc: MemberProfileDoc = {
           memberId: member.memberId,
           studioId: input.studioId,
@@ -67,6 +81,7 @@ export async function syncStudioMateMemberProfiles(input: {
           email: stringValue(firstValue(data, ["email", "mail"])),
           birthDate: stringValue(firstValue(data, ["birth", "birthday", "birth_date", "birthDate"])),
           gender: stringValue(firstValue(data, ["gender", "sex"])),
+          memberGrade,
           memoPreview: contactMemo.slice(0, 120),
           activeTicketNames: ticketSummary.activeTicketNames,
           activeTicketCount: ticketSummary.activeTicketCount,
@@ -80,7 +95,7 @@ export async function syncStudioMateMemberProfiles(input: {
         };
         await refs.memberProfile(member.memberId).set(doc, { merge: true });
         if (phone && isProtectedStaffContact({ name: doc.name, phone }, activeStaffContacts)) {
-          const contactDisplayName = `${doc.name} 강사님`;
+          const contactDisplayName = `${doc.name.trim()} 아카이브`;
           const contactHash = stableHash({
             name: doc.name,
             contactDisplayName,
@@ -96,6 +111,7 @@ export async function syncStudioMateMemberProfiles(input: {
               name: doc.name,
               contactDisplayName,
               contactMemo,
+              memberGrade,
               phone,
               phoneLast4: phone.slice(-4),
               registeredAt,
@@ -117,7 +133,7 @@ export async function syncStudioMateMemberProfiles(input: {
             { merge: true },
           );
         } else if (phone) {
-          const contactDisplayName = formatMemberContactDisplayName(doc.name, registeredAt);
+          const contactDisplayName = formatMemberContactDisplayName(doc.name, registeredAt, memberGrade);
           const contactHash = stableHash({
             name: doc.name,
             contactDisplayName,
@@ -145,6 +161,7 @@ export async function syncStudioMateMemberProfiles(input: {
               name: doc.name,
               contactDisplayName,
               contactMemo,
+              memberGrade,
               phone,
               phoneLast4: phone.slice(-4),
               registeredAt,
@@ -383,21 +400,6 @@ function asArray(value: unknown): unknown[] {
 function isNewMember(registeredAt: Timestamp | null): boolean {
   if (!registeredAt) return false;
   return registeredAt.toMillis() >= new Date(`${addDays(todayKst(), -30)}T00:00:00+09:00`).getTime();
-}
-
-function formatMemberContactDisplayName(name: string, registeredAt: Timestamp | null): string {
-  const compactRegisteredAt = registeredAt ? compactDateKst(registeredAt.toDate()) : "";
-  return [name, "회원", compactRegisteredAt].filter(Boolean).join(" ");
-}
-
-function compactDateKst(date: Date): string {
-  const formatter = new Intl.DateTimeFormat("en-CA", {
-    timeZone: "Asia/Seoul",
-    year: "numeric",
-    month: "2-digit",
-    day: "2-digit",
-  });
-  return formatter.format(date).replace(/^20/, "").replaceAll("-", "");
 }
 
 function uniqueMembers(bookings: BookingDoc[]): Array<{ memberId: string; memberName: string }> {

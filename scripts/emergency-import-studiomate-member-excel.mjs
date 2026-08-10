@@ -6,6 +6,12 @@ import path from "node:path";
 import { createRequire } from "node:module";
 import { qualityIssuesFromSummary, recordDataQualityIssues, recordSourceImport } from "./lib/archive-core-ops-logging.mjs";
 import { cleanupImportedSourceFiles } from "./lib/imported-source-retention.mjs";
+import {
+  formatExcelMemberContactDisplayName,
+  INSTRUCTOR_MEMBER_GRADE,
+  normalizeMemberGrade,
+  resolveMemberGrade,
+} from "./lib/member-contact-display-name-policy.mjs";
 
 const require = createRequire(import.meta.url);
 const admin = require("../firebase/kangsain-functions/functions/node_modules/firebase-admin");
@@ -59,6 +65,10 @@ const { plans, skipped } = buildPlans(groupedMembers, existingProfiles, existing
 const plannedProfileWrites = plans.filter((plan) => plan.profileDoc && plan.writeProfile).length;
 const plannedContactIndexWrites = plans.filter((plan) => plan.writeContactIndex).length;
 const plannedContactSyncJobs = plans.filter((plan) => plan.contactSyncJobDoc).length;
+const plannedInstructorMemberContactSyncJobs = plans.filter(
+  (plan) => plan.contactSyncJobDoc && plan.memberGrade === INSTRUCTOR_MEMBER_GRADE,
+).length;
+const plannedOtherContactSyncJobs = plannedContactSyncJobs - plannedInstructorMemberContactSyncJobs;
 const plannedStudiomateMemberIdLookupJobs = plans.filter((plan) => plan.studiomateMemberIdLookupJobDoc).length;
 const plannedWrites =
   plannedProfileWrites +
@@ -80,6 +90,8 @@ const summary = {
   unchangedProfiles: plans.filter((plan) => plan.profileDoc && !plan.writeProfile).length,
   unchangedContactIndexes: plans.filter((plan) => !plan.writeContactIndex).length,
   plannedContactSyncJobs,
+  plannedInstructorMemberContactSyncJobs,
+  plannedOtherContactSyncJobs,
   plannedStudiomateMemberIdLookupJobs,
   matchedExistingProfiles: plans.filter((plan) => plan.matchType === "existing").length,
   temporaryExcelProfiles: plans.filter((plan) => plan.matchType === "temporary_excel_id").length,
@@ -266,6 +278,7 @@ function buildPlans(groups, existingProfiles, existingContacts, activeStaffConta
     const gender = firstNonEmpty(group.rows, "성별");
     const birthDate = firstNonEmpty(group.rows, "생년월일");
     const contactMemo = cleanContactMemo(firstNonEmpty(group.rows, "메모"));
+    const memberGrade = resolveMemberGrade(group.rows);
     const memoPreview = contactMemo.slice(0, 120);
     if (isConsultationGroup(group, activeTickets)) {
       if (protectedStaffContact) continue;
@@ -388,6 +401,7 @@ function buildPlans(groups, existingProfiles, existingContacts, activeStaffConta
       email,
       birthDate,
       gender,
+      memberGrade,
       memoPreview,
       activeTicketNames: activeTicketsWithPreservedPayment.map((ticket) => ticket.name),
       activeTicketCount: activeTicketsWithPreservedPayment.length,
@@ -406,10 +420,14 @@ function buildPlans(groups, existingProfiles, existingContacts, activeStaffConta
     profileDoc.emergencyImportHash = memberProfileImportHash(profileDoc);
     const writeProfile =
       !matchedProfile ||
-      matchedProfile.data.emergencyImportHash !== profileDoc.emergencyImportHash;
-    const contactDisplayName = protectedStaffContact
-      ? `${group.name} 강사님`
-      : [group.name, "회원", compactDate(registeredAt)].filter(Boolean).join(" ");
+      matchedProfile.data.emergencyImportHash !== profileDoc.emergencyImportHash ||
+      normalizeMemberGrade(matchedProfile.data.memberGrade || "") !== memberGrade;
+    const contactDisplayName = formatExcelMemberContactDisplayName({
+      name: group.name,
+      compactRegisteredAt: compactDate(registeredAt),
+      memberGrade,
+      activeStaff: protectedStaffContact,
+    });
     const contactHash = hash({
       name: group.name,
       contactDisplayName,
@@ -440,6 +458,7 @@ function buildPlans(groups, existingProfiles, existingContacts, activeStaffConta
       name: group.name,
       contactDisplayName,
       contactMemo,
+      memberGrade,
       phone: group.phone,
       phoneLast4: group.phone.slice(-4),
       registeredAt,
@@ -458,6 +477,7 @@ function buildPlans(groups, existingProfiles, existingContacts, activeStaffConta
     const writeContactIndex =
       !previousContact ||
       previousContact.contactHash !== contactHash ||
+      normalizeMemberGrade(previousContact.memberGrade || "") !== memberGrade ||
       shouldQueueHomeSync;
     const contactSyncJobDoc = shouldQueueHomeSync
       ? {
@@ -506,6 +526,7 @@ function buildPlans(groups, existingProfiles, existingContacts, activeStaffConta
       contactIndexDoc,
       writeContactIndex,
       contactSyncJobDoc,
+      memberGrade,
       studiomateMemberIdLookupJobDoc,
     });
   }

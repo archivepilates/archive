@@ -300,6 +300,7 @@ export interface MemberProfileDoc {
   email?: string;
   birthDate?: string;
   gender?: string;
+  memberGrade?: string;
   memoPreview?: string;
   activeTicketNames?: string[];
   activeTicketCount?: number;
@@ -500,6 +501,7 @@ export interface MemberContactIndexDoc {
   name: string;
   contactDisplayName?: string;
   contactMemo?: string;
+  memberGrade?: string;
   phone: string;
   phoneLast4: string;
   registeredAt: Timestamp | null;

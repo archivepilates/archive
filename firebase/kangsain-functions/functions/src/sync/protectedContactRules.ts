@@ -56,7 +56,7 @@ export function shouldSkipProtectedStaffContactJob(
 }
 
 export function shouldPreserveExistingContactName(name: string): boolean {
-  return / 회원(?: \d{6})?$| 강사님$|대표|원장|부원장|스탭|스텝|STAFF|오너/i.test(name);
+  return / 회원(?: \d{6})?$| 강사회원$| 아카이브$| 강사님$|대표|원장|부원장|스탭|스텝|STAFF|오너/i.test(name);
 }
 
 function normalizePhoneDigits(value: string): string {
