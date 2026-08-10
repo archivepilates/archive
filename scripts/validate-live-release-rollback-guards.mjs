@@ -47,7 +47,17 @@ const guardGroups = [
         markers: [
           "loadActiveStaffContacts",
           "const protectedStaffContact",
-          "`${group.name} 강사님`",
+          "formatExcelMemberContactDisplayName",
+          "activeStaff: protectedStaffContact",
+          "memberGrade",
+        ],
+      },
+      {
+        file: "scripts/lib/member-contact-display-name-policy.mjs",
+        markers: [
+          "if (activeStaff) return `${normalizedName} 아카이브`",
+          "INSTRUCTOR_MEMBER_GRADE = \"강사회원\"",
+          "return `${normalizedName} 강사회원`",
         ],
       },
       {
