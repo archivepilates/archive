@@ -11,6 +11,7 @@ import {
   isProtectedStaffContact,
   shouldSkipProtectedStaffContactJob,
 } from "../../firebase/kangsain-functions/functions/src/sync/protectedContactRules";
+import { formatStaffContactDisplayName } from "../../firebase/kangsain-functions/functions/src/sync/queueStaffContactSync";
 
 const activeStaffContacts = buildActiveStaffContactIndex([
   {
@@ -90,6 +91,11 @@ test("member jobs are blocked but an explicit staff refresh is allowed", () => {
     ),
     false,
   );
+});
+
+test("active staff contacts use the ARCHIVE suffix regardless of staff role", () => {
+  assert.equal(formatStaffContactDisplayName({ name: "테스트 강사" }), "테스트 강사 아카이브");
+  assert.equal(formatStaffContactDisplayName({ name: "  테스트 스텝  " }), "테스트 스텝 아카이브");
 });
 
 test("a staff refresh wins when staff and member jobs share one phone", () => {

@@ -83,10 +83,8 @@ export async function queueActiveStaffContactSync(staff: StaffDoc): Promise<{ qu
   return { queued: true, jobId };
 }
 
-function formatStaffContactDisplayName(staff: StaffDoc): string {
-  if (staff.role === "owner") return `${staff.name} 원장님`;
-  if (staff.role === "manager") return `${staff.name} 매니저님`;
-  return `${staff.name} 강사님`;
+export function formatStaffContactDisplayName(staff: Pick<StaffDoc, "name">): string {
+  return `${staff.name.trim()} 아카이브`;
 }
 
 function normalizePhone(value: string): string {

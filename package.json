@@ -12,6 +12,7 @@
     "test:system-health-alimtalk": "node --test scripts/tests/system-health-alimtalk.test.mjs",
     "test:operational-retention": "node --test scripts/tests/operational-retention.test.mjs",
     "test:contact-staff-precedence": "firebase/kangsain-functions/functions/node_modules/.bin/tsx --test scripts/tests/contact-staff-precedence.test.ts",
+    "sync:active-staff-contacts": "firebase/kangsain-functions/functions/node_modules/.bin/tsx scripts/requeue-active-staff-contacts.ts",
     "test:social-content": "firebase/kangsain-functions/functions/node_modules/.bin/tsx --test scripts/tests/social-content-contract.test.ts",
     "codex:queue": "node scripts/list-codex-action-queue.mjs",
     "monitor:hohoyoga": "node scripts/run-hohoyoga-monitor.mjs",
