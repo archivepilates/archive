@@ -161,6 +161,23 @@
     .nav-swap[data-nav="products"] { --nav-w: 78px; }
     .nav-swap[data-nav="video"] { --nav-w: 86px; }
 
+    .nav-new {
+      position: absolute;
+      top: 2px;
+      right: 1px;
+      z-index: 2;
+      padding: 2px 4px;
+      border-radius: 999px;
+      background: var(--accent-dark);
+      color: #fff;
+      font-size: 0.48rem;
+      font-weight: 900;
+      line-height: 1;
+      letter-spacing: 0;
+      pointer-events: none;
+      transition: opacity 120ms ease;
+    }
+
     .nav-swap .nav-ko,
     .nav-swap .nav-en {
       display: inline-flex;
@@ -189,6 +206,11 @@
     .nav-swap:focus-visible .nav-en {
       opacity: 1;
       transform: translateY(0);
+    }
+
+    .nav-swap:hover .nav-new,
+    .nav-swap:focus-visible .nav-new {
+      opacity: 0;
     }
 
     .hero {
@@ -705,6 +727,11 @@
         opacity: 0;
         transform: translateY(5px);
       }
+
+      .nav-swap:hover .nav-new,
+      .nav-swap:focus-visible .nav-new {
+        opacity: 1;
+      }
     }
 
     @media (prefers-reduced-motion: reduce) {
@@ -768,9 +795,10 @@
           <span class="nav-ko">판매상품</span>
           <span class="nav-en" aria-hidden="true">PRODUCTS</span>
         </a>
-        <a class="nav-swap" data-nav="career" href="/careers" aria-label="채용">
+        <a class="nav-swap" data-nav="career" href="/careers" aria-label="채용, 신규 모집 중">
           <span class="nav-ko">채용</span>
           <span class="nav-en" aria-hidden="true">CAREERS</span>
+          <span class="nav-new" aria-hidden="true">NEW</span>
         </a>
       </div>
     </nav>
