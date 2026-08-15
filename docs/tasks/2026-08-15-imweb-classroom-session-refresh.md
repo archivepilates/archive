@@ -22,4 +22,9 @@
 - `npm run validate:archive-home-classroom`: passed.
 - Delayed-entitlement browser test: opened My Classroom without AR4, granted AR4 after the first probe, and observed one AR4 card on the second probe without reload or relogin.
 - The test member's original groups were restored and read back successfully.
-- Pending scoped Hosting deploy, Imweb loader update, and live canary.
+- Imweb header loader `2026-08-15a` was saved after exact-block replacement; unrelated header content was preserved.
+- Firebase Hosting site `archive-pilates-home` was deployed with the `archive-codex-operator` service account.
+- Postdeploy canary: live asset HTTP 200, no-store cache policy, exact SHA match, Imweb loader `2026-08-15a`, and anonymous classroom/watch-page redirects to login.
+- Live delayed-entitlement test: AR4 appeared on probe round 2 without reload or relogin, then the AR4 watch page rendered one expected YouTube iframe.
+- Responsive empty-state checks passed at 320, 390, 768, and 1440px with no horizontal overflow and a minimum 44px refresh target.
+- ARCHIVE CORE rules were not changed because the entitlement source, staff procedure, member communication policy, and exception-handling rule remain unchanged; this is a page-level retry resilience fix.
