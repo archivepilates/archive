@@ -1,5 +1,7 @@
 (function(){
-  var VERSION="2026-07-28d";
+  var VERSION="2026-08-15a";
+  var RETRY_DELAYS=[0,2000,5000];
+  var PROBE_TIMEOUT=4500;
   var path=String(location.pathname||"").replace(/\/$/,"");
   if(path!=="/48"&&path!=="/my-classroom")return;
 
@@ -102,6 +104,7 @@
     return uid?"현재 로그인 계정: "+uid:"현재 로그인 계정을 확인하지 못했습니다.";
   }
   function startRelogin(){try{sessionStorage.setItem(K,"1")}catch(e){}}
+  function wait(ms){return new Promise(function(resolve){setTimeout(resolve,ms)})}
 
   function run(){
     if(document.documentElement.getAttribute("data-ap-classroom-v2-ready"))return;
@@ -115,6 +118,7 @@
     var loading=sec.querySelector(".apc-loading");
     var available=[];
     var finished=false;
+    var refreshing=false;
 
     function add(x,i,source){
       if(available[i])return false;
@@ -131,6 +135,8 @@
         count++;
       });
       if(count){
+        var empty=sec.querySelector(".apc-empty");
+        if(empty)empty.remove();
         grid.hidden=false;
         loading.textContent=finished?"":"추가 시청 권한을 확인하고 있습니다.";
         loading.hidden=finished;
@@ -150,20 +156,25 @@
       L.forEach(function(x,i){if(text.indexOf(groupTitle(x))>-1)add(x,i,"profile")});
     }
     function showEmpty(){
-      loading.remove();
+      loading.hidden=true;
+      if(sec.querySelector(".apc-empty"))return;
       var e=document.createElement("div");
       e.className="apc-empty";
-      e.innerHTML='<strong>현재 이 계정으로 볼 수 있는 온라인 클래스가 없습니다.</strong><p class="apc-empty-help">최근 구매했거나 권한을 수동으로 받은 경우, 로그인한 계정이 권한을 받은 계정과 같은지 확인해 주세요. 아래 계정이 예상과 다르면 로그아웃 후 권한을 받은 계정으로 로그인해야 합니다.</p><p class="apc-account"></p><div class="apc-actions"><a class="apc-btn" href="/logout.cm">다시 로그인</a><a class="apc-btn sub" href="/17">온라인 클래스 보기</a><a class="apc-btn sub" href="http://pf.kakao.com/_AHdvn/chat">권한 문의</a></div>';
+      e.innerHTML='<strong>현재 이 계정으로 볼 수 있는 온라인 클래스가 없습니다.</strong><p class="apc-empty-help">방금 구매했거나 권한을 수동으로 받은 경우에는 로그아웃하지 않고 다시 확인할 수 있습니다.</p><p class="apc-account"></p><div class="apc-actions"><button class="apc-btn" type="button" data-ap-classroom-refresh>권한 다시 확인</button><a class="apc-btn sub" href="/17">온라인 클래스 보기</a><a class="apc-btn sub" href="http://pf.kakao.com/_AHdvn/chat">권한 문의</a><a class="apc-btn sub" href="/logout.cm">다른 계정으로 로그인</a></div>';
       e.querySelector(".apc-account").textContent=accountLabel();
+      e.querySelector("[data-ap-classroom-refresh]").addEventListener("click",function(){
+        e.remove();
+        refreshAccess();
+      });
       e.querySelector('.apc-btn[href="/logout.cm"]').addEventListener("click",startRelogin);
       sec.querySelector(".apc-in").appendChild(e);
     }
-    async function probe(x,i){
+    async function probe(x,i,round){
       if(available[i])return;
       var controller=new AbortController();
-      var timer=setTimeout(function(){controller.abort()},7000);
+      var timer=setTimeout(function(){controller.abort()},PROBE_TIMEOUT);
       try{
-        var response=await fetch(x.path+(x.path.indexOf("?")>-1?"&":"?")+"ap_classroom_fetch_probe=1",{
+        var response=await fetch(x.path+(x.path.indexOf("?")>-1?"&":"?")+"ap_classroom_fetch_probe="+(round+1)+"&ap_classroom_probe_time="+Date.now(),{
           credentials:"same-origin",
           redirect:"follow",
           cache:"no-store",
@@ -174,17 +185,33 @@
         if(okDocument(doc)&&add(x,i,"fetch"))draw();
       }catch(e){}finally{clearTimeout(timer)}
     }
+    async function refreshAccess(){
+      if(refreshing)return;
+      refreshing=true;
+      finished=false;
+      loading.hidden=false;
+      document.documentElement.removeAttribute("data-ap-classroom-v2-complete");
+
+      for(var round=0;round<RETRY_DELAYS.length;round++){
+        if(round>0)await wait(RETRY_DELAYS[round]);
+        loading.textContent=round===0?"시청 가능한 수업을 확인하고 있습니다.":"방금 구매한 권한을 반영하고 있습니다. 잠시만 기다려 주세요.";
+        document.documentElement.setAttribute("data-ap-classroom-probe-round",String(round+1));
+        await Promise.all(L.map(function(x,i){return probe(x,i,round)}));
+        markManual();
+        markProfile();
+        draw();
+      }
+
+      finished=true;
+      refreshing=false;
+      if(available.some(Boolean))draw();else showEmpty();
+      document.documentElement.setAttribute("data-ap-classroom-v2-complete",VERSION);
+    }
 
     markManual();
     markProfile();
     draw();
-    Promise.all(L.map(probe)).then(function(){
-      finished=true;
-      markManual();
-      markProfile();
-      if(available.some(Boolean))draw();else showEmpty();
-      document.documentElement.setAttribute("data-ap-classroom-v2-complete",VERSION);
-    });
+    refreshAccess();
   }
 
   if(document.readyState==="loading")document.addEventListener("DOMContentLoaded",run,{once:true});else run();
