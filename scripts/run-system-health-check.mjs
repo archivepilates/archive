@@ -98,16 +98,6 @@ const AUTOMATIONS = [
     repair: "bootstrap",
   },
   {
-    id: "reservation-deadline",
-    label: "com.archive.studiomate-reservation-deadline",
-    title: "StudioMate reservation deadline",
-    area: "studiomate",
-    resultFile: path.join(HOME, "ArchiveIN/automation/studiomate-results/last-reservation-deadline-result.json"),
-    maxAgeMinutes: 8 * 24 * 60,
-    plist: path.join(PLIST_DIR, "com.archive.studiomate-reservation-deadline.plist"),
-    repair: "none",
-  },
-  {
     id: "monthly-settlement-statements",
     label: "com.archive.monthly-settlement-statements",
     title: "Monthly settlement statements",

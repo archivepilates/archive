@@ -166,16 +166,9 @@ Mac mini LaunchAgent `com.archive.monthly-ticket-liability`는 매일 22:00에 �
 
 자동화 상태는 `automationStatus/monthly-ticket-liability`, 결과 파일은 `~/ArchiveIN/automation/reports/ticket-liability/latest.json`, 로그는 `~/ArchiveIN/emergency/logs/monthly-ticket-liability.*.log`에서 확인한다.
 
-### StudioMate 예약 가능 기한 설정 자동화
+### StudioMate 예약 가능 기한 설정
 
-매주 월요일 12:30에 수행하는 StudioMate 예약 가능 기한 설정 변경은 현재 Mac mini 브라우저 자동화 기준이다. ARCHIVE IN Firebase Functions의 StudioMate API 클라이언트에는 아직 이 설정 변경 전용 endpoint가 확인되어 있지 않다.
-
-API 전환 조건:
-
-1. StudioMate 관리자 설정 화면에서 실제 네트워크 요청의 endpoint, method, payload, 인증 헤더를 캡처한다.
-2. 동일 계정/동일 권한으로 저빈도 테스트 호출이 성공하는지 확인한다.
-3. 실패 시 브라우저 자동화로 fallback할 수 있게 둔다.
-4. 확인 전까지는 설정 변경 자동화를 Firebase 서버 API로 옮기지 않는다.
+예약 가능 기한은 StudioMate 관리자 화면의 네이티브 반복설정을 원천으로 사용한다. 매주 월요일 오늘 날짜를 직접 입력하던 Mac mini Playwright 자동화와 `com.archive.studiomate-reservation-deadline` LaunchAgent는 2026-08-17 폐기했다. 예약 가능 기한 변경은 StudioMate 네이티브 설정에서만 관리하며, ARCHIVE IN 자동화나 시스템 점검은 이 값을 다시 쓰거나 해당 LaunchAgent를 복구하지 않는다.
 
 ## 5. 모바일 UI 운영 기준
 

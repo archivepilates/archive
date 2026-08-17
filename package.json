@@ -59,8 +59,7 @@
     "backfill:private-lesson-sessions": "firebase/kangsain-functions/functions/node_modules/.bin/tsx scripts/backfill-private-lesson-sessions.ts",
     "release:promote-main:dry": "node scripts/promote-release-to-main.mjs",
     "release:promote-main": "node scripts/promote-release-to-main.mjs --apply",
-    "studiomate:member-excel": "node firebase/kangsain-functions/macmini-studiomate/download-member-excel.mjs",
-    "studiomate:reservation-deadline": "node firebase/kangsain-functions/macmini-studiomate/set-reservation-deadline.mjs"
+    "studiomate:member-excel": "node firebase/kangsain-functions/macmini-studiomate/download-member-excel.mjs"
   },
   "dependencies": {
     "chart.js": "^4.4.9",
