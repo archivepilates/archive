@@ -48,6 +48,10 @@ try {
       await page.goto(url, { waitUntil: "domcontentloaded", timeout: 30_000 });
       await page.waitForSelector(".shell", { state: "visible", timeout: 10_000 });
       await page.evaluate(() => {
+        const style = document.createElement("style");
+        style.dataset.archiveCoreQa = "login-gate";
+        style.textContent = ".login-gate{display:none!important}";
+        document.head.appendChild(style);
         document.querySelectorAll(".login-gate").forEach((element) => element.remove());
       });
       if (route.name === "home") {
@@ -102,7 +106,7 @@ try {
           }
           if (memberSummary) {
             memberSummary.hidden = false;
-            memberSummary.innerHTML = "<strong>반응형검증회원 · 010-1234-5678</strong><span>보유 수강권 1개 · 원천 2026.08.20</span>";
+            memberSummary.innerHTML = "<strong>반응형검증회원 · 010-****-5678</strong><span>보유 수강권 1개 · 원천 2026.08.20</span>";
           }
           if (ticketList) {
             ticketList.hidden = false;
@@ -203,6 +207,18 @@ try {
       await page.screenshot({ path: screenshot, fullPage: true });
       results.push({ route: route.name, viewport: viewport.name, screenshot, ...check });
       for (const failure of routeFailures) failures.push(`${route.name}/${viewport.name}: ${failure}`);
+
+      if (route.name === "refunds") {
+        const periodCheck = await exposeRefundPeriodFields(page);
+        const periodScreenshot = path.join(outputDir, `refunds-period-${viewport.name}.png`);
+        await page.screenshot({ path: periodScreenshot, fullPage: true });
+        results.push({ route: "refunds-period", viewport: viewport.name, screenshot: periodScreenshot, ...periodCheck });
+        if (periodCheck.horizontalOverflow) {
+          failures.push(`refunds-period/${viewport.name}: horizontal overflow ${periodCheck.documentWidth}px > ${periodCheck.viewportWidth}px`);
+        }
+        if (periodCheck.shortTouchTarget) failures.push(`refunds-period/${viewport.name}: interactive target below 44px`);
+        if (!periodCheck.allSourceValuesVisible) failures.push(`refunds-period/${viewport.name}: automatic period values are clipped or hidden`);
+      }
     }
     await page.close();
   }
@@ -231,6 +247,47 @@ console.log(
     2,
   ),
 );
+
+async function exposeRefundPeriodFields(page) {
+  await page.evaluate(() => {
+    document.querySelectorAll(".login-gate").forEach((element) => element.remove());
+    const countFields = document.querySelector("#refundCountFields");
+    const periodFields = document.querySelector("#refundPeriodFields");
+    const kind = document.querySelector("#refundTicketKind");
+    if (countFields) countFields.hidden = true;
+    if (periodFields) periodFields.hidden = false;
+    if (kind) kind.value = "period";
+    const values = {
+      refundAvailableFrom: "2026-08-01",
+      refundExpiresAt: "2026-10-31",
+      refundTotalContractDays: "92일",
+      refundRemainingDays: "72일",
+      refundUsedDays: "20일",
+    };
+    for (const [id, value] of Object.entries(values)) {
+      const element = document.querySelector(`#${id}`);
+      if (element) element.value = value;
+    }
+  });
+  return page.evaluate(() => {
+    const documentWidth = Math.max(document.documentElement.scrollWidth, document.body.scrollWidth);
+    const viewportWidth = document.documentElement.clientWidth;
+    const visibleSourceInputs = [...document.querySelectorAll("#refundPeriodFields input:not([type='hidden'])")]
+      .filter((element) => element.offsetParent !== null);
+    const touchTargets = [...document.querySelectorAll(".primary-action, .secondary-action, .refund-candidate-option")]
+      .filter((element) => element.offsetParent !== null)
+      .map((element) => Math.round(element.getBoundingClientRect().height));
+    return {
+      documentWidth,
+      viewportWidth,
+      horizontalOverflow: documentWidth > viewportWidth + 1,
+      shortTouchTarget: touchTargets.some((height) => height < 44),
+      allSourceValuesVisible:
+        visibleSourceInputs.length === 5
+        && visibleSourceInputs.every((element) => element.scrollWidth <= element.clientWidth + 1),
+    };
+  });
+}
 
 async function startStaticServer() {
   const server = http.createServer((request, response) => {

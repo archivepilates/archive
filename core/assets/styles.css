@@ -4352,23 +4352,36 @@ a.rank-row:hover,
 
 .refund-form {
   display: grid;
-  gap: 14px;
+  gap: 16px;
   margin-top: 18px;
+  padding: 0 20px 20px;
 }
 
 .refund-lookup-form {
-  grid-template-columns: minmax(0, 1fr) auto;
+  grid-template-columns: minmax(240px, 520px) max-content;
   align-items: end;
+  justify-content: start;
+}
+
+.refund-lookup-form .primary-action {
+  min-width: 168px;
 }
 
 .refund-form label,
 .refund-message-field {
   display: grid;
   min-width: 0;
-  gap: 7px;
+  gap: 8px;
   color: var(--muted);
   font-size: 0.86rem;
   font-weight: 800;
+}
+
+.refund-field-hint {
+  color: var(--soft);
+  font-size: 0.76rem;
+  font-weight: 700;
+  line-height: 1.4;
 }
 
 .refund-form input,
@@ -4383,16 +4396,60 @@ a.rank-row:hover,
   color: var(--text);
   padding: 10px 12px;
   font: inherit;
+  font-variant-numeric: tabular-nums;
+}
+
+.refund-form input[readonly],
+.refund-form select:disabled {
+  border-color: var(--line-soft);
+  background: var(--surface);
+  color: var(--muted);
+  opacity: 1;
+  cursor: default;
+  -webkit-text-fill-color: currentColor;
 }
 
 .refund-kind-fields {
   display: grid;
-  grid-template-columns: repeat(2, minmax(0, 1fr));
-  gap: 12px;
+  grid-template-columns: repeat(auto-fit, minmax(170px, 1fr));
+  gap: 10px 12px;
   border: 1px solid var(--line-soft);
   border-radius: 6px;
   background: var(--surface);
-  padding: 12px;
+  padding: 12px 14px 14px;
+}
+
+.refund-kind-fields legend {
+  padding: 0 6px;
+  color: var(--muted);
+  font-size: 0.78rem;
+  font-weight: 900;
+}
+
+.refund-kind-fields .refund-source-field > span {
+  display: flex;
+  align-items: center;
+  gap: 6px;
+}
+
+.refund-kind-fields .refund-source-field > span::after {
+  content: "자동";
+  border-radius: 999px;
+  background: var(--surface-strong);
+  color: var(--soft);
+  padding: 2px 6px;
+  font-size: 0.66rem;
+  font-weight: 900;
+}
+
+.refund-kind-fields .refund-source-field input {
+  min-height: 44px;
+  font-weight: 800;
+}
+
+.refund-kind-fields .refund-operator-field input {
+  border-color: rgba(240, 100, 24, 0.34);
+  background: var(--surface-strong);
 }
 
 .refund-kind-fields[hidden] {
@@ -4405,7 +4462,7 @@ a.rank-row:hover,
 }
 
 .refund-member-summary {
-  margin-top: 18px;
+  margin: 0 20px 16px;
   border-left: 4px solid var(--accent);
   background: var(--accent-soft);
   padding: 12px 14px;
@@ -4420,7 +4477,7 @@ a.rank-row:hover,
 .refund-candidate-list {
   display: grid;
   gap: 10px;
-  margin: 18px 0 0;
+  margin: 0 20px 20px;
   border: 0;
   padding: 0;
 }
@@ -4486,7 +4543,7 @@ a.rank-row:hover,
 .refund-ticket-list {
   display: grid;
   gap: 10px;
-  margin: 18px 0 0;
+  margin: 0 20px 20px;
   border: 0;
   padding: 0;
 }
@@ -4545,10 +4602,15 @@ a.rank-row:hover,
   grid-column: 1 / -1;
 }
 
+.refund-span-2 {
+  grid-column: span 2;
+}
+
 .refund-result {
   display: grid;
   gap: 14px;
-  margin-top: 18px;
+  margin: 0;
+  padding: 0 20px 20px;
 }
 
 .refund-amount-grid {
@@ -4592,7 +4654,15 @@ a.rank-row:hover,
 .refund-send-check {
   display: grid;
   gap: 6px;
-  margin: 18px 0 14px;
+  margin: 18px 20px 14px;
+}
+
+.refund-panel > .form-status {
+  margin: -8px 20px 20px;
+}
+
+.refund-panel > #refundSendButton {
+  margin: 0 20px 20px;
 }
 
 .refund-send-check label {
@@ -4619,6 +4689,7 @@ a.rank-row:hover,
   align-items: flex-start;
   gap: 10px;
   min-height: 48px;
+  border-radius: 6px;
   padding: 12px 14px;
   border: 1px solid var(--line);
   background: var(--surface-soft);
@@ -4627,7 +4698,10 @@ a.rank-row:hover,
 .refund-policy-check input {
   width: 20px;
   height: 20px;
+  min-height: 20px;
   flex: 0 0 auto;
+  margin: 1px 0 0;
+  padding: 0;
 }
 
 .refund-policy-check span {
@@ -4646,13 +4720,15 @@ a.rank-row:hover,
 }
 
 @media (max-width: 860px) {
-  .refund-lookup-form,
   .refund-input-grid {
     grid-template-columns: 1fr 1fr;
   }
 
-  .refund-lookup-form > button,
   .refund-wide-field {
+    grid-column: 1 / -1;
+  }
+
+  .refund-span-2 {
     grid-column: 1 / -1;
   }
 
@@ -4662,6 +4738,34 @@ a.rank-row:hover,
 }
 
 @media (max-width: 560px) {
+  .refund-form,
+  .refund-result {
+    padding-right: 16px;
+    padding-left: 16px;
+  }
+
+  .refund-candidate-list,
+  .refund-ticket-list {
+    margin-right: 16px;
+    margin-left: 16px;
+  }
+
+  .refund-member-summary {
+    margin-right: 16px;
+    margin-left: 16px;
+  }
+
+  .refund-panel > .form-status,
+  .refund-send-check {
+    margin-right: 16px;
+    margin-left: 16px;
+  }
+
+  .refund-panel > #refundSendButton {
+    margin-right: 16px;
+    margin-left: 16px;
+  }
+
   .refund-stepper {
     gap: 6px;
   }
@@ -4694,8 +4798,13 @@ a.rank-row:hover,
   }
 
   .refund-lookup-form > button,
-  .refund-wide-field {
+  .refund-wide-field,
+  .refund-span-2 {
     grid-column: auto;
+  }
+
+  .refund-lookup-form .primary-action {
+    width: 100%;
   }
 
   .refund-ticket-option {
