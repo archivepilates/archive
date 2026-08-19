@@ -39,6 +39,10 @@ service cloud.firestore {
         );
     }
 
+    function sameStudioClaim(studioId) {
+      return signedIn() && request.auth.token.studioId == studioId;
+    }
+
     function isIncludedStaff(data) {
       return signedIn() &&
         data.staffIds is list &&
@@ -150,6 +154,15 @@ service cloud.firestore {
         request.resource.data.operatorUpdatedAt is timestamp &&
         request.resource.data.updatedAt is timestamp;
       allow create, delete: if false;
+    }
+
+    match /refundCases/{caseId} {
+      allow read: if isManager() && sameStudioClaim(resource.data.studioId);
+      allow write: if false;
+    }
+
+    match /eformsignRefundJobs/{jobId} {
+      allow read, write: if false;
     }
 
     match /memberContactIndex/{memberId} {

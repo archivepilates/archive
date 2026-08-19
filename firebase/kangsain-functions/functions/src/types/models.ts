@@ -317,6 +317,13 @@ export interface MemberProfileDoc {
     expiryLevel: TicketExpiryLevel;
     status?: string;
     classType?: string;
+    paymentAmount?: number | null;
+    amountTotal?: number | null;
+    price?: number | null;
+    paymentAt?: Timestamp | null;
+    purchasedAt?: Timestamp | null;
+    sourceFile?: string;
+    sourceImportId?: string;
   }>;
   ticketStatusSummary?: {
     hasHoldingTicket?: boolean;

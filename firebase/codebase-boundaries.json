@@ -95,9 +95,12 @@
         "generateRecommendedMealDraftOnSurveySubmitted",
         "saveRecommendedMealProgramDraft",
         "adminIssueStaffTempCode",
-        "processParkingDiscountJob"
+        "processParkingDiscountJob",
+        "getRefundMemberTickets",
+        "previewRefund",
+        "sendRefundAgreement"
       ],
-      "forbidden": ["scheduled jobs", "external member-facing sends"]
+      "forbidden": ["scheduled jobs", "automatic member-facing sends without manager confirmation"]
     },
     "functions-social": {
       "physicalSource": "firebase/function-codebases/social",

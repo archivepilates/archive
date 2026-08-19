@@ -70,6 +70,7 @@ const state = {
   pricingInquiryAlimtalkRequests: [],
   recommendedMealProgramRequests: [],
   recommendedMealReview: null,
+  refundCases: [],
   parkingVehicles: [],
   parkingJobs: [],
   parkingConfig: null,
@@ -101,6 +102,7 @@ let memberPage = 1;
 let selectedStaffKey = "";
 let selectedMealRequestId = "";
 let mealQueueFilter = "active";
+let refundFlow = { member: null, tickets: [], selectedTicket: null, preview: null };
 
 const MEMBER_PAGE_SIZE = 20;
 const COMMAND_ITEMS = [
@@ -121,6 +123,12 @@ const COMMAND_ITEMS = [
     detail: "설문·InBody 기반 식단 초안 검토와 승인 발송",
     href: "./recommended-meals/",
     keywords: "추천식단 식단 다이어트 설문 인바디 검토 발송 alimtalk",
+  },
+  {
+    title: "환불 안내·동의서",
+    detail: "회원 수강권 환불 예상액 검토와 이폼싸인 발송",
+    href: "./refunds/",
+    keywords: "refund 환불 수강권 동의서 이폼싸인",
   },
   {
     title: "재등록 관리",
@@ -616,6 +624,7 @@ const NAV_ICONS = {
   lessons: "M4 6.5h16M4 12h16M4 17.5h9M8 4v16M16 4v10",
   private: "M5 4h14v16H5zM8 8h8M8 12h5M8 16h7",
   "recommended-meals": "M5 5h14v14H5zM8 9h8M8 13h8M8 17h5",
+  refunds: "M4 7h16M7 4v6M17 4v6M6 11h12v9H6zM9 15h6",
   staff: "M12 12a4 4 0 1 0 0-8 4 4 0 0 0 0 8M4 21a8 8 0 0 1 16 0M17.5 7.5l1.5 1.5 3-3",
   messages: "M4 6h16v11H8l-4 3V6zM8 10h8M8 14h5",
   content: "M5 4h14v16H5zM8 8h8M8 12h5M8 16h7M16.5 15.5l2.5 2.5",
@@ -642,6 +651,7 @@ const NAV_LABELS = {
   lessons: "수업",
   private: "프라이빗",
   "recommended-meals": "추천식단",
+  refunds: "환불",
   staff: "강사",
   messages: "알림톡",
   content: "콘텐츠",
@@ -670,6 +680,15 @@ function enhanceNav() {
     link.href = `${homeHref.replace(/\/?$/, "/")}recommended-meals/`;
     link.dataset.section = "recommended-meals";
     link.innerHTML = "Meals <small>추천식단</small>";
+    const before = nav.querySelector('[data-section="messages"]');
+    nav.insertBefore(link, before || null);
+  }
+  if (!nav.querySelector('[data-section="refunds"]')) {
+    const homeHref = nav.querySelector('[data-section="home"]')?.getAttribute("href") || "./";
+    const link = document.createElement("a");
+    link.href = `${homeHref.replace(/\/?$/, "/")}refunds/`;
+    link.dataset.section = "refunds";
+    link.innerHTML = "Refund <small>환불</small>";
     const before = nav.querySelector('[data-section="messages"]');
     nav.insertBefore(link, before || null);
   }
@@ -3222,6 +3241,328 @@ async function handleRecommendedMealProgramSubmit(event) {
       button.textContent = "추천식단 설문 발송";
     }
   }
+}
+
+function setRefundStatus(id, message, tone = "") {
+  const element = qs(id);
+  if (!element) return;
+  element.textContent = message || "";
+  element.className = `form-status${tone ? ` ${tone}` : ""}`;
+}
+
+function setRefundStep(step) {
+  document.querySelectorAll("[data-refund-step]").forEach((item) => {
+    const value = Number(item.dataset.refundStep || 0);
+    item.classList.toggle("is-active", value === step);
+    item.classList.toggle("is-complete", value < step);
+  });
+}
+
+function refundRequestDate() {
+  return qs("refundRequestedAt")?.value || new Intl.DateTimeFormat("en-CA", {
+    timeZone: "Asia/Seoul",
+    year: "numeric",
+    month: "2-digit",
+    day: "2-digit",
+  }).format(new Date());
+}
+
+function refundPayload() {
+  const paidAmount = qs("refundPaidAmount")?.value;
+  const money = (id) => {
+    const value = qs(id)?.value;
+    return value === "" || value == null ? null : Number(value);
+  };
+  return {
+    memberName: refundFlow.member?.memberName || String(qs("refundMemberName")?.value || "").trim(),
+    memberPhone: refundFlow.member?.memberPhone || normalizePhone(qs("refundMemberPhone")?.value || ""),
+    ticketKey: refundFlow.selectedTicket?.ticketKey || "",
+    requestedAt: `${refundRequestDate()}T00:00:00+09:00`,
+    paidAmount: paidAmount === "" ? null : Number(paidAmount),
+    ticketKind: qs("refundTicketKind")?.value || "count",
+    normalUnitAmount: money("refundNormalUnitAmount"),
+    usedCount: money("refundUsedCount"),
+    totalContractWeeks: money("refundTotalContractWeeks"),
+    usedWeeks: money("refundUsedWeeks"),
+    giftDeductionAmount: money("refundGiftDeductionAmount"),
+    manualReason: String(qs("refundManualReason")?.value || "").trim(),
+    paymentSourceNote: String(qs("refundPaymentSourceNote")?.value || "").trim(),
+    eligibilityReviewConfirmed: Boolean(qs("refundEligibilityCheck")?.checked),
+  };
+}
+
+function updateRefundKindFields() {
+  const kind = qs("refundTicketKind")?.value || "count";
+  if (qs("refundCountFields")) qs("refundCountFields").hidden = kind !== "count";
+  if (qs("refundPeriodFields")) qs("refundPeriodFields").hidden = kind !== "period";
+  if (qs("refundNormalUnitAmount")) qs("refundNormalUnitAmount").required = kind === "count";
+  if (qs("refundUsedCount")) qs("refundUsedCount").required = kind === "count";
+  if (qs("refundTotalContractWeeks")) qs("refundTotalContractWeeks").required = kind === "period";
+  if (qs("refundUsedWeeks")) qs("refundUsedWeeks").required = kind === "period";
+}
+
+function resetRefundPreview() {
+  refundFlow.preview = null;
+  if (qs("refundResult")) qs("refundResult").hidden = true;
+  if (qs("refundSendPanel")) qs("refundSendPanel").hidden = true;
+  if (qs("refundConfirmCheck")) qs("refundConfirmCheck").checked = false;
+  if (qs("refundSendButton")) qs("refundSendButton").disabled = true;
+  setRefundStatus("refundCalculationStatus", "");
+  setRefundStatus("refundSendStatus", "");
+}
+
+function renderRefundTickets(tickets) {
+  const list = qs("refundTicketList");
+  if (!list) return;
+  const legend = `<legend>환불할 수강권</legend>`;
+  if (!tickets.length) {
+    list.innerHTML = `${legend}<div class="empty-state">현재 환불 검토 가능한 수강권이 없습니다.</div>`;
+    list.hidden = false;
+    return;
+  }
+  list.innerHTML =
+    legend +
+    tickets
+      .map((ticket, index) => {
+        const countText =
+          ticket.totalCount == null || ticket.remainingCount == null
+            ? "기간권·횟수 확인 필요"
+            : `잔여 ${ticket.remainingCount} / 총 ${ticket.totalCount} · 사용 ${ticket.usedCount}`;
+        const amountText = ticket.expiredNow
+          ? "유효기간 만료"
+          : ticket.paymentAmount
+            ? formatWon(ticket.paymentAmount)
+            : "결제금액 확인 필요";
+        const eligibilityWarnings = Array.isArray(ticket.eligibilityWarnings) ? ticket.eligibilityWarnings : [];
+        return `
+          <label class="refund-ticket-option">
+            <input type="radio" name="refundTicket" value="${escapeHtml(ticket.ticketKey)}" ${index === 0 ? "checked" : ""} />
+            <span>
+              <strong>${escapeHtml(ticket.ticketName)}</strong>
+              <small>${escapeHtml(countText)} · ${escapeHtml(shortDate(ticket.expiresAt))}</small>
+              ${eligibilityWarnings.length ? `<small class="refund-ticket-warning">${escapeHtml(eligibilityWarnings.join(" · "))}</small>` : ""}
+            </span>
+            <span class="pill ${ticket.expiredNow ? "danger" : ticket.calculationReady ? "success" : "warning"}">${escapeHtml(amountText)}</span>
+          </label>
+        `;
+      })
+      .join("");
+  list.hidden = false;
+  selectRefundTicket(tickets[0]?.ticketKey || "");
+}
+
+function selectRefundTicket(ticketKey) {
+  const ticket = refundFlow.tickets.find((item) => item.ticketKey === ticketKey) || null;
+  refundFlow.selectedTicket = ticket;
+  resetRefundPreview();
+  if (!ticket) {
+    if (qs("refundCalculationPanel")) qs("refundCalculationPanel").hidden = true;
+    return;
+  }
+  if (qs("refundCalculationPanel")) qs("refundCalculationPanel").hidden = false;
+  if (qs("refundPaidAmount")) qs("refundPaidAmount").value = ticket.paymentAmount || "";
+  if (qs("refundTicketKind")) qs("refundTicketKind").value = ticket.suggestedTicketKind || "count";
+  if (qs("refundNormalUnitAmount")) qs("refundNormalUnitAmount").value = "";
+  if (qs("refundUsedCount")) qs("refundUsedCount").value = ticket.usedCount ?? "";
+  if (qs("refundTotalContractWeeks")) qs("refundTotalContractWeeks").value = ticket.suggestedContractWeeks ?? "";
+  if (qs("refundUsedWeeks")) qs("refundUsedWeeks").value = "";
+  if (qs("refundGiftDeductionAmount")) qs("refundGiftDeductionAmount").value = "0";
+  if (qs("refundManualReason")) qs("refundManualReason").value = "";
+  if (qs("refundPaymentSourceNote")) qs("refundPaymentSourceNote").value = "";
+  if (qs("refundEligibilityCheck")) qs("refundEligibilityCheck").checked = false;
+  updateRefundKindFields();
+  setRefundStep(2);
+  setRefundStatus(
+    "refundCalculationStatus",
+    ticket.expiredNow
+      ? "유효기간이 지난 수강권은 환불할 수 없습니다."
+      : ticket.suggestedTicketKind === "count"
+        ? "정상 1회 단가를 확인한 뒤 계산하세요."
+        : "홀딩을 제외한 실제 사용 주수와 근거를 확인하세요.",
+    ticket.expiredNow ? "danger" : "warn",
+  );
+}
+
+async function handleRefundLookup(event) {
+  event.preventDefault();
+  const memberName = String(qs("refundMemberName")?.value || "").trim();
+  const memberPhone = normalizePhone(qs("refundMemberPhone")?.value || "");
+  const button = qs("refundLookupButton");
+  if (memberName.length < 2 || !/^010\d{8}$/.test(memberPhone)) {
+    setRefundStatus("refundLookupStatus", "회원 이름과 010으로 시작하는 11자리 연락처를 확인하세요.", "danger");
+    return;
+  }
+  if (button) {
+    button.disabled = true;
+    button.textContent = "회원 확인 중";
+  }
+  setRefundStatus("refundLookupStatus", "회원카드와 현재 수강권을 확인하고 있습니다.", "warn");
+  try {
+    const runtime = await initFirebase();
+    const user = await waitForAuth(runtime);
+    if (!user) {
+      showLoginGate("환불 처리는 운영자 로그인이 필요합니다.");
+      throw new Error("운영자 로그인 후 다시 시도하세요.");
+    }
+    const callable = runtime.httpsCallable(runtime.functionsClient, "getRefundMemberTickets");
+    const result = await callable({ memberName, memberPhone });
+    const data = result?.data || {};
+    refundFlow = { member: data.member || null, tickets: data.tickets || [], selectedTicket: null, preview: null };
+    if (qs("refundMemberSummary")) {
+      qs("refundMemberSummary").hidden = false;
+      qs("refundMemberSummary").innerHTML = `
+        <strong>${escapeHtml(data.member?.memberName || memberName)} · ${escapeHtml(formatPhoneForDisplay(memberPhone))}</strong>
+        <span>보유 수강권 ${(data.tickets || []).length}개 · 원천 ${escapeHtml(formatDate(data.member?.sourceUpdatedAt))}</span>
+      `;
+    }
+    renderRefundTickets(refundFlow.tickets);
+    setRefundStatus("refundLookupStatus", "회원과 보유 수강권을 확인했습니다.", "good");
+  } catch (error) {
+    if (isPermissionDenied(error)) showLoginGate("환불 처리는 운영자 권한이 필요합니다.");
+    setRefundStatus("refundLookupStatus", error?.message || "회원 조회 중 오류가 발생했습니다.", "danger");
+  } finally {
+    if (button) {
+      button.disabled = false;
+      button.textContent = "보유 수강권 확인";
+    }
+  }
+}
+
+async function handleRefundPreview(event) {
+  event.preventDefault();
+  const button = qs("refundPreviewButton");
+  resetRefundPreview();
+  if (button) {
+    button.disabled = true;
+    button.textContent = "계산 중";
+  }
+  setRefundStatus("refundCalculationStatus", "서버에서 원천과 산식을 다시 확인하고 있습니다.", "warn");
+  try {
+    const runtime = await initFirebase();
+    const callable = runtime.httpsCallable(runtime.functionsClient, "previewRefund");
+    const result = await callable(refundPayload());
+    const data = result?.data || {};
+    refundFlow.preview = data;
+    const calculation = data.calculation || {};
+    setText("refundResultPaid", formatWon(calculation.paidAmount));
+    setText("refundResultPenalty", formatWon(calculation.penaltyAmount));
+    setText("refundResultUsed", formatWon(calculation.usedAmount));
+    setText("refundResultGift", formatWon(calculation.giftDeductionAmount));
+    setText("refundResultAmount", formatWon(calculation.refundAmount));
+    setText("refundFormula", `산정식 · ${calculation.formula || "-"}`);
+    if (qs("refundMessage")) qs("refundMessage").value = calculation.message || "";
+    if (qs("refundResult")) qs("refundResult").hidden = false;
+    if (qs("refundSendPanel")) qs("refundSendPanel").hidden = false;
+    setRefundStep(3);
+    setRefundStatus(
+      "refundCalculationStatus",
+      calculation.requiresReview ? "직접 확인 값이 포함되어 있습니다. 근거와 금액을 한 번 더 확인하세요." : "환불 예상액을 계산했습니다.",
+      calculation.requiresReview ? "warn" : "good",
+    );
+  } catch (error) {
+    setRefundStep(2);
+    setRefundStatus("refundCalculationStatus", error?.message || "환불 계산 중 오류가 발생했습니다.", "danger");
+  } finally {
+    if (button) {
+      button.disabled = false;
+      button.textContent = "환불금액 계산";
+    }
+  }
+}
+
+async function handleRefundCopy() {
+  const text = qs("refundMessage")?.value || "";
+  if (!text) return;
+  try {
+    await navigator.clipboard.writeText(text);
+    setRefundStatus("refundCalculationStatus", "회원 안내 문구를 복사했습니다.", "good");
+  } catch {
+    qs("refundMessage")?.select();
+    setRefundStatus("refundCalculationStatus", "안내 문구를 선택했습니다. 복사해 사용하세요.", "warn");
+  }
+}
+
+async function handleRefundSend() {
+  const button = qs("refundSendButton");
+  const confirmed = Boolean(qs("refundConfirmCheck")?.checked);
+  const calculationHash = refundFlow.preview?.calculation?.calculationHash || "";
+  if (!confirmed || !calculationHash) {
+    setRefundStatus("refundSendStatus", "환불금액을 계산하고 확인란을 선택하세요.", "danger");
+    return;
+  }
+  if (button) {
+    button.disabled = true;
+    button.textContent = "발송 작업 등록 중";
+  }
+  setRefundStatus("refundSendStatus", "이폼싸인 환불동의서 발송 작업을 등록하고 있습니다.", "warn");
+  try {
+    const runtime = await initFirebase();
+    const callable = runtime.httpsCallable(runtime.functionsClient, "sendRefundAgreement");
+    const result = await callable({ ...refundPayload(), calculationHash, confirmed: true });
+    const data = result?.data || {};
+    const duplicate = data.status === "duplicate_blocked";
+    const queued = data.status === "agreement_queued";
+    setRefundStatus(
+      "refundSendStatus",
+      duplicate
+        ? "동일 계산값의 환불동의서 작업이 이미 있어 중복 등록을 차단했습니다."
+        : queued
+          ? "환불동의서 발송 대기에 등록했습니다. 발송 결과는 최근 처리에서 확인할 수 있습니다."
+          : "이폼싸인 환불동의서 발송을 완료했습니다.",
+      duplicate ? "warn" : "good",
+    );
+    if (!duplicate) {
+      setText("refundSendButton", queued ? "발송 대기" : "발송 완료");
+      await refresh();
+    }
+  } catch (error) {
+    setRefundStatus("refundSendStatus", error?.message || "이폼싸인 발송 작업 등록 중 오류가 발생했습니다.", "danger");
+    if (button) button.disabled = false;
+  } finally {
+    if (button && !["발송 완료", "발송 대기"].includes(button.textContent)) {
+      button.textContent = "이폼싸인 환불동의서 발송 요청";
+      button.disabled = !confirmed;
+    }
+  }
+}
+
+function renderRefundCases() {
+  const list = qs("refundCaseList");
+  if (!list) return;
+  const cases = state.refundCases || [];
+  setText("refundCaseCount", `${cases.length.toLocaleString("ko-KR")}건`);
+  list.innerHTML = cases.length
+    ? cases
+        .slice(0, 20)
+        .map((item) => {
+          const status = String(item.status || "");
+          const tone = status === "agreement_sent" ? "success" : status === "send_review_required" ? "danger" : "warning";
+          const label =
+            status === "agreement_sent"
+              ? "동의서 발송"
+              : status === "send_review_required"
+                ? "발송 결과 확인"
+                : status === "sending"
+                  ? "발송 중"
+                  : status === "agreement_queued"
+                    ? "발송 대기"
+                  : "검토";
+          return `
+            <div class="status-row">
+              <div>
+                <strong>${escapeHtml(item.memberName || "회원")} · ${escapeHtml(item.ticketName || "수강권")}</strong>
+                <p>끝자리 ${escapeHtml(item.memberPhoneLast4 || "-")} · 예상 환불 ${escapeHtml(formatWon(item.calculation?.refundAmount))} · ${escapeHtml(formatDate(item.updatedAt))}</p>
+              </div>
+              <span class="pill ${tone}">${label}</span>
+            </div>
+          `;
+        })
+        .join("")
+    : `<div class="empty-state">처리 이력이 없습니다.</div>`;
+}
+
+function formatPhoneForDisplay(value) {
+  return normalizePhone(value).replace(/^(\d{3})(\d{4})(\d{4})$/, "$1-$2-$3");
 }
 
 function lessonTypeLabel(value) {
@@ -5936,6 +6277,7 @@ function renderFallback(error, options = {}) {
   state.pricingInquiryAlimtalkRequests = [];
   state.recommendedMealProgramRequests = [];
   state.recommendedMealReview = null;
+  state.refundCases = [];
   state.parkingVehicles = [];
   state.parkingJobs = [];
   state.parkingConfig = null;
@@ -5947,6 +6289,7 @@ function renderFallback(error, options = {}) {
   renderRecommendedMealRecentList();
   renderRecommendedMealQueue();
   renderRecommendedMealReview(null);
+  renderRefundCases();
   renderMessages([], []);
   renderStaffHr();
   renderLessons([], [], []);
@@ -5989,6 +6332,7 @@ async function refresh() {
     const shouldLoadTicketLiability = Boolean(qs("ticketLiabilityTableBody"));
     const shouldLoadHome = Boolean(qs("homeDecisionList"));
     const shouldLoadRecommendedMeals = Boolean(qs("recommendedMealQueue"));
+    const shouldLoadRefunds = Boolean(qs("refundCaseList"));
     const shouldLoadMembers = Boolean(qs("membersTable"));
     const shouldLoadMessages = Boolean(qs("messagesCandidateList"));
     const shouldLoadParking = Boolean(qs("parkingRegistrationForm"));
@@ -6166,6 +6510,15 @@ async function refresh() {
     state.staffHrCards = studioItems(staffHrCards);
     state.staffEvaluationSubmissions = studioItems(staffEvaluationSubmissions);
     state.businessSnapshot = dashboardSnapshot?.exists?.() ? normalizeBusinessSnapshot(dashboardSnapshot.data()) : null;
+    state.refundCases = shouldLoadRefunds
+      ? studioItems(
+          await safeRead(
+            "refundCases",
+            () => getStudioCollectionBy(db, runtime, "refundCases", "updatedAt", 50),
+            [],
+          ),
+        )
+      : [];
     if (shouldLoadParking) await loadParkingDashboard(runtime);
     if (shouldLoadInstagram) {
       state.instagramDashboard = await safeRead(
@@ -6188,6 +6541,7 @@ async function refresh() {
     renderPricingInquiryRecentList();
     renderRecommendedMealRecentList();
     renderRecommendedMealQueue();
+    renderRefundCases();
     renderMemberDetail(memberDetail);
     renderPrivate(
       privateRequests,
@@ -6224,6 +6578,25 @@ qs("pricingInquiryHistoryToggle")?.addEventListener("click", togglePricingInquir
 qs("recommendedMealProgramForm")?.addEventListener("submit", handleRecommendedMealProgramSubmit);
 qs("recommendedMealHistoryToggle")?.addEventListener("click", toggleRecommendedMealHistory);
 qs("recommendedMealQueue")?.addEventListener("click", handleMealQueueClick);
+qs("refundLookupForm")?.addEventListener("submit", handleRefundLookup);
+qs("refundCalculationForm")?.addEventListener("submit", handleRefundPreview);
+qs("refundTicketList")?.addEventListener("change", (event) => {
+  const input = event.target.closest?.('input[name="refundTicket"]');
+  if (input) selectRefundTicket(input.value);
+});
+qs("refundCalculationForm")?.addEventListener("input", () => {
+  if (refundFlow.preview) {
+    resetRefundPreview();
+    setRefundStep(2);
+    setRefundStatus("refundCalculationStatus", "입력값이 변경되었습니다. 환불금액을 다시 계산하세요.", "warn");
+  }
+});
+qs("refundTicketKind")?.addEventListener("change", updateRefundKindFields);
+qs("refundCopyButton")?.addEventListener("click", handleRefundCopy);
+qs("refundConfirmCheck")?.addEventListener("change", (event) => {
+  if (qs("refundSendButton")) qs("refundSendButton").disabled = !event.target.checked || !refundFlow.preview;
+});
+qs("refundSendButton")?.addEventListener("click", handleRefundSend);
 qs("mealFilterBar")?.addEventListener("click", handleMealFilterClick);
 qs("mealGenerateButton")?.addEventListener("click", handleMealGenerate);
 qs("mealDraftForm")?.addEventListener("submit", handleMealDraftSubmit);
@@ -6305,4 +6678,7 @@ document.addEventListener("click", (event) => {
   renderBusinessMonth(month);
 });
 syncParkingVisitorFields();
+if (qs("refundRequestedAt") && !qs("refundRequestedAt").value) {
+  qs("refundRequestedAt").value = new Date().toLocaleDateString("en-CA", { timeZone: "Asia/Seoul" });
+}
 if (document.querySelector("[data-firestore-dashboard]")) refresh();

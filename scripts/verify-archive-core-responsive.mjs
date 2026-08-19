@@ -23,6 +23,7 @@ const routes = [
   { name: "private", path: "/private/" },
   { name: "staff", path: "/staff/" },
   { name: "recommended-meals", path: "/recommended-meals/" },
+  { name: "refunds", path: "/refunds/" },
   { name: "messages", path: "/messages/" },
   { name: "content", path: "/content/" },
   { name: "automation", path: "/automation/" },
@@ -85,6 +86,39 @@ try {
           if (days) {
             days.innerHTML = Array.from({ length: 2 }, (_, index) => `<fieldset class="meal-day-editor" data-meal-day="${index}"><legend>${index + 1}일차</legend><label><span>아침</span><textarea rows="2">단백질과 채소 중심 식사</textarea></label><label><span>점심</span><textarea rows="2">일정에 맞춘 균형 식사</textarea></label></fieldset>`).join("");
           }
+        });
+      }
+      if (route.name === "refunds") {
+        await page.evaluate(() => {
+          const memberSummary = document.querySelector("#refundMemberSummary");
+          const ticketList = document.querySelector("#refundTicketList");
+          const calculationPanel = document.querySelector("#refundCalculationPanel");
+          const result = document.querySelector("#refundResult");
+          const sendPanel = document.querySelector("#refundSendPanel");
+          if (memberSummary) {
+            memberSummary.hidden = false;
+            memberSummary.innerHTML = "<strong>반응형검증회원 · 010-1234-5678</strong><span>보유 수강권 1개 · 원천 2026.08.20</span>";
+          }
+          if (ticketList) {
+            ticketList.hidden = false;
+            ticketList.innerHTML = '<legend>환불할 수강권</legend><label class="refund-ticket-option"><input type="radio" checked><span><strong>아주 긴 이름의 프라이빗 30회 수강권 반응형 검증</strong><small>잔여 17 / 총 30 · 사용 13 · 2026.12.31</small></span><span class="pill success">1,650,000원</span></label>';
+          }
+          if (calculationPanel) calculationPanel.hidden = false;
+          if (result) result.hidden = false;
+          if (sendPanel) sendPanel.hidden = false;
+          const values = {
+            refundResultPaid: "1,650,000원",
+            refundResultPenalty: "165,000원",
+            refundResultUsed: "715,000원",
+            refundResultAmount: "770,000원",
+            refundFormula: "산정식 · 1,650,000원 - 위약금 165,000원 - 사용금액 715,000원",
+          };
+          for (const [id, text] of Object.entries(values)) {
+            const element = document.querySelector(`#${id}`);
+            if (element) element.textContent = text;
+          }
+          const message = document.querySelector("#refundMessage");
+          if (message) message.value = "긴 회원 안내 문장이 모바일에서도 잘리지 않고 여러 줄로 표시되는지 확인합니다.";
         });
       }
       await page.evaluate(() => document.fonts?.ready);

@@ -25,6 +25,8 @@ export const archiveActionCollections = [
   archiveCollections.alimtalkCandidates,
   archiveCollections.alimtalkSends,
   archiveCollections.renewalCases,
+  archiveCollections.refundCases,
+  archiveCollections.eformsignRefundJobs,
   archiveCollections.contactSyncJobs,
   archiveCollections.adminSyncRequests,
   archiveCollections.memberSignupContracts,
@@ -49,7 +51,13 @@ export const archiveMirrorCollections = [
 
 export const archiveIncubationCollections = [archiveCollections.workLanes] as const;
 
-export const archiveExternalProjectionTargets = ["notionPrivateCharts", "googleDriveReports", "solapi", "studiomate"] as const;
+export const archiveExternalProjectionTargets = [
+  "notionPrivateCharts",
+  "googleDriveReports",
+  "solapi",
+  "studiomate",
+  "eformsign",
+] as const;
 
 export const memberFacingActionForbiddenSourceCollections = [
   ...archiveMirrorCollections,

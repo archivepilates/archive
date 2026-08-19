@@ -45,6 +45,11 @@ import {
   recommendedMealCallableOptions,
   recommendedMealEventOptions,
 } from "../runtime/functionOptions";
+import {
+  getRefundMemberTicketsHandler,
+  previewRefundHandler,
+  sendRefundAgreementHandler,
+} from "../refund/refundOperations";
 import { requireManager, requireStaff } from "../security/authGuards";
 import {
   adjustInstructorEvaluationEssayScoreHandler,
@@ -276,6 +281,30 @@ export const adminIssueStaffTempCode = onCall(callableOptions, async (request) =
   try {
     const staff = await requireStaff(request);
     return await adminIssueStaffTempCodeHandler(request, staff);
+  } catch (err) {
+    throw toHttpsError(err);
+  }
+});
+
+export const getRefundMemberTickets = onCall(callableOptions, async (request) => {
+  try {
+    return await getRefundMemberTicketsHandler(request);
+  } catch (err) {
+    throw toHttpsError(err);
+  }
+});
+
+export const previewRefund = onCall(callableOptions, async (request) => {
+  try {
+    return await previewRefundHandler(request);
+  } catch (err) {
+    throw toHttpsError(err);
+  }
+});
+
+export const sendRefundAgreement = onCall(callableOptions, async (request) => {
+  try {
+    return await sendRefundAgreementHandler(request);
   } catch (err) {
     throw toHttpsError(err);
   }

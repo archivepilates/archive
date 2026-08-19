@@ -22,6 +22,7 @@ artifacts/*/node_modules_deps/
 artifacts/*/node_modules
 artifacts/*/node_modules_deps
 .firebase/
+.playwright-cli/
 .DS_Store
 firebase/.DS_Store
 

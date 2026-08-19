@@ -4290,6 +4290,364 @@ a.rank-row:hover,
   color: var(--accent);
 }
 
+.refund-stepper {
+  display: grid;
+  grid-template-columns: repeat(3, minmax(0, 1fr));
+  gap: 10px;
+  margin: 0;
+  padding: 0;
+  list-style: none;
+}
+
+.refund-stepper li {
+  display: flex;
+  min-width: 0;
+  min-height: 58px;
+  align-items: center;
+  gap: 10px;
+  border: 1px solid var(--line);
+  border-radius: 6px;
+  background: var(--surface);
+  color: var(--muted);
+  padding: 10px 12px;
+}
+
+.refund-stepper li span {
+  display: inline-grid;
+  width: 30px;
+  height: 30px;
+  flex: 0 0 auto;
+  place-items: center;
+  border: 1px solid currentColor;
+  border-radius: 50%;
+  font-weight: 900;
+}
+
+.refund-stepper li strong {
+  min-width: 0;
+  overflow-wrap: anywhere;
+}
+
+.refund-stepper li.is-active,
+.refund-stepper li.is-complete {
+  border-color: var(--text);
+  background: var(--surface-strong);
+  color: var(--text);
+}
+
+.refund-stepper li.is-complete span {
+  border-color: var(--green);
+  background: var(--green-soft);
+  color: var(--green);
+}
+
+.refund-workspace {
+  display: grid;
+  gap: 16px;
+}
+
+.refund-panel[hidden] {
+  display: none;
+}
+
+.refund-form {
+  display: grid;
+  gap: 14px;
+  margin-top: 18px;
+}
+
+.refund-lookup-form {
+  grid-template-columns: minmax(0, 1fr) minmax(0, 1fr) auto;
+  align-items: end;
+}
+
+.refund-form label,
+.refund-message-field {
+  display: grid;
+  min-width: 0;
+  gap: 7px;
+  color: var(--muted);
+  font-size: 0.86rem;
+  font-weight: 800;
+}
+
+.refund-form input,
+.refund-form select,
+.refund-message-field textarea {
+  width: 100%;
+  min-width: 0;
+  min-height: 48px;
+  border: 1px solid var(--line);
+  border-radius: 6px;
+  background: var(--surface-strong);
+  color: var(--text);
+  padding: 10px 12px;
+  font: inherit;
+}
+
+.refund-kind-fields {
+  display: grid;
+  grid-template-columns: repeat(2, minmax(0, 1fr));
+  gap: 12px;
+  border: 1px solid var(--line-soft);
+  border-radius: 6px;
+  background: var(--surface);
+  padding: 12px;
+}
+
+.refund-kind-fields[hidden] {
+  display: none;
+}
+
+.refund-message-field textarea {
+  resize: vertical;
+  white-space: pre-wrap;
+}
+
+.refund-member-summary {
+  margin-top: 18px;
+  border-left: 4px solid var(--accent);
+  background: var(--accent-soft);
+  padding: 12px 14px;
+}
+
+.refund-member-summary strong,
+.refund-member-summary span {
+  display: block;
+  overflow-wrap: anywhere;
+}
+
+.refund-member-summary span {
+  margin-top: 3px;
+  color: var(--muted);
+  font-size: 0.86rem;
+}
+
+.refund-ticket-list {
+  display: grid;
+  gap: 10px;
+  margin: 18px 0 0;
+  border: 0;
+  padding: 0;
+}
+
+.refund-ticket-list[hidden] {
+  display: none;
+}
+
+.refund-ticket-list legend {
+  margin-bottom: 9px;
+  color: var(--muted);
+  font-size: 0.82rem;
+  font-weight: 900;
+}
+
+.refund-ticket-option {
+  display: grid;
+  grid-template-columns: auto minmax(0, 1fr) auto;
+  gap: 12px;
+  align-items: center;
+  border: 1px solid var(--line-soft);
+  border-radius: 7px;
+  background: var(--surface-strong);
+  padding: 13px;
+  cursor: pointer;
+}
+
+.refund-ticket-option:has(input:checked) {
+  border-color: var(--accent);
+  box-shadow: inset 4px 0 0 var(--accent);
+}
+
+.refund-ticket-option input {
+  width: 20px;
+  height: 20px;
+}
+
+.refund-ticket-option strong,
+.refund-ticket-option small {
+  display: block;
+  overflow-wrap: anywhere;
+}
+
+.refund-ticket-option small {
+  margin-top: 3px;
+  color: var(--muted);
+}
+
+.refund-input-grid {
+  display: grid;
+  grid-template-columns: repeat(3, minmax(0, 1fr));
+  gap: 12px;
+}
+
+.refund-wide-field {
+  grid-column: 1 / -1;
+}
+
+.refund-result {
+  display: grid;
+  gap: 14px;
+  margin-top: 18px;
+}
+
+.refund-amount-grid {
+  display: grid;
+  grid-template-columns: repeat(5, minmax(0, 1fr));
+  gap: 8px;
+}
+
+.refund-amount-grid > div {
+  display: grid;
+  min-width: 0;
+  gap: 5px;
+  border: 1px solid var(--line-soft);
+  border-radius: 6px;
+  background: var(--surface-strong);
+  padding: 12px;
+}
+
+.refund-amount-grid span {
+  color: var(--muted);
+  font-size: 0.78rem;
+  font-weight: 800;
+}
+
+.refund-amount-grid strong {
+  overflow-wrap: anywhere;
+  font-size: 1.15rem;
+}
+
+.refund-amount-grid .refund-final-amount {
+  border-color: var(--accent);
+  background: var(--accent-soft);
+}
+
+.refund-formula {
+  margin: 0;
+  color: var(--muted);
+  overflow-wrap: anywhere;
+}
+
+.refund-send-check {
+  display: grid;
+  gap: 6px;
+  margin: 18px 0 14px;
+}
+
+.refund-send-check label {
+  display: flex;
+  align-items: flex-start;
+  gap: 9px;
+  font-weight: 900;
+}
+
+.refund-send-check input {
+  width: 20px;
+  height: 20px;
+  flex: 0 0 auto;
+}
+
+.refund-send-check p {
+  margin: 0;
+  color: var(--muted);
+  font-size: 0.86rem;
+}
+
+.refund-policy-check {
+  display: flex;
+  align-items: flex-start;
+  gap: 10px;
+  min-height: 48px;
+  padding: 12px 14px;
+  border: 1px solid var(--line);
+  background: var(--surface-soft);
+}
+
+.refund-policy-check input {
+  width: 20px;
+  height: 20px;
+  flex: 0 0 auto;
+}
+
+.refund-policy-check span {
+  line-height: 1.55;
+}
+
+.refund-ticket-warning {
+  display: block;
+  margin-top: 4px;
+  color: var(--danger);
+  font-weight: 800;
+}
+
+.refund-history-panel .status-list {
+  padding-top: 14px;
+}
+
+@media (max-width: 860px) {
+  .refund-lookup-form,
+  .refund-input-grid {
+    grid-template-columns: 1fr 1fr;
+  }
+
+  .refund-lookup-form > button,
+  .refund-wide-field {
+    grid-column: 1 / -1;
+  }
+
+  .refund-amount-grid {
+    grid-template-columns: 1fr 1fr;
+  }
+}
+
+@media (max-width: 560px) {
+  .refund-stepper {
+    gap: 6px;
+  }
+
+  .refund-stepper li {
+    min-height: 54px;
+    justify-content: center;
+    padding: 8px 6px;
+  }
+
+  .refund-stepper li span {
+    width: 28px;
+    height: 28px;
+  }
+
+  .refund-stepper li strong {
+    position: absolute;
+    width: 1px;
+    height: 1px;
+    overflow: hidden;
+    clip: rect(0 0 0 0);
+    white-space: nowrap;
+  }
+
+  .refund-lookup-form,
+  .refund-input-grid,
+  .refund-amount-grid,
+  .refund-kind-fields {
+    grid-template-columns: 1fr;
+  }
+
+  .refund-lookup-form > button,
+  .refund-wide-field {
+    grid-column: auto;
+  }
+
+  .refund-ticket-option {
+    grid-template-columns: auto minmax(0, 1fr);
+  }
+
+  .refund-ticket-option > .pill {
+    grid-column: 2;
+    justify-self: start;
+  }
+}
+
 .action-card h2 {
   line-height: 1.22;
 }

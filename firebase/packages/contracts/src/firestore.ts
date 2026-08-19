@@ -8,6 +8,8 @@ export const archiveCollections = {
   alimtalkCandidates: "alimtalkCandidates",
   alimtalkSends: "alimtalkSends",
   renewalCases: "renewalCases",
+  refundCases: "refundCases",
+  eformsignRefundJobs: "eformsignRefundJobs",
   contactSyncJobs: "contactSyncJobs",
   memberSignupContracts: "memberSignupContracts",
   onsiteWelcomeRequests: "onsiteWelcomeRequests",
@@ -45,6 +47,8 @@ export const sourceOfTruthCollections = [
   archiveCollections.privateLessonSessions,
   archiveCollections.methodCueCardReviews,
   archiveCollections.adminSyncRequests,
+  archiveCollections.refundCases,
+  archiveCollections.eformsignRefundJobs,
 ] as const;
 
 export const mirrorCollections = [archiveCollections.membersMirror, archiveCollections.member360CardsMirror] as const;

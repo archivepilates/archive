@@ -98,6 +98,16 @@ const AUTOMATIONS = [
     repair: "bootstrap",
   },
   {
+    id: "eformsign-refund-queue",
+    label: "com.archive.eformsign-refund-queue",
+    title: "eformsign refund agreement queue",
+    area: "refunds",
+    resultFile: path.join(HOME, "ArchiveIN/automation/reports/eformsign-refund-queue/latest.json"),
+    maxAgeMinutes: 45,
+    plist: path.join(PLIST_DIR, "com.archive.eformsign-refund-queue.plist"),
+    repair: "bootstrap",
+  },
+  {
     id: "monthly-settlement-statements",
     label: "com.archive.monthly-settlement-statements",
     title: "Monthly settlement statements",
@@ -485,6 +495,16 @@ async function checkQueues() {
     repairStatus: "retry",
   });
   await inspectQueue({
+    collection: "eformsignRefundJobs",
+    area: "refunds",
+    title: "이폼싸인 환불동의서 발송 큐",
+    activeStatuses: ["pending", "retry", "processing", "sending"],
+    staleStatuses: ["processing"],
+    staleMinutes: 20,
+    repairStatus: "retry",
+    failureStatuses: ["failed", "error", "send_review_required"],
+  });
+  await inspectQueue({
     collection: "contactSyncJobs",
     area: "contacts",
     title: "Google Contacts 동기화 큐",
@@ -507,7 +527,7 @@ async function checkQueues() {
 async function inspectQueue(input) {
   const docs = await loadStatusDocs(input.collection, input.activeStatuses, 250);
   const stale = docs.filter((doc) => input.staleStatuses.includes(doc.status) && minutesSince(doc.updatedAt || doc.startedAt || doc.createdAt) > input.staleMinutes);
-  const failedAll = await loadStatusDocs(input.collection, ["failed", "error"], 50).catch(() => []);
+  const failedAll = await loadStatusDocs(input.collection, input.failureStatuses || ["failed", "error"], 50).catch(() => []);
   const failed = recentOrUndatedDocs(failedAll, RECENT_FAILURE_MINUTES);
   checked.push({
     id: input.collection,
