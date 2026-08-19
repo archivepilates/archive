@@ -102,7 +102,7 @@ let memberPage = 1;
 let selectedStaffKey = "";
 let selectedMealRequestId = "";
 let mealQueueFilter = "active";
-let refundFlow = { member: null, tickets: [], selectedTicket: null, preview: null };
+let refundFlow = { candidates: [], member: null, tickets: [], selectedTicket: null, preview: null };
 
 const MEMBER_PAGE_SIZE = 20;
 const COMMAND_ITEMS = [
@@ -3274,16 +3274,17 @@ function refundPayload() {
     return value === "" || value == null ? null : Number(value);
   };
   return {
+    memberId: refundFlow.member?.memberId || "",
     memberName: refundFlow.member?.memberName || String(qs("refundMemberName")?.value || "").trim(),
-    memberPhone: refundFlow.member?.memberPhone || normalizePhone(qs("refundMemberPhone")?.value || ""),
+    memberPhone: refundFlow.member?.memberPhone || "",
     ticketKey: refundFlow.selectedTicket?.ticketKey || "",
     requestedAt: `${refundRequestDate()}T00:00:00+09:00`,
     paidAmount: paidAmount === "" ? null : Number(paidAmount),
     ticketKind: qs("refundTicketKind")?.value || "count",
     normalUnitAmount: money("refundNormalUnitAmount"),
-    usedCount: money("refundUsedCount"),
-    totalContractWeeks: money("refundTotalContractWeeks"),
-    usedWeeks: money("refundUsedWeeks"),
+    usedCount: null,
+    totalContractWeeks: null,
+    usedWeeks: null,
     giftDeductionAmount: money("refundGiftDeductionAmount"),
     manualReason: String(qs("refundManualReason")?.value || "").trim(),
     paymentSourceNote: String(qs("refundPaymentSourceNote")?.value || "").trim(),
@@ -3296,9 +3297,7 @@ function updateRefundKindFields() {
   if (qs("refundCountFields")) qs("refundCountFields").hidden = kind !== "count";
   if (qs("refundPeriodFields")) qs("refundPeriodFields").hidden = kind !== "period";
   if (qs("refundNormalUnitAmount")) qs("refundNormalUnitAmount").required = kind === "count";
-  if (qs("refundUsedCount")) qs("refundUsedCount").required = kind === "count";
-  if (qs("refundTotalContractWeeks")) qs("refundTotalContractWeeks").required = kind === "period";
-  if (qs("refundUsedWeeks")) qs("refundUsedWeeks").required = kind === "period";
+  if (qs("refundUsedCount")) qs("refundUsedCount").required = false;
 }
 
 function resetRefundPreview() {
@@ -3324,9 +3323,10 @@ function renderRefundTickets(tickets) {
     legend +
     tickets
       .map((ticket, index) => {
-        const countText =
-          ticket.totalCount == null || ticket.remainingCount == null
-            ? "기간권·횟수 확인 필요"
+        const countText = ticket.suggestedTicketKind === "period"
+          ? `남은 기간 ${ticket.remainingDays ?? "-"}일 / 총 ${ticket.totalContractDays ?? "-"}일`
+          : ticket.totalCount == null || ticket.remainingCount == null
+            ? "StudioMate 횟수 원천 확인 필요"
             : `잔여 ${ticket.remainingCount} / 총 ${ticket.totalCount} · 사용 ${ticket.usedCount}`;
         const amountText = ticket.expiredNow
           ? "유효기간 만료"
@@ -3351,6 +3351,56 @@ function renderRefundTickets(tickets) {
   selectRefundTicket(tickets[0]?.ticketKey || "");
 }
 
+function renderRefundCandidates(candidates) {
+  const list = qs("refundMemberCandidates");
+  if (!list) return;
+  const legend = `<legend>회원 후보를 선택하세요</legend>`;
+  if (!candidates.length) {
+    list.innerHTML = `${legend}<div class="empty-state">현재 유효회원 명단에서 일치하는 이름을 찾지 못했습니다.</div>`;
+    list.hidden = false;
+    return;
+  }
+  list.innerHTML = legend + candidates.map((candidate) => `
+    <button class="refund-candidate-option" type="button" data-refund-member-id="${escapeHtml(candidate.memberId)}">
+      <span>
+        <strong>${escapeHtml(candidate.memberName || "이름 미상")}</strong>
+        <small>${escapeHtml(candidate.maskedPhone || `010-****-${candidate.phoneLast4 || "----"}`)}</small>
+      </span>
+      <span>
+        <small>활성 수강권 ${Number(candidate.activeTicketCount || 0).toLocaleString("ko-KR")}개</small>
+        <small>원천 갱신 ${escapeHtml(formatDate(candidate.sourceUpdatedAt) || "확인 필요")}</small>
+      </span>
+      <span class="pill">회원 선택</span>
+    </button>
+  `).join("");
+  list.hidden = false;
+}
+
+function refundDateValue(value) {
+  if (!value) return "";
+  const date = new Date(value);
+  if (Number.isNaN(date.getTime())) return String(value).slice(0, 10);
+  return new Intl.DateTimeFormat("en-CA", { timeZone: "Asia/Seoul" }).format(date);
+}
+
+function setReadonlyRefundValue(id, value) {
+  const element = qs(id);
+  if (element) element.value = value == null ? "" : String(value);
+}
+
+function renderRefundUsage(ticket) {
+  setReadonlyRefundValue("refundTotalCount", ticket.totalCount);
+  setReadonlyRefundValue("refundRemainingCount", ticket.remainingCount);
+  setReadonlyRefundValue("refundUsedCount", ticket.usedCount);
+  setReadonlyRefundValue("refundAvailableFrom", refundDateValue(ticket.availableFrom));
+  setReadonlyRefundValue("refundExpiresAt", refundDateValue(ticket.expiresAt));
+  setReadonlyRefundValue("refundTotalContractDays", ticket.totalContractDays == null ? "" : `${ticket.totalContractDays}일`);
+  setReadonlyRefundValue("refundRemainingDays", ticket.remainingDays == null ? "" : `${ticket.remainingDays}일`);
+  setReadonlyRefundValue("refundUsedDays", ticket.usedDays == null ? "" : `${ticket.usedDays}일`);
+  setReadonlyRefundValue("refundTotalContractWeeks", ticket.totalContractDays == null ? "" : (Number(ticket.totalContractDays) / 7).toFixed(2));
+  setReadonlyRefundValue("refundUsedWeeks", ticket.usedDays == null ? "" : (Number(ticket.usedDays) / 7).toFixed(2));
+}
+
 function selectRefundTicket(ticketKey) {
   const ticket = refundFlow.tickets.find((item) => item.ticketKey === ticketKey) || null;
   refundFlow.selectedTicket = ticket;
@@ -3363,9 +3413,7 @@ function selectRefundTicket(ticketKey) {
   if (qs("refundPaidAmount")) qs("refundPaidAmount").value = ticket.paymentAmount || "";
   if (qs("refundTicketKind")) qs("refundTicketKind").value = ticket.suggestedTicketKind || "count";
   if (qs("refundNormalUnitAmount")) qs("refundNormalUnitAmount").value = "";
-  if (qs("refundUsedCount")) qs("refundUsedCount").value = ticket.usedCount ?? "";
-  if (qs("refundTotalContractWeeks")) qs("refundTotalContractWeeks").value = ticket.suggestedContractWeeks ?? "";
-  if (qs("refundUsedWeeks")) qs("refundUsedWeeks").value = "";
+  renderRefundUsage(ticket);
   if (qs("refundGiftDeductionAmount")) qs("refundGiftDeductionAmount").value = "0";
   if (qs("refundManualReason")) qs("refundManualReason").value = "";
   if (qs("refundPaymentSourceNote")) qs("refundPaymentSourceNote").value = "";
@@ -3378,25 +3426,18 @@ function selectRefundTicket(ticketKey) {
       ? "유효기간이 지난 수강권은 환불할 수 없습니다."
       : ticket.suggestedTicketKind === "count"
         ? "정상 1회 단가를 확인한 뒤 계산하세요."
-        : "홀딩을 제외한 실제 사용 주수와 근거를 확인하세요.",
+        : "StudioMate 시작일·종료일 기준의 총 기간과 남은 기간을 확인하세요.",
     ticket.expiredNow ? "danger" : "warn",
   );
 }
 
-async function handleRefundLookup(event) {
-  event.preventDefault();
-  const memberName = String(qs("refundMemberName")?.value || "").trim();
-  const memberPhone = normalizePhone(qs("refundMemberPhone")?.value || "");
+async function loadRefundMember(memberId) {
   const button = qs("refundLookupButton");
-  if (memberName.length < 2 || !/^010\d{8}$/.test(memberPhone)) {
-    setRefundStatus("refundLookupStatus", "회원 이름과 010으로 시작하는 11자리 연락처를 확인하세요.", "danger");
-    return;
-  }
   if (button) {
     button.disabled = true;
-    button.textContent = "회원 확인 중";
+    button.textContent = "수강권 확인 중";
   }
-  setRefundStatus("refundLookupStatus", "회원카드와 현재 수강권을 확인하고 있습니다.", "warn");
+  setRefundStatus("refundLookupStatus", "선택한 회원카드와 현재 수강권을 확인하고 있습니다.", "warn");
   try {
     const runtime = await initFirebase();
     const user = await waitForAuth(runtime);
@@ -3405,25 +3446,72 @@ async function handleRefundLookup(event) {
       throw new Error("운영자 로그인 후 다시 시도하세요.");
     }
     const callable = runtime.httpsCallable(runtime.functionsClient, "getRefundMemberTickets");
-    const result = await callable({ memberName, memberPhone });
+    const result = await callable({ memberId });
     const data = result?.data || {};
-    refundFlow = { member: data.member || null, tickets: data.tickets || [], selectedTicket: null, preview: null };
+    refundFlow = { candidates: [], member: data.member || null, tickets: data.tickets || [], selectedTicket: null, preview: null };
+    if (qs("refundMemberCandidates")) qs("refundMemberCandidates").hidden = true;
     if (qs("refundMemberSummary")) {
       qs("refundMemberSummary").hidden = false;
       qs("refundMemberSummary").innerHTML = `
-        <strong>${escapeHtml(data.member?.memberName || memberName)} · ${escapeHtml(formatPhoneForDisplay(memberPhone))}</strong>
-        <span>보유 수강권 ${(data.tickets || []).length}개 · 원천 ${escapeHtml(formatDate(data.member?.sourceUpdatedAt))}</span>
+        <strong>${escapeHtml(data.member?.memberName || "회원")} · ${escapeHtml(data.member?.maskedPhone || "연락처 확인됨")}</strong>
+        <span>보유 수강권 ${(data.tickets || []).length}개 · 원천 ${escapeHtml(formatDate(data.member?.sourceUpdatedAt) || "확인 필요")}</span>
       `;
     }
     renderRefundTickets(refundFlow.tickets);
     setRefundStatus("refundLookupStatus", "회원과 보유 수강권을 확인했습니다.", "good");
   } catch (error) {
     if (isPermissionDenied(error)) showLoginGate("환불 처리는 운영자 권한이 필요합니다.");
+    setRefundStatus("refundLookupStatus", error?.message || "회원 수강권 조회 중 오류가 발생했습니다.", "danger");
+  } finally {
+    if (button) {
+      button.disabled = false;
+      button.textContent = "회원 후보 찾기";
+    }
+  }
+}
+
+async function handleRefundLookup(event) {
+  event.preventDefault();
+  const memberName = String(qs("refundMemberName")?.value || "").trim();
+  const button = qs("refundLookupButton");
+  if (memberName.length < 2) {
+    setRefundStatus("refundLookupStatus", "회원 이름을 두 글자 이상 입력하세요.", "danger");
+    return;
+  }
+  if (button) {
+    button.disabled = true;
+    button.textContent = "후보 찾는 중";
+  }
+  refundFlow = { candidates: [], member: null, tickets: [], selectedTicket: null, preview: null };
+  resetRefundPreview();
+  if (qs("refundMemberCandidates")) {
+    qs("refundMemberCandidates").hidden = true;
+    qs("refundMemberCandidates").innerHTML = "<legend>회원 후보를 선택하세요</legend>";
+  }
+  if (qs("refundMemberSummary")) qs("refundMemberSummary").hidden = true;
+  if (qs("refundTicketList")) qs("refundTicketList").hidden = true;
+  if (qs("refundCalculationPanel")) qs("refundCalculationPanel").hidden = true;
+  setRefundStatus("refundLookupStatus", "유효회원 후보를 확인하고 있습니다.", "warn");
+  try {
+    const runtime = await initFirebase();
+    const user = await waitForAuth(runtime);
+    if (!user) {
+      showLoginGate("환불 처리는 운영자 로그인이 필요합니다.");
+      throw new Error("운영자 로그인 후 다시 시도하세요.");
+    }
+    const callable = runtime.httpsCallable(runtime.functionsClient, "getRefundMemberTickets");
+    const result = await callable({ memberName });
+    const data = result?.data || {};
+    refundFlow.candidates = Array.isArray(data.candidates) ? data.candidates : [];
+    renderRefundCandidates(refundFlow.candidates);
+    setRefundStatus("refundLookupStatus", `${refundFlow.candidates.length.toLocaleString("ko-KR")}명의 후보를 확인했습니다. 회원카드를 선택하세요.`, "good");
+  } catch (error) {
+    if (isPermissionDenied(error)) showLoginGate("환불 처리는 운영자 권한이 필요합니다.");
     setRefundStatus("refundLookupStatus", error?.message || "회원 조회 중 오류가 발생했습니다.", "danger");
   } finally {
     if (button) {
       button.disabled = false;
-      button.textContent = "보유 수강권 확인";
+      button.textContent = "회원 후보 찾기";
     }
   }
 }
@@ -3443,6 +3531,10 @@ async function handleRefundPreview(event) {
     const result = await callable(refundPayload());
     const data = result?.data || {};
     refundFlow.preview = data;
+    if (data.ticket) {
+      refundFlow.selectedTicket = { ...refundFlow.selectedTicket, ...data.ticket };
+      renderRefundUsage(refundFlow.selectedTicket);
+    }
     const calculation = data.calculation || {};
     setText("refundResultPaid", formatWon(calculation.paidAmount));
     setText("refundResultPenalty", formatWon(calculation.penaltyAmount));
@@ -6579,6 +6671,12 @@ qs("recommendedMealProgramForm")?.addEventListener("submit", handleRecommendedMe
 qs("recommendedMealHistoryToggle")?.addEventListener("click", toggleRecommendedMealHistory);
 qs("recommendedMealQueue")?.addEventListener("click", handleMealQueueClick);
 qs("refundLookupForm")?.addEventListener("submit", handleRefundLookup);
+qs("refundMemberCandidates")?.addEventListener("click", (event) => {
+  const button = event.target.closest?.("[data-refund-member-id]");
+  if (!button) return;
+  const memberId = String(button.dataset.refundMemberId || "").trim();
+  if (memberId) loadRefundMember(memberId);
+});
 qs("refundCalculationForm")?.addEventListener("submit", handleRefundPreview);
 qs("refundTicketList")?.addEventListener("change", (event) => {
   const input = event.target.closest?.('input[name="refundTicket"]');

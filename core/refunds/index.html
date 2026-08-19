@@ -56,15 +56,17 @@
         <section class="refund-workspace">
           <article class="panel refund-panel" id="refundLookupPanel">
             <div class="panel-header">
-              <div><h2>회원 찾기</h2><p>이름과 전체 연락처가 모두 일치할 때만 수강권을 불러옵니다.</p></div>
+              <div><h2>회원 찾기</h2><p>이름으로 유효회원 후보를 찾은 뒤 회원카드를 선택합니다.</p></div>
               <span class="pill active">1단계</span>
             </div>
             <form class="refund-form refund-lookup-form" id="refundLookupForm">
               <label><span>회원 이름</span><input id="refundMemberName" autocomplete="name" maxlength="40" required /></label>
-              <label><span>연락처</span><input id="refundMemberPhone" type="tel" inputmode="numeric" autocomplete="tel" placeholder="01000000000" maxlength="13" required /></label>
-              <button class="primary-action" id="refundLookupButton" type="submit">보유 수강권 확인</button>
+              <button class="primary-action" id="refundLookupButton" type="submit">회원 후보 찾기</button>
             </form>
             <div class="form-status" id="refundLookupStatus" aria-live="polite"></div>
+            <fieldset class="refund-candidate-list" id="refundMemberCandidates" hidden>
+              <legend>회원 후보를 선택하세요</legend>
+            </fieldset>
             <div class="refund-member-summary" id="refundMemberSummary" hidden></div>
             <fieldset class="refund-ticket-list" id="refundTicketList" hidden>
               <legend>환불할 수강권</legend>
@@ -83,14 +85,21 @@
                 <label><span>수강권 유형 · 원천 기준</span><select id="refundTicketKind" required disabled aria-disabled="true"><option value="count">횟수권</option><option value="period">기간권</option></select></label>
                 <div class="refund-kind-fields refund-wide-field" id="refundCountFields">
                   <label><span>1회 정상 단가</span><input id="refundNormalUnitAmount" type="number" inputmode="numeric" min="1" step="1" placeholder="정상가표 기준" /></label>
-                  <label><span>사용 횟수</span><input id="refundUsedCount" type="number" inputmode="numeric" min="0" step="1" /></label>
+                  <label><span>StudioMate 사용 횟수</span><input id="refundUsedCount" type="number" inputmode="numeric" min="0" step="1" readonly aria-readonly="true" /></label>
+                  <label><span>StudioMate 총 횟수</span><input id="refundTotalCount" type="number" inputmode="numeric" min="0" step="1" readonly aria-readonly="true" /></label>
+                  <label><span>StudioMate 잔여 횟수</span><input id="refundRemainingCount" type="number" inputmode="numeric" min="0" step="1" readonly aria-readonly="true" /></label>
                 </div>
                 <div class="refund-kind-fields refund-wide-field" id="refundPeriodFields" hidden>
-                  <label><span>총 계약 주수</span><input id="refundTotalContractWeeks" type="number" inputmode="decimal" min="0.01" step="0.01" /></label>
-                  <label><span>실제 사용 주수</span><input id="refundUsedWeeks" type="number" inputmode="decimal" min="0" step="0.01" placeholder="홀딩 제외" /></label>
+                  <label><span>이용 시작일</span><input id="refundAvailableFrom" type="date" readonly aria-readonly="true" /></label>
+                  <label><span>이용 종료일</span><input id="refundExpiresAt" type="date" readonly aria-readonly="true" /></label>
+                  <label><span>총 기간</span><input id="refundTotalContractDays" type="text" readonly aria-readonly="true" /></label>
+                  <label><span>남은 기간</span><input id="refundRemainingDays" type="text" readonly aria-readonly="true" /></label>
+                  <label><span>사용 기간</span><input id="refundUsedDays" type="text" readonly aria-readonly="true" /></label>
+                  <input id="refundTotalContractWeeks" type="hidden" />
+                  <input id="refundUsedWeeks" type="hidden" />
                 </div>
                 <label><span>증정·프로모션 공제</span><input id="refundGiftDeductionAmount" type="number" inputmode="numeric" min="0" step="1" value="0" /></label>
-                <label class="refund-wide-field"><span>사용분 확인 근거</span><input id="refundManualReason" maxlength="300" placeholder="정상가표, 이용내역, 홀딩 제외 기간 등" /></label>
+                <label class="refund-wide-field"><span>예외·혜택 확인 메모 <small>(선택)</small></span><input id="refundManualReason" maxlength="300" placeholder="예외 또는 별도 혜택 확인 내용이 있을 때만 입력" /></label>
                 <label class="refund-wide-field"><span>결제금액 확인 근거</span><input id="refundPaymentSourceNote" maxlength="300" placeholder="원천 금액을 수정한 경우 결제내역 위치를 기록" /></label>
                 <label class="refund-policy-check refund-wide-field">
                   <input id="refundEligibilityCheck" type="checkbox" required />

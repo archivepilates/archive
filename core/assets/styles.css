@@ -4357,7 +4357,7 @@ a.rank-row:hover,
 }
 
 .refund-lookup-form {
-  grid-template-columns: minmax(0, 1fr) minmax(0, 1fr) auto;
+  grid-template-columns: minmax(0, 1fr) auto;
   align-items: end;
 }
 
@@ -4415,6 +4415,66 @@ a.rank-row:hover,
 .refund-member-summary span {
   display: block;
   overflow-wrap: anywhere;
+}
+
+.refund-candidate-list {
+  display: grid;
+  gap: 10px;
+  margin: 18px 0 0;
+  border: 0;
+  padding: 0;
+}
+
+.refund-candidate-list[hidden] {
+  display: none;
+}
+
+.refund-candidate-list legend {
+  margin-bottom: 2px;
+  color: var(--muted);
+  font-size: 0.82rem;
+  font-weight: 900;
+}
+
+.refund-candidate-option {
+  display: grid;
+  grid-template-columns: minmax(0, 1fr) auto auto;
+  gap: 12px;
+  width: 100%;
+  min-width: 0;
+  min-height: 64px;
+  align-items: center;
+  border: 1px solid var(--line-soft);
+  border-radius: 7px;
+  background: var(--surface-strong);
+  color: var(--text);
+  padding: 12px 13px;
+  text-align: left;
+  font: inherit;
+  cursor: pointer;
+}
+
+.refund-candidate-option:hover,
+.refund-candidate-option:focus-visible {
+  border-color: var(--accent);
+  box-shadow: inset 4px 0 0 var(--accent);
+  outline: none;
+}
+
+.refund-candidate-option > span {
+  min-width: 0;
+}
+
+.refund-candidate-option strong,
+.refund-candidate-option small {
+  display: block;
+  overflow-wrap: anywhere;
+}
+
+.refund-candidate-option small {
+  margin-top: 3px;
+  color: var(--muted);
+  font-size: 0.78rem;
 }
 
 .refund-member-summary span {
@@ -4640,6 +4700,21 @@ a.rank-row:hover,
 
   .refund-ticket-option {
     grid-template-columns: auto minmax(0, 1fr);
+  }
+
+  .refund-candidate-option {
+    grid-template-columns: minmax(0, 1fr) auto;
+  }
+
+  .refund-candidate-option > span:nth-child(2) {
+    grid-column: 1 / -1;
+    grid-row: 2;
+  }
+
+  .refund-candidate-option > .pill {
+    grid-column: 2;
+    grid-row: 1;
+    justify-self: end;
   }
 
   .refund-ticket-option > .pill {

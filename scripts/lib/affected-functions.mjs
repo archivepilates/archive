@@ -32,7 +32,7 @@ export function detectAffectedFromCli(argv) {
   };
 }
 
-function codebasesForFile(file) {
+export function codebasesForFile(file) {
   const normalized = file.replaceAll("\\", "/");
   if (!normalized || normalized.startsWith("docs/") || normalized.startsWith("artifacts/")) return [];
   if (isSharedPath(normalized)) return allCodebases;
@@ -59,6 +59,7 @@ function codebasesForFile(file) {
   }
   if (normalized.endsWith("/parking/parkingOperations.ts")) return ["functions-app", "functions-sync"];
   if (normalized.includes("/parking/")) return ["functions-app"];
+  if (normalized.includes("/refund/")) return ["functions-app"];
   if (normalized.includes("/callable/") || normalized.includes("/security/") || normalized.endsWith("/exports/app.ts")) {
     return ["functions-app"];
   }

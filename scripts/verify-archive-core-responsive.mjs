@@ -90,11 +90,16 @@ try {
       }
       if (route.name === "refunds") {
         await page.evaluate(() => {
+          const memberCandidates = document.querySelector("#refundMemberCandidates");
           const memberSummary = document.querySelector("#refundMemberSummary");
           const ticketList = document.querySelector("#refundTicketList");
           const calculationPanel = document.querySelector("#refundCalculationPanel");
           const result = document.querySelector("#refundResult");
           const sendPanel = document.querySelector("#refundSendPanel");
+          if (memberCandidates) {
+            memberCandidates.hidden = false;
+            memberCandidates.innerHTML = '<legend>회원 후보를 선택하세요</legend><button class="refund-candidate-option" type="button"><span><strong>동명이인반응형검증회원</strong><small>010-****-5678</small></span><span><small>활성 수강권 2개</small><small>원천 갱신 2026.08.20</small></span><span class="pill">회원 선택</span></button>';
+          }
           if (memberSummary) {
             memberSummary.hidden = false;
             memberSummary.innerHTML = "<strong>반응형검증회원 · 010-1234-5678</strong><span>보유 수강권 1개 · 원천 2026.08.20</span>";
@@ -141,7 +146,7 @@ try {
           }));
         const touchTargets = [
           ...document.querySelectorAll(
-            ".nav a, .nav-more-button, .quick-action, .external-tool-link, .filter-button, .text-link, .reference-toggle, a.rank-row, .rank-link, .primary-action, .secondary-action, .renewal-actions button",
+            ".nav a, .nav-more-button, .quick-action, .external-tool-link, .filter-button, .text-link, .reference-toggle, a.rank-row, .rank-link, .primary-action, .secondary-action, .renewal-actions button, .refund-candidate-option",
           ),
         ]
           .filter((element) => element.offsetParent !== null)

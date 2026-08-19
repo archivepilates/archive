@@ -4,9 +4,9 @@ import { existsSync, readFileSync } from "node:fs";
 const checks = [
   ["core/refunds/index.html", ["data-refund-dashboard", "환불 안내·동의서", "refundEligibilityCheck", "refundTicketKind\" required disabled"]],
   ["core/assets/app.js", ["getStudioCollectionBy(db, runtime, \"refundCases\"", "eligibilityReviewConfirmed"]],
-  ["firebase/kangsain-functions/functions/src/refund/refundPolicy.ts", ["archive-refund-notion-2026-08-19-v1", "REFUND_PENALTY_RATE = 0.1"]],
+  ["firebase/kangsain-functions/functions/src/refund/refundPolicy.ts", ["archive-refund-studiomate-source-2026-08-20-v2", "REFUND_PENALTY_RATE = 0.1", "deriveRefundPeriodUsage"]],
   ["firebase/kangsain-functions/firestore.rules", ["sameStudioClaim", "match /refundCases/{caseId}"]],
-  ["firebase/kangsain-functions/functions/src/refund/refundOperations.ts", ["eformsignRefundJobs", "agreement_queued", "eligibilityReviewConfirmed", "inferRefundTicketKind", "assertRefundRequestWindow", "sourceTicketSnapshot", "refundCaseId(staff.studioId, member.memberId, input.ticketKey)"]],
+  ["firebase/kangsain-functions/functions/src/refund/refundOperations.ts", ["eformsignRefundJobs", "agreement_queued", "eligibilityReviewConfirmed", "inferRefundTicketKind", "assertRefundRequestWindow", "searchRefundMembers", "resolveMemberById", "usageSource: \"studiomate_active_ticket\"", "sourceTicketSnapshot", "refundCaseId(staff.studioId, member.memberId, input.ticketKey)"]],
   ["scripts/lib/eformsign-refund-browser-contract.mjs", ["companySignature", "documentName", "documentId", "assertRefundJobStillWithinValidity", "assertRefundSourceUnchanged", "staleRefundJobRecoveryStatus", "extractEformsignDocumentId"]],
   ["scripts/process-eformsign-refund-jobs.mjs", ["if (config.loginOnly)", "authenticated = true", "recoverStaleJobs", "assertLiveRefundSource", "send_review_required", "acquireEformsignBrowserLock", "assertRefundJobStillWithinValidity", "eformsignDocumentId"]],
   ["firebase/kangsain-functions/macmini-studiomate/com.archive.eformsign-refund-queue.plist", ["process-eformsign-refund-jobs.mjs", "--apply"]],

@@ -1003,6 +1003,56 @@ const guardGroups = [
     ],
   },
   {
+    id: "refund-studiomate-source-selection",
+    reason: "환불 화면이 이름+전화번호 수동 조회나 사용횟수·홀딩기간 수동 계산으로 되돌아가는 것을 막습니다.",
+    files: [
+      {
+        file: "core/refunds/index.html",
+        markers: [
+          "refundMemberCandidates",
+          "StudioMate 사용 횟수",
+          "StudioMate 잔여 횟수",
+          "refundRemainingDays",
+          "예외·혜택 확인 메모",
+        ],
+        forbiddenMarkers: ["id=\"refundMemberPhone\""],
+      },
+      {
+        file: "core/assets/app.js",
+        markers: [
+          "renderRefundCandidates",
+          "data-refund-member-id",
+          "memberId: refundFlow.member?.memberId",
+          "usedCount: null",
+          "remainingDays",
+        ],
+      },
+      {
+        file: "firebase/kangsain-functions/functions/src/refund/refundOperations.ts",
+        markers: [
+          "searchRefundMembers",
+          "resolveMemberById",
+          "deriveRefundPeriodUsage",
+          "usageSource: \"studiomate_active_ticket\"",
+          "StudioMate 총횟수·잔여횟수 원천",
+        ],
+      },
+      {
+        file: "firebase/kangsain-functions/functions/src/refund/refundPolicy.ts",
+        markers: [
+          "archive-refund-studiomate-source-2026-08-20-v2",
+          "StudioMate 잔여기간 기준",
+          "totalContractDays",
+          "remainingDays",
+        ],
+      },
+      {
+        file: "scripts/lib/affected-functions.mjs",
+        markers: ["normalized.includes(\"/refund/\")", "return [\"functions-app\"]"],
+      },
+    ],
+  },
+  {
     id: "core-operating-rules",
     reason: "Notion 대신 ARCHIVE CORE 운영규칙 탭을 기준으로 쓰는 운영 정책이 빠지는 것을 막습니다.",
     files: [
