@@ -46,6 +46,8 @@
 - 상태: `pending → processing → sending → done`
 - 처리기가 중단되면 전송 클릭 전 작업만 `retry`로 회수하고, 전송 클릭 가능성이 있는 작업은 `send_review_required`로 보내 자동 중복 발송을 막는다.
 - 전송 클릭 후 성공 여부가 모호하면 `send_review_required`로 멈추며 자동 재시도하지 않는다.
+- 환불동의서 v9 필드 계약은 회원명 `ozinput_24`, 연락처 `ozinput_27`, 실결제금액 `ozinput_29`, 위약금 `ozinput_30`, 사용·혜택 공제 `ozinput_31`, 예상 환불금액 `ozinput_32`를 사용한다.
+- SMS 수신자 입력 후 진행 중 문서함에서 문서명, 문서 ID, 대상 연락처가 함께 확인되어야 `done`으로 전환한다.
 
 ## 환불 후 운영 처리
 
@@ -62,7 +64,8 @@ ARCHIVE CORE 환불 메뉴는 1~3단계만 지원한다. 실제 결제 취소와
 - 구현: 완료
 - 기존 운영 배포: 이름+연락처 방식의 v1 Functions와 CORE 화면이 배포됨
 - 이번 개선 구현: 이름 후보 선택, canonical memberId 검증, 횟수권 잔여횟수 자동 산정, 기간권 잔여 주수 자동 산정, 사용 횟수·주수 수동 입력 제거 완료
-- 로컬 검증: 환불정책 15건, 이폼싸인 큐 안전성 9건, affected-only 환불 매핑, Functions 전체 빌드와 경계·데이터 원천 검사 통과
-- 라이브 검증: 김기효 격리 계정 조회, 수강권 선택, 10% 위약금 계산, 안내 문구 생성, 발송 큐 단건 등록 완료
-- 이폼싸인 실발송: 전용 Playwright 프로필의 `archivepilates@gmail.com` 1회 로그인 대기. 테스트 작업은 `pending`에서 안전 정지
-- 이번 개선 운영 배포: 미실행. 환불 계산 규칙 변경이므로 별도 배포 승인 후 `functions-app`과 ARCHIVE CORE Hosting만 반영
+- 로컬 검증: 환불정책 15건, 이폼싸인 큐 안전성 10건, affected-only 환불 매핑, Functions 전체 빌드와 경계·데이터 원천 검사 통과
+- 라이브 검증: 김기효 격리 계정 조회, 사전등록 100회권 선택, 실결제금액 100,000원·위약금 10,000원·사용 공제 0원·예상 환불 90,000원 확인
+- 이폼싸인 실발송: `archivepilates@gmail.com` 프로필에서 SMS 단건 발송 완료. 문서 `2026-08-20_환불동의서_김기효_d9e786e3`, 문서 ID `193d256294be423c9406cda7d0f393c4`, Firestore 작업 `done`, 케이스 `agreement_sent` 확인
+- 실제 결제 환불, StudioMate 문자, 수강권 변경은 실행하지 않음
+- v9 필드·수신자·문서함 증거 보강은 `codex/mini/refund-eform-v9-field-map` worktree에서 검증 완료했으며 운영 승격 전 상태

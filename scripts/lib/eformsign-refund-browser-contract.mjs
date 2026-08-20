@@ -3,14 +3,16 @@ import { createHash } from "node:crypto";
 export const EFORMSIGN_REFUND_TEMPLATE_ID = "fbdd279c2d7447938bc4e997f249c7b5";
 export const EFORMSIGN_REFUND_TEMPLATE_URL =
   `https://www.eformsign.com/eform/document/view_service.html?form_id=${EFORMSIGN_REFUND_TEMPLATE_ID}`;
+export const EFORMSIGN_PROGRESS_DOCUMENTS_URL =
+  "https://www.eformsign.com/eform/document/document_list.html?mode=ip";
 
 export const EFORMSIGN_REFUND_FIELD_IDS = Object.freeze({
-  memberName: "ozinput_25",
-  memberPhone: "ozinput_28",
-  paymentAmount: "ozinput_30",
-  penaltyAmount: "ozinput_31",
-  usedAmount: "ozinput_32",
-  refundAmount: "ozinput_34",
+  memberName: "ozinput_24",
+  memberPhone: "ozinput_27",
+  paymentAmount: "ozinput_29",
+  penaltyAmount: "ozinput_30",
+  usedAmount: "ozinput_31",
+  refundAmount: "ozinput_32",
   companySignerName: "ozinput_38",
   companySignature: "oziviw_39",
 });
@@ -120,7 +122,7 @@ export function isUnambiguousSendSuccess({ url = "", bodyText = "", documentName
   if (!normalizedName || !text.includes(normalizedName) || !String(documentId || "").trim()) return false;
   const explicitSuccess = /문서(?:가|를)?\s*전송(?:되었습니다|했습니다| 완료)/.test(text)
     || /전송이\s*완료(?:되었습니다|됐습니다)/.test(text);
-  const documentInSentList = /\/eform\/document\/(?:list|doc_list|sent)/.test(String(url || ""))
+  const documentInSentList = /\/eform\/document\/(?:document_list\.html|list|doc_list|sent)/.test(String(url || ""))
     && /진행 중|처리 중|완료|수신자|문서함/.test(text);
   return explicitSuccess || documentInSentList;
 }

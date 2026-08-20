@@ -9,6 +9,7 @@ import {
   assertRefundSourceUnchanged,
   buildRefundDocumentName,
   buildRefundRecipientMessage,
+  EFORMSIGN_PROGRESS_DOCUMENTS_URL,
   EFORMSIGN_REFUND_FIELD_IDS,
   EFORMSIGN_REFUND_TEMPLATE_URL,
   extractEformsignDocumentId,
@@ -251,13 +252,21 @@ async function sendRefundAgreement(page, job, beforeFinalSend) {
   const sendHeading = page.getByRole("heading", { name: "문서 전송", exact: true });
   await sendHeading.waitFor({ state: "visible", timeout: 30000 });
   const sendModal = sendHeading.locator("xpath=ancestor::*[.//button[normalize-space()='취소']][1]");
-  const checkboxes = sendModal.locator('input[type="checkbox"]');
-  const emailCheckbox = checkboxes.nth(0);
-  const smsCheckbox = checkboxes.nth(1);
-  if (await emailCheckbox.isChecked().catch(() => false)) await emailCheckbox.uncheck();
-  if (!(await smsCheckbox.isChecked().catch(() => false))) await smsCheckbox.check();
-  await sendModal.getByRole("textbox", { name: "이름" }).first().fill(job.memberName);
-  const phoneInput = sendModal.locator('input[type="tel"], input[placeholder*="휴대"], input[placeholder*="연락처"]').first();
+  const emailCheckbox = sendModal.locator('input[type="checkbox"][clonekey="useEmail"]').last();
+  const smsCheckbox = sendModal.locator('input[type="checkbox"][clonekey="useSms"]').last();
+  if (await emailCheckbox.isChecked().catch(() => false)) {
+    await sendModal.locator('label[clonekey="useEmailLabel"]').last().click();
+  }
+  if (!(await smsCheckbox.isChecked().catch(() => false))) {
+    await sendModal.locator('label[clonekey="useSmsLabel"]').last().click();
+  }
+  const recipientNameInput = sendModal.locator('input[name="flexdatalist-userName"]').last();
+  await recipientNameInput.fill(job.memberName);
+  const exactRecipientOption = page.getByRole("option", { name: job.memberName, exact: true });
+  if (await exactRecipientOption.waitFor({ state: "visible", timeout: 1500 }).then(() => true).catch(() => false)) {
+    await exactRecipientOption.click();
+  }
+  const phoneInput = sendModal.locator('input[type="tel"][subkey="inputOutsiderNumber"]').last();
   await phoneInput.waitFor({ state: "visible", timeout: 10000 });
   await phoneInput.fill(job.memberPhone);
   const messageBox = sendModal.getByRole("textbox", { name: "수신자에게 전달할 메시지를 입력하세요." });
@@ -265,7 +274,9 @@ async function sendRefundAgreement(page, job, beforeFinalSend) {
 
   assertRefundJobStillWithinValidity(job);
   await beforeFinalSend();
-  await sendModal.getByRole("button", { name: "전송", exact: true }).click();
+  const finalSendButton = sendModal.getByRole("button", { name: "전송", exact: true });
+  if (!(await finalSendButton.isEnabled())) throw new Error("이폼싸인 수신자 정보가 완성되지 않아 전송을 중단했습니다.");
+  await finalSendButton.click();
   const sendEvidence = await waitForSendEvidence(page, documentName);
   if (!isUnambiguousSendSuccess({ ...sendEvidence, documentName })) {
     throw new Error("최종 전송 버튼 이후 성공 여부를 명확히 확인하지 못했습니다.");
@@ -306,6 +317,7 @@ async function clickNext(page) {
 async function waitForSendEvidence(page, documentName) {
   const deadline = Date.now() + 30000;
   let last = { url: page.url(), bodyText: "", documentId: "" };
+  let openedProgressDocuments = false;
   while (Date.now() < deadline) {
     last = {
       url: page.url(),
@@ -313,6 +325,11 @@ async function waitForSendEvidence(page, documentName) {
       documentId: await findDocumentIdOnPage(page, documentName),
     };
     if (isUnambiguousSendSuccess({ ...last, documentName })) return last;
+    if (!openedProgressDocuments && /\/eform\/index\.html/.test(page.url())) {
+      openedProgressDocuments = true;
+      await page.goto(EFORMSIGN_PROGRESS_DOCUMENTS_URL, { waitUntil: "domcontentloaded", timeout: 30000 });
+      continue;
+    }
     await sleep(500);
   }
   return last;

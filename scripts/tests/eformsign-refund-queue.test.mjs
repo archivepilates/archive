@@ -5,6 +5,8 @@ import {
   assertRefundSourceUnchanged,
   buildRefundDocumentName,
   currentRefundTicketSourceSnapshot,
+  EFORMSIGN_PROGRESS_DOCUMENTS_URL,
+  EFORMSIGN_REFUND_FIELD_IDS,
   EFORMSIGN_REFUND_TEMPLATE_ID,
   extractEformsignDocumentId,
   formatInputWon,
@@ -52,6 +54,19 @@ test("환불 큐 작업은 승인된 템플릿과 정상 연락처만 허용한�
 test("환불 금액은 문서에서 바로 읽을 수 있는 원화 형식으로 입력한다", () => {
   assert.equal(formatInputWon(100000), "100,000원");
   assert.equal(formatInputWon(0), "0원");
+});
+
+test("환불동의서 v9 필드 계약은 라이브 양식 순서와 일치한다", () => {
+  assert.deepEqual(EFORMSIGN_REFUND_FIELD_IDS, {
+    memberName: "ozinput_24",
+    memberPhone: "ozinput_27",
+    paymentAmount: "ozinput_29",
+    penaltyAmount: "ozinput_30",
+    usedAmount: "ozinput_31",
+    refundAmount: "ozinput_32",
+    companySignerName: "ozinput_38",
+    companySignature: "oziviw_39",
+  });
 });
 
 test("큐 처리 직전 수강권이 만료되면 발송을 중단한다", () => {
@@ -134,7 +149,7 @@ test("명확한 전송 완료 증거만 성공으로 판정한다", () => {
   assert.equal(isUnambiguousSendSuccess({ url: "https://www.eformsign.com/eform/document/sent", documentName }), false);
   assert.equal(
     isUnambiguousSendSuccess({
-      url: "https://www.eformsign.com/eform/document/sent",
+      url: EFORMSIGN_PROGRESS_DOCUMENTS_URL,
       bodyText: `${documentName} 진행 중 수신자 1명`,
       documentName,
       documentId: "doc_123",
