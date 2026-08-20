@@ -31,14 +31,29 @@ export function deriveRefundPeriodUsage(input: {
   availableFrom?: string | null;
   expiresAt?: string | null;
   requestedAt: string;
-}): { totalDays: number; usedDays: number; remainingDays: number } | null {
+  contractDays?: number | null;
+}): { totalDays: number; usedDays: number; remainingDays: number; excludedDays: number } | null {
   const startDay = kstDayNumber(input.availableFrom || null);
   const endDay = kstDayNumber(input.expiresAt || null);
   const requestedDay = kstDayNumber(input.requestedAt);
   if (startDay == null || endDay == null || requestedDay == null || endDay < startDay) return null;
-  const totalDays = endDay - startDay + 1;
-  const usedDays = Math.min(totalDays, Math.max(0, requestedDay - startDay));
-  return { totalDays, usedDays, remainingDays: totalDays - usedDays };
+  const calendarDays = endDay - startDay + 1;
+  const sourceContractDays = Number(input.contractDays);
+  const totalDays = Number.isInteger(sourceContractDays) && sourceContractDays > 0 && sourceContractDays <= calendarDays
+    ? sourceContractDays
+    : calendarDays;
+  const calendarRemainingDays = Math.max(0, endDay - requestedDay + 1);
+  const remainingDays = Math.min(totalDays, calendarRemainingDays);
+  const usedDays = totalDays - remainingDays;
+  return { totalDays, usedDays, remainingDays, excludedDays: calendarDays - totalDays };
+}
+
+export function inferRefundContractDays(ticketName: unknown): number | null {
+  const name = String(ticketName || "").replace(/\s+/g, "");
+  const weekMatch = name.match(/(?:^|[^0-9])(\d{1,3})주(?:[^0-9]|$)/);
+  if (weekMatch) return Number(weekMatch[1]) * 7;
+  const dayMatch = name.match(/(?:^|[^0-9])(\d{1,3})일(?:[^0-9]|$)/);
+  return dayMatch ? Number(dayMatch[1]) : null;
 }
 
 export type RefundCalculationInput = {

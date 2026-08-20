@@ -260,9 +260,9 @@ async function exposeRefundPeriodFields(page) {
     const values = {
       refundAvailableFrom: "2026-08-01",
       refundExpiresAt: "2026-10-31",
-      refundTotalContractDays: "92일",
       refundRemainingDays: "72일",
-      refundUsedDays: "20일",
+      refundTotalContractWeeks: "10",
+      refundUsedWeeks: "5.43",
     };
     for (const [id, value] of Object.entries(values)) {
       const element = document.querySelector(`#${id}`);

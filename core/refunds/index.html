@@ -91,17 +91,15 @@
                   <label class="refund-source-field"><span>잔여 횟수</span><input id="refundRemainingCount" aria-label="StudioMate 잔여 횟수" type="number" inputmode="numeric" min="0" step="1" readonly aria-readonly="true" /></label>
                 </fieldset>
                 <fieldset class="refund-kind-fields refund-wide-field" id="refundPeriodFields" hidden>
-                  <legend>StudioMate 기간 자동 반영</legend>
+                  <legend>기간권 원천·홀딩 확인</legend>
                   <label class="refund-source-field"><span>이용 시작일</span><input id="refundAvailableFrom" type="date" readonly aria-readonly="true" /></label>
                   <label class="refund-source-field"><span>이용 종료일</span><input id="refundExpiresAt" type="date" readonly aria-readonly="true" /></label>
-                  <label class="refund-source-field"><span>총 기간</span><input id="refundTotalContractDays" type="text" readonly aria-readonly="true" /></label>
                   <label class="refund-source-field"><span>남은 기간</span><input id="refundRemainingDays" type="text" readonly aria-readonly="true" /></label>
-                  <label class="refund-source-field"><span>사용 기간</span><input id="refundUsedDays" type="text" readonly aria-readonly="true" /></label>
-                  <input id="refundTotalContractWeeks" type="hidden" />
-                  <input id="refundUsedWeeks" type="hidden" />
+                  <label class="refund-operator-field"><span>총 계약 주수</span><input id="refundTotalContractWeeks" type="number" inputmode="decimal" min="0.01" step="0.01" /></label>
+                  <label class="refund-operator-field"><span>실제 사용 주수</span><input id="refundUsedWeeks" type="number" inputmode="decimal" min="0" step="0.01" placeholder="홀딩 제외" /></label>
                 </fieldset>
                 <label><span>증정·프로모션 공제</span><input id="refundGiftDeductionAmount" type="number" inputmode="numeric" min="0" step="1" value="0" /></label>
-                <label class="refund-span-2"><span>예외·혜택 확인 메모 <small>(선택)</small></span><input id="refundManualReason" aria-describedby="refundManualReasonHint" maxlength="300" placeholder="예외 또는 혜택 내용" /><small class="refund-field-hint" id="refundManualReasonHint">별도 예외나 혜택이 있을 때만 입력합니다.</small></label>
+                <label class="refund-span-2"><span>사용분·예외 확인 근거</span><input id="refundManualReason" aria-describedby="refundManualReasonHint" maxlength="300" placeholder="홀딩 기간, 이용내역, 혜택 확인 내용" /><small class="refund-field-hint" id="refundManualReasonHint">기간권은 StudioMate 정지기간정보에서 홀딩 제외 실제 사용 주수를 확인합니다.</small></label>
                 <label class="refund-wide-field"><span>결제금액 확인 근거 <small>(금액 수정 시)</small></span><input id="refundPaymentSourceNote" aria-describedby="refundPaymentSourceNoteHint" maxlength="300" placeholder="결제내역 위치" /><small class="refund-field-hint" id="refundPaymentSourceNoteHint">원천 금액을 수정한 경우에만 기록합니다.</small></label>
                 <label class="refund-policy-check refund-wide-field">
                   <input id="refundEligibilityCheck" type="checkbox" required />

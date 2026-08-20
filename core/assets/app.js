@@ -3283,8 +3283,8 @@ function refundPayload() {
     ticketKind: qs("refundTicketKind")?.value || "count",
     normalUnitAmount: money("refundNormalUnitAmount"),
     usedCount: null,
-    totalContractWeeks: null,
-    usedWeeks: null,
+    totalContractWeeks: money("refundTotalContractWeeks"),
+    usedWeeks: money("refundUsedWeeks"),
     giftDeductionAmount: money("refundGiftDeductionAmount"),
     manualReason: String(qs("refundManualReason")?.value || "").trim(),
     paymentSourceNote: String(qs("refundPaymentSourceNote")?.value || "").trim(),
@@ -3298,6 +3298,8 @@ function updateRefundKindFields() {
   if (qs("refundPeriodFields")) qs("refundPeriodFields").hidden = kind !== "period";
   if (qs("refundNormalUnitAmount")) qs("refundNormalUnitAmount").required = kind === "count";
   if (qs("refundUsedCount")) qs("refundUsedCount").required = false;
+  if (qs("refundTotalContractWeeks")) qs("refundTotalContractWeeks").required = kind === "period";
+  if (qs("refundUsedWeeks")) qs("refundUsedWeeks").required = kind === "period";
 }
 
 function resetRefundPreview() {
@@ -3394,11 +3396,9 @@ function renderRefundUsage(ticket) {
   setReadonlyRefundValue("refundUsedCount", ticket.usedCount);
   setReadonlyRefundValue("refundAvailableFrom", refundDateValue(ticket.availableFrom));
   setReadonlyRefundValue("refundExpiresAt", refundDateValue(ticket.expiresAt));
-  setReadonlyRefundValue("refundTotalContractDays", ticket.totalContractDays == null ? "" : `${ticket.totalContractDays}일`);
   setReadonlyRefundValue("refundRemainingDays", ticket.remainingDays == null ? "" : `${ticket.remainingDays}일`);
-  setReadonlyRefundValue("refundUsedDays", ticket.usedDays == null ? "" : `${ticket.usedDays}일`);
-  setReadonlyRefundValue("refundTotalContractWeeks", ticket.totalContractDays == null ? "" : (Number(ticket.totalContractDays) / 7).toFixed(2));
-  setReadonlyRefundValue("refundUsedWeeks", ticket.usedDays == null ? "" : (Number(ticket.usedDays) / 7).toFixed(2));
+  setReadonlyRefundValue("refundTotalContractWeeks", ticket.suggestedContractWeeks);
+  setReadonlyRefundValue("refundUsedWeeks", "");
 }
 
 function selectRefundTicket(ticketKey) {
@@ -3426,7 +3426,7 @@ function selectRefundTicket(ticketKey) {
       ? "유효기간이 지난 수강권은 환불할 수 없습니다."
       : ticket.suggestedTicketKind === "count"
         ? "정상 1회 단가를 확인한 뒤 계산하세요."
-        : "StudioMate 시작일·종료일 기준의 총 기간과 남은 기간을 확인하세요.",
+        : "StudioMate 남은 기간과 홀딩 이력을 확인한 뒤 실제 사용 주수를 입력하세요.",
     ticket.expiredNow ? "danger" : "warn",
   );
 }

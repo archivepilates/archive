@@ -4,6 +4,7 @@ import {
   assertRefundRequestWindow,
   calculateRefund,
   deriveRefundPeriodUsage,
+  inferRefundContractDays,
   inferRefundTicketKind,
   REFUND_POLICY_VERSION,
 } from "../../firebase/kangsain-functions/functions/src/refund/refundPolicy";
@@ -21,15 +22,27 @@ test("기간권 잔여기간은 StudioMate 날짜를 한국 날짜 기준으로 
     expiresAt: "2026-08-31T23:59:59+09:00",
     requestedAt: "2026-08-10T00:00:00+09:00",
   });
-  assert.deepEqual(usage, { totalDays: 31, usedDays: 9, remainingDays: 22 });
+  assert.deepEqual(usage, { totalDays: 31, usedDays: 9, remainingDays: 22, excludedDays: 0 });
   assert.deepEqual(
     deriveRefundPeriodUsage({
       availableFrom: "2026-08-01T00:00:00+09:00",
       expiresAt: "2026-08-31T23:59:59+09:00",
       requestedAt: "2026-07-20T00:00:00+09:00",
     }),
-    { totalDays: 31, usedDays: 0, remainingDays: 31 },
+    { totalDays: 31, usedDays: 0, remainingDays: 31, excludedDays: 0 },
   );
+});
+
+test("기간권 수강권명에서 계약 일수를 읽어 홀딩 연장 확인값을 표시한다", () => {
+  assert.equal(inferRefundContractDays("10주(주2회)"), 70);
+  assert.equal(inferRefundContractDays("그룹 20회"), null);
+  const usage = deriveRefundPeriodUsage({
+    availableFrom: "2026-06-29T00:00:00+09:00",
+    expiresAt: "2026-09-20T23:59:59+09:00",
+    requestedAt: "2026-08-20T00:00:00+09:00",
+    contractDays: 70,
+  });
+  assert.deepEqual(usage, { totalDays: 70, usedDays: 38, remainingDays: 32, excludedDays: 14 });
 });
 
 test("만료된 수강권과 미래 요청일은 차단한다", () => {
@@ -193,6 +206,23 @@ test("StudioMate 기간권은 총기간과 잔여기간으로 사용분을 자�
   assert.equal(result.usedAmount, 90000);
   assert.equal(result.refundAmount, 234000);
   assert.match(result.message, /StudioMate 잔여기간 기준/);
+});
+
+test("홀딩이 반영된 10주 기간권은 확인된 실제 사용 주수로 환불액을 계산한다", () => {
+  const result = calculateRefund({
+    memberName: "테스트회원",
+    ticketName: "10주(주2회)",
+    ticketKind: "period",
+    paidAmount: 398000,
+    totalCount: null,
+    remainingCount: null,
+    totalContractWeeks: 10,
+    usedWeeks: 5.43,
+    manualReason: "StudioMate 정지기간 14일을 제외해 실제 사용 38일로 확인",
+  });
+  assert.equal(result.penaltyAmount, 39800);
+  assert.equal(result.usedAmount, 216114);
+  assert.equal(result.refundAmount, 142086);
 });
 
 test("StudioMate 기간권은 총기간과 사용·잔여기간이 맞지 않으면 중단한다", () => {

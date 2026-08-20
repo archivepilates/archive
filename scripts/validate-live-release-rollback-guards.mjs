@@ -1004,7 +1004,7 @@ const guardGroups = [
   },
   {
     id: "refund-studiomate-source-selection",
-    reason: "환불 화면이 이름+전화번호 수동 조회나 사용횟수·홀딩기간 수동 계산으로 되돌아가는 것을 막습니다.",
+    reason: "환불 화면이 이름+전화번호 조회로 되돌아가거나 StudioMate 횟수 원천을 수동 덮어쓰는 것을 막습니다.",
     files: [
       {
         file: "core/refunds/index.html",
@@ -1013,7 +1013,7 @@ const guardGroups = [
           "StudioMate 사용 횟수",
           "StudioMate 잔여 횟수",
           "refundRemainingDays",
-          "예외·혜택 확인 메모",
+          "사용분·예외 확인 근거",
         ],
         forbiddenMarkers: ["id=\"refundMemberPhone\""],
       },
@@ -1033,7 +1033,8 @@ const guardGroups = [
           "searchRefundMembers",
           "resolveMemberById",
           "deriveRefundPeriodUsage",
-          "usageSource: \"studiomate_active_ticket\"",
+          "inferRefundContractDays",
+          "canonicalTicketKind === \"count\" ? \"studiomate_active_ticket\"",
           "StudioMate 총횟수·잔여횟수 원천",
         ],
       },
@@ -1042,6 +1043,7 @@ const guardGroups = [
         markers: [
           "archive-refund-studiomate-source-2026-08-20-v2",
           "StudioMate 잔여기간 기준",
+          "inferRefundContractDays",
           "totalContractDays",
           "remainingDays",
         ],

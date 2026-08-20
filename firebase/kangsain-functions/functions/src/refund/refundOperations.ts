@@ -10,6 +10,7 @@ import {
   assertRefundRequestWindow,
   calculateRefund,
   deriveRefundPeriodUsage,
+  inferRefundContractDays,
   inferRefundTicketKind,
   type RefundCalculation,
   type RefundTicketKind,
@@ -263,15 +264,10 @@ function calculateFromTicket(input: RefundPreviewInput, ticket: ActiveTicket, me
   }
   const totalCount = nullableSourceNumber(ticket.maxCount ?? ticket.usableCount);
   const remainingCount = nullableSourceNumber(ticket.remainingCount);
-  const periodUsage = canonicalTicketKind === "period"
-    ? periodUsageFromTicket(ticket, input.requestedAt)
-    : null;
   if (canonicalTicketKind === "count") {
     if (totalCount == null || remainingCount == null || remainingCount > totalCount) {
       throw new AppError("INVALID_ARGUMENT", "StudioMate 총횟수·잔여횟수 원천을 확인할 수 없어 계산을 중단했습니다.");
     }
-  } else if (!periodUsage) {
-    throw new AppError("INVALID_ARGUMENT", "StudioMate 이용 시작일·만료일 원천을 확인할 수 없어 계산을 중단했습니다.");
   }
   let calculation: RefundCalculation;
   try {
@@ -284,12 +280,11 @@ function calculateFromTicket(input: RefundPreviewInput, ticket: ActiveTicket, me
       remainingCount,
       normalUnitAmount: input.normalUnitAmount,
       usedCount: null,
-      totalContractDays: periodUsage?.totalDays ?? null,
-      usedDays: periodUsage?.usedDays ?? null,
-      remainingDays: periodUsage?.remainingDays ?? null,
+      totalContractWeeks: input.totalContractWeeks,
+      usedWeeks: input.usedWeeks,
       giftDeductionAmount: input.giftDeductionAmount,
       manualReason: input.manualReason,
-      usageSource: "studiomate_active_ticket",
+      usageSource: canonicalTicketKind === "count" ? "studiomate_active_ticket" : "operator_verified",
     });
   } catch (err) {
     throw new AppError("INVALID_ARGUMENT", errorMessage(err));
@@ -440,7 +435,10 @@ function safeTicket(ticket: ActiveTicket, usageAsOf = new Date().toISOString()) 
   const totalCount = nullableSourceNumber(ticket.maxCount ?? ticket.usableCount);
   const remainingCount = nullableSourceNumber(ticket.remainingCount);
   const suggestedTicketKind = inferRefundTicketKind(ticket.maxCount, ticket.usableCount);
-  const suggestedContractWeeks = contractWeeks(ticket.availableFrom, ticket.expiresAt);
+  const inferredContractDays = inferRefundContractDays(ticket.name);
+  const suggestedContractWeeks = inferredContractDays != null
+    ? Math.round((inferredContractDays / 7) * 100) / 100
+    : contractWeeks(ticket.availableFrom, ticket.expiresAt);
   const expiresAt = timestampIso(ticket.expiresAt);
   const periodUsage = suggestedTicketKind === "period"
     ? periodUsageFromTicket(ticket, usageAsOf)
@@ -464,8 +462,9 @@ function safeTicket(ticket: ActiveTicket, usageAsOf = new Date().toISOString()) 
     suggestedTicketKind,
     suggestedContractWeeks,
     totalContractDays: periodUsage?.totalDays ?? null,
-    usedDays: periodUsage?.usedDays ?? null,
+    usedDays: periodUsage?.excludedDays === 0 ? periodUsage.usedDays : null,
     remainingDays: periodUsage?.remainingDays ?? null,
+    excludedDays: periodUsage?.excludedDays ?? 0,
     usageAsOf,
     expiredNow: expiresAt ? new Date(expiresAt).getTime() < Date.now() : false,
     sourceFile: ticket.sourceFile || "",
@@ -618,8 +617,10 @@ function refundEligibilityWarnings(ticket: ActiveTicket, paymentAmount: number |
     if (totalCount == null || remainingCount == null || remainingCount > totalCount) {
       warnings.push("총횟수·잔여횟수 원천 확인 필요");
     }
-  } else if (!periodUsageFromTicket(ticket, new Date().toISOString())) {
-    warnings.push("이용 시작일·만료일 원천 확인 필요");
+  } else {
+    const periodUsage = periodUsageFromTicket(ticket, new Date().toISOString());
+    if (!periodUsage) warnings.push("이용 시작일·만료일 원천 확인 필요");
+    else if (periodUsage.excludedDays > 0) warnings.push(`홀딩·연장 ${periodUsage.excludedDays}일 확인 필요`);
   }
   if (/무료|증정|체험|이벤트|프로모션|쿠폰|직원|강사/i.test(name)) {
     warnings.push("무료·증정·이벤트·프로모션 적용 여부 확인 필요");
@@ -639,11 +640,12 @@ function contractWeeks(availableFrom: unknown, expiresAt: unknown): number | nul
 function periodUsageFromTicket(
   ticket: ActiveTicket,
   requestedAt: string,
-): { totalDays: number; usedDays: number; remainingDays: number } | null {
+): { totalDays: number; usedDays: number; remainingDays: number; excludedDays: number } | null {
   return deriveRefundPeriodUsage({
     availableFrom: timestampIso(ticket.availableFrom),
     expiresAt: timestampIso(ticket.expiresAt),
     requestedAt,
+    contractDays: inferRefundContractDays(ticket.name),
   });
 }
 
