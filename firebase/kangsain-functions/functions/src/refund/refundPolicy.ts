@@ -1,6 +1,6 @@
 import { createHash } from "node:crypto";
 
-export const REFUND_POLICY_VERSION = "archive-refund-studiomate-source-2026-08-20-v3";
+export const REFUND_POLICY_VERSION = "archive-refund-studiomate-source-2026-08-20-v4";
 export const REFUND_PENALTY_RATE = 0.1;
 
 export type RefundTicketKind = "count" | "period";
@@ -42,7 +42,9 @@ export function deriveRefundPeriodUsage(input: {
   const totalDays = Number.isInteger(sourceContractDays) && sourceContractDays > 0 && sourceContractDays <= calendarDays
     ? sourceContractDays
     : calendarDays;
-  const calendarRemainingDays = Math.max(0, endDay - requestedDay + 1);
+  const calendarRemainingDays = requestedDay < startDay
+    ? calendarDays
+    : Math.max(0, endDay - requestedDay);
   const remainingDays = Math.min(totalDays, calendarRemainingDays);
   const usedDays = totalDays - remainingDays;
   return { totalDays, usedDays, remainingDays, excludedDays: calendarDays - totalDays };
@@ -63,21 +65,16 @@ export type RefundCalculationInput = {
   paidAmount: number;
   totalCount: number | null;
   remainingCount: number | null;
-  usedCount?: number | null;
   normalUnitAmount?: number | null;
   totalContractWeeks?: number | null;
-  usedWeeks?: number | null;
-  totalContractDays?: number | null;
-  usedDays?: number | null;
-  remainingDays?: number | null;
+  remainingWeeks?: number | null;
   giftDeductionAmount?: number | null;
-  manualReason?: string;
-  usageSource?: "studiomate_active_ticket" | "operator_verified";
+  usageSource?: "studiomate_active_ticket" | "studiomate_period_weeks";
 };
 
 export type RefundCalculation = {
   policyVersion: string;
-  usageSource: "studiomate_active_ticket" | "operator_verified";
+  usageSource: "studiomate_active_ticket" | "studiomate_period_weeks";
   calculationMode: "count_ticket" | "period_ticket";
   paidAmount: number;
   penaltyAmount: number;
@@ -107,7 +104,6 @@ export function calculateRefund(input: RefundCalculationInput): RefundCalculatio
   const paidAmount = positiveWon(input.paidAmount, "실결제금액");
   const penaltyAmount = roundWon(paidAmount * REFUND_PENALTY_RATE);
   const giftDeductionAmount = optionalWon(input.giftDeductionAmount, "증정·프로모션 공제액");
-  const manualReason = String(input.manualReason || "").trim();
   const totalCount = nullableInteger(input.totalCount, "총 횟수");
   const remainingCount = nullableInteger(input.remainingCount, "잔여 횟수");
   const reviewReasons: string[] = [];
@@ -123,56 +119,30 @@ export function calculateRefund(input: RefundCalculationInput): RefundCalculatio
   let usedDays: number | null = null;
   let remainingDays: number | null = null;
   let requiresReview = false;
-  const usageSource = input.usageSource || "operator_verified";
+  const usageSource = input.usageSource || (input.ticketKind === "count" ? "studiomate_active_ticket" : "studiomate_period_weeks");
 
   if (input.ticketKind === "count") {
     calculationMode = "count_ticket";
+    if (usageSource !== "studiomate_active_ticket") throw new Error("횟수권 사용 횟수 원천을 확인하세요.");
     unitAmount = positiveWon(input.normalUnitAmount, "1회 정상 단가");
     const sourceUsedCount =
       totalCount != null && remainingCount != null && remainingCount <= totalCount
         ? totalCount - remainingCount
         : null;
-    if (usageSource === "studiomate_active_ticket") {
-      usedCount = sourceUsedCount;
-      if (input.usedCount != null && nullableInteger(input.usedCount, "사용 횟수") !== sourceUsedCount) {
-        throw new Error("StudioMate 원천과 다른 사용 횟수는 적용할 수 없습니다.");
-      }
-      requiresReview = true;
-      reviewReasons.push("1회 정상 단가는 운영자 입력값입니다.");
-    } else {
-      if (!manualReason) throw new Error("1회 정상 단가와 사용 횟수의 확인 근거를 작성하세요.");
-      usedCount = input.usedCount == null ? sourceUsedCount : nullableInteger(input.usedCount, "사용 횟수");
-    }
+    usedCount = sourceUsedCount;
+    requiresReview = true;
+    reviewReasons.push("1회 정상 단가는 운영자 입력값입니다.");
     if (usedCount == null) throw new Error("횟수권 사용 횟수를 확인하세요.");
     if (totalCount != null && usedCount > totalCount) throw new Error("사용 횟수는 총 횟수를 초과할 수 없습니다.");
-    if (sourceUsedCount != null && usedCount !== sourceUsedCount) {
-      requiresReview = true;
-      reviewReasons.push("운영자가 원천과 다른 사용 횟수를 확인했습니다.");
-    }
     usedAmount = roundWon(unitAmount * usedCount);
   } else if (input.ticketKind === "period") {
     calculationMode = "period_ticket";
-    if (usageSource === "studiomate_active_ticket") {
-      totalContractDays = positiveInteger(input.totalContractDays, "총 계약 일수");
-      usedDays = nonNegativeInteger(input.usedDays, "사용 일수");
-      remainingDays = nonNegativeInteger(input.remainingDays, "잔여 일수");
-      if (usedDays > totalContractDays || remainingDays > totalContractDays || usedDays + remainingDays !== totalContractDays) {
-        throw new Error("StudioMate 이용기간과 잔여기간 원천이 일치하지 않습니다.");
-      }
-      totalContractWeeks = roundDecimal(totalContractDays / 7);
-      usedWeeks = roundDecimal(usedDays / 7);
-      remainingWeeks = roundDecimal(remainingDays / 7);
-      usedAmount = roundWon(paidAmount * (usedDays / totalContractDays));
-    } else {
-      totalContractWeeks = positiveNumber(input.totalContractWeeks, "총 계약 주수");
-      usedWeeks = nonNegativeNumber(input.usedWeeks, "실제 사용 주수");
-      if (usedWeeks > totalContractWeeks) throw new Error("실제 사용 주수는 총 계약 주수를 초과할 수 없습니다.");
-      if (!manualReason) throw new Error("홀딩을 제외한 실제 사용 주수의 확인 근거를 작성하세요.");
-      remainingWeeks = roundDecimal(totalContractWeeks - usedWeeks);
-      usedAmount = roundWon(paidAmount * (usedWeeks / totalContractWeeks));
-      requiresReview = true;
-      reviewReasons.push("기간권 사용 주수와 홀딩 제외 기간을 운영자가 확인했습니다.");
-    }
+    if (usageSource !== "studiomate_period_weeks") throw new Error("기간권 잔여기간 원천을 확인하세요.");
+    totalContractWeeks = positiveNumber(input.totalContractWeeks, "총 계약 주수");
+    remainingWeeks = nonNegativeNumber(input.remainingWeeks, "잔여 주수");
+    if (remainingWeeks > totalContractWeeks) throw new Error("잔여 주수는 총 계약 주수를 초과할 수 없습니다.");
+    usedWeeks = roundDecimal(totalContractWeeks - remainingWeeks);
+    usedAmount = roundWon(paidAmount * (usedWeeks / totalContractWeeks));
   } else {
     throw new Error("수강권 유형을 확인하세요.");
   }
@@ -235,7 +205,6 @@ export function calculateRefund(input: RefundCalculationInput): RefundCalculatio
     totalContractDays,
     usedDays,
     remainingDays,
-    manualReason,
     usageSource,
   });
 
@@ -325,18 +294,6 @@ function buildRefundMessage(
 
 function nullableInteger(value: number | null | undefined, label: string): number | null {
   if (value == null) return null;
-  const numberValue = Number(value);
-  if (!Number.isInteger(numberValue) || numberValue < 0) throw new Error(`${label} 값이 올바르지 않습니다.`);
-  return numberValue;
-}
-
-function positiveInteger(value: number | null | undefined, label: string): number {
-  const numberValue = Number(value);
-  if (!Number.isInteger(numberValue) || numberValue <= 0) throw new Error(`${label} 값이 올바르지 않습니다.`);
-  return numberValue;
-}
-
-function nonNegativeInteger(value: number | null | undefined, label: string): number {
   const numberValue = Number(value);
   if (!Number.isInteger(numberValue) || numberValue < 0) throw new Error(`${label} 값이 올바르지 않습니다.`);
   return numberValue;

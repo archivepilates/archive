@@ -15,6 +15,7 @@ const viewports = [
   { name: "mobile-390", width: 390, height: 844 },
   { name: "tablet-768", width: 768, height: 1024 },
   { name: "desktop-1440", width: 1440, height: 1000 },
+  { name: "desktop-1920", width: 1920, height: 1000 },
 ];
 const routes = [
   { name: "home", path: "/" },
@@ -127,6 +128,15 @@ try {
             const element = document.querySelector(`#${id}`);
             if (element) element.textContent = text;
           }
+          const periodSummaries = {
+            refundPeriodRange: "2026.08.01 - 2026.10.31",
+            refundPeriodRemaining: "72일",
+            refundPeriodUsage: "잔여 4.57주 / 총 10주 · 사용 5.43주",
+          };
+          for (const [id, text] of Object.entries(periodSummaries)) {
+            const element = document.querySelector(`#${id}`);
+            if (element) element.textContent = text;
+          }
           const message = document.querySelector("#refundMessage");
           if (message) message.value = "긴 회원 안내 문장이 모바일에서도 잘리지 않고 여러 줄로 표시되는지 확인합니다.";
         });
@@ -218,7 +228,24 @@ try {
           failures.push(`refunds-period/${viewport.name}: horizontal overflow ${periodCheck.documentWidth}px > ${periodCheck.viewportWidth}px`);
         }
         if (periodCheck.shortTouchTarget) failures.push(`refunds-period/${viewport.name}: interactive target below 44px`);
-        if (!periodCheck.allSourceValuesVisible) failures.push(`refunds-period/${viewport.name}: automatic period values are clipped or hidden`);
+        if (!periodCheck.allSourceValuesVisible) {
+          failures.push(`refunds-period/${viewport.name}: compact automatic period summaries are clipped or incomplete`);
+        }
+        if (viewport.width >= 1200) {
+          if (!periodCheck.workspaceCentered) failures.push(`refunds-period/${viewport.name}: refund workspace is not centered in the main content area`);
+          if (periodCheck.workspaceWidth > periodCheck.workspaceMaxWidth + 1) {
+            failures.push(`refunds-period/${viewport.name}: refund workspace stretches to ${Math.round(periodCheck.workspaceWidth)}px`);
+          }
+          if (periodCheck.calculationButtonFullWidth) {
+            failures.push(`refunds-period/${viewport.name}: calculation button is full-width on desktop`);
+          }
+        }
+        if (viewport.width <= 560 && !periodCheck.calculationButtonFullWidth) {
+          failures.push(`refunds-period/${viewport.name}: calculation button is not full-width on mobile`);
+        }
+        if (!periodCheck.calculationButtonUsable) {
+          failures.push(`refunds-period/${viewport.name}: calculation button is below 44px`);
+        }
       }
     }
     await page.close();
@@ -259,22 +286,40 @@ async function exposeRefundPeriodFields(page) {
     if (periodFields) periodFields.hidden = false;
     if (kind) kind.value = "period";
     const values = {
-      refundAvailableFrom: "2026-08-01",
-      refundExpiresAt: "2026-10-31",
-      refundRemainingDays: "72일",
-      refundTotalContractWeeks: "10",
-      refundUsedWeeks: "5.43",
+      refundPeriodRange: "2026.08.01 - 2026.10.31",
+      refundPeriodRemaining: "72일",
+      refundPeriodUsage: "잔여 4.57주 / 총 10주 · 사용 5.43주",
     };
     for (const [id, value] of Object.entries(values)) {
       const element = document.querySelector(`#${id}`);
-      if (element) element.value = value;
+      if (element) element.textContent = value;
     }
   });
   return page.evaluate(() => {
     const documentWidth = Math.max(document.documentElement.scrollWidth, document.body.scrollWidth);
     const viewportWidth = document.documentElement.clientWidth;
-    const visibleSourceInputs = [...document.querySelectorAll("#refundPeriodFields input:not([type='hidden'])")]
+    const sourceSummaries = [...document.querySelectorAll("#refundPeriodFields .refund-source-summary")]
       .filter((element) => element.offsetParent !== null);
+    const sourceSummaryValues = sourceSummaries.map((element) => element.querySelector("strong")?.textContent?.trim() || "");
+    const calculationForm = document.querySelector("#refundCalculationForm");
+    const calculationButton = document.querySelector("#refundPreviewButton");
+    const calculationFormStyle = calculationForm ? getComputedStyle(calculationForm) : null;
+    const calculationFormContentWidth = calculationForm && calculationFormStyle
+      ? calculationForm.clientWidth - Number.parseFloat(calculationFormStyle.paddingLeft) - Number.parseFloat(calculationFormStyle.paddingRight)
+      : 0;
+    const calculationButtonWidth = calculationButton?.getBoundingClientRect().width || 0;
+    const refundWorkspace = document.querySelector(".refund-workspace");
+    const main = document.querySelector(".main");
+    const workspaceRect = refundWorkspace?.getBoundingClientRect();
+    const mainRect = main?.getBoundingClientRect();
+    const mainStyle = main ? getComputedStyle(main) : null;
+    const mainContentLeft = mainRect && mainStyle ? mainRect.left + Number.parseFloat(mainStyle.paddingLeft) : 0;
+    const mainContentRight = mainRect && mainStyle
+      ? mainRect.right - Number.parseFloat(mainStyle.paddingRight)
+      : 0;
+    const workspaceCentered = workspaceRect && mainRect
+      ? Math.abs((workspaceRect.left + workspaceRect.width / 2) - (mainContentLeft + (mainContentRight - mainContentLeft) / 2)) <= 1
+      : false;
     const touchTargets = [...document.querySelectorAll(".primary-action, .secondary-action, .refund-candidate-option")]
       .filter((element) => element.offsetParent !== null)
       .map((element) => Math.round(element.getBoundingClientRect().height));
@@ -283,9 +328,20 @@ async function exposeRefundPeriodFields(page) {
       viewportWidth,
       horizontalOverflow: documentWidth > viewportWidth + 1,
       shortTouchTarget: touchTargets.some((height) => height < 44),
+      sourceSummaryCount: sourceSummaries.length,
+      sourceSummaryValues,
       allSourceValuesVisible:
-        visibleSourceInputs.length === 5
-        && visibleSourceInputs.every((element) => element.scrollWidth <= element.clientWidth + 1),
+        sourceSummaries.length === 3
+        && sourceSummaryValues.every(Boolean)
+        && sourceSummaries.every((element) => element.scrollWidth <= element.clientWidth + 1 && element.scrollHeight <= element.clientHeight + 1),
+      workspaceCentered,
+      workspaceWidth: workspaceRect?.width || 0,
+      workspaceMaxWidth: 1216,
+      calculationButtonWidth,
+      calculationFormContentWidth,
+      calculationButtonFullWidth:
+        calculationButtonWidth >= calculationFormContentWidth - 1,
+      calculationButtonUsable: (calculationButton?.getBoundingClientRect().height || 0) >= 44,
     };
   });
 }

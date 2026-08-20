@@ -3282,13 +3282,8 @@ function refundPayload() {
     paidAmount: paidAmount === "" ? null : Number(paidAmount),
     ticketKind: qs("refundTicketKind")?.value || "count",
     normalUnitAmount: money("refundNormalUnitAmount"),
-    usedCount: null,
-    totalContractWeeks: money("refundTotalContractWeeks"),
-    usedWeeks: money("refundUsedWeeks"),
     giftDeductionAmount: money("refundGiftDeductionAmount"),
-    manualReason: String(qs("refundManualReason")?.value || "").trim(),
     paymentSourceNote: String(qs("refundPaymentSourceNote")?.value || "").trim(),
-    eligibilityReviewConfirmed: Boolean(qs("refundEligibilityCheck")?.checked),
   };
 }
 
@@ -3297,9 +3292,6 @@ function updateRefundKindFields() {
   if (qs("refundCountFields")) qs("refundCountFields").hidden = kind !== "count";
   if (qs("refundPeriodFields")) qs("refundPeriodFields").hidden = kind !== "period";
   if (qs("refundNormalUnitAmount")) qs("refundNormalUnitAmount").required = kind === "count";
-  if (qs("refundUsedCount")) qs("refundUsedCount").required = false;
-  if (qs("refundTotalContractWeeks")) qs("refundTotalContractWeeks").required = kind === "period";
-  if (qs("refundUsedWeeks")) qs("refundUsedWeeks").required = kind === "period";
 }
 
 function resetRefundPreview() {
@@ -3383,27 +3375,39 @@ function renderRefundCandidates(candidates) {
   list.hidden = false;
 }
 
-function refundDateValue(value) {
-  if (!value) return "";
-  const date = new Date(value);
-  if (Number.isNaN(date.getTime())) return String(value).slice(0, 10);
-  return new Intl.DateTimeFormat("en-CA", { timeZone: "Asia/Seoul" }).format(date);
-}
-
-function setReadonlyRefundValue(id, value) {
-  const element = qs(id);
-  if (element) element.value = value == null ? "" : String(value);
+function formatRefundQuantity(value, suffix = "") {
+  const numberValue = Number(value);
+  return Number.isFinite(numberValue)
+    ? `${numberValue.toLocaleString("ko-KR", { maximumFractionDigits: 2 })}${suffix}`
+    : "-";
 }
 
 function renderRefundUsage(ticket) {
-  setReadonlyRefundValue("refundTotalCount", ticket.totalCount);
-  setReadonlyRefundValue("refundRemainingCount", ticket.remainingCount);
-  setReadonlyRefundValue("refundUsedCount", ticket.usedCount);
-  setReadonlyRefundValue("refundAvailableFrom", refundDateValue(ticket.availableFrom));
-  setReadonlyRefundValue("refundExpiresAt", refundDateValue(ticket.expiresAt));
-  setReadonlyRefundValue("refundRemainingDays", ticket.remainingDays == null ? "" : `${ticket.remainingDays}일`);
-  setReadonlyRefundValue("refundTotalContractWeeks", ticket.suggestedContractWeeks);
-  setReadonlyRefundValue("refundUsedWeeks", "");
+  setText(
+    "refundCountUsage",
+    `사용 ${formatRefundQuantity(ticket.usedCount, "회")} · 잔여 ${formatRefundQuantity(ticket.remainingCount, "회")} / 총 ${formatRefundQuantity(ticket.totalCount, "회")}`,
+  );
+  setText(
+    "refundPeriodRange",
+    ticket.availableFrom && ticket.expiresAt
+      ? `${shortDate(ticket.availableFrom)} - ${shortDate(ticket.expiresAt)}`
+      : "원천 확인 필요",
+  );
+  setText("refundPeriodRemaining", formatRefundQuantity(ticket.remainingDays, "일"));
+  setText(
+    "refundPeriodUsage",
+    `잔여 ${formatRefundQuantity(ticket.remainingContractWeeks, "주")} / 총 ${formatRefundQuantity(ticket.suggestedContractWeeks, "주")} · 사용 ${formatRefundQuantity(ticket.usedContractWeeks, "주")}`,
+  );
+}
+
+function syncRefundPaymentOverride() {
+  const paidInput = qs("refundPaidAmount");
+  const sourceAmount = Number(refundFlow.selectedTicket?.paymentAmount);
+  const currentAmount = Number(paidInput?.value);
+  const override = !Number.isFinite(sourceAmount) || !Number.isFinite(currentAmount) || sourceAmount !== currentAmount;
+  const note = qs("refundPaymentSourceNote");
+  if (note) note.required = override;
+  if (override && qs("refundOptionalDetails")) qs("refundOptionalDetails").open = true;
 }
 
 function selectRefundTicket(ticketKey) {
@@ -3420,9 +3424,9 @@ function selectRefundTicket(ticketKey) {
   if (qs("refundNormalUnitAmount")) qs("refundNormalUnitAmount").value = "";
   renderRefundUsage(ticket);
   if (qs("refundGiftDeductionAmount")) qs("refundGiftDeductionAmount").value = "0";
-  if (qs("refundManualReason")) qs("refundManualReason").value = "";
   if (qs("refundPaymentSourceNote")) qs("refundPaymentSourceNote").value = "";
-  if (qs("refundEligibilityCheck")) qs("refundEligibilityCheck").checked = false;
+  if (qs("refundOptionalDetails")) qs("refundOptionalDetails").open = !ticket.paymentAmount;
+  syncRefundPaymentOverride();
   updateRefundKindFields();
   setRefundStep(2);
   setRefundStatus(
@@ -3430,9 +3434,9 @@ function selectRefundTicket(ticketKey) {
     ticket.expiredNow
       ? "유효기간이 지난 수강권은 환불할 수 없습니다."
       : ticket.suggestedTicketKind === "count"
-        ? "정상 1회 단가를 확인한 뒤 계산하세요."
-        : "StudioMate 남은 기간과 홀딩 이력을 확인한 뒤 실제 사용 주수를 입력하세요.",
-    ticket.expiredNow ? "danger" : "warn",
+        ? "정상 1회 단가를 확인하면 바로 계산할 수 있습니다."
+        : "StudioMate 남은 기간을 주 단위로 환산해 바로 계산할 수 있습니다.",
+    ticket.expiredNow ? "danger" : "",
   );
 }
 
@@ -6746,7 +6750,8 @@ qs("refundTicketList")?.addEventListener("change", (event) => {
   const input = event.target.closest?.('input[name="refundTicket"]');
   if (input) selectRefundTicket(input.value);
 });
-qs("refundCalculationForm")?.addEventListener("input", () => {
+qs("refundCalculationForm")?.addEventListener("input", (event) => {
+  if (event.target?.id === "refundPaidAmount") syncRefundPaymentOverride();
   if (refundFlow.preview) {
     resetRefundPreview();
     setRefundStep(2);

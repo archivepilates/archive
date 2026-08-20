@@ -38,13 +38,8 @@ type RefundPreviewInput = {
   paidAmount: number | null;
   ticketKind: RefundTicketKind;
   normalUnitAmount: number | null;
-  usedCount: number | null;
-  totalContractWeeks: number | null;
-  usedWeeks: number | null;
   giftDeductionAmount: number | null;
-  manualReason: string;
   paymentSourceNote: string;
-  eligibilityReviewConfirmed: boolean;
 };
 
 export async function getRefundMemberTicketsHandler(request: CallableRequest): Promise<Record<string, unknown>> {
@@ -78,7 +73,7 @@ export async function getRefundMemberTicketsHandler(request: CallableRequest): P
       title: "ARCHIVE PILATES 환불규정",
       summary: "모든 환불에 결제금액의 10% 위약금과 사용분을 공제",
       countTicketRule: "1회 정상 단가 × (StudioMate 총횟수 − 잔여횟수)",
-      periodTicketRule: "결제금액 × StudioMate 사용기간 ÷ 총 이용기간",
+      periodTicketRule: "StudioMate 잔여일수를 7일 단위로 환산해 잔여금액 계산",
       sourceUrl: "https://app.notion.com/p/313d49eae4bf80179269f09d02597ede",
     },
   };
@@ -341,13 +336,8 @@ function parsePreviewInput(data: any): RefundPreviewInput {
     paidAmount: nullableMoney(data?.paidAmount),
     ticketKind: refundTicketKind(data?.ticketKind),
     normalUnitAmount: nullableMoney(data?.normalUnitAmount),
-    usedCount: nullableNumber(data?.usedCount, "사용 횟수", true),
-    totalContractWeeks: nullableNumber(data?.totalContractWeeks, "총 계약 주수"),
-    usedWeeks: nullableNumber(data?.usedWeeks, "실제 사용 주수"),
     giftDeductionAmount: nullableMoney(data?.giftDeductionAmount),
-    manualReason: cleanText(data?.manualReason, 300),
     paymentSourceNote: cleanText(data?.paymentSourceNote, 300),
-    eligibilityReviewConfirmed: data?.eligibilityReviewConfirmed === true,
   };
 }
 
@@ -360,12 +350,6 @@ function calculateFromTicket(input: RefundPreviewInput, ticket: ActiveTicket, me
   const canonicalTicketKind = inferRefundTicketKind(ticket.maxCount, ticket.usableCount);
   if (input.ticketKind !== canonicalTicketKind) {
     throw new AppError("INVALID_ARGUMENT", "수강권 유형이 원천 데이터와 다릅니다. 회원을 다시 조회하세요.");
-  }
-  if (!input.eligibilityReviewConfirmed) {
-    throw new AppError(
-      "INVALID_ARGUMENT",
-      "무료·증정·이벤트·프로모션 혜택과 완료수업·노쇼 공제 여부를 확인하세요.",
-    );
   }
   const canonicalPaymentAmount = ticketPaymentAmount(ticket);
   const paidAmount = input.paidAmount ?? canonicalPaymentAmount;
@@ -381,6 +365,12 @@ function calculateFromTicket(input: RefundPreviewInput, ticket: ActiveTicket, me
       throw new AppError("INVALID_ARGUMENT", "StudioMate 총횟수·잔여횟수 원천을 확인할 수 없어 계산을 중단했습니다.");
     }
   }
+  const periodWeekUsage = canonicalTicketKind === "period"
+    ? automaticPeriodWeekUsage(ticket, input.requestedAt)
+    : null;
+  if (canonicalTicketKind === "period" && !periodWeekUsage) {
+    throw new AppError("INVALID_ARGUMENT", "StudioMate 남은 기간으로 환불 기준 주수를 확인할 수 없습니다.");
+  }
   let calculation: RefundCalculation;
   try {
     calculation = calculateRefund({
@@ -391,12 +381,10 @@ function calculateFromTicket(input: RefundPreviewInput, ticket: ActiveTicket, me
       totalCount,
       remainingCount,
       normalUnitAmount: input.normalUnitAmount,
-      usedCount: null,
-      totalContractWeeks: input.totalContractWeeks,
-      usedWeeks: input.usedWeeks,
+      totalContractWeeks: periodWeekUsage?.totalWeeks ?? null,
+      remainingWeeks: periodWeekUsage?.remainingWeeks ?? null,
       giftDeductionAmount: input.giftDeductionAmount,
-      manualReason: input.manualReason,
-      usageSource: canonicalTicketKind === "count" ? "studiomate_active_ticket" : "operator_verified",
+      usageSource: canonicalTicketKind === "count" ? "studiomate_active_ticket" : "studiomate_period_weeks",
     });
   } catch (err) {
     throw new AppError("INVALID_ARGUMENT", errorMessage(err));
@@ -555,6 +543,9 @@ function safeTicket(ticket: ActiveTicket, usageAsOf = new Date().toISOString()) 
   const periodUsage = suggestedTicketKind === "period"
     ? periodUsageFromTicket(ticket, usageAsOf)
     : null;
+  const periodWeekUsage = suggestedTicketKind === "period"
+    ? automaticPeriodWeekUsage(ticket, usageAsOf)
+    : null;
   const countUsageReady = totalCount != null && remainingCount != null && remainingCount <= totalCount;
   const usageReady = suggestedTicketKind === "count" ? countUsageReady : Boolean(periodUsage);
   return {
@@ -576,6 +567,8 @@ function safeTicket(ticket: ActiveTicket, usageAsOf = new Date().toISOString()) 
     totalContractDays: periodUsage?.totalDays ?? null,
     usedDays: periodUsage?.excludedDays === 0 ? periodUsage.usedDays : null,
     remainingDays: periodUsage?.remainingDays ?? null,
+    remainingContractWeeks: periodWeekUsage?.remainingWeeks ?? null,
+    usedContractWeeks: periodWeekUsage?.usedWeeks ?? null,
     excludedDays: periodUsage?.excludedDays ?? 0,
     usageAsOf,
     expiredNow: expiresAt ? new Date(expiresAt).getTime() < Date.now() : false,
@@ -711,15 +704,6 @@ function nullableMoney(value: unknown): number | null {
   return Math.round(amount);
 }
 
-function nullableNumber(value: unknown, label: string, integer = false): number | null {
-  if (value == null || value === "") return null;
-  const numberValue = Number(value);
-  if (!Number.isFinite(numberValue) || numberValue < 0 || (integer && !Number.isInteger(numberValue))) {
-    throw new AppError("INVALID_ARGUMENT", `${label} 값을 확인하세요.`);
-  }
-  return Math.round(numberValue * 100) / 100;
-}
-
 function refundTicketKind(value: unknown): RefundTicketKind {
   if (value === "count" || value === "period") return value;
   throw new AppError("INVALID_ARGUMENT", "수강권 유형을 선택하세요.");
@@ -739,7 +723,6 @@ function refundEligibilityWarnings(ticket: ActiveTicket, paymentAmount: number |
   } else {
     const periodUsage = periodUsageFromTicket(ticket, new Date().toISOString());
     if (!periodUsage) warnings.push("이용 시작일·만료일 원천 확인 필요");
-    else if (periodUsage.excludedDays > 0) warnings.push(`홀딩·연장 ${periodUsage.excludedDays}일 확인 필요`);
   }
   if (/무료|증정|체험|이벤트|프로모션|쿠폰|직원|강사/i.test(name)) {
     warnings.push("무료·증정·이벤트·프로모션 적용 여부 확인 필요");
@@ -766,6 +749,24 @@ function periodUsageFromTicket(
     requestedAt,
     contractDays: inferRefundContractDays(ticket.name),
   });
+}
+
+function automaticPeriodWeekUsage(
+  ticket: ActiveTicket,
+  requestedAt: string,
+): { totalWeeks: number; usedWeeks: number; remainingWeeks: number } | null {
+  const usage = periodUsageFromTicket(ticket, requestedAt);
+  const inferredDays = inferRefundContractDays(ticket.name);
+  const totalWeeks = inferredDays != null
+    ? Math.round((inferredDays / 7) * 100) / 100
+    : contractWeeks(ticket.availableFrom, ticket.expiresAt);
+  if (!usage || totalWeeks == null || totalWeeks <= 0) return null;
+  const remainingWeeks = Math.min(totalWeeks, Math.max(0, Math.floor(usage.remainingDays / 7)));
+  return {
+    totalWeeks,
+    remainingWeeks,
+    usedWeeks: Math.round((totalWeeks - remainingWeeks) * 100) / 100,
+  };
 }
 
 function timestampIso(value: unknown): string | null {
