@@ -277,8 +277,8 @@ async function sendRefundAgreement(page, job, beforeFinalSend) {
   const finalSendButton = sendModal.getByRole("button", { name: "전송", exact: true });
   if (!(await finalSendButton.isEnabled())) throw new Error("이폼싸인 수신자 정보가 완성되지 않아 전송을 중단했습니다.");
   await finalSendButton.click();
-  const sendEvidence = await waitForSendEvidence(page, documentName);
-  if (!isUnambiguousSendSuccess({ ...sendEvidence, documentName })) {
+  const sendEvidence = await waitForSendEvidence(page, documentName, job.memberPhone);
+  if (!isUnambiguousSendSuccess({ ...sendEvidence, documentName, recipientPhone: job.memberPhone })) {
     throw new Error("최종 전송 버튼 이후 성공 여부를 명확히 확인하지 못했습니다.");
   }
   return {
@@ -314,7 +314,7 @@ async function clickNext(page) {
   await button.click();
 }
 
-async function waitForSendEvidence(page, documentName) {
+async function waitForSendEvidence(page, documentName, recipientPhone) {
   const deadline = Date.now() + 30000;
   let last = { url: page.url(), bodyText: "", documentId: "" };
   let openedProgressDocuments = false;
@@ -324,7 +324,7 @@ async function waitForSendEvidence(page, documentName) {
       bodyText: await page.locator("body").innerText().catch(() => ""),
       documentId: await findDocumentIdOnPage(page, documentName),
     };
-    if (isUnambiguousSendSuccess({ ...last, documentName })) return last;
+    if (isUnambiguousSendSuccess({ ...last, documentName, recipientPhone })) return last;
     if (!openedProgressDocuments && /\/eform\/index\.html/.test(page.url())) {
       openedProgressDocuments = true;
       await page.goto(EFORMSIGN_PROGRESS_DOCUMENTS_URL, { waitUntil: "domcontentloaded", timeout: 30000 });

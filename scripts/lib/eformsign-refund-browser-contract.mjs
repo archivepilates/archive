@@ -116,15 +116,38 @@ export function formatInputWon(value) {
   return `${Math.round(Number(value) || 0).toLocaleString("ko-KR")}원`;
 }
 
-export function isUnambiguousSendSuccess({ url = "", bodyText = "", documentName = "", documentId = "" } = {}) {
+export function isUnambiguousSendSuccess({
+  url = "",
+  bodyText = "",
+  documentName = "",
+  documentId = "",
+  recipientPhone = "",
+} = {}) {
   const text = String(bodyText || "").replace(/\s+/g, " ");
   const normalizedName = String(documentName || "").trim();
-  if (!normalizedName || !text.includes(normalizedName) || !String(documentId || "").trim()) return false;
+  if (
+    !normalizedName
+    || !text.includes(normalizedName)
+    || !String(documentId || "").trim()
+    || !hasRecipientPhoneEvidence(text, recipientPhone)
+  ) return false;
   const explicitSuccess = /문서(?:가|를)?\s*전송(?:되었습니다|했습니다| 완료)/.test(text)
     || /전송이\s*완료(?:되었습니다|됐습니다)/.test(text);
   const documentInSentList = /\/eform\/document\/(?:document_list\.html|list|doc_list|sent)/.test(String(url || ""))
     && /진행 중|처리 중|완료|수신자|문서함/.test(text);
   return explicitSuccess || documentInSentList;
+}
+
+export function hasRecipientPhoneEvidence(bodyText = "", recipientPhone = "") {
+  const localPhone = String(recipientPhone || "").replace(/\D/g, "");
+  if (!/^01\d{8,9}$/.test(localPhone)) return false;
+  const separator = "[\\s().-]*";
+  const localPattern = localPhone.split("").join(separator);
+  const internationalPattern = `\\+?82${separator}${localPhone.slice(1).split("").join(separator)}`;
+  const text = String(bodyText || "");
+  return [localPattern, internationalPattern].some((pattern) => (
+    new RegExp(`(?:^|[^0-9])${pattern}(?:$|[^0-9])`).test(text)
+  ));
 }
 
 export function extractEformsignDocumentId(url = "") {

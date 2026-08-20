@@ -142,7 +142,12 @@ test("문서명에는 날짜, 회원명, 환불 건 식별자가 들어간다", 
 test("명확한 전송 완료 증거만 성공으로 판정한다", () => {
   const documentName = "2026-08-20_환불동의서_테스트회원_12345678";
   assert.equal(
-    isUnambiguousSendSuccess({ bodyText: `${documentName} 문서를 전송했습니다.`, documentName, documentId: "doc_123" }),
+    isUnambiguousSendSuccess({
+      bodyText: `${documentName} 문서를 전송했습니다. 수신자 010-0000-0000`,
+      documentName,
+      documentId: "doc_123",
+      recipientPhone: "01000000000",
+    }),
     true,
   );
   assert.equal(isUnambiguousSendSuccess({ bodyText: "문서를 전송했습니다.", documentName }), false);
@@ -150,15 +155,30 @@ test("명확한 전송 완료 증거만 성공으로 판정한다", () => {
   assert.equal(
     isUnambiguousSendSuccess({
       url: EFORMSIGN_PROGRESS_DOCUMENTS_URL,
-      bodyText: `${documentName} 진행 중 수신자 1명`,
+      bodyText: `${documentName} 진행 중 수신자 테스트회원(+821000000000)`,
       documentName,
       documentId: "doc_123",
+      recipientPhone: "01000000000",
     }),
     true,
   );
+  assert.equal(
+    isUnambiguousSendSuccess({
+      bodyText: `${documentName} 진행 중 수신자 다른회원(+821011112222)`,
+      documentName,
+      documentId: "doc_123",
+      recipientPhone: "01000000000",
+    }),
+    false,
+  );
   assert.equal(isUnambiguousSendSuccess({ bodyText: `${documentName} 전송 버튼을 눌러주세요.`, documentName }), false);
   assert.equal(
-    isUnambiguousSendSuccess({ bodyText: `${documentName} 문서를 전송했습니다.`, documentName, documentId: "" }),
+    isUnambiguousSendSuccess({
+      bodyText: `${documentName} 문서를 전송했습니다. 수신자 010-0000-0000`,
+      documentName,
+      documentId: "",
+      recipientPhone: "01000000000",
+    }),
     false,
   );
 });
