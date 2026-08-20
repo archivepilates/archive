@@ -88,6 +88,8 @@ const required = [
       "renderRefundCandidates",
       "previewRefund",
       "sendRefundAgreement",
+      "queueRefundStudioMateSms",
+      "handleRefundSmsSend",
       "renderRefundCases",
     ],
   },

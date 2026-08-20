@@ -48,6 +48,7 @@ import {
 import {
   getRefundMemberTicketsHandler,
   previewRefundHandler,
+  queueRefundStudioMateSmsHandler,
   sendRefundAgreementHandler,
 } from "../refund/refundOperations";
 import { requireManager, requireStaff } from "../security/authGuards";
@@ -305,6 +306,14 @@ export const previewRefund = onCall(callableOptions, async (request) => {
 export const sendRefundAgreement = onCall(callableOptions, async (request) => {
   try {
     return await sendRefundAgreementHandler(request);
+  } catch (err) {
+    throw toHttpsError(err);
+  }
+});
+
+export const queueRefundStudioMateSms = onCall(callableOptions, async (request) => {
+  try {
+    return await queueRefundStudioMateSmsHandler(request);
   } catch (err) {
     throw toHttpsError(err);
   }

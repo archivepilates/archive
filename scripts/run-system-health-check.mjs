@@ -108,6 +108,16 @@ const AUTOMATIONS = [
     repair: "bootstrap",
   },
   {
+    id: "studiomate-refund-sms-queue",
+    label: "com.archive.studiomate-refund-sms-queue",
+    title: "StudioMate refund SMS queue",
+    area: "refunds",
+    resultFile: path.join(HOME, "ArchiveIN/automation/reports/studiomate-refund-sms/latest.json"),
+    maxAgeMinutes: 45,
+    plist: path.join(PLIST_DIR, "com.archive.studiomate-refund-sms-queue.plist"),
+    repair: "bootstrap",
+  },
+  {
     id: "monthly-settlement-statements",
     label: "com.archive.monthly-settlement-statements",
     title: "Monthly settlement statements",

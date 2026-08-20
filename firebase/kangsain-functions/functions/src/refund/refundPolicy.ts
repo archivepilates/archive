@@ -1,6 +1,6 @@
 import { createHash } from "node:crypto";
 
-export const REFUND_POLICY_VERSION = "archive-refund-studiomate-source-2026-08-20-v2";
+export const REFUND_POLICY_VERSION = "archive-refund-studiomate-source-2026-08-20-v3";
 export const REFUND_PENALTY_RATE = 0.1;
 
 export type RefundTicketKind = "count" | "period";
@@ -84,6 +84,7 @@ export type RefundCalculation = {
   usedAmount: number;
   giftDeductionAmount: number;
   totalDeductionAmount: number;
+  remainingBalanceAmount: number;
   refundAmount: number;
   usedCount: number | null;
   totalCount: number | null;
@@ -91,6 +92,7 @@ export type RefundCalculation = {
   unitAmount: number | null;
   totalContractWeeks: number | null;
   usedWeeks: number | null;
+  remainingWeeks: number | null;
   totalContractDays: number | null;
   usedDays: number | null;
   remainingDays: number | null;
@@ -116,6 +118,7 @@ export function calculateRefund(input: RefundCalculationInput): RefundCalculatio
   let unitAmount: number | null = null;
   let totalContractWeeks: number | null = null;
   let usedWeeks: number | null = null;
+  let remainingWeeks: number | null = null;
   let totalContractDays: number | null = null;
   let usedDays: number | null = null;
   let remainingDays: number | null = null;
@@ -158,12 +161,14 @@ export function calculateRefund(input: RefundCalculationInput): RefundCalculatio
       }
       totalContractWeeks = roundDecimal(totalContractDays / 7);
       usedWeeks = roundDecimal(usedDays / 7);
+      remainingWeeks = roundDecimal(remainingDays / 7);
       usedAmount = roundWon(paidAmount * (usedDays / totalContractDays));
     } else {
       totalContractWeeks = positiveNumber(input.totalContractWeeks, "총 계약 주수");
       usedWeeks = nonNegativeNumber(input.usedWeeks, "실제 사용 주수");
       if (usedWeeks > totalContractWeeks) throw new Error("실제 사용 주수는 총 계약 주수를 초과할 수 없습니다.");
       if (!manualReason) throw new Error("홀딩을 제외한 실제 사용 주수의 확인 근거를 작성하세요.");
+      remainingWeeks = roundDecimal(totalContractWeeks - usedWeeks);
       usedAmount = roundWon(paidAmount * (usedWeeks / totalContractWeeks));
       requiresReview = true;
       reviewReasons.push("기간권 사용 주수와 홀딩 제외 기간을 운영자가 확인했습니다.");
@@ -177,6 +182,7 @@ export function calculateRefund(input: RefundCalculationInput): RefundCalculatio
     reviewReasons.push("증정·이벤트·프로모션 혜택 공제액이 포함되었습니다.");
   }
 
+  const remainingBalanceAmount = Math.max(0, roundWon(paidAmount - usedAmount));
   const totalDeductionAmount = roundWon(penaltyAmount + usedAmount + giftDeductionAmount);
   const refundAmount = Math.max(0, roundWon(paidAmount - totalDeductionAmount));
   if (totalDeductionAmount > paidAmount) {
@@ -185,10 +191,9 @@ export function calculateRefund(input: RefundCalculationInput): RefundCalculatio
   }
 
   const formula = [
-    formatWon(paidAmount),
+    `잔여금액 ${formatWon(remainingBalanceAmount)}`,
     `위약금 ${formatWon(penaltyAmount)}`,
-    `사용분 ${formatWon(usedAmount)}`,
-    giftDeductionAmount > 0 ? `증정·프로모션 ${formatWon(giftDeductionAmount)}` : null,
+    giftDeductionAmount > 0 ? `추가 공제 ${formatWon(giftDeductionAmount)}` : null,
   ].filter(Boolean).join(" - ");
   const message = buildRefundMessage(input.memberName, input.ticketName, {
     calculationMode,
@@ -196,11 +201,15 @@ export function calculateRefund(input: RefundCalculationInput): RefundCalculatio
     penaltyAmount,
     usedAmount,
     giftDeductionAmount,
+    remainingBalanceAmount,
     refundAmount,
+    totalCount,
+    remainingCount,
     usedCount,
     unitAmount,
     totalContractWeeks,
     usedWeeks,
+    remainingWeeks,
     totalContractDays,
     usedDays,
     remainingDays,
@@ -213,6 +222,7 @@ export function calculateRefund(input: RefundCalculationInput): RefundCalculatio
     penaltyAmount,
     usedAmount,
     giftDeductionAmount,
+    remainingBalanceAmount,
     totalDeductionAmount,
     refundAmount,
     totalCount,
@@ -221,6 +231,7 @@ export function calculateRefund(input: RefundCalculationInput): RefundCalculatio
     unitAmount,
     totalContractWeeks,
     usedWeeks,
+    remainingWeeks,
     totalContractDays,
     usedDays,
     remainingDays,
@@ -237,6 +248,7 @@ export function calculateRefund(input: RefundCalculationInput): RefundCalculatio
     usedAmount,
     giftDeductionAmount,
     totalDeductionAmount,
+    remainingBalanceAmount,
     refundAmount,
     usedCount,
     totalCount,
@@ -244,6 +256,7 @@ export function calculateRefund(input: RefundCalculationInput): RefundCalculatio
     unitAmount,
     totalContractWeeks,
     usedWeeks,
+    remainingWeeks,
     totalContractDays,
     usedDays,
     remainingDays,
@@ -265,34 +278,46 @@ function buildRefundMessage(
     | "penaltyAmount"
     | "usedAmount"
     | "giftDeductionAmount"
+    | "remainingBalanceAmount"
     | "refundAmount"
+    | "totalCount"
+    | "remainingCount"
     | "usedCount"
     | "unitAmount"
     | "totalContractWeeks"
     | "usedWeeks"
+    | "remainingWeeks"
     | "totalContractDays"
     | "usedDays"
     | "remainingDays"
     | "formula"
   >,
 ): string {
-  const usageBasis = values.calculationMode === "count_ticket"
-    ? `사용분: 정상 단가 ${formatWon(values.unitAmount || 0)} × ${values.usedCount || 0}회`
-    : values.totalContractDays != null && values.usedDays != null
-      ? `사용분: 결제금액 × ${values.usedDays}일 / ${values.totalContractDays}일 (StudioMate 잔여기간 기준)`
-      : `사용분: 결제금액 × ${formatDecimal(values.usedWeeks || 0)}주 / ${formatDecimal(values.totalContractWeeks || 0)}주 (운영자 확인)`;
+  const remainingBasis = values.calculationMode === "count_ticket"
+    ? `잔여횟수: ${values.remainingCount || 0}회 / ${values.totalCount || 0}회`
+    : values.totalContractDays != null && values.remainingDays != null
+      ? `잔여기간: ${values.remainingDays}일 / ${values.totalContractDays}일`
+      : `잔여기간: ${formatDecimal(values.remainingWeeks || 0)}주 / ${formatDecimal(values.totalContractWeeks || 0)}주`;
+  const deductionFormula = [
+    `잔여금액 ${formatWon(values.remainingBalanceAmount)}`,
+    `위약금 ${formatWon(values.penaltyAmount)}`,
+    values.giftDeductionAmount > 0 ? `추가 공제 ${formatWon(values.giftDeductionAmount)}` : null,
+  ].filter(Boolean).join(" - ");
   return [
-    `${memberName} 회원님, 요청하신 ${ticketName} 환불 예상금액을 안내드립니다.`,
+    "[ARCHIVE PILATES 환불 예상금액 안내]",
+    "",
+    `${memberName} 회원님, 요청하신 ${ticketName} 수강권의 환불 예상금액입니다.`,
     "",
     `결제금액: ${formatWon(values.paidAmount)}`,
+    remainingBasis,
+    `잔여금액: ${formatWon(values.remainingBalanceAmount)}`,
     `위약금(결제금액의 10%): ${formatWon(values.penaltyAmount)}`,
-    `${usageBasis}: ${formatWon(values.usedAmount)}`,
     values.giftDeductionAmount > 0
-      ? `증정·프로모션 혜택 공제: ${formatWon(values.giftDeductionAmount)}`
+      ? `증정·프로모션 추가 공제: ${formatWon(values.giftDeductionAmount)}`
       : null,
     `예상 환불금액: ${formatWon(values.refundAmount)}`,
     "",
-    `산정식: ${values.formula}`,
+    `산정식: ${deductionFormula} = ${formatWon(values.refundAmount)}`,
     "",
     "최종 환불금액은 환불동의서 작성과 운영자 확인 후 확정됩니다.",
   ].filter((line) => line != null).join("\n");

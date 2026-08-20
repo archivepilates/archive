@@ -2,14 +2,17 @@
 import { existsSync, readFileSync } from "node:fs";
 
 const checks = [
-  ["core/refunds/index.html", ["data-refund-dashboard", "환불 안내·동의서", "refundEligibilityCheck", "refundTicketKind\" required disabled"]],
-  ["core/assets/app.js", ["getStudioCollectionBy(db, runtime, \"refundCases\"", "eligibilityReviewConfirmed"]],
-  ["firebase/kangsain-functions/functions/src/refund/refundPolicy.ts", ["archive-refund-studiomate-source-2026-08-20-v2", "REFUND_PENALTY_RATE = 0.1", "deriveRefundPeriodUsage"]],
-  ["firebase/kangsain-functions/firestore.rules", ["sameStudioClaim", "match /refundCases/{caseId}"]],
-  ["firebase/kangsain-functions/functions/src/refund/refundOperations.ts", ["eformsignRefundJobs", "agreement_queued", "eligibilityReviewConfirmed", "inferRefundTicketKind", "assertRefundRequestWindow", "searchRefundMembers", "resolveMemberById", "canonicalTicketKind === \"count\" ? \"studiomate_active_ticket\"", "sourceTicketSnapshot", "refundCaseId(staff.studioId, member.memberId, input.ticketKey)"]],
+  ["core/refunds/index.html", ["data-refund-dashboard", "환불 안내·동의서", "refundEligibilityCheck", "refundTicketKind\" required disabled", "refundResultBalance", "refundSmsButton"]],
+  ["core/assets/app.js", ["getStudioCollectionBy(db, runtime, \"refundCases\"", "eligibilityReviewConfirmed", "queueRefundStudioMateSms", "handleRefundSmsSend"]],
+  ["firebase/kangsain-functions/functions/src/refund/refundPolicy.ts", ["archive-refund-studiomate-source-2026-08-20-v3", "REFUND_PENALTY_RATE = 0.1", "deriveRefundPeriodUsage", "remainingBalanceAmount", "ARCHIVE PILATES 환불 예상금액 안내"]],
+  ["firebase/kangsain-functions/firestore.rules", ["sameStudioClaim", "match /refundCases/{caseId}", "match /studiomateRefundSmsJobs/{jobId}"]],
+  ["firebase/kangsain-functions/functions/src/refund/refundOperations.ts", ["eformsignRefundJobs", "studiomateRefundSmsJobs", "agreement_queued", "sms_queued", "eligibilityReviewConfirmed", "inferRefundTicketKind", "assertRefundRequestWindow", "searchRefundMembers", "resolveMemberById", "canonicalTicketKind === \"count\" ? \"studiomate_active_ticket\"", "sourceTicketSnapshot", "refundCaseId(staff.studioId, member.memberId, input.ticketKey)"]],
   ["scripts/lib/eformsign-refund-browser-contract.mjs", ["companySignature", "documentName", "documentId", "assertRefundJobStillWithinValidity", "assertRefundSourceUnchanged", "staleRefundJobRecoveryStatus", "extractEformsignDocumentId"]],
   ["scripts/process-eformsign-refund-jobs.mjs", ["if (config.loginOnly)", "authenticated = true", "recoverStaleJobs", "assertLiveRefundSource", "send_review_required", "acquireEformsignBrowserLock", "assertRefundJobStillWithinValidity", "eformsignDocumentId"]],
   ["firebase/kangsain-functions/macmini-studiomate/com.archive.eformsign-refund-queue.plist", ["process-eformsign-refund-jobs.mjs", "--apply"]],
+  ["scripts/lib/studiomate-refund-sms-contract.mjs", ["assertRefundSmsSourceUnchanged", "classifyStudioMateSmsSendEvidence", "send_review_required"]],
+  ["scripts/process-studiomate-refund-sms-jobs.mjs", ["studiomateRefundSmsJobs", "acquireStudioMateBrowserLock", "sendRefundSms", "send_review_required"]],
+  ["firebase/kangsain-functions/macmini-studiomate/com.archive.studiomate-refund-sms-queue.plist", ["process-studiomate-refund-sms-jobs.mjs", "--apply"]],
 ];
 
 const failures = [];

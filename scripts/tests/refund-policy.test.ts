@@ -205,7 +205,7 @@ test("StudioMate 기간권은 총기간과 잔여기간으로 사용분을 자�
   assert.equal(result.remainingDays, 63);
   assert.equal(result.usedAmount, 90000);
   assert.equal(result.refundAmount, 234000);
-  assert.match(result.message, /StudioMate 잔여기간 기준/);
+  assert.match(result.message, /잔여기간: 63일 \/ 84일/);
 });
 
 test("홀딩이 반영된 10주 기간권은 확인된 실제 사용 주수로 환불액을 계산한다", () => {
@@ -223,6 +223,30 @@ test("홀딩이 반영된 10주 기간권은 확인된 실제 사용 주수로 �
   assert.equal(result.penaltyAmount, 39800);
   assert.equal(result.usedAmount, 216114);
   assert.equal(result.refundAmount, 142086);
+});
+
+test("10주 기간권의 잔여 4주 환불 안내는 119,400원으로 계산한다", () => {
+  const result = calculateRefund({
+    memberName: "테스트회원",
+    ticketName: "10주(주2회)",
+    ticketKind: "period",
+    paidAmount: 398000,
+    totalCount: null,
+    remainingCount: null,
+    totalContractWeeks: 10,
+    usedWeeks: 6,
+    manualReason: "StudioMate 남은 기간 31일을 운영 규칙에 따라 4주로 확인",
+  });
+  assert.equal(result.remainingWeeks, 4);
+  assert.equal(result.remainingBalanceAmount, 159200);
+  assert.equal(result.penaltyAmount, 39800);
+  assert.equal(result.usedAmount, 238800);
+  assert.equal(result.refundAmount, 119400);
+  assert.equal(result.formula, "잔여금액 159,200원 - 위약금 39,800원");
+  assert.match(result.message, /잔여기간: 4주 \/ 10주/);
+  assert.match(result.message, /잔여금액: 159,200원/);
+  assert.match(result.message, /예상 환불금액: 119,400원/);
+  assert.match(result.message, /잔여금액 159,200원 - 위약금 39,800원 = 119,400원/);
 });
 
 test("StudioMate 기간권은 총기간과 사용·잔여기간이 맞지 않으면 중단한다", () => {
@@ -259,7 +283,7 @@ test("증정과 프로모션 혜택 공제액을 별도로 반영한다", () => 
   assert.equal(result.giftDeductionAmount, 50000);
   assert.equal(result.totalDeductionAmount, 240000);
   assert.equal(result.refundAmount, 160000);
-  assert.match(result.message, /증정·프로모션 혜택 공제/);
+  assert.match(result.message, /증정·프로모션 추가 공제/);
 });
 
 test("공제액이 결제액을 넘으면 환불액을 0원으로 제한한다", () => {

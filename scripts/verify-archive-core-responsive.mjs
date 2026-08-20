@@ -117,6 +117,7 @@ try {
           if (sendPanel) sendPanel.hidden = false;
           const values = {
             refundResultPaid: "1,650,000원",
+            refundResultBalance: "935,000원",
             refundResultPenalty: "165,000원",
             refundResultUsed: "715,000원",
             refundResultAmount: "770,000원",

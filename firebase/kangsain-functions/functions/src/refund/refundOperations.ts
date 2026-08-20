@@ -18,6 +18,7 @@ import {
 
 const REFUND_CASES = "refundCases";
 const EFORMSIGN_REFUND_JOBS = "eformsignRefundJobs";
+const STUDIOMATE_REFUND_SMS_JOBS = "studiomateRefundSmsJobs";
 const REFUND_AGREEMENT_TEMPLATE_ID = "fbdd279c2d7447938bc4e997f249c7b5";
 const MAX_MATCHES = 30;
 
@@ -203,6 +204,117 @@ export async function sendRefundAgreementHandler(request: CallableRequest): Prom
   }
 
   return { ok: true, status: "agreement_queued", caseId, documentId: "" };
+}
+
+export async function queueRefundStudioMateSmsHandler(request: CallableRequest): Promise<Record<string, unknown>> {
+  const staff = await manager(request);
+  if (request.data?.confirmed !== true) throw new AppError("INVALID_ARGUMENT", "회원 문자 발송 확인이 필요합니다.");
+  const input = parsePreviewInput(request.data);
+  const expectedHash = cleanText(request.data?.calculationHash, 80);
+  if (!expectedHash) throw new AppError("INVALID_ARGUMENT", "환불 계산을 먼저 실행하세요.");
+  const member = await resolvePreviewMember(staff, input);
+  const memberPhone = requireMemberPhone(member.profile.phone);
+  const ticket = findTicket(member.profile.activeTickets || [], input.ticketKey);
+  const { calculation, paymentSource } = calculateFromTicket(input, ticket, member.profile.name);
+  if (calculation.calculationHash !== expectedHash) {
+    throw new AppError("INVALID_ARGUMENT", "환불금액이 변경되었습니다. 다시 계산한 뒤 확인하세요.");
+  }
+
+  const caseId = refundCaseId(staff.studioId, member.memberId, input.ticketKey);
+  const jobId = refundSmsJobId(caseId, calculation.calculationHash);
+  const caseRef = db.collection(REFUND_CASES).doc(caseId);
+  const jobRef = db.collection(STUDIOMATE_REFUND_SMS_JOBS).doc(jobId);
+  const ticketSnapshot = safeTicket(ticket, input.requestedAt);
+  const now = nowTimestamp();
+  const result = await db.runTransaction(async (transaction) => {
+    const [existingCase, existingJob] = await Promise.all([
+      transaction.get(caseRef),
+      transaction.get(jobRef),
+    ]);
+    const caseData = existingCase.data() || {};
+    const jobData = existingJob.data() || {};
+    const existingStatus = String(jobData.status || "");
+    if (existingStatus === "sent") {
+      return { duplicate: true, status: "sms_already_sent" };
+    }
+    if (["pending", "retry", "processing", "sending", "send_review_required"].includes(existingStatus)) {
+      return { duplicate: true, status: "sms_duplicate_blocked" };
+    }
+    if (jobData.sendClickedAt) {
+      throw new AppError(
+        "INVALID_ARGUMENT",
+        "이전 문자 발송 결과를 먼저 확인하세요. 중복 발송 방지를 위해 재발송을 막았습니다.",
+      );
+    }
+
+    const smsNotice = {
+      jobId,
+      status: "queued",
+      title: "ARCHIVE PILATES 환불 안내",
+      message: calculation.message,
+      calculationHash: calculation.calculationHash,
+      queuedAt: now,
+      updatedAt: now,
+    };
+    transaction.set(
+      caseRef,
+      {
+        caseId,
+        studioId: staff.studioId,
+        memberId: member.memberId,
+        memberName: member.profile.name,
+        memberPhone,
+        memberPhoneLast4: memberPhone.slice(-4),
+        ticketKey: input.ticketKey,
+        ticketName: ticket.name,
+        ticketSnapshot,
+        paymentSource,
+        calculation,
+        calculationHash: calculation.calculationHash,
+        policyVersion: calculation.policyVersion,
+        operatorMessage: calculation.message,
+        status: caseData.status || "calculated",
+        smsNotice,
+        createdByUid: caseData.createdByUid || staff.uid,
+        createdByName: caseData.createdByName || staff.name,
+        createdAt: caseData.createdAt || now,
+        updatedAt: now,
+      },
+      { merge: true },
+    );
+    transaction.set(
+      jobRef,
+      {
+        jobId,
+        caseId,
+        studioId: staff.studioId,
+        memberId: member.memberId,
+        studiomateMemberId: cleanText(member.profile.studiomateMemberId, 120),
+        memberName: member.profile.name,
+        memberPhone,
+        memberPhoneLast4: memberPhone.slice(-4),
+        ticketKey: input.ticketKey,
+        ticketName: ticket.name,
+        ticketExpiresAt: timestampIso(ticket.expiresAt),
+        ticketSourceSnapshot: sourceTicketSnapshot(ticket),
+        calculationHash: calculation.calculationHash,
+        smsTitle: smsNotice.title,
+        smsMessage: smsNotice.message,
+        status: "pending",
+        attempts: 0,
+        maxAttempts: 3,
+        createdByUid: staff.uid,
+        createdAt: jobData.createdAt || now,
+        queuedAt: now,
+        updatedAt: now,
+        lastError: null,
+      },
+      { merge: true },
+    );
+    return { duplicate: false, status: "sms_queued" };
+  });
+
+  return { ok: true, status: result.status, caseId, jobId, duplicate: result.duplicate };
 }
 
 async function manager(request: CallableRequest): Promise<StaffDoc> {
@@ -521,6 +633,13 @@ function ticketKey(ticket: ActiveTicket): string {
 function refundCaseId(studioId: string, memberId: string, ticketKeyValue: string): string {
   return `refund_${createHash("sha256")
     .update(`${studioId}|${memberId}|${ticketKeyValue}`)
+    .digest("hex")
+    .slice(0, 32)}`;
+}
+
+function refundSmsJobId(caseId: string, calculationHash: string): string {
+  return `refund_sms_${createHash("sha256")
+    .update(`${caseId}|${calculationHash}|refund_estimate`)
     .digest("hex")
     .slice(0, 32)}`;
 }

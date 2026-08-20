@@ -126,7 +126,7 @@ const COMMAND_ITEMS = [
   },
   {
     title: "환불 안내·동의서",
-    detail: "회원 수강권 환불 예상액 검토와 이폼싸인 발송",
+    detail: "회원 수강권 환불 예상액 검토, StudioMate 문자와 이폼싸인 발송",
     href: "./refunds/",
     keywords: "refund 환불 수강권 동의서 이폼싸인",
   },
@@ -3308,8 +3308,13 @@ function resetRefundPreview() {
   if (qs("refundSendPanel")) qs("refundSendPanel").hidden = true;
   if (qs("refundConfirmCheck")) qs("refundConfirmCheck").checked = false;
   if (qs("refundSendButton")) qs("refundSendButton").disabled = true;
+  if (qs("refundSmsButton")) {
+    qs("refundSmsButton").disabled = true;
+    qs("refundSmsButton").textContent = "StudioMate 문자 발송 요청";
+  }
   setRefundStatus("refundCalculationStatus", "");
   setRefundStatus("refundSendStatus", "");
+  setRefundStatus("refundSmsStatus", "");
 }
 
 function renderRefundTickets(tickets) {
@@ -3537,6 +3542,7 @@ async function handleRefundPreview(event) {
     }
     const calculation = data.calculation || {};
     setText("refundResultPaid", formatWon(calculation.paidAmount));
+    setText("refundResultBalance", formatWon(calculation.remainingBalanceAmount));
     setText("refundResultPenalty", formatWon(calculation.penaltyAmount));
     setText("refundResultUsed", formatWon(calculation.usedAmount));
     setText("refundResultGift", formatWon(calculation.giftDeductionAmount));
@@ -3558,6 +3564,47 @@ async function handleRefundPreview(event) {
     if (button) {
       button.disabled = false;
       button.textContent = "환불금액 계산";
+    }
+  }
+}
+
+async function handleRefundSmsSend() {
+  const button = qs("refundSmsButton");
+  const confirmed = Boolean(qs("refundConfirmCheck")?.checked);
+  const calculationHash = refundFlow.preview?.calculation?.calculationHash || "";
+  if (!confirmed || !calculationHash) {
+    setRefundStatus("refundSmsStatus", "환불금액을 계산하고 확인란을 선택하세요.", "danger");
+    return;
+  }
+  if (button) {
+    button.disabled = true;
+    button.textContent = "문자 발송 작업 등록 중";
+  }
+  setRefundStatus("refundSmsStatus", "현재 원천과 계산값을 다시 확인하고 있습니다.", "warn");
+  try {
+    const runtime = await initFirebase();
+    const callable = runtime.httpsCallable(runtime.functionsClient, "queueRefundStudioMateSms");
+    const result = await callable({ ...refundPayload(), calculationHash, confirmed: true });
+    const data = result?.data || {};
+    const duplicate = ["sms_already_sent", "sms_duplicate_blocked"].includes(data.status);
+    setRefundStatus(
+      "refundSmsStatus",
+      data.status === "sms_already_sent"
+        ? "같은 계산값의 문자가 이미 발송되어 중복 요청을 차단했습니다."
+        : data.status === "sms_duplicate_blocked"
+          ? "같은 계산값의 문자 작업이 이미 진행 중입니다. 최근 처리 상태를 확인하세요."
+          : "StudioMate 문자 발송 대기에 등록했습니다. 실제 발송 결과는 최근 처리에서 확인할 수 있습니다.",
+      duplicate ? "warn" : "good",
+    );
+    if (!duplicate && button) button.textContent = "문자 발송 대기";
+    await refresh();
+  } catch (error) {
+    setRefundStatus("refundSmsStatus", error?.message || "문자 발송 작업 등록 중 오류가 발생했습니다.", "danger");
+    if (button) button.disabled = false;
+  } finally {
+    if (button && button.textContent !== "문자 발송 대기") {
+      button.textContent = "StudioMate 문자 발송 요청";
+      button.disabled = !confirmed;
     }
   }
 }
@@ -3639,13 +3686,30 @@ function renderRefundCases() {
                   : status === "agreement_queued"
                     ? "발송 대기"
                   : "검토";
+          const smsStatus = String(item.smsNotice?.status || "");
+          const smsTone = smsStatus === "sent" ? "success" : ["failed", "send_review_required"].includes(smsStatus) ? "danger" : "warning";
+          const smsLabel = smsStatus === "sent"
+            ? "문자 발송"
+            : smsStatus === "send_review_required"
+              ? "문자 결과 확인"
+              : smsStatus === "failed"
+                ? "문자 실패"
+                : smsStatus === "sending" || smsStatus === "processing"
+                  ? "문자 발송 중"
+                  : smsStatus === "queued" || smsStatus === "retry"
+                    ? "문자 대기"
+                    : "";
+          const agreementLabel = status === "calculated" && smsLabel ? "" : label;
           return `
             <div class="status-row">
               <div>
                 <strong>${escapeHtml(item.memberName || "회원")} · ${escapeHtml(item.ticketName || "수강권")}</strong>
                 <p>끝자리 ${escapeHtml(item.memberPhoneLast4 || "-")} · 예상 환불 ${escapeHtml(formatWon(item.calculation?.refundAmount))} · ${escapeHtml(formatDate(item.updatedAt))}</p>
               </div>
-              <span class="pill ${tone}">${label}</span>
+              <div class="status-row-pills">
+                ${smsLabel ? `<span class="pill ${smsTone}">${smsLabel}</span>` : ""}
+                ${agreementLabel ? `<span class="pill ${tone}">${agreementLabel}</span>` : ""}
+              </div>
             </div>
           `;
         })
@@ -6693,8 +6757,10 @@ qs("refundTicketKind")?.addEventListener("change", updateRefundKindFields);
 qs("refundCopyButton")?.addEventListener("click", handleRefundCopy);
 qs("refundConfirmCheck")?.addEventListener("change", (event) => {
   if (qs("refundSendButton")) qs("refundSendButton").disabled = !event.target.checked || !refundFlow.preview;
+  if (qs("refundSmsButton")) qs("refundSmsButton").disabled = !event.target.checked || !refundFlow.preview;
 });
 qs("refundSendButton")?.addEventListener("click", handleRefundSend);
+qs("refundSmsButton")?.addEventListener("click", handleRefundSmsSend);
 qs("mealFilterBar")?.addEventListener("click", handleMealFilterClick);
 qs("mealGenerateButton")?.addEventListener("click", handleMealGenerate);
 qs("mealDraftForm")?.addEventListener("submit", handleMealDraftSubmit);

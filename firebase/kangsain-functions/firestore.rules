@@ -165,6 +165,10 @@ service cloud.firestore {
       allow read, write: if false;
     }
 
+    match /studiomateRefundSmsJobs/{jobId} {
+      allow read, write: if false;
+    }
+
     match /memberContactIndex/{memberId} {
       allow read: if isManager() && sameStudio(resource.data.studioId);
       allow write: if false;

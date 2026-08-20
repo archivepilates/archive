@@ -4615,7 +4615,7 @@ a.rank-row:hover,
 
 .refund-amount-grid {
   display: grid;
-  grid-template-columns: repeat(5, minmax(0, 1fr));
+  grid-template-columns: repeat(6, minmax(0, 1fr));
   gap: 8px;
 }
 
@@ -4661,10 +4661,6 @@ a.rank-row:hover,
   margin: -8px 20px 20px;
 }
 
-.refund-panel > #refundSendButton {
-  margin: 0 20px 20px;
-}
-
 .refund-send-check label {
   display: flex;
   align-items: flex-start;
@@ -4682,6 +4678,49 @@ a.rank-row:hover,
   margin: 0;
   color: var(--muted);
   font-size: 0.86rem;
+}
+
+.refund-send-actions {
+  display: grid;
+  gap: 0;
+  margin: 0 20px 20px;
+  border-top: 1px solid var(--line-soft);
+}
+
+.refund-send-action {
+  display: grid;
+  grid-template-columns: minmax(0, 1fr) minmax(200px, max-content);
+  align-items: center;
+  gap: 12px 18px;
+  padding: 16px 0;
+  border-bottom: 1px solid var(--line-soft);
+}
+
+.refund-send-action > div:first-child {
+  min-width: 0;
+}
+
+.refund-send-action strong,
+.refund-send-action p {
+  overflow-wrap: anywhere;
+}
+
+.refund-send-action p {
+  margin: 4px 0 0;
+  color: var(--muted);
+  font-size: 0.84rem;
+}
+
+.refund-send-action > .form-status {
+  grid-column: 1 / -1;
+  margin: 0;
+}
+
+.status-row-pills {
+  display: flex;
+  flex-wrap: wrap;
+  justify-content: flex-end;
+  gap: 6px;
 }
 
 .refund-policy-check {
@@ -4761,9 +4800,21 @@ a.rank-row:hover,
     margin-left: 16px;
   }
 
-  .refund-panel > #refundSendButton {
+  .refund-send-actions {
     margin-right: 16px;
     margin-left: 16px;
+  }
+
+  .refund-send-action {
+    grid-template-columns: 1fr;
+  }
+
+  .refund-send-action button {
+    width: 100%;
+  }
+
+  .status-row-pills {
+    justify-content: flex-start;
   }
 
   .refund-stepper {

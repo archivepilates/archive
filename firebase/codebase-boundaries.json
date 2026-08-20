@@ -98,7 +98,8 @@
         "processParkingDiscountJob",
         "getRefundMemberTickets",
         "previewRefund",
-        "sendRefundAgreement"
+        "sendRefundAgreement",
+        "queueRefundStudioMateSms"
       ],
       "forbidden": ["scheduled jobs", "automatic member-facing sends without manager confirmation"]
     },
