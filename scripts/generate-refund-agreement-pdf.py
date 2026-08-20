@@ -42,6 +42,12 @@ def draw_table(c, x, y_top, widths, row_height, rows):
             cursor += width
 
 
+def draw_section_title(c, x, y, title):
+    c.setFillColor(colors.HexColor("#30302E"))
+    c.setFont("ArchiveBold", 10)
+    c.drawString(x, y, title)
+
+
 def build_pdf():
     OUTPUT.parent.mkdir(parents=True, exist_ok=True)
     pdfmetrics.registerFont(TTFont("ArchiveRegular", FONT_REGULAR))
@@ -54,54 +60,45 @@ def build_pdf():
 
     c.setFillColor(colors.white)
     c.rect(0, 0, width, height, stroke=0, fill=1)
-    if LOGO.exists():
-        c.drawImage(str(LOGO), 184, 770, 28, 28, mask="auto", preserveAspectRatio=True)
+    c.setFillColor(colors.HexColor("#6A6863"))
+    c.setFont("ArchiveMedium", 8.5)
+    c.drawCentredString(width / 2, 803, "ARCHIVE PILATES")
     c.setFillColor(colors.HexColor("#151515"))
-    c.setFont("ArchiveBold", 18)
-    c.drawString(220, 778, "ARCHIVE PILATES 환불동의서")
+    c.setFont("ArchiveBold", 20)
+    c.drawCentredString(width / 2, 775, "환불동의서")
     c.setStrokeColor(colors.HexColor("#E4572E"))
-    c.setLineWidth(2)
+    c.setLineWidth(1.6)
     c.line(40, 750, 555, 750)
 
-    c.setFont("ArchiveBold", 10)
-    c.setFillColor(colors.HexColor("#353535"))
-    c.drawString(40, 726, "회원 정보")
-    draw_table(c, 40, 714, [78, 155, 78, 204], 38, [["이름", "", "주소", ""], ["생년월일", "", "연락처", ""]])
+    draw_section_title(c, 40, 726, "회원 정보")
+    draw_table(c, 40, 714, [78, 179.5, 78, 179.5], 36, [["이름", "", "주소", ""], ["생년월일", "", "연락처", ""]])
 
-    c.setFont("ArchiveBold", 10)
-    c.drawString(40, 578, "환불 신청")
+    draw_section_title(c, 40, 614, "환불 신청 정보")
     draw_table(
         c,
         40,
-        566,
-        [82, 146, 82, 205],
-        45,
-        [["환불 사유", "", "실결제금액", ""], ["위약금", "", "사용·혜택 공제", ""], ["예상 환불금액", "", "", ""]],
+        602,
+        [104, 411],
+        34,
+        [
+            ["환불 사유", ""],
+            ["실결제금액", ""],
+            ["위약금", ""],
+            ["사용·혜택 공제", ""],
+            ["예상 환불금액", ""],
+            ["은행명", ""],
+            ["계좌번호", ""],
+        ],
     )
 
-    # The existing eformsign template keeps separate bank and account fields.
-    # Extend only the account cell so the original stable field IDs stay aligned.
-    c.setStrokeColor(colors.HexColor("#565656"))
-    c.setLineWidth(0.7)
-    c.line(268, 431, 268, 386)
-    c.line(350, 431, 350, 386)
-    c.line(555, 431, 555, 386)
-    c.line(268, 386, 555, 386)
-    c.line(350, 421, 555, 421)
-    c.setFillColor(colors.HexColor("#E9E9E7"))
-    c.rect(268, 386, 82, 90, stroke=0, fill=1)
-    c.setFillColor(colors.HexColor("#171717"))
-    c.setFont("ArchiveBold", 9)
-    c.drawCentredString(309, 428, "지급계좌")
-
-    policy_top = 371
-    policy_height = 101
+    policy_top = 344
+    policy_height = 96
     c.setFillColor(colors.HexColor("#FAF9F7"))
     c.setStrokeColor(colors.HexColor("#BBBBB5"))
     c.rect(40, policy_top - policy_height, 515, policy_height, stroke=1, fill=1)
     c.setFillColor(colors.HexColor("#171717"))
     c.setFont("ArchiveBold", 9)
-    c.drawString(54, policy_top - 18, "환불 산정 기준")
+    c.drawString(54, policy_top - 17, "환불 산정 기준")
     c.setFont("ArchiveRegular", 8.2)
     policy_lines = [
         "• 모든 환불은 실결제금액의 10% 위약금을 공제합니다.",
@@ -111,25 +108,26 @@ def build_pdf():
         "• 최종 환불금액은 본 동의서 서명과 운영자 확인 후 확정됩니다.",
     ]
     for index, line in enumerate(policy_lines):
-        c.drawString(54, policy_top - 35 - index * 13, line)
+        c.drawString(54, policy_top - 33 - index * 12.5, line)
 
     c.setFillColor(colors.HexColor("#555555"))
     c.setFont("ArchiveRegular", 8.3)
-    c.drawString(40, 255, "위 환불 산정 기준과 예상 환불금액을 확인했으며, 환불 처리를 요청합니다.")
+    c.drawString(40, 231, "위 환불 산정 기준과 예상 환불금액을 확인했으며, 환불 처리를 요청합니다.")
 
     c.setFillColor(colors.HexColor("#222222"))
     c.setFont("ArchiveMedium", 9)
-    c.drawString(40, 224, "작성일")
+    c.drawString(40, 202, "작성일")
     c.setStrokeColor(colors.HexColor("#9A9A95"))
-    c.line(90, 221, 292, 221)
+    c.line(90, 199, 292, 199)
 
-    c.setFont("ArchiveMedium", 10)
-    c.drawString(165, 151, "환불 신청 회원")
-    c.line(252, 147, 370, 147)
-    c.drawString(380, 151, "(서명 또는 인)")
-    c.drawString(165, 112, "ARCHIVE PILATES")
-    c.line(252, 108, 370, 108)
-    c.drawString(380, 112, "(서명 또는 인)")
+    draw_table(
+        c,
+        40,
+        172,
+        [104, 153, 72, 186],
+        34,
+        [["환불 신청 회원", "", "서명", ""], ["ARCHIVE PILATES", "", "서명", ""]],
+    )
 
     c.setStrokeColor(colors.HexColor("#B6B6B0"))
     c.line(40, 68, 555, 68)
