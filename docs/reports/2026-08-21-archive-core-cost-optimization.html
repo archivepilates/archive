@@ -41,8 +41,8 @@
   <body>
     <main>
       <div class="eyebrow">ARCHIVE PILATES · COST OPTIMIZATION</div>
-      <h1>ARCHIVE CORE 1~3순위 개선 결과</h1>
-      <p class="muted">기준일 2026-08-21 · 프로젝트 <code>archive-pilates</code> · 로컬 구현 및 검증 완료, 운영 배포 전</p>
+      <h1>ARCHIVE CORE 비용 최적화 1~5 완료</h1>
+      <p class="muted">기준일 2026-08-22 · 프로젝트 <code>archive-pilates</code> · 운영 배포 및 즉시 검증 완료</p>
 
       <section class="grid" aria-label="핵심 결과">
         <article class="metric"><span>홈 초기 읽기 상한</span><strong>약 67% 감소</strong><small class="muted">의도상 6,947건 이상에서 최대 약 2,263건으로 축소</small></article>
@@ -56,10 +56,10 @@
           <table>
             <thead><tr><th>순위</th><th>문제</th><th>개선</th><th>현재 상태</th></tr></thead>
             <tbody>
-              <tr><td>1</td><td>홈이 전체 회원 요약·회원 원본과 프라이빗 진행 데이터를 함께 읽음</td><td>전체 회원 조회 제거, 재등록 후보의 회원 원본만 묶음 확인, 회원 검색은 비메뉴 검색어 2자 이상 입력 시 1회 지연 조회</td><td><span class="status">로컬 검증 완료</span></td></tr>
-              <tr><td>1 보강</td><td>공통 목록 함수가 서버 제한 없이 전체 컬렉션을 받은 뒤 브라우저에서 잘라냄</td><td>정렬 조회와 예외 fallback 모두 Firestore 쿼리에 <code>limit</code> 적용</td><td><span class="status">로컬 검증 완료</span></td></tr>
-              <tr><td>2</td><td>CORE의 HTML·JS·CSS·이미지가 모두 <code>no-store</code>라 반복 전체 다운로드 발생</td><td>HTML/release는 no-store 유지, JS/CSS는 저장 후 재검증, 이미지·아이콘·폰트는 1시간 캐시</td><td><span class="status">로컬 헤더 확인</span></td></tr>
-              <tr><td>3</td><td>결과 0건인 알림톡·설문·연락처 워커가 5분마다 반복 실행</td><td>세 워커만 10분으로 조정하고 대상 선정·중복 차단·10분 운영 약속은 유지</td><td><span class="status pending">Functions 배포 대기</span></td></tr>
+              <tr><td>1</td><td>홈이 전체 회원 요약·회원 원본과 프라이빗 진행 데이터를 함께 읽음</td><td>전체 회원 조회 제거, 재등록 후보의 회원 원본만 묶음 확인, 회원 검색은 비메뉴 검색어 2자 이상 입력 시 1회 지연 조회</td><td><span class="status">운영 적용</span></td></tr>
+              <tr><td>1 보강</td><td>공통 목록 함수가 서버 제한 없이 전체 컬렉션을 받은 뒤 브라우저에서 잘라냄</td><td>정렬 조회와 예외 fallback 모두 Firestore 쿼리에 <code>limit</code> 적용</td><td><span class="status">운영 적용</span></td></tr>
+              <tr><td>2</td><td>CORE의 HTML·JS·CSS·이미지가 모두 <code>no-store</code>라 반복 전체 다운로드 발생</td><td>HTML과 디렉터리형 메뉴 URL은 no-store 유지, JS/CSS는 저장 후 재검증, 이미지·아이콘·폰트는 1시간 캐시</td><td><span class="status">라이브 헤더 확인</span></td></tr>
+              <tr><td>3</td><td>결과 0건인 알림톡·설문·연락처 워커가 5분마다 반복 실행</td><td>세 워커만 10분으로 조정하고 대상 선정·중복 차단·10분 운영 약속은 유지</td><td><span class="status">스케줄 확인</span></td></tr>
             </tbody>
           </table>
         </div>
@@ -83,16 +83,18 @@
           <li class="good">재등록 17개, 프라이빗 흐름 22개 테스트 통과</li>
           <li class="good">14개 화면을 320·390·768·1440·1920px에서 검사: 가로 넘침, 잘림, 터치 크기 이상 없음</li>
           <li class="good">Firebase Hosting 로컬 에뮬레이터 확인: HTML no-store, JS/CSS 재검증, 이미지 1시간 캐시 헤더 적용</li>
+          <li class="good">라이브 확인: 홈·회원·프라이빗·수업 디렉터리 URL은 no-store, JS/CSS는 재검증, manifest는 no-store</li>
+          <li class="good">세 Scheduler는 모두 every 10 minutes·ENABLED, 대응 함수는 모두 ACTIVE</li>
         </ul>
       </section>
 
       <section class="panel">
-        <h2>배포 주의</h2>
-        <p class="warn">현재 변경은 운영에 배포하지 않았고 GitHub에도 올리지 않았습니다.</p>
+        <h2>배포와 72시간 비교</h2>
+        <p class="good">커밋 <code>388c377</code>을 <code>origin/main</code>에 반영하고 CORE Hosting 및 영향받은 세 Functions 코드베이스만 배포했습니다.</p>
         <ul>
-          <li><code>firebase.json</code> 변경 때문에 일반 affected 감지는 모든 Functions 코드베이스를 선택합니다.</li>
-          <li>실제 반영 시 Hosting은 <code>archive-pilates-core</code>, Functions는 <code>functions-alimtalk</code>·<code>functions-private-chart</code>·<code>functions-sync</code>만 명시적으로 분리해야 합니다.</li>
-          <li>배포 후 실제 CORE 응답 헤더, 세 Scheduler의 10분 주기, Firestore 일일 읽기, CORE Hosting 전송량을 다시 확인해야 합니다.</li>
+          <li>배포 전 72시간 기준: Firestore 읽기 요청 약 917,088건, CORE Hosting 전송량 약 7.46GB.</li>
+          <li>배포 전 72시간 워커 기준: 알림톡 약 868회, 연락처 약 867회 호출. billable instance time은 알림톡 약 114초, 연락처 약 180초, 프라이빗 설문 약 1,222초.</li>
+          <li>72시간 후 같은 Cloud Monitoring 지표와 큐 지연·실패 상태를 비교해 기능 저하 없이 사용량이 줄었는지 판정합니다.</li>
           <li>직접 결제액 절감은 무료 구간과 실제 접속량에 따라 달라지므로 고정 금액으로 단정하지 않고 배포 후 72시간 데이터를 비교합니다.</li>
         </ul>
       </section>

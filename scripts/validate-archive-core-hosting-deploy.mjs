@@ -231,7 +231,7 @@ const required = [
       "ticketLiabilityReports",
       "최근 8주",
       "renewalCases",
-      "2026-08-21 비용 최적화",
+      "2026-08-22 비용 최적화",
       "환불 안내·동의서",
       "refundCases",
     ],
