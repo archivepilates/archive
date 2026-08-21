@@ -592,7 +592,16 @@ const guardGroups = [
       },
       {
         file: "core/assets/app.js",
-        markers: ['"쿠폰"', "sameKindTickets.length < 2", "isHealthyBackupTicket"],
+        markers: ['"쿠폰"', "renewalCaseIsCurrent", "renewalSourceTicketIdentity", "healthyAlternative", "isHealthyBackupTicket"],
+      },
+      {
+        file: "firebase/kangsain-functions/functions/src/alimtalk/rebuildAlimtalkCandidates.ts",
+        markers: [
+          "await syncRenewalCases(profiles, bookingIndex, input.endDate)",
+          '.select(',
+          '"attendanceStatus"',
+          '"ticketClassType"',
+        ],
       },
       {
         file: "firebase/kangsain-functions/firestore.rules",

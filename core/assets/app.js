@@ -1506,6 +1506,42 @@ function isHealthyBackupTicket(ticket, referenceDate = new Date()) {
   return true;
 }
 
+function renewalSourceTicketIdentity(memberId, kind, ticket) {
+  const userTicketId = String(ticket?.userTicketId || "").trim();
+  if (userTicketId) return `user:${userTicketId}`;
+  const availableFrom = timestampMs(ticket?.availableFrom || ticket?.startDate) || "";
+  const paymentAt = timestampMs(ticket?.paymentAt || ticket?.paymentDate || ticket?.purchasedAt) || "";
+  const maxCount = ticketMaxCount(ticket);
+  return [
+    `member:${memberId}`,
+    `kind:${kind}`,
+    `name:${ticketNameText(ticket).toLowerCase()}`,
+    `from:${availableFrom}`,
+    `paid:${paymentAt}`,
+    `max:${Number.isFinite(maxCount) ? maxCount : ""}`,
+  ].join("|");
+}
+
+function renewalCaseIsCurrent(item, member, referenceDate = new Date()) {
+  const memberId = String(item.memberId || member?.memberId || member?.id || "");
+  const kind = String(item.kind || "lesson");
+  const tickets = (member?.currentTicketsSummary || [])
+    .filter((ticket) => ticket && typeof ticket !== "string")
+    .filter((ticket) => renewalTicketKind(ticket) === kind && isRenewalManagedTicket(ticket));
+  const caseIdentity = String(item.ticketIdentity || "");
+  const exactTicket = caseIdentity
+    ? tickets.find((ticket) => renewalSourceTicketIdentity(memberId, kind, ticket) === caseIdentity)
+    : null;
+  const healthyAlternative = tickets.some(
+    (ticket) =>
+      renewalSourceTicketIdentity(memberId, kind, ticket) !== caseIdentity &&
+      isHealthyBackupTicket(ticket, referenceDate),
+  );
+  if (healthyAlternative) return false;
+  if (exactTicket && isHealthyBackupTicket(exactTicket, referenceDate)) return false;
+  return true;
+}
+
 function hasSameKindBackupTicket(tickets, target, referenceDate = new Date()) {
   const targetKind = renewalTicketKind(target);
   return tickets.some((ticket) => {
@@ -1622,11 +1658,7 @@ function renewalCaseRows(referenceDate = new Date()) {
     .filter((item) => {
       if (!isRenewalManagedTicket({ name: item.ticketName || "" })) return false;
       const member = memberById.get(String(item.memberId || "")) || {};
-      const tickets = (member.currentTicketsSummary || []).filter((ticket) => ticket && typeof ticket !== "string");
-      const sameKindTickets = tickets.filter(
-        (ticket) => renewalTicketKind(ticket) === String(item.kind || "lesson") && isRenewalManagedTicket(ticket),
-      );
-      return sameKindTickets.length < 2;
+      return renewalCaseIsCurrent(item, member, referenceDate);
     })
     .map((item) => {
       const member = memberById.get(String(item.memberId || "")) || {};

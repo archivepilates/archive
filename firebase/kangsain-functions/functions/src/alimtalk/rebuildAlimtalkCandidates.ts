@@ -49,6 +49,10 @@ export async function rebuildAlimtalkCandidatesForRange(input: {
   const writes: Array<Promise<unknown>> = [];
   const candidateIds: string[] = [];
   const profiles = profilesSnap.docs.map((snap) => snap.data());
+  if (mode === "daily") {
+    // Keep the operator renewal ledger current even if later candidate work fails.
+    await syncRenewalCases(profiles, bookingIndex, input.endDate);
+  }
   for (const sourceDate of dateRange(input.startDate, input.endDate)) {
     for (const profile of profiles) {
       if (mode === "reservation_open") {
@@ -128,7 +132,6 @@ export async function rebuildAlimtalkCandidatesForRange(input: {
   }
 
   await Promise.all(writes);
-  if (mode === "daily") await syncRenewalCases(profiles, bookingIndex, input.endDate);
   await markStaleCandidatesSkipped({
     studioId: input.studioId,
     startDate: input.startDate,
@@ -160,10 +163,31 @@ type BookingIndex = Map<string, BookingDoc[]>;
 type LectureIndex = Map<string, LectureDoc>;
 
 async function loadBookingIndex(studioId: string): Promise<BookingIndex> {
-  const snap = await refs.bookings().where("studioId", "==", studioId).get();
+  const snap = await refs
+    .bookings()
+    .where("studioId", "==", studioId)
+    .select(
+      "bookingId",
+      "lectureId",
+      "studioId",
+      "memberId",
+      "memberName",
+      "memberPhone",
+      "staffId",
+      "staffName",
+      "lectureDate",
+      "lectureStartAt",
+      "lessonType",
+      "appStatus",
+      "attendanceStatus",
+      "ticketName",
+      "ticketClassType",
+      "ticketType",
+    )
+    .get();
   const index: BookingIndex = new Map();
   for (const doc of snap.docs) {
-    const booking = doc.data();
+    const booking = doc.data() as BookingDoc;
     if (!booking.memberId) continue;
     const list = index.get(booking.memberId) || [];
     list.push(booking);
