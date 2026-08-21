@@ -44,7 +44,7 @@ import { redirectShortLinkHandler } from "../utils/shortLinks";
 export const scheduledSyncPrivateSurveyResponses = onSchedule(
   {
     ...scheduleOptions,
-    schedule: "every 5 minutes",
+    schedule: "every 10 minutes",
   },
   async () => {
     await syncPrivateSurveyResponsesFromSheet();

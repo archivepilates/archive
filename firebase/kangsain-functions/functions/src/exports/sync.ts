@@ -31,7 +31,7 @@ export const scheduledProcessWriteQueue = onSchedule(
 export const scheduledProcessContactSyncJobs = onSchedule(
   {
     ...scheduleOptions,
-    schedule: "every 5 minutes",
+    schedule: "every 10 minutes",
   },
   async () => {
     await processContactSyncJobs();

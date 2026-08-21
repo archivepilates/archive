@@ -146,6 +146,12 @@ StudioMate 알림 poll 또는 회원 관련 API 갱신에서 아래 이벤트를
 - 회원카드 연락처 갱신: StudioMate 갱신 후 10분 이내
 - Google 주소록 반영: 10분 이내 큐 등록, API 오류 시 재시도
 
+운영 워커 주기:
+
+- `scheduledProcessAlimtalkQueue`는 10분마다 `queued` 후보를 확인한다.
+- `scheduledProcessContactSyncJobs`는 10분마다 `home_archivepilates` 대상 중 처리 시각이 된 큐만 확인한다.
+- 주기 조정 후에도 회원가입/신규등록 알림톡 후보와 연락처 갱신은 각 이벤트 발생 후 10분 이내 처리를 목표로 한다.
+
 ### 정합성 동기화
 
 하루 1회 전체 또는 최근 변경분을 다시 훑어 빠진 회원, 연락처 변경, 수강권 상태 변경을 보정한다.
@@ -196,7 +202,7 @@ Google 주소록 쓰기에는 Google People API 권한이 필요하다.
 - 운영자 화면과 회원카드에는 알림톡 상태 태그/칩을 표시하지 않는다. 후보 패널, 발송 이력, Google Drive 로그 문서, 메일 보고에서만 확인한다. 알림톡 보고/승인/미제출 알림 메일 제목은 `[알림톡][상태] 핵심내용` 형식을 사용하고, Gmail에는 `알림톡 보고` 라벨과 `자동화 성공`, `자동화 실패`, `자동화 긴급`, `자동화 확인필요` 중 하나를 함께 적용한다.
 - 신규회원 웰컴은 기준일 기준 등록 3일 이내 후보만 자동 발송 대상으로 본다.
 - 운영자는 필요할 때 후보 명단을 복사해 검토하거나 `일괄 승인`으로 수동 발송 대기 처리할 수 있다.
-- 서버 워커 `scheduledProcessAlimtalkQueue`가 5분마다 남은 `queued` 후보를 확인해 SOLAPI로 발송하고, `alimtalkSends/{candidateId}`에 결과를 남긴다.
+- 서버 워커 `scheduledProcessAlimtalkQueue`가 10분마다 남은 `queued` 후보를 확인해 SOLAPI로 발송하고, `alimtalkSends/{candidateId}`에 결과를 남긴다.
 - 실제 발송은 승인 완료 템플릿만 허용한다. 검수중/보류 템플릿은 후보에는 보일 수 있지만 발송 워커에서 차단한다.
 
 현재 운영 가능 템플릿:

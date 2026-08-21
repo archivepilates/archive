@@ -27,7 +27,7 @@
         <header class="page-hero">
           <p class="eyebrow">RULES</p>
           <h1>운영 규칙</h1>
-          <p class="subtitle">2026.08.20 기준 현재 유효한 운영 규칙만 정리한 ARCHIVE CORE 단일 운영 허브입니다.</p>
+          <p class="subtitle">2026.08.21 기준 현재 유효한 운영 규칙만 정리한 ARCHIVE CORE 단일 운영 허브입니다.</p>
         </header>
 
         <section class="panel rules-hero">
@@ -797,6 +797,16 @@
                 <li>프라이빗 리포트는 수업 후 기록이 들어오기 전에는 waiting_post로 보관하고 정기 생성 대상에서 제외합니다.</li>
                 <li>운영 영향이 작은 누락 설문 확인은 시간 단위, Notion 백필은 하루 3회로 제한합니다.</li>
                 <li>사용하지 않는 Scheduler와 Secret은 참조·대체 수단을 확인한 뒤 삭제합니다.</li>
+              </ul>
+            </article>
+            <article class="rule-card">
+              <h3>2026-08-21 비용 최적화</h3>
+              <ul>
+                <li>CORE 홈은 전체 회원 디렉터리를 처음부터 읽지 않고 재등록 후보의 memberProfiles만 묶음 조회해 최신성을 확인합니다. 명령창에서 회원명을 2자 이상 검색할 때만 회원 검색 데이터를 한 번 불러오며, Members 화면의 기존 조회는 유지합니다.</li>
+                <li>목록별 최대 건수는 브라우저에서 자르지 않고 Firestore 쿼리 단계에 적용해 원본 전체 읽기를 막습니다.</li>
+                <li>CORE HTML과 release.json은 캐시하지 않고, JavaScript와 CSS는 저장 후 재검증하며, 이미지·아이콘·폰트는 짧게 캐시합니다.</li>
+                <li>알림톡 큐, 프라이빗 사전설문 응답, Google 주소록 큐 워커는 canonical 원천과 10분 이내 운영 약속을 유지하면서 10분 주기로 처리합니다.</li>
+                <li>상태: 로컬 구현·검증 완료, 운영 Hosting·Functions 배포 대기. 실제 응답 헤더와 Scheduler 주기는 배포 후 확인하기 전까지 변경 완료로 간주하지 않습니다.</li>
               </ul>
             </article>
             <article class="rule-card">

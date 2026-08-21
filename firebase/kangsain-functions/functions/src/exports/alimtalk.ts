@@ -32,7 +32,7 @@ const alimtalkQueueRequestOptions = {
 export const scheduledProcessAlimtalkQueue = onSchedule(
   {
     ...alimtalkQueueScheduleOptions,
-    schedule: "every 5 minutes",
+    schedule: "every 10 minutes",
   },
   async () => {
     await processAlimtalkQueue();

@@ -70,6 +70,12 @@ const required = [
       "SECONDARY_NAV_SECTIONS",
       "enhanceRuleSections",
       "CORE_RUNTIME_CONTRACT_VERSION",
+      "COMMAND_MEMBER_SEARCH_MIN_LENGTH",
+      "ensureMemberDirectory",
+      "hasCommandMenuMatch",
+      "handleCommandPaletteInput",
+      "getCollectionDocumentsByIds",
+      "renewalMemberProfiles",
       "renderReadHealth",
       "getBookingsForLessonWindow",
       "deriveLessonOccurrencesFromBookings",
@@ -225,6 +231,7 @@ const required = [
       "ticketLiabilityReports",
       "최근 8주",
       "renewalCases",
+      "2026-08-21 비용 최적화",
       "환불 안내·동의서",
       "refundCases",
     ],
@@ -292,6 +299,64 @@ for (const tool of externalToolLinks) {
 }
 
 const coreAppSource = fs.readFileSync(path.join(repoRoot, "core/assets/app.js"), "utf8");
+const refreshSource = coreAppSource.slice(
+  coreAppSource.indexOf("async function refresh()"),
+  coreAppSource.indexOf("enhanceNav();"),
+);
+const openCommandPaletteSource = coreAppSource.slice(
+  coreAppSource.indexOf("function openCommandPalette()"),
+  coreAppSource.indexOf("function handleCommandPaletteInput()"),
+);
+const commandPaletteInputSource = coreAppSource.slice(
+  coreAppSource.indexOf("function handleCommandPaletteInput()"),
+  coreAppSource.indexOf("function closeCommandPalette()"),
+);
+const collectionReadSource = coreAppSource.slice(
+  coreAppSource.indexOf("async function getCollectionBy"),
+  coreAppSource.indexOf("async function getOptionalCollectionBy"),
+);
+if (!refreshSource || refreshSource.includes("shouldLoadMembers || shouldLoadHome")) {
+  failures.push({
+    file: "core/assets/app.js",
+    label: "ARCHIVE CORE home read budget",
+    missing: "load the full member directory only on the Members page",
+  });
+}
+if (!refreshSource || /const shouldLoadPrivate\s*=.*shouldLoadHome/.test(refreshSource)) {
+  failures.push({
+    file: "core/assets/app.js",
+    label: "ARCHIVE CORE home read budget",
+    missing: "keep private lesson session reads off the Home route",
+  });
+}
+if (!openCommandPaletteSource || openCommandPaletteSource.includes("ensureMemberDirectory")) {
+  failures.push({
+    file: "core/assets/app.js",
+    label: "ARCHIVE CORE command palette read budget",
+    missing: "opening the command palette must not load the member directory",
+  });
+}
+if (!commandPaletteInputSource.includes("hasCommandMenuMatch(term)")) {
+  failures.push({
+    file: "core/assets/app.js",
+    label: "ARCHIVE CORE command palette read budget",
+    missing: "do not load the member directory for known operation menu searches",
+  });
+}
+if (!refreshSource.includes('getCollectionDocumentsByIds(db, runtime, "memberProfiles", renewalMemberIds, 1000)')) {
+  failures.push({
+    file: "core/assets/app.js",
+    label: "ARCHIVE CORE renewal accuracy",
+    missing: "load only renewal-case member profiles before validating Home renewal rows",
+  });
+}
+if ((collectionReadSource.match(/firestore\.limit\(maxItems\)/g) || []).length < 2) {
+  failures.push({
+    file: "core/assets/app.js",
+    label: "ARCHIVE CORE collection read budget",
+    missing: "bound both ordered and fallback collection reads on the Firestore server",
+  });
+}
 const alimtalkTemplateSource = fs.readFileSync(
   path.join(repoRoot, "firebase/kangsain-functions/functions/src/alimtalk/templates.ts"),
   "utf8",
@@ -313,6 +378,44 @@ if (/KA\d{2}TP[0-9A-Za-z]+/.test(coreRulesSource)) {
     label: "operator-facing Korean Alimtalk template titles",
     missing: "remove raw SOLAPI template IDs from visible rules",
   });
+}
+
+const firebaseConfig = JSON.parse(fs.readFileSync(path.join(repoRoot, "firebase.json"), "utf8"));
+const coreHostingConfig = (firebaseConfig.hosting || []).find((entry) => entry.site === "archive-pilates-core");
+const coreHeaders = coreHostingConfig?.headers || [];
+const headerPolicy = new Map(
+  coreHeaders.map((entry) => [entry.source, entry.headers?.find((header) => header.key === "Cache-Control")?.value]),
+);
+const requiredCachePolicies = [
+  ["/index.html", "no-cache, no-store, must-revalidate"],
+  ["/", "no-cache, no-store, must-revalidate"],
+  ["/**/", "no-cache, no-store, must-revalidate"],
+  ["/**/*.html", "no-cache, no-store, must-revalidate"],
+  ["/release.json", "no-cache, no-store, must-revalidate"],
+  ["/site.webmanifest", "no-cache, no-store, must-revalidate"],
+  ["/**/*.js", "public, max-age=0, must-revalidate"],
+  ["/**/*.css", "public, max-age=0, must-revalidate"],
+  ["/**/*.{png,jpg,jpeg,gif,webp,svg,ico,woff,woff2,ttf,otf}", "public, max-age=3600, stale-while-revalidate=86400"],
+];
+if (!coreHostingConfig) {
+  failures.push({ file: "firebase.json", label: "ARCHIVE CORE Hosting target", missing: "archive-pilates-core" });
+} else {
+  for (const [source, expected] of requiredCachePolicies) {
+    if (headerPolicy.get(source) !== expected) {
+      failures.push({
+        file: "firebase.json",
+        label: `ARCHIVE CORE cache policy: ${source}`,
+        missing: `${source} => ${expected}`,
+      });
+    }
+  }
+  if (headerPolicy.has("/**")) {
+    failures.push({
+      file: "firebase.json",
+      label: "ARCHIVE CORE cache policy",
+      missing: "remove /** no-store catch-all",
+    });
+  }
 }
 
 for (const file of collectHtmlFiles(path.join(repoRoot, "core"))) {

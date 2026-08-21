@@ -1,5 +1,5 @@
 const FIREBASE_APP_VERSION = "10.14.1";
-const CORE_RUNTIME_CONTRACT_VERSION = "2026-08-04.1";
+const CORE_RUNTIME_CONTRACT_VERSION = "2026-08-21.1";
 const WORK_LANE_ID = "archive-core-transition";
 const STUDIO_ID = "5330";
 
@@ -62,6 +62,7 @@ const state = {
   memberCards: [],
   memberProfiles: [],
   renewalCases: [],
+  renewalMembers: [],
   memberDetail: null,
   alimtalkCandidates: [],
   alimtalkSends: [],
@@ -92,6 +93,8 @@ const state = {
   instagramDashboard: null,
   lane: null,
   authReady: null,
+  memberDirectoryLoadPromise: null,
+  memberDirectoryLoadStatus: "idle",
   readWarnings: [],
   readStates: {},
 };
@@ -105,6 +108,7 @@ let mealQueueFilter = "active";
 let refundFlow = { candidates: [], member: null, tickets: [], selectedTicket: null, preview: null };
 
 const MEMBER_PAGE_SIZE = 20;
+const COMMAND_MEMBER_SEARCH_MIN_LENGTH = 2;
 const COMMAND_ITEMS = [
   {
     title: "회원 검색",
@@ -465,7 +469,7 @@ function currentReadRequirements() {
     return [
       { label: "automationStatus", title: "자동화 상태", staleAfterHours: 30 },
       { label: "sourceImports", title: "StudioMate 원본", staleAfterHours: 36 },
-      { label: "memberProfiles", title: "회원 원본", staleAfterHours: 30 },
+      { label: "renewalMemberProfiles", title: "재등록 회원 원본", staleAfterHours: 30 },
     ];
   }
   return [];
@@ -525,7 +529,7 @@ function commandSearchText(item) {
 }
 
 function commandPaletteEntries() {
-  const memberEntries = state.members.slice(0, 80).map((member) => {
+  const memberEntries = state.members.map((member) => {
     const memberId = member.memberId || member.id || "";
     const name = member.name || member.memberName || memberId || "회원";
     const phone = normalizePhone(member.phone || member.memberPhone || "");
@@ -543,16 +547,66 @@ function commandPaletteEntries() {
   return [...COMMAND_ITEMS, ...memberEntries];
 }
 
+function hasCommandMenuMatch(term) {
+  const normalized = String(term || "").trim().toLowerCase();
+  if (!normalized) return true;
+  if (COMMAND_ITEMS.some((item) => commandSearchText(item).includes(normalized))) return true;
+  return Object.values(NAV_LABELS).some((label) => String(label).toLowerCase().includes(normalized));
+}
+
+async function ensureMemberDirectory() {
+  if (state.memberDirectoryLoadStatus === "success") return true;
+  if (state.memberDirectoryLoadStatus === "loading" && state.memberDirectoryLoadPromise) {
+    return state.memberDirectoryLoadPromise;
+  }
+  state.memberDirectoryLoadStatus = "loading";
+  state.memberDirectoryLoadPromise = (async () => {
+    try {
+      const runtime = await initFirebase();
+      const { db } = runtime;
+      const [members, memberProfiles] = await Promise.all([
+        safeRead("member360Cards", () => getCollectionBy(db, runtime, "member360Cards", "totalRevenue", 2000), []),
+        safeRead("memberProfiles", () => getCollectionBy(db, runtime, "memberProfiles", "updatedAt", 2000), []),
+      ]);
+      if (readUnavailable("member360Cards") || readUnavailable("memberProfiles")) {
+        state.memberDirectoryLoadStatus = "failed";
+        return false;
+      }
+      state.memberCards = studioItems(members);
+      state.memberProfiles = studioItems(memberProfiles);
+      state.members = mergeMemberCardsWithProfiles(state.memberCards, state.memberProfiles);
+      state.memberDirectoryLoadStatus = "success";
+      renderHomeSummary();
+      renderHomeDecisions();
+      return true;
+    } catch (error) {
+      state.memberDirectoryLoadStatus = "failed";
+      console.warn("ARCHIVE CORE member directory load skipped", error);
+      return false;
+    } finally {
+      state.memberDirectoryLoadPromise = null;
+    }
+  })();
+  return state.memberDirectoryLoadPromise;
+}
+
 function renderCommandPaletteResults() {
   const list = qs("commandPaletteResults");
   const input = qs("commandPaletteInput");
   if (!list) return;
   const term = String(input?.value || "").trim().toLowerCase();
+  if (state.memberDirectoryLoadStatus === "loading" && term.length >= COMMAND_MEMBER_SEARCH_MIN_LENGTH) {
+    list.innerHTML = `<div class="command-palette-empty">회원 디렉터리를 불러오는 중입니다.</div>`;
+    return;
+  }
   const entries = commandPaletteEntries()
     .filter((item) => !term || commandSearchText(item).includes(term))
     .slice(0, 9);
   if (!entries.length) {
-    list.innerHTML = `<div class="command-palette-empty">검색 결과가 없습니다. 회원명, 전화번호 끝자리, 메뉴명을 다시 입력하세요.</div>`;
+    list.innerHTML =
+      state.memberDirectoryLoadStatus === "failed" && term.length >= COMMAND_MEMBER_SEARCH_MIN_LENGTH
+        ? `<div class="command-palette-empty">회원 목록을 불러오지 못했습니다. Members 화면에서 다시 검색하세요.</div>`
+        : `<div class="command-palette-empty">검색 결과가 없습니다. 회원명, 전화번호 끝자리, 메뉴명을 다시 입력하세요.</div>`;
     return;
   }
   list.innerHTML = entries
@@ -578,6 +632,21 @@ function openCommandPalette() {
     input.focus();
     input.select();
   }, 20);
+}
+
+function handleCommandPaletteInput() {
+  const term = String(qs("commandPaletteInput")?.value || "").trim();
+  if (
+    term.length < COMMAND_MEMBER_SEARCH_MIN_LENGTH ||
+    hasCommandMenuMatch(term) ||
+    state.memberDirectoryLoadStatus !== "idle"
+  ) {
+    renderCommandPaletteResults();
+    return;
+  }
+  const loadPromise = ensureMemberDirectory();
+  renderCommandPaletteResults();
+  void loadPromise.then(() => renderCommandPaletteResults());
 }
 
 function closeCommandPalette() {
@@ -891,7 +960,9 @@ async function getRecentCollectionBy(db, firestore, collectionName, orderField =
     return snapshot.docs.map((docSnapshot) => ({ id: docSnapshot.id, ...docSnapshot.data() }));
   } catch (error) {
     if (String(error?.code || error?.message || "").includes("permission")) throw error;
-    const snapshot = await firestore.getDocs(firestore.collection(db, collectionName));
+    const snapshot = await firestore.getDocs(
+      firestore.query(firestore.collection(db, collectionName), firestore.limit(maxItems)),
+    );
     return snapshot.docs
       .map((docSnapshot) => ({ id: docSnapshot.id, ...docSnapshot.data() }))
       .sort((a, b) => String(b[orderField] || "").localeCompare(String(a[orderField] || "")))
@@ -926,17 +997,46 @@ async function getCurrentPrivateLessonSessions(db, firestore, maxItems = 500) {
 async function getCollectionBy(db, firestore, collectionName, orderField = "updatedAt", maxItems = 1000) {
   try {
     const snapshot = await firestore.getDocs(
-      firestore.query(firestore.collection(db, collectionName), firestore.orderBy(orderField, "desc")),
+      firestore.query(
+        firestore.collection(db, collectionName),
+        firestore.orderBy(orderField, "desc"),
+        firestore.limit(maxItems),
+      ),
     );
-    return snapshot.docs.slice(0, maxItems).map((docSnapshot) => ({ id: docSnapshot.id, ...docSnapshot.data() }));
+    return snapshot.docs.map((docSnapshot) => ({ id: docSnapshot.id, ...docSnapshot.data() }));
   } catch (error) {
     if (String(error?.code || error?.message || "").includes("permission")) throw error;
-    const snapshot = await firestore.getDocs(firestore.collection(db, collectionName));
+    const snapshot = await firestore.getDocs(
+      firestore.query(firestore.collection(db, collectionName), firestore.limit(maxItems)),
+    );
     return snapshot.docs
       .map((docSnapshot) => ({ id: docSnapshot.id, ...docSnapshot.data() }))
       .sort((a, b) => String(b[orderField] || "").localeCompare(String(a[orderField] || "")))
       .slice(0, maxItems);
   }
+}
+
+async function getCollectionDocumentsByIds(db, firestore, collectionName, documentIds, maxItems = 1000) {
+  const ids = [...new Set((documentIds || []).map((value) => String(value || "").trim()).filter(Boolean))].slice(
+    0,
+    maxItems,
+  );
+  if (!ids.length) return [];
+  const batches = [];
+  for (let index = 0; index < ids.length; index += 30) batches.push(ids.slice(index, index + 30));
+  const snapshots = await Promise.all(
+    batches.map((batch) =>
+      firestore.getDocs(
+        firestore.query(
+          firestore.collection(db, collectionName),
+          firestore.where(firestore.documentId(), "in", batch),
+        ),
+      ),
+    ),
+  );
+  return snapshots.flatMap((snapshot) =>
+    snapshot.docs.map((docSnapshot) => ({ id: docSnapshot.id, ...docSnapshot.data() })),
+  );
 }
 
 async function getOptionalCollectionBy(db, firestore, collectionName, orderField = "updatedAt", maxItems = 1000) {
@@ -1649,13 +1749,22 @@ function renewalCandidateRows(referenceDate = new Date()) {
   );
 }
 
+function actionableRenewalCaseItems(items = state.renewalCases, referenceDate = new Date()) {
+  const now = referenceDate.getTime();
+  return (items || [])
+    .filter((item) => item.active !== false && !["resolved", "excluded"].includes(String(item.workflowStatus || "open")))
+    .filter((item) => item.workflowStatus !== "snoozed" || !timestampMs(item.nextActionAt) || timestampMs(item.nextActionAt) <= now);
+}
+
 function renewalCaseRows(referenceDate = new Date()) {
   if (!state.renewalCases.length) return null;
-  const memberById = new Map((state.members || []).map((member) => [String(member.memberId || member.id || ""), member]));
-  const now = referenceDate.getTime();
-  const rows = state.renewalCases
-    .filter((item) => item.active !== false && !["resolved", "excluded"].includes(String(item.workflowStatus || "open")))
-    .filter((item) => item.workflowStatus !== "snoozed" || !timestampMs(item.nextActionAt) || timestampMs(item.nextActionAt) <= now)
+  const memberById = new Map(
+    [...(state.renewalMembers || []), ...(state.members || [])].map((member) => [
+      String(member.memberId || member.id || ""),
+      member,
+    ]),
+  );
+  const rows = actionableRenewalCaseItems(state.renewalCases, referenceDate)
     .filter((item) => {
       if (!isRenewalManagedTicket({ name: item.ticketName || "" })) return false;
       const member = memberById.get(String(item.memberId || "")) || {};
@@ -1667,14 +1776,14 @@ function renewalCaseRows(referenceDate = new Date()) {
       return {
         member,
         memberId,
-        name: item.memberName || member.name || "회원",
-        phone: normalizePhone(member.phone || member.memberPhone || member.phoneNumber || ""),
+        name: member.name || member.memberName || item.memberName || "회원",
+        phone: normalizePhone(member.phone || member.memberPhone || member.phoneNumber || item.phone || item.memberPhone || item.phoneNumber || ""),
         priority: item.priority || "follow",
         topRisk: { kind: item.kind || "lesson" },
         ticketName: item.ticketName || "수강권 확인",
         reason: item.reason || "재등록 확인",
         recentVisitDays: Number.POSITIVE_INFINITY,
-        activeTicketCount: toNumber(member.activeTicketCount),
+        activeTicketCount: toNumber(member.activeTicketCount ?? item.activeTicketCount),
         href: memberId ? `./members/detail/?id=${encodeURIComponent(memberId)}` : "./members/",
         action: item.recommendation || "최근 이용 패턴 기준 재등록 상담",
         predictedDepletionDate: item.predictedDepletionDate || "",
@@ -6530,7 +6639,7 @@ async function refresh() {
     const shouldLoadMessages = Boolean(qs("messagesCandidateList"));
     const shouldLoadParking = Boolean(qs("parkingRegistrationForm"));
     const shouldLoadMemberDetail = Boolean(qs("memberDetailName"));
-    const shouldLoadPrivate = Boolean(qs("privateProgressList")) || shouldLoadHome;
+    const shouldLoadPrivate = Boolean(qs("privateProgressList"));
     const shouldLoadLessons = Boolean(qs("lessonsTodayList"));
     const shouldLoadStaffDashboard = Boolean(qs("staffHrList"));
     const shouldLoadInstagram = Boolean(qs("instagramApprovalList"));
@@ -6572,10 +6681,10 @@ async function refresh() {
       shouldLoadBusinessSnapshot
         ? safeRead("dashboardSnapshots/current", () => getDoc(doc(db, "dashboardSnapshots", "current")), null)
         : Promise.resolve(null),
-      shouldLoadMembers || shouldLoadHome
+      shouldLoadMembers
         ? safeRead("member360Cards", () => getCollectionBy(db, runtime, "member360Cards", "totalRevenue", 2000), [])
         : Promise.resolve([]),
-      shouldLoadMembers || shouldLoadHome
+      shouldLoadMembers
         ? safeRead("memberProfiles", () => getCollectionBy(db, runtime, "memberProfiles", "updatedAt", 2000), [])
         : Promise.resolve([]),
       shouldLoadHome
@@ -6673,14 +6782,31 @@ async function refresh() {
         : Promise.resolve([]),
     ]);
 
+    const renewalCaseItems = studioItems(renewalCases);
+    const renewalMemberIds = actionableRenewalCaseItems(renewalCaseItems)
+      .filter((item) => isRenewalManagedTicket({ name: item.ticketName || "" }))
+      .map((item) => item.memberId);
+    const renewalMembers =
+      shouldLoadHome && renewalMemberIds.length
+        ? await safeRead(
+            "renewalMemberProfiles",
+            () => getCollectionDocumentsByIds(db, runtime, "memberProfiles", renewalMemberIds, 1000),
+            [],
+          )
+        : [];
+
     state.lane = laneSnapshot?.exists?.() ? laneSnapshot.data() : { status: "active" };
     state.automationItems = automationItems;
     state.sourceImports = studioItems(sourceImports);
     state.qualityIssues = studioItems(qualityIssues);
-    state.memberCards = studioItems(members);
-    state.memberProfiles = studioItems(memberProfiles);
-    state.members = mergeMemberCardsWithProfiles(state.memberCards, state.memberProfiles);
-    state.renewalCases = studioItems(renewalCases);
+    if (shouldLoadMembers) {
+      state.memberCards = studioItems(members);
+      state.memberProfiles = studioItems(memberProfiles);
+      state.members = mergeMemberCardsWithProfiles(state.memberCards, state.memberProfiles);
+      state.memberDirectoryLoadStatus = "success";
+    }
+    state.renewalCases = renewalCaseItems;
+    state.renewalMembers = studioItems(renewalMembers);
     state.alimtalkCandidates = alimtalkCandidates;
     state.alimtalkSends = alimtalkSends;
     state.onsiteWelcomeRequests = studioItems(onsiteWelcomeRequests);
@@ -6809,7 +6935,7 @@ qs("parkingAutoApplyButton")?.addEventListener("click", handleParkingAutoApplyCl
 qs("parkingVehicleList")?.addEventListener("click", handleParkingVehicleListClick);
 qs("renewalPipelineList")?.addEventListener("click", handleRenewalActionClick);
 qs("commandPaletteOpen")?.addEventListener("click", openCommandPalette);
-qs("commandPaletteInput")?.addEventListener("input", renderCommandPaletteResults);
+qs("commandPaletteInput")?.addEventListener("input", handleCommandPaletteInput);
 qs("commandPalette")?.addEventListener("click", (event) => {
   if (event.target === qs("commandPalette")) closeCommandPalette();
   if (event.target.closest?.(".command-palette-results a")) closeCommandPalette();
