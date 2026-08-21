@@ -1501,6 +1501,7 @@ function isHealthyBackupTicket(ticket, referenceDate = new Date()) {
   const kind = renewalTicketKind(ticket);
   const remaining = ticketRemainingCount(ticket);
   const days = daysUntilDate(ticketExpiresMs(ticket), referenceDate);
+  if (!Number.isFinite(remaining) && !Number.isFinite(days)) return false;
   if (Number.isFinite(remaining) && remaining <= renewalCountThreshold(kind)) return false;
   if (Number.isFinite(days) && days <= 30) return false;
   return true;

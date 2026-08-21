@@ -54,10 +54,28 @@ export function renewalCountThreshold(kind: RenewalTicketKind): number {
   return kind === "private" ? 3 : 5;
 }
 
-export function hasSameKindAlternativeTicket(tickets: ActiveTicket[], target: ActiveTicket): boolean {
+export function isHealthyRenewalAlternativeTicket(ticket: ActiveTicket, sourceDate: string): boolean {
+  if (!isRenewalManagedTicket(ticket)) return false;
+  const kind = renewalTicketKind(ticket);
+  const remainingCount = finiteNumber(ticket.remainingCount);
+  const remainingDays = ticket.expiresAt ? daysBetween(sourceDate, dateText(ticket.expiresAt.toDate())) : null;
+  if (remainingCount == null && remainingDays == null) return false;
+  if (remainingCount != null && remainingCount <= renewalCountThreshold(kind)) return false;
+  if (remainingDays != null && remainingDays <= 30) return false;
+  return true;
+}
+
+export function hasSameKindAlternativeTicket(
+  tickets: ActiveTicket[],
+  target: ActiveTicket,
+  sourceDate: string,
+): boolean {
   const targetKind = renewalTicketKind(target);
   return tickets.some(
-    (ticket) => ticket !== target && isRenewalManagedTicket(ticket) && renewalTicketKind(ticket) === targetKind,
+    (ticket) =>
+      ticket !== target &&
+      renewalTicketKind(ticket) === targetKind &&
+      isHealthyRenewalAlternativeTicket(ticket, sourceDate),
   );
 }
 

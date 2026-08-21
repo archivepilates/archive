@@ -592,7 +592,14 @@ const guardGroups = [
       },
       {
         file: "core/assets/app.js",
-        markers: ['"쿠폰"', "renewalCaseIsCurrent", "renewalSourceTicketIdentity", "healthyAlternative", "isHealthyBackupTicket"],
+        markers: [
+          '"쿠폰"',
+          "renewalCaseIsCurrent",
+          "renewalSourceTicketIdentity",
+          "healthyAlternative",
+          "isHealthyBackupTicket",
+          "!Number.isFinite(remaining) && !Number.isFinite(days)",
+        ],
       },
       {
         file: "firebase/kangsain-functions/functions/src/alimtalk/rebuildAlimtalkCandidates.ts",
@@ -602,6 +609,10 @@ const guardGroups = [
           '"attendanceStatus"',
           '"ticketClassType"',
         ],
+      },
+      {
+        file: "firebase/kangsain-functions/functions/src/renewal/renewalPolicy.ts",
+        markers: ["isHealthyRenewalAlternativeTicket", "remainingCount == null && remainingDays == null"],
       },
       {
         file: "firebase/kangsain-functions/firestore.rules",

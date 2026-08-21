@@ -931,7 +931,7 @@ function hasOtherActiveTicket(
   target: NonNullable<MemberProfileDoc["activeTickets"]>[number],
   sourceDate: string,
 ): boolean {
-  return hasSameKindAlternativeTicket(currentOrUpcomingLessonProfileTickets(profile, sourceDate), target);
+  return hasSameKindAlternativeTicket(currentOrUpcomingLessonProfileTickets(profile, sourceDate), target, sourceDate);
 }
 
 function hasHoldingTicket(profile: MemberProfileDoc | undefined): boolean {
@@ -1045,7 +1045,7 @@ async function syncRenewalCases(
       .map((ticket) => ({ ticket, assessment: assessRenewalTicket({ ticket, bookings, sourceDate }) }))
       .filter(
         (item): item is { ticket: NonNullable<MemberProfileDoc["activeTickets"]>[number]; assessment: NonNullable<ReturnType<typeof assessRenewalTicket>> } =>
-          Boolean(item.assessment) && !hasSameKindActiveBackup(currentOrUpcomingTickets, item.ticket),
+          Boolean(item.assessment) && !hasSameKindActiveBackup(currentOrUpcomingTickets, item.ticket, sourceDate),
       );
 
     const bestByKind = new Map<string, (typeof assessments)[number]>();
@@ -1197,8 +1197,9 @@ function renewalAssessmentRank(assessment: NonNullable<ReturnType<typeof assessR
 function hasSameKindActiveBackup(
   tickets: NonNullable<MemberProfileDoc["activeTickets"]>,
   target: NonNullable<MemberProfileDoc["activeTickets"]>[number],
+  sourceDate: string,
 ): boolean {
-  return hasSameKindAlternativeTicket(tickets, target);
+  return hasSameKindAlternativeTicket(tickets, target, sourceDate);
 }
 
 function ticketPayload(

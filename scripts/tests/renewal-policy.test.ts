@@ -129,7 +129,7 @@ test("same-name ticket records are still treated as separate follow-up tickets",
     expiresAt: timestamp("2026-12-31T23:59:59+09:00"),
     expiryLevel: "normal",
   };
-  assert.equal(hasSameKindAlternativeTicket([expiring, followUp], expiring), true);
+  assert.equal(hasSameKindAlternativeTicket([expiring, followUp], expiring, "2026-08-01"), true);
 });
 
 test("compensation coupons are not renewal tickets or replacement tickets", () => {
@@ -147,8 +147,39 @@ test("compensation coupons are not renewal tickets or replacement tickets", () =
     expiresAt: timestamp("2026-08-17T23:59:59+09:00"),
     expiryLevel: "warning",
   };
-  assert.equal(hasSameKindAlternativeTicket([expiring, coupon], expiring), false);
+  assert.equal(hasSameKindAlternativeTicket([expiring, coupon], expiring, "2026-08-01"), false);
   assert.equal(assessRenewalTicket({ ticket: coupon, bookings: [], sourceDate: "2026-08-01" }), null);
+});
+
+test("another risky same-kind ticket does not suppress renewal management", () => {
+  const first: Ticket = {
+    name: "그룹 30회",
+    classType: "G",
+    remainingCount: 3,
+    expiresAt: timestamp("2026-08-20T23:59:59+09:00"),
+    expiryLevel: "warning",
+  };
+  const second: Ticket = {
+    name: "그룹 20회",
+    classType: "G",
+    remainingCount: 2,
+    expiresAt: timestamp("2026-08-25T23:59:59+09:00"),
+    expiryLevel: "warning",
+  };
+  assert.equal(hasSameKindAlternativeTicket([first, second], first, "2026-08-01"), false);
+  assert.equal(hasSameKindAlternativeTicket([first, second], second, "2026-08-01"), false);
+});
+
+test("an incomplete same-kind ticket is not treated as a healthy follow-up", () => {
+  const target: Ticket = {
+    name: "그룹 30회",
+    classType: "G",
+    remainingCount: 3,
+    expiresAt: timestamp("2026-08-20T23:59:59+09:00"),
+    expiryLevel: "warning",
+  };
+  const incomplete: Ticket = { name: "그룹 신규권", classType: "G" };
+  assert.equal(hasSameKindAlternativeTicket([target, incomplete], target, "2026-08-01"), false);
 });
 
 test("send guard blocks a stale candidate after a follow-up ticket is added", () => {

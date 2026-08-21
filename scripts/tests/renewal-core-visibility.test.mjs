@@ -70,6 +70,16 @@ test("CORE does not treat a compensation coupon as a follow-up ticket", () => {
   assert.equal(renewalCaseIsCurrent(renewalCase(), member([ticket(), coupon]), referenceDate), true);
 });
 
+test("CORE keeps a case visible when the alternative ticket has no usable status fields", () => {
+  const incomplete = ticket({
+    userTicketId: "incomplete",
+    name: "그룹 신규권",
+    remainingCount: null,
+    expiresAt: null,
+  });
+  assert.equal(renewalCaseIsCurrent(renewalCase(), member([ticket(), incomplete]), referenceDate), true);
+});
+
 test("CORE hides a case when the same source ticket is no longer at risk", () => {
   const recovered = ticket({ remainingCount: 20, expiresAt: timestamp("2026-12-20T23:59:59+09:00") });
   assert.equal(renewalCaseIsCurrent(renewalCase(), member([recovered]), referenceDate), false);
