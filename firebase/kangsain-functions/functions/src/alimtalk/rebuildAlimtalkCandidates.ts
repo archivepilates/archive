@@ -691,7 +691,7 @@ async function longAbsenceCandidateForDate(
   if (!profile.memberId || !profile.name || !profile.phone) return null;
   if (ALIMTALK_MEMBER_EXCLUSION_REASONS[profile.memberId] && !isAlimtalkTestRecipient(profile)) return null;
   if (hasHoldingTicket(profile)) return null;
-  const activeTickets = currentLessonProfileTickets(profile, sourceDate);
+  const activeTickets = currentLessonProfileTickets(profile, sourceDate).filter(isRenewalManagedTicket);
   if (!activeTickets.length) return null;
   if (hasUpcomingReservedBooking(profile.memberId, sourceDate, bookingIndex)) return null;
   const lastAttendance = lastAttendedBooking(profile.memberId, sourceDate, bookingIndex);
@@ -850,6 +850,7 @@ function directTicketCandidate(
   sourceDate: string,
   bookings: BookingDoc[] = [],
 ): AlimtalkCandidateDoc | null {
+  if (!isRenewalManagedTicket(ticket)) return null;
   if (hasOtherActiveTicket(profile, ticket, sourceDate)) return null;
   const memberId = profile.memberId;
   const memberName = profile.name;

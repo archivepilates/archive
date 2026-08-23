@@ -4,6 +4,7 @@ import type { AlimtalkCandidateDoc, BookingDoc, MemberProfileDoc } from "../../f
 import {
   assessRenewalTicket,
   hasSameKindAlternativeTicket,
+  isRenewalManagedTicket,
   renewalBookingKind,
   renewalRecommendation,
   renewalSourceTicketKey,
@@ -149,6 +150,47 @@ test("compensation coupons are not renewal tickets or replacement tickets", () =
   };
   assert.equal(hasSameKindAlternativeTicket([expiring, coupon], expiring, "2026-08-01"), false);
   assert.equal(assessRenewalTicket({ ticket: coupon, bookings: [], sourceDate: "2026-08-01" }), null);
+  assert.equal(isRenewalManagedTicket({ name: "신규 스텝 교육용 수강권" }), false);
+  assert.equal(isRenewalManagedTicket({ name: "여름휴가 보상권" }), false);
+});
+
+test("send guard blocks gift vouchers and compensation coupons", () => {
+  const profile: MemberProfileDoc = {
+    memberId: "member-1",
+    studioId: "5330",
+    name: "테스트",
+    phone: "01000000000",
+    registeredAt: null,
+    activeTickets: [
+      {
+        name: "그룹1회상품권",
+        classType: "G",
+        remainingCount: 1,
+        expiresAt: timestamp("2026-08-25T23:59:59+09:00"),
+        expiryLevel: "warning",
+      },
+    ],
+    syncedAt: timestamp(),
+    updatedAt: timestamp(),
+  };
+  const candidate: AlimtalkCandidateDoc = {
+    candidateId: "candidate-gift-voucher",
+    studioId: "5330",
+    memberId: "member-1",
+    memberName: "테스트",
+    memberPhone: "01000000000",
+    type: "remaining_low",
+    status: "queued",
+    templateCode: "template",
+    title: "수강권",
+    reason: "잔여횟수 부족",
+    sourceDate: "2026-08-01",
+    payload: { ticketName: "그룹1회상품권", remainingCount: "1" },
+    lastError: null,
+    createdAt: timestamp(),
+    updatedAt: timestamp(),
+  };
+  assert.equal(renewalCandidateProfileIssue(candidate, profile), "재등록 안내 제외 수강권");
 });
 
 test("another risky same-kind ticket does not suppress renewal management", () => {

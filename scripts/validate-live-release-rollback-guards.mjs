@@ -587,6 +587,8 @@ const guardGroups = [
         markers: [
           "renewalCandidateSendabilityIssue",
           "동일 유형 후속 수강권 보유",
+          "재등록 안내 제외 수강권",
+          "isRenewalManagedTicket",
           "renewalCandidateProfileIssue",
         ],
       },
@@ -608,6 +610,8 @@ const guardGroups = [
           '.select(',
           '"attendanceStatus"',
           '"ticketClassType"',
+          "if (!isRenewalManagedTicket(ticket)) return null;",
+          "currentLessonProfileTickets(profile, sourceDate).filter(isRenewalManagedTicket)",
         ],
       },
       {

@@ -8,6 +8,8 @@ const DAY_MS = 24 * 60 * 60 * 1000;
 const RENEWAL_EXCLUDED_TICKET_KEYWORDS = [
   "강사레슨",
   "강사용",
+  "스텝",
+  "교육용",
   "직원",
   "상담",
   "체험",
@@ -16,6 +18,7 @@ const RENEWAL_EXCLUDED_TICKET_KEYWORDS = [
   "토삭스",
   "상품권",
   "쿠폰",
+  "보상권",
 ];
 
 export interface RenewalUsageSummary {

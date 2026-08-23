@@ -1,6 +1,10 @@
 import type { AlimtalkCandidateDoc, MemberProfileDoc } from "../types/models";
 import { refs } from "../firestore/refs";
-import { hasSameKindAlternativeTicket, renewalTicketKind } from "../renewal/renewalPolicy";
+import {
+  hasSameKindAlternativeTicket,
+  isRenewalManagedTicket,
+  renewalTicketKind,
+} from "../renewal/renewalPolicy";
 
 const RENEWAL_TYPES = new Set([
   "ticket_expiring",
@@ -24,6 +28,7 @@ export function renewalCandidateProfileIssue(
   const tickets = (profile.activeTickets || []).filter((ticket) => currentTicket(ticket, candidate.sourceDate));
   const target = tickets.find((ticket) => sameTicket(candidate, ticket));
   if (!target) return "최신 수강권 상태에서 안내 대상 아님";
+  if (!isRenewalManagedTicket(target)) return "재등록 안내 제외 수강권";
   if (hasSameKindAlternativeTicket(tickets, target, candidate.sourceDate))
     return "현재 또는 사용예정 동일 유형 후속 수강권 보유";
 
