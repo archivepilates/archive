@@ -12,6 +12,7 @@ import {
   renewalUsageSummary,
 } from "../../firebase/kangsain-functions/functions/src/renewal/renewalPolicy";
 import { renewalCandidateProfileIssue } from "../../firebase/kangsain-functions/functions/src/alimtalk/renewalSendGuard";
+import { selectDailyAlimtalkCandidates } from "../../firebase/kangsain-functions/functions/src/alimtalk/dailyCandidateSelection";
 
 type Ticket = NonNullable<MemberProfileDoc["activeTickets"]>[number];
 
@@ -193,6 +194,22 @@ test("send guard blocks gift vouchers and compensation coupons", () => {
   assert.equal(renewalCandidateProfileIssue(candidate, profile), "재등록 안내 제외 수강권");
 });
 
+test("daily selection prefers renewal guidance over long absence for the same member", () => {
+  const renewal = renewalCandidate("renewal", "ticket_expiring");
+  const absence = renewalCandidate("absence", "long_absence");
+  const result = selectDailyAlimtalkCandidates([absence, renewal]);
+  assert.deepEqual(result.selected.map((candidate) => candidate.candidateId), ["renewal"]);
+  assert.equal(result.suppressed[0]?.candidate.candidateId, "absence");
+});
+
+test("daily selection sends one reminder when the same ticket is low and expiring", () => {
+  const countLow = renewalCandidate("count-low", "remaining_low");
+  const expiring = renewalCandidate("expiring", "ticket_expiring");
+  const result = selectDailyAlimtalkCandidates([expiring, countLow]);
+  assert.deepEqual(result.selected.map((candidate) => candidate.candidateId), ["count-low"]);
+  assert.equal(result.suppressed[0]?.candidate.candidateId, "expiring");
+});
+
 test("another risky same-kind ticket does not suppress renewal management", () => {
   const first: Ticket = {
     name: "그룹 30회",
@@ -332,3 +349,26 @@ test("send guard blocks a same-name follow-up ticket without stable ticket ids",
     "현재 또는 사용예정 동일 유형 후속 수강권 보유",
   );
 });
+
+function renewalCandidate(candidateId: string, type: AlimtalkCandidateDoc["type"]): AlimtalkCandidateDoc {
+  return {
+    candidateId,
+    studioId: "5330",
+    memberId: "member-1",
+    memberName: "테스트",
+    memberPhone: "01000000000",
+    type,
+    status: "candidate",
+    templateCode: `template-${type}`,
+    title: "알림",
+    reason: "테스트",
+    sourceDate: "2026-08-01",
+    payload: {
+      ticketName: "그룹 30회",
+      expiresAt: "2026. 8. 31.",
+    },
+    lastError: null,
+    createdAt: timestamp(),
+    updatedAt: timestamp(),
+  };
+}

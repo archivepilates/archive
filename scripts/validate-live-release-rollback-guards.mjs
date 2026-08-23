@@ -615,6 +615,26 @@ const guardGroups = [
         ],
       },
       {
+        file: "firebase/kangsain-functions/functions/src/alimtalk/queueDailyAlimtalk.ts",
+        markers: [
+          "selectDailyAlimtalkCandidates",
+          "renewalCandidateSendabilityIssue",
+          "privateSurveySendabilityIssue",
+          "same_day_message_priority",
+        ],
+      },
+      {
+        file: "firebase/kangsain-functions/functions/src/alimtalk/dailyCandidateSelection.ts",
+        markers: [
+          "같은 회원의 재등록 안내가 있어 장기 미출석 안내를 당일 발송하지 않음",
+          "같은 수강권의 잔여횟수·만료 안내 중 우선순위가 높은 1건만 당일 발송",
+        ],
+      },
+      {
+        file: "firebase/kangsain-functions/functions/src/alimtalk/privateSurveySendGuard.ts",
+        markers: ["수업 시작 이후 프라이빗 사전설문 발송 제외"],
+      },
+      {
         file: "firebase/kangsain-functions/functions/src/renewal/renewalPolicy.ts",
         markers: ["isHealthyRenewalAlternativeTicket", "remainingCount == null && remainingDays == null"],
       },

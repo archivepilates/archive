@@ -46,6 +46,11 @@ export function privateSurveySourceIssue(
   if (/cancel|deleted|inactive|stale|missing/i.test(String(effectiveBooking.sourceStatus || ""))) {
     return "취소·삭제·변경된 프라이빗 예약입니다.";
   }
+  const lessonStartMs =
+    effectiveBooking.lectureStartAt?.toMillis?.() || request.lessonStartAt?.toMillis?.() || 0;
+  if (lessonStartMs && lessonStartMs <= nowMs) {
+    return "수업 시작 이후 프라이빗 사전설문 발송 제외";
+  }
   if (!isPrivateBooking(effectiveBooking)) return "프라이빗 수업 예약이 아닙니다.";
   if (
     replacementBooking &&

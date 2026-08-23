@@ -612,6 +612,18 @@ test("private survey send guard blocks cancelled bookings at send time", () => {
   );
 });
 
+test("private survey send guard blocks delivery after the lesson starts", () => {
+  const candidate = privateSurveyCandidate();
+  const request = privateSurveyRequest();
+  const booking = {
+    ...privateSurveyBooking(),
+    lectureStartAt: {
+      toMillis: () => nowDate.getTime() - 1,
+    },
+  };
+  assert.match(privateSurveySourceIssue(candidate, request, booking, nowDate.getTime()), /수업 시작 이후/);
+});
+
 test("private lesson session projection follows the four operator stages", () => {
   const request = chartRequest();
   assert.equal(privateLessonSessionProjection(request.requestId, request, undefined).workflowStage, "preparation");
