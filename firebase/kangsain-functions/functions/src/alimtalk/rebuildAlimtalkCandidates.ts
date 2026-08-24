@@ -21,7 +21,7 @@ import {
   type SendableAlimtalkCandidateType,
 } from "./templates";
 import { alimtalkDedupeKey, findCompletedDuplicateForCandidate } from "./dedupe";
-import { isValidInstructorLessonManagementNumber as isValidInstructorLessonManagementNumberFromUtil } from "./instructorLessonManagement";
+import { instructorLessonManagementNumberFor } from "./instructorLessonManagement";
 import { isAlimtalkTestRecipient } from "./testRecipients";
 import {
   assessRenewalTicket,
@@ -327,10 +327,21 @@ function instructorLessonMaterialCandidatesForDate(
 ): AlimtalkCandidateDoc[] {
   if (!profile.memberId || !profile.name || !profile.phone) return [];
   const lessonDate = addDays(sourceDate, 1);
-  return memberBookings(bookingIndex, profile.memberId)
-    .filter((booking) => booking.appStatus === "reserved" && booking.lectureDate === lessonDate && isInstructorLessonBooking(booking))
+  const candidates = memberBookings(bookingIndex, profile.memberId)
+    .filter(
+      (booking) =>
+        booking.appStatus === "reserved" && booking.lectureDate === lessonDate && isInstructorLessonBooking(booking),
+    )
     .map((booking) => instructorLessonMaterialCandidate(profile, booking, sourceDate, lectureIndex))
     .filter((candidate): candidate is AlimtalkCandidateDoc => Boolean(candidate));
+  const byManagementNumber = new Map<string, AlimtalkCandidateDoc>();
+  for (const candidate of candidates) {
+    const managementNumber = String(candidate.payload?.managementNumber || "");
+    if (managementNumber && !byManagementNumber.has(managementNumber)) {
+      byManagementNumber.set(managementNumber, candidate);
+    }
+  }
+  return [...byManagementNumber.values()];
 }
 
 function instructorLessonMaterialCandidate(
@@ -341,12 +352,8 @@ function instructorLessonMaterialCandidate(
 ): AlimtalkCandidateDoc | null {
   const lecture = lectureIndex.get(booking.lectureId);
   const title = lecture?.title || "";
-  const topicSlug = instructorLessonTopicSlug(title);
-  if (!topicSlug) return null;
-  const lessonDateShort = compactDate6(booking.lectureDate);
-  if (!lessonDateShort) return null;
-  const managementNumber = `${topicSlug}-${lessonDateShort}`;
-  if (!isValidInstructorLessonManagementNumberFromUtil(managementNumber)) return null;
+  const managementNumber = instructorLessonManagementNumberFor({ title, lessonDate: booking.lectureDate });
+  if (!managementNumber) return null;
   const targetUrl = `https://in.archivepilates.com/method/${encodeURIComponent(managementNumber)}`;
   const shortLinkId = shortLinkIdForTarget("method_material", targetUrl);
   return {
@@ -1273,26 +1280,6 @@ function compactDate6(value: string): string {
   const normalized = normalizedDateText(value);
   if (!normalized) return "";
   return `${normalized.slice(2, 4)}${normalized.slice(5, 7)}${normalized.slice(8, 10)}`;
-}
-
-function instructorLessonTopicSlug(title: string): string {
-  const normalizedText = String(title || "").toLowerCase().replace(/_/g, "-");
-  const tokens = normalizedText
-    .split(/[^a-z0-9]+/g)
-    .flatMap((token) => token.split("-").filter(Boolean));
-  const topicWords: string[] = [];
-  let hasStarted = false;
-  for (const token of tokens) {
-    if (!/^[a-z]+$/.test(token)) {
-      if (!hasStarted) {
-        continue;
-      }
-      break;
-    }
-    hasStarted = true;
-    topicWords.push(token);
-  }
-  return topicWords.join("-") || "";
 }
 
 function normalizedDateText(value: string): string {

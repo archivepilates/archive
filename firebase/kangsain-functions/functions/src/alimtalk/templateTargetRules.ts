@@ -37,6 +37,8 @@ export const SURVEY_DETAIL_BUTTON_URL_TEMPLATE =
 export const GROUP_SURVEY_BUTTON_URL_TEMPLATE =
   "https://in.archivepilates.com/groupSurvey?id=#{설문ID}&token=#{접근토큰}";
 export const METHOD_MATERIAL_BUTTON_URL_TEMPLATE = "https://in.archivepilates.com/method/#{관리번호}";
+export const METHOD_ASSIGNMENT_BUTTON_URL_TEMPLATE =
+  "https://in.archivepilates.com/method/#{관리번호}/assignment";
 export const PRIVATE_REPORT_BUTTON_URL_TEMPLATE = "https://in.archivepilates.com/s/#{리포트링크ID}/";
 export const RECOMMENDED_MEAL_REPORT_BUTTON_URL_TEMPLATE =
   "https://in.archivepilates.com/s/#{리포트링크ID}/";
@@ -404,8 +406,13 @@ export const ALIMTALK_TEMPLATE_TARGET_RULES: Partial<Record<AlimtalkCandidateTyp
         maxLength: SOLAPI_BUTTON_URL_MAX_LENGTH,
       },
       {
-        label: "강사레슨 수업자료 버튼",
+        label: "강사레슨 짧은 링크",
         template: SHORT_LINK_BUTTON_URL_TEMPLATE,
+        maxLength: SOLAPI_BUTTON_URL_MAX_LENGTH,
+      },
+      {
+        label: "강사레슨 수업배정 버튼",
+        template: METHOD_ASSIGNMENT_BUTTON_URL_TEMPLATE,
         maxLength: SOLAPI_BUTTON_URL_MAX_LENGTH,
       },
     ],

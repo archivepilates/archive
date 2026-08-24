@@ -1,6 +1,7 @@
 import type { AlimtalkCandidateType } from "../types/models";
 
 export const INSTRUCTOR_LESSON_ALIMTALK_CHANNEL_ID = "KA01PF260511123407631PSoAflYAVXs";
+export const INSTRUCTOR_LESSON_ALIMTALK_TEMPLATE_CODE = "KA01TP260724090746135DWCIb2boEw7";
 
 export const NEW_MEMBER_ALIMTALK_START_DATE = "2026-05-16";
 export const NEW_MEMBER_ALIMTALK_WINDOW_DAYS = 3;
@@ -120,8 +121,8 @@ export const ALIMTALK_TEMPLATES = {
     status: "approved",
   },
   instructor_lesson_material: {
-    code: "KA01TP260521120040094XcMvYgFTryj",
-    label: "강사레슨 수업자료 안내 v1",
+    code: INSTRUCTOR_LESSON_ALIMTALK_TEMPLATE_CODE,
+    label: "강사레슨_수업자료 안내 v2",
     status: "approved",
   },
   private_lesson_report: {

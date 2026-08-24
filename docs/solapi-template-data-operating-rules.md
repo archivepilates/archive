@@ -57,7 +57,7 @@
 | 강사용 프라이빗 차트 작성 안내 v3 | `KA01TP260729144657202OV26yAD15wR` | `APPROVED` | 수업 전 계획·수업 후 기록·사진/영상 업로드 연결 |
 | 회원용 프라이빗 수업 리포트 안내 v1 | `KA01TP260528081225871Fr92FW901Vo` | `APPROVED` | 검수·승인된 리포트 발송 |
 | 아카이브 장기 미방문 수업안내 v1 | `KA01TP260524083643752cySb9BoDOjN` | `PENDING` | 후보 생성 연결 완료, 승인 전 실제 발송 차단 |
-| 강사레슨_수업자료 안내 v1 | `KA01TP260521120040094XcMvYgFTryj` | `APPROVED` | 아카이브강사레슨 채널, 수업자료/방문안내 버튼 2개 구성 |
+| 강사레슨_수업자료 안내 v2 | `KA01TP260724090746135DWCIb2boEw7` | `APPROVED` | 아카이브강사레슨 채널, 수업자료/수업배정/방문안내 버튼 3개 구성 |
 | 회원용_프라이빗 수업 리포트 안내 v2 | `KA01TP260528090731992hVPP5efmmUC` | `미사용` | 운영 연결 없음 |
 | 회원용_인바디 리포트 안내 v1 | `KA01TP260528090148593isshfXtt8vE` | `PENDING` | 단독 인바디 발송용으로 보류. 프라이빗 리포트 운영은 v2 통합 기준 |
 
@@ -340,10 +340,12 @@
 - `https://in.archivepilates.com/s/#{링크ID}/` 형식의 짧은 링크를 사용한다.
 - 원본 자료 URL은 `https://in.archivepilates.com/method/#{관리번호}`이다.
 - 관리번호는 `영문수업주제-YYMMDD` 형식으로 정규화한다. 수업명, 기존 링크, 테스트 후보에 `kg02`, `bm01`, `jy03` 같은 회원/테스트 식별자가 섞여 있으면 영문 주제와 날짜만 남긴다.
+- StudioMate 수업명이 `8월 강사레슨 A`처럼 영문 주제를 포함하지 않는 회차는 승인된 수업일-주제 매핑으로 관리번호를 만든다. 2026-08-29와 2026-08-30은 각각 `support-movement-260829`, `support-movement-260830`을 사용한다.
 - 예: `circulation-kg02-260530` -> `circulation-260530`
 - 같은 수업자료 단축링크는 여러 후보가 공유할 수 있으므로 `shortLinks.sourceIds`에 사용 후보를 누적하고, 반복 발송 때 기존 `sourceId`를 덮어쓰지 않는다.
-- `방문안내 보기`
-- `https://www.notion.so/367d49eae4bf811ca3daea273ed278c8`
+- `수업자료 보기`: `https://in.archivepilates.com/method/#{관리번호}`
+- `수업배정 안내`: `https://in.archivepilates.com/method/#{관리번호}/assignment`
+- `방문안내 보기`: `https://www.notion.so/367d49eae4bf811ca3daea273ed278c8`
 - 버튼 URL은 변수 치환 후 100자 이하여야 한다. 현재 승인 템플릿이 기존 `관리번호` 버튼을 쓰는 동안에는 원본 자료 URL도 함께 검사한다.
 
 제외:
