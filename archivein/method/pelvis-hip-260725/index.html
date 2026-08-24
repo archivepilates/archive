@@ -10,6 +10,7 @@
 <link rel="apple-touch-icon" href="../../apple-touch-icon.png">
 <link rel="preconnect" href="https://cdn.jsdelivr.net">
 <link rel="stylesheet" href="https://cdn.jsdelivr.net/gh/orioncactus/pretendard/dist/web/static/pretendard.css">
+<link rel="stylesheet" href="../assets/method-access.css">
 <style>
 :root{--bg:#fbfaf7;--paper:#fff;--ink:#1f1d1a;--muted:#716b63;--quiet:#9c9389;--line:#e7dfd6;--soft:#f3eee8;--accent:#9a4e38;--dark:#211d19;--green:#4f7462;--blue:#566e86;--radius:14px;--shadow:0 10px 32px rgba(44,37,30,.08)}
 *{box-sizing:border-box}
@@ -62,11 +63,6 @@ section{padding:30px 0;border-bottom:1px solid var(--line)}
 .block:first-child{border-top:0}
 .block-title{display:flex;align-items:center;gap:8px;margin:0 0 12px;font-size:14px}
 .block-title:before{content:attr(data-mark);color:var(--accent);font-size:11px;font-weight:900;letter-spacing:.08em}
-.sequence-shell{position:relative}
-.sequence-gate{display:none;padding:18px;border:1px solid var(--line);border-radius:12px;background:var(--soft);color:var(--muted);font-weight:900;line-height:1.55}
-.sequence-gate p{margin:0;color:var(--ink)}
-body.sequence-locked .sequence-body{display:none}
-body.sequence-locked .sequence-gate{display:block}
 .phase-list{display:grid;gap:1px;overflow:hidden;border:1px solid var(--line);border-radius:12px;background:var(--line)}
 .phase-card{display:grid;grid-template-columns:56px 1fr;background:var(--paper)}
 .phase-mark{display:flex;align-items:flex-start;justify-content:center;padding:15px 10px;color:var(--accent);font-size:11px;font-weight:900;letter-spacing:.1em;background:var(--soft)}
@@ -104,7 +100,11 @@ footer{padding-top:22px;color:var(--quiet);font-size:11px;font-weight:700;letter
 @media(max-width:390px){.page{padding-left:14px;padding-right:14px}.title{font-size:38px}.summary-row{grid-template-columns:1fr;gap:4px}.card{padding:16px}.block{padding:16px}.tab{font-size:12px}.tab span{font-size:9px}.phase-card{grid-template-columns:48px 1fr}.phase-body{padding:13px 14px}}
 </style>
 </head>
-<body data-sequence-open="2026-07-25T13:00:00+09:00" class="sequence-locked">
+<body data-method-date="2026-07-25" data-method-preview-code="pelviship260725" class="method-locked">
+<div class="method-gate" data-method-gate aria-live="polite">
+  <p data-method-gate-message>수업자료는 수업 당일 12시에 공개됩니다.</p>
+</div>
+<div class="method-content" data-method-content>
 <div class="progress" id="progress"></div>
 <button class="topbtn" id="topbtn" onclick="window.scrollTo({top:0,behavior:'smooth'})" aria-label="맨 위로">↑</button>
 <main class="page">
@@ -115,7 +115,6 @@ footer{padding-top:22px;color:var(--quiet);font-size:11px;font-weight:700;letter
     <div class="meta">
       <span class="pill">강사레슨</span>
       <span class="pill">큐카드</span>
-      <span class="pill">시퀀스 7/25 13:00 공개</span>
     </div>
     <div class="hero-note">
       <strong>오늘의 핵심</strong>
@@ -155,7 +154,6 @@ footer{padding-top:22px;color:var(--quiet);font-size:11px;font-weight:700;letter
     <div id="tab-mj" class="pane on">
       <div class="block sequence-shell">
         <h3 class="block-title" data-mark="SEQ">Sequence</h3>
-        <div class="sequence-gate"><p>7/25(토) 오후1시에 시퀀스가 공개됩니다.</p></div>
         <div class="sequence-body">
           <div class="phase-list">
             <div class="phase-card"><div class="phase-mark">W</div><div class="phase-body"><h4 class="phase-name">Warm-up</h4><ul class="move-list"><li>Heel Raise</li><li>Wide Squat</li><li>Standing Spiral Reach</li><li>Standing Clamshell</li></ul></div></div>
@@ -183,7 +181,6 @@ footer{padding-top:22px;color:var(--quiet);font-size:11px;font-weight:700;letter
     <div id="tab-ey" class="pane">
       <div class="block sequence-shell">
         <h3 class="block-title" data-mark="SEQ">Sequence</h3>
-        <div class="sequence-gate"><p>7/25(토) 오후1시에 시퀀스가 공개됩니다.</p></div>
         <div class="sequence-body">
           <div class="phase-list">
             <div class="phase-card"><div class="phase-mark">W</div><div class="phase-body"><h4 class="phase-name">Warm-up</h4><ul class="move-list"><li>Cat Cow</li><li>Arabesque</li><li>Lunge Series<small>Kick Back / Cross Lunge</small></li><li>Front Splits</li></ul></div></div>
@@ -253,26 +250,9 @@ footer{padding-top:22px;color:var(--quiet);font-size:11px;font-weight:700;letter
 
   <footer>ARCHIVE PILATES · ARCHIVE METHOD · 2607</footer>
 </main>
+</div>
+<script src="../assets/method-access.js"></script>
 <script>
-document.body.classList.add('sequence-locked');
-const sequenceOpenTime = new Date(document.body.dataset.sequenceOpen);
-const previewCode = new URLSearchParams(window.location.search).get('preview');
-const isStaffPreview = previewCode === 'pelviship260725';
-
-function applySequenceGate(){
-  if (Number.isNaN(sequenceOpenTime.getTime())) {
-    document.body.classList.remove('sequence-locked');
-    return;
-  }
-
-  const now = new Date();
-  const isUnlocked = isStaffPreview || now >= sequenceOpenTime;
-  document.body.classList.toggle('sequence-locked', !isUnlocked);
-}
-
-applySequenceGate();
-setInterval(applySequenceGate, 30000);
-
 function switchTab(id, btn){
   document.querySelectorAll('.pane').forEach((pane) => pane.classList.remove('on'));
   document.querySelectorAll('.tab').forEach((tab) => tab.classList.remove('active'));

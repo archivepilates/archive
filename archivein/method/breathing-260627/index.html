@@ -10,6 +10,7 @@
 <link rel="apple-touch-icon" href="../../apple-touch-icon.png">
 <link rel="preconnect" href="https://cdn.jsdelivr.net">
 <link rel="stylesheet" href="https://cdn.jsdelivr.net/gh/orioncactus/pretendard/dist/web/static/pretendard.css">
+<link rel="stylesheet" href="../assets/method-access.css">
 <style>
 :root{--bg:#fbfaf7;--paper:#fff;--ink:#1f1d1a;--muted:#716b63;--quiet:#9c9389;--line:#e7dfd6;--soft:#f3eee8;--accent:#bf4d2b;--dark:#211d19;--green:#4e7461;--blue:#526d87;--radius:14px;--shadow:0 10px 32px rgba(44,37,30,.08)}
 *{box-sizing:border-box}
@@ -95,24 +96,17 @@ section{padding:30px 0;border-bottom:1px solid var(--line)}
 footer{padding-top:22px;color:var(--quiet);font-size:11px;font-weight:700;letter-spacing:.12em;text-transform:uppercase}
 .topbtn{position:fixed;right:18px;bottom:24px;width:44px;height:44px;border:0;border-radius:50%;background:var(--dark);color:#fff;font-weight:900;box-shadow:var(--shadow);opacity:0;transform:translateY(10px);transition:.2s}
 .topbtn.on{opacity:1;transform:none}
-.lesson-gate{display:none;margin:28px 0 0;padding:18px;border:1px solid var(--line);border-radius:var(--radius);background:var(--paper);box-shadow:var(--shadow);font-weight:900;color:var(--muted);line-height:1.5}
-.lesson-gate p{margin:0;color:var(--ink)}
-.lesson-content{display:block}
-body.locked .lesson-gate{display:block}
-body.locked .lesson-content{display:none}
-body.locked footer{display:none}
-body.locked .topbtn{display:none}
 @media(max-width:390px){.page{padding-left:14px;padding-right:14px}.summary-row{grid-template-columns:1fr;gap:4px}.card{padding:16px}.block{padding:16px}.tab{font-size:12px}.tab span{font-size:9px}.phase-card{grid-template-columns:48px 1fr}.phase-body{padding:13px 14px}}
 </style>
 </head>
-<body data-lesson-start="2026-06-27T13:00:00+09:00" class="locked">
+<body data-method-date="2026-06-27" data-method-preview-code="breathing260627" class="method-locked">
+<div class="method-gate" data-method-gate aria-live="polite">
+  <p data-method-gate-message>수업자료는 수업 당일 12시에 공개됩니다.</p>
+</div>
+<div class="method-content" data-method-content>
 <div class="progress" id="progress"></div>
 <button class="topbtn" id="topbtn" onclick="window.scrollTo({top:0,behavior:'smooth'})" aria-label="맨 위로">↑</button>
 <main class="page">
-  <div class="lesson-gate">
-    <p>6/27(토) 오후1시에 공개됩니다.</p>
-  </div>
-  <div class="lesson-content">
     <header class="top">
       <div class="kicker">ARCHIVE METHOD · 큐카드 2606</div>
       <h1 class="title">호흡</h1>
@@ -120,7 +114,6 @@ body.locked .topbtn{display:none}
       <div class="meta">
         <span class="pill">강사레슨</span>
         <span class="pill">큐카드</span>
-        <span class="pill">6/27 13:00 공개</span>
       </div>
       <div class="hero-note">
         <strong>오늘의 핵심</strong>
@@ -255,32 +248,11 @@ body.locked .topbtn{display:none}
         <p class="join-note">가입을 완료하면 스텝이 수업 영상 시청 권한을 연결합니다.</p>
       </div>
     </div>
-  </div>
-
   <footer>ARCHIVE PILATES · ARCHIVE METHOD · 2606</footer>
 </main>
+</div>
+<script src="../assets/method-access.js"></script>
 <script>
-document.body.classList.add('locked');
-const startTime = new Date(document.body.dataset.lessonStart);
-const gate = document.querySelector('.lesson-gate');
-const content = document.querySelector('.lesson-content');
-const previewCode = new URLSearchParams(window.location.search).get('preview');
-const isStaffPreview = previewCode === 'breathing260627';
-
-function applyLessonGate(){
-  if (Number.isNaN(startTime.getTime()) || !gate || !content) {
-    document.body.classList.remove('locked');
-    return;
-  }
-
-  const now = new Date();
-  const isUnlocked = isStaffPreview || now >= startTime;
-  document.body.classList.toggle('locked', !isUnlocked);
-}
-
-applyLessonGate();
-setInterval(applyLessonGate, 30000);
-
 function switchTab(id, btn) {
   document.querySelectorAll('.pane').forEach((pane) => pane.classList.remove('on'));
   document.querySelectorAll('.tab').forEach((button) => button.classList.remove('active'));
