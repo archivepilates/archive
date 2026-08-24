@@ -27,8 +27,8 @@
 ## 구현 상태
 
 - `implemented`: 날짜별 캘린더 랜딩 페이지와 `.ics` 파일을 소스에 추가했다.
-- `deployed`: ARCHIVE IN Hosting의 9월 19일·20일 날짜별 경로에 반영한다.
-- `verified`: 배포 후 랜딩 페이지, `.ics`, Google Calendar와 상세 안내 링크를 각각 확인한다.
+- `deployed`: 2026-08-25 ARCHIVE IN, ARCHIVE CORE와 루트 미러 Hosting에 반영했다.
+- `verified`: 9월 19일·20일 랜딩 페이지와 `.ics`가 사용자 도메인 및 Firebase 기본 도메인에서 HTTP 200으로 응답한다. `.ics`의 `text/calendar` MIME, 날짜·시간·장소, Google Calendar 링크와 320px~1280px 반응형 화면을 확인했다.
 - `pending`: SOLAPI `강사레슨_예약확정 안내 v1`은 검수 완료 후 김기효 1인 테스트로 최종 확인한다.
-- 마지막 갱신: 2026-08-24
+- 마지막 갱신: 2026-08-25
 - 다음 작업: 템플릿 승인 확인 후 중복 이력을 점검하고 9월 19일 기준 테스트 1건을 발송한다.
