@@ -20,6 +20,7 @@
     "sync:active-staff-contacts": "firebase/kangsain-functions/functions/node_modules/.bin/tsx scripts/requeue-active-staff-contacts.ts",
     "test:social-content": "firebase/kangsain-functions/functions/node_modules/.bin/tsx --test scripts/tests/social-content-contract.test.ts",
     "test:instructor-lesson-management": "firebase/kangsain-functions/functions/node_modules/.bin/tsx --test scripts/tests/instructor-lesson-management.test.ts",
+    "test:instructor-lesson-sample-approval": "firebase/kangsain-functions/functions/node_modules/.bin/tsx --test scripts/tests/instructor-lesson-sample-approval.test.ts",
     "codex:queue": "node scripts/list-codex-action-queue.mjs",
     "monitor:hohoyoga": "node scripts/run-hohoyoga-monitor.mjs",
     "verify:archivein-admin": "node scripts/verify-archivein-admin-firestore-access.mjs",

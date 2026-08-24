@@ -1,8 +1,7 @@
 import type { AlimtalkCandidateDoc, MemberProfileDoc } from "../types/models";
 
 type AlimtalkRecipientLike = Partial<
-  Pick<AlimtalkCandidateDoc, "memberId" | "memberName" | "memberPhone"> &
-    Pick<MemberProfileDoc, "name" | "phone">
+  Pick<AlimtalkCandidateDoc, "memberId" | "memberName" | "memberPhone"> & Pick<MemberProfileDoc, "name" | "phone">
 >;
 
 const TEST_RECIPIENTS = [
@@ -16,6 +15,15 @@ const TEST_RECIPIENTS = [
 
 const TEST_MEMBER_IDS = new Set<string>(TEST_RECIPIENTS.map((recipient) => recipient.memberId));
 const TEST_PHONES = new Set<string>(TEST_RECIPIENTS.map((recipient) => normalizeRecipientPhone(recipient.phone)));
+
+export function primaryAlimtalkTestRecipient(): {
+  memberId: string;
+  name: string;
+  phone: string;
+  reason: string;
+} {
+  return { ...TEST_RECIPIENTS[0] };
+}
 
 export function isAlimtalkTestRecipient(input: AlimtalkRecipientLike): boolean {
   const memberId = String(input.memberId || "").trim();
@@ -43,5 +51,7 @@ export function normalizeRecipientPhone(value: string): string {
 }
 
 function normalizeRecipientName(value: string): string {
-  return String(value || "").replace(/\s+/g, "").trim();
+  return String(value || "")
+    .replace(/\s+/g, "")
+    .trim();
 }

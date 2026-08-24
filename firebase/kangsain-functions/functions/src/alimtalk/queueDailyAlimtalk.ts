@@ -10,13 +10,25 @@ import { requireApprovalForLargeAlimtalkBatch } from "./approvalGate";
 import { privateSurveySendabilityIssue } from "./privateSurveySendGuard";
 import { renewalCandidateSendabilityIssue } from "./renewalSendGuard";
 import { selectDailyAlimtalkCandidates } from "./dailyCandidateSelection";
+import {
+  prepareInstructorLessonSampleApprovals,
+  splitInstructorLessonCandidates,
+  type InstructorLessonSampleApprovalSummary,
+} from "./instructorLessonSampleApproval";
 
 export async function queueDailyAlimtalkCandidates(
   input: {
     studioId?: string;
     today?: string;
   } = {},
-): Promise<{ rebuilt: number; queued: number; blocked: number; approvalRequired?: boolean; approvalId?: string }> {
+): Promise<{
+  rebuilt: number;
+  queued: number;
+  blocked: number;
+  approvalRequired?: boolean;
+  approvalId?: string;
+  instructorLessonSample?: InstructorLessonSampleApprovalSummary;
+}> {
   const studioId = input.studioId || DEFAULT_STUDIO_ID;
   const today = input.today || todayKst();
   const rebuilt = await rebuildAlimtalkCandidatesForRange({
@@ -62,6 +74,15 @@ export async function queueDailyAlimtalkCandidates(
     ),
   );
 
+  const split = splitInstructorLessonCandidates(sendable);
+  const instructorLessonSample = await prepareInstructorLessonSampleApprovals({
+    studioId,
+    sourceDate: today,
+    candidates: split.instructorLesson,
+  });
+  sendable = split.other;
+  blocked += split.instructorLesson.length;
+
   const approval = await requireApprovalForLargeAlimtalkBatch({
     studioId,
     today,
@@ -84,6 +105,7 @@ export async function queueDailyAlimtalkCandidates(
       blocked: blocked + sendable.length,
       approvalRequired: true,
       approvalId: approval.approvalId,
+      instructorLessonSample,
     };
   }
 
@@ -106,6 +128,7 @@ export async function queueDailyAlimtalkCandidates(
     blocked,
     approvalRequired: approval.required,
     approvalId: approval.approvalId,
+    instructorLessonSample,
   };
 }
 

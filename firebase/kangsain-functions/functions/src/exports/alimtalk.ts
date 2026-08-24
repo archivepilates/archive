@@ -2,6 +2,11 @@ import { logger } from "firebase-functions";
 import { onCall, onRequest } from "firebase-functions/v2/https";
 import { onSchedule } from "firebase-functions/v2/scheduler";
 import { approveAlimtalkBatchHandler } from "../alimtalk/approvalGate";
+import {
+  approveInstructorLessonAlimtalkBatchHandler,
+  remindPendingInstructorLessonApprovals,
+  sendApprovedInstructorLessonAlimtalks,
+} from "../alimtalk/instructorLessonSampleApproval";
 import { processAlimtalkQueue } from "../alimtalk/processAlimtalkQueue";
 import { operatorSendPricingInquiryAlimtalkHandler } from "../alimtalk/pricingInquiryAlimtalk";
 import { operatorSendRecommendedMealProgramAlimtalkHandler } from "../mealPlan/recommendedMealAlimtalk";
@@ -10,7 +15,12 @@ import { queueDailyAlimtalkCandidates, queueReservationOpenAlimtalkCandidates } 
 import { sendDailyAlimtalkReport } from "../alimtalk/sendDailyAlimtalkReport";
 import { syncAlimtalkTemplateStatuses } from "../alimtalk/templateStatus";
 import { notionToken } from "../config/secrets";
-import { callableOptions, publicLongRequestOptions, scheduleOptions } from "../runtime/functionOptions";
+import {
+  callableOptions,
+  publicLongRequestOptions,
+  publicRequestOptions,
+  scheduleOptions,
+} from "../runtime/functionOptions";
 import { requireManager, requireStaff } from "../security/authGuards";
 import { toHttpsError } from "../utils/errors";
 
@@ -101,7 +111,33 @@ export const scheduledSyncAlimtalkTemplateStatuses = onSchedule(
   },
 );
 
+export const scheduledCheckInstructorLessonSampleApproval = onSchedule(
+  {
+    ...alimtalkQueueScheduleOptions,
+    schedule: "30 17 * * *",
+  },
+  async () => {
+    const result = await remindPendingInstructorLessonApprovals();
+    logger.info("scheduledCheckInstructorLessonSampleApproval complete", result);
+  },
+);
+
+export const scheduledSendApprovedInstructorLessonAlimtalk = onSchedule(
+  {
+    ...alimtalkQueueScheduleOptions,
+    schedule: "0 18 * * *",
+  },
+  async () => {
+    const result = await sendApprovedInstructorLessonAlimtalks();
+    logger.info("scheduledSendApprovedInstructorLessonAlimtalk complete", result);
+  },
+);
+
 export const approveAlimtalkBatch = onRequest(alimtalkQueueRequestOptions, approveAlimtalkBatchHandler);
+export const approveInstructorLessonAlimtalkBatch = onRequest(
+  publicRequestOptions,
+  approveInstructorLessonAlimtalkBatchHandler,
+);
 
 export const operatorSendPricingInquiryAlimtalk = onCall(callableOptions, async (request) => {
   try {

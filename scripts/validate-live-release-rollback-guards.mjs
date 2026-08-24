@@ -9,7 +9,8 @@ const repoRoot = path.resolve(__dirname, "..");
 const guardGroups = [
   {
     id: "staff-member-contact-precedence",
-    reason: "현재 근무 강사와 회원이 같은 전화번호를 쓸 때 회원 동기화가 Google 연락처의 강사명을 덮는 회귀를 막습니다.",
+    reason:
+      "현재 근무 강사와 회원이 같은 전화번호를 쓸 때 회원 동기화가 Google 연락처의 강사명을 덮는 회귀를 막습니다.",
     files: [
       {
         file: "firebase/kangsain-functions/functions/src/sync/protectedContactRules.ts",
@@ -24,7 +25,7 @@ const guardGroups = [
         markers: [
           "loadActiveStaffContactsByStudio",
           "finishProtectedStaffJob",
-          "home_archivepilates: \"skipped\"",
+          'home_archivepilates: "skipped"',
           "latestMemberContactPolicy",
           "profile.memberGrade",
           "groupNames: effectivePolicy.contactGroupNames",
@@ -33,7 +34,7 @@ const guardGroups = [
       {
         file: "firebase/kangsain-functions/functions/src/sync/syncStudioMateMemberProfiles.ts",
         markers: [
-          "resolveMemberGrade(sourceMemberGrade, previousProfile?.memberGrade || \"\")",
+          'resolveMemberGrade(sourceMemberGrade, previousProfile?.memberGrade || "")',
           "formatMemberContactDisplayName(doc.name, registeredAt, memberGrade)",
           "buildInstructorLessonContactGroupNames(instructorLessonDates)",
         ],
@@ -42,15 +43,15 @@ const guardGroups = [
         file: "firebase/kangsain-functions/functions/src/sync/queueStaffContactSync.ts",
         markers: [
           "queueActiveStaffContactSync",
-          "sourceReason: \"staff_profile_refresh\"",
-          "home_archivepilates: \"pending\"",
+          'sourceReason: "staff_profile_refresh"',
+          'home_archivepilates: "pending"',
         ],
       },
       {
         file: "firebase/kangsain-functions/functions/src/exports/sync.ts",
         markers: [
           "export const queueStaffContactSync = onDocumentWritten",
-          "document: \"staffs/{staffId}\"",
+          'document: "staffs/{staffId}"',
         ],
       },
       {
@@ -69,8 +70,8 @@ const guardGroups = [
         file: "scripts/lib/member-contact-display-name-policy.mjs",
         markers: [
           "if (activeStaff) return `${normalizedName} 아카이브`",
-          "INSTRUCTOR_MEMBER_GRADE = \"강사회원\"",
-          "[normalizedName, \"강사회원\", compactRegisteredAt]",
+          'INSTRUCTOR_MEMBER_GRADE = "강사회원"',
+          '[normalizedName, "강사회원", compactRegisteredAt]',
           "`강사레슨 ${date}`",
         ],
       },
@@ -86,7 +87,7 @@ const guardGroups = [
       {
         file: "scripts/sync-studiomate-staffs-from-browser.mjs",
         markers: [
-          "const staffIdScope = valueArg(\"--staff-id\")",
+          'const staffIdScope = valueArg("--staff-id")',
           "retireMissing: !staffIdScope",
           "if (options.retireMissing !== false)",
         ],
@@ -103,7 +104,8 @@ const guardGroups = [
   },
   {
     id: "archive-in-retired-operator-root",
-    reason: "ARCHIVE IN 운영자 루트가 예전 앱 화면으로 되돌아가고 private-chart 최신 화면을 덮는 것을 막습니다.",
+    reason:
+      "ARCHIVE IN 운영자 루트가 예전 앱 화면으로 되돌아가고 private-chart 최신 화면을 덮는 것을 막습니다.",
     files: [
       {
         file: "archivein/index.html",
@@ -118,28 +120,25 @@ const guardGroups = [
         file: "archivein/manifest.webmanifest",
         markers: [
           "ARCHIVE IN 운영자 앱 종료 안내",
-          "\"short_name\": \"ARCHIVE IN\"",
+          '"short_name": "ARCHIVE IN"',
         ],
       },
       {
         file: "archivein/sw.js",
-        markers: [
-          "LEGACY_CACHE_PREFIX",
-          "archive-in-",
-          "caches.delete",
-        ],
+        markers: ["LEGACY_CACHE_PREFIX", "archive-in-", "caches.delete"],
       },
     ],
   },
   {
     id: "private-survey-native-form",
-    reason: "회원 프라이빗 사전설문 페이지와 제출 API rewrite가 main 승격 과정에서 빠지는 것을 막습니다.",
+    reason:
+      "회원 프라이빗 사전설문 페이지와 제출 API rewrite가 main 승격 과정에서 빠지는 것을 막습니다.",
     files: [
       {
         file: "archivein/privateSurvey/index.html",
         markers: [
           "ARCHIVE PILATES 프라이빗 사전설문",
-          "id=\"surveyForm\"",
+          'id="surveyForm"',
           "api/privateSurveySubmit",
           "제출이 완료되었습니다.",
         ],
@@ -147,10 +146,10 @@ const guardGroups = [
       {
         file: "firebase.json",
         markers: [
-          "\"source\": \"/archivein/api/privateSurveySubmit\"",
-          "\"source\": \"/archivein/privateSurvey/**\"",
-          "\"source\": \"/api/privateSurveySubmit\"",
-          "\"source\": \"/privateSurvey/**\"",
+          '"source": "/archivein/api/privateSurveySubmit"',
+          '"source": "/archivein/privateSurvey/**"',
+          '"source": "/api/privateSurveySubmit"',
+          '"source": "/privateSurvey/**"',
         ],
       },
       {
@@ -164,13 +163,14 @@ const guardGroups = [
   },
   {
     id: "recommended-meal-program",
-    reason: "추천식단 설문, API, CORE 단건 발송, SOLAPI 짧은 링크 연결이 다른 배포에서 빠지는 것을 막습니다.",
+    reason:
+      "추천식단 설문, API, CORE 단건 발송, SOLAPI 짧은 링크 연결이 다른 배포에서 빠지는 것을 막습니다.",
     files: [
       {
         file: "archivein/recommendedMealSurvey/index.html",
         markers: [
           "ARCHIVE PILATES 추천식단 프로그램",
-          "id=\"mealSurveyForm\"",
+          'id="mealSurveyForm"',
           "api/recommendedMealSurvey",
           "설문 제출이 완료되었습니다.",
           ".option:has(input:checked)",
@@ -190,10 +190,10 @@ const guardGroups = [
       {
         file: "firebase.json",
         markers: [
-          "\"source\": \"/archivein/api/recommendedMealSurvey\"",
-          "\"source\": \"/archivein/recommendedMealSurvey/**\"",
-          "\"source\": \"/api/recommendedMealSurvey\"",
-          "\"source\": \"/recommendedMealSurvey/**\"",
+          '"source": "/archivein/api/recommendedMealSurvey"',
+          '"source": "/archivein/recommendedMealSurvey/**"',
+          '"source": "/api/recommendedMealSurvey"',
+          '"source": "/recommendedMealSurvey/**"',
         ],
       },
       {
@@ -212,8 +212,8 @@ const guardGroups = [
           "KA01TP260802163827071E2TTuX6CsWp",
           "ST01FZ260730122108103pEzxH5jOOpU",
           "KA01PF260511123220162lk0NUjstpVl",
-          "label: \"아카이브 추천식단 프로그램 v2\"",
-          "status: \"approved\"",
+          'label: "아카이브 추천식단 프로그램 v2"',
+          'status: "approved"',
         ],
       },
       {
@@ -282,7 +282,8 @@ const guardGroups = [
   },
   {
     id: "archive-method-cue-card-video-cta",
-    reason: "ARCHIVE METHOD 강사레슨 큐카드의 수업촬영영상 시청용 아임웹 가입 CTA가 main 승격이나 Hosting 배포에서 빠지는 것을 막습니다.",
+    reason:
+      "ARCHIVE METHOD 강사레슨 큐카드의 수업촬영영상 시청용 아임웹 가입 CTA가 main 승격이나 Hosting 배포에서 빠지는 것을 막습니다.",
     files: [
       {
         file: "archivein/method/breathing-260627/index.html",
@@ -306,16 +307,11 @@ const guardGroups = [
       },
       {
         file: ".github/workflows/functions-affected-check.yml",
-        markers: [
-          "archivein/method/**",
-        ],
+        markers: ["archivein/method/**"],
       },
       {
         file: "firebase.json",
-        markers: [
-          "\"source\": \"/archivein/method/**\"",
-          "\"source\": \"/method/**\"",
-        ],
+        markers: ['"source": "/archivein/method/**"', '"source": "/method/**"'],
       },
       {
         file: "scripts/validate-live-release-canary.mjs",
@@ -330,7 +326,8 @@ const guardGroups = [
   },
   {
     id: "deploy-release-safety",
-    reason: "오래된 브랜치나 배포 스냅샷이 live Hosting을 덮어쓰는 것을 배포 스크립트 단계에서 차단합니다.",
+    reason:
+      "오래된 브랜치나 배포 스냅샷이 live Hosting을 덮어쓰는 것을 배포 스크립트 단계에서 차단합니다.",
     files: [
       {
         file: "scripts/validate-release-branch-state.mjs",
@@ -388,7 +385,7 @@ const guardGroups = [
         markers: [
           "for (const codebase of affected.codebases)",
           "`functions:${codebase}`",
-          "command.push(\"--force\")",
+          'command.push("--force")',
           "Deploying Functions codebase:",
           "failed to update function",
           "Firebase reported an incomplete Functions deployment",
@@ -406,7 +403,7 @@ const guardGroups = [
         file: "firebase/kangsain-functions/firebase.json",
         markers: [
           "reject-legacy-functions-deploy.mjs",
-          "\"codebase\": \"default\"",
+          '"codebase": "default"',
         ],
       },
       {
@@ -435,8 +432,8 @@ const guardGroups = [
       {
         file: "firebase.json",
         markers: [
-          "\"site\": \"archive-pilates\"",
-          "\"site\": \"archive-pilates-core\"",
+          '"site": "archive-pilates"',
+          '"site": "archive-pilates-core"',
           "validate-release-branch-state.mjs --require-origin-main",
           "npm run validate:onsite-welcome",
           "npm run validate:archive-core-hosting",
@@ -446,7 +443,8 @@ const guardGroups = [
   },
   {
     id: "archive-core-home-actions",
-    reason: "ARCHIVE CORE 오늘 업무 큐와 재등록·주차·수강료 발송 UI가 예전 번들로 되돌아가는 것을 막습니다.",
+    reason:
+      "ARCHIVE CORE 오늘 업무 큐와 재등록·주차·수강료 발송 UI가 예전 번들로 되돌아가는 것을 막습니다.",
     files: [
       {
         file: "core/index.html",
@@ -470,8 +468,8 @@ const guardGroups = [
           "https://mail.google.com/mail/?authuser=home@archivepilates.com",
           "https://new.smartplace.naver.com/",
           "https://arcpilates.studiomate.kr/",
-          "target=\"_blank\"",
-          "rel=\"noopener noreferrer\"",
+          'target="_blank"',
+          'rel="noopener noreferrer"',
           "새 창에서 열기",
         ],
       },
@@ -489,7 +487,7 @@ const guardGroups = [
           "renderRenewalPipeline",
           "renewalCases",
           "handleRenewalActionClick",
-          "data-renewal-action=\"excluded\"",
+          'data-renewal-action="excluded"',
           "재등록 의사 없음",
           "ALIMTALK_TEMPLATE_LABELS_BY_CODE",
           "alimtalkTemplateTitle",
@@ -506,9 +504,9 @@ const guardGroups = [
           "operatorLifecycle",
           "emergencyLastAttendance",
           "syncParkingVisitorFields",
-          "if (isVisitor) input.value = \"\"",
+          'if (isVisitor) input.value = ""',
           "input.disabled = isVisitor",
-          "addEventListener(\"change\", syncParkingVisitorFields)",
+          'addEventListener("change", syncParkingVisitorFields)',
         ],
       },
       {
@@ -528,7 +526,8 @@ const guardGroups = [
   },
   {
     id: "ticket-liability-price-quality",
-    reason: "수강권 잔여금액 보고서가 분할결제를 회당가로 오인하거나 듀엣·강사레슨을 프라이빗·그룹 평균에 다시 섞는 회귀를 막습니다.",
+    reason:
+      "수강권 잔여금액 보고서가 분할결제를 회당가로 오인하거나 듀엣·강사레슨을 프라이빗·그룹 평균에 다시 섞는 회귀를 막습니다.",
     files: [
       {
         file: "scripts/generate-studiomate-ticket-liability-report.mjs",
@@ -569,7 +568,8 @@ const guardGroups = [
   },
   {
     id: "renewal-personalization",
-    reason: "재등록 듀엣 분류, 예상 소진일, 상담 장부, 발송 직전 재등록 차단이 후속 배포에서 빠지는 것을 막습니다.",
+    reason:
+      "재등록 듀엣 분류, 예상 소진일, 상담 장부, 발송 직전 재등록 차단이 후속 배포에서 빠지는 것을 막습니다.",
     files: [
       {
         file: "firebase/kangsain-functions/functions/src/renewal/renewalPolicy.ts",
@@ -607,7 +607,7 @@ const guardGroups = [
         file: "firebase/kangsain-functions/functions/src/alimtalk/rebuildAlimtalkCandidates.ts",
         markers: [
           "await syncRenewalCases(profiles, bookingIndex, input.endDate)",
-          '.select(',
+          ".select(",
           '"attendanceStatus"',
           '"ticketClassType"',
           "if (!isRenewalManagedTicket(ticket)) return null;",
@@ -636,17 +636,25 @@ const guardGroups = [
       },
       {
         file: "firebase/kangsain-functions/functions/src/renewal/renewalPolicy.ts",
-        markers: ["isHealthyRenewalAlternativeTicket", "remainingCount == null && remainingDays == null"],
+        markers: [
+          "isHealthyRenewalAlternativeTicket",
+          "remainingCount == null && remainingDays == null",
+        ],
       },
       {
         file: "firebase/kangsain-functions/firestore.rules",
-        markers: ["match /renewalCases/{caseId}", "operatorUpdatedByUid", "nextActionAt"],
+        markers: [
+          "match /renewalCases/{caseId}",
+          "operatorUpdatedByUid",
+          "nextActionAt",
+        ],
       },
     ],
   },
   {
     id: "pricing-inquiry-alimtalk",
-    reason: "수강료 문의 알림톡 발송과 내부 메모 기록 기능이 빠지는 것을 막습니다.",
+    reason:
+      "수강료 문의 알림톡 발송과 내부 메모 기록 기능이 빠지는 것을 막습니다.",
     files: [
       {
         file: "firebase/kangsain-functions/functions/src/alimtalk/pricingInquiryAlimtalk.ts",
@@ -668,7 +676,8 @@ const guardGroups = [
   },
   {
     id: "core-parking-vehicle-removal",
-    reason: "등록 차량 삭제와 회원/강사 카드 미러 정리가 후속 CORE 또는 Functions 배포에서 빠지는 것을 막습니다.",
+    reason:
+      "등록 차량 삭제와 회원/강사 카드 미러 정리가 후속 CORE 또는 Functions 배포에서 빠지는 것을 막습니다.",
     files: [
       {
         file: "core/assets/app.js",
@@ -681,25 +690,22 @@ const guardGroups = [
       },
       {
         file: "core/assets/styles.css",
-        markers: [
-          ".parking-row-actions",
-          ".parking-delete-button",
-        ],
+        markers: [".parking-row-actions", ".parking-delete-button"],
       },
       {
         file: "firebase/kangsain-functions/functions/src/parking/parkingOperations.ts",
         markers: [
           "removeParkingVehicleHandler",
-          "status: \"archived\"",
+          'status: "archived"',
           "defaultVehicleNumber: FieldValue.delete()",
           "ownerVehicleMirror",
           "SCHEDULED_BOOKING_LOOKBACK_MINUTES",
           "loadParkingCandidateBookings",
-          "scanMode === \"full_day\"",
-          "ownerType === \"visitor\" ? \"방문객\"",
-          "ownerType === \"visitor\" ? \"\"",
-          "ownerName: isVisitor ? \"방문객\" : vehicle.ownerName",
-          "ownerPhone: isVisitor ? \"\" : vehicle.ownerPhone",
+          'scanMode === "full_day"',
+          'ownerType === "visitor" ? "방문객"',
+          'ownerType === "visitor" ? ""',
+          'ownerName: isVisitor ? "방문객" : vehicle.ownerName',
+          'ownerPhone: isVisitor ? "" : vehicle.ownerPhone',
         ],
       },
       {
@@ -711,30 +717,25 @@ const guardGroups = [
       },
       {
         file: "firebase/codebase-boundaries.json",
-        markers: [
-          "\"removeParkingVehicle\"",
-        ],
+        markers: ['"removeParkingVehicle"'],
       },
       {
         file: "scripts/lib/affected-functions.mjs",
         markers: [
           "parking/parkingOperations.ts",
-          "[\"functions-app\", \"functions-sync\"]",
+          '["functions-app", "functions-sync"]',
         ],
       },
       {
         file: "firebase/kangsain-functions/functions/src/exports/sync.ts",
         markers: [
           "scheduledCreateParkingDiscountJobs",
-          "scanMode: \"scheduled_window\"",
+          'scanMode: "scheduled_window"',
         ],
       },
       {
         file: "firebase/kangsain-functions/firestore.indexes.json",
-        markers: [
-          "\"fieldPath\": \"appStatus\"",
-          "\"fieldPath\": \"lectureStartAt\"",
-        ],
+        markers: ['"fieldPath": "appStatus"', '"fieldPath": "lectureStartAt"'],
       },
       {
         file: "core/rules/index.html",
@@ -749,7 +750,8 @@ const guardGroups = [
   },
   {
     id: "parking-staff-fixed-four-hours",
-    reason: "강사 차량의 4시간 고정 할인 규칙이 다른 주차 또는 Functions 배포에서 2시간으로 되돌아가는 것을 막습니다.",
+    reason:
+      "강사 차량의 4시간 고정 할인 규칙이 다른 주차 또는 Functions 배포에서 2시간으로 되돌아가는 것을 막습니다.",
     files: [
       {
         file: "firebase/kangsain-functions/functions/src/parking/parkingDiscountPolicy.ts",
@@ -757,7 +759,7 @@ const guardGroups = [
           "PARKING_DISCOUNT_UNIT_HOURS = 2",
           "STAFF_REQUIRED_DISCOUNT_HOURS = 4",
           "isStaffParkingJob",
-          "policy: \"staff_fixed_4h\"",
+          'policy: "staff_fixed_4h"',
           "requestedDiscountHours: STAFF_REQUIRED_DISCOUNT_HOURS",
         ],
       },
@@ -778,7 +780,7 @@ const guardGroups = [
           "IPARKING_ACCOUNT_POOL_JSON",
           "parseIparkingAccountPool",
           "resolveIparkingAccountStoreSeq",
-          "role: \"main\" | \"sub\"",
+          'role: "main" | "sub"',
           "storeSeq?: number",
         ],
       },
@@ -794,8 +796,8 @@ const guardGroups = [
         file: "firebase/kangsain-functions/functions/src/parking/parkingOperations.ts",
         markers: [
           "STAFF_REQUIRED_DISCOUNT_HOURS,",
-          "input.ownerType === \"staff\" ? STAFF_REQUIRED_DISCOUNT_HOURS",
-          "parkingPolicy: input.ownerType === \"staff\" ? \"staff_fixed_4h\" : \"standard\"",
+          'input.ownerType === "staff" ? STAFF_REQUIRED_DISCOUNT_HOURS',
+          'parkingPolicy: input.ownerType === "staff" ? "staff_fixed_4h" : "standard"',
         ],
       },
       {
@@ -812,7 +814,8 @@ const guardGroups = [
   },
   {
     id: "private-chart-edit-before-send",
-    reason: "프라이빗 리포트 발송 전 수정 기능과 다음수업 메모 분리 정책이 롤백되는 것을 막습니다.",
+    reason:
+      "프라이빗 리포트 발송 전 수정 기능과 다음수업 메모 분리 정책이 롤백되는 것을 막습니다.",
     files: [
       {
         file: "archivein/private-chart/index.html",
@@ -833,7 +836,7 @@ const guardGroups = [
       {
         file: "firebase/kangsain-functions/functions/src/privateLessonChart/privateLessonChart.ts",
         markers: [
-          "String(body.action || \"\") === \"editReport\"",
+          'String(body.action || "") === "editReport"',
           "publicSummary",
           "publicNextDirection",
           "delete (postRecord as Record<string, unknown>).nextMemo",
@@ -853,21 +856,22 @@ const guardGroups = [
   },
   {
     id: "private-media-drive-direct-upload",
-    reason: "프라이빗 사진/영상 업로드가 Drive 직접 업로드가 아닌 예전 Function 중계 구조로 되돌아가는 것을 막습니다.",
+    reason:
+      "프라이빗 사진/영상 업로드가 Drive 직접 업로드가 아닌 예전 Function 중계 구조로 되돌아가는 것을 막습니다.",
     files: [
       {
         file: "firebase/kangsain-functions/functions/src/privateLessonChart/privateLessonMedia.ts",
         markers: [
           "const CHUNK_SIZE = 16 * 1024 * 1024;",
           "directUpload",
-          "uploadMode: \"drive_direct\"",
+          'uploadMode: "drive_direct"',
           "completePrivateLessonMediaUpload",
         ],
       },
       {
         file: "archivein/private-chart/index.html",
         markers: [
-          "input type=\"file\" id=\"mediaFiles\" accept=\"image/*,video/*\" multiple",
+          'input type="file" id="mediaFiles" accept="image/*,video/*" multiple',
           "init.chunkSize || 16 * 1024 * 1024",
           "uploadMediaFileDirect",
           "completeMediaUpload",
@@ -877,7 +881,7 @@ const guardGroups = [
       {
         file: "scripts/validate-private-media-upload-live.mjs",
         markers: [
-          "uploadMode: \"drive_direct\"",
+          'uploadMode: "drive_direct"',
           "chunkSize",
           "completeMediaUpload",
         ],
@@ -886,12 +890,13 @@ const guardGroups = [
   },
   {
     id: "bookings-single-source-private-session-ledger",
-    reason: "프라이빗 회차가 memberUsageEvents나 과거 미체크 예약으로 부풀려지는 것을 막고 bookings 단일 예약 원천 정책을 유지합니다.",
+    reason:
+      "프라이빗 회차가 memberUsageEvents나 과거 미체크 예약으로 부풀려지는 것을 막고 bookings 단일 예약 원천 정책을 유지합니다.",
     files: [
       {
         file: "scripts/recompute-private-session-ledger.mjs",
         markers: [
-          "computedFrom: [\"bookings\"]",
+          'computedFrom: ["bookings"]',
           "bookings_single_reservation_snapshot_attended_or_today_future",
         ],
       },
@@ -930,7 +935,8 @@ const guardGroups = [
   },
   {
     id: "private-session-reschedule-reconcile",
-    reason: "프라이빗 수업 시간변경/취소 시 기존 설문 링크와 Notion 차트가 과거 예약으로 롤백되는 것을 막습니다.",
+    reason:
+      "프라이빗 수업 시간변경/취소 시 기존 설문 링크와 Notion 차트가 과거 예약으로 롤백되는 것을 막습니다.",
     files: [
       {
         file: "firebase/kangsain-functions/functions/src/privateLessonChart/privateLessonChart.ts",
@@ -963,7 +969,8 @@ const guardGroups = [
   },
   {
     id: "onsite-welcome-current-flow",
-    reason: "현장 웰컴 가입서 알림톡과 StudioMate 후속 처리 흐름이 예전 코드로 되돌아가는 것을 막습니다.",
+    reason:
+      "현장 웰컴 가입서 알림톡과 StudioMate 후속 처리 흐름이 예전 코드로 되돌아가는 것을 막습니다.",
     files: [
       {
         file: "archivein/onsiteWelcome/index.html",
@@ -994,7 +1001,8 @@ const guardGroups = [
   },
   {
     id: "reservation-open-alimtalk-v4",
-    reason: "삭제된 예약안내 v3가 다시 연결되거나 승인된 v4의 이미지·변수·버튼 계약이 빠지는 것을 막습니다.",
+    reason:
+      "삭제된 예약안내 v3가 다시 연결되거나 승인된 v4의 이미지·변수·버튼 계약이 빠지는 것을 막습니다.",
     files: [
       {
         file: "firebase/kangsain-functions/functions/src/alimtalk/templates.ts",
@@ -1019,36 +1027,87 @@ const guardGroups = [
       },
       {
         file: "firebase/kangsain-functions/functions/src/alimtalk/dedupe.ts",
-        markers: [
-          "\"private_survey\", \"reservation_open\"",
-          "sameWeekSend",
-        ],
+        markers: ['"private_survey", "reservation_open"', "sameWeekSend"],
       },
       {
         file: "firebase/kangsain-functions/functions/src/alimtalk/approvalGate.ts",
+        markers: ["alimtalkApprovalId", "reservation_open"],
+      },
+      {
+        file: "firebase/kangsain-functions/functions/src/alimtalk/queueDailyAlimtalk.ts",
+        markers: ['approvalScope: "reservation_open"'],
+      },
+      {
+        file: "core/rules/index.html",
+        markers: ["스튜디오메이트 예약 안내 v4", "동일 예약주차 기준 6일"],
+      },
+    ],
+  },
+  {
+    id: "instructor-lesson-d1-sample-approval",
+    reason:
+      "강사레슨 D-1 알림톡이 샘플 성공과 명시적 승인 없이 일반 큐에서 발송되거나 불명확한 결과를 자동 재시도하는 회귀를 막습니다.",
+    files: [
+      {
+        file: "firebase/kangsain-functions/functions/src/alimtalk/instructorLessonSampleApproval.ts",
         markers: [
-          "alimtalkApprovalId",
-          "reservation_open",
+          'const APPROVAL_COLLECTION = "instructorLessonAlimtalkApprovals"',
+          'status: "sample_unknown"',
+          'if (request.method === "GET")',
+          'if (request.method !== "POST")',
+          "instructorLessonContentFingerprint",
+          "instructorLessonGroupSourceIssue",
+          "maxAttempts: 1",
+        ],
+      },
+      {
+        file: "firebase/kangsain-functions/functions/src/alimtalk/instructorLessonDeliveryGuard.ts",
+        markers: [
+          "genericInstructorLessonQueueBlock",
+          "instructor_lesson_sample_approval_required",
+          "instructor_lesson_provider_outcome_unknown",
+        ],
+      },
+      {
+        file: "firebase/kangsain-functions/functions/src/alimtalk/processAlimtalkQueue.ts",
+        markers: [
+          "genericInstructorLessonQueueBlock(claimed)",
+          "maxAttempts: 1",
         ],
       },
       {
         file: "firebase/kangsain-functions/functions/src/alimtalk/queueDailyAlimtalk.ts",
         markers: [
-          "approvalScope: \"reservation_open\"",
+          "splitInstructorLessonCandidates(sendable)",
+          "prepareInstructorLessonSampleApprovals",
+          "sendable = split.other",
+        ],
+      },
+      {
+        file: "firebase/kangsain-functions/functions/src/exports/alimtalk.ts",
+        markers: [
+          "scheduledCheckInstructorLessonSampleApproval",
+          'schedule: "30 17 * * *"',
+          "scheduledSendApprovedInstructorLessonAlimtalk",
+          'schedule: "0 18 * * *"',
+          "approveInstructorLessonAlimtalkBatch",
         ],
       },
       {
         file: "core/rules/index.html",
         markers: [
-          "스튜디오메이트 예약 안내 v4",
-          "동일 예약주차 기준 6일",
+          "D-1 11:30",
+          "POST 요청만 승인으로 기록",
+          "D-1 17:30",
+          "승인 전용 경로는 1회만 시도",
         ],
       },
     ],
   },
   {
     id: "refund-studiomate-source-selection",
-    reason: "환불 화면이 이름+전화번호 조회로 되돌아가거나 StudioMate 횟수 원천을 수동 덮어쓰는 것을 막습니다.",
+    reason:
+      "환불 화면이 이름+전화번호 조회로 되돌아가거나 StudioMate 횟수 원천을 수동 덮어쓰는 것을 막습니다.",
     files: [
       {
         file: "core/refunds/index.html",
@@ -1065,7 +1124,7 @@ const guardGroups = [
           "refundConfirmCheck",
           "refundSmsButton",
         ],
-        forbiddenMarkers: ["id=\"refundMemberPhone\""],
+        forbiddenMarkers: ['id="refundMemberPhone"'],
       },
       {
         file: "core/assets/app.js",
@@ -1091,7 +1150,7 @@ const guardGroups = [
           "deriveRefundPeriodUsage",
           "inferRefundContractDays",
           "automaticPeriodWeekUsage",
-          "canonicalTicketKind === \"count\" ? \"studiomate_active_ticket\"",
+          'canonicalTicketKind === "count" ? "studiomate_active_ticket"',
           "StudioMate 총횟수·잔여횟수 원천",
           "studiomateRefundSmsJobs",
         ],
@@ -1111,13 +1170,17 @@ const guardGroups = [
       },
       {
         file: "scripts/lib/affected-functions.mjs",
-        markers: ["normalized.includes(\"/refund/\")", "return [\"functions-app\"]"],
+        markers: [
+          'normalized.includes("/refund/")',
+          'return ["functions-app"]',
+        ],
       },
     ],
   },
   {
     id: "core-operating-rules",
-    reason: "Notion 대신 ARCHIVE CORE 운영규칙 탭을 기준으로 쓰는 운영 정책이 빠지는 것을 막습니다.",
+    reason:
+      "Notion 대신 ARCHIVE CORE 운영규칙 탭을 기준으로 쓰는 운영 정책이 빠지는 것을 막습니다.",
     files: [
       {
         file: "core/rules/index.html",
@@ -1138,17 +1201,32 @@ for (const group of guardGroups) {
   for (const item of group.files) {
     const content = readFile(item.file);
     if (!content) {
-      failures.push({ group: group.id, reason: group.reason, file: item.file, missing: "__file__" });
+      failures.push({
+        group: group.id,
+        reason: group.reason,
+        file: item.file,
+        missing: "__file__",
+      });
       continue;
     }
     for (const marker of item.markers) {
       if (!content.includes(marker)) {
-        failures.push({ group: group.id, reason: group.reason, file: item.file, missing: marker });
+        failures.push({
+          group: group.id,
+          reason: group.reason,
+          file: item.file,
+          missing: marker,
+        });
       }
     }
     for (const marker of item.forbiddenMarkers || []) {
       if (content.includes(marker)) {
-        failures.push({ group: group.id, reason: group.reason, file: item.file, forbidden: marker });
+        failures.push({
+          group: group.id,
+          reason: group.reason,
+          file: item.file,
+          forbidden: marker,
+        });
       }
     }
   }
@@ -1156,7 +1234,9 @@ for (const group of guardGroups) {
 
 if (failures.length) {
   console.error("Live release rollback guard failed.");
-  console.error("This deploy appears to remove or overwrite a currently active ARCHIVE PILATES feature.");
+  console.error(
+    "This deploy appears to remove or overwrite a currently active ARCHIVE PILATES feature.",
+  );
   console.error(JSON.stringify({ failures }, null, 2));
   process.exit(1);
 }
@@ -1167,7 +1247,11 @@ console.log(
       ok: true,
       guard: "archive-live-release-rollback-guards",
       groups: guardGroups.map((group) => group.id),
-      checkedFiles: [...new Set(guardGroups.flatMap((group) => group.files.map((item) => item.file)))],
+      checkedFiles: [
+        ...new Set(
+          guardGroups.flatMap((group) => group.files.map((item) => item.file)),
+        ),
+      ],
     },
     null,
     2,
@@ -1176,5 +1260,7 @@ console.log(
 
 function readFile(relativePath) {
   const absolutePath = path.join(repoRoot, relativePath);
-  return fs.existsSync(absolutePath) ? fs.readFileSync(absolutePath, "utf8") : "";
+  return fs.existsSync(absolutePath)
+    ? fs.readFileSync(absolutePath, "utf8")
+    : "";
 }

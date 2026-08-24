@@ -12,6 +12,7 @@ import { autoSendabilityIssue, isRetryableTemplateStatusIssue } from "./eligibil
 import { alimtalkDedupeKey, findCompletedDuplicateForCandidate, normalizePhone } from "./dedupe";
 import { isAlimtalkTemplateApproved } from "./templateStatus";
 import { normalizeInstructorLessonManagementNumber } from "./instructorLessonManagement";
+import { genericInstructorLessonQueueBlock } from "./instructorLessonDeliveryGuard";
 import { isAlimtalkTestRecipient } from "./testRecipients";
 import { currentPrivateLessonReportRevision } from "../privateLessonChart/privateLessonReportRevision";
 import { privateSurveySendabilityIssue } from "./privateSurveySendGuard";
@@ -51,6 +52,19 @@ export async function processAlimtalkQueue(): Promise<{
     if (!claimed) continue;
     processed += 1;
     try {
+      const instructorLessonBlock = genericInstructorLessonQueueBlock(claimed);
+      if (instructorLessonBlock) {
+        await refs.alimtalkCandidate(claimed.candidateId).set(
+          {
+            ...instructorLessonBlock,
+            maxAttempts: 1,
+            updatedAt: nowTimestamp(),
+          },
+          { merge: true },
+        );
+        if (instructorLessonBlock.status === "failed") failed += 1;
+        continue;
+      }
       const sendabilityIssue = await autoSendabilityIssue(claimed, todayKst());
       if (sendabilityIssue) {
         if (isRetryableTemplateStatusIssue(sendabilityIssue)) {
@@ -261,6 +275,22 @@ export async function processAlimtalkCandidate(candidateId: string): Promise<Ali
   if (!claimed) return { processed: false, status: "not_claimed", lastError: "알림톡 후보를 처리할 수 없습니다" };
 
   try {
+    const instructorLessonBlock = genericInstructorLessonQueueBlock(claimed);
+    if (instructorLessonBlock) {
+      await refs.alimtalkCandidate(claimed.candidateId).set(
+        {
+          ...instructorLessonBlock,
+          maxAttempts: 1,
+          updatedAt: nowTimestamp(),
+        },
+        { merge: true },
+      );
+      return {
+        processed: true,
+        status: instructorLessonBlock.status,
+        lastError: instructorLessonBlock.lastError,
+      };
+    }
     const sendabilityIssue = await autoSendabilityIssue(claimed, todayKst());
     if (sendabilityIssue) {
       if (isRetryableTemplateStatusIssue(sendabilityIssue)) {
@@ -463,10 +493,7 @@ export async function processAlimtalkCandidate(candidateId: string): Promise<Ali
   }
 }
 
-async function deferCandidateForTemplateStatus(
-  candidate: AlimtalkCandidateDoc,
-  issue: string,
-): Promise<void> {
+async function deferCandidateForTemplateStatus(candidate: AlimtalkCandidateDoc, issue: string): Promise<void> {
   await refs.alimtalkCandidate(candidate.candidateId).set(
     {
       status: "queued",
@@ -561,11 +588,7 @@ async function markRecommendedMealReportSent(candidate: AlimtalkCandidateDoc): P
       },
       { merge: true },
     );
-    tx.set(
-      requestRef,
-      { recommendationStatus: "sent", completedAt: sentAt, updatedAt: sentAt },
-      { merge: true },
-    );
+    tx.set(requestRef, { recommendationStatus: "sent", completedAt: sentAt, updatedAt: sentAt }, { merge: true });
   });
 }
 
@@ -573,10 +596,13 @@ async function markRecommendedMealReportFailed(candidate: AlimtalkCandidateDoc, 
   if (candidate.type !== "recommended_meal_report") return;
   const reportId = String(candidate.payload?.reportId || candidate.sourceActionKey || "").trim();
   if (!reportId) return;
-  await db.collection(RECOMMENDED_MEAL_REPORT_COLLECTION).doc(reportId).set(
-    { publicationStatus: "send_failed", lastError: message.slice(0, 500), updatedAt: nowTimestamp() },
-    { merge: true },
-  );
+  await db
+    .collection(RECOMMENDED_MEAL_REPORT_COLLECTION)
+    .doc(reportId)
+    .set(
+      { publicationStatus: "send_failed", lastError: message.slice(0, 500), updatedAt: nowTimestamp() },
+      { merge: true },
+    );
 }
 
 async function lockPrivateLessonReportForSend(candidate: AlimtalkCandidateDoc): Promise<string> {
@@ -633,9 +659,7 @@ async function lockPrivateLessonReportForSend(candidate: AlimtalkCandidateDoc): 
   });
 }
 
-async function finalPrivateLessonReportSendabilityIssue(
-  candidate: AlimtalkCandidateDoc,
-): Promise<string> {
+async function finalPrivateLessonReportSendabilityIssue(candidate: AlimtalkCandidateDoc): Promise<string> {
   if (candidate.type !== "private_lesson_report") return "";
   const recordId = String(candidate.payload?.recordId || candidate.sourceActionKey || "").trim();
   const requestId = String(candidate.payload?.requestId || recordId).trim();
@@ -730,7 +754,7 @@ function isStaleProcessing(candidate: AlimtalkCandidateDoc): boolean {
   return updatedAt > 0 && Date.now() - updatedAt >= PROCESSING_STALE_MS;
 }
 
-async function sendSolapiAlimtalk(candidate: AlimtalkCandidateDoc): Promise<{ messageId: string }> {
+export async function sendSolapiAlimtalk(candidate: AlimtalkCandidateDoc): Promise<{ messageId: string }> {
   const to = normalizePhone(candidate.memberPhone);
   if (!to) throw new Error("member phone is empty");
   if (!candidate.templateCode) throw new Error("templateCode is empty");
@@ -931,15 +955,13 @@ async function shortLinkIdForCandidate(
       sourceId: candidate.candidateId,
     });
     if (!existing) {
-      await refs
-        .alimtalkCandidate(candidate.candidateId)
-        .set(
-          {
-            payload: { ...candidate.payload, shortLinkId: link.linkId, shortUrl: link.shortUrl },
-            updatedAt: nowTimestamp(),
-          },
-          { merge: true },
-        );
+      await refs.alimtalkCandidate(candidate.candidateId).set(
+        {
+          payload: { ...candidate.payload, shortLinkId: link.linkId, shortUrl: link.shortUrl },
+          updatedAt: nowTimestamp(),
+        },
+        { merge: true },
+      );
     }
     return link.linkId;
   }
@@ -950,15 +972,13 @@ async function shortLinkIdForCandidate(
       targetUrl: methodMaterialTargetUrl(managementNumber),
       sourceId: candidate.candidateId,
     });
-    await refs
-      .alimtalkCandidate(candidate.candidateId)
-      .set(
-        {
-          payload: { ...candidate.payload, shortLinkId: link.linkId, shortUrl: link.shortUrl },
-          updatedAt: nowTimestamp(),
-        },
-        { merge: true },
-      );
+    await refs.alimtalkCandidate(candidate.candidateId).set(
+      {
+        payload: { ...candidate.payload, shortLinkId: link.linkId, shortUrl: link.shortUrl },
+        updatedAt: nowTimestamp(),
+      },
+      { merge: true },
+    );
     return link.linkId;
   }
   return "";

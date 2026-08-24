@@ -13,12 +13,19 @@
         "scheduledQueueAndSendAlimtalkDaily",
         "scheduledQueueAndSendReservationOpenAlimtalk",
         "scheduledSyncAlimtalkTemplateStatuses",
+        "scheduledCheckInstructorLessonSampleApproval",
+        "scheduledSendApprovedInstructorLessonAlimtalk",
         "approveAlimtalkBatch",
+        "approveInstructorLessonAlimtalkBatch",
         "operatorSendPricingInquiryAlimtalk",
         "operatorSendRecommendedMealProgramAlimtalk",
         "operatorPublishRecommendedMealPlan"
       ],
-      "forbidden": ["StudioMate writes", "Google Contacts writes", "private chart generation"]
+      "forbidden": [
+        "StudioMate writes",
+        "Google Contacts writes",
+        "private chart generation"
+      ]
     },
     "functions-private-chart": {
       "physicalSource": "firebase/function-codebases/private-chart",
@@ -45,7 +52,11 @@
         "syncPrivateLessonSessionFromRequest",
         "syncPrivateLessonSessionFromRecord"
       ],
-      "forbidden": ["daily Alimtalk candidate selection", "StudioMate writes", "Google Contacts writes"]
+      "forbidden": [
+        "daily Alimtalk candidate selection",
+        "StudioMate writes",
+        "Google Contacts writes"
+      ]
     },
     "functions-sync": {
       "physicalSource": "firebase/function-codebases/sync",
@@ -101,7 +112,10 @@
         "sendRefundAgreement",
         "queueRefundStudioMateSms"
       ],
-      "forbidden": ["scheduled jobs", "automatic member-facing sends without manager confirmation"]
+      "forbidden": [
+        "scheduled jobs",
+        "automatic member-facing sends without manager confirmation"
+      ]
     },
     "functions-social": {
       "physicalSource": "firebase/function-codebases/social",
