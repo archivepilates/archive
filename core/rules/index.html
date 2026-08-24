@@ -825,13 +825,15 @@
               </ul>
             </article>
             <article class="rule-card">
-              <h3>2026-08-22 비용 최적화</h3>
+              <h3>2026-08-22 비용 최적화 · 72시간 검증 완료</h3>
               <ul>
                 <li>CORE 홈은 전체 회원 디렉터리를 처음부터 읽지 않고 재등록 후보의 memberProfiles만 묶음 조회해 최신성을 확인합니다. 명령창에서 회원명을 2자 이상 검색할 때만 회원 검색 데이터를 한 번 불러오며, Members 화면의 기존 조회는 유지합니다.</li>
                 <li>목록별 최대 건수는 브라우저에서 자르지 않고 Firestore 쿼리 단계에 적용해 원본 전체 읽기를 막습니다.</li>
                 <li>CORE HTML, 디렉터리형 메뉴 URL, release.json, manifest는 캐시하지 않고, JavaScript와 CSS는 저장 후 재검증하며, 이미지·아이콘·폰트는 짧게 캐시합니다.</li>
                 <li>알림톡 큐, 프라이빗 사전설문 응답, Google 주소록 큐 워커는 canonical 원천과 10분 이내 운영 약속을 유지하면서 10분 주기로 처리합니다.</li>
-                <li>상태: 운영 CORE Hosting과 functions-alimtalk, functions-private-chart, functions-sync 배포 완료. 라이브 캐시 헤더, 세 Scheduler의 10분 주기, 함수 ACTIVE 상태를 확인했으며 72시간 사용량 비교를 예약했습니다.</li>
+                <li>72시간 결과: Firestore 읽기 823,641건(-10.2%), CORE Hosting 전송 22,423,039바이트(-99.7%), 알림톡·연락처 워커 호출 432건·431건(각 약 -50%)으로 줄었습니다.</li>
+                <li>billable instance time은 알림톡 61.6초(-46.0%), 연락처 202.5초(+12.5%), 프라이빗 설문 700.7초(-42.7%)입니다. 연락처는 실제 작업 39건을 처리해 단독 시간은 늘었지만 세 워커 합계는 36.4% 감소했습니다.</li>
+                <li>상태: 72시간 사용량 비교를 완료했습니다. 세 Scheduler는 10분 주기·ENABLED, 대응 함수는 ACTIVE이며 HTTP 실패, 최근 큐 실패, 처리 대기, 10분 초과 적체가 없습니다.</li>
               </ul>
             </article>
             <article class="rule-card">

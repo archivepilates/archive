@@ -91,11 +91,26 @@
       <section class="panel">
         <h2>배포와 72시간 비교</h2>
         <p class="good">커밋 <code>388c377</code>을 <code>origin/main</code>에 반영하고 CORE Hosting 및 영향받은 세 Functions 코드베이스만 배포했습니다.</p>
+        <div class="table-wrap">
+          <table>
+            <thead><tr><th>지표</th><th>배포 전 72시간</th><th>배포 후 72시간</th><th>증감</th></tr></thead>
+            <tbody>
+              <tr><td>Firestore 문서 읽기</td><td>약 917,088건</td><td>823,641건</td><td class="good">-10.2%</td></tr>
+              <tr><td>CORE Hosting 전송량</td><td>약 7,457,125,674바이트</td><td>22,423,039바이트</td><td class="good">-99.7%</td></tr>
+              <tr><td>알림톡 워커 호출</td><td>약 868회</td><td>432회</td><td class="good">-50.2%</td></tr>
+              <tr><td>연락처 워커 호출</td><td>약 867회</td><td>431회</td><td class="good">-50.3%</td></tr>
+              <tr><td>알림톡 billable instance time</td><td>약 114초</td><td>61.6초</td><td class="good">-46.0%</td></tr>
+              <tr><td>연락처 billable instance time</td><td>약 180초</td><td>202.5초</td><td class="warn">+12.5%</td></tr>
+              <tr><td>프라이빗 설문 billable instance time</td><td>약 1,222초</td><td>700.7초</td><td class="good">-42.7%</td></tr>
+            </tbody>
+          </table>
+        </div>
         <ul>
-          <li>배포 전 72시간 기준: Firestore 읽기 요청 약 917,088건, CORE Hosting 전송량 약 7.46GB.</li>
-          <li>배포 전 72시간 워커 기준: 알림톡 약 868회, 연락처 약 867회 호출. billable instance time은 알림톡 약 114초, 연락처 약 180초, 프라이빗 설문 약 1,222초.</li>
-          <li>72시간 후 같은 Cloud Monitoring 지표와 큐 지연·실패 상태를 비교해 기능 저하 없이 사용량이 줄었는지 판정합니다.</li>
-          <li>직접 결제액 절감은 무료 구간과 실제 접속량에 따라 달라지므로 고정 금액으로 단정하지 않고 배포 후 72시간 데이터를 비교합니다.</li>
+          <li class="good">세 워커 billable instance time 합계는 약 1,516초에서 964.8초로 36.4% 감소했습니다.</li>
+          <li>연락처 워커는 72시간 동안 실제 작업 39건을 처리해 호출 감소와 별개로 단독 실행시간이 늘었습니다.</li>
+          <li class="good">세 Scheduler는 10분 주기·ENABLED, 대응 Functions는 ACTIVE이며 1,294회 실행이 모두 HTTP 200으로 끝났습니다.</li>
+          <li class="good">최근 큐 실패, 처리 대기, 10분 초과 적체가 없고 CORE 홈과 정적 자산의 라이브 캐시 헤더도 정상입니다.</li>
+          <li>검증 구간: 2026-08-22 04:38~2026-08-25 04:38 KST. Cloud Monitoring, Cloud Scheduler 로그, Firestore 큐를 읽기 전용으로 확인했습니다.</li>
         </ul>
       </section>
 
