@@ -1,0 +1,28 @@
+BEGIN:VCALENDAR
+VERSION:2.0
+PRODID:-//ARCHIVE PILATES//ARCHIVE METHOD//KO
+CALSCALE:GREGORIAN
+METHOD:PUBLISH
+BEGIN:VEVENT
+UID:archive-method-8-external-feedback-260919@archivepilates.com
+DTSTAMP:20260824T000000Z
+DTSTART:20260919T040000Z
+DTEND:20260919T061000Z
+SUMMARY:ARCHIVE METHOD #8 외부 피드백
+DESCRIPTION:몸이 스스로 답을 찾도록 돕는 소도구\n
+ 민진T 리포머 + 폼롤러\n
+ 은영T 바렐 + 토닝볼\n
+ 두 세션 모두 수강\n
+ https://archivepilates.notion.site/lessons9
+LOCATION:ARCHIVE PILATES 명지\, 부산광역시 강서구
+  명지국제8로 265\, 신화빌딩 6층
+URL:https://archivepilates.notion.site/lessons9
+STATUS:CONFIRMED
+TRANSP:OPAQUE
+BEGIN:VALARM
+TRIGGER:-P1D
+ACTION:DISPLAY
+DESCRIPTION:ARCHIVE METHOD 강사레슨이 내일 진행됩니다.
+END:VALARM
+END:VEVENT
+END:VCALENDAR
