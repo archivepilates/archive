@@ -1,6 +1,7 @@
 export const PARKING_DISCOUNT_UNIT_HOURS = 2;
 export const PARKING_MAX_AUTO_DISCOUNT_HOURS = 4;
 export const STAFF_REQUIRED_DISCOUNT_HOURS = 4;
+export const PARKING_APPLY_AFTER_START_MINUTES = 30;
 
 export type ParkingDiscountPolicyInput = {
   ownerType?: string;

@@ -16,6 +16,16 @@ const AUTOMATION_STATUS_LABELS = {
 
 export type AutomationEmailStatus = keyof typeof AUTOMATION_STATUS_LABELS;
 
+export type OperationsEmailInput = {
+  subject: string;
+  body: string;
+  htmlBody?: string;
+  to?: string;
+  status?: AutomationEmailStatus;
+  domainLabel: string;
+  labelNames?: string[];
+};
+
 interface DriveFile {
   id: string;
   name?: string;
@@ -72,6 +82,13 @@ export async function sendAlimtalkLogEmail(input: {
   status?: AutomationEmailStatus;
   labelNames?: string[];
 }): Promise<void> {
+  await sendOperationsEmail({
+    ...input,
+    domainLabel: ALIMTALK_REPORT_LABEL_NAME,
+  });
+}
+
+export async function sendOperationsEmail(input: OperationsEmailInput): Promise<void> {
   const client = new DelegatedGoogleClient([GMAIL_SEND_SCOPE, GMAIL_MODIFY_SCOPE]);
   const to = input.to || OPERATOR_EMAIL;
   const boundary = `archive-in-${Date.now().toString(36)}`;
@@ -108,16 +125,12 @@ export async function sendAlimtalkLogEmail(input: {
     body: JSON.stringify({ raw }),
   });
   if (sent.id) {
-    await applyGmailLabels(client, sent.id, reportLabelNames(input.status, input.labelNames));
+    await applyGmailLabels(client, sent.id, reportLabelNames(input.domainLabel, input.status, input.labelNames));
   }
 }
 
-function reportLabelNames(status?: AutomationEmailStatus, labelNames: string[] = []): string[] {
-  return uniqueLabels([
-    ALIMTALK_REPORT_LABEL_NAME,
-    status ? AUTOMATION_STATUS_LABELS[status] : "",
-    ...labelNames,
-  ]);
+function reportLabelNames(domainLabel: string, status?: AutomationEmailStatus, labelNames: string[] = []): string[] {
+  return uniqueLabels([domainLabel, status ? AUTOMATION_STATUS_LABELS[status] : "", ...labelNames]);
 }
 
 function uniqueLabels(labels: string[]): string[] {

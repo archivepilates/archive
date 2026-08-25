@@ -742,8 +742,33 @@ const guardGroups = [
         markers: [
           "차량을 보관 상태로 전환",
           "최근 75분 구간만 읽습니다.",
+          "수업 시작 30분 뒤",
+          "입차 기록 조회는 작업당 1회만 수행합니다.",
+          "주차등록 확인필요 메일을 1회 발송합니다.",
           "오늘 자동적용 실행만 누락 복구를 위해 오늘 전체를 확인합니다.",
           "방문 차량은 일회성 등록이므로 차량번호와 선택 메모만 입력",
+        ],
+      },
+      {
+        file: "firebase/kangsain-functions/functions/src/parking/parkingDiscountPolicy.ts",
+        markers: ["PARKING_APPLY_AFTER_START_MINUTES = 30"],
+      },
+      {
+        file: "firebase/kangsain-functions/functions/src/parking/processParkingDiscountJob.ts",
+        markers: [
+          "notifyNoEntryOnce",
+          'operatorAlertType: "no_entry"',
+          'operatorAlertStatus: "sending"',
+          'operatorAlertStatus: "sent"',
+          'operatorAlertStatus: "failed"',
+        ],
+      },
+      {
+        file: "firebase/kangsain-functions/functions/src/parking/parkingOperatorAlerts.ts",
+        markers: [
+          "[주차등록][확인필요] 입차기록 없음",
+          'const PARKING_REPORT_LABEL = "주차등록 보고"',
+          "자동 재조회는 실행하지 않습니다.",
         ],
       },
     ],

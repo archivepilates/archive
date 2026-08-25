@@ -16,6 +16,7 @@ import {
   PARKING_MAX_AUTO_DISCOUNT_HOURS,
   resolveParkingDiscountPolicy,
 } from "./parkingDiscountPolicy";
+import { sendParkingNoEntryAlert } from "./parkingOperatorAlerts";
 
 const PARKING_DISCOUNT_JOBS = "parkingDiscountJobs";
 const DEFAULT_DISCOUNT_NAME = "2시간 할인";
@@ -42,9 +43,15 @@ type ParkingDiscountJob = {
   memberName?: string;
   staffId?: string;
   staffName?: string;
+  ownerName?: string;
+  visitorName?: string;
   bookingId?: string;
+  lessonDate?: string;
+  lectureStartAt?: FirebaseFirestore.Timestamp | null;
   requestedBy?: string;
   source?: string;
+  operatorAlertStatus?: string;
+  operatorAlertType?: string;
 };
 
 type JobStatus = "running" | "eligible" | "success" | "manual_review" | "error";
@@ -445,6 +452,7 @@ export async function processParkingDiscountJobSnapshot(snap: QueryDocumentSnaps
         lastError: "입차 기록을 찾지 못했습니다",
         result: { carNumberLast4: last4, metrics, totalMs: Date.now() - requestedAt },
       });
+      await notifyNoEntryOnce(ref, snap.id, job, last4, requestedDiscountHours);
       return;
     }
     await ref.set({ accountLabel, updatedAt: FieldValue.serverTimestamp() }, { merge: true });
@@ -527,6 +535,68 @@ export async function processParkingDiscountJobSnapshot(snap: QueryDocumentSnaps
       lastError: errorMessage(err),
       result: { metrics, totalMs: Date.now() - requestedAt },
     });
+  }
+}
+
+async function notifyNoEntryOnce(
+  ref: FirebaseFirestore.DocumentReference,
+  jobId: string,
+  job: ParkingDiscountJob,
+  carNumberLast4: string,
+  requestedDiscountHours: number,
+): Promise<void> {
+  const claimed = await db.runTransaction(async (tx) => {
+    const current = await tx.get(ref);
+    const currentJob = current.data() as ParkingDiscountJob | undefined;
+    if (currentJob?.operatorAlertStatus || currentJob?.operatorAlertType) return false;
+    tx.set(
+      ref,
+      {
+        operatorAlertType: "no_entry",
+        operatorAlertStatus: "sending",
+        operatorAlertAttemptedAt: FieldValue.serverTimestamp(),
+        updatedAt: FieldValue.serverTimestamp(),
+      },
+      { merge: true },
+    );
+    return true;
+  });
+  if (!claimed) return;
+
+  try {
+    await sendParkingNoEntryAlert({
+      jobId,
+      lessonDate: job.lessonDate,
+      lectureStartAt: job.lectureStartAt,
+      memberName: job.memberName,
+      staffName: job.staffName,
+      ownerName: job.ownerName,
+      visitorName: job.visitorName,
+      carNumberLast4,
+      requestedDiscountHours,
+    });
+    await ref.set(
+      {
+        operatorAlertStatus: "sent",
+        operatorAlertSentAt: FieldValue.serverTimestamp(),
+        operatorAlertLastError: null,
+        updatedAt: FieldValue.serverTimestamp(),
+      },
+      { merge: true },
+    );
+  } catch (err) {
+    logger.error("parking no-entry alert email failed", {
+      jobId,
+      message: errorMessage(err),
+    });
+    await ref.set(
+      {
+        operatorAlertStatus: "failed",
+        operatorAlertLastError: errorMessage(err),
+        updatedAt: FieldValue.serverTimestamp(),
+      },
+      { merge: true },
+    );
   }
 }
 

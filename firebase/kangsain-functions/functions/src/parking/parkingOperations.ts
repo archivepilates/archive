@@ -7,6 +7,7 @@ import type { BookingDoc, StaffDoc } from "../types/models";
 import { nowTimestamp, todayKst } from "../utils/date";
 import { AppError } from "../utils/errors";
 import {
+  PARKING_APPLY_AFTER_START_MINUTES as APPLY_AFTER_START_MINUTES,
   PARKING_DISCOUNT_UNIT_HOURS as DISCOUNT_UNIT_HOURS,
   PARKING_MAX_AUTO_DISCOUNT_HOURS as MAX_AUTO_DISCOUNT_HOURS,
   STAFF_REQUIRED_DISCOUNT_HOURS,
@@ -16,7 +17,6 @@ const PARKING_VEHICLES = "parkingVehicles";
 const PARKING_DISCOUNT_JOBS = "parkingDiscountJobs";
 const VEHICLE_MAX_COUNT = 4;
 const DISCOUNT_NAME = "2시간 할인";
-const APPLY_AFTER_START_MINUTES = 10;
 const SCHEDULED_BOOKING_LOOKBACK_MINUTES = 75;
 
 type ParkingOwnerType = "member" | "staff" | "visitor";

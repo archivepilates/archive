@@ -17,6 +17,7 @@ import {
 import { submitBookingAttendanceHandler } from "../callable/submitBookingAttendance";
 import { submitMemberMemoHandler } from "../callable/submitMemberMemo";
 import { REGION } from "../config/constants";
+import { googleDwdServiceAccountJson } from "../config/secrets";
 import {
   iparkingAccountPoolJson,
   iparkingLoginId,
@@ -64,6 +65,7 @@ const parkingDiscountJobOptions = {
   region: REGION,
   document: "parkingDiscountJobs/{jobId}",
   secrets: [
+    googleDwdServiceAccountJson,
     iparkingAccountPoolJson,
     iparkingLoginId,
     iparkingLoginPassword,
