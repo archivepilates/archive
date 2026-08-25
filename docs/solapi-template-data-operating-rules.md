@@ -399,7 +399,7 @@
 버튼 URL:
 
 - `캘린더에 일정 추가`: `https://in.archivepilates.com/method/#{관리번호}/calendar/`
-- `방문안내 보기`: `https://archivepilates.notion.site/3c7d49eae4bf8190b39de97d513dac6b`
+- `방문안내 보기`: `https://archivepilates.notion.site/visitin`
 
 월별 상세 안내 페이지는 모집·신청 단계에서만 사용하며 예약확정 알림톡에는 넣지 않는다.
 

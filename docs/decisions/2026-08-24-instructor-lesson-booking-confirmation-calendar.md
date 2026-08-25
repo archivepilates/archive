@@ -25,7 +25,7 @@
 - 수업 구성: `민진T 리포머 + 폼롤러`, `은영T 바렐 + 토닝볼`
 - 장소: `ARCHIVE PILATES 명지`, `부산광역시 강서구 명지국제2로28번길 34 에코팰리스 704호`
 - 상세 안내 버튼: 사용하지 않음
-- 방문 안내: `https://archivepilates.notion.site/3c7d49eae4bf8190b39de97d513dac6b`
+- 방문 안내: `https://archivepilates.notion.site/visitin`
 
 ## 구현 상태
 
