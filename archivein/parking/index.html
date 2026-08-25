@@ -1,0 +1,388 @@
+<!doctype html>
+<html lang="ko">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1">
+  <meta name="robots" content="noindex,nofollow,noarchive">
+  <meta name="referrer" content="no-referrer">
+  <meta name="theme-color" content="#fffdfa">
+  <link rel="icon" href="/logo120.png">
+  <title>주차 사전등록 | ARCHIVE PILATES</title>
+  <style>
+    :root {
+      color-scheme: light;
+      --ink: #171512;
+      --muted: #6e675f;
+      --paper: #fffdfa;
+      --canvas: #f3f0eb;
+      --line: #e2dcd5;
+      --accent: #c8322c;
+      --accent-strong: #a92420;
+      --good: #1f6657;
+      --good-soft: #edf7f3;
+      --warn: #81502f;
+      --warn-soft: #fff6e9;
+    }
+    *, *::before, *::after { box-sizing: border-box; }
+    html { -webkit-text-size-adjust: 100%; }
+    body {
+      margin: 0;
+      min-height: 100dvh;
+      background: var(--canvas);
+      color: var(--ink);
+      font-family: -apple-system, BlinkMacSystemFont, "Apple SD Gothic Neo", "Noto Sans KR", sans-serif;
+    }
+    button, input { font: inherit; }
+    button, input, main, section { min-width: 0; }
+    p, h1, h2, span, label, button { overflow-wrap: anywhere; word-break: keep-all; }
+    main {
+      width: min(100%, 620px);
+      margin: 0 auto;
+      padding: 18px 14px 48px;
+    }
+    header {
+      display: grid;
+      grid-template-columns: minmax(0, 1fr) 48px;
+      gap: 18px;
+      align-items: start;
+      padding: 18px 2px 24px;
+      border-bottom: 1px solid rgba(23, 21, 18, .1);
+    }
+    .brand {
+      margin: 0 0 8px;
+      color: var(--accent);
+      font-size: 12px;
+      font-weight: 800;
+      line-height: 1.4;
+    }
+    h1 {
+      margin: 0;
+      font-size: 29px;
+      line-height: 1.2;
+      letter-spacing: 0;
+    }
+    .brand-mark {
+      width: 48px;
+      height: 48px;
+      border-radius: 50%;
+      object-fit: contain;
+    }
+    .lead {
+      margin: 12px 0 0;
+      color: var(--muted);
+      font-size: 15px;
+      line-height: 1.65;
+    }
+    .content {
+      display: grid;
+      gap: 16px;
+      padding-top: 20px;
+    }
+    .panel {
+      padding: 20px 16px;
+      border: 1px solid var(--line);
+      border-radius: 8px;
+      background: var(--paper);
+    }
+    .lesson-meta {
+      display: grid;
+      grid-template-columns: minmax(0, 1fr) auto;
+      gap: 12px;
+      align-items: center;
+    }
+    .lesson-meta h2 {
+      margin: 0 0 4px;
+      font-size: 17px;
+      line-height: 1.45;
+      letter-spacing: 0;
+    }
+    .lesson-meta p {
+      margin: 0;
+      color: var(--muted);
+      font-size: 14px;
+      line-height: 1.55;
+    }
+    .status-pill {
+      display: inline-flex;
+      align-items: center;
+      min-height: 32px;
+      padding: 6px 10px;
+      border-radius: 999px;
+      background: #f0ece7;
+      color: #514b44;
+      font-size: 12px;
+      font-weight: 800;
+      white-space: nowrap;
+    }
+    .status-pill.good { background: var(--good-soft); color: var(--good); }
+    .form-panel { display: grid; gap: 18px; }
+    .field { display: grid; gap: 9px; }
+    label { font-size: 15px; font-weight: 800; line-height: 1.45; }
+    input {
+      width: 100%;
+      min-height: 50px;
+      padding: 12px 13px;
+      border: 1px solid #d8d0c7;
+      border-radius: 7px;
+      background: #fff;
+      color: var(--ink);
+      font-size: 17px;
+      line-height: 1.4;
+      text-transform: uppercase;
+    }
+    input:focus-visible, button:focus-visible {
+      outline: 3px solid rgba(200, 50, 44, .22);
+      outline-offset: 2px;
+    }
+    input:focus-visible { border-color: var(--accent); }
+    .hint {
+      margin: 0;
+      color: var(--muted);
+      font-size: 13px;
+      line-height: 1.6;
+    }
+    .primary-action {
+      width: 100%;
+      min-height: 50px;
+      padding: 12px 16px;
+      border: 0;
+      border-radius: 7px;
+      background: var(--accent);
+      color: #fff;
+      font-weight: 800;
+      cursor: pointer;
+    }
+    .primary-action:hover { background: var(--accent-strong); }
+    .primary-action:disabled { cursor: wait; opacity: .58; }
+    .message {
+      margin: 0;
+      padding: 13px 14px;
+      border-radius: 7px;
+      background: var(--warn-soft);
+      color: var(--warn);
+      font-size: 14px;
+      line-height: 1.65;
+    }
+    .message[hidden] { display: none; }
+    .success {
+      display: grid;
+      gap: 10px;
+      border-color: #cfe4dc;
+      background: var(--good-soft);
+    }
+    .success h2 { margin: 0; color: var(--good); font-size: 19px; line-height: 1.4; }
+    .success p { margin: 0; color: #365e55; font-size: 14px; line-height: 1.7; }
+    .visit {
+      display: grid;
+      gap: 5px;
+      border-top: 1px solid rgba(23, 21, 18, .09);
+      padding: 18px 2px 0;
+    }
+    .visit strong { font-size: 13px; }
+    .visit span { color: var(--muted); font-size: 13px; line-height: 1.65; }
+    .loading { color: var(--muted); font-size: 14px; line-height: 1.6; }
+    [hidden] { display: none !important; }
+    @media (min-width: 720px) {
+      main { padding-top: 36px; }
+      .panel { padding: 24px; }
+    }
+    @media (prefers-reduced-motion: reduce) {
+      *, *::before, *::after { scroll-behavior: auto !important; transition: none !important; }
+    }
+  </style>
+</head>
+<body>
+  <main>
+    <header>
+      <div>
+        <p class="brand">ARCHIVE PILATES</p>
+        <h1>주차 사전등록</h1>
+        <p class="lead">수업 당일 이용할 차량번호를 등록해 주세요.</p>
+      </div>
+      <img class="brand-mark" src="/logo120.png" width="48" height="48" alt="ARCHIVE PILATES">
+    </header>
+
+    <div class="content">
+      <p class="loading" id="loading" role="status">예약 정보를 확인하고 있습니다.</p>
+
+      <section class="panel lesson-meta" id="lessonPanel" hidden>
+        <div>
+          <h2 id="memberLabel">강사레슨</h2>
+          <p id="lessonDateLabel"></p>
+        </div>
+        <span class="status-pill" id="statusPill">등록 전</span>
+      </section>
+
+      <section class="panel success" id="successPanel" hidden>
+        <h2>사전등록 완료</h2>
+        <p id="successMessage">차량번호 사전등록이 완료되었습니다.</p>
+      </section>
+
+      <form class="panel form-panel" id="registrationForm" hidden novalidate>
+        <div class="field">
+          <label for="carNumber">차량번호</label>
+          <input id="carNumber" name="carNumber" type="text" inputmode="text" autocomplete="off" maxlength="12" placeholder="예: 241고2299" aria-describedby="carHint">
+          <p class="hint" id="carHint">지역명 또는 한글을 포함한 전체 차량번호를 입력해 주세요.</p>
+        </div>
+        <p class="message" id="formMessage" role="alert" hidden></p>
+        <button class="primary-action" id="submitButton" type="submit">차량번호 등록</button>
+      </form>
+
+      <section class="panel" id="errorPanel" hidden>
+        <p class="message" id="errorMessage" role="alert"></p>
+      </section>
+
+      <div class="visit">
+        <strong>ARCHIVE PILATES</strong>
+        <span>부산광역시 강서구 명지국제2로28번길 34 에코팰리스 704호</span>
+      </div>
+    </div>
+  </main>
+  <script>
+    (() => {
+      const params = new URLSearchParams(location.search);
+      const requestId = params.get("id") || "";
+      const token = params.get("token") || "";
+      const preview = params.get("preview") === "1";
+      const endpoint = location.pathname.startsWith("/archivein/")
+        ? "/archivein/api/parkingPreRegistration"
+        : "/api/parkingPreRegistration";
+      const elements = {
+        loading: document.getElementById("loading"),
+        lessonPanel: document.getElementById("lessonPanel"),
+        memberLabel: document.getElementById("memberLabel"),
+        lessonDateLabel: document.getElementById("lessonDateLabel"),
+        statusPill: document.getElementById("statusPill"),
+        successPanel: document.getElementById("successPanel"),
+        successMessage: document.getElementById("successMessage"),
+        form: document.getElementById("registrationForm"),
+        carNumber: document.getElementById("carNumber"),
+        formMessage: document.getElementById("formMessage"),
+        submitButton: document.getElementById("submitButton"),
+        errorPanel: document.getElementById("errorPanel"),
+        errorMessage: document.getElementById("errorMessage"),
+      };
+      let registration = null;
+
+      elements.form.addEventListener("submit", submitRegistration);
+      initialize();
+
+      async function initialize() {
+        if (preview) {
+          renderRegistration({
+            memberName: "김기효",
+            lessonDate: "2026-09-19",
+            lessonStartAt: "2026-09-19T04:00:00.000Z",
+            status: "pending",
+            carLast4: "",
+            canEdit: true,
+            preview: true,
+          });
+          return;
+        }
+        if (!requestId || !token) {
+          showError("주차 사전등록 링크가 올바르지 않습니다.");
+          return;
+        }
+        try {
+          const response = await fetch(`${endpoint}?id=${encodeURIComponent(requestId)}&token=${encodeURIComponent(token)}`, {
+            headers: { Accept: "application/json" },
+            cache: "no-store",
+          });
+          const body = await response.json().catch(() => ({}));
+          if (!response.ok) throw new Error(body.message || "예약 정보를 확인하지 못했습니다.");
+          renderRegistration(body);
+        } catch (error) {
+          showError(error instanceof Error ? error.message : "예약 정보를 확인하지 못했습니다.");
+        }
+      }
+
+      function renderRegistration(data) {
+        registration = data;
+        elements.loading.hidden = true;
+        elements.errorPanel.hidden = true;
+        elements.lessonPanel.hidden = false;
+        elements.memberLabel.textContent = `${data.memberName || "예약자"}님 강사레슨`;
+        elements.lessonDateLabel.textContent = formatLessonDate(data.lessonStartAt, data.lessonDate);
+        const registered = data.status === "registered" || Boolean(data.carLast4);
+        elements.statusPill.textContent = registered ? `등록 완료 · ${data.carLast4}` : data.status === "closed" ? "등록 종료" : "등록 전";
+        elements.statusPill.classList.toggle("good", registered);
+        elements.successPanel.hidden = !registered;
+        if (registered) {
+          const previewNote = data.preview ? " 프리뷰에서는 실제로 저장되지 않습니다." : "";
+          elements.successMessage.textContent = `차량번호 뒤 4자리 ${data.carLast4} 사전등록이 완료되었습니다. 수업 당일 입차 확인 후 4시간 주차 할인이 자동 적용됩니다.${previewNote}`;
+        }
+        elements.form.hidden = !data.canEdit;
+        elements.submitButton.textContent = registered ? "차량번호 변경" : "차량번호 등록";
+        if (data.status === "closed" && !registered) showError("주차 사전등록 시간이 종료되었습니다.", false);
+      }
+
+      async function submitRegistration(event) {
+        event.preventDefault();
+        const carNumber = normalizeCarNumber(elements.carNumber.value);
+        if (carNumber.length < 6 || carNumber.length > 12 || !/\d{4}$/.test(carNumber)) {
+          showFormMessage("차량번호를 다시 확인해 주세요.");
+          elements.carNumber.focus();
+          return;
+        }
+        elements.formMessage.hidden = true;
+        elements.submitButton.disabled = true;
+        elements.submitButton.textContent = "등록 중";
+        try {
+          if (registration && registration.preview) {
+            renderRegistration({ ...registration, status: "registered", carLast4: carNumber.replace(/\D/g, "").slice(-4) });
+            elements.carNumber.value = "";
+            return;
+          }
+          const response = await fetch(endpoint, {
+            method: "POST",
+            headers: { "Content-Type": "application/json", Accept: "application/json" },
+            cache: "no-store",
+            body: JSON.stringify({ id: requestId, token, carNumber }),
+          });
+          const body = await response.json().catch(() => ({}));
+          if (!response.ok) throw new Error(body.message || "차량번호를 등록하지 못했습니다.");
+          renderRegistration({ ...registration, status: "registered", carLast4: body.carLast4, canEdit: true });
+          elements.carNumber.value = "";
+        } catch (error) {
+          showFormMessage(error instanceof Error ? error.message : "차량번호를 등록하지 못했습니다.");
+        } finally {
+          elements.submitButton.disabled = false;
+          elements.submitButton.textContent = registration && registration.carLast4 ? "차량번호 변경" : "차량번호 등록";
+        }
+      }
+
+      function showFormMessage(message) {
+        elements.formMessage.textContent = message;
+        elements.formMessage.hidden = false;
+      }
+
+      function showError(message, hideLesson = true) {
+        elements.loading.hidden = true;
+        if (hideLesson) elements.lessonPanel.hidden = true;
+        elements.form.hidden = true;
+        elements.successPanel.hidden = true;
+        elements.errorMessage.textContent = message;
+        elements.errorPanel.hidden = false;
+      }
+
+      function normalizeCarNumber(value) {
+        return String(value || "").trim().replace(/[\s-]/g, "").toUpperCase();
+      }
+
+      function formatLessonDate(iso, fallback) {
+        const date = new Date(iso || `${fallback}T13:00:00+09:00`);
+        if (Number.isNaN(date.getTime())) return fallback || "수업일 확인 필요";
+        return new Intl.DateTimeFormat("ko-KR", {
+          timeZone: "Asia/Seoul",
+          month: "long",
+          day: "numeric",
+          weekday: "short",
+          hour: "numeric",
+          minute: "2-digit",
+        }).format(date);
+      }
+    })();
+  </script>
+</body>
+</html>

@@ -10,6 +10,11 @@ import { stableHash } from "../utils/hash";
 import { shortLinkIdForTarget, shortUrlForId } from "../utils/shortLinks";
 import { canonicalizeBookings } from "../utils/canonicalBooking";
 import {
+  attachInstructorLessonParkingPayload,
+  upsertInstructorLessonParkingPreRegistration,
+} from "../parking/instructorLessonParkingPreRegistration";
+import { earliestIsoDateTime, mergeParkingBookingIds } from "../parking/instructorLessonParkingContract";
+import {
   ALIMTALK_MEMBER_EXCLUSION_REASONS,
   CANDIDATE_TEMPLATE_CODES,
   GROUP_SURVEY_ALIMTALK_START_DATE,
@@ -76,7 +81,9 @@ export async function rebuildAlimtalkCandidatesForRange(input: {
         if (enqueued) writes.push(upsertGroupSurveyRequest(groupSurveyCandidate));
       }
       for (const candidate of instructorLessonMaterialCandidatesForDate(profile, sourceDate, bookingIndex, lectureIndex)) {
-        await enqueueSendableCandidate(candidate, candidateIds, writes);
+        const prepared = attachInstructorLessonParkingPayload(candidate);
+        const enqueued = await enqueueSendableCandidate(prepared, candidateIds, writes);
+        if (enqueued) writes.push(upsertInstructorLessonParkingPreRegistration(prepared));
       }
       const longAbsenceCandidate = await longAbsenceCandidateForDate(profile, sourceDate, bookingIndex);
       if (longAbsenceCandidate) {
@@ -337,9 +344,26 @@ function instructorLessonMaterialCandidatesForDate(
   const byManagementNumber = new Map<string, AlimtalkCandidateDoc>();
   for (const candidate of candidates) {
     const managementNumber = String(candidate.payload?.managementNumber || "");
-    if (managementNumber && !byManagementNumber.has(managementNumber)) {
+    if (!managementNumber) continue;
+    const previous = byManagementNumber.get(managementNumber);
+    if (!previous) {
       byManagementNumber.set(managementNumber, candidate);
+      continue;
     }
+    byManagementNumber.set(managementNumber, {
+      ...previous,
+      payload: {
+        ...previous.payload,
+        parkingBookingIds: mergeParkingBookingIds(
+          String(previous.payload?.parkingBookingIds || previous.payload?.bookingId || ""),
+          String(candidate.payload?.parkingBookingIds || candidate.payload?.bookingId || ""),
+        ),
+        lessonStartAt: earliestIsoDateTime(
+          String(previous.payload?.lessonStartAt || ""),
+          String(candidate.payload?.lessonStartAt || ""),
+        ),
+      },
+    });
   }
   return [...byManagementNumber.values()];
 }
@@ -382,11 +406,13 @@ function instructorLessonMaterialCandidate(
       ticketName: booking.ticketName || "",
       staffId: booking.staffId || "",
       staffName: booking.staffName || lecture?.staffName || "",
+      lessonStartAt: booking.lectureStartAt?.toDate?.().toISOString() || "",
       managementNumber,
       materialNumber: managementNumber,
       archiveMethodId: managementNumber,
       shortLinkId,
       shortUrl: shortUrlForId(shortLinkId),
+      parkingBookingIds: booking.bookingId,
     },
     attempts: 0,
     maxAttempts: 2,

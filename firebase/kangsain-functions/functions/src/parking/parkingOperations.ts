@@ -12,6 +12,13 @@ import {
   PARKING_MAX_AUTO_DISCOUNT_HOURS as MAX_AUTO_DISCOUNT_HOURS,
   STAFF_REQUIRED_DISCOUNT_HOURS,
 } from "./parkingDiscountPolicy";
+import {
+  maskParkingCarNumber,
+  normalizeParkingCarNumber,
+  parkingCarLast4,
+  parkingVehicleId,
+  validParkingCarNumber,
+} from "./instructorLessonParkingContract";
 
 const PARKING_VEHICLES = "parkingVehicles";
 const PARKING_DISCOUNT_JOBS = "parkingDiscountJobs";
@@ -38,7 +45,7 @@ type ParkingVehicleDoc = {
   label: string;
   isDefault: boolean;
   note?: string;
-  source: "core_parking";
+  source: "core_parking" | "instructor_lesson_pre_registration";
   createdAt: FirebaseFirestore.Timestamp;
   updatedAt: FirebaseFirestore.Timestamp;
   updatedByUid: string;
@@ -82,6 +89,8 @@ type ParkingDashboardJob = {
   ownerName?: string;
   carNumberLast4?: string;
   requestedDiscountHours?: number;
+  operatorAlertStatus?: string;
+  operatorAlertLastError?: string;
   result?: Record<string, unknown>;
   createdAt?: FirebaseFirestore.Timestamp;
   updatedAt?: FirebaseFirestore.Timestamp;
@@ -99,12 +108,12 @@ export async function registerParkingVehicleHandler(request: CallableRequest): P
   const ownerName =
     ownerType === "visitor" ? "방문객" : stringValue(request.data?.ownerName || request.data?.name);
   const ownerPhone = ownerType === "visitor" ? "" : digitsOnly(request.data?.ownerPhone || request.data?.phone);
-  const carNumber = normalizeCarNumber(request.data?.carNumber);
+  const carNumber = normalizeParkingCarNumber(request.data?.carNumber);
   const note = stringValue(request.data?.note);
   const validDate = todayKst();
 
   if (ownerType !== "visitor" && !ownerName && !ownerPhone) throw new AppError("INVALID_ARGUMENT", "이름 또는 연락처가 필요합니다");
-  if (!validCarNumber(carNumber)) throw new AppError("INVALID_ARGUMENT", "차량번호를 다시 확인하세요");
+  if (!validParkingCarNumber(carNumber)) throw new AppError("INVALID_ARGUMENT", "차량번호를 다시 확인하세요");
 
   const resolved =
     ownerType === "staff"
@@ -127,8 +136,8 @@ export async function registerParkingVehicleHandler(request: CallableRequest): P
     staffId: resolved.staffId,
     validDate: ownerType === "visitor" ? validDate : undefined,
     carNumber,
-    carNumberLast4: carLast4(carNumber),
-    label: maskCarNumber(carNumber),
+    carNumberLast4: parkingCarLast4(carNumber),
+    label: maskParkingCarNumber(carNumber),
     isDefault: true,
     note,
     source: "core_parking",
@@ -665,7 +674,7 @@ async function loadParkingVehicles(studioId: string, date = todayKst()): Promise
   const snap = await db.collection(PARKING_VEHICLES).where("studioId", "==", studioId).where("status", "==", "active").limit(500).get();
   return snap.docs
     .map((doc) => doc.data() as ParkingVehicleDoc)
-    .filter((vehicle) => vehicle.ownerType !== "visitor" || vehicle.validDate === date)
+    .filter((vehicle) => !vehicle.validDate || vehicle.validDate === date)
     .sort((a, b) => timestampMs(b.updatedAt) - timestampMs(a.updatedAt));
 }
 
@@ -677,6 +686,11 @@ async function loadRecentParkingJobs(studioId: string): Promise<ParkingDashboard
 }
 
 function findMemberVehicle(vehicles: ParkingVehicleDoc[], booking: BookingDoc): ParkingVehicleDoc | null {
+  const requestedVehicleId = String(booking.parkingVehicleId || "");
+  if (requestedVehicleId) {
+    const requested = vehicles.find((vehicle) => vehicle.vehicleId === requestedVehicleId);
+    if (requested) return requested;
+  }
   const byId = vehicles.find((vehicle) => vehicle.memberId && vehicle.memberId === booking.memberId);
   if (byId) return byId;
   const phone = digitsOnly(booking.memberPhone);
@@ -808,28 +822,6 @@ function timestampMs(value: unknown): number {
   if (typeof (value as { toMillis?: unknown }).toMillis === "function") return (value as FirebaseFirestore.Timestamp).toMillis();
   const date = new Date(String(value));
   return Number.isNaN(date.getTime()) ? 0 : date.getTime();
-}
-
-function parkingVehicleId(ownerType: ParkingOwnerType, ownerId: string, carNumber: string): string {
-  return `pv_${ownerType}_${safeId(ownerId) || hashSmall(ownerId)}_${hashSmall(carNumber)}`;
-}
-
-function normalizeCarNumber(value: unknown): string {
-  return stringValue(value).replace(/[\s-]/g, "").toUpperCase();
-}
-
-function validCarNumber(value: string): boolean {
-  return value.length >= 6 && value.length <= 12 && /\d{4}$/.test(value);
-}
-
-function carLast4(value: string): string {
-  return value.replace(/\D/g, "").slice(-4);
-}
-
-function maskCarNumber(value: string): string {
-  const normalized = normalizeCarNumber(value);
-  if (normalized.length <= 4) return normalized;
-  return `${normalized.slice(0, -4)} ${normalized.slice(-4)}`;
 }
 
 function hashSmall(value: string): string {

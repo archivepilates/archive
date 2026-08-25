@@ -655,16 +655,28 @@
               </ul>
             </article>
             <article class="rule-card">
+              <h3>강사레슨 주차 사전등록</h3>
+              <ul>
+                <li>D-1 알림톡의 개인별 주차 링크는 instructorLessonParkingPreRegistrations를 원천으로 사용하고, 공개 화면은 불투명 토큰으로 해당 예약만 확인합니다.</li>
+                <li>같은 날 두 세션을 듣는 예약자는 예약 ID를 하나의 요청으로 묶습니다. 등록 시점과 아이파킹 조회 직전에 현재 reserved 예약, 수업일과 시작시각을 다시 확인합니다.</li>
+                <li>공개 링크로 등록한 차량은 해당 수업일에만 유효합니다. 회원의 영구 기본차량으로 저장하지 않으며 연결 bookings의 parkingVehicleId가 자동 적용 차량의 우선 기준입니다.</li>
+                <li>차량번호 등록과 변경은 수업 시작 20분 후 닫고, 수업 시작 30분 후 입차를 한 번 조회합니다. 전체 차량번호는 등록 완료 화면과 운영 메일에 다시 노출하지 않습니다.</li>
+                <li>스텝 샘플은 저장되지 않는 전용 프리뷰 링크를 사용하므로 실제 예약자의 차량등록 권한을 복사하지 않습니다.</li>
+                <li>4버튼 v3 템플릿은 검수 승인과 별도 활성화 배포가 끝날 때까지 사용하지 않고, 현재 승인된 3버튼 v2를 유지합니다.</li>
+              </ul>
+            </article>
+            <article class="rule-card">
               <h3>검증 위치</h3>
               <ul>
                 <li>홈 주차등록 섹션에서 회원/강사/방문 등록 차량과 최근 주차권 작업을 확인합니다.</li>
                 <li>자동화는 scheduledCreateParkingDiscountJobs가 작업을 만들고 processParkingDiscountJob이 실제 아이파킹 적용을 수행합니다.</li>
                 <li>문제 발생 시 수동확인 또는 error job만 운영자가 확인합니다.</li>
                 <li>입차 기록 없음 메일에는 수업일시, 대상 이름, 차량번호 뒤 4자리, 작업 ID와 CORE 확인 링크만 표시하며 전체 연락처와 전체 차량번호는 노출하지 않습니다.</li>
+                <li>확인필요 메일 자체가 실패하면 자동 재시도하지 않고 최근 주차권 작업에 확인메일 실패 상태와 오류를 표시합니다.</li>
               </ul>
             </article>
           </div>
-          <div class="rule-note"><strong>현재 확인 위치</strong><span>CORE Home / Firestore parkingVehicles, parkingDiscountJobs, bookings parkingStatus</span></div>
+          <div class="rule-note"><strong>현재 확인 위치</strong><span>CORE Home / 공개 주차 사전등록 / Firestore instructorLessonParkingPreRegistrations, parkingVehicles, parkingDiscountJobs, bookings parkingStatus</span></div>
         </section>
 
         <section class="panel rule-section" id="welcome">

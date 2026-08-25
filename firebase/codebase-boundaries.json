@@ -101,6 +101,7 @@
         "instructorApplicantEvaluationApi",
         "recommendedMealSurveyApi",
         "recommendedMealPlanApi",
+        "instructorLessonParkingPreRegistrationApi",
         "getRecommendedMealProgramReview",
         "generateRecommendedMealProgramDraft",
         "generateRecommendedMealDraftOnSurveySubmitted",

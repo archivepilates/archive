@@ -2,6 +2,7 @@ import { logger } from "firebase-functions";
 import type { QueryDocumentSnapshot } from "firebase-admin/firestore";
 import { FieldValue } from "firebase-admin/firestore";
 import { db } from "../config/firebase";
+import type { BookingDoc } from "../types/models";
 import { errorMessage } from "../utils/errors";
 import {
   getIparkingAccountConfigs,
@@ -12,6 +13,7 @@ import {
   resolveIparkingAccountStoreSeq,
 } from "./iparkingClient";
 import {
+  PARKING_APPLY_AFTER_START_MINUTES,
   PARKING_DISCOUNT_UNIT_HOURS,
   PARKING_MAX_AUTO_DISCOUNT_HOURS,
   resolveParkingDiscountPolicy,
@@ -23,6 +25,7 @@ const DEFAULT_DISCOUNT_NAME = "2시간 할인";
 const DEFAULT_IPARKING_STOR_SEQ = Number(process.env.IPARKING_STOR_SEQ || "287798");
 const DEFAULT_IPARKING_PARK_SEQ = Number(process.env.IPARKING_PARK_SEQ || "5068");
 const DEFAULT_REQUESTED_DISCOUNT_HOURS = 2;
+const BOOKING_FRESHNESS_MS = 24 * 60 * 60 * 1000;
 
 type ParkingDiscountJob = {
   status?: string;
@@ -418,20 +421,19 @@ export async function processParkingDiscountJobSnapshot(snap: QueryDocumentSnaps
 
   try {
     if (!/^\d{4}$/.test(last4)) throw new Error("차량번호 뒤 4자리가 필요합니다");
-    await ref.set(
-      {
-        status: "running",
-        startedAt: FieldValue.serverTimestamp(),
-        updatedAt: FieldValue.serverTimestamp(),
-        attempts: FieldValue.increment(1),
-        lastError: null,
-        parkingPolicy: parkingPolicy.policy,
-        requestedDiscountHours,
-        maxAutoDiscountHours,
-        discountUnitHours,
-      },
-      { merge: true },
-    );
+    const claim = await claimCurrentParkingJob(ref, job, {
+      parkingPolicy: parkingPolicy.policy,
+      requestedDiscountHours,
+      maxAutoDiscountHours,
+      discountUnitHours,
+    });
+    if (!claim.claimed) {
+      logger.info("parking discount job stopped before iParking lookup", {
+        jobId: snap.id,
+        reason: claim.reason,
+      });
+      return;
+    }
 
     const {
       client,
@@ -536,6 +538,109 @@ export async function processParkingDiscountJobSnapshot(snap: QueryDocumentSnaps
       result: { metrics, totalMs: Date.now() - requestedAt },
     });
   }
+}
+
+async function claimCurrentParkingJob(
+  ref: FirebaseFirestore.DocumentReference,
+  job: ParkingDiscountJob,
+  policy: {
+    parkingPolicy: string;
+    requestedDiscountHours: number;
+    maxAutoDiscountHours: number;
+    discountUnitHours: number;
+  },
+): Promise<{ claimed: boolean; reason: string }> {
+  return await db.runTransaction(async (tx) => {
+    const currentSnap = await tx.get(ref);
+    const current = currentSnap.data() as ParkingDiscountJob | undefined;
+    if (!current || (current.status && current.status !== "pending")) {
+      return { claimed: false, reason: `job_status_${current?.status || "missing"}` };
+    }
+
+    let bookingIssue = "";
+    const bookingId = String(current.bookingId || job.bookingId || "");
+    let bookingRef: FirebaseFirestore.DocumentReference | null = null;
+    if (bookingId) {
+      bookingRef = db.collection("bookings").doc(bookingId);
+      const bookingSnap = await tx.get(bookingRef);
+      bookingIssue = currentParkingBookingIssue(current, bookingSnap.data() as BookingDoc | undefined);
+    }
+
+    if (bookingIssue) {
+      tx.set(
+        ref,
+        {
+          status: "manual_review",
+          reason: "booking_not_current",
+          lastError: bookingIssue,
+          retryable: false,
+          completedAt: FieldValue.serverTimestamp(),
+          updatedAt: FieldValue.serverTimestamp(),
+        },
+        { merge: true },
+      );
+      if (bookingRef) {
+        tx.set(
+          bookingRef,
+          {
+            parkingStatus: "manual_review",
+            parkingReason: "booking_not_current",
+            parkingLastError: bookingIssue,
+            parkingUpdatedAt: FieldValue.serverTimestamp(),
+          },
+          { merge: true },
+        );
+      }
+      return { claimed: false, reason: bookingIssue };
+    }
+
+    tx.set(
+      ref,
+      {
+        status: "running",
+        startedAt: FieldValue.serverTimestamp(),
+        updatedAt: FieldValue.serverTimestamp(),
+        attempts: FieldValue.increment(1),
+        lastError: null,
+        ...policy,
+      },
+      { merge: true },
+    );
+    return { claimed: true, reason: "" };
+  });
+}
+
+export function currentParkingBookingIssue(
+  job: ParkingDiscountJob,
+  booking: BookingDoc | undefined,
+  nowMs = Date.now(),
+): string {
+  if (!job.bookingId) return "";
+  if (!booking) return "연결 예약을 찾을 수 없습니다";
+  if (booking.appStatus !== "reserved") return `현재 예약 상태가 ${booking.appStatus || "unknown"}입니다`;
+  if (job.lessonDate && booking.lectureDate !== job.lessonDate) return "수업일이 변경되었습니다";
+  const jobStartMs = timestampMillis(job.lectureStartAt);
+  const bookingStartMs = timestampMillis(booking.lectureStartAt);
+  if (!jobStartMs || !bookingStartMs || jobStartMs !== bookingStartMs) return "수업 시작시각이 변경되었습니다";
+  if (nowMs < bookingStartMs + PARKING_APPLY_AFTER_START_MINUTES * 60 * 1000) {
+    return `수업 시작 ${PARKING_APPLY_AFTER_START_MINUTES}분 전에는 입차 조회를 실행하지 않습니다`;
+  }
+  const syncedAtMs = Math.max(
+    timestampMillis(booking.sourceUpdatedAt),
+    timestampMillis(booking.syncedAt),
+    timestampMillis(booking.updatedAt),
+  );
+  if (!syncedAtMs || nowMs - syncedAtMs > BOOKING_FRESHNESS_MS) return "StudioMate 예약 데이터가 24시간 이내 동기화되지 않았습니다";
+  return "";
+}
+
+function timestampMillis(value: unknown): number {
+  if (!value) return 0;
+  if (typeof (value as { toMillis?: unknown }).toMillis === "function") {
+    return (value as FirebaseFirestore.Timestamp).toMillis();
+  }
+  const parsed = Date.parse(String(value));
+  return Number.isFinite(parsed) ? parsed : 0;
 }
 
 async function notifyNoEntryOnce(

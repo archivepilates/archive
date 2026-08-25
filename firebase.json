@@ -151,6 +151,14 @@
           ]
         },
         {
+          "source": "/archivein/parking/**",
+          "headers": [
+            { "key": "Cache-Control", "value": "no-cache, no-store, must-revalidate" },
+            { "key": "Referrer-Policy", "value": "no-referrer" },
+            { "key": "X-Robots-Tag", "value": "noindex, nofollow, noarchive" }
+          ]
+        },
+        {
           "source": "/archivein/instructor-evaluation/**",
           "headers": [
             { "key": "Cache-Control", "value": "no-cache, no-store, must-revalidate" }
@@ -315,6 +323,13 @@
           }
         },
         {
+          "source": "/archivein/api/parkingPreRegistration",
+          "function": {
+            "functionId": "instructorLessonParkingPreRegistrationApi",
+            "region": "asia-northeast3"
+          }
+        },
+        {
           "source": "/archivein/private-chart/**",
           "destination": "/archivein/private-chart/index.html"
         },
@@ -329,6 +344,10 @@
         {
           "source": "/archivein/recommendedMealPlan/**",
           "destination": "/archivein/recommendedMealPlan/index.html"
+        },
+        {
+          "source": "/archivein/parking/**",
+          "destination": "/archivein/parking/index.html"
         },
         {
           "source": "/core/**",
@@ -538,6 +557,14 @@
           ]
         },
         {
+          "source": "/parking/**",
+          "headers": [
+            { "key": "Cache-Control", "value": "no-cache, no-store, must-revalidate" },
+            { "key": "Referrer-Policy", "value": "no-referrer" },
+            { "key": "X-Robots-Tag", "value": "noindex, nofollow, noarchive" }
+          ]
+        },
+        {
           "source": "/recommendedMealSurvey/**",
           "headers": [
             { "key": "Cache-Control", "value": "no-cache, no-store, must-revalidate" }
@@ -651,6 +678,13 @@
           }
         },
         {
+          "source": "/api/parkingPreRegistration",
+          "function": {
+            "functionId": "instructorLessonParkingPreRegistrationApi",
+            "region": "asia-northeast3"
+          }
+        },
+        {
           "source": "/private-chart/**",
           "destination": "/private-chart/index.html"
         },
@@ -665,6 +699,10 @@
         {
           "source": "/recommendedMealPlan/**",
           "destination": "/recommendedMealPlan/index.html"
+        },
+        {
+          "source": "/parking/**",
+          "destination": "/parking/index.html"
         },
         {
           "source": "/api/inbody/webhook",

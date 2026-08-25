@@ -839,6 +839,7 @@ async function templateVariables(candidate: AlimtalkCandidateDoc): Promise<Recor
     "#{접근토큰}": accessToken,
     "#{관리번호}": managementNumber,
     "#{링크ID}": shortLinkId,
+    "#{주차링크ID}": String(payload.parkingLinkId || ""),
     "#{리포트링크ID}": reportLinkId,
     "#{인바디링크ID}": inbodyLinkId,
   };

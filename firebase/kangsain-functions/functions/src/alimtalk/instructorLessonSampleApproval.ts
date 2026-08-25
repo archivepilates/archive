@@ -14,6 +14,11 @@ import { sendSolapiAlimtalk } from "./processAlimtalkQueue";
 import { rebuildAlimtalkCandidatesForRange } from "./rebuildAlimtalkCandidates";
 import { alimtalkDedupePolicy, INSTRUCTOR_LESSON_ALIMTALK_TEMPLATE_CODE } from "./templates";
 import { primaryAlimtalkTestRecipient } from "./testRecipients";
+import {
+  ensureInstructorLessonParkingPreviewShortLink,
+  instructorLessonParkingPreviewLinkId,
+} from "../parking/instructorLessonParkingPreRegistration";
+import { shortUrlForId } from "../utils/shortLinks";
 
 const APPROVAL_COLLECTION = "instructorLessonAlimtalkApprovals";
 const BOOKING_FRESHNESS_MS = 24 * 60 * 60 * 1000;
@@ -194,6 +199,7 @@ async function prepareInstructorLessonSampleApproval(input: {
   }
 
   const testRecipient = primaryAlimtalkTestRecipient();
+  await ensureInstructorLessonParkingPreviewShortLink();
   const sample = buildSampleCandidate(group.candidates[0], approvalId, testRecipient);
   const claimed = await db.runTransaction(async (tx) => {
     const snap = await tx.get(ref);
@@ -692,6 +698,7 @@ function buildSampleCandidate(
   recipient: ReturnType<typeof primaryAlimtalkTestRecipient>,
 ): AlimtalkCandidateDoc {
   const now = nowTimestamp();
+  const parkingLinkId = instructorLessonParkingPreviewLinkId();
   return {
     ...representative,
     candidateId: sampleCandidateId(approvalId),
@@ -708,6 +715,10 @@ function buildSampleCandidate(
       memberName: recipient.name,
       deliveryMode: "sample",
       approvalId,
+      parkingRequestId: "preview",
+      parkingAccessToken: "",
+      parkingLinkId,
+      parkingShortUrl: shortUrlForId(parkingLinkId),
     },
     attempts: 0,
     maxAttempts: 1,

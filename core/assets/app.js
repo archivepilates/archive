@@ -3066,11 +3066,14 @@ function renderParkingDashboard() {
                 ? `${result.totalSatisfiedHours || result.appliedHours || 0}/${item.requestedDiscountHours || 4}시간`
                 : "4시간 요청";
             const reason = item.lastError || item.reason || item.jobId || item.id;
+            const alertFailure = item.operatorAlertStatus === "failed"
+              ? ` · 확인메일 실패: ${item.operatorAlertLastError || "전송 결과 확인 필요"}`
+              : "";
             return `
               <div class="status-row">
                 <div>
                   <strong>${escapeHtml(name)} · 끝자리 ${escapeHtml(item.carNumberLast4 || "")}</strong>
-                  <p>${escapeHtml(hours)} · ${escapeHtml(formatDate(item.updatedAt || item.createdAt))}${reason ? ` · ${escapeHtml(reason)}` : ""}</p>
+                  <p>${escapeHtml(hours)} · ${escapeHtml(formatDate(item.updatedAt || item.createdAt))}${reason ? ` · ${escapeHtml(reason)}` : ""}${escapeHtml(alertFailure)}</p>
                 </div>
                 ${pill(item.status || "pending")}
               </div>

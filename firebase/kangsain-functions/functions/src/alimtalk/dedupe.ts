@@ -41,6 +41,10 @@ export async function findCompletedDuplicateForCandidate(
       }
     }
   }
+  if (candidate.type === "instructor_lesson_material") {
+    const sameLessonSend = await findInstructorLessonDuplicate(candidate, windowDays);
+    if (sameLessonSend) return sameLessonSend;
+  }
   if (!isTicketReminder(candidate)) return "";
 
   const cutoffMs = windowDays == null ? 0 : Date.now() - windowDays * 24 * 60 * 60 * 1000;
@@ -62,8 +66,35 @@ export async function findCompletedDuplicateForCandidate(
   return "";
 }
 
+async function findInstructorLessonDuplicate(
+  candidate: AlimtalkCandidateDoc,
+  windowDays: number | null,
+): Promise<string> {
+  const phone = normalizePhone(candidate.memberPhone);
+  if (!phone) return "";
+  const cutoffMs = windowDays == null ? 0 : Date.now() - windowDays * 24 * 60 * 60 * 1000;
+  const snap = await refs
+    .alimtalkSends()
+    .where("memberPhone", "==", candidate.memberPhone)
+    .where("status", "==", "done")
+    .limit(20)
+    .get();
+  const expectedScope = JSON.stringify(dedupeScope(candidate));
+  for (const sendDoc of snap.docs) {
+    const send = sendDoc.data();
+    const sentMs = send.createdAt?.toMillis?.() || send.updatedAt?.toMillis?.() || 0;
+    if (windowDays != null && sentMs && sentMs < cutoffMs) continue;
+    const previousCandidate = (await refs.alimtalkCandidate(send.candidateId || sendDoc.id).get()).data();
+    if (!previousCandidate || previousCandidate.type !== "instructor_lesson_material") continue;
+    if (JSON.stringify(dedupeScope(previousCandidate)) === expectedScope) return sendDoc.id;
+  }
+  return "";
+}
+
 export function alimtalkDedupeKey(candidate: AlimtalkCandidateDoc): string {
-  const versionIndependent = ["private_survey", "reservation_open"].includes(String(candidate.type));
+  const versionIndependent = ["private_survey", "reservation_open", "instructor_lesson_material"].includes(
+    String(candidate.type),
+  );
   const memberPhone = versionIndependent ? "" : normalizePhone(candidate.memberPhone);
   const templateCode = versionIndependent ? "" : candidate.templateCode;
   return stableHash({

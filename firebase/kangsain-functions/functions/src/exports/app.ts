@@ -17,7 +17,7 @@ import {
 import { submitBookingAttendanceHandler } from "../callable/submitBookingAttendance";
 import { submitMemberMemoHandler } from "../callable/submitMemberMemo";
 import { REGION } from "../config/constants";
-import { googleDwdServiceAccountJson } from "../config/secrets";
+import { googleDwdServiceAccountJson, privateSurveyWebhookSecret } from "../config/secrets";
 import {
   iparkingAccountPoolJson,
   iparkingLoginId,
@@ -40,6 +40,7 @@ import {
   saveRecommendedMealProgramDraftHandler,
 } from "../mealPlan/recommendedMealProgram";
 import { processParkingDiscountJobSnapshot } from "../parking/processParkingDiscountJob";
+import { instructorLessonParkingPreRegistrationApiHandler } from "../parking/instructorLessonParkingPreRegistration";
 import {
   callableOptions,
   publicRequestOptions,
@@ -74,6 +75,11 @@ const parkingDiscountJobOptions = {
   ],
   timeoutSeconds: 60,
   memory: "256MiB" as const,
+};
+
+const instructorLessonParkingRequestOptions = {
+  ...publicRequestOptions,
+  secrets: [privateSurveyWebhookSecret],
 };
 
 export const getInstructorHome = onCall(callableOptions, async (request) => {
@@ -231,6 +237,11 @@ export const instructorApplicantEvaluationApi = onRequest(
 export const recommendedMealSurveyApi = onRequest(publicRequestOptions, recommendedMealSurveyApiHandler);
 
 export const recommendedMealPlanApi = onRequest(publicRequestOptions, recommendedMealPlanApiHandler);
+
+export const instructorLessonParkingPreRegistrationApi = onRequest(
+  instructorLessonParkingRequestOptions,
+  instructorLessonParkingPreRegistrationApiHandler,
+);
 
 export const getRecommendedMealProgramReview = onCall(callableOptions, async (request) => {
   try {

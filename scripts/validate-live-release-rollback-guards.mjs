@@ -745,6 +745,7 @@ const guardGroups = [
           "수업 시작 30분 뒤",
           "입차 기록 조회는 작업당 1회만 수행합니다.",
           "주차등록 확인필요 메일을 1회 발송합니다.",
+          "확인메일 실패 상태와 오류를 표시합니다.",
           "오늘 자동적용 실행만 누락 복구를 위해 오늘 전체를 확인합니다.",
           "방문 차량은 일회성 등록이므로 차량번호와 선택 메모만 입력",
         ],
@@ -769,6 +770,88 @@ const guardGroups = [
           "[주차등록][확인필요] 입차기록 없음",
           'const PARKING_REPORT_LABEL = "주차등록 보고"',
           "자동 재조회는 실행하지 않습니다.",
+        ],
+      },
+      {
+        file: "core/assets/app.js",
+        markers: [
+          'item.operatorAlertStatus === "failed"',
+          "확인메일 실패:",
+        ],
+      },
+    ],
+  },
+  {
+    id: "instructor-lesson-parking-pre-registration",
+    reason:
+      "강사레슨 D-1 개인별 주차 링크, 수업일 전용 차량, 취소 재검증과 샘플 무저장 계약이 다른 배포에서 빠지는 것을 막습니다.",
+    files: [
+      {
+        file: "archivein/parking/index.html",
+        markers: [
+          "주차 사전등록",
+          'params.get("preview") === "1"',
+          "parkingPreRegistration",
+          "부산광역시 강서구 명지국제2로28번길 34 에코팰리스 704호",
+        ],
+      },
+      {
+        file: "firebase/kangsain-functions/functions/src/parking/instructorLessonParkingPreRegistration.ts",
+        markers: [
+          "INSTRUCTOR_LESSON_PARKING_COLLECTION",
+          'validDate: currentRequest.lessonDate',
+          'parkingVehicleId: vehicleId',
+          'parkingStatus: "pre_registered"',
+          "instructorLessonParkingTokenMatches",
+        ],
+      },
+      {
+        file: "firebase/kangsain-functions/functions/src/parking/processParkingDiscountJob.ts",
+        markers: [
+          "claimCurrentParkingJob",
+          "currentParkingBookingIssue",
+          'reason: "booking_not_current"',
+        ],
+      },
+      {
+        file: "firebase/kangsain-functions/functions/src/alimtalk/rebuildAlimtalkCandidates.ts",
+        markers: [
+          "attachInstructorLessonParkingPayload",
+          "upsertInstructorLessonParkingPreRegistration",
+          "parkingBookingIds",
+        ],
+      },
+      {
+        file: "firebase/kangsain-functions/functions/src/alimtalk/instructorLessonSampleApproval.ts",
+        markers: [
+          "ensureInstructorLessonParkingPreviewShortLink",
+          "instructorLessonParkingPreviewLinkId",
+        ],
+      },
+      {
+        file: "firebase.json",
+        markers: [
+          "/api/parkingPreRegistration",
+          "instructorLessonParkingPreRegistrationApi",
+          '"source": "/parking/**"',
+        ],
+      },
+      {
+        file: "scripts/create-instructor-lesson-parking-solapi-template.mjs",
+        markers: [
+          "Refusing to create a SOLAPI template without --apply.",
+          "강사레슨_수업자료 안내 v3",
+          "#{주차링크ID}",
+          "v2 remains active until v3 is APPROVED",
+        ],
+      },
+      {
+        file: "core/rules/index.html",
+        markers: [
+          "강사레슨 주차 사전등록",
+          "해당 수업일에만 유효",
+          "수업 시작 20분 후 닫고",
+          "저장되지 않는 전용 프리뷰 링크",
         ],
       },
     ],

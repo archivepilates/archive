@@ -163,6 +163,12 @@ export interface BookingDoc {
     reason: string;
     correctedAt: Timestamp;
   };
+  parkingPreRegistrationId?: string;
+  parkingVehicleId?: string;
+  parkingCarLast4?: string;
+  parkingStatus?: string;
+  parkingPreRegistrationStatus?: string;
+  parkingPreRegisteredAt?: Timestamp;
   memberTagIds: string[];
   lastMemoPreview: string;
   lastMemoAt: Timestamp | null;

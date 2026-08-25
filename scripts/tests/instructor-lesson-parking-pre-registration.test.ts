@@ -1,0 +1,110 @@
+import assert from "node:assert/strict";
+import fs from "node:fs";
+import test from "node:test";
+import type { BookingDoc } from "../../firebase/kangsain-functions/functions/src/types/models";
+import {
+  earliestIsoDateTime,
+  instructorLessonParkingAccessToken,
+  instructorLessonParkingAccessTokenHash,
+  instructorLessonParkingRequestId,
+  instructorLessonParkingTargetUrl,
+  instructorLessonParkingTokenMatches,
+  mergeParkingBookingIds,
+  normalizeParkingCarNumber,
+  parkingCarLast4,
+  parkingRegistrationCloseMs,
+  parkingVehicleId,
+  validParkingCarNumber,
+} from "../../firebase/kangsain-functions/functions/src/parking/instructorLessonParkingContract";
+import { currentParkingBookingIssue } from "../../firebase/kangsain-functions/functions/src/parking/processParkingDiscountJob";
+
+const startMs = Date.parse("2026-09-19T13:00:00+09:00");
+const timestamp = (ms: number) => ({ toMillis: () => ms }) as FirebaseFirestore.Timestamp;
+
+test("creates a stable recipient and lesson scoped capability token", () => {
+  const requestId = instructorLessonParkingRequestId({
+    memberId: "member-1",
+    lessonDate: "2026-09-19",
+    managementNumber: "external-feedback-260919",
+  });
+  const token = instructorLessonParkingAccessToken(requestId, "test-secret");
+  assert.match(requestId, /^ipr-[a-f0-9]{16}$/);
+  assert.match(token, /^[a-f0-9]{32}$/);
+  assert.equal(instructorLessonParkingTokenMatches(token, instructorLessonParkingAccessTokenHash(token)), true);
+  assert.equal(instructorLessonParkingTokenMatches(`${token.slice(0, -1)}0`, instructorLessonParkingAccessTokenHash(token)), false);
+  const url = new URL(instructorLessonParkingTargetUrl(requestId, token));
+  assert.equal(url.origin, "https://in.archivepilates.com");
+  assert.equal(url.pathname, "/parking/");
+  assert.equal(url.searchParams.get("id"), requestId);
+});
+
+test("merges two instructor lesson sessions and keeps the earliest start", () => {
+  assert.equal(mergeParkingBookingIds("booking-b,booking-a", "booking-a", "booking-c"), "booking-a,booking-b,booking-c");
+  assert.equal(
+    earliestIsoDateTime("2026-09-19T05:10:00.000Z", "2026-09-19T04:00:00.000Z"),
+    "2026-09-19T04:00:00.000Z",
+  );
+});
+
+test("accepts Korean vehicle numbers and closes registration before the one-time lookup", () => {
+  const carNumber = normalizeParkingCarNumber("241고-2299");
+  assert.equal(carNumber, "241고2299");
+  assert.equal(validParkingCarNumber(carNumber), true);
+  assert.equal(parkingCarLast4(carNumber), "2299");
+  assert.equal(parkingRegistrationCloseMs(startMs), Date.parse("2026-09-19T13:20:00+09:00"));
+});
+
+test("uses a lesson-date scoped vehicle id instead of a permanent member default", () => {
+  const firstDate = parkingVehicleId("member", "member-1_2026-09-19", "241고2299");
+  const nextDate = parkingVehicleId("member", "member-1_2026-09-20", "241고2299");
+  assert.notEqual(firstDate, nextDate);
+});
+
+test("blocks iParking lookup when the current booking was cancelled, moved, or stale", () => {
+  const job = {
+    bookingId: "booking-1",
+    lessonDate: "2026-09-19",
+    lectureStartAt: timestamp(startMs),
+  };
+  const current = {
+    bookingId: "booking-1",
+    appStatus: "reserved",
+    lectureDate: "2026-09-19",
+    lectureStartAt: timestamp(startMs),
+    syncedAt: timestamp(startMs - 60_000),
+  } as BookingDoc;
+  const lookupMs = startMs + 30 * 60_000;
+  assert.equal(currentParkingBookingIssue(job, current, lookupMs), "");
+  assert.match(currentParkingBookingIssue(job, { ...current, appStatus: "cancel" }, lookupMs), /cancel/);
+  assert.match(
+    currentParkingBookingIssue(job, { ...current, lectureStartAt: timestamp(startMs + 10 * 60_000) }, lookupMs),
+    /시작시각/,
+  );
+  assert.match(
+    currentParkingBookingIssue(
+      job,
+      {
+        ...current,
+        sourceUpdatedAt: timestamp(startMs - 25 * 60 * 60_000),
+        syncedAt: timestamp(startMs - 25 * 60 * 60_000),
+        updatedAt: timestamp(startMs - 25 * 60 * 60_000),
+      },
+      lookupMs,
+    ),
+    /24시간/,
+  );
+  assert.match(currentParkingBookingIssue(job, current, startMs + 29 * 60_000), /30분 전/);
+});
+
+test("public page never mirrors the pre-registered car into the permanent member profile", () => {
+  const source = fs.readFileSync(
+    new URL(
+      "../../firebase/kangsain-functions/functions/src/parking/instructorLessonParkingPreRegistration.ts",
+      import.meta.url,
+    ),
+    "utf8",
+  );
+  assert.match(source, /validDate: currentRequest\.lessonDate/);
+  assert.doesNotMatch(source, /defaultVehicleNumber/);
+  assert.doesNotMatch(source, /memberProfiles/);
+});
