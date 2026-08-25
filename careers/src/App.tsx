@@ -691,7 +691,7 @@ export default function App() {
             <div className="space-y-4 text-sm">
               <div className="flex items-start gap-3">
                 <MapPin size={18} className="text-primary-container shrink-0" />
-                <p>부산, 강서구 명지 <br /> 에코팰리스 704.</p>
+                <p>부산광역시 강서구 명지국제2로28번길 34 에코팰리스 704호</p>
               </div>
               <div className="flex items-center gap-3">
                 <Phone size={18} className="text-primary-container shrink-0" />
