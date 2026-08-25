@@ -10,7 +10,7 @@ Create a public privacy policy URL for Google OAuth / YouTube API verification a
 
 - Applicant legal name: 배민진
 - Organization name: ARCHIVE PILATES 명지점
-- Official organization address: 부산광역시 강서구 명지국제8로 265, 신화빌딩 6층
+- Official organization address: 부산광역시 강서구 명지국제2로28번길 34 에코팰리스 704호 (corrected 2026-08-25)
 - Privacy contact: home@archivepilates.com
 
 ## Implementation

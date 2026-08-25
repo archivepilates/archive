@@ -21,7 +21,7 @@
 - 9월 20일 관리번호: `external-feedback-260920`
 - 시간: `13:00~15:10`
 - 수업 구성: `민진T 리포머 + 폼롤러`, `은영T 바렐 + 토닝볼`
-- 장소: `ARCHIVE PILATES 명지`
+- 장소: `ARCHIVE PILATES 명지`, `부산광역시 강서구 명지국제2로28번길 34 에코팰리스 704호`
 - 상세 안내: `https://archivepilates.notion.site/lessons9`
 
 ## 구현 상태
