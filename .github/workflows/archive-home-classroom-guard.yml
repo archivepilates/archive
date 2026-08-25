@@ -6,22 +6,26 @@ on:
     paths:
       - ".github/workflows/archive-home-classroom-guard.yml"
       - "firebase.archive-home.json"
+      - "official-home/index.html"
       - "official-home/assets/imweb-my-classroom-20260723a.js"
       - "package.json"
       - "scripts/imweb/imweb-my-classroom-loader.html"
       - "scripts/validate-archive-home-classroom-asset.mjs"
       - "scripts/validate-archive-home-classroom-release-config.mjs"
+      - "scripts/validate-archive-home-address.mjs"
       - "scripts/validate-imweb-classroom-loader-fallback.mjs"
       - "scripts/verify-archive-home-classroom-live.mjs"
   push:
     paths:
       - ".github/workflows/archive-home-classroom-guard.yml"
       - "firebase.archive-home.json"
+      - "official-home/index.html"
       - "official-home/assets/imweb-my-classroom-20260723a.js"
       - "package.json"
       - "scripts/imweb/imweb-my-classroom-loader.html"
       - "scripts/validate-archive-home-classroom-asset.mjs"
       - "scripts/validate-archive-home-classroom-release-config.mjs"
+      - "scripts/validate-archive-home-address.mjs"
       - "scripts/validate-imweb-classroom-loader-fallback.mjs"
       - "scripts/verify-archive-home-classroom-live.mjs"
 
@@ -41,3 +45,6 @@ jobs:
 
       - name: Validate classroom release inputs
         run: npm run validate:archive-home-classroom
+
+      - name: Validate ARCHIVE PILATES address
+        run: npm run validate:archive-home-address

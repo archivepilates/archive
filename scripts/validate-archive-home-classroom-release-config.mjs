@@ -13,6 +13,10 @@ const hosting = firebaseConfig.hosting;
 assert(hosting?.site === "archive-pilates-home", "Unexpected Firebase Hosting site.");
 assert(hosting?.public === "official-home", "Unexpected Firebase Hosting public directory.");
 assert(
+  hosting.predeploy?.includes("npm run validate:archive-home-address"),
+  "ARCHIVE PILATES address predeploy guard is missing.",
+);
+assert(
   hosting.predeploy?.includes("npm run validate:archive-home-classroom"),
   "My Classroom predeploy guard is missing.",
 );
@@ -57,9 +61,11 @@ assert(
 
 [
   "firebase.archive-home.json",
+  "official-home/index.html",
   "official-home/assets/imweb-my-classroom-20260723a.js",
   "scripts/imweb/imweb-my-classroom-loader.html",
   "scripts/validate-archive-home-classroom-release-config.mjs",
+  "scripts/validate-archive-home-address.mjs",
   "scripts/validate-archive-home-classroom-asset.mjs",
   "scripts/validate-imweb-classroom-loader-fallback.mjs",
   "scripts/verify-archive-home-classroom-live.mjs",
@@ -72,6 +78,10 @@ assert(
 assert(
   workflow.includes("run: npm run validate:archive-home-classroom"),
   "GitHub classroom guard no longer runs the validation command.",
+);
+assert(
+  workflow.includes("run: npm run validate:archive-home-address"),
+  "GitHub classroom guard no longer validates the ARCHIVE PILATES address.",
 );
 
 console.log("Validated My Classroom release configuration.");

@@ -2,6 +2,7 @@
   "hosting": {
     "site": "archive-pilates-home",
     "predeploy": [
+      "npm run validate:archive-home-address",
       "npm run validate:archive-home-team",
       "npm run validate:archive-home-classroom",
       "npm run validate:video-sales-growth"
