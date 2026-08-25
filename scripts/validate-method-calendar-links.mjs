@@ -5,9 +5,7 @@ const root = resolve(import.meta.dirname, "..");
 const methodRoot = join(root, "archivein", "method");
 const expectedAddress = "부산광역시 강서구 명지국제2로28번길 34 에코팰리스 704호";
 const expectedLocation = `ARCHIVE PILATES 명지, ${expectedAddress}`;
-const expectedDetailUrl =
-  "https://archivepilates.notion.site/9-3c5d49eae4bf801f8b82c9106ee4ce11";
-const staleDetailUrls = ["https://archivepilates.notion.site/lessons9"];
+const forbiddenDetailHost = "archivepilates.notion.site";
 const failures = [];
 let validated = 0;
 
@@ -56,12 +54,8 @@ for (const entry of readdirSync(methodRoot)) {
   if (!html.includes(`dates=${year}${month}${day}T040000Z%2F${year}${month}${day}T061000Z`)) {
     fail(htmlFile, "Google Calendar dates must match 13:00-15:10 KST");
   }
-  if (!html.includes(expectedDetailUrl)) {
-    fail(htmlFile, "September detail link is missing");
-  }
-  for (const staleUrl of staleDetailUrls) {
-    if (html.includes(staleUrl)) fail(htmlFile, `stale detail link remains: ${staleUrl}`);
-  }
+  if (html.includes("상세 안내 보기")) fail(htmlFile, "detail button must not be present");
+  if (html.includes(forbiddenDetailHost)) fail(htmlFile, "Notion detail link must not be present");
   if (!html.includes(expectedAddress)) {
     fail(htmlFile, "ARCHIVE PILATES address is missing or stale");
   }
@@ -77,8 +71,8 @@ for (const entry of readdirSync(methodRoot)) {
     if (googleUrl.searchParams.get("location") !== expectedLocation) {
       fail(htmlFile, "Google Calendar location is missing or stale");
     }
-    if (!String(googleUrl.searchParams.get("details") || "").includes(expectedDetailUrl)) {
-      fail(htmlFile, "Google Calendar detail link is missing or stale");
+    if (String(googleUrl.searchParams.get("details") || "").includes(forbiddenDetailHost)) {
+      fail(htmlFile, "Google Calendar details must not include the Notion detail page");
     }
   }
 
@@ -101,11 +95,8 @@ for (const entry of readdirSync(methodRoot)) {
   if (!unfoldedIcs.includes(`LOCATION:${expectedIcsLocation}`)) {
     fail(icsFile, "calendar location is missing or stale");
   }
-  if (!unfoldedIcs.includes(`URL:${expectedDetailUrl}`)) {
-    fail(icsFile, "calendar detail link is missing or stale");
-  }
-  for (const staleUrl of staleDetailUrls) {
-    if (unfoldedIcs.includes(staleUrl)) fail(icsFile, `stale detail link remains: ${staleUrl}`);
+  if (unfoldedIcs.includes(forbiddenDetailHost)) {
+    fail(icsFile, "calendar must not include the Notion detail page");
   }
 
   if (icsBuffer.includes(Buffer.from("\n")) && /(^|[^\r])\n/.test(ics)) {

@@ -10,7 +10,9 @@
 - 강사레슨 D-1 수업자료 샘플 승인 절차를 예약확정 알림톡에는 적용하지 않는다.
 - 관리번호는 실제 수업일을 포함한 `영문주제-YYMMDD` 형식을 사용한다.
 - `캘린더에 일정 추가` 버튼은 `https://in.archivepilates.com/method/#{관리번호}/calendar/`로 연결한다.
-- 날짜별 랜딩 페이지는 해당 날짜의 `.ics`, Google Calendar, 상세 안내 링크를 제공한다.
+- 날짜별 랜딩 페이지는 해당 날짜의 `.ics`와 Google Calendar 저장만 제공한다.
+- 모집용 월별 상세 안내는 예약확정 알림톡과 캘린더 랜딩 페이지에 반복 노출하지 않는다.
+- `방문안내 보기`는 월별 복제본이 아닌 공통 강사레슨 방문안내 공개 페이지로 연결한다.
 - `.ics`와 Google Calendar의 날짜, 시간, 장소, 수업 구성이 서로 일치해야 한다.
 - 발송 전 랜딩 페이지와 `.ics`가 모두 HTTP 200인지 확인한다.
 - 예약확정 중복키는 정규화한 휴대폰번호, 실제 수업일, 관리번호, 템플릿으로 구성하고 성공 이력이 있으면 다시 발송하지 않는다.
@@ -22,14 +24,14 @@
 - 시간: `13:00~15:10`
 - 수업 구성: `민진T 리포머 + 폼롤러`, `은영T 바렐 + 토닝볼`
 - 장소: `ARCHIVE PILATES 명지`, `부산광역시 강서구 명지국제2로28번길 34 에코팰리스 704호`
-- 상세 안내 공개 원본: `https://archivepilates.notion.site/9-3c5d49eae4bf801f8b82c9106ee4ce11`
-- 알림톡 `#{안내링크}` 값: `archivepilates.notion.site/9-3c5d49eae4bf801f8b82c9106ee4ce11` (`https://`는 템플릿에 포함)
+- 상세 안내 버튼: 사용하지 않음
+- 방문 안내: `https://archivepilates.notion.site/3c7d49eae4bf8190b39de97d513dac6b`
 
 ## 구현 상태
 
 - `implemented`: 날짜별 캘린더 랜딩 페이지와 `.ics` 파일을 소스에 추가했다.
 - `deployed`: 2026-08-25 ARCHIVE IN, ARCHIVE CORE와 루트 미러 Hosting에 반영했다.
-- `verified`: 9월 19일·20일 랜딩 페이지와 `.ics`가 사용자 도메인 및 Firebase 기본 도메인에서 HTTP 200으로 응답한다. `.ics`의 `text/calendar` MIME, 날짜·시간·장소, Google Calendar 링크와 320px~1280px 반응형 화면을 확인했다. 9월 상세 안내는 Notion API가 반환한 현재 `public_url`을 사용한다.
+- `verified`: 9월 19일·20일 랜딩 페이지와 `.ics`가 사용자 도메인 및 Firebase 기본 도메인에서 HTTP 200으로 응답한다. `.ics`의 `text/calendar` MIME, 날짜·시간·장소, Google Calendar 링크와 320px~1280px 반응형 화면을 확인했다. 예약확정 흐름에서 월별 상세 안내 링크를 제거했다.
 - `pending`: SOLAPI `강사레슨_예약확정 안내 v1`은 검수 완료 후 김기효 1인 테스트로 최종 확인한다.
 - 마지막 갱신: 2026-08-25
 - 다음 작업: 템플릿 승인 확인 후 중복 이력을 점검하고 9월 19일 기준 테스트 1건을 발송한다.

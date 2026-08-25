@@ -393,19 +393,15 @@
 
 - SOLAPI 이름: `강사레슨_예약확정 안내 v1`
 - 템플릿 코드: `BGkEFYD8dX`
-- 2026-08-24 현재 상태: `검수진행중`
-- 변수: `이름`, `수업일`, `수업시간`, `수업구성`, `관리번호`, `안내링크`
+- 2026-08-25 현재 상태: `검수진행중`
+- 변수: `이름`, `수업일`, `수업시간`, `수업구성`, `관리번호`
 
 버튼 URL:
 
 - `캘린더에 일정 추가`: `https://in.archivepilates.com/method/#{관리번호}/calendar/`
-- `상세 안내 보기`: `https://#{안내링크}`
-- `방문안내 보기`: `https://www.notion.so/367d49eae4bf811ca3daea273ed278c8`
+- `방문안내 보기`: `https://archivepilates.notion.site/3c7d49eae4bf8190b39de97d513dac6b`
 
-2026년 9월 `안내링크` 값:
-
-- `archivepilates.notion.site/9-3c5d49eae4bf801f8b82c9106ee4ce11`
-- `archivepilates.notion.site/lessons9`는 현재 Notion Site에서 해석되지 않으므로 사용하지 않는다.
+월별 상세 안내 페이지는 모집·신청 단계에서만 사용하며 예약확정 알림톡에는 넣지 않는다.
 
 발송 전 확인:
 
