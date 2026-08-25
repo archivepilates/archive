@@ -402,6 +402,11 @@
 - `상세 안내 보기`: `https://#{안내링크}`
 - `방문안내 보기`: `https://www.notion.so/367d49eae4bf811ca3daea273ed278c8`
 
+2026년 9월 `안내링크` 값:
+
+- `archivepilates.notion.site/9-3c5d49eae4bf801f8b82c9106ee4ce11`
+- `archivepilates.notion.site/lessons9`는 현재 Notion Site에서 해석되지 않으므로 사용하지 않는다.
+
 발송 전 확인:
 
 - 실제 StudioMate 예약의 수업일과 `영문주제-YYMMDD` 관리번호 날짜를 일치시킨다.
