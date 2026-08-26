@@ -14,7 +14,8 @@
 - `implemented`: ARCHIVE CORE 관리자 전용 `영상 시청 현황` 화면과 7/30/90일 조회
 - `implemented`: 상세 이벤트 180일, 세션 요약 1년, rate-limit 2일 TTL 선언
 - `implemented`: 개인정보처리방침과 ARCHIVE CORE 운영규칙 반영
-- `pending`: Functions, Firestore TTL, ARCHIVE CORE, 개인정보처리방침, 아임웹 body 추적기 운영 배포
+- `deployed`: `videoWatchEventApi`, `getVideoWatchDashboard`, 세 컬렉션 TTL, ARCHIVE CORE, 개인정보처리방침
+- `deployed`: CORE 정적 추적기와 아임웹 body 외부 로더. 기존 body 스크립트 19개를 보존하고 로더 1개만 추가했다.
 
 ## 데이터 정책
 
@@ -32,8 +33,9 @@
 1. Functions app codebase에서 `videoWatchEventApi`, `getVideoWatchDashboard`만 배포한다.
 2. Firestore의 세 컬렉션 `expiresAt` TTL을 배포하고 활성 상태를 확인한다.
 3. ARCHIVE CORE와 개인정보처리방침 Hosting을 배포한다.
-4. `npm run prepare:imweb-video-watch-tracker`로 현재 body 스크립트 보존 여부와 dry-run을 확인한다.
-5. 현재 CLI body 조회가 약 63KB에서 잘리므로 운영 반영은 인증된 아임웹 관리자 스크립트 편집기에서 기존 내용을 보존한 채 추적기 한 블록만 추가한다. CLI 전체 readback이 복구된 경우에만 `--apply`를 허용한다.
+4. 추적기 본체는 `core/assets/imweb-video-watch-tracker-20260826.js`로 배포하고 공개 파일 해시를 확인한다.
+5. `npm run prepare:imweb-video-watch-tracker`로 기존 body 스크립트를 보존한 외부 로더를 준비한다. 현재 CLI read 출력이 64KB에서 잘리고 전체 스크립트는 로컬 50건 한도를 넘으므로, 공식 dry-run의 대상·본문·차단점 확인 후 같은 OpenAPI 요청으로 반영한다.
+6. 공개 아임웹 HTML에서 기존 마커 19개, 추적기 로더 1개, CORE 정적 파일 URL을 다시 확인한다.
 
 ## 운영 검증
 
@@ -45,16 +47,21 @@
 - ARCHIVE CORE 관리자: 마스킹된 구매자 단위와 영상별 집계만 조회
 - 적용 전 과거 시청 이력은 복원하거나 추정하지 않음
 
-## 로컬 검증 결과
+## 검증 결과
 
-- `npm run test:video-watch-analytics`: 7개 테스트 통과
+- `npm run test:video-watch-analytics`: 8개 테스트 통과
 - Functions TypeScript 빌드 및 전체 Functions 코드베이스 빌드 통과
 - Functions 소유 경계와 ARCHIVE IN 데이터 원천 정책 검증 통과
 - ARCHIVE CORE Hosting 구성 검증 통과
 - 15개 ARCHIVE CORE 화면을 320, 390, 768, 1440, 1920px에서 검사한 80개 반응형 조합 통과
-- 아임웹 추적기 준비 결과: 기존 body 스크립트 보존 확인, 추적기 1개 병합 확인, CLI 잘림으로 운영 쓰기 차단
-- 운영 데이터 쓰기, Functions 배포, Hosting 배포, 아임웹 스크립트 적용은 실행하지 않음
+- Functions 두 개 `ACTIVE`, 허용 Origin CORS 204, 잘못된 요청 400, 비허용 Origin 403, 비로그인 관리자 호출 401 확인
+- Firestore TTL 세 개 `ACTIVE`, 세션 조회 인덱스 `READY` 확인
+- ARCHIVE CORE와 개인정보처리방침의 사용자 도메인·Firebase 도메인 HTTP 200 및 390/1440px 화면 검증 통과
+- CORE 추적기 정적 파일은 배포본과 소스 SHA-256 일치 확인
+- 아임웹 공개 HTML에서 기존 스크립트 마커 19개와 새 추적기 로더 1개를 확인했고, 인라인 중복 추적기는 없음
+- 유효한 합성 시청 이벤트는 운영 데이터에 만들지 않았다. 첫 실제 구매자 재생부터 집계한다.
 
-## 현재 차단점
+## 남은 운영 확인
 
-- 개인정보 수집 시작과 운영 배포는 별도 go-live 승인 후 진행한다.
+- 구매 회원의 실제 첫 재생 후 ARCHIVE CORE 관리자 화면에서 세션 1건이 집계되는지 확인한다.
+- 관리자 계정 외 역할의 로그인 후 차단 화면은 운영 계정을 가장하지 않고 별도 테스트 계정으로 확인한다.
