@@ -285,6 +285,16 @@ const required = [
       "Analytics failure must never interrupt playback",
     ],
   },
+  {
+    file: "core/assets/imweb-video-watch-tracker-20260826.js",
+    label: "deployed paid video watch tracker asset",
+    markers: [
+      "archive-method-watch-",
+      "window.MEMBER_HASH",
+      "videoWatchEventApi",
+      "Analytics failure must never interrupt playback",
+    ],
+  },
 ];
 
 const failures = [];

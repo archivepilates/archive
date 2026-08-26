@@ -8,9 +8,11 @@ const __dirname = path.dirname(fileURLToPath(import.meta.url));
 const EXPECTED_SITE_CODE = "S20260516852c71a014d08";
 const TRACKER_VERSION = "2026-08-26.1";
 const TRACKER_ATTRIBUTE = "data-archive-pilates-video-watch-tracker";
+const TRACKER_ASSET_URL =
+  "https://core.archivepilates.com/assets/imweb-video-watch-tracker-20260826.js?v=20260826a";
 
-export function mergeVideoWatchTracker(currentContent, trackerSource) {
-  const wrapped = `<script ${TRACKER_ATTRIBUTE}="${TRACKER_VERSION}">\n${trackerSource.trim()}\n</script>`;
+export function mergeVideoWatchTracker(currentContent) {
+  const wrapped = `<script ${TRACKER_ATTRIBUTE}="${TRACKER_VERSION}" src="${TRACKER_ASSET_URL}"></script>`;
   const pattern = new RegExp(
     `<script\\b[^>]*${TRACKER_ATTRIBUTE}=(?:"[^"]*"|'[^']*'|[^\\s>]+)[^>]*>[\\s\\S]*?<\\/script>\\s*`,
     "gi",
@@ -118,8 +120,7 @@ async function main() {
   }
 
   const current = await readBodyScript();
-  const trackerSource = fs.readFileSync(path.join(__dirname, "imweb-video-watch-tracker.js"), "utf8");
-  const scriptContent = mergeVideoWatchTracker(current.scriptContent, trackerSource);
+  const scriptContent = mergeVideoWatchTracker(current.scriptContent);
   if (countVideoWatchTrackers(scriptContent) !== 1) {
     throw new Error("The prepared body script must contain exactly one video watch tracker.");
   }

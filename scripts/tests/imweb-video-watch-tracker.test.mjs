@@ -7,6 +7,14 @@ import {
 } from "../prepare-imweb-video-watch-tracker.mjs";
 
 const source = fs.readFileSync(new URL("../imweb-video-watch-tracker.js", import.meta.url), "utf8");
+const deployedSource = fs.readFileSync(
+  new URL("../../core/assets/imweb-video-watch-tracker-20260826.js", import.meta.url),
+  "utf8",
+);
+
+test("CORE serves the exact tracker source used by the Imweb loader", () => {
+  assert.equal(deployedSource, source);
+});
 
 test("tracker is restricted to paid watch pages and an embedded YouTube player", () => {
   assert.match(source, /archive-method-watch-/);
@@ -53,5 +61,10 @@ test("body script merge preserves unrelated scripts and replaces the tracker ide
   assert.ok(mergedTwice.includes("window.existingOne = true"));
   assert.ok(mergedTwice.includes("window.existingTwo = true"));
   assert.ok(!mergedTwice.includes("window.oldTracker = true"));
+  assert.match(
+    mergedTwice,
+    /src="https:\/\/core\.archivepilates\.com\/assets\/imweb-video-watch-tracker-20260826\.js\?v=20260826a"/,
+  );
+  assert.ok(!mergedTwice.includes("archivePilatesVideoWatchTracker"));
   assert.equal(mergedTwice, mergedOnce);
 });
