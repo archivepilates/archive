@@ -1394,6 +1394,7 @@ async function markDuplicateSkipped(candidate: AlimtalkCandidateDoc, dedupeKey: 
       ...candidate,
       dedupeKey,
       status: "skipped",
+      reasonCode: "duplicate_send_blocked",
       lastError: reason,
       createdAt: previous?.createdAt || candidate.createdAt,
       updatedAt: nowTimestamp(),

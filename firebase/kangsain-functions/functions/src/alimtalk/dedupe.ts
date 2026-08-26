@@ -6,12 +6,7 @@ import { isAlimtalkTestRecipient } from "./testRecipients";
 
 export async function findCompletedDuplicate(dedupeKey: string, windowDays: number | null): Promise<string> {
   if (!dedupeKey) return "";
-  const snap = await refs
-    .alimtalkSends()
-    .where("dedupeKey", "==", dedupeKey)
-    .where("status", "==", "done")
-    .limit(1)
-    .get();
+  const snap = await refs.alimtalkSends().where("dedupeKey", "==", dedupeKey).where("status", "==", "done").get();
   const cutoffMs = windowDays == null ? 0 : Date.now() - windowDays * 24 * 60 * 60 * 1000;
   const duplicate = snap.docs.find((doc) => {
     if (windowDays == null) return true;
@@ -53,7 +48,6 @@ export async function findCompletedDuplicateForCandidate(
     .where("memberPhone", "==", candidate.memberPhone)
     .where("templateCode", "==", candidate.templateCode)
     .where("status", "==", "done")
-    .limit(20)
     .get();
   for (const sendDoc of snap.docs) {
     const send = sendDoc.data();
@@ -77,7 +71,6 @@ async function findInstructorLessonDuplicate(
     .alimtalkSends()
     .where("memberPhone", "==", candidate.memberPhone)
     .where("status", "==", "done")
-    .limit(20)
     .get();
   const expectedScope = JSON.stringify(dedupeScope(candidate));
   for (const sendDoc of snap.docs) {

@@ -1,0 +1,77 @@
+<!doctype html>
+<html lang="ko">
+  <head>
+    <meta charset="utf-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1" />
+    <title>알림톡 중복 발송 점검 · 2026-08-26</title>
+    <style>
+      * { box-sizing: border-box; }
+      body { margin: 0; background: #f7f5f1; color: #20201f; font-family: -apple-system, BlinkMacSystemFont, "Apple SD Gothic Neo", sans-serif; }
+      main { width: min(760px, calc(100% - 32px)); margin: 48px auto; }
+      header { border-bottom: 2px solid #20201f; padding-bottom: 24px; }
+      .eyebrow { margin: 0 0 10px; color: #be3b32; font-size: 13px; font-weight: 700; }
+      h1 { margin: 0; font-size: 30px; letter-spacing: 0; }
+      .summary { margin: 16px 0 0; color: #5d5b57; line-height: 1.65; }
+      section { padding: 26px 0; border-bottom: 1px solid #d9d5cf; }
+      h2 { margin: 0 0 14px; font-size: 19px; }
+      p, li { font-size: 15px; line-height: 1.7; }
+      ul { margin: 0; padding-left: 20px; }
+      .metrics { display: grid; grid-template-columns: repeat(3, minmax(0, 1fr)); gap: 10px; }
+      .metric { min-width: 0; border: 1px solid #d9d5cf; background: #fff; padding: 16px; }
+      .metric strong { display: block; margin-bottom: 6px; font-size: 25px; }
+      .metric span { color: #686560; font-size: 13px; }
+      code { overflow-wrap: anywhere; color: #9d3029; }
+      .status { display: inline-block; margin-top: 18px; border: 1px solid #d09a94; padding: 8px 10px; color: #8b2b25; font-size: 13px; font-weight: 700; }
+      @media (max-width: 560px) {
+        main { margin: 28px auto; }
+        .metrics { grid-template-columns: 1fr; }
+        h1 { font-size: 25px; }
+      }
+    </style>
+  </head>
+  <body>
+    <main>
+      <header>
+        <p class="eyebrow">ARCHIVE PILATES · ALIMTALK INCIDENT</p>
+        <h1>알림톡 중복 발송 점검</h1>
+        <p class="summary">중복 금지 정책은 삭제되지 않았으나, 기간형 성공 이력 조회가 오래된 1건만 선택해 최신 발송을 놓치는 결함을 확인했습니다.</p>
+        <span class="status">수정·검증 완료 / 운영 배포 전</span>
+      </header>
+      <section>
+        <h2>라이브 확인 결과</h2>
+        <div class="metrics">
+          <div class="metric"><strong>3명</strong><span>일반 회원 영향</span></div>
+          <div class="metric"><strong>4건</strong><span>14일 내 중복 발송</span></div>
+          <div class="metric"><strong>1종</strong><span>장기 미방문 안내</span></div>
+        </div>
+        <p>최근 90일 성공 발송 2,040건을 읽기 전용으로 대조했습니다. 운영자 테스트 수신자의 의도된 반복 테스트 1건은 일반 회원 영향에서 제외했습니다.</p>
+      </section>
+      <section>
+        <h2>원인</h2>
+        <ul>
+          <li><code>dedupeKey + done</code> 조회에 정렬 없는 <code>limit(1)</code>이 적용되어 있었습니다.</li>
+          <li>5월 또는 6월의 오래된 발송이 먼저 선택되면 14일 범위를 벗어난 것으로 판단했고, 8월의 최신 발송이 같은 키에 있어도 확인하지 않았습니다.</li>
+          <li>김기효 테스트 계정 예외가 일반 회원으로 확장된 문제는 아니었습니다.</li>
+        </ul>
+      </section>
+      <section>
+        <h2>수정</h2>
+        <ul>
+          <li>같은 키의 모든 성공 이력을 확인해 정책 기간 안의 발송이 하나라도 있으면 차단합니다.</li>
+          <li>수강권 알림과 강사레슨 보조 조회의 임의 20건 제한도 제거했습니다.</li>
+          <li>후보 생성 단계의 차단 기록에 <code>duplicate_send_blocked</code> 사유 코드를 남깁니다.</li>
+        </ul>
+      </section>
+      <section>
+        <h2>검증</h2>
+        <ul>
+          <li>회귀 테스트 3건 통과</li>
+          <li>전체 Functions 코드베이스 빌드 통과</li>
+          <li>Functions 경계, 데이터 원천 정책, GCP 비용 가드 통과</li>
+          <li>영향 회원 3명의 실제 키를 수정 코드로 재판정해 모두 차단됨을 확인</li>
+          <li>점검 중 후보 변경, 큐 실행, 실발송 없음</li>
+        </ul>
+      </section>
+    </main>
+  </body>
+</html>
