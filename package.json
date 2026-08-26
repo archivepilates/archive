@@ -57,6 +57,8 @@
     "deploy:archivein-live": "bash scripts/deploy-archivein-live.sh",
     "process:admin-emergency-sync": "node scripts/process-admin-emergency-sync-requests.mjs",
     "validate:archive-core-hosting": "node scripts/validate-archive-core-hosting-deploy.mjs",
+    "test:video-watch-analytics": "firebase/kangsain-functions/functions/node_modules/.bin/tsx --test scripts/tests/video-watch-analytics.test.ts && node --test scripts/tests/imweb-video-watch-tracker.test.mjs",
+    "prepare:imweb-video-watch-tracker": "node scripts/prepare-imweb-video-watch-tracker.mjs",
     "validate:monthly-settlement-compensation": "node --test scripts/tests/monthly-settlement-compensation.test.mjs scripts/tests/monthly-settlement-rate-policy.test.mjs",
     "validate:ticket-liability-price": "node --test scripts/tests/ticket-liability-price-policy.test.mjs",
     "verify:archive-core-responsive": "node scripts/verify-archive-core-responsive.mjs",

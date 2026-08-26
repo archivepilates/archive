@@ -97,6 +97,9 @@ const required = [
       "queueRefundStudioMateSms",
       "handleRefundSmsSend",
       "renderRefundCases",
+      "getVideoWatchDashboard",
+      "renderVideoWatchDashboard",
+      "videoWatchRangeDays",
     ],
   },
   {
@@ -196,6 +199,20 @@ const required = [
     markers: ["instructorEvaluationQuizForm", "evaluationQuizQuestions", "평가 퀴즈 제출"],
   },
   {
+    file: "core/video-analytics/index.html",
+    label: "paid video watch analytics dashboard",
+    markers: [
+      "영상 시청 현황",
+      "data-video-watch-dashboard",
+      "videoWatchRange",
+      "videoWatchVideoTableBody",
+      "videoWatchBuyerList",
+      "videoWatchRecentList",
+      "30분 동안 활동이 없으면",
+      "구매와 권한에는 영향을 주지 않는",
+    ],
+  },
+  {
     file: "core/assets/styles.css",
     label: "stable KPI card sizing",
     markers: [
@@ -217,6 +234,9 @@ const required = [
       ".refund-stepper",
       ".refund-ticket-option",
       ".refund-amount-grid",
+      ".video-watch-kpis",
+      ".video-watch-trend",
+      ".video-watch-progress",
     ],
   },
   {
@@ -234,8 +254,36 @@ const required = [
       "2026-08-22 비용 최적화",
       "환불 안내·동의서",
       "refundCases",
+      "구매 영상 시청 분석",
+      "videoWatchEvents",
+      "videoWatchSessions",
+      "상세 이벤트는 180일",
     ],
     patterns: [{ pattern: /\d{4}\.\d{2}\.\d{2} 기준/, label: "current rules date" }],
+  },
+  {
+    file: "privacy/index.html",
+    label: "paid video watch privacy disclosure",
+    markers: [
+      "2026년 8월 26일",
+      "구매 영상 시청 분석",
+      "가명 처리된 회원 식별값",
+      "구매 영상 상세 시청 이벤트: 수집일로부터 180일",
+      "구매 영상 시청 세션 요약: 수집일로부터 1년",
+      "구매·권한·환불 여부를 자동 결정하거나 광고 및 자동 메시지 발송 대상을 정하는 데 사용하지 않습니다",
+    ],
+  },
+  {
+    file: "scripts/imweb-video-watch-tracker.js",
+    label: "fail-open paid video watch tracker",
+    markers: [
+      "archive-method-watch-",
+      "window.MEMBER_HASH",
+      "SHA-256",
+      "enablejsapi",
+      "progress_${milestone}",
+      "Analytics failure must never interrupt playback",
+    ],
   },
 ];
 
@@ -381,6 +429,23 @@ if (/KA\d{2}TP[0-9A-Za-z]+/.test(coreRulesSource)) {
 }
 
 const firebaseConfig = JSON.parse(fs.readFileSync(path.join(repoRoot, "firebase.json"), "utf8"));
+const firestoreIndexes = JSON.parse(
+  fs.readFileSync(path.join(repoRoot, "firebase/kangsain-functions/firestore.indexes.json"), "utf8"),
+);
+const ttlCollectionGroups = new Set(
+  (firestoreIndexes.fieldOverrides || [])
+    .filter((entry) => entry.fieldPath === "expiresAt" && entry.ttl === true)
+    .map((entry) => entry.collectionGroup),
+);
+for (const collectionGroup of ["videoWatchEvents", "videoWatchSessions", "videoWatchRateLimits"]) {
+  if (!ttlCollectionGroups.has(collectionGroup)) {
+    failures.push({
+      file: "firebase/kangsain-functions/firestore.indexes.json",
+      label: "paid video watch data retention",
+      missing: `${collectionGroup}.expiresAt TTL`,
+    });
+  }
+}
 const coreHostingConfig = (firebaseConfig.hosting || []).find((entry) => entry.site === "archive-pilates-core");
 const coreHeaders = coreHostingConfig?.headers || [];
 const headerPolicy = new Map(

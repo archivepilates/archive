@@ -1,5 +1,5 @@
 const FIREBASE_APP_VERSION = "10.14.1";
-const CORE_RUNTIME_CONTRACT_VERSION = "2026-08-21.1";
+const CORE_RUNTIME_CONTRACT_VERSION = "2026-08-26.1";
 const WORK_LANE_ID = "archive-core-transition";
 const STUDIO_ID = "5330";
 
@@ -92,6 +92,7 @@ const state = {
   deletedClassLogs: [],
   deletedLessons: [],
   instagramDashboard: null,
+  videoWatchDashboard: null,
   lane: null,
   authReady: null,
   memberDirectoryLoadPromise: null,
@@ -106,6 +107,7 @@ let memberPage = 1;
 let selectedStaffKey = "";
 let selectedMealRequestId = "";
 let mealQueueFilter = "active";
+let videoWatchRangeDays = 30;
 let refundFlow = { candidates: [], member: null, tickets: [], selectedTicket: null, preview: null };
 
 const MEMBER_PAGE_SIZE = 20;
@@ -164,6 +166,12 @@ const COMMAND_ITEMS = [
     detail: "게시물 초안, 승인, 예약 발행, 성과 확인",
     href: "./content/",
     keywords: "instagram 인스타그램 콘텐츠 게시물 릴스 예약 발행",
+  },
+  {
+    title: "영상 시청 현황",
+    detail: "구매자별 반복 시청, 영상별 도달률과 누적 재생시간 확인",
+    href: "./video-analytics/",
+    keywords: "video 영상 시청 구매자 반복 재생 완료율",
   },
   {
     title: "자동화 관제",
@@ -444,6 +452,9 @@ function sourceAgeText(value) {
 }
 
 function currentReadRequirements() {
+  if (qs("videoWatchVideoTableBody")) {
+    return [{ label: "videoWatchDashboard", title: "영상 시청 기록", staleAfterHours: null }];
+  }
   if (qs("lessonsTodayList")) return [{ label: "bookings", title: "예약 원본", staleAfterHours: 30 }];
   if (qs("membersTable")) {
     return [
@@ -698,6 +709,7 @@ const NAV_ICONS = {
   staff: "M12 12a4 4 0 1 0 0-8 4 4 0 0 0 0 8M4 21a8 8 0 0 1 16 0M17.5 7.5l1.5 1.5 3-3",
   messages: "M4 6h16v11H8l-4 3V6zM8 10h8M8 14h5",
   content: "M5 4h14v16H5zM8 8h8M8 12h5M8 16h7M16.5 15.5l2.5 2.5",
+  "video-analytics": "M4 6h16v12H4zM10 9l5 3-5 3z",
   automation: "M12 3v4M12 17v4M4.9 4.9l2.8 2.8M16.3 16.3l2.8 2.8M3 12h4M17 12h4M4.9 19.1l2.8-2.8M16.3 7.7l2.8-2.8M9 12a3 3 0 1 0 6 0 3 3 0 0 0-6 0",
   business: "M4 19h16M6 16V9M12 16V5M18 16v-7",
   imports: "M12 3v11M7 9l5 5 5-5M5 19h14",
@@ -725,6 +737,7 @@ const NAV_LABELS = {
   staff: "강사",
   messages: "알림톡",
   content: "콘텐츠",
+  "video-analytics": "영상 시청",
   automation: "자동화",
   business: "경영",
   imports: "원본",
@@ -760,6 +773,15 @@ function enhanceNav() {
     link.dataset.section = "refunds";
     link.innerHTML = "Refund <small>환불</small>";
     const before = nav.querySelector('[data-section="messages"]');
+    nav.insertBefore(link, before || null);
+  }
+  if (!nav.querySelector('[data-section="video-analytics"]')) {
+    const homeHref = nav.querySelector('[data-section="home"]')?.getAttribute("href") || "./";
+    const link = document.createElement("a");
+    link.href = `${homeHref.replace(/\/?$/, "/")}video-analytics/`;
+    link.dataset.section = "video-analytics";
+    link.innerHTML = "Video <small>시청</small>";
+    const before = nav.querySelector('[data-section="automation"]');
     nav.insertBefore(link, before || null);
   }
   const links = [...nav.querySelectorAll("a")];
@@ -6533,6 +6555,199 @@ function closeInstagramPreview() {
   qs("instagramPreviewDialog")?.close?.();
 }
 
+async function loadVideoWatchDashboard(runtime) {
+  const callable = runtime.httpsCallable(runtime.functionsClient, "getVideoWatchDashboard");
+  const response = await callable({ rangeDays: videoWatchRangeDays });
+  return response?.data || null;
+}
+
+function formatVideoWatchTime(value) {
+  const seconds = Math.max(0, Math.round(toNumber(value)));
+  const hours = Math.floor(seconds / 3600);
+  const minutes = Math.floor((seconds % 3600) / 60);
+  if (hours && minutes) return `${hours}시간 ${minutes}분`;
+  if (hours) return `${hours}시간`;
+  if (minutes) return `${minutes}분`;
+  return seconds ? `${seconds}초` : "0분";
+}
+
+function syncVideoWatchRangeButtons() {
+  document.querySelectorAll("[data-video-range]").forEach((button) => {
+    const active = Number(button.dataset.videoRange) === videoWatchRangeDays;
+    button.setAttribute("aria-pressed", String(active));
+  });
+}
+
+function renderVideoWatchDashboard(dashboard) {
+  syncVideoWatchRangeButtons();
+  if (!dashboard && readUnavailable("videoWatchDashboard")) {
+    ["videoWatchActiveBuyers", "videoWatchSessions", "videoWatchRepeatBuyers", "videoWatchCompletions", "videoWatchTime"]
+      .forEach((id) => setText(id, "-"));
+    setText("videoWatchBuyerNote", "조회 상태 확인 필요");
+    setText("videoWatchSessionNote", "조회 상태 확인 필요");
+    setText("videoWatchRepeatRate", "조회 상태 확인 필요");
+    setText("videoWatchCompletionRate", "조회 상태 확인 필요");
+    setText("videoWatchVideoCount", "-");
+    setText("videoWatchBuyerCount", "-");
+    setText("videoWatchCollectorStatus", readState("videoWatchDashboard").status === "permission-denied" ? "권한 필요" : "조회 실패");
+    setText("videoWatchUpdatedAt", "영상 시청 기록의 조회 권한 또는 연결 상태를 확인하세요.");
+    setText("videoWatchTrendSummary", "-");
+    const collectorStatus = qs("videoWatchCollectorStatus");
+    if (collectorStatus) collectorStatus.className = "pill danger";
+    const emptyMessage = '<div class="empty-state">영상 시청 기록의 조회 권한 또는 연결 상태를 확인하세요.</div>';
+    const trend = qs("videoWatchTrend");
+    const videoBody = qs("videoWatchVideoTableBody");
+    const buyers = qs("videoWatchBuyerList");
+    const recent = qs("videoWatchRecentList");
+    if (trend) trend.innerHTML = emptyMessage;
+    if (videoBody) videoBody.innerHTML = `<tr><td colspan="7">${emptyMessage}</td></tr>`;
+    if (buyers) buyers.innerHTML = emptyMessage;
+    if (recent) recent.innerHTML = emptyMessage;
+    return;
+  }
+  const totals = dashboard?.totals || {};
+  const videos = Array.isArray(dashboard?.videos) ? dashboard.videos : [];
+  const buyers = Array.isArray(dashboard?.buyers) ? dashboard.buyers : [];
+  const recent = Array.isArray(dashboard?.recentSessions) ? dashboard.recentSessions : [];
+  const daily = Array.isArray(dashboard?.daily) ? dashboard.daily : [];
+  const hasData = toNumber(totals.watchSessions) > 0;
+
+  setText("videoWatchActiveBuyers", hasData ? `${toNumber(totals.activeBuyers).toLocaleString("ko-KR")}명` : "0명");
+  setText("videoWatchSessions", hasData ? `${toNumber(totals.watchSessions).toLocaleString("ko-KR")}회` : "0회");
+  setText("videoWatchRepeatBuyers", hasData ? `${toNumber(totals.repeatBuyers).toLocaleString("ko-KR")}명` : "0명");
+  setText("videoWatchCompletions", hasData ? `${toNumber(totals.completions).toLocaleString("ko-KR")}회` : "0회");
+  setText("videoWatchTime", formatVideoWatchTime(totals.totalWatchSeconds));
+  setText("videoWatchBuyerNote", `${videoWatchRangeDays}일간 · 1인 평균 ${toNumber(totals.sessionsPerBuyer).toFixed(1)}회`);
+  setText("videoWatchSessionNote", `재생 시작 ${toNumber(totals.playStarts).toLocaleString("ko-KR")}회`);
+  setText("videoWatchRepeatRate", `반복률 ${toNumber(totals.repeatRate).toFixed(1)}%`);
+  setText("videoWatchCompletionRate", `완료율 ${toNumber(totals.completionRate).toFixed(1)}%`);
+  setText("videoWatchVideoCount", `${videos.length.toLocaleString("ko-KR")}편`);
+  setText("videoWatchBuyerCount", `${buyers.length.toLocaleString("ko-KR")}명`);
+  setText("videoWatchCollectorStatus", hasData ? "수집 중" : "수집 대기");
+  const collectorStatus = qs("videoWatchCollectorStatus");
+  if (collectorStatus) collectorStatus.className = `pill ${hasData ? "good" : "warn"}`;
+  const generatedAt = dashboard?.generatedAt ? compactDateTime(dashboard.generatedAt) : "-";
+  setText(
+    "videoWatchUpdatedAt",
+    dashboard
+      ? `${generatedAt} 갱신 · 적용 이후 기록만 표시${dashboard.truncated ? " · 최근 2,000세션까지만 표시" : ""}`
+      : "추적 기능을 적용한 시점 이후의 기록만 표시됩니다.",
+  );
+
+  renderVideoWatchTrend(daily);
+  renderVideoWatchVideoTable(videos);
+  renderVideoWatchBuyerList(buyers);
+  renderVideoWatchRecentList(recent);
+}
+
+function renderVideoWatchTrend(rows) {
+  const container = qs("videoWatchTrend");
+  if (!container) return;
+  if (!rows.length) {
+    container.innerHTML = '<div class="empty-state">선택한 기간에 재생을 시작한 기록이 없습니다.</div>';
+    setText("videoWatchTrendSummary", "0회");
+    return;
+  }
+  const maxSessions = Math.max(1, ...rows.map((row) => toNumber(row.sessions)));
+  const totalSessions = rows.reduce((sum, row) => sum + toNumber(row.sessions), 0);
+  setText("videoWatchTrendSummary", `${totalSessions.toLocaleString("ko-KR")}세션`);
+  container.innerHTML = rows
+    .map((row) => {
+      const sessions = toNumber(row.sessions);
+      const height = Math.max(10, Math.round((sessions / maxSessions) * 100));
+      const label = String(row.date || "").slice(5).replace("-", ".");
+      return `
+        <div class="video-watch-trend-item" aria-label="${escapeHtml(label)} ${sessions}세션, ${toNumber(row.completions)}회 완료">
+          <div class="video-watch-trend-value">${sessions}</div>
+          <div class="video-watch-trend-track"><span style="height:${height}%"></span></div>
+          <strong>${escapeHtml(label)}</strong>
+          <small>${toNumber(row.buyers)}명</small>
+        </div>
+      `;
+    })
+    .join("");
+}
+
+function renderVideoWatchVideoTable(rows) {
+  const body = qs("videoWatchVideoTableBody");
+  if (!body) return;
+  if (!rows.length) {
+    body.innerHTML = '<tr><td colspan="7"><div class="empty-state">선택한 기간의 영상 시청 기록이 없습니다.</div></td></tr>';
+    return;
+  }
+  body.innerHTML = rows
+    .map(
+      (row) => `
+        <tr>
+          <td><div class="video-watch-title"><strong>${escapeHtml(row.videoCode || "-")}</strong><span>${escapeHtml(row.label || row.videoCode || "-")}</span></div></td>
+          <td>${toNumber(row.uniqueBuyers).toLocaleString("ko-KR")}명</td>
+          <td>${toNumber(row.sessions).toLocaleString("ko-KR")}회</td>
+          <td>${formatVideoWatchTime(row.totalWatchSeconds)}</td>
+          <td><div class="video-watch-progress"><span style="width:${Math.min(100, toNumber(row.maxProgressPercent))}%"></span></div><small>${toNumber(row.maxProgressPercent).toFixed(0)}%</small></td>
+          <td>${toNumber(row.completions).toLocaleString("ko-KR")}회 <small>(${toNumber(row.completionRate).toFixed(1)}%)</small></td>
+          <td>${compactDateTime(row.lastWatchedAt)}</td>
+        </tr>
+      `,
+    )
+    .join("");
+}
+
+function renderVideoWatchBuyerList(rows) {
+  const container = qs("videoWatchBuyerList");
+  if (!container) return;
+  if (!rows.length) {
+    container.innerHTML = '<div class="empty-state">선택한 기간의 구매자 시청 기록이 없습니다.</div>';
+    return;
+  }
+  container.innerHTML = rows
+    .slice(0, 50)
+    .map(
+      (row) => `
+        <article class="video-watch-list-item">
+          <div><strong>${escapeHtml(row.label || row.buyerId || "구매자")}</strong><span>${escapeHtml((row.videoCodes || []).join(" · ") || "영상 코드 대기")}</span></div>
+          <dl>
+            <div><dt>세션</dt><dd>${toNumber(row.sessions)}회</dd></div>
+            <div><dt>시청일</dt><dd>${toNumber(row.activeDays)}일</dd></div>
+            <div><dt>재생시간</dt><dd>${formatVideoWatchTime(row.totalWatchSeconds)}</dd></div>
+          </dl>
+          <small>최근 ${compactDateTime(row.lastWatchedAt)} · 최대 ${toNumber(row.maxProgressPercent).toFixed(0)}%</small>
+        </article>
+      `,
+    )
+    .join("");
+}
+
+function renderVideoWatchRecentList(rows) {
+  const container = qs("videoWatchRecentList");
+  if (!container) return;
+  if (!rows.length) {
+    container.innerHTML = '<div class="empty-state">최근 시청 세션이 없습니다.</div>';
+    return;
+  }
+  container.innerHTML = rows
+    .slice(0, 30)
+    .map(
+      (row) => `
+        <article class="video-watch-list-item compact">
+          <div><strong>${escapeHtml(row.videoCode || "-")} · ${escapeHtml(row.accountHint || row.buyerId || "구매자")}</strong><span>${escapeHtml(row.videoTitle || "")}</span></div>
+          <span class="pill ${row.completed ? "good" : ""}">${row.completed ? "90% 완료" : `${toNumber(row.maxProgressPercent).toFixed(0)}%`}</span>
+          <small>${compactDateTime(row.lastWatchedAt)} · ${formatVideoWatchTime(row.activeWatchSeconds)} · 재생 ${toNumber(row.playCount)}회</small>
+        </article>
+      `,
+    )
+    .join("");
+}
+
+function handleVideoWatchRangeClick(event) {
+  const button = event.target.closest?.("[data-video-range]");
+  if (!button) return;
+  const nextRange = Number(button.dataset.videoRange);
+  if (![7, 30, 90].includes(nextRange) || nextRange === videoWatchRangeDays) return;
+  videoWatchRangeDays = nextRange;
+  syncVideoWatchRangeButtons();
+  refresh();
+}
+
 async function handleInstagramListAction(event) {
   const button = event.target.closest?.("[data-instagram-action]");
   if (!button || button.disabled) return;
@@ -6591,6 +6806,7 @@ function renderFallback(error, options = {}) {
   state.staffHrCards = [];
   state.staffEvaluationSubmissions = [];
   state.instagramDashboard = null;
+  state.videoWatchDashboard = null;
   renderPricingInquiryRecentList();
   renderRecommendedMealRecentList();
   renderRecommendedMealQueue();
@@ -6603,6 +6819,7 @@ function renderFallback(error, options = {}) {
   renderHomeDecisions();
   renderParkingDashboard();
   renderInstagramContentDashboard(null);
+  renderVideoWatchDashboard(null);
   renderMemberDetail(null);
   renderPrivate([], [], [], []);
   renderBusinessFallback(error);
@@ -6647,6 +6864,7 @@ async function refresh() {
     const shouldLoadLessons = Boolean(qs("lessonsTodayList"));
     const shouldLoadStaffDashboard = Boolean(qs("staffHrList"));
     const shouldLoadInstagram = Boolean(qs("instagramApprovalList"));
+    const shouldLoadVideoWatch = Boolean(qs("videoWatchVideoTableBody"));
     const shouldLoadBusinessSnapshot = shouldLoadBusiness || shouldLoadStaffDashboard;
     const [
       laneSnapshot,
@@ -6850,6 +7068,13 @@ async function refresh() {
         null,
       );
     }
+    if (shouldLoadVideoWatch) {
+      state.videoWatchDashboard = await safeRead(
+        "videoWatchDashboard",
+        () => loadVideoWatchDashboard(runtime),
+        null,
+      );
+    }
     renderLane(state.lane);
     renderAutomation(automationItems);
     renderImports(state.sourceImports);
@@ -6861,6 +7086,7 @@ async function refresh() {
     renderHomeDecisions();
     renderParkingDashboard();
     renderInstagramContentDashboard(state.instagramDashboard);
+    renderVideoWatchDashboard(state.videoWatchDashboard);
     renderPricingInquiryRecentList();
     renderRecommendedMealRecentList();
     renderRecommendedMealQueue();
@@ -6954,6 +7180,7 @@ qs("instagramPreviewDialog")?.addEventListener("click", (event) => {
 qs("instagramApprovalList")?.addEventListener("click", handleInstagramListAction);
 qs("instagramScheduleList")?.addEventListener("click", handleInstagramListAction);
 qs("instagramHistoryList")?.addEventListener("click", handleInstagramListAction);
+qs("videoWatchRange")?.addEventListener("click", handleVideoWatchRangeClick);
 qs("instagramStatusFilter")?.addEventListener("change", () =>
   renderInstagramHistoryList(
     state.instagramDashboard?.items || [],

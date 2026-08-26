@@ -61,6 +61,10 @@ import {
   submitInstructorEvaluationQuizHandler,
 } from "../staffEvaluation/instructorEvaluationQuiz";
 import { toHttpsError } from "../utils/errors";
+import {
+  getVideoWatchDashboardHandler,
+  videoWatchEventApiHandler,
+} from "../videoAnalytics/videoWatchAnalytics";
 
 const parkingDiscountJobOptions = {
   region: REGION,
@@ -80,6 +84,11 @@ const parkingDiscountJobOptions = {
 const instructorLessonParkingRequestOptions = {
   ...publicRequestOptions,
   secrets: [privateSurveyWebhookSecret],
+};
+
+const videoWatchRequestOptions = {
+  ...publicRequestOptions,
+  maxInstances: 3,
 };
 
 export const getInstructorHome = onCall(callableOptions, async (request) => {
@@ -242,6 +251,18 @@ export const instructorLessonParkingPreRegistrationApi = onRequest(
   instructorLessonParkingRequestOptions,
   instructorLessonParkingPreRegistrationApiHandler,
 );
+
+export const videoWatchEventApi = onRequest(videoWatchRequestOptions, videoWatchEventApiHandler);
+
+export const getVideoWatchDashboard = onCall(callableOptions, async (request) => {
+  try {
+    const staff = await requireStaff(request);
+    requireManager(staff);
+    return await getVideoWatchDashboardHandler(request);
+  } catch (err) {
+    throw toHttpsError(err);
+  }
+});
 
 export const getRecommendedMealProgramReview = onCall(callableOptions, async (request) => {
   try {

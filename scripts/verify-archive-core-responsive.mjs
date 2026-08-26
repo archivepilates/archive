@@ -27,6 +27,7 @@ const routes = [
   { name: "refunds", path: "/refunds/" },
   { name: "messages", path: "/messages/" },
   { name: "content", path: "/content/" },
+  { name: "video-analytics", path: "/video-analytics/" },
   { name: "automation", path: "/automation/" },
   { name: "business", path: "/business/" },
   { name: "imports", path: "/imports/" },
@@ -141,12 +142,64 @@ try {
           if (message) message.value = "긴 회원 안내 문장이 모바일에서도 잘리지 않고 여러 줄로 표시되는지 확인합니다.";
         });
       }
+      if (route.name === "video-analytics") {
+        await page.evaluate(() => {
+          const text = {
+            videoWatchActiveBuyers: "18명",
+            videoWatchBuyerNote: "30일간 · 1인 평균 2.4회",
+            videoWatchSessions: "43회",
+            videoWatchSessionNote: "재생 시작 61회",
+            videoWatchRepeatBuyers: "9명",
+            videoWatchRepeatRate: "반복률 50.0%",
+            videoWatchCompletions: "27회",
+            videoWatchCompletionRate: "완료율 62.8%",
+            videoWatchTime: "38시간 42분",
+            videoWatchUpdatedAt: "2026.08.26 17:30 갱신 · 적용 이후 기록만 표시",
+            videoWatchVideoCount: "8편",
+            videoWatchBuyerCount: "18명",
+            videoWatchTrendSummary: "43세션",
+          };
+          for (const [id, value] of Object.entries(text)) {
+            const element = document.querySelector(`#${id}`);
+            if (element) element.textContent = value;
+          }
+          const trend = document.querySelector("#videoWatchTrend");
+          if (trend) {
+            trend.innerHTML = Array.from({ length: 10 }, (_, index) => `
+              <div class="video-watch-trend-item" aria-label="08.${index + 1} ${index + 2}세션">
+                <div class="video-watch-trend-value">${index + 2}</div>
+                <div class="video-watch-trend-track"><span style="height:${20 + index * 8}%"></span></div>
+                <strong>08.${String(index + 1).padStart(2, "0")}</strong><small>${(index % 4) + 1}명</small>
+              </div>`).join("");
+          }
+          const table = document.querySelector("#videoWatchVideoTableBody");
+          if (table) {
+            table.innerHTML = `
+              <tr>
+                <td><div class="video-watch-title"><strong>ACH8</strong><span>체어 호흡과 체간 안정화를 연결하는 긴 상품명</span></div></td>
+                <td>7명</td><td>16회</td><td>12시간 18분</td>
+                <td><div class="video-watch-progress"><span style="width:92%"></span></div><small>92%</small></td>
+                <td>11회 <small>(68.8%)</small></td><td>2026.08.26 17:20</td>
+              </tr>`;
+          }
+          const buyers = document.querySelector("#videoWatchBuyerList");
+          if (buyers) {
+            buyers.innerHTML = `
+              <article class="video-watch-list-item"><div><strong>h***@archivepilates.com</strong><span>ACH8 · ACA5 · AR4</span></div><dl><div><dt>세션</dt><dd>7회</dd></div><div><dt>시청일</dt><dd>4일</dd></div><div><dt>재생시간</dt><dd>8시간 12분</dd></div></dl><span class="pill good">최근 2026.08.26</span></article>`;
+          }
+          const recent = document.querySelector("#videoWatchRecentList");
+          if (recent) {
+            recent.innerHTML = `
+              <article class="video-watch-list-item compact"><div><strong>ACH8 · 체어 호흡</strong><span>h***@archivepilates.com</span></div><span class="pill good">90% 완료</span><small>2026.08.26 17:20 · 48분 · 재생 2회</small></article>`;
+          }
+        });
+      }
       await page.evaluate(() => document.fonts?.ready);
 
-      const check = await page.evaluate(() => {
+      const check = await page.evaluate((routeName) => {
         const documentWidth = Math.max(document.documentElement.scrollWidth, document.body.scrollWidth);
         const viewportWidth = document.documentElement.clientWidth;
-        const metricCards = [...document.querySelectorAll(".kpis > .metric")].slice(0, 4);
+        const metricCards = [...document.querySelectorAll(".kpis > .metric")].slice(0, routeName === "video-analytics" ? 5 : 4);
         const metricHeights = metricCards.map((element) => Math.round(element.getBoundingClientRect().height));
         const metricContentOverflow = metricCards.some(
           (element) => element.scrollHeight > element.clientHeight + 1 || element.scrollWidth > element.clientWidth + 1,
@@ -161,7 +214,7 @@ try {
           }));
         const touchTargets = [
           ...document.querySelectorAll(
-            ".nav a, .nav-more-button, .quick-action, .external-tool-link, .filter-button, .text-link, .reference-toggle, a.rank-row, .rank-link, .primary-action, .secondary-action, .renewal-actions button, .refund-candidate-option",
+            ".nav a, .nav-more-button, .quick-action, .external-tool-link, .filter-button, .text-link, .reference-toggle, a.rank-row, .rank-link, .primary-action, .secondary-action, .renewal-actions button, .refund-candidate-option, .range-segment button",
           ),
         ]
           .filter((element) => element.offsetParent !== null)
@@ -200,7 +253,7 @@ try {
           shortTouchTarget: touchTargets.some((height) => height < 44),
           mealLayout,
         };
-      });
+      }, route.name);
 
       const routeFailures = [];
       if (check.horizontalOverflow) routeFailures.push(`horizontal overflow ${check.documentWidth}px > ${check.viewportWidth}px`);
