@@ -29,7 +29,7 @@
           <div class="title-block">
             <p class="eyebrow">VIDEO WATCH</p>
             <h1>영상 시청 현황</h1>
-            <p class="subtitle">구매자별 반복 시청과 영상별 도달률을 가명 식별값으로 확인합니다.</p>
+            <p class="subtitle">구매자 이름별 반복 시청과 영상별 도달률을 확인합니다.</p>
           </div>
           <div class="top-actions" aria-label="시청 현황 설정">
             <div class="connection-card" aria-live="polite">
@@ -109,10 +109,10 @@
         <section class="grid overview-grid video-watch-detail-grid">
           <article class="panel" aria-labelledby="videoWatchBuyersTitle">
             <div class="panel-header">
-              <div><h2 id="videoWatchBuyersTitle">구매자별 이용</h2><p>마스킹된 계정 단위로 빈도와 최근 시청을 확인합니다.</p></div>
+              <div><h2 id="videoWatchBuyersTitle">구매자별 이용</h2><p>시청 기록이 있는 회원명만 표시합니다.</p></div>
               <span class="pill" id="videoWatchBuyerCount">0명</span>
             </div>
-            <div class="video-watch-list" id="videoWatchBuyerList">
+            <div class="video-watch-member-list" id="videoWatchBuyerList" role="list">
               <div class="empty-state">구매자별 기록을 확인 중입니다.</div>
             </div>
           </article>
@@ -120,25 +120,11 @@
           <article class="panel" aria-labelledby="videoWatchRecentTitle">
             <div class="panel-header">
               <div><h2 id="videoWatchRecentTitle">최근 시청 세션</h2><p>가장 최근에 재생된 구매 영상입니다.</p></div>
-              <span class="pill">recent</span>
             </div>
             <div class="video-watch-list" id="videoWatchRecentList">
               <div class="empty-state">최근 시청 기록을 확인 중입니다.</div>
             </div>
           </article>
-        </section>
-
-        <section class="panel video-watch-policy" aria-labelledby="videoWatchPolicyTitle">
-          <div class="panel-header">
-            <div><h2 id="videoWatchPolicyTitle">측정 기준</h2><p>구매와 권한에는 영향을 주지 않는 별도 시청 로그입니다.</p></div>
-            <span class="pill good">privacy minimal</span>
-          </div>
-          <div class="ops-board">
-            <article class="ops-card"><h3>시청 세션</h3><p>같은 구매자와 영상에서 30분 동안 활동이 없으면 다음 재생을 새 세션으로 계산합니다.</p></article>
-            <article class="ops-card"><h3>완료</h3><p>영상 길이의 90% 이상 도달했거나 재생 종료 이벤트가 확인된 세션입니다.</p></article>
-            <article class="ops-card"><h3>구매자 식별</h3><p>이름·전화번호·원문 이메일은 저장하지 않고 가명 키와 마스킹 계정만 사용합니다.</p></article>
-            <article class="ops-card"><h3>수집 시작</h3><p>기능 적용 이전의 과거 시청 기록은 복원하지 않으며 적용 이후 기록만 집계합니다.</p></article>
-          </div>
         </section>
       </main>
     </div>

@@ -208,9 +208,10 @@ const required = [
       "videoWatchVideoTableBody",
       "videoWatchBuyerList",
       "videoWatchRecentList",
-      "30분 동안 활동이 없으면",
-      "구매와 권한에는 영향을 주지 않는",
+      "시청 기록이 있는 회원명만 표시합니다.",
+      "video-watch-member-list",
     ],
+    forbiddenMarkers: ["측정 기준", "video-watch-policy"],
   },
   {
     file: "core/assets/styles.css",
@@ -306,6 +307,11 @@ for (const item of required) {
       failures.push({ file: item.file, label: item.label, missing: marker });
     }
   }
+  for (const marker of item.forbiddenMarkers || []) {
+    if (content.includes(marker)) {
+      failures.push({ file: item.file, label: item.label, unexpected: marker });
+    }
+  }
   for (const expected of item.patterns || []) {
     if (!expected.pattern.test(content)) {
       failures.push({ file: item.file, label: item.label, missing: expected.label });
@@ -357,6 +363,20 @@ for (const tool of externalToolLinks) {
 }
 
 const coreAppSource = fs.readFileSync(path.join(repoRoot, "core/assets/app.js"), "utf8");
+const videoWatchBuyerListSource = coreAppSource.slice(
+  coreAppSource.indexOf("function renderVideoWatchBuyerList(rows)"),
+  coreAppSource.indexOf("function renderVideoWatchRecentList(rows)"),
+);
+if (
+  !videoWatchBuyerListSource.includes("row.buyerName") ||
+  /row\.(videoCodes|sessions|activeDays|totalWatchSeconds|lastWatchedAt|maxProgressPercent)/.test(videoWatchBuyerListSource)
+) {
+  failures.push({
+    file: "core/assets/app.js",
+    label: "paid video buyer list privacy and presentation",
+    missing: "render only the member name in the buyer list",
+  });
+}
 const refreshSource = coreAppSource.slice(
   coreAppSource.indexOf("async function refresh()"),
   coreAppSource.indexOf("enhanceNav();"),

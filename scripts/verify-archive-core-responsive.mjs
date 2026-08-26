@@ -185,12 +185,13 @@ try {
           const buyers = document.querySelector("#videoWatchBuyerList");
           if (buyers) {
             buyers.innerHTML = `
-              <article class="video-watch-list-item"><div><strong>h***@archivepilates.com</strong><span>ACH8 · ACA5 · AR4</span></div><dl><div><dt>세션</dt><dd>7회</dd></div><div><dt>시청일</dt><dd>4일</dd></div><div><dt>재생시간</dt><dd>8시간 12분</dd></div></dl><span class="pill good">최근 2026.08.26</span></article>`;
+              <div class="video-watch-member-name" role="listitem"><strong>반응형검증구매자</strong></div>
+              <div class="video-watch-member-name" role="listitem"><strong>긴이름반응형검증회원</strong></div>`;
           }
           const recent = document.querySelector("#videoWatchRecentList");
           if (recent) {
             recent.innerHTML = `
-              <article class="video-watch-list-item compact"><div><strong>ACH8 · 체어 호흡</strong><span>h***@archivepilates.com</span></div><span class="pill good">90% 완료</span><small>2026.08.26 17:20 · 48분 · 재생 2회</small></article>`;
+              <article class="video-watch-list-item compact"><div><strong>ACH8 · 반응형검증구매자</strong><span>체어 호흡과 체간 안정화</span></div><span class="pill good">90% 완료</span><small>2026.08.26 17:20 · 48분 · 재생 2회</small></article>`;
           }
         });
       }
@@ -231,6 +232,8 @@ try {
         const mealFilterContent = mealFilter?.firstElementChild;
         const mealListContent = mealList?.firstElementChild;
         const mealTextareas = [...document.querySelectorAll(".meal-draft-form textarea")];
+        const buyerList = routeName === "video-analytics" ? document.querySelector("#videoWatchBuyerList") : null;
+        const buyerRows = buyerList ? [...buyerList.children] : [];
         const mealLayout = mealPanel
           ? {
               filterAligned:
@@ -251,6 +254,8 @@ try {
           metricValues,
           navOutsideViewport,
           shortTouchTarget: touchTargets.some((height) => height < 44),
+          buyerListNamesOnly:
+            !buyerList || buyerRows.every((element) => element.matches(".video-watch-member-name") && !element.querySelector("span, small, dl")),
           mealLayout,
         };
       }, route.name);
@@ -262,6 +267,7 @@ try {
       if (check.metricValues.some((item) => item.clippedX || item.clippedY)) routeFailures.push("KPI value text is clipped");
       if (check.navOutsideViewport) routeFailures.push("navigation extends outside viewport");
       if (check.shortTouchTarget) routeFailures.push("interactive target below 44px");
+      if (!check.buyerListNamesOnly) routeFailures.push("buyer list exposes details other than member names");
       if (check.mealLayout && (!check.mealLayout.filterAligned || !check.mealLayout.listAligned)) {
         routeFailures.push("recommended-meal panel content is not aligned with its header");
       }

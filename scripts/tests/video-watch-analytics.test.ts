@@ -2,18 +2,20 @@ import assert from "node:assert/strict";
 import test from "node:test";
 import {
   buildVideoWatchDashboard,
+  eventWithoutBuyerName,
   normalizeVideoWatchEvent,
   type VideoWatchSessionRow,
 } from "../../firebase/kangsain-functions/functions/src/videoAnalytics/videoWatchAnalytics";
 
 const now = new Date("2026-08-26T08:30:00.000Z");
 
-test("normalizes a privacy-minimal paid video watch event", () => {
+test("normalizes a paid video watch event with a cleaned buyer name", () => {
   const event = normalizeVideoWatchEvent(
     {
       eventId: "event_123456789012345678901234",
       sessionId: "session_1234567890123456",
       buyerKey: "a".repeat(64),
+      buyerName: "홍길동 님",
       accountHint: "h***@archivepilates.com",
       videoCode: "AR2-1",
       videoTitle: "ARCHIVE METHOD 리포머",
@@ -23,7 +25,7 @@ test("normalizes a privacy-minimal paid video watch event", () => {
       durationSeconds: 2400,
       activeDeltaSeconds: 60,
       clientOccurredAt: "2026-08-26T08:29:50.000Z",
-      trackerVersion: "2026-08-26.1",
+      trackerVersion: "2026-08-26.2",
     },
     now,
   );
@@ -31,10 +33,13 @@ test("normalizes a privacy-minimal paid video watch event", () => {
   assert.equal(event.videoCode, "AR2-1");
   assert.equal(event.progressPercent, 50);
   assert.equal(event.watchDate, "2026-08-26");
+  assert.equal(event.buyerName, "홍길동");
   assert.equal(event.accountHint, "h***@archivepilates.com");
   assert.equal("email" in event, false);
   assert.equal("phone" in event, false);
-  assert.equal("name" in event, false);
+  const rawEvent = eventWithoutBuyerName(event);
+  assert.equal("buyerName" in rawEvent, false);
+  assert.equal(rawEvent.buyerKey, event.buyerKey);
 });
 
 test("rejects raw email, mismatched page, and invalid buyer identity", () => {
@@ -48,6 +53,7 @@ test("rejects raw email, mismatched page, and invalid buyer identity", () => {
     pagePath: "/archive-method-watch-ar1",
   };
   assert.throws(() => normalizeVideoWatchEvent({ ...base, accountHint: "home@archivepilates.com" }, now), /마스킹/);
+  assert.throws(() => normalizeVideoWatchEvent({ ...base, buyerName: "home@archivepilates.com" }, now), /이메일/);
   assert.throws(() => normalizeVideoWatchEvent({ ...base, pagePath: "/archive-method-watch-ab1" }, now), /일치/);
   assert.throws(() => normalizeVideoWatchEvent({ ...base, buyerKey: "short" }, now), /식별값/);
 });
@@ -57,6 +63,7 @@ test("builds video and buyer frequency summaries from started sessions only", ()
     session({
       id: "session-a",
       buyerKey: "a".repeat(64),
+      buyerName: "홍길동",
       accountHint: "h***@archivepilates.com",
       videoCode: "AR1",
       videoTitle: "리포머 AR1",
@@ -70,6 +77,7 @@ test("builds video and buyer frequency summaries from started sessions only", ()
     session({
       id: "session-b",
       buyerKey: "a".repeat(64),
+      buyerName: "",
       accountHint: "h***@archivepilates.com",
       videoCode: "AR1",
       videoTitle: "리포머 AR1",
@@ -110,12 +118,15 @@ test("builds video and buyer frequency summaries from started sessions only", ()
   assert.equal(dashboard.videos.length, 1);
   assert.equal(dashboard.videos[0].sessions, 2);
   assert.equal(dashboard.buyers[0].activeDays, 2);
+  assert.equal(dashboard.buyers[0].label, "홍길동");
+  assert.equal(dashboard.buyers[0].buyerName, "홍길동");
 });
 
 function session(overrides: Partial<VideoWatchSessionRow>): VideoWatchSessionRow {
   return {
     id: "session",
     buyerKey: "a".repeat(64),
+    buyerName: "",
     accountHint: "",
     videoCode: "AR1",
     videoTitle: "AR1",

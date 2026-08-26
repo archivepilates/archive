@@ -48,6 +48,7 @@ export interface NormalizedVideoWatchEvent {
   eventId: string;
   sessionId: string;
   buyerKey: string;
+  buyerName: string;
   accountHint: string;
   videoCode: string;
   videoTitle: string;
@@ -65,6 +66,7 @@ export interface NormalizedVideoWatchEvent {
 export interface VideoWatchSessionRow {
   id: string;
   buyerKey: string;
+  buyerName: string;
   accountHint: string;
   videoCode: string;
   videoTitle: string;
@@ -147,6 +149,7 @@ export function normalizeVideoWatchEvent(
   if (!EVENT_TYPES.has(eventType)) throw new Error("지원하지 않는 시청 이벤트입니다.");
 
   const accountHint = cleanAccountHint(input.accountHint);
+  const buyerName = cleanBuyerName(input.buyerName);
   const videoTitle = cleanText(input.videoTitle, 120) || `ARCHIVE METHOD ${videoCode}`;
   const positionSeconds = boundedNumber(input.positionSeconds, 0, 8 * 60 * 60);
   const durationSeconds = boundedNumber(input.durationSeconds, 0, 8 * 60 * 60);
@@ -162,6 +165,7 @@ export function normalizeVideoWatchEvent(
     eventId,
     sessionId,
     buyerKey,
+    buyerName,
     accountHint,
     videoCode,
     videoTitle,
@@ -177,6 +181,13 @@ export function normalizeVideoWatchEvent(
   };
 }
 
+export function eventWithoutBuyerName(
+  event: NormalizedVideoWatchEvent,
+): Omit<NormalizedVideoWatchEvent, "buyerName"> {
+  const { buyerName: _buyerName, ...privacyMinimalEvent } = event;
+  return privacyMinimalEvent;
+}
+
 export function buildVideoWatchDashboard(
   sessionRows: VideoWatchSessionRow[],
   rangeDays: number,
@@ -189,7 +200,9 @@ export function buildVideoWatchDashboard(
 
   for (const row of sessions) {
     updateBucket(videos, row.videoCode, row.videoTitle || row.videoCode, row);
-    updateBucket(buyers, row.buyerKey, row.accountHint || buyerAlias(row.buyerKey), row);
+    const buyerLabel = row.buyerName || row.accountHint || buyerAlias(row.buyerKey);
+    const buyerLabelRank = row.buyerName ? 3 : row.accountHint ? 2 : 1;
+    updateBucket(buyers, row.buyerKey, buyerLabel, row, buyerLabelRank);
     const dates = row.watchDates.length ? row.watchDates : [kstDate(row.lastSeenAt)];
     for (const date of new Set(dates)) {
       const current = daily.get(date) || { date, sessions: 0, completions: 0, buyers: new Set<string>() };
@@ -208,12 +221,17 @@ export function buildVideoWatchDashboard(
     .map(([videoCode, bucket]) => ({ videoCode, ...bucketOutput(bucket) }))
     .sort(bucketSort);
   const buyerRows = [...buyers.entries()]
-    .map(([buyerKey, bucket]) => ({ buyerId: buyerAlias(buyerKey), ...bucketOutput(bucket) }))
+    .map(([buyerKey, bucket]) => ({
+      buyerId: buyerAlias(buyerKey),
+      buyerName: bucket.labelRank >= 3 ? bucket.label : "",
+      ...bucketOutput(bucket),
+    }))
     .sort(bucketSort);
   const repeatBuyers = buyerRows.filter((row) => Number(row.sessions || 0) >= 2).length;
   const recentSessions = sessions.slice(0, 40).map((row) => ({
     sessionId: row.id.slice(0, 12),
     buyerId: buyerAlias(row.buyerKey),
+    buyerName: row.buyerName,
     accountHint: row.accountHint || buyerAlias(row.buyerKey),
     videoCode: row.videoCode,
     videoTitle: row.videoTitle,
@@ -261,6 +279,8 @@ async function storeVideoWatchEvent(event: NormalizedVideoWatchEvent, networkKey
   const hour = utcHour(now.toDate());
   const buyerRateRef = db.collection(VIDEO_WATCH_RATE_LIMIT_COLLECTION).doc(`buyer_${event.buyerKey}_${hour}`);
   const networkRateRef = db.collection(VIDEO_WATCH_RATE_LIMIT_COLLECTION).doc(`network_${networkKey}_${hour}`);
+  const sessionBuyerName = event.buyerName;
+  const privacyMinimalEvent = eventWithoutBuyerName(event);
 
   return db.runTransaction(async (transaction) => {
     const [existingEvent, existingSession, buyerRateLimit, networkRateLimit] = await Promise.all([
@@ -289,7 +309,7 @@ async function storeVideoWatchEvent(event: NormalizedVideoWatchEvent, networkKey
 
     transaction.create(eventRef, {
       studioId: DEFAULT_STUDIO_ID,
-      ...event,
+      ...privacyMinimalEvent,
       clientOccurredAt: Timestamp.fromDate(event.clientOccurredAt),
       serverOccurredAt: now,
       expiresAt: Timestamp.fromMillis(now.toMillis() + RAW_EVENT_RETENTION_DAYS * 86_400_000),
@@ -299,6 +319,8 @@ async function storeVideoWatchEvent(event: NormalizedVideoWatchEvent, networkKey
       {
         studioId: DEFAULT_STUDIO_ID,
         buyerKey: event.buyerKey,
+        buyerName: sessionBuyerName || current.buyerName || "",
+        buyerNameSource: sessionBuyerName ? "imweb-profile-client" : current.buyerNameSource || "",
         accountHint: event.accountHint || current.accountHint || "",
         videoCode: event.videoCode,
         videoTitle: event.videoTitle,
@@ -351,6 +373,7 @@ async function storeVideoWatchEvent(event: NormalizedVideoWatchEvent, networkKey
 
 interface DashboardBucket {
   label: string;
+  labelRank: number;
   sessions: number;
   playStarts: number;
   completions: number;
@@ -383,9 +406,11 @@ function updateBucket(
   key: string,
   label: string,
   row: VideoWatchSessionRow,
+  labelRank = 1,
 ): void {
   const current = target.get(key) || {
     label,
+    labelRank,
     sessions: 0,
     playStarts: 0,
     completions: 0,
@@ -397,7 +422,10 @@ function updateBucket(
     relatedBuyers: new Set<string>(),
     relatedCodes: new Set<string>(),
   };
-  current.label = label || current.label;
+  if (label && labelRank >= current.labelRank) {
+    current.label = label;
+    current.labelRank = labelRank;
+  }
   current.sessions += 1;
   current.playStarts += row.playCount;
   current.completions += row.completed ? 1 : 0;
@@ -439,6 +467,7 @@ function sessionRow(id: string, data: FirebaseFirestore.DocumentData): VideoWatc
   return {
     id,
     buyerKey: String(data.buyerKey),
+    buyerName: storedBuyerName(data.buyerName),
     accountHint: String(data.accountHint || ""),
     videoCode: String(data.videoCode),
     videoTitle: String(data.videoTitle || data.videoCode),
@@ -506,6 +535,25 @@ function cleanAccountHint(value: unknown): string {
   if (/\d{10,11}/.test(hint)) throw new Error("연락처는 시청 기록에 저장할 수 없습니다.");
   if (hint.includes("@") && !hint.includes("*")) throw new Error("이메일은 마스킹해서 전송해야 합니다.");
   return hint;
+}
+
+function cleanBuyerName(value: unknown): string {
+  const name = cleanText(value, 40).replace(/\s*님$/, "").trim();
+  if (!name) return "";
+  if (name.includes("@") || /\d{3,}/.test(name)) {
+    throw new Error("연락처나 이메일은 구매자 이름으로 저장할 수 없습니다.");
+  }
+  if (name.length < 2 || !/^[가-힣A-Za-z][가-힣A-Za-z .'-]{1,39}$/.test(name)) return "";
+  if (/^(관리자|소유자|로그인|회원|마이페이지)$/i.test(name)) return "";
+  return name;
+}
+
+function storedBuyerName(value: unknown): string {
+  try {
+    return cleanBuyerName(value);
+  } catch {
+    return "";
+  }
 }
 
 function boundedNumber(value: unknown, min: number, max: number): number {

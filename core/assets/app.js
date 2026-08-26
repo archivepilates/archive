@@ -6701,19 +6701,14 @@ function renderVideoWatchBuyerList(rows) {
   }
   container.innerHTML = rows
     .slice(0, 50)
-    .map(
-      (row) => `
-        <article class="video-watch-list-item">
-          <div><strong>${escapeHtml(row.label || row.buyerId || "구매자")}</strong><span>${escapeHtml((row.videoCodes || []).join(" · ") || "영상 코드 대기")}</span></div>
-          <dl>
-            <div><dt>세션</dt><dd>${toNumber(row.sessions)}회</dd></div>
-            <div><dt>시청일</dt><dd>${toNumber(row.activeDays)}일</dd></div>
-            <div><dt>재생시간</dt><dd>${formatVideoWatchTime(row.totalWatchSeconds)}</dd></div>
-          </dl>
-          <small>최근 ${compactDateTime(row.lastWatchedAt)} · 최대 ${toNumber(row.maxProgressPercent).toFixed(0)}%</small>
-        </article>
-      `,
-    )
+    .map((row) => {
+      const memberName = String(row.buyerName || "").trim();
+      return `
+        <div class="video-watch-member-name${memberName ? "" : " is-unknown"}" role="listitem">
+          <strong>${escapeHtml(memberName || "회원명 확인 필요")}</strong>
+        </div>
+      `;
+    })
     .join("");
 }
 
@@ -6729,7 +6724,7 @@ function renderVideoWatchRecentList(rows) {
     .map(
       (row) => `
         <article class="video-watch-list-item compact">
-          <div><strong>${escapeHtml(row.videoCode || "-")} · ${escapeHtml(row.accountHint || row.buyerId || "구매자")}</strong><span>${escapeHtml(row.videoTitle || "")}</span></div>
+          <div><strong>${escapeHtml(row.videoCode || "-")} · ${escapeHtml(row.buyerName || row.accountHint || row.buyerId || "구매자")}</strong><span>${escapeHtml(row.videoTitle || "")}</span></div>
           <span class="pill ${row.completed ? "good" : ""}">${row.completed ? "90% 완료" : `${toNumber(row.maxProgressPercent).toFixed(0)}%`}</span>
           <small>${compactDateTime(row.lastWatchedAt)} · ${formatVideoWatchTime(row.activeWatchSeconds)} · 재생 ${toNumber(row.playCount)}회</small>
         </article>

@@ -238,7 +238,7 @@
         </section>
 
         <section class="panel rule-section" id="video-watch">
-          <div class="panel-header"><div><h2>2A. 구매 영상 시청 분석</h2><p>구매·권한과 분리된 가명화 시청 로그로 반복 이용과 완료 흐름을 확인합니다.</p></div><span class="pill good">deployed</span></div>
+          <div class="panel-header"><div><h2>2A. 구매 영상 시청 분석</h2><p>구매·권한과 분리된 관리자 전용 시청 로그로 반복 이용과 완료 흐름을 확인합니다.</p></div><span class="pill warn">deploy pending</span></div>
           <div class="rule-grid">
             <article class="rule-card">
               <h3>목적과 범위</h3>
@@ -259,7 +259,7 @@
             <article class="rule-card">
               <h3>개인정보와 보존</h3>
               <ul>
-                <li>이름, 전화번호, 원문 이메일은 저장하지 않습니다. 아임웹 회원 식별값을 브라우저에서 다시 해시한 값과 마스킹된 계정 힌트만 사용합니다.</li>
+                <li>구매자 이름은 관리자 전용 세션 요약에만 저장합니다. 전화번호와 원문 이메일은 시청 기록에 저장하지 않고, 아임웹 회원 식별값을 브라우저에서 다시 해시한 값과 마스킹된 계정 힌트를 함께 사용합니다.</li>
                 <li>상세 이벤트는 180일, 세션 요약은 1년 보관하며 expiresAt TTL 정책으로 만료 처리합니다.</li>
                 <li>시청 기록은 광고, 자동 메시지 대상 선정, 구매 권한 판정의 원천으로 사용하지 않습니다.</li>
               </ul>
@@ -273,7 +273,7 @@
               </ul>
             </article>
           </div>
-          <div class="rule-note"><strong>현재 구현 상태</strong><span>2026.08.26 운영 배포·검증 완료 / functions-app, ARCHIVE CORE, 개인정보처리방침, 아임웹 외부 추적기 로더, Firestore TTL 적용</span></div>
+          <div class="rule-note"><strong>현재 구현 상태</strong><span>2026.08.26 이름 표시 보강 로컬 검증 완료 / 운영 배포 전 / 기존 시청·구매·권한 흐름은 변경하지 않음</span></div>
         </section>
 
         <section class="panel rule-section" id="renewal">

@@ -1,7 +1,7 @@
 (function archivePilatesVideoWatchTracker() {
   "use strict";
 
-  const TRACKER_VERSION = "2026-08-26.1";
+  const TRACKER_VERSION = "2026-08-26.2";
   const TRACKER_MARKER = "data-archive-pilates-video-watch-tracker";
   const EVENT_ENDPOINT = "https://asia-northeast3-archive-pilates.cloudfunctions.net/videoWatchEventApi";
   const SESSION_IDLE_MS = 30 * 60 * 1000;
@@ -28,6 +28,7 @@
     const videoCode = routeMatch[1].toUpperCase();
     const pagePath = `/archive-method-watch-${routeMatch[1].toLowerCase()}`;
     const accountHint = maskAccount(String(window.MEMBER_UID || ""));
+    let buyerName = readBuyerName();
     const videoTitle = readVideoTitle(videoCode);
     const sessionStorageKey = `ap-video-watch:${buyerKey.slice(0, 16)}:${videoCode}`;
     const trackerState = {
@@ -138,6 +139,7 @@
     }
 
     function emit(eventType, includeActiveTime, keepalive) {
+      if (!buyerName) buyerName = readBuyerName();
       const sessionId = currentSessionId();
       const activeDeltaSeconds = includeActiveTime
         ? Math.round(trackerState.activeSeconds * 10) / 10
@@ -148,6 +150,7 @@
         eventId: createId(),
         sessionId,
         buyerKey,
+        buyerName,
         accountHint,
         videoCode,
         videoTitle,
@@ -302,6 +305,48 @@
       return `${local.slice(0, 1)}***@${domain}`.slice(0, 80);
     }
     return `${account.slice(0, 2)}***`.slice(0, 80);
+  }
+
+  function readBuyerName() {
+    const globals = [
+      window.MEMBER_NAME,
+      window.MEMBER_NICKNAME,
+      window.MEMBER_NICK,
+    ];
+    for (const value of globals) {
+      const name = normalizeBuyerName(value);
+      if (name) return name;
+    }
+
+    const selectors = [
+      "#member_profile .profile-info > .sm-padding",
+      "#member_profile .profile-info > div:first-child",
+      "#mobile_slide_menu_wrap .member-info",
+    ];
+    for (const selector of selectors) {
+      const element = document.querySelector(selector);
+      if (!element) continue;
+      const clone = element.cloneNode(true);
+      clone.querySelectorAll(".email-info, a, button, small").forEach(function removeMetadata(node) {
+        node.remove();
+      });
+      const name = normalizeBuyerName(clone.textContent);
+      if (name) return name;
+    }
+    return "";
+  }
+
+  function normalizeBuyerName(value) {
+    const name = String(value || "")
+      .replace(/[<>\u0000-\u001f]/g, " ")
+      .replace(/\s+/g, " ")
+      .trim()
+      .replace(/\s*님$/, "")
+      .slice(0, 40);
+    if (name.length < 2 || name.includes("@") || /\d{3,}/.test(name)) return "";
+    if (!/^[가-힣A-Za-z][가-힣A-Za-z .'-]{1,39}$/.test(name)) return "";
+    if (/^(관리자|소유자|로그인|회원|마이페이지)$/i.test(name)) return "";
+    return name;
   }
 
   function readVideoTitle(videoCode) {
