@@ -4,6 +4,7 @@
     "predeploy": [
       "npm run validate:archive-home-address",
       "npm run validate:archive-home-team",
+      "npm run validate:archive-home-community",
       "npm run validate:archive-home-classroom",
       "npm run validate:video-sales-growth"
     ],
@@ -47,6 +48,12 @@
       },
       {
         "source": "/teams/**",
+        "headers": [
+          { "key": "Cache-Control", "value": "no-cache, no-store, must-revalidate" }
+        ]
+      },
+      {
+        "source": "/community",
         "headers": [
           { "key": "Cache-Control", "value": "no-cache, no-store, must-revalidate" }
         ]
@@ -136,6 +143,10 @@
       {
         "source": "/teams",
         "destination": "/teams/index.html"
+      },
+      {
+        "source": "/community",
+        "destination": "/community/index.html"
       },
       {
         "source": "**",

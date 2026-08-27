@@ -160,6 +160,7 @@
     .nav-swap[data-nav="career"] { --nav-w: 64px; }
     .nav-swap[data-nav="products"] { --nav-w: 78px; }
     .nav-swap[data-nav="video"] { --nav-w: 86px; }
+    .nav-swap[data-nav="community"] { --nav-w: 84px; }
 
     .nav-new {
       position: absolute;
@@ -541,6 +542,65 @@
       object-position: center;
     }
 
+    .community-preview {
+      background: var(--paper);
+      border-top: 1px solid var(--line);
+      border-bottom: 1px solid var(--line);
+    }
+
+    .community-preview-inner {
+      display: grid;
+      grid-template-columns: minmax(0, 0.78fr) minmax(0, 1.22fr);
+      gap: clamp(42px, 7vw, 90px);
+      align-items: start;
+    }
+
+    .community-preview-copy p:last-of-type {
+      max-width: 46ch;
+      margin: 20px 0 0;
+      color: var(--muted);
+      font-size: 1.05rem;
+    }
+
+    .community-preview-copy .actions {
+      margin-top: 28px;
+    }
+
+    .community-topics {
+      margin: 0;
+      padding: 0;
+      list-style: none;
+      border-top: 1px solid var(--ink);
+    }
+
+    .community-topics li {
+      min-height: 108px;
+      display: grid;
+      grid-template-columns: 42px minmax(0, 1fr);
+      gap: 18px;
+      align-items: center;
+      padding: 22px 0;
+      border-bottom: 1px solid var(--line);
+    }
+
+    .community-topics span {
+      color: var(--accent-dark);
+      font-size: 0.78rem;
+      font-weight: 900;
+    }
+
+    .community-topics h3 {
+      margin: 0;
+      font-size: 1.25rem;
+      line-height: 1.3;
+    }
+
+    .community-topics p {
+      margin: 7px 0 0;
+      color: var(--muted);
+      font-size: 0.94rem;
+    }
+
     .social {
       background: var(--black);
       color: #fff;
@@ -671,6 +731,7 @@
       .image-band picture { min-height: 360px; }
       .band-copy { padding: 50px 24px 58px; }
       .studio-photo { min-height: 380px; }
+      .community-preview-inner { grid-template-columns: 1fr; }
       .social-links { grid-template-columns: 1fr; }
       .careers-inner { grid-template-columns: 1fr; gap: 22px; }
       .careers-inner .actions { justify-content: flex-start; }
@@ -679,14 +740,16 @@
 
     @media (max-width: 640px) {
       section { padding: 72px 18px; }
+      .site-header { padding-left: 8px; padding-right: 8px; }
       .brand-logo { width: 142px; }
       .nav-links { justify-content: center; }
-      .nav-links a { padding: 0 4px; font-size: 0.84rem; }
-      .nav-swap[data-nav="team"] { --nav-w: 74px; }
-      .nav-swap[data-nav="lesson"] { --nav-w: 66px; }
-      .nav-swap[data-nav="career"] { --nav-w: 42px; }
-      .nav-swap[data-nav="products"] { --nav-w: 68px; }
-      .nav-swap[data-nav="video"] { --nav-w: 70px; }
+      .nav-links a { padding: 0 1px; font-size: 0.72rem; }
+      .nav-swap[data-nav="team"] { --nav-w: 60px; }
+      .nav-swap[data-nav="lesson"] { --nav-w: 48px; }
+      .nav-swap[data-nav="career"] { --nav-w: 28px; }
+      .nav-swap[data-nav="products"] { --nav-w: 48px; }
+      .nav-swap[data-nav="video"] { --nav-w: 48px; }
+      .nav-swap[data-nav="community"] { --nav-w: 60px; }
       .hero {
         min-height: 710px;
         align-items: end;
@@ -709,6 +772,7 @@
       .class-body { padding: 24px 20px 26px; }
       .studio-copy { padding: 30px 22px; }
       .studio-photo { min-height: 340px; }
+      .community-topics li { min-height: 96px; grid-template-columns: 34px minmax(0, 1fr); gap: 12px; }
     }
 
     @media (max-width: 360px) {
@@ -794,6 +858,10 @@
         <a class="nav-swap" data-nav="products" href="/shop" aria-label="판매상품">
           <span class="nav-ko">판매상품</span>
           <span class="nav-en" aria-hidden="true">PRODUCTS</span>
+        </a>
+        <a class="nav-swap" data-nav="community" href="/community" aria-label="후기와 질문">
+          <span class="nav-ko">후기·질문</span>
+          <span class="nav-en" aria-hidden="true">COMMUNITY</span>
         </a>
         <a class="nav-swap" data-nav="career" href="/careers" aria-label="채용, 신규 모집 중">
           <span class="nav-ko">채용</span>
@@ -926,6 +994,33 @@
             </picture>
           </div>
         </div>
+      </div>
+    </section>
+
+    <section class="community-preview" aria-labelledby="community-preview-title">
+      <div class="wrap community-preview-inner">
+        <div class="community-preview-copy reveal">
+          <p class="section-kicker">Community</p>
+          <h2 id="community-preview-title">경험을 기록하고,<br>수업의 질문을 이어갑니다.</h2>
+          <p>강사레슨과 영상 클래스를 경험한 분들의 후기, 수업과 동작에 관한 질문을 한곳에서 나눕니다.</p>
+          <div class="actions">
+            <a class="button dark" href="/community">후기·질문 보기</a>
+          </div>
+        </div>
+        <ol class="community-topics reveal" aria-label="후기와 질문 게시판 유형">
+          <li>
+            <span>01</span>
+            <div><h3>강사레슨 후기</h3><p>현장에서 발견한 변화와 수업에서 남은 기준을 기록합니다.</p></div>
+          </li>
+          <li>
+            <span>02</span>
+            <div><h3>영상 클래스 후기</h3><p>반복 시청하며 도움이 된 장면과 적용 경험을 나눕니다.</p></div>
+          </li>
+          <li>
+            <span>03</span>
+            <div><h3>수업·동작 질문</h3><p>시퀀스, 큐잉, 기구 사용과 움직임에 관해 질문합니다.</p></div>
+          </li>
+        </ol>
       </div>
     </section>
 

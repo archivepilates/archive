@@ -23,6 +23,7 @@
     "validate:live-release-canary": "node scripts/validate-live-release-canary.mjs",
     "validate:archive-home-classroom": "node scripts/validate-archive-home-classroom-release-config.mjs && node scripts/validate-archive-home-classroom-asset.mjs && node scripts/validate-imweb-classroom-loader-fallback.mjs",
     "validate:archive-home-team": "node scripts/validate-official-home-team.mjs",
+    "validate:archive-home-community": "node scripts/validate-official-home-community.mjs",
     "validate:archive-home-address": "node scripts/validate-archive-home-address.mjs",
     "verify:archive-home-classroom-live": "node scripts/verify-archive-home-classroom-live.mjs",
     "validate:video-sales-growth": "node --check official-home/assets/archive-analytics-20260729a.js && node --check official-home/assets/imweb-video-sales-20260730b.js && node --check scripts/imweb/apply-video-sales-growth.mjs && node scripts/validate-video-sales-growth.mjs",

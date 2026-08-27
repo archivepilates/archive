@@ -1,0 +1,33 @@
+.nav-swap[data-nav="community"] {
+  --nav-w: 84px;
+}
+
+@media (max-width: 640px) {
+  .site-header {
+    padding-left: 8px;
+    padding-right: 8px;
+  }
+
+  .nav-links a {
+    padding: 0 1px;
+    font-size: 0.72rem;
+  }
+
+  .nav-swap[data-nav="team"] {
+    --nav-w: 60px;
+  }
+
+  .nav-swap[data-nav="lesson"],
+  .nav-swap[data-nav="products"],
+  .nav-swap[data-nav="video"] {
+    --nav-w: 48px;
+  }
+
+  .nav-swap[data-nav="community"] {
+    --nav-w: 60px;
+  }
+
+  .nav-swap[data-nav="career"] {
+    --nav-w: 28px;
+  }
+}
