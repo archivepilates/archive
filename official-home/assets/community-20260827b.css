@@ -54,8 +54,7 @@
 }
 
 .community-intro,
-.community-types,
-.community-rules {
+.community-types {
   padding: 96px 22px;
 }
 
@@ -72,8 +71,7 @@
 
 .community-intro h2,
 .community-types h2,
-.community-entry h2,
-.community-rules h2 {
+.community-entry h2 {
   margin: 0;
   font-size: 2.7rem;
   line-height: 1.16;
@@ -170,48 +168,6 @@
   color: #fff;
 }
 
-.community-rules {
-  background: var(--paper);
-}
-
-.community-rules-grid {
-  display: grid;
-  grid-template-columns: minmax(0, 0.82fr) minmax(0, 1.18fr);
-  gap: clamp(44px, 8vw, 112px);
-  align-items: start;
-}
-
-.community-rule-list {
-  margin: 0;
-  padding: 0;
-  list-style: none;
-  border-top: 1px solid var(--ink);
-}
-
-.community-rule-list li {
-  display: grid;
-  grid-template-columns: 28px minmax(0, 1fr);
-  gap: 14px;
-  padding: 20px 0;
-  border-bottom: 1px solid var(--line);
-  color: var(--muted);
-}
-
-.community-rule-list strong {
-  color: var(--accent);
-}
-
-.community-private {
-  margin: 26px 0 0;
-  color: var(--muted);
-}
-
-.community-private a {
-  color: var(--ink);
-  font-weight: 850;
-  text-underline-offset: 4px;
-}
-
 @media (max-width: 920px) {
   .community-hero {
     min-height: 660px;
@@ -226,7 +182,6 @@
   }
 
   .community-intro-grid,
-  .community-rules-grid,
   .community-entry-inner {
     grid-template-columns: 1fr;
   }
@@ -265,15 +220,13 @@
 
   .community-intro,
   .community-types,
-  .community-rules,
   .community-entry {
     padding: 72px 18px;
   }
 
   .community-intro h2,
   .community-types h2,
-  .community-entry h2,
-  .community-rules h2 {
+  .community-entry h2 {
     font-size: 2rem;
   }
 

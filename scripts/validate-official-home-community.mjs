@@ -39,7 +39,6 @@ for (const required of [
   "영상 클래스 후기",
   "수업·동작 질문",
   "글 작성은 아카이브 회원",
-  "카카오톡 1:1 문의",
   communityUrl,
 ]) {
   if (!communityPage.includes(required)) {
@@ -50,8 +49,14 @@ for (const required of [
 if (!communityPage.includes('/assets/community-nav-20260827a.css')) {
   failures.push("official-home/community/index.html: 버전 처리된 COMMUNITY 메뉴 스타일이 없습니다.");
 }
-if (!communityPage.includes('/assets/community-20260827a.css')) {
+if (!communityPage.includes('/assets/community-20260827b.css')) {
   failures.push("official-home/community/index.html: 버전 처리된 COMMUNITY 페이지 스타일이 없습니다.");
+}
+
+for (const removed of ["BEFORE WRITING", "개인정보는 남기지 않습니다.", "community-rules"]) {
+  if (communityPage.includes(removed)) {
+    failures.push(`official-home/community/index.html: 제거 대상 안내 섹션이 남아 있습니다: ${removed}`);
+  }
 }
 
 const sitemap = read("official-home/sitemap.xml");
@@ -75,7 +80,7 @@ if (!communityHeader) {
 
 for (const relativePath of [
   "official-home/assets/community-nav-20260827a.css",
-  "official-home/assets/community-20260827a.css",
+  "official-home/assets/community-20260827b.css",
 ]) {
   if (!fs.existsSync(path.join(root, relativePath))) {
     failures.push(`${relativePath}: 파일이 없습니다.`);
