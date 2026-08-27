@@ -1,0 +1,102 @@
+<script data-archive-pilates-community-menu-identity="2026-08-27a">
+(function () {
+  "use strict";
+
+  var VERSION = "2026-08-27a";
+  var LABEL = "커뮤니티";
+  var ENGLISH = "COMMUNITY";
+  var STYLE_ID = "archive-pilates-community-menu-identity-style";
+  var pending = false;
+
+  function installStyle() {
+    var style = document.getElementById(STYLE_ID);
+    if (!style) {
+      style = document.createElement("style");
+      style.id = STYLE_ID;
+      (document.head || document.documentElement).appendChild(style);
+    }
+    style.textContent =
+      ".ap-shop-nav-link[data-ap-shop-nav='커뮤니티'] .ap-shop-nav-label{" +
+      "width:84px!important;min-width:84px!important}";
+  }
+
+  function isCommunityLink(anchor) {
+    if (!anchor) return false;
+    var href = String(anchor.getAttribute("href") || "");
+    var dataUrl = String(anchor.getAttribute("data-url") || "");
+    var identity = String(anchor.getAttribute("data-ap-shop-nav") || "");
+    return (
+      href === "/community" ||
+      href.indexOf("/community?") === 0 ||
+      dataUrl === "community" ||
+      identity === "후기·질문" ||
+      identity === LABEL
+    );
+  }
+
+  function patchLink(anchor) {
+    var item = anchor.closest("li");
+    var plain = anchor.querySelector(".plain_name");
+
+    if (item) item.classList.remove("use_sub_name");
+    anchor.removeAttribute("data-hover");
+    if (plain) plain.removeAttribute("data-hover");
+
+    if (anchor.classList.contains("ap-shop-nav-link") || anchor.querySelector(".ap-shop-nav-label")) {
+      anchor.setAttribute("data-ap-shop-nav", LABEL);
+      anchor.setAttribute("aria-label", LABEL);
+      var korean = anchor.querySelector(".ap-nav-ko");
+      var english = anchor.querySelector(".ap-nav-en");
+      var screenReader = anchor.querySelector(".sr-only");
+      if (korean && korean.textContent !== LABEL) korean.textContent = LABEL;
+      if (english && english.textContent !== ENGLISH) english.textContent = ENGLISH;
+      if (screenReader && screenReader.textContent !== LABEL) screenReader.textContent = LABEL;
+      return;
+    }
+
+    if (plain && plain.textContent.trim() !== LABEL) plain.textContent = LABEL;
+  }
+
+  function patchCommunityPage() {
+    if (String(window.location.pathname || "").replace(/\/$/, "") !== "/community") return;
+    document.title = "커뮤니티 | 아카이브필라테스";
+    var heading = document.querySelector(".widget.board .board-head .heading > header");
+    if (!heading) return;
+    Array.prototype.slice.call(heading.childNodes).forEach(function (node) {
+      if (node.nodeType === 3 && String(node.nodeValue || "").trim() === "후기·질문") {
+        node.nodeValue = LABEL + " ";
+      }
+    });
+  }
+
+  function run() {
+    pending = false;
+    installStyle();
+    Array.prototype.slice.call(document.querySelectorAll("a")).filter(isCommunityLink).forEach(patchLink);
+    patchCommunityPage();
+    document.documentElement.setAttribute("data-archive-pilates-community-menu-identity", VERSION);
+  }
+
+  function schedule() {
+    if (pending) return;
+    pending = true;
+    window.requestAnimationFrame(run);
+  }
+
+  if (document.readyState === "loading") {
+    document.addEventListener("DOMContentLoaded", run, { once: true });
+  } else {
+    run();
+  }
+  [120, 350, 900, 1900, 3300, 5200].forEach(function (delay) {
+    window.setTimeout(run, delay);
+  });
+  try {
+    var observer = new MutationObserver(schedule);
+    observer.observe(document.documentElement, { childList: true, subtree: true });
+    window.setTimeout(function () {
+      observer.disconnect();
+    }, 8000);
+  } catch (error) {}
+})();
+</script>

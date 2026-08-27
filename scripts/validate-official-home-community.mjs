@@ -19,7 +19,7 @@ const read = (relativePath) => fs.readFileSync(path.join(root, relativePath), "u
 for (const relativePath of htmlFiles) {
   const html = read(relativePath);
   if (!html.includes('href="/community"')) {
-    failures.push(`${relativePath}: 후기·질문 메뉴 링크가 없습니다.`);
+    failures.push(`${relativePath}: 커뮤니티 메뉴 링크가 없습니다.`);
   }
   if (!html.includes('data-nav="community"')) {
     failures.push(`${relativePath}: COMMUNITY 메뉴 식별자가 없습니다.`);
@@ -35,6 +35,8 @@ for (const relativePath of teamHtmlFiles) {
 
 const communityPage = read("official-home/community/index.html");
 for (const required of [
+  "커뮤니티 | 아카이브필라테스",
+  '<span class="nav-ko">커뮤니티</span>',
   "강사레슨 후기",
   "영상 클래스 후기",
   "수업·동작 질문",
@@ -92,4 +94,4 @@ if (failures.length) {
   process.exit(1);
 }
 
-console.log("ARCHIVE PILATES 후기·질문 공식홈 구성이 유효합니다.");
+console.log("ARCHIVE PILATES 커뮤니티 공식홈 구성이 유효합니다.");
