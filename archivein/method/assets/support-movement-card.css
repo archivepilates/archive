@@ -57,6 +57,16 @@ section { padding: 30px 0; border-bottom: 1px solid var(--line); }
 .summary-row:first-child { padding-top: 0; border-top: 0; }
 .summary-label { color: var(--quiet); font-size: 11px; font-weight: 900; }
 .summary-text { color: var(--ink); font-weight: 750; }
+.scope-note {
+  margin: 16px 0 0;
+  padding: 14px 15px;
+  border-left: 3px solid var(--accent);
+  border-radius: 0 8px 8px 0;
+  background: var(--soft);
+  color: var(--muted);
+  font-size: 12px;
+  font-weight: 750;
+}
 .concept-grid { display: grid; grid-template-columns: 1fr; gap: 10px; }
 .concept {
   min-width: 0;
@@ -67,6 +77,9 @@ section { padding: 30px 0; border-bottom: 1px solid var(--line); }
 }
 .concept b { display: block; margin-bottom: 5px; color: var(--accent); font-size: 13px; }
 .concept p { margin: 0; color: var(--muted); font-size: 13px; font-weight: 700; }
+.concept.caution { background: var(--dark); border-color: var(--dark); }
+.concept.caution b { color: #d8b6a8; }
+.concept.caution p { color: rgba(255, 255, 255, 0.76); }
 .flow { display: grid; grid-template-columns: repeat(5, minmax(0, 1fr)); gap: 1px; overflow: hidden; border: 1px solid var(--line); border-radius: 8px; background: var(--line); }
 .flow-step { min-width: 0; padding: 14px 12px; background: var(--paper); }
 .flow-step b { display: block; margin-bottom: 5px; color: var(--accent); font-size: 11px; font-weight: 900; }
