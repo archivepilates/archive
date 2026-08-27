@@ -11,6 +11,18 @@ const STUDIOMATE_JOBS = "studiomateInstructorLessonJobs";
 const TICKET_NAME = "강사레슨 (2T)";
 const EXPECTED_SESSION_COUNT = 2;
 const MAX_DASHBOARD_ITEMS = 100;
+const DASHBOARD_STATUSES = [
+  "queued",
+  "processing",
+  "retry",
+  "waiting_class_assignment",
+  "waiting_signature",
+  "memo_pending",
+  "action_required",
+  "review_required",
+  "failed",
+  "completed",
+] as const;
 
 type RegistrationStepStatus =
   | "not_required"
@@ -19,6 +31,7 @@ type RegistrationStepStatus =
   | "queued"
   | "sent"
   | "waiting_external"
+  | "waiting_assignment"
   | "verified"
   | "review_required"
   | "failed";
@@ -140,17 +153,20 @@ export async function getInstructorLessonRegistrationDashboardHandler(
 ): Promise<Record<string, unknown>> {
   const staff = await manager(request);
   const requestedLimit = Math.max(1, Math.min(MAX_DASHBOARD_ITEMS, Number(request.data?.limit || 50)));
-  const snapshot = await db.collection(REGISTRATIONS)
-    .where("studioId", "==", staff.studioId)
-    .orderBy("updatedAt", "desc")
-    .limit(MAX_DASHBOARD_ITEMS)
-    .get();
+  const registrations = db.collection(REGISTRATIONS).where("studioId", "==", staff.studioId);
+  const [snapshot, countSnapshots] = await Promise.all([
+    registrations.orderBy("updatedAt", "desc").limit(MAX_DASHBOARD_ITEMS).get(),
+    Promise.all(DASHBOARD_STATUSES.map((status) => registrations.where("status", "==", status).count().get())),
+  ]);
   const allItems = snapshot.docs
     .map((doc) => safeRegistration(doc.id, doc.data()));
+  const counts = Object.fromEntries(
+    DASHBOARD_STATUSES.map((status, index) => [status, Number(countSnapshots[index]?.data().count || 0)]),
+  );
   return {
     ok: true,
     generatedAt: new Date().toISOString(),
-    counts: countStatuses(allItems),
+    counts,
     countsLimited: snapshot.size === MAX_DASHBOARD_ITEMS,
     items: allItems.slice(0, requestedLimit),
   };
@@ -178,7 +194,7 @@ export function parseRegistrationInput(data: unknown): RegistrationInput {
     throw new AppError("INVALID_ARGUMENT", "StudioMate에 기록할 결제수단을 선택하세요.");
   }
   if (value.paymentConfirmed !== true || value.seatConfirmed !== true) {
-    throw new AppError("INVALID_ARGUMENT", "입금과 좌석 확인 후 등록을 확정하세요.");
+    throw new AppError("INVALID_ARGUMENT", "입금과 접수 가능 여부를 확인한 뒤 등록을 확정하세요.");
   }
   return { memberName, memberPhone, lessonDate, paymentMethod, paymentConfirmed: true, seatConfirmed: true };
 }
@@ -227,14 +243,6 @@ function safeEvidence(value: unknown): Record<string, unknown> {
       : [],
     eformsignDocumentId: cleanText(data.eformsignDocumentId, 160),
   };
-}
-
-function countStatuses(items: Array<Record<string, unknown>>): Record<string, number> {
-  return items.reduce<Record<string, number>>((counts, item) => {
-    const status = cleanText(item.status, 40) || "unknown";
-    counts[status] = Number(counts[status] || 0) + 1;
-    return counts;
-  }, {});
 }
 
 function assertSameRegistration(existing: Record<string, unknown>, input: RegistrationInput): void {

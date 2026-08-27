@@ -57,17 +57,69 @@ export function selectExactInstructorLessonTicket(tickets, ticketName = INSTRUCT
   return matches[0];
 }
 
-export function selectInstructorLessonSessionCards(cards, lessonDate) {
+export function inspectInstructorLessonSessionCards(cards, lessonDate) {
   const expectedDate = String(lessonDate || "").slice(0, 10);
   const matches = (Array.isArray(cards) ? cards : []).filter((card) => card.date === expectedDate);
   if (matches.some((card) => card.full || card.disabled)) {
     throw new Error("강사레슨 두 세션 중 예약 마감 또는 선택 불가 수업이 있습니다.");
   }
   const unique = new Map(matches.map((card) => [`${card.date}|${card.time}|${card.instructor}|${card.title}`, card]));
+  if (unique.size === 0) {
+    return { status: "waiting_class_assignment", sessions: [] };
+  }
   if (unique.size !== INSTRUCTOR_LESSON_EXPECTED_SESSIONS) {
     throw new Error(`선택 가능한 강사레슨 세션이 ${unique.size}건입니다. 정확히 2건이어야 합니다.`);
   }
-  return [...unique.values()].sort((a, b) => String(a.time).localeCompare(String(b.time)));
+  return {
+    status: "ready",
+    sessions: [...unique.values()].sort((a, b) => String(a.time).localeCompare(String(b.time))),
+  };
+}
+
+export function selectInstructorLessonSessionCards(cards, lessonDate) {
+  const inspection = inspectInstructorLessonSessionCards(cards, lessonDate);
+  if (inspection.status !== "ready") {
+    throw new Error("선택 가능한 강사레슨 세션이 0건입니다. 정확히 2건이어야 합니다.");
+  }
+  return inspection.sessions;
+}
+
+export function deriveInstructorLessonRegistrationState({ mode, steps = {} }) {
+  const status = (key) => String(steps?.[key]?.status || "pending");
+  const normalizedMode = String(mode || "");
+  const requiredSteps = ["member", "ticket", "bookings"];
+  if (normalizedMode === "new_member") requiredSteps.push("eformsign", "memo");
+  if (requiredSteps.some((key) => ["review_required", "failed"].includes(status(key)))) {
+    return { status: "action_required", nextAction: "확인필요 항목 검토" };
+  }
+  if (!["new_member", "returning_member"].includes(normalizedMode)) {
+    return { status: "processing", nextAction: "StudioMate 회원 유형 확인" };
+  }
+  if (status("member") !== "verified" || status("ticket") !== "verified") {
+    return { status: "processing", nextAction: "회원·수강권 검증 중" };
+  }
+
+  const bookingStatus = status("bookings");
+  if (bookingStatus === "waiting_assignment") {
+    return {
+      status: "waiting_class_assignment",
+      nextAction: "StudioMate 수업 생성·반배정 후 두 세션 예약 자동 재개",
+    };
+  }
+  if (bookingStatus !== "verified") {
+    return { status: "processing", nextAction: "두 세션 예약·원천 검증 중" };
+  }
+
+  if (normalizedMode === "returning_member") {
+    return { status: "completed", nextAction: "없음" };
+  }
+  if (status("memo") === "verified") {
+    return { status: "completed", nextAction: "없음" };
+  }
+  if (status("eformsign") === "verified") {
+    return { status: "memo_pending", nextAction: "StudioMate 가입서 완료 메모 반영 대기" };
+  }
+  return { status: "waiting_signature", nextAction: "강사회원 가입서 발송·작성 대기" };
 }
 
 export function validateCanonicalInstructorLessonBookings(

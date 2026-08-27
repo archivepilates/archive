@@ -4,7 +4,9 @@ import {
   INSTRUCTOR_LESSON_EXPECTED_SESSIONS,
   INSTRUCTOR_LESSON_TICKET_NAME,
   buildInstructorMemberDocumentName,
+  deriveInstructorLessonRegistrationState,
   exactMemberCandidates,
+  inspectInstructorLessonSessionCards,
   instructorLessonRegistrationId,
   isInstructorMemberGrade,
   normalizeInstructorLessonPhone,
@@ -65,6 +67,87 @@ test("수강일의 예약 가능한 세션이 정확히 두 개일 때만 진행
   assert.throws(
     () => selectInstructorLessonSessionCards([{ date: "2026-09-12", time: "09:00", full: true }], "2026-09-12"),
     /마감/,
+  );
+});
+
+test("수업이 아직 없으면 오류가 아니라 반배정 대기로 분류한다", () => {
+  assert.deepEqual(inspectInstructorLessonSessionCards([], "2026-09-12"), {
+    status: "waiting_class_assignment",
+    sessions: [],
+  });
+  assert.throws(
+    () => inspectInstructorLessonSessionCards([
+      { date: "2026-09-12", time: "09:00", instructor: "A", title: "강사레슨 1" },
+    ], "2026-09-12"),
+    /1건/,
+  );
+});
+
+test("예약과 신규 가입서 메모가 모두 끝나야 등록을 완료한다", () => {
+  const baseSteps = {
+    member: { status: "verified" },
+    ticket: { status: "verified" },
+    eformsign: { status: "verified" },
+    memo: { status: "verified" },
+  };
+  assert.deepEqual(
+    deriveInstructorLessonRegistrationState({
+      mode: "new_member",
+      steps: { ...baseSteps, bookings: { status: "waiting_assignment" } },
+    }),
+    {
+      status: "waiting_class_assignment",
+      nextAction: "StudioMate 수업 생성·반배정 후 두 세션 예약 자동 재개",
+    },
+  );
+  assert.equal(
+    deriveInstructorLessonRegistrationState({
+      mode: "new_member",
+      steps: { ...baseSteps, bookings: { status: "verified" } },
+    }).status,
+    "completed",
+  );
+  assert.equal(
+    deriveInstructorLessonRegistrationState({
+      mode: "returning_member",
+      steps: {
+        member: { status: "verified" },
+        ticket: { status: "verified" },
+        bookings: { status: "verified" },
+        eformsign: { status: "not_required" },
+        memo: { status: "not_required" },
+      },
+    }).status,
+    "completed",
+  );
+  assert.equal(
+    deriveInstructorLessonRegistrationState({
+      mode: "new_member",
+      steps: {
+        ...baseSteps,
+        bookings: { status: "waiting_assignment" },
+        eformsign: { status: "review_required" },
+      },
+    }).status,
+    "action_required",
+  );
+  assert.equal(
+    deriveInstructorLessonRegistrationState({
+      mode: "unresolved",
+      steps: { ...baseSteps, bookings: { status: "verified" } },
+    }).status,
+    "processing",
+  );
+  assert.equal(
+    deriveInstructorLessonRegistrationState({
+      mode: "returning_member",
+      steps: {
+        member: { status: "pending" },
+        ticket: { status: "verified" },
+        bookings: { status: "verified" },
+      },
+    }).status,
+    "processing",
   );
 });
 

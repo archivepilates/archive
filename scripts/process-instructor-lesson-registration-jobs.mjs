@@ -12,13 +12,14 @@ import { appendIdleHeartbeatIfDue } from "./lib/idle-heartbeat.mjs";
 import {
   INSTRUCTOR_LESSON_EXPECTED_SESSIONS,
   INSTRUCTOR_LESSON_TICKET_NAME,
+  deriveInstructorLessonRegistrationState,
   exactMemberCandidates,
+  inspectInstructorLessonSessionCards,
   isInstructorMemberGrade,
   normalizeInstructorLessonName,
   normalizeInstructorLessonPhone,
   paymentMethodLabel,
   selectExactInstructorLessonTicket,
-  selectInstructorLessonSessionCards,
   staleExternalActionStatus,
   validateCanonicalInstructorLessonBookings,
 } from "./lib/instructor-lesson-registration-contract.mjs";
@@ -234,6 +235,12 @@ async function processStudioMateRegistration(page, ref, job) {
     detail: activeTicket ? "기존 동일 수강일 수강권 재사용" : "강사레슨 (2T) 발급 검증 완료",
     nextStep: "bookings",
   });
+  await preparePostTicketSteps(ref, job.claimToken, {
+    ...job,
+    mode,
+    studiomateMemberId: memberId,
+    ticketId,
+  });
 
   const bookingPreflight = await canonicalBookingState({ ...job, studiomateMemberId: memberId });
   if (bookingPreflight.ok) {
@@ -269,6 +276,10 @@ async function processStudioMateRegistration(page, ref, job) {
     studiomateMemberId: memberId,
     ticketId,
   });
+  if (bookingResult.status === "waiting_class_assignment") {
+    await waitForClassAssignment(ref, job.claimToken, { mode, memberId, ticketId });
+    return { status: "waiting_class_assignment", detail: "수업 미생성 · 반배정 후 예약 자동 재개" };
+  }
   await commitClaimedState(ref, job.claimToken, {
     status: "pending",
     currentStep: "bookings_verify",
@@ -482,14 +493,41 @@ async function reserveInstructorLessonSessions(page, ref, job) {
 
   const rangeInputs = page.locator(".el-range-input");
   await rangeInputs.first().waitFor({ state: "visible", timeout: 20_000 });
-  await setElementDate(rangeInputs.nth(0), job.lessonDate);
-  await setElementDate(rangeInputs.nth(1), job.lessonDate);
-  await rangeInputs.nth(1).press("Enter");
-  await page.keyboard.press("Escape").catch(() => {});
-  await page.waitForFunction(() => !document.body.innerText.includes("수업 목록을 가져오는 중..."));
-
-  const cards = await readLectureCards(page);
-  const selectedCards = selectInstructorLessonSessionCards(cards, job.lessonDate);
+  const lessonListResponses = [];
+  const responseListener = (response) => {
+    if (
+      response.request().method() === "GET"
+      && response.url().includes("api.studiomate.kr")
+      && /(lecture|booking|schedule)/i.test(response.url())
+    ) {
+      lessonListResponses.push({ ok: response.ok(), status: response.status(), url: response.url() });
+    }
+  };
+  page.on("response", responseListener);
+  let cards;
+  try {
+    await setElementDate(rangeInputs.nth(0), job.lessonDate);
+    await setElementDate(rangeInputs.nth(1), job.lessonDate);
+    await rangeInputs.nth(1).press("Enter");
+    await page.keyboard.press("Escape").catch(() => {});
+    await page.waitForFunction(() => !document.body.innerText.includes("수업 목록을 가져오는 중..."));
+    cards = await readLectureCards(page);
+  } finally {
+    page.off("response", responseListener);
+  }
+  if (!cards.length) {
+    const sourceColumnText = await page.locator(".lecture-list__list__column").first().innerText().catch(() => "");
+    const hasEmptyState = /(수업|예약).{0,20}(없습니다|없어요|없음)|조회.{0,20}없습니다/.test(sourceColumnText);
+    const hasSuccessfulSourceRead = lessonListResponses.some((response) => response.ok);
+    if (!hasEmptyState && !hasSuccessfulSourceRead) {
+      throw new Error("StudioMate 수업 목록 0건의 원천 응답 또는 빈 상태 화면을 확인하지 못했습니다.");
+    }
+  }
+  const inspection = inspectInstructorLessonSessionCards(cards, job.lessonDate);
+  if (inspection.status === "waiting_class_assignment") {
+    return { status: "waiting_class_assignment", bookingIds: [], cards: [] };
+  }
+  const selectedCards = inspection.sessions;
   for (const card of selectedCards) {
     await page.locator(".lecture-list__list__column").first().locator(".lecture-item").nth(card.index).click();
   }
@@ -515,6 +553,115 @@ async function reserveInstructorLessonSessions(page, ref, job) {
     throw new Error(`StudioMate 예약 결과가 성공 ${success.length}건·오류 ${errors.length}건입니다.`);
   }
   return { bookingIds: success.map((item) => String(item.id || "")).filter(Boolean), cards: selectedCards };
+}
+
+async function preparePostTicketSteps(ref, claimToken, job) {
+  const registrationRef = registration(ref.id);
+  const eformRef = db.collection("eformsignInstructorMemberJobs").doc(ref.id);
+  await db.runTransaction(async (transaction) => {
+    const [jobSnapshot, registrationSnapshot, eformSnapshot] = await Promise.all([
+      transaction.get(ref),
+      transaction.get(registrationRef),
+      transaction.get(eformRef),
+    ]);
+    const currentJob = jobSnapshot.data() || {};
+    if (!jobSnapshot.exists || currentJob.status !== "processing" || currentJob.claimToken !== claimToken) {
+      throw new Error("수강권 확인 뒤 작업 임대가 변경되어 후속 처리 준비를 중단했습니다.");
+    }
+    if (!registrationSnapshot.exists) throw new Error("강사레슨 등록 원본을 찾지 못했습니다.");
+    const registrationData = registrationSnapshot.data() || {};
+    const currentSteps = registrationData.steps || {};
+    const now = FieldValue.serverTimestamp();
+    const newMember = String(job.mode || currentJob.mode || "") === "new_member";
+    const eformStep = currentSteps.eformsign || {};
+    const memoStep = currentSteps.memo || {};
+    const steps = {
+      ...currentSteps,
+      eformsign: newMember
+        ? (eformStep.status && eformStep.status !== "pending"
+          ? eformStep
+          : stepValue("queued", "강사회원 가입서", "예약과 별개로 이폼싸인 브라우저 큐 등록"))
+        : stepValue("not_required", "강사회원 가입서", "재수강 강사회원은 재발송하지 않음"),
+      memo: newMember
+        ? (memoStep.status && memoStep.status !== "pending"
+          ? memoStep
+          : stepValue("waiting_external", "가입서 완료 메모", "가입서 완료 뒤 자동 등록"))
+        : stepValue("not_required", "가입서 완료 메모", "재수강 건"),
+    };
+    transaction.update(registrationRef, {
+      mode: job.mode || currentJob.mode,
+      steps,
+      nextAction: "두 세션 예약 또는 반배정 대기 확인",
+      updatedAt: now,
+    });
+    if (newMember && !eformSnapshot.exists && String(steps.eformsign?.status || "") !== "verified") {
+      transaction.set(eformRef, {
+        jobId: ref.id,
+        registrationId: ref.id,
+        studioId: job.studioId,
+        memberName: job.memberName,
+        memberPhone: normalizeInstructorLessonPhone(job.memberPhone),
+        lessonDate: job.lessonDate,
+        studiomateMemberId: job.studiomateMemberId,
+        ticketName: INSTRUCTOR_LESSON_TICKET_NAME,
+        status: "pending",
+        attempts: 0,
+        maxAttempts: 3,
+        externalEffectStarted: false,
+        createdAt: now,
+        updatedAt: now,
+      });
+    }
+  });
+}
+
+async function waitForClassAssignment(ref, claimToken, { mode, memberId, ticketId }) {
+  const registrationRef = registration(ref.id);
+  await db.runTransaction(async (transaction) => {
+    const [jobSnapshot, registrationSnapshot] = await Promise.all([
+      transaction.get(ref),
+      transaction.get(registrationRef),
+    ]);
+    const currentJob = jobSnapshot.data() || {};
+    if (!jobSnapshot.exists || currentJob.status !== "processing" || currentJob.claimToken !== claimToken) {
+      throw new Error("반배정 대기 반영 전 작업 임대가 변경되었습니다.");
+    }
+    if (!registrationSnapshot.exists) throw new Error("강사레슨 등록 원본을 찾지 못했습니다.");
+    const registrationData = registrationSnapshot.data() || {};
+    const steps = {
+      ...(registrationData.steps || {}),
+      bookings: stepValue("waiting_assignment", "두 세션 예약", "수업 미생성 · 반배정 뒤 자동 예약 재개"),
+    };
+    const state = deriveInstructorLessonRegistrationState({ mode, steps });
+    const now = FieldValue.serverTimestamp();
+    transaction.set(ref, {
+      status: "waiting_assignment",
+      currentStep: "bookings_wait_assignment",
+      attempts: 0,
+      claimToken: null,
+      claimedAt: null,
+      claimedBy: null,
+      leaseExpiresAt: null,
+      nextRunAt: Timestamp.fromMillis(Date.now() + 10 * 60 * 1000),
+      mode,
+      studiomateMemberId: memberId,
+      ticketId,
+      externalEffectStarted: false,
+      effectType: null,
+      effectStartedAt: null,
+      bookingEffectStartedAt: null,
+      canonicalVerificationAttempts: 0,
+      lastError: null,
+      updatedAt: now,
+    }, { merge: true });
+    transaction.update(registrationRef, {
+      status: state.status,
+      nextAction: state.nextAction,
+      steps,
+      ...(state.status === "action_required" ? {} : { lastError: null }),
+      updatedAt: now,
+    });
+  });
 }
 
 async function verifyCanonicalBookings(ref, job) {
@@ -544,14 +691,26 @@ async function verifyCanonicalBookings(ref, job) {
     throw new Error(`예약 후 4시간 동안 canonical 예약원천이 ${verification.count}/2건입니다.`);
   }
 
-  const newMember = job.memberCreatedByRegistration === true || String(job.mode || "") === "new_member";
+  let registrationState = { status: "processing", nextAction: "두 세션 예약·원천 검증 중" };
   await db.runTransaction(async (transaction) => {
-    const snapshot = await transaction.get(ref);
+    const registrationRef = registration(ref.id);
+    const [snapshot, registrationSnapshot] = await Promise.all([
+      transaction.get(ref),
+      transaction.get(registrationRef),
+    ]);
     const current = snapshot.data() || {};
     if (!snapshot.exists || current.status !== "processing" || current.claimToken !== job.claimToken) {
       throw new Error("예약 검증 작업 임대가 변경되어 완료 반영을 중단했습니다.");
     }
+    if (!registrationSnapshot.exists) throw new Error("강사레슨 등록 원본을 찾지 못했습니다.");
+    const registrationData = registrationSnapshot.data() || {};
     const now = FieldValue.serverTimestamp();
+    const steps = {
+      ...(registrationData.steps || {}),
+      bookings: stepValue("verified", "두 세션 예약", "선택 수업과 canonical 예약원천이 정확히 2건 일치"),
+      confirmation: stepValue("not_required", "예약 안내", "기존 강사레슨 D-1 안내 자동화가 canonical 예약원천을 사용"),
+    };
+    registrationState = deriveInstructorLessonRegistrationState({ mode: current.mode || job.mode, steps });
     transaction.set(ref, {
       status: "done",
       currentStep: "complete",
@@ -562,43 +721,20 @@ async function verifyCanonicalBookings(ref, job) {
       externalEffectStarted: false,
       lastError: null,
     }, { merge: true });
-    transaction.update(registration(ref.id), {
-      status: newMember ? "waiting_signature" : "completed",
-      nextAction: newMember ? "강사회원 가입서 발송·작성 대기" : "없음",
-      "steps.bookings": stepValue("verified", "두 세션 예약", "선택 수업과 canonical 예약원천이 정확히 2건 일치"),
-      "steps.eformsign": newMember
-        ? stepValue("queued", "강사회원 가입서", "이폼싸인 브라우저 큐 등록")
-        : stepValue("not_required", "강사회원 가입서", "재수강 강사회원은 재발송하지 않음"),
-      "steps.memo": newMember
-        ? stepValue("waiting_external", "가입서 완료 메모", "가입서 완료 뒤 자동 등록")
-        : stepValue("not_required", "가입서 완료 메모", "재수강 건"),
-      "steps.confirmation": stepValue("not_required", "예약 안내", "기존 강사레슨 D-1 안내 자동화가 canonical 예약원천을 사용"),
+    transaction.update(registrationRef, {
+      status: registrationState.status,
+      nextAction: registrationState.nextAction,
+      steps,
       "evidence.bookingIds": verification.bookingIds,
       updatedAt: now,
-      ...(newMember ? {} : { completedAt: now }),
+      ...(registrationState.status === "completed" ? { completedAt: now } : {}),
     });
-    if (newMember) {
-      transaction.set(db.collection("eformsignInstructorMemberJobs").doc(ref.id), {
-        jobId: ref.id,
-        registrationId: ref.id,
-        studioId: job.studioId,
-        memberName: job.memberName,
-        memberPhone: normalizeInstructorLessonPhone(job.memberPhone),
-        lessonDate: job.lessonDate,
-        studiomateMemberId: job.studiomateMemberId,
-        ticketName: INSTRUCTOR_LESSON_TICKET_NAME,
-        status: "pending",
-        attempts: 0,
-        maxAttempts: 3,
-        externalEffectStarted: false,
-        createdAt: now,
-        updatedAt: now,
-      }, { merge: true });
-    }
   });
   return {
-    status: newMember ? "waiting_signature" : "completed",
-    detail: newMember ? "예약 2건 검증 · 가입서 발송 대기" : "예약 2건 검증 · 재수강 등록 완료",
+    status: registrationState.status,
+    detail: registrationState.status === "completed"
+      ? "예약 2건과 후속 처리 검증 완료"
+      : `예약 2건 검증 · ${registrationState.nextAction}`,
   };
 }
 
@@ -651,24 +787,30 @@ async function loadCandidates(limit) {
     return snapshot.exists ? [{ ref: snapshot.ref, data: snapshot.data() }] : [];
   }
   const snapshots = await Promise.all(
-    ["pending", "retry"].map((status) => db.collection("studiomateInstructorLessonJobs").where("status", "==", status).limit(limit * 4).get()),
+    ["pending", "retry", "waiting_assignment"].map((status) =>
+      db.collection("studiomateInstructorLessonJobs").where("status", "==", status).get()),
   );
   const now = Date.now();
   return snapshots.flatMap((snapshot) => snapshot.docs)
     .map((doc) => ({ ref: doc.ref, data: doc.data() }))
     .filter(({ data }) => !data.nextRunAt || timestampMillis(data.nextRunAt) <= now)
-    .sort((a, b) => timestampMillis(a.data.createdAt) - timestampMillis(b.data.createdAt))
+    .sort((a, b) => {
+      const aWaiting = a.data.currentStep === "bookings_wait_assignment" ? 1 : 0;
+      const bWaiting = b.data.currentStep === "bookings_wait_assignment" ? 1 : 0;
+      return aWaiting - bWaiting || timestampMillis(a.data.createdAt) - timestampMillis(b.data.createdAt);
+    })
     .slice(0, limit);
 }
 
 async function claimJob(ref) {
   return db.runTransaction(async (transaction) => {
     const snapshot = await transaction.get(ref);
-    if (!snapshot.exists || !["pending", "retry"].includes(String(snapshot.data()?.status || ""))) return null;
+    if (!snapshot.exists || !["pending", "retry", "waiting_assignment"].includes(String(snapshot.data()?.status || ""))) return null;
     const data = snapshot.data();
     if (data.nextRunAt && timestampMillis(data.nextRunAt) > Date.now()) return null;
     if (data.externalEffectStarted || data.effectStartedAt) {
       const message = "외부 작업 실행 흔적이 있어 자동 재시도를 차단했습니다.";
+      const stateStep = registrationStepName(data.currentStep);
       transaction.set(ref, {
         status: "review_required",
         lastError: message,
@@ -679,9 +821,9 @@ async function claimJob(ref) {
         status: "action_required",
         nextAction: "외부 작업 결과 운영자 확인",
         lastError: message,
-        [`steps.${String(data.currentStep || "member")}`]: stepValue(
+        [`steps.${stateStep}`]: stepValue(
           "review_required",
-          stepLabel(String(data.currentStep || "member")),
+          stepLabel(stateStep),
           message,
         ),
         updatedAt: FieldValue.serverTimestamp(),
@@ -773,7 +915,7 @@ async function commitClaimedState(ref, claimToken, jobPatch, registrationPatch) 
 }
 
 async function markFailure(ref, job, message, status) {
-  const currentStep = String(job.currentStep || "member");
+  const currentStep = registrationStepName(job.currentStep);
   await db.runTransaction(async (transaction) => {
     const snapshot = await transaction.get(ref);
     const current = snapshot.data() || {};
@@ -840,6 +982,11 @@ function stepLabel(stepName) {
     bookings: "두 세션 예약",
     bookings_verify: "예약 원천 확인",
   }[stepName] || stepName;
+}
+
+function registrationStepName(stepName) {
+  const value = String(stepName || "member");
+  return value.startsWith("bookings") ? "bookings" : value;
 }
 
 function nextStepLabel(stepName) {

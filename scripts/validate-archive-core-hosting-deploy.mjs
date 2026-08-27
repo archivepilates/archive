@@ -121,10 +121,11 @@ const required = [
       "instructorLessonPaymentMethod",
       "instructorLessonRegistrationList",
       "입금 확인",
-      "좌석 확인",
+      "접수 가능 확인",
       "강사레슨 (2T)",
       "강사회원 가입서",
-      "신규 강사회원만 발송",
+      "신규 강사회원은 예약 전에도 발송",
+      "수업 생성 전에도 접수",
     ],
     forbiddenMarkers: [
       'data-section="members"',

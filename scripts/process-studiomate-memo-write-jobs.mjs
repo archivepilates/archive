@@ -3,10 +3,11 @@ import { appendFile, mkdir, readFile, writeFile } from "node:fs/promises";
 import os from "node:os";
 import path from "node:path";
 import { createRequire } from "node:module";
-import { createSign } from "node:crypto";
+import { createSign, randomUUID } from "node:crypto";
 import { acquireStudioMateBrowserLock } from "./lib/studiomate-browser-lock.mjs";
 import { ensureStudioMateLoggedIn } from "./lib/studiomate-login.mjs";
 import { appendIdleHeartbeatIfDue } from "./lib/idle-heartbeat.mjs";
+import { deriveInstructorLessonRegistrationState } from "./lib/instructor-lesson-registration-contract.mjs";
 
 const require = createRequire(import.meta.url);
 const admin = require("../firebase/kangsain-functions/functions/node_modules/firebase-admin");
@@ -78,18 +79,28 @@ try {
   if (!capturedAuthorization) throw new Error("StudioMate browser authorization header was not captured.");
 
   for (const { ref, data } of jobs) {
-    result.processed += 1;
     const item = { jobId: data.jobId || ref.id, memberName: data.memberName, status: "pending" };
+    let activeData = data;
     try {
       if (!apply) {
+        result.processed += 1;
         item.status = "dry-run";
         result.skipped += 1;
       } else {
-        const writeResult = await writeMemo(page, data, capturedAuthorization);
+        activeData = await claimMemoJob(ref);
+        if (!activeData) {
+          item.status = "skipped";
+          result.skipped += 1;
+          result.jobs.push(item);
+          continue;
+        }
+        result.processed += 1;
+        const writeResult = await writeMemo(page, activeData, capturedAuthorization);
         await ref.set(
           {
             status: "done",
-            attempts: Number(data.attempts || 0) + 1,
+            attempts: Number(activeData.attempts || 0),
+            claimToken: null,
             ...(writeResult.studiomateMemberId ? { studiomateMemberId: writeResult.studiomateMemberId } : {}),
             writtenAt: admin.firestore.Timestamp.now(),
             lastError: null,
@@ -97,50 +108,51 @@ try {
           },
           { merge: true },
         );
-        await updateMemberMemoSyncStatus(data.jobId || ref.id, {
+        await updateMemberMemoSyncStatus(activeData.jobId || ref.id, {
           syncStatus: "synced",
           syncedAt: admin.firestore.Timestamp.now(),
           syncError: null,
         });
-        await updateMemberSignupContractSyncStatus(data, {
+        await updateMemberSignupContractSyncStatus(activeData, {
           status: "done",
           reason: "StudioMate member signup memo was written by individual Playwright sync.",
           updatedAt: admin.firestore.Timestamp.now(),
         });
-        await updateInstructorLessonRegistrationMemoStatus(data, {
+        await updateInstructorLessonRegistrationMemoStatus(activeData, {
           status: "done",
           reason: "StudioMate 회원 메모 반영 완료",
         });
-        await markMemberIdLookupDone(data, writeResult.studiomateMemberId);
+        await markMemberIdLookupDone(activeData, writeResult.studiomateMemberId);
         item.status = "done";
         result.written += 1;
       }
     } catch (error) {
-      const attempts = Number(data.attempts || 0) + 1;
-      const maxAttempts = Number(data.maxAttempts || 3);
+      const attempts = Number(activeData.attempts || 0) || Number(data.attempts || 0) + 1;
+      const maxAttempts = Number(activeData.maxAttempts || data.maxAttempts || 3);
       const message = error instanceof Error ? error.message : String(error);
       const status = attempts >= maxAttempts ? "failed" : "retry";
       await ref.set(
         {
           status,
           attempts,
+          claimToken: null,
           lastError: message,
           updatedAt: admin.firestore.Timestamp.now(),
         },
         { merge: true },
       );
-      await updateMemberMemoSyncStatus(data.jobId || ref.id, {
+      await updateMemberMemoSyncStatus(activeData.jobId || ref.id, {
         syncStatus: status,
         syncError: message,
       });
-      await updateMemberSignupContractSyncStatus(data, {
+      await updateMemberSignupContractSyncStatus(activeData, {
         status,
         reason: message,
         updatedAt: admin.firestore.Timestamp.now(),
       });
-      await updateInstructorLessonRegistrationMemoStatus(data, { status, reason: message });
+      await updateInstructorLessonRegistrationMemoStatus(activeData, { status, reason: message });
       if (status === "failed") {
-        await sendMemoWriteFailureEmailOnce(ref, data, message);
+        await sendMemoWriteFailureEmailOnce(ref, activeData, message);
       }
       item.status = status;
       item.error = message;
@@ -174,9 +186,31 @@ async function loadPendingJobs(max) {
   const snap = await db
     .collection("studiomateMemoWriteJobs")
     .where("status", "in", ["pending", "retry"])
-    .limit(max)
     .get();
-  return snap.docs.map((doc) => ({ ref: doc.ref, data: doc.data() }));
+  return snap.docs
+    .map((doc) => ({ ref: doc.ref, data: doc.data() }))
+    .sort((a, b) => timestampMillis(a.data.updatedAt || a.data.createdAt) - timestampMillis(b.data.updatedAt || b.data.createdAt))
+    .slice(0, max);
+}
+
+async function claimMemoJob(ref) {
+  return db.runTransaction(async (transaction) => {
+    const snapshot = await transaction.get(ref);
+    if (!snapshot.exists || !["pending", "retry"].includes(String(snapshot.data()?.status || ""))) return null;
+    const data = snapshot.data() || {};
+    const attempts = Number(data.attempts || 0) + 1;
+    const claimToken = randomUUID();
+    transaction.set(ref, {
+      status: "processing",
+      attempts,
+      claimToken,
+      claimedBy: `${os.hostname()}:${process.pid}`,
+      claimedAt: admin.firestore.Timestamp.now(),
+      updatedAt: admin.firestore.Timestamp.now(),
+      lastError: null,
+    }, { merge: true });
+    return { ...data, attempts, claimToken };
+  });
 }
 
 async function updateMemberMemoSyncStatus(memoId, patch) {
@@ -228,20 +262,22 @@ async function updateInstructorLessonRegistrationMemoStatus(job, patch) {
 
     const failed = patch.status === "failed";
     const now = admin.firestore.Timestamp.now();
-    transaction.set(registrationRef, {
-      status: completed ? "completed" : failed ? "action_required" : "memo_pending",
-      nextAction: completed ? "없음" : failed ? "StudioMate 메모 반영 운영자 확인" : "StudioMate 메모 자동 재시도 대기",
-      steps: {
-        ...(current.steps || {}),
-        memo: {
-          ...currentMemo,
-          status: completed ? "verified" : failed ? "review_required" : "retry",
-          label: "가입서 완료 메모",
-          detail: String(patch.reason || "").slice(0, 240),
-          updatedAt: now,
-        },
+    const steps = {
+      ...(current.steps || {}),
+      memo: {
+        ...currentMemo,
+        status: completed ? "verified" : failed ? "review_required" : "retry",
+        label: "가입서 완료 메모",
+        detail: String(patch.reason || "").slice(0, 240),
+        updatedAt: now,
       },
-      ...(completed ? { completedAt: current.completedAt || now } : {}),
+    };
+    const state = deriveInstructorLessonRegistrationState({ mode: current.mode, steps });
+    transaction.set(registrationRef, {
+      status: state.status,
+      nextAction: state.nextAction,
+      steps,
+      ...(state.status === "completed" ? { completedAt: current.completedAt || now } : {}),
       updatedAt: now,
     }, { merge: true });
   });
@@ -249,7 +285,9 @@ async function updateInstructorLessonRegistrationMemoStatus(job, patch) {
 
 async function markLoadedJobsFailed(message) {
   for (const { ref, data } of jobs) {
-    const attempts = Number(data.attempts || 0) + 1;
+    const latest = (await ref.get()).data() || {};
+    if (!["pending", "retry"].includes(String(latest.status || ""))) continue;
+    const attempts = Number(latest.attempts || data.attempts || 0) + 1;
     await ref.set(
       {
         status: "failed",
@@ -388,8 +426,14 @@ async function writeMemo(page, job, authorization) {
   const content = String(job.content || "");
   if (!memberId || !content) throw new Error("memberId/content is required");
   const studiomateMemberId = await resolveStudioMateMemberId(page, job);
+  if (await studioMateMemoExists(page, studiomateMemberId, content)) {
+    return { studiomateMemberId, alreadyExists: true };
+  }
   try {
     await writeMemoViaBrowserRequest(page, studiomateMemberId, content, authorization);
+    if (!(await studioMateMemoExists(page, studiomateMemberId, content))) {
+      throw new Error("StudioMate memo API success was not visible on the member detail page.");
+    }
     return { studiomateMemberId };
   } catch (error) {
     const message = error instanceof Error ? error.message : String(error);
@@ -397,6 +441,15 @@ async function writeMemo(page, job, authorization) {
   }
   await writeMemoViaUi(page, studiomateMemberId, content);
   return { studiomateMemberId };
+}
+
+async function studioMateMemoExists(page, memberId, content) {
+  await page.goto(new URL(`/users/detail?id=${encodeURIComponent(memberId)}`, config.baseUrl).toString(), {
+    waitUntil: "networkidle",
+    timeout: 60000,
+  });
+  const body = await page.locator("body").innerText({ timeout: 10000 });
+  return bodyContainsMemoContent(body, content);
 }
 
 async function resolveStudioMateMemberId(page, job) {
@@ -519,6 +572,15 @@ function normalizeMemoText(value) {
     .replace(/[ \t]+/g, " ")
     .replace(/[ \t]*\n[ \t]*/g, "\n")
     .trim();
+}
+
+function timestampMillis(value) {
+  if (!value) return 0;
+  if (typeof value.toMillis === "function") return value.toMillis();
+  const seconds = Number(value.seconds ?? value._seconds);
+  if (Number.isFinite(seconds)) return seconds * 1000;
+  const parsed = Date.parse(String(value));
+  return Number.isFinite(parsed) ? parsed : 0;
 }
 
 async function clickSearchResult(page, { phone, name }) {

@@ -14,6 +14,7 @@ import {
   INSTRUCTOR_MEMBER_EFORMSIGN_TEMPLATE_URL,
   buildInstructorMemberDocumentName,
   buildInstructorMemberRecipientMessage,
+  deriveInstructorLessonRegistrationState,
   staleExternalActionStatus,
 } from "./lib/instructor-lesson-registration-contract.mjs";
 
@@ -181,16 +182,20 @@ async function loadCandidates(limit) {
     return [{ ref: snapshot.ref, data: snapshot.data() }];
   }
   const [pendingSnapshot, retrySnapshot, sentSnapshot, waitingSnapshot] = await Promise.all([
-    db.collection("eformsignInstructorMemberJobs").where("status", "==", "pending").limit(limit * 2).get(),
-    db.collection("eformsignInstructorMemberJobs").where("status", "==", "retry").limit(limit * 2).get(),
-    db.collection("eformsignInstructorMemberJobs").where("status", "==", "sent").limit(limit * 2).get(),
-    db.collection("eformsignInstructorMemberJobs").where("status", "==", "waiting_completion").limit(limit * 2).get(),
+    db.collection("eformsignInstructorMemberJobs").where("status", "==", "pending").get(),
+    db.collection("eformsignInstructorMemberJobs").where("status", "==", "retry").get(),
+    db.collection("eformsignInstructorMemberJobs").where("status", "==", "sent").get(),
+    db.collection("eformsignInstructorMemberJobs").where("status", "==", "waiting_completion").get(),
   ]);
   const sortOldest = (docs) => docs
     .map((doc) => ({ ref: doc.ref, data: doc.data() }))
     .sort((a, b) => timestampMillis(a.data.createdAt) - timestampMillis(b.data.createdAt));
   const sends = sortOldest([...pendingSnapshot.docs, ...retrySnapshot.docs]).slice(0, limit);
-  const checks = sortOldest([...sentSnapshot.docs, ...waitingSnapshot.docs]).slice(0, limit);
+  const checks = [...sentSnapshot.docs, ...waitingSnapshot.docs]
+    .map((doc) => ({ ref: doc.ref, data: doc.data() }))
+    .sort((a, b) => timestampMillis(a.data.lastCheckedAt || a.data.sentAt || a.data.createdAt)
+      - timestampMillis(b.data.lastCheckedAt || b.data.sentAt || b.data.createdAt))
+    .slice(0, limit);
   return [...sends, ...checks];
 }
 
@@ -222,13 +227,17 @@ async function recoverStaleJobs() {
 
 async function claimJob(ref) {
   return db.runTransaction(async (transaction) => {
-    const snapshot = await transaction.get(ref);
+    const registrationRef = db.collection("instructorLessonRegistrations").doc(ref.id);
+    const [snapshot, registrationSnapshot] = await Promise.all([
+      transaction.get(ref),
+      transaction.get(registrationRef),
+    ]);
     if (!snapshot.exists || !["pending", "retry"].includes(String(snapshot.data()?.status || ""))) return null;
     const data = snapshot.data();
     if (data.externalEffectStarted || data.effectStartedAt || data.sendClickedAt) {
       const message = "이폼싸인 전송 실행 흔적이 있어 자동 재발송을 차단했습니다.";
       transaction.set(ref, { status: "send_review_required", lastError: message, updatedAt: FieldValue.serverTimestamp() }, { merge: true });
-      transaction.update(db.collection("instructorLessonRegistrations").doc(ref.id), {
+      transaction.update(registrationRef, {
         status: "action_required",
         nextAction: "이폼싸인 발송 결과 운영자 확인",
         lastError: message,
@@ -237,6 +246,7 @@ async function claimJob(ref) {
       });
       return { ...data, blocked: true };
     }
+    if (!registrationSnapshot.exists) throw new Error("강사레슨 등록 원본을 찾지 못했습니다.");
     const attempts = Number(data.attempts || 0) + 1;
     const claimToken = randomUUID();
     transaction.set(ref, {
@@ -248,12 +258,11 @@ async function claimJob(ref) {
       updatedAt: FieldValue.serverTimestamp(),
       lastError: null,
     }, { merge: true });
-    transaction.update(db.collection("instructorLessonRegistrations").doc(ref.id), {
-      status: "waiting_signature",
-      nextAction: "강사회원 가입서 발송 중",
+    const registrationData = registrationSnapshot.data() || {};
+    transaction.update(registrationRef, deriveRegistrationPatch(registrationData, {
       "steps.eformsign": stepValue("processing", "강사회원 가입서", "이폼싸인 문서 준비 중"),
       updatedAt: FieldValue.serverTimestamp(),
-    });
+    }));
     return { ...data, attempts, claimToken };
   });
 }
@@ -460,13 +469,20 @@ async function markCompletionReviewRequired(ref, job, message, extra = {}) {
 
 async function writeCompletionCheckState(ref, claimToken, jobPatch, registrationPatch = null) {
   await db.runTransaction(async (transaction) => {
-    const snapshot = await transaction.get(ref);
+    const registrationRef = db.collection("instructorLessonRegistrations").doc(ref.id);
+    const [snapshot, registrationSnapshot] = await Promise.all([
+      transaction.get(ref),
+      transaction.get(registrationRef),
+    ]);
     const current = snapshot.data() || {};
     if (!snapshot.exists || current.status !== "checking_completion" || current.claimToken !== claimToken) {
       throw new Error("이폼싸인 완료 확인 임대가 변경되어 상태 반영을 중단했습니다.");
     }
     transaction.set(ref, jobPatch, { merge: true });
-    if (registrationPatch) transaction.update(db.collection("instructorLessonRegistrations").doc(ref.id), registrationPatch);
+    if (registrationPatch) {
+      if (!registrationSnapshot.exists) throw new Error("강사레슨 등록 원본을 찾지 못했습니다.");
+      transaction.update(registrationRef, deriveRegistrationPatch(registrationSnapshot.data() || {}, registrationPatch));
+    }
   });
 }
 
@@ -551,13 +567,18 @@ async function markSent(ref, job, sendResult) {
 
 async function writeSendClaimedState(ref, claimToken, allowedStatuses, jobPatch, registrationPatch) {
   await db.runTransaction(async (transaction) => {
-    const snapshot = await transaction.get(ref);
+    const registrationRef = db.collection("instructorLessonRegistrations").doc(ref.id);
+    const [snapshot, registrationSnapshot] = await Promise.all([
+      transaction.get(ref),
+      transaction.get(registrationRef),
+    ]);
     const current = snapshot.data() || {};
     if (!snapshot.exists || !allowedStatuses.includes(String(current.status || "")) || current.claimToken !== claimToken) {
       throw new Error("이폼싸인 발송 작업 임대가 변경되어 상태 반영을 중단했습니다.");
     }
+    if (!registrationSnapshot.exists) throw new Error("강사레슨 등록 원본을 찾지 못했습니다.");
     transaction.set(ref, jobPatch, { merge: true });
-    transaction.update(db.collection("instructorLessonRegistrations").doc(ref.id), registrationPatch);
+    transaction.update(registrationRef, deriveRegistrationPatch(registrationSnapshot.data() || {}, registrationPatch));
   });
 }
 
@@ -668,14 +689,12 @@ async function finalizeCompletedDocument(ref, job, evidence) {
       updatedAt: now,
       lastError: null,
     }, { merge: true });
-    transaction.update(registrationRef, {
-      status: "memo_pending",
-      nextAction: "StudioMate 가입서 완료 메모 반영 대기",
+    transaction.update(registrationRef, deriveRegistrationPatch(registration, {
       "steps.eformsign": stepValue("verified", "강사회원 가입서", "이폼싸인 작성 완료 확인"),
       "steps.memo": stepValue("queued", "가입서 완료 메모", "ARCHIVE PILATES 메모 저장 · StudioMate 반영 대기"),
       "evidence.eformsignDocumentId": documentId,
       updatedAt: now,
-    });
+    }));
   });
 }
 
@@ -689,10 +708,15 @@ async function markFailure(ref, job, message, finalSendClicked) {
 async function updateFailureState(ref, job, message, status) {
   const now = FieldValue.serverTimestamp();
   await db.runTransaction(async (transaction) => {
-    const snapshot = await transaction.get(ref);
+    const registrationRef = db.collection("instructorLessonRegistrations").doc(ref.id);
+    const [snapshot, registrationSnapshot] = await Promise.all([
+      transaction.get(ref),
+      transaction.get(registrationRef),
+    ]);
     const current = snapshot.data() || {};
     if (!snapshot.exists) return;
     if (job.claimToken && current.claimToken && current.claimToken !== job.claimToken) return;
+    if (!registrationSnapshot.exists) throw new Error("강사레슨 등록 원본을 찾지 못했습니다.");
     transaction.set(ref, {
       status,
       claimToken: null,
@@ -701,13 +725,11 @@ async function updateFailureState(ref, job, message, status) {
       lastError: message.slice(0, 1200),
       updatedAt: now,
     }, { merge: true });
-    transaction.update(db.collection("instructorLessonRegistrations").doc(ref.id), {
-      status: status === "send_review_required" ? "action_required" : status,
-      nextAction: status === "retry" ? "이폼싸인 자동 재시도 대기" : "이폼싸인 운영자 확인",
+    transaction.update(registrationRef, deriveRegistrationPatch(registrationSnapshot.data() || {}, {
       lastError: message.slice(0, 500),
       "steps.eformsign": stepValue(status === "send_review_required" ? "review_required" : status, "강사회원 가입서", message.slice(0, 240)),
       updatedAt: now,
-    });
+    }));
   });
 }
 
@@ -724,6 +746,20 @@ async function persistSummary() {
     warnings: [summary.error, ...summary.jobs.filter((job) => job.error).map((job) => `${job.jobId}: ${job.error}`)].filter(Boolean),
   }).catch(() => {});
   console.log(JSON.stringify(summary, null, 2));
+}
+
+function deriveRegistrationPatch(current, patch) {
+  const steps = { ...(current.steps || {}) };
+  for (const [key, value] of Object.entries(patch || {})) {
+    if (key.startsWith("steps.")) steps[key.slice("steps.".length)] = value;
+  }
+  if (patch?.steps && typeof patch.steps === "object") Object.assign(steps, patch.steps);
+  const state = deriveInstructorLessonRegistrationState({ mode: current.mode, steps });
+  return {
+    ...patch,
+    status: state.status,
+    nextAction: state.nextAction,
+  };
 }
 
 function stepValue(status, label, detail) {
