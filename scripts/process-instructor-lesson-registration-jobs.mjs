@@ -10,18 +10,15 @@ import { acquireStudioMateBrowserLock } from "./lib/studiomate-browser-lock.mjs"
 import { ensureStudioMateLoggedIn } from "./lib/studiomate-login.mjs";
 import { appendIdleHeartbeatIfDue } from "./lib/idle-heartbeat.mjs";
 import {
-  INSTRUCTOR_LESSON_EXPECTED_SESSIONS,
   INSTRUCTOR_LESSON_TICKET_NAME,
   deriveInstructorLessonRegistrationState,
   exactMemberCandidates,
-  inspectInstructorLessonSessionCards,
   isInstructorMemberGrade,
   normalizeInstructorLessonName,
   normalizeInstructorLessonPhone,
   paymentMethodLabel,
   selectExactInstructorLessonTicket,
   staleExternalActionStatus,
-  validateCanonicalInstructorLessonBookings,
 } from "./lib/instructor-lesson-registration-contract.mjs";
 
 const require = createRequire(import.meta.url);
@@ -93,16 +90,10 @@ if (!apply) {
   process.exit(0);
 }
 
-const verificationJobs = candidates.filter(({ data }) => data.currentStep === "bookings_verify");
-for (const candidate of verificationJobs) {
-  await runCandidate(candidate, null);
-}
-
-const browserJobs = candidates.filter(({ data }) => data.currentStep !== "bookings_verify");
 let releaseBrowserLock = null;
 let context = null;
 try {
-  if (browserJobs.length) {
+  if (candidates.length) {
     releaseBrowserLock = await acquireStudioMateBrowserLock({
       owner: "instructor-lesson-registration-queue",
       waitMs: 5 * 60 * 1000,
@@ -114,7 +105,7 @@ try {
     page.setDefaultTimeout(20_000);
     await page.goto(new URL("/users", config.baseUrl).toString(), { waitUntil: "networkidle", timeout: 60_000 });
     await ensureStudioMateLoggedIn(page, { headless: config.headless, waitForLogin: config.waitForLogin });
-    for (const candidate of browserJobs) await runCandidate(candidate, page);
+    for (const candidate of candidates) await runCandidate(candidate, page);
   }
 } finally {
   await context?.close().catch(() => {});
@@ -153,19 +144,12 @@ async function runCandidate(candidate, page) {
   };
   summary.processed += 1;
   try {
-    if (claimed.currentStep === "bookings_verify") {
-      const verified = await verifyCanonicalBookings(candidate.ref, claimed);
-      item.status = verified.status;
-      item.detail = verified.detail;
-      if (verified.status === "completed") summary.completed += 1;
-      else summary.waiting += 1;
-    } else {
-      if (!page) throw new Error("StudioMate 브라우저가 준비되지 않았습니다.");
-      const processed = await processStudioMateRegistration(page, candidate.ref, claimed);
-      item.status = processed.status;
-      item.detail = processed.detail;
-      summary.waiting += 1;
-    }
+    if (!page) throw new Error("StudioMate 브라우저가 준비되지 않았습니다.");
+    const processed = await processStudioMateRegistration(page, candidate.ref, claimed);
+    item.status = processed.status;
+    item.detail = processed.detail;
+    if (processed.status === "completed") summary.completed += 1;
+    else summary.waiting += 1;
   } catch (error) {
     const message = error instanceof Error ? error.message : String(error);
     const current = (await candidate.ref.get()).data() || claimed;
@@ -233,7 +217,7 @@ async function processStudioMateRegistration(page, ref, job) {
   await completeStep(ref, job.claimToken, "ticket", {
     ticketId,
     detail: activeTicket ? "기존 동일 수강일 수강권 재사용" : "강사레슨 (2T) 발급 검증 완료",
-    nextStep: "bookings",
+    nextStep: "followup",
   });
   await preparePostTicketSteps(ref, job.claimToken, {
     ...job,
@@ -242,69 +226,11 @@ async function processStudioMateRegistration(page, ref, job) {
     ticketId,
   });
 
-  const bookingPreflight = await canonicalBookingState({ ...job, studiomateMemberId: memberId });
-  if (bookingPreflight.ok) {
-    await commitClaimedState(ref, job.claimToken, {
-      status: "pending",
-      currentStep: "bookings_verify",
-      mode,
-      studiomateMemberId: memberId,
-      ticketId,
-      externalEffectStarted: false,
-      canonicalVerificationAttempts: 0,
-      nextRunAt: Timestamp.fromMillis(Date.now() + 60_000),
-      updatedAt: FieldValue.serverTimestamp(),
-    }, {
-      status: "processing",
-      mode,
-      nextAction: "기존 예약 원천 최종 확인",
-      "steps.bookings": stepValue("waiting_external", "두 세션 예약", "기존 canonical 예약 두 건 확인 · 재예약 생략"),
-      "evidence.studiomateMemberId": memberId,
-      "evidence.ticketId": ticketId,
-      "evidence.bookingIds": bookingPreflight.bookingIds,
-      updatedAt: FieldValue.serverTimestamp(),
-    });
-    return { status: "waiting_canonical_booking", detail: "기존 예약 2건 확인 · 재예약 없이 원천 검증 대기" };
-  }
-  if (bookingPreflight.count > 0) {
-    throw new Error(`예약 전 canonical 원천에 강사레슨 예약이 ${bookingPreflight.count}건 있습니다. 자동 추가 예약을 중단했습니다.`);
-  }
-
-  const bookingResult = await reserveInstructorLessonSessions(page, ref, {
-    ...job,
+  return completeStudioMateRegistration(ref, job.claimToken, {
     mode,
-    studiomateMemberId: memberId,
+    memberId,
     ticketId,
   });
-  if (bookingResult.status === "waiting_class_assignment") {
-    await waitForClassAssignment(ref, job.claimToken, { mode, memberId, ticketId });
-    return { status: "waiting_class_assignment", detail: "수업 미생성 · 반배정 후 예약 자동 재개" };
-  }
-  await commitClaimedState(ref, job.claimToken, {
-    status: "pending",
-    currentStep: "bookings_verify",
-    mode,
-    studiomateMemberId: memberId,
-    ticketId,
-    bookingResponseIds: bookingResult.bookingIds,
-    externalEffectStarted: false,
-    effectType: null,
-    effectStartedAt: null,
-    canonicalVerificationAttempts: 0,
-    nextRunAt: Timestamp.fromMillis(Date.now() + 15 * 60 * 1000),
-    updatedAt: FieldValue.serverTimestamp(),
-  }, {
-    status: "processing",
-    mode,
-    nextAction: "예약 원천 반영 확인",
-    "steps.bookings": stepValue("waiting_external", "두 세션 예약", "StudioMate 응답 확인 · canonical 예약원천 반영 대기"),
-    "evidence.studiomateMemberId": memberId,
-    "evidence.ticketId": ticketId,
-    "evidence.bookingResponseIds": bookingResult.bookingIds,
-    "evidence.expectedSessions": bookingResult.cards.map(sessionEvidence),
-    updatedAt: FieldValue.serverTimestamp(),
-  });
-  return { status: "waiting_canonical_booking", detail: "예약 2건 응답 확인 · 원천 동기화 대기" };
 }
 
 async function lookupExactMember(page, job) {
@@ -475,86 +401,6 @@ async function issueInstructorLessonTicket(page, ref, job) {
   return { ticketId };
 }
 
-async function reserveInstructorLessonSessions(page, ref, job) {
-  await page.goto(
-    new URL(`/users/${encodeURIComponent(job.studiomateMemberId)}/bulk_bookings`, config.baseUrl).toString(),
-    { waitUntil: "networkidle", timeout: 60_000 },
-  );
-  await page.getByText("수업 일괄 예약하기", { exact: true }).waitFor({ state: "visible", timeout: 30_000 });
-  const ticketItems = page.locator(".select-ticket__item");
-  const choices = [];
-  for (let index = 0; index < await ticketItems.count(); index += 1) {
-    const locator = ticketItems.nth(index);
-    const text = await locator.innerText();
-    choices.push({ locator, title: ticketChoiceTitle(text), text });
-  }
-  const selectedTicket = selectExactInstructorLessonTicket(choices);
-  await selectedTicket.locator.click();
-
-  const rangeInputs = page.locator(".el-range-input");
-  await rangeInputs.first().waitFor({ state: "visible", timeout: 20_000 });
-  const lessonListResponses = [];
-  const responseListener = (response) => {
-    if (
-      response.request().method() === "GET"
-      && response.url().includes("api.studiomate.kr")
-      && /(lecture|booking|schedule)/i.test(response.url())
-    ) {
-      lessonListResponses.push({ ok: response.ok(), status: response.status(), url: response.url() });
-    }
-  };
-  page.on("response", responseListener);
-  let cards;
-  try {
-    await setElementDate(rangeInputs.nth(0), job.lessonDate);
-    await setElementDate(rangeInputs.nth(1), job.lessonDate);
-    await rangeInputs.nth(1).press("Enter");
-    await page.keyboard.press("Escape").catch(() => {});
-    await page.waitForFunction(() => !document.body.innerText.includes("수업 목록을 가져오는 중..."));
-    cards = await readLectureCards(page);
-  } finally {
-    page.off("response", responseListener);
-  }
-  if (!cards.length) {
-    const sourceColumnText = await page.locator(".lecture-list__list__column").first().innerText().catch(() => "");
-    const hasEmptyState = /(수업|예약).{0,20}(없습니다|없어요|없음)|조회.{0,20}없습니다/.test(sourceColumnText);
-    const hasSuccessfulSourceRead = lessonListResponses.some((response) => response.ok);
-    if (!hasEmptyState && !hasSuccessfulSourceRead) {
-      throw new Error("StudioMate 수업 목록 0건의 원천 응답 또는 빈 상태 화면을 확인하지 못했습니다.");
-    }
-  }
-  const inspection = inspectInstructorLessonSessionCards(cards, job.lessonDate);
-  if (inspection.status === "waiting_class_assignment") {
-    return { status: "waiting_class_assignment", bookingIds: [], cards: [] };
-  }
-  const selectedCards = inspection.sessions;
-  for (const card of selectedCards) {
-    await page.locator(".lecture-list__list__column").first().locator(".lecture-item").nth(card.index).click();
-  }
-  const selectedCount = await page.locator(".lecture-list__list__column").nth(1).locator(".lecture-item").count();
-  if (selectedCount !== INSTRUCTOR_LESSON_EXPECTED_SESSIONS) {
-    throw new Error(`StudioMate 선택 수업이 ${selectedCount}건입니다. 예약을 중단했습니다.`);
-  }
-
-  await startExternalEffect(ref, job.claimToken, "bookings", "booking_create", {
-    expectedSessions: selectedCards.map(sessionEvidence),
-  });
-  const responsePromise = page.waitForResponse(
-    (response) => response.request().method() === "POST" && response.url() === "https://api.studiomate.kr/v2/staff/booking",
-    { timeout: 120_000 },
-  );
-  await page.getByRole("button", { name: "수업 예약 완료", exact: true }).click();
-  const response = await responsePromise;
-  const payload = await response.json().catch(async () => ({ raw: await response.text() }));
-  if (!response.ok()) throw new Error(`StudioMate 예약 실패: ${response.status()} ${JSON.stringify(payload).slice(0, 700)}`);
-  const success = Array.isArray(payload.success) ? payload.success : [];
-  const errors = Array.isArray(payload.errors) ? payload.errors : [];
-  if (success.length !== INSTRUCTOR_LESSON_EXPECTED_SESSIONS || errors.length) {
-    throw new Error(`StudioMate 예약 결과가 성공 ${success.length}건·오류 ${errors.length}건입니다.`);
-  }
-  return { bookingIds: success.map((item) => String(item.id || "")).filter(Boolean), cards: selectedCards };
-}
-
 async function preparePostTicketSteps(ref, claimToken, job) {
   const registrationRef = registration(ref.id);
   const eformRef = db.collection("eformsignInstructorMemberJobs").doc(ref.id);
@@ -580,18 +426,20 @@ async function preparePostTicketSteps(ref, claimToken, job) {
       eformsign: newMember
         ? (eformStep.status && eformStep.status !== "pending"
           ? eformStep
-          : stepValue("queued", "강사회원 가입서", "예약과 별개로 이폼싸인 브라우저 큐 등록"))
+          : stepValue("queued", "강사회원 가입서", "수강권 발급 뒤 이폼싸인 브라우저 큐 등록"))
         : stepValue("not_required", "강사회원 가입서", "재수강 강사회원은 재발송하지 않음"),
       memo: newMember
         ? (memoStep.status && memoStep.status !== "pending"
           ? memoStep
           : stepValue("waiting_external", "가입서 완료 메모", "가입서 완료 뒤 자동 등록"))
         : stepValue("not_required", "가입서 완료 메모", "재수강 건"),
+      bookings: stepValue("not_required", "반배정·예약", "수업 생성 시 운영자가 StudioMate에서 직접 처리"),
+      confirmation: stepValue("not_required", "예약 안내", "운영자 수동 예약 뒤 기존 D-1 안내 자동화가 처리"),
     };
     transaction.update(registrationRef, {
       mode: job.mode || currentJob.mode,
       steps,
-      nextAction: "두 세션 예약 또는 반배정 대기 확인",
+      nextAction: newMember ? "강사회원 가입서 발송·작성 대기" : "없음",
       updatedAt: now,
     });
     if (newMember && !eformSnapshot.exists && String(steps.eformsign?.status || "") !== "verified") {
@@ -615,8 +463,9 @@ async function preparePostTicketSteps(ref, claimToken, job) {
   });
 }
 
-async function waitForClassAssignment(ref, claimToken, { mode, memberId, ticketId }) {
+async function completeStudioMateRegistration(ref, claimToken, { mode, memberId, ticketId }) {
   const registrationRef = registration(ref.id);
+  let state = { status: "processing", nextAction: "회원·수강권 검증 중" };
   await db.runTransaction(async (transaction) => {
     const [jobSnapshot, registrationSnapshot] = await Promise.all([
       transaction.get(ref),
@@ -624,34 +473,29 @@ async function waitForClassAssignment(ref, claimToken, { mode, memberId, ticketI
     ]);
     const currentJob = jobSnapshot.data() || {};
     if (!jobSnapshot.exists || currentJob.status !== "processing" || currentJob.claimToken !== claimToken) {
-      throw new Error("반배정 대기 반영 전 작업 임대가 변경되었습니다.");
+      throw new Error("수강권 발급 완료 전 작업 임대가 변경되었습니다.");
     }
     if (!registrationSnapshot.exists) throw new Error("강사레슨 등록 원본을 찾지 못했습니다.");
     const registrationData = registrationSnapshot.data() || {};
-    const steps = {
-      ...(registrationData.steps || {}),
-      bookings: stepValue("waiting_assignment", "두 세션 예약", "수업 미생성 · 반배정 뒤 자동 예약 재개"),
-    };
-    const state = deriveInstructorLessonRegistrationState({ mode, steps });
+    const steps = registrationData.steps || {};
+    state = deriveInstructorLessonRegistrationState({ mode, steps });
     const now = FieldValue.serverTimestamp();
     transaction.set(ref, {
-      status: "waiting_assignment",
-      currentStep: "bookings_wait_assignment",
-      attempts: 0,
+      status: "done",
+      currentStep: "complete",
       claimToken: null,
       claimedAt: null,
       claimedBy: null,
       leaseExpiresAt: null,
-      nextRunAt: Timestamp.fromMillis(Date.now() + 10 * 60 * 1000),
+      nextRunAt: null,
       mode,
       studiomateMemberId: memberId,
       ticketId,
       externalEffectStarted: false,
       effectType: null,
       effectStartedAt: null,
-      bookingEffectStartedAt: null,
-      canonicalVerificationAttempts: 0,
       lastError: null,
+      completedAt: now,
       updatedAt: now,
     }, { merge: true });
     transaction.update(registrationRef, {
@@ -659,111 +503,16 @@ async function waitForClassAssignment(ref, claimToken, { mode, memberId, ticketI
       nextAction: state.nextAction,
       steps,
       ...(state.status === "action_required" ? {} : { lastError: null }),
+      ...(state.status === "completed" ? { completedAt: now } : {}),
       updatedAt: now,
-    });
-  });
-}
-
-async function verifyCanonicalBookings(ref, job) {
-  const attempts = Number(job.canonicalVerificationAttempts || 0) + 1;
-  const verification = await canonicalBookingState(job);
-  if (!verification.ok) {
-    if (
-      verification.duplicate
-      || verification.count > INSTRUCTOR_LESSON_EXPECTED_SESSIONS
-      || (verification.count === INSTRUCTOR_LESSON_EXPECTED_SESSIONS && !verification.expectedMatch)
-    ) {
-      throw new Error(`canonical 예약원천이 ${verification.count}건이거나 중복입니다. 자동 진행을 중단했습니다.`);
-    }
-    if (attempts < 16) {
-      await commitClaimedState(ref, job.claimToken, {
-        status: "pending",
-        currentStep: "bookings_verify",
-        canonicalVerificationAttempts: attempts,
-        nextRunAt: Timestamp.fromMillis(Date.now() + 15 * 60 * 1000),
-        claimedAt: null,
-        claimedBy: null,
-        leaseExpiresAt: null,
-        updatedAt: FieldValue.serverTimestamp(),
-      }, null);
-      return { status: "waiting_canonical_booking", detail: `예약원천 ${verification.count}/2건 · 재확인 대기` };
-    }
-    throw new Error(`예약 후 4시간 동안 canonical 예약원천이 ${verification.count}/2건입니다.`);
-  }
-
-  let registrationState = { status: "processing", nextAction: "두 세션 예약·원천 검증 중" };
-  await db.runTransaction(async (transaction) => {
-    const registrationRef = registration(ref.id);
-    const [snapshot, registrationSnapshot] = await Promise.all([
-      transaction.get(ref),
-      transaction.get(registrationRef),
-    ]);
-    const current = snapshot.data() || {};
-    if (!snapshot.exists || current.status !== "processing" || current.claimToken !== job.claimToken) {
-      throw new Error("예약 검증 작업 임대가 변경되어 완료 반영을 중단했습니다.");
-    }
-    if (!registrationSnapshot.exists) throw new Error("강사레슨 등록 원본을 찾지 못했습니다.");
-    const registrationData = registrationSnapshot.data() || {};
-    const now = FieldValue.serverTimestamp();
-    const steps = {
-      ...(registrationData.steps || {}),
-      bookings: stepValue("verified", "두 세션 예약", "선택 수업과 canonical 예약원천이 정확히 2건 일치"),
-      confirmation: stepValue("not_required", "예약 안내", "기존 강사레슨 D-1 안내 자동화가 canonical 예약원천을 사용"),
-    };
-    registrationState = deriveInstructorLessonRegistrationState({ mode: current.mode || job.mode, steps });
-    transaction.set(ref, {
-      status: "done",
-      currentStep: "complete",
-      bookingIds: verification.bookingIds,
-      canonicalVerificationAttempts: attempts,
-      completedAt: now,
-      updatedAt: now,
-      externalEffectStarted: false,
-      lastError: null,
-    }, { merge: true });
-    transaction.update(registrationRef, {
-      status: registrationState.status,
-      nextAction: registrationState.nextAction,
-      steps,
-      "evidence.bookingIds": verification.bookingIds,
-      updatedAt: now,
-      ...(registrationState.status === "completed" ? { completedAt: now } : {}),
     });
   });
   return {
-    status: registrationState.status,
-    detail: registrationState.status === "completed"
-      ? "예약 2건과 후속 처리 검증 완료"
-      : `예약 2건 검증 · ${registrationState.nextAction}`,
+    status: state.status,
+    detail: state.status === "completed"
+      ? "회원·수강권 검증 완료 · 반배정·예약은 운영자 수동 처리"
+      : `수강권 발급 완료 · ${state.nextAction}`,
   };
-}
-
-async function canonicalBookingState(job) {
-  const snapshot = await db.collection("bookings")
-    .where("studioId", "==", job.studioId)
-    .where("lectureDate", "==", job.lessonDate)
-    .get();
-  const rows = snapshot.docs.map((doc) => ({ id: doc.id, ...doc.data() }));
-  return validateCanonicalInstructorLessonBookings(rows, {
-    phone: job.memberPhone,
-    lessonDate: job.lessonDate,
-    expectedSessions: job.expectedSessions || [],
-    notBeforeMs: job.expectedSessions?.length ? timestampMillis(job.bookingEffectStartedAt) : 0,
-  });
-}
-
-async function readLectureCards(page) {
-  return page.locator(".lecture-list__list__column").first().locator(".lecture-item").evaluateAll((nodes) =>
-    nodes.map((node, index) => ({
-      index,
-      date: normalizeCardDate(node.querySelector(".lecture-item__date")?.textContent || ""),
-      time: String(node.querySelector(".lecture-item__time")?.textContent || "").trim().slice(0, 5),
-      instructor: String(node.querySelector(".lecture-item__instructor")?.textContent || "").replace(/\s*강사\s*$/, "").trim(),
-      title: String(node.querySelector(".lecture-item__title")?.textContent || "").trim(),
-      full: node.classList.contains("full"),
-      disabled: node.classList.contains("disabled"),
-    })),
-  );
 }
 
 async function setElementDate(locator, value) {
@@ -787,25 +536,21 @@ async function loadCandidates(limit) {
     return snapshot.exists ? [{ ref: snapshot.ref, data: snapshot.data() }] : [];
   }
   const snapshots = await Promise.all(
-    ["pending", "retry", "waiting_assignment"].map((status) =>
+    ["pending", "retry"].map((status) =>
       db.collection("studiomateInstructorLessonJobs").where("status", "==", status).get()),
   );
   const now = Date.now();
   return snapshots.flatMap((snapshot) => snapshot.docs)
     .map((doc) => ({ ref: doc.ref, data: doc.data() }))
     .filter(({ data }) => !data.nextRunAt || timestampMillis(data.nextRunAt) <= now)
-    .sort((a, b) => {
-      const aWaiting = a.data.currentStep === "bookings_wait_assignment" ? 1 : 0;
-      const bWaiting = b.data.currentStep === "bookings_wait_assignment" ? 1 : 0;
-      return aWaiting - bWaiting || timestampMillis(a.data.createdAt) - timestampMillis(b.data.createdAt);
-    })
+    .sort((a, b) => timestampMillis(a.data.createdAt) - timestampMillis(b.data.createdAt))
     .slice(0, limit);
 }
 
 async function claimJob(ref) {
   return db.runTransaction(async (transaction) => {
     const snapshot = await transaction.get(ref);
-    if (!snapshot.exists || !["pending", "retry", "waiting_assignment"].includes(String(snapshot.data()?.status || ""))) return null;
+    if (!snapshot.exists || !["pending", "retry"].includes(String(snapshot.data()?.status || ""))) return null;
     const data = snapshot.data();
     if (data.nextRunAt && timestampMillis(data.nextRunAt) > Date.now()) return null;
     if (data.externalEffectStarted || data.effectStartedAt) {
@@ -859,14 +604,12 @@ async function startExternalEffect(ref, claimToken, stepName, effectType, extraJ
     externalEffectStarted: true,
     effectType,
     effectStartedAt: now,
-    ...(stepName === "bookings" ? { bookingEffectStartedAt: now } : {}),
     ...extraJobValues,
     updatedAt: now,
   }, {
     status: "processing",
     nextAction: `${effectType} 결과 확인 중`,
     [`steps.${stepName}`]: stepValue("processing", stepLabel(stepName), "외부 작업 실행 중"),
-    ...(extraJobValues.expectedSessions ? { "evidence.expectedSessions": extraJobValues.expectedSessions } : {}),
     updatedAt: now,
   });
 }
@@ -979,21 +722,17 @@ function stepLabel(stepName) {
   return {
     member: "회원·등급 확인",
     ticket: "강사레슨 (2T) 발급",
-    bookings: "두 세션 예약",
-    bookings_verify: "예약 원천 확인",
   }[stepName] || stepName;
 }
 
 function registrationStepName(stepName) {
-  const value = String(stepName || "member");
-  return value.startsWith("bookings") ? "bookings" : value;
+  return String(stepName || "member");
 }
 
 function nextStepLabel(stepName) {
   return {
     ticket: "강사레슨 (2T) 수강권 확인",
-    bookings: "두 세션 예약",
-    bookings_verify: "예약 원천 반영 확인",
+    followup: "가입서 후속 처리 준비",
   }[stepName] || "처리 중";
 }
 
@@ -1031,25 +770,6 @@ function memberRowsFromPayload(payload) {
   }));
 }
 
-function sessionEvidence(card) {
-  return {
-    date: String(card?.date || "").slice(0, 10),
-    time: String(card?.time || "").slice(0, 5),
-    instructor: normalizeInstructorLessonName(card?.instructor),
-    title: normalizeInstructorLessonName(card?.title),
-  };
-}
-
-function firstLine(value) {
-  return normalizeInstructorLessonName(String(value || "").split(/\n/)[0]);
-}
-
-function ticketChoiceTitle(value) {
-  return String(value || "").split(/\n/)
-    .map((line) => normalizeInstructorLessonName(line))
-    .find((line) => line === INSTRUCTOR_LESSON_TICKET_NAME) || firstLine(value);
-}
-
 function ticketDates(value) {
   return [...String(value || "").matchAll(/(20\d{2})[.\-/]\s*(\d{1,2})[.\-/]\s*(\d{1,2})/g)]
     .map((match) => `${match[1]}-${match[2].padStart(2, "0")}-${match[3].padStart(2, "0")}`);
@@ -1068,11 +788,6 @@ async function selectPaymentMethod(dialog, value) {
 function displayDate(value) {
   const [year, month, day] = String(value).split("-").map(Number);
   return `${year}. ${month}. ${day}.`;
-}
-
-function normalizeCardDate(value) {
-  const match = String(value || "").match(/(\d{4})\.\s*(\d{1,2})\.\s*(\d{1,2})\.?/);
-  return match ? `${match[1]}-${match[2].padStart(2, "0")}-${match[3].padStart(2, "0")}` : "";
 }
 
 function timestampMillis(value) {

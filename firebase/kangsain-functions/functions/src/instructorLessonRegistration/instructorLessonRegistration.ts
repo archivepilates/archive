@@ -9,13 +9,11 @@ import { AppError } from "../utils/errors";
 const REGISTRATIONS = "instructorLessonRegistrations";
 const STUDIOMATE_JOBS = "studiomateInstructorLessonJobs";
 const TICKET_NAME = "강사레슨 (2T)";
-const EXPECTED_SESSION_COUNT = 2;
 const MAX_DASHBOARD_ITEMS = 100;
 const DASHBOARD_STATUSES = [
   "queued",
   "processing",
   "retry",
-  "waiting_class_assignment",
   "waiting_signature",
   "memo_pending",
   "action_required",
@@ -31,7 +29,6 @@ type RegistrationStepStatus =
   | "queued"
   | "sent"
   | "waiting_external"
-  | "waiting_assignment"
   | "verified"
   | "review_required"
   | "failed";
@@ -81,10 +78,16 @@ export async function operatorCreateInstructorLessonRegistrationHandler(
     const steps: Record<string, RegistrationStep> = {
       member: step("pending", "회원·등급 확인"),
       ticket: step("pending", `${TICKET_NAME} 발급`),
-      bookings: step("pending", "두 세션 예약"),
+      bookings: {
+        ...step("not_required", "반배정·예약"),
+        detail: "수업 생성 시 운영자가 StudioMate에서 직접 처리",
+      },
       eformsign: step("pending", "강사회원 가입서 판정"),
       memo: step("pending", "가입서 완료 메모"),
-      confirmation: step("pending", "예약확정 안내 판정"),
+      confirmation: {
+        ...step("not_required", "예약 안내"),
+        detail: "운영자 수동 예약 뒤 기존 D-1 안내 자동화가 처리",
+      },
     };
     const source = {
       type: "archive_core_operator",
@@ -100,7 +103,6 @@ export async function operatorCreateInstructorLessonRegistrationHandler(
       lessonDate: input.lessonDate,
       paymentMethod: input.paymentMethod,
       ticketName: TICKET_NAME,
-      expectedSessionCount: EXPECTED_SESSION_COUNT,
       mode: "unresolved",
       status: "queued",
       operatorChecks: {
@@ -128,7 +130,6 @@ export async function operatorCreateInstructorLessonRegistrationHandler(
       lessonDate: input.lessonDate,
       paymentMethod: input.paymentMethod,
       ticketName: TICKET_NAME,
-      expectedSessionCount: EXPECTED_SESSION_COUNT,
       status: "pending",
       currentStep: "member",
       attempts: jobSnapshot.exists ? Number(jobSnapshot.data()?.attempts || 0) : 0,
@@ -194,7 +195,7 @@ export function parseRegistrationInput(data: unknown): RegistrationInput {
     throw new AppError("INVALID_ARGUMENT", "StudioMate에 기록할 결제수단을 선택하세요.");
   }
   if (value.paymentConfirmed !== true || value.seatConfirmed !== true) {
-    throw new AppError("INVALID_ARGUMENT", "입금과 접수 가능 여부를 확인한 뒤 등록을 확정하세요.");
+    throw new AppError("INVALID_ARGUMENT", "입금과 수강 접수를 확인한 뒤 등록을 확정하세요.");
   }
   return { memberName, memberPhone, lessonDate, paymentMethod, paymentConfirmed: true, seatConfirmed: true };
 }
@@ -211,7 +212,6 @@ function safeRegistration(id: string, data: Record<string, unknown>): Record<str
     lessonDate: cleanText(data.lessonDate, 10),
     paymentMethod: cleanText(data.paymentMethod, 20),
     ticketName: cleanText(data.ticketName, 80),
-    expectedSessionCount: Number(data.expectedSessionCount || EXPECTED_SESSION_COUNT),
     mode: cleanText(data.mode, 40),
     status: cleanText(data.status, 40),
     nextAction: cleanText(data.nextAction, 160),
@@ -239,7 +239,7 @@ function safeEvidence(value: unknown): Record<string, unknown> {
     studiomateMemberId: cleanText(data.studiomateMemberId, 80),
     ticketId: cleanText(data.ticketId, 80),
     bookingIds: Array.isArray(data.bookingIds)
-      ? data.bookingIds.map((item) => cleanText(item, 80)).filter(Boolean).slice(0, EXPECTED_SESSION_COUNT)
+      ? data.bookingIds.map((item) => cleanText(item, 80)).filter(Boolean).slice(0, 10)
       : [],
     eformsignDocumentId: cleanText(data.eformsignDocumentId, 160),
   };

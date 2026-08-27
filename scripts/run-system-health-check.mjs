@@ -528,7 +528,7 @@ async function checkQueues() {
     collection: "studiomateInstructorLessonJobs",
     area: "instructor_lessons",
     title: "강사레슨 StudioMate 처리 큐",
-    activeStatuses: ["pending", "retry", "waiting_assignment", "processing"],
+    activeStatuses: ["pending", "retry", "processing"],
     staleStatuses: ["processing"],
     staleMinutes: 40,
     repairStatus: "retry",

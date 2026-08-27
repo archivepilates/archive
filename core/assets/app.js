@@ -6808,8 +6808,8 @@ async function handleInstagramListAction(event) {
   }
 }
 
-const INSTRUCTOR_LESSON_STEP_KEYS = ["member", "ticket", "eformsign", "bookings", "memo"];
-const INSTRUCTOR_LESSON_ACTIVE_STATUSES = new Set(["queued", "processing", "retry", "waiting_class_assignment", "waiting_signature", "memo_pending"]);
+const INSTRUCTOR_LESSON_STEP_KEYS = ["member", "ticket", "eformsign", "memo"];
+const INSTRUCTOR_LESSON_ACTIVE_STATUSES = new Set(["queued", "processing", "retry", "waiting_signature", "memo_pending"]);
 const INSTRUCTOR_LESSON_REVIEW_STATUSES = new Set(["action_required", "review_required", "failed"]);
 
 function instructorLessonStatusLabel(value) {
@@ -6817,7 +6817,6 @@ function instructorLessonStatusLabel(value) {
     queued: "접수",
     processing: "자동 처리중",
     retry: "재시도 대기",
-    waiting_class_assignment: "반배정 대기",
     waiting_signature: "가입서 작성대기",
     memo_pending: "메모 반영대기",
     action_required: "확인필요",
@@ -6831,7 +6830,7 @@ function instructorLessonStatusTone(value) {
   const status = String(value || "");
   if (status === "completed") return "good";
   if (INSTRUCTOR_LESSON_REVIEW_STATUSES.has(status)) return "danger";
-  if (["waiting_class_assignment", "waiting_signature", "memo_pending"].includes(status)) return "warn";
+  if (["waiting_signature", "memo_pending"].includes(status)) return "warn";
   return "";
 }
 
@@ -6850,7 +6849,7 @@ function instructorLessonPaymentLabel(value) {
 function instructorLessonStepClass(value) {
   const status = String(value || "pending");
   if (["verified", "not_required"].includes(status)) return "is-done";
-  if (["processing", "queued", "sent", "waiting_external", "waiting_assignment"].includes(status)) return "is-active";
+  if (["processing", "queued", "sent", "waiting_external"].includes(status)) return "is-active";
   if (["review_required", "failed"].includes(status)) return "is-error";
   return "is-pending";
 }
@@ -6860,7 +6859,6 @@ function instructorLessonStepStatusLabel(value) {
   if (status === "verified") return "완료";
   if (status === "not_required") return "해당 없음";
   if (["processing", "queued"].includes(status)) return "진행중";
-  if (status === "waiting_assignment") return "반배정 대기";
   if (["sent", "waiting_external"].includes(status)) return "대기";
   if (["review_required", "failed"].includes(status)) return "확인필요";
   return "대기";
@@ -6889,7 +6887,7 @@ function renderInstructorLessonRegistrationDashboard(data = state.instructorLess
   const counts = data?.counts && typeof data.counts === "object" ? data.counts : {};
   const statusCount = (status) => Number(counts[status] || 0);
   const active = [...INSTRUCTOR_LESSON_ACTIVE_STATUSES].reduce((sum, status) => sum + statusCount(status), 0);
-  const signatures = statusCount("waiting_signature") + statusCount("waiting_class_assignment");
+  const signatures = statusCount("waiting_signature");
   const review = [...INSTRUCTOR_LESSON_REVIEW_STATUSES].reduce((sum, status) => sum + statusCount(status), 0);
   const completed = statusCount("completed");
   setText("instructorLessonActiveCount", `${active.toLocaleString("ko-KR")}건`);
@@ -6930,7 +6928,7 @@ function renderInstructorLessonRegistrationDashboard(data = state.instructorLess
           ${INSTRUCTOR_LESSON_STEP_KEYS.map((key, index) => {
             const step = steps[key] || {};
             const stepStatus = String(step.status || "pending");
-            return `<li class="${instructorLessonStepClass(stepStatus)}" title="${escapeHtml(step.detail || step.label || "")}"><span>${index + 1}</span><small>${escapeHtml(step.label || ["회원", "수강권", "가입서", "예약", "메모"][index])}</small><em>${escapeHtml(instructorLessonStepStatusLabel(stepStatus))}</em></li>`;
+            return `<li class="${instructorLessonStepClass(stepStatus)}" title="${escapeHtml(step.detail || step.label || "")}"><span>${index + 1}</span><small>${escapeHtml(step.label || ["회원", "수강권", "가입서", "메모"][index])}</small><em>${escapeHtml(instructorLessonStepStatusLabel(stepStatus))}</em></li>`;
           }).join("")}
         </ol>
         <div class="instructor-registration-next ${INSTRUCTOR_LESSON_REVIEW_STATUSES.has(status) ? "is-error" : ""}">

@@ -1,20 +1,16 @@
 import assert from "node:assert/strict";
 import test from "node:test";
 import {
-  INSTRUCTOR_LESSON_EXPECTED_SESSIONS,
   INSTRUCTOR_LESSON_TICKET_NAME,
   buildInstructorMemberDocumentName,
   deriveInstructorLessonRegistrationState,
   exactMemberCandidates,
-  inspectInstructorLessonSessionCards,
   instructorLessonRegistrationId,
   isInstructorMemberGrade,
   normalizeInstructorLessonPhone,
   paymentMethodLabel,
   selectExactInstructorLessonTicket,
-  selectInstructorLessonSessionCards,
   staleExternalActionStatus,
-  validateCanonicalInstructorLessonBookings,
 } from "../lib/instructor-lesson-registration-contract.mjs";
 
 test("강사레슨 등록키는 스튜디오·전화번호·수강일이 같으면 동일하다", () => {
@@ -57,53 +53,17 @@ test("강사레슨 수강권은 정확한 이름 한 건만 선택한다", () =>
   );
 });
 
-test("수강일의 예약 가능한 세션이 정확히 두 개일 때만 진행한다", () => {
-  const sessions = selectInstructorLessonSessionCards([
-    { date: "2026-09-12", time: "09:00", instructor: "A", title: "강사레슨 1" },
-    { date: "2026-09-12", time: "11:00", instructor: "A", title: "강사레슨 2" },
-    { date: "2026-09-13", time: "09:00", instructor: "A", title: "다른 날" },
-  ], "2026-09-12");
-  assert.equal(sessions.length, INSTRUCTOR_LESSON_EXPECTED_SESSIONS);
-  assert.throws(
-    () => selectInstructorLessonSessionCards([{ date: "2026-09-12", time: "09:00", full: true }], "2026-09-12"),
-    /마감/,
-  );
-});
-
-test("수업이 아직 없으면 오류가 아니라 반배정 대기로 분류한다", () => {
-  assert.deepEqual(inspectInstructorLessonSessionCards([], "2026-09-12"), {
-    status: "waiting_class_assignment",
-    sessions: [],
-  });
-  assert.throws(
-    () => inspectInstructorLessonSessionCards([
-      { date: "2026-09-12", time: "09:00", instructor: "A", title: "강사레슨 1" },
-    ], "2026-09-12"),
-    /1건/,
-  );
-});
-
-test("예약과 신규 가입서 메모가 모두 끝나야 등록을 완료한다", () => {
+test("수강권과 신규 가입서 메모가 끝나면 등록을 완료한다", () => {
   const baseSteps = {
     member: { status: "verified" },
     ticket: { status: "verified" },
     eformsign: { status: "verified" },
     memo: { status: "verified" },
   };
-  assert.deepEqual(
-    deriveInstructorLessonRegistrationState({
-      mode: "new_member",
-      steps: { ...baseSteps, bookings: { status: "waiting_assignment" } },
-    }),
-    {
-      status: "waiting_class_assignment",
-      nextAction: "StudioMate 수업 생성·반배정 후 두 세션 예약 자동 재개",
-    },
-  );
   assert.equal(
     deriveInstructorLessonRegistrationState({
       mode: "new_member",
-      steps: { ...baseSteps, bookings: { status: "verified" } },
+      steps: baseSteps,
     }).status,
     "completed",
   );
@@ -113,7 +73,7 @@ test("예약과 신규 가입서 메모가 모두 끝나야 등록을 완료한�
       steps: {
         member: { status: "verified" },
         ticket: { status: "verified" },
-        bookings: { status: "verified" },
+        bookings: { status: "review_required" },
         eformsign: { status: "not_required" },
         memo: { status: "not_required" },
       },
@@ -125,7 +85,6 @@ test("예약과 신규 가입서 메모가 모두 끝나야 등록을 완료한�
       mode: "new_member",
       steps: {
         ...baseSteps,
-        bookings: { status: "waiting_assignment" },
         eformsign: { status: "review_required" },
       },
     }).status,
@@ -134,7 +93,7 @@ test("예약과 신규 가입서 메모가 모두 끝나야 등록을 완료한�
   assert.equal(
     deriveInstructorLessonRegistrationState({
       mode: "unresolved",
-      steps: { ...baseSteps, bookings: { status: "verified" } },
+      steps: baseSteps,
     }).status,
     "processing",
   );
@@ -144,81 +103,10 @@ test("예약과 신규 가입서 메모가 모두 끝나야 등록을 완료한�
       steps: {
         member: { status: "pending" },
         ticket: { status: "verified" },
-        bookings: { status: "verified" },
       },
     }).status,
     "processing",
   );
-});
-
-test("canonical bookings는 활성 예약 두 건과 중복 없는 키를 요구한다", () => {
-  const base = {
-    memberPhone: "01012345678",
-    lectureDate: "2026-09-12",
-    ticketName: "강사레슨 (2T)",
-    appStatus: "reserved",
-    staffName: "정은영",
-    lectureTitle: "강사레슨",
-    sourceUpdatedAt: "2026-09-12T12:00:00+09:00",
-  };
-  const result = validateCanonicalInstructorLessonBookings([
-    { ...base, id: "b1", lectureStartAt: "2026-09-12T09:00:00+09:00" },
-    { ...base, id: "b2", lectureStartAt: "2026-09-12T11:00:00+09:00" },
-    { ...base, id: "b3", appStatus: "cancelled", lectureStartAt: "2026-09-12T13:00:00+09:00" },
-  ], { phone: "010-1234-5678", lessonDate: "2026-09-12" });
-  assert.equal(result.ok, true);
-  assert.equal(result.count, 2);
-
-  const duplicated = validateCanonicalInstructorLessonBookings([
-    { ...base, id: "b1", lectureStartAt: "2026-09-12T09:00:00+09:00" },
-    { ...base, id: "b2", lectureStartAt: "2026-09-12T09:00:00+09:00" },
-  ], { phone: "01012345678", lessonDate: "2026-09-12" });
-  assert.equal(duplicated.ok, false);
-  assert.equal(duplicated.duplicate, true);
-
-  const unsafeStatuses = validateCanonicalInstructorLessonBookings([
-    { ...base, id: "b1", appStatus: "wait", lectureStartAt: "2026-09-12T09:00:00+09:00" },
-    { ...base, id: "b2", appStatus: "superseded", lectureStartAt: "2026-09-12T11:00:00+09:00" },
-  ], { phone: "01012345678", lessonDate: "2026-09-12" });
-  assert.equal(unsafeStatuses.ok, false);
-  assert.equal(unsafeStatuses.count, 0);
-
-  const wrongTicket = validateCanonicalInstructorLessonBookings([
-    { ...base, id: "b1", ticketName: "강사레슨 체험", lectureStartAt: "2026-09-12T09:00:00+09:00" },
-    { ...base, id: "b2", ticketName: "강사레슨 체험", lectureStartAt: "2026-09-12T11:00:00+09:00" },
-  ], { phone: "01012345678", lessonDate: "2026-09-12" });
-  assert.equal(wrongTicket.count, 0);
-
-  const expectedSessions = [
-    { date: "2026-09-12", time: "09:00", instructor: "정은영", title: "강사레슨" },
-    { date: "2026-09-12", time: "11:00", instructor: "정은영", title: "강사레슨" },
-  ];
-  const expected = validateCanonicalInstructorLessonBookings([
-    { ...base, id: "b1", lectureStartAt: "2026-09-12T09:00:00+09:00" },
-    { ...base, id: "b2", lectureStartAt: "2026-09-12T11:00:00+09:00" },
-  ], {
-    phone: "01012345678",
-    lessonDate: "2026-09-12",
-    expectedSessions,
-    notBeforeMs: Date.parse("2026-09-12T08:00:00+09:00"),
-  });
-  assert.equal(expected.ok, true);
-  const staleSource = validateCanonicalInstructorLessonBookings([
-    { ...base, id: "b1", lectureStartAt: "2026-09-12T09:00:00+09:00", sourceUpdatedAt: "2026-09-12T07:00:00+09:00" },
-    { ...base, id: "b2", lectureStartAt: "2026-09-12T11:00:00+09:00", sourceUpdatedAt: "2026-09-12T07:00:00+09:00" },
-  ], {
-    phone: "01012345678",
-    lessonDate: "2026-09-12",
-    expectedSessions,
-    notBeforeMs: Date.parse("2026-09-12T08:00:00+09:00"),
-  });
-  assert.equal(staleSource.count, 0);
-  const wrongSession = validateCanonicalInstructorLessonBookings([
-    { ...base, id: "b1", lectureStartAt: "2026-09-12T09:00:00+09:00" },
-    { ...base, id: "b2", lectureStartAt: "2026-09-12T10:00:00+09:00" },
-  ], { phone: "01012345678", lessonDate: "2026-09-12", expectedSessions });
-  assert.equal(wrongSession.ok, false);
-  assert.equal(wrongSession.expectedMatch, false);
 });
 
 test("외부 최종 실행 뒤 중단된 작업은 자동 재시도하지 않는다", () => {

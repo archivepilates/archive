@@ -1,7 +1,6 @@
 import { createHash } from "node:crypto";
 
 export const INSTRUCTOR_LESSON_TICKET_NAME = "강사레슨 (2T)";
-export const INSTRUCTOR_LESSON_EXPECTED_SESSIONS = 2;
 export const INSTRUCTOR_MEMBER_EFORMSIGN_TEMPLATE_ID = "a5b5ea6b85ec44c8bcb4af1e980e94eb";
 export const INSTRUCTOR_MEMBER_EFORMSIGN_TEMPLATE_URL =
   `https://www.eformsign.com/eform/document/view_service.html?form_id=${INSTRUCTOR_MEMBER_EFORMSIGN_TEMPLATE_ID}`;
@@ -57,37 +56,10 @@ export function selectExactInstructorLessonTicket(tickets, ticketName = INSTRUCT
   return matches[0];
 }
 
-export function inspectInstructorLessonSessionCards(cards, lessonDate) {
-  const expectedDate = String(lessonDate || "").slice(0, 10);
-  const matches = (Array.isArray(cards) ? cards : []).filter((card) => card.date === expectedDate);
-  if (matches.some((card) => card.full || card.disabled)) {
-    throw new Error("강사레슨 두 세션 중 예약 마감 또는 선택 불가 수업이 있습니다.");
-  }
-  const unique = new Map(matches.map((card) => [`${card.date}|${card.time}|${card.instructor}|${card.title}`, card]));
-  if (unique.size === 0) {
-    return { status: "waiting_class_assignment", sessions: [] };
-  }
-  if (unique.size !== INSTRUCTOR_LESSON_EXPECTED_SESSIONS) {
-    throw new Error(`선택 가능한 강사레슨 세션이 ${unique.size}건입니다. 정확히 2건이어야 합니다.`);
-  }
-  return {
-    status: "ready",
-    sessions: [...unique.values()].sort((a, b) => String(a.time).localeCompare(String(b.time))),
-  };
-}
-
-export function selectInstructorLessonSessionCards(cards, lessonDate) {
-  const inspection = inspectInstructorLessonSessionCards(cards, lessonDate);
-  if (inspection.status !== "ready") {
-    throw new Error("선택 가능한 강사레슨 세션이 0건입니다. 정확히 2건이어야 합니다.");
-  }
-  return inspection.sessions;
-}
-
 export function deriveInstructorLessonRegistrationState({ mode, steps = {} }) {
   const status = (key) => String(steps?.[key]?.status || "pending");
   const normalizedMode = String(mode || "");
-  const requiredSteps = ["member", "ticket", "bookings"];
+  const requiredSteps = ["member", "ticket"];
   if (normalizedMode === "new_member") requiredSteps.push("eformsign", "memo");
   if (requiredSteps.some((key) => ["review_required", "failed"].includes(status(key)))) {
     return { status: "action_required", nextAction: "확인필요 항목 검토" };
@@ -97,17 +69,6 @@ export function deriveInstructorLessonRegistrationState({ mode, steps = {} }) {
   }
   if (status("member") !== "verified" || status("ticket") !== "verified") {
     return { status: "processing", nextAction: "회원·수강권 검증 중" };
-  }
-
-  const bookingStatus = status("bookings");
-  if (bookingStatus === "waiting_assignment") {
-    return {
-      status: "waiting_class_assignment",
-      nextAction: "StudioMate 수업 생성·반배정 후 두 세션 예약 자동 재개",
-    };
-  }
-  if (bookingStatus !== "verified") {
-    return { status: "processing", nextAction: "두 세션 예약·원천 검증 중" };
   }
 
   if (normalizedMode === "returning_member") {
@@ -120,48 +81,6 @@ export function deriveInstructorLessonRegistrationState({ mode, steps = {} }) {
     return { status: "memo_pending", nextAction: "StudioMate 가입서 완료 메모 반영 대기" };
   }
   return { status: "waiting_signature", nextAction: "강사회원 가입서 발송·작성 대기" };
-}
-
-export function validateCanonicalInstructorLessonBookings(
-  bookings,
-  { phone, lessonDate, expectedSessions = [], notBeforeMs = 0 },
-) {
-  const normalizedPhone = normalizeInstructorLessonPhone(phone);
-  const active = (Array.isArray(bookings) ? bookings : []).filter((booking) => {
-    const sourceStatus = String(booking.sourceStatus || "").toLowerCase();
-    const supersededBy = booking.supersededByBookingId || booking.sessionOrder?.supersededByBookingId;
-    const sourceUpdatedAtMs = timestampMillis(booking.sourceUpdatedAt || booking.syncedAt || booking.updatedAt);
-    return normalizeInstructorLessonPhone(booking.memberPhone) === normalizedPhone
-      && String(booking.lectureDate || "").slice(0, 10) === lessonDate
-      && String(booking.appStatus || "").toLowerCase() === "reserved"
-      && normalizeComparable(booking.ticketName) === normalizeComparable(INSTRUCTOR_LESSON_TICKET_NAME)
-      && !/(cancel|canceled|취소|deleted|삭제|superseded|duplicate|중복|제외)/i.test(sourceStatus)
-      && !supersededBy
-      && booking.archiveBooking?.isCanonical !== false
-      && (!notBeforeMs || sourceUpdatedAtMs >= notBeforeMs);
-  });
-  const keys = active.map((booking) => canonicalBookingEvidenceKey(booking));
-  const unique = new Set(keys);
-  const expectedKeys = (Array.isArray(expectedSessions) ? expectedSessions : [])
-    .map((session) => expectedSessionEvidenceKey(session))
-    .filter(Boolean)
-    .sort();
-  const actualSessionKeys = active.map((booking) => bookingSessionEvidenceKey(booking)).sort();
-  const expectedMatch = expectedKeys.length === 0
-    || (expectedKeys.length === actualSessionKeys.length
-      && expectedKeys.every((key, index) => key === actualSessionKeys[index]));
-  return {
-    ok: active.length === INSTRUCTOR_LESSON_EXPECTED_SESSIONS
-      && unique.size === INSTRUCTOR_LESSON_EXPECTED_SESSIONS
-      && expectedMatch,
-    count: active.length,
-    duplicate: unique.size !== active.length,
-    expectedMatch,
-    bookingIds: active.map((booking) => String(booking.bookingId || booking.id || "")).filter(Boolean),
-    keys,
-    expectedSessionKeys: expectedKeys,
-    actualSessionKeys,
-  };
 }
 
 export function buildInstructorMemberDocumentName(job, date = new Date()) {
@@ -188,54 +107,6 @@ export function staleExternalActionStatus(job, reviewStatus = "review_required")
 
 export function formatInstructorLessonPhone(phone) {
   return normalizeInstructorLessonPhone(phone).replace(/^(\d{3})(\d{4})(\d{4})$/, "$1-$2-$3");
-}
-
-function canonicalBookingEvidenceKey(booking) {
-  return [
-    normalizeInstructorLessonPhone(booking.memberPhone),
-    bookingSessionEvidenceKey(booking),
-  ].join("|");
-}
-
-function bookingSessionEvidenceKey(booking) {
-  return [
-    String(booking.lectureDate || "").slice(0, 10),
-    seoulTime(booking.lectureStartAt || booking.startAt || booking.startOn),
-    normalizeComparable(booking.staffName || booking.instructor),
-    normalizeComparable(booking.lectureTitle || booking.title),
-  ].join("|");
-}
-
-function expectedSessionEvidenceKey(session) {
-  const date = String(session?.date || session?.lectureDate || "").slice(0, 10);
-  const time = String(session?.time || "").slice(0, 5);
-  const instructor = normalizeComparable(session?.instructor || session?.staffName);
-  const title = normalizeComparable(session?.title || session?.lectureTitle);
-  return date && time && instructor && title ? [date, time, instructor, title].join("|") : "";
-}
-
-function seoulTime(value) {
-  const date = timestampDate(value);
-  if (!date) return "";
-  return new Intl.DateTimeFormat("en-GB", {
-    timeZone: "Asia/Seoul",
-    hour: "2-digit",
-    minute: "2-digit",
-    hourCycle: "h23",
-  }).format(date);
-}
-
-function timestampDate(value) {
-  if (!value) return null;
-  if (typeof value.toDate === "function") return value.toDate();
-  const seconds = Number(value.seconds ?? value._seconds);
-  if (Number.isFinite(seconds)) return new Date(seconds * 1000);
-  const parsed = new Date(String(value));
-  return Number.isNaN(parsed.getTime()) ? null : parsed;
-}
-
-function timestampMillis(value) {
-  return timestampDate(value)?.getTime() || 0;
 }
 
 function normalizeComparable(value) {
