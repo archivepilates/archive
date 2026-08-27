@@ -13,7 +13,7 @@ import { alimtalkDedupeKey, findCompletedDuplicateForCandidate, normalizePhone }
 import { isAlimtalkTemplateApproved } from "./templateStatus";
 import { normalizeInstructorLessonManagementNumber } from "./instructorLessonManagement";
 import { genericInstructorLessonQueueBlock } from "./instructorLessonDeliveryGuard";
-import { isAlimtalkTestRecipient } from "./testRecipients";
+import { hasExplicitAlimtalkTestOverride } from "./testRecipients";
 import { currentPrivateLessonReportRevision } from "../privateLessonChart/privateLessonReportRevision";
 import { privateSurveySendabilityIssue } from "./privateSurveySendGuard";
 import { renewalCandidateSendabilityIssue } from "./renewalSendGuard";
@@ -111,7 +111,7 @@ export async function processAlimtalkQueue(): Promise<{
       }
       const dedupeKey = alimtalkDedupeKey(claimed);
       const dedupePolicy = alimtalkDedupePolicy(claimed.templateCode);
-      const duplicate = isAlimtalkTestRecipient(claimed)
+      const duplicate = hasExplicitAlimtalkTestOverride(claimed)
         ? ""
         : await findCompletedDuplicateForCandidate(claimed, dedupeKey, dedupePolicy.windowDays);
       if (duplicate) {
@@ -339,7 +339,7 @@ export async function processAlimtalkCandidate(candidateId: string): Promise<Ali
 
     const dedupeKey = alimtalkDedupeKey(claimed);
     const dedupePolicy = alimtalkDedupePolicy(claimed.templateCode);
-    const duplicate = isAlimtalkTestRecipient(claimed)
+    const duplicate = hasExplicitAlimtalkTestOverride(claimed)
       ? ""
       : await findCompletedDuplicateForCandidate(claimed, dedupeKey, dedupePolicy.windowDays);
     if (duplicate) {

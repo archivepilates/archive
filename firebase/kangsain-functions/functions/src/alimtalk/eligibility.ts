@@ -20,7 +20,7 @@ import {
 } from "./templateStatus";
 import { alimtalkTemplateTargetRule, solapiButtonUrlLengthIssue } from "./templateTargetRules";
 import { isValidInstructorLessonManagementNumber, normalizeInstructorLessonManagementNumber } from "./instructorLessonManagement";
-import { isAlimtalkTestRecipient } from "./testRecipients";
+import { hasExplicitAlimtalkTestOverride } from "./testRecipients";
 
 export const RETRYABLE_TEMPLATE_STATUS_PREFIX = "템플릿 상태 확인 일시 실패:";
 const PRIVATE_SURVEY_BUTTON_URL = "https://in.archivepilates.com/s/#{링크ID}/";
@@ -32,7 +32,7 @@ const RESERVATION_METHOD_BUTTON_URL = "https://archivepilates.notion.site/studio
 export async function autoSendabilityIssue(candidate: AlimtalkCandidateDoc, today: string): Promise<string> {
   const rule = alimtalkTemplateTargetRule(candidate.type);
   if (rule?.requiresMemberPhone && !candidate.memberPhone) return "전화번호 없음";
-  if (ALIMTALK_MEMBER_EXCLUSION_REASONS[candidate.memberId] && !isAlimtalkTestRecipient(candidate))
+  if (ALIMTALK_MEMBER_EXCLUSION_REASONS[candidate.memberId] && !hasExplicitAlimtalkTestOverride(candidate))
     return ALIMTALK_MEMBER_EXCLUSION_REASONS[candidate.memberId];
   const templateContractIssue =
     privateSurveyTemplateContractIssue(candidate) ||

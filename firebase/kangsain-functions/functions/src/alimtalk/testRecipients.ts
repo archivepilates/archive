@@ -33,6 +33,18 @@ export function isAlimtalkTestRecipient(input: AlimtalkRecipientLike): boolean {
   return Boolean(phone && TEST_PHONES.has(phone) && name === "김기효");
 }
 
+export function hasExplicitAlimtalkTestOverride(input: Partial<AlimtalkCandidateDoc>): boolean {
+  if (!isAlimtalkTestRecipient(input)) return false;
+  const reviewedByUid = String(input.reviewedByUid || "").trim();
+  const payload = input.payload || {};
+  return (
+    input.queuedBy === "operator" ||
+    Boolean(reviewedByUid && !reviewedByUid.startsWith("system:")) ||
+    payload.deliveryMode === "sample" ||
+    payload.testRecipientOverride === "approved"
+  );
+}
+
 export function alimtalkTestRecipientReason(input: AlimtalkRecipientLike): string {
   if (!isAlimtalkTestRecipient(input)) return "";
   const phone = normalizeRecipientPhone(input.memberPhone || input.phone || "");

@@ -2,7 +2,24 @@ import { refs } from "../firestore/refs";
 import type { AlimtalkCandidateDoc } from "../types/models";
 import { stableHash } from "../utils/hash";
 import { normalizeInstructorLessonManagementNumber } from "./instructorLessonManagement";
-import { isAlimtalkTestRecipient } from "./testRecipients";
+import { ALIMTALK_TEMPLATES } from "./templates";
+import { hasExplicitAlimtalkTestOverride } from "./testRecipients";
+
+const MEMBER_CARE_TYPES = new Set([
+  "ticket_expiring",
+  "remaining_low",
+  "private_count_low",
+  "private_ticket_expiring",
+  "long_absence",
+]);
+
+const MEMBER_CARE_TYPE_BY_TEMPLATE = new Map<string, string>([
+  [ALIMTALK_TEMPLATES.ticket_expiring.code, "ticket_expiring"],
+  [ALIMTALK_TEMPLATES.remaining_low.code, "remaining_low"],
+  [ALIMTALK_TEMPLATES.private_count_low.code, "private_count_low"],
+  [ALIMTALK_TEMPLATES.private_ticket_expiring.code, "private_ticket_expiring"],
+  [ALIMTALK_TEMPLATES.long_absence.code, "long_absence"],
+]);
 
 export async function findCompletedDuplicate(dedupeKey: string, windowDays: number | null): Promise<string> {
   if (!dedupeKey) return "";
@@ -22,7 +39,11 @@ export async function findCompletedDuplicateForCandidate(
   dedupeKey: string,
   windowDays: number | null,
 ): Promise<string> {
-  if (isAlimtalkTestRecipient(candidate)) return "";
+  if (hasExplicitAlimtalkTestOverride(candidate)) return "";
+  if (candidate.type === "long_absence") {
+    const recentMemberCareSend = await findRecentMemberCareDuplicate(candidate, 14);
+    if (recentMemberCareSend) return recentMemberCareSend;
+  }
   const exact = await findCompletedDuplicate(dedupeKey, windowDays);
   if (exact) return exact;
   if (candidate.type === "reservation_open") {
@@ -58,6 +79,45 @@ export async function findCompletedDuplicateForCandidate(
     if (ticketReminderFingerprint(previousCandidate) === ticketReminderFingerprint(candidate)) return sendDoc.id;
   }
   return "";
+}
+
+async function findRecentMemberCareDuplicate(candidate: AlimtalkCandidateDoc, windowDays: number): Promise<string> {
+  const queries = [];
+  if (candidate.memberId) {
+    queries.push(refs.alimtalkSends().where("memberId", "==", candidate.memberId).where("status", "==", "done").get());
+  }
+  if (candidate.memberPhone) {
+    queries.push(
+      refs.alimtalkSends().where("memberPhone", "==", candidate.memberPhone).where("status", "==", "done").get(),
+    );
+  }
+  if (!queries.length) return "";
+
+  const snapshots = await Promise.all(queries);
+  const documents = snapshots.flatMap((snap) => snap.docs);
+  const uniqueDocuments = new Map<string, (typeof documents)[number]>();
+  documents.forEach((doc) => uniqueDocuments.set(doc.id, doc));
+
+  const cutoffMs = Date.now() - windowDays * 24 * 60 * 60 * 1000;
+  let latestId = "";
+  let latestSentMs = -1;
+  for (const sendDoc of uniqueDocuments.values()) {
+    if (sendDoc.id === candidate.candidateId) continue;
+    const send = sendDoc.data();
+    const sentMs = send.createdAt?.toMillis?.() || send.updatedAt?.toMillis?.() || 0;
+    if (sentMs && sentMs < cutoffMs) continue;
+    const previousCandidate = (await refs.alimtalkCandidate(send.candidateId || sendDoc.id).get()).data();
+    const previousType = String(
+      previousCandidate?.type || MEMBER_CARE_TYPE_BY_TEMPLATE.get(String(send.templateCode || "")) || "",
+    );
+    if (!MEMBER_CARE_TYPES.has(previousType)) continue;
+    const comparisonMs = sentMs || Number.MAX_SAFE_INTEGER;
+    if (comparisonMs > latestSentMs) {
+      latestId = sendDoc.id;
+      latestSentMs = comparisonMs;
+    }
+  }
+  return latestId;
 }
 
 async function findInstructorLessonDuplicate(

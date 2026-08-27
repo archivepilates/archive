@@ -1152,6 +1152,37 @@ const guardGroups = [
     ],
   },
   {
+    id: "alimtalk-auto-staff-and-member-care-cooldown",
+    reason:
+      "자동 알림톡이 테스트 수신자 예외로 스텝에게 발송되거나 최근 재등록 안내 직후 장기 미방문 안내를 다시 보내는 회귀를 막습니다.",
+    files: [
+      {
+        file: "firebase/kangsain-functions/functions/src/alimtalk/testRecipients.ts",
+        markers: ["hasExplicitAlimtalkTestOverride", 'input.queuedBy === "operator"'],
+      },
+      {
+        file: "firebase/kangsain-functions/functions/src/alimtalk/rebuildAlimtalkCandidates.ts",
+        markers: [
+          "hasExplicitAlimtalkTestOverride",
+          "if (ALIMTALK_MEMBER_EXCLUSION_REASONS[profile.memberId]) return null;",
+        ],
+        forbiddenMarkers: ["&& !isAlimtalkTestRecipient(profile)", "|| isAlimtalkTestRecipient(profile)"],
+      },
+      {
+        file: "firebase/kangsain-functions/functions/src/alimtalk/dedupe.ts",
+        markers: ["findRecentMemberCareDuplicate(candidate, 14)", '"private_count_low"', '"long_absence"'],
+      },
+      {
+        file: "firebase/kangsain-functions/functions/src/alimtalk/eligibility.ts",
+        markers: ["hasExplicitAlimtalkTestOverride(candidate)"],
+      },
+      {
+        file: "core/rules/index.html",
+        markers: ["최근 14일 안에 잔여횟수·만료·재등록 안내", "일일·주간 자동 후보에서는 다른 스텝과 동일하게 제외"],
+      },
+    ],
+  },
+  {
     id: "instructor-lesson-d1-sample-approval",
     reason:
       "강사레슨 D-1 알림톡이 샘플 성공과 명시적 승인 없이 일반 큐에서 발송되거나 불명확한 결과를 자동 재시도하는 회귀를 막습니다.",
