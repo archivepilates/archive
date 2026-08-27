@@ -87,7 +87,7 @@
                 <li>정상 정규화, 중복 차단, source import row 수, canonical key 정리, 이름/전화번호 누락으로 외부 실행에서 이미 제외된 행처럼 운영자가 액션할 수 없는 기록은 자동 리졸브하거나 시스템 진단에만 보관합니다.</li>
                 <li>같은 내부 경고가 반복되거나 자동 처리가 실패하면 그때 운영 큐로 승격합니다.</li>
                 <li>주 탐색 메뉴에서는 사용 빈도가 낮은 회원·수업·콘텐츠 화면을 제외하고, 기존 직접 URL은 점검과 예외 업무를 위해 유지합니다.</li>
-                <li>회원가입서 메뉴는 현장 웰컴 v5 발송 화면을 열고, 강사레슨 메뉴는 StudioMate·이폼싸인·알림톡·강사기록 운영 도구를 한곳에 연결합니다.</li>
+                <li>회원가입서 메뉴는 현장 웰컴 v5 발송 화면을 열고, 강사레슨 메뉴는 이름·전화번호·수강일 등록부터 StudioMate 수강권·예약과 신규 강사회원 가입서까지 처리합니다.</li>
               </ul>
             </article>
             <article class="rule-card">
@@ -97,7 +97,7 @@
                 <li>데이터는 source, action, computed, mirror, incubation 5개 층으로만 구분합니다.</li>
                 <li>source는 memberProfiles, memberContactIndex, bookings, lectures, memberMemos, memberTags, privateSurveyRequests, privateSurveyResponses입니다.</li>
                 <li>예약·출석·프라이빗 회차 판단의 단일 예약 원천은 bookings입니다. memberUsageEvents는 legacy 검증·백필 자료로만 보관하고 운영 원천으로 사용하지 않습니다.</li>
-                <li>action은 alimtalkCandidates, alimtalkSends, contactSyncJobs, memberSignupContracts, onsiteWelcomeRequests, privateLessonChartRequests, privateLessonChartRecords입니다.</li>
+                <li>action은 alimtalkCandidates, alimtalkSends, contactSyncJobs, memberSignupContracts, onsiteWelcomeRequests, instructorLessonRegistrations, privateLessonChartRequests, privateLessonChartRecords입니다.</li>
                 <li>computed는 privateSessionLedger, privateLessonSessions, attendanceSummaries, adminActions, instructorViews, dashboardSnapshots입니다.</li>
                 <li>member360Cards, members 하위 컬렉션, dashboardSnapshots는 분석·검토용 read-model입니다. 현재 수강권, 재등록 후보, 외부 실행 대상 판단은 최신 memberProfiles를 우선합니다.</li>
                 <li>workLanes는 임시 작업 공간이며 외부 발송·쓰기 원천으로 사용하지 않습니다.</li>
@@ -614,7 +614,7 @@
                 <li>문항은 Firebase Function에서 받아오고, 정답은 브라우저에 노출하지 않습니다.</li>
                 <li>제출하면 Function이 객관식·단답형·서술형을 채점하고 staffEvaluationSubmissions에 원본 제출 기록을 저장합니다.</li>
                 <li>강사별 staffHrCards/{staffId}와 하위 quizResults에 최신 결과와 누적 요약을 반영합니다.</li>
-                <li>입사지원자는 별도 공개 시험 사이트에서 이름과 연락처 입력 후 20분 제한시간으로 응시합니다.</li>
+                <li>입사지원자는 CORE 강사 현황의 강사 테스트 버튼에서 공개 시험 사이트를 열고 이름과 연락처 입력 후 20분 제한시간으로 응시합니다.</li>
                 <li>운영자는 CORE Staff 탭에서 강사별 최신 점수, 통과 여부, 서술형 답변과 점수를 확인하고 필요 시 수정합니다.</li>
                 <li>강사 이름을 선택하면 해당 강사의 퀴즈 답변과 월별 그룹 예약률, 출석률, 평균인원, 수업매출을 세부 카드로 확인합니다.</li>
                 <li>강사 인사기록카드 상단에는 종합 점수와 산출 기준을 먼저 표시합니다.</li>
@@ -756,6 +756,13 @@
             <article class="rule-card">
               <h3>강사회원 가입서</h3>
               <ul>
+                <li>강사레슨 등록키는 StudioMate 스튜디오, 정규화된 휴대폰번호, 수강일로 고정해 같은 신청의 중복 처리를 막습니다.</li>
+                <li>입금과 좌석을 확인한 뒤 CORE 강사레슨 메뉴에서 이름, 휴대폰번호, 수강일, 결제수단을 등록합니다.</li>
+                <li>StudioMate는 휴대폰번호 정확 일치로 판정합니다. 신규이면 강사회원 생성, 강사레슨 (2T) 발급, 해당일 두 세션 예약 후 가입서를 발송합니다.</li>
+                <li>기존 강사회원이면 수강권과 두 세션 예약만 처리하고 가입서는 다시 보내지 않습니다. 일반회원, 중복번호, 수강권·세션 불일치는 확인필요로 중단합니다.</li>
+                <li>StudioMate 예약은 Firestore bookings 원천에서 해당 전화번호·수강일의 활성 예약이 정확히 두 건인지 확인한 뒤 완료합니다.</li>
+                <li>이폼싸인 Personal 요금제는 API 대신 전용 Playwright 큐를 사용합니다. 최종 발송 결과가 모호하면 자동 재발송하지 않고 확인필요로 남깁니다.</li>
+                <li>가입서 완료 확인 뒤 ARCHIVE PILATES 회원 메모를 저장하고 StudioMate 메모 반영 큐를 생성합니다. StudioMate 메모 반영까지 확인되어야 전체 등록을 완료 처리합니다.</li>
                 <li>촬영형 강사레슨은 촬영, 강의 콘텐츠 제작·제공·판매와 해당 강의 소개를 위한 홍보 활용을 전제로 운영합니다.</li>
                 <li>촬영·콘텐츠·해당 강의 소개 활용은 하나의 필수 동의로 받고, 별도의 포괄적인 홍보·마케팅 동의 항목은 두지 않습니다.</li>
                 <li>필수 동의에 동의하지 않으면 촬영형 강사레슨을 신청하거나 수강할 수 없습니다.</li>
@@ -763,6 +770,7 @@
               </ul>
             </article>
           </div>
+          <div class="rule-note"><strong>현재 확인 위치</strong><span>CORE 강사레슨 / Firestore instructorLessonRegistrations, studiomateInstructorLessonJobs, eformsignInstructorMemberJobs, instructorMemberConsents / StudioMate bookings / 이폼싸인 강사회원가입서</span></div>
         </section>
 
         <section class="panel rule-section" id="settlement">

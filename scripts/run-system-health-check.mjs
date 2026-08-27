@@ -108,6 +108,26 @@ const AUTOMATIONS = [
     repair: "bootstrap",
   },
   {
+    id: "instructor-lesson-registration-queue",
+    label: "com.archive.instructor-lesson-registration-queue",
+    title: "Instructor lesson registration queue",
+    area: "instructor-lessons",
+    resultFile: path.join(HOME, "ArchiveIN/automation/reports/instructor-lesson-registration/latest.json"),
+    maxAgeMinutes: 45,
+    plist: path.join(PLIST_DIR, "com.archive.instructor-lesson-registration-queue.plist"),
+    repair: "bootstrap",
+  },
+  {
+    id: "eformsign-instructor-member-queue",
+    label: "com.archive.eformsign-instructor-member-queue",
+    title: "eformsign instructor member queue",
+    area: "instructor-lessons",
+    resultFile: path.join(HOME, "ArchiveIN/automation/reports/eformsign-instructor-member/latest.json"),
+    maxAgeMinutes: 45,
+    plist: path.join(PLIST_DIR, "com.archive.eformsign-instructor-member-queue.plist"),
+    repair: "bootstrap",
+  },
+  {
     id: "studiomate-refund-sms-queue",
     label: "com.archive.studiomate-refund-sms-queue",
     title: "StudioMate refund SMS queue",
@@ -503,6 +523,26 @@ async function checkQueues() {
     staleStatuses: ["processing"],
     staleMinutes: 20,
     repairStatus: "retry",
+  });
+  await inspectQueue({
+    collection: "studiomateInstructorLessonJobs",
+    area: "instructor_lessons",
+    title: "강사레슨 StudioMate 처리 큐",
+    activeStatuses: ["pending", "retry", "processing"],
+    staleStatuses: ["processing"],
+    staleMinutes: 40,
+    repairStatus: "retry",
+    failureStatuses: ["failed", "error", "review_required"],
+  });
+  await inspectQueue({
+    collection: "eformsignInstructorMemberJobs",
+    area: "instructor_lessons",
+    title: "강사회원 가입서 처리 큐",
+    activeStatuses: ["pending", "retry", "processing", "sending", "checking_completion"],
+    staleStatuses: ["processing", "sending", "checking_completion"],
+    staleMinutes: 40,
+    repairStatus: "retry",
+    failureStatuses: ["failed", "error", "send_review_required"],
   });
   await inspectQueue({
     collection: "eformsignRefundJobs",

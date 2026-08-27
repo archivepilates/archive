@@ -10,6 +10,10 @@ export const archiveCollections = {
   renewalCases: "renewalCases",
   refundCases: "refundCases",
   eformsignRefundJobs: "eformsignRefundJobs",
+  instructorLessonRegistrations: "instructorLessonRegistrations",
+  studiomateInstructorLessonJobs: "studiomateInstructorLessonJobs",
+  eformsignInstructorMemberJobs: "eformsignInstructorMemberJobs",
+  instructorMemberConsents: "instructorMemberConsents",
   contactSyncJobs: "contactSyncJobs",
   memberSignupContracts: "memberSignupContracts",
   onsiteWelcomeRequests: "onsiteWelcomeRequests",
@@ -49,6 +53,10 @@ export const sourceOfTruthCollections = [
   archiveCollections.adminSyncRequests,
   archiveCollections.refundCases,
   archiveCollections.eformsignRefundJobs,
+  archiveCollections.instructorLessonRegistrations,
+  archiveCollections.studiomateInstructorLessonJobs,
+  archiveCollections.eformsignInstructorMemberJobs,
+  archiveCollections.instructorMemberConsents,
 ] as const;
 
 export const mirrorCollections = [archiveCollections.membersMirror, archiveCollections.member360CardsMirror] as const;

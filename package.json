@@ -22,6 +22,8 @@
     "test:instructor-lesson-management": "firebase/kangsain-functions/functions/node_modules/.bin/tsx --test scripts/tests/instructor-lesson-management.test.ts",
     "test:instructor-lesson-sample-approval": "firebase/kangsain-functions/functions/node_modules/.bin/tsx --test scripts/tests/instructor-lesson-sample-approval.test.ts",
     "test:instructor-lesson-parking": "firebase/kangsain-functions/functions/node_modules/.bin/tsx --test scripts/tests/instructor-lesson-parking-pre-registration.test.ts",
+    "test:instructor-lesson-registration": "node --test scripts/tests/instructor-lesson-registration-contract.test.mjs",
+    "validate:instructor-lesson-registration": "node scripts/validate-instructor-lesson-registration-release.mjs",
     "create:instructor-lesson-parking-solapi-template": "node scripts/create-instructor-lesson-parking-solapi-template.mjs --apply",
     "codex:queue": "node scripts/list-codex-action-queue.mjs",
     "monitor:hohoyoga": "node scripts/run-hohoyoga-monitor.mjs",

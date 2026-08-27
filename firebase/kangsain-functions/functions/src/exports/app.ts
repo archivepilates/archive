@@ -31,6 +31,10 @@ import {
   removeParkingVehicleHandler,
   runParkingAutoApplyNowHandler,
 } from "../parking/parkingOperations";
+import {
+  getInstructorLessonRegistrationDashboardHandler,
+  operatorCreateInstructorLessonRegistrationHandler,
+} from "../instructorLessonRegistration/instructorLessonRegistration";
 import { recommendedMealSurveyApiHandler } from "../mealPlan/recommendedMealSurvey";
 import {
   generateRecommendedMealProgramDraftForSubmittedResponse,
@@ -348,6 +352,22 @@ export const sendRefundAgreement = onCall(callableOptions, async (request) => {
 export const queueRefundStudioMateSms = onCall(callableOptions, async (request) => {
   try {
     return await queueRefundStudioMateSmsHandler(request);
+  } catch (err) {
+    throw toHttpsError(err);
+  }
+});
+
+export const getInstructorLessonRegistrationDashboard = onCall(callableOptions, async (request) => {
+  try {
+    return await getInstructorLessonRegistrationDashboardHandler(request);
+  } catch (err) {
+    throw toHttpsError(err);
+  }
+});
+
+export const operatorCreateInstructorLessonRegistration = onCall(callableOptions, async (request) => {
+  try {
+    return await operatorCreateInstructorLessonRegistrationHandler(request);
   } catch (err) {
     throw toHttpsError(err);
   }

@@ -113,7 +113,9 @@
         "getRefundMemberTickets",
         "previewRefund",
         "sendRefundAgreement",
-        "queueRefundStudioMateSms"
+        "queueRefundStudioMateSms",
+        "getInstructorLessonRegistrationDashboard",
+        "operatorCreateInstructorLessonRegistration"
       ],
       "forbidden": [
         "scheduled jobs",

@@ -107,6 +107,10 @@ try {
           reason: "StudioMate member signup memo was written by individual Playwright sync.",
           updatedAt: admin.firestore.Timestamp.now(),
         });
+        await updateInstructorLessonRegistrationMemoStatus(data, {
+          status: "done",
+          reason: "StudioMate 회원 메모 반영 완료",
+        });
         await markMemberIdLookupDone(data, writeResult.studiomateMemberId);
         item.status = "done";
         result.written += 1;
@@ -134,6 +138,7 @@ try {
         reason: message,
         updatedAt: admin.firestore.Timestamp.now(),
       });
+      await updateInstructorLessonRegistrationMemoStatus(data, { status, reason: message });
       if (status === "failed") {
         await sendMemoWriteFailureEmailOnce(ref, data, message);
       }
@@ -207,6 +212,41 @@ async function updateMemberSignupContractSyncStatus(job, patch) {
   );
 }
 
+async function updateInstructorLessonRegistrationMemoStatus(job, patch) {
+  if (String(job.source || "") !== "instructor_member_eformsign") return;
+  const registrationId = String(job.registrationId || "").trim();
+  if (!registrationId) return;
+  const registrationRef = db.collection("instructorLessonRegistrations").doc(registrationId);
+  await db.runTransaction(async (transaction) => {
+    const snapshot = await transaction.get(registrationRef);
+    if (!snapshot.exists) return;
+    const current = snapshot.data() || {};
+    const currentMemo = current.steps?.memo || {};
+    const alreadyCompleted = current.status === "completed" && currentMemo.status === "verified";
+    const completed = patch.status === "done";
+    if (alreadyCompleted && !completed) return;
+
+    const failed = patch.status === "failed";
+    const now = admin.firestore.Timestamp.now();
+    transaction.set(registrationRef, {
+      status: completed ? "completed" : failed ? "action_required" : "memo_pending",
+      nextAction: completed ? "없음" : failed ? "StudioMate 메모 반영 운영자 확인" : "StudioMate 메모 자동 재시도 대기",
+      steps: {
+        ...(current.steps || {}),
+        memo: {
+          ...currentMemo,
+          status: completed ? "verified" : failed ? "review_required" : "retry",
+          label: "가입서 완료 메모",
+          detail: String(patch.reason || "").slice(0, 240),
+          updatedAt: now,
+        },
+      },
+      ...(completed ? { completedAt: current.completedAt || now } : {}),
+      updatedAt: now,
+    }, { merge: true });
+  });
+}
+
 async function markLoadedJobsFailed(message) {
   for (const { ref, data } of jobs) {
     const attempts = Number(data.attempts || 0) + 1;
@@ -223,6 +263,7 @@ async function markLoadedJobsFailed(message) {
       syncStatus: "failed",
       syncError: message,
     });
+    await updateInstructorLessonRegistrationMemoStatus(data, { status: "failed", reason: message });
     try {
       await sendMemoWriteFailureEmailOnce(ref, { ...data, attempts }, message);
     } catch (emailError) {

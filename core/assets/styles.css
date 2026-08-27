@@ -522,6 +522,368 @@ kbd {
   font-weight: 750;
 }
 
+.instructor-registration-kpis {
+  grid-template-columns: repeat(4, minmax(0, 1fr));
+}
+
+.instructor-registration-layout {
+  grid-template-columns: minmax(0, 1.35fr) minmax(280px, 0.65fr);
+  align-items: stretch;
+  margin-bottom: 20px;
+}
+
+.instructor-registration-panel,
+.instructor-registration-flow {
+  min-width: 0;
+}
+
+.instructor-registration-form {
+  display: grid;
+  gap: 18px;
+  padding: 20px;
+}
+
+.instructor-registration-fields {
+  display: grid;
+  grid-template-columns: repeat(2, minmax(0, 1fr));
+  gap: 14px;
+}
+
+.instructor-registration-fields label {
+  display: grid;
+  min-width: 0;
+  gap: 8px;
+  color: var(--muted);
+  font-size: 0.84rem;
+  font-weight: 800;
+}
+
+.instructor-registration-fields input,
+.instructor-registration-fields select {
+  width: 100%;
+  min-width: 0;
+  min-height: 48px;
+  border: 1px solid var(--line);
+  border-radius: 7px;
+  background: var(--surface-strong);
+  color: var(--text);
+  padding: 0 13px;
+  font: inherit;
+  font-weight: 750;
+}
+
+.instructor-registration-fields input:focus-visible,
+.instructor-registration-fields select:focus-visible {
+  border-color: var(--accent);
+  outline: 3px solid rgba(248, 91, 28, 0.16);
+}
+
+.instructor-registration-checks {
+  display: grid;
+  grid-template-columns: repeat(2, minmax(0, 1fr));
+  gap: 10px;
+}
+
+.instructor-registration-checks label {
+  display: flex;
+  min-height: 48px;
+  min-width: 0;
+  align-items: center;
+  gap: 10px;
+  border: 1px solid var(--line-soft);
+  border-radius: 7px;
+  background: var(--surface);
+  padding: 0 13px;
+  color: var(--text);
+  font-weight: 800;
+}
+
+.instructor-registration-checks input {
+  width: 20px;
+  height: 20px;
+  accent-color: var(--accent);
+}
+
+.instructor-registration-form > .primary-action {
+  width: 100%;
+  min-height: 50px;
+}
+
+.instructor-registration-form .form-status {
+  min-height: 20px;
+}
+
+.instructor-flow-steps {
+  display: grid;
+  gap: 0;
+  margin: 0;
+  padding: 16px 20px 20px;
+  list-style: none;
+}
+
+.instructor-flow-steps li {
+  display: grid;
+  position: relative;
+  min-width: 0;
+  grid-template-columns: 34px minmax(0, 1fr);
+  gap: 12px;
+  align-items: center;
+  padding: 12px 0;
+}
+
+.instructor-flow-steps li + li {
+  border-top: 1px solid var(--line-soft);
+}
+
+.instructor-flow-steps li > span {
+  display: grid;
+  width: 34px;
+  height: 34px;
+  place-items: center;
+  border: 1px solid var(--line);
+  border-radius: 50%;
+  background: var(--surface);
+  color: var(--accent);
+  font-weight: 900;
+}
+
+.instructor-flow-steps li > div {
+  display: grid;
+  min-width: 0;
+  gap: 3px;
+}
+
+.instructor-flow-steps small {
+  color: var(--muted);
+  overflow-wrap: anywhere;
+}
+
+.instructor-registration-history {
+  margin-bottom: 20px;
+}
+
+.segmented-control {
+  display: inline-flex;
+  min-width: 0;
+  flex-wrap: wrap;
+  gap: 4px;
+  border: 1px solid var(--line-soft);
+  border-radius: 8px;
+  background: var(--surface);
+  padding: 4px;
+}
+
+.segmented-control button {
+  min-height: 44px;
+  border: 0;
+  border-radius: 6px;
+  background: transparent;
+  color: var(--muted);
+  padding: 0 11px;
+  font: inherit;
+  font-size: 0.8rem;
+  font-weight: 850;
+  cursor: pointer;
+}
+
+.segmented-control button.active {
+  background: var(--surface-strong);
+  color: var(--text);
+  box-shadow: 0 1px 4px rgba(17, 17, 17, 0.08);
+}
+
+.instructor-registration-list {
+  display: grid;
+  gap: 12px;
+  padding: 16px 20px 20px;
+}
+
+.instructor-registration-item {
+  display: grid;
+  min-width: 0;
+  gap: 13px;
+  border: 1px solid var(--line-soft);
+  border-radius: 7px;
+  background: var(--surface-strong);
+  padding: 16px;
+}
+
+.instructor-registration-item-head {
+  display: flex;
+  min-width: 0;
+  align-items: flex-start;
+  justify-content: space-between;
+  gap: 12px;
+}
+
+.instructor-registration-item-head > div {
+  display: grid;
+  min-width: 0;
+  gap: 4px;
+}
+
+.instructor-registration-item-head strong {
+  font-size: 1rem;
+}
+
+.instructor-registration-item-head span:not(.pill),
+.instructor-registration-meta {
+  color: var(--muted);
+  font-size: 0.82rem;
+}
+
+.instructor-registration-meta {
+  display: flex;
+  min-width: 0;
+  flex-wrap: wrap;
+  gap: 6px 14px;
+}
+
+.instructor-registration-meta span {
+  overflow-wrap: anywhere;
+}
+
+.instructor-registration-progress {
+  display: grid;
+  grid-template-columns: repeat(5, minmax(0, 1fr));
+  gap: 6px;
+  margin: 0;
+  padding: 0;
+  list-style: none;
+}
+
+.instructor-registration-progress li {
+  display: grid;
+  min-width: 0;
+  justify-items: center;
+  gap: 6px;
+  color: var(--soft);
+  text-align: center;
+}
+
+.instructor-registration-progress li > span {
+  display: grid;
+  width: 28px;
+  height: 28px;
+  place-items: center;
+  border: 1px solid var(--line);
+  border-radius: 50%;
+  background: var(--surface);
+  font-size: 0.74rem;
+  font-weight: 900;
+}
+
+.instructor-registration-progress small {
+  max-width: 100%;
+  font-size: 0.72rem;
+  line-height: 1.3;
+  overflow-wrap: anywhere;
+}
+
+.instructor-registration-progress em {
+  color: currentColor;
+  font-size: 0.66rem;
+  font-style: normal;
+  font-weight: 800;
+  line-height: 1.2;
+}
+
+.instructor-registration-progress .is-done {
+  color: var(--green);
+}
+
+.instructor-registration-progress .is-active {
+  color: var(--accent);
+}
+
+.instructor-registration-progress .is-error {
+  color: var(--red);
+}
+
+.instructor-registration-progress .is-done > span,
+.instructor-registration-progress .is-active > span,
+.instructor-registration-progress .is-error > span {
+  border-color: currentColor;
+}
+
+.instructor-registration-next {
+  display: grid;
+  min-width: 0;
+  grid-template-columns: max-content minmax(0, 1fr);
+  gap: 10px;
+  border-top: 1px solid var(--line-soft);
+  padding-top: 12px;
+  font-size: 0.82rem;
+}
+
+.instructor-registration-next strong {
+  color: var(--muted);
+}
+
+.instructor-registration-next span {
+  overflow-wrap: anywhere;
+}
+
+.instructor-registration-next.is-error span {
+  color: var(--red);
+  font-weight: 800;
+}
+
+.instructor-tool-grid.compact {
+  grid-template-columns: repeat(4, minmax(0, 1fr));
+}
+
+.instructor-tool-grid.compact .instructor-tool-link {
+  min-height: 76px;
+  grid-template-columns: minmax(0, 1fr);
+  padding: 15px 16px;
+}
+
+@media (max-width: 980px) {
+  .instructor-registration-kpis {
+    grid-template-columns: repeat(2, minmax(0, 1fr));
+  }
+
+  .instructor-registration-layout {
+    grid-template-columns: 1fr;
+  }
+
+  .instructor-tool-grid.compact {
+    grid-template-columns: repeat(2, minmax(0, 1fr));
+  }
+}
+
+@media (max-width: 620px) {
+  .instructor-registration-fields,
+  .instructor-registration-checks,
+  .instructor-registration-kpis,
+  .instructor-tool-grid.compact {
+    grid-template-columns: 1fr;
+  }
+
+  .instructor-registration-history .panel-header,
+  .instructor-registration-item-head {
+    align-items: stretch;
+    flex-direction: column;
+  }
+
+  .instructor-registration-history .segmented-control {
+    display: grid;
+    width: 100%;
+    grid-template-columns: repeat(2, minmax(0, 1fr));
+  }
+
+  .instructor-registration-progress {
+    grid-template-columns: repeat(3, minmax(0, 1fr));
+    row-gap: 12px;
+  }
+
+  .instructor-registration-next {
+    grid-template-columns: 1fr;
+    gap: 4px;
+  }
+}
+
 .command-context-card {
   display: grid;
   min-width: 0;
