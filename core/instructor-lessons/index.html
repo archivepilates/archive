@@ -1,0 +1,94 @@
+<!doctype html>
+<html lang="ko">
+  <head>
+    <meta charset="utf-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1" />
+    <meta name="theme-color" content="#f8f5ef" />
+    <link rel="icon" type="image/png" sizes="32x32" href="/icons/favicon-32.png?v=1" />
+    <link rel="shortcut icon" type="image/png" href="/favicon.png?v=1" />
+    <link rel="icon" type="image/png" sizes="192x192" href="/icons/archive-pilates-icon-192.png?v=1" />
+    <link rel="apple-touch-icon" sizes="180x180" href="/icons/apple-touch-icon.png?v=1" />
+    <link rel="manifest" href="/site.webmanifest?v=1" />
+    <title>강사레슨 · ARCHIVE CORE</title>
+    <link rel="stylesheet" href="../assets/styles.css" />
+    <script src="../firebase-config.js"></script>
+    <script type="module" src="../assets/app.js"></script>
+  </head>
+  <body data-firestore-dashboard data-auth-only-dashboard data-instructor-lessons-dashboard>
+    <div class="shell">
+      <aside class="sidebar" aria-label="ARCHIVE CORE navigation">
+        <div class="brand">
+          <div class="brand-mark" aria-hidden="true">CORE</div>
+          <strong>ARCHIVE CORE</strong>
+          <span>ARCHIVE PILATES Operations Platform</span>
+        </div>
+        <nav class="nav">
+          <a href="../" data-section="home">Home <small>요약</small></a>
+          <a href="./" data-section="instructor-lessons">Instructor <small>강사레슨</small></a>
+          <a href="../private/" data-section="private">Private <small>차트</small></a>
+          <a href="../staff/" data-section="staff">Staff <small>강사</small></a>
+          <a href="../messages/" data-section="messages">Messages <small>알림톡</small></a>
+          <a href="../automation/" data-section="automation">Automation <small>관제</small></a>
+          <a href="../business/" data-section="business">Business <small>지표</small></a>
+          <a href="../imports/" data-section="imports">Imports <small>원본</small></a>
+          <a href="../rules/" data-section="rules">Rules <small>규칙</small></a>
+          <a href="../settings/" data-section="settings">Settings <small>설정</small></a>
+        </nav>
+      </aside>
+
+      <main class="main instructor-lessons-page">
+        <header class="topbar">
+          <div class="title-block">
+            <p class="eyebrow">ARCHIVE METHOD</p>
+            <h1>강사레슨</h1>
+          </div>
+          <div class="top-actions" aria-label="상태 확인">
+            <div class="connection-card" aria-live="polite">
+              <span id="connectionLabel">로딩</span>
+              <strong id="connectionDetail">운영 도구 연결 준비 중</strong>
+            </div>
+            <button class="refresh-button" id="refreshButton" type="button">새로고침</button>
+          </div>
+        </header>
+
+        <section class="instructor-tool-grid" aria-label="강사레슨 운영 도구">
+          <a class="instructor-tool-link primary" href="https://arcpilates.studiomate.kr/" target="_blank" rel="noopener noreferrer">
+            <svg aria-hidden="true" viewBox="0 0 24 24" focusable="false"><rect x="3" y="4" width="18" height="17" rx="2" /><path d="M8 2v4M16 2v4M3 9h18M8 13h3M8 17h6" /></svg>
+            <span><strong>수강권·예약</strong><small>StudioMate</small></span>
+            <svg class="tool-arrow" aria-hidden="true" viewBox="0 0 24 24" focusable="false"><path d="M15 3h6v6M10 14 21 3M18 13v7a1 1 0 0 1-1 1H4a1 1 0 0 1-1-1V7a1 1 0 0 1 1-1h7" /></svg>
+          </a>
+
+          <a class="instructor-tool-link" href="https://www.eformsign.com/" target="_blank" rel="noopener noreferrer">
+            <svg aria-hidden="true" viewBox="0 0 24 24" focusable="false"><path d="M5 3h10l4 4v14H5zM14 3v5h5M8 13h8M8 17h6" /></svg>
+            <span><strong>강사회원 가입서</strong><small>이폼싸인</small></span>
+            <svg class="tool-arrow" aria-hidden="true" viewBox="0 0 24 24" focusable="false"><path d="M15 3h6v6M10 14 21 3M18 13v7a1 1 0 0 1-1 1H4a1 1 0 0 1-1-1V7a1 1 0 0 1 1-1h7" /></svg>
+          </a>
+
+          <a class="instructor-tool-link" href="../messages/">
+            <svg aria-hidden="true" viewBox="0 0 24 24" focusable="false"><path d="M4 5h16v12H8l-4 3zM8 9h8M8 13h5" /></svg>
+            <span><strong>예약·자료 알림톡</strong><small>발송 상태 확인</small></span>
+            <svg class="tool-arrow" aria-hidden="true" viewBox="0 0 24 24" focusable="false"><path d="m9 18 6-6-6-6" /></svg>
+          </a>
+
+          <a class="instructor-tool-link" href="../staff/">
+            <svg aria-hidden="true" viewBox="0 0 24 24" focusable="false"><circle cx="12" cy="8" r="4" /><path d="M4 21a8 8 0 0 1 16 0M17 6l1.5 1.5L21 5" /></svg>
+            <span><strong>강사 기록</strong><small>평가·인사카드</small></span>
+            <svg class="tool-arrow" aria-hidden="true" viewBox="0 0 24 24" focusable="false"><path d="m9 18 6-6-6-6" /></svg>
+          </a>
+
+          <a class="instructor-tool-link" href="https://in.archivepilates.com/instructor-evaluation/" target="_blank" rel="noopener noreferrer">
+            <svg aria-hidden="true" viewBox="0 0 24 24" focusable="false"><path d="M5 4h14v16H5zM8 8h8M8 12h8M8 16h4" /></svg>
+            <span><strong>강사 테스트</strong><small>지원자 시험</small></span>
+            <svg class="tool-arrow" aria-hidden="true" viewBox="0 0 24 24" focusable="false"><path d="M15 3h6v6M10 14 21 3M18 13v7a1 1 0 0 1-1 1H4a1 1 0 0 1-1-1V7a1 1 0 0 1 1-1h7" /></svg>
+          </a>
+
+          <a class="instructor-tool-link" href="../rules/#welcome">
+            <svg aria-hidden="true" viewBox="0 0 24 24" focusable="false"><path d="M6 4h12v16H6zM9 8h6M9 12h6M9 16h4" /></svg>
+            <span><strong>운영규칙</strong><small>가입·발송 기준</small></span>
+            <svg class="tool-arrow" aria-hidden="true" viewBox="0 0 24 24" focusable="false"><path d="m9 18 6-6-6-6" /></svg>
+          </a>
+        </section>
+      </main>
+    </div>
+  </body>
+</html>

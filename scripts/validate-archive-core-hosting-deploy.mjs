@@ -30,8 +30,8 @@ const required = [
       "https://new.smartplace.naver.com/",
       "https://arcpilates.studiomate.kr/",
       "data-section=\"staff\"",
-      "data-section=\"content\"",
-      "Instagram 운영",
+      "https://in.archivepilates.com/onsiteWelcome/?v=icon-check",
+      "./instructor-lessons/",
       "data-ticket-liability-link",
       "./business/#ticketLiability",
       "/site.webmanifest?v=1",
@@ -68,6 +68,9 @@ const required = [
       "data-parking-vehicle-id",
       "submitInstructorEvaluationQuiz",
       "SECONDARY_NAV_SECTIONS",
+      "hiddenSections",
+      'data-section="onsite-welcome"',
+      'data-section="instructor-lessons"',
       "enhanceRuleSections",
       "CORE_RUNTIME_CONTRACT_VERSION",
       "COMMAND_MEMBER_SEARCH_MIN_LENGTH",
@@ -101,6 +104,21 @@ const required = [
       "renderVideoWatchDashboard",
       "videoWatchRangeDays",
     ],
+  },
+  {
+    file: "core/instructor-lessons/index.html",
+    label: "instructor lesson operations hub",
+    markers: [
+      "data-instructor-lessons-dashboard",
+      "data-auth-only-dashboard",
+      "강사레슨 운영 도구",
+      "수강권·예약",
+      "강사회원 가입서",
+      "예약·자료 알림톡",
+      "강사 기록",
+      "강사 테스트",
+    ],
+    forbiddenMarkers: ['data-section="members"', 'data-section="lessons"', 'data-section="content"'],
   },
   {
     file: "core/business/index.html",
@@ -180,7 +198,6 @@ const required = [
       "refundConfirmCheck",
       "refundSendButton",
       "refundCaseList",
-      "data-section=\"content\"",
     ],
   },
   {
@@ -225,6 +242,8 @@ const required = [
       ".parking-delete-button",
       ".external-tool-grid",
       ".external-tool-link",
+      ".instructor-tool-grid",
+      ".instructor-tool-link",
       ".nav-secondary",
       ".admin-nav-open .nav-secondary",
       ".social-work-grid",
@@ -259,6 +278,8 @@ const required = [
       "videoWatchEvents",
       "videoWatchSessions",
       "상세 이벤트는 180일",
+      "회원가입서 메뉴",
+      "강사레슨 메뉴",
     ],
     patterns: [{ pattern: /\d{4}\.\d{2}\.\d{2} 기준/, label: "current rules date" }],
   },
@@ -521,8 +542,10 @@ for (const file of collectHtmlFiles(path.join(repoRoot, "core"))) {
       failures.push({ file: relative, label: "ARCHIVE CORE app icon links", missing: marker });
     }
   }
-  if (!content.includes('data-section="content"')) {
-    failures.push({ file: relative, label: "ARCHIVE CORE content navigation", missing: 'data-section="content"' });
+  for (const marker of ['data-section="members"', 'data-section="lessons"', 'data-section="content"']) {
+    if (content.includes(marker)) {
+      failures.push({ file: relative, label: "ARCHIVE CORE simplified navigation", missing: `remove ${marker}` });
+    }
   }
 }
 

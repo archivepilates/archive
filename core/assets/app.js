@@ -120,6 +120,18 @@ const COMMAND_ITEMS = [
     keywords: "member 회원 검색 전화번호 수강권 방문",
   },
   {
+    title: "회원가입서 발송",
+    detail: "StudioMate 회원 확인 후 가입 링크 즉시 발송",
+    href: "https://in.archivepilates.com/onsiteWelcome/?v=icon-check",
+    keywords: "회원가입서 현장 웰컴 신규회원 알림톡 발송 onsite welcome",
+  },
+  {
+    title: "강사레슨 운영",
+    detail: "수강권·예약·가입서·알림톡 업무 바로가기",
+    href: "./instructor-lessons/",
+    keywords: "강사레슨 강사회원 수강권 예약 가입서 이폼싸인",
+  },
+  {
     title: "수강료 안내 발송",
     detail: "문의 전화번호 입력 후 승인 템플릿으로 즉시 발송",
     href: "#pricingInquiry",
@@ -160,12 +172,6 @@ const COMMAND_ITEMS = [
     detail: "후보, 발송, 실패, 대기 상태 확인",
     href: "./messages/",
     keywords: "alimtalk 알림톡 실패 후보 발송 카카오",
-  },
-  {
-    title: "Instagram 콘텐츠",
-    detail: "게시물 초안, 승인, 예약 발행, 성과 확인",
-    href: "./content/",
-    keywords: "instagram 인스타그램 콘텐츠 게시물 릴스 예약 발행",
   },
   {
     title: "영상 시청 현황",
@@ -703,6 +709,8 @@ const NAV_ICONS = {
   home: "M3 11.5 12 4l9 7.5M5 10v10h14V10M9 20v-6h6v6",
   members: "M16 19v-1.5A3.5 3.5 0 0 0 12.5 14h-5A3.5 3.5 0 0 0 4 17.5V19M11 8a3 3 0 1 1-6 0 3 3 0 0 1 6 0M20 19v-1a3 3 0 0 0-3-3h-1.2M15 5.2a2.8 2.8 0 0 1 0 5.6",
   lessons: "M4 6.5h16M4 12h16M4 17.5h9M8 4v16M16 4v10",
+  "onsite-welcome": "M4 5h16v14H4zM8 9h8M8 13h5M16 16l2 2 3-4",
+  "instructor-lessons": "M4 5h16v14H4zM8 9h8M8 13h4M16 13l2 2 3-4",
   private: "M5 4h14v16H5zM8 8h8M8 12h5M8 16h7",
   "recommended-meals": "M5 5h14v14H5zM8 9h8M8 13h8M8 17h5",
   refunds: "M4 7h16M7 4v6M17 4v6M6 11h12v9H6zM9 15h6",
@@ -731,6 +739,8 @@ const NAV_LABELS = {
   home: "홈",
   members: "회원",
   lessons: "수업",
+  "onsite-welcome": "회원가입서",
+  "instructor-lessons": "강사레슨",
   private: "프라이빗",
   "recommended-meals": "추천식단",
   refunds: "환불",
@@ -757,28 +767,47 @@ function setAdminNavOpen(open) {
 function enhanceNav() {
   const nav = document.querySelector(".nav");
   if (!nav) return;
-  if (!nav.querySelector('[data-section="recommended-meals"]')) {
-    const homeHref = nav.querySelector('[data-section="home"]')?.getAttribute("href") || "./";
+  const hiddenSections = new Set(["members", "lessons", "content"]);
+  nav.querySelectorAll("a[data-section]").forEach((link) => {
+    if (hiddenSections.has(link.dataset.section)) link.remove();
+  });
+  const homeLink = nav.querySelector('[data-section="home"]');
+  const homeHref = homeLink?.getAttribute("href") || "./";
+  const coreRootHref = homeHref.replace(/\/?$/, "/");
+  if (!nav.querySelector('[data-section="onsite-welcome"]')) {
     const link = document.createElement("a");
-    link.href = `${homeHref.replace(/\/?$/, "/")}recommended-meals/`;
+    link.href = "https://in.archivepilates.com/onsiteWelcome/?v=icon-check";
+    link.dataset.section = "onsite-welcome";
+    link.innerHTML = "Signup <small>회원가입서</small>";
+    homeLink?.insertAdjacentElement("afterend", link);
+  }
+  if (!nav.querySelector('[data-section="instructor-lessons"]')) {
+    const link = document.createElement("a");
+    link.href = `${coreRootHref}instructor-lessons/`;
+    link.dataset.section = "instructor-lessons";
+    link.innerHTML = "Instructor <small>강사레슨</small>";
+    const onsiteLink = nav.querySelector('[data-section="onsite-welcome"]');
+    onsiteLink?.insertAdjacentElement("afterend", link);
+  }
+  if (!nav.querySelector('[data-section="recommended-meals"]')) {
+    const link = document.createElement("a");
+    link.href = `${coreRootHref}recommended-meals/`;
     link.dataset.section = "recommended-meals";
     link.innerHTML = "Meals <small>추천식단</small>";
     const before = nav.querySelector('[data-section="messages"]');
     nav.insertBefore(link, before || null);
   }
   if (!nav.querySelector('[data-section="refunds"]')) {
-    const homeHref = nav.querySelector('[data-section="home"]')?.getAttribute("href") || "./";
     const link = document.createElement("a");
-    link.href = `${homeHref.replace(/\/?$/, "/")}refunds/`;
+    link.href = `${coreRootHref}refunds/`;
     link.dataset.section = "refunds";
     link.innerHTML = "Refund <small>환불</small>";
     const before = nav.querySelector('[data-section="messages"]');
     nav.insertBefore(link, before || null);
   }
   if (!nav.querySelector('[data-section="video-analytics"]')) {
-    const homeHref = nav.querySelector('[data-section="home"]')?.getAttribute("href") || "./";
     const link = document.createElement("a");
-    link.href = `${homeHref.replace(/\/?$/, "/")}video-analytics/`;
+    link.href = `${coreRootHref}video-analytics/`;
     link.dataset.section = "video-analytics";
     link.innerHTML = "Video <small>시청</small>";
     const before = nav.querySelector('[data-section="automation"]');
@@ -6845,6 +6874,10 @@ async function refresh() {
       throw error;
     }
     hideLoginGate();
+    if (document.querySelector("[data-auth-only-dashboard]")) {
+      setConnection("연결됨", "운영 도구 준비 완료");
+      return;
+    }
     const { db, doc, getDoc } = runtime;
     const shouldLoadBusiness = Boolean(qs("businessMonthSelect"));
     const shouldLoadTicketLiability = Boolean(qs("ticketLiabilityTableBody"));

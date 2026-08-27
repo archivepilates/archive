@@ -443,6 +443,85 @@ kbd {
   opacity: 0.48;
 }
 
+.instructor-lessons-page {
+  display: grid;
+  align-content: start;
+}
+
+.instructor-tool-grid {
+  display: grid;
+  grid-template-columns: repeat(3, minmax(0, 1fr));
+  gap: 12px;
+}
+
+.instructor-tool-link {
+  display: grid;
+  min-width: 0;
+  min-height: 116px;
+  grid-template-columns: 42px minmax(0, 1fr) 22px;
+  gap: 14px;
+  align-items: center;
+  border: 1px solid var(--line);
+  border-radius: 6px;
+  background: var(--surface-strong);
+  color: var(--text);
+  padding: 20px;
+  text-decoration: none;
+  transition: border-color 160ms ease, background 160ms ease, color 160ms ease;
+}
+
+.instructor-tool-link.primary {
+  border-color: #111111;
+  background: #111111;
+  color: #ffffff;
+}
+
+.instructor-tool-link:hover,
+.instructor-tool-link:focus-visible {
+  border-color: var(--accent);
+  background: var(--accent-soft);
+  color: var(--text);
+}
+
+.instructor-tool-link > svg {
+  width: 28px;
+  height: 28px;
+  fill: none;
+  stroke: currentColor;
+  stroke-linecap: round;
+  stroke-linejoin: round;
+  stroke-width: 1.8;
+}
+
+.instructor-tool-link .tool-arrow {
+  width: 20px;
+  height: 20px;
+  justify-self: end;
+}
+
+.instructor-tool-link span {
+  display: grid;
+  min-width: 0;
+  gap: 4px;
+}
+
+.instructor-tool-link strong,
+.instructor-tool-link small {
+  overflow-wrap: anywhere;
+  letter-spacing: 0;
+}
+
+.instructor-tool-link strong {
+  font-size: 1rem;
+}
+
+.instructor-tool-link small {
+  color: currentColor;
+  opacity: 0.68;
+  font-size: 0.82rem;
+  font-weight: 750;
+}
+
 .command-context-card {
   display: grid;
   min-width: 0;
@@ -3743,6 +3822,10 @@ a.rank-row:hover,
     grid-column: 1 / -1;
   }
 
+  .instructor-tool-grid {
+    grid-template-columns: repeat(2, minmax(0, 1fr));
+  }
+
   .overview-grid,
   .data-grid,
   .summary-grid,
@@ -3982,6 +4065,17 @@ a.rank-row:hover,
 
   .external-tool-link .external-tool-arrow {
     display: none;
+  }
+
+  .instructor-tool-grid {
+    grid-template-columns: 1fr;
+  }
+
+  .instructor-tool-link {
+    min-height: 92px;
+    grid-template-columns: 36px minmax(0, 1fr) 20px;
+    gap: 12px;
+    padding: 16px;
   }
 
   .command-context-card {

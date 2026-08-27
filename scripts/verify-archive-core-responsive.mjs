@@ -19,6 +19,7 @@ const viewports = [
 ];
 const routes = [
   { name: "home", path: "/" },
+  { name: "instructor-lessons", path: "/instructor-lessons/" },
   { name: "members", path: "/members/" },
   { name: "lessons", path: "/lessons/" },
   { name: "private", path: "/private/" },
@@ -215,7 +216,7 @@ try {
           }));
         const touchTargets = [
           ...document.querySelectorAll(
-            ".nav a, .nav-more-button, .quick-action, .external-tool-link, .filter-button, .text-link, .reference-toggle, a.rank-row, .rank-link, .primary-action, .secondary-action, .renewal-actions button, .refund-candidate-option, .range-segment button",
+            ".nav a, .nav-more-button, .quick-action, .external-tool-link, .instructor-tool-link, .filter-button, .text-link, .reference-toggle, a.rank-row, .rank-link, .primary-action, .secondary-action, .renewal-actions button, .refund-candidate-option, .range-segment button",
           ),
         ]
           .filter((element) => element.offsetParent !== null)
