@@ -1,8 +1,8 @@
-<script data-archive-pilates-community-menu-identity="2026-08-27a">
+<script data-archive-pilates-community-menu-identity="2026-08-28a">
 (function () {
   "use strict";
 
-  var VERSION = "2026-08-27a";
+  var VERSION = "2026-08-28a";
   var LABEL = "커뮤니티";
   var ENGLISH = "COMMUNITY";
   var STYLE_ID = "archive-pilates-community-menu-identity-style";
@@ -17,7 +17,8 @@
     }
     style.textContent =
       ".ap-shop-nav-link[data-ap-shop-nav='커뮤니티'] .ap-shop-nav-label{" +
-      "width:84px!important;min-width:84px!important}";
+      "width:84px!important;min-width:84px!important}" +
+      "header[data-archive-pilates-community-heading]>em{display:none!important}";
   }
 
   function isCommunityLink(anchor) {
@@ -62,9 +63,17 @@
     document.title = "커뮤니티 | 아카이브필라테스";
     var heading = document.querySelector(".widget.board .board-head .heading > header");
     if (!heading) return;
+    heading.setAttribute("data-archive-pilates-community-heading", VERSION);
+    var postCount = heading.querySelector(":scope > em");
+    if (postCount) {
+      postCount.hidden = true;
+      postCount.setAttribute("aria-hidden", "true");
+    }
     Array.prototype.slice.call(heading.childNodes).forEach(function (node) {
-      if (node.nodeType === 3 && String(node.nodeValue || "").trim() === "후기·질문") {
-        node.nodeValue = LABEL + " ";
+      if (node.nodeType !== 3) return;
+      var headingText = String(node.nodeValue || "").trim();
+      if (headingText === "후기·질문" || headingText === LABEL || headingText === ENGLISH) {
+        node.nodeValue = ENGLISH + " ";
       }
     });
   }
