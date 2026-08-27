@@ -53,3 +53,12 @@
 - 비회원은 게시판을 읽을 수 있고 작성 시 로그인이 요구되어야 한다.
 - 로그인 회원은 글 작성 화면에 진입할 수 있어야 한다.
 - 공식홈과 아임웹의 메뉴가 동일한 게시판으로 연결되어야 한다.
+
+## 배포 결과
+
+- Firebase 프로젝트: `archive-pilates`
+- Hosting 사이트: `archive-pilates-home`
+- 배포 일자: 2026-08-27
+- 라이브 URL: `https://archivepilates.com/community`
+- 라이브 응답: HTTP 200, HTML은 no-cache, 버전 처리된 CSS는 immutable 캐시
+- 라이브 브라우저 검증: 320px, 390px, 768px, 1440px 모두 통과
