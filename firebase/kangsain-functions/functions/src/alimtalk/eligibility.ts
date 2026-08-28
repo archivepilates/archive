@@ -36,6 +36,7 @@ export async function autoSendabilityIssue(candidate: AlimtalkCandidateDoc, toda
     return ALIMTALK_MEMBER_EXCLUSION_REASONS[candidate.memberId];
   const templateContractIssue =
     privateSurveyTemplateContractIssue(candidate) ||
+    instructorLessonTemplateContractIssue(candidate) ||
     recommendedMealTemplateContractIssue(candidate) ||
     recommendedMealReportTemplateContractIssue(candidate) ||
     reservationOpenTemplateContractIssue(candidate);
@@ -48,6 +49,7 @@ export async function autoSendabilityIssue(candidate: AlimtalkCandidateDoc, toda
     if (!readiness.approved) return `승인 템플릿 코드 아님: ${candidate.templateCode}`;
     const remoteContractIssue =
       privateSurveyTemplateContractIssue(candidate, readiness.state) ||
+      instructorLessonTemplateContractIssue(candidate) ||
       recommendedMealTemplateContractIssue(candidate, readiness.state) ||
       recommendedMealReportTemplateContractIssue(candidate, readiness.state) ||
       reservationOpenTemplateContractIssue(candidate, readiness.state);
@@ -98,6 +100,15 @@ export async function autoSendabilityIssue(candidate: AlimtalkCandidateDoc, toda
 
 export function isRetryableTemplateStatusIssue(issue: string): boolean {
   return String(issue || "").startsWith(RETRYABLE_TEMPLATE_STATUS_PREFIX);
+}
+
+export function instructorLessonTemplateContractIssue(candidate: AlimtalkCandidateDoc): string {
+  if (candidate.type !== "instructor_lesson_material") return "";
+  const configuredTemplateCode = ALIMTALK_TEMPLATES.instructor_lesson_material.code;
+  if (candidate.templateCode !== configuredTemplateCode) {
+    return `강사레슨 수업자료 V3 템플릿 설정 불일치: ${candidate.templateCode}`;
+  }
+  return "";
 }
 
 export function privateSurveyTemplateContractIssue(

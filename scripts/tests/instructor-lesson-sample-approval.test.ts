@@ -2,6 +2,7 @@ import assert from "node:assert/strict";
 import test from "node:test";
 import type { AlimtalkCandidateDoc } from "../../firebase/kangsain-functions/functions/src/types/models";
 import { genericInstructorLessonQueueBlock } from "../../firebase/kangsain-functions/functions/src/alimtalk/instructorLessonDeliveryGuard";
+import { instructorLessonTemplateContractIssue } from "../../firebase/kangsain-functions/functions/src/alimtalk/eligibility";
 import {
   ALIMTALK_TEMPLATES,
   INSTRUCTOR_LESSON_ALIMTALK_TEMPLATE_CODE,
@@ -61,6 +62,16 @@ test("uses the approved V3 instructor lesson template and validates all four but
   assert.equal(
     buttonRules.at(-1)?.template,
     INSTRUCTOR_LESSON_PARKING_BUTTON_URL,
+  );
+});
+
+test("blocks a persisted V2 candidate from the approved live-send path", () => {
+  assert.equal(instructorLessonTemplateContractIssue(candidate()), "");
+  assert.match(
+    instructorLessonTemplateContractIssue(
+      candidate({ templateCode: "KA01TP260724090746135DWCIb2boEw7" }),
+    ),
+    /V3 템플릿 설정 불일치/,
   );
 });
 
@@ -153,6 +164,15 @@ test("keeps the approved content contract stable when only the live roster chang
   assert.equal(
     instructorLessonContentFingerprint(original),
     instructorLessonContentFingerprint(changedRecipient),
+  );
+});
+
+test("fingerprints the approved V3 contract even when an old candidate document still says V2", () => {
+  const current = candidate();
+  const stale = candidate({ templateCode: "KA01TP260724090746135DWCIb2boEw7" });
+  assert.equal(
+    instructorLessonContentFingerprint(current),
+    instructorLessonContentFingerprint(stale),
   );
 });
 

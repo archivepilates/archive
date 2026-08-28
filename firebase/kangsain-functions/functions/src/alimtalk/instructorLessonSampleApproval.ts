@@ -111,7 +111,7 @@ export function instructorLessonContentFingerprint(candidate: AlimtalkCandidateD
     String(candidate.payload?.managementNumber || candidate.payload?.materialNumber || ""),
   );
   return stableHash({
-    templateCode: candidate.templateCode,
+    templateCode: INSTRUCTOR_LESSON_ALIMTALK_TEMPLATE_CODE,
     lessonDate: String(candidate.payload?.lessonDate || candidate.payload?.lectureDate || ""),
     managementNumber,
     shortLinkId: String(candidate.payload?.shortLinkId || ""),
