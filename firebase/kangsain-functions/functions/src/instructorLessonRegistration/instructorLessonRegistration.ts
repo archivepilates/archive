@@ -21,6 +21,8 @@ const DASHBOARD_STATUSES = [
   "retry",
   "waiting_signature",
   "memo_pending",
+  "booking_pending",
+  "confirmation_pending",
   "action_required",
   "review_required",
   "failed",
@@ -84,14 +86,14 @@ export async function operatorCreateInstructorLessonRegistrationHandler(
       member: step("pending", "회원·등급 확인"),
       ticket: step("pending", `${TICKET_NAME} 발급`),
       bookings: {
-        ...step("not_required", "반배정·예약"),
-        detail: "수업 생성 시 운영자가 StudioMate에서 직접 처리",
+        ...step("pending", "StudioMate 예약"),
+        detail: "반배정 후 두 세션을 운영자가 직접 예약",
       },
       eformsign: step("pending", "강사회원 가입서 판정"),
       memo: step("pending", "가입서 완료 메모"),
       confirmation: {
-        ...step("not_required", "예약 안내"),
-        detail: "운영자 수동 예약 뒤 기존 D-1 안내 자동화가 처리",
+        ...step("pending", "예약확정 안내"),
+        detail: "두 세션 예약 확인 후 승인 템플릿으로 1회 발송",
       },
     };
     const source = {
@@ -300,6 +302,9 @@ function safeEvidence(value: unknown): Record<string, unknown> {
           .slice(0, 10)
       : [],
     eformsignDocumentId: cleanText(data.eformsignDocumentId, 160),
+    confirmationCandidateId: cleanText(data.confirmationCandidateId, 160),
+    confirmationManagementNumber: cleanText(data.confirmationManagementNumber, 160),
+    confirmationSolapiMessageId: cleanText(data.confirmationSolapiMessageId, 160),
   };
 }
 

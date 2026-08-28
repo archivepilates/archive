@@ -70,7 +70,7 @@ export function selectExactInstructorLessonTicket(tickets, ticketName = INSTRUCT
 export function deriveInstructorLessonRegistrationState({ mode, steps = {} }) {
   const status = (key) => String(steps?.[key]?.status || "pending");
   const normalizedMode = String(mode || "");
-  const requiredSteps = ["member", "ticket"];
+  const requiredSteps = ["member", "ticket", "bookings", "confirmation"];
   if (normalizedMode === "new_member") requiredSteps.push("eformsign", "memo");
   if (requiredSteps.some((key) => ["review_required", "failed"].includes(status(key)))) {
     return { status: "action_required", nextAction: "확인필요 항목 검토" };
@@ -82,16 +82,21 @@ export function deriveInstructorLessonRegistrationState({ mode, steps = {} }) {
     return { status: "processing", nextAction: "회원·수강권 검증 중" };
   }
 
-  if (normalizedMode === "returning_member") {
+  if (normalizedMode === "new_member") {
+    if (status("eformsign") !== "verified") {
+      return { status: "waiting_signature", nextAction: "강사회원 가입서 발송·작성 대기" };
+    }
+    if (status("memo") !== "verified") {
+      return { status: "memo_pending", nextAction: "StudioMate 가입서 완료 메모 반영 대기" };
+    }
+  }
+  if (!["verified", "not_required"].includes(status("bookings"))) {
+    return { status: "booking_pending", nextAction: "StudioMate 반배정·예약 후 CORE에서 예약 완료 확인" };
+  }
+  if (["verified", "not_required"].includes(status("confirmation"))) {
     return { status: "completed", nextAction: "없음" };
   }
-  if (status("memo") === "verified") {
-    return { status: "completed", nextAction: "없음" };
-  }
-  if (status("eformsign") === "verified") {
-    return { status: "memo_pending", nextAction: "StudioMate 가입서 완료 메모 반영 대기" };
-  }
-  return { status: "waiting_signature", nextAction: "강사회원 가입서 발송·작성 대기" };
+  return { status: "confirmation_pending", nextAction: "강사레슨 예약확정 알림톡 발송 대기" };
 }
 
 export function buildInstructorMemberDocumentName(job, date = new Date()) {

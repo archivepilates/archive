@@ -145,6 +145,15 @@ async function findInstructorLessonDuplicate(
 }
 
 export function alimtalkDedupeKey(candidate: AlimtalkCandidateDoc): string {
+  if (candidate.type === "instructor_lesson_confirmation") {
+    return stableHash({
+      studioId: candidate.studioId,
+      memberPhone: normalizePhone(candidate.memberPhone),
+      type: candidate.type,
+      templateCode: candidate.templateCode,
+      scope: dedupeScope(candidate),
+    });
+  }
   const versionIndependent = ["private_survey", "reservation_open", "instructor_lesson_material"].includes(
     String(candidate.type),
   );
@@ -179,6 +188,12 @@ function dedupeScope(candidate: AlimtalkCandidateDoc): Record<string, string> {
   if (type === "recommended_meal_survey") return { memberPhone: normalizePhone(candidate.memberPhone) };
   if (type === "recommended_meal_report") {
     return { reportId: String(payload.reportId || candidate.sourceActionKey || candidate.candidateId || "") };
+  }
+  if (type === "instructor_lesson_confirmation") {
+    return {
+      lessonDate: String(payload.lessonDate || ""),
+      managementNumber: normalizeInstructorLessonManagementNumber(String(payload.managementNumber || "")),
+    };
   }
   if (type === "instructor_lesson_material") {
     return {

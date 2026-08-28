@@ -39,6 +39,8 @@ export const GROUP_SURVEY_BUTTON_URL_TEMPLATE =
   "https://in.archivepilates.com/groupSurvey?id=#{설문ID}&token=#{접근토큰}";
 export const METHOD_MATERIAL_BUTTON_URL_TEMPLATE = "https://in.archivepilates.com/method/#{관리번호}";
 export const METHOD_ASSIGNMENT_BUTTON_URL_TEMPLATE = "https://in.archivepilates.com/method/#{관리번호}/assignment";
+export const METHOD_CALENDAR_BUTTON_URL_TEMPLATE = "https://in.archivepilates.com/method/#{관리번호}/calendar/";
+export const INSTRUCTOR_LESSON_VISIT_BUTTON_URL = "https://archivepilates.notion.site/visitin";
 export const PRIVATE_REPORT_BUTTON_URL_TEMPLATE = "https://in.archivepilates.com/s/#{리포트링크ID}/";
 export const RECOMMENDED_MEAL_REPORT_BUTTON_URL_TEMPLATE = "https://in.archivepilates.com/s/#{리포트링크ID}/";
 export const PRICING_INFO_BUTTON_URL_TEMPLATE = "https://archivepilates.notion.site/";
@@ -387,6 +389,37 @@ export const ALIMTALK_TEMPLATE_TARGET_RULES: Partial<Record<AlimtalkCandidateTyp
       "발송 기준일 이후 예정 예약 있음",
       "마지막 출석 완료일이 7일 미만",
       "동일 회원 장기 미방문 안내 14일 내 발송 이력 있음",
+      "SOLAPI 미승인 템플릿",
+    ],
+  },
+  instructor_lesson_confirmation: {
+    type: "instructor_lesson_confirmation",
+    templateCode: ALIMTALK_TEMPLATES.instructor_lesson_confirmation.code,
+    templateLabel: ALIMTALK_TEMPLATES.instructor_lesson_confirmation.label,
+    sourceDatePolicy: "same_or_before_today",
+    requiresApprovedTemplate: true,
+    requiresMemberPhone: true,
+    requiresManagementNumber: true,
+    buttonUrlRules: [
+      {
+        label: "강사레슨 캘린더 버튼",
+        template: METHOD_CALENDAR_BUTTON_URL_TEMPLATE,
+        maxLength: SOLAPI_BUTTON_URL_MAX_LENGTH,
+      },
+    ],
+    targetRules: [
+      "ARCHIVE CORE 강사레슨 등록 건",
+      "StudioMate 활성 예약 두 세션 확인",
+      "수업일별 관리번호와 캘린더 경로 확인",
+      "운영자가 예약 완료 확인 후 1회 발송",
+    ],
+    exclusionRules: [
+      "전화번호 없음",
+      "활성 예약 두 세션 미확인",
+      "취소·삭제·중복·비정규 예약",
+      "수업일별 관리번호 또는 캘린더 계약 없음",
+      "알림톡 제외 스텝 계정",
+      "같은 연락처·수업일·관리번호·템플릿 발송 이력 있음",
       "SOLAPI 미승인 템플릿",
     ],
   },

@@ -2,6 +2,8 @@ import { addDays } from "../utils/date";
 import {
   ALIMTALK_MEMBER_EXCLUSION_REASONS,
   ALIMTALK_TEMPLATES,
+  INSTRUCTOR_LESSON_ALIMTALK_CHANNEL_ID,
+  INSTRUCTOR_LESSON_CONFIRMATION_ALIMTALK_IMAGE_ID,
   LEGACY_PRIVATE_SURVEY_ALIMTALK_TEMPLATE_CODE,
   NATIVE_PRIVATE_SURVEY_ALIMTALK_IMAGE_ID,
   NATIVE_PRIVATE_SURVEY_ALIMTALK_TEMPLATE_CODE,
@@ -18,9 +20,14 @@ import {
   alimtalkTemplateReadiness,
   type AlimtalkTemplateState,
 } from "./templateStatus";
-import { alimtalkTemplateTargetRule, solapiButtonUrlLengthIssue } from "./templateTargetRules";
+import {
+  INSTRUCTOR_LESSON_VISIT_BUTTON_URL,
+  METHOD_CALENDAR_BUTTON_URL_TEMPLATE,
+  alimtalkTemplateTargetRule,
+  solapiButtonUrlLengthIssue,
+} from "./templateTargetRules";
 import { isValidInstructorLessonManagementNumber, normalizeInstructorLessonManagementNumber } from "./instructorLessonManagement";
-import { hasExplicitAlimtalkTestOverride } from "./testRecipients";
+import { hasExplicitAlimtalkTestOverride, isAlimtalkTestRecipient } from "./testRecipients";
 
 export const RETRYABLE_TEMPLATE_STATUS_PREFIX = "템플릿 상태 확인 일시 실패:";
 const PRIVATE_SURVEY_BUTTON_URL = "https://in.archivepilates.com/s/#{링크ID}/";
@@ -34,11 +41,15 @@ export async function autoSendabilityIssue(candidate: AlimtalkCandidateDoc, toda
   if (rule?.requiresMemberPhone && !candidate.memberPhone) return "전화번호 없음";
   if (ALIMTALK_MEMBER_EXCLUSION_REASONS[candidate.memberId] && !hasExplicitAlimtalkTestOverride(candidate))
     return ALIMTALK_MEMBER_EXCLUSION_REASONS[candidate.memberId];
+  if (isAlimtalkTestRecipient(candidate) && !hasExplicitAlimtalkTestOverride(candidate)) {
+    return "스텝 계정 알림톡 제외";
+  }
   const templateContractIssue =
     privateSurveyTemplateContractIssue(candidate) ||
     instructorLessonTemplateContractIssue(candidate) ||
     recommendedMealTemplateContractIssue(candidate) ||
     recommendedMealReportTemplateContractIssue(candidate) ||
+    instructorLessonConfirmationTemplateContractIssue(candidate) ||
     reservationOpenTemplateContractIssue(candidate);
   if (templateContractIssue) return templateContractIssue;
   if (rule?.requiresApprovedTemplate) {
@@ -52,6 +63,7 @@ export async function autoSendabilityIssue(candidate: AlimtalkCandidateDoc, toda
       instructorLessonTemplateContractIssue(candidate) ||
       recommendedMealTemplateContractIssue(candidate, readiness.state) ||
       recommendedMealReportTemplateContractIssue(candidate, readiness.state) ||
+      instructorLessonConfirmationTemplateContractIssue(candidate, readiness.state) ||
       reservationOpenTemplateContractIssue(candidate, readiness.state);
     if (remoteContractIssue) return remoteContractIssue;
   }
@@ -172,6 +184,45 @@ export function reservationOpenTemplateContractIssue(
   return "";
 }
 
+export function instructorLessonConfirmationTemplateContractIssue(
+  candidate: AlimtalkCandidateDoc,
+  state: AlimtalkTemplateState | null = null,
+): string {
+  if (candidate.type !== "instructor_lesson_confirmation") return "";
+  if (candidate.templateCode !== ALIMTALK_TEMPLATES.instructor_lesson_confirmation.code) {
+    return `강사레슨 예약확정 템플릿 설정 불일치: ${candidate.templateCode}`;
+  }
+  if (!state) return "";
+  const imageContractIssue = alimtalkImageTemplateContractIssue(
+    state,
+    INSTRUCTOR_LESSON_CONFIRMATION_ALIMTALK_IMAGE_ID,
+    "강사레슨 예약확정 템플릿",
+  );
+  if (imageContractIssue) return imageContractIssue;
+  if (state.channelId !== INSTRUCTOR_LESSON_ALIMTALK_CHANNEL_ID) {
+    return "강사레슨 예약확정 템플릿 채널 ID 불일치";
+  }
+  const contractText = String(state.content || "");
+  for (const variable of ["#{이름}", "#{수업일}", "#{수업시간}", "#{수업구성}"]) {
+    if (!contractText.includes(variable)) return `강사레슨 예약확정 템플릿 변수 없음: ${variable}`;
+  }
+  const buttons = state.buttons || [];
+  if (
+    buttons.length !== 2 ||
+    buttons[0]?.name !== "캘린더에 일정 추가" ||
+    buttons[0]?.type !== "WL" ||
+    buttons[0]?.mobileUrl !== METHOD_CALENDAR_BUTTON_URL_TEMPLATE ||
+    buttons[0]?.desktopUrl !== METHOD_CALENDAR_BUTTON_URL_TEMPLATE ||
+    buttons[1]?.name !== "방문안내 보기" ||
+    buttons[1]?.type !== "WL" ||
+    buttons[1]?.mobileUrl !== INSTRUCTOR_LESSON_VISIT_BUTTON_URL ||
+    buttons[1]?.desktopUrl !== INSTRUCTOR_LESSON_VISIT_BUTTON_URL
+  ) {
+    return "강사레슨 예약확정 템플릿 2버튼 계약 불일치";
+  }
+  return "";
+}
+
 export function recommendedMealTemplateContractIssue(
   candidate: AlimtalkCandidateDoc,
   state: AlimtalkTemplateState | null = null,
@@ -262,6 +313,15 @@ function requiredPayloadIssue(candidate: AlimtalkCandidateDoc): string {
   }
   if (candidate.type === "recommended_meal_report" && !payload.shortLinkId)
     return "추천식단 리포트 짧은 링크 없음";
+  if (candidate.type === "instructor_lesson_confirmation") {
+    if (!payload.registrationId) return "강사레슨 등록 ID 없음";
+    if (!payload.lessonDate || !payload.lessonDateText) return "강사레슨 수업일 변수 없음";
+    if (!payload.lessonTimeText) return "강사레슨 수업시간 변수 없음";
+    if (!payload.lessonComposition) return "강사레슨 수업구성 변수 없음";
+    if (String(payload.bookingIds || "").split(",").filter(Boolean).length !== 2) {
+      return "강사레슨 활성 예약 두 세션 확인 안 됨";
+    }
+  }
   if (candidate.type === "private_survey" || candidate.type === "group_survey") {
     if (!(payload.surveyId || payload.responseId) || !payload.accessToken) return "설문 링크 변수 없음";
   }
@@ -288,6 +348,9 @@ function candidateTemplateVariables(candidate: AlimtalkCandidateDoc): Record<str
     "#{설문ID}": surveyId,
     "#{접근토큰}": accessToken,
     "#{관리번호}": managementNumber,
+    "#{수업일}": String(payload.lessonDateText || payload.lessonDate || ""),
+    "#{수업시간}": String(payload.lessonTimeText || ""),
+    "#{수업구성}": String(payload.lessonComposition || ""),
     "#{링크ID}": candidateShortLinkId(candidate, surveyId, accessToken, managementNumber),
     "#{주차링크ID}": String(payload.parkingLinkId || ""),
     "#{리포트링크ID}": reportLinkId,

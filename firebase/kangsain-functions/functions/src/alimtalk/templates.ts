@@ -2,6 +2,8 @@ import type { AlimtalkCandidateType } from "../types/models";
 
 export const INSTRUCTOR_LESSON_ALIMTALK_CHANNEL_ID = "KA01PF260511123407631PSoAflYAVXs";
 export const INSTRUCTOR_LESSON_ALIMTALK_TEMPLATE_CODE = "KA01TP260825074722212ylmndmsB3V4";
+export const INSTRUCTOR_LESSON_CONFIRMATION_ALIMTALK_TEMPLATE_CODE = "KA01TP2608241233353269Jgtoiwnzi6";
+export const INSTRUCTOR_LESSON_CONFIRMATION_ALIMTALK_IMAGE_ID = "ST01FZ260825101204154cOImfLX8Ri7";
 
 export const NEW_MEMBER_ALIMTALK_START_DATE = "2026-05-16";
 export const NEW_MEMBER_ALIMTALK_WINDOW_DAYS = 3;
@@ -36,6 +38,7 @@ export type SendableAlimtalkCandidateType =
   | "onsite_welcome"
   | "private_survey"
   | "group_survey"
+  | "instructor_lesson_confirmation"
   | "instructor_lesson_material"
   | "private_lesson_report"
   | "inbody_report"
@@ -120,6 +123,11 @@ export const ALIMTALK_TEMPLATES = {
     label: "첫 그룹수업 회원 확인 v1",
     status: "approved",
   },
+  instructor_lesson_confirmation: {
+    code: INSTRUCTOR_LESSON_CONFIRMATION_ALIMTALK_TEMPLATE_CODE,
+    label: "강사레슨_예약확정 안내 v1",
+    status: "approved",
+  },
   instructor_lesson_material: {
     code: INSTRUCTOR_LESSON_ALIMTALK_TEMPLATE_CODE,
     label: "강사레슨_수업자료 안내 v3",
@@ -153,6 +161,7 @@ export const ALIMTALK_TEMPLATES = {
 } as const;
 
 export const ALIMTALK_TEMPLATE_CHANNEL_IDS: Readonly<Record<string, string>> = {
+  [ALIMTALK_TEMPLATES.instructor_lesson_confirmation.code]: INSTRUCTOR_LESSON_ALIMTALK_CHANNEL_ID,
   [ALIMTALK_TEMPLATES.instructor_lesson_material.code]: INSTRUCTOR_LESSON_ALIMTALK_CHANNEL_ID,
   [ALIMTALK_TEMPLATES.recommended_meal_survey.code]: RECOMMENDED_MEAL_ALIMTALK_CHANNEL_ID,
   [ALIMTALK_TEMPLATES.recommended_meal_report.code]: RECOMMENDED_MEAL_ALIMTALK_CHANNEL_ID,
@@ -164,6 +173,7 @@ export const CANDIDATE_TEMPLATE_CODES: Record<SendableAlimtalkCandidateType, str
   onsite_welcome: ALIMTALK_TEMPLATES.onsite_welcome.code,
   private_survey: ALIMTALK_TEMPLATES.private_survey.code,
   group_survey: ALIMTALK_TEMPLATES.group_survey.code,
+  instructor_lesson_confirmation: ALIMTALK_TEMPLATES.instructor_lesson_confirmation.code,
   instructor_lesson_material: ALIMTALK_TEMPLATES.instructor_lesson_material.code,
   private_lesson_report: ALIMTALK_TEMPLATES.private_lesson_report.code,
   inbody_report: ALIMTALK_TEMPLATES.inbody_report.code,
@@ -238,6 +248,10 @@ export const ALIMTALK_DEDUPE_POLICIES_BY_TEMPLATE_CODE: Record<string, AlimtalkD
   [ALIMTALK_TEMPLATES.long_absence.code]: {
     label: "장기 미방문 안내 14일",
     windowDays: 14,
+  },
+  [ALIMTALK_TEMPLATES.instructor_lesson_confirmation.code]: {
+    label: "강사레슨 예약확정 수업별 1회",
+    windowDays: null,
   },
   [ALIMTALK_TEMPLATES.instructor_lesson_material.code]: {
     label: "강사레슨 수업자료 수업별 1회",

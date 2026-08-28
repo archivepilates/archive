@@ -1187,6 +1187,60 @@ const guardGroups = [
     ],
   },
   {
+    id: "instructor-lesson-booking-confirmation-v1",
+    reason:
+      "강사레슨 수동 예약 뒤 예약확정 안내가 승인 템플릿, 활성 두 세션, 캘린더 계약과 영구 중복 차단 없이 발송되는 회귀를 막습니다.",
+    files: [
+      {
+        file: "firebase/kangsain-functions/functions/src/alimtalk/templates.ts",
+        markers: [
+          "KA01TP2608241233353269Jgtoiwnzi6",
+          "ST01FZ260825101204154cOImfLX8Ri7",
+          "강사레슨_예약확정 안내 v1",
+          "강사레슨 예약확정 수업별 1회",
+        ],
+      },
+      {
+        file: "firebase/kangsain-functions/functions/src/instructorLessonRegistration/instructorLessonConfirmation.ts",
+        markers: [
+          "confirmInstructorLessonBookingAndQueueAlimtalkHandler",
+          "instructorLessonConfirmationSendabilityIssue",
+          "syncInstructorLessonConfirmationOutcome",
+          "StudioMate 활성 강사레슨 예약",
+          "assertCalendarReady",
+          'queuedBy: "auto"',
+          'reviewedByUid: "system:core-instructor-lesson-confirmation"',
+        ],
+      },
+      {
+        file: "firebase/kangsain-functions/functions/src/alimtalk/processAlimtalkQueue.ts",
+        markers: [
+          "instructorLessonConfirmationSendabilityIssue(claimed)",
+          "instructor_lesson_confirmation_source_blocked",
+          '"#{수업일}"',
+          '"#{수업시간}"',
+          '"#{수업구성}"',
+        ],
+      },
+      {
+        file: "core/assets/app.js",
+        markers: [
+          "confirmInstructorLessonBookingAndQueueAlimtalk",
+          "예약 완료 확인·안내 발송",
+          "StudioMate 활성 예약 두 세션과 캘린더를 다시 확인",
+        ],
+      },
+      {
+        file: "core/rules/index.html",
+        markers: [
+          "강사레슨 예약확정 안내 v1",
+          "StudioMate 활성 예약 두 세션",
+          "발송 직전 다시 확인",
+        ],
+      },
+    ],
+  },
+  {
     id: "instructor-lesson-d1-sample-approval",
     reason:
       "강사레슨 D-1 알림톡이 샘플 성공과 명시적 승인 없이 일반 큐에서 발송되거나 불명확한 결과를 자동 재시도하는 회귀를 막습니다.",

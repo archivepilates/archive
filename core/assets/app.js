@@ -1,5 +1,5 @@
 const FIREBASE_APP_VERSION = "10.14.1";
-const CORE_RUNTIME_CONTRACT_VERSION = "2026-08-28.1";
+const CORE_RUNTIME_CONTRACT_VERSION = "2026-08-28.2";
 const WORK_LANE_ID = "archive-core-transition";
 const STUDIO_ID = "5330";
 
@@ -15,6 +15,7 @@ const ALIMTALK_TEMPLATE_LABELS_BY_CODE = Object.freeze({
   KA01TP260521120040094XcMvYgFTryj: "강사레슨 수업자료 안내 v1",
   KA01TP260724090746135DWCIb2boEw7: "강사레슨 수업자료 안내 v2",
   KA01TP260825074722212ylmndmsB3V4: "강사레슨 수업자료 안내 v3",
+  KA01TP2608241233353269Jgtoiwnzi6: "강사레슨 예약확정 안내 v1",
   KA01TP260522041704111wu4Z0cu9cgl: "첫 그룹수업 회원 확인 v1",
   KA01TP260524083643752cySb9BoDOjN: "장기 미방문 수업안내 v1",
   KA01TP260527182741301uIuSTL01YQ1: "강사용 프라이빗 차트 작성 안내 v2 (미사용)",
@@ -45,6 +46,7 @@ const ALIMTALK_TEMPLATE_LABELS_BY_TYPE = Object.freeze({
   staff_private_chart: "강사용 프라이빗 차트 작성 안내",
   staff_group_survey: "첫 그룹수업 회원 확인",
   instructor_lesson_material: "강사레슨 수업자료 안내",
+  instructor_lesson_confirmation: "강사레슨 예약확정 안내",
   private_lesson_report: "프라이빗 회원 리포트 안내",
   inbody_report: "회원용 인바디 리포트 안내",
   pricing_info: "회원용 수강료 안내",
@@ -6809,8 +6811,17 @@ async function handleInstagramListAction(event) {
   }
 }
 
-const INSTRUCTOR_LESSON_STEP_KEYS = ["member", "ticket", "eformsign", "memo"];
-const INSTRUCTOR_LESSON_ACTIVE_STATUSES = new Set(["queued", "processing", "retry", "waiting_signature", "memo_pending"]);
+const INSTRUCTOR_LESSON_STEP_KEYS = ["member", "ticket", "eformsign", "memo", "bookings", "confirmation"];
+const INSTRUCTOR_LESSON_STEP_LABELS = ["회원", "수강권", "가입서", "메모", "예약", "안내"];
+const INSTRUCTOR_LESSON_ACTIVE_STATUSES = new Set([
+  "queued",
+  "processing",
+  "retry",
+  "waiting_signature",
+  "memo_pending",
+  "booking_pending",
+  "confirmation_pending",
+]);
 const INSTRUCTOR_LESSON_REVIEW_STATUSES = new Set(["action_required", "review_required", "failed"]);
 
 function instructorLessonStatusLabel(value) {
@@ -6820,6 +6831,8 @@ function instructorLessonStatusLabel(value) {
     retry: "재시도 대기",
     waiting_signature: "가입서 작성대기",
     memo_pending: "메모 반영대기",
+    booking_pending: "예약 대기",
+    confirmation_pending: "안내 발송대기",
     action_required: "확인필요",
     review_required: "확인필요",
     failed: "실패",
@@ -6831,7 +6844,7 @@ function instructorLessonStatusTone(value) {
   const status = String(value || "");
   if (status === "completed") return "good";
   if (INSTRUCTOR_LESSON_REVIEW_STATUSES.has(status)) return "danger";
-  if (["waiting_signature", "memo_pending"].includes(status)) return "warn";
+  if (["waiting_signature", "memo_pending", "booking_pending", "confirmation_pending"].includes(status)) return "warn";
   return "";
 }
 
@@ -7015,16 +7028,37 @@ function renderInstructorLessonRegistrationDashboard(data = state.instructorLess
           ${INSTRUCTOR_LESSON_STEP_KEYS.map((key, index) => {
             const step = steps[key] || {};
             const stepStatus = String(step.status || "pending");
-            return `<li class="${instructorLessonStepClass(stepStatus)}" title="${escapeHtml(step.detail || step.label || "")}"><span>${index + 1}</span><small>${escapeHtml(step.label || ["회원", "수강권", "가입서", "메모"][index])}</small><em>${escapeHtml(instructorLessonStepStatusLabel(stepStatus))}</em></li>`;
+            return `<li class="${instructorLessonStepClass(stepStatus)}" title="${escapeHtml(step.detail || step.label || "")}"><span>${index + 1}</span><small>${escapeHtml(step.label || INSTRUCTOR_LESSON_STEP_LABELS[index])}</small><em>${escapeHtml(instructorLessonStepStatusLabel(stepStatus))}</em></li>`;
           }).join("")}
         </ol>
         <div class="instructor-registration-next ${INSTRUCTOR_LESSON_REVIEW_STATUSES.has(status) ? "is-error" : ""}">
           <strong>${INSTRUCTOR_LESSON_REVIEW_STATUSES.has(status) ? "확인할 내용" : "다음 단계"}</strong>
           <span>${escapeHtml(item.lastError || item.nextAction || "없음")}</span>
         </div>
+        ${instructorLessonConfirmationAction(item)}
       </article>
     `;
   }).join("");
+}
+
+function instructorLessonConfirmationAction(item) {
+  const steps = item?.steps && typeof item.steps === "object" ? item.steps : {};
+  const memberReady = steps.member?.status === "verified";
+  const ticketReady = steps.ticket?.status === "verified";
+  const onboardingReady = item?.mode !== "new_member"
+    || (steps.eformsign?.status === "verified" && steps.memo?.status === "verified");
+  const confirmationStatus = String(steps.confirmation?.status || "pending");
+  if (!memberReady || !ticketReady || !onboardingReady || confirmationStatus === "verified") return "";
+  return `
+    <div class="instructor-registration-actions">
+      <button
+        type="button"
+        class="secondary-action instructor-confirmation-action"
+        data-confirm-instructor-lesson="${escapeHtml(item.registrationId || "")}"
+      >예약 완료 확인·안내 발송</button>
+      <small>StudioMate 활성 예약 두 세션과 캘린더를 다시 확인한 뒤 1회 발송합니다.</small>
+    </div>
+  `;
 }
 
 async function loadInstructorLessonRegistrationDashboard(runtime) {
@@ -7102,6 +7136,37 @@ function handleInstructorLessonRegistrationFilter(event) {
   if (!button) return;
   instructorLessonRegistrationFilter = button.dataset.instructorRegistrationFilter || "active";
   renderInstructorLessonRegistrationDashboard();
+}
+
+async function handleInstructorLessonConfirmation(event) {
+  const button = event.target.closest?.("[data-confirm-instructor-lesson]");
+  if (!button) return;
+  const registrationId = String(button.dataset.confirmInstructorLesson || "").trim();
+  if (!registrationId) return;
+  button.disabled = true;
+  setInstructorLessonRegistrationStatus("StudioMate 예약 두 세션과 캘린더를 확인하고 있습니다.");
+  try {
+    const runtime = await initFirebase();
+    const callable = runtime.httpsCallable(runtime.functionsClient, "confirmInstructorLessonBookingAndQueueAlimtalk");
+    const result = await callable({ registrationId });
+    const duplicate = Boolean(result?.data?.duplicate);
+    const requeued = Boolean(result?.data?.requeued);
+    setInstructorLessonRegistrationStatus(
+      requeued
+        ? "예약 변경을 다시 확인해 예약확정 안내를 재등록했습니다."
+        : duplicate
+          ? "기존 예약확정 안내 이력을 확인했습니다."
+          : "예약을 확인했습니다. 예약확정 안내 발송을 대기열에 등록했습니다.",
+      "good",
+    );
+    state.instructorLessonRegistrationDashboard = await loadInstructorLessonRegistrationDashboard(runtime);
+    renderInstructorLessonRegistrationDashboard();
+  } catch (error) {
+    if (isPermissionDenied(error)) showLoginGate("강사레슨 예약확정 권한을 확인해 주세요.");
+    setInstructorLessonRegistrationStatus(error?.message || "예약확정 안내 처리에 실패했습니다.", "danger");
+  } finally {
+    button.disabled = false;
+  }
 }
 
 function renderFallback(error, options = {}) {
@@ -7532,6 +7597,7 @@ qs("instagramHistoryList")?.addEventListener("click", handleInstagramListAction)
 qs("videoWatchRange")?.addEventListener("click", handleVideoWatchRangeClick);
 qs("instructorLessonRegistrationForm")?.addEventListener("submit", handleInstructorLessonRegistrationSubmit);
 qs("instructorLessonRegistrationFilters")?.addEventListener("click", handleInstructorLessonRegistrationFilter);
+qs("instructorLessonRegistrationList")?.addEventListener("click", handleInstructorLessonConfirmation);
 qs("instagramStatusFilter")?.addEventListener("change", () =>
   renderInstagramHistoryList(
     state.instagramDashboard?.items || [],

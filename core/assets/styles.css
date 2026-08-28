@@ -868,7 +868,7 @@ kbd {
 
 .instructor-registration-progress {
   display: grid;
-  grid-template-columns: repeat(4, minmax(0, 1fr));
+  grid-template-columns: repeat(6, minmax(0, 1fr));
   gap: 6px;
   margin: 0;
   padding: 0;
@@ -952,6 +952,27 @@ kbd {
   font-weight: 800;
 }
 
+.instructor-registration-actions {
+  display: flex;
+  min-width: 0;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: 8px 12px;
+}
+
+.instructor-registration-actions small {
+  min-width: min(100%, 260px);
+  flex: 1;
+  color: var(--muted);
+  font-size: 0.76rem;
+  line-height: 1.45;
+}
+
+.instructor-confirmation-action:disabled {
+  cursor: progress;
+  opacity: 0.62;
+}
+
 .instructor-tool-grid.compact {
   grid-template-columns: repeat(4, minmax(0, 1fr));
 }
@@ -969,6 +990,10 @@ kbd {
 
   .instructor-registration-layout {
     grid-template-columns: 1fr;
+  }
+
+  .instructor-registration-progress {
+    grid-template-columns: repeat(3, minmax(0, 1fr));
   }
 
   .instructor-tool-grid.compact {

@@ -31,6 +31,13 @@ const eligibilitySource = fs.readFileSync(
   ),
   "utf8",
 );
+const instructorLessonConfirmationSource = fs.readFileSync(
+  new URL(
+    "../../firebase/kangsain-functions/functions/src/instructorLessonRegistration/instructorLessonConfirmation.ts",
+    import.meta.url,
+  ),
+  "utf8",
+);
 
 test("checks every matching completed send before applying a time-window dedupe policy", () => {
   assert.doesNotMatch(
@@ -103,5 +110,17 @@ test("does not treat an automatic Kim test-recipient candidate as an explicit te
       reviewedByUid: "operator-user",
     }),
     true,
+  );
+});
+
+test("CORE instructor confirmation keeps staff exclusion unless a separate test override is approved", () => {
+  assert.match(
+    eligibilitySource,
+    /isAlimtalkTestRecipient\(candidate\) && !hasExplicitAlimtalkTestOverride\(candidate\)/,
+  );
+  assert.match(instructorLessonConfirmationSource, /queuedBy: "auto"/);
+  assert.match(
+    instructorLessonConfirmationSource,
+    /reviewedByUid: "system:core-instructor-lesson-confirmation"/,
   );
 });

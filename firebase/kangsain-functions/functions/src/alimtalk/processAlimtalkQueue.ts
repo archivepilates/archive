@@ -22,6 +22,10 @@ import {
   RECOMMENDED_MEAL_REPORT_COLLECTION,
 } from "../mealPlan/recommendedMealProgram";
 import { RECOMMENDED_MEAL_REQUEST_COLLECTION } from "../mealPlan/recommendedMealSurvey";
+import {
+  instructorLessonConfirmationSendabilityIssue,
+  syncInstructorLessonConfirmationOutcome,
+} from "../instructorLessonRegistration/instructorLessonConfirmation";
 
 const SOLAPI_SEND_URL = "https://api.solapi.com/messages/v4/send-many/detail";
 const PROCESSING_STALE_MS = 10 * 60 * 1000;
@@ -52,6 +56,7 @@ export async function processAlimtalkQueue(): Promise<{
     if (!claimed) continue;
     processed += 1;
     try {
+      await safeSyncInstructorLessonConfirmationOutcome(claimed, { status: "processing" });
       const instructorLessonBlock = genericInstructorLessonQueueBlock(claimed);
       if (instructorLessonBlock) {
         await refs.alimtalkCandidate(claimed.candidateId).set(
@@ -69,6 +74,11 @@ export async function processAlimtalkQueue(): Promise<{
       if (sendabilityIssue) {
         if (isRetryableTemplateStatusIssue(sendabilityIssue)) {
           await deferCandidateForTemplateStatus(claimed, sendabilityIssue);
+          await safeSyncInstructorLessonConfirmationOutcome(claimed, {
+            status: "queued",
+            reasonCode: "template_status_retry",
+            detail: sendabilityIssue,
+          });
           deferred += 1;
           continue;
         }
@@ -81,6 +91,11 @@ export async function processAlimtalkQueue(): Promise<{
           },
           { merge: true },
         );
+        await safeSyncInstructorLessonConfirmationOutcome(claimed, {
+          status: "skipped",
+          reasonCode: "auto_sendability_blocked",
+          detail: sendabilityIssue,
+        });
         continue;
       }
       const privateSurveyIssue = await privateSurveySendabilityIssue(claimed);
@@ -109,6 +124,24 @@ export async function processAlimtalkQueue(): Promise<{
         );
         continue;
       }
+      const instructorLessonConfirmationIssue = await instructorLessonConfirmationSendabilityIssue(claimed);
+      if (instructorLessonConfirmationIssue) {
+        await refs.alimtalkCandidate(claimed.candidateId).set(
+          {
+            status: "skipped",
+            reasonCode: "instructor_lesson_confirmation_source_blocked",
+            lastError: instructorLessonConfirmationIssue,
+            updatedAt: nowTimestamp(),
+          },
+          { merge: true },
+        );
+        await safeSyncInstructorLessonConfirmationOutcome(claimed, {
+          status: "skipped",
+          reasonCode: "instructor_lesson_confirmation_source_blocked",
+          detail: instructorLessonConfirmationIssue,
+        });
+        continue;
+      }
       const dedupeKey = alimtalkDedupeKey(claimed);
       const dedupePolicy = alimtalkDedupePolicy(claimed.templateCode);
       const duplicate = hasExplicitAlimtalkTestOverride(claimed)
@@ -125,6 +158,11 @@ export async function processAlimtalkQueue(): Promise<{
           },
           { merge: true },
         );
+        await safeSyncInstructorLessonConfirmationOutcome(claimed, {
+          status: "skipped",
+          reasonCode: "duplicate_send_blocked",
+          detail: `기존 성공 발송 확인: ${duplicate}`,
+        });
         continue;
       }
       const privateReportIssue = await lockPrivateLessonReportForSend(claimed);
@@ -214,6 +252,11 @@ export async function processAlimtalkQueue(): Promise<{
       );
       await markPrivateLessonReportSent(claimed);
       await markRecommendedMealReportSent(claimed);
+      await safeSyncInstructorLessonConfirmationOutcome(claimed, {
+        status: "sent",
+        solapiMessageId: result.messageId,
+        detail: "강사레슨 예약확정 안내 발송 완료",
+      });
       sent += 1;
     } catch (err) {
       const message = errorMessage(err);
@@ -254,6 +297,10 @@ export async function processAlimtalkQueue(): Promise<{
         },
         { merge: true },
       );
+      await safeSyncInstructorLessonConfirmationOutcome(claimed, {
+        status: "failed",
+        detail: message,
+      });
       failed += 1;
       logger.warn("processAlimtalkQueue send failed", {
         candidateId: claimed.candidateId,
@@ -275,6 +322,7 @@ export async function processAlimtalkCandidate(candidateId: string): Promise<Ali
   if (!claimed) return { processed: false, status: "not_claimed", lastError: "알림톡 후보를 처리할 수 없습니다" };
 
   try {
+    await safeSyncInstructorLessonConfirmationOutcome(claimed, { status: "processing" });
     const instructorLessonBlock = genericInstructorLessonQueueBlock(claimed);
     if (instructorLessonBlock) {
       await refs.alimtalkCandidate(claimed.candidateId).set(
@@ -295,6 +343,11 @@ export async function processAlimtalkCandidate(candidateId: string): Promise<Ali
     if (sendabilityIssue) {
       if (isRetryableTemplateStatusIssue(sendabilityIssue)) {
         await deferCandidateForTemplateStatus(claimed, sendabilityIssue);
+        await safeSyncInstructorLessonConfirmationOutcome(claimed, {
+          status: "queued",
+          reasonCode: "template_status_retry",
+          detail: sendabilityIssue,
+        });
         return { processed: true, status: "deferred", lastError: sendabilityIssue };
       }
       await refs.alimtalkCandidate(claimed.candidateId).set(
@@ -306,6 +359,11 @@ export async function processAlimtalkCandidate(candidateId: string): Promise<Ali
         },
         { merge: true },
       );
+      await safeSyncInstructorLessonConfirmationOutcome(claimed, {
+        status: "skipped",
+        reasonCode: "auto_sendability_blocked",
+        detail: sendabilityIssue,
+      });
       return { processed: true, status: "skipped", lastError: sendabilityIssue };
     }
 
@@ -337,6 +395,25 @@ export async function processAlimtalkCandidate(candidateId: string): Promise<Ali
       return { processed: true, status: "skipped", lastError: renewalIssue };
     }
 
+    const instructorLessonConfirmationIssue = await instructorLessonConfirmationSendabilityIssue(claimed);
+    if (instructorLessonConfirmationIssue) {
+      await refs.alimtalkCandidate(claimed.candidateId).set(
+        {
+          status: "skipped",
+          reasonCode: "instructor_lesson_confirmation_source_blocked",
+          lastError: instructorLessonConfirmationIssue,
+          updatedAt: nowTimestamp(),
+        },
+        { merge: true },
+      );
+      await safeSyncInstructorLessonConfirmationOutcome(claimed, {
+        status: "skipped",
+        reasonCode: "instructor_lesson_confirmation_source_blocked",
+        detail: instructorLessonConfirmationIssue,
+      });
+      return { processed: true, status: "skipped", lastError: instructorLessonConfirmationIssue };
+    }
+
     const dedupeKey = alimtalkDedupeKey(claimed);
     const dedupePolicy = alimtalkDedupePolicy(claimed.templateCode);
     const duplicate = hasExplicitAlimtalkTestOverride(claimed)
@@ -354,6 +431,11 @@ export async function processAlimtalkCandidate(candidateId: string): Promise<Ali
         },
         { merge: true },
       );
+      await safeSyncInstructorLessonConfirmationOutcome(claimed, {
+        status: "skipped",
+        reasonCode: "duplicate_send_blocked",
+        detail: `기존 성공 발송 확인: ${duplicate}`,
+      });
       return { processed: true, status: "skipped", lastError };
     }
 
@@ -444,6 +526,11 @@ export async function processAlimtalkCandidate(candidateId: string): Promise<Ali
     );
     await markPrivateLessonReportSent(claimed);
     await markRecommendedMealReportSent(claimed);
+    await safeSyncInstructorLessonConfirmationOutcome(claimed, {
+      status: "sent",
+      solapiMessageId: result.messageId,
+      detail: "강사레슨 예약확정 안내 발송 완료",
+    });
     return { processed: true, status: "sent", solapiMessageId: result.messageId };
   } catch (err) {
     const message = errorMessage(err);
@@ -484,6 +571,10 @@ export async function processAlimtalkCandidate(candidateId: string): Promise<Ali
       },
       { merge: true },
     );
+    await safeSyncInstructorLessonConfirmationOutcome(claimed, {
+      status: "failed",
+      detail: message,
+    });
     logger.warn("processAlimtalkCandidate send failed", {
       candidateId: claimed.candidateId,
       templateCode: claimed.templateCode,
@@ -838,11 +929,28 @@ async function templateVariables(candidate: AlimtalkCandidateDoc): Promise<Recor
     "#{설문ID}": surveyId,
     "#{접근토큰}": accessToken,
     "#{관리번호}": managementNumber,
+    "#{수업일}": String(payload.lessonDateText || payload.lessonDate || ""),
+    "#{수업시간}": String(payload.lessonTimeText || ""),
+    "#{수업구성}": String(payload.lessonComposition || ""),
     "#{링크ID}": shortLinkId,
     "#{주차링크ID}": String(payload.parkingLinkId || ""),
     "#{리포트링크ID}": reportLinkId,
     "#{인바디링크ID}": inbodyLinkId,
   };
+}
+
+async function safeSyncInstructorLessonConfirmationOutcome(
+  candidate: AlimtalkCandidateDoc,
+  outcome: Parameters<typeof syncInstructorLessonConfirmationOutcome>[1],
+): Promise<void> {
+  try {
+    await syncInstructorLessonConfirmationOutcome(candidate, outcome);
+  } catch (error) {
+    logger.error("instructor lesson confirmation outcome sync failed", {
+      candidateId: candidate.candidateId,
+      error: errorMessage(error),
+    });
+  }
 }
 
 async function inbodyLinkIdForCandidate(candidate: AlimtalkCandidateDoc): Promise<string> {

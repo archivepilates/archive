@@ -488,6 +488,7 @@ export type AlimtalkCandidateType =
   | "onsite_welcome"
   | "private_survey"
   | "group_survey"
+  | "instructor_lesson_confirmation"
   | "instructor_lesson_material"
   | "private_lesson_report"
   | "inbody_report"

@@ -115,7 +115,8 @@
         "sendRefundAgreement",
         "queueRefundStudioMateSms",
         "getInstructorLessonRegistrationDashboard",
-        "operatorCreateInstructorLessonRegistration"
+        "operatorCreateInstructorLessonRegistration",
+        "confirmInstructorLessonBookingAndQueueAlimtalk"
       ],
       "forbidden": [
         "scheduled jobs",

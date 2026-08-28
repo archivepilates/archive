@@ -81,6 +81,7 @@ try {
         await page.evaluate(() => {
           const summary = document.querySelector("#instructorLessonScheduleSummary");
           const list = document.querySelector("#instructorLessonScheduleList");
+          const registrations = document.querySelector("#instructorLessonRegistrationList");
           if (summary) summary.textContent = "4개 일정 · 잔여 8석";
           if (list) {
             list.innerHTML = [
@@ -94,6 +95,18 @@ try {
                 <div class="instructor-seat-counts"><span><small>예약·접수</small><strong>${occupied}</strong></span><span><small>정원</small><strong>${capacity}</strong></span><span><small>남은 좌석</small><strong>${remaining}</strong></span></div>
                 <div class="instructor-seat-progress"><span style="width:${Number(occupied) * 10}%"></span></div><small class="instructor-seat-source">${source}</small>
               </article>`).join("");
+          }
+          if (registrations) {
+            registrations.innerHTML = `
+              <article class="instructor-registration-item">
+                <div class="instructor-registration-item-head"><div><strong>반응형검증강사</strong><span>2026-09-19 · ***-****-5678</span></div><span class="pill warn">예약 대기</span></div>
+                <div class="instructor-registration-meta"><span>재수강 강사회원</span><span>강사레슨 (2T)</span><span>카드</span><span>최근 2026.08.28 18:00</span></div>
+                <ol class="instructor-registration-progress" aria-label="강사레슨 등록 진행 단계">
+                  ${["회원", "수강권", "가입서", "메모", "예약", "안내"].map((label, index) => `<li class="${index < 4 ? "is-done" : index === 4 ? "is-active" : "is-pending"}"><span>${index + 1}</span><small>${label}</small><em>${index < 4 ? "완료" : "대기"}</em></li>`).join("")}
+                </ol>
+                <div class="instructor-registration-next"><strong>다음 단계</strong><span>StudioMate 반배정·예약 후 CORE에서 예약 완료 확인</span></div>
+                <div class="instructor-registration-actions"><button class="secondary-action instructor-confirmation-action" type="button">예약 완료 확인·안내 발송</button><small>StudioMate 활성 예약 두 세션과 캘린더를 다시 확인한 뒤 1회 발송합니다.</small></div>
+              </article>`;
           }
         });
       }

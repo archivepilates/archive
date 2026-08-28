@@ -67,19 +67,21 @@ test("강사레슨 수강권은 정확한 이름 한 건만 선택한다", () =>
   );
 });
 
-test("수강권과 신규 가입서 메모가 끝나면 등록을 완료한다", () => {
+test("수강권과 신규 가입서 메모 이후 예약·안내 단계까지 상태를 이어간다", () => {
   const baseSteps = {
     member: { status: "verified" },
     ticket: { status: "verified" },
     eformsign: { status: "verified" },
     memo: { status: "verified" },
+    bookings: { status: "pending" },
+    confirmation: { status: "pending" },
   };
   assert.equal(
     deriveInstructorLessonRegistrationState({
       mode: "new_member",
       steps: baseSteps,
     }).status,
-    "completed",
+    "booking_pending",
   );
   assert.equal(
     deriveInstructorLessonRegistrationState({
@@ -87,9 +89,22 @@ test("수강권과 신규 가입서 메모가 끝나면 등록을 완료한다",
       steps: {
         member: { status: "verified" },
         ticket: { status: "verified" },
-        bookings: { status: "review_required" },
+        bookings: { status: "verified" },
+        confirmation: { status: "pending" },
         eformsign: { status: "not_required" },
         memo: { status: "not_required" },
+      },
+    }).status,
+    "confirmation_pending",
+  );
+  assert.equal(
+    deriveInstructorLessonRegistrationState({
+      mode: "returning_member",
+      steps: {
+        member: { status: "verified" },
+        ticket: { status: "verified" },
+        bookings: { status: "verified" },
+        confirmation: { status: "verified" },
       },
     }).status,
     "completed",
@@ -100,6 +115,18 @@ test("수강권과 신규 가입서 메모가 끝나면 등록을 완료한다",
       steps: {
         ...baseSteps,
         eformsign: { status: "review_required" },
+      },
+    }).status,
+    "action_required",
+  );
+  assert.equal(
+    deriveInstructorLessonRegistrationState({
+      mode: "returning_member",
+      steps: {
+        member: { status: "verified" },
+        ticket: { status: "verified" },
+        bookings: { status: "review_required" },
+        confirmation: { status: "pending" },
       },
     }).status,
     "action_required",

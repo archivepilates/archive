@@ -35,6 +35,7 @@ import {
   getInstructorLessonRegistrationDashboardHandler,
   operatorCreateInstructorLessonRegistrationHandler,
 } from "../instructorLessonRegistration/instructorLessonRegistration";
+import { confirmInstructorLessonBookingAndQueueAlimtalkHandler } from "../instructorLessonRegistration/instructorLessonConfirmation";
 import { recommendedMealSurveyApiHandler } from "../mealPlan/recommendedMealSurvey";
 import {
   generateRecommendedMealProgramDraftForSubmittedResponse,
@@ -368,6 +369,14 @@ export const getInstructorLessonRegistrationDashboard = onCall(callableOptions, 
 export const operatorCreateInstructorLessonRegistration = onCall(callableOptions, async (request) => {
   try {
     return await operatorCreateInstructorLessonRegistrationHandler(request);
+  } catch (err) {
+    throw toHttpsError(err);
+  }
+});
+
+export const confirmInstructorLessonBookingAndQueueAlimtalk = onCall(callableOptions, async (request) => {
+  try {
+    return await confirmInstructorLessonBookingAndQueueAlimtalkHandler(request);
   } catch (err) {
     throw toHttpsError(err);
   }
