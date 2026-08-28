@@ -70,7 +70,7 @@ if (!before.includes('data-archive-pilates-site-improvements="2026-07-28b"')) {
   throw new Error("current header is missing the active site-improvements loader");
 }
 const after = replaceMarkedScript(before);
-if (!after.includes(`${MARKER}="2026-08-28c"`)) {
+if (!after.includes(`${MARKER}="2026-08-28d"`)) {
   throw new Error("prepared header is missing the shipping-products-only script");
 }
 

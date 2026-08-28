@@ -29,13 +29,13 @@ Keep the `판매상품` navigation limited to shippable merchandise. Online vide
 ## Live result
 
 - Saved on 2026-08-28 through the authenticated Imweb admin session for `archivepilates.imweb.me`.
-- Reloading the admin SEO page confirmed the final `2026-08-28c` marker persisted in the normal `Header Code` field.
+- Reloading the admin SEO page confirmed the final `2026-08-28d` marker persisted in the normal `Header Code` field.
 - `/16?ap_shop=all&page=2` resolved in the browser to `/16?ap_shop=knitido`, and the redundant `전체` entry was absent.
 - The shipping-products page exposed 27 visible Knitido product links and no visible online-video or offline-lesson product link.
 - `/17` still exposed online classes and `/18` still exposed the offline instructor lesson.
 - Desktop and 390px mobile checks measured all five primary sidebar links at `54px` height with `30px` left padding and an identical left edge.
 - `firebase.archive-home.json` is aligned for the official `/shop` redirect in source, but no Firebase Hosting deploy was performed from this branch. The current public `/shop` route still reaches the corrected Imweb route through the saved redirect guard.
-- A live browser check of `https://archivepilates.com/shop` finished at `https://archivepilates.imweb.me/16?ap_shop=knitido` with the `2026-08-28c` marker active and the header still visible.
+- A live browser check of `https://archivepilates.com/shop` finished at `https://archivepilates.imweb.me/16?ap_shop=knitido`; the later DOM-order fix is active as `2026-08-28d`.
 - Computed top-menu typography matched across all five entries: desktop `15px` and mobile `13px`, with the same weight and line height at each breakpoint.
 
 ## Header-preserving follow-up
@@ -44,3 +44,10 @@ Keep the `판매상품` navigation limited to shippable merchandise. Online vide
 - Version `2026-08-28c` replaces the query URL with `history.replaceState` before the existing shop renderer starts. The page, header DOM, and menu remain mounted while the physical-products-only mode initializes.
 - A same-origin `location.replace` remains only as a defensive fallback when the History API is unavailable.
 - A targeted Firebase Hosting deploy was attempted to make the official `/shop` redirect one hop, but stopped before upload because the configured service account and registered Firebase users did not have `archive-pilates` project access. No Hosting files changed. The header-preserving Imweb implementation fixes the live entry behavior without that deploy.
+
+## Delayed DOM reorder follow-up
+
+- A real top-menu click followed by a 10-second observation reproduced the header at document position `3806px`, immediately before the footer.
+- The Knitido renderer inserts `.ap-shop-subcategory` and `#ap-knitido-brand-intro` at the start of the Imweb body after initial paint. That insertion put the 3690px brand section before `#doz_header_wrap`.
+- Version `2026-08-28d` watches those insertions and restores `#doz_header_wrap` immediately before the first shop-content node. It does not clone the header or change navigation typography.
+- After a real menu click and 10-second wait, desktop and 390px mobile both kept the header at document position `0px`, child index `0`, before shop-content index `2`. Browser console error checks were empty.

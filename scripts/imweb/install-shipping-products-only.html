@@ -1,8 +1,8 @@
-<script data-archive-pilates-shipping-products-only="2026-08-28c">
+<script data-archive-pilates-shipping-products-only="2026-08-28d">
 (function () {
   "use strict";
 
-  var VERSION = "2026-08-28c";
+  var VERSION = "2026-08-28d";
   var SHOP_PATHS = ["/16", "/shop"];
   var SHIPPING_PRODUCTS_URL = "/16?ap_shop=knitido";
   var SIDEBAR_STYLE_ID = "archive-pilates-sidebar-primary-alignment";
@@ -85,6 +85,25 @@
     });
   }
 
+  function keepShopHeaderBeforeContent() {
+    if (SHOP_PATHS.indexOf(normalizedPath(window.location.pathname)) < 0) return;
+    var header = document.getElementById("doz_header_wrap");
+    var candidates = Array.prototype.slice.call(
+      document.querySelectorAll(".ap-shop-subcategory,#ap-knitido-brand-intro")
+    );
+    if (!header || !candidates.length) return;
+    var parent = header.parentElement;
+    var firstShopNode = candidates
+      .filter(function (node) { return node.parentElement === parent; })
+      .sort(function (a, b) {
+        return Array.prototype.indexOf.call(parent.children, a) - Array.prototype.indexOf.call(parent.children, b);
+      })[0];
+    if (!firstShopNode) return;
+    var headerIndex = Array.prototype.indexOf.call(parent.children, header);
+    var shopIndex = Array.prototype.indexOf.call(parent.children, firstShopNode);
+    if (headerIndex > shopIndex) parent.insertBefore(header, firstShopNode);
+  }
+
   function rewriteLinks() {
     pending = false;
     Array.prototype.slice.call(document.querySelectorAll("a[href]")).forEach(function (anchor) {
@@ -101,6 +120,7 @@
       link.remove();
     });
     markSidebarAlignment();
+    keepShopHeaderBeforeContent();
     document.documentElement.setAttribute("data-archive-pilates-shipping-products-only", VERSION);
   }
 

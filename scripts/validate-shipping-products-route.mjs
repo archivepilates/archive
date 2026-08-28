@@ -11,11 +11,13 @@ if (shopRedirect?.destination !== "https://archivepilates.imweb.me/16?ap_shop=kn
 }
 
 [
-  'data-archive-pilates-shipping-products-only="2026-08-28c"',
+  'data-archive-pilates-shipping-products-only="2026-08-28d"',
   'var SHIPPING_PRODUCTS_URL = "/16?ap_shop=knitido";',
   'url.searchParams.has("idx")',
   'mode === "all"',
   'window.history.replaceState(window.history.state, "", SHIPPING_PRODUCTS_URL)',
+  'function keepShopHeaderBeforeContent()',
+  'parent.insertBefore(header, firstShopNode)',
   '[data-ap-shop-sub="all"]',
   'data-archive-pilates-sidebar-primary-alignment',
   'ap-sidebar-primary-link',
