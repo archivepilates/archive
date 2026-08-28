@@ -26,7 +26,6 @@
     "validate:instructor-lesson-registration": "node scripts/validate-instructor-lesson-registration-release.mjs",
     "create:instructor-lesson-parking-solapi-template": "node scripts/create-instructor-lesson-parking-solapi-template.mjs --apply",
     "codex:queue": "node scripts/list-codex-action-queue.mjs",
-    "monitor:hohoyoga": "node scripts/run-hohoyoga-monitor.mjs",
     "verify:archivein-admin": "node scripts/verify-archivein-admin-firestore-access.mjs",
     "build:contracts": "node firebase/kangsain-functions/functions/node_modules/typescript/bin/tsc -p firebase/packages/contracts/tsconfig.json",
     "prepare:function-codebases": "node scripts/prepare-functions-codebase.mjs all",

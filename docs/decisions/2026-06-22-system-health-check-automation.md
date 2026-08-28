@@ -70,14 +70,9 @@ npm run codex:queue
 
 The queue is evidence for Codex triage. It does not grant permission to run production writes, member-facing sends, deploys, or destructive fixes.
 
-## HohoYoga
+## Retired Data Collection
 
-HohoYoga monitoring is restored as a separate data-collection automation, not part of ARCHIVE PILATES operational health.
-
-- Script: `scripts/run-hohoyoga-monitor.mjs`
-- LaunchAgent: `com.archive.hohoyoga-monitor`
-- Schedule: every day 09:00 KST
-- Target spreadsheet: `1bP0m8_h6-jMFEHN9-_9LptuLoxZZE4Thbr0Fqpxk6tc`
+The HohoYoga crawler was retired on 2026-08-28. Its LaunchAgent, crawler scripts, package command, and system-health check were removed. Existing spreadsheet rows and historical reports remain read-only records.
 
 ## Reporting Rule
 

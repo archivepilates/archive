@@ -176,16 +176,6 @@ const AUTOMATIONS = [
     repair: "bootstrap",
     keepAlive: true,
   },
-  {
-    id: "hohoyoga-monitor",
-    label: "com.archive.hohoyoga-monitor",
-    title: "HohoYoga monitor",
-    area: "recruiting",
-    reportDir: path.join(HOME, "ArchiveIN/automation/reports/hohoyoga-monitor"),
-    maxAgeMinutes: 30 * 60,
-    plist: path.join(PLIST_DIR, "com.archive.hohoyoga-monitor.plist"),
-    repair: "none",
-  },
 ];
 
 await main();
@@ -415,7 +405,7 @@ async function checkLaunchAgents() {
     if (!plistExists) {
       addFinding({
         area: item.area,
-        severity: item.id === "hohoyoga-monitor" ? "action_required" : "critical",
+        severity: "critical",
         title: `${item.title} LaunchAgent plist 없음`,
         cause: `${item.plist} 파일이 없습니다.`,
         impact: `${item.title} 자동화가 스케줄대로 실행되지 않습니다.`,
