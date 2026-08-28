@@ -38,7 +38,7 @@
 - `deployed`: 2026-08-28 `functions-app`, `functions-alimtalk`, ARCHIVE CORE에 예약확정 흐름을 반영했다.
 - `verified`: 9월 19일·20일 랜딩 페이지와 `.ics`가 사용자 도메인 및 Firebase 기본 도메인에서 HTTP 200으로 응답한다. `.ics`의 `text/calendar` MIME, 날짜·시간·장소, Google Calendar 링크와 320px~1280px 반응형 화면을 확인했다. 예약확정 흐름에서 월별 상세 안내 링크를 제거했다.
 - `verified`: 2026-08-28 SOLAPI 템플릿의 APPROVED, BA/IMAGE, ARCHIVE 이미지 ID, 변수 5개와 버튼 2개 계약을 확인했다.
-- `pending`: 수강권 발급 이벤트 함수, 알림톡 큐 함수와 ARCHIVE CORE 변경의 배포 후 라이브 검증이 필요하다.
+- `verified`: 2026-08-28 수강권 발급 이벤트 함수와 알림톡 큐 함수가 `ACTIVE`, 10분 큐 Scheduler가 `ENABLED`임을 확인했다. ARCHIVE CORE 사용자 도메인의 수강권 기준 문구와 320px~1920px 반응형 85개 검사를 통과했고, 배포로 생성·변경된 강사레슨 등록 및 예약확정 후보는 0건이다.
 - `pending`: 실제 수강생 첫 예약확정 발송 결과는 첫 운영 예약 건에서 SOLAPI 결과와 CORE 완료 상태를 함께 확인한다.
 - 마지막 갱신: 2026-08-28
 - 다음 작업: 배포 후 첫 실제 수강권 발급 건에서 SOLAPI messageId와 CORE `완료` 전환을 확인한다.
