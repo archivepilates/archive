@@ -6,6 +6,7 @@ import {
   instructorLessonApprovalCutoffIssue,
   instructorLessonApprovalId,
   instructorLessonContentFingerprint,
+  instructorLessonReservationSnapshotIssue,
   splitInstructorLessonCandidates,
 } from "../../firebase/kangsain-functions/functions/src/alimtalk/instructorLessonSampleApproval";
 
@@ -144,5 +145,43 @@ test("blocks every generic queue path for instructor lesson material", () => {
       }),
     )?.status,
     "failed",
+  );
+});
+
+test("accepts a fresh reservation snapshot that covers the lesson date", () => {
+  const now = new Date("2026-08-28T03:00:00Z").getTime();
+  assert.equal(
+    instructorLessonReservationSnapshotIssue(
+      {
+        active: true,
+        snapshotPolicy: "bookings_single_source_reconcile_import_range",
+        dateRange: { startDate: "2026-08-28", endDate: "2026-09-06" },
+        importedBookings: 509,
+        updatedAt: { toMillis: () => now - 3 * 60 * 60 * 1000 },
+      },
+      "2026-08-29",
+      now,
+    ),
+    "",
+  );
+});
+
+test("blocks stale or out-of-range reservation snapshots", () => {
+  const now = new Date("2026-08-28T03:00:00Z").getTime();
+  const base = {
+    active: true,
+    snapshotPolicy: "bookings_single_source_reconcile_import_range",
+    dateRange: { startDate: "2026-08-28", endDate: "2026-09-06" },
+    importedBookings: 509,
+    updatedAt: { toMillis: () => now - 25 * 60 * 60 * 1000 },
+  };
+  assert.match(instructorLessonReservationSnapshotIssue(base, "2026-08-29", now), /24시간/);
+  assert.match(
+    instructorLessonReservationSnapshotIssue(
+      { ...base, updatedAt: { toMillis: () => now } },
+      "2026-09-07",
+      now,
+    ),
+    /범위/,
   );
 });

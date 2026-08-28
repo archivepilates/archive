@@ -7,6 +7,7 @@ import path from "node:path";
 import { recordAutomationStatus } from "./lib/archive-core-ops-logging.mjs";
 import { shouldApplyOperationalDataPurge } from "./lib/operational-data-retention-policy.mjs";
 import { isActionableAlimtalkFailure } from "./lib/system-health-alimtalk.mjs";
+import { monthlySettlementIndexPath } from "./lib/system-health-schedule-evidence.mjs";
 import {
   isExcludedPrivateBooking,
   isPrivateBooking,
@@ -142,7 +143,7 @@ const AUTOMATIONS = [
     label: "com.archive.monthly-settlement-statements",
     title: "Monthly settlement statements",
     area: "settlement",
-    runLog: path.join(HOME, "ArchiveIN/emergency/logs/monthly-settlement-statements.out.log"),
+    resultFile: monthlySettlementIndexPath(HOME, now),
     maxAgeMinutes: 40 * 24 * 60,
     plist: path.join(PLIST_DIR, "com.archive.monthly-settlement-statements.plist"),
     repair: "none",

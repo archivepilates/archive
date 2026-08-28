@@ -1196,6 +1196,8 @@ const guardGroups = [
           'if (request.method !== "POST")',
           "instructorLessonContentFingerprint",
           "instructorLessonGroupSourceIssue",
+          "instructorLessonReservationSnapshotIssue",
+          'snapshotPolicy !== "bookings_single_source_reconcile_import_range"',
           "maxAttempts: 1",
         ],
       },
@@ -1239,7 +1241,22 @@ const guardGroups = [
           "POST 요청만 승인으로 기록",
           "D-1 17:30",
           "승인 전용 경로는 1회만 시도",
+          "최신 StudioMate 전체 예약 스냅샷과 현재 예약 상태",
         ],
+      },
+    ],
+  },
+  {
+    id: "monthly-settlement-health-evidence",
+    reason: "월말 정산 관제가 오래된 stdout 로그 대신 해당 월의 실제 정산 산출물을 확인하도록 유지합니다.",
+    files: [
+      {
+        file: "scripts/run-system-health-check.mjs",
+        markers: ["monthlySettlementIndexPath(HOME, now)"],
+      },
+      {
+        file: "scripts/lib/system-health-schedule-evidence.mjs",
+        markers: ["expectedMonthlySettlementMonth", "아카이브 정산명세서 ${month}_INDEX.html"],
       },
     ],
   },

@@ -22,6 +22,7 @@ import { shortUrlForId } from "../utils/shortLinks";
 
 const APPROVAL_COLLECTION = "instructorLessonAlimtalkApprovals";
 const BOOKING_FRESHNESS_MS = 24 * 60 * 60 * 1000;
+const RESERVATION_SNAPSHOT_DOC = "studiomateReservationExcelEmergency";
 const LIVE_SEND_HOUR_KST = 18;
 const APPROVAL_FUNCTION_URL =
   process.env.INSTRUCTOR_LESSON_APPROVAL_FUNCTION_URL ||
@@ -774,6 +775,9 @@ async function writeSampleAudit(
 }
 
 async function instructorLessonGroupSourceIssue(group: InstructorLessonCandidateGroup): Promise<string> {
+  const snapshot = (await db.collection("opsState").doc(RESERVATION_SNAPSHOT_DOC).get()).data();
+  const snapshotIssue = instructorLessonReservationSnapshotIssue(snapshot, group.lessonDate);
+  if (snapshotIssue) return snapshotIssue;
   for (const candidate of group.candidates) {
     const bookingId = String(candidate.payload?.bookingId || "");
     if (!bookingId) return `${candidate.memberName}: 예약 ID 없음`;
@@ -781,12 +785,41 @@ async function instructorLessonGroupSourceIssue(group: InstructorLessonCandidate
     if (!booking) return `${candidate.memberName}: 현재 예약을 찾을 수 없음`;
     if (booking.appStatus !== "reserved") return `${candidate.memberName}: 현재 예약 상태 ${booking.appStatus}`;
     if (booking.lectureDate !== group.lessonDate) return `${candidate.memberName}: 수업일 불일치`;
-    const syncedAtMs = booking.syncedAt?.toMillis?.() || booking.updatedAt?.toMillis?.() || 0;
-    if (!syncedAtMs || Date.now() - syncedAtMs > BOOKING_FRESHNESS_MS) {
-      return `${candidate.memberName}: StudioMate 예약 데이터가 24시간 이내 동기화되지 않음`;
-    }
   }
   return "";
+}
+
+export function instructorLessonReservationSnapshotIssue(
+  snapshot: FirebaseFirestore.DocumentData | undefined,
+  lessonDate: string,
+  nowMs = Date.now(),
+): string {
+  if (!snapshot?.active) return "StudioMate 최신 예약 원천 상태를 찾을 수 없음";
+  if (snapshot.snapshotPolicy !== "bookings_single_source_reconcile_import_range") {
+    return "StudioMate 예약 원천 정책 확인 필요";
+  }
+  const startDate = String(snapshot.dateRange?.startDate || "");
+  const endDate = String(snapshot.dateRange?.endDate || "");
+  if (!startDate || !endDate || lessonDate < startDate || lessonDate > endDate) {
+    return `StudioMate 최신 예약 원천 범위에 수업일 ${lessonDate} 없음`;
+  }
+  const updatedAtMs = timestampMillis(snapshot.updatedAt);
+  if (!updatedAtMs || nowMs - updatedAtMs > BOOKING_FRESHNESS_MS) {
+    return "StudioMate 예약 원천 스냅샷이 24시간 이내 동기화되지 않음";
+  }
+  if (!(Number(snapshot.importedBookings || 0) > 0)) {
+    return "StudioMate 최신 예약 원천에 예약 행이 없음";
+  }
+  return "";
+}
+
+function timestampMillis(value: unknown): number {
+  if (value && typeof (value as { toMillis?: () => number }).toMillis === "function") {
+    return Number((value as { toMillis: () => number }).toMillis()) || 0;
+  }
+  if (value instanceof Date) return value.getTime();
+  const parsed = Date.parse(String(value || ""));
+  return Number.isFinite(parsed) ? parsed : 0;
 }
 
 async function instructorLessonRouteIssue(lessonDate: string, managementNumber: string): Promise<string> {
