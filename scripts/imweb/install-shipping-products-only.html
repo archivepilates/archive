@@ -1,8 +1,8 @@
-<script data-archive-pilates-shipping-products-only="2026-08-28b">
+<script data-archive-pilates-shipping-products-only="2026-08-28c">
 (function () {
   "use strict";
 
-  var VERSION = "2026-08-28b";
+  var VERSION = "2026-08-28c";
   var SHOP_PATHS = ["/16", "/shop"];
   var SHIPPING_PRODUCTS_URL = "/16?ap_shop=knitido";
   var SIDEBAR_STYLE_ID = "archive-pilates-sidebar-primary-alignment";
@@ -20,7 +20,7 @@
     return !mode || mode === "all";
   }
 
-  function currentListingNeedsRedirect() {
+  function currentListingNeedsNormalization() {
     try {
       return isShippingProductsListing(new URL(window.location.href));
     } catch (error) {
@@ -110,9 +110,13 @@
     window.requestAnimationFrame(rewriteLinks);
   }
 
-  if (currentListingNeedsRedirect()) {
-    window.location.replace(SHIPPING_PRODUCTS_URL);
-    return;
+  if (currentListingNeedsNormalization()) {
+    try {
+      window.history.replaceState(window.history.state, "", SHIPPING_PRODUCTS_URL);
+    } catch (error) {
+      window.location.replace(SHIPPING_PRODUCTS_URL);
+      return;
+    }
   }
 
   if (document.readyState === "loading") {

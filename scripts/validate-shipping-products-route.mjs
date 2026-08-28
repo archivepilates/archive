@@ -11,10 +11,11 @@ if (shopRedirect?.destination !== "https://archivepilates.imweb.me/16?ap_shop=kn
 }
 
 [
-  'data-archive-pilates-shipping-products-only="2026-08-28b"',
+  'data-archive-pilates-shipping-products-only="2026-08-28c"',
   'var SHIPPING_PRODUCTS_URL = "/16?ap_shop=knitido";',
   'url.searchParams.has("idx")',
   'mode === "all"',
+  'window.history.replaceState(window.history.state, "", SHIPPING_PRODUCTS_URL)',
   '[data-ap-shop-sub="all"]',
   'data-archive-pilates-sidebar-primary-alignment',
   'ap-sidebar-primary-link',
@@ -23,6 +24,10 @@ if (shopRedirect?.destination !== "https://archivepilates.imweb.me/16?ap_shop=kn
 ].forEach((required) => {
   if (!installer.includes(required)) failures.push(`shipping products installer missing: ${required}`);
 });
+
+if (installer.includes("if (currentListingNeedsRedirect())")) {
+  failures.push("shipping products installer still uses the old full-page redirect branch");
+}
 
 const installerScript = installer
   .replace(/^<script[^>]*>\s*/, "")
