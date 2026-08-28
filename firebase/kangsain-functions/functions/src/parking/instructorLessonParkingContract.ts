@@ -5,10 +5,14 @@ export const INSTRUCTOR_LESSON_PARKING_COLLECTION = "instructorLessonParkingPreR
 export const INSTRUCTOR_LESSON_PARKING_BASE_URL = "https://in.archivepilates.com/parking/";
 export const INSTRUCTOR_LESSON_PARKING_BUTTON_URL =
   "https://in.archivepilates.com/s/#{주차링크ID}/";
-export const INSTRUCTOR_LESSON_PARKING_PREVIEW_URL =
-  "https://in.archivepilates.com/parking/?preview=1";
 export const PARKING_REGISTRATION_CLOSE_AFTER_START_MINUTES = 20;
 export const PARKING_REGISTRATION_EXPIRE_AFTER_START_HOURS = 4;
+
+export type InstructorLessonParkingPreviewInput = {
+  memberName: string;
+  lessonDate: string;
+  lessonStartAt: string;
+};
 
 export function instructorLessonParkingRequestId(input: {
   memberId: string;
@@ -41,6 +45,23 @@ export function instructorLessonParkingTargetUrl(requestId: string, accessToken:
   const url = new URL(INSTRUCTOR_LESSON_PARKING_BASE_URL);
   url.searchParams.set("id", requestId);
   url.searchParams.set("token", accessToken);
+  return url.toString();
+}
+
+export function instructorLessonParkingPreviewTargetUrl(
+  input: InstructorLessonParkingPreviewInput,
+): string {
+  const memberName = String(input.memberName || "").trim();
+  const lessonDate = String(input.lessonDate || "").trim();
+  const lessonStartAt = earliestIsoDateTime(input.lessonStartAt);
+  if (!memberName || !/^\d{4}-\d{2}-\d{2}$/.test(lessonDate) || !lessonStartAt) {
+    throw new Error("instructor lesson parking preview requires current lesson metadata");
+  }
+  const url = new URL(INSTRUCTOR_LESSON_PARKING_BASE_URL);
+  url.searchParams.set("preview", "1");
+  url.searchParams.set("name", memberName);
+  url.searchParams.set("lessonDate", lessonDate);
+  url.searchParams.set("lessonStartAt", lessonStartAt);
   return url.toString();
 }
 

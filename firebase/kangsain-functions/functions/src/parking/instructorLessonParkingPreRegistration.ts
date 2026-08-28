@@ -8,10 +8,11 @@ import { nowTimestamp } from "../utils/date";
 import { ensureShortLink, shortLinkIdForTarget, shortUrlForId } from "../utils/shortLinks";
 import {
   INSTRUCTOR_LESSON_PARKING_COLLECTION,
-  INSTRUCTOR_LESSON_PARKING_PREVIEW_URL,
   earliestIsoDateTime,
+  type InstructorLessonParkingPreviewInput,
   instructorLessonParkingAccessToken,
   instructorLessonParkingAccessTokenHash,
+  instructorLessonParkingPreviewTargetUrl,
   instructorLessonParkingRequestId,
   instructorLessonParkingTargetUrl,
   instructorLessonParkingTokenMatches,
@@ -154,15 +155,18 @@ export async function upsertInstructorLessonParkingPreRegistration(
   });
 }
 
-export function instructorLessonParkingPreviewLinkId(): string {
-  return shortLinkIdForTarget("parking_pre_registration", INSTRUCTOR_LESSON_PARKING_PREVIEW_URL);
+export function instructorLessonParkingPreviewLinkId(input: InstructorLessonParkingPreviewInput): string {
+  return shortLinkIdForTarget("parking_pre_registration", instructorLessonParkingPreviewTargetUrl(input));
 }
 
-export async function ensureInstructorLessonParkingPreviewShortLink(): Promise<string> {
+export async function ensureInstructorLessonParkingPreviewShortLink(
+  input: InstructorLessonParkingPreviewInput,
+): Promise<string> {
+  const targetUrl = instructorLessonParkingPreviewTargetUrl(input);
   const link = await ensureShortLink({
     type: "parking_pre_registration",
-    targetUrl: INSTRUCTOR_LESSON_PARKING_PREVIEW_URL,
-    sourceId: "instructor-lesson-parking-preview",
+    targetUrl,
+    sourceId: `instructor-lesson-parking-preview:${input.lessonDate}`,
   });
   return link.linkId;
 }

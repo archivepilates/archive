@@ -791,6 +791,9 @@ const guardGroups = [
         markers: [
           "주차 사전등록",
           'params.get("preview") === "1"',
+          'params.get("lessonDate")',
+          'params.get("lessonStartAt")',
+          "실제 차량번호는 저장되지 않습니다.",
           "parkingPreRegistration",
           "부산광역시 강서구 명지국제2로28번길 34 에코팰리스 704호",
         ],
@@ -803,6 +806,7 @@ const guardGroups = [
           'parkingVehicleId: vehicleId',
           'parkingStatus: "pre_registered"',
           "instructorLessonParkingTokenMatches",
+          "instructorLessonParkingPreviewTargetUrl",
         ],
       },
       {
@@ -825,7 +829,7 @@ const guardGroups = [
         file: "firebase/kangsain-functions/functions/src/alimtalk/instructorLessonSampleApproval.ts",
         markers: [
           "ensureInstructorLessonParkingPreviewShortLink",
-          "instructorLessonParkingPreviewLinkId",
+          'lessonStartAt: String(representative.payload?.lessonStartAt || "")',
         ],
       },
       {

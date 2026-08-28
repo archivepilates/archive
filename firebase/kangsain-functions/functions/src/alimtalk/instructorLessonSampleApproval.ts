@@ -16,7 +16,6 @@ import { alimtalkDedupePolicy, INSTRUCTOR_LESSON_ALIMTALK_TEMPLATE_CODE } from "
 import { primaryAlimtalkTestRecipient } from "./testRecipients";
 import {
   ensureInstructorLessonParkingPreviewShortLink,
-  instructorLessonParkingPreviewLinkId,
 } from "../parking/instructorLessonParkingPreRegistration";
 import { shortUrlForId } from "../utils/shortLinks";
 
@@ -221,8 +220,13 @@ async function prepareInstructorLessonSampleApproval(input: {
   }
 
   const testRecipient = primaryAlimtalkTestRecipient();
-  await ensureInstructorLessonParkingPreviewShortLink();
-  const sample = buildSampleCandidate(group.candidates[0], approvalId, testRecipient);
+  const representative = group.candidates[0];
+  const parkingLinkId = await ensureInstructorLessonParkingPreviewShortLink({
+    memberName: testRecipient.name,
+    lessonDate: group.lessonDate,
+    lessonStartAt: String(representative.payload?.lessonStartAt || ""),
+  });
+  const sample = buildSampleCandidate(representative, approvalId, testRecipient, parkingLinkId);
   const claimed = await db.runTransaction(async (tx) => {
     const snap = await tx.get(ref);
     const current = snap.data() as InstructorLessonApprovalDoc | undefined;
@@ -730,9 +734,9 @@ function buildSampleCandidate(
   representative: AlimtalkCandidateDoc,
   approvalId: string,
   recipient: ReturnType<typeof primaryAlimtalkTestRecipient>,
+  parkingLinkId: string,
 ): AlimtalkCandidateDoc {
   const now = nowTimestamp();
-  const parkingLinkId = instructorLessonParkingPreviewLinkId();
   return {
     ...representative,
     candidateId: sampleCandidateId(approvalId),

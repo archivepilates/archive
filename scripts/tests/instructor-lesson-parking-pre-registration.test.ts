@@ -6,6 +6,7 @@ import {
   earliestIsoDateTime,
   instructorLessonParkingAccessToken,
   instructorLessonParkingAccessTokenHash,
+  instructorLessonParkingPreviewTargetUrl,
   instructorLessonParkingRequestId,
   instructorLessonParkingTargetUrl,
   instructorLessonParkingTokenMatches,
@@ -44,6 +45,23 @@ test("merges two instructor lesson sessions and keeps the earliest start", () =>
     earliestIsoDateTime("2026-09-19T05:10:00.000Z", "2026-09-19T04:00:00.000Z"),
     "2026-09-19T04:00:00.000Z",
   );
+});
+
+test("builds a lesson-scoped non-saving parking preview URL", () => {
+  const url = new URL(
+    instructorLessonParkingPreviewTargetUrl({
+      memberName: "김기효",
+      lessonDate: "2026-08-29",
+      lessonStartAt: "2026-08-29T04:00:00.000Z",
+    }),
+  );
+  assert.equal(url.pathname, "/parking/");
+  assert.equal(url.searchParams.get("preview"), "1");
+  assert.equal(url.searchParams.get("name"), "김기효");
+  assert.equal(url.searchParams.get("lessonDate"), "2026-08-29");
+  assert.equal(url.searchParams.get("lessonStartAt"), "2026-08-29T04:00:00.000Z");
+  assert.equal(url.searchParams.has("id"), false);
+  assert.equal(url.searchParams.has("token"), false);
 });
 
 test("accepts Korean vehicle numbers and closes registration before the one-time lookup", () => {
@@ -107,4 +125,15 @@ test("public page never mirrors the pre-registered car into the permanent member
   assert.match(source, /validDate: currentRequest\.lessonDate/);
   assert.doesNotMatch(source, /defaultVehicleNumber/);
   assert.doesNotMatch(source, /memberProfiles/);
+});
+
+test("parking preview reads the current lesson metadata and never hardcodes a future class", () => {
+  const source = fs.readFileSync(
+    new URL("../../archivein/parking/index.html", import.meta.url),
+    "utf8",
+  );
+  assert.match(source, /params\.get\("lessonDate"\)/);
+  assert.match(source, /params\.get\("lessonStartAt"\)/);
+  assert.match(source, /실제 차량번호는 저장되지 않습니다/);
+  assert.doesNotMatch(source, /2026-09-19/);
 });

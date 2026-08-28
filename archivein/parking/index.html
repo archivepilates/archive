@@ -141,6 +141,16 @@
       font-size: 13px;
       line-height: 1.6;
     }
+    .preview-notice {
+      margin: 0;
+      padding: 11px 12px;
+      border-radius: 6px;
+      background: var(--warn-soft);
+      color: var(--warn);
+      font-size: 13px;
+      font-weight: 700;
+      line-height: 1.55;
+    }
     .primary-action {
       width: 100%;
       min-height: 50px;
@@ -219,6 +229,7 @@
       </section>
 
       <form class="panel form-panel" id="registrationForm" hidden novalidate>
+        <p class="preview-notice" id="previewNotice" hidden>테스트 화면입니다. 입력해도 실제 차량번호는 저장되지 않습니다.</p>
         <div class="field">
           <label for="carNumber">차량번호</label>
           <input id="carNumber" name="carNumber" type="text" inputmode="text" autocomplete="off" maxlength="12" placeholder="예: 241고2299" aria-describedby="carHint">
@@ -244,6 +255,9 @@
       const requestId = params.get("id") || "";
       const token = params.get("token") || "";
       const preview = params.get("preview") === "1";
+      const previewName = (params.get("name") || "").trim();
+      const previewLessonDate = (params.get("lessonDate") || "").trim();
+      const previewLessonStartAt = (params.get("lessonStartAt") || "").trim();
       const endpoint = location.pathname.startsWith("/archivein/")
         ? "/archivein/api/parkingPreRegistration"
         : "/api/parkingPreRegistration";
@@ -256,6 +270,7 @@
         successPanel: document.getElementById("successPanel"),
         successMessage: document.getElementById("successMessage"),
         form: document.getElementById("registrationForm"),
+        previewNotice: document.getElementById("previewNotice"),
         carNumber: document.getElementById("carNumber"),
         formMessage: document.getElementById("formMessage"),
         submitButton: document.getElementById("submitButton"),
@@ -269,10 +284,14 @@
 
       async function initialize() {
         if (preview) {
+          if (!validPreviewLesson(previewName, previewLessonDate, previewLessonStartAt)) {
+            showError("프리뷰 수업 일정 정보가 올바르지 않습니다.");
+            return;
+          }
           renderRegistration({
-            memberName: "김기효",
-            lessonDate: "2026-09-19",
-            lessonStartAt: "2026-09-19T04:00:00.000Z",
+            memberName: previewName,
+            lessonDate: previewLessonDate,
+            lessonStartAt: previewLessonStartAt,
             status: "pending",
             carLast4: "",
             canEdit: true,
@@ -308,6 +327,7 @@
         elements.statusPill.textContent = registered ? `등록 완료 · ${data.carLast4}` : data.status === "closed" ? "등록 종료" : "등록 전";
         elements.statusPill.classList.toggle("good", registered);
         elements.successPanel.hidden = !registered;
+        elements.previewNotice.hidden = !data.preview;
         if (registered) {
           const previewNote = data.preview ? " 프리뷰에서는 실제로 저장되지 않습니다." : "";
           elements.successMessage.textContent = `차량번호 뒤 4자리 ${data.carLast4} 사전등록이 완료되었습니다. 수업 당일 입차 확인 후 4시간 주차 할인이 자동 적용됩니다.${previewNote}`;
@@ -368,6 +388,19 @@
 
       function normalizeCarNumber(value) {
         return String(value || "").trim().replace(/[\s-]/g, "").toUpperCase();
+      }
+
+      function validPreviewLesson(memberName, lessonDate, lessonStartAt) {
+        if (!memberName || !/^\d{4}-\d{2}-\d{2}$/.test(lessonDate)) return false;
+        const start = new Date(lessonStartAt);
+        if (Number.isNaN(start.getTime())) return false;
+        const startDate = new Intl.DateTimeFormat("en-CA", {
+          timeZone: "Asia/Seoul",
+          year: "numeric",
+          month: "2-digit",
+          day: "2-digit",
+        }).format(start);
+        return startDate === lessonDate;
       }
 
       function formatLessonDate(iso, fallback) {
