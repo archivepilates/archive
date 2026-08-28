@@ -1,12 +1,14 @@
-<script data-archive-pilates-shipping-products-only="2026-08-28d">
+<script data-archive-pilates-shipping-products-only="2026-08-28f">
 (function () {
   "use strict";
 
-  var VERSION = "2026-08-28d";
+  var VERSION = "2026-08-28f";
   var SHOP_PATHS = ["/16", "/shop"];
   var SHIPPING_PRODUCTS_URL = "/16?ap_shop=knitido";
   var SIDEBAR_STYLE_ID = "archive-pilates-sidebar-primary-alignment";
   var pending = false;
+
+  installMutationObserverGuard();
 
   function normalizedPath(value) {
     return String(value || "/").replace(/\/+$/, "") || "/";
@@ -28,6 +30,46 @@
     }
   }
 
+  function isManagedStyleNode(node) {
+    return !!(
+      node &&
+      node.nodeType === 1 &&
+      node.tagName === "STYLE" &&
+      String(node.id || "").indexOf("archive-pilates-") === 0
+    );
+  }
+
+  function isManagedStyleOnlyMutation(record) {
+    if (!record || record.type !== "childList") return false;
+    if (isManagedStyleNode(record.target)) return true;
+    var nodes = Array.prototype.slice.call(record.addedNodes || []).concat(
+      Array.prototype.slice.call(record.removedNodes || [])
+    );
+    return !!nodes.length && nodes.every(isManagedStyleNode);
+  }
+
+  function installMutationObserverGuard() {
+    var NativeObserver = window.MutationObserver;
+    if (typeof NativeObserver !== "function" || NativeObserver.__apManagedStyleGuard) return;
+
+    function StableMutationObserver(callback) {
+      return new NativeObserver(function (records, observer) {
+        var meaningful = Array.prototype.slice.call(records || []).filter(function (record) {
+          return !isManagedStyleOnlyMutation(record);
+        });
+        if (meaningful.length) callback(meaningful, observer);
+      });
+    }
+
+    StableMutationObserver.prototype = NativeObserver.prototype;
+    try {
+      Object.setPrototypeOf(StableMutationObserver, NativeObserver);
+    } catch (error) {}
+    StableMutationObserver.__apManagedStyleGuard = true;
+    StableMutationObserver.__apNativeObserver = NativeObserver;
+    window.MutationObserver = StableMutationObserver;
+  }
+
   function installSidebarStyle() {
     var style = document.getElementById(SIDEBAR_STYLE_ID);
     if (!style) {
@@ -36,13 +78,17 @@
       (document.head || document.documentElement).appendChild(style);
     }
     style.setAttribute("data-archive-pilates-sidebar-primary-alignment", VERSION);
-    style.textContent = [
+    var css = [
       "html body #mobile_slide_menu_wrap .ap-sidebar-primary-row,html body .im-mobile-slide .ap-sidebar-primary-row{list-style:none!important;margin:0!important;padding:0!important}",
       "html body #mobile_slide_menu_wrap a.ap-sidebar-primary-link,html body .im-mobile-slide a.ap-sidebar-primary-link{display:flex!important;align-items:center!important;width:100%!important;min-height:54px!important;height:auto!important;margin:0!important;padding:0 30px!important;box-sizing:border-box!important;text-align:left!important;line-height:1.35!important;text-indent:0!important;transform:none!important}",
       "html body #mobile_slide_menu_wrap a.ap-sidebar-primary-link .plain_name,html body .im-mobile-slide a.ap-sidebar-primary-link .plain_name{display:flex!important;align-items:center!important;min-height:0!important;margin:0!important;padding:0!important;text-indent:0!important;transform:none!important}",
       "html body #mobile_slide_menu_wrap a.ap-sidebar-primary-link .ap-knitido-logo-wrap,html body .im-mobile-slide a.ap-sidebar-primary-link .ap-knitido-logo-wrap{display:flex!important;align-items:center!important;margin:0!important;padding:0!important}",
-      "html body #mobile_slide_menu_wrap a.ap-sidebar-primary-link .ap-knitido-logo,html body .im-mobile-slide a.ap-sidebar-primary-link .ap-knitido-logo{display:block!important;width:108px!important;max-width:108px!important;height:auto!important;margin:0!important}"
+      "html body #mobile_slide_menu_wrap a.ap-sidebar-primary-link .ap-knitido-logo,html body .im-mobile-slide a.ap-sidebar-primary-link .ap-knitido-logo{display:block!important;width:108px!important;max-width:108px!important;height:auto!important;margin:0!important}",
+      "html body #doz_header_wrap,html body #inline_header_normal,html body #inline_header_mobile{transition:none!important;animation:none!important}",
+      "@media(min-width:861px){html body #doz_header_wrap .viewport-nav.desktop{align-items:center!important}html body #doz_header_wrap .viewport-nav.desktop>li:has(>a[href='/index']),html body #doz_header_wrap .viewport-nav.desktop>li:has(>a[data-ap-shop-nav='아카이브홈']),html body #doz_header_wrap .viewport-nav.desktop>li:has(>a[data-ap-external-home='true']){order:1!important}html body #doz_header_wrap .viewport-nav.desktop>li:has(>a[href='/18']),html body #doz_header_wrap .viewport-nav.desktop>li:has(>a[data-ap-shop-nav='강사레슨']){order:2!important}html body #doz_header_wrap .viewport-nav.desktop>li:has(>a[href='/17']),html body #doz_header_wrap .viewport-nav.desktop>li:has(>a[data-ap-shop-nav='영상구매']){order:3!important}html body #doz_header_wrap .viewport-nav.desktop>.ap-shop-visual-menu{order:4!important}html body #doz_header_wrap .viewport-nav.desktop>li:has(>a[href='/community']),html body #doz_header_wrap .viewport-nav.desktop>li:has(>a[data-ap-shop-nav='커뮤니티']){order:5!important}html body #doz_header_wrap .viewport-nav.desktop>li:has(>a[href='/studio']),html body #doz_header_wrap .viewport-nav.desktop>li:has(>a[href='/48']),html body #doz_header_wrap .viewport-nav.desktop>li:has(>a[href^='/16']:not(.ap-shop-visual-link)){display:none!important}html body #doz_header_wrap .viewport-nav.desktop>.ap-shop-visual-menu>a.ap-shop-visual-link{min-width:104px!important;min-height:44px!important;padding:0 10px!important;transform:none!important}html body #doz_header_wrap .viewport-nav.desktop>.ap-shop-visual-menu>a.ap-shop-visual-link:hover,html body #doz_header_wrap .viewport-nav.desktop>.ap-shop-visual-menu>a.ap-shop-visual-link:focus-visible,html body #doz_header_wrap .viewport-nav.desktop>.ap-shop-visual-menu>a.ap-shop-visual-link:active{transform:none!important}html body #doz_header_wrap .viewport-nav.desktop>.ap-shop-visual-menu>a .ap-shop-visual-label{width:84px!important;min-height:19px!important;line-height:1.25!important}html body #doz_header_wrap .viewport-nav.desktop>.ap-shop-visual-menu>a .ap-shop-visual-label>span{transform:none!important;transition:opacity .12s ease!important}html body #doz_header_wrap .viewport-nav.desktop>.ap-shop-visual-menu>a .ap-shop-visual-label .ap-shop-pill-ko{font-size:15px!important;font-weight:750!important;line-height:1.25!important;letter-spacing:0!important}html body #doz_header_wrap .viewport-nav.desktop>.ap-shop-visual-menu>a .ap-shop-visual-label .ap-shop-pill-en{font-size:11px!important;font-weight:880!important;line-height:1.25!important;letter-spacing:0!important}}",
+      "@media(max-width:860px){html body #mobile_carousel_menu_0>.nav-item:has(>a[href='/index']),html body #mobile_carousel_menu_0>.nav-item:has(>a[data-ap-shop-nav='아카이브홈']),html body #mobile_carousel_menu_0>.nav-item:has(>a[data-ap-external-home='true']){order:1!important}html body #mobile_carousel_menu_0>.nav-item:has(>a[href='/18']),html body #mobile_carousel_menu_0>.nav-item:has(>a[data-ap-shop-nav='강사레슨']){order:2!important}html body #mobile_carousel_menu_0>.nav-item:has(>a[href='/17']),html body #mobile_carousel_menu_0>.nav-item:has(>a[data-ap-shop-nav='영상구매']){order:3!important}html body #mobile_carousel_menu_0>.nav-item.ap-shop-visual-menu{order:4!important}html body #mobile_carousel_menu_0>.nav-item:has(>a[href='/community']),html body #mobile_carousel_menu_0>.nav-item:has(>a[data-ap-shop-nav='커뮤니티']){order:5!important}html body #mobile_carousel_menu_0>.nav-item:has(>a[href='/studio']),html body #mobile_carousel_menu_0>.nav-item:has(>a[href='/48']),html body #mobile_carousel_menu_0>.nav-item:has(>a[href^='/16']:not(.ap-shop-visual-link)){display:none!important}}"
     ].join("");
+    if (style.textContent !== css) style.textContent = css;
   }
 
   function cleanText(element) {
@@ -129,6 +175,8 @@
     pending = true;
     window.requestAnimationFrame(rewriteLinks);
   }
+
+  installSidebarStyle();
 
   if (currentListingNeedsNormalization()) {
     try {

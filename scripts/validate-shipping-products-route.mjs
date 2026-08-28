@@ -11,13 +11,21 @@ if (shopRedirect?.destination !== "https://archivepilates.imweb.me/16?ap_shop=kn
 }
 
 [
-  'data-archive-pilates-shipping-products-only="2026-08-28d"',
+  'data-archive-pilates-shipping-products-only="2026-08-28f"',
   'var SHIPPING_PRODUCTS_URL = "/16?ap_shop=knitido";',
   'url.searchParams.has("idx")',
   'mode === "all"',
   'window.history.replaceState(window.history.state, "", SHIPPING_PRODUCTS_URL)',
   'function keepShopHeaderBeforeContent()',
   'parent.insertBefore(header, firstShopNode)',
+  'function installMutationObserverGuard()',
+  'StableMutationObserver.__apManagedStyleGuard = true',
+  ".viewport-nav.desktop>li:has(>a[data-ap-shop-nav='강사레슨']){order:2!important}",
+  ".viewport-nav.desktop>li:has(>a[data-ap-shop-nav='영상구매']){order:3!important}",
+  ".viewport-nav.desktop>.ap-shop-visual-menu{order:4!important}",
+  "#mobile_carousel_menu_0>.nav-item:has(>a[data-ap-shop-nav='커뮤니티']){order:5!important}",
+  '.ap-shop-pill-ko{font-size:15px!important;font-weight:750!important',
+  '.ap-shop-pill-en{font-size:11px!important;font-weight:880!important',
   '[data-ap-shop-sub="all"]',
   'data-archive-pilates-sidebar-primary-alignment',
   'ap-sidebar-primary-link',

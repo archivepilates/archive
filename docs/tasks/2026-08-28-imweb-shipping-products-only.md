@@ -51,3 +51,20 @@ Keep the `판매상품` navigation limited to shippable merchandise. Online vide
 - The Knitido renderer inserts `.ap-shop-subcategory` and `#ap-knitido-brand-intro` at the start of the Imweb body after initial paint. That insertion put the 3690px brand section before `#doz_header_wrap`.
 - Version `2026-08-28d` watches those insertions and restores `#doz_header_wrap` immediately before the first shop-content node. It does not clone the header or change navigation typography.
 - After a real menu click and 10-second wait, desktop and 390px mobile both kept the header at document position `0px`, child index `0`, before shop-content index `2`. Browser console error checks were empty.
+
+## Desktop shop-label typography follow-up
+
+- The desktop anchor inherited `15px`, but the visible `.ap-shop-pill-ko` child still had a more specific legacy rule at `13px` and weight `850`.
+- Version `2026-08-28e` aligns the visible Korean label to the neighboring menu values (`15px`, weight `750`, 44px link height) and aligns the English hover label to `11px`, weight `880`.
+- Mobile remains unchanged at the already-matching `13px` menu size.
+
+## Header click-stability follow-up
+
+- Live click sampling showed a real desktop order jump: the expected `강사레슨 → 영상구매 → 판매상품 → 커뮤니티` order was replaced at `360-720ms` by `영상구매 → 강사레슨 → 커뮤니티 → 판매상품`, then restored by `1200ms`.
+- Mobile briefly painted `강사레슨 → 영상구매 → 판매상품 → 아카이브홈 → 커뮤니티` before returning to the intended order within `80ms`.
+- Version `2026-08-28f` fixes visual order independently of delayed DOM insertion order, keeps the shop link at the same 44px height as adjacent links, removes its vertical hover movement, and ignores mutations caused only by ARCHIVE PILATES managed style nodes so legacy observers do not repeatedly wake themselves.
+- The normal Imweb `Header Code` field was saved through the authenticated `home@archivepilates.com` Chrome session, then reloaded and confirmed to retain the `2026-08-28f` marker.
+- Desktop click sampling from `0ms` through `6400ms` kept the five menu items at fixed x positions and 44px heights. The shop link now renders at `15px`, weight `750`, and `104px × 44px`, matching adjacent labels.
+- Consecutive transitions through `/16?ap_shop=knitido`, `/community`, and `/18` kept the same visual order. On the shop page, the header remained at document position `0` before shop content through the `6600ms` check.
+- Responsive checks at `320`, `390`, `768`, and `1440` CSS pixels found no clipped labels or horizontal overflow. The `390px` mobile click test held the intended order from the first sample through `3450ms`.
+- Browser console checks reported no warnings or errors after the desktop and mobile navigation runs.
