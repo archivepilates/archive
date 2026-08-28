@@ -3,6 +3,13 @@ import test from "node:test";
 import type { AlimtalkCandidateDoc } from "../../firebase/kangsain-functions/functions/src/types/models";
 import { genericInstructorLessonQueueBlock } from "../../firebase/kangsain-functions/functions/src/alimtalk/instructorLessonDeliveryGuard";
 import {
+  ALIMTALK_TEMPLATES,
+  INSTRUCTOR_LESSON_ALIMTALK_TEMPLATE_CODE,
+} from "../../firebase/kangsain-functions/functions/src/alimtalk/templates";
+import { ALIMTALK_TEMPLATE_TARGET_RULES } from "../../firebase/kangsain-functions/functions/src/alimtalk/templateTargetRules";
+import { INSTRUCTOR_LESSON_PARKING_BUTTON_URL } from "../../firebase/kangsain-functions/functions/src/parking/instructorLessonParkingContract";
+import {
+  canRecoverBlockedInstructorLessonSample,
   instructorLessonApprovalCutoffIssue,
   instructorLessonApprovalId,
   instructorLessonContentFingerprint,
@@ -22,7 +29,7 @@ function candidate(
     memberPhone: "01011112222",
     type: "instructor_lesson_material",
     status: "candidate",
-    templateCode: "KA01TP260724090746135DWCIb2boEw7",
+    templateCode: INSTRUCTOR_LESSON_ALIMTALK_TEMPLATE_CODE,
     title: "강사레슨 수업자료",
     reason: "강사레슨 D-1",
     sourceDate: "2026-08-28",
@@ -37,6 +44,50 @@ function candidate(
     ...overrides,
   };
 }
+
+test("uses the approved V3 instructor lesson template and validates all four buttons", () => {
+  assert.equal(
+    INSTRUCTOR_LESSON_ALIMTALK_TEMPLATE_CODE,
+    "KA01TP260825074722212ylmndmsB3V4",
+  );
+  assert.equal(
+    ALIMTALK_TEMPLATES.instructor_lesson_material.label,
+    "강사레슨_수업자료 안내 v3",
+  );
+  const buttonRules =
+    ALIMTALK_TEMPLATE_TARGET_RULES.instructor_lesson_material?.buttonUrlRules ||
+    [];
+  assert.equal(buttonRules.length, 4);
+  assert.equal(
+    buttonRules.at(-1)?.template,
+    INSTRUCTOR_LESSON_PARKING_BUTTON_URL,
+  );
+});
+
+test("recovers only a source-stale sample with no delivery evidence", () => {
+  assert.equal(
+    canRecoverBlockedInstructorLessonSample({ status: "blocked_source_stale" }),
+    true,
+  );
+  assert.equal(
+    canRecoverBlockedInstructorLessonSample({
+      status: "blocked_source_stale",
+      sampleSolapiMessageId: "provider-message-id",
+    }),
+    false,
+  );
+  assert.equal(
+    canRecoverBlockedInstructorLessonSample({
+      status: "blocked_source_stale",
+      sampleSentAt: {},
+    }),
+    false,
+  );
+  assert.equal(
+    canRecoverBlockedInstructorLessonSample({ status: "sample_unknown" }),
+    false,
+  );
+});
 
 test("separates even one instructor lesson candidate from the normal auto-send queue", () => {
   const instructor = candidate();
@@ -175,7 +226,10 @@ test("blocks stale or out-of-range reservation snapshots", () => {
     importedBookings: 509,
     updatedAt: { toMillis: () => now - 25 * 60 * 60 * 1000 },
   };
-  assert.match(instructorLessonReservationSnapshotIssue(base, "2026-08-29", now), /24시간/);
+  assert.match(
+    instructorLessonReservationSnapshotIssue(base, "2026-08-29", now),
+    /24시간/,
+  );
   assert.match(
     instructorLessonReservationSnapshotIssue(
       { ...base, updatedAt: { toMillis: () => now } },

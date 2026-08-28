@@ -7,6 +7,7 @@ import {
   NEW_MEMBER_ALIMTALK_WINDOW_DAYS,
   PRIVATE_SURVEY_ALIMTALK_START_DATE,
 } from "./templates";
+import { INSTRUCTOR_LESSON_PARKING_BUTTON_URL } from "../parking/instructorLessonParkingContract";
 
 export interface AlimtalkTemplateTargetRule {
   type: AlimtalkCandidateType;
@@ -37,11 +38,9 @@ export const SURVEY_DETAIL_BUTTON_URL_TEMPLATE =
 export const GROUP_SURVEY_BUTTON_URL_TEMPLATE =
   "https://in.archivepilates.com/groupSurvey?id=#{설문ID}&token=#{접근토큰}";
 export const METHOD_MATERIAL_BUTTON_URL_TEMPLATE = "https://in.archivepilates.com/method/#{관리번호}";
-export const METHOD_ASSIGNMENT_BUTTON_URL_TEMPLATE =
-  "https://in.archivepilates.com/method/#{관리번호}/assignment";
+export const METHOD_ASSIGNMENT_BUTTON_URL_TEMPLATE = "https://in.archivepilates.com/method/#{관리번호}/assignment";
 export const PRIVATE_REPORT_BUTTON_URL_TEMPLATE = "https://in.archivepilates.com/s/#{리포트링크ID}/";
-export const RECOMMENDED_MEAL_REPORT_BUTTON_URL_TEMPLATE =
-  "https://in.archivepilates.com/s/#{리포트링크ID}/";
+export const RECOMMENDED_MEAL_REPORT_BUTTON_URL_TEMPLATE = "https://in.archivepilates.com/s/#{리포트링크ID}/";
 export const PRICING_INFO_BUTTON_URL_TEMPLATE = "https://archivepilates.notion.site/";
 
 export const ALIMTALK_TEMPLATE_TARGET_RULES: Partial<Record<AlimtalkCandidateType, AlimtalkTemplateTargetRule>> = {
@@ -415,12 +414,24 @@ export const ALIMTALK_TEMPLATE_TARGET_RULES: Partial<Record<AlimtalkCandidateTyp
         template: METHOD_ASSIGNMENT_BUTTON_URL_TEMPLATE,
         maxLength: SOLAPI_BUTTON_URL_MAX_LENGTH,
       },
+      {
+        label: "강사레슨 주차 사전등록 버튼",
+        template: INSTRUCTOR_LESSON_PARKING_BUTTON_URL,
+        maxLength: SOLAPI_BUTTON_URL_MAX_LENGTH,
+      },
     ],
-    targetRules: ["강사레슨 예약", "수업 하루 전 후보", "수업자료 관리번호가 있음", "강사레슨 카카오 채널 템플릿 사용"],
+    targetRules: [
+      "강사레슨 예약",
+      "수업 하루 전 후보",
+      "수업자료 관리번호가 있음",
+      "주차 사전등록 짧은 링크가 있음",
+      "강사레슨 카카오 채널 템플릿 사용",
+    ],
     exclusionRules: [
       "전화번호 없음",
       "강사레슨 예약 아님",
       "수업자료 관리번호 없음",
+      "주차 사전등록 짧은 링크 없음",
       "짧은 링크 생성 실패 또는 버튼 URL 치환 후 100자 초과",
       "같은 수업자료와 수업일 조합 발송 이력 있음",
       "SOLAPI 미승인 템플릿",

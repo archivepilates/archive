@@ -48,6 +48,7 @@ interface InstructorLessonApprovalDoc {
   sourceDate: string;
   lessonDate: string;
   managementNumber: string;
+  templateCode: string;
   status: InstructorLessonApprovalStatus;
   candidateIds: string[];
   approvedTargetKeys: string[];
@@ -61,6 +62,8 @@ interface InstructorLessonApprovalDoc {
   approvalTokenHash?: string;
   approvalEmailSentAt?: FirebaseFirestore.Timestamp;
   reminderSentAt?: FirebaseFirestore.Timestamp;
+  sourceRecoveredAt?: FirebaseFirestore.Timestamp;
+  sourceRecoveryCount?: number;
   approvedAt?: FirebaseFirestore.Timestamp;
   approvedBy?: string;
   liveSendStartedAt?: FirebaseFirestore.Timestamp;
@@ -125,6 +128,16 @@ export function instructorLessonApprovalCutoffIssue(sourceDate: string, now: Dat
   return "";
 }
 
+export function canRecoverBlockedInstructorLessonSample(input: {
+  status?: string;
+  sampleSolapiMessageId?: string;
+  sampleSentAt?: unknown;
+}): boolean {
+  return (
+    input.status === "blocked_source_stale" && !String(input.sampleSolapiMessageId || "").trim() && !input.sampleSentAt
+  );
+}
+
 export async function prepareInstructorLessonSampleApprovals(input: {
   studioId?: string;
   sourceDate: string;
@@ -156,6 +169,7 @@ async function prepareInstructorLessonSampleApproval(input: {
   const approvalId = instructorLessonApprovalId(studioId, sourceDate, group.managementNumber);
   const ref = db.collection(APPROVAL_COLLECTION).doc(approvalId);
   const existing = (await ref.get()).data() as InstructorLessonApprovalDoc | undefined;
+  let recoveringBlockedSource = false;
   if (existing) {
     if (existing.status === "sample_sending") {
       return recoverSampleSendingApproval(ref, existing);
@@ -165,12 +179,18 @@ async function prepareInstructorLessonSampleApproval(input: {
     }
     if (["sample_sent", "approved"].includes(existing.status)) return "awaiting_approval";
     if (["sending", "sent"].includes(existing.status)) return "awaiting_approval";
-    return "blocked";
+    if (!canRecoverBlockedInstructorLessonSample(existing)) return "blocked";
+    const sourceIssue = await instructorLessonGroupSourceIssue(group);
+    const routeIssue = await instructorLessonRouteIssue(group.lessonDate, group.managementNumber);
+    if (sourceIssue || routeIssue) return "blocked";
+    recoveringBlockedSource = true;
   }
 
-  const sourceIssue = await instructorLessonGroupSourceIssue(group);
-  const routeIssue = await instructorLessonRouteIssue(group.lessonDate, group.managementNumber);
-  if (sourceIssue || routeIssue) {
+  const sourceIssue = recoveringBlockedSource ? "" : await instructorLessonGroupSourceIssue(group);
+  const routeIssue = recoveringBlockedSource
+    ? ""
+    : await instructorLessonRouteIssue(group.lessonDate, group.managementNumber);
+  if (!recoveringBlockedSource && (sourceIssue || routeIssue)) {
     const issue = sourceIssue || routeIssue;
     await ref.set({
       approvalId,
@@ -178,6 +198,7 @@ async function prepareInstructorLessonSampleApproval(input: {
       sourceDate,
       lessonDate: group.lessonDate,
       managementNumber: group.managementNumber,
+      templateCode: INSTRUCTOR_LESSON_ALIMTALK_TEMPLATE_CODE,
       status: sourceIssue ? "blocked_source_stale" : "sample_failed",
       candidateIds: group.candidates.map((candidate) => candidate.candidateId),
       approvedTargetKeys: group.candidates.map(instructorLessonTargetKey),
@@ -204,13 +225,17 @@ async function prepareInstructorLessonSampleApproval(input: {
   const sample = buildSampleCandidate(group.candidates[0], approvalId, testRecipient);
   const claimed = await db.runTransaction(async (tx) => {
     const snap = await tx.get(ref);
-    if (snap.exists) return false;
-    tx.create(ref, {
+    const current = snap.data() as InstructorLessonApprovalDoc | undefined;
+    if (snap.exists && !current) return false;
+    if (current && !canRecoverBlockedInstructorLessonSample(current)) return false;
+    const now = nowTimestamp();
+    const next = {
       approvalId,
       studioId,
       sourceDate,
       lessonDate: group.lessonDate,
       managementNumber: group.managementNumber,
+      templateCode: INSTRUCTOR_LESSON_ALIMTALK_TEMPLATE_CODE,
       status: "sample_sending",
       candidateIds: group.candidates.map((candidate) => candidate.candidateId),
       approvedTargetKeys: group.candidates.map(instructorLessonTargetKey),
@@ -220,9 +245,17 @@ async function prepareInstructorLessonSampleApproval(input: {
       sampleCandidateId: sample.candidateId,
       sampleRecipientName: testRecipient.name,
       lastError: null,
-      createdAt: nowTimestamp(),
-      updatedAt: nowTimestamp(),
-    } satisfies InstructorLessonApprovalDoc);
+      createdAt: current?.createdAt || now,
+      updatedAt: now,
+      ...(current
+        ? {
+            sourceRecoveredAt: now,
+            sourceRecoveryCount: Number(current.sourceRecoveryCount || 0) + 1,
+          }
+        : {}),
+    } satisfies InstructorLessonApprovalDoc;
+    if (snap.exists) tx.set(ref, next, { merge: true });
+    else tx.create(ref, next);
     return true;
   });
   if (!claimed) return "awaiting_approval";
@@ -861,7 +894,7 @@ async function sendSampleApprovalEmail(
     `본 발송 예정: ${approval.candidateCount}명`,
     `대상: ${names}`,
     "",
-    "샘플의 문구와 버튼 3개를 확인한 뒤 아래 링크로 승인해주세요.",
+    "샘플의 문구와 버튼 4개를 확인한 뒤 아래 링크로 승인해주세요.",
     "승인 전에는 본 발송되지 않으며, 승인 후에도 D-1 18:00 KST에 발송됩니다.",
     approvalUrl,
   ].join("\n");
@@ -871,7 +904,7 @@ async function sendSampleApprovalEmail(
     `<h2 style="font-size:22px;margin:8px 0 20px">${escapeHtml(approval.lessonDate)} 강사레슨</h2>`,
     `<p>샘플 수신: <b>${escapeHtml(approval.sampleRecipientName)}</b><br>본 발송 예정: <b>${approval.candidateCount}명</b><br>관리번호: <code>${escapeHtml(approval.managementNumber)}</code></p>`,
     `<p style="color:#555">대상: ${escapeHtml(names)}</p>`,
-    '<p style="margin-top:20px">샘플의 문구와 버튼 3개를 확인한 뒤 승인해주세요. 승인 후에도 D-1 18:00 KST에 발송됩니다.</p>',
+    '<p style="margin-top:20px">샘플의 문구와 버튼 4개를 확인한 뒤 승인해주세요. 승인 후에도 D-1 18:00 KST에 발송됩니다.</p>',
     `<a href="${escapeHtml(approvalUrl)}" style="display:inline-block;margin-top:12px;background:#171717;color:#fff;text-decoration:none;padding:13px 18px;border-radius:6px;font-weight:700">샘플 확인 완료 · 발송 승인</a>`,
     "</div>",
   ].join("");
@@ -975,7 +1008,7 @@ function approvalConfirmationHtml(approvalId: string, token: string, approval: I
     '<body style="font-family:Arial,sans-serif;line-height:1.6;color:#171717;max-width:560px;margin:40px auto;padding:20px">',
     '<h1 style="font-size:24px">강사레슨 D-1 알림톡 승인</h1>',
     `<p>수업일: <b>${escapeHtml(approval.lessonDate)}</b><br>관리번호: <code>${escapeHtml(approval.managementNumber)}</code><br>본 발송 예정: <b>${approval.candidateCount}명</b><br>발송 시각: D-1 18:00 KST</p>`,
-    '<p style="color:#555">샘플의 문구와 버튼 3개를 직접 확인했다면 아래 버튼으로 승인해주세요. 이 화면을 여는 것만으로는 승인되지 않습니다.</p>',
+    '<p style="color:#555">샘플의 문구와 버튼 4개를 직접 확인했다면 아래 버튼으로 승인해주세요. 이 화면을 여는 것만으로는 승인되지 않습니다.</p>',
     `<form method="post" action="${action}">`,
     `<input type="hidden" name="id" value="${escapeHtml(approvalId)}">`,
     `<input type="hidden" name="token" value="${escapeHtml(token)}">`,
