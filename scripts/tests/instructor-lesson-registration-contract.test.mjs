@@ -2,11 +2,14 @@ import assert from "node:assert/strict";
 import test from "node:test";
 import {
   INSTRUCTOR_LESSON_TICKET_NAME,
+  INSTRUCTOR_LESSON_TICKET_PRICE,
+  INSTRUCTOR_MEMBER_EFORMSIGN_OPERATOR_FIELD_IDS,
   buildInstructorMemberDocumentName,
   deriveInstructorLessonRegistrationState,
   exactMemberCandidates,
   instructorLessonRegistrationId,
   isInstructorMemberGrade,
+  isInstructorLessonNewMemberTestRecipient,
   normalizeInstructorLessonPhone,
   paymentMethodLabel,
   selectExactInstructorLessonTicket,
@@ -40,6 +43,12 @@ test("StudioMate 강사회원 등급만 재수강 자동 처리 대상으로 인
   assert.equal(isInstructorMemberGrade("일반회원"), false);
 });
 
+test("신규회원 시뮬레이션은 김기효 테스트 계정에만 허용한다", () => {
+  assert.equal(isInstructorLessonNewMemberTestRecipient({ memberName: "김기효", memberPhone: "010-8648-8585" }), true);
+  assert.equal(isInstructorLessonNewMemberTestRecipient({ memberName: "김기효", memberPhone: "010-1111-2222" }), false);
+  assert.equal(isInstructorLessonNewMemberTestRecipient({ memberName: "다른 회원", memberPhone: "010-8648-8585" }), false);
+});
+
 test("강사레슨 수강권은 정확한 이름 한 건만 선택한다", () => {
   const ticket = selectExactInstructorLessonTicket([
     { title: "강사레슨 (2T)", id: "ticket-1" },
@@ -47,6 +56,11 @@ test("강사레슨 수강권은 정확한 이름 한 건만 선택한다", () =>
   ]);
   assert.equal(ticket.id, "ticket-1");
   assert.equal(INSTRUCTOR_LESSON_TICKET_NAME, "강사레슨 (2T)");
+  assert.equal(INSTRUCTOR_LESSON_TICKET_PRICE, 70_000);
+  assert.deepEqual(INSTRUCTOR_MEMBER_EFORMSIGN_OPERATOR_FIELD_IDS, {
+    ticketName: "ozinput_33",
+    paymentAmount: "ozinput_34",
+  });
   assert.throws(
     () => selectExactInstructorLessonTicket([{ title: "강사레슨 (2T)" }, { title: "강사레슨 (2T)" }]),
     /2건/,

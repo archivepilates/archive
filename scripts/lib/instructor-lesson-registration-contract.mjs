@@ -1,6 +1,12 @@
 import { createHash } from "node:crypto";
 
 export const INSTRUCTOR_LESSON_TICKET_NAME = "강사레슨 (2T)";
+export const INSTRUCTOR_LESSON_TICKET_PRICE = 70_000;
+export const INSTRUCTOR_LESSON_NEW_MEMBER_TEST_PHONE = "01086488585";
+export const INSTRUCTOR_MEMBER_EFORMSIGN_OPERATOR_FIELD_IDS = Object.freeze({
+  ticketName: "ozinput_33",
+  paymentAmount: "ozinput_34",
+});
 export const INSTRUCTOR_MEMBER_EFORMSIGN_TEMPLATE_ID = "a5b5ea6b85ec44c8bcb4af1e980e94eb";
 export const INSTRUCTOR_MEMBER_EFORMSIGN_TEMPLATE_URL =
   `https://www.eformsign.com/eform/document/view_service.html?form_id=${INSTRUCTOR_MEMBER_EFORMSIGN_TEMPLATE_ID}`;
@@ -43,6 +49,11 @@ export function paymentMethodLabel(value) {
 
 export function isInstructorMemberGrade(value) {
   return /(^|\s)강사회원($|\s)|강사\s*회원/i.test(String(value || ""));
+}
+
+export function isInstructorLessonNewMemberTestRecipient(job) {
+  return normalizeInstructorLessonName(job?.memberName) === "김기효"
+    && normalizeInstructorLessonPhone(job?.memberPhone) === INSTRUCTOR_LESSON_NEW_MEMBER_TEST_PHONE;
 }
 
 export function selectExactInstructorLessonTicket(tickets, ticketName = INSTRUCTOR_LESSON_TICKET_NAME) {

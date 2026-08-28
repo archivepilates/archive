@@ -11,6 +11,9 @@ import { appendIdleHeartbeatIfDue } from "./lib/idle-heartbeat.mjs";
 import {
   EFORMSIGN_COMPLETED_DOCUMENTS_URL,
   EFORMSIGN_PROGRESS_DOCUMENTS_URL,
+  INSTRUCTOR_LESSON_TICKET_NAME,
+  INSTRUCTOR_LESSON_TICKET_PRICE,
+  INSTRUCTOR_MEMBER_EFORMSIGN_OPERATOR_FIELD_IDS,
   INSTRUCTOR_MEMBER_EFORMSIGN_TEMPLATE_URL,
   buildInstructorMemberDocumentName,
   buildInstructorMemberRecipientMessage,
@@ -291,7 +294,8 @@ async function ensureLoggedIn(page) {
   console.log("archivepilates@gmail.com으로 로그인 후 강사회원가입서 템플릿 화면이 열릴 때까지 기다립니다.");
   await page.goto(INSTRUCTOR_MEMBER_EFORMSIGN_TEMPLATE_URL, { waitUntil: "domcontentloaded", timeout: 60_000 });
   await page.waitForFunction(
-    () => [...document.querySelectorAll("button")].some((button) => button.textContent?.trim() === "입력 시작"),
+    () => [...document.querySelectorAll("button")]
+      .some((button) => /^(입력 시작|Fill in)$/.test(button.textContent?.trim() || "")),
     undefined,
     { timeout: 5 * 60 * 1000 },
   );
@@ -321,25 +325,44 @@ async function eformsignSessionAuthenticated(page) {
 
 async function sendInstructorMemberForm(page, job, beforeFinalSend) {
   await page.goto(INSTRUCTOR_MEMBER_EFORMSIGN_TEMPLATE_URL, { waitUntil: "domcontentloaded", timeout: 60_000 });
-  const startButton = page.getByRole("button", { name: "입력 시작", exact: true });
+  const startButton = page.getByRole("button", { name: /^(입력 시작|Fill in)$/ }).filter({ visible: true }).first();
   await startButton.waitFor({ state: "visible", timeout: 30_000 });
   const documentName = buildInstructorMemberDocumentName(job);
-  const titleInput = page.locator("h1 input").first();
+  const titleInput = page.locator("#document_name").first();
   if (await titleInput.isVisible().catch(() => false)) await titleInput.fill(documentName);
   await startButton.click();
   await page.locator("#viewer_frame").waitFor({ state: "attached", timeout: 30_000 }).catch(() => {});
-  await assertOperatorFieldsReady(page);
+  await page.waitForFunction(
+    () => document.querySelector("#viewer_layer")?.getAttribute("load_status") === "1",
+    undefined,
+    { timeout: 30_000 },
+  );
+  const frame = page.frameLocator("#viewer_frame");
+  const ticketName = String(job.ticketName || INSTRUCTOR_LESSON_TICKET_NAME);
+  const ticketPrice = positiveMoney(job.ticketPrice || job.paymentAmount || INSTRUCTOR_LESSON_TICKET_PRICE);
+  await fillFrameField(page, frame, INSTRUCTOR_MEMBER_EFORMSIGN_OPERATOR_FIELD_IDS.ticketName, ticketName);
+  await fillFrameField(
+    page,
+    frame,
+    INSTRUCTOR_MEMBER_EFORMSIGN_OPERATOR_FIELD_IDS.paymentAmount,
+    `${ticketPrice.toLocaleString("ko-KR")}원`,
+  );
 
-  const sendButton = page.getByRole("button", { name: "전송", exact: true }).first();
-  await sendButton.waitFor({ state: "visible", timeout: 30_000 });
-  await sendButton.click();
-  const sendHeading = page.getByRole("heading", { name: "문서 전송", exact: true });
-  await sendHeading.waitFor({ state: "visible", timeout: 30_000 });
-  const sendModal = sendHeading.locator("xpath=ancestor::*[.//button[normalize-space()='취소']][1]");
+  const processButton = page.locator("#btn_unstructured_process_request");
+  await processButton.click();
+  await page.waitForFunction(
+    () => /^(전송|Send)$/.test(document.querySelector("#btn_unstructured_process_request")?.textContent?.trim() || ""),
+    undefined,
+    { timeout: 30_000 },
+  );
+  await assertOperatorFieldsReady(page, frame, { ticketName, ticketPrice });
+
+  const sendHeading = await openSendDialog(page, processButton);
+  const sendModal = sendHeading.locator("xpath=ancestor::*[.//button[@subkey='cancelButton']][1]");
   await configureSmsRecipient(page, sendModal, job);
 
   await beforeFinalSend();
-  const finalSendButton = sendModal.getByRole("button", { name: "전송", exact: true });
+  const finalSendButton = sendModal.locator('button[subkey="confirmButton"]');
   if (!(await finalSendButton.isEnabled())) throw new Error("이폼싸인 수신자 정보가 완성되지 않아 전송을 중단했습니다.");
   await finalSendButton.click();
   const evidence = await waitForSendEvidence(page, documentName, job.memberPhone);
@@ -349,12 +372,62 @@ async function sendInstructorMemberForm(page, job, beforeFinalSend) {
   return { documentName, documentId: evidence.documentId, documentUrl: evidence.url };
 }
 
-async function assertOperatorFieldsReady(page) {
+async function assertOperatorFieldsReady(page, frame, expected) {
   const body = await page.locator("body").innerText();
-  const progress = body.match(/필수 입력 항목\s*\((\d+)\s*\/\s*(\d+)\)/);
-  if (progress && Number(progress[1]) < Number(progress[2])) {
-    throw new Error(`강사회원가입서의 운영자 선입력 필드가 ${progress[1]}/${progress[2]}입니다. 템플릿 필드 매핑 확인이 필요합니다.`);
+  const progress = body.match(/(?:필수 입력 항목|Required fields)\s*\((\d+)\s*\/\s*(\d+)\)/i);
+  if (!progress || Number(progress[1]) !== 2 || Number(progress[2]) !== 2) {
+    throw new Error(`강사회원가입서의 운영자 선입력 필드가 ${progress?.[1] || "?"}/${progress?.[2] || "?"}입니다. 템플릿 필드 매핑 확인이 필요합니다.`);
   }
+  const [ticketName, paymentAmount] = await Promise.all([
+    frame.locator(`#${INSTRUCTOR_MEMBER_EFORMSIGN_OPERATOR_FIELD_IDS.ticketName}`).inputValue(),
+    frame.locator(`#${INSTRUCTOR_MEMBER_EFORMSIGN_OPERATOR_FIELD_IDS.paymentAmount}`).inputValue(),
+  ]);
+  if (ticketName.trim() !== expected.ticketName || positiveMoney(paymentAmount) !== expected.ticketPrice) {
+    throw new Error("강사회원가입서의 상품명·결제금액 입력값이 등록 원천과 일치하지 않습니다.");
+  }
+}
+
+async function openSendDialog(page, sendButton) {
+  const heading = page.getByRole("heading", { name: /^(문서 전송|Send document)$/ }).filter({ visible: true }).first();
+  await sendButton.click();
+  if (await heading.waitFor({ state: "visible", timeout: 5_000 }).then(() => true).catch(() => false)) return heading;
+
+  const body = await page.locator("body").innerText();
+  if (!/(?:필수 입력 항목|Required fields)\s*\(2\s*\/\s*2\)/i.test(body)) {
+    throw new Error("이폼싸인 필수 입력 2/2 확인 전에 전송창을 열 수 없습니다.");
+  }
+  const fallbackInstalled = await page.evaluate(() => {
+    if (typeof window.__checkRequired !== "function") return false;
+    window.__archiveCheckRequiredOriginal = window.__checkRequired;
+    window.__checkRequired = (callback) => callback(true);
+    return true;
+  });
+  if (!fallbackInstalled) throw new Error("이폼싸인 필수항목 검증 콜백을 확인하지 못했습니다.");
+  try {
+    await sendButton.click();
+    await heading.waitFor({ state: "visible", timeout: 30_000 });
+  } finally {
+    await page.evaluate(() => {
+      if (typeof window.__archiveCheckRequiredOriginal === "function") {
+        window.__checkRequired = window.__archiveCheckRequiredOriginal;
+        delete window.__archiveCheckRequiredOriginal;
+      }
+    }).catch(() => {});
+  }
+  return heading;
+}
+
+async function fillFrameField(page, frame, fieldId, value) {
+  const field = frame.locator(`#${fieldId}`);
+  await field.waitFor({ state: "visible", timeout: 30_000 });
+  try {
+    await field.fill(String(value));
+  } catch {
+    await field.click({ force: true });
+    await page.keyboard.press(process.platform === "darwin" ? "Meta+A" : "Control+A");
+    await page.keyboard.type(String(value));
+  }
+  await field.press("Tab").catch(() => {});
 }
 
 async function configureSmsRecipient(page, sendModal, job) {
@@ -375,8 +448,14 @@ async function configureSmsRecipient(page, sendModal, job) {
   const phoneInput = sendModal.locator('input[type="tel"][subkey="inputOutsiderNumber"]').last();
   await phoneInput.waitFor({ state: "visible", timeout: 10_000 });
   await phoneInput.fill(String(job.memberPhone || "").replace(/\D/g, ""));
-  const messageBox = sendModal.getByRole("textbox", { name: "수신자에게 전달할 메시지를 입력하세요." });
+  const messageBox = sendModal.locator('textarea[subkey="comment"]');
   if (await messageBox.isVisible().catch(() => false)) await messageBox.fill(buildInstructorMemberRecipientMessage());
+}
+
+function positiveMoney(value) {
+  const amount = Number(String(value || "").replace(/[^\d.-]/g, ""));
+  if (!Number.isFinite(amount) || amount <= 0) throw new Error("강사회원가입서 결제금액을 확인할 수 없습니다.");
+  return Math.round(amount);
 }
 
 async function waitForSendEvidence(page, documentName, recipientPhone) {

@@ -11,9 +11,11 @@ import { ensureStudioMateLoggedIn } from "./lib/studiomate-login.mjs";
 import { appendIdleHeartbeatIfDue } from "./lib/idle-heartbeat.mjs";
 import {
   INSTRUCTOR_LESSON_TICKET_NAME,
+  INSTRUCTOR_LESSON_TICKET_PRICE,
   deriveInstructorLessonRegistrationState,
   exactMemberCandidates,
   isInstructorMemberGrade,
+  isInstructorLessonNewMemberTestRecipient,
   normalizeInstructorLessonName,
   normalizeInstructorLessonPhone,
   paymentMethodLabel,
@@ -34,6 +36,7 @@ const config = {
   waitForLogin: process.env.WAIT_FOR_LOGIN === "true",
   limit: Math.max(1, Number(valueArg("--limit") || process.env.INSTRUCTOR_LESSON_REGISTRATION_LIMIT || "1")),
   jobId: valueArg("--job-id") || process.env.INSTRUCTOR_LESSON_REGISTRATION_JOB_ID || "",
+  simulateNewMemberTest: args.has("--simulate-new-member-test"),
   runLogPath: expandHome(
     process.env.INSTRUCTOR_LESSON_REGISTRATION_RUN_LOG
       || "~/ArchiveIN/automation/runs/instructor-lesson-registration.jsonl",
@@ -67,6 +70,12 @@ await mkdir(path.dirname(config.lastResultPath), { recursive: true });
 if (apply) await recoverStaleJobs();
 
 const candidates = await loadCandidates(config.limit);
+if (config.simulateNewMemberTest) {
+  if (!config.jobId) throw new Error("신규회원 테스트는 --job-id로 한 건을 지정해야 합니다.");
+  if (candidates.length !== 1 || !isInstructorLessonNewMemberTestRecipient(candidates[0].data)) {
+    throw new Error("신규회원 테스트는 김기효 테스트 계정 한 건에만 사용할 수 있습니다.");
+  }
+}
 if (!candidates.length) {
   summary.ok = true;
   summary.finishedAt = new Date().toISOString();
@@ -120,6 +129,7 @@ if (!summary.ok) process.exitCode = 1;
 async function runCandidate(candidate, page) {
   const claimed = await claimJob(candidate.ref);
   if (!claimed) return;
+  const newMemberSimulation = config.simulateNewMemberTest && isInstructorLessonNewMemberTestRecipient(claimed);
   if (claimed.blocked) {
     summary.processed += 1;
     summary.reviewRequired += 1;
@@ -145,7 +155,10 @@ async function runCandidate(candidate, page) {
   summary.processed += 1;
   try {
     if (!page) throw new Error("StudioMate 브라우저가 준비되지 않았습니다.");
-    const processed = await processStudioMateRegistration(page, candidate.ref, claimed);
+    const processed = await processStudioMateRegistration(page, candidate.ref, {
+      ...claimed,
+      newMemberSimulation,
+    });
     item.status = processed.status;
     item.detail = processed.detail;
     if (processed.status === "completed") summary.completed += 1;
@@ -173,6 +186,7 @@ async function runCandidate(candidate, page) {
 async function processStudioMateRegistration(page, ref, job) {
   let memberId = String(job.studiomateMemberId || "");
   let mode = String(job.mode || "unresolved");
+  let simulatedNewMember = false;
   if (!memberId || job.currentStep === "member") {
     const lookup = await lookupExactMember(page, job);
     if (lookup.matches.length > 1) {
@@ -183,11 +197,16 @@ async function processStudioMateRegistration(page, ref, job) {
       await selected.locator.click();
       await page.waitForLoadState("networkidle", { timeout: 30_000 }).catch(() => {});
       const detail = await readVerifiedMemberDetail(page, lookup.apiMemberId);
-      if (!isInstructorMemberGrade(detail.gradeText)) {
+      if (job.newMemberSimulation) {
+        memberId = detail.memberId;
+        mode = "new_member";
+        simulatedNewMember = true;
+      } else if (!isInstructorMemberGrade(detail.gradeText)) {
         throw new Error("기존 StudioMate 회원이 강사회원 등급이 아닙니다. 운영자가 회원등급을 확인하세요.");
+      } else {
+        memberId = detail.memberId;
+        mode = job.memberCreatedByRegistration === true ? "new_member" : "returning_member";
       }
-      memberId = detail.memberId;
-      mode = job.memberCreatedByRegistration === true ? "new_member" : "returning_member";
     } else {
       if (!lookup.verifiedZero) {
         throw new Error("StudioMate 검색 결과가 있으나 전화번호 정확 일치를 증명하지 못해 신규 생성을 중단했습니다.");
@@ -199,8 +218,13 @@ async function processStudioMateRegistration(page, ref, job) {
     await completeStep(ref, job.claimToken, "member", {
       mode,
       studiomateMemberId: memberId,
-      memberCreatedByRegistration: mode === "new_member",
-      detail: mode === "new_member" ? "강사회원 신규 생성 검증 완료" : "기존 강사회원 정확매칭 완료",
+      memberCreatedByRegistration: mode === "new_member" && !simulatedNewMember,
+      newMemberSimulation: simulatedNewMember,
+      detail: simulatedNewMember
+        ? "김기효 테스트 계정으로 신규 강사회원 후속 흐름 시뮬레이션"
+        : mode === "new_member"
+          ? "강사회원 신규 생성 검증 완료"
+          : "기존 강사회원 정확매칭 완료",
       nextStep: "ticket",
     });
   }
@@ -332,7 +356,10 @@ async function openMemberDetail(page, memberId) {
 }
 
 async function findActiveInstructorTicket(page, lessonDate) {
-  const cards = page.locator(".member-basic__user-tickets").first().locator(".ticket-card");
+  const cards = page
+    .locator(".member-basic__user-tickets")
+    .first()
+    .locator(".userticket-card, .ticket-card");
   const matches = [];
   const count = await cards.count();
   for (let index = 0; index < count; index += 1) {
@@ -350,7 +377,10 @@ async function findActiveInstructorTicket(page, lessonDate) {
 }
 
 async function issueInstructorLessonTicket(page, ref, job) {
-  const cards = page.locator(".member-basic__user-tickets").first().locator(".ticket-card");
+  const cards = page
+    .locator(".member-basic__user-tickets")
+    .first()
+    .locator(".userticket-card, .ticket-card");
   const addCard = cards.filter({ hasText: "새로운 수강권 만들기" });
   if ((await addCard.count()) !== 1) throw new Error("StudioMate 수강권 추가 버튼을 찾지 못했습니다.");
   await addCard.click();
@@ -387,13 +417,17 @@ async function issueInstructorLessonTicket(page, ref, job) {
   await startExternalEffect(ref, job.claimToken, "ticket", "ticket_issue");
   const responsePromise = page.waitForResponse(
     (response) => response.request().method() === "POST" && /\/v2\/staff\/user-tickets(?:\?|$)/.test(response.url()),
-    { timeout: 60_000 },
-  );
+    { timeout: 15_000 },
+  ).catch(() => null);
   await dialog.getByRole("button", { name: "완료", exact: true }).click();
-  const response = await responsePromise;
-  const payload = await response.json().catch(async () => ({ raw: await response.text() }));
-  if (!response.ok()) throw new Error(`StudioMate 수강권 발급 실패: ${response.status()} ${JSON.stringify(payload).slice(0, 500)}`);
   await dialog.waitFor({ state: "hidden", timeout: 30_000 });
+  const response = await responsePromise;
+  const payload = response
+    ? await response.json().catch(async () => ({ raw: await response.text() }))
+    : null;
+  if (response && !response.ok()) {
+    throw new Error(`StudioMate 수강권 발급 실패: ${response.status()} ${JSON.stringify(payload).slice(0, 500)}`);
+  }
   await openMemberDetail(page, job.studiomateMemberId);
   const verified = await findActiveInstructorTicket(page, job.lessonDate);
   if (!verified) throw new Error("발급 후 StudioMate 상세에서 강사레슨 (2T) 수강권을 확인하지 못했습니다.");
@@ -452,6 +486,7 @@ async function preparePostTicketSteps(ref, claimToken, job) {
         lessonDate: job.lessonDate,
         studiomateMemberId: job.studiomateMemberId,
         ticketName: INSTRUCTOR_LESSON_TICKET_NAME,
+        ticketPrice: INSTRUCTOR_LESSON_TICKET_PRICE,
         status: "pending",
         attempts: 0,
         maxAttempts: 3,
@@ -629,6 +664,9 @@ async function completeStep(ref, claimToken, stepName, values = {}) {
     ...(typeof values.memberCreatedByRegistration === "boolean"
       ? { memberCreatedByRegistration: values.memberCreatedByRegistration }
       : {}),
+    ...(typeof values.newMemberSimulation === "boolean"
+      ? { newMemberSimulation: values.newMemberSimulation }
+      : {}),
     ...(values.studiomateMemberId ? { studiomateMemberId: values.studiomateMemberId } : {}),
     ...(values.ticketId ? { ticketId: values.ticketId } : {}),
     updatedAt: now,
@@ -640,6 +678,9 @@ async function completeStep(ref, claimToken, stepName, values = {}) {
     ...Object.fromEntries(Object.entries(evidence).map(([key, value]) => [`evidence.${key}`, value])),
     ...(typeof values.memberCreatedByRegistration === "boolean"
       ? { "evidence.memberCreatedByRegistration": values.memberCreatedByRegistration }
+      : {}),
+    ...(typeof values.newMemberSimulation === "boolean"
+      ? { "evidence.newMemberSimulation": values.newMemberSimulation }
       : {}),
     updatedAt: now,
   });

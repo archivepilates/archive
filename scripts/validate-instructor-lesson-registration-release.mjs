@@ -68,6 +68,11 @@ const checks = [
   ["scripts/process-instructor-lesson-registration-jobs.mjs", [
     "exactMemberCandidates",
     "isInstructorMemberGrade",
+    "--simulate-new-member-test",
+    "isInstructorLessonNewMemberTestRecipient",
+    ".userticket-card, .ticket-card",
+    "INSTRUCTOR_LESSON_TICKET_PRICE",
+    "response && !response.ok()",
     "selectExactInstructorLessonTicket",
     "completeStudioMateRegistration",
     "반배정·예약은 운영자 수동 처리",
@@ -90,6 +95,10 @@ const checks = [
     "studiomateMemoWriteJobs",
     "deriveInstructorLessonRegistrationState",
     "lastCheckedAt || a.data.sentAt",
+    "INSTRUCTOR_MEMBER_EFORMSIGN_OPERATOR_FIELD_IDS",
+    "Required fields",
+    "Send document",
+    "__archiveCheckRequiredOriginal",
   ], []],
   ["scripts/process-studiomate-memo-write-jobs.mjs", [
     "updateInstructorLessonRegistrationMemoStatus",
