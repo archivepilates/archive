@@ -51,6 +51,19 @@
           </div>
         </header>
 
+        <section class="instructor-seat-overview" aria-label="강사레슨 일정별 예약 인원, 정원, 남은 좌석">
+          <div class="instructor-seat-overview-head">
+            <div>
+              <p class="eyebrow">UPCOMING</p>
+              <h2 id="instructorLessonScheduleHeading">일정별 예약현황</h2>
+            </div>
+            <strong id="instructorLessonScheduleSummary">불러오는 중</strong>
+          </div>
+          <div class="instructor-seat-list" id="instructorLessonScheduleList" aria-live="polite">
+            <div class="empty-state">강사레슨 일정을 불러오는 중입니다.</div>
+          </div>
+        </section>
+
         <section class="grid kpis instructor-registration-kpis" aria-label="강사레슨 등록 현황">
           <article class="panel metric"><div class="metric-label">진행중 전체</div><div class="metric-value" id="instructorLessonActiveCount">0건</div></article>
           <article class="panel metric"><div class="metric-label">가입서 대기</div><div class="metric-value" id="instructorLessonSignatureCount">0건</div></article>

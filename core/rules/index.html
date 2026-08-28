@@ -762,6 +762,9 @@
                 <li>자동화는 수업 생성 여부를 조회하지 않으며 반배정·예약 화면을 열거나 예약 API를 호출하지 않습니다.</li>
                 <li>기존 강사회원이면 강사레슨 (2T) 수강권까지만 발급하고 가입서는 다시 보내지 않습니다. 일반회원 또는 중복번호는 확인필요로 중단합니다.</li>
                 <li>반배정과 예약은 수업 생성 시 운영자가 StudioMate에서 직접 처리합니다. 수동 예약 뒤 기존 D-1 예약 안내 자동화가 예약 원천을 사용합니다.</li>
+                <li>CORE 일정별 예약현황은 읽기 전용입니다. 실제 활성 예약의 고유 인원을 우선하고, 아직 반배정 전이면 강사레슨 (2T) 수강권 발급 인원, 그 전에는 취소되지 않은 접수 인원을 사용합니다.</li>
+                <li>강사레슨은 5:1 두 팀 운영 기준으로 기본 정원은 10명입니다. 실제 수업에 신뢰 가능한 정원이 있으면 같은 시작 시간의 병렬 수업 정원을 합산하고, 남은 좌석은 정원에서 예약·접수 인원을 뺀 값으로 표시합니다.</li>
+                <li>좌석 현황 조회는 StudioMate 예약 생성·변경·취소를 실행하지 않습니다.</li>
                 <li>이폼싸인 Personal 요금제는 API 대신 전용 Playwright 큐를 사용합니다. 최종 발송 결과가 모호하면 자동 재발송하지 않고 확인필요로 남깁니다.</li>
                 <li>가입서 완료 확인 뒤 ARCHIVE PILATES 회원 메모를 저장하고 StudioMate 메모 반영 큐를 생성합니다. 신규 등록은 회원·수강권·가입서·메모가 끝나면 완료하며 수동 예약 여부는 완료 조건에 포함하지 않습니다.</li>
                 <li>촬영형 강사레슨은 촬영, 강의 콘텐츠 제작·제공·판매와 해당 강의 소개를 위한 홍보 활용을 전제로 운영합니다.</li>
@@ -771,7 +774,7 @@
               </ul>
             </article>
           </div>
-          <div class="rule-note"><strong>현재 확인 위치</strong><span>CORE 강사레슨 / Firestore instructorLessonRegistrations, studiomateInstructorLessonJobs, eformsignInstructorMemberJobs, instructorMemberConsents / StudioMate 회원·수강권 / 이폼싸인 강사회원가입서</span></div>
+          <div class="rule-note"><strong>현재 확인 위치</strong><span>CORE 강사레슨 / Firestore lectures, bookings, memberProfiles.activeTickets, instructorLessonRegistrations, studiomateInstructorLessonJobs, eformsignInstructorMemberJobs, instructorMemberConsents / StudioMate 회원·수강권 / 이폼싸인 강사회원가입서</span></div>
         </section>
 
         <section class="panel rule-section" id="settlement">

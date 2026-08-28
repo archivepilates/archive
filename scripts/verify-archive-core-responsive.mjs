@@ -77,6 +77,26 @@ try {
           }
         });
       }
+      if (route.name === "instructor-lessons") {
+        await page.evaluate(() => {
+          const summary = document.querySelector("#instructorLessonScheduleSummary");
+          const list = document.querySelector("#instructorLessonScheduleList");
+          if (summary) summary.textContent = "4개 일정 · 잔여 8석";
+          if (list) {
+            list.innerHTML = [
+              ["8월 29일 (토)", "13:00–15:10", "마감", 10, 10, 0, "예약 반영"],
+              ["8월 30일 (일)", "13:00–15:10", "마감", 10, 10, 0, "예약 반영"],
+              ["9월 19일 (토)", "반배정 전", "잔여 1석", 9, 10, 1, "수강권 발급 기준"],
+              ["9월 20일 (일)", "반배정 전", "잔여 5석", 5, 10, 5, "수강권 발급 기준"],
+            ].map(([date, time, badge, occupied, capacity, remaining, source]) => `
+              <article class="instructor-seat-item">
+                <div class="instructor-seat-item-head"><div><strong>${date}</strong><span>${time}</span></div><span class="pill">${badge}</span></div>
+                <div class="instructor-seat-counts"><span><small>예약·접수</small><strong>${occupied}</strong></span><span><small>정원</small><strong>${capacity}</strong></span><span><small>남은 좌석</small><strong>${remaining}</strong></span></div>
+                <div class="instructor-seat-progress"><span style="width:${Number(occupied) * 10}%"></span></div><small class="instructor-seat-source">${source}</small>
+              </article>`).join("");
+          }
+        });
+      }
       if (route.name === "recommended-meals") {
         await page.evaluate(() => {
           const reviewBody = document.querySelector("#mealReviewBody");

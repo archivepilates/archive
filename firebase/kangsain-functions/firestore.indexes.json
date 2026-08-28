@@ -39,6 +39,15 @@
       "queryScope": "COLLECTION",
       "fields": [
         { "fieldPath": "studioId", "order": "ASCENDING" },
+        { "fieldPath": "ticketName", "order": "ASCENDING" },
+        { "fieldPath": "lectureDate", "order": "ASCENDING" }
+      ]
+    },
+    {
+      "collectionGroup": "bookings",
+      "queryScope": "COLLECTION",
+      "fields": [
+        { "fieldPath": "studioId", "order": "ASCENDING" },
         { "fieldPath": "appStatus", "order": "ASCENDING" },
         { "fieldPath": "lectureStartAt", "order": "ASCENDING" }
       ]

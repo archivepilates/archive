@@ -6872,9 +6872,95 @@ function instructorLessonRegistrationMatchesFilter(item) {
   return true;
 }
 
+function instructorLessonScheduleSourceLabel(value) {
+  return {
+    bookings: "예약 반영",
+    tickets: "수강권 발급 기준",
+    registrations: "접수 기준",
+    none: "접수 전",
+  }[String(value || "none")] || "확인 필요";
+}
+
+function instructorLessonScheduleDateLabel(value) {
+  const date = new Date(`${String(value || "").slice(0, 10)}T12:00:00+09:00`);
+  if (Number.isNaN(date.getTime())) return value || "일정 확인 필요";
+  return new Intl.DateTimeFormat("ko-KR", {
+    timeZone: "Asia/Seoul",
+    month: "long",
+    day: "numeric",
+    weekday: "short",
+  }).format(date);
+}
+
+function instructorLessonScheduleTimeLabel(startAt, endAt) {
+  if (!startAt) return "반배정 전";
+  const formatter = new Intl.DateTimeFormat("ko-KR", {
+    timeZone: "Asia/Seoul",
+    hour: "2-digit",
+    minute: "2-digit",
+    hour12: false,
+  });
+  const start = new Date(startAt);
+  const end = endAt ? new Date(endAt) : null;
+  if (Number.isNaN(start.getTime())) return "시간 확인 필요";
+  return end && !Number.isNaN(end.getTime())
+    ? `${formatter.format(start)}–${formatter.format(end)}`
+    : formatter.format(start);
+}
+
+function renderInstructorLessonSchedule(schedule = state.instructorLessonRegistrationDashboard?.schedule) {
+  const container = qs("instructorLessonScheduleList");
+  if (!container) return;
+  if (readUnavailable("instructorLessonRegistrations")) {
+    setText("instructorLessonScheduleSummary", "확인 필요");
+    container.innerHTML = '<div class="empty-state danger">일정과 예약 원본을 읽지 못했습니다.</div>';
+    return;
+  }
+  const items = Array.isArray(schedule?.items) ? schedule.items : [];
+  const remainingSeats = items.reduce((sum, item) => sum + toNumber(item.remainingSeats), 0);
+  setText(
+    "instructorLessonScheduleSummary",
+    items.length ? `${items.length.toLocaleString("ko-KR")}개 일정 · 잔여 ${remainingSeats.toLocaleString("ko-KR")}석` : "예정 일정 없음",
+  );
+  if (!items.length) {
+    container.innerHTML = '<div class="empty-state">예정된 강사레슨 접수 또는 예약이 없습니다.</div>';
+    return;
+  }
+  container.innerHTML = items.map((item) => {
+    const occupied = toNumber(item.occupiedCount);
+    const capacity = Math.max(1, toNumber(item.capacity));
+    const remaining = toNumber(item.remainingSeats);
+    const overbooked = toNumber(item.overbookedCount);
+    const percentage = Math.min(100, Math.round((occupied / capacity) * 100));
+    const tone = overbooked ? "danger" : remaining === 0 ? "good" : remaining <= 2 ? "warn" : "";
+    const seatLabel = overbooked ? `정원 초과 ${overbooked}명` : remaining === 0 ? "마감" : `잔여 ${remaining}석`;
+    return `
+      <article class="instructor-seat-item">
+        <div class="instructor-seat-item-head">
+          <div>
+            <strong>${escapeHtml(instructorLessonScheduleDateLabel(item.date))}</strong>
+            <span>${escapeHtml(instructorLessonScheduleTimeLabel(item.startAt, item.endAt))}</span>
+          </div>
+          <span class="pill ${tone}">${escapeHtml(seatLabel)}</span>
+        </div>
+        <div class="instructor-seat-counts">
+          <span><small>예약·접수</small><strong>${occupied.toLocaleString("ko-KR")}</strong></span>
+          <span><small>정원</small><strong>${capacity.toLocaleString("ko-KR")}</strong></span>
+          <span><small>남은 좌석</small><strong>${remaining.toLocaleString("ko-KR")}</strong></span>
+        </div>
+        <div class="instructor-seat-progress" role="img" aria-label="${occupied}명 접수, 정원 ${capacity}명">
+          <span style="width:${percentage}%"></span>
+        </div>
+        <small class="instructor-seat-source">${escapeHtml(instructorLessonScheduleSourceLabel(item.countSource))}</small>
+      </article>
+    `;
+  }).join("");
+}
+
 function renderInstructorLessonRegistrationDashboard(data = state.instructorLessonRegistrationDashboard) {
   if (!qs("instructorLessonRegistrationList")) return;
   const container = qs("instructorLessonRegistrationList");
+  renderInstructorLessonSchedule(data?.schedule);
   if (readUnavailable("instructorLessonRegistrations")) {
     setText("instructorLessonActiveCount", "확인 필요");
     setText("instructorLessonSignatureCount", "확인 필요");
@@ -6943,7 +7029,7 @@ function renderInstructorLessonRegistrationDashboard(data = state.instructorLess
 async function loadInstructorLessonRegistrationDashboard(runtime) {
   const callable = runtime.httpsCallable(runtime.functionsClient, "getInstructorLessonRegistrationDashboard");
   const result = await callable({ limit: 100 });
-  return result?.data || { counts: {}, items: [] };
+  return result?.data || { counts: {}, items: [], schedule: { items: [] } };
 }
 
 function setInstructorLessonRegistrationStatus(message, tone = "") {

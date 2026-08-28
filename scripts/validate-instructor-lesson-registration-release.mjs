@@ -12,6 +12,9 @@ const checks = [
     "instructorLessonPaymentConfirmed",
     "instructorLessonSeatConfirmed",
     "instructorLessonRegistrationList",
+    "instructorLessonScheduleList",
+    "일정별 예약현황",
+    "남은 좌석",
     "신규 강사회원에게 자동 발송",
     "수업 생성 전에도 접수",
     "수강권 발급 뒤 반배정·예약은 직접 처리",
@@ -22,6 +25,8 @@ const checks = [
     "operatorCreateInstructorLessonRegistration",
     "getInstructorLessonRegistrationDashboard",
     "renderInstructorLessonRegistrationDashboard",
+    "renderInstructorLessonSchedule",
+    "instructorLessonScheduleSourceLabel",
     "handleInstructorLessonRegistrationSubmit",
     "instructorLessonRegistrationFilter",
     "[\"member\", \"ticket\", \"eformsign\", \"memo\"]",
@@ -35,7 +40,19 @@ const checks = [
     ".count().get()",
     "requireManager",
     "수업 생성 시 운영자가 StudioMate에서 직접 처리",
+    "loadInstructorLessonSchedule",
+    "buildInstructorLessonScheduleSummaries",
+    "INSTRUCTOR_LESSON_DEFAULT_CAPACITY",
   ], ["waiting_class_assignment", "waiting_assignment", "expectedSessionCount"]],
+  ["firebase/kangsain-functions/functions/src/instructorLessonRegistration/instructorLessonSchedule.ts", [
+    "INSTRUCTOR_LESSON_DEFAULT_CAPACITY = 10",
+    "buildInstructorLessonScheduleSummaries",
+    "bookingMemberCount",
+    "ticketHolderCount",
+    "registrationCount",
+    "capacitySource",
+    "archiveBooking?.isCanonical === false",
+  ], ["db.collection(", "batch.set(", "transaction.set("]],
   ["firebase/kangsain-functions/firestore.rules", [
     "match /instructorLessonRegistrations/{registrationId}",
     "match /studiomateInstructorLessonJobs/{jobId}",
@@ -45,6 +62,8 @@ const checks = [
   ["firebase/kangsain-functions/firestore.indexes.json", [
     "instructorLessonRegistrations",
     "updatedAt",
+    '"fieldPath": "ticketName"',
+    '"fieldPath": "lectureDate"',
   ], []],
   ["scripts/process-instructor-lesson-registration-jobs.mjs", [
     "exactMemberCandidates",
@@ -99,6 +118,8 @@ const checks = [
     "운영자가 StudioMate에서 직접 처리",
     "최종 발송 결과가 모호하면 자동 재발송하지 않고 확인필요",
     "수동 예약 여부는 완료 조건에 포함하지 않습니다",
+    "실제 활성 예약의 고유 인원을 우선",
+    "기본 정원은 10명",
   ], ["예약을 자동 재개", "반배정 대기로 유지"]],
 ];
 

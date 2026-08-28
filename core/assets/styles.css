@@ -526,6 +526,129 @@ kbd {
   grid-template-columns: repeat(4, minmax(0, 1fr));
 }
 
+.instructor-seat-overview {
+  display: grid;
+  min-width: 0;
+  gap: 14px;
+  margin-bottom: 20px;
+}
+
+.instructor-seat-overview-head {
+  display: flex;
+  min-width: 0;
+  align-items: end;
+  justify-content: space-between;
+  gap: 16px;
+}
+
+.instructor-seat-overview-head > div {
+  display: grid;
+  min-width: 0;
+  gap: 3px;
+}
+
+.instructor-seat-overview-head h2 {
+  margin: 0;
+  font-size: 1.08rem;
+}
+
+.instructor-seat-overview-head .eyebrow {
+  margin: 0;
+}
+
+.instructor-seat-overview-head > strong {
+  color: var(--muted);
+  font-size: 0.82rem;
+  text-align: right;
+}
+
+.instructor-seat-list {
+  display: grid;
+  min-width: 0;
+  grid-template-columns: repeat(auto-fit, minmax(min(100%, 220px), 1fr));
+  gap: 10px;
+}
+
+.instructor-seat-list > .empty-state {
+  grid-column: 1 / -1;
+}
+
+.instructor-seat-item {
+  display: grid;
+  min-width: 0;
+  min-height: 164px;
+  align-content: start;
+  gap: 13px;
+  border: 1px solid var(--line);
+  border-radius: 7px;
+  background: var(--surface-strong);
+  padding: 16px;
+}
+
+.instructor-seat-item-head {
+  display: flex;
+  min-width: 0;
+  align-items: flex-start;
+  justify-content: space-between;
+  gap: 10px;
+}
+
+.instructor-seat-item-head > div {
+  display: grid;
+  min-width: 0;
+  gap: 3px;
+}
+
+.instructor-seat-item-head strong {
+  font-size: 0.98rem;
+}
+
+.instructor-seat-item-head div > span,
+.instructor-seat-source {
+  color: var(--muted);
+  font-size: 0.76rem;
+  font-weight: 750;
+}
+
+.instructor-seat-counts {
+  display: grid;
+  grid-template-columns: repeat(3, minmax(0, 1fr));
+  gap: 8px;
+}
+
+.instructor-seat-counts > span {
+  display: grid;
+  min-width: 0;
+  gap: 3px;
+}
+
+.instructor-seat-counts small {
+  color: var(--muted);
+  font-size: 0.67rem;
+  line-height: 1.25;
+  overflow-wrap: anywhere;
+}
+
+.instructor-seat-counts strong {
+  font-size: 1.25rem;
+  line-height: 1;
+}
+
+.instructor-seat-progress {
+  width: 100%;
+  height: 5px;
+  overflow: hidden;
+  border-radius: 3px;
+  background: var(--line-soft);
+}
+
+.instructor-seat-progress > span {
+  display: block;
+  height: 100%;
+  border-radius: inherit;
+  background: var(--accent);
+}
+
 .instructor-registration-layout {
   grid-template-columns: minmax(0, 1.35fr) minmax(280px, 0.65fr);
   align-items: stretch;
@@ -881,6 +1004,16 @@ kbd {
   .instructor-registration-next {
     grid-template-columns: 1fr;
     gap: 4px;
+  }
+
+  .instructor-seat-overview-head {
+    align-items: flex-start;
+    flex-direction: column;
+    gap: 8px;
+  }
+
+  .instructor-seat-overview-head > strong {
+    text-align: left;
   }
 }
 

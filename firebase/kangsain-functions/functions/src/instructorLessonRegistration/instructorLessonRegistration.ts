@@ -5,6 +5,11 @@ import { requireManager, requireStaff } from "../security/authGuards";
 import type { StaffDoc } from "../types/models";
 import { nowTimestamp } from "../utils/date";
 import { AppError } from "../utils/errors";
+import {
+  buildInstructorLessonScheduleSummaries,
+  INSTRUCTOR_LESSON_DEFAULT_CAPACITY,
+  instructorLessonScheduleDateRange,
+} from "./instructorLessonSchedule";
 
 const REGISTRATIONS = "instructorLessonRegistrations";
 const STUDIOMATE_JOBS = "studiomateInstructorLessonJobs";
@@ -121,23 +126,27 @@ export async function operatorCreateInstructorLessonRegistrationHandler(
       createdAt: now,
       updatedAt: now,
     });
-    transaction.set(jobRef, {
-      jobId: registrationId,
-      registrationId,
-      studioId: staff.studioId,
-      memberName: input.memberName,
-      memberPhone: input.memberPhone,
-      lessonDate: input.lessonDate,
-      paymentMethod: input.paymentMethod,
-      ticketName: TICKET_NAME,
-      status: "pending",
-      currentStep: "member",
-      attempts: jobSnapshot.exists ? Number(jobSnapshot.data()?.attempts || 0) : 0,
-      maxAttempts: 3,
-      externalEffectStarted: false,
-      createdAt: now,
-      updatedAt: now,
-    }, { merge: true });
+    transaction.set(
+      jobRef,
+      {
+        jobId: registrationId,
+        registrationId,
+        studioId: staff.studioId,
+        memberName: input.memberName,
+        memberPhone: input.memberPhone,
+        lessonDate: input.lessonDate,
+        paymentMethod: input.paymentMethod,
+        ticketName: TICKET_NAME,
+        status: "pending",
+        currentStep: "member",
+        attempts: jobSnapshot.exists ? Number(jobSnapshot.data()?.attempts || 0) : 0,
+        maxAttempts: 3,
+        externalEffectStarted: false,
+        createdAt: now,
+        updatedAt: now,
+      },
+      { merge: true },
+    );
     return { duplicate: false, registrationId, status: "queued" };
   });
 
@@ -155,12 +164,12 @@ export async function getInstructorLessonRegistrationDashboardHandler(
   const staff = await manager(request);
   const requestedLimit = Math.max(1, Math.min(MAX_DASHBOARD_ITEMS, Number(request.data?.limit || 50)));
   const registrations = db.collection(REGISTRATIONS).where("studioId", "==", staff.studioId);
-  const [snapshot, countSnapshots] = await Promise.all([
+  const [snapshot, countSnapshots, schedule] = await Promise.all([
     registrations.orderBy("updatedAt", "desc").limit(MAX_DASHBOARD_ITEMS).get(),
     Promise.all(DASHBOARD_STATUSES.map((status) => registrations.where("status", "==", status).count().get())),
+    loadInstructorLessonSchedule(staff.studioId),
   ]);
-  const allItems = snapshot.docs
-    .map((doc) => safeRegistration(doc.id, doc.data()));
+  const allItems = snapshot.docs.map((doc) => safeRegistration(doc.id, doc.data()));
   const counts = Object.fromEntries(
     DASHBOARD_STATUSES.map((status, index) => [status, Number(countSnapshots[index]?.data().count || 0)]),
   );
@@ -170,6 +179,49 @@ export async function getInstructorLessonRegistrationDashboardHandler(
     counts,
     countsLimited: snapshot.size === MAX_DASHBOARD_ITEMS,
     items: allItems.slice(0, requestedLimit),
+    schedule,
+  };
+}
+
+async function loadInstructorLessonSchedule(studioId: string): Promise<Record<string, unknown>> {
+  const { startDate, endDate } = instructorLessonScheduleDateRange();
+  const [lecturesSnapshot, bookingsSnapshot, holdersSnapshot, registrationsSnapshot] = await Promise.all([
+    db
+      .collection("lectures")
+      .where("studioId", "==", studioId)
+      .where("date", ">=", startDate)
+      .where("date", "<=", endDate)
+      .get(),
+    db
+      .collection("bookings")
+      .where("studioId", "==", studioId)
+      .where("ticketName", "==", TICKET_NAME)
+      .where("lectureDate", ">=", startDate)
+      .where("lectureDate", "<=", endDate)
+      .get(),
+    db
+      .collection("memberProfiles")
+      .where("studioId", "==", studioId)
+      .where("activeTicketNames", "array-contains", TICKET_NAME)
+      .get(),
+    db.collection(REGISTRATIONS).where("lessonDate", ">=", startDate).where("lessonDate", "<=", endDate).get(),
+  ]);
+  const items = buildInstructorLessonScheduleSummaries({
+    startDate,
+    endDate,
+    defaultCapacity: INSTRUCTOR_LESSON_DEFAULT_CAPACITY,
+    lectures: lecturesSnapshot.docs.map((doc) => ({ id: doc.id, ...doc.data() })),
+    bookings: bookingsSnapshot.docs.map((doc) => ({ id: doc.id, ...doc.data() })),
+    ticketHolders: holdersSnapshot.docs.map((doc) => ({ id: doc.id, ...doc.data() })),
+    registrations: registrationsSnapshot.docs
+      .map((doc) => ({ id: doc.id, ...doc.data() }))
+      .filter((item) => cleanText((item as Record<string, unknown>).studioId, 80) === studioId),
+  });
+  return {
+    startDate,
+    endDate,
+    defaultCapacity: INSTRUCTOR_LESSON_DEFAULT_CAPACITY,
+    items,
   };
 }
 
@@ -181,7 +233,7 @@ export function instructorLessonRegistrationId(studioId: string, phone: string, 
 }
 
 export function parseRegistrationInput(data: unknown): RegistrationInput {
-  const value = data && typeof data === "object" ? data as Record<string, unknown> : {};
+  const value = data && typeof data === "object" ? (data as Record<string, unknown>) : {};
   const memberName = cleanText(value.memberName, 40);
   const memberPhone = normalizePhone(value.memberPhone);
   const lessonDate = cleanText(value.lessonDate, 10);
@@ -201,9 +253,12 @@ export function parseRegistrationInput(data: unknown): RegistrationInput {
 }
 
 function safeRegistration(id: string, data: Record<string, unknown>): Record<string, unknown> {
-  const steps = data.steps && typeof data.steps === "object"
-    ? Object.fromEntries(Object.entries(data.steps as Record<string, unknown>).map(([key, value]) => [key, safeStep(value)]))
-    : {};
+  const steps =
+    data.steps && typeof data.steps === "object"
+      ? Object.fromEntries(
+          Object.entries(data.steps as Record<string, unknown>).map(([key, value]) => [key, safeStep(value)]),
+        )
+      : {};
   const phoneLast4 = cleanText(data.phoneLast4, 4) || normalizePhone(data.memberPhone).slice(-4);
   return {
     registrationId: id,
@@ -224,7 +279,7 @@ function safeRegistration(id: string, data: Record<string, unknown>): Record<str
 }
 
 function safeStep(value: unknown): Record<string, unknown> {
-  const data = value && typeof value === "object" ? value as Record<string, unknown> : {};
+  const data = value && typeof value === "object" ? (value as Record<string, unknown>) : {};
   return {
     status: cleanText(data.status, 40),
     label: cleanText(data.label, 80),
@@ -234,12 +289,15 @@ function safeStep(value: unknown): Record<string, unknown> {
 }
 
 function safeEvidence(value: unknown): Record<string, unknown> {
-  const data = value && typeof value === "object" ? value as Record<string, unknown> : {};
+  const data = value && typeof value === "object" ? (value as Record<string, unknown>) : {};
   return {
     studiomateMemberId: cleanText(data.studiomateMemberId, 80),
     ticketId: cleanText(data.ticketId, 80),
     bookingIds: Array.isArray(data.bookingIds)
-      ? data.bookingIds.map((item) => cleanText(item, 80)).filter(Boolean).slice(0, 10)
+      ? data.bookingIds
+          .map((item) => cleanText(item, 80))
+          .filter(Boolean)
+          .slice(0, 10)
       : [],
     eformsignDocumentId: cleanText(data.eformsignDocumentId, 160),
   };
@@ -247,10 +305,10 @@ function safeEvidence(value: unknown): Record<string, unknown> {
 
 function assertSameRegistration(existing: Record<string, unknown>, input: RegistrationInput): void {
   if (
-    cleanText(existing.memberName, 40) !== input.memberName
-    || normalizePhone(existing.memberPhone) !== input.memberPhone
-    || cleanText(existing.lessonDate, 10) !== input.lessonDate
-    || cleanText(existing.paymentMethod, 20) !== input.paymentMethod
+    cleanText(existing.memberName, 40) !== input.memberName ||
+    normalizePhone(existing.memberPhone) !== input.memberPhone ||
+    cleanText(existing.lessonDate, 10) !== input.lessonDate ||
+    cleanText(existing.paymentMethod, 20) !== input.paymentMethod
   ) {
     throw new AppError("INVALID_ARGUMENT", "같은 중복키의 등록 정보가 다릅니다. 기존 건을 먼저 확인하세요.");
   }
@@ -276,13 +334,15 @@ function normalizePhone(value: unknown): string {
 }
 
 function cleanText(value: unknown, maxLength: number): string {
-  return String(value || "").trim().slice(0, maxLength);
+  return String(value || "")
+    .trim()
+    .slice(0, maxLength);
 }
 
 function timestampIso(value: unknown): string | null {
   if (!value) return null;
   if (typeof (value as { toDate?: unknown }).toDate === "function") {
-    return ((value as { toDate: () => Date }).toDate()).toISOString();
+    return (value as { toDate: () => Date }).toDate().toISOString();
   }
   const data = value as { seconds?: number; _seconds?: number };
   const seconds = Number(data.seconds ?? data._seconds);
