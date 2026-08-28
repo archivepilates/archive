@@ -455,6 +455,7 @@ async function preparePostTicketSteps(ref, claimToken, job) {
     const newMember = String(job.mode || currentJob.mode || "") === "new_member";
     const eformStep = currentSteps.eformsign || {};
     const memoStep = currentSteps.memo || {};
+    const confirmationStep = currentSteps.confirmation || {};
     const steps = {
       ...currentSteps,
       eformsign: newMember
@@ -468,7 +469,9 @@ async function preparePostTicketSteps(ref, claimToken, job) {
           : stepValue("waiting_external", "가입서 완료 메모", "가입서 완료 뒤 자동 등록"))
         : stepValue("not_required", "가입서 완료 메모", "재수강 건"),
       bookings: stepValue("not_required", "반배정·예약", "수업 생성 시 운영자가 StudioMate에서 직접 처리"),
-      confirmation: stepValue("not_required", "예약 안내", "운영자 수동 예약 뒤 기존 D-1 안내 자동화가 처리"),
+      confirmation: confirmationStep.status && confirmationStep.status !== "pending"
+        ? confirmationStep
+        : stepValue("pending", "예약확정 안내", "수강권 발급 확인 후 알림톡 자동 등록"),
     };
     transaction.update(registrationRef, {
       mode: job.mode || currentJob.mode,
@@ -545,7 +548,7 @@ async function completeStudioMateRegistration(ref, claimToken, { mode, memberId,
   return {
     status: state.status,
     detail: state.status === "completed"
-      ? "회원·수강권 검증 완료 · 반배정·예약은 운영자 수동 처리"
+      ? "회원·수강권·안내 검증 완료 · 반배정·예약은 운영자 수동 처리"
       : `수강권 발급 완료 · ${state.nextAction}`,
   };
 }

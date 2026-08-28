@@ -99,13 +99,13 @@ try {
           if (registrations) {
             registrations.innerHTML = `
               <article class="instructor-registration-item">
-                <div class="instructor-registration-item-head"><div><strong>반응형검증강사</strong><span>2026-09-19 · ***-****-5678</span></div><span class="pill warn">예약 대기</span></div>
+                <div class="instructor-registration-item-head"><div><strong>반응형검증강사</strong><span>2026-09-19 · ***-****-5678</span></div><span class="pill warn">안내 확인필요</span></div>
                 <div class="instructor-registration-meta"><span>재수강 강사회원</span><span>강사레슨 (2T)</span><span>카드</span><span>최근 2026.08.28 18:00</span></div>
                 <ol class="instructor-registration-progress" aria-label="강사레슨 등록 진행 단계">
-                  ${["회원", "수강권", "가입서", "메모", "예약", "안내"].map((label, index) => `<li class="${index < 4 ? "is-done" : index === 4 ? "is-active" : "is-pending"}"><span>${index + 1}</span><small>${label}</small><em>${index < 4 ? "완료" : "대기"}</em></li>`).join("")}
+                  ${["회원", "수강권", "안내", "가입서", "메모", "예약"].map((label, index) => `<li class="${index < 2 ? "is-done" : index === 2 ? "is-error" : "is-pending"}"><span>${index + 1}</span><small>${label}</small><em>${index < 2 ? "완료" : index === 2 ? "확인필요" : "대기"}</em></li>`).join("")}
                 </ol>
-                <div class="instructor-registration-next"><strong>다음 단계</strong><span>StudioMate 반배정·예약 후 CORE에서 예약 완료 확인</span></div>
-                <div class="instructor-registration-actions"><button class="secondary-action instructor-confirmation-action" type="button">예약 완료 확인·안내 발송</button><small>StudioMate 활성 예약 두 세션과 캘린더를 다시 확인한 뒤 1회 발송합니다.</small></div>
+                <div class="instructor-registration-next is-error"><strong>확인할 내용</strong><span>수강권 발급 안내 후보를 다시 확인합니다.</span></div>
+                <div class="instructor-registration-actions"><button class="secondary-action instructor-confirmation-action" type="button">안내 재처리</button><small>수강권 발급 증거와 캘린더를 다시 확인한 뒤 발송 대기열에 등록합니다.</small></div>
               </article>`;
           }
         });

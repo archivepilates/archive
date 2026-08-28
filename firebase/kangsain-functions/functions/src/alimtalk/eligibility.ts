@@ -26,7 +26,10 @@ import {
   alimtalkTemplateTargetRule,
   solapiButtonUrlLengthIssue,
 } from "./templateTargetRules";
-import { isValidInstructorLessonManagementNumber, normalizeInstructorLessonManagementNumber } from "./instructorLessonManagement";
+import {
+  isValidInstructorLessonManagementNumber,
+  normalizeInstructorLessonManagementNumber,
+} from "./instructorLessonManagement";
 import { hasExplicitAlimtalkTestOverride, isAlimtalkTestRecipient } from "./testRecipients";
 
 export const RETRYABLE_TEMPLATE_STATUS_PREFIX = "템플릿 상태 확인 일시 실패:";
@@ -91,7 +94,10 @@ export async function autoSendabilityIssue(candidate: AlimtalkCandidateDoc, toda
     return "추천식단 리포트 짧은 링크 없음";
   if (rule?.requiresManagementNumber) {
     const rawManagementNumber = String(
-      candidate.payload?.managementNumber || candidate.payload?.materialNumber || candidate.payload?.archiveMethodId || "",
+      candidate.payload?.managementNumber ||
+        candidate.payload?.materialNumber ||
+        candidate.payload?.archiveMethodId ||
+        "",
     );
     if (!rawManagementNumber) return "강사레슨 수업자료 관리번호 없음";
     const managementNumber = normalizeInstructorLessonManagementNumber(rawManagementNumber);
@@ -127,8 +133,7 @@ export function privateSurveyTemplateContractIssue(
   candidate: AlimtalkCandidateDoc,
   state: AlimtalkTemplateState | null = null,
   configuredTemplateCode = String(
-    process.env.PRIVATE_SURVEY_ALIMTALK_TEMPLATE_ID ||
-      NATIVE_PRIVATE_SURVEY_ALIMTALK_TEMPLATE_CODE,
+    process.env.PRIVATE_SURVEY_ALIMTALK_TEMPLATE_ID || NATIVE_PRIVATE_SURVEY_ALIMTALK_TEMPLATE_CODE,
   ).trim(),
 ): string {
   if (candidate.type !== "private_survey") return "";
@@ -311,16 +316,14 @@ function requiredPayloadIssue(candidate: AlimtalkCandidateDoc): string {
     if (!payload.shortLinkId) return "추천식단 설문 짧은 링크 없음";
     if (!payload.reportLinkId) return "추천식단 리포트 짧은 링크 없음";
   }
-  if (candidate.type === "recommended_meal_report" && !payload.shortLinkId)
-    return "추천식단 리포트 짧은 링크 없음";
+  if (candidate.type === "recommended_meal_report" && !payload.shortLinkId) return "추천식단 리포트 짧은 링크 없음";
   if (candidate.type === "instructor_lesson_confirmation") {
     if (!payload.registrationId) return "강사레슨 등록 ID 없음";
     if (!payload.lessonDate || !payload.lessonDateText) return "강사레슨 수업일 변수 없음";
     if (!payload.lessonTimeText) return "강사레슨 수업시간 변수 없음";
     if (!payload.lessonComposition) return "강사레슨 수업구성 변수 없음";
-    if (String(payload.bookingIds || "").split(",").filter(Boolean).length !== 2) {
-      return "강사레슨 활성 예약 두 세션 확인 안 됨";
-    }
+    if (String(payload.ticketName || "").replace(/\s+/g, "") !== "강사레슨(2T)")
+      return "강사레슨 수강권 발급 변수 없음";
   }
   if (candidate.type === "private_survey" || candidate.type === "group_survey") {
     if (!(payload.surveyId || payload.responseId) || !payload.accessToken) return "설문 링크 변수 없음";

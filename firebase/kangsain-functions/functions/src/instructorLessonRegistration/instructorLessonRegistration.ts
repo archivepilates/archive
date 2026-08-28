@@ -89,14 +89,14 @@ export async function operatorCreateInstructorLessonRegistrationHandler(
       member: step("pending", "회원·등급 확인"),
       ticket: step("pending", `${TICKET_NAME} 발급`),
       bookings: {
-        ...step("pending", "StudioMate 예약"),
-        detail: "반배정 후 두 세션을 운영자가 직접 예약",
+        ...step("not_required", "반배정·예약(수동)"),
+        detail: "수강권 발급 후 운영자가 StudioMate에서 직접 처리",
       },
       eformsign: step("pending", "강사회원 가입서 판정"),
       memo: step("pending", "가입서 완료 메모"),
       confirmation: {
         ...step("pending", "예약확정 안내"),
-        detail: "두 세션 예약 확인 후 승인 템플릿으로 1회 발송",
+        detail: "수강권 발급 검증 후 승인 템플릿으로 자동 1회 발송",
       },
     };
     const source = {

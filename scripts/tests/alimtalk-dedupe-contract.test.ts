@@ -121,6 +121,10 @@ test("CORE instructor confirmation keeps staff exclusion unless a separate test 
   assert.match(instructorLessonConfirmationSource, /queuedBy: "auto"/);
   assert.match(
     instructorLessonConfirmationSource,
-    /reviewedByUid: "system:core-instructor-lesson-confirmation"/,
+    /system:instructor-lesson-ticket-issued/,
+  );
+  assert.match(
+    instructorLessonConfirmationSource,
+    /operatorChecks\?\.paymentConfirmed/,
   );
 });

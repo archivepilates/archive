@@ -1,10 +1,9 @@
 import assert from "node:assert/strict";
 import test from "node:test";
-import type { BookingDoc } from "../../firebase/kangsain-functions/functions/src/types/models";
 import {
-  activeInstructorLessonBooking,
   instructorLessonConfirmationCandidateId,
   instructorLessonConfirmationScheduleFor,
+  instructorLessonTicketConfirmationIssue,
 } from "../../firebase/kangsain-functions/functions/src/instructorLessonRegistration/instructorLessonConfirmation";
 import { deriveInstructorLessonRegistrationState } from "../../firebase/kangsain-functions/functions/src/instructorLessonRegistration/instructorLessonRegistrationState";
 
@@ -48,39 +47,32 @@ test("예약확정 후보는 전화번호 표기 차이를 정규화하고 수�
   );
 });
 
-test("취소·대체·비정규 예약은 예약확정 발송 원천에서 제외한다", () => {
-  assert.equal(activeInstructorLessonBooking(booking()), true);
+test("예약 없이도 운영자 확인과 강사레슨 수강권 발급이 검증되면 안내 원천이 된다", () => {
+  const registration = issuedTicketRegistration();
+  assert.equal(instructorLessonTicketConfirmationIssue(registration), "");
   assert.equal(
-    activeInstructorLessonBooking(booking({ appStatus: "cancel" })),
-    false,
+    instructorLessonTicketConfirmationIssue({
+      ...registration,
+      steps: { ...registration.steps, ticket: { status: "pending" } },
+    }),
+    "강사레슨 (2T) 수강권 발급 확인 안 됨",
   );
   assert.equal(
-    activeInstructorLessonBooking(
-      booking({ sourceStatus: "missing_from_latest_reservation_import" }),
-    ),
-    false,
-  );
-  assert.equal(
-    activeInstructorLessonBooking(
-      booking({ supersededByBookingId: "booking-new" }),
-    ),
-    false,
-  );
-  assert.equal(
-    activeInstructorLessonBooking(
-      booking({ archiveBooking: { isCanonical: false } }),
-    ),
-    false,
+    instructorLessonTicketConfirmationIssue({
+      ...registration,
+      operatorChecks: { paymentConfirmed: true, seatConfirmed: false },
+    }),
+    "입금·수강 접수 운영자 확인 없음",
   );
 });
 
-test("예약과 알림톡 결과가 모두 확인돼야 등록 완료가 된다", () => {
+test("예약 상태와 무관하게 알림톡 결과가 확인되면 등록 완료가 된다", () => {
   const ready = {
     member: { status: "verified" },
     ticket: { status: "verified" },
     eformsign: { status: "not_required" },
     memo: { status: "not_required" },
-    bookings: { status: "verified" },
+    bookings: { status: "pending" },
   };
   assert.equal(
     deriveInstructorLessonRegistrationState({
@@ -98,36 +90,18 @@ test("예약과 알림톡 결과가 모두 확인돼야 등록 완료가 된다"
   );
 });
 
-function booking(overrides: Record<string, unknown> = {}): BookingDoc {
+function issuedTicketRegistration(): Record<string, any> {
   return {
-    bookingId: "booking-1",
-    lectureId: "lecture-1",
     studioId: "5330",
-    memberId: "member-1",
+    status: "processing",
     memberName: "테스트",
     memberPhone: "01012345678",
-    memberRegisteredAt: null,
-    staffId: "staff-1",
-    staffName: "강사",
-    lectureDate: "2026-09-19",
-    lectureStartAt: null,
-    lectureEndAt: null,
-    sourceStatus: "예약",
-    appStatus: "reserved",
-    attendanceStatus: "unchecked",
-    syncStatus: "synced",
     ticketName: "강사레슨 (2T)",
-    ticketRemainingCount: 2,
-    ticketExpiresAt: null,
-    ticketExpiryLevel: "normal",
-    memberTagIds: [],
-    lastMemoPreview: "",
-    lastMemoAt: null,
-    lastChangedBy: "test",
-    sourceHash: "source",
-    sourceUpdatedAt: null,
-    syncedAt: null as never,
-    updatedAt: null as never,
-    ...overrides,
-  } as BookingDoc;
+    operatorChecks: { paymentConfirmed: true, seatConfirmed: true },
+    steps: {
+      member: { status: "verified" },
+      ticket: { status: "verified" },
+    },
+    evidence: { studiomateMemberId: "member-1", ticketId: "ticket-1" },
+  };
 }

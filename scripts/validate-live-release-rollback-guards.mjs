@@ -1187,9 +1187,9 @@ const guardGroups = [
     ],
   },
   {
-    id: "instructor-lesson-booking-confirmation-v1",
+    id: "instructor-lesson-ticket-confirmation-v1",
     reason:
-      "강사레슨 수동 예약 뒤 예약확정 안내가 승인 템플릿, 활성 두 세션, 캘린더 계약과 영구 중복 차단 없이 발송되는 회귀를 막습니다.",
+      "강사레슨 수강권 발급 뒤 예약확정 안내가 승인 템플릿, 캘린더 계약과 영구 중복 차단 없이 발송되거나 다시 예약 의존으로 돌아가는 회귀를 막습니다.",
     files: [
       {
         file: "firebase/kangsain-functions/functions/src/alimtalk/templates.ts",
@@ -1204,12 +1204,15 @@ const guardGroups = [
         file: "firebase/kangsain-functions/functions/src/instructorLessonRegistration/instructorLessonConfirmation.ts",
         markers: [
           "confirmInstructorLessonBookingAndQueueAlimtalkHandler",
+          "queueInstructorLessonConfirmationOnTicketVerifiedHandler",
+          "queueInstructorLessonConfirmationForIssuedTicket",
+          "instructorLessonTicketConfirmationIssue",
           "instructorLessonConfirmationSendabilityIssue",
           "syncInstructorLessonConfirmationOutcome",
-          "StudioMate 활성 강사레슨 예약",
+          "${TICKET_NAME} 수강권 발급 검증 완료",
           "assertCalendarReady",
           'queuedBy: "auto"',
-          'reviewedByUid: "system:core-instructor-lesson-confirmation"',
+          "system:instructor-lesson-ticket-issued",
         ],
       },
       {
@@ -1226,15 +1229,15 @@ const guardGroups = [
         file: "core/assets/app.js",
         markers: [
           "confirmInstructorLessonBookingAndQueueAlimtalk",
-          "예약 완료 확인·안내 발송",
-          "StudioMate 활성 예약 두 세션과 캘린더를 다시 확인",
+          "안내 재처리",
+          "수강권 발급 증거와 캘린더를 다시 확인",
         ],
       },
       {
         file: "core/rules/index.html",
         markers: [
           "강사레슨 예약확정 안내 v1",
-          "StudioMate 활성 예약 두 세션",
+          "강사레슨 (2T) 수강권 발급이 검증되면",
           "발송 직전 다시 확인",
         ],
       },

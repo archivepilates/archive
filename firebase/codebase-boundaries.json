@@ -116,11 +116,12 @@
         "queueRefundStudioMateSms",
         "getInstructorLessonRegistrationDashboard",
         "operatorCreateInstructorLessonRegistration",
-        "confirmInstructorLessonBookingAndQueueAlimtalk"
+        "confirmInstructorLessonBookingAndQueueAlimtalk",
+        "queueInstructorLessonConfirmationOnTicketVerified"
       ],
       "forbidden": [
         "scheduled jobs",
-        "automatic member-facing sends without manager confirmation"
+        "automatic member-facing sends without a manager-approved source"
       ]
     },
     "functions-social": {

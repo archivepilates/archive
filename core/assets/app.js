@@ -6811,8 +6811,8 @@ async function handleInstagramListAction(event) {
   }
 }
 
-const INSTRUCTOR_LESSON_STEP_KEYS = ["member", "ticket", "eformsign", "memo", "bookings", "confirmation"];
-const INSTRUCTOR_LESSON_STEP_LABELS = ["회원", "수강권", "가입서", "메모", "예약", "안내"];
+const INSTRUCTOR_LESSON_STEP_KEYS = ["member", "ticket", "confirmation", "eformsign", "memo", "bookings"];
+const INSTRUCTOR_LESSON_STEP_LABELS = ["회원", "수강권", "안내", "가입서", "메모", "예약"];
 const INSTRUCTOR_LESSON_ACTIVE_STATUSES = new Set([
   "queued",
   "processing",
@@ -7045,18 +7045,16 @@ function instructorLessonConfirmationAction(item) {
   const steps = item?.steps && typeof item.steps === "object" ? item.steps : {};
   const memberReady = steps.member?.status === "verified";
   const ticketReady = steps.ticket?.status === "verified";
-  const onboardingReady = item?.mode !== "new_member"
-    || (steps.eformsign?.status === "verified" && steps.memo?.status === "verified");
   const confirmationStatus = String(steps.confirmation?.status || "pending");
-  if (!memberReady || !ticketReady || !onboardingReady || confirmationStatus === "verified") return "";
+  if (!memberReady || !ticketReady || !["review_required", "failed"].includes(confirmationStatus)) return "";
   return `
     <div class="instructor-registration-actions">
       <button
         type="button"
         class="secondary-action instructor-confirmation-action"
         data-confirm-instructor-lesson="${escapeHtml(item.registrationId || "")}"
-      >예약 완료 확인·안내 발송</button>
-      <small>StudioMate 활성 예약 두 세션과 캘린더를 다시 확인한 뒤 1회 발송합니다.</small>
+      >안내 재처리</button>
+      <small>수강권 발급 증거와 캘린더를 다시 확인한 뒤 발송 대기열에 등록합니다.</small>
     </div>
   `;
 }
@@ -7144,7 +7142,7 @@ async function handleInstructorLessonConfirmation(event) {
   const registrationId = String(button.dataset.confirmInstructorLesson || "").trim();
   if (!registrationId) return;
   button.disabled = true;
-  setInstructorLessonRegistrationStatus("StudioMate 예약 두 세션과 캘린더를 확인하고 있습니다.");
+  setInstructorLessonRegistrationStatus("수강권 발급 증거와 캘린더 설정을 확인하고 있습니다.");
   try {
     const runtime = await initFirebase();
     const callable = runtime.httpsCallable(runtime.functionsClient, "confirmInstructorLessonBookingAndQueueAlimtalk");
@@ -7153,17 +7151,17 @@ async function handleInstructorLessonConfirmation(event) {
     const requeued = Boolean(result?.data?.requeued);
     setInstructorLessonRegistrationStatus(
       requeued
-        ? "예약 변경을 다시 확인해 예약확정 안내를 재등록했습니다."
+        ? "수강권 발급 상태를 다시 확인해 예약확정 안내를 재등록했습니다."
         : duplicate
           ? "기존 예약확정 안내 이력을 확인했습니다."
-          : "예약을 확인했습니다. 예약확정 안내 발송을 대기열에 등록했습니다.",
+          : "수강권 발급을 확인했습니다. 예약확정 안내 발송을 대기열에 등록했습니다.",
       "good",
     );
     state.instructorLessonRegistrationDashboard = await loadInstructorLessonRegistrationDashboard(runtime);
     renderInstructorLessonRegistrationDashboard();
   } catch (error) {
-    if (isPermissionDenied(error)) showLoginGate("강사레슨 예약확정 권한을 확인해 주세요.");
-    setInstructorLessonRegistrationStatus(error?.message || "예약확정 안내 처리에 실패했습니다.", "danger");
+    if (isPermissionDenied(error)) showLoginGate("강사레슨 안내 재처리 권한을 확인해 주세요.");
+    setInstructorLessonRegistrationStatus(error?.message || "예약확정 안내 재처리에 실패했습니다.", "danger");
   } finally {
     button.disabled = false;
   }

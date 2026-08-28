@@ -1,5 +1,5 @@
 import { onCall, onRequest } from "firebase-functions/v2/https";
-import { onDocumentCreated } from "firebase-functions/v2/firestore";
+import { onDocumentCreated, onDocumentWritten } from "firebase-functions/v2/firestore";
 import { getInstructorHomeHandler } from "../callable/getInstructorHome";
 import {
   getKioskParkingJobStatusHandler,
@@ -35,7 +35,10 @@ import {
   getInstructorLessonRegistrationDashboardHandler,
   operatorCreateInstructorLessonRegistrationHandler,
 } from "../instructorLessonRegistration/instructorLessonRegistration";
-import { confirmInstructorLessonBookingAndQueueAlimtalkHandler } from "../instructorLessonRegistration/instructorLessonConfirmation";
+import {
+  confirmInstructorLessonBookingAndQueueAlimtalkHandler,
+  queueInstructorLessonConfirmationOnTicketVerifiedHandler,
+} from "../instructorLessonRegistration/instructorLessonConfirmation";
 import { recommendedMealSurveyApiHandler } from "../mealPlan/recommendedMealSurvey";
 import {
   generateRecommendedMealProgramDraftForSubmittedResponse,
@@ -66,10 +69,7 @@ import {
   submitInstructorEvaluationQuizHandler,
 } from "../staffEvaluation/instructorEvaluationQuiz";
 import { toHttpsError } from "../utils/errors";
-import {
-  getVideoWatchDashboardHandler,
-  videoWatchEventApiHandler,
-} from "../videoAnalytics/videoWatchAnalytics";
+import { getVideoWatchDashboardHandler, videoWatchEventApiHandler } from "../videoAnalytics/videoWatchAnalytics";
 
 const parkingDiscountJobOptions = {
   region: REGION,
@@ -381,3 +381,18 @@ export const confirmInstructorLessonBookingAndQueueAlimtalk = onCall(callableOpt
     throw toHttpsError(err);
   }
 });
+
+export const queueInstructorLessonConfirmationOnTicketVerified = onDocumentWritten(
+  {
+    region: REGION,
+    document: "instructorLessonRegistrations/{registrationId}",
+    retry: true,
+  },
+  async (event) => {
+    await queueInstructorLessonConfirmationOnTicketVerifiedHandler({
+      registrationId: event.params.registrationId,
+      before: event.data?.before.exists ? event.data.before.data() : null,
+      after: event.data?.after.exists ? event.data.after.data() : null,
+    });
+  },
+);

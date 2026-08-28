@@ -2,8 +2,7 @@ import type { CallableRequest } from "firebase-functions/v2/https";
 import { db } from "../config/firebase";
 import { refs } from "../firestore/refs";
 import { requireManager, requireStaff } from "../security/authGuards";
-import type { AlimtalkCandidateDoc, BookingDoc, StaffDoc } from "../types/models";
-import { canonicalizeBookings } from "../utils/canonicalBooking";
+import type { AlimtalkCandidateDoc, StaffDoc } from "../types/models";
 import { nowTimestamp, todayKst } from "../utils/date";
 import { AppError } from "../utils/errors";
 import { stableHash } from "../utils/hash";
@@ -14,7 +13,16 @@ import { deriveInstructorLessonRegistrationState } from "./instructorLessonRegis
 
 const REGISTRATIONS = "instructorLessonRegistrations";
 const TICKET_NAME = "강사레슨 (2T)";
-const REQUIRED_BOOKING_COUNT = 2;
+
+type ConfirmationQueueSource = "ticket_verified_trigger" | "core_recovery";
+
+type ConfirmationQueueContext = {
+  source: ConfirmationQueueSource;
+  expectedStudioId?: string;
+  operatorStaffId?: string;
+  operatorUid?: string;
+  allowRetry?: boolean;
+};
 
 export type InstructorLessonConfirmationSchedule = {
   lessonDate: string;
@@ -55,64 +63,97 @@ export async function confirmInstructorLessonBookingAndQueueAlimtalkHandler(
   if (!/^ilr_[a-f0-9]{24}$/.test(registrationId)) {
     throw new AppError("INVALID_ARGUMENT", "강사레슨 등록 ID를 확인하세요.");
   }
-  const registrationRef = db.collection(REGISTRATIONS).doc(registrationId);
-  const registrationSnapshot = await registrationRef.get();
-  if (!registrationSnapshot.exists) throw new AppError("NOT_FOUND", "강사레슨 등록 건을 찾지 못했습니다.");
-  const registration = registrationSnapshot.data() || {};
-  if (cleanText(registration.studioId, 80) !== staff.studioId) {
-    throw new AppError("PERMISSION_DENIED", "다른 스튜디오의 강사레슨 등록 건입니다.");
-  }
-  const lessonDate = cleanText(registration.lessonDate, 10);
-  const config = instructorLessonConfirmationScheduleFor(lessonDate);
-  if (!config) {
-    throw new AppError("INVALID_ARGUMENT", `${lessonDate || "해당 수업일"} 예약확정 안내 설정이 없습니다.`);
-  }
-  const bookings = await loadConfirmedBookings(registration);
-  assertConfirmedBookingSet(bookings, registration, config);
-  await assertCalendarReady(config);
-
-  const candidateId = instructorLessonConfirmationCandidateId({
-    phone: normalizePhone(registration.memberPhone),
-    lessonDate,
-    managementNumber: config.managementNumber,
+  return queueInstructorLessonConfirmationForIssuedTicket(registrationId, {
+    source: "core_recovery",
+    expectedStudioId: staff.studioId,
+    operatorStaffId: staff.staffId,
+    operatorUid: staff.uid || "",
+    allowRetry: true,
   });
-  const candidateRef = refs.alimtalkCandidate(candidateId);
+}
+
+export async function queueInstructorLessonConfirmationOnTicketVerifiedHandler(input: {
+  registrationId: string;
+  before?: Record<string, any> | null;
+  after?: Record<string, any> | null;
+}): Promise<Record<string, unknown>> {
+  const registrationId = cleanText(input.registrationId, 80);
+  const beforeTicketStatus = cleanText(input.before?.steps?.ticket?.status, 40);
+  const afterTicketStatus = cleanText(input.after?.steps?.ticket?.status, 40);
+  if (afterTicketStatus !== "verified") return { ok: true, skipped: "ticket_not_verified" };
+  if (beforeTicketStatus === "verified") return { ok: true, skipped: "ticket_already_verified" };
+  try {
+    return await queueInstructorLessonConfirmationForIssuedTicket(registrationId, {
+      source: "ticket_verified_trigger",
+    });
+  } catch (error) {
+    if (!(error instanceof AppError) || error.retryable) throw error;
+    await markConfirmationQueueFailure(registrationId, error.message);
+    return { ok: false, registrationId, error: error.message };
+  }
+}
+
+export async function queueInstructorLessonConfirmationForIssuedTicket(
+  registrationId: string,
+  context: ConfirmationQueueContext,
+): Promise<Record<string, unknown>> {
+  const registrationRef = db.collection(REGISTRATIONS).doc(registrationId);
   const now = nowTimestamp();
   const result = await db.runTransaction(async (transaction) => {
-    const [freshRegistrationSnapshot, candidateSnapshot] = await Promise.all([
-      transaction.get(registrationRef),
-      transaction.get(candidateRef),
-    ]);
+    const freshRegistrationSnapshot = await transaction.get(registrationRef);
     if (!freshRegistrationSnapshot.exists) throw new AppError("NOT_FOUND", "강사레슨 등록 건이 삭제되었습니다.");
     const freshRegistration = freshRegistrationSnapshot.data() || {};
+    if (
+      context.expectedStudioId &&
+      cleanText(freshRegistration.studioId, 80) !== cleanText(context.expectedStudioId, 80)
+    ) {
+      throw new AppError("PERMISSION_DENIED", "다른 스튜디오의 강사레슨 등록 건입니다.");
+    }
+    const ticketIssue = instructorLessonTicketConfirmationIssue(freshRegistration);
+    if (ticketIssue) throw new AppError("INVALID_ARGUMENT", ticketIssue);
+    const lessonDate = cleanText(freshRegistration.lessonDate, 10);
+    const config = instructorLessonConfirmationScheduleFor(lessonDate);
+    if (!config) {
+      throw new AppError("INVALID_ARGUMENT", `${lessonDate || "해당 수업일"} 예약확정 안내 설정이 없습니다.`);
+    }
+    const candidateId = instructorLessonConfirmationCandidateId({
+      phone: normalizePhone(freshRegistration.memberPhone),
+      lessonDate,
+      managementNumber: config.managementNumber,
+    });
+    const candidateRef = refs.alimtalkCandidate(candidateId);
+    const candidateSnapshot = await transaction.get(candidateRef);
     const existingCandidate = candidateSnapshot.data();
     const retryableSourceBlock =
       existingCandidate?.status === "skipped" &&
       existingCandidate.reasonCode === "instructor_lesson_confirmation_source_blocked";
-    if (
-      existingCandidate &&
-      !retryableSourceBlock &&
-      ["failed", "skipped"].includes(String(existingCandidate.status || ""))
-    ) {
-      throw new AppError(
-        "INVALID_ARGUMENT",
-        `기존 예약확정 안내가 ${existingCandidate.status} 상태입니다. ${existingCandidate.lastError || "알림톡 이력을 확인하세요."}`,
-      );
-    }
-    const bookingIds = bookings.map((booking) => booking.bookingId).sort();
-    const memberId = cleanText(freshRegistration.evidence?.studiomateMemberId || bookings[0]?.memberId, 80);
+    const managerRetry =
+      context.allowRetry === true &&
+      ["failed", "skipped"].includes(String(existingCandidate?.status || "")) &&
+      existingCandidate?.reasonCode !== "duplicate_send_blocked";
+    const shouldWriteCandidate = !candidateSnapshot.exists || retryableSourceBlock || managerRetry;
+    const existingStatus = String(existingCandidate?.status || "");
+    const confirmationStatus =
+      shouldWriteCandidate || ["queued", "processing"].includes(existingStatus)
+        ? "queued"
+        : existingStatus === "sent" || existingCandidate?.reasonCode === "duplicate_send_blocked"
+          ? "verified"
+          : ["failed", "skipped"].includes(existingStatus)
+            ? "review_required"
+            : "queued";
+    const memberId = cleanText(freshRegistration.evidence?.studiomateMemberId, 80);
+    const ticketId = cleanText(freshRegistration.evidence?.ticketId, 80);
     const nextSteps = {
       ...(freshRegistration.steps || {}),
-      bookings: {
-        status: "verified",
-        label: "StudioMate 예약",
-        detail: `활성 예약 ${bookingIds.length}개 세션 확인`,
-        updatedAt: now,
-      },
       confirmation: {
-        status: existingCandidate?.status === "sent" ? "verified" : "queued",
+        status: confirmationStatus,
         label: "예약확정 안내",
-        detail: existingCandidate?.status === "sent" ? "알림톡 발송 완료" : "승인 템플릿 발송 대기",
+        detail:
+          confirmationStatus === "verified"
+            ? "알림톡 발송 완료"
+            : confirmationStatus === "review_required"
+              ? existingCandidate?.lastError || "기존 알림톡 이력 확인 필요"
+              : "수강권 발급 확인 · 승인 템플릿 발송 대기",
         updatedAt: now,
       },
     };
@@ -126,21 +167,20 @@ export async function confirmInstructorLessonBookingAndQueueAlimtalkHandler(
         steps: nextSteps,
         evidence: {
           ...(freshRegistration.evidence || {}),
-          bookingIds,
           confirmationCandidateId: candidateId,
           confirmationManagementNumber: config.managementNumber,
         },
         status: nextState.status,
         nextAction: nextState.nextAction,
-        lastError: null,
+        lastError: confirmationStatus === "review_required" ? nextSteps.confirmation.detail : null,
         updatedAt: now,
       },
       { merge: true },
     );
-    if (!candidateSnapshot.exists || retryableSourceBlock) {
+    if (shouldWriteCandidate) {
       const candidate: AlimtalkCandidateDoc = {
         candidateId,
-        studioId: staff.studioId,
+        studioId: cleanText(freshRegistration.studioId, 80),
         memberId,
         memberName: cleanText(freshRegistration.memberName, 40),
         memberPhone: normalizePhone(freshRegistration.memberPhone),
@@ -148,7 +188,7 @@ export async function confirmInstructorLessonBookingAndQueueAlimtalkHandler(
         status: "queued",
         templateCode: ALIMTALK_TEMPLATES.instructor_lesson_confirmation.code,
         title: "강사레슨 예약확정",
-        reason: `${config.lessonDateText} StudioMate 활성 예약 ${bookingIds.length}개 세션 확인`,
+        reason: `${config.lessonDateText} ${TICKET_NAME} 수강권 발급 검증 완료`,
         sourceActionKey: candidateId,
         sourceDate: todayKst(),
         payload: {
@@ -159,14 +199,19 @@ export async function confirmInstructorLessonBookingAndQueueAlimtalkHandler(
           lessonTimeText: config.lessonTimeText,
           lessonComposition: config.lessonComposition,
           managementNumber: config.managementNumber,
-          bookingIds: bookingIds.join(","),
-          operatorStaffId: staff.staffId,
-          operatorUid: staff.uid || "",
+          ticketName: TICKET_NAME,
+          ticketId,
+          operatorStaffId: cleanText(context.operatorStaffId || freshRegistration.createdBy?.staffId, 80),
+          operatorUid: cleanText(context.operatorUid, 160),
+          queueSource: context.source,
         },
         attempts: 0,
         maxAttempts: 2,
         queuedBy: "auto",
-        reviewedByUid: "system:core-instructor-lesson-confirmation",
+        reviewedByUid:
+          context.source === "ticket_verified_trigger"
+            ? "system:instructor-lesson-ticket-issued"
+            : "system:core-instructor-lesson-confirmation",
         reviewedAt: now,
         lastError: null,
         createdAt: existingCandidate?.createdAt || now,
@@ -176,19 +221,19 @@ export async function confirmInstructorLessonBookingAndQueueAlimtalkHandler(
     }
     return {
       duplicate: candidateSnapshot.exists,
-      requeued: retryableSourceBlock,
-      candidateStatus: existingCandidate?.status || "queued",
-      bookingIds,
+      requeued: retryableSourceBlock || managerRetry,
+      candidateStatus: shouldWriteCandidate ? "queued" : existingStatus || "queued",
       memberId,
+      ticketId,
+      candidateId,
+      lessonDate,
+      managementNumber: config.managementNumber,
     };
   });
 
   return {
     ok: true,
     registrationId,
-    candidateId,
-    lessonDate,
-    managementNumber: config.managementNumber,
     ...result,
   };
 }
@@ -199,17 +244,22 @@ export async function instructorLessonConfirmationSendabilityIssue(candidate: Al
   const registrationSnapshot = registrationId ? await db.collection(REGISTRATIONS).doc(registrationId).get() : null;
   if (!registrationSnapshot?.exists) return "강사레슨 등록 원천 없음";
   const registration = registrationSnapshot.data() || {};
+  const ticketIssue = instructorLessonTicketConfirmationIssue(registration);
+  if (ticketIssue) return ticketIssue;
   const lessonDate = cleanText(candidate.payload?.lessonDate, 10);
   const config = instructorLessonConfirmationScheduleFor(lessonDate);
   if (!config || config.managementNumber !== cleanText(candidate.payload?.managementNumber, 100)) {
     return "강사레슨 예약확정 일정·관리번호 계약 불일치";
   }
-  const bookingIds = cleanText(candidate.payload?.bookingIds, 1000).split(",").filter(Boolean);
-  if (bookingIds.length !== REQUIRED_BOOKING_COUNT) return "강사레슨 활성 예약 두 세션 확인 안 됨";
-  const snapshots = await db.getAll(...bookingIds.map((bookingId) => refs.booking(bookingId)));
-  const bookings = snapshots.filter((snapshot) => snapshot.exists).map((snapshot) => snapshot.data() as BookingDoc);
+  if (normalizePhone(candidate.memberPhone) !== normalizePhone(registration.memberPhone)) {
+    return "강사레슨 수강권 회원과 알림톡 수신자 불일치";
+  }
+  const candidateTicketId = cleanText(candidate.payload?.ticketId, 80);
+  const currentTicketId = cleanText(registration.evidence?.ticketId, 80);
+  if (candidateTicketId && currentTicketId && candidateTicketId !== currentTicketId) {
+    return "강사레슨 수강권 발급 증거 불일치";
+  }
   try {
-    assertConfirmedBookingSet(bookings, registration, config);
     await assertCalendarReady(config);
   } catch (error) {
     return error instanceof Error ? error.message : String(error);
@@ -306,69 +356,50 @@ export function instructorLessonConfirmationCandidateId(input: {
   }).slice(0, 24)}`;
 }
 
-export function activeInstructorLessonBooking(booking: BookingDoc): boolean {
-  if (booking.appStatus !== "reserved") return false;
-  if ((booking as BookingDoc & { active?: boolean }).active === false) return false;
-  if ((booking as BookingDoc & { archiveBooking?: { isCanonical?: boolean } }).archiveBooking?.isCanonical === false)
-    return false;
-  if (cleanText(booking.supersededByBookingId, 100)) return false;
-  return !/(missing_from_latest_reservation_import|superseded|duplicate|stale|lecture_deleted|deleted|cancel)/i.test(
-    cleanText(booking.sourceStatus, 160),
-  );
+export function instructorLessonTicketConfirmationIssue(registration: Record<string, any>): string {
+  if (cleanText(registration.status, 40) === "cancelled") return "취소된 강사레슨 등록 건";
+  if (registration.operatorChecks?.paymentConfirmed !== true || registration.operatorChecks?.seatConfirmed !== true) {
+    return "입금·수강 접수 운영자 확인 없음";
+  }
+  if (cleanText(registration.steps?.member?.status, 40) !== "verified") return "StudioMate 회원 확인 안 됨";
+  if (cleanText(registration.steps?.ticket?.status, 40) !== "verified") {
+    return `${TICKET_NAME} 수강권 발급 확인 안 됨`;
+  }
+  if (normalizeComparable(registration.ticketName) !== normalizeComparable(TICKET_NAME)) {
+    return "강사레슨 수강권 종류 불일치";
+  }
+  if (!cleanText(registration.evidence?.studiomateMemberId, 80)) return "StudioMate 회원 ID 없음";
+  return "";
 }
 
-async function loadConfirmedBookings(registration: Record<string, any>): Promise<BookingDoc[]> {
-  const lessonDate = cleanText(registration.lessonDate, 10);
-  const phone = normalizePhone(registration.memberPhone);
-  const memberId = cleanText(registration.evidence?.studiomateMemberId, 80);
-  const snapshot = await refs.bookings().where("lectureDate", "==", lessonDate).get();
-  const matches = snapshot.docs
-    .map((doc) => doc.data())
-    .filter((booking) => booking.studioId === registration.studioId)
-    .filter((booking) => normalizePhone(booking.memberPhone) === phone || (memberId && booking.memberId === memberId));
-  return canonicalizeBookings(matches)
-    .filter(activeInstructorLessonBooking)
-    .filter(isInstructorLessonBooking)
-    .sort((a, b) => timestampMillis(a.lectureStartAt) - timestampMillis(b.lectureStartAt));
-}
-
-function assertConfirmedBookingSet(
-  bookings: BookingDoc[],
-  registration: Record<string, any>,
-  config: InstructorLessonConfirmationSchedule,
-): void {
-  if (bookings.length !== REQUIRED_BOOKING_COUNT) {
-    throw new AppError(
-      "INVALID_ARGUMENT",
-      `StudioMate 활성 강사레슨 예약이 ${bookings.length}건입니다. 두 세션 예약을 완료한 뒤 다시 확인하세요.`,
+async function markConfirmationQueueFailure(registrationId: string, detail: string): Promise<void> {
+  const registrationRef = db.collection(REGISTRATIONS).doc(registrationId);
+  await db.runTransaction(async (transaction) => {
+    const snapshot = await transaction.get(registrationRef);
+    if (!snapshot.exists) return;
+    const registration = snapshot.data() || {};
+    const steps = {
+      ...(registration.steps || {}),
+      confirmation: {
+        status: "review_required",
+        label: "예약확정 안내",
+        detail: cleanText(detail, 240),
+        updatedAt: nowTimestamp(),
+      },
+    };
+    const nextState = deriveInstructorLessonRegistrationState({ mode: registration.mode, steps });
+    transaction.set(
+      registrationRef,
+      {
+        steps,
+        status: nextState.status,
+        nextAction: nextState.nextAction,
+        lastError: cleanText(detail, 500),
+        updatedAt: nowTimestamp(),
+      },
+      { merge: true },
     );
-  }
-  const phone = normalizePhone(registration.memberPhone);
-  const memberId = cleanText(registration.evidence?.studiomateMemberId, 80);
-  const lessonIds = new Set<string>();
-  for (const booking of bookings) {
-    if (!activeInstructorLessonBooking(booking))
-      throw new AppError("INVALID_ARGUMENT", "취소되거나 유효하지 않은 예약이 포함되어 있습니다.");
-    if (booking.lectureDate !== config.lessonDate)
-      throw new AppError("INVALID_ARGUMENT", "예약 수업일이 등록 수업일과 다릅니다.");
-    if (normalizePhone(booking.memberPhone) !== phone && (!memberId || booking.memberId !== memberId)) {
-      throw new AppError("INVALID_ARGUMENT", "예약 회원이 강사레슨 등록 회원과 다릅니다.");
-    }
-    if (!isInstructorLessonBooking(booking))
-      throw new AppError("INVALID_ARGUMENT", "강사레슨 수강권 예약이 아닌 항목이 포함되어 있습니다.");
-    lessonIds.add(booking.lectureId || `${timestampMillis(booking.lectureStartAt)}`);
-  }
-  if (lessonIds.size !== REQUIRED_BOOKING_COUNT) {
-    throw new AppError("INVALID_ARGUMENT", "같은 세션의 중복 예약이 감지되었습니다.");
-  }
-  const startTime = kstTime(Math.min(...bookings.map((booking) => timestampMillis(booking.lectureStartAt))));
-  const endTime = kstTime(Math.max(...bookings.map((booking) => timestampMillis(booking.lectureEndAt))));
-  if (startTime !== config.expectedStartTime || endTime !== config.expectedEndTime) {
-    throw new AppError(
-      "INVALID_ARGUMENT",
-      `예약 시간 ${startTime || "-"}~${endTime || "-"}이 안내 시간 ${config.lessonTimeText}과 다릅니다.`,
-    );
-  }
+  });
 }
 
 async function assertCalendarReady(config: InstructorLessonConfirmationSchedule): Promise<void> {
@@ -408,34 +439,6 @@ function schedule(input: {
   };
 }
 
-function isInstructorLessonBooking(booking: BookingDoc): boolean {
-  return /강사\s*레슨/i.test(
-    [booking.ticketName, booking.ticketClassType, booking.ticketType].filter(Boolean).join(" "),
-  );
-}
-
-function kstTime(value: number): string {
-  if (!Number.isFinite(value) || value <= 0) return "";
-  return new Intl.DateTimeFormat("en-GB", {
-    timeZone: "Asia/Seoul",
-    hour: "2-digit",
-    minute: "2-digit",
-    hour12: false,
-  }).format(new Date(value));
-}
-
-function timestampMillis(value: unknown): number {
-  if (!value) return 0;
-  if (typeof (value as { toMillis?: unknown }).toMillis === "function") {
-    return Number((value as { toMillis: () => number }).toMillis()) || 0;
-  }
-  if (typeof (value as { toDate?: unknown }).toDate === "function") {
-    return Number((value as { toDate: () => Date }).toDate().getTime()) || 0;
-  }
-  const parsed = Date.parse(String(value));
-  return Number.isFinite(parsed) ? parsed : 0;
-}
-
 async function manager(request: CallableRequest): Promise<StaffDoc> {
   const staff = await requireStaff(request);
   requireManager(staff);
@@ -451,6 +454,13 @@ function cleanText(value: unknown, maxLength: number): string {
   return String(value || "")
     .trim()
     .slice(0, maxLength);
+}
+
+function normalizeComparable(value: unknown): string {
+  return String(value || "")
+    .replace(/\s+/g, "")
+    .trim()
+    .toLowerCase();
 }
 
 export function registrationIdForConfirmation(studioId: string, phone: string, lessonDate: string): string {
