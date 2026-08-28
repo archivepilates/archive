@@ -41,14 +41,16 @@ const checks = [
     "seatConfirmed",
     "studiomateInstructorLessonJobs",
     "DASHBOARD_STATUSES",
-    ".count().get()",
+    "MAX_DASHBOARD_QUERY_ITEMS",
+    "buildInstructorLessonRegistrationCounts",
+    "isInstructorLessonSyntheticTest",
     "requireManager",
     "반배정 후 두 세션을 운영자가 직접 예약",
     "loadInstructorLessonSchedule",
     "buildInstructorLessonScheduleSummaries",
     "INSTRUCTOR_LESSON_DEFAULT_CAPACITY",
     "두 세션 예약 확인 후 승인 템플릿으로 1회 발송",
-  ], ["waiting_class_assignment", "waiting_assignment", "expectedSessionCount"]],
+  ], ["waiting_class_assignment", "waiting_assignment", "expectedSessionCount", ".count().get()"]],
   ["firebase/kangsain-functions/functions/src/instructorLessonRegistration/instructorLessonConfirmation.ts", [
     "confirmInstructorLessonBookingAndQueueAlimtalkHandler",
     "instructorLessonConfirmationSendabilityIssue",
@@ -78,6 +80,9 @@ const checks = [
     "registrationCount",
     "capacitySource",
     "archiveBooking?.isCanonical === false",
+    "currentInstructorLessonTicketDates",
+    "excludedTicketOnlyMember",
+    "newMemberSimulation",
   ], ["db.collection(", "batch.set(", "transaction.set("]],
   ["firebase/kangsain-functions/firestore.rules", [
     "match /instructorLessonRegistrations/{registrationId}",
@@ -155,6 +160,8 @@ const checks = [
     "수동 예약 여부는 완료 조건에 포함하지 않습니다",
     "실제 활성 예약의 고유 인원을 우선",
     "기본 정원은 10명",
+    "현재 활성 강사레슨 (2T) 수강권의 시작일",
+    "합성 테스트는 접수·완료·좌석 카운트에서 제외",
   ], ["예약을 자동 재개", "반배정 대기로 유지"]],
 ];
 

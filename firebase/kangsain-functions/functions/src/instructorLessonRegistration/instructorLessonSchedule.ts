@@ -19,6 +19,23 @@ export type InstructorLessonScheduleSummary = {
   registrationCount: number;
 };
 
+export function isInstructorLessonSyntheticTest(item: SourceRecord): boolean {
+  return item?.newMemberSimulation === true || item?.evidence?.newMemberSimulation === true;
+}
+
+export function buildInstructorLessonRegistrationCounts(
+  registrations: SourceRecord[],
+  statuses: readonly string[],
+): Record<string, number> {
+  const counts = Object.fromEntries(statuses.map((status) => [status, 0]));
+  for (const registration of registrations) {
+    if (isInstructorLessonSyntheticTest(registration)) continue;
+    const status = cleanText(registration.status).toLowerCase();
+    if (Object.prototype.hasOwnProperty.call(counts, status)) counts[status] += 1;
+  }
+  return counts;
+}
+
 export function buildInstructorLessonScheduleSummaries(input: {
   startDate: string;
   endDate: string;
@@ -57,14 +74,23 @@ export function buildInstructorLessonScheduleSummaries(input: {
     dates.add(date);
   }
 
+  const syntheticMembers = new Map<string, Set<string>>();
+  for (const registration of input.registrations || []) {
+    if (!isInstructorLessonSyntheticTest(registration)) continue;
+    const date = dateKey(registration.lessonDate);
+    const memberKey = memberIdentity(registration);
+    if (inRange(date, startDate, endDate) && memberKey) addSetValue(syntheticMembers, date, memberKey);
+  }
+
   const ticketMembers = new Map<string, Set<string>>();
   for (const holder of input.ticketHolders || []) {
-    if (!hasInstructorLessonTicket(holder)) continue;
+    if (!hasInstructorLessonTicket(holder) || excludedTicketOnlyMember(holder)) continue;
     const memberKey = memberIdentity(holder);
     if (!memberKey) continue;
-    for (const rawDate of Array.isArray(holder.instructorLessonDates) ? holder.instructorLessonDates : []) {
+    for (const rawDate of currentInstructorLessonTicketDates(holder)) {
       const date = dateKey(rawDate);
       if (!inRange(date, startDate, endDate)) continue;
+      if (syntheticMembers.get(date)?.has(memberKey)) continue;
       addSetValue(ticketMembers, date, memberKey);
       dates.add(date);
     }
@@ -72,6 +98,7 @@ export function buildInstructorLessonScheduleSummaries(input: {
 
   const registrationMembers = new Map<string, Set<string>>();
   for (const registration of input.registrations || []) {
+    if (isInstructorLessonSyntheticTest(registration)) continue;
     const date = dateKey(registration.lessonDate);
     const status = cleanText(registration.status).toLowerCase();
     if (!inRange(date, startDate, endDate) || ["cancelled", "canceled", "rejected"].includes(status)) continue;
@@ -170,6 +197,22 @@ function hasInstructorLessonTicket(holder: SourceRecord): boolean {
   return names.some((name: unknown) => /강사\s*레슨/i.test(cleanText(name)));
 }
 
+function currentInstructorLessonTicketDates(holder: SourceRecord): unknown[] {
+  if (Array.isArray(holder.activeTickets)) {
+    return holder.activeTickets
+      .filter((ticket: SourceRecord) => /강사\s*레슨/i.test(cleanText(ticket?.name || ticket?.ticketName)))
+      .map((ticket: SourceRecord) => ticket?.availableFrom || ticket?.startAt || ticket?.startDate)
+      .filter(Boolean);
+  }
+  return Array.isArray(holder.instructorLessonDates) ? holder.instructorLessonDates : [];
+}
+
+function excludedTicketOnlyMember(holder: SourceRecord): boolean {
+  return /(스텝|직원|운영자|스튜디오\s*오너|부원장|원장)/i.test(
+    cleanText(holder.memberGrade || holder.grade || holder.userGrade),
+  );
+}
+
 function concurrentLectureCapacity(lectures: SourceRecord[]): number {
   const slots = new Map<string, SourceRecord[]>();
   for (const lecture of lectures) {
@@ -223,9 +266,18 @@ function inRange(value: unknown, startDate: string, endDate: string): boolean {
 }
 
 function dateKey(value: unknown): string {
-  const text = cleanText(value);
+  const text = typeof value === "string" ? cleanText(value) : "";
   const match = text.match(/^(20\d{2})[-./]?(\d{2})[-./]?(\d{2})/);
-  return match ? `${match[1]}-${match[2]}-${match[3]}` : "";
+  if (match) return `${match[1]}-${match[2]}-${match[3]}`;
+  const timestamp = millis(value);
+  return timestamp
+    ? new Intl.DateTimeFormat("en-CA", {
+        timeZone: "Asia/Seoul",
+        year: "numeric",
+        month: "2-digit",
+        day: "2-digit",
+      }).format(new Date(timestamp))
+    : "";
 }
 
 function normalizePhone(value: unknown): string {

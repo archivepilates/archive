@@ -6,15 +6,18 @@ import type { StaffDoc } from "../types/models";
 import { nowTimestamp } from "../utils/date";
 import { AppError } from "../utils/errors";
 import {
+  buildInstructorLessonRegistrationCounts,
   buildInstructorLessonScheduleSummaries,
   INSTRUCTOR_LESSON_DEFAULT_CAPACITY,
   instructorLessonScheduleDateRange,
+  isInstructorLessonSyntheticTest,
 } from "./instructorLessonSchedule";
 
 const REGISTRATIONS = "instructorLessonRegistrations";
 const STUDIOMATE_JOBS = "studiomateInstructorLessonJobs";
 const TICKET_NAME = "강사레슨 (2T)";
 const MAX_DASHBOARD_ITEMS = 100;
+const MAX_DASHBOARD_QUERY_ITEMS = 200;
 const DASHBOARD_STATUSES = [
   "queued",
   "processing",
@@ -166,20 +169,23 @@ export async function getInstructorLessonRegistrationDashboardHandler(
   const staff = await manager(request);
   const requestedLimit = Math.max(1, Math.min(MAX_DASHBOARD_ITEMS, Number(request.data?.limit || 50)));
   const registrations = db.collection(REGISTRATIONS).where("studioId", "==", staff.studioId);
-  const [snapshot, countSnapshots, schedule] = await Promise.all([
-    registrations.orderBy("updatedAt", "desc").limit(MAX_DASHBOARD_ITEMS).get(),
-    Promise.all(DASHBOARD_STATUSES.map((status) => registrations.where("status", "==", status).count().get())),
+  const [snapshot, schedule] = await Promise.all([
+    registrations.orderBy("updatedAt", "desc").limit(MAX_DASHBOARD_QUERY_ITEMS).get(),
     loadInstructorLessonSchedule(staff.studioId),
   ]);
-  const allItems = snapshot.docs.map((doc) => safeRegistration(doc.id, doc.data()));
-  const counts = Object.fromEntries(
-    DASHBOARD_STATUSES.map((status, index) => [status, Number(countSnapshots[index]?.data().count || 0)]),
+  const productionRows = snapshot.docs
+    .map((doc) => ({ id: doc.id, data: doc.data() }))
+    .filter((item) => !isInstructorLessonSyntheticTest(item.data));
+  const allItems = productionRows.map((item) => safeRegistration(item.id, item.data));
+  const counts = buildInstructorLessonRegistrationCounts(
+    productionRows.map((item) => item.data),
+    DASHBOARD_STATUSES,
   );
   return {
     ok: true,
     generatedAt: new Date().toISOString(),
     counts,
-    countsLimited: snapshot.size === MAX_DASHBOARD_ITEMS,
+    countsLimited: snapshot.size === MAX_DASHBOARD_QUERY_ITEMS,
     items: allItems.slice(0, requestedLimit),
     schedule,
   };

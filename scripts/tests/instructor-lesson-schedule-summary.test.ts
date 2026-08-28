@@ -1,6 +1,7 @@
 import assert from "node:assert/strict";
 import test from "node:test";
 import {
+  buildInstructorLessonRegistrationCounts,
   buildInstructorLessonScheduleSummaries,
   INSTRUCTOR_LESSON_DEFAULT_CAPACITY,
 } from "../../firebase/kangsain-functions/functions/src/instructorLessonRegistration/instructorLessonSchedule";
@@ -96,6 +97,75 @@ test("취소·대체된 예약과 엑셀 중복 예약은 좌석을 늘리지 �
   assert.equal(summary.remainingSeats, 9);
 });
 
+test("현재 활성 수강권 날짜를 사용하고 누적된 과거 날짜는 다시 세지 않는다", () => {
+  const summaries = buildInstructorLessonScheduleSummaries({
+    startDate: "2026-08-28",
+    endDate: "2026-12-31",
+    ticketHolders: [
+      {
+        ...holder(0, "2026-09-19"),
+        activeTickets: [
+          {
+            name: "강사레슨 (2T)",
+            availableFrom: "2026-09-20T00:00:00+09:00",
+          },
+        ],
+      },
+    ],
+  });
+
+  assert.deepEqual(summaries.map((item) => item.date), ["2026-09-20"]);
+  assert.equal(summaries[0].ticketHolderCount, 1);
+});
+
+test("스텝 수강권은 예약 전 좌석에서 제외하고 강사회원 수강권만 센다", () => {
+  const [summary] = buildInstructorLessonScheduleSummaries({
+    startDate: "2026-08-28",
+    endDate: "2026-12-31",
+    ticketHolders: [
+      activeHolder(0, "2026-09-19", "강사회원"),
+      activeHolder(1, "2026-09-19", "스텝"),
+    ],
+  });
+
+  assert.equal(summary.ticketHolderCount, 1);
+  assert.equal(summary.remainingSeats, 9);
+});
+
+test("신규회원 E2E 시뮬레이션은 접수와 같은 날짜의 테스트 수강권 모두 제외한다", () => {
+  const [summary] = buildInstructorLessonScheduleSummaries({
+    startDate: "2026-08-28",
+    endDate: "2026-12-31",
+    ticketHolders: [
+      activeHolder(0, "2026-09-20", "강사회원"),
+      activeHolder(1, "2026-09-20", "강사회원"),
+    ],
+    registrations: [
+      {
+        ...registration(0, "completed"),
+        newMemberSimulation: true,
+      },
+    ],
+  });
+
+  assert.equal(summary.ticketHolderCount, 1);
+  assert.equal(summary.registrationCount, 0);
+  assert.equal(summary.occupiedCount, 1);
+});
+
+test("대시보드 상태 카운트는 합성 테스트 등록을 제외한다", () => {
+  const counts = buildInstructorLessonRegistrationCounts(
+    [
+      registration(0, "completed"),
+      { ...registration(1, "completed"), evidence: { newMemberSimulation: true } },
+      registration(2, "failed"),
+    ],
+    ["completed", "failed"],
+  );
+
+  assert.deepEqual(counts, { completed: 1, failed: 1 });
+});
+
 function lecturePair(date: string) {
   return [
     {
@@ -137,6 +207,17 @@ function holder(index: number, date: string) {
     memberId: `member-${index}`,
     phone: `0101234${String(index).padStart(4, "0")}`,
     activeTicketNames: ["강사레슨 (2T)"],
+    instructorLessonDates: [date],
+  };
+}
+
+function activeHolder(index: number, date: string, memberGrade: string) {
+  return {
+    memberId: `member-${index}`,
+    phone: `0105678${String(index).padStart(4, "0")}`,
+    memberGrade,
+    activeTicketNames: ["강사레슨 (2T)"],
+    activeTickets: [{ name: "강사레슨 (2T)", availableFrom: `${date}T00:00:00+09:00` }],
     instructorLessonDates: [date],
   };
 }
