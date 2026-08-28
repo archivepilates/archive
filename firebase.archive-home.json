@@ -5,6 +5,7 @@
       "npm run validate:archive-home-address",
       "npm run validate:archive-home-team",
       "npm run validate:archive-home-community",
+      "npm run validate:shipping-products-route",
       "npm run validate:archive-home-classroom",
       "npm run validate:video-sales-growth"
     ],
@@ -110,7 +111,7 @@
       },
       {
         "source": "/shop",
-        "destination": "https://archivepilates.imweb.me/16",
+        "destination": "https://archivepilates.imweb.me/16?ap_shop=knitido",
         "type": 302
       },
       {

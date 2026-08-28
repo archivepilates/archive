@@ -25,6 +25,7 @@
     "validate:archive-home-team": "node scripts/validate-official-home-team.mjs",
     "validate:archive-home-community": "node scripts/validate-official-home-community.mjs",
     "validate:archive-home-address": "node scripts/validate-archive-home-address.mjs",
+    "validate:shipping-products-route": "node --check scripts/imweb/apply-shipping-products-only.mjs && node scripts/validate-shipping-products-route.mjs",
     "verify:archive-home-classroom-live": "node scripts/verify-archive-home-classroom-live.mjs",
     "validate:video-sales-growth": "node --check official-home/assets/archive-analytics-20260729a.js && node --check official-home/assets/imweb-video-sales-20260730b.js && node --check scripts/imweb/apply-video-sales-growth.mjs && node scripts/validate-video-sales-growth.mjs",
     "verify:video-sales-growth-ui": "bash scripts/run-video-sales-growth-ui.sh",

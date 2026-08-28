@@ -1,0 +1,135 @@
+<script data-archive-pilates-shipping-products-only="2026-08-28b">
+(function () {
+  "use strict";
+
+  var VERSION = "2026-08-28b";
+  var SHOP_PATHS = ["/16", "/shop"];
+  var SHIPPING_PRODUCTS_URL = "/16?ap_shop=knitido";
+  var SIDEBAR_STYLE_ID = "archive-pilates-sidebar-primary-alignment";
+  var pending = false;
+
+  function normalizedPath(value) {
+    return String(value || "/").replace(/\/+$/, "") || "/";
+  }
+
+  function isShippingProductsListing(url) {
+    if (!url || url.origin !== window.location.origin) return false;
+    if (SHOP_PATHS.indexOf(normalizedPath(url.pathname)) < 0) return false;
+    if (url.searchParams.has("idx")) return false;
+    var mode = url.searchParams.get("ap_shop");
+    return !mode || mode === "all";
+  }
+
+  function currentListingNeedsRedirect() {
+    try {
+      return isShippingProductsListing(new URL(window.location.href));
+    } catch (error) {
+      return false;
+    }
+  }
+
+  function installSidebarStyle() {
+    var style = document.getElementById(SIDEBAR_STYLE_ID);
+    if (!style) {
+      style = document.createElement("style");
+      style.id = SIDEBAR_STYLE_ID;
+      (document.head || document.documentElement).appendChild(style);
+    }
+    style.setAttribute("data-archive-pilates-sidebar-primary-alignment", VERSION);
+    style.textContent = [
+      "html body #mobile_slide_menu_wrap .ap-sidebar-primary-row,html body .im-mobile-slide .ap-sidebar-primary-row{list-style:none!important;margin:0!important;padding:0!important}",
+      "html body #mobile_slide_menu_wrap a.ap-sidebar-primary-link,html body .im-mobile-slide a.ap-sidebar-primary-link{display:flex!important;align-items:center!important;width:100%!important;min-height:54px!important;height:auto!important;margin:0!important;padding:0 30px!important;box-sizing:border-box!important;text-align:left!important;line-height:1.35!important;text-indent:0!important;transform:none!important}",
+      "html body #mobile_slide_menu_wrap a.ap-sidebar-primary-link .plain_name,html body .im-mobile-slide a.ap-sidebar-primary-link .plain_name{display:flex!important;align-items:center!important;min-height:0!important;margin:0!important;padding:0!important;text-indent:0!important;transform:none!important}",
+      "html body #mobile_slide_menu_wrap a.ap-sidebar-primary-link .ap-knitido-logo-wrap,html body .im-mobile-slide a.ap-sidebar-primary-link .ap-knitido-logo-wrap{display:flex!important;align-items:center!important;margin:0!important;padding:0!important}",
+      "html body #mobile_slide_menu_wrap a.ap-sidebar-primary-link .ap-knitido-logo,html body .im-mobile-slide a.ap-sidebar-primary-link .ap-knitido-logo{display:block!important;width:108px!important;max-width:108px!important;height:auto!important;margin:0!important}"
+    ].join("");
+  }
+
+  function cleanText(element) {
+    return String((element && (element.textContent || element.innerText)) || "")
+      .replace(/\s+/g, " ")
+      .trim();
+  }
+
+  function sidebarPath(anchor) {
+    try {
+      return normalizedPath(new URL(anchor.getAttribute("href") || "", window.location.href).pathname);
+    } catch (error) {
+      return "";
+    }
+  }
+
+  function isPrimarySidebarLink(anchor) {
+    var path = sidebarPath(anchor);
+    var text = cleanText(anchor.querySelector(".plain_name") || anchor);
+    if (path === "/17" || path === "/18" || path === "/48" || path === "/my-classroom" || path === "/community") return true;
+    if (anchor.classList.contains("ap-knitido-side-link")) return true;
+    return /^(영상구매|온라인 클래스|강사레슨|오프라인 클래스|내 강의실|커뮤니티|COMMUNITY|니티도|knitido)$/i.test(text);
+  }
+
+  function markSidebarAlignment() {
+    installSidebarStyle();
+    Array.prototype.slice.call(document.querySelectorAll("#mobile_slide_menu_wrap,.im-mobile-slide")).forEach(function (root) {
+      Array.prototype.slice.call(root.querySelectorAll(".ap-sidebar-primary-link")).forEach(function (anchor) {
+        anchor.classList.remove("ap-sidebar-primary-link");
+      });
+      Array.prototype.slice.call(root.querySelectorAll(".ap-sidebar-primary-row")).forEach(function (row) {
+        row.classList.remove("ap-sidebar-primary-row");
+      });
+      Array.prototype.slice.call(root.querySelectorAll("a[href]")).forEach(function (anchor) {
+        if (!isPrimarySidebarLink(anchor)) return;
+        anchor.classList.add("ap-sidebar-primary-link");
+        var row = anchor.closest("li,.nav-item,.depth-01,.depth-02,._item");
+        if (row && root.contains(row)) row.classList.add("ap-sidebar-primary-row");
+      });
+    });
+  }
+
+  function rewriteLinks() {
+    pending = false;
+    Array.prototype.slice.call(document.querySelectorAll("a[href]")).forEach(function (anchor) {
+      var raw = anchor.getAttribute("href") || "";
+      if (!raw || raw.indexOf("javascript:") === 0 || raw.charAt(0) === "#") return;
+      try {
+        if (!isShippingProductsListing(new URL(raw, window.location.href))) return;
+        anchor.setAttribute("href", SHIPPING_PRODUCTS_URL);
+        anchor.setAttribute("data-ap-shipping-products-link", VERSION);
+      } catch (error) {}
+    });
+
+    Array.prototype.slice.call(document.querySelectorAll('[data-ap-shop-sub="all"]')).forEach(function (link) {
+      link.remove();
+    });
+    markSidebarAlignment();
+    document.documentElement.setAttribute("data-archive-pilates-shipping-products-only", VERSION);
+  }
+
+  function schedule() {
+    if (pending) return;
+    pending = true;
+    window.requestAnimationFrame(rewriteLinks);
+  }
+
+  if (currentListingNeedsRedirect()) {
+    window.location.replace(SHIPPING_PRODUCTS_URL);
+    return;
+  }
+
+  if (document.readyState === "loading") {
+    document.addEventListener("DOMContentLoaded", rewriteLinks, { once: true });
+  } else {
+    rewriteLinks();
+  }
+  window.addEventListener("pageshow", rewriteLinks);
+  [200, 700, 1500, 3200, 6200].forEach(function (delay) {
+    window.setTimeout(rewriteLinks, delay);
+  });
+  try {
+    var observer = new MutationObserver(schedule);
+    observer.observe(document.documentElement, { childList: true, subtree: true });
+    window.setTimeout(function () {
+      observer.disconnect();
+    }, 9000);
+  } catch (error) {}
+})();
+</script>
