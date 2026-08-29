@@ -57,6 +57,11 @@ type ParkingDiscountJob = {
   operatorAlertType?: string;
 };
 
+export type ParkingCarSelectionInput = Pick<
+  ParkingDiscountJob,
+  "ownerType" | "staffId" | "staffName" | "carNumber" | "expectedCarNumber" | "expectedEnterDatetime"
+>;
+
 type JobStatus = "running" | "eligible" | "success" | "manual_review" | "error";
 
 type StatusPatch = {
@@ -108,12 +113,35 @@ function publicProduct(product: IparkingDiscountProduct): Record<string, unknown
   };
 }
 
-function selectCar(job: ParkingDiscountJob, cars: IparkingCarInfo[]): IparkingCarInfo | null {
+function isStaffParkingJob(job: Pick<ParkingDiscountJob, "ownerType" | "staffId" | "staffName">): boolean {
+  const ownerType = String(job.ownerType || "")
+    .trim()
+    .toLowerCase();
+  if (ownerType) return ownerType === "staff";
+  return Boolean(job.staffId || job.staffName);
+}
+
+function entryTimeMs(car: IparkingCarInfo): number {
+  const parsed = Date.parse(String(car.enter_datetime || "").replace(" ", "T"));
+  return Number.isFinite(parsed) ? parsed : 0;
+}
+
+export function selectParkingCarForJob(
+  job: ParkingCarSelectionInput,
+  cars: IparkingCarInfo[],
+): IparkingCarInfo | null {
   const expected = normalizeCarNumber(job.expectedCarNumber || job.carNumber);
   const expectedMinute = normalizeMinute(job.expectedEnterDatetime);
   let candidates = cars;
   if (expected.length > 4) {
     candidates = candidates.filter((car) => normalizeCarNumber(car.car_number) === expected);
+  }
+  if (isStaffParkingJob(job)) {
+    if (candidates.length === 1) return candidates[0];
+    if (expected.length > 4 && candidates.length > 1) {
+      return [...candidates].sort((left, right) => entryTimeMs(right) - entryTimeMs(left))[0] || null;
+    }
+    return null;
   }
   if (expectedMinute) {
     candidates = candidates.filter((car) => normalizeMinute(car.enter_datetime) === expectedMinute);
@@ -459,12 +487,15 @@ export async function processParkingDiscountJobSnapshot(snap: QueryDocumentSnaps
     }
     await ref.set({ accountLabel, updatedAt: FieldValue.serverTimestamp() }, { merge: true });
 
-    const car = selectCar(job, cars);
+    const car = selectParkingCarForJob(job, cars);
     if (!car) {
+      const staffJob = isStaffParkingJob(job);
       await setJobStatus(ref, {
         status: "manual_review",
-        reason: "multiple_or_mismatched_entries",
-        lastError: "차량 후보가 여러 건이거나 예상 차량/입차시각과 다릅니다",
+        reason: staffJob ? "staff_vehicle_not_in_parking" : "multiple_or_mismatched_entries",
+        lastError: staffJob
+          ? "등록된 직원 차량의 현재 입차 기록을 찾지 못했습니다"
+          : "차량 후보가 여러 건이거나 예상 차량/입차시각과 다릅니다",
         result: { carNumberLast4: last4, candidates: cars.map(publicCar), metrics, totalMs: Date.now() - requestedAt },
       });
       return;

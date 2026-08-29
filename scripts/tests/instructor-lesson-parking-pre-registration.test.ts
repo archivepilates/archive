@@ -17,7 +17,10 @@ import {
   parkingVehicleId,
   validParkingCarNumber,
 } from "../../firebase/kangsain-functions/functions/src/parking/instructorLessonParkingContract";
-import { currentParkingBookingIssue } from "../../firebase/kangsain-functions/functions/src/parking/processParkingDiscountJob";
+import {
+  currentParkingBookingIssue,
+  selectParkingCarForJob,
+} from "../../firebase/kangsain-functions/functions/src/parking/processParkingDiscountJob";
 
 const startMs = Date.parse("2026-09-19T13:00:00+09:00");
 const timestamp = (ms: number) => ({ toMillis: () => ms }) as FirebaseFirestore.Timestamp;
@@ -112,6 +115,36 @@ test("blocks iParking lookup when the current booking was cancelled, moved, or s
     /24시간/,
   );
   assert.match(currentParkingBookingIssue(job, current, startMs + 29 * 60_000), /30분 전/);
+});
+
+test("staff parking ignores lesson-time entry matching and selects the latest exact vehicle", () => {
+  const cars = [
+    { inot_seq: 1, car_number: "42도0761", enter_datetime: "2026-08-29 08:10" },
+    { inot_seq: 2, car_number: "42도0761", enter_datetime: "2026-08-29 12:40" },
+    { inot_seq: 3, car_number: "11가9461", enter_datetime: "2026-08-29 12:54" },
+  ];
+  const selected = selectParkingCarForJob(
+    {
+      ownerType: "staff",
+      staffId: "2222464",
+      carNumber: "42도0761",
+      expectedEnterDatetime: "2026-08-29 09:00",
+    },
+    cars,
+  );
+  assert.equal(selected?.inot_seq, 2);
+});
+
+test("member parking keeps the expected entry-time safeguard", () => {
+  const selected = selectParkingCarForJob(
+    {
+      ownerType: "member",
+      carNumber: "42도0761",
+      expectedEnterDatetime: "2026-08-29 09:00",
+    },
+    [{ inot_seq: 1, car_number: "42도0761", enter_datetime: "2026-08-29 08:10" }],
+  );
+  assert.equal(selected, null);
 });
 
 test("public page never mirrors the pre-registered car into the permanent member profile", () => {
