@@ -11,7 +11,7 @@ if (shopRedirect?.destination !== "https://archivepilates.imweb.me/16?ap_shop=kn
 }
 
 [
-  'data-archive-pilates-shipping-products-only="2026-08-28f"',
+  'data-archive-pilates-shipping-products-only="2026-08-29g"',
   'var SHIPPING_PRODUCTS_URL = "/16?ap_shop=knitido";',
   'url.searchParams.has("idx")',
   'mode === "all"',
@@ -26,6 +26,9 @@ if (shopRedirect?.destination !== "https://archivepilates.imweb.me/16?ap_shop=kn
   "#mobile_carousel_menu_0>.nav-item:has(>a[data-ap-shop-nav='커뮤니티']){order:5!important}",
   '.ap-shop-pill-ko{font-size:15px!important;font-weight:750!important',
   '.ap-shop-pill-en{font-size:11px!important;font-weight:880!important',
+  'ul.ap-equipment-menu{width:148px!important;min-width:148px!important;max-width:148px!important',
+  'ul.ap-equipment-menu>li{display:block!important;width:100%!important;height:43px!important',
+  'ul.ap-equipment-menu>li>a{display:flex!important;align-items:center!important;width:100%!important;height:43px!important',
   '[data-ap-shop-sub="all"]',
   'data-archive-pilates-sidebar-primary-alignment',
   'ap-sidebar-primary-link',
