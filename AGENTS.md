@@ -45,6 +45,14 @@
 - Use worktrees when a change is non-trivial, experimental, or should be isolated from the current branch.
 - Start live checks with read-only verification of the deployed ARCHIVE IN app, Firebase/Hosting configuration, and visible browser errors before proposing fixes.
 
+## Browser Cleanup Rules
+
+- Treat Chrome tabs, windows, Playwright pages, contexts, temporary profiles, and browser processes opened by Codex for debugging or verification as task-owned state.
+- Close and verify all task-owned browser state before the final response. Put browser/context shutdown and lock release in `finally` blocks.
+- Never close the user's pre-existing Chrome tabs, windows, profiles, or generic Chrome processes. Broad `pkill`, `killall`, and profile deletion are not cleanup methods.
+- Remove an orphaned process only when its PID, command line, profile path, or session proves that the current task owns it. Leave uncertain processes alone and report them.
+- Keep a browser open only for an explicit user request or an immediate login/approval handoff, and report exactly what remains open and why.
+
 ## StudioMate Sync Mode
 
 - Until ARCHIVE PILATES operates its own site, treat StudioMate Excel download/import as the default ARCHIVE IN sync mode.

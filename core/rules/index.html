@@ -971,6 +971,9 @@
               <ul>
                 <li>Mac mini는 Codex 통합 운영 허브이자 자동화 실행 환경입니다.</li>
                 <li>StudioMate Playwright 공유 프로필은 lock을 잡고 직렬 실행합니다.</li>
+                <li>Codex가 디버깅·검증을 위해 연 Chrome 탭·창·Playwright 세션은 작업 종료 전에 닫고, 종료와 lock 해제를 <code>finally</code>에서 보장합니다.</li>
+                <li>사용자가 기존에 열어 둔 Chrome 상태와 소유권이 불명확한 프로세스는 닫지 않으며, 광범위한 프로세스 종료 명령은 사용하지 않습니다.</li>
+                <li>로그인·승인을 위해 창을 남길 때는 남긴 대상과 이유를 완료 보고에 명시합니다.</li>
                 <li>자동화 실패나 지연은 Firebase 장애와 분리해 LaunchAgent, 로그, 원본 파일부터 확인합니다.</li>
               </ul>
             </article>
