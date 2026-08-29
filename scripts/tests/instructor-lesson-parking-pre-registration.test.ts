@@ -135,10 +135,49 @@ test("staff parking ignores lesson-time entry matching and selects the latest ex
   assert.equal(selected?.inot_seq, 2);
 });
 
-test("member parking keeps the expected entry-time safeguard", () => {
+test("member parking ignores lesson-time entry matching when the registered vehicle matches", () => {
   const selected = selectParkingCarForJob(
     {
       ownerType: "member",
+      memberId: "member-1",
+      carNumber: "42도0761",
+      expectedEnterDatetime: "2026-08-29 09:00",
+    },
+    [{ inot_seq: 1, car_number: "42도0761", enter_datetime: "2026-08-29 08:10" }],
+  );
+  assert.equal(selected?.inot_seq, 1);
+});
+
+test("member parking never selects a different vehicle that shares the last four digits", () => {
+  const selected = selectParkingCarForJob(
+    {
+      ownerType: "member",
+      memberId: "member-1",
+      carNumber: "42도0761",
+      expectedEnterDatetime: "2026-08-29 09:00",
+    },
+    [{ inot_seq: 1, car_number: "11가0761", enter_datetime: "2026-08-29 09:00" }],
+  );
+  assert.equal(selected, null);
+});
+
+test("legacy member parking remains a member job when instructor fields are also present", () => {
+  const selected = selectParkingCarForJob(
+    {
+      memberId: "member-1",
+      staffId: "staff-1",
+      carNumber: "42도0761",
+      expectedEnterDatetime: "2026-08-29 09:00",
+    },
+    [{ inot_seq: 1, car_number: "42도0761", enter_datetime: "2026-08-29 08:10" }],
+  );
+  assert.equal(selected?.inot_seq, 1);
+});
+
+test("visitor parking keeps the expected entry-time safeguard", () => {
+  const selected = selectParkingCarForJob(
+    {
+      ownerType: "visitor",
       carNumber: "42도0761",
       expectedEnterDatetime: "2026-08-29 09:00",
     },

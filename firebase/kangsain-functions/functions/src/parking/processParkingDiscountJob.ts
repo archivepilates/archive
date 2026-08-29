@@ -59,7 +59,14 @@ type ParkingDiscountJob = {
 
 export type ParkingCarSelectionInput = Pick<
   ParkingDiscountJob,
-  "ownerType" | "staffId" | "staffName" | "carNumber" | "expectedCarNumber" | "expectedEnterDatetime"
+  | "ownerType"
+  | "memberId"
+  | "memberName"
+  | "staffId"
+  | "staffName"
+  | "carNumber"
+  | "expectedCarNumber"
+  | "expectedEnterDatetime"
 >;
 
 type JobStatus = "running" | "eligible" | "success" | "manual_review" | "error";
@@ -113,12 +120,24 @@ function publicProduct(product: IparkingDiscountProduct): Record<string, unknown
   };
 }
 
-function isStaffParkingJob(job: Pick<ParkingDiscountJob, "ownerType" | "staffId" | "staffName">): boolean {
+function isStaffParkingJob(
+  job: Pick<ParkingDiscountJob, "ownerType" | "memberId" | "memberName" | "staffId" | "staffName">,
+): boolean {
   const ownerType = String(job.ownerType || "")
     .trim()
     .toLowerCase();
   if (ownerType) return ownerType === "staff";
-  return Boolean(job.staffId || job.staffName);
+  return Boolean(job.staffId || job.staffName) && !Boolean(job.memberId || job.memberName);
+}
+
+function isMemberParkingJob(
+  job: Pick<ParkingDiscountJob, "ownerType" | "memberId" | "memberName" | "staffId" | "staffName">,
+): boolean {
+  const ownerType = String(job.ownerType || "")
+    .trim()
+    .toLowerCase();
+  if (ownerType) return ownerType === "member";
+  return Boolean(job.memberId || job.memberName);
 }
 
 function entryTimeMs(car: IparkingCarInfo): number {
@@ -136,7 +155,7 @@ export function selectParkingCarForJob(
   if (expected.length > 4) {
     candidates = candidates.filter((car) => normalizeCarNumber(car.car_number) === expected);
   }
-  if (isStaffParkingJob(job)) {
+  if (isStaffParkingJob(job) || isMemberParkingJob(job)) {
     if (candidates.length === 1) return candidates[0];
     if (expected.length > 4 && candidates.length > 1) {
       return [...candidates].sort((left, right) => entryTimeMs(right) - entryTimeMs(left))[0] || null;
@@ -490,12 +509,19 @@ export async function processParkingDiscountJobSnapshot(snap: QueryDocumentSnaps
     const car = selectParkingCarForJob(job, cars);
     if (!car) {
       const staffJob = isStaffParkingJob(job);
+      const memberJob = isMemberParkingJob(job);
       await setJobStatus(ref, {
         status: "manual_review",
-        reason: staffJob ? "staff_vehicle_not_in_parking" : "multiple_or_mismatched_entries",
+        reason: staffJob
+          ? "staff_vehicle_not_in_parking"
+          : memberJob
+            ? "member_vehicle_not_in_parking"
+            : "multiple_or_mismatched_entries",
         lastError: staffJob
           ? "등록된 직원 차량의 현재 입차 기록을 찾지 못했습니다"
-          : "차량 후보가 여러 건이거나 예상 차량/입차시각과 다릅니다",
+          : memberJob
+            ? "등록된 회원 차량의 현재 입차 기록을 찾지 못했습니다"
+            : "차량 후보가 여러 건이거나 예상 차량/입차시각과 다릅니다",
         result: { carNumberLast4: last4, candidates: cars.map(publicCar), metrics, totalMs: Date.now() - requestedAt },
       });
       return;

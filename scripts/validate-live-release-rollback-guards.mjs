@@ -863,7 +863,7 @@ const guardGroups = [
   {
     id: "parking-staff-fixed-four-hours",
     reason:
-      "강사 차량의 4시간 고정 할인 규칙이 다른 주차 또는 Functions 배포에서 2시간으로 되돌아가는 것을 막습니다.",
+      "강사 차량의 4시간 고정 할인과 회원·강사 차량의 입차시각 비사용 규칙이 다른 주차 또는 Functions 배포에서 되돌아가는 것을 막습니다.",
     files: [
       {
         file: "firebase/kangsain-functions/functions/src/parking/parkingDiscountPolicy.ts",
@@ -881,8 +881,11 @@ const guardGroups = [
           "resolveParkingDiscountPolicy(job)",
           "selectParkingCarForJob",
           "isStaffParkingJob(job)",
+          "isMemberParkingJob(job)",
           "staff_vehicle_not_in_parking",
+          "member_vehicle_not_in_parking",
           "등록된 직원 차량의 현재 입차 기록을 찾지 못했습니다",
+          "등록된 회원 차량의 현재 입차 기록을 찾지 못했습니다",
           "parkingPolicy: parkingPolicy.policy",
           "resolveIparkingAccountStoreSeq(account, params.storSeq)",
           "role: account.role",
@@ -921,9 +924,9 @@ const guardGroups = [
         markers: [
           "강사 차량은 수업 종류와 수업 시간에 관계없이",
           "총 4시간을 적용합니다.",
-          "강사 차량은 예약 수업시각과 입차시각을 비교하지 않고",
-          "등록된 강사 차량 자체가 현재 입차 목록에 없을 때만",
-          "회원·방문 차량은 기존 차량번호와 입차시각 안전 검증을 유지합니다.",
+          "회원·강사 차량은 예약 수업시각과 입차시각을 비교하지 않고",
+          "등록된 회원·강사 차량 자체가 현재 입차 목록에 없을 때만",
+          "방문 차량은 기존 차량번호와 입차시각 안전 검증을 유지합니다.",
           "메인 계정은 704호와 705호",
           "서브 계정은 504호부터 508호",
           "각 계정의 고유 상점 번호",
