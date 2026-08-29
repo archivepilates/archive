@@ -6,12 +6,12 @@ import {
   INSTRUCTOR_LESSON_DEFAULT_CAPACITY,
 } from "../../firebase/kangsain-functions/functions/src/instructorLessonRegistration/instructorLessonSchedule";
 
-test("실제 예약이 있으면 수강권 보유 인원보다 예약 고유 인원을 우선한다", () => {
-  const bookings = Array.from({ length: 10 }, (_, index) => [
+test("수강권이 있으면 수동 예약보다 수강권 발급 고유 인원을 우선한다", () => {
+  const bookings = Array.from({ length: 9 }, (_, index) => [
     booking(index, "13:00", "staff-a"),
     booking(index, "14:10", "staff-b"),
   ]).flat();
-  const ticketHolders = Array.from({ length: 8 }, (_, index) =>
+  const ticketHolders = Array.from({ length: 10 }, (_, index) =>
     holder(index, "2026-08-30"),
   );
   const [summary] = buildInstructorLessonScheduleSummaries({
@@ -22,9 +22,9 @@ test("실제 예약이 있으면 수강권 보유 인원보다 예약 고유 인
     ticketHolders,
   });
 
-  assert.equal(summary.countSource, "bookings");
-  assert.equal(summary.bookingMemberCount, 10);
-  assert.equal(summary.ticketHolderCount, 8);
+  assert.equal(summary.countSource, "tickets");
+  assert.equal(summary.bookingMemberCount, 9);
+  assert.equal(summary.ticketHolderCount, 10);
   assert.equal(summary.occupiedCount, 10);
   assert.equal(summary.remainingSeats, 0);
 });
@@ -118,18 +118,22 @@ test("현재 활성 수강권 날짜를 사용하고 누적된 과거 날짜는 
   assert.equal(summaries[0].ticketHolderCount, 1);
 });
 
-test("스텝 수강권은 예약 전 좌석에서 제외하고 강사회원 수강권만 센다", () => {
+test("스텝도 실제 강사레슨 수강권 발급자이면 좌석에 포함한다", () => {
   const [summary] = buildInstructorLessonScheduleSummaries({
     startDate: "2026-08-28",
     endDate: "2026-12-31",
     ticketHolders: [
-      activeHolder(0, "2026-09-19", "강사회원"),
-      activeHolder(1, "2026-09-19", "스텝"),
+      ...Array.from({ length: 9 }, (_, index) =>
+        activeHolder(index, "2026-09-19", "강사회원"),
+      ),
+      activeHolder(9, "2026-09-19", "스텝"),
     ],
   });
 
-  assert.equal(summary.ticketHolderCount, 1);
-  assert.equal(summary.remainingSeats, 9);
+  assert.equal(summary.countSource, "tickets");
+  assert.equal(summary.ticketHolderCount, 10);
+  assert.equal(summary.occupiedCount, 10);
+  assert.equal(summary.remainingSeats, 0);
 });
 
 test("신규회원 E2E 시뮬레이션은 접수와 같은 날짜의 테스트 수강권 모두 제외한다", () => {

@@ -1254,6 +1254,28 @@ const guardGroups = [
     ],
   },
   {
+    id: "instructor-lesson-ticket-holder-seat-count",
+    reason:
+      "강사레슨 좌석 수가 수동 예약이나 회원 등급 제외로 되돌아가 실제 수강권 발급 인원보다 적게 표시되는 회귀를 막습니다.",
+    files: [
+      {
+        file: "firebase/kangsain-functions/functions/src/instructorLessonRegistration/instructorLessonSchedule.ts",
+        markers: [
+          "if (!hasInstructorLessonTicket(holder)) continue;",
+          "const countSource = ticketHolderCount",
+        ],
+        forbiddenMarkers: ["excludedTicketOnlyMember(holder)"],
+      },
+      {
+        file: "core/rules/index.html",
+        markers: [
+          "수강권 발급 고유 인원을 우선",
+          "스텝·운영자도 실제 수강권이 발급되면 좌석에 포함",
+        ],
+      },
+    ],
+  },
+  {
     id: "instructor-lesson-d1-sample-approval",
     reason:
       "강사레슨 D-1 알림톡이 샘플 성공과 명시적 승인 없이 일반 큐에서 발송되거나 불명확한 결과를 자동 재시도하는 회귀를 막습니다.",

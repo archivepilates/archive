@@ -84,7 +84,7 @@ export function buildInstructorLessonScheduleSummaries(input: {
 
   const ticketMembers = new Map<string, Set<string>>();
   for (const holder of input.ticketHolders || []) {
-    if (!hasInstructorLessonTicket(holder) || excludedTicketOnlyMember(holder)) continue;
+    if (!hasInstructorLessonTicket(holder)) continue;
     const memberKey = memberIdentity(holder);
     if (!memberKey) continue;
     for (const rawDate of currentInstructorLessonTicketDates(holder)) {
@@ -113,10 +113,10 @@ export function buildInstructorLessonScheduleSummaries(input: {
     const bookingMemberCount = bookingMembers.get(date)?.size || 0;
     const ticketHolderCount = ticketMembers.get(date)?.size || 0;
     const registrationCount = registrationMembers.get(date)?.size || 0;
-    const countSource = bookingMemberCount
-      ? "bookings"
-      : ticketHolderCount
-        ? "tickets"
+    const countSource = ticketHolderCount
+      ? "tickets"
+      : bookingMemberCount
+        ? "bookings"
         : registrationCount
           ? "registrations"
           : "none";
@@ -205,12 +205,6 @@ function currentInstructorLessonTicketDates(holder: SourceRecord): unknown[] {
       .filter(Boolean);
   }
   return Array.isArray(holder.instructorLessonDates) ? holder.instructorLessonDates : [];
-}
-
-function excludedTicketOnlyMember(holder: SourceRecord): boolean {
-  return /(스텝|직원|운영자|스튜디오\s*오너|부원장|원장)/i.test(
-    cleanText(holder.memberGrade || holder.grade || holder.userGrade),
-  );
 }
 
 function concurrentLectureCapacity(lectures: SourceRecord[]): number {
