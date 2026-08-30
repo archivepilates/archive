@@ -1,0 +1,225 @@
+<script data-archive-pilates-site-improvements-p1="2026-08-30d">
+(function () {
+  "use strict";
+
+  var VERSION = "2026-08-30d";
+  var STYLE_ID = "archive-pilates-site-improvements-p1-style";
+  var OFFICIAL_HOME = "https://archivepilates.com/";
+
+  function normalizedPath() {
+    return String(window.location.pathname || "/").replace(/\/+$/, "") || "/";
+  }
+
+  function setMeta(name, content) {
+    var meta = document.querySelector('meta[name="' + name + '"]');
+    if (!meta) {
+      meta = document.createElement("meta");
+      meta.setAttribute("name", name);
+      (document.head || document.documentElement).appendChild(meta);
+    }
+    meta.setAttribute("content", content);
+  }
+
+  function setCanonical(url) {
+    var canonical = document.querySelector('link[rel="canonical"]');
+    if (!canonical) {
+      canonical = document.createElement("link");
+      canonical.setAttribute("rel", "canonical");
+      (document.head || document.documentElement).appendChild(canonical);
+    }
+    canonical.setAttribute("href", url);
+  }
+
+  function applyIndexPolicy() {
+    var path = normalizedPath();
+    var params;
+    try {
+      params = new URLSearchParams(window.location.search || "");
+    } catch (error) {
+      params = { get: function () { return null; } };
+    }
+
+    if (path === "/" || path === "/index") {
+      setCanonical(OFFICIAL_HOME);
+      setMeta("robots", "noindex,follow");
+      return;
+    }
+
+    if (path === "/48") {
+      setCanonical(window.location.origin + "/48");
+      setMeta("robots", "noindex,nofollow");
+      return;
+    }
+
+    if (["/44", "/45", "/46", "/47"].indexOf(path) >= 0 || (path === "/17" && params.get("ap_equipment"))) {
+      setCanonical(window.location.origin + "/17");
+      setMeta("robots", "noindex,follow");
+      return;
+    }
+
+    var productNumber = params.get("idx");
+    if (productNumber && (path === "/16" || path === "/shop_view")) {
+      setCanonical(window.location.origin + "/shop_view/" + encodeURIComponent(productNumber));
+      setMeta("robots", "noindex,follow");
+    }
+  }
+
+  function installStyle() {
+    var style = document.getElementById(STYLE_ID);
+    if (!style) {
+      style = document.createElement("style");
+      style.id = STYLE_ID;
+      (document.head || document.documentElement).appendChild(style);
+    }
+    style.setAttribute("data-archive-pilates-site-improvements-p1-style", VERSION);
+    style.textContent = [
+      "html body #mobile_slide_menu .profile .member-info,html body #mobile_slide_menu_wrap .profile .member-info,html body .im-mobile-slide .profile .member-info{color:#27231f!important;opacity:1!important}",
+      "html body #mobile_slide_menu .profile .email-info,html body #mobile_slide_menu_wrap .profile .email-info,html body .im-mobile-slide .profile .email-info{color:rgba(39,35,31,.72)!important;opacity:1!important}",
+      "html body a:focus-visible,html body button:focus-visible{outline:2px solid #9a3324!important;outline-offset:3px!important}",
+      "html body .widget.board .board-head header[data-archive-pilates-community-heading] h1{margin:0!important;padding:0!important;color:inherit!important;font:inherit!important;letter-spacing:inherit!important;line-height:inherit!important}",
+      "html body .widget.board .btn-write .btn{display:inline-flex!important;align-items:center!important;justify-content:center!important;min-height:44px!important}",
+      "html body .ap-lesson-list-heading{max-width:1280px;margin:0 auto 26px;padding:22px 15px 0;box-sizing:border-box}",
+      "html body .ap-lesson-list-heading p{margin:0 0 8px;color:#9a3324;font-size:12px;font-weight:850;line-height:1.4;letter-spacing:.08em}",
+      "html body .ap-lesson-list-heading h1{margin:0;color:#171412;font-size:32px;font-weight:800;line-height:1.25;letter-spacing:0}",
+      "html body .ap-knitido-product-card img{width:100%!important;height:auto!important;aspect-ratio:1/1!important;object-fit:cover!important}",
+      "@media(max-width:860px){",
+      "#inline_header_mobile .inline-col-group-left>a._no_hover,#inline_header_mobile .inline-col-group-left a[href='javascript:;']{display:flex!important;align-items:center!important;justify-content:center!important;width:44px!important;min-width:44px!important;height:48px!important;padding:0!important;box-sizing:border-box!important}",
+      "#inline_header_mobile .inline-col-group-right a[href='/shop_cart'],#inline_header_mobile .inline-col-group-right a[href='#']{display:flex!important;align-items:center!important;justify-content:center!important;width:44px!important;min-width:44px!important;height:44px!important;padding:0!important;box-sizing:border-box!important}",
+      "#slide-alarm_mobile,#mobile_slide_menu_wrap .dropdown-toggle,#mobile_slide_menu .dropdown-toggle{min-width:44px!important;min-height:44px!important}",
+      "#archive-pilates-mobile-online-subnav a{min-height:44px!important;height:44px!important}",
+      ".ap-classroom-exit,.apc-exit,a[data-archive-pilates-classroom-exit],button[data-archive-pilates-classroom-exit]{display:inline-flex!important;align-items:center!important;justify-content:center!important;min-width:64px!important;min-height:44px!important}",
+      ".ap-lesson-list-heading{margin-bottom:20px!important;padding-top:18px!important}",
+      ".ap-lesson-list-heading h1{font-size:28px!important}",
+      "}",
+      "@media(max-width:767px){html body .widget.board._list_wrap .li_footer._list_bottom .btn-block-right{display:none!important}}",
+      "@media(prefers-reduced-motion:reduce){html body *,html body *:before,html body *:after{scroll-behavior:auto!important}}"
+    ].join("");
+  }
+
+  function setLabel(element, label) {
+    if (!element) return;
+    element.setAttribute("aria-label", label);
+  }
+
+  function patchAccessibility() {
+    var mobileHeader = document.getElementById("inline_header_mobile");
+    if (mobileHeader) {
+      Array.prototype.slice.call(mobileHeader.querySelectorAll("a,button")).forEach(function (control) {
+        var text = String(control.textContent || "").replace(/\s+/g, " ").trim();
+        var href = String(control.getAttribute("href") || "");
+        if (text === "MENU" || control.classList.contains("navbar-toggle")) setLabel(control, "메뉴 열기");
+        if (href === "/shop_cart") setLabel(control, "장바구니 열기");
+        if (href === "#" && /search/i.test(text)) setLabel(control, "검색 열기");
+      });
+    }
+
+    setLabel(document.getElementById("slide-alarm_mobile"), "알림 열기");
+
+    Array.prototype.slice.call(document.querySelectorAll("#mobile_slide_menu a.profile,#mobile_slide_menu_wrap a.profile,.im-mobile-slide a.profile")).forEach(function (profile) {
+      setLabel(profile, "회원 정보 수정");
+    });
+
+    Array.prototype.slice.call(document.querySelectorAll(".widget.board a.btn,.widget.board button.btn")).forEach(function (button) {
+      if (String(button.textContent || "").trim() === "글쓰기") setLabel(button, "커뮤니티 글쓰기");
+    });
+
+    Array.prototype.slice.call(document.querySelectorAll(".ap-classroom-exit,.apc-exit,a[data-archive-pilates-classroom-exit],button[data-archive-pilates-classroom-exit]")).forEach(function (button) {
+      setLabel(button, "내 강의실 나가기");
+    });
+
+    Array.prototype.slice.call(document.querySelectorAll(".shop-item._shop_item,.shop-item")).forEach(function (item) {
+      var title = item.querySelector(".shop-title");
+      var titleText = String(title && title.textContent || "").replace(/\s+/g, " ").trim();
+      if (!titleText) return;
+      Array.prototype.slice.call(item.querySelectorAll("img")).forEach(function (image) {
+        if (!String(image.getAttribute("alt") || "").trim()) image.setAttribute("alt", titleText);
+      });
+    });
+  }
+
+  function patchCommunity() {
+    if (normalizedPath() !== "/community") return;
+
+    var params;
+    try {
+      params = new URLSearchParams(window.location.search || "");
+    } catch (error) {
+      params = { get: function () { return null; } };
+    }
+
+    var heading = document.querySelector(".widget.board .board-head .heading > header");
+    if (heading) {
+      heading.setAttribute("data-archive-pilates-community-heading", VERSION);
+      Array.prototype.slice.call(heading.childNodes).forEach(function (node) {
+        if (node.nodeType === 3) node.parentNode.removeChild(node);
+      });
+      var count = heading.querySelector(":scope > em");
+      if (count) {
+        count.hidden = true;
+        count.setAttribute("aria-hidden", "true");
+      }
+      var h1 = heading.querySelector(":scope > h1");
+      if (!h1) {
+        h1 = document.createElement("h1");
+        heading.insertBefore(h1, heading.firstChild);
+      }
+      h1.textContent = "COMMUNITY";
+    }
+
+    if (params.get("bmode") === "write") {
+      Array.prototype.slice.call(document.querySelectorAll("body *")).forEach(function (element) {
+        if (element.children.length) return;
+        if (String(element.textContent || "").trim() !== "후기·질문") return;
+        var rect = element.getBoundingClientRect();
+        if (rect.width > 0 && rect.height > 0) element.textContent = "COMMUNITY";
+      });
+    }
+  }
+
+  function patchLessonHeading() {
+    if (normalizedPath() !== "/18" || window.location.search) return;
+    if (document.querySelector(".ap-lesson-list-heading")) return;
+    if (document.querySelector("main h1,#doz_content h1")) return;
+    var shop = document.querySelector(".shop-content.widget");
+    if (!shop || !shop.parentNode) return;
+    var heading = document.createElement("div");
+    heading.className = "ap-lesson-list-heading";
+    heading.setAttribute("data-archive-pilates-lesson-heading", VERSION);
+    heading.innerHTML = "<p>ARCHIVE PILATES LESSON</p><h1>강사레슨</h1>";
+    shop.parentNode.insertBefore(heading, shop);
+  }
+
+  function patchKnitidoImages() {
+    Array.prototype.slice.call(document.querySelectorAll(".ap-knitido-product-card img")).forEach(function (image) {
+      image.setAttribute("loading", "lazy");
+      image.setAttribute("decoding", "async");
+      image.setAttribute("fetchpriority", "low");
+      if (!image.getAttribute("width")) image.setAttribute("width", "960");
+      if (!image.getAttribute("height")) image.setAttribute("height", "960");
+    });
+  }
+
+  function run() {
+    installStyle();
+    applyIndexPolicy();
+    patchAccessibility();
+    patchCommunity();
+    patchLessonHeading();
+    patchKnitidoImages();
+    document.documentElement.setAttribute("data-archive-pilates-site-improvements-p1", VERSION);
+  }
+
+  installStyle();
+  applyIndexPolicy();
+  if (document.readyState === "loading") {
+    document.addEventListener("DOMContentLoaded", run, { once: true });
+  } else {
+    run();
+  }
+  window.addEventListener("pageshow", run);
+  window.addEventListener("popstate", run);
+  [400, 1400, 3200].forEach(function (delay) {
+    window.setTimeout(run, delay);
+  });
+})();
+</script>
