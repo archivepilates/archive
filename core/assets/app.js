@@ -5416,6 +5416,21 @@ function staffLatestSubmission(staffId) {
   );
 }
 
+function staffEvaluationIdentityPhone(item) {
+  return normalizePhone(
+    item?.applicantPhone || item?.staffPhone || item?.phone || item?.mobile || item?.phoneNumber || "",
+  );
+}
+
+function promotedStaffEvaluationKey(rows, item) {
+  const phone = staffEvaluationIdentityPhone(item);
+  if (phone.length < 10) return "";
+  const matches = [...rows.values()].filter(
+    (row) => row.employmentSource === "staffs" && row.identityPhone === phone,
+  );
+  return matches.length === 1 ? matches[0].key : "";
+}
+
 function staffEvaluationRows() {
   const rows = new Map();
   for (const staff of state.staffItems || []) {
@@ -5436,11 +5451,13 @@ function staffEvaluationRows() {
       staffActive: staff.active !== false,
       isCurrentStaff,
       employmentSource: "staffs",
+      identityPhone: staffEvaluationIdentityPhone(staff),
     });
   }
 
   for (const card of state.staffHrCards || []) {
-    const key = String(card.staffId || card.id || card.staffName || "");
+    const sourceKey = String(card.staffId || card.id || card.staffName || "");
+    const key = rows.has(sourceKey) ? sourceKey : promotedStaffEvaluationKey(rows, card) || sourceKey;
     if (!key) continue;
     const applicantEvaluation = Boolean(card.applicantEvaluation || card.staffRole === "applicant");
     if (!rows.has(key)) {
@@ -5455,12 +5472,14 @@ function staffEvaluationRows() {
         staffActive: false,
         isCurrentStaff: false,
         employmentSource: "hrCard",
+        identityPhone: staffEvaluationIdentityPhone(card),
       });
     } else {
       const row = rows.get(key);
       row.card = card;
-      row.applicantEvaluation = Boolean(row.applicantEvaluation || applicantEvaluation);
-      if (applicantEvaluation) {
+      const promotedToCurrentStaff = row.employmentSource === "staffs" && row.isCurrentStaff;
+      row.applicantEvaluation = Boolean(row.applicantEvaluation || (applicantEvaluation && !promotedToCurrentStaff));
+      if (applicantEvaluation && !promotedToCurrentStaff) {
         row.isCurrentStaff = false;
         row.role = "applicant";
       }
@@ -5468,7 +5487,8 @@ function staffEvaluationRows() {
   }
 
   for (const submission of state.staffEvaluationSubmissions || []) {
-    const key = String(submission.staffId || submission.staffName || submission.id || "");
+    const sourceKey = String(submission.staffId || submission.staffName || submission.id || "");
+    const key = rows.has(sourceKey) ? sourceKey : promotedStaffEvaluationKey(rows, submission) || sourceKey;
     if (!key) continue;
     const applicantEvaluation = Boolean(submission.applicantEvaluation || submission.staffRole === "applicant");
     if (!rows.has(key)) {
@@ -5483,10 +5503,11 @@ function staffEvaluationRows() {
         staffActive: false,
         isCurrentStaff: false,
         employmentSource: "submission",
+        identityPhone: staffEvaluationIdentityPhone(submission),
       });
     }
     rows.get(key).submissions.push(submission);
-    if (applicantEvaluation) {
+    if (applicantEvaluation && !(rows.get(key).employmentSource === "staffs" && rows.get(key).isCurrentStaff)) {
       const row = rows.get(key);
       row.applicantEvaluation = true;
       row.isCurrentStaff = false;

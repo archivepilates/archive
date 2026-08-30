@@ -109,6 +109,9 @@ const required = [
       "renderInstructorLessonSchedule",
       "instructorLessonScheduleSourceLabel",
       "handleInstructorLessonRegistrationSubmit",
+      "staffEvaluationIdentityPhone",
+      "promotedStaffEvaluationKey",
+      "promotedToCurrentStaff",
     ],
   },
   {
@@ -235,6 +238,28 @@ const required = [
     file: "core/staff/evaluation/index.html",
     label: "instructor evaluation quiz page",
     markers: ["instructorEvaluationQuizForm", "evaluationQuizQuestions", "평가 퀴즈 제출"],
+  },
+  {
+    file: "firebase/kangsain-functions/firestore.rules",
+    label: "manager-only instructor evaluation reads",
+    markers: [
+      "match /staffEvaluationSubmissions/{submissionId}",
+      "match /staffHrCards/{staffId}",
+      "match /quizResults/{resultId}",
+      "allow read: if isManager()",
+    ],
+    patterns: [
+      {
+        label: "manager-only staff evaluation submission read block",
+        pattern:
+          /match \/staffEvaluationSubmissions\/\{submissionId\}\s*\{\s*allow read: if isManager\(\);\s*allow write: if false;\s*\}/m,
+      },
+      {
+        label: "manager-only staff HR card and quiz-result read blocks",
+        pattern:
+          /match \/staffHrCards\/\{staffId\}\s*\{\s*allow read: if isManager\(\);\s*allow write: if false;[\s\S]*?match \/quizResults\/\{resultId\}\s*\{\s*allow read: if isManager\(\);\s*allow write: if false;\s*\}/m,
+      },
+    ],
   },
   {
     file: "core/video-analytics/index.html",
