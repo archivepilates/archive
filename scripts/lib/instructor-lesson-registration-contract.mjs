@@ -56,6 +56,37 @@ export function isInstructorLessonNewMemberTestRecipient(job) {
     && normalizeInstructorLessonPhone(job?.memberPhone) === INSTRUCTOR_LESSON_NEW_MEMBER_TEST_PHONE;
 }
 
+export function isInstructorMemberEformOrphan(registration, hasJob = false) {
+  const steps = registration?.steps || {};
+  const registrationStatus = String(registration?.status || "").toLowerCase();
+  const eformStatus = String(steps?.eformsign?.status || "pending").toLowerCase();
+  if (hasJob || String(registration?.mode || "") !== "new_member") return false;
+  if (["cancelled", "canceled", "rejected", "completed"].includes(registrationStatus)) return false;
+  if (String(steps?.member?.status || "") !== "verified") return false;
+  if (String(steps?.ticket?.status || "") !== "verified") return false;
+  return ["pending", "queued", "sent", "waiting_external"].includes(eformStatus);
+}
+
+export function selectInstructorMemberEformDocument(rows, memberName) {
+  const expectedName = normalizeInstructorLessonName(memberName);
+  const matches = (Array.isArray(rows) ? rows : [])
+    .filter((row) => {
+      const text = String(row?.text || "").replace(/\s+/g, " ").trim();
+      const href = String(row?.href || "");
+      return Boolean(row?.documentId)
+        && text.includes(expectedName)
+        && text.includes("강사회원가입서")
+        && href.includes(`form_id=${INSTRUCTOR_MEMBER_EFORMSIGN_TEMPLATE_ID}`);
+    });
+  const unique = [...new Map(matches.map((row) => [String(row.documentId), row])).values()];
+  if (unique.length === 1) return { status: "found", evidence: unique[0], matchCount: 1 };
+  return {
+    status: unique.length ? "ambiguous" : "missing",
+    evidence: null,
+    matchCount: unique.length,
+  };
+}
+
 export function selectExactInstructorLessonTicket(tickets, ticketName = INSTRUCTOR_LESSON_TICKET_NAME) {
   const expected = normalizeComparable(ticketName);
   const matches = (Array.isArray(tickets) ? tickets : []).filter(

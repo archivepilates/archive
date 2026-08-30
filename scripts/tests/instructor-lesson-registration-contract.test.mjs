@@ -8,11 +8,13 @@ import {
   deriveInstructorLessonRegistrationState,
   exactMemberCandidates,
   instructorLessonRegistrationId,
+  isInstructorMemberEformOrphan,
   isInstructorMemberGrade,
   isInstructorLessonNewMemberTestRecipient,
   normalizeInstructorLessonPhone,
   paymentMethodLabel,
   selectExactInstructorLessonTicket,
+  selectInstructorMemberEformDocument,
   staleExternalActionStatus,
 } from "../lib/instructor-lesson-registration-contract.mjs";
 
@@ -47,6 +49,55 @@ test("신규회원 시뮬레이션은 김기효 테스트 계정에만 허용한
   assert.equal(isInstructorLessonNewMemberTestRecipient({ memberName: "김기효", memberPhone: "010-8648-8585" }), true);
   assert.equal(isInstructorLessonNewMemberTestRecipient({ memberName: "김기효", memberPhone: "010-1111-2222" }), false);
   assert.equal(isInstructorLessonNewMemberTestRecipient({ memberName: "다른 회원", memberPhone: "010-8648-8585" }), false);
+});
+
+test("가입서 추적 작업이 없는 신규회원만 완료 문서 보정 대상으로 판정한다", () => {
+  const registration = {
+    mode: "new_member",
+    status: "waiting_signature",
+    steps: {
+      member: { status: "verified" },
+      ticket: { status: "verified" },
+      eformsign: { status: "pending" },
+    },
+  };
+  assert.equal(isInstructorMemberEformOrphan(registration, false), true);
+  assert.equal(isInstructorMemberEformOrphan(registration, true), false);
+  assert.equal(isInstructorMemberEformOrphan({ ...registration, mode: "returning_member" }, false), false);
+  assert.equal(
+    isInstructorMemberEformOrphan({
+      ...registration,
+      steps: { ...registration.steps, ticket: { status: "pending" } },
+    }, false),
+    false,
+  );
+});
+
+test("이름과 현재 강사회원가입서 템플릿이 정확히 한 건일 때만 문서를 연결한다", () => {
+  const href = "https://www.eformsign.com/eform/document/view_service.html?form_id=a5b5ea6b85ec44c8bcb4af1e980e94eb&document_id=doc-1";
+  assert.deepEqual(
+    selectInstructorMemberEformDocument([
+      { text: "Completed 강사회원가입서 홍예진", href, documentId: "doc-1" },
+    ], "홍예진"),
+    {
+      status: "found",
+      evidence: { text: "Completed 강사회원가입서 홍예진", href, documentId: "doc-1" },
+      matchCount: 1,
+    },
+  );
+  assert.equal(
+    selectInstructorMemberEformDocument([
+      { text: "Completed 강사회원가입서 홍예진", href, documentId: "doc-1" },
+      { text: "Completed 강사회원가입서 홍예진", href: href.replace("doc-1", "doc-2"), documentId: "doc-2" },
+    ], "홍예진").status,
+    "ambiguous",
+  );
+  assert.equal(
+    selectInstructorMemberEformDocument([
+      { text: "Completed 강사회원가입서 다른 이름", href, documentId: "doc-1" },
+    ], "홍예진").status,
+    "missing",
+  );
 });
 
 test("강사레슨 수강권은 정확한 이름 한 건만 선택한다", () => {

@@ -18,6 +18,10 @@ import {
   buildInstructorMemberDocumentName,
   buildInstructorMemberRecipientMessage,
   deriveInstructorLessonRegistrationState,
+  isInstructorMemberEformOrphan,
+  normalizeInstructorLessonName,
+  normalizeInstructorLessonPhone,
+  selectInstructorMemberEformDocument,
   staleExternalActionStatus,
 } from "./lib/instructor-lesson-registration-contract.mjs";
 
@@ -125,6 +129,17 @@ if (!summary.ok) process.exitCode = 1;
 async function processCandidate(page, candidate) {
   const item = { jobId: candidate.ref.id, status: candidate.data.status };
   try {
+    if (candidate.type === "orphan_registration") {
+      summary.processed += 1;
+      const outcome = await reconcileOrphanRegistration(page, candidate.ref, candidate.data);
+      item.status = outcome.status;
+      item.detail = outcome.detail;
+      if (outcome.status === "completed") summary.completed += 1;
+      else if (outcome.status === "review_required") summary.reviewRequired += 1;
+      else summary.waiting += 1;
+      summary.jobs.push(item);
+      return;
+    }
     if (["sent", "waiting_completion"].includes(String(candidate.data.status || ""))) {
       const claimed = await claimCompletionCheck(candidate.ref);
       if (!claimed) return;
@@ -180,9 +195,17 @@ async function processCandidate(page, candidate) {
 
 async function loadCandidates(limit) {
   if (config.jobId) {
-    const snapshot = await db.collection("eformsignInstructorMemberJobs").doc(config.jobId).get();
-    if (!snapshot.exists || !["pending", "retry", "sent", "waiting_completion"].includes(String(snapshot.data()?.status || ""))) return [];
-    return [{ ref: snapshot.ref, data: snapshot.data() }];
+    const [snapshot, registrationSnapshot] = await Promise.all([
+      db.collection("eformsignInstructorMemberJobs").doc(config.jobId).get(),
+      db.collection("instructorLessonRegistrations").doc(config.jobId).get(),
+    ]);
+    if (snapshot.exists && ["pending", "retry", "sent", "waiting_completion"].includes(String(snapshot.data()?.status || ""))) {
+      return [{ ref: snapshot.ref, data: snapshot.data(), type: "job" }];
+    }
+    if (registrationSnapshot.exists && isInstructorMemberEformOrphan(registrationSnapshot.data(), snapshot.exists)) {
+      return [{ ref: registrationSnapshot.ref, data: registrationSnapshot.data(), type: "orphan_registration" }];
+    }
+    return [];
   }
   const [pendingSnapshot, retrySnapshot, sentSnapshot, waitingSnapshot] = await Promise.all([
     db.collection("eformsignInstructorMemberJobs").where("status", "==", "pending").get(),
@@ -199,7 +222,29 @@ async function loadCandidates(limit) {
     .sort((a, b) => timestampMillis(a.data.lastCheckedAt || a.data.sentAt || a.data.createdAt)
       - timestampMillis(b.data.lastCheckedAt || b.data.sentAt || b.data.createdAt))
     .slice(0, limit);
-  return [...sends, ...checks];
+  const jobs = [...sends, ...checks].map((candidate) => ({ ...candidate, type: "job" }));
+  if (jobs.length) return jobs;
+  return loadOrphanRegistrationCandidates(limit);
+}
+
+async function loadOrphanRegistrationCandidates(limit) {
+  const registrationSnapshot = await db
+    .collection("instructorLessonRegistrations")
+    .where("mode", "==", "new_member")
+    .get();
+  const possible = registrationSnapshot.docs
+    .filter((doc) => isInstructorMemberEformOrphan(doc.data(), false))
+    .sort((a, b) => timestampMillis(a.data().updatedAt || a.data().createdAt)
+      - timestampMillis(b.data().updatedAt || b.data().createdAt));
+  if (!possible.length) return [];
+  const jobSnapshots = await db.getAll(
+    ...possible.map((doc) => db.collection("eformsignInstructorMemberJobs").doc(doc.id)),
+  );
+  const existing = new Set(jobSnapshots.filter((doc) => doc.exists).map((doc) => doc.id));
+  return possible
+    .filter((doc) => !existing.has(doc.id) && isInstructorMemberEformOrphan(doc.data(), false))
+    .slice(0, limit)
+    .map((doc) => ({ ref: doc.ref, data: doc.data(), type: "orphan_registration" }));
 }
 
 async function recoverStaleJobs() {
@@ -478,6 +523,162 @@ async function waitForSendEvidence(page, documentName, recipientPhone) {
     await sleep(500);
   }
   return last;
+}
+
+async function reconcileOrphanRegistration(page, registrationRef, registration) {
+  const completed = await findInstructorMemberDocument(page, EFORMSIGN_COMPLETED_DOCUMENTS_URL, registration.memberName);
+  if (completed.status === "ambiguous") {
+    return markOrphanReviewRequired(
+      registrationRef,
+      registration,
+      `완료 문서함에 같은 이름의 강사회원 가입서가 ${completed.matchCount}건이라 자동 연결하지 않았습니다.`,
+    );
+  }
+  if (completed.status === "found") {
+    const jobRef = await seedOrphanTrackingJob(registrationRef, registration, completed.evidence);
+    const claimed = await claimCompletionCheck(jobRef);
+    if (!claimed) throw new Error("보정한 이폼싸인 완료 확인 작업을 가져오지 못했습니다.");
+    return inspectCompletion(page, jobRef, claimed);
+  }
+
+  const progress = await findInstructorMemberDocument(page, EFORMSIGN_PROGRESS_DOCUMENTS_URL, registration.memberName);
+  if (progress.status === "ambiguous") {
+    return markOrphanReviewRequired(
+      registrationRef,
+      registration,
+      `진행 중 문서함에 같은 이름의 강사회원 가입서가 ${progress.matchCount}건이라 자동 연결하지 않았습니다.`,
+    );
+  }
+  if (progress.status === "found") {
+    await seedOrphanTrackingJob(registrationRef, registration, progress.evidence);
+    return { status: "waiting_completion", detail: "기존 가입서 문서 연결 · 작성 완료 대기" };
+  }
+  return markOrphanReviewRequired(
+    registrationRef,
+    registration,
+    "등록은 있으나 연결할 강사회원 가입서 문서를 찾지 못했습니다. 중복 방지를 위해 자동 재발송하지 않습니다.",
+  );
+}
+
+async function findInstructorMemberDocument(page, url, memberName) {
+  await page.goto(url, { waitUntil: "domcontentloaded", timeout: 60_000 });
+  await page.waitForFunction(
+    (expectedName) => document.body?.innerText?.includes(expectedName),
+    memberName,
+    { timeout: 10_000 },
+  ).catch(() => {});
+  const rows = await page.evaluate(() => {
+    const nodes = [...document.querySelectorAll("tr, [role='row'], .document-item, .list-item")];
+    return nodes.map((row) => {
+      const link = row.querySelector("a[href*='view_service.html']") || row.querySelector("a[href]");
+      const href = link?.getAttribute("href") || "";
+      const hrefId = href.match(/[?&](?:document_id|doc_id)=([^&]+)/i)?.[1] || "";
+      const documentId = row.getAttribute("data-document-id") || row.getAttribute("data-doc-id")
+        || link?.getAttribute("data-document-id") || link?.getAttribute("data-doc-id")
+        || (hrefId ? decodeURIComponent(hrefId) : "");
+      return {
+        text: String(row.textContent || "").replace(/\s+/g, " ").trim(),
+        href,
+        documentId: String(documentId || ""),
+      };
+    });
+  });
+  const selected = selectInstructorMemberEformDocument(rows, memberName);
+  if (selected.status !== "found") return selected;
+  const documentUrl = new URL(selected.evidence.href, page.url()).href;
+  return {
+    ...selected,
+    evidence: {
+      ...selected.evidence,
+      documentUrl,
+    },
+  };
+}
+
+async function seedOrphanTrackingJob(registrationRef, registration, evidence) {
+  const jobRef = db.collection("eformsignInstructorMemberJobs").doc(registrationRef.id);
+  await db.runTransaction(async (transaction) => {
+    const [registrationSnapshot, jobSnapshot] = await Promise.all([
+      transaction.get(registrationRef),
+      transaction.get(jobRef),
+    ]);
+    if (!registrationSnapshot.exists) throw new Error("강사레슨 등록 원본을 찾지 못했습니다.");
+    const current = registrationSnapshot.data() || {};
+    if (jobSnapshot.exists || !isInstructorMemberEformOrphan(current, false)) {
+      throw new Error("강사회원 가입서 추적 작업 상태가 변경되어 자동 연결을 중단했습니다.");
+    }
+    const now = FieldValue.serverTimestamp();
+    const documentId = String(evidence.documentId || "").slice(0, 160);
+    transaction.set(jobRef, {
+      jobId: registrationRef.id,
+      registrationId: registrationRef.id,
+      studioId: current.studioId,
+      memberName: current.memberName,
+      memberPhone: normalizeInstructorLessonPhone(current.memberPhone),
+      lessonDate: current.lessonDate,
+      studiomateMemberId: current.studiomateMemberId || current.evidence?.studiomateMemberId || "",
+      ticketName: current.ticketName || INSTRUCTOR_LESSON_TICKET_NAME,
+      ticketPrice: Number(current.evidence?.ticketPaymentAmount || INSTRUCTOR_LESSON_TICKET_PRICE),
+      status: "waiting_completion",
+      attempts: 0,
+      maxAttempts: 3,
+      externalEffectStarted: false,
+      documentName: normalizeInstructorLessonName(current.memberName),
+      documentId,
+      documentUrl: String(evidence.documentUrl || "").slice(0, 1000),
+      source: "orphan_registration_reconcile",
+      reconciledFromOrphan: true,
+      sentAt: now,
+      createdAt: now,
+      updatedAt: now,
+      lastError: null,
+    });
+    transaction.update(registrationRef, deriveRegistrationPatch(current, {
+      "steps.eformsign": stepValue("sent", "강사회원 가입서", "기존 이폼싸인 문서 연결 · 완료 확인 중"),
+      "evidence.eformsignDocumentId": documentId,
+      lastError: null,
+      updatedAt: now,
+    }));
+  });
+  return jobRef;
+}
+
+async function markOrphanReviewRequired(registrationRef, registration, message) {
+  const jobRef = db.collection("eformsignInstructorMemberJobs").doc(registrationRef.id);
+  const now = FieldValue.serverTimestamp();
+  await db.runTransaction(async (transaction) => {
+    const [registrationSnapshot, jobSnapshot] = await Promise.all([
+      transaction.get(registrationRef),
+      transaction.get(jobRef),
+    ]);
+    if (!registrationSnapshot.exists) throw new Error("강사레슨 등록 원본을 찾지 못했습니다.");
+    const current = registrationSnapshot.data() || {};
+    if (jobSnapshot.exists || !isInstructorMemberEformOrphan(current, false)) return;
+    transaction.set(jobRef, {
+      jobId: registrationRef.id,
+      registrationId: registrationRef.id,
+      studioId: current.studioId,
+      memberName: current.memberName,
+      memberPhone: normalizeInstructorLessonPhone(current.memberPhone),
+      lessonDate: current.lessonDate,
+      studiomateMemberId: current.studiomateMemberId || current.evidence?.studiomateMemberId || "",
+      ticketName: current.ticketName || INSTRUCTOR_LESSON_TICKET_NAME,
+      status: "send_review_required",
+      source: "orphan_registration_reconcile",
+      externalEffectStarted: false,
+      attempts: 0,
+      maxAttempts: 3,
+      lastError: message.slice(0, 1200),
+      createdAt: now,
+      updatedAt: now,
+    });
+    transaction.update(registrationRef, deriveRegistrationPatch(current, {
+      lastError: message.slice(0, 500),
+      "steps.eformsign": stepValue("review_required", "강사회원 가입서", message.slice(0, 240)),
+      updatedAt: now,
+    }));
+  });
+  return { status: "review_required", detail: "이폼싸인 문서 확인 필요" };
 }
 
 async function inspectCompletion(page, ref, job) {
