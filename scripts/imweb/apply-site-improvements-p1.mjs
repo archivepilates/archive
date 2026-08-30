@@ -10,7 +10,7 @@ const IMWEB = "/Users/archivepilates/.local/bin/imweb";
 const SITE_CODE = "S20260516852c71a014d08";
 const UNIT_CODE = "u2026051698c99ea234719";
 const MARKER = "data-archive-pilates-site-improvements-p1";
-const VERSION = "2026-08-30d";
+const VERSION = "2026-08-30e";
 const ARTIFACT_DIR = path.join(ROOT, "artifacts", "imweb-site-improvements-20260830");
 const INSTALLER = fs
   .readFileSync(path.join(ROOT, "scripts", "imweb", "install-site-improvements-p1.html"), "utf8")
