@@ -10,7 +10,7 @@ const IMWEB = "/Users/archivepilates/.local/bin/imweb";
 const SITE_CODE = "S20260516852c71a014d08";
 const UNIT_CODE = "u2026051698c99ea234719";
 const MARKER = "data-archive-pilates-site-improvements-p1";
-const VERSION = "2026-08-30e";
+const VERSION = "2026-08-31a";
 const ARTIFACT_DIR = path.join(ROOT, "artifacts", "imweb-site-improvements-20260830");
 const INSTALLER = fs
   .readFileSync(path.join(ROOT, "scripts", "imweb", "install-site-improvements-p1.html"), "utf8")
@@ -107,6 +107,9 @@ const after = {
 
 if (!after.header.includes(`${MARKER}="${VERSION}"`)) {
   throw new Error("prepared header is missing the P1 installer marker");
+}
+if (!after.header.includes("#archive-pilates-site .apb-hero .apb-hero-text,#archive-pilates-site .apb-hero #apb-hero-text{animation:none!important;transition:none!important;transform:translate3d(0,48px,0)!important;opacity:1!important}")) {
+  throw new Error("prepared header is missing the desktop hero stability rule");
 }
 if (!after.footer.includes('loading="lazy" decoding="async" fetchpriority="low" width="960" height="960"')) {
   throw new Error("prepared footer is missing the optimized Knitido image template");
