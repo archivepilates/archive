@@ -15,6 +15,8 @@ import {
   requireGroupRates,
   requirePrivateRate,
 } from "./lib/monthly-settlement-rate-policy.mjs";
+import { summarizeCurrentSettlementOperation } from "./lib/monthly-settlement-operation.mjs";
+import { dedupeSettlementSourceRows } from "./lib/monthly-settlement-source.mjs";
 
 const HOME = os.homedir();
 const REPO_ROOT = path.resolve(path.dirname(fileURLToPath(import.meta.url)), "..");
@@ -138,7 +140,12 @@ async function createSettlementWorkbookFromRaw(outputPath) {
   }
 
   const refs = await loadReferenceTables();
-  const rawRows = readWorkbookObjects(lessonSource).map((row) => mapRawLessonRow(row, path.basename(lessonSource)));
+  const mappedRows = readWorkbookObjects(lessonSource).map((row) => mapRawLessonRow(row, path.basename(lessonSource)));
+  const deduped = dedupeSettlementSourceRows(mappedRows);
+  const rawRows = deduped.rows;
+  if (deduped.removedCount) {
+    console.warn(`정산 원천의 완전 중복 ${deduped.removedCount}행을 제외하고 원천중복검수 시트에 기록합니다.`);
+  }
   assertSettlementRateCoverage(rawRows, refs);
   const auxRows = buildAuxRows(rawRows, refs);
   const payroll = buildPayrollRows(auxRows, refs);
@@ -151,6 +158,7 @@ async function createSettlementWorkbookFromRaw(outputPath) {
   XLSX.utils.book_append_sheet(wb, XLSX.utils.aoa_to_sheet(buildAuxSheetRows(auxRows)), "정산보조");
   XLSX.utils.book_append_sheet(wb, XLSX.utils.aoa_to_sheet(buildPayrollSheetRows(payroll.rows)), "정산대장");
   XLSX.utils.book_append_sheet(wb, XLSX.utils.aoa_to_sheet(buildReportSheetRows(report)), "월간리포트");
+  XLSX.utils.book_append_sheet(wb, XLSX.utils.aoa_to_sheet(buildDuplicateAuditSheetRows(deduped.duplicates)), "원천중복검수");
   XLSX.writeFile(wb, outputPath);
 }
 
@@ -522,6 +530,25 @@ function buildReportSheetRows(report) {
   ];
 }
 
+function buildDuplicateAuditSheetRows(duplicates) {
+  return [
+    ["중복키", "원본행수", "제외행수", "수업일자", "수업시간", "회원명", "강사명", "수업구분", "수강권명", "출결", "차감금액"],
+    ...duplicates.map((item) => [
+      item.key,
+      item.sourceCount,
+      item.removedCount,
+      item.row.classDate,
+      item.row.classTime,
+      item.row.memberName,
+      item.row.instructorName,
+      item.row.finalType,
+      item.row.ticketName,
+      item.row.attendance,
+      item.row.revenue,
+    ]),
+  ];
+}
+
 function createStatementWorkbookFromSettlement(settlementPath, outputPath) {
   const settlementWb = XLSX.readFile(settlementPath, { cellDates: true });
   const previousInfo = readPreviousInstructorInfo(rootDir, ym);
@@ -838,8 +865,10 @@ function readPreviousSummary(root, currentYm) {
 
 function readOperationWorkbook(filePath) {
   const wb = XLSX.readFile(filePath, { cellDates: true });
+  const current = readCurrentOperationWorkbook(wb);
+  if (current) return current;
   const sheet3 = rows(wb, "Sheet3");
-  if (!sheet3.length) return readCurrentOperationWorkbook(wb);
+  if (!sheet3.length) return null;
   const byLabel = new Map();
   for (const row of sheet3) {
     const label = clean(row[0]);
@@ -860,44 +889,7 @@ function readCurrentOperationWorkbook(wb) {
   const auxRows = rows(wb, "정산보조");
   const payrollRows = rows(wb, "정산대장");
   const reportRows = rows(wb, "월간리포트");
-  if (!auxRows.length && !payrollRows.length) return null;
-
-  const auxHeader = (auxRows[0] || []).map(clean);
-  const auxIndex = Object.fromEntries(auxHeader.map((name, idx) => [name, idx]));
-  const payrollHeader = (payrollRows[0] || []).map(clean);
-  const payrollIndex = Object.fromEntries(payrollHeader.map((name, idx) => [name, idx]));
-  const payroll = payrollRows.slice(1);
-  const aux = auxRows.slice(1);
-
-  const groupRevenue = aux
-    .filter((row) => clean(row[auxIndex["최종수업구분"]]) === "그룹")
-    .reduce((sum, row) => sum + money(row[auxIndex["정산매출"]]), 0);
-  const privateRevenue = aux
-    .filter((row) => clean(row[auxIndex["최종수업구분"]]) === "프라이빗")
-    .reduce((sum, row) => sum + money(row[auxIndex["정산매출"]]), 0);
-  const groupPay = payroll.reduce((sum, row) => sum + money(row[payrollIndex["그룹보수합계"]]), 0);
-  const privatePay = payroll.reduce((sum, row) => sum + money(row[payrollIndex["프라이빗보수합계"]]), 0);
-  const privateCount = payroll.reduce((sum, row) => sum + number(row[payrollIndex["프라이빗횟수"]]), 0);
-
-  return {
-    groupAttendanceAverage: readReportSummaryValue(reportRows, "그룹 출석평균"),
-    groupReservationAverage: readReportSummaryValue(reportRows, "그룹 예약평균"),
-    groupRevenue,
-    groupPay,
-    privateCount,
-    privateRevenue,
-    privatePay,
-  };
-}
-
-function readReportSummaryValue(reportRows, headerName) {
-  for (let i = 0; i < reportRows.length - 1; i += 1) {
-    const header = reportRows[i].map(clean);
-    const index = header.indexOf(headerName);
-    if (index < 0) continue;
-    return number(reportRows[i + 1]?.[index]);
-  }
-  return 0;
+  return summarizeCurrentSettlementOperation({ auxRows, payrollRows, reportRows });
 }
 
 function buildSummary(instructors, previousTotalPayout, operation) {
