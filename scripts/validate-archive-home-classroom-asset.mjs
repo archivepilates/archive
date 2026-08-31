@@ -9,12 +9,16 @@ if (!fs.existsSync(assetPath)) {
 
 const source = fs.readFileSync(assetPath, "utf8");
 const requiredMarkers = [
-  'VERSION="2026-07-28d"',
+  'VERSION="2026-08-31a"',
   'data-ap-classroom-v2',
   '"/archive-method-watch-ach8"',
   '"/archive-method-watch-ab9"',
   '"/private-lesson-pelvis-hip-b-barrel-260725"',
   '"/private-lesson-jey-260718"',
+  '"/private-lesson-support-movement-a-260829"',
+  '"/private-lesson-support-movement-b-260829"',
+  '"/private-lesson-support-movement-c-260830"',
+  '"/private-lesson-support-movement-d-260830"',
 ];
 
 for (const marker of requiredMarkers) {

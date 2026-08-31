@@ -1,5 +1,5 @@
 (function(){
-  var VERSION="2026-07-28d";
+  var VERSION="2026-08-31a";
   var path=String(location.pathname||"").replace(/\/$/,"");
   if(path!=="/48"&&path!=="/my-classroom")return;
 
@@ -37,7 +37,11 @@
     {"code":"AR5","path":"/archive-method-watch-ar5","title":"리포머 골반·고관절 (AR5)"},
     {"code":"B260725-BARREL","path":"/private-lesson-pelvis-hip-b-barrel-260725","title":"7/25 골반·고관절 B팀 · 바렐","group":"PRIVATE LESSON PELVIS HIP B 260725 40D","private":true},
     {"code":"B260725-REFORMER","path":"/private-lesson-pelvis-hip-b-reformer-260725","title":"7/25 골반·고관절 B팀 · 리포머","group":"PRIVATE LESSON PELVIS HIP B 260725 40D","private":true},
-    {"code":"JEY260718","path":"/private-lesson-jey-260718","title":"정은영 프라이빗 강사레슨 260718","group":"PRIVATE LESSON JEY 260718 40D","private":true}
+    {"code":"JEY260718","path":"/private-lesson-jey-260718","title":"정은영 프라이빗 강사레슨 260718","group":"PRIVATE LESSON JEY 260718 40D","private":true},
+    {"code":"A260829","path":"/private-lesson-support-movement-a-260829","title":"8/29 지지와 움직임 A팀 · 수강생 공유","group":"PRIVATE LESSON SUPPORT MOVEMENT A 260829 40D","private":true},
+    {"code":"B260829","path":"/private-lesson-support-movement-b-260829","title":"8/29 지지와 움직임 B팀 · 수강생 공유","group":"PRIVATE LESSON SUPPORT MOVEMENT B 260829 40D","private":true},
+    {"code":"C260830","path":"/private-lesson-support-movement-c-260830","title":"8/30 지지와 움직임 C팀 · 수강생 공유","group":"PRIVATE LESSON SUPPORT MOVEMENT C 260830 40D","private":true},
+    {"code":"D260830","path":"/private-lesson-support-movement-d-260830","title":"8/30 지지와 움직임 D팀 · 수강생 공유","group":"PRIVATE LESSON SUPPORT MOVEMENT D 260830 40D","private":true}
   ];
   var M={
     "d43dd28704f02dbdf0ff891b31450e359240d62d":"all",
