@@ -21,6 +21,7 @@ artifacts/*/node_modules/
 artifacts/*/node_modules_deps/
 artifacts/*/node_modules
 artifacts/*/node_modules_deps
+output/
 .firebase/
 .DS_Store
 firebase/.DS_Store

@@ -15,11 +15,28 @@ const NONBUYER = {
   email: "codex.imweb.nobuyer.202607011145@archivepilates.com",
   keychainService: "ARCHIVE PILATES Imweb nonbuyer test member",
 };
-const TEST_ACCESS = {
-  code: "A260829",
-  groupCode: "g20260831856d87e46bff5",
-  path: "/private-lesson-support-movement-a-260829",
-};
+const TEST_ACCESS_CASES = [
+  {
+    code: "A260829",
+    groupCode: "g20260831856d87e46bff5",
+    path: "/private-lesson-support-movement-a-260829",
+  },
+  {
+    code: "B260829",
+    groupCode: "g20260831285f4ebae0f7d",
+    path: "/private-lesson-support-movement-b-260829",
+  },
+  {
+    code: "C260830",
+    groupCode: "g2026083145148b595b4dd",
+    path: "/private-lesson-support-movement-c-260830",
+  },
+  {
+    code: "D260830",
+    groupCode: "g202608311da9acbcaf394",
+    path: "/private-lesson-support-movement-d-260830",
+  },
+];
 const VIEWPORTS = [
   { name: "mobile", width: 390, height: 844 },
   { name: "desktop", width: 1440, height: 900 },
@@ -36,25 +53,30 @@ assert(
 
 const browser = await chromium.launch({ headless: true });
 try {
-  updateGroups(BUYER.email, [TEST_ACCESS.groupCode]);
-  assertGroups(BUYER.email, [TEST_ACCESS.groupCode], "test access assignment");
-
   const buyerPassword = keychainPassword(BUYER.keychainService);
   const nonbuyerPassword = keychainPassword(NONBUYER.keychainService);
 
+  const temporaryGroupCodes = TEST_ACCESS_CASES.map((item) => item.groupCode);
+  updateGroups(BUYER.email, temporaryGroupCodes);
+  assertGroups(BUYER.email, temporaryGroupCodes, "August classroom test access assignment");
   for (const viewport of VIEWPORTS) {
     results.push(await verifyAccount({
       account: BUYER,
-      expectedCodes: [TEST_ACCESS.code],
+      expectedCodes: TEST_ACCESS_CASES.map((item) => item.code),
       password: buyerPassword,
       role: "authorized",
+      testAccesses: TEST_ACCESS_CASES,
       viewport,
     }));
+  }
+
+  for (const viewport of VIEWPORTS) {
     results.push(await verifyAccount({
       account: NONBUYER,
       expectedCodes: [],
       password: nonbuyerPassword,
       role: "unauthorized",
+      testAccesses: TEST_ACCESS_CASES,
       viewport,
     }));
   }
@@ -76,7 +98,7 @@ console.log(
       ok: results.every((result) => result.ok),
       gate: "imweb-classroom-test-accounts",
       classroomVersion: VERSION,
-      temporaryAccess: TEST_ACCESS.code,
+      temporaryAccessCases: TEST_ACCESS_CASES.map((item) => item.code),
       restoredBuyerGroupCount: originalBuyerGroups.length,
       results,
     },
@@ -85,8 +107,29 @@ console.log(
   ),
 );
 
-async function verifyAccount({ account, expectedCodes, password, role, viewport }) {
+async function verifyAccount({
+  account,
+  expectedCodes,
+  password,
+  role,
+  testAccesses = [],
+  viewport,
+}) {
   const context = await browser.newContext({ viewport });
+  const liveProbePaths = new Set(testAccesses.map((item) => item.path));
+  await context.route("**/*", async (route) => {
+    const url = new URL(route.request().url());
+    if (url.searchParams.has("ap_classroom_probe")) {
+      await route.fulfill({ status: 403, contentType: "text/plain", body: "legacy probe disabled" });
+      return;
+    }
+    const isFetchProbe = url.searchParams.has("ap_classroom_fetch_probe");
+    if (isFetchProbe && !liveProbePaths.has(url.pathname.replace(/\/$/, ""))) {
+      await route.fulfill({ status: 403, contentType: "text/plain", body: "test-scope denied" });
+      return;
+    }
+    await route.continue();
+  });
   const page = await context.newPage();
   try {
     await login(page, account.email, password);
@@ -134,52 +177,62 @@ async function verifyAccount({ account, expectedCodes, password, role, viewport 
 
     if (role === "authorized") {
       assert(!state.emptyVisible, `${role}/${viewport.name}: empty state is visible.`);
-      assert(state.links.includes(TEST_ACCESS.path), `${role}/${viewport.name}: expected watch link missing.`);
-      await page.goto(`${SITE}${TEST_ACCESS.path}?ap_test_account_gate=${Date.now()}`, {
-        waitUntil: "domcontentloaded",
-        timeout: 30000,
-      });
-      await page.waitForFunction(
-        () =>
+      for (const allowedAccess of testAccesses) {
+        assert(
+          state.links.includes(allowedAccess.path),
+          `${role}/${viewport.name}/${allowedAccess.code}: expected watch link missing.`,
+        );
+        await page.goto(`${SITE}${allowedAccess.path}?ap_test_account_gate=${Date.now()}`, {
+          waitUntil: "domcontentloaded",
+          timeout: 30000,
+        });
+        await page.waitForFunction(
+          () =>
+            Boolean(
+              document.querySelector(
+                '.ap-private-watch,.ap-private-watch__video,iframe[src*="youtube.com/embed"],iframe[src*="youtube-nocookie.com/embed"]',
+              ),
+            ),
+          null,
+          { timeout: 15000 },
+        );
+        const protectedMedia = await page.evaluate(() =>
           Boolean(
             document.querySelector(
               '.ap-private-watch,.ap-private-watch__video,iframe[src*="youtube.com/embed"],iframe[src*="youtube-nocookie.com/embed"]',
             ),
           ),
-        null,
-        { timeout: 15000 },
-      );
-      const watchVisible = await page
-        .getByRole("heading", { name: /지지와 움직임|수강생 공유/i })
-        .count()
-        .catch(() => 0);
-      const protectedMedia = await page.evaluate(() =>
-        Boolean(
-          document.querySelector(
-            '.ap-private-watch,.ap-private-watch__video,iframe[src*="youtube.com/embed"],iframe[src*="youtube-nocookie.com/embed"]',
-          ),
-        ),
-      );
-      assert(watchVisible > 0 || protectedMedia, `${role}/${viewport.name}: watch page did not render.`);
+        );
+        assert(
+          protectedMedia,
+          `${role}/${viewport.name}/${allowedAccess.code}: watch page did not render.`,
+        );
+      }
     } else {
       assert(state.emptyVisible, `${role}/${viewport.name}: empty state is missing.`);
-      await page.goto(`${SITE}${TEST_ACCESS.path}?ap_test_account_gate=${Date.now()}`, {
-        waitUntil: "domcontentloaded",
-        timeout: 30000,
-      });
-      const leakedMedia = await page.evaluate(() =>
-        Boolean(
-          document.querySelector(
-            '.ap-private-watch,.ap-private-watch__video,iframe[src*="youtube.com/embed"],iframe[src*="youtube-nocookie.com/embed"]',
+      for (const deniedAccess of testAccesses) {
+        await page.goto(`${SITE}${deniedAccess.path}?ap_test_account_gate=${Date.now()}`, {
+          waitUntil: "domcontentloaded",
+          timeout: 30000,
+        });
+        const leakedMedia = await page.evaluate(() =>
+          Boolean(
+            document.querySelector(
+              '.ap-private-watch,.ap-private-watch__video,iframe[src*="youtube.com/embed"],iframe[src*="youtube-nocookie.com/embed"]',
+            ),
           ),
-        ),
-      );
-      assert(!leakedMedia, `${role}/${viewport.name}: protected media leaked to non-buyer.`);
+        );
+        assert(
+          !leakedMedia,
+          `${role}/${viewport.name}/${deniedAccess.code}: protected media leaked to non-buyer.`,
+        );
+      }
     }
 
     return {
       ok: true,
       role,
+      accessCases: role === "authorized" ? testAccesses.map((item) => item.code) : [],
       viewport: viewport.name,
       cardCount: state.cardCount,
       codes: state.codes,
