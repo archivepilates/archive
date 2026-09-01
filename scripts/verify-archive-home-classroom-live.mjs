@@ -2,10 +2,10 @@ import crypto from "node:crypto";
 import fs from "node:fs";
 import path from "node:path";
 
-const version = "2026-08-31a";
+const version = "2026-09-01a";
 const assetPath = path.resolve("official-home/assets/imweb-my-classroom-20260723a.js");
 const assetUrl =
-  "https://archivepilates.com/assets/imweb-my-classroom-20260723a.js?v=20260831a";
+  "https://archivepilates.com/assets/imweb-my-classroom-20260723a.js?v=20260901a";
 const imwebHomeUrl = "https://archivepilates.imweb.me/";
 const expectedSource = fs.readFileSync(assetPath, "utf8");
 const expectedHash = sha256(expectedSource);
@@ -48,7 +48,7 @@ const imwebScripts = await retry("Imweb classroom loader", async () => {
   });
   const html = await response.text();
   const loaderMarker = `data-archive-pilates-my-classroom-v2="${version}"`;
-  const assetMarker = `v=20260831a`;
+  const assetMarker = `v=20260901a`;
   const inlineFallbackMarker =
     'data-archive-pilates-my-classroom="2026-07-21b"';
 

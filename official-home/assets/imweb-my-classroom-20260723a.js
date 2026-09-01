@@ -1,5 +1,6 @@
 (function(){
-  var VERSION="2026-08-31a";
+  var VERSION="2026-09-01a";
+  var MAX_PROBES=6;
   var path=String(location.pathname||"").replace(/\/$/,"");
   if(path!=="/48"&&path!=="/my-classroom")return;
 
@@ -85,7 +86,19 @@
   function okDocument(doc){
     if(!doc)return false;
     doc.querySelectorAll("script,style").forEach(function(node){node.remove()});
-    return !!doc.querySelector('.ap-watch,[data-archive-pilates-watch-code],iframe[src*="youtube.com/embed"]');
+    return !!doc.querySelector('.ap-watch,.ap-private-watch,.ap-private-watch__video,[data-archive-pilates-watch-code],iframe[src*="youtube.com/embed"],iframe[src*="youtube-nocookie.com/embed"]');
+  }
+  function normalizedPath(value){
+    try{return new URL(value,location.href).pathname.replace(/\/$/,"")||"/"}catch(e){return""}
+  }
+  function responseMatches(response,x){
+    return !!(response&&response.ok&&normalizedPath(response.url)===normalizedPath(x.path));
+  }
+  function probeOrder(){
+    var privateItems=[];
+    var standardItems=[];
+    L.forEach(function(x,i){(x.private?privateItems:standardItems).push(i)});
+    return privateItems.concat(standardItems);
   }
   function titleFor(x){
     if(x.private)return x.title;
@@ -175,14 +188,27 @@
         });
         var html=await response.text();
         var doc=new DOMParser().parseFromString(html,"text/html");
-        if(okDocument(doc)&&add(x,i,"fetch"))draw();
+        if(responseMatches(response,x)&&okDocument(doc)&&add(x,i,"fetch"))draw();
       }catch(e){}finally{clearTimeout(timer)}
+    }
+
+    function runProbes(){
+      var order=probeOrder();
+      var cursor=0;
+      var workers=[];
+      function worker(){
+        if(cursor>=order.length)return Promise.resolve();
+        var i=order[cursor++];
+        return probe(L[i],i).then(worker);
+      }
+      for(var i=0;i<Math.min(MAX_PROBES,order.length);i++)workers.push(worker());
+      return Promise.all(workers);
     }
 
     markManual();
     markProfile();
     draw();
-    Promise.all(L.map(probe)).then(function(){
+    runProbes().then(function(){
       finished=true;
       markManual();
       markProfile();

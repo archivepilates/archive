@@ -11,10 +11,10 @@ if (!scriptMatch) {
 }
 
 const source = scriptMatch[1];
-const expectedVersion = "2026-08-31a";
+const expectedVersion = "2026-09-01a";
 const recoveryKey = "ap_classroom_asset_skip_once";
 const expectedAssetUrl =
-  "https://archivepilates.com/assets/imweb-my-classroom-20260723a.js?v=20260831a";
+  "https://archivepilates.com/assets/imweb-my-classroom-20260723a.js?v=20260901a";
 
 if (!loaderHtml.includes(`data-archive-pilates-my-classroom-v2="${expectedVersion}"`)) {
   throw new Error("My Classroom loader marker is stale.");
