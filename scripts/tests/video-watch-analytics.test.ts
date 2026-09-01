@@ -109,6 +109,7 @@ test("builds video and buyer frequency summaries from started sessions only", ()
     totals: Record<string, number>;
     videos: Array<Record<string, unknown>>;
     buyers: Array<Record<string, unknown>>;
+    recentMembers: Array<Record<string, unknown>>;
   };
   assert.equal(dashboard.totals.activeBuyers, 1);
   assert.equal(dashboard.totals.watchSessions, 2);
@@ -120,6 +121,39 @@ test("builds video and buyer frequency summaries from started sessions only", ()
   assert.equal(dashboard.buyers[0].activeDays, 2);
   assert.equal(dashboard.buyers[0].label, "홍길동");
   assert.equal(dashboard.buyers[0].buyerName, "홍길동");
+  assert.equal(dashboard.recentMembers.length, 1);
+  assert.equal(dashboard.recentMembers[0].buyerName, "홍길동");
+  assert.equal(dashboard.recentMembers[0].watchedVideos, 1);
+  assert.deepEqual(
+    (dashboard.recentMembers[0].history as Array<Record<string, unknown>>).map((row) => ({
+      code: row.videoCode,
+      sessions: row.sessions,
+      completions: row.completions,
+    })),
+    [{ code: "AR1", sessions: 2, completions: 1 }],
+  );
+});
+
+test("returns only the ten most recently active members in recent order", () => {
+  const sessions = Array.from({ length: 12 }, (_, index) => {
+    const day = String(index + 1).padStart(2, "0");
+    return session({
+      id: `session-${index + 1}`,
+      buyerKey: (index + 1).toString(16).padStart(64, "0"),
+      buyerName: `회원${index + 1}`,
+      lastSeenAt: new Date(`2026-08-${day}T09:00:00.000Z`),
+      watchDates: [`2026-08-${day}`],
+    });
+  });
+
+  const dashboard = buildVideoWatchDashboard(sessions, 30) as {
+    recentMembers: Array<Record<string, unknown>>;
+  };
+
+  assert.equal(dashboard.recentMembers.length, 10);
+  assert.equal(dashboard.recentMembers[0].buyerName, "회원12");
+  assert.equal(dashboard.recentMembers[9].buyerName, "회원3");
+  assert.equal(dashboard.recentMembers.some((row) => row.buyerName === "회원2"), false);
 });
 
 function session(overrides: Partial<VideoWatchSessionRow>): VideoWatchSessionRow {

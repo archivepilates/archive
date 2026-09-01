@@ -196,6 +196,7 @@ export function buildVideoWatchDashboard(
   const sessions = sessionRows.filter((row) => row.started);
   const videos = new Map<string, DashboardBucket>();
   const buyers = new Map<string, DashboardBucket>();
+  const memberVideos = new Map<string, Map<string, DashboardBucket>>();
   const daily = new Map<string, { date: string; sessions: number; completions: number; buyers: Set<string> }>();
 
   for (const row of sessions) {
@@ -203,6 +204,9 @@ export function buildVideoWatchDashboard(
     const buyerLabel = row.buyerName || row.accountHint || buyerAlias(row.buyerKey);
     const buyerLabelRank = row.buyerName ? 3 : row.accountHint ? 2 : 1;
     updateBucket(buyers, row.buyerKey, buyerLabel, row, buyerLabelRank);
+    const videoBuckets = memberVideos.get(row.buyerKey) || new Map<string, DashboardBucket>();
+    updateBucket(videoBuckets, row.videoCode, row.videoTitle || row.videoCode, row);
+    memberVideos.set(row.buyerKey, videoBuckets);
     const dates = row.watchDates.length ? row.watchDates : [kstDate(row.lastSeenAt)];
     for (const date of new Set(dates)) {
       const current = daily.get(date) || { date, sessions: 0, completions: 0, buyers: new Set<string>() };
@@ -227,6 +231,44 @@ export function buildVideoWatchDashboard(
       ...bucketOutput(bucket),
     }))
     .sort(bucketSort);
+  const recentMembers = [...buyers.entries()]
+    .map(([buyerKey, bucket]) => {
+      const summary = bucketOutput(bucket);
+      const history = [...(memberVideos.get(buyerKey) || new Map<string, DashboardBucket>()).entries()]
+        .map(([videoCode, videoBucket]) => {
+          const video = bucketOutput(videoBucket);
+          return {
+            videoCode,
+            videoTitle: video.label || videoCode,
+            sessions: video.sessions,
+            playStarts: video.playStarts,
+            completions: video.completions,
+            completionRate: video.completionRate,
+            totalWatchSeconds: video.totalWatchSeconds,
+            maxProgressPercent: video.maxProgressPercent,
+            activeDays: video.activeDays,
+            firstWatchedAt: video.firstWatchedAt,
+            lastWatchedAt: video.lastWatchedAt,
+          };
+        })
+        .sort((a, b) => b.lastWatchedAt.localeCompare(a.lastWatchedAt));
+      return {
+        buyerId: buyerAlias(buyerKey),
+        buyerName: bucket.labelRank >= 3 ? bucket.label : "",
+        sessions: summary.sessions,
+        playStarts: summary.playStarts,
+        completions: summary.completions,
+        totalWatchSeconds: summary.totalWatchSeconds,
+        maxProgressPercent: summary.maxProgressPercent,
+        activeDays: summary.activeDays,
+        watchedVideos: history.length,
+        firstWatchedAt: summary.firstWatchedAt,
+        lastWatchedAt: summary.lastWatchedAt,
+        history,
+      };
+    })
+    .sort((a, b) => b.lastWatchedAt.localeCompare(a.lastWatchedAt))
+    .slice(0, 10);
   const repeatBuyers = buyerRows.filter((row) => Number(row.sessions || 0) >= 2).length;
   const recentSessions = sessions.slice(0, 40).map((row) => ({
     sessionId: row.id.slice(0, 12),
@@ -262,6 +304,7 @@ export function buildVideoWatchDashboard(
     },
     videos: videoRows,
     buyers: buyerRows,
+    recentMembers,
     recentSessions,
     daily: [...daily.values()]
       .sort((a, b) => a.date.localeCompare(b.date))

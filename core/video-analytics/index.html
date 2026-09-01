@@ -27,8 +27,8 @@
         <header class="topbar">
           <div class="title-block">
             <p class="eyebrow">VIDEO WATCH</p>
-            <h1>영상 시청 현황</h1>
-            <p class="subtitle">구매자 이름별 반복 시청과 영상별 도달률을 확인합니다.</p>
+            <h1>회원별 영상 시청 현황</h1>
+            <p class="subtitle">최근 시청 회원과 개인별 영상 이력</p>
           </div>
           <div class="top-actions" aria-label="시청 현황 설정">
             <div class="connection-card" aria-live="polite">
@@ -39,10 +39,9 @@
           </div>
         </header>
 
-        <section class="panel video-watch-toolbar" aria-label="조회 기간">
+        <section class="panel video-watch-toolbar" aria-labelledby="videoWatchRangeTitle">
           <div>
-            <span class="pill good" id="videoWatchCollectorStatus">수집 준비</span>
-            <h2>구매 영상 이용 흐름</h2>
+            <h2 id="videoWatchRangeTitle">조회 기간</h2>
             <p id="videoWatchUpdatedAt">추적 기능을 적용한 시점 이후의 기록만 표시됩니다.</p>
           </div>
           <div class="range-segment" id="videoWatchRange" role="group" aria-label="조회 기간 선택">
@@ -52,76 +51,45 @@
           </div>
         </section>
 
-        <section class="grid kpis video-watch-kpis" aria-label="핵심 시청 지표">
+        <section class="grid kpis video-watch-kpis" aria-label="회원 시청 요약">
           <article class="panel metric">
-            <div class="metric-label">시청 구매자</div>
+            <div class="metric-label">시청 회원</div>
             <div class="metric-value" id="videoWatchActiveBuyers">-</div>
-            <div class="metric-note" id="videoWatchBuyerNote">선택 기간 기준</div>
+            <div class="metric-note" id="videoWatchBuyerNote">선택 기간</div>
           </article>
           <article class="panel metric">
-            <div class="metric-label">시청 세션</div>
-            <div class="metric-value" id="videoWatchSessions">-</div>
-            <div class="metric-note" id="videoWatchSessionNote">30분 비활동 시 새 세션</div>
+            <div class="metric-label">시청 영상</div>
+            <div class="metric-value" id="videoWatchVideoCount">-</div>
+            <div class="metric-note">서로 다른 영상</div>
           </article>
           <article class="panel metric">
-            <div class="metric-label">반복 시청자</div>
-            <div class="metric-value" id="videoWatchRepeatBuyers">-</div>
-            <div class="metric-note" id="videoWatchRepeatRate">2회 이상 세션</div>
-          </article>
-          <article class="panel metric">
-            <div class="metric-label">90% 도달</div>
-            <div class="metric-value" id="videoWatchCompletions">-</div>
-            <div class="metric-note" id="videoWatchCompletionRate">완료율</div>
-          </article>
-          <article class="panel metric">
-            <div class="metric-label">누적 재생시간</div>
+            <div class="metric-label">총 시청시간</div>
             <div class="metric-value" id="videoWatchTime">-</div>
             <div class="metric-note">실제 재생 상태 기준</div>
           </article>
         </section>
 
-        <section class="panel" aria-labelledby="videoWatchTrendTitle">
-          <div class="panel-header">
-            <div><h2 id="videoWatchTrendTitle">날짜별 시청</h2><p>시청 세션과 완료 흐름을 날짜 순으로 표시합니다.</p></div>
-            <span class="pill" id="videoWatchTrendSummary">데이터 대기</span>
-          </div>
-          <div class="video-watch-trend" id="videoWatchTrend">
-            <div class="empty-state">시청 기록을 불러오면 여기에 표시됩니다.</div>
-          </div>
-        </section>
-
-        <section class="panel" aria-labelledby="videoWatchVideosTitle">
-          <div class="panel-header">
-            <div><h2 id="videoWatchVideosTitle">영상별 현황</h2><p>어떤 영상이 반복 시청되고 끝까지 도달하는지 확인합니다.</p></div>
-            <span class="pill" id="videoWatchVideoCount">0편</span>
-          </div>
-          <div class="table-wrap">
-            <table class="core-table video-watch-table">
-              <thead><tr><th>영상</th><th>구매자</th><th>세션</th><th>시청시간</th><th>최대 도달</th><th>90% 완료</th><th>최근 시청</th></tr></thead>
-              <tbody id="videoWatchVideoTableBody">
-                <tr><td colspan="7"><div class="empty-state">영상별 기록을 확인 중입니다.</div></td></tr>
-              </tbody>
-            </table>
-          </div>
-        </section>
-
-        <section class="grid overview-grid video-watch-detail-grid">
+        <section class="video-watch-member-layout" aria-label="회원별 영상 시청 이력">
           <article class="panel" aria-labelledby="videoWatchBuyersTitle">
             <div class="panel-header">
-              <div><h2 id="videoWatchBuyersTitle">구매자별 이용</h2><p>시청 기록이 있는 회원명만 표시합니다.</p></div>
+              <div><h2 id="videoWatchBuyersTitle">최근 시청 회원</h2><p>최근 시청순 10명</p></div>
               <span class="pill" id="videoWatchBuyerCount">0명</span>
             </div>
             <div class="video-watch-member-list" id="videoWatchBuyerList" role="list">
-              <div class="empty-state">구매자별 기록을 확인 중입니다.</div>
+              <div class="empty-state">회원 시청 기록을 확인 중입니다.</div>
             </div>
           </article>
 
-          <article class="panel" aria-labelledby="videoWatchRecentTitle">
+          <article class="panel video-watch-member-detail" aria-labelledby="videoWatchMemberDetailTitle">
             <div class="panel-header">
-              <div><h2 id="videoWatchRecentTitle">최근 시청 세션</h2><p>가장 최근에 재생된 구매 영상입니다.</p></div>
+              <div>
+                <p class="eyebrow">MEMBER HISTORY</p>
+                <h2 id="videoWatchMemberDetailTitle">회원 선택</h2>
+                <p id="videoWatchMemberDetailMeta">최근 시청 회원을 선택하세요.</p>
+              </div>
             </div>
-            <div class="video-watch-list" id="videoWatchRecentList">
-              <div class="empty-state">최근 시청 기록을 확인 중입니다.</div>
+            <div class="video-watch-history" id="videoWatchMemberHistory" aria-live="polite">
+              <div class="empty-state">선택한 회원의 시청 이력이 표시됩니다.</div>
             </div>
           </article>
         </section>

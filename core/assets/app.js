@@ -112,6 +112,8 @@ let selectedStaffKey = "";
 let selectedMealRequestId = "";
 let mealQueueFilter = "active";
 let videoWatchRangeDays = 30;
+let videoWatchMembers = [];
+let selectedVideoWatchMemberId = "";
 let instructorLessonRegistrationFilter = "active";
 let refundFlow = { candidates: [], member: null, tickets: [], selectedTicket: null, preview: null };
 
@@ -463,7 +465,7 @@ function sourceAgeText(value) {
 }
 
 function currentReadRequirements() {
-  if (qs("videoWatchVideoTableBody")) {
+  if (qs("videoWatchBuyerList")) {
     return [{ label: "videoWatchDashboard", title: "영상 시청 기록", staleAfterHours: null }];
   }
   if (qs("lessonsTodayList")) return [{ label: "bookings", title: "예약 원본", staleAfterHours: 30 }];
@@ -6639,51 +6641,30 @@ function syncVideoWatchRangeButtons() {
 function renderVideoWatchDashboard(dashboard) {
   syncVideoWatchRangeButtons();
   if (!dashboard && readUnavailable("videoWatchDashboard")) {
-    ["videoWatchActiveBuyers", "videoWatchSessions", "videoWatchRepeatBuyers", "videoWatchCompletions", "videoWatchTime"]
-      .forEach((id) => setText(id, "-"));
+    ["videoWatchActiveBuyers", "videoWatchVideoCount", "videoWatchTime"].forEach((id) => setText(id, "-"));
     setText("videoWatchBuyerNote", "조회 상태 확인 필요");
-    setText("videoWatchSessionNote", "조회 상태 확인 필요");
-    setText("videoWatchRepeatRate", "조회 상태 확인 필요");
-    setText("videoWatchCompletionRate", "조회 상태 확인 필요");
-    setText("videoWatchVideoCount", "-");
     setText("videoWatchBuyerCount", "-");
-    setText("videoWatchCollectorStatus", readState("videoWatchDashboard").status === "permission-denied" ? "권한 필요" : "조회 실패");
     setText("videoWatchUpdatedAt", "영상 시청 기록의 조회 권한 또는 연결 상태를 확인하세요.");
-    setText("videoWatchTrendSummary", "-");
-    const collectorStatus = qs("videoWatchCollectorStatus");
-    if (collectorStatus) collectorStatus.className = "pill danger";
     const emptyMessage = '<div class="empty-state">영상 시청 기록의 조회 권한 또는 연결 상태를 확인하세요.</div>';
-    const trend = qs("videoWatchTrend");
-    const videoBody = qs("videoWatchVideoTableBody");
-    const buyers = qs("videoWatchBuyerList");
-    const recent = qs("videoWatchRecentList");
-    if (trend) trend.innerHTML = emptyMessage;
-    if (videoBody) videoBody.innerHTML = `<tr><td colspan="7">${emptyMessage}</td></tr>`;
-    if (buyers) buyers.innerHTML = emptyMessage;
-    if (recent) recent.innerHTML = emptyMessage;
+    const memberList = qs("videoWatchBuyerList");
+    const memberHistory = qs("videoWatchMemberHistory");
+    if (memberList) memberList.innerHTML = emptyMessage;
+    if (memberHistory) memberHistory.innerHTML = emptyMessage;
+    setText("videoWatchMemberDetailTitle", "조회 실패");
+    setText("videoWatchMemberDetailMeta", "영상 시청 기록 연결 상태를 확인하세요.");
+    videoWatchMembers = [];
+    selectedVideoWatchMemberId = "";
     return;
   }
   const totals = dashboard?.totals || {};
-  const videos = Array.isArray(dashboard?.videos) ? dashboard.videos : [];
-  const buyers = Array.isArray(dashboard?.buyers) ? dashboard.buyers : [];
-  const recent = Array.isArray(dashboard?.recentSessions) ? dashboard.recentSessions : [];
-  const daily = Array.isArray(dashboard?.daily) ? dashboard.daily : [];
+  videoWatchMembers = normalizeVideoWatchMembers(dashboard);
   const hasData = toNumber(totals.watchSessions) > 0;
 
   setText("videoWatchActiveBuyers", hasData ? `${toNumber(totals.activeBuyers).toLocaleString("ko-KR")}명` : "0명");
-  setText("videoWatchSessions", hasData ? `${toNumber(totals.watchSessions).toLocaleString("ko-KR")}회` : "0회");
-  setText("videoWatchRepeatBuyers", hasData ? `${toNumber(totals.repeatBuyers).toLocaleString("ko-KR")}명` : "0명");
-  setText("videoWatchCompletions", hasData ? `${toNumber(totals.completions).toLocaleString("ko-KR")}회` : "0회");
   setText("videoWatchTime", formatVideoWatchTime(totals.totalWatchSeconds));
-  setText("videoWatchBuyerNote", `${videoWatchRangeDays}일간 · 1인 평균 ${toNumber(totals.sessionsPerBuyer).toFixed(1)}회`);
-  setText("videoWatchSessionNote", `재생 시작 ${toNumber(totals.playStarts).toLocaleString("ko-KR")}회`);
-  setText("videoWatchRepeatRate", `반복률 ${toNumber(totals.repeatRate).toFixed(1)}%`);
-  setText("videoWatchCompletionRate", `완료율 ${toNumber(totals.completionRate).toFixed(1)}%`);
-  setText("videoWatchVideoCount", `${videos.length.toLocaleString("ko-KR")}편`);
-  setText("videoWatchBuyerCount", `${buyers.length.toLocaleString("ko-KR")}명`);
-  setText("videoWatchCollectorStatus", hasData ? "수집 중" : "수집 대기");
-  const collectorStatus = qs("videoWatchCollectorStatus");
-  if (collectorStatus) collectorStatus.className = `pill ${hasData ? "good" : "warn"}`;
+  setText("videoWatchBuyerNote", `${videoWatchRangeDays}일 기준`);
+  setText("videoWatchVideoCount", `${toNumber(totals.watchedVideos).toLocaleString("ko-KR")}편`);
+  setText("videoWatchBuyerCount", `${videoWatchMembers.length.toLocaleString("ko-KR")}명`);
   const generatedAt = dashboard?.generatedAt ? compactDateTime(dashboard.generatedAt) : "-";
   setText(
     "videoWatchUpdatedAt",
@@ -6692,103 +6673,126 @@ function renderVideoWatchDashboard(dashboard) {
       : "추적 기능을 적용한 시점 이후의 기록만 표시됩니다.",
   );
 
-  renderVideoWatchTrend(daily);
-  renderVideoWatchVideoTable(videos);
-  renderVideoWatchBuyerList(buyers);
-  renderVideoWatchRecentList(recent);
-}
-
-function renderVideoWatchTrend(rows) {
-  const container = qs("videoWatchTrend");
-  if (!container) return;
-  if (!rows.length) {
-    container.innerHTML = '<div class="empty-state">선택한 기간에 재생을 시작한 기록이 없습니다.</div>';
-    setText("videoWatchTrendSummary", "0회");
-    return;
+  if (!videoWatchMembers.some((member) => member.buyerId === selectedVideoWatchMemberId)) {
+    selectedVideoWatchMemberId = videoWatchMembers[0]?.buyerId || "";
   }
-  const maxSessions = Math.max(1, ...rows.map((row) => toNumber(row.sessions)));
-  const totalSessions = rows.reduce((sum, row) => sum + toNumber(row.sessions), 0);
-  setText("videoWatchTrendSummary", `${totalSessions.toLocaleString("ko-KR")}세션`);
-  container.innerHTML = rows
-    .map((row) => {
-      const sessions = toNumber(row.sessions);
-      const height = Math.max(10, Math.round((sessions / maxSessions) * 100));
-      const label = String(row.date || "").slice(5).replace("-", ".");
-      return `
-        <div class="video-watch-trend-item" aria-label="${escapeHtml(label)} ${sessions}세션, ${toNumber(row.completions)}회 완료">
-          <div class="video-watch-trend-value">${sessions}</div>
-          <div class="video-watch-trend-track"><span style="height:${height}%"></span></div>
-          <strong>${escapeHtml(label)}</strong>
-          <small>${toNumber(row.buyers)}명</small>
-        </div>
-      `;
-    })
-    .join("");
+  renderVideoWatchMemberList(videoWatchMembers);
+  renderVideoWatchMemberDetail(videoWatchMembers.find((member) => member.buyerId === selectedVideoWatchMemberId));
 }
 
-function renderVideoWatchVideoTable(rows) {
-  const body = qs("videoWatchVideoTableBody");
-  if (!body) return;
-  if (!rows.length) {
-    body.innerHTML = '<tr><td colspan="7"><div class="empty-state">선택한 기간의 영상 시청 기록이 없습니다.</div></td></tr>';
-    return;
-  }
-  body.innerHTML = rows
-    .map(
-      (row) => `
-        <tr>
-          <td><div class="video-watch-title"><strong>${escapeHtml(row.videoCode || "-")}</strong><span>${escapeHtml(row.label || row.videoCode || "-")}</span></div></td>
-          <td>${toNumber(row.uniqueBuyers).toLocaleString("ko-KR")}명</td>
-          <td>${toNumber(row.sessions).toLocaleString("ko-KR")}회</td>
-          <td>${formatVideoWatchTime(row.totalWatchSeconds)}</td>
-          <td><div class="video-watch-progress"><span style="width:${Math.min(100, toNumber(row.maxProgressPercent))}%"></span></div><small>${toNumber(row.maxProgressPercent).toFixed(0)}%</small></td>
-          <td>${toNumber(row.completions).toLocaleString("ko-KR")}회 <small>(${toNumber(row.completionRate).toFixed(1)}%)</small></td>
-          <td>${compactDateTime(row.lastWatchedAt)}</td>
-        </tr>
-      `,
-    )
-    .join("");
+function normalizeVideoWatchMembers(dashboard) {
+  const currentRows = Array.isArray(dashboard?.recentMembers) ? dashboard.recentMembers : [];
+  if (currentRows.length) return currentRows.slice(0, 10);
+
+  const sessionRows = Array.isArray(dashboard?.recentSessions) ? dashboard.recentSessions : [];
+  const members = new Map();
+  sessionRows.forEach((session) => {
+    const buyerId = String(session.buyerId || "").trim();
+    if (!buyerId) return;
+    const member = members.get(buyerId) || {
+      buyerId,
+      buyerName: String(session.buyerName || "").trim(),
+      sessions: 0,
+      completions: 0,
+      totalWatchSeconds: 0,
+      watchedVideos: 0,
+      lastWatchedAt: String(session.lastWatchedAt || ""),
+      history: [],
+    };
+    member.sessions += 1;
+    member.completions += session.completed ? 1 : 0;
+    member.totalWatchSeconds += toNumber(session.activeWatchSeconds);
+    if (String(session.lastWatchedAt || "") > member.lastWatchedAt) member.lastWatchedAt = session.lastWatchedAt;
+    member.history.push({
+      videoCode: session.videoCode,
+      videoTitle: session.videoTitle,
+      sessions: 1,
+      completions: session.completed ? 1 : 0,
+      totalWatchSeconds: toNumber(session.activeWatchSeconds),
+      maxProgressPercent: toNumber(session.maxProgressPercent),
+      lastWatchedAt: session.lastWatchedAt,
+    });
+    member.watchedVideos = new Set(member.history.map((item) => item.videoCode)).size;
+    members.set(buyerId, member);
+  });
+  return [...members.values()]
+    .sort((a, b) => String(b.lastWatchedAt || "").localeCompare(String(a.lastWatchedAt || "")))
+    .slice(0, 10);
 }
 
-function renderVideoWatchBuyerList(rows) {
+function renderVideoWatchMemberList(rows) {
   const container = qs("videoWatchBuyerList");
   if (!container) return;
   if (!rows.length) {
-    container.innerHTML = '<div class="empty-state">선택한 기간의 구매자 시청 기록이 없습니다.</div>';
+    container.innerHTML = '<div class="empty-state">선택한 기간의 회원 시청 기록이 없습니다.</div>';
     return;
   }
   container.innerHTML = rows
-    .slice(0, 50)
+    .slice(0, 10)
     .map((row) => {
       const memberName = String(row.buyerName || "").trim();
       return `
-        <div class="video-watch-member-name${memberName ? "" : " is-unknown"}" role="listitem">
+        <button type="button" class="video-watch-member-button${row.buyerId === selectedVideoWatchMemberId ? " is-selected" : ""}${memberName ? "" : " is-unknown"}" data-video-member-id="${escapeHtml(row.buyerId || "")}" role="listitem" aria-pressed="${row.buyerId === selectedVideoWatchMemberId}">
           <strong>${escapeHtml(memberName || "회원명 확인 필요")}</strong>
-        </div>
+        </button>
       `;
     })
     .join("");
 }
 
-function renderVideoWatchRecentList(rows) {
-  const container = qs("videoWatchRecentList");
+function renderVideoWatchMemberDetail(member) {
+  const container = qs("videoWatchMemberHistory");
   if (!container) return;
-  if (!rows.length) {
-    container.innerHTML = '<div class="empty-state">최근 시청 세션이 없습니다.</div>';
+  if (!member) {
+    setText("videoWatchMemberDetailTitle", "회원 선택");
+    setText("videoWatchMemberDetailMeta", "최근 시청 회원을 선택하세요.");
+    container.innerHTML = '<div class="empty-state">선택한 회원의 시청 이력이 표시됩니다.</div>';
     return;
   }
-  container.innerHTML = rows
-    .slice(0, 30)
+  const memberName = String(member.buyerName || "").trim() || "회원명 확인 필요";
+  const history = Array.isArray(member.history) ? member.history : [];
+  setText("videoWatchMemberDetailTitle", memberName);
+  setText(
+    "videoWatchMemberDetailMeta",
+    `영상 ${toNumber(member.watchedVideos || history.length).toLocaleString("ko-KR")}편 · 시청 ${toNumber(member.sessions).toLocaleString("ko-KR")}회 · 최근 ${compactDateTime(member.lastWatchedAt)}`,
+  );
+  if (!history.length) {
+    container.innerHTML = '<div class="empty-state">이 회원의 영상별 시청 이력이 없습니다.</div>';
+    return;
+  }
+  container.innerHTML = history
     .map(
       (row) => `
-        <article class="video-watch-list-item compact">
-          <div><strong>${escapeHtml(row.videoCode || "-")} · ${escapeHtml(row.buyerName || row.accountHint || row.buyerId || "구매자")}</strong><span>${escapeHtml(row.videoTitle || "")}</span></div>
-          <span class="pill ${row.completed ? "good" : ""}">${row.completed ? "90% 완료" : `${toNumber(row.maxProgressPercent).toFixed(0)}%`}</span>
-          <small>${compactDateTime(row.lastWatchedAt)} · ${formatVideoWatchTime(row.activeWatchSeconds)} · 재생 ${toNumber(row.playCount)}회</small>
+        <article class="video-watch-history-row">
+          <div class="video-watch-history-main">
+            <strong>${escapeHtml(row.videoTitle || row.videoCode || "영상")}</strong>
+            <small>${escapeHtml(row.videoCode || "-")} · ${compactDateTime(row.lastWatchedAt)}</small>
+            <div class="video-watch-progress" aria-label="최대 도달 ${toNumber(row.maxProgressPercent).toFixed(0)}%"><span style="width:${Math.min(100, toNumber(row.maxProgressPercent))}%"></span></div>
+          </div>
+          <dl>
+            <div><dt>시청시간</dt><dd>${formatVideoWatchTime(row.totalWatchSeconds)}</dd></div>
+            <div><dt>최대 도달</dt><dd>${toNumber(row.maxProgressPercent).toFixed(0)}%</dd></div>
+            <div><dt>완료</dt><dd>${toNumber(row.completions) > 0 ? `${toNumber(row.completions).toLocaleString("ko-KR")}회` : "미완료"}</dd></div>
+          </dl>
         </article>
       `,
     )
     .join("");
+}
+
+function handleVideoWatchMemberClick(event) {
+  const button = event.target.closest?.("[data-video-member-id]");
+  if (!button) return;
+  selectedVideoWatchMemberId = button.getAttribute("data-video-member-id") || "";
+  renderVideoWatchMemberList(videoWatchMembers);
+  renderVideoWatchMemberDetail(videoWatchMembers.find((member) => member.buyerId === selectedVideoWatchMemberId));
+  if (window.matchMedia("(max-width: 860px)").matches) {
+    const reducedMotion = window.matchMedia("(prefers-reduced-motion: reduce)").matches;
+    qs("videoWatchMemberHistory")?.closest(".video-watch-member-detail")?.scrollIntoView({
+      behavior: reducedMotion ? "auto" : "smooth",
+      block: "start",
+    });
+  }
 }
 
 function handleVideoWatchRangeClick(event) {
@@ -7279,7 +7283,7 @@ async function refresh() {
     const shouldLoadLessons = Boolean(qs("lessonsTodayList"));
     const shouldLoadStaffDashboard = Boolean(qs("staffHrList"));
     const shouldLoadInstagram = Boolean(qs("instagramApprovalList"));
-    const shouldLoadVideoWatch = Boolean(qs("videoWatchVideoTableBody"));
+    const shouldLoadVideoWatch = Boolean(qs("videoWatchBuyerList"));
     const shouldLoadInstructorLessons = Boolean(qs("instructorLessonRegistrationList"));
     const shouldLoadBusinessSnapshot = shouldLoadBusiness || shouldLoadStaffDashboard;
     const [
@@ -7614,6 +7618,7 @@ qs("instagramApprovalList")?.addEventListener("click", handleInstagramListAction
 qs("instagramScheduleList")?.addEventListener("click", handleInstagramListAction);
 qs("instagramHistoryList")?.addEventListener("click", handleInstagramListAction);
 qs("videoWatchRange")?.addEventListener("click", handleVideoWatchRangeClick);
+qs("videoWatchBuyerList")?.addEventListener("click", handleVideoWatchMemberClick);
 qs("instructorLessonRegistrationForm")?.addEventListener("submit", handleInstructorLessonRegistrationSubmit);
 qs("instructorLessonRegistrationFilters")?.addEventListener("click", handleInstructorLessonRegistrationFilter);
 qs("instructorLessonRegistrationList")?.addEventListener("click", handleInstructorLessonConfirmation);

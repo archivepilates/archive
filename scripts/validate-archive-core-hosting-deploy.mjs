@@ -265,16 +265,26 @@ const required = [
     file: "core/video-analytics/index.html",
     label: "paid video watch analytics dashboard",
     markers: [
-      "영상 시청 현황",
+      "회원별 영상 시청 현황",
       "data-video-watch-dashboard",
       "videoWatchRange",
-      "videoWatchVideoTableBody",
       "videoWatchBuyerList",
-      "videoWatchRecentList",
-      "시청 기록이 있는 회원명만 표시합니다.",
+      "videoWatchMemberDetailTitle",
+      "videoWatchMemberHistory",
+      "최근 시청순 10명",
+      "video-watch-member-layout",
       "video-watch-member-list",
     ],
-    forbiddenMarkers: ["측정 기준", "video-watch-policy"],
+    forbiddenMarkers: [
+      "측정 기준",
+      "video-watch-policy",
+      "videoWatchTrend",
+      "videoWatchVideoTableBody",
+      "videoWatchRecentList",
+      "날짜별 시청",
+      "영상별 현황",
+      "최근 시청 세션",
+    ],
   },
   {
     file: "core/assets/styles.css",
@@ -301,7 +311,9 @@ const required = [
       ".refund-ticket-option",
       ".refund-amount-grid",
       ".video-watch-kpis",
-      ".video-watch-trend",
+      ".video-watch-member-layout",
+      ".video-watch-member-button",
+      ".video-watch-history-row",
       ".video-watch-progress",
     ],
   },
@@ -431,8 +443,8 @@ for (const tool of externalToolLinks) {
 
 const coreAppSource = fs.readFileSync(path.join(repoRoot, "core/assets/app.js"), "utf8");
 const videoWatchBuyerListSource = coreAppSource.slice(
-  coreAppSource.indexOf("function renderVideoWatchBuyerList(rows)"),
-  coreAppSource.indexOf("function renderVideoWatchRecentList(rows)"),
+  coreAppSource.indexOf("function renderVideoWatchMemberList(rows)"),
+  coreAppSource.indexOf("function renderVideoWatchMemberDetail(member)"),
 );
 if (
   !videoWatchBuyerListSource.includes("row.buyerName") ||
