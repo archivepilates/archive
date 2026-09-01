@@ -11,12 +11,13 @@ if (!scriptMatch) {
 }
 
 const source = scriptMatch[1];
-const expectedVersion = "2026-09-01a";
+const expectedLoaderVersion = "2026-09-01b";
+const expectedAssetVersion = "2026-09-01a";
 const recoveryKey = "ap_classroom_asset_skip_once";
 const expectedAssetUrl =
   "https://archivepilates.com/assets/imweb-my-classroom-20260723a.js?v=20260901a";
 
-if (!loaderHtml.includes(`data-archive-pilates-my-classroom-v2="${expectedVersion}"`)) {
+if (!loaderHtml.includes(`data-archive-pilates-my-classroom-v2="${expectedLoaderVersion}"`)) {
   throw new Error("My Classroom loader marker is stale.");
 }
 
@@ -31,39 +32,48 @@ assert(
   `Unexpected My Classroom asset URL: ${normal.appendedScripts[0].src}`,
 );
 assert(
-  !normal.attributes.has("data-ap-classroom"),
-  "Loader must not preempt the inline fallback with data-ap-classroom.",
+  normal.attributes.get("data-ap-classroom") === expectedAssetVersion,
+  "Loader must claim the current renderer before the inline fallback starts.",
 );
 
 normal.appendedScripts[0].onerror();
 assert(
-  normal.attributes.get("data-ap-classroom-v2-asset-error") === expectedVersion,
+  normal.attributes.get("data-ap-classroom-v2-asset-error") === expectedLoaderVersion,
   "Loader does not mark external asset failures.",
 );
 assert(
   !normal.attributes.has("data-ap-classroom"),
-  "Asset fetch failure must leave the inline fallback available.",
+  "Asset fetch recovery must release the inline fallback claim.",
 );
-
-normal.appendedScripts[0].onload();
-assert(
-  normal.attributes.get("data-ap-classroom-v2-asset-loaded") === expectedVersion,
-  "Loader does not mark successful external asset loading.",
-);
-
-normal.attributes.set("data-ap-classroom", expectedVersion);
-normal.watchdog();
-assert(normal.reloads() === 1, "Stalled current renderer must trigger one recovery reload.");
+assert(normal.reloads() === 1, "Asset fetch failure must trigger one recovery reload.");
 assert(
   normal.session.get(recoveryKey) === "1",
+  "Asset fetch failure must leave a one-time external-asset skip marker.",
+);
+
+const loaded = runLoader();
+loaded.appendedScripts[0].onload();
+assert(
+  loaded.attributes.get("data-ap-classroom-v2-asset-loaded") === expectedLoaderVersion,
+  "Loader does not mark successful external asset loading.",
+);
+loaded.attributes.set("data-ap-classroom-v2-complete", expectedAssetVersion);
+loaded.watchdog();
+assert(loaded.reloads() === 0, "Completed current renderer must not be reloaded.");
+
+const stalled = runLoader();
+stalled.watchdog();
+assert(stalled.reloads() === 1, "Stalled current renderer must trigger one recovery reload.");
+assert(
+  stalled.session.get(recoveryKey) === "1",
   "Recovery reload must leave a one-time external-asset skip marker.",
 );
 assert(
-  !normal.attributes.has("data-ap-classroom"),
+  !stalled.attributes.has("data-ap-classroom"),
   "Recovery reload must release the inline fallback claim.",
 );
 assert(
-  normal.attributes.get("data-ap-classroom-v2-runtime-error") === expectedVersion,
+  stalled.attributes.get("data-ap-classroom-v2-runtime-error") === expectedLoaderVersion,
   "Stalled current renderer must leave a runtime-error marker.",
 );
 
@@ -78,7 +88,7 @@ assert(
 );
 assert(
   fallbackReload.attributes.get("data-ap-classroom-v2-loader-fallback") ===
-    expectedVersion,
+    expectedLoaderVersion,
   "Recovery reload must expose a fallback diagnostic marker.",
 );
 assert(
@@ -91,7 +101,7 @@ legacyWins.attributes.set("data-ap-classroom", "2026-07-21b");
 legacyWins.watchdog();
 assert(legacyWins.reloads() === 0, "An active inline fallback must not be reloaded.");
 assert(
-  legacyWins.attributes.get("data-ap-classroom-v2-fallback-active") === expectedVersion,
+  legacyWins.attributes.get("data-ap-classroom-v2-fallback-active") === expectedLoaderVersion,
   "An active inline fallback must be recorded for diagnosis.",
 );
 

@@ -1,5 +1,6 @@
-<script data-archive-pilates-my-classroom-v2="2026-09-01a">(function(){
-  var VERSION="2026-09-01a";
+<script data-archive-pilates-my-classroom-v2="2026-09-01b">(function(){
+  var LOADER_VERSION="2026-09-01b";
+  var ASSET_VERSION="2026-09-01a";
   var RECOVERY_KEY="ap_classroom_asset_skip_once";
   var path=String(location.pathname||"").replace(/\/$/,"");
   if(path!=="/48"&&path!=="/my-classroom")return;
@@ -8,54 +9,60 @@
   try{
     if(sessionStorage.getItem(RECOVERY_KEY)==="1"){
       sessionStorage.removeItem(RECOVERY_KEY);
-      root.setAttribute("data-ap-classroom-v2-loader-fallback",VERSION);
+      root.setAttribute("data-ap-classroom-v2-loader-fallback",LOADER_VERSION);
       return;
     }
   }catch(e){}
 
-  root.setAttribute("data-ap-classroom-v2-loader",VERSION);
+  root.setAttribute("data-ap-classroom",ASSET_VERSION);
+  root.setAttribute("data-ap-classroom-v2-loader",LOADER_VERSION);
+
+  var recovering=false;
+  function recover(marker){
+    if(recovering)return;
+    recovering=true;
+    root.setAttribute(marker,LOADER_VERSION);
+    [
+      "data-ap-classroom",
+      "data-ap-classroom-v2",
+      "data-ap-classroom-v2-ready",
+      "data-ap-classroom-v2-complete"
+    ].forEach(function(name){root.removeAttribute(name)});
+
+    try{
+      sessionStorage.setItem(RECOVERY_KEY,"1");
+      if(sessionStorage.getItem(RECOVERY_KEY)==="1"){
+        root.setAttribute("data-ap-classroom-v2-recovery-reload",LOADER_VERSION);
+        location.reload();
+        return;
+      }
+    }catch(e){}
+
+    root.setAttribute("data-ap-classroom-v2-recovery-unavailable",LOADER_VERSION);
+  }
 
   function load(){
     if(document.querySelector("script[data-ap-classroom-v2-asset]"))return;
     var script=document.createElement("script");
     script.src="https://archivepilates.com/assets/imweb-my-classroom-20260723a.js?v=20260901a";
     script.async=false;
-    script.setAttribute("data-ap-classroom-v2-asset",VERSION);
+    script.setAttribute("data-ap-classroom-v2-asset",LOADER_VERSION);
     script.onload=function(){
-      root.setAttribute("data-ap-classroom-v2-asset-loaded",VERSION);
+      root.setAttribute("data-ap-classroom-v2-asset-loaded",LOADER_VERSION);
     };
     script.onerror=function(){
-      root.setAttribute("data-ap-classroom-v2-asset-error",VERSION);
+      recover("data-ap-classroom-v2-asset-error");
     };
     (document.head||document.documentElement).appendChild(script);
 
     setTimeout(function(){
-      if(root.getAttribute("data-ap-classroom-v2-complete")===VERSION)return;
+      if(root.getAttribute("data-ap-classroom-v2-complete")===ASSET_VERSION)return;
       var claim=root.getAttribute("data-ap-classroom");
-      if(claim&&claim!==VERSION){
-        root.setAttribute("data-ap-classroom-v2-fallback-active",VERSION);
+      if(claim&&claim!==ASSET_VERSION){
+        root.setAttribute("data-ap-classroom-v2-fallback-active",LOADER_VERSION);
         return;
       }
-      if(claim!==VERSION)return;
-
-      root.setAttribute("data-ap-classroom-v2-runtime-error",VERSION);
-      [
-        "data-ap-classroom",
-        "data-ap-classroom-v2",
-        "data-ap-classroom-v2-ready",
-        "data-ap-classroom-v2-complete"
-      ].forEach(function(name){root.removeAttribute(name)});
-
-      try{
-        sessionStorage.setItem(RECOVERY_KEY,"1");
-        if(sessionStorage.getItem(RECOVERY_KEY)==="1"){
-          root.setAttribute("data-ap-classroom-v2-recovery-reload",VERSION);
-          location.reload();
-          return;
-        }
-      }catch(e){}
-
-      root.setAttribute("data-ap-classroom-v2-recovery-unavailable",VERSION);
+      recover("data-ap-classroom-v2-runtime-error");
     },12000);
   }
 

@@ -2,7 +2,8 @@ import crypto from "node:crypto";
 import fs from "node:fs";
 import path from "node:path";
 
-const version = "2026-09-01a";
+const loaderVersion = "2026-09-01b";
+const assetVersion = "2026-09-01a";
 const assetPath = path.resolve("official-home/assets/imweb-my-classroom-20260723a.js");
 const assetUrl =
   "https://archivepilates.com/assets/imweb-my-classroom-20260723a.js?v=20260901a";
@@ -31,7 +32,7 @@ const asset = await retry("official-home classroom asset", async () => {
     `Asset cache policy is ${cacheControl || "(missing)"}.`,
   );
   assert(hash === expectedHash, `Asset SHA mismatch: live=${hash} local=${expectedHash}.`);
-  assert(source.includes(`VERSION="${version}"`), "Live asset version is stale.");
+  assert(source.includes(`VERSION="${assetVersion}"`), "Live asset version is stale.");
 
   return {
     cacheControl,
@@ -47,7 +48,7 @@ const imwebScripts = await retry("Imweb classroom loader", async () => {
     headers,
   });
   const html = await response.text();
-  const loaderMarker = `data-archive-pilates-my-classroom-v2="${version}"`;
+  const loaderMarker = `data-archive-pilates-my-classroom-v2="${loaderVersion}"`;
   const assetMarker = `v=20260901a`;
   const inlineFallbackMarker =
     'data-archive-pilates-my-classroom="2026-07-21b"';
@@ -60,13 +61,22 @@ const imwebScripts = await retry("Imweb classroom loader", async () => {
     "Live Imweb inline fallback is missing or duplicated.",
   );
   assert(
-    !html.includes('setAttribute("data-ap-classroom","1")'),
-    "Live Imweb loader still preempts the inline fallback.",
+    html.includes('root.setAttribute("data-ap-classroom",ASSET_VERSION)'),
+    "Live Imweb loader does not claim the current renderer before the inline fallback.",
+  );
+  assert(
+    count(html, `data-archive-pilates-my-classroom-v2="${assetVersion}"`) === 0,
+    "Live Imweb body still contains the duplicate direct classroom asset tag.",
+  );
+  assert(
+    (html.match(/<script\b[^>]*data-archive-pilates-my-classroom-v2=/g) || []).length === 1,
+    "Live Imweb contains more than one classroom v2 loader tag.",
   );
 
   return {
     inlineFallback: true,
-    loaderVersion: version,
+    assetVersion,
+    loaderVersion,
     status: response.status,
   };
 });
