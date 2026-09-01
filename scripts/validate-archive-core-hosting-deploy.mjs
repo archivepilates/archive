@@ -287,6 +287,17 @@ const required = [
     ],
   },
   {
+    file: "scripts/lib/affected-functions.mjs",
+    label: "paid video watch Functions deployment routing",
+    markers: ['normalized.includes("/videoAnalytics/")'],
+    patterns: [
+      {
+        label: "video analytics routes to functions-app",
+        pattern: /normalized\.includes\("\/videoAnalytics\/"\)\) return \["functions-app"\]/,
+      },
+    ],
+  },
+  {
     file: "core/assets/styles.css",
     label: "stable KPI card sizing",
     markers: [

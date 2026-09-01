@@ -60,6 +60,7 @@ export function codebasesForFile(file) {
   if (normalized.endsWith("/parking/parkingOperations.ts")) return ["functions-app", "functions-sync"];
   if (normalized.includes("/parking/")) return ["functions-app"];
   if (normalized.includes("/refund/")) return ["functions-app"];
+  if (normalized.includes("/videoAnalytics/")) return ["functions-app"];
   if (normalized.endsWith("/instructorLessonRegistration/instructorLessonConfirmation.ts")) {
     return ["functions-alimtalk", "functions-app"];
   }
