@@ -15,7 +15,7 @@ import {
 
 const source = fs.readFileSync(new URL("../imweb-video-watch-tracker.js", import.meta.url), "utf8");
 const deployedSource = fs.readFileSync(
-  new URL("../../core/assets/imweb-video-watch-tracker-20260826.js", import.meta.url),
+  new URL("../../core/assets/imweb-video-watch-tracker-20260901.js", import.meta.url),
   "utf8",
 );
 
@@ -23,13 +23,17 @@ test("CORE serves the exact tracker source used by the Imweb loader", () => {
   assert.equal(deployedSource, source);
 });
 
-test("tracker is restricted to paid watch pages and an embedded YouTube player", () => {
+test("tracker is restricted to paid and explicitly registered student-share pages", () => {
   assert.match(source, /archive-method-watch-/);
+  assert.match(source, /private-lesson-support-movement-a-260829/);
+  assert.match(source, /private-lesson-support-movement-d-260830/);
+  assert.match(source, /contentType: "student_share"/);
+  assert.match(source, /D팀 · 수강생 공유 \(B팀 영상 대체\)/);
   assert.match(source, /waitForYouTubeIframe/);
   assert.match(source, /youtube\.com\/embed/);
   assert.match(source, /enablejsapi/);
   assert.match(source, /window\.location\.origin/);
-  assert.doesNotMatch(source, /private-lesson/);
+  assert.doesNotMatch(source, /private-lesson-support-movement-\[a-z/);
 });
 
 test("tracker hashes the member identity and only adds the cleaned profile name", () => {
@@ -74,7 +78,7 @@ test("body script merge preserves unrelated scripts and replaces the tracker ide
   assert.ok(!mergedTwice.includes("window.oldTracker = true"));
   assert.match(
     mergedTwice,
-    /src="https:\/\/core\.archivepilates\.com\/assets\/imweb-video-watch-tracker-20260826\.js\?v=20260826b"/,
+    /src="https:\/\/core\.archivepilates\.com\/assets\/imweb-video-watch-tracker-20260901\.js\?v=20260901a"/,
   );
   assert.ok(!mergedTwice.includes("archivePilatesVideoWatchTracker"));
   assert.equal(mergedTwice, mergedOnce);

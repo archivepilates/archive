@@ -177,6 +177,16 @@ try {
         });
       }
       if (route.name === "video-analytics") {
+        const studentShareButton = page.getByRole("button", { name: "수강생 공유", exact: true });
+        const paidButton = page.getByRole("button", { name: "판매영상", exact: true });
+        await studentShareButton.click();
+        await page.waitForFunction(
+          () => document.querySelector("#videoWatchViewTitle")?.textContent?.trim() === "수강생 공유영상 조회",
+        );
+        await paidButton.click();
+        await page.waitForFunction(
+          () => document.querySelector("#videoWatchViewTitle")?.textContent?.trim() === "판매영상 조회",
+        );
         await page.evaluate(() => {
           const text = {
             videoWatchActiveBuyers: "18명",
@@ -185,7 +195,7 @@ try {
             videoWatchUpdatedAt: "2026.08.26 17:30 갱신 · 적용 이후 기록만 표시",
             videoWatchVideoCount: "8편",
             videoWatchBuyerCount: "10명",
-            videoWatchMemberDetailTitle: "반응형검증구매자",
+            videoWatchMemberDetailTitle: "반응형검증회원",
             videoWatchMemberDetailMeta: "영상 3편 · 시청 8회 · 최근 2026.08.26 17:20",
           };
           for (const [id, value] of Object.entries(text)) {
@@ -204,11 +214,11 @@ try {
             history.innerHTML = `
               <article class="video-watch-history-row">
                 <div class="video-watch-history-main"><strong>체어 호흡과 체간 안정화를 연결하는 긴 영상 제목</strong><small>ACH8 · 2026.08.26 17:20</small><div class="video-watch-progress"><span style="width:92%"></span></div></div>
-                <dl><div><dt>시청시간</dt><dd>48분</dd></div><div><dt>최대 도달</dt><dd>92%</dd></div><div><dt>완료</dt><dd>1회</dd></div></dl>
+                <dl><div><dt>시청시간</dt><dd>48분</dd></div><div><dt>최대 도달</dt><dd>92%</dd></div><div><dt>90% 도달</dt><dd>1회</dd></div></dl>
               </article>
               <article class="video-watch-history-row">
                 <div class="video-watch-history-main"><strong>지지와 움직임</strong><small>SUPPORT1 · 2026.08.24 11:10</small><div class="video-watch-progress"><span style="width:45%"></span></div></div>
-                <dl><div><dt>시청시간</dt><dd>19분</dd></div><div><dt>최대 도달</dt><dd>45%</dd></div><div><dt>완료</dt><dd>미완료</dd></div></dl>
+                <dl><div><dt>시청시간</dt><dd>19분</dd></div><div><dt>최대 도달</dt><dd>45%</dd></div><div><dt>90% 도달</dt><dd>미도달</dd></div></dl>
               </article>`;
           }
         });

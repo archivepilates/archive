@@ -44,12 +44,22 @@ const RAW_EVENT_RETENTION_DAYS = 180;
 const SESSION_RETENTION_DAYS = 365;
 const DASHBOARD_SESSION_LIMIT = 2000;
 
+export type VideoWatchContentType = "paid" | "student_share";
+
+const STUDENT_SHARE_PAGE_CODES = new Map<string, string>([
+  ["/private-lesson-support-movement-a-260829", "A260829"],
+  ["/private-lesson-support-movement-b-260829", "B260829"],
+  ["/private-lesson-support-movement-c-260830", "C260830"],
+  ["/private-lesson-support-movement-d-260830", "D260830"],
+]);
+
 export interface NormalizedVideoWatchEvent {
   eventId: string;
   sessionId: string;
   buyerKey: string;
   buyerName: string;
   accountHint: string;
+  contentType: VideoWatchContentType;
   videoCode: string;
   videoTitle: string;
   eventType: string;
@@ -68,6 +78,7 @@ export interface VideoWatchSessionRow {
   buyerKey: string;
   buyerName: string;
   accountHint: string;
+  contentType: VideoWatchContentType;
   videoCode: string;
   videoTitle: string;
   sourcePage: string;
@@ -140,9 +151,11 @@ export function normalizeVideoWatchEvent(
 
   const videoCode = String(input.videoCode || "").trim().toUpperCase();
   if (!/^[A-Z0-9-]{2,24}$/.test(videoCode)) throw new Error("영상 코드 형식이 올바르지 않습니다.");
-  const pagePath = String(input.pagePath || "").trim().toLowerCase();
-  if (!/^\/archive-method-watch-[a-z0-9-]{2,60}$/.test(pagePath) || !pagePath.endsWith(videoCode.toLowerCase())) {
-    throw new Error("영상 페이지와 코드가 일치하지 않습니다.");
+  const pagePath = normalizePagePath(input.pagePath);
+  const contentType = contentTypeForPage(pagePath, videoCode);
+  const requestedContentType = String(input.contentType || "").trim().toLowerCase();
+  if (requestedContentType && requestedContentType !== contentType) {
+    throw new Error("영상 유형과 페이지가 일치하지 않습니다.");
   }
 
   const eventType = String(input.eventType || "").trim().toLowerCase();
@@ -167,6 +180,7 @@ export function normalizeVideoWatchEvent(
     buyerKey,
     buyerName,
     accountHint,
+    contentType,
     videoCode,
     videoTitle,
     eventType,
@@ -194,6 +208,22 @@ export function buildVideoWatchDashboard(
   truncated = false,
 ): Record<string, unknown> {
   const sessions = sessionRows.filter((row) => row.started);
+  const combined = buildVideoWatchDashboardSegment(sessions);
+  const paid = buildVideoWatchDashboardSegment(sessions.filter((row) => row.contentType === "paid"));
+  const studentShare = buildVideoWatchDashboardSegment(
+    sessions.filter((row) => row.contentType === "student_share"),
+  );
+
+  return {
+    generatedAt: new Date().toISOString(),
+    rangeDays,
+    truncated,
+    ...combined,
+    segments: { paid, studentShare },
+  };
+}
+
+function buildVideoWatchDashboardSegment(sessions: VideoWatchSessionRow[]): Record<string, unknown> {
   const videos = new Map<string, DashboardBucket>();
   const buyers = new Map<string, DashboardBucket>();
   const memberVideos = new Map<string, Map<string, DashboardBucket>>();
@@ -283,12 +313,10 @@ export function buildVideoWatchDashboard(
     playCount: row.playCount,
     maxProgressPercent: row.maxProgressPercent,
     completed: row.completed,
+    contentType: row.contentType,
   }));
 
   return {
-    generatedAt: new Date().toISOString(),
-    rangeDays,
-    truncated,
     totals: {
       activeBuyers: uniqueBuyers,
       repeatBuyers,
@@ -365,6 +393,7 @@ async function storeVideoWatchEvent(event: NormalizedVideoWatchEvent, networkKey
         buyerName: sessionBuyerName || current.buyerName || "",
         buyerNameSource: sessionBuyerName ? "imweb-profile-client" : current.buyerNameSource || "",
         accountHint: event.accountHint || current.accountHint || "",
+        contentType: event.contentType,
         videoCode: event.videoCode,
         videoTitle: event.videoTitle,
         sourcePage: event.pagePath,
@@ -512,6 +541,7 @@ function sessionRow(id: string, data: FirebaseFirestore.DocumentData): VideoWatc
     buyerKey: String(data.buyerKey),
     buyerName: storedBuyerName(data.buyerName),
     accountHint: String(data.accountHint || ""),
+    contentType: storedContentType(data.contentType, data.sourcePage),
     videoCode: String(data.videoCode),
     videoTitle: String(data.videoTitle || data.videoCode),
     sourcePage: String(data.sourcePage || ""),
@@ -524,6 +554,24 @@ function sessionRow(id: string, data: FirebaseFirestore.DocumentData): VideoWatc
     maxProgressPercent: Number(data.maxProgressPercent || 0),
     watchDates: Array.isArray(data.watchDates) ? data.watchDates.map(String) : [],
   };
+}
+
+function normalizePagePath(value: unknown): string {
+  const cleaned = String(value || "").trim().toLowerCase().replace(/\/+$/, "");
+  return cleaned || "/";
+}
+
+function contentTypeForPage(pagePath: string, videoCode: string): VideoWatchContentType {
+  const paidMatch = pagePath.match(/^\/archive-method-watch-([a-z0-9-]{2,60})$/);
+  if (paidMatch && paidMatch[1] === videoCode.toLowerCase()) return "paid";
+  if (STUDENT_SHARE_PAGE_CODES.get(pagePath) === videoCode) return "student_share";
+  throw new Error("영상 페이지와 코드가 일치하지 않습니다.");
+}
+
+function storedContentType(value: unknown, sourcePage: unknown): VideoWatchContentType {
+  if (value === "student_share") return "student_share";
+  if (String(sourcePage || "").startsWith("/private-lesson-support-movement-")) return "student_share";
+  return "paid";
 }
 
 function parseRequestBody(body: unknown): Record<string, unknown> {

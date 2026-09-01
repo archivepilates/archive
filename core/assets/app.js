@@ -112,6 +112,7 @@ let selectedStaffKey = "";
 let selectedMealRequestId = "";
 let mealQueueFilter = "active";
 let videoWatchRangeDays = 30;
+let videoWatchContentType = "paid";
 let videoWatchMembers = [];
 let selectedVideoWatchMemberId = "";
 let instructorLessonRegistrationFilter = "active";
@@ -6638,8 +6639,32 @@ function syncVideoWatchRangeButtons() {
   });
 }
 
+function syncVideoWatchContentTypeButtons() {
+  document.querySelectorAll("[data-video-content-type]").forEach((button) => {
+    button.setAttribute("aria-pressed", String(button.dataset.videoContentType === videoWatchContentType));
+  });
+  setText("videoWatchViewTitle", videoWatchContentType === "student_share" ? "수강생 공유영상 조회" : "판매영상 조회");
+}
+
+function emptyVideoWatchSegment() {
+  return {
+    totals: {},
+    recentMembers: [],
+    recentSessions: [],
+  };
+}
+
+function selectedVideoWatchSegment(dashboard) {
+  if (!dashboard) return null;
+  if (videoWatchContentType === "student_share") {
+    return dashboard.segments?.studentShare || emptyVideoWatchSegment();
+  }
+  return dashboard.segments?.paid || dashboard;
+}
+
 function renderVideoWatchDashboard(dashboard) {
   syncVideoWatchRangeButtons();
+  syncVideoWatchContentTypeButtons();
   if (!dashboard && readUnavailable("videoWatchDashboard")) {
     ["videoWatchActiveBuyers", "videoWatchVideoCount", "videoWatchTime"].forEach((id) => setText(id, "-"));
     setText("videoWatchBuyerNote", "조회 상태 확인 필요");
@@ -6656,8 +6681,9 @@ function renderVideoWatchDashboard(dashboard) {
     selectedVideoWatchMemberId = "";
     return;
   }
-  const totals = dashboard?.totals || {};
-  videoWatchMembers = normalizeVideoWatchMembers(dashboard);
+  const selectedDashboard = selectedVideoWatchSegment(dashboard) || emptyVideoWatchSegment();
+  const totals = selectedDashboard.totals || {};
+  videoWatchMembers = normalizeVideoWatchMembers(selectedDashboard);
   const hasData = toNumber(totals.watchSessions) > 0;
 
   setText("videoWatchActiveBuyers", hasData ? `${toNumber(totals.activeBuyers).toLocaleString("ko-KR")}명` : "0명");
@@ -6772,7 +6798,7 @@ function renderVideoWatchMemberDetail(member) {
           <dl>
             <div><dt>시청시간</dt><dd>${formatVideoWatchTime(row.totalWatchSeconds)}</dd></div>
             <div><dt>최대 도달</dt><dd>${toNumber(row.maxProgressPercent).toFixed(0)}%</dd></div>
-            <div><dt>완료</dt><dd>${toNumber(row.completions) > 0 ? `${toNumber(row.completions).toLocaleString("ko-KR")}회` : "미완료"}</dd></div>
+            <div><dt>90% 도달</dt><dd>${toNumber(row.completions) > 0 ? `${toNumber(row.completions).toLocaleString("ko-KR")}회` : "미도달"}</dd></div>
           </dl>
         </article>
       `,
@@ -6803,6 +6829,16 @@ function handleVideoWatchRangeClick(event) {
   videoWatchRangeDays = nextRange;
   syncVideoWatchRangeButtons();
   refresh();
+}
+
+function handleVideoWatchContentTypeClick(event) {
+  const button = event.target.closest?.("[data-video-content-type]");
+  if (!button) return;
+  const nextContentType = button.dataset.videoContentType;
+  if (!["paid", "student_share"].includes(nextContentType) || nextContentType === videoWatchContentType) return;
+  videoWatchContentType = nextContentType;
+  selectedVideoWatchMemberId = "";
+  renderVideoWatchDashboard(state.videoWatchDashboard);
 }
 
 async function handleInstagramListAction(event) {
@@ -7618,6 +7654,7 @@ qs("instagramApprovalList")?.addEventListener("click", handleInstagramListAction
 qs("instagramScheduleList")?.addEventListener("click", handleInstagramListAction);
 qs("instagramHistoryList")?.addEventListener("click", handleInstagramListAction);
 qs("videoWatchRange")?.addEventListener("click", handleVideoWatchRangeClick);
+qs("videoWatchContentType")?.addEventListener("click", handleVideoWatchContentTypeClick);
 qs("videoWatchBuyerList")?.addEventListener("click", handleVideoWatchMemberClick);
 qs("instructorLessonRegistrationForm")?.addEventListener("submit", handleInstructorLessonRegistrationSubmit);
 qs("instructorLessonRegistrationFilters")?.addEventListener("click", handleInstructorLessonRegistrationFilter);

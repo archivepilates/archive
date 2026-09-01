@@ -5627,12 +5627,22 @@ a.rank-row:hover,
   color: var(--muted);
 }
 
+.video-watch-toolbar-controls {
+  display: grid;
+  min-width: min(100%, 320px);
+  gap: 10px;
+}
+
 .range-segment {
   display: inline-grid;
   min-width: 244px;
   grid-template-columns: repeat(3, minmax(0, 1fr));
   border: 1px solid var(--line);
   background: var(--surface-strong);
+}
+
+.range-segment.content-type-segment {
+  grid-template-columns: repeat(2, minmax(0, 1fr));
 }
 
 .range-segment button {
@@ -5810,6 +5820,11 @@ a.rank-row:hover,
   }
 
   .range-segment {
+    width: 100%;
+    min-width: 0;
+  }
+
+  .video-watch-toolbar-controls {
     width: 100%;
     min-width: 0;
   }

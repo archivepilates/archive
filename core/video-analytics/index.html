@@ -28,7 +28,7 @@
           <div class="title-block">
             <p class="eyebrow">VIDEO WATCH</p>
             <h1>회원별 영상 시청 현황</h1>
-            <p class="subtitle">최근 시청 회원과 개인별 영상 이력</p>
+            <p class="subtitle">판매영상과 수강생 공유영상의 최근 시청 회원 및 개인별 이력</p>
           </div>
           <div class="top-actions" aria-label="시청 현황 설정">
             <div class="connection-card" aria-live="polite">
@@ -39,15 +39,21 @@
           </div>
         </header>
 
-        <section class="panel video-watch-toolbar" aria-labelledby="videoWatchRangeTitle">
+        <section class="panel video-watch-toolbar" aria-labelledby="videoWatchViewTitle">
           <div>
-            <h2 id="videoWatchRangeTitle">조회 기간</h2>
+            <h2 id="videoWatchViewTitle">판매영상 조회</h2>
             <p id="videoWatchUpdatedAt">추적 기능을 적용한 시점 이후의 기록만 표시됩니다.</p>
           </div>
-          <div class="range-segment" id="videoWatchRange" role="group" aria-label="조회 기간 선택">
-            <button type="button" data-video-range="7">7일</button>
-            <button type="button" data-video-range="30" aria-pressed="true">30일</button>
-            <button type="button" data-video-range="90">90일</button>
+          <div class="video-watch-toolbar-controls">
+            <div class="range-segment content-type-segment" id="videoWatchContentType" role="group" aria-label="영상 유형 선택">
+              <button type="button" data-video-content-type="paid" aria-pressed="true">판매영상</button>
+              <button type="button" data-video-content-type="student_share" aria-pressed="false">수강생 공유</button>
+            </div>
+            <div class="range-segment" id="videoWatchRange" role="group" aria-label="조회 기간 선택">
+              <button type="button" data-video-range="7">7일</button>
+              <button type="button" data-video-range="30" aria-pressed="true">30일</button>
+              <button type="button" data-video-range="90">90일</button>
+            </div>
           </div>
         </section>
 

@@ -6,10 +6,10 @@ import { fileURLToPath, pathToFileURL } from "node:url";
 
 const __dirname = path.dirname(fileURLToPath(import.meta.url));
 const EXPECTED_SITE_CODE = "S20260516852c71a014d08";
-const TRACKER_VERSION = "2026-08-26.2";
+const TRACKER_VERSION = "2026-09-01.1";
 const TRACKER_ATTRIBUTE = "data-archive-pilates-video-watch-tracker";
 const TRACKER_ASSET_URL =
-  "https://core.archivepilates.com/assets/imweb-video-watch-tracker-20260826.js?v=20260826b";
+  "https://core.archivepilates.com/assets/imweb-video-watch-tracker-20260901.js?v=20260901a";
 
 export function mergeVideoWatchTracker(currentContent) {
   const wrapped = `<script ${TRACKER_ATTRIBUTE}="${TRACKER_VERSION}" src="${TRACKER_ASSET_URL}"></script>`;

@@ -9,7 +9,7 @@ import {
 
 const now = new Date("2026-08-26T08:30:00.000Z");
 
-test("normalizes a paid video watch event with a cleaned buyer name", () => {
+test("normalizes a legacy paid video watch event with a cleaned buyer name", () => {
   const event = normalizeVideoWatchEvent(
     {
       eventId: "event_123456789012345678901234",
@@ -35,6 +35,7 @@ test("normalizes a paid video watch event with a cleaned buyer name", () => {
   assert.equal(event.watchDate, "2026-08-26");
   assert.equal(event.buyerName, "홍길동");
   assert.equal(event.accountHint, "h***@archivepilates.com");
+  assert.equal(event.contentType, "paid");
   assert.equal("email" in event, false);
   assert.equal("phone" in event, false);
   const rawEvent = eventWithoutBuyerName(event);
@@ -48,6 +49,7 @@ test("rejects raw email, mismatched page, and invalid buyer identity", () => {
     sessionId: "session_1234567890123456",
     buyerKey: "a".repeat(64),
     accountHint: "h***@archivepilates.com",
+    contentType: "paid",
     videoCode: "AR1",
     eventType: "play",
     pagePath: "/archive-method-watch-ar1",
@@ -55,7 +57,37 @@ test("rejects raw email, mismatched page, and invalid buyer identity", () => {
   assert.throws(() => normalizeVideoWatchEvent({ ...base, accountHint: "home@archivepilates.com" }, now), /마스킹/);
   assert.throws(() => normalizeVideoWatchEvent({ ...base, buyerName: "home@archivepilates.com" }, now), /이메일/);
   assert.throws(() => normalizeVideoWatchEvent({ ...base, pagePath: "/archive-method-watch-ab1" }, now), /일치/);
+  assert.throws(() => normalizeVideoWatchEvent({ ...base, contentType: "student_share" }, now), /유형/);
+  assert.throws(
+    () => normalizeVideoWatchEvent({ ...base, pagePath: "/private-lesson-support-movement-unknown" }, now),
+    /일치/,
+  );
   assert.throws(() => normalizeVideoWatchEvent({ ...base, buyerKey: "short" }, now), /식별값/);
+});
+
+test("normalizes only explicitly registered student-share pages", () => {
+  const event = normalizeVideoWatchEvent(
+    {
+      eventId: "event_student_123456789012345",
+      sessionId: "session_student_1234567890",
+      buyerKey: "b".repeat(64),
+      buyerName: "수강회원",
+      contentType: "student_share",
+      videoCode: "D260830",
+      videoTitle: "8/30 지지와 움직임 D팀 · 수강생 공유 (B팀 영상 대체)",
+      eventType: "play",
+      pagePath: "/private-lesson-support-movement-d-260830/",
+    },
+    now,
+  );
+
+  assert.equal(event.contentType, "student_share");
+  assert.equal(event.videoCode, "D260830");
+  assert.equal(event.pagePath, "/private-lesson-support-movement-d-260830");
+  assert.throws(
+    () => normalizeVideoWatchEvent({ ...event, videoCode: "B260829" }, now),
+    /일치/,
+  );
 });
 
 test("builds video and buyer frequency summaries from started sessions only", () => {
@@ -156,12 +188,58 @@ test("returns only the ten most recently active members in recent order", () => 
   assert.equal(dashboard.recentMembers.some((row) => row.buyerName === "회원2"), false);
 });
 
+test("keeps paid and student-share dashboard segments separate", () => {
+  const dashboard = buildVideoWatchDashboard(
+    [
+      session({
+        id: "paid-session",
+        buyerKey: "a".repeat(64),
+        buyerName: "판매회원",
+        contentType: "paid",
+        videoCode: "ACA2",
+      }),
+      session({
+        id: "share-session",
+        buyerKey: "b".repeat(64),
+        buyerName: "공유회원",
+        contentType: "student_share",
+        videoCode: "A260829",
+        sourcePage: "/private-lesson-support-movement-a-260829",
+      }),
+    ],
+    30,
+  ) as {
+    totals: Record<string, number>;
+    segments: {
+      paid: {
+        totals: Record<string, number>;
+        videos: Array<Record<string, unknown>>;
+        recentMembers: Array<Record<string, unknown>>;
+      };
+      studentShare: {
+        totals: Record<string, number>;
+        videos: Array<Record<string, unknown>>;
+        recentMembers: Array<Record<string, unknown>>;
+      };
+    };
+  };
+
+  assert.equal(dashboard.totals.watchSessions, 2);
+  assert.equal(dashboard.segments.paid.totals.watchSessions, 1);
+  assert.equal(dashboard.segments.studentShare.totals.watchSessions, 1);
+  assert.equal(dashboard.segments.paid.videos[0].videoCode, "ACA2");
+  assert.equal(dashboard.segments.studentShare.videos[0].videoCode, "A260829");
+  assert.equal(dashboard.segments.paid.recentMembers[0].buyerName, "판매회원");
+  assert.equal(dashboard.segments.studentShare.recentMembers[0].buyerName, "공유회원");
+});
+
 function session(overrides: Partial<VideoWatchSessionRow>): VideoWatchSessionRow {
   return {
     id: "session",
     buyerKey: "a".repeat(64),
     buyerName: "",
     accountHint: "",
+    contentType: "paid",
     videoCode: "AR1",
     videoTitle: "AR1",
     sourcePage: "/archive-method-watch-ar1",
