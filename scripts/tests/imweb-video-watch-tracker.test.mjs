@@ -3,6 +3,7 @@ import fs from "node:fs";
 import test from "node:test";
 import {
   countVideoWatchTrackers,
+  findConfirmToken,
   mergeVideoWatchTracker,
 } from "../prepare-imweb-video-watch-tracker.mjs";
 import {
@@ -82,6 +83,12 @@ test("body script merge preserves unrelated scripts and replaces the tracker ide
   );
   assert.ok(!mergedTwice.includes("archivePilatesVideoWatchTracker"));
   assert.equal(mergedTwice, mergedOnce);
+});
+
+test("body script update accepts current and legacy Imweb confirmation token keys", () => {
+  assert.equal(findConfirmToken({ confirmation_token: "current-token" }), "current-token");
+  assert.equal(findConfirmToken({ safety: { confirm_token: "legacy-token" } }), "legacy-token");
+  assert.equal(findConfirmToken({ confirmation: { confirmToken: "camel-token" } }), "camel-token");
 });
 
 test("backfill derives the same stable buyer key for the same Imweb member code", () => {

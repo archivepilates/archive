@@ -38,10 +38,10 @@ function runImweb(args) {
   return JSON.parse(runImwebRaw(args));
 }
 
-function findConfirmToken(value) {
+export function findConfirmToken(value) {
   if (!value || typeof value !== "object") return "";
   for (const [key, child] of Object.entries(value)) {
-    if (["confirm_token", "confirmToken"].includes(key) && typeof child === "string") return child;
+    if (["confirmation_token", "confirm_token", "confirmToken"].includes(key) && typeof child === "string") return child;
     const nested = findConfirmToken(child);
     if (nested) return nested;
   }
