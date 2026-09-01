@@ -10,6 +10,7 @@ const TRACKER_VERSION = "2026-09-01.1";
 const TRACKER_ATTRIBUTE = "data-archive-pilates-video-watch-tracker";
 const TRACKER_ASSET_URL =
   "https://core.archivepilates.com/assets/imweb-video-watch-tracker-20260901.js?v=20260901a";
+const IMWEB_CLI_BIN = process.env.IMWEB_CLI_BIN || "imweb";
 
 export function mergeVideoWatchTracker(currentContent) {
   const wrapped = `<script ${TRACKER_ATTRIBUTE}="${TRACKER_VERSION}" src="${TRACKER_ASSET_URL}"></script>`;
@@ -27,7 +28,7 @@ export function countVideoWatchTrackers(content) {
 }
 
 function runImwebRaw(args) {
-  return execFileSync("imweb", ["--output", "json", ...args], {
+  return execFileSync(IMWEB_CLI_BIN, ["--output", "json", ...args], {
     cwd: path.resolve(__dirname, ".."),
     encoding: "utf8",
     maxBuffer: 24 * 1024 * 1024,

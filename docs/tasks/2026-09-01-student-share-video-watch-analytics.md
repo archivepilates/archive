@@ -36,9 +36,9 @@
 
 ## 상태
 
-- `implemented locally`: 추적기, 수집 API, 분리 집계, ARCHIVE CORE 전환 UI
-- `pending`: 자동 테스트, Functions 빌드, Hosting 검증, 320/390/768/1440px 반응형 검증
-- `not deployed`: 사용자 배포 승인 전에는 Functions, Hosting, 아임웹 body script를 변경하지 않는다.
+- `deployed`: `functions-app`, 공식 홈페이지·ARCHIVE CORE·개인정보처리방침 Hosting, 아임웹 body 추적 로더
+- `verified live`: 판매영상과 수강생 공유 분리 화면, 새 추적 자산 해시, API CORS·허용 경로 판정, 일반회원 권한 구분
+- `historical boundary`: 2026-09-01 새 로더 적용 이후 이벤트만 유형별로 기록하며 과거 시청 기록은 소급 생성하지 않는다.
 
 ## 배포 순서
 
@@ -48,3 +48,13 @@
 4. 아임웹 body의 기존 스크립트를 보존하면서 추적기 로더 한 개만 새 버전으로 교체한다.
 5. 판매영상 권한 회원, 수강생 공유 권한 회원, 무권한 일반회원으로 접근과 재생을 검증한다.
 6. 수강생 공유 테스트 이벤트가 ARCHIVE CORE의 `수강생 공유`에서만 보이고 판매영상에는 섞이지 않는지 확인한다.
+
+## 배포 및 검증 결과
+
+- Functions: `functions-app`만 감지·빌드·배포했으며 `videoWatchEventApi`, `getVideoWatchDashboard` 갱신을 확인했다.
+- Hosting: `archive-pilates`, `archive-pilates-core`, `archive-pilates-privacy`를 배포했다.
+- ARCHIVE CORE: 320, 390, 768, 1440, 1920px에서 16개 경로 85개 반응형 검증을 통과했고 라이브 canary가 커밋 `fabcde8`을 확인했다.
+- 아임웹: body 원문을 로컬 백업한 뒤 기존 사용자 스크립트를 보존하고 `2026-09-01.1` 로더 한 개만 남겼다. 공개 홈페이지와 수강생 공유 페이지에서 구형 로더가 제거됐음을 확인했다.
+- 일반회원: 전용 테스트 회원에게 A/B/C/D 그룹을 임시 부여해 모바일·PC에서 4편을 확인했고, 무권한 테스트 회원은 두 환경 모두 0편이었다. 테스트 종료 후 두 계정의 그룹을 원래 상태로 복구하고 API로 재확인했다.
+- 수집: 테스트 접근에서 `student_share` 유형의 A/B/C/D `page_view` 이벤트를 확인했다. 재생하지 않은 검증이므로 판매·수강생 공유 조회 수에는 포함되지 않는다.
+- 보호 규칙: 등록하지 않은 프라이빗 경로는 운영 API에서 HTTP 400으로 거부됐고, 추적 실패가 영상 재생이나 권한을 바꾸지 않는 구조를 유지했다.
