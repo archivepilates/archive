@@ -195,7 +195,7 @@ try {
           const buyers = document.querySelector("#videoWatchBuyerList");
           if (buyers) {
             buyers.innerHTML = Array.from({ length: 10 }, (_, index) => `
-              <button type="button" class="video-watch-member-button${index === 0 ? " is-selected" : ""}" data-video-member-id="member-${index + 1}" role="listitem" aria-pressed="${index === 0}">
+              <button type="button" class="video-watch-member-button${index === 0 ? " is-selected" : ""}" data-video-member-id="member-${index + 1}" aria-pressed="${index === 0}">
                 <strong>${index === 0 ? "반응형검증구매자" : `최근시청회원${index + 1}`}</strong>
               </button>`).join("");
           }

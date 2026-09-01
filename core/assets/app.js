@@ -6732,7 +6732,7 @@ function renderVideoWatchMemberList(rows) {
     .map((row) => {
       const memberName = String(row.buyerName || "").trim();
       return `
-        <button type="button" class="video-watch-member-button${row.buyerId === selectedVideoWatchMemberId ? " is-selected" : ""}${memberName ? "" : " is-unknown"}" data-video-member-id="${escapeHtml(row.buyerId || "")}" role="listitem" aria-pressed="${row.buyerId === selectedVideoWatchMemberId}">
+        <button type="button" class="video-watch-member-button${row.buyerId === selectedVideoWatchMemberId ? " is-selected" : ""}${memberName ? "" : " is-unknown"}" data-video-member-id="${escapeHtml(row.buyerId || "")}" aria-pressed="${row.buyerId === selectedVideoWatchMemberId}">
           <strong>${escapeHtml(memberName || "회원명 확인 필요")}</strong>
         </button>
       `;
