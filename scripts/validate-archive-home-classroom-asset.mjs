@@ -10,11 +10,13 @@ if (!fs.existsSync(assetPath)) {
 
 const source = fs.readFileSync(assetPath, "utf8");
 const requiredMarkers = [
-  'VERSION="2026-09-01a"',
+  'VERSION="2026-09-04c"',
   "var MAX_PROBES=6",
   'data-ap-classroom-v2',
   '"/archive-method-watch-ach8"',
   '"/archive-method-watch-ab9"',
+  '"/archive-method-watch-aca6"',
+  '"/archive-method-watch-ach9"',
   '"/private-lesson-pelvis-hip-b-barrel-260725"',
   '"/private-lesson-jey-260718"',
   '"/private-lesson-support-movement-a-260829"',
@@ -80,6 +82,18 @@ const privateDoc = {
   },
 };
 assert(hooks.okDocument(privateDoc), "Private watch containers must count as playable pages.");
+const nativeVideoWidgetDoc = {
+  querySelector(selector) {
+    return selector.includes('[data-widget-type="video"]') ? {} : null;
+  },
+  querySelectorAll() {
+    return [];
+  },
+};
+assert(
+  hooks.okDocument(nativeVideoWidgetDoc),
+  "Native Imweb video widgets must count as playable pages.",
+);
 assert(
   hooks.responseMatches(
     {

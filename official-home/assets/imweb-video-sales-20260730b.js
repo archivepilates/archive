@@ -1,7 +1,7 @@
 (function () {
   "use strict";
 
-  var VERSION = "2026-07-30b";
+  var VERSION = "2026-09-04a";
   var ORIGIN = "https://archivepilates.com";
   var ANALYTICS_ASSET = ORIGIN + "/assets/archive-analytics-20260729a.js?v=" + VERSION;
   var STYLE_ID = "archive-pilates-video-sales-style";
@@ -35,7 +35,9 @@
     50: { code: "ACH8", title: "체어 호흡", price: 15000 },
     51: { code: "ACA5", title: "캐딜락 호흡", price: 15000 },
     79: { code: "AB9", title: "바렐 골반·고관절", price: 15000 },
-    80: { code: "AR5", title: "리포머 골반·고관절", price: 15000 }
+    80: { code: "AR5", title: "리포머 골반·고관절", price: 15000 },
+    84: { code: "ACA6", title: "캐딜락 지지와 움직임", price: 15000 },
+    85: { code: "ACH9", title: "체어 지지와 움직임", price: 15000 }
   };
 
   var BEST = [
@@ -45,6 +47,11 @@
   ];
 
   var ROUTES = [
+    {
+      title: "지지와 움직임",
+      copy: "안정된 지지 위에서 정렬과 움직임이 이어지는 흐름을 살펴봅니다.",
+      items: [84, 85]
+    },
     {
       title: "호흡과 중심",
       copy: "호흡을 움직임에 연결하고 중심을 다시 세웁니다.",
@@ -68,6 +75,8 @@
   ];
 
   var NEXT_BY_CODE = {
+    ACA6: 85,
+    ACH9: 84,
     ACH8: 51,
     ACA5: 44,
     AB9: 80,
@@ -77,7 +86,7 @@
     AR1: 44,
     ACH3: 27
   };
-  var NEXT_PRIORITY = ["ACH8", "AB9", "AB8", "AR1", "ACA5", "AR5", "AR4", "ACH3"];
+  var NEXT_PRIORITY = ["ACA6", "ACH9", "ACH8", "AB9", "AB8", "AR1", "ACA5", "AR5", "AR4", "ACH3"];
 
   function currentPath() {
     return String(window.location.pathname || "/").replace(/\/+$/, "") || "/";

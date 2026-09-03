@@ -7,7 +7,7 @@ import { spawnSync } from "node:child_process";
 
 const APPLY = process.argv.includes("--apply");
 const ROOT = path.resolve(path.dirname(new URL(import.meta.url).pathname), "../..");
-const IMWEB = "/Users/archivepilates/.local/bin/imweb";
+const IMWEB = process.env.IMWEB_CLI || "/Users/archivepilates/.local/bin/imweb";
 const UNIT_CODE = "u2026051698c99ea234719";
 const SITE_CODE = "S20260516852c71a014d08";
 const MARKER = "data-archive-pilates-video-sales-growth";
@@ -65,7 +65,7 @@ if (!before.includes('data-archive-pilates-site-improvements="2026-07-28b"')) {
   throw new Error("current header is missing the active site-improvements loader");
 }
 const after = replaceMarkedScript(before);
-if (!after.includes(`${MARKER}="2026-07-30b"`)) {
+if (!after.includes(`${MARKER}="2026-09-04a"`)) {
   throw new Error("prepared header is missing the video-sales loader");
 }
 

@@ -38,7 +38,7 @@ assert(
 ].forEach((eventName) => {
   assert(sales.includes(`"${eventName}"`), `Missing analytics event: ${eventName}`);
 });
-["ACH8", "AB9", "AR4", "호흡과 중심", "골반·고관절", "순환과 FLOW", "정렬과 코어"].forEach(
+["ACA6", "ACH9", "ACH8", "AB9", "AR4", "지지와 움직임", "호흡과 중심", "골반·고관절", "순환과 FLOW", "정렬과 코어"].forEach(
   (needle) => {
     assert(sales.includes(needle), `Missing curated route value: ${needle}`);
   }
@@ -51,9 +51,17 @@ assert(
   sales.includes("ACA5: 44"),
   "The post-ACA5 recommendation must be ACH3."
 );
+assert(sales.includes('84: { code: "ACA6"'), "ACA6 product 84 is missing from the catalog.");
+assert(sales.includes('85: { code: "ACH9"'), "ACH9 product 85 is missing from the catalog.");
+assert(sales.includes("ACA6: 85"), "The post-ACA6 recommendation must be ACH9.");
+assert(sales.includes("ACH9: 84"), "The post-ACH9 recommendation must be ACA6.");
 assert(
   installer.includes("imweb-video-sales-20260730b.js"),
   "Imweb loader does not reference the versioned sales asset."
+);
+assert(
+  installer.includes('data-archive-pilates-video-sales-growth="2026-09-04a"'),
+  "Imweb video-sales loader version is stale."
 );
 assert(
   index.includes("/assets/archive-analytics-20260729a.js"),

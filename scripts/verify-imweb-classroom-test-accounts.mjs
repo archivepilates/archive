@@ -4,7 +4,7 @@ import { chromium } from "playwright";
 
 const SITE = "https://archivepilates.imweb.me";
 const CLASSROOM_PATH = "/48";
-const VERSION = "2026-09-01a";
+const VERSION = "2026-09-04c";
 const IMWEB = process.env.IMWEB_CLI || "/Users/archivepilates/.local/bin/imweb";
 
 const BUYER = {
@@ -36,6 +36,16 @@ const TEST_ACCESS_CASES = [
     groupCode: "g202608311da9acbcaf394",
     path: "/private-lesson-support-movement-d-260830",
   },
+  {
+    code: "ACA6",
+    groupCode: "g20260904cd391d32c1196",
+    path: "/archive-method-watch-aca6",
+  },
+  {
+    code: "ACH9",
+    groupCode: "g202609044ef28afed03be",
+    path: "/archive-method-watch-ach9",
+  },
 ];
 const VIEWPORTS = [
   { name: "mobile", width: 390, height: 844 },
@@ -58,7 +68,7 @@ try {
 
   const temporaryGroupCodes = TEST_ACCESS_CASES.map((item) => item.groupCode);
   updateGroups(BUYER.email, temporaryGroupCodes);
-  assertGroups(BUYER.email, temporaryGroupCodes, "August classroom test access assignment");
+  assertGroups(BUYER.email, temporaryGroupCodes, "classroom test access assignment");
   for (const viewport of VIEWPORTS) {
     results.push(await verifyAccount({
       account: BUYER,
@@ -190,7 +200,7 @@ async function verifyAccount({
           () =>
             Boolean(
               document.querySelector(
-                '.ap-private-watch,.ap-private-watch__video,iframe[src*="youtube.com/embed"],iframe[src*="youtube-nocookie.com/embed"]',
+                '.ap-private-watch,.ap-private-watch__video,[data-widget-type="video"],iframe[src*="youtube.com/embed"],iframe[src*="youtube-nocookie.com/embed"]',
               ),
             ),
           null,
@@ -199,7 +209,7 @@ async function verifyAccount({
         const protectedMedia = await page.evaluate(() =>
           Boolean(
             document.querySelector(
-              '.ap-private-watch,.ap-private-watch__video,iframe[src*="youtube.com/embed"],iframe[src*="youtube-nocookie.com/embed"]',
+              '.ap-private-watch,.ap-private-watch__video,[data-widget-type="video"],iframe[src*="youtube.com/embed"],iframe[src*="youtube-nocookie.com/embed"]',
             ),
           ),
         );
@@ -218,7 +228,7 @@ async function verifyAccount({
         const leakedMedia = await page.evaluate(() =>
           Boolean(
             document.querySelector(
-              '.ap-private-watch,.ap-private-watch__video,iframe[src*="youtube.com/embed"],iframe[src*="youtube-nocookie.com/embed"]',
+              '.ap-private-watch,.ap-private-watch__video,[data-widget-type="video"],iframe[src*="youtube.com/embed"],iframe[src*="youtube-nocookie.com/embed"]',
             ),
           ),
         );
