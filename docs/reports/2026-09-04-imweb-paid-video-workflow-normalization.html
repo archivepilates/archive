@@ -1,0 +1,40 @@
+<!doctype html>
+<html lang="ko">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width,initial-scale=1">
+  <title>판매영상 제작 흐름 정규화 | ARCHIVE PILATES</title>
+  <style>
+    :root{color-scheme:light;--bg:#f7f4ef;--paper:#fffdfa;--ink:#191715;--muted:#6f665f;--line:#ddd4ca;--red:#a33a2a;--green:#32664a}
+    *{box-sizing:border-box}body{margin:0;background:var(--bg);color:var(--ink);font-family:-apple-system,BlinkMacSystemFont,"Apple SD Gothic Neo","Noto Sans KR",sans-serif;line-height:1.65}
+    main{width:min(1040px,calc(100% - 32px));margin:0 auto;padding:72px 0 96px}header{padding-bottom:34px;border-bottom:2px solid var(--ink)}
+    .eyebrow{margin:0 0 12px;color:var(--red);font-size:12px;font-weight:800;letter-spacing:0}h1,h2,h3{word-break:keep-all;overflow-wrap:break-word}h1{margin:0;font-size:62px;line-height:1.1;letter-spacing:0}
+    .lead{max-width:720px;margin:20px 0 0;color:var(--muted);font-size:18px}.meta{display:flex;gap:10px;flex-wrap:wrap;margin-top:24px}.tag{padding:7px 10px;border:1px solid var(--line);background:var(--paper);font-size:13px}
+    section{padding:42px 0;border-bottom:1px solid var(--line)}h2{margin:0 0 22px;font-size:26px;letter-spacing:0}.grid{display:grid;grid-template-columns:repeat(2,minmax(0,1fr));gap:14px}
+    article{min-width:0;padding:22px;border:1px solid var(--line);background:var(--paper)}h3{margin:0 0 10px;font-size:18px}.num{display:block;margin-bottom:12px;color:var(--red);font-size:12px;font-weight:800}
+    p{margin:0;color:var(--muted)}ul{margin:0;padding-left:20px}li+li{margin-top:9px}.flow{display:grid;grid-template-columns:repeat(4,minmax(0,1fr));gap:10px;counter-reset:step}.flow div{padding:18px;border-top:3px solid var(--ink);background:var(--paper)}.flow div:before{counter-increment:step;content:"0" counter(step);display:block;color:var(--red);font-weight:800;font-size:12px;margin-bottom:12px}
+    table{width:100%;border-collapse:collapse;background:var(--paper)}th,td{padding:14px;text-align:left;border:1px solid var(--line);vertical-align:top}th{font-size:13px}.ok{color:var(--green);font-weight:800}.note{margin-top:18px;padding:18px;border-left:3px solid var(--red);background:var(--paper)}code{font-family:ui-monospace,SFMono-Regular,Menlo,monospace;font-size:.92em;overflow-wrap:anywhere}
+    @media(max-width:720px){main{width:min(100% - 24px,1040px);padding:42px 0 72px}.grid,.flow{grid-template-columns:1fr}section{padding:32px 0}h1{font-size:38px}.lead{font-size:16px}article{padding:18px}th,td{padding:11px;font-size:14px}}
+  </style>
+</head>
+<body><main>
+  <header><p class="eyebrow">ARCHIVE PILATES · WORKFLOW REVIEW</p><h1>판매영상 제작 흐름 정규화</h1><p class="lead">이번 작업이 오래 걸린 이유를 분리하고, 다음 판매영상부터 한 번의 입력으로 상품 자료·내 강의실·영상구매 목록·검증 대상을 함께 만드는 구조로 바꿨습니다.</p><div class="meta"><span class="tag">기준일 2026.09.04</span><span class="tag">카탈로그 29편</span><span class="tag">현재 릴리스 ACA6 · ACH9</span><span class="tag">로컬 구현 · 미배포</span></div></header>
+  <section><h2>왜 오래 걸렸나</h2><div class="grid">
+    <article><span class="num">01 · 반복 입력</span><h3>영상 하나가 여러 파일에 흩어졌습니다</h3><p>상품 코드, 제목, 상품번호, 그룹, 시청 경로와 추천 관계를 내 강의실·판매 화면·검증 스크립트에 각각 다시 적어야 했습니다.</p></article>
+    <article><span class="num">02 · 위젯 차이</span><h3>새 페이지가 기존 판별 규칙과 달랐습니다</h3><p>이번 숨김 페이지는 아임웹 기본 영상 위젯이었고 기존 로직은 커스텀 임베드만 찾았습니다. 관리자 확인으로는 드러나지 않아 일반회원 테스트에서 수정이 필요했습니다.</p></article>
+    <article><span class="num">03 · 두 시스템 배포</span><h3>공식 홈페이지와 아임웹 순서가 얽혔습니다</h3><p>공식 홈페이지 자산을 먼저 올리고 아임웹 로더를 갱신해야 합니다. 중간 상태를 완성 상태처럼 검사하면 일시적인 실패가 발생합니다.</p></article>
+    <article><span class="num">04 · 작업 범위</span><h3>원본 2편과 미리보기 2편을 함께 처리했습니다</h3><p>유튜브 업로드·처리 대기 뒤 상품·그룹·페이지·미리보기와 비로그인, 구매자, 비구매자의 모바일·PC까지 확인했습니다. 검증은 필요하지만 매번 대상을 수기로 만드는 일은 불필요했습니다.</p></article>
+  </div></section>
+  <section><h2>새 표준 흐름</h2><div class="flow"><div><strong>영상 입력</strong><p>코드, 제목, 강사, 길이, 미리보기, 원본, 썸네일, 그룹</p></div><div><strong>자료·상품 생성</strong><p>상세 HTML과 숨김 페이지 설정을 만들고 중복 확인 후 상품 등록</p></div><div><strong>카탈로그 반영</strong><p>내 강의실·판매 목록·버전·검증 대상을 자동 동기화</p></div><div><strong>회원 검증</strong><p>상품 API, 공개 미리보기, 권한 차단, 일반회원 모바일·PC 확인</p></div></div>
+    <p class="note"><strong>수동으로 남는 한 단계:</strong> 아임웹 공개 API가 회원그룹 생성과 숨김 페이지 영상 위젯 편집을 지원하지 않아 이 부분만 관리자 디자인 모드에서 처리합니다.</p>
+  </section>
+  <section><h2>자동 보호 장치</h2><table><thead><tr><th>검사</th><th>방지하는 오류</th><th>현재 결과</th></tr></thead><tbody>
+    <tr><td>코드·상품번호·그룹·경로 중복</td><td>다른 영상 권한 또는 상품으로 잘못 연결</td><td class="ok">통과</td></tr>
+    <tr><td>장비 접두어와 카테고리</td><td>캐딜락·체어·리포머·바렐 분류 오류</td><td class="ok">통과</td></tr>
+    <tr><td>전체 영상 ID 공개 파일 유출</td><td>상품 상세나 전역 스크립트에서 원본 링크 노출</td><td class="ok">통과</td></tr>
+    <tr><td>아임웹 기본 영상 위젯 인식</td><td>권한이 있어도 내 강의실 카드가 사라지는 재발</td><td class="ok">통과</td></tr>
+    <tr><td>현재 릴리스 자동 선택</td><td>검증 스크립트가 지난 영상만 검사</td><td class="ok">통과</td></tr>
+  </tbody></table></section>
+  <section><h2>다음 작업의 기대 변화</h2><div class="grid"><article><h3>바뀌는 일</h3><ul><li>메타데이터 입력 위치를 한 곳으로 축소</li><li>상품 상세 문구와 40일 정책 자동 생성</li><li>최신 영상이 검증 대상에 자동 포함</li><li>배포 전 누락과 링크 유출을 즉시 차단</li></ul></article><article><h3>목표 운영 시간</h3><p>유튜브 업로드·처리가 끝나 있고 회원그룹 코드가 준비된 뒤에는 1개 상품 기준 등록 자료 생성부터 자동 검증까지 약 20~35분을 목표로 합니다. 아임웹 디자인 모드 응답과 유튜브 처리 시간은 별도입니다.</p></article></div></section>
+  <section><h2>검증 결과</h2><ul><li><code>validate:imweb-paid-video-catalog</code>: 29개 카탈로그와 생성 소스 일치</li><li><code>validate:archive-home-classroom</code>: 내 강의실 자산·복구 로더 통과</li><li><code>validate:video-sales-growth</code>: 판매 목록·추천·분석 자산 통과</li><li><code>verify:imweb-paid-video-release</code>: ACA6·ACH9 상품, 그룹, 숨김 페이지, 미리보기, 비로그인 차단 통과</li></ul><p class="note">이 보고서 시점에는 배포하지 않았습니다. 다음 배포 승인 때 공식 홈페이지, 아임웹 로더, ARCHIVE CORE 운영규칙을 함께 반영하고 일반회원 회귀검증을 진행합니다.</p></section>
+</main></body></html>

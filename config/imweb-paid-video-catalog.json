@@ -1,0 +1,397 @@
+{
+  "schemaVersion": 1,
+  "site": {
+    "siteCode": "S20260516852c71a014d08",
+    "unitCode": "u2026051698c99ea234719",
+    "shopPath": "/17",
+    "classroomPath": "/48",
+    "onlineCategoryCode": "s20260613848c8356b9c73"
+  },
+  "runtime": {
+    "releaseDate": "2026-09-04",
+    "classroomAssetVersion": "2026-09-04c",
+    "classroomLoaderVersion": "2026-09-04d",
+    "classroomAssetQuery": "20260904c",
+    "videoSalesVersion": "2026-09-04a"
+  },
+  "defaults": {
+    "price": 15000,
+    "entitlementDays": 40,
+    "productType": "subscribe"
+  },
+  "equipment": {
+    "리포머": {
+      "codePrefix": "AR",
+      "categoryCode": "s202607019679c4dfe7444"
+    },
+    "캐딜락": {
+      "codePrefix": "ACA",
+      "categoryCode": "s20260701efdb5b2301d6a"
+    },
+    "바렐": {
+      "codePrefix": "AB",
+      "categoryCode": "s20260701bd76df25dd869"
+    },
+    "체어": {
+      "codePrefix": "ACH",
+      "categoryCode": "s20260701ffa32bf1db1c7"
+    }
+  },
+  "products": [
+    {
+      "code": "AR1",
+      "productNo": 27,
+      "title": "리포머 척추 정렬 & 코어 컨트롤",
+      "groupCode": "g2026062802f1f8a665b83",
+      "watchPath": "/archive-method-watch-ar1",
+      "saleStatus": "sale",
+      "displayed": true
+    },
+    {
+      "code": "ACH7",
+      "productNo": 28,
+      "title": "체어 흉추가동성",
+      "groupCode": "g202606280088d48c168dd",
+      "watchPath": "/archive-method-watch-ach7",
+      "saleStatus": "sale",
+      "displayed": true
+    },
+    {
+      "code": "ACA4",
+      "productNo": 29,
+      "title": "캐딜락 흉추가동성",
+      "groupCode": "g202606286a5f40cd97cff",
+      "watchPath": "/archive-method-watch-aca4",
+      "saleStatus": "sale",
+      "displayed": true
+    },
+    {
+      "code": "AB7",
+      "productNo": 30,
+      "title": "바렐 요추안정화",
+      "groupCode": "g2026062844c875efbe83d",
+      "watchPath": "/archive-method-watch-ab7",
+      "saleStatus": "sale",
+      "displayed": true
+    },
+    {
+      "code": "AR3",
+      "productNo": 31,
+      "title": "리포머 요추안정화",
+      "groupCode": "g20260628d909ece7b18d4",
+      "watchPath": "/archive-method-watch-ar3",
+      "saleStatus": "sale",
+      "displayed": true
+    },
+    {
+      "code": "AB6",
+      "productNo": 32,
+      "title": "바렐 직장인 증후군",
+      "groupCode": "g202606284da349b19a03c",
+      "watchPath": "/archive-method-watch-ab6",
+      "saleStatus": "sale",
+      "displayed": true
+    },
+    {
+      "code": "ACH6",
+      "productNo": 33,
+      "title": "체어 직장인 증후군",
+      "groupCode": "g20260628f72b1c85bfa18",
+      "watchPath": "/archive-method-watch-ach6",
+      "saleStatus": "sale",
+      "displayed": true
+    },
+    {
+      "code": "AR2-1",
+      "productNo": 34,
+      "title": "리포머 챌린지 동작 빌드업",
+      "groupCode": "g202606287f9e5ff5d4a21",
+      "watchPath": "/archive-method-watch-ar2-1",
+      "saleStatus": "nosale",
+      "displayed": true,
+      "classroomTitle": "리포머 챌린지 동작 빌드업 시퀀스 (AR2-1)"
+    },
+    {
+      "code": "ACH5",
+      "productNo": 35,
+      "title": "체어 고강도 필라테스",
+      "groupCode": "g2026062882ccaeca13ec3",
+      "watchPath": "/archive-method-watch-ach5",
+      "saleStatus": "sale",
+      "displayed": true,
+      "classroomTitle": "체어 고강도필라테스 (ACH5)"
+    },
+    {
+      "code": "ACA2",
+      "productNo": 36,
+      "title": "캐딜락 경추보호 코어강화",
+      "groupCode": "g202606282754ea4191b73",
+      "watchPath": "/archive-method-watch-aca2",
+      "saleStatus": "sale",
+      "displayed": true
+    },
+    {
+      "code": "ACA3",
+      "productNo": 37,
+      "title": "캐딜락 고강도 필라테스",
+      "groupCode": "g202606288eb28ae436e92",
+      "watchPath": "/archive-method-watch-aca3",
+      "saleStatus": "sale",
+      "displayed": true,
+      "classroomTitle": "캐딜락 고강도필라테스 (ACA3)"
+    },
+    {
+      "code": "ACA1",
+      "productNo": 38,
+      "title": "캐딜락 보상패턴 바로잡기",
+      "groupCode": "g20260628d8695c0317b89",
+      "watchPath": "/archive-method-watch-aca1",
+      "saleStatus": "sale",
+      "displayed": true,
+      "classroomTitle": "캐딜락 암스프링 단 하나로 보상패턴 바로잡기 (ACA1)"
+    },
+    {
+      "code": "AB3",
+      "productNo": 39,
+      "title": "바렐 척추 유연성 & 어깨 안정화",
+      "groupCode": "g20260628f4948711ee506",
+      "watchPath": "/archive-method-watch-ab3",
+      "saleStatus": "sale",
+      "displayed": true
+    },
+    {
+      "code": "ACH2",
+      "productNo": 40,
+      "title": "체어 림프 순환 & 척추 컨트롤",
+      "groupCode": "g202606289e121e49cda3a",
+      "watchPath": "/archive-method-watch-ach2",
+      "saleStatus": "sale",
+      "displayed": true
+    },
+    {
+      "code": "AB2",
+      "productNo": 41,
+      "title": "바렐 척추 신장 & 복부 컨트롤",
+      "groupCode": "g202606288c436b61462d1",
+      "watchPath": "/archive-method-watch-ab2",
+      "saleStatus": "sale",
+      "displayed": true
+    },
+    {
+      "code": "ACH1",
+      "productNo": 42,
+      "title": "체어 골반 & 체간 안정화",
+      "groupCode": "g202606283c4a5a9fb9d58",
+      "watchPath": "/archive-method-watch-ach1",
+      "saleStatus": "sale",
+      "displayed": true,
+      "classroomTitle": "체어 골반 & 체간 안정화 + 척추 유연성 (ACH1)"
+    },
+    {
+      "code": "ACH4",
+      "productNo": 43,
+      "title": "체어 골반 안정화 & 비대칭 교정",
+      "groupCode": "g20260628b653d3fe5713d",
+      "watchPath": "/archive-method-watch-ach4",
+      "saleStatus": "sale",
+      "displayed": true
+    },
+    {
+      "code": "ACH3",
+      "productNo": 44,
+      "title": "체어 정렬 인지 & 체간 안정화",
+      "groupCode": "g20260628dee74ff7404b2",
+      "watchPath": "/archive-method-watch-ach3",
+      "saleStatus": "sale",
+      "displayed": true
+    },
+    {
+      "code": "AB5",
+      "productNo": 45,
+      "title": "바렐 크로스패턴",
+      "groupCode": "g20260628bfc1f7dd5bb5f",
+      "watchPath": "/archive-method-watch-ab5",
+      "saleStatus": "sale",
+      "displayed": true
+    },
+    {
+      "code": "AB1",
+      "productNo": 46,
+      "title": "바렐 척추 신장 & 흉곽 안정화",
+      "groupCode": "g2026062817b8d0582b57e",
+      "watchPath": "/archive-method-watch-ab1",
+      "saleStatus": "sale",
+      "displayed": true
+    },
+    {
+      "code": "AR4",
+      "productNo": 47,
+      "title": "리포머 순환",
+      "groupCode": "g202606288f208548cea6b",
+      "watchPath": "/archive-method-watch-ar4",
+      "saleStatus": "sale",
+      "displayed": true
+    },
+    {
+      "code": "AB4",
+      "productNo": 48,
+      "title": "바렐 전신 근막 FLOW",
+      "groupCode": "g2026062875aa3901a0e22",
+      "watchPath": "/archive-method-watch-ab4",
+      "saleStatus": "sale",
+      "displayed": true
+    },
+    {
+      "code": "AB8",
+      "productNo": 49,
+      "title": "바렐 순환",
+      "groupCode": "g20260628258a4b03dc237",
+      "watchPath": "/archive-method-watch-ab8",
+      "saleStatus": "sale",
+      "displayed": true
+    },
+    {
+      "code": "ACH8",
+      "productNo": 50,
+      "title": "체어 호흡",
+      "groupCode": "g2026062956772b09976a1",
+      "watchPath": "/archive-method-watch-ach8",
+      "saleStatus": "sale",
+      "displayed": true
+    },
+    {
+      "code": "ACA5",
+      "productNo": 51,
+      "title": "캐딜락 호흡",
+      "groupCode": "g202606290bc066cba328e",
+      "watchPath": "/archive-method-watch-aca5",
+      "saleStatus": "sale",
+      "displayed": true
+    },
+    {
+      "code": "AB9",
+      "productNo": 79,
+      "title": "바렐 골반·고관절",
+      "groupCode": "g202607267e167cd868581",
+      "watchPath": "/archive-method-watch-ab9",
+      "saleStatus": "sale",
+      "displayed": true
+    },
+    {
+      "code": "AR5",
+      "productNo": 80,
+      "title": "리포머 골반·고관절",
+      "groupCode": "g20260726bbdf2bb16a76a",
+      "watchPath": "/archive-method-watch-ar5",
+      "saleStatus": "sale",
+      "displayed": true
+    },
+    {
+      "code": "ACA6",
+      "productNo": 84,
+      "title": "캐딜락 지지와 움직임",
+      "groupCode": "g20260904cd391d32c1196",
+      "watchPath": "/archive-method-watch-aca6",
+      "saleStatus": "sale",
+      "displayed": true,
+      "previewYouTubeId": "gsoSB2PwkXU",
+      "verifyInRelease": true
+    },
+    {
+      "code": "ACH9",
+      "productNo": 85,
+      "title": "체어 지지와 움직임",
+      "groupCode": "g202609044ef28afed03be",
+      "watchPath": "/archive-method-watch-ach9",
+      "saleStatus": "sale",
+      "displayed": true,
+      "previewYouTubeId": "JVdsoaWkH-s",
+      "verifyInRelease": true
+    }
+  ],
+  "merchandising": {
+    "best": [
+      {
+        "code": "ACH3",
+        "label": "BEST 01",
+        "reason": "정렬 인지에서 체간 안정화로 이어지는 시작점"
+      },
+      {
+        "code": "AB9",
+        "label": "BEST 02",
+        "reason": "최근 가장 빠르게 선택된 주제"
+      },
+      {
+        "code": "AR4",
+        "label": "BEST 03",
+        "reason": "다른 기구로 확장하기 좋은 FLOW"
+      }
+    ],
+    "routes": [
+      {
+        "title": "지지와 움직임",
+        "copy": "안정된 지지 위에서 정렬과 움직임이 이어지는 흐름을 살펴봅니다.",
+        "codes": [
+          "ACA6",
+          "ACH9"
+        ]
+      },
+      {
+        "title": "호흡과 중심",
+        "copy": "호흡을 움직임에 연결하고 중심을 다시 세웁니다.",
+        "codes": [
+          "ACH8",
+          "ACA5"
+        ]
+      },
+      {
+        "title": "골반·고관절",
+        "copy": "골반의 위치와 고관절 움직임을 기구별로 비교합니다.",
+        "codes": [
+          "AB9",
+          "AR5"
+        ]
+      },
+      {
+        "title": "순환과 FLOW",
+        "copy": "동작 사이의 연결과 회복까지 끊기지 않게 구성합니다.",
+        "codes": [
+          "AB8",
+          "AR4"
+        ]
+      },
+      {
+        "title": "정렬과 코어",
+        "copy": "보상 패턴을 관찰하고 체간 안정화로 이어갑니다.",
+        "codes": [
+          "AR1",
+          "ACH3"
+        ]
+      }
+    ],
+    "nextByCode": {
+      "ACA6": "ACH9",
+      "ACH9": "ACA6",
+      "ACH8": "ACA5",
+      "ACA5": "ACH3",
+      "AB9": "AR5",
+      "AR5": "AB9",
+      "AB8": "AR4",
+      "AR4": "AB8",
+      "AR1": "ACH3",
+      "ACH3": "AR1"
+    },
+    "nextPriority": [
+      "ACA6",
+      "ACH9",
+      "ACH8",
+      "AB9",
+      "AB8",
+      "AR1",
+      "ACA5",
+      "AR5",
+      "AR4",
+      "ACH3"
+    ]
+  }
+}

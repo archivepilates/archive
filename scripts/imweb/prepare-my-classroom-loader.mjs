@@ -1,11 +1,14 @@
 #!/usr/bin/env node
 import fs from "node:fs";
 import path from "node:path";
+import { loadPaidVideoCatalog } from "./lib/paid-video-catalog.mjs";
 
 const inputPath = path.resolve(process.argv[2] || "");
 const outputDir = path.resolve(process.argv[3] || "");
 const loaderPath = path.resolve("scripts/imweb/imweb-my-classroom-loader.html");
-const unitCode = "u2026051698c99ea234719";
+const catalog = loadPaidVideoCatalog(path.resolve("."));
+const unitCode = catalog.site.unitCode;
+const { classroomAssetQuery, classroomLoaderVersion } = catalog.runtime;
 
 if (!process.argv[2] || !process.argv[3]) {
   throw new Error("Usage: prepare-my-classroom-loader.mjs SCRIPT_LIST_JSON OUTPUT_DIR");
@@ -36,11 +39,17 @@ assert(
   "Prepared body lost or duplicated the inline fallback.",
 );
 assert(
-  count(preparedHeader, 'data-archive-pilates-my-classroom-v2="2026-09-20d"') === 1,
+  count(
+    preparedHeader,
+    `data-archive-pilates-my-classroom-v2="${classroomLoaderVersion}"`,
+  ) === 1,
   "Prepared header does not contain the current loader version.",
 );
 assert(
-  count(preparedHeader, "imweb-my-classroom-20260723a.js?v=20260920c") === 1,
+  count(
+    preparedHeader,
+    `imweb-my-classroom-20260723a.js?v=${classroomAssetQuery}`,
+  ) === 1,
   "Prepared header does not contain the current asset URL.",
 );
 
@@ -55,7 +64,7 @@ console.log(
       bodyLengthBefore: body.length,
       headerLengthAfter: preparedHeader.length,
       headerLengthBefore: header.length,
-      loaderVersion: "2026-09-20d",
+      loaderVersion: classroomLoaderVersion,
       outputDir,
       removedBodyLoaderCount: bodyLoaderCount,
     },

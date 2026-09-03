@@ -4,12 +4,14 @@ import os from "node:os";
 import path from "node:path";
 import process from "node:process";
 import { spawnSync } from "node:child_process";
+import { loadPaidVideoCatalog } from "./lib/paid-video-catalog.mjs";
 
 const APPLY = process.argv.includes("--apply");
 const ROOT = path.resolve(path.dirname(new URL(import.meta.url).pathname), "../..");
+const catalog = loadPaidVideoCatalog(ROOT);
 const IMWEB = process.env.IMWEB_CLI || "/Users/archivepilates/.local/bin/imweb";
-const UNIT_CODE = "u2026051698c99ea234719";
-const SITE_CODE = "S20260516852c71a014d08";
+const UNIT_CODE = catalog.site.unitCode;
+const SITE_CODE = catalog.site.siteCode;
 const MARKER = "data-archive-pilates-video-sales-growth";
 const INSTALLER = fs
   .readFileSync(path.join(ROOT, "scripts/imweb/install-video-sales-growth.html"), "utf8")
@@ -65,7 +67,7 @@ if (!before.includes('data-archive-pilates-site-improvements="2026-07-28b"')) {
   throw new Error("current header is missing the active site-improvements loader");
 }
 const after = replaceMarkedScript(before);
-if (!after.includes(`${MARKER}="2026-09-04a"`)) {
+if (!after.includes(`${MARKER}="${catalog.runtime.videoSalesVersion}"`)) {
   throw new Error("prepared header is missing the video-sales loader");
 }
 

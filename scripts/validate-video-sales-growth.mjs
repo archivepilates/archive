@@ -1,7 +1,9 @@
 import fs from "node:fs";
 import path from "node:path";
+import { loadPaidVideoCatalog, releaseProducts } from "./imweb/lib/paid-video-catalog.mjs";
 
 const ROOT = path.resolve(path.dirname(new URL(import.meta.url).pathname), "..");
+const catalog = loadPaidVideoCatalog(ROOT);
 const analytics = fs.readFileSync(
   path.join(ROOT, "official-home/assets/archive-analytics-20260729a.js"),
   "utf8"
@@ -38,29 +40,29 @@ assert(
 ].forEach((eventName) => {
   assert(sales.includes(`"${eventName}"`), `Missing analytics event: ${eventName}`);
 });
-["ACA6", "ACH9", "ACH8", "AB9", "AR4", "지지와 움직임", "호흡과 중심", "골반·고관절", "순환과 FLOW", "정렬과 코어"].forEach(
-  (needle) => {
-    assert(sales.includes(needle), `Missing curated route value: ${needle}`);
-  }
-);
-assert(
-  sales.includes('{ idx: 44, label: "BEST 01"'),
-  "BEST 01 must be ACH3."
-);
-assert(
-  sales.includes("ACA5: 44"),
-  "The post-ACA5 recommendation must be ACH3."
-);
-assert(sales.includes('84: { code: "ACA6"'), "ACA6 product 84 is missing from the catalog.");
-assert(sales.includes('85: { code: "ACH9"'), "ACH9 product 85 is missing from the catalog.");
-assert(sales.includes("ACA6: 85"), "The post-ACA6 recommendation must be ACH9.");
-assert(sales.includes("ACH9: 84"), "The post-ACH9 recommendation must be ACA6.");
+for (const product of catalog.products) {
+  assert(
+    sales.includes(`${product.productNo}: { code: "${product.code}"`),
+    `${product.code} product ${product.productNo} is missing from the sales catalog.`,
+  );
+}
+for (const route of catalog.merchandising.routes) {
+  assert(sales.includes(`title: ${JSON.stringify(route.title)}`), `Missing route ${route.title}.`);
+}
+for (const item of catalog.merchandising.best) {
+  assert(sales.includes(`label: ${JSON.stringify(item.label)}`), `Missing ${item.label}.`);
+}
+for (const product of releaseProducts(catalog)) {
+  assert(sales.includes(`code: "${product.code}"`), `Missing current release ${product.code}.`);
+}
 assert(
   installer.includes("imweb-video-sales-20260730b.js"),
   "Imweb loader does not reference the versioned sales asset."
 );
 assert(
-  installer.includes('data-archive-pilates-video-sales-growth="2026-09-04a"'),
+  installer.includes(
+    `data-archive-pilates-video-sales-growth="${catalog.runtime.videoSalesVersion}"`,
+  ),
   "Imweb video-sales loader version is stale."
 );
 assert(

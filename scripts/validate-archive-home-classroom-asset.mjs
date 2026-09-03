@@ -1,8 +1,10 @@
 import fs from "node:fs";
 import path from "node:path";
 import vm from "node:vm";
+import { loadPaidVideoCatalog, releaseProducts } from "./imweb/lib/paid-video-catalog.mjs";
 
 const assetPath = path.resolve("official-home/assets/imweb-my-classroom-20260723a.js");
+const catalog = loadPaidVideoCatalog(path.resolve("."));
 
 if (!fs.existsSync(assetPath)) {
   throw new Error(`Required Imweb My Classroom asset is missing: ${assetPath}`);
@@ -10,13 +12,9 @@ if (!fs.existsSync(assetPath)) {
 
 const source = fs.readFileSync(assetPath, "utf8");
 const requiredMarkers = [
-  'VERSION="2026-09-20c"',
+  `VERSION="${catalog.runtime.classroomAssetVersion}"`,
   "var MAX_PROBES=6",
   'data-ap-classroom-v2',
-  '"/archive-method-watch-ach8"',
-  '"/archive-method-watch-ab9"',
-  '"/archive-method-watch-aca6"',
-  '"/archive-method-watch-ach9"',
   '"/private-lesson-pelvis-hip-b-barrel-260725"',
   '"/private-lesson-jey-260718"',
   '"/private-lesson-support-movement-a-260829"',
@@ -28,6 +26,8 @@ const requiredMarkers = [
   '"/private-lesson-external-feedback-c-260920"',
   '"/private-lesson-external-feedback-d-260920"',
 ];
+
+for (const product of catalog.products) requiredMarkers.push(JSON.stringify(product.watchPath));
 
 for (const marker of requiredMarkers) {
   if (!source.includes(marker)) {
@@ -76,6 +76,23 @@ vm.runInNewContext(instrumented, sandbox);
 
 const hooks = sandbox.__apClassroomTest;
 assert(hooks, "Imweb My Classroom test hooks did not initialize.");
+const paidLessons = hooks.L.filter((lesson) => !lesson.private);
+assert(
+  paidLessons.length === catalog.products.length,
+  `Expected ${catalog.products.length} paid lessons, found ${paidLessons.length}.`,
+);
+for (const product of catalog.products) {
+  assert(
+    paidLessons.some((lesson) => lesson.code === product.code && lesson.path === product.watchPath),
+    `${product.code} is missing from the My Classroom runtime catalog.`,
+  );
+}
+for (const product of releaseProducts(catalog)) {
+  assert(
+    paidLessons.some((lesson) => lesson.code === product.code),
+    `Current release ${product.code} is missing from My Classroom.`,
+  );
+}
 
 const privateDoc = {
   querySelector(selector) {

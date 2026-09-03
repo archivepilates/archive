@@ -42,6 +42,10 @@ assert(
 
 const validateCommand = packageConfig.scripts?.["validate:archive-home-classroom"] || "";
 assert(
+  validateCommand.includes("validate:imweb-paid-video-catalog"),
+  "The classroom validation command no longer checks the canonical paid-video catalog.",
+);
+assert(
   validateCommand.includes("validate-archive-home-classroom-release-config.mjs"),
   "The classroom validation command no longer checks release config.",
 );
@@ -60,15 +64,27 @@ assert(
 );
 
 [
+  "config/imweb-paid-video-catalog.json",
+  "config/imweb-paid-video-release.example.json",
   "firebase.archive-home.json",
   "official-home/index.html",
   "official-home/assets/imweb-my-classroom-20260723a.js",
+  "official-home/assets/imweb-video-sales-20260730b.js",
+  "scripts/imweb/install-video-sales-growth.html",
+  "scripts/imweb/apply-paid-video-products.mjs",
+  "scripts/imweb/apply-video-sales-growth.mjs",
   "scripts/imweb/imweb-my-classroom-loader.html",
+  "scripts/imweb/lib/paid-video-catalog.mjs",
+  "scripts/imweb/prepare-paid-video-release.mjs",
+  "scripts/imweb/sync-paid-video-catalog.mjs",
+  "scripts/imweb/verify-paid-video-release.mjs",
   "scripts/validate-archive-home-classroom-release-config.mjs",
   "scripts/validate-archive-home-address.mjs",
   "scripts/validate-archive-home-classroom-asset.mjs",
   "scripts/validate-imweb-classroom-loader-fallback.mjs",
+  "scripts/validate-imweb-paid-video-catalog.mjs",
   "scripts/verify-archive-home-classroom-live.mjs",
+  "scripts/tests/imweb-paid-video-workflow.test.mjs",
 ].forEach((watchedPath) => {
   assert(
     workflow.includes(`- "${watchedPath}"`),

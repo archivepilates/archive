@@ -8,6 +8,7 @@
   var ROOT_CLASS = "ap-video-sales";
   var scheduled = false;
 
+  // <archive-paid-video-sales-catalog:begin>
   var CATALOG = {
     27: { code: "AR1", title: "리포머 척추 정렬 & 코어 컨트롤", price: 15000 },
     28: { code: "ACH7", title: "체어 흉추가동성", price: 15000 },
@@ -86,7 +87,8 @@
     AR1: 44,
     ACH3: 27
   };
-  var NEXT_PRIORITY = ["ACA6", "ACH9", "ACH8", "AB9", "AB8", "AR1", "ACA5", "AR5", "AR4", "ACH3"];
+  var NEXT_PRIORITY = ["ACA6","ACH9","ACH8","AB9","AB8","AR1","ACA5","AR5","AR4","ACH3"];
+  // <archive-paid-video-sales-catalog:end>
 
   function currentPath() {
     return String(window.location.pathname || "/").replace(/\/+$/, "") || "/";

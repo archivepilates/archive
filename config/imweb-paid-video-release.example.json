@@ -1,0 +1,18 @@
+{
+  "_note": "복사 후 placeholders를 실제 값으로 바꾸고, 실제 입력 파일은 artifacts/imweb-paid-video-release/ 아래에 저장합니다.",
+  "releaseDate": "2026-10-01",
+  "videos": [
+    {
+      "code": "ACA7",
+      "productNo": 86,
+      "title": "캐딜락 수업 주제",
+      "instructor": "강사명",
+      "duration": "55:00",
+      "summary": "이 영상에서 확인할 수 있는 수업의 목적과 대표적인 흐름을 두 문장 이내로 적습니다.",
+      "previewYouTubeId": "AAAAAAAAAAA",
+      "fullYouTubeId": "BBBBBBBBBBB",
+      "thumbnailPath": "https://example.com/thumbnail.png",
+      "groupCode": "g000000000000000000000"
+    }
+  ]
+}

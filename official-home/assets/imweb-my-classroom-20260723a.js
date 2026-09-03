@@ -45,7 +45,8 @@
   document.documentElement.setAttribute("data-ap-classroom-v2",VERSION);
 
   var K="ap_classroom_relogin";
-  var L=[
+  // <archive-paid-video-classroom-catalog:begin>
+  var PAID_VIDEO_CATALOG=[
     {"code":"AR1","path":"/archive-method-watch-ar1","title":"리포머 척추 정렬 & 코어 컨트롤 (AR1)"},
     {"code":"ACH7","path":"/archive-method-watch-ach7","title":"체어 흉추가동성 (ACH7)"},
     {"code":"ACA4","path":"/archive-method-watch-aca4","title":"캐딜락 흉추가동성 (ACA4)"},
@@ -74,7 +75,10 @@
     {"code":"AB9","path":"/archive-method-watch-ab9","title":"바렐 골반·고관절 (AB9)"},
     {"code":"AR5","path":"/archive-method-watch-ar5","title":"리포머 골반·고관절 (AR5)"},
     {"code":"ACA6","path":"/archive-method-watch-aca6","title":"캐딜락 지지와 움직임 (ACA6)"},
-    {"code":"ACH9","path":"/archive-method-watch-ach9","title":"체어 지지와 움직임 (ACH9)"},
+    {"code":"ACH9","path":"/archive-method-watch-ach9","title":"체어 지지와 움직임 (ACH9)"}
+  ];
+  // <archive-paid-video-classroom-catalog:end>
+  var L=PAID_VIDEO_CATALOG.concat([
     {"code":"B260725-BARREL","path":"/private-lesson-pelvis-hip-b-barrel-260725","title":"7/25 골반·고관절 B팀 · 바렐","group":"PRIVATE LESSON PELVIS HIP B 260725 40D","private":true},
     {"code":"B260725-REFORMER","path":"/private-lesson-pelvis-hip-b-reformer-260725","title":"7/25 골반·고관절 B팀 · 리포머","group":"PRIVATE LESSON PELVIS HIP B 260725 40D","private":true},
     {"code":"JEY260718","path":"/private-lesson-jey-260718","title":"정은영 프라이빗 강사레슨 260718","group":"PRIVATE LESSON JEY 260718 40D","private":true},
@@ -86,7 +90,7 @@
     {"code":"B260919","path":"/private-lesson-external-feedback-b-260919","title":"9/19 외부 피드백 B팀 · 수강생 공유","group":"PRIVATE LESSON EXTERNAL FEEDBACK B 260919 40D","private":true},
     {"code":"C260920","path":"/private-lesson-external-feedback-c-260920","title":"9/20 외부 피드백 C팀 · 수강생 공유","group":"PRIVATE LESSON EXTERNAL FEEDBACK C 260920 40D","private":true},
     {"code":"D260920","path":"/private-lesson-external-feedback-d-260920","title":"9/20 외부 피드백 D팀 · 수강생 공유","group":"PRIVATE LESSON EXTERNAL FEEDBACK D 260920 40D","private":true}
-  ];
+  ]);
   var M={
     "d43dd28704f02dbdf0ff891b31450e359240d62d":"all",
     "eaa69fb684aed5e2aa35ec5150c015917178fa2d":"all",

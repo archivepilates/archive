@@ -1,12 +1,14 @@
 import crypto from "node:crypto";
 import fs from "node:fs";
 import path from "node:path";
+import { loadPaidVideoCatalog, releaseProducts } from "./imweb/lib/paid-video-catalog.mjs";
 
-const loaderVersion = "2026-09-20d";
-const assetVersion = "2026-09-20c";
+const catalog = loadPaidVideoCatalog(path.resolve("."));
+const loaderVersion = catalog.runtime.classroomLoaderVersion;
+const assetVersion = catalog.runtime.classroomAssetVersion;
 const assetPath = path.resolve("official-home/assets/imweb-my-classroom-20260723a.js");
 const assetUrl =
-  "https://archivepilates.com/assets/imweb-my-classroom-20260723a.js?v=20260920c";
+  `https://archivepilates.com/assets/imweb-my-classroom-20260723a.js?v=${catalog.runtime.classroomAssetQuery}`;
 const imwebHomeUrl = "https://archivepilates.imweb.me/";
 const expectedSource = fs.readFileSync(assetPath, "utf8");
 const expectedHash = sha256(expectedSource);
@@ -49,7 +51,7 @@ const imwebScripts = await retry("Imweb classroom loader", async () => {
   });
   const html = await response.text();
   const loaderMarker = `data-archive-pilates-my-classroom-v2="${loaderVersion}"`;
-  const assetMarker = `v=20260920c`;
+  const assetMarker = `v=${catalog.runtime.classroomAssetQuery}`;
   const inlineFallbackMarker =
     'data-archive-pilates-my-classroom="2026-07-21b"';
 
@@ -86,10 +88,10 @@ const classroom = await verifyAnonymousRedirect(
   "Anonymous classroom gate",
 );
 const watchPages = {};
-for (const code of ["aca6", "ach9"]) {
-  watchPages[code.toUpperCase()] = await verifyAnonymousRedirect(
-    `https://archivepilates.imweb.me/archive-method-watch-${code}`,
-    `Anonymous ${code.toUpperCase()} watch-page gate`,
+for (const product of releaseProducts(catalog)) {
+  watchPages[product.code] = await verifyAnonymousRedirect(
+    `https://archivepilates.imweb.me${product.watchPath}`,
+    `Anonymous ${product.code} watch-page gate`,
   );
 }
 for (const team of ["a", "b"]) {

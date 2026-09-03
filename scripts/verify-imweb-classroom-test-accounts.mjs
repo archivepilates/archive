@@ -1,10 +1,13 @@
 #!/usr/bin/env node
 import { spawnSync } from "node:child_process";
+import path from "node:path";
 import { chromium } from "playwright";
+import { loadPaidVideoCatalog, releaseProducts } from "./imweb/lib/paid-video-catalog.mjs";
 
 const SITE = "https://archivepilates.imweb.me";
 const CLASSROOM_PATH = "/48";
-const VERSION = "2026-09-20c";
+const catalog = loadPaidVideoCatalog(path.resolve("."));
+const VERSION = catalog.runtime.classroomAssetVersion;
 const IMWEB = process.env.IMWEB_CLI || "/Users/archivepilates/.local/bin/imweb";
 
 const BUYER = {
@@ -15,7 +18,7 @@ const NONBUYER = {
   email: "codex.imweb.nobuyer.202607011145@archivepilates.com",
   keychainService: "ARCHIVE PILATES Imweb nonbuyer test member",
 };
-const TEST_ACCESS_CASES = [
+const PRIVATE_TEST_ACCESS_CASES = [
   {
     code: "A260829",
     groupCode: "g20260831856d87e46bff5",
@@ -60,17 +63,14 @@ const TEST_ACCESS_CASES = [
     path: "/private-lesson-external-feedback-d-260920",
     expectedVideoIds: ["HMbaoNzQ8XE", "QCrzx6Y8ISE"],
   },
-  {
-    code: "ACA6",
-    groupCode: "g20260904cd391d32c1196",
-    path: "/archive-method-watch-aca6",
-  },
-  {
-    code: "ACH9",
-    groupCode: "g202609044ef28afed03be",
-    path: "/archive-method-watch-ach9",
-  },
 ];
+const TEST_ACCESS_CASES = PRIVATE_TEST_ACCESS_CASES.concat(
+  releaseProducts(catalog).map((product) => ({
+    code: product.code,
+    groupCode: product.groupCode,
+    path: product.watchPath,
+  })),
+);
 const VIEWPORTS = [
   { name: "mobile", width: 390, height: 844 },
   { name: "desktop", width: 1440, height: 900 },

@@ -1,6 +1,7 @@
 import fs from "node:fs";
 import path from "node:path";
 import vm from "node:vm";
+import { loadPaidVideoCatalog } from "./imweb/lib/paid-video-catalog.mjs";
 
 const loaderPath = path.resolve("scripts/imweb/imweb-my-classroom-loader.html");
 const loaderHtml = fs.readFileSync(loaderPath, "utf8");
@@ -11,11 +12,12 @@ if (!scriptMatch) {
 }
 
 const source = scriptMatch[1];
-const expectedLoaderVersion = "2026-09-20d";
-const expectedAssetVersion = "2026-09-20c";
+const catalog = loadPaidVideoCatalog(path.resolve("."));
+const expectedLoaderVersion = catalog.runtime.classroomLoaderVersion;
+const expectedAssetVersion = catalog.runtime.classroomAssetVersion;
 const recoveryKey = "ap_classroom_asset_skip_once";
 const expectedAssetUrl =
-  "https://archivepilates.com/assets/imweb-my-classroom-20260723a.js?v=20260920c";
+  `https://archivepilates.com/assets/imweb-my-classroom-20260723a.js?v=${catalog.runtime.classroomAssetQuery}`;
 
 if (!loaderHtml.includes(`data-archive-pilates-my-classroom-v2="${expectedLoaderVersion}"`)) {
   throw new Error("My Classroom loader marker is stale.");
