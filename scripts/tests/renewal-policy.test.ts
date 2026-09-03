@@ -13,6 +13,7 @@ import {
 } from "../../firebase/kangsain-functions/functions/src/renewal/renewalPolicy";
 import { renewalCandidateProfileIssue } from "../../firebase/kangsain-functions/functions/src/alimtalk/renewalSendGuard";
 import { selectDailyAlimtalkCandidates } from "../../firebase/kangsain-functions/functions/src/alimtalk/dailyCandidateSelection";
+import { assessLongAbsenceTarget } from "../../firebase/kangsain-functions/functions/src/alimtalk/longAbsencePolicy";
 
 type Ticket = NonNullable<MemberProfileDoc["activeTickets"]>[number];
 
@@ -350,6 +351,54 @@ test("send guard blocks a same-name follow-up ticket without stable ticket ids",
   );
 });
 
+test("returning member with an upcoming waitlist is excluded from long absence", () => {
+  const waitBooking = booking("2026-09-04", "20회(5개월)", "unchecked");
+  waitBooking.appStatus = "wait";
+  const result = assessLongAbsenceTarget({
+    profile: longAbsenceProfile("2026-09-02"),
+    sourceDate: "2026-09-03",
+    bookings: [booking("2024-08-29", "20회(5개월)"), waitBooking],
+  });
+
+  assert.equal(result.eligible, false);
+  assert.equal(result.issueCode, "upcoming_wait");
+});
+
+test("attendance from an expired membership cycle is not reused after a new ticket starts", () => {
+  const result = assessLongAbsenceTarget({
+    profile: longAbsenceProfile("2026-09-02"),
+    sourceDate: "2026-09-03",
+    bookings: [booking("2024-08-29", "20회(5개월)")],
+  });
+
+  assert.equal(result.eligible, false);
+  assert.equal(result.issueCode, "new_ticket_cycle");
+  assert.equal(result.latestTicketCycleStartDate, "2026-09-02");
+});
+
+test("member becomes eligible after attending in the current ticket cycle and then missing seven days", () => {
+  const result = assessLongAbsenceTarget({
+    profile: longAbsenceProfile("2026-09-01"),
+    sourceDate: "2026-09-10",
+    bookings: [booking("2026-09-02", "20회(5개월)")],
+  });
+
+  assert.equal(result.eligible, true);
+  assert.equal(result.absenceDays, 8);
+  assert.equal(result.lastAttendance?.lectureDate, "2026-09-02");
+});
+
+test("upcoming confirmed reservation still excludes long absence", () => {
+  const result = assessLongAbsenceTarget({
+    profile: longAbsenceProfile("2026-08-01"),
+    sourceDate: "2026-09-03",
+    bookings: [booking("2026-08-20", "20회(5개월)"), booking("2026-09-05", "20회(5개월)", "unchecked")],
+  });
+
+  assert.equal(result.eligible, false);
+  assert.equal(result.issueCode, "upcoming_reservation");
+});
+
 function renewalCandidate(candidateId: string, type: AlimtalkCandidateDoc["type"]): AlimtalkCandidateDoc {
   return {
     candidateId,
@@ -370,5 +419,28 @@ function renewalCandidate(candidateId: string, type: AlimtalkCandidateDoc["type"
     lastError: null,
     createdAt: timestamp(),
     updatedAt: timestamp(),
+  };
+}
+
+function longAbsenceProfile(availableFrom: string): MemberProfileDoc {
+  return {
+    memberId: "member-1",
+    studioId: "5330",
+    name: "테스트",
+    phone: "01000000000",
+    registeredAt: null,
+    activeTickets: [
+      {
+        name: "20회(5개월)",
+        classType: "그룹",
+        remainingCount: 20,
+        maxCount: 20,
+        availableFrom: timestamp(`${availableFrom}T00:00:00+09:00`),
+        expiresAt: timestamp("2027-01-28T23:59:59+09:00"),
+        expiryLevel: "normal",
+      },
+    ],
+    syncedAt: timestamp("2026-09-03T00:00:00+09:00"),
+    updatedAt: timestamp("2026-09-03T00:00:00+09:00"),
   };
 }

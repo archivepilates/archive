@@ -17,6 +17,7 @@ import { hasExplicitAlimtalkTestOverride } from "./testRecipients";
 import { currentPrivateLessonReportRevision } from "../privateLessonChart/privateLessonReportRevision";
 import { privateSurveySendabilityIssue } from "./privateSurveySendGuard";
 import { renewalCandidateSendabilityIssue } from "./renewalSendGuard";
+import { longAbsenceCandidateSendabilityIssue } from "./longAbsenceSendGuard";
 import {
   RECOMMENDED_MEAL_DRAFT_COLLECTION,
   RECOMMENDED_MEAL_REPORT_COLLECTION,
@@ -118,6 +119,19 @@ export async function processAlimtalkQueue(): Promise<{
             status: "skipped",
             reasonCode: "renewal_source_recheck_blocked",
             lastError: renewalIssue,
+            updatedAt: nowTimestamp(),
+          },
+          { merge: true },
+        );
+        continue;
+      }
+      const longAbsenceIssue = await longAbsenceCandidateSendabilityIssue(claimed);
+      if (longAbsenceIssue) {
+        await refs.alimtalkCandidate(claimed.candidateId).set(
+          {
+            status: "skipped",
+            reasonCode: "long_absence_source_recheck_blocked",
+            lastError: longAbsenceIssue,
             updatedAt: nowTimestamp(),
           },
           { merge: true },

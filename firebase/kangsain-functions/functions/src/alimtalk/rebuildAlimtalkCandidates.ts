@@ -28,6 +28,7 @@ import {
 import { alimtalkDedupeKey, findCompletedDuplicateForCandidate } from "./dedupe";
 import { instructorLessonManagementNumberFor } from "./instructorLessonManagement";
 import { hasExplicitAlimtalkTestOverride } from "./testRecipients";
+import { assessLongAbsenceTarget } from "./longAbsencePolicy";
 import {
   assessRenewalTicket,
   hasSameKindAlternativeTicket,
@@ -723,14 +724,15 @@ async function longAbsenceCandidateForDate(
   if (sourceDate < LONG_ABSENCE_ALIMTALK_START_DATE) return null;
   if (!profile.memberId || !profile.name || !profile.phone) return null;
   if (ALIMTALK_MEMBER_EXCLUSION_REASONS[profile.memberId]) return null;
-  if (hasHoldingTicket(profile)) return null;
-  const activeTickets = currentLessonProfileTickets(profile, sourceDate).filter(isRenewalManagedTicket);
-  if (!activeTickets.length) return null;
-  if (hasUpcomingReservedBooking(profile.memberId, sourceDate, bookingIndex)) return null;
-  const lastAttendance = lastAttendedBooking(profile.memberId, sourceDate, bookingIndex);
-  if (!lastAttendance) return null;
-  const absenceDays = daysBetweenDateStrings(lastAttendance.lectureDate, sourceDate);
-  if (!Number.isFinite(absenceDays) || absenceDays < 7) return null;
+  const assessment = assessLongAbsenceTarget({
+    profile,
+    sourceDate,
+    bookings: memberBookings(bookingIndex, profile.memberId),
+  });
+  if (!assessment.eligible || !assessment.lastAttendance || assessment.absenceDays == null) return null;
+  const activeTickets = assessment.activeTickets;
+  const lastAttendance = assessment.lastAttendance;
+  const absenceDays = assessment.absenceDays;
   const primaryTicket = activeTickets[0];
   return {
     candidateId: `long_absence_${profile.memberId}_${sourceDate}`,
@@ -764,31 +766,6 @@ async function longAbsenceCandidateForDate(
     createdAt: nowTimestamp(),
     updatedAt: nowTimestamp(),
   };
-}
-
-function lastAttendedBooking(memberId: string, sourceDate: string, bookingIndex: BookingIndex): BookingDoc | null {
-  const attended = memberBookings(bookingIndex, memberId)
-    .filter(
-      (booking) =>
-        booking.attendanceStatus === "attended" &&
-        booking.lectureDate &&
-        booking.lectureDate <= sourceDate &&
-        !isInstructorLessonBooking(booking),
-    )
-    .sort((a, b) => {
-      if (a.lectureDate !== b.lectureDate) return b.lectureDate.localeCompare(a.lectureDate);
-      return (b.lectureStartAt?.toMillis() || 0) - (a.lectureStartAt?.toMillis() || 0);
-    });
-  return attended[0] || null;
-}
-
-function hasUpcomingReservedBooking(memberId: string, sourceDate: string, bookingIndex: BookingIndex): boolean {
-  return memberBookings(bookingIndex, memberId).some(
-    (booking) =>
-      booking.appStatus === "reserved" &&
-      booking.lectureDate >= sourceDate &&
-      !isInstructorLessonBooking(booking),
-  );
 }
 
 function firstUpcomingPrivateBookingInReservationWindow(
