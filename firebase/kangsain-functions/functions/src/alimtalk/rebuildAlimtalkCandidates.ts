@@ -1398,6 +1398,19 @@ async function upsertCandidate(candidate: AlimtalkCandidateDoc): Promise<void> {
     ["auto_sendability_blocked", "private_survey_booking_blocked"].includes(
       String(previous.reasonCode || ""),
     );
+  if (previous?.status === "queued" && candidate.type === "private_survey") {
+    await ref.set(
+      {
+        memberName: candidate.memberName,
+        memberPhone: candidate.memberPhone,
+        templateCode: candidate.templateCode,
+        payload: candidate.payload,
+        updatedAt: nowTimestamp(),
+      },
+      { merge: true },
+    );
+    return;
+  }
   if (previous && ["queued", "sent"].includes(previous.status)) {
     await ref.set({ updatedAt: nowTimestamp() }, { merge: true });
     return;

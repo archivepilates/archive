@@ -3,7 +3,12 @@ import { logger } from "firebase-functions";
 import { db } from "../config/firebase";
 import { solapiApiKey, solapiApiSecret, solapiPfid } from "../config/secrets";
 import { refs } from "../firestore/refs";
-import type { AlimtalkCandidateDoc } from "../types/models";
+import type {
+  AlimtalkCandidateDoc,
+  BookingDoc,
+  PrivateLessonChartRecordDoc,
+  PrivateLessonChartRequestDoc,
+} from "../types/models";
 import { errorMessage } from "../utils/errors";
 import { nowTimestamp, todayKst } from "../utils/date";
 import { ensureShortLink } from "../utils/shortLinks";
@@ -257,6 +262,7 @@ export async function processAlimtalkQueue(): Promise<{
           maxAttempts: 1,
           nextRunAt: nowTimestamp(),
           solapiMessageId: result.messageId,
+          variables: result.variables,
           lastError: null,
           createdByUid: claimed.reviewedByUid || "system",
           createdAt: nowTimestamp(),
@@ -531,6 +537,7 @@ export async function processAlimtalkCandidate(candidateId: string): Promise<Ali
         maxAttempts: claimed.maxAttempts || 2,
         nextRunAt: nowTimestamp(),
         solapiMessageId: result.messageId,
+        variables: result.variables,
         lastError: null,
         createdByUid: claimed.reviewedByUid || "system",
         createdAt: nowTimestamp(),
@@ -638,6 +645,11 @@ async function markPrivateLessonReportSent(candidate: AlimtalkCandidateDoc): Pro
             sentAt,
             lastError: null,
           },
+          notionSync: {
+            ...(record.notionSync || {}),
+            status: "pending",
+            error: "",
+          },
           updatedAt: sentAt,
         },
         { merge: true },
@@ -741,6 +753,8 @@ async function lockPrivateLessonReportForSend(candidate: AlimtalkCandidateDoc): 
     ) {
       return "예약 취소 또는 시간변경 상태를 다시 확인해야 합니다.";
     }
+    const scheduleIssue = privateLessonReportScheduleIssue(booking, chartRequest, record);
+    if (scheduleIssue) return scheduleIssue;
     if (record.approvedRevision !== revision || record.approvedReportSnapshot?.revision !== revision) {
       return "승인본과 발송 후보의 리비전이 다릅니다.";
     }
@@ -790,6 +804,8 @@ async function finalPrivateLessonReportSendabilityIssue(candidate: AlimtalkCandi
   ) {
     return "발송 직전 예약 취소 또는 시간변경 상태입니다.";
   }
+  const scheduleIssue = privateLessonReportScheduleIssue(booking, chartRequest, record);
+  if (scheduleIssue) return `발송 직전 ${scheduleIssue}`;
   if (
     record.publicReportApproval?.status !== "processing" ||
     record.approvedRevision !== revision ||
@@ -799,6 +815,51 @@ async function finalPrivateLessonReportSendabilityIssue(candidate: AlimtalkCandi
     return "발송 직전 승인본 리비전이 변경되었습니다.";
   }
   return "";
+}
+
+export function privateLessonReportScheduleIssue(
+  booking: BookingDoc,
+  chartRequest: PrivateLessonChartRequestDoc,
+  record: PrivateLessonChartRecordDoc,
+): string {
+  const snapshot = record.approvedReportSnapshot;
+  if (!snapshot) return "승인된 리포트 일정 정보가 없습니다.";
+
+  const bookingStart = booking.lectureStartAt?.toMillis?.() || 0;
+  const requestStart = chartRequest.lessonStartAt?.toMillis?.() || 0;
+  const snapshotStart = snapshot.lessonStartAt?.toMillis?.() || 0;
+  const bookingDate = String(booking.lectureDate || "");
+  const requestDate = String(chartRequest.lessonDate || "");
+  const snapshotDate = String(snapshot.lessonDate || "");
+  const memberChanged = Boolean(
+    booking.memberId && chartRequest.memberId && booking.memberId !== chartRequest.memberId,
+  );
+  const staffChanged = booking.staffId && chartRequest.staffId
+    ? booking.staffId !== chartRequest.staffId
+    : normalizedOperationalName(booking.staffName) !== normalizedOperationalName(chartRequest.staffName);
+  const snapshotChanged =
+    normalizedOperationalName(snapshot.memberName) !== normalizedOperationalName(record.memberName) ||
+    normalizedOperationalName(snapshot.staffName) !== normalizedOperationalName(record.staffName);
+
+  if (
+    booking.bookingId !== chartRequest.bookingId ||
+    memberChanged ||
+    staffChanged ||
+    !bookingDate ||
+    bookingDate !== requestDate ||
+    requestDate !== snapshotDate ||
+    !bookingStart ||
+    bookingStart !== requestStart ||
+    requestStart !== snapshotStart ||
+    snapshotChanged
+  ) {
+    return "예약의 날짜·시간·강사가 승인본과 달라 재승인이 필요합니다.";
+  }
+  return "";
+}
+
+function normalizedOperationalName(value: unknown): string {
+  return String(value || "").normalize("NFKC").replace(/[\s·._-]+/g, "").toLowerCase();
 }
 
 async function markPrivateLessonReportFailed(candidate: AlimtalkCandidateDoc, message: string): Promise<void> {
@@ -859,7 +920,9 @@ function isStaleProcessing(candidate: AlimtalkCandidateDoc): boolean {
   return updatedAt > 0 && Date.now() - updatedAt >= PROCESSING_STALE_MS;
 }
 
-export async function sendSolapiAlimtalk(candidate: AlimtalkCandidateDoc): Promise<{ messageId: string }> {
+export async function sendSolapiAlimtalk(
+  candidate: AlimtalkCandidateDoc,
+): Promise<{ messageId: string; variables: Record<string, string> }> {
   const to = normalizePhone(candidate.memberPhone);
   if (!to) throw new Error("member phone is empty");
   if (!candidate.templateCode) throw new Error("templateCode is empty");
@@ -902,6 +965,7 @@ export async function sendSolapiAlimtalk(candidate: AlimtalkCandidateDoc): Promi
   }
   return {
     messageId: result.messageList?.[0]?.messageId || result.groupInfo?.groupId || "",
+    variables,
   };
 }
 
@@ -1060,7 +1124,7 @@ async function shortLinkIdForCandidate(
       targetUrl: privateSurveyTargetUrl(surveyId, accessToken),
       sourceId: candidate.candidateId,
     });
-    if (!existing) {
+    if (existing !== link.linkId || String(candidate.payload?.shortUrl || "") !== link.shortUrl) {
       await refs.alimtalkCandidate(candidate.candidateId).set(
         {
           payload: { ...candidate.payload, shortLinkId: link.linkId, shortUrl: link.shortUrl },
@@ -1077,7 +1141,7 @@ async function shortLinkIdForCandidate(
       targetUrl: groupSurveyTargetUrl(surveyId, accessToken),
       sourceId: candidate.candidateId,
     });
-    if (!existing) {
+    if (existing !== link.linkId || String(candidate.payload?.shortUrl || "") !== link.shortUrl) {
       await refs.alimtalkCandidate(candidate.candidateId).set(
         {
           payload: { ...candidate.payload, shortLinkId: link.linkId, shortUrl: link.shortUrl },

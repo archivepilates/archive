@@ -33,20 +33,13 @@ const templates = [
     key: "staff_private_chart",
     id:
       process.env.STAFF_PRIVATE_CHART_ALIMTALK_TEMPLATE_ID ||
-      "KA01TP260729144657202OV26yAD15wR",
-    requiredButtonFragments: [
-      "#{수업전계획링크ID}",
-      "#{수업후기록링크ID}",
-      "#{사진영상업로드링크ID}",
-    ],
+      "KA01TP260903104439283cNjQW0YrrtV",
+    requiredButtonFragments: ["https://in.archivepilates.com/s/#{오늘기록링크ID}/"],
     requiredVariables: [
       "#{강사명}",
-      "#{회원명}",
-      "#{회차}",
-      "#{수업일시}",
-      "#{수업전계획링크ID}",
-      "#{수업후기록링크ID}",
-      "#{사진영상업로드링크ID}",
+      "#{수업일}",
+      "#{수업수}",
+      "#{오늘기록링크ID}",
     ],
     forbiddenContentFragments: ["Notion"],
     expectedMessageType: "BA",

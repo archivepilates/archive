@@ -92,9 +92,8 @@ requireMarkers("scripts/create-private-survey-solapi-template.mjs", [
 requireMarkers("scripts/create-staff-private-chart-solapi-template.mjs", [
   'REFERENCE_TEMPLATE_ID = "KA01TP260729144657202OV26yAD15wR"',
   "Refusing to create a SOLAPI template without --apply.",
-  "https://in.archivepilates.com/s/#{수업전계획링크ID}/",
-  "https://in.archivepilates.com/s/#{수업후기록링크ID}/",
-  "https://in.archivepilates.com/s/#{사진영상업로드링크ID}/",
+  "강사용 프라이빗 오늘 기록 안내 v4",
+  "https://in.archivepilates.com/s/#{오늘기록링크ID}/",
   "legacy Notion copy remains",
   "STAFF_PRIVATE_CHART_ALIMTALK_TEMPLATE_ID",
   "referenceImageContract",
@@ -110,6 +109,12 @@ requireMarkers("scripts/audit-private-report-runtime.ts", [
   '"read-only"',
   "legacyActionableSurveyCandidates",
   "staleActionableReportCandidates",
+  'variables["#{링크ID}"]',
+  "validPrivateSurveyShortLink",
+]);
+requireMarkers("firebase/kangsain-functions/functions/src/alimtalk/privateSurveySendGuard.ts", [
+  "프라이빗 사전설문 접근 토큰이 현재 요청과 다릅니다.",
+  "sha256(accessToken) !== request.accessTokenHash",
 ]);
 requireMarkers("scripts/audit-private-alimtalk-templates.mjs", [
   'REFERENCE_TEMPLATE_ID = "KA01TP260729144645970fv13He8mfsK"',
@@ -122,13 +127,14 @@ requireMarkers("scripts/audit-private-alimtalk-templates.mjs", [
 ]);
 requireMarkers("firebase/kangsain-functions/functions/src/privateLessonChart/privateLessonSession.ts", [
   "privateLessonSessionProjection",
-  '"preparation"',
   '"recording"',
   '"report_review"',
   '"delivered"',
 ]);
 requireMarkers("firebase/kangsain-functions/functions/src/alimtalk/processAlimtalkQueue.ts", [
   "lockPrivateLessonReportForSend",
+  "privateLessonReportScheduleIssue",
+  "예약의 날짜·시간·강사가 승인본과 달라 재승인이 필요합니다.",
   "approvedRevision",
   "approvedReportSnapshot",
   "privateSurveySendabilityIssue",
@@ -137,6 +143,7 @@ requireMarkers("firebase/kangsain-functions/functions/src/alimtalk/processAlimta
   "booking.sessionOrder?.counted === false",
   "reportRevision",
   "sentRevision",
+  "variables: result.variables",
 ]);
 requireMarkers("firebase/kangsain-functions/functions/src/privateLessonChart/privateLessonChart.ts", [
   'status: "display_only"',
@@ -144,6 +151,24 @@ requireMarkers("firebase/kangsain-functions/functions/src/privateLessonChart/pri
   "approvedReportSnapshot",
   "reportUrlForRevision",
   "supersededByBookingId",
+  'workflowVersion: "post_only_v2"',
+  "sendDailyPrivateLessonChartAlimtalksForDate",
+  "syncPendingPrivateLessonNotionProjections",
+  "validateSimplifiedPostAnswers",
+  "simplifiedPrivateLessonDraft",
+  'chartRequest.workflowVersion === "post_only_v2" ? "post"',
+  "dailyStaffIdentity",
+  "claimDailyPrivateChartSend",
+  "sourceVersion",
+  "privateLessonNotionProjectionVersion",
+]);
+requireMarkers("firebase/kangsain-functions/functions/src/privateSurvey/privateSurveyResponse.ts", [
+  'existing?.notionSync || { status: "pending" as const }',
+  'doc.notionSync || { status: "pending" as const }',
+]);
+requireMarkers("firebase/kangsain-functions/functions/src/exports/privateChart.ts", [
+  'schedule: "40 22 * * *"',
+  'schedule: "0 7-21 * * *"',
 ]);
 forbidMarkers("firebase/kangsain-functions/functions/src/privateLessonChart/privateLessonChart.ts", [
   "notionApprovedReportPages",
@@ -156,18 +181,19 @@ forbidMarkers("firebase/kangsain-functions/functions/src/exports/privateChart.ts
 requireMarkers("core/assets/app.js", [
   '"privateLessonSessions"',
   "getCurrentPrivateLessonSessions",
-  '"preparation", "수업 준비"',
-  '"recording", "수업 기록"',
-  '"report_review", "리포트 확인"',
+  '["recording", "기록 대기"',
+  '["preparing", "자동 처리 · 운영 확인"',
+  '["report_review", "확인 후 발송"',
   '"delivered", "전달 완료"',
 ]);
 requireMarkers("core/rules/index.html", [
   "privateLessonSessions",
-  "Notion은 표시·열람용입니다.",
+  "Notion은 야간 표시·열람용입니다.",
   "immutable snapshot",
   "supersededByBookingId",
   "자체설문 링크형 v2는 기존 ARCHIVE PILATES 로고 이미지형 양식을 유지하며",
-  "v3도 기존 ARCHIVE PILATES 로고 이미지형 양식을 유지하며",
+  "강사용 프라이빗 오늘 기록 안내 v4",
+  "매일 22:20 야간 작업",
 ]);
 
 const trackedStaticPrivateArtifacts = gitLines([
@@ -198,7 +224,9 @@ console.log(
       checked: [
         "native private survey",
         "permanent intake dedupe",
-        "four-stage private session projection",
+        "post-only private session projection",
+        "one daily instructor record link",
+        "three required post-record fields",
         "immutable report revision",
         "send-time booking lock",
         "native-link Alimtalk template contract",

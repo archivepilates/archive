@@ -1,3 +1,4 @@
+import { createHash } from "node:crypto";
 import { refs } from "../firestore/refs";
 import type { AlimtalkCandidateDoc, BookingDoc, PrivateSurveyRequestDoc } from "../types/models";
 
@@ -31,6 +32,11 @@ export function privateSurveySourceIssue(
     return "프라이빗 사전설문 제출 기간이 만료되었습니다.";
   }
   if (request.memberId !== candidate.memberId) return "설문 요청 회원과 발송 후보 회원이 다릅니다.";
+  const accessToken = String(candidate.payload?.accessToken || "");
+  if (!accessToken) return "프라이빗 사전설문 접근 토큰이 없습니다.";
+  if (!request.accessTokenHash || sha256(accessToken) !== request.accessTokenHash) {
+    return "프라이빗 사전설문 접근 토큰이 현재 요청과 다릅니다.";
+  }
   const effectiveBooking = replacementBooking || booking;
   if (!effectiveBooking || effectiveBooking.memberId !== candidate.memberId) {
     return "연결된 프라이빗 예약을 찾을 수 없습니다.";
@@ -60,6 +66,10 @@ export function privateSurveySourceIssue(
     return "대체 예약 ID가 기존 예약과 같습니다.";
   }
   return "";
+}
+
+function sha256(value: string): string {
+  return createHash("sha256").update(value).digest("hex");
 }
 
 function isPrivateBooking(booking: BookingDoc): boolean {

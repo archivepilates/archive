@@ -37,6 +37,8 @@
         "scheduledProcessMissingSurveySubmissionAlerts",
         "scheduledSyncPrivateSurveyNotion",
         "scheduledCreatePrivateLessonChartRequests",
+        "scheduledSendTodayPrivateLessonChartAlimtalks",
+        "scheduledSyncPrivateLessonNotionProjections",
         "scheduledReconcileCurrentMonthPrivateLessonCharts",
         "scheduledGeneratePrivateLessonChartReports",
         "scheduledPurgeDiscardedMemberSignupContracts",

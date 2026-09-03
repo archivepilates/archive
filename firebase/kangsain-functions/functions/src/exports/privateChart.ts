@@ -3,12 +3,14 @@ import { onDocumentCreated, onDocumentWritten } from "firebase-functions/v2/fire
 import { onSchedule } from "firebase-functions/v2/scheduler";
 import { receiveInBodyWebhookHandler } from "../inbody/inbodyWebhook";
 import {
-  createAndSendTomorrowPrivateLessonCharts,
+  createTomorrowPrivateLessonChartRequests,
   generatePendingPrivateLessonChartReports,
   notionPrivateLessonReportWebhookHandler,
   privateLessonChartApiHandler,
   privateLessonReportViewHandler,
   reconcileCurrentMonthPrivateLessonCharts,
+  sendTodayPrivateLessonChartAlimtalks,
+  syncPendingPrivateLessonNotionProjections,
 } from "../privateLessonChart/privateLessonChart";
 import {
   syncPrivateLessonSessionOnRecordWrite,
@@ -74,7 +76,7 @@ export const scheduledProcessMissingSurveySubmissionAlerts = onSchedule(
 export const scheduledSyncPrivateSurveyNotion = onSchedule(
   {
     ...privateSurveyIntakeOptions,
-    schedule: "0 6,14,22 * * *",
+    schedule: "40 22 * * *",
   },
   async () => {
     await syncPrivateSurveyNotionBackfill();
@@ -84,10 +86,30 @@ export const scheduledSyncPrivateSurveyNotion = onSchedule(
 export const scheduledCreatePrivateLessonChartRequests = onSchedule(
   {
     ...privateSurveyIntakeOptions,
-    schedule: "0 18 * * *",
+    schedule: "0 22 * * *",
   },
   async () => {
-    await createAndSendTomorrowPrivateLessonCharts();
+    await createTomorrowPrivateLessonChartRequests();
+  },
+);
+
+export const scheduledSendTodayPrivateLessonChartAlimtalks = onSchedule(
+  {
+    ...privateLessonChartScheduleOptions,
+    schedule: "0 7-21 * * *",
+  },
+  async () => {
+    await sendTodayPrivateLessonChartAlimtalks();
+  },
+);
+
+export const scheduledSyncPrivateLessonNotionProjections = onSchedule(
+  {
+    ...privateLessonChartScheduleOptions,
+    schedule: "20 22 * * *",
+  },
+  async () => {
+    await syncPendingPrivateLessonNotionProjections();
   },
 );
 

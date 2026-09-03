@@ -148,8 +148,7 @@ function privateLessonWorkflowStage(
   ) {
     return "report_review";
   }
-  if (record?.preSubmittedAt || request?.preStatus === "submitted") return "recording";
-  return "preparation";
+  return "recording";
 }
 
 export function privateLessonRoundVerified(
@@ -183,7 +182,6 @@ function nextActionFor(
   if (stage === "cancelled") return "없음";
   if (stage === "needs_review") return "회차 확인";
   if (stage === "delivered") return "완료";
-  if (stage === "preparation") return request?.preStatus === "submitted" ? "수업 진행" : "수업 전 계획 작성";
   if (stage === "recording") return "수업 후 기록 작성";
   if (!record?.postSubmittedAt) return "수업 후 기록 확인";
   if (record.gptStatus !== "draft_created") return "리포트 생성 확인";

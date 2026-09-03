@@ -5,25 +5,19 @@ import { execFileSync } from "node:child_process";
 
 const PROJECT_ID = "archive-pilates";
 const REFERENCE_TEMPLATE_ID = "KA01TP260729144657202OV26yAD15wR";
-const TEMPLATE_NAME = "강사용 프라이빗 차트 작성 안내 v3";
+const TEMPLATE_NAME = "강사용 프라이빗 오늘 기록 안내 v4";
 const TEMPLATE_CONTENT = `#{강사명} 강사님,
-내일 프라이빗 수업이 예정되어 있습니다.
+#{수업일} 프라이빗 수업 기록을 안내드립니다.
 
-회원: #{회원명}
-회차: #{회차}회차
-수업: #{수업일시}
+오늘 수업: #{수업수}건
 
-수업 전 계획은 수업 전까지,
-수업 후 기록은 수업 종료 후 작성해 주세요.
-
-사진·영상은 회차 리포트에 바로 첨부됩니다.
+수업 후 아래 링크에서 회원별 기록을 작성해 주세요.
+필수 항목은 진행 부위, 확인한 변화, 다음 방향입니다.
 
 감사합니다.
 ARCHIVE PILATES`;
 const BUTTON_URLS = [
-  ["수업 전 계획 작성", "https://in.archivepilates.com/s/#{수업전계획링크ID}/"],
-  ["수업 후 기록 작성", "https://in.archivepilates.com/s/#{수업후기록링크ID}/"],
-  ["사진·영상 업로드", "https://in.archivepilates.com/s/#{사진영상업로드링크ID}/"],
+  ["오늘 기록 열기", "https://in.archivepilates.com/s/#{오늘기록링크ID}/"],
 ];
 const API_BASE = "https://api.solapi.com/kakao/v2/templates";
 
@@ -86,7 +80,7 @@ if (String(current.status || "").toUpperCase() === "PENDING") {
     method: "PUT",
     body: JSON.stringify({
       comment:
-        "ARCHIVE PILATES 프라이빗 수업 담당 강사에게 수업 전 계획, 수업 후 기록, 사진·영상 업로드 링크를 안내합니다.",
+        "ARCHIVE PILATES 프라이빗 수업 담당 강사에게 당일 수업 목록과 수업 후 기록 단일 링크를 안내합니다.",
     }),
   });
 }

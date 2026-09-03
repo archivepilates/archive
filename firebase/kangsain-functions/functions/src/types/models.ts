@@ -731,6 +731,7 @@ export interface PrivateLessonSessionNumberCorrection {
 
 export interface PrivateLessonChartRequestDoc {
   requestId: string;
+  workflowVersion?: "post_only_v2";
   studioId: string;
   bookingId: string;
   lectureId: string;
@@ -866,6 +867,7 @@ export interface PrivateLessonChartRecordDoc {
   legacySentReportSnapshot?: PrivateLessonReportSnapshot | null;
   notionSync?: {
     status: "pending" | "synced" | "failed";
+    sourceVersion?: string;
     pageId?: string;
     pageUrl?: string;
     instructorPageId?: string;

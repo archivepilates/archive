@@ -238,16 +238,7 @@ export async function processPrivateSurveyIntakeHandler(
     const created = await createSurveyResponseIfNew(responseId, doc);
     if (!created) {
       const existing = (await refs.privateSurveyResponse(responseId).get()).data();
-      const notionSync = existing
-        ? await syncPrivateSurveyResponseToNotion({
-            ...existing,
-            delivery: existing.delivery || {
-              detailUrl,
-              alimtalkStatus: "pending",
-              alimtalkReason: "강사 알림톡 발송 대기",
-            },
-          })
-        : null;
+      const notionSync = existing?.notionSync || { status: "pending" as const };
       await snap.ref.set(
         {
           status: "duplicate",
@@ -260,9 +251,6 @@ export async function processPrivateSurveyIntakeHandler(
         },
         { merge: true },
       );
-      if (existing && notionSync) {
-        await refs.privateSurveyResponse(responseId).set({ notionSync, updatedAt: nowTimestamp() }, { merge: true });
-      }
       return;
     }
 
@@ -288,8 +276,7 @@ export async function processPrivateSurveyIntakeHandler(
       },
       { merge: true },
     );
-    const notionSync = await syncPrivateSurveyResponseToNotion({ ...doc, delivery });
-    await refs.privateSurveyResponse(responseId).set({ notionSync, updatedAt: nowTimestamp() }, { merge: true });
+    const notionSync = doc.notionSync || { status: "pending" as const };
     await snap.ref.set(
       {
         status: "processed",

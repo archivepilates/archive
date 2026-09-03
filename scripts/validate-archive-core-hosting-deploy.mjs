@@ -54,7 +54,7 @@ const required = [
       "ALIMTALK_TEMPLATE_LABELS_BY_CODE",
       "alimtalkTemplateTitle",
       "humanizeAlimtalkTemplateText",
-      "강사용 프라이빗 차트 작성 안내 v3",
+      "강사용 프라이빗 오늘 기록 안내 v4",
       "predictedDepletionDate",
       "mergeMemberCardsWithProfiles",
       "coreDataHealthIssues",
@@ -202,7 +202,7 @@ const required = [
   {
     file: "core/private/index.html",
     label: "private lesson progress page",
-    markers: ["진행 현황", "privateInstructorPendingList", "privateProgressList"],
+    markers: ["오늘 기록·리포트", "privateInstructorPendingList", "privateProgressList"],
   },
   {
     file: "core/refunds/index.html",

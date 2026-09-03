@@ -79,7 +79,7 @@
 
     .workflow-steps {
       display: grid;
-      grid-template-columns: repeat(4, minmax(0, 1fr));
+      grid-template-columns: repeat(3, minmax(0, 1fr));
       gap: 6px;
       margin-top: 16px;
     }
@@ -168,9 +168,105 @@
       border-top: 1px solid var(--line);
     }
 
+    .field-group {
+      min-width: 0;
+      margin: 18px 0 0;
+      padding: 18px 0 0;
+      border: 0;
+      border-top: 1px solid var(--line);
+    }
+
+    .field-group legend {
+      width: 100%;
+      margin: 0 0 12px;
+      padding: 0;
+      color: var(--text);
+      font-size: 16px;
+      font-weight: 800;
+    }
+
+    .field-group:focus {
+      outline: 2px solid var(--accent);
+      outline-offset: 6px;
+    }
+
     .grid {
       display: grid;
       gap: 8px;
+    }
+
+    .optional-details {
+      margin-top: 18px;
+      padding: 0 14px;
+      border: 1px solid var(--line);
+      border-radius: var(--radius);
+      background: var(--surface);
+    }
+
+    .optional-details > summary {
+      min-height: 48px;
+      display: flex;
+      align-items: center;
+      cursor: pointer;
+      color: var(--text);
+      font-size: 14px;
+      font-weight: 750;
+    }
+
+    .optional-details[open] {
+      padding-bottom: 14px;
+    }
+
+    .optional-details section:first-of-type {
+      margin-top: 0;
+    }
+
+    .daily-list {
+      display: grid;
+      gap: 10px;
+      margin-top: 18px;
+    }
+
+    .daily-card {
+      min-height: 76px;
+      display: grid;
+      grid-template-columns: minmax(0, 1fr) auto;
+      align-items: center;
+      gap: 12px;
+      padding: 14px;
+      color: inherit;
+      background: var(--surface);
+      border: 1px solid var(--line);
+      border-radius: var(--radius);
+      text-decoration: none;
+    }
+
+    .daily-card strong,
+    .daily-card span {
+      display: block;
+      min-width: 0;
+      overflow-wrap: anywhere;
+    }
+
+    .daily-card span {
+      margin-top: 4px;
+      color: var(--muted);
+      font-size: 13px;
+    }
+
+    .daily-status {
+      padding: 5px 8px;
+      border-radius: 999px;
+      background: var(--soft);
+      color: var(--muted);
+      font-size: 12px;
+      font-weight: 750;
+      white-space: nowrap;
+    }
+
+    .daily-status.done {
+      background: var(--accent-weak);
+      color: var(--accent);
     }
 
     .choices {
@@ -343,6 +439,12 @@
       overflow-wrap: anywhere;
     }
 
+    .media-upload-content {
+      display: grid;
+      gap: 12px;
+      padding-bottom: 14px;
+    }
+
     .media-input {
       display: grid;
       gap: 8px;
@@ -350,6 +452,11 @@
       border: 1px dashed var(--line);
       border-radius: var(--radius);
       background: var(--accent-weak);
+    }
+
+    .media-input:focus-within {
+      outline: 2px solid var(--accent);
+      outline-offset: 2px;
     }
 
     .media-input input {
@@ -456,22 +563,24 @@
   <main>
     <header>
       <p class="brand">ARCHIVE PILATES</p>
-      <h1 id="title">프라이빗 차트 작성</h1>
+      <h1 id="title">프라이빗 오늘 기록</h1>
       <div class="meta" id="meta">차트 정보를 불러오는 중입니다.</div>
       <div class="workflow-steps" id="workflowSteps" aria-label="프라이빗 기록 진행 단계"></div>
     </header>
 
     <div class="summary" id="summary" aria-live="polite"></div>
 
+    <p class="status" id="status" role="status" aria-live="polite"></p>
+    <div id="dailyPanel" class="daily-list hidden"></div>
+
     <form id="form" class="hidden">
       <div id="sections"></div>
-      <div id="mediaPanel" class="media-upload-panel hidden"></div>
-      <p class="status" id="status"></p>
+      <div id="mediaPanel" class="hidden"></div>
       <div class="actions">
         <button type="submit" id="submitButton">제출</button>
       </div>
-      <div id="reportPanel" class="report-panel hidden" aria-live="polite"></div>
     </form>
+    <div id="reportPanel" class="report-panel hidden" aria-live="polite"></div>
   </main>
 
   <script>
@@ -479,9 +588,12 @@
     const state = {
       requestId: params.get("r") || "",
       token: params.get("t") || "",
-      mode: params.get("mode") === "post" ? "post" : "pre",
+      view: params.get("view") || "",
+      date: params.get("date") || "",
+      mode: "post",
       focus: params.get("focus") || "",
       mediaFocusHandled: false,
+      reportFocusHandled: false,
       loading: false,
       uploading: 0,
       data: null,
@@ -498,25 +610,17 @@
       changes: ["정렬 인지 향상", "호흡 연결 개선", "코어 연결감 향상", "불필요한 긴장 감소", "좌우 차이 남아있음", "가동범위 향상", "불편감 완화", "강도 적절", "피로 누적", "컨트롤 보완 필요", "편안하게 수업 진행", "큰 변화보다 유지에 집중"],
     };
 
-    const preFields = [
-      { type: "multi", key: "goals", label: "오늘의 수업 목표", options: sets.goals, required: true },
-      { type: "multi", key: "focusAreas", label: "집중 부위", options: sets.focusAreas, required: true },
-      { type: "multi", key: "equipment", label: "예정 기구", options: sets.equipment },
-      { type: "multi", key: "cautions", label: "수업 전 체크", options: sets.cautions },
-      { type: "text", key: "memo", label: "계획 메모" },
+    const postFields = [
+      { type: "multi", key: "focusAreas", label: "진행 부위", options: sets.focusAreas, required: true },
+      { type: "multi", key: "changes", label: "확인한 변화", options: sets.changes, required: true },
+      { type: "text", key: "nextDirection", label: "다음 방향", required: true, placeholder: "다음 수업에서 이어갈 방향을 한두 문장으로 적어주세요.", help: "작성한 뜻을 바꾸지 않고 회원 리포트에 그대로 반영합니다." },
     ];
 
-    const postFields = [
-      { type: "single", key: "attendance", label: "출결", options: ["출석", "지각", "당일 취소", "결석"], required: true },
-      { type: "single", key: "condition", label: "오늘 몸 상태", options: ["편안하게 시작", "보통", "피로감 있어 조절", "불편감 확인 필요", "집중 유지 어려움"], required: true },
-      { type: "single", key: "painChange", label: "불편감 흐름", options: ["특이 없음", "기존 불편감 유지", "부담 감소", "부담 증가로 주의", "새 불편감 체크"] },
-      { type: "multi", key: "focusAreas", label: "진행 부위", options: sets.focusAreas },
+    const optionalPostFields = [
+      { type: "single", key: "condition", label: "오늘 몸 상태", options: ["편안하게 시작", "보통", "피로감 있어 조절", "불편감 확인 필요", "집중 유지 어려움"] },
       { type: "multi", key: "equipment", label: "사용 기구", options: sets.equipment },
-      { type: "multi", key: "changes", label: "오늘 확인한 변화", options: sets.changes, required: true },
-      { type: "text", key: "summaryKeywords", label: "오늘의 핵심 키워드", placeholder: "회원 리포트의 오늘의 핵심 문장에 꼭 들어가야 할 키워드를 적어주세요. 예: 흉곽 움직임, 코어 연결", help: "작성하면 회원 리포트의 오늘의 핵심 문장에 자연스럽게 반영됩니다." },
-      { type: "text", key: "nextDirectionKeywords", label: "다음 수업 방향 키워드", placeholder: "회원 리포트의 다음 수업 방향 문장에 꼭 들어가야 할 키워드를 적어주세요. 예: 호흡-흉곽 연계, 고관절 안정화", help: "작성하면 회원 리포트의 다음 수업 방향 문장에 자연스럽게 반영됩니다." },
+      { type: "multi", key: "cautions", label: "주의사항", options: sets.cautions },
       { type: "text", key: "homework", label: "홈워크", placeholder: "숙제가 있을 때만 입력해 주세요. 예: 자기 전 3분 흉곽 호흡, 벽 기대어 어깨 긴장 풀기", help: "작성한 내용은 회원 리포트의 홈워크 섹션에 표시됩니다." },
-      { type: "text", key: "nextMemo", label: "다음 수업 준비 메모", placeholder: "필요한 경우에만 내부 참고사항을 적어주세요.", help: "회원에게는 노출되지 않습니다." },
     ];
 
     const title = document.getElementById("title");
@@ -524,6 +628,7 @@
     const workflowSteps = document.getElementById("workflowSteps");
     const summary = document.getElementById("summary");
     const form = document.getElementById("form");
+    const dailyPanel = document.getElementById("dailyPanel");
     const sections = document.getElementById("sections");
     const mediaPanel = document.getElementById("mediaPanel");
     const reportPanel = document.getElementById("reportPanel");
@@ -535,6 +640,13 @@
     async function boot() {
       try {
         if (!state.requestId || !state.token) throw new Error("차트 링크 정보가 부족합니다.");
+        if (state.view === "today") {
+          const res = await fetch(`${apiBase}?view=today&r=${encodeURIComponent(state.requestId)}&t=${encodeURIComponent(state.token)}&date=${encodeURIComponent(state.date)}`);
+          const data = await res.json();
+          if (!res.ok || data.ok === false) throw new Error(data.error || "오늘 기록 목록을 불러오지 못했습니다.");
+          renderDaily(data);
+          return;
+        }
         const res = await fetch(`${apiBase}?r=${encodeURIComponent(state.requestId)}&t=${encodeURIComponent(state.token)}&mode=${state.mode}`);
         const data = await res.json();
         if (!res.ok || data.ok === false) {
@@ -548,11 +660,28 @@
       }
     }
 
+    function renderDaily(data) {
+      title.textContent = "오늘의 프라이빗 기록";
+      meta.innerHTML = `<span>${escapeHtml(data.staffName || "강사")} · ${escapeHtml(data.date || "")}</span><span>전체 ${Number(data.total || 0)}건 · 전달 완료 ${Number(data.completed || 0)}건</span>`;
+      workflowSteps.innerHTML = "";
+      summary.innerHTML = "";
+      const labels = { recording: "기록 필요", preparing: "리포트 준비", review: "확인 필요", delivered: "전달 완료" };
+      dailyPanel.innerHTML = (data.items || []).length
+        ? data.items.map((item) => `<a class="daily-card" href="${escapeAttr(dailyItemUrl(item))}"><span><strong>${escapeHtml(item.memberName || "회원")} · ${Number(item.sessionNumber || 0)}회차</strong><span>${escapeHtml(item.lessonTime || "")}</span></span><span class="daily-status ${item.status === "delivered" ? "done" : ""}">${escapeHtml(labels[item.status] || "확인")}</span></a>`).join("")
+        : `<div class="summary"><p>오늘 작성할 프라이빗 기록이 없습니다.</p></div>`;
+      dailyPanel.classList.remove("hidden");
+    }
+
+    function dailyItemUrl(item) {
+      const url = String(item.postUrl || "#");
+      if (item.status !== "review" || url === "#") return url;
+      return `${url}${url.includes("?") ? "&" : "?"}focus=report`;
+    }
+
     function render(data) {
       state.data = data;
-      const isPost = data.mode === "post";
-      title.textContent = isPost ? "수업 후 기록" : "수업 전 계획";
-      submitButton.textContent = isPost ? "수업 후 기록 제출" : "수업 전 계획 제출";
+      title.textContent = "프라이빗 오늘 기록";
+      submitButton.textContent = "기록 저장 · 리포트 확인";
       meta.innerHTML = [
         `<span>${escapeHtml(data.memberName || "-")}님 · ${Number(data.sessionNumber || 1)}회차</span>`,
         `<span>${escapeHtml(data.lessonTime || data.lessonDate || "-")} · 담당 ${escapeHtml(data.staffName || "미정")}</span>`,
@@ -560,25 +689,43 @@
       renderWorkflowSteps(data);
       summary.innerHTML = [
         intakeHtml(data.intakeSummary),
-        isPost ? "" : previousReportHtml(data.previousReport),
+        previousReportHtml(data.previousReport),
       ].filter(Boolean).join("");
-      sections.innerHTML = (isPost ? postFields : preFields).map(fieldHtml).join("");
+      sections.innerHTML = postFields.map(fieldHtml).join("") + `<details class="optional-details"><summary data-testid="optional-record-toggle">선택 기록</summary>${optionalPostFields.map(fieldHtml).join("")}</details>`;
       renderMediaPanel(data);
       applyExistingAnswers(data);
       syncOtherAnswers();
-      applyLockedState(data);
+      syncOptionalDetails(data);
       renderReportPanel(data);
+      applyLockedState(data);
       form.classList.remove("hidden");
-      form.addEventListener("submit", submit);
+      if (!form.dataset.submitBound) {
+        form.addEventListener("submit", submit);
+        form.dataset.submitBound = "1";
+      }
       if (!form.dataset.otherAnswerBound) {
         form.addEventListener("change", syncOtherAnswers);
         form.dataset.otherAnswerBound = "1";
       }
       focusMediaUploadPanelIfRequested();
+      focusReportPanelIfRequested();
+    }
+
+    function syncOptionalDetails(data) {
+      const details = sections.querySelector(".optional-details");
+      if (!details) return;
+      const answers = data.existingAnswers?.post || {};
+      const count = optionalPostFields.filter((field) => {
+        const value = answers[field.key];
+        return Array.isArray(value) ? value.length > 0 : Boolean(String(value || "").trim());
+      }).length;
+      const summaryNode = details.querySelector("summary");
+      if (summaryNode) summaryNode.textContent = count ? `선택 기록 · ${count}개 입력됨` : "선택 기록";
+      if (count) details.open = true;
     }
 
     function applyExistingAnswers(data) {
-      const answers = data.mode === "post" ? data.existingAnswers?.post : data.existingAnswers?.pre;
+      const answers = data.existingAnswers?.post;
       if (!answers || typeof answers !== "object") return;
       for (const [key, value] of Object.entries(answers)) {
         const values = (Array.isArray(value) ? value.map(String) : [String(value ?? "")]).flatMap((item) => expandLegacyChoiceValue(key, item));
@@ -602,16 +749,25 @@
     }
 
     function applyLockedState(data) {
-      if (!data.locked) return;
+      const lockedNote = document.getElementById("lockedNote");
+      if (lockedNote) lockedNote.remove();
       form.querySelectorAll("input, textarea").forEach((input) => {
-        input.disabled = true;
+        input.disabled = Boolean(data.locked);
       });
-      submitButton.disabled = true;
-      submitButton.textContent = "회원 리포트 발송 완료";
-      const note = document.createElement("p");
-      note.className = "locked-note";
-      note.textContent = "회원 리포트 알림톡 발송이 완료되어 기록을 수정할 수 없습니다.";
-      sections.after(note);
+      if (data.locked) {
+        submitButton.disabled = true;
+        submitButton.textContent = "회원 리포트 발송 완료";
+        const note = document.createElement("p");
+        note.id = "lockedNote";
+        note.className = "locked-note";
+        note.textContent = "회원 리포트 알림톡 발송이 완료되어 기록을 수정할 수 없습니다.";
+        sections.after(note);
+      } else {
+        submitButton.textContent = data.postStatus === "submitted"
+          ? "기록 수정 · 리포트 다시 확인"
+          : "기록 저장 · 리포트 확인";
+      }
+      syncInteractionState();
     }
 
     function renderReportPanel(data) {
@@ -621,19 +777,27 @@
         return;
       }
       const report = data.report || {};
-      const status = String(report.status || report.approval?.status || "");
+      const status = String(report.status || "");
       const sent = Boolean(report.sent) || status === "sent";
       const approved = ["approved", "queued"].includes(status);
+      const processing = status === "processing";
       const ready = Boolean(report.url);
       const submitted = data.postStatus === "submitted" || Boolean(report.postSubmitted);
+      if (!submitted) {
+        reportPanel.classList.add("hidden");
+        reportPanel.innerHTML = "";
+        return;
+      }
       const canEditReport = ready && !sent && report.canEdit !== false;
       const previewUrl = ready ? cacheBustedUrl(report.canonicalUrl || report.url) : "";
       const message = ready
         ? sent
           ? "회원 리포트 알림톡 발송이 완료되었습니다. 발송 후에는 기록을 수정할 수 없습니다."
+          : processing
+            ? "회원 리포트 알림톡을 발송하고 있습니다. 처리 결과가 확인될 때까지 잠시 기다려 주세요."
           : approved
             ? "승인이 반영되었습니다. 발송 전 수정하면 기존 발송 후보를 보류하고 다시 승인해 주세요."
-            : "수업 전/후 기록이 반영된 최종 리포트입니다. 내용을 확인한 뒤 발송 승인해 주세요."
+            : "오늘 기록이 반영된 최종 리포트입니다. 문장을 확인한 뒤 한 번에 발송해 주세요."
         : submitted
           ? "리포트를 자동으로 준비하고 있습니다. 지연될 때만 다시 생성을 눌러 주세요."
           : "수업 후 기록 제출 후 회원용 리포트가 생성됩니다.";
@@ -641,15 +805,13 @@
       reportPanel.innerHTML = `
         <h2>회원용 리포트</h2>
         <p>${escapeHtml(message)}</p>
-        ${ready ? `<iframe class="report-frame" title="회원용 리포트 미리보기" src="${escapeAttr(previewUrl)}"></iframe>` : ""}
         ${canEditReport ? reportEditHtml(report) : ""}
+        ${ready ? `<iframe class="report-frame" title="회원용 리포트 미리보기" src="${escapeAttr(previewUrl)}"></iframe>` : ""}
         <div class="button-row">
-          ${submitted ? `<button class="${ready ? "secondary" : ""}" type="button" data-convert-report ${sent ? "disabled" : ""}>${ready ? "수정 내용으로 리포트 재생성" : "리포트 생성 다시 시도"}</button>` : ""}
+          ${!ready ? `<button type="button" data-convert-report ${sent || processing ? "disabled" : ""}>리포트 생성 다시 시도</button>` : ""}
           ${ready ? `<button class="secondary" type="button" data-open-report>리포트 새 창으로 보기</button>` : `<button class="secondary" type="button" data-refresh-report>리포트 상태 새로고침</button>`}
-          ${ready ? `<button type="button" data-approve-report ${sent ? "disabled" : ""}>${sent ? "발송 완료" : approved ? "회원 알림톡 발송 재승인" : "회원 알림톡 발송 승인"}</button>` : ""}
+          ${ready ? `<button type="button" data-approve-report>${sent ? "발송 완료" : processing ? "발송 처리 중" : approved ? "발송 대기 중" : "검토 완료 · 회원에게 발송"}</button>` : ""}
         </div>`;
-      const saveEditButton = reportPanel.querySelector("[data-save-report-edit]");
-      if (saveEditButton && !sent) saveEditButton.addEventListener("click", saveReportEdit);
       const convertButton = reportPanel.querySelector("[data-convert-report]");
       if (convertButton && !sent) convertButton.addEventListener("click", convertReport);
       const openButton = reportPanel.querySelector("[data-open-report]");
@@ -658,6 +820,10 @@
       if (refreshButton) refreshButton.addEventListener("click", refreshReport);
       const approveButton = reportPanel.querySelector("[data-approve-report]");
       if (approveButton) approveButton.addEventListener("click", approveReport);
+      reportPanel.querySelectorAll("#reportSummaryEdit, #reportNextDirectionEdit").forEach((input) => {
+        input.addEventListener("input", syncInteractionState);
+      });
+      syncInteractionState();
     }
 
     function reportEditHtml(report) {
@@ -668,8 +834,48 @@
         <label>다음 수업 방향
           <textarea id="reportNextDirectionEdit" class="report-next-direction" maxlength="1200" placeholder="회원에게 보이는 다음 수업 방향입니다.">${escapeHtml(report.nextDirection || "")}</textarea>
         </label>
-        <button type="button" class="secondary" data-save-report-edit>리포트 문장 저장</button>
       </div>`;
+    }
+
+    function reportTextChanged() {
+      const report = state.data?.report || {};
+      const summaryInput = reportPanel.querySelector("#reportSummaryEdit");
+      const nextInput = reportPanel.querySelector("#reportNextDirectionEdit");
+      if (!summaryInput && !nextInput) return false;
+      return (
+        String(summaryInput?.value || "").trim() !== String(report.summary || "").trim() ||
+        String(nextInput?.value || "").trim() !== String(report.nextDirection || "").trim()
+      );
+    }
+
+    function syncInteractionState() {
+      const report = state.data?.report || {};
+      const status = String(report.status || "");
+      const sent = Boolean(state.data?.locked || report.sent || status === "sent");
+      const processing = status === "processing";
+      const awaitingSend = ["approved", "queued"].includes(status);
+      const busy = state.loading || state.uploading > 0;
+      submitButton.disabled = sent || busy;
+      const mediaInput = mediaPanel.querySelector("#mediaFiles");
+      if (mediaInput) mediaInput.disabled = sent || processing || busy;
+      reportPanel.querySelectorAll("#reportSummaryEdit, #reportNextDirectionEdit").forEach((input) => {
+        input.disabled = sent || processing || busy;
+      });
+      const convertButton = reportPanel.querySelector("[data-convert-report]");
+      if (convertButton) convertButton.disabled = sent || processing || busy;
+      const approveButton = reportPanel.querySelector("[data-approve-report]");
+      if (!approveButton) return;
+      const changed = reportTextChanged();
+      approveButton.disabled = sent || processing || busy || (awaitingSend && !changed);
+      approveButton.textContent = sent
+        ? "발송 완료"
+        : processing
+          ? "발송 처리 중"
+          : state.uploading > 0
+            ? "첨부 완료 대기"
+            : awaitingSend
+              ? changed ? "수정 저장 · 다시 승인" : "발송 대기 중"
+              : "검토 완료 · 회원에게 발송";
     }
 
     function renderMediaPanel(data) {
@@ -681,17 +887,21 @@
       const files = Array.isArray(data.media?.files) ? data.media.files : [];
       mediaPanel.classList.remove("hidden");
       mediaPanel.innerHTML = `
-        <h2>수업 사진·영상</h2>
-        <p>여기에 첨부한 사진과 영상은 같은 회차 회원 리포트에 자동 포함됩니다. 리포트에 넣을 파일만 선택해 주세요.</p>
-        <label class="media-input" tabindex="0">
-          <span>사진/영상 선택</span>
-          <input type="file" id="mediaFiles" accept="image/*,video/*" multiple>
-        </label>
-        <div id="mediaUploadQueue" class="media-list"></div>
-        <div class="media-list">
-          ${files.length ? files.map(mediaFileHtml).join("") : `<div class="media-file">아직 업로드된 사진/영상이 없습니다.</div>`}
-        </div>
-        ${data.media?.sessionFolderUrl ? `<a href="${escapeAttr(data.media.sessionFolderUrl)}" target="_blank" rel="noopener">Drive 폴더 열기</a>` : ""}
+        <details class="optional-details" ${state.focus === "media" ? "open" : ""}>
+          <summary>사진·영상 첨부</summary>
+          <div class="media-upload-content">
+            <p>회원 리포트에 넣을 파일만 선택해 주세요.</p>
+            <label class="media-input">
+              <span>사진/영상 선택</span>
+              <input type="file" id="mediaFiles" accept="image/*,video/*" multiple ${data.locked ? "disabled" : ""}>
+            </label>
+            <div id="mediaUploadQueue" class="media-list"></div>
+            <div class="media-list">
+              ${files.length ? files.map(mediaFileHtml).join("") : `<div class="media-file">아직 업로드된 사진/영상이 없습니다.</div>`}
+            </div>
+            ${data.media?.sessionFolderUrl ? `<a href="${escapeAttr(data.media.sessionFolderUrl)}" target="_blank" rel="noopener">Drive 폴더 열기</a>` : ""}
+          </div>
+        </details>
       `;
       const input = mediaPanel.querySelector("#mediaFiles");
       if (input) input.addEventListener("change", handleMediaFiles);
@@ -702,9 +912,22 @@
       state.mediaFocusHandled = true;
       requestAnimationFrame(() => {
         mediaPanel.scrollIntoView({ behavior: "smooth", block: "start" });
-        const selector = mediaPanel.querySelector(".media-input");
+        const selector = mediaPanel.querySelector("#mediaFiles");
         if (selector) selector.focus({ preventScroll: true });
         setStatus("사진/영상 선택 버튼을 눌러 휴대폰 앨범에서 파일을 선택해 주세요.", false);
+      });
+    }
+
+    function focusReportPanelIfRequested() {
+      if (state.reportFocusHandled || state.focus !== "report" || reportPanel.classList.contains("hidden")) return;
+      state.reportFocusHandled = true;
+      requestAnimationFrame(() => {
+        reportPanel.scrollIntoView({ behavior: "smooth", block: "start" });
+        const heading = reportPanel.querySelector("h2");
+        if (heading) {
+          heading.tabIndex = -1;
+          heading.focus({ preventScroll: true });
+        }
       });
     }
 
@@ -739,6 +962,7 @@
       const progress = item.querySelector("progress");
       state.uploading += 1;
       submitButton.disabled = true;
+      syncInteractionState();
       try {
         if (!/^image\/|^video\//.test(file.type || "")) throw new Error("사진 또는 영상 파일만 업로드할 수 있습니다.");
         const init = await postJson({
@@ -771,6 +995,7 @@
         if (!state.loading && state.uploading === 0 && !state.data?.locked) {
           submitButton.disabled = false;
         }
+        syncInteractionState();
       }
     }
 
@@ -869,8 +1094,8 @@
       const sent = Boolean(report.sent) || reportStatus === "sent";
       const reportReady = Boolean(report.url);
       const postSubmitted = data.postStatus === "submitted" || Boolean(report.postSubmitted);
-      const activeIndex = sent ? 3 : reportReady || postSubmitted ? 2 : data.mode === "post" ? 1 : 0;
-      const labels = ["수업 준비", "수업 기록", "리포트 확인", "전달 완료"];
+      const activeIndex = sent ? 2 : reportReady || postSubmitted ? 1 : 0;
+      const labels = ["오늘 기록", "확인 후 발송", "전달 완료"];
       workflowSteps.innerHTML = labels
         .map((label, index) => `<span class="workflow-step ${index < activeIndex ? "done" : index === activeIndex ? "active" : ""}">${escapeHtml(label)}</span>`)
         .join("");
@@ -882,7 +1107,7 @@
         const placeholder = field.placeholder || "필요할 때만 입력";
         const helpText = field.help || (field.required ? "회원 리포트의 다음 수업 방향 원문으로 사용됩니다." : "");
         const help = helpText ? `<p class="field-help">${escapeHtml(helpText)}</p>` : "";
-        return `<section><label for="${field.key}"><h2>${escapeHtml(field.label)}</h2></label>${help}<textarea id="${field.key}" name="${field.key}" ${required} placeholder="${escapeAttr(placeholder)}"></textarea></section>`;
+        return `<section data-field-key="${escapeAttr(field.key)}"><label for="${field.key}"><h2>${escapeHtml(field.label)}</h2></label>${help}<textarea id="${field.key}" name="${field.key}" ${required} aria-describedby="status" placeholder="${escapeAttr(placeholder)}"></textarea></section>`;
       }
       if (field.type === "groupedMulti") {
         const groups = field.groups.map((group) => `
@@ -890,16 +1115,16 @@
             <p class="purpose-title">${escapeHtml(group.label)}</p>
             <div class="choices">${group.options.map((option) => choiceInputHtml(field.key, "checkbox", option)).join("")}</div>
           </div>`).join("");
-        return `<section><h2>${escapeHtml(field.label)}</h2><div class="purpose-groups">${groups}
+        return `<fieldset class="field-group" data-field-key="${escapeAttr(field.key)}" tabindex="-1" aria-describedby="status"><legend>${escapeHtml(field.label)}</legend><div class="purpose-groups">${groups}
           <div class="purpose-group">
             <p class="purpose-title">기타</p>
             <div class="choices">${choiceInputHtml(field.key, "checkbox", "기타")}</div>
             ${otherAnswerHtml(field.key)}
           </div>
-        </div></section>`;
+        </div></fieldset>`;
       }
       const inputType = field.type === "single" ? "radio" : "checkbox";
-      return `<section><h2>${escapeHtml(field.label)}</h2><div class="choices">${withOtherChoice(field.options).map((option) => choiceInputHtml(field.key, inputType, option)).join("")}</div>${otherAnswerHtml(field.key)}</section>`;
+      return `<fieldset class="field-group" data-field-key="${escapeAttr(field.key)}" tabindex="-1" aria-describedby="status"><legend>${escapeHtml(field.label)}</legend><div class="choices">${withOtherChoice(field.options).map((option) => choiceInputHtml(field.key, inputType, option)).join("")}</div>${otherAnswerHtml(field.key)}</fieldset>`;
     }
 
     function choiceInputHtml(fieldKey, inputType, option) {
@@ -963,7 +1188,7 @@
         if (field.type === "text") continue;
         const selected = form.querySelector(`input[name="${field.key}"][data-other-trigger="1"]:checked`);
         const text = String(form.elements[`${field.key}Other`]?.value || "").trim();
-        if (selected && !text) throw new Error(`${field.label}의 기타 내용을 적어주세요.`);
+        if (selected && !text) throw fieldValidationError(`${field.label}의 기타 내용을 적어주세요.`, field.key);
       }
     }
 
@@ -976,10 +1201,11 @@
       }
       state.loading = true;
       submitButton.disabled = true;
+      syncInteractionState();
       setStatus("제출 중입니다.", false);
       try {
         if (state.uploading > 0) throw new Error("사진/영상 업로드가 끝난 뒤 제출해 주세요.");
-        const activeFields = state.mode === "post" ? postFields : preFields;
+        const activeFields = [...postFields, ...optionalPostFields];
         validateOtherAnswers(activeFields);
         const answers = readAnswers(new FormData(form), activeFields);
         validateRequiredAnswers(answers, activeFields);
@@ -990,14 +1216,22 @@
         });
         const data = await res.json();
         if (!res.ok || data.ok === false) throw new Error(data.error || "제출에 실패했습니다.");
-        setStatus(state.mode === "post" ? "수업 후 기록을 저장했습니다. 리포트를 준비합니다." : "수업 전 계획을 저장했습니다.", false);
+        setStatus("기록을 저장했습니다. 아래 리포트를 확인해 주세요.", false);
         submitButton.textContent = "제출 완료";
-        if (state.mode === "post") await refreshReport();
+        await refreshReport();
+        if (!state.data?.locked) {
+          submitButton.disabled = false;
+          submitButton.textContent = "기록 수정 · 리포트 다시 확인";
+        }
+        reportPanel.scrollIntoView({ behavior: "smooth", block: "start" });
         state.loading = false;
+        syncInteractionState();
       } catch (error) {
         state.loading = false;
         submitButton.disabled = false;
         setStatus(error.message || String(error), true);
+        focusInvalidField(error.fieldKey);
+        syncInteractionState();
       }
     }
 
@@ -1006,8 +1240,12 @@
       const data = await res.json();
       if (!res.ok || data.ok === false) throw new Error(data.error || "리포트 상태를 불러오지 못했습니다.");
       state.data = data;
+      renderWorkflowSteps(data);
       renderMediaPanel(data);
       renderReportPanel(data);
+      applyLockedState(data);
+      syncInteractionState();
+      focusReportPanelIfRequested();
       return data;
     }
 
@@ -1039,7 +1277,12 @@
 
     async function convertReport() {
       if (state.loading) return;
+      if (state.uploading > 0) {
+        setStatus("사진/영상 업로드가 끝난 뒤 리포트를 다시 생성해 주세요.", true);
+        return;
+      }
       state.loading = true;
+      syncInteractionState();
       setStatus("회원용 리포트 변환 요청 중입니다.", false);
       const button = reportPanel.querySelector("[data-convert-report]");
       if (button) button.disabled = true;
@@ -1059,16 +1302,37 @@
         if (button) button.disabled = false;
       } finally {
         state.loading = false;
+        syncInteractionState();
       }
     }
 
     async function approveReport() {
       if (state.loading) return;
+      if (state.uploading > 0) {
+        setStatus("사진/영상 업로드가 끝난 뒤 회원 발송을 진행해 주세요.", true);
+        return;
+      }
+      const currentStatus = String(state.data?.report?.status || "");
+      if (["approved", "queued"].includes(currentStatus) && !reportTextChanged()) {
+        setStatus("이미 발송 대기 중입니다. 문장을 수정한 경우에만 다시 승인할 수 있습니다.", false);
+        return;
+      }
       state.loading = true;
+      syncInteractionState();
       setStatus("발송 승인 처리 중입니다.", false);
       const button = reportPanel.querySelector("[data-approve-report]");
       if (button) button.disabled = true;
       try {
+        const { summary, nextDirection } = currentReportEditPayload({ requireFields: true });
+        if (reportTextChanged()) {
+          await postJson({
+            requestId: state.requestId,
+            token: state.token,
+            action: "editReport",
+            summary,
+            nextDirection,
+          });
+        }
         const res = await fetch(apiBase, {
           method: "POST",
           headers: { "Content-Type": "application/json" },
@@ -1076,38 +1340,14 @@
         });
         const data = await res.json();
         if (!res.ok || data.ok === false) throw new Error(data.error || "승인 처리에 실패했습니다.");
-        setStatus(data.message || "승인되었습니다.", false);
+        setStatus(data.message || "검토한 리포트를 발송 대기열에 등록했습니다.", false);
         await refreshReport();
       } catch (error) {
         setStatus(error.message || String(error), true);
         if (button) button.disabled = false;
       } finally {
         state.loading = false;
-      }
-    }
-
-    async function saveReportEdit() {
-      if (state.loading) return;
-      state.loading = true;
-      setStatus("리포트 문장을 저장 중입니다.", false);
-      const button = reportPanel.querySelector("[data-save-report-edit]");
-      if (button) button.disabled = true;
-      try {
-        const { summary, nextDirection } = currentReportEditPayload({ requireFields: true });
-        const data = await postJson({
-          requestId: state.requestId,
-          token: state.token,
-          action: "editReport",
-          summary,
-          nextDirection,
-        });
-        setStatus(data.message || "리포트 문장을 저장했습니다.", false);
-        await refreshReport();
-      } catch (error) {
-        setStatus(error.message || String(error), true);
-        if (button) button.disabled = false;
-      } finally {
-        state.loading = false;
+        syncInteractionState();
       }
     }
 
@@ -1124,7 +1364,7 @@
       return summary || nextDirection ? { summary, nextDirection } : {};
     }
 
-    function readAnswers(formData, activeFields = state.mode === "post" ? postFields : preFields) {
+    function readAnswers(formData, activeFields = [...postFields, ...optionalPostFields]) {
       const answers = {};
       for (const field of activeFields) {
         if (field.type === "multi" || field.type === "groupedMulti") answers[field.key] = formData.getAll(field.key).map(String).map((value) => normalizeChoiceValue(field.key, value));
@@ -1135,11 +1375,31 @@
     }
 
     function validateRequiredAnswers(answers, activeFields) {
+      const messages = {
+        focusAreas: "진행 부위를 선택해 주세요.",
+        changes: "확인한 변화를 선택해 주세요.",
+        nextDirection: "다음 방향을 입력해 주세요.",
+      };
       for (const field of activeFields.filter((item) => item.required)) {
         const value = answers[field.key];
         const hasValue = Array.isArray(value) ? value.length > 0 : Boolean(String(value || "").trim());
-        if (!hasValue) throw new Error(`${field.label}을 입력해 주세요.`);
+        if (!hasValue) throw fieldValidationError(messages[field.key] || `${field.label}을 입력해 주세요.`, field.key);
       }
+    }
+
+    function fieldValidationError(message, fieldKey) {
+      const error = new Error(message);
+      error.fieldKey = fieldKey;
+      return error;
+    }
+
+    function focusInvalidField(fieldKey) {
+      if (!fieldKey) return;
+      const target = form.querySelector(`[data-field-key="${CSS.escape(String(fieldKey))}"]`);
+      if (!target) return;
+      target.scrollIntoView({ behavior: "smooth", block: "center" });
+      const focusTarget = target.matches("fieldset") ? target : target.querySelector("textarea, input") || target;
+      focusTarget.focus({ preventScroll: true });
     }
 
     function cacheBustedUrl(url) {
@@ -1151,6 +1411,8 @@
     function setStatus(message, error) {
       statusEl.textContent = message;
       statusEl.classList.toggle("error", Boolean(error));
+      statusEl.setAttribute("role", error ? "alert" : "status");
+      statusEl.setAttribute("aria-live", error ? "assertive" : "polite");
     }
 
     function escapeHtml(value) {

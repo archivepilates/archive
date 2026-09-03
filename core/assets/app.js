@@ -28,7 +28,8 @@ const ALIMTALK_TEMPLATE_LABELS_BY_CODE = Object.freeze({
   KA01TP260802163827071E2TTuX6CsWp: "아카이브 추천식단 프로그램 v2",
   KA01TP260731123545629Sx4N5CZa5BF: "아카이브 추천식단 도착 안내 v1 (미사용)",
   KA01TP260729144645970fv13He8mfsK: "프라이빗 사전설문 안내 v2",
-  KA01TP260729144657202OV26yAD15wR: "강사용 프라이빗 차트 작성 안내 v3",
+  KA01TP260729144657202OV26yAD15wR: "강사용 프라이빗 차트 작성 안내 v3 (이전)",
+  KA01TP260903104439283cNjQW0YrrtV: "강사용 프라이빗 오늘 기록 안내 v4",
 });
 
 const ALIMTALK_TEMPLATE_LABELS_BY_TYPE = Object.freeze({
@@ -43,7 +44,7 @@ const ALIMTALK_TEMPLATE_LABELS_BY_TYPE = Object.freeze({
   private_ticket_expiring: "프라이빗 기간권 잔여기간 안내",
   long_absence: "장기 미방문 수업안내",
   staff_private_survey: "담당강사 사전설문 제출 안내",
-  staff_private_chart: "강사용 프라이빗 차트 작성 안내",
+  staff_private_chart: "강사용 프라이빗 오늘 기록 안내",
   staff_group_survey: "첫 그룹수업 회원 확인",
   instructor_lesson_material: "강사레슨 수업자료 안내",
   instructor_lesson_confirmation: "강사레슨 예약확정 안내",
@@ -1036,11 +1037,15 @@ async function getRecentCollectionBy(db, firestore, collectionName, orderField =
 async function getCurrentPrivateLessonSessions(db, firestore, maxItems = 500) {
   const start = new Date();
   start.setHours(0, 0, 0, 0);
+  start.setDate(start.getDate() - 7);
+  const end = new Date();
+  end.setHours(24, 0, 0, 0);
   try {
     const snapshot = await firestore.getDocs(
       firestore.query(
         firestore.collection(db, "privateLessonSessions"),
         firestore.where("lessonStartAt", ">=", start),
+        firestore.where("lessonStartAt", "<", end),
         firestore.orderBy("lessonStartAt", "asc"),
         firestore.limit(maxItems),
       ),
@@ -1051,7 +1056,10 @@ async function getCurrentPrivateLessonSessions(db, firestore, maxItems = 500) {
     const snapshot = await firestore.getDocs(firestore.collection(db, "privateLessonSessions"));
     return snapshot.docs
       .map((docSnapshot) => ({ id: docSnapshot.id, ...docSnapshot.data() }))
-      .filter((session) => timestampMs(session.lessonStartAt || session.lessonDate) >= start.getTime())
+      .filter((session) => {
+        const ms = timestampMs(session.lessonStartAt || session.lessonDate);
+        return ms >= start.getTime() && ms < end.getTime();
+      })
       .sort((a, b) => timestampMs(a.lessonStartAt || a.lessonDate) - timestampMs(b.lessonStartAt || b.lessonDate))
       .slice(0, maxItems);
   }
@@ -4503,21 +4511,23 @@ function privateProgressTimeMs(row) {
 
 function currentPrivateProgressRows(rows, referenceDate = new Date()) {
   const start = todayStartMs(referenceDate);
+  const end = start + 24 * 60 * 60 * 1000;
+  const overdueStart = start - 7 * 24 * 60 * 60 * 1000;
   return rows.filter((row) => {
     const ms = privateProgressTimeMs(row);
-    return ms && ms >= start;
+    if (!ms) return false;
+    if (ms >= start && ms < end) return true;
+    return ms >= overdueStart && ms < start && privateStage(row) !== "complete";
   });
 }
 
 function privateStage(row) {
-  const preDone = privateProgressStatus(row.request.preStatus || row.record?.preSubmittedAt) === "success";
   const postDone = privateProgressStatus(row.request.postStatus || row.record?.postSubmittedAt) === "success";
   const reportDone = privateReportReady(row);
   const sendDone = ["done", "sent", "success", "completed"].includes(String(row.send?.status || "").toLowerCase());
-  if (!preDone) return "pre";
-  if (!postDone) return "post";
-  if (!reportDone) return "report";
-  if (!sendDone) return "send";
+  if (!postDone) return "recording";
+  if (!reportDone) return "preparing";
+  if (!sendDone) return "review";
   return "complete";
 }
 
@@ -4549,10 +4559,14 @@ function pendingPrivateProgressRows() {
 
 function currentPrivateSessionRows(sessions, referenceDate = new Date()) {
   const start = todayStartMs(referenceDate);
+  const end = start + 24 * 60 * 60 * 1000;
+  const overdueStart = start - 7 * 24 * 60 * 60 * 1000;
   return [...sessions]
     .filter((session) => {
       const ms = timestampMs(session.lessonStartAt || session.lessonDate);
-      return ms && ms >= start;
+      if (!ms) return false;
+      if (ms >= start && ms < end) return true;
+      return ms >= overdueStart && ms < start && !["delivered", "cancelled"].includes(String(session.workflowStage || ""));
     })
     .sort((a, b) => timestampMs(a.lessonStartAt || a.lessonDate) - timestampMs(b.lessonStartAt || b.lessonDate));
 }
@@ -4586,28 +4600,30 @@ function renderPrivateSessions(sessions) {
   const rows = currentPrivateSessionRows(sessions);
   const activeRows = rows.filter((row) => row.workflowStage !== "cancelled");
   const groups = {
-    preparation: activeRows.filter((row) => ["preparation", "needs_review"].includes(row.workflowStage)),
-    recording: activeRows.filter((row) => row.workflowStage === "recording"),
-    report_review: activeRows.filter((row) => row.workflowStage === "report_review"),
+    recording: activeRows.filter((row) => ["preparation", "recording"].includes(row.workflowStage)),
+    preparing: activeRows.filter((row) => row.workflowStage === "report_review" && ["pending", "processing", "approved"].includes(String(row.reportStatus || ""))),
+    report_review: activeRows.filter((row) => row.workflowStage === "report_review" && !["pending", "processing", "approved"].includes(String(row.reportStatus || ""))),
+    needs_review: activeRows.filter((row) => row.workflowStage === "needs_review"),
     delivered: activeRows.filter((row) => row.workflowStage === "delivered"),
   };
-  const pendingRows = activeRows.filter((row) => row.workflowStage !== "delivered");
-  setText("privatePendingCount", formatCount(pendingRows.length));
-  setText("privatePreStageCount", formatCount(groups.preparation.length));
-  setText("privatePostStageCount", formatCount(groups.recording.length));
+  const instructorActionRows = [...groups.recording, ...groups.report_review];
+  const operatorActionRows = [...instructorActionRows, ...groups.needs_review];
+  setText("privatePendingCount", formatCount(operatorActionRows.length));
+  setText("privatePreStageCount", formatCount(groups.recording.length));
+  setText("privatePostStageCount", formatCount(groups.report_review.length));
   setText("privateCompleteStageCount", formatCount(groups.delivered.length));
-  setPillText("privateProgressStatus", pendingRows.length ? "warning" : "success");
+  setPillText("privateProgressStatus", operatorActionRows.length ? "warning" : "success");
 
   const byStaff = new Map();
-  pendingRows.forEach((row) => {
+  instructorActionRows.forEach((row) => {
     const staff = row.staffName || "강사 미지정";
     if (!byStaff.has(staff)) byStaff.set(staff, []);
     byStaff.get(staff).push(row);
   });
-  setPillText("privateInstructorPendingStatus", pendingRows.length ? "warning" : "success");
+  setPillText("privateInstructorPendingStatus", instructorActionRows.length ? "warning" : "success");
   const staffList = qs("privateInstructorPendingList");
   if (staffList) {
-    staffList.innerHTML = pendingRows.length
+    staffList.innerHTML = instructorActionRows.length
       ? [...byStaff.entries()]
           .sort((a, b) => b[1].length - a[1].length)
           .map(
@@ -4619,13 +4635,13 @@ function renderPrivateSessions(sessions) {
             `,
           )
           .join("")
-      : `<div class="empty-state">진행 안 된 프라이빗 수업이 없습니다.</div>`;
+      : `<div class="empty-state">오늘 남은 강사 작업이 없습니다.</div>`;
   }
 
   list.innerHTML = [
-    ["preparation", "수업 준비", groups.preparation],
-    ["recording", "수업 기록", groups.recording],
-    ["report_review", "리포트 확인", groups.report_review],
+    ["recording", "기록 대기", groups.recording],
+    ["preparing", "자동 처리 · 운영 확인", [...groups.preparing, ...groups.needs_review]],
+    ["report_review", "확인 후 발송", groups.report_review],
     ["delivered", "전달 완료", groups.delivered],
   ]
     .map(
@@ -4647,7 +4663,7 @@ function privatePendingBreakdown(rows) {
       acc[privateStage(row)] += 1;
       return acc;
     },
-    { pre: 0, post: 0, report: 0, send: 0 },
+    { recording: 0, preparing: 0, review: 0, complete: 0 },
   );
 }
 
@@ -4669,10 +4685,9 @@ function renderPrivateStageCard(row) {
       <strong>${escapeHtml(formatPrivateClassLine(row))}</strong>
       <p>${escapeHtml(row.merged.bookingId || row.merged.requestId || row.request.id)}</p>
       <div class="tag-row">
-        ${privateStepPill("사전", row.request.preStatus || row.record?.preSubmittedAt)}
-        ${privateStepPill("사후", row.request.postStatus || row.record?.postSubmittedAt)}
+        ${privateStepPill("오늘 기록", row.request.postStatus || row.record?.postSubmittedAt)}
         ${privateStepPill("리포트", reportReady ? "success" : row.record?.gptStatus || "pending")}
-        ${privateStepPill("전송", sendStatus)}
+        ${privateStepPill("회원 전달", sendStatus)}
       </div>
       ${stage === "complete" ? `<p>완료</p>` : ""}
     </div>
@@ -4682,7 +4697,7 @@ function renderPrivateStageCard(row) {
 function renderPrivateInstructorPending(rows) {
   const list = qs("privateInstructorPendingList");
   if (!list) return;
-  const pendingRows = rows.filter((row) => privateStage(row) !== "complete");
+  const pendingRows = rows.filter((row) => ["recording", "review"].includes(privateStage(row)));
   const byStaff = new Map();
   pendingRows.forEach((row) => {
     const staff = row.merged.staffName || "강사 미지정";
@@ -4705,7 +4720,7 @@ function renderPrivateInstructorPending(rows) {
           `,
         )
         .join("")
-    : `<div class="empty-state">진행 안 된 프라이빗 차트가 없습니다.</div>`;
+    : `<div class="empty-state">오늘 남은 강사 작업이 없습니다.</div>`;
 }
 
 function renderPrivateProgress(requests, records, ledgerEntries, candidates = [], sends = []) {
@@ -4716,25 +4731,23 @@ function renderPrivateProgress(requests, records, ledgerEntries, candidates = []
   renderPrivateInstructorPending(rows);
 
   const groups = {
-    pre: rows.filter((row) => privateStage(row) === "pre"),
-    post: rows.filter((row) => privateStage(row) === "post"),
-    report: rows.filter((row) => privateStage(row) === "report"),
-    send: rows.filter((row) => privateStage(row) === "send"),
+    recording: rows.filter((row) => privateStage(row) === "recording"),
+    preparing: rows.filter((row) => privateStage(row) === "preparing"),
+    review: rows.filter((row) => privateStage(row) === "review"),
     complete: rows.filter((row) => privateStage(row) === "complete"),
   };
-  setText("privatePendingCount", formatCount(rows.length - groups.complete.length));
-  setText("privatePreStageCount", formatCount(groups.pre.length));
-  setText("privatePostStageCount", formatCount(groups.post.length));
+  setText("privatePendingCount", formatCount(groups.recording.length + groups.review.length));
+  setText("privatePreStageCount", formatCount(groups.recording.length));
+  setText("privatePostStageCount", formatCount(groups.review.length));
   setText("privateCompleteStageCount", formatCount(groups.complete.length));
-  setPillText("privateProgressStatus", rows.length && rows.length === groups.complete.length ? "success" : "warning");
+  setPillText("privateProgressStatus", groups.recording.length || groups.review.length ? "warning" : "success");
 
   list.innerHTML = rows.length
-    ? [
-        ["pre", "수업전 설문 단계", groups.pre],
-        ["post", "수업후 설문 단계", groups.post],
-        ["report", "리포트 완성 단계", groups.report],
-        ["send", "리포트 전송 단계", groups.send],
-        ["complete", "완료 단계", groups.complete],
+      ? [
+        ["recording", "기록 대기", groups.recording],
+        ["preparing", "자동 처리 중", groups.preparing],
+        ["review", "확인 후 발송", groups.review],
+        ["complete", "전달 완료", groups.complete],
       ]
         .map(
           ([key, title, stageRows]) => `
@@ -4747,7 +4760,7 @@ function renderPrivateProgress(requests, records, ledgerEntries, candidates = []
           `,
         )
         .join("")
-    : `<div class="empty-state">오늘 이후 진행 대상 프라이빗 차트가 없습니다.</div>`;
+    : `<div class="empty-state">오늘 처리할 프라이빗 기록이 없습니다.</div>`;
 }
 
 function renderPrivate(requests, records, ledgerEntries, candidates = [], sends = [], sessions = []) {
@@ -4758,7 +4771,7 @@ function renderPrivate(requests, records, ledgerEntries, candidates = [], sends 
     setText("privateUsageCount", String(sessions.filter((item) => item.bookingId).length));
     setText("privateLedgerCount", String(sessions.filter((item) => item.roundVerified).length));
     setText("privateRecordHealth", sessions.some((item) => item.lastError) ? "확인할 오류 있음" : "진행 데이터 정상");
-    setText("privateSubmittedCount", formatCount(sessions.filter((item) => item.preStatus === "submitted").length));
+    setText("privateSubmittedCount", formatCount(sessions.filter((item) => item.postStatus === "submitted").length));
     setText("privateCorrectionCount", formatCount(sessions.filter((item) => item.roundVerified === false).length));
     renderPrivateSessions(sessions);
     return;
@@ -4772,8 +4785,8 @@ function renderPrivate(requests, records, ledgerEntries, candidates = [], sends 
   ).length;
   const corrections = records.filter((item) => item.sessionNumberCorrection).length;
   const submitted = requests.filter((item) =>
-    ["submitted", "pre_submitted", "post_submitted", "completed"].includes(
-      String(item.preStatus || item.postStatus || item.status || "").toLowerCase(),
+    ["submitted", "post_submitted", "completed"].includes(
+      String(item.postStatus || item.status || "").toLowerCase(),
     ),
   ).length;
   setText("privateRecordHealth", recordFailures ? `${recordFailures}건 오류 확인` : "차트 기록 읽기 정상");

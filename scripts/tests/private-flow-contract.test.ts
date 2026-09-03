@@ -1,4 +1,5 @@
 import assert from "node:assert/strict";
+import { createHash } from "node:crypto";
 import test from "node:test";
 import {
   createPrivateLessonReportSnapshot,
@@ -14,6 +15,7 @@ import { renderPrivateLessonReportPage } from "../../firebase/kangsain-functions
 import { alimtalkApprovalId } from "../../firebase/kangsain-functions/functions/src/alimtalk/approvalGate";
 import { alimtalkDedupeKey } from "../../firebase/kangsain-functions/functions/src/alimtalk/dedupe";
 import { privateSurveySourceIssue } from "../../firebase/kangsain-functions/functions/src/alimtalk/privateSurveySendGuard";
+import { privateLessonReportScheduleIssue } from "../../firebase/kangsain-functions/functions/src/alimtalk/processAlimtalkQueue";
 import {
   isRetryableTemplateStatusIssue,
   privateSurveyTemplateContractIssue,
@@ -149,8 +151,9 @@ test("member report preserves long text and omits empty placeholder sections", (
     {
       ...reportRecord(),
       postRecord: {
-        summaryKeywords: "흉곽 움직임",
-        nextDirectionKeywords: "고관절 안정성",
+        focusAreas: ["흉곽"],
+        changes: ["호흡 연결 개선"],
+        nextDirection: "고관절 안정성과 코어 연결을 이어갑니다.",
         homework: "",
       },
       gptDraftNextDirection: nextDirection,
@@ -196,6 +199,40 @@ test("report is editable before send and locked while processing or after send",
       publicReportApproval: { status: "sent", sentAt: now },
     }),
     /발송 완료/,
+  );
+});
+
+test("private report send stays bound to the approved booking schedule", () => {
+  const request = chartRequest();
+  const record = reportRecord();
+  const revision = currentPrivateLessonReportRevision(record);
+  const approvedRecord = {
+    ...record,
+    approvedRevision: revision,
+    approvedReportSnapshot: createPrivateLessonReportSnapshot(record, revision),
+  };
+  const booking = {
+    bookingId: request.bookingId,
+    memberId: request.memberId,
+    memberName: request.memberName,
+    staffId: request.staffId,
+    staffName: request.staffName,
+    lectureDate: request.lessonDate,
+    lectureStartAt: request.lessonStartAt,
+  } as any;
+
+  assert.equal(privateLessonReportScheduleIssue(booking, request, approvedRecord), "");
+  assert.match(
+    privateLessonReportScheduleIssue(
+      { ...booking, lectureStartAt: { toMillis: () => nowDate.getTime() + 60 * 60 * 1000 } },
+      request,
+      approvedRecord,
+    ),
+    /재승인/,
+  );
+  assert.match(
+    privateLessonReportScheduleIssue({ ...booking, staffId: "staff-2" }, request, approvedRecord),
+    /재승인/,
   );
 });
 
@@ -612,6 +649,22 @@ test("private survey send guard blocks cancelled bookings at send time", () => {
   );
 });
 
+test("private survey send guard rejects a stale access token", () => {
+  const candidate = privateSurveyCandidate();
+  const request = privateSurveyRequest();
+  const booking = privateSurveyBooking();
+  assert.equal(privateSurveySourceIssue(candidate, request, booking, nowDate.getTime()), "");
+  assert.match(
+    privateSurveySourceIssue(
+      { ...candidate, payload: { ...candidate.payload, accessToken: "stale-token" } },
+      request,
+      booking,
+      nowDate.getTime(),
+    ),
+    /접근 토큰/,
+  );
+});
+
 test("private survey send guard blocks delivery after the lesson starts", () => {
   const candidate = privateSurveyCandidate();
   const request = privateSurveyRequest();
@@ -624,9 +677,9 @@ test("private survey send guard blocks delivery after the lesson starts", () => 
   assert.match(privateSurveySourceIssue(candidate, request, booking, nowDate.getTime()), /수업 시작 이후/);
 });
 
-test("private lesson session projection follows the four operator stages", () => {
+test("private lesson session projection starts with post-only recording", () => {
   const request = chartRequest();
-  assert.equal(privateLessonSessionProjection(request.requestId, request, undefined).workflowStage, "preparation");
+  assert.equal(privateLessonSessionProjection(request.requestId, request, undefined).workflowStage, "recording");
   assert.equal(
     privateLessonSessionProjection(request.requestId, { ...request, preStatus: "submitted" }, undefined).workflowStage,
     "recording",
@@ -764,7 +817,7 @@ function privateSurveyCandidate(): any {
     title: "프라이빗 사전설문",
     reason: "첫 수업",
     sourceDate: "2026-07-29",
-    payload: { surveyId: "psr-test", bookingId: "booking-1" },
+    payload: { surveyId: "psr-test", bookingId: "booking-1", accessToken: "survey-token" },
     attempts: 0,
     maxAttempts: 2,
     createdAt: now,
@@ -819,6 +872,7 @@ function privateSurveyRequest(): any {
     requestId: "psr-test",
     memberId: "member-1",
     bookingId: "booking-1",
+    accessTokenHash: createHash("sha256").update("survey-token").digest("hex"),
     status: "pending",
     expiresAt: {
       toMillis: () => nowDate.getTime() + 24 * 60 * 60 * 1000,
