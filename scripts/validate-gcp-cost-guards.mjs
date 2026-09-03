@@ -46,10 +46,12 @@ const checks = [
     file: "firebase/kangsain-functions/functions/src/exports/privateChart.ts",
     required: [
       "scheduledProcessMissingSurveySubmissionAlerts",
-      'schedule: "every 60 minutes"',
-      'schedule: "0 6,14,22 * * *"',
+      "scheduledSyncPrivateSurveyNotion",
+      "scheduledCreatePrivateLessonChartRequests",
+      "scheduledSendTodayPrivateLessonChartAlimtalks",
+      "scheduledSyncPrivateLessonNotionProjections",
     ],
-    forbidden: [],
+    forbidden: ['schedule: "0 6,14,22 * * *"'],
   },
   {
     file: "firebase/kangsain-functions/functions/src/sync/processContactSyncJobs.ts",
@@ -127,6 +129,34 @@ const scheduleGuards = [
   },
 ];
 
+const exactScheduleGuards = [
+  {
+    file: "firebase/kangsain-functions/functions/src/exports/privateChart.ts",
+    functionName: "scheduledProcessMissingSurveySubmissionAlerts",
+    expectedSchedule: "every 60 minutes",
+  },
+  {
+    file: "firebase/kangsain-functions/functions/src/exports/privateChart.ts",
+    functionName: "scheduledSyncPrivateSurveyNotion",
+    expectedSchedule: "40 22 * * *",
+  },
+  {
+    file: "firebase/kangsain-functions/functions/src/exports/privateChart.ts",
+    functionName: "scheduledCreatePrivateLessonChartRequests",
+    expectedSchedule: "0 22 * * *",
+  },
+  {
+    file: "firebase/kangsain-functions/functions/src/exports/privateChart.ts",
+    functionName: "scheduledSendTodayPrivateLessonChartAlimtalks",
+    expectedSchedule: "0 7-21 * * *",
+  },
+  {
+    file: "firebase/kangsain-functions/functions/src/exports/privateChart.ts",
+    functionName: "scheduledSyncPrivateLessonNotionProjections",
+    expectedSchedule: "20 22 * * *",
+  },
+];
+
 const failures = [];
 for (const check of checks) {
   const absolutePath = path.join(repoRoot, check.file);
@@ -165,6 +195,21 @@ for (const check of scheduleGuards) {
   }
 }
 
+for (const check of exactScheduleGuards) {
+  const absolutePath = path.join(repoRoot, check.file);
+  const source = fs.existsSync(absolutePath) ? fs.readFileSync(absolutePath, "utf8") : "";
+  if (!source) {
+    failures.push(`${check.file}: file missing or empty`);
+    continue;
+  }
+  const functionStart = source.indexOf(`export const ${check.functionName} = onSchedule(`);
+  const nextExport = functionStart >= 0 ? source.indexOf("\nexport const ", functionStart + 1) : -1;
+  const functionSource = functionStart >= 0 ? source.slice(functionStart, nextExport >= 0 ? nextExport : source.length) : "";
+  if (!functionSource.includes(`schedule: "${check.expectedSchedule}"`)) {
+    failures.push(`${check.file}: ${check.functionName} must use ${check.expectedSchedule}`);
+  }
+}
+
 if (failures.length) {
   console.error("validate-gcp-cost-guards failed");
   for (const failure of failures) console.error(`- ${failure}`);
@@ -175,14 +220,14 @@ console.log(
   JSON.stringify(
     {
       ok: true,
-      checkedFiles: checks.length + scheduleGuards.length,
+      checkedFiles: checks.length + scheduleGuards.length + exactScheduleGuards.length,
       guards: [
         "hourly import cannot trigger full-month reconcile",
         "unchanged member and reservation documents are skipped",
         "instructor views do not depend on the latest source file name",
         "survey alert scans are bounded and idempotent",
         "pre-lesson records stay out of report generation scans",
-        "Notion recovery and missing-survey scans use reduced schedules",
+        "private survey and chart jobs keep their reduced nightly and hourly schedules",
         "alimtalk queue, private survey sync, and contact sync run every 10 minutes",
         "contact sync reads only due home-account jobs",
         "parking scheduler scans only the recent due-time window",
