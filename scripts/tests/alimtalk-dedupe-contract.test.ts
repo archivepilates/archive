@@ -59,6 +59,12 @@ test("records candidate-generation duplicate blocks with the canonical reason co
   assert.match(rebuildSource, /reasonCode: "duplicate_send_blocked"/);
 });
 
+test("expires every open past-due automatic candidate without a rolling lookback gap", () => {
+  assert.match(rebuildSource, /\["candidate", "reviewed", "failed"\]/);
+  assert.match(rebuildSource, /\.where\("status", "==", status\)\.get\(\)/);
+  assert.doesNotMatch(rebuildSource, /lookbackDays/);
+});
+
 test("checks every member-care message against the shared fourteen-day cooldown", () => {
   assert.match(dedupeSource, /MEMBER_CARE_TYPES\.has\(candidate\.type\)/);
   assert.match(dedupeSource, /findRecentMemberCareDuplicate\(candidate, 14\)/);

@@ -199,12 +199,11 @@ export function isPastDueAutomaticCandidate(candidate: AlimtalkCandidateDoc, tod
 export async function expirePastDueAutomaticCandidates(input: {
   studioId: string;
   today: string;
-  lookbackDays?: number;
 }): Promise<number> {
-  const lookbackDays = Math.max(1, Math.min(90, input.lookbackDays || 45));
-  const dates = dateRange(addDays(input.today, -lookbackDays), addDays(input.today, -1));
   const snapshots = await Promise.all(
-    dates.map((sourceDate) => refs.alimtalkCandidates().where("sourceDate", "==", sourceDate).limit(500).get()),
+    (["candidate", "reviewed", "failed"] as const).map((status) =>
+      refs.alimtalkCandidates().where("status", "==", status).get(),
+    ),
   );
   const stale = snapshots.flatMap((snapshot) =>
     snapshot.docs.filter((doc) => {
