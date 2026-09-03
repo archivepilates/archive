@@ -161,6 +161,7 @@ requireMarkers("firebase/kangsain-functions/functions/src/privateLessonChart/pri
   "claimDailyPrivateChartSend",
   "sourceVersion",
   "privateLessonNotionProjectionVersion",
+  "const activeSeed = await activePrivateBookingForChartRequest(seed)",
 ]);
 requireMarkers("firebase/kangsain-functions/functions/src/privateSurvey/privateSurveyResponse.ts", [
   'existing?.notionSync || { status: "pending" as const }',

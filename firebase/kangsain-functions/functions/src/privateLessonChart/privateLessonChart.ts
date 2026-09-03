@@ -2188,7 +2188,15 @@ async function publicDailyChartRequest(request: any): Promise<Record<string, unk
     throw new Error("오늘 기록 링크가 올바르지 않습니다.");
   }
   const seed = (await refs.privateLessonChartRequest(requestId).get()).data();
-  if (!seed || !normalizePhone(seed.staffPhone) || token !== dailyAccessTokenFor(seed, date)) {
+  if (!seed || !normalizePhone(seed.staffPhone)) {
+    throw new Error("오늘 기록 링크를 확인할 수 없습니다.");
+  }
+  const activeSeed = await activePrivateBookingForChartRequest(seed);
+  if (
+    !activeSeed.ok ||
+    seed.lessonDate !== date ||
+    token !== dailyAccessTokenFor(seed, date)
+  ) {
     throw new Error("오늘 기록 링크를 확인할 수 없습니다.");
   }
   const snap = await refs.privateLessonChartRequests().where("lessonDate", "==", date).limit(500).get();
