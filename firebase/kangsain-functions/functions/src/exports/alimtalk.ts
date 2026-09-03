@@ -2,13 +2,26 @@ import { logger } from "firebase-functions";
 import { onCall, onRequest } from "firebase-functions/v2/https";
 import { onSchedule } from "firebase-functions/v2/scheduler";
 import { approveAlimtalkBatchHandler } from "../alimtalk/approvalGate";
+import {
+  approveInstructorLessonAlimtalkBatchHandler,
+  remindPendingInstructorLessonApprovals,
+  sendApprovedInstructorLessonAlimtalks,
+} from "../alimtalk/instructorLessonSampleApproval";
 import { processAlimtalkQueue } from "../alimtalk/processAlimtalkQueue";
 import { operatorSendPricingInquiryAlimtalkHandler } from "../alimtalk/pricingInquiryAlimtalk";
+import { operatorSendRecommendedMealProgramAlimtalkHandler } from "../mealPlan/recommendedMealAlimtalk";
+import { operatorPublishRecommendedMealPlanHandler } from "../mealPlan/recommendedMealReportAlimtalk";
 import { queueDailyAlimtalkCandidates, queueReservationOpenAlimtalkCandidates } from "../alimtalk/queueDailyAlimtalk";
 import { sendDailyAlimtalkReport } from "../alimtalk/sendDailyAlimtalkReport";
 import { syncAlimtalkTemplateStatuses } from "../alimtalk/templateStatus";
+import { auditPreviousDayAlimtalkProviderLedgerAndNotify } from "../alimtalk/providerLedgerAudit";
 import { notionToken } from "../config/secrets";
-import { callableOptions, publicLongRequestOptions, scheduleOptions } from "../runtime/functionOptions";
+import {
+  callableOptions,
+  publicLongRequestOptions,
+  publicRequestOptions,
+  scheduleOptions,
+} from "../runtime/functionOptions";
 import { requireManager, requireStaff } from "../security/authGuards";
 import { toHttpsError } from "../utils/errors";
 
@@ -30,7 +43,7 @@ const alimtalkQueueRequestOptions = {
 export const scheduledProcessAlimtalkQueue = onSchedule(
   {
     ...alimtalkQueueScheduleOptions,
-    schedule: "every 5 minutes",
+    schedule: "every 10 minutes",
   },
   async () => {
     await processAlimtalkQueue();
@@ -45,13 +58,14 @@ export const scheduledQueueAndSendAlimtalkDaily = onSchedule(
   async () => {
     await syncAlimtalkTemplateStatusesSafely("scheduledQueueAndSendAlimtalkDaily");
     const queueSummary = await queueDailyAlimtalkCandidates();
-    const processSummary = { processed: 0, sent: 0, failed: 0 };
+    const processSummary = { processed: 0, sent: 0, failed: 0, deferred: 0 };
     for (let index = 0; index < 10; index += 1) {
       const result = await processAlimtalkQueue();
       processSummary.processed += result.processed;
       processSummary.sent += result.sent;
       processSummary.failed += result.failed;
-      if (!result.processed) break;
+      processSummary.deferred += result.deferred;
+      if (!result.processed || result.processed === result.deferred) break;
     }
     try {
       await sendDailyAlimtalkReport({ queueSummary, processSummary });
@@ -70,13 +84,14 @@ export const scheduledQueueAndSendReservationOpenAlimtalk = onSchedule(
   async () => {
     await syncAlimtalkTemplateStatusesSafely("scheduledQueueAndSendReservationOpenAlimtalk");
     const queueSummary = await queueReservationOpenAlimtalkCandidates();
-    const processSummary = { processed: 0, sent: 0, failed: 0 };
+    const processSummary = { processed: 0, sent: 0, failed: 0, deferred: 0 };
     for (let index = 0; index < 10; index += 1) {
       const result = await processAlimtalkQueue();
       processSummary.processed += result.processed;
       processSummary.sent += result.sent;
       processSummary.failed += result.failed;
-      if (!result.processed) break;
+      processSummary.deferred += result.deferred;
+      if (!result.processed || result.processed === result.deferred) break;
     }
     try {
       await sendDailyAlimtalkReport({ queueSummary, processSummary });
@@ -97,13 +112,69 @@ export const scheduledSyncAlimtalkTemplateStatuses = onSchedule(
   },
 );
 
+export const scheduledAuditAlimtalkProviderLedger = onSchedule(
+  {
+    ...scheduleOptions,
+    schedule: "15 10 * * *",
+  },
+  async () => {
+    await auditPreviousDayAlimtalkProviderLedgerAndNotify();
+  },
+);
+
+export const scheduledCheckInstructorLessonSampleApproval = onSchedule(
+  {
+    ...alimtalkQueueScheduleOptions,
+    schedule: "30 17 * * *",
+  },
+  async () => {
+    const result = await remindPendingInstructorLessonApprovals();
+    logger.info("scheduledCheckInstructorLessonSampleApproval complete", result);
+  },
+);
+
+export const scheduledSendApprovedInstructorLessonAlimtalk = onSchedule(
+  {
+    ...alimtalkQueueScheduleOptions,
+    schedule: "0 18 * * *",
+  },
+  async () => {
+    const result = await sendApprovedInstructorLessonAlimtalks();
+    logger.info("scheduledSendApprovedInstructorLessonAlimtalk complete", result);
+  },
+);
+
 export const approveAlimtalkBatch = onRequest(alimtalkQueueRequestOptions, approveAlimtalkBatchHandler);
+export const approveInstructorLessonAlimtalkBatch = onRequest(
+  publicRequestOptions,
+  approveInstructorLessonAlimtalkBatchHandler,
+);
 
 export const operatorSendPricingInquiryAlimtalk = onCall(callableOptions, async (request) => {
   try {
     const staff = await requireStaff(request);
     requireManager(staff);
     return await operatorSendPricingInquiryAlimtalkHandler(request, staff);
+  } catch (err) {
+    throw toHttpsError(err);
+  }
+});
+
+export const operatorSendRecommendedMealProgramAlimtalk = onCall(callableOptions, async (request) => {
+  try {
+    const staff = await requireStaff(request);
+    requireManager(staff);
+    return await operatorSendRecommendedMealProgramAlimtalkHandler(request, staff);
+  } catch (err) {
+    throw toHttpsError(err);
+  }
+});
+
+export const operatorPublishRecommendedMealPlan = onCall(callableOptions, async (request) => {
+  try {
+    const staff = await requireStaff(request);
+    requireManager(staff);
+    return await operatorPublishRecommendedMealPlanHandler(request, staff);
   } catch (err) {
     throw toHttpsError(err);
   }

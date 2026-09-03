@@ -4,6 +4,10 @@ import { mkdirSync, writeFileSync } from "node:fs";
 import os from "node:os";
 import path from "node:path";
 import { createRequire } from "node:module";
+import {
+  inactivePrivateBookingReason,
+  isPrivateBooking,
+} from "./lib/private-session-order-policy.mjs";
 
 const require = createRequire(import.meta.url);
 const admin = require("../firebase/kangsain-functions/functions/node_modules/firebase-admin");
@@ -13,10 +17,16 @@ const STUDIO_ID = process.env.STUDIOMATE_STUDIO_ID || process.env.MANAGER_STUDIO
 const DEFAULT_OUT_DIR = path.join(os.homedir(), "ArchiveIN/automation/reports/private-session-ledger");
 
 const args = parseArgs(process.argv.slice(2));
+const memberIds = cleanString(args["member-ids"] || "")
+  .split(",")
+  .map(cleanString)
+  .filter(Boolean);
 const config = {
   apply: Boolean(args.apply),
+  pruneStale: Boolean(args["prune-stale"]),
   all: Boolean(args.all),
   memberId: cleanString(args["member-id"] || args.member || ""),
+  memberIds: [...new Set(memberIds)],
   memberName: cleanString(args.name || ""),
   memberPhone: normalizePhone(args.phone || ""),
   outDir: expandHome(cleanString(args["out-dir"] || DEFAULT_OUT_DIR)),
@@ -32,8 +42,8 @@ main().catch((err) => {
 });
 
 async function main() {
-  if (!config.all && !config.memberId && !config.memberName && !config.memberPhone) {
-    throw new Error("Set --member-id, --name, --phone, or --all.");
+  if (!config.all && !config.memberId && !config.memberIds.length && !config.memberName && !config.memberPhone) {
+    throw new Error("Set --member-id, --member-ids, --name, --phone, or --all.");
   }
   const members = await loadMembers();
   if (!members.length) throw new Error("No members matched.");
@@ -58,6 +68,8 @@ async function main() {
     affectedBookings: rows.reduce((sum, row) => sum + row.bookingPatches.length, 0),
     affectedRequests: rows.reduce((sum, row) => sum + row.requestPatches.length, 0),
     ledgerEntries: rows.reduce((sum, row) => sum + row.ledgerEntries.length, 0),
+    ledgerUpserts: rows.reduce((sum, row) => sum + row.ledgerUpserts.length, 0),
+    staleLedgerDeletes: rows.reduce((sum, row) => sum + row.staleLedgerDeletes.length, 0),
   };
   mkdirSync(config.outDir, { recursive: true });
   const reportPath = path.join(
@@ -69,6 +81,14 @@ async function main() {
 }
 
 async function loadMembers() {
+  if (config.memberIds.length) {
+    const snaps = await db.getAll(...config.memberIds.map((memberId) => db.collection("memberProfiles").doc(memberId)));
+    return snaps.map((snap, index) =>
+      snap.exists
+        ? { memberId: snap.id, ...(snap.data() || {}) }
+        : { memberId: config.memberIds[index], name: "", phone: "" },
+    );
+  }
   if (config.memberId) {
     const snap = await db.collection("memberProfiles").doc(config.memberId).get();
     if (snap.exists) return [{ memberId: snap.id, ...(snap.data() || {}) }];
@@ -100,15 +120,29 @@ async function recomputeMember(member) {
 
   const ordered = [...timeline.values()].sort(compareTimelineRows);
   const ledgerEntries = ordered.map((row, index) => ledgerEntryFromTimeline(member, row, index + 1));
+  const currentLedgerById = new Map(
+    ledgerSnap.docs.map((doc) => [doc.id, { ledgerId: doc.id, ...(doc.data() || {}) }]),
+  );
+  const ledgerUpserts = ledgerEntries.filter((entry) => ledgerNeedsUpsert(entry, currentLedgerById.get(entry.ledgerId)));
   const ledgerByKey = new Map(ledgerEntries.map((entry) => [entry.occurrenceKey, entry]));
   const ledgerByBookingId = new Map(ledgerEntries.filter((entry) => entry.bookingId).map((entry) => [entry.bookingId, entry]));
   const bookingPatches = buildBookingPatches(bookings, ledgerByKey, ledgerByBookingId);
   const requestPatches = await buildRequestPatches(requestSnap.docs, bookings, ledgerByKey, ledgerByBookingId);
-  const staleLedgerDeletes = ledgerSnap.docs.map((doc) => doc.id);
-  const plannedWrites = ledgerEntries.length + staleLedgerDeletes.length + bookingPatches.length * 2 + requestPatches.length * 2;
+  const expectedLedgerIds = new Set(ledgerEntries.map((entry) => entry.ledgerId));
+  const staleLedgerDeletes = config.pruneStale
+    ? ledgerSnap.docs.filter((doc) => !expectedLedgerIds.has(doc.id)).map((doc) => doc.id)
+    : [];
+  const plannedWrites = ledgerUpserts.length + staleLedgerDeletes.length + bookingPatches.length * 2 + requestPatches.length * 2;
 
   if (config.apply) {
-    await applyMemberPlan({ member, ledgerEntries, staleLedgerDeletes, bookingPatches, requestPatches });
+    await applyMemberPlan({
+      member,
+      ledgerEntries: ledgerUpserts,
+      totalLedgerEntries: ledgerEntries.length,
+      staleLedgerDeletes,
+      bookingPatches,
+      requestPatches,
+    });
   }
 
   return {
@@ -120,6 +154,8 @@ async function recomputeMember(member) {
       chartRequests: requestSnap.size,
     },
     ledgerEntries,
+    ledgerUpserts,
+    staleLedgerDeletes,
     bookingPatches,
     requestPatches,
     plannedWrites,
@@ -348,6 +384,18 @@ async function buildRequestPatches(requestDocs, bookings, ledgerByKey, ledgerByB
 }
 
 function replacementBookingForRequest(request, bookings, ledgerByKey, ledgerByBookingId) {
+  const linkedBooking = bookings.find(
+    (booking) => String(booking.bookingId || booking.id || "") === String(request.bookingId || ""),
+  );
+  const explicitReplacementId = String(
+    linkedBooking?.supersededByBookingId || linkedBooking?.sessionOrder?.supersededByBookingId || "",
+  );
+  if (explicitReplacementId) {
+    const explicitReplacement = bookings.find(
+      (booking) => String(booking.bookingId || booking.id || "") === explicitReplacementId,
+    );
+    if (explicitReplacement && isCountablePrivateBooking(explicitReplacement)) return explicitReplacement;
+  }
   const requestStaff = staffOccurrenceIdentity(request.staffId, request.staffName);
   const requestStart = timestampMillisFromValue(request.lessonStartAt);
   const candidates = bookings
@@ -367,7 +415,14 @@ function replacementBookingForRequest(request, bookings, ledgerByKey, ledgerByBo
   return candidates.length === 1 ? candidates[0] : null;
 }
 
-async function applyMemberPlan({ member, ledgerEntries, staleLedgerDeletes, bookingPatches, requestPatches }) {
+async function applyMemberPlan({
+  member,
+  ledgerEntries,
+  totalLedgerEntries,
+  staleLedgerDeletes,
+  bookingPatches,
+  requestPatches,
+}) {
   const chunks = [];
   const ledgerBatch = [];
   for (const id of staleLedgerDeletes) {
@@ -395,7 +450,9 @@ async function applyMemberPlan({ member, ledgerEntries, staleLedgerDeletes, book
       studioId: STUDIO_ID,
       memberId: member.memberId,
       memberName: member.name || "",
-      ledgerEntries: ledgerEntries.length,
+      ledgerEntries: totalLedgerEntries,
+      ledgerUpserts: ledgerEntries.length,
+      staleLedgerDeletes: staleLedgerDeletes.length,
       bookingPatches: bookingPatches.length,
       requestPatches: requestPatches.length,
       updatedAt: admin.firestore.Timestamp.now(),
@@ -490,36 +547,23 @@ function timelineRowFromRequest(request) {
 }
 
 function isCountablePrivateBooking(booking) {
+  const bookingId = String(booking?.bookingId || booking?.id || "");
+  if (bookingId.startsWith("usage_booking_")) return false;
   if (inactivePrivateBookingReason(booking)) return false;
   return true;
 }
 
-function inactivePrivateBookingReason(booking) {
-  if (!booking) return "missing_booking";
-  if (booking.archiveBooking?.isCanonical === false) return String(booking.sessionOrder?.excludedReason || "duplicate_source");
-  if (booking.sessionOrder?.counted === false && /duplicate|missing|stale|cancel|superseded/i.test(String(booking.sessionOrder?.excludedReason || ""))) {
-    return String(booking.sessionOrder.excludedReason || "session_order_excluded");
-  }
-  if (booking.appStatus && String(booking.appStatus) !== "reserved") return `booking_app_status_${booking.appStatus}`;
-  if (["absent", "late_cancel"].includes(String(booking.attendanceStatus || ""))) return `attendance_status_${booking.attendanceStatus}`;
-  if (isPastUncheckedBooking(booking)) return "past_unchecked_attendance";
-  const sourceStatus = String(booking.sourceStatus || "");
-  if (/missing_from_latest_reservation_import|stale|lecture_deleted|deleted|cancel/i.test(sourceStatus)) return sourceStatus;
-  if (!isPrivateBooking(booking)) return "not_private_booking";
-  return "";
-}
-
-function isPastUncheckedBooking(booking) {
-  if (String(booking.attendanceStatus || "unchecked") === "attended") return false;
-  const date = String(booking.lectureDate || dateFromTimestampLike(booking.lectureStartAt) || "");
-  return Boolean(date && date < todayKst());
-}
-
-function isPrivateBooking(booking) {
-  if (String(booking.lessonType || "") === "group") return false;
-  if (["private", "semi_private"].includes(String(booking.lessonType || ""))) return true;
-  const text = `${booking.ticketName || ""} ${booking.ticketClassType || ""} ${booking.ticketType || ""} ${booking.title || ""} ${booking.lectureTitle || ""}`;
-  return /프라이빗|개인|1:1|PRIVATE|\bP\b/i.test(text);
+function ledgerNeedsUpsert(next, current) {
+  if (!current) return true;
+  return [
+    "bookingId",
+    "memberId",
+    "staffName",
+    "status",
+    "cumulativePrivateRound",
+    "ticketName",
+  ].some((key) => String(next[key] ?? "") !== String(current[key] ?? "")) ||
+    timestampMillisFromValue(next.startsAt) !== timestampMillisFromValue(current.startsAt);
 }
 
 function occurrenceKey(row) {
@@ -560,15 +604,6 @@ function timestampMillisFromValue(value) {
   if (typeof value === "number") return value;
   const parsed = Date.parse(String(value));
   return Number.isFinite(parsed) ? parsed : 0;
-}
-
-function dateFromTimestampLike(value) {
-  const millis = timestampMillisFromValue(value);
-  return millis ? new Intl.DateTimeFormat("en-CA", { timeZone: "Asia/Seoul" }).format(new Date(millis)) : "";
-}
-
-function todayKst() {
-  return new Intl.DateTimeFormat("en-CA", { timeZone: "Asia/Seoul" }).format(new Date());
 }
 
 function positiveNumber(value) {
@@ -635,18 +670,20 @@ function removeUndefined(value) {
 }
 
 function redactForReport(row) {
+  const redactLedgerEntry = (entry) => ({
+    ledgerId: entry.ledgerId,
+    bookingId: entry.bookingId,
+    usageEventId: entry.usageEventId,
+    startsAt: entry.startsAt?.toDate?.()?.toISOString?.() || entry.startsAt,
+    staffName: entry.staffName,
+    ticketName: entry.ticketName,
+    cumulativePrivateRound: entry.cumulativePrivateRound,
+    status: entry.status,
+  });
   return {
     ...row,
-    ledgerEntries: row.ledgerEntries.map((entry) => ({
-      ledgerId: entry.ledgerId,
-      bookingId: entry.bookingId,
-      usageEventId: entry.usageEventId,
-      startsAt: entry.startsAt?.toDate?.()?.toISOString?.() || entry.startsAt,
-      staffName: entry.staffName,
-      ticketName: entry.ticketName,
-      cumulativePrivateRound: entry.cumulativePrivateRound,
-      status: entry.status,
-    })),
+    ledgerEntries: row.ledgerEntries.map(redactLedgerEntry),
+    ledgerUpserts: row.ledgerUpserts.map(redactLedgerEntry),
   };
 }
 

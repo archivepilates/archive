@@ -7,13 +7,28 @@ import { nowTimestamp, todayKst } from "../utils/date";
 import { autoSendabilityIssue } from "./eligibility";
 import { rebuildAlimtalkCandidatesForRange } from "./rebuildAlimtalkCandidates";
 import { requireApprovalForLargeAlimtalkBatch } from "./approvalGate";
+import { privateSurveySendabilityIssue } from "./privateSurveySendGuard";
+import { renewalCandidateSendabilityIssue } from "./renewalSendGuard";
+import { selectDailyAlimtalkCandidates } from "./dailyCandidateSelection";
+import {
+  prepareInstructorLessonSampleApprovals,
+  splitInstructorLessonCandidates,
+  type InstructorLessonSampleApprovalSummary,
+} from "./instructorLessonSampleApproval";
 
 export async function queueDailyAlimtalkCandidates(
   input: {
     studioId?: string;
     today?: string;
   } = {},
-): Promise<{ rebuilt: number; queued: number; blocked: number; approvalRequired?: boolean; approvalId?: string }> {
+): Promise<{
+  rebuilt: number;
+  queued: number;
+  blocked: number;
+  approvalRequired?: boolean;
+  approvalId?: string;
+  instructorLessonSample?: InstructorLessonSampleApprovalSummary;
+}> {
   const studioId = input.studioId || DEFAULT_STUDIO_ID;
   const today = input.today || todayKst();
   const rebuilt = await rebuildAlimtalkCandidatesForRange({
@@ -23,20 +38,57 @@ export async function queueDailyAlimtalkCandidates(
   });
   const candidates = await listRebuiltCandidates(rebuilt.candidateIds, studioId);
 
-  const sendable: AlimtalkCandidateDoc[] = [];
+  let sendable: AlimtalkCandidateDoc[] = [];
   let blocked = 0;
   for (const candidate of candidates) {
-    if (
-      !["candidate", "reviewed", "failed"].includes(candidate.status) ||
-      (await autoSendabilityIssue(candidate, today))
-    ) {
+    if (!["candidate", "reviewed", "failed"].includes(candidate.status)) {
+      blocked += 1;
+      continue;
+    }
+    const autoIssue = await autoSendabilityIssue(candidate, today);
+    if (autoIssue) {
+      blocked += 1;
+      continue;
+    }
+    const privateSurveyIssue = await privateSurveySendabilityIssue(candidate);
+    if (privateSurveyIssue) {
+      await markDailyCandidateSkipped(candidate, "private_survey_booking_blocked", privateSurveyIssue);
+      blocked += 1;
+      continue;
+    }
+    const renewalIssue = await renewalCandidateSendabilityIssue(candidate);
+    if (renewalIssue) {
+      await markDailyCandidateSkipped(candidate, "renewal_source_recheck_blocked", renewalIssue);
       blocked += 1;
       continue;
     }
     sendable.push(candidate);
   }
 
-  const approval = await requireApprovalForLargeAlimtalkBatch({ studioId, today, candidates: sendable });
+  const selection = selectDailyAlimtalkCandidates(sendable);
+  sendable = selection.selected;
+  blocked += selection.suppressed.length;
+  await Promise.all(
+    selection.suppressed.map(({ candidate, reason }) =>
+      markDailyCandidateSkipped(candidate, "same_day_message_priority", reason),
+    ),
+  );
+
+  const split = splitInstructorLessonCandidates(sendable);
+  const instructorLessonSample = await prepareInstructorLessonSampleApprovals({
+    studioId,
+    sourceDate: today,
+    candidates: split.instructorLesson,
+  });
+  sendable = split.other;
+  blocked += split.instructorLesson.length;
+
+  const approval = await requireApprovalForLargeAlimtalkBatch({
+    studioId,
+    today,
+    candidates: sendable,
+    approvalScope: "daily",
+  });
   if (approval.required && !approval.approved) {
     logger.info("queueDailyAlimtalkCandidates awaiting approval", {
       studioId,
@@ -53,6 +105,7 @@ export async function queueDailyAlimtalkCandidates(
       blocked: blocked + sendable.length,
       approvalRequired: true,
       approvalId: approval.approvalId,
+      instructorLessonSample,
     };
   }
 
@@ -75,7 +128,24 @@ export async function queueDailyAlimtalkCandidates(
     blocked,
     approvalRequired: approval.required,
     approvalId: approval.approvalId,
+    instructorLessonSample,
   };
+}
+
+async function markDailyCandidateSkipped(
+  candidate: AlimtalkCandidateDoc,
+  reasonCode: string,
+  lastError: string,
+): Promise<void> {
+  await refs.alimtalkCandidate(candidate.candidateId).set(
+    {
+      status: "skipped",
+      reasonCode,
+      lastError,
+      updatedAt: nowTimestamp(),
+    },
+    { merge: true },
+  );
 }
 
 export async function queueReservationOpenAlimtalkCandidates(
@@ -108,7 +178,12 @@ export async function queueReservationOpenAlimtalkCandidates(
     sendable.push(candidate);
   }
 
-  const approval = await requireApprovalForLargeAlimtalkBatch({ studioId, today, candidates: sendable });
+  const approval = await requireApprovalForLargeAlimtalkBatch({
+    studioId,
+    today,
+    candidates: sendable,
+    approvalScope: "reservation_open",
+  });
   if (approval.required && !approval.approved) {
     logger.info("queueReservationOpenAlimtalkCandidates awaiting approval", {
       studioId,

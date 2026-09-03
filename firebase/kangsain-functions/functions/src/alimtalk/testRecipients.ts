@@ -1,8 +1,7 @@
 import type { AlimtalkCandidateDoc, MemberProfileDoc } from "../types/models";
 
 type AlimtalkRecipientLike = Partial<
-  Pick<AlimtalkCandidateDoc, "memberId" | "memberName" | "memberPhone"> &
-    Pick<MemberProfileDoc, "name" | "phone">
+  Pick<AlimtalkCandidateDoc, "memberId" | "memberName" | "memberPhone"> & Pick<MemberProfileDoc, "name" | "phone">
 >;
 
 const TEST_RECIPIENTS = [
@@ -17,12 +16,33 @@ const TEST_RECIPIENTS = [
 const TEST_MEMBER_IDS = new Set<string>(TEST_RECIPIENTS.map((recipient) => recipient.memberId));
 const TEST_PHONES = new Set<string>(TEST_RECIPIENTS.map((recipient) => normalizeRecipientPhone(recipient.phone)));
 
+export function primaryAlimtalkTestRecipient(): {
+  memberId: string;
+  name: string;
+  phone: string;
+  reason: string;
+} {
+  return { ...TEST_RECIPIENTS[0] };
+}
+
 export function isAlimtalkTestRecipient(input: AlimtalkRecipientLike): boolean {
   const memberId = String(input.memberId || "").trim();
   if (memberId && TEST_MEMBER_IDS.has(memberId)) return true;
   const phone = normalizeRecipientPhone(input.memberPhone || input.phone || "");
   const name = normalizeRecipientName(input.memberName || input.name || "");
   return Boolean(phone && TEST_PHONES.has(phone) && name === "김기효");
+}
+
+export function hasExplicitAlimtalkTestOverride(input: Partial<AlimtalkCandidateDoc>): boolean {
+  if (!isAlimtalkTestRecipient(input)) return false;
+  const reviewedByUid = String(input.reviewedByUid || "").trim();
+  const payload = input.payload || {};
+  return (
+    input.queuedBy === "operator" ||
+    Boolean(reviewedByUid && !reviewedByUid.startsWith("system:")) ||
+    payload.deliveryMode === "sample" ||
+    payload.testRecipientOverride === "approved"
+  );
 }
 
 export function alimtalkTestRecipientReason(input: AlimtalkRecipientLike): string {
@@ -43,5 +63,7 @@ export function normalizeRecipientPhone(value: string): string {
 }
 
 function normalizeRecipientName(value: string): string {
-  return String(value || "").replace(/\s+/g, "").trim();
+  return String(value || "")
+    .replace(/\s+/g, "")
+    .trim();
 }

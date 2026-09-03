@@ -22,19 +22,79 @@ if (selectedSurfaces.includes("archivein")) {
       "ARCHIVE CORE",
     ]),
     textCheck("private-chart-upload-custom-domain", "https://in.archivepilates.com/private-chart/", [
-      "수업 사진·영상",
+      "프라이빗 오늘 기록",
+      "기록 저장 · 리포트 확인",
+      "선택 기록",
       "uploadMediaFileDirect",
       "completeMediaUpload",
       "Drive 직접 업로드 중",
       "focusMediaUploadPanelIfRequested",
     ]),
     textCheck("private-chart-upload-webapp-path", "https://archive-pilates.web.app/archivein/private-chart/", [
-      "수업 사진·영상",
+      "프라이빗 오늘 기록",
+      "기록 저장 · 리포트 확인",
+      "선택 기록",
       "uploadMediaFileDirect",
       "completeMediaUpload",
       "Drive 직접 업로드 중",
       "focusMediaUploadPanelIfRequested",
     ]),
+    textCheck("private-survey-form-custom-domain", "https://in.archivepilates.com/privateSurvey/", [
+      "ARCHIVE PILATES 프라이빗 사전설문",
+      "surveyForm",
+      "api/privateSurveySubmit",
+    ]),
+    textCheck("private-survey-form-webapp-path", "https://archive-pilates.web.app/archivein/privateSurvey/", [
+      "ARCHIVE PILATES 프라이빗 사전설문",
+      "surveyForm",
+      "api/privateSurveySubmit",
+    ]),
+    statusCheck("private-survey-api-custom-domain", "https://in.archivepilates.com/api/privateSurveySubmit", [403]),
+    statusCheck("private-survey-api-webapp-path", "https://archive-pilates.web.app/archivein/api/privateSurveySubmit", [403]),
+    textCheck("recommended-meal-survey-custom-domain", "https://in.archivepilates.com/recommendedMealSurvey/", [
+      "ARCHIVE PILATES 추천식단 프로그램",
+      "mealSurveyForm",
+      "api/recommendedMealSurvey",
+      ".option:has(input:checked)",
+      "min-height: 46px",
+    ]),
+    textCheck(
+      "recommended-meal-survey-webapp-path",
+      "https://archive-pilates.web.app/archivein/recommendedMealSurvey/",
+      [
+        "ARCHIVE PILATES 추천식단 프로그램",
+        "mealSurveyForm",
+        "api/recommendedMealSurvey",
+        ".option:has(input:checked)",
+        "min-height: 46px",
+      ],
+    ),
+    textCheck("method-breathing-cue-card-custom-domain", "https://in.archivepilates.com/method/breathing-260627/", [
+      "호흡 큐카드 | ARCHIVE METHOD",
+      "ARCHIVE METHOD VIDEO",
+      "ARCHIVE PILATES 홈페이지 가입하기",
+      "archivepilates.imweb.me/?mode=join",
+    ]),
+    textCheck("method-breathing-cue-card-webapp-path", "https://archive-pilates.web.app/archivein/method/breathing-260627/", [
+      "호흡 큐카드 | ARCHIVE METHOD",
+      "ARCHIVE METHOD VIDEO",
+      "ARCHIVE PILATES 홈페이지 가입하기",
+      "archivepilates.imweb.me/?mode=join",
+    ]),
+    textCheck("method-pelvis-hip-cue-card-custom-domain", "https://in.archivepilates.com/method/pelvis-hip-260725/", [
+      "골반.고관절 큐카드 | ARCHIVE METHOD",
+      "ARCHIVE METHOD VIDEO",
+      "ARCHIVE PILATES 홈페이지 가입하기",
+      "archivepilates.imweb.me/?mode=join",
+    ]),
+    textCheck("method-pelvis-hip-cue-card-webapp-path", "https://archive-pilates.web.app/archivein/method/pelvis-hip-260725/", [
+      "골반.고관절 큐카드 | ARCHIVE METHOD",
+      "ARCHIVE METHOD VIDEO",
+      "ARCHIVE PILATES 홈페이지 가입하기",
+      "archivepilates.imweb.me/?mode=join",
+    ]),
+    statusCheck("method-cue-card-review-api-custom-domain", "https://in.archivepilates.com/api/methodCueCardReview", [405]),
+    statusCheck("method-cue-card-review-api-webapp-path", "https://archive-pilates.web.app/archivein/api/methodCueCardReview", [405]),
     textCheck("archivein-service-worker-cache-clear-custom-domain", "https://in.archivepilates.com/sw.js", [
       "LEGACY_CACHE_PREFIX",
       "caches.delete",
@@ -48,31 +108,99 @@ if (selectedSurfaces.includes("archivein")) {
 
 if (selectedSurfaces.includes("core")) {
   checks.push(
-    jsonCheck("core-release-custom-domain", "https://core.archivepilates.com/release.json", (json) => json?.source?.head === expectedSha),
-    jsonCheck("core-release-webapp-path", "https://archive-pilates.web.app/core/release.json", (json) => json?.source?.head === expectedSha),
+    jsonCheck(
+      "core-release-custom-domain",
+      "https://core.archivepilates.com/release.json",
+      (json) => json?.source?.head === expectedSha && json?.runtimeContractVersion === "2026-08-01.1",
+    ),
+    jsonCheck(
+      "core-release-webapp-path",
+      "https://archive-pilates.web.app/core/release.json",
+      (json) => json?.source?.head === expectedSha && json?.runtimeContractVersion === "2026-08-01.1",
+    ),
     textCheck("core-home-actions-custom-domain", "https://core.archivepilates.com/", [
-      "homeActionTotal",
-      "수강료 문의 즉시발송",
+      "오늘 처리할 일",
+      "homeDecisionList",
+      "renewalPipelineList",
+      "parkingRegistrationForm",
+      "수강료 문의",
       "pricingInquiryForm",
       "pricingInquiryHistoryPanel",
+      "recommendedMealProgramForm",
+      "recommendedMealHistoryPanel",
     ]),
     textCheck("core-home-actions-webapp-path", "https://archive-pilates.web.app/core/", [
-      "homeActionTotal",
-      "수강료 문의 즉시발송",
+      "오늘 처리할 일",
+      "homeDecisionList",
+      "renewalPipelineList",
+      "parkingRegistrationForm",
+      "수강료 문의",
       "pricingInquiryForm",
       "pricingInquiryHistoryPanel",
+      "recommendedMealProgramForm",
+      "recommendedMealHistoryPanel",
     ]),
     textCheck("core-app-bundle-custom-domain", "https://core.archivepilates.com/assets/app.js", [
       "pricingInquiryAlimtalkRequests",
+      "recommendedMealProgramRequests",
+      "operatorSendRecommendedMealProgramAlimtalk",
       "pendingPrivateProgressRows",
       "privateInstructorPendingList",
-      "homeActionTotal",
+      "commandQueueStatus",
+      "renewalCases",
+      "handleRenewalActionClick",
+      "SECONDARY_NAV_SECTIONS",
+      "removeParkingVehicle",
+      "data-parking-vehicle-id",
+      "CORE_RUNTIME_CONTRACT_VERSION",
+      "renderReadHealth",
+      "getBookingsForLessonWindow",
+      "deriveLessonOccurrencesFromBookings",
+      "normalizedLessonKind",
+      "operatorLifecycle",
+      "data-renewal-action=\"excluded\"",
+      "재등록 의사 없음",
+      "alimtalkTemplateTitle",
+      "강사용 프라이빗 오늘 기록 안내 v4",
+      "privateLessonSessions",
+      '["recording", "기록 대기"',
+      '"delivered", "전달 완료"',
     ]),
     textCheck("core-app-bundle-webapp-path", "https://archive-pilates.web.app/core/assets/app.js", [
       "pricingInquiryAlimtalkRequests",
+      "recommendedMealProgramRequests",
+      "operatorSendRecommendedMealProgramAlimtalk",
       "pendingPrivateProgressRows",
       "privateInstructorPendingList",
-      "homeActionTotal",
+      "commandQueueStatus",
+      "renewalCases",
+      "handleRenewalActionClick",
+      "SECONDARY_NAV_SECTIONS",
+      "removeParkingVehicle",
+      "data-parking-vehicle-id",
+      "CORE_RUNTIME_CONTRACT_VERSION",
+      "renderReadHealth",
+      "getBookingsForLessonWindow",
+      "deriveLessonOccurrencesFromBookings",
+      "normalizedLessonKind",
+      "operatorLifecycle",
+      "privateLessonSessions",
+      '["recording", "기록 대기"',
+      '"delivered", "전달 완료"',
+    ]),
+    textCheck("core-rules-recommended-meal-custom-domain", "https://core.archivepilates.com/rules/", [
+      "2026.08.04 기준",
+      "아카이브 추천식단 프로그램 v2",
+      "추천식단 확인",
+      "강사용 프라이빗 오늘 기록 안내 v4",
+      "APPROVED·BA·IMAGE",
+    ]),
+    textCheck("core-rules-recommended-meal-webapp-path", "https://archive-pilates.web.app/core/rules/", [
+      "2026.08.04 기준",
+      "아카이브 추천식단 프로그램 v2",
+      "추천식단 확인",
+      "강사용 프라이빗 오늘 기록 안내 v4",
+      "APPROVED·BA·IMAGE",
     ]),
   );
 }
@@ -113,6 +241,17 @@ async function runCheck(check) {
       redirect: "follow",
     });
     const body = await response.text();
+    if (check.type === "status") {
+      const ok = check.statuses.includes(response.status);
+      return {
+        id: check.id,
+        url: check.url,
+        ok,
+        status: response.status,
+        expectedStatuses: check.statuses,
+        reason: ok ? undefined : "unexpected_status",
+      };
+    }
     if (!response.ok) {
       return { id: check.id, url: check.url, ok: false, status: response.status, reason: "http_status" };
     }
@@ -146,6 +285,10 @@ function jsonCheck(id, url, predicate) {
 
 function textCheck(id, url, markers) {
   return { id, url, type: "text", markers };
+}
+
+function statusCheck(id, url, statuses) {
+  return { id, url, type: "status", statuses };
 }
 
 function withCacheBust(url) {

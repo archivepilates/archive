@@ -1,44 +1,93 @@
 import { createHmac, randomBytes } from "node:crypto";
 import { logger } from "firebase-functions";
 import { db } from "../config/firebase";
-import { notionToken, solapiApiKey, solapiApiSecret, solapiPfid } from "../config/secrets";
+import { solapiApiKey, solapiApiSecret, solapiPfid } from "../config/secrets";
 import { refs } from "../firestore/refs";
-import type { AlimtalkCandidateDoc } from "../types/models";
+import type {
+  AlimtalkCandidateDoc,
+  BookingDoc,
+  PrivateLessonChartRecordDoc,
+  PrivateLessonChartRequestDoc,
+} from "../types/models";
 import { errorMessage } from "../utils/errors";
 import { nowTimestamp, todayKst } from "../utils/date";
 import { ensureShortLink } from "../utils/shortLinks";
 import { ALIMTALK_TEMPLATE_CHANNEL_IDS, alimtalkDedupePolicy } from "./templates";
-import { autoSendabilityIssue } from "./eligibility";
+import { autoSendabilityIssue, isRetryableTemplateStatusIssue } from "./eligibility";
 import { alimtalkDedupeKey, findCompletedDuplicateForCandidate, normalizePhone } from "./dedupe";
 import { isAlimtalkTemplateApproved } from "./templateStatus";
 import { normalizeInstructorLessonManagementNumber } from "./instructorLessonManagement";
-import { isAlimtalkTestRecipient } from "./testRecipients";
+import { genericInstructorLessonQueueBlock } from "./instructorLessonDeliveryGuard";
+import { hasExplicitAlimtalkTestOverride } from "./testRecipients";
+import { currentPrivateLessonReportRevision } from "../privateLessonChart/privateLessonReportRevision";
+import { privateSurveySendabilityIssue } from "./privateSurveySendGuard";
+import { renewalCandidateSendabilityIssue } from "./renewalSendGuard";
+import { longAbsenceCandidateSendabilityIssue } from "./longAbsenceSendGuard";
+import {
+  RECOMMENDED_MEAL_DRAFT_COLLECTION,
+  RECOMMENDED_MEAL_REPORT_COLLECTION,
+} from "../mealPlan/recommendedMealProgram";
+import { RECOMMENDED_MEAL_REQUEST_COLLECTION } from "../mealPlan/recommendedMealSurvey";
+import {
+  instructorLessonConfirmationSendabilityIssue,
+  syncInstructorLessonConfirmationOutcome,
+} from "../instructorLessonRegistration/instructorLessonConfirmation";
 
 const SOLAPI_SEND_URL = "https://api.solapi.com/messages/v4/send-many/detail";
-const NOTION_API_VERSION = "2022-06-28";
 const PROCESSING_STALE_MS = 10 * 60 * 1000;
+const RECOMMENDED_MEAL_ALREADY_SENT = "추천식단 이미 발송 완료";
 
 export interface AlimtalkCandidateProcessResult {
   processed: boolean;
-  status: "not_found" | "not_claimed" | "sent" | "skipped" | "failed";
+  status: "not_found" | "not_claimed" | "sent" | "skipped" | "deferred" | "failed";
   lastError?: string | null;
   solapiMessageId?: string;
 }
 
-export async function processAlimtalkQueue(): Promise<{ processed: number; sent: number; failed: number }> {
+export async function processAlimtalkQueue(): Promise<{
+  processed: number;
+  sent: number;
+  failed: number;
+  deferred: number;
+}> {
   const snap = await refs.alimtalkCandidates().where("status", "in", ["queued", "processing"]).limit(20).get();
 
   let processed = 0;
   let sent = 0;
   let failed = 0;
+  let deferred = 0;
 
   for (const candidateSnap of snap.docs) {
     const claimed = await claimCandidate(candidateSnap.data());
     if (!claimed) continue;
     processed += 1;
     try {
+      await safeSyncInstructorLessonConfirmationOutcome(claimed, { status: "processing" });
+      const instructorLessonBlock = genericInstructorLessonQueueBlock(claimed);
+      if (instructorLessonBlock) {
+        await refs.alimtalkCandidate(claimed.candidateId).set(
+          {
+            ...instructorLessonBlock,
+            maxAttempts: 1,
+            updatedAt: nowTimestamp(),
+          },
+          { merge: true },
+        );
+        if (instructorLessonBlock.status === "failed") failed += 1;
+        continue;
+      }
       const sendabilityIssue = await autoSendabilityIssue(claimed, todayKst());
       if (sendabilityIssue) {
+        if (isRetryableTemplateStatusIssue(sendabilityIssue)) {
+          await deferCandidateForTemplateStatus(claimed, sendabilityIssue);
+          await safeSyncInstructorLessonConfirmationOutcome(claimed, {
+            status: "queued",
+            reasonCode: "template_status_retry",
+            detail: sendabilityIssue,
+          });
+          deferred += 1;
+          continue;
+        }
         await refs.alimtalkCandidate(claimed.candidateId).set(
           {
             status: "skipped",
@@ -48,11 +97,73 @@ export async function processAlimtalkQueue(): Promise<{ processed: number; sent:
           },
           { merge: true },
         );
+        await safeSyncInstructorLessonConfirmationOutcome(claimed, {
+          status: "skipped",
+          reasonCode: "auto_sendability_blocked",
+          detail: sendabilityIssue,
+        });
+        continue;
+      }
+      const privateSurveyIssue = await privateSurveySendabilityIssue(claimed);
+      if (privateSurveyIssue) {
+        await refs.alimtalkCandidate(claimed.candidateId).set(
+          {
+            status: "skipped",
+            reasonCode: "private_survey_booking_blocked",
+            lastError: privateSurveyIssue,
+            updatedAt: nowTimestamp(),
+          },
+          { merge: true },
+        );
+        continue;
+      }
+      const renewalIssue = await renewalCandidateSendabilityIssue(claimed);
+      if (renewalIssue) {
+        await refs.alimtalkCandidate(claimed.candidateId).set(
+          {
+            status: "skipped",
+            reasonCode: "renewal_source_recheck_blocked",
+            lastError: renewalIssue,
+            updatedAt: nowTimestamp(),
+          },
+          { merge: true },
+        );
+        continue;
+      }
+      const longAbsenceIssue = await longAbsenceCandidateSendabilityIssue(claimed);
+      if (longAbsenceIssue) {
+        await refs.alimtalkCandidate(claimed.candidateId).set(
+          {
+            status: "skipped",
+            reasonCode: "long_absence_source_recheck_blocked",
+            lastError: longAbsenceIssue,
+            updatedAt: nowTimestamp(),
+          },
+          { merge: true },
+        );
+        continue;
+      }
+      const instructorLessonConfirmationIssue = await instructorLessonConfirmationSendabilityIssue(claimed);
+      if (instructorLessonConfirmationIssue) {
+        await refs.alimtalkCandidate(claimed.candidateId).set(
+          {
+            status: "skipped",
+            reasonCode: "instructor_lesson_confirmation_source_blocked",
+            lastError: instructorLessonConfirmationIssue,
+            updatedAt: nowTimestamp(),
+          },
+          { merge: true },
+        );
+        await safeSyncInstructorLessonConfirmationOutcome(claimed, {
+          status: "skipped",
+          reasonCode: "instructor_lesson_confirmation_source_blocked",
+          detail: instructorLessonConfirmationIssue,
+        });
         continue;
       }
       const dedupeKey = alimtalkDedupeKey(claimed);
       const dedupePolicy = alimtalkDedupePolicy(claimed.templateCode);
-      const duplicate = isAlimtalkTestRecipient(claimed)
+      const duplicate = hasExplicitAlimtalkTestOverride(claimed)
         ? ""
         : await findCompletedDuplicateForCandidate(claimed, dedupeKey, dedupePolicy.windowDays);
       if (duplicate) {
@@ -62,6 +173,58 @@ export async function processAlimtalkQueue(): Promise<{ processed: number; sent:
             dedupeKey,
             reasonCode: "duplicate_send_blocked",
             lastError: `중복 발송 차단(${dedupePolicy.label}): ${duplicate}`,
+            updatedAt: nowTimestamp(),
+          },
+          { merge: true },
+        );
+        await safeSyncInstructorLessonConfirmationOutcome(claimed, {
+          status: "skipped",
+          reasonCode: "duplicate_send_blocked",
+          detail: `기존 성공 발송 확인: ${duplicate}`,
+        });
+        continue;
+      }
+      const privateReportIssue = await lockPrivateLessonReportForSend(claimed);
+      if (privateReportIssue) {
+        await markPrivateLessonReportFailed(claimed, privateReportIssue);
+        await refs.alimtalkCandidate(claimed.candidateId).set(
+          {
+            status: "skipped",
+            reasonCode: "private_report_revision_blocked",
+            lastError: privateReportIssue,
+            updatedAt: nowTimestamp(),
+          },
+          { merge: true },
+        );
+        continue;
+      }
+      const finalPrivateReportIssue = await finalPrivateLessonReportSendabilityIssue(claimed);
+      if (finalPrivateReportIssue) {
+        await markPrivateLessonReportFailed(claimed, finalPrivateReportIssue);
+        await refs.alimtalkCandidate(claimed.candidateId).set(
+          {
+            status: "skipped",
+            reasonCode: "private_report_final_guard_blocked",
+            lastError: finalPrivateReportIssue,
+            updatedAt: nowTimestamp(),
+          },
+          { merge: true },
+        );
+        continue;
+      }
+      const mealReportIssue = await recommendedMealReportSendabilityIssue(claimed);
+      if (mealReportIssue) {
+        if (mealReportIssue !== RECOMMENDED_MEAL_ALREADY_SENT) {
+          await markRecommendedMealReportFailed(claimed, mealReportIssue);
+        }
+        await refs.alimtalkCandidate(claimed.candidateId).set(
+          {
+            status: "skipped",
+            reasonCode:
+              mealReportIssue === RECOMMENDED_MEAL_ALREADY_SENT
+                ? "recommended_meal_already_sent"
+                : "recommended_meal_revision_blocked",
+            lastError: mealReportIssue,
             updatedAt: nowTimestamp(),
           },
           { merge: true },
@@ -99,6 +262,7 @@ export async function processAlimtalkQueue(): Promise<{ processed: number; sent:
           maxAttempts: 1,
           nextRunAt: nowTimestamp(),
           solapiMessageId: result.messageId,
+          variables: result.variables,
           lastError: null,
           createdByUid: claimed.reviewedByUid || "system",
           createdAt: nowTimestamp(),
@@ -107,9 +271,17 @@ export async function processAlimtalkQueue(): Promise<{ processed: number; sent:
         { merge: true },
       );
       await markPrivateLessonReportSent(claimed);
+      await markRecommendedMealReportSent(claimed);
+      await safeSyncInstructorLessonConfirmationOutcome(claimed, {
+        status: "sent",
+        solapiMessageId: result.messageId,
+        detail: "강사레슨 예약확정 안내 발송 완료",
+      });
       sent += 1;
     } catch (err) {
       const message = errorMessage(err);
+      await markPrivateLessonReportFailed(claimed, message);
+      await markRecommendedMealReportFailed(claimed, message);
       const attempts = (claimed.attempts || 0) + 1;
       const maxAttempts = claimed.maxAttempts || 2;
       await refs.alimtalkCandidate(claimed.candidateId).set(
@@ -145,6 +317,10 @@ export async function processAlimtalkQueue(): Promise<{ processed: number; sent:
         },
         { merge: true },
       );
+      await safeSyncInstructorLessonConfirmationOutcome(claimed, {
+        status: "failed",
+        detail: message,
+      });
       failed += 1;
       logger.warn("processAlimtalkQueue send failed", {
         candidateId: claimed.candidateId,
@@ -154,8 +330,8 @@ export async function processAlimtalkQueue(): Promise<{ processed: number; sent:
     }
   }
 
-  logger.info("processAlimtalkQueue completed", { processed, sent, failed });
-  return { processed, sent, failed };
+  logger.info("processAlimtalkQueue completed", { processed, sent, failed, deferred });
+  return { processed, sent, failed, deferred };
 }
 
 export async function processAlimtalkCandidate(candidateId: string): Promise<AlimtalkCandidateProcessResult> {
@@ -166,8 +342,34 @@ export async function processAlimtalkCandidate(candidateId: string): Promise<Ali
   if (!claimed) return { processed: false, status: "not_claimed", lastError: "알림톡 후보를 처리할 수 없습니다" };
 
   try {
+    await safeSyncInstructorLessonConfirmationOutcome(claimed, { status: "processing" });
+    const instructorLessonBlock = genericInstructorLessonQueueBlock(claimed);
+    if (instructorLessonBlock) {
+      await refs.alimtalkCandidate(claimed.candidateId).set(
+        {
+          ...instructorLessonBlock,
+          maxAttempts: 1,
+          updatedAt: nowTimestamp(),
+        },
+        { merge: true },
+      );
+      return {
+        processed: true,
+        status: instructorLessonBlock.status,
+        lastError: instructorLessonBlock.lastError,
+      };
+    }
     const sendabilityIssue = await autoSendabilityIssue(claimed, todayKst());
     if (sendabilityIssue) {
+      if (isRetryableTemplateStatusIssue(sendabilityIssue)) {
+        await deferCandidateForTemplateStatus(claimed, sendabilityIssue);
+        await safeSyncInstructorLessonConfirmationOutcome(claimed, {
+          status: "queued",
+          reasonCode: "template_status_retry",
+          detail: sendabilityIssue,
+        });
+        return { processed: true, status: "deferred", lastError: sendabilityIssue };
+      }
       await refs.alimtalkCandidate(claimed.candidateId).set(
         {
           status: "skipped",
@@ -177,12 +379,64 @@ export async function processAlimtalkCandidate(candidateId: string): Promise<Ali
         },
         { merge: true },
       );
+      await safeSyncInstructorLessonConfirmationOutcome(claimed, {
+        status: "skipped",
+        reasonCode: "auto_sendability_blocked",
+        detail: sendabilityIssue,
+      });
       return { processed: true, status: "skipped", lastError: sendabilityIssue };
+    }
+
+    const privateSurveyIssue = await privateSurveySendabilityIssue(claimed);
+    if (privateSurveyIssue) {
+      await refs.alimtalkCandidate(claimed.candidateId).set(
+        {
+          status: "skipped",
+          reasonCode: "private_survey_booking_blocked",
+          lastError: privateSurveyIssue,
+          updatedAt: nowTimestamp(),
+        },
+        { merge: true },
+      );
+      return { processed: true, status: "skipped", lastError: privateSurveyIssue };
+    }
+
+    const renewalIssue = await renewalCandidateSendabilityIssue(claimed);
+    if (renewalIssue) {
+      await refs.alimtalkCandidate(claimed.candidateId).set(
+        {
+          status: "skipped",
+          reasonCode: "renewal_source_recheck_blocked",
+          lastError: renewalIssue,
+          updatedAt: nowTimestamp(),
+        },
+        { merge: true },
+      );
+      return { processed: true, status: "skipped", lastError: renewalIssue };
+    }
+
+    const instructorLessonConfirmationIssue = await instructorLessonConfirmationSendabilityIssue(claimed);
+    if (instructorLessonConfirmationIssue) {
+      await refs.alimtalkCandidate(claimed.candidateId).set(
+        {
+          status: "skipped",
+          reasonCode: "instructor_lesson_confirmation_source_blocked",
+          lastError: instructorLessonConfirmationIssue,
+          updatedAt: nowTimestamp(),
+        },
+        { merge: true },
+      );
+      await safeSyncInstructorLessonConfirmationOutcome(claimed, {
+        status: "skipped",
+        reasonCode: "instructor_lesson_confirmation_source_blocked",
+        detail: instructorLessonConfirmationIssue,
+      });
+      return { processed: true, status: "skipped", lastError: instructorLessonConfirmationIssue };
     }
 
     const dedupeKey = alimtalkDedupeKey(claimed);
     const dedupePolicy = alimtalkDedupePolicy(claimed.templateCode);
-    const duplicate = isAlimtalkTestRecipient(claimed)
+    const duplicate = hasExplicitAlimtalkTestOverride(claimed)
       ? ""
       : await findCompletedDuplicateForCandidate(claimed, dedupeKey, dedupePolicy.windowDays);
     if (duplicate) {
@@ -197,9 +451,61 @@ export async function processAlimtalkCandidate(candidateId: string): Promise<Ali
         },
         { merge: true },
       );
+      await safeSyncInstructorLessonConfirmationOutcome(claimed, {
+        status: "skipped",
+        reasonCode: "duplicate_send_blocked",
+        detail: `기존 성공 발송 확인: ${duplicate}`,
+      });
       return { processed: true, status: "skipped", lastError };
     }
 
+    const privateReportIssue = await lockPrivateLessonReportForSend(claimed);
+    if (privateReportIssue) {
+      await markPrivateLessonReportFailed(claimed, privateReportIssue);
+      await refs.alimtalkCandidate(claimed.candidateId).set(
+        {
+          status: "skipped",
+          reasonCode: "private_report_revision_blocked",
+          lastError: privateReportIssue,
+          updatedAt: nowTimestamp(),
+        },
+        { merge: true },
+      );
+      return { processed: true, status: "skipped", lastError: privateReportIssue };
+    }
+    const finalPrivateReportIssue = await finalPrivateLessonReportSendabilityIssue(claimed);
+    if (finalPrivateReportIssue) {
+      await markPrivateLessonReportFailed(claimed, finalPrivateReportIssue);
+      await refs.alimtalkCandidate(claimed.candidateId).set(
+        {
+          status: "skipped",
+          reasonCode: "private_report_final_guard_blocked",
+          lastError: finalPrivateReportIssue,
+          updatedAt: nowTimestamp(),
+        },
+        { merge: true },
+      );
+      return { processed: true, status: "skipped", lastError: finalPrivateReportIssue };
+    }
+    const mealReportIssue = await recommendedMealReportSendabilityIssue(claimed);
+    if (mealReportIssue) {
+      if (mealReportIssue !== RECOMMENDED_MEAL_ALREADY_SENT) {
+        await markRecommendedMealReportFailed(claimed, mealReportIssue);
+      }
+      await refs.alimtalkCandidate(claimed.candidateId).set(
+        {
+          status: "skipped",
+          reasonCode:
+            mealReportIssue === RECOMMENDED_MEAL_ALREADY_SENT
+              ? "recommended_meal_already_sent"
+              : "recommended_meal_revision_blocked",
+          lastError: mealReportIssue,
+          updatedAt: nowTimestamp(),
+        },
+        { merge: true },
+      );
+      return { processed: true, status: "skipped", lastError: mealReportIssue };
+    }
     const attempts = (claimed.attempts || 0) + 1;
     const result = await sendSolapiAlimtalk(claimed);
     await refs.alimtalkCandidate(claimed.candidateId).set(
@@ -231,6 +537,7 @@ export async function processAlimtalkCandidate(candidateId: string): Promise<Ali
         maxAttempts: claimed.maxAttempts || 2,
         nextRunAt: nowTimestamp(),
         solapiMessageId: result.messageId,
+        variables: result.variables,
         lastError: null,
         createdByUid: claimed.reviewedByUid || "system",
         createdAt: nowTimestamp(),
@@ -239,9 +546,17 @@ export async function processAlimtalkCandidate(candidateId: string): Promise<Ali
       { merge: true },
     );
     await markPrivateLessonReportSent(claimed);
+    await markRecommendedMealReportSent(claimed);
+    await safeSyncInstructorLessonConfirmationOutcome(claimed, {
+      status: "sent",
+      solapiMessageId: result.messageId,
+      detail: "강사레슨 예약확정 안내 발송 완료",
+    });
     return { processed: true, status: "sent", solapiMessageId: result.messageId };
   } catch (err) {
     const message = errorMessage(err);
+    await markPrivateLessonReportFailed(claimed, message);
+    await markRecommendedMealReportFailed(claimed, message);
     const attempts = (claimed.attempts || 0) + 1;
     const maxAttempts = claimed.maxAttempts || 2;
     await refs.alimtalkCandidate(claimed.candidateId).set(
@@ -277,6 +592,10 @@ export async function processAlimtalkCandidate(candidateId: string): Promise<Ali
       },
       { merge: true },
     );
+    await safeSyncInstructorLessonConfirmationOutcome(claimed, {
+      status: "failed",
+      detail: message,
+    });
     logger.warn("processAlimtalkCandidate send failed", {
       candidateId: claimed.candidateId,
       templateCode: claimed.templateCode,
@@ -286,60 +605,281 @@ export async function processAlimtalkCandidate(candidateId: string): Promise<Ali
   }
 }
 
+async function deferCandidateForTemplateStatus(candidate: AlimtalkCandidateDoc, issue: string): Promise<void> {
+  await refs.alimtalkCandidate(candidate.candidateId).set(
+    {
+      status: "queued",
+      reasonCode: "template_status_retry",
+      lastError: issue,
+      updatedAt: nowTimestamp(),
+    },
+    { merge: true },
+  );
+}
+
 async function markPrivateLessonReportSent(candidate: AlimtalkCandidateDoc): Promise<void> {
   if (candidate.type !== "private_lesson_report") return;
   const recordId = String(candidate.payload?.recordId || candidate.sourceActionKey || "").trim();
-  const notionPageId = String(candidate.payload?.notionPageId || "").trim();
+  const reportRevision = String(candidate.payload?.reportRevision || "").trim();
   const sentAt = nowTimestamp();
   if (recordId) {
-    await refs.privateLessonChartRecord(recordId).set(
-      {
-        gptStatus: "published",
-        publicReportApproval: {
-          status: "sent",
-          candidateId: candidate.candidateId,
-          lastError: null,
+    await db.runTransaction(async (tx) => {
+      const ref = refs.privateLessonChartRecord(recordId);
+      const snap = await tx.get(ref);
+      const record = snap.data();
+      if (!record) return;
+      const snapshot =
+        reportRevision && record.approvedReportSnapshot?.revision === reportRevision
+          ? record.approvedReportSnapshot
+          : record.approvedReportSnapshot || null;
+      tx.set(
+        ref,
+        {
+          gptStatus: "published",
+          sentRevision: reportRevision || record.approvedRevision || "",
+          sentReportSnapshot: snapshot,
+          publicReportApproval: {
+            ...(record.publicReportApproval || {}),
+            status: "sent",
+            candidateId: candidate.candidateId,
+            sentAt,
+            lastError: null,
+          },
+          notionSync: {
+            ...(record.notionSync || {}),
+            status: "pending",
+            error: "",
+          },
+          updatedAt: sentAt,
         },
-        updatedAt: sentAt,
-      },
-      { merge: true },
-    );
-  }
-  if (notionPageId) {
-    await updatePrivateLessonReportNotionStatus(notionPageId, "완료").catch((err) => {
-      logger.warn("private lesson report notion sent status update failed", {
-        candidateId: candidate.candidateId,
-        recordId,
-        notionPageId,
-        message: errorMessage(err),
-      });
+        { merge: true },
+      );
     });
   }
 }
 
-async function updatePrivateLessonReportNotionStatus(pageId: string, status: string): Promise<void> {
-  await notionRequest(`pages/${pageId}`, "PATCH", {
-    properties: {
-      발송: { checkbox: true },
-      발송상태: { select: { name: status } },
-    },
+async function recommendedMealReportSendabilityIssue(candidate: AlimtalkCandidateDoc): Promise<string> {
+  if (candidate.type !== "recommended_meal_report") return "";
+  const reportId = String(candidate.payload?.reportId || candidate.sourceActionKey || "").trim();
+  const revision = String(candidate.payload?.reportRevision || "").trim();
+  if (!reportId || !revision) return "추천식단 reportId 또는 revision 없음";
+  const [reportSnap, draftSnap] = await Promise.all([
+    db.collection(RECOMMENDED_MEAL_REPORT_COLLECTION).doc(reportId).get(),
+    db.collection(RECOMMENDED_MEAL_DRAFT_COLLECTION).doc(reportId).get(),
+  ]);
+  const report = reportSnap.data();
+  const draft = draftSnap.data();
+  if (!report || !draft) return "추천식단 승인 문서 없음";
+  if (report.publicationStatus === "sent") return RECOMMENDED_MEAL_ALREADY_SENT;
+  if (report.approvalStatus !== "approved") return "추천식단 운영자 승인 없음";
+  if (String(report.approvedRevision || "") !== revision) return "추천식단 승인 revision 불일치";
+  if (String(report.reportRevision || "") !== revision) return "추천식단 현재 revision 불일치";
+  if (String(draft.revision || "") !== revision) return "추천식단 초안 revision 변경됨";
+  if (String(report.approvedSnapshot?.revision || "") !== revision) return "추천식단 승인 스냅샷 불일치";
+  if (!candidate.payload?.shortLinkId) return "추천식단 짧은 링크 없음";
+  return "";
+}
+
+async function markRecommendedMealReportSent(candidate: AlimtalkCandidateDoc): Promise<void> {
+  if (candidate.type !== "recommended_meal_report") return;
+  const reportId = String(candidate.payload?.reportId || candidate.sourceActionKey || "").trim();
+  const revision = String(candidate.payload?.reportRevision || "").trim();
+  if (!reportId) return;
+  const sentAt = nowTimestamp();
+  await db.runTransaction(async (tx) => {
+    const reportRef = db.collection(RECOMMENDED_MEAL_REPORT_COLLECTION).doc(reportId);
+    const requestRef = db.collection(RECOMMENDED_MEAL_REQUEST_COLLECTION).doc(reportId);
+    const reportSnap = await tx.get(reportRef);
+    const report = reportSnap.data();
+    if (!report || String(report.approvedRevision || "") !== revision) return;
+    tx.set(
+      reportRef,
+      {
+        sentRevision: revision,
+        sentSnapshot: report.approvedSnapshot || null,
+        approvalStatus: "sent",
+        publicationStatus: "sent",
+        sentAt,
+        lastError: null,
+        updatedAt: sentAt,
+      },
+      { merge: true },
+    );
+    tx.set(requestRef, { recommendationStatus: "sent", completedAt: sentAt, updatedAt: sentAt }, { merge: true });
   });
 }
 
-async function notionRequest(path: string, method: "GET" | "POST" | "PATCH" | "DELETE", body?: Record<string, unknown>): Promise<any> {
-  const response = await fetch(`https://api.notion.com/v1/${path}`, {
-    method,
-    headers: {
-      Authorization: `Bearer ${notionToken.value()}`,
-      "Content-Type": "application/json",
-      "Notion-Version": NOTION_API_VERSION,
-    },
-    body: body ? JSON.stringify(body) : undefined,
+async function markRecommendedMealReportFailed(candidate: AlimtalkCandidateDoc, message: string): Promise<void> {
+  if (candidate.type !== "recommended_meal_report") return;
+  const reportId = String(candidate.payload?.reportId || candidate.sourceActionKey || "").trim();
+  if (!reportId) return;
+  await db
+    .collection(RECOMMENDED_MEAL_REPORT_COLLECTION)
+    .doc(reportId)
+    .set(
+      { publicationStatus: "send_failed", lastError: message.slice(0, 500), updatedAt: nowTimestamp() },
+      { merge: true },
+    );
+}
+
+async function lockPrivateLessonReportForSend(candidate: AlimtalkCandidateDoc): Promise<string> {
+  if (candidate.type !== "private_lesson_report") return "";
+  const recordId = String(candidate.payload?.recordId || candidate.sourceActionKey || "").trim();
+  const revision = String(candidate.payload?.reportRevision || "").trim();
+  if (!recordId || !revision) return "승인된 리포트 리비전 정보가 없습니다.";
+  return db.runTransaction(async (tx) => {
+    const candidateRef = refs.alimtalkCandidate(candidate.candidateId);
+    const recordRef = refs.privateLessonChartRecord(recordId);
+    const requestId = String(candidate.payload?.requestId || recordId);
+    const requestRef = refs.privateLessonChartRequest(requestId);
+    const [candidateSnap, recordSnap, requestSnap] = await Promise.all([
+      tx.get(candidateRef),
+      tx.get(recordRef),
+      tx.get(requestRef),
+    ]);
+    const currentCandidate = candidateSnap.data();
+    const record = recordSnap.data();
+    const chartRequest = requestSnap.data();
+    if (currentCandidate?.status !== "processing") return "발송 후보 상태가 변경되었습니다.";
+    if (!record || !chartRequest) return "프라이빗 수업 기록을 찾을 수 없습니다.";
+    if (chartRequest.status === "cancelled" || chartRequest.cancelledAt) return "취소된 수업입니다.";
+    const booking = chartRequest.bookingId ? (await tx.get(refs.booking(chartRequest.bookingId))).data() : undefined;
+    if (
+      !booking ||
+      booking.appStatus !== "reserved" ||
+      booking.sessionOrder?.counted === false ||
+      ["absent", "late_cancel"].includes(String(booking.attendanceStatus || "")) ||
+      /cancel|deleted|inactive/i.test(String(booking.sourceStatus || ""))
+    ) {
+      return "예약 취소 또는 시간변경 상태를 다시 확인해야 합니다.";
+    }
+    const scheduleIssue = privateLessonReportScheduleIssue(booking, chartRequest, record);
+    if (scheduleIssue) return scheduleIssue;
+    if (record.approvedRevision !== revision || record.approvedReportSnapshot?.revision !== revision) {
+      return "승인본과 발송 후보의 리비전이 다릅니다.";
+    }
+    if (currentPrivateLessonReportRevision(record) !== revision) {
+      return "승인 후 리포트 내용이 변경되었습니다.";
+    }
+    tx.set(
+      recordRef,
+      {
+        publicReportApproval: {
+          ...(record.publicReportApproval || {}),
+          status: "processing",
+          candidateId: candidate.candidateId,
+          lastError: null,
+        },
+        updatedAt: nowTimestamp(),
+      },
+      { merge: true },
+    );
+    return "";
   });
-  const text = await response.text();
-  const parsed = text ? JSON.parse(text) : {};
-  if (!response.ok) throw new Error(`Notion API ${path} failed ${response.status}: ${parsed.message || text}`);
-  return parsed;
+}
+
+async function finalPrivateLessonReportSendabilityIssue(candidate: AlimtalkCandidateDoc): Promise<string> {
+  if (candidate.type !== "private_lesson_report") return "";
+  const recordId = String(candidate.payload?.recordId || candidate.sourceActionKey || "").trim();
+  const requestId = String(candidate.payload?.requestId || recordId).trim();
+  const revision = String(candidate.payload?.reportRevision || "").trim();
+  const [candidateSnap, recordSnap, requestSnap] = await Promise.all([
+    refs.alimtalkCandidate(candidate.candidateId).get(),
+    refs.privateLessonChartRecord(recordId).get(),
+    refs.privateLessonChartRequest(requestId).get(),
+  ]);
+  const currentCandidate = candidateSnap.data();
+  const record = recordSnap.data();
+  const chartRequest = requestSnap.data();
+  if (currentCandidate?.status !== "processing") return "발송 직전 후보 상태가 변경되었습니다.";
+  if (!record || !chartRequest) return "발송 직전 프라이빗 수업 기록을 찾을 수 없습니다.";
+  if (chartRequest.status === "cancelled" || chartRequest.cancelledAt) return "발송 직전 취소된 수업입니다.";
+  const booking = chartRequest.bookingId ? (await refs.booking(chartRequest.bookingId).get()).data() : undefined;
+  if (
+    !booking ||
+    booking.appStatus !== "reserved" ||
+    booking.sessionOrder?.counted === false ||
+    ["absent", "late_cancel"].includes(String(booking.attendanceStatus || "")) ||
+    /cancel|deleted|inactive|stale|missing/i.test(String(booking.sourceStatus || ""))
+  ) {
+    return "발송 직전 예약 취소 또는 시간변경 상태입니다.";
+  }
+  const scheduleIssue = privateLessonReportScheduleIssue(booking, chartRequest, record);
+  if (scheduleIssue) return `발송 직전 ${scheduleIssue}`;
+  if (
+    record.publicReportApproval?.status !== "processing" ||
+    record.approvedRevision !== revision ||
+    record.approvedReportSnapshot?.revision !== revision ||
+    currentPrivateLessonReportRevision(record) !== revision
+  ) {
+    return "발송 직전 승인본 리비전이 변경되었습니다.";
+  }
+  return "";
+}
+
+export function privateLessonReportScheduleIssue(
+  booking: BookingDoc,
+  chartRequest: PrivateLessonChartRequestDoc,
+  record: PrivateLessonChartRecordDoc,
+): string {
+  const snapshot = record.approvedReportSnapshot;
+  if (!snapshot) return "승인된 리포트 일정 정보가 없습니다.";
+
+  const bookingStart = booking.lectureStartAt?.toMillis?.() || 0;
+  const requestStart = chartRequest.lessonStartAt?.toMillis?.() || 0;
+  const snapshotStart = snapshot.lessonStartAt?.toMillis?.() || 0;
+  const bookingDate = String(booking.lectureDate || "");
+  const requestDate = String(chartRequest.lessonDate || "");
+  const snapshotDate = String(snapshot.lessonDate || "");
+  const memberChanged = Boolean(
+    booking.memberId && chartRequest.memberId && booking.memberId !== chartRequest.memberId,
+  );
+  const staffChanged = booking.staffId && chartRequest.staffId
+    ? booking.staffId !== chartRequest.staffId
+    : normalizedOperationalName(booking.staffName) !== normalizedOperationalName(chartRequest.staffName);
+  const snapshotChanged =
+    normalizedOperationalName(snapshot.memberName) !== normalizedOperationalName(record.memberName) ||
+    normalizedOperationalName(snapshot.staffName) !== normalizedOperationalName(record.staffName);
+
+  if (
+    booking.bookingId !== chartRequest.bookingId ||
+    memberChanged ||
+    staffChanged ||
+    !bookingDate ||
+    bookingDate !== requestDate ||
+    requestDate !== snapshotDate ||
+    !bookingStart ||
+    bookingStart !== requestStart ||
+    requestStart !== snapshotStart ||
+    snapshotChanged
+  ) {
+    return "예약의 날짜·시간·강사가 승인본과 달라 재승인이 필요합니다.";
+  }
+  return "";
+}
+
+function normalizedOperationalName(value: unknown): string {
+  return String(value || "").normalize("NFKC").replace(/[\s·._-]+/g, "").toLowerCase();
+}
+
+async function markPrivateLessonReportFailed(candidate: AlimtalkCandidateDoc, message: string): Promise<void> {
+  if (candidate.type !== "private_lesson_report") return;
+  const recordId = String(candidate.payload?.recordId || candidate.sourceActionKey || "").trim();
+  if (!recordId) return;
+  const record = (await refs.privateLessonChartRecord(recordId).get()).data();
+  if (!record || record.publicReportApproval?.status === "sent") return;
+  await refs.privateLessonChartRecord(recordId).set(
+    {
+      publicReportApproval: {
+        ...(record.publicReportApproval || {}),
+        status: "failed",
+        candidateId: candidate.candidateId,
+        lastError: message,
+      },
+      updatedAt: nowTimestamp(),
+    },
+    { merge: true },
+  );
 }
 
 async function claimCandidate(candidate: AlimtalkCandidateDoc): Promise<AlimtalkCandidateDoc | null> {
@@ -380,7 +920,9 @@ function isStaleProcessing(candidate: AlimtalkCandidateDoc): boolean {
   return updatedAt > 0 && Date.now() - updatedAt >= PROCESSING_STALE_MS;
 }
 
-async function sendSolapiAlimtalk(candidate: AlimtalkCandidateDoc): Promise<{ messageId: string }> {
+export async function sendSolapiAlimtalk(
+  candidate: AlimtalkCandidateDoc,
+): Promise<{ messageId: string; variables: Record<string, string> }> {
   const to = normalizePhone(candidate.memberPhone);
   if (!to) throw new Error("member phone is empty");
   if (!candidate.templateCode) throw new Error("templateCode is empty");
@@ -423,6 +965,7 @@ async function sendSolapiAlimtalk(candidate: AlimtalkCandidateDoc): Promise<{ me
   }
   return {
     messageId: result.messageList?.[0]?.messageId || result.groupInfo?.groupId || "",
+    variables,
   };
 }
 
@@ -464,10 +1007,28 @@ async function templateVariables(candidate: AlimtalkCandidateDoc): Promise<Recor
     "#{설문ID}": surveyId,
     "#{접근토큰}": accessToken,
     "#{관리번호}": managementNumber,
+    "#{수업일}": String(payload.lessonDateText || payload.lessonDate || ""),
+    "#{수업시간}": String(payload.lessonTimeText || ""),
+    "#{수업구성}": String(payload.lessonComposition || ""),
     "#{링크ID}": shortLinkId,
+    "#{주차링크ID}": String(payload.parkingLinkId || ""),
     "#{리포트링크ID}": reportLinkId,
     "#{인바디링크ID}": inbodyLinkId,
   };
+}
+
+async function safeSyncInstructorLessonConfirmationOutcome(
+  candidate: AlimtalkCandidateDoc,
+  outcome: Parameters<typeof syncInstructorLessonConfirmationOutcome>[1],
+): Promise<void> {
+  try {
+    await syncInstructorLessonConfirmationOutcome(candidate, outcome);
+  } catch (error) {
+    logger.error("instructor lesson confirmation outcome sync failed", {
+      candidateId: candidate.candidateId,
+      error: errorMessage(error),
+    });
+  }
 }
 
 async function inbodyLinkIdForCandidate(candidate: AlimtalkCandidateDoc): Promise<string> {
@@ -557,44 +1118,64 @@ async function shortLinkIdForCandidate(
   managementNumber: string,
 ): Promise<string> {
   const existing = String(candidate.payload?.shortLinkId || "");
-  if (candidate.type !== "instructor_lesson_material" && existing) return existing;
-  if (candidate.type === "group_survey" && surveyId && accessToken) {
+  if (candidate.type === "private_survey" && surveyId && accessToken) {
     const link = await ensureShortLink({
-      type: "group_survey",
-      targetUrl: groupSurveyTargetUrl(surveyId, accessToken),
+      type: "private_survey",
+      targetUrl: privateSurveyTargetUrl(surveyId, accessToken),
       sourceId: candidate.candidateId,
     });
-    if (!existing) {
-      await refs
-        .alimtalkCandidate(candidate.candidateId)
-        .set(
-          {
-            payload: { ...candidate.payload, shortLinkId: link.linkId, shortUrl: link.shortUrl },
-            updatedAt: nowTimestamp(),
-          },
-          { merge: true },
-        );
-    }
-    return link.linkId;
-  }
-  if (candidate.type === "instructor_lesson_material" && managementNumber) {
-    const link = await ensureShortLink({
-      type: "method_material",
-      targetUrl: methodMaterialTargetUrl(managementNumber),
-      sourceId: candidate.candidateId,
-    });
-    await refs
-      .alimtalkCandidate(candidate.candidateId)
-      .set(
+    if (existing !== link.linkId || String(candidate.payload?.shortUrl || "") !== link.shortUrl) {
+      await refs.alimtalkCandidate(candidate.candidateId).set(
         {
           payload: { ...candidate.payload, shortLinkId: link.linkId, shortUrl: link.shortUrl },
           updatedAt: nowTimestamp(),
         },
         { merge: true },
       );
+    }
+    return link.linkId;
+  }
+  if (candidate.type === "group_survey" && surveyId && accessToken) {
+    const link = await ensureShortLink({
+      type: "group_survey",
+      targetUrl: groupSurveyTargetUrl(surveyId, accessToken),
+      sourceId: candidate.candidateId,
+    });
+    if (existing !== link.linkId || String(candidate.payload?.shortUrl || "") !== link.shortUrl) {
+      await refs.alimtalkCandidate(candidate.candidateId).set(
+        {
+          payload: { ...candidate.payload, shortLinkId: link.linkId, shortUrl: link.shortUrl },
+          updatedAt: nowTimestamp(),
+        },
+        { merge: true },
+      );
+    }
+    return link.linkId;
+  }
+  if (existing) return existing;
+  if (candidate.type === "instructor_lesson_material" && managementNumber) {
+    const link = await ensureShortLink({
+      type: "method_material",
+      targetUrl: methodMaterialTargetUrl(managementNumber),
+      sourceId: candidate.candidateId,
+    });
+    await refs.alimtalkCandidate(candidate.candidateId).set(
+      {
+        payload: { ...candidate.payload, shortLinkId: link.linkId, shortUrl: link.shortUrl },
+        updatedAt: nowTimestamp(),
+      },
+      { merge: true },
+    );
     return link.linkId;
   }
   return "";
+}
+
+function privateSurveyTargetUrl(surveyId: string, accessToken: string): string {
+  const url = new URL("https://in.archivepilates.com/privateSurvey");
+  url.searchParams.set("id", surveyId);
+  url.searchParams.set("token", accessToken);
+  return url.toString();
 }
 
 function groupSurveyTargetUrl(surveyId: string, accessToken: string): string {

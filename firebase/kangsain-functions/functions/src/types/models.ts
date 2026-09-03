@@ -137,6 +137,7 @@ export interface BookingDoc {
   appStatus: AppBookingStatus;
   attendanceStatus: AttendanceStatus;
   syncStatus: SyncStatus;
+  supersededByBookingId?: string | null;
   ticketName: string;
   ticketClassType?: string;
   ticketType?: string;
@@ -162,6 +163,12 @@ export interface BookingDoc {
     reason: string;
     correctedAt: Timestamp;
   };
+  parkingPreRegistrationId?: string;
+  parkingVehicleId?: string;
+  parkingCarLast4?: string;
+  parkingStatus?: string;
+  parkingPreRegistrationStatus?: string;
+  parkingPreRegisteredAt?: Timestamp;
   memberTagIds: string[];
   lastMemoPreview: string;
   lastMemoAt: Timestamp | null;
@@ -299,6 +306,8 @@ export interface MemberProfileDoc {
   email?: string;
   birthDate?: string;
   gender?: string;
+  memberGrade?: string;
+  instructorLessonDates?: string[];
   memoPreview?: string;
   activeTicketNames?: string[];
   activeTicketCount?: number;
@@ -314,6 +323,13 @@ export interface MemberProfileDoc {
     expiryLevel: TicketExpiryLevel;
     status?: string;
     classType?: string;
+    paymentAmount?: number | null;
+    amountTotal?: number | null;
+    price?: number | null;
+    paymentAt?: Timestamp | null;
+    purchasedAt?: Timestamp | null;
+    sourceFile?: string;
+    sourceImportId?: string;
   }>;
   ticketStatusSummary?: {
     hasHoldingTicket?: boolean;
@@ -472,6 +488,7 @@ export type AlimtalkCandidateType =
   | "onsite_welcome"
   | "private_survey"
   | "group_survey"
+  | "instructor_lesson_confirmation"
   | "instructor_lesson_material"
   | "private_lesson_report"
   | "inbody_report"
@@ -481,6 +498,8 @@ export type AlimtalkCandidateType =
   | "private_ticket_expiring"
   | "long_absence"
   | "pricing_info"
+  | "recommended_meal_survey"
+  | "recommended_meal_report"
   | "manual_review";
 export type AlimtalkCandidateStatus =
   | "candidate"
@@ -497,6 +516,8 @@ export interface MemberContactIndexDoc {
   name: string;
   contactDisplayName?: string;
   contactMemo?: string;
+  memberGrade?: string;
+  contactGroupNames?: string[];
   phone: string;
   phoneLast4: string;
   registeredAt: Timestamp | null;
@@ -564,11 +585,44 @@ export interface AlimtalkSendDoc {
   updatedAt: Timestamp;
 }
 
+export type RenewalWorkflowStatus = "open" | "contacted" | "considering" | "snoozed" | "resolved" | "excluded";
+
+export interface RenewalCaseDoc {
+  caseId: string;
+  studioId: string;
+  memberId: string;
+  memberName: string;
+  kind: "group" | "private" | "lesson";
+  active: boolean;
+  workflowStatus: RenewalWorkflowStatus;
+  ticketIdentity: string;
+  ticketName: string;
+  priority: "urgent" | "warning" | "follow" | "waiting";
+  reason: string;
+  remainingCount: number | null;
+  remainingDays: number | null;
+  predictedDepletionDate: string;
+  weeklyUsagePace: number;
+  nextBookingDate: string;
+  recommendation: string;
+  sourceDate: string;
+  sourceCollection: "memberProfiles";
+  sourceCandidateId?: string;
+  operatorNote?: string;
+  nextActionAt?: Timestamp | null;
+  operatorUpdatedAt?: Timestamp | null;
+  operatorUpdatedByUid?: string;
+  autoResolvedReason?: string;
+  createdAt: Timestamp;
+  updatedAt: Timestamp;
+}
+
 export interface PrivateSurveyResponseDoc {
   responseId: string;
   studioId: string;
   surveyType?: "private" | "group";
   source: {
+    kind?: "google_sheet" | "native";
     spreadsheetId: string;
     sheetName: string;
     rowNumber: number;
@@ -609,14 +663,45 @@ export interface PrivateSurveyResponseDoc {
     alimtalkReason: string;
   };
   notionSync?: {
-    status: "synced" | "skipped" | "failed";
+    status: "pending" | "synced" | "skipped" | "failed";
     action?: "created" | "updated";
     memberPageId?: string;
     intakePageId?: string;
     syncedAt?: string;
     error?: string;
   } | null;
+  finalizationStatus?: "pending" | "processing" | "ready" | "failed";
+  finalizationError?: string | null;
+  finalizationStartedAt?: Timestamp | null;
+  finalizedAt?: Timestamp | null;
   accessTokenHash: string;
+  createdAt: Timestamp;
+  updatedAt: Timestamp;
+}
+
+export interface PrivateSurveyRequestDoc {
+  requestId: string;
+  schemaVersion: 1;
+  studioId: string;
+  memberId: string;
+  memberName: string;
+  memberPhone: string;
+  memberPhoneLast4: string;
+  bookingId: string;
+  lectureId: string;
+  lectureDate: string;
+  lessonStartAt: Timestamp | null;
+  staffId: string;
+  staffName: string;
+  sourceCandidateId: string;
+  shortLinkId: string;
+  shortUrl: string;
+  accessTokenHash: string;
+  tokenVersion: 1;
+  status: "pending" | "submitted" | "expired" | "cancelled";
+  responseId?: string;
+  expiresAt: Timestamp | null;
+  submittedAt?: Timestamp | null;
   createdAt: Timestamp;
   updatedAt: Timestamp;
 }
@@ -629,6 +714,7 @@ export type PrivateLessonChartRequestStatus =
   | "completed"
   | "cancelled";
 export type PrivateLessonChartGptStatus =
+  | "waiting_post"
   | "pending"
   | "processing"
   | "draft_created"
@@ -645,6 +731,7 @@ export interface PrivateLessonSessionNumberCorrection {
 
 export interface PrivateLessonChartRequestDoc {
   requestId: string;
+  workflowVersion?: "post_only_v2";
   studioId: string;
   bookingId: string;
   lectureId: string;
@@ -755,7 +842,7 @@ export interface PrivateLessonChartRecordDoc {
     editedAt?: Timestamp;
     editedBy?: string;
     source?: string;
-  };
+  } | null;
   media?: {
     rootFolderId?: string;
     memberFolderId?: string;
@@ -765,20 +852,87 @@ export interface PrivateLessonChartRecordDoc {
     updatedAt?: Timestamp;
   };
   publicReportApproval?: {
-    status: "pending" | "approved" | "queued" | "sent" | "failed";
+    status: "pending" | "approved" | "queued" | "processing" | "sent" | "failed";
     approvedAt?: Timestamp | null;
     approvedBy?: string;
     candidateId?: string | null;
     sentAt?: Timestamp;
     lastError?: string | null;
   };
+  reportRevision?: string;
+  approvedRevision?: string;
+  sentRevision?: string;
+  approvedReportSnapshot?: PrivateLessonReportSnapshot | null;
+  sentReportSnapshot?: PrivateLessonReportSnapshot | null;
+  legacySentReportSnapshot?: PrivateLessonReportSnapshot | null;
   notionSync?: {
     status: "pending" | "synced" | "failed";
+    sourceVersion?: string;
     pageId?: string;
     pageUrl?: string;
     instructorPageId?: string;
     instructorPageUrl?: string;
     syncedAt?: string;
+    error?: string;
+  };
+  createdAt: Timestamp;
+  updatedAt: Timestamp;
+}
+
+export interface PrivateLessonReportSnapshot {
+  revision: string;
+  summary: string;
+  nextDirection: string;
+  homework: string;
+  includedMedia: PrivateLessonChartMediaFile[];
+  memberName: string;
+  staffName: string;
+  lessonDate: string;
+  lessonStartAt: Timestamp | null;
+  sessionNumber: number;
+  createdAt: Timestamp;
+}
+
+export type PrivateLessonWorkflowStage =
+  | "preparation"
+  | "recording"
+  | "report_review"
+  | "delivered"
+  | "cancelled"
+  | "needs_review";
+
+export interface PrivateLessonSessionDoc {
+  sessionId: string;
+  studioId: string;
+  bookingId: string;
+  bookingAliases: string[];
+  occurrenceId: string;
+  memberId: string;
+  memberName: string;
+  staffId: string;
+  staffName: string;
+  lessonDate: string;
+  lessonStartAt: Timestamp | null;
+  sessionNumber: number | null;
+  roundVerified: boolean;
+  workflowStage: PrivateLessonWorkflowStage;
+  preStatus: "pending" | "submitted";
+  postStatus: "pending" | "submitted";
+  reportStatus: "pending" | "draft" | "approved" | "processing" | "sent" | "failed";
+  deliveryStatus: "pending" | "queued" | "processing" | "sent" | "failed";
+  reportRevision: string;
+  approvedRevision: string;
+  sentRevision: string;
+  nextAction: string;
+  cancellationReason: string;
+  lastError: string;
+  legacyRequestId: string;
+  legacyRecordId: string;
+  notionProjection?: {
+    status: "pending" | "synced" | "failed";
+    pageId?: string;
+    pageUrl?: string;
+    updatedAt?: Timestamp;
     error?: string;
   };
   createdAt: Timestamp;
@@ -810,6 +964,7 @@ export interface ContactSyncJobDoc {
   memberName: string;
   contactDisplayName?: string;
   contactMemo?: string;
+  contactGroupNames?: string[];
   memberPhone: string;
   target: ContactSyncTarget;
   status: QueueStatus;
@@ -823,6 +978,7 @@ export interface ContactSyncJobDoc {
   };
   sourceReason:
     | "member_profile_refresh"
+    | "staff_profile_refresh"
     | "notice_member_signup"
     | "notice_ticket_update"
     | "consultation_schedule"

@@ -1,5 +1,5 @@
 import { onCall, onRequest } from "firebase-functions/v2/https";
-import { onDocumentCreated } from "firebase-functions/v2/firestore";
+import { onDocumentCreated, onDocumentWritten } from "firebase-functions/v2/firestore";
 import { getInstructorHomeHandler } from "../callable/getInstructorHome";
 import {
   getKioskParkingJobStatusHandler,
@@ -17,7 +17,9 @@ import {
 import { submitBookingAttendanceHandler } from "../callable/submitBookingAttendance";
 import { submitMemberMemoHandler } from "../callable/submitMemberMemo";
 import { REGION } from "../config/constants";
+import { googleDwdServiceAccountJson, privateSurveyWebhookSecret } from "../config/secrets";
 import {
+  iparkingAccountPoolJson,
   iparkingLoginId,
   iparkingLoginPassword,
   iparkingSubLoginId,
@@ -26,11 +28,40 @@ import {
 import {
   getParkingDashboardHandler,
   registerParkingVehicleHandler,
+  removeParkingVehicleHandler,
   runParkingAutoApplyNowHandler,
 } from "../parking/parkingOperations";
+import {
+  getInstructorLessonRegistrationDashboardHandler,
+  operatorCreateInstructorLessonRegistrationHandler,
+} from "../instructorLessonRegistration/instructorLessonRegistration";
+import {
+  confirmInstructorLessonBookingAndQueueAlimtalkHandler,
+  queueInstructorLessonConfirmationOnTicketVerifiedHandler,
+} from "../instructorLessonRegistration/instructorLessonConfirmation";
+import { recommendedMealSurveyApiHandler } from "../mealPlan/recommendedMealSurvey";
+import {
+  generateRecommendedMealProgramDraftForSubmittedResponse,
+  generateRecommendedMealProgramDraftHandler,
+  getRecommendedMealProgramReviewHandler,
+  recommendedMealPlanApiHandler,
+  saveRecommendedMealProgramDraftHandler,
+} from "../mealPlan/recommendedMealProgram";
 import { processParkingDiscountJobSnapshot } from "../parking/processParkingDiscountJob";
-import { callableOptions, publicRequestOptions } from "../runtime/functionOptions";
-import { requireStaff } from "../security/authGuards";
+import { instructorLessonParkingPreRegistrationApiHandler } from "../parking/instructorLessonParkingPreRegistration";
+import {
+  callableOptions,
+  publicRequestOptions,
+  recommendedMealCallableOptions,
+  recommendedMealEventOptions,
+} from "../runtime/functionOptions";
+import {
+  getRefundMemberTicketsHandler,
+  previewRefundHandler,
+  queueRefundStudioMateSmsHandler,
+  sendRefundAgreementHandler,
+} from "../refund/refundOperations";
+import { requireManager, requireStaff } from "../security/authGuards";
 import {
   adjustInstructorEvaluationEssayScoreHandler,
   getInstructorEvaluationQuizHandler,
@@ -38,13 +69,31 @@ import {
   submitInstructorEvaluationQuizHandler,
 } from "../staffEvaluation/instructorEvaluationQuiz";
 import { toHttpsError } from "../utils/errors";
+import { getVideoWatchDashboardHandler, videoWatchEventApiHandler } from "../videoAnalytics/videoWatchAnalytics";
 
 const parkingDiscountJobOptions = {
   region: REGION,
   document: "parkingDiscountJobs/{jobId}",
-  secrets: [iparkingLoginId, iparkingLoginPassword, iparkingSubLoginId, iparkingSubLoginPassword],
+  secrets: [
+    googleDwdServiceAccountJson,
+    iparkingAccountPoolJson,
+    iparkingLoginId,
+    iparkingLoginPassword,
+    iparkingSubLoginId,
+    iparkingSubLoginPassword,
+  ],
   timeoutSeconds: 60,
   memory: "256MiB" as const,
+};
+
+const instructorLessonParkingRequestOptions = {
+  ...publicRequestOptions,
+  secrets: [privateSurveyWebhookSecret],
+};
+
+const videoWatchRequestOptions = {
+  ...publicRequestOptions,
+  maxInstances: 3,
 };
 
 export const getInstructorHome = onCall(callableOptions, async (request) => {
@@ -143,6 +192,14 @@ export const getParkingDashboard = onCall(callableOptions, async (request) => {
   }
 });
 
+export const removeParkingVehicle = onCall(callableOptions, async (request) => {
+  try {
+    return await removeParkingVehicleHandler(request);
+  } catch (err) {
+    throw toHttpsError(err);
+  }
+});
+
 export const runParkingAutoApplyNow = onCall(callableOptions, async (request) => {
   try {
     return await runParkingAutoApplyNowHandler(request);
@@ -186,7 +243,73 @@ export const adjustInstructorEvaluationEssayScore = onCall(callableOptions, asyn
   }
 });
 
-export const instructorApplicantEvaluationApi = onRequest(publicRequestOptions, instructorApplicantEvaluationApiHandler);
+export const instructorApplicantEvaluationApi = onRequest(
+  publicRequestOptions,
+  instructorApplicantEvaluationApiHandler,
+);
+
+export const recommendedMealSurveyApi = onRequest(publicRequestOptions, recommendedMealSurveyApiHandler);
+
+export const recommendedMealPlanApi = onRequest(publicRequestOptions, recommendedMealPlanApiHandler);
+
+export const instructorLessonParkingPreRegistrationApi = onRequest(
+  instructorLessonParkingRequestOptions,
+  instructorLessonParkingPreRegistrationApiHandler,
+);
+
+export const videoWatchEventApi = onRequest(videoWatchRequestOptions, videoWatchEventApiHandler);
+
+export const getVideoWatchDashboard = onCall(callableOptions, async (request) => {
+  try {
+    const staff = await requireStaff(request);
+    requireManager(staff);
+    return await getVideoWatchDashboardHandler(request);
+  } catch (err) {
+    throw toHttpsError(err);
+  }
+});
+
+export const getRecommendedMealProgramReview = onCall(callableOptions, async (request) => {
+  try {
+    const staff = await requireStaff(request);
+    requireManager(staff);
+    return await getRecommendedMealProgramReviewHandler(request, staff);
+  } catch (err) {
+    throw toHttpsError(err);
+  }
+});
+
+export const generateRecommendedMealProgramDraft = onCall(recommendedMealCallableOptions, async (request) => {
+  try {
+    const staff = await requireStaff(request);
+    requireManager(staff);
+    return await generateRecommendedMealProgramDraftHandler(request, staff);
+  } catch (err) {
+    throw toHttpsError(err);
+  }
+});
+
+export const saveRecommendedMealProgramDraft = onCall(callableOptions, async (request) => {
+  try {
+    const staff = await requireStaff(request);
+    requireManager(staff);
+    return await saveRecommendedMealProgramDraftHandler(request, staff);
+  } catch (err) {
+    throw toHttpsError(err);
+  }
+});
+
+export const generateRecommendedMealDraftOnSurveySubmitted = onDocumentCreated(
+  {
+    ...recommendedMealEventOptions,
+    document: "recommendedMealProgramResponses/{responseId}",
+  },
+  async (event) => {
+    const response = event.data?.data();
+    if (!response) return;
+    await generateRecommendedMealProgramDraftForSubmittedResponse(event.params.responseId, response);
+  },
+);
 
 export const processParkingDiscountJob = onDocumentCreated(parkingDiscountJobOptions, async (event) => {
   const snap = event.data;
@@ -202,3 +325,74 @@ export const adminIssueStaffTempCode = onCall(callableOptions, async (request) =
     throw toHttpsError(err);
   }
 });
+
+export const getRefundMemberTickets = onCall(callableOptions, async (request) => {
+  try {
+    return await getRefundMemberTicketsHandler(request);
+  } catch (err) {
+    throw toHttpsError(err);
+  }
+});
+
+export const previewRefund = onCall(callableOptions, async (request) => {
+  try {
+    return await previewRefundHandler(request);
+  } catch (err) {
+    throw toHttpsError(err);
+  }
+});
+
+export const sendRefundAgreement = onCall(callableOptions, async (request) => {
+  try {
+    return await sendRefundAgreementHandler(request);
+  } catch (err) {
+    throw toHttpsError(err);
+  }
+});
+
+export const queueRefundStudioMateSms = onCall(callableOptions, async (request) => {
+  try {
+    return await queueRefundStudioMateSmsHandler(request);
+  } catch (err) {
+    throw toHttpsError(err);
+  }
+});
+
+export const getInstructorLessonRegistrationDashboard = onCall(callableOptions, async (request) => {
+  try {
+    return await getInstructorLessonRegistrationDashboardHandler(request);
+  } catch (err) {
+    throw toHttpsError(err);
+  }
+});
+
+export const operatorCreateInstructorLessonRegistration = onCall(callableOptions, async (request) => {
+  try {
+    return await operatorCreateInstructorLessonRegistrationHandler(request);
+  } catch (err) {
+    throw toHttpsError(err);
+  }
+});
+
+export const confirmInstructorLessonBookingAndQueueAlimtalk = onCall(callableOptions, async (request) => {
+  try {
+    return await confirmInstructorLessonBookingAndQueueAlimtalkHandler(request);
+  } catch (err) {
+    throw toHttpsError(err);
+  }
+});
+
+export const queueInstructorLessonConfirmationOnTicketVerified = onDocumentWritten(
+  {
+    region: REGION,
+    document: "instructorLessonRegistrations/{registrationId}",
+    retry: true,
+  },
+  async (event) => {
+    await queueInstructorLessonConfirmationOnTicketVerifiedHandler({
+      registrationId: event.params.registrationId,
+      before: event.data?.before.exists ? event.data.before.data() : null,
+      after: event.data?.after.exists ? event.data.after.data() : null,
+    });
+  },
+);

@@ -1,0 +1,160 @@
+<!doctype html>
+<html lang="ko">
+  <head>
+    <meta charset="utf-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1" />
+    <meta name="theme-color" content="#f8f5ef" />
+    <link rel="icon" type="image/png" sizes="32x32" href="/icons/favicon-32.png?v=1" />
+    <link rel="apple-touch-icon" sizes="180x180" href="/icons/apple-touch-icon.png?v=1" />
+    <link rel="manifest" href="/site.webmanifest?v=1" />
+    <title>환불 · ARCHIVE CORE</title>
+    <link rel="stylesheet" href="../assets/styles.css" />
+    <script src="../firebase-config.js"></script>
+    <script type="module" src="../assets/app.js"></script>
+  </head>
+  <body data-firestore-dashboard data-refund-dashboard>
+    <div class="shell">
+      <aside class="sidebar" aria-label="ARCHIVE CORE navigation">
+        <div class="brand"><div class="brand-mark" aria-hidden="true">CORE</div><strong>ARCHIVE CORE</strong><span>ARCHIVE PILATES Operations Platform</span></div>
+        <nav class="nav">
+          <a href="../" data-section="home">Home <small>요약</small></a>
+          <a href="../private/" data-section="private">Private <small>차트</small></a>
+          <a href="../staff/" data-section="staff">Staff <small>강사</small></a>
+          <a href="../recommended-meals/" data-section="recommended-meals">Meals <small>추천식단</small></a>
+          <a href="./" data-section="refunds">Refund <small>환불</small></a>
+          <a href="../messages/" data-section="messages">Messages <small>알림톡</small></a>
+          <a href="../automation/" data-section="automation">Automation <small>관제</small></a>
+          <a href="../business/" data-section="business">Business <small>지표</small></a>
+          <a href="../imports/" data-section="imports">Imports <small>원본</small></a>
+          <a href="../rules/" data-section="rules">Rules <small>규칙</small></a>
+          <a href="../settings/" data-section="settings">Settings <small>설정</small></a>
+        </nav>
+      </aside>
+
+      <main class="main">
+        <header class="topbar">
+          <div class="title-block">
+            <p class="eyebrow">회원 환불</p>
+            <h1>환불 안내·동의서</h1>
+            <p>회원과 수강권을 선택해 예상 환불금액을 계산하고 안내 문자와 동의서를 발송합니다.</p>
+          </div>
+          <div class="top-actions" aria-label="상태 확인">
+            <div class="connection-card" aria-live="polite"><span id="connectionLabel">로딩</span><strong id="connectionDetail">데이터 연결 준비 중</strong></div>
+            <button class="refresh-button" id="refreshButton" type="button">새로고침</button>
+          </div>
+        </header>
+
+        <ol class="refund-stepper" aria-label="환불 처리 단계">
+          <li class="is-active" data-refund-step="1"><span>1</span><strong>회원·수강권</strong></li>
+          <li data-refund-step="2"><span>2</span><strong>금액 검토</strong></li>
+          <li data-refund-step="3"><span>3</span><strong>안내·동의서</strong></li>
+        </ol>
+
+        <section class="refund-workspace">
+          <article class="panel refund-panel" id="refundLookupPanel">
+            <div class="panel-header">
+              <div><h2>회원 찾기</h2><p>이름으로 유효회원 후보를 찾은 뒤 회원카드를 선택합니다.</p></div>
+              <span class="pill active">1단계</span>
+            </div>
+            <form class="refund-form refund-lookup-form" id="refundLookupForm">
+              <label><span>회원 이름</span><input id="refundMemberName" autocomplete="name" maxlength="40" required /></label>
+              <button class="primary-action" id="refundLookupButton" type="submit">회원 후보 찾기</button>
+            </form>
+            <div class="form-status" id="refundLookupStatus" aria-live="polite"></div>
+            <fieldset class="refund-candidate-list" id="refundMemberCandidates" hidden>
+              <legend>회원 후보를 선택하세요</legend>
+            </fieldset>
+            <div class="refund-member-summary" id="refundMemberSummary" hidden></div>
+            <fieldset class="refund-ticket-list" id="refundTicketList" hidden>
+              <legend>환불할 수강권</legend>
+            </fieldset>
+          </article>
+
+          <article class="panel refund-panel" id="refundCalculationPanel" hidden>
+            <div class="panel-header">
+              <div><h2>예상 환불액</h2><p>StudioMate의 현재 수강권 정보로 자동 계산합니다.</p></div>
+              <span class="pill warning">2단계</span>
+            </div>
+            <form class="refund-form" id="refundCalculationForm">
+              <div class="refund-input-grid">
+                <label><span>환불 요청일</span><input id="refundRequestedAt" type="date" required /></label>
+                <label><span>결제금액</span><input id="refundPaidAmount" type="number" inputmode="numeric" min="1" step="1" required /></label>
+                <select id="refundTicketKind" required disabled aria-disabled="true" hidden><option value="count">횟수권</option><option value="period">기간권</option></select>
+                <fieldset class="refund-kind-fields refund-wide-field" id="refundCountFields">
+                  <legend>횟수권 계산 기준</legend>
+                  <div class="refund-source-summary"><span>StudioMate 이용 횟수</span><strong id="refundCountUsage">-</strong></div>
+                  <label class="refund-operator-field"><span>1회 정상 단가</span><input id="refundNormalUnitAmount" type="number" inputmode="numeric" min="1" step="1" placeholder="정상가표 기준" /></label>
+                </fieldset>
+                <fieldset class="refund-kind-fields refund-wide-field" id="refundPeriodFields" hidden>
+                  <legend>기간권 계산 기준</legend>
+                  <div class="refund-source-summary"><span>이용 기간</span><strong id="refundPeriodRange">-</strong></div>
+                  <div class="refund-source-summary"><span>StudioMate 남은 기간</span><strong id="refundPeriodRemaining">-</strong></div>
+                  <div class="refund-source-summary"><span>환불 계산 기준</span><strong id="refundPeriodUsage">-</strong></div>
+                </fieldset>
+                <details class="refund-optional-details refund-wide-field" id="refundOptionalDetails">
+                  <summary><span>추가 공제·결제금액 수정</span><small>필요한 경우만 입력</small></summary>
+                  <div class="refund-optional-grid">
+                    <label><span>증정·프로모션 추가 공제</span><input id="refundGiftDeductionAmount" type="number" inputmode="numeric" min="0" step="1" value="0" /></label>
+                    <label><span>결제금액 수정 근거</span><input id="refundPaymentSourceNote" aria-describedby="refundPaymentSourceNoteHint" maxlength="300" placeholder="결제내역 위치" /><small class="refund-field-hint" id="refundPaymentSourceNoteHint">위 결제금액을 수정한 경우에만 작성합니다.</small></label>
+                  </div>
+                </details>
+              </div>
+              <div class="form-status" id="refundCalculationStatus" aria-live="polite"></div>
+              <button class="primary-action" id="refundPreviewButton" type="submit">환불금액 계산</button>
+            </form>
+            <div class="refund-result" id="refundResult" hidden>
+              <div class="refund-result-overview" aria-label="환불 계산 결과">
+                <div class="refund-final-amount"><span>예상 환불금액</span><strong id="refundResultAmount">-</strong><p class="refund-formula" id="refundFormula"></p></div>
+                <div class="refund-balance-amount"><span>공제 전 잔여금액</span><strong id="refundResultBalance">-</strong></div>
+              </div>
+              <details class="refund-breakdown">
+                <summary>계산 상세</summary>
+                <div class="refund-amount-grid">
+                  <div><span>결제금액</span><strong id="refundResultPaid">-</strong></div>
+                  <div><span>사용금액</span><strong id="refundResultUsed">-</strong></div>
+                  <div><span>위약금</span><strong id="refundResultPenalty">-</strong></div>
+                  <div><span>추가 공제</span><strong id="refundResultGift">-</strong></div>
+                </div>
+              </details>
+              <details class="refund-message-preview">
+                <summary>회원 안내 문구 확인</summary>
+                <div class="refund-message-content">
+                  <label class="refund-message-field"><span>발송 전 문구</span><textarea id="refundMessage" rows="8" readonly></textarea></label>
+                  <button class="secondary-action" id="refundCopyButton" type="button">안내 문구 복사</button>
+                </div>
+              </details>
+            </div>
+          </article>
+
+          <article class="panel refund-panel" id="refundSendPanel" hidden>
+            <div class="panel-header">
+              <div><h2>환불동의서 발송</h2><p>확정한 금액을 발송 큐에 등록하고 처리 결과를 추적합니다.</p></div>
+              <span class="pill success">3단계</span>
+            </div>
+            <div class="refund-send-check">
+              <label><input id="refundConfirmCheck" type="checkbox" /> <span>원천, 혜택·완료수업·노쇼 공제, 예상 환불금액을 확인했습니다.</span></label>
+              <p>실제 카드·계좌 환불과 StudioMate 수강권 변경은 이 화면에서 자동 처리하지 않습니다.</p>
+            </div>
+            <div class="refund-send-actions">
+              <div class="refund-send-action">
+                <div><strong>회원 환불계산 안내</strong><p>현재 계산 문구를 StudioMate 문자로 발송합니다.</p></div>
+                <button class="primary-action" id="refundSmsButton" type="button" disabled>StudioMate 문자 발송 요청</button>
+                <div class="form-status" id="refundSmsStatus" aria-live="polite"></div>
+              </div>
+              <div class="refund-send-action">
+                <div><strong>환불동의서</strong><p>같은 계산값으로 이폼싸인 환불동의서를 준비합니다.</p></div>
+                <button class="secondary-action" id="refundSendButton" type="button" disabled>이폼싸인 환불동의서 발송 요청</button>
+                <div class="form-status" id="refundSendStatus" aria-live="polite"></div>
+              </div>
+            </div>
+          </article>
+        </section>
+
+        <details class="panel action-disclosure refund-history-panel">
+          <summary><span><strong>최근 환불동의서 처리</strong><small>발송 상태와 중복 차단 결과</small></span><span class="pill" id="refundCaseCount">0건</span></summary>
+          <div class="status-list" id="refundCaseList"><div class="empty-state">처리 이력이 없습니다.</div></div>
+        </details>
+      </main>
+    </div>
+  </body>
+</html>

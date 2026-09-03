@@ -7,10 +7,10 @@
   <key>ProgramArguments</key>
   <array>
     <string>/opt/homebrew/bin/node</string>
-    <string>/Users/archivepilates/codex-worktrees/archivein-live-setup/scripts/process-admin-emergency-sync-requests.mjs</string>
+    <string>/Users/archivepilates/dev/archive-in-runtime/scripts/process-admin-emergency-sync-requests.mjs</string>
   </array>
   <key>WorkingDirectory</key>
-  <string>/Users/archivepilates/codex-worktrees/archivein-live-setup</string>
+  <string>/Users/archivepilates/dev/archive-in-runtime</string>
   <key>StartInterval</key>
   <integer>30</integer>
   <key>EnvironmentVariables</key>

@@ -78,25 +78,11 @@ Notion에서 `ARCHIVE PILATES 프라이빗 회원 차트 시스템` 페이지 �
 - 설문 응답은 `Raw Response URL`로 찾는다.
 - 같은 응답을 다시 처리하면 새로 만들지 않고 기존 Notion 페이지를 업데이트한다.
 
-## 로컬 실행
+## 운영규칙 기록 위치
 
-2026-06-10 이후 이 스크립트는 legacy 보정용이다. 현재 운영규칙은 Notion이 아니라 ARCHIVE CORE `/core/rules/`에 기록한다. 아래 명령은 과거 Notion 페이지를 1회 보정해야 할 때만 명시적으로 실행한다.
-
-토큰은 로컬 shell 환경변수 또는 로컬 전용 env 파일에만 둔다.
-
-```bash
-export NOTION_TOKEN="secret_..."
-ALLOW_LEGACY_NOTION_RULE_SYNC=1 node scripts/sync-notion-alimtalk-rules.mjs
-```
-
-선택 env:
-
-```bash
-export NOTION_ALIMTALK_PARENT_PAGE_ID="361d49eae4bf8189adf5f7effcdf5bfd"
-export NOTION_ALIMTALK_TEMPLATE_PAGE_TITLE="카카오 알림톡 템플릿 분류와 SOLAPI 네이밍 규칙"
-```
-
-처음 실행하면 `카카오 알림톡 운영 규칙` 아래에 `카카오 알림톡 템플릿 분류와 SOLAPI 네이밍 규칙` child page를 만든다. 이후 같은 제목의 페이지를 찾아 내용을 교체한다.
+2026-06-10 이후 운영규칙은 Notion이 아니라 ARCHIVE CORE `/core/rules/`에
+기록합니다. 과거 Notion 알림톡 규칙을 쓰던 일회성 동기화 스크립트는
+2026-07-30에 제거했습니다.
 
 ## 보안 규칙
 

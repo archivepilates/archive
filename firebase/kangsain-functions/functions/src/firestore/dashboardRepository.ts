@@ -8,11 +8,12 @@ export async function saveDashboardSnapshot(input: {
   data: DashboardData;
   sourceSpreadsheetId: string;
 }): Promise<DashboardSnapshotDoc> {
+  const snapshotData = compactDashboardSnapshotData(input.data);
   const doc: DashboardSnapshotDoc = {
     snapshotId: "current",
     sourceSpreadsheetId: input.sourceSpreadsheetId,
     syncedAt: nowTimestamp(),
-    ...input.data,
+    ...snapshotData,
   };
   await refs.dashboardSnapshot("current").set(doc, { merge: true });
   await saveDashboardMetricDocs(input.data, input.sourceSpreadsheetId, doc.syncedAt);
@@ -158,6 +159,25 @@ function buildMemberRevenueRows(data: DashboardData): DashboardMemberRevenueRow[
 }
 
 function buildMonthlyMemberRows(data: DashboardData): DashboardMonthlyMemberRow[] {
+  if (data.월별회원지표?.length) {
+    return data.월별회원지표.flatMap((row) => [
+      {
+        월: row.월,
+        구분: "수강권보유" as const,
+        회원수: row.수강권보유회원수,
+      },
+      {
+        월: row.월,
+        구분: "예약이용" as const,
+        회원수: row.예약이용회원수,
+      },
+      {
+        월: row.월,
+        구분: "출석" as const,
+        회원수: row.출석회원수,
+      },
+    ]).filter((row) => row.월 && row.회원수 > 0);
+  }
   if (data.월별회원?.length) return data.월별회원;
   return data.월별이용회원
     .map((row) => ({
@@ -172,4 +192,14 @@ function memberSalesMetricId(phone: string, memberName: string): string {
   const digits = phone.replace(/\D/g, "");
   if (digits) return `phone_${digits}`;
   return `name_${stableHash(memberName).slice(0, 20)}`;
+}
+
+function compactDashboardSnapshotData(data: DashboardData): DashboardData {
+  return {
+    ...data,
+    회원매출: [...(data.회원매출 || [])].sort((a, b) => b.totalRevenue - a.totalRevenue).slice(0, 500),
+    매출일일누적: [...(data.매출일일누적 || [])]
+      .sort((a, b) => a.기준일.localeCompare(b.기준일))
+      .slice(-180),
+  };
 }

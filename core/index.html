@@ -24,8 +24,6 @@
         </div>
         <nav class="nav">
           <a href="./" data-section="home">Home <small>요약</small></a>
-          <a href="./members/" data-section="members">Members <small>회원</small></a>
-          <a href="./lessons/" data-section="lessons">Lessons <small>수업</small></a>
           <a href="./private/" data-section="private">Private <small>차트</small></a>
           <a href="./staff/" data-section="staff">Staff <small>강사</small></a>
           <a href="./messages/" data-section="messages">Messages <small>알림톡</small></a>
@@ -40,26 +38,102 @@
       <main class="main">
         <header class="command-hero">
           <div class="command-copy">
-            <p class="eyebrow">OPERATOR COMMAND CENTER · HOME</p>
-            <h1>오늘 운영을 빠르게 판단하고 실행합니다</h1>
-            <p class="subtitle">미해결 업무, 빠른 실행, 검색을 한 화면에 모았습니다. 내부 진단은 접어두고 운영자가 지금 움직일 항목만 먼저 보여줍니다.</p>
+            <p class="eyebrow">ARCHIVE CORE</p>
+            <h1>오늘 할 일</h1>
             <button class="command-search-button" id="commandPaletteOpen" type="button" aria-haspopup="dialog" aria-controls="commandPalette">
-              <span>회원명, 전화번호, 알림톡, 수업, 오류 ID 검색</span>
+              <span>회원 또는 업무 검색</span>
               <kbd>⌘K</kbd>
             </button>
             <div class="quick-action-row" aria-label="빠른 실행">
-              <a class="quick-action" href="#pricingInquiryForm">수강료 안내</a>
-              <a class="quick-action" href="#parkingRegistrationForm">주차등록</a>
+              <a class="quick-action" href="#pricingInquiry">수강료 안내</a>
+              <a class="quick-action" href="https://in.archivepilates.com/onsiteWelcome/?v=icon-check">회원가입서 발송</a>
+              <a class="quick-action" href="./instructor-lessons/">강사레슨</a>
+              <a class="quick-action" href="#recommendedMealProgram">추천식단 설문</a>
+              <a class="quick-action" href="#renewalPipeline">재등록 관리</a>
+              <a class="quick-action" href="#parkingTools">주차등록</a>
+              <a class="quick-action" data-ticket-liability-link href="./business/#ticketLiability">수강권 잔여금액</a>
               <a class="quick-action" href="./private/">프라이빗 진행</a>
               <a class="quick-action" href="./messages/">알림톡 확인</a>
-              <a class="quick-action" href="./automation/">자동화 관제</a>
+            </div>
+            <div class="external-tool-shortcuts" data-core-external-shortcuts>
+              <p>외부 운영 도구</p>
+              <nav class="external-tool-grid" aria-label="외부 운영 도구">
+                <a
+                  class="external-tool-link"
+                  data-external-tool="imweb"
+                  href="https://archivepilates.imweb.me/admin"
+                  target="_blank"
+                  rel="noopener noreferrer"
+                  aria-label="아임웹 관리자, 새 창에서 열기"
+                >
+                  <svg aria-hidden="true" viewBox="0 0 24 24" focusable="false">
+                    <path d="M6 2 3 6v14h18V6l-3-4Z" />
+                    <path d="M3 6h18M16 10a4 4 0 0 1-8 0" />
+                  </svg>
+                  <span>아임웹 관리자</span>
+                  <svg class="external-tool-arrow" aria-hidden="true" viewBox="0 0 24 24" focusable="false">
+                    <path d="M15 3h6v6M10 14 21 3M18 13v7a1 1 0 0 1-1 1H4a1 1 0 0 1-1-1V7a1 1 0 0 1 1-1h7" />
+                  </svg>
+                </a>
+                <a
+                  class="external-tool-link"
+                  data-external-tool="gmail"
+                  href="https://mail.google.com/mail/?authuser=home@archivepilates.com"
+                  target="_blank"
+                  rel="noopener noreferrer"
+                  aria-label="공식 이메일, 새 창에서 열기"
+                >
+                  <svg aria-hidden="true" viewBox="0 0 24 24" focusable="false">
+                    <rect x="3" y="5" width="18" height="14" rx="2" />
+                    <path d="m3 7 9 6 9-6" />
+                  </svg>
+                  <span>공식 이메일</span>
+                  <svg class="external-tool-arrow" aria-hidden="true" viewBox="0 0 24 24" focusable="false">
+                    <path d="M15 3h6v6M10 14 21 3M18 13v7a1 1 0 0 1-1 1H4a1 1 0 0 1-1-1V7a1 1 0 0 1 1-1h7" />
+                  </svg>
+                </a>
+                <a
+                  class="external-tool-link"
+                  data-external-tool="smartplace"
+                  href="https://new.smartplace.naver.com/"
+                  target="_blank"
+                  rel="noopener noreferrer"
+                  aria-label="스마트플레이스, 새 창에서 열기"
+                >
+                  <svg aria-hidden="true" viewBox="0 0 24 24" focusable="false">
+                    <path d="M20 10c0 5-8 12-8 12S4 15 4 10a8 8 0 1 1 16 0Z" />
+                    <circle cx="12" cy="10" r="3" />
+                  </svg>
+                  <span>스마트플레이스</span>
+                  <svg class="external-tool-arrow" aria-hidden="true" viewBox="0 0 24 24" focusable="false">
+                    <path d="M15 3h6v6M10 14 21 3M18 13v7a1 1 0 0 1-1 1H4a1 1 0 0 1-1-1V7a1 1 0 0 1 1-1h7" />
+                  </svg>
+                </a>
+                <a
+                  class="external-tool-link"
+                  data-external-tool="studiomate"
+                  href="https://arcpilates.studiomate.kr/"
+                  target="_blank"
+                  rel="noopener noreferrer"
+                  aria-label="StudioMate, 새 창에서 열기"
+                >
+                  <svg aria-hidden="true" viewBox="0 0 24 24" focusable="false">
+                    <rect x="3" y="4" width="18" height="18" rx="2" />
+                    <path d="M16 2v4M8 2v4M3 10h18M8 14h.01M12 14h.01M16 14h.01M8 18h.01M12 18h.01" />
+                  </svg>
+                  <span>StudioMate</span>
+                  <svg class="external-tool-arrow" aria-hidden="true" viewBox="0 0 24 24" focusable="false">
+                    <path d="M15 3h6v6M10 14 21 3M18 13v7a1 1 0 0 1-1 1H4a1 1 0 0 1-1-1V7a1 1 0 0 1 1-1h7" />
+                  </svg>
+                </a>
+              </nav>
             </div>
           </div>
           <aside class="command-context-card" aria-label="오늘 운영 요약">
             <div>
               <span class="context-label">오늘 우선순위</span>
               <strong id="commandQueueStatus">운영 큐 확인 중</strong>
-              <p id="commandQueueNote">데이터 연결 후 미해결 업무를 계산합니다.</p>
+              <p id="commandQueueNote">처리가 필요한 업무를 확인합니다.</p>
             </div>
             <div class="connection-card" aria-live="polite">
               <span id="connectionLabel">로딩</span>
@@ -69,68 +143,41 @@
           </aside>
         </header>
 
-        <section class="grid kpis command-kpis" aria-label="운영 요약">
-          <a class="panel metric metric-link" href="./messages/">
-            <div class="metric-label">미해결 액션</div>
-            <div class="metric-value" id="homeActionTotal">0건</div>
-            <div class="metric-note" id="homeActionNote">운영자 확인 대기 없음</div>
-          </a>
-          <a class="panel metric metric-link" href="./members/">
-            <div class="metric-label">회원 응대</div>
-            <div class="metric-value" id="homeMemberCareTotal">0건</div>
-            <div class="metric-note" id="homeMemberCareNote">회원가입/수강료 흐름 정상권</div>
-          </a>
-          <a class="panel metric metric-link" href="./private/">
-            <div class="metric-label">프라이빗 진행</div>
-            <div class="metric-value" id="homePrivateTotal">0건</div>
-            <div class="metric-note" id="homePrivateNote">미제출/미발송 없음</div>
-          </a>
-          <a class="panel metric metric-link" href="./automation/">
-            <div class="metric-label">자동화 주의</div>
-            <div class="metric-value" id="homeAutomationTotal">정상권</div>
-            <div class="metric-note" id="homeAutomationNote">실패/중단 신호 낮음</div>
-          </a>
-        </section>
-
-        <section class="grid overview-grid">
-          <article class="panel">
+        <section class="panel home-action-panel">
             <div class="panel-header">
               <div>
                 <h2>오늘 처리할 일</h2>
-                <p>해결될 때까지 남겨야 하는 업무만 큐로 올립니다.</p>
               </div>
-              <span class="pill good">operator queue</span>
+              <span class="pill good">오늘</span>
             </div>
             <div class="list" id="homeDecisionList">
-              <div class="empty-state">데이터 연결 후 미해결 운영 큐를 표시합니다.</div>
+              <div class="empty-state">확인 중입니다.</div>
             </div>
-          </article>
-
-          <aside class="panel command-context-panel">
-            <div class="panel-header">
-              <div>
-                <h2>운영 컨텍스트</h2>
-                <p>오늘 판단에 필요한 상태만 짧게 묶어봅니다.</p>
-              </div>
-              <span class="pill">context</span>
-            </div>
-            <div class="context-list">
-              <div><span>회원 응대</span><strong id="homeContextMemberCare">정상권</strong></div>
-              <div><span>프라이빗</span><strong id="homeContextPrivate">진행 확인 중</strong></div>
-              <div><span>알림톡</span><strong id="homeContextMessages">대기 낮음</strong></div>
-              <div><span>최근 원본</span><strong id="homeContextImport">원본 대기</strong></div>
-              <div><span>품질/자동화</span><strong id="homeContextQuality">주의 낮음</strong></div>
-            </div>
-          </aside>
         </section>
 
-        <section class="panel parking-panel">
-          <div class="panel-header">
-            <div>
-              <h2>주차등록</h2>
+        <details class="panel action-disclosure" id="renewalPipeline">
+          <summary>
+            <span><strong>재등록 관리</strong><small>오늘 연락할 회원과 재등록 대기 회원</small></span>
+            <span class="pill" id="renewalPipelineCount">0명</span>
+          </summary>
+          <div class="disclosure-body">
+            <div class="renewal-summary-grid" aria-label="재등록 후보 요약">
+              <div><span>오늘 확인</span><strong id="renewalUrgentCount">0명</strong></div>
+              <div><span>30일 내</span><strong id="renewalSoonCount">0명</strong></div>
+              <div><span>재등록 대기</span><strong id="renewalWaitingCount">0명</strong></div>
             </div>
-            <span class="pill good" id="parkingPolicyPill">2시간 × 2계정</span>
+            <div class="list compact-list renewal-list" id="renewalPipelineList" aria-live="polite">
+              <div class="empty-state">확인 중입니다.</div>
+            </div>
           </div>
+        </details>
+
+        <details class="panel action-disclosure parking-panel" id="parkingTools">
+          <summary>
+            <span><strong>주차등록</strong><small>차량 등록 또는 오늘 주차권 적용</small></span>
+            <span class="pill good" id="parkingPolicyPill">2시간 × 2계정</span>
+          </summary>
+          <div class="disclosure-body">
           <form class="action-form parking-form" id="parkingRegistrationForm">
             <label>
               <span>구분</span>
@@ -140,11 +187,11 @@
                 <option value="visitor">방문</option>
               </select>
             </label>
-            <label>
+            <label id="parkingOwnerNameField">
               <span>이름</span>
-              <input id="parkingOwnerName" name="ownerName" type="text" autocomplete="name" placeholder="회원명, 강사명, 방문객명" />
+              <input id="parkingOwnerName" name="ownerName" type="text" autocomplete="name" placeholder="회원명 또는 강사명" />
             </label>
-            <label>
+            <label id="parkingOwnerPhoneField">
               <span>연락처</span>
               <input id="parkingOwnerPhone" name="ownerPhone" type="tel" inputmode="numeric" autocomplete="tel" placeholder="010-0000-0000" />
             </label>
@@ -188,16 +235,15 @@
               </div>
             </article>
           </div>
-        </section>
-
-        <section class="panel">
-          <div class="panel-header">
-            <div>
-              <h2>수강료 문의 즉시발송</h2>
-              <p>문의 전화번호를 확인하고, 승인된 수강료 안내 알림톡을 바로 보냅니다.</p>
-            </div>
-            <span class="pill">quick action</span>
           </div>
+        </details>
+
+        <details class="panel action-disclosure" id="pricingInquiry">
+          <summary>
+            <span><strong>수강료 문의</strong><small>전화번호 입력 후 안내 알림톡 발송</small></span>
+            <span class="pill">바로 발송</span>
+          </summary>
+          <div class="disclosure-body">
           <form class="action-form" id="pricingInquiryForm">
             <label>
               <span>휴대폰 번호</span>
@@ -239,85 +285,58 @@
               <div class="empty-state">최근 발송 이력을 불러오면 여기에 표시됩니다.</div>
             </div>
           </div>
-        </section>
-
-        <section class="panel" aria-label="메뉴별 현황">
-          <div class="panel-header">
-            <div><h2>업무 영역</h2><p>각 메뉴는 누적 로그가 아니라 운영자가 실제 업무를 처리하는 작업판입니다.</p></div>
-            <span class="pill">operator map</span>
-          </div>
-          <div class="ops-board">
-            <a class="ops-card status-link" href="./members/">
-              <div class="ops-card-header"><h3>회원</h3><span class="pill">Members</span></div>
-              <strong id="homeMemberTotal">회원 데이터</strong>
-              <p id="homeMemberNote">전체 회원 목록과 상태를 확인합니다.</p>
-            </a>
-            <a class="ops-card status-link" href="./private/">
-              <div class="ops-card-header"><h3>프라이빗</h3><span class="pill warn">Private</span></div>
-              <strong id="homePrivateCardTotal">프라이빗 진행</strong>
-              <p id="homePrivateCardNote">설문, 리포트, 발송 상태를 봅니다.</p>
-            </a>
-            <a class="ops-card status-link" href="./messages/">
-              <div class="ops-card-header"><h3>알림톡</h3><span class="pill">Messages</span></div>
-              <strong id="homeMessageTotal">알림톡</strong>
-              <p id="homeMessageNote">최근 후보와 발송 로그 상태를 확인합니다.</p>
-            </a>
-            <a class="ops-card status-link" href="./staff/">
-              <div class="ops-card-header"><h3>강사</h3><span class="pill">Staff</span></div>
-              <strong>인사기록카드</strong>
-              <p>평가 퀴즈 결과와 강사별 검토 기록을 확인합니다.</p>
-            </a>
-            <a class="ops-card status-link" href="./automation/">
-              <div class="ops-card-header"><h3>자동화</h3><span class="pill good">Automation</span></div>
-              <strong id="homeAutomationCardTotal">자동화</strong>
-              <p id="homeAutomationCardNote">자동화 실패/지연 여부를 먼저 확인합니다.</p>
-            </a>
-          </div>
-        </section>
-
-        <details class="panel diagnostic-panel">
-          <summary>
-            <span>시스템 진단과 표시 기준 보기</span>
-            <small>원본 import, 데이터 품질, workLane, 홈 노출 규칙은 필요할 때만 펼칩니다.</small>
-          </summary>
-          <div class="flow-list queue-principles">
-            <div><strong>보여줌</strong><span>발송 실패, 회원가입 후속 실패, 자동화 실패처럼 운영자가 당장 처리해야 하는 항목</span></div>
-            <div><strong>분리</strong><span>프라이빗 리포트 진행 건은 미해결 총합에 넣지 않고 프라이빗 카드와 Private 탭에서 확인</span></div>
-            <div><strong>남겨둠</strong><span>날짜가 바뀌어도 해결 전까지 사라지면 안 되는 실패·보류 업무</span></div>
-            <div><strong>숨김</strong><span>정상 정규화, 중복 차단, source import row 수 같은 내부 진단 로그</span></div>
-            <div><strong>상승</strong><span>자동 처리 실패 또는 같은 warning 반복 시 운영 큐로 올림</span></div>
-          </div>
-          <div class="ops-board">
-            <a class="ops-card status-link" href="./automation/">
-              <div class="ops-card-header"><h3>워크라인</h3><span class="pill">lane</span></div>
-              <strong id="laneStatus">준비</strong>
-              <p id="laneUpdated">workLanes 연결 전</p>
-            </a>
-            <a class="ops-card status-link" href="./imports/">
-              <div class="ops-card-header"><h3>최근 원본</h3><span class="pill">source</span></div>
-              <strong id="homeImportTotal">원본 데이터</strong>
-              <p id="homeImportNote">회원목록, 예약내역, 삭제 수업 import 상태를 봅니다.</p>
-            </a>
-            <a class="ops-card status-link" href="./imports/">
-              <div class="ops-card-header"><h3>품질 진단</h3><span class="pill warn">quality</span></div>
-              <strong id="homeQualityTotal">열린 이슈 없음</strong>
-              <p id="homeQualityNote">운영자 액션이 필요한 이슈만 표시합니다.</p>
-            </a>
           </div>
         </details>
 
-        <section class="panel" aria-label="자동화 관제">
-          <div class="panel-header">
-            <div>
-              <h2>자동화 관제</h2>
-              <p>실패/중단이 있을 때만 홈 액션 큐로 올라옵니다.</p>
+        <details class="panel action-disclosure" id="recommendedMealProgram">
+          <summary>
+            <span><strong>추천식단 프로그램</strong><small>회원 확인 후 생활·식습관 설문 알림톡 발송</small></span>
+            <span class="pill">단건 발송</span>
+          </summary>
+          <div class="disclosure-body">
+            <form class="action-form" id="recommendedMealProgramForm">
+              <label>
+                <span>회원 휴대폰 번호</span>
+                <input id="recommendedMealPhone" name="phone" type="tel" inputmode="numeric" autocomplete="tel" placeholder="010-0000-0000" />
+              </label>
+              <label>
+                <span>회원명</span>
+                <input id="recommendedMealName" name="memberName" type="text" autocomplete="name" placeholder="동일 번호 구분을 위해 입력 권장" />
+              </label>
+              <label class="wide">
+                <span>내부 메모</span>
+                <textarea id="recommendedMealNote" name="note" rows="2" placeholder="회원 목표나 상담 배경을 적습니다. 설문과 알림톡 본문에는 포함되지 않습니다."></textarea>
+              </label>
+              <div class="action-form-footer">
+                <button class="primary-action" id="recommendedMealSendButton" type="submit">추천식단 설문 발송</button>
+                <button
+                  class="secondary-action"
+                  id="recommendedMealHistoryToggle"
+                  type="button"
+                  aria-expanded="false"
+                  aria-controls="recommendedMealHistoryPanel"
+                >
+                  최근 요청 보기
+                </button>
+                <p class="form-status" id="recommendedMealStatus" role="status" aria-live="polite">
+                  회원카드와 최신 InBody 기록을 확인한 뒤 14일 유효 설문 링크를 발송합니다.
+                </p>
+              </div>
+            </form>
+            <div class="pricing-history-panel" id="recommendedMealHistoryPanel" hidden>
+              <div class="pricing-history-header">
+                <div>
+                  <strong>최근 추천식단 요청</strong>
+                  <p>발송, 설문 제출, InBody 확인 상태만 표시합니다. 민감한 설문 답변은 여기에 노출하지 않습니다.</p>
+                </div>
+                <span class="pill" id="recommendedMealHistoryCount">0건</span>
+              </div>
+              <div class="pricing-history-list" id="recommendedMealHistoryList">
+                <div class="empty-state">최근 추천식단 요청을 불러오면 여기에 표시됩니다.</div>
+              </div>
             </div>
-            <span class="pill" id="automationMode">연결 대기</span>
           </div>
-          <div class="list" id="automationList" aria-live="polite">
-            <div class="empty-state">연결 후 자동화 상태를 표시합니다.</div>
-          </div>
-        </section>
+        </details>
       </main>
     </div>
 
@@ -331,7 +350,7 @@
           <a href="./members/"><strong>회원 검색</strong><span>회원명, 전화번호, 수강권 상태 확인</span></a>
           <a href="./messages/"><strong>알림톡 확인</strong><span>후보, 발송, 실패 상태 확인</span></a>
           <a href="./private/"><strong>프라이빗 진행</strong><span>사전/사후/리포트/발송 단계 확인</span></a>
-          <a href="./automation/"><strong>자동화 관제</strong><span>LaunchAgent, 실패, 지연 상태 확인</span></a>
+          <a href="./automation/"><strong>자동화 관제</strong><span>실패와 지연 상태 확인</span></a>
         </div>
       </div>
     </div>

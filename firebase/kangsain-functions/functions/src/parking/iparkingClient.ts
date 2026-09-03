@@ -5,15 +5,19 @@ export const iparkingLoginId = defineSecret("IPARKING_LOGIN_ID");
 export const iparkingLoginPassword = defineSecret("IPARKING_LOGIN_PASSWORD");
 export const iparkingSubLoginId = defineSecret("IPARKING_SUB_LOGIN_ID");
 export const iparkingSubLoginPassword = defineSecret("IPARKING_SUB_LOGIN_PASSWORD");
+export const iparkingAccountPoolJson = defineSecret("IPARKING_ACCOUNT_POOL_JSON");
 
 const OAUTH_BASE_URL = "http://oauth.parkingcloud.co.kr";
 const DEFAULT_MEMBERS_API_BASE_URL = "http://members.iparking.co.kr/api/members";
+const DEFAULT_PRIMARY_STORE_SEQ = 287798;
+const DEFAULT_SECONDARY_STORE_SEQ = 287799;
 const AES_KEY = "DlaCkdAnr!Qwer%@)*FronT$#~KinG!!";
 const AES_IV = Buffer.alloc(16, 0);
 
 export type IparkingAuthData = {
   access_token: string;
   client_id?: string;
+  cmpy_seq?: number;
   memb_name?: string;
   stor_name?: string;
   operation_company?: Array<{ domain?: string }>;
@@ -71,9 +75,11 @@ type PostOptions = {
 };
 
 export type IparkingAccountConfig = {
-  label: "primary" | "sub";
+  label: string;
+  role: "main" | "sub";
   loginId: string;
   loginPassword: string;
+  storeSeq?: number;
 };
 
 export class IparkingApiError extends Error {
@@ -241,16 +247,96 @@ export class IparkingClient {
 }
 
 export function getIparkingAccountConfigs(): IparkingAccountConfig[] {
+  const poolJson = iparkingAccountPoolJson.value();
+  if (poolJson) return parseIparkingAccountPool(poolJson);
+
   const accounts: IparkingAccountConfig[] = [];
   const primaryId = iparkingLoginId.value();
   const primaryPassword = iparkingLoginPassword.value();
   if (primaryId && primaryPassword) {
-    accounts.push({ label: "primary", loginId: primaryId, loginPassword: primaryPassword });
+    accounts.push({
+      label: "main-primary",
+      role: "main",
+      loginId: primaryId,
+      loginPassword: primaryPassword,
+      storeSeq: DEFAULT_PRIMARY_STORE_SEQ,
+    });
   }
   const subId = iparkingSubLoginId.value();
   const subPassword = iparkingSubLoginPassword.value();
   if (subId && subPassword) {
-    accounts.push({ label: "sub", loginId: subId, loginPassword: subPassword });
+    accounts.push({
+      label: "main-secondary",
+      role: "main",
+      loginId: subId,
+      loginPassword: subPassword,
+      storeSeq: DEFAULT_SECONDARY_STORE_SEQ,
+    });
   }
   return accounts;
+}
+
+export function resolveIparkingAccountStoreSeq(account: IparkingAccountConfig, fallback: number): number {
+  const storeSeq = Number(account.storeSeq || fallback);
+  if (!Number.isInteger(storeSeq) || storeSeq <= 0) {
+    throw new IparkingApiError(`iParking ${account.label} 상점 번호가 올바르지 않습니다`, undefined, false);
+  }
+  return storeSeq;
+}
+
+export function parseIparkingAccountPool(raw: string): IparkingAccountConfig[] {
+  let parsed: unknown;
+  try {
+    parsed = JSON.parse(raw);
+  } catch {
+    throw new IparkingApiError("iParking 계정 풀 Secret이 올바른 JSON이 아닙니다", undefined, false);
+  }
+
+  const rows = Array.isArray(parsed)
+    ? parsed
+    : parsed && typeof parsed === "object" && Array.isArray((parsed as { accounts?: unknown }).accounts)
+      ? (parsed as { accounts: unknown[] }).accounts
+      : null;
+  if (!rows?.length) {
+    throw new IparkingApiError("iParking 계정 풀 Secret에 accounts가 없습니다", undefined, false);
+  }
+
+  const accounts = rows.map((row, index) => {
+    if (!row || typeof row !== "object") {
+      throw new IparkingApiError(`iParking 계정 풀 ${index + 1}번 항목이 올바르지 않습니다`, undefined, false);
+    }
+    const value = row as Record<string, unknown>;
+    const label = String(value.label || "").trim();
+    const role = String(value.role || "").trim();
+    const loginId = String(value.loginId || "").trim();
+    const loginPassword = String(value.loginPassword || "");
+    const storeSeq = Number(value.storeSeq);
+    if (!label || !loginId || !loginPassword || !["main", "sub"].includes(role)) {
+      throw new IparkingApiError(`iParking 계정 풀 ${index + 1}번 필수값이 없습니다`, undefined, false);
+    }
+    if (!Number.isInteger(storeSeq) || storeSeq <= 0) {
+      throw new IparkingApiError(`iParking 계정 풀 ${label}의 storeSeq가 올바르지 않습니다`, undefined, false);
+    }
+    return {
+      label,
+      role: role as "main" | "sub",
+      loginId,
+      loginPassword,
+      storeSeq,
+    };
+  });
+
+  const loginIds = accounts.map((account) => account.loginId);
+  const storeSeqs = accounts.map((account) => account.storeSeq);
+  if (new Set(loginIds).size !== loginIds.length || new Set(storeSeqs).size !== storeSeqs.length) {
+    throw new IparkingApiError("iParking 계정 풀에 중복 loginId 또는 storeSeq가 있습니다", undefined, false);
+  }
+
+  return accounts
+    .map((account, index) => ({ account, index }))
+    .sort((left, right) => {
+      const roleOrder = Number(left.account.role === "sub") - Number(right.account.role === "sub");
+      return roleOrder || left.index - right.index;
+    })
+    .map(({ account }) => account);
 }

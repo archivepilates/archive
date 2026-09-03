@@ -1,0 +1,44 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<!DOCTYPE plist PUBLIC "-//Apple//DTD PLIST 1.0//EN" "http://www.apple.com/DTDs/PropertyList-1.0.dtd">
+<plist version="1.0">
+<dict>
+  <key>Label</key>
+  <string>com.archive.monthly-ticket-liability</string>
+  <key>ProgramArguments</key>
+  <array>
+    <string>/opt/homebrew/bin/node</string>
+    <string>/Users/archivepilates/dev/archive-in-runtime/scripts/generate-studiomate-ticket-liability-report.mjs</string>
+    <string>--month-end-only</string>
+    <string>--publish</string>
+    <string>--drive-copy</string>
+    <string>--report</string>
+    <string>/Users/archivepilates/ArchiveIN/automation/reports/ticket-liability/latest.html</string>
+    <string>--json</string>
+    <string>/Users/archivepilates/ArchiveIN/automation/reports/ticket-liability/latest.json</string>
+  </array>
+  <key>StartCalendarInterval</key>
+  <dict>
+    <key>Hour</key>
+    <integer>22</integer>
+    <key>Minute</key>
+    <integer>0</integer>
+  </dict>
+  <key>EnvironmentVariables</key>
+  <dict>
+    <key>GOOGLE_APPLICATION_CREDENTIALS</key>
+    <string>/Users/archivepilates/ArchiveIN/secrets/google/archive-codex-operator.json</string>
+    <key>GOOGLE_CLOUD_PROJECT</key>
+    <string>archive-pilates</string>
+    <key>PATH</key>
+    <string>/opt/homebrew/bin:/usr/local/bin:/usr/bin:/bin</string>
+    <key>TZ</key>
+    <string>Asia/Seoul</string>
+  </dict>
+  <key>StandardOutPath</key>
+  <string>/Users/archivepilates/ArchiveIN/emergency/logs/monthly-ticket-liability.out.log</string>
+  <key>StandardErrorPath</key>
+  <string>/Users/archivepilates/ArchiveIN/emergency/logs/monthly-ticket-liability.err.log</string>
+  <key>WorkingDirectory</key>
+  <string>/Users/archivepilates/dev/archive-in-runtime</string>
+</dict>
+</plist>

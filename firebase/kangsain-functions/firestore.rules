@@ -39,6 +39,10 @@ service cloud.firestore {
         );
     }
 
+    function sameStudioClaim(studioId) {
+      return signedIn() && request.auth.token.studioId == studioId;
+    }
+
     function isIncludedStaff(data) {
       return signedIn() &&
         data.staffIds is list &&
@@ -60,6 +64,21 @@ service cloud.firestore {
     match /staffs/{staffId} {
       allow read: if isManager() || isInstructor(staffId);
       allow write: if false;
+    }
+
+    match /staffEvaluationSubmissions/{submissionId} {
+      allow read: if isManager();
+      allow write: if false;
+    }
+
+    match /staffHrCards/{staffId} {
+      allow read: if isManager();
+      allow write: if false;
+
+      match /quizResults/{resultId} {
+        allow read: if isManager();
+        allow write: if false;
+      }
     }
 
     match /lectures/{lectureId} {
@@ -133,6 +152,55 @@ service cloud.firestore {
       allow write: if false;
     }
 
+    match /renewalCases/{caseId} {
+      allow read: if isManager() && sameStudio(resource.data.studioId);
+      allow update: if isManager() &&
+        sameStudio(resource.data.studioId) &&
+        request.resource.data.diff(resource.data).affectedKeys().hasOnly([
+          'workflowStatus',
+          'operatorNote',
+          'nextActionAt',
+          'operatorUpdatedAt',
+          'operatorUpdatedByUid',
+          'updatedAt'
+        ]) &&
+        request.resource.data.workflowStatus in ['open', 'contacted', 'considering', 'snoozed', 'resolved', 'excluded'] &&
+        request.resource.data.operatorUpdatedByUid == request.auth.uid &&
+        request.resource.data.operatorUpdatedAt is timestamp &&
+        request.resource.data.updatedAt is timestamp;
+      allow create, delete: if false;
+    }
+
+    match /refundCases/{caseId} {
+      allow read: if isManager() && sameStudioClaim(resource.data.studioId);
+      allow write: if false;
+    }
+
+    match /eformsignRefundJobs/{jobId} {
+      allow read, write: if false;
+    }
+
+    match /instructorLessonRegistrations/{registrationId} {
+      allow read: if isManager() && sameStudioClaim(resource.data.studioId);
+      allow write: if false;
+    }
+
+    match /studiomateInstructorLessonJobs/{jobId} {
+      allow read, write: if false;
+    }
+
+    match /eformsignInstructorMemberJobs/{jobId} {
+      allow read, write: if false;
+    }
+
+    match /instructorMemberConsents/{consentId} {
+      allow read, write: if false;
+    }
+
+    match /studiomateRefundSmsJobs/{jobId} {
+      allow read, write: if false;
+    }
+
     match /memberContactIndex/{memberId} {
       allow read: if isManager() && sameStudio(resource.data.studioId);
       allow write: if false;
@@ -163,6 +231,26 @@ service cloud.firestore {
       allow write: if false;
     }
 
+    match /socialContentDrafts/{contentId} {
+      allow read: if isManager() && sameStudio(resource.data.studioId);
+      allow write: if false;
+    }
+
+    match /socialPublishJobs/{jobId} {
+      allow read: if isManager() && sameStudio(resource.data.studioId);
+      allow write: if false;
+    }
+
+    match /socialPublishLogs/{logId} {
+      allow read: if isManager() && sameStudio(resource.data.studioId);
+      allow write: if false;
+    }
+
+    match /socialInsightsSnapshots/{snapshotId} {
+      allow read: if isManager() && sameStudio(resource.data.studioId);
+      allow write: if false;
+    }
+
     match /onsiteWelcomeRequests/{requestId} {
       allow read: if isManager() && sameStudio(resource.data.studioId);
       allow write: if false;
@@ -174,6 +262,26 @@ service cloud.firestore {
     }
 
     match /pricingInquiryAlimtalkRequests/{requestId} {
+      allow read: if isManager() && sameStudio(resource.data.studioId);
+      allow write: if false;
+    }
+
+    match /recommendedMealProgramRequests/{requestId} {
+      allow read: if isManager() && sameStudio(resource.data.studioId);
+      allow write: if false;
+    }
+
+    match /recommendedMealProgramResponses/{responseId} {
+      allow read: if isManager() && sameStudio(resource.data.studioId);
+      allow write: if false;
+    }
+
+    match /recommendedMealProgramDrafts/{draftId} {
+      allow read: if isManager() && sameStudio(resource.data.studioId);
+      allow write: if false;
+    }
+
+    match /recommendedMealProgramReports/{reportId} {
       allow read: if isManager() && sameStudio(resource.data.studioId);
       allow write: if false;
     }
@@ -203,6 +311,11 @@ service cloud.firestore {
     }
 
     match /privateSurveyResponses/{responseId} {
+      allow read: if isManager() && sameStudio(resource.data.studioId);
+      allow write: if false;
+    }
+
+    match /privateSurveyRequests/{requestId} {
       allow read: if isManager() && sameStudio(resource.data.studioId);
       allow write: if false;
     }
@@ -382,6 +495,11 @@ service cloud.firestore {
       allow write: if false;
     }
 
+    match /privateLessonSessions/{sessionId} {
+      allow read: if isManager();
+      allow write: if false;
+    }
+
     match /lessonOccurrences/{occurrenceId} {
       allow read: if isManager();
       allow write: if false;
@@ -404,6 +522,11 @@ service cloud.firestore {
 
     match /dashboardSnapshots/{snapshotId} {
       allow read: if signedIn() && snapshotId == 'current';
+      allow write: if false;
+    }
+
+    match /ticketLiabilityReports/{reportId} {
+      allow read: if isManager() && sameStudio(resource.data.studioId);
       allow write: if false;
     }
 
@@ -471,6 +594,31 @@ service cloud.firestore {
     }
 
     match /apiLogs/{logId} {
+      allow read: if isManager();
+      allow write: if false;
+    }
+
+    match /automationStatus/{automationId} {
+      allow read: if isManager();
+      allow write: if false;
+    }
+
+    match /dataQualityIssues/{issueId} {
+      allow read: if isManager();
+      allow write: if false;
+    }
+
+    match /codexActionQueue/{queueId} {
+      allow read: if isManager();
+      allow write: if false;
+    }
+
+    match /systemHealthRuns/{runId} {
+      allow read: if isManager();
+      allow write: if false;
+    }
+
+    match /systemHealthFindings/{findingId} {
       allow read: if isManager();
       allow write: if false;
     }

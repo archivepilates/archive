@@ -24,6 +24,13 @@ export const archiveSourceCollections = [
 export const archiveActionCollections = [
   archiveCollections.alimtalkCandidates,
   archiveCollections.alimtalkSends,
+  archiveCollections.renewalCases,
+  archiveCollections.refundCases,
+  archiveCollections.eformsignRefundJobs,
+  archiveCollections.instructorLessonRegistrations,
+  archiveCollections.studiomateInstructorLessonJobs,
+  archiveCollections.eformsignInstructorMemberJobs,
+  archiveCollections.instructorMemberConsents,
   archiveCollections.contactSyncJobs,
   archiveCollections.adminSyncRequests,
   archiveCollections.memberSignupContracts,
@@ -38,6 +45,7 @@ export const archiveComputedCollections = [
   archiveCollections.adminActions,
   archiveCollections.instructorViews,
   archiveCollections.dashboardSnapshots,
+  archiveCollections.ticketLiabilityReports,
 ] as const;
 
 export const archiveMirrorCollections = [
@@ -47,11 +55,18 @@ export const archiveMirrorCollections = [
 
 export const archiveIncubationCollections = [archiveCollections.workLanes] as const;
 
-export const archiveExternalProjectionTargets = ["notionPrivateCharts", "googleDriveReports", "solapi", "studiomate"] as const;
+export const archiveExternalProjectionTargets = [
+  "notionPrivateCharts",
+  "googleDriveReports",
+  "solapi",
+  "studiomate",
+  "eformsign",
+] as const;
 
 export const memberFacingActionForbiddenSourceCollections = [
   ...archiveMirrorCollections,
   ...archiveIncubationCollections,
+  archiveCollections.renewalCases,
 ] as const;
 
 export const archiveCanonicalSourcePolicy = {

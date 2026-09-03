@@ -1,0 +1,92 @@
+<!doctype html>
+<html lang="ko">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1">
+  <link rel="icon" href="data:,">
+  <title>ARCHIVE PILATES 알림톡 최근 발송 감사</title>
+  <style>
+    * { box-sizing: border-box; }
+    body { margin: 0; background: #f6f5f2; color: #181817; font-family: -apple-system, BlinkMacSystemFont, "Apple SD Gothic Neo", "Noto Sans KR", sans-serif; line-height: 1.55; }
+    main { width: min(100% - 32px, 1040px); margin: 40px auto 64px; }
+    header { padding: 32px 0 24px; border-bottom: 2px solid #1d1d1b; }
+    h1 { margin: 0 0 8px; font-size: 30px; letter-spacing: 0; }
+    h2 { margin: 36px 0 14px; font-size: 20px; letter-spacing: 0; }
+    p { margin: 0 0 10px; }
+    .muted { color: #6a6964; }
+    .grid { display: grid; grid-template-columns: repeat(4, minmax(0, 1fr)); gap: 12px; margin-top: 20px; }
+    .metric { min-height: 112px; padding: 18px; background: #fff; border: 1px solid #ddd9d1; border-radius: 6px; }
+    .metric strong { display: block; margin-top: 8px; font-size: 26px; }
+    .status { display: inline-block; padding: 3px 8px; border-radius: 4px; font-size: 13px; font-weight: 700; }
+    .ok { color: #175e3a; background: #e4f1e9; }
+    .warn { color: #8a3d22; background: #f8e8df; }
+    table { width: 100%; border-collapse: collapse; background: #fff; border: 1px solid #ddd9d1; }
+    th, td { padding: 13px 14px; text-align: left; vertical-align: top; border-bottom: 1px solid #e7e4de; }
+    th { width: 22%; color: #55534f; background: #f1f0ec; font-size: 14px; }
+    ul, ol { margin: 8px 0 0; padding-left: 22px; }
+    li { margin: 7px 0; }
+    .note { margin-top: 18px; padding: 16px 18px; border-left: 4px solid #c54b31; background: #fff; }
+    code { font-family: ui-monospace, SFMono-Regular, Menlo, monospace; font-size: .92em; }
+    @media (max-width: 760px) {
+      main { width: min(100% - 24px, 1040px); margin-top: 16px; }
+      h1 { font-size: 25px; }
+      .grid { grid-template-columns: repeat(2, minmax(0, 1fr)); }
+      table, tbody, tr, th, td { display: block; }
+      th { width: 100%; border-bottom: 0; padding-bottom: 5px; }
+      td { padding-top: 5px; }
+    }
+  </style>
+</head>
+<body>
+  <main>
+    <header>
+      <h1>알림톡 최근 발송 감사</h1>
+      <p>2026.08.20 00:00 ~ 2026.09.03 16:20 KST</p>
+      <p class="muted">SOLAPI 실제 발송, Firestore 후보·발송 장부, 활성 스텝, 현재 예약·수강권 상태를 읽기 전용으로 대조했습니다.</p>
+    </header>
+
+    <section class="grid" aria-label="핵심 지표">
+      <div class="metric"><span>SOLAPI 발송</span><strong>404건</strong><span class="status ok">수신 완료 404</span></div>
+      <div class="metric"><span>Firestore 발송 장부</span><strong>403건</strong><span class="status ok">실패 0</span></div>
+      <div class="metric"><span>확정 중복 묶음</span><strong>4명</strong><span class="status warn">초과 7건</span></div>
+      <div class="metric"><span>미종결 후보</span><strong>51건</strong><span class="status warn">모두 과거일</span></div>
+    </section>
+
+    <h2>판정</h2>
+    <table>
+      <tbody>
+        <tr><th>전송 안정성</th><td>SOLAPI 404건은 모두 수신 완료였고 공급자 실패는 없었습니다. Firestore의 완료 발송 403건도 SOLAPI에서 모두 확인됐습니다.</td></tr>
+        <tr><th>예약오픈 중복</th><td>동일 전화번호와 동일 예약주차로 두 번 발송된 건은 0건입니다.</td></tr>
+        <tr><th>확정 중복</th><td>장기 미방문 안내가 김보현2 3회, 김기효 4회, 안미영 2회, 안종수 2회 발송됐습니다. 최초 1회를 제외하면 초과 발송은 총 7건입니다.</td></tr>
+        <tr><th>스텝 오발송</th><td>김기효 장기 미방문 4건과 김기효·배민진 예약오픈 2건은 일반회원용 정기 알림에서 제외됐어야 합니다. 정은영 현장 웰컴 1건은 운영자가 승인한 일회성 예외라 오발송으로 분류하지 않았습니다.</td></tr>
+        <tr><th>회원관리 알림 겹침</th><td>7명이 14일 이내 회원관리성 알림을 2회 이상 받았습니다. 특히 진여정은 동일 재등록 건으로 3회, 양효정은 동일 재등록 건으로 2회 받아 현재의 템플릿별 중복 규칙만으로는 알림 피로도를 막지 못합니다.</td></tr>
+        <tr><th>장기 미방문 재판정</th><td>31건을 현재 정책으로 다시 계산하면 9건만 유지되고 22건은 예정예약 8, 활성 수강권 없음 5, 새 수강권 주기 4, 홀딩 3, 대기예약 2로 차단됩니다. 발송 후 상태가 바뀐 경우가 있을 수 있어 22건 전체를 과거 오발송으로 단정하지는 않습니다.</td></tr>
+        <tr><th>김수민 건</th><td>9월 3일 11:30 발송은 새 수강권·예약 상태를 놓친 오발송으로 확인됐고, 같은 날 14:12 배포된 원천 재검사 규칙으로 차단되도록 수정된 상태입니다.</td></tr>
+        <tr><th>장부 밖 발송</th><td>8월 24일 김기효에게 보낸 구형 강사레슨 자료 테스트 1건은 SOLAPI에는 있으나 Firestore 발송 장부에는 없습니다. 운영회원 발송은 아니지만 수동 발송 감사 공백입니다.</td></tr>
+      </tbody>
+    </table>
+
+    <h2>현재 상태</h2>
+    <ul>
+      <li>알림톡 관련 Scheduler 6개는 모두 <code>ENABLED</code>, 대응 Functions는 모두 <code>ACTIVE</code>입니다.</li>
+      <li>현재 <code>queued</code>, <code>processing</code>, <code>failed</code> 후보는 0건입니다.</li>
+      <li>8월 29일 이후 활성 스텝에게 일반회원용 정기 알림이 발송된 사례는 없습니다.</li>
+      <li>9월 3일 템플릿 상태 동기화는 19개 중 17개 성공, 미사용 추천식단 도착 v1과 보류 중인 인바디 리포트 v1 조회만 경고가 발생했습니다. 실제 발송 실패로 이어지지는 않았습니다.</li>
+    </ul>
+
+    <h2>개선 우선순위</h2>
+    <ol>
+      <li><strong>스텝 제외를 동적으로 통합:</strong> 수동 회원 ID 목록 대신 <code>memberGrade=스텝</code>과 활성 <code>staffs</code> 전화번호를 후보 생성과 발송 직전 모두 검사합니다. 명시적인 운영자 테스트만 1회 예외로 둡니다.</li>
+      <li><strong>회원관리 알림 통합 쿨다운:</strong> 기간만료·잔여횟수·프라이빗·장기미방문 전체에 대해 회원과 <code>renewalCaseId</code> 기준 14일 1회로 묶고, 동시에 여러 조건이면 가장 긴급한 한 문구만 선택합니다.</li>
+      <li><strong>과거 후보 자동 종결:</strong> 발송일이 지난 <code>candidate</code> 51건을 <code>skipped/stale_source_date</code>로 닫아 미해결 목록과 운영 판단을 흐리지 않게 합니다.</li>
+      <li><strong>SOLAPI 장부 일치:</strong> 관리자 콘솔 수동 발송은 운영 채널에서 금지하거나, 일일 대조에서 Firestore 미기록 발송을 자동으로 확인필요 처리합니다.</li>
+      <li><strong>비활성 템플릿 분리:</strong> 미사용·보류 템플릿을 운영 상태 동기화 대상에서 제외해 실제 장애 경고와 구분합니다.</li>
+    </ol>
+
+    <div class="note">
+      <strong>운영 판단</strong>
+      <p>현재 즉시 재발송되거나 실패한 큐는 없습니다. 다만 스텝 동적 제외와 회원관리 통합 쿨다운은 코드상 남아 있는 실제 빈틈이므로 다음 배포에서 함께 보강하는 것이 적절합니다.</p>
+    </div>
+  </main>
+</body>
+</html>

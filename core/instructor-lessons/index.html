@@ -1,0 +1,150 @@
+<!doctype html>
+<html lang="ko">
+  <head>
+    <meta charset="utf-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1" />
+    <meta name="theme-color" content="#f8f5ef" />
+    <link rel="icon" type="image/png" sizes="32x32" href="/icons/favicon-32.png?v=1" />
+    <link rel="shortcut icon" type="image/png" href="/favicon.png?v=1" />
+    <link rel="icon" type="image/png" sizes="192x192" href="/icons/archive-pilates-icon-192.png?v=1" />
+    <link rel="apple-touch-icon" sizes="180x180" href="/icons/apple-touch-icon.png?v=1" />
+    <link rel="manifest" href="/site.webmanifest?v=1" />
+    <title>강사레슨 · ARCHIVE CORE</title>
+    <link rel="stylesheet" href="../assets/styles.css" />
+    <script src="../firebase-config.js"></script>
+    <script type="module" src="../assets/app.js"></script>
+  </head>
+  <body data-firestore-dashboard data-instructor-lessons-dashboard>
+    <div class="shell">
+      <aside class="sidebar" aria-label="ARCHIVE CORE navigation">
+        <div class="brand">
+          <div class="brand-mark" aria-hidden="true">CORE</div>
+          <strong>ARCHIVE CORE</strong>
+          <span>ARCHIVE PILATES Operations Platform</span>
+        </div>
+        <nav class="nav">
+          <a href="../" data-section="home">Home <small>요약</small></a>
+          <a href="./" data-section="instructor-lessons">Instructor <small>강사레슨</small></a>
+          <a href="../private/" data-section="private">Private <small>차트</small></a>
+          <a href="../staff/" data-section="staff">Staff <small>강사</small></a>
+          <a href="../messages/" data-section="messages">Messages <small>알림톡</small></a>
+          <a href="../automation/" data-section="automation">Automation <small>관제</small></a>
+          <a href="../business/" data-section="business">Business <small>지표</small></a>
+          <a href="../imports/" data-section="imports">Imports <small>원본</small></a>
+          <a href="../rules/" data-section="rules">Rules <small>규칙</small></a>
+          <a href="../settings/" data-section="settings">Settings <small>설정</small></a>
+        </nav>
+      </aside>
+
+      <main class="main instructor-lessons-page">
+        <header class="topbar">
+          <div class="title-block">
+            <p class="eyebrow">ARCHIVE METHOD</p>
+            <h1>강사레슨</h1>
+          </div>
+          <div class="top-actions" aria-label="상태 확인">
+            <div class="connection-card" aria-live="polite">
+              <span id="connectionLabel">로딩</span>
+              <strong id="connectionDetail">운영 도구 연결 준비 중</strong>
+            </div>
+            <button class="refresh-button" id="refreshButton" type="button">새로고침</button>
+          </div>
+        </header>
+
+        <section class="instructor-seat-overview" aria-label="강사레슨 일정별 예약 인원, 정원, 남은 좌석">
+          <div class="instructor-seat-overview-head">
+            <div>
+              <p class="eyebrow">UPCOMING</p>
+              <h2 id="instructorLessonScheduleHeading">일정별 예약현황</h2>
+            </div>
+            <strong id="instructorLessonScheduleSummary">불러오는 중</strong>
+          </div>
+          <div class="instructor-seat-list" id="instructorLessonScheduleList" aria-live="polite">
+            <div class="empty-state">강사레슨 일정을 불러오는 중입니다.</div>
+          </div>
+        </section>
+
+        <section class="grid kpis instructor-registration-kpis" aria-label="강사레슨 등록 현황">
+          <article class="panel metric"><div class="metric-label">진행중 전체</div><div class="metric-value" id="instructorLessonActiveCount">0건</div></article>
+          <article class="panel metric"><div class="metric-label">가입서 대기</div><div class="metric-value" id="instructorLessonSignatureCount">0건</div></article>
+          <article class="panel metric"><div class="metric-label">확인필요</div><div class="metric-value" id="instructorLessonReviewCount">0건</div></article>
+          <article class="panel metric"><div class="metric-label">완료</div><div class="metric-value" id="instructorLessonCompletedCount">0건</div></article>
+        </section>
+
+        <section class="grid instructor-registration-layout">
+          <article class="panel instructor-registration-panel">
+            <div class="panel-header">
+              <div><h2>수강 등록</h2><p>수업 생성 전에도 접수할 수 있습니다. 수강권 발급 뒤 안내는 자동 발송되고 반배정·예약은 직접 처리합니다.</p></div>
+              <span class="pill">single</span>
+            </div>
+            <form id="instructorLessonRegistrationForm" class="instructor-registration-form">
+              <div class="instructor-registration-fields">
+                <label>
+                  <span>강사 이름</span>
+                  <input id="instructorLessonMemberName" name="memberName" type="text" autocomplete="name" maxlength="40" required />
+                </label>
+                <label>
+                  <span>휴대폰번호</span>
+                  <input id="instructorLessonMemberPhone" name="memberPhone" type="tel" inputmode="numeric" autocomplete="tel" placeholder="01012345678" maxlength="13" required />
+                </label>
+                <label>
+                  <span>수강일</span>
+                  <input id="instructorLessonDate" name="lessonDate" type="date" required />
+                </label>
+                <label>
+                  <span>결제수단</span>
+                  <select id="instructorLessonPaymentMethod" name="paymentMethod" required>
+                    <option value="">선택</option>
+                    <option value="card">카드</option>
+                    <option value="wiretransfer">계좌이체</option>
+                    <option value="cash">현금</option>
+                  </select>
+                </label>
+              </div>
+              <div class="instructor-registration-checks">
+                <label><input id="instructorLessonPaymentConfirmed" type="checkbox" required /> <span>입금 확인</span></label>
+                <label><input id="instructorLessonSeatConfirmed" type="checkbox" required /> <span>수강 접수 확인</span></label>
+              </div>
+              <button class="primary-action" id="instructorLessonRegistrationSubmit" type="submit">등록 확정</button>
+              <p class="form-status" id="instructorLessonRegistrationStatus" role="status" aria-live="polite"></p>
+            </form>
+          </article>
+
+          <aside class="panel instructor-registration-flow">
+            <div class="panel-header"><div><h2>등록 후 처리 순서</h2><p>자동화 범위와 운영자 후속 작업입니다.</p></div><span class="pill">workflow</span></div>
+            <ol class="instructor-flow-steps">
+              <li><span>1</span><div><strong>회원 확인</strong><small>강사회원 조회 또는 신규 등록</small></div></li>
+              <li><span>2</span><div><strong>수강권</strong><small>강사레슨 (2T) 발급</small></div></li>
+              <li><span>3</span><div><strong>예약확정 안내</strong><small>수강권 발급 확인 후 자동 1회 발송</small></div></li>
+              <li><span>4</span><div><strong>가입서</strong><small>신규 강사회원에게 자동 발송</small></div></li>
+              <li><span>5</span><div><strong>완료 기록</strong><small>신규 가입서 메모까지 확인</small></div></li>
+              <li><span>6</span><div><strong>반배정·예약</strong><small>수업 생성 시 StudioMate에서 직접 처리</small></div></li>
+            </ol>
+          </aside>
+        </section>
+
+        <section class="panel instructor-registration-history">
+          <div class="panel-header">
+            <div><h2>최근 등록</h2><p>진행중과 확인필요 건을 먼저 표시합니다.</p></div>
+            <div class="segmented-control" id="instructorLessonRegistrationFilters" role="group" aria-label="등록 상태 필터">
+              <button type="button" class="active" data-instructor-registration-filter="active">진행중</button>
+              <button type="button" data-instructor-registration-filter="review">확인필요</button>
+              <button type="button" data-instructor-registration-filter="completed">완료</button>
+              <button type="button" data-instructor-registration-filter="all">전체</button>
+            </div>
+          </div>
+          <div class="instructor-registration-list" id="instructorLessonRegistrationList">
+            <div class="empty-state">등록 내역을 불러오는 중입니다.</div>
+          </div>
+        </section>
+
+        <section class="instructor-tool-grid compact" aria-label="강사레슨 운영 도구">
+          <a class="instructor-tool-link primary" href="https://arcpilates.studiomate.kr/" target="_blank" rel="noopener noreferrer"><span><strong>StudioMate</strong><small>수강권·예약 확인</small></span></a>
+          <a class="instructor-tool-link" href="https://www.eformsign.com/" target="_blank" rel="noopener noreferrer"><span><strong>이폼싸인</strong><small>강사회원 가입서</small></span></a>
+          <a class="instructor-tool-link" href="../messages/"><span><strong>알림톡</strong><small>강사레슨 안내 확인</small></span></a>
+          <a class="instructor-tool-link" href="../rules/#welcome"><span><strong>운영규칙</strong><small>등록·예외 기준</small></span></a>
+        </section>
+      </main>
+    </div>
+  </body>
+</html>

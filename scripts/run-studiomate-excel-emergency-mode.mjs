@@ -6,6 +6,10 @@ import path from "node:path";
 import { createRequire } from "node:module";
 import { recordAutomationStatus } from "./lib/archive-core-ops-logging.mjs";
 import { cleanupImportedSourceFiles } from "./lib/imported-source-retention.mjs";
+import {
+  isExcludedPrivateBooking,
+  isPrivateBooking,
+} from "./lib/private-session-order-policy.mjs";
 
 const require = createRequire(import.meta.url);
 const admin = require("../firebase/kangsain-functions/functions/node_modules/firebase-admin");
@@ -17,6 +21,7 @@ const reservationFile = valueArg("--reservation-file");
 const memberFile = valueArg("--member-file");
 const reportDir = path.join(os.homedir(), "ArchiveIN/automation/reports/excel-emergency-mode");
 const PROJECT_ID = process.env.GOOGLE_CLOUD_PROJECT || process.env.GCLOUD_PROJECT || "archive-pilates";
+const STUDIO_ID = process.env.STUDIOMATE_STUDIO_ID || "5330";
 
 if (!admin.apps.length) admin.initializeApp({ projectId: PROJECT_ID });
 const db = admin.firestore();
@@ -25,6 +30,7 @@ const steps = [];
 let downloadedMemberFile = "";
 let downloadedReservationFile = "";
 let downloadedDeletedClassFile = "";
+let downloadedReservationRange = null;
 
 let downloadFailedWithoutMember = false;
 if (download) {
@@ -38,6 +44,7 @@ if (download) {
   downloadedMemberFile = downloadStep.stdout?.downloads?.member?.archivePath || downloadStep.stdout?.downloads?.member?.stagingPath || "";
   downloadedReservationFile =
     downloadStep.stdout?.downloads?.reservation?.archivePath || downloadStep.stdout?.downloads?.reservation?.stagingPath || "";
+  downloadedReservationRange = downloadStep.stdout?.downloads?.reservation?.range || null;
   downloadedDeletedClassFile =
     downloadStep.stdout?.downloads?.deletedClass?.archivePath || downloadStep.stdout?.downloads?.deletedClass?.stagingPath || "";
   downloadFailedWithoutMember = apply && !downloadedMemberFile;
@@ -49,8 +56,7 @@ if (!downloadFailedWithoutMember) {
       "scripts/emergency-import-studiomate-member-excel.mjs",
       ...(memberFile || downloadedMemberFile ? ["--file", memberFile || downloadedMemberFile] : []),
       "--allow-new-excel-profiles",
-      "--new-excel-profile-max-age-days",
-      "3",
+      "--queue-contact-sync",
       ...(apply ? ["--apply"] : []),
     ]),
   );
@@ -66,6 +72,8 @@ if (!downloadFailedWithoutMember) {
     runStep("reservations", [
       "scripts/emergency-import-studiomate-reservation-excel.mjs",
       ...(reservationFile || downloadedReservationFile ? ["--file", reservationFile || downloadedReservationFile] : []),
+      ...(downloadedReservationRange?.startDate ? ["--start-date", downloadedReservationRange.startDate] : []),
+      ...(downloadedReservationRange?.endDate ? ["--end-date", downloadedReservationRange.endDate] : []),
       ...(apply ? ["--apply"] : []),
     ]),
   );
@@ -79,6 +87,25 @@ if (!downloadFailedWithoutMember) {
         ...(apply ? ["--apply"] : []),
       ]),
     );
+  }
+
+  if (apply) {
+    const reservationStep = steps.find((step) => step.name === "reservations");
+    const affectedPrivateMemberIds = stringArray(reservationStep?.stdout?.affectedPrivateMemberIds);
+    if (affectedPrivateMemberIds.length) {
+      const delta = runStep("privateSessionLedgerDelta", [
+        "scripts/recompute-private-session-ledger.mjs",
+        "--member-ids",
+        affectedPrivateMemberIds.join(","),
+        "--apply",
+      ]);
+      steps.push(delta);
+      if (delta.exitCode === 0) {
+        steps.push(await verifyPrivateSessionOrderDelta(affectedPrivateMemberIds));
+      }
+    } else {
+      steps.push(skippedStep("privateSessionLedgerDelta", "no changed private bookings"));
+    }
   }
 }
 
@@ -125,7 +152,11 @@ console.log(JSON.stringify({ ...summary, reportPath }, null, 2));
 if (failed.length) process.exitCode = 1;
 
 function runStep(name, command) {
-  const result = spawnSync(process.execPath, command, {
+  return runCommandStep(name, [process.execPath, ...command]);
+}
+
+function runCommandStep(name, command) {
+  const result = spawnSync(command[0], command.slice(1), {
     cwd: process.cwd(),
     encoding: "utf8",
     env: process.env,
@@ -133,13 +164,73 @@ function runStep(name, command) {
   });
   return {
     name,
-    command: [process.execPath, ...command],
-    exitCode: result.status ?? 0,
+    command,
+    exitCode: result.status ?? (result.error ? 1 : 0),
     stdout: parseJsonOrText(result.stdout),
-    stderr: result.stderr.trim(),
+    stderr: String(result.error?.message || result.stderr || "").trim(),
     stdoutOk: parsedOk(result.stdout),
     requiredFailed: name === "memberProfiles" && parsedOk(result.stdout) === false,
   };
+}
+
+async function verifyPrivateSessionOrderDelta(memberIds) {
+  const result = await inspectPrivateSessionOrders(memberIds);
+  return {
+    name: "privateSessionLedgerDeltaVerify",
+    command: ["firestore", "bookings", "sessionOrder", ...memberIds],
+    exitCode: result.ok ? 0 : 1,
+    stdout: result,
+    stderr: result.ok ? "" : "private session order delta verification failed",
+    stdoutOk: result.ok,
+    requiredFailed: !result.ok,
+  };
+}
+
+async function inspectPrivateSessionOrders(memberIds) {
+  const docs = [];
+  for (const memberId of memberIds) {
+    const snap = await db
+      .collection("bookings")
+      .where("studioId", "==", STUDIO_ID)
+      .where("memberId", "==", memberId)
+      .get();
+    docs.push(...snap.docs.map((doc) => ({ id: doc.id, data: doc.data() })));
+  }
+  const privateDocs = docs.filter((doc) => isPrivateBooking(doc.data));
+  const countable = privateDocs.filter((doc) => !isExcludedPrivateBooking(doc.data));
+  const excluded = privateDocs.filter((doc) => isExcludedPrivateBooking(doc.data));
+  const missingOrder = countable.filter((doc) => !positiveNumber(doc.data?.sessionOrder?.privateCumulativeRound));
+  const excludedWithOrder = excluded.filter((doc) => positiveNumber(doc.data?.sessionOrder?.privateCumulativeRound));
+  const duplicateRounds = duplicatePrivateRounds(countable);
+  return {
+    ok: missingOrder.length === 0 && excludedWithOrder.length === 0 && duplicateRounds.length === 0,
+    memberIds,
+    privateBookings: privateDocs.length,
+    missingOrder: missingOrder.length,
+    excludedWithOrder: excludedWithOrder.length,
+    duplicateRounds: duplicateRounds.length,
+    sourceRefs: [
+      ...missingOrder.slice(0, 5).map((doc) => `bookings/${doc.id}`),
+      ...excludedWithOrder.slice(0, 5).map((doc) => `bookings/${doc.id}`),
+      ...duplicateRounds.slice(0, 5).map((doc) => `bookings/${doc.id}`),
+    ],
+  };
+}
+
+function duplicatePrivateRounds(bookings) {
+  const byKey = new Map();
+  for (const doc of bookings) {
+    const round = positiveNumber(doc.data?.sessionOrder?.privateCumulativeRound);
+    if (!round) continue;
+    const key = `${doc.data.memberId || doc.data.memberPhone || doc.data.memberName}|${round}`;
+    byKey.set(key, [...(byKey.get(key) || []), doc]);
+  }
+  return [...byKey.values()].filter((items) => items.length > 1).flat();
+}
+
+function positiveNumber(value) {
+  const number = Number(value || 0);
+  return Number.isFinite(number) && number > 0 ? number : 0;
 }
 
 function valueArg(name) {
@@ -148,6 +239,22 @@ function valueArg(name) {
   if (inline) return inline.slice(prefix.length);
   const index = process.argv.indexOf(name);
   return index >= 0 ? process.argv[index + 1] : "";
+}
+
+function stringArray(value) {
+  return Array.isArray(value) ? [...new Set(value.map((item) => String(item || "").trim()).filter(Boolean))] : [];
+}
+
+function skippedStep(name, reason) {
+  return {
+    name,
+    command: [],
+    exitCode: 0,
+    stdout: { ok: true, skipped: reason },
+    stderr: "",
+    stdoutOk: true,
+    requiredFailed: false,
+  };
 }
 
 function parseJsonOrText(value) {

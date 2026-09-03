@@ -1,0 +1,44 @@
+<!doctype html>
+<html lang="ko">
+  <head>
+    <meta charset="utf-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1" />
+    <meta name="theme-color" content="#fffdfa" />
+    <meta name="robots" content="noindex,nofollow,noarchive" />
+    <meta name="referrer" content="no-referrer" />
+    <link rel="icon" type="image/png" sizes="32x32" href="/icons/favicon-32.png?v=1" />
+    <link rel="apple-touch-icon" sizes="180x180" href="/icons/apple-touch-icon.png?v=1" />
+    <title>ARCHIVE PILATES 추천식단</title>
+    <style>
+      :root{color-scheme:light;--ink:#15171b;--muted:#666d76;--line:#e7e2db;--paper:#fffdfa;--panel:#fff;--accent:#f26a21;--soft:#f6f2ec}
+      *{box-sizing:border-box}html{-webkit-text-size-adjust:100%}body{margin:0;min-height:100dvh;background:var(--paper);color:var(--ink);font-family:-apple-system,BlinkMacSystemFont,"Apple SD Gothic Neo","Pretendard",sans-serif;line-height:1.65;word-break:keep-all;overflow-wrap:anywhere}
+      main{width:min(100% - 32px,780px);margin:0 auto;padding:40px 0 72px}.brand{display:flex;align-items:center;gap:12px;margin-bottom:40px}.mark{display:grid;place-items:center;width:48px;height:48px;border-radius:50%;background:var(--accent);color:#fff;font-weight:800}.brand strong{font-size:18px;letter-spacing:0}.hero{padding-bottom:28px;border-bottom:1px solid var(--line)}.eyebrow{margin:0 0 8px;color:var(--accent);font-size:13px;font-weight:800}.hero h1{margin:0;font-size:clamp(30px,7vw,48px);line-height:1.2;letter-spacing:0}.hero p{margin:16px 0 0;color:var(--muted);font-size:16px}.card{margin-top:20px;padding:24px;border:1px solid var(--line);border-radius:8px;background:var(--panel)}.card h2,.card h3{margin:0 0 10px;letter-spacing:0}.card p{margin:0;white-space:pre-line}.principles{margin:0;padding-left:20px}.principles li+li{margin-top:8px}.days{display:grid;gap:16px;margin-top:20px}.day{padding:22px;border-top:3px solid var(--accent);background:var(--panel);box-shadow:0 8px 28px rgba(21,23,27,.06)}.day h3{font-size:20px}.meal{display:grid;grid-template-columns:72px minmax(0,1fr);gap:12px;padding:10px 0;border-top:1px solid var(--line)}.meal:first-of-type{border-top:0}.meal strong{color:var(--muted);font-size:14px}.meal span{white-space:pre-line}.tip{margin-top:10px;padding:12px 14px;background:var(--soft);color:var(--muted);font-size:14px}.notice{border-left:4px solid var(--accent)}.loading,.error{padding:48px 24px;text-align:center;color:var(--muted)}.error{color:#a33}footer{margin-top:32px;color:var(--muted);font-size:13px;text-align:center}
+      @media (min-width:700px){main{padding-top:64px}.days{grid-template-columns:1fr 1fr}.day:last-child{grid-column:1/-1}.card{padding:30px}}
+      @media (max-width:360px){main{width:min(100% - 24px,780px)}.card,.day{padding:18px}.meal{grid-template-columns:58px minmax(0,1fr)}}
+      @media (prefers-reduced-motion:reduce){*{scroll-behavior:auto!important}}
+    </style>
+  </head>
+  <body>
+    <main>
+      <div class="brand"><div class="mark" aria-hidden="true">A</div><strong>ARCHIVE PILATES</strong></div>
+      <div id="app" class="loading" role="status" aria-live="polite">추천식단을 불러오고 있습니다.</div>
+      <footer>ARCHIVE PILATES · 생활 습관 개선을 위한 추천 자료</footer>
+    </main>
+    <script>
+      const app=document.getElementById("app");
+      const esc=(v)=>String(v??"").replace(/[&<>"']/g,(c)=>({"&":"&amp;","<":"&lt;",">":"&gt;",'"':"&quot;","'":"&#39;"}[c]));
+      const params=new URLSearchParams(location.search);const id=params.get("id")||"";const token=params.get("token")||"";
+      fetch(`/api/recommendedMealPlan?id=${encodeURIComponent(id)}&token=${encodeURIComponent(token)}`,{cache:"no-store"})
+        .then(async(r)=>{const j=await r.json().catch(()=>({}));if(!r.ok||!j.ok)throw new Error(j.error||"추천식단을 불러오지 못했습니다.");return j;})
+        .then(({memberName,content})=>{const days=Array.isArray(content.days)?content.days:[];app.className="";app.innerHTML=`
+          <section class="hero"><p class="eyebrow">7-DAY MEAL GUIDE</p><h1>${esc(content.title)}</h1><p>${esc(content.summary)}</p></section>
+          <section class="card"><h2>${esc(memberName)}님의 목표</h2><p>${esc(content.goal)}</p></section>
+          ${content.metricsSummary?`<section class="card"><h2>InBody 참고</h2><p>${esc(content.metricsSummary)}</p></section>`:""}
+          <section class="card"><h2>이번 주 실천 원칙</h2><ul class="principles">${(content.principles||[]).map((v)=>`<li>${esc(v)}</li>`).join("")}</ul></section>
+          <section class="days">${days.map((day)=>`<article class="day"><h3>${esc(day.label)}</h3>${[["아침",day.breakfast],["점심",day.lunch],["저녁",day.dinner],["간식",day.snack]].filter(([,v])=>v).map(([k,v])=>`<div class="meal"><strong>${k}</strong><span>${esc(v)}</span></div>`).join("")}${day.timingTip?`<p class="tip">${esc(day.timingTip)}</p>`:""}</article>`).join("")}</section>
+          <section class="card"><h2>함께 기억할 내용</h2>${[["수분 섭취",content.hydration],["운동 전후",content.exerciseNutrition],["주말",content.weekendStrategy]].filter(([,v])=>v).map(([k,v])=>`<h3>${k}</h3><p>${esc(v)}</p>`).join("")}</section>
+          <section class="card notice"><h2>안내</h2><p>${esc(content.caution)}</p></section>`;})
+        .catch((error)=>{app.className="error";app.textContent=error.message||"추천식단을 불러오지 못했습니다.";});
+    </script>
+  </body>
+</html>

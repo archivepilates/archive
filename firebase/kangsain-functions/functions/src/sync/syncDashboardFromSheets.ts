@@ -219,6 +219,7 @@ export function buildDashboardData(input: {
   const ticketAnalysis = input.ticketAnalysis.map(normalizeTicketAnalysisRow).filter((row) => row.월);
   const ticketSales = input.ticketSales.map(normalizeTicketSalesRow).filter((row) => row.월);
   const ticketSalesRaw = (input.ticketSalesRaw || []).map(normalizeTicketSalesRow).filter((row) => row.월);
+  const summaryTicketSales = ticketSales.length ? ticketSales : ticketSalesRaw;
   const memberSales = (input.memberSales || []).map(normalizeMemberSalesRow).filter(
     (row) => row.totalRevenue > 0 && (row.memberId || row.memberName || row.memberPhone),
   );
@@ -228,7 +229,7 @@ export function buildDashboardData(input: {
     .filter((row) => row.월 && row.이용회원수 > 0);
 
   return {
-    summary: buildSummary(settlement, instructorStats, ticketSales),
+    summary: buildSummary(settlement, instructorStats, summaryTicketSales),
     강사별: settlement
       .filter((row) => row.강사)
       .map((row) => ({
@@ -375,6 +376,7 @@ function buildSummary(
     .map((row) => ({
       ...row,
       총매출: round0(row.총매출),
+      수강권매출: round0(row.총매출),
       수업매출: round0(row.수업매출),
       실지급액: round0(row.실지급액),
       세전총액: round0(row.세전총액),
@@ -606,6 +608,10 @@ function normalizeDashboardPayload(input: Partial<DashboardData>): DashboardData
       .map((row) => ({
         월: monthKey(row.월),
         총매출: numberValue(row.총매출),
+        수강권매출: numberValue(row.수강권매출),
+        수강권총결제: numberValue(row.수강권총결제),
+        수강권환불: numberValue(row.수강권환불),
+        수강권매출원천: stringValue(row.수강권매출원천),
         수업매출: numberValue(row.수업매출),
         실지급액: numberValue(row.실지급액),
         세전총액: numberValue(row.세전총액),
@@ -654,6 +660,25 @@ function normalizeDashboardPayload(input: Partial<DashboardData>): DashboardData
         이용회원수: numberValue(row.이용회원수),
       }))
       .filter((row) => row.월 && row.이용회원수 > 0),
+    월별회원지표: (input.월별회원지표 || [])
+      .map((row) => ({
+        월: monthKey(row.월),
+        수강권보유회원수: numberValue(row.수강권보유회원수),
+        예약이용회원수: numberValue(row.예약이용회원수),
+        출석회원수: numberValue(row.출석회원수),
+        원본예약행수: numberValue(row.원본예약행수),
+        정규화예약건수: numberValue(row.정규화예약건수),
+        중복정리행수: numberValue(row.중복정리행수),
+        취소제외행수: numberValue(row.취소제외행수),
+        비예약제외행수: numberValue(row.비예약제외행수),
+        강사레슨제외행수: numberValue(row.강사레슨제외행수),
+        유효예약행수: numberValue(row.유효예약행수),
+        출석예약행수: numberValue(row.출석예약행수),
+        결석예약행수: numberValue(row.결석예약행수),
+        산출원천: stringValue(row.산출원천),
+        산출기준: stringValue(row.산출기준),
+      }))
+      .filter((row) => row.월),
     수강권TOP5: (input.수강권TOP5 || [])
       .map((row) => ({
         월: monthKey(row.월),

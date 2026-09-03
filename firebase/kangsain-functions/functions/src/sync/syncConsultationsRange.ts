@@ -3,12 +3,17 @@ import { DEFAULT_MANAGER_STAFF_ID, DEFAULT_STUDIO_ID } from "../config/constants
 import { markMissingConsultationsDeleted, upsertConsultationIfChanged } from "../firestore/consultationRepository";
 import { saveRawMirrorBatch } from "../firestore/rawMirrorRepository";
 import { refs } from "../firestore/refs";
+import { getActiveStaffs } from "../firestore/staffRepository";
 import { ManagerClient } from "../studiomate/managerClient";
 import { normalizeConsultation } from "../studiomate/normalizers";
 import type { ConsultationDoc, ContactSyncJobDoc, MemberProfileDoc } from "../types/models";
 import { dateRange, nowTimestamp } from "../utils/date";
 import { stableHash } from "../utils/hash";
-import { isProtectedStaffContact } from "./protectedContactRules";
+import {
+  type ActiveStaffContactIndex,
+  buildActiveStaffContactIndex,
+  isProtectedStaffContact,
+} from "./protectedContactRules";
 
 export async function syncConsultationsRange(input: {
   studioId?: string;
@@ -21,6 +26,7 @@ export async function syncConsultationsRange(input: {
   const client = new ManagerClient(studioId, staffId);
   const rawConsultations = await client.getCounsels({ startDate: input.startDate, endDate: input.endDate });
   const profileLookup = await uniqueMemberProfilesByName(studioId);
+  const activeStaffContacts = buildActiveStaffContactIndex(await getActiveStaffs(studioId));
   await saveRawMirrorBatch({
     studioId,
     dataset: "managerCounsels",
@@ -39,7 +45,7 @@ export async function syncConsultationsRange(input: {
     dateIds.add(consultation.consultationId);
     consultationIdsByDate.set(consultation.date, dateIds);
     if (await upsertConsultationIfChanged(consultation)) consultationsChanged++;
-    await queueConsultationContactSync(consultation);
+    await queueConsultationContactSync(consultation, activeStaffContacts);
   }
 
   let consultationsDeleted = 0;
@@ -120,9 +126,16 @@ function todayDate(): string {
   return new Date(Date.now() + 9 * 60 * 60 * 1000).toISOString().slice(0, 10);
 }
 
-async function queueConsultationContactSync(consultation: ConsultationDoc): Promise<void> {
+async function queueConsultationContactSync(
+  consultation: ConsultationDoc,
+  activeStaffContacts: ActiveStaffContactIndex,
+): Promise<void> {
   if (!consultation.memberPhone || !consultation.memberName || consultation.status === "deleted") return;
-  if (isProtectedStaffContact({ name: consultation.memberName, phone: consultation.memberPhone })) return;
+  if (
+    isProtectedStaffContact({ name: consultation.memberName, phone: consultation.memberPhone }, activeStaffContacts)
+  ) {
+    return;
+  }
 
   const contactId = consultation.memberId || `consultation_${consultation.consultationId}`;
   const contactDisplayName = formatConsultationContactDisplayName(consultation);

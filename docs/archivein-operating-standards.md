@@ -148,18 +148,27 @@ Firebase 주소록 동기화는 `home@archivepilates.com`을 Google People API �
 
 강사레슨 정산은 프라이빗 정산 요율을 그대로 적용한다. 강사레슨 별도 요율표나 그룹식 1회 고정 보수로 계산하지 않는다. 여러 회원이 참여한 강사레슨은 같은 세션 안의 참여자별 정산대상 행보수를 모두 합산하고, 세션 수는 수업 1건으로만 센다.
 
+정규직 급여와 프리랜서 수업 보수를 함께 받는 강사는 전체 수업 보수에서 정규직 세전 급여를 먼저 공제한 금액만 프리랜서 보수로 계산하고, 원천징수 후 정규직 실지급액을 한 번만 합산한다. 이전 달 명세서의 `조정내용`과 `정규직 실지급`은 열 번호가 아니라 헤더 이름으로 읽으며, 정규직 실지급액이 있는데 세전 공제액을 확인할 수 없으면 이중계상 방지를 위해 명세서 생성을 중단한다.
+
+그룹 또는 프라이빗/강사레슨 정산 대상 강사가 `아카이브 강사 보수기준표`의 해당 탭에 없으면 기본 요율을 추정 적용하지 않는다. 정산 파일 생성을 즉시 중단하고 누락 강사명과 필요한 탭을 자동화 실패 메일로 보고한다. 보수기준 변경 후 기존 월을 다시 계산할 때는 원본 수업매출 엑셀을 기준으로 `--rebuild-from-raw --apply`를 사용한다.
+
 실패 시 우선 확인 순서는 `~/ArchiveIN/emergency/logs/monthly-settlement-statements.err.log`, 전월 전체 범위 원본 엑셀, 월별정산백업 gsheet, `아카이브 월말정산/YYYYMM` 출력물이다.
 
-### StudioMate 예약 가능 기한 설정 자동화
+### 월말 수강권 잔여금액 자동화
 
-매주 월요일 12:30에 수행하는 StudioMate 예약 가능 기한 설정 변경은 현재 Mac mini 브라우저 자동화 기준이다. ARCHIVE IN Firebase Functions의 StudioMate API 클라이언트에는 아직 이 설정 변경 전용 endpoint가 확인되어 있지 않다.
+Mac mini LaunchAgent `com.archive.monthly-ticket-liability`는 매일 22:00에 기동하고, `scripts/generate-studiomate-ticket-liability-report.mjs --month-end-only --publish --drive-copy`가 KST 월말인 날에만 실제 집계를 수행한다. 월 길이와 윤년은 스크립트가 판정하며, 말일이 아닌 날에는 Firestore를 읽지 않고 즉시 종료한다.
 
-API 전환 조건:
+집계 원천은 최신 적용 완료 StudioMate 회원목록과 `memberProfiles.activeTickets`, 회원별 StudioMate 수강권 결제이력이다. 게시 시점 기준 회원목록이 3시간보다 오래됐거나 다른 스튜디오 원천이면 게시를 중단한다. 횟수권은 잔여횟수, 기간권은 잔여일수와 주당횟수를 이용해 환산 잔여횟수를 계산한다. 결제금액은 회원·수강권·이용기간이 같은 결제행을 합산하고, 미수금·분할결제·임시 프로필·동일권종 가격 이상치는 현재 동일 권종 기준가로 보정한다. 평균 회당가격은 그룹·1:1 프라이빗·듀엣을 분리하며, 0원 수강권과 강사레슨은 평균에서 제외한다.
 
-1. StudioMate 관리자 설정 화면에서 실제 네트워크 요청의 endpoint, method, payload, 인증 헤더를 캡처한다.
-2. 동일 계정/동일 권한으로 저빈도 테스트 호출이 성공하는지 확인한다.
-3. 실패 시 브라우저 자동화로 fallback할 수 있게 둔다.
-4. 확인 전까지는 설정 변경 자동화를 Firebase 서버 API로 옮기지 않는다.
+집계 결과는 `ticketLiabilityReports/current`와 `ticketLiabilityReports/{YYYY-MM}`에 월별 스냅샷으로 보관한다. 같은 HTML 보고서를 home 계정 Google Drive의 `아카이브 정산/잔여수강권`에 `YYMM 잔여수강권.html` 이름으로 저장하며, 같은 달 재실행 시 해당 파일을 교체한다. 운영자는 `https://core.archivepilates.com/business/#ticketLiability`에서 최신 결과와 과거 월을 확인한다. 이 컬렉션은 경영 검토용 computed 데이터이며 알림톡 대상, 예약, 결제, 환불 또는 StudioMate 쓰기 원천으로 사용하지 않는다.
+
+수강권별 상세표의 `잔여금액 비율`은 수강권별 잔여금액을 전체 잔여금액으로 나눈 값이다. 가격 커버리지는 운영자 표에서 숨기되 원본 품질 검증을 위해 Firestore 계산 데이터에는 유지한다.
+
+자동화 상태는 `automationStatus/monthly-ticket-liability`, 결과 파일은 `~/ArchiveIN/automation/reports/ticket-liability/latest.json`, 로그는 `~/ArchiveIN/emergency/logs/monthly-ticket-liability.*.log`에서 확인한다.
+
+### StudioMate 예약 가능 기한 설정
+
+예약 가능 기한은 StudioMate 관리자 화면의 네이티브 반복설정을 원천으로 사용한다. 매주 월요일 오늘 날짜를 직접 입력하던 Mac mini Playwright 자동화와 `com.archive.studiomate-reservation-deadline` LaunchAgent는 2026-08-17 폐기했다. 예약 가능 기한 변경은 StudioMate 네이티브 설정에서만 관리하며, ARCHIVE IN 자동화나 시스템 점검은 이 값을 다시 쓰거나 해당 LaunchAgent를 복구하지 않는다.
 
 ## 5. 모바일 UI 운영 기준
 

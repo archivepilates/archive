@@ -13,10 +13,20 @@
         "scheduledQueueAndSendAlimtalkDaily",
         "scheduledQueueAndSendReservationOpenAlimtalk",
         "scheduledSyncAlimtalkTemplateStatuses",
+        "scheduledAuditAlimtalkProviderLedger",
+        "scheduledCheckInstructorLessonSampleApproval",
+        "scheduledSendApprovedInstructorLessonAlimtalk",
         "approveAlimtalkBatch",
-        "operatorSendPricingInquiryAlimtalk"
+        "approveInstructorLessonAlimtalkBatch",
+        "operatorSendPricingInquiryAlimtalk",
+        "operatorSendRecommendedMealProgramAlimtalk",
+        "operatorPublishRecommendedMealPlan"
       ],
-      "forbidden": ["StudioMate writes", "Google Contacts writes", "private chart generation"]
+      "forbidden": [
+        "StudioMate writes",
+        "Google Contacts writes",
+        "private chart generation"
+      ]
     },
     "functions-private-chart": {
       "physicalSource": "firebase/function-codebases/private-chart",
@@ -24,11 +34,13 @@
       "owns": [
         "scheduledSyncPrivateSurveyResponses",
         "scheduledProcessStaffSurveyAlimtalks",
+        "scheduledProcessMissingSurveySubmissionAlerts",
         "scheduledSyncPrivateSurveyNotion",
         "scheduledCreatePrivateLessonChartRequests",
+        "scheduledSendTodayPrivateLessonChartAlimtalks",
+        "scheduledSyncPrivateLessonNotionProjections",
         "scheduledReconcileCurrentMonthPrivateLessonCharts",
         "scheduledGeneratePrivateLessonChartReports",
-        "scheduledEnqueuePrivateLessonReportAlimtalks",
         "scheduledPurgeDiscardedMemberSignupContracts",
         "ingestPrivateSurveyResponse",
         "privateSurveyResponseView",
@@ -36,24 +48,29 @@
         "privateLessonReportView",
         "memberSignupContract",
         "onsiteWelcomeRequest",
+        "methodCueCardReview",
         "notionPrivateLessonReportWebhook",
         "redirectShortLink",
-        "processPrivateSurveyIntake"
+        "processPrivateSurveyIntake",
+        "syncPrivateLessonSessionFromRequest",
+        "syncPrivateLessonSessionFromRecord"
       ],
-      "forbidden": ["daily Alimtalk candidate selection", "StudioMate writes", "Google Contacts writes"]
+      "forbidden": [
+        "daily Alimtalk candidate selection",
+        "StudioMate writes",
+        "Google Contacts writes"
+      ]
     },
     "functions-sync": {
       "physicalSource": "firebase/function-codebases/sync",
       "sourceEntrypoint": "firebase/kangsain-functions/functions/src/exports/sync.ts",
       "owns": [
-        "scheduledSyncLecturesDaily",
-        "scheduledPollManagerNotices",
         "scheduledProcessWriteQueue",
         "scheduledProcessContactSyncJobs",
+        "queueStaffContactSync",
         "scheduledAttendanceReminder",
         "scheduledCreateParkingDiscountJobs",
         "scheduledSyncDashboardDaily",
-        "scheduledPreSecurityRawMirror",
         "syncDashboardNow",
         "adminSyncLecturesRange",
         "adminSyncManagerStaffs",
@@ -78,16 +95,56 @@
         "getKioskParkingJobStatus",
         "registerParkingVehicle",
         "getParkingDashboard",
+        "removeParkingVehicle",
         "runParkingAutoApplyNow",
         "registerFcmToken",
         "getInstructorEvaluationQuiz",
         "submitInstructorEvaluationQuiz",
         "adjustInstructorEvaluationEssayScore",
         "instructorApplicantEvaluationApi",
+        "recommendedMealSurveyApi",
+        "recommendedMealPlanApi",
+        "instructorLessonParkingPreRegistrationApi",
+        "videoWatchEventApi",
+        "getVideoWatchDashboard",
+        "getRecommendedMealProgramReview",
+        "generateRecommendedMealProgramDraft",
+        "generateRecommendedMealDraftOnSurveySubmitted",
+        "saveRecommendedMealProgramDraft",
         "adminIssueStaffTempCode",
-        "processParkingDiscountJob"
+        "processParkingDiscountJob",
+        "getRefundMemberTickets",
+        "previewRefund",
+        "sendRefundAgreement",
+        "queueRefundStudioMateSms",
+        "getInstructorLessonRegistrationDashboard",
+        "operatorCreateInstructorLessonRegistration",
+        "confirmInstructorLessonBookingAndQueueAlimtalk",
+        "queueInstructorLessonConfirmationOnTicketVerified"
       ],
-      "forbidden": ["scheduled jobs", "external member-facing sends"]
+      "forbidden": [
+        "scheduled jobs",
+        "automatic member-facing sends without a manager-approved source"
+      ]
+    },
+    "functions-social": {
+      "physicalSource": "firebase/function-codebases/social",
+      "sourceEntrypoint": "firebase/kangsain-functions/functions/src/exports/social.ts",
+      "owns": [
+        "getInstagramContentDashboard",
+        "saveInstagramContentDraft",
+        "approveInstagramContent",
+        "holdInstagramContent",
+        "scheduledPublishInstagramContent",
+        "scheduledSyncInstagramInsights"
+      ],
+      "forbidden": [
+        "SOLAPI sends",
+        "member target selection",
+        "StudioMate writes",
+        "Google Contacts writes",
+        "private chart generation"
+      ]
     }
   },
   "migrationRule": "Deploy physical codebases one at a time after prepare/build/validate and dry-run. Do not restore the default all-in-one source unless a rollback is intentional."

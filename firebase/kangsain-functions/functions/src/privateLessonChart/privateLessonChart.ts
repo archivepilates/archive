@@ -1,4 +1,4 @@
-import { createHmac, randomBytes, timingSafeEqual } from "node:crypto";
+import { createHmac, randomBytes } from "node:crypto";
 import { Timestamp } from "firebase-admin/firestore";
 import { logger } from "firebase-functions";
 import { DEFAULT_STUDIO_ID } from "../config/constants";
@@ -20,17 +20,34 @@ import { errorMessage } from "../utils/errors";
 import { stableHash } from "../utils/hash";
 import { ensureShortLink } from "../utils/shortLinks";
 import { bookingSourcePriority, isExcelBookingId } from "../utils/canonicalBooking";
-import { ALIMTALK_TEMPLATES } from "../alimtalk/templates";
-import { isAlimtalkTemplateApproved } from "../alimtalk/templateStatus";
+import {
+  ALIMTALK_TEMPLATES,
+  LEGACY_STAFF_PRIVATE_CHART_ALIMTALK_TEMPLATE_CODE,
+  NATIVE_STAFF_PRIVATE_CHART_ALIMTALK_IMAGE_ID,
+  NATIVE_STAFF_PRIVATE_CHART_ALIMTALK_TEMPLATE_CODE,
+} from "../alimtalk/templates";
+import {
+  alimtalkImageTemplateContractIssue,
+  alimtalkTemplateReadiness,
+  isAlimtalkTemplateApproved,
+} from "../alimtalk/templateStatus";
 import { completePrivateLessonMediaUpload, initPrivateLessonMediaUpload, uploadPrivateLessonMediaChunk } from "./privateLessonMedia";
+import { invalidatePendingPrivateLessonReportCandidates } from "./privateLessonReportCandidates";
+import {
+  createPrivateLessonReportSnapshot,
+  currentPrivateLessonReportRevision,
+  privateLessonReportCandidateId,
+  privateLessonReportMutationLockReason,
+  privateLessonReportSnapshotForView,
+  privateLessonReportSourceChangePatch,
+  reportUrlForRevision,
+} from "./privateLessonReportRevision";
 
 const PUBLIC_BASE_URL = process.env.PRIVATE_CHART_BASE_URL || "https://in.archivepilates.com/private-chart/";
 const NOTION_API_VERSION = "2022-06-28";
 const NOTION_MEMBERS_DATABASE_ID = process.env.NOTION_PRIVATE_MEMBERS_DATABASE_ID || "c58a39ceb7ac405ba43b38d3b5871ed3";
-const NOTION_SESSION_RECORDS_DATABASE_ID =
-  process.env.NOTION_PRIVATE_SESSION_RECORDS_DATABASE_ID || "105b17685d914fbe915ef5b65146d993";
-const STAFF_PRIVATE_CHART_TEMPLATE_ID = "KA01TP260527182741301uIuSTL01YQ1";
-const PRIVATE_CHART_TEMPLATE_NAME = "강사용_프라이빗 차트 작성 안내 v2";
+const STAFF_PRIVATE_CHART_TEMPLATE_ID = ALIMTALK_TEMPLATES.staff_private_chart.code;
+const PRIVATE_CHART_TEMPLATE_NAME = ALIMTALK_TEMPLATES.staff_private_chart.label;
 const PRIVATE_LESSON_REPORT_VIEW_BASE_URL = process.env.PRIVATE_LESSON_REPORT_VIEW_BASE_URL ||
   "https://in.archivepilates.com/api/privateLessonReport";
 const GEMINI_MODEL = process.env.PRIVATE_LESSON_REPORT_GEMINI_MODEL || "gemini-2.5-flash";
@@ -40,7 +57,6 @@ const GEMINI_FALLBACK_MODELS = (process.env.PRIVATE_LESSON_REPORT_GEMINI_FALLBAC
   .filter(Boolean);
 const GEMINI_GENERATE_URL = "https://generativelanguage.googleapis.com/v1beta/models";
 const SOLAPI_SEND_URL = "https://api.solapi.com/messages/v4/send-many/detail";
-const SOLAPI_TEMPLATE_URL = "https://api.solapi.com/kakao/v2/templates";
 const NOTION_INSTRUCTOR_CHART_PAGE_IDS: Record<string, string> = {
   "이초림 수석강사": "22cd49eae4bf802ebc89fe094d0c355a",
   이초림: "22cd49eae4bf802ebc89fe094d0c355a",
@@ -63,6 +79,10 @@ export async function privateLessonChartApiHandler(request: any, response: any):
 
   try {
     if (request.method === "GET") {
+      if (String(request.query?.view || "") === "today") {
+        response.status(200).json(await publicDailyChartRequest(request));
+        return;
+      }
       const { chartRequest, mode } = await readChartRequestFromRequest(request);
       const record = (await refs.privateLessonChartRecord(chartRequest.requestId).get()).data() || null;
       response.status(200).json(await publicChartRequest(chartRequest, mode, record));
@@ -127,7 +147,7 @@ export async function privateLessonChartApiHandler(request: any, response: any):
         response.status(200).json({ ok: true, ...result });
         return;
       }
-      const mode = normalizeMode(body.mode);
+      const mode = chartRequest.workflowVersion === "post_only_v2" ? "post" : normalizeMode(body.mode);
       const answers = normalizeAnswers(body.answers || {});
       const result = await submitPrivateLessonChart(chartRequest, mode, answers);
       response.status(200).json({ ok: true, ...result });
@@ -145,6 +165,7 @@ export async function privateLessonReportViewHandler(request: any, response: any
   const recordId = String(request.query?.recordId || request.query?.r || request.query?.record || "");
   const requestId = String(request.query?.requestId || request.query?.req || request.query?.request || "");
   const token = String(request.query?.token || request.query?.t || request.query?.accessToken || "");
+  const requestedRevision = String(request.query?.rev || "");
   response.set("Cache-Control", "no-store");
 
   if ((!recordId && !requestId) || !token) {
@@ -174,47 +195,72 @@ export async function privateLessonReportViewHandler(request: any, response: any
     response.status(409).send(renderPrivateLessonReportMessagePage("회원용 리포트가 아직 생성되지 않았습니다."));
     return;
   }
+  record = await ensureLegacySentReportSnapshot(record);
 
-  response.status(200).send(renderPrivateLessonReportPage(record, requestDoc));
+  const snapshot = privateLessonReportSnapshotForView(record, requestedRevision);
+  if (requestedRevision && !snapshot) {
+    response.status(409).send(renderPrivateLessonReportMessagePage("승인된 리포트 버전을 찾을 수 없습니다."));
+    return;
+  }
+  const recordForView = snapshot
+    ? ({
+      ...record,
+      memberName: snapshot.memberName || record.memberName,
+      staffName: snapshot.staffName || record.staffName,
+      lessonDate: snapshot.lessonDate || record.lessonDate,
+      lessonStartAt: snapshot.lessonStartAt || record.lessonStartAt,
+      sessionNumber: snapshot.sessionNumber || record.sessionNumber,
+      gptDraftSummary: snapshot.summary,
+      publicSummary: snapshot.summary,
+      gptDraftNextDirection: snapshot.nextDirection,
+      publicNextDirection: snapshot.nextDirection,
+      postRecord: { ...(record.postRecord || {}), homework: snapshot.homework },
+      media: { ...(record.media || {}), files: snapshot.includedMedia },
+    } as PrivateLessonChartRecordDoc)
+    : record;
+  response.status(200).send(renderPrivateLessonReportPage(recordForView, requestDoc));
+}
+
+async function ensureLegacySentReportSnapshot(
+  record: PrivateLessonChartRecordDoc,
+): Promise<PrivateLessonChartRecordDoc> {
+  if (
+    record.sentReportSnapshot?.revision ||
+    record.approvedReportSnapshot?.revision ||
+    record.legacySentReportSnapshot?.revision ||
+    !(
+      record.publicReportApproval?.status === "sent" ||
+      record.publicReportApproval?.sentAt ||
+      record.gptStatus === "published"
+    )
+  ) {
+    return record;
+  }
+  return db.runTransaction(async (tx) => {
+    const ref = refs.privateLessonChartRecord(record.recordId);
+    const snap = await tx.get(ref);
+    const current = snap.data() || record;
+    if (current.legacySentReportSnapshot?.revision) return current;
+    const revision = `legacy-${currentPrivateLessonReportRevision(current)}`;
+    const legacySentReportSnapshot = createPrivateLessonReportSnapshot(current, revision);
+    tx.set(
+      ref,
+      {
+        legacySentReportSnapshot,
+        updatedAt: nowTimestamp(),
+      },
+      { merge: true },
+    );
+    return { ...current, legacySentReportSnapshot };
+  });
 }
 
 export async function notionPrivateLessonReportWebhookHandler(request: any, response: any): Promise<void> {
-  if (request.method !== "POST") {
-    response.status(405).json({ ok: false, error: "method not allowed" });
-    return;
-  }
-
-  try {
-    const body = request.body || {};
-    if (body.verification_token) {
-      await db
-        .collection("systemSettings")
-        .doc("notionPrivateLessonReportWebhook")
-        .set(
-          {
-            verificationToken: String(body.verification_token),
-            verified: false,
-            updatedAt: nowTimestamp(),
-          },
-          { merge: true },
-        );
-      response.status(200).json({ ok: true });
-      return;
-    }
-
-    const trusted = await verifyNotionWebhookSignature(request);
-    if (!trusted) {
-      response.status(401).json({ ok: false, error: "invalid signature" });
-      return;
-    }
-
-    const result = await handleNotionPrivateLessonReportEvent(body);
-    response.status(200).json({ ok: true, ...result });
-  } catch (err) {
-    const message = errorMessage(err);
-    logger.warn("notionPrivateLessonReportWebhook failed", { message });
-    response.status(500).json({ ok: false, error: message });
-  }
+  response.status(200).json({
+    ok: true,
+    status: "display_only",
+    message: "Notion은 프라이빗 차트 표시용이며 발송 승인 입력으로 사용하지 않습니다.",
+  });
 }
 
 export async function createTomorrowPrivateLessonChartRequests(): Promise<{
@@ -225,17 +271,6 @@ export async function createTomorrowPrivateLessonChartRequests(): Promise<{
 }> {
   const targetDate = addDays(todayKst(), 1);
   return createPrivateLessonChartRequestsForDate(targetDate);
-}
-
-export async function createAndSendTomorrowPrivateLessonCharts(): Promise<{
-  date: string;
-  createSummary: Awaited<ReturnType<typeof createPrivateLessonChartRequestsForDate>>;
-  sendSummary: Awaited<ReturnType<typeof sendPendingPrivateLessonChartAlimtalksForDate>>;
-}> {
-  const targetDate = addDays(todayKst(), 1);
-  const createSummary = await createPrivateLessonChartRequestsForDate(targetDate);
-  const sendSummary = await sendPendingPrivateLessonChartAlimtalksForDate(targetDate);
-  return { date: targetDate, createSummary, sendSummary };
 }
 
 export async function createPrivateLessonChartRequestsForDate(date: string): Promise<{
@@ -336,7 +371,7 @@ export async function reconcileCurrentMonthPrivateLessonCharts(): Promise<{
   return result;
 }
 
-export async function sendPendingPrivateLessonChartAlimtalksForDate(date: string): Promise<{
+export async function sendDailyPrivateLessonChartAlimtalksForDate(date: string): Promise<{
   date: string;
   checked: number;
   sent: number;
@@ -346,6 +381,11 @@ export async function sendPendingPrivateLessonChartAlimtalksForDate(date: string
   const templateApproved = await isStaffPrivateChartTemplateApproved();
   const snap = await refs.privateLessonChartRequests().where("lessonDate", "==", date).limit(500).get();
   const canonical = canonicalChartRequests(snap.docs.map((doc) => doc.data()));
+  if (!templateApproved) {
+    const result = { date, checked: 0, sent: 0, skipped: canonical.length, failed: 0 };
+    logger.info("sendDailyPrivateLessonChartAlimtalksForDate skipped while template is pending", result);
+    return result;
+  }
   const canonicalIds = new Set(canonical.map((request) => request.requestId));
   let checked = 0;
   let sent = 0;
@@ -371,8 +411,9 @@ export async function sendPendingPrivateLessonChartAlimtalksForDate(date: string
     }
   }
 
+  const activeRequests: PrivateLessonChartRequestDoc[] = [];
   for (const request of canonical) {
-    if (!isSendablePrivateChartRequest(request)) {
+    if (request.status === "cancelled" || !request.postShortUrl) {
       skipped += 1;
       continue;
     }
@@ -382,84 +423,70 @@ export async function sendPendingPrivateLessonChartAlimtalksForDate(date: string
       skipped += 1;
       continue;
     }
+    if (request.lessonDate !== date || !normalizePhone(request.staffPhone)) {
+      skipped += 1;
+      continue;
+    }
+    activeRequests.push(request);
+  }
+
+  const groups = new Map<string, PrivateLessonChartRequestDoc[]>();
+  for (const request of activeRequests) {
+    const key = dailyStaffIdentity(request);
+    const rows = groups.get(key) || [];
+    rows.push(request);
+    groups.set(key, rows);
+  }
+
+  for (const [staffKey, requests] of groups) {
     checked += 1;
-    if (!templateApproved) {
-      await refs.privateLessonChartRequest(request.requestId).set(
-        {
-          alimtalk: {
-            ...(request.alimtalk || {}),
-            status: "template_pending",
-            templateName: PRIVATE_CHART_TEMPLATE_NAME,
-            templateId: STAFF_PRIVATE_CHART_TEMPLATE_ID,
-            lastError: "강사용 프라이빗 차트 알림톡 템플릿 승인 대기",
-          },
-          updatedAt: nowTimestamp(),
-        },
-        { merge: true },
-      );
+    const seed = [...requests].sort((a, b) => privateLessonOrderMillis(a) - privateLessonOrderMillis(b))[0];
+    const staffPhone = normalizePhone(seed.staffPhone);
+    const sendId = `staff_private_lesson_day_${date}_${stableHash(staffKey).slice(0, 16)}`;
+    const existingSend = (await refs.alimtalkSend(sendId).get()).data();
+    if (existingSend?.status === "done") {
+      await markDailyPrivateChartRequestsSent(requests, existingSend.solapiMessageId || "");
+      skipped += 1;
+      continue;
+    }
+    if (requests.some((request) => request.alimtalk?.status === "sent")) {
+      logger.info("daily private chart send skipped because a per-session notice was already sent", {
+        date,
+        staffName: seed.staffName,
+        requestIds: requests.map((request) => request.requestId),
+      });
       skipped += 1;
       continue;
     }
 
-    const sendId = `staff_private_lesson_chart_${request.requestId}`;
-    const existingSend = (await refs.alimtalkSend(sendId).get()).data();
-    if (existingSend?.status === "done") {
-      await refs.privateLessonChartRequest(request.requestId).set(
-        {
-          alimtalk: {
-            ...(request.alimtalk || {}),
-            status: "sent",
-            templateName: PRIVATE_CHART_TEMPLATE_NAME,
-            templateId: STAFF_PRIVATE_CHART_TEMPLATE_ID,
-            solapiMessageId: existingSend.solapiMessageId || "",
-            lastError: null,
-          },
-          updatedAt: nowTimestamp(),
-        },
-        { merge: true },
-      );
+    const claim = await claimDailyPrivateChartSend(sendId, seed, staffPhone);
+    if (claim.status === "done") {
+      await markDailyPrivateChartRequestsSent(requests, claim.solapiMessageId || "");
+      skipped += 1;
+      continue;
+    }
+    if (claim.status !== "claimed") {
       skipped += 1;
       continue;
     }
 
     try {
-      const variables = privateChartAlimtalkVariables(request);
-      const result = await sendStaffPrivateChartAlimtalk(request.staffPhone, variables);
-      await refs.privateLessonChartRequest(request.requestId).set(
-        {
-          alimtalk: {
-            status: "sent",
-            templateName: PRIVATE_CHART_TEMPLATE_NAME,
-            templateId: STAFF_PRIVATE_CHART_TEMPLATE_ID,
-            solapiMessageId: result.messageId,
-            sentAt: nowTimestamp(),
-            lastError: null,
-          },
-          updatedAt: nowTimestamp(),
-        },
-        { merge: true },
-      );
+      const dailyTarget = dailyChartUrl(seed, date);
+      const dailyShort = await ensureShortLink({
+        type: "private_chart",
+        targetUrl: dailyTarget,
+        sourceId: sendId,
+      });
+      const variables = dailyPrivateChartAlimtalkVariables(seed, requests.length, dailyShort.shortUrl);
+      await refs.alimtalkSend(sendId).set({ variables, updatedAt: nowTimestamp() }, { merge: true });
+      const result = await sendStaffPrivateChartAlimtalk(staffPhone, variables);
+      await markDailyPrivateChartRequestsSent(requests, result.messageId);
       await refs.alimtalkSend(sendId).set(
         {
-          sendId,
-          studioId: request.studioId,
-          candidateId: sendId,
-          memberId: request.memberId,
-          memberName: request.memberName,
-          memberPhone: request.staffPhone,
-          templateCode: STAFF_PRIVATE_CHART_TEMPLATE_ID,
-          dedupeKey: sendId,
-          dedupePolicy: "강사용 프라이빗 차트 수업별 1회",
-          dedupeWindowDays: null,
           status: "done",
-          attempts: 1,
-          maxAttempts: 1,
-          nextRunAt: nowTimestamp(),
           solapiMessageId: result.messageId,
           variables,
           lastError: null,
-          createdByUid: "system:private-lesson-chart",
-          createdAt: nowTimestamp(),
           updatedAt: nowTimestamp(),
         },
         { merge: true },
@@ -468,29 +495,103 @@ export async function sendPendingPrivateLessonChartAlimtalksForDate(date: string
     } catch (err) {
       const message = errorMessage(err);
       failed += 1;
-      await refs.privateLessonChartRequest(request.requestId).set(
-        {
-          alimtalk: {
-            ...(request.alimtalk || {}),
-            status: "failed",
-            templateName: PRIVATE_CHART_TEMPLATE_NAME,
-            templateId: STAFF_PRIVATE_CHART_TEMPLATE_ID,
-            lastError: message,
-          },
-          updatedAt: nowTimestamp(),
-        },
+      await refs.alimtalkSend(sendId).set(
+        { status: "failed", lastError: message, updatedAt: nowTimestamp() },
         { merge: true },
       );
-      logger.warn("sendPendingPrivateLessonChartAlimtalksForDate failed", {
-        requestId: request.requestId,
-        bookingId: request.bookingId,
+      await Promise.all(requests.map((request) =>
+        refs.privateLessonChartRequest(request.requestId).set(
+          {
+            alimtalk: {
+              ...(request.alimtalk || {}),
+              status: "failed",
+              templateName: PRIVATE_CHART_TEMPLATE_NAME,
+              templateId: STAFF_PRIVATE_CHART_TEMPLATE_ID,
+              lastError: message,
+            },
+            updatedAt: nowTimestamp(),
+          },
+          { merge: true },
+        ),
+      ));
+      logger.warn("sendDailyPrivateLessonChartAlimtalksForDate failed", {
+        staffName: seed.staffName,
+        date,
         message,
       });
     }
   }
 
-  logger.info("sendPendingPrivateLessonChartAlimtalksForDate completed", { date, checked, sent, skipped, failed });
+  logger.info("sendDailyPrivateLessonChartAlimtalksForDate completed", { date, checked, sent, skipped, failed });
   return { date, checked, sent, skipped, failed };
+}
+
+async function claimDailyPrivateChartSend(
+  sendId: string,
+  request: PrivateLessonChartRequestDoc,
+  staffPhone: string,
+): Promise<{ status: "claimed" | "done" | "blocked"; solapiMessageId?: string }> {
+  return db.runTransaction(async (tx) => {
+    const ref = refs.alimtalkSend(sendId);
+    const existing = (await tx.get(ref)).data();
+    if (existing) {
+      return existing.status === "done"
+        ? { status: "done" as const, solapiMessageId: existing.solapiMessageId || "" }
+        : { status: "blocked" as const };
+    }
+    const now = nowTimestamp();
+    tx.create(ref, {
+      sendId,
+      studioId: request.studioId,
+      candidateId: sendId,
+      memberId: `staff:${request.staffId || stableHash(staffPhone).slice(0, 12)}`,
+      memberName: request.staffName,
+      memberPhone: staffPhone,
+      templateCode: STAFF_PRIVATE_CHART_TEMPLATE_ID,
+      dedupeKey: sendId,
+      dedupePolicy: "강사용 프라이빗 오늘 기록 강사별 일 1회",
+      dedupeWindowDays: null,
+      status: "processing",
+      attempts: 1,
+      maxAttempts: 1,
+      nextRunAt: now,
+      lastError: null,
+      createdByUid: "system:private-lesson-chart",
+      createdAt: now,
+      updatedAt: now,
+    });
+    return { status: "claimed" as const };
+  });
+}
+
+async function markDailyPrivateChartRequestsSent(
+  requests: PrivateLessonChartRequestDoc[],
+  solapiMessageId: string,
+): Promise<void> {
+  const sentAt = nowTimestamp();
+  await Promise.all(requests.map((request) =>
+    refs.privateLessonChartRequest(request.requestId).set(
+      {
+        alimtalk: {
+          ...(request.alimtalk || {}),
+          status: "sent",
+          templateName: PRIVATE_CHART_TEMPLATE_NAME,
+          templateId: STAFF_PRIVATE_CHART_TEMPLATE_ID,
+          solapiMessageId,
+          sentAt,
+          lastError: null,
+        },
+        updatedAt: sentAt,
+      },
+      { merge: true },
+    ),
+  ));
+}
+
+export async function sendTodayPrivateLessonChartAlimtalks(): Promise<Awaited<ReturnType<typeof sendDailyPrivateLessonChartAlimtalksForDate>>> {
+  const date = todayKst();
+  await createPrivateLessonChartRequestsForDate(date);
+  return sendDailyPrivateLessonChartAlimtalksForDate(date);
 }
 
 export async function generatePendingPrivateLessonChartReports(): Promise<{
@@ -533,104 +634,6 @@ export async function generatePendingPrivateLessonChartReports(): Promise<{
   return { checked, generated, skipped, failed };
 }
 
-export async function enqueueApprovedPrivateLessonReportAlimtalks(): Promise<{
-  checked: number;
-  queued: number;
-  skipped: number;
-  completed: number;
-  failed: number;
-}> {
-  const notionPages = await notionApprovedReportPages();
-  const templateApproved = await isAlimtalkTemplateApproved(ALIMTALK_TEMPLATES.private_lesson_report.code);
-  let checked = 0;
-  let queued = 0;
-  let skipped = 0;
-  let completed = 0;
-  let failed = 0;
-
-  for (const page of notionPages) {
-    checked += 1;
-    const result = await enqueuePrivateLessonReportForNotionPage(page, templateApproved);
-    if (result === "queued") queued += 1;
-    else if (result === "completed") completed += 1;
-    else if (result === "failed") failed += 1;
-    else skipped += 1;
-  }
-
-  logger.info("enqueueApprovedPrivateLessonReportAlimtalks completed", {
-    checked,
-    queued,
-    skipped,
-    completed,
-    failed,
-  });
-  return { checked, queued, skipped, completed, failed };
-}
-
-async function handleNotionPrivateLessonReportEvent(body: any): Promise<{ status: string }> {
-  const eventId = String(body.id || "");
-  if (eventId && !(await claimNotionWebhookEvent(eventId, body))) return { status: "duplicate" };
-  if (String(body.type || "") !== "page.properties_updated") return { status: "ignored_type" };
-
-  const pageId = String(body.entity?.id || "");
-  if (!pageId) return { status: "missing_page" };
-  const updatedProperties = Array.isArray(body.data?.updated_properties)
-    ? body.data.updated_properties.map(String)
-    : [];
-  if (
-    updatedProperties.length &&
-    !updatedProperties.some((name: string) => ["발송", "발송상태", "회원 리포트"].includes(name))
-  ) {
-    return { status: "ignored_property" };
-  }
-
-  const page = await notionRequest(`pages/${pageId}`, "GET");
-  if (!isPrivateSessionRecordPage(page)) return { status: "ignored_page" };
-  const templateApproved = await isAlimtalkTemplateApproved(ALIMTALK_TEMPLATES.private_lesson_report.code);
-  const result = await enqueuePrivateLessonReportForNotionPage(page, templateApproved);
-  if (eventId) {
-    await db.collection("notionWebhookEvents").doc(eventId).set(
-      {
-        status: result,
-        pageId,
-        updatedAt: nowTimestamp(),
-      },
-      { merge: true },
-    );
-  }
-  return { status: result };
-}
-
-async function enqueuePrivateLessonReportForNotionPage(
-  page: any,
-  templateApproved: boolean,
-): Promise<"queued" | "completed" | "failed" | "skipped" | "already_queued" | "template_pending"> {
-  if (!notionCheckbox(page.properties?.["발송"])) return "skipped";
-  if (notionSelectName(page.properties?.["발송상태"]) !== "대기") return "skipped";
-  if (!notionUrl(page.properties?.["회원 리포트"])) return "skipped";
-
-  const recordId = notionRichText(page.properties?.["Chart Request ID"]);
-  const pageId = String(page.id || "");
-  if (!pageId) return "skipped";
-  const record =
-    (recordId ? (await refs.privateLessonChartRecord(recordId).get()).data() : null) ||
-    (await privateLessonChartRecordByNotionPageId(pageId));
-  if (!record) {
-    logger.warn("notion private report: record not found", { pageId, recordId });
-    return "skipped";
-  }
-  if (
-    !record.postRecord ||
-    record.gptStatus !== "draft_created" ||
-    !(record.publicReportCanonicalUrl || record.publicReportUrl) ||
-    !record.postSubmittedAt ||
-    !record.memberPhone
-  ) {
-    return "skipped";
-  }
-  return enqueuePrivateLessonReportForRecord(record, templateApproved, String(page.id || ""), "system:notion-private-report");
-}
-
 async function approvePrivateLessonReportFromChart(
   chartRequest: PrivateLessonChartRequestDoc,
 ): Promise<{
@@ -640,19 +643,70 @@ async function approvePrivateLessonReportFromChart(
   reportUrl?: string;
   message?: string;
 }> {
-  const record = (await refs.privateLessonChartRecord(chartRequest.requestId).get()).data();
-  if (!record) throw new Error("회차 기록을 찾을 수 없습니다.");
-  if (!record.postRecord || !record.postSubmittedAt) {
-    throw new Error("수업 후 기록 제출 후 승인할 수 있습니다.");
+  const initialRecord = (await refs.privateLessonChartRecord(chartRequest.requestId).get()).data();
+  if (!initialRecord) throw new Error("회차 기록을 찾을 수 없습니다.");
+  const activeBooking = await activePrivateBookingForChartRequest(chartRequest);
+  if (!activeBooking.ok) {
+    const message = `예약 취소/변경 확인: ${activeBooking.reason}`;
+    await refs.privateLessonChartRecord(chartRequest.requestId).set(
+      {
+        publicReportApproval: { status: "failed", lastError: message },
+        updatedAt: nowTimestamp(),
+      },
+      { merge: true },
+    );
+    throw new Error(message);
   }
-  if (!isPrivateLessonReportGenerated(record)) {
-    throw new Error("회원용 리포트가 아직 생성되지 않았습니다. 잠시 후 다시 확인해 주세요.");
-  }
-  if (!record.memberPhone) throw new Error("회원 연락처가 없어 발송 후보를 만들 수 없습니다.");
-
+  const approvedRecord = await db.runTransaction(async (tx) => {
+    const recordRef = refs.privateLessonChartRecord(chartRequest.requestId);
+    const snap = await tx.get(recordRef);
+    const current = snap.data();
+    if (!current) throw new Error("회차 기록을 찾을 수 없습니다.");
+    if (!current.postRecord || !current.postSubmittedAt) {
+      throw new Error("수업 후 기록 제출 후 승인할 수 있습니다.");
+    }
+    if (!isPrivateLessonReportGenerated(current)) {
+      throw new Error("회원용 리포트가 아직 생성되지 않았습니다. 잠시 후 다시 확인해 주세요.");
+    }
+    if (!current.memberPhone) throw new Error("회원 연락처가 없어 발송 후보를 만들 수 없습니다.");
+    const lockReason = privateLessonReportMutationLockReason(current);
+    if (lockReason) throw new Error(lockReason);
+    const revision = currentPrivateLessonReportRevision(current);
+    const snapshot = createPrivateLessonReportSnapshot(current, revision);
+    const approvedAt = nowTimestamp();
+    const nextRecord: PrivateLessonChartRecordDoc = {
+      ...current,
+      reportRevision: revision,
+      approvedRevision: revision,
+      approvedReportSnapshot: snapshot,
+      publicReportApproval: {
+        status: "approved",
+        approvedAt,
+        approvedBy: chartRequest.staffName || "staff",
+        candidateId: null,
+        lastError: null,
+      },
+      notionSync: pendingNotionProjection(current),
+      updatedAt: approvedAt,
+    };
+    tx.set(
+      recordRef,
+      {
+        reportRevision: revision,
+        approvedRevision: revision,
+        approvedReportSnapshot: snapshot,
+        publicReportApproval: nextRecord.publicReportApproval,
+        notionSync: nextRecord.notionSync,
+        updatedAt: approvedAt,
+      },
+      { merge: true },
+    );
+    return nextRecord;
+  });
+  const revision = approvedRecord.approvedRevision || "";
+  const candidateId = privateLessonReportCandidateId(approvedRecord.recordId, revision);
   const templateApproved = await isAlimtalkTemplateApproved(ALIMTALK_TEMPLATES.private_lesson_report.code);
-  const result = await enqueuePrivateLessonReportForRecord(record, templateApproved, record.notionSync?.pageId || "", "staff:private-chart");
-  const candidateId = `private_lesson_report_${record.recordId}`;
+  const result = await enqueuePrivateLessonReportForRecord(approvedRecord, templateApproved, "staff:private-chart");
   const status =
     result === "queued" || result === "already_queued"
       ? "queued"
@@ -660,34 +714,26 @@ async function approvePrivateLessonReportFromChart(
         ? "sent"
         : result === "template_pending"
           ? "approved"
-          : result === "failed"
+          : result === "failed" || result === "inactive"
             ? "failed"
-            : "approved";
-  await refs.privateLessonChartRecord(record.recordId).set(
-    {
-      gptStatus: status === "sent" ? "published" : "approved",
-      publicReportApproval: {
-        status,
-        approvedAt: nowTimestamp(),
-        approvedBy: chartRequest.staffName || "staff",
-        candidateId,
-        lastError: result === "template_pending" ? "프라이빗 회원 리포트 템플릿 승인 대기" : null,
-      },
-      updatedAt: nowTimestamp(),
-    },
-    { merge: true },
-  );
+            : result === "stale"
+              ? "pending"
+              : "approved";
   return {
-    recordId: record.recordId,
+    recordId: approvedRecord.recordId,
     reportStatus: status,
     candidateId,
-    reportUrl: record.publicReportUrl || record.publicReportCanonicalUrl || "",
+    reportUrl: approvedRecord.publicReportUrl || approvedRecord.publicReportCanonicalUrl || "",
     message:
       status === "queued"
         ? "회원 알림톡 발송 후보에 등록되었습니다."
         : status === "sent"
           ? "이미 발송 완료된 리포트입니다."
-          : "승인되었습니다. 템플릿 상태 확인 후 발송됩니다.",
+          : status === "pending"
+            ? "리포트 내용이 변경되어 발송 후보를 만들지 않았습니다. 최신 내용을 확인한 뒤 다시 승인해 주세요."
+            : status === "failed"
+              ? "예약 상태를 확인할 수 없어 발송 후보를 만들지 않았습니다."
+              : "승인되었습니다. 템플릿 상태 확인 후 발송됩니다.",
   };
 }
 
@@ -709,6 +755,8 @@ async function convertPrivateLessonReportFromChart(
   if (isPrivateLessonReportSent(record)) {
     throw new Error("회원 리포트 알림톡 발송 완료 후에는 리포트를 다시 생성할 수 없습니다.");
   }
+  const lockReason = privateLessonReportMutationLockReason(record);
+  if (lockReason) throw new Error(lockReason);
 
   let sourceRecord = record;
   if (hasEditableReportInput(input)) {
@@ -717,13 +765,17 @@ async function convertPrivateLessonReportFromChart(
     if (!summary) throw new Error("오늘의 핵심 문장을 입력해 주세요.");
     if (!nextDirection) throw new Error("다음 수업 방향 문장을 입력해 주세요.");
     sourceRecord = await saveManualPrivateLessonReportEdit(sourceRecord, chartRequest, summary, nextDirection);
+  } else {
+    sourceRecord = await preparePrivateLessonReportRegeneration(sourceRecord, chartRequest);
   }
 
   const generated = hasManualPrivateLessonReportText(sourceRecord)
     ? await regenerateManualPrivateLessonReport(sourceRecord, chartRequest)
     : await generatePrivateLessonReportDraft(sourceRecord, chartRequest, { force: true });
-  const notionSync = await syncPrivateLessonChartRecordToNotion(generated.record, chartRequest);
-  await refs.privateLessonChartRecord(record.recordId).set({ notionSync, updatedAt: nowTimestamp() }, { merge: true });
+  await refs.privateLessonChartRecord(record.recordId).set(
+    { notionSync: pendingNotionProjection(generated.record), updatedAt: nowTimestamp() },
+    { merge: true },
+  );
   return {
     recordId: record.recordId,
     reportStatus: "ready",
@@ -755,6 +807,8 @@ async function editPrivateLessonReportFromChart(
   if (isPrivateLessonReportSent(record)) {
     throw new Error("회원 리포트 알림톡 발송 완료 후에는 리포트를 수정할 수 없습니다.");
   }
+  const lockReason = privateLessonReportMutationLockReason(record);
+  if (lockReason) throw new Error(lockReason);
 
   const summary = cleanEditableReportText(input.summary, 900);
   const nextDirection = cleanEditableReportText(input.nextDirection, 1200);
@@ -762,8 +816,10 @@ async function editPrivateLessonReportFromChart(
   if (!nextDirection) throw new Error("다음 수업 방향 문장을 입력해 주세요.");
 
   const nextRecord = await saveManualPrivateLessonReportEdit(record, chartRequest, summary, nextDirection);
-  const notionSync = await syncPrivateLessonChartRecordToNotion(nextRecord, chartRequest);
-  await refs.privateLessonChartRecord(record.recordId).set({ notionSync, updatedAt: nowTimestamp() }, { merge: true });
+  await refs.privateLessonChartRecord(record.recordId).set(
+    { notionSync: pendingNotionProjection(nextRecord), updatedAt: nowTimestamp() },
+    { merge: true },
+  );
 
   return {
     recordId: record.recordId,
@@ -781,55 +837,128 @@ async function saveManualPrivateLessonReportEdit(
   summary: string,
   nextDirection: string,
 ): Promise<PrivateLessonChartRecordDoc> {
-  await skipPendingPrivateLessonReportCandidate(
-    record,
-    "리포트 발송 전 회원용 리포트 문장이 수정되어 기존 발송 후보를 보류했습니다.",
-  );
-  const now = nowTimestamp();
-  const nextRecord = {
-    ...record,
-    gptStatus: "draft_created",
-    gptDraftSummary: summary,
-    gptDraftNextDirection: nextDirection,
-    publicSummary: summary,
-    publicNextDirection: nextDirection,
-    publicReportApproval: {
-      status: "pending" as const,
-      approvedAt: null,
-      approvedBy: chartRequest.staffName || "staff",
-      candidateId: "",
-      lastError: null,
-    },
-    manualReportEdit: {
-      editedAt: now,
-      editedBy: chartRequest.staffName || "staff",
-      source: "staff:private-chart",
-    },
-    updatedAt: now,
-  } as PrivateLessonChartRecordDoc;
-  await refs.privateLessonChartRecord(record.recordId).set(
-    {
+  const lastError = "리포트 발송 전 회원용 리포트 문장이 수정되어 기존 발송 후보를 보류했습니다.";
+  const nextRecord = await db.runTransaction(async (tx) => {
+    const recordRef = refs.privateLessonChartRecord(record.recordId);
+    const snap = await tx.get(recordRef);
+    const current = snap.data();
+    if (!current) throw new Error("회차 기록을 찾을 수 없습니다.");
+    const lockReason = privateLessonReportMutationLockReason(current);
+    if (lockReason) throw new Error(lockReason);
+    const candidateId = String(current.publicReportApproval?.candidateId || "");
+    const candidateRef = candidateId ? refs.alimtalkCandidate(candidateId) : null;
+    const candidate = candidateRef ? (await tx.get(candidateRef)).data() : undefined;
+    if (candidate?.status === "processing") throw new Error("알림톡 발송이 시작되어 리포트를 수정할 수 없습니다.");
+    if (candidate?.status === "sent") throw new Error("알림톡 발송 완료 후에는 리포트를 수정할 수 없습니다.");
+    const now = nowTimestamp();
+    const nextRecordBase = {
+      ...current,
       gptStatus: "draft_created",
       gptDraftSummary: summary,
       gptDraftNextDirection: nextDirection,
       publicSummary: summary,
       publicNextDirection: nextDirection,
-      publicReportApproval: nextRecord.publicReportApproval,
-      manualReportEdit: nextRecord.manualReportEdit,
+      publicReportApproval: {
+        status: "pending" as const,
+        approvedAt: null,
+        approvedBy: chartRequest.staffName || "staff",
+        candidateId: "",
+        lastError: null,
+      },
+      approvedRevision: "",
+      sentRevision: "",
+      approvedReportSnapshot: null,
+      sentReportSnapshot: null,
+      manualReportEdit: {
+        editedAt: now,
+        editedBy: chartRequest.staffName || "staff",
+        source: "staff:private-chart",
+      },
       updatedAt: now,
-    },
-    { merge: true },
-  );
+    } as PrivateLessonChartRecordDoc;
+    const next = {
+      ...nextRecordBase,
+      reportRevision: currentPrivateLessonReportRevision(nextRecordBase),
+    };
+    if (candidateRef && candidate && ["candidate", "queued", "failed"].includes(candidate.status)) {
+      tx.set(
+        candidateRef,
+        {
+          status: "skipped",
+          reasonCode: "private_report_changed_before_send",
+          lastError,
+          updatedAt: now,
+        },
+        { merge: true },
+      );
+    }
+    tx.set(recordRef, next, { merge: true });
+    return next;
+  });
+  await invalidatePendingPrivateLessonReportCandidates(record.recordId, lastError);
+  return nextRecord;
+}
+
+async function preparePrivateLessonReportRegeneration(
+  record: PrivateLessonChartRecordDoc,
+  chartRequest: PrivateLessonChartRequestDoc,
+): Promise<PrivateLessonChartRecordDoc> {
+  const lastError = "리포트가 다시 생성되어 기존 발송 후보를 보류했습니다.";
+  const nextRecord = await db.runTransaction(async (tx) => {
+    const recordRef = refs.privateLessonChartRecord(record.recordId);
+    const snap = await tx.get(recordRef);
+    const current = snap.data();
+    if (!current) throw new Error("회차 기록을 찾을 수 없습니다.");
+    const lockReason = privateLessonReportMutationLockReason(current);
+    if (lockReason) throw new Error(lockReason);
+    const candidateId = String(current.publicReportApproval?.candidateId || "");
+    const candidateRef = candidateId ? refs.alimtalkCandidate(candidateId) : null;
+    const candidate = candidateRef ? (await tx.get(candidateRef)).data() : undefined;
+    if (candidate?.status === "processing") throw new Error("알림톡 발송이 시작되어 리포트를 다시 생성할 수 없습니다.");
+    if (candidate?.status === "sent") throw new Error("알림톡 발송 완료 후에는 리포트를 다시 생성할 수 없습니다.");
+    const now = nowTimestamp();
+    const patch = {
+      gptStatus: "pending" as const,
+      approvedRevision: "",
+      approvedReportSnapshot: null,
+      publicReportApproval: {
+        status: "pending" as const,
+        approvedAt: null,
+        approvedBy: chartRequest.staffName || "staff",
+        candidateId: "",
+        lastError: null,
+      },
+      updatedAt: now,
+    };
+    if (candidateRef && candidate && ["candidate", "queued", "failed"].includes(candidate.status)) {
+      tx.set(
+        candidateRef,
+        {
+          status: "skipped",
+          reasonCode: "private_report_changed_before_send",
+          lastError,
+          updatedAt: now,
+        },
+        { merge: true },
+      );
+    }
+    tx.set(recordRef, patch, { merge: true });
+    return { ...current, ...patch } as PrivateLessonChartRecordDoc;
+  });
+  await invalidatePendingPrivateLessonReportCandidates(record.recordId, lastError);
   return nextRecord;
 }
 
 async function enqueuePrivateLessonReportForRecord(
   record: PrivateLessonChartRecordDoc,
   templateApproved: boolean,
-  notionPageId = "",
   reviewedByUid = "system:private-report",
-): Promise<"queued" | "completed" | "failed" | "skipped" | "already_queued" | "template_pending"> {
+): Promise<
+  "queued" | "completed" | "failed" | "skipped" | "already_queued" | "template_pending" | "stale" | "inactive"
+> {
   if (!isPrivateLessonReportGenerated(record)) return "skipped";
+  const revision = String(record.approvedRevision || "");
+  if (!revision || record.approvedReportSnapshot?.revision !== revision) return "skipped";
   const resolved = await resolveReportShortUrl(record);
   if (!resolved.reportTargetUrl) return "skipped";
   if (resolved.shouldUpdateRecord) {
@@ -842,44 +971,14 @@ async function enqueuePrivateLessonReportForRecord(
       { merge: true },
     );
   }
-  if (resolved.shouldUpdateNotion && notionPageId) {
-    await notionRequest(`pages/${notionPageId}`, "PATCH", {
-      properties: {
-        "회원 리포트": { url: resolved.publicReportUrl },
-      },
-    }).catch((err) => {
-      logger.warn("session notion report link patch failed", {
-        pageId: notionPageId,
-        memberName: record.memberName,
-        recordId: record.recordId,
-        error: errorMessage(err),
-      });
-    });
-  }
-  const reportTargetUrl = resolved.reportTargetUrl;
+  const reportTargetUrl = reportUrlForRevision(resolved.reportTargetUrl, revision);
 
-  const candidateId = `private_lesson_report_${record.recordId}`;
-  const existing = (await refs.alimtalkCandidate(candidateId).get()).data();
-  if (existing?.status === "sent") {
-    if (notionPageId) await updatePrivateLessonReportNotionStatus(notionPageId, "완료");
-    return "completed";
-  }
+  const candidateId = privateLessonReportCandidateId(record.recordId, revision);
 
   const chartRequest = (await refs.privateLessonChartRequest(record.requestId || record.recordId).get()).data();
   if (!chartRequest) return "skipped";
   const activeBooking = await activePrivateBookingForChartRequest(chartRequest);
   if (!activeBooking.ok) {
-    if (existing?.status === "queued" || existing?.status === "processing" || existing?.status === "candidate") {
-      await refs.alimtalkCandidate(candidateId).set(
-        {
-          status: "skipped",
-          reasonCode: "inactive_booking",
-          lastError: `예약 취소/변경 확인: ${activeBooking.reason}`,
-          updatedAt: nowTimestamp(),
-        },
-        { merge: true },
-      );
-    }
     await refs.privateLessonChartRecord(record.recordId).set(
       {
         publicReportApproval: {
@@ -891,10 +990,8 @@ async function enqueuePrivateLessonReportForRecord(
       },
       { merge: true },
     );
-    if (notionPageId) await updatePrivateLessonReportNotionStatus(notionPageId, "실패");
-    return "skipped";
+    return "inactive";
   }
-  if (existing?.status === "queued" || existing?.status === "processing") return "already_queued";
 
   const link = await ensureShortLink({
     type: "private_report",
@@ -903,86 +1000,90 @@ async function enqueuePrivateLessonReportForRecord(
   });
   const now = nowTimestamp();
   const nextStatus: AlimtalkCandidateDoc["status"] = templateApproved ? "queued" : "candidate";
-  const candidate: AlimtalkCandidateDoc = {
-    candidateId,
-    studioId: record.studioId || DEFAULT_STUDIO_ID,
-    memberId: record.memberId,
-    memberName: record.memberName,
-    memberPhone: record.memberPhone,
-    type: "private_lesson_report",
-    status: nextStatus,
-    templateCode: ALIMTALK_TEMPLATES.private_lesson_report.code,
-    title: "프라이빗 회원 리포트",
-    reason: `${record.memberName} ${record.sessionNumber}회차 회원 리포트 검수 완료`,
-    sourceActionKey: record.recordId,
-    sourceDate: record.lessonDate,
-    payload: {
-      memberName: record.memberName,
-      sessionNumberText: `${record.sessionNumber}회차`,
-      sessionLabel: `${record.sessionNumber}회차`,
-      lessonDate: record.lessonDate,
-      lessonDateTime: lessonTimeText(record),
-      staffName: record.staffName,
-      instructorName: record.staffName,
-      recordId: record.recordId,
-      requestId: record.requestId,
-      publicReportUrl: reportTargetUrl,
-      reportLinkId: link.linkId,
-      reportShortUrl: link.shortUrl,
-      notionPageId: String(notionPageId || ""),
-    },
-    attempts: existing?.attempts || 0,
-    maxAttempts: existing?.maxAttempts || 2,
-    queuedBy: templateApproved ? "auto" : undefined,
-    reviewedByUid: templateApproved ? reviewedByUid : existing?.reviewedByUid,
-    reviewedAt: templateApproved ? now : existing?.reviewedAt || null,
-    reasonCode: "",
-    lastError: templateApproved ? null : "프라이빗 회원 리포트 템플릿 승인 대기",
-    createdAt: existing?.createdAt || now,
-    updatedAt: now,
-  };
-  await refs.alimtalkCandidate(candidateId).set(candidate, { merge: true });
-  if (existing?.status === "failed") return "failed";
-  return templateApproved ? "queued" : "template_pending";
-}
-
-async function claimNotionWebhookEvent(eventId: string, body: any): Promise<boolean> {
   return db.runTransaction(async (tx) => {
-    const ref = db.collection("notionWebhookEvents").doc(eventId);
-    const snap = await tx.get(ref);
-    if (snap.exists) return false;
-    tx.set(ref, {
-      eventId,
-      type: String(body.type || ""),
-      pageId: String(body.entity?.id || ""),
-      status: "received",
-      createdAt: nowTimestamp(),
-      updatedAt: nowTimestamp(),
-    });
-    return true;
+    const recordRef = refs.privateLessonChartRecord(record.recordId);
+    const candidateRef = refs.alimtalkCandidate(candidateId);
+    const [recordSnap, candidateSnap] = await Promise.all([tx.get(recordRef), tx.get(candidateRef)]);
+    const current = recordSnap.data();
+    const existing = candidateSnap.data();
+    if (existing?.status === "sent") return "completed";
+    if (existing?.status === "queued" || existing?.status === "processing") return "already_queued";
+    if (
+      !current ||
+      current.approvedRevision !== revision ||
+      current.approvedReportSnapshot?.revision !== revision ||
+      currentPrivateLessonReportRevision(current) !== revision
+    ) {
+      if (existing && ["candidate", "queued"].includes(existing.status)) {
+        tx.set(
+          candidateRef,
+          {
+            status: "skipped",
+            reasonCode: "stale_report_revision",
+            lastError: "승인 후 리포트 내용이 변경되어 발송 후보를 무효화했습니다.",
+            updatedAt: now,
+          },
+          { merge: true },
+        );
+      }
+      return "stale";
+    }
+    const candidate: AlimtalkCandidateDoc = {
+      candidateId,
+      studioId: record.studioId || DEFAULT_STUDIO_ID,
+      memberId: record.memberId,
+      memberName: record.memberName,
+      memberPhone: record.memberPhone,
+      type: "private_lesson_report",
+      status: nextStatus,
+      templateCode: ALIMTALK_TEMPLATES.private_lesson_report.code,
+      title: "프라이빗 회원 리포트",
+      reason: `${record.memberName} ${record.sessionNumber}회차 회원 리포트 검수 완료`,
+      sourceActionKey: record.recordId,
+      sourceDate: record.lessonDate,
+      payload: {
+        memberName: record.memberName,
+        sessionNumberText: `${record.sessionNumber}회차`,
+        sessionLabel: `${record.sessionNumber}회차`,
+        lessonDate: record.lessonDate,
+        lessonDateTime: lessonTimeText(record),
+        staffName: record.staffName,
+        instructorName: record.staffName,
+        recordId: record.recordId,
+        requestId: record.requestId,
+        publicReportUrl: reportTargetUrl,
+        reportLinkId: link.linkId,
+        reportShortUrl: link.shortUrl,
+        reportRevision: revision,
+        notionPageId: "",
+      },
+      attempts: existing?.attempts || 0,
+      maxAttempts: existing?.maxAttempts || 2,
+      queuedBy: templateApproved ? "auto" : undefined,
+      reviewedByUid: templateApproved ? reviewedByUid : existing?.reviewedByUid,
+      reviewedAt: templateApproved ? now : existing?.reviewedAt || null,
+      reasonCode: "",
+      lastError: templateApproved ? null : "프라이빗 회원 리포트 템플릿 승인 대기",
+      createdAt: existing?.createdAt || now,
+      updatedAt: now,
+    };
+    tx.set(candidateRef, candidate, { merge: true });
+    tx.set(
+      recordRef,
+      {
+        gptStatus: "approved",
+        publicReportApproval: {
+          ...(current.publicReportApproval || {}),
+          status: templateApproved ? "queued" : "approved",
+          candidateId,
+          lastError: templateApproved ? null : "프라이빗 회원 리포트 템플릿 승인 대기",
+        },
+        updatedAt: now,
+      },
+      { merge: true },
+    );
+    return templateApproved ? "queued" : "template_pending";
   });
-}
-
-async function notionApprovedReportPages(): Promise<any[]> {
-  const result = await notionRequest(`databases/${NOTION_SESSION_RECORDS_DATABASE_ID}/query`, "POST", {
-    filter: {
-      and: [
-        { property: "발송", checkbox: { equals: true } },
-        { property: "발송상태", select: { equals: "대기" } },
-        { property: "회원 리포트", url: { is_not_empty: true } },
-      ],
-    },
-    page_size: 50,
-  });
-  return Array.isArray(result.results) ? result.results : [];
-}
-
-async function privateLessonChartRecordByNotionPageId(
-  pageId: string,
-): Promise<PrivateLessonChartRecordDoc | null> {
-  if (!pageId) return null;
-  const snap = await refs.privateLessonChartRecords().where("notionSync.pageId", "==", pageId).limit(1).get();
-  return snap.docs.length ? snap.docs[0].data() : null;
 }
 
 async function resolveReportShortUrl(record: PrivateLessonChartRecordDoc): Promise<{
@@ -1110,42 +1211,6 @@ function isShortPrivateReportUrl(url: string): boolean {
   return /^https:\/\/in\.archivepilates\.com\/s\/[A-Za-z0-9_-]+\/?$/.test(url || "");
 }
 
-async function updatePrivateLessonReportNotionStatus(pageId: string, status: string): Promise<void> {
-  if (!pageId) return;
-  await notionRequest(`pages/${pageId}`, "PATCH", {
-    properties: {
-      발송상태: notionSelect(status),
-    },
-  });
-}
-
-async function verifyNotionWebhookSignature(request: any): Promise<boolean> {
-  const signature = String(request.get?.("X-Notion-Signature") || request.headers?.["x-notion-signature"] || "");
-  if (!signature.startsWith("sha256=")) return false;
-  const settings = (await db.collection("systemSettings").doc("notionPrivateLessonReportWebhook").get()).data();
-  const verificationToken = String(settings?.verificationToken || "");
-  if (!verificationToken) return false;
-  const rawBody = request.rawBody
-    ? Buffer.isBuffer(request.rawBody)
-      ? request.rawBody
-      : Buffer.from(String(request.rawBody))
-    : Buffer.from(JSON.stringify(request.body || {}));
-  const expected = `sha256=${createHmac("sha256", verificationToken).update(rawBody).digest("hex")}`;
-  if (signature.length !== expected.length) return false;
-  return timingSafeEqual(Buffer.from(signature), Buffer.from(expected));
-}
-
-function isPrivateSessionRecordPage(page: any): boolean {
-  const parentId = String(page?.parent?.database_id || page?.parent?.data_source_id || "");
-  return normalizeNotionId(parentId) === normalizeNotionId(NOTION_SESSION_RECORDS_DATABASE_ID);
-}
-
-function normalizeNotionId(value: string): string {
-  return String(value || "")
-    .replaceAll("-", "")
-    .toLowerCase();
-}
-
 async function ensureChartRequestForBooking(booking: BookingDoc): Promise<{ requestId: string; created: boolean }> {
   const requestId = `plc_${booking.bookingId}`;
   const existing = await refs.privateLessonChartRequest(requestId).get();
@@ -1178,16 +1243,13 @@ async function ensureChartRequestForBooking(booking: BookingDoc): Promise<{ requ
   ]);
   const staff = staffSnap?.data?.();
   const token = accessTokenFor(requestId);
-  const preUrl = chartUrl("pre", requestId, token);
   const postUrl = chartUrl("post", requestId, token);
-  const [preShort, postShort] = await Promise.all([
-    ensureShortLink({ type: "private_chart", targetUrl: preUrl, sourceId: `${requestId}_pre` }),
-    ensureShortLink({ type: "private_chart", targetUrl: postUrl, sourceId: `${requestId}_post` }),
-  ]);
+  const postShort = await ensureShortLink({ type: "private_chart", targetUrl: postUrl, sourceId: `${requestId}_post` });
 
   const now = nowTimestamp();
   const doc: PrivateLessonChartRequestDoc = {
     requestId,
+    workflowVersion: "post_only_v2",
     studioId: booking.studioId || DEFAULT_STUDIO_ID,
     bookingId: booking.bookingId,
     lectureId: booking.lectureId,
@@ -1203,9 +1265,9 @@ async function ensureChartRequestForBooking(booking: BookingDoc): Promise<{ requ
     lessonEndAt: booking.lectureEndAt || null,
     sessionNumber,
     accessTokenHash: sha256(token),
-    preUrl,
+    preUrl: postUrl,
     postUrl,
-    preShortUrl: preShort.shortUrl,
+    preShortUrl: postShort.shortUrl,
     postShortUrl: postShort.shortUrl,
     status: "pending",
     preStatus: "pending",
@@ -1220,9 +1282,7 @@ async function ensureChartRequestForBooking(booking: BookingDoc): Promise<{ requ
     updatedAt: now,
   };
   await refs.privateLessonChartRequest(requestId).create(doc);
-  const baseRecord = await upsertChartRecordBase(doc);
-  const notionSync = await syncPrivateLessonChartRecordToNotion(baseRecord, doc);
-  await refs.privateLessonChartRecord(requestId).set({ notionSync, updatedAt: nowTimestamp() }, { merge: true });
+  await upsertChartRecordBase(doc);
   await ensureChartRequestMediaUploadLink(doc);
   return { requestId, created: true };
 }
@@ -1300,89 +1360,172 @@ async function syncChartRequestToActiveBooking(
   reason: string,
 ): Promise<PrivateLessonChartRequestDoc> {
   if (!request) throw new Error("missing_private_chart_request");
-  const sessionNumber = await nextSessionNumber(booking);
-  const now = nowTimestamp();
-  const sessionChanged = Number(request.sessionNumber || 0) !== sessionNumber;
-  const bookingChanged =
-    request.bookingId !== booking.bookingId ||
-    request.lectureId !== booking.lectureId ||
-    request.lessonDate !== booking.lectureDate ||
-    (request.lessonStartAt?.toMillis?.() || 0) !== (booking.lectureStartAt?.toMillis?.() || 0) ||
-    (request.lessonEndAt?.toMillis?.() || 0) !== (booking.lectureEndAt?.toMillis?.() || 0);
-  const shouldReactivate = request.status === "cancelled" && isAutoBookingCancellationReason(request.cancellationReason);
-  if (request.status === "cancelled" && !shouldReactivate) return request;
-  if (!sessionChanged && !bookingChanged && !shouldReactivate) return request;
-
-  const correction = {
-    fromBookingId: request.bookingId || null,
-    toBookingId: booking.bookingId || null,
-    fromLessonStartAt: request.lessonStartAt || null,
-    toLessonStartAt: booking.lectureStartAt || null,
-    fromSessionNumber: Number(request.sessionNumber || 0) || null,
-    toSessionNumber: sessionNumber,
-    reason,
-    correctedAt: now,
-  };
-  const sessionNumberCorrection = sessionChanged
-    ? {
-      from: Number(request.sessionNumber || 0) || null,
-      to: sessionNumber,
-      reason: "privateSessionLedger canonical round",
-      correctedAt: now,
-    }
-    : request.sessionNumberCorrection;
-  const requestPatch = compactObject({
-    bookingId: booking.bookingId,
-    lectureId: booking.lectureId,
-    staffId: booking.staffId,
-    staffName: booking.staffName,
-    lessonDate: booking.lectureDate,
-    lessonStartAt: booking.lectureStartAt || null,
-    lessonEndAt: booking.lectureEndAt || null,
-    sessionNumber,
-    sessionNumberCorrection,
-    rescheduleCorrection: correction,
-    cancellationReason: null,
-    cancelledAt: null,
-    status: shouldReactivate ? chartRequestStatusFromSubmissions(request) : request.status,
-    updatedAt: now,
-  }) as Partial<PrivateLessonChartRequestDoc>;
-  const updatedRequest = { ...request, ...requestPatch } as PrivateLessonChartRequestDoc;
-  const recordSnap = await refs.privateLessonChartRecord(request.requestId).get();
-  const currentRecord = recordSnap.data() || chartRecordBase(updatedRequest);
-  const recordPatch = compactObject({
-    bookingId: booking.bookingId,
-    lectureId: booking.lectureId,
-    staffId: booking.staffId,
-    staffName: booking.staffName,
-    lessonDate: booking.lectureDate,
-    lessonStartAt: booking.lectureStartAt || null,
-    sessionNumber,
-    sessionNumberCorrection,
-    rescheduleCorrection: correction,
-    cancellationReason: null,
-    cancelledAt: null,
-    updatedAt: now,
-  }) as Partial<PrivateLessonChartRecordDoc>;
-  const updatedRecord = { ...currentRecord, ...recordPatch } as PrivateLessonChartRecordDoc;
-  const recordWrite = recordSnap.exists ? recordPatch : compactObject(updatedRecord as unknown as Record<string, unknown>);
-  await Promise.all([
-    refs.privateLessonChartRequest(request.requestId).set(requestPatch, { merge: true }),
-    refs.privateLessonChartRecord(request.requestId).set(recordWrite, { merge: true }),
+  const [sessionNumber, staffSnap] = await Promise.all([
+    nextSessionNumber(booking),
+    booking.staffId ? refs.staff(booking.staffId).get() : Promise.resolve(null as any),
   ]);
-
-  if (updatedRecord.notionSync?.pageId || updatedRecord.notionSync?.instructorPageId) {
-    try {
-      const notionSync = await syncPrivateLessonChartRecordToNotion(updatedRecord, updatedRequest);
-      await refs.privateLessonChartRecord(request.requestId).set({ notionSync, updatedAt: nowTimestamp() }, { merge: true });
-    } catch (err) {
-      logger.warn("private chart request booking sync notion update failed", {
-        requestId: request.requestId,
-        previousBookingId: request.bookingId,
-        nextBookingId: booking.bookingId,
-        message: errorMessage(err),
-      });
+  const currentStaffPhone = String(request.staffPhone || "");
+  const freshStaffPhone = String(staffSnap?.data?.()?.phone || "");
+  const sameStaff = request.staffId && booking.staffId
+    ? request.staffId === booking.staffId
+    : normalizeKoreanName(request.staffName || "") === normalizeKoreanName(booking.staffName || "");
+  const staffPhone = freshStaffPhone || (sameStaff ? currentStaffPhone : "");
+  const syncResult = await db.runTransaction(async (tx) => {
+    const requestRef = refs.privateLessonChartRequest(request.requestId);
+    const recordRef = refs.privateLessonChartRecord(request.requestId);
+    const [requestSnap, recordSnap] = await Promise.all([tx.get(requestRef), tx.get(recordRef)]);
+    const currentRequest = requestSnap.data() || request;
+    const shouldReactivate =
+      currentRequest.status === "cancelled" &&
+      isAutoBookingCancellationReason(currentRequest.cancellationReason);
+    if (currentRequest.status === "cancelled" && !shouldReactivate) {
+      return { changed: false, updatedRequest: currentRequest, updatedRecord: recordSnap.data() || null, invalidated: false };
     }
+    const sessionChanged = Number(currentRequest.sessionNumber || 0) !== sessionNumber;
+    const bookingChanged =
+      currentRequest.bookingId !== booking.bookingId ||
+      currentRequest.lectureId !== booking.lectureId ||
+      currentRequest.staffId !== booking.staffId ||
+      currentRequest.staffName !== booking.staffName ||
+      normalizePhone(currentRequest.staffPhone) !== normalizePhone(staffPhone) ||
+      currentRequest.lessonDate !== booking.lectureDate ||
+      (currentRequest.lessonStartAt?.toMillis?.() || 0) !== (booking.lectureStartAt?.toMillis?.() || 0) ||
+      (currentRequest.lessonEndAt?.toMillis?.() || 0) !== (booking.lectureEndAt?.toMillis?.() || 0);
+    if (!sessionChanged && !bookingChanged && !shouldReactivate) {
+      return { changed: false, updatedRequest: currentRequest, updatedRecord: recordSnap.data() || null, invalidated: false };
+    }
+
+    const now = nowTimestamp();
+    const correction = {
+      fromBookingId: currentRequest.bookingId || null,
+      toBookingId: booking.bookingId || null,
+      fromLessonStartAt: currentRequest.lessonStartAt || null,
+      toLessonStartAt: booking.lectureStartAt || null,
+      fromSessionNumber: Number(currentRequest.sessionNumber || 0) || null,
+      toSessionNumber: sessionNumber,
+      reason,
+      correctedAt: now,
+    };
+    const sessionNumberCorrection = sessionChanged
+      ? {
+        from: Number(currentRequest.sessionNumber || 0) || null,
+        to: sessionNumber,
+        reason: "privateSessionLedger canonical round",
+        correctedAt: now,
+      }
+      : currentRequest.sessionNumberCorrection;
+    const scheduleNotice =
+      bookingChanged && currentRequest.alimtalk?.status === "sent"
+        ? {
+          alimtalk: {
+            ...currentRequest.alimtalk,
+            status: "sent" as const,
+            reasonCode: "schedule_changed_after_send",
+            lastError: "강사 알림톡 발송 후 수업 일정이 변경되었습니다. 링크는 최신 일정으로 연결됩니다.",
+          },
+        }
+        : {};
+    const requestPatch = compactObject({
+      workflowVersion: "post_only_v2",
+      bookingId: booking.bookingId,
+      lectureId: booking.lectureId,
+      staffId: booking.staffId,
+      staffName: booking.staffName,
+      staffPhone,
+      lessonDate: booking.lectureDate,
+      lessonStartAt: booking.lectureStartAt || null,
+      lessonEndAt: booking.lectureEndAt || null,
+      sessionNumber,
+      sessionNumberCorrection,
+      rescheduleCorrection: correction,
+      cancellationReason: null,
+      cancelledAt: null,
+      status: shouldReactivate ? chartRequestStatusFromSubmissions(currentRequest) : currentRequest.status,
+      ...scheduleNotice,
+      updatedAt: now,
+    }) as Partial<PrivateLessonChartRequestDoc>;
+    const updatedRequest = { ...currentRequest, ...requestPatch } as PrivateLessonChartRequestDoc;
+    const currentRecord = recordSnap.data() || chartRecordBase(updatedRequest);
+    const recordPatch = compactObject({
+      bookingId: booking.bookingId,
+      lectureId: booking.lectureId,
+      staffId: booking.staffId,
+      staffName: booking.staffName,
+      lessonDate: booking.lectureDate,
+      lessonStartAt: booking.lectureStartAt || null,
+      sessionNumber,
+      sessionNumberCorrection,
+      rescheduleCorrection: correction,
+      cancellationReason: null,
+      cancelledAt: null,
+      updatedAt: now,
+    }) as Partial<PrivateLessonChartRecordDoc>;
+    const recordWithSchedule = { ...currentRecord, ...recordPatch } as PrivateLessonChartRecordDoc;
+    const shouldInvalidateApproval =
+      (sessionChanged || bookingChanged) &&
+      !isPrivateLessonReportSent(currentRecord) &&
+      Boolean(currentRecord.approvedRevision || currentRecord.publicReportApproval?.candidateId);
+    const reportStatePatch: Partial<PrivateLessonChartRecordDoc> = shouldInvalidateApproval
+      ? {
+        reportRevision: currentPrivateLessonReportRevision(recordWithSchedule),
+        approvedRevision: "",
+        approvedReportSnapshot: null,
+        publicReportApproval: {
+          status: "pending",
+          approvedAt: null,
+          approvedBy: currentRecord.publicReportApproval?.approvedBy,
+          candidateId: null,
+          lastError: "수업 일정 또는 회차가 변경되어 리포트 재승인이 필요합니다.",
+        },
+      }
+      : {};
+    const updatedRecord = { ...recordWithSchedule, ...reportStatePatch } as PrivateLessonChartRecordDoc;
+    const candidateId = shouldInvalidateApproval
+      ? String(currentRecord.publicReportApproval?.candidateId || "")
+      : "";
+    const candidateRef = candidateId ? refs.alimtalkCandidate(candidateId) : null;
+    const candidate = candidateRef ? (await tx.get(candidateRef)).data() : undefined;
+    tx.set(requestRef, requestPatch, { merge: true });
+    tx.set(
+      recordRef,
+      recordSnap.exists
+        ? { ...recordPatch, ...reportStatePatch }
+        : compactObject(updatedRecord as unknown as Record<string, unknown>),
+      { merge: true },
+    );
+    if (candidateRef && candidate && ["candidate", "queued", "processing", "failed"].includes(candidate.status)) {
+      tx.set(
+        candidateRef,
+        {
+          status: "skipped",
+          reasonCode: "private_report_schedule_changed",
+          lastError: "수업 일정 또는 회차가 변경되어 기존 리포트 발송 후보를 보류했습니다.",
+          updatedAt: now,
+        },
+        { merge: true },
+      );
+    }
+    return {
+      changed: true,
+      updatedRequest,
+      updatedRecord,
+      invalidated: shouldInvalidateApproval,
+    };
+  });
+  const { updatedRequest, updatedRecord } = syncResult;
+  if (!syncResult.changed) return updatedRequest;
+  if (syncResult.invalidated) {
+    await invalidatePendingPrivateLessonReportCandidates(
+      updatedRecord?.recordId || request.requestId,
+      "수업 일정 또는 회차가 변경되어 기존 리포트 발송 후보를 보류했습니다.",
+    );
+  }
+
+  if (updatedRecord) {
+    await refs.privateLessonChartRecord(request.requestId).set(
+      { notionSync: pendingNotionProjection(updatedRecord), updatedAt: nowTimestamp() },
+      { merge: true },
+    );
   }
   return updatedRequest;
 }
@@ -1403,6 +1546,7 @@ async function submitPrivateLessonChart(
   mode: PrivateLessonChartMode,
   answers: ChartAnswerMap,
 ): Promise<{ requestId: string; recordId: string; mode: PrivateLessonChartMode; notionStatus: string }> {
+  if (mode === "post") validateSimplifiedPostAnswers(answers);
   const recordRef = refs.privateLessonChartRecord(chartRequest.requestId);
   const requestRef = refs.privateLessonChartRequest(chartRequest.requestId);
   const { nextRecord } = await db.runTransaction(async (tx) => {
@@ -1410,18 +1554,16 @@ async function submitPrivateLessonChart(
     const recordSnap = await tx.get(recordRef);
     const currentRequest = requestSnap.data() || chartRequest;
     const base = recordSnap.data() || chartRecordBase(chartRequest);
-    if (isPrivateLessonReportSent(base)) {
-      throw new Error("회원 리포트 알림톡 발송 완료 후에는 설문 답변을 수정할 수 없습니다.");
-    }
+    const lockReason = privateLessonReportMutationLockReason(base);
+    if (lockReason) throw new Error(lockReason);
     const now = nowTimestamp();
-    if (mode === "post" && !cleanReportSentence(answers.nextMemo)) {
-      throw new Error("다음 수업 준비 메모를 입력해 주세요.");
-    }
-    const reportResetPatch = resetPrivateLessonReportDraftPatch();
+    const reportResetPatch = privateLessonReportSourceChangePatch(
+      mode === "post" || Boolean(base.postSubmittedAt) ? "pending" : "waiting_post",
+    );
     const recordPatch =
       mode === "pre"
-        ? { prePlan: answers, preSubmittedAt: now, ...reportResetPatch }
-        : { postRecord: answers, postSubmittedAt: now, ...reportResetPatch };
+        ? { prePlan: answers, preSubmittedAt: now, ...reportResetPatch, notionSync: pendingNotionProjection(base) }
+        : { postRecord: answers, postSubmittedAt: now, ...reportResetPatch, notionSync: pendingNotionProjection(base) };
     const nextRecord = {
       ...base,
       ...recordPatch,
@@ -1444,36 +1586,31 @@ async function submitPrivateLessonChart(
     return { nextRecord };
   });
 
-  let recordForNotion = nextRecord;
-  await skipPendingPrivateLessonReportCandidate(recordForNotion);
-  if (recordForNotion.postRecord && recordForNotion.postSubmittedAt) {
+  let generatedRecord = nextRecord;
+  await skipPendingPrivateLessonReportCandidate(generatedRecord);
+  if (generatedRecord.postRecord && generatedRecord.postSubmittedAt) {
     try {
-      recordForNotion = (await generatePrivateLessonReportDraft(nextRecord, chartRequest)).record;
+      generatedRecord = (await generatePrivateLessonReportDraft(nextRecord, chartRequest)).record;
     } catch (err) {
-      logger.warn("submitPrivateLessonChart Gemini draft failed", {
+      logger.warn("submitPrivateLessonChart report draft failed", {
         requestId: chartRequest.requestId,
         memberName: chartRequest.memberName,
         message: errorMessage(err),
       });
     }
   }
-  const notionSync = await syncPrivateLessonChartRecordToNotion(recordForNotion, chartRequest);
-  await recordRef.set({ notionSync, updatedAt: nowTimestamp() }, { merge: true });
+  await recordRef.set(
+    { notionSync: pendingNotionProjection(generatedRecord), updatedAt: nowTimestamp() },
+    { merge: true },
+  );
 
-  return { requestId: chartRequest.requestId, recordId: recordForNotion.recordId, mode, notionStatus: notionSync.status };
+  return { requestId: chartRequest.requestId, recordId: generatedRecord.recordId, mode, notionStatus: "pending" };
 }
 
-function resetPrivateLessonReportDraftPatch(): Partial<PrivateLessonChartRecordDoc> {
-  return {
-    gptStatus: "pending",
-    gptTaskId: "",
-    gptError: null,
-    gptDraftSummary: "",
-    gptDraftNextDirection: "",
-    publicSummary: "",
-    publicNextDirection: "",
-    publicReportApproval: { status: "pending", lastError: null },
-  };
+function validateSimplifiedPostAnswers(answers: ChartAnswerMap): void {
+  if (!textArray(answers.focusAreas).length) throw new Error("진행 부위를 선택해 주세요.");
+  if (!textArray(answers.changes).length) throw new Error("확인한 변화를 선택해 주세요.");
+  if (!cleanEditableReportText(answers.nextDirection, 1200)) throw new Error("다음 방향을 입력해 주세요.");
 }
 
 async function skipPendingPrivateLessonReportCandidate(
@@ -1481,19 +1618,7 @@ async function skipPendingPrivateLessonReportCandidate(
   lastError = "리포트 발송 전 설문 답변이 수정되어 기존 발송 후보를 보류했습니다.",
 ): Promise<void> {
   if (isPrivateLessonReportSent(record)) return;
-  const candidateId = `private_lesson_report_${record.recordId}`;
-  const existing = (await refs.alimtalkCandidate(candidateId).get()).data();
-  if (!existing || existing.status === "sent" || existing.status === "skipped") return;
-  if (!["candidate", "queued", "processing", "failed"].includes(String(existing.status || ""))) return;
-  await refs.alimtalkCandidate(candidateId).set(
-    {
-      status: "skipped",
-      reasonCode: "private_report_edited_before_send",
-      lastError,
-      updatedAt: nowTimestamp(),
-    },
-    { merge: true },
-  );
+  await invalidatePendingPrivateLessonReportCandidates(record.recordId, lastError);
 }
 
 async function upsertChartRecordBase(chartRequest: PrivateLessonChartRequestDoc): Promise<PrivateLessonChartRecordDoc> {
@@ -1520,7 +1645,7 @@ function chartRecordBase(chartRequest: PrivateLessonChartRequestDoc): PrivateLes
     sessionNumber: chartRequest.sessionNumber,
     preSubmittedAt: null,
     postSubmittedAt: null,
-    gptStatus: "pending",
+    gptStatus: "waiting_post",
     notionSync: { status: "pending" },
     createdAt: now,
     updatedAt: now,
@@ -1533,7 +1658,9 @@ async function generatePrivateLessonReportDraft(
   options: { force?: boolean } = {},
 ): Promise<{ taskId: string; generated: boolean; ready: boolean; record: PrivateLessonChartRecordDoc }> {
   const sourceHash = gptSourceHash(record, chartRequest);
-  const taskId = `gemini_${record.recordId}_${sourceHash.slice(0, 12)}`;
+  const directNextDirection = cleanEditableReportText(record.postRecord?.nextDirection, 1200);
+  const provider = directNextDirection ? "archive_rules" : "gemini";
+  const taskId = `${provider}_${record.recordId}_${sourceHash.slice(0, 12)}`;
   if (
     !options.force &&
     record.gptStatus === "draft_created" &&
@@ -1550,8 +1677,8 @@ async function generatePrivateLessonReportDraft(
     {
       gptTaskId: taskId,
       gptStatus: "processing",
-      gptProvider: "gemini",
-      gptModel: GEMINI_MODEL,
+      gptProvider: provider,
+      gptModel: provider === "gemini" ? GEMINI_MODEL : "simplified-v1",
       gptSourceHash: sourceHash,
       gptError: null,
       updatedAt: now,
@@ -1560,10 +1687,9 @@ async function generatePrivateLessonReportDraft(
   );
 
   try {
-    const draft = applyPrivateLessonReportKeywords(
-      await generateGeminiPrivateLessonDraft(record, chartRequest),
-      record,
-    );
+    const draft = directNextDirection
+      ? simplifiedPrivateLessonDraft(record, directNextDirection)
+      : applyPrivateLessonReportKeywords(await generateGeminiPrivateLessonDraft(record, chartRequest), record);
     const nextRecord = {
       ...record,
       gptTaskId: taskId,
@@ -1575,17 +1701,24 @@ async function generatePrivateLessonReportDraft(
       updatedAt: nowTimestamp(),
     } as PrivateLessonChartRecordDoc;
     const reportResolution = await resolveReportShortUrl(nextRecord);
-    const readyRecord = {
+    const readyRecordBase = {
       ...nextRecord,
       publicReportUrl: reportResolution.publicReportUrl || nextRecord.publicReportUrl,
       publicReportCanonicalUrl: reportResolution.publicReportCanonicalUrl || nextRecord.publicReportCanonicalUrl,
+    } as PrivateLessonChartRecordDoc;
+    const reportRevision = currentPrivateLessonReportRevision(readyRecordBase);
+    const readyRecord = {
+      ...readyRecordBase,
+      reportRevision,
+      approvedRevision: "",
+      approvedReportSnapshot: null,
     } as PrivateLessonChartRecordDoc;
     await refs.privateLessonChartRecord(record.recordId).set(
       {
         gptTaskId: taskId,
         gptStatus: "draft_created",
-        gptProvider: "gemini",
-        gptModel: GEMINI_MODEL,
+        gptProvider: provider,
+        gptModel: provider === "gemini" ? GEMINI_MODEL : "simplified-v1",
         gptSourceHash: sourceHash,
         gptDraftSummary: draft.summary,
         gptDraftNextDirection: draft.nextDirection,
@@ -1593,7 +1726,11 @@ async function generatePrivateLessonReportDraft(
         publicNextDirection: draft.nextDirection,
         publicReportUrl: readyRecord.publicReportUrl || "",
         publicReportCanonicalUrl: readyRecord.publicReportCanonicalUrl || "",
+        reportRevision,
+        approvedRevision: "",
+        approvedReportSnapshot: null,
         publicReportApproval: { status: "pending", lastError: null },
+        notionSync: pendingNotionProjection(record),
         gptError: null,
         updatedAt: nowTimestamp(),
       },
@@ -1606,8 +1743,8 @@ async function generatePrivateLessonReportDraft(
       {
         gptTaskId: taskId,
         gptStatus: "failed",
-        gptProvider: "gemini",
-        gptModel: GEMINI_MODEL,
+        gptProvider: provider,
+        gptModel: provider === "gemini" ? GEMINI_MODEL : "simplified-v1",
         gptSourceHash: sourceHash,
         gptError: message,
         publicReportApproval: { status: "pending", lastError: message },
@@ -1639,13 +1776,21 @@ async function regenerateManualPrivateLessonReport(
     publicSummary: summary,
     publicNextDirection: nextDirection,
     publicReportApproval: { status: "pending" as const, lastError: null },
+    notionSync: pendingNotionProjection(record),
     updatedAt: nowTimestamp(),
   } as PrivateLessonChartRecordDoc;
   const reportResolution = await resolveReportShortUrl(nextRecord);
-  const readyRecord = {
+  const readyRecordBase = {
     ...nextRecord,
     publicReportUrl: reportResolution.publicReportUrl || nextRecord.publicReportUrl,
     publicReportCanonicalUrl: reportResolution.publicReportCanonicalUrl || nextRecord.publicReportCanonicalUrl,
+  } as PrivateLessonChartRecordDoc;
+  const reportRevision = currentPrivateLessonReportRevision(readyRecordBase);
+  const readyRecord = {
+    ...readyRecordBase,
+    reportRevision,
+    approvedRevision: "",
+    approvedReportSnapshot: null,
   } as PrivateLessonChartRecordDoc;
   await refs.privateLessonChartRecord(record.recordId).set(
     {
@@ -1658,7 +1803,11 @@ async function regenerateManualPrivateLessonReport(
       publicNextDirection: nextDirection,
       publicReportUrl: readyRecord.publicReportUrl || "",
       publicReportCanonicalUrl: readyRecord.publicReportCanonicalUrl || "",
+      reportRevision,
+      approvedRevision: "",
+      approvedReportSnapshot: null,
       publicReportApproval: readyRecord.publicReportApproval,
+      notionSync: readyRecord.notionSync,
       gptError: null,
       updatedAt: nowTimestamp(),
     },
@@ -1677,6 +1826,78 @@ function hasManualPrivateLessonReportText(record: PrivateLessonChartRecordDoc): 
     cleanEditableReportText(record.gptDraftSummary || record.publicSummary, 900) &&
     cleanEditableReportText(record.gptDraftNextDirection || record.publicNextDirection, 1200)
   );
+}
+
+function pendingNotionProjection(
+  record: PrivateLessonChartRecordDoc,
+): NonNullable<PrivateLessonChartRecordDoc["notionSync"]> {
+  return {
+    ...(record.notionSync || {}),
+    status: "pending",
+    error: "",
+  };
+}
+
+export async function syncPendingPrivateLessonNotionProjections(): Promise<{
+  checked: number;
+  synced: number;
+  failed: number;
+  skipped: number;
+}> {
+  const [pendingSnap, failedSnap] = await Promise.all([
+    refs.privateLessonChartRecords().where("notionSync.status", "==", "pending").limit(50).get(),
+    refs.privateLessonChartRecords().where("notionSync.status", "==", "failed").get(),
+  ]);
+  const failedDocs = [...failedSnap.docs]
+    .sort((a, b) => notionSyncMillis(a.data()) - notionSyncMillis(b.data()))
+    .slice(0, 10);
+  const records = [...new Map(
+    [...pendingSnap.docs, ...failedDocs].map((doc) => [doc.id, doc.data()] as const),
+  ).values()];
+  let checked = 0;
+  let synced = 0;
+  let failed = 0;
+  let skipped = 0;
+  for (const record of records) {
+    const chartRequest = (await refs.privateLessonChartRequest(record.requestId).get()).data();
+    if (!chartRequest) {
+      skipped += 1;
+      await refs.privateLessonChartRecord(record.recordId).set(
+        { notionSync: { ...pendingNotionProjection(record), status: "failed", error: "차트 요청 없음" }, updatedAt: nowTimestamp() },
+        { merge: true },
+      );
+      continue;
+    }
+    checked += 1;
+    const notionSync = await syncPrivateLessonChartRecordToNotion(record, chartRequest);
+    const finalStatus = await db.runTransaction(async (tx) => {
+      const recordRef = refs.privateLessonChartRecord(record.recordId);
+      const requestRef = refs.privateLessonChartRequest(record.requestId);
+      const [currentRecordSnap, currentRequestSnap] = await Promise.all([
+        tx.get(recordRef),
+        tx.get(requestRef),
+      ]);
+      const currentRecord = currentRecordSnap.data();
+      const currentRequest = currentRequestSnap.data();
+      if (!currentRecord || !currentRequest) return "skipped" as const;
+      const currentSourceVersion = privateLessonNotionProjectionVersion(currentRecord, currentRequest);
+      const sourceChanged = currentSourceVersion !== notionSync.sourceVersion;
+      const nextSync = {
+        ...(currentRecord.notionSync || {}),
+        ...notionSync,
+        status: sourceChanged ? "pending" as const : notionSync.status,
+        sourceVersion: currentSourceVersion,
+        error: sourceChanged ? "" : notionSync.error || "",
+      };
+      tx.set(recordRef, { notionSync: nextSync, updatedAt: nowTimestamp() }, { merge: true });
+      return nextSync.status;
+    });
+    if (finalStatus === "synced") synced += 1;
+    else if (finalStatus === "failed") failed += 1;
+    else skipped += 1;
+  }
+  logger.info("syncPendingPrivateLessonNotionProjections completed", { checked, synced, failed, skipped });
+  return { checked, synced, failed, skipped };
 }
 
 async function syncPrivateLessonChartRecordToNotion(
@@ -1704,7 +1925,6 @@ async function syncPrivateLessonChartRecordToNotion(
         { merge: true },
       );
     }
-    const reportUrl = reportResolution.publicReportUrl;
     const recordForNotion = {
       ...record,
       publicReportUrl: reportCanBeExposed ? reportResolution.publicReportUrl || record.publicReportUrl || "" : "",
@@ -1712,69 +1932,76 @@ async function syncPrivateLessonChartRecordToNotion(
         ? reportResolution.publicReportCanonicalUrl || record.publicReportCanonicalUrl || ""
         : "",
     } as PrivateLessonChartRecordDoc;
-    const newPageProperties = compactObject({
-      "회원 리포트": reportUrl ? { url: reportUrl } : undefined,
-      발송: { checkbox: false },
-      발송상태: notionSelect(reportUrl ? "대기" : ""),
-    });
-    const existingPageProperties = compactObject({
-      "회원 리포트": reportUrl ? { url: reportUrl } : reportResolution.shouldUpdateNotion ? { url: null } : undefined,
-    });
-    const content = notionChartChildren(recordForNotion, chartRequest);
-    const existingPageId = record.notionSync?.pageId;
-    if (existingPageId) {
-      await updateNotionPageTitle(existingPageId, notionSessionTitle(recordForNotion, chartRequest)).catch((err) => {
-        logger.warn("update private session record page title failed", {
-          pageId: existingPageId,
-          requestId: chartRequest.requestId,
-          title: notionSessionTitle(recordForNotion, chartRequest),
-          message: errorMessage(err),
-        });
-      });
-      if (Object.keys(existingPageProperties).length) {
-        await notionRequest(`pages/${existingPageId}`, "PATCH", { properties: existingPageProperties });
-      }
-      await appendPageContent(existingPageId, notionUpdateChildren(recordForNotion, chartRequest));
-      const instructorPage = await syncInstructorMemberChartPage(
-        recordForNotion,
-        chartRequest,
-        record.notionSync?.pageUrl || notionPageUrl(existingPageId),
-      );
-      return {
-        status: "synced",
-        pageId: existingPageId,
-        pageUrl: record.notionSync?.pageUrl || notionPageUrl(existingPageId),
-        instructorPageId: instructorPage?.pageId || record.notionSync?.instructorPageId,
-        instructorPageUrl: instructorPage?.pageUrl || record.notionSync?.instructorPageUrl,
-        syncedAt: new Date().toISOString(),
-      };
+    const sourceVersion = privateLessonNotionProjectionVersion(recordForNotion, chartRequest);
+    const instructorPage = await syncInstructorMemberChartPage(recordForNotion, chartRequest);
+    if (!instructorPage) {
+      throw new Error(`Notion 강사 차트 위치를 찾을 수 없습니다: ${record.staffName || "강사 미확인"}`);
     }
-    const page = await notionRequest("pages", "POST", {
-      parent: { database_id: NOTION_SESSION_RECORDS_DATABASE_ID },
-      properties: newPageProperties,
-      children: content,
-    });
-    const pageUrl = String(page.url || notionPageUrl(String(page.id)));
-    const instructorPage = await syncInstructorMemberChartPage(recordForNotion, chartRequest, pageUrl);
     return {
       status: "synced",
-      pageId: String(page.id),
-      pageUrl,
+      pageId: record.notionSync?.pageId,
+      pageUrl: record.notionSync?.pageUrl,
       instructorPageId: instructorPage?.pageId,
       instructorPageUrl: instructorPage?.pageUrl,
+      sourceVersion,
       syncedAt: new Date().toISOString(),
     };
   } catch (err) {
-    return { status: "failed", error: errorMessage(err), syncedAt: new Date().toISOString() };
+    return {
+      status: "failed",
+      sourceVersion: privateLessonNotionProjectionVersion(record, chartRequest),
+      error: errorMessage(err),
+      syncedAt: new Date().toISOString(),
+    };
   }
+}
+
+function privateLessonNotionProjectionVersion(
+  record: PrivateLessonChartRecordDoc,
+  chartRequest: PrivateLessonChartRequestDoc,
+): string {
+  return stableHash({
+    request: {
+      bookingId: chartRequest.bookingId,
+      memberId: chartRequest.memberId,
+      memberName: chartRequest.memberName,
+      staffId: chartRequest.staffId,
+      staffName: chartRequest.staffName,
+      lessonDate: chartRequest.lessonDate,
+      lessonStartAt: chartRequest.lessonStartAt?.toMillis?.() || 0,
+      sessionNumber: chartRequest.sessionNumber,
+      status: chartRequest.status,
+      intakeSummary: chartRequest.intakeSummary || null,
+    },
+    record: {
+      bookingId: record.bookingId,
+      memberId: record.memberId,
+      memberName: record.memberName,
+      staffId: record.staffId,
+      staffName: record.staffName,
+      lessonDate: record.lessonDate,
+      lessonStartAt: record.lessonStartAt?.toMillis?.() || 0,
+      sessionNumber: record.sessionNumber,
+      cancelledAt: record.cancelledAt?.toMillis?.() || 0,
+      postRecord: record.postRecord || null,
+      publicSummary: record.publicSummary || record.gptDraftSummary || "",
+      publicNextDirection: record.publicNextDirection || record.gptDraftNextDirection || "",
+      publicReportUrl: record.publicReportUrl || "",
+      publicReportApproval: record.publicReportApproval || null,
+      media: record.media || null,
+    },
+  }).slice(0, 24);
+}
+
+function notionSyncMillis(record: PrivateLessonChartRecordDoc): number {
+  const syncedAt = Date.parse(String(record.notionSync?.syncedAt || ""));
+  return Number.isFinite(syncedAt) ? syncedAt : 0;
 }
 
 async function syncInstructorMemberChartPage(
   record: PrivateLessonChartRecordDoc,
   chartRequest: PrivateLessonChartRequestDoc,
-  sessionPageUrl: string,
 ): Promise<{ pageId: string; pageUrl: string } | null> {
-  if (!sessionPageUrl) return null;
   const title = notionSessionTitle(record, chartRequest);
   const knownPageId = record.notionSync?.instructorPageId;
   if (knownPageId) {
@@ -1785,7 +2012,7 @@ async function syncInstructorMemberChartPage(
         message: errorMessage(err),
       });
     });
-    await appendPageContent(knownPageId, notionInstructorUpdateChildren(record, chartRequest));
+    await replacePageContent(knownPageId, notionInstructorChartChildren(record, chartRequest));
     return {
       pageId: knownPageId,
       pageUrl: record.notionSync?.instructorPageUrl || notionPageUrl(knownPageId),
@@ -1802,7 +2029,7 @@ async function syncInstructorMemberChartPage(
   if (!memberPageId) return null;
   const existingPageId = await findChildPageByExactTitle(memberPageId, title);
   if (existingPageId) {
-    await appendPageContent(existingPageId, notionInstructorUpdateChildren(record, chartRequest));
+    await replacePageContent(existingPageId, notionInstructorChartChildren(record, chartRequest));
     return { pageId: existingPageId, pageUrl: notionPageUrl(existingPageId) };
   }
   const page = await notionRequest("pages", "POST", {
@@ -1877,6 +2104,15 @@ async function appendPageContent(pageId: string, children: Record<string, unknow
   await notionRequest(`blocks/${pageId}/children`, "PATCH", { children });
 }
 
+async function replacePageContent(pageId: string, children: Record<string, unknown>[]): Promise<void> {
+  const existing = await notionBlockChildren(pageId);
+  for (const child of existing) {
+    if (!child?.id || child?.type === "child_page") continue;
+    await notionRequest(`blocks/${child.id}`, "DELETE");
+  }
+  await appendPageContent(pageId, children);
+}
+
 async function updateNotionPageTitle(pageId: string, title: string): Promise<void> {
   await notionRequest(`pages/${pageId}`, "PATCH", { properties: notionTitle(title) });
 }
@@ -1939,9 +2175,66 @@ async function readChartRequestFromRequest(
 ): Promise<{ chartRequest: PrivateLessonChartRequestDoc; mode: PrivateLessonChartMode }> {
   const requestId = String(request.query?.r || request.query?.requestId || "").trim();
   const token = String(request.query?.t || request.query?.token || "").trim();
-  const mode = normalizeMode(request.query?.mode);
   const chartRequest = await readChartRequest(requestId, token);
+  const mode = chartRequest.workflowVersion === "post_only_v2" ? "post" : normalizeMode(request.query?.mode);
   return { chartRequest, mode };
+}
+
+async function publicDailyChartRequest(request: any): Promise<Record<string, unknown>> {
+  const requestId = String(request.query?.r || request.query?.requestId || "").trim();
+  const token = String(request.query?.t || request.query?.token || "").trim();
+  const date = String(request.query?.date || "").trim();
+  if (!/^plc_[a-zA-Z0-9_.:-]{4,120}$/.test(requestId) || !/^\d{4}-\d{2}-\d{2}$/.test(date)) {
+    throw new Error("오늘 기록 링크가 올바르지 않습니다.");
+  }
+  const seed = (await refs.privateLessonChartRequest(requestId).get()).data();
+  if (!seed || !normalizePhone(seed.staffPhone)) {
+    throw new Error("오늘 기록 링크를 확인할 수 없습니다.");
+  }
+  const activeSeed = await activePrivateBookingForChartRequest(seed);
+  if (
+    !activeSeed.ok ||
+    seed.lessonDate !== date ||
+    token !== dailyAccessTokenFor(seed, date)
+  ) {
+    throw new Error("오늘 기록 링크를 확인할 수 없습니다.");
+  }
+  const snap = await refs.privateLessonChartRequests().where("lessonDate", "==", date).limit(500).get();
+  const candidates = canonicalChartRequests(snap.docs.map((doc) => doc.data()))
+    .filter((row) => dailyStaffIdentity(row) === dailyStaffIdentity(seed));
+  const active: PrivateLessonChartRequestDoc[] = [];
+  for (const row of candidates) {
+    const booking = await activePrivateBookingForChartRequest(row);
+    if (booking.ok) active.push(row);
+  }
+  const rows = await Promise.all(active.map(async (row) => ({
+    request: row,
+    record: (await refs.privateLessonChartRecord(row.requestId).get()).data() || null,
+  })));
+  const items = rows
+    .sort((a, b) => privateLessonOrderMillis(a.request) - privateLessonOrderMillis(b.request))
+    .map(({ request: row, record }) => {
+      const sent = isPrivateLessonReportSent(record);
+      const ready = isPrivateLessonReportGenerated(record);
+      const postSubmitted = Boolean(record?.postSubmittedAt || row.postStatus === "submitted");
+      return {
+        requestId: row.requestId,
+        memberName: row.memberName,
+        sessionNumber: row.sessionNumber,
+        lessonTime: lessonTimeText(row),
+        postUrl: row.postShortUrl,
+        status: sent ? "delivered" : ready ? "review" : postSubmitted ? "preparing" : "recording",
+      };
+    });
+  return {
+    ok: true,
+    view: "today",
+    date,
+    staffName: seed.staffName,
+    total: items.length,
+    completed: items.filter((item) => item.status === "delivered").length,
+    items,
+  };
 }
 
 async function readChartRequest(requestId: string, token: string): Promise<PrivateLessonChartRequestDoc> {
@@ -1975,9 +2268,16 @@ async function publicChartRequest(
     : reportReady
       ? "ready"
       : record?.gptStatus || "pending";
-  const previousReport = mode === "pre"
-    ? await previousPrivateLessonReportSummary(chartRequest)
-    : null;
+  const [previousReport, latestIntake] = await Promise.all([
+    previousPrivateLessonReportSummary(chartRequest),
+    latestPrivateSurveyForBooking({
+      memberId: chartRequest.memberId,
+      memberPhone: chartRequest.memberPhone,
+    }),
+  ]);
+  const intakeSummary = latestIntake
+    ? privateSurveySummaryForRequest(latestIntake)
+    : chartRequest.intakeSummary || null;
   return {
     requestId: chartRequest.requestId,
     mode,
@@ -1988,7 +2288,7 @@ async function publicChartRequest(
     sessionNumber: chartRequest.sessionNumber,
     preStatus: chartRequest.preStatus,
     postStatus: chartRequest.postStatus,
-    intakeSummary: chartRequest.intakeSummary || null,
+    intakeSummary,
     previousReport,
     existingAnswers: record
       ? {
@@ -2071,7 +2371,9 @@ async function previousPrivateLessonReportSummary(
   };
 }
 
-async function latestPrivateSurveyForBooking(booking: BookingDoc): Promise<PrivateSurveyResponseDoc | null> {
+async function latestPrivateSurveyForBooking(
+  booking: Pick<BookingDoc, "memberId" | "memberPhone">,
+): Promise<PrivateSurveyResponseDoc | null> {
   const byMember = booking.memberId
     ? await refs.privateSurveyResponses().where("matching.memberId", "==", booking.memberId).limit(10).get()
     : null;
@@ -2370,7 +2672,7 @@ function isSendablePrivateChartRequest(request: PrivateLessonChartRequestDoc): b
   if (request.status === "cancelled") return false;
   if (request.alimtalk?.status !== "template_pending" && request.alimtalk?.status !== "queued") return false;
   if (!request.staffPhone || !normalizePhone(request.staffPhone)) return false;
-  if (!request.preShortUrl || !request.postShortUrl || !request.mediaUploadShortUrl) return false;
+  if (!request.postShortUrl) return false;
   if (!request.memberName || !request.staffName || !request.lessonStartAt) return false;
   return true;
 }
@@ -2378,7 +2680,12 @@ function isSendablePrivateChartRequest(request: PrivateLessonChartRequestDoc): b
 async function activePrivateBookingForChartRequest(
   request: PrivateLessonChartRequestDoc,
 ): Promise<{ ok: true; booking: BookingDoc } | { ok: false; reason: string }> {
-  if (request.status === "cancelled") return { ok: false, reason: request.cancellationReason || "chart_request_cancelled" };
+  if (
+    request.status === "cancelled" &&
+    !isAutoBookingCancellationReason(request.cancellationReason)
+  ) {
+    return { ok: false, reason: request.cancellationReason || "chart_request_cancelled" };
+  }
   if (!request.bookingId) return { ok: false, reason: "missing_booking_id" };
   const snap = await refs.booking(request.bookingId).get();
   const booking = snap.data();
@@ -2407,6 +2714,19 @@ async function findReplacementPrivateBookingForChartRequest(
   reason: string,
 ): Promise<BookingDoc | null> {
   if (!request.memberId || !request.lessonDate) return null;
+  const linkedBooking = request.bookingId ? (await refs.booking(request.bookingId).get()).data() : null;
+  const explicitReplacementId = String(
+    linkedBooking?.supersededByBookingId || linkedBooking?.sessionOrder?.supersededByBookingId || "",
+  );
+  if (explicitReplacementId) {
+    const explicitReplacement = (await refs.booking(explicitReplacementId).get()).data();
+    if (
+      explicitReplacement?.memberId === request.memberId &&
+      !inactivePrivateBookingReason(explicitReplacement)
+    ) {
+      return explicitReplacement;
+    }
+  }
   const snap = await refs.bookings()
     .where("memberId", "==", request.memberId)
     .where("lectureDate", "==", request.lessonDate)
@@ -2501,46 +2821,23 @@ async function cancelPrivateLessonChartRequest(
     {
       cancellationReason: reason,
       cancelledAt: now,
+      notionSync: pendingNotionProjection(record),
       updatedAt: now,
     },
     { merge: true },
   );
-  await updateCancelledNotionChartTitle(record, request, reason);
 }
 
-async function updateCancelledNotionChartTitle(
-  record: PrivateLessonChartRecordDoc,
+function dailyPrivateChartAlimtalkVariables(
   request: PrivateLessonChartRequestDoc,
-  reason: string,
-): Promise<void> {
-  const title = `${notionSessionTitle(record, request)} (취소)`;
-  const pageIds = [record.notionSync?.pageId, record.notionSync?.instructorPageId].filter(Boolean) as string[];
-  await Promise.all(
-    pageIds.map(async (pageId) => {
-      await updateNotionPageTitle(pageId, title);
-      await appendPageContent(pageId, [
-        callout(`예약 취소/변경으로 차트 요청을 중단했습니다. 사유: ${reason}`),
-      ]);
-    }),
-  ).catch((err) => {
-    logger.warn("cancelled private lesson notion title update failed", {
-      requestId: request.requestId,
-      bookingId: request.bookingId,
-      reason,
-      message: errorMessage(err),
-    });
-  });
-}
-
-function privateChartAlimtalkVariables(request: PrivateLessonChartRequestDoc): Record<string, string> {
+  lessonCount: number,
+  dailyShortUrl: string,
+): Record<string, string> {
   return {
     "#{강사명}": request.staffName,
-    "#{회원명}": request.memberName,
-    "#{회차}": String(request.sessionNumber || ""),
-    "#{수업일시}": lessonTimeText(request),
-    "#{수업전계획링크ID}": shortLinkIdFromUrl(request.preShortUrl),
-    "#{수업후기록링크ID}": shortLinkIdFromUrl(request.postShortUrl),
-    "#{사진영상업로드링크ID}": shortLinkIdFromUrl(request.mediaUploadShortUrl || ""),
+    "#{수업일}": request.lessonDate,
+    "#{수업수}": String(lessonCount),
+    "#{오늘기록링크ID}": shortLinkIdFromUrl(dailyShortUrl),
   };
 }
 
@@ -2598,14 +2895,36 @@ async function sendStaffPrivateChartAlimtalk(
 }
 
 async function isStaffPrivateChartTemplateApproved(): Promise<boolean> {
-  const response = await fetch(`${SOLAPI_TEMPLATE_URL}/${encodeURIComponent(STAFF_PRIVATE_CHART_TEMPLATE_ID)}`, {
-    headers: {
-      Authorization: solapiAuthHeader(),
-    },
-  });
-  if (!response.ok) return isAlimtalkTemplateApproved(STAFF_PRIVATE_CHART_TEMPLATE_ID);
-  const body = (await response.json().catch(() => ({}))) as { status?: string };
-  return String(body.status || "").toUpperCase() === "APPROVED";
+  const configured = String(
+    process.env.STAFF_PRIVATE_CHART_ALIMTALK_TEMPLATE_ID ||
+      NATIVE_STAFF_PRIVATE_CHART_ALIMTALK_TEMPLATE_CODE,
+  ).trim();
+  if (
+    !configured ||
+    STAFF_PRIVATE_CHART_TEMPLATE_ID === LEGACY_STAFF_PRIVATE_CHART_ALIMTALK_TEMPLATE_CODE ||
+    STAFF_PRIVATE_CHART_TEMPLATE_ID !== configured ||
+    STAFF_PRIVATE_CHART_TEMPLATE_ID !== NATIVE_STAFF_PRIVATE_CHART_ALIMTALK_TEMPLATE_CODE
+  ) {
+    return false;
+  }
+  const readiness = await alimtalkTemplateReadiness(STAFF_PRIVATE_CHART_TEMPLATE_ID);
+  if (!readiness.approved || !readiness.state) return false;
+  if (
+    alimtalkImageTemplateContractIssue(
+      readiness.state,
+      NATIVE_STAFF_PRIVATE_CHART_ALIMTALK_IMAGE_ID,
+      "강사용 프라이빗 차트 템플릿",
+    )
+  ) {
+    return false;
+  }
+  const content = String(readiness.state.content || "");
+  if (/Notion/i.test(content)) return false;
+  for (const variable of ["#{강사명}", "#{수업일}", "#{수업수}"]) {
+    if (!content.includes(variable)) return false;
+  }
+  const buttonUrls = readiness.state.buttonUrls || [];
+  return buttonUrls.includes("https://in.archivepilates.com/s/#{오늘기록링크ID}/");
 }
 
 function solapiAuthHeader(): string {
@@ -2649,18 +2968,16 @@ function gptPromptBrief(record: PrivateLessonChartRecordDoc, chartRequest: Priva
     "ARCHIVE PILATES 프라이빗 회원용 수업 리포트 문장을 작성합니다.",
     "톤: 조용하고 전문적이며 따뜻하게. 과장, 진단, 치료 효과 단정, 통증/병력 상세 노출은 금지합니다.",
     "점수, 평균, 등급, 평가처럼 느껴지는 표현은 쓰지 않습니다. 몸 상태의 흐름과 다음 수업 방향만 정리합니다.",
-    "다음 수업 방향은 수업 후 기록의 목표, 진행 부위, 관찰 변화, 주의사항, 다음 수업 방향 키워드를 바탕으로 회원용 1문장으로 정리합니다.",
+    "다음 수업 방향은 강사가 작성한 다음 방향을 유지하며 회원이 읽기 자연스럽게만 정리합니다.",
     "오늘의 핵심 키워드가 있으면 summary 문장에 자연스럽게 반드시 포함합니다.",
     "다음 수업 방향 키워드가 있으면 nextDirection 문장에 자연스럽게 반드시 포함합니다.",
     "홈워크는 별도 섹션에 노출되므로 summary나 nextDirection에 억지로 반복하지 않습니다.",
-    "강사의 다음 수업 준비 메모는 내부 참고용이므로 회원용 다음 수업 방향 문장에 그대로 복사하지 않습니다.",
     "회원이 읽는 문장입니다. 강사용 체크값을 자연스럽고 고급스럽게 정리합니다.",
     `회원: ${record.memberName}`,
     `회차: ${record.sessionNumber}회차`,
     `수업일: ${record.lessonDate}`,
     `강사: ${record.staffName}`,
     `사전설문 요약: ${safeJson(chartRequest.intakeSummary || {})}`,
-    `수업 전 계획: ${safeJson(record.prePlan || {})}`,
     `수업 후 기록: ${safeJson(postRecord)}`,
     `오늘의 핵심 키워드: ${summaryKeywords.join(", ") || "-"}`,
     `다음 수업 방향 키워드: ${nextDirectionKeywords.join(", ") || "-"}`,
@@ -2669,6 +2986,20 @@ function gptPromptBrief(record: PrivateLessonChartRecordDoc, chartRequest: Priva
     "summary: 1문장. 강사가 회원에게 직접 전하는 짧은 코칭 톤으로, 오늘 확인한 변화와 수업 방향을 평가 없이 따뜻하지만 담백하게 요약합니다.",
     "nextDirection: 1문장. 오늘 기록에서 이어갈 다음 수업 방향을 회원이 이해하기 쉬운 코칭 문장으로 정리합니다.",
   ].join("\n");
+}
+
+function simplifiedPrivateLessonDraft(
+  record: PrivateLessonChartRecordDoc,
+  nextDirection: string,
+): { summary: string; nextDirection: string } {
+  const focus = textArray(record.postRecord?.focusAreas).slice(0, 3);
+  const changes = textArray(record.postRecord?.changes).slice(0, 3);
+  const focusText = focus.length ? `${focus.join(" · ")}를 중심으로` : "회원의 움직임을 중심으로";
+  const changeText = changes.length ? `${changes.join(" · ")}을 확인했습니다.` : "오늘의 움직임 변화를 확인했습니다.";
+  return {
+    summary: cleanReportSentence(`${focusText} 수업하며 ${changeText}`),
+    nextDirection: cleanEditableReportText(nextDirection, 1200),
+  };
 }
 
 async function generateGeminiPrivateLessonDraft(
@@ -2748,11 +3079,12 @@ function applyPrivateLessonReportKeywords(
       reportKeywordList(record.postRecord?.summaryKeywords),
       "summary",
     ),
-    nextDirection: ensureKeywordsInReportSentence(
-      draft.nextDirection,
-      reportKeywordList(record.postRecord?.nextDirectionKeywords),
-      "nextDirection",
-    ),
+    nextDirection: cleanEditableReportText(record.postRecord?.nextDirection, 1200) ||
+      ensureKeywordsInReportSentence(
+        draft.nextDirection,
+        reportKeywordList(record.postRecord?.nextDirectionKeywords),
+        "nextDirection",
+      ),
   };
 }
 
@@ -2823,81 +3155,20 @@ function gptSourceHash(record: PrivateLessonChartRecordDoc, chartRequest: Privat
   });
 }
 
-function notionChartChildren(
-  record: PrivateLessonChartRecordDoc,
-  chartRequest: PrivateLessonChartRequestDoc,
-): Record<string, unknown>[] {
-  return [
-    heading(2, `${record.memberName}님 개인레슨 차트`),
-    paragraph(
-      `회차: ${record.sessionNumber}회차 / 수업일: ${lessonTimeText(chartRequest)} / 담당: ${record.staffName || "미정"}`,
-    ),
-    callout(
-      "사진·영상은 수업 후 기록 설문 페이지에서 첨부합니다. 첨부한 파일은 home@archivepilates.com Google Drive의 회원별/회차별 폴더에 저장되고 회원 리포트에 자동 포함됩니다.",
-    ),
-    divider(),
-    heading(3, "오늘의 수업 목적"),
-    ...bullets(textArray(record.prePlan?.goals).length ? textArray(record.prePlan?.goals) : ["수업 전 계획 미작성"]),
-    divider(),
-    heading(3, "사전설문 참고"),
-    ...bullets([
-      `목표: ${chartRequest.intakeSummary?.goal || "-"}`,
-      `신경 부위: ${chartRequest.intakeSummary?.focusArea || "-"}`,
-      `운동 수준: ${chartRequest.intakeSummary?.exerciseLevel || "-"}`,
-      chartRequest.intakeSummary?.painOrMedicalNote ? "주의 내용 확인 필요" : "특별 주의 내용 없음",
-    ]),
-    divider(),
-    heading(3, "수업 전 계획"),
-    ...bullets([
-      `집중 부위: ${textArray(record.prePlan?.focusAreas).join(", ") || "-"}`,
-      `예정 기구: ${textArray(record.prePlan?.equipment).join(", ") || "-"}`,
-      `강도 계획: ${firstText(record.prePlan?.intensity) || "-"}`,
-      `주의점: ${textArray(record.prePlan?.cautions).join(", ") || "-"}`,
-      `메모: ${String(record.prePlan?.memo || "-")}`,
-    ]),
-    divider(),
-    heading(3, "수업 후 기록"),
-    ...bullets([
-      `컨디션: ${firstText(record.postRecord?.condition) || "-"}`,
-      `불편감 흐름: ${firstText(record.postRecord?.painChange) || "-"}`,
-      `진행 부위: ${textArray(record.postRecord?.focusAreas).join(", ") || "-"}`,
-      `사용 기구: ${textArray(record.postRecord?.equipment).join(", ") || "-"}`,
-      `오늘 변화: ${textArray(record.postRecord?.changes).join(", ") || "-"}`,
-      `움직임 관찰: ${textArray(record.postRecord?.movementObservations).join(", ") || "-"}`,
-      `회원 체감/반응: ${textArray(record.postRecord?.memberResponses).join(", ") || "-"}`,
-      `오늘의 핵심 키워드: ${reportKeywordList(record.postRecord?.summaryKeywords).join(", ") || "-"}`,
-      `다음 수업 방향 키워드: ${reportKeywordList(record.postRecord?.nextDirectionKeywords).join(", ") || "-"}`,
-      `홈워크: ${cleanEditableReportText(record.postRecord?.homework, 900) || "-"}`,
-      `다음 수업 준비 메모(내부): ${String(record.postRecord?.nextMemo || "-")}`,
-    ]),
-    divider(),
-    heading(3, "회원용 초안"),
-    paragraph(record.gptDraftSummary || "Gemini 초안 생성 대기 중입니다."),
-    divider(),
-    heading(3, "회원 리포트 검수"),
-    paragraph(
-      isPrivateLessonReportGenerated(record)
-        ? "아래 임베드 또는 회원 리포트 URL 속성에서 최종 회원용 리포트를 확인합니다."
-        : "회원용 HTML 리포트 생성 대기 중입니다.",
-    ),
-    ...(isPrivateLessonReportGenerated(record) && record.publicReportUrl ? [embed(record.publicReportUrl)] : []),
-  ];
-}
-
 function renderPrivateLessonReportMessagePage(message: string): string {
   return `<!doctype html><html><head><meta charset="utf-8"><meta name="viewport" content="width=device-width,initial-scale=1"/>` +
     `<title>ARCHIVE PILATES Private Report</title><style>body{margin:0;padding:24px;font-family:Apple SD Gothic Neo,\"Noto Sans KR\",Arial,sans-serif;background:#f8f6f1;color:#27211b}.card{max-width:760px;margin:0 auto;padding:24px;background:#fff;border:1px solid #e4ded5;border-radius:12px}</style>` +
     `</head><body><div class="card"><p>${escapeHtml(message)}</p></div></body></html>`;
 }
 
-function renderPrivateLessonReportPage(
+export function renderPrivateLessonReportPage(
   record: PrivateLessonChartRecordDoc,
   chartRequest: PrivateLessonChartRequestDoc,
 ): string {
   const memberName = escapeHtml(record.memberName || "");
   const staffName = escapeHtml(record.staffName || "미정");
   const sessionText = `${Number(record.sessionNumber || 1)}회차`;
-  const lessonTime = lessonTimeText(chartRequest);
+  const lessonTime = lessonTimeText(record);
   const title = `${memberName || "회원"}님 수업 리포트`;
   const reportSummaryText = cleanEditableReportText(record.gptDraftSummary || record.publicSummary, 900) ||
     "오늘 수업 기록을 바탕으로 몸의 변화와 다음 방향을 정리했습니다.";
@@ -2921,9 +3192,8 @@ function renderPrivateLessonReportPage(
   })();
   const reportShortcutUrl = String(record.publicReportUrl || "").trim();
   const reportVisibleUrl = reportShortcutUrl || reportUrl;
-  const flowSummary = [condition, painChange].filter(Boolean).join(" · ") || "수업 기록 기준으로 정리 중";
+  const flowSummary = [condition, painChange].filter(Boolean).join(" · ");
   const todayProgress = uniqueTextItems([...goals, ...focusAreas, ...equipment]).slice(0, 10);
-  const improvementItems = uniqueTextItems(changes.length ? changes : memberResponses).slice(0, 6);
   const observationItems = uniqueTextItems([...movementObservations, ...memberResponses]).slice(0, 12);
   const nextCheckItems = privateReportNextCheckItems({
     condition,
@@ -2933,6 +3203,30 @@ function renderPrivateLessonReportPage(
   });
   const mediaFiles = mediaFilesForReport(record);
   const mediaSection = renderPrivateLessonReportMediaSection(mediaFiles, record.media?.sessionFolderUrl || "");
+  const metricTiles = [
+    flowSummary
+      ? `<div class="tile"><small>몸 상태 흐름</small><strong>${escapeHtml(flowSummary)}</strong></div>`
+      : "",
+    changes.length
+      ? `<div class="tile"><small>오늘 변화</small><strong>${escapeHtml(changes.slice(0, 2).join(" · "))}</strong></div>`
+      : "",
+  ].filter(Boolean);
+  const metricGrid = metricTiles.length ? `<div class="grid">${metricTiles.join("")}</div>` : "";
+  const progressSection = todayProgress.length
+    ? `<section><div class="section-title"><h2>오늘 확인한 움직임</h2><span class="hint">진행 내용</span></div><div class="chips">${todayProgress
+      .map((item) => `<span class="chip">${escapeHtml(item)}</span>`)
+      .join("")}</div></section>`
+    : "";
+  const observationSection = observationItems.length
+    ? `<section><div class="section-title"><h2>수업 중 관찰</h2><span class="hint">담당 강사 기록</span></div><div class="chips">${observationItems
+      .map((item) => `<span class="chip">${escapeHtml(item)}</span>`)
+      .join("")}</div></section>`
+    : "";
+  const nextCheckSection = nextCheckItems.length
+    ? `<section><div class="section-title"><h2>다음 수업 전 체크</h2><span class="hint">가볍게 확인할 내용</span></div><ul class="soft-list">${nextCheckItems
+      .map((item) => `<li>${escapeHtml(item)}</li>`)
+      .join("")}</ul></section>`
+    : "";
 
   return `<!doctype html><html lang="ko"><head><meta charset="utf-8"><meta name="viewport" content="width=device-width,initial-scale=1"/>` +
     `<title>${title}</title><style>
@@ -2953,25 +3247,14 @@ function renderPrivateLessonReportPage(
     </style></head><body><main><div class="hero"><p class="brand">ARCHIVE PILATES</p><h1>${escapeHtml(title)}</h1>` +
     `<p class="meta">${escapeHtml(sessionText)} · ${escapeHtml(lessonTime)} · 담당: ${staffName}</p>` +
     `<div class="lead"><small>오늘의 핵심</small><p>${escapeHtml(reportSummaryText)}</p></div>` +
-    `<div class="grid"><div class="tile"><small>집중 영역</small><strong>${escapeHtml(focusAreas.slice(0, 2).join(" · ") || "-")}</strong></div>` +
-    `<div class="tile"><small>몸 상태 흐름</small><strong>${escapeHtml(flowSummary)}</strong></div>` +
-    `<div class="tile"><small>오늘 변화</small><strong>${escapeHtml(changes.slice(0, 2).join(" · ") || "기록 정리 중")}</strong></div></div></div>` +
-    `<section><div class="section-title"><h2>좋아진 점</h2><span class="hint">회원님이 느낄 수 있는 변화</span></div><ul class="soft-list">` +
-    (improvementItems.length ? improvementItems : ["오늘 수업에서 확인한 변화는 다음 기록에서 더 구체적으로 이어가겠습니다."]).map((item) => `<li>${escapeHtml(item)}</li>`).join("") +
-    `</ul></section>` +
-    `<section><div class="section-title"><h2>오늘 확인한 움직임</h2><span class="hint">진행 내용과 관찰</span></div><div class="chips">` +
-    (todayProgress.length ? todayProgress : ["기록된 진행 항목 없음"]).map((item) => `<span class="chip">${escapeHtml(item)}</span>`).join("") +
-    `</div></section>` +
-    `<section><div class="section-title"><h2>수업 중 관찰</h2><span class="hint">담당 강사 기록</span></div><div class="chips">` +
-    (observationItems.length ? observationItems : ["기록된 관찰 항목 없음"]).map((item) => `<span class="chip">${escapeHtml(item)}</span>`).join("") +
-    `</div></section>` +
+    `${metricGrid}</div>` +
+    progressSection +
+    observationSection +
     `<section><div class="section-title"><h2>다음 수업 방향</h2><span class="hint">강사 입력 반영</span></div><p class="note">${escapeHtml(nextDirectionText)}</p></section>` +
     (homeworkText
       ? `<section><div class="section-title"><h2>홈워크</h2><span class="hint">다음 수업 전 가볍게</span></div><p class="note">${escapeHtml(homeworkText)}</p></section>`
       : "") +
-    `<section><div class="section-title"><h2>다음 수업 전 체크</h2><span class="hint">가볍게 확인할 내용</span></div><ul class="soft-list">` +
-    nextCheckItems.map((item) => `<li>${escapeHtml(item)}</li>`).join("") +
-    `</ul></section>` +
+    nextCheckSection +
     mediaSection +
     `<p class="footer">본 리포트는 담당 강사의 프라이빗 수업 기록을 바탕으로 정리되었습니다.<br><a class="report-link" href="${escapeAttr(reportVisibleUrl)}">리포트 다시 열기</a></p>` +
     `</main></body></html>`;
@@ -2989,7 +3272,7 @@ function privateReportNextCheckItems(options: {
     options.cautions.length ? `주의할 부분: ${options.cautions.slice(0, 2).join(" · ")}` : "",
     options.focusAreas.length ? `이어갈 감각: ${options.focusAreas.slice(0, 2).join(" · ")}` : "",
   ]).slice(0, 4);
-  return items.length ? items : ["다음 수업 전 컨디션과 불편감 변화를 가볍게 확인해 주세요."];
+  return items;
 }
 
 function uniqueTextItems(values: unknown[]): string[] {
@@ -3054,41 +3337,6 @@ function drivePreviewUrl(fileId: string): string {
   return `https://drive.google.com/file/d/${fileId}/preview`;
 }
 
-function notionUpdateChildren(
-  record: PrivateLessonChartRecordDoc,
-  chartRequest: PrivateLessonChartRequestDoc,
-): Record<string, unknown>[] {
-  return [
-    divider(),
-    heading(3, `자동화 업데이트 ${new Date().toLocaleString("ko-KR", { timeZone: "Asia/Seoul" })}`),
-    paragraph(
-      `회차: ${record.sessionNumber}회차 / 수업일: ${lessonTimeText(chartRequest)} / 담당: ${record.staffName || "미정"}`,
-    ),
-    heading(3, "수업 전 계획"),
-    ...bullets([
-      `목표: ${textArray(record.prePlan?.goals).join(", ") || "-"}`,
-      `집중 부위: ${textArray(record.prePlan?.focusAreas).join(", ") || "-"}`,
-      `예정 기구: ${textArray(record.prePlan?.equipment).join(", ") || "-"}`,
-      `메모: ${String(record.prePlan?.memo || "-")}`,
-    ]),
-    heading(3, "수업 후 기록"),
-    ...bullets([
-      `컨디션: ${firstText(record.postRecord?.condition) || "-"}`,
-      `불편감 흐름: ${firstText(record.postRecord?.painChange) || "-"}`,
-      `오늘 변화: ${textArray(record.postRecord?.changes).join(", ") || "-"}`,
-      `움직임 관찰: ${textArray(record.postRecord?.movementObservations).join(", ") || "-"}`,
-      `회원 체감/반응: ${textArray(record.postRecord?.memberResponses).join(", ") || "-"}`,
-      `오늘의 핵심 키워드: ${reportKeywordList(record.postRecord?.summaryKeywords).join(", ") || "-"}`,
-      `다음 수업 방향 키워드: ${reportKeywordList(record.postRecord?.nextDirectionKeywords).join(", ") || "-"}`,
-      `홈워크: ${cleanEditableReportText(record.postRecord?.homework, 900) || "-"}`,
-      `다음 수업 준비 메모(내부): ${String(record.postRecord?.nextMemo || "-")}`,
-    ]),
-    heading(3, "회원 리포트"),
-    paragraph(record.gptDraftSummary || "Gemini 초안 생성 대기 중입니다."),
-    ...(isPrivateLessonReportGenerated(record) && record.publicReportUrl ? [embed(record.publicReportUrl)] : []),
-  ];
-}
-
 function notionInstructorChartChildren(
   record: PrivateLessonChartRecordDoc,
   chartRequest: PrivateLessonChartRequestDoc,
@@ -3097,86 +3345,37 @@ function notionInstructorChartChildren(
     ? record.publicReportUrl || record.publicReportCanonicalUrl || ""
     : "";
   return [
-    callout("이 페이지는 강사용 회차 기록입니다. 회원 발송은 수업 후 기록 링크의 리포트 화면에서 처리합니다."),
+    callout("Firestore 원본을 야간에 표시한 읽기 전용 회차 기록입니다. 기록·검수·발송은 ARCHIVE IN에서 처리합니다."),
     heading(2, `${record.memberName}님 ${record.sessionNumber}회차`),
     paragraph(`수업일: ${lessonTimeText(chartRequest)} / 담당: ${record.staffName || "미정"}`),
-    heading(2, "사진·영상"),
-    paragraph("수업 후 기록 설문에서 첨부한 사진과 영상은 Google Drive에 저장되고 회원 리포트에 자동 포함됩니다."),
     divider(),
-    heading(3, "수업 전 계획"),
+    heading(3, "회원 사전설문 참고"),
     ...bullets([
-      `목표: ${textArray(record.prePlan?.goals).join(", ") || "-"}`,
-      `집중 부위: ${textArray(record.prePlan?.focusAreas).join(", ") || "-"}`,
-      `예정 기구: ${textArray(record.prePlan?.equipment).join(", ") || "-"}`,
-      `강도 계획: ${firstText(record.prePlan?.intensity) || "-"}`,
-      `주의점: ${textArray(record.prePlan?.cautions).join(", ") || "-"}`,
-      `메모: ${String(record.prePlan?.memo || "-")}`,
+      `목표: ${chartRequest.intakeSummary?.goal || "-"}`,
+      `신경 부위: ${chartRequest.intakeSummary?.focusArea || "-"}`,
+      `운동 수준: ${chartRequest.intakeSummary?.exerciseLevel || "-"}`,
+      chartRequest.intakeSummary?.painOrMedicalNote ? "주의 내용 확인 필요" : "특별 주의 내용 없음",
     ]),
     divider(),
-    heading(3, "수업 후 기록"),
+    heading(3, "오늘 기록"),
     ...bullets([
-      `컨디션: ${firstText(record.postRecord?.condition) || "-"}`,
-      `불편감 흐름: ${firstText(record.postRecord?.painChange) || "-"}`,
       `진행 부위: ${textArray(record.postRecord?.focusAreas).join(", ") || "-"}`,
-      `사용 기구: ${textArray(record.postRecord?.equipment).join(", ") || "-"}`,
-      `오늘 변화: ${textArray(record.postRecord?.changes).join(", ") || "-"}`,
-      `움직임 관찰: ${textArray(record.postRecord?.movementObservations).join(", ") || "-"}`,
-      `회원 체감/반응: ${textArray(record.postRecord?.memberResponses).join(", ") || "-"}`,
-      `오늘의 핵심 키워드: ${reportKeywordList(record.postRecord?.summaryKeywords).join(", ") || "-"}`,
-      `다음 수업 방향 키워드: ${reportKeywordList(record.postRecord?.nextDirectionKeywords).join(", ") || "-"}`,
+      `확인한 변화: ${textArray(record.postRecord?.changes).join(", ") || "-"}`,
+      `다음 방향: ${cleanEditableReportText(record.postRecord?.nextDirection || record.postRecord?.nextDirectionKeywords, 1200) || "-"}`,
+      `주의사항: ${textArray(record.postRecord?.cautions).join(", ") || "-"}`,
       `홈워크: ${cleanEditableReportText(record.postRecord?.homework, 900) || "-"}`,
-      `다음 수업 준비 메모(내부): ${String(record.postRecord?.nextMemo || "-")}`,
+      `첨부: ${mediaFilesForReport(record).length}개`,
     ]),
     divider(),
     heading(3, "회원 리포트"),
     paragraph(
       reportButtonUrl
-        ? "회원용 리포트가 생성되었습니다. 운영자가 검수 후 발송합니다."
+        ? "회원용 리포트가 생성되었습니다. 최종 발송 상태는 ARCHIVE IN에서 확인합니다."
         : "회원용 리포트 생성 대기 중입니다.",
     ),
     ...(reportButtonUrl
       ? [notionLinkButton("최종 회원 리포트 보기", reportButtonUrl)]
       : []),
-  ];
-}
-
-function notionInstructorUpdateChildren(
-  record: PrivateLessonChartRecordDoc,
-  chartRequest: PrivateLessonChartRequestDoc,
-): Record<string, unknown>[] {
-  const reportButtonUrl = isPrivateLessonReportGenerated(record)
-    ? record.publicReportUrl || record.publicReportCanonicalUrl || ""
-    : "";
-  return [
-    divider(),
-    heading(3, `업데이트 ${new Date().toLocaleString("ko-KR", { timeZone: "Asia/Seoul" })}`),
-    paragraph(`수업일: ${lessonTimeText(chartRequest)} / 담당: ${record.staffName || "미정"}`),
-    heading(3, "수업 전 계획"),
-    ...bullets([
-      `목표: ${textArray(record.prePlan?.goals).join(", ") || "-"}`,
-      `집중 부위: ${textArray(record.prePlan?.focusAreas).join(", ") || "-"}`,
-      `예정 기구: ${textArray(record.prePlan?.equipment).join(", ") || "-"}`,
-      `메모: ${String(record.prePlan?.memo || "-")}`,
-    ]),
-    heading(3, "수업 후 기록"),
-    ...bullets([
-      `컨디션: ${firstText(record.postRecord?.condition) || "-"}`,
-      `불편감 흐름: ${firstText(record.postRecord?.painChange) || "-"}`,
-      `오늘 변화: ${textArray(record.postRecord?.changes).join(", ") || "-"}`,
-      `움직임 관찰: ${textArray(record.postRecord?.movementObservations).join(", ") || "-"}`,
-      `회원 체감/반응: ${textArray(record.postRecord?.memberResponses).join(", ") || "-"}`,
-      `오늘의 핵심 키워드: ${reportKeywordList(record.postRecord?.summaryKeywords).join(", ") || "-"}`,
-      `다음 수업 방향 키워드: ${reportKeywordList(record.postRecord?.nextDirectionKeywords).join(", ") || "-"}`,
-      `홈워크: ${cleanEditableReportText(record.postRecord?.homework, 900) || "-"}`,
-      `다음 수업 준비 메모(내부): ${String(record.postRecord?.nextMemo || "-")}`,
-    ]),
-    heading(3, "회원 리포트"),
-    paragraph(
-      reportButtonUrl
-        ? "회원용 리포트가 생성되었습니다. 운영자가 검수 후 발송합니다."
-        : "회원용 리포트 생성 대기 중입니다.",
-    ),
-    ...(reportButtonUrl ? [notionLinkButton("최종 회원 리포트 보기", reportButtonUrl)] : []),
   ];
 }
 
@@ -3194,23 +3393,6 @@ function notionLinkButton(text: string, url: string): Record<string, unknown> {
   };
 }
 
-function chartNotes(record: PrivateLessonChartRecordDoc, chartRequest: PrivateLessonChartRequestDoc): string {
-  return [
-    `[${record.sessionNumber}회차] ${lessonTimeText(chartRequest)}`,
-    "",
-    "사전설문 요약",
-    safeJson(chartRequest.intakeSummary || {}),
-    "",
-    "수업 전 계획",
-    safeJson(record.prePlan || {}),
-    "",
-    "수업 후 기록",
-    safeJson(record.postRecord || {}),
-  ]
-    .join("\n")
-    .slice(0, 1900);
-}
-
 function chartUrl(
   mode: PrivateLessonChartMode,
   requestId: string,
@@ -3225,6 +3407,27 @@ function chartUrl(
     if (value) url.searchParams.set(key, value);
   }
   return url.toString();
+}
+
+function dailyChartUrl(request: PrivateLessonChartRequestDoc, date: string): string {
+  const url = new URL(PUBLIC_BASE_URL);
+  url.searchParams.set("view", "today");
+  url.searchParams.set("date", date);
+  url.searchParams.set("r", request.requestId);
+  url.searchParams.set("t", dailyAccessTokenFor(request, date));
+  return url.toString();
+}
+
+function dailyAccessTokenFor(request: PrivateLessonChartRequestDoc, date: string): string {
+  return createHmac("sha256", privateSurveyWebhookSecret.value())
+    .update(`private-chart-day:${request.requestId}:${date}:${dailyStaffIdentity(request)}`)
+    .digest("hex")
+    .slice(0, 24);
+}
+
+function dailyStaffIdentity(request: PrivateLessonChartRequestDoc): string {
+  const staffKey = String(request.staffId || "").trim() || normalizeKoreanName(request.staffName || "");
+  return `${normalizePhone(request.staffPhone)}|${staffKey}`;
 }
 
 function buildPrivateReportCanonicalUrl(input: { recordId: string; accessTokenHash: string }): string {
@@ -3302,11 +3505,11 @@ function privateLessonChartStageLabel(
   record: PrivateLessonChartRecordDoc,
   chartRequest?: PrivateLessonChartRequestDoc,
 ): string {
+  if (record.cancelledAt || chartRequest?.status === "cancelled") return "취소";
   if (isPrivateLessonReportSent(record)) return "리포트 발송완료";
   if (isPrivateLessonReportGenerated(record)) return "리포트 생성완료";
-  if (record.postSubmittedAt || chartRequest?.postStatus === "submitted") return "수업 후 설문완료";
-  if (record.preSubmittedAt || chartRequest?.preStatus === "submitted") return "수업 전 설문완료";
-  return "수업 전 설문대기";
+  if (record.postSubmittedAt || chartRequest?.postStatus === "submitted") return "리포트 생성중";
+  return "수업 기록대기";
 }
 
 function isPrivateLessonReportSent(record: PrivateLessonChartRecordDoc | null | undefined): boolean {
@@ -3393,26 +3596,6 @@ function notionText(value: string): Record<string, unknown> {
   return { rich_text: value ? [{ text: { content: value.slice(0, 2000) } }] : [] };
 }
 
-function notionRichText(property: any): string {
-  const items = Array.isArray(property?.rich_text) ? property.rich_text : [];
-  return items
-    .map((item: any) => String(item?.plain_text || ""))
-    .join("")
-    .trim();
-}
-
-function notionCheckbox(property: any): boolean {
-  return Boolean(property?.checkbox);
-}
-
-function notionSelectName(property: any): string {
-  return String(property?.select?.name || "");
-}
-
-function notionUrl(property: any): string {
-  return String(property?.url || "");
-}
-
 function notionSelect(value: string): Record<string, unknown> | undefined {
   return value ? { select: { name: value } } : undefined;
 }
@@ -3490,10 +3673,6 @@ function bullets(values: string[]): Record<string, unknown>[] {
 
 function divider(): Record<string, unknown> {
   return { object: "block", type: "divider", divider: {} };
-}
-
-function embed(url: string): Record<string, unknown> {
-  return { object: "block", type: "embed", embed: { url } };
 }
 
 function safeJson(value: unknown): string {

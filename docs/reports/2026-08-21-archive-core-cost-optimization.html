@@ -1,0 +1,123 @@
+<!doctype html>
+<html lang="ko">
+  <head>
+    <meta charset="utf-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1" />
+    <title>ARCHIVE CORE 비용 최적화 작업 결과</title>
+    <style>
+      * { box-sizing: border-box; }
+      body { margin: 0; background: #f5f6f7; color: #17191c; font-family: -apple-system, BlinkMacSystemFont, "Apple SD Gothic Neo", "Noto Sans KR", sans-serif; line-height: 1.65; }
+      main { width: min(1040px, calc(100% - 32px)); margin: 32px auto 64px; }
+      h1 { margin: 8px 0 10px; font-size: 38px; line-height: 1.2; letter-spacing: 0; }
+      h2 { margin: 0 0 14px; font-size: 23px; letter-spacing: 0; }
+      p { margin: 0; }
+      code { padding: 2px 5px; background: #eef1f3; border-radius: 4px; font-size: 0.92em; }
+      .eyebrow { color: #e84a25; font-size: 13px; font-weight: 800; }
+      .muted { color: #646b72; }
+      .grid { display: grid; grid-template-columns: repeat(3, minmax(0, 1fr)); gap: 12px; margin: 26px 0; }
+      .metric, .panel { background: #fff; border: 1px solid #d9dde1; border-radius: 8px; }
+      .metric { min-height: 142px; padding: 20px; }
+      .metric strong { display: block; margin: 14px 0 3px; font-size: 29px; line-height: 1.2; }
+      .panel { margin-top: 16px; padding: 24px; }
+      .good { color: #08775a; font-weight: 750; }
+      .warn { color: #a23b20; font-weight: 750; }
+      ul { margin: 10px 0 0; padding-left: 21px; }
+      li + li { margin-top: 7px; }
+      .table-wrap { overflow-x: auto; }
+      table { width: 100%; min-width: 720px; border-collapse: collapse; }
+      th, td { padding: 12px 10px; border-bottom: 1px solid #e6e9eb; text-align: left; vertical-align: top; }
+      th { color: #5e656b; font-size: 13px; }
+      .status { display: inline-block; padding: 3px 8px; border-radius: 999px; background: #e4f5ef; color: #08775a; font-size: 12px; font-weight: 800; }
+      .status.pending { background: #fff0eb; color: #a23b20; }
+      @media (max-width: 720px) {
+        main { width: min(100% - 20px, 1040px); margin-top: 20px; }
+        h1 { font-size: 30px; }
+        .grid { grid-template-columns: 1fr; }
+        .metric { min-height: 0; }
+        .panel { padding: 18px; }
+      }
+    </style>
+  </head>
+  <body>
+    <main>
+      <div class="eyebrow">ARCHIVE PILATES · COST OPTIMIZATION</div>
+      <h1>ARCHIVE CORE 비용 최적화 1~5 완료</h1>
+      <p class="muted">기준일 2026-08-22 · 프로젝트 <code>archive-pilates</code> · 운영 배포 및 즉시 검증 완료</p>
+
+      <section class="grid" aria-label="핵심 결과">
+        <article class="metric"><span>홈 초기 읽기 상한</span><strong>약 67% 감소</strong><small class="muted">의도상 6,947건 이상에서 최대 약 2,263건으로 축소</small></article>
+        <article class="metric"><span>반복 워커 호출</span><strong>하루 432회 감소</strong><small class="muted">세 작업 합계 864회에서 432회</small></article>
+        <article class="metric"><span>화면 회귀 검사</span><strong>75개 통과</strong><small class="muted">320px부터 1920px, 14개 주요 화면</small></article>
+      </section>
+
+      <section class="panel">
+        <h2>적용 내용</h2>
+        <div class="table-wrap">
+          <table>
+            <thead><tr><th>순위</th><th>문제</th><th>개선</th><th>현재 상태</th></tr></thead>
+            <tbody>
+              <tr><td>1</td><td>홈이 전체 회원 요약·회원 원본과 프라이빗 진행 데이터를 함께 읽음</td><td>전체 회원 조회 제거, 재등록 후보의 회원 원본만 묶음 확인, 회원 검색은 비메뉴 검색어 2자 이상 입력 시 1회 지연 조회</td><td><span class="status">운영 적용</span></td></tr>
+              <tr><td>1 보강</td><td>공통 목록 함수가 서버 제한 없이 전체 컬렉션을 받은 뒤 브라우저에서 잘라냄</td><td>정렬 조회와 예외 fallback 모두 Firestore 쿼리에 <code>limit</code> 적용</td><td><span class="status">운영 적용</span></td></tr>
+              <tr><td>2</td><td>CORE의 HTML·JS·CSS·이미지가 모두 <code>no-store</code>라 반복 전체 다운로드 발생</td><td>HTML과 디렉터리형 메뉴 URL은 no-store 유지, JS/CSS는 저장 후 재검증, 이미지·아이콘·폰트는 1시간 캐시</td><td><span class="status">라이브 헤더 확인</span></td></tr>
+              <tr><td>3</td><td>결과 0건인 알림톡·설문·연락처 워커가 5분마다 반복 실행</td><td>세 워커만 10분으로 조정하고 대상 선정·중복 차단·10분 운영 약속은 유지</td><td><span class="status">스케줄 확인</span></td></tr>
+            </tbody>
+          </table>
+        </div>
+      </section>
+
+      <section class="panel">
+        <h2>읽기량 판단</h2>
+        <p>변경 전 홈은 코드상 의도된 상한만 합쳐도 약 6,947건이었고, 일부 공통 조회는 서버 제한이 없어 실제로는 컬렉션 전체를 읽을 수 있었습니다. 변경 후 정상 조회 경로의 최댓값은 재등록 장부 1,000건과 해당 후보 회원 원본 최대 1,000건을 포함해 약 2,263건입니다. 실제 재등록 후보가 적으면 이보다 더 낮습니다.</p>
+        <ul>
+          <li>단순히 명령창을 열거나 업무 메뉴를 검색할 때는 회원 디렉터리를 읽지 않습니다.</li>
+          <li>회원명·전화번호 검색이 필요할 때만 회원 요약과 원본을 각각 최대 2,000건 읽고 현재 페이지에서 한 번 재사용합니다.</li>
+          <li>재등록 최신성 검증은 없애지 않고, 재등록 장부에 연결된 canonical <code>memberProfiles</code>만 조회합니다.</li>
+        </ul>
+      </section>
+
+      <section class="panel">
+        <h2>검증 결과</h2>
+        <ul>
+          <li class="good">Functions 5개 코드베이스 TypeScript 빌드 및 경계 검사 통과</li>
+          <li class="good">CORE Hosting guard, GCP 비용 guard, 데이터 원천 정책, 라이브 롤백 guard 통과</li>
+          <li class="good">재등록 17개, 프라이빗 흐름 22개 테스트 통과</li>
+          <li class="good">14개 화면을 320·390·768·1440·1920px에서 검사: 가로 넘침, 잘림, 터치 크기 이상 없음</li>
+          <li class="good">Firebase Hosting 로컬 에뮬레이터 확인: HTML no-store, JS/CSS 재검증, 이미지 1시간 캐시 헤더 적용</li>
+          <li class="good">라이브 확인: 홈·회원·프라이빗·수업 디렉터리 URL은 no-store, JS/CSS는 재검증, manifest는 no-store</li>
+          <li class="good">세 Scheduler는 모두 every 10 minutes·ENABLED, 대응 함수는 모두 ACTIVE</li>
+        </ul>
+      </section>
+
+      <section class="panel">
+        <h2>배포와 72시간 비교</h2>
+        <p class="good">커밋 <code>388c377</code>을 <code>origin/main</code>에 반영하고 CORE Hosting 및 영향받은 세 Functions 코드베이스만 배포했습니다.</p>
+        <div class="table-wrap">
+          <table>
+            <thead><tr><th>지표</th><th>배포 전 72시간</th><th>배포 후 72시간</th><th>증감</th></tr></thead>
+            <tbody>
+              <tr><td>Firestore 문서 읽기</td><td>약 917,088건</td><td>823,641건</td><td class="good">-10.2%</td></tr>
+              <tr><td>CORE Hosting 전송량</td><td>약 7,457,125,674바이트</td><td>22,423,039바이트</td><td class="good">-99.7%</td></tr>
+              <tr><td>알림톡 워커 호출</td><td>약 868회</td><td>432회</td><td class="good">-50.2%</td></tr>
+              <tr><td>연락처 워커 호출</td><td>약 867회</td><td>431회</td><td class="good">-50.3%</td></tr>
+              <tr><td>알림톡 billable instance time</td><td>약 114초</td><td>61.6초</td><td class="good">-46.0%</td></tr>
+              <tr><td>연락처 billable instance time</td><td>약 180초</td><td>202.5초</td><td class="warn">+12.5%</td></tr>
+              <tr><td>프라이빗 설문 billable instance time</td><td>약 1,222초</td><td>700.7초</td><td class="good">-42.7%</td></tr>
+            </tbody>
+          </table>
+        </div>
+        <ul>
+          <li class="good">세 워커 billable instance time 합계는 약 1,516초에서 964.8초로 36.4% 감소했습니다.</li>
+          <li>연락처 워커는 72시간 동안 실제 작업 39건을 처리해 호출 감소와 별개로 단독 실행시간이 늘었습니다.</li>
+          <li class="good">세 Scheduler는 10분 주기·ENABLED, 대응 Functions는 ACTIVE이며 1,294회 실행이 모두 HTTP 200으로 끝났습니다.</li>
+          <li class="good">최근 큐 실패, 처리 대기, 10분 초과 적체가 없고 CORE 홈과 정적 자산의 라이브 캐시 헤더도 정상입니다.</li>
+          <li>검증 구간: 2026-08-22 04:38~2026-08-25 04:38 KST. Cloud Monitoring, Cloud Scheduler 로그, Firestore 큐를 읽기 전용으로 확인했습니다.</li>
+        </ul>
+      </section>
+
+      <section class="panel">
+        <h2>실행 모델 기록</h2>
+        <p>현재 Codex 하위 작업 도구에는 <code>5.3 Spark</code>라는 선택지가 없어 Spark 사용량으로 기록되는 호출은 하지 못했습니다. 빠른 실행 역할은 <code>gpt-5.6-luna</code> 작업자 3개와 독립 리뷰어 1개로 분리했고, 최종 수정·판단·검증은 메인 작업에서 수행했습니다.</p>
+      </section>
+    </main>
+  </body>
+</html>

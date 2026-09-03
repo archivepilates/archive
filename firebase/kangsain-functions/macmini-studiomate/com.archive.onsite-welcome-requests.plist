@@ -7,11 +7,11 @@
   <key>ProgramArguments</key>
   <array>
     <string>/opt/homebrew/bin/node</string>
-    <string>/Users/archivepilates/codex-worktrees/archivein-live-setup/scripts/process-onsite-welcome-requests.mjs</string>
+    <string>/Users/archivepilates/dev/archive-in-runtime/scripts/process-onsite-welcome-requests.mjs</string>
     <string>--apply</string>
   </array>
   <key>WorkingDirectory</key>
-  <string>/Users/archivepilates/codex-worktrees/archivein-live-setup</string>
+  <string>/Users/archivepilates/dev/archive-in-runtime</string>
   <key>StartInterval</key>
   <integer>15</integer>
   <key>EnvironmentVariables</key>

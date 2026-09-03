@@ -47,6 +47,7 @@ jobs:
             npm run validate:onsite-welcome
           else
             npm run validate:archive-core-hosting
+            npm run validate:ticket-liability-price
           fi
 
       - name: Write release manifest
@@ -69,7 +70,7 @@ jobs:
           if [ "${{ inputs.surface }}" = "archivein" ]; then
             "$FIREBASE_BIN" deploy --project archive-pilates --config firebase.json --only hosting:archive-pilates,hosting:archive-pilates-in --non-interactive
           else
-            "$FIREBASE_BIN" deploy --project archive-pilates --config firebase.json --only hosting:archive-pilates-core --non-interactive
+            "$FIREBASE_BIN" deploy --project archive-pilates --config firebase.json --only hosting:archive-pilates,hosting:archive-pilates-core --non-interactive
           fi
 
       - name: Live canary

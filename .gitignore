@@ -23,6 +23,7 @@ artifacts/*/node_modules
 artifacts/*/node_modules_deps
 output/
 .firebase/
+.playwright-cli/
 .DS_Store
 firebase/.DS_Store
 
@@ -30,6 +31,10 @@ firebase/.DS_Store
 /release.json
 /archivein/release.json
 /core/release.json
+
+# Private survey/report pages are dynamic Functions output, never static Hosting artifacts.
+/archivein/private-reports/
+/archivein/private-surveys/
 
 # Local service account keys. Never commit these.
 .secrets/

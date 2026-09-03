@@ -1,0 +1,35 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<!DOCTYPE plist PUBLIC "-//Apple//DTD PLIST 1.0//EN" "http://www.apple.com/DTDs/PropertyList-1.0.dtd">
+<plist version="1.0">
+<dict>
+  <key>Label</key>
+  <string>com.archive.studiomate-memo-write-queue</string>
+  <key>ProgramArguments</key>
+  <array>
+    <string>/opt/homebrew/bin/node</string>
+    <string>/Users/archivepilates/dev/archive-in-runtime/scripts/process-studiomate-memo-write-jobs.mjs</string>
+    <string>--apply</string>
+    <string>--limit</string>
+    <string>5</string>
+  </array>
+  <key>WorkingDirectory</key>
+  <string>/Users/archivepilates/dev/archive-in-runtime</string>
+  <key>StartInterval</key>
+  <integer>300</integer>
+  <key>EnvironmentVariables</key>
+  <dict>
+    <key>GCLOUD_PROJECT</key>
+    <string>archive-pilates</string>
+    <key>GOOGLE_APPLICATION_CREDENTIALS</key>
+    <string>/Users/archivepilates/ArchiveIN/secrets/google/archive-codex-operator.json</string>
+    <key>GOOGLE_CLOUD_PROJECT</key>
+    <string>archive-pilates</string>
+    <key>HEADLESS</key>
+    <string>true</string>
+  </dict>
+  <key>StandardOutPath</key>
+  <string>/Users/archivepilates/ArchiveIN/automation/logs/studiomate-memo-write-queue.out.log</string>
+  <key>StandardErrorPath</key>
+  <string>/Users/archivepilates/ArchiveIN/automation/logs/studiomate-memo-write-queue.err.log</string>
+</dict>
+</plist>

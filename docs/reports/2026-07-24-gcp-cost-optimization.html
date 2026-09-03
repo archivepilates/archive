@@ -1,0 +1,55 @@
+<!doctype html>
+<html lang="ko">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width,initial-scale=1">
+  <title>ARCHIVE PILATES GCP 비용 최적화</title>
+  <style>
+    :root{color-scheme:light;--bg:#f5f3ef;--panel:#fff;--ink:#171717;--muted:#6f6c67;--line:#dedbd5;--accent:#ee5f32}
+    *{box-sizing:border-box}body{margin:0;background:var(--bg);color:var(--ink);font-family:-apple-system,BlinkMacSystemFont,"Apple SD Gothic Neo","Pretendard",sans-serif;line-height:1.55}
+    main{width:min(920px,calc(100% - 32px));margin:40px auto 64px}.eyebrow{color:var(--accent);font-size:13px;font-weight:800}h1{margin:8px 0 12px;font-size:clamp(30px,5vw,50px);line-height:1.1;letter-spacing:0}p{margin:0;color:var(--muted)}
+    section{margin-top:24px;padding:24px;background:var(--panel);border:1px solid var(--line);border-radius:8px}h2{margin:0 0 16px;font-size:21px}ul{margin:0;padding-left:20px}li+li{margin-top:9px}
+    .metrics{display:grid;grid-template-columns:repeat(auto-fit,minmax(min(100%,180px),1fr));gap:12px;margin-top:24px}.metric{padding:18px;background:#fff;border:1px solid var(--line);border-radius:8px}.metric strong{display:block;font-size:27px}.metric span{color:var(--muted);font-size:13px}
+    code{font-family:ui-monospace,SFMono-Regular,Menlo,monospace;font-size:.92em}@media(max-width:520px){main{margin-top:24px}section{padding:20px}}
+  </style>
+</head>
+<body>
+<main>
+  <div class="eyebrow">ARCHIVE PILATES · 2026.07.24</div>
+  <h1>GCP 비용 최적화 적용 보고</h1>
+  <p>시간별 StudioMate Excel 동기화와 설문 점검에서 반복되던 전체 재처리 비용을 변경분 처리로 전환했습니다.</p>
+  <div class="metrics">
+    <div class="metric"><strong>24회/일</strong><span>StudioMate Excel 기본 동기화</span></div>
+    <div class="metric"><strong>0회</strong><span>시간별 전체 월간 회차 보정 호출</span></div>
+    <div class="metric"><strong>변경분만</strong><span>회원·수업·예약 Firestore 쓰기</span></div>
+    <div class="metric"><strong>23:30</strong><span>전체 월간 회차 안전 점검 유지</span></div>
+  </div>
+  <section>
+    <h2>원인</h2>
+    <ul>
+      <li>같은 회원목록과 예약 엑셀을 내려받아도 매시간 약 1,700개 문서를 다시 쓰고 있었습니다.</li>
+      <li>시간별 동기화가 월 전체 프라이빗 회차 보정을 호출해 장시간 Function 실행과 504 응답을 만들었습니다.</li>
+      <li>설문 미제출 점검이 이미 경고 메일을 보낸 후보까지 10분마다 다시 조회했습니다.</li>
+    </ul>
+  </section>
+  <section>
+    <h2>적용 내용</h2>
+    <ul>
+      <li>회원·연락처·수업·예약에 안정적인 import hash를 적용하고 내용이 같은 문서는 쓰지 않습니다.</li>
+      <li>예약 변경 시 해당 프라이빗 회원만 <code>privateSessionLedger</code>를 다시 계산합니다.</li>
+      <li>강사 화면 재생성 기준에서 최신 파일명 의존을 제거해 변경 문서 생략 시에도 화면 누락이 없게 했습니다.</li>
+      <li>설문 점검은 최근 60일의 프라이빗 설문만 보고, 기존 경고 문서를 먼저 확인해 추가 조회를 차단합니다.</li>
+      <li>전체 월간 보정은 매일 23:30 안전 점검으로 유지합니다.</li>
+    </ul>
+  </section>
+  <section>
+    <h2>예상 효과</h2>
+    <ul>
+      <li>변경이 없는 평상시 기준 Firestore 반복 쓰기 약 3.5만~4.1만 건/일을 줄입니다.</li>
+      <li>시간별 전체 월간 보정에서 발생하던 장시간 Cloud Run/Functions 실행을 제거합니다.</li>
+      <li>설문 후보·응답·예약의 반복 조회를 줄이고, 실제 변경과 미제출 건만 처리합니다.</li>
+    </ul>
+  </section>
+</main>
+</body>
+</html>

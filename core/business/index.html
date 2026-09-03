@@ -19,7 +19,7 @@
       <aside class="sidebar" aria-label="ARCHIVE CORE navigation">
         <div class="brand"><div class="brand-mark" aria-hidden="true">CORE</div><strong>ARCHIVE CORE</strong><span>ARCHIVE PILATES Operations Platform</span></div>
         <nav class="nav">
-          <a href="../" data-section="home">Home <small>요약</small></a><a href="../members/" data-section="members">Members <small>회원</small></a><a href="../lessons/" data-section="lessons">Lessons <small>수업</small></a><a href="../private/" data-section="private">Private <small>차트</small></a><a href="../staff/" data-section="staff">Staff <small>강사</small></a><a href="../messages/" data-section="messages">Messages <small>알림톡</small></a><a href="../automation/" data-section="automation">Automation <small>관제</small></a><a href="./" data-section="business">Business <small>지표</small></a><a href="../imports/" data-section="imports">Imports <small>원본</small></a><a href="../rules/" data-section="rules">Rules <small>규칙</small></a><a href="../settings/" data-section="settings">Settings <small>설정</small></a>
+          <a href="../" data-section="home">Home <small>요약</small></a><a href="../private/" data-section="private">Private <small>차트</small></a><a href="../staff/" data-section="staff">Staff <small>강사</small></a><a href="../messages/" data-section="messages">Messages <small>알림톡</small></a><a href="../automation/" data-section="automation">Automation <small>관제</small></a><a href="./" data-section="business">Business <small>지표</small></a><a href="../imports/" data-section="imports">Imports <small>원본</small></a><a href="../rules/" data-section="rules">Rules <small>규칙</small></a><a href="../settings/" data-section="settings">Settings <small>설정</small></a>
         </nav>
       </aside>
       <main class="main">
@@ -74,6 +74,65 @@
             <div class="metric-value" id="businessAttendanceRate">-</div>
             <div class="metric-note" id="businessAttendanceDelta">그룹 운영 품질</div>
           </article>
+        </section>
+
+        <section class="grid kpis business-member-kpis" aria-label="회원 지표">
+          <article class="panel metric">
+            <div class="metric-label">수강권 보유회원</div>
+            <div class="metric-value" id="businessTicketMembers">-</div>
+            <div class="metric-note" id="businessTicketMembersNote">정산 시트 기준</div>
+          </article>
+          <article class="panel metric">
+            <div class="metric-label">예약 이용회원</div>
+            <div class="metric-value" id="businessBookingMembers">-</div>
+            <div class="metric-note" id="businessBookingMembersNote">예약 원천 기준</div>
+          </article>
+          <article class="panel metric">
+            <div class="metric-label">출석 회원</div>
+            <div class="metric-value" id="businessAttendedMembers">-</div>
+            <div class="metric-note" id="businessAttendedMembersNote">출석 완료 기준</div>
+          </article>
+        </section>
+
+        <section class="panel ticket-liability-panel" id="ticketLiability" aria-labelledby="ticketLiabilityTitle">
+          <div class="panel-header">
+            <div>
+              <h2 id="ticketLiabilityTitle">수강권 잔여금액</h2>
+              <p>월말 기준 보유 회원, 환산 잔여횟수와 수강권별 잔여금액을 확인합니다.</p>
+            </div>
+            <label class="month-control compact-month-control">
+              <span>기준 월</span>
+              <select id="ticketLiabilityMonthSelect" aria-label="수강권 잔여금액 기준 월">
+                <option>데이터 확인 중</option>
+              </select>
+            </label>
+          </div>
+          <div class="ticket-liability-summary" aria-label="수강권 잔여금액 요약">
+            <div><span>보유 회원</span><strong id="ticketLiabilityHolders">-</strong></div>
+            <div><span>환산 잔여횟수</span><strong id="ticketLiabilityRemaining">-</strong></div>
+            <div><span>전체 잔여금액</span><strong id="ticketLiabilityValue">-</strong></div>
+            <div><span>전월대비</span><strong id="ticketLiabilityDelta">-</strong><small id="ticketLiabilityDeltaRate">비교 대기</small></div>
+            <div><span>확정 결제 연결률</span><strong id="ticketLiabilityCoverage">-</strong></div>
+          </div>
+          <div class="ticket-liability-unit-summary" aria-label="그룹, 프라이빗 및 듀엣 평균 회당가격">
+            <div><span>그룹 평균 회당가격</span><strong id="ticketLiabilityGroupAverage">-</strong><small id="ticketLiabilityGroupAverageBasis">0원 제외</small></div>
+            <div><span>1:1 프라이빗 평균 회당가격</span><strong id="ticketLiabilityPrivateAverage">-</strong><small id="ticketLiabilityPrivateAverageBasis">0원 제외</small></div>
+            <div><span>듀엣 평균 회당가격</span><strong id="ticketLiabilityDuetAverage">-</strong><small id="ticketLiabilityDuetAverageBasis">0원 제외</small></div>
+          </div>
+          <div class="ticket-liability-meta">
+            <span class="pill" id="ticketLiabilityStatus">연결 대기</span>
+            <p id="ticketLiabilityMeta">월말 자동 집계 결과를 불러옵니다.</p>
+          </div>
+          <div class="table-wrap">
+            <table class="core-table liability-table">
+              <thead>
+                <tr><th>수강권</th><th>보유</th><th>잔여</th><th>대표 회당금액</th><th>전체 잔여금액</th><th>잔여금액 비율</th></tr>
+              </thead>
+              <tbody id="ticketLiabilityTableBody">
+                <tr><td colspan="6"><div class="empty-state">월말 집계 데이터를 확인 중입니다.</div></td></tr>
+              </tbody>
+            </table>
+          </div>
         </section>
 
         <section class="panel">

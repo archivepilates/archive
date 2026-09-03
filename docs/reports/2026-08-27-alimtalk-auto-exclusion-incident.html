@@ -1,0 +1,77 @@
+<!doctype html>
+<html lang="ko">
+  <head>
+    <meta charset="utf-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1" />
+    <title>알림톡 자동 제외·중복 차단 점검 · 2026-08-27</title>
+    <style>
+      * { box-sizing: border-box; }
+      body { margin: 0; background: #f7f5f1; color: #20201f; font-family: -apple-system, BlinkMacSystemFont, "Apple SD Gothic Neo", sans-serif; }
+      main { width: min(780px, calc(100% - 32px)); margin: 48px auto; }
+      header { border-bottom: 2px solid #20201f; padding-bottom: 24px; }
+      .eyebrow { margin: 0 0 10px; color: #be3b32; font-size: 13px; font-weight: 700; }
+      h1 { margin: 0; font-size: 30px; letter-spacing: 0; }
+      .summary { margin: 16px 0 0; color: #5d5b57; line-height: 1.65; }
+      section { padding: 26px 0; border-bottom: 1px solid #d9d5cf; }
+      h2 { margin: 0 0 14px; font-size: 19px; }
+      p, li { font-size: 15px; line-height: 1.7; }
+      ul { margin: 0; padding-left: 20px; }
+      .metrics { display: grid; grid-template-columns: repeat(3, minmax(0, 1fr)); gap: 10px; }
+      .metric { min-width: 0; border: 1px solid #d9d5cf; background: #fff; padding: 16px; }
+      .metric strong { display: block; margin-bottom: 6px; font-size: 25px; }
+      .metric span { color: #686560; font-size: 13px; }
+      code { overflow-wrap: anywhere; color: #9d3029; }
+      .status { display: inline-block; margin-top: 18px; border: 1px solid #d09a94; padding: 8px 10px; color: #8b2b25; font-size: 13px; font-weight: 700; }
+      @media (max-width: 560px) {
+        main { margin: 28px auto; }
+        .metrics { grid-template-columns: 1fr; }
+        h1 { font-size: 25px; }
+      }
+    </style>
+  </head>
+  <body>
+    <main>
+      <header>
+        <p class="eyebrow">ARCHIVE PILATES · ALIMTALK INCIDENT</p>
+        <h1>자동 제외·중복 차단 점검</h1>
+        <p class="summary">자동 발송에서 테스트 수신자 예외 범위가 너무 넓었고, 장기 미방문 안내가 최근 다른 재등록 계열 안내를 확인하지 않아 두 건이 규칙 기대와 다르게 발송됐습니다.</p>
+        <span class="status">수정·검증 완료 / 운영 배포 전</span>
+      </header>
+      <section>
+        <h2>라이브 확인</h2>
+        <div class="metrics">
+          <div class="metric"><strong>2건</strong><span>8월 27일 실제 발송</span></div>
+          <div class="metric"><strong>3일</strong><span>김기효 동일 안내 연속 발송</span></div>
+          <div class="metric"><strong>4일</strong><span>최인경 직전 재등록 계열 안내 간격</span></div>
+        </div>
+        <p>두 건 모두 11:30 KST 장기 미방문 자동화에서 SOLAPI 메시지 ID가 생성되고 <code>done</code>으로 기록됐습니다.</p>
+      </section>
+      <section>
+        <h2>원인</h2>
+        <ul>
+          <li>김기효 테스트 수신자 식별만으로 스텝 제외와 중복 차단을 우회해 자동 후보까지 예외가 적용됐습니다.</li>
+          <li>최인경은 8월 23일 프라이빗 잔여횟수 안내를 받았지만, 장기 미방문의 14일 차단은 같은 템플릿 이력만 확인했습니다.</li>
+          <li>재등록 계열과 장기 미방문 우선순위는 같은 날에만 적용되어 날짜가 달라지면 다시 발송될 수 있었습니다.</li>
+        </ul>
+      </section>
+      <section>
+        <h2>수정 기준</h2>
+        <ul>
+          <li>일일·주간 자동 후보에서는 테스트 수신자도 다른 스텝과 동일하게 제외합니다.</li>
+          <li>운영자가 직접 승인했거나 샘플 표시가 있는 발송만 김기효 테스트 예외를 사용할 수 있습니다.</li>
+          <li>장기 미방문 안내는 최근 14일의 잔여횟수·만료·재등록·장기 미방문 성공 발송을 함께 확인합니다.</li>
+          <li>후보 생성과 실제 큐 처리 직전 모두 동일한 차단을 적용합니다.</li>
+        </ul>
+      </section>
+      <section>
+        <h2>읽기 전용 재판정</h2>
+        <ul>
+          <li>김기효 자동 후보는 <code>스텝 계정 알림톡 제외</code>와 8월 26일 동일 안내 이력에 의해 차단됩니다.</li>
+          <li>최인경 자동 후보는 8월 23일 프라이빗 잔여횟수 안내 이력에 의해 장기 미방문 14일 차단이 적용됩니다.</li>
+          <li>Functions 전체 빌드, 회귀 테스트, 코드베이스 경계, 데이터 원천 정책, 비용 가드 검증을 통과했습니다.</li>
+          <li>검증 중 후보·발송·회원 데이터는 변경하지 않았습니다.</li>
+        </ul>
+      </section>
+    </main>
+  </body>
+</html>

@@ -6,6 +6,14 @@ import path from "node:path";
 import { createRequire } from "node:module";
 import { qualityIssuesFromSummary, recordDataQualityIssues, recordSourceImport } from "./lib/archive-core-ops-logging.mjs";
 import { cleanupImportedSourceFiles } from "./lib/imported-source-retention.mjs";
+import {
+  buildInstructorLessonContactGroupNames,
+  formatExcelMemberContactDisplayName,
+  INSTRUCTOR_MEMBER_GRADE,
+  normalizeMemberGrade,
+  resolveInstructorLessonDates,
+  resolveMemberGrade,
+} from "./lib/member-contact-display-name-policy.mjs";
 
 const require = createRequire(import.meta.url);
 const admin = require("../firebase/kangsain-functions/functions/node_modules/firebase-admin");
@@ -50,8 +58,25 @@ if (!sourceFile) {
 
 const rows = readMemberRows(sourceFile);
 const groupedMembers = groupRows(rows);
-const [existingProfiles, existingContacts] = await Promise.all([loadExistingProfiles(), loadExistingContacts()]);
-const { plans, skipped } = buildPlans(groupedMembers, existingProfiles, existingContacts);
+const [existingProfiles, existingContacts, activeStaffContacts] = await Promise.all([
+  loadExistingProfiles(),
+  loadExistingContacts(),
+  loadActiveStaffContacts(),
+]);
+const { plans, skipped } = buildPlans(groupedMembers, existingProfiles, existingContacts, activeStaffContacts);
+const plannedProfileWrites = plans.filter((plan) => plan.profileDoc && plan.writeProfile).length;
+const plannedContactIndexWrites = plans.filter((plan) => plan.writeContactIndex).length;
+const plannedContactSyncJobs = plans.filter((plan) => plan.contactSyncJobDoc).length;
+const plannedInstructorMemberContactSyncJobs = plans.filter(
+  (plan) => plan.contactSyncJobDoc && plan.memberGrade === INSTRUCTOR_MEMBER_GRADE,
+).length;
+const plannedOtherContactSyncJobs = plannedContactSyncJobs - plannedInstructorMemberContactSyncJobs;
+const plannedStudiomateMemberIdLookupJobs = plans.filter((plan) => plan.studiomateMemberIdLookupJobDoc).length;
+const plannedWrites =
+  plannedProfileWrites +
+  plannedContactIndexWrites +
+  plannedContactSyncJobs +
+  plannedStudiomateMemberIdLookupJobs;
 const summary = {
   ok: true,
   mode: apply ? "apply" : "dry-run",
@@ -60,9 +85,16 @@ const summary = {
   studioId: STUDIO_ID,
   readRows: rows.length,
   groupedMembers: groupedMembers.length,
-  plannedWrites: plans.length,
-  plannedContactSyncJobs: plans.filter((plan) => plan.contactSyncJobDoc).length,
-  plannedStudiomateMemberIdLookupJobs: plans.filter((plan) => plan.studiomateMemberIdLookupJobDoc).length,
+  plannedMembers: plans.length,
+  plannedWrites,
+  plannedProfileWrites,
+  plannedContactIndexWrites,
+  unchangedProfiles: plans.filter((plan) => plan.profileDoc && !plan.writeProfile).length,
+  unchangedContactIndexes: plans.filter((plan) => !plan.writeContactIndex).length,
+  plannedContactSyncJobs,
+  plannedInstructorMemberContactSyncJobs,
+  plannedOtherContactSyncJobs,
+  plannedStudiomateMemberIdLookupJobs,
   matchedExistingProfiles: plans.filter((plan) => plan.matchType === "existing").length,
   temporaryExcelProfiles: plans.filter((plan) => plan.matchType === "temporary_excel_id").length,
   skipped,
@@ -73,8 +105,8 @@ const summary = {
   maxWrites,
 };
 
-if (plans.length > maxWrites) {
-  throw new Error(`Planned writes ${plans.length} exceeds --max-writes ${maxWrites}.`);
+if (plannedWrites > maxWrites) {
+  throw new Error(`Planned writes ${plannedWrites} exceeds --max-writes ${maxWrites}.`);
 }
 
 if (apply) {
@@ -86,6 +118,8 @@ if (apply) {
       studioId: STUDIO_ID,
       importedRows: rows.length,
       importedMembers: plans.length,
+      changedProfiles: plannedProfileWrites,
+      changedContactIndexes: plannedContactIndexWrites,
       skippedMembers: skipped,
       queueContactSync,
       updatedAt: admin.firestore.Timestamp.now(),
@@ -213,7 +247,19 @@ async function loadExistingContacts() {
   return out;
 }
 
-function buildPlans(groups, existingProfiles, existingContacts) {
+async function loadActiveStaffContacts() {
+  const snap = await db
+    .collection("staffs")
+    .where("studioId", "==", STUDIO_ID)
+    .where("active", "==", true)
+    .get();
+  return {
+    phones: new Set(snap.docs.map((doc) => normalizePhone(doc.data().phone || "")).filter(Boolean)),
+    names: new Set(snap.docs.map((doc) => normalizeName(doc.data().name || "")).filter(Boolean)),
+  };
+}
+
+function buildPlans(groups, existingProfiles, existingContacts, activeStaffContacts) {
   let skippedNoActiveTicket = 0;
   let skippedAmbiguousPhone = 0;
   let skippedNoExistingProfile = 0;
@@ -224,10 +270,8 @@ function buildPlans(groups, existingProfiles, existingContacts) {
   let skippedNoPhone = groups.skippedNoPhone || 0;
   const plans = [];
   for (const group of groups) {
-    if (isProtectedStaffContact(group)) {
-      skippedProtectedStaffContact += 1;
-      continue;
-    }
+    const protectedStaffContact = isProtectedStaffContact(group, activeStaffContacts);
+    if (protectedStaffContact) skippedProtectedStaffContact += 1;
     const activeTickets = buildActiveTickets(group.rows);
     const ticketStatusSummary = buildTicketStatusSummary(group.rows);
     const registeredAt = parseKstTimestamp(bestDate(group.rows, "등록일"));
@@ -236,8 +280,10 @@ function buildPlans(groups, existingProfiles, existingContacts) {
     const gender = firstNonEmpty(group.rows, "성별");
     const birthDate = firstNonEmpty(group.rows, "생년월일");
     const contactMemo = cleanContactMemo(firstNonEmpty(group.rows, "메모"));
+    const memberGrade = resolveMemberGrade(group.rows);
     const memoPreview = contactMemo.slice(0, 120);
     if (isConsultationGroup(group, activeTickets)) {
+      if (protectedStaffContact) continue;
       const consultationDate = parseKstTimestamp(consultationDateText(group.rows));
       const memberId = `consultation_excel_${hash(`${group.phone}|${group.normalizedName}`).slice(0, 16)}`;
       const contactDisplayName = [group.name, "상담", compactDate(consultationDate)].filter(Boolean).join(" ");
@@ -303,17 +349,30 @@ function buildPlans(groups, existingProfiles, existingContacts) {
           }
         : null;
       consultationContacts += 1;
-      plans.push({ memberId, matchType: "consultation_excel", contactIndexDoc, contactSyncJobDoc });
+      const writeContactIndex =
+        !previousContact ||
+        previousContact.contactHash !== contactHash ||
+        shouldQueueHomeSync;
+      plans.push({
+        memberId,
+        matchType: "consultation_excel",
+        contactIndexDoc,
+        writeContactIndex,
+        contactSyncJobDoc,
+      });
       continue;
     }
     const existing = existingProfiles.get(group.phone) || [];
     const exact = existing.filter((item) => normalizeName(item.data.name || "") === group.normalizedName);
     let memberId = "";
     let matchType = "temporary_excel_id";
+    let matchedProfile = null;
     if (exact.length === 1) {
+      matchedProfile = exact[0];
       memberId = exact[0].id;
       matchType = "existing";
     } else if (existing.length === 1) {
+      matchedProfile = existing[0];
       memberId = existing[0].id;
       matchType = "existing";
     } else if (existing.length > 1) {
@@ -329,6 +388,15 @@ function buildPlans(groups, existingProfiles, existingContacts) {
       skippedNoExistingProfile += 1;
       continue;
     }
+    const activeTicketsWithPreservedPayment = preserveActiveTicketPaymentMetadata(
+      activeTickets,
+      matchedProfile?.data?.activeTickets || [],
+    );
+    const instructorLessonDates =
+      memberGrade === INSTRUCTOR_MEMBER_GRADE
+        ? resolveInstructorLessonDates(group.rows, matchedProfile?.data?.instructorLessonDates || [])
+        : [];
+    const contactGroupNames = buildInstructorLessonContactGroupNames(instructorLessonDates);
     if (!activeTickets.length) skippedNoActiveTicket += 1;
     const profileDoc = {
       memberId,
@@ -340,10 +408,12 @@ function buildPlans(groups, existingProfiles, existingContacts) {
       email,
       birthDate,
       gender,
+      memberGrade,
+      instructorLessonDates,
       memoPreview,
-      activeTicketNames: activeTickets.map((ticket) => ticket.name),
-      activeTicketCount: activeTickets.length,
-      activeTickets,
+      activeTicketNames: activeTicketsWithPreservedPayment.map((ticket) => ticket.name),
+      activeTicketCount: activeTicketsWithPreservedPayment.length,
+      activeTickets: activeTicketsWithPreservedPayment,
       ticketStatusSummary,
       isNewMember: registeredAt ? daysBetween(kstDate(registeredAt.toDate()), today) <= 3 : false,
       newMemberBasis: registeredAt ? "registered_at" : "unknown",
@@ -355,7 +425,18 @@ function buildPlans(groups, existingProfiles, existingContacts) {
       emergencySourceFile: sourceFile,
       emergencyLastAttendance: latestAttendance,
     };
-    const contactDisplayName = [group.name, "회원", compactDate(registeredAt)].filter(Boolean).join(" ");
+    profileDoc.emergencyImportHash = memberProfileImportHash(profileDoc);
+    const writeProfile =
+      !matchedProfile ||
+      matchedProfile.data.emergencyImportHash !== profileDoc.emergencyImportHash ||
+      normalizeMemberGrade(matchedProfile.data.memberGrade || "") !== memberGrade ||
+      JSON.stringify(matchedProfile.data.instructorLessonDates || []) !== JSON.stringify(instructorLessonDates);
+    const contactDisplayName = formatExcelMemberContactDisplayName({
+      name: group.name,
+      compactRegisteredAt: compactDate(registeredAt),
+      memberGrade,
+      activeStaff: protectedStaffContact,
+    });
     const contactHash = hash({
       name: group.name,
       contactDisplayName,
@@ -363,9 +444,11 @@ function buildPlans(groups, existingProfiles, existingContacts) {
       phone: group.phone,
       registeredAt: registeredAt?.toMillis() || null,
       activeTicketNames: profileDoc.activeTicketNames,
+      contactGroupNames,
     });
     const previousContact = existingContacts.get(memberId);
     const shouldQueueHomeSync =
+      !protectedStaffContact &&
       queueContactSync &&
       (!previousContact ||
         previousContact.contactHash !== contactHash ||
@@ -374,7 +457,9 @@ function buildPlans(groups, existingProfiles, existingContacts) {
       archivepilates_gmail: previousContact?.contactTargets?.archivepilates_gmail || "skipped",
       home_archivepilates: shouldQueueHomeSync
         ? "pending"
-        : previousContact?.contactTargets?.home_archivepilates || "skipped",
+        : protectedStaffContact
+          ? "skipped"
+          : previousContact?.contactTargets?.home_archivepilates || "skipped",
     };
     const jobId = `contact_${memberId}_home_${contactHash.slice(0, 16)}`;
     const contactIndexDoc = {
@@ -383,10 +468,12 @@ function buildPlans(groups, existingProfiles, existingContacts) {
       name: group.name,
       contactDisplayName,
       contactMemo,
+      memberGrade,
+      contactGroupNames,
       phone: group.phone,
       phoneLast4: group.phone.slice(-4),
       registeredAt,
-      activeTicketCount: activeTickets.length,
+      activeTicketCount: activeTicketsWithPreservedPayment.length,
       activeTicketNames: profileDoc.activeTicketNames,
       source: "studiomate_excel_emergency",
       contactHash,
@@ -398,6 +485,11 @@ function buildPlans(groups, existingProfiles, existingContacts) {
       syncedAt: admin.firestore.Timestamp.now(),
       updatedAt: admin.firestore.Timestamp.now(),
     };
+    const writeContactIndex =
+      !previousContact ||
+      previousContact.contactHash !== contactHash ||
+      normalizeMemberGrade(previousContact.memberGrade || "") !== memberGrade ||
+      shouldQueueHomeSync;
     const contactSyncJobDoc = shouldQueueHomeSync
       ? {
           jobId,
@@ -406,6 +498,7 @@ function buildPlans(groups, existingProfiles, existingContacts) {
           memberName: group.name,
           contactDisplayName,
           contactMemo,
+          contactGroupNames,
           memberPhone: group.phone,
           target: "home_archivepilates",
           status: "pending",
@@ -437,7 +530,17 @@ function buildPlans(groups, existingProfiles, existingContacts) {
             lastError: null,
           }
         : null;
-    plans.push({ memberId, matchType, profileDoc, contactIndexDoc, contactSyncJobDoc, studiomateMemberIdLookupJobDoc });
+    plans.push({
+      memberId,
+      matchType,
+      profileDoc,
+      writeProfile,
+      contactIndexDoc,
+      writeContactIndex,
+      contactSyncJobDoc,
+      memberGrade,
+      studiomateMemberIdLookupJobDoc,
+    });
   }
   return {
     plans,
@@ -463,6 +566,7 @@ function buildActiveTickets(rows) {
     if (!name) continue;
     const expiresAt = parseKstTimestamp(row["수강권종료일"]);
     const availableFrom = parseKstTimestamp(row["수강권시작일"]);
+    const paymentAt = parseKstTimestamp(row["결제일시"]);
     const remainingCount = nullableNumber(row["잔여횟수"]);
     if (expiresAt && kstDate(expiresAt.toDate()) < today) continue;
     if (remainingCount != null && Number.isFinite(Number(remainingCount)) && Number(remainingCount) <= 0) continue;
@@ -478,6 +582,10 @@ function buildActiveTickets(rows) {
       expiryLevel: ticketExpiryLevel(expiresAt),
       status,
       classType: cleanText(row["수강권종류"]),
+      paymentAmount: moneyValue(row["결제금액"]),
+      paymentAt,
+      paymentMethod: cleanText(row["결제방법"]),
+      paymentType: cleanText(row["결제구분"]),
     });
   }
   const byKey = new Map();
@@ -485,7 +593,11 @@ function buildActiveTickets(rows) {
     const key = `${ticket.name}|${ticket.expiresAt?.toMillis() || ""}|${ticket.remainingCount ?? ""}`;
     byKey.set(key, ticket);
   }
-  return [...byKey.values()].sort((a, b) => (a.expiresAt?.toMillis() || Number.MAX_SAFE_INTEGER) - (b.expiresAt?.toMillis() || Number.MAX_SAFE_INTEGER));
+  return [...byKey.values()].sort(
+    (a, b) =>
+      (a.expiresAt?.toMillis() || Number.MAX_SAFE_INTEGER) - (b.expiresAt?.toMillis() || Number.MAX_SAFE_INTEGER) ||
+      memberTicketSortKey(a).localeCompare(memberTicketSortKey(b)),
+  );
 }
 
 function buildTicketStatusSummary(rows) {
@@ -505,8 +617,57 @@ function buildTicketStatusSummary(rows) {
   return {
     hasHoldingTicket: holdingTickets.length > 0,
     holdingTicketCount: holdingTickets.length,
-    holdingTickets,
+    holdingTickets: holdingTickets.sort((a, b) => memberTicketSortKey(a).localeCompare(memberTicketSortKey(b))),
   };
+}
+
+function preserveActiveTicketPaymentMetadata(activeTickets, previousTickets = []) {
+  if (!activeTickets.length || !previousTickets.length) return activeTickets;
+  const previousByStrictKey = new Map(previousTickets.map((ticket) => [activeTicketPaymentKey(ticket, true), ticket]));
+  const previousByLooseKey = new Map(previousTickets.map((ticket) => [activeTicketPaymentKey(ticket, false), ticket]));
+  return activeTickets.map((ticket) => {
+    if (hasPaymentMetadata(ticket)) return ticket;
+    const previous = previousByStrictKey.get(activeTicketPaymentKey(ticket, true)) || previousByLooseKey.get(activeTicketPaymentKey(ticket, false));
+    if (!previous || !hasPaymentMetadata(previous)) return ticket;
+    return {
+      ...ticket,
+      paymentAmount: moneyValue(ticket.paymentAmount) || moneyValue(previous.paymentAmount ?? previous.amountTotal ?? previous.price),
+      paymentAt: ticket.paymentAt || previous.paymentAt || previous.paymentDate || previous.purchasedAt || null,
+      paymentMethod: ticket.paymentMethod || previous.paymentMethod || "",
+      paymentType: ticket.paymentType || previous.paymentType || previous.category || "",
+      purchaseId: ticket.purchaseId || previous.purchaseId || "",
+    };
+  });
+}
+
+function activeTicketPaymentKey(ticket, strict) {
+  return [
+    normalizeName(ticket.name || ticket.ticketName || ""),
+    cleanText(ticket.classType || ticket.lessonType || ""),
+    strict ? timestampKey(ticket.availableFrom || ticket.startDate || ticket.issuedAt) : "",
+    timestampKey(ticket.expiresAt || ticket.endDate || ticket.expireAt),
+    strict ? nullableNumber(ticket.maxCount ?? ticket.totalCount ?? ticket.usableCount) ?? "" : "",
+  ].join("|");
+}
+
+function hasPaymentMetadata(ticket) {
+  return Boolean(
+    moneyValue(ticket.paymentAmount ?? ticket.amountTotal ?? ticket.price) ||
+      ticket.paymentAt ||
+      ticket.paymentDate ||
+      ticket.purchasedAt ||
+      ticket.paymentMethod ||
+      ticket.paymentType ||
+      ticket.category,
+  );
+}
+
+function timestampKey(value) {
+  if (!value) return "";
+  if (typeof value.toDate === "function") return compactDate(value);
+  if (typeof value === "object" && typeof value.seconds === "number") return compactDate(admin.firestore.Timestamp.fromMillis(value.seconds * 1000));
+  const parsed = parseKstTimestamp(value);
+  return parsed ? compactDate(parsed) : cleanText(value).slice(0, 10);
 }
 
 function isHoldingTicketStatus(status) {
@@ -517,12 +678,14 @@ async function applyPlans(plans) {
   let batch = db.batch();
   let count = 0;
   for (const plan of plans) {
-    if (plan.profileDoc) {
+    if (plan.profileDoc && plan.writeProfile) {
       batch.set(db.collection("memberProfiles").doc(plan.memberId), plan.profileDoc, { merge: true });
       count += 1;
     }
-    batch.set(db.collection("memberContactIndex").doc(plan.memberId), plan.contactIndexDoc, { merge: true });
-    count += 1;
+    if (plan.writeContactIndex) {
+      batch.set(db.collection("memberContactIndex").doc(plan.memberId), plan.contactIndexDoc, { merge: true });
+      count += 1;
+    }
     if (plan.contactSyncJobDoc) {
       batch.set(db.collection("contactSyncJobs").doc(plan.contactSyncJobDoc.jobId), plan.contactSyncJobDoc, {
         merge: true,
@@ -544,6 +707,67 @@ async function applyPlans(plans) {
     }
   }
   if (count) await batch.commit();
+}
+
+function memberProfileImportHash(profile) {
+  return hash({
+    memberId: profile.memberId,
+    studioId: profile.studioId,
+    name: profile.name,
+    normalizedName: profile.normalizedName,
+    phone: profile.phone,
+    email: profile.email,
+    birthDate: profile.birthDate,
+    gender: profile.gender,
+    memoPreview: profile.memoPreview,
+    activeTicketNames: profile.activeTicketNames,
+    activeTicketCount: profile.activeTicketCount,
+    activeTickets: (profile.activeTickets || []).map((ticket) => ({
+      userTicketId: ticket.userTicketId || "",
+      ticketId: ticket.ticketId || "",
+      name: ticket.name || "",
+      remainingCount: ticket.remainingCount ?? null,
+      usableCount: ticket.usableCount ?? null,
+      maxCount: ticket.maxCount ?? null,
+      availableFrom: timestampKey(ticket.availableFrom),
+      expiresAt: timestampKey(ticket.expiresAt),
+      expiryLevel: ticket.expiryLevel || "",
+      status: ticket.status || "",
+      classType: ticket.classType || "",
+      paymentAmount: ticket.paymentAmount || 0,
+      paymentAt: timestampKey(ticket.paymentAt),
+      paymentMethod: ticket.paymentMethod || "",
+      paymentType: ticket.paymentType || "",
+      purchaseId: ticket.purchaseId || "",
+    })),
+    ticketStatusSummary: {
+      hasHoldingTicket: Boolean(profile.ticketStatusSummary?.hasHoldingTicket),
+      holdingTicketCount: Number(profile.ticketStatusSummary?.holdingTicketCount || 0),
+      holdingTickets: (profile.ticketStatusSummary?.holdingTickets || []).map((ticket) => ({
+        name: ticket.name || "",
+        status: ticket.status || "",
+        availableFrom: timestampKey(ticket.availableFrom),
+        expiresAt: timestampKey(ticket.expiresAt),
+        updatedAtText: ticket.updatedAtText || "",
+      })),
+    },
+    isNewMember: Boolean(profile.isNewMember),
+    newMemberBasis: profile.newMemberBasis || "",
+    registeredAt: timestampKey(profile.registeredAt),
+    emergencyLastAttendance: profile.emergencyLastAttendance || "",
+  });
+}
+
+function memberTicketSortKey(ticket) {
+  return [
+    ticket.name || "",
+    ticket.status || "",
+    ticket.classType || "",
+    timestampKey(ticket.availableFrom),
+    timestampKey(ticket.expiresAt),
+    ticket.remainingCount ?? "",
+    ticket.maxCount ?? "",
+  ].join("|");
 }
 
 function isUsableTicketStatus(status) {
@@ -642,13 +866,16 @@ function normalizePhone(value) {
   return digits;
 }
 
-function isProtectedStaffContact(input) {
+function isProtectedStaffContact(input, activeStaffContacts) {
   const phone = normalizePhone(input.phone || "");
   const name = normalizeName(input.name || "");
-  return PROTECTED_STAFF_CONTACTS.some((contact) => {
-    if (phone && phone === contact.phone) return true;
-    return name === normalizeName(contact.name);
-  });
+  if (activeStaffContacts) {
+    if (phone) return activeStaffContacts.phones.has(phone);
+    return Boolean(name && activeStaffContacts.names.has(name));
+  }
+  if (phone) return PROTECTED_STAFF_CONTACTS.some((contact) => phone === contact.phone);
+  if (!name) return false;
+  return PROTECTED_STAFF_CONTACTS.some((contact) => name === normalizeName(contact.name));
 }
 
 function nullableNumber(value) {
@@ -656,6 +883,13 @@ function nullableNumber(value) {
   if (!cleaned) return null;
   const number = Number(cleaned);
   return Number.isFinite(number) ? number : null;
+}
+
+function moneyValue(value) {
+  const cleaned = cleanText(value).replace(/[^0-9.-]+/g, "");
+  if (!cleaned) return 0;
+  const number = Number(cleaned);
+  return Number.isFinite(number) ? Math.round(number) : 0;
 }
 
 function hash(value) {

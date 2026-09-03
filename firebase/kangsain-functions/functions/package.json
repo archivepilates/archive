@@ -14,8 +14,8 @@
     "format:check": "prettier --check \"src/**/*.ts\" \"../*.json\" \"../*.md\"",
     "firebase": "firebase --config ../firebase.json --project archive-pilates",
     "serve": "npm run build && npm run firebase -- emulators:start --only functions,firestore",
-    "deploy": "npm run build && npm run firebase -- deploy --only functions,firestore:rules,firestore:indexes",
-    "deploy:functions": "npm run build && npm run firebase -- deploy --only functions",
+    "deploy": "node ../../../scripts/reject-legacy-functions-deploy.mjs",
+    "deploy:functions": "node ../../../scripts/reject-legacy-functions-deploy.mjs",
     "deploy:firestore": "npm run firebase -- deploy --only firestore:rules,firestore:indexes"
   },
   "dependencies": {

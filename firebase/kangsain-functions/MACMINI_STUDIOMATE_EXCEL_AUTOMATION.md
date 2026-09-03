@@ -18,6 +18,12 @@ This is not a private API scraper. It should operate like a logged-in manager us
 6. Firestore member cards and member events are updated.
 7. New member / changed member / message candidate records are created.
 
+Cost and idempotency rule:
+
+- Repeated downloads of the same normalized member, ticket, lecture, or booking data must not rewrite unchanged Firestore documents.
+- The hourly runner recalculates `privateSessionLedger` only for members whose private booking source changed.
+- Full current-month private chart reconciliation remains a daily 23:30 safety job and must not be invoked by every hourly Excel import.
+
 ## Recommended Flow
 
 ```mermaid
@@ -189,63 +195,9 @@ HEADLESS=false WAIT_FOR_LOGIN=true DRY_RUN=true npm run studiomate:member-excel
 
 Log in manually in the opened browser. The automation resumes after the member page loads and stores the logged-in session in the persistent browser profile.
 
-### Weekly Reservation Availability Deadline
+### Reservation Availability Deadline
 
-The local Mac mini CLI for StudioMate `설정 -> 운영정보 -> 07. 예약 가능 기한 설정` is:
-
-```bash
-npm run studiomate:reservation-deadline
-```
-
-Default behavior is safe inspection only:
-
-```bash
-DRY_RUN=true npm run studiomate:reservation-deadline
-```
-
-Real setting changes require explicit confirmation:
-
-```bash
-DRY_RUN=false CONFIRM=true npm run studiomate:reservation-deadline
-```
-
-Default target:
-
-- `프라이빗 수업`
-- `그룹 수업`
-- `예약 가능 일자`: weekly run date, normally that Monday
-- `13` days
-- `13:00`
-
-Example: on Monday `2026. 5. 11.`, set the reservation availability date to `2026. 5. 11.` and auto-extend `13` days at `13:00`. After `13:00`, StudioMate opens reservations through `2026. 5. 24.`.
-
-Useful environment variables:
-
-- `STUDIOMATE_OPERATION_INFO_PATH`: defaults to `/settings/operations`
-- `STUDIOMATE_RESERVATION_AVAILABLE_UNTIL`: optional override such as `2026. 5. 11.`
-- `STUDIOMATE_RESERVATION_EXTENSION_DAYS`: defaults to `13`
-- `STUDIOMATE_RESERVATION_EXTENSION_TIME`: defaults to `13:00`
-- `STUDIOMATE_OUTPUT_DIR`: defaults to `~/ArchiveIN/automation/studiomate-results`
-- `WAIT_FOR_LOGIN`: defaults to `false`
-
-First login/setup run:
-
-```bash
-HEADLESS=false WAIT_FOR_LOGIN=true DRY_RUN=true npm run studiomate:reservation-deadline
-```
-
-Recommended weekly schedule on the Mac mini:
-
-- Every Monday at `12:30`
-- Use the Mac mini local timezone, `Asia/Seoul`
-- Run in `DRY_RUN=true` until the UI path and field selectors are verified once
-- After verification, switch the scheduled command to `DRY_RUN=false CONFIRM=true`
-
-A launchd template is available at:
-
-```bash
-firebase/kangsain-functions/macmini-studiomate/com.archive.studiomate-reservation-deadline.plist
-```
+StudioMate's native recurring setting is the source of truth for reservation availability. The weekly Mac mini browser job and its LaunchAgent were retired on 2026-08-17 and must not be reinstalled or repaired by system health checks.
 
 ## Implementation Phases
 

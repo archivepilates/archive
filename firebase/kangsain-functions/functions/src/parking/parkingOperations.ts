@@ -6,14 +6,25 @@ import { requireManager, requireStaff } from "../security/authGuards";
 import type { BookingDoc, StaffDoc } from "../types/models";
 import { nowTimestamp, todayKst } from "../utils/date";
 import { AppError } from "../utils/errors";
+import {
+  PARKING_APPLY_AFTER_START_MINUTES as APPLY_AFTER_START_MINUTES,
+  PARKING_DISCOUNT_UNIT_HOURS as DISCOUNT_UNIT_HOURS,
+  PARKING_MAX_AUTO_DISCOUNT_HOURS as MAX_AUTO_DISCOUNT_HOURS,
+  STAFF_REQUIRED_DISCOUNT_HOURS,
+} from "./parkingDiscountPolicy";
+import {
+  maskParkingCarNumber,
+  normalizeParkingCarNumber,
+  parkingCarLast4,
+  parkingVehicleId,
+  validParkingCarNumber,
+} from "./instructorLessonParkingContract";
 
 const PARKING_VEHICLES = "parkingVehicles";
 const PARKING_DISCOUNT_JOBS = "parkingDiscountJobs";
 const VEHICLE_MAX_COUNT = 4;
 const DISCOUNT_NAME = "2시간 할인";
-const DISCOUNT_UNIT_HOURS = 2;
-const MAX_AUTO_DISCOUNT_HOURS = 4;
-const APPLY_AFTER_START_MINUTES = 10;
+const SCHEDULED_BOOKING_LOOKBACK_MINUTES = 75;
 
 type ParkingOwnerType = "member" | "staff" | "visitor";
 
@@ -34,7 +45,7 @@ type ParkingVehicleDoc = {
   label: string;
   isDefault: boolean;
   note?: string;
-  source: "core_parking";
+  source: "core_parking" | "instructor_lesson_pre_registration";
   createdAt: FirebaseFirestore.Timestamp;
   updatedAt: FirebaseFirestore.Timestamp;
   updatedByUid: string;
@@ -78,6 +89,8 @@ type ParkingDashboardJob = {
   ownerName?: string;
   carNumberLast4?: string;
   requestedDiscountHours?: number;
+  operatorAlertStatus?: string;
+  operatorAlertLastError?: string;
   result?: Record<string, unknown>;
   createdAt?: FirebaseFirestore.Timestamp;
   updatedAt?: FirebaseFirestore.Timestamp;
@@ -92,14 +105,15 @@ export async function registerParkingVehicleHandler(request: CallableRequest): P
 }> {
   const staff = await requireManagerAccess(request);
   const ownerType = parseOwnerType(request.data?.ownerType);
-  const ownerName = stringValue(request.data?.ownerName || request.data?.name) || (ownerType === "visitor" ? "방문객" : "");
-  const ownerPhone = digitsOnly(request.data?.ownerPhone || request.data?.phone);
-  const carNumber = normalizeCarNumber(request.data?.carNumber);
+  const ownerName =
+    ownerType === "visitor" ? "방문객" : stringValue(request.data?.ownerName || request.data?.name);
+  const ownerPhone = ownerType === "visitor" ? "" : digitsOnly(request.data?.ownerPhone || request.data?.phone);
+  const carNumber = normalizeParkingCarNumber(request.data?.carNumber);
   const note = stringValue(request.data?.note);
   const validDate = todayKst();
 
   if (ownerType !== "visitor" && !ownerName && !ownerPhone) throw new AppError("INVALID_ARGUMENT", "이름 또는 연락처가 필요합니다");
-  if (!validCarNumber(carNumber)) throw new AppError("INVALID_ARGUMENT", "차량번호를 다시 확인하세요");
+  if (!validParkingCarNumber(carNumber)) throw new AppError("INVALID_ARGUMENT", "차량번호를 다시 확인하세요");
 
   const resolved =
     ownerType === "staff"
@@ -122,8 +136,8 @@ export async function registerParkingVehicleHandler(request: CallableRequest): P
     staffId: resolved.staffId,
     validDate: ownerType === "visitor" ? validDate : undefined,
     carNumber,
-    carNumberLast4: carLast4(carNumber),
-    label: maskCarNumber(carNumber),
+    carNumberLast4: parkingCarLast4(carNumber),
+    label: maskParkingCarNumber(carNumber),
     isDefault: true,
     note,
     source: "core_parking",
@@ -167,6 +181,7 @@ export async function getParkingDashboardHandler(request: CallableRequest): Prom
     discountUnitHours: number;
     maxAutoDiscountHours: number;
     applyAfterStartMinutes: number;
+    scheduledBookingLookbackMinutes: number;
   };
 }> {
   const staff = await requireManagerAccess(request);
@@ -182,7 +197,119 @@ export async function getParkingDashboardHandler(request: CallableRequest): Prom
       discountUnitHours: DISCOUNT_UNIT_HOURS,
       maxAutoDiscountHours: MAX_AUTO_DISCOUNT_HOURS,
       applyAfterStartMinutes: APPLY_AFTER_START_MINUTES,
+      scheduledBookingLookbackMinutes: SCHEDULED_BOOKING_LOOKBACK_MINUTES,
     },
+  };
+}
+
+export async function removeParkingVehicleHandler(request: CallableRequest): Promise<{
+  ok: true;
+  vehicleId: string;
+  alreadyRemoved: boolean;
+  replacementVehicleId: string | null;
+}> {
+  const staff = await requireManagerAccess(request);
+  const vehicleId = stringValue(request.data?.vehicleId);
+  if (!/^pv_[A-Za-z0-9_-]{5,116}$/.test(vehicleId)) {
+    throw new AppError("INVALID_ARGUMENT", "삭제할 차량 정보를 다시 확인하세요");
+  }
+
+  const vehicleRef = db.collection(PARKING_VEHICLES).doc(vehicleId);
+  const vehicleSnap = await vehicleRef.get();
+  if (!vehicleSnap.exists) throw new AppError("NOT_FOUND", "등록 차량을 찾지 못했습니다");
+
+  const vehicle = vehicleSnap.data() as ParkingVehicleDoc;
+  const studioId = staff.studioId || DEFAULT_STUDIO_ID;
+  if (vehicle.studioId !== studioId) throw new AppError("PERMISSION_DENIED", "다른 지점 차량은 삭제할 수 없습니다");
+  if (vehicle.status === "archived") {
+    return { ok: true, vehicleId, alreadyRemoved: true, replacementVehicleId: null };
+  }
+
+  const replacement =
+    (await loadParkingVehicles(studioId)).find(
+      (candidate) =>
+        candidate.vehicleId !== vehicleId &&
+        candidate.ownerType === vehicle.ownerType &&
+        candidate.ownerId === vehicle.ownerId,
+    ) || null;
+  const now = nowTimestamp();
+  let alreadyRemoved = false;
+
+  await db.runTransaction(async (tx) => {
+    const currentSnap = await tx.get(vehicleRef);
+    if (!currentSnap.exists) throw new AppError("NOT_FOUND", "등록 차량을 찾지 못했습니다");
+    const current = currentSnap.data() as ParkingVehicleDoc;
+    if (current.status === "archived") {
+      alreadyRemoved = true;
+      return;
+    }
+
+    const ownerRef =
+      current.memberId
+        ? db.collection("memberProfiles").doc(current.memberId)
+        : current.staffId
+          ? db.collection("staffs").doc(current.staffId)
+          : null;
+    const ownerSnap = ownerRef ? await tx.get(ownerRef) : null;
+
+    tx.set(
+      vehicleRef,
+      {
+        status: "archived",
+        archivedAt: now,
+        archivedByUid: request.auth?.uid || "operator",
+        updatedAt: now,
+        updatedByUid: request.auth?.uid || "operator",
+      },
+      { merge: true },
+    );
+
+    if (ownerRef && ownerSnap?.exists) {
+      const currentMirrors = Array.isArray(ownerSnap.get("vehicles")) ? ownerSnap.get("vehicles") : [];
+      const remainingMirrors = currentMirrors.filter(
+        (item: Record<string, unknown>) => stringValue(item?.vehicleId) !== vehicleId,
+      );
+      if (replacement) {
+        const otherMirrors = remainingMirrors.filter(
+          (item: Record<string, unknown>) => stringValue(item?.vehicleId) !== replacement.vehicleId,
+        );
+        tx.set(
+          ownerRef,
+          {
+            vehicles: [ownerVehicleMirror(replacement), ...otherMirrors].map((item, index) => ({
+              ...item,
+              isDefault: index === 0,
+            })),
+            defaultVehicleNumber: replacement.carNumber,
+            defaultVehicleLast4: replacement.carNumberLast4,
+            vehicleUpdatedAt: now,
+            vehicleUpdatedByUid: request.auth?.uid || "operator",
+            updatedAt: now,
+          },
+          { merge: true },
+        );
+      } else {
+        tx.set(
+          ownerRef,
+          {
+            vehicles: remainingMirrors,
+            defaultVehicleNumber: FieldValue.delete(),
+            defaultVehicleLast4: FieldValue.delete(),
+            vehicleUpdatedAt: now,
+            vehicleUpdatedByUid: request.auth?.uid || "operator",
+            updatedAt: now,
+          },
+          { merge: true },
+        );
+      }
+    }
+  });
+
+  return {
+    ok: true,
+    vehicleId,
+    alreadyRemoved,
+    replacementVehicleId: replacement?.vehicleId || null,
   };
 }
 
@@ -205,6 +332,7 @@ export async function runParkingAutoApplyNowHandler(request: CallableRequest): P
     source: "core_parking_manual_run",
     date: String(request.data?.date || todayKst()),
     includeVisitors: true,
+    scanMode: "full_day",
   });
 }
 
@@ -214,6 +342,7 @@ export async function createDueParkingDiscountJobs(input: {
   source?: string;
   date?: string;
   includeVisitors?: boolean;
+  scanMode?: "scheduled_window" | "full_day";
 }): Promise<{
   ok: true;
   date: string;
@@ -230,16 +359,23 @@ export async function createDueParkingDiscountJobs(input: {
   const date = input.date || todayKst();
   const now = nowTimestamp();
   const nowMs = now.toMillis();
+  const scanMode = input.scanMode || "scheduled_window";
+  const bookings = await loadParkingCandidateBookings({ studioId, date, nowMs, scanMode });
+  if (!bookings.length && !input.includeVisitors) {
+    return {
+      ok: true,
+      date,
+      created: 0,
+      existing: 0,
+      skippedNotDue: 0,
+      skippedNoVehicle: 0,
+      candidates: 0,
+      visitorCandidates: 0,
+      visitorCreated: 0,
+      visitorExisting: 0,
+    };
+  }
   const vehicles = await loadParkingVehicles(studioId, date);
-  const bookingSnap = await db
-    .collection("bookings")
-    .where("studioId", "==", studioId)
-    .where("lectureDate", "==", date)
-    .where("appStatus", "==", "reserved")
-    .get();
-  const bookings = bookingSnap.docs
-    .map((doc) => doc.data() as BookingDoc)
-    .sort((a, b) => timestampMs(a.lectureStartAt) - timestampMs(b.lectureStartAt));
 
   const memberVehicles = vehicles.filter((vehicle) => vehicle.ownerType === "member");
   const staffVehicles = vehicles.filter((vehicle) => vehicle.ownerType === "staff");
@@ -265,7 +401,8 @@ export async function createDueParkingDiscountJobs(input: {
 
     const memberVehicle = findMemberVehicle(memberVehicles, booking);
     if (memberVehicle) {
-      const key = `${date}_${booking.memberId || booking.memberPhone}_${memberVehicle.vehicleId}`;
+      const bookingDate = booking.lectureDate || date;
+      const key = `${bookingDate}_${booking.memberId || booking.memberPhone}_${memberVehicle.vehicleId}`;
       if (!queuedMemberKeys.has(key)) {
         queuedMemberKeys.add(key);
         const result = await createParkingJob({
@@ -287,7 +424,8 @@ export async function createDueParkingDiscountJobs(input: {
     const staffVehicle = findStaffVehicle(staffVehicles, booking);
     if (staffVehicle) {
       const staffKey = booking.staffId || booking.staffName || "staff";
-      const key = `${date}_${staffKey}_${staffVehicle.vehicleId}`;
+      const bookingDate = booking.lectureDate || date;
+      const key = `${bookingDate}_${staffKey}_${staffVehicle.vehicleId}`;
       if (!queuedStaffKeys.has(key)) {
         queuedStaffKeys.add(key);
         const result = await createParkingJob({
@@ -340,6 +478,33 @@ export async function createDueParkingDiscountJobs(input: {
     visitorCreated,
     visitorExisting,
   };
+}
+
+async function loadParkingCandidateBookings(input: {
+  studioId: string;
+  date: string;
+  nowMs: number;
+  scanMode: "scheduled_window" | "full_day";
+}): Promise<BookingDoc[]> {
+  let query: FirebaseFirestore.Query = db
+    .collection("bookings")
+    .where("studioId", "==", input.studioId)
+    .where("appStatus", "==", "reserved");
+
+  if (input.scanMode === "full_day") {
+    query = query.where("lectureDate", "==", input.date);
+  } else {
+    const dueUpperMs = input.nowMs - APPLY_AFTER_START_MINUTES * 60 * 1000;
+    const dueLowerMs = dueUpperMs - SCHEDULED_BOOKING_LOOKBACK_MINUTES * 60 * 1000;
+    query = query
+      .where("lectureStartAt", ">=", Timestamp.fromMillis(dueLowerMs))
+      .where("lectureStartAt", "<=", Timestamp.fromMillis(dueUpperMs));
+  }
+
+  const snap = await query.get();
+  return snap.docs
+    .map((doc) => doc.data() as BookingDoc)
+    .sort((a, b) => timestampMs(a.lectureStartAt) - timestampMs(b.lectureStartAt));
 }
 
 async function requireManagerAccess(request: CallableRequest): Promise<StaffDoc> {
@@ -478,20 +643,10 @@ function upsertOwnerVehicleMirror(
   ref: FirebaseFirestore.DocumentReference,
   vehicle: ParkingVehicleDoc,
 ): void {
-  const mirror = {
-    vehicleId: vehicle.vehicleId,
-    carNumber: vehicle.carNumber,
-    carNumberLast4: vehicle.carNumberLast4,
-    label: vehicle.label,
-    isDefault: true,
-    source: vehicle.source,
-    registeredAt: vehicle.createdAt,
-    updatedAt: vehicle.updatedAt,
-  };
   tx.set(
     ref,
     {
-      vehicles: FieldValue.arrayUnion(mirror),
+      vehicles: FieldValue.arrayUnion(ownerVehicleMirror(vehicle)),
       defaultVehicleNumber: vehicle.carNumber,
       defaultVehicleLast4: vehicle.carNumberLast4,
       vehicleUpdatedAt: vehicle.updatedAt,
@@ -502,11 +657,24 @@ function upsertOwnerVehicleMirror(
   );
 }
 
+function ownerVehicleMirror(vehicle: ParkingVehicleDoc): Record<string, unknown> {
+  return {
+    vehicleId: vehicle.vehicleId,
+    carNumber: vehicle.carNumber,
+    carNumberLast4: vehicle.carNumberLast4,
+    label: vehicle.label,
+    isDefault: true,
+    source: vehicle.source,
+    registeredAt: vehicle.createdAt,
+    updatedAt: vehicle.updatedAt,
+  };
+}
+
 async function loadParkingVehicles(studioId: string, date = todayKst()): Promise<ParkingVehicleDoc[]> {
   const snap = await db.collection(PARKING_VEHICLES).where("studioId", "==", studioId).where("status", "==", "active").limit(500).get();
   return snap.docs
     .map((doc) => doc.data() as ParkingVehicleDoc)
-    .filter((vehicle) => vehicle.ownerType !== "visitor" || vehicle.validDate === date)
+    .filter((vehicle) => !vehicle.validDate || vehicle.validDate === date)
     .sort((a, b) => timestampMs(b.updatedAt) - timestampMs(a.updatedAt));
 }
 
@@ -518,6 +686,11 @@ async function loadRecentParkingJobs(studioId: string): Promise<ParkingDashboard
 }
 
 function findMemberVehicle(vehicles: ParkingVehicleDoc[], booking: BookingDoc): ParkingVehicleDoc | null {
+  const requestedVehicleId = String(booking.parkingVehicleId || "");
+  if (requestedVehicleId) {
+    const requested = vehicles.find((vehicle) => vehicle.vehicleId === requestedVehicleId);
+    if (requested) return requested;
+  }
   const byId = vehicles.find((vehicle) => vehicle.memberId && vehicle.memberId === booking.memberId);
   if (byId) return byId;
   const phone = digitsOnly(booking.memberPhone);
@@ -543,6 +716,8 @@ async function createParkingJob(input: {
   const ref = db.collection(PARKING_DISCOUNT_JOBS).doc(input.jobId);
   const snap = await ref.get();
   if (snap.exists) return "existing";
+  const requestedDiscountHours =
+    input.ownerType === "staff" ? STAFF_REQUIRED_DISCOUNT_HOURS : MAX_AUTO_DISCOUNT_HOURS;
   await ref.create({
     jobId: input.jobId,
     status: "pending",
@@ -561,7 +736,8 @@ async function createParkingJob(input: {
     carNumberLast4: input.vehicle.carNumberLast4,
     expectedCarNumber: input.vehicle.carNumber,
     discountName: DISCOUNT_NAME,
-    requestedDiscountHours: MAX_AUTO_DISCOUNT_HOURS,
+    parkingPolicy: input.ownerType === "staff" ? "staff_fixed_4h" : "standard",
+    requestedDiscountHours,
     maxAutoDiscountHours: MAX_AUTO_DISCOUNT_HOURS,
     discountUnitHours: DISCOUNT_UNIT_HOURS,
     requestedBy: input.requestedByUid,
@@ -612,11 +788,12 @@ async function createVisitorParkingJob(input: {
 }
 
 function publicVehicle(vehicle: ParkingVehicleDoc): ParkingDashboardVehicle {
+  const isVisitor = vehicle.ownerType === "visitor";
   return {
     vehicleId: vehicle.vehicleId,
     ownerType: vehicle.ownerType,
-    ownerName: vehicle.ownerName,
-    ownerPhone: vehicle.ownerPhone,
+    ownerName: isVisitor ? "방문객" : vehicle.ownerName,
+    ownerPhone: isVisitor ? "" : vehicle.ownerPhone,
     memberId: vehicle.memberId,
     staffId: vehicle.staffId,
     validDate: vehicle.validDate,
@@ -645,28 +822,6 @@ function timestampMs(value: unknown): number {
   if (typeof (value as { toMillis?: unknown }).toMillis === "function") return (value as FirebaseFirestore.Timestamp).toMillis();
   const date = new Date(String(value));
   return Number.isNaN(date.getTime()) ? 0 : date.getTime();
-}
-
-function parkingVehicleId(ownerType: ParkingOwnerType, ownerId: string, carNumber: string): string {
-  return `pv_${ownerType}_${safeId(ownerId) || hashSmall(ownerId)}_${hashSmall(carNumber)}`;
-}
-
-function normalizeCarNumber(value: unknown): string {
-  return stringValue(value).replace(/[\s-]/g, "").toUpperCase();
-}
-
-function validCarNumber(value: string): boolean {
-  return value.length >= 6 && value.length <= 12 && /\d{4}$/.test(value);
-}
-
-function carLast4(value: string): string {
-  return value.replace(/\D/g, "").slice(-4);
-}
-
-function maskCarNumber(value: string): string {
-  const normalized = normalizeCarNumber(value);
-  if (normalized.length <= 4) return normalized;
-  return `${normalized.slice(0, -4)} ${normalized.slice(-4)}`;
 }
 
 function hashSmall(value: string): string {

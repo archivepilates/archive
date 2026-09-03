@@ -2,6 +2,7 @@ import { logger } from "firebase-functions";
 import type { QueryDocumentSnapshot } from "firebase-admin/firestore";
 import { FieldValue } from "firebase-admin/firestore";
 import { db } from "../config/firebase";
+import type { BookingDoc } from "../types/models";
 import { errorMessage } from "../utils/errors";
 import {
   getIparkingAccountConfigs,
@@ -9,15 +10,22 @@ import {
   IparkingCarInfo,
   IparkingClient,
   IparkingDiscountProduct,
+  resolveIparkingAccountStoreSeq,
 } from "./iparkingClient";
+import {
+  PARKING_APPLY_AFTER_START_MINUTES,
+  PARKING_DISCOUNT_UNIT_HOURS,
+  PARKING_MAX_AUTO_DISCOUNT_HOURS,
+  resolveParkingDiscountPolicy,
+} from "./parkingDiscountPolicy";
+import { sendParkingNoEntryAlert } from "./parkingOperatorAlerts";
 
 const PARKING_DISCOUNT_JOBS = "parkingDiscountJobs";
 const DEFAULT_DISCOUNT_NAME = "2시간 할인";
 const DEFAULT_IPARKING_STOR_SEQ = Number(process.env.IPARKING_STOR_SEQ || "287798");
 const DEFAULT_IPARKING_PARK_SEQ = Number(process.env.IPARKING_PARK_SEQ || "5068");
-const DEFAULT_DISCOUNT_UNIT_HOURS = 2;
 const DEFAULT_REQUESTED_DISCOUNT_HOURS = 2;
-const MAX_AUTO_DISCOUNT_HOURS = 4;
+const BOOKING_FRESHNESS_MS = 24 * 60 * 60 * 1000;
 
 type ParkingDiscountJob = {
   status?: string;
@@ -33,12 +41,33 @@ type ParkingDiscountJob = {
   requestedDiscountHours?: number | string;
   maxAutoDiscountHours?: number | string;
   discountUnitHours?: number | string;
+  ownerType?: string;
   memberId?: string;
   memberName?: string;
+  staffId?: string;
+  staffName?: string;
+  ownerName?: string;
+  visitorName?: string;
   bookingId?: string;
+  lessonDate?: string;
+  lectureStartAt?: FirebaseFirestore.Timestamp | null;
   requestedBy?: string;
   source?: string;
+  operatorAlertStatus?: string;
+  operatorAlertType?: string;
 };
+
+export type ParkingCarSelectionInput = Pick<
+  ParkingDiscountJob,
+  | "ownerType"
+  | "memberId"
+  | "memberName"
+  | "staffId"
+  | "staffName"
+  | "carNumber"
+  | "expectedCarNumber"
+  | "expectedEnterDatetime"
+>;
 
 type JobStatus = "running" | "eligible" | "success" | "manual_review" | "error";
 
@@ -91,12 +120,47 @@ function publicProduct(product: IparkingDiscountProduct): Record<string, unknown
   };
 }
 
-function selectCar(job: ParkingDiscountJob, cars: IparkingCarInfo[]): IparkingCarInfo | null {
+function isStaffParkingJob(
+  job: Pick<ParkingDiscountJob, "ownerType" | "memberId" | "memberName" | "staffId" | "staffName">,
+): boolean {
+  const ownerType = String(job.ownerType || "")
+    .trim()
+    .toLowerCase();
+  if (ownerType) return ownerType === "staff";
+  return Boolean(job.staffId || job.staffName) && !Boolean(job.memberId || job.memberName);
+}
+
+function isMemberParkingJob(
+  job: Pick<ParkingDiscountJob, "ownerType" | "memberId" | "memberName" | "staffId" | "staffName">,
+): boolean {
+  const ownerType = String(job.ownerType || "")
+    .trim()
+    .toLowerCase();
+  if (ownerType) return ownerType === "member";
+  return Boolean(job.memberId || job.memberName);
+}
+
+function entryTimeMs(car: IparkingCarInfo): number {
+  const parsed = Date.parse(String(car.enter_datetime || "").replace(" ", "T"));
+  return Number.isFinite(parsed) ? parsed : 0;
+}
+
+export function selectParkingCarForJob(
+  job: ParkingCarSelectionInput,
+  cars: IparkingCarInfo[],
+): IparkingCarInfo | null {
   const expected = normalizeCarNumber(job.expectedCarNumber || job.carNumber);
   const expectedMinute = normalizeMinute(job.expectedEnterDatetime);
   let candidates = cars;
   if (expected.length > 4) {
     candidates = candidates.filter((car) => normalizeCarNumber(car.car_number) === expected);
+  }
+  if (isStaffParkingJob(job) || isMemberParkingJob(job)) {
+    if (candidates.length === 1) return candidates[0];
+    if (expected.length > 4 && candidates.length > 1) {
+      return [...candidates].sort((left, right) => entryTimeMs(right) - entryTimeMs(left))[0] || null;
+    }
+    return null;
   }
   if (expectedMinute) {
     candidates = candidates.filter((car) => normalizeMinute(car.enter_datetime) === expectedMinute);
@@ -118,12 +182,6 @@ function numericSetting(value: unknown, fallback: number, label: string): number
     throw new Error(`${label} 설정값이 올바르지 않습니다`);
   }
   return numberValue;
-}
-
-function boundedDiscountHours(value: unknown, fallback: number, max: number): number {
-  const numberValue = Number(value || fallback);
-  if (!Number.isFinite(numberValue) || numberValue <= 0) return fallback;
-  return Math.min(Math.ceil(numberValue), max);
 }
 
 function elapsedMetric(name: string, startedAt: number): Record<string, unknown> {
@@ -153,12 +211,20 @@ async function searchCarsAcrossAccounts(params: {
     try {
       const loginStartedAt = Date.now();
       await client.login();
-      metrics.push({ account: account.label, ...elapsedMetric("login", loginStartedAt) });
-
-      const searchStartedAt = Date.now();
-      const cars = await client.searchCars(params);
+      const accountStoreSeq = resolveIparkingAccountStoreSeq(account, params.storSeq);
       metrics.push({
         account: account.label,
+        role: account.role,
+        storeSeq: accountStoreSeq,
+        ...elapsedMetric("login", loginStartedAt),
+      });
+
+      const searchStartedAt = Date.now();
+      const cars = await client.searchCars({ ...params, storSeq: accountStoreSeq });
+      metrics.push({
+        account: account.label,
+        role: account.role,
+        storeSeq: accountStoreSeq,
         count: cars.length,
         ...elapsedMetric("car_search", searchStartedAt),
       });
@@ -238,31 +304,58 @@ async function applyDiscountAcrossAccounts(params: {
     try {
       const loginStartedAt = Date.now();
       await client.login();
-      params.metrics.push({ account: account.label, ...elapsedMetric("login_for_apply", loginStartedAt) });
+      const accountStoreSeq = resolveIparkingAccountStoreSeq(account, params.storSeq);
+      params.metrics.push({
+        account: account.label,
+        role: account.role,
+        storeSeq: accountStoreSeq,
+        ...elapsedMetric("login_for_apply", loginStartedAt),
+      });
 
       const productStartedAt = Date.now();
       const accountProducts = await client.listProducts({
-        storSeq: params.storSeq,
+        storSeq: accountStoreSeq,
         parkSeq: params.parkSeq,
         inotSeq: Number(params.car.inot_seq),
       });
-      params.metrics.push({ account: account.label, ...elapsedMetric("product_list", productStartedAt) });
+      params.metrics.push({
+        account: account.label,
+        role: account.role,
+        storeSeq: accountStoreSeq,
+        ...elapsedMetric("product_list", productStartedAt),
+      });
       const product = selectProduct(accountProducts, params.discountName);
       if (!product) {
         attempts.push({
           account: account.label,
+          role: account.role,
+          storeSeq: accountStoreSeq,
           status: "skipped",
           reason: "discount_ticket_not_found",
         });
         continue;
       }
-      products.push({ account: account.label, ...publicProduct(product) });
+      products.push({ account: account.label, role: account.role, ...publicProduct(product) });
 
-      const resolvedStorSeq = Number(product.stor_seq || params.storSeq);
+      const productStoreSeq = Number(product.stor_seq || accountStoreSeq);
+      if (productStoreSeq !== accountStoreSeq) {
+        attempts.push({
+          account: account.label,
+          role: account.role,
+          storeSeq: accountStoreSeq,
+          status: "skipped",
+          reason: "product_store_mismatch",
+          productStoreSeq,
+        });
+        continue;
+      }
+      const resolvedStorSeq = accountStoreSeq;
       const resolvedParkSeq = Number(product.park_seq || params.parkSeq);
       if (!Number.isFinite(resolvedStorSeq) || !Number.isFinite(resolvedParkSeq)) {
         attempts.push({
           account: account.label,
+          role: account.role,
+          storeSeq: accountStoreSeq,
           status: "skipped",
           reason: "invalid_product_location",
         });
@@ -283,6 +376,8 @@ async function applyDiscountAcrossAccounts(params: {
         alreadyAppliedHours += params.unitHours;
         attempts.push({
           account: account.label,
+          role: account.role,
+          storeSeq: resolvedStorSeq,
           status: "already_applied",
           hours: params.unitHours,
           product: publicProduct(product),
@@ -294,6 +389,8 @@ async function applyDiscountAcrossAccounts(params: {
       if (!params.shouldApply) {
         attempts.push({
           account: account.label,
+          role: account.role,
+          storeSeq: resolvedStorSeq,
           status: "eligible",
           hours: params.unitHours,
           product: publicProduct(product),
@@ -312,17 +409,35 @@ async function applyDiscountAcrossAccounts(params: {
         memo: `ARCHIVE PILATES 자동 주차등록 ${params.unitHours}시간`,
       });
       params.metrics.push({ account: account.label, ...elapsedMetric("apply_discount", applyStartedAt) });
+
+      const verifyStartedAt = Date.now();
+      const appliedAfter = await client.listAppliedDiscounts({
+        storSeq: resolvedStorSeq,
+        parkSeq: resolvedParkSeq,
+        inotSeq: Number(params.car.inot_seq),
+        searchOption: 1,
+      });
+      params.metrics.push({ account: account.label, ...elapsedMetric("applied_verify", verifyStartedAt) });
+      if (!appliedAfter.some((item) => item.discount_key === product.discount_key)) {
+        throw new IparkingApiError(`${account.label} 할인 적용 결과를 확인할 수 없습니다`, undefined, true);
+      }
+
       appliedHours += params.unitHours;
       attempts.push({
         account: account.label,
+        role: account.role,
+        storeSeq: resolvedStorSeq,
         status: "applied",
         hours: params.unitHours,
         product: publicProduct(product),
-        appliedDiscounts: applied,
+        appliedDiscountsBefore: applied,
+        appliedDiscountsAfter: appliedAfter,
       });
     } catch (error) {
       attempts.push({
         account: account.label,
+        role: account.role,
+        storeSeq: resolveIparkingAccountStoreSeq(account, params.storSeq),
         status: "error",
         message: errorMessage(error),
         retryable: error instanceof IparkingApiError ? error.retryable : false,
@@ -347,27 +462,25 @@ export async function processParkingDiscountJobSnapshot(snap: QueryDocumentSnaps
   const last4 = String(job.carNumberLast4 || carLast4(rawCarNumber));
   const storSeq = numericSetting(job.storSeq, DEFAULT_IPARKING_STOR_SEQ, "iParking storSeq");
   const defaultParkSeq = numericSetting(job.parkSeq, DEFAULT_IPARKING_PARK_SEQ, "iParking parkSeq");
-  const maxAutoDiscountHours = boundedDiscountHours(job.maxAutoDiscountHours, MAX_AUTO_DISCOUNT_HOURS, MAX_AUTO_DISCOUNT_HOURS);
-  const requestedDiscountHours = boundedDiscountHours(
-    job.requestedDiscountHours,
-    DEFAULT_REQUESTED_DISCOUNT_HOURS,
-    maxAutoDiscountHours,
-  );
-  const discountUnitHours = boundedDiscountHours(job.discountUnitHours, DEFAULT_DISCOUNT_UNIT_HOURS, maxAutoDiscountHours);
+  const parkingPolicy = resolveParkingDiscountPolicy(job);
+  const { requestedDiscountHours, maxAutoDiscountHours, discountUnitHours } = parkingPolicy;
   const shouldApply = job.dryRun === false;
 
   try {
     if (!/^\d{4}$/.test(last4)) throw new Error("차량번호 뒤 4자리가 필요합니다");
-    await ref.set(
-      {
-        status: "running",
-        startedAt: FieldValue.serverTimestamp(),
-        updatedAt: FieldValue.serverTimestamp(),
-        attempts: FieldValue.increment(1),
-        lastError: null,
-      },
-      { merge: true },
-    );
+    const claim = await claimCurrentParkingJob(ref, job, {
+      parkingPolicy: parkingPolicy.policy,
+      requestedDiscountHours,
+      maxAutoDiscountHours,
+      discountUnitHours,
+    });
+    if (!claim.claimed) {
+      logger.info("parking discount job stopped before iParking lookup", {
+        jobId: snap.id,
+        reason: claim.reason,
+      });
+      return;
+    }
 
     const {
       client,
@@ -388,16 +501,27 @@ export async function processParkingDiscountJobSnapshot(snap: QueryDocumentSnaps
         lastError: "입차 기록을 찾지 못했습니다",
         result: { carNumberLast4: last4, metrics, totalMs: Date.now() - requestedAt },
       });
+      await notifyNoEntryOnce(ref, snap.id, job, last4, requestedDiscountHours);
       return;
     }
     await ref.set({ accountLabel, updatedAt: FieldValue.serverTimestamp() }, { merge: true });
 
-    const car = selectCar(job, cars);
+    const car = selectParkingCarForJob(job, cars);
     if (!car) {
+      const staffJob = isStaffParkingJob(job);
+      const memberJob = isMemberParkingJob(job);
       await setJobStatus(ref, {
         status: "manual_review",
-        reason: "multiple_or_mismatched_entries",
-        lastError: "차량 후보가 여러 건이거나 예상 차량/입차시각과 다릅니다",
+        reason: staffJob
+          ? "staff_vehicle_not_in_parking"
+          : memberJob
+            ? "member_vehicle_not_in_parking"
+            : "multiple_or_mismatched_entries",
+        lastError: staffJob
+          ? "등록된 직원 차량의 현재 입차 기록을 찾지 못했습니다"
+          : memberJob
+            ? "등록된 회원 차량의 현재 입차 기록을 찾지 못했습니다"
+            : "차량 후보가 여러 건이거나 예상 차량/입차시각과 다릅니다",
         result: { carNumberLast4: last4, candidates: cars.map(publicCar), metrics, totalMs: Date.now() - requestedAt },
       });
       return;
@@ -473,6 +597,171 @@ export async function processParkingDiscountJobSnapshot(snap: QueryDocumentSnaps
   }
 }
 
+async function claimCurrentParkingJob(
+  ref: FirebaseFirestore.DocumentReference,
+  job: ParkingDiscountJob,
+  policy: {
+    parkingPolicy: string;
+    requestedDiscountHours: number;
+    maxAutoDiscountHours: number;
+    discountUnitHours: number;
+  },
+): Promise<{ claimed: boolean; reason: string }> {
+  return await db.runTransaction(async (tx) => {
+    const currentSnap = await tx.get(ref);
+    const current = currentSnap.data() as ParkingDiscountJob | undefined;
+    if (!current || (current.status && current.status !== "pending")) {
+      return { claimed: false, reason: `job_status_${current?.status || "missing"}` };
+    }
+
+    let bookingIssue = "";
+    const bookingId = String(current.bookingId || job.bookingId || "");
+    let bookingRef: FirebaseFirestore.DocumentReference | null = null;
+    if (bookingId) {
+      bookingRef = db.collection("bookings").doc(bookingId);
+      const bookingSnap = await tx.get(bookingRef);
+      bookingIssue = currentParkingBookingIssue(current, bookingSnap.data() as BookingDoc | undefined);
+    }
+
+    if (bookingIssue) {
+      tx.set(
+        ref,
+        {
+          status: "manual_review",
+          reason: "booking_not_current",
+          lastError: bookingIssue,
+          retryable: false,
+          completedAt: FieldValue.serverTimestamp(),
+          updatedAt: FieldValue.serverTimestamp(),
+        },
+        { merge: true },
+      );
+      if (bookingRef) {
+        tx.set(
+          bookingRef,
+          {
+            parkingStatus: "manual_review",
+            parkingReason: "booking_not_current",
+            parkingLastError: bookingIssue,
+            parkingUpdatedAt: FieldValue.serverTimestamp(),
+          },
+          { merge: true },
+        );
+      }
+      return { claimed: false, reason: bookingIssue };
+    }
+
+    tx.set(
+      ref,
+      {
+        status: "running",
+        startedAt: FieldValue.serverTimestamp(),
+        updatedAt: FieldValue.serverTimestamp(),
+        attempts: FieldValue.increment(1),
+        lastError: null,
+        ...policy,
+      },
+      { merge: true },
+    );
+    return { claimed: true, reason: "" };
+  });
+}
+
+export function currentParkingBookingIssue(
+  job: ParkingDiscountJob,
+  booking: BookingDoc | undefined,
+  nowMs = Date.now(),
+): string {
+  if (!job.bookingId) return "";
+  if (!booking) return "연결 예약을 찾을 수 없습니다";
+  if (booking.appStatus !== "reserved") return `현재 예약 상태가 ${booking.appStatus || "unknown"}입니다`;
+  if (job.lessonDate && booking.lectureDate !== job.lessonDate) return "수업일이 변경되었습니다";
+  const jobStartMs = timestampMillis(job.lectureStartAt);
+  const bookingStartMs = timestampMillis(booking.lectureStartAt);
+  if (!jobStartMs || !bookingStartMs || jobStartMs !== bookingStartMs) return "수업 시작시각이 변경되었습니다";
+  if (nowMs < bookingStartMs + PARKING_APPLY_AFTER_START_MINUTES * 60 * 1000) {
+    return `수업 시작 ${PARKING_APPLY_AFTER_START_MINUTES}분 전에는 입차 조회를 실행하지 않습니다`;
+  }
+  const syncedAtMs = Math.max(
+    timestampMillis(booking.sourceUpdatedAt),
+    timestampMillis(booking.syncedAt),
+    timestampMillis(booking.updatedAt),
+  );
+  if (!syncedAtMs || nowMs - syncedAtMs > BOOKING_FRESHNESS_MS) return "StudioMate 예약 데이터가 24시간 이내 동기화되지 않았습니다";
+  return "";
+}
+
+function timestampMillis(value: unknown): number {
+  if (!value) return 0;
+  if (typeof (value as { toMillis?: unknown }).toMillis === "function") {
+    return (value as FirebaseFirestore.Timestamp).toMillis();
+  }
+  const parsed = Date.parse(String(value));
+  return Number.isFinite(parsed) ? parsed : 0;
+}
+
+async function notifyNoEntryOnce(
+  ref: FirebaseFirestore.DocumentReference,
+  jobId: string,
+  job: ParkingDiscountJob,
+  carNumberLast4: string,
+  requestedDiscountHours: number,
+): Promise<void> {
+  const claimed = await db.runTransaction(async (tx) => {
+    const current = await tx.get(ref);
+    const currentJob = current.data() as ParkingDiscountJob | undefined;
+    if (currentJob?.operatorAlertStatus || currentJob?.operatorAlertType) return false;
+    tx.set(
+      ref,
+      {
+        operatorAlertType: "no_entry",
+        operatorAlertStatus: "sending",
+        operatorAlertAttemptedAt: FieldValue.serverTimestamp(),
+        updatedAt: FieldValue.serverTimestamp(),
+      },
+      { merge: true },
+    );
+    return true;
+  });
+  if (!claimed) return;
+
+  try {
+    await sendParkingNoEntryAlert({
+      jobId,
+      lessonDate: job.lessonDate,
+      lectureStartAt: job.lectureStartAt,
+      memberName: job.memberName,
+      staffName: job.staffName,
+      ownerName: job.ownerName,
+      visitorName: job.visitorName,
+      carNumberLast4,
+      requestedDiscountHours,
+    });
+    await ref.set(
+      {
+        operatorAlertStatus: "sent",
+        operatorAlertSentAt: FieldValue.serverTimestamp(),
+        operatorAlertLastError: null,
+        updatedAt: FieldValue.serverTimestamp(),
+      },
+      { merge: true },
+    );
+  } catch (err) {
+    logger.error("parking no-entry alert email failed", {
+      jobId,
+      message: errorMessage(err),
+    });
+    await ref.set(
+      {
+        operatorAlertStatus: "failed",
+        operatorAlertLastError: errorMessage(err),
+        updatedAt: FieldValue.serverTimestamp(),
+      },
+      { merge: true },
+    );
+  }
+}
+
 export async function createParkingDiscountJobForTest(data: ParkingDiscountJob): Promise<{ jobId: string }> {
   const ref = await db.collection(PARKING_DISCOUNT_JOBS).add({
     ...data,
@@ -480,8 +769,8 @@ export async function createParkingDiscountJobForTest(data: ParkingDiscountJob):
     dryRun: data.dryRun ?? true,
     discountName: data.discountName || DEFAULT_DISCOUNT_NAME,
     requestedDiscountHours: data.requestedDiscountHours || DEFAULT_REQUESTED_DISCOUNT_HOURS,
-    maxAutoDiscountHours: data.maxAutoDiscountHours || MAX_AUTO_DISCOUNT_HOURS,
-    discountUnitHours: data.discountUnitHours || DEFAULT_DISCOUNT_UNIT_HOURS,
+    maxAutoDiscountHours: data.maxAutoDiscountHours || PARKING_MAX_AUTO_DISCOUNT_HOURS,
+    discountUnitHours: data.discountUnitHours || PARKING_DISCOUNT_UNIT_HOURS,
     source: data.source || "manual_test",
     createdAt: FieldValue.serverTimestamp(),
     updatedAt: FieldValue.serverTimestamp(),

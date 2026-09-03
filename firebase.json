@@ -59,6 +59,21 @@
         "firebase-debug.log",
         "firebase-debug.*.log"
       ]
+    },
+    {
+      "source": "firebase/function-codebases/social",
+      "codebase": "functions-social",
+      "runtime": "nodejs22",
+      "predeploy": [
+        "node scripts/prepare-functions-codebase.mjs \"$RESOURCE_DIR\"",
+        "node firebase/kangsain-functions/functions/node_modules/typescript/bin/tsc -p \"$RESOURCE_DIR/tsconfig.json\""
+      ],
+      "ignore": [
+        "node_modules",
+        ".git",
+        "firebase-debug.log",
+        "firebase-debug.*.log"
+      ]
     }
   ],
   "firestore": {
@@ -68,6 +83,11 @@
   "hosting": [
     {
       "site": "archive-pilates",
+      "predeploy": [
+        "node scripts/validate-release-branch-state.mjs --require-origin-main",
+        "npm run validate:onsite-welcome",
+        "npm run validate:archive-core-hosting"
+      ],
       "public": ".",
       "headers": [
         {
@@ -131,7 +151,21 @@
           ]
         },
         {
+          "source": "/archivein/parking/**",
+          "headers": [
+            { "key": "Cache-Control", "value": "no-cache, no-store, must-revalidate" },
+            { "key": "Referrer-Policy", "value": "no-referrer" },
+            { "key": "X-Robots-Tag", "value": "noindex, nofollow, noarchive" }
+          ]
+        },
+        {
           "source": "/archivein/instructor-evaluation/**",
+          "headers": [
+            { "key": "Cache-Control", "value": "no-cache, no-store, must-revalidate" }
+          ]
+        },
+        {
+          "source": "/archivein/method/**",
           "headers": [
             { "key": "Cache-Control", "value": "no-cache, no-store, must-revalidate" }
           ]
@@ -219,6 +253,13 @@
           }
         },
         {
+          "source": "/archivein/api/privateSurveySubmit",
+          "function": {
+            "functionId": "ingestPrivateSurveyResponse",
+            "region": "asia-northeast3"
+          }
+        },
+        {
           "source": "/archivein/api/privateChart",
           "function": {
             "functionId": "privateLessonChartApi",
@@ -247,6 +288,13 @@
           }
         },
         {
+          "source": "/archivein/api/methodCueCardReview",
+          "function": {
+            "functionId": "methodCueCardReview",
+            "region": "asia-northeast3"
+          }
+        },
+        {
           "source": "/archivein/api/notion/privateLessonReportWebhook",
           "function": {
             "functionId": "notionPrivateLessonReportWebhook",
@@ -261,8 +309,45 @@
           }
         },
         {
+          "source": "/archivein/api/recommendedMealSurvey",
+          "function": {
+            "functionId": "recommendedMealSurveyApi",
+            "region": "asia-northeast3"
+          }
+        },
+        {
+          "source": "/archivein/api/recommendedMealPlan",
+          "function": {
+            "functionId": "recommendedMealPlanApi",
+            "region": "asia-northeast3"
+          }
+        },
+        {
+          "source": "/archivein/api/parkingPreRegistration",
+          "function": {
+            "functionId": "instructorLessonParkingPreRegistrationApi",
+            "region": "asia-northeast3"
+          }
+        },
+        {
           "source": "/archivein/private-chart/**",
           "destination": "/archivein/private-chart/index.html"
+        },
+        {
+          "source": "/archivein/privateSurvey/**",
+          "destination": "/archivein/privateSurvey/index.html"
+        },
+        {
+          "source": "/archivein/recommendedMealSurvey/**",
+          "destination": "/archivein/recommendedMealSurvey/index.html"
+        },
+        {
+          "source": "/archivein/recommendedMealPlan/**",
+          "destination": "/archivein/recommendedMealPlan/index.html"
+        },
+        {
+          "source": "/archivein/parking/**",
+          "destination": "/archivein/parking/index.html"
         },
         {
           "source": "/core/**",
@@ -287,6 +372,7 @@
     {
       "site": "archive-pilates-core",
       "predeploy": [
+        "node scripts/validate-release-branch-state.mjs --require-origin-main",
         "npm run validate:archive-core-hosting"
       ],
       "public": "core",
@@ -310,6 +396,15 @@
           ]
         },
         {
+          "source": "/**/",
+          "headers": [
+            {
+              "key": "Cache-Control",
+              "value": "no-cache, no-store, must-revalidate"
+            }
+          ]
+        },
+        {
           "source": "/**/*.html",
           "headers": [
             {
@@ -319,11 +414,47 @@
           ]
         },
         {
-          "source": "/**",
+          "source": "/release.json",
           "headers": [
             {
               "key": "Cache-Control",
               "value": "no-cache, no-store, must-revalidate"
+            }
+          ]
+        },
+        {
+          "source": "/site.webmanifest",
+          "headers": [
+            {
+              "key": "Cache-Control",
+              "value": "no-cache, no-store, must-revalidate"
+            }
+          ]
+        },
+        {
+          "source": "/**/*.js",
+          "headers": [
+            {
+              "key": "Cache-Control",
+              "value": "public, max-age=0, must-revalidate"
+            }
+          ]
+        },
+        {
+          "source": "/**/*.css",
+          "headers": [
+            {
+              "key": "Cache-Control",
+              "value": "public, max-age=0, must-revalidate"
+            }
+          ]
+        },
+        {
+          "source": "/**/*.{png,jpg,jpeg,gif,webp,svg,ico,woff,woff2,ttf,otf}",
+          "headers": [
+            {
+              "key": "Cache-Control",
+              "value": "public, max-age=3600, stale-while-revalidate=86400"
             }
           ]
         }
@@ -426,7 +557,35 @@
           ]
         },
         {
+          "source": "/parking/**",
+          "headers": [
+            { "key": "Cache-Control", "value": "no-cache, no-store, must-revalidate" },
+            { "key": "Referrer-Policy", "value": "no-referrer" },
+            { "key": "X-Robots-Tag", "value": "noindex, nofollow, noarchive" }
+          ]
+        },
+        {
+          "source": "/recommendedMealSurvey/**",
+          "headers": [
+            { "key": "Cache-Control", "value": "no-cache, no-store, must-revalidate" }
+          ]
+        },
+        {
+          "source": "/recommendedMealPlan/**",
+          "headers": [
+            { "key": "Cache-Control", "value": "no-cache, no-store, must-revalidate" },
+            { "key": "Referrer-Policy", "value": "no-referrer" },
+            { "key": "X-Robots-Tag", "value": "noindex, nofollow, noarchive" }
+          ]
+        },
+        {
           "source": "/instructor-evaluation/**",
+          "headers": [
+            { "key": "Cache-Control", "value": "no-cache, no-store, must-revalidate" }
+          ]
+        },
+        {
+          "source": "/method/**",
           "headers": [
             { "key": "Cache-Control", "value": "no-cache, no-store, must-revalidate" }
           ]
@@ -443,6 +602,13 @@
       "rewrites": [
         {
           "source": "/api/groupSurveySubmit",
+          "function": {
+            "functionId": "ingestPrivateSurveyResponse",
+            "region": "asia-northeast3"
+          }
+        },
+        {
+          "source": "/api/privateSurveySubmit",
           "function": {
             "functionId": "ingestPrivateSurveyResponse",
             "region": "asia-northeast3"
@@ -477,6 +643,13 @@
           }
         },
         {
+          "source": "/api/methodCueCardReview",
+          "function": {
+            "functionId": "methodCueCardReview",
+            "region": "asia-northeast3"
+          }
+        },
+        {
           "source": "/api/notion/privateLessonReportWebhook",
           "function": {
             "functionId": "notionPrivateLessonReportWebhook",
@@ -491,8 +664,45 @@
           }
         },
         {
+          "source": "/api/recommendedMealSurvey",
+          "function": {
+            "functionId": "recommendedMealSurveyApi",
+            "region": "asia-northeast3"
+          }
+        },
+        {
+          "source": "/api/recommendedMealPlan",
+          "function": {
+            "functionId": "recommendedMealPlanApi",
+            "region": "asia-northeast3"
+          }
+        },
+        {
+          "source": "/api/parkingPreRegistration",
+          "function": {
+            "functionId": "instructorLessonParkingPreRegistrationApi",
+            "region": "asia-northeast3"
+          }
+        },
+        {
           "source": "/private-chart/**",
           "destination": "/private-chart/index.html"
+        },
+        {
+          "source": "/privateSurvey/**",
+          "destination": "/privateSurvey/index.html"
+        },
+        {
+          "source": "/recommendedMealSurvey/**",
+          "destination": "/recommendedMealSurvey/index.html"
+        },
+        {
+          "source": "/recommendedMealPlan/**",
+          "destination": "/recommendedMealPlan/index.html"
+        },
+        {
+          "source": "/parking/**",
+          "destination": "/parking/index.html"
         },
         {
           "source": "/api/inbody/webhook",

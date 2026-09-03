@@ -7,6 +7,7 @@ import {
   NEW_MEMBER_ALIMTALK_WINDOW_DAYS,
   PRIVATE_SURVEY_ALIMTALK_START_DATE,
 } from "./templates";
+import { INSTRUCTOR_LESSON_PARKING_BUTTON_URL } from "../parking/instructorLessonParkingContract";
 
 export interface AlimtalkTemplateTargetRule {
   type: AlimtalkCandidateType;
@@ -34,12 +35,14 @@ export const SOLAPI_BUTTON_URL_MAX_LENGTH = 100;
 export const SHORT_LINK_BUTTON_URL_TEMPLATE = "https://in.archivepilates.com/s/#{링크ID}/";
 export const SURVEY_DETAIL_BUTTON_URL_TEMPLATE =
   "https://in.archivepilates.com/privateSurveyResponseView?id=#{설문ID}&token=#{접근토큰}";
-export const PRIVATE_SURVEY_BUTTON_URL_TEMPLATE =
-  "https://in.archivepilates.com/privateSurvey?id=#{설문ID}&token=#{접근토큰}";
 export const GROUP_SURVEY_BUTTON_URL_TEMPLATE =
   "https://in.archivepilates.com/groupSurvey?id=#{설문ID}&token=#{접근토큰}";
 export const METHOD_MATERIAL_BUTTON_URL_TEMPLATE = "https://in.archivepilates.com/method/#{관리번호}";
+export const METHOD_ASSIGNMENT_BUTTON_URL_TEMPLATE = "https://in.archivepilates.com/method/#{관리번호}/assignment";
+export const METHOD_CALENDAR_BUTTON_URL_TEMPLATE = "https://in.archivepilates.com/method/#{관리번호}/calendar/";
+export const INSTRUCTOR_LESSON_VISIT_BUTTON_URL = "https://archivepilates.notion.site/visitin";
 export const PRIVATE_REPORT_BUTTON_URL_TEMPLATE = "https://in.archivepilates.com/s/#{리포트링크ID}/";
+export const RECOMMENDED_MEAL_REPORT_BUTTON_URL_TEMPLATE = "https://in.archivepilates.com/s/#{리포트링크ID}/";
 export const PRICING_INFO_BUTTON_URL_TEMPLATE = "https://archivepilates.notion.site/";
 
 export const ALIMTALK_TEMPLATE_TARGET_RULES: Partial<Record<AlimtalkCandidateType, AlimtalkTemplateTargetRule>> = {
@@ -146,6 +149,68 @@ export const ALIMTALK_TEMPLATE_TARGET_RULES: Partial<Record<AlimtalkCandidateTyp
       "대량 발송 또는 홍보성 일괄 발송",
     ],
   },
+  recommended_meal_survey: {
+    type: "recommended_meal_survey",
+    templateCode: ALIMTALK_TEMPLATES.recommended_meal_survey.code,
+    templateLabel: ALIMTALK_TEMPLATES.recommended_meal_survey.label,
+    sourceDatePolicy: "manual",
+    requiresApprovedTemplate: true,
+    requiresMemberPhone: true,
+    buttonUrlRules: [
+      {
+        label: "추천식단 설문 작성 버튼",
+        template: SHORT_LINK_BUTTON_URL_TEMPLATE,
+        maxLength: SOLAPI_BUTTON_URL_MAX_LENGTH,
+      },
+      {
+        label: "추천식단 확인 버튼",
+        template: RECOMMENDED_MEAL_REPORT_BUTTON_URL_TEMPLATE,
+        maxLength: SOLAPI_BUTTON_URL_MAX_LENGTH,
+      },
+    ],
+    targetRules: [
+      "ARCHIVE CORE에서 운영자가 회원 전화번호와 이름을 확인한 단건 발송",
+      "memberProfiles 또는 memberContactIndex의 전화번호 기준 회원 매칭",
+      "추천식단 전용 요청과 설문·리포트 짧은 링크가 있음",
+      "최근 30일 내 같은 회원에게 동일 설문 발송 이력 없음",
+    ],
+    exclusionRules: [
+      "회원 전화번호 또는 회원카드 매칭 없음",
+      "같은 전화번호에 서로 다른 이름의 회원이 있어 운영자 확인 필요",
+      "추천식단 설문 짧은 링크 없음",
+      "추천식단 리포트 짧은 링크 없음",
+      "최근 30일 내 같은 회원에게 동일 설문 발송 이력 있음",
+      "SOLAPI 미승인 템플릿",
+    ],
+  },
+  recommended_meal_report: {
+    type: "recommended_meal_report",
+    templateCode: ALIMTALK_TEMPLATES.recommended_meal_report.code,
+    templateLabel: ALIMTALK_TEMPLATES.recommended_meal_report.label,
+    sourceDatePolicy: "manual",
+    requiresApprovedTemplate: true,
+    requiresMemberPhone: true,
+    buttonUrlRules: [
+      {
+        label: "추천식단 보기 버튼",
+        template: SHORT_LINK_BUTTON_URL_TEMPLATE,
+        maxLength: SOLAPI_BUTTON_URL_MAX_LENGTH,
+      },
+    ],
+    targetRules: [
+      "ARCHIVE CORE에서 운영자가 설문과 InBody를 검토하고 최종 식단을 승인",
+      "승인된 revision과 발송 candidate의 revision이 일치",
+      "추천식단 전용 짧은 링크가 있음",
+      "같은 추천식단 reportId는 1회만 발송",
+    ],
+    exclusionRules: [
+      "운영자 검토 미완료 또는 주의 응답 미확인",
+      "승인 후 식단 내용이 변경됨",
+      "추천식단 짧은 링크 없음",
+      "동일 reportId 발송 이력 있음",
+      "SOLAPI 미승인 템플릿",
+    ],
+  },
   private_survey: {
     type: "private_survey",
     templateCode: ALIMTALK_TEMPLATES.private_survey.code,
@@ -157,11 +222,6 @@ export const ALIMTALK_TEMPLATE_TARGET_RULES: Partial<Record<AlimtalkCandidateTyp
     buttonUrlRules: [
       {
         label: "프라이빗 사전설문 작성 버튼",
-        template: PRIVATE_SURVEY_BUTTON_URL_TEMPLATE,
-        maxLength: SOLAPI_BUTTON_URL_MAX_LENGTH,
-      },
-      {
-        label: "프라이빗 사전설문 작성 버튼",
         template: SHORT_LINK_BUTTON_URL_TEMPLATE,
         maxLength: SOLAPI_BUTTON_URL_MAX_LENGTH,
       },
@@ -170,7 +230,7 @@ export const ALIMTALK_TEMPLATE_TARGET_RULES: Partial<Record<AlimtalkCandidateTyp
       "오늘부터 다음 주 일요일까지 예정된 첫 프라이빗 예약이 있음",
       "예약이 강사레슨이 아님",
       "자체설문 요청 문서와 짧은 링크가 있음",
-      "최근 1년 내 프라이빗 사전설문 제출 이력이 없음",
+      "과거 프라이빗 사전설문 제출 이력이 없음(회원별 영구 1회)",
       "과거 프라이빗 출석 완료 이력이 없음",
     ],
     exclusionRules: [
@@ -179,7 +239,7 @@ export const ALIMTALK_TEMPLATE_TARGET_RULES: Partial<Record<AlimtalkCandidateTyp
       "프라이빗 예약 없음",
       "그룹 또는 강사레슨 예약",
       "짧은 링크 생성 실패 또는 버튼 URL 치환 후 100자 초과",
-      "최근 1년 내 프라이빗 사전설문 제출 이력 있음",
+      "과거 프라이빗 사전설문 제출 이력 있음",
       "과거 프라이빗 출석 완료 이력 있음",
       "SOLAPI 미승인 템플릿",
     ],
@@ -233,14 +293,14 @@ export const ALIMTALK_TEMPLATE_TARGET_RULES: Partial<Record<AlimtalkCandidateTyp
     targetRules: [
       "활성 그룹 수강권",
       "만료일이 발송 기준일로부터 14일 이내",
-      "다른 현재 또는 사용예정 유효 수업 수강권 없음",
+      "다른 현재 또는 사용예정 동일 유형 유효 수강권 없음",
     ],
     exclusionRules: [
       "알림톡 제외 회원",
       "전화번호 없음",
       "프라이빗 또는 강사레슨 수강권",
       "수업권이 아닌 상품",
-      "다른 현재 또는 사용예정 유효 수업 수강권 보유",
+      "다른 현재 또는 사용예정 동일 유형 유효 수강권 보유",
       "만료일이 지났거나 14일 초과",
       "동일 수강권 기간 안내 30일 내 발송 이력 있음",
       "SOLAPI 미승인 템플릿",
@@ -253,13 +313,13 @@ export const ALIMTALK_TEMPLATE_TARGET_RULES: Partial<Record<AlimtalkCandidateTyp
     sourceDatePolicy: "today",
     requiresApprovedTemplate: true,
     requiresMemberPhone: true,
-    targetRules: ["활성 그룹 횟수권", "잔여횟수 1-4회", "다른 현재 또는 사용예정 유효 수업 수강권 없음"],
+    targetRules: ["활성 그룹 횟수권", "잔여횟수 1-4회", "다른 현재 또는 사용예정 동일 유형 유효 수강권 없음"],
     exclusionRules: [
       "알림톡 제외 회원",
       "전화번호 없음",
       "프라이빗 또는 강사레슨 수강권",
       "수업권이 아닌 상품",
-      "다른 현재 또는 사용예정 유효 수업 수강권 보유",
+      "다른 현재 또는 사용예정 동일 유형 유효 수강권 보유",
       "잔여횟수 0회 또는 5회 이상",
       "동일 수강권 횟수 안내 30일 내 발송 이력 있음",
       "SOLAPI 미승인 템플릿",
@@ -272,13 +332,13 @@ export const ALIMTALK_TEMPLATE_TARGET_RULES: Partial<Record<AlimtalkCandidateTyp
     sourceDatePolicy: "today",
     requiresApprovedTemplate: true,
     requiresMemberPhone: true,
-    targetRules: ["활성 프라이빗 횟수권", "잔여횟수 1-3회", "다른 현재 또는 사용예정 유효 수업 수강권 없음"],
+    targetRules: ["활성 프라이빗·듀엣 횟수권", "잔여횟수 1-3회", "다른 현재 또는 사용예정 동일 유형 유효 수강권 없음"],
     exclusionRules: [
       "알림톡 제외 회원",
       "전화번호 없음",
       "그룹 또는 강사레슨 수강권",
       "수업권이 아닌 상품",
-      "다른 현재 또는 사용예정 유효 수업 수강권 보유",
+      "다른 현재 또는 사용예정 동일 유형 유효 수강권 보유",
       "잔여횟수 0회 또는 4회 이상",
       "동일 수강권 횟수 안내 30일 내 발송 이력 있음",
       "SOLAPI 미승인 템플릿",
@@ -294,14 +354,14 @@ export const ALIMTALK_TEMPLATE_TARGET_RULES: Partial<Record<AlimtalkCandidateTyp
     targetRules: [
       "활성 프라이빗 수강권",
       "만료일이 발송 기준일로부터 14일 이내",
-      "다른 현재 또는 사용예정 유효 수업 수강권 없음",
+      "다른 현재 또는 사용예정 동일 유형 유효 수강권 없음",
     ],
     exclusionRules: [
       "알림톡 제외 회원",
       "전화번호 없음",
       "그룹 또는 강사레슨 수강권",
       "수업권이 아닌 상품",
-      "다른 현재 또는 사용예정 유효 수업 수강권 보유",
+      "다른 현재 또는 사용예정 동일 유형 유효 수강권 보유",
       "만료일이 지났거나 14일 초과",
       "동일 수강권 기간 안내 30일 내 발송 이력 있음",
       "SOLAPI 미승인 템플릿",
@@ -317,7 +377,7 @@ export const ALIMTALK_TEMPLATE_TARGET_RULES: Partial<Record<AlimtalkCandidateTyp
     requiresMemberPhone: true,
     targetRules: [
       "활성 수업 수강권 보유",
-      "마지막 출석 완료일이 발송 기준일로부터 7일 이상 지남",
+      "현재 활성 수강 주기 안의 마지막 출석 완료일이 발송 기준일로부터 7일 이상 지남",
       "마지막 출석일과 보유 수강권명이 변수로 있음",
     ],
     exclusionRules: [
@@ -326,9 +386,44 @@ export const ALIMTALK_TEMPLATE_TARGET_RULES: Partial<Record<AlimtalkCandidateTyp
       "활성 수업 수강권 없음",
       "수강권 정지중/중지/홀딩 상태",
       "출석 완료 이력 없음",
-      "발송 기준일 이후 예정 예약 있음",
+      "발송 기준일 이후 예정 예약 또는 수업 대기 신청 있음",
+      "새 수강권 시작일 이후 출석 전인 복귀 회원",
       "마지막 출석 완료일이 7일 미만",
+      "발송 직전 원천 재검사에서 수강권·예약·대기·출석 상태가 바뀜",
       "동일 회원 장기 미방문 안내 14일 내 발송 이력 있음",
+      "SOLAPI 미승인 템플릿",
+    ],
+  },
+  instructor_lesson_confirmation: {
+    type: "instructor_lesson_confirmation",
+    templateCode: ALIMTALK_TEMPLATES.instructor_lesson_confirmation.code,
+    templateLabel: ALIMTALK_TEMPLATES.instructor_lesson_confirmation.label,
+    sourceDatePolicy: "same_or_before_today",
+    requiresApprovedTemplate: true,
+    requiresMemberPhone: true,
+    requiresManagementNumber: true,
+    buttonUrlRules: [
+      {
+        label: "강사레슨 캘린더 버튼",
+        template: METHOD_CALENDAR_BUTTON_URL_TEMPLATE,
+        maxLength: SOLAPI_BUTTON_URL_MAX_LENGTH,
+      },
+    ],
+    targetRules: [
+      "ARCHIVE CORE 강사레슨 등록 건",
+      "입금·수강 접수 운영자 확인",
+      "StudioMate 강사레슨 (2T) 수강권 발급 검증",
+      "수업일별 관리번호와 캘린더 경로 확인",
+      "수강권 발급 검증 직후 수업일별 1회 자동 발송",
+    ],
+    exclusionRules: [
+      "전화번호 없음",
+      "입금·수강 접수 운영자 확인 없음",
+      "강사레슨 (2T) 수강권 발급 미확인",
+      "취소된 강사레슨 등록 건",
+      "수업일별 관리번호 또는 캘린더 계약 없음",
+      "알림톡 제외 스텝 계정",
+      "같은 연락처·수업일·관리번호·템플릿 발송 이력 있음",
       "SOLAPI 미승인 템플릿",
     ],
   },
@@ -347,16 +442,33 @@ export const ALIMTALK_TEMPLATE_TARGET_RULES: Partial<Record<AlimtalkCandidateTyp
         maxLength: SOLAPI_BUTTON_URL_MAX_LENGTH,
       },
       {
-        label: "강사레슨 수업자료 버튼",
+        label: "강사레슨 짧은 링크",
         template: SHORT_LINK_BUTTON_URL_TEMPLATE,
         maxLength: SOLAPI_BUTTON_URL_MAX_LENGTH,
       },
+      {
+        label: "강사레슨 수업배정 버튼",
+        template: METHOD_ASSIGNMENT_BUTTON_URL_TEMPLATE,
+        maxLength: SOLAPI_BUTTON_URL_MAX_LENGTH,
+      },
+      {
+        label: "강사레슨 주차 사전등록 버튼",
+        template: INSTRUCTOR_LESSON_PARKING_BUTTON_URL,
+        maxLength: SOLAPI_BUTTON_URL_MAX_LENGTH,
+      },
     ],
-    targetRules: ["강사레슨 예약", "수업 하루 전 후보", "수업자료 관리번호가 있음", "강사레슨 카카오 채널 템플릿 사용"],
+    targetRules: [
+      "강사레슨 예약",
+      "수업 하루 전 후보",
+      "수업자료 관리번호가 있음",
+      "주차 사전등록 짧은 링크가 있음",
+      "강사레슨 카카오 채널 템플릿 사용",
+    ],
     exclusionRules: [
       "전화번호 없음",
       "강사레슨 예약 아님",
       "수업자료 관리번호 없음",
+      "주차 사전등록 짧은 링크 없음",
       "짧은 링크 생성 실패 또는 버튼 URL 치환 후 100자 초과",
       "같은 수업자료와 수업일 조합 발송 이력 있음",
       "SOLAPI 미승인 템플릿",
@@ -378,7 +490,7 @@ export const ALIMTALK_TEMPLATE_TARGET_RULES: Partial<Record<AlimtalkCandidateTyp
     ],
     targetRules: [
       "수업 후 기록이 제출된 프라이빗 회차",
-      "Gemini 회원용 리포트 초안이 생성됨",
+      "회원용 리포트 초안이 생성됨(자동 생성 또는 강사 수정본)",
       "회원용 HTML 리포트 URL이 있음",
       "강사 차트 링크에서 회원 알림톡 발송 승인됨",
     ],
@@ -447,20 +559,25 @@ export function surveyDetailButtonUrlLengthIssue(
   responseId: string,
   accessToken: string,
   shortLinkId = "sv-000000000000",
+  mode: "short_link" | "legacy_direct" = "short_link",
 ): string {
   return solapiButtonUrlLengthIssue({
-    rules: [
-      {
-        label: "설문 확인하기 버튼",
-        template: SURVEY_DETAIL_BUTTON_URL_TEMPLATE,
-        maxLength: SOLAPI_BUTTON_URL_MAX_LENGTH,
-      },
-      {
-        label: "설문 확인하기 버튼",
-        template: SHORT_LINK_BUTTON_URL_TEMPLATE,
-        maxLength: SOLAPI_BUTTON_URL_MAX_LENGTH,
-      },
-    ],
+    rules:
+      mode === "legacy_direct"
+        ? [
+            {
+              label: "설문 확인하기 버튼",
+              template: SURVEY_DETAIL_BUTTON_URL_TEMPLATE,
+              maxLength: SOLAPI_BUTTON_URL_MAX_LENGTH,
+            },
+          ]
+        : [
+            {
+              label: "설문 확인하기 버튼",
+              template: SHORT_LINK_BUTTON_URL_TEMPLATE,
+              maxLength: SOLAPI_BUTTON_URL_MAX_LENGTH,
+            },
+          ],
     variables: {
       "#{설문ID}": responseId,
       "#{접근토큰}": accessToken,

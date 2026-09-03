@@ -220,7 +220,7 @@ CONTACTS_SYNC_MAX_AUTO_UPDATE=50
 | --- | --- | --- | --- |
 | StudioMate 회원목록 다운로드 | `com.archive.studiomate-member-excel` | 매일 23:00 | 삭제됨. 정상모드 엑셀 자동화 `com.archive.studiomate-excel-emergency-mode`가 회원목록을 포함해 처리 |
 | StudioMate → Google Contacts 동기화 | `com.archive.studiomate-contacts-sync` | 매일 23:10 | 레거시 작업으로 비활성 |
-| StudioMate 예약 가능 기한 설정 | `com.archive.studiomate-reservation-deadline` | 매주 월요일 12:30 | 활성 |
+| StudioMate 예약 가능 기한 설정 | StudioMate 네이티브 반복설정 | StudioMate 설정 기준 | Mac mini 자동화 삭제 |
 
 연락처 동기화 LaunchAgent:
 
@@ -234,7 +234,9 @@ CONTACTS_SYNC_MAX_AUTO_UPDATE=50
 cd "/Users/archivepilates/Documents/New project 2" && /usr/local/bin/node scripts/run_studiomate_google_sync_job.mjs
 ```
 
-2026-05-22부터 이 레거시 23:10 작업은 unload 상태로 유지하고 `.disabled-20260519`로 보관한다. 최신 정상모드 엑셀 연락처 동기화는 `com.archive.studiomate-emergency-contacts-sync`가 1시간 간격으로 담당한다. LaunchAgent 이름의 `emergency`는 호환용 레거시 이름이다.
+2026-07-30부터 별도 연락처 LaunchAgent는 사용하지 않는다. 1시간 Excel
+동기화가 `contactSyncJobs`를 만들고 Firebase
+`scheduledProcessContactSyncJobs`가 큐를 처리한다.
 
 로그:
 
@@ -250,13 +252,14 @@ Codex 앱 자동화는 혼선을 줄이기 위해 보조/수동 테스트용으�
 이전 Codex 앱 자동화:
 
 - `StudioMate 회원목록 엑셀 다운로드`
-- `StudioMate 예약가능기한 주간 갱신`
+- `StudioMate 예약가능기한 주간 갱신` (폐기, StudioMate 네이티브 반복설정으로 대체)
 - `daily-studiomate-to-google-contacts-sync`
 
 현재 운영 기준:
 
 - 실제 정기 실행: LaunchAgent
 - Codex 앱 자동화: 필요 시 테스트/수동 확인용
+- 예약 가능 기한: StudioMate 네이티브 반복설정
 
 ## 완료/실패 보고 메일
 
@@ -392,9 +395,9 @@ Codex 앱 자동화는 혼선을 줄이기 위해 보조/수동 테스트용으�
 | --- | --- |
 | Google Contacts 대상 계정 | `home@archivepilates.com` |
 | 완료보고 메일 계정 | `home@archivepilates.com` |
-| 연락처 동기화 LaunchAgent | 23:10 레거시 작업 비활성. 정상모드 엑셀 연락처 작업은 `com.archive.studiomate-emergency-contacts-sync` |
+| 연락처 동기화 | 별도 LaunchAgent 없음. Excel 동기화가 큐를 만들고 `scheduledProcessContactSyncJobs`가 처리 |
 | 회원목록 다운로드 LaunchAgent | 삭제됨. 정상모드 엑셀 자동화가 회원목록 다운로드를 담당 |
-| 예약 가능 기한 LaunchAgent | 활성 |
+| 예약 가능 기한 LaunchAgent | 삭제됨. StudioMate 네이티브 반복설정 사용 |
 | Firebase 연락처 큐 | `memberContactIndex` / `contactSyncJobs` 기준 |
 | 완료보고 메일 | `home@archivepilates.com` 기준 |
 

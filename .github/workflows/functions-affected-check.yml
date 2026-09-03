@@ -8,6 +8,8 @@ on:
       - "archivein/manifest.webmanifest"
       - "archivein/sw.js"
       - "archivein/private-chart/**"
+      - "archivein/privateSurvey/**"
+      - "archivein/method/**"
       - "archivein/onsiteWelcome/**"
       - "core/**"
       - "core/rules/**"
@@ -25,6 +27,8 @@ on:
       - "archivein/manifest.webmanifest"
       - "archivein/sw.js"
       - "archivein/private-chart/**"
+      - "archivein/privateSurvey/**"
+      - "archivein/method/**"
       - "archivein/onsiteWelcome/**"
       - "core/**"
       - "core/rules/**"
@@ -74,11 +78,23 @@ jobs:
       - name: Validate data source policy
         run: npm run validate:data-source-policy
 
+      - name: Test staff and member contact precedence
+        run: npm run test:contact-staff-precedence
+
+      - name: Validate GCP cost regression guards
+        run: npm run validate:gcp-cost-guards
+
       - name: Validate onsite welcome release guard
         run: npm run validate:onsite-welcome
 
       - name: Validate private media upload config
         run: npm run validate:private-media-upload-config
+
+      - name: Validate private flow contract
+        run: npm run validate:private-flow-contract
+
+      - name: Test private flow state and revision contract
+        run: npm run test:private-flow
 
       - name: Validate live rollback guards
         run: npm run validate:live-release-rollback-guards

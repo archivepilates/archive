@@ -1,14 +1,29 @@
 #!/usr/bin/env node
+import { spawnSync } from "node:child_process";
 import { existsSync, mkdirSync, readdirSync, readFileSync, writeFileSync } from "node:fs";
+import { fileURLToPath } from "node:url";
 import os from "node:os";
 import path from "node:path";
 import XLSX from "xlsx";
 import { googleAccessToken, sheetsRequest } from "./dashboard-export-utils.mjs";
+import {
+  calculateSplitCompensation,
+  readRegularCompensationCarryForward,
+} from "./lib/monthly-settlement-compensation.mjs";
+import {
+  assertSettlementRateCoverage,
+  requireGroupRates,
+  requirePrivateRate,
+} from "./lib/monthly-settlement-rate-policy.mjs";
+import { summarizeCurrentSettlementOperation } from "./lib/monthly-settlement-operation.mjs";
+import { dedupeSettlementSourceRows } from "./lib/monthly-settlement-source.mjs";
 
 const HOME = os.homedir();
+const REPO_ROOT = path.resolve(path.dirname(fileURLToPath(import.meta.url)), "..");
+const AUTOMATION_REPORT_SCRIPT = path.join(REPO_ROOT, "firebase/kangsain-functions/macmini-studiomate/send-automation-report.mjs");
 const DEFAULT_ROOT = path.join(
   HOME,
-  "Library/CloudStorage/GoogleDrive-kihyo2215@gmail.com/내 드라이브/10_업무/아카이브필라테스/아카이브필라테스/03_재무_대출_정산/아카이브 월말정산",
+  "Library/CloudStorage/GoogleDrive-home@archivepilates.com/내 드라이브/아카이브필라테스/아카이브필라테스/03_재무_대출_정산/아카이브 월말정산",
 );
 const DEFAULT_BACKUP_ROOT = path.join(HOME, "Library/CloudStorage/GoogleDrive-home@archivepilates.com/내 드라이브/아카이브 정산/월별정산백업");
 const DEFAULT_SETTLEMENT_DRIVE_ROOT = path.dirname(DEFAULT_BACKUP_ROOT);
@@ -24,9 +39,17 @@ const targetDir = path.join(rootDir, ym);
 const statementXlsx = path.join(targetDir, `아카이브 정산명세서 ${ym}.xlsx`);
 const settlementXlsx = path.join(targetDir, `아카이브 정산 ${ym}.xlsx`);
 const apply = Boolean(args.apply);
+const rebuildFromRaw = Boolean(args["rebuild-from-raw"]);
 
-main().catch((error) => {
+main().catch(async (error) => {
   console.error(error instanceof Error ? error.stack || error.message : String(error));
+  if (apply && error?.code === "MISSING_SETTLEMENT_RATE") {
+    try {
+      sendMissingRateFailureReport(error);
+    } catch (reportError) {
+      console.error(`보수기준 누락 실패 메일 전송 실패: ${reportError.message}`);
+    }
+  }
   process.exitCode = 1;
 });
 
@@ -53,6 +76,7 @@ async function main() {
     ok: true,
     mode: apply ? "apply" : "dry-run",
     month: ym,
+    rebuildFromRaw,
     targetDir,
     statementXlsx,
     settlementXlsx: existsSync(settlementXlsx) ? settlementXlsx : "",
@@ -64,9 +88,18 @@ async function main() {
 }
 
 async function ensureInputWorkbooks() {
+  if (rebuildFromRaw) {
+    if (!apply) throw new Error("--rebuild-from-raw는 --apply와 함께 사용해야 합니다.");
+    await createSettlementWorkbookFromRaw(settlementXlsx);
+    createStatementWorkbookFromSettlement(settlementXlsx, statementXlsx);
+    return;
+  }
+
   if (!existsSync(settlementXlsx)) {
     await exportSettlementBackupWorkbook(settlementXlsx);
   }
+
+  await validateSettlementWorkbookRateCoverage(settlementXlsx);
 
   if (!existsSync(statementXlsx)) {
     createStatementWorkbookFromSettlement(settlementXlsx, statementXlsx);
@@ -107,7 +140,13 @@ async function createSettlementWorkbookFromRaw(outputPath) {
   }
 
   const refs = await loadReferenceTables();
-  const rawRows = readWorkbookObjects(lessonSource).map((row) => mapRawLessonRow(row, path.basename(lessonSource)));
+  const mappedRows = readWorkbookObjects(lessonSource).map((row) => mapRawLessonRow(row, path.basename(lessonSource)));
+  const deduped = dedupeSettlementSourceRows(mappedRows);
+  const rawRows = deduped.rows;
+  if (deduped.removedCount) {
+    console.warn(`정산 원천의 완전 중복 ${deduped.removedCount}행을 제외하고 원천중복검수 시트에 기록합니다.`);
+  }
+  assertSettlementRateCoverage(rawRows, refs);
   const auxRows = buildAuxRows(rawRows, refs);
   const payroll = buildPayrollRows(auxRows, refs);
   const report = buildMonthlyReportRows(auxRows, payroll.rows);
@@ -119,6 +158,7 @@ async function createSettlementWorkbookFromRaw(outputPath) {
   XLSX.utils.book_append_sheet(wb, XLSX.utils.aoa_to_sheet(buildAuxSheetRows(auxRows)), "정산보조");
   XLSX.utils.book_append_sheet(wb, XLSX.utils.aoa_to_sheet(buildPayrollSheetRows(payroll.rows)), "정산대장");
   XLSX.utils.book_append_sheet(wb, XLSX.utils.aoa_to_sheet(buildReportSheetRows(report)), "월간리포트");
+  XLSX.utils.book_append_sheet(wb, XLSX.utils.aoa_to_sheet(buildDuplicateAuditSheetRows(deduped.duplicates)), "원천중복검수");
   XLSX.writeFile(wb, outputPath);
 }
 
@@ -133,6 +173,10 @@ async function loadReferenceTables() {
   const priceMap = {};
   const groupMap = {};
   const privateMap = {};
+
+  if (!rateFile) {
+    throw new Error(`보수기준표 파일을 찾을 수 없습니다: ${path.join(settlementDriveRoot, "아카이브 강사 보수기준표.gsheet")}`);
+  }
 
   if (priceFile) {
     const priceRows = await readSheetValues(token, priceFile, "A:Z");
@@ -158,6 +202,22 @@ async function loadReferenceTables() {
   return { priceMap, groupMap, privateMap };
 }
 
+async function validateSettlementWorkbookRateCoverage(filePath) {
+  const wb = XLSX.readFile(filePath, { cellDates: true });
+  const auxSheet = wb.Sheets["정산보조"];
+  const sourceSheet = wb.Sheets["Sheet1"];
+  const sourceRows = auxSheet
+    ? XLSX.utils.sheet_to_json(auxSheet, { defval: "" }).map((row) => ({
+      instructorName: clean(row["강사명"]),
+      finalType: clean(row["최종수업구분"]),
+    }))
+    : sourceSheet
+      ? XLSX.utils.sheet_to_json(sourceSheet, { defval: "" }).map((row) => mapRawLessonRow(row, path.basename(filePath)))
+      : [];
+  if (!sourceRows.length) throw new Error(`정산 보수기준 검증용 원천 시트를 찾을 수 없습니다: ${filePath}`);
+  assertSettlementRateCoverage(sourceRows, await loadReferenceTables());
+}
+
 async function readSheetValues(token, spreadsheetId, range) {
   const result = await sheetsRequest(token, "GET", `/v4/spreadsheets/${encodeURIComponent(spreadsheetId)}/values/${encodeURIComponent(range)}?valueRenderOption=UNFORMATTED_VALUE`);
   return result.values || [];
@@ -171,6 +231,37 @@ function findGsheetPointerByNormalizedName(root, baseName) {
     return pointer.doc_id || pointer.id || "";
   }
   return "";
+}
+
+function sendMissingRateFailureReport(error) {
+  const missing = Array.isArray(error.missing) ? error.missing : [];
+  const details = missing.map((item) => `- ${item.instructorName}: ${item.rateType} 탭 기준 없음`);
+  const result = spawnSync(process.execPath, [AUTOMATION_REPORT_SCRIPT], {
+    cwd: REPO_ROOT,
+    encoding: "utf8",
+    env: {
+      ...process.env,
+      AUTOMATION_REPORT_SUBJECT: `[월말정산][실패] 강사 보수기준 누락 · ${ym}`,
+      AUTOMATION_REPORT_BODY: [
+        "주체: ARCHIVE IN / 월말 정산 자동화",
+        "결론: 강사 보수기준 누락으로 정산 생성을 중단했습니다.",
+        "",
+        "핵심:",
+        ...details,
+        "- 추정 요율이나 기본값은 적용하지 않았습니다.",
+        "",
+        `검증: ${path.join(settlementDriveRoot, "아카이브 강사 보수기준표.gsheet")}`,
+        "주의: 정산 파일은 갱신되지 않았습니다.",
+        "다음: 누락 강사를 보수기준표의 해당 탭에 추가한 뒤 자동화를 다시 실행합니다.",
+      ].join("\n"),
+      AUTOMATION_REPORT_FROM: "home@archivepilates.com",
+      AUTOMATION_REPORT_TO: "home@archivepilates.com",
+      AUTOMATION_REPORT_LABEL: "자동화 실패",
+    },
+  });
+  if (result.status !== 0) {
+    throw new Error((result.stderr || result.stdout || "실패 메일 전송 오류").trim());
+  }
 }
 
 function findMonthlySourceFile(dirName, prefix, range) {
@@ -222,10 +313,10 @@ function buildAuxRows(rawRows, refs) {
     let appliedRate = 0;
     let linePay = 0;
     if (row.finalType === "프라이빗") {
-      appliedRate = refs.privateMap[row.instructorName] || 0.45;
+      appliedRate = requirePrivateRate(refs.privateMap, row.instructorName);
       linePay = settlementCount ? (settlementRevenue / 1.1) * appliedRate : 0;
     } else if (row.finalType === "강사레슨") {
-      appliedRate = refs.privateMap[row.instructorName] || 0.45;
+      appliedRate = requirePrivateRate(refs.privateMap, row.instructorName);
       linePay = settlementCount ? (settlementRevenue / 1.1) * appliedRate : 0;
     }
     return {
@@ -296,7 +387,7 @@ function buildPayrollRows(auxRows, refs) {
     const instructor = byInstructor.get(session.instructorName);
     instructor.groupCount += 1;
     instructor.groupRevenue += session.revenue;
-    const rates = refs.groupMap[session.instructorName] || [15000, 25000, 25000, 30000, 32000, 35000, 35000, 35000, 35000, 35000, 35000];
+    const rates = requireGroupRates(refs.groupMap, session.instructorName);
     instructor.groupPay += Math.round(rates[session.attended] ?? rates[rates.length - 1] ?? 0);
   }
 
@@ -439,6 +530,25 @@ function buildReportSheetRows(report) {
   ];
 }
 
+function buildDuplicateAuditSheetRows(duplicates) {
+  return [
+    ["중복키", "원본행수", "제외행수", "수업일자", "수업시간", "회원명", "강사명", "수업구분", "수강권명", "출결", "차감금액"],
+    ...duplicates.map((item) => [
+      item.key,
+      item.sourceCount,
+      item.removedCount,
+      item.row.classDate,
+      item.row.classTime,
+      item.row.memberName,
+      item.row.instructorName,
+      item.row.finalType,
+      item.row.ticketName,
+      item.row.attendance,
+      item.row.revenue,
+    ]),
+  ];
+}
+
 function createStatementWorkbookFromSettlement(settlementPath, outputPath) {
   const settlementWb = XLSX.readFile(settlementPath, { cellDates: true });
   const previousInfo = readPreviousInstructorInfo(rootDir, ym);
@@ -482,8 +592,9 @@ function readPreviousInstructorInfo(root, currentYm) {
       const name = clean(row[1]);
       if (!name) continue;
       const current = result.get(name) || { name };
-      current.regularPayout = money(row[16]);
-      current.regularGrossDeduction = parseRegularGrossDeduction(clean(row[9]));
+      const compensation = readRegularCompensationCarryForward(ledgerRows, row);
+      current.regularPayout = compensation.regularPayout;
+      current.regularGrossDeduction = compensation.regularGrossDeduction;
       result.set(name, current);
     }
 
@@ -551,15 +662,15 @@ function normalizeStatementRow(raw, previousInfo) {
   const info = previousInfo.get(raw.name) || { name: raw.name };
   const regularGrossDeduction = info.regularPayout ? info.regularGrossDeduction || 0 : 0;
   const lessonPay = raw.lessonPay || 0;
-  const adjustmentAmount = regularGrossDeduction ? lessonPay - regularGrossDeduction : lessonPay;
+  const compensation = calculateSplitCompensation({
+    groupPay: raw.groupPay,
+    privatePay: raw.privatePay,
+    lessonPay,
+    regularPayout: info.regularPayout || 0,
+    regularGrossDeduction,
+  });
+  const { adjustmentAmount } = compensation;
   const adjustmentText = buildAdjustmentText({ regularGrossDeduction, lessonPay });
-  const pretaxPay = raw.groupPay + raw.privatePay + adjustmentAmount;
-  const incomeTax = pretaxPay > 0 ? pretaxPay * 0.03 : 0;
-  const localTax = pretaxPay > 0 ? pretaxPay * 0.003 : 0;
-  const deductionTotal = incomeTax + localTax;
-  const freelancerPayout = pretaxPay - deductionTotal;
-  const regularPayout = info.regularPayout || 0;
-  const combinedPayout = regularPayout ? freelancerPayout + regularPayout : 0;
 
   return {
     ...raw,
@@ -571,14 +682,7 @@ function normalizeStatementRow(raw, previousInfo) {
     accountHolder: info.accountHolder || raw.name,
     adjustmentAmount,
     adjustmentText,
-    pretaxPay,
-    deductionTotal,
-    incomeTax,
-    localTax,
-    freelancerPayout,
-    combinedPayout,
-    regularPayout,
-    finalPayout: combinedPayout || freelancerPayout,
+    ...compensation,
   };
 }
 
@@ -676,11 +780,6 @@ function buildSimpleStatementSheetRows(instructors) {
   ];
 }
 
-function parseRegularGrossDeduction(text) {
-  const matched = String(text || "").match(/정규직급여\s*\(([-,\d]+)\)/);
-  return matched ? Math.abs(money(matched[1])) : 0;
-}
-
 function buildAdjustmentText({ regularGrossDeduction, lessonPay }) {
   const lines = [];
   if (regularGrossDeduction) lines.push(`정규직급여 (${Math.round(regularGrossDeduction).toLocaleString("ko-KR")})`);
@@ -766,8 +865,10 @@ function readPreviousSummary(root, currentYm) {
 
 function readOperationWorkbook(filePath) {
   const wb = XLSX.readFile(filePath, { cellDates: true });
+  const current = readCurrentOperationWorkbook(wb);
+  if (current) return current;
   const sheet3 = rows(wb, "Sheet3");
-  if (!sheet3.length) return readCurrentOperationWorkbook(wb);
+  if (!sheet3.length) return null;
   const byLabel = new Map();
   for (const row of sheet3) {
     const label = clean(row[0]);
@@ -788,44 +889,7 @@ function readCurrentOperationWorkbook(wb) {
   const auxRows = rows(wb, "정산보조");
   const payrollRows = rows(wb, "정산대장");
   const reportRows = rows(wb, "월간리포트");
-  if (!auxRows.length && !payrollRows.length) return null;
-
-  const auxHeader = (auxRows[0] || []).map(clean);
-  const auxIndex = Object.fromEntries(auxHeader.map((name, idx) => [name, idx]));
-  const payrollHeader = (payrollRows[0] || []).map(clean);
-  const payrollIndex = Object.fromEntries(payrollHeader.map((name, idx) => [name, idx]));
-  const payroll = payrollRows.slice(1);
-  const aux = auxRows.slice(1);
-
-  const groupRevenue = aux
-    .filter((row) => clean(row[auxIndex["최종수업구분"]]) === "그룹")
-    .reduce((sum, row) => sum + money(row[auxIndex["정산매출"]]), 0);
-  const privateRevenue = aux
-    .filter((row) => clean(row[auxIndex["최종수업구분"]]) === "프라이빗")
-    .reduce((sum, row) => sum + money(row[auxIndex["정산매출"]]), 0);
-  const groupPay = payroll.reduce((sum, row) => sum + money(row[payrollIndex["그룹보수합계"]]), 0);
-  const privatePay = payroll.reduce((sum, row) => sum + money(row[payrollIndex["프라이빗보수합계"]]), 0);
-  const privateCount = payroll.reduce((sum, row) => sum + number(row[payrollIndex["프라이빗횟수"]]), 0);
-
-  return {
-    groupAttendanceAverage: readReportSummaryValue(reportRows, "그룹 출석평균"),
-    groupReservationAverage: readReportSummaryValue(reportRows, "그룹 예약평균"),
-    groupRevenue,
-    groupPay,
-    privateCount,
-    privateRevenue,
-    privatePay,
-  };
-}
-
-function readReportSummaryValue(reportRows, headerName) {
-  for (let i = 0; i < reportRows.length - 1; i += 1) {
-    const header = reportRows[i].map(clean);
-    const index = header.indexOf(headerName);
-    if (index < 0) continue;
-    return number(reportRows[i + 1]?.[index]);
-  }
-  return 0;
+  return summarizeCurrentSettlementOperation({ auxRows, payrollRows, reportRows });
 }
 
 function buildSummary(instructors, previousTotalPayout, operation) {

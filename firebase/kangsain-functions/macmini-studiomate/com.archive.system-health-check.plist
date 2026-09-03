@@ -1,0 +1,41 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<!DOCTYPE plist PUBLIC "-//Apple//DTD PLIST 1.0//EN" "http://www.apple.com/DTDs/PropertyList-1.0.dtd">
+<plist version="1.0">
+<dict>
+  <key>Label</key>
+  <string>com.archive.system-health-check</string>
+  <key>WorkingDirectory</key>
+  <string>/Users/archivepilates/dev/archive-in-runtime</string>
+  <key>ProgramArguments</key>
+  <array>
+    <string>/opt/homebrew/bin/node</string>
+    <string>/Users/archivepilates/dev/archive-in-runtime/scripts/run-system-health-check.mjs</string>
+    <string>--mode=quick</string>
+    <string>--repair</string>
+  </array>
+  <key>EnvironmentVariables</key>
+  <dict>
+    <key>PATH</key>
+    <string>/opt/homebrew/bin:/usr/local/bin:/usr/bin:/bin:/usr/sbin:/sbin</string>
+    <key>GOOGLE_APPLICATION_CREDENTIALS</key>
+    <string>/Users/archivepilates/ArchiveIN/secrets/google/archive-codex-operator.json</string>
+    <key>GOOGLE_CLOUD_PROJECT</key>
+    <string>archive-pilates</string>
+    <key>GCLOUD_PROJECT</key>
+    <string>archive-pilates</string>
+    <key>TZ</key>
+    <string>Asia/Seoul</string>
+  </dict>
+  <key>StartCalendarInterval</key>
+  <dict>
+    <key>Hour</key>
+    <integer>8</integer>
+    <key>Minute</key>
+    <integer>40</integer>
+  </dict>
+  <key>StandardOutPath</key>
+  <string>/Users/archivepilates/ArchiveIN/automation/logs/system-health-check.out.log</string>
+  <key>StandardErrorPath</key>
+  <string>/Users/archivepilates/ArchiveIN/automation/logs/system-health-check.err.log</string>
+</dict>
+</plist>

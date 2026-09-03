@@ -19,16 +19,15 @@
       <aside class="sidebar" aria-label="ARCHIVE CORE navigation">
         <div class="brand"><div class="brand-mark" aria-hidden="true">CORE</div><strong>ARCHIVE CORE</strong><span>ARCHIVE PILATES Operations Platform</span></div>
         <nav class="nav">
-          <a href="../" data-section="home">Home <small>요약</small></a><a href="../members/" data-section="members">Members <small>회원</small></a><a href="../lessons/" data-section="lessons">Lessons <small>수업</small></a><a href="../private/" data-section="private">Private <small>차트</small></a><a href="./" data-section="staff">Staff <small>강사</small></a><a href="../messages/" data-section="messages">Messages <small>알림톡</small></a><a href="../automation/" data-section="automation">Automation <small>관제</small></a><a href="../business/" data-section="business">Business <small>지표</small></a><a href="../imports/" data-section="imports">Imports <small>원본</small></a><a href="../rules/" data-section="rules">Rules <small>규칙</small></a><a href="../settings/" data-section="settings">Settings <small>설정</small></a>
+          <a href="../" data-section="home">Home <small>요약</small></a><a href="../private/" data-section="private">Private <small>차트</small></a><a href="./" data-section="staff">Staff <small>강사</small></a><a href="../messages/" data-section="messages">Messages <small>알림톡</small></a><a href="../automation/" data-section="automation">Automation <small>관제</small></a><a href="../business/" data-section="business">Business <small>지표</small></a><a href="../imports/" data-section="imports">Imports <small>원본</small></a><a href="../rules/" data-section="rules">Rules <small>규칙</small></a><a href="../settings/" data-section="settings">Settings <small>설정</small></a>
         </nav>
       </aside>
 
       <main class="main">
         <header class="topbar">
           <div class="title-block">
-            <p class="eyebrow">STAFF · HR RECORD</p>
-            <h1>강사 인사기록카드</h1>
-            <p class="subtitle">강사 평가 퀴즈 결과를 강사별 카드로 누적해서 봅니다. 운영 판단이 필요한 기록만 빠르게 확인합니다.</p>
+            <p class="eyebrow">강사</p>
+            <h1>강사 현황</h1>
           </div>
           <div class="top-actions" aria-label="상태 확인">
             <div class="connection-card" aria-live="polite">
@@ -40,10 +39,10 @@
         </header>
 
         <section class="grid kpis" aria-label="강사 평가 요약">
-          <article class="panel metric"><div class="metric-label">현재 근무중</div><div class="metric-value" id="staffTotal">0명</div><div class="metric-note">staffs active 기준</div></article>
-          <article class="panel metric"><div class="metric-label">합격 기록</div><div class="metric-value" id="staffPassedCount">0건</div><div class="metric-note">평가 퀴즈 통과</div></article>
-          <article class="panel metric"><div class="metric-label">검토 필요</div><div class="metric-value" id="staffReviewCount">0건</div><div class="metric-note">오답/재교육 확인</div></article>
-          <article class="panel metric"><div class="metric-label">최근 점수</div><div class="metric-value" id="staffLatestScore">-</div><div class="metric-note">가장 최근 제출</div></article>
+          <article class="panel metric"><div class="metric-label">현재 근무중</div><div class="metric-value" id="staffTotal">0명</div></article>
+          <article class="panel metric"><div class="metric-label">테스트 합격</div><div class="metric-value" id="staffPassedCount">0건</div></article>
+          <article class="panel metric"><div class="metric-label">검토 필요</div><div class="metric-value" id="staffReviewCount">0건</div></article>
+          <article class="panel metric"><div class="metric-label">최근 점수</div><div class="metric-value" id="staffLatestScore">-</div></article>
         </section>
 
         <section class="panel">
@@ -62,7 +61,7 @@
               <div><h2>강사별 인사기록카드</h2><p>현재 근무중 강사와 지원자/비근무 기록을 분리해서 확인합니다.</p></div>
               <div class="inline-actions">
                 <a class="text-link" href="./evaluation/">내부 평가</a>
-                <a class="text-link" href="https://in.archivepilates.com/instructor-evaluation/" target="_blank" rel="noreferrer">지원자 시험</a>
+                <a class="text-link" href="https://in.archivepilates.com/instructor-evaluation/" target="_blank" rel="noopener noreferrer" aria-label="지원자 강사 테스트 열기">강사 테스트</a>
                 <a class="text-link" href="https://docs.google.com/spreadsheets/d/1VwOS7s8u6BX9t1dAWm7WOVmrigXbpoMZL7k4TGsce58/edit" target="_blank" rel="noreferrer">응답 시트</a>
               </div>
             </div>

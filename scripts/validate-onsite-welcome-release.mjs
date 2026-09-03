@@ -5,7 +5,7 @@ import { join } from "node:path";
 
 const root = process.cwd();
 const macMiniLaunchAgentPath = "/Users/archivepilates/Library/LaunchAgents/com.archive.onsite-welcome-requests.plist";
-const macMiniLiveRunnerPath = "/Users/archivepilates/codex-worktrees/archivein-live-setup/scripts/process-onsite-welcome-requests.mjs";
+const macMiniLiveRunnerPath = "/Users/archivepilates/dev/archive-in-runtime/scripts/process-onsite-welcome-requests.mjs";
 
 const requiredFiles = [
   "archivein/onsiteWelcome/index.html",

@@ -1,7 +1,20 @@
 #!/usr/bin/env node
 import { spawnSync } from "node:child_process";
-import { createSign } from "node:crypto";
-import { existsSync, mkdirSync, readdirSync, readFileSync, statSync, writeFileSync } from "node:fs";
+import { createHash, createSign } from "node:crypto";
+import {
+  closeSync,
+  copyFileSync,
+  existsSync,
+  mkdirSync,
+  openSync,
+  readSync,
+  readdirSync,
+  readFileSync,
+  renameSync,
+  rmSync,
+  statSync,
+  writeFileSync,
+} from "node:fs";
 import os from "node:os";
 import path from "node:path";
 
@@ -17,6 +30,7 @@ const DEFAULT_PYTHON = path.join(
   ".cache/codex-runtimes/codex-primary-runtime/dependencies/python/bin/python3",
 );
 const REPORT_DIR = path.join(HOME, "ArchiveIN/automation/reports/archive-dashboard-db-sync");
+const EXCEL_CACHE_DIR = path.join(HOME, "ArchiveIN/automation/cache/archive-dashboard-excels");
 
 const args = parseArgs(process.argv.slice(2));
 const config = {
@@ -195,11 +209,26 @@ function numberCompare(a, b) {
 }
 
 function readExcelRows(files) {
+  mkdirSync(EXCEL_CACHE_DIR, { recursive: true });
+  const stagedFiles = files.map((item, index) => {
+    const stagedPath = cachedExcelPath(item, index);
+    if (!existsSync(stagedPath) || statSync(stagedPath).size <= 0) {
+      const partialPath = `${stagedPath}.partial-${process.pid}`;
+      rmSync(partialPath, { force: true });
+      try {
+        copyFileWithRetry(item.path, partialPath);
+        renameSync(partialPath, stagedPath);
+      } finally {
+        rmSync(partialPath, { force: true });
+      }
+    }
+    return { ...item, path: stagedPath };
+  });
   const script = `
 import json
 import pandas as pd
 
-files = json.loads(${JSON.stringify(JSON.stringify(files))})
+files = json.loads(${JSON.stringify(JSON.stringify(stagedFiles))})
 rows = []
 
 def clean(value):
@@ -223,6 +252,54 @@ print(json.dumps(rows, ensure_ascii=False, default=str))
   const result = spawnSync(config.python, ["-c", script], { encoding: "utf8", maxBuffer: 256 * 1024 * 1024 });
   if (result.status !== 0) throw new Error(`Excel read failed: ${result.stderr || result.stdout}`);
   return JSON.parse(result.stdout);
+}
+
+function cachedExcelPath(item, index) {
+  const sourceStats = statSync(item.path);
+  const sourceKey = createHash("sha256")
+    .update([item.path, sourceStats.size, sourceStats.mtimeMs].join("\u0001"))
+    .digest("hex")
+    .slice(0, 16);
+  const label = `${item.month || "unknown"}-${String(index).padStart(3, "0")}-${sourceKey}`;
+  return path.join(EXCEL_CACHE_DIR, `${label}-${path.basename(item.path)}`);
+}
+
+function copyFileWithRetry(sourcePath, targetPath) {
+  let lastError;
+  const maxAttempts = 12;
+  for (let attempt = 1; attempt <= maxAttempts; attempt += 1) {
+    try {
+      copyFileSync(sourcePath, targetPath);
+      if (statSync(targetPath).size <= 0) throw new Error("staged file is empty");
+      return;
+    } catch (error) {
+      lastError = error;
+      rmSync(targetPath, { force: true });
+      materializeCloudFile(sourcePath);
+      if (attempt < maxAttempts) sleepSync(Math.min(15_000, attempt * 2_000));
+    }
+  }
+  throw new Error(
+    `Excel staging failed for ${path.basename(sourcePath)}: ${
+      lastError instanceof Error ? lastError.message : String(lastError)
+    }`,
+  );
+}
+
+function materializeCloudFile(sourcePath) {
+  let descriptor;
+  try {
+    descriptor = openSync(sourcePath, "r");
+    readSync(descriptor, Buffer.alloc(1), 0, 1, 0);
+  } catch {
+    // Google Drive File Provider may return EAGAIN while downloading an online-only file.
+  } finally {
+    if (descriptor !== undefined) closeSync(descriptor);
+  }
+}
+
+function sleepSync(ms) {
+  Atomics.wait(new Int32Array(new SharedArrayBuffer(4)), 0, 0, ms);
 }
 
 function normalizeLessonSalesRow(row) {
@@ -810,17 +887,17 @@ async function syncFirebaseDashboard({ dailyRevenueSheet, settlementPreviewSheet
   }));
   const settlementPreview = sheetRowsToObjects(settlementPreviewSheet);
   const instructorPreview = sheetRowsToObjects(instructorPreviewSheet);
-  const idToken = await googleIdentityToken(config.syncEndpoint);
-  const result = await fetch(config.syncEndpoint, {
-    method: "POST",
-    headers: { authorization: `Bearer ${idToken}` },
-  });
-  const text = await result.text();
-  const functionResult = { ok: result.ok, status: result.status, body: safeJson(text) || text.slice(0, 2000) };
+  const functionResult = {
+    ok: true,
+    status: 0,
+    skipped: true,
+    body: "Skipped full Cloud Function snapshot sync; scoped Firestore dashboard patch is the scheduled source.",
+  };
   const firestorePatch = await patchDashboardCurrentPreview({ dailyRevenue, settlementPreview, instructorPreview });
   return {
-    ok: functionResult.ok || Boolean(firestorePatch.ok),
+    ok: Boolean(firestorePatch.ok),
     status: firestorePatch.ok ? firestorePatch.status : functionResult.status,
+    warning: "",
     functionResult,
     dailyRevenueRows: dailyRevenue.length,
     settlementPreviewRows: settlementPreview.length,
@@ -1161,12 +1238,17 @@ function classTypeName(value, ticketName = "") {
 
 function dateKey(value) {
   if (value == null || value === "") return "";
+  if (typeof value === "number" && Number.isFinite(value)) return googleSerialDateKey(value);
   const text = String(value).trim();
   const matched = text.match(/(20\d{2})[-./년\s]+(\d{1,2})[-./월\s]+(\d{1,2})/);
   return matched ? `${matched[1]}-${matched[2].padStart(2, "0")}-${matched[3].padStart(2, "0")}` : "";
 }
 
 function monthKey(value) {
+  if (typeof value === "number" && Number.isFinite(value)) {
+    const date = googleSerialDateKey(value);
+    return date ? date.slice(0, 7) : "";
+  }
   const text = String(value || "").trim();
   const monthOnly = text.match(/^(20\d{2})[-./년\s]+(\d{1,2})\s*월?$/);
   if (monthOnly) return `${monthOnly[1]}-${monthOnly[2].padStart(2, "0")}`;
@@ -1174,6 +1256,12 @@ function monthKey(value) {
   if (date) return date.slice(0, 7);
   const matched = text.match(/(20\d{2})[-./년\s]+(\d{1,2})/);
   return matched ? `${matched[1]}-${matched[2].padStart(2, "0")}` : "";
+}
+
+function googleSerialDateKey(value) {
+  if (value < 20000 || value > 90000) return "";
+  const date = new Date(Math.round((value - 25569) * 86400 * 1000));
+  return `${date.getUTCFullYear()}-${String(date.getUTCMonth() + 1).padStart(2, "0")}-${String(date.getUTCDate()).padStart(2, "0")}`;
 }
 
 function maxMonth(files) {

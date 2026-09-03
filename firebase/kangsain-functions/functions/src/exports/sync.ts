@@ -1,15 +1,13 @@
 import { logger } from "firebase-functions";
 import { onCall, onRequest, HttpsError } from "firebase-functions/v2/https";
-import { onDocumentCreated } from "firebase-functions/v2/firestore";
+import { onDocumentCreated, onDocumentWritten } from "firebase-functions/v2/firestore";
 import { onSchedule } from "firebase-functions/v2/scheduler";
 import { syncDashboardFromSheets } from "../sync/syncDashboardFromSheets";
-import { syncLecturesDaily } from "../sync/syncLecturesDaily";
 import { syncLecturesRange } from "../sync/syncLecturesRange";
 import { pollManagerNotices } from "../sync/pollManagerNotices";
 import { processContactSyncJobs } from "../sync/processContactSyncJobs";
 import { processWriteQueue } from "../queue/processWriteQueue";
 import { createDueParkingDiscountJobs } from "../parking/parkingOperations";
-import { preSecurityRawMirror } from "../sync/preSecurityRawMirror";
 import { syncManagerStaffs } from "../sync/syncManagerStaffs";
 import { sendAttendanceReminder } from "../push/sendAttendanceReminder";
 import { getStaffByUid } from "../firestore/staffRepository";
@@ -17,26 +15,8 @@ import { isManagerRole, requireManager, requireStaff } from "../security/authGua
 import { nowTimestamp } from "../utils/date";
 import { toHttpsError } from "../utils/errors";
 import { callableOptions, longCallableOptions, longRequestOptions, scheduleOptions } from "../runtime/functionOptions";
-
-export const scheduledSyncLecturesDaily = onSchedule(
-  {
-    ...scheduleOptions,
-    schedule: "5 0 * * *",
-  },
-  async () => {
-    await syncLecturesDaily();
-  },
-);
-
-export const scheduledPollManagerNotices = onSchedule(
-  {
-    ...scheduleOptions,
-    schedule: "every 10 minutes",
-  },
-  async () => {
-    await pollManagerNotices();
-  },
-);
+import type { StaffDoc } from "../types/models";
+import { queueActiveStaffContactSync, staffContactIdentityChanged } from "../sync/queueStaffContactSync";
 
 export const scheduledProcessWriteQueue = onSchedule(
   {
@@ -51,10 +31,23 @@ export const scheduledProcessWriteQueue = onSchedule(
 export const scheduledProcessContactSyncJobs = onSchedule(
   {
     ...scheduleOptions,
-    schedule: "every 5 minutes",
+    schedule: "every 10 minutes",
   },
   async () => {
     await processContactSyncJobs();
+  },
+);
+
+export const queueStaffContactSync = onDocumentWritten(
+  {
+    ...scheduleOptions,
+    document: "staffs/{staffId}",
+  },
+  async (event) => {
+    const before = event.data?.before.data() as StaffDoc | undefined;
+    const after = event.data?.after.data() as StaffDoc | undefined;
+    if (!after || !staffContactIdentityChanged(before, after)) return;
+    await queueActiveStaffContactSync(after);
   },
 );
 
@@ -77,6 +70,7 @@ export const scheduledCreateParkingDiscountJobs = onSchedule(
     await createDueParkingDiscountJobs({
       source: "core_parking_scheduler",
       requestedByUid: "scheduler",
+      scanMode: "scheduled_window",
     });
   },
 );
@@ -88,16 +82,6 @@ export const scheduledSyncDashboardDaily = onSchedule(
   },
   async () => {
     await syncDashboardFromSheets();
-  },
-);
-
-export const scheduledPreSecurityRawMirror = onSchedule(
-  {
-    ...scheduleOptions,
-    schedule: "20 12 12 5 *",
-  },
-  async () => {
-    await preSecurityRawMirror();
   },
 );
 

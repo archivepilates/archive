@@ -12,9 +12,12 @@ export type ShortLinkType =
   | "group_survey"
   | "member_signup"
   | "method_material"
+  | "parking_pre_registration"
   | "private_chart"
   | "private_report"
-  | "inbody_report";
+  | "inbody_report"
+  | "recommended_meal_survey"
+  | "recommended_meal_report";
 
 export function shortLinkIdForTarget(type: ShortLinkType, targetUrl: string): string {
   const prefix =
@@ -26,12 +29,18 @@ export function shortLinkIdForTarget(type: ShortLinkType, targetUrl: string): st
           ? "gs"
           : type === "member_signup"
             ? "ms"
+            : type === "parking_pre_registration"
+              ? "pk"
             : type === "private_chart"
               ? "pc"
               : type === "private_report"
                 ? "pr"
-                : type === "inbody_report"
+              : type === "inbody_report"
                   ? "ir"
+                  : type === "recommended_meal_survey"
+                    ? "rm"
+                    : type === "recommended_meal_report"
+                      ? "mr"
                   : "mt";
   return `${prefix}-${stableHash({ type, targetUrl }).slice(0, 12)}`;
 }

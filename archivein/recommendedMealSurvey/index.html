@@ -1,0 +1,765 @@
+<!doctype html>
+<html lang="ko">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1">
+  <meta name="robots" content="noindex,nofollow">
+  <meta name="theme-color" content="#fffdfa">
+  <title>ARCHIVE PILATES 추천식단 프로그램</title>
+  <style>
+    :root {
+      color-scheme: light;
+      --ink: #171512;
+      --muted: #6f675f;
+      --line: #e8e1da;
+      --paper: #fffdfa;
+      --canvas: #f5f2ed;
+      --accent: #c7372f;
+      --accent-soft: #fff0ec;
+      --good: #25675e;
+      --good-soft: #edf8f5;
+      --warn: #8b4b20;
+      --warn-soft: #fff7eb;
+    }
+    *,
+    *::before,
+    *::after { box-sizing: border-box; }
+    html { -webkit-text-size-adjust: 100%; }
+    body {
+      margin: 0;
+      min-height: 100dvh;
+      overflow-x: clip;
+      background: var(--canvas);
+      color: var(--ink);
+      font-family: -apple-system, BlinkMacSystemFont, "Apple SD Gothic Neo", "Noto Sans KR", sans-serif;
+      text-rendering: optimizeLegibility;
+    }
+    button,
+    input,
+    textarea,
+    select { font: inherit; }
+    button,
+    input,
+    textarea,
+    select,
+    .option { min-width: 0; }
+    img { display: block; max-width: 100%; height: auto; }
+    p,
+    h1,
+    h2,
+    span,
+    label,
+    button { overflow-wrap: anywhere; word-break: keep-all; }
+    main {
+      width: min(100%, 760px);
+      margin: 0 auto;
+      padding: 16px 14px 48px;
+    }
+    .hero {
+      display: grid;
+      grid-template-columns: minmax(0, 1fr) auto;
+      gap: 18px;
+      align-items: start;
+      padding: 20px 2px 22px;
+      border-bottom: 1px solid rgba(23, 21, 18, .08);
+    }
+    .brand-mark {
+      width: 50px;
+      height: 50px;
+      border-radius: 50%;
+      object-fit: contain;
+    }
+    .eyebrow {
+      color: var(--accent);
+      font-size: 13px;
+      font-weight: 800;
+    }
+    h1 {
+      margin: 8px 0 11px;
+      font-size: 28px;
+      line-height: 1.22;
+      letter-spacing: 0;
+    }
+    h2 {
+      margin: 0;
+      font-size: 17px;
+      line-height: 1.35;
+      letter-spacing: 0;
+    }
+    .lead {
+      max-width: 58ch;
+      margin: 0;
+      color: var(--muted);
+      font-size: 15px;
+      line-height: 1.7;
+    }
+    .meta {
+      display: flex;
+      flex-wrap: wrap;
+      gap: 8px;
+      margin-top: 14px;
+    }
+    .chip {
+      display: inline-flex;
+      align-items: center;
+      min-height: 32px;
+      padding: 6px 11px;
+      border: 1px solid var(--line);
+      border-radius: 999px;
+      background: rgba(255, 253, 250, .8);
+      color: var(--muted);
+      font-size: 13px;
+    }
+    .notice {
+      margin-top: 16px;
+      padding: 16px;
+      border: 1px solid #efd8ca;
+      border-radius: 8px;
+      background: var(--warn-soft);
+      color: #65432d;
+      font-size: 14px;
+      line-height: 1.7;
+    }
+    form {
+      display: grid;
+      gap: 18px;
+      margin-top: 20px;
+    }
+    .section {
+      display: grid;
+      gap: 18px;
+      padding: 20px 16px;
+      border: 1px solid var(--line);
+      border-radius: 8px;
+      background: var(--paper);
+    }
+    .section-heading {
+      display: grid;
+      gap: 6px;
+      padding-bottom: 15px;
+      border-bottom: 1px solid var(--line);
+    }
+    .section-heading p,
+    .field-hint {
+      margin: 0;
+      color: var(--muted);
+      font-size: 13px;
+      line-height: 1.65;
+    }
+    .field {
+      display: grid;
+      gap: 10px;
+    }
+    .field > span,
+    fieldset legend {
+      padding: 0;
+      font-size: 15px;
+      font-weight: 800;
+      line-height: 1.55;
+    }
+    fieldset {
+      display: grid;
+      gap: 11px;
+      min-width: 0;
+      margin: 0;
+      padding: 0;
+      border: 0;
+    }
+    .grid-2 {
+      display: grid;
+      grid-template-columns: 1fr;
+      gap: 16px;
+    }
+    .section > :is(.field, fieldset, .grid-2) + :is(.field, fieldset, .grid-2) {
+      padding-top: 17px;
+      border-top: 1px solid #f0ebe5;
+    }
+    input[type="text"],
+    input[type="time"],
+    textarea,
+    select {
+      width: 100%;
+      min-height: 48px;
+      padding: 12px 13px;
+      border: 1px solid #ddd4cb;
+      border-radius: 7px;
+      background: #fff;
+      color: var(--ink);
+      font-size: 16px;
+      line-height: 1.45;
+    }
+    textarea {
+      min-height: 104px;
+      resize: vertical;
+      line-height: 1.55;
+    }
+    input:focus-visible,
+    textarea:focus-visible,
+    select:focus-visible,
+    button:focus-visible {
+      outline: 2px solid rgba(199, 55, 47, .45);
+      outline-offset: 2px;
+      border-color: var(--accent);
+    }
+    .options {
+      display: grid;
+      gap: 9px;
+    }
+    .option {
+      display: grid;
+      grid-template-columns: 22px minmax(0, 1fr);
+      gap: 10px;
+      align-items: center;
+      min-height: 46px;
+      padding: 10px 12px;
+      border: 1px solid #e4ddd5;
+      border-radius: 7px;
+      background: #fff;
+      color: #37322d;
+      font-size: 15px;
+      line-height: 1.5;
+      cursor: pointer;
+    }
+    .option:has(input:checked) {
+      border-color: rgba(199, 55, 47, .52);
+      background: var(--accent-soft);
+      color: var(--ink);
+    }
+    .option:focus-within {
+      outline: 2px solid rgba(199, 55, 47, .38);
+      outline-offset: 2px;
+    }
+    input[type="radio"],
+    input[type="checkbox"] {
+      width: 20px;
+      height: 20px;
+      margin: 0;
+      accent-color: var(--accent);
+    }
+    .consent {
+      padding: 16px;
+      border: 1px solid #cddfd9;
+      border-radius: 8px;
+      background: var(--good-soft);
+    }
+    .consent .option {
+      border-color: transparent;
+      background: transparent;
+      font-weight: 700;
+    }
+    .consent p {
+      margin: 10px 0 0 32px;
+      color: #42645e;
+      font-size: 13px;
+      line-height: 1.65;
+    }
+    .actions {
+      margin-top: -2px;
+    }
+    .submit-button {
+      width: 100%;
+      min-height: 52px;
+      border: 0;
+      border-radius: 8px;
+      background: var(--accent);
+      color: #fff;
+      font-size: 16px;
+      font-weight: 800;
+      cursor: pointer;
+    }
+    .submit-button:disabled { opacity: .56; cursor: wait; }
+    .message {
+      margin-top: 16px;
+      padding: 16px;
+      border: 1px solid #c7ddd6;
+      border-radius: 8px;
+      background: var(--good-soft);
+      color: var(--good);
+      font-size: 14px;
+      line-height: 1.7;
+    }
+    .message.bad {
+      border-color: #ebc7bf;
+      background: var(--accent-soft);
+      color: #8f2d26;
+    }
+    .report-link {
+      display: inline-flex;
+      align-items: center;
+      justify-content: center;
+      width: 100%;
+      min-height: 48px;
+      margin-top: 12px;
+      padding: 11px 16px;
+      border-radius: 8px;
+      background: var(--ink);
+      color: #fff;
+      font-size: 14px;
+      font-weight: 800;
+      text-decoration: none;
+    }
+    .report-link:focus-visible {
+      outline: 2px solid rgba(199, 55, 47, .45);
+      outline-offset: 3px;
+    }
+    [hidden] { display: none !important; }
+    @media (min-width: 620px) {
+      main { padding: 22px 18px 54px; }
+      .hero { padding: 24px 4px; }
+      h1 { font-size: 32px; }
+      .section { padding: 24px; }
+      .grid-2 { grid-template-columns: repeat(2, minmax(0, 1fr)); }
+      .options.columns { grid-template-columns: repeat(2, minmax(0, 1fr)); }
+    }
+    @media (prefers-reduced-motion: reduce) {
+      * { scroll-behavior: auto !important; transition: none !important; animation: none !important; }
+    }
+  </style>
+</head>
+<body>
+  <main>
+    <header class="hero">
+      <div>
+        <div class="eyebrow">ARCHIVE PILATES</div>
+        <h1>추천식단 프로그램</h1>
+        <p class="lead">생활 리듬과 식사 환경을 먼저 이해한 뒤, ARCHIVE에서 측정한 InBody 자료와 함께 현실적으로 이어갈 수 있는 식단을 준비합니다.</p>
+        <div class="meta" id="surveyMeta"><span class="chip">설문 정보를 확인하는 중</span></div>
+      </div>
+      <img class="brand-mark" src="../logo120.png" alt="ARCHIVE PILATES">
+    </header>
+
+    <div class="notice">
+      이 설문은 건강한 식습관과 운동 목표를 돕기 위한 참고 자료입니다. 질환 치료나 의학적 영양 처방을 대신하지 않으며, 복용 약물·임신·섭식장애·중증 알레르기 등 주의사항이 있으면 자동 추천을 보류하고 전문가 확인을 안내합니다.
+    </div>
+
+    <form id="mealSurveyForm" hidden>
+      <section class="section">
+        <div class="section-heading">
+          <h2>1. 목표</h2>
+          <p>지금 가장 중요한 목표를 기준으로 식단의 방향을 정합니다.</p>
+        </div>
+        <fieldset>
+          <legend>가장 우선하는 목표는 무엇인가요?</legend>
+          <div class="options columns">
+            <label class="option"><input type="radio" name="primaryGoal" value="체지방 감량" required><span>체지방 감량</span></label>
+            <label class="option"><input type="radio" name="primaryGoal" value="체중 관리와 유지"><span>체중 관리와 유지</span></label>
+            <label class="option"><input type="radio" name="primaryGoal" value="근육량 유지 또는 증가"><span>근육량 유지 또는 증가</span></label>
+            <label class="option"><input type="radio" name="primaryGoal" value="규칙적인 식사 습관"><span>규칙적인 식사 습관</span></label>
+          </div>
+        </fieldset>
+        <label class="field">
+          <span>목표를 조금 더 자세히 적어주세요</span>
+          <textarea name="goalDetail" maxlength="500" placeholder="예: 오후 피로와 야식을 줄이면서 체지방을 천천히 감량하고 싶어요"></textarea>
+        </label>
+        <label class="field">
+          <span>목표 기간이나 예정된 일정이 있나요?</span>
+          <input type="text" name="targetTimeline" maxlength="120" placeholder="예: 3개월 동안 생활 습관 개선 / 특별한 기한 없음">
+        </label>
+      </section>
+
+      <section class="section">
+        <div class="section-heading">
+          <h2>2. 하루 리듬과 업무</h2>
+          <p>실제로 식사할 수 있는 시간과 활동량을 식단에 반영합니다.</p>
+        </div>
+        <div class="grid-2">
+          <label class="field">
+            <span>평소 기상 시간</span>
+            <input type="time" name="wakeTime" required>
+          </label>
+          <label class="field">
+            <span>평소 취침 시간</span>
+            <input type="time" name="sleepTime" required>
+          </label>
+        </div>
+        <fieldset>
+          <legend>최근 수면 상태는 어떤가요?</legend>
+          <div class="options columns">
+            <label class="option"><input type="radio" name="sleepQuality" value="충분하고 규칙적" required><span>충분하고 규칙적</span></label>
+            <label class="option"><input type="radio" name="sleepQuality" value="시간은 충분하지만 불규칙"><span>시간은 충분하지만 불규칙</span></label>
+            <label class="option"><input type="radio" name="sleepQuality" value="수면 시간이 부족"><span>수면 시간이 부족</span></label>
+            <label class="option"><input type="radio" name="sleepQuality" value="자주 깨거나 숙면이 어려움"><span>자주 깨거나 숙면이 어려움</span></label>
+          </div>
+        </fieldset>
+        <label class="field">
+          <span>평소 업무 형태</span>
+          <select name="workType" required>
+            <option value="">선택해 주세요</option>
+            <option>주로 앉아서 근무</option>
+            <option>앉기와 이동이 섞인 근무</option>
+            <option>서 있거나 이동이 많은 근무</option>
+            <option>육체 활동이 많은 근무</option>
+            <option>교대근무 또는 야간근무</option>
+            <option>가사·육아 중심</option>
+            <option>기타</option>
+          </select>
+        </label>
+        <fieldset>
+          <legend>업무 중 활동 강도</legend>
+          <div class="options columns">
+            <label class="option"><input type="radio" name="workIntensity" value="낮음" required><span>낮음</span></label>
+            <label class="option"><input type="radio" name="workIntensity" value="보통"><span>보통</span></label>
+            <label class="option"><input type="radio" name="workIntensity" value="높음"><span>높음</span></label>
+            <label class="option"><input type="radio" name="workIntensity" value="날짜마다 다름"><span>날짜마다 다름</span></label>
+          </div>
+        </fieldset>
+        <label class="field">
+          <span>근무 시간과 이동 시간을 알려주세요</span>
+          <textarea name="workSchedule" maxlength="200" placeholder="예: 09:00~18:00 사무직, 왕복 이동 1시간"></textarea>
+        </label>
+        <label class="field">
+          <span>식사가 가능한 시간대</span>
+          <textarea name="mealBreakWindow" maxlength="200" placeholder="예: 점심 12:30 전후, 저녁은 퇴근 후 20시"></textarea>
+        </label>
+        <label class="field">
+          <span>운동 요일과 시간</span>
+          <textarea name="exerciseSchedule" maxlength="300" placeholder="예: 화·목 저녁 필라테스, 토요일 오전 산책"></textarea>
+        </label>
+      </section>
+
+      <section class="section">
+        <div class="section-heading">
+          <h2>3. 현재 식사 습관</h2>
+          <p>완벽한 식단보다 지금의 생활에서 바꿀 수 있는 부분을 찾습니다.</p>
+        </div>
+        <div class="grid-2">
+          <label class="field">
+            <span>하루 식사 횟수</span>
+            <select name="mealsPerDay" required>
+              <option value="">선택해 주세요</option>
+              <option>1회</option>
+              <option>2회</option>
+              <option>3회</option>
+              <option>4회 이상</option>
+              <option>날짜마다 다름</option>
+            </select>
+          </label>
+          <label class="field">
+            <span>아침 식사</span>
+            <select name="breakfastPattern" required>
+              <option value="">선택해 주세요</option>
+              <option>거의 매일 먹음</option>
+              <option>주 3~4회 먹음</option>
+              <option>거의 먹지 않음</option>
+              <option>음료나 간식으로 대신함</option>
+            </select>
+          </label>
+        </div>
+        <label class="field">
+          <span>평소 하루 식사를 예시로 적어주세요</span>
+          <textarea name="regularMealPattern" maxlength="500" placeholder="예: 아침 커피, 점심 회사 식당, 오후 빵, 저녁 배달식"></textarea>
+        </label>
+        <label class="field">
+          <span>간식과 음료 습관</span>
+          <textarea name="snackPattern" maxlength="300" placeholder="예: 오후 4시 단 음식, 하루 라떼 2잔"></textarea>
+        </label>
+        <div class="grid-2">
+          <label class="field">
+            <span>야식 빈도</span>
+            <select name="lateNightFrequency" required>
+              <option value="">선택해 주세요</option>
+              <option>거의 없음</option>
+              <option>주 1회</option>
+              <option>주 2~3회</option>
+              <option>주 4회 이상</option>
+            </select>
+          </label>
+          <label class="field">
+            <span>외식·배달 빈도</span>
+            <select name="eatingOutFrequency" required>
+              <option value="">선택해 주세요</option>
+              <option>주 1회 이하</option>
+              <option>주 2~3회</option>
+              <option>주 4~5회</option>
+              <option>거의 매일</option>
+            </select>
+          </label>
+        </div>
+        <label class="field">
+          <span>식사 준비 환경</span>
+          <select name="cookingAccess" required>
+            <option value="">선택해 주세요</option>
+            <option>직접 조리 가능</option>
+            <option>간단한 조리만 가능</option>
+            <option>도시락 준비 가능</option>
+            <option>편의점·외식 중심</option>
+            <option>가족이 식사를 준비함</option>
+          </select>
+        </label>
+        <label class="field">
+          <span>하루 식비 범위가 있다면 적어주세요</span>
+          <input type="text" name="mealBudget" maxlength="120" placeholder="예: 하루 2만원 이내 / 별도 제한 없음">
+        </label>
+      </section>
+
+      <section class="section">
+        <div class="section-heading">
+          <h2>4. 음식 선호와 생활 습관</h2>
+          <p>안전하게 피해야 할 음식과 오래 유지할 수 있는 선택을 확인합니다.</p>
+        </div>
+        <fieldset>
+          <legend>알레르기가 있나요?</legend>
+          <div class="options columns">
+            <label class="option"><input type="checkbox" name="allergies" value="없음"><span>없음</span></label>
+            <label class="option"><input type="checkbox" name="allergies" value="견과류"><span>견과류</span></label>
+            <label class="option"><input type="checkbox" name="allergies" value="갑각류·해산물"><span>갑각류·해산물</span></label>
+            <label class="option"><input type="checkbox" name="allergies" value="우유·유제품"><span>우유·유제품</span></label>
+            <label class="option"><input type="checkbox" name="allergies" value="달걀"><span>달걀</span></label>
+            <label class="option"><input type="checkbox" name="allergies" value="밀·글루텐"><span>밀·글루텐</span></label>
+            <label class="option"><input type="checkbox" name="allergies" value="기타"><span>기타</span></label>
+          </div>
+          <p class="field-hint">기타 알레르기는 아래 섭취가 어려운 음식 항목에 정확히 적어주세요.</p>
+        </fieldset>
+        <label class="field">
+          <span>알레르기, 의사에게 제한받은 음식, 못 먹는 음식을 적어주세요</span>
+          <textarea name="avoidFoods" maxlength="500" required placeholder="없으면 ‘없음’이라고 적어주세요"></textarea>
+        </label>
+        <label class="field">
+          <span>좋아하거나 자주 먹고 싶은 음식</span>
+          <textarea name="preferredFoods" maxlength="500" placeholder="예: 한식, 두부, 생선, 국물 요리"></textarea>
+        </label>
+        <div class="grid-2">
+          <label class="field">
+            <span>음주 빈도</span>
+            <select name="alcoholFrequency" required>
+              <option value="">선택해 주세요</option>
+              <option>마시지 않음</option>
+              <option>월 1~2회</option>
+              <option>주 1회</option>
+              <option>주 2~3회</option>
+              <option>주 4회 이상</option>
+            </select>
+          </label>
+          <label class="field">
+            <span>흡연 여부</span>
+            <select name="smokingStatus" required>
+              <option value="">선택해 주세요</option>
+              <option>비흡연</option>
+              <option>흡연</option>
+              <option>전자담배 사용</option>
+              <option>금연 중</option>
+            </select>
+          </label>
+        </div>
+        <label class="field">
+          <span>한 번에 마시는 술의 종류와 양</span>
+          <input type="text" name="alcoholAmount" maxlength="200" placeholder="예: 와인 2잔 / 해당 없음">
+        </label>
+        <label class="field">
+          <span>주말 식사가 평일과 다르다면 적어주세요</span>
+          <textarea name="weekendDifference" maxlength="300" placeholder="예: 주말에는 브런치와 외식이 많아요"></textarea>
+        </label>
+      </section>
+
+      <section class="section">
+        <div class="section-heading">
+          <h2>5. 건강상 주의사항</h2>
+          <p>아래 응답은 안전 검토에만 사용됩니다. 해당 내용이 있으면 자동 추천을 보류할 수 있습니다.</p>
+        </div>
+        <label class="field">
+          <span>진단받은 질환 또는 식사 관련 주의사항</span>
+          <textarea name="medicalConditions" maxlength="500" required placeholder="없으면 ‘없음’이라고 적어주세요"></textarea>
+        </label>
+        <label class="field">
+          <span>현재 복용 중인 약물이나 보충제</span>
+          <textarea name="medications" maxlength="500" required placeholder="없으면 ‘없음’이라고 적어주세요"></textarea>
+        </label>
+        <fieldset>
+          <legend>임신·수유 관련 해당 사항</legend>
+          <div class="options columns">
+            <label class="option"><input type="radio" name="pregnancyStatus" value="해당 없음" required><span>해당 없음</span></label>
+            <label class="option"><input type="radio" name="pregnancyStatus" value="임신 중"><span>임신 중</span></label>
+            <label class="option"><input type="radio" name="pregnancyStatus" value="수유 중"><span>수유 중</span></label>
+            <label class="option"><input type="radio" name="pregnancyStatus" value="임신 준비 중"><span>임신 준비 중</span></label>
+          </div>
+        </fieldset>
+        <fieldset>
+          <legend>섭식장애 또는 식사 관련 치료 경험이 있나요?</legend>
+          <div class="options columns">
+            <label class="option"><input type="radio" name="eatingDisorderHistory" value="없음" required><span>없음</span></label>
+            <label class="option"><input type="radio" name="eatingDisorderHistory" value="있음"><span>있음</span></label>
+            <label class="option"><input type="radio" name="eatingDisorderHistory" value="답변을 원하지 않음"><span>답변을 원하지 않음</span></label>
+          </div>
+        </fieldset>
+        <label class="field">
+          <span>추가로 식단 구성에 반영했으면 하는 내용</span>
+          <textarea name="additionalNote" maxlength="500" placeholder="예: 가족과 같은 메뉴를 먹어야 해요 / 점심은 회사 식당을 이용해요"></textarea>
+        </label>
+      </section>
+
+      <div class="consent">
+        <label class="option">
+          <input type="checkbox" name="consent" value="yes" required>
+          <span>추천식단 준비를 위해 위 생활·식습관·건강정보를 저장하고 최신 InBody 기록과 함께 식단 초안 자동 생성 및 ARCHIVE PILATES 운영자 검토에 활용하는 데 동의합니다. AI 초안에는 회원명·전화번호·InBody 내부 ID를 제외합니다.</span>
+        </label>
+        <p>응답은 ARCHIVE PILATES 운영자만 확인하며 알림톡 본문에는 포함되지 않습니다.</p>
+      </div>
+
+      <div class="actions">
+        <button class="submit-button" type="submit">설문 제출하기</button>
+      </div>
+    </form>
+
+    <section id="surveyMessage" class="message" hidden>
+      <span id="surveyMessageText"></span>
+      <a id="mealReportLink" class="report-link" href="#" hidden>추천식단 리포트 보기</a>
+    </section>
+  </main>
+
+  <script>
+    const params = new URLSearchParams(location.search);
+    const requestId = String(params.get("id") || "").trim();
+    const accessToken = String(params.get("token") || "").trim();
+    const form = document.getElementById("mealSurveyForm");
+    const meta = document.getElementById("surveyMeta");
+    const message = document.getElementById("surveyMessage");
+    const messageText = document.getElementById("surveyMessageText");
+    const reportLink = document.getElementById("mealReportLink");
+    const submitButton = form.querySelector('button[type="submit"]');
+
+    init();
+    form.addEventListener("submit", submitSurvey);
+    form.addEventListener("change", handleExclusiveNone);
+
+    async function init() {
+      if (!/^meal-[a-z0-9-]{16,96}$/i.test(requestId) || !/^[a-f0-9]{48}$/i.test(accessToken)) {
+        showMessage("설문 링크가 올바르지 않습니다. 받은 알림톡 링크를 다시 확인해 주세요.", true);
+        return;
+      }
+      try {
+        const info = await requestJson(`../api/recommendedMealSurvey?id=${encodeURIComponent(requestId)}&token=${encodeURIComponent(accessToken)}`);
+        const inbodyText = info.inbodyStatus === "available"
+          ? `InBody ${formatDate(info.inbodyMeasuredAt) || "기록 확인"}`
+          : "InBody 측정 확인 필요";
+        meta.innerHTML = [
+          `<span class="chip">${escapeHtml(info.memberName || "회원")} 회원</span>`,
+          `<span class="chip">${escapeHtml(inbodyText)}</span>`,
+          `<span class="chip">약 7분</span>`
+        ].join("");
+        if (info.status === "submitted") {
+          if (info.reportReady) {
+            showMessage("추천식단 준비가 완료되었습니다. 아래 버튼에서 확인해 주세요.", false, true);
+          } else {
+            showMessage("이미 설문 제출이 완료되었습니다. 설문과 최신 InBody를 반영해 추천식단을 준비 중입니다. 운영자 검토가 끝난 뒤 이 링크에서 확인할 수 있습니다.");
+          }
+          return;
+        }
+        form.hidden = false;
+      } catch (error) {
+        showMessage(error.message || "설문 정보를 불러오지 못했습니다.", true);
+      }
+    }
+
+    async function submitSurvey(event) {
+      event.preventDefault();
+      if (!form.reportValidity()) return;
+      const allergies = Array.from(form.querySelectorAll('input[name="allergies"]:checked')).map((input) => input.value);
+      if (!allergies.length) {
+        showMessage("알레르기 여부를 선택해 주세요.", true);
+        form.querySelector('input[name="allergies"]')?.focus();
+        return;
+      }
+      submitButton.disabled = true;
+      submitButton.textContent = "안전하게 저장하는 중";
+      try {
+        const data = new FormData(form);
+        const payload = {
+          requestId,
+          accessToken,
+          primaryGoal: data.get("primaryGoal"),
+          goalDetail: data.get("goalDetail"),
+          targetTimeline: data.get("targetTimeline"),
+          wakeTime: data.get("wakeTime"),
+          sleepTime: data.get("sleepTime"),
+          sleepQuality: data.get("sleepQuality"),
+          workType: data.get("workType"),
+          workIntensity: data.get("workIntensity"),
+          workSchedule: data.get("workSchedule"),
+          mealBreakWindow: data.get("mealBreakWindow"),
+          exerciseSchedule: data.get("exerciseSchedule"),
+          mealsPerDay: data.get("mealsPerDay"),
+          breakfastPattern: data.get("breakfastPattern"),
+          regularMealPattern: data.get("regularMealPattern"),
+          snackPattern: data.get("snackPattern"),
+          lateNightFrequency: data.get("lateNightFrequency"),
+          eatingOutFrequency: data.get("eatingOutFrequency"),
+          cookingAccess: data.get("cookingAccess"),
+          mealBudget: data.get("mealBudget"),
+          allergies,
+          avoidFoods: data.get("avoidFoods"),
+          preferredFoods: data.get("preferredFoods"),
+          alcoholFrequency: data.get("alcoholFrequency"),
+          alcoholAmount: data.get("alcoholAmount"),
+          smokingStatus: data.get("smokingStatus"),
+          medicalConditions: data.get("medicalConditions"),
+          medications: data.get("medications"),
+          pregnancyStatus: data.get("pregnancyStatus"),
+          eatingDisorderHistory: data.get("eatingDisorderHistory"),
+          weekendDifference: data.get("weekendDifference"),
+          additionalNote: data.get("additionalNote"),
+          consent: data.get("consent") === "yes"
+        };
+        await requestJson("../api/recommendedMealSurvey", {
+          method: "POST",
+          headers: { "Content-Type": "application/json" },
+          body: JSON.stringify(payload)
+        });
+        form.hidden = true;
+        showMessage("설문 제출이 완료되었습니다. 설문과 최신 InBody를 반영해 추천식단을 준비합니다. 운영자 검토가 끝난 뒤 이 링크에서 확인할 수 있습니다.");
+        window.scrollTo({ top: 0, behavior: "smooth" });
+      } catch (error) {
+        showMessage(error.message || "제출 중 오류가 발생했습니다. 잠시 후 다시 시도해 주세요.", true);
+      } finally {
+        submitButton.disabled = false;
+        submitButton.textContent = "설문 제출하기";
+      }
+    }
+
+    function handleExclusiveNone(event) {
+      const input = event.target;
+      if (!(input instanceof HTMLInputElement) || input.name !== "allergies" || !input.checked) return;
+      const items = Array.from(form.querySelectorAll('input[name="allergies"]'));
+      if (input.value === "없음") {
+        items.forEach((item) => { if (item !== input) item.checked = false; });
+      } else {
+        const none = items.find((item) => item.value === "없음");
+        if (none) none.checked = false;
+      }
+    }
+
+    async function requestJson(url, options) {
+      const response = await fetch(url, options);
+      const data = await response.json().catch(() => ({}));
+      if (!response.ok || data.ok === false) throw new Error(data.error || `HTTP ${response.status}`);
+      return data;
+    }
+
+    function showMessage(text, warn = false, showReport = false) {
+      message.hidden = false;
+      message.className = `message${warn ? " bad" : ""}`;
+      messageText.textContent = text;
+      reportLink.hidden = !showReport;
+      if (showReport) {
+        reportLink.href = `../recommendedMealPlan/?id=${encodeURIComponent(requestId)}&token=${encodeURIComponent(accessToken)}`;
+      }
+    }
+
+    function formatDate(value) {
+      if (!value) return "";
+      const date = new Date(value);
+      if (Number.isNaN(date.getTime())) return "";
+      return `${date.getFullYear()}.${String(date.getMonth() + 1).padStart(2, "0")}.${String(date.getDate()).padStart(2, "0")}`;
+    }
+
+    function escapeHtml(value) {
+      return String(value == null ? "" : value).replace(/[&<>"']/g, (char) => ({
+        "&": "&amp;",
+        "<": "&lt;",
+        ">": "&gt;",
+        '"': "&quot;",
+        "'": "&#39;"
+      })[char] || char);
+    }
+  </script>
+</body>
+</html>

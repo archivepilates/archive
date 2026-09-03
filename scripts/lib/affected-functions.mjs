@@ -32,15 +32,18 @@ export function detectAffectedFromCli(argv) {
   };
 }
 
-function codebasesForFile(file) {
+export function codebasesForFile(file) {
   const normalized = file.replaceAll("\\", "/");
   if (!normalized || normalized.startsWith("docs/") || normalized.startsWith("artifacts/")) return [];
   if (isSharedPath(normalized)) return allCodebases;
+  if (normalized.endsWith("/alimtalk/templates.ts")) return ["functions-alimtalk", "functions-private-chart"];
+  if (normalized.includes("/social/") || normalized.endsWith("/exports/social.ts")) return ["functions-social"];
   if (normalized.includes("/alimtalk/") || normalized.endsWith("/exports/alimtalk.ts")) return ["functions-alimtalk"];
   if (
     normalized.includes("/privateLessonChart/") ||
     normalized.includes("/privateSurvey/") ||
     normalized.includes("/inbody/") ||
+    normalized.startsWith("firebase/kangsain-functions/functions/src/method/") ||
     normalized.endsWith("/exports/privateChart.ts")
   ) {
     return ["functions-private-chart"];
@@ -55,6 +58,14 @@ function codebasesForFile(file) {
   ) {
     return ["functions-sync"];
   }
+  if (normalized.endsWith("/parking/parkingOperations.ts")) return ["functions-app", "functions-sync"];
+  if (normalized.includes("/parking/")) return ["functions-app"];
+  if (normalized.includes("/refund/")) return ["functions-app"];
+  if (normalized.includes("/videoAnalytics/")) return ["functions-app"];
+  if (normalized.endsWith("/instructorLessonRegistration/instructorLessonConfirmation.ts")) {
+    return ["functions-alimtalk", "functions-app"];
+  }
+  if (normalized.includes("/instructorLessonRegistration/")) return ["functions-app"];
   if (normalized.includes("/callable/") || normalized.includes("/security/") || normalized.endsWith("/exports/app.ts")) {
     return ["functions-app"];
   }

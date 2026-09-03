@@ -181,8 +181,8 @@ printf '%s' 'NEW_SECRET_VALUE' | gcloud secrets versions add SECRET_NAME \
 - `scheduledSyncLecturesDaily`: 매일 00:05 수업/예약 정합성 동기화
 - `scheduledPollManagerNotices`: 10분마다 StudioMate 알림 poll
 - `scheduledProcessWriteQueue`: 1분마다 출석/결석/메모 StudioMate 쓰기 큐 처리
-- `scheduledProcessContactSyncJobs`: 5분마다 Google Contacts 동기화 큐 처리
-- `scheduledProcessAlimtalkQueue`: 5분마다 승인된 알림톡 큐 처리
+- `scheduledProcessContactSyncJobs`: 10분마다 Google Contacts 동기화 큐 처리
+- `scheduledProcessAlimtalkQueue`: 10분마다 승인된 알림톡 큐 처리
 - `scheduledAttendanceReminder`: 매시 출석 체크 리마인더
 - `scheduledSyncDashboardDaily`: 매일 00:20 대시보드 스냅샷 동기화
 - `adminSyncLecturesRange`: 운영자 수동 동기화
@@ -222,7 +222,7 @@ flowchart LR
 - 운영 기준:
   - 명확한 안내성 메시지부터 자동화한다.
   - 초기에는 후보 생성 후 운영자 검토/승인을 거친다.
-  - 승인된 후보만 `queued` 상태로 전환하고, 서버 워커가 5분마다 발송한다.
+  - 승인된 후보만 `queued` 상태로 전환하고, 서버 워커가 10분마다 발송한다.
 
 관련 문서:
 

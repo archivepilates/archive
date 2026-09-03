@@ -51,6 +51,18 @@ const forbiddenTextPatterns = [
     reason: "privateSessionLedger must be recomputed from the single bookings reservation source",
   },
 ];
+const requiredTextPatterns = [
+  {
+    file: "scripts/recompute-private-session-ledger.mjs",
+    pattern: 'bookingId.startsWith("usage_booking_")',
+    reason: "usage_booking_ fallback rows must never enter the live private session ledger",
+  },
+  {
+    file: "scripts/recompute-private-session-ledger.mjs",
+    pattern: 'pruneStale: Boolean(args["prune-stale"])',
+    reason: "ledger recompute must not delete stale rows unless pruning is explicitly requested",
+  },
+];
 
 for (const root of actionRoots) {
   for (const file of walk(path.join(repoRoot, root))) {
@@ -68,6 +80,13 @@ for (const item of forbiddenTextPatterns) {
   const absolutePath = path.join(repoRoot, item.file);
   const text = fs.existsSync(absolutePath) ? fs.readFileSync(absolutePath, "utf8") : "";
   if (text.includes(item.pattern)) {
+    violations.push({ file: item.file, collection: item.pattern, reason: item.reason });
+  }
+}
+for (const item of requiredTextPatterns) {
+  const absolutePath = path.join(repoRoot, item.file);
+  const text = fs.existsSync(absolutePath) ? fs.readFileSync(absolutePath, "utf8") : "";
+  if (!text.includes(item.pattern)) {
     violations.push({ file: item.file, collection: item.pattern, reason: item.reason });
   }
 }

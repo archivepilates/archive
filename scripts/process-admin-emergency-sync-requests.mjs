@@ -4,6 +4,7 @@ import { mkdirSync, writeFileSync } from "node:fs";
 import { createRequire } from "node:module";
 import os from "node:os";
 import path from "node:path";
+import { writeIdleHeartbeatIfDue } from "./lib/idle-heartbeat.mjs";
 
 const require = createRequire(import.meta.url);
 const admin = require("../firebase/kangsain-functions/functions/node_modules/firebase-admin");
@@ -37,8 +38,16 @@ const summary = {
   finishedAt: new Date().toISOString(),
 };
 
-writeReport(summary);
-console.log(JSON.stringify(summary, null, 2));
+if (processed.length) {
+  writeReport(summary);
+  console.log(JSON.stringify(summary, null, 2));
+} else {
+  writeIdleHeartbeatIfDue(
+    path.join(REPORT_DIR, "idle-heartbeat.json"),
+    summary,
+    30 * 60 * 1000,
+  );
+}
 if (!summary.ok) process.exitCode = 1;
 
 async function claimNextRequest() {

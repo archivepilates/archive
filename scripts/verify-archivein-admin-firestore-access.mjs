@@ -75,7 +75,8 @@ const adminReads = [
     "memberContactIndex",
     "alimtalkCandidates",
     "privateSurveyResponses",
-    "studiomateMemoWriteJobs"
+    "studiomateMemoWriteJobs",
+    "ticketLiabilityReports"
   ].map((collectionName) => ({
     label: `${collectionName} query`,
     run: async ({ db, getDocs, collection, query, where, limit }) => ({
@@ -141,6 +142,11 @@ try {
   const url = new URL(targetUrl);
   url.searchParams.set("verify-admin", String(Date.now()));
   await page.goto(url.toString(), { waitUntil: "networkidle" });
+  const firebaseConfigUrl = url.pathname.startsWith("/archivein/")
+    ? `${url.origin}/archivein/firebase-config.js`
+    : `${url.origin}/firebase-config.js`;
+  await page.addScriptTag({ url: firebaseConfigUrl });
+  await page.waitForFunction(() => !!window.KANGSAIN_FIREBASE_CONFIG);
 
   const result = await page.evaluate(async ({ token, adminReadLabels }) => {
     const { initializeApp, getApps } = await import("https://www.gstatic.com/firebasejs/10.14.1/firebase-app.js");
@@ -200,6 +206,7 @@ try {
       "alimtalkCandidates query": () => getDocs(query(collection(db, "alimtalkCandidates"), where("studioId", "==", verifyStudioId), limit(1))).then((snap) => ({ size: snap.size })),
       "privateSurveyResponses query": () => getDocs(query(collection(db, "privateSurveyResponses"), where("studioId", "==", verifyStudioId), limit(1))).then((snap) => ({ size: snap.size })),
       "studiomateMemoWriteJobs query": () => getDocs(query(collection(db, "studiomateMemoWriteJobs"), where("studioId", "==", verifyStudioId), limit(1))).then((snap) => ({ size: snap.size })),
+      "ticketLiabilityReports query": () => getDocs(query(collection(db, "ticketLiabilityReports"), where("studioId", "==", verifyStudioId), limit(1))).then((snap) => ({ size: snap.size })),
       "alimtalkTemplateStates query": () => getDocs(query(collection(db, "alimtalkTemplateStates"), limit(1))).then((snap) => ({ size: snap.size })),
       "adminActions doc": () => getDoc(doc(db, "adminActions", `${verifyStudioId}_${verifyDate}`)).then((snap) => ({ exists: snap.exists() })),
       "syncStates doc": () => getDoc(doc(db, "syncStates", `lecturesRange_${verifyStudioId}`)).then((snap) => ({ exists: snap.exists() })),
@@ -215,18 +222,16 @@ try {
     verifyStaffId: staffId
   });
 
-  await page.waitForTimeout(8000);
   const screen = await page.evaluate(() => ({
     title: document.title,
-    hasOperatorTitle: document.body.innerText.includes("아카이브IN 운영자"),
     hasPermissionError: document.body.innerText.includes("Missing or insufficient permissions"),
-    hasActionNeeded: document.body.innerText.includes("액션 필요"),
-    hasInstructorTitle: /^IN\s*강사/m.test(document.body.innerText)
+    hasRetiredRootCopy: document.body.innerText.includes("ARCHIVE IN 운영자 화면은 ARCHIVE CORE로 역할이 이전되었습니다."),
+    hasInstructorTitle: /^IN\s*강사/m.test(document.body.innerText),
   }));
   await page.screenshot({ path: "/tmp/archivein-admin-verify.png", fullPage: true });
 
   const failedReads = probes.filter((item) => !item.ok);
-  const failedScreen = !screen.hasOperatorTitle || screen.hasPermissionError || screen.hasInstructorTitle;
+  const failedScreen = screen.hasPermissionError || screen.hasInstructorTitle;
   const summary = {
     ok: failedReads.length === 0 && !failedScreen,
     targetUrl,

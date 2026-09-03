@@ -23,6 +23,12 @@ export const archiveFunctionCodebases = {
     source: "firebase/function-codebases/app",
     ownsMemberFacingSend: false,
   },
+  "functions-social": {
+    area: "social",
+    deployTarget: "functions:functions-social",
+    source: "firebase/function-codebases/social",
+    ownsMemberFacingSend: true,
+  },
 } as const;
 
 export type ArchiveFunctionCodebase = keyof typeof archiveFunctionCodebases;

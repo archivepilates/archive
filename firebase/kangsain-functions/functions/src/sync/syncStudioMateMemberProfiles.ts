@@ -3,10 +3,18 @@ import type { Timestamp } from "firebase-admin/firestore";
 import type { BookingDoc, ContactSyncJobDoc, MemberProfileDoc, TicketExpiryLevel } from "../types/models";
 import { refs } from "../firestore/refs";
 import { saveRawMirrorBatch } from "../firestore/rawMirrorRepository";
+import { getActiveStaffs } from "../firestore/staffRepository";
 import { StudioMateClient } from "../studiomate/studiomateClient";
 import { addDays, nowTimestamp, parseStudioMateDateTime, todayKst } from "../utils/date";
 import { stableHash } from "../utils/hash";
-import { isProtectedStaffContact } from "./protectedContactRules";
+import { buildActiveStaffContactIndex, isProtectedStaffContact } from "./protectedContactRules";
+import {
+  buildInstructorLessonContactGroupNames,
+  formatMemberContactDisplayName,
+  isInstructorMemberGrade,
+  normalizeMemberGrade,
+  resolveMemberGrade,
+} from "./memberContactDisplayName";
 
 export async function syncStudioMateMemberProfiles(input: {
   studioId: string;
@@ -15,6 +23,7 @@ export async function syncStudioMateMemberProfiles(input: {
   const members = uniqueMembers(input.bookings);
   const ticketSummaryByMember = buildTicketSummaryByMember(input.bookings);
   const client = new StudioMateClient(input.studioId);
+  const activeStaffContacts = buildActiveStaffContactIndex(await getActiveStaffs(input.studioId));
 
   for (let index = 0; index < members.length; index += 5) {
     const chunk = members.slice(index, index + 5);
@@ -55,6 +64,28 @@ export async function syncStudioMateMemberProfiles(input: {
         const contactMemo = cleanContactMemo(
           firstValue(data, ["memo", "note", "notes", "member_memo", "memberMemo", "description", "remark", "remarks"]),
         );
+        const [previousProfile, previousContact] = await Promise.all([
+          refs.memberProfile(member.memberId).get().then((snap) => snap.data()),
+          refs.memberContactIndexDoc(member.memberId).get().then((snap) => snap.data()),
+        ]);
+        const sourceMemberGrade = normalizeMemberGrade(
+          stringValue(
+            firstValue(data, [
+              "grade",
+              "member_grade",
+              "memberGrade",
+              "member_type",
+              "memberType",
+              "등급",
+              "회원구분",
+            ]),
+          ),
+        );
+        const memberGrade = resolveMemberGrade(sourceMemberGrade, previousProfile?.memberGrade || "");
+        const instructorLessonDates = isInstructorMemberGrade(memberGrade)
+          ? mergeInstructorLessonDates(previousProfile?.instructorLessonDates || [], ticketSummary.activeTickets || [])
+          : [];
+        const contactGroupNames = buildInstructorLessonContactGroupNames(instructorLessonDates);
         const doc: MemberProfileDoc = {
           memberId: member.memberId,
           studioId: input.studioId,
@@ -65,6 +96,8 @@ export async function syncStudioMateMemberProfiles(input: {
           email: stringValue(firstValue(data, ["email", "mail"])),
           birthDate: stringValue(firstValue(data, ["birth", "birthday", "birth_date", "birthDate"])),
           gender: stringValue(firstValue(data, ["gender", "sex"])),
+          memberGrade,
+          instructorLessonDates,
           memoPreview: contactMemo.slice(0, 120),
           activeTicketNames: ticketSummary.activeTicketNames,
           activeTicketCount: ticketSummary.activeTicketCount,
@@ -77,8 +110,46 @@ export async function syncStudioMateMemberProfiles(input: {
           updatedAt: nowTimestamp(),
         };
         await refs.memberProfile(member.memberId).set(doc, { merge: true });
-        if (phone && !isProtectedStaffContact({ name: doc.name, phone })) {
-          const contactDisplayName = formatMemberContactDisplayName(doc.name, registeredAt);
+        if (phone && isProtectedStaffContact({ name: doc.name, phone }, activeStaffContacts)) {
+          const contactDisplayName = `${doc.name.trim()} 아카이브`;
+          const contactHash = stableHash({
+            name: doc.name,
+            contactDisplayName,
+            contactMemo,
+            phone,
+            activeStaffContact: true,
+          });
+          await refs.memberContactIndexDoc(member.memberId).set(
+            {
+              memberId: member.memberId,
+              studioId: input.studioId,
+              name: doc.name,
+              contactDisplayName,
+              contactMemo,
+              memberGrade,
+              contactGroupNames,
+              phone,
+              phoneLast4: phone.slice(-4),
+              registeredAt,
+              activeTicketCount: ticketSummary.activeTicketCount,
+              activeTicketNames: ticketSummary.activeTicketNames,
+              contactHash,
+              source: "studiomate_api",
+              contactTargets: {
+                archivepilates_gmail: previousContact?.contactTargets?.archivepilates_gmail || "skipped",
+                home_archivepilates: "skipped",
+              },
+              homeContactResourceName: previousContact?.homeContactResourceName || "",
+              lastContactSyncJobId: previousContact?.lastContactSyncJobId || "",
+              contactLastError: null,
+              contactUpdatedAt: previousContact?.contactUpdatedAt || null,
+              syncedAt: nowTimestamp(),
+              updatedAt: nowTimestamp(),
+            },
+            { merge: true },
+          );
+        } else if (phone) {
+          const contactDisplayName = formatMemberContactDisplayName(doc.name, registeredAt, memberGrade);
           const contactHash = stableHash({
             name: doc.name,
             contactDisplayName,
@@ -86,8 +157,8 @@ export async function syncStudioMateMemberProfiles(input: {
             phone,
             registeredAt: registeredAt?.toMillis() || null,
             activeTicketNames: ticketSummary.activeTicketNames,
+            contactGroupNames,
           });
-          const previousContact = (await refs.memberContactIndexDoc(member.memberId).get()).data();
           const shouldQueueHomeSync =
             !previousContact ||
             previousContact.contactHash !== contactHash ||
@@ -106,6 +177,8 @@ export async function syncStudioMateMemberProfiles(input: {
               name: doc.name,
               contactDisplayName,
               contactMemo,
+              memberGrade,
+              contactGroupNames,
               phone,
               phoneLast4: phone.slice(-4),
               registeredAt,
@@ -131,6 +204,7 @@ export async function syncStudioMateMemberProfiles(input: {
               memberName: doc.name,
               contactDisplayName,
               contactMemo,
+              contactGroupNames,
               memberPhone: phone,
               target: "home_archivepilates",
               status: "pending",
@@ -157,6 +231,26 @@ export async function syncStudioMateMemberProfiles(input: {
 
   logger.info("syncStudioMateMemberProfiles completed", { studioId: input.studioId, members: members.length });
   return { members: members.length };
+}
+
+function mergeInstructorLessonDates(
+  previousDates: string[],
+  tickets: NonNullable<MemberProfileDoc["activeTickets"]>,
+): string[] {
+  const nextDates = tickets
+    .filter((ticket) => /강사\s*레슨/i.test(ticket.name))
+    .map((ticket) => (ticket.availableFrom ? kstDate(ticket.availableFrom.toDate()) : ""))
+    .filter(Boolean);
+  return [...new Set([...previousDates, ...nextDates])].sort();
+}
+
+function kstDate(date: Date): string {
+  return new Intl.DateTimeFormat("en-CA", {
+    timeZone: "Asia/Seoul",
+    year: "numeric",
+    month: "2-digit",
+    day: "2-digit",
+  }).format(date);
 }
 
 function buildTicketSummaryByMember(bookings: BookingDoc[]): Map<
@@ -344,21 +438,6 @@ function asArray(value: unknown): unknown[] {
 function isNewMember(registeredAt: Timestamp | null): boolean {
   if (!registeredAt) return false;
   return registeredAt.toMillis() >= new Date(`${addDays(todayKst(), -30)}T00:00:00+09:00`).getTime();
-}
-
-function formatMemberContactDisplayName(name: string, registeredAt: Timestamp | null): string {
-  const compactRegisteredAt = registeredAt ? compactDateKst(registeredAt.toDate()) : "";
-  return [name, "회원", compactRegisteredAt].filter(Boolean).join(" ");
-}
-
-function compactDateKst(date: Date): string {
-  const formatter = new Intl.DateTimeFormat("en-CA", {
-    timeZone: "Asia/Seoul",
-    year: "numeric",
-    month: "2-digit",
-    day: "2-digit",
-  });
-  return formatter.format(date).replace(/^20/, "").replaceAll("-", "");
 }
 
 function uniqueMembers(bookings: BookingDoc[]): Array<{ memberId: string; memberName: string }> {

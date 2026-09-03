@@ -19,14 +19,14 @@
       <aside class="sidebar" aria-label="ARCHIVE CORE navigation">
         <div class="brand"><div class="brand-mark" aria-hidden="true">CORE</div><strong>ARCHIVE CORE</strong><span>ARCHIVE PILATES Operations Platform</span></div>
         <nav class="nav">
-          <a href="../" data-section="home">Home <small>요약</small></a><a href="../members/" data-section="members">Members <small>회원</small></a><a href="../lessons/" data-section="lessons">Lessons <small>수업</small></a><a href="../private/" data-section="private">Private <small>차트</small></a><a href="../staff/" data-section="staff">Staff <small>강사</small></a><a href="../messages/" data-section="messages">Messages <small>알림톡</small></a><a href="../automation/" data-section="automation">Automation <small>관제</small></a><a href="../business/" data-section="business">Business <small>지표</small></a><a href="../imports/" data-section="imports">Imports <small>원본</small></a><a href="./" data-section="rules">Rules <small>규칙</small></a><a href="../settings/" data-section="settings">Settings <small>설정</small></a>
+          <a href="../" data-section="home">Home <small>요약</small></a><a href="../private/" data-section="private">Private <small>차트</small></a><a href="../staff/" data-section="staff">Staff <small>강사</small></a><a href="../messages/" data-section="messages">Messages <small>알림톡</small></a><a href="../automation/" data-section="automation">Automation <small>관제</small></a><a href="../business/" data-section="business">Business <small>지표</small></a><a href="../imports/" data-section="imports">Imports <small>원본</small></a><a href="./" data-section="rules">Rules <small>규칙</small></a><a href="../settings/" data-section="settings">Settings <small>설정</small></a>
         </nav>
       </aside>
       <main class="main rules-page">
         <header class="page-hero">
           <p class="eyebrow">RULES</p>
           <h1>운영 규칙</h1>
-          <p class="subtitle">2026.06.26 기준 현재 유효한 운영 규칙만 정리한 ARCHIVE CORE 단일 운영 허브입니다.</p>
+          <p class="subtitle">2026.09.03 기준 현재 유효한 운영 규칙만 정리한 ARCHIVE CORE 단일 운영 허브입니다.</p>
         </header>
 
         <section class="panel rules-hero">
@@ -37,7 +37,7 @@
           </div>
           <div class="rules-meta">
             <div><strong>기록 원칙</strong><span>새 규칙은 ARCHIVE CORE 운영규칙 탭에 먼저 기록</span></div>
-            <div><strong>Notion 사용</strong><span>과거 참조 또는 프라이빗 차트처럼 아직 기능이 의존하는 화면에만 한정</span></div>
+            <div><strong>Notion 사용</strong><span>과거 참조와 프라이빗 차트의 야간 표시용 미러에만 한정</span></div>
             <div><strong>완료 기준</strong><span>구현 상태, 원천, 검증, 다음 액션이 함께 있어야 완료</span></div>
           </div>
         </section>
@@ -47,12 +47,19 @@
           <nav class="rule-anchor-grid" aria-label="운영규칙 목차">
             <a href="#principles">공통 원칙<span>보안, 원천, 기록</span></a>
             <a href="#data-sync">데이터·동기화<span>StudioMate Excel, Contacts</span></a>
+            <a href="#video-watch">영상 시청 분석<span>최근 회원, 개인별 영상 이력</span></a>
+            <a href="#data-trust">데이터 신뢰<span>신선도, 화면 상태, 액션 수명주기</span></a>
+            <a href="#renewal">재등록 관리<span>만료, 잔여, 상담 후보</span></a>
             <a href="#alimtalk">알림톡<span>후보, 승인, 중복 차단</span></a>
+            <a href="#social-content">Instagram<span>초안, 승인, 예약 발행</span></a>
+            <a href="#meal-plan">추천식단<span>설문, InBody, 안전 검토</span></a>
             <a href="#private">프라이빗<span>회차, 설문, 리포트</span></a>
             <a href="#staff-evaluation">강사 평가<span>퀴즈, 인사기록카드</span></a>
             <a href="#parking">주차등록<span>차량, 아이파킹, 자동 할인</span></a>
             <a href="#welcome">현장 웰컴<span>가입서, PDF, StudioMate 반영</span></a>
             <a href="#settlement">정산·지표<span>월별 정산, 대시보드</span></a>
+            <a href="#refunds">환불<span>예상액, 검토, 이폼싸인</span></a>
+            <a href="#cloud-cost">클라우드 비용<span>예산, 과금, 자원 정리</span></a>
             <a href="#release">배포·검증<span>배포세트, 실패보고</span></a>
             <a href="#worklines">워크라인<span>스레드, worktree, 승격</span></a>
             <a href="#archive">폐기·보관<span>Notion, API 모드, 레거시</span></a>
@@ -76,9 +83,11 @@
                 <li>홈에는 운영자가 직접 처리할 미해결 업무만 표시합니다.</li>
                 <li>알림톡 실패, 회원가입서 후속 실패, 자동화 실패, 운영자 매칭 판단이 필요한 데이터 이슈는 해결될 때까지 남깁니다.</li>
                 <li>프라이빗 리포트 진행 건은 홈 미해결 액션 총합에 넣지 않고, 별도 프라이빗 카드와 Private 탭에서 확인합니다.</li>
-                <li>프라이빗 진행 카운트와 단계별 보드는 오늘 이후 수업만 집계합니다. 과거 미완료 기록은 원본 기록으로 남기되 홈 운영 큐에는 누적하지 않습니다.</li>
+                <li>프라이빗 진행 카운트와 단계별 보드는 오늘 수업과 최근 7일의 미완료 건만 집계합니다. 오래된 기록은 원본에 남기되 홈 운영 큐에는 누적하지 않습니다.</li>
                 <li>정상 정규화, 중복 차단, source import row 수, canonical key 정리, 이름/전화번호 누락으로 외부 실행에서 이미 제외된 행처럼 운영자가 액션할 수 없는 기록은 자동 리졸브하거나 시스템 진단에만 보관합니다.</li>
                 <li>같은 내부 경고가 반복되거나 자동 처리가 실패하면 그때 운영 큐로 승격합니다.</li>
+                <li>주 탐색 메뉴에서는 사용 빈도가 낮은 회원·수업·콘텐츠 화면을 제외하고, 기존 직접 URL은 점검과 예외 업무를 위해 유지합니다.</li>
+                <li>회원가입서 메뉴는 현장 웰컴 v5 발송 화면을 열고, 강사레슨 메뉴는 이름·전화번호·수강일 등록부터 StudioMate 수강권과 신규 강사회원 가입서까지 처리합니다. 반배정·예약은 운영자가 직접 처리합니다.</li>
               </ul>
             </article>
             <article class="rule-card">
@@ -86,11 +95,11 @@
               <ul>
                 <li>알림톡, 연락처, StudioMate write, 예약·결제 판단은 canonical source에서만 실행합니다.</li>
                 <li>데이터는 source, action, computed, mirror, incubation 5개 층으로만 구분합니다.</li>
-                <li>source는 memberProfiles, memberContactIndex, bookings, lectures, memberMemos, memberTags, privateSurveyResponses입니다.</li>
+                <li>source는 memberProfiles, memberContactIndex, bookings, lectures, memberMemos, memberTags, privateSurveyRequests, privateSurveyResponses입니다.</li>
                 <li>예약·출석·프라이빗 회차 판단의 단일 예약 원천은 bookings입니다. memberUsageEvents는 legacy 검증·백필 자료로만 보관하고 운영 원천으로 사용하지 않습니다.</li>
-                <li>action은 alimtalkCandidates, alimtalkSends, contactSyncJobs, memberSignupContracts, onsiteWelcomeRequests, privateLessonChartRequests, privateLessonChartRecords입니다.</li>
-                <li>computed는 privateSessionLedger, attendanceSummaries, adminActions, instructorViews, dashboardSnapshots입니다.</li>
-                <li>member360Cards, members 하위 컬렉션, dashboardSnapshots는 분석·검토용 read-model입니다.</li>
+                <li>action은 alimtalkCandidates, alimtalkSends, contactSyncJobs, memberSignupContracts, onsiteWelcomeRequests, instructorLessonRegistrations, privateLessonChartRequests, privateLessonChartRecords입니다.</li>
+                <li>computed는 privateSessionLedger, privateLessonSessions, attendanceSummaries, adminActions, instructorViews, dashboardSnapshots입니다.</li>
+                <li>member360Cards, members 하위 컬렉션, dashboardSnapshots는 분석·검토용 read-model입니다. 현재 수강권, 재등록 후보, 외부 실행 대상 판단은 최신 memberProfiles를 우선합니다.</li>
                 <li>workLanes는 임시 작업 공간이며 외부 발송·쓰기 원천으로 사용하지 않습니다.</li>
               </ul>
             </article>
@@ -110,6 +119,16 @@
                 <li>목적, 현재 구현 상태, 운영 규칙, 데이터 원천, 배포 상태, 검증, 차단점, 다음 액션을 함께 남깁니다.</li>
                 <li>새 운영 규칙은 Notion이 아니라 이 탭에 반영합니다.</li>
                 <li>직원 행동이나 회원 커뮤니케이션이 바뀌면 코드 배포와 운영규칙 업데이트를 같은 작업으로 봅니다.</li>
+              </ul>
+            </article>
+            <article class="rule-card">
+              <h3>운영 액션 수명주기</h3>
+              <ul>
+                <li>홈에는 canonicalActionKey 기준으로 중복을 제거한 미해결 액션만 표시합니다.</li>
+                <li>상태는 open, acknowledged, in_progress, blocked, resolved 순서로 관리합니다.</li>
+                <li>resolved 항목은 홈과 미해결 KPI에서 즉시 제외하고 이력 화면에서만 확인합니다.</li>
+                <li>운영자 판단이 필요한 액션에는 owner, dueAt, resolutionCode, resolvedBy, resolvedAt을 기록합니다.</li>
+                <li>자동 복구된 원본 중복, 정규화, 캐시 지연은 홈 액션으로 올리지 않고 진단 로그에만 남깁니다.</li>
               </ul>
             </article>
           </div>
@@ -137,6 +156,10 @@
               <h3>회원·수강권</h3>
               <ul>
                 <li>memberProfiles는 화면과 후속 실행을 위한 정규화 뷰입니다.</li>
+                <li>현재 활성 수강권 판단은 memberProfiles.activeTickets를 우선합니다. member360Cards나 members 하위 summary가 더 오래된 경우 CORE 화면은 memberProfiles 값으로 덮어 표시합니다.</li>
+                <li>구매금액과 누적매출은 member360Cards와 members/{memberId}/purchases의 분석용 미러입니다. 결제금액 원천이 끊기면 임의 추정하지 않고 StudioMate 회원목록/수강권 결제 컬럼을 재수집해 미러를 재생성합니다.</li>
+                <li>회원목록 Excel import는 활성 수강권 안에 결제금액, 결제일시, 결제방법을 함께 보존합니다. 새 엑셀 행의 결제 칼럼이 비어 있더라도 같은 수강권의 기존 결제 메타데이터를 지우지 않습니다.</li>
+                <li>CORE 데이터 검증은 audit:archive-core-data로 실행하며, 수강권 미러 지연·구매금액 미러 누락·회원 360 미러 누락을 운영자 액션 1건으로 요약합니다.</li>
                 <li>엑셀에만 있는 회원은 등록 3일 이내이고 활성 수강권이 있을 때만 임시 회원카드를 만듭니다.</li>
                 <li>수강권 없는 상담고객은 회원카드를 만들지 않고 연락처 후보로만 다룹니다.</li>
                 <li>같은 연락처의 회원카드는 대표 회원카드 1개만 유지합니다. 중복이 생기면 전화번호 병합 가드가 실제 StudioMate ID, 활성 수강권, 정식 프로필을 우선 대표로 고르고 나머지는 mergedInto로 표시한 뒤 예약, 회차, 알림톡, 메모, 주차 참조를 대표 카드로 이동합니다.</li>
@@ -170,6 +193,19 @@
                 <li>Codex 앱 자동화는 테스트, 리뷰, 수동 fallback 용도이며 LaunchAgent와 같은 작업을 동시에 ACTIVE로 두지 않습니다.</li>
                 <li>ARCHIVE CORE 자동화 관제 탭은 Firestore automationStatus를 표시하므로, 새 자동화는 실행 주체와 상태를 automationStatus에 기록해야 합니다.</li>
                 <li>LaunchAgent와 Codex 자동화 정의는 sync:automation-observability로 점검해 CORE 관제에 반영합니다.</li>
+                <li>LaunchAgent는 로그 최신성뿐 아니라 실제 last exit code를 확인하며, 실행 실패를 최신 로그 생성으로 정상 처리하지 않습니다.</li>
+                <li>운영 LaunchAgent는 임시 worktree가 아니라 최신 main을 반영한 /Users/archivepilates/dev/archive-in-runtime만 실행합니다.</li>
+                <li>예약 가능 기한은 StudioMate 네이티브 반복설정을 사용합니다. 매주 월요일 날짜를 직접 쓰던 Mac mini LaunchAgent는 폐기했으며 시스템 점검이 복구하지 않습니다.</li>
+                <li>호호요가 크롤링 자동화는 2026-08-28 폐기했습니다. LaunchAgent와 실행 코드는 복구하지 않으며 기존 구글시트와 과거 수집 결과만 기록으로 보존합니다.</li>
+                <li>대기 작업이 없는 큐 폴러는 실행마다 보고서를 만들지 않고 15~30분 간격의 단일 idle heartbeat만 남깁니다.</li>
+                <li>종료된 승인 확인 heartbeat, 비활성 plist, 합성 E2E 데이터와 반영 완료 원본 파일은 검증 후 정리하고 실제 회원·예약·발송 원천은 보존합니다.</li>
+                <li>일반 자동복구 옵션은 Firestore 삭제 권한을 포함하지 않습니다. 만료 운영 데이터 정리는 주간 점검의 명시적 purge 플래그와 엄격한 보존 조건을 모두 통과할 때만 실행합니다.</li>
+                <li>시간별 StudioMate Excel 동기화는 이전 반영 해시와 비교해 변경된 회원·수강권·예약·수업 문서만 씁니다. 같은 원본을 다시 내려받아도 변경 문서가 없으면 Firestore 본문을 다시 쓰지 않습니다.</li>
+                <li>프라이빗 회차는 변경된 프라이빗 예약의 회원만 동기화 직후 보정합니다. 전체 월간 보정은 매일 23:30 안전 점검으로만 실행하며 시간별 동기화에서 다시 호출하지 않습니다.</li>
+                <li>설문 미제출 점검은 최근 프라이빗 설문 후보만 조회하고, 이미 확인 메일을 만든 요청은 회원 응답·예약을 다시 조회하지 않습니다.</li>
+                <li>superseded, 취소, 대기, 결석 및 sessionOrder.counted=false 예약은 프라이빗 회차 누락 대상으로 보지 않습니다.</li>
+                <li>dirty worktree는 개발 정리 대상으로 별도 기록하며 회원·운영 시스템 장애 점수에는 포함하지 않습니다.</li>
+                <li>worktree 정리는 macOS Documents 권한 때문에 LaunchAgent에서 실행하지 않고, Codex 사용자 세션에서 감사 후 수행합니다.</li>
               </ul>
             </article>
             <article class="rule-card">
@@ -178,15 +214,124 @@
                 <li>기준 계정은 home@archivepilates.com입니다.</li>
                 <li>Google Contacts는 원천이 아니라 전화 발신·검색을 위한 보조 저장소입니다.</li>
                 <li>연락처는 memberContactIndex와 contactSyncJobs 기준으로 큐를 만들고, dry-run 후 반영합니다.</li>
+                <li>현재 근무 중인 강사·스텝 연락처는 <strong>이름 아카이브</strong>로 저장합니다.</li>
+                <li>현재 근무 스텝이 아니면서 StudioMate 등급이 강사회원인 연락처는 <strong>이름 강사회원 가입일</strong>로 저장합니다.</li>
+                <li>강사회원의 강사레슨 수강권 시작일은 <strong>강사레슨</strong>과 <strong>강사레슨 YYYY-MM-DD</strong> Google 연락처 태그로 저장합니다.</li>
+                <li>연락처 작업 실행 직전에 최신 회원등급을 다시 확인해 오래된 신규회원 작업이 강사회원 이름을 덮지 못하게 합니다.</li>
+                <li>같은 전화번호가 회원과 현재 근무 강사에 함께 등록되면 회원카드는 유지하고 Google 연락처 이름만 강사명을 우선합니다.</li>
+                <li>강사 우선 여부는 active staffs의 전화번호로 판단하며, 전화번호가 없는 경우에만 이름을 보조 기준으로 사용합니다.</li>
+                <li>강사 보호로 건너뛴 회원 연락처 작업은 synced가 아니라 skipped로 기록하고, 새 강사는 회원 연락처 동기화 전에 active staffs에 먼저 등록합니다.</li>
                 <li>Google-only 연락처 삭제, 연락처 병합, 대량 이동은 별도 승인 없이는 하지 않습니다.</li>
+              </ul>
+            </article>
+            <article class="rule-card" id="data-trust">
+              <h3>원천 신선도와 화면 상태</h3>
+              <ul>
+                <li>CORE 수업 화면의 현재 원천은 bookings입니다. lessonOccurrences와 reservations는 전환기 보조 자료로만 사용합니다.</li>
+                <li>회원 최근 방문은 memberProfiles.emergencyLastAttendance, lastAttendanceAt, recentVisitAt과 member360Cards.recentVisitAt 중 가장 최신 값을 표시합니다.</li>
+                <li>모든 주요 화면은 정상, 빈 데이터, 원천 지연, 권한 오류를 서로 다른 상태로 표시합니다. 읽기 실패를 0건으로 표시하지 않습니다.</li>
+                <li>원천 갱신 시각과 현재 시각의 차이를 표시하고, 오래된 데이터는 운영 판단 전에 재동기화하도록 경고합니다.</li>
+                <li>강사 지표는 최근 2개월 자료만 현재 평가에 반영하고, 100%를 넘는 예약률처럼 해석이 불가능한 값은 원본 확인 상태로 둡니다.</li>
+                <li>배포 전 validate:archive-core-hosting과 live rollback guard로 bookings 원천, 상태 표시, 외부 도구 바로가기, 운영 액션 필터가 보존되는지 확인합니다.</li>
               </ul>
             </article>
           </div>
           <div class="rule-note"><strong>현재 확인 위치</strong><span>CORE Imports, Automation, Members / Firestore memberProfiles, bookings, memberContactIndex, contactSyncJobs</span></div>
         </section>
 
+        <section class="panel rule-section" id="video-watch">
+          <div class="panel-header"><div><h2>2A. 회원 전용 영상 시청 분석</h2><p>판매·공유 권한과 분리된 관리자 전용 시청 로그로 반복 이용과 도달 흐름을 확인합니다.</p></div><span class="pill warn">implemented</span></div>
+          <div class="rule-grid">
+            <article class="rule-card">
+              <h3>목적과 범위</h3>
+              <ul>
+                <li>아임웹의 판매영상 <strong>/archive-method-watch-*</strong> 페이지와 운영자가 명시 등록한 수강생 공유 페이지의 YouTube 플레이어만 측정합니다.</li>
+                <li>수강생 공유는 2026년 8월 강사레슨 A·B·C·D팀 네 경로만 허용하며, 공개 미리보기·상품 목록·그 밖의 프라이빗 페이지는 수집하지 않습니다.</li>
+                <li>시청 기록은 영상 이용 현황과 재생 문제 확인을 위한 분석 자료이며 구매, 그룹 권한, 환불을 자동 변경하지 않습니다.</li>
+              </ul>
+            </article>
+            <article class="rule-card">
+              <h3>데이터 원천과 요약</h3>
+              <ul>
+                <li><strong>videoWatchEvents</strong>는 적용 이후의 재생 이벤트 원천이며, <strong>videoWatchSessions</strong>는 회원·영상·세션 단위 계산 미러입니다.</li>
+                <li>같은 회원과 영상에서 30분 동안 활동이 없으면 다음 재생을 새 세션으로 계산합니다.</li>
+                <li>영상 길이의 90% 도달 또는 재생 종료를 90% 도달로 계산하며, 재생 전환 횟수는 실제 조회 세션 수와 구분합니다.</li>
+                <li>ARCHIVE CORE에서 판매영상과 수강생 공유를 분리해 조회하며, 적용 전 과거 시청 기록은 복원하거나 추정하지 않습니다.</li>
+                <li>ARCHIVE CORE에는 최근 시청순 회원 10명만 표시하고, 회원을 선택하면 해당 회원의 영상별 시청시간·최대 도달률·완료 이력을 표시합니다.</li>
+              </ul>
+            </article>
+            <article class="rule-card">
+              <h3>개인정보와 보존</h3>
+              <ul>
+                <li>회원 이름은 관리자 전용 세션 요약에만 저장합니다. 전화번호와 원문 이메일은 시청 기록에 저장하지 않고, 아임웹 회원 식별값을 브라우저에서 다시 해시한 값과 마스킹된 계정 힌트를 함께 사용합니다.</li>
+                <li>상세 이벤트는 180일, 세션 요약은 1년 보관하며 expiresAt TTL 정책으로 만료 처리합니다.</li>
+                <li>시청 기록은 광고, 자동 메시지 대상 선정, 구매 권한 판정의 원천으로 사용하지 않습니다.</li>
+              </ul>
+            </article>
+            <article class="rule-card">
+              <h3>접근과 장애 격리</h3>
+              <ul>
+                <li>영상 시청 현황은 ARCHIVE CORE 관리자 화면에서 staff와 manager 권한을 모두 확인한 뒤 조회합니다.</li>
+                <li>추적 스크립트와 수집 API가 실패해도 YouTube 재생과 아임웹 구매자 접근은 계속 동작해야 합니다.</li>
+                <li>배포 전 판매영상 권한 회원, 수강생 공유 권한 회원, 무권한 일반회원으로 나눠 기존 페이지 접근 권한이 바뀌지 않았는지 확인합니다.</li>
+              </ul>
+            </article>
+          </div>
+          <div class="rule-note"><strong>현재 구현 상태</strong><span>2026.09.01 판매영상·수강생 공유 분리 집계 운영 배포 및 일반회원 모바일·PC 검증 완료 / 기존 시청·구매·공유 권한 흐름은 변경하지 않음</span></div>
+        </section>
+
+        <section class="panel rule-section" id="renewal">
+          <div class="panel-header"><div><h2>3. 재등록 관리</h2><p>회원이 끊기기 전에 운영자가 확인할 재등록 후보를 관리합니다.</p></div><span class="pill warn">operator action</span></div>
+          <div class="rule-grid">
+            <article class="rule-card">
+              <h3>관리 목적</h3>
+              <ul>
+                <li>재등록 관리는 기존 잔여횟수·기간만료 알림톡 자동발송과 운영자 상담을 함께 관리하는 세션입니다.</li>
+                <li>알림톡은 승인된 기존 템플릿과 30일 중복 차단을 유지하고, 개인화 계산값은 대상 검토와 상담 추천에만 사용합니다.</li>
+                <li>홈 미해결 액션에는 오늘 바로 확인해야 하는 긴급 후보만 더합니다.</li>
+                <li>30일 내 관리 후보는 홈 재등록 관리 섹션에 별도로 표시하고, 실패나 오류로 누적하지 않습니다.</li>
+              </ul>
+            </article>
+            <article class="rule-card">
+              <h3>후보 산정</h3>
+              <ul>
+                <li>기본 원천은 memberProfiles.activeTickets입니다. member360Cards.currentTicketsSummary는 매출·상세 검토용 미러로만 사용하며, 최신 memberProfiles와 다르면 CORE 화면은 memberProfiles 값을 우선 표시합니다.</li>
+                <li>수강권 만료 30일 이내, 잔여 횟수 부족, 최근 방문 후 활성 수강권 공백 회원을 후보로 봅니다.</li>
+                <li>최근 8주 출석·결석·당일취소의 실제 소진 속도를 계산해 예상 소진일이 30일 이내인 회원도 관리 후보로 봅니다.</li>
+                <li>그룹은 잔여 5회 이하, 프라이빗과 듀엣은 잔여 3회 이하를 기본 임계값으로 사용합니다.</li>
+                <li>7일 이내 만료·예상 소진 또는 매우 낮은 잔여 횟수는 오늘 확인 후보로 올립니다.</li>
+              </ul>
+            </article>
+            <article class="rule-card">
+              <h3>제외와 중복 방지</h3>
+              <ul>
+                <li>상담, 체험, 강사레슨, 스텝·강사 교육용, 직원용, 락커, 양말, 상품권·쿠폰·보상권처럼 재등록 상담 대상이 아닌 수강권은 제외합니다.</li>
+                <li>같은 유형의 정상 후속 수강권을 이미 보유한 회원은 만료·부족 알림톡 대상에서 제외합니다. 수강권 ID가 없거나 상품명이 같아도 별도 보유 행이면 재등록 후속권으로 판정하되, 보상 쿠폰·상품권과 잔여횟수·만료일이 모두 없는 불완전 행은 후속권으로 사용하지 않습니다.</li>
+                <li>전화번호가 없는 후보는 외부 발송 원천으로 쓰지 않고, 운영자 화면에서만 보조 확인 대상으로 봅니다.</li>
+                <li>재등록 알림톡은 후보 생성 때와 실제 발송 직전에 같은 제외 규칙, 정상 후속 수강권, 수강권 canonical key, 중복발송 여부를 다시 확인합니다.</li>
+                <li>같은 회원이 최근 14일 안에 잔여횟수·만료·재등록 안내를 받았다면 장기 미출석 안내를 발송하지 않습니다. 같은 날 겹치면 재등록 안내 1건만 발송하고, 같은 수강권이 잔여횟수와 만료일 조건에 동시에 해당해도 우선순위가 높은 안내 1건만 발송합니다.</li>
+                <li>장기 미출석 안내는 현재 수강 주기 안의 출석만 사용합니다. 새 수강권 시작 후 아직 출석하지 않았거나 향후 예약·대기 신청이 있으면 제외하며, 실제 발송 직전에 같은 원천을 다시 확인합니다.</li>
+                <li>같은 회원·수강유형의 renewalCases 장부는 하나만 유지하며, 후속 수강권이 확인되면 기존 건은 자동 완료 처리하고 CORE 새로고침에서도 즉시 제외합니다.</li>
+                <li>재등록 장부 갱신은 일일 알림톡 후보 처리보다 먼저 수행하며, 예약 원천은 후보 판정에 필요한 필드만 읽어 메모리 중단을 방지합니다.</li>
+              </ul>
+            </article>
+            <article class="rule-card">
+              <h3>운영 단계</h3>
+              <ul>
+                <li>오늘 확인: 만료 또는 잔여가 임박해 당일 현장 상담·전화가 필요한 상태입니다.</li>
+                <li>이번 주 상담: 곧 만료되거나 잔여가 낮아 수업 전후 안내하면 좋은 상태입니다.</li>
+                <li>만료 전 관리: 30일 안에 미리 안내하면 이탈을 줄일 수 있는 상태입니다.</li>
+                <li>재등록 대기: 최근 방문 이력이 있지만 현재 활성 수강권이 없어 복귀 상담 대상입니다.</li>
+                <li>운영자는 연락완료, 고민중, 7일 후 재확인, 재등록완료, 재등록 의사 없음 상태를 기록합니다.</li>
+                <li>재등록완료는 실제 재등록이 확인된 건, 재등록 의사 없음은 회원이 재등록하지 않겠다고 확인한 건에만 사용하며 두 상태 모두 현재 목록에서 숨기고 이력은 유지합니다.</li>
+              </ul>
+            </article>
+          </div>
+          <div class="rule-note"><strong>현재 확인 위치</strong><span>CORE Home > 재등록 관리 / 원천 memberProfiles + canonical bookings / 운영상태 renewalCases</span></div>
+        </section>
+
         <section class="panel rule-section" id="alimtalk">
-          <div class="panel-header"><div><h2>3. 카카오 알림톡</h2><p>대상자 선정, 승인, 발송, 로그를 분리해 오발송을 막습니다.</p></div><span class="pill danger">external send</span></div>
+          <div class="panel-header"><div><h2>4. 카카오 알림톡</h2><p>대상자 선정, 승인, 발송, 로그를 분리해 오발송을 막습니다.</p></div><span class="pill danger">external send</span></div>
           <div class="rule-grid">
             <article class="rule-card">
               <h3>발송 흐름</h3>
@@ -202,39 +347,74 @@
               <h3>자동 발송 기준</h3>
               <ul>
                 <li>일일 정기 발송 기준 시각은 11:30입니다.</li>
+                <li>월요일 예약오픈 안내는 12:30에 스튜디오메이트 예약 안내 v4로 발송하며, 동일 예약주차 기준 6일 동안 중복 발송하지 않습니다.</li>
+                <li>예약오픈 대량 발송 승인은 같은 날의 일일 알림톡 승인과 별도 승인 건으로 관리합니다.</li>
                 <li>대량 발송 가능 후보가 10건 이상이면 자동 발송하지 않고 승인 게이트로 보냅니다.</li>
                 <li>발송 전 중복, 제외 회원, 템플릿 승인, 전화번호를 다시 확인합니다.</li>
+                <li>예약오픈·설문·재등록·장기 미출석 같은 일반 회원 자동 알림은 후보 생성과 발송 직전에 현재 memberProfiles 등급과 active staffs 연락처를 함께 확인해 근무 스텝을 제외합니다. 운영자 단건 발송과 강사레슨 업무 알림은 별도 규칙을 유지합니다.</li>
+                <li>당일만 유효한 자동 후보가 발송되지 않은 채 기준일을 넘기면 stale_source_date로 종료하며 다음 자동 실행 대상에 다시 포함하지 않습니다.</li>
                 <li>운영자 화면의 일반 회원 태그에는 알림톡 상태 태그를 표시하지 않습니다.</li>
               </ul>
             </article>
             <article class="rule-card">
               <h3>제외 규칙</h3>
               <ul>
-                <li>다른 유효 수업 수강권을 보유한 회원은 수강권 만료·부족 알림에서 제외합니다.</li>
-                <li>양말, 토삭스, 기간연장 등 수업권이 아닌 상품은 제외합니다.</li>
+                <li>같은 수업 유형의 정상 후속 수강권을 보유한 회원은 수강권 만료·부족 알림에서 제외합니다.</li>
+                <li>스텝·강사 교육용 수강권과 양말, 토삭스, 상품권, 쿠폰, 보상권, 기간연장 등 재등록 대상이 아닌 상품은 제외합니다.</li>
                 <li>전화번호 없음, 상담고객, 템플릿 미승인, 구 템플릿 코드는 발송하지 않습니다.</li>
                 <li>취소되거나 stale인 예약은 프라이빗/그룹 설문 알림 발송 직전에 다시 제외합니다.</li>
+                <li>프라이빗 사전설문은 예약 상태가 유효하더라도 수업 시작 시각이 지난 뒤에는 발송하지 않습니다.</li>
+                <li>김기효 테스트 수신자 예외는 운영자가 직접 승인한 테스트 발송에만 적용합니다. 일일·주간 자동 후보에서는 다른 스텝과 동일하게 제외합니다.</li>
               </ul>
             </article>
             <article class="rule-card">
               <h3>중복 방지</h3>
               <ul>
                 <li>수강권 알림은 회원, 템플릿, 수강권 식별자 기준으로 막습니다.</li>
-                <li>프라이빗 사전설문과 그룹 첫 수업 설문은 같은 유형 제출 후 1년이 지나야 재후보가 됩니다.</li>
+                <li>기간형 중복 차단은 같은 dedupeKey의 전체 성공 이력 중 가장 최근 발송 시각을 확인하며, 오래된 첫 이력 1건만으로 판단하지 않습니다.</li>
+                <li>프라이빗 최초 사전설문은 회원별 영구 1회입니다. 그룹 첫 수업 설문은 같은 유형 제출 후 1년이 지나야 재후보가 됩니다.</li>
                 <li>수업자료와 회원 리포트는 같은 회원·수업·recordId 단위로 영구 1회만 발송합니다.</li>
-                <li>Notion 웹훅 이벤트 ID와 후보 ID를 고정해 재전송 중복을 막습니다.</li>
+                <li>회원 리포트는 승인한 revision과 후보 ID를 고정해 수정본과 발송본이 섞이지 않게 합니다.</li>
+                <li>회원관리 알림은 최근 14일 동안 양방향으로 확인합니다. 장기 미출석 전후의 재등록 알림은 같은 회원 기준으로 막고, 잔여횟수·만료 알림은 동일 renewalCaseId 기준으로 1건만 허용합니다. 같은 날 겹치면 재등록 안내를 우선합니다.</li>
               </ul>
             </article>
             <article class="rule-card">
               <h3>템플릿과 링크</h3>
               <ul>
                 <li>템플릿별 대상/제외 규칙은 templateTargetRules.ts에서 관리합니다.</li>
+                <li>일일 SOLAPI 템플릿 동기화는 코드에서 운영 승인 상태인 템플릿만 확인합니다. pending·deleted·미사용 템플릿은 운영 실패 경고에서 제외합니다.</li>
+                <li>매일 10:15에 전일 SOLAPI 알림톡 목록과 Firestore alimtalkSends 성공 원장을 메시지 ID로 대조합니다. 일치하면 조용히 기록하고, SOLAPI에만 있는 발송이나 조회 실패가 있을 때만 운영 메일을 보냅니다.</li>
                 <li>SOLAPI 버튼 URL은 변수 치환 후 100자 이하여야 합니다.</li>
+                <li>강사레슨 수업자료 안내는 수업자료 보기, 수업배정 안내, 방문안내 보기, 주차 사전등록 버튼을 함께 검수합니다.</li>
+                <li>강사레슨 수업자료 발송은 승인된 <strong>강사레슨 수업자료 안내 v3</strong> 템플릿만 사용합니다. 본 발송 직전 재생성된 후보도 V3가 아니면 차단하며, v1은 삭제됐고 v2는 과거 발송 이력 식별에만 사용합니다.</li>
+                <li><strong>강사레슨 D-1 수업자료 안내에만</strong> 샘플 승인 절차를 적용합니다. 다른 알림톡의 자동 발송 및 기존 승인 규칙에는 적용하지 않습니다.</li>
+                <li>강사레슨 D-1 대상은 개별 예약 문서의 수정시각이 아니라 수업일을 포함하는 최신 StudioMate 전체 예약 스냅샷과 현재 예약 상태로 검증합니다.</li>
+                <li>D-1 11:30에 실제 본 발송과 같은 템플릿, 문구, 날짜별 관리번호, 버튼 4개로 지정된 스텝 테스트 수신자에게 샘플 1건을 먼저 발송합니다.</li>
+                <li>샘플의 SOLAPI 성공 기록과 사용자의 명시적 승인이 모두 확인된 뒤에만 D-1 18:00 본 발송 대상으로 전환합니다. 샘플 수신 성공만으로 승인 처리하지 않으며, 승인되지 않으면 본 발송하지 않습니다.</li>
+                <li>승인 링크를 여는 GET 요청은 확인 화면만 표시하고, 화면 안의 승인 버튼을 누른 POST 요청만 승인으로 기록합니다. D-1 17:30에는 미승인 또는 실패 상태를 다시 확인해 긴급 메일을 보냅니다.</li>
+                <li>본 발송 직전 StudioMate 예약 상태, 취소, 연락처 중복, 기존 발송 이력과 라이브 링크를 다시 확인합니다. 수강생 수와 관계없이 같은 승인 규칙을 적용하고 날짜가 다른 수업은 각각 별도 승인합니다.</li>
+                <li>승인 뒤 예약자 증감은 18:00 최신 명단에 반영하지만 템플릿, 수업일 또는 날짜별 링크가 바뀌면 본 발송을 중단합니다. 일반 알림톡 큐는 강사레슨 수업자료를 발송할 수 없고 승인 전용 경로는 1회만 시도합니다.</li>
+                <li><strong>강사레슨 예약확정 안내 v1</strong>은 운영자가 CORE에서 입금·수강 접수를 확인한 등록 건에 대해 StudioMate <strong>강사레슨 (2T) 수강권 발급이 검증되면</strong> 자동으로 1회 발송합니다. 반배정·예약은 이후 운영자가 StudioMate에서 직접 처리하며 발송 조건으로 사용하지 않습니다.</li>
+                <li>알림톡 후보는 수강권 단계가 <strong>verified</strong>로 처음 전환될 때만 만들고, 알림톡 큐는 등록 취소 여부, 회원·수강권 발급 증거, 수업일별 관리번호, 캘린더 계약과 기존 성공 발송을 <strong>발송 직전 다시 확인</strong>합니다.</li>
+                <li>자동 발송의 운영자 승인은 CORE 등록 시의 입금 확인과 수강 접수 확인으로 고정합니다. 오류 건의 <strong>안내 재처리</strong>는 기존 성공 이력을 다시 확인하며, 김기효 등 스텝 계정은 별도 실발송 테스트 승인 없이 제외합니다.</li>
+                <li>예약확정 캘린더 버튼은 실제 수업일이 포함된 <strong>영문주제-YYMMDD</strong> 관리번호로 날짜별 랜딩 페이지와 .ics를 연결합니다. 발송 전 두 경로의 200 응답과 일정·시간·장소 일치를 확인합니다.</li>
+                <li>월별 상세 안내는 모집·신청 단계에서만 사용하고 예약확정 알림톡과 캘린더 랜딩 페이지에는 반복 노출하지 않습니다. 방문안내 버튼은 공통 공개 페이지 <strong>archivepilates.notion.site/visitin</strong>을 사용합니다.</li>
+                <li>ARCHIVE PILATES 공식 방문 주소의 단일 기준은 <strong>부산광역시 강서구 명지국제2로28번길 34 에코팰리스 704호</strong>입니다. 개인정보처리방침, METHOD, 면접·채용, 캘린더 화면·.ics·Google Calendar, Notion 방문안내 등 외부 안내 원천은 이 문장을 그대로 사용하고 주소 변경 시 함께 갱신·검증합니다.</li>
+                <li>2026년 9월 외부 피드백은 <strong>external-feedback-260919</strong>와 <strong>external-feedback-260920</strong>을 사용합니다. 2026.08.25 랜딩 페이지와 .ics의 Hosting 반영, 200 응답, 캘린더 형식 및 반응형 화면을 확인했고, 2026.08.28 SOLAPI 예약확정 v1의 APPROVED·BA/IMAGE·ARCHIVE 이미지·버튼 계약을 확인했습니다. 같은 날 발송 원천을 예약 두 세션에서 강사레슨 (2T) 수강권 발급 검증으로 변경했습니다.</li>
+                <li>2026.08.28 수강권 이벤트와 알림톡 큐 Functions의 <strong>ACTIVE</strong>, 10분 큐 Scheduler의 <strong>ENABLED</strong>, CORE 라이브 문구와 반응형 화면을 확인했습니다. 배포만으로 생성·변경된 강사레슨 등록 및 예약확정 후보는 0건입니다.</li>
+                <li>강사레슨 수업배정 안내는 StudioMate 예약 스케줄의 수업일, 시간, 강사, 기구, 예약자 기준으로 만들고 수기 이미지나 임의 명단을 원천으로 쓰지 않습니다.</li>
+                <li>ARCHIVE METHOD 수업자료는 수업 당일 12:00(KST)에 공개하는 것이 기본입니다. 공개 전에는 “수업자료는 수업 당일 12시에 공개됩니다.” 안내만 표시합니다.</li>
+                <li>수업자료 공개일은 StudioMate 예약 스케줄의 실제 수업일과 관리번호 날짜를 일치시킵니다. 스텝 프리뷰 링크는 공개 시각 전에도 자료를 확인할 수 있습니다.</li>
+                <li>StudioMate 수업명이 영문 주제를 포함하지 않으면 승인된 수업일-주제 매핑으로 관리번호를 만듭니다. 한 회차가 여러 날 열릴 때는 날짜별 관리번호와 공개 시각을 각각 적용합니다.</li>
                 <li>긴 URL은 shortLinks를 만들고 버튼에는 pr-, ir- 같은 짧은 링크 ID를 넣습니다.</li>
                 <li>발송 직전에는 템플릿 승인 상태, 전화번호, 대상일, 재시도 한도, 설문/가입서/리포트 필수 링크 변수를 다시 확인합니다.</li>
                 <li>설문ID, 접근토큰, shortLinkId, reportLinkId 같은 필수 링크 변수가 비어 있으면 후보가 생성되어 있어도 queued 또는 sent로 전환하지 않습니다.</li>
                 <li>삭제된 신규회원 웰컴 v3 템플릿은 후보 재생성 대상에서 제외하고, 현장 웰컴 v5 흐름만 사용합니다.</li>
-                <li>프라이빗 사전설문은 Google Form이 아니라 ARCHIVE IN 자체 설문을 사용합니다.</li>
+                <li>프라이빗 사전설문은 Google Form이 아니라 ARCHIVE PILATES 자체 설문을 사용합니다.</li>
+                <li>프라이빗 회원은 <strong>프라이빗 사전설문 안내 v2</strong>, 제출 내용을 받는 담당강사는 <strong>담당강사 사전설문 제출 안내 v2</strong>, 하루 기록 강사는 승인 후 <strong>강사용 프라이빗 오늘 기록 안내 v4</strong>, 회원 리포트는 <strong>프라이빗 회원 리포트 안내 v1</strong>만 사용합니다.</li>
+                <li>구 프라이빗 사전설문 v1과 강사용 차트 v2는 2026.07.31 SOLAPI에서 삭제했으며, 과거 발송 기록 식별 외에는 다시 참조하지 않습니다.</li>
+                <li>회원 작성 링크는 https://in.archivepilates.com/privateSurvey/를 사용하며, Hosting 배포에는 설문 페이지와 privateSurveySubmit API rewrite가 함께 있어야 합니다.</li>
+                <li>배포 전 롤백 가드와 배포 후 라이브 canary가 설문 페이지 및 제출 API 연결을 필수로 확인합니다.</li>
               </ul>
             </article>
             <article class="rule-card">
@@ -250,6 +430,26 @@
                 <li>SOLAPI 템플릿이 승인 대기 상태이면 요청 로그만 남기고 실제 발송하지 않습니다.</li>
               </ul>
             </article>
+            <article class="rule-card" id="meal-plan">
+              <h3>ARCHIVE 추천식단 프로그램</h3>
+              <ul>
+                <li>운영자가 CORE 홈에서 회원 전화번호와 이름을 확인한 뒤 승인된 템플릿으로 설문 링크를 단건 발송합니다.</li>
+                <li>회원 매칭 원천은 memberProfiles와 memberContactIndex의 전화번호이며, 같은 번호에 서로 다른 이름이 있으면 발송을 멈추고 확인합니다.</li>
+                <li>추천식단 요청·민감 응답·편집 초안·승인 리포트는 recommendedMealProgramRequests, recommendedMealProgramResponses, recommendedMealProgramDrafts, recommendedMealProgramReports로 분리 저장합니다.</li>
+                <li>설문 링크는 14일 동안 유효하고, 같은 회원의 동일 프로그램 설문은 30일 안에 중복 발송하지 않습니다.</li>
+                <li>설문 제출 시 최신 inbodyWebhookEvents의 measurementId를 따라 inbodyMeasurements의 정규화된 체성분 수치를 연결합니다.</li>
+                <li>설문 제출 직후 AI 7일 식단 초안을 자동 생성해 CORE 추천식단 탭의 검토 목록에 올립니다. 운영자는 직접 수정·저장할 수 있고, 필요할 때만 다시 생성합니다. Gemini 사용량 제한이나 응답 오류가 있으면 안전한 기본 식단 초안으로 전환합니다.</li>
+                <li>질환, 복용 약물, 임신·수유, 섭식장애 경험, 알레르기 또는 InBody 누락은 review_required로 분류합니다. 운영자가 주의 응답 확인을 저장하기 전에는 리포트를 공개할 수 없습니다.</li>
+                <li>AI 초안에는 회원명, 전화번호, InBody 내부 ID를 전달하지 않습니다. 알레르기 응답이 있으면 특정 식품 자동 추천을 중단하고 기존에 안전하게 섭취한 식품군 중심의 검토용 초안만 만듭니다.</li>
+                <li>운영자 승인은 현재 revision의 불변 스냅샷을 저장하고 최초 설문 알림톡에 연결된 리포트 링크를 활성화합니다. 별도 도착 알림톡은 보내지 않으며, 공개 후에는 수정을 잠급니다.</li>
+                <li>민감 설문 원문은 CORE 목록, 알림톡 후보, 짧은 링크 ID, 회원 리포트에 복사하지 않습니다. 회원은 90일 토큰 링크에서 승인된 식단만 확인합니다.</li>
+                <li>이 프로그램은 생활 습관 개선용이며 의료적 영양 처방이나 질환 치료를 대신하지 않습니다.</li>
+                <li><strong>아카이브 추천식단 프로그램 v2</strong> 템플릿은 2026.08.04 기준 SOLAPI에서 APPROVED·BA·IMAGE 상태를 확인했습니다.</li>
+                <li>승인된 이미지형 v2 템플릿을 사용합니다. 회원명 변수, ARCHIVE 이미지, `식단 설문 작성`, `추천식단 확인` 두 버튼 중 하나라도 원격 승인본과 다르면 실제 발송을 차단합니다.</li>
+                <li>두 번째 알림톡 없이 최초 알림톡의 `추천식단 확인` 버튼에서 완성 리포트를 확인합니다. 공개 전에는 준비 중 화면을, 운영자 승인 후에는 같은 링크에 승인된 리포트를 표시합니다.</li>
+                <li>단일 버튼 v1 템플릿은 발송 원천에서 제거하고 SOLAPI에서 삭제합니다. 과거 발송 로그의 템플릿 ID는 감사 목적으로만 한글 이름과 함께 표시합니다.</li>
+              </ul>
+            </article>
             <article class="rule-card">
               <h3>보고 메일</h3>
               <ul>
@@ -260,24 +460,85 @@
               </ul>
             </article>
           </div>
+          <div class="rule-note"><strong>현재 구현 상태</strong><span>2026.09.03 자동 회원알림 스텝 제외, 회원관리 14일 교차 중복 차단, stale 후보 종료, 운영 템플릿만 동기화, 전일 SOLAPI 원장 대조를 functions-alimtalk에 적용하고 단위 테스트·Functions 빌드·원천 경계 검증을 완료했습니다.</span></div>
           <div class="rule-note"><strong>현재 확인 위치</strong><span>CORE Messages / Firestore pricingInquiryAlimtalkRequests, alimtalkCandidates, alimtalkSends, alimtalkTemplateStates, shortLinks</span></div>
         </section>
 
-        <section class="panel rule-section" id="private">
-          <div class="panel-header"><div><h2>4. 프라이빗 차트·설문·리포트</h2><p>회원 누적 회차, 강사 입력, 회원 리포트, Notion 차트 동기화를 하나의 흐름으로 봅니다.</p></div><span class="pill good">current</span></div>
+        <section class="panel rule-section" id="social-content">
+          <div class="panel-header"><div><h2>4-1. Instagram 콘텐츠 운영</h2><p>ARCHIVE PILATES 공식 계정의 초안, 승인, 예약 발행과 성과를 한곳에서 관리합니다.</p></div><span class="pill warn">approval required</span></div>
           <div class="rule-grid">
             <article class="rule-card">
-              <h3>회차 원천</h3>
+              <h3>계정 방향</h3>
               <ul>
-                <li>2026.06.01 이후 프라이빗/세미프라이빗 수업은 자동화 차트를 반드시 생성합니다.</li>
-                <li>회차 흐름은 StudioMate 수업예약내역 Excel → bookings 단일 예약 원천 → privateSessionLedger 회차 → 설문/리포트/Notion 표시 순서로 운영합니다.</li>
-                <li>privateSessionLedger는 bookings에서 계산한 회차 장부입니다. privateLessonChartRequests, privateLessonChartRecords, Notion 차트, memberUsageEvents는 회차 계산 원천으로 사용하지 않습니다.</li>
+                <li>공식 계정은 ARCHIVE PILATES 본사 성격의 브랜드 채널로 운영합니다.</li>
+                <li>콘텐츠 축은 브랜드·메소드, 명지점·현장, 프로모션·전환, 사람·커뮤니티 네 가지입니다.</li>
+                <li>지역 운영정보와 상담 전환을 다루되 과장된 효능, 회원 개인정보, 건강정보는 게시하지 않습니다.</li>
+              </ul>
+            </article>
+            <article class="rule-card">
+              <h3>발행 흐름</h3>
+              <ol>
+                <li>운영자 또는 자동화가 socialContentDrafts에 초안을 저장합니다.</li>
+                <li>운영자가 캡션, 미디어, 발행시각을 검토하고 승인합니다.</li>
+                <li>승인 후 socialPublishJobs에 예약 작업을 만들고 Functions가 Meta API로 발행합니다.</li>
+                <li>결과는 socialPublishLogs와 socialInsightsSnapshots에 남겨 CORE 콘텐츠 탭에서 확인합니다.</li>
+              </ol>
+            </article>
+            <article class="rule-card">
+              <h3>운영 리듬</h3>
+              <ul>
+                <li>주 3회를 기본으로 릴스 1건, 정보형 캐러셀 1건, 명지점 현장 소식 1건을 준비합니다.</li>
+                <li>프로모션만 반복하지 않고 네 가지 콘텐츠 축이 한 달 안에 고르게 보이도록 조정합니다.</li>
+                <li>성과는 팔로워 수만 보지 않고 도달 대비 팔로우, 프로필 방문, 링크 클릭, 상담 전환을 월 단위로 함께 확인합니다.</li>
+              </ul>
+            </article>
+            <article class="rule-card">
+              <h3>안전 규칙</h3>
+              <ul>
+                <li>자동화는 초안과 검토 요청까지만 만들며 운영자 승인 없이 실제 게시하지 않습니다.</li>
+                <li>콘텐츠 본문, 미디어, 발행시각으로 만든 idempotency key가 같으면 중복 작업을 만들지 않습니다.</li>
+                <li>Meta 발행 요청 이후 결과가 불명확하면 자동 재시도하지 않고 수동확인으로 전환합니다.</li>
+                <li>Meta 연결 정보가 없거나 검증되지 않으면 승인 버튼과 예약 발행을 차단합니다.</li>
+                <li>승인 시점과 실제 발행 직전에 연결 계정이 archivepilates_official인지 다시 확인합니다.</li>
+                <li>Instagram 운영은 회원 선정, 알림톡, StudioMate, 연락처 쓰기의 원천으로 사용하지 않습니다.</li>
+                <li>Meta Secret이 not-configured 상태이면 초안 작성·검토만 허용하고 승인, 예약 발행, 성과 동기화는 차단합니다.</li>
+              </ul>
+            </article>
+            <article class="rule-card">
+              <h3>현재 상태</h3>
+              <ul>
+                <li>Functions codebase는 functions-social로 분리해 다른 운영 기능과 배포 경계를 나눕니다.</li>
+                <li>미디어는 Meta가 읽을 수 있는 공개 HTTPS 주소만 사용할 수 있습니다.</li>
+                <li>Meta 전문 계정 연결과 권한 검증 전에는 로컬 구현 상태이며 실제 발행 테스트를 하지 않습니다.</li>
+              </ul>
+            </article>
+          </div>
+          <div class="rule-note"><strong>현재 확인 위치</strong><span>CORE Content / Firestore socialContentDrafts, socialPublishJobs, socialPublishLogs, socialInsightsSnapshots</span></div>
+        </section>
+
+        <section class="panel rule-section" id="private">
+          <div class="panel-header"><div><h2>5. 프라이빗 오늘 기록·리포트</h2><p>강사는 기록과 전달만 처리하고, 중간 생성 단계는 시스템이 맡습니다.</p></div><span class="pill warn">v4 심사 중</span></div>
+          <div class="rule-grid">
+            <article class="rule-card">
+              <h3>단일 흐름</h3>
+              <ul>
+                <li>운영자는 CORE Private에서 기록 대기, 자동 처리 중, 확인 후 발송, 전달 완료만 확인합니다.</li>
+                <li>privateLessonSessions가 단계, 다음 작업, 오류를 보여주는 운영 장부입니다. 예약과 회차를 다시 계산하는 원천으로는 사용하지 않습니다.</li>
+                <li>예약 원천은 bookings, 회차 원천은 bookings에서 계산한 privateSessionLedger입니다.</li>
+                <li>privateLessonChartRequests와 privateLessonChartRecords는 기존 설문 링크와 기록을 유지하는 호환 문서입니다.</li>
+                <li>2026.06.01 이후 프라이빗/세미프라이빗 수업은 자동 기록 페이지를 생성합니다.</li>
+              </ul>
+            </article>
+            <article class="rule-card">
+              <h3>회차·예약 보정</h3>
+              <ul>
                 <li>어제 이전 예약확정/출석미체크 수업은 확정 회차로 세지 않습니다. 오늘 이후 예약은 예정 회차로만 이어 세고, 출석 완료가 반영되면 확정 회차가 됩니다.</li>
                 <li>booking.sessionOrder.privateCumulativeRound는 privateSessionLedger에서 내려쓴 캐시입니다. 값이 없거나 원천과 다르면 즉시 재계산해 저장합니다.</li>
                 <li>삭제, 취소, 시간변경은 sessionOrder.counted=false와 제외 사유를 남기고 해당 수업 이후 회차까지 연쇄 재계산합니다.</li>
+                <li>usage_booking_ 같은 이용내역 fallback 예약은 실예약 장부와 회차 계산에서 제외합니다.</li>
                 <li>booking.lessonType=group인 수업은 수강권명이 프라이빗처럼 보여도 프라이빗 회차에서 제외합니다. 원본 분류가 틀렸다면 원본 보정 후 다시 반영합니다.</li>
-                <li>강사 설문 알림톡 발송, 설문 링크 열기, 설문 제출, Notion 차트 갱신은 연결된 booking이 active일 때만 진행합니다.</li>
-                <li>수업 시간이 변경되어 기존 설문 링크만 남아 있으면 같은 회원, 강사, 날짜의 active booking으로 요청과 차트를 자동 이관합니다.</li>
+                <li>강사 오늘 기록 안내, 링크 열기, 기록 제출, 회원 리포트 발송은 연결된 booking이 active일 때만 진행합니다.</li>
+                <li>수업 시간이 변경되면 supersededByBookingId를 우선 따라 같은 수업 세션으로 이관하고, 연결이 불명확하면 자동 발송하지 않고 확인필요로 둡니다.</li>
                 <li>같은 회원, 강사, 날짜, 수강권에서 시간변경 중복이 생기면 출석/최신 예약을 대표 booking으로 두고 나머지는 rescheduled_duplicate로 제외합니다.</li>
               </ul>
             </article>
@@ -285,24 +546,31 @@
               <h3>Notion 차트 동기화</h3>
               <ul>
                 <li>운영규칙은 CORE가 기준이지만, 개인레슨 회차 차트는 강사별 회원 페이지 하위의 Notion 일반 페이지로 유지합니다.</li>
-                <li>Private Session Records DB는 사용하지 않습니다. 차트 상태와 발송 승인은 Firestore privateLessonChartRecords가 원천입니다.</li>
-                <li>리포트가 없어도 실제 수업 회차는 Notion 일반 페이지로 남겨 누락을 확인할 수 있어야 합니다.</li>
-                <li>차트 제목에는 수업 전 설문대기, 수업 전 설문완료, 수업 후 설문완료, 리포트 생성완료, 리포트 발송완료 단계를 표시합니다.</li>
-                <li>리포트 생성완료는 수업 후 설문 제출, GPT 리포트 생성 상태, 회원용 리포트 URL 준비가 모두 확인된 경우에만 표시합니다.</li>
-                <li>회원용 리포트는 오늘의 핵심, 좋아진 점, 오늘 확인한 움직임, 다음 수업 방향, 홈워크, 다음 수업 전 체크 순서의 코칭 카드형 화면으로 제공합니다. 홈워크는 강사가 입력한 경우에만 노출합니다.</li>
-                <li>다음 수업 준비 메모는 내부 코칭 참고용으로 보관하고, 회원용 다음 수업 방향 문장에 그대로 노출하지 않습니다.</li>
-                <li>예약 시간이 바뀌거나 취소되면 Notion 제목, 날짜, 상태, 회차, 발송상태를 함께 갱신하고 취소 차트는 회원 발송 후보에서 제외합니다.</li>
+                <li>Notion은 야간 표시·열람용입니다. Private Session Records DB, 웹훅 승인, 예약 스케줄러는 사용하지 않습니다.</li>
+                <li>개인레슨 차트 상단은 현재 진행 흐름과 강사별 차트만 우선 표시합니다. 자동화 테스트 차트와 기타 자료는 접힌 보관 영역에 분리하고, 이전 DB 기반 운영 문서는 보관 처리합니다.</li>
+                <li>차트 상태와 발송 승인은 Firestore privateLessonChartRecords, 운영 진행상태는 privateLessonSessions가 원천입니다.</li>
+                <li>누락과 오류는 CORE와 Firestore 원천에서 판단하며 Notion 화면은 운영 검수 기준으로 사용하지 않습니다.</li>
+                <li>차트 제목에는 기록 대기, 자동 처리 중, 확인 후 발송, 전달 완료 또는 취소 상태를 표시합니다.</li>
+                <li>확인 후 발송은 오늘 기록 제출, 리포트 생성 상태, 회원용 리포트 URL 준비가 모두 확인된 경우에만 표시합니다.</li>
+                <li>회원용 리포트는 오늘의 핵심, 오늘 확인한 변화, 다음 수업 방향, 홈워크 순서의 코칭 카드형 화면으로 제공합니다. 홈워크는 강사가 입력한 경우에만 노출합니다.</li>
+                <li>예약·기록·리포트·발송 변경은 먼저 Firestore에 확정하고, 매일 22:20 야간 작업이 Notion 제목과 본문을 표시용으로 동기화합니다. Notion 성공 여부는 운영 처리의 성공 조건이 아닙니다.</li>
+                <li>예약 시간이 바뀌거나 취소되면 야간 동기화에서 Notion 제목, 날짜, 상태, 회차, 발송상태를 함께 갱신하고 취소 차트는 회원 발송 후보에서 제외합니다.</li>
+                <li>자동화가 관리하는 차트 본문은 갱신할 때 교체하며 같은 내용이 반복해서 쌓이지 않게 합니다.</li>
               </ul>
             </article>
             <article class="rule-card">
-              <h3>강사 설문</h3>
+              <h3>간소화 기록</h3>
               <ul>
-                <li>회원 최초 프라이빗 사전설문은 ARCHIVE IN 자체 설문을 사용합니다.</li>
-                <li>강사용 수업 전 화면은 회원 사전설문 요약과 지난 리포트 요약을 보여줍니다.</li>
-                <li>수업 후 설문은 점수, 평균, 등급, 1-5 평가 표현을 사용하지 않습니다.</li>
-                <li>수업 전/후 객관식 항목은 운영자가 미리 정한 보기와 함께 기타 서술형을 허용합니다.</li>
-                <li>오늘의 핵심과 다음 수업 방향은 강사가 입력한 키워드를 자연스럽게 포함해 회원용 문장으로 생성합니다.</li>
-                <li>다음 수업 방향은 수업 후 기록의 목표, 진행 부위, 관찰 변화, 주의사항, 강사 키워드를 바탕으로 회원용 문장으로 생성합니다.</li>
+                <li>회원 최초 프라이빗 사전설문은 예약별 토큰을 가진 ARCHIVE PILATES 자체 설문을 사용하며 회원별 영구 1회만 받습니다.</li>
+                <li>취소·변경되었거나 active 상태가 아닌 예약 링크는 열기와 제출을 모두 막습니다.</li>
+                <li>설문 알림톡은 후보 생성 때와 실제 발송 직전에 연결 예약을 다시 확인합니다. 자체설문 링크형 v2는 기존 ARCHIVE PILATES 로고 이미지형 양식을 유지하며, 승인 상태·버튼 URL·이미지 ID가 모두 일치하기 전에는 발송하지 않습니다.</li>
+                <li>회원 설문 제출 후 담당강사 확인 알림도 긴 설문ID·접근토큰 URL을 직접 넣지 않고 shortLinks의 sv- 링크만 사용합니다. v2가 승인되기 전에는 기존 v1로 되돌아가 발송하지 않습니다.</li>
+                <li>강사의 매 수업 전 계획 제출과 수업별 D-1 차트 알림은 사용하지 않습니다. 강사별로 하루 한 번 보내는 오늘 기록 단일 링크에서 당일 수업을 선택합니다.</li>
+                <li><strong>강사용 프라이빗 오늘 기록 안내 v4</strong>는 2026.09.03 SOLAPI 심사 중이며, APPROVED·BA·IMAGE·기존 ARCHIVE PILATES 이미지·오늘 기록 버튼 계약이 모두 확인될 때까지 실제 발송을 차단합니다. 승인 전에는 v3로 되돌아가 발송하지 않습니다.</li>
+                <li>승인 상태는 07:00부터 21:00까지 매시 확인하지만, 실제 알림톡은 강사별·날짜별 원자적 발송 장부로 하루 한 번만 허용합니다. 결과가 불명확하거나 실패한 발송은 자동 재발송하지 않습니다.</li>
+                <li>필수 입력은 진행 부위, 확인한 변화, 다음 방향 세 가지입니다. 주의사항, 홈워크, 컨디션, 사용 기구, 사진·영상은 접힌 선택 영역에서 필요한 경우에만 작성합니다.</li>
+                <li>기록 화면은 회원 최초 사전설문 요약과 직전 리포트를 함께 보여주며, 점수·평균·등급·1-5 평가 표현을 사용하지 않습니다.</li>
+                <li>저장하면 강사가 쓴 다음 방향을 그대로 보존해 리포트를 즉시 만들고 같은 화면에서 문장을 확인·수정한 뒤 한 버튼으로 발송 승인합니다.</li>
               </ul>
             </article>
             <article class="rule-card">
@@ -310,20 +578,22 @@
               <ul>
                 <li>회원은 최초 사전설문에서 체형교정/정렬, 다이어트/체력, 통증/회복, 산전·산후/컨디션 중 하나를 선택합니다.</li>
                 <li>회원 선택값을 우선 적용하고, 과거 서술형 응답은 키워드 기반 자동 분류로 보정합니다.</li>
-                <li>수업 전·후 질문과 리포트 문장 규칙은 목적 템플릿별로 달라집니다.</li>
+                <li>오늘 기록과 리포트 문장 규칙은 목적 템플릿별로 달라집니다.</li>
                 <li>5회 단위 회차는 리뷰 회차로 보고 누적 변화와 다음 블록 방향을 더 의식해 작성합니다.</li>
               </ul>
             </article>
             <article class="rule-card">
               <h3>미디어</h3>
               <ul>
-                <li>강사는 수업 후 기록 페이지에서 사진/영상을 첨부합니다.</li>
-                <li>강사용 알림톡의 사진·영상 업로드 버튼은 Notion이 아니라 ARCHIVE IN 수업 후 기록 페이지의 미디어 영역으로 연결합니다.</li>
+                <li>강사는 오늘 기록 페이지의 접힌 선택 영역에서 사진/영상을 첨부합니다.</li>
+                <li>사진·영상 업로드는 별도 알림톡 버튼이나 Notion 링크가 아니라 각 수업의 ARCHIVE PILATES 오늘 기록 화면 안에서 처리합니다.</li>
                 <li>privateLessonChartRequests.mediaUploadShortUrl의 shortLinks target은 `https://in.archivepilates.com/private-chart/?mode=post...&amp;focus=media` 형식이어야 합니다.</li>
                 <li>파일은 home@archivepilates.com 권한으로 Google Drive 프라이빗 리포트 미디어 폴더에 저장합니다.</li>
                 <li>Firestore에는 Drive file ID, 링크, mime type, size, 리포트 포함 여부만 저장합니다.</li>
                 <li>현재 기준은 첨부한 미디어를 같은 회차 리포트에 자동 포함하는 단순 운영입니다.</li>
+                <li>완료된 업로드 재시도는 같은 Drive 파일을 다시 확인해 결과만 반환하며, 리포트 revision이나 발송 승인을 다시 변경하지 않습니다.</li>
                 <li>업로드는 16MB 청크 기준으로 Function이 Drive resumable upload 세션을 발급하고, 브라우저가 Drive로 직접 전송한 뒤 Function이 완료 기록만 남깁니다.</li>
+                <li>Drive 업로드 완료 후 파일명, 형식, 크기, 회차 폴더를 서버에서 다시 검증하고 리포트 첨부가 끝나야 업로드 완료로 표시합니다.</li>
                 <li>Drive 직접 업로드가 브라우저 또는 네트워크 정책에 막히면 첫 청크 전에만 기존 Function 중계 경로로 자동 fallback합니다.</li>
                 <li>미디어 업로드만으로는 Gemini 리포트 문장을 다시 생성하지 않습니다. 기존 오늘의 핵심과 다음 수업 방향은 유지하고 미디어 섹션만 다시 렌더링합니다.</li>
                 <li>배포 전후 기본 검증은 scripts/validate-private-media-upload-live.mjs로 실제 이미지/영상 업로드, Drive 직접 업로드, 리포트 미디어 삽입만 확인하며 Gemini를 호출하지 않습니다.</li>
@@ -334,19 +604,22 @@
             <article class="rule-card">
               <h3>수정 잠금</h3>
               <ul>
-                <li>수업 후 설문은 리포트 생성 후에도 회원 알림톡 발송 전까지 수정할 수 있습니다.</li>
-                <li>수정하면 리포트는 재생성 대상이 되고 승인/대기 후보는 다시 검수 상태가 됩니다.</li>
+                <li>오늘 기록은 리포트 생성 후에도 회원 알림톡 발송 전까지 수정할 수 있습니다.</li>
+                <li>문장이나 미디어를 수정하면 reportRevision을 새로 만들고 기존 승인/대기 후보는 다시 검수 상태가 됩니다.</li>
                 <li>회원 리포트 자체의 오늘의 핵심, 다음 수업 방향 문장도 알림톡 발송 전까지 직접 수정할 수 있습니다. 수정하면 기존 발송 후보는 보류하고 다시 승인합니다.</li>
+                <li>승인 시점의 문장과 미디어를 immutable snapshot으로 고정하며 발송 URL도 해당 revision을 가리킵니다.</li>
+                <li>설문 답변, 수업시간, 담당강사, 회차 또는 미디어가 바뀌면 기존 승인 스냅샷과 미발송 후보를 무효화합니다.</li>
+                <li>스냅샷 도입 전 발송된 과거 리포트는 잠긴 현재 발송본을 읽기 전용 호환 스냅샷으로 열 수 있게 유지합니다.</li>
                 <li>회원 리포트 알림톡 발송 완료 이후에는 회차 기록을 잠급니다.</li>
                 <li>발송 처리 중에는 중복과 충돌을 막기 위해 임시 잠금합니다.</li>
               </ul>
             </article>
           </div>
-          <div class="rule-note"><strong>현재 확인 위치</strong><span>CORE Private / Firestore bookings, privateLessonChartRequests, privateLessonChartRecords, privateSessionLedger</span></div>
+          <div class="rule-note"><strong>현재 확인 위치</strong><span>CORE Private / Firestore bookings, privateSessionLedger, privateLessonSessions, privateLessonChartRequests, privateLessonChartRecords</span></div>
         </section>
 
         <section class="panel rule-section" id="staff-evaluation">
-          <div class="panel-header"><div><h2>4-1. 강사 평가·인사기록카드</h2><p>기존 Google Form 기반 강사 평가 퀴즈를 Firebase 기반 제출/채점/기록 구조로 전환합니다.</p></div><span class="pill good">staff</span></div>
+          <div class="panel-header"><div><h2>5-1. 강사 평가·인사기록카드</h2><p>기존 Google Form 기반 강사 평가 퀴즈를 Firebase 기반 제출/채점/기록 구조로 전환합니다.</p></div><span class="pill good">staff</span></div>
           <div class="rule-grid">
             <article class="rule-card">
               <h3>운영 흐름</h3>
@@ -355,7 +628,7 @@
                 <li>문항은 Firebase Function에서 받아오고, 정답은 브라우저에 노출하지 않습니다.</li>
                 <li>제출하면 Function이 객관식·단답형·서술형을 채점하고 staffEvaluationSubmissions에 원본 제출 기록을 저장합니다.</li>
                 <li>강사별 staffHrCards/{staffId}와 하위 quizResults에 최신 결과와 누적 요약을 반영합니다.</li>
-                <li>입사지원자는 별도 공개 시험 사이트에서 이름과 연락처 입력 후 20분 제한시간으로 응시합니다.</li>
+                <li>입사지원자는 CORE 강사 현황의 강사 테스트 버튼에서 공개 시험 사이트를 열고 이름과 연락처 입력 후 20분 제한시간으로 응시합니다.</li>
                 <li>운영자는 CORE Staff 탭에서 강사별 최신 점수, 통과 여부, 서술형 답변과 점수를 확인하고 필요 시 수정합니다.</li>
                 <li>강사 이름을 선택하면 해당 강사의 퀴즈 답변과 월별 그룹 예약률, 출석률, 평균인원, 수업매출을 세부 카드로 확인합니다.</li>
                 <li>강사 인사기록카드 상단에는 종합 점수와 산출 기준을 먼저 표시합니다.</li>
@@ -370,8 +643,10 @@
                 <li>운영자와 매니저는 대상 강사를 선택해 제출/검토할 수 있고, Q19 서술형 점수를 조정할 수 있습니다.</li>
                 <li>지원자 입사시험은 instructorApplicantEvaluationApi HTTP Function으로만 시작/제출하며 Firestore 직접 쓰기는 허용하지 않습니다.</li>
                 <li>staffEvaluationSubmissions는 제출 원본, staffHrCards는 인사기록카드 read-model입니다.</li>
+                <li>강사 평가 제출 원본과 인사기록카드는 ARCHIVE CORE 관리자만 읽을 수 있으며, 직접 쓰기는 허용하지 않습니다.</li>
                 <li>지원자 원본은 staffApplicantEvaluationSessions와 staffApplicantEvaluationSubmissions에 별도로 보관합니다.</li>
                 <li>현재 근무중 여부는 staffs.active와 staffRole 기준으로 판단합니다. active인 instructor/owner는 현재 근무중, manager/viewer는 운영자 계정, staffHrCards나 제출 기록만 있는 대상은 비근무/지원자 기록으로 보관합니다.</li>
+                <li>지원자 시험 ID와 입사 후 강사 ID가 달라진 경우 휴대폰번호가 정확히 한 명에게만 일치할 때 현재 강사 인사기록카드로 연결합니다.</li>
                 <li>인사기록카드는 외부 발송, 정산, 예약, 회원 응대 자동화의 원천으로 사용하지 않습니다.</li>
               </ul>
             </article>
@@ -409,14 +684,18 @@
         </section>
 
         <section class="panel rule-section" id="parking">
-          <div class="panel-header"><div><h2>5. 주차등록</h2><p>ARCHIVE CORE 홈에서 회원, 강사, 방문 차량을 등록하고 주차권을 적용합니다.</p></div><span class="pill good">active</span></div>
+          <div class="panel-header"><div><h2>6. 주차등록</h2><p>ARCHIVE CORE 홈에서 회원, 강사, 방문 차량을 등록하고 주차권을 적용합니다.</p></div><span class="pill good">active</span></div>
           <div class="rule-grid">
             <article class="rule-card">
               <h3>운영 규칙</h3>
               <ul>
-                <li>회원/강사/방문 차량은 ARCHIVE CORE 홈의 주차등록 섹션에서 구분, 이름, 연락처, 차량번호로 등록합니다.</li>
+                <li>회원과 강사 차량은 이름 또는 연락처와 차량번호로 등록합니다. 방문 차량은 일회성 등록이므로 차량번호와 선택 메모만 입력하고 이름·연락처는 저장하지 않습니다.</li>
                 <li>차량 원천은 parkingVehicles 컬렉션입니다. 회원카드와 강사카드에는 기본 차량만 표시용으로 미러링하고, 방문 차량은 오늘 날짜 일회성 차량으로 보관합니다.</li>
-                <li>오늘 예약된 수업 시작 10분 뒤, 등록 차량이 있는 회원/강사를 대상으로 parkingDiscountJobs를 자동 생성합니다.</li>
+                <li>등록 차량의 삭제 버튼은 차량을 보관 상태로 전환하고 회원/강사 카드의 차량 미러를 함께 정리합니다. 이미 처리된 주차권 작업 이력은 감사용으로 유지합니다.</li>
+                <li>오늘 예약된 수업 시작 30분 뒤, 등록 차량이 있는 회원/강사를 대상으로 parkingDiscountJobs를 자동 생성합니다.</li>
+                <li>자동 후보 확인은 10분마다 Firestore에서 수업 시작 30분이 지난 최근 75분 구간만 읽습니다. 오늘 예약 전체를 반복 조회하지 않으며, 해당 구간에 수업이 없으면 차량 목록도 읽지 않습니다.</li>
+                <li>같은 작업은 고정 job id로 중복 차단하며 새 작업이 생길 때만 아이파킹을 호출합니다. 운영자의 오늘 자동적용 실행만 누락 복구를 위해 오늘 전체를 확인합니다.</li>
+                <li>입차 기록 조회는 작업당 1회만 수행합니다. 입차 기록이 없으면 자동 재조회하지 않고 manual_review/no_entry로 남긴 뒤 주차등록 확인필요 메일을 1회 발송합니다.</li>
                 <li>방문 차량은 수업 예약과 매칭하지 않고, 오늘 자동적용 실행 버튼을 눌렀을 때 당일 방문 차량으로 parkingDiscountJobs를 생성합니다.</li>
                 <li>같은 날 같은 사람·차량은 하나의 안정적인 job id로 묶어 중복 주차권 생성을 막습니다.</li>
               </ul>
@@ -424,10 +703,26 @@
             <article class="rule-card">
               <h3>아이파킹 적용</h3>
               <ul>
-                <li>아이파킹 계정 2개를 사용해 2시간 할인권을 계정별 1개씩 적용합니다.</li>
+                <li>메인 계정은 704호와 705호이며, 2시간 할인권을 계정별 1개씩 우선 적용합니다.</li>
+                <li>서브 계정은 504호부터 508호이며, 메인 계정 적용이 불가능하거나 이미 사용된 경우에만 순서대로 사용합니다.</li>
+                <li>각 계정의 고유 상점 번호로 할인권 조회·적용·중복 확인을 수행합니다. 다른 계정의 상점 번호를 재사용하지 않습니다.</li>
                 <li>자동 적용 최대 시간은 4시간입니다. 기본 할인권명은 2시간 할인입니다.</li>
-                <li>차량 입차 기록이 없거나 후보가 여러 건이면 수동확인 상태로 남기고 자동 적용하지 않습니다.</li>
+                <li>강사 차량은 수업 종류와 수업 시간에 관계없이 2시간 할인권 2개, 총 4시간을 적용합니다.</li>
+                <li>회원·강사 차량은 예약 수업시각과 입차시각을 비교하지 않고 등록된 전체 차량번호로 현재 입차 건을 확인합니다. 같은 차량의 현재 입차 건이 여러 개면 가장 최근 건을 사용합니다.</li>
+                <li>등록된 회원·강사 차량 자체가 현재 입차 목록에 없을 때만 수동확인 상태로 남기며, 같은 끝자리의 다른 차량에는 할인권을 적용하지 않습니다.</li>
+                <li>방문 차량은 기존 차량번호와 입차시각 안전 검증을 유지합니다.</li>
                 <li>적용 결과는 parkingDiscountJobs와 연결 bookings 문서의 parkingStatus에 기록합니다.</li>
+              </ul>
+            </article>
+            <article class="rule-card">
+              <h3>강사레슨 주차 사전등록</h3>
+              <ul>
+                <li>D-1 알림톡의 개인별 주차 링크는 instructorLessonParkingPreRegistrations를 원천으로 사용하고, 공개 화면은 불투명 토큰으로 해당 예약만 확인합니다.</li>
+                <li>같은 날 두 세션을 듣는 예약자는 예약 ID를 하나의 요청으로 묶습니다. 등록 시점과 아이파킹 조회 직전에 현재 reserved 예약, 수업일과 시작시각을 다시 확인합니다.</li>
+                <li>공개 링크로 등록한 차량은 해당 수업일에만 유효합니다. 회원의 영구 기본차량으로 저장하지 않으며 연결 bookings의 parkingVehicleId가 자동 적용 차량의 우선 기준입니다.</li>
+                <li>차량번호 등록과 변경은 수업 시작 20분 후 닫고, 수업 시작 30분 후 입차를 한 번 조회합니다. 전체 차량번호는 등록 완료 화면과 운영 메일에 다시 노출하지 않습니다.</li>
+                <li>스텝 샘플은 실제 수업일과 시작시각을 담은 저장되지 않는 전용 프리뷰 링크를 사용하므로 실제 예약자의 차량등록 권한을 복사하지 않습니다.</li>
+                <li>4버튼 v3 템플릿은 2026-08-28 승인본의 채널, 본문, 이미지, 버튼과 링크 변수를 확인한 뒤 운영 연결했습니다. 스텝 샘플과 본 발송 모두 v3만 사용합니다.</li>
               </ul>
             </article>
             <article class="rule-card">
@@ -436,14 +731,16 @@
                 <li>홈 주차등록 섹션에서 회원/강사/방문 등록 차량과 최근 주차권 작업을 확인합니다.</li>
                 <li>자동화는 scheduledCreateParkingDiscountJobs가 작업을 만들고 processParkingDiscountJob이 실제 아이파킹 적용을 수행합니다.</li>
                 <li>문제 발생 시 수동확인 또는 error job만 운영자가 확인합니다.</li>
+                <li>입차 기록 없음 메일에는 수업일시, 대상 이름, 차량번호 뒤 4자리, 작업 ID와 CORE 확인 링크만 표시하며 전체 연락처와 전체 차량번호는 노출하지 않습니다.</li>
+                <li>확인필요 메일 자체가 실패하면 자동 재시도하지 않고 최근 주차권 작업에 확인메일 실패 상태와 오류를 표시합니다.</li>
               </ul>
             </article>
           </div>
-          <div class="rule-note"><strong>현재 확인 위치</strong><span>CORE Home / Firestore parkingVehicles, parkingDiscountJobs, bookings parkingStatus</span></div>
+          <div class="rule-note"><strong>현재 확인 위치</strong><span>CORE Home / 공개 주차 사전등록 / Firestore instructorLessonParkingPreRegistrations, parkingVehicles, parkingDiscountJobs, bookings parkingStatus</span></div>
         </section>
 
         <section class="panel rule-section" id="welcome">
-          <div class="panel-header"><div><h2>6. 현장 웰컴·회원가입·연락처</h2><p>회원가입서 제출과 StudioMate 반영을 분리해 실패 지점을 명확히 봅니다.</p></div><span class="pill">onsite</span></div>
+          <div class="panel-header"><div><h2>7. 현장 웰컴·회원가입·연락처</h2><p>회원가입서 제출과 StudioMate 반영을 분리해 실패 지점을 명확히 봅니다.</p></div><span class="pill">onsite</span></div>
           <div class="rule-grid">
             <article class="rule-card">
               <h3>현장 웰컴 알림톡</h3>
@@ -452,7 +749,8 @@
                 <li>같은 전화번호에 현장 웰컴 또는 신규회원 웰컴 성공 발송 이력이 있으면 중복 차단합니다.</li>
                 <li>삭제된 신규회원 웰컴 v3 템플릿은 사용하지 않습니다. 신규회원 안내는 현장 웰컴 v5 플로우로만 처리합니다.</li>
                 <li>CORE 홈탭은 alimtalkCandidates 실패, onsiteWelcomeRequests 오류, memberSignupContracts 후속 처리 오류를 함께 문제로 표시합니다.</li>
-                <li>김기효 테스트 계정 같은 예외는 테스트 목적과 기간을 남긴 뒤 운영에서 제거합니다.</li>
+                <li>운영자는 CORE의 회원가입서 메뉴에서 현장 웰컴 화면을 열어 단건 조회와 발송을 진행합니다.</li>
+                <li>지정 테스트 계정 예외는 테스트 목적과 기간을 남긴 뒤 운영에서 제거합니다.</li>
               </ul>
             </article>
             <article class="rule-card">
@@ -473,11 +771,35 @@
                 <li>기존 memo write queue에 회원가입서 메모 작업이 남아 있으면 skipped로 처리합니다.</li>
               </ul>
             </article>
+            <article class="rule-card">
+              <h3>강사회원 가입서</h3>
+              <ul>
+                <li>강사레슨 등록키는 StudioMate 스튜디오, 정규화된 휴대폰번호, 수강일로 고정해 같은 신청의 중복 처리를 막습니다.</li>
+                <li>입금과 수강 접수를 확인한 뒤 CORE 강사레슨 메뉴에서 이름, 휴대폰번호, 수강일, 결제수단을 등록합니다.</li>
+                <li>StudioMate는 휴대폰번호 정확 일치로 판정합니다. 신규이면 강사회원 생성과 강사레슨 (2T) 발급 뒤 가입서를 발송합니다.</li>
+                <li>자동화는 수업 생성 여부를 조회하지 않으며 반배정·예약 화면을 열거나 예약 API를 호출하지 않습니다.</li>
+                <li>기존 강사회원이면 강사레슨 (2T) 수강권까지만 발급하고 가입서는 다시 보내지 않습니다. 일반회원 또는 중복번호는 확인필요로 중단합니다.</li>
+                <li>반배정과 예약은 수업 생성 시 운영자가 StudioMate에서 직접 처리합니다. 수동 예약 뒤 기존 D-1 예약 안내 자동화가 예약 원천을 사용합니다.</li>
+                <li>CORE 일정별 예약현황은 읽기 전용입니다. 해당 수업일의 현재 활성 강사레슨 (2T) 수강권 발급 고유 인원을 우선하고, 수강권 데이터가 없을 때만 실제 활성 예약, 그 전에는 취소되지 않은 접수 인원을 사용합니다.</li>
+                <li>수강권 발급 인원은 누적 수강일 기록이 아니라 현재 활성 강사레슨 (2T) 수강권의 시작일로 계산합니다. 스텝·운영자도 실제 수강권이 발급되면 좌석에 포함하며, 알림톡 스텝 제외 규칙과 좌석 집계 규칙은 분리합니다.</li>
+                <li>김기효 신규회원 E2E처럼 newMemberSimulation으로 표시한 합성 테스트는 접수·완료·좌석 카운트에서 제외하고, 테스트 종료 후 StudioMate 수강권·메모와 Firestore 테스트 문서를 정리합니다.</li>
+                <li>강사레슨은 5:1 두 팀 운영 기준으로 기본 정원은 10명입니다. 실제 수업에 신뢰 가능한 정원이 있으면 같은 시작 시간의 병렬 수업 정원을 합산하고, 남은 좌석은 정원에서 수강권 발급·예약·접수 중 적용 원천의 고유 인원을 뺀 값으로 표시합니다.</li>
+                <li>좌석 현황 조회는 StudioMate 예약 생성·변경·취소를 실행하지 않습니다.</li>
+                <li>이폼싸인 Personal 요금제는 API 대신 전용 Playwright 큐를 사용합니다. 최종 발송 결과가 모호하면 자동 재발송하지 않고 확인필요로 남깁니다.</li>
+                <li>추적 작업이 없는 신규회원 등록은 자동 재발송하지 않고 완료·진행 문서를 먼저 연결합니다. 현재 강사회원가입서 템플릿과 이름이 정확히 한 건일 때만 자동 보정하고, 없거나 여러 건이면 확인필요로 중단합니다.</li>
+                <li>가입서 완료 확인 뒤 ARCHIVE PILATES 회원 메모를 저장하고 StudioMate 메모 반영 큐를 생성합니다. 신규 등록은 회원·수강권·가입서·메모가 끝나면 완료하며 수동 예약 여부는 완료 조건에 포함하지 않습니다.</li>
+                <li>촬영형 강사레슨은 촬영, 강의 콘텐츠 제작·제공·판매와 해당 강의 소개를 위한 홍보 활용을 전제로 운영합니다.</li>
+                <li>촬영·콘텐츠·해당 강의 소개 활용은 하나의 필수 동의로 받고, 별도의 포괄적인 홍보·마케팅 동의 항목은 두지 않습니다.</li>
+                <li>필수 동의에 동의하지 않으면 촬영형 강사레슨을 신청하거나 수강할 수 없습니다.</li>
+                <li>개인정보 수집·이용 동의는 별도 필수 항목으로 유지합니다.</li>
+              </ul>
+            </article>
           </div>
+          <div class="rule-note"><strong>현재 확인 위치</strong><span>CORE 강사레슨 / Firestore lectures, bookings, memberProfiles.activeTickets, instructorLessonRegistrations, studiomateInstructorLessonJobs, eformsignInstructorMemberJobs, instructorMemberConsents / StudioMate 회원·수강권 / 이폼싸인 강사회원가입서</span></div>
         </section>
 
         <section class="panel rule-section" id="settlement">
-          <div class="panel-header"><div><h2>7. 정산·비즈니스 지표</h2><p>대시보드는 정산 자동화 결과를 참조하고 중복 계산을 줄입니다.</p></div><span class="pill">finance</span></div>
+          <div class="panel-header"><div><h2>8. 정산·비즈니스 지표</h2><p>대시보드는 정산 자동화 결과를 참조하고 중복 계산을 줄입니다.</p></div><span class="pill">finance</span></div>
           <div class="rule-grid">
             <article class="rule-card">
               <h3>원본 폴더</h3>
@@ -485,16 +807,18 @@
                 <li>Google Drive 아카이브 정산 폴더의 수업매출원본데이터와 수강권매출원본데이터를 사용합니다.</li>
                 <li>정산 자동화는 파일 수정일이 아니라 파일명 날짜 범위로 대상 파일을 고릅니다.</li>
                 <li>닫힌 월은 전체월 파일을 우선 사용하고, 없을 때만 최신 누적 파일을 사용하며 경고를 남깁니다.</li>
+                <li>회원·수업일시·강사·수강권·출결·차감금액이 모두 같은 완전 중복 원천 행은 한 건만 반영하고 제외 근거를 원천중복검수 시트에 남깁니다.</li>
               </ul>
             </article>
             <article class="rule-card">
               <h3>자동화 결과</h3>
               <ul>
-                <li>Google Apps Script 정산 자동화가 월별 정산 파일과 강사별 HTML 명세서를 만듭니다.</li>
+                <li>Mac mini 월말정산 LaunchAgent가 매월 1일 전월 원천을 검증해 월별 정산 파일과 강사별 HTML 명세서를 만듭니다.</li>
                 <li>노쇼는 수업료 50%, 지급 50% 규칙을 적용합니다.</li>
                 <li>대시보드 DB 동기화는 정산 자동화의 대시보드_EXPORT 탭을 우선 읽어 Firestore에 쓰는 ETL로 축소합니다.</li>
                 <li>대시보드_EXPORT가 없거나 지원 형식이 아니면 기존 Master 시트 계산으로 임시 fallback하고 경고 로그를 남깁니다.</li>
                 <li>수업매출과 수강권매출은 서로 다른 지표이므로 화면 라벨을 명확히 구분합니다.</li>
+                <li>회원수는 단일 유효회원으로 표시하지 않습니다. 수강권 보유회원은 정산 시트 기준, 예약 이용회원과 출석 회원은 Firestore bookings 예약 원천 기준으로 분리합니다.</li>
               </ul>
             </article>
             <article class="rule-card">
@@ -502,15 +826,125 @@
               <ul>
                 <li>매월 1일 전월 정산월 폴더를 생성합니다.</li>
                 <li>강사별 정산명세서에는 총 합계, 전월대비, 그룹 합계, 프라이빗 합계, 총 수업 수, 월 그룹 평균을 표시합니다.</li>
+                <li>월간 요약은 현재 형식의 정산보조·정산대장·월간리포트를 우선 읽고, 과거 파일에서만 Sheet3 호환 방식을 사용합니다.</li>
+                <li>정규직과 프리랜서 보수를 함께 받는 강사는 전체 수업 보수에서 정규직 세전 급여를 먼저 공제한 금액만 프리랜서 보수로 계산하고, 정규직 실지급액은 한 번만 합산합니다.</li>
+                <li>이전 달 정산 데이터는 헤더 이름으로 연결하며, 정규직 실지급액이 있는데 세전 공제액을 확인할 수 없으면 이중계상 방지를 위해 명세서 생성을 중단합니다.</li>
+                <li>보수기준표에 없는 강사는 기본 요율을 추정하지 않습니다. 누락 강사명과 필요한 그룹/프라이빗 탭을 메일로 보고하고 정산 생성을 중단합니다.</li>
                 <li>일 단위 누적 파일은 최종 월 파일이 만들어진 뒤 휴지통으로 보냅니다.</li>
               </ul>
             </article>
+            <article class="rule-card">
+              <h3>수강권 잔여금액</h3>
+              <ul>
+                <li>Mac mini LaunchAgent는 매일 22:00에 기동하고 KST 월말인 날에만 집계를 게시합니다.</li>
+                <li>최신 적용 완료 StudioMate 회원목록과 memberProfiles.activeTickets를 사용하며, 3시간보다 오래된 원천이면 게시를 중단합니다.</li>
+                <li>횟수권은 잔여횟수, 기간권은 잔여일수와 주당횟수를 이용해 환산 잔여횟수를 계산합니다.</li>
+                <li>결제금액은 회원·수강권·이용기간이 같은 결제이력을 합산하고, 미수금·분할결제·임시 프로필·가격 이상치는 동일 권종 기준가로 보정합니다.</li>
+                <li>평균 회당가격은 그룹·1:1 프라이빗·듀엣을 분리하고, 0원 수강권과 강사레슨은 평균에서 제외합니다.</li>
+                <li>수강권별 상세표는 가격 커버리지 대신 해당 수강권 잔여금액이 전체 잔여금액에서 차지하는 비율을 표시합니다.</li>
+                <li>HTML 보고서는 home 계정 Google Drive의 아카이브 정산/잔여수강권에 YYMM 잔여수강권.html 이름으로 저장합니다.</li>
+                <li>결과는 ticketLiabilityReports/current와 월별 문서에 보관하고 CORE Business 고정 링크에서 확인합니다.</li>
+                <li>잔여금액은 경영 검토용 계산값이며 알림톡, 예약, 결제, 환불 등 외부 실행 원천으로 사용하지 않습니다.</li>
+              </ul>
+            </article>
           </div>
-          <div class="rule-note"><strong>현재 확인 위치</strong><span>CORE Business / Google Drive 아카이브 정산 자동화 / Firestore businessSnapshots</span></div>
+          <div class="rule-note"><strong>현재 확인 위치</strong><span>CORE Business / Google Drive 아카이브 정산 자동화 / Firestore businessSnapshots / ticketLiabilityReports</span></div>
+        </section>
+
+        <section class="panel rule-section" id="refunds">
+          <div class="panel-header"><div><h2>9. 환불 안내·동의서</h2><p>환불 예상액은 원천과 계산 근거를 확인한 뒤 운영자가 확정합니다.</p></div><span class="pill warn">manager review</span></div>
+          <div class="rule-grid">
+            <article class="rule-card">
+              <h3>회원과 수강권 원천</h3>
+              <ul>
+                <li>운영자는 이름으로 현재 유효회원 후보를 조회하고, 마스킹 연락처·활성 수강권 수·원천 갱신일을 확인해 회원카드를 선택합니다.</li>
+                <li>선택 이후 계산과 발송은 화면의 이름이나 연락처가 아니라 동일 스튜디오의 canonical memberId로 다시 검증하며, 연락처는 memberProfiles 원천을 사용합니다.</li>
+                <li>현재 보유 수강권은 memberProfiles.activeTickets를 사용합니다. member360Cards, members 하위 purchases, 잔여금액 보고서는 환불 판단 원천으로 사용하지 않습니다.</li>
+                <li>수강권 유형은 원천 횟수 필드로 고정하며, 처리 시점에 만료된 수강권은 과거 요청일 입력으로 우회할 수 없습니다.</li>
+                <li>실결제금액이 없으면 임의 추정하지 않고 결제내역 위치와 확인 근거를 요구합니다.</li>
+                <li>유효기간이 지난 수강권, 이미 이용한 수업, 회원 귀책 노쇼, 무료·이벤트·프로모션 혜택은 환불 대상 또는 금액에서 제외합니다.</li>
+                <li>회원과 수강권을 선택하면 현재 원천으로 예상액을 바로 계산할 수 있습니다. 무료·증정·이벤트·프로모션 혜택과 완료수업·노쇼 공제 여부는 회원 안내 또는 동의서 발송 전에 운영자가 확인합니다.</li>
+              </ul>
+            </article>
+            <article class="rule-card">
+              <h3>환불 계산</h3>
+              <ul>
+                <li>모든 환불은 결제금액의 10% 위약금을 공제합니다.</li>
+                <li>횟수권 사용금액은 1회 정상 단가 × (StudioMate 총횟수 − 잔여횟수)로 계산하며 사용횟수 수동 덮어쓰기를 허용하지 않습니다.</li>
+                <li>기간권은 StudioMate 이용 시작일·만료일·환불 요청일로 남은 일수를 계산하고, 7일 단위의 잔여 주수로 환산합니다. 남은 7일 미만은 환불 잔여 주수에 포함하지 않습니다.</li>
+                <li>기간권의 총 주수·사용 주수·잔여 주수는 원천에서 자동 산출하며 운영자 수동 입력이나 홀딩 근거 입력을 받지 않습니다. 원천 날짜가 없거나 서로 맞지 않으면 계산을 중단합니다.</li>
+                <li>증정·이벤트·프로모션 혜택 공제액은 사용금액과 분리해 운영자가 확인합니다.</li>
+                <li>회원 안내 문구는 잔여금액에서 위약금과 추가 공제를 차감하는 방식으로 표시하며, 기간권은 확인된 잔여 주수 또는 잔여 일수를 함께 기록합니다.</li>
+                <li>화면 금액은 예상 환불액이며 동의서 작성과 운영자 확인 후 최종 확정합니다.</li>
+              </ul>
+            </article>
+            <article class="rule-card">
+              <h3>발송과 후속 처리</h3>
+              <ul>
+                <li>환불 요청 접수 → 내부 승인 → 이폼싸인 서명 → 결제수단별 환불 → 회원 안내 순서로 처리합니다.</li>
+                <li>운영자 확인 후에만 이폼싸인 환불동의서를 한 건 발송합니다. 같은 회원의 같은 수강권은 계산값이나 근거 문구가 달라도 활성 환불 건을 하나만 허용합니다.</li>
+                <li>환불계산 안내 문자는 CORE에서 별도로 요청합니다. 서버가 현재 수강권과 계산 해시를 다시 확인한 뒤 studiomateRefundSmsJobs에 등록하고 Mac mini 전용 브라우저 큐가 StudioMate 문자 화면에서 발송합니다.</li>
+                <li>같은 회원·수강권·계산 해시의 문자는 한 건만 허용합니다. 문자 제목과 본문은 서버 생성본으로 고정하며 화면에서 임의 수정한 문구는 발송하지 않습니다.</li>
+                <li>현재 이폼싸인 Personal 요금제는 API를 지원하지 않으므로 CORE는 eformsignRefundJobs에 작업을 저장하고 Mac mini의 전용 브라우저 큐가 발송합니다.</li>
+                <li>환불동의서 v9의 회원명·연락처·결제금액·위약금·공제액·환불금 필드 계약을 고정하고, SMS 수신자와 진행 중 문서함의 문서 ID까지 확인해야 발송 완료로 기록합니다.</li>
+                <li>발송 직전에 현재 memberProfiles.activeTickets를 다시 읽어 수강권 금액·사용·상태·유효기간이 바뀌면 중단합니다. 중단된 큐는 전송 클릭 전 작업만 재시도하고 클릭 가능성이 있으면 운영자 확인 상태로 둡니다.</li>
+                <li>문서명과 해당 문서 ID가 함께 확인되는 완료 화면 또는 발송 문서 목록만 성공으로 기록합니다. 응답이 불명확하면 자동 재발송하지 않고 발송 결과 확인 상태로 남깁니다.</li>
+                <li>회원은 이폼싸인에서 환불 사유, 필요한 지급계좌, 서명을 직접 작성하며 CORE는 계좌번호를 저장하지 않습니다.</li>
+                <li>실제 카드·계좌 환불, StudioMate 수강권 변경, 수강권 종료는 자동 실행하지 않고 별도 확인 절차로 유지합니다.</li>
+              </ul>
+            </article>
+          </div>
+          <div class="rule-note"><strong>현재 확인 위치</strong><span>CORE 환불 / Firestore refundCases·studiomateRefundSmsJobs / eformsign 환불 신청서 / Notion 회원권 환불 및 양도(규정 원문)</span></div>
+        </section>
+
+        <section class="panel rule-section" id="cloud-cost">
+          <div class="panel-header"><div><h2>10. 클라우드 비용</h2><p>운영 기능을 유지하면서 사용하지 않는 상시 자원과 반복 읽기를 먼저 줄입니다.</p></div><span class="pill good">optimized</span></div>
+          <div class="rule-grid">
+            <article class="rule-card">
+              <h3>현재 운영 기준</h3>
+              <ul>
+                <li>ARCHIVE PILATES 운영 데이터는 Firestore와 Google Drive 원천을 사용하며 Firebase Data Connect와 Cloud SQL은 사용하지 않습니다.</li>
+                <li>사용 목적, 데이터 소유자, 종료 기준이 없는 유료 상시 자원은 만들지 않습니다.</li>
+                <li>새 Cloud SQL, Data Connect, 최소 인스턴스, CPU 상시 할당은 비용 추정과 종료 계획을 먼저 남긴 뒤 승인합니다.</li>
+                <li>채용 사이트 Cloud Run은 최소 인스턴스 0, 요청 처리 중 CPU 할당 방식으로 운영합니다.</li>
+              </ul>
+            </article>
+            <article class="rule-card">
+              <h3>반복 작업 기준</h3>
+              <ul>
+                <li>Firestore 예약·연락처·설문 작업은 전체 문서 폴링보다 상태와 dueAt/nextRunAt 조건 쿼리를 우선합니다.</li>
+                <li>프라이빗 리포트는 수업 후 기록이 들어오기 전에는 waiting_post로 보관하고 정기 생성 대상에서 제외합니다.</li>
+                <li>운영 영향이 작은 누락 설문 확인은 시간 단위로 유지합니다. 프라이빗 차트 Notion 표시는 매일 22:20, 회원 사전설문 Notion 표시는 매일 22:40 한 번씩만 동기화합니다.</li>
+                <li>사용하지 않는 Scheduler와 Secret은 참조·대체 수단을 확인한 뒤 삭제합니다.</li>
+              </ul>
+            </article>
+            <article class="rule-card">
+              <h3>2026-08-22 비용 최적화 · 72시간 검증 완료</h3>
+              <ul>
+                <li>CORE 홈은 전체 회원 디렉터리를 처음부터 읽지 않고 재등록 후보의 memberProfiles만 묶음 조회해 최신성을 확인합니다. 명령창에서 회원명을 2자 이상 검색할 때만 회원 검색 데이터를 한 번 불러오며, Members 화면의 기존 조회는 유지합니다.</li>
+                <li>목록별 최대 건수는 브라우저에서 자르지 않고 Firestore 쿼리 단계에 적용해 원본 전체 읽기를 막습니다.</li>
+                <li>CORE HTML, 디렉터리형 메뉴 URL, release.json, manifest는 캐시하지 않고, JavaScript와 CSS는 저장 후 재검증하며, 이미지·아이콘·폰트는 짧게 캐시합니다.</li>
+                <li>알림톡 큐, 프라이빗 사전설문 응답, Google 주소록 큐 워커는 canonical 원천과 10분 이내 운영 약속을 유지하면서 10분 주기로 처리합니다.</li>
+                <li>72시간 결과: Firestore 읽기 823,641건(-10.2%), CORE Hosting 전송 22,423,039바이트(-99.7%), 알림톡·연락처 워커 호출 432건·431건(각 약 -50%)으로 줄었습니다.</li>
+                <li>billable instance time은 알림톡 61.6초(-46.0%), 연락처 202.5초(+12.5%), 프라이빗 설문 700.7초(-42.7%)입니다. 연락처는 실제 작업 39건을 처리해 단독 시간은 늘었지만 세 워커 합계는 36.4% 감소했습니다.</li>
+                <li>상태: 72시간 사용량 비교를 완료했습니다. 세 Scheduler는 10분 주기·ENABLED, 대응 함수는 ACTIVE이며 HTTP 실패, 최근 큐 실패, 처리 대기, 10분 초과 적체가 없습니다.</li>
+              </ul>
+            </article>
+            <article class="rule-card">
+              <h3>관제와 검증</h3>
+              <ul>
+                <li>Cloud Billing 상세 내보내기는 archive-pilates.archive_billing_export 데이터셋을 사용합니다.</li>
+                <li>월별 비용은 프로젝트, 서비스, SKU, 리전 순으로 확인하고 전월 같은 날짜 대비 급증 항목부터 원인을 찾습니다.</li>
+                <li>비용 절감 변경도 기능 배포와 동일하게 빌드, 라이브 URL, Scheduler 상태, Firestore 상태를 함께 검증합니다.</li>
+                <li>운영 기능을 줄여야 하는 경우에는 자동으로 중단하지 않고 운영자 확인 대상으로 올립니다.</li>
+              </ul>
+            </article>
+          </div>
+          <div class="rule-note"><strong>현재 확인 위치</strong><span>Google Cloud Billing / BigQuery archive_billing_export / Cloud Run Careers / Firebase Functions Scheduler</span></div>
         </section>
 
         <section class="panel rule-section" id="release">
-          <div class="panel-header"><div><h2>8. 배포·검증·보고</h2><p>배포 요청은 검증, commit, deploy, live check, GitHub push를 한 세트로 처리합니다.</p></div><span class="pill warn">release gate</span></div>
+          <div class="panel-header"><div><h2>11. 배포·검증·보고</h2><p>배포 요청은 검증, commit, deploy, live check, GitHub push를 한 세트로 처리합니다.</p></div><span class="pill warn">release gate</span></div>
           <div class="rule-grid">
             <article class="rule-card">
               <h3>배포세트</h3>
@@ -521,6 +955,7 @@
                 <li>CORE Hosting은 최신 CORE 작업 기준에서만 배포합니다. 배포 전 validate:archive-core-hosting이 수강료 문의 카드, 최근 발송/메모 패널, KPI 카드 높이 CSS를 확인하고, 빠진 항목이 있으면 배포를 중단합니다.</li>
                 <li>라이브 배포 커밋은 origin/main으로 fast-forward 승격합니다. 배포 완료 보고 전 npm run release:promote-main:dry로 승격 가능성을 확인하고, 검증이 끝나면 npm run release:promote-main을 실행합니다.</li>
                 <li>기능 브랜치만 라이브에 배포되고 main으로 승격되지 않은 상태는 rollback/다른 스레드 덮어쓰기 위험으로 봅니다. 승격이 막히면 차단 원인을 보고하고 별도 정리합니다.</li>
+                <li>ARCHIVE METHOD 강사레슨 큐카드 하단은 별점 제출 대신 수업촬영영상 시청을 위한 ARCHIVE PILATES 아임웹 가입 CTA로 안내합니다. 배포 전 롤백 가드와 배포 후 라이브 canary는 페이지 응답, CTA 문구, 가입 링크를 확인합니다.</li>
                 <li>배포 후 실제 URL, callable/API 응답, 브라우저 오류를 확인합니다.</li>
               </ul>
             </article>
@@ -553,13 +988,16 @@
         </section>
 
         <section class="panel rule-section" id="worklines">
-          <div class="panel-header"><div><h2>9. 인프라·워크라인</h2><p>스레드와 worktree를 분리해 기능 간 충돌을 줄입니다.</p></div><span class="pill">coordination</span></div>
+          <div class="panel-header"><div><h2>12. 인프라·워크라인</h2><p>스레드와 worktree를 분리해 기능 간 충돌을 줄입니다.</p></div><span class="pill">coordination</span></div>
           <div class="rule-grid">
             <article class="rule-card">
               <h3>Mac mini</h3>
               <ul>
                 <li>Mac mini는 Codex 통합 운영 허브이자 자동화 실행 환경입니다.</li>
                 <li>StudioMate Playwright 공유 프로필은 lock을 잡고 직렬 실행합니다.</li>
+                <li>Codex가 디버깅·검증을 위해 연 Chrome 탭·창·Playwright 세션은 작업 종료 전에 닫고, 종료와 lock 해제를 <code>finally</code>에서 보장합니다.</li>
+                <li>사용자가 기존에 열어 둔 Chrome 상태와 소유권이 불명확한 프로세스는 닫지 않으며, 광범위한 프로세스 종료 명령은 사용하지 않습니다.</li>
+                <li>로그인·승인을 위해 창을 남길 때는 남긴 대상과 이유를 완료 보고에 명시합니다.</li>
                 <li>자동화 실패나 지연은 Firebase 장애와 분리해 LaunchAgent, 로그, 원본 파일부터 확인합니다.</li>
               </ul>
             </article>
@@ -584,14 +1022,14 @@
         </section>
 
         <section class="panel rule-section" id="archive">
-          <div class="panel-header"><div><h2>10. 폐기·보관 기준</h2><p>더 이상 현재 운영 원칙이 아닌 항목을 명확히 분리합니다.</p></div><span class="pill danger">deprecated</span></div>
+          <div class="panel-header"><div><h2>13. 폐기·보관 기준</h2><p>더 이상 현재 운영 원칙이 아닌 항목을 명확히 분리합니다.</p></div><span class="pill danger">deprecated</span></div>
           <div class="rule-grid">
             <article class="rule-card">
               <h3>Notion 운영규칙</h3>
               <ul>
                 <li>Notion 아카이브 운영 규칙은 2026.06.10 이후 현재 운영규칙 업데이트 대상이 아닙니다.</li>
                 <li>기존 내용은 과거 참조로만 사용하고, 새 규칙은 CORE 운영규칙 탭에 기록합니다.</li>
-                <li>프라이빗 개인레슨 차트처럼 기능 자체가 아직 Notion에 의존하는 데이터 화면은 별도 기능 표면으로 유지합니다.</li>
+                <li>프라이빗 개인레슨 차트는 Firestore 원천의 야간 표시용 미러로만 유지하며 기능 성공 여부는 Notion에 의존하지 않습니다.</li>
               </ul>
             </article>
             <article class="rule-card">

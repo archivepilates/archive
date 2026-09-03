@@ -10,7 +10,7 @@ echo "== ARCHIVE IN live deploy: onsite welcome guard =="
 node scripts/validate-release-branch-state.mjs --require-origin-main
 npm run validate:live-release-rollback-guards
 npm run validate:onsite-welcome
-node scripts/write-release-manifest.mjs --surface archivein --surface core
+node scripts/write-release-manifest.mjs --surface archivein
 
 echo "== ARCHIVE IN live deploy: Firestore rules dry-run =="
 firebase deploy --project archive-pilates --config firebase.json --only firestore:rules --dry-run

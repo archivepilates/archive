@@ -1,16 +1,21 @@
 import { onRequest } from "firebase-functions/v2/https";
-import { onDocumentCreated } from "firebase-functions/v2/firestore";
+import { onDocumentCreated, onDocumentWritten } from "firebase-functions/v2/firestore";
 import { onSchedule } from "firebase-functions/v2/scheduler";
 import { receiveInBodyWebhookHandler } from "../inbody/inbodyWebhook";
 import {
-  enqueueApprovedPrivateLessonReportAlimtalks,
-  createAndSendTomorrowPrivateLessonCharts,
+  createTomorrowPrivateLessonChartRequests,
   generatePendingPrivateLessonChartReports,
   notionPrivateLessonReportWebhookHandler,
   privateLessonChartApiHandler,
   privateLessonReportViewHandler,
   reconcileCurrentMonthPrivateLessonCharts,
+  sendTodayPrivateLessonChartAlimtalks,
+  syncPendingPrivateLessonNotionProjections,
 } from "../privateLessonChart/privateLessonChart";
+import {
+  syncPrivateLessonSessionOnRecordWrite,
+  syncPrivateLessonSessionOnRequestWrite,
+} from "../privateLessonChart/privateLessonSession";
 import {
   ingestPrivateSurveyResponseHandler,
   processDueStaffSurveyAlimtalks,
@@ -25,6 +30,7 @@ import {
   purgeUnsignedDiscardedMemberSignupContracts,
 } from "../memberSignup/memberSignupContract";
 import { onsiteWelcomeRequestHandler } from "../memberSignup/onsiteWelcomeRequest";
+import { methodCueCardReviewHandler } from "../method/methodCueCardReview";
 import {
   privateLessonChartRequestOptions,
   privateLessonChartScheduleOptions,
@@ -40,7 +46,7 @@ import { redirectShortLinkHandler } from "../utils/shortLinks";
 export const scheduledSyncPrivateSurveyResponses = onSchedule(
   {
     ...scheduleOptions,
-    schedule: "every 5 minutes",
+    schedule: "every 10 minutes",
   },
   async () => {
     await syncPrivateSurveyResponsesFromSheet();
@@ -53,15 +59,24 @@ export const scheduledProcessStaffSurveyAlimtalks = onSchedule(
     schedule: "every 10 minutes",
   },
   async () => {
-    await processMissingSurveySubmissionAlerts();
     await processDueStaffSurveyAlimtalks();
+  },
+);
+
+export const scheduledProcessMissingSurveySubmissionAlerts = onSchedule(
+  {
+    ...scheduleOptions,
+    schedule: "every 60 minutes",
+  },
+  async () => {
+    await processMissingSurveySubmissionAlerts();
   },
 );
 
 export const scheduledSyncPrivateSurveyNotion = onSchedule(
   {
     ...privateSurveyIntakeOptions,
-    schedule: "every 30 minutes",
+    schedule: "40 22 * * *",
   },
   async () => {
     await syncPrivateSurveyNotionBackfill();
@@ -71,10 +86,30 @@ export const scheduledSyncPrivateSurveyNotion = onSchedule(
 export const scheduledCreatePrivateLessonChartRequests = onSchedule(
   {
     ...privateSurveyIntakeOptions,
-    schedule: "0 18 * * *",
+    schedule: "0 22 * * *",
   },
   async () => {
-    await createAndSendTomorrowPrivateLessonCharts();
+    await createTomorrowPrivateLessonChartRequests();
+  },
+);
+
+export const scheduledSendTodayPrivateLessonChartAlimtalks = onSchedule(
+  {
+    ...privateLessonChartScheduleOptions,
+    schedule: "0 7-21 * * *",
+  },
+  async () => {
+    await sendTodayPrivateLessonChartAlimtalks();
+  },
+);
+
+export const scheduledSyncPrivateLessonNotionProjections = onSchedule(
+  {
+    ...privateLessonChartScheduleOptions,
+    schedule: "20 22 * * *",
+  },
+  async () => {
+    await syncPendingPrivateLessonNotionProjections();
   },
 );
 
@@ -91,20 +126,10 @@ export const scheduledReconcileCurrentMonthPrivateLessonCharts = onSchedule(
 export const scheduledGeneratePrivateLessonChartReports = onSchedule(
   {
     ...privateLessonChartScheduleOptions,
-    schedule: "every 10 minutes",
+    schedule: "every 60 minutes",
   },
   async () => {
     await generatePendingPrivateLessonChartReports();
-  },
-);
-
-export const scheduledEnqueuePrivateLessonReportAlimtalks = onSchedule(
-  {
-    ...privateSurveyIntakeOptions,
-    schedule: "10 9,15,21 * * *",
-  },
-  async () => {
-    await enqueueApprovedPrivateLessonReportAlimtalks();
   },
 );
 
@@ -141,6 +166,8 @@ export const memberSignupContract = onRequest(publicDriveRequestOptions, memberS
 
 export const onsiteWelcomeRequest = onRequest(publicSolapiRequestOptions, onsiteWelcomeRequestHandler);
 
+export const methodCueCardReview = onRequest(publicDriveRequestOptions, methodCueCardReviewHandler);
+
 export const notionPrivateLessonReportWebhook = onRequest(
   privateLessonChartRequestOptions,
   notionPrivateLessonReportWebhookHandler,
@@ -154,4 +181,20 @@ export const processPrivateSurveyIntake = onDocumentCreated(
     document: "privateSurveyIntakes/{intakeId}",
   },
   processPrivateSurveyIntakeHandler,
+);
+
+export const syncPrivateLessonSessionFromRequest = onDocumentWritten(
+  {
+    ...privateSurveyIntakeOptions,
+    document: "privateLessonChartRequests/{requestId}",
+  },
+  syncPrivateLessonSessionOnRequestWrite,
+);
+
+export const syncPrivateLessonSessionFromRecord = onDocumentWritten(
+  {
+    ...privateSurveyIntakeOptions,
+    document: "privateLessonChartRecords/{recordId}",
+  },
+  syncPrivateLessonSessionOnRecordWrite,
 );

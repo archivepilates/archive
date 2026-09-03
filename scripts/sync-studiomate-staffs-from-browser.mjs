@@ -11,6 +11,7 @@ const admin = require("../firebase/kangsain-functions/functions/node_modules/fir
 
 const args = new Set(process.argv.slice(2));
 const apply = args.has("--apply");
+const staffIdScope = valueArg("--staff-id");
 
 const PROJECT_ID = process.env.GOOGLE_CLOUD_PROJECT || process.env.GCLOUD_PROJECT || "archive-pilates";
 const STUDIO_ID = process.env.STUDIOMATE_STUDIO_ID || process.env.MANAGER_STUDIO_ID || "5330";
@@ -29,8 +30,20 @@ const startedAt = new Date();
 let summary;
 try {
   const scanned = await scanStudioMateStaffTab();
+  const scopedStaffs = staffIdScope
+    ? scanned.staffs.filter((staff) => staff.staffId === staffIdScope)
+    : scanned.staffs;
+  if (staffIdScope && !scopedStaffs.length) {
+    throw new Error(`StudioMate staff not found for --staff-id ${staffIdScope}`);
+  }
+  const mismatchedStudio = scopedStaffs.find((staff) => staff.studioId && staff.studioId !== STUDIO_ID);
+  if (mismatchedStudio) {
+    throw new Error(`StudioMate staff ${mismatchedStudio.staffId} does not belong to studio ${STUDIO_ID}`);
+  }
   const existing = await loadExistingStaffs();
-  const plans = await buildPlans(scanned, existing);
+  const plans = await buildPlans({ ...scanned, staffs: scopedStaffs }, existing, {
+    retireMissing: !staffIdScope,
+  });
   summary = {
     ok: true,
     mode: apply ? "apply" : "dry-run",
@@ -39,13 +52,14 @@ try {
     baseUrl: BASE_URL,
     profileDir: PROFILE_DIR,
     scanUrl: scanned.scanUrl,
-    scannedStaffs: scanned.staffs.length,
-    scannedNames: scanned.staffs.map((staff) => staff.name),
+    scannedStaffs: scopedStaffs.length,
+    scannedNames: scopedStaffs.map((staff) => staff.name),
+    staffIdScope: staffIdScope || null,
     plannedWrites: plans.writes.length,
     plannedRetirements: plans.writes.filter((plan) => plan.change === "retire_missing_no_future_schedule").length,
     keptMissingWithFutureSchedule: plans.keptMissingWithFutureSchedule,
     skippedOperators: plans.skippedOperators,
-    writes: plans.writes,
+    writes: plans.writes.map(({ data: _data, ...plan }) => plan),
     startedAt: startedAt.toISOString(),
     finishedAt: new Date().toISOString(),
   };
@@ -95,10 +109,10 @@ if (summary.ok) {
 
 async function scanStudioMateStaffTab() {
   const releaseBrowserLock = await acquireStudioMateBrowserLock({ owner: "studiomate-staff-browser-scan" });
-  const { chromium } = await import("playwright");
   let context = null;
 
   try {
+    const { chromium } = await import("playwright");
     context = await chromium.launchPersistentContext(PROFILE_DIR, {
       acceptDownloads: true,
       headless: HEADLESS,
@@ -153,7 +167,7 @@ async function loadExistingStaffs() {
   return snap.docs.map((doc) => ({ docId: doc.id, ...doc.data() }));
 }
 
-async function buildPlans(scanned, existing) {
+async function buildPlans(scanned, existing, options = {}) {
   const writes = [];
   const scannedIds = new Set(scanned.staffs.map((staff) => staff.staffId));
   const existingById = new Map(existing.map((staff) => [staff.staffId || staff.docId, staff]));
@@ -189,33 +203,43 @@ async function buildPlans(scanned, existing) {
 
   const skippedOperators = [];
   const keptMissingWithFutureSchedule = [];
-  for (const staff of existing) {
-    const staffId = staff.staffId || staff.docId;
-    if (!staff.active || scannedIds.has(staffId)) continue;
-    if (OPERATOR_STAFF_IDS.has(staffId) || staff.role === "manager") {
-      skippedOperators.push({ staffId, name: staff.name, role: staff.role });
-      continue;
+  if (options.retireMissing !== false) {
+    for (const staff of existing) {
+      const staffId = staff.staffId || staff.docId;
+      if (!staff.active || scannedIds.has(staffId)) continue;
+      if (OPERATOR_STAFF_IDS.has(staffId) || staff.role === "manager") {
+        skippedOperators.push({ staffId, name: staff.name, role: staff.role });
+        continue;
+      }
+      const future = await futureScheduleCount(staffId);
+      if (future.lectures || future.bookings) {
+        keptMissingWithFutureSchedule.push({ staffId, name: staff.name, ...future });
+        continue;
+      }
+      writes.push({
+        staffId,
+        name: staff.name,
+        change: "retire_missing_no_future_schedule",
+        before: pickStaff(staff),
+        after: { ...pickStaff(staff), active: false },
+        data: {
+          active: false,
+          retiredAt: admin.firestore.Timestamp.now(),
+          retiredReason: "StudioMate 강사탭 주간 스캔에서 제외되고 미래 수업/예약 없음",
+          updatedAt: admin.firestore.Timestamp.now(),
+        },
+      });
     }
-    const future = await futureScheduleCount(staffId);
-    if (future.lectures || future.bookings) {
-      keptMissingWithFutureSchedule.push({ staffId, name: staff.name, ...future });
-      continue;
-    }
-    writes.push({
-      staffId,
-      name: staff.name,
-      change: "retire_missing_no_future_schedule",
-      before: pickStaff(staff),
-      after: { ...pickStaff(staff), active: false },
-      data: {
-        active: false,
-        retiredAt: admin.firestore.Timestamp.now(),
-        retiredReason: "StudioMate 강사탭 주간 스캔에서 제외되고 미래 수업/예약 없음",
-        updatedAt: admin.firestore.Timestamp.now(),
-      },
-    });
   }
   return { writes, skippedOperators, keptMissingWithFutureSchedule };
+}
+
+function valueArg(name) {
+  const prefix = `${name}=`;
+  const inline = process.argv.slice(2).find((arg) => arg.startsWith(prefix));
+  if (inline) return inline.slice(prefix.length);
+  const index = process.argv.indexOf(name);
+  return index >= 0 ? process.argv[index + 1] : "";
 }
 
 async function futureScheduleCount(staffId) {
@@ -239,6 +263,7 @@ function normalizeStudioMateStaff(row) {
     : "";
   return {
     staffId: stringValue(row.id),
+    studioId: stringValue(row.studio_id || row.studio?.id || row.profile?.studio_id),
     name: stringValue(row.name || profile.name),
     phone: digitsOnly(row.mobile || representativeContact),
     role: roleFromStudioMate(row),

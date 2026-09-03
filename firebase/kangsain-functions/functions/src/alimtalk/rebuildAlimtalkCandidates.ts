@@ -1,6 +1,7 @@
 import { createHash, createHmac } from "node:crypto";
+import { Timestamp } from "firebase-admin/firestore";
 import { logger } from "firebase-functions";
-import type { AlimtalkCandidateDoc, BookingDoc, LectureDoc, MemberProfileDoc } from "../types/models";
+import type { AlimtalkCandidateDoc, BookingDoc, LectureDoc, MemberProfileDoc, RenewalCaseDoc } from "../types/models";
 import { db } from "../config/firebase";
 import { privateSurveyWebhookSecret } from "../config/secrets";
 import { refs } from "../firestore/refs";
@@ -8,6 +9,11 @@ import { addDays, dateRange, nowTimestamp } from "../utils/date";
 import { stableHash } from "../utils/hash";
 import { shortLinkIdForTarget, shortUrlForId } from "../utils/shortLinks";
 import { canonicalizeBookings } from "../utils/canonicalBooking";
+import {
+  attachInstructorLessonParkingPayload,
+  upsertInstructorLessonParkingPreRegistration,
+} from "../parking/instructorLessonParkingPreRegistration";
+import { earliestIsoDateTime, mergeParkingBookingIds } from "../parking/instructorLessonParkingContract";
 import {
   ALIMTALK_MEMBER_EXCLUSION_REASONS,
   CANDIDATE_TEMPLATE_CODES,
@@ -20,8 +26,20 @@ import {
   type SendableAlimtalkCandidateType,
 } from "./templates";
 import { alimtalkDedupeKey, findCompletedDuplicateForCandidate } from "./dedupe";
-import { isValidInstructorLessonManagementNumber as isValidInstructorLessonManagementNumberFromUtil } from "./instructorLessonManagement";
-import { isAlimtalkTestRecipient } from "./testRecipients";
+import { instructorLessonManagementNumberFor } from "./instructorLessonManagement";
+import { hasExplicitAlimtalkTestOverride } from "./testRecipients";
+import { automaticMemberExclusionReason, loadActiveStaffPhones } from "./recipientExclusion";
+import { alimtalkTemplateTargetRule } from "./templateTargetRules";
+import { assessLongAbsenceTarget } from "./longAbsencePolicy";
+import {
+  assessRenewalTicket,
+  hasSameKindAlternativeTicket,
+  isRenewalManagedTicket,
+  renewalBookingKind,
+  renewalSourceTicketKey,
+  renewalTicketKind,
+  renewalUsageSummary,
+} from "../renewal/renewalPolicy";
 
 export async function rebuildAlimtalkCandidatesForRange(input: {
   studioId: string;
@@ -30,40 +48,57 @@ export async function rebuildAlimtalkCandidatesForRange(input: {
   mode?: "daily" | "reservation_open";
 }): Promise<{ candidates: number; candidateIds: string[] }> {
   const mode = input.mode || "daily";
-  const profilesPromise = refs.memberProfiles().where("studioId", "==", input.studioId).get();
-  const [profilesSnap, bookingIndex, lectureIndex] =
-    mode === "reservation_open"
-      ? [await profilesPromise, new Map<string, BookingDoc[]>(), new Map<string, LectureDoc>()]
-      : await Promise.all([profilesPromise, loadBookingIndex(input.studioId), loadLectureIndex(input.studioId)]);
+  const [profilesSnap, activeStaffPhones, bookingIndex, lectureIndex] = await Promise.all([
+    refs.memberProfiles().where("studioId", "==", input.studioId).get(),
+    loadActiveStaffPhones(input.studioId),
+    mode === "reservation_open" ? Promise.resolve(new Map<string, BookingDoc[]>()) : loadBookingIndex(input.studioId),
+    mode === "reservation_open" ? Promise.resolve(new Map<string, LectureDoc>()) : loadLectureIndex(input.studioId),
+  ]);
 
   const writes: Array<Promise<unknown>> = [];
   const candidateIds: string[] = [];
   const profiles = profilesSnap.docs.map((snap) => snap.data());
+  if (mode === "daily") {
+    // Keep the operator renewal ledger current even if later candidate work fails.
+    await syncRenewalCases(profiles, bookingIndex, input.endDate);
+  }
   for (const sourceDate of dateRange(input.startDate, input.endDate)) {
     for (const profile of profiles) {
+      const automaticExclusion = automaticMemberExclusionReason(profile, activeStaffPhones);
       if (mode === "reservation_open") {
-        const reservationOpenCandidate = reservationOpenCandidateForDate(profile, sourceDate);
+        const reservationOpenCandidate = automaticExclusion ? null : reservationOpenCandidateForDate(profile, sourceDate);
         if (reservationOpenCandidate) {
           await enqueueSendableCandidate(reservationOpenCandidate, candidateIds, writes);
         }
         continue;
       }
-      for (const candidate of directTicketCandidates(profile, sourceDate)) {
-        await enqueueSendableCandidate(candidate, candidateIds, writes);
-      }
-      const privateSurveyCandidate = await privateSurveyCandidateForDate(profile, sourceDate, bookingIndex);
-      if (privateSurveyCandidate) {
-        await enqueueSendableCandidate(privateSurveyCandidate, candidateIds, writes);
-      }
-      const groupSurveyCandidate = await groupSurveyCandidateForDate(profile, sourceDate, bookingIndex);
-      if (groupSurveyCandidate) {
-        const enqueued = await enqueueSendableCandidate(groupSurveyCandidate, candidateIds, writes);
-        if (enqueued) writes.push(upsertGroupSurveyRequest(groupSurveyCandidate));
+      if (!automaticExclusion) {
+        for (const candidate of directTicketCandidates(
+          profile,
+          sourceDate,
+          memberBookings(bookingIndex, profile.memberId),
+        )) {
+          await enqueueSendableCandidate(candidate, candidateIds, writes);
+        }
+        const privateSurveyCandidate = await privateSurveyCandidateForDate(profile, sourceDate, bookingIndex);
+        if (privateSurveyCandidate) {
+          const enqueued = await enqueueSendableCandidate(privateSurveyCandidate, candidateIds, writes);
+          if (enqueued) writes.push(upsertPrivateSurveyRequest(privateSurveyCandidate));
+        }
+        const groupSurveyCandidate = await groupSurveyCandidateForDate(profile, sourceDate, bookingIndex);
+        if (groupSurveyCandidate) {
+          const enqueued = await enqueueSendableCandidate(groupSurveyCandidate, candidateIds, writes);
+          if (enqueued) writes.push(upsertGroupSurveyRequest(groupSurveyCandidate));
+        }
       }
       for (const candidate of instructorLessonMaterialCandidatesForDate(profile, sourceDate, bookingIndex, lectureIndex)) {
-        await enqueueSendableCandidate(candidate, candidateIds, writes);
+        const prepared = attachInstructorLessonParkingPayload(candidate);
+        const enqueued = await enqueueSendableCandidate(prepared, candidateIds, writes);
+        if (enqueued) writes.push(upsertInstructorLessonParkingPreRegistration(prepared));
       }
-      const longAbsenceCandidate = await longAbsenceCandidateForDate(profile, sourceDate, bookingIndex);
+      const longAbsenceCandidate = automaticExclusion
+        ? null
+        : await longAbsenceCandidateForDate(profile, sourceDate, bookingIndex);
       if (longAbsenceCandidate) {
         await enqueueSendableCandidate(longAbsenceCandidate, candidateIds, writes);
       }
@@ -74,7 +109,7 @@ export async function rebuildAlimtalkCandidatesForRange(input: {
     for (const profile of profiles.filter(
       (profile) =>
         profile.isNewMember &&
-        (!ALIMTALK_MEMBER_EXCLUSION_REASONS[profile.memberId] || isAlimtalkTestRecipient(profile)) &&
+        !automaticMemberExclusionReason(profile, activeStaffPhones) &&
         currentOrUpcomingLessonProfileTickets(profile, input.endDate).length > 0 &&
         registeredDate(profile) >= NEW_MEMBER_ALIMTALK_START_DATE &&
         registeredDate(profile) >= newMemberWindowStartDate(input.endDate) &&
@@ -117,6 +152,10 @@ export async function rebuildAlimtalkCandidatesForRange(input: {
   }
 
   await Promise.all(writes);
+  const expired = await expirePastDueAutomaticCandidates({
+    studioId: input.studioId,
+    today: input.endDate,
+  });
   await markStaleCandidatesSkipped({
     studioId: input.studioId,
     startDate: input.startDate,
@@ -127,6 +166,7 @@ export async function rebuildAlimtalkCandidatesForRange(input: {
   logger.info("rebuildAlimtalkCandidatesForRange completed", {
     studioId: input.studioId,
     candidates: candidateIds.length,
+    expired,
     mode,
   });
   return { candidates: candidateIds.length, candidateIds };
@@ -144,14 +184,78 @@ const DAILY_ALIMTALK_CANDIDATE_TYPES: SendableAlimtalkCandidateType[] = [
   "long_absence",
 ];
 
+const EXPIRING_AUTOMATIC_TYPES = new Set<SendableAlimtalkCandidateType>([
+  ...DAILY_ALIMTALK_CANDIDATE_TYPES,
+  "reservation_open",
+]);
+
+export function isPastDueAutomaticCandidate(candidate: AlimtalkCandidateDoc, today: string): boolean {
+  if (!EXPIRING_AUTOMATIC_TYPES.has(candidate.type as SendableAlimtalkCandidateType)) return false;
+  if (!["candidate", "reviewed", "failed"].includes(candidate.status)) return false;
+  if (!candidate.sourceDate || candidate.sourceDate >= today) return false;
+  return alimtalkTemplateTargetRule(candidate.type)?.sourceDatePolicy === "today";
+}
+
+export async function expirePastDueAutomaticCandidates(input: {
+  studioId: string;
+  today: string;
+}): Promise<number> {
+  const snapshots = await Promise.all(
+    (["candidate", "reviewed", "failed"] as const).map((status) =>
+      refs.alimtalkCandidates().where("status", "==", status).get(),
+    ),
+  );
+  const stale = snapshots.flatMap((snapshot) =>
+    snapshot.docs.filter((doc) => {
+      const candidate = doc.data();
+      return candidate.studioId === input.studioId && isPastDueAutomaticCandidate(candidate, input.today);
+    }),
+  );
+  await Promise.all(
+    stale.map((doc) =>
+      doc.ref.set(
+        {
+          status: "skipped",
+          reasonCode: "stale_source_date",
+          lastError: "발송 기준일이 지난 자동 후보",
+          updatedAt: nowTimestamp(),
+        },
+        { merge: true },
+      ),
+    ),
+  );
+  return stale.length;
+}
+
 type BookingIndex = Map<string, BookingDoc[]>;
 type LectureIndex = Map<string, LectureDoc>;
 
 async function loadBookingIndex(studioId: string): Promise<BookingIndex> {
-  const snap = await refs.bookings().where("studioId", "==", studioId).get();
+  const snap = await refs
+    .bookings()
+    .where("studioId", "==", studioId)
+    .select(
+      "bookingId",
+      "lectureId",
+      "studioId",
+      "memberId",
+      "memberName",
+      "memberPhone",
+      "staffId",
+      "staffName",
+      "lectureDate",
+      "lectureStartAt",
+      "lessonType",
+      "appStatus",
+      "attendanceStatus",
+      "ticketName",
+      "ticketClassType",
+      "ticketType",
+    )
+    .get();
   const index: BookingIndex = new Map();
   for (const doc of snap.docs) {
-    const booking = doc.data();
+    const booking = doc.data() as BookingDoc;
     if (!booking.memberId) continue;
     const list = index.get(booking.memberId) || [];
     list.push(booking);
@@ -218,7 +322,7 @@ async function enqueueSendableCandidate(
 ): Promise<boolean> {
   const dedupeKey = alimtalkDedupeKey(candidate);
   const dedupePolicy = alimtalkDedupePolicy(candidate.templateCode);
-  const duplicate = isAlimtalkTestRecipient(candidate)
+  const duplicate = hasExplicitAlimtalkTestOverride(candidate)
     ? ""
     : await findCompletedDuplicateForCandidate(candidate, dedupeKey, dedupePolicy.windowDays);
   if (duplicate) {
@@ -230,18 +334,22 @@ async function enqueueSendableCandidate(
   return true;
 }
 
-function directTicketCandidates(profile: MemberProfileDoc, sourceDate: string): AlimtalkCandidateDoc[] {
+function directTicketCandidates(
+  profile: MemberProfileDoc,
+  sourceDate: string,
+  bookings: BookingDoc[],
+): AlimtalkCandidateDoc[] {
   if (!profile.memberId || !profile.name || !profile.phone) return [];
-  if (ALIMTALK_MEMBER_EXCLUSION_REASONS[profile.memberId] && !isAlimtalkTestRecipient(profile)) return [];
+  if (ALIMTALK_MEMBER_EXCLUSION_REASONS[profile.memberId]) return [];
   return currentLessonProfileTickets(profile, sourceDate)
-    .map((ticket) => directTicketCandidate(profile, ticket, sourceDate))
+    .map((ticket) => directTicketCandidate(profile, ticket, sourceDate, bookings))
     .filter((candidate): candidate is AlimtalkCandidateDoc => Boolean(candidate));
 }
 
 function reservationOpenCandidateForDate(profile: MemberProfileDoc, sourceDate: string): AlimtalkCandidateDoc | null {
   if (!isReservationOpenSendDate(sourceDate)) return null;
   if (!profile.memberId || !profile.name || !profile.phone) return null;
-  if (ALIMTALK_MEMBER_EXCLUSION_REASONS[profile.memberId] && !isAlimtalkTestRecipient(profile)) return null;
+  if (ALIMTALK_MEMBER_EXCLUSION_REASONS[profile.memberId]) return null;
   const reservationStartDate = reservationOpenStartDate(sourceDate);
   const reservationEndDate = reservationOpenEndDate(sourceDate);
   const eligibleTickets = reservationOpenEligibleGroupTickets(profile, reservationStartDate, reservationEndDate);
@@ -287,10 +395,38 @@ function instructorLessonMaterialCandidatesForDate(
 ): AlimtalkCandidateDoc[] {
   if (!profile.memberId || !profile.name || !profile.phone) return [];
   const lessonDate = addDays(sourceDate, 1);
-  return memberBookings(bookingIndex, profile.memberId)
-    .filter((booking) => booking.appStatus === "reserved" && booking.lectureDate === lessonDate && isInstructorLessonBooking(booking))
+  const candidates = memberBookings(bookingIndex, profile.memberId)
+    .filter(
+      (booking) =>
+        booking.appStatus === "reserved" && booking.lectureDate === lessonDate && isInstructorLessonBooking(booking),
+    )
     .map((booking) => instructorLessonMaterialCandidate(profile, booking, sourceDate, lectureIndex))
     .filter((candidate): candidate is AlimtalkCandidateDoc => Boolean(candidate));
+  const byManagementNumber = new Map<string, AlimtalkCandidateDoc>();
+  for (const candidate of candidates) {
+    const managementNumber = String(candidate.payload?.managementNumber || "");
+    if (!managementNumber) continue;
+    const previous = byManagementNumber.get(managementNumber);
+    if (!previous) {
+      byManagementNumber.set(managementNumber, candidate);
+      continue;
+    }
+    byManagementNumber.set(managementNumber, {
+      ...previous,
+      payload: {
+        ...previous.payload,
+        parkingBookingIds: mergeParkingBookingIds(
+          String(previous.payload?.parkingBookingIds || previous.payload?.bookingId || ""),
+          String(candidate.payload?.parkingBookingIds || candidate.payload?.bookingId || ""),
+        ),
+        lessonStartAt: earliestIsoDateTime(
+          String(previous.payload?.lessonStartAt || ""),
+          String(candidate.payload?.lessonStartAt || ""),
+        ),
+      },
+    });
+  }
+  return [...byManagementNumber.values()];
 }
 
 function instructorLessonMaterialCandidate(
@@ -301,12 +437,8 @@ function instructorLessonMaterialCandidate(
 ): AlimtalkCandidateDoc | null {
   const lecture = lectureIndex.get(booking.lectureId);
   const title = lecture?.title || "";
-  const topicSlug = instructorLessonTopicSlug(title);
-  if (!topicSlug) return null;
-  const lessonDateShort = compactDate6(booking.lectureDate);
-  if (!lessonDateShort) return null;
-  const managementNumber = `${topicSlug}-${lessonDateShort}`;
-  if (!isValidInstructorLessonManagementNumberFromUtil(managementNumber)) return null;
+  const managementNumber = instructorLessonManagementNumberFor({ title, lessonDate: booking.lectureDate });
+  if (!managementNumber) return null;
   const targetUrl = `https://in.archivepilates.com/method/${encodeURIComponent(managementNumber)}`;
   const shortLinkId = shortLinkIdForTarget("method_material", targetUrl);
   return {
@@ -335,11 +467,13 @@ function instructorLessonMaterialCandidate(
       ticketName: booking.ticketName || "",
       staffId: booking.staffId || "",
       staffName: booking.staffName || lecture?.staffName || "",
+      lessonStartAt: booking.lectureStartAt?.toDate?.().toISOString() || "",
       managementNumber,
       materialNumber: managementNumber,
       archiveMethodId: managementNumber,
       shortLinkId,
       shortUrl: shortUrlForId(shortLinkId),
+      parkingBookingIds: booking.bookingId,
     },
     attempts: 0,
     maxAttempts: 2,
@@ -356,7 +490,7 @@ async function groupSurveyCandidateForDate(
 ): Promise<AlimtalkCandidateDoc | null> {
   if (sourceDate < GROUP_SURVEY_ALIMTALK_START_DATE) return null;
   if (!profile.memberId || !profile.name || !profile.phone) return null;
-  if (ALIMTALK_MEMBER_EXCLUSION_REASONS[profile.memberId] && !isAlimtalkTestRecipient(profile)) return null;
+  if (ALIMTALK_MEMBER_EXCLUSION_REASONS[profile.memberId]) return null;
   const booking = firstUpcomingGroupBookingInReservationWindow(profile.memberId, sourceDate, bookingIndex);
   if (!booking) return null;
   if (await hasSubmittedGroupSurvey(profile.memberId, profile.phone)) return null;
@@ -447,7 +581,7 @@ function hasAttendedGroupBookingOnOrBefore(
 function isGroupAttendanceHistory(booking: BookingDoc): boolean {
   if (isInstructorLessonBooking(booking)) return false;
   if (booking.lessonType === "private" || booking.lessonType === "semi_private") return false;
-  if (/프라이빗|개인|1:1/i.test(booking.ticketName || "")) return false;
+  if (/프라이빗|개인|1:1|듀엣|duet|세미/i.test(booking.ticketName || "")) return false;
   return true;
 }
 
@@ -458,8 +592,8 @@ function isGroupBooking(booking: BookingDoc): boolean {
   const ticketKind = bookingTicketKind(booking);
   if (ticketKind === "group") return true;
   if (ticketKind === "private" || ticketKind === "instructor") return false;
-  if (/프라이빗|개인|1:1/i.test(booking.ticketName || "")) return false;
-  return /그룹|체험|듀엣|소그룹/i.test(booking.ticketName || "") || booking.ticketName === "";
+  if (/프라이빗|개인|1:1|듀엣|duet|세미/i.test(booking.ticketName || "")) return false;
+  return /그룹|체험|소그룹/i.test(booking.ticketName || "") || booking.ticketName === "";
 }
 
 function groupSurveyTiming(
@@ -536,11 +670,15 @@ async function privateSurveyCandidateForDate(
 ): Promise<AlimtalkCandidateDoc | null> {
   if (sourceDate < PRIVATE_SURVEY_ALIMTALK_START_DATE) return null;
   if (!profile.memberId || !profile.name || !profile.phone) return null;
-  if (ALIMTALK_MEMBER_EXCLUSION_REASONS[profile.memberId] && !isAlimtalkTestRecipient(profile)) return null;
+  if (ALIMTALK_MEMBER_EXCLUSION_REASONS[profile.memberId]) return null;
   const booking = firstUpcomingPrivateBookingInReservationWindow(profile.memberId, sourceDate, bookingIndex);
   if (!booking) return null;
   if (await hasSubmittedPrivateSurvey(profile.memberId, profile.phone)) return null;
   if (hasAttendedPrivateBookingOnOrBefore(profile.memberId, sourceDate, bookingIndex)) return null;
+  const requestId = privateSurveyRequestId(profile.memberId, booking.bookingId);
+  const accessToken = privateSurveyAccessToken(requestId);
+  const targetUrl = privateSurveyTargetUrl(requestId, accessToken);
+  const shortLinkId = shortLinkIdForTarget("private_survey", targetUrl);
   return {
     candidateId: `private_survey_${profile.memberId}_${sourceDate}`,
     studioId: profile.studioId,
@@ -559,6 +697,13 @@ async function privateSurveyCandidateForDate(
       bookingId: booking.bookingId,
       lectureId: booking.lectureId,
       lectureDate: booking.lectureDate,
+      staffId: booking.staffId,
+      staffName: booking.staffName,
+      surveyId: requestId,
+      responseId: requestId,
+      accessToken,
+      shortLinkId,
+      shortUrl: shortUrlForId(shortLinkId),
       privateSurveyWindowEndDate: reservationOpenEndDate(sourceDate),
     },
     attempts: 0,
@@ -569,6 +714,68 @@ async function privateSurveyCandidateForDate(
   };
 }
 
+function privateSurveyRequestId(memberId: string, bookingId: string): string {
+  return `psr-${stableHash({ memberId, bookingId }).slice(0, 12)}`;
+}
+
+function privateSurveyAccessToken(requestId: string): string {
+  return createHmac("sha256", privateSurveyWebhookSecret.value())
+    .update(`native-private-survey:${requestId}`)
+    .digest("hex")
+    .slice(0, 32);
+}
+
+function privateSurveyTargetUrl(requestId: string, accessToken: string): string {
+  const url = new URL("https://in.archivepilates.com/privateSurvey");
+  url.searchParams.set("id", requestId);
+  url.searchParams.set("token", accessToken);
+  return url.toString();
+}
+
+async function upsertPrivateSurveyRequest(candidate: AlimtalkCandidateDoc): Promise<void> {
+  const requestId = String(candidate.payload.surveyId || candidate.payload.responseId || "");
+  const accessToken = String(candidate.payload.accessToken || "");
+  if (!requestId || !accessToken) return;
+  const ref = refs.privateSurveyRequest(requestId);
+  const previous = (await ref.get()).data();
+  if (previous?.status === "submitted") {
+    await ref.set({ updatedAt: nowTimestamp() }, { merge: true });
+    return;
+  }
+  const bookingId = String(candidate.payload.bookingId || "");
+  const booking = bookingId ? (await refs.booking(bookingId).get()).data() : undefined;
+  const expiresAt = booking?.lectureStartAt
+    ? Timestamp.fromMillis(booking.lectureStartAt.toMillis() + 24 * 60 * 60 * 1000)
+    : null;
+  await ref.set(
+    {
+      requestId,
+      schemaVersion: 1,
+      studioId: candidate.studioId,
+      memberId: candidate.memberId,
+      memberName: candidate.memberName,
+      memberPhone: candidate.memberPhone,
+      memberPhoneLast4: candidate.memberPhone.slice(-4),
+      bookingId,
+      lectureId: candidate.payload.lectureId || "",
+      lectureDate: booking?.lectureDate || candidate.payload.lectureDate || "",
+      lessonStartAt: booking?.lectureStartAt || null,
+      staffId: booking?.staffId || candidate.payload.staffId || "",
+      staffName: booking?.staffName || candidate.payload.staffName || "",
+      sourceCandidateId: candidate.candidateId,
+      shortLinkId: candidate.payload.shortLinkId || "",
+      shortUrl: candidate.payload.shortUrl || "",
+      accessTokenHash: sha256(accessToken),
+      tokenVersion: 1,
+      status: previous?.status || "pending",
+      expiresAt,
+      createdAt: previous?.createdAt || nowTimestamp(),
+      updatedAt: nowTimestamp(),
+    },
+    { merge: true },
+  );
+}
+
 async function longAbsenceCandidateForDate(
   profile: MemberProfileDoc,
   sourceDate: string,
@@ -576,15 +783,16 @@ async function longAbsenceCandidateForDate(
 ): Promise<AlimtalkCandidateDoc | null> {
   if (sourceDate < LONG_ABSENCE_ALIMTALK_START_DATE) return null;
   if (!profile.memberId || !profile.name || !profile.phone) return null;
-  if (ALIMTALK_MEMBER_EXCLUSION_REASONS[profile.memberId] && !isAlimtalkTestRecipient(profile)) return null;
-  if (hasHoldingTicket(profile)) return null;
-  const activeTickets = currentLessonProfileTickets(profile, sourceDate);
-  if (!activeTickets.length) return null;
-  if (hasUpcomingReservedBooking(profile.memberId, sourceDate, bookingIndex)) return null;
-  const lastAttendance = lastAttendedBooking(profile.memberId, sourceDate, bookingIndex);
-  if (!lastAttendance) return null;
-  const absenceDays = daysBetweenDateStrings(lastAttendance.lectureDate, sourceDate);
-  if (!Number.isFinite(absenceDays) || absenceDays < 7) return null;
+  if (ALIMTALK_MEMBER_EXCLUSION_REASONS[profile.memberId]) return null;
+  const assessment = assessLongAbsenceTarget({
+    profile,
+    sourceDate,
+    bookings: memberBookings(bookingIndex, profile.memberId),
+  });
+  if (!assessment.eligible || !assessment.lastAttendance || assessment.absenceDays == null) return null;
+  const activeTickets = assessment.activeTickets;
+  const lastAttendance = assessment.lastAttendance;
+  const absenceDays = assessment.absenceDays;
   const primaryTicket = activeTickets[0];
   return {
     candidateId: `long_absence_${profile.memberId}_${sourceDate}`,
@@ -620,31 +828,6 @@ async function longAbsenceCandidateForDate(
   };
 }
 
-function lastAttendedBooking(memberId: string, sourceDate: string, bookingIndex: BookingIndex): BookingDoc | null {
-  const attended = memberBookings(bookingIndex, memberId)
-    .filter(
-      (booking) =>
-        booking.attendanceStatus === "attended" &&
-        booking.lectureDate &&
-        booking.lectureDate <= sourceDate &&
-        !isInstructorLessonBooking(booking),
-    )
-    .sort((a, b) => {
-      if (a.lectureDate !== b.lectureDate) return b.lectureDate.localeCompare(a.lectureDate);
-      return (b.lectureStartAt?.toMillis() || 0) - (a.lectureStartAt?.toMillis() || 0);
-    });
-  return attended[0] || null;
-}
-
-function hasUpcomingReservedBooking(memberId: string, sourceDate: string, bookingIndex: BookingIndex): boolean {
-  return memberBookings(bookingIndex, memberId).some(
-    (booking) =>
-      booking.appStatus === "reserved" &&
-      booking.lectureDate >= sourceDate &&
-      !isInstructorLessonBooking(booking),
-  );
-}
-
 function firstUpcomingPrivateBookingInReservationWindow(
   memberId: string,
   sourceDate: string,
@@ -670,13 +853,13 @@ async function hasSubmittedPrivateSurvey(memberId: string, memberPhone: string):
   const byMember = await refs.privateSurveyResponses().where("matching.memberId", "==", memberId).limit(10).get();
   if (
     byMember.docs.some(
-      (doc) => (doc.data().surveyType || "private") === "private" && isRecentSurveyResponse(doc.data()),
+      (doc) => (doc.data().surveyType || "private") === "private",
     )
   )
     return true;
   const byPhone = await refs.privateSurveyResponses().where("memberPhone", "==", memberPhone).limit(10).get();
   return byPhone.docs.some(
-    (doc) => (doc.data().surveyType || "private") === "private" && isRecentSurveyResponse(doc.data()),
+    (doc) => (doc.data().surveyType || "private") === "private",
   );
 }
 
@@ -719,8 +902,8 @@ function bookingTicketKind(booking: BookingDoc): "group" | "private" | "instruct
   for (const value of values) {
     const upper = value.toUpperCase();
     if (!upper) continue;
-    if (upper === "P" || upper === "PRIVATE" || /프라이빗|개인|1:1/i.test(value)) return "private";
-    if (upper === "G" || upper === "GROUP" || /그룹|체험|듀엣|소그룹/i.test(value)) return "group";
+    if (upper === "P" || upper === "PRIVATE" || /프라이빗|개인|1:1|듀엣|duet|세미/i.test(value)) return "private";
+    if (upper === "G" || upper === "GROUP" || /그룹|체험|소그룹/i.test(value)) return "group";
     if (upper === "I" || upper === "INSTRUCTOR" || /강사레슨/i.test(value)) return "instructor";
   }
   return "";
@@ -735,7 +918,9 @@ function directTicketCandidate(
   profile: MemberProfileDoc,
   ticket: NonNullable<MemberProfileDoc["activeTickets"]>[number],
   sourceDate: string,
+  bookings: BookingDoc[] = [],
 ): AlimtalkCandidateDoc | null {
+  if (!isRenewalManagedTicket(ticket)) return null;
   if (hasOtherActiveTicket(profile, ticket, sourceDate)) return null;
   const memberId = profile.memberId;
   const memberName = profile.name;
@@ -746,6 +931,13 @@ function directTicketCandidate(
   const templateCode = CANDIDATE_TEMPLATE_CODES[type];
   if (!templateCode) return null;
   const payload = ticketPayload(ticket, sourceDate);
+  const assessment = assessRenewalTicket({ ticket, bookings, sourceDate });
+  const ticketKind = renewalTicketKind(ticket);
+  const renewalCaseId = renewalCaseIdFor(
+    profile.memberId,
+    ticketKind,
+    renewalSourceTicketKey(profile.memberId, ticketKind, ticket),
+  );
   const candidateId = `ticket_${stableHash({
     date: sourceDate,
     memberId,
@@ -768,6 +960,11 @@ function directTicketCandidate(
       memberName: profile.name,
       reason: ticketReason(type, payload),
       date: sourceDate,
+      renewalCaseId,
+      predictedDepletionDate: assessment?.predictedDepletionDate || "",
+      weeklyUsagePace: assessment ? String(assessment.usage.weeklyPace) : "",
+      nextBookingDate: assessment?.usage.nextBookingDate || "",
+      recommendation: assessment?.recommendation || "",
       ...payload,
     },
     attempts: 0,
@@ -805,10 +1002,7 @@ function hasOtherActiveTicket(
   target: NonNullable<MemberProfileDoc["activeTickets"]>[number],
   sourceDate: string,
 ): boolean {
-  const targetKey = profileTicketIdentity(target);
-  return currentOrUpcomingLessonProfileTickets(profile, sourceDate).some(
-    (ticket) => profileTicketIdentity(ticket) !== targetKey,
-  );
+  return hasSameKindAlternativeTicket(currentOrUpcomingLessonProfileTickets(profile, sourceDate), target, sourceDate);
 }
 
 function hasHoldingTicket(profile: MemberProfileDoc | undefined): boolean {
@@ -887,20 +1081,196 @@ function isGroupOrMixedProfileTicket(ticket: NonNullable<MemberProfileDoc["activ
   const classType = String(ticket.classType || "").toUpperCase();
   const name = String(ticket.name || "");
   if (classType === "G" || classType === "GROUP") return true;
-  if (/그룹|듀엣|소그룹|혼합/.test(name)) return true;
+  if (/듀엣|duet|세미/i.test(name)) return false;
+  if (/그룹|소그룹|혼합/.test(name)) return true;
   return !isPrivateProfileTicket(ticket);
 }
 
 function isPrivateProfileTicket(ticket: NonNullable<MemberProfileDoc["activeTickets"]>[number]): boolean {
-  const classType = String(ticket.classType || "").toUpperCase();
-  const name = String(ticket.name || "");
-  return classType === "P" || classType === "PRIVATE" || /프라이빗|개인/.test(name);
+  return renewalTicketKind(ticket) === "private";
 }
 
-function profileTicketIdentity(ticket: NonNullable<MemberProfileDoc["activeTickets"]>[number]): string {
-  if (ticket.userTicketId) return `user:${ticket.userTicketId}`;
-  const expiresAt = ticket.expiresAt?.toMillis() || "";
-  return [ticket.ticketId || "", ticket.name || "", expiresAt].filter(Boolean).join("|");
+async function syncRenewalCases(
+  profiles: MemberProfileDoc[],
+  bookingIndex: BookingIndex,
+  sourceDate: string,
+): Promise<void> {
+  if (!profiles.length) return;
+  const studioId = profiles[0]?.studioId || "";
+  if (!studioId) return;
+  const existingSnap = await refs.renewalCases().where("studioId", "==", studioId).get();
+  const existingById = new Map(existingSnap.docs.map((doc) => [doc.id, doc.data()]));
+  const currentCaseIds = new Set<string>();
+  const currentMemberKinds = new Set<string>();
+  const freshMemberIds = new Set(
+    profiles.filter((profile) => memberProfileIsFresh(profile)).map((profile) => profile.memberId),
+  );
+  const writes: Array<Promise<unknown>> = [];
+
+  for (const profile of profiles) {
+    if (!profile.memberId || !profile.name) continue;
+    const bookings = memberBookings(bookingIndex, profile.memberId);
+    const tickets = currentLessonProfileTickets(profile, sourceDate).filter(isRenewalManagedTicket);
+    const currentOrUpcomingTickets = currentOrUpcomingLessonProfileTickets(profile, sourceDate).filter(isRenewalManagedTicket);
+    const assessments = tickets
+      .map((ticket) => ({ ticket, assessment: assessRenewalTicket({ ticket, bookings, sourceDate }) }))
+      .filter(
+        (item): item is { ticket: NonNullable<MemberProfileDoc["activeTickets"]>[number]; assessment: NonNullable<ReturnType<typeof assessRenewalTicket>> } =>
+          Boolean(item.assessment) && !hasSameKindActiveBackup(currentOrUpcomingTickets, item.ticket, sourceDate),
+      );
+
+    const bestByKind = new Map<string, (typeof assessments)[number]>();
+    for (const item of assessments) {
+      const current = bestByKind.get(item.assessment.kind);
+      if (!current || renewalAssessmentRank(item.assessment) > renewalAssessmentRank(current.assessment)) {
+        bestByKind.set(item.assessment.kind, item);
+      }
+    }
+
+    for (const { ticket, assessment } of bestByKind.values()) {
+      const ticketIdentity = renewalSourceTicketKey(profile.memberId, assessment.kind, ticket);
+      const caseId = renewalCaseIdFor(profile.memberId, assessment.kind, ticketIdentity);
+      const existing = existingById.get(caseId);
+      const sourceCandidate = directTicketCandidate(profile, ticket, sourceDate, bookings);
+      const value: Partial<RenewalCaseDoc> = {
+        caseId,
+        studioId: profile.studioId,
+        memberId: profile.memberId,
+        memberName: profile.name,
+        kind: assessment.kind,
+        active: true,
+        ticketIdentity,
+        ticketName: ticket.name,
+        priority: assessment.priority,
+        reason: assessment.reason,
+        remainingCount: assessment.remainingCount,
+        remainingDays: assessment.remainingDays,
+        predictedDepletionDate: assessment.predictedDepletionDate,
+        weeklyUsagePace: assessment.usage.weeklyPace,
+        nextBookingDate: assessment.usage.nextBookingDate,
+        recommendation: assessment.recommendation,
+        sourceDate,
+        sourceCollection: "memberProfiles",
+        sourceCandidateId: sourceCandidate?.candidateId || "",
+        autoResolvedReason: "",
+        updatedAt: nowTimestamp(),
+      };
+      if (!existing) {
+        Object.assign(value, {
+          workflowStatus: "open",
+          operatorNote: "",
+          nextActionAt: null,
+          operatorUpdatedAt: null,
+          operatorUpdatedByUid: "",
+          createdAt: nowTimestamp(),
+        });
+      }
+      currentCaseIds.add(caseId);
+      currentMemberKinds.add(`${profile.memberId}|${assessment.kind}`);
+      writes.push(refs.renewalCase(caseId).set(value, { merge: true }));
+    }
+
+    if (!tickets.length) {
+      const lastBooking = bookings
+        .filter(
+          (booking) =>
+            booking.lectureDate <= sourceDate &&
+            ["attended", "absent", "late_cancel"].includes(String(booking.attendanceStatus || "")),
+        )
+        .sort((a, b) => b.lectureDate.localeCompare(a.lectureDate))[0];
+      if (lastBooking && daysBetweenDateStrings(lastBooking.lectureDate, sourceDate) <= 45) {
+        const kind = renewalBookingKind(lastBooking);
+        const ticketIdentity = `waiting:${lastBooking.bookingId || lastBooking.lectureDate}`;
+        const caseId = renewalCaseIdFor(profile.memberId, kind, ticketIdentity);
+        const existing = existingById.get(caseId);
+        const usage = renewalUsageSummary(bookings, kind, sourceDate);
+        currentCaseIds.add(caseId);
+        currentMemberKinds.add(`${profile.memberId}|${kind}`);
+        writes.push(
+          refs.renewalCase(caseId).set(
+            {
+              caseId,
+              studioId: profile.studioId,
+              memberId: profile.memberId,
+              memberName: profile.name,
+              kind,
+              active: true,
+              ticketIdentity,
+              ticketName: "활성 수강권 없음",
+              priority: "waiting",
+              reason: `최근 이용 ${lastBooking.lectureDate}`,
+              remainingCount: null,
+              remainingDays: null,
+              predictedDepletionDate: "",
+              weeklyUsagePace: usage.weeklyPace,
+              nextBookingDate: usage.nextBookingDate,
+              recommendation: kind === "private" ? "프라이빗 복귀 상담" : "그룹 복귀 상담",
+              sourceDate,
+              sourceCollection: "memberProfiles",
+              sourceCandidateId: "",
+              autoResolvedReason: "",
+              ...(existing
+                ? {}
+                : {
+                    workflowStatus: "open" as const,
+                    operatorNote: "",
+                    nextActionAt: null,
+                    operatorUpdatedAt: null,
+                    operatorUpdatedByUid: "",
+                    createdAt: nowTimestamp(),
+                  }),
+              updatedAt: nowTimestamp(),
+            },
+            { merge: true },
+          ),
+        );
+      }
+    }
+  }
+
+  for (const [caseId, existing] of existingById.entries()) {
+    if (!existing.active || currentCaseIds.has(caseId)) continue;
+    if (!freshMemberIds.has(existing.memberId)) continue;
+    const replacementExists = currentMemberKinds.has(`${existing.memberId}|${existing.kind}`);
+    writes.push(
+      refs.renewalCase(caseId).set(
+        {
+          active: false,
+          autoResolvedReason: replacementExists
+            ? "동일 유형 새 수강권 확인"
+            : "최신 수강권·예약 상태에서 재등록 관리 대상 해소",
+          updatedAt: nowTimestamp(),
+        },
+        { merge: true },
+      ),
+    );
+  }
+  await Promise.all(writes);
+}
+
+function renewalCaseIdFor(memberId: string, kind: string, sourceTicketKey: string): string {
+  return `renewal_${stableHash({ memberId, kind, sourceTicketKey }).slice(0, 24)}`;
+}
+
+function memberProfileIsFresh(profile: MemberProfileDoc): boolean {
+  const updatedAt = profile.sourceUpdatedAt || profile.syncedAt || profile.updatedAt;
+  const updatedAtMs = updatedAt?.toMillis?.() || 0;
+  return updatedAtMs > 0 && Date.now() - updatedAtMs <= 72 * 60 * 60 * 1000;
+}
+
+function renewalAssessmentRank(assessment: NonNullable<ReturnType<typeof assessRenewalTicket>>): number {
+  const priority = { urgent: 3000, warning: 2000, follow: 1000 }[assessment.priority] || 0;
+  const depletion = assessment.predictedDepletionDays == null ? 999 : assessment.predictedDepletionDays;
+  const expiry = assessment.remainingDays == null ? 999 : assessment.remainingDays;
+  return priority + Math.max(0, 999 - Math.min(depletion, expiry));
+}
+
+function hasSameKindActiveBackup(
+  tickets: NonNullable<MemberProfileDoc["activeTickets"]>,
+  target: NonNullable<MemberProfileDoc["activeTickets"]>[number],
+  sourceDate: string,
+): boolean {
+  return hasSameKindAlternativeTicket(tickets, target, sourceDate);
 }
 
 function ticketPayload(
@@ -975,26 +1345,6 @@ function compactDate6(value: string): string {
   return `${normalized.slice(2, 4)}${normalized.slice(5, 7)}${normalized.slice(8, 10)}`;
 }
 
-function instructorLessonTopicSlug(title: string): string {
-  const normalizedText = String(title || "").toLowerCase().replace(/_/g, "-");
-  const tokens = normalizedText
-    .split(/[^a-z0-9]+/g)
-    .flatMap((token) => token.split("-").filter(Boolean));
-  const topicWords: string[] = [];
-  let hasStarted = false;
-  for (const token of tokens) {
-    if (!/^[a-z]+$/.test(token)) {
-      if (!hasStarted) {
-        continue;
-      }
-      break;
-    }
-    hasStarted = true;
-    topicWords.push(token);
-  }
-  return topicWords.join("-") || "";
-}
-
 function normalizedDateText(value: string): string {
   const text = String(value || "").trim();
   if (!text) return "";
@@ -1042,14 +1392,39 @@ function kstNoonDate(value: string): Date {
 async function upsertCandidate(candidate: AlimtalkCandidateDoc): Promise<void> {
   const ref = refs.alimtalkCandidate(candidate.candidateId);
   const previous = (await ref.get()).data();
-  if (previous && ["queued", "sent", "skipped"].includes(previous.status)) {
+  const recoverPrivateSurvey =
+    candidate.type === "private_survey" &&
+    previous?.status === "skipped" &&
+    ["auto_sendability_blocked", "private_survey_booking_blocked"].includes(
+      String(previous.reasonCode || ""),
+    );
+  if (previous?.status === "queued" && candidate.type === "private_survey") {
+    await ref.set(
+      {
+        memberName: candidate.memberName,
+        memberPhone: candidate.memberPhone,
+        templateCode: candidate.templateCode,
+        payload: candidate.payload,
+        updatedAt: nowTimestamp(),
+      },
+      { merge: true },
+    );
+    return;
+  }
+  if (previous && ["queued", "sent"].includes(previous.status)) {
+    await ref.set({ updatedAt: nowTimestamp() }, { merge: true });
+    return;
+  }
+  if (previous?.status === "skipped" && !recoverPrivateSurvey) {
     await ref.set({ updatedAt: nowTimestamp() }, { merge: true });
     return;
   }
   await ref.set(
     {
       ...candidate,
-      status: previous?.status || candidate.status,
+      status: recoverPrivateSurvey ? candidate.status : previous?.status || candidate.status,
+      reasonCode: recoverPrivateSurvey ? "" : previous?.reasonCode || candidate.reasonCode || "",
+      lastError: recoverPrivateSurvey ? null : previous?.lastError ?? candidate.lastError,
       createdAt: previous?.createdAt || candidate.createdAt,
       updatedAt: nowTimestamp(),
     },
@@ -1069,6 +1444,7 @@ async function markDuplicateSkipped(candidate: AlimtalkCandidateDoc, dedupeKey: 
       ...candidate,
       dedupeKey,
       status: "skipped",
+      reasonCode: "duplicate_send_blocked",
       lastError: reason,
       createdAt: previous?.createdAt || candidate.createdAt,
       updatedAt: nowTimestamp(),

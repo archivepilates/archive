@@ -10,10 +10,12 @@ export interface HomeContact {
   name: string;
   phones: string[];
   biography: string;
+  contactGroupResourceNames: string[];
 }
 
 export class HomePeopleClient {
   private accessToken: string | null = null;
+  private contactGroupsByName: Map<string, string> | null = null;
 
   async listContactsByPhone(): Promise<Map<string, HomeContact[]>> {
     const map = new Map<string, HomeContact[]>();
@@ -21,7 +23,7 @@ export class HomePeopleClient {
     do {
       const params = new URLSearchParams({
         pageSize: "1000",
-        personFields: "names,phoneNumbers,biographies,metadata",
+        personFields: "names,phoneNumbers,biographies,memberships,metadata",
         sortOrder: "FIRST_NAME_ASCENDING",
       });
       if (pageToken) params.set("pageToken", pageToken);
@@ -47,6 +49,7 @@ export class HomePeopleClient {
     name: string;
     phone: string;
     memo?: string;
+    groupNames?: string[];
   }): Promise<{ action: "created" | "updated" | "skipped"; resourceName?: string }> {
     const normalizedPhone = normalizePhone(input.phone);
     if (!normalizedPhone) throw new Error("연락처 전화번호가 없습니다");
@@ -65,6 +68,8 @@ export class HomePeopleClient {
         method: "POST",
         body: JSON.stringify(person),
       });
+      if (!created.resourceName) throw new Error("Google 연락처 resourceName이 생성되지 않았습니다");
+      await this.ensureContactGroups(created.resourceName, input.groupNames || [], []);
       return { action: "created", resourceName: created.resourceName };
     }
 
@@ -76,7 +81,12 @@ export class HomePeopleClient {
       currentPhone === normalizedPhone &&
       normalizeBiography(current.biography) === normalizeBiography(nextBiography)
     ) {
-      return { action: "skipped", resourceName: current.resourceName };
+      const membershipUpdated = await this.ensureContactGroups(
+        current.resourceName,
+        input.groupNames || [],
+        current.contactGroupResourceNames,
+      );
+      return { action: membershipUpdated ? "updated" : "skipped", resourceName: current.resourceName };
     }
 
     const updated = await this.request<{ resourceName?: string }>(
@@ -89,7 +99,60 @@ export class HomePeopleClient {
         }),
       },
     );
-    return { action: "updated", resourceName: updated.resourceName || current.resourceName };
+    const resourceName = updated.resourceName || current.resourceName;
+    await this.ensureContactGroups(resourceName, input.groupNames || [], current.contactGroupResourceNames);
+    return { action: "updated", resourceName };
+  }
+
+  private async ensureContactGroups(
+    contactResourceName: string,
+    groupNames: string[],
+    existingGroupResourceNames: string[],
+  ): Promise<boolean> {
+    const names = [...new Set(groupNames.map((name) => name.trim()).filter(Boolean))];
+    if (!names.length) return false;
+    const resourceNames = await Promise.all(names.map((name) => this.getOrCreateContactGroup(name)));
+    const missing = resourceNames.filter((resourceName) => !existingGroupResourceNames.includes(resourceName));
+    for (const groupResourceName of missing) {
+      await this.request(`/v1/${groupResourceName}/members:modify`, {
+        method: "POST",
+        body: JSON.stringify({ resourceNamesToAdd: [contactResourceName] }),
+      });
+    }
+    return missing.length > 0;
+  }
+
+  private async getOrCreateContactGroup(name: string): Promise<string> {
+    const groups = await this.loadContactGroups();
+    const existing = groups.get(name);
+    if (existing) return existing;
+    const created = await this.request<{ resourceName?: string; name?: string }>("/v1/contactGroups", {
+      method: "POST",
+      body: JSON.stringify({ contactGroup: { name } }),
+    });
+    if (!created.resourceName) throw new Error(`Google 연락처 태그 생성 실패: ${name}`);
+    groups.set(created.name || name, created.resourceName);
+    return created.resourceName;
+  }
+
+  private async loadContactGroups(): Promise<Map<string, string>> {
+    if (this.contactGroupsByName) return this.contactGroupsByName;
+    const groups = new Map<string, string>();
+    let pageToken = "";
+    do {
+      const params = new URLSearchParams({ pageSize: "1000", groupFields: "name,metadata" });
+      if (pageToken) params.set("pageToken", pageToken);
+      const response = await this.request<{
+        contactGroups?: Array<{ resourceName?: string; name?: string }>;
+        nextPageToken?: string;
+      }>(`/v1/contactGroups?${params.toString()}`, { method: "GET" });
+      for (const group of response.contactGroups || []) {
+        if (group.name && group.resourceName) groups.set(group.name, group.resourceName);
+      }
+      pageToken = response.nextPageToken || "";
+    } while (pageToken);
+    this.contactGroupsByName = groups;
+    return groups;
   }
 
   private async request<T>(path: string, init: RequestInit): Promise<T> {
@@ -155,6 +218,7 @@ function parseContact(raw: unknown): HomeContact {
     names?: Array<{ displayName?: string }>;
     phoneNumbers?: Array<{ value?: string }>;
     biographies?: Array<{ value?: string }>;
+    memberships?: Array<{ contactGroupMembership?: { contactGroupResourceName?: string } }>;
   };
   return {
     resourceName: person.resourceName || "",
@@ -162,6 +226,9 @@ function parseContact(raw: unknown): HomeContact {
     name: person.names?.[0]?.displayName || "",
     phones: (person.phoneNumbers || []).map((phone) => phone.value || "").filter(Boolean),
     biography: person.biographies?.[0]?.value || "",
+    contactGroupResourceNames: (person.memberships || [])
+      .map((membership) => membership.contactGroupMembership?.contactGroupResourceName || "")
+      .filter(Boolean),
   };
 }
 

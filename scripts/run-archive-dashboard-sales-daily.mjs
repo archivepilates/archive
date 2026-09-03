@@ -31,25 +31,45 @@ if (!skipDownload) {
   );
 }
 
-const downloadFailed = steps.some((step) => step.name === "downloadSalesExcels" && !parsedOk(step.stdout));
+const downloadStep = steps.find((step) => step.name === "downloadSalesExcels");
+const downloadFailed = Boolean(downloadStep && !stepSucceeded(downloadStep));
 const shouldRunDbSync = skipDownload || apply;
 if (!downloadFailed && shouldRunDbSync) {
-  steps.push(
-    runStep("syncArchiveDashboardDb", [
-      "scripts/sync-archive-dashboard-db.mjs",
-      ...(month ? [`--month=${month}`] : []),
-      ...(apply ? ["--apply"] : []),
-      ...(apply && syncFirebase ? ["--sync-firebase"] : []),
-    ]),
-  );
+  const directSyncStep = runStep("syncArchiveDashboardDbFromExcels", [
+    "scripts/sync-archive-dashboard-db.mjs",
+    ...(month ? [`--month=${month}`, "--allow-partial-overwrite"] : []),
+    ...(apply ? ["--apply"] : []),
+    ...(syncFirebase ? ["--sync-firebase"] : []),
+  ]);
+  steps.push(directSyncStep);
+  if (!stepSucceeded(directSyncStep)) {
+    steps.push(
+      runStep("syncArchiveDashboardDbFromExport", [
+        "scripts/sync-archive-dashboard-db-export.mjs",
+        ...(month ? [`--month=${month}`] : []),
+        ...(apply ? ["--apply"] : []),
+        ...(apply && syncFirebase ? ["--sync-firebase"] : []),
+      ]),
+    );
+  }
 }
 
-const failed = steps.filter((step) => (step.exitCode && step.exitCode !== 0) || step.requiredFailed);
+const dbSyncSteps = steps.filter((step) => step.name.startsWith("syncArchiveDashboardDb"));
+const dbSyncSucceeded = !shouldRunDbSync || dbSyncSteps.some(stepSucceeded);
+const blockingFailures = [
+  ...(downloadFailed && downloadStep ? [downloadStep] : []),
+  ...(!downloadFailed && shouldRunDbSync && !dbSyncSucceeded ? dbSyncSteps : []),
+];
+const warnings = steps
+  .filter((step) => !stepSucceeded(step) && !blockingFailures.includes(step))
+  .map((step) => `${step.name}: ${step.stderr || "non-zero exit"}`);
 const summary = {
-  ok: failed.length === 0,
+  ok: blockingFailures.length === 0,
   mode: apply ? "apply" : "dry-run",
   source: "archive_dashboard_sales_daily",
   skippedDbSync: downloadFailed ? "sales Excel download failed" : shouldRunDbSync ? "" : "dry-run download does not create source Excel files",
+  dbSyncSucceeded,
+  warnings,
   steps,
   finishedAt: new Date().toISOString(),
 };
@@ -58,7 +78,7 @@ mkdirSync(reportDir, { recursive: true });
 const reportPath = path.join(reportDir, `${new Date().toISOString().replace(/[:.]/g, "-")}-run-${apply ? "apply" : "dry-run"}.json`);
 writeFileSync(reportPath, `${JSON.stringify(summary, null, 2)}\n`);
 console.log(JSON.stringify({ ...summary, reportPath }, null, 2));
-if (failed.length) process.exitCode = 1;
+if (blockingFailures.length) process.exitCode = 1;
 
 function runStep(name, command) {
   const result = spawnSync(process.execPath, command, {
@@ -70,9 +90,9 @@ function runStep(name, command) {
   return {
     name,
     command: [process.execPath, ...command],
-    exitCode: result.status ?? 0,
+    exitCode: result.status ?? (result.error ? 1 : 0),
     stdout: parseJsonOrText(result.stdout),
-    stderr: result.stderr.trim(),
+    stderr: [result.error?.message, result.stderr].filter(Boolean).join("\n").trim(),
     requiredFailed: parsedOk(result.stdout) === false,
   };
 }
@@ -99,4 +119,8 @@ function parsedOk(value) {
   if (value && typeof value === "object" && "ok" in value) return value.ok;
   const parsed = parseJsonOrText(value);
   return parsed && typeof parsed === "object" && "ok" in parsed ? parsed.ok : undefined;
+}
+
+function stepSucceeded(step) {
+  return Boolean(step) && Number(step.exitCode || 0) === 0 && step.requiredFailed !== true;
 }

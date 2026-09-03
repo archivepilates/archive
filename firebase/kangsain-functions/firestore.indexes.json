@@ -39,6 +39,24 @@
       "queryScope": "COLLECTION",
       "fields": [
         { "fieldPath": "studioId", "order": "ASCENDING" },
+        { "fieldPath": "ticketName", "order": "ASCENDING" },
+        { "fieldPath": "lectureDate", "order": "ASCENDING" }
+      ]
+    },
+    {
+      "collectionGroup": "bookings",
+      "queryScope": "COLLECTION",
+      "fields": [
+        { "fieldPath": "studioId", "order": "ASCENDING" },
+        { "fieldPath": "appStatus", "order": "ASCENDING" },
+        { "fieldPath": "lectureStartAt", "order": "ASCENDING" }
+      ]
+    },
+    {
+      "collectionGroup": "bookings",
+      "queryScope": "COLLECTION",
+      "fields": [
+        { "fieldPath": "studioId", "order": "ASCENDING" },
         { "fieldPath": "lectureId", "order": "ASCENDING" }
       ]
     },
@@ -167,6 +185,16 @@
       ]
     },
     {
+      "collectionGroup": "alimtalkCandidates",
+      "queryScope": "COLLECTION",
+      "fields": [
+        { "fieldPath": "studioId", "order": "ASCENDING" },
+        { "fieldPath": "status", "order": "ASCENDING" },
+        { "fieldPath": "type", "order": "ASCENDING" },
+        { "fieldPath": "sourceDate", "order": "DESCENDING" }
+      ]
+    },
+    {
       "collectionGroup": "memberMemos",
       "queryScope": "COLLECTION",
       "fields": [
@@ -183,6 +211,14 @@
         { "fieldPath": "studioId", "order": "ASCENDING" },
         { "fieldPath": "staffId", "order": "ASCENDING" },
         { "fieldPath": "createdAt", "order": "DESCENDING" }
+      ]
+    },
+    {
+      "collectionGroup": "instructorLessonRegistrations",
+      "queryScope": "COLLECTION",
+      "fields": [
+        { "fieldPath": "studioId", "order": "ASCENDING" },
+        { "fieldPath": "updatedAt", "order": "DESCENDING" }
       ]
     },
     {
@@ -227,5 +263,24 @@
       ]
     }
   ],
-  "fieldOverrides": []
+  "fieldOverrides": [
+    {
+      "collectionGroup": "videoWatchEvents",
+      "fieldPath": "expiresAt",
+      "ttl": true,
+      "indexes": []
+    },
+    {
+      "collectionGroup": "videoWatchSessions",
+      "fieldPath": "expiresAt",
+      "ttl": true,
+      "indexes": []
+    },
+    {
+      "collectionGroup": "videoWatchRateLimits",
+      "fieldPath": "expiresAt",
+      "ttl": true,
+      "indexes": []
+    }
+  ]
 }

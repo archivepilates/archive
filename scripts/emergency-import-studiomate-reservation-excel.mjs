@@ -61,16 +61,71 @@ if (!sourceFile) {
 const rows = readRows(sourceFile);
 const parsedRows = rows.map(normalizeReservationRow).filter((row) => row.date && row.startTime && row.title);
 const dateBounds = requestedDateBounds(parsedRows);
-const [existingLectures, existingProfiles, existingStaffs] = await Promise.all([
+const [existingLectures, existingProfiles, existingStaffs, existingBookings] = await Promise.all([
   loadExistingLectures(dateBounds.startDate, dateBounds.endDate),
   loadExistingProfiles(),
   loadExistingStaffs(),
+  loadExistingBookings(dateBounds.startDate, dateBounds.endDate),
 ]);
 const { lectures, bookings, reservationOnlyProfiles, skipped } = buildPlans(parsedRows, existingLectures, existingProfiles, existingStaffs);
-const staleCandidates = await findStaleBookingsMissingFromLatestImport(dateBounds, parsedRows, bookings);
+const existingLecturesById = mapExistingDocs(existingLectures, "lectureId");
+const existingBookingsById = mapExistingDocs(existingBookings, "bookingId");
+const changedLectures = lectures.filter((lecture) =>
+  importDocumentChanged(lecture, existingLecturesById.get(lecture.lectureId), lectureImportHash),
+);
+const changedBookings = bookings.filter((booking) =>
+  importDocumentChanged(booking, existingBookingsById.get(booking.bookingId), bookingImportHash),
+);
+const changedReservationOnlyProfiles = reservationOnlyProfiles.filter((profile) =>
+  importDocumentChanged(profile, existingProfiles.byId.get(profile.memberId), reservationOnlyProfileImportHash),
+);
+const staleCandidates = findStaleBookingsMissingFromLatestImport(dateBounds, parsedRows, bookings, existingBookings);
 const staleBookings = staleCandidates.filter((item) => missingPolicy !== "report-only" || item.data?.reconcileStatus !== "missing_from_latest_reservation_import");
-const staffDates = uniquePairs(lectures.map((lecture) => ({ staffId: lecture.staffId, date: lecture.date })));
-const plannedWrites = lectures.length + bookings.length + reservationOnlyProfiles.length + staleBookings.length + staffDates.length + 1;
+const changedBookingPairs = changedBookings.map((booking) => ({
+  next: booking,
+  previous: existingBookingsById.get(booking.bookingId)?.data || null,
+}));
+const staffDates = uniquePairs([
+  ...changedLectures.map((lecture) => ({ staffId: lecture.staffId, date: lecture.date })),
+  ...changedBookings.map((booking) => ({ staffId: booking.staffId, date: booking.lectureDate })),
+  ...changedLectures.map((lecture) => {
+    const previous = existingLecturesById.get(lecture.lectureId)?.data;
+    return { staffId: previous?.staffId || "", date: previous?.date || "" };
+  }),
+  ...changedBookingPairs.map(({ previous }) => ({
+    staffId: previous?.staffId || "",
+    date: previous?.lectureDate || "",
+  })),
+  ...staleBookings.map((booking) => ({ staffId: booking.staffId, date: booking.lectureDate })),
+]);
+const changedMemberIds = [
+  ...new Set(
+    [
+      ...changedBookingPairs.flatMap(({ next, previous }) => [next.memberId, previous?.memberId || ""]),
+      ...staleBookings.map((booking) => booking.memberId),
+    ].filter(Boolean),
+  ),
+];
+const affectedPrivateMemberIds = [
+  ...new Set(
+    [
+      ...changedBookingPairs.flatMap(({ next, previous }) =>
+        isPrivateImportRecord(next) || isPrivateImportRecord(previous)
+          ? [next.memberId, previous?.memberId || ""]
+          : [],
+      ),
+      ...staleBookings.filter(isPrivateImportRecord).map((booking) => booking.memberId),
+    ].filter(Boolean),
+  ),
+];
+const plannedWrites =
+  changedLectures.length +
+  changedBookings.length +
+  changedReservationOnlyProfiles.length +
+  staleBookings.length +
+  staffDates.length +
+  changedMemberIds.length +
+  1;
 const staleCandidateBreakdown = countBy(staleCandidates, (item) => item.data?.reconcileStatus || item.data?.sourceStatus || "unknown");
 const staleBreakdown = countBy(staleBookings, (item) => item.data?.reconcileStatus || item.data?.sourceStatus || "unknown");
 
@@ -85,14 +140,22 @@ const summary = {
   parsedRows: parsedRows.length,
   dateRange: dateBounds,
   lectures: lectures.length,
+  changedLectures: changedLectures.length,
+  unchangedLectures: lectures.length - changedLectures.length,
   bookings: bookings.length,
+  changedBookings: changedBookings.length,
+  unchangedBookings: bookings.length - changedBookings.length,
   reservationOnlyProfiles: reservationOnlyProfiles.length,
+  changedReservationOnlyProfiles: changedReservationOnlyProfiles.length,
+  unchangedReservationOnlyProfiles: reservationOnlyProfiles.length - changedReservationOnlyProfiles.length,
   staleCandidates: staleCandidates.length,
   staleCandidateBreakdown,
   staleBookings: staleBookings.length,
   staleBreakdown,
   missingPolicy,
   instructorViews: staffDates.length,
+  attendanceSummaries: changedMemberIds.length,
+  affectedPrivateMemberIds,
   skipped,
   maxWrites,
 };
@@ -102,9 +165,14 @@ if (plannedWrites > maxWrites) {
 }
 
 if (apply) {
-  await applyPlans({ lectures, bookings, reservationOnlyProfiles, staleBookings });
+  await applyPlans({
+    lectures: changedLectures,
+    bookings: changedBookings,
+    reservationOnlyProfiles: changedReservationOnlyProfiles,
+    staleBookings,
+  });
   await rebuildInstructorViews(staffDates);
-  await rebuildAttendanceSummaries(bookings, dateBounds.endDate);
+  await rebuildAttendanceSummaries(changedMemberIds, dateBounds.endDate);
   await db.collection("opsState").doc("studiomateReservationExcelEmergency").set(
     {
       active: true,
@@ -116,7 +184,11 @@ if (apply) {
       importedLectures: lectures.length,
       importedBookings: bookings.length,
       importedReservationOnlyProfiles: reservationOnlyProfiles.length,
+      changedLectures: changedLectures.length,
+      changedBookings: changedBookings.length,
+      changedReservationOnlyProfiles: changedReservationOnlyProfiles.length,
       staleBookings: staleBookings.length,
+      affectedPrivateMemberIds,
       skipped,
       updatedAt: admin.firestore.Timestamp.now(),
     },
@@ -134,12 +206,14 @@ const { importId } = await recordSourceImport(db, {
   status: apply ? "applied" : "dry_run",
   rowCount: summary.readRows,
   normalizedRows: summary.parsedRows,
-  appliedRows: apply ? summary.bookings : 0,
+  appliedRows: apply ? summary.changedBookings + summary.staleBookings : 0,
   skippedRows: Object.values(summary.skipped || {}).reduce((sum, value) => sum + Number(value || 0), 0),
   notes: [
     `dateRange=${summary.dateRange?.startDate || ""}~${summary.dateRange?.endDate || ""}`,
     `lectures=${summary.lectures}`,
     `bookings=${summary.bookings}`,
+    `changedBookings=${summary.changedBookings}`,
+    `unchangedBookings=${summary.unchangedBookings}`,
     `reservationOnlyProfiles=${summary.reservationOnlyProfiles}`,
     `staleCandidates=${summary.staleCandidates}`,
     `staleBookings=${summary.staleBookings}`,
@@ -284,8 +358,10 @@ async function loadExistingProfiles() {
   const byPhoneName = new Map();
   const byPhone = new Map();
   const byName = new Map();
+  const byId = new Map();
   for (const doc of snap.docs) {
     const data = doc.data();
+    byId.set(doc.id, { id: doc.id, data });
     const phone = normalizePhone(data.phone || "");
     const name = normalizeName(data.name || "");
     if (phone && name) byPhoneName.set(`${phone}|${name}`, { id: doc.id, data });
@@ -300,7 +376,20 @@ async function loadExistingProfiles() {
       byName.set(name, list);
     }
   }
-  return { byPhoneName, byPhone, byName };
+  return { byPhoneName, byPhone, byName, byId };
+}
+
+async function loadExistingBookings(startDate, endDate) {
+  const out = [];
+  for (const date of dateRange(startDate, endDate)) {
+    const snap = await db
+      .collection("bookings")
+      .where("studioId", "==", STUDIO_ID)
+      .where("lectureDate", "==", date)
+      .get();
+    out.push(...snap.docs.map((doc) => ({ id: doc.id, data: doc.data() })));
+  }
+  return out;
 }
 
 async function loadExistingStaffs() {
@@ -395,11 +484,12 @@ function buildPlans(rows, existingLectures, existingProfiles, existingStaffs) {
         emergencySource: "studiomate_reservation_excel",
         emergencySourceFile: sourceFile,
       };
+      booking.emergencyImportHash = bookingImportHash(booking);
       lectureBookings.push(booking);
       bookings.push(booking);
     }
     const activeBookingCount = lectureBookings.filter((booking) => booking.appStatus === "reserved").length;
-    lectures.push({
+    const lecture = {
       lectureId,
       studioId: STUDIO_ID,
       date: base.date,
@@ -422,12 +512,18 @@ function buildPlans(rows, existingLectures, existingProfiles, existingStaffs) {
       updatedAt: admin.firestore.Timestamp.now(),
       emergencySource: "studiomate_reservation_excel",
       emergencySourceFile: sourceFile,
-    });
+    };
+    lecture.emergencyImportHash = lectureImportHash(lecture);
+    lectures.push(lecture);
   }
-  return { lectures, bookings, reservationOnlyProfiles: [...reservationOnlyProfiles.values()], skipped };
+  const normalizedReservationOnlyProfiles = [...reservationOnlyProfiles.values()].map((profile) => ({
+    ...profile,
+    emergencyImportHash: reservationOnlyProfileImportHash(profile),
+  }));
+  return { lectures, bookings, reservationOnlyProfiles: normalizedReservationOnlyProfiles, skipped };
 }
 
-async function findStaleBookingsMissingFromLatestImport(dateBounds, parsedRows, plannedBookings) {
+function findStaleBookingsMissingFromLatestImport(dateBounds, parsedRows, plannedBookings, existingBookings) {
   if (!dateBounds.startDate || !dateBounds.endDate || !parsedRows.length) return [];
   const importedBookingIds = new Set(plannedBookings.map((booking) => booking.bookingId).filter(Boolean));
   const importedByCanonicalKey = new Map(plannedBookings.map((booking) => [booking.canonicalBookingKey, booking]).filter(([key]) => key));
@@ -435,14 +531,8 @@ async function findStaleBookingsMissingFromLatestImport(dateBounds, parsedRows, 
     plannedBookings.map((booking) => [reservationPresenceKey(booking), booking]).filter(([key]) => key),
   );
   const stale = [];
-  for (const date of dateRange(dateBounds.startDate, dateBounds.endDate)) {
-    const snap = await db
-      .collection("bookings")
-      .where("studioId", "==", STUDIO_ID)
-      .where("lectureDate", "==", date)
-      .get();
-    for (const doc of snap.docs) {
-      const booking = doc.data();
+  for (const doc of existingBookings) {
+      const booking = doc.data;
       const bookingId = String(booking.bookingId || doc.id || "");
       if (!bookingId || importedBookingIds.has(bookingId)) continue;
       if (!["reserved", "wait"].includes(String(booking.appStatus || "reserved"))) continue;
@@ -452,6 +542,12 @@ async function findStaleBookingsMissingFromLatestImport(dateBounds, parsedRows, 
       if (replacement) {
         stale.push({
           id: doc.id,
+          memberId: booking.memberId || "",
+          staffId: booking.staffId || "",
+          lectureDate: booking.lectureDate || "",
+          lessonType: booking.lessonType || "",
+          ticketClassType: booking.ticketClassType || "",
+          ticketName: booking.ticketName || "",
           data: {
             appStatus: "superseded",
             sourceStatus: "superseded_by_latest_reservation_import",
@@ -487,6 +583,12 @@ async function findStaleBookingsMissingFromLatestImport(dateBounds, parsedRows, 
       }
       stale.push({
         id: doc.id,
+        memberId: booking.memberId || "",
+        staffId: booking.staffId || "",
+        lectureDate: booking.lectureDate || "",
+        lessonType: booking.lessonType || "",
+        ticketClassType: booking.ticketClassType || "",
+        ticketName: booking.ticketName || "",
         data: {
           appStatus: "cancel",
           sourceStatus: "missing_from_latest_reservation_import",
@@ -513,7 +615,6 @@ async function findStaleBookingsMissingFromLatestImport(dateBounds, parsedRows, 
           updatedAt: now,
         },
       });
-    }
   }
   return stale;
 }
@@ -660,11 +761,11 @@ async function rebuildInstructorViews(staffDates) {
     ]);
     const lectures = lecturesSnap.docs
       .map((doc) => doc.data())
-      .filter((lecture) => lecture.status !== "deleted" && lecture.emergencySourceFile === sourceFile);
+      .filter((lecture) => lecture.status !== "deleted");
     const lectureIds = new Set(lectures.map((lecture) => lecture.lectureId).filter(Boolean));
     const bookings = bookingsSnap.docs
       .map((doc) => doc.data())
-      .filter((booking) => lectureIds.has(booking.lectureId) && booking.emergencySourceFile === sourceFile);
+      .filter((booking) => lectureIds.has(booking.lectureId));
     const staffName =
       lectures.map((lecture) => cleanText(lecture.staffName)).find(Boolean) ||
       bookings.map((booking) => cleanText(booking.staffName)).find(Boolean) ||
@@ -738,9 +839,8 @@ async function rebuildInstructorViews(staffDates) {
   }
 }
 
-async function rebuildAttendanceSummaries(bookings, endDate) {
+async function rebuildAttendanceSummaries(memberIds, endDate) {
   const periodStart = addDays(endDate, -29);
-  const memberIds = [...new Set(bookings.map((booking) => booking.memberId).filter(Boolean))];
   for (const memberId of memberIds) {
     const snap = await db
       .collection("bookings")
@@ -764,6 +864,105 @@ async function rebuildAttendanceSummaries(bookings, endDate) {
       { merge: true },
     );
   }
+}
+
+function mapExistingDocs(items, idField) {
+  const out = new Map();
+  for (const item of items) {
+    out.set(String(item.id || ""), item);
+    const sourceId = String(item.data?.[idField] || "");
+    if (sourceId) out.set(sourceId, item);
+  }
+  return out;
+}
+
+function importDocumentChanged(next, current, hasher) {
+  if (!current) return true;
+  const currentHash = current.data?.emergencyImportHash || hasher(current.data || {});
+  return currentHash !== next.emergencyImportHash;
+}
+
+function lectureImportHash(lecture) {
+  return hash({
+    lectureId: lecture.lectureId || "",
+    studioId: lecture.studioId || "",
+    date: lecture.date || "",
+    startAt: timestampMillis(lecture.startAt),
+    endAt: timestampMillis(lecture.endAt),
+    roomName: lecture.roomName || "",
+    divisionName: lecture.divisionName || "",
+    lessonType: lecture.lessonType || "",
+    staffId: lecture.staffId || "",
+    staffName: lecture.staffName || "",
+    title: lecture.title || "",
+    status: lecture.status || "",
+    capacity: lecture.capacity ?? null,
+    bookingCount: lecture.bookingCount ?? 0,
+    waitCount: lecture.waitCount ?? 0,
+    cancelCount: lecture.cancelCount ?? 0,
+    sourceHash: lecture.sourceHash || "",
+  });
+}
+
+function bookingImportHash(booking) {
+  return hash({
+    bookingId: booking.bookingId || "",
+    archiveBookingId: booking.archiveBookingId || "",
+    canonicalBookingKey: booking.canonicalBookingKey || "",
+    sourceBookingId: booking.sourceBookingId || "",
+    sourcePriority: booking.sourcePriority ?? null,
+    lectureId: booking.lectureId || "",
+    studioId: booking.studioId || "",
+    memberId: booking.memberId || "",
+    memberName: booking.memberName || "",
+    memberPhone: normalizePhone(booking.memberPhone || ""),
+    staffId: booking.staffId || "",
+    staffName: booking.staffName || "",
+    lectureDate: booking.lectureDate || "",
+    lectureTitle: booking.lectureTitle || "",
+    lectureStartAt: timestampMillis(booking.lectureStartAt),
+    lectureEndAt: timestampMillis(booking.lectureEndAt),
+    lessonType: booking.lessonType || "",
+    sourceStatus: booking.sourceStatus || "",
+    appStatus: booking.appStatus || "",
+    attendanceStatus: booking.attendanceStatus || "",
+    ticketName: booking.ticketName || "",
+    ticketClassType: booking.ticketClassType || "",
+    ticketRemainingCount: booking.ticketRemainingCount ?? null,
+    ticketExpiresAt: timestampMillis(booking.ticketExpiresAt),
+    ticketExpiryLevel: booking.ticketExpiryLevel || "",
+    sourceHash: booking.sourceHash || "",
+  });
+}
+
+function reservationOnlyProfileImportHash(profile) {
+  return hash({
+    memberId: profile.memberId || "",
+    studioId: profile.studioId || "",
+    name: profile.name || "",
+    phone: normalizePhone(profile.phone || ""),
+    status: profile.status || "",
+    profileKind: profile.profileKind || "",
+    externalActionEligible: Boolean(profile.externalActionEligible),
+    firstSeenLectureDate: profile.firstSeenLectureDate || "",
+    lastSeenLectureDate: profile.lastSeenLectureDate || "",
+    aliasNames: [...(profile.aliasNames || [])].sort(),
+  });
+}
+
+function timestampMillis(value) {
+  if (!value) return null;
+  if (typeof value.toMillis === "function") return value.toMillis();
+  if (typeof value.toDate === "function") return value.toDate().getTime();
+  if (typeof value === "object" && Number.isFinite(value.seconds)) return Number(value.seconds) * 1000;
+  const parsed = new Date(value);
+  return Number.isNaN(parsed.getTime()) ? null : parsed.getTime();
+}
+
+function isPrivateImportRecord(record) {
+  if (!record || typeof record !== "object") return false;
+  const text = [record.lessonType, record.ticketClassType, record.ticketName].join(" ").toLowerCase();
+  return /private|semi_private|프라이빗|개인|1:1|세미/.test(text);
 }
 
 function attendanceTotals(bookings, endDate) {

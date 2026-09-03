@@ -15,9 +15,12 @@ import type {
   LectureDoc,
   MemberMemoDoc,
   MemberProfileDoc,
+  RenewalCaseDoc,
   MemberTagDoc,
   NoticeDoc,
   OtherScheduleDoc,
+  PrivateLessonSessionDoc,
+  PrivateSurveyRequestDoc,
   PrivateSurveyResponseDoc,
   PrivateLessonChartRecordDoc,
   PrivateLessonChartRequestDoc,
@@ -55,6 +58,8 @@ export const refs = {
   memberTag: (memberId: string) => refs.memberTags().doc(memberId),
   memberProfiles: () => db.collection("memberProfiles").withConverter(converter<MemberProfileDoc>()),
   memberProfile: (memberId: string) => refs.memberProfiles().doc(memberId),
+  renewalCases: () => db.collection("renewalCases").withConverter(converter<RenewalCaseDoc>()),
+  renewalCase: (caseId: string) => refs.renewalCases().doc(caseId),
   memberContactIndex: () => db.collection("memberContactIndex").withConverter(converter<MemberContactIndexDoc>()),
   memberContactIndexDoc: (memberId: string) => refs.memberContactIndex().doc(memberId),
   memberSignupContracts: () =>
@@ -69,6 +74,9 @@ export const refs = {
   alimtalkCandidate: (candidateId: string) => refs.alimtalkCandidates().doc(candidateId),
   alimtalkSends: () => db.collection("alimtalkSends").withConverter(converter<AlimtalkSendDoc>()),
   alimtalkSend: (sendId: string) => refs.alimtalkSends().doc(sendId),
+  privateSurveyRequests: () =>
+    db.collection("privateSurveyRequests").withConverter(converter<PrivateSurveyRequestDoc>()),
+  privateSurveyRequest: (requestId: string) => refs.privateSurveyRequests().doc(requestId),
   privateSurveyResponses: () =>
     db.collection("privateSurveyResponses").withConverter(converter<PrivateSurveyResponseDoc>()),
   privateSurveyResponse: (responseId: string) => refs.privateSurveyResponses().doc(responseId),
@@ -78,6 +86,9 @@ export const refs = {
   privateLessonChartRecords: () =>
     db.collection("privateLessonChartRecords").withConverter(converter<PrivateLessonChartRecordDoc>()),
   privateLessonChartRecord: (recordId: string) => refs.privateLessonChartRecords().doc(recordId),
+  privateLessonSessions: () =>
+    db.collection("privateLessonSessions").withConverter(converter<PrivateLessonSessionDoc>()),
+  privateLessonSession: (sessionId: string) => refs.privateLessonSessions().doc(sessionId),
   memberMemos: () => db.collection("memberMemos").withConverter(converter<MemberMemoDoc>()),
   memberMemo: (memoId: string) => refs.memberMemos().doc(memoId),
   notices: () => db.collection("notices").withConverter(converter<NoticeDoc>()),
