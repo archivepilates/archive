@@ -72,11 +72,12 @@ export function selectDailyAlimtalkCandidates(candidates: AlimtalkCandidateDoc[]
 
 function renewalTicketIdentity(candidate: AlimtalkCandidateDoc): string {
   const payload = candidate.payload || {};
+  const renewalCaseId = String(payload.renewalCaseId || "").trim();
+  if (renewalCaseId) return `${candidate.memberId}|case:${renewalCaseId}`;
   const ticketId = String(payload.userTicketId || payload.ticketId || "").trim();
   if (ticketId) return `${candidate.memberId}|ticket:${ticketId}`;
   return [
     candidate.memberId,
     String(payload.ticketName || payload.ticket || "").trim().toLowerCase(),
-    String(payload.expiresAt || payload.expiryDate || payload.expireDate || "").trim(),
   ].join("|");
 }

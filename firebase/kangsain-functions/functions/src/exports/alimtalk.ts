@@ -14,6 +14,7 @@ import { operatorPublishRecommendedMealPlanHandler } from "../mealPlan/recommend
 import { queueDailyAlimtalkCandidates, queueReservationOpenAlimtalkCandidates } from "../alimtalk/queueDailyAlimtalk";
 import { sendDailyAlimtalkReport } from "../alimtalk/sendDailyAlimtalkReport";
 import { syncAlimtalkTemplateStatuses } from "../alimtalk/templateStatus";
+import { auditPreviousDayAlimtalkProviderLedgerAndNotify } from "../alimtalk/providerLedgerAudit";
 import { notionToken } from "../config/secrets";
 import {
   callableOptions,
@@ -108,6 +109,16 @@ export const scheduledSyncAlimtalkTemplateStatuses = onSchedule(
   },
   async () => {
     await syncAlimtalkTemplateStatusesSafely("scheduledSyncAlimtalkTemplateStatuses");
+  },
+);
+
+export const scheduledAuditAlimtalkProviderLedger = onSchedule(
+  {
+    ...scheduleOptions,
+    schedule: "15 10 * * *",
+  },
+  async () => {
+    await auditPreviousDayAlimtalkProviderLedgerAndNotify();
   },
 );
 

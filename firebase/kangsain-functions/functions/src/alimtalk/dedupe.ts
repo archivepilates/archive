@@ -13,6 +13,13 @@ const MEMBER_CARE_TYPES = new Set([
   "long_absence",
 ]);
 
+const RENEWAL_MEMBER_CARE_TYPES = new Set([
+  "ticket_expiring",
+  "remaining_low",
+  "private_count_low",
+  "private_ticket_expiring",
+]);
+
 const MEMBER_CARE_TYPE_BY_TEMPLATE = new Map<string, string>([
   [ALIMTALK_TEMPLATES.ticket_expiring.code, "ticket_expiring"],
   [ALIMTALK_TEMPLATES.remaining_low.code, "remaining_low"],
@@ -40,7 +47,7 @@ export async function findCompletedDuplicateForCandidate(
   windowDays: number | null,
 ): Promise<string> {
   if (hasExplicitAlimtalkTestOverride(candidate)) return "";
-  if (candidate.type === "long_absence") {
+  if (MEMBER_CARE_TYPES.has(candidate.type)) {
     const recentMemberCareSend = await findRecentMemberCareDuplicate(candidate, 14);
     if (recentMemberCareSend) return recentMemberCareSend;
   }
@@ -111,6 +118,14 @@ async function findRecentMemberCareDuplicate(candidate: AlimtalkCandidateDoc, wi
       previousCandidate?.type || MEMBER_CARE_TYPE_BY_TEMPLATE.get(String(send.templateCode || "")) || "",
     );
     if (!MEMBER_CARE_TYPES.has(previousType)) continue;
+    const comparablePreviousCandidate = previousCandidate || {
+      ...candidate,
+      candidateId: send.candidateId || sendDoc.id,
+      type: previousType as AlimtalkCandidateDoc["type"],
+      templateCode: String(send.templateCode || ""),
+      payload: {},
+    };
+    if (!memberCareCandidatesConflict(candidate, comparablePreviousCandidate)) continue;
     const comparisonMs = sentMs || Number.MAX_SAFE_INTEGER;
     if (comparisonMs > latestSentMs) {
       latestId = sendDoc.id;
@@ -118,6 +133,23 @@ async function findRecentMemberCareDuplicate(candidate: AlimtalkCandidateDoc, wi
     }
   }
   return latestId;
+}
+
+export function memberCareCandidatesConflict(
+  current: AlimtalkCandidateDoc,
+  previous: AlimtalkCandidateDoc,
+): boolean {
+  const sameMemberId = Boolean(current.memberId && previous.memberId && current.memberId === previous.memberId);
+  const currentPhone = normalizePhone(current.memberPhone);
+  const previousPhone = normalizePhone(previous.memberPhone);
+  const samePhone = Boolean(currentPhone && previousPhone && currentPhone === previousPhone);
+  if (!sameMemberId && !samePhone) return false;
+  if (!MEMBER_CARE_TYPES.has(current.type) || !MEMBER_CARE_TYPES.has(previous.type)) return false;
+  if (current.type === "long_absence" || previous.type === "long_absence") return true;
+  if (!RENEWAL_MEMBER_CARE_TYPES.has(current.type) || !RENEWAL_MEMBER_CARE_TYPES.has(previous.type)) return false;
+  const currentIdentity = renewalReminderIdentity(current);
+  const previousIdentity = renewalReminderIdentity(previous);
+  return Boolean(currentIdentity && previousIdentity && currentIdentity === previousIdentity);
 }
 
 async function findInstructorLessonDuplicate(
@@ -235,12 +267,17 @@ function isTicketReminder(candidate: AlimtalkCandidateDoc): boolean {
 }
 
 function ticketReminderFingerprint(candidate: AlimtalkCandidateDoc): string {
+  return renewalReminderIdentity(candidate);
+}
+
+export function renewalReminderIdentity(candidate: AlimtalkCandidateDoc): string {
   const payload = candidate.payload || {};
+  const renewalCaseId = String(payload.renewalCaseId || "").trim();
+  if (renewalCaseId) return `case:${renewalCaseId}`;
   const explicitTicketId = String(payload.userTicketId || payload.ticketId || "").trim();
-  if (explicitTicketId) return `${String(candidate.type || "")}|ticket:${explicitTicketId}`;
-  return [
-    String(candidate.type || ""),
-    String(payload.ticketName || payload.ticket || "").trim(),
-    String(payload.expiresAt || payload.expiryDate || payload.expireDate || "").trim(),
-  ].join("|");
+  if (explicitTicketId) return `ticket:${explicitTicketId}`;
+  const kind = String(candidate.type || "").startsWith("private_") ? "private" : "group";
+  const ticketName = String(payload.ticketName || payload.ticket || "").replace(/\s+/g, " ").trim().toLowerCase();
+  if (!ticketName) return "";
+  return `${kind}|name:${ticketName}`;
 }

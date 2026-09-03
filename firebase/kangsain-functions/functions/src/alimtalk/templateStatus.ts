@@ -55,13 +55,23 @@ export interface AlimtalkTemplateReadiness {
   state: AlimtalkTemplateState | null;
 }
 
-export async function syncAlimtalkTemplateStatuses(): Promise<{ checked: number; approved: number; failed: number }> {
+export async function syncAlimtalkTemplateStatuses(): Promise<{
+  checked: number;
+  approved: number;
+  failed: number;
+  skipped: number;
+}> {
   let checked = 0;
   let approved = 0;
   let failed = 0;
+  let skipped = 0;
   for (const template of Object.values(ALIMTALK_TEMPLATES)) {
     const templateCode = normalizeTemplateCode(template.code);
     if (!templateCode) continue;
+    if (template.status !== "approved") {
+      skipped += 1;
+      continue;
+    }
     checked += 1;
     try {
       const remote = await fetchSolapiTemplate(templateCode);
@@ -119,8 +129,8 @@ export async function syncAlimtalkTemplateStatuses(): Promise<{ checked: number;
       logger.warn("syncAlimtalkTemplateStatuses failed for template", { templateCode, message });
     }
   }
-  logger.info("syncAlimtalkTemplateStatuses completed", { checked, approved, failed });
-  return { checked, approved, failed };
+  logger.info("syncAlimtalkTemplateStatuses completed", { checked, approved, failed, skipped });
+  return { checked, approved, failed, skipped };
 }
 
 export async function isAlimtalkTemplateApproved(templateCode: string): Promise<boolean> {

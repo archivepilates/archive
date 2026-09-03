@@ -26,7 +26,7 @@
         <header class="page-hero">
           <p class="eyebrow">RULES</p>
           <h1>운영 규칙</h1>
-          <p class="subtitle">2026.09.01 기준 현재 유효한 운영 규칙만 정리한 ARCHIVE CORE 단일 운영 허브입니다.</p>
+          <p class="subtitle">2026.09.03 기준 현재 유효한 운영 규칙만 정리한 ARCHIVE CORE 단일 운영 허브입니다.</p>
         </header>
 
         <section class="panel rules-hero">
@@ -351,6 +351,8 @@
                 <li>예약오픈 대량 발송 승인은 같은 날의 일일 알림톡 승인과 별도 승인 건으로 관리합니다.</li>
                 <li>대량 발송 가능 후보가 10건 이상이면 자동 발송하지 않고 승인 게이트로 보냅니다.</li>
                 <li>발송 전 중복, 제외 회원, 템플릿 승인, 전화번호를 다시 확인합니다.</li>
+                <li>예약오픈·설문·재등록·장기 미출석 같은 일반 회원 자동 알림은 후보 생성과 발송 직전에 현재 memberProfiles 등급과 active staffs 연락처를 함께 확인해 근무 스텝을 제외합니다. 운영자 단건 발송과 강사레슨 업무 알림은 별도 규칙을 유지합니다.</li>
+                <li>당일만 유효한 자동 후보가 발송되지 않은 채 기준일을 넘기면 stale_source_date로 종료하며 다음 자동 실행 대상에 다시 포함하지 않습니다.</li>
                 <li>운영자 화면의 일반 회원 태그에는 알림톡 상태 태그를 표시하지 않습니다.</li>
               </ul>
             </article>
@@ -373,13 +375,15 @@
                 <li>프라이빗 최초 사전설문은 회원별 영구 1회입니다. 그룹 첫 수업 설문은 같은 유형 제출 후 1년이 지나야 재후보가 됩니다.</li>
                 <li>수업자료와 회원 리포트는 같은 회원·수업·recordId 단위로 영구 1회만 발송합니다.</li>
                 <li>회원 리포트는 승인한 revision과 후보 ID를 고정해 수정본과 발송본이 섞이지 않게 합니다.</li>
-                <li>장기 미출석 안내는 최근 14일의 잔여횟수·만료·재등록·장기 미출석 성공 발송을 함께 확인합니다. 같은 날 겹치면 재등록 안내를 우선하고, 같은 수강권의 잔여·만료 알림도 1건으로 제한합니다.</li>
+                <li>회원관리 알림은 최근 14일 동안 양방향으로 확인합니다. 장기 미출석 전후의 재등록 알림은 같은 회원 기준으로 막고, 잔여횟수·만료 알림은 동일 renewalCaseId 기준으로 1건만 허용합니다. 같은 날 겹치면 재등록 안내를 우선합니다.</li>
               </ul>
             </article>
             <article class="rule-card">
               <h3>템플릿과 링크</h3>
               <ul>
                 <li>템플릿별 대상/제외 규칙은 templateTargetRules.ts에서 관리합니다.</li>
+                <li>일일 SOLAPI 템플릿 동기화는 코드에서 운영 승인 상태인 템플릿만 확인합니다. pending·deleted·미사용 템플릿은 운영 실패 경고에서 제외합니다.</li>
+                <li>매일 10:15에 전일 SOLAPI 알림톡 목록과 Firestore alimtalkSends 성공 원장을 메시지 ID로 대조합니다. 일치하면 조용히 기록하고, SOLAPI에만 있는 발송이나 조회 실패가 있을 때만 운영 메일을 보냅니다.</li>
                 <li>SOLAPI 버튼 URL은 변수 치환 후 100자 이하여야 합니다.</li>
                 <li>강사레슨 수업자료 안내는 수업자료 보기, 수업배정 안내, 방문안내 보기, 주차 사전등록 버튼을 함께 검수합니다.</li>
                 <li>강사레슨 수업자료 발송은 승인된 <strong>강사레슨 수업자료 안내 v3</strong> 템플릿만 사용합니다. 본 발송 직전 재생성된 후보도 V3가 아니면 차단하며, v1은 삭제됐고 v2는 과거 발송 이력 식별에만 사용합니다.</li>
@@ -456,6 +460,7 @@
               </ul>
             </article>
           </div>
+          <div class="rule-note"><strong>현재 구현 상태</strong><span>2026.09.03 자동 회원알림 스텝 제외, 회원관리 14일 교차 중복 차단, stale 후보 종료, 운영 템플릿만 동기화, 전일 SOLAPI 원장 대조를 functions-alimtalk에 적용하고 단위 테스트·Functions 빌드·원천 경계 검증을 완료했습니다.</span></div>
           <div class="rule-note"><strong>현재 확인 위치</strong><span>CORE Messages / Firestore pricingInquiryAlimtalkRequests, alimtalkCandidates, alimtalkSends, alimtalkTemplateStates, shortLinks</span></div>
         </section>
 

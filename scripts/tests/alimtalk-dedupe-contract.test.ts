@@ -59,9 +59,11 @@ test("records candidate-generation duplicate blocks with the canonical reason co
   assert.match(rebuildSource, /reasonCode: "duplicate_send_blocked"/);
 });
 
-test("blocks long-absence messages after any recent member-care message", () => {
-  assert.match(dedupeSource, /candidate\.type === "long_absence"/);
+test("checks every member-care message against the shared fourteen-day cooldown", () => {
+  assert.match(dedupeSource, /MEMBER_CARE_TYPES\.has\(candidate\.type\)/);
   assert.match(dedupeSource, /findRecentMemberCareDuplicate\(candidate, 14\)/);
+  assert.match(dedupeSource, /current\.type === "long_absence" \|\| previous\.type === "long_absence"/);
+  assert.match(dedupeSource, /payload\.renewalCaseId/);
   assert.match(dedupeSource, /"private_count_low"/);
   assert.match(dedupeSource, /"private_ticket_expiring"/);
 });

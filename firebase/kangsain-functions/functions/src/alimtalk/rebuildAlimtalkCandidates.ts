@@ -28,6 +28,8 @@ import {
 import { alimtalkDedupeKey, findCompletedDuplicateForCandidate } from "./dedupe";
 import { instructorLessonManagementNumberFor } from "./instructorLessonManagement";
 import { hasExplicitAlimtalkTestOverride } from "./testRecipients";
+import { automaticMemberExclusionReason, loadActiveStaffPhones } from "./recipientExclusion";
+import { alimtalkTemplateTargetRule } from "./templateTargetRules";
 import { assessLongAbsenceTarget } from "./longAbsencePolicy";
 import {
   assessRenewalTicket,
@@ -46,11 +48,12 @@ export async function rebuildAlimtalkCandidatesForRange(input: {
   mode?: "daily" | "reservation_open";
 }): Promise<{ candidates: number; candidateIds: string[] }> {
   const mode = input.mode || "daily";
-  const profilesPromise = refs.memberProfiles().where("studioId", "==", input.studioId).get();
-  const [profilesSnap, bookingIndex, lectureIndex] =
-    mode === "reservation_open"
-      ? [await profilesPromise, new Map<string, BookingDoc[]>(), new Map<string, LectureDoc>()]
-      : await Promise.all([profilesPromise, loadBookingIndex(input.studioId), loadLectureIndex(input.studioId)]);
+  const [profilesSnap, activeStaffPhones, bookingIndex, lectureIndex] = await Promise.all([
+    refs.memberProfiles().where("studioId", "==", input.studioId).get(),
+    loadActiveStaffPhones(input.studioId),
+    mode === "reservation_open" ? Promise.resolve(new Map<string, BookingDoc[]>()) : loadBookingIndex(input.studioId),
+    mode === "reservation_open" ? Promise.resolve(new Map<string, LectureDoc>()) : loadLectureIndex(input.studioId),
+  ]);
 
   const writes: Array<Promise<unknown>> = [];
   const candidateIds: string[] = [];
@@ -61,32 +64,41 @@ export async function rebuildAlimtalkCandidatesForRange(input: {
   }
   for (const sourceDate of dateRange(input.startDate, input.endDate)) {
     for (const profile of profiles) {
+      const automaticExclusion = automaticMemberExclusionReason(profile, activeStaffPhones);
       if (mode === "reservation_open") {
-        const reservationOpenCandidate = reservationOpenCandidateForDate(profile, sourceDate);
+        const reservationOpenCandidate = automaticExclusion ? null : reservationOpenCandidateForDate(profile, sourceDate);
         if (reservationOpenCandidate) {
           await enqueueSendableCandidate(reservationOpenCandidate, candidateIds, writes);
         }
         continue;
       }
-      for (const candidate of directTicketCandidates(profile, sourceDate, memberBookings(bookingIndex, profile.memberId))) {
-        await enqueueSendableCandidate(candidate, candidateIds, writes);
-      }
-      const privateSurveyCandidate = await privateSurveyCandidateForDate(profile, sourceDate, bookingIndex);
-      if (privateSurveyCandidate) {
-        const enqueued = await enqueueSendableCandidate(privateSurveyCandidate, candidateIds, writes);
-        if (enqueued) writes.push(upsertPrivateSurveyRequest(privateSurveyCandidate));
-      }
-      const groupSurveyCandidate = await groupSurveyCandidateForDate(profile, sourceDate, bookingIndex);
-      if (groupSurveyCandidate) {
-        const enqueued = await enqueueSendableCandidate(groupSurveyCandidate, candidateIds, writes);
-        if (enqueued) writes.push(upsertGroupSurveyRequest(groupSurveyCandidate));
+      if (!automaticExclusion) {
+        for (const candidate of directTicketCandidates(
+          profile,
+          sourceDate,
+          memberBookings(bookingIndex, profile.memberId),
+        )) {
+          await enqueueSendableCandidate(candidate, candidateIds, writes);
+        }
+        const privateSurveyCandidate = await privateSurveyCandidateForDate(profile, sourceDate, bookingIndex);
+        if (privateSurveyCandidate) {
+          const enqueued = await enqueueSendableCandidate(privateSurveyCandidate, candidateIds, writes);
+          if (enqueued) writes.push(upsertPrivateSurveyRequest(privateSurveyCandidate));
+        }
+        const groupSurveyCandidate = await groupSurveyCandidateForDate(profile, sourceDate, bookingIndex);
+        if (groupSurveyCandidate) {
+          const enqueued = await enqueueSendableCandidate(groupSurveyCandidate, candidateIds, writes);
+          if (enqueued) writes.push(upsertGroupSurveyRequest(groupSurveyCandidate));
+        }
       }
       for (const candidate of instructorLessonMaterialCandidatesForDate(profile, sourceDate, bookingIndex, lectureIndex)) {
         const prepared = attachInstructorLessonParkingPayload(candidate);
         const enqueued = await enqueueSendableCandidate(prepared, candidateIds, writes);
         if (enqueued) writes.push(upsertInstructorLessonParkingPreRegistration(prepared));
       }
-      const longAbsenceCandidate = await longAbsenceCandidateForDate(profile, sourceDate, bookingIndex);
+      const longAbsenceCandidate = automaticExclusion
+        ? null
+        : await longAbsenceCandidateForDate(profile, sourceDate, bookingIndex);
       if (longAbsenceCandidate) {
         await enqueueSendableCandidate(longAbsenceCandidate, candidateIds, writes);
       }
@@ -97,7 +109,7 @@ export async function rebuildAlimtalkCandidatesForRange(input: {
     for (const profile of profiles.filter(
       (profile) =>
         profile.isNewMember &&
-        !ALIMTALK_MEMBER_EXCLUSION_REASONS[profile.memberId] &&
+        !automaticMemberExclusionReason(profile, activeStaffPhones) &&
         currentOrUpcomingLessonProfileTickets(profile, input.endDate).length > 0 &&
         registeredDate(profile) >= NEW_MEMBER_ALIMTALK_START_DATE &&
         registeredDate(profile) >= newMemberWindowStartDate(input.endDate) &&
@@ -140,6 +152,10 @@ export async function rebuildAlimtalkCandidatesForRange(input: {
   }
 
   await Promise.all(writes);
+  const expired = await expirePastDueAutomaticCandidates({
+    studioId: input.studioId,
+    today: input.endDate,
+  });
   await markStaleCandidatesSkipped({
     studioId: input.studioId,
     startDate: input.startDate,
@@ -150,6 +166,7 @@ export async function rebuildAlimtalkCandidatesForRange(input: {
   logger.info("rebuildAlimtalkCandidatesForRange completed", {
     studioId: input.studioId,
     candidates: candidateIds.length,
+    expired,
     mode,
   });
   return { candidates: candidateIds.length, candidateIds };
@@ -166,6 +183,50 @@ const DAILY_ALIMTALK_CANDIDATE_TYPES: SendableAlimtalkCandidateType[] = [
   "private_ticket_expiring",
   "long_absence",
 ];
+
+const EXPIRING_AUTOMATIC_TYPES = new Set<SendableAlimtalkCandidateType>([
+  ...DAILY_ALIMTALK_CANDIDATE_TYPES,
+  "reservation_open",
+]);
+
+export function isPastDueAutomaticCandidate(candidate: AlimtalkCandidateDoc, today: string): boolean {
+  if (!EXPIRING_AUTOMATIC_TYPES.has(candidate.type as SendableAlimtalkCandidateType)) return false;
+  if (!["candidate", "reviewed", "failed"].includes(candidate.status)) return false;
+  if (!candidate.sourceDate || candidate.sourceDate >= today) return false;
+  return alimtalkTemplateTargetRule(candidate.type)?.sourceDatePolicy === "today";
+}
+
+export async function expirePastDueAutomaticCandidates(input: {
+  studioId: string;
+  today: string;
+  lookbackDays?: number;
+}): Promise<number> {
+  const lookbackDays = Math.max(1, Math.min(90, input.lookbackDays || 45));
+  const dates = dateRange(addDays(input.today, -lookbackDays), addDays(input.today, -1));
+  const snapshots = await Promise.all(
+    dates.map((sourceDate) => refs.alimtalkCandidates().where("sourceDate", "==", sourceDate).limit(500).get()),
+  );
+  const stale = snapshots.flatMap((snapshot) =>
+    snapshot.docs.filter((doc) => {
+      const candidate = doc.data();
+      return candidate.studioId === input.studioId && isPastDueAutomaticCandidate(candidate, input.today);
+    }),
+  );
+  await Promise.all(
+    stale.map((doc) =>
+      doc.ref.set(
+        {
+          status: "skipped",
+          reasonCode: "stale_source_date",
+          lastError: "발송 기준일이 지난 자동 후보",
+          updatedAt: nowTimestamp(),
+        },
+        { merge: true },
+      ),
+    ),
+  );
+  return stale.length;
+}
 
 type BookingIndex = Map<string, BookingDoc[]>;
 type LectureIndex = Map<string, LectureDoc>;

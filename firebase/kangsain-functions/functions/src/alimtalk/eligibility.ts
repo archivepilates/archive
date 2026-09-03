@@ -31,6 +31,7 @@ import {
   normalizeInstructorLessonManagementNumber,
 } from "./instructorLessonManagement";
 import { hasExplicitAlimtalkTestOverride, isAlimtalkTestRecipient } from "./testRecipients";
+import { currentAutomaticMemberExclusionReason } from "./recipientExclusion";
 
 export const RETRYABLE_TEMPLATE_STATUS_PREFIX = "템플릿 상태 확인 일시 실패:";
 const PRIVATE_SURVEY_BUTTON_URL = "https://in.archivepilates.com/s/#{링크ID}/";
@@ -46,6 +47,10 @@ export async function autoSendabilityIssue(candidate: AlimtalkCandidateDoc, toda
     return ALIMTALK_MEMBER_EXCLUSION_REASONS[candidate.memberId];
   if (isAlimtalkTestRecipient(candidate) && !hasExplicitAlimtalkTestOverride(candidate)) {
     return "스텝 계정 알림톡 제외";
+  }
+  if (!hasExplicitAlimtalkTestOverride(candidate)) {
+    const currentMemberExclusion = await currentAutomaticMemberExclusionReason(candidate);
+    if (currentMemberExclusion) return currentMemberExclusion;
   }
   const templateContractIssue =
     privateSurveyTemplateContractIssue(candidate) ||
