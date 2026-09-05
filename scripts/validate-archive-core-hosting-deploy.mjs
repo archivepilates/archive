@@ -49,6 +49,13 @@ const required = [
     markers: [
       "renewalCandidateRows",
       "renderRenewalPipeline",
+      "groupRenewalRows",
+      "activeRenewalMemberRows",
+      "getCommunicationActions",
+      "communicationReadRequirements",
+      "hasMetricValue",
+      "currentPrivateSessionState",
+      "parkingJobNeedsAttention",
       "renewalCases",
       "handleRenewalActionClick",
       "ALIMTALK_TEMPLATE_LABELS_BY_CODE",
@@ -109,6 +116,7 @@ const required = [
       "renderInstructorLessonRegistrationDashboard",
       "renderInstructorLessonSchedule",
       "instructorLessonScheduleSourceLabel",
+      "renderInstructorLessonRoster",
       "handleInstructorLessonRegistrationSubmit",
       "staffEvaluationIdentityPhone",
       "promotedStaffEvaluationKey",
@@ -127,6 +135,7 @@ const required = [
       "instructorLessonPaymentMethod",
       "instructorLessonRegistrationList",
       "instructorLessonScheduleList",
+      "instructorLessonScheduleDetail",
       "instructorLessonScheduleSummary",
       "일정별 예약현황",
       "남은 좌석",
@@ -182,7 +191,7 @@ const required = [
   {
     file: "core/staff/index.html",
     label: "staff HR cards page",
-    markers: ["강사 현황", "staffHrList", "강사별 평가 차트", "강사 테스트"],
+    markers: ["강사 현황", "staffHrList", "staffEvaluationChart", "강사 테스트"],
   },
   {
     file: "core/members/index.html",
@@ -202,7 +211,7 @@ const required = [
   {
     file: "core/private/index.html",
     label: "private lesson progress page",
-    markers: ["오늘 기록·리포트", "privateInstructorPendingList", "privateProgressList"],
+    markers: ["privateScopeTabs", "data-private-scope=\"today\"", "data-private-scope=\"overdue\"", "privateInstructorPendingList", "privateProgressList"],
   },
   {
     file: "core/refunds/index.html",

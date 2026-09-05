@@ -104,6 +104,8 @@ const state = {
   memberDirectoryLoadStatus: "idle",
   readWarnings: [],
   readStates: {},
+  communicationActions: {},
+  readTruncated: {},
 };
 
 let memberSearchTerm = "";
@@ -117,6 +119,10 @@ let videoWatchContentType = "paid";
 let videoWatchMembers = [];
 let selectedVideoWatchMemberId = "";
 let instructorLessonRegistrationFilter = "active";
+let renewalView = "today";
+let renewalVisibleLimit = 20;
+let privateScope = "today";
+let selectedInstructorLessonDate = "";
 let refundFlow = { candidates: [], member: null, tickets: [], selectedTicket: null, preview: null };
 
 const MEMBER_PAGE_SIZE = 20;
@@ -136,7 +142,7 @@ const COMMAND_ITEMS = [
   },
   {
     title: "강사레슨 운영",
-    detail: "강사 이름과 전화번호로 수강권·예약·가입서를 자동 처리",
+    detail: "수강권 발급과 가입서 처리, 일정별 접수 확인",
     href: "./instructor-lessons/",
     keywords: "강사레슨 강사회원 수강신청 등록 수강권 예약 가입서 이폼싸인",
   },
@@ -172,7 +178,7 @@ const COMMAND_ITEMS = [
   },
   {
     title: "프라이빗 진행",
-    detail: "사전 설문, 사후 설문, 리포트, 발송 단계 확인",
+    detail: "오늘 수업 기록과 리포트 전달 확인",
     href: "./private/",
     keywords: "private 프라이빗 차트 리포트 설문 회차",
   },
@@ -479,7 +485,7 @@ function currentReadRequirements() {
   }
   if (qs("staffHrList")) {
     return [
-      { label: "staffs", title: "강사 명단", staleAfterHours: 24 * 14 },
+      { label: "staffs", title: "강사 명단", staleAfterHours: null },
       { label: "dashboardSnapshots/current", title: "강사 지표", staleAfterHours: 24 * 35 },
     ];
   }
@@ -490,16 +496,22 @@ function currentReadRequirements() {
     return [
       { label: "alimtalkCandidates", title: "알림톡 후보", staleAfterHours: null },
       { label: "alimtalkSends", title: "알림톡 발송", staleAfterHours: null },
+      ...communicationReadRequirements(),
     ];
   }
   if (qs("privateProgressList")) {
-    return [{ label: "privateLessonChartRequests", title: "프라이빗 진행", staleAfterHours: 48 }];
+    return [
+      { label: "privateLessonSessions", title: "수업 진행", staleAfterHours: null },
+      { label: "privateLessonChartRecords", title: "수업 기록", staleAfterHours: null },
+    ];
   }
   if (qs("homeDecisionList")) {
     return [
       { label: "automationStatus", title: "자동화 상태", staleAfterHours: 30 },
       { label: "sourceImports", title: "StudioMate 원본", staleAfterHours: 36 },
       { label: "renewalMemberProfiles", title: "재등록 회원 원본", staleAfterHours: 30 },
+      { label: "renewalCases", title: "재등록 상담", staleAfterHours: null },
+      ...communicationReadRequirements(),
     ];
   }
   return [];
@@ -517,8 +529,14 @@ function renderReadHealth() {
     document.body.dataset.sourceHealth = "unavailable";
     setConnection(
       "원본 확인 필요",
-      `${unavailable.map((item) => item.title).join(", ")} 읽기 실패 · 화면의 0은 확정값이 아닙니다.`,
+      `${unavailable.map((item) => item.title).join(", ")} 조회 실패 · 새로고침이 필요합니다.`,
     );
+    return;
+  }
+
+  if (requirements.some((item) => state.readTruncated[item.label])) {
+    document.body.dataset.sourceHealth = "partial";
+    setConnection("일부 조회", "조회 한도에 도달했습니다. 업무 건수는 확인된 최소값입니다.");
     return;
   }
 
@@ -547,8 +565,54 @@ function renderReadHealth() {
     setConnection("조회 완료 · 0건", "원본 읽기는 성공했고 현재 표시할 기록이 없습니다.");
     return;
   }
-  const latest = nonEmpty[0];
-  setConnection("원본 연결됨", `${latest.title} ${sourceAgeText(latest.state.sourceUpdatedAtMs)} · 화면 조회 ${formatDate(new Date())}`);
+  setConnection("조회 완료", `화면 조회 ${formatDate(new Date())}`);
+}
+
+const COMMUNICATION_ACTION_FIELDS = {
+  alimtalkCandidates: ["status", "sendStatus", "deliveryStatus", "resultStatus", "solapiStatus", "alimtalkStatus"],
+  alimtalkSends: ["status", "sendStatus", "deliveryStatus", "resultStatus", "solapiStatus", "alimtalkStatus"],
+  onsiteWelcomeRequests: ["status"],
+  memberSignupContracts: ["status", "syncStatus", "studiomateSyncStatus", "studiomateProfileSyncStatus", "studiomateProfileSync.status", "driveArchive.status"],
+  pricingInquiryAlimtalkRequests: ["status", "sendStatus"],
+};
+
+function communicationReadRequirements() {
+  return Object.keys(COMMUNICATION_ACTION_FIELDS).map((name) => ({ label: `actions:${name}`, title: "미해결 알림톡", staleAfterHours: null }));
+}
+
+function communicationActionItems(name) {
+  return state.communicationActions[name] ?? state[name] ?? [];
+}
+
+function homeActionReadsIncomplete() {
+  return currentReadRequirements().some((item) => readUnavailable(item.label) || state.readTruncated[item.label]);
+}
+
+async function getCommunicationActions(db, runtime, name, maxItems = 300) {
+  const failureStatuses = ["failed", "error", "critical", "blocked"];
+  const label = `actions:${name}`;
+  state.readTruncated[label] = false;
+  const byId = new Map();
+  // Status queries do not depend on the latest-history window or a composite index.
+  const conditions = COMMUNICATION_ACTION_FIELDS[name].map((field) => runtime.where(field, "in",
+    name === "alimtalkCandidates" && field === "status"
+      ? [...failureStatuses, "queued", "pending", "review", "reviewed", "processing", "template_pending"]
+      : failureStatuses,
+  ));
+  if (["onsiteWelcomeRequests", "memberSignupContracts"].includes(name)) conditions.push(runtime.where("lastError", ">", ""));
+  if (name === "memberSignupContracts") conditions.push(runtime.where("driveArchive.lastError", ">", ""));
+  for (const condition of conditions) {
+    const snapshot = await runtime.getDocs(runtime.query(runtime.collection(db, name), condition, runtime.limit(maxItems + 1)));
+    if (snapshot.metadata?.fromCache) throw new Error("서버에서 최신 업무 상태를 확인하지 못했습니다.");
+    if (snapshot.docs.length > maxItems) state.readTruncated[label] = true;
+    for (const item of snapshot.docs.slice(0, maxItems)) byId.set(item.id, { ...item.data(), id: item.id });
+  }
+  return studioItems([...byId.values()]);
+}
+
+function coreHref(path = "") {
+  const home = document.querySelector('.nav [data-section="home"]')?.getAttribute("href") || "./";
+  return `${home.replace(/\/?$/, "/")}${path.replace(/^\.\//, "")}`;
 }
 
 function commandSearchText(item) {
@@ -574,7 +638,10 @@ function commandPaletteEntries() {
       id: memberId,
     };
   });
-  return [...COMMAND_ITEMS, ...memberEntries];
+  return [...COMMAND_ITEMS, ...memberEntries].map((item) => ({
+    ...item,
+    href: /^https?:/.test(item.href) ? item.href : coreHref(item.href),
+  }));
 }
 
 function hasCommandMenuMatch(term) {
@@ -652,6 +719,7 @@ function renderCommandPaletteResults() {
 }
 
 function openCommandPalette() {
+  ensureCommandPalette();
   const palette = qs("commandPalette");
   const input = qs("commandPaletteInput");
   if (!palette || !input) return;
@@ -684,6 +752,21 @@ function closeCommandPalette() {
   if (!palette) return;
   palette.classList.remove("open");
   palette.hidden = true;
+  qs("commandPaletteOpen")?.focus();
+}
+
+function ensureCommandPalette() {
+  if (qs("commandPalette")) return;
+  const dialog = document.createElement("div");
+  dialog.id = "commandPalette";
+  dialog.className = "command-palette";
+  dialog.hidden = true;
+  dialog.innerHTML = `<div class="command-palette-card" role="dialog" aria-modal="true" aria-label="회원 또는 업무 검색"><button type="button" class="secondary-action" data-command-close aria-label="검색 닫기">닫기</button><label class="command-palette-search"><span>회원 또는 업무 검색</span><input id="commandPaletteInput" type="search" autocomplete="off" /></label><div id="commandPaletteResults" class="command-palette-results"></div></div>`;
+  document.body.appendChild(dialog);
+  qs("commandPaletteInput").addEventListener("input", handleCommandPaletteInput);
+  dialog.addEventListener("click", (event) => {
+    if (event.target === dialog || event.target.closest("a, [data-command-close]")) closeCommandPalette();
+  });
 }
 
 function setRuleSectionOpen(section, open) {
@@ -779,6 +862,27 @@ function setAdminNavOpen(open) {
 function enhanceNav() {
   const nav = document.querySelector(".nav");
   if (!nav) return;
+  const sidebar = nav.closest(".sidebar");
+  if (sidebar && !sidebar.querySelector(".mobile-nav-toggle")) {
+    nav.id = "coreNavigation";
+    const toggle = document.createElement("button");
+    toggle.type = "button";
+    toggle.className = "mobile-nav-toggle";
+    toggle.setAttribute("aria-controls", nav.id);
+    toggle.setAttribute("aria-expanded", "false");
+    toggle.textContent = "메뉴";
+    toggle.addEventListener("click", () => toggle.setAttribute("aria-expanded", String(sidebar.classList.toggle("is-open"))));
+    sidebar.prepend(toggle);
+  }
+  if (!qs("commandPaletteOpen")) {
+    const search = document.createElement("button");
+    search.id = "commandPaletteOpen";
+    search.className = "command-search-button";
+    search.type = "button";
+    search.textContent = "회원 또는 업무 검색";
+    search.setAttribute("aria-haspopup", "dialog");
+    document.querySelector(".top-actions")?.prepend(search);
+  }
   const hiddenSections = new Set(["members", "lessons", "content"]);
   nav.querySelectorAll("a[data-section]").forEach((link) => {
     if (hiddenSections.has(link.dataset.section)) link.remove();
@@ -837,7 +941,7 @@ function enhanceNav() {
       .trim();
     const title = NAV_LABELS[section] || small || label || section;
     link.setAttribute("aria-label", title);
-    link.removeAttribute("title");
+    link.setAttribute("title", title);
     link.innerHTML = `
       ${navIcon(section)}
       <span class="nav-label">
@@ -1105,9 +1209,10 @@ async function getCollectionDocumentsByIds(db, firestore, collectionName, docume
       ),
     ),
   );
-  return snapshots.flatMap((snapshot) =>
-    snapshot.docs.map((docSnapshot) => ({ id: docSnapshot.id, ...docSnapshot.data() })),
-  );
+  return snapshots.flatMap((snapshot) => {
+    if (snapshot.metadata?.fromCache) throw new Error("서버에서 최신 회원 수강권을 확인하지 못했습니다.");
+    return snapshot.docs.map((docSnapshot) => ({ id: docSnapshot.id, ...docSnapshot.data() }));
+  });
 }
 
 async function getOptionalCollectionBy(db, firestore, collectionName, orderField = "updatedAt", maxItems = 1000) {
@@ -1828,22 +1933,28 @@ function actionableRenewalCaseItems(items = state.renewalCases, referenceDate = 
 }
 
 function renewalCaseRows(referenceDate = new Date()) {
-  if (!state.renewalCases.length) return null;
+  if (!state.renewalCases.length) return readState("renewalCases").status === "idle" ? null : [];
   const memberById = new Map(
-    [...(state.renewalMembers || []), ...(state.members || [])].map((member) => [
+    mergeMemberCardsWithProfiles(state.members || [], state.renewalMembers || []).map((member) => [
       String(member.memberId || member.id || ""),
       member,
     ]),
   );
-  const rows = actionableRenewalCaseItems(state.renewalCases, referenceDate)
+  const verifiedMemberIds = new Set(
+    (state.renewalMembers || []).filter(hasProfileActiveTicketsField).map((member) => String(member.memberId || member.id || "")),
+  );
+  const rows = state.renewalCases
     .filter((item) => {
-      if (!isRenewalManagedTicket({ name: item.ticketName || "" })) return false;
-      const member = memberById.get(String(item.memberId || "")) || {};
-      return renewalCaseIsCurrent(item, member, referenceDate);
+      return isRenewalManagedTicket({ name: item.ticketName || "" });
     })
     .map((item) => {
       const member = memberById.get(String(item.memberId || "")) || {};
       const memberId = item.memberId || member.memberId || member.id || "";
+      const sourceVerified = verifiedMemberIds.has(String(memberId)) && !readUnavailable("renewalMemberProfiles");
+      const recovered = sourceVerified && !renewalCaseIsCurrent(item, member, referenceDate);
+      const terminal = item.active === false || ["resolved", "excluded"].includes(item.workflowStatus) || recovered;
+      const planned = ["contacted", "considering"].includes(item.workflowStatus) ||
+        (item.workflowStatus === "snoozed" && timestampMs(item.nextActionAt) > referenceDate.getTime());
       return {
         member,
         memberId,
@@ -1855,13 +1966,17 @@ function renewalCaseRows(referenceDate = new Date()) {
         reason: item.reason || "재등록 확인",
         recentVisitDays: Number.POSITIVE_INFINITY,
         activeTicketCount: toNumber(member.activeTicketCount ?? item.activeTicketCount),
-        href: memberId ? `./members/detail/?id=${encodeURIComponent(memberId)}` : "./members/",
+        href: coreHref(memberId ? `members/detail/?id=${encodeURIComponent(memberId)}` : "members/"),
         action: item.recommendation || "최근 이용 패턴 기준 재등록 상담",
         predictedDepletionDate: item.predictedDepletionDate || "",
         weeklyUsagePace: toNumber(item.weeklyUsagePace),
-        nextBookingDate: item.nextBookingDate || "",
+        nextBookingDate: String(item.nextBookingDate || "").slice(0, 10) >= dateKey(referenceDate) ? item.nextBookingDate : "",
         workflowStatus: item.workflowStatus || "open",
         renewalCaseId: item.caseId || item.id || "",
+        sourceVerified,
+        recovered,
+        nextActionAt: item.nextActionAt,
+        view: terminal ? "history" : planned ? "planned" : item.priority === "urgent" ? "today" : item.priority === "waiting" ? "return" : "planned",
       };
     });
   const priorityRank = { urgent: 4, warning: 3, waiting: 2, follow: 1 };
@@ -1870,6 +1985,25 @@ function renewalCaseRows(referenceDate = new Date()) {
       (priorityRank[b.priority] || 0) - (priorityRank[a.priority] || 0) ||
       String(a.predictedDepletionDate || "9999-12-31").localeCompare(String(b.predictedDepletionDate || "9999-12-31")),
   );
+}
+
+function groupRenewalRows(rows) {
+  const groups = new Map();
+  const rank = { today: 3, planned: 2, return: 1, history: 0 };
+  for (const [index, row] of rows.entries()) {
+    const key = row.phone || row.memberId || row.renewalCaseId || `unknown:${index}`;
+    const group = groups.get(key);
+    if (!group) groups.set(key, { ...row, cases: [row] });
+    else {
+      const cases = [...group.cases, row];
+      groups.set(key, { ...(rank[row.view] > rank[group.view] ? row : group), cases });
+    }
+  }
+  return [...groups.values()].sort((a, b) => rank[b.view] - rank[a.view]);
+}
+
+function activeRenewalMemberRows() {
+  return groupRenewalRows(renewalCandidateRows().filter((row) => row.view !== "history"));
 }
 
 function ticketFingerprint(tickets = []) {
@@ -2294,7 +2428,11 @@ function communicationActionText(item) {
 }
 
 function isNonActionableCommunicationItem(item) {
-  if (isResolvedOperationalItem(item)) return true;
+  const deliveredFailure = [item?.sendStatus, item?.deliveryStatus, item?.resultStatus, item?.solapiStatus, item?.alimtalkStatus].some(isFailureStatus);
+  const operatorResolved = item?.resolvedAt || item?.resolved === true || item?.completed === true ||
+    [item?.status, item?.sendStatus, item?.resolutionStatus, item?.actionStatus, item?.operatorStatus, item?.reviewStatus]
+      .some((value) => ["resolved", "closed", "done", "completed", "skipped", "excluded", "ignored"].includes(String(value || "").toLowerCase()));
+  if (operatorResolved || (!deliveredFailure && isResolvedOperationalItem(item))) return true;
   const code = String(item?.reasonCode || item?.skipCode || item?.excludeCode || "").toLowerCase();
   if (
     [
@@ -2332,14 +2470,14 @@ function isNonActionableCommunicationItem(item) {
   ].some((keyword) => text.includes(keyword));
 }
 
-function failedAlimtalkCandidates(items = state.alimtalkCandidates) {
+function failedAlimtalkCandidates(items = communicationActionItems("alimtalkCandidates")) {
   return uniqueOperatorItems(
     items.filter((item) => hasCommunicationFailureSignal(item) && !isNonActionableCommunicationItem(item)),
     "alimtalk-candidate",
   );
 }
 
-function failedAlimtalkSends(items = state.alimtalkSends) {
+function failedAlimtalkSends(items = communicationActionItems("alimtalkSends")) {
   return uniqueOperatorItems(
     items.filter((item) => hasCommunicationFailureSignal(item) && !isNonActionableCommunicationItem(item)),
     "alimtalk-send",
@@ -2357,11 +2495,11 @@ function hasCommunicationFailureSignal(item) {
   ].some(isFailureStatus);
 }
 
-function onsiteWelcomeProblems(items = state.onsiteWelcomeRequests) {
+function onsiteWelcomeProblems(items = communicationActionItems("onsiteWelcomeRequests")) {
   return items.filter((item) => !isResolvedOperationalItem(item) && (isFailureStatus(item.status) || Boolean(item.lastError)));
 }
 
-function signupContractProblems(items = state.memberSignupContracts) {
+function signupContractProblems(items = communicationActionItems("memberSignupContracts")) {
   return items.filter(
     (item) =>
       !isResolvedOperationalItem(item) &&
@@ -2375,7 +2513,7 @@ function signupContractProblems(items = state.memberSignupContracts) {
   );
 }
 
-function pricingInquiryProblems(items = state.pricingInquiryAlimtalkRequests) {
+function pricingInquiryProblems(items = communicationActionItems("pricingInquiryAlimtalkRequests")) {
   return items.filter((item) => !isResolvedOperationalItem(item) && (isFailureStatus(item.status) || isFailureStatus(item.sendStatus)));
 }
 
@@ -2429,7 +2567,7 @@ function problemRequestRows() {
 
 function renderMessages(candidates, sends) {
   if (!qs("messagesCandidateList")) return;
-  if (readUnavailable("alimtalkCandidates") && readUnavailable("alimtalkSends")) {
+  if (currentReadRequirements().some((item) => readUnavailable(item.label))) {
     ["messagesCandidateCount", "messagesSendCount", "messagesSentCount", "messagesFailedCount"].forEach((id) => setText(id, "-"));
     setPillText("messagesPendingDecision", "blocked");
     setPillText("messagesRiskDecision", "blocked");
@@ -2440,20 +2578,15 @@ function renderMessages(candidates, sends) {
     return;
   }
   const sentCandidates = candidates.filter((item) => String(item.status || "").toLowerCase() === "sent");
-  const failedCandidates = failedAlimtalkCandidates(candidates);
-  const failedSends = failedAlimtalkSends(sends);
-  const flowProblems = problemRequestRows();
+  const { failedCandidates, failedSends, flowProblems, pendingCandidates } = communicationProblemSummary();
   const totalFailures = failedCandidates.length + failedSends.length + flowProblems.length;
-  const pendingCandidates = uniqueOperatorItems(
-    candidates.filter((item) => isPendingStatus(item.status) && !isNonActionableCommunicationItem(item)),
-    "alimtalk-candidate",
-  );
-  setText("messagesCandidateCount", formatCount(pendingCandidates.length));
+  const partial = homeActionReadsIncomplete();
+  setText("messagesCandidateCount", `${partial ? "최소 " : ""}${formatCount(pendingCandidates.length)}`);
   setText("messagesSendCount", formatCount(sends.length));
   setText("messagesSentCount", formatCount(sentCandidates.length));
-  setText("messagesFailedCount", formatCount(totalFailures));
+  setText("messagesFailedCount", `${partial ? "최소 " : ""}${formatCount(totalFailures)}`);
   setText("messagesPendingDecision", pendingCandidates.length ? `${pendingCandidates.length}건 확인` : "대기 없음");
-  setText("messagesRiskDecision", totalFailures ? `${totalFailures}건 실패` : "위험 낮음");
+  setText("messagesRiskDecision", partial ? "일부 조회" : totalFailures ? `${totalFailures}건 실패` : "미해결 실패 없음");
 
   const renderAlimtalkRow = (item, options = {}) => {
     const title = alimtalkRowTitle(item);
@@ -2476,7 +2609,7 @@ function renderMessages(candidates, sends) {
   const candidateList = qs("messagesCandidateList");
   candidateList.innerHTML = candidates.length
     ? candidates.map((item) => renderAlimtalkRow(item)).join("")
-    : `<div class="empty-state">최근 alimtalkCandidates 문서가 없습니다.</div>`;
+    : `<div class="empty-state">최근 알림톡 내역이 없습니다.</div>`;
 
   const sendList = qs("messagesSendList");
   if (sendList) {
@@ -2491,7 +2624,7 @@ function renderMessages(candidates, sends) {
     ];
     sendList.innerHTML = failureRows.length
       ? failureRows.map((item) => renderAlimtalkRow(item, { status: (row) => row.status || row.sendStatus || "failed" })).join("")
-      : `<div class="empty-state">현재 확인할 실패 알림톡이 없습니다.</div>`;
+      : `<div class="empty-state">${partial ? "일부 내역만 조회되어 전체 실패 여부를 확정할 수 없습니다." : "현재 확인할 실패 알림톡이 없습니다."}</div>`;
   }
 
   const templateList = qs("messagesTemplateList");
@@ -3081,16 +3214,35 @@ function normalizeCarNumber(value) {
   return String(value || "").replace(/[\s-]/g, "").toUpperCase();
 }
 
+function parkingJobNeedsAttention(item) {
+  return item.reason !== "no_entry" && !isResolvedOperationalItem(item) &&
+    (["manual_review", "failed", "error", "blocked"].includes(item.status) || item.operatorAlertStatus === "failed");
+}
+
+function parkingJobStatusLabel(item) {
+  if (item.reason === "no_entry") return "입차 미확인";
+  return { applied: "할인 적용", already_applied: "적용 확인됨", manual_review: "확인 필요" }[item.reason] ||
+    { completed: "완료", succeeded: "완료" }[item.status] || item.status || "pending";
+}
+
 function renderParkingDashboard() {
   const vehicleList = qs("parkingVehicleList");
   const jobList = qs("parkingJobList");
   const vehicleCount = qs("parkingVehicleCount");
   const jobCount = qs("parkingJobCount");
   if (!vehicleList && !jobList) return;
+  if (readUnavailable("parkingDashboard")) {
+    if (vehicleCount) vehicleCount.textContent = "확인 필요";
+    if (jobCount) jobCount.textContent = "확인 필요";
+    for (const element of [vehicleList, jobList]) if (element) element.innerHTML = '<div class="empty-state">주차 현황을 불러오지 못했습니다.</div>';
+    return;
+  }
   const vehicles = [...(state.parkingVehicles || [])].sort((a, b) => timestampMs(b.updatedAt) - timestampMs(a.updatedAt));
   const jobs = [...(state.parkingJobs || [])].sort((a, b) => timestampMs(b.updatedAt || b.createdAt) - timestampMs(a.updatedAt || a.createdAt));
   if (vehicleCount) vehicleCount.textContent = `${vehicles.length}대`;
-  if (jobCount) jobCount.textContent = `${jobs.length}건`;
+  const todayJobs = jobs.filter((item) => timestampMs(item.updatedAt || item.createdAt) >= todayStartMs(new Date()) || parkingJobNeedsAttention(item));
+  const historyJobs = jobs.filter((item) => !todayJobs.includes(item));
+  if (jobCount) jobCount.textContent = `오늘·확인 필요 ${todayJobs.length}건`;
 
   if (vehicleList) {
     vehicleList.innerHTML = vehicles.length
@@ -3125,17 +3277,15 @@ function renderParkingDashboard() {
   }
 
   if (jobList) {
-    jobList.innerHTML = jobs.length
-      ? jobs
-          .slice(0, 20)
-          .map((item) => {
+    const renderJob = (item) => {
             const name = item.memberName || item.staffName || item.ownerName || item.visitorName || "대상";
             const result = item.result || {};
             const hours =
               result.totalSatisfiedHours || result.appliedHours || item.requestedDiscountHours
                 ? `${result.totalSatisfiedHours || result.appliedHours || 0}/${item.requestedDiscountHours || 4}시간`
                 : "4시간 요청";
-            const reason = item.lastError || item.reason || item.jobId || item.id;
+            const reason = item.reason === "no_entry" ? "입차 기록 없음" : item.lastError ||
+              ({ applied: "", already_applied: "이미 할인 적용됨" }[item.reason] ?? item.reason ?? "");
             const alertFailure = item.operatorAlertStatus === "failed"
               ? ` · 확인메일 실패: ${item.operatorAlertLastError || "전송 결과 확인 필요"}`
               : "";
@@ -3145,12 +3295,12 @@ function renderParkingDashboard() {
                   <strong>${escapeHtml(name)} · 끝자리 ${escapeHtml(item.carNumberLast4 || "")}</strong>
                   <p>${escapeHtml(hours)} · ${escapeHtml(formatDate(item.updatedAt || item.createdAt))}${reason ? ` · ${escapeHtml(reason)}` : ""}${escapeHtml(alertFailure)}</p>
                 </div>
-                ${pill(item.status || "pending")}
+                ${pill(parkingJobStatusLabel(item))}
               </div>
             `;
-          })
-          .join("")
-      : `<div class="empty-state">최근 주차권 작업이 없습니다. 오늘 자동적용 실행 후 상태가 표시됩니다.</div>`;
+          };
+    jobList.innerHTML = todayJobs.map(renderJob).join("") || `<div class="empty-state">오늘 주차 작업이 없습니다.</div>`;
+    if (historyJobs.length) jobList.innerHTML += `<details><summary>이전 내역 ${historyJobs.length}건</summary>${historyJobs.map(renderJob).join("")}</details>`;
   }
 }
 
@@ -3163,12 +3313,14 @@ async function loadParkingDashboard(runtime) {
     state.parkingVehicles = Array.isArray(data.vehicles) ? data.vehicles : [];
     state.parkingJobs = Array.isArray(data.jobs) ? data.jobs : [];
     state.parkingConfig = data.config || null;
+    setReadState("parkingDashboard", "success", { count: state.parkingVehicles.length + state.parkingJobs.length });
     const config = state.parkingConfig;
     if (config?.discountUnitHours && config?.maxAutoDiscountHours) {
       setText("parkingPolicyPill", `${config.discountUnitHours}시간 × ${Math.floor(config.maxAutoDiscountHours / config.discountUnitHours)}계정`);
     }
   } catch (error) {
     state.readWarnings.push({ label: "parkingDashboard", message: error?.message || String(error) });
+    setReadState("parkingDashboard", "unavailable", { message: error?.message || String(error) });
     state.parkingVehicles = [];
     state.parkingJobs = [];
     setParkingStatus("주차등록 데이터를 불러오지 못했습니다. 운영자 권한 또는 Functions 배포 상태를 확인하세요.", "danger");
@@ -4561,7 +4713,7 @@ function currentPrivateSessionRows(sessions, referenceDate = new Date()) {
   const start = todayStartMs(referenceDate);
   const end = start + 24 * 60 * 60 * 1000;
   const overdueStart = start - 7 * 24 * 60 * 60 * 1000;
-  return [...sessions]
+  return sessions.map(currentPrivateSessionState)
     .filter((session) => {
       const ms = timestampMs(session.lessonStartAt || session.lessonDate);
       if (!ms) return false;
@@ -4569,6 +4721,34 @@ function currentPrivateSessionRows(sessions, referenceDate = new Date()) {
       return ms >= overdueStart && ms < start && !["delivered", "cancelled"].includes(String(session.workflowStage || ""));
     })
     .sort((a, b) => timestampMs(a.lessonStartAt || a.lessonDate) - timestampMs(b.lessonStartAt || b.lessonDate));
+}
+
+function currentPrivateSessionState(session) {
+  if (session.workflowStage !== "delivered") return session;
+  const record = state.privateRecords.find((item) => [session.legacyRecordId, session.sessionId, session.id].includes(item.recordId || item.id));
+  const sent = session.deliveryStatus === "sent" || session.sentRevision || record?.sentRevision ||
+    record?.publicReportApproval?.status === "sent" || record?.publicReportApproval?.sentAt;
+  return sent ? session : { ...session, workflowStage: session.postStatus === "submitted" ? "report_review" : "recording" };
+}
+
+function privateSessionAction(session) {
+  if (session.workflowStage === "cancelled") return "수업 취소";
+  if (session.workflowStage === "delivered") return "리포트 전달 완료";
+  if (session.workflowStage === "needs_review") return "수업·회차 확인 필요";
+  if (session.workflowStage === "report_review") return session.deliveryStatus === "failed" ? "발송 결과 확인" : "리포트 확인 후 발송";
+  return timestampMs(session.lessonStartAt || session.lessonDate) > Date.now() ? "수업 후 기록 예정" : "수업 후 기록 작성";
+}
+
+function privateSessionHref(session) {
+  const request = state.privateRequests.find((item) => [session.legacyRequestId, session.sessionId, session.id].includes(item.requestId || item.id));
+  const raw = request?.postShortUrl || request?.postUrl;
+  if (raw) {
+    try {
+      const url = new URL(raw);
+      if (url.protocol === "https:" && ["in.archivepilates.com", "archive-pilates.web.app"].includes(url.hostname)) return url.href;
+    } catch { /* A malformed stored link must not bypass the existing authenticated detail view. */ }
+  }
+  return coreHref(`members/detail/?id=${encodeURIComponent(session.memberId || "")}`);
 }
 
 function privateSessionLine(session) {
@@ -4584,10 +4764,10 @@ function privateSessionLine(session) {
 function renderPrivateSessionCard(session) {
   return `
     <div class="stage-card">
-      <strong>${escapeHtml(privateSessionLine(session))}</strong>
-      <p>${escapeHtml(session.nextAction || "상태 확인")}</p>
+      <strong><a href="${escapeHtml(privateSessionHref(session))}">${escapeHtml(privateSessionLine(session))}</a></strong>
+      <p>${escapeHtml(privateSessionAction(session))}</p>
       <div class="tag-row">
-        <span class="pill ${session.roundVerified === false ? "warn" : "good"}">${session.roundVerified === false ? "회차 확인" : "회차 확인됨"}</span>
+        <span class="pill ${session.roundVerified === true ? "good" : "warn"}">${session.roundVerified === true ? "회차 확인됨" : "회차 확인 필요"}</span>
         ${session.lastError ? `<span class="pill warn">오류 확인</span>` : ""}
       </div>
     </div>
@@ -4597,7 +4777,17 @@ function renderPrivateSessionCard(session) {
 function renderPrivateSessions(sessions) {
   const list = qs("privateProgressList");
   if (!list) return;
-  const rows = currentPrivateSessionRows(sessions);
+  const today = todayStartMs(new Date());
+  const rows = currentPrivateSessionRows(sessions).filter((row) => privateScope === "overdue"
+    ? timestampMs(row.lessonStartAt || row.lessonDate) < today
+    : timestampMs(row.lessonStartAt || row.lessonDate) >= today);
+  document.querySelectorAll("[data-private-scope]").forEach((button) => {
+    const selected = button.dataset.privateScope === privateScope;
+    button.setAttribute("aria-selected", String(selected));
+    button.classList.toggle("is-active", selected);
+    button.tabIndex = selected ? 0 : -1;
+    if (selected && button.id) qs("privateScopePanel")?.setAttribute("aria-labelledby", button.id);
+  });
   const activeRows = rows.filter((row) => row.workflowStage !== "cancelled");
   const groups = {
     recording: activeRows.filter((row) => ["preparation", "recording"].includes(row.workflowStage)),
@@ -4635,7 +4825,7 @@ function renderPrivateSessions(sessions) {
             `,
           )
           .join("")
-      : `<div class="empty-state">오늘 남은 강사 작업이 없습니다.</div>`;
+      : `<div class="empty-state">선택한 기간에 남은 강사 작업이 없습니다.</div>`;
   }
 
   list.innerHTML = [
@@ -4650,6 +4840,7 @@ function renderPrivateSessions(sessions) {
           <div class="stage-column-header"><strong>${escapeHtml(title)}</strong><span>${stageRows.length.toLocaleString("ko-KR")}건</span></div>
           <div class="stage-card-list">
             ${stageRows.length ? stageRows.slice(0, 20).map(renderPrivateSessionCard).join("") : `<div class="empty-state">해당 단계 수업 없음</div>`}
+            ${stageRows.length > 20 ? `<details><summary>나머지 ${stageRows.length - 20}건 보기</summary>${stageRows.slice(20).map(renderPrivateSessionCard).join("")}</details>` : ""}
           </div>
         </article>
       `,
@@ -4765,7 +4956,12 @@ function renderPrivateProgress(requests, records, ledgerEntries, candidates = []
 
 function renderPrivate(requests, records, ledgerEntries, candidates = [], sends = [], sessions = []) {
   if (!qs("privateProgressList")) return;
-  if (sessions.length) {
+  if (readUnavailable("privateLessonSessions") || readUnavailable("privateLessonChartRecords")) {
+    ["privatePendingCount", "privatePreStageCount", "privatePostStageCount", "privateCompleteStageCount"].forEach((id) => setText(id, "확인 필요"));
+    ["privateProgressList", "privateInstructorPendingList"].forEach((id) => { if (qs(id)) qs(id).innerHTML = '<div class="empty-state">수업 진행 정보를 불러오지 못했습니다. 새로고침 후 확인해 주세요.</div>'; });
+    return;
+  }
+  if (sessions.length || readState("privateLessonSessions").status !== "idle") {
     setText("privateRequestCount", String(sessions.length));
     setText("privateRecordCount", String(sessions.filter((item) => item.postStatus === "submitted").length));
     setText("privateUsageCount", String(sessions.filter((item) => item.bookingId).length));
@@ -5205,16 +5401,17 @@ function failedAutomationItems() {
 
 function pendingAlimtalkCandidates() {
   return uniqueOperatorItems(
-    state.alimtalkCandidates.filter((item) => isPendingStatus(item.status) && !isNonActionableCommunicationItem(item)),
+    communicationActionItems("alimtalkCandidates").filter((item) => isPendingStatus(item.status) && !isNonActionableCommunicationItem(item)),
     "alimtalk-candidate",
   );
 }
 
 function communicationProblemSummary() {
-  const failedCandidates = failedAlimtalkCandidates();
   const failedSends = failedAlimtalkSends();
+  const failedSendCandidateIds = new Set(failedSends.map((item) => item.candidateId).filter(Boolean));
+  const failedCandidates = failedAlimtalkCandidates().filter((item) => !failedSendCandidateIds.has(item.candidateId || item.id));
   const flowProblems = problemRequestRows();
-  const pendingCandidates = pendingAlimtalkCandidates();
+  const pendingCandidates = pendingAlimtalkCandidates().filter((item) => !failedSendCandidateIds.has(item.candidateId || item.id));
   return { failedCandidates, failedSends, flowProblems, pendingCandidates };
 }
 
@@ -5223,12 +5420,16 @@ function renderHomeDecisions() {
   if (!list) return;
   const failedAutomation = failedAutomationItems();
   const { failedCandidates, failedSends, flowProblems, pendingCandidates } = communicationProblemSummary();
-  const renewalRows = renewalCandidateRows();
-  const renewalUrgent = renewalRows.filter((row) => row.priority === "urgent").length;
+  const renewalRows = activeRenewalMemberRows();
+  const renewalUrgent = renewalRows.filter((row) => row.view === "today").length;
   const sendFailures = failedCandidates.length + failedSends.length;
   const rows = [];
 
-  if (renewalRows.length) {
+  if (homeActionReadsIncomplete()) {
+    rows.push({ title: "일부 업무를 확인하지 못했습니다", detail: "새로고침 후 연결 상태를 확인해 주세요. 아래 건수는 조회된 내역만 포함합니다.", status: "warning", href: "#connectionDetail" });
+  }
+
+  if (renewalUrgent) {
     rows.push({
       title: "재등록 관리",
       detail: renewalUrgent
@@ -5298,69 +5499,70 @@ function renderHomeDecisions() {
 function renderHomeSummary() {
   if (!qs("commandQueueStatus")) return;
   const failedAutomation = failedAutomationItems();
-  const renewalRows = renewalCandidateRows();
-  const renewalUrgent = renewalRows.filter((row) => row.priority === "urgent").length;
-  const renewalSoon = renewalRows.filter((row) => row.priority === "warning" || row.priority === "follow").length;
-  const renewalWaiting = renewalRows.filter((row) => row.priority === "waiting").length;
+  const renewalRows = activeRenewalMemberRows();
+  const renewalUrgent = renewalRows.filter((row) => row.view === "today").length;
   const { failedCandidates, failedSends, flowProblems, pendingCandidates } = communicationProblemSummary();
   const communicationProblems = failedCandidates.length + failedSends.length + flowProblems.length;
   const actionTotal = communicationProblems + pendingCandidates.length + failedAutomation.length + renewalUrgent;
-  setText("commandQueueStatus", actionTotal ? `${actionTotal}건 확인 필요` : "오늘 처리할 큐 없음");
+  const incomplete = homeActionReadsIncomplete();
+  setText("commandQueueStatus", incomplete ? "업무 조회 확인 필요" : actionTotal ? `${actionTotal}건 확인 필요` : "오늘 처리할 일 없음");
   setText(
     "commandQueueNote",
-    actionTotal
+    incomplete ? "일부 내역을 확인하지 못했습니다." : actionTotal
       ? "회원 응대, 알림톡, 자동화 중 확인할 항목입니다."
       : "오늘 확인할 문제가 없습니다.",
   );
-  renderRenewalPipeline(renewalRows, { urgent: renewalUrgent, soon: renewalSoon, waiting: renewalWaiting });
+  renderRenewalPipeline();
 }
 
-function renderRenewalPipeline(rows = renewalCandidateRows(), counts = null) {
+function renderRenewalPipeline(rows = renewalCandidateRows()) {
   const list = qs("renewalPipelineList");
   if (!list) return;
-  const computedCounts =
-    counts || {
-      urgent: rows.filter((row) => row.priority === "urgent").length,
-      soon: rows.filter((row) => row.priority === "warning" || row.priority === "follow").length,
-      waiting: rows.filter((row) => row.priority === "waiting").length,
-    };
-  setText("renewalUrgentCount", formatCount(computedCounts.urgent, "명"));
-  setText("renewalSoonCount", formatCount(computedCounts.soon, "명"));
-  setText("renewalWaitingCount", formatCount(computedCounts.waiting, "명"));
-  setText("renewalPipelineCount", formatCount(rows.length, "명"));
-  if (!rows.length) {
-    list.innerHTML = `<div class="empty-state">현재 30일 내 만료, 잔여 부족, 재등록 대기 후보가 없습니다.</div>`;
+  if (readUnavailable("renewalCases") || readUnavailable("renewalMemberProfiles")) {
+    ["renewalUrgentCount", "renewalSoonCount", "renewalWaitingCount", "renewalPipelineCount"].forEach((id) => setText(id, "확인 필요"));
+    list.innerHTML = `<div class="empty-state">재등록 원본을 불러오지 못했습니다. 새로고침 후 확인해 주세요.</div>`;
     return;
   }
-  list.innerHTML = rows
-    .map((row) => {
-      const phone = row.phone ? formatPhoneNumber(row.phone) : "전화번호 없음";
-      const visit = row.member.recentVisitAt ? `최근 방문 ${compactDateTime(row.member.recentVisitAt)}` : "최근 방문 없음";
-      const pace = row.weeklyUsagePace ? `주 ${row.weeklyUsagePace}회` : "이용속도 확인 전";
-      const depletion = row.predictedDepletionDate ? `예상 소진 ${row.predictedDepletionDate}` : "예상 소진일 없음";
-      const nextBooking = row.nextBookingDate ? `다음 예약 ${row.nextBookingDate}` : visit;
-      const detail = `${row.reason} · ${row.ticketName} · ${pace} · ${depletion} · ${nextBooking} · ${row.action}`;
-      const actions = row.renewalCaseId
-        ? `<div class="renewal-actions" aria-label="${escapeHtml(row.name)} 재등록 상태 변경">
-            <button type="button" data-renewal-action="contacted" data-renewal-case-id="${escapeHtml(row.renewalCaseId)}">연락완료</button>
-            <button type="button" data-renewal-action="considering" data-renewal-case-id="${escapeHtml(row.renewalCaseId)}">고민중</button>
-            <button type="button" data-renewal-action="snoozed" data-renewal-case-id="${escapeHtml(row.renewalCaseId)}">7일 후</button>
-            <button type="button" data-renewal-action="resolved" data-renewal-case-id="${escapeHtml(row.renewalCaseId)}">재등록완료</button>
-            <button type="button" data-renewal-action="excluded" data-renewal-case-id="${escapeHtml(row.renewalCaseId)}">재등록 의사 없음</button>
-          </div>`
-        : "";
-      return `
-        <article class="status-row renewal-row ${row.priority}">
-          <div>
-            <strong><a class="renewal-member-link" href="${escapeHtml(row.href)}">${escapeHtml(row.name)}</a><small>${escapeHtml(phone)}</small></strong>
-            <p>${escapeHtml(detail)}</p>
-            ${actions}
-          </div>
-          ${pill(row.workflowStatus ? renewalWorkflowStatusLabel(row.workflowStatus) : renewalStatusValue(row.priority))}
-        </article>
-      `;
-    })
-    .join("");
+  const active = groupRenewalRows(rows.filter((row) => row.view !== "history"));
+  const history = groupRenewalRows(rows.filter((row) => row.view === "history"));
+  const count = (view) => active.filter((row) => row.view === view).length;
+  setText("renewalUrgentCount", formatCount(count("today"), "명"));
+  setText("renewalSoonCount", formatCount(count("planned"), "명"));
+  setText("renewalWaitingCount", formatCount(count("return"), "명"));
+  setText("renewalPipelineCount", `${state.readTruncated.renewalCases ? "최소 " : ""}${formatCount(active.length, "명")}`);
+  document.querySelectorAll("[data-renewal-view]").forEach((button) => {
+    const selected = button.dataset.renewalView === renewalView;
+    button.setAttribute("aria-selected", String(selected));
+    button.classList.toggle("is-active", selected);
+    button.tabIndex = selected ? 0 : -1;
+    if (selected && button.id) list.setAttribute("aria-labelledby", button.id);
+  });
+  const visible = renewalView === "history" ? history : active.filter((row) => row.view === renewalView);
+  list.innerHTML = visible.slice(0, renewalVisibleLimit).map((row) => `
+    <details class="renewal-member-row">
+      <summary><span><strong>${escapeHtml(row.name)}</strong><small>${escapeHtml(row.phone ? formatPhoneNumber(row.phone) : "연락처 확인 필요")}</small></span><span>${escapeHtml(row.reason)}${row.cases.length > 1 ? ` · 수강권 ${row.cases.length}건` : ""}</span>${pill(row.recovered ? "재등록 확인됨" : renewalWorkflowStatusLabel(row.workflowStatus))}</summary>
+      <div class="renewal-member-body">
+        <a class="renewal-member-link" href="${escapeHtml(row.href)}">회원 상세</a>
+        ${row.cases.map(renderRenewalCaseDetail).join("")}
+      </div>
+    </details>`).join("") || `<div class="empty-state">${renewalView === "today" ? "오늘 연락할 회원이 없습니다." : "이 분류에 해당하는 상담이 없습니다."}</div>`;
+  if (visible.length > renewalVisibleLimit) list.innerHTML += `<button class="secondary-action" type="button" data-renewal-more>20명 더 보기 (${renewalVisibleLimit}/${visible.length})</button>`;
+}
+
+function renderRenewalCaseDetail(row) {
+  const parts = [row.ticketName, row.reason];
+  if (row.weeklyUsagePace) parts.push(`주 ${row.weeklyUsagePace}회`);
+  if (row.predictedDepletionDate && !row.reason.includes(row.predictedDepletionDate)) parts.push(`예상 소진 ${row.predictedDepletionDate}`);
+  if (row.nextBookingDate) parts.push(`다음 예약 ${row.nextBookingDate}`);
+  else if (row.member.recentVisitAt) parts.push(`최근 방문 ${compactDateTime(row.member.recentVisitAt)}`);
+  if (row.nextActionAt) parts.push(`다시 연락 ${formatDate(row.nextActionAt)}`);
+  const canEdit = row.renewalCaseId && row.view !== "history" && row.sourceVerified;
+  return `<div class="renewal-case-detail"><p>${escapeHtml(parts.filter(Boolean).join(" · "))}</p>
+    ${row.recovered ? "<p>새 수강권이 확인되어 진행 목록에서 제외했습니다.</p>" : !row.sourceVerified ? "<p>회원 원본 확인이 필요합니다.</p>" : ""}
+    ${canEdit ? `<div class="renewal-actions"><select aria-label="${escapeHtml(row.name)} ${escapeHtml(row.ticketName)} 상담 상태">
+      ${["contacted", "considering", "snoozed", "resolved", "excluded"].map((status) => `<option value="${status}"${row.workflowStatus === status ? " selected" : ""}>${status === "snoozed" ? "7일 후" : renewalWorkflowStatusLabel(status)}</option>`).join("")}
+      </select><button type="button" data-renewal-action="selected" data-renewal-case-id="${escapeHtml(row.renewalCaseId)}">저장</button></div>` : ""}
+  </div>`;
 }
 
 function renewalWorkflowStatusLabel(status) {
@@ -5377,10 +5579,15 @@ function renewalWorkflowStatusLabel(status) {
 }
 
 async function handleRenewalActionClick(event) {
+  if (event.target.closest("[data-renewal-more]")) {
+    renewalVisibleLimit += 20;
+    renderRenewalPipeline();
+    return;
+  }
   const button = event.target.closest("[data-renewal-action]");
   if (!button) return;
   const caseId = String(button.dataset.renewalCaseId || "");
-  const workflowStatus = String(button.dataset.renewalAction || "");
+  const workflowStatus = String(button.dataset.renewalAction === "selected" ? button.closest(".renewal-actions")?.querySelector("select")?.value : button.dataset.renewalAction || "");
   if (!caseId || !["contacted", "considering", "snoozed", "resolved", "excluded"].includes(workflowStatus)) return;
   if (workflowStatus === "excluded" && !window.confirm("재등록 의사 없음으로 처리할까요? 현재 재등록 목록에서 숨겨집니다.")) return;
   button.disabled = true;
@@ -5640,22 +5847,26 @@ function currentStaffMetric(metrics = []) {
 }
 
 function validMetricRate(value) {
-  if (!Number.isFinite(Number(value))) return null;
+  if (!hasMetricValue(value)) return null;
   const numeric = toNumber(value);
   return numeric >= 0 && numeric <= 100 ? numeric : null;
 }
 
 function formatMetricRate(value) {
   const numeric = validMetricRate(value);
-  return numeric === null ? (Number.isFinite(Number(value)) ? "원본 확인" : "연결 대기") : `${numeric.toFixed(1).replace(/\.0$/, "")}%`;
+  return numeric === null ? (hasMetricValue(value) ? "원본 확인" : "자료 없음") : `${numeric.toFixed(1).replace(/\.0$/, "")}%`;
+}
+
+function hasMetricValue(value) {
+  return value !== null && value !== undefined && String(value).trim() !== "" && Number.isFinite(Number(value));
 }
 
 function formatMetricNumber(value, suffix = "") {
-  return Number.isFinite(Number(value)) ? `${toNumber(value).toLocaleString("ko-KR")}${suffix}` : "연결 대기";
+  return hasMetricValue(value) ? `${toNumber(value).toLocaleString("ko-KR")}${suffix}` : "자료 없음";
 }
 
 function scoreBand(score) {
-  if (!Number.isFinite(Number(score))) return { label: "산출 대기", tone: "muted" };
+  if (!hasMetricValue(score)) return { label: "평가 전", tone: "muted" };
   if (score >= 85) return { label: "우수", tone: "good" };
   if (score >= 75) return { label: "안정", tone: "good" };
   if (score >= 65) return { label: "관찰", tone: "warn" };
@@ -5663,7 +5874,7 @@ function scoreBand(score) {
 }
 
 function normalizeGroupAverageScore(value) {
-  if (!Number.isFinite(Number(value))) return null;
+  if (!hasMetricValue(value)) return null;
   const targetAverage = 4.5;
   return Math.max(0, Math.min(100, Math.round((toNumber(value) / targetAverage) * 100)));
 }
@@ -5675,8 +5886,8 @@ function staffCompositeScore(row, metrics, latestQuiz) {
       key: "quiz",
       label: "평가 퀴즈",
       weight: 35,
-      value: latestQuiz ? Math.max(0, Math.min(100, toNumber(latestQuiz.scorePercent))) : null,
-      display: latestQuiz ? `${Math.round(toNumber(latestQuiz.scorePercent))}점` : "미응시",
+      value: hasMetricValue(latestQuiz?.scorePercent) ? Math.max(0, Math.min(100, toNumber(latestQuiz.scorePercent))) : null,
+      display: hasMetricValue(latestQuiz?.scorePercent) ? `${Math.round(toNumber(latestQuiz.scorePercent))}점` : "평가 전",
     },
     {
       key: "reservation",
@@ -5700,9 +5911,9 @@ function staffCompositeScore(row, metrics, latestQuiz) {
       display: latestMetric ? formatMetricRate(latestMetric.attendanceRate) : "연결 대기",
     },
   ];
-  const active = definitions.filter((item) => Number.isFinite(Number(item.value)));
+  const active = definitions.filter((item) => hasMetricValue(item.value));
   const totalWeight = active.reduce((sum, item) => sum + item.weight, 0);
-  const score = latestQuiz && latestMetric && active.length >= 3 && totalWeight >= 65
+  const score = hasMetricValue(latestQuiz?.scorePercent) && latestMetric && active.length >= 3 && totalWeight >= 65
     ? Math.round(active.reduce((sum, item) => sum + item.value * item.weight, 0) / totalWeight)
     : null;
   return {
@@ -5747,7 +5958,7 @@ function renderStaffDetail(row) {
     "staffDetailSubtitle",
     [
       staffEmploymentLabel(row),
-      row.role || "instructor",
+      { owner: "운영자", instructor: "강사", manager: "관리자" }[row.role] || "강사",
       latestQuiz ? `최근 평가 ${Math.round(toNumber(latestQuiz.scorePercent))}점` : "평가 기록 없음",
       lastUpdated,
     ]
@@ -5785,7 +5996,7 @@ function renderStaffDetail(row) {
         <div>
           <span>강사 평가 종합 점수</span>
           <strong>${composite.score === null ? "산출 대기" : `${composite.score}점`}</strong>
-          <em>v1 산식 · 연결 항목 ${composite.activeCount}/${composite.totalCount} · 가중치 ${composite.coverage}%</em>
+          <em>평가 자료 ${composite.activeCount}/${composite.totalCount}개</em>
         </div>
         <span class="pill ${escapeHtml(composite.band.tone)}">${escapeHtml(composite.band.label)}</span>
       </div>
@@ -7002,6 +7213,7 @@ function renderInstructorLessonSchedule(schedule = state.instructorLessonRegistr
   if (readUnavailable("instructorLessonRegistrations")) {
     setText("instructorLessonScheduleSummary", "확인 필요");
     container.innerHTML = '<div class="empty-state danger">일정과 예약 원본을 읽지 못했습니다.</div>';
+    renderInstructorLessonRoster(null);
     return;
   }
   const items = Array.isArray(schedule?.items) ? schedule.items : [];
@@ -7012,6 +7224,7 @@ function renderInstructorLessonSchedule(schedule = state.instructorLessonRegistr
   );
   if (!items.length) {
     container.innerHTML = '<div class="empty-state">예정된 강사레슨 접수 또는 예약이 없습니다.</div>';
+    renderInstructorLessonRoster(null);
     return;
   }
   container.innerHTML = items.map((item) => {
@@ -7040,8 +7253,31 @@ function renderInstructorLessonSchedule(schedule = state.instructorLessonRegistr
           <span style="width:${percentage}%"></span>
         </div>
         <small class="instructor-seat-source">${escapeHtml(instructorLessonScheduleSourceLabel(item.countSource))}</small>
+        <button type="button" class="secondary-action" data-instructor-schedule-date="${escapeHtml(item.date)}" aria-controls="instructorLessonScheduleDetail" aria-expanded="${selectedInstructorLessonDate === item.date}">수강 명단 보기</button>
       </article>
     `;
+  }).join("");
+  renderInstructorLessonRoster(items.find((item) => item.date === selectedInstructorLessonDate));
+}
+
+function renderInstructorLessonRoster(schedule) {
+  const container = qs("instructorLessonScheduleDetail");
+  if (!container) return;
+  if (!schedule) { container.innerHTML = ""; return; }
+  const roster = schedule.roster;
+  const registrations = state.instructorLessonRegistrationDashboard?.items || [];
+  if (!Array.isArray(roster)) {
+    container.innerHTML = '<div class="empty-state">명단 연결 확인이 필요합니다. 접수 건수와 수강권 보유 인원은 다를 수 있습니다.</div>';
+    return;
+  }
+  container.innerHTML = `<h3>${escapeHtml(instructorLessonScheduleDateLabel(schedule.date))} · ${roster.length}명</h3>` + roster.map((member) => {
+    const registration = registrations.find((item) => member.registrationId && item.registrationId === member.registrationId);
+    const steps = registration?.steps || {};
+    const details = registration
+      ? [`가입서 ${instructorLessonStepStatusLabel(steps.eformsign?.status || "pending")}`, `안내 ${instructorLessonStepStatusLabel(steps.confirmation?.status || "pending")}`].join(" · ")
+      : "가입서·안내 기록 연결 전";
+    const name = member.memberId ? `<a href="${escapeHtml(coreHref(`members/detail/?id=${encodeURIComponent(member.memberId)}`))}">${escapeHtml(member.memberName)}</a>` : escapeHtml(member.memberName);
+    return `<div class="status-row"><div><strong>${name}</strong><p>${escapeHtml(details)}</p></div><span class="pill">${escapeHtml(instructorLessonScheduleSourceLabel(schedule.countSource))}</span></div>`;
   }).join("");
 }
 
@@ -7474,7 +7710,9 @@ async function refresh() {
     ]);
 
     const renewalCaseItems = studioItems(renewalCases);
-    const renewalMemberIds = actionableRenewalCaseItems(renewalCaseItems)
+    state.readTruncated.renewalCases = renewalCaseItems.length >= 1000;
+    const renewalMemberIds = renewalCaseItems
+      .filter((item) => item.active !== false && !["resolved", "excluded"].includes(item.workflowStatus))
       .filter((item) => isRenewalManagedTicket({ name: item.ticketName || "" }))
       .map((item) => item.memberId);
     const renewalMembers =
@@ -7484,7 +7722,15 @@ async function refresh() {
             () => getCollectionDocumentsByIds(db, runtime, "memberProfiles", renewalMemberIds, 1000),
             [],
           )
-        : [];
+        : await safeRead("renewalMemberProfiles", async () => [], []);
+
+    if (shouldLoadHome || shouldLoadMessages) {
+      state.communicationActions = Object.fromEntries(await Promise.all(
+        Object.keys(COMMUNICATION_ACTION_FIELDS).map(async (name) => [name,
+          await safeRead(`actions:${name}`, () => getCommunicationActions(db, runtime, name), []),
+        ]),
+      ));
+    }
 
     state.lane = laneSnapshot?.exists?.() ? laneSnapshot.data() : { status: "active" };
     state.automationItems = automationItems;
@@ -7650,6 +7896,19 @@ qs("parkingOwnerType")?.addEventListener("change", syncParkingVisitorFields);
 qs("parkingAutoApplyButton")?.addEventListener("click", handleParkingAutoApplyClick);
 qs("parkingVehicleList")?.addEventListener("click", handleParkingVehicleListClick);
 qs("renewalPipelineList")?.addEventListener("click", handleRenewalActionClick);
+qs("renewalViewTabs")?.addEventListener("click", (event) => {
+  const button = event.target.closest("[data-renewal-view]");
+  if (!button) return;
+  renewalView = button.dataset.renewalView;
+  renewalVisibleLimit = 20;
+  renderRenewalPipeline();
+});
+qs("privateScopeTabs")?.addEventListener("click", (event) => {
+  const button = event.target.closest("[data-private-scope]");
+  if (!button) return;
+  privateScope = button.dataset.privateScope;
+  renderPrivate(state.privateRequests, state.privateRecords, state.privateLedgerEntries, state.alimtalkCandidates, state.alimtalkSends, state.privateSessions);
+});
 qs("commandPaletteOpen")?.addEventListener("click", openCommandPalette);
 qs("commandPaletteInput")?.addEventListener("input", handleCommandPaletteInput);
 qs("commandPalette")?.addEventListener("click", (event) => {
@@ -7672,6 +7931,12 @@ qs("videoWatchBuyerList")?.addEventListener("click", handleVideoWatchMemberClick
 qs("instructorLessonRegistrationForm")?.addEventListener("submit", handleInstructorLessonRegistrationSubmit);
 qs("instructorLessonRegistrationFilters")?.addEventListener("click", handleInstructorLessonRegistrationFilter);
 qs("instructorLessonRegistrationList")?.addEventListener("click", handleInstructorLessonConfirmation);
+qs("instructorLessonScheduleList")?.addEventListener("click", (event) => {
+  const button = event.target.closest("[data-instructor-schedule-date]");
+  if (!button) return;
+  selectedInstructorLessonDate = selectedInstructorLessonDate === button.dataset.instructorScheduleDate ? "" : button.dataset.instructorScheduleDate;
+  renderInstructorLessonSchedule();
+});
 qs("instagramStatusFilter")?.addEventListener("change", () =>
   renderInstagramHistoryList(
     state.instagramDashboard?.items || [],
@@ -7692,6 +7957,23 @@ document.addEventListener("click", (event) => {
   renderStaffHr();
 });
 window.addEventListener("keydown", (event) => {
+  const tab = event.target.closest?.('.workflow-tabs [role="tab"]');
+  if (tab && ["ArrowLeft", "ArrowRight", "Home", "End"].includes(event.key)) {
+    const tabs = [...tab.parentElement.querySelectorAll('[role="tab"]')];
+    const current = tabs.indexOf(tab);
+    const index = event.key === "Home" ? 0 : event.key === "End" ? tabs.length - 1 : (current + (event.key === "ArrowRight" ? 1 : -1) + tabs.length) % tabs.length;
+    event.preventDefault();
+    tabs[index].click();
+    tabs[index].focus();
+  }
+  const palette = qs("commandPalette");
+  if (event.key === "Tab" && palette && !palette.hidden) {
+    const focusable = [...palette.querySelectorAll('button, input, a[href]')].filter((item) => !item.disabled);
+    const first = focusable[0];
+    const last = focusable.at(-1);
+    if (event.shiftKey && document.activeElement === first) { event.preventDefault(); last?.focus(); }
+    if (!event.shiftKey && document.activeElement === last) { event.preventDefault(); first?.focus(); }
+  }
   const isCommandSearch = (event.metaKey || event.ctrlKey) && event.key.toLowerCase() === "k";
   if (isCommandSearch) {
     event.preventDefault();

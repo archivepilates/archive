@@ -45,6 +45,7 @@
         <section class="panel rules-index" aria-labelledby="rulesIndexTitle">
           <div class="panel-header"><div><h2 id="rulesIndexTitle">운영규칙 위계</h2><p>운영자가 문제를 찾을 때 이 순서로 이동합니다.</p></div><span class="pill">2-click map</span></div>
           <nav class="rule-anchor-grid" aria-label="운영규칙 목차">
+            <a href="#operator-workflow">업무 화면 개선<span>오늘 업무, 상담 이력, 상태 구분</span></a>
             <a href="#principles">공통 원칙<span>보안, 원천, 기록</span></a>
             <a href="#data-sync">데이터·동기화<span>StudioMate Excel, Contacts</span></a>
             <a href="#video-watch">영상 시청 분석<span>최근 회원, 개인별 영상 이력</span></a>
@@ -64,6 +65,26 @@
             <a href="#worklines">워크라인<span>스레드, worktree, 승격</span></a>
             <a href="#archive">폐기·보관<span>Notion, API 모드, 레거시</span></a>
           </nav>
+        </section>
+
+        <section class="panel rule-section" id="operator-workflow">
+          <div class="panel-header"><div><h2>업무 화면 개선 · 2026.09.05</h2></div><span class="pill warn">배포 대기</span></div>
+          <div class="rule-grid">
+            <article class="rule-card"><h3>오늘 업무와 이력</h3><ul>
+              <li>재등록은 오늘 연락, 예정, 복귀 대기, 처리 이력으로 나눕니다. 같은 연락처의 회원은 한 줄로 표시하되 수강권별 상담 상태는 각각 저장합니다.</li>
+              <li>새로 조회한 memberProfiles 수강권을 회원 요약보다 우선합니다. 새 수강권이 확인된 건은 처리 이력에 표시하고 원본 상담 문서는 임의로 삭제하지 않습니다.</li>
+              <li>연락완료·고민중·미래 재확인 예약은 예정에, 완료·제외는 이력에 표시합니다. 실제 알림톡 발송 대상·중복 금지 규칙은 변경하지 않습니다.</li>
+              <li>최근 알림톡 내역과 미해결 상태 조회는 분리합니다. 조회 실패는 확인 필요, 상태별 조회 300건 초과는 최소 집계로 표시합니다.</li>
+            </ul></article>
+            <article class="rule-card"><h3>업무별 확인</h3><ul>
+              <li>프라이빗은 오늘과 최근 7일 미처리를 나눕니다. 리포트 공개만으로 전달 완료로 판단하지 않고 발송 상태·기록을 확인합니다.</li>
+              <li>강사레슨 일정의 명단은 좌석 수와 같은 원천 집합으로 표시합니다. 접수 처리 건수와 수강권 보유 인원은 별개의 수치입니다. 반배정·예약은 계속 수동입니다.</li>
+              <li>주차는 오늘 작업과 남아 있는 실제 실패를 우선 표시합니다. 이전 입차 미확인은 이력으로 접으며, 할인·재시도·알림 정책은 유지합니다.</li>
+              <li>평가 자료 없음은 0점이나 개선필요로 해석하지 않습니다. 추천식단 설문 요청과 검토 화면은 서로 연결합니다.</li>
+            </ul></article>
+          </div>
+          <div class="rule-note"><strong>원천·경계</strong><span>memberProfiles, renewalCases, alimtalkCandidates/Sends 및 가입서 요청, privateLessonSessions/ChartRecords, 강사레슨 일정 빌더의 기존 수강권·예약·접수 입력을 사용합니다. 추가 명단은 화면 조회용이며 발송·예약 원천으로 재사용하지 않습니다. 새 컬렉션·타깃 전환·운영 데이터 일괄 변경은 없습니다.</span></div>
+          <div class="rule-note"><strong>진행 상태</strong><span>구현 완료 · 핵심 단위 52건과 합성 데이터 브라우저 76건 검증 통과 · 운영 배포 전. 이후 Hosting CORE와 영향 Functions 배포 승인 후 실제 운영자 화면 및 권한 있는 조회를 재검증합니다. 담당: Codex.</span></div>
         </section>
 
         <section class="panel rule-section" id="principles">

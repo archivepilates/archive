@@ -16,6 +16,8 @@
     "test:contact-staff-precedence": "firebase/kangsain-functions/functions/node_modules/.bin/tsx --test scripts/tests/contact-staff-precedence.test.ts",
     "test:refund-policy": "firebase/kangsain-functions/functions/node_modules/.bin/tsx --test scripts/tests/refund-policy.test.ts",
     "test:renewal": "firebase/kangsain-functions/functions/node_modules/.bin/tsx --test scripts/tests/renewal-policy.test.ts && node --test scripts/tests/renewal-core-visibility.test.mjs",
+    "test:core-operator-workflow": "node --test scripts/tests/core-operator-workflow.test.mjs scripts/tests/renewal-core-visibility.test.mjs scripts/tests/staff-evaluation-identity.test.mjs && firebase/kangsain-functions/functions/node_modules/.bin/tsx --test scripts/tests/private-session-delivery-state.test.ts scripts/tests/instructor-lesson-schedule-roster.test.ts",
+    "verify:core-operator-workflow": "node scripts/verify-core-operator-workflow.mjs",
     "test:eformsign-refund-queue": "node --test scripts/tests/eformsign-refund-queue.test.mjs",
     "process:eformsign-refunds": "node scripts/process-eformsign-refund-jobs.mjs",
     "validate:eformsign-refund-release": "node scripts/validate-eformsign-refund-release.mjs",

@@ -136,15 +136,14 @@ function privateLessonWorkflowStage(
   if (
     record?.publicReportApproval?.status === "sent" ||
     record?.publicReportApproval?.sentAt ||
-    record?.sentRevision ||
-    record?.gptStatus === "published"
+    record?.sentRevision
   ) {
     return "delivered";
   }
   if (
     record?.postSubmittedAt ||
     request?.postStatus === "submitted" ||
-    ["draft_created", "approved"].includes(String(record?.gptStatus || ""))
+    ["draft_created", "approved", "published"].includes(String(record?.gptStatus || ""))
   ) {
     return "report_review";
   }

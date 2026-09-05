@@ -1,7 +1,17 @@
+import { createHash } from "node:crypto";
+
 export const INSTRUCTOR_LESSON_DEFAULT_CAPACITY = 10;
 export const INSTRUCTOR_LESSON_SCHEDULE_WINDOW_DAYS = 120;
 
 type SourceRecord = Record<string, any>;
+type ScheduleMembers = Map<string, Map<string, SourceRecord[]>>;
+
+export type InstructorLessonScheduleRosterRow = {
+  memberKey: string;
+  memberId: string | null;
+  memberName: string;
+  registrationId?: string;
+};
 
 export type InstructorLessonScheduleSummary = {
   date: string;
@@ -17,6 +27,7 @@ export type InstructorLessonScheduleSummary = {
   bookingMemberCount: number;
   ticketHolderCount: number;
   registrationCount: number;
+  roster?: InstructorLessonScheduleRosterRow[];
 };
 
 export function isInstructorLessonSyntheticTest(item: SourceRecord): boolean {
@@ -54,7 +65,7 @@ export function buildInstructorLessonScheduleSummaries(input: {
   const lectureIds = new Set(lectures.map((item) => cleanText(item.lectureId || item.id)).filter(Boolean));
   const dates = new Set(lectures.map((item) => dateKey(item.date)).filter(Boolean));
 
-  const bookingMembers = new Map<string, Set<string>>();
+  const bookingMembers: ScheduleMembers = new Map();
   const canonicalOccurrences = new Map<string, SourceRecord>();
   for (const booking of input.bookings || []) {
     if (!activeBooking(booking) || !inRange(booking.lectureDate, startDate, endDate)) continue;
@@ -70,7 +81,7 @@ export function buildInstructorLessonScheduleSummaries(input: {
     const date = dateKey(booking.lectureDate);
     const memberKey = memberIdentity(booking);
     if (!date || !memberKey) continue;
-    addSetValue(bookingMembers, date, memberKey);
+    addScheduleMember(bookingMembers, date, memberKey, booking);
     dates.add(date);
   }
 
@@ -82,7 +93,7 @@ export function buildInstructorLessonScheduleSummaries(input: {
     if (inRange(date, startDate, endDate) && memberKey) addSetValue(syntheticMembers, date, memberKey);
   }
 
-  const ticketMembers = new Map<string, Set<string>>();
+  const ticketMembers: ScheduleMembers = new Map();
   for (const holder of input.ticketHolders || []) {
     if (!hasInstructorLessonTicket(holder)) continue;
     const memberKey = memberIdentity(holder);
@@ -91,12 +102,12 @@ export function buildInstructorLessonScheduleSummaries(input: {
       const date = dateKey(rawDate);
       if (!inRange(date, startDate, endDate)) continue;
       if (syntheticMembers.get(date)?.has(memberKey)) continue;
-      addSetValue(ticketMembers, date, memberKey);
+      addScheduleMember(ticketMembers, date, memberKey, holder);
       dates.add(date);
     }
   }
 
-  const registrationMembers = new Map<string, Set<string>>();
+  const registrationMembers: ScheduleMembers = new Map();
   for (const registration of input.registrations || []) {
     if (isInstructorLessonSyntheticTest(registration)) continue;
     const date = dateKey(registration.lessonDate);
@@ -104,7 +115,7 @@ export function buildInstructorLessonScheduleSummaries(input: {
     if (!inRange(date, startDate, endDate) || ["cancelled", "canceled", "rejected"].includes(status)) continue;
     const memberKey = memberIdentity(registration) || cleanText(registration.registrationId || registration.id);
     if (!memberKey) continue;
-    addSetValue(registrationMembers, date, memberKey);
+    addScheduleMember(registrationMembers, date, memberKey, registration);
     dates.add(date);
   }
 
@@ -120,12 +131,40 @@ export function buildInstructorLessonScheduleSummaries(input: {
         : registrationCount
           ? "registrations"
           : "none";
-    const occupiedCount =
+    const occupiedMembers =
       countSource === "bookings"
-        ? bookingMemberCount
+        ? bookingMembers.get(date)
         : countSource === "tickets"
-          ? ticketHolderCount
-          : registrationCount;
+          ? ticketMembers.get(date)
+          : registrationMembers.get(date);
+    const occupiedCount = occupiedMembers?.size || 0;
+    const roster = [...(occupiedMembers || [])].map(([memberKey, members]) => {
+      const sources =
+        countSource === "bookings"
+          ? [...members].sort((a, b) => bookingSourcePriority(a) - bookingSourcePriority(b))
+          : members;
+      const registrations = registrationMembers.get(date)?.get(memberKey) || [];
+      const registrationIds = new Set(
+        registrations.map((item) => cleanText(item.registrationId || item.id)).filter(Boolean),
+      );
+      // Link only an unambiguous, eligible registration with the same date and identity.
+      const registrationId = registrationIds.size === 1 ? [...registrationIds][0] : undefined;
+      const registration = registrationId
+        ? registrations.find((item) => cleanText(item.registrationId || item.id) === registrationId)
+        : undefined;
+      return {
+        // The internal identity may contain a full phone number; keep it out of the response.
+        memberKey: `member:${createHash("sha256").update(memberKey).digest("hex")}`,
+        memberId:
+          sources.map((item) => rosterMemberId(item, countSource === "tickets")).find(Boolean) ||
+          (registration ? rosterMemberId(registration) : null),
+        memberName:
+          sources.map((item) => cleanText(item.memberName || item.name)).find(Boolean) ||
+          cleanText(registration?.memberName || registration?.name) ||
+          "이름 미확인",
+        ...(registrationId ? { registrationId } : {}),
+      } satisfies InstructorLessonScheduleRosterRow;
+    });
     const lectureCapacity = concurrentLectureCapacity(dateLectures);
     const capacity = lectureCapacity || defaultCapacity;
     const timestamps = dateLectures
@@ -151,6 +190,7 @@ export function buildInstructorLessonScheduleSummaries(input: {
       bookingMemberCount,
       ticketHolderCount,
       registrationCount,
+      roster,
     } satisfies InstructorLessonScheduleSummary;
   });
 }
@@ -252,6 +292,23 @@ function addSetValue(map: Map<string, Set<string>>, key: string, value: string):
   const rows = map.get(key) || new Set<string>();
   rows.add(value);
   map.set(key, rows);
+}
+
+function addScheduleMember(map: ScheduleMembers, date: string, memberKey: string, item: SourceRecord): void {
+  const members = map.get(date) || new Map<string, SourceRecord[]>();
+  const records = members.get(memberKey) || [];
+  records.push(item);
+  members.set(memberKey, records);
+  map.set(date, members);
+}
+
+function rosterMemberId(item: SourceRecord, isProfile = false): string | null {
+  const phone = normalizePhone(item.memberPhone || item.phone);
+  return (
+    [item.studiomateMemberId, item.evidence?.studiomateMemberId, item.memberId, isProfile ? item.id : null]
+      .map(cleanText)
+      .find((id) => id && !/^(excel_|usage_)/i.test(id) && (!phone || normalizePhone(id) !== phone)) || null
+  );
 }
 
 function inRange(value: unknown, startDate: string, endDate: string): boolean {
