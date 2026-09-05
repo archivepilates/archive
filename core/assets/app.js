@@ -2470,16 +2470,31 @@ function isNonActionableCommunicationItem(item) {
   ].some((keyword) => text.includes(keyword));
 }
 
-function failedAlimtalkCandidates(items = communicationActionItems("alimtalkCandidates")) {
+function isCurrentCommunicationFailure(item, referenceDate = new Date()) {
+  const ids = [item?.id, item?.candidateId, item?.requestId].map((value) => String(value || ""));
+  if (item?.syntheticTest === true || item?.isTest === true || item?.testMode === true ||
+      ids.some((id) => /^(test_|e2e_|private_survey_(staff_)?psr-test-)/i.test(id))) return false;
+  const now = referenceDate.getTime();
+  const upcoming = [item?.scheduledAt, item?.scheduledFor, item?.lessonDate, item?.lectureDate]
+    .some((value) => timestampMs(value) >= startOfLocalDay(referenceDate).getTime());
+  const lastActivity = Math.max(0, ...[item?.failedAt, item?.lastAttemptAt, item?.deliveryUpdatedAt,
+    item?.updatedAt, item?.sentAt, item?.createdAt].map(timestampMs).filter(Number.isFinite));
+  // Preserve the record as history; missing dates must not silently hide an unresolved failure.
+  return upcoming || !lastActivity || lastActivity >= now - 7 * 24 * 60 * 60 * 1000;
+}
+
+function failedAlimtalkCandidates(items = communicationActionItems("alimtalkCandidates"), includeArchived = false) {
   return uniqueOperatorItems(
-    items.filter((item) => hasCommunicationFailureSignal(item) && !isNonActionableCommunicationItem(item)),
+    items.filter((item) => hasCommunicationFailureSignal(item) && !isNonActionableCommunicationItem(item) &&
+      (includeArchived || isCurrentCommunicationFailure(item))),
     "alimtalk-candidate",
   );
 }
 
-function failedAlimtalkSends(items = communicationActionItems("alimtalkSends")) {
+function failedAlimtalkSends(items = communicationActionItems("alimtalkSends"), includeArchived = false) {
   return uniqueOperatorItems(
-    items.filter((item) => hasCommunicationFailureSignal(item) && !isNonActionableCommunicationItem(item)),
+    items.filter((item) => hasCommunicationFailureSignal(item) && !isNonActionableCommunicationItem(item) &&
+      (includeArchived || isCurrentCommunicationFailure(item))),
     "alimtalk-send",
   );
 }
@@ -2495,14 +2510,16 @@ function hasCommunicationFailureSignal(item) {
   ].some(isFailureStatus);
 }
 
-function onsiteWelcomeProblems(items = communicationActionItems("onsiteWelcomeRequests")) {
-  return items.filter((item) => !isResolvedOperationalItem(item) && (isFailureStatus(item.status) || Boolean(item.lastError)));
+function onsiteWelcomeProblems(items = communicationActionItems("onsiteWelcomeRequests"), includeArchived = false) {
+  return items.filter((item) => !isResolvedOperationalItem(item) && (includeArchived || isCurrentCommunicationFailure(item)) &&
+    (isFailureStatus(item.status) || Boolean(item.lastError)));
 }
 
-function signupContractProblems(items = communicationActionItems("memberSignupContracts")) {
+function signupContractProblems(items = communicationActionItems("memberSignupContracts"), includeArchived = false) {
   return items.filter(
     (item) =>
       !isResolvedOperationalItem(item) &&
+      (includeArchived || isCurrentCommunicationFailure(item)) &&
       (isFailureStatus(item.status) ||
         isFailureStatus(item.syncStatus) ||
         isFailureStatus(item.studiomateSyncStatus) ||
@@ -2513,14 +2530,15 @@ function signupContractProblems(items = communicationActionItems("memberSignupCo
   );
 }
 
-function pricingInquiryProblems(items = communicationActionItems("pricingInquiryAlimtalkRequests")) {
-  return items.filter((item) => !isResolvedOperationalItem(item) && (isFailureStatus(item.status) || isFailureStatus(item.sendStatus)));
+function pricingInquiryProblems(items = communicationActionItems("pricingInquiryAlimtalkRequests"), includeArchived = false) {
+  return items.filter((item) => !isResolvedOperationalItem(item) && (includeArchived || isCurrentCommunicationFailure(item)) &&
+    (isFailureStatus(item.status) || isFailureStatus(item.sendStatus)));
 }
 
-function problemRequestRows() {
+function problemRequestRows(includeArchived = false) {
   return uniqueOperatorItems(
     [
-    ...onsiteWelcomeProblems().map((item) => ({
+    ...onsiteWelcomeProblems(undefined, includeArchived).map((item) => ({
       ...item,
       title: "현장 웰컴 준비 실패",
       memberName: item.memberName || item.name || item.memberNameHint,
@@ -2529,7 +2547,7 @@ function problemRequestRows() {
       status: item.status || "error",
       updatedAt: item.updatedAt || item.createdAt,
     })),
-    ...signupContractProblems().map((item) => ({
+    ...signupContractProblems(undefined, includeArchived).map((item) => ({
       ...item,
       title: "회원가입서 후속 처리 실패",
       memberName: item.memberName || item.name,
@@ -2551,7 +2569,7 @@ function problemRequestRows() {
         "error",
       updatedAt: item.updatedAt || item.submittedAt || item.createdAt,
     })),
-    ...pricingInquiryProblems().map((item) => ({
+    ...pricingInquiryProblems(undefined, includeArchived).map((item) => ({
       ...item,
       title: "수강료 안내 발송 실패",
       memberName: item.memberName || item.name || item.memberPhone || item.phone,
@@ -2625,6 +2643,10 @@ function renderMessages(candidates, sends) {
     sendList.innerHTML = failureRows.length
       ? failureRows.map((item) => renderAlimtalkRow(item, { status: (row) => row.status || row.sendStatus || "failed" })).join("")
       : `<div class="empty-state">${partial ? "일부 내역만 조회되어 전체 실패 여부를 확정할 수 없습니다." : "현재 확인할 실패 알림톡이 없습니다."}</div>`;
+    const previousFailures = uniqueOperatorItems([
+      ...failedAlimtalkCandidates(undefined, true), ...failedAlimtalkSends(undefined, true), ...problemRequestRows(true),
+    ], "communication-history").filter((item) => !isCurrentCommunicationFailure(item));
+    if (previousFailures.length) sendList.innerHTML += `<details><summary>이전·테스트 실패 이력 ${previousFailures.length}건</summary>${previousFailures.map((item) => renderAlimtalkRow(item, { status: () => "failed" })).join("")}</details>`;
   }
 
   const templateList = qs("messagesTemplateList");

@@ -162,6 +162,8 @@ if (selectedSurfaces.includes("core")) {
       '"contacted", "considering", "snoozed", "resolved", "excluded"',
       "groupRenewalRows",
       "renderRenewalCaseDetail",
+      "isCurrentCommunicationFailure",
+      "이전·테스트 실패 이력",
       "재등록 의사 없음",
       "alimtalkTemplateTitle",
       "강사용 프라이빗 오늘 기록 안내 v4",
@@ -170,6 +172,8 @@ if (selectedSurfaces.includes("core")) {
       '"delivered", "전달 완료"',
     ]),
     textCheck("core-app-bundle-webapp-path", "https://archive-pilates.web.app/core/assets/app.js", [
+      "isCurrentCommunicationFailure",
+      "이전·테스트 실패 이력",
       'data-renewal-action="selected"',
       '"contacted", "considering", "snoozed", "resolved", "excluded"',
       "groupRenewalRows",

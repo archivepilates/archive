@@ -19,7 +19,7 @@ function app() {
   vm.runInNewContext(`${source.slice(0, end)}\nglobalThis.api = {
     state, setReadState, renderHomeSummary, renderHomeDecisions, renderRenewalPipeline,
     renewalCaseRows, activeRenewalMemberRows, groupRenewalRows, getCommunicationActions,
-    pendingAlimtalkCandidates, failedAlimtalkCandidates, failedAlimtalkSends, communicationProblemSummary, currentPrivateSessionRows,
+    pendingAlimtalkCandidates, failedAlimtalkCandidates, failedAlimtalkSends, isCurrentCommunicationFailure, communicationProblemSummary, currentPrivateSessionRows,
     privateSessionAction, renderPrivateSessionCard, staffCompositeScore, scoreBand,
     formatMetricNumber, formatMetricRate, parkingJobNeedsAttention, parkingJobStatusLabel,
     renderPrivate, coreHref, commandPaletteEntries
@@ -178,6 +178,81 @@ test("explicit terminal resolutions stay hidden despite a retained provider fail
   const rows = a.failedAlimtalkSends();
   assert.equal(rows.length, 1);
   assert.equal(rows[0].id, "unresolved");
+});
+
+test("communication failures use an inclusive rolling seven-day boundary", () => {
+  const a = app();
+  const cutoff = reference.getTime() - 7 * 24 * 60 * 60 * 1000;
+  for (const [offset, expected] of [[-1, false], [0, true], [1, true]]) {
+    assert.equal(a.isCurrentCommunicationFailure({ status: "failed", failedAt: new Date(cutoff + offset).toISOString() }, reference), expected, `cutoff offset ${offset}ms`);
+  }
+});
+
+test("every communication activity timestamp can establish the most recent failure activity", () => {
+  const a = app();
+  const fields = ["failedAt", "lastAttemptAt", "deliveryUpdatedAt", "updatedAt", "sentAt", "createdAt"];
+  const old = Object.fromEntries(fields.map((field) => [field, "2026-08-01T00:00:00Z"]));
+  assert.equal(a.isCurrentCommunicationFailure({ status: "failed", ...old }, reference), false);
+  for (const field of fields) {
+    assert.equal(a.isCurrentCommunicationFailure({ status: "failed", ...old, [field]: "2026-09-04T00:00:00Z" }, reference), true, field);
+    assert.equal(a.isCurrentCommunicationFailure({ status: "failed", [field]: old[field] }, reference), false, `${field} alone is historical`);
+  }
+});
+
+test("undated or unusably dated communication failures remain actionable", () => {
+  const a = app();
+  for (const dates of [{}, { failedAt: null, updatedAt: "" }, { failedAt: "invalid-date", createdAt: "invalid-date" }]) {
+    assert.equal(a.isCurrentCommunicationFailure({ status: "failed", ...dates }, reference), true);
+  }
+});
+
+test("only explicit true test flags exclude communication failures", () => {
+  const a = app();
+  for (const field of ["isTest", "testMode", "syntheticTest"]) {
+    assert.equal(a.isCurrentCommunicationFailure({ status: "failed", [field]: true, scheduledAt: "2026-09-06" }, reference), false, field);
+    for (const value of [false, "true", 1, null]) {
+      assert.equal(a.isCurrentCommunicationFailure({ status: "failed", [field]: value }, reference), true, `${field}=${value}`);
+    }
+  }
+});
+
+test("test-prefixed communication identities are excluded even for upcoming work", () => {
+  const a = app();
+  for (const prefix of ["test_", "e2e_", "private_survey_staff_psr-test-", "private_survey_psr-test-"]) {
+    for (const field of ["id", "candidateId", "requestId"]) {
+      assert.equal(a.isCurrentCommunicationFailure({ status: "failed", [field]: `${prefix}123`, lessonDate: "2026-09-06" }, reference), false, `${field}: ${prefix}`);
+    }
+    assert.equal(a.isCurrentCommunicationFailure({ status: "failed", id: `live_${prefix}123` }, reference), true, `non-prefix ${prefix}`);
+  }
+});
+
+test("current-day and future schedules retain old failures while past schedules do not", () => {
+  const a = app();
+  for (const field of ["scheduledAt", "scheduledFor", "lessonDate", "lectureDate"]) {
+    for (const [date, expected] of [["2026-09-04", false], ["2026-09-05", true], ["2026-09-06", true]]) {
+      assert.equal(a.isCurrentCommunicationFailure({ status: "failed", failedAt: "2026-08-01", [field]: date }, reference), expected, `${field}: ${date}`);
+    }
+  }
+});
+
+test("archived failed sends remain unresolved history and are excluded by default", (t) => {
+  t.mock.timers.enable({ apis: ["Date"], now: reference.getTime() });
+  const a = app();
+  const items = [
+    { id: "current-failure", status: "failed", failedAt: "2026-09-04" },
+    { id: "historical-failure", status: "failed", failedAt: "2026-08-01" },
+    { id: "historical-delivery-failure", status: "sent", deliveryStatus: "failed", updatedAt: "2026-08-01" },
+    { id: "undated-failure", status: "failed" },
+    { id: "resolved-failure", status: "failed", failedAt: "2026-08-01", actionStatus: "resolved" },
+    { id: "successful-send", status: "sent", sentAt: "2026-09-04" },
+  ];
+  const before = structuredClone(items);
+  assert.deepEqual(Array.from(a.failedAlimtalkSends(items), (row) => row.id), ["current-failure", "undated-failure"]);
+  const history = a.failedAlimtalkSends(items, true);
+  assert.deepEqual(Array.from(history, (row) => row.id), ["current-failure", "historical-failure", "historical-delivery-failure", "undated-failure"]);
+  assert.equal(history.find((row) => row.id === "historical-failure").status, "failed");
+  assert.equal(history.find((row) => row.id === "historical-delivery-failure").deliveryStatus, "failed");
+  assert.deepEqual(items, before);
 });
 
 test("menu search resolves to the CORE root from a nested detail page", () => {

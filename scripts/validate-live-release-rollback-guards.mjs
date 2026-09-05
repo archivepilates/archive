@@ -491,6 +491,8 @@ const guardGroups = [
           '"contacted", "considering", "snoozed", "resolved", "excluded"',
           "groupRenewalRows",
           "renderRenewalCaseDetail",
+          "isCurrentCommunicationFailure",
+          "이전·테스트 실패 이력",
           "재등록 의사 없음",
           "ALIMTALK_TEMPLATE_LABELS_BY_CODE",
           "alimtalkTemplateTitle",
