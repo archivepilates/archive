@@ -811,6 +811,8 @@
       }
     }
   </style>
+  <link rel="stylesheet" href="/assets/public-home-ux-20260905.css">
+  <script src="/assets/public-home-ux-20260905.js" defer></script>
   <script type="application/ld+json">
     {
       "@context": "https://schema.org",
@@ -835,7 +837,7 @@
     }
   </script>
 </head>
-<body>
+<body class="public-home">
   <a class="skip-link" href="#main">본문으로 이동</a>
   <header class="site-header" aria-label="사이트 상단">
     <nav class="nav">
@@ -859,7 +861,7 @@
           <span class="nav-ko">판매상품</span>
           <span class="nav-en" aria-hidden="true">PRODUCTS</span>
         </a>
-        <a class="nav-swap" data-nav="community" href="/community" aria-label="커뮤니티">
+        <a class="nav-swap" data-nav="community" href="https://archivepilates.imweb.me/community" aria-label="커뮤니티">
           <span class="nav-ko">커뮤니티</span>
           <span class="nav-en" aria-hidden="true">COMMUNITY</span>
         </a>
@@ -876,102 +878,73 @@
     <section class="hero" aria-label="ARCHIVE PILATES 공식 홈페이지">
       <picture>
         <source srcset="/assets/hero.webp" type="image/webp">
-        <img src="/assets/hero.jpg" alt="부산 명지 ARCHIVE PILATES 스튜디오 수업 장면" width="2400" height="1600" fetchpriority="high">
+        <img src="/assets/hero.jpg" alt="부산 명지 ARCHIVE PILATES 스튜디오 내부" width="2400" height="1600" fetchpriority="high">
       </picture>
-      <div class="hero-inner reveal">
+      <div class="hero-inner">
         <p class="eyebrow">Movement archived, life refined</p>
         <h1>ARCHIVE PILATES</h1>
-        <p class="hero-lead">강사의 수업을 기록하고, 레슨의 기준을 다시 세웁니다. 부산 명지에서 5:1 오프라인 강사레슨과 온라인 ARCHIVE METHOD 클래스를 운영합니다.</p>
+        <p class="hero-lead">강사의 수업을 기록하고, 레슨의 기준을 다시 세웁니다.<span class="hero-detail">부산 명지 5:1 강사레슨 · ARCHIVE METHOD 영상</span></p>
         <div class="actions" aria-label="클래스 바로가기">
           <a class="button primary" href="/offline">강사레슨 일정 확인</a>
           <a class="button ghost" href="https://archivepilates.imweb.me/17">강사레슨 영상구매</a>
         </div>
-      </div>
-    </section>
-
-    <section id="philosophy" class="philosophy">
-      <div class="wrap">
-        <div class="section-head reveal">
-          <div>
-            <p class="section-kicker">Studio Philosophy</p>
-            <h2>몸을 먼저 보고, 수업의 방향을 조정합니다.</h2>
-          </div>
-          <p>ARCHIVE PILATES는 정해진 시퀀스를 밀어붙이는 수업보다, 오늘의 몸을 읽고 필요한 움직임을 선택하는 수업을 지향합니다. 수업의 기록은 다음 수업의 기준이 됩니다.</p>
-        </div>
-        <div class="values">
-          <article class="value reveal">
-            <strong>관찰</strong>
-            <p>회원의 몸을 먼저 보고, 오늘 필요한 방향을 읽습니다.</p>
-          </article>
-          <article class="value reveal">
-            <strong>조정</strong>
-            <p>정해진 수업보다 회원의 상태에 맞는 선택을 우선합니다.</p>
-          </article>
-          <article class="value reveal">
-            <strong>FLOW</strong>
-            <p>동작, 설명, 호흡, 회복이 끊기지 않고 이어지도록 설계합니다.</p>
-          </article>
-          <article class="value reveal">
-            <strong>축적</strong>
-            <p>한 번의 수업으로 끝내지 않고 변화가 다음 수업으로 이어지게 합니다.</p>
-          </article>
-          <article class="value reveal">
-            <strong>책임감</strong>
-            <p>회원의 몸을 맡는 사람으로서 변화의 방향을 함께 책임집니다.</p>
-          </article>
-        </div>
-      </div>
-    </section>
-
-    <section class="image-band" aria-label="수업 기록">
-      <div class="image-band-inner">
-        <picture>
-          <source srcset="/assets/field-record.webp" type="image/webp">
-          <img src="/assets/field-record.jpg" alt="필라테스 강사레슨 현장 기록 장면" width="2400" height="1000" loading="lazy">
-        </picture>
-        <div class="band-copy reveal">
-          <p class="section-kicker">Class Record</p>
-          <h2>현장에서 보고, 기록으로 남깁니다.</h2>
-          <p>오프라인 강사레슨은 움직임 관찰과 피드백을 중심으로 진행합니다. 수업의 흐름, 큐잉, 보상 패턴을 기록해 다시 볼 수 있는 기준으로 만듭니다.</p>
-        </div>
+        <a class="hero-browse" href="#classes">수업 둘러보기 <span aria-hidden="true">↓</span></a>
       </div>
     </section>
 
     <section id="classes" class="classes">
       <div class="wrap">
-        <div class="section-head reveal">
+        <div class="section-head">
           <div>
-            <p class="section-kicker">Class Route</p>
-            <h2>오프라인에서 체감하고, 온라인에서 반복합니다.</h2>
+            <p class="section-kicker">ARCHIVE METHOD</p>
+            <h2>강사레슨과 영상 클래스</h2>
           </div>
-          <p>강사레슨은 현장 피드백의 밀도를 높이고, 영상구매 상품은 기구별 ARCHIVE METHOD 수업을 40일 동안 반복 학습할 수 있도록 구성합니다.</p>
+          <a class="text-link" href="https://archivepilates.imweb.me/17">전체 영상 둘러보기 <span aria-hidden="true">→</span></a>
         </div>
         <div class="class-grid">
-          <a class="class-card reveal" href="/offline">
+          <article class="class-card">
             <picture>
               <source srcset="/assets/offline-class.webp" type="image/webp">
               <img src="/assets/offline-class.jpg" alt="ARCHIVE PILATES 오프라인 강사레슨 현장" width="1200" height="1000" loading="lazy">
             </picture>
             <div class="class-body">
-              <p class="type">Offline Lesson</p>
+              <p class="type">부산 명지 · 오프라인</p>
               <h3>5:1 오프라인 강사레슨</h3>
-              <p>매월 마지막 주 토요일, 부산 명지 스튜디오에서 수업 관찰과 피드백 중심으로 진행합니다.</p>
-              <span class="more">강사레슨 일정 확인</span>
+              <p>부산 명지 스튜디오에서 수업 관찰과 피드백 중심으로 진행합니다.</p>
+              <a class="text-link" href="/offline">강사레슨 일정 확인 <span aria-hidden="true">→</span></a>
             </div>
-          </a>
-          <a class="class-card reveal" href="https://archivepilates.imweb.me/17">
-            <picture>
-              <source srcset="/assets/online-class.webp" type="image/webp">
-              <img src="/assets/online-class.jpg" alt="ARCHIVE METHOD 온라인 클래스 촬영 장면" width="1200" height="1000" loading="lazy">
-            </picture>
+          </article>
+          <article class="class-card">
+            <div class="class-preview" id="ach9-preview">
+              <a class="preview-launch" href="https://www.youtube.com/embed/JVdsoaWkH-s" aria-label="체어 지지와 움직임 ACH9 미리보기 재생" data-home-preview>
+                <img src="https://i.ytimg.com/vi/JVdsoaWkH-s/hqdefault.jpg" srcset="https://i.ytimg.com/vi/JVdsoaWkH-s/hqdefault.jpg 480w, https://i.ytimg.com/vi/JVdsoaWkH-s/maxresdefault.jpg 1280w" sizes="(max-width: 640px) calc(100vw - 40px), (max-width: 1224px) 46vw, 576px" alt="체어 지지와 움직임 ACH9 미리보기" width="1280" height="720" loading="lazy" decoding="async">
+                <span class="preview-play"><span aria-hidden="true">▶</span> 미리보기</span>
+              </a>
+            </div>
             <div class="class-body">
-              <p class="type">Video Class</p>
-              <h3>기구별 영상구매</h3>
-              <p>체어, 바렐, 리포머, 캐딜락 수업을 구매 계정으로 시청하고 반복 학습합니다.</p>
-              <span class="more">영상구매 목록 보기</span>
+              <p class="type">체어 · ACH9</p>
+              <h3>지지와 움직임</h3>
+              <p>ARCHIVE METHOD 기구별 수업을 구매 계정으로 40일 동안 반복 학습합니다.</p>
+              <a class="text-link" href="https://archivepilates.imweb.me/17/?idx=85">ACH9 영상 보기 <span aria-hidden="true">→</span></a>
+              <a class="related-video" href="https://archivepilates.imweb.me/17/?idx=84">같은 주제의 캐딜락 수업 · ACA6 <span aria-hidden="true">→</span></a>
             </div>
-          </a>
+          </article>
         </div>
+      </div>
+    </section>
+
+    <section class="community-preview" aria-labelledby="community-preview-title">
+      <div class="wrap community-preview-inner">
+        <div class="community-preview-copy">
+          <p class="section-kicker">Community</p>
+          <h2 id="community-preview-title">스튜디오 기록</h2>
+          <a class="text-link" href="https://archivepilates.imweb.me/community">커뮤니티 둘러보기 <span aria-hidden="true">→</span></a>
+        </div>
+        <article class="studio-post">
+          <p class="post-byline">ARCHIVE PILATES · 스튜디오 작성</p>
+          <h3><a href="https://archivepilates.imweb.me/community/?bmode=view&amp;idx=173675198">8월의 마지막 강사레슨 | 지지와 움직임</a></h3>
+          <a class="text-link" href="https://archivepilates.imweb.me/community/?bmode=view&amp;idx=173675198">수업 기록 읽기 <span aria-hidden="true">→</span></a>
+        </article>
       </div>
     </section>
 
@@ -980,8 +953,8 @@
         <div class="studio-grid">
           <div class="studio-copy reveal">
             <p class="section-kicker">팀아카이브</p>
-            <h2>부산 명지, 수업을 깊게 보는 팀.</h2>
-            <p>ARCHIVE PILATES는 부산 강서구 명지에 위치한 필라테스 스튜디오입니다. 강사와 예비 강사가 수업의 언어, 시퀀스, 피드백을 더 구체적으로 다듬을 수 있도록 오프라인 강사레슨과 영상구매 클래스를 함께 운영합니다.</p>
+            <h2>부산 명지, 팀아카이브</h2>
+            <p>몸을 먼저 보고, 필요한 움직임을 선택합니다. 수업의 관찰과 기록을 함께 쌓아가는 강사들을 만나보세요.</p>
             <div class="actions">
               <a class="button dark" href="/teams">팀아카이브 보기</a>
               <a class="button" href="https://www.instagram.com/minjin.vibe/">Instagram</a>
@@ -997,42 +970,8 @@
       </div>
     </section>
 
-    <section class="community-preview" aria-labelledby="community-preview-title">
-      <div class="wrap community-preview-inner">
-        <div class="community-preview-copy reveal">
-          <p class="section-kicker">Community</p>
-          <h2 id="community-preview-title">경험을 기록하고,<br>수업의 질문을 이어갑니다.</h2>
-          <p>강사레슨과 영상 클래스를 경험한 분들의 후기, 수업과 동작에 관한 질문을 한곳에서 나눕니다.</p>
-          <div class="actions">
-            <a class="button dark" href="/community">커뮤니티 보기</a>
-          </div>
-        </div>
-        <ol class="community-topics reveal" aria-label="후기와 질문 게시판 유형">
-          <li>
-            <span>01</span>
-            <div><h3>강사레슨 후기</h3><p>현장에서 발견한 변화와 수업에서 남은 기준을 기록합니다.</p></div>
-          </li>
-          <li>
-            <span>02</span>
-            <div><h3>영상 클래스 후기</h3><p>반복 시청하며 도움이 된 장면과 적용 경험을 나눕니다.</p></div>
-          </li>
-          <li>
-            <span>03</span>
-            <div><h3>수업·동작 질문</h3><p>시퀀스, 큐잉, 기구 사용과 움직임에 관해 질문합니다.</p></div>
-          </li>
-        </ol>
-      </div>
-    </section>
-
-    <section class="social">
+    <section class="social" aria-label="ARCHIVE PILATES 채널">
       <div class="wrap">
-        <div class="section-head reveal">
-          <div>
-            <p class="section-kicker">Archive Channel</p>
-            <h2>수업 기록은 채널에서도 이어집니다.</h2>
-          </div>
-          <p>유튜브와 인스타그램에서 공개 수업 기록, 쇼츠, 스튜디오 소식을 확인할 수 있습니다. 구매와 시청은 영상구매 메뉴에서 진행됩니다.</p>
-        </div>
         <div class="social-links">
           <a class="reveal" href="https://www.youtube.com/@archivepilates">
             <strong>YouTube</strong>
@@ -1054,8 +993,7 @@
       <div class="careers-inner reveal">
         <div>
           <p class="section-kicker">채용</p>
-          <h2>수업의 기준을 함께 만들 강사를 기다립니다.</h2>
-          <p>ARCHIVE PILATES는 움직임을 관찰하고, 기록하고, 다음 수업으로 축적하는 강사와 함께 성장합니다. 지원과 면접 일정은 아카이브 채용사이트에서 확인할 수 있습니다.</p>
+          <h2>ARCHIVE PILATES와 함께할 강사</h2>
         </div>
         <div class="actions">
           <a class="button primary" href="/careers">채용 페이지 보기</a>

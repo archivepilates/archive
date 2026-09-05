@@ -1,0 +1,284 @@
+/* Scope 5: native Imweb header presentation only. No controller or page changes.
+ * The two real header IDs deliberately outrank the July global !important
+ * overrides, including styles reinserted after this stylesheet loads.
+ * Keep this unlayered: legacy author styles are also unlayered.
+ */
+html body header#doz_header_wrap {
+  background: #fffdfa !important;
+  border-bottom: 1px solid rgba(222, 214, 204, 0.88) !important;
+}
+
+/* Imweb custom.cm scales body by .85 in this exact tablet range. Undo it
+ * for the header only so its 44px controls and type retain their actual size.
+ * Mirror the native fullscreen exception without changing body or page layers.
+ */
+@media (min-width: 767px) and (max-width: 1024px) {
+  html body:not(.video_fullpage) header#doz_header_wrap {
+    zoom: calc(1 / 0.85);
+  }
+}
+
+html body #doz_header_wrap #doz_header {
+  --ap-header-font: -apple-system, BlinkMacSystemFont, "Apple SD Gothic Neo",
+    "Noto Sans KR", "Segoe UI", sans-serif;
+  font-family: var(--ap-header-font) !important;
+  letter-spacing: 0 !important;
+}
+
+html body #doz_header_wrap #doz_header .inline-section-wrap {
+  background: #fffdfa !important;
+  border-bottom: 0 !important;
+  backdrop-filter: none !important;
+  -webkit-backdrop-filter: none !important;
+}
+
+html body #doz_header_wrap #doz_header :is(.ap-shop-nav-link, .ap-shop-visual-link),
+html body #doz_header_wrap #doz_header :is(.ap-shop-nav-label, .ap-shop-visual-label),
+html body #doz_header_wrap #doz_header :is(.ap-nav-ko, .ap-nav-en, .ap-shop-pill-ko, .ap-shop-pill-en) {
+  font-family: var(--ap-header-font) !important;
+  font-weight: 750 !important;
+  letter-spacing: 0 !important;
+  line-height: 1.35 !important;
+}
+
+/* Keep both languages in the same grid cell so hovering cannot resize a link. */
+html body #doz_header_wrap #doz_header :is(.ap-shop-nav-label, .ap-shop-visual-label) {
+  position: relative !important;
+  display: inline-grid !important;
+  grid-template-areas: "label" !important;
+  align-items: center !important;
+  justify-items: center !important;
+  width: auto !important;
+  min-width: 0 !important;
+  height: auto !important;
+  min-height: 0 !important;
+  padding: 0 !important;
+  overflow: visible !important;
+  contain: none !important;
+  white-space: nowrap !important;
+}
+
+html body #doz_header_wrap #doz_header :is(.ap-shop-nav-label, .ap-shop-visual-label) > span {
+  position: static !important;
+  grid-area: label !important;
+  display: inline-flex !important;
+  align-items: center !important;
+  justify-content: center !important;
+  padding: 0 !important;
+  transform: none !important;
+  transition: opacity 120ms ease !important;
+}
+
+html body #doz_header_wrap #doz_header :is(.ap-nav-ko, .ap-shop-pill-ko) {
+  opacity: 1 !important;
+}
+
+html body #doz_header_wrap #doz_header :is(.ap-nav-en, .ap-shop-pill-en) {
+  opacity: 0 !important;
+  font-size: 11.84px !important;
+  font-weight: 880 !important;
+}
+
+/* Replace the bitmap, not the anchor or widget. Legacy src rewrites remain inert. */
+html body #doz_header_wrap #w202605201366f2d7c56ae .front_img > img,
+html body #doz_header_wrap #logo_w202605184e66bbd892e24 .ap-mobile-header-logo-img {
+  content: url("https://archivepilates.com/assets/archive-wordmark-nav-crop.png");
+  display: block !important;
+  width: 176px !important;
+  max-width: 100% !important;
+  height: auto !important;
+  max-height: none !important;
+  aspect-ratio: 513 / 126;
+  object-fit: contain !important;
+}
+
+html body #doz_header_wrap #w202605201366f2d7c56ae :is(.img_container, .front_img) {
+  width: 176px !important;
+  max-width: 100% !important;
+  height: auto !important;
+}
+
+/* Reserve space for the existing desktop menu toggle at the narrow breakpoint. */
+html body #doz_header_wrap #w202605201366f2d7c56ae {
+  margin-left: 64px !important;
+}
+
+html body #doz_header_wrap #w202605201366f2d7c56ae .img_container > a {
+  display: flex !important;
+  align-items: center !important;
+  min-height: 74px !important;
+}
+
+html body #doz_header_wrap #inline_header_normal .viewport-nav.desktop {
+  gap: 2px !important;
+}
+
+html body #doz_header_wrap #inline_header_normal .viewport-nav.desktop > .ap-shop-visual-menu {
+  margin-left: 0 !important;
+}
+
+html body #doz_header_wrap #inline_header_normal .viewport-nav.desktop > li > :is(.ap-shop-nav-link, .ap-shop-visual-link) {
+  display: inline-flex !important;
+  align-items: center !important;
+  justify-content: center !important;
+  min-height: 44px !important;
+  min-width: 0 !important;
+  padding: 0 8px !important;
+  font-size: 15px !important;
+  background: transparent !important;
+  border: 0 !important;
+  border-radius: 0 !important;
+  box-shadow: none !important;
+  transform: none !important;
+}
+
+html body #doz_header_wrap #inline_header_normal :is(.ap-nav-ko, .ap-shop-pill-ko) {
+  font-size: 15px !important;
+}
+
+/* Native Imweb visibility/breakpoints and fixed-header positioning are untouched. */
+html body #doz_header_wrap #inline_header_mobile {
+  padding-top: env(safe-area-inset-top, 0px) !important;
+  min-height: 0 !important;
+}
+
+html body #doz_header_wrap #inline_header_mobile > [data-type="section-wrap"] > .inline-inside {
+  padding: 0 max(8px, env(safe-area-inset-right, 0px)) 0 max(8px, env(safe-area-inset-left, 0px)) !important;
+}
+
+html body #doz_header_wrap #inline_header_mobile > [data-type="section-wrap"] .inline-section {
+  display: grid !important;
+  grid-template-columns: 88px minmax(0, 1fr) 88px;
+  align-items: center;
+  width: 100% !important;
+  min-height: 64px !important;
+  gap: 0;
+}
+
+html body #doz_header_wrap #inline_header_mobile .inline-col-group {
+  display: flex !important;
+  align-items: center !important;
+  width: auto !important;
+  min-width: 0 !important;
+  padding: 0 !important;
+}
+
+html body #doz_header_wrap #inline_header_mobile .inline-col-group-center {
+  justify-content: center !important;
+}
+
+html body #doz_header_wrap #inline_header_mobile .inline-col-group-right {
+  flex-wrap: nowrap !important;
+  justify-content: flex-end !important;
+  gap: 0 !important;
+}
+
+html body #doz_header_wrap #inline_header_mobile .inline-col {
+  flex: 0 0 auto;
+  min-width: 0 !important;
+  max-width: 100% !important;
+  padding: 0 !important;
+  margin: 0 !important;
+}
+
+html body #doz_header_wrap #inline_header_mobile .inline-col-group-center .inline-col {
+  flex: 0 1 148px;
+}
+
+html body #doz_header_wrap #inline_header_mobile :is(.logo, .logo_title, .logo_title > a) {
+  display: flex !important;
+  align-items: center !important;
+  justify-content: center !important;
+  height: 44px !important;
+  min-height: 44px !important;
+  max-width: 100% !important;
+  line-height: 1 !important;
+}
+
+html body #doz_header_wrap #inline_header_mobile #logo_w202605184e66bbd892e24 .ap-mobile-header-logo-img {
+  width: 148px !important;
+  max-width: 100% !important;
+}
+
+html body #doz_header_wrap #inline_header_mobile :is(.icon_type_menu a, .search_btn a, a[href="/shop_cart"]) {
+  display: inline-flex !important;
+  align-items: center !important;
+  justify-content: center !important;
+  width: 44px !important;
+  min-width: 44px !important;
+  height: 44px !important;
+  min-height: 44px !important;
+  padding: 0 !important;
+  margin: 0 !important;
+  line-height: 1 !important;
+  box-sizing: border-box !important;
+}
+
+html body #doz_header_wrap #inline_header_mobile .search_btn .simple.icon-magnifier {
+  transform: none !important;
+}
+
+html body #doz_header_wrap #mobile_carousel_menu {
+  border-top: 1px solid rgba(222, 214, 204, 0.88) !important;
+  border-bottom: 0 !important;
+  box-shadow: none !important;
+}
+
+html body #doz_header_wrap #mobile_carousel_menu_0 {
+  padding: 0 4px !important;
+  gap: 0 !important;
+}
+
+html body #doz_header_wrap #mobile_carousel_menu_0 > .nav-item:not(.ap-shop-nav-hidden):not(.ap-shop-button-polish-hide) {
+  flex: 1 1 0 !important;
+  min-width: 0 !important;
+  max-width: none !important;
+  padding: 0 !important;
+  margin: 0 !important;
+}
+
+html body #doz_header_wrap #mobile_carousel_menu_0 > .nav-item[data-url="index"]:not(.ap-shop-nav-hidden):not(.ap-shop-button-polish-hide) {
+  flex-grow: 1.25 !important;
+}
+
+html body #doz_header_wrap #mobile_carousel_menu_0 > .nav-item > a {
+  width: 100% !important;
+  min-width: 0 !important;
+  min-height: 44px !important;
+  padding: 0 2px !important;
+  font-size: 13px !important;
+  border: 0 !important;
+  border-radius: 0 !important;
+  background: transparent !important;
+  transform: none !important;
+}
+
+html body #doz_header_wrap #inline_header_mobile :is(.ap-shop-nav-label, .ap-shop-visual-label, .ap-nav-ko, .ap-shop-pill-ko) {
+  font-size: 13px !important;
+}
+
+html body #doz_header_wrap #inline_header_mobile :is(.ap-shop-nav-label, .ap-shop-visual-label) > :is(.ap-nav-en, .ap-shop-pill-en) {
+  display: none !important;
+}
+
+html body #doz_header_wrap #doz_header a:focus-visible,
+html body header#doz_header_wrap button:focus-visible {
+  outline: 2px solid #9a3324 !important;
+  outline-offset: -2px !important;
+}
+
+@media (hover: hover) and (pointer: fine) {
+  html body #doz_header_wrap #inline_header_normal :is(.ap-shop-nav-link, .ap-shop-visual-link):hover :is(.ap-nav-ko, .ap-shop-pill-ko) {
+    opacity: 0 !important;
+  }
+
+  html body #doz_header_wrap #inline_header_normal :is(.ap-shop-nav-link, .ap-shop-visual-link):hover :is(.ap-nav-en, .ap-shop-pill-en) {
+    opacity: 1 !important;
+  }
+}
+
+@media (prefers-reduced-motion: reduce) {
+  html body #doz_header_wrap #doz_header :is(.ap-shop-nav-label, .ap-shop-visual-label) > span {
+    transition: none !important;
+  }
+}

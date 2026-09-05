@@ -2,6 +2,7 @@
   "hosting": {
     "site": "archive-pilates-home",
     "predeploy": [
+      "node scripts/validate-public-site-ux.mjs",
       "npm run validate:archive-home-address",
       "npm run validate:archive-home-team",
       "npm run validate:archive-home-community",
@@ -105,6 +106,11 @@
     ],
     "redirects": [
       {
+        "source": "/community{,/**}",
+        "destination": "https://archivepilates.imweb.me/community",
+        "type": 302
+      },
+      {
         "source": "/teams/ayoung",
         "destination": "/teams",
         "type": 301
@@ -144,10 +150,6 @@
       {
         "source": "/teams",
         "destination": "/teams/index.html"
-      },
-      {
-        "source": "/community",
-        "destination": "/community/index.html"
       },
       {
         "source": "**",
