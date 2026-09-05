@@ -10,6 +10,8 @@
     "health:system": "node scripts/run-system-health-check.mjs",
     "health:system:repair": "node scripts/run-system-health-check.mjs --mode=quick --repair",
     "test:system-health-alimtalk": "node --test scripts/tests/system-health-alimtalk.test.mjs",
+    "health:system:read-only": "node scripts/run-system-health-check.mjs --mode=quick --read-only",
+    "test:system-health": "node --test scripts/tests/system-health*.test.mjs scripts/tests/operational-retention.test.mjs",
     "test:operational-retention": "node --test scripts/tests/operational-retention.test.mjs",
     "test:contact-staff-precedence": "firebase/kangsain-functions/functions/node_modules/.bin/tsx --test scripts/tests/contact-staff-precedence.test.ts",
     "test:refund-policy": "firebase/kangsain-functions/functions/node_modules/.bin/tsx --test scripts/tests/refund-policy.test.ts",

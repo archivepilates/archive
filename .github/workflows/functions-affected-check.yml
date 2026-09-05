@@ -81,6 +81,9 @@ jobs:
       - name: Test staff and member contact precedence
         run: npm run test:contact-staff-precedence
 
+      - name: Test system health current-state evidence
+        run: npm run test:system-health
+
       - name: Validate GCP cost regression guards
         run: npm run validate:gcp-cost-guards
 

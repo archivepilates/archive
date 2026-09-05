@@ -9,9 +9,13 @@ import { shouldApplyOperationalDataPurge } from "./lib/operational-data-retentio
 import { isActionableAlimtalkFailure } from "./lib/system-health-alimtalk.mjs";
 import { monthlySettlementIndexPath } from "./lib/system-health-schedule-evidence.mjs";
 import {
-  isExcludedPrivateBooking,
-  isPrivateBooking,
-} from "./lib/private-session-order-policy.mjs";
+  canResolveHealthFinding,
+  classifyPrivateRoundIssues,
+  inspectHeadlessRuntime,
+  loadSyncRunEvidence,
+  recoveredMainFailureIds,
+  unresolvedMainWorkflowFailures,
+} from "./lib/system-health-current-state.mjs";
 
 const require = createRequire(import.meta.url);
 const admin = require("../firebase/kangsain-functions/functions/node_modules/firebase-admin");
@@ -27,10 +31,14 @@ const UID = String(process.getuid?.() || execText("id", ["-u"]).trim() || "501")
 const GH = process.env.GH_BIN || "/opt/homebrew/bin/gh";
 const args = parseArgs(process.argv.slice(2));
 const MODE = String(args.mode || "quick");
+const READ_ONLY = Boolean(args["read-only"]);
+if (READ_ONLY && (args.repair || args.apply || args["purge-operational-data"])) {
+  throw new Error("--read-only cannot be combined with mutation flags.");
+}
 const REPAIR = Boolean(args.repair);
 const APPLY = Boolean(args.apply || REPAIR);
 const PURGE_OPERATIONAL_DATA = shouldApplyOperationalDataPurge(args);
-const NO_EMAIL = Boolean(args["no-email"]);
+const NO_EMAIL = READ_ONLY || Boolean(args["no-email"]);
 const now = new Date();
 const RECENT_FAILURE_MINUTES = 7 * 24 * 60;
 
@@ -42,10 +50,13 @@ if (!admin.apps.length) admin.initializeApp({ projectId: PROJECT_ID });
 const db = admin.firestore();
 const FieldValue = admin.firestore.FieldValue;
 
-const runId = `health_${kstDateTimeCompact(now)}_${MODE}`;
+const runId = `health_${kstDateTimeCompact(now)}_${MODE}${READ_ONLY ? "_read_only" : ""}`;
 const findings = [];
 const repairs = [];
 const checked = [];
+const completedChecks = new Set();
+const syncEvidence = new Map();
+let headlessRuntime;
 
 const AUTOMATIONS = [
   {
@@ -55,6 +66,7 @@ const AUTOMATIONS = [
     area: "studiomate",
     reportDir: path.join(HOME, "ArchiveIN/automation/reports/excel-emergency-mode"),
     maxAgeMinutes: 95,
+    syncEvidence: true,
     plist: path.join(PLIST_DIR, "com.archive.studiomate-excel-emergency-mode.plist"),
     repair: "kickstart",
   },
@@ -65,6 +77,7 @@ const AUTOMATIONS = [
     area: "settlement",
     reportDir: path.join(HOME, "ArchiveIN/automation/reports/archive-dashboard-sales-daily"),
     maxAgeMinutes: 26 * 60,
+    syncEvidence: true,
     plist: path.join(PLIST_DIR, "com.archive.archive-dashboard-db-sync.plist"),
     repair: "kickstart",
   },
@@ -181,8 +194,9 @@ const AUTOMATIONS = [
 await main();
 
 async function main() {
-  mkdirSync(REPORT_DIR, { recursive: true });
+  if (!READ_ONLY) mkdirSync(REPORT_DIR, { recursive: true });
   await refreshRuntimeCheckout();
+  checkBrowserRuntime();
   await checkLaunchAgents();
   await checkWebSurfaces();
   await checkAdminAccess();
@@ -195,10 +209,29 @@ async function main() {
   await writeResults();
 }
 
+function checkBrowserRuntime() {
+  headlessRuntime = inspectHeadlessRuntime(require);
+  checked.push({ id: "browser-runtime", ...headlessRuntime });
+  completedChecks.add("browser-runtime");
+  if (!headlessRuntime.ok) {
+    addFinding({
+      checkKey: "browser-runtime",
+      area: "automation",
+      severity: "action_required",
+      title: "StudioMate 자동화 브라우저 실행 파일 확인 필요",
+      cause: headlessRuntime.error || `실행 파일 없음: ${headlessRuntime.executable}`,
+      impact: "예약·회원·매출 다운로드와 브라우저 작업 큐가 실행되지 못할 수 있습니다.",
+      suggestedAction: "운영 런타임의 Playwright 버전에 맞는 chromium-headless-shell을 복구하고 실제 조회를 검증하세요. 캐시 정리 시 사용 중인 실행 파일은 보존합니다.",
+      sourceRefs: [headlessRuntime.executable || "node_modules/playwright-core"],
+      autoRepairable: false,
+    });
+  }
+}
+
 async function refreshRuntimeCheckout() {
   const runtimeRoot = path.join(HOME, "dev/archive-in-runtime");
   if (path.resolve(ROOT) !== runtimeRoot) return;
-  if (["weekly", "deep", "e2e"].includes(MODE)) {
+  if (!READ_ONLY && ["weekly", "deep", "e2e"].includes(MODE)) {
     spawnSync("git", ["fetch", "origin", "main", "--prune"], {
       cwd: ROOT,
       encoding: "utf8",
@@ -245,6 +278,7 @@ async function refreshRuntimeCheckout() {
 }
 
 async function runWeeklyArtifactRetention() {
+  if (READ_ONLY) return;
   if (!["weekly", "deep", "e2e"].includes(MODE)) return;
   const command = ["scripts/prune-operational-artifacts.mjs", ...(APPLY ? ["--apply"] : [])];
   const run = spawnSync(process.execPath, command, {
@@ -346,6 +380,10 @@ async function checkWebSurfaces() {
 }
 
 async function checkAdminAccess() {
+  if (READ_ONLY) {
+    checked.push({ id: "archivein-admin-access", skipped: "read-only: credential-creating verifier excluded" });
+    return;
+  }
   if (!["weekly", "deep", "e2e"].includes(MODE)) return;
   const result = spawnSync(process.execPath, ["scripts/verify-archivein-admin-firestore-access.mjs"], {
     cwd: ROOT,
@@ -378,9 +416,17 @@ async function checkLaunchAgents() {
   for (const item of AUTOMATIONS) {
     const plistExists = existsSync(item.plist);
     const launchState = launchAgentState(item.label);
-    const latest = latestEvidence(item);
-    const stale = item.maxAgeMinutes && latest.exists && latest.ageMinutes > item.maxAgeMinutes;
-    const missingEvidence = item.maxAgeMinutes && !latest.exists && !item.keepAlive;
+    const pipeline = item.syncEvidence ? loadSyncRunEvidence(item.reportDir, { nowMs: now.getTime(), maxAgeMinutes: item.maxAgeMinutes }) : null;
+    if (pipeline) syncEvidence.set(item.id, pipeline);
+    const latest = pipeline ? fileEvidence(pipeline.latestPath || item.reportDir) : latestEvidence(item);
+    const stale = pipeline ? pipeline.stale : item.maxAgeMinutes && latest.exists && latest.ageMinutes > item.maxAgeMinutes;
+    const missingEvidence = pipeline ? !pipeline.lastSuccessAt : item.maxAgeMinutes && !latest.exists && !item.keepAlive;
+    const evidenceAge = pipeline ? pipeline.successAgeMinutes : latest.ageMinutes;
+    const checkKey = item.syncEvidence ? `sync:${item.id}` : "";
+    if (checkKey) {
+      completedChecks.add(checkKey);
+      completedChecks.add(`${checkKey}:availability`);
+    }
 
     checked.push({
       id: item.id,
@@ -393,17 +439,18 @@ async function checkLaunchAgents() {
       state: launchState.state,
       runs: launchState.runs,
       lastExitCode: launchState.lastExitCode,
+      ...(pipeline ? { syncEvidence: pipeline } : {}),
     });
 
-    const executionFailed =
-      launchState.loaded &&
+    const executionFailed = Boolean((pipeline?.latestPath && !pipeline.latestAttemptSucceeded) || (launchState.loaded &&
       launchState.state !== "running" &&
       launchState.runs > 0 &&
       launchState.lastExitCode !== null &&
-      launchState.lastExitCode !== 0;
+      launchState.lastExitCode !== 0));
 
     if (!plistExists) {
       addFinding({
+        checkKey: checkKey ? `${checkKey}:availability` : "",
         area: item.area,
         severity: "critical",
         title: `${item.title} LaunchAgent plist 없음`,
@@ -419,6 +466,7 @@ async function checkLaunchAgents() {
     if (!launchState.loaded) {
       const repaired = REPAIR && item.repair !== "none" ? repairLaunchAgent(item) : null;
       addFinding({
+        checkKey: checkKey ? `${checkKey}:availability` : "",
         area: item.area,
         severity: item.keepAlive ? "critical" : "warning",
         title: `${item.title} LaunchAgent 미로드`,
@@ -433,35 +481,45 @@ async function checkLaunchAgents() {
 
     if (executionFailed) {
       addFinding({
+        checkKey: checkKey ? `${checkKey}:execution` : "",
         area: item.area,
-        severity: "warning",
+        severity: pipeline && stale ? "action_required" : "warning",
         title: `${item.title} 최근 실행 실패`,
-        cause: `LaunchAgent last exit code ${launchState.lastExitCode}`,
-        impact: `${item.title}의 최근 예약 실행이 정상 완료되지 않았습니다.`,
-        suggestedAction: "stdout/stderr와 실행 결과 파일을 확인한 뒤 원인을 수정하세요.",
+        cause: pipeline?.error || `LaunchAgent last exit code ${launchState.lastExitCode}`,
+        impact: pipeline
+          ? `마지막 정상 동기화 ${pipeline.lastSuccessAt || "확인 불가"} · 연속 실패 ${pipeline.consecutiveFailures}${pipeline.failureCountIsLowerBound ? "회 이상" : "회"}`
+          : `${item.title}의 최근 예약 실행이 정상 완료되지 않았습니다.`,
+        suggestedAction: pipeline?.missingBrowserExecutable
+          ? headlessRuntime.ok
+            ? "브라우저 실행 파일은 현재 존재합니다. 중단 기간을 포함해 동기화를 재실행하고 DB 반영 성공을 확인하세요."
+            : "누락된 Playwright 실행 파일을 복구한 뒤 중단 기간을 포함해 동기화를 재실행하세요."
+          : "실패 단계와 실행 결과를 확인하고 정상 반영 완료 후 다시 점검하세요.",
         sourceRefs: [latest.path || item.plist],
         autoRepairable: false,
       });
     }
 
     if (stale || missingEvidence) {
-      const repaired = REPAIR && item.repair === "kickstart" ? kickstartLaunchAgent(item) : null;
+      const repaired = REPAIR && item.repair === "kickstart" && launchState.state !== "running" && headlessRuntime.ok
+        ? kickstartLaunchAgent(item) : null;
       addFinding({
+        checkKey,
         area: item.area,
-        severity: stale && latest.ageMinutes > item.maxAgeMinutes * 2 ? "action_required" : "warning",
+        severity: missingEvidence || evidenceAge > item.maxAgeMinutes * 2 ? "action_required" : "warning",
         title: `${item.title} 실행 결과 최신성 확인 필요`,
         cause: missingEvidence
-          ? "최근 결과 파일을 찾지 못했습니다."
-          : `최근 결과가 ${Math.round(latest.ageMinutes)}분 전입니다.`,
+          ? "정상 완료된 실행 결과를 찾지 못했습니다."
+          : `마지막 ${pipeline ? "정상 반영 원천" : "결과"}이 ${Math.round(evidenceAge)}분 전입니다.`,
         impact: "후속 데이터나 관제 화면이 오래된 원천을 볼 수 있습니다.",
         suggestedAction: repaired?.ok ? "자동 재실행을 요청했습니다. 다음 Health Check에서 재확인합니다." : "로그와 실행 결과를 확인하세요.",
-        sourceRefs: [latest.path || item.reportDir || item.runLog || item.resultFile || item.plist],
+        sourceRefs: [pipeline?.lastSuccessPath || latest.path || item.reportDir || item.runLog || item.resultFile || item.plist],
         autoRepairable: item.repair === "kickstart",
-        repairStatus: repaired?.ok ? "repaired" : repaired ? "failed" : "not_attempted",
+        repairStatus: repaired?.ok ? "requested" : repaired ? "failed" : "not_attempted",
       });
     }
 
-    await recordAutomationStatus(db, {
+    if (checkKey) completedChecks.add(`${checkKey}:execution`);
+    if (!READ_ONLY) await recordAutomationStatus(db, {
       automationId: item.id,
       title: item.title,
       ownerArea: item.area,
@@ -473,15 +531,16 @@ async function checkLaunchAgents() {
         : !launchState.loaded
           ? "LaunchAgent 미로드"
           : executionFailed
-            ? `최근 실행 실패 · exit ${launchState.lastExitCode}`
+            ? `최근 실행 실패${pipeline?.failedStep ? ` · ${pipeline.failedStep}` : ` · exit ${launchState.lastExitCode}`}`
           : stale
-            ? `최근 결과 ${Math.round(latest.ageMinutes)}분 전`
+            ? `마지막 정상 반영 ${evidenceAge === null ? "확인 불가" : `${Math.round(evidenceAge)}분 전`}`
             : "Health Check 통과",
       warnings: [
         launchState.error,
         executionFailed ? `last exit code ${launchState.lastExitCode}` : "",
         stale ? "stale evidence" : "",
         missingEvidence ? "missing evidence" : "",
+        pipeline?.lastSuccessAt ? `last success ${pipeline.lastSuccessAt}` : "",
       ].filter(Boolean),
     });
   }
@@ -567,7 +626,7 @@ async function checkQueues() {
 
 async function inspectQueue(input) {
   const docs = await loadStatusDocs(input.collection, input.activeStatuses, 250);
-  const stale = docs.filter((doc) => input.staleStatuses.includes(doc.status) && minutesSince(doc.updatedAt || doc.startedAt || doc.createdAt) > input.staleMinutes);
+  const stale = docs.filter((doc) => input.staleStatuses.includes(doc.status) && minutesSince(doc.data.updatedAt || doc.data.startedAt || doc.data.createdAt) > input.staleMinutes);
   const failedAll = await loadStatusDocs(input.collection, input.failureStatuses || ["failed", "error"], 50).catch(() => []);
   const failed = recentOrUndatedDocs(failedAll, RECENT_FAILURE_MINUTES);
   checked.push({
@@ -610,29 +669,45 @@ async function inspectQueue(input) {
 
 async function checkPrivateLessonConsistency() {
   const recentBookings = await loadRecentBookings(700);
-  const privateBookings = recentBookings.filter((doc) => isPrivateBooking(doc.data));
-  const countable = privateBookings.filter((doc) => !isExcludedPrivateBooking(doc.data));
-  const excluded = privateBookings.filter((doc) => isExcludedPrivateBooking(doc.data));
-  const missingOrder = countable.filter((doc) => !positiveNumber(doc.data?.sessionOrder?.privateCumulativeRound));
-  const cancelledWithOrder = excluded.filter((doc) => positiveNumber(doc.data?.sessionOrder?.privateCumulativeRound));
+  const { privateBookings, countable, missingOrder, cancelledWithOrder, excludedWithOrder, pastUnchecked, pastUncheckedWithOrder } =
+    classifyPrivateRoundIssues(recentBookings, { now });
+  const source = syncEvidence.get("studiomate-excel-sync");
+  const sourceFresh = Boolean(source && !source.stale && source.latestAttemptSucceeded);
+  const attendanceSinceKst = kstDate(new Date(now.getTime() - RECENT_FAILURE_MINUTES * 60_000));
+  const attendanceNeedsVerification = pastUnchecked.filter((doc) =>
+    positiveNumber(doc.data?.sessionOrder?.privateCumulativeRound) || String(doc.data.lectureDate || "") >= attendanceSinceKst);
   const duplicateRounds = duplicatePrivateRounds(countable);
+  completedChecks.add("private-session-order");
+  completedChecks.add("private-attendance");
+  for (const doc of recentBookings) completedChecks.add(`bookings/${doc.id}`);
   checked.push({
     id: "private-session-order",
     privateBookings: privateBookings.length,
     missingOrder: missingOrder.length,
     cancelledWithOrder: cancelledWithOrder.length,
+    excludedWithOrder: excludedWithOrder.length,
+    pastUncheckedWithOrder: pastUncheckedWithOrder.length,
+    pastUnchecked: pastUnchecked.length,
+    attendanceNeedsVerification: attendanceNeedsVerification.length,
+    attendanceSinceKst,
     duplicateRounds: duplicateRounds.length,
+    sourceFresh,
+    lastSourceSuccessAt: source?.lastSuccessAt || "",
+    verification: sourceFresh ? "internal_consistency_only" : "source_refresh_required",
+    reservationRange: source?.reservationRange || null,
   });
 
-  const needsReconcile = missingOrder.length || cancelledWithOrder.length || duplicateRounds.length;
+  const needsReconcile = missingOrder.length || cancelledWithOrder.length || excludedWithOrder.length || duplicateRounds.length;
   if (needsReconcile) {
     addFinding({
+      checkKey: "private-session-order",
       area: "private",
       severity: "action_required",
       title: "프라이빗 회차/취소 정합성 확인 필요",
       cause: [
         missingOrder.length ? `회차 누락 ${missingOrder.length}건` : "",
         cancelledWithOrder.length ? `취소 수업 회차 잔존 ${cancelledWithOrder.length}건` : "",
+        excludedWithOrder.length ? `집계 제외 수업 회차 잔존 ${excludedWithOrder.length}건` : "",
         duplicateRounds.length ? `동일 회원 회차 중복 ${duplicateRounds.length}건` : "",
       ].filter(Boolean).join(", "),
       impact: "강사용 설문, 노션 차트, 회원 리포트 회차가 틀어질 수 있습니다.",
@@ -640,10 +715,32 @@ async function checkPrivateLessonConsistency() {
       sourceRefs: [
         ...missingOrder.slice(0, 3).map((doc) => `bookings/${doc.id}`),
         ...cancelledWithOrder.slice(0, 3).map((doc) => `bookings/${doc.id}`),
+        ...excludedWithOrder.slice(0, 3).map((doc) => `bookings/${doc.id}`),
         ...duplicateRounds.slice(0, 3).map((row) => `bookings/${row.bookingId}`),
       ],
-      autoRepairable: true,
+      autoRepairable: false,
       repairStatus: "not_attempted",
+    });
+  }
+
+  if (attendanceNeedsVerification.length) {
+    const dates = [...new Set(attendanceNeedsVerification.map((doc) => doc.data.lectureDate))].filter(Boolean).sort();
+    const range = source?.reservationRange;
+    const rangeCovered = Boolean(range && dates.every((date) => date >= range.startDate && date <= range.endDate));
+    addFinding({
+      checkKey: "private-attendance",
+      area: "private",
+      severity: "action_required",
+      title: "지난 프라이빗 수업 출석 확인 필요",
+      cause: `최근 출석 미체크 또는 회차 잔존 ${attendanceNeedsVerification.length}건 · ${dates.join(", ")}`,
+      impact: sourceFresh && rangeCovered
+        ? "최신 원천에서도 출석이 미확인입니다. 취소로 단정하거나 회차를 자동 삭제하지 않습니다."
+        : "해당 수업일의 최신 원천 확인이 부족해 실제 출석·취소와 회차를 확정할 수 없습니다.",
+      suggestedAction: sourceFresh && rangeCovered
+        ? "StudioMate 실제 출석 상태를 확인한 후 회차를 재검증하세요."
+        : `${dates.join(", ")}을 포함한 예약 자료를 다시 내려받아 반영한 후 출석과 회차를 재검증하세요. 오늘 이후 범위 동기화만으로는 완료 처리하지 않습니다.`,
+      sourceRefs: attendanceNeedsVerification.map((doc) => `bookings/${doc.id}`),
+      autoRepairable: false,
     });
   }
 
@@ -753,35 +850,46 @@ async function checkGitAndCi() {
     dirtyPaths: dirty.map((wt) => wt.path).slice(0, 12),
     operationalFinding: false,
   });
-  const gh = spawnSync(GH, ["run", "list", "--limit", "10", "--json", "databaseId,conclusion,status,workflowName,headBranch,displayTitle"], {
+  const gh = spawnSync(GH, ["run", "list", "--branch", "main", "--limit", "50", "--json", "databaseId,workflowDatabaseId,conclusion,status,workflowName,headBranch,headSha,createdAt"], {
     cwd: ROOT,
     encoding: "utf8",
     env: process.env,
   });
   if (gh.status === 0) {
-    const runs = safeJson(gh.stdout, []);
-    const failed = runs.filter(
-      (run) => run.headBranch === "main" && (run.conclusion === "failure" || run.status === "failure"),
-    );
+    const runs = JSON.parse(gh.stdout);
+    if (!Array.isArray(runs) || !runs.length) throw new Error("GitHub main workflow evidence is empty");
+    const failed = unresolvedMainWorkflowFailures(runs);
+    completedChecks.add("github-ci");
+    completedChecks.add("github-ci-lookup");
+    for (const id of recoveredMainFailureIds(runs)) completedChecks.add(`github-run:${id}`);
+    checked.push({ id: "github-ci", runsChecked: runs.length, unresolvedFailures: failed.length });
     if (failed.length) {
       addFinding({
+        checkKey: "github-ci",
         area: "github",
         severity: "warning",
-        title: `GitHub Actions 최근 실패 ${failed.length}건`,
-        cause: "최근 GitHub Actions 실패가 있습니다.",
+        title: `GitHub Actions 미해결 실패 ${failed.length}건`,
+        cause: "같은 workflow의 main 검사에서 후속 성공으로 해소되지 않은 실패가 있습니다.",
         impact: "배포/검증 기준이 깨졌을 수 있습니다.",
         suggestedAction: "실패 workflow와 branch를 확인하고 같은 변경의 배포 여부를 점검하세요.",
         sourceRefs: failed.slice(0, 5).map((run) => `${run.workflowName || "workflow"}:${run.headBranch || ""}:${run.databaseId || ""}`),
         autoRepairable: false,
       });
     }
+  } else {
+    addFinding({
+      checkKey: "github-ci-lookup",
+      area: "github",
+      severity: "warning",
+      title: "GitHub Actions 상태 조회 실패",
+      cause: String(gh.stderr || gh.error?.message || "GitHub 조회 실패").slice(0, 300),
+      impact: "기존 GitHub 실패 항목을 해결 완료로 처리하지 않습니다.",
+      suggestedAction: "GitHub 조회 연결을 확인한 후 다시 점검하세요.",
+    });
   }
 }
 
 async function writeResults() {
-  const queueSyncResult = await syncCodexActionQueue(findings);
-  checked.push({ id: "codex-action-queue", ...queueSyncResult });
-
   const severityRank = { info: 0, warning: 1, action_required: 2, critical: 3 };
   const worst = findings.reduce((max, item) => Math.max(max, effectiveSeverityRank(item, severityRank)), 0);
   const status = worst >= 3 ? "critical" : worst >= 2 ? "action_required" : worst >= 1 ? "warning" : "success";
@@ -791,6 +899,7 @@ async function writeResults() {
     runId,
     mode: MODE,
     repair: REPAIR,
+    readOnly: READ_ONLY,
     status,
     startedAt: now.toISOString(),
     finishedAt: new Date().toISOString(),
@@ -800,16 +909,38 @@ async function writeResults() {
     actionRequiredCount: openFindings.filter((item) => item.severity === "action_required").length,
     warningCount: findings.filter((item) => effectiveSeverityRank(item, severityRank) === severityRank.warning).length,
     codexActionCount: findings.filter(needsCodexAction).length,
-    repairedCount: repairs.filter((item) => item.ok).length,
+    repairedCount: repairs.filter((item) => item.ok && item.action !== "kickstart").length,
+    restartRequestedCount: repairs.filter((item) => item.ok && item.action === "kickstart").length,
     checked,
     findings,
     repairs,
   };
-  const reportPath = path.join(REPORT_DIR, `${new Date().toISOString().replace(/[:.]/g, "-")}-${MODE}${REPAIR ? "-repair" : ""}.json`);
-  writeFileSync(reportPath, `${JSON.stringify(summary, null, 2)}\n`);
+  const reportPath = path.join(REPORT_DIR, `${new Date().toISOString().replace(/[:.]/g, "-")}-${MODE}${REPAIR ? "-repair" : ""}${READ_ONLY ? "-read-only" : ""}.json`);
+  if (READ_ONLY) {
+    console.log(JSON.stringify(summary, null, 2));
+    return;
+  }
 
+  writeFileSync(reportPath, `${JSON.stringify(summary, null, 2)}\n`);
+  // Save evidence before closing either finding store; a failed run must not resolve old incidents.
   await db.collection("systemHealthRuns").doc(runId).set({ ...summary, reportPath, updatedAt: FieldValue.serverTimestamp() }, { merge: true });
-  const batch = db.batch();
+  const queueSyncResult = await syncCodexActionQueue(findings);
+  checked.push({ id: "codex-action-queue", ...queueSyncResult });
+  summary.checkedCount = checked.length;
+  let batch = db.batch();
+  const oldFindings = await db.collection("systemHealthFindings").where("status", "==", "open").get();
+  const activeIds = new Set(findings.map((finding) => finding.findingId));
+  let writes = 0;
+  for (const doc of oldFindings.docs) {
+    if (!canResolveHealthFinding({ ...doc.data(), findingId: doc.id }, activeIds, completedChecks)) continue;
+    batch.set(doc.ref, { status: "resolved", resolvedReason: "not_detected_in_verified_latest_check", resolvedRunId: runId, resolvedAt: FieldValue.serverTimestamp(), updatedAt: FieldValue.serverTimestamp() }, { merge: true });
+    writes++;
+    if (writes === 400) {
+      await batch.commit();
+      batch = db.batch();
+      writes = 0;
+    }
+  }
   for (const finding of findings) {
     batch.set(db.collection("systemHealthFindings").doc(finding.findingId), {
       ...finding,
@@ -818,8 +949,16 @@ async function writeResults() {
       createdAt: FieldValue.serverTimestamp(),
       updatedAt: FieldValue.serverTimestamp(),
     }, { merge: true });
+    writes++;
+    if (writes === 400) {
+      await batch.commit();
+      batch = db.batch();
+      writes = 0;
+    }
   }
-  if (findings.length) await batch.commit();
+  if (writes) await batch.commit();
+  await db.collection("systemHealthRuns").doc(runId).set({ checked, checkedCount: checked.length, reconciliationCompletedAt: FieldValue.serverTimestamp() }, { merge: true });
+  writeFileSync(reportPath, `${JSON.stringify(summary, null, 2)}\n`);
 
   await recordAutomationStatus(db, {
     automationId: "system-health-check",
@@ -840,7 +979,7 @@ async function writeResults() {
 
 async function syncCodexActionQueue(currentFindings) {
   const actionable = currentFindings.filter(needsCodexAction);
-  const activeIds = new Set(actionable.map((finding) => finding.findingId));
+  const activeIds = new Set(currentFindings.map((finding) => finding.findingId));
   for (const finding of actionable) {
     const ref = db.collection("codexActionQueue").doc(finding.findingId);
     const existing = await ref.get();
@@ -850,6 +989,7 @@ async function syncCodexActionQueue(currentFindings) {
       sourceType: "systemHealthFinding",
       sourceRunId: runId,
       sourceFindingId: finding.findingId,
+      checkKey: finding.checkKey || "",
       status: existing.exists && ["in_progress", "blocked"].includes(String(existing.data()?.status || ""))
         ? String(existing.data()?.status || "open")
         : "open",
@@ -877,7 +1017,7 @@ async function syncCodexActionQueue(currentFindings) {
   const batch = db.batch();
   let resolved = 0;
   for (const doc of openSnap?.docs || []) {
-    if (activeIds.has(doc.id)) continue;
+    if (!canResolveHealthFinding({ ...doc.data(), queueId: doc.id }, activeIds, completedChecks)) continue;
     batch.set(doc.ref, {
       status: "resolved",
       resolvedReason: "not_detected_in_latest_health_check",
@@ -902,9 +1042,10 @@ function effectiveSeverityRank(item, severityRank) {
 }
 
 function addFinding(input) {
-  const findingId = `health_${stableId([input.area, input.title, input.cause, input.sourceRefs?.[0] || ""]).slice(0, 28)}`;
+  const findingId = `health_${stableId(input.checkKey ? [input.area, input.checkKey] : [input.area, input.title, input.cause, input.sourceRefs?.[0] || ""]).slice(0, 28)}`;
   findings.push({
     findingId,
+    checkKey: input.checkKey || "",
     area: input.area || "system",
     severity: input.severity || "warning",
     title: input.title || "시스템 점검 항목",
@@ -970,7 +1111,7 @@ function repairLaunchAgent(item) {
 }
 
 function kickstartLaunchAgent(item) {
-  const result = spawnSync("launchctl", ["kickstart", "-k", `gui/${UID}/${item.label}`], { encoding: "utf8" });
+  const result = spawnSync("launchctl", ["kickstart", `gui/${UID}/${item.label}`], { encoding: "utf8" });
   const ok = result.status === 0;
   const repair = { item: item.id, action: "kickstart", ok, code: result.status ?? 0, stderr: String(result.stderr || result.stdout || "").trim().slice(0, 500) };
   repairs.push(repair);
@@ -1002,11 +1143,20 @@ async function loadStatusDocs(collectionName, statuses, limit) {
 }
 
 async function loadRecentBookings(limit) {
-  const snap = await db.collection("bookings").orderBy("lectureStartAt", "desc").limit(limit).get().catch(async () => {
-    const fallback = await db.collection("bookings").limit(limit).get();
-    return fallback;
-  });
-  return snap.docs.map((doc) => ({ id: doc.id, data: doc.data() }));
+  const snap = await db.collection("bookings").orderBy("lectureStartAt", "desc").limit(limit).get();
+  const rows = new Map(snap.docs.map((doc) => [doc.id, { id: doc.id, data: doc.data() }]));
+  // A previously flagged booking must not disappear just because newer reservations fill the sample.
+  const open = await db.collection("systemHealthFindings").where("status", "==", "open").get();
+  const trackedIds = [...new Set(open.docs.filter((doc) => doc.data().area === "private")
+    .flatMap((doc) => doc.data().sourceRefs || [])
+    .filter((ref) => /^bookings\/[^/]+$/.test(ref)).map((ref) => ref.split("/")[1]))];
+  const missing = trackedIds.filter((id) => !rows.has(id));
+  for (let offset = 0; offset < missing.length; offset += 100) {
+    const docs = await db.getAll(...missing.slice(offset, offset + 100).map((id) => db.collection("bookings").doc(id)));
+    for (const doc of docs) if (doc.exists) rows.set(doc.id, { id: doc.id, data: doc.data() });
+  }
+  checked.push({ id: "private-booking-coverage", recentSample: snap.size, trackedFollowups: missing.length, loadedBookings: rows.size });
+  return [...rows.values()];
 }
 
 async function loadChartRequestsNeedingAttention() {
@@ -1113,12 +1263,13 @@ async function sendAttentionEmail(summary, reportPath) {
   const subject = `[시스템점검][${summary.status === "critical" ? "긴급" : "확인필요"}] 자동복구 ${summary.repairedCount}건 · ${kstDate(new Date())}`;
   const body = [
     "주체: ARCHIVE IN / Mac mini 시스템 점검 자동화",
-    `결론: ${summary.findingCount}건을 감지했고 ${summary.repairedCount}건은 자동복구를 시도했습니다.`,
+    `결론: ${summary.findingCount}건 감지 · 직접 복구 ${summary.repairedCount}건 · 재실행 요청 ${summary.restartRequestedCount}건입니다.`,
     "",
     "핵심:",
     `- 긴급: ${summary.criticalCount}건`,
     `- 확인필요: ${summary.actionRequiredCount}건`,
     `- 경고: ${summary.warningCount}건`,
+    "- 재실행 요청은 복구 완료가 아닙니다. 실제 정상 반영 결과로 재검증합니다.",
     `- 모드: ${summary.mode}${summary.repair ? " / repair" : ""}`,
     "",
     "주요 항목:",

@@ -194,6 +194,11 @@
                 <li>ARCHIVE CORE 자동화 관제 탭은 Firestore automationStatus를 표시하므로, 새 자동화는 실행 주체와 상태를 automationStatus에 기록해야 합니다.</li>
                 <li>LaunchAgent와 Codex 자동화 정의는 sync:automation-observability로 점검해 CORE 관제에 반영합니다.</li>
                 <li>LaunchAgent는 로그 최신성뿐 아니라 실제 last exit code를 확인하며, 실행 실패를 최신 로그 생성으로 정상 처리하지 않습니다.</li>
+                <li>회원·예약·매출 최신성은 다운로드부터 DB 반영까지 정상 완료한 원천 시각으로 판정합니다. 실패·dry-run·부분 반영 로그는 성공으로 인정하지 않습니다.</li>
+                <li>Playwright 실행 파일을 선행 점검합니다. 재실행 요청은 복구 완료와 구분하며, 실행 중 작업을 강제 종료하지 않습니다.</li>
+                <li>지난 프라이빗 수업의 출석 미체크와 실제 취소는 분리합니다. 최근 7일 또는 회차가 남은 수업을 확인 대상으로 보며, 동기화 중단 기간의 수업일이 확인되지 않으면 회차를 임의 삭제하지 않고 해당 기간 원천 재확인을 요청합니다.</li>
+                <li>GitHub 실패는 같은 workflow·main의 후속 성공 증거로 해소합니다. 조회 실패·생략·표본 밖 항목은 해결 완료로 처리하지 않습니다.</li>
+                <li>점검 결과를 먼저 저장한 뒤 확인된 범위의 기존 오류만 종료합니다. 읽기 전용 점검은 상태 저장·자동복구·메일 발송 없이 검증합니다. 기준 갱신: 2026-09-05.</li>
                 <li>운영 LaunchAgent는 임시 worktree가 아니라 최신 main을 반영한 /Users/archivepilates/dev/archive-in-runtime만 실행합니다.</li>
                 <li>예약 가능 기한은 StudioMate 네이티브 반복설정을 사용합니다. 매주 월요일 날짜를 직접 쓰던 Mac mini LaunchAgent는 폐기했으며 시스템 점검이 복구하지 않습니다.</li>
                 <li>호호요가 크롤링 자동화는 2026-08-28 폐기했습니다. LaunchAgent와 실행 코드는 복구하지 않으며 기존 구글시트와 과거 수집 결과만 기록으로 보존합니다.</li>
