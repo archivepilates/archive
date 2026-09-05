@@ -4,6 +4,11 @@ import crypto from "node:crypto";
 import { execFileSync } from "node:child_process";
 
 const dir = "artifacts/public-site-ux-20260905";
+const publicResponse = await fetch("https://archivepilates.imweb.me/17", { signal: AbortSignal.timeout(15000) });
+if (!publicResponse.ok) throw new Error("Cannot verify existing public UX installation");
+if ((await publicResponse.text()).includes('data-archive-pilates-public-ux="2026-09-05a"')) {
+  throw new Error("Public UX is already installed. Preserve SEO common code; do not prepare duplicate unit scripts.");
+}
 fs.mkdirSync(dir, { recursive: true });
 const listing = JSON.parse(execFileSync("/Users/archivepilates/.local/bin/imweb", ["--output", "json", "script", "list"], { encoding: "utf8", maxBuffer: 32e6 }));
 const before = Object.fromEntries(listing.data.map(row => [row.position, row.scriptContent]));

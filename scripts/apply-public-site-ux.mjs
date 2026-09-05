@@ -3,6 +3,10 @@ import fs from "node:fs";
 import { spawnSync } from "node:child_process";
 
 assert(process.argv.includes("--apply"), "Explicit --apply required; prepare and verify the release first.");
+const publicResponse = await fetch("https://archivepilates.imweb.me/17", { signal: AbortSignal.timeout(15000) });
+assert(publicResponse.ok, "Cannot verify existing public UX installation");
+assert(!(await publicResponse.text()).includes('data-archive-pilates-public-ux="2026-09-05a"'),
+  "Public UX is already installed. Preserve SEO common code; duplicate unit writes are forbidden.");
 const dir = "artifacts/public-site-ux-20260905";
 function cli(args) {
   const result = spawnSync("/Users/archivepilates/.local/bin/imweb", ["--output", "json", ...args], { encoding: "utf8", maxBuffer: 32e6 });
