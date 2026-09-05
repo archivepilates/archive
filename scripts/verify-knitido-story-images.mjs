@@ -22,7 +22,7 @@ try {
           const response = await route.fetch();
           const html = await response.text();
           assert(!html.includes(asset), "New image asset already installed; use live verification");
-          await route.fulfill({ response, body: html.replace("</head>", `<script defer src="${asset}"></script></head>`) });
+          await route.fulfill({ response, body: html.replace("</head>", `<script src="${asset}"></script></head>`) });
         });
       }
       const page = await context.newPage();
@@ -47,6 +47,7 @@ try {
       const state = await page.evaluate(() => ({ width: document.documentElement.clientWidth, scrollWidth: document.documentElement.scrollWidth }));
       assert(state.scrollWidth <= state.width + 1, "Horizontal overflow");
       assert.equal(obsolete.length, 0, "Obsolete loader request returned");
+      assert.equal(jpgRequests.length, 0, "Legacy story JPG request returned");
       await page.screenshot({ path: `${dir}/${preview ? "preview" : "live"}-story-images-${width}.png` });
       results.push({ width, images, obsoleteRequests: obsolete.length, legacyJpgRequests: jpgRequests.length });
       console.log(`${width}: three WebP images, obsolete requests ${obsolete.length}, legacy JPG requests ${jpgRequests.length}`);
