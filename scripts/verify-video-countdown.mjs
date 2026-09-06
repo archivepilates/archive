@@ -35,11 +35,15 @@ try {
           const b = el.getBoundingClientRect();
           return { left: b.left, right: b.right, viewport: innerWidth, overflow: document.documentElement.scrollWidth > innerWidth + 1,
             clipped: [...el.querySelectorAll('*')].filter(n => n.scrollWidth > n.clientWidth + 1 && getComputedStyle(n).display !== 'inline').map(n => n.className),
+            outside: [...el.querySelectorAll('*')].filter(n => { const r = n.getBoundingClientRect(); return r.left < b.left || r.right > b.right; }).map(n => n.className),
+            rightBorder: getComputedStyle(el).borderRightWidth,
             nativePrice: document.querySelector('.real_price')?.textContent.trim() };
         });
         assert.ok(geometry.left >= 0 && geometry.right <= width + 1);
         assert.equal(geometry.overflow, false);
         assert.deepEqual(geometry.clipped, []);
+        assert.deepEqual(geometry.outside, []);
+        assert.ok(parseFloat(geometry.rightBorder) > 0 && parseFloat(geometry.rightBorder) <= 2);
         if (type === 'detail') assert.equal(geometry.nativePrice, '15,000원');
         await page.screenshot({ path: new URL(`${type}-${width}.png`, output).pathname });
         results.push({ type, width, ...geometry, stableCounter: true });

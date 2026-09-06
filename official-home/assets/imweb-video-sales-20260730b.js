@@ -112,10 +112,21 @@
       item_category: "온라인 클래스",
       item_list_id: listId || undefined,
       item_list_name: listName || undefined,
-      price: product.price,
+      price: currentPrice(idx),
       currency: "KRW",
       quantity: 1
     };
+  }
+
+  // Imweb is authoritative for period discounts and their automatic expiry.
+  function currentPrice(idx) {
+    if (currentIndex() === idx) {
+      var node = document.querySelector('.real_price');
+      var amount = node && Number(node.textContent.replace(/[^0-9]/g, ''));
+      if (amount > 0) return amount;
+    }
+    var product = liveProducts()[idx];
+    return product ? product.price : undefined;
   }
 
   function track(eventName, parameters) {
@@ -161,7 +172,7 @@
         idx: idx,
         name: data.name || CATALOG[idx].title,
         image: data.image_url || "",
-        price: Number(data.price || CATALOG[idx].price)
+        price: Number(data.price) > 0 ? Number(data.price) : undefined
       };
     });
     return products;
@@ -225,7 +236,7 @@
       '<span class="' + ROOT_CLASS + '__best-body">',
       "<strong>" + catalog.title + "</strong>",
       '<span class="' + ROOT_CLASS + '__reason">' + entry.reason + "</span>",
-      '<span class="' + ROOT_CLASS + '__price">' + catalog.code + " · " + formatPrice(catalog.price) + "</span>",
+      '<span class="' + ROOT_CLASS + '__price">' + catalog.code + (product && product.price ? " · " + formatPrice(product.price) : "") + "</span>",
       "</span>",
       "</a>"
     ].join("");
@@ -293,6 +304,14 @@
       ].join("");
       root.setAttribute("data-archive-pilates-video-sales", VERSION);
     }
+
+    BEST.forEach(function (entry) {
+      var price = root.querySelector('[data-ap-sales-item="' + entry.idx + '"] .' + ROOT_CLASS + '__price');
+      var product = products[entry.idx];
+      if (!price || !product || !product.price) return;
+      var label = CATALOG[entry.idx].code + ' · ' + formatPrice(product.price);
+      if (price.textContent !== label) price.textContent = label;
+    });
 
     if (!document.documentElement.hasAttribute("data-ap-ga-list-video")) {
       document.documentElement.setAttribute("data-ap-ga-list-video", VERSION);
@@ -373,7 +392,7 @@
     document.documentElement.setAttribute(marker, VERSION);
     track("view_item", {
       currency: "KRW",
-      value: CATALOG[idx].price,
+      value: currentPrice(idx),
       items: [itemPayload(idx, "video_detail", "온라인 클래스 상세")]
     });
   }
@@ -421,7 +440,7 @@
     if (idx && CATALOG[idx] && /(구매하기|바로구매|결제하기)/.test(label)) {
       track("begin_checkout", {
         currency: "KRW",
-        value: CATALOG[idx].price,
+        value: currentPrice(idx),
         items: [itemPayload(idx, "video_detail", "온라인 클래스 상세")]
       });
     }
