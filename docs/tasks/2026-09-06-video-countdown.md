@@ -26,7 +26,30 @@
 - No overflow or clipped countdown text; digit updates preserve element dimensions.
 - Deterministic fixtures cover deadline, duplicate loader, reduced motion,
   native-price preservation, and excluded shopping/classroom/private routes.
-- Production save, live verification, member regression, and push pending.
+- Deployed Hosting version: `d2ce8212f142475e`; 71 files, exactly one new path.
+- Runtime compression differs between local Node 25 and deploy Node 24. Before
+  manifest matches source using Node 25 gzip-9; after manifest matches the same
+  source using Node 24 gzip-9. Existing file bytes and Hosting config are preserved.
+- New public asset SHA-256: `4be12f931a1f61c0c407d56b580165caf02c51189a4342f0500cec35dbb771f6`.
+- SEO Header saved and reload-read exactly: 26980 characters; one 149-character
+  append. Top, Footer, and empty Body preserved. Unit scripts JSON is unchanged.
+- Live responsive checks passed at all four widths, with stable countdown bounds.
+- All 28 paid-video detail pages show exactly one countdown and native 15,000 KRW.
+- Existing classroom canary passed: raw asset hash and cache policy unchanged;
+  anonymous classroom/ACA6/ACH9 access remains login-redirected.
+- Ordinary BUYER/NONBUYER fixtures: 24 protected-page checks passed across mobile
+  and desktop; classroom lists six permitted entries for BUYER and none for
+  NONBUYER. Temporary test groups restored and API-read back for both accounts.
+- Existing Imweb `header_more_menu.js` race warning occurred in two matrix runs;
+  no access failures or new countdown errors. This pre-existing warning is not
+  fixed in the countdown scope. Actual payment and full playback were not tested.
+- Implementation commit: `ff6ba6f`. Push follows successful verification.
+
+## Evidence
+- Ignored local artifacts: `artifacts/countdown-20260906/`.
+- Includes before/after Hosting and unit-script snapshots, responsive screenshots,
+  local/live results, and the 28-detail-page readback.
+- Member fixture evidence: `artifacts/public-site-ux-20260905/member-regression-*`.
 
 ## Operating Rules
 No ARCHIVE CORE rule update is needed: this change is public display only and

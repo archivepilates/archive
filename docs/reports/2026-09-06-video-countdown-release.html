@@ -1,0 +1,22 @@
+<!doctype html>
+<html lang="ko"><head><meta charset="utf-8"><meta name="viewport" content="width=device-width,initial-scale=1"><title>영상 카운트다운 적용 | ARCHIVE PILATES</title><style>
+*{box-sizing:border-box}body{margin:0;background:#fff;color:#252321;font-family:system-ui,sans-serif;line-height:1.7;letter-spacing:0}main{max-width:880px;margin:auto;padding:40px 22px}h1{font-size:28px;line-height:1.35}h2{font-size:19px;margin:32px 0 10px}p{max-width:65ch}a{color:#a9372b}strong{font-weight:750}.label{font-size:13px;color:#a9372b;font-weight:750}.rows{border-top:1px solid #ddd}.row{display:grid;grid-template-columns:140px 1fr;gap:20px;padding:14px 0;border-bottom:1px solid #ddd}.row span{overflow-wrap:anywhere}small{color:#666}@media(max-width:500px){.row{grid-template-columns:1fr;gap:3px}h1{font-size:25px}}
+</style></head><body><main>
+<p class="label">ARCHIVE PILATES · 2026.09.06</p><h1>영상구매 카운트다운 적용 완료</h1>
+<p><a href="https://archivepilates.imweb.me/17">영상구매 목록</a>과 판매 영상 28개 상세페이지에 승인된 가격 안내와 카운트다운을 적용했습니다.</p>
+<h2>표시 내용</h2><p><strong>9월 30일까지 15,000원</strong><br>10월 1일부터 영상당 20,000원으로 변경됩니다.</p>
+<p>한국시간 2026년 10월 1일 0시에 안내 영역이 자동으로 사라집니다. 숫자 영역의 크기는 고정되며, 모션 감소 설정에서는 움직임 없이 숫자만 변경됩니다.</p>
+<p><strong>실제 상품 가격 변경 및 기간 할인 예약은 이번 작업에 포함되지 않았습니다.</strong> 현재 판매가는 15,000원 그대로이며, 카운트다운이 가격을 변경하지 않습니다.</p>
+<h2>검증 결과</h2><div class="rows">
+<div class="row"><strong>공개 화면</strong><span>320·390·768·1440px 목록/상세 검증 통과. 가로 넘침·숫자 잘림·카운터 크기 변화 없음.</span></div>
+<div class="row"><strong>판매 영상</strong><span>28개 상품에서 카운트다운 1개씩 표시, 실제 가격 15,000원 확인.</span></div>
+<div class="row"><strong>내 강의실</strong><span>일반 구매자·미구매자 테스트 계정, 모바일·PC 총 24개 보호 페이지 검증 통과. 테스트 권한 복원 확인.</span></div>
+<div class="row"><strong>기존 데이터</strong><span>SEO Header에 로더 한 줄만 추가. Header 상단·Body·Footer 및 단위 스크립트 원문 보존. 실제 고객·주문·상품가격 변경 없음.</span></div>
+<div class="row"><strong>배포 범위</strong><span>Firebase archive-pilates-home에 파일 한 개 추가. 기존 70개 경로의 내용과 Hosting 설정 보존. Functions·Firestore 배포 없음.</span></div>
+<div class="row"><strong>자동 종료</strong><span>종료 시각·중복 삽입 방지·모션 감소·비대상 경로 제외를 별도 고정 시각 테스트로 확인.</span></div>
+</div>
+<h2>남은 사항</h2><p>기존 아임웹 header_more_menu.js의 간헐적 경고가 테스트 2회에서 관찰됐지만, 내 강의실 권한 검증 실패는 없었습니다. 해당 경고는 이번 변경 범위에서 수정하지 않았습니다. 실제 카드 결제와 전체 영상 재생은 수행하지 않았습니다.</p>
+<p>가격 예약 변경은 별도 작업이 필요합니다. 운영 정책이나 발송 규칙을 바꾸지 않아 ARCHIVE CORE 운영규칙 수정은 필요하지 않습니다.</p>
+<h2>배포 기록</h2><div class="rows"><div class="row"><strong>구현 커밋</strong><span>ff6ba6f</span></div><div class="row"><strong>브랜치</strong><span>codex/mini/video-countdown-20260906</span></div><div class="row"><strong>Hosting 버전</strong><span>d2ce8212f142475e</span></div></div>
+<p><small>별도 공개 홈페이지 브랜치 계보로 배포했으며, 공식홈 소스가 없는 origin/main에 관련 없는 커밋을 일괄 합치지 않았습니다.</small></p>
+</main></body></html>
