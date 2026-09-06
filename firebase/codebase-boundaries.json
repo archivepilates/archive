@@ -39,6 +39,8 @@
         "scheduledCreatePrivateLessonChartRequests",
         "scheduledSendTodayPrivateLessonChartAlimtalks",
         "scheduledSyncPrivateLessonNotionProjections",
+        "syncPrivateLessonNotionFromRecord",
+        "syncPrivateLessonNotionFromRequest",
         "scheduledReconcileCurrentMonthPrivateLessonCharts",
         "scheduledGeneratePrivateLessonChartReports",
         "scheduledPurgeDiscardedMemberSignupContracts",

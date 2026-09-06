@@ -11,6 +11,8 @@ import {
   reconcileCurrentMonthPrivateLessonCharts,
   sendTodayPrivateLessonChartAlimtalks,
   syncPendingPrivateLessonNotionProjections,
+  syncPrivateNotionOnRecordWrite,
+  syncPrivateNotionOnRequestWrite,
 } from "../privateLessonChart/privateLessonChart";
 import {
   syncPrivateLessonSessionOnRecordWrite,
@@ -42,6 +44,29 @@ import {
   scheduleOptions,
 } from "../runtime/functionOptions";
 import { redirectShortLinkHandler } from "../utils/shortLinks";
+import { REGION } from "../config/constants";
+import { notionToken } from "../config/secrets";
+
+const privateNotionEventOptions = {
+  region: REGION,
+  secrets: [notionToken],
+  timeoutSeconds: 540,
+  memory: "256MiB" as const,
+  minInstances: 0,
+  maxInstances: 1,
+  concurrency: 1,
+  retry: true,
+};
+
+export const syncPrivateLessonNotionFromRecord = onDocumentWritten(
+  { ...privateNotionEventOptions, document: "privateLessonChartRecords/{recordId}" },
+  syncPrivateNotionOnRecordWrite,
+);
+
+export const syncPrivateLessonNotionFromRequest = onDocumentWritten(
+  { ...privateNotionEventOptions, document: "privateLessonChartRequests/{requestId}" },
+  syncPrivateNotionOnRequestWrite,
+);
 
 export const scheduledSyncPrivateSurveyResponses = onSchedule(
   {

@@ -154,6 +154,10 @@ requireMarkers("firebase/kangsain-functions/functions/src/privateLessonChart/pri
   'workflowVersion: "post_only_v2"',
   "sendDailyPrivateLessonChartAlimtalksForDate",
   "syncPendingPrivateLessonNotionProjections",
+  "syncPrivateNotionOnRecordWrite",
+  "syncPrivateNotionOnRequestWrite",
+  "notionProjectionLease",
+  'syncState("privateLessonNotionReconciliation")',
   "validateSimplifiedPostAnswers",
   "simplifiedPrivateLessonDraft",
   'chartRequest.workflowVersion === "post_only_v2" ? "post"',
@@ -168,6 +172,9 @@ requireMarkers("firebase/kangsain-functions/functions/src/privateSurvey/privateS
   'doc.notionSync || { status: "pending" as const }',
 ]);
 requireMarkers("firebase/kangsain-functions/functions/src/exports/privateChart.ts", [
+  "syncPrivateLessonNotionFromRecord",
+  "syncPrivateLessonNotionFromRequest",
+  'schedule: "20 22 * * *"',
   'schedule: "40 22 * * *"',
   'schedule: "0 7-21 * * *"',
 ]);
@@ -189,7 +196,7 @@ requireMarkers("core/assets/app.js", [
 ]);
 requireMarkers("core/rules/index.html", [
   "privateLessonSessions",
-  "Notion은 야간 표시·열람용입니다.",
+  "Notion은 읽기 전용 표시·열람용입니다.",
   "immutable snapshot",
   "supersededByBookingId",
   "자체설문 링크형 v2는 기존 ARCHIVE PILATES 로고 이미지형 양식을 유지하며",

@@ -1,5 +1,5 @@
 import { createHmac, randomBytes } from "node:crypto";
-import { Timestamp } from "firebase-admin/firestore";
+import { FieldPath, Timestamp } from "firebase-admin/firestore";
 import { logger } from "firebase-functions";
 import { DEFAULT_STUDIO_ID } from "../config/constants";
 import { geminiApiKey, notionToken, privateSurveyWebhookSecret, solapiApiKey, solapiApiSecret, solapiPfid } from "../config/secrets";
@@ -33,6 +33,14 @@ import {
 } from "../alimtalk/templateStatus";
 import { completePrivateLessonMediaUpload, initPrivateLessonMediaUpload, uploadPrivateLessonMediaChunk } from "./privateLessonMedia";
 import { invalidatePendingPrivateLessonReportCandidates } from "./privateLessonReportCandidates";
+import {
+  PRIVATE_NOTION_DEBOUNCE_MS,
+  privateNotionSourceChanged,
+  reconcilePrivateNotionPages,
+  runPrivateNotionProjection,
+  type PrivateNotionState,
+  type PrivateNotionStore,
+} from "./privateLessonNotionSync";
 import {
   createPrivateLessonReportSnapshot,
   currentPrivateLessonReportRevision,
@@ -1829,10 +1837,9 @@ function hasManualPrivateLessonReportText(record: PrivateLessonChartRecordDoc): 
 }
 
 function pendingNotionProjection(
-  record: PrivateLessonChartRecordDoc,
+  _record: PrivateLessonChartRecordDoc,
 ): NonNullable<PrivateLessonChartRecordDoc["notionSync"]> {
   return {
-    ...(record.notionSync || {}),
     status: "pending",
     error: "",
   };
@@ -1844,96 +1851,105 @@ export async function syncPendingPrivateLessonNotionProjections(): Promise<{
   failed: number;
   skipped: number;
 }> {
-  const [pendingSnap, failedSnap] = await Promise.all([
-    refs.privateLessonChartRecords().where("notionSync.status", "==", "pending").limit(50).get(),
-    refs.privateLessonChartRecords().where("notionSync.status", "==", "failed").get(),
-  ]);
-  const failedDocs = [...failedSnap.docs]
-    .sort((a, b) => notionSyncMillis(a.data()) - notionSyncMillis(b.data()))
-    .slice(0, 10);
-  const records = [...new Map(
-    [...pendingSnap.docs, ...failedDocs].map((doc) => [doc.id, doc.data()] as const),
-  ).values()];
+  const progressRef = refs.syncState("privateLessonNotionReconciliation");
+  const progress = (await progressRef.get()).data();
   let checked = 0;
   let synced = 0;
   let failed = 0;
   let skipped = 0;
-  for (const record of records) {
-    const chartRequest = (await refs.privateLessonChartRequest(record.requestId).get()).data();
-    if (!chartRequest) {
-      skipped += 1;
-      await refs.privateLessonChartRecord(record.recordId).set(
-        { notionSync: { ...pendingNotionProjection(record), status: "failed", error: "차트 요청 없음" }, updatedAt: nowTimestamp() },
-        { merge: true },
-      );
-      continue;
-    }
-    checked += 1;
-    const notionSync = await syncPrivateLessonChartRecordToNotion(record, chartRequest);
-    const finalStatus = await db.runTransaction(async (tx) => {
-      const recordRef = refs.privateLessonChartRecord(record.recordId);
-      const requestRef = refs.privateLessonChartRequest(record.requestId);
-      const [currentRecordSnap, currentRequestSnap] = await Promise.all([
-        tx.get(recordRef),
-        tx.get(requestRef),
-      ]);
-      const currentRecord = currentRecordSnap.data();
-      const currentRequest = currentRequestSnap.data();
-      if (!currentRecord || !currentRequest) return "skipped" as const;
-      const currentSourceVersion = privateLessonNotionProjectionVersion(currentRecord, currentRequest);
-      const sourceChanged = currentSourceVersion !== notionSync.sourceVersion;
-      const nextSync = {
-        ...(currentRecord.notionSync || {}),
-        ...notionSync,
-        status: sourceChanged ? "pending" as const : notionSync.status,
-        sourceVersion: currentSourceVersion,
-        error: sourceChanged ? "" : notionSync.error || "",
-      };
-      tx.set(recordRef, { notionSync: nextSync, updatedAt: nowTimestamp() }, { merge: true });
-      return nextSync.status;
-    });
-    if (finalStatus === "synced") synced += 1;
-    else if (finalStatus === "failed") failed += 1;
-    else skipped += 1;
-  }
+  await reconcilePrivateNotionPages({
+    cursor: { nextLane: progress?.nextLane || 0, cursors: progress?.cursors || {} },
+    list: async (lane, after) => {
+      const records = refs.privateLessonChartRecords();
+      const query = (lane === "all" ? records : records.where("notionSync.status", "==", lane)).orderBy(FieldPath.documentId());
+      const page = await (after ? query.startAfter(after) : query).limit(5).get();
+      return page.docs.map((doc) => doc.id);
+    },
+    save: async (cursor) => { await progressRef.set({ ...cursor, updatedAt: nowTimestamp() }, { merge: true }); },
+    process: async (recordId) => {
+      checked += 1;
+      try {
+        const status = await syncPrivateNotionByRecordId(recordId, true);
+        if (status === "synced") synced += 1;
+        else if (status === "failed") failed += 1;
+        else skipped += 1;
+      } catch (err) {
+        failed += 1;
+        logger.error("private Notion reconciliation failed", { recordId, error: errorMessage(err) });
+      }
+    },
+  });
   logger.info("syncPendingPrivateLessonNotionProjections completed", { checked, synced, failed, skipped });
   return { checked, synced, failed, skipped };
+}
+
+const privateNotionStore: PrivateNotionStore = {
+  transact: (id, update) => db.runTransaction(async (tx) => {
+    const recordRef = refs.privateLessonChartRecord(id);
+    const recordSnap = await tx.get(recordRef);
+    const rawRecord = recordSnap.data();
+    const lease = (rawRecord as any)?.notionProjectionLease;
+    const record = rawRecord ? {
+      ...rawRecord,
+      notionSync: { ...(rawRecord.notionSync || { status: "pending" as const }), leaseToken: lease?.token || "", leaseUntilMs: lease?.untilMs || 0 },
+    } : undefined;
+    const request = record?.requestId
+      ? (await tx.get(refs.privateLessonChartRequest(record.requestId))).data()
+      : undefined;
+    const result = update(record ? { record, request } : null);
+    // Sync acknowledgments do not change canonical source timestamps/content.
+    if (record && result.state) {
+      const { leaseToken = "", leaseUntilMs = 0, ...notionSync } = result.state;
+      // Source writers may merge old notionSync data; they never own this fence.
+      tx.update(recordRef, { notionSync, notionProjectionLease: { token: leaseToken, untilMs: leaseUntilMs } } as any);
+    }
+    return result.result;
+  }),
+};
+
+async function syncPrivateNotionByRecordId(recordId: string, retryFailures = false) {
+  return runPrivateNotionProjection(recordId, {
+    store: privateNotionStore,
+    version: ({ record, request }) => privateLessonNotionProjectionVersion(record, request!),
+    project: ({ record, request }, checkpoint) => syncPrivateLessonChartRecordToNotion(record, request!, checkpoint),
+    retryFailures,
+  });
+}
+
+export async function syncPrivateNotionOnRecordWrite(event: any): Promise<void> {
+  if (!privateNotionSourceChanged(event.data?.before?.data(), event.data?.after?.data())) return;
+  // The original save is already committed. Read the newest source after coalescing.
+  await new Promise((resolve) => setTimeout(resolve, PRIVATE_NOTION_DEBOUNCE_MS));
+  await syncPrivateNotionByRecordId(String(event.params.recordId));
+}
+
+export async function syncPrivateNotionOnRequestWrite(event: any): Promise<void> {
+  const before = event.data?.before?.data();
+  const after = event.data?.after?.data();
+  if (!privateNotionSourceChanged(before, after)) return;
+  const recordId = String(event.params.requestId);
+  const record = (await refs.privateLessonChartRecord(recordId).get()).data();
+  if (!record) return;
+  if (before && privateLessonNotionProjectionVersion(record, before) === privateLessonNotionProjectionVersion(record, after)) return;
+  await new Promise((resolve) => setTimeout(resolve, PRIVATE_NOTION_DEBOUNCE_MS));
+  await syncPrivateNotionByRecordId(recordId);
 }
 
 async function syncPrivateLessonChartRecordToNotion(
   record: PrivateLessonChartRecordDoc,
   chartRequest: PrivateLessonChartRequestDoc,
+  checkpoint: (page: Partial<PrivateNotionState>) => Promise<void>,
 ): Promise<NonNullable<PrivateLessonChartRecordDoc["notionSync"]>> {
   try {
     const reportCanBeExposed = canExposePrivateLessonReport(record);
-    const reportResolution = reportCanBeExposed
-      ? await resolveReportShortUrl(record)
-      : {
-        reportTargetUrl: "",
-        publicReportUrl: "",
-        publicReportCanonicalUrl: "",
-        shouldUpdateRecord: Boolean(record.publicReportUrl || record.publicReportCanonicalUrl),
-        shouldUpdateNotion: Boolean(record.publicReportUrl || record.publicReportCanonicalUrl),
-      };
-    if (reportResolution.shouldUpdateRecord) {
-      await refs.privateLessonChartRecord(record.recordId).set(
-        {
-          publicReportUrl: reportResolution.publicReportUrl,
-          publicReportCanonicalUrl: reportResolution.publicReportCanonicalUrl,
-          updatedAt: nowTimestamp(),
-        },
-        { merge: true },
-      );
-    }
+    // Links are prepared by report generation, never by a display-only worker.
     const recordForNotion = {
       ...record,
-      publicReportUrl: reportCanBeExposed ? reportResolution.publicReportUrl || record.publicReportUrl || "" : "",
-      publicReportCanonicalUrl: reportCanBeExposed
-        ? reportResolution.publicReportCanonicalUrl || record.publicReportCanonicalUrl || ""
-        : "",
+      publicReportUrl: reportCanBeExposed ? record.publicReportUrl || "" : "",
+      publicReportCanonicalUrl: reportCanBeExposed ? record.publicReportCanonicalUrl || "" : "",
     } as PrivateLessonChartRecordDoc;
-    const sourceVersion = privateLessonNotionProjectionVersion(recordForNotion, chartRequest);
-    const instructorPage = await syncInstructorMemberChartPage(recordForNotion, chartRequest);
+    const sourceVersion = privateLessonNotionProjectionVersion(record, chartRequest);
+    const instructorPage = await syncInstructorMemberChartPage(recordForNotion, chartRequest, checkpoint);
     if (!instructorPage) {
       throw new Error(`Notion 강사 차트 위치를 찾을 수 없습니다: ${record.staffName || "강사 미확인"}`);
     }
@@ -1956,62 +1972,25 @@ async function syncPrivateLessonChartRecordToNotion(
   }
 }
 
-function privateLessonNotionProjectionVersion(
+export function privateLessonNotionProjectionVersion(
   record: PrivateLessonChartRecordDoc,
   chartRequest: PrivateLessonChartRequestDoc,
 ): string {
   return stableHash({
-    request: {
-      bookingId: chartRequest.bookingId,
-      memberId: chartRequest.memberId,
-      memberName: chartRequest.memberName,
-      staffId: chartRequest.staffId,
-      staffName: chartRequest.staffName,
-      lessonDate: chartRequest.lessonDate,
-      lessonStartAt: chartRequest.lessonStartAt?.toMillis?.() || 0,
-      sessionNumber: chartRequest.sessionNumber,
-      status: chartRequest.status,
-      intakeSummary: chartRequest.intakeSummary || null,
-    },
-    record: {
-      bookingId: record.bookingId,
-      memberId: record.memberId,
-      memberName: record.memberName,
-      staffId: record.staffId,
-      staffName: record.staffName,
-      lessonDate: record.lessonDate,
-      lessonStartAt: record.lessonStartAt?.toMillis?.() || 0,
-      sessionNumber: record.sessionNumber,
-      cancelledAt: record.cancelledAt?.toMillis?.() || 0,
-      postRecord: record.postRecord || null,
-      publicSummary: record.publicSummary || record.gptDraftSummary || "",
-      publicNextDirection: record.publicNextDirection || record.gptDraftNextDirection || "",
-      publicReportUrl: record.publicReportUrl || "",
-      publicReportApproval: record.publicReportApproval || null,
-      media: record.media || null,
-    },
+    title: notionSessionTitle(record, chartRequest),
+    children: notionInstructorChartChildren(record, chartRequest),
   }).slice(0, 24);
-}
-
-function notionSyncMillis(record: PrivateLessonChartRecordDoc): number {
-  const syncedAt = Date.parse(String(record.notionSync?.syncedAt || ""));
-  return Number.isFinite(syncedAt) ? syncedAt : 0;
 }
 
 async function syncInstructorMemberChartPage(
   record: PrivateLessonChartRecordDoc,
   chartRequest: PrivateLessonChartRequestDoc,
+  checkpoint: (page: Partial<PrivateNotionState>) => Promise<void>,
 ): Promise<{ pageId: string; pageUrl: string } | null> {
   const title = notionSessionTitle(record, chartRequest);
   const knownPageId = record.notionSync?.instructorPageId;
   if (knownPageId) {
-    await updateNotionPageTitle(knownPageId, title).catch((err) => {
-      logger.warn("update instructor chart page title failed", {
-        pageId: knownPageId,
-        title,
-        message: errorMessage(err),
-      });
-    });
+    await updateNotionPageTitle(knownPageId, title);
     await replacePageContent(knownPageId, notionInstructorChartChildren(record, chartRequest));
     return {
       pageId: knownPageId,
@@ -2027,16 +2006,32 @@ async function syncInstructorMemberChartPage(
     return "";
   });
   if (!memberPageId) return null;
-  const existingPageId = await findChildPageByExactTitle(memberPageId, title);
+  const creationTitle = (record.notionSync as PrivateNotionState | undefined)?.creationTitle;
+  const existingPageId = await findChildPageByExactTitle(memberPageId, creationTitle || title);
   if (existingPageId) {
+    await checkpoint({ instructorPageId: existingPageId, instructorPageUrl: notionPageUrl(existingPageId), creationTitle: "" });
+    await updateNotionPageTitle(existingPageId, title);
     await replacePageContent(existingPageId, notionInstructorChartChildren(record, chartRequest));
     return { pageId: existingPageId, pageUrl: notionPageUrl(existingPageId) };
   }
-  const page = await notionRequest("pages", "POST", {
-    parent: { page_id: memberPageId },
-    properties: notionTitle(title),
-    children: notionInstructorChartChildren(record, chartRequest),
-  });
+  // An uncertain create must be reconciled, not repeated with a changed title.
+  if (creationTitle) throw new Error("Notion 페이지 생성 결과 확인 필요: 중복 생성을 보류합니다.");
+  await checkpoint({ creationTitle: title });
+  let page: any;
+  try {
+    page = await notionRequest("pages", "POST", {
+      parent: { page_id: memberPageId },
+      properties: notionTitle(title),
+      children: notionInstructorChartChildren(record, chartRequest),
+    });
+  } catch (err) {
+    if (/Notion API pages failed (400|401|403|404|429):/.test(errorMessage(err))) {
+      await checkpoint({ creationTitle: "" });
+    }
+    throw err;
+  }
+  if (!page.id) throw new Error("Notion page create returned no page ID");
+  await checkpoint({ instructorPageId: String(page.id), instructorPageUrl: String(page.url || notionPageUrl(page.id)), creationTitle: "" });
   return {
     pageId: String(page.id || ""),
     pageUrl: String(page.url || notionPageUrl(String(page.id || ""))),
@@ -2106,11 +2101,12 @@ async function appendPageContent(pageId: string, children: Record<string, unknow
 
 async function replacePageContent(pageId: string, children: Record<string, unknown>[]): Promise<void> {
   const existing = await notionBlockChildren(pageId);
+  // Preserve the old body if appending the new content fails.
+  await appendPageContent(pageId, children);
   for (const child of existing) {
     if (!child?.id || child?.type === "child_page") continue;
     await notionRequest(`blocks/${child.id}`, "DELETE");
   }
-  await appendPageContent(pageId, children);
 }
 
 async function updateNotionPageTitle(pageId: string, title: string): Promise<void> {
@@ -2150,24 +2146,39 @@ async function notionQueryFirst(databaseId: string, filter: Record<string, unkno
   return first?.id ? String(first.id) : "";
 }
 
+let notionNextRequestAt = 0;
+
 async function notionRequest(
   path: string,
   method: "GET" | "POST" | "PATCH" | "DELETE",
   body?: Record<string, unknown>,
 ): Promise<any> {
-  const response = await fetch(`https://api.notion.com/v1/${path}`, {
-    method,
-    headers: {
-      Authorization: `Bearer ${notionToken.value()}`,
-      "Content-Type": "application/json",
-      "Notion-Version": NOTION_API_VERSION,
-    },
-    body: body ? JSON.stringify(body) : undefined,
-  });
-  const text = await response.text();
-  const parsed = text ? JSON.parse(text) : {};
-  if (!response.ok) throw new Error(`Notion API ${path} failed ${response.status}: ${parsed.message || text}`);
-  return parsed;
+  for (let attempt = 0; ; attempt += 1) {
+    const wait = Math.max(0, notionNextRequestAt - Date.now());
+    notionNextRequestAt = Date.now() + wait + 400;
+    if (wait) await new Promise((resolve) => setTimeout(resolve, wait));
+    const response = await fetch(`https://api.notion.com/v1/${path}`, {
+      method,
+      signal: AbortSignal.timeout(20_000),
+      headers: {
+        Authorization: `Bearer ${notionToken.value()}`,
+        "Content-Type": "application/json",
+        "Notion-Version": NOTION_API_VERSION,
+      },
+      body: body ? JSON.stringify(body) : undefined,
+    });
+    const text = await response.text();
+    let parsed: any = {};
+    try { parsed = text ? JSON.parse(text) : {}; } catch { parsed = { message: text }; }
+    const retryAfter = Number(response.headers.get("retry-after") || 1);
+    // Only retry explicit rejection; ambiguous append/create outcomes need read-back.
+    if (response.status === 429 && attempt < 2 && Number.isFinite(retryAfter) && retryAfter >= 0 && retryAfter <= 30) {
+      await new Promise((resolve) => setTimeout(resolve, Math.max(1, retryAfter) * 1000));
+      continue;
+    }
+    if (!response.ok) throw new Error(`Notion API ${path} failed ${response.status}: ${parsed.message || text}`);
+    return parsed;
+  }
 }
 
 async function readChartRequestFromRequest(
@@ -3345,7 +3356,7 @@ function notionInstructorChartChildren(
     ? record.publicReportUrl || record.publicReportCanonicalUrl || ""
     : "";
   return [
-    callout("Firestore 원본을 야간에 표시한 읽기 전용 회차 기록입니다. 기록·검수·발송은 ARCHIVE IN에서 처리합니다."),
+    callout("읽기 전용 회차 기록입니다. 작성·수정·발송은 강사 기록 화면과 ARCHIVE CORE에서 처리합니다."),
     heading(2, `${record.memberName}님 ${record.sessionNumber}회차`),
     paragraph(`수업일: ${lessonTimeText(chartRequest)} / 담당: ${record.staffName || "미정"}`),
     divider(),
@@ -3370,7 +3381,7 @@ function notionInstructorChartChildren(
     heading(3, "회원 리포트"),
     paragraph(
       reportButtonUrl
-        ? "회원용 리포트가 생성되었습니다. 최종 발송 상태는 ARCHIVE IN에서 확인합니다."
+        ? "회원용 리포트가 생성되었습니다. 최종 발송 상태는 ARCHIVE CORE에서 확인합니다."
         : "회원용 리포트 생성 대기 중입니다.",
     ),
     ...(reportButtonUrl
@@ -3506,7 +3517,7 @@ function privateLessonChartStageLabel(
   chartRequest?: PrivateLessonChartRequestDoc,
 ): string {
   if (record.cancelledAt || chartRequest?.status === "cancelled") return "취소";
-  if (isPrivateLessonReportSent(record)) return "리포트 발송완료";
+  if (record.publicReportApproval?.status === "sent" || record.publicReportApproval?.sentAt || (record as any).publicReportSentAt || record.sentRevision) return "리포트 발송완료";
   if (isPrivateLessonReportGenerated(record)) return "리포트 생성완료";
   if (record.postSubmittedAt || chartRequest?.postStatus === "submitted") return "리포트 생성중";
   return "수업 기록대기";
