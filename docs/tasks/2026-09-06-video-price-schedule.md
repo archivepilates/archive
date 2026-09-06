@@ -29,18 +29,37 @@
 - Local injection into live pages passes eight geometry checks, stable updates,
   reduced motion, expiry, deduplication, and excluded routes.
 - Native-price fixtures cover 15,000, 20,000, and 22,000 KRW with three cards each.
-- Deployment and ordinary-member checks: pending.
+- Live 320/390/768/1440px listing/detail checks pass after the final save: no
+  clipped descendants, horizontal overflow, or changing clock dimensions.
+- Expiry, reduced motion, deduplication, and seven excluded routes pass.
+- Ordinary-member matrix passes 24 protected-page checks on mobile/desktop.
+  Buyer classroom shows six expected cards; nonbuyer shows none. Both synthetic
+  accounts' original empty groups were restored and read back; fixture lock removed.
+- The existing Imweb header_more_menu.js race warning remains; no new access
+  failure was observed. Real checkout and full media playback were not exercised.
 
 ## Release Boundary
 - Source branch: codex/mini/video-price-schedule-20260906, base 043281f.
 - Before Hosting version: d2ce8212f142475e, archive-pilates-home.
+- Deployed Hosting version: 63c046e0f767ec39; code commit 2e02e69.
 - 71-path Hosting manifest compared with Node 24 gzip hashes; only countdown and
   video-sales JavaScript differ. Firebase reserved init paths excluded locally.
 - Hosting configuration and classroom asset unchanged. No Functions deployment.
-- SEO Header Code changes are two exact loader cache-version replacements only.
+- Seven predeploy guards and the postdeploy classroom canary pass.
+- SEO Header Code: one countdown loader URL/marker replacement, plus one explicit
+  video-price asset loader. Public readback preserves the other 36 custom blocks.
+- Unit Header update was refused by the CLI's per-request safety count (144/50),
+  before any write. No CLI limit was changed. Unit Header remains byte-identical.
+- The approved native SEO editor instead references the new price asset before
+  the existing unit loader. Its duplicate guard skips the old immutable URL.
+  Live network proof: exactly one price-runtime asset request with the new query.
+- The live price asset matches Git source; three recommendation cards show the
+  current native 15,000 KRW price. Fixture prices 20,000/22,000 also pass.
 - No customer order, payment, refund, or real member entitlement mutation.
 - Test fixtures may temporarily modify only the two established synthetic users;
   the existing test runner restores their original groups with API readback.
+- Task-owned product tab closed; pre-existing SEO/login tabs preserved. The synced
+  Chrome group was closed, not deleted. All test browser contexts exited.
 
 ## Operating Rule Record
 - Purpose: maintain advertised/current price consistency at the discount deadline.
