@@ -1093,7 +1093,7 @@ const guardGroups = [
         markers: [
           "삭제, 취소, 시간변경은 sessionOrder.counted=false와 제외 사유를 남기고 해당 수업 이후 회차까지 연쇄 재계산합니다.",
           "supersededByBookingId를 우선 따라 같은 수업 세션으로 이관",
-          "예약 시간이 바뀌거나 취소되면 야간 동기화에서 Notion 제목, 날짜, 상태, 회차, 발송상태를 함께 갱신",
+          "예약 시간·취소·회차 변경이 Firestore 회차 요청에 반영되면 Notion 제목과 본문도 갱신",
         ],
       },
     ],
@@ -1445,10 +1445,24 @@ const guardGroups = [
         markers: [
           "운영규칙",
           "수강료 문의 즉시발송",
-          "Notion은 야간 표시·열람용입니다. Private Session Records DB, 웹훅 승인, 예약 스케줄러는 사용하지 않습니다.",
+          "Notion은 읽기 전용 표시·열람용입니다. Private Session Records DB, 웹훅 승인, 예약 스케줄러는 사용하지 않습니다.",
           "업로드는 16MB 청크 기준",
           "기능 브랜치만 라이브에 배포되고 main으로 승격되지 않은 상태는 rollback",
         ],
+      },
+    ],
+  },
+  {
+    id: "private-notion-event-projection",
+    reason: "저장 후 Notion 백그라운드 반영과 야간 복구가 이전 야간 전용 방식으로 되돌아가지 않도록 확인합니다.",
+    files: [
+      {
+        file: "firebase/kangsain-functions/functions/src/exports/privateChart.ts",
+        markers: ["syncPrivateLessonNotionFromRecord", "syncPrivateLessonNotionFromRequest", 'schedule: "20 22 * * *"'],
+      },
+      {
+        file: "firebase/kangsain-functions/functions/src/privateLessonChart/privateLessonNotionSync.ts",
+        markers: ["reconcilePrivateNotionPages", "PRIVATE_NOTION_LEASE_MS", "!state.leaseToken", "currentVersion !== version"],
       },
     ],
   },

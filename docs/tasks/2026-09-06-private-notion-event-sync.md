@@ -53,6 +53,8 @@ Updated: 2026-09-06
 
 - Pending targets: `functions-private-chart` and ARCHIVE CORE operating-rules Hosting, using the canonical release/main promotion procedure. Do not deploy another worktree's stale source.
 - Before release, rerun guards against latest main; verify the two new exports and existing 22:20 scheduler. No template update or member send is part of this release.
+- The affected detector conservatively reports all five codebases because the root test command and ownership manifest changed. Inspection confirms these changes only add tests and private-chart export ownership; no other runtime contract, dependency, or entrypoint changed. Build/validate all five, deploy only functions-private-chart.
+- `scripts/validate-private-notion-live.mjs --confirm-synthetic-notion-test` is the scoped live harness. It uses an old-date cancelled synthetic request, empty phone fields, no post-submission stamp or approvals, no booking/member documents, and one dedicated Notion page. Existing session projection side effects are included in cleanup. It does not run any scheduler or send queue.
 - After release, use an isolated synthetic chart/page to verify save response, provider read-back, source version, lease clearance, retry, and cleanup. Preserve unrelated member data and do not send any test Alimtalk.
 - Update CORE's implementation/deployment status only after the corresponding proof exists.
 - Rollback should remove the two event handlers explicitly and retain/restore a working nightly processor. Merely redeploying an older handler export set is not proof that event triggers are removed. Never restore old canonical report data to roll back a display-only worker.
