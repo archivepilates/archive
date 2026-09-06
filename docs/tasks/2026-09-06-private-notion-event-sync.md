@@ -5,8 +5,8 @@ Updated: 2026-09-06
 ## Scope And State
 
 - Implemented in `codex/mini/private-notion-event-sync-20260906`, based on `origin/main` at `951aa7a`.
-- Local implementation and regression verification only; not deployed or pushed.
-- No production Firestore/Notion writes, real member fixtures, sends, or StudioMate actions during verification.
+- User approved the deploy set. Runtime release `7b16090` was promoted to origin/main; functions-private-chart deployed on 2026-09-06 at 13:44 KST, all 24 Functions ACTIVE.
+- Local tests were read-only/in-memory. Approved live verification used one isolated synthetic request/record/derived session and one disposable Notion page. No actual member fixture, send, booking, or StudioMate action.
 - Notion remains a read-only general-page projection in the existing instructor/member location, with the existing chart body format.
 - Member intake's separate 22:40 Notion schedule is unchanged.
 
@@ -47,11 +47,14 @@ Updated: 2026-09-06
 - `npm run build:function-codebases`: all five codebases.
 - Guards: private-flow contract, data-source policy, function boundaries, GCP cost guards, ARCHIVE CORE hosting, and `git diff --check`.
 - Independent read-only review found and prompted fixes for scan starvation, age-out, and A-to-B-interrupted-to-A acknowledgment.
-- In-memory tests replace Firestore/provider writes. The changed transaction adapter, real trigger delivery, and Notion provider timing still require scoped live verification after deployment approval.
+- Approved live harness verified real Firestore event delivery, current-source transaction adapter, Notion read-back, same-content dedupe, request-only changes, failed-state recovery, and cleanup. Five stages passed. Firestore commit was 114ms; provider-confirmed initial projection 11005ms, latest edit 17401ms, same-content acknowledgment 6841ms, request change 17498ms, failed-state recovery 17563ms. These are one synthetic run, not a latency SLA or a measurement of the full instructor HTTP save.
+- Synthetic source and session documents removed; Notion page archived and read-back confirmed. No synthetic member candidates/sends found. Evidence: `artifacts/private-notion-event-sync/plc_notion_canary_1788669974707_5bfaf3d3.json`.
+- New event handlers ACTIVE with document filters/retry policy/maximum one instance; 22:20 chart repair and unchanged 22:40 member-intake schedules ENABLED in Asia/Seoul. The nightly full-source scan was unit-tested and configured, not manually run on real member records.
+- GitHub Actions runtime release check `34012178055` succeeded. CORE local responsive verification passed 85 combinations. CORE Hosting/live proof is completed separately by the release command and saved with release artifacts.
 
 ## Release And Rollback
 
-- Pending targets: `functions-private-chart` and ARCHIVE CORE operating-rules Hosting, using the canonical release/main promotion procedure. Do not deploy another worktree's stale source.
+- Targets: `functions-private-chart` and ARCHIVE CORE operating-rules Hosting, using the canonical release/main promotion procedure. Do not deploy another worktree's stale source.
 - Before release, rerun guards against latest main; verify the two new exports and existing 22:20 scheduler. No template update or member send is part of this release.
 - The affected detector conservatively reports all five codebases because the root test command and ownership manifest changed. Inspection confirms these changes only add tests and private-chart export ownership; no other runtime contract, dependency, or entrypoint changed. Build/validate all five, deploy only functions-private-chart.
 - `scripts/validate-private-notion-live.mjs --confirm-synthetic-notion-test` is the scoped live harness. It uses an old-date cancelled synthetic request, empty phone fields, no post-submission stamp or approvals, no booking/member documents, and one dedicated Notion page. Existing session projection side effects are included in cleanup. It does not run any scheduler or send queue.

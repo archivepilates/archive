@@ -19,6 +19,8 @@ const db = admin.firestore();
 db.settings({ ignoreUndefinedProperties: true });
 const token = process.env.NOTION_TOKEN || execFileSync("gcloud", ["secrets", "versions", "access", "latest", "--secret=NOTION_TOKEN", "--project=archive-pilates"], { encoding: "utf8" }).trim();
 const id = `plc_notion_canary_${Date.now()}_${randomUUID().slice(0, 8)}`;
+const parentPageId = "36ed49eae4bf8161a0d3edd9f30643b9";
+const pageTitle = `ARCHIVE PILATES Notion 검증 ${id}`;
 const out = "artifacts/private-notion-event-sync";
 mkdirSync(out, { recursive: true });
 const recordRef = db.collection("privateLessonChartRecords").doc(id);
@@ -26,7 +28,7 @@ const requestRef = db.collection("privateLessonChartRequests").doc(id);
 const sessionRef = db.collection("privateLessonSessions").doc(id);
 const summary = { id, startedAt: new Date().toISOString(), stages: [], cleanup: {}, ok: false };
 let pageId = "";
-let fixtureCreated = false;
+let pageCreateAttempted = false;
 
 async function notion(path, method = "GET", body) {
   const r = await fetch(`https://api.notion.com/v1/${path}`, {
@@ -67,9 +69,10 @@ async function synced(label, marker, started) {
 try {
   assert.equal((await recordRef.get()).exists, false);
   assert.equal((await requestRef.get()).exists, false);
+  pageCreateAttempted = true;
   const page = await notion("pages", "POST", {
-    parent: { page_id: "36ed49eae4bf8161a0d3edd9f30643b9" },
-    properties: { title: { title: [{ text: { content: `ARCHIVE PILATES Notion 검증 ${id}` } }] } },
+    parent: { page_id: parentPageId },
+    properties: { title: { title: [{ text: { content: pageTitle } }] } },
   });
   pageId = page.id;
   summary.pageId = pageId;
@@ -81,7 +84,6 @@ try {
   batch.create(requestRef, { ...common, requestId: id, status: "cancelled", cancellationReason: "Isolated Notion canary; no booking, phone, or send", preStatus: "pending", postStatus: "pending", workflowVersion: "post_only_v2" });
   batch.create(recordRef, { ...common, recordId: id, requestId: id, cancelledAt: stamp, gptStatus: "draft_created", postRecord: { focusAreas: ["테스트"], changes: [marker("A")], nextDirection: "합성 데이터 검증" }, notionSync: { status: "pending", instructorPageId: pageId, instructorPageUrl: page.url } });
   await batch.commit();
-  fixtureCreated = true;
   summary.saveLatencyMs = Date.now() - start;
   await synced("initial-save", marker("A"), start);
 
@@ -123,22 +125,40 @@ try {
   process.exitCode = 1;
 } finally {
   try {
-    if (fixtureCreated) {
-      const batch = db.batch();
-      batch.delete(recordRef); batch.delete(requestRef); batch.delete(sessionRef);
-      await batch.commit();
-      await waitFor("fixture removal", async () => {
-        const docs = await db.getAll(recordRef, requestRef, sessionRef);
-        return docs.every((d) => !d.exists);
-      }, 30000);
-      summary.cleanup.firestore = true;
+    // Creation acknowledgments may be lost. Reconcile only this unique fixture ID.
+    await db.runTransaction(async (tx) => {
+      const docs = await tx.getAll(recordRef, requestRef, sessionRef);
+      for (const doc of docs) {
+        if (!doc.exists) continue;
+        assert.equal(doc.data().memberId, id, "Refusing to delete another fixture/member");
+        assert.equal(doc.data().studioId, "notion-live-canary");
+        tx.delete(doc.ref);
+      }
+    });
+    await waitFor("fixture removal", async () => {
+      const docs = await db.getAll(recordRef, requestRef, sessionRef);
+      return docs.every((d) => !d.exists);
+    }, 30000);
+    summary.cleanup.firestore = true;
+  } catch (err) { summary.cleanup.firestoreError = err.message; process.exitCode = 1; }
+  try {
+    // Independent cleanup: a database failure must not skip the Notion artifact.
+    if (!pageId && pageCreateAttempted) {
+      let cursor = "";
+      do {
+        const children = await notion(`blocks/${parentPageId}/children?page_size=100${cursor ? `&start_cursor=${encodeURIComponent(cursor)}` : ""}`);
+        const match = children.results.find((child) => child.child_page?.title === pageTitle);
+        if (match) { pageId = match.id; break; }
+        cursor = children.has_more ? children.next_cursor : "";
+      } while (cursor);
+      if (!pageId) throw new Error(`Uncertain Notion creation: verify unique title ${pageTitle}`);
     }
     if (pageId) {
       await notion(`pages/${pageId}`, "PATCH", { archived: true });
       assert.equal((await notion(`pages/${pageId}`)).archived, true);
       summary.cleanup.notionArchived = true;
     }
-  } catch (err) { summary.cleanup.error = err.message; process.exitCode = 1; }
+  } catch (err) { summary.cleanup.notionError = err.message; process.exitCode = 1; }
   summary.finishedAt = new Date().toISOString();
   writeFileSync(`${out}/${id}.json`, JSON.stringify(summary, null, 2));
   console.log(JSON.stringify(summary, null, 2));
