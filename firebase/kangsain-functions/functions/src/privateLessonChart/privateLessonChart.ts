@@ -2124,33 +2124,71 @@ function blockHasHref(block: any, url: string): boolean {
   );
 }
 
-async function appendPageContent(pageId: string, children: Record<string, unknown>[]): Promise<void> {
-  await notionRequest(`blocks/${pageId}/children`, "PATCH", { children });
+async function appendPageContent(pageId: string, children: Record<string, unknown>[]): Promise<any[]> {
+  const result = await notionRequest(`blocks/${pageId}/children`, "PATCH", { children });
+  return Array.isArray(result.results) ? result.results : [];
 }
 
 async function replacePageContent(pageId: string, children: Record<string, unknown>[], assertWritable: () => Promise<void>): Promise<void> {
   const existing = await notionBlockChildren(pageId);
   const textOf = (block: any) => (block[block.type]?.rich_text || []).map((part: any) => part.plain_text || part.text?.content || "").join("");
-  const hasHistory = existing.some((block) => block.type === "toggle" && textOf(block) === "이전 양식 기록");
-  const isLegacy = existing.some((block) => /수업 전 계획|수업 후 기록|야간.*동기화/.test(textOf(block)));
-  if (!hasHistory && isLegacy) {
+  const ownerRef = refs.syncState(`privateNotionPage_${pageId.replaceAll("-", "").toLowerCase()}`);
+  const owner = (await ownerRef.get()).data() as any;
+  const hashes = owner?.managedBlockHashes as Record<string, string> | undefined;
+  const fingerprint = async (block: any): Promise<string> => {
+    const nested = block.has_children ? await notionBlockChildren(block.id) : [];
+    const childHashes: string[] = [];
+    for (const child of nested) childHashes.push(await fingerprint(child));
+    return privateNotionBlockFingerprint(block, childHashes);
+  };
+  const removable: { id: string; hash: string }[] = [];
+  for (const block of existing) {
+    if (!block.id || (block.type === "toggle" && textOf(block) === "이전 양식 기록")) continue;
+    if (hashes ? Object.hasOwn(hashes, block.id) : isManagedPrivateNotionBlock(block)) {
+      const hash = await fingerprint(block);
+      if (!hashes || hash === hashes[block.id]) removable.push({ id: block.id, hash });
+    }
+  }
+  // The first migration keeps every legacy text, including text added after an older archive.
+  if (!hashes) {
     const archived = existing.filter((block) => !block.has_children && ["paragraph", "heading_1", "heading_2", "heading_3", "bulleted_list_item", "numbered_list_item", "quote", "bookmark", "callout"].includes(block.type));
-    const content = archived.map(privateNotionArchiveBlock);
+    let history = existing.find((block) => block.type === "toggle" && textOf(block) === "이전 양식 기록");
+    const saved = history ? await notionBlockChildren(history.id) : [];
+    const content = archived.filter((block) => !saved.some((item) => privateNotionBlockFingerprint(item) === privateNotionBlockFingerprint(block))).map(privateNotionArchiveBlock);
+    if (content.length > 100) throw new Error("Notion 이전 기록 보존 범위 확인 필요");
     if (content.length) {
       await assertWritable();
-      await appendPageContent(pageId, [{ object: "block", type: "toggle", toggle: {
-        rich_text: [{ type: "text", text: { content: "이전 양식 기록" } }], color: "gray_background", children: content,
-      } }]);
+      if (history) await appendPageContent(history.id, content);
+      else {
+        const created = await appendPageContent(pageId, [{ object: "block", type: "toggle", toggle: {
+          rich_text: [{ type: "text", text: { content: "이전 양식 기록" } }], color: "gray_background", children: content,
+        } }]);
+        history = created[0];
+      }
+      if (!history?.id) throw new Error("Notion 이전 기록 보존 결과 확인 필요");
+      const confirmed = await notionBlockChildren(history.id);
+      const texts = confirmed.map(textOf);
+      if (!content.every((block) => texts.includes(textOf(block)))) throw new Error("Notion 이전 기록 보존 검증 실패");
     }
   }
   // Preserve the old body if appending the new content fails.
   await assertWritable();
-  await appendPageContent(pageId, children);
-  for (const child of existing) {
-    if (!child?.id || !isManagedPrivateNotionBlock(child)) continue;
+  const appended = await appendPageContent(pageId, children);
+  if (appended.length !== children.length || appended.some((block) => !block.id)) throw new Error("Notion 생성 블록 확인 필요");
+  const nextHashes: Record<string, string> = Object.fromEntries(removable.map((block) => [block.id, block.hash]));
+  for (const block of appended) nextHashes[block.id] = await fingerprint(block);
+  // Checkpoint new block identities before deletes so retries still recognize a partial replacement.
+  await assertWritable();
+  await ownerRef.set({ managedBlockHashes: nextHashes }, { merge: true });
+  for (const child of removable) {
     await assertWritable();
+    const latest = await notionRequest(`blocks/${child.id}`, "GET");
+    if (await fingerprint(latest) !== child.hash) continue;
     await notionRequest(`blocks/${child.id}`, "DELETE");
+    delete nextHashes[child.id];
   }
+  await assertWritable();
+  await ownerRef.update({ managedBlockHashes: nextHashes });
 }
 
 export function privateNotionArchiveBlock(block: any): Record<string, unknown> {
@@ -2168,11 +2206,13 @@ export function privateNotionArchiveBlock(block: any): Record<string, unknown> {
   return { object: "block", type: block.type, [block.type]: writable };
 }
 
-export function isManagedPrivateNotionBlock(block: any): boolean {
-  if (block?.type === "toggle") {
-    const label = (block.toggle?.rich_text || []).map((part: any) => part.plain_text || part.text?.content || "").join("");
-    return ["회원 사전설문 참고", "홈워크", "주의사항", "수업 자료"].includes(label);
-  }
+export function privateNotionBlockFingerprint(block: any, children: any[] = []): string {
+  return stableHash({ block: privateNotionArchiveBlock(block), children: children.map((child) =>
+    typeof child === "string" ? child : privateNotionBlockFingerprint(child, child.children || [])) });
+}
+
+export function isManagedPrivateNotionBlock(block: any, hashes?: Record<string, string>, children: any[] = []): boolean {
+  if (hashes) return Boolean(block?.id && hashes[block.id] === privateNotionBlockFingerprint(block, children));
   return !block?.has_children && ["paragraph", "heading_1", "heading_2", "heading_3", "bulleted_list_item", "numbered_list_item", "quote", "bookmark", "divider", "callout"].includes(block?.type);
 }
 

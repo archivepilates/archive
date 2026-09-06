@@ -82,14 +82,33 @@ try {
   const start = Date.now();
   const batch = db.batch();
   batch.create(requestRef, { ...common, requestId: id, status: "cancelled", cancellationReason: "Isolated Notion canary; no booking, phone, or send", preStatus: "pending", postStatus: "pending", workflowVersion: "post_only_v2" });
-  batch.create(recordRef, { ...common, recordId: id, requestId: id, cancelledAt: stamp, gptStatus: "draft_created", postRecord: { focusAreas: ["테스트"], changes: [marker("A")], nextDirection: "합성 데이터 검증" }, notionSync: { status: "pending", instructorPageId: pageId, instructorPageUrl: page.url } });
+  batch.create(recordRef, { ...common, recordId: id, requestId: id, cancelledAt: stamp, gptStatus: "draft_created", postRecord: { focusAreas: ["테스트"], changes: [marker("A")], nextDirection: "합성 데이터 검증", homework: marker("homework") }, notionSync: { status: "pending", instructorPageId: pageId, instructorPageUrl: page.url } });
   await batch.commit();
   summary.saveLatencyMs = Date.now() - start;
   await synced("initial-save", marker("A"), start);
 
+  const initialBlocks = await notion(`blocks/${pageId}/children?page_size=100`);
+  const generatedHomework = initialBlocks.results.find((b) => b.type === "toggle" && b.toggle.rich_text.some((t) => t.plain_text === "홈워크"));
+  assert.ok(generatedHomework, "generated homework toggle");
+  const homeworkChildren = await notion(`blocks/${generatedHomework.id}/children?page_size=100`);
+  await notion(`blocks/${homeworkChildren.results[0].id}`, "PATCH", { paragraph: { rich_text: [{ text: { content: marker("manual-child-edit") } }] } });
+  await notion(`blocks/${pageId}/children`, "PATCH", { children: [
+    { object: "block", type: "paragraph", paragraph: { rich_text: [{ text: { content: marker("manual-paragraph") } }] } },
+    { object: "block", type: "toggle", toggle: { rich_text: [{ text: { content: "홈워크" } }], children: [
+      { object: "block", type: "paragraph", paragraph: { rich_text: [{ text: { content: marker("manual-toggle") } }] } },
+    ] } },
+  ] });
+
   const editStart = Date.now();
   for (const value of ["B", "C"]) await recordRef.update({ "postRecord.changes": [marker(value)], "notionSync.status": "pending", updatedAt: admin.firestore.Timestamp.now() });
   const latest = await synced("latest-edit", marker("C"), editStart);
+  const preserved = await notion(`blocks/${pageId}/children?page_size=100`);
+  assert.ok(JSON.stringify(preserved).includes(marker("manual-paragraph")), "manual paragraph preserved");
+  let nestedText = "";
+  for (const block of preserved.results.filter((b) => b.has_children)) nestedText += JSON.stringify(await notion(`blocks/${block.id}/children?page_size=100`));
+  assert.ok(nestedText.includes(marker("manual-child-edit")), "manual child edit preserved");
+  assert.ok(nestedText.includes(marker("manual-toggle")), "same-title manual toggle preserved");
+  summary.manualContentPreserved = true;
   const before = await notion(`pages/${pageId}`);
   const duplicateStart = Date.now();
   await recordRef.update({ canaryTouch: admin.firestore.Timestamp.now(), "notionSync.status": "pending", updatedAt: admin.firestore.Timestamp.now() });
