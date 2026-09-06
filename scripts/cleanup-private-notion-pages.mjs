@@ -288,7 +288,8 @@ try {
       const done = load("refreshed", {});
       let attempted = 0;
       for (const [id, before] of targets) {
-        if (done[id]?.ok && done[id].pageId === norm(before.notionSync?.instructorPageId) && done[id].sourceVersion === helper.privateLessonNotionProjectionVersion(before, requests.get(before.requestId || id))) continue;
+        if (done[id]?.ok && before.notionSync?.status === "synced" && done[id].pageId === norm(before.notionSync?.instructorPageId) &&
+          done[id].sourceVersion === before.notionSync.sourceVersion && done[id].sourceVersion === helper.privateLessonNotionProjectionVersion(before, requests.get(before.requestId || id))) continue;
         if (attempted++ >= limit) break;
         const current = await assertUnchanged(id, before);
         const q = (await db.collection("privateLessonChartRequests").doc(current.requestId || id).get()).data();
@@ -346,14 +347,131 @@ try {
   }
   if (args.has("--verify")) {
     const baseline = load("source-before");
-    const changedSourceIds = [...records].filter(([id, r]) => baseline.hashes[id] && sourceHash(r) !== baseline.hashes[id]).map(([id]) => id);
-    const changedRequests = [...requests].filter(([id, r]) => baseline.requests[id] && hash(r) !== hash(baseline.requests[id])).map(([id]) => id);
+    assert.ok(baseline && load("prepared"), "A completed preparation and source snapshot are required");
+    assert.deepEqual(Object.keys(baseline.hashes).sort(), Object.keys(baseline.records).sort(), "Incomplete baseline hashes");
+    for (const [id, r] of Object.entries(baseline.records)) assert.equal(baseline.hashes[id], sourceHash(r), `Invalid baseline hash: ${id}`);
+    const reviewedChanges = load("reviewed-source-changes", {});
+    const reviewed = (id) => {
+      const item = reviewedChanges[id];
+      return item?.reason && item.recordBeforeHash === baseline.hashes[id] && item.requestBeforeHash === hash(baseline.requests[id] || null) &&
+        item.recordAfterHash === sourceHash(records.get(id) || {}) && item.requestAfterHash === hash(requests.get(id) || null);
+    };
+    const reviewedSourceChanges = Object.keys(reviewedChanges).filter(reviewed).length;
+    const changedSourceIds = [...records].filter(([id, r]) => baseline.hashes[id] && sourceHash(r) !== baseline.hashes[id] && !reviewed(id)).map(([id]) => id);
+    const changedRequests = [...requests].filter(([id, r]) => baseline.requests[id] && hash(r) !== hash(baseline.requests[id]) && !reviewed(id)).map(([id]) => id);
     const failed = [...records].filter(([, r]) => r.notionSync?.status === "failed").map(([id, r]) => ({ id, error: r.notionSync.error }));
-    const aliasErrors = owners.filter(([owner, alias]) => records.get(alias)?.notionProjectionControl?.aliasOfRecordId !== owner);
+    const aliasErrors = owners.filter(([owner, alias]) => records.get(alias)?.notionProjectionControl?.aliasOfRecordId !== owner || records.get(owner)?.notionProjectionControl?.aliasOfRecordId);
     const removedIds = Object.keys(baseline.hashes).filter((id) => !records.has(id));
-    const result = { at: new Date().toISOString(), changedSourceIds, changedRequests, removedIds, failed, aliasErrors, refreshed: Object.keys(load("refreshed", {})).length, titleCorrections: Object.keys(load("titles-refreshed", {})).length };
+    const removedRequestIds = Object.keys(baseline.requests).filter((id) => !requests.has(id));
+    const addedRecordIds = [...records.keys()].filter((id) => !baseline.records[id]);
+    const addedRequestIds = [...requests.keys()].filter((id) => !baseline.requests[id]);
+    const bindingFields = ["pageId", "pageUrl", "instructorPageId", "instructorPageUrl"];
+    const bindingValue = (field, value) => field.endsWith("Id") ? norm(value) : String(value || "");
+    const movedPageBindings = [...records].filter(([id, r]) => bindingFields.some((field) => {
+      const before = baseline.records[id]?.notionSync?.[field];
+      return before && bindingValue(field, before) !== bindingValue(field, r.notionSync?.[field]);
+    })).map(([id]) => id);
+    const newBindings = [...records].filter(([id, r]) => baseline.records[id] &&
+      !baseline.records[id].notionSync?.instructorPageId && r.notionSync?.instructorPageId).map(([id]) => id);
+    const plannedNewBindings = new Set(load("inventory").missing);
+    const unexpectedNewBindings = newBindings.filter((id) => !plannedNewBindings.has(id));
+    const missingNewBindings = [...plannedNewBindings].filter((id) => !newBindings.includes(id));
+    const unexpectedBindingFields = [];
+    for (const [id, r] of records) for (const field of bindingFields) {
+      if (baseline.records[id]?.notionSync?.[field] || !r.notionSync?.[field]) continue;
+      const allowedPage = field === "instructorPageId" && plannedNewBindings.has(id);
+      const urlId = String(r.notionSync?.[field] || "").replaceAll("-", "").match(/([a-f0-9]{32})(?:[?#/]|$)/i)?.[1];
+      const allowedUrl = field === "instructorPageUrl" && r.notionSync?.instructorPageId && urlId && norm(urlId) === norm(r.notionSync.instructorPageId) &&
+        (plannedNewBindings.has(id) || targets.some(([targetId]) => targetId === id));
+      if (!allowedPage && !allowedUrl) unexpectedBindingFields.push({ id, field });
+    }
+    const createdChartPageBindings = newBindings.length;
+    const pageGroups = new Map();
+    for (const [id, r] of records) {
+      const pageId = norm(r.notionSync?.instructorPageId);
+      if (pageId) pageGroups.set(pageId, [...(pageGroups.get(pageId) || []), id]);
+    }
+    const unexpectedSharing = [...pageGroups].filter(([, ids]) => ids.length > 1 &&
+      !owners.some(([owner, alias]) => ids.length === 2 && ids.includes(owner) && ids.includes(alias))).map(([pageId, ids]) => ({ pageId, ids }));
+    const done = load("refreshed", {});
+    const unrefreshed = targets.filter(([id, r]) => !done[id]?.ok || done[id].pageId !== norm(r.notionSync?.instructorPageId) || done[id].sourceVersion !== r.notionSync?.sourceVersion).map(([id]) => id);
+    const staleProjections = targets.filter(([id, r]) => r.notionSync?.sourceVersion !==
+      helper.privateLessonNotionProjectionVersion(r, requests.get(r.requestId || id))).map(([id]) => id);
+    const activeOrMalformedLease = (r) => !!(r?.notionProjectionLease?.token &&
+      (!Number.isFinite(r.notionProjectionLease.untilMs) || r.notionProjectionLease.untilMs > Date.now()));
+    const unsettledTargets = targets.filter(([, r]) => r.notionSync?.status !== "synced" ||
+      r.notionProjectionControl?.aliasOfRecordId || activeOrMalformedLease(r)).map(([id]) => id);
+    const unsettledAliases = [...records].filter(([id, r]) => (aliases.has(id) || r.notionProjectionControl?.aliasOfRecordId) && activeOrMalformedLease(r)).map(([id]) => id);
+    const ownershipErrors = [];
+    for (const [id, r] of targets) {
+      const pageId = norm(r.notionSync?.instructorPageId);
+      const owner = pageId ? (await db.collection("syncStates").doc("privateNotionPage_" + pageId).get()).data() : null;
+      if (owner?.ownerRecordId !== id) ownershipErrors.push(id);
+    }
+    const providerErrors = [];
+    const targetIds = new Set(targets.map(([id]) => id));
+    let titlesVerified = 0;
+    let bodiesVerified = 0;
+    let foldedParentBindingsVerified = 0;
+    for (const [id, r] of records) {
+      if (isTest(id, r) || aliases.has(id) || r.notionProjectionControl?.aliasOfRecordId || !r.notionSync?.instructorPageId) continue;
+      const q = requests.get(r.requestId || id);
+      if (!q) { providerErrors.push({ id, reason: "missing request" }); continue; }
+      const pageId = norm(r.notionSync.instructorPageId);
+      const page = await notion("pages/" + pageId);
+      if (title(page) !== helper.notionSessionTitle(r, q)) providerErrors.push({ id, reason: "title mismatch" });
+      if (targetIds.has(id)) {
+        if (page.archived || page.in_trash) providerErrors.push({ id, reason: "target page archived" });
+        const oldPage = load("page-before-" + pageId)?.page;
+        const parent = oldPage?.parent || { type: "page_id", page_id: r.notionProjectionControl?.memberPageId };
+        let parentMatches = parent.page_id && page.parent?.type === parent.type && norm(page.parent.page_id) === norm(parent.page_id);
+        if (!parentMatches && oldPage && page.parent?.type === "block_id") {
+          const plan = load("navigation-before")?.plans?.find((item) => norm(item.id) === norm(parent.page_id));
+          const navigationDone = load("navigation-complete")?.members?.some((item) => norm(item.id) === norm(parent.page_id));
+          if (navigationDone && plan?.old?.some((tag) => tag.includes(pageId))) {
+            const folder = await notion("blocks/" + page.parent.block_id);
+            parentMatches = folder.type === "toggle" && !folder.archived && text(folder) === "이전 회차 기록 · 2026년 7월 이전" &&
+              folder.parent?.type === "page_id" && norm(folder.parent.page_id) === norm(parent.page_id);
+            if (parentMatches) foldedParentBindingsVerified++;
+          }
+        }
+        if (!parentMatches) providerErrors.push({ id, reason: "parent mismatch" });
+        const body = await children(pageId);
+        const expected = helper.notionInstructorChartChildren(r, q);
+        if (body.filter((b) => b.type === "heading_3" && text(b) === "오늘 기록").length !== 1 ||
+          expected.some((e) => !body.some((b) => b.type === e.type && text(b) === text(e)))) providerErrors.push({ id, reason: "body mismatch" });
+        const priorBlocks = load("page-before-" + pageId)?.blocks || [];
+        if (legacyBlocks(priorBlocks).length && !body.some((b) => b.type === "toggle" && text(b) === "이전 양식 기록")) providerErrors.push({ id, reason: "missing legacy history" });
+        for (const b of priorBlocks.filter((b) => b.has_children || ["image", "video", "file", "child_page", "child_database"].includes(b.type))) {
+          if (!body.some((current) => current.id === b.id)) providerErrors.push({ id, reason: "missing preserved block", blockId: b.id });
+        }
+        bodiesVerified++;
+      }
+      titlesVerified++;
+      if (titlesVerified % 100 === 0) console.log(`TITLES_VERIFIED ${titlesVerified}`);
+    }
+    // A second source read prevents long provider checks from acknowledging stale input.
+    const currentRecords = new Map((await db.collection("privateLessonChartRecords").get()).docs.map((d) => [d.id, d.data()]));
+    const currentRequests = new Map((await db.collection("privateLessonChartRequests").get()).docs.map((d) => [d.id, d.data()]));
+    const relevantState = (r) => r && { source: sourceHash(r), bindings: Object.fromEntries(bindingFields.map((field) => [field, bindingValue(field, r.notionSync?.[field])])),
+      status: r.notionSync?.status, sourceVersion: r.notionSync?.sourceVersion, control: r.notionProjectionControl,
+      activeLease: activeOrMalformedLease(r) };
+    const changedDuringVerification = [...new Set([...records.keys(), ...currentRecords.keys()])].filter((id) => hash(relevantState(records.get(id)) || null) !== hash(relevantState(currentRecords.get(id)) || null));
+    const requestsChangedDuringVerification = [...new Set([...requests.keys(), ...currentRequests.keys()])].filter((id) => hash(requests.get(id) || null) !== hash(currentRequests.get(id) || null));
+    const ownershipChangedDuringVerification = [];
+    for (const [id, r] of targets) {
+      const owner = (await db.collection("syncStates").doc("privateNotionPage_" + norm(r.notionSync?.instructorPageId)).get()).data();
+      if (owner?.ownerRecordId !== id) ownershipChangedDuringVerification.push(id);
+    }
+    const result = { at: new Date().toISOString(), sourceRecords: records.size, sourceRequests: requests.size,
+      changedSourceIds, changedRequests, removedIds, removedRequestIds, addedRecordIds, addedRequestIds,
+      movedPageBindings, unexpectedNewBindings, missingNewBindings, unexpectedBindingFields, unexpectedSharing, failed, aliasErrors,
+      unrefreshed, staleProjections, unsettledTargets, unsettledAliases, ownershipErrors, providerErrors,
+      changedDuringVerification, requestsChangedDuringVerification, ownershipChangedDuringVerification,
+      createdChartPageBindings, titlesVerified, bodiesVerified, foldedParentBindingsVerified, reviewedSourceChanges,
+      refreshed: Object.keys(done).length, titleCorrections: Object.keys(load("titles-refreshed", {})).length };
     save("verification", result); console.log(JSON.stringify(result, null, 2));
-    assert.equal(changedSourceIds.length + changedRequests.length + removedIds.length + failed.length + aliasErrors.length, 0, "Verification requires review");
+    assert.ok(Object.values(result).filter(Array.isArray).every((items) => items.length === 0), "Verification requires review");
   }
 } finally {
   await db.terminate();

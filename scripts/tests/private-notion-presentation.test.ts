@@ -85,6 +85,15 @@ function assertNativeBlocks(blocks: Block[]): void {
   }
 }
 
+test("Korean time presentation is identical across server and local ICU day-period labels", () => {
+  for (const [english, korean] of [["AM", "오전"], ["PM", "오후"], ["am", "오전"], ["pm", "오후"]]) {
+    const local = input({ lessonTime: `09. 07. (월) ${korean} 10:30` });
+    const server = input({ lessonTime: `09. 07. (월) ${english} 10:30` });
+    assert.deepEqual(compactPrivateNotionBlocks(server), compactPrivateNotionBlocks(local));
+    assert.equal(server.lessonTime, `09. 07. (월) ${english} 10:30`);
+  }
+});
+
 test("blank fields have one empty-record message and no placeholders or repeated title", () => {
   const blocks = compactPrivateNotionBlocks(
     input({

@@ -116,9 +116,11 @@ export function compactPrivateNotionBlocks(input: PrivateNotionPresentationInput
   const hasReport = hasText(input.reportUrl);
   const review = hasText(input.reviewReason) || ["needs_review", "확인필요", "확인 필요"].includes(input.stage.trim());
   const status = statusText(input, hasReport);
+  // ICU versions differ on Korean day periods; projection hashes must not.
+  const lessonTime = input.lessonTime.replace(/\bAM\b/gi, "오전").replace(/\bPM\b/gi, "오후");
   const blocks = textBlocks("callout", status, { color: review || hasReport ? "blue_background" : "gray_background" });
   const metadata = [
-    hasText(input.lessonTime) ? `수업: ${input.lessonTime}` : "",
+    hasText(lessonTime) ? `수업: ${lessonTime}` : "",
     hasText(input.staffName) ? `담당: ${input.staffName}` : "",
   ].filter(hasText);
   if (metadata.length) blocks.push(...textBlocks("paragraph", metadata.join(" / ")));

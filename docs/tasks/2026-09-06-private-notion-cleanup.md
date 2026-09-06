@@ -13,6 +13,7 @@
 - Source: privateLessonChartRecords and privateLessonChartRequests.
 - Page identity: normalized Notion UUID in syncStates/privateNotionPage_{uuid}; ownerRecordId is permanent unless explicitly reviewed.
 - Per-record notionProjectionControl stores an alias writer exclusion, verified member-page parent, or display-only review reason.
+- Page processing metadata also tracks generated block IDs and content hashes. Only unchanged owned blocks are replaced; new manual blocks and manual edits to nested generated content are retained. First migration archives legacy leaves before replacement, including text added after an older archive.
 - Allowed readers: Notion event projection, nightly repair and scoped maintenance.
 - Forbidden effects: message targeting, sends, reservation/attendance changes, report generation, approvals, member source merging.
 - Alias records and their original answers remain intact; ambiguous mappings fail closed.
@@ -33,6 +34,13 @@ Unexpected or uncertain page creation is not automatically repeated. Maintenance
 
 ## Verification
 
-- Focused source/rendering tests: 60 passed before release.
+- Focused source/rendering/replacement tests: 76 passed, including first-migration partial failure, duplicate delivery, manual nested edits, last-moment edits and server/local ICU time normalization.
 - Full function-codebase build, source policy, boundaries, cost guards, private-flow contract and rollback guards passed.
+- Release 37293a8: all 24 private-chart Functions updated. Direct event Function read-back ACTIVE; GitHub Actions run 34027911074 succeeded.
+- Isolated deployed canary passed all five stages and preserved manual paragraphs, same-title toggles and edited children. Source save 109 ms; Notion first reflection 8.9 s, subsequent changes/recovery 13.2-17.3 s. Test documents, page ownership and Notion page were removed/archived after verification.
+- Navigation: 20 member parents, 279 older child pages folded with exact child URL preservation. The root was reduced to three current workflow steps; existing sharing settings were retained.
+- Maintenance verifier: 64 isolated offline cases passed against the extracted executable verification branch. Source ID sets/hashes, protected bindings, planned new pages, aliases, active/malformed leases, body/title/parent read-back and second-read changes fail closed. Moving a planned older page inside the verified archive toggle is allowed only under its original member page.
+- Browser proof: root, member navigation and a recent chart were inspected live. The local HTML report URL was blocked by browser policy, so no workaround or visual-verification claim is made for that report. Task-owned tabs were closed.
+- During verification, the existing scheduled reservation reconciler legitimately replaced one booking reference. Canonical supersession, member and round equality were verified; unchanged protected fields and exact before/after source hashes were recorded separately without replacing the original baseline. The Notion cleanup did not write the canonical correction.
+- The actual server exposed ICU AM/PM output while the Mac mini used Korean day periods. Normalize Notion-only time display, add the regression case, and require Korean time in the deployed canary. Final maintenance verification includes the independently reviewed concurrent source update.
 - Production cleanup and provider read-back: pending at code commit; final outcome is recorded in the cleanup report and CORE operating rules.

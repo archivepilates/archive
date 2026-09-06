@@ -61,6 +61,8 @@ async function synced(label, marker, started) {
   assert.ok(JSON.stringify(blocks).includes(marker), `${label}: provider read-back missing marker`);
   const headings = blocks.results.filter((b) => b.type === "heading_3" && b.heading_3.rich_text.some((t) => t.plain_text === "오늘 기록"));
   assert.equal(headings.length, 1, `${label}: repeated body`);
+  const metadata = blocks.results.filter((b) => b.type === "paragraph").map((b) => b.paragraph.rich_text.map((t) => t.plain_text || t.text?.content || "").join(""));
+  assert.ok(metadata.some((value) => value.startsWith("수업:") && value.includes("오전 10:30")), `${label}: Korean time normalization missing`);
   summary.stages.push({ label, latencyMs: Date.now() - started, sourceVersion: row.notionSync.sourceVersion, blockCount: blocks.results.length });
   console.log(JSON.stringify(summary.stages.at(-1)));
   return row;
@@ -77,7 +79,7 @@ try {
   pageId = page.id;
   summary.pageId = pageId;
   const stamp = admin.firestore.Timestamp.now();
-  const common = { studioId: "notion-live-canary", bookingId: id, memberId: id, memberName: "Notion 자동 검증", memberPhone: "", staffId: id, staffName: "김기효", staffPhone: "", lessonDate: "2000-01-01", sessionNumber: 1, isTest: true, source: "notion_projection_live_canary", createdAt: stamp, updatedAt: stamp };
+  const common = { studioId: "notion-live-canary", bookingId: id, memberId: id, memberName: "Notion 자동 검증", memberPhone: "", staffId: id, staffName: "김기효", staffPhone: "", lessonDate: "2000-01-01", lessonStartAt: admin.firestore.Timestamp.fromDate(new Date("2000-01-01T10:30:00+09:00")), sessionNumber: 1, isTest: true, source: "notion_projection_live_canary", createdAt: stamp, updatedAt: stamp };
   const marker = (s) => `${id}-${s}`;
   const start = Date.now();
   const batch = db.batch();
