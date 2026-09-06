@@ -119,7 +119,11 @@ try {
   assert.equal((await notion(`pages/${pageId}`)).last_edited_time, before.last_edited_time);
 
   const requestStart = Date.now();
-  await requestRef.update({ lessonDate: "2000-01-02", updatedAt: admin.firestore.Timestamp.now() });
+  await requestRef.update({
+    lessonDate: "2000-01-02",
+    lessonStartAt: admin.firestore.Timestamp.fromDate(new Date("2000-01-02T10:30:00+09:00")),
+    updatedAt: admin.firestore.Timestamp.now(),
+  });
   await waitFor("request-only change", async () => {
     const row = (await recordRef.get()).data();
     return row?.notionSync?.status === "synced" && row.notionSync.sourceVersion !== same.notionSync.sourceVersion && !row.notionProjectionLease?.token;
