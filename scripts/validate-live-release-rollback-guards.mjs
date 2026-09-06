@@ -1462,7 +1462,11 @@ const guardGroups = [
       },
       {
         file: "firebase/kangsain-functions/functions/src/privateLessonChart/privateLessonNotionSync.ts",
-        markers: ["reconcilePrivateNotionPages", "PRIVATE_NOTION_LEASE_MS", "!state.leaseToken", "currentVersion !== version"],
+        markers: ["reconcilePrivateNotionPages", "PRIVATE_NOTION_LEASE_MS", "!state.leaseToken", "currentVersion !== version", "assertPrivateNotionPageOwner", "source.control?.aliasOfRecordId"],
+      },
+      {
+        file: "firebase/kangsain-functions/functions/src/privateLessonChart/privateLessonChart.ts",
+        markers: ["claimPrivateNotionPage", "notionProjectionControl", "이전 양식 기록", "compactPrivateNotionBlocks"],
       },
     ],
   },

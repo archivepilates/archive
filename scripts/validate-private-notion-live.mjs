@@ -157,6 +157,14 @@ try {
       await notion(`pages/${pageId}`, "PATCH", { archived: true });
       assert.equal((await notion(`pages/${pageId}`)).archived, true);
       summary.cleanup.notionArchived = true;
+      const ownerRef = db.collection("syncStates").doc("privateNotionPage_" + pageId.replaceAll("-", "").toLowerCase());
+      await db.runTransaction(async (tx) => {
+        const owner = (await tx.get(ownerRef)).data();
+        if (!owner) return;
+        assert.equal(owner.ownerRecordId, id, "Refusing to remove another chart's ownership");
+        tx.delete(ownerRef);
+      });
+      summary.cleanup.pageOwnership = !(await ownerRef.get()).exists;
     }
   } catch (err) { summary.cleanup.notionError = err.message; process.exitCode = 1; }
   summary.finishedAt = new Date().toISOString();

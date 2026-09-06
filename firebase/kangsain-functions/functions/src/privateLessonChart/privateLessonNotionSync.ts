@@ -18,6 +18,13 @@ export type PrivateNotionState = NonNullable<PrivateLessonChartRecordDoc["notion
 export interface PrivateNotionSource {
   record: PrivateLessonChartRecordDoc;
   request?: PrivateLessonChartRequestDoc;
+  control?: { aliasOfRecordId?: string; reviewReason?: string };
+}
+
+export function assertPrivateNotionPageOwner(recordId: string, ownerId: string, peers: string[]): void {
+  if ((ownerId && ownerId !== recordId) || (!ownerId && peers.some((id) => id !== recordId))) {
+    throw new Error("Notion 페이지 공유 연결 확인 필요: 다른 차트의 덮어쓰기를 차단했습니다.");
+  }
 }
 
 export interface PrivateNotionStore {
@@ -97,7 +104,7 @@ export async function runPrivateNotionProjection(id: string, deps: {
   const now = deps.now || Date.now;
   const token = randomUUID();
   const claimed = await deps.store.transact<PrivateNotionSource | null>(id, (source) => {
-    if (!source) return { result: null };
+    if (!source || source.control?.aliasOfRecordId) return { result: null };
     const state: PrivateNotionState = source.record.notionSync || { status: "pending" };
     if ((state.leaseUntilMs || 0) > now()) return { result: null };
     if (!source.request) return {
@@ -122,7 +129,7 @@ export async function runPrivateNotionProjection(id: string, deps: {
   const checkpoint = async (page: Partial<PrivateNotionState>) => {
     await deps.store.transact(id, (current) => {
       const state = current?.record.notionSync as PrivateNotionState | undefined;
-      if (!state || state.leaseToken !== token || (state.leaseUntilMs || 0) <= now()) {
+      if (current?.control?.aliasOfRecordId || !state || state.leaseToken !== token || (state.leaseUntilMs || 0) <= now()) {
         throw new Error("Notion projection lease lost");
       }
       return { state: { ...state, ...page }, result: undefined };
@@ -136,7 +143,7 @@ export async function runPrivateNotionProjection(id: string, deps: {
   }
   return deps.store.transact(id, (current) => {
     const state = current?.record.notionSync as PrivateNotionState | undefined;
-    if (!current || !state || state.leaseToken !== token || (state.leaseUntilMs || 0) <= now()) return { result: "skipped" as const };
+    if (!current || current.control?.aliasOfRecordId || !state || state.leaseToken !== token || (state.leaseUntilMs || 0) <= now()) return { result: "skipped" as const };
     const currentVersion = current.request ? deps.version(current) : "";
     const changed = Boolean(currentVersion && currentVersion !== version);
     const status = changed ? "pending" : current.request ? projected.status : "failed";

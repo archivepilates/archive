@@ -3,6 +3,7 @@ import test from "node:test";
 import fs from "node:fs";
 import {
   PRIVATE_NOTION_LEASE_MS,
+  assertPrivateNotionPageOwner,
   privateNotionSourceChanged,
   reconcilePrivateNotionPages,
   runPrivateNotionProjection,
@@ -11,7 +12,7 @@ import {
   type PrivateNotionStore,
   type PrivateNotionRepairCursor,
 } from "../../firebase/kangsain-functions/functions/src/privateLessonChart/privateLessonNotionSync";
-import { privateLessonNotionProjectionVersion } from "../../firebase/kangsain-functions/functions/src/privateLessonChart/privateLessonChart";
+import { privateLessonNotionProjectionVersion, isManagedPrivateNotionBlock, notionSessionTitle } from "../../firebase/kangsain-functions/functions/src/privateLessonChart/privateLessonChart";
 
 function harness() {
   let time = 1_800_000_000_000;
@@ -35,6 +36,51 @@ function harness() {
   };
   return { deps, get source() { return source!; }, get calls() { return calls; }, advance: (ms: number) => { time += ms; }, remove: () => { source = null; } };
 }
+
+test("display aliases never project or mutate instructor answers, including nightly recovery", async () => {
+  const h = harness();
+  h.source.control = { aliasOfRecordId: "canonical" };
+  const before = structuredClone(h.source);
+  assert.equal(await runPrivateNotionProjection("test", { ...h.deps, retryFailures: true }), "skipped");
+  assert.equal(h.calls, 0);
+  assert.deepEqual(h.source, before);
+});
+
+test("page ownership fails closed for shared and conflicting owners", () => {
+  assert.doesNotThrow(() => assertPrivateNotionPageOwner("a", "", ["a"]));
+  assert.doesNotThrow(() => assertPrivateNotionPageOwner("a", "a", ["a", "old"]));
+  assert.throws(() => assertPrivateNotionPageOwner("old", "a", []), /덮어쓰기/);
+  assert.throws(() => assertPrivateNotionPageOwner("a", "", ["a", "b"]), /덮어쓰기/);
+});
+
+test("an alias introduced mid-flight cannot checkpoint or acknowledge success", async () => {
+  const h = harness();
+  const result = await runPrivateNotionProjection("test", { ...h.deps, project: async (_source, checkpoint) => {
+    h.source.control = { aliasOfRecordId: "canonical" };
+    await assert.rejects(checkpoint({ instructorPageId: "wrong" }), /lease lost/);
+    return { status: "synced" };
+  } });
+  assert.equal(result, "skipped");
+  assert.equal(h.source.record.notionSync?.instructorPageId, undefined);
+});
+
+test("replacement retains history, attachments and manual nested content but replaces managed toggles", () => {
+  const toggle = (label: string) => ({ type: "toggle", has_children: true, toggle: { rich_text: [{ text: { content: label } }] } });
+  assert.equal(isManagedPrivateNotionBlock(toggle("이전 양식 기록")), false);
+  assert.equal(isManagedPrivateNotionBlock(toggle("강사 메모")), false);
+  assert.equal(isManagedPrivateNotionBlock(toggle("홈워크")), true);
+  for (const type of ["child_page", "child_database", "file", "image", "video", "table"]) assert.equal(isManagedPrivateNotionBlock({ type }), false);
+  assert.equal(isManagedPrivateNotionBlock({ type: "paragraph", has_children: true }), false);
+  assert.equal(isManagedPrivateNotionBlock({ type: "callout", has_children: false }), true);
+});
+
+test("Notion-only review hides unverified round/cancellation without changing canonical state", () => {
+  const r: any = { memberName: "검증", sessionNumber: 99, cancelledAt: 1, notionProjectionControl: { reviewReason: "출석 확인필요" } };
+  const q: any = { lessonDate: "2026-09-04", status: "cancelled" };
+  assert.equal(notionSessionTitle(r, q), "2026.09.04 · 검증(확인필요)");
+  assert.equal(q.status, "cancelled");
+  assert.equal(r.sessionNumber, 99);
+});
 
 test("duplicate and out-of-order deliveries use the newest source once", async () => {
   const h = harness();

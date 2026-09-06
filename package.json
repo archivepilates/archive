@@ -45,7 +45,7 @@
     "migrate:private-report-waiting-post": "node scripts/migrate-private-report-waiting-post.mjs",
     "validate:private-media-upload-config": "node scripts/validate-private-media-upload-config.mjs",
     "validate:private-flow-contract": "node scripts/validate-private-flow-contract.mjs",
-    "test:private-flow": "firebase/kangsain-functions/functions/node_modules/.bin/tsx --test scripts/tests/private-flow-contract.test.ts scripts/tests/private-notion-event-sync.test.ts",
+    "test:private-flow": "firebase/kangsain-functions/functions/node_modules/.bin/tsx --test scripts/tests/private-flow-contract.test.ts scripts/tests/private-notion-event-sync.test.ts scripts/tests/private-notion-presentation.test.ts",
     "verify:private-flow-ui": "node scripts/verify-private-flow-ui.mjs",
     "audit:private-report-runtime": "firebase/kangsain-functions/functions/node_modules/.bin/tsx scripts/audit-private-report-runtime.ts",
     "audit:private-alimtalk-templates": "node scripts/audit-private-alimtalk-templates.mjs",

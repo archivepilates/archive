@@ -33,8 +33,10 @@ import {
 } from "../alimtalk/templateStatus";
 import { completePrivateLessonMediaUpload, initPrivateLessonMediaUpload, uploadPrivateLessonMediaChunk } from "./privateLessonMedia";
 import { invalidatePendingPrivateLessonReportCandidates } from "./privateLessonReportCandidates";
+import { compactPrivateNotionBlocks } from "./privateLessonNotionPresentation";
 import {
   PRIVATE_NOTION_DEBOUNCE_MS,
+  assertPrivateNotionPageOwner,
   privateNotionSourceChanged,
   reconcilePrivateNotionPages,
   runPrivateNotionProjection,
@@ -1896,7 +1898,7 @@ const privateNotionStore: PrivateNotionStore = {
     const request = record?.requestId
       ? (await tx.get(refs.privateLessonChartRequest(record.requestId))).data()
       : undefined;
-    const result = update(record ? { record, request } : null);
+    const result = update(record ? { record, request, control: (rawRecord as any)?.notionProjectionControl } : null);
     // Sync acknowledgments do not change canonical source timestamps/content.
     if (record && result.state) {
       const { leaseToken = "", leaseUntilMs = 0, ...notionSync } = result.state;
@@ -1907,7 +1909,7 @@ const privateNotionStore: PrivateNotionStore = {
   }),
 };
 
-async function syncPrivateNotionByRecordId(recordId: string, retryFailures = false) {
+export async function syncPrivateNotionByRecordId(recordId: string, retryFailures = false) {
   return runPrivateNotionProjection(recordId, {
     store: privateNotionStore,
     version: ({ record, request }) => privateLessonNotionProjectionVersion(record, request!),
@@ -1990,14 +1992,16 @@ async function syncInstructorMemberChartPage(
   const title = notionSessionTitle(record, chartRequest);
   const knownPageId = record.notionSync?.instructorPageId;
   if (knownPageId) {
+    await claimPrivateNotionPage(knownPageId, record.recordId);
+    await checkpoint({});
     await updateNotionPageTitle(knownPageId, title);
-    await replacePageContent(knownPageId, notionInstructorChartChildren(record, chartRequest));
+    await replacePageContent(knownPageId, notionInstructorChartChildren(record, chartRequest), () => checkpoint({}));
     return {
       pageId: knownPageId,
       pageUrl: record.notionSync?.instructorPageUrl || notionPageUrl(knownPageId),
     };
   }
-  const memberPageId = await findInstructorMemberPageId(record.staffName, record.memberName).catch((err) => {
+  const memberPageId = (record as any).notionProjectionControl?.memberPageId || await findInstructorMemberPageId(record.staffName, record.memberName).catch((err) => {
     logger.warn("findInstructorMemberPageId failed", {
       staffName: record.staffName,
       memberName: record.memberName,
@@ -2009,9 +2013,10 @@ async function syncInstructorMemberChartPage(
   const creationTitle = (record.notionSync as PrivateNotionState | undefined)?.creationTitle;
   const existingPageId = await findChildPageByExactTitle(memberPageId, creationTitle || title);
   if (existingPageId) {
+    await claimPrivateNotionPage(existingPageId, record.recordId, Boolean(creationTitle));
     await checkpoint({ instructorPageId: existingPageId, instructorPageUrl: notionPageUrl(existingPageId), creationTitle: "" });
     await updateNotionPageTitle(existingPageId, title);
-    await replacePageContent(existingPageId, notionInstructorChartChildren(record, chartRequest));
+    await replacePageContent(existingPageId, notionInstructorChartChildren(record, chartRequest), () => checkpoint({}));
     return { pageId: existingPageId, pageUrl: notionPageUrl(existingPageId) };
   }
   // An uncertain create must be reconciled, not repeated with a changed title.
@@ -2031,6 +2036,7 @@ async function syncInstructorMemberChartPage(
     throw err;
   }
   if (!page.id) throw new Error("Notion page create returned no page ID");
+  await claimPrivateNotionPage(String(page.id), record.recordId, true);
   await checkpoint({ instructorPageId: String(page.id), instructorPageUrl: String(page.url || notionPageUrl(page.id)), creationTitle: "" });
   return {
     pageId: String(page.id || ""),
@@ -2038,10 +2044,32 @@ async function syncInstructorMemberChartPage(
   };
 }
 
+async function claimPrivateNotionPage(pageId: string, recordId: string, allowUnbound = false): Promise<void> {
+  const compactId = pageId.replaceAll("-", "").toLowerCase();
+  if (!/^[a-f0-9]{32}$/i.test(compactId) || !recordId) throw new Error("Notion 페이지 연결 식별자 확인 필요");
+  const dashedId = compactId.replace(/(.{8})(.{4})(.{4})(.{4})(.{12})/, "$1-$2-$3-$4-$5");
+  // One permanent owner per page protects against separate record-level leases.
+  const ownerRef = refs.syncState(`privateNotionPage_${compactId}`);
+  await db.runTransaction(async (tx) => {
+    const owner = (await tx.get(ownerRef)).data() as any;
+    let peers: string[] = [];
+    if (!owner?.ownerRecordId) {
+      const matches = await tx.get(refs.privateLessonChartRecords()
+        .where("notionSync.instructorPageId", "in", [compactId, dashedId, compactId.toUpperCase(), dashedId.toUpperCase()]));
+      peers = matches.docs.map((doc) => doc.id);
+      if (!peers.length && !allowUnbound) throw new Error("Notion 기존 페이지 연결 확인 필요: 제목만 같은 페이지를 덮어쓰지 않습니다.");
+    }
+    assertPrivateNotionPageOwner(recordId, String(owner?.ownerRecordId || ""), peers);
+    if (!owner?.ownerRecordId) tx.set(ownerRef, {
+      pageId: compactId, ownerRecordId: recordId, purpose: "notion_display_page_owner", claimedAt: Timestamp.now(),
+    } as any);
+  });
+}
+
 async function findInstructorMemberPageId(staffName: string, memberName: string): Promise<string> {
   const instructorPageId = NOTION_INSTRUCTOR_CHART_PAGE_IDS[staffName];
   if (!instructorPageId) return "";
-  const normalizedMemberName = normalizeKoreanName(memberName);
+  const normalizedMemberName = String(memberName || "").replace(/\s+/g, "").replace(/님$/, "");
   const direct = await findChildPageByTitle(instructorPageId, normalizedMemberName);
   if (direct) return direct;
   const children = await notionBlockChildren(instructorPageId);
@@ -2056,11 +2084,12 @@ async function findInstructorMemberPageId(staffName: string, memberName: string)
 
 async function findChildPageByTitle(parentPageId: string, normalizedMemberName: string): Promise<string> {
   const children = await notionBlockChildren(parentPageId);
-  const hit = children.find((child) => {
+  const hits = children.filter((child) => {
     const title = String(child.child_page?.title || "");
-    return title && normalizeKoreanName(title) === normalizedMemberName;
+    return title && title.replace(/\s+/g, "").replace(/님$/, "") === normalizedMemberName;
   });
-  return hit?.id ? String(hit.id) : "";
+  if (hits.length > 1) throw new Error("Notion 회원 페이지 중복: 연결 확인 필요");
+  return hits[0]?.id ? String(hits[0].id) : "";
 }
 
 async function findChildPageByExactTitle(parentPageId: string, title: string): Promise<string> {
@@ -2099,14 +2128,37 @@ async function appendPageContent(pageId: string, children: Record<string, unknow
   await notionRequest(`blocks/${pageId}/children`, "PATCH", { children });
 }
 
-async function replacePageContent(pageId: string, children: Record<string, unknown>[]): Promise<void> {
+async function replacePageContent(pageId: string, children: Record<string, unknown>[], assertWritable: () => Promise<void>): Promise<void> {
   const existing = await notionBlockChildren(pageId);
+  const textOf = (block: any) => (block[block.type]?.rich_text || []).map((part: any) => part.plain_text || part.text?.content || "").join("");
+  const hasHistory = existing.some((block) => block.type === "toggle" && textOf(block) === "이전 양식 기록");
+  const isLegacy = existing.some((block) => /수업 전 계획|수업 후 기록|야간.*동기화/.test(textOf(block)));
+  if (!hasHistory && isLegacy) {
+    const archived = existing.filter((block) => !block.has_children && ["paragraph", "heading_1", "heading_2", "heading_3", "bulleted_list_item", "numbered_list_item", "quote", "bookmark", "callout"].includes(block.type));
+    const content = archived.map((block) => ({ object: "block", type: block.type, [block.type]: block[block.type] }));
+    if (content.length) {
+      await assertWritable();
+      await appendPageContent(pageId, [{ object: "block", type: "toggle", toggle: {
+        rich_text: [{ type: "text", text: { content: "이전 양식 기록" } }], color: "gray_background", children: content,
+      } }]);
+    }
+  }
   // Preserve the old body if appending the new content fails.
+  await assertWritable();
   await appendPageContent(pageId, children);
   for (const child of existing) {
-    if (!child?.id || child?.type === "child_page") continue;
+    if (!child?.id || !isManagedPrivateNotionBlock(child)) continue;
+    await assertWritable();
     await notionRequest(`blocks/${child.id}`, "DELETE");
   }
+}
+
+export function isManagedPrivateNotionBlock(block: any): boolean {
+  if (block?.type === "toggle") {
+    const label = (block.toggle?.rich_text || []).map((part: any) => part.plain_text || part.text?.content || "").join("");
+    return ["회원 사전설문 참고", "홈워크", "주의사항", "수업 자료"].includes(label);
+  }
+  return !block?.has_children && ["paragraph", "heading_1", "heading_2", "heading_3", "bulleted_list_item", "numbered_list_item", "quote", "bookmark", "divider", "callout"].includes(block?.type);
 }
 
 async function updateNotionPageTitle(pageId: string, title: string): Promise<void> {
@@ -3348,46 +3400,27 @@ function drivePreviewUrl(fileId: string): string {
   return `https://drive.google.com/file/d/${fileId}/preview`;
 }
 
-function notionInstructorChartChildren(
+export function notionInstructorChartChildren(
   record: PrivateLessonChartRecordDoc,
   chartRequest: PrivateLessonChartRequestDoc,
 ): Record<string, unknown>[] {
   const reportButtonUrl = isPrivateLessonReportGenerated(record)
     ? record.publicReportUrl || record.publicReportCanonicalUrl || ""
     : "";
-  return [
-    callout("읽기 전용 회차 기록입니다. 작성·수정·발송은 강사 기록 화면과 ARCHIVE CORE에서 처리합니다."),
-    heading(2, `${record.memberName}님 ${record.sessionNumber}회차`),
-    paragraph(`수업일: ${lessonTimeText(chartRequest)} / 담당: ${record.staffName || "미정"}`),
-    divider(),
-    heading(3, "회원 사전설문 참고"),
-    ...bullets([
-      `목표: ${chartRequest.intakeSummary?.goal || "-"}`,
-      `신경 부위: ${chartRequest.intakeSummary?.focusArea || "-"}`,
-      `운동 수준: ${chartRequest.intakeSummary?.exerciseLevel || "-"}`,
-      chartRequest.intakeSummary?.painOrMedicalNote ? "주의 내용 확인 필요" : "특별 주의 내용 없음",
-    ]),
-    divider(),
-    heading(3, "오늘 기록"),
-    ...bullets([
-      `진행 부위: ${textArray(record.postRecord?.focusAreas).join(", ") || "-"}`,
-      `확인한 변화: ${textArray(record.postRecord?.changes).join(", ") || "-"}`,
-      `다음 방향: ${cleanEditableReportText(record.postRecord?.nextDirection || record.postRecord?.nextDirectionKeywords, 1200) || "-"}`,
-      `주의사항: ${textArray(record.postRecord?.cautions).join(", ") || "-"}`,
-      `홈워크: ${cleanEditableReportText(record.postRecord?.homework, 900) || "-"}`,
-      `첨부: ${mediaFilesForReport(record).length}개`,
-    ]),
-    divider(),
-    heading(3, "회원 리포트"),
-    paragraph(
-      reportButtonUrl
-        ? "회원용 리포트가 생성되었습니다. 최종 발송 상태는 ARCHIVE CORE에서 확인합니다."
-        : "회원용 리포트 생성 대기 중입니다.",
-    ),
-    ...(reportButtonUrl
-      ? [notionLinkButton("최종 회원 리포트 보기", reportButtonUrl)]
-      : []),
-  ];
+  return compactPrivateNotionBlocks({
+    memberName: record.memberName, sessionNumber: record.sessionNumber,
+    lessonTime: lessonTimeText(chartRequest), staffName: record.staffName || "미정",
+    stage: privateLessonChartStageLabel(record, chartRequest),
+    intake: { ...chartRequest.intakeSummary, hasCaution: Boolean(chartRequest.intakeSummary?.painOrMedicalNote) },
+    focusAreas: textArray(record.postRecord?.focusAreas), changes: textArray(record.postRecord?.changes),
+    nextDirection: String((reportButtonUrl && record.gptDraftNextDirection) || record.postRecord?.nextDirection || record.postRecord?.nextDirectionKeywords || ""),
+    cautions: textArray(record.postRecord?.cautions), homework: String(record.postRecord?.homework || ""),
+    mediaCount: mediaFilesForReport(record).length, reportUrl: reportButtonUrl,
+    summaryText: reportButtonUrl ? record.gptDraftSummary : "",
+    reviewReason: (record as any).notionProjectionControl?.reviewReason || "",
+    cancelled: Boolean(record.cancelledAt || chartRequest.status === "cancelled"),
+    submitted: Boolean(record.postSubmittedAt || chartRequest.postStatus === "submitted"),
+  });
 }
 
 function notionLinkButton(text: string, url: string): Record<string, unknown> {
@@ -3508,7 +3541,10 @@ function lessonTimeText(chartRequest: Pick<PrivateLessonChartRequestDoc, "lesson
   }).format(date);
 }
 
-function notionSessionTitle(record: PrivateLessonChartRecordDoc, chartRequest: PrivateLessonChartRequestDoc): string {
+export function notionSessionTitle(record: PrivateLessonChartRecordDoc, chartRequest: PrivateLessonChartRequestDoc): string {
+  if ((record as any).notionProjectionControl?.reviewReason) {
+    return `${lessonTitleDate(chartRequest)} · ${record.memberName}(확인필요)`;
+  }
   return `${lessonTitleDate(chartRequest)} · ${record.memberName} ${record.sessionNumber}회차(${privateLessonChartStageLabel(record, chartRequest)})`;
 }
 
