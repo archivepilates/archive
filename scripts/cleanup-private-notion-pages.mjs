@@ -101,7 +101,7 @@ async function assertUnchanged(id, before) {
 }
 function legacyBlocks(blocks) {
   const supported = ["paragraph", "heading_1", "heading_2", "heading_3", "bulleted_list_item", "numbered_list_item", "quote", "bookmark", "callout"];
-  return blocks.filter((b) => !b.has_children && supported.includes(b.type)).map((b) => ({ object: "block", type: b.type, [b.type]: b[b.type] }));
+  return blocks.filter((b) => !b.has_children && supported.includes(b.type)).map(helper.privateNotionArchiveBlock);
 }
 async function preserveHistory(pageId, blocks, extra = []) {
   const existing = blocks.find((b) => b.type === "toggle" && text(b) === "이전 양식 기록");

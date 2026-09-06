@@ -12,7 +12,7 @@ import {
   type PrivateNotionStore,
   type PrivateNotionRepairCursor,
 } from "../../firebase/kangsain-functions/functions/src/privateLessonChart/privateLessonNotionSync";
-import { privateLessonNotionProjectionVersion, isManagedPrivateNotionBlock, notionSessionTitle } from "../../firebase/kangsain-functions/functions/src/privateLessonChart/privateLessonChart";
+import { privateLessonNotionProjectionVersion, isManagedPrivateNotionBlock, notionSessionTitle, privateNotionArchiveBlock } from "../../firebase/kangsain-functions/functions/src/privateLessonChart/privateLessonChart";
 
 function harness() {
   let time = 1_800_000_000_000;
@@ -80,6 +80,14 @@ test("Notion-only review hides unverified round/cancellation without changing ca
   assert.equal(notionSessionTitle(r, q), "2026.09.04 · 검증(확인필요)");
   assert.equal(q.status, "cancelled");
   assert.equal(r.sessionNumber, 99);
+});
+
+test("history clones only writable fields while preserving rich text and links", () => {
+  const rich = { type: "text", text: { content: "기존 기록", link: { url: "https://example.com" } }, plain_text: "기존 기록", href: "https://example.com", annotations: { bold: true } };
+  const block: any = privateNotionArchiveBlock({ type: "paragraph", paragraph: { rich_text: [rich], icon: null, color: "gray" } });
+  assert.equal(block.paragraph.icon, undefined);
+  assert.deepEqual(block.paragraph.rich_text, [{ type: "text", text: rich.text, annotations: rich.annotations }]);
+  assert.equal(block.paragraph.color, "gray");
 });
 
 test("duplicate and out-of-order deliveries use the newest source once", async () => {

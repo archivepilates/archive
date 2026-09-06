@@ -2135,7 +2135,7 @@ async function replacePageContent(pageId: string, children: Record<string, unkno
   const isLegacy = existing.some((block) => /수업 전 계획|수업 후 기록|야간.*동기화/.test(textOf(block)));
   if (!hasHistory && isLegacy) {
     const archived = existing.filter((block) => !block.has_children && ["paragraph", "heading_1", "heading_2", "heading_3", "bulleted_list_item", "numbered_list_item", "quote", "bookmark", "callout"].includes(block.type));
-    const content = archived.map((block) => ({ object: "block", type: block.type, [block.type]: block[block.type] }));
+    const content = archived.map(privateNotionArchiveBlock);
     if (content.length) {
       await assertWritable();
       await appendPageContent(pageId, [{ object: "block", type: "toggle", toggle: {
@@ -2151,6 +2151,21 @@ async function replacePageContent(pageId: string, children: Record<string, unkno
     await assertWritable();
     await notionRequest(`blocks/${child.id}`, "DELETE");
   }
+}
+
+export function privateNotionArchiveBlock(block: any): Record<string, unknown> {
+  const data = block[block.type] || {};
+  const rich = (items: any[] = []) => items.map((item) => ({
+    type: item.type,
+    [item.type]: item[item.type],
+    ...(item.annotations ? { annotations: item.annotations } : {}),
+  }));
+  // Read responses include nullable/icon metadata that the write API rejects.
+  const writable = block.type === "bookmark"
+    ? { url: data.url, caption: rich(data.caption) }
+    : { rich_text: rich(data.rich_text), ...(data.color ? { color: data.color } : {}),
+      ...(block.type === "callout" && data.icon ? { icon: data.icon } : {}) };
+  return { object: "block", type: block.type, [block.type]: writable };
 }
 
 export function isManagedPrivateNotionBlock(block: any): boolean {
