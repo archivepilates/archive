@@ -89,3 +89,11 @@ Email is sent only for `critical` or `action_required` findings.
 - The retired ARCHIVE IN operator page is not an active service-health target. Active ARCHIVE IN member/private/welcome routes remain monitored.
 - Runtime LaunchAgent source moves to a stable Git worktree under `~/dev`; temporary feature worktrees must not be production runtime paths.
 - Worktree cleanup is an interactive Codex maintenance command, not a LaunchAgent. The canonical repository Git metadata is under `Documents`, where background shell access is blocked by macOS TCC.
+
+## 2026-09-07 Reservation Catch-up
+
+- The hourly StudioMate sync normally downloads reservations from the current KST date through the open-booking horizon.
+- If the previous successful run belongs to an earlier KST date or a later attempt failed, the next run starts once from the last successful reservation date, capped at seven days of lookback.
+- The future end date remains based on the current date, so catching up a past gap does not omit newly opened future reservations.
+- Changed private bookings trigger member-scoped `privateSessionLedger` recomputation and verification. Unchanged rows remain hash-skipped.
+- The health check stays read-only for attendance decisions: it reports residual past unchecked attendance but does not guess attendance or delete a round.

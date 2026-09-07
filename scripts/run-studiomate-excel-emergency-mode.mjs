@@ -10,6 +10,10 @@ import {
   isExcludedPrivateBooking,
   isPrivateBooking,
 } from "./lib/private-session-order-policy.mjs";
+import {
+  loadSyncRunEvidence,
+  studioMateReservationSyncWindow,
+} from "./lib/system-health-current-state.mjs";
 
 const require = createRequire(import.meta.url);
 const admin = require("../firebase/kangsain-functions/functions/node_modules/firebase-admin");
@@ -19,6 +23,8 @@ const apply = args.has("--apply");
 const download = args.has("--download");
 const reservationFile = valueArg("--reservation-file");
 const memberFile = valueArg("--member-file");
+const requestedStartDate = valueArg("--start-date");
+const requestedEndDate = valueArg("--end-date");
 const reportDir = path.join(os.homedir(), "ArchiveIN/automation/reports/excel-emergency-mode");
 const PROJECT_ID = process.env.GOOGLE_CLOUD_PROJECT || process.env.GCLOUD_PROJECT || "archive-pilates";
 const STUDIO_ID = process.env.STUDIOMATE_STUDIO_ID || "5330";
@@ -31,6 +37,14 @@ let downloadedMemberFile = "";
 let downloadedReservationFile = "";
 let downloadedDeletedClassFile = "";
 let downloadedReservationRange = null;
+const previousSyncEvidence = download ? loadSyncRunEvidence(reportDir, { maxAgeMinutes: 95 }) : {};
+const reservationWindow = download
+  ? studioMateReservationSyncWindow({
+      requestedStartDate,
+      requestedEndDate,
+      evidence: previousSyncEvidence,
+    })
+  : null;
 
 let downloadFailedWithoutMember = false;
 if (download) {
@@ -38,6 +52,10 @@ if (download) {
     "scripts/emergency-download-studiomate-excels.mjs",
     "--kind",
     "all",
+    "--start-date",
+    reservationWindow.startDate,
+    "--end-date",
+    reservationWindow.endDate,
     ...(apply ? ["--apply"] : ["--dry-run"]),
   ]);
   steps.push(downloadStep);
@@ -123,6 +141,15 @@ const summary = {
   skippedImports: downloadFailedWithoutMember ? "download failed or produced no member Excel file" : "",
   sourceImportIds,
   sourceFileCleanup,
+  reservationWindow,
+  previousSyncEvidence: download
+    ? {
+        latestAttemptSucceeded: previousSyncEvidence.latestAttemptSucceeded,
+        lastSuccessAt: previousSyncEvidence.lastSuccessAt,
+        consecutiveFailures: previousSyncEvidence.consecutiveFailures,
+        reservationRange: previousSyncEvidence.reservationRange,
+      }
+    : null,
   steps,
   finishedAt: new Date().toISOString(),
 };

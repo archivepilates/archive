@@ -7,7 +7,8 @@ import vm from "node:vm";
 import { createRequire } from "node:module";
 import {
   canResolveHealthFinding, classifyPrivateRoundIssues, loadSyncRunEvidence,
-  recoveredMainFailureIds, successfulSyncReport, summarizeSyncReports, unresolvedMainWorkflowFailures,
+  recoveredMainFailureIds, studioMateReservationSyncWindow, successfulSyncReport,
+  summarizeSyncReports, unresolvedMainWorkflowFailures,
 } from "../lib/system-health-current-state.mjs";
 
 const now = new Date("2026-09-05T02:00:00Z");
@@ -80,6 +81,75 @@ test("missing, corrupt and child reports cannot create success evidence", () => 
     assert.equal(result.consecutiveFailures, 1);
     assert.equal(loadSyncRunEvidence(path.join(dir, "missing")).lastSuccessAt, "");
   } finally { rmSync(dir, { recursive: true, force: true }); }
+});
+
+test("reservation sync catches up across a failed midnight boundary without shrinking the future range", () => {
+  const result = studioMateReservationSyncWindow({
+    now: new Date("2026-09-07T03:00:00Z"),
+    evidence: {
+      latestAttemptSucceeded: false,
+      lastSuccessAt: "2026-09-04T10:08:28Z",
+      reservationRange: { startDate: "2026-09-04", endDate: "2026-09-13" },
+    },
+  });
+  assert.deepEqual(result, {
+    startDate: "2026-09-04",
+    endDate: "2026-09-20",
+    catchup: true,
+    reason: "recover_gap_since_last_success",
+    today: "2026-09-07",
+  });
+});
+
+test("reservation sync performs one overnight catch-up and then returns to the current day", () => {
+  const overnight = studioMateReservationSyncWindow({
+    now: new Date("2026-09-07T00:00:00Z"),
+    evidence: {
+      latestAttemptSucceeded: true,
+      lastSuccessAt: "2026-09-06T14:15:00Z",
+      reservationRange: { startDate: "2026-09-06", endDate: "2026-09-13" },
+    },
+  });
+  assert.equal(overnight.startDate, "2026-09-06");
+  assert.equal(overnight.catchup, true);
+
+  const current = studioMateReservationSyncWindow({
+    now: new Date("2026-09-07T01:00:00Z"),
+    evidence: {
+      latestAttemptSucceeded: true,
+      lastSuccessAt: "2026-09-07T00:15:00Z",
+      reservationRange: { startDate: "2026-09-06", endDate: "2026-09-20" },
+    },
+  });
+  assert.equal(current.startDate, "2026-09-07");
+  assert.equal(current.catchup, false);
+});
+
+test("reservation catch-up is capped and explicit ranges remain exact", () => {
+  const capped = studioMateReservationSyncWindow({
+    now: new Date("2026-09-07T03:00:00Z"),
+    evidence: {
+      latestAttemptSucceeded: false,
+      lastSuccessAt: "2026-08-20T00:00:00Z",
+      reservationRange: { startDate: "2026-08-20", endDate: "2026-08-30" },
+    },
+  });
+  assert.equal(capped.startDate, "2026-08-31");
+  assert.equal(capped.endDate, "2026-09-20");
+
+  const explicit = studioMateReservationSyncWindow({
+    now: new Date("2026-09-07T03:00:00Z"),
+    requestedStartDate: "2026-09-04",
+    requestedEndDate: "2026-09-04",
+    evidence: capped,
+  });
+  assert.deepEqual(explicit, {
+    startDate: "2026-09-04",
+    endDate: "2026-09-04",
+    catchup: false,
+    reason: "explicit_range",
+    today: "2026-09-07",
+  });
 });
 
 const run = (id, conclusion, overrides = {}) => ({ databaseId: id, workflowDatabaseId: 42, workflowName: "affected-check", headBranch: "main", status: "completed", conclusion, createdAt: `2026-09-0${id}T00:00:00Z`, ...overrides });

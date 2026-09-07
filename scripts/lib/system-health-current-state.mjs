@@ -85,6 +85,84 @@ export function loadSyncRunEvidence(dir, options = {}) {
   return summarizeSyncReports(entries, options);
 }
 
+export function studioMateReservationSyncWindow({
+  now = new Date(),
+  requestedStartDate = "",
+  requestedEndDate = "",
+  evidence = {},
+  maxCatchupDays = 7,
+} = {}) {
+  const today = kstDate(now);
+  const explicitStart = validIsoDate(requestedStartDate);
+  const explicitEnd = validIsoDate(requestedEndDate);
+  if ((requestedStartDate && !explicitStart) || (requestedEndDate && !explicitEnd)) {
+    throw new Error("StudioMate reservation range must use YYYY-MM-DD dates.");
+  }
+
+  let startDate = explicitStart || today;
+  let reason = explicitStart ? "explicit_range" : "current_day";
+  if (!explicitStart && evidence.lastSuccessAt) {
+    const lastSuccess = new Date(evidence.lastSuccessAt);
+    const lastSuccessDate = Number.isFinite(lastSuccess.getTime()) ? kstDate(lastSuccess) : "";
+    const needsCatchup = evidence.latestAttemptSucceeded === false || (lastSuccessDate && lastSuccessDate < today);
+    if (needsCatchup) {
+      const previousRangeStart = validIsoDate(evidence.reservationRange?.startDate);
+      const candidate = previousRangeStart || lastSuccessDate;
+      if (candidate && candidate < today) {
+        startDate = maxIsoDate(candidate, addIsoDays(today, -Math.max(1, Number(maxCatchupDays) || 7)));
+        reason = "recover_gap_since_last_success";
+      }
+    }
+  }
+
+  const endDate = explicitEnd || reservationOpenEndDate(today);
+  if (endDate < startDate) throw new Error("StudioMate reservation end date cannot be before the start date.");
+  return {
+    startDate,
+    endDate,
+    catchup: !explicitStart && startDate < today,
+    reason,
+    today,
+  };
+}
+
+function reservationOpenEndDate(baseDate) {
+  const date = isoDateValue(baseDate);
+  const daysSinceMonday = (date.getUTCDay() + 6) % 7;
+  return addIsoDays(baseDate, 13 - daysSinceMonday);
+}
+
+function addIsoDays(value, days) {
+  const date = isoDateValue(value);
+  date.setUTCDate(date.getUTCDate() + days);
+  return date.toISOString().slice(0, 10);
+}
+
+function maxIsoDate(...values) {
+  return values.filter(Boolean).sort().at(-1) || "";
+}
+
+function validIsoDate(value) {
+  const text = String(value || "").trim();
+  if (!/^\d{4}-\d{2}-\d{2}$/.test(text)) return "";
+  return isoDateValue(text).toISOString().slice(0, 10) === text ? text : "";
+}
+
+function isoDateValue(value) {
+  const date = new Date(`${value}T00:00:00.000Z`);
+  if (!Number.isFinite(date.getTime())) throw new Error(`Invalid ISO date: ${value}`);
+  return date;
+}
+
+function kstDate(value) {
+  return new Intl.DateTimeFormat("en-CA", {
+    timeZone: "Asia/Seoul",
+    year: "numeric",
+    month: "2-digit",
+    day: "2-digit",
+  }).format(value);
+}
+
 export function inspectHeadlessRuntime(require) {
   try {
     const root = path.dirname(require.resolve("playwright-core/package.json"));

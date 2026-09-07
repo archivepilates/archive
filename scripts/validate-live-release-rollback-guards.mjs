@@ -1065,6 +1065,47 @@ const guardGroups = [
     ],
   },
   {
+    id: "studiomate-reservation-gap-catchup",
+    reason:
+      "StudioMate 동기화 장애가 자정을 넘겼을 때 지난 수업의 최종 출석 상태를 영구히 놓치는 회귀를 막습니다.",
+    files: [
+      {
+        file: "scripts/run-studiomate-excel-emergency-mode.mjs",
+        markers: [
+          "studioMateReservationSyncWindow",
+          '"--start-date"',
+          "reservationWindow.startDate",
+          '"--end-date"',
+          "reservationWindow.endDate",
+          "previousSyncEvidence",
+        ],
+      },
+      {
+        file: "scripts/lib/system-health-current-state.mjs",
+        markers: [
+          "export function studioMateReservationSyncWindow",
+          "recover_gap_since_last_success",
+          "maxCatchupDays = 7",
+          "reservationOpenEndDate(today)",
+        ],
+      },
+      {
+        file: "scripts/tests/system-health-current-state.test.mjs",
+        markers: [
+          "reservation sync catches up across a failed midnight boundary without shrinking the future range",
+          "reservation sync performs one overnight catch-up and then returns to the current day",
+          "reservation catch-up is capped and explicit ranges remain exact",
+        ],
+      },
+      {
+        file: "core/rules/index.html",
+        markers: [
+          "다음 정상 실행은 마지막 성공 예약일부터 최대 7일을 한 번 재수집합니다.",
+        ],
+      },
+    ],
+  },
+  {
     id: "private-session-reschedule-reconcile",
     reason:
       "프라이빗 수업 시간변경/취소 시 기존 설문 링크와 Notion 차트가 과거 예약으로 롤백되는 것을 막습니다.",
