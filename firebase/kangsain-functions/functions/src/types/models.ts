@@ -758,7 +758,6 @@ export interface PrivateLessonChartRequestDoc {
     correctedAt: Timestamp;
   };
   cancellationReason?: string | null;
-  cancellationSource?: "system_booking_reconcile" | "operator" | string | null;
   cancelledAt?: Timestamp | null;
   accessTokenHash: string;
   preUrl: string;
@@ -822,7 +821,6 @@ export interface PrivateLessonChartRecordDoc {
     correctedAt: Timestamp;
   };
   cancellationReason?: string | null;
-  cancellationSource?: "system_booking_reconcile" | "operator" | string | null;
   cancelledAt?: Timestamp | null;
   prePlan?: Record<string, unknown>;
   postRecord?: Record<string, unknown>;

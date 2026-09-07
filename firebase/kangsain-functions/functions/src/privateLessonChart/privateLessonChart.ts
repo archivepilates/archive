@@ -1313,7 +1313,7 @@ async function findReusableChartRequestForBooking(
     if (request.bookingId === booking.bookingId) continue;
     if (
       request.status === "cancelled" &&
-      !isAutoBookingCancellationReason(request.cancellationReason, request.cancellationSource)
+      !isAutoBookingCancellationReason(request.cancellationReason, privateChartCancellationSource(request))
     ) continue;
     if (staffOccurrenceIdentity(request.staffId, request.staffName) !== staffOccurrenceIdentity(booking.staffId, booking.staffName)) {
       continue;
@@ -1391,7 +1391,7 @@ async function syncChartRequestToActiveBooking(
     const currentRecord = recordSnap.data() || chartRecordBase(currentRequest);
     const shouldReactivate =
       currentRequest.status === "cancelled" &&
-      isAutoBookingCancellationReason(currentRequest.cancellationReason, currentRequest.cancellationSource);
+      isAutoBookingCancellationReason(currentRequest.cancellationReason, privateChartCancellationSource(currentRequest));
     if (currentRequest.status === "cancelled" && !shouldReactivate) {
       return { changed: false, updatedRequest: currentRequest, updatedRecord: recordSnap.data() || null, invalidated: false };
     }
@@ -1408,13 +1408,13 @@ async function syncChartRequestToActiveBooking(
     const staleRequestCancellationState = Boolean(
       currentRequest.status !== "cancelled" &&
       (currentRequest.cancelledAt ||
-        isAutoBookingCancellationReason(currentRequest.cancellationReason, currentRequest.cancellationSource)),
+        isAutoBookingCancellationReason(currentRequest.cancellationReason, privateChartCancellationSource(currentRequest))),
     );
     const staleRecordCancellationState = Boolean(
       currentRequest.status !== "cancelled" &&
       (currentRecord.cancelledAt ||
         (currentRecord as any).sessionStatus === "cancelled" ||
-        isAutoBookingCancellationReason(currentRecord.cancellationReason, currentRecord.cancellationSource) ||
+        isAutoBookingCancellationReason(currentRecord.cancellationReason, privateChartCancellationSource(currentRecord)) ||
         isAutoPrivateChartReviewReason((currentRecord as any).notionProjectionControl?.reviewReason)),
     );
     const shouldClearCancellationResidue = shouldReactivate || staleRequestCancellationState || staleRecordCancellationState;
@@ -1600,6 +1600,10 @@ function isAutoBookingCancellationReason(value: unknown, source: unknown = ""): 
     /^booking_app_status_(cancel|cancelled|canceled)$/.test(reason) ||
     /^booking_status_(cancelled|canceled|superseded)$/.test(reason) ||
     /^attendance_status_(absent|late_cancel)$/.test(reason);
+}
+
+function privateChartCancellationSource(value: unknown): unknown {
+  return (value as { cancellationSource?: unknown } | null | undefined)?.cancellationSource;
 }
 
 function isAutoPrivateChartReviewReason(value: unknown): boolean {
@@ -2864,7 +2868,7 @@ async function activePrivateBookingForChartRequest(
 ): Promise<{ ok: true; booking: BookingDoc } | { ok: false; reason: string }> {
   if (
     request.status === "cancelled" &&
-    !isAutoBookingCancellationReason(request.cancellationReason, request.cancellationSource)
+    !isAutoBookingCancellationReason(request.cancellationReason, privateChartCancellationSource(request))
   ) {
     return { ok: false, reason: request.cancellationReason || "chart_request_cancelled" };
   }
@@ -3000,16 +3004,14 @@ async function cancelPrivateLessonChartRequest(
   const recordSnap = await refs.privateLessonChartRecord(request.requestId).get();
   const record = recordSnap.data();
   if (!record) return;
-  await refs.privateLessonChartRecord(request.requestId).set(
-    {
-      cancellationReason: reason,
-      cancellationSource: "system_booking_reconcile" as const,
-      cancelledAt: now,
-      notionSync: pendingNotionProjection(record),
-      updatedAt: now,
-    },
-    { merge: true },
-  );
+  const recordPatch = {
+    cancellationReason: reason,
+    cancellationSource: "system_booking_reconcile" as const,
+    cancelledAt: now,
+    notionSync: pendingNotionProjection(record),
+    updatedAt: now,
+  };
+  await refs.privateLessonChartRecord(request.requestId).set(recordPatch, { merge: true });
 }
 
 function dailyPrivateChartAlimtalkVariables(
