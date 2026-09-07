@@ -25,11 +25,31 @@ const profileSlugs = fs
 assertSameSet(cardSlugs, profileSlugs, "Team cards and profile directories differ.");
 
 for (const slug of cardSlugs) {
+  const profilePath = path.join(TEAM_DIR, slug, "index.html");
   assert(
-    fs.existsSync(path.join(TEAM_DIR, slug, "index.html")),
+    fs.existsSync(profilePath),
     `Missing profile page for ${slug}.`
   );
+  const profileHtml = fs.readFileSync(profilePath, "utf8");
+  const profileUrl = `https://archivepilates.com/teams/${slug}`;
+  assert(
+    profileHtml.includes(`<link rel="canonical" href="${profileUrl}">`),
+    `Missing canonical URL for ${slug}.`
+  );
+  const personMatch = profileHtml.match(/<script type="application\/ld\+json">([\s\S]*?)<\/script>/);
+  assert(personMatch, `Missing Person structured data for ${slug}.`);
+  const person = JSON.parse(personMatch[1]);
+  assert(person["@type"] === "Person" && person.url === profileUrl, `Invalid Person data for ${slug}.`);
+  for (const match of profileHtml.matchAll(/src="(\/assets\/team\/[^"]+)"/g)) {
+    assert(fs.existsSync(path.join(PUBLIC, match[1].slice(1))), `Missing profile image for ${slug}.`);
+  }
 }
+
+assert(cardSlugs.includes("yuri"), "Jung Yuri is missing from the active team roster.");
+const yuriHtml = fs.readFileSync(path.join(TEAM_DIR, "yuri", "index.html"), "utf8");
+assert(yuriHtml.includes("<h1>정유리</h1>"), "Jung Yuri profile has the wrong name.");
+assert(yuriHtml.includes("/assets/team/jung-yuri-20260907.jpg"), "Jung Yuri profile has the wrong portrait.");
+assert((yuriHtml.match(/<li>/g) || []).length === 9, "Jung Yuri's nine source qualifications must be preserved.");
 
 const imagePaths = unique(
   Array.from(

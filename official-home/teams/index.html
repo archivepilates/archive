@@ -26,7 +26,10 @@
   <link rel="stylesheet" href="/assets/public-home-ux-20260905.css">
   <style>
     @media (min-width: 921px) {
-      .teacher-grid { grid-template-columns: repeat(4, minmax(0, 1fr)); gap: 52px 18px; }
+      .teacher-grid { grid-template-columns: repeat(3, minmax(0, 1fr)); gap: 52px 18px; }
+    }
+    @media (min-width: 1200px) {
+      .teacher-grid { grid-template-columns: repeat(5, minmax(0, 1fr)); }
     }
   </style>
 </head>
@@ -145,6 +148,18 @@
               <div>
                 <span class="teacher-role">수석강사</span>
                 <h3>이초림</h3>
+              </div>
+              <span class="teacher-arrow" aria-hidden="true">↗</span>
+            </div>
+          </a>
+          <a class="teacher-card" href="/teams/yuri" aria-label="정유리 강사 프로필 보기">
+            <div class="teacher-photo">
+              <img src="/assets/team/jung-yuri-20260907.jpg" alt="정유리 강사" width="1254" height="1254" loading="lazy">
+            </div>
+            <div class="teacher-meta">
+              <div>
+                <span class="teacher-role">강사</span>
+                <h3>정유리</h3>
               </div>
               <span class="teacher-arrow" aria-hidden="true">↗</span>
             </div>
