@@ -1603,6 +1603,7 @@ function isAutoBookingCancellationReason(value: unknown, source: unknown = ""): 
 }
 
 function privateChartCancellationSource(value: unknown): unknown {
+  // Keep the source marker local to the private-chart codebase.
   return (value as { cancellationSource?: unknown } | null | undefined)?.cancellationSource;
 }
 
