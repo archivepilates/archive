@@ -47,4 +47,21 @@
 - Desktop roster and mobile profile screenshots visually reviewed.
 - Evidence: ignored `output/playwright/team-yuri-20260907/` and
   `artifacts/team-yuri-20260907/before-hosting.json`.
-- Deployment, public readback, GitHub push, and final cleanup: pending.
+
+## Released and Verified
+- Code commit: `d0366ec`; pushed to the matching origin branch with its own upstream.
+- Deployed Hosting version: `6518d2b582ce7918` on `archive-pilates-home`.
+- Live `/teams` and `/teams/yuri` pass the same four-width browser checks (eight
+  page/viewport combinations). Mobile touch plus reduced-motion emulation also
+  passes profile navigation and qualification disclosure.
+- The deployed 73-path manifest matches local source. Compared with the previous
+  release: two additions (portrait and profile), two changes (roster and sitemap),
+  zero deletions and zero unrelated changes. Hash with the deployment Node 24
+  runtime; Node 25 produces different gzip bytes even for identical source files.
+- Classroom postdeploy canary passes: current asset SHA/cache headers, one current
+  loader and fallback, and anonymous login redirects for classroom/ACA6/ACH9.
+- Ordinary-member playback and checkout were not re-exercised: no member-facing
+  code or entitlement data changed; the complete shared-asset hash set is intact.
+- Task-owned Playwright session/browser PID 38615 closed. Temporary touch context
+  closed in finally; local server on 127.0.0.1:8876 stopped. User tabs untouched.
+- GitHub code-check run: https://github.com/archivepilates/archive/actions/runs/34101382856
