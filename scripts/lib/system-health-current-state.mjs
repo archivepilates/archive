@@ -232,6 +232,7 @@ export function managedHealthCheckKey(finding) {
   if (title.startsWith("StudioMate Excel sync ")) return "sync:studiomate-excel-sync";
   if (title.startsWith("ARCHIVE dashboard DB sync ")) return "sync:archive-dashboard-db-sync";
   if (finding.area === "private" && title === "프라이빗 회차/취소 정합성 확인 필요") return "private-session-order";
+  if (finding.area === "private" && title === "프라이빗 차트 자동 취소 복구 필요") return "private-chart-state";
   if (finding.area === "github" && /^GitHub Actions 최근 실패 \d+건$/.test(title)) return "github-ci";
   return "";
 }
@@ -239,7 +240,7 @@ export function managedHealthCheckKey(finding) {
 export function canResolveHealthFinding(finding, activeIds, completedChecks) {
   const key = managedHealthCheckKey(finding);
   if (key === "github-ci" && !(finding.sourceRefs || []).every((ref) => completedChecks.has(`github-run:${String(ref).split(":").at(-1)}`))) return false;
-  if (["private-session-order", "private-attendance"].includes(key) &&
+  if (["private-session-order", "private-attendance", "private-chart-state"].includes(key) &&
       !(finding.sourceRefs || []).every((ref) => completedChecks.has(String(ref)))) return false;
   return Boolean(key && completedChecks.has(key) && !activeIds.has(finding.findingId || finding.queueId));
 }

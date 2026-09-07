@@ -8,6 +8,12 @@ import {
   inactivePrivateBookingReason,
   isPrivateBooking,
 } from "./lib/private-session-order-policy.mjs";
+import {
+  isAutoPrivateChartCancellationReason,
+  isAutoPrivateChartReviewReason,
+  privateChartRequestStatusFromSubmissions,
+  reactivatedPrivateChartAlimtalk,
+} from "./lib/private-chart-consistency.mjs";
 
 const require = createRequire(import.meta.url);
 const admin = require("../firebase/kangsain-functions/functions/node_modules/firebase-admin");
@@ -127,7 +133,8 @@ async function recomputeMember(member) {
   const ledgerByKey = new Map(ledgerEntries.map((entry) => [entry.occurrenceKey, entry]));
   const ledgerByBookingId = new Map(ledgerEntries.filter((entry) => entry.bookingId).map((entry) => [entry.bookingId, entry]));
   const bookingPatches = buildBookingPatches(bookings, ledgerByKey, ledgerByBookingId);
-  const requestPatches = await buildRequestPatches(requestSnap.docs, bookings, ledgerByKey, ledgerByBookingId);
+  const recordsById = await loadChartRecordsByRequestId(requestSnap.docs);
+  const requestPatches = await buildRequestPatches(requestSnap.docs, recordsById, bookings, ledgerByKey, ledgerByBookingId);
   const expectedLedgerIds = new Set(ledgerEntries.map((entry) => entry.ledgerId));
   const staleLedgerDeletes = config.pruneStale
     ? ledgerSnap.docs.filter((doc) => !expectedLedgerIds.has(doc.id)).map((doc) => doc.id)
@@ -152,6 +159,7 @@ async function recomputeMember(member) {
       bookings: bookingSnap.size,
       previousLedger: ledgerSnap.size,
       chartRequests: requestSnap.size,
+      chartRecords: recordsById.size,
     },
     ledgerEntries,
     ledgerUpserts,
@@ -239,14 +247,18 @@ function buildBookingPatches(bookings, ledgerByKey, ledgerByBookingId) {
   return patches;
 }
 
-async function buildRequestPatches(requestDocs, bookings, ledgerByKey, ledgerByBookingId) {
+async function buildRequestPatches(requestDocs, recordsById, bookings, ledgerByKey, ledgerByBookingId) {
   const now = admin.firestore.Timestamp.now();
   const patches = [];
   for (const doc of requestDocs) {
     const request = { requestId: doc.id, ...(doc.data() || {}) };
+    const record = recordsById.get(request.requestId) || {};
     const key = occurrenceKey(timelineRowFromRequest(request));
     const ledger = ledgerByBookingId.get(String(request.bookingId || "")) || ledgerByKey.get(key);
-    if (String(request.status || "") === "cancelled") continue;
+    const requestCancelled = String(request.status || "") === "cancelled";
+    const autoCancelled = requestCancelled &&
+      isAutoPrivateChartCancellationReason(request.cancellationReason, request.cancellationSource);
+    if (requestCancelled && !autoCancelled) continue;
     if (!ledger) {
       const replacement = replacementBookingForRequest(request, bookings, ledgerByKey, ledgerByBookingId);
       if (replacement) {
@@ -292,7 +304,12 @@ async function buildRequestPatches(requestDocs, bookings, ledgerByKey, ledgerByB
               correctedAt: now,
             },
             cancellationReason: null,
+            cancellationSource: null,
             cancelledAt: null,
+            ...(autoCancelled ? {
+              status: privateChartRequestStatusFromSubmissions(request),
+              alimtalk: reactivatedPrivateChartAlimtalk(request.alimtalk, { scheduleChanged: true }),
+            } : {}),
             updatedAt: now,
           },
           recordPatch: {
@@ -320,12 +337,19 @@ async function buildRequestPatches(requestDocs, bookings, ledgerByKey, ledgerByB
               correctedAt: now,
             },
             cancellationReason: null,
+            cancellationSource: null,
             cancelledAt: null,
+            notionSync: pendingNotionSync(record),
             updatedAt: now,
           },
+          recordDeleteFields: autoCancelled ? staleRecordDeleteFields(record) : [],
         });
         continue;
       }
+      // An automatic cancellation is already the canonical state while the
+      // booking is absent from the ledger. Rewriting it would churn timestamps
+      // and repeatedly enqueue the same Notion projection.
+      if (requestCancelled && autoCancelled) continue;
       patches.push({
         requestId: request.requestId,
         recordId: request.requestId,
@@ -334,6 +358,7 @@ async function buildRequestPatches(requestDocs, bookings, ledgerByKey, ledgerByB
         requestPatch: {
           status: "cancelled",
           cancellationReason: "booking_not_in_private_session_ledger",
+          cancellationSource: "system_booking_reconcile",
           cancelledAt: now,
           updatedAt: now,
           alimtalk: {
@@ -345,42 +370,89 @@ async function buildRequestPatches(requestDocs, bookings, ledgerByKey, ledgerByB
         recordPatch: {
           sessionStatus: "cancelled",
           cancellationReason: "booking_not_in_private_session_ledger",
+          cancellationSource: "system_booking_reconcile",
           cancelledAt: now,
+          notionSync: pendingNotionSync(record),
           updatedAt: now,
         },
       });
       continue;
     }
-    if (positiveNumber(request.sessionNumber) !== ledger.cumulativePrivateRound) {
+    const roundChanged = positiveNumber(request.sessionNumber) !== ledger.cumulativePrivateRound;
+    const staleRequestState = Boolean(
+      autoCancelled ||
+      (String(request.status || "") !== "cancelled" &&
+        (request.cancelledAt || isAutoPrivateChartCancellationReason(request.cancellationReason, request.cancellationSource))),
+    );
+    const staleRecordState = Boolean(
+      isAutoPrivateChartCancellationReason(record.cancellationReason, record.cancellationSource) ||
+      (String(request.status || "") !== "cancelled" && (record.cancelledAt || record.sessionStatus === "cancelled")) ||
+      (String(request.status || "") !== "cancelled" && isAutoPrivateChartReviewReason(record.notionProjectionControl?.reviewReason)),
+    );
+    if (roundChanged || staleRequestState || staleRecordState) {
+      const reason = staleRequestState || staleRecordState
+        ? "reactivate_chart_request_from_canonical_ledger"
+        : "sync_chart_request_round_from_ledger";
       patches.push({
         requestId: request.requestId,
         recordId: request.requestId,
-        reason: "sync_chart_request_round_from_ledger",
+        reason,
         before: { sessionNumber: request.sessionNumber, status: request.status, bookingId: request.bookingId },
         requestPatch: {
-          sessionNumber: ledger.cumulativePrivateRound,
-          sessionNumberCorrection: {
-            from: positiveNumber(request.sessionNumber),
-            to: ledger.cumulativePrivateRound,
-            reason: "privateSessionLedger canonical round",
-            correctedAt: now,
-          },
+          ...(roundChanged ? {
+            sessionNumber: ledger.cumulativePrivateRound,
+            sessionNumberCorrection: {
+              from: positiveNumber(request.sessionNumber),
+              to: ledger.cumulativePrivateRound,
+              reason: "privateSessionLedger canonical round",
+              correctedAt: now,
+            },
+          } : {}),
+          ...(staleRequestState ? {
+            status: privateChartRequestStatusFromSubmissions(request),
+            cancellationReason: null,
+            cancellationSource: null,
+            cancelledAt: null,
+            alimtalk: reactivatedPrivateChartAlimtalk(request.alimtalk),
+          } : {}),
           updatedAt: now,
         },
         recordPatch: {
-          sessionNumber: ledger.cumulativePrivateRound,
-          sessionNumberCorrection: {
-            from: positiveNumber(request.sessionNumber),
-            to: ledger.cumulativePrivateRound,
-            reason: "privateSessionLedger canonical round",
-            correctedAt: now,
-          },
+          ...(roundChanged ? {
+            sessionNumber: ledger.cumulativePrivateRound,
+            sessionNumberCorrection: {
+              from: positiveNumber(request.sessionNumber),
+              to: ledger.cumulativePrivateRound,
+              reason: "privateSessionLedger canonical round",
+              correctedAt: now,
+            },
+          } : {}),
+          ...(staleRequestState || staleRecordState ? {
+            cancellationReason: null,
+            cancellationSource: null,
+            cancelledAt: null,
+          } : {}),
+          notionSync: pendingNotionSync(record),
           updatedAt: now,
         },
+        recordDeleteFields: staleRequestState || staleRecordState ? staleRecordDeleteFields(record) : [],
       });
     }
   }
   return patches;
+}
+
+async function loadChartRecordsByRequestId(requestDocs) {
+  const records = new Map();
+  for (let offset = 0; offset < requestDocs.length; offset += 100) {
+    const refs = requestDocs.slice(offset, offset + 100)
+      .map((doc) => db.collection("privateLessonChartRecords").doc(doc.id));
+    const snapshots = refs.length ? await db.getAll(...refs) : [];
+    for (const snap of snapshots) {
+      if (snap.exists) records.set(snap.id, { recordId: snap.id, ...(snap.data() || {}) });
+    }
+  }
+  return records;
 }
 
 function replacementBookingForRequest(request, bookings, ledgerByKey, ledgerByBookingId) {
@@ -438,7 +510,12 @@ async function applyMemberPlan({
   }
   for (const item of requestPatches) {
     chunks.push((batch) => batch.set(db.collection("privateLessonChartRequests").doc(item.requestId), item.requestPatch, { merge: true }));
-    chunks.push((batch) => batch.set(db.collection("privateLessonChartRecords").doc(item.recordId), item.recordPatch, { merge: true }));
+    chunks.push((batch) => {
+      const recordRef = db.collection("privateLessonChartRecords").doc(item.recordId);
+      const deletePatch = Object.fromEntries((item.recordDeleteFields || []).map((field) => [field, admin.firestore.FieldValue.delete()]));
+      if (Object.keys(deletePatch).length) batch.update(recordRef, { ...item.recordPatch, ...deletePatch });
+      else batch.set(recordRef, item.recordPatch, { merge: true });
+    });
   }
   for (let index = 0; index < chunks.length; index += 400) {
     const batch = db.batch();
@@ -459,6 +536,23 @@ async function applyMemberPlan({
     },
     { merge: true },
   );
+}
+
+function staleRecordDeleteFields(record) {
+  const fields = [];
+  if (record.sessionStatus === "cancelled") fields.push("sessionStatus");
+  if (isAutoPrivateChartReviewReason(record.notionProjectionControl?.reviewReason)) {
+    fields.push("notionProjectionControl.reviewReason");
+  }
+  return fields;
+}
+
+function pendingNotionSync(record) {
+  return {
+    ...(record.notionSync || {}),
+    status: "pending",
+    error: "",
+  };
 }
 
 function ledgerEntryFromTimeline(member, row, round) {

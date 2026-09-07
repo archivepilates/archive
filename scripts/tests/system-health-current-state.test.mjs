@@ -185,6 +185,11 @@ test("resolution requires completed coverage and positive CI recovery evidence",
   assert.equal(canResolveHealthFinding(finding, new Set(), new Set(["github-ci", "github-run:1"])), true);
   assert.equal(canResolveHealthFinding(finding, new Set(["old"]), new Set(["github-ci", "github-run:1"])), false);
   assert.equal(canResolveHealthFinding({ ...finding, checkKey: "private-attendance", sourceRefs: ["bookings/1"] }, new Set(), new Set(["private-attendance"])), false);
+  assert.equal(canResolveHealthFinding(
+    { ...finding, checkKey: "private-chart-state", sourceRefs: ["privateLessonChartRequests/1", "bookings/1"] },
+    new Set(),
+    new Set(["private-chart-state", "privateLessonChartRequests/1", "bookings/1"]),
+  ), true);
   assert.equal(canResolveHealthFinding({ findingId: "admin", title: "운영자 Firestore 권한 검증 실패" }, new Set(), new Set()), false);
 });
 

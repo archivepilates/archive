@@ -1,5 +1,5 @@
 import { createHmac, randomBytes } from "node:crypto";
-import { FieldPath, Timestamp } from "firebase-admin/firestore";
+import { FieldPath, FieldValue, Timestamp } from "firebase-admin/firestore";
 import { logger } from "firebase-functions";
 import { DEFAULT_STUDIO_ID } from "../config/constants";
 import { geminiApiKey, notionToken, privateSurveyWebhookSecret, solapiApiKey, solapiApiSecret, solapiPfid } from "../config/secrets";
@@ -1311,7 +1311,10 @@ async function findReusableChartRequestForBooking(
     const request = doc.data();
     if (!request || request.requestId === `plc_${booking.bookingId}`) continue;
     if (request.bookingId === booking.bookingId) continue;
-    if (request.status === "cancelled" && !isAutoBookingCancellationReason(request.cancellationReason)) continue;
+    if (
+      request.status === "cancelled" &&
+      !isAutoBookingCancellationReason(request.cancellationReason, request.cancellationSource)
+    ) continue;
     if (staffOccurrenceIdentity(request.staffId, request.staffName) !== staffOccurrenceIdentity(booking.staffId, booking.staffName)) {
       continue;
     }
@@ -1385,9 +1388,10 @@ async function syncChartRequestToActiveBooking(
     const recordRef = refs.privateLessonChartRecord(request.requestId);
     const [requestSnap, recordSnap] = await Promise.all([tx.get(requestRef), tx.get(recordRef)]);
     const currentRequest = requestSnap.data() || request;
+    const currentRecord = recordSnap.data() || chartRecordBase(currentRequest);
     const shouldReactivate =
       currentRequest.status === "cancelled" &&
-      isAutoBookingCancellationReason(currentRequest.cancellationReason);
+      isAutoBookingCancellationReason(currentRequest.cancellationReason, currentRequest.cancellationSource);
     if (currentRequest.status === "cancelled" && !shouldReactivate) {
       return { changed: false, updatedRequest: currentRequest, updatedRecord: recordSnap.data() || null, invalidated: false };
     }
@@ -1401,7 +1405,20 @@ async function syncChartRequestToActiveBooking(
       currentRequest.lessonDate !== booking.lectureDate ||
       (currentRequest.lessonStartAt?.toMillis?.() || 0) !== (booking.lectureStartAt?.toMillis?.() || 0) ||
       (currentRequest.lessonEndAt?.toMillis?.() || 0) !== (booking.lectureEndAt?.toMillis?.() || 0);
-    if (!sessionChanged && !bookingChanged && !shouldReactivate) {
+    const staleRequestCancellationState = Boolean(
+      currentRequest.status !== "cancelled" &&
+      (currentRequest.cancelledAt ||
+        isAutoBookingCancellationReason(currentRequest.cancellationReason, currentRequest.cancellationSource)),
+    );
+    const staleRecordCancellationState = Boolean(
+      currentRequest.status !== "cancelled" &&
+      (currentRecord.cancelledAt ||
+        (currentRecord as any).sessionStatus === "cancelled" ||
+        isAutoBookingCancellationReason(currentRecord.cancellationReason, currentRecord.cancellationSource) ||
+        isAutoPrivateChartReviewReason((currentRecord as any).notionProjectionControl?.reviewReason)),
+    );
+    const shouldClearCancellationResidue = shouldReactivate || staleRequestCancellationState || staleRecordCancellationState;
+    if (!sessionChanged && !bookingChanged && !shouldClearCancellationResidue) {
       return { changed: false, updatedRequest: currentRequest, updatedRecord: recordSnap.data() || null, invalidated: false };
     }
 
@@ -1435,6 +1452,15 @@ async function syncChartRequestToActiveBooking(
           },
         }
         : {};
+    const reactivationNotice = shouldReactivate || staleRequestCancellationState
+      ? {
+        alimtalk: {
+          ...currentRequest.alimtalk,
+          status: currentRequest.alimtalk?.status === "sent" ? "sent" as const : "template_pending" as const,
+          lastError: null,
+        },
+      }
+      : {};
     const requestPatch = compactObject({
       workflowVersion: "post_only_v2",
       bookingId: booking.bookingId,
@@ -1449,13 +1475,14 @@ async function syncChartRequestToActiveBooking(
       sessionNumberCorrection,
       rescheduleCorrection: correction,
       cancellationReason: null,
+      cancellationSource: null,
       cancelledAt: null,
       status: shouldReactivate ? chartRequestStatusFromSubmissions(currentRequest) : currentRequest.status,
+      ...reactivationNotice,
       ...scheduleNotice,
       updatedAt: now,
     }) as Partial<PrivateLessonChartRequestDoc>;
     const updatedRequest = { ...currentRequest, ...requestPatch } as PrivateLessonChartRequestDoc;
-    const currentRecord = recordSnap.data() || chartRecordBase(updatedRequest);
     const recordPatch = compactObject({
       bookingId: booking.bookingId,
       lectureId: booking.lectureId,
@@ -1467,9 +1494,20 @@ async function syncChartRequestToActiveBooking(
       sessionNumberCorrection,
       rescheduleCorrection: correction,
       cancellationReason: null,
+      cancellationSource: null,
       cancelledAt: null,
       updatedAt: now,
     }) as Partial<PrivateLessonChartRecordDoc>;
+    const recordDeletePatch: Record<string, unknown> = {};
+    if (shouldClearCancellationResidue && String((currentRecord as any).sessionStatus || "") === "cancelled") {
+      recordDeletePatch.sessionStatus = FieldValue.delete();
+    }
+    if (
+      shouldClearCancellationResidue &&
+      isAutoPrivateChartReviewReason((currentRecord as any).notionProjectionControl?.reviewReason)
+    ) {
+      recordDeletePatch["notionProjectionControl.reviewReason"] = FieldValue.delete();
+    }
     const recordWithSchedule = { ...currentRecord, ...recordPatch } as PrivateLessonChartRecordDoc;
     const shouldInvalidateApproval =
       (sessionChanged || bookingChanged) &&
@@ -1496,13 +1534,11 @@ async function syncChartRequestToActiveBooking(
     const candidateRef = candidateId ? refs.alimtalkCandidate(candidateId) : null;
     const candidate = candidateRef ? (await tx.get(candidateRef)).data() : undefined;
     tx.set(requestRef, requestPatch, { merge: true });
-    tx.set(
-      recordRef,
-      recordSnap.exists
-        ? { ...recordPatch, ...reportStatePatch }
-        : compactObject(updatedRecord as unknown as Record<string, unknown>),
-      { merge: true },
-    );
+    if (recordSnap.exists) {
+      tx.update(recordRef, { ...recordPatch, ...reportStatePatch, ...recordDeletePatch });
+    } else {
+      tx.set(recordRef, compactObject(updatedRecord as unknown as Record<string, unknown>), { merge: true });
+    }
     if (candidateRef && candidate && ["candidate", "queued", "processing", "failed"].includes(candidate.status)) {
       tx.set(
         candidateRef,
@@ -1540,8 +1576,36 @@ async function syncChartRequestToActiveBooking(
   return updatedRequest;
 }
 
-function isAutoBookingCancellationReason(value: unknown): boolean {
-  return /^(booking_not_in_private_session_ledger|chart_request_not_in_private_session_ledger|missing_from_latest_reservation_import|stale|lecture_deleted|deleted|source_inactive|missing_booking|booking_not_found|booking_app_status_cancel|rescheduled_duplicate|duplicate_source|fallback_source_superseded|session_order_excluded|not_in_private_session_ledger)/i.test(String(value || ""));
+function isAutoBookingCancellationReason(value: unknown, source: unknown = ""): boolean {
+  if (String(source || "").trim() === "system_booking_reconcile") return true;
+  const reason = String(value || "").trim().toLowerCase();
+  return new Set([
+    "booking_not_in_private_session_ledger",
+    "chart_request_not_in_private_session_ledger",
+    "missing_from_latest_reservation_import",
+    "stale",
+    "lecture_deleted",
+    "deleted",
+    "source_inactive",
+    "missing_booking",
+    "booking_not_found",
+    "rescheduled_duplicate",
+    "duplicate_source",
+    "fallback_source_superseded",
+    "session_order_excluded",
+    "not_in_private_session_ledger",
+    "past_unchecked_attendance",
+    "not_private_booking",
+  ]).has(reason) ||
+    /^booking_app_status_(cancel|cancelled|canceled)$/.test(reason) ||
+    /^booking_status_(cancelled|canceled|superseded)$/.test(reason) ||
+    /^attendance_status_(absent|late_cancel)$/.test(reason);
+}
+
+function isAutoPrivateChartReviewReason(value: unknown): boolean {
+  return /(출석|회차|예약|원천).*(확인|재검증)|booking_not_in_private_session_ledger|not_in_private_session_ledger/i.test(
+    String(value || ""),
+  );
 }
 
 function chartRequestStatusFromSubmissions(request: PrivateLessonChartRequestDoc): PrivateLessonChartRequestStatus {
@@ -2800,7 +2864,7 @@ async function activePrivateBookingForChartRequest(
 ): Promise<{ ok: true; booking: BookingDoc } | { ok: false; reason: string }> {
   if (
     request.status === "cancelled" &&
-    !isAutoBookingCancellationReason(request.cancellationReason)
+    !isAutoBookingCancellationReason(request.cancellationReason, request.cancellationSource)
   ) {
     return { ok: false, reason: request.cancellationReason || "chart_request_cancelled" };
   }
@@ -2921,6 +2985,7 @@ async function cancelPrivateLessonChartRequest(
   const patch = {
     status: "cancelled" as const,
     cancellationReason: reason,
+    cancellationSource: "system_booking_reconcile" as const,
     cancelledAt: now,
     alimtalk: {
       ...(request.alimtalk || {}),
@@ -2938,6 +3003,7 @@ async function cancelPrivateLessonChartRequest(
   await refs.privateLessonChartRecord(request.requestId).set(
     {
       cancellationReason: reason,
+      cancellationSource: "system_booking_reconcile" as const,
       cancelledAt: now,
       notionSync: pendingNotionProjection(record),
       updatedAt: now,

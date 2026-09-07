@@ -1140,6 +1140,59 @@ const guardGroups = [
     ],
   },
   {
+    id: "private-chart-auto-reactivation-after-source-recovery",
+    reason:
+      "StudioMate 출석 원천이 복구된 뒤 프라이빗 차트가 자동취소 또는 Notion 확인필요 상태에 남는 회귀를 막습니다.",
+    files: [
+      {
+        file: "scripts/lib/private-chart-consistency.mjs",
+        markers: [
+          "system_booking_reconcile",
+          "classifyPrivateChartStateIssues",
+          "isAutoPrivateChartReviewReason",
+        ],
+      },
+      {
+        file: "scripts/recompute-private-session-ledger.mjs",
+        markers: [
+          "requestCancelled && !autoCancelled",
+          "reactivate_chart_request_from_canonical_ledger",
+          "notionProjectionControl.reviewReason",
+        ],
+      },
+      {
+        file: "scripts/run-system-health-check.mjs",
+        markers: [
+          "loadPrivateChartStateAudit",
+          "프라이빗 차트 자동 취소 복구 필요",
+          "private-chart-state",
+        ],
+      },
+      {
+        file: "firebase/kangsain-functions/functions/src/privateLessonChart/privateLessonChart.ts",
+        markers: [
+          "cancellationSource",
+          "recordDeletePatch.sessionStatus = FieldValue.delete()",
+          'recordDeletePatch["notionProjectionControl.reviewReason"] = FieldValue.delete()',
+        ],
+      },
+      {
+        file: "scripts/tests/system-health-private-chart.test.mjs",
+        markers: [
+          "operator and unknown cancellations are never treated as automatic recovery",
+          "without duplicate send",
+        ],
+      },
+      {
+        file: "core/rules/index.html",
+        markers: [
+          "운영자·테스트·사유 불명 취소는 자동 복원하지 않습니다.",
+          "기존 알림톡 발송 ID와 발송시각은 유지하고 재발송하지 않습니다.",
+        ],
+      },
+    ],
+  },
+  {
     id: "onsite-welcome-current-flow",
     reason:
       "현장 웰컴 가입서 알림톡과 StudioMate 후속 처리 흐름이 예전 코드로 되돌아가는 것을 막습니다.",

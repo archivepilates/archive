@@ -97,3 +97,11 @@ Email is sent only for `critical` or `action_required` findings.
 - The future end date remains based on the current date, so catching up a past gap does not omit newly opened future reservations.
 - Changed private bookings trigger member-scoped `privateSessionLedger` recomputation and verification. Unchanged rows remain hash-skipped.
 - The health check stays read-only for attendance decisions: it reports residual past unchecked attendance but does not guess attendance or delete a round.
+
+## 2026-09-07 Private Chart Reactivation
+
+- Booking reconciliation writes `cancellationSource=system_booking_reconcile` when it automatically cancels a private chart because its booking is temporarily inactive or absent from the ledger.
+- When that exact booking or a verified replacement returns to the canonical ledger, the member-scoped ledger recompute restores only system-cancelled chart requests. Operator, test, and unknown cancellations remain untouched.
+- Reactivation restores the request stage from submitted forms, clears stale cancellation and Notion review residue, preserves existing Notion page ownership, and keeps prior Alimtalk send evidence without resending.
+- System health now compares active canonical bookings, ledger rounds, chart requests, chart records, and Notion review state. A healthy booking/ledger alone is no longer enough to close the check.
+- Private chart repair remains in the StudioMate import and ledger-recompute path. The health checker detects and tracks residual mismatches but does not independently mutate attendance or chart state.

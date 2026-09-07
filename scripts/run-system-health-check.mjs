@@ -8,6 +8,7 @@ import { recordAutomationStatus } from "./lib/archive-core-ops-logging.mjs";
 import { shouldApplyOperationalDataPurge } from "./lib/operational-data-retention-policy.mjs";
 import { isActionableAlimtalkFailure } from "./lib/system-health-alimtalk.mjs";
 import { monthlySettlementIndexPath } from "./lib/system-health-schedule-evidence.mjs";
+import { classifyPrivateChartStateIssues } from "./lib/private-chart-consistency.mjs";
 import {
   canResolveHealthFinding,
   classifyPrivateRoundIssues,
@@ -744,16 +745,45 @@ async function checkPrivateLessonConsistency() {
     });
   }
 
-  const staleRequests = await loadChartRequestsNeedingAttention();
-  if (staleRequests.length) {
+  const chartState = await loadPrivateChartStateAudit(recentBookings);
+  const chartIssueRows = uniqueByRequestId([
+    ...chartState.autoCancelledActive,
+    ...chartState.roundMismatches,
+    ...chartState.staleActiveRecords,
+  ]);
+  const chartIssueIds = new Set(chartIssueRows.map((row) => row.requestId));
+  if (chartIssueRows.length) {
+    addFinding({
+      checkKey: "private-chart-state",
+      area: "private",
+      severity: "action_required",
+      title: "프라이빗 차트 자동 취소 복구 필요",
+      cause: [
+        chartState.autoCancelledActive.length ? `활성 예약에 남은 자동취소 ${chartState.autoCancelledActive.length}건` : "",
+        chartState.roundMismatches.length ? `예약·차트 회차 불일치 ${chartState.roundMismatches.length}건` : "",
+        chartState.staleActiveRecords.length ? `차트/Notion 확인표시 잔존 ${chartState.staleActiveRecords.length}건` : "",
+      ].filter(Boolean).join(", "),
+      impact: "실제 출석과 회차가 정상이어도 강사 기록 또는 Notion 차트가 취소·확인필요로 남을 수 있습니다.",
+      suggestedAction: "해당 회원만 privateSessionLedger 보정을 실행하고 요청·기록·Notion 상태를 다시 확인하세요.",
+      sourceRefs: chartIssueRows.slice(0, 5).flatMap((row) => [
+        `privateLessonChartRequests/${row.requestId}`,
+        ...(row.bookingId ? [`bookings/${row.bookingId}`] : []),
+      ]),
+      autoRepairable: false,
+      repairStatus: "not_attempted",
+    });
+  }
+
+  const workflowWarnings = chartState.workflowWarnings.filter((row) => !chartIssueIds.has(row.requestId));
+  if (workflowWarnings.length) {
     addFinding({
       area: "private",
       severity: "warning",
-      title: `프라이빗 차트 요청 확인필요 ${staleRequests.length}건`,
+      title: `프라이빗 차트 요청 확인필요 ${workflowWarnings.length}건`,
       cause: "취소/리포트/노션 동기 상태가 예약 원천과 다시 확인되어야 합니다.",
       impact: "수업 전/후 설문 또는 리포트 상태 표시가 운영자가 기대한 단계와 다를 수 있습니다.",
       suggestedAction: "자동 reconcile 후에도 남으면 해당 요청을 수동 확인하세요.",
-      sourceRefs: staleRequests.slice(0, 5).map((doc) => `privateLessonChartRequests/${doc.id}`),
+      sourceRefs: workflowWarnings.slice(0, 5).map((row) => `privateLessonChartRequests/${row.requestId}`),
       autoRepairable: false,
     });
   }
@@ -1159,18 +1189,58 @@ async function loadRecentBookings(limit) {
   return [...rows.values()];
 }
 
-async function loadChartRequestsNeedingAttention() {
+async function loadPrivateChartStateAudit(recentBookings) {
   const snap = await db.collection("privateLessonChartRequests").orderBy("lessonDate", "desc").limit(250).get().catch(() => null);
-  return (snap?.docs || [])
-    .map((doc) => ({ id: doc.id, data: doc.data() }))
-    .filter((doc) => {
-      const status = String(doc.data.status || "");
-      const reportStatus = String(doc.data.reportStatus || doc.data.gptStatus || "");
-      const sent = Boolean(doc.data.reportSentAt || doc.data.alimtalkSentAt);
-      if (status === "cancelled" && reportStatus === "generated") return true;
-      if (status === "pre_survey_submitted" && reportStatus === "generated" && !sent) return true;
-      return false;
-    });
+  const requestsById = new Map((snap?.docs || []).map((doc) => [doc.id, { id: doc.id, data: doc.data() }]));
+  const open = await db.collection("systemHealthFindings").where("status", "==", "open").get().catch(() => null);
+  const trackedRequestIds = [...new Set((open?.docs || [])
+    .filter((doc) => doc.data().area === "private")
+    .flatMap((doc) => doc.data().sourceRefs || [])
+    .filter((ref) => /^privateLessonChartRequests\/[^/]+$/.test(ref))
+    .map((ref) => ref.split("/")[1]))];
+  const missingRequestIds = trackedRequestIds.filter((id) => !requestsById.has(id));
+  for (const doc of await loadDocumentsById("privateLessonChartRequests", missingRequestIds)) {
+    requestsById.set(doc.id, doc);
+  }
+
+  const requests = [...requestsById.values()];
+  const recordsById = new Map(
+    (await loadDocumentsById("privateLessonChartRecords", requests.map((doc) => doc.id))).map((doc) => [doc.id, doc]),
+  );
+  const bookingsById = new Map(recentBookings.map((doc) => [doc.id, doc]));
+  const missingBookingIds = [...new Set(requests.map((doc) => String(doc.data.bookingId || "")).filter(Boolean))]
+    .filter((id) => !bookingsById.has(id));
+  for (const doc of await loadDocumentsById("bookings", missingBookingIds)) bookingsById.set(doc.id, doc);
+
+  completedChecks.add("private-chart-state");
+  for (const doc of requests) completedChecks.add(`privateLessonChartRequests/${doc.id}`);
+  for (const doc of recordsById.values()) completedChecks.add(`privateLessonChartRecords/${doc.id}`);
+  for (const doc of bookingsById.values()) completedChecks.add(`bookings/${doc.id}`);
+  const state = classifyPrivateChartStateIssues({ requests, recordsById, bookingsById, options: { now } });
+  checked.push({
+    id: "private-chart-state",
+    requests: requests.length,
+    trackedFollowups: missingRequestIds.length,
+    autoCancelledActive: state.autoCancelledActive.length,
+    roundMismatches: state.roundMismatches.length,
+    staleActiveRecords: state.staleActiveRecords.length,
+    workflowWarnings: state.workflowWarnings.length,
+  });
+  return state;
+}
+
+async function loadDocumentsById(collectionName, ids) {
+  const uniqueIds = [...new Set(ids.filter(Boolean))];
+  const rows = [];
+  for (let offset = 0; offset < uniqueIds.length; offset += 100) {
+    const docs = await db.getAll(...uniqueIds.slice(offset, offset + 100).map((id) => db.collection(collectionName).doc(id)));
+    for (const doc of docs) if (doc.exists) rows.push({ id: doc.id, data: doc.data() });
+  }
+  return rows;
+}
+
+function uniqueByRequestId(rows) {
+  return [...new Map(rows.map((row) => [row.requestId, row])).values()];
 }
 
 function duplicatePrivateRounds(bookings) {
