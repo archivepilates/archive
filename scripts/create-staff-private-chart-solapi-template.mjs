@@ -4,7 +4,7 @@ import { createHmac, randomBytes } from "node:crypto";
 import { execFileSync } from "node:child_process";
 
 const PROJECT_ID = "archive-pilates";
-const REFERENCE_TEMPLATE_ID = "KA01TP260729144657202OV26yAD15wR";
+const REFERENCE_TEMPLATE_ID = "KA01TP260903104439283cNjQW0YrrtV";
 const TEMPLATE_NAME = "강사용 프라이빗 오늘 기록 안내 v4";
 const TEMPLATE_CONTENT = `#{강사명} 강사님,
 #{수업일} 프라이빗 수업 기록을 안내드립니다.

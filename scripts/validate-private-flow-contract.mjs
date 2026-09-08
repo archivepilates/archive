@@ -90,7 +90,7 @@ requireMarkers("scripts/create-private-survey-solapi-template.mjs", [
   "emphasizeType: imageContract.emphasizeType",
 ]);
 requireMarkers("scripts/create-staff-private-chart-solapi-template.mjs", [
-  'REFERENCE_TEMPLATE_ID = "KA01TP260729144657202OV26yAD15wR"',
+  'REFERENCE_TEMPLATE_ID = "KA01TP260903104439283cNjQW0YrrtV"',
   "Refusing to create a SOLAPI template without --apply.",
   "강사용 프라이빗 오늘 기록 안내 v4",
   "https://in.archivepilates.com/s/#{오늘기록링크ID}/",

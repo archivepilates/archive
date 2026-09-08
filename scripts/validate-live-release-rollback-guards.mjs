@@ -983,6 +983,22 @@ const guardGroups = [
           ".note{padding:16px",
         ],
       },
+      {
+        file: "firebase/kangsain-functions/functions/src/alimtalk/templates.ts",
+        markers: [
+          'NATIVE_STAFF_PRIVATE_CHART_ALIMTALK_TEMPLATE_CODE = "KA01TP260903104439283cNjQW0YrrtV"',
+          'label: "강사용 프라이빗 오늘 기록 안내 v4"',
+          'status: "approved"',
+        ],
+      },
+      {
+        file: "core/rules/index.html",
+        markers: [
+          "강사용 프라이빗 오늘 기록 안내 v4",
+          "2026.09.08 SOLAPI 승인",
+          "v2·v3로 되돌아가지 않습니다.",
+        ],
+      },
     ],
   },
   {

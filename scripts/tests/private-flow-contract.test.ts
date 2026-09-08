@@ -32,9 +32,11 @@ import {
   templateReadinessFromState,
 } from "../../firebase/kangsain-functions/functions/src/alimtalk/templateStatus";
 import {
+  ALIMTALK_TEMPLATES,
   LEGACY_PRIVATE_SURVEY_ALIMTALK_TEMPLATE_CODE,
   NATIVE_PRIVATE_SURVEY_ALIMTALK_IMAGE_ID,
   NATIVE_STAFF_PRIVATE_SURVEY_ALIMTALK_TEMPLATE_CODE,
+  NATIVE_STAFF_PRIVATE_CHART_ALIMTALK_TEMPLATE_CODE,
   RECOMMENDED_MEAL_ALIMTALK_CHANNEL_ID,
   RECOMMENDED_MEAL_ALIMTALK_IMAGE_ID,
   RECOMMENDED_MEAL_ALIMTALK_TEMPLATE_CODE,
@@ -47,6 +49,12 @@ const now = {
   toMillis: () => nowDate.getTime(),
   toDate: () => nowDate,
 };
+
+test("daily private chart notices use the approved v4 template", () => {
+  assert.equal(ALIMTALK_TEMPLATES.staff_private_chart.code, NATIVE_STAFF_PRIVATE_CHART_ALIMTALK_TEMPLATE_CODE);
+  assert.equal(ALIMTALK_TEMPLATES.staff_private_chart.label, "강사용 프라이빗 오늘 기록 안내 v4");
+  assert.equal(ALIMTALK_TEMPLATES.staff_private_chart.status, "approved");
+});
 
 test("report revision changes when member-visible content changes", () => {
   const base = reportRecord();

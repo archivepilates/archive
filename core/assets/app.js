@@ -18,7 +18,7 @@ const ALIMTALK_TEMPLATE_LABELS_BY_CODE = Object.freeze({
   KA01TP2608241233353269Jgtoiwnzi6: "강사레슨 예약확정 안내 v1",
   KA01TP260522041704111wu4Z0cu9cgl: "첫 그룹수업 회원 확인 v1",
   KA01TP260524083643752cySb9BoDOjN: "장기 미방문 수업안내 v1",
-  KA01TP260527182741301uIuSTL01YQ1: "강사용 프라이빗 차트 작성 안내 v2 (미사용)",
+  KA01TP260527182741301uIuSTL01YQ1: "강사용 프라이빗 차트 작성 안내 v2 (삭제됨)",
   KA01TP260528081225871Fr92FW901Vo: "프라이빗 회원 리포트 안내 v1",
   KA01TP260528090148593isshfXtt8vE: "회원용 인바디 리포트 안내 v1",
   KA01TP260602101939427lPhGyuDLvFM: "신규회원 웰컴 v5",
@@ -28,7 +28,7 @@ const ALIMTALK_TEMPLATE_LABELS_BY_CODE = Object.freeze({
   KA01TP260802163827071E2TTuX6CsWp: "아카이브 추천식단 프로그램 v2",
   KA01TP260731123545629Sx4N5CZa5BF: "아카이브 추천식단 도착 안내 v1 (미사용)",
   KA01TP260729144645970fv13He8mfsK: "프라이빗 사전설문 안내 v2",
-  KA01TP260729144657202OV26yAD15wR: "강사용 프라이빗 차트 작성 안내 v3 (이전)",
+  KA01TP260729144657202OV26yAD15wR: "강사용 프라이빗 차트 작성 안내 v3 (삭제됨)",
   KA01TP260903104439283cNjQW0YrrtV: "강사용 프라이빗 오늘 기록 안내 v4",
 });
 

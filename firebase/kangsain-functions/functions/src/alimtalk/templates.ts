@@ -116,7 +116,7 @@ export const ALIMTALK_TEMPLATES = {
       process.env.STAFF_PRIVATE_CHART_ALIMTALK_TEMPLATE_ID ||
       NATIVE_STAFF_PRIVATE_CHART_ALIMTALK_TEMPLATE_CODE,
     label: "강사용 프라이빗 오늘 기록 안내 v4",
-    status: "pending",
+    status: "approved",
   },
   staff_group_survey: {
     code: "KA01TP260522041704111wu4Z0cu9cgl",
