@@ -2,6 +2,7 @@
   "hosting": {
     "site": "archive-pilates-home",
     "predeploy": [
+      "python3 scripts/validate-official-home-seo.py",
       "node scripts/validate-public-site-ux.mjs",
       "npm run validate:archive-home-address",
       "npm run validate:archive-home-team",
@@ -50,6 +51,12 @@
       },
       {
         "source": "/teams/**",
+        "headers": [
+          { "key": "Cache-Control", "value": "no-cache, no-store, must-revalidate" }
+        ]
+      },
+      {
+        "source": "/instructor-lessons{,/**}",
         "headers": [
           { "key": "Cache-Control", "value": "no-cache, no-store, must-revalidate" }
         ]
