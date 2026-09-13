@@ -59,6 +59,9 @@ assert "재생 시작 후 환불" not in description
 assert "구매 후 이용 안내" not in description
 assert description.count('<section data-archive-pilates-tosspay="online-2026-07-30" data-ap-aca6-guide="2026-09-13"') == 1
 assert description.count("http://pf.kakao.com/_AHdvn/chat") == 1
+assert "안내·계약과" not in fragment
+assert fragment.count("<details ") == 1
+assert "청약철회 예외 기준</summary>" in fragment
 for term in ["40일", "7일", "1/3", "2/3", "1/2", "3개월", "30일", "소비자분쟁해결기준"]:
     assert term in fragment, term
 payload = {

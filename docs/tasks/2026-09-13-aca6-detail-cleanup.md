@@ -58,3 +58,25 @@
 - Recheck the three legacy paragraph selectors if Imweb changes its detail
   template. Never extend this suppression to unrelated product content.
 - Generalizing this layout to additional products requires a new approval.
+
+## Follow-up: simplify the exception row
+
+- Removed the standalone misleading-description/contract-mismatch row at the
+  user's request. Kept its existing three-month/30-day withdrawal text inside
+  a collapsed native disclosure under the withdrawal-period row.
+- Checked the current Electronic Commerce Consumer Protection Act, Article
+  17(3), and the live site terms. The live terms did not contain this exception;
+  no claim was made that it could simply be removed from consumer guidance.
+- Saved only product 84's `description` through exact-payload dry runs. A second
+  description-only save increased the disclosure touch height because Imweb
+  scales the content at tablet width. No policy, access or price changed.
+- Fresh GET comparison with `followup-before.json`: only `content` and
+  `editTime` changed; final content exactly matched the submitted payload.
+- Fresh live checks at 320, 390, 768 and 1440 pixels passed: standalone label
+  absent, disclosure collapsed initially, click expands/collapses the retained
+  exception, no horizontal overflow, rendered touch heights 56/56/47.6/56 px.
+- Mobile screenshot visually inspected. Preparation-script assertions and
+  `git diff --check` passed. Existing preview/watch/contact destinations remain
+  unchanged. No checkout or authenticated playback test was needed or run.
+- No ARCHIVE CORE rule update: presentation-only follow-up; no operational
+  refund rule or member-facing workflow changed.
