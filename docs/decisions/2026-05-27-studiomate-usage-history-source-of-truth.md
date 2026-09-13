@@ -1,5 +1,13 @@
 # StudioMate 이용내역 백필 원본 기준
 
+## 상태: 대체됨 (Superseded)
+
+2026-09-14 문서 정리: 이 결정의 예약·출석·프라이빗 회차 원천 정책은 [2026-06-25 Bookings Single Reservation Source](2026-06-25-bookings-single-reservation-source.md)로 대체되었습니다. 아래 본문과 당시 수치는 역사 기록으로 보존하며 현재 운영 승인이나 원천 교체 지시로 사용하지 않습니다.
+
+현재 운영 예약 원천은 StudioMate 예약내역 Excel의 기간 스냅샷으로 정합성을 맞춘 `bookings`입니다. `privateSessionLedger`는 `bookings`에서만 계산하며, `memberUsageEvents`는 legacy 감사·백필 증거로만 보존합니다. 이용내역 자료를 회차 계산, 알림톡 대상 선정, 차트 상태 또는 보고서 생성의 live 원천으로 다시 사용하지 않습니다. 이 상태 표시는 기존 데이터 삭제나 백필 재실행을 승인하지 않습니다.
+
+현재 규칙은 ARCHIVE CORE > `운영규칙` (`/core/rules/`)과 위 후속 결정을 우선합니다. 수강권 구매 원천은 회원목록 Excel이며 이용내역은 보강 자료라는 기존 구분을 유지합니다.
+
 ## 결정
 
 2026-05-27부터 회원별 과거 예약/출석 이력 백필은 StudioMate `회원 > 회원정보 > 이용내역 > 전체 > 엑셀 다운로드` 파일을 최종 원본으로 본다.

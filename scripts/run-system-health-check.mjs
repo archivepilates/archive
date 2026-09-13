@@ -10,6 +10,18 @@ import { isActionableAlimtalkFailure } from "./lib/system-health-alimtalk.mjs";
 import { monthlySettlementIndexPath } from "./lib/system-health-schedule-evidence.mjs";
 import { classifyPrivateChartStateIssues } from "./lib/private-chart-consistency.mjs";
 import {
+  canAutoRetryQueueDocument,
+  classifyNotionDocument,
+  classifyQueueDocument,
+  loadRecentQueueFailures,
+  queryCoverage,
+} from "./lib/system-health-queue-policy.mjs";
+import {
+  classifyCloudReadError,
+  probeMcpEndpoints,
+  readSystemHealthCloudState,
+} from "./lib/system-health-cloud-state.mjs";
+import {
   canResolveHealthFinding,
   classifyPrivateRoundIssues,
   inspectHeadlessRuntime,
@@ -57,6 +69,7 @@ const repairs = [];
 const checked = [];
 const completedChecks = new Set();
 const syncEvidence = new Map();
+const queueWorkers = new Map();
 let headlessRuntime;
 
 const AUTOMATIONS = [
@@ -378,6 +391,56 @@ async function checkWebSurfaces() {
       autoRepairable: false,
     });
   }
+  await checkMcpReachability();
+}
+
+async function checkMcpReachability() {
+  const urls = String(process.env.SYSTEM_HEALTH_MCP_URLS || "").split(/[\s,]+/).filter(Boolean);
+  const checks = urls.length ? await probeMcpEndpoints(urls)
+    : [{ state: "disabled_not_configured", needsAttention: false }];
+  checked.push({ id: "caddy-mcp-reachability", checks });
+  const byKey = new Map(checks.map((check) => [`mcp:${check.url || "configuration"}`, check]));
+  for (const [checkKey, check] of byKey) {
+    if (check.url && !check.needsAttention && check.state === "reachable_not_functionally_verified") completedChecks.add(checkKey);
+    if (!check.needsAttention) continue;
+    addFinding({
+      checkKey, area: "service", severity: "warning", title: "Caddy MCP 접근 확인 필요",
+      cause: `${check.state}${check.status ? ` · HTTP ${check.status}` : ""}`,
+      impact: "MCP 연결 경로의 도달 가능성을 확인하지 못했습니다. 기능 호출 성공 여부와는 별도입니다.",
+      suggestedAction: "SYSTEM_HEALTH_MCP_URLS의 공개 엔드포인트와 Caddy 경로를 확인하세요. 자동 재시도 설정은 변경하지 않습니다.",
+      sourceRefs: [check.url || "SYSTEM_HEALTH_MCP_URLS"], autoRepairable: false,
+    });
+  }
+  if (urls.length && checks.every((check) => check.url && !check.needsAttention)) completedChecks.add("mcp:configuration");
+}
+
+async function checkCloudMetadata() {
+  let state;
+  try {
+    const { GoogleAuth } = require("../firebase/kangsain-functions/functions/node_modules/google-auth-library");
+    const auth = new GoogleAuth({ scopes: ["https://www.googleapis.com/auth/cloud-platform"] });
+    state = await readSystemHealthCloudState({
+      request: (options) => auth.request(options), projectId: PROJECT_ID, nowMs: now.getTime(),
+    });
+  } catch (error) {
+    state = { checks: [{ id: "cloud-metadata", ...classifyCloudReadError(error) }], workers: {} };
+  }
+  for (const collection of ["writeQueue", "contactSyncJobs", "alimtalkCandidates"]) {
+    queueWorkers.set(collection, state.workers[collection] || { state: "metadata_unavailable", needsAttention: true });
+  }
+  checked.push({ id: "cloud-metadata", checks: state.checks });
+  for (const id of state.completedCheckIds || []) completedChecks.add(`cloud:${id}`);
+  for (const check of state.checks) {
+    if (!check.needsAttention) continue;
+    addFinding({
+      checkKey: `cloud:${check.id}`,
+      area: "cloud", severity: "action_required", title: `${check.id} 확인 필요`,
+      cause: `${check.state}${check.code ? ` · ${check.code}` : ""}${check.actualState ? ` · ${check.actualState}` : ""}`,
+      impact: "DB 보호·백업 또는 큐 Scheduler 상태를 정상으로 확인하지 못했습니다.",
+      suggestedAction: "현재 서비스 계정의 조회 권한과 해당 설정을 확인하세요. Health Check는 클라우드 설정을 자동 변경하지 않습니다.",
+      sourceRefs: [check.name || check.id], autoRepairable: false,
+    });
+  }
 }
 
 async function checkAdminAccess() {
@@ -548,6 +611,7 @@ async function checkLaunchAgents() {
 }
 
 async function checkQueues() {
+  await checkCloudMetadata();
   await inspectQueue({
     collection: "adminSyncRequests",
     area: "studiomate",
@@ -623,47 +687,123 @@ async function checkQueues() {
     staleMinutes: 30,
     repairStatus: "retry",
   });
+  await checkNotionSync();
 }
 
 async function inspectQueue(input) {
-  const docs = await loadStatusDocs(input.collection, input.activeStatuses, 250);
-  const stale = docs.filter((doc) => input.staleStatuses.includes(doc.status) && minutesSince(doc.data.updatedAt || doc.data.startedAt || doc.data.createdAt) > input.staleMinutes);
-  const failedAll = await loadStatusDocs(input.collection, input.failureStatuses || ["failed", "error"], 50).catch(() => []);
-  const failed = recentOrUndatedDocs(failedAll, RECENT_FAILURE_MINUTES);
+  let docs = [];
+  let activeError;
+  try { docs = await loadStatusDocs(input.collection, input.activeStatuses, 250); }
+  catch (error) { activeError = error; }
+  const activeCoverage = queryCoverage({ size: docs.length, limit: 250, error: activeError });
+  const policy = { ...input, nowMs: now.getTime(), worker: queueWorkers.get(input.collection) };
+  const states = docs.map((doc) => ({ doc, ...classifyQueueDocument(doc.data, policy) }));
+  const stale = states.filter((row) => ["overdue_waiting", "stuck_processing"].includes(row.state)).map((row) => row.doc);
+  const undated = states.filter((row) => row.state === "timestamp_unavailable");
+  const failures = await loadRecentQueueFailures(db, input.collection, input.failureStatuses || ["failed", "error"], {
+    nowMs: now.getTime(), recentMinutes: RECENT_FAILURE_MINUTES,
+  });
+  const failed = failures.docs;
+  const ageKey = `queue:${input.collection}:age`;
+  const failedKey = `queue:${input.collection}:failed`;
+  if (activeCoverage.complete && !stale.length && !undated.length) completedChecks.add(ageKey);
+  if (failures.coverage.complete && !failed.length) completedChecks.add(failedKey);
   checked.push({
     id: input.collection,
     area: input.area,
     active: docs.length,
     stale: stale.length,
+    overdueWaiting: states.filter((row) => row.state === "overdue_waiting").length,
+    futureDue: states.filter((row) => row.state === "future_due").length,
+    retired: states.filter((row) => row.state === "retired").length,
+    unknownTimestamp: undated.length,
+    worker: policy.worker || null,
+    activeCoverage,
     failedRecent: failed.length,
-    failedTotalSample: failedAll.length,
+    failureCoverage: failures.coverage,
   });
+  reportQueueCoverage(input, { active: activeCoverage, failures: failures.coverage });
 
-  if (stale.length) {
-    const repair = REPAIR ? await repairStaleQueue(input, stale.slice(0, 20)) : null;
+  if (stale.length || undated.length) {
+    const retryable = stale.filter((doc) => canAutoRetryQueueDocument(input.collection, doc.data, policy));
+    const repair = REPAIR && retryable.length ? await repairStaleQueue(input, retryable.slice(0, 20)) : null;
     addFinding({
+      checkKey: ageKey,
       area: input.area,
       severity: "action_required",
-      title: `${input.title} stuck ${stale.length}건`,
-      cause: `${input.staleMinutes}분 이상 ${input.staleStatuses.join("/")} 상태입니다.`,
+      title: `${input.title} 지연/시각 확인 ${stale.length + undated.length}건${activeCoverage.complete ? "" : " 이상"}`,
+      cause: `${input.staleMinutes}분 이상 지연 ${stale.length}건, 기준 시각 누락/오류 ${undated.length}건입니다.${policy.worker ? ` worker=${policy.worker.state}` : ""}`,
       impact: "운영 요청이 멈춰 보이거나 다음 자동화가 같은 작업을 처리하지 못할 수 있습니다.",
-      suggestedAction: repair?.ok ? `${repair.updated}건을 ${input.repairStatus} 상태로 복구했습니다.` : "중복 실행 가능성을 확인한 뒤 retry 처리하세요.",
-      sourceRefs: stale.slice(0, 5).map((doc) => `${input.collection}/${doc.id}`),
-      autoRepairable: true,
-      repairStatus: repair?.ok ? "repaired" : REPAIR ? "failed" : "not_attempted",
+      suggestedAction: repair?.ok ? `${repair.updated}건만 ${input.repairStatus} 상태로 변경했습니다. 나머지 지연 건은 별도 확인하세요.`
+        : input.collection === "writeQueue" ? "의도적으로 중단한 API 쓰기 큐입니다. 자동 재시도하지 말고 원천 확인 후 명시적 폐기 여부를 검토하세요."
+          : "worker 상태와 실행 예정 시각, 중복 실행 가능성을 확인하세요. 대기 작업은 자동 재등록하지 않습니다.",
+      sourceRefs: [...stale, ...undated.map(({ doc }) => doc)].slice(0, 5).map((doc) => `${input.collection}/${doc.id}`),
+      autoRepairable: retryable.length > 0,
+      repairStatus: repair?.ok && activeCoverage.complete && !undated.length && repair.updated === stale.length ? "repaired" : repair ? "requested" : "not_attempted",
     });
   }
 
   if (failed.length) {
     addFinding({
+      checkKey: failedKey,
       area: input.area,
       severity: "warning",
-      title: `${input.title} 실패 기록 ${failed.length}건`,
-      cause: "최근 7일 이내 또는 발생일을 알 수 없는 failed/error 상태 문서가 있습니다.",
+      title: `${input.title} 실패 기록 ${failed.length}건${failures.coverage.complete ? "" : " 이상"}`,
+      cause: "최근 7일 이내 상태 변경 또는 날짜 미상 실패 문서입니다. retiredAt/retirementReason이 명시된 폐기 문서는 제외합니다.",
       impact: "이미 실패로 종료된 작업은 자동 재실행하지 않고 운영자 검토 대상으로 둡니다.",
       suggestedAction: "ARCHIVE CORE 자동화 관제에서 실패 원인을 확인하고 필요 시 재시도하세요.",
       sourceRefs: failed.slice(0, 5).map((doc) => `${input.collection}/${doc.id}`),
       autoRepairable: false,
+    });
+  }
+}
+
+function reportQueueCoverage(input, coverage) {
+  const checkKey = input.checkKey || `queue:${input.collection}:coverage`;
+  if (Object.values(coverage).length && Object.values(coverage).every((value) => value.complete)) {
+    completedChecks.add(checkKey);
+    return;
+  }
+  addFinding({
+    checkKey,
+    area: input.area, severity: "action_required", title: `${input.title} 조회 범위 확인 필요`,
+    cause: "조회 상한 도달 또는 조회 실패로 집계가 불완전합니다. 표시 수는 전체 현재 건수가 아닌 확인된 최소 건수입니다.",
+    impact: "미조회 문서의 실패/지연을 정상 또는 0건으로 판단할 수 없습니다.",
+    suggestedAction: "조회 권한과 필요한 인덱스, 리포트 coverage를 확인하고 별도 승인된 범위 조회로 검증하세요.",
+    sourceRefs: [input.collection], autoRepairable: false,
+  });
+}
+
+async function checkNotionSync() {
+  for (const input of [
+    { collection: "privateLessonChartRecords", title: "Notion 프라이빗 차트", staleMinutes: 60 },
+    { collection: "privateSurveyResponses", title: "Notion 프라이빗 설문", staleMinutes: 26 * 60 },
+  ]) {
+    let docs = [];
+    let queryError;
+    try {
+      const snap = await db.collection(input.collection).where("notionSync.status", "in", ["pending", "failed"]).limit(250).get();
+      docs = snap.docs.map((doc) => ({ id: doc.id, data: doc.data() }));
+    } catch (error) { queryError = error; }
+    const coverage = queryCoverage({ size: docs.length, limit: 250, error: queryError });
+    const states = docs.map((doc) => ({ doc, ...classifyNotionDocument(doc.data, { nowMs: now.getTime(), staleMinutes: input.staleMinutes }) }));
+    const issues = states.filter((row) => row.needsAttention);
+    checked.push({ id: `notion:${input.collection}`, sample: docs.length, coverage, staleMinutes: input.staleMinutes,
+      aliasesExcluded: states.filter((row) => row.state === "alias").length,
+      overduePending: states.filter((row) => row.state === "overdue_pending").length,
+      overdueFailed: states.filter((row) => row.state === "overdue_failed").length,
+      unknownTimestamp: states.filter((row) => row.state === "timestamp_unavailable").length,
+    });
+    const checkKey = `notion:${input.collection}:sync`;
+    if (coverage.complete && !issues.length) completedChecks.add(checkKey);
+    reportQueueCoverage({ ...input, area: "notion", checkKey: `notion:${input.collection}:coverage` }, { notion: coverage });
+    if (issues.length) addFinding({
+      checkKey,
+      area: "notion", severity: "action_required", title: `${input.title} 동기화 확인 필요`,
+      cause: `notionSync pending/failed 지연 또는 날짜 미상 ${issues.length}건${coverage.complete ? "" : " 이상"} · 기준 ${input.staleMinutes}분`,
+      impact: "Notion 표시가 원천 기록과 다를 수 있습니다. 수업 전 응답 대기는 동기화 지연으로 분류하지 않습니다.",
+      suggestedAction: "원천 notionSync 상태와 projection worker 결과를 확인하세요. 자동 재시도나 Notion 수정은 수행하지 않습니다.",
+      sourceRefs: issues.slice(0, 5).map(({ doc }) => `${input.collection}/${doc.id}`), autoRepairable: false,
     });
   }
 }
@@ -780,7 +920,7 @@ async function checkPrivateLessonConsistency() {
       area: "private",
       severity: "warning",
       title: `프라이빗 차트 요청 확인필요 ${workflowWarnings.length}건`,
-      cause: "취소/리포트/노션 동기 상태가 예약 원천과 다시 확인되어야 합니다.",
+      cause: "취소/리포트 발행 상태를 예약 원천과 다시 확인해야 합니다. Notion 동기화는 별도 notionSync 점검을 따릅니다.",
       impact: "수업 전/후 설문 또는 리포트 상태 표시가 운영자가 기대한 단계와 다를 수 있습니다.",
       suggestedAction: "자동 reconcile 후에도 남으면 해당 요청을 수동 확인하세요.",
       sourceRefs: workflowWarnings.slice(0, 5).map((row) => `privateLessonChartRequests/${row.requestId}`),
@@ -790,24 +930,35 @@ async function checkPrivateLessonConsistency() {
 }
 
 async function checkAlimtalk() {
-  const active = await loadStatusDocs("alimtalkCandidates", ["queued", "processing"], 200).catch(() => []);
-  const failedSample = await loadStatusDocs("alimtalkSends", ["failed", "error"], 80).catch(() => []);
-  const failedAll = failedSample.filter((doc) => isActionableAlimtalkFailure(doc.data));
-  const resolvedFailureSample = failedSample.length - failedAll.length;
-  const failed = recentOrUndatedDocs(failedAll, RECENT_FAILURE_MINUTES);
+  let active = [];
+  let activeError;
+  try { active = await loadStatusDocs("alimtalkCandidates", ["queued", "processing"], 200); }
+  catch (error) { activeError = error; }
+  const activeCoverage = queryCoverage({ size: active.length, limit: 200, error: activeError });
+  const failures = await loadRecentQueueFailures(db, "alimtalkSends", ["failed", "error"], {
+    nowMs: now.getTime(), recentMinutes: RECENT_FAILURE_MINUTES,
+  });
+  const failed = failures.docs.filter((doc) => isActionableAlimtalkFailure(doc.data));
+  const resolvedFailureSample = failures.docs.length - failed.length;
   const missingDedupe = active.filter((doc) => !doc.data?.dedupeKey && !doc.data?.sourceActionKey);
+  if (activeCoverage.complete && !missingDedupe.length) completedChecks.add("queue:alimtalkCandidates:dedupe");
+  if (failures.coverage.complete && !failed.length) completedChecks.add("queue:alimtalkSends:failed");
   checked.push({
     id: "alimtalk",
     active: active.length,
     failedRecent: failed.length,
-    failedTotalSample: failedAll.length,
-    rawFailureSample: failedSample.length,
+    activeCoverage,
+    failureCoverage: failures.coverage,
+    rawFailureSample: failures.docs.length,
     resolvedFailureSample,
     missingDedupe: missingDedupe.length,
   });
+  reportQueueCoverage({ collection: "alimtalkCandidates", area: "alimtalk", title: "알림톡 후보 큐" }, { active: activeCoverage });
+  reportQueueCoverage({ collection: "alimtalkSends", area: "alimtalk", title: "알림톡 발송" }, { failures: failures.coverage });
 
   if (missingDedupe.length) {
     addFinding({
+      checkKey: "queue:alimtalkCandidates:dedupe",
       area: "alimtalk",
       severity: "critical",
       title: `알림톡 중복방지 키 누락 ${missingDedupe.length}건`,
@@ -820,9 +971,10 @@ async function checkAlimtalk() {
   }
   if (failed.length) {
     addFinding({
+      checkKey: "queue:alimtalkSends:failed",
       area: "alimtalk",
       severity: "action_required",
-      title: `알림톡 실패 기록 ${failed.length}건`,
+      title: `알림톡 실패 기록 ${failed.length}건${failures.coverage.complete ? "" : " 이상"}`,
       cause: "최근 7일 이내 또는 발생일을 알 수 없는 실패 발송 로그가 있습니다.",
       impact: "회원 안내 누락 가능성이 있습니다.",
       suggestedAction: "실패 사유를 확인하고 같은 dedupeKey 중복 발송 여부를 검토하세요.",
@@ -1149,10 +1301,13 @@ function kickstartLaunchAgent(item) {
 }
 
 async function repairStaleQueue(input, staleDocs) {
-  if (!APPLY) return { ok: false, updated: 0 };
+  if (READ_ONLY || !APPLY || input.collection === "writeQueue") return { ok: false, updated: 0 };
   let updated = 0;
   const batch = db.batch();
   for (const doc of staleDocs) {
+    if (!canAutoRetryQueueDocument(input.collection, doc.data, {
+      ...input, nowMs: now.getTime(), worker: queueWorkers.get(input.collection),
+    })) continue;
     batch.set(db.collection(input.collection).doc(doc.id), {
       status: input.repairStatus,
       lastError: `system-health-check: stale ${doc.status} -> ${input.repairStatus}`,
@@ -1265,30 +1420,6 @@ function minutesSince(value) {
   const date = toDate(value);
   if (!date) return Infinity;
   return (Date.now() - date.getTime()) / 60000;
-}
-
-function recentOrUndatedDocs(docs, maxAgeMinutes) {
-  return docs.filter((doc) => {
-    const age = documentAgeMinutes(doc.data);
-    return age === null || age <= maxAgeMinutes;
-  });
-}
-
-function documentAgeMinutes(data) {
-  const candidates = [
-    data?.failedAt,
-    data?.completedAt,
-    data?.processedAt,
-    data?.sentAt,
-    data?.updatedAt,
-    data?.createdAt,
-    data?.requestedAt,
-  ];
-  for (const value of candidates) {
-    const date = toDate(value);
-    if (date) return (Date.now() - date.getTime()) / 60000;
-  }
-  return null;
 }
 
 function toDate(value) {

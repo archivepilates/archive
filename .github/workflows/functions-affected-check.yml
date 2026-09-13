@@ -3,6 +3,8 @@ name: ARCHIVE IN Functions Affected Check
 on:
   pull_request:
     paths:
+      - "firebase.json"
+      - ".firebaserc"
       - "firebase/**"
       - "archivein/index.html"
       - "archivein/manifest.webmanifest"
@@ -22,6 +24,8 @@ on:
       - main
       - "codex/**"
     paths:
+      - "firebase.json"
+      - ".firebaserc"
       - "firebase/**"
       - "archivein/index.html"
       - "archivein/manifest.webmanifest"
@@ -77,6 +81,12 @@ jobs:
 
       - name: Validate data source policy
         run: npm run validate:data-source-policy
+
+      - name: Test system hardening and deploy safety
+        run: npm run test:system-hardening
+
+      - name: Validate instructor lesson registration release
+        run: node scripts/validate-instructor-lesson-registration-release.mjs
 
       - name: Test staff and member contact precedence
         run: npm run test:contact-staff-precedence

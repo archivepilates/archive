@@ -10,6 +10,8 @@ import {
   recoveredMainFailureIds, studioMateReservationSyncWindow, successfulSyncReport,
   summarizeSyncReports, unresolvedMainWorkflowFailures,
 } from "../lib/system-health-current-state.mjs";
+import { canAutoRetryQueueDocument, classifyNotionDocument, classifyQueueDocument, queryCoverage } from "../lib/system-health-queue-policy.mjs";
+import { classifyCloudReadError, readSystemHealthCloudState } from "../lib/system-health-cloud-state.mjs";
 
 const now = new Date("2026-09-05T02:00:00Z");
 const step = (name) => ({ name, exitCode: 0, stdout: { ok: true,
@@ -204,9 +206,202 @@ function runnerFunction(name, globals) {
   return vm.runInNewContext(`(${node.getText(tree)})`, globals);
 }
 const baseGlobals = (overrides = {}) => ({
-  READ_ONLY: true, MODE: "weekly", REPAIR: false, findings: [], repairs: [], checked: [], now,
+  READ_ONLY: true, MODE: "weekly", REPAIR: false, findings: [], repairs: [], checked: [], completedChecks: new Set(), now,
   runId: "synthetic-health-test", REPORT_DIR: "/unused", path, console: { log() {} },
   effectiveSeverityRank: () => 0, needsCodexAction: () => false, ...overrides,
+});
+
+function findingHarness(overrides = {}) {
+  const globals = baseGlobals({
+    stableId: runnerFunction("stableId", { require }), cleanArray: (value) => Array.isArray(value) ? value.filter(Boolean) : [],
+    ...overrides,
+  });
+  globals.addFinding = runnerFunction("addFinding", globals);
+  globals.reportQueueCoverage = runnerFunction("reportQueueCoverage", globals);
+  return globals;
+}
+
+function resolves(prior, current) {
+  return canResolveHealthFinding(prior, new Set(current.findings.map((finding) => finding.findingId)), current.completedChecks);
+}
+
+async function queueAudit({ active = [], failed = [], activeError = null, failuresComplete = true } = {}) {
+  const globals = findingHarness({
+    RECENT_FAILURE_MINUTES: 10080, db: {}, queueWorkers: new Map(), classifyQueueDocument, queryCoverage, canAutoRetryQueueDocument,
+    loadStatusDocs: async () => { if (activeError) throw activeError; return active; },
+    loadRecentQueueFailures: async () => ({ docs: failed, coverage: { complete: failuresComplete } }),
+  });
+  await runnerFunction("inspectQueue", globals)({ collection: "jobs", area: "queue", title: "queue", staleStatuses: ["processing"], staleMinutes: 30 });
+  return globals;
+}
+
+test("queue age/failure identity is stable across counts and date errors, then resolves on full verification", async () => {
+  const past = new Date(now.getTime() - 7200000);
+  const first = await queueAudit({ active: [
+    { id: "old", data: { status: "pending", createdAt: past } },
+    { id: "undated", data: { status: "retry" } },
+  ], failed: [{ id: "failed-1" }] });
+  assert.deepEqual(first.findings.map((finding) => finding.checkKey), ["queue:jobs:age", "queue:jobs:failed"]);
+  const changed = await queueAudit({ active: [{ id: "new-undated", data: { status: "pending" } }], failed: [{ id: "failed-2" }, { id: "failed-3" }] });
+  assert.deepEqual(changed.findings.map((finding) => finding.findingId), first.findings.map((finding) => finding.findingId));
+  assert.equal(first.findings.every((prior) => !resolves(prior, changed)), true);
+  const healthy = await queueAudit();
+  assert.equal(first.findings.every((prior) => resolves(prior, healthy)), true);
+  assert.equal(healthy.completedChecks.has("queue:jobs:coverage"), true);
+});
+
+test("capped and permission-failed queue reads preserve prior age, failure and coverage findings", async () => {
+  const prior = await queueAudit({ active: [{ id: "overdue", data: { status: "pending", createdAt: new Date(0) } }], failed: [{ id: "failed" }] });
+  const capped = await queueAudit({
+    active: Array.from({ length: 250 }, (_, id) => ({ id: String(id), data: { status: "pending", nextRunAt: new Date(now.getTime() + 60000) } })),
+    failuresComplete: false,
+  });
+  const denied = await queueAudit({ activeError: { code: 7 }, failuresComplete: false });
+  const coverage = capped.findings.find((finding) => finding.checkKey === "queue:jobs:coverage");
+  assert.ok(coverage);
+  assert.equal(denied.findings[0].findingId, coverage.findingId);
+  for (const partial of [capped, denied]) {
+    assert.equal(prior.findings.every((finding) => !resolves(finding, partial)), true);
+    assert.equal(partial.completedChecks.size, 0);
+  }
+  assert.equal(resolves(coverage, await queueAudit()), true);
+});
+
+async function notionAudit(rows, error = null) {
+  const globals = findingHarness({ classifyNotionDocument, queryCoverage, db: { collection: (collection) => ({
+    where(field, op, statuses) {
+      assert.equal(field, "notionSync.status");
+      assert.equal(op, "in");
+      assert.deepEqual(Array.from(statuses), ["pending", "failed"]);
+      return this;
+    },
+    limit(limit) { assert.equal(limit, 250); return this; },
+    async get() {
+      if (collection === "privateLessonChartRecords" && error) throw error;
+      return { docs: collection === "privateLessonChartRecords" ? rows.map((data, index) => ({ id: String(index), data: () => data })) : [] };
+    },
+  }) } });
+  await runnerFunction("checkNotionSync", globals)();
+  return globals;
+}
+
+test("Notion stable findings resolve for fully verified aliases, never a capped or failed sample", async () => {
+  const first = await notionAudit([{ notionSync: { status: "pending" }, updatedAt: new Date(0) }]);
+  const changed = await notionAudit(Array(3).fill({ notionSync: { status: "failed" }, updatedAt: new Date(0) }));
+  const prior = first.findings[0];
+  assert.equal(prior.checkKey, "notion:privateLessonChartRecords:sync");
+  assert.equal(changed.findings[0].findingId, prior.findingId);
+  const alias = { notionSync: { status: "pending" }, notionProjectionControl: { aliasOfRecordId: "owner" } };
+  const partial = await notionAudit(Array(250).fill(alias));
+  const denied = await notionAudit([], { code: 7 });
+  assert.equal(resolves(prior, partial), false);
+  assert.equal(resolves(prior, denied), false);
+  const coverage = partial.findings[0];
+  assert.equal(coverage.checkKey, "notion:privateLessonChartRecords:coverage");
+  assert.equal(coverage.findingId, denied.findings[0].findingId);
+  const healthy = await notionAudit([...Array(6).fill(alias), ...Array(2).fill({ ...alias, notionSync: { status: "failed" } })]);
+  assert.equal(resolves(prior, healthy), true);
+  assert.equal(resolves(coverage, healthy), true);
+});
+
+async function cloudAudit({ deniedCode, partial = false, noBackup = false, newSchedule = false } = {}) {
+  const database = { name: "projects/test/databases/(default)", uid: "test-generation",
+    deleteProtectionState: "DELETE_PROTECTION_ENABLED", pointInTimeRecoveryEnablement: "POINT_IN_TIME_RECOVERY_ENABLED" };
+  const request = async ({ url, method }) => {
+    assert.equal(method, "GET");
+    if (deniedCode) throw { code: deniedCode };
+    if (url.endsWith("/backupSchedules")) return { data: { backupSchedules: [{ dailyRecurrence: {}, createTime: new Date(newSchedule ? now.getTime() - 3600000 : 0).toISOString() }] } };
+    if (url.endsWith("/backups")) return { data: { unreachable: partial ? ["test-region"] : [], backups: noBackup ? [] : [
+      { database: database.name, databaseUid: database.uid, state: "READY", snapshotTime: now.toISOString(), expireTime: new Date(now.getTime() + 3600000).toISOString() },
+    ] } };
+    if (url.includes("cloudscheduler")) return { data: { state: "ENABLED", schedule: "*/10 * * * *" } };
+    return { data: database };
+  };
+  const globals = findingHarness({ PROJECT_ID: "test", queueWorkers: new Map(), classifyCloudReadError,
+    require: () => ({ GoogleAuth: class { request(options) { return request(options); } } }),
+    readSystemHealthCloudState: (options) => readSystemHealthCloudState({ ...options,
+      schedulers: [{ functionName: "scheduledProcessContactSyncJobs", expectedState: "ENABLED", collection: "contactSyncJobs" }],
+    }),
+  });
+  await runnerFunction("checkCloudMetadata", globals)();
+  return globals;
+}
+
+test("cloud permission findings keep stable IDs and resolve only after positive metadata reads", async () => {
+  const denied = await cloudAudit({ deniedCode: 403 });
+  const unavailable = await cloudAudit({ deniedCode: 500 });
+  assert.equal(denied.findings.every((finding) => finding.checkKey.startsWith("cloud:")), true);
+  assert.deepEqual(denied.findings.map((finding) => finding.findingId), unavailable.findings.map((finding) => finding.findingId));
+  assert.equal(denied.completedChecks.size, 0);
+  const healthy = await cloudAudit();
+  assert.equal(denied.findings.every((finding) => resolves(finding, healthy)), true);
+  const partial = await cloudAudit({ partial: true });
+  assert.equal(resolves(denied.findings.find((finding) => finding.checkKey === "cloud:firestore-backups"), partial), false);
+  assert.equal(partial.completedChecks.has("cloud:cloud-metadata"), false);
+});
+
+test("backup failure cannot resolve on partial reads or first-schedule grace without a READY backup", async () => {
+  const failed = await cloudAudit({ noBackup: true });
+  const prior = failed.findings.find((finding) => finding.checkKey === "cloud:firestore-backup-state");
+  assert.ok(prior);
+  assert.equal(resolves(prior, await cloudAudit({ partial: true })), false);
+  assert.equal(resolves(prior, await cloudAudit({ noBackup: true, newSchedule: true })), false);
+  assert.equal(resolves(prior, await cloudAudit()), true);
+});
+
+test("MCP finding IDs are per URL and disabling checks cannot erase an unverified route failure", async () => {
+  const url = "https://test.invalid/mcp";
+  const audit = async (status) => {
+    const globals = findingHarness({ process: { env: status === null ? {} : { SYSTEM_HEALTH_MCP_URLS: url } },
+      probeMcpEndpoints: async () => [{ url, status, state: status === 405 ? "reachable_not_functionally_verified" : "unreachable", needsAttention: status !== 405 }],
+    });
+    await runnerFunction("checkMcpReachability", globals)();
+    return globals;
+  };
+  const failed = await audit(502);
+  const changed = await audit(404);
+  assert.equal(failed.findings[0].checkKey, `mcp:${url}`);
+  assert.equal(failed.findings[0].findingId, changed.findings[0].findingId);
+  assert.equal(resolves(failed.findings[0], await audit(null)), false);
+  assert.equal(resolves(failed.findings[0], await audit(405)), true);
+});
+
+test("optional MCP endpoints are disabled without configuration and never raise findings", async () => {
+  for (const env of [{}, { SYSTEM_HEALTH_MCP_URLS: "" }, { SYSTEM_HEALTH_MCP_URLS: " , \n " }]) {
+    const checked = [];
+    await runnerFunction("checkMcpReachability", baseGlobals({
+      checked, process: { env },
+      probeMcpEndpoints: () => assert.fail("unconfigured MCP must not be probed"),
+      addFinding: () => assert.fail("unconfigured MCP must not create findings"),
+    }))();
+    assert.equal(checked.length, 1);
+    assert.equal(checked[0].id, "caddy-mcp-reachability");
+    assert.equal(checked[0].checks[0].state, "disabled_not_configured");
+    assert.equal(checked[0].checks[0].needsAttention, false);
+  }
+});
+
+test("explicit MCP endpoints still warn for unreachable routes only", async () => {
+  const emitted = [];
+  const urls = ["https://first.invalid/mcp", "https://second.invalid/mcp"];
+  let probes = 0;
+  await runnerFunction("checkMcpReachability", baseGlobals({
+    process: { env: { SYSTEM_HEALTH_MCP_URLS: urls.join(", ") } },
+    probeMcpEndpoints: async (actualUrls) => {
+      probes++;
+      assert.deepEqual(Array.from(actualUrls), urls);
+      return [
+        { url: urls[0], state: "unreachable", status: 502, needsAttention: true },
+        { url: urls[1], state: "reachable_not_functionally_verified", status: 405, needsAttention: false },
+      ];
+    },
+    addFinding: (finding) => emitted.push(finding),
+  }))();
+  assert.equal(probes, 1);
+  assert.equal(emitted.length, 1);
+  assert.equal(emitted[0].severity, "warning");
+  assert.equal(emitted[0].sourceRefs[0], urls[0]);
+  assert.equal(emitted[0].autoRepairable, false);
 });
 
 test("read-only mode cannot persist findings, queues, files or emails", async () => {
@@ -253,10 +448,44 @@ test("queue age uses stored data timestamps, not missing wrapper fields", async 
   await runnerFunction("inspectQueue", baseGlobals({
     RECENT_FAILURE_MINUTES: 10080,
     loadStatusDocs: async (_collection, statuses) => statuses.includes("processing") ? [{ id: "job", status: "processing", data }] : [],
-    minutesSince: (value) => value === now ? 0 : Infinity,
-    recentOrUndatedDocs: (docs) => docs, addFinding: (finding) => emitted.push(finding),
+    db: {}, queueWorkers: new Map(), classifyQueueDocument, queryCoverage,
+    loadRecentQueueFailures: async () => ({ docs: [], coverage: { complete: true } }),
+    reportQueueCoverage() {}, addFinding: (finding) => emitted.push(finding),
   }))({ collection: "queue", title: "queue", activeStatuses: ["processing"], staleStatuses: ["processing"], staleMinutes: 20 });
   assert.deepEqual(emitted, []);
+});
+
+test("read-only and retired writeQueue cannot trigger any recovery write", async () => {
+  const forbidden = () => assert.fail("unexpected queue mutation");
+  for (const globals of [{ READ_ONLY: true, APPLY: true }, { READ_ONLY: false, APPLY: true }]) {
+    const repair = runnerFunction("repairStaleQueue", baseGlobals({ ...globals, db: { batch: forbidden } }));
+    assert.equal((await repair({ collection: "writeQueue" }, [{ data: { status: "processing" } }])).updated, 0);
+    if (globals.READ_ONLY) assert.equal((await repair({ collection: "contactSyncJobs" }, [])).updated, 0);
+  }
+});
+
+test("retired worker backlog is reported without repair even with repair enabled", async () => {
+  const emitted = [];
+  const rows = [{ id: "legacy", status: "processing", data: { status: "processing", updatedAt: new Date(now.getTime() - 7200000) } }];
+  await runnerFunction("inspectQueue", baseGlobals({
+    REPAIR: true, RECENT_FAILURE_MINUTES: 10080, db: {}, classifyQueueDocument, queryCoverage, canAutoRetryQueueDocument,
+    queueWorkers: new Map([["writeQueue", { state: "intentionally_retired" }]]),
+    loadStatusDocs: async () => rows,
+    loadRecentQueueFailures: async () => ({ docs: [], coverage: { complete: true } }),
+    repairStaleQueue: () => assert.fail("must not retry retired worker"), reportQueueCoverage() {},
+    addFinding: (finding) => emitted.push(finding),
+  }))({ collection: "writeQueue", title: "queue", activeStatuses: ["processing"], staleStatuses: ["processing"], staleMinutes: 20 });
+  assert.equal(emitted.length, 1);
+  assert.equal(emitted[0].autoRepairable, false);
+  assert.equal(emitted[0].repairStatus, "not_attempted");
+});
+
+test("unavailable or capped evidence produces an actionable finding even with zero rows", () => {
+  const emitted = [];
+  const check = runnerFunction("reportQueueCoverage", baseGlobals({ addFinding: (finding) => emitted.push(finding) }));
+  check({ title: "queue", collection: "jobs" }, { failures: queryCoverage({ limit: 50, error: { code: 7 } }) });
+  assert.equal(emitted[0].severity, "action_required");
+  assert.equal(emitted[0].autoRepairable, false);
 });
 
 test("GitHub query failure cannot overwrite prior workflow failure identity", async () => {

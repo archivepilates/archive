@@ -986,13 +986,25 @@
           <div class="panel-header"><div><h2>11. 배포·검증·보고</h2><p>배포 요청은 검증, commit, deploy, live check, GitHub push를 한 세트로 처리합니다.</p></div><span class="pill warn">release gate</span></div>
           <div class="rule-grid">
             <article class="rule-card">
+              <h3>2026-09-14 시스템 보호 보강</h3>
+              <ul>
+                <li>목적: 반복 동기화 실패·과거 배포 덮어쓰기·복구 수단 부재를 차단합니다. 원천은 bookings와 memberProfiles이며 Notion은 표시용입니다.</li>
+                <li>예약 변경으로 bookingId가 갱신된 차트는 기존 요청 ID를 재사용합니다. 이름이 바뀐 회원의 Notion 위치는 같은 memberId·담당 강사의 기존 기록으로 확인하며, 다른 차트의 페이지를 덮어쓰지 않습니다.</li>
+                <li>점검은 기한이 지난 pending/retry, 활성 기록의 Notion 실패, 조회 범위 부족, 주요 Scheduler와 복구 설정을 함께 확인합니다. 통합된 별칭과 명시적으로 종료한 요청은 장애에서 제외합니다.</li>
+                <li>Firestore 삭제 보호·7일 PITR·일일 백업 7일 보관을 사용합니다. 새 백업은 첫 26시간 동안 생성 대기로 구분하고, 이후 백업이 없거나 오래되면 실패로 보고합니다.</li>
+                <li>오래된 API 출석 대기는 이력만 보존하고 재실행하지 않습니다. 중단한 API 워커는 자동복구 대상이 아닙니다.</li>
+                <li>배포는 최신 origin/main과 동일한 깨끗한 main에서만 허용합니다. 직접 Firebase CLI 호출에도 동일한 Functions 사전 검증을 적용합니다.</li>
+                <li>검증: 전용 작업공간에서 회귀 테스트와 실제 백업·Notion 상태를 확인합니다. 배포와 복구 시험 증거는 2026-09-14 시스템 보강 보고서에 별도로 기록합니다.</li>
+              </ul>
+            </article>
+            <article class="rule-card">
               <h3>배포세트</h3>
               <ul>
                 <li>배포, 반영, publish, release 요청은 scoped commit, 필요한 target 배포, 라이브 확인, push까지 포함합니다.</li>
                 <li>UI/static-only 변경은 Hosting만, Functions 변경은 해당 codebase만 우선 배포합니다. CORE는 scripts/deploy-archive-core-live.sh 또는 npm run deploy:archive-core-live를 사용합니다.</li>
                 <li>배포 전 변경 범위, 테스트, 롤백 기준을 확인합니다.</li>
                 <li>CORE Hosting은 최신 CORE 작업 기준에서만 배포합니다. 배포 전 validate:archive-core-hosting이 수강료 문의 카드, 최근 발송/메모 패널, KPI 카드 높이 CSS를 확인하고, 빠진 항목이 있으면 배포를 중단합니다.</li>
-                <li>라이브 배포 커밋은 origin/main으로 fast-forward 승격합니다. 배포 완료 보고 전 npm run release:promote-main:dry로 승격 가능성을 확인하고, 검증이 끝나면 npm run release:promote-main을 실행합니다.</li>
+                <li>검증된 기능 커밋을 origin/main으로 fast-forward 승격한 뒤 깨끗한 main 작업공간에서 배포합니다. npm run release:promote-main:dry로 먼저 확인하며 강제 푸시는 하지 않습니다.</li>
                 <li>기능 브랜치만 라이브에 배포되고 main으로 승격되지 않은 상태는 rollback/다른 스레드 덮어쓰기 위험으로 봅니다. 승격이 막히면 차단 원인을 보고하고 별도 정리합니다.</li>
                 <li>ARCHIVE METHOD 강사레슨 큐카드 하단은 별점 제출 대신 수업촬영영상 시청을 위한 ARCHIVE PILATES 아임웹 가입 CTA로 안내합니다. 배포 전 롤백 가드와 배포 후 라이브 canary는 페이지 응답, CTA 문구, 가입 링크를 확인합니다.</li>
                 <li>배포 후 실제 URL, callable/API 응답, 브라우저 오류를 확인합니다.</li>
@@ -1001,7 +1013,7 @@
             <article class="rule-card">
               <h3>Functions 경계</h3>
               <ul>
-                <li>알림톡은 functions-alimtalk, 프라이빗/설문/리포트는 functions-private-chart, 동기화는 functions-sync, 앱 callable은 functions-app으로 나눕니다.</li>
+                <li>알림톡은 functions-alimtalk, 프라이빗/설문/리포트는 functions-private-chart, 동기화는 functions-sync, 앱 callable은 functions-app, 콘텐츠 운영은 functions-social로 나눕니다.</li>
                 <li>contracts 패키지에 collection, event, queue payload, codebase ownership을 먼저 기록합니다.</li>
                 <li>affected-only 감지와 CI 변경 감지 결과를 배포 범위 판단에 사용합니다.</li>
               </ul>
@@ -1025,6 +1037,8 @@
               <ul>
                 <li>Mac mini는 Codex 통합 운영 허브이자 자동화 실행 환경입니다.</li>
                 <li>StudioMate Playwright 공유 프로필은 lock을 잡고 직렬 실행합니다.</li>
+                <li>잠금은 시간이 지났다는 이유만으로 해제하지 않습니다. 같은 Mac의 소유 프로세스가 종료된 사실과 만료 시간을 모두 확인하며, 소유권이 불명확하면 유지합니다. 해제할 때도 잠금 토큰을 재확인합니다.</li>
+                <li>worktree 정리는 origin/main 병합 완료·변경 없음·사용 중 아님을 모두 확인하고 명시한 경로만 처리합니다. 푸시만 된 미병합 작업이나 원본·결과 파일은 자동 삭제하지 않습니다.</li>
                 <li>Codex가 디버깅·검증을 위해 연 Chrome 탭·창·Playwright 세션은 작업 종료 전에 닫고, 종료와 lock 해제를 <code>finally</code>에서 보장합니다.</li>
                 <li>사용자가 기존에 열어 둔 Chrome 상태와 소유권이 불명확한 프로세스는 닫지 않으며, 광범위한 프로세스 종료 명령은 사용하지 않습니다.</li>
                 <li>로그인·승인을 위해 창을 남길 때는 남긴 대상과 이유를 완료 보고에 명시합니다.</li>

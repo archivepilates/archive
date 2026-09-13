@@ -76,6 +76,7 @@ function isSharedPath(file) {
   return [
     ".github/",
     "firebase.json",
+    "firebase/kangsain-functions/firebase.json",
     "package.json",
     "package-lock.json",
     "firebase/codebase-boundaries.json",
@@ -89,6 +90,7 @@ function isSharedPath(file) {
     "firebase/kangsain-functions/functions/src/utils/",
     "scripts/prepare-functions-codebase.mjs",
     "scripts/validate-functions-boundaries.mjs",
+    "scripts/validate-functions-predeploy.mjs",
     "scripts/detect-affected-function-codebases.mjs",
     "scripts/deploy-affected-functions.mjs",
     "scripts/lib/affected-functions.mjs",

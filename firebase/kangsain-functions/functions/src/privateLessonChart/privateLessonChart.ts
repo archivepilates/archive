@@ -1307,6 +1307,12 @@ async function findReusableChartRequestForBooking(
     .limit(50)
     .get();
   const candidates: PrivateLessonChartRequestDoc[] = [];
+  const rebound = snap.docs.map((doc) => doc.data()).filter((request) =>
+    isSamePrivateBookingRequest(request, booking) && request.status !== "cancelled");
+  // A rescheduled chart keeps its original request ID after bookingId is updated.
+  // Reuse that binding on subsequent runs instead of creating plc_<new bookingId>.
+  if (rebound.length > 1) throw new Error("동일 예약의 프라이빗 차트 연결이 여러 건입니다. 원본 확인이 필요합니다.");
+  if (rebound.length === 1) return rebound[0];
   for (const doc of snap.docs) {
     const request = doc.data();
     if (!request || request.requestId === `plc_${booking.bookingId}`) continue;
@@ -1324,6 +1330,12 @@ async function findReusableChartRequestForBooking(
   }
   if (candidates.length !== 1) return null;
   return candidates.sort((a, b) => chartRequestReuseScore(b) - chartRequestReuseScore(a))[0] || null;
+}
+
+export function isSamePrivateBookingRequest(request: PrivateLessonChartRequestDoc, booking: BookingDoc): boolean {
+  return Boolean(request.bookingId && request.bookingId === booking.bookingId &&
+    request.memberId && request.memberId === booking.memberId &&
+    privateChartRequestOccurrenceKey(request) === privateLessonOccurrenceKey(booking));
 }
 
 function chartRequestReuseScore(request: PrivateLessonChartRequestDoc): number {
@@ -2022,7 +2034,7 @@ async function syncPrivateLessonChartRecordToNotion(
     const sourceVersion = privateLessonNotionProjectionVersion(record, chartRequest);
     const instructorPage = await syncInstructorMemberChartPage(recordForNotion, chartRequest, checkpoint);
     if (!instructorPage) {
-      throw new Error(`Notion 강사 차트 위치를 찾을 수 없습니다: ${record.staffName || "강사 미확인"}`);
+      throw new Error("Notion 회원 페이지 연결이 없습니다. 기존 회원 기록 연결을 확인해야 합니다.");
     }
     return {
       status: "synced",
@@ -2070,14 +2082,9 @@ async function syncInstructorMemberChartPage(
       pageUrl: record.notionSync?.instructorPageUrl || notionPageUrl(knownPageId),
     };
   }
-  const memberPageId = (record as any).notionProjectionControl?.memberPageId || await findInstructorMemberPageId(record.staffName, record.memberName).catch((err) => {
-    logger.warn("findInstructorMemberPageId failed", {
-      staffName: record.staffName,
-      memberName: record.memberName,
-      message: errorMessage(err),
-    });
-    return "";
-  });
+  const memberPageId = (record as any).notionProjectionControl?.memberPageId ||
+    await findSourceLinkedNotionMemberPage(record) ||
+    await findInstructorMemberPageId(record.staffName, record.memberName);
   if (!memberPageId) return null;
   const creationTitle = (record.notionSync as PrivateNotionState | undefined)?.creationTitle;
   const existingPageId = await findChildPageByExactTitle(memberPageId, creationTitle || title);
@@ -2111,6 +2118,34 @@ async function syncInstructorMemberChartPage(
     pageId: String(page.id || ""),
     pageUrl: String(page.url || notionPageUrl(String(page.id || ""))),
   };
+}
+
+async function findSourceLinkedNotionMemberPage(record: PrivateLessonChartRecordDoc): Promise<string> {
+  if (!record.memberId || !record.staffName) return "";
+  const instructorRoot = NOTION_INSTRUCTOR_CHART_PAGE_IDS[record.staffName];
+  if (!instructorRoot) return "";
+  const previous = await refs.privateLessonChartRecords().where("memberId", "==", record.memberId).limit(100).get();
+  const candidates = previous.docs.map((doc) => doc.data()).filter((row) =>
+    row.recordId !== record.recordId &&
+    staffOccurrenceIdentity(row.staffId, row.staffName) === staffOccurrenceIdentity(record.staffId, record.staffName) &&
+    !(row as any).notionProjectionControl?.aliasOfRecordId && row.notionSync?.instructorPageId)
+    .sort((a, b) => String(b.lessonDate).localeCompare(String(a.lessonDate)));
+  // Only an existing canonical member ID + instructor binding can survive a name change.
+  // Titles, suffix stripping, and phone/name guesses are never identity evidence here.
+  if (!candidates.length) return "";
+  const linked = await notionRequest(`pages/${candidates[0].notionSync!.instructorPageId}`, "GET");
+  const memberPageId = String(linked.parent?.page_id || "");
+  if (!memberPageId || linked.archived || linked.in_trash) throw new Error("Notion 기존 회원 기록 위치 확인 필요");
+  let parent = memberPageId;
+  for (let depth = 0; depth < 3; depth++) {
+    const page = await notionRequest(`pages/${parent}`, "GET");
+    if (page.archived || page.in_trash || page.public_url) throw new Error("Notion 회원 기록의 보관·공개 상태 확인 필요");
+    const ancestor = String(page.parent?.page_id || "");
+    if (ancestor.replaceAll("-", "") === instructorRoot.replaceAll("-", "")) return memberPageId;
+    if (!ancestor) break;
+    parent = ancestor;
+  }
+  throw new Error("Notion 회원 기록이 담당 강사 영역 밖에 있습니다. 연결 확인이 필요합니다.");
 }
 
 async function claimPrivateNotionPage(pageId: string, recordId: string, allowUnbound = false): Promise<void> {

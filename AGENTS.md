@@ -25,19 +25,13 @@
 - Use the main ARCHIVE IN project chat as the control surface for cross-cutting decisions about the web app, Firebase model, StudioMate sync, Google Contacts, Kakao Alimtalk, and deployment readiness.
 - If a separate chat or agent is used for a narrow subtask, bring the decision/result back into the main ARCHIVE IN chat before treating it as project direction.
 - ARCHIVE CORE transition work uses `workLanes/archive-core-transition` as the shared work lane. New subthreads should read that lane first, update handoffs there, and use lane-specific worktrees for code changes.
-- Current ARCHIVE CORE transition integration worktree: `/Users/archivepilates/codex-worktrees/archive-core-transition`.
-- Keep this integration worktree on `main` after merged cleanup/deploy work. For new non-trivial changes, create a temporary `codex/mini/<task-name>` branch, fast-forward/merge it back to `main` after validation, then delete the temporary branch when it is no longer needed.
-- ARCHIVE CORE now uses one main command thread. The main command thread owns requirements, priorities, final judgment, go-live approval, Notion status, and cross-lane handoff decisions.
+- Active integration/runtime repository: `~/dev/archive-in-runtime`; GitHub `origin/main` is the source of truth.
+- Keep the active runtime checkout fast-forward aligned with `origin/main` (the Mac mini runtime branch is `archive-runtime-main`). For new non-trivial changes, use a dedicated `codex/mini/<task-name>` branch/worktree under `~/codex-worktrees`, then promote reviewed changes to `origin/main` and deploy from a clean local `main` worktree. Do not deploy from old transition or live-setup worktrees.
+- ARCHIVE CORE now uses one main command thread. The main command thread owns requirements, priorities, final judgment, go-live approval, ARCHIVE CORE operating-rule status, and cross-lane handoff decisions.
 - Feature-specific Codex threads or subagents may investigate or implement bounded work, but they must report results back to the main ARCHIVE CORE command thread before their output becomes project direction.
-- Do not repeat cross-cutting instructions across feature threads. Put shared instructions in the command thread, `workLanes/archive-core-transition`, this `AGENTS.md`, and the relevant Notion page.
-- ARCHIVE CORE worktree map:
-  - `/Users/archivepilates/codex-worktrees/archive-core-transition` / `codex/mini/archive-core-transition`: command coordination, integration review, release readiness, and emergency shared fixes only.
-  - `/Users/archivepilates/codex-worktrees/archive-core-ui` / `codex/mini/archive-core-ui`: `/core` UI, routing, responsive layout, visual states, and operator UX.
-  - `/Users/archivepilates/codex-worktrees/archive-core-data` / `codex/mini/archive-core-data`: `members`, `member360Cards`, source import logs, data quality issues, read-model rebuilds, and shadow-compare reports.
-  - `/Users/archivepilates/codex-worktrees/archive-core-functions` / `codex/mini/archive-core-functions`: Firebase Functions, contracts, Firestore rules/indexes, affected deploy boundaries, and API surfaces.
-  - `/Users/archivepilates/codex-worktrees/archive-alimtalk` / `codex/mini/archive-alimtalk`: Kakao Alimtalk candidates, sends, templates, dedupe, approval flow, and communication logs.
-  - `/Users/archivepilates/codex-worktrees/studiomate-automation` / `codex/mini/studiomate-automation`: StudioMate Excel download/import, Playwright automation, staff scan, memo write queue, and LaunchAgent-facing scripts.
-  - `/Users/archivepilates/codex-worktrees/archive-core-docs` / `codex/mini/archive-core-docs`: Notion drafts, decision docs, handoff summaries, operating rules, and transition checklists.
+- Do not repeat cross-cutting instructions across feature threads. Put shared instructions in the command thread, the relevant `workLanes` record, this `AGENTS.md`, and ARCHIVE CORE > `운영규칙` (`/core/rules/`).
+- ARCHIVE CORE `운영규칙` is the active operating-rules hub. Do not duplicate new operating rules into Notion; retain Notion only for historical references, existing private-chart workflows, or an explicit user request.
+- Record each active lane's actual worktree, branch, file ownership, checks, and handoff in the command thread. Historical transition/UI/data/Functions worktree names are not active deployment paths.
 - One worktree equals one functional lane. Do not commit Alimtalk, StudioMate automation, CORE UI, Functions, and data mirror changes together unless the main command thread explicitly approves an integration commit.
 - ARCHIVE CORE is an operator-only web platform. It should not be treated as a teacher app, member app, or immediate StudioMate replacement.
 - Keep existing Alimtalk, StudioMate sync, and member-facing writes on their current canonical sources until a shadow-compare migration explicitly approves a source change.
@@ -67,8 +61,9 @@
 
 ## Local Setup
 
-- Active development worktree: `/Users/archivepilates/codex-worktrees/archivein-live-setup`
-- Base branch: `origin/archivein-canonical-20260514`
+- Active integration/runtime repository: `~/dev/archive-in-runtime`
+- Base branch and source of truth: `origin/main`
+- Development worktrees: `~/codex-worktrees/<task-name>`; preserve unrelated work and use disjoint file ownership for explicitly shared worktrees.
 - Local branch convention: `codex/mini/<task-name>`
 - Service account key path: `/Users/archivepilates/ArchiveIN/secrets/google/archive-codex-operator.json`
 - Service account email: `archive-codex-operator@archive-pilates.iam.gserviceaccount.com`
@@ -100,10 +95,13 @@ The Functions package declares Node.js `22`. If the machine default is newer, ex
 
 ## Functions Codebase Rules
 
-- Firebase Functions are split into four physical codebases: `functions-alimtalk`, `functions-private-chart`, `functions-sync`, and `functions-app`.
+- Firebase Functions are split into five physical codebases: `functions-alimtalk`, `functions-private-chart`, `functions-sync`, `functions-app`, and `functions-social`.
 - Shared cross-codebase contracts live in `firebase/packages/contracts`. Put shared event names, queue payloads, Firestore collection names, and codebase ownership constants there before duplicating them in feature code.
 - Before changing a Functions deployment path, run `npm run detect:affected-functions` to see which codebases are affected.
 - For local deploys, prefer `npm run deploy:affected-functions:dry` first. Use `npm run deploy:affected-functions -- --base <sha> --head HEAD` only when the user explicitly approves deploy/go-live.
-- Shared files such as `firebase.json`, `firebase/codebase-boundaries.json`, `firebase/packages/contracts/**`, `firebase/kangsain-functions/functions/src/config/**`, `runtime/**`, `types/**`, and broad utility/firestore files affect all four codebases.
+- All root Functions predeploy entries run `scripts/validate-functions-predeploy.mjs` before the existing prepare/build hooks. The guard verifies Firebase's `GCLOUD_PROJECT`, `PROJECT_DIR`, and `RESOURCE_DIR` against this script's repository and the selected codebase, then requires a clean local `main` equal to freshly fetched `origin/main` and the existing live rollback guards.
+- Firebase dry-run also runs those predeploy guards. It is not a branch/dirty-state bypass and may contact Firebase or enable APIs. Use affected detection and local tests for offline feature-branch review; do not use inherited dry-run flags to relax production guards.
+- Use root `firebase.json` and explicit affected targets, one codebase per Firebase process. Direct targeted Functions deploys still run the guards. The alternate `firebase/kangsain-functions/firebase.json` default-codebase deploy remains blocked; it is not a fallback release path.
+- Shared files such as `firebase.json`, `firebase/codebase-boundaries.json`, `firebase/packages/contracts/**`, `firebase/kangsain-functions/functions/src/config/**`, `runtime/**`, `types/**`, and broad utility/firestore files affect all five codebases.
 - Do not deploy all Functions by habit. Deploy only the affected codebase unless a shared contract or shared runtime file changed.
-- GitHub CI runs affected-codebase detection and boundary validation so other Codex threads can see the expected deployment scope.
+- GitHub CI runs affected-codebase detection, boundary validation, Functions predeploy safety tests, and the current instructor lesson registration validator. Root `firebase.json` and `.firebaserc` changes trigger these checks too.

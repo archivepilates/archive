@@ -5,6 +5,7 @@
       "codebase": "functions-alimtalk",
       "runtime": "nodejs22",
       "predeploy": [
+        "node \"$PROJECT_DIR/scripts/validate-functions-predeploy.mjs\" functions-alimtalk",
         "node scripts/prepare-functions-codebase.mjs \"$RESOURCE_DIR\"",
         "node firebase/kangsain-functions/functions/node_modules/typescript/bin/tsc -p \"$RESOURCE_DIR/tsconfig.json\""
       ],
@@ -20,6 +21,7 @@
       "codebase": "functions-private-chart",
       "runtime": "nodejs22",
       "predeploy": [
+        "node \"$PROJECT_DIR/scripts/validate-functions-predeploy.mjs\" functions-private-chart",
         "node scripts/prepare-functions-codebase.mjs \"$RESOURCE_DIR\"",
         "node firebase/kangsain-functions/functions/node_modules/typescript/bin/tsc -p \"$RESOURCE_DIR/tsconfig.json\""
       ],
@@ -35,6 +37,7 @@
       "codebase": "functions-sync",
       "runtime": "nodejs22",
       "predeploy": [
+        "node \"$PROJECT_DIR/scripts/validate-functions-predeploy.mjs\" functions-sync",
         "node scripts/prepare-functions-codebase.mjs \"$RESOURCE_DIR\"",
         "node firebase/kangsain-functions/functions/node_modules/typescript/bin/tsc -p \"$RESOURCE_DIR/tsconfig.json\""
       ],
@@ -50,6 +53,7 @@
       "codebase": "functions-app",
       "runtime": "nodejs22",
       "predeploy": [
+        "node \"$PROJECT_DIR/scripts/validate-functions-predeploy.mjs\" functions-app",
         "node scripts/prepare-functions-codebase.mjs \"$RESOURCE_DIR\"",
         "node firebase/kangsain-functions/functions/node_modules/typescript/bin/tsc -p \"$RESOURCE_DIR/tsconfig.json\""
       ],
@@ -65,6 +69,7 @@
       "codebase": "functions-social",
       "runtime": "nodejs22",
       "predeploy": [
+        "node \"$PROJECT_DIR/scripts/validate-functions-predeploy.mjs\" functions-social",
         "node scripts/prepare-functions-codebase.mjs \"$RESOURCE_DIR\"",
         "node firebase/kangsain-functions/functions/node_modules/typescript/bin/tsc -p \"$RESOURCE_DIR/tsconfig.json\""
       ],
