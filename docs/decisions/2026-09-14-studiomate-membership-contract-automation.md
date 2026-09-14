@@ -118,18 +118,24 @@ not permission to send; `sendAllowed` remains false in this staging implementati
   ticket remained one. Saving a draft did not issue a new ticket in this test only.
 - Signature-request click was blocked by `서명 요청 전에, 작성자의 서명이 필요합니다.`
   Native author signature supports drawing or image upload.
-- The user selected official center-seal image upload instead of drawing. The existing
-  official seal was already present in the test contract when inspected, matched the
-  original visually, and persisted after reload. No duplicate upload/save was made.
-  Automatic reuse on newly created contracts remains unverified. Do not invent a seal,
-  copy it into Git, sign for members, or check member consent on their behalf.
-  No signature-request message was sent during this verification.
+- The user selected official center-seal image upload instead of drawing. The approved
+  200x200 PNG is stored outside Git at
+  `~/ArchiveIN/automation/assets/archive-pilates-official-seal.png` with mode `0600`.
+  Its required SHA-256 is
+  `8aa7cc2bf0fb4c43809d753a505898a305b5d0340147f78364eb9ef56795ff8f`.
+  The local verifier rejects links, public permissions, altered bytes, non-PNG files and
+  different dimensions. Do not invent or substitute a seal, copy it into Git, sign for
+  members, or check member consent on their behalf.
+- On 2026-09-14 21:11 KST, one explicitly approved ordinary-member live test contract
+  was saved with this exact seal. Reload confirmed the center seal remained present, and
+  the native StudioMate LMS signature request was submitted. The contract changed to
+  `가입 요청대기`; the member signature is still pending. No welcome Alimtalk was sent.
 
 ## Activation Blockers And Next Verification
 
-1. The official center seal is verified on the existing test draft. Next, send the test
-   signature request after action-time confirmation; the recipient signs for themselves.
-   Verify native requested/signed status and message history separately.
+1. The official center seal and signature-request transition are verified on one live
+   test contract. The recipient must sign for themselves. Next, verify native signed
+   status, both signature-presence flags and message history after that action.
 2. Re-read ticket/payment counts after both sending and signing; draft-only proof does
    not establish the absence of downstream changes on completed contracts.
 3. Implement and verify native issuance/product/payment/history enrichment. Excel IDs
@@ -185,7 +191,7 @@ or mark unverified adapter input as complete to get an E2E to pass.
 
 ## Checks
 
-`npm run test:membership-contract` passed 788 tests (172 Node + 616 TypeScript),
+`npm run test:membership-contract` passed 790 tests (174 Node + 616 TypeScript),
 with zero failures or skipped tests. Covers first/renewal/exclusions, partial evidence,
 template contract, native DOM/signature intervals, historical pagination, aliases,
 concurrent/crashed dispatch, legacy nested outbound markers and current-readback races.
@@ -194,11 +200,15 @@ concurrent/crashed dispatch, legacy nested outbound markers and current-readback
 `npm run validate:data-source-policy` passed. All 5 codebases / 91 exports build.
 The existing Alimtalk dedupe/safeguards/onsite-retirement regression suites passed 19 tests;
 `node scripts/validate-onsite-welcome-release.mjs` passed. Retired entry points remain blocked.
-No native contract send or member write ran. New source formatting and syntax checks passed.
+One explicitly approved native LMS signature request ran after manual source review. No
+welcome Alimtalk or separate member/ticket/payment write ran. New source formatting and
+syntax checks passed.
 
 `node --check scripts/emergency-import-studiomate-member-excel.mjs`
 
 `node --check scripts/run-studiomate-excel-emergency-mode.mjs`
+
+`npm run verify:studiomate-official-seal` passed against the private local asset.
 
 `node scripts/process-studiomate-membership-contract-completions.mjs --dry-run`
 returned disabled with zero reads, writes and sends (browser never opened).
