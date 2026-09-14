@@ -1,7 +1,7 @@
 {
-  "name": "ARCHIVE PILATES 현장 웰컴",
-  "short_name": "ARCHIVE 웰컴",
-  "description": "ARCHIVE PILATES 현장 신규회원 웰컴 발송",
+  "name": "ARCHIVE PILATES 회원등록",
+  "short_name": "회원등록",
+  "description": "StudioMate 회원등록 바로가기",
   "start_url": "/onsiteWelcome/",
   "scope": "/onsiteWelcome/",
   "display": "standalone",

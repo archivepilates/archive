@@ -135,10 +135,11 @@ const COMMAND_ITEMS = [
     keywords: "member 회원 검색 전화번호 수강권 방문",
   },
   {
-    title: "회원가입서 발송",
-    detail: "StudioMate 회원 확인 후 가입 링크 즉시 발송",
-    href: "https://in.archivepilates.com/onsiteWelcome/?v=icon-check",
-    keywords: "회원가입서 현장 웰컴 신규회원 알림톡 발송 onsite welcome",
+    title: "회원등록 (StudioMate)",
+    detail: "StudioMate에서 회원·수강권·자체 계약서를 수동 등록",
+    href: "https://arcpilates.studiomate.kr/users/create",
+    external: true,
+    keywords: "회원등록 신규회원 스튜디오메이트 studiomate 수강권 계약서",
   },
   {
     title: "강사레슨 운영",
@@ -709,7 +710,7 @@ function renderCommandPaletteResults() {
   list.innerHTML = entries
     .map(
       (item) => `
-        <a href="${escapeHtml(item.href)}">
+        <a href="${escapeHtml(item.href)}"${item.external ? ' target="_blank" rel="noopener noreferrer"' : ""}>
           <strong>${escapeHtml(item.title)}</strong>
           <span>${escapeHtml(item.detail)}</span>
         </a>
@@ -804,7 +805,7 @@ const NAV_ICONS = {
   home: "M3 11.5 12 4l9 7.5M5 10v10h14V10M9 20v-6h6v6",
   members: "M16 19v-1.5A3.5 3.5 0 0 0 12.5 14h-5A3.5 3.5 0 0 0 4 17.5V19M11 8a3 3 0 1 1-6 0 3 3 0 0 1 6 0M20 19v-1a3 3 0 0 0-3-3h-1.2M15 5.2a2.8 2.8 0 0 1 0 5.6",
   lessons: "M4 6.5h16M4 12h16M4 17.5h9M8 4v16M16 4v10",
-  "onsite-welcome": "M4 5h16v14H4zM8 9h8M8 13h5M16 16l2 2 3-4",
+  "studiomate-member-registration": "M4 5h16v14H4zM8 9h8M8 13h5M16 16l2 2 3-4",
   "instructor-lessons": "M4 5h16v14H4zM8 9h8M8 13h4M16 13l2 2 3-4",
   private: "M5 4h14v16H5zM8 8h8M8 12h5M8 16h7",
   "recommended-meals": "M5 5h14v14H5zM8 9h8M8 13h8M8 17h5",
@@ -834,7 +835,7 @@ const NAV_LABELS = {
   home: "홈",
   members: "회원",
   lessons: "수업",
-  "onsite-welcome": "회원가입서",
+  "studiomate-member-registration": "회원등록 (StudioMate)",
   "instructor-lessons": "강사레슨",
   private: "프라이빗",
   "recommended-meals": "추천식단",
@@ -890,20 +891,24 @@ function enhanceNav() {
   const homeLink = nav.querySelector('[data-section="home"]');
   const homeHref = homeLink?.getAttribute("href") || "./";
   const coreRootHref = homeHref.replace(/\/?$/, "/");
-  if (!nav.querySelector('[data-section="onsite-welcome"]')) {
-    const link = document.createElement("a");
-    link.href = "https://in.archivepilates.com/onsiteWelcome/?v=icon-check";
-    link.dataset.section = "onsite-welcome";
-    link.innerHTML = "Signup <small>회원가입서</small>";
-    homeLink?.insertAdjacentElement("afterend", link);
+  nav.querySelectorAll('[data-section="onsite-welcome"], a[href*="/onsiteWelcome/"]').forEach((link) => link.remove());
+  let registrationLink = nav.querySelector('[data-section="studiomate-member-registration"]');
+  if (!registrationLink) {
+    registrationLink = document.createElement("a");
+    registrationLink.dataset.section = "studiomate-member-registration";
+    registrationLink.textContent = NAV_LABELS["studiomate-member-registration"];
+    if (homeLink) homeLink.insertAdjacentElement("afterend", registrationLink);
+    else nav.prepend(registrationLink);
   }
+  registrationLink.href = "https://arcpilates.studiomate.kr/users/create";
+  registrationLink.target = "_blank";
+  registrationLink.rel = "noopener noreferrer";
   if (!nav.querySelector('[data-section="instructor-lessons"]')) {
     const link = document.createElement("a");
     link.href = `${coreRootHref}instructor-lessons/`;
     link.dataset.section = "instructor-lessons";
     link.innerHTML = "Instructor <small>강사레슨</small>";
-    const onsiteLink = nav.querySelector('[data-section="onsite-welcome"]');
-    onsiteLink?.insertAdjacentElement("afterend", link);
+    registrationLink.insertAdjacentElement("afterend", link);
   }
   if (!nav.querySelector('[data-section="recommended-meals"]')) {
     const link = document.createElement("a");

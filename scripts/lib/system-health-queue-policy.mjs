@@ -43,8 +43,8 @@ export function classifyQueueDocument(data, {
 }
 
 export function canAutoRetryQueueDocument(collection, data, options = {}) {
-  // Legacy API writes must never be revived by the health checker, even in repair mode.
-  if (collection === "writeQueue" || isExplicitlyRetired(data)) return false;
+  // Retired intake and legacy API writes must never be revived, even in repair mode.
+  if (collection === "writeQueue" || collection === "onsiteWelcomeRequests" || isExplicitlyRetired(data)) return false;
   if (options.worker && options.worker.state !== "enabled") return false;
   return classifyQueueDocument(data, options).state === "stuck_processing";
 }

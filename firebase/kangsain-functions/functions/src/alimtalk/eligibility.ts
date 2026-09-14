@@ -41,6 +41,7 @@ const RESERVATION_NOTICE_BUTTON_URL = "https://archivepilates.notion.site/notice
 const RESERVATION_METHOD_BUTTON_URL = "https://archivepilates.notion.site/studiomate";
 
 export async function autoSendabilityIssue(candidate: AlimtalkCandidateDoc, today: string): Promise<string> {
+  if (candidate.type === "onsite_welcome") return "현장 웰컴 신규 발송 종료";
   const rule = alimtalkTemplateTargetRule(candidate.type);
   if (rule?.requiresMemberPhone && !candidate.memberPhone) return "전화번호 없음";
   if (ALIMTALK_MEMBER_EXCLUSION_REASONS[candidate.memberId] && !hasExplicitAlimtalkTestOverride(candidate))

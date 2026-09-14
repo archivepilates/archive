@@ -47,6 +47,35 @@ test("retired worker backlog remains visible but no writeQueue job is auto-retri
   assert.equal(classifyQueueDocument(data, { ...options, worker: { state: "intentionally_retired" } }).reason, "retired_worker_backlog");
 });
 
+test("onsite intake is never retried even before retirement metadata lands", () => {
+  for (const worker of [undefined, { state: "enabled" }, { state: "intentionally_retired" }]) {
+    const policy = { ...options, worker };
+    for (const status of ["pending", "retry", "running", "processing", "lookup_ready", "failed", "error", "sent"]) {
+      const data = { status, createdAt: ago(120), updatedAt: ago(90) };
+      assert.equal(canAutoRetryQueueDocument("onsiteWelcomeRequests", data, policy), false, status);
+    }
+    const pending = { status: "pending", createdAt: ago(120) };
+    assert.equal(classifyQueueDocument(pending, policy).needsAttention, true);
+    const retired = { ...pending, retiredAt: ago(1), retirementReason: "onsite_welcome_retired" };
+    assert.equal(classifyQueueDocument(retired, policy).state, "retired");
+  }
+  for (const collection of ["studiomateMemoWriteJobs", "eformsignInstructorMemberJobs", "eformsignRefundJobs"]) {
+    assert.equal(canAutoRetryQueueDocument(collection, { status: "processing", updatedAt: ago(90) }, options), true, collection);
+  }
+});
+
+test("health monitoring retains contract history and instructor eformsign without onsite worker revival", () => {
+  const source = readFileSync(new URL("../run-system-health-check.mjs", import.meta.url), "utf8");
+  assert.ok(!source.includes("com.archive.onsite-welcome-requests"));
+  assert.ok(!source.includes('url: "https://in.archivepilates.com/onsiteWelcome/"'));
+  assert.ok(source.includes('url: "https://in.archivepilates.com/memberSignup/"'));
+  assert.ok(source.includes('queueWorkers.set("onsiteWelcomeRequests", { state: "intentionally_retired"'));
+  assert.ok(source.includes('collection: "onsiteWelcomeRequests"'));
+  assert.ok(source.includes('input.collection === "onsiteWelcomeRequests") return { ok: false, updated: 0 }'));
+  assert.ok(source.includes('label: "com.archive.eformsign-instructor-member-queue"'));
+  assert.ok(source.includes('collection: "eformsignInstructorMemberJobs"'));
+});
+
 test("missing or invalid age evidence needs attention without unsafe retries", () => {
   for (const data of [{ status: "pending" }, { status: "retry", nextRunAt: "invalid", createdAt: ago(90) }, { status: "processing" }]) {
     assert.equal(classifyQueueDocument(data, options).state, "timestamp_unavailable");

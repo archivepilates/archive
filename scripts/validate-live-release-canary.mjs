@@ -13,6 +13,12 @@ if (selectedSurfaces.includes("archivein")) {
   checks.push(
     jsonCheck("archivein-release-custom-domain", "https://in.archivepilates.com/release.json", (json) => json?.source?.head === expectedSha),
     jsonCheck("archivein-release-webapp-path", "https://archive-pilates.web.app/archivein/release.json", (json) => json?.source?.head === expectedSha),
+    textCheck("onsite-welcome-retired-custom-domain", "https://in.archivepilates.com/onsiteWelcome/", [
+      "data-onsite-welcome-retired", "https://arcpilates.studiomate.kr/users/create",
+    ]),
+    textCheck("onsite-welcome-retired-webapp-path", "https://archive-pilates.web.app/archivein/onsiteWelcome/", [
+      "data-onsite-welcome-retired", "https://arcpilates.studiomate.kr/users/create",
+    ]),
     textCheck("archivein-root-retired-custom-domain", "https://in.archivepilates.com/", [
       "ARCHIVE IN 운영자 앱 종료 안내",
       "ARCHIVE CORE",
@@ -119,6 +125,7 @@ if (selectedSurfaces.includes("core")) {
       (json) => json?.source?.head === expectedSha && json?.runtimeContractVersion === "2026-08-01.1",
     ),
     textCheck("core-home-actions-custom-domain", "https://core.archivepilates.com/", [
+      "https://arcpilates.studiomate.kr/users/create",
       "오늘 처리할 일",
       "homeDecisionList",
       "renewalPipelineList",
@@ -130,6 +137,7 @@ if (selectedSurfaces.includes("core")) {
       "recommendedMealHistoryPanel",
     ]),
     textCheck("core-home-actions-webapp-path", "https://archive-pilates.web.app/core/", [
+      "https://arcpilates.studiomate.kr/users/create",
       "오늘 처리할 일",
       "homeDecisionList",
       "renewalPipelineList",
@@ -141,6 +149,8 @@ if (selectedSurfaces.includes("core")) {
       "recommendedMealHistoryPanel",
     ]),
     textCheck("core-app-bundle-custom-domain", "https://core.archivepilates.com/assets/app.js", [
+      "https://arcpilates.studiomate.kr/users/create",
+      "studiomate-member-registration",
       "pricingInquiryAlimtalkRequests",
       "recommendedMealProgramRequests",
       "operatorSendRecommendedMealProgramAlimtalk",
@@ -172,6 +182,8 @@ if (selectedSurfaces.includes("core")) {
       '"delivered", "전달 완료"',
     ]),
     textCheck("core-app-bundle-webapp-path", "https://archive-pilates.web.app/core/assets/app.js", [
+      "https://arcpilates.studiomate.kr/users/create",
+      "studiomate-member-registration",
       "isCurrentCommunicationFailure",
       "이전·테스트 실패 이력",
       'data-renewal-action="selected"',

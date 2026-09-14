@@ -4,19 +4,13 @@ import { readFileSync, existsSync } from "node:fs";
 import { join } from "node:path";
 
 const root = process.cwd();
-const macMiniLaunchAgentPath = "/Users/archivepilates/Library/LaunchAgents/com.archive.onsite-welcome-requests.plist";
-const macMiniLiveRunnerPath = "/Users/archivepilates/dev/archive-in-runtime/scripts/process-onsite-welcome-requests.mjs";
+const senderPath = "firebase/kangsain-functions/functions/src/alimtalk/onsiteWelcomeAlimtalk.ts";
 
 const requiredFiles = [
   "archivein/onsiteWelcome/index.html",
-  "archivein/onsiteWelcome/site.webmanifest",
-  "archivein/onsiteWelcome/icons/apple-touch-icon.png",
-  "archivein/onsiteWelcome/icons/archive-pilates-icon-192.png",
-  "archivein/onsiteWelcome/icons/archive-pilates-icon-512.png",
+  "archivein/memberSignup/index.html",
   "firebase/kangsain-functions/functions/src/memberSignup/onsiteWelcomeRequest.ts",
-  "firebase/kangsain-functions/functions/src/alimtalk/onsiteWelcomeAlimtalk.ts",
-  "firebase/kangsain-functions/functions/src/alimtalk/templates.ts",
-  "firebase/kangsain-functions/functions/src/alimtalk/templateTargetRules.ts",
+  "firebase/kangsain-functions/functions/src/memberSignup/memberSignupContract.ts",
   "firebase/kangsain-functions/functions/src/assets/NotoSansKR.ttf",
   "firebase/kangsain-functions/functions/src/exports/privateChart.ts",
   "firebase/kangsain-functions/functions/src/memberSignup/memberSignupPdfArchive.ts",
@@ -32,84 +26,79 @@ const requiredSnippets = [
     snippets: [
       "\"site\": \"archive-pilates-in\"",
       "\"public\": \"archivein\"",
-      "\"source\": \"/onsiteWelcome/\"",
-      "\"source\": \"/onsiteWelcome/index.html\"",
-      "\"source\": \"/archivein/onsiteWelcome/\"",
-      "\"source\": \"/archivein/onsiteWelcome/index.html\"",
+      '"source": "/api/memberSignupContract"',
+      '"source": "/archivein/api/memberSignupContract"',
+      '"functionId": "memberSignupContract"',
+      '"source": "/api/onsiteWelcomeRequest"',
+      '"source": "/archivein/api/onsiteWelcomeRequest"',
+      '"functionId": "onsiteWelcomeRequest"',
+      '"source": "/s/**"',
+      '"functionId": "redirectShortLink"',
     ],
   },
   {
     file: "archivein/onsiteWelcome/index.html",
-    snippets: [
-      "id=\"sendButton\"",
-      "웰컴 알림톡 전송",
-      "'lookup_ready'",
-      "request.canSendAlimtalk",
-      "action: 'send'",
-      "archiveOnsiteWelcomeHistory",
-      "terminalError ? [] : (request.stages || [])",
-      "서명완료 가입서 PDF 폴더",
-      "https://drive.google.com/drive/folders/1jpW73Io8GOkrURxoUoWZ2257mWKqEe8X",
-    ],
+    snippets: ["data-onsite-welcome-retired", "https://arcpilates.studiomate.kr/users/create"],
+    forbiddenPatterns: [/<form\b/i, /<script\b/i, /\bon(?:submit|click)\s*=/i, /sendButton/, /api\/onsiteWelcomeRequest/],
   },
   {
     file: "firebase/kangsain-functions/functions/src/memberSignup/onsiteWelcomeRequest.ts",
     snippets: [
-      "body.action === \"send\"",
-      "sendOnsiteWelcomeAlimtalkForRequest",
-      "\"lookup_ready\"",
-      "canSendAlimtalk",
+      'if (request.method === "POST") {\n      response.status(410).json({',
+      'code: "onsite_welcome_retired"',
+      'if (request.method === "GET")',
+      "await readAuthorizedRequest(requestId, accessToken)",
+      "doc.accessTokenHash !== sha256(accessToken)",
+      "const canSendAlimtalk = false",
       "hasSentAlimtalkHistory",
-      "label: \"알림톡 발송\"",
+    ],
+    forbiddenPatterns: [
+      /onsiteWelcomeAlimtalk/,
+      /sendOnsiteWelcomeAlimtalkForRequest/,
+      /createSignupContract/,
+      /request\.body/,
+      /\brefs\.[^\n;]*\.(?:set|update|add|delete)\s*\(/,
+      /\b(?:db|tx|batch|ref)\.(?:set|update|add|delete|runTransaction|batch)\s*\(/,
+      /\.ref\.(?:set|update|delete)\s*\(/,
     ],
   },
   {
-    file: "firebase/kangsain-functions/functions/src/alimtalk/onsiteWelcomeAlimtalk.ts",
+    file: "firebase/kangsain-functions/functions/src/alimtalk/eligibility.ts",
     snippets: [
-      "ONSITE_WELCOME_SETTINGS_DOC",
-      "onsiteWelcomeAlimtalk",
-      "ALIMTALK_TEMPLATES.onsite_welcome.code",
-      "type: \"onsite_welcome\"",
-      "ensureShortLink",
-      "type: \"member_signup\"",
-      "processAlimtalkQueue",
-      "existingWelcomeSend",
-      "ALIMTALK_TEMPLATES.new_member.code",
+      'export async function autoSendabilityIssue(candidate: AlimtalkCandidateDoc, today: string): Promise<string> {\n  if (candidate.type === "onsite_welcome") return "현장 웰컴 신규 발송 종료";',
     ],
   },
   {
-    file: "firebase/kangsain-functions/functions/src/alimtalk/templates.ts",
-    snippets: [
-      "| \"onsite_welcome\"",
-      "onsite_welcome: {",
-      "KA01TP260602101939427lPhGyuDLvFM",
-      "신규회원 웰컴 v5",
-      "현장 웰컴 영구 1회",
-    ],
+    file: "archivein/memberSignup/index.html",
+    snippets: ["../api/memberSignupContract", "contractId", "accessToken", "signatureImageDataUrl"],
   },
   {
-    file: "firebase/kangsain-functions/functions/src/alimtalk/templateTargetRules.ts",
+    file: "firebase/kangsain-functions/functions/src/memberSignup/memberSignupContract.ts",
     snippets: [
-      "onsite_welcome: {",
-      "현장 웰컴 페이지에서 가입서 링크가 준비된 lookup_ready 요청",
-      "직원이 웰컴 페이지의 알림톡 전송 버튼을 직접 클릭",
-      "회원가입서 작성 버튼",
+      "memberSignupContractHandler",
+      'if (request.method === "GET")',
+      'if (request.method === "POST")',
+      "readAuthorizedContract",
+      "current.accessTokenHash !== sha256(stringValue(tokenInput))",
+      'if (contract.status === "submitted")',
+      "duplicate: true",
+      "tryArchiveSubmittedContract",
+      "enqueueStudioMateProfileWriteJob",
+      'if (contract.status === "submitted" || contract.submittedAt || contract.signature) continue;',
     ],
   },
   {
     file: "firebase/kangsain-functions/functions/src/exports/privateChart.ts",
     snippets: [
-      "publicSolapiRequestOptions",
-      "publicDriveRequestOptions",
       "export const memberSignupContract = onRequest(publicDriveRequestOptions, memberSignupContractHandler)",
-      "export const onsiteWelcomeRequest = onRequest(publicSolapiRequestOptions, onsiteWelcomeRequestHandler)",
+      "export const onsiteWelcomeRequest = onRequest(",
+      "onsiteWelcomeRequestHandler",
+      "export const redirectShortLink = onRequest(publicRequestOptions, redirectShortLinkHandler)",
     ],
   },
   {
     file: "firebase/kangsain-functions/functions/src/runtime/functionOptions.ts",
     snippets: [
-      "export const publicSolapiRequestOptions",
-      "secrets: [solapiApiKey, solapiApiSecret, solapiPfid]",
       "export const publicDriveRequestOptions",
       "secrets: [googleDwdServiceAccountJson]",
     ],
@@ -131,21 +120,17 @@ const requiredSnippets = [
   },
   {
     file: "firebase/kangsain-functions/functions/src/utils/shortLinks.ts",
-    snippets: ["| \"member_signup\"", "? \"ms\""],
+    snippets: ['| "member_signup"', '? "ms"', "redirectShortLinkHandler", "response.redirect(302, String(data.targetUrl))"],
   },
   {
     file: "scripts/process-onsite-welcome-requests.mjs",
-    snippets: [
-      "status: \"lookup_ready\"",
-      "waitForMatchingMemberDetail",
-      "extractActiveTicketInfo",
-      "validateLookupForSignup",
-      "사용중인 수강권 정보를 찾지 못했습니다",
-      "수강권 이용기간을 찾지 못했습니다",
-      "rawTextPreview: body.slice(0, 2400)",
-      "Date.now() + 20000",
-      "sawActiveTicketSection",
-      "activeTicket.ticketName && activeTicket.startDate && activeTicket.endDate",
+    snippets: ['status: "retired"', 'source: "onsite_welcome_playwright_runner"', "ok: true", "processed: 0"],
+    forbiddenPatterns: [
+      /\b(?:import|require)\b/,
+      /\bfetch\s*\(/,
+      /\b(?:firebase-admin|playwright)\b|launchPersistentContext|acquireStudioMateBrowserLock/,
+      /claimNextRequest|createSignupContract|onsiteWelcomeRequests|memberSignupContracts/,
+      /\.(?:set|update|add|delete|runTransaction|batch)\s*\(/,
     ],
   },
 ];
@@ -155,6 +140,24 @@ const failures = [];
 for (const file of requiredFiles) {
   if (!existsSync(join(root, file))) failures.push(`missing file: ${file}`);
 }
+if (existsSync(join(root, senderPath))) failures.push(`retired sender must remain absent: ${senderPath}`);
+
+try {
+  const config = JSON.parse(readFileSync(join(root, "firebase.json"), "utf8"));
+  for (const [site, prefix] of [["archive-pilates", "/archivein"], ["archive-pilates-in", ""]]) {
+    const hosting = config.hosting.find((entry) => entry.site === site);
+    for (const [source, functionId] of [
+      [`${prefix}/api/memberSignupContract`, "memberSignupContract"],
+      [`${prefix}/api/onsiteWelcomeRequest`, "onsiteWelcomeRequest"],
+      ["/s/**", "redirectShortLink"],
+    ]) {
+      const rewrite = hosting?.rewrites?.find((entry) => entry.source === source);
+      if (rewrite?.function?.functionId !== functionId) failures.push(`compatibility rewrite missing or changed: ${site} ${source} -> ${functionId}`);
+    }
+  }
+} catch (error) {
+  failures.push(`cannot validate compatibility rewrites: ${error.message}`);
+}
 
 for (const check of requiredSnippets) {
   const path = join(root, check.file);
@@ -162,32 +165,15 @@ for (const check of requiredSnippets) {
   for (const snippet of check.snippets) {
     if (!content.includes(snippet)) failures.push(`missing snippet in ${check.file}: ${snippet}`);
   }
-}
-
-if (existsSync(macMiniLaunchAgentPath)) {
-  const plist = readFileSync(macMiniLaunchAgentPath, "utf8");
-  if (!plist.includes(macMiniLiveRunnerPath)) {
-    failures.push(`unexpected onsite welcome LaunchAgent runner path: expected ${macMiniLiveRunnerPath}`);
-  }
-  if (existsSync(macMiniLiveRunnerPath)) {
-    const liveRunner = readFileSync(macMiniLiveRunnerPath, "utf8");
-    for (const snippet of [
-      "Date.now() + 20000",
-      "sawActiveTicketSection",
-      "activeTicket.ticketName && activeTicket.startDate && activeTicket.endDate",
-      "rawTextPreview: body.slice(0, 2400)",
-    ]) {
-      if (!liveRunner.includes(snippet)) failures.push(`missing snippet in active LaunchAgent runner: ${snippet}`);
-    }
-  } else {
-    failures.push(`active LaunchAgent runner missing: ${macMiniLiveRunnerPath}`);
+  for (const pattern of check.forbiddenPatterns || []) {
+    if (pattern.test(content)) failures.push(`retired entrypoint in ${check.file}: ${pattern}`);
   }
 }
 
 if (failures.length) {
-  console.error("ARCHIVE IN onsite welcome release guard failed.");
+  console.error("ARCHIVE IN onsite welcome retirement guard failed.");
   for (const failure of failures) console.error(`- ${failure}`);
   process.exit(1);
 }
 
-console.log("ARCHIVE IN onsite welcome release guard passed.");
+console.log("ARCHIVE IN onsite welcome retirement and existing contract compatibility guard passed.");

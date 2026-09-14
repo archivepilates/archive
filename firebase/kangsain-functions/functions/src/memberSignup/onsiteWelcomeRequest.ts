@@ -1,90 +1,16 @@
-import { createHash, randomBytes } from "node:crypto";
-import { Timestamp } from "firebase-admin/firestore";
+import { createHash } from "node:crypto";
 import type { OnsiteWelcomeRequestDoc } from "../types/models";
-import { sendOnsiteWelcomeAlimtalkForRequest } from "../alimtalk/onsiteWelcomeAlimtalk";
-import { DEFAULT_STUDIO_ID } from "../config/constants";
 import { refs } from "../firestore/refs";
-import { nowTimestamp } from "../utils/date";
 
 export async function onsiteWelcomeRequestHandler(request: any, response: any): Promise<void> {
   try {
     if (request.method === "POST") {
-      const body = request.body || {};
-      if (body.action === "send") {
-        const doc = await readAuthorizedRequest(body.requestId || body.id, body.accessToken || body.token);
-        if (!doc.signupUrl || !doc.contractId) throw new Error("회원가입서 링크가 아직 준비되지 않았습니다.");
-        if (!["lookup_ready", "ready"].includes(doc.status)) {
-          throw new Error("현재 알림톡 전송 요청을 할 수 없는 상태입니다.");
-        }
-        if (await hasSentAlimtalkHistory(doc)) {
-          throw new Error("이미 웰컴 알림톡 발송 이력이 있는 회원입니다.");
-        }
-        await sendOnsiteWelcomeAlimtalkForRequest(doc);
-        const updated = (await refs.onsiteWelcomeRequest(doc.requestId).get()).data() || doc;
-        response.json({ ok: true, request: await publicRequest(updated) });
-        return;
-      }
-      if (body.action === "discard") {
-        const doc = await readAuthorizedRequest(body.requestId || body.id, body.accessToken || body.token);
-        if (doc.status === "sent" || doc.alimtalkSendId) {
-          throw new Error("이미 알림톡이 발송된 이력은 폐기할 수 없습니다.");
-        }
-        if (doc.contractId) {
-          const contractSnap = await refs.memberSignupContract(doc.contractId).get();
-          const contract = contractSnap.data();
-          if (contract?.status === "submitted") {
-            throw new Error("이미 회원이 제출한 가입서는 폐기할 수 없습니다.");
-          }
-          const cancelledAt = nowTimestamp();
-          const purgeAfter = Timestamp.fromMillis(cancelledAt.toMillis() + 1000 * 60 * 60 * 24);
-          await refs.memberSignupContract(doc.contractId).set(
-            {
-              status: "cancelled",
-              expiresAt: cancelledAt,
-              cancelledAt,
-              cancelReason: "onsite_welcome_discarded",
-              purgeAfter,
-              updatedAt: cancelledAt,
-            },
-            { merge: true },
-          );
-        }
-        await refs.onsiteWelcomeRequest(doc.requestId).set(
-          {
-            status: "cancelled",
-            progressPercent: 0,
-            progressLabel: "운영자가 잘못 생성된 요청을 폐기했습니다.",
-            lastError: null,
-            updatedAt: nowTimestamp(),
-          },
-          { merge: true },
-        );
-        const updated = (await refs.onsiteWelcomeRequest(doc.requestId).get()).data() || doc;
-        response.json({ ok: true, request: await publicRequest(updated) });
-        return;
-      }
-      const phone = digitsOnly(body.phone);
-      if (!/^01\d{8,9}$/.test(phone)) throw new Error("휴대폰 번호를 정확히 입력해주세요.");
-      const accessToken = randomBytes(24).toString("base64url");
-      const requestId = `owr-${Date.now().toString(36)}-${randomBytes(5).toString("hex")}`;
-      const now = nowTimestamp();
-      const doc: OnsiteWelcomeRequestDoc = {
-        requestId,
-        studioId: String(body.studioId || DEFAULT_STUDIO_ID),
-        status: "pending",
-        accessTokenHash: sha256(accessToken),
-        phone,
-        phoneLast4: phone.slice(-4),
-        memberNameHint: cleanText(body.memberName, 60),
-        source: "onsite_welcome_page",
-        progressPercent: 5,
-        progressLabel: "현장 웰컴 요청 접수",
-        lastError: null,
-        createdAt: now,
-        updatedAt: now,
-      };
-      await refs.onsiteWelcomeRequest(requestId).set(doc, { merge: true });
-      response.json({ ok: true, requestId, accessToken });
+      response.status(410).json({
+        ok: false,
+        code: "onsite_welcome_retired",
+        error: "현장 웰컴 신규 접수와 발송이 종료되었습니다. StudioMate에서 회원등록을 진행해 주세요.",
+        replacementUrl: "https://arcpilates.studiomate.kr/users/create",
+      });
       return;
     }
 
@@ -124,11 +50,7 @@ async function publicRequest(doc: OnsiteWelcomeRequestDoc) {
     (contract as any)?.studiomateProfileSyncStatus || (contract as any)?.studiomateSyncStatus,
   );
   const hasAlimtalkSentHistory = await hasSentAlimtalkHistory(doc);
-  const canSendAlimtalk =
-    ["lookup_ready", "ready"].includes(doc.status) &&
-    Boolean(doc.signupUrl && doc.contractId) &&
-    !hasAlimtalkSentHistory &&
-    contractStatus !== "cancelled";
+  const canSendAlimtalk = false;
   return {
     requestId: doc.requestId,
     status: doc.status,
@@ -196,10 +118,6 @@ function buildStages(doc: OnsiteWelcomeRequestDoc, contractStatus: string, studi
 
 function normalizeStudioMateSyncStatus(value: unknown): string {
   return String(value || "").trim();
-}
-
-function digitsOnly(value: unknown): string {
-  return String(value || "").replace(/\D/g, "");
 }
 
 function cleanText(value: unknown, max: number): string {

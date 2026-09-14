@@ -106,16 +106,6 @@ const AUTOMATIONS = [
     repair: "bootstrap",
   },
   {
-    id: "onsite-welcome-requests",
-    label: "com.archive.onsite-welcome-requests",
-    title: "Onsite welcome request queue",
-    area: "welcome",
-    runLog: path.join(HOME, "ArchiveIN/emergency/runs/onsite-welcome.jsonl"),
-    maxAgeMinutes: 45,
-    plist: path.join(PLIST_DIR, "com.archive.onsite-welcome-requests.plist"),
-    repair: "bootstrap",
-  },
-  {
     id: "studiomate-memo-write-queue",
     label: "com.archive.studiomate-memo-write-queue",
     title: "StudioMate memo write queue",
@@ -365,7 +355,6 @@ async function checkWebSurfaces() {
     { area: "archivein", title: "ARCHIVE IN domain", url: "https://in.archivepilates.com/" },
     { area: "private", title: "Private survey", url: "https://in.archivepilates.com/privateSurvey/" },
     { area: "private", title: "Private chart", url: "https://in.archivepilates.com/private-chart/" },
-    { area: "welcome", title: "Onsite welcome", url: "https://in.archivepilates.com/onsiteWelcome/" },
     { area: "welcome", title: "Member signup", url: "https://in.archivepilates.com/memberSignup/" },
   ];
   const checks = await Promise.all(targets.map(async (target) => {
@@ -621,14 +610,14 @@ async function checkQueues() {
     staleMinutes: 30,
     repairStatus: "pending",
   });
+  queueWorkers.set("onsiteWelcomeRequests", { state: "intentionally_retired", needsAttention: false });
   await inspectQueue({
     collection: "onsiteWelcomeRequests",
     area: "welcome",
-    title: "현장 웰컴 가입 큐",
+    title: "종료된 현장 웰컴 가입 큐",
     activeStatuses: ["pending", "running"],
     staleStatuses: ["running"],
     staleMinutes: 20,
-    repairStatus: "pending",
   });
   await inspectQueue({
     collection: "studiomateMemoWriteJobs",
@@ -736,6 +725,7 @@ async function inspectQueue(input) {
       impact: "운영 요청이 멈춰 보이거나 다음 자동화가 같은 작업을 처리하지 못할 수 있습니다.",
       suggestedAction: repair?.ok ? `${repair.updated}건만 ${input.repairStatus} 상태로 변경했습니다. 나머지 지연 건은 별도 확인하세요.`
         : input.collection === "writeQueue" ? "의도적으로 중단한 API 쓰기 큐입니다. 자동 재시도하지 말고 원천 확인 후 명시적 폐기 여부를 검토하세요."
+          : input.collection === "onsiteWelcomeRequests" ? "신규 접수가 종료된 큐입니다. 재실행하지 말고 기존 발송·서명 기록을 보존하며 미발송 요청의 종료 상태를 확인하세요."
           : "worker 상태와 실행 예정 시각, 중복 실행 가능성을 확인하세요. 대기 작업은 자동 재등록하지 않습니다.",
       sourceRefs: [...stale, ...undated.map(({ doc }) => doc)].slice(0, 5).map((doc) => `${input.collection}/${doc.id}`),
       autoRepairable: retryable.length > 0,
@@ -751,7 +741,9 @@ async function inspectQueue(input) {
       title: `${input.title} 실패 기록 ${failed.length}건${failures.coverage.complete ? "" : " 이상"}`,
       cause: "최근 7일 이내 상태 변경 또는 날짜 미상 실패 문서입니다. retiredAt/retirementReason이 명시된 폐기 문서는 제외합니다.",
       impact: "이미 실패로 종료된 작업은 자동 재실행하지 않고 운영자 검토 대상으로 둡니다.",
-      suggestedAction: "ARCHIVE CORE 자동화 관제에서 실패 원인을 확인하고 필요 시 재시도하세요.",
+      suggestedAction: input.collection === "onsiteWelcomeRequests"
+        ? "신규 접수가 종료된 큐입니다. 재시도하지 말고 기존 기록을 보존하며 종료 상태를 확인하세요."
+        : "ARCHIVE CORE 자동화 관제에서 실패 원인을 확인하고 필요 시 재시도하세요.",
       sourceRefs: failed.slice(0, 5).map((doc) => `${input.collection}/${doc.id}`),
       autoRepairable: false,
     });
@@ -1301,7 +1293,7 @@ function kickstartLaunchAgent(item) {
 }
 
 async function repairStaleQueue(input, staleDocs) {
-  if (READ_ONLY || !APPLY || input.collection === "writeQueue") return { ok: false, updated: 0 };
+  if (READ_ONLY || !APPLY || input.collection === "writeQueue" || input.collection === "onsiteWelcomeRequests") return { ok: false, updated: 0 };
   let updated = 0;
   const batch = db.batch();
   for (const doc of staleDocs) {

@@ -113,7 +113,6 @@ const guardGroups = [
           "ARCHIVE IN 운영자 앱 종료 안내",
           "ARCHIVE CORE",
           "private-chart",
-          "onsiteWelcome",
         ],
       },
       {
@@ -1209,34 +1208,80 @@ const guardGroups = [
     ],
   },
   {
-    id: "onsite-welcome-current-flow",
+    id: "onsite-welcome-retired-existing-contracts-preserved",
     reason:
-      "현장 웰컴 가입서 알림톡과 StudioMate 후속 처리 흐름이 예전 코드로 되돌아가는 것을 막습니다.",
+      "현장 웰컴 신규 접수·발송·자동 재시도 재개를 막고 기존 회원가입서 작성·보관 경로를 보존합니다.",
+    absentFiles: ["firebase/kangsain-functions/functions/src/alimtalk/onsiteWelcomeAlimtalk.ts"],
     files: [
       {
         file: "archivein/onsiteWelcome/index.html",
         markers: [
-          "가입서 링크 준비",
-          "웰컴 알림톡 발송 완료",
-          "스튜디오메이트 확인 대기",
-          "서명완료 가입서 PDF 폴더",
+          "data-onsite-welcome-retired",
+          "https://arcpilates.studiomate.kr/users/create",
         ],
+        forbiddenMarkers: ["<form", "<script", "sendButton", "api/onsiteWelcomeRequest"],
       },
       {
         file: "firebase/kangsain-functions/functions/src/memberSignup/onsiteWelcomeRequest.ts",
         markers: [
           "onsiteWelcomeRequestHandler",
-          "lookup_ready",
-          "sendOnsiteWelcomeAlimtalkForRequest",
+          "response.status(410).json(",
+          'code: "onsite_welcome_retired"',
+          "const canSendAlimtalk = false",
+          "await readAuthorizedRequest(requestId, accessToken)",
+        ],
+        forbiddenMarkers: ["onsiteWelcomeAlimtalk", "sendOnsiteWelcomeAlimtalkForRequest", "request.body", "createSignupContract"],
+      },
+      {
+        file: "firebase/kangsain-functions/functions/src/alimtalk/eligibility.ts",
+        markers: [
+          'export async function autoSendabilityIssue(candidate: AlimtalkCandidateDoc, today: string): Promise<string> {\n  if (candidate.type === "onsite_welcome") return "현장 웰컴 신규 발송 종료";',
         ],
       },
       {
         file: "scripts/process-onsite-welcome-requests.mjs",
         markers: [
-          "onsiteWelcomeRequests",
-          "StudioMate",
-          "memberSignupContracts",
+          'status: "retired"',
+          'source: "onsite_welcome_playwright_runner"',
+          "ok: true",
+          "processed: 0",
         ],
+        forbiddenMarkers: ["import ", "import(", "require(", "claimNextRequest", "createSignupContract", "launchPersistentContext", "onsiteWelcomeRequests", "memberSignupContracts"],
+      },
+      {
+        file: "archivein/memberSignup/index.html",
+        markers: ["../api/memberSignupContract", "signatureImageDataUrl"],
+      },
+      {
+        file: "firebase/kangsain-functions/functions/src/memberSignup/memberSignupContract.ts",
+        markers: [
+          'if (request.method === "GET")',
+          'if (request.method === "POST")',
+          "readAuthorizedContract",
+          "tryArchiveSubmittedContract",
+          "enqueueStudioMateProfileWriteJob",
+        ],
+      },
+      {
+        file: "firebase/kangsain-functions/functions/src/memberSignup/memberSignupPdfArchive.ts",
+        markers: ["createMemberSignupPdf", "uploadPdfToDrive", "signatureImageDataUrl"],
+      },
+      {
+        file: "firebase/kangsain-functions/functions/src/utils/shortLinks.ts",
+        markers: ['| "member_signup"', '? "ms"', "redirectShortLinkHandler"],
+      },
+      {
+        file: "firebase.json",
+        markers: ['"source": "/api/memberSignupContract"', '"source": "/archivein/api/memberSignupContract"', '"functionId": "redirectShortLink"'],
+      },
+      {
+        file: "scripts/run-system-health-check.mjs",
+        markers: ['queueWorkers.set("onsiteWelcomeRequests", { state: "intentionally_retired"'],
+        forbiddenMarkers: ["com.archive.onsite-welcome-requests"],
+      },
+      {
+        file: "scripts/lib/system-health-queue-policy.mjs",
+        markers: ['collection === "onsiteWelcomeRequests" || isExplicitlyRetired(data)) return false'],
       },
     ],
   },
@@ -1584,6 +1629,11 @@ const guardGroups = [
 
 const failures = [];
 for (const group of guardGroups) {
+  for (const file of group.absentFiles || []) {
+    if (fs.existsSync(path.join(repoRoot, file))) {
+      failures.push({ group: group.id, reason: group.reason, file, forbidden: "__file__" });
+    }
+  }
   for (const item of group.files) {
     const content = readFile(item.file);
     if (!content) {

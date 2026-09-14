@@ -42,6 +42,7 @@ export function codebasesForFile(file) {
   if (
     normalized.includes("/privateLessonChart/") ||
     normalized.includes("/privateSurvey/") ||
+    normalized.includes("/memberSignup/") ||
     normalized.includes("/inbody/") ||
     normalized.startsWith("firebase/kangsain-functions/functions/src/method/") ||
     normalized.endsWith("/exports/privateChart.ts")

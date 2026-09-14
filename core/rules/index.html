@@ -57,7 +57,7 @@
             <a href="#private">프라이빗<span>회차, 설문, 리포트</span></a>
             <a href="#staff-evaluation">강사 평가<span>퀴즈, 인사기록카드</span></a>
             <a href="#parking">주차등록<span>차량, 아이파킹, 자동 할인</span></a>
-            <a href="#welcome">현장 웰컴<span>가입서, PDF, StudioMate 반영</span></a>
+            <a href="#welcome">회원등록·가입 이력<span>StudioMate 수동 등록, 과거 가입서 후속 확인</span></a>
             <a href="#settlement">정산·지표<span>월별 정산, 대시보드</span></a>
             <a href="#refunds">환불<span>예상액, 검토, 이폼싸인</span></a>
             <a href="#cloud-cost">클라우드 비용<span>예산, 과금, 자원 정리</span></a>
@@ -109,7 +109,7 @@
                 <li>정상 정규화, 중복 차단, source import row 수, canonical key 정리, 이름/전화번호 누락으로 외부 실행에서 이미 제외된 행처럼 운영자가 액션할 수 없는 기록은 자동 리졸브하거나 시스템 진단에만 보관합니다.</li>
                 <li>같은 내부 경고가 반복되거나 자동 처리가 실패하면 그때 운영 큐로 승격합니다.</li>
                 <li>주 탐색 메뉴에서는 사용 빈도가 낮은 회원·수업·콘텐츠 화면을 제외하고, 기존 직접 URL은 점검과 예외 업무를 위해 유지합니다.</li>
-                <li>회원가입서 메뉴는 현장 웰컴 v5 발송 화면을 열고, 강사레슨 메뉴는 이름·전화번호·수강일 등록부터 StudioMate 수강권과 신규 강사회원 가입서까지 처리합니다. 반배정·예약은 운영자가 직접 처리합니다.</li>
+                <li>회원등록 (StudioMate) 메뉴는 StudioMate 회원등록 화면을 새 탭으로 엽니다. 일반회원·수강권·StudioMate 자체 계약서는 당분간 운영자가 수동 처리합니다. 강사레슨 메뉴는 기존대로 이름·전화번호·수강일 등록부터 StudioMate 수강권과 신규 강사회원 가입서까지 처리하며, 반배정·예약은 운영자가 직접 처리합니다.</li>
               </ul>
             </article>
             <article class="rule-card">
@@ -437,7 +437,7 @@
                 <li>긴 URL은 shortLinks를 만들고 버튼에는 pr-, ir- 같은 짧은 링크 ID를 넣습니다.</li>
                 <li>발송 직전에는 템플릿 승인 상태, 전화번호, 대상일, 재시도 한도, 설문/가입서/리포트 필수 링크 변수를 다시 확인합니다.</li>
                 <li>설문ID, 접근토큰, shortLinkId, reportLinkId 같은 필수 링크 변수가 비어 있으면 후보가 생성되어 있어도 queued 또는 sent로 전환하지 않습니다.</li>
-                <li>삭제된 신규회원 웰컴 v3 템플릿은 후보 재생성 대상에서 제외하고, 현장 웰컴 v5 흐름만 사용합니다.</li>
+                <li>삭제된 신규회원 웰컴 v3 템플릿은 후보 재생성 대상에서 제외합니다. 현장 웰컴 v5도 2026-09-14부터 신규 접수·신규 발송을 중단하며, 과거 발송·제출 이력의 후속 확인만 유지합니다.</li>
                 <li>프라이빗 사전설문은 Google Form이 아니라 ARCHIVE PILATES 자체 설문을 사용합니다.</li>
                 <li>프라이빗 회원은 <strong>프라이빗 사전설문 안내 v2</strong>, 제출 내용을 받는 담당강사는 <strong>담당강사 사전설문 제출 안내 v2</strong>, 하루 기록 강사는 <strong>강사용 프라이빗 오늘 기록 안내 v4</strong>, 회원 리포트는 <strong>프라이빗 회원 리포트 안내 v1</strong>만 사용합니다.</li>
                 <li>구 프라이빗 사전설문 v1과 강사용 차트 v2·v3는 SOLAPI에서 삭제했으며, 과거 발송 기록 식별 외에는 다시 참조하지 않습니다.</li>
@@ -779,32 +779,32 @@
         </section>
 
         <section class="panel rule-section" id="welcome">
-          <div class="panel-header"><div><h2>7. 현장 웰컴·회원가입·연락처</h2><p>회원가입서 제출과 StudioMate 반영을 분리해 실패 지점을 명확히 봅니다.</p></div><span class="pill">onsite</span></div>
+          <div class="panel-header"><div><h2>7. 회원등록·가입 이력·연락처</h2><p>신규 등록은 StudioMate에서 수동 처리하고, 과거 현장 웰컴 가입서의 이력과 후속 확인은 보존합니다.</p></div><span class="pill">StudioMate</span></div>
           <div class="rule-grid">
             <article class="rule-card">
-              <h3>현장 웰컴 알림톡</h3>
+              <h3>신규 등록 운영 기준 · 2026-09-14</h3>
               <ul>
-                <li>StudioMate 단건 조회 후 수강권과 전화번호가 확인된 lookup_ready 상태에서만 발송 버튼을 활성화합니다.</li>
-                <li>같은 전화번호에 현장 웰컴 또는 신규회원 웰컴 성공 발송 이력이 있으면 중복 차단합니다.</li>
-                <li>삭제된 신규회원 웰컴 v3 템플릿은 사용하지 않습니다. 신규회원 안내는 현장 웰컴 v5 플로우로만 처리합니다.</li>
+                <li>2026-09-14부터 onsiteWelcome 현장 웰컴의 신규 접수와 신규 알림톡 발송을 중단합니다. 기존 회원가입서 발송 메뉴는 회원등록 (StudioMate)으로 대체합니다.</li>
+                <li><a href="https://arcpilates.studiomate.kr/users/create" target="_blank" rel="noopener noreferrer">StudioMate 회원등록</a>에서 회원을 등록하고, 수강권과 StudioMate 자체 계약서는 당분간 운영자가 수동 처리합니다.</li>
+                <li>StudioMate 자체 계약서 자동화는 검증 중입니다. 센터 서명, 자체 계약서 발급, 계약 이력 확인이 남아 있어 자동 발급 완료로 간주하지 않습니다.</li>
+                <li>과거 발송 링크, 제출 데이터, 서명 완료 PDF는 삭제하거나 신규 등록 흐름으로 덮어쓰지 않습니다. 삭제된 신규회원 웰컴 v3와 중단한 현장 웰컴 v5를 새 발송에 사용하지 않습니다.</li>
                 <li>CORE 홈탭은 alimtalkCandidates 실패, onsiteWelcomeRequests 오류, memberSignupContracts 후속 처리 오류를 함께 문제로 표시합니다.</li>
-                <li>운영자는 CORE의 회원가입서 메뉴에서 현장 웰컴 화면을 열어 단건 조회와 발송을 진행합니다.</li>
-                <li>지정 테스트 계정 예외는 테스트 목적과 기간을 남긴 뒤 운영에서 제거합니다.</li>
+                <li>강사레슨의 강사회원 가입서와 이폼싸인 발송·완료 확인 절차는 이번 중단 대상이 아니며 기존대로 유지합니다.</li>
               </ul>
             </article>
             <article class="rule-card">
-              <h3>가입서 제출</h3>
+              <h3>과거 가입서 제출·PDF 후속 확인</h3>
               <ul>
-                <li>회원 제출은 먼저 memberSignupContracts에 저장합니다.</li>
+                <li>기발송 링크와 memberSignupContracts의 제출 원본은 유지합니다. 신규 접수 중단과 과거 제출 건의 후속 처리를 구분합니다.</li>
                 <li>서명 완료 PDF는 home@archivepilates.com Google Drive 가입서 PDF 폴더에 저장합니다.</li>
                 <li>PDF 저장 실패는 회원 제출을 실패시키지 않고 재처리 상태로 남깁니다.</li>
-                <li>현장 웰컴 사이트에는 가입서 PDF 폴더 버튼을 제공합니다.</li>
+                <li><a href="https://drive.google.com/drive/folders/1jpW73Io8GOkrURxoUoWZ2257mWKqEe8X" target="_blank" rel="noopener noreferrer">서명완료 가입서 PDF 폴더</a>와 미해결 제출·PDF 오류의 후속 확인은 유지합니다.</li>
               </ul>
             </article>
             <article class="rule-card">
-              <h3>StudioMate 반영</h3>
+              <h3>과거 제출 건의 StudioMate 반영</h3>
               <ul>
-                <li>주소, 생년월일, 성별은 StudioMate 회원정보란에 반영해야 합니다.</li>
+                <li>과거 제출 건의 주소, 생년월일, 성별은 StudioMate 회원정보란 반영 여부를 확인합니다. 신규 회원등록 자동화가 완료되었다는 뜻은 아닙니다.</li>
                 <li>회원가입 정보는 StudioMate 메모란에 자동으로 쓰지 않습니다.</li>
                 <li>반영은 studiomateMemberProfileWriteJobs 큐를 통해 Mac mini Playwright가 처리합니다.</li>
                 <li>기존 memo write queue에 회원가입서 메모 작업이 남아 있으면 skipped로 처리합니다.</li>
@@ -834,7 +834,8 @@
               </ul>
             </article>
           </div>
-          <div class="rule-note"><strong>현재 확인 위치</strong><span>CORE 강사레슨 / Firestore lectures, bookings, memberProfiles.activeTickets, instructorLessonRegistrations, studiomateInstructorLessonJobs, eformsignInstructorMemberJobs, instructorMemberConsents / StudioMate 회원·수강권 / 이폼싸인 강사회원가입서</span></div>
+          <div class="rule-note"><strong>변경·검증 상태</strong><span>2026-09-14 폐기 릴리스: 신규 API 요청은 410으로 차단하고 발송 큐에서도 웰컴을 제외합니다. 15초 조회 작업과 점검 자동복구 대상에서 제거합니다. 기존 개별 가입서·서명·PDF는 보존하며, StudioMate 자체 계약서 자동화는 센터 서명·발급·이력 검증 후 별도 적용합니다.</span></div>
+          <div class="rule-note"><strong>현재 확인 위치</strong><span>StudioMate 회원·수강권·자체 계약서 / 과거 가입서 원본: Firestore onsiteWelcomeRequests, memberSignupContracts, studiomateMemberProfileWriteJobs / Google Drive 가입서 PDF 폴더 / CORE 강사레슨 / Firestore lectures, bookings, memberProfiles.activeTickets, instructorLessonRegistrations, studiomateInstructorLessonJobs, eformsignInstructorMemberJobs, instructorMemberConsents / 이폼싸인 강사회원가입서</span></div>
         </section>
 
         <section class="panel rule-section" id="settlement">

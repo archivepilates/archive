@@ -107,13 +107,12 @@ export const ALIMTALK_TEMPLATE_TARGET_RULES: Partial<Record<AlimtalkCandidateTyp
       },
     ],
     targetRules: [
-      "현장 웰컴 페이지에서 가입서 링크가 준비된 lookup_ready 요청",
-      "직원이 웰컴 페이지의 알림톡 전송 버튼을 직접 클릭",
-      "StudioMate 전화번호 단건 조회 성공",
-      "회원가입서 초안과 짧은 링크가 있음",
-      "기존 신규회원 웰컴 발송 이력이 없음",
+      "2026-09-14 현장 웰컴 신규 접수·발송 종료",
+      "회원등록은 StudioMate에서 진행",
+      "기존 가입서·발송 이력과 개별 링크는 보존",
     ],
     exclusionRules: [
+      "현장 웰컴 신규 발송 종료: 테스트 예외와 재시도에도 적용",
       "전화번호 없음",
       "회원가입서 링크 없음",
       "신규회원 웰컴 v5 템플릿 코드 미설정 또는 미승인",
