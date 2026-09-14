@@ -1,6 +1,6 @@
 # StudioMate Membership Contract Automation
 
-State: guarded completion and welcome queue implemented locally; native issuance and contract writer incomplete; production activation blocked.
+State: native source reader, contract writer, completion refresh and welcome queue implemented locally; production activation blocked.
 Owner: ARCHIVE PILATES. Updated: 2026-09-14.
 
 ## Operating Decision
@@ -52,10 +52,11 @@ history. Delivered/accepted blocks permanently. Queued/sending/unknown or any at
 failure is review-only; repeated contract-complete events must not resend. Unattempted
 cancelled/skipped jobs may qualify only after the fresh complete cross-family audit.
 
-Promotion design (implemented adapters, NOT active): native StudioMate contract/issuance records are the source;
-`studiomateMembershipContracts` is the verified-source collection contract and
+Promotion design (implemented, NOT active): native StudioMate contract/issuance records are the source;
+`studiomateMembershipContracts` is the verified-source collection and
 `alimtalkCandidates`/`alimtalkSends` are the existing delivery ledger. The source collection
-has not been populated by this task. WorkLane hints and CRM mirrors are forbidden
+is populated only by the guarded writer after a verified native issuance. The authorized
+manual test contract is not retroactively inserted. WorkLane hints and CRM mirrors are forbidden
 external-action sources. The adapter atomically reserves phone/member welcome identity
 before the provider POST, repeats source/role/template/history checks and uses the shared
 Alimtalk queue/provider ledger without a second direct sender.
@@ -77,8 +78,9 @@ approved template, source promotion and limited test readback; no historical bac
   phone/name/DOB/address and retain sourceImportId.
 - Allowed readers: bounded operator review/enrichment. Forbidden: sends, member creation,
   ticket issue, payment, reservation, contact or memo writes from hints or CRM mirrors.
-- Promotion is pending until native field mapping/history completeness and E2E readback
-  are verified. No production queue or send adapter is enabled by this change.
+- Native field mapping, full contract-history reads and exact ticket/payment readback are
+  implemented and verified against the authorized completed test. Production promotion
+  still requires a fresh issuance through the automatic writer and an approved v6 template.
 
 ## Implemented Guarded Entry Point
 
@@ -126,32 +128,45 @@ not permission to send; `sendAllowed` remains false in this staging implementati
   The local verifier rejects links, public permissions, altered bytes, non-PNG files and
   different dimensions. Do not invent or substitute a seal, copy it into Git, sign for
   members, or check member consent on their behalf.
-- On 2026-09-14 21:11 KST, one explicitly approved ordinary-member live test contract
-  was saved with this exact seal. Reload confirmed the center seal remained present, and
-  the native StudioMate LMS signature request was submitted. The contract changed to
-  `가입 요청대기`; the member signature is still pending. No welcome Alimtalk was sent.
+- On 2026-09-14 21:13 KST, one explicitly approved ordinary-member live test contract
+  was saved with this exact seal, then refreshed through readback.
+  The native contract reached 완료 status with both center and member signatures present and
+  all three required terms marked as agreed. No welcome Alimtalk was sent.
 
 ## Activation Blockers And Next Verification
 
-1. The official center seal and signature-request transition are verified on one live
-   test contract. The recipient must sign for themselves. Next, verify native signed
-   status, both signature-presence flags and message history after that action.
-2. Re-read ticket/payment counts after both sending and signing; draft-only proof does
-   not establish the absence of downstream changes on completed contracts.
-3. Implement and verify native issuance/product/payment/history enrichment. Excel IDs
-   are currently blank; its payment metadata can be inherited and dates lose time.
+1. The official center seal, both signature-presence flags, and three required terms
+   were verified on one live test contract (21:13 KST). The recipient signed themselves.
+   Keep monitoring message history as additional completed-case evidence is collected.
+2. Re-read ticket/payment state after completion for the same test contract:
+   one ticket issuance remained (expected), and two payment rows were observed:
+   one initial unpaid ledger row and one later actual card-settlement row. No ticket
+   or payment duplication occurred.
+3. Native issuance/product/payment/history enrichment now reads exact IDs and full
+   StudioMate timestamps. The member Excel remains discovery-only and its blank IDs or
+   date-only values are never promoted as native evidence.
 4. Review existing terms against current cancellation policy and legal requirements.
    Existing brackets, broad injury liability, exclusive jurisdiction and blanket refund
    wording were not rewritten or certified legally valid during this task.
-5. Test cutover baseline, signed renewal, first regular purchase, all exclusions, source
-   edits, duplicate jobs, partial payments and ambiguous external results. Promote the
-   lane only after a read-only target audit and limited test succeed.
-6. The canonical history loader and queue adapter are implemented locally. Complete native
-   current-read integration, provider coverage audit, template approval and contract E2E.
-   Commit/release scoped sources, verify installed runtime, and activate the
-   canonical queue only after explicit go-live approval. The legacy onsite entry was
+5. Synthetic tests cover cutover baseline, signed renewal, first regular purchase,
+   exclusions, source edits, duplicate jobs, partial payments and ambiguous external
+   results. Run one limited automatic-writer E2E on a future explicitly approved test
+   issuance before setting `nativeE2eVerified` and live activation flags.
+6. The canonical source reader, contract writer, completion refresh and queue adapter are
+   implemented locally. Remaining blockers are provider-history coverage approval,
+   v6 template approval and the limited automatic-writer E2E. The legacy onsite entry was
    already retired on main in commits 06f49971/7c3d658a; do not re-enable it or delete
    historical ARCHIVE IN contracts or links when integrating this older worktree.
+
+Verified live evidence:
+- 2026-09-14 21:13 KST: completed authorized test contract has center and member
+  signatures present, and all three required terms agreed; one ticket issuance remained.
+- The same contract had two payment rows: one initial unpaid ledger row and one
+  later actual card-settlement row. No member/ticket/payment duplication occurred.
+- Native readback normalized the ticket period and the two-row payment ledger to the
+  exact owned issuance, 398,000 KRW paid and zero outstanding balance.
+- template `KA01TP260914091233543JoFDsn7KfCr` remains `INSPECTING` in SOLAPI,
+  so welcome Alimtalk remains inactive.
 
 No Codex heartbeat or duplicate LaunchAgent was created. Native automatic sends stay off.
 
@@ -161,7 +176,7 @@ No Codex heartbeat or duplicate LaunchAgent was created. Native automatic sends 
   and both member/center signature images. Only presence booleans are retained, never images.
 - StudioMate exposes a signature calendar date, not a signature instant. A bound draft-to-
   signed observation interval is retained. No synthetic signedAt is inferred from that date.
-- The completion worker shares the existing Excel/contact runner and browser-profile lock.
+- The completion worker shares the existing browser-profile lock.
   Its default-off path exits before opening a browser or reading member data. It only reads
   existing bound native contracts and cannot create/send contracts, issue tickets or sign.
 - Local/canonical welcome history exhausts bounded pages across phone formats and merged
@@ -174,24 +189,25 @@ No Codex heartbeat or duplicate LaunchAgent was created. Native automatic sends 
 - Missing attempts are never converted to zero for this type. Before POST, permanent
   phone-family and member-alias claims are created atomically. Acceptance/unknown outcomes
   retain claims. No automatic retry after timeout, crash or ambiguous provider acceptance.
-- A current native member/ticket/payment readback, exact native IDs and settled payment
-  are required again before claiming and immediately before POST. Readback must be no
-  older than 90 seconds and must follow candidate creation; copied contract amounts do
-  not qualify. This producer/dispatch handoff is NOT wired to a live native collector yet.
-  Do not enable the queue expecting the existing 10-minute cached completion to satisfy it.
+- A current native member/ticket/payment readback plus the same contract's current signed
+  state, exact native IDs and settled payment are required again before claiming and
+  immediately before POST. The provider signing instant must exactly match the accepted
+  completion. Candidate creation
+  writes a one-shot readback request into the existing 30-second Mac mini operations queue;
+  only a post-candidate readback no older than 12 minutes qualifies. Copied contract
+  amounts do not qualify. No new LaunchAgent or periodic StudioMate scan was added.
 - Source fingerprints, config, role exclusions, template content/image/buttons and history
   are rechecked. The shared transport does not create an extra short link for welcome v6.
 
-Remaining implementation is substantive, not just an approval wait: the full native
-issuance/payment/contract-history collector and automatic draft/seal/signature-request
-writer still need development against verified native identities and UI save semantics.
-Read-only live review confirmed payment rows expose no payment ID in rendered DOM and
-the copied contract fields cannot prove current refund state. Do not invent those IDs
-or mark unverified adapter input as complete to get an E2E to pass.
+The native issuance/payment/contract-history reader and automatic
+draft/seal/signature-request writer are implemented. They remain dormant behind environment
+and Firestore gates. Do not activate them until the v6 template is approved and one fresh,
+explicitly authorized issuance completes the automatic writer E2E. The completed manual
+test must not be rerun through the writer because its issuance is already contracted.
 
 ## Checks
 
-`npm run test:membership-contract` passed 790 tests (174 Node + 616 TypeScript),
+`npm run test:membership-contract` passed 815 tests (189 Node + 626 TypeScript),
 with zero failures or skipped tests. Covers first/renewal/exclusions, partial evidence,
 template contract, native DOM/signature intervals, historical pagination, aliases,
 concurrent/crashed dispatch, legacy nested outbound markers and current-readback races.
@@ -215,7 +231,7 @@ returned disabled with zero reads, writes and sends (browser never opened).
 
 `git diff --check`
 
-Local feature branch only; main promotion, deployment, push and source activation deferred
-until native collection/writing and the live signature E2E are actually complete.
+Local feature branch only at this checkpoint. Main promotion, scoped deployment and push
+are next; production activation remains deferred until template approval and automatic-writer E2E.
 
 Report: `docs/reports/2026-09-14-studiomate-membership-contract-verification.html`.

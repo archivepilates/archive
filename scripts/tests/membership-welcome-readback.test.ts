@@ -29,6 +29,8 @@ function fixture() {
     ...identity,
     ...ticketIdentity,
     checkedAt: iso(NOW - 300_000),
+    contractId: "a".repeat(64),
+    signedAt: iso(NOW - 600_000),
     memberPhone: "01000000001",
     paidAmount: 100000,
   };
@@ -62,7 +64,21 @@ function fixture() {
     },
   };
   return {
-    source: { studioId: identity.studioId, completion, nativeReadback },
+    source: {
+      studioId: identity.studioId,
+      contractId: completion.contractId,
+      completion,
+      nativeReadback: {
+        ...nativeReadback,
+        providerSignature: {
+          ...common,
+          ...ticketIdentity,
+          source: "studiomate_native_contract",
+          contractId: completion.contractId,
+          signedAt: completion.signedAt,
+        },
+      },
+    },
     now: new Date(NOW),
     candidate: {
       createdAt: { seconds: (NOW - 120_000) / 1000, nanoseconds: 0 },
@@ -139,9 +155,9 @@ for (const kind of kinds) {
   }
   for (const [label, checkedAt, expected] of [
     ["fresh", iso(NOW), ""],
-    ["89.999 seconds old", iso(NOW - 89_999), ""],
-    ["exactly 90 seconds old", iso(NOW - 90_000), ""],
-    ["90.001 seconds old", iso(NOW - 90_001), "fresh_native_readback_required"],
+    ["11:59.999 old", iso(NOW - 719_999), ""],
+    ["exactly 12 minutes old", iso(NOW - 720_000), ""],
+    ["12:00.001 old", iso(NOW - 720_001), "fresh_native_readback_required"],
     [
       "one millisecond in the future",
       iso(NOW + 1),
@@ -152,6 +168,11 @@ for (const kind of kinds) {
   ] as const) {
     test(`${kind} clock ${label}`, () => {
       const f = fixture();
+      f.source.completion.checkedAt = iso(NOW - 900_000);
+      f.candidate.createdAt = {
+        seconds: (NOW - 900_000) / 1000,
+        nanoseconds: 0,
+      };
       f.source.nativeReadback[kind].checkedAt = checkedAt;
       assert.equal(
         membershipWelcomeReadbackIssue(f.source, f.now, f.candidate),
@@ -354,6 +375,48 @@ test("fully paid scheduled regular ticket is eligible", () => {
   const f = fixture();
   f.source.nativeReadback.ticket.status = "scheduled";
   assert.equal(membershipWelcomeReadbackIssue(f.source, f.now), "");
+});
+
+for (const value of [undefined, null, [], "synthetic"]) {
+  test(`current provider signature is required: ${JSON.stringify(value)}`, () => {
+    const f = fixture();
+    f.source.nativeReadback.providerSignature = value;
+    assert.equal(
+      membershipWelcomeReadbackIssue(f.source, f.now),
+      "current_native_readback_identity_mismatch",
+    );
+  });
+}
+for (const [field, value] of [
+  ["contractId", "b".repeat(64)],
+  ["userTicketId", "999"],
+  ["memberId", "999"],
+  ["verified", false],
+] as const) {
+  test(`provider signature rejects mismatched ${field}`, () => {
+    const f = fixture();
+    f.source.nativeReadback.providerSignature[field] = value;
+    assert.equal(
+      membershipWelcomeReadbackIssue(f.source, f.now),
+      "current_native_readback_identity_mismatch",
+    );
+  });
+}
+test("provider signature must be refreshed after the candidate", () => {
+  const f = fixture();
+  f.source.nativeReadback.providerSignature.checkedAt = iso(NOW - 120_001);
+  assert.equal(
+    membershipWelcomeReadbackIssue(f.source, f.now, f.candidate),
+    "fresh_native_readback_required",
+  );
+});
+test("provider signedAt must exactly match the accepted completion", () => {
+  const f = fixture();
+  f.source.nativeReadback.providerSignature.signedAt = iso(NOW - 599_999);
+  assert.equal(
+    membershipWelcomeReadbackIssue(f.source, f.now),
+    "current_native_signature_mismatch",
+  );
 });
 
 for (const source of [undefined, null, [], "synthetic", 1]) {
@@ -592,7 +655,7 @@ for (const field of [
 }
 
 // Strict regression expectations, not TODOs: report guard gaps without blessing them.
-test("invalid current clock cannot bypass the 90-second freshness gate", () => {
+test("invalid current clock cannot bypass the native freshness gate", () => {
   const f = fixture();
   assert.notEqual(
     membershipWelcomeReadbackIssue(f.source, new Date(NaN), f.candidate),

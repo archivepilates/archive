@@ -204,6 +204,8 @@ export async function observeMembershipContractHints({
         ambiguousNames: group.ambiguousNames,
         hints: group.hints,
         sourceImportId: source.sourceImportId,
+        previousDownloadedAt: previous.downloadedAt,
+        sourceDownloadedAt: source.downloadedAt,
         discoveredAt: now,
         status: "native_verification_required",
         allowedAction: "read_only_review",
@@ -228,15 +230,44 @@ export async function observeMembershipContractHints({
       updatedAt: now,
       mode: "shadow",
     });
-    return unseen.length;
+    return unseen.map(({ group, ref }) => ({
+      phoneFingerprint: group.id,
+      hintId: ref.id,
+    }));
   });
   return {
     ok: true,
     mode: "shadow",
     baseline: !previous,
-    candidates: result,
+    candidates: result.length,
+    candidateFingerprints: result.map((item) => item.phoneFingerprint),
+    candidateHints: result,
+    previousDownloadedAt: previous?.downloadedAt || null,
+    sourceDownloadedAt: source.downloadedAt,
     sends: 0,
   };
+}
+
+// Raw phones are reconstructed only in the same import process and must not be
+// persisted or logged. The durable discovery records contain fingerprints only.
+export function resolveContractCandidateGroups(rows, fingerprints) {
+  if (!Array.isArray(rows) || !Array.isArray(fingerprints)) return [];
+  const wanted = new Set(fingerprints);
+  const groups = new Map();
+  for (const row of rows) {
+    const phone = phoneOf(row?.["\uC804\uD654\uBC88\uD638"]);
+    if (!phone) continue;
+    const id = hash(phone);
+    if (!wanted.has(id)) continue;
+    const group = groups.get(id) || { phone, rows: [] };
+    group.rows.push(row);
+    groups.set(id, group);
+  }
+  return [...groups.entries()].map(([phoneFingerprint, value]) => ({
+    phoneFingerprint,
+    phone: value.phone,
+    rows: value.rows,
+  }));
 }
 
 // Observer failure is visible to health monitoring without failing a valid source import.

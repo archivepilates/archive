@@ -7,6 +7,7 @@ import { createRequire } from "node:module";
 import { qualityIssuesFromSummary, recordDataQualityIssues, recordSourceImport } from "./lib/archive-core-ops-logging.mjs";
 import { cleanupImportedSourceFiles } from "./lib/imported-source-retention.mjs";
 import { observeMembershipContractHints } from "./lib/studiomate-membership-contract-observer.mjs";
+import { runStudioMateMembershipContractCandidates } from "./lib/studiomate-membership-contract-processor.mjs";
 import {
   buildInstructorLessonContactGroupNames,
   formatExcelMemberContactDisplayName,
@@ -160,6 +161,27 @@ if (apply && process.env.STUDIOMATE_MEMBERSHIP_CONTRACT_OBSERVER === "shadow" &&
     });
   } catch (error) {
     summary.membershipContractDiscovery = { ok: false, mode: "shadow", reason: error.message, sends: 0 };
+  }
+}
+if (
+  apply &&
+  summary.membershipContractDiscovery?.ok === true &&
+  summary.membershipContractDiscovery?.candidates > 0
+) {
+  try {
+    summary.membershipContractProcessing =
+      await runStudioMateMembershipContractCandidates({
+        db,
+        rows,
+        discovery: summary.membershipContractDiscovery,
+      });
+  } catch (error) {
+    summary.membershipContractProcessing = {
+      status: "review",
+      reason: error instanceof Error ? error.message : "processing_failed",
+      studioMateWrites: 0,
+      alimtalkSends: 0,
+    };
   }
 }
 summary.sourceFileRetention = await cleanupImportedSourceFiles({

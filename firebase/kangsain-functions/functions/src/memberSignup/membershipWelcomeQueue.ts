@@ -11,6 +11,7 @@ import { membershipWelcomeOutboundMarker as outboundMarker } from "./membershipW
 export const MEMBERSHIP_CONTRACT_COLLECTION = "studiomateMembershipContracts";
 export const MEMBERSHIP_WELCOME_CLAIMS = "membershipWelcomeClaims";
 export const MEMBERSHIP_AUTOMATION_SETTINGS = "systemSettings/membershipContractAutomation";
+export const MEMBERSHIP_READBACK_REQUESTS = "adminSyncRequests";
 type Data = Record<string, any>;
 export interface MembershipWelcomeDependencies {
   db: FirebaseFirestore.Firestore;
@@ -133,6 +134,9 @@ export async function queueMembershipWelcome(deps: MembershipWelcomeDependencies
   if (checked.issue || !checked.source) return { status: "blocked", reason: checked.issue };
   const { source, candidateId } = checked;
   const candidateRef = deps.db.collection("alimtalkCandidates").doc(candidateId!);
+  const refreshRef = deps.db
+    .collection(MEMBERSHIP_READBACK_REQUESTS)
+    .doc(`membership_contract_readback_${sourceId}`);
   return deps.db.runTransaction(async (tx) => {
     const current = await tx.get(deps.db.collection(MEMBERSHIP_CONTRACT_COLLECTION).doc(sourceId));
     const config = await tx.get(deps.db.doc(MEMBERSHIP_AUTOMATION_SETTINGS));
@@ -167,7 +171,23 @@ export async function queueMembershipWelcome(deps: MembershipWelcomeDependencies
       createdAt: at,
       updatedAt: at,
     });
-    tx.update(current.ref, { welcomeCandidateId: candidateId, welcomeStatus: "queued", updatedAt: at });
+    // Candidate creation does not prove that the member/ticket/payment source
+    // is still current. Ask the existing Mac mini queue runner for one exact,
+    // post-candidate native readback before the provider send is claimable.
+    tx.create(refreshRef, {
+      requestMode: "membership_contract_readback",
+      status: "pending",
+      contractId: sourceId,
+      candidateId,
+      createdAt: at,
+      updatedAt: at,
+    });
+    tx.update(current.ref, {
+      welcomeCandidateId: candidateId,
+      welcomeStatus: "queued",
+      nextObservationAt: at,
+      updatedAt: at,
+    });
     return { status: "queued", reason: "" };
   });
 }

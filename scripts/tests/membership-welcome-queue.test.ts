@@ -7,6 +7,7 @@ import {
   queueMembershipWelcome,
   MEMBERSHIP_AUTOMATION_SETTINGS,
   MEMBERSHIP_CONTRACT_COLLECTION,
+  MEMBERSHIP_READBACK_REQUESTS,
   MEMBERSHIP_WELCOME_CLAIMS,
   type MembershipWelcomeDependencies,
 } from "../../firebase/kangsain-functions/functions/src/memberSignup/membershipWelcomeQueue";
@@ -33,6 +34,7 @@ const PHONE = "01000000001";
 const MEMBER = "100";
 const CANDIDATE_ID = membershipWelcomeKey(STUDIO, PHONE);
 const CANDIDATE_PATH = `alimtalkCandidates/${CANDIDATE_ID}`;
+const READBACK_REQUEST_PATH = `${MEMBERSHIP_READBACK_REQUESTS}/membership_contract_readback_${SOURCE_ID}`;
 const memberClaim = (memberId: string): string =>
   `member_${createHash("sha256")
     .update(JSON.stringify({ studio: STUDIO, id: memberId }))
@@ -197,6 +199,18 @@ function fixture() {
           paidAmount: 100000,
           outstandingAmount: 0,
           refundedAmount: 0,
+        },
+        providerSignature: {
+          source: "studiomate_native_contract",
+          verified: true,
+          complete: true,
+          checkedAt: "2026-09-14T04:00:00.000Z",
+          studioId: STUDIO,
+          memberId: MEMBER,
+          userTicketId: "200",
+          productId: "300",
+          contractId: SOURCE_ID,
+          signedAt: completion.signedAt,
         },
       },
     },
@@ -500,12 +514,28 @@ test("valid queue is idempotent and binds exactly one canonical candidate", asyn
   assert.equal(stored.maxAttempts, 1);
   assert.deepEqual(stored.payload, { sourceContractId: SOURCE_ID });
   assert.equal(h.db.row(SOURCE_PATH)?.welcomeCandidateId, CANDIDATE_ID);
-  assert.equal(h.db.writes.length, 2);
+  assert.equal(h.db.row(SOURCE_PATH)?.welcomeStatus, "queued");
+  assert.ok(h.db.row(SOURCE_PATH)?.nextObservationAt);
+  assert.deepEqual(
+    {
+      requestMode: h.db.row(READBACK_REQUEST_PATH)?.requestMode,
+      status: h.db.row(READBACK_REQUEST_PATH)?.status,
+      contractId: h.db.row(READBACK_REQUEST_PATH)?.contractId,
+      candidateId: h.db.row(READBACK_REQUEST_PATH)?.candidateId,
+    },
+    {
+      requestMode: "membership_contract_readback",
+      status: "pending",
+      contractId: SOURCE_ID,
+      candidateId: CANDIDATE_ID,
+    },
+  );
+  assert.equal(h.db.writes.length, 3);
   assert.deepEqual(await queueMembershipWelcome(h.deps, SOURCE_ID), {
     status: "existing",
     reason: "candidate_already_exists",
   });
-  assert.equal(h.db.writes.length, 2);
+  assert.equal(h.db.writes.length, 3);
   assert.equal(h.db.entries("alimtalkCandidates").length, 1);
   assert.equal(h.calls.transport, 0);
 });
@@ -520,7 +550,7 @@ test("two concurrent queue attempts create one candidate", async () => {
     "existing",
     "queued",
   ]);
-  assert.equal(h.db.writes.length, 2);
+  assert.equal(h.db.writes.length, 3);
 });
 
 for (const target of ["source", "config", "clock"]) {
@@ -913,8 +943,8 @@ test("inspect is read-only and cannot send a template still under review", async
 
 for (const operation of ["queue", "dispatch"] as const) {
   for (const phase of ["evidence", "transaction"] as const) {
-    for (const delay of [90_000, 90_001]) {
-      test(`${operation} rechecks native 90-second boundary after ${phase}: ${delay}ms`, async () => {
+    for (const delay of [720_000, 720_001]) {
+      test(`${operation} rechecks native 12-minute boundary after ${phase}: ${delay}ms`, async () => {
         const h = harness();
         if (operation === "dispatch") h.prime();
         if (phase === "evidence") {
@@ -928,7 +958,7 @@ for (const operation of ["queue", "dispatch"] as const) {
         if (operation === "queue") {
           assert.deepEqual(
             await queueMembershipWelcome(h.deps, SOURCE_ID),
-            delay === 90_000
+            delay === 720_000
               ? { status: "queued", reason: "" }
               : {
                   status: "blocked",
@@ -938,7 +968,7 @@ for (const operation of ["queue", "dispatch"] as const) {
                       : "source_changed",
                 },
           );
-        } else if (delay === 90_000) {
+        } else if (delay === 720_000) {
           assert.equal(
             (await dispatchMembershipWelcome(h.deps, h.candidate, h.transport))
               .messageId,
@@ -953,7 +983,7 @@ for (const operation of ["queue", "dispatch"] as const) {
               : /welcome_source_changed_before_send/,
           );
         }
-        if (delay > 90_000) {
+        if (delay > 720_000) {
           noActions(h);
           assert.equal(h.db.entries(MEMBERSHIP_WELCOME_CLAIMS).length, 0);
           assert.equal(h.db.transactionCalls, phase === "evidence" ? 0 : 1);

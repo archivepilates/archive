@@ -55,6 +55,11 @@ export async function processAlimtalkQueue(): Promise<{
   failed: number;
   deferred: number;
 }> {
+  await reconcileMembershipWelcomeQueue().catch((error) =>
+    logger.error("Membership welcome reconciliation unavailable", {
+      error: errorMessage(error),
+    }),
+  );
   const snap = await refs.alimtalkCandidates().where("status", "in", ["queued", "processing"]).limit(20).get();
 
   let processed = 0;
@@ -340,7 +345,6 @@ export async function processAlimtalkQueue(): Promise<{
     }
   }
 
-  if (!membershipProcessed) await reconcileMembershipWelcomeQueue().catch((error) => logger.error("Membership welcome reconciliation unavailable", { error: errorMessage(error) }));
   logger.info("processAlimtalkQueue completed", { processed, sent, failed, deferred });
   return { processed, sent, failed, deferred };
 }

@@ -4,17 +4,36 @@ import os from "node:os";
 import path from "node:path";
 import { acquireStudioMateBrowserLock } from "./lib/studiomate-browser-lock.mjs";
 import { readNativeContractPage } from "./lib/studiomate-native-contract-reader.mjs";
+import { ensureStudioMateLoggedIn } from "./lib/studiomate-login.mjs";
+import {
+  buildNativeContractCompletionReadback,
+  captureStudioMateNativeApiClient,
+  readExactStudioMateMember,
+  readStudioMateContract,
+  readStudioMateUserTickets,
+} from "./lib/studiomate-native-contract-source.mjs";
 import {
   normalizeNativeContractObservation,
   normalizeNativeContractDom,
 } from "./lib/studiomate-native-contract-evidence.mjs";
 
 const args = process.argv.slice(2);
+let requestedContractId = "";
+for (let index = 0; index < args.length; index += 1) {
+  const arg = args[index];
+  if (["--apply", "--dry-run"].includes(arg)) continue;
+  if (arg === "--contract-id" && !requestedContractId) {
+    requestedContractId = String(args[index + 1] || "");
+    index += 1;
+    continue;
+  }
+  throw new Error("Use --apply or --dry-run with an optional --contract-id");
+}
 if (
-  args.some((arg) => !["--apply", "--dry-run"].includes(arg)) ||
-  (args.includes("--apply") && args.includes("--dry-run"))
+  (args.includes("--apply") && args.includes("--dry-run")) ||
+  (requestedContractId && !/^[a-f0-9]{64}$/.test(requestedContractId))
 )
-  throw new Error("Use --apply or --dry-run");
+  throw new Error("Use --apply or --dry-run with a valid --contract-id");
 const apply = args.includes("--apply");
 const result = {
   mode: apply ? "apply" : "dry-run",
@@ -49,12 +68,14 @@ if (
   console.log(JSON.stringify({ ...result, status: "source_not_promoted" }));
   process.exit(0);
 }
-const targets = await db
-  .collection("studiomateMembershipContracts")
-  .where("nextObservationAt", "<=", admin.firestore.Timestamp.now())
-  .orderBy("nextObservationAt")
-  .limit(5)
-  .get();
+const targets = requestedContractId
+  ? await exactContractTarget(requestedContractId)
+  : await db
+      .collection("studiomateMembershipContracts")
+      .where("nextObservationAt", "<=", admin.firestore.Timestamp.now())
+      .orderBy("nextObservationAt")
+      .limit(5)
+      .get();
 if (targets.empty) {
   console.log(JSON.stringify({ ...result, status: "idle" }));
   process.exit(0);
@@ -72,6 +93,10 @@ try {
     { headless: true },
   );
   const page = await context.newPage();
+  const api = await captureStudioMateNativeApiClient(page, {
+    ensureLoggedIn: (target) =>
+      ensureStudioMateLoggedIn(target, { headless: true }),
+  });
   for (const doc of targets.docs) {
     const source = doc.data();
     if (
@@ -81,13 +106,32 @@ try {
       source.studioId !== config.studioId ||
       source.contractId !== doc.id ||
       source.binding?.contractId !== doc.id ||
-      ["accepted", "queued"].includes(source.welcomeStatus)
+      source.welcomeStatus === "accepted"
     )
       continue;
     result.checked++;
     let outcome;
+    let refreshedReadback = null;
     try {
-      const observed = await readNativeContractPage(page, doc.id);
+      const [observed, providerContract, memberResult] = await Promise.all([
+        readNativeContractPage(page, doc.id),
+        readStudioMateContract(api, doc.id),
+        readExactStudioMateMember(api, source.binding.memberPhone),
+      ]);
+      const ticketRead =
+        memberResult.status === "verified"
+          ? await readStudioMateUserTickets(api, memberResult.member.memberId)
+          : { status: "review", tickets: [] };
+      const refreshed = buildNativeContractCompletionReadback({
+        memberResult,
+        ticketRead,
+        contract: providerContract,
+        binding: source.binding,
+        checkedAt: new Date().toISOString(),
+      });
+      if (refreshed.status !== "verified")
+        throw new Error(refreshed.reason);
+      refreshedReadback = refreshed.nativeReadback;
       const contract = {
         ...observed,
         schemaVersion: 1,
@@ -99,7 +143,7 @@ try {
       };
       const binding = {
         ...source.binding,
-        currentMemberTicket: source.nativeReadback,
+        currentMemberTicket: refreshed.nativeReadback,
       };
       const dom = normalizeNativeContractDom(contract, binding);
       // Native eligibility comes only from an independently verified current member/ticket/payment read.
@@ -139,12 +183,14 @@ try {
       tx.update(doc.ref, {
         observationStatus: outcome.status,
         observationReason: outcome.reason,
+        ...(refreshedReadback ? { nativeReadback: refreshedReadback } : {}),
         "binding.previousObservations": observations,
         ...(outcome.completion
           ? {
               completion: outcome.completion,
               status: "signed",
-              welcomeStatus: "ready",
+              welcomeStatus:
+                source.welcomeStatus === "queued" ? "queued" : "ready",
             }
           : {}),
         nextObservationAt: terminal
@@ -152,6 +198,22 @@ try {
           : admin.firestore.Timestamp.fromMillis(Date.now() + 10 * 60_000),
         updatedAt: admin.firestore.Timestamp.now(),
       });
+      if (outcome.completion) {
+        tx.set(
+          db
+            .collection("studiomateMembershipContractJobs")
+            .doc(source.binding.selectionJobKey),
+          {
+            stage: "complete",
+            contractId: doc.id,
+            signedAt:
+              outcome.completion.signedAt ||
+              outcome.completion.firstObservedSignedAt,
+            updatedAt: admin.firestore.Timestamp.now(),
+          },
+          { merge: true },
+        );
+      }
     });
   }
 } finally {
@@ -164,3 +226,11 @@ try {
 console.log(
   JSON.stringify({ ...result, status: result.review ? "review" : "checked" }),
 );
+
+async function exactContractTarget(contractId) {
+  const doc = await db
+    .collection("studiomateMembershipContracts")
+    .doc(contractId)
+    .get();
+  return { empty: !doc.exists, docs: doc.exists ? [doc] : [] };
+}

@@ -1,7 +1,9 @@
 import { normalizeMembershipPhone } from "./membershipContractPolicy";
 
 type Data = Record<string, any>;
-const MAX_AGE_MS = 90_000;
+// The native StudioMate refresh request is handled by the Mac mini and the
+// Alimtalk queue runs every 10 minutes. Keep one cadence plus a small margin.
+const MAX_AGE_MS = 12 * 60_000;
 const record = (value: any): value is Data => !!value && typeof value === "object" && !Array.isArray(value);
 const utcMillis = (value: any) => {
   if (typeof value !== "string" || !/^\d{4}-\d{2}-\d{2}T\d{2}:\d{2}:\d{2}\.\d{3}Z$/.test(value)) return NaN;
@@ -59,6 +61,38 @@ export function membershipWelcomeReadbackIssue(source: Data, now: Date, candidat
     )
       return "fresh_native_readback_required";
   }
+  const providerSignature = readback.providerSignature;
+  if (
+    !record(providerSignature) ||
+    providerSignature.source !== "studiomate_native_contract" ||
+    providerSignature.verified !== true ||
+    providerSignature.complete !== true ||
+    providerSignature.studioId !== source.studioId ||
+    providerSignature.memberId !== completion.memberId ||
+    providerSignature.userTicketId !== completion.userTicketId ||
+    providerSignature.productId !== completion.productId ||
+    providerSignature.contractId !== source.contractId ||
+    providerSignature.contractId !== completion.contractId
+  )
+    return "current_native_readback_identity_mismatch";
+  const providerCheckedAt = utcMillis(providerSignature.checkedAt);
+  if (
+    !Number.isFinite(providerCheckedAt) ||
+    providerCheckedAt > now.getTime() ||
+    now.getTime() - providerCheckedAt > MAX_AGE_MS ||
+    providerCheckedAt < completionAt ||
+    providerCheckedAt < candidateAt
+  )
+    return "fresh_native_readback_required";
+  const providerSignedAt = utcMillis(providerSignature.signedAt);
+  const completionSignedAt = utcMillis(completion.signedAt);
+  if (
+    !Number.isFinite(providerSignedAt) ||
+    !Number.isFinite(completionSignedAt) ||
+    providerSignature.signedAt !== completion.signedAt ||
+    providerSignedAt > providerCheckedAt
+  )
+    return "current_native_signature_mismatch";
   const [member, ticket, payment] = reads;
   if (
     member.phoneMatchCount !== 1 ||
