@@ -188,7 +188,7 @@ export const privateLessonReportView = onRequest(publicRequestOptions, privateLe
 
 export const memberSignupContract = onRequest(publicDriveRequestOptions, memberSignupContractHandler);
 
-export const onsiteWelcomeRequest = onRequest(publicRequestOptions, onsiteWelcomeRequestHandler);
+export const onsiteWelcomeRequest = onRequest({ ...publicRequestOptions, secrets: [] }, onsiteWelcomeRequestHandler);
 
 export const methodCueCardReview = onRequest(publicDriveRequestOptions, methodCueCardReviewHandler);
 

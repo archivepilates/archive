@@ -92,6 +92,7 @@ const requiredSnippets = [
     snippets: [
       "export const memberSignupContract = onRequest(publicDriveRequestOptions, memberSignupContractHandler)",
       "export const onsiteWelcomeRequest = onRequest(",
+      "{ ...publicRequestOptions, secrets: [] }, onsiteWelcomeRequestHandler",
       "onsiteWelcomeRequestHandler",
       "export const redirectShortLink = onRequest(publicRequestOptions, redirectShortLinkHandler)",
     ],
