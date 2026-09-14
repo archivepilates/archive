@@ -1,6 +1,6 @@
 # StudioMate Membership Contract Automation
 
-State: native source reader, contract writer, completion refresh and welcome queue implemented locally; production activation blocked.
+State: native source reader, contract writer, completion refresh and welcome queue deployed; production activation blocked.
 Owner: ARCHIVE PILATES. Updated: 2026-09-14.
 
 ## Operating Decision
@@ -153,7 +153,7 @@ not permission to send; `sendAllowed` remains false in this staging implementati
    results. Run one limited automatic-writer E2E on a future explicitly approved test
    issuance before setting `nativeE2eVerified` and live activation flags.
 6. The canonical source reader, contract writer, completion refresh and queue adapter are
-   implemented locally. Remaining blockers are provider-history coverage approval,
+   implemented and deployed. Remaining blockers are provider-history coverage approval,
    v6 template approval and the limited automatic-writer E2E. The legacy onsite entry was
    already retired on main in commits 06f49971/7c3d658a; do not re-enable it or delete
    historical ARCHIVE IN contracts or links when integrating this older worktree.
@@ -231,7 +231,9 @@ returned disabled with zero reads, writes and sends (browser never opened).
 
 `git diff --check`
 
-Local feature branch only at this checkpoint. Main promotion, scoped deployment and push
-are next; production activation remains deferred until template approval and automatic-writer E2E.
+Commits through `4d7afc62` were fast-forwarded to `main`, pushed to GitHub, and deployed on
+2026-09-14. `functions-alimtalk` and ARCHIVE CORE Hosting passed their release guards and
+live CORE canary. The Mac mini runtime checkout was fast-forwarded to the same commit.
+Production activation remains deferred until template approval and automatic-writer E2E.
 
 Report: `docs/reports/2026-09-14-studiomate-membership-contract-verification.html`.
