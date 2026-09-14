@@ -46,6 +46,13 @@ export const RECOMMENDED_MEAL_REPORT_BUTTON_URL_TEMPLATE = "https://in.archivepi
 export const PRICING_INFO_BUTTON_URL_TEMPLATE = "https://archivepilates.notion.site/";
 
 export const ALIMTALK_TEMPLATE_TARGET_RULES: Partial<Record<AlimtalkCandidateType, AlimtalkTemplateTargetRule>> = {
+  membership_welcome: {
+    type: "membership_welcome", templateCode: ALIMTALK_TEMPLATES.membership_welcome.code,
+    templateLabel: ALIMTALK_TEMPLATES.membership_welcome.label,
+    sourceDatePolicy: "same_or_before_today", requiresApprovedTemplate: true, requiresMemberPhone: true,
+    targetRules: ["신규 정규 수강권 구매 계약서 본인 서명 완료", "발송 직전 원본 계약·수강권·전체 웰컴 이력 재검증"],
+    exclusionRules: ["재등록·체험·1회권·강사회원·스텝·무료권 제외", "과거 웰컴 발송 또는 결과 불명 시 재발송 금지", "승인·검증·가동 설정 미완료 시 발송 금지"],
+  },
   reservation_open: {
     type: "reservation_open",
     templateCode: ALIMTALK_TEMPLATES.reservation_open.code,

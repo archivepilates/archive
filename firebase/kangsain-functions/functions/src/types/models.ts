@@ -484,6 +484,7 @@ export type ContactSyncTarget = "archivepilates_gmail" | "home_archivepilates";
 export type ContactSyncStatus = "pending" | "synced" | "skipped" | "failed";
 export type AlimtalkCandidateType =
   | "reservation_open"
+  | "membership_welcome"
   | "new_member"
   | "onsite_welcome"
   | "private_survey"

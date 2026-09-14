@@ -6,6 +6,7 @@ import path from "node:path";
 import { createRequire } from "node:module";
 import { recordAutomationStatus } from "./lib/archive-core-ops-logging.mjs";
 import { cleanupImportedSourceFiles } from "./lib/imported-source-retention.mjs";
+import { membershipContractDiscoveryWarning } from "./lib/studiomate-membership-contract-observer.mjs";
 import {
   isExcludedPrivateBooking,
   isPrivateBooking,
@@ -37,6 +38,7 @@ let downloadedMemberFile = "";
 let downloadedReservationFile = "";
 let downloadedDeletedClassFile = "";
 let downloadedReservationRange = null;
+let contractSourceDownloadedAt = "";
 const previousSyncEvidence = download ? loadSyncRunEvidence(reportDir, { maxAgeMinutes: 95 }) : {};
 const reservationWindow = download
   ? studioMateReservationSyncWindow({
@@ -48,6 +50,8 @@ const reservationWindow = download
 
 let downloadFailedWithoutMember = false;
 if (download) {
+  // Conservative freshness: the member export is fetched before the other files.
+  const downloadStartedAt = new Date().toISOString();
   const downloadStep = runStep("download", [
     "scripts/emergency-download-studiomate-excels.mjs",
     "--kind",
@@ -66,6 +70,9 @@ if (download) {
   downloadedDeletedClassFile =
     downloadStep.stdout?.downloads?.deletedClass?.archivePath || downloadStep.stdout?.downloads?.deletedClass?.stagingPath || "";
   downloadFailedWithoutMember = apply && !downloadedMemberFile;
+  if (apply && downloadStep.exitCode === 0 && downloadedMemberFile && !memberFile) {
+    contractSourceDownloadedAt = downloadStartedAt;
+  }
 }
 
 if (!downloadFailedWithoutMember) {
@@ -75,9 +82,17 @@ if (!downloadFailedWithoutMember) {
       ...(memberFile || downloadedMemberFile ? ["--file", memberFile || downloadedMemberFile] : []),
       "--allow-new-excel-profiles",
       "--queue-contact-sync",
+      ...(contractSourceDownloadedAt ? ["--contract-source-downloaded-at", contractSourceDownloadedAt] : []),
       ...(apply ? ["--apply"] : []),
     ]),
   );
+  const memberImportSucceeded = steps.at(-1)?.exitCode === 0 && steps.at(-1)?.stdoutOk !== false;
+  const contractDiscoveryWarning = membershipContractDiscoveryWarning(steps.at(-1)?.stdout);
+  if (contractDiscoveryWarning) steps.push(contractDiscoveryWarning);
+  if (apply && download && contractSourceDownloadedAt && memberImportSucceeded
+    && process.env.STUDIOMATE_MEMBERSHIP_CONTRACT_COMPLETION === "enabled") {
+    steps.push(runStep("membershipContractCompletion", ["scripts/process-studiomate-membership-contract-completions.mjs", "--apply"]));
+  }
 
   steps.push(
     runStep("memberPhoneDedupe", [

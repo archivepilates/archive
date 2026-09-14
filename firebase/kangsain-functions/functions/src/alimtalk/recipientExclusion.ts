@@ -6,6 +6,7 @@ import { normalizeRecipientPhone } from "./testRecipients";
 const AUTOMATIC_MEMBER_TYPES = new Set<AlimtalkCandidateType>([
   "reservation_open",
   "new_member",
+  "membership_welcome",
   "private_survey",
   "group_survey",
   "ticket_expiring",

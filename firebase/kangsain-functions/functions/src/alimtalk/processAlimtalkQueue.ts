@@ -1,4 +1,9 @@
 import { createHmac, randomBytes } from "node:crypto";
+import { reconcileMembershipWelcomeQueue, sendMembershipWelcome } from "../memberSignup/membershipWelcomeRuntime";
+import { MEMBERSHIP_WELCOME_TEMPLATE } from "../memberSignup/membershipWelcomePolicy";
+import { isMembershipWelcomeCandidate, membershipAutomationEnabled, membershipWelcomeClaimIssue,
+  MEMBERSHIP_AUTOMATION_SETTINGS, MEMBERSHIP_CONTRACT_COLLECTION } from "../memberSignup/membershipWelcomeQueue";
+import { membershipWelcomeReadbackIssue } from "../memberSignup/membershipWelcomeReadback";
 import { logger } from "firebase-functions";
 import { db } from "../config/firebase";
 import { solapiApiKey, solapiApiSecret, solapiPfid } from "../config/secrets";
@@ -56,8 +61,13 @@ export async function processAlimtalkQueue(): Promise<{
   let sent = 0;
   let failed = 0;
   let deferred = 0;
+  let membershipProcessed = false;
 
   for (const candidateSnap of snap.docs) {
+    if (isMembershipWelcomeCandidate(candidateSnap.data())) {
+      if (membershipProcessed) continue;
+      membershipProcessed = true;
+    }
     const claimed = await claimCandidate(candidateSnap.data());
     if (!claimed) continue;
     processed += 1;
@@ -330,6 +340,7 @@ export async function processAlimtalkQueue(): Promise<{
     }
   }
 
+  if (!membershipProcessed) await reconcileMembershipWelcomeQueue().catch((error) => logger.error("Membership welcome reconciliation unavailable", { error: errorMessage(error) }));
   logger.info("processAlimtalkQueue completed", { processed, sent, failed, deferred });
   return { processed, sent, failed, deferred };
 }
@@ -888,6 +899,16 @@ async function claimCandidate(candidate: AlimtalkCandidateDoc): Promise<Alimtalk
     const snap = await tx.get(ref);
     const current = snap.data();
     if (!current) return null;
+    if (isMembershipWelcomeCandidate(current)) {
+      const settings = await tx.get(db.doc(MEMBERSHIP_AUTOMATION_SETTINGS));
+      if (!membershipAutomationEnabled(settings.data())) return null;
+      // Never coerce missing attempts to zero or start work before fresh native readback.
+      if (membershipWelcomeClaimIssue(current)) return null;
+      const sourceId = String(current.payload?.sourceContractId || "");
+      if (!/^[a-f0-9]{64}$/.test(sourceId)) return null;
+      const source = await tx.get(db.collection(MEMBERSHIP_CONTRACT_COLLECTION).doc(sourceId));
+      if (!source.exists || membershipWelcomeReadbackIssue(source.data()!, new Date(), current)) return null;
+    }
     if (current.status === "processing" && !isStaleProcessing(current)) return null;
     if (!["queued", "processing"].includes(current.status)) return null;
     if ((current.attempts || 0) >= (current.maxAttempts || 2)) {
@@ -923,10 +944,18 @@ function isStaleProcessing(candidate: AlimtalkCandidateDoc): boolean {
 export async function sendSolapiAlimtalk(
   candidate: AlimtalkCandidateDoc,
 ): Promise<{ messageId: string; variables: Record<string, string> }> {
+  if (candidate.type === "membership_welcome" || candidate.templateCode === MEMBERSHIP_WELCOME_TEMPLATE.templateId) {
+    return sendMembershipWelcome(candidate, () => sendSolapiMessage(candidate));
+  }
+  return sendSolapiMessage(candidate);
+}
+
+async function sendSolapiMessage(candidate: AlimtalkCandidateDoc): Promise<{ messageId: string; variables: Record<string, string> }> {
   const to = normalizePhone(candidate.memberPhone);
   if (!to) throw new Error("member phone is empty");
   if (!candidate.templateCode) throw new Error("templateCode is empty");
-  if (!(await isAlimtalkTemplateApproved(candidate.templateCode)))
+  // Membership dispatch already checked the full uncached provider contract before its durable claim.
+  if (candidate.type !== "membership_welcome" && !(await isAlimtalkTemplateApproved(candidate.templateCode)))
     throw new Error(`template is not approved: ${candidate.templateCode}`);
 
   const variables = await templateVariables(candidate);
@@ -981,6 +1010,7 @@ function solapiAuthHeader(): string {
 }
 
 async function templateVariables(candidate: AlimtalkCandidateDoc): Promise<Record<string, string>> {
+  if (candidate.type === "membership_welcome") return { "#{이름}": candidate.memberName };
   const payload = candidate.payload || {};
   const memberName = String(payload.memberName || candidate.memberName || "");
   const surveyId = String(payload.surveyId || payload.responseId || "");

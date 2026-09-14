@@ -177,6 +177,7 @@ async function findInstructorLessonDuplicate(
 }
 
 export function alimtalkDedupeKey(candidate: AlimtalkCandidateDoc): string {
+  if (candidate.type === "membership_welcome") return candidate.candidateId;
   if (candidate.type === "instructor_lesson_confirmation") {
     return stableHash({
       studioId: candidate.studioId,

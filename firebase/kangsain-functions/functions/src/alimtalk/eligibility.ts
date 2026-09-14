@@ -42,6 +42,9 @@ const RESERVATION_METHOD_BUTTON_URL = "https://archivepilates.notion.site/studio
 
 export async function autoSendabilityIssue(candidate: AlimtalkCandidateDoc, today: string): Promise<string> {
   if (candidate.type === "onsite_welcome") return "현장 웰컴 신규 발송 종료";
+  if (candidate.type === "membership_welcome" && (hasExplicitAlimtalkTestOverride(candidate)
+    || candidate.templateCode !== ALIMTALK_TEMPLATES.membership_welcome.code || candidate.maxAttempts !== 1
+    || !candidate.payload?.sourceContractId)) return "계약완료 웰컴 후보 규칙 불일치";
   const rule = alimtalkTemplateTargetRule(candidate.type);
   if (rule?.requiresMemberPhone && !candidate.memberPhone) return "전화번호 없음";
   if (ALIMTALK_MEMBER_EXCLUSION_REASONS[candidate.memberId] && !hasExplicitAlimtalkTestOverride(candidate))

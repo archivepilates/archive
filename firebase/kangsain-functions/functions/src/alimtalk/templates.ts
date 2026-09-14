@@ -1,4 +1,5 @@
 import type { AlimtalkCandidateType } from "../types/models";
+import { MEMBERSHIP_WELCOME_TEMPLATE } from "../memberSignup/membershipWelcomePolicy";
 
 export const INSTRUCTOR_LESSON_ALIMTALK_CHANNEL_ID = "KA01PF260511123407631PSoAflYAVXs";
 export const INSTRUCTOR_LESSON_ALIMTALK_TEMPLATE_CODE = "KA01TP260825074722212ylmndmsB3V4";
@@ -34,6 +35,7 @@ export const ALIMTALK_MEMBER_EXCLUSION_REASONS: Record<string, string> = {
 
 export type SendableAlimtalkCandidateType =
   | "reservation_open"
+  | "membership_welcome"
   | "new_member"
   | "onsite_welcome"
   | "private_survey"
@@ -52,6 +54,11 @@ export type SendableAlimtalkCandidateType =
   | "recommended_meal_report";
 
 export const ALIMTALK_TEMPLATES = {
+  membership_welcome: {
+    code: MEMBERSHIP_WELCOME_TEMPLATE.templateId,
+    label: MEMBERSHIP_WELCOME_TEMPLATE.name,
+    status: "pending",
+  },
   reservation_open: {
     code: RESERVATION_OPEN_ALIMTALK_TEMPLATE_CODE,
     label: "스튜디오메이트 예약 안내 v4",
@@ -161,6 +168,7 @@ export const ALIMTALK_TEMPLATES = {
 } as const;
 
 export const ALIMTALK_TEMPLATE_CHANNEL_IDS: Readonly<Record<string, string>> = {
+  [MEMBERSHIP_WELCOME_TEMPLATE.templateId]: MEMBERSHIP_WELCOME_TEMPLATE.channelId,
   [ALIMTALK_TEMPLATES.instructor_lesson_confirmation.code]: INSTRUCTOR_LESSON_ALIMTALK_CHANNEL_ID,
   [ALIMTALK_TEMPLATES.instructor_lesson_material.code]: INSTRUCTOR_LESSON_ALIMTALK_CHANNEL_ID,
   [ALIMTALK_TEMPLATES.recommended_meal_survey.code]: RECOMMENDED_MEAL_ALIMTALK_CHANNEL_ID,
@@ -168,6 +176,7 @@ export const ALIMTALK_TEMPLATE_CHANNEL_IDS: Readonly<Record<string, string>> = {
 };
 
 export const CANDIDATE_TEMPLATE_CODES: Record<SendableAlimtalkCandidateType, string> = {
+  membership_welcome: ALIMTALK_TEMPLATES.membership_welcome.code,
   reservation_open: ALIMTALK_TEMPLATES.reservation_open.code,
   new_member: ALIMTALK_TEMPLATES.new_member.code,
   onsite_welcome: ALIMTALK_TEMPLATES.onsite_welcome.code,
@@ -201,6 +210,7 @@ export interface AlimtalkDedupePolicy {
 }
 
 export const ALIMTALK_DEDUPE_POLICIES_BY_TEMPLATE_CODE: Record<string, AlimtalkDedupePolicy> = {
+  [MEMBERSHIP_WELCOME_TEMPLATE.templateId]: { label: "계약완료 웰컴 전화번호·회원 기준 영구 1회", windowDays: null },
   [ALIMTALK_TEMPLATES.reservation_open.code]: {
     label: "예약 오픈 안내 주간 반복",
     windowDays: 6,
