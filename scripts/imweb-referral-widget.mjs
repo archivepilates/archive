@@ -24,7 +24,7 @@ export function mountReferralWidget(container, { code = null, logoUrl, onRequest
     </style><div class="wrap">
       <p class="preview" ${preview ? '' : 'hidden'}>테스트 화면 · 실제 적립금은 지급되지 않습니다.</p>
       <header class="heading"><img class="logo" alt="ARCHIVE PILATES" width="36" height="36"><div><h2>친구 초대 이벤트</h2><p class="sub">좋은 수업, 친구와 함께 나눠요.</p></div></header>
-      <div class="offer"><p class="offer-title">친구도 나도, 각각</p><p class="amount">3,000<span>원 적립</span></p><p class="offer-note">초대 링크로 친구가 가입하면<br>구매하지 않아도 둘 다 받아요.</p></div>
+      <div class="offer"><p class="offer-title">친구도 나도</p><p class="amount">3,000<span>원 적립</span></p><p class="offer-note">초대 링크로 친구가 가입하면<br>구매하지 않아도 둘 다 받아요.</p></div>
       <div class="limit"><div>초대받은 친구 · 최초 1회<strong>3,000원</strong></div><div>초대자 · 한 달 최대<strong>30,000원</strong></div></div>
       <details><summary>참여 안내</summary><ul>
       <li>친구가 초대 링크로 이메일 회원가입을 완료하면 두 분께 각각 3,000원이 적립돼요. 가입 내역은 5분 간격으로 확인해요.</li>
