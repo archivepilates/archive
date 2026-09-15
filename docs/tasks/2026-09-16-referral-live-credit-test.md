@@ -10,4 +10,7 @@
 - Test runner uses an exclusive test lock, durable atomic journal writes, native dry-run/confirmation, single-use attempts and canonical-identity recovery independent of mutable referral attribution.
 - Checks: 86 focused worker/both-party/proof tests passed; syntax check passed; read-only peer review passed after durability and recovery corrections.
 - Boundary: this is not a new-signup-to-both-first-awards E2E claim. Browser signup consent/prefill proof remains separate. No browser opened for this API/ledger test.
-- CORE operating-rule verification entry updated. Only the operating-rule HTML needs publication; reward implementation and Imweb loader remain unchanged.
+- CORE operating-rule verification entry published to `archive-pilates-core` on project `archive-pilates`; only one changed Hosting file uploaded. Commit `4dabbd7c` pushed to origin/main and the scoped test branch. Repository predeploy guard requires origin/main equality, so this push preceded deployment.
+- Independent live readback: `/rules/` HTTP 200, byte-identical to source; existing referral asset including old loader query HTTP 200 and unchanged SHA-256 prefix `8766cc95bcd9`. No reward implementation or Imweb loader change.
+- Independent native readback: each account has exactly one new +3,000 and one -3,000 entry, final zero balance, unchanged group digest, retained paid guard, and duplicate execution send attempts zero. Latest observed regular job successful with both test roles excluded, zero failures.
+- Hosting, branch-state and onsite-welcome compatibility guards passed. No browser opened and no test lock remains. New-signup browser E2E and deliberate crash injection were not performed.
