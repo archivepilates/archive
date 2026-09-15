@@ -43,6 +43,9 @@ function readScripts(run) {
 }
 
 export function publishReferral({ apply = false, block, privateDirectory, run = imwebJson }) {
+  // The CLI unit-script snapshot differs from the live SEO Footer Code source.
+  // Never replace that source through the CLI until the provider resolves it.
+  if (apply && run === imwebJson) throw new Error('Native SEO editor required: CLI source is not the live footer');
   const stat = lstatSync(privateDirectory);
   if (!stat.isDirectory() || stat.isSymbolicLink() || stat.uid !== process.getuid() || (stat.mode & 0o077)) {
     throw new Error('Unsafe backup directory');

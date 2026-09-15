@@ -1,5 +1,9 @@
 import { REFERRAL_ORIGIN, validReferralCode } from './imweb-referral-links.mjs';
 
+export function nativeProfileLink(document) {
+  return document.querySelector('a[onclick^="SITE_MEMBER.editProfile("]');
+}
+
 export function nativeSignupField(document) {
   const matches = [...document.querySelectorAll('#join_form input#recommend_code[name="recommend_code"]')]
     .filter(field => field.type === 'text' && !field.disabled && !field.readOnly &&

@@ -1,6 +1,6 @@
 import { connectReferralSession } from './lib/imweb-referral-session.mjs';
 import { incomingReferral } from './lib/imweb-referral-links.mjs';
-import { nativeSignupField, nativeOwnCode, isReferralSite, waitForNative } from './lib/imweb-referral-native.mjs';
+import { nativeSignupField, nativeOwnCode, nativeProfileLink, isReferralSite, waitForNative } from './lib/imweb-referral-native.mjs';
 import { mountReferralWidget } from './imweb-referral-widget.mjs';
 
 function start() {
@@ -26,7 +26,7 @@ function start() {
   let opener;
   dialog.addEventListener('close', () => opener?.focus());
 
-  function memberLink() { return document.querySelector('a[onclick*="showMemberProfile"]'); }
+  function memberLink() { return nativeProfileLink(document); }
   function nativeJoin() {
     return [...document.querySelectorAll('a')].find(link => link.textContent.trim() === '회원가입');
   }

@@ -1,6 +1,13 @@
 import test from 'node:test';
 import assert from 'node:assert/strict';
-import { nativeSignupField, nativeOwnCode, isReferralSite } from '../lib/imweb-referral-native.mjs';
+import { nativeSignupField, nativeOwnCode, nativeProfileLink, isReferralSite } from '../lib/imweb-referral-native.mjs';
+test('profile entry opens editProfile rather than the hidden dropdown', () => {
+  const profile = {};
+  assert.equal(nativeProfileLink({ querySelector: selector => {
+    assert.equal(selector, 'a[onclick^="SITE_MEMBER.editProfile("]');
+    return profile;
+  } }), profile);
+});
 test('native signup field is unique and never targets own-code profile forms', () => {
   const field = { type: 'text', disabled: false, readOnly: false, form: { querySelector: () => null } };
   assert.equal(nativeSignupField({ querySelectorAll: () => [field] }), field);
