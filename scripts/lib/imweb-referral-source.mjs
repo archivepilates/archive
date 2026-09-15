@@ -1,5 +1,5 @@
 import { execFileSync } from 'node:child_process';
-import { referralKey } from './imweb-referral-policy.mjs';
+import { referralKey, awardReason } from './imweb-referral-policy.mjs';
 import { readCanonicalPointLogs } from './imweb-referral-point-logs.mjs';
 
 export const IMWEB_REFERRAL_SCOPE = Object.freeze({
@@ -68,24 +68,25 @@ export function referralPairs(members) {
   ).map(member => ({ member, inviter: codes.get(member.recommendTargetCode) || null }));
 }
 
-export function preparePointAward(member, rewardKey, { run = imwebJson } = {}) {
+export function preparePointAward(member, rewardKey, { run = imwebJson, role = 'inviter' } = {}) {
+  const reason = awardReason(rewardKey, role);
   referralKey(member);
   if (member.siteCode !== IMWEB_REFERRAL_SCOPE.siteCode || member.unitCode !== IMWEB_REFERRAL_SCOPE.unitCode ||
       typeof member.uid !== 'string' || !member.uid.trim() ||
       !/^[a-f0-9]{64}$/.test(rewardKey)) throw new Error('Invalid award target');
   // A restored or stale local ledger must never repeat an earlier provider award.
   const prior = readCanonicalPointLogs(member, { run, scope: IMWEB_REFERRAL_SCOPE });
-  if (prior.some(row => row.reason === `imweb-referral:${rewardKey}`)) {
+  if (prior.some(row => row.reason === reason)) {
     throw new Error('Prior provider award exists; manual reconciliation required');
   }
   const data = JSON.stringify({ unitCode: IMWEB_REFERRAL_SCOPE.unitCode, changeType: 'increase',
-    point: 3000, reason: `imweb-referral:${rewardKey}` });
+    point: 3000, reason });
   const args = ['promotion', 'point', 'change', 'member', member.uid, '--data', data];
   const dryRun = run([...args, '--dry-run']);
   if (typeof dryRun.confirmation_token !== 'string' || !dryRun.confirmation_token) throw new Error('Missing provider confirmation');
   let used = false;
   return {
-    reason: `imweb-referral:${rewardKey}`,
+    reason,
     send() {
       if (used) throw new Error('Award attempt already consumed');
       used = true;

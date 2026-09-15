@@ -397,7 +397,8 @@ test('less than 60 seconds before KST month end rejects before claim; exactly 60
     assert.equal(summary.prepared, 1);
     assert.equal(summary.claimed, allowed ? 1 : 0);
     assert.equal(summary.sendAttempts, allowed ? 1 : 0);
-    assert.equal(summary.failures, 0);
+    assert.equal(summary.failures, allowed ? 0 : 1);
+    assert.equal(summary.unresolved, allowed ? 0 : 1);
     const row = ledger.get(referralKey(member()));
     assert.equal(row.status, allowed ? 'paid' : 'pending');
     assert.equal(row.amountWon, 3000); assert.equal(row.month, '2026-09');

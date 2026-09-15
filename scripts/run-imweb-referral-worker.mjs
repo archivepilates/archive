@@ -29,7 +29,7 @@ const COUNTERS = ['disabled', 'pages', 'members', 'pairs', 'filtered', 'simulate
 const CONFIG_KEYS = new Set(['enabled', 'tested', 'startsAt', 'rewardWon',
   'monthlyLimitWon', 'timezone', 'siteCode', 'unitCode', 'ledgerPath', 'backupDir',
   'maxPages', 'pageSize', 'testMode', 'allowlist', 'excludedMemberCodes',
-  'nativeCampaignDisabled', 'nativeCampaignCheckedAt']);
+  'nativeCampaignDisabled', 'nativeCampaignCheckedAt', 'inviteeStartsAt', 'inviteeTested']);
 
 class RunnerError extends Error {
   constructor(code) { super(code); this.code = code; }
@@ -84,6 +84,10 @@ export function validateConfig(input, { apply = false } = {}) {
   requireValue(input.siteCode === IMWEB_REFERRAL_SCOPE.siteCode &&
     input.unitCode === IMWEB_REFERRAL_SCOPE.unitCode, 'SCOPE_MISMATCH');
   const startsAt = isoTime(input.startsAt);
+  const inviteeStartsAt = input.inviteeStartsAt === undefined ? undefined : isoTime(input.inviteeStartsAt);
+  requireValue(input.inviteeTested === undefined || typeof input.inviteeTested === 'boolean', 'INVALID_CONFIG');
+  requireValue(!apply || inviteeStartsAt === undefined || input.inviteeTested === true, 'INVITEE_NOT_APPROVED');
+  requireValue(inviteeStartsAt === undefined || Date.parse(inviteeStartsAt) >= Date.parse(startsAt), 'INVALID_TIMESTAMP');
   for (const key of ['ledgerPath', 'backupDir']) absolutePath(input[key]);
   requireValue(!apply || (input.enabled === true && input.tested === true), 'APPLY_NOT_APPROVED');
   const maxPages = input.maxPages ?? 10;
@@ -111,6 +115,7 @@ export function validateConfig(input, { apply = false } = {}) {
       Date.parse(nativeCampaignCheckedAt) <= Date.parse(startsAt), 'CAMPAIGN_ATTESTATION_REQUIRED');
   }
   return Object.freeze({ ...input, startsAt, tested: input.tested === true, maxPages, pageSize,
+    ...(inviteeStartsAt === undefined ? {} : { inviteeStartsAt }),
     testMode: input.testMode === true, nativeCampaignCheckedAt,
     excludedMemberCodes: Object.freeze([...excludedMemberCodes]),
     ...(input.allowlist === undefined ? {} : {
@@ -275,9 +280,9 @@ function aggregate(summary) {
   return Object.fromEntries(COUNTERS.map(key => [key, summary[key]]));
 }
 
-async function createLedger(filename) {
+async function createLedger(filename, role = 'inviter') {
   const { ReferralLedger } = await import('./lib/imweb-referral-ledger.mjs');
-  return new ReferralLedger(filename);
+  return new ReferralLedger(filename, role);
 }
 
 export async function main(argv = [], dependencies = {}) {
@@ -287,6 +292,7 @@ export async function main(argv = [], dependencies = {}) {
   let report = { mode: 'disabled', state: 'running', startedAt: null, finishedAt: null,
     errorCode: null, summary: null };
   let lock, ledger, paths;
+  const extraLedgers = [];
   let failureCode = 'CONFIG_FAILED';
   const fail = error => {
     report.state = 'failed';
@@ -349,17 +355,32 @@ export async function main(argv = [], dependencies = {}) {
           ledger = await (dependencies.createLedger ?? createLedger)(paths.ledgerPath);
         }
         failureCode = 'WORKER_FAILED';
-        const policy = Object.freeze({ ...REFERRAL_POLICY, enabled: config.enabled, startsAt: config.startsAt });
         const bounds = { maxPages: config.maxPages, pageSize: config.pageSize };
-        report.summary = aggregate(await runWorker({ enabled: config.enabled, tested: config.tested,
-          apply: options.apply, policy, testMode: config.testMode, allowlist: config.allowlist,
-          excludedMemberCodes: config.excludedMemberCodes }, {
-          readReferralMembers: () => readReferralMembers(bounds),
-          verifier: input => readPointAwardProof(input, { ...bounds, now: isoTime(clock()) }),
-          clock: () => isoTime(clock()),
-          ...dependencies.workerDependencies, ledger,
-          beforePrepare: options.apply ? async () => { await ensureBackup(); return true; } : undefined,
-        }));
+        const roles = ['inviter'];
+        if (config.inviteeStartsAt && Date.parse(config.inviteeStartsAt) <= Date.parse(report.startedAt)) roles.push('invitee');
+        let scan;
+        const scanMembers = dependencies.workerDependencies?.readReferralMembers ?? (() => readReferralMembers(bounds));
+        report.rewards = {};
+        for (const role of roles) {
+          const roleLedger = role === 'inviter' ? ledger : options.apply
+            ? await (dependencies.createLedger ?? createLedger)(paths.ledgerPath, role) : undefined;
+          if (role === 'invitee' && roleLedger) extraLedgers.push(roleLedger);
+          const policy = Object.freeze({ ...REFERRAL_POLICY, enabled: config.enabled,
+            startsAt: role === 'invitee' ? config.inviteeStartsAt : config.startsAt,
+            version: role === 'invitee' ? '2026-09-15-invitee-v1' : REFERRAL_POLICY.version });
+          report.rewards[role] = aggregate(await runWorker({ enabled: config.enabled, tested: config.tested,
+            apply: options.apply, role, policy, testMode: config.testMode, allowlist: config.allowlist,
+            excludedMemberCodes: config.excludedMemberCodes }, {
+            verifier: input => readPointAwardProof(input, { ...bounds, now: isoTime(clock()) }),
+            clock: () => isoTime(clock()),
+            ...dependencies.workerDependencies,
+            readReferralMembers: async () => (scan ??= await scanMembers()), ledger: roleLedger,
+            beforePrepare: options.apply ? async () => { await ensureBackup(); return true; } : undefined,
+          }));
+        }
+        report.summary = Object.fromEntries(COUNTERS.map(key => [key,
+          ['disabled', 'pages', 'members', 'pairs'].includes(key) ? report.rewards.inviter[key]
+            : Object.values(report.rewards).reduce((sum, result) => sum + result[key], 0)]));
         requireValue(report.summary.failures === 0 && report.summary.held === 0 &&
           report.summary.unresolved === 0, 'WORKER_INCOMPLETE');
       }
@@ -367,6 +388,9 @@ export async function main(argv = [], dependencies = {}) {
     report.state = 'success';
   } catch (error) { fail(error); }
   finally {
+    for (const extra of extraLedgers) {
+      try { extra.close(); } catch { fail(new RunnerError('LEDGER_CLOSE_FAILED')); }
+    }
     try { ledger?.close(); }
     catch { fail(new RunnerError('LEDGER_CLOSE_FAILED')); }
     try { report.finishedAt = isoTime(clock()); }

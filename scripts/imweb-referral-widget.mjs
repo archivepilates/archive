@@ -24,12 +24,12 @@ export function mountReferralWidget(container, { code = null, logoUrl, onRequest
     </style><div class="wrap">
       <p class="preview" ${preview ? '' : 'hidden'}>테스트 화면 · 실제 적립금은 지급되지 않습니다.</p>
       <header class="heading"><img class="logo" alt="ARCHIVE PILATES" width="36" height="36"><div><h2>친구 초대 이벤트</h2><p class="sub">좋은 수업, 친구와 함께 나눠요.</p></div></header>
-      <div class="offer"><p class="offer-title">초대한 친구가 가입하면</p><p class="amount">3,000<span>원 적립</span></p><p class="offer-note">구매하지 않아도 괜찮아요.<br>적립금은 초대자에게만 지급돼요.</p></div>
-      <div class="limit"><div>친구 1명 가입 시<strong>3,000원</strong></div><div>한 달 최대 10명<strong>30,000원</strong></div></div>
+      <div class="offer"><p class="offer-title">친구도 나도, 각각</p><p class="amount">3,000<span>원 적립</span></p><p class="offer-note">초대 링크로 친구가 가입하면<br>구매하지 않아도 둘 다 받아요.</p></div>
+      <div class="limit"><div>초대받은 친구 · 최초 1회<strong>3,000원</strong></div><div>초대자 · 한 달 최대<strong>30,000원</strong></div></div>
       <details><summary>참여 안내</summary><ul>
-      <li>친구가 초대 링크로 이메일 회원가입을 완료하면 초대자에게 한 번 적립돼요. 가입 내역은 5분 간격으로 확인해요.</li>
+      <li>친구가 초대 링크로 이메일 회원가입을 완료하면 두 분께 각각 3,000원이 적립돼요. 가입 내역은 5분 간격으로 확인해요.</li>
       <li>처음 가입하는 친구만 참여할 수 있어요. 가입을 마칠 때까지 같은 브라우저에서 진행해 주세요.</li>
-      <li>매월 1일 한국시간 기준으로 한도가 새로 시작돼요. 월 10명을 넘은 가입 건은 다음 달로 이월되지 않아요.</li>
+      <li>초대자는 매월 최대 10명까지 적립받아요. 초대자 한도를 넘겨도 처음 가입하는 친구의 3,000원 혜택은 유지돼요. 초대자 한도는 매월 1일 한국시간 기준으로 새로 시작하며 이월되지 않아요.</li>
       <li>본인 초대와 중복 가입은 제외돼요. 확인이 필요한 가입은 적립이 보류될 수 있어요.</li>
       </ul></details>
       <div class="share"><button class="request" type="button">내 초대 링크 만들기</button>

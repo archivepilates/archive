@@ -12,6 +12,14 @@ export const REFERRAL_POLICY = Object.freeze({
   startsAt: null,
 });
 
+export function awardRole(role = 'inviter') {
+  if (!['inviter', 'invitee'].includes(role)) throw new Error('Invalid reward role');
+  return role;
+}
+
+export const awardReason = (key, role = 'inviter') =>
+  `imweb-referral${awardRole(role) === 'invitee' ? '-invitee' : ''}:${key}`;
+
 function instant(value) {
   if (typeof value !== 'string' || !/(Z|[+-]\d{2}:\d{2})$/.test(value)) return NaN;
   return Date.parse(value);
@@ -45,7 +53,8 @@ function normalizedEmail(value) {
  * and monthly budget atomically in a durable ledger before any provider call.
  */
 export function assessReferral({ member, inviter, now, policy = REFERRAL_POLICY,
-  existingReward = null, monthlyReservedWon = 0, sourceVerified = false }) {
+  existingReward = null, monthlyReservedWon = 0, sourceVerified = false, role = 'inviter' }) {
+  awardRole(role);
   const hold = (reason) => ({ eligible: false, rewardWon: 0, reason });
   if (policy.enabled !== true) return hold('not_active');
   if (policy.rewardWon !== 3000 || policy.monthlyLimitWon !== 30000) return hold('policy_mismatch');
@@ -76,7 +85,7 @@ export function assessReferral({ member, inviter, now, policy = REFERRAL_POLICY,
   // No retroactive awards or carry-over until an explicit policy approves them.
   if (kstMonth(member.joinTime) !== kstMonth(now)) return hold('past_month_review');
   if (!Number.isSafeInteger(monthlyReservedWon) || monthlyReservedWon < 0) return hold('budget_invalid');
-  if (monthlyReservedWon + policy.rewardWon > policy.monthlyLimitWon) return hold('monthly_limit');
+  if (role === 'inviter' && monthlyReservedWon + policy.rewardWon > policy.monthlyLimitWon) return hold('monthly_limit');
   return { eligible: true, rewardWon: policy.rewardWon, reason: 'eligible',
     rewardKey: key, month: kstMonth(member.joinTime) };
 }

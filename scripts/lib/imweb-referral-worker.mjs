@@ -1,4 +1,4 @@
-import { REFERRAL_POLICY, assessReferral, kstMonth, referralKey } from './imweb-referral-policy.mjs';
+import { REFERRAL_POLICY, assessReferral, kstMonth, referralKey, awardRole } from './imweb-referral-policy.mjs';
 import { readReferralMembers as readMembers, referralPairs as makePairs,
   preparePointAward as prepareAward } from './imweb-referral-source.mjs';
 
@@ -25,6 +25,7 @@ export async function runReferralWorker(config = {}, dependencies = {}) {
   if (config.enabled !== true) return summary;
   summary.disabled = 0;
   const apply = config.apply === true;
+  const role = awardRole(config.role);
   const policy = { ...REFERRAL_POLICY, ...config.policy };
   const { readReferralMembers = readMembers, referralPairs = makePairs,
     preparePointAward = prepareAward, ledger, verifier, beforePrepare,
@@ -37,6 +38,7 @@ export async function runReferralWorker(config = {}, dependencies = {}) {
   };
   const now = readNow();
   if (apply) {
+    if ((ledger?.role ?? 'inviter') !== role) throw new Error('Reward ledger role mismatch');
     let active = false;
     try {
       kstMonth(policy.startsAt); kstMonth(now);
@@ -82,6 +84,8 @@ export async function runReferralWorker(config = {}, dependencies = {}) {
   } catch { throw new Error('Complete unambiguous canonical referral scan required; no awards attempted'); }
 
   const seen = new Set();
+  const counterparts = new Map(apply && ledger.counterpartRecords
+    ? ledger.counterpartRecords(policy.startsAt).map(row => [row.rewardKey, row]) : []);
   const budgets = new Map();
   const paired = new Set(pairs.map(pair => referralKey(pair.member)));
   // Also find previously dispatched rewards whose native attribution was later removed.
@@ -105,7 +109,7 @@ export async function runReferralWorker(config = {}, dependencies = {}) {
     hold(record.rewardKey);
   };
   const canDispatch = (member, inviter, row, at) => {
-    const decision = assessReferral({ member, inviter, now: at, policy, sourceVerified: true });
+    const decision = assessReferral({ member, inviter, now: at, policy, sourceVerified: true, role });
     return row.status === 'pending' && decision.eligible && decision.month === row.month && decision.rewardWon === row.amountWon;
   };
 
@@ -113,6 +117,10 @@ export async function runReferralWorker(config = {}, dependencies = {}) {
     // Ledger rows remain operator-visible even if either canonical member disappears.
     const missingMembers = new Set();
     if (apply) {
+      for (const row of counterparts.values()) {
+        if (byKey.has(row.rewardKey) && byKey.has(row.inviterKey)) continue;
+        missingMembers.add(row.rewardKey); summary.unresolved++; summary.failures++;
+      }
       for (const row of ledger.unresolvedRecords()) {
         if (byKey.has(row.rewardKey) && byKey.has(row.inviterKey)) continue;
         missingMembers.add(row.rewardKey);
@@ -127,10 +135,14 @@ export async function runReferralWorker(config = {}, dependencies = {}) {
       seen.add(key);
       if (missingMembers.has(key)) continue;
       let row = apply ? ledger.get(key) : null;
-      if (!row && !member.recommendTargetCode) continue;
+      const peer = counterparts.get(key);
+      if (!row && !member.recommendTargetCode && !peer) continue;
       let inviter = row ? byKey.get(row.inviterKey) : pair.inviter;
+      if (!row && peer && (!inviter || referralKey(inviter) !== peer.inviterKey)) {
+        summary.unresolved++; summary.failures++; continue;
+      }
       if (!permits(member, inviter)) { summary.filtered++; continue; }
-      const input = { member, inviter, now: readNow(), policy, sourceVerified: true };
+      const input = { member, inviter, now: readNow(), policy, sourceVerified: true, role };
       if (!apply) {
         const initial = assessReferral(input);
         if (!initial.eligible) { summary.rejected++; continue; }
@@ -145,7 +157,13 @@ export async function runReferralWorker(config = {}, dependencies = {}) {
         const reservation = ledger.reserve(input);
         row = reservation.record;
         if (reservation.eligible) summary.reserved++;
-        else if (reservation.reason !== 'already_recorded' || !row) { summary.rejected++; continue; }
+        else if (reservation.reason !== 'already_recorded' || !row) {
+          summary.rejected++;
+          if (counterparts.has(key) && reservation.reason !== 'monthly_limit' && reservation.reason !== 'existing_member') {
+            summary.unresolved++; summary.failures++;
+          }
+          continue;
+        }
       }
       // A competing reservation may have bound a different inviter: never substitute it.
       inviter = byKey.get(row.inviterKey);
@@ -157,20 +175,24 @@ export async function runReferralWorker(config = {}, dependencies = {}) {
         continue;
       }
       if (!canDispatch(member, inviter, row, readNow())) {
-        summary.rejected++; continue;
+        summary.rejected++; summary.unresolved++; summary.failures++; continue;
       }
       let prepared;
       try {
         if (beforePrepare && await beforePrepare({ member, inviter, record: row }) !== true) {
           throw new Error('Referral prepare guard did not authorize preparation');
         }
-        if (!canDispatch(member, inviter, row, readNow())) { summary.rejected++; continue; }
-        prepared = await preparePointAward(inviter, key);
+        if (!canDispatch(member, inviter, row, readNow())) {
+          summary.rejected++; summary.unresolved++; summary.failures++; continue;
+        }
+        prepared = await preparePointAward(role === 'invitee' ? member : inviter, key, { role });
         if (prepared?.reason !== row.providerReason || typeof prepared.send !== 'function') throw new Error();
         summary.prepared++;
       } catch { summary.failures++; continue; }
       const dispatchAt = readNow();
-      if (!canDispatch(member, inviter, row, dispatchAt) || !hasDispatchWindow(dispatchAt)) { summary.rejected++; continue; }
+      if (!canDispatch(member, inviter, row, dispatchAt) || !hasDispatchWindow(dispatchAt)) {
+        summary.rejected++; summary.unresolved++; summary.failures++; continue;
+      }
       const claimed = ledger.claim(key, dispatchAt);
       if (!claimed) { summary.duplicates++; continue; }
       summary.claimed++;

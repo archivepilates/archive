@@ -86,6 +86,46 @@ function countRows(path) {
 
 function assertPrivate(path) { assert.equal(statSync(path).mode & 0o777, 0o600); }
 
+test('invitee activation requires its own tested flag and never backdates the inviter start', t => {
+  const f = fixture(t);
+  assert.throws(() => validateConfig({ ...f.config, inviteeStartsAt: NOW }, { apply: true }), /INVITEE_NOT_APPROVED/);
+  assert.throws(() => validateConfig({ ...f.config, inviteeStartsAt: '2026-08-01T00:00:00Z', inviteeTested: true }), /INVALID_TIMESTAMP/);
+  assert.equal(validateConfig(f.config).inviteeStartsAt, undefined);
+});
+
+test('dual runner shares a scan and lock, closes both ledgers, and reports each recipient separately', async t => {
+  const f = fixture(t);
+  f.saveConfig({ inviteeStartsAt: '2026-09-15T04:00:00Z', inviteeTested: true });
+  const closed = [], sent = [];
+  const createLedger = (path, role = 'inviter') => {
+    const ledger = new ReferralLedger(path, role);
+    const close = ledger.close.bind(ledger);
+    ledger.close = () => { closed.push(role); close(); };
+    return ledger;
+  };
+  const workerDependencies = { ...f.dependencies.workerDependencies,
+    preparePointAward: (target, key, { role }) => ({
+      reason: `imweb-referral${role === 'invitee' ? '-invitee' : ''}:${key}`,
+      send: () => { sent.push([role, target.memberCode]); return {}; },
+    }),
+    verifier: ({ member, inviter: referrer, record }) => ({ sourceVerified: true,
+      member: record.role === 'invitee' ? member : referrer, amountWon: 3000,
+      reason: record.providerReason, logId: `fixture-${record.role}` }),
+  };
+  const first = await f.run(['--apply'], { createLedger, workerDependencies });
+  assert.equal(first.exitCode, 0);
+  assert.equal(first.rewards.inviter.paid, 1);
+  assert.equal(first.rewards.invitee.paid, 1);
+  assert.equal(first.summary.paid, 2);
+  assert.equal(f.events.filter(event => event === 'read').length, 1);
+  assert.deepEqual(sent, [['inviter', inviter.memberCode], ['invitee', invitee.memberCode]]);
+  assert.deepEqual(closed.sort(), ['invitee', 'inviter']);
+  const second = await f.run(['--apply'], { createLedger, workerDependencies });
+  assert.equal(second.summary.sendAttempts, 0);
+  assert.equal(sent.length, 2);
+  assert.equal(existsSync(f.lockPath), false);
+});
+
 test('import has no execution/output/files and CLI defaults make no calls or writes', async t => {
   const f = fixture(t, { initialize: false });
   const before = readdirSync(f.directory);

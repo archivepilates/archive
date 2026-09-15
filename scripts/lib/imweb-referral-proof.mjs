@@ -1,21 +1,23 @@
 import { createHash } from 'node:crypto';
 import { imwebJson, IMWEB_REFERRAL_SCOPE as scope } from './imweb-referral-source.mjs';
-import { referralKey } from './imweb-referral-policy.mjs';
+import { referralKey, awardReason, awardRole } from './imweb-referral-policy.mjs';
 
 const time = value => typeof value === 'string' && /(Z|[+-]\d{2}:\d{2})$/.test(value)
   ? Date.parse(value) : NaN;
 
 // Imweb exposes no log ID here. This fingerprint is a derived reference to a
 // unique observed row, not a provider-issued ID or proof of current net balance.
-export function readPointAwardProof({ inviter, record }, {
+export function readPointAwardProof({ member, inviter: sourceInviter, record }, {
   run = imwebJson, maxPages = 10, pageSize = 50, now = new Date().toISOString(),
 } = {}) {
+  const role = awardRole(record?.role);
+  const inviter = role === 'invitee' ? member : sourceInviter;
   if (!Number.isInteger(maxPages) || maxPages < 1 || maxPages > 100 ||
       !Number.isInteger(pageSize) || pageSize < 1 || pageSize > 50) throw new Error('Invalid log scan bounds');
   if (inviter?.siteCode !== scope.siteCode || inviter?.unitCode !== scope.unitCode ||
       typeof inviter.uid !== 'string' || !inviter.uid.trim() ||
-      record?.inviterKey !== referralKey(inviter) || !/^[a-f0-9]{64}$/.test(record.rewardKey) ||
-      record.providerReason !== `imweb-referral:${record.rewardKey}` || record.amountWon !== 3000 ||
+      (role === 'invitee' ? record?.rewardKey : record?.inviterKey) !== referralKey(inviter) || !/^[a-f0-9]{64}$/.test(record.rewardKey) ||
+      record.providerReason !== awardReason(record.rewardKey, role) || record.amountWon !== 3000 ||
       !Number.isFinite(time(record.createdAt)) || !Number.isFinite(time(now))) {
     throw new Error('Invalid canonical award record');
   }

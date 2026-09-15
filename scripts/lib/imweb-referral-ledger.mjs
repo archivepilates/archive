@@ -2,11 +2,9 @@ import { createHash } from 'node:crypto';
 import { closeSync, existsSync, lstatSync, openSync } from 'node:fs';
 import { dirname, isAbsolute } from 'node:path';
 import { DatabaseSync } from 'node:sqlite';
-import { REFERRAL_POLICY, assessReferral, referralKey } from './imweb-referral-policy.mjs';
+import { REFERRAL_POLICY, assessReferral, referralKey, awardRole, awardReason } from './imweb-referral-policy.mjs';
 
 const hash = value => createHash('sha256').update(JSON.stringify(value)).digest('hex');
-const providerReason = key => `imweb-referral:${key}`;
-const record = row => row ? { ...row, providerReason: providerReason(row.rewardKey) } : null;
 const timestamp = value => {
   if (typeof value !== 'string' || !/(Z|[+-]\d{2}:\d{2})$/.test(value) || !Number.isFinite(Date.parse(value))) {
     throw new Error('Timezone-qualified timestamp required');
@@ -19,10 +17,22 @@ const timestamp = value => {
 export class ReferralLedger {
   #filename;
   #db = null;
+  #role;
+  #table;
 
-  constructor(filename) {
+  get role() { return this.#role; }
+
+  #record(row) {
+    return row ? { ...row, role: this.#role,
+      recipientKey: this.#role === 'invitee' ? row.rewardKey : row.inviterKey,
+      providerReason: awardReason(row.rewardKey, this.#role) } : null;
+  }
+
+  constructor(filename, role = 'inviter') {
     if (typeof filename !== 'string' || !isAbsolute(filename)) throw new Error('Absolute SQLite path required');
     this.#filename = filename;
+    this.#role = awardRole(role);
+    this.#table = role === 'invitee' ? 'referral_invitee_rewards' : 'referral_rewards';
   }
 
   #open(create = false) {
@@ -37,7 +47,7 @@ export class ReferralLedger {
     const db = new DatabaseSync(this.#filename);
     try {
       db.exec(`PRAGMA busy_timeout = 10000; PRAGMA synchronous = FULL;
-        CREATE TABLE IF NOT EXISTS referral_rewards (
+        CREATE TABLE IF NOT EXISTS ${this.#table} (
           rewardKey TEXT PRIMARY KEY NOT NULL, inviterKey TEXT NOT NULL,
           month TEXT NOT NULL, policyVersion TEXT NOT NULL,
           amountWon INTEGER NOT NULL CHECK (amountWon IN (0, 3000)),
@@ -46,7 +56,7 @@ export class ReferralLedger {
           providerLogKey TEXT UNIQUE,
           CHECK ((status = 'rejected' AND amountWon = 0) OR (status <> 'rejected' AND amountWon = 3000))
         ) STRICT;
-        CREATE INDEX IF NOT EXISTS referral_budget ON referral_rewards(inviterKey, month);`);
+        CREATE INDEX IF NOT EXISTS ${this.#table}_budget ON ${this.#table}(inviterKey, month);`);
       this.#db = db;
       return db;
     } catch (error) { db.close(); throw error; }
@@ -60,16 +70,33 @@ export class ReferralLedger {
   }
 
   get(rewardKey) {
-    return record(this.#open()?.prepare('SELECT * FROM referral_rewards WHERE rewardKey = ?').get(rewardKey));
+    return this.#record(this.#open()?.prepare(`SELECT * FROM ${this.#table} WHERE rewardKey = ?`).get(rewardKey));
   }
 
   unresolvedRecords() {
-    return (this.#open()?.prepare(`SELECT * FROM referral_rewards
-      WHERE status IN ('pending', 'dispatching', 'held') ORDER BY createdAt, rewardKey`).all() || []).map(record);
+    return (this.#open()?.prepare(`SELECT * FROM ${this.#table}
+      WHERE status IN ('pending', 'dispatching', 'held') ORDER BY createdAt, rewardKey`).all() || []).map(row => this.#record(row));
+  }
+
+  counterpartRecords(startsAt) {
+    const db = this.#open();
+    if (!db) return [];
+    const peer = this.#role === 'invitee' ? 'referral_rewards' : 'referral_invitee_rewards';
+    if (!db.prepare('SELECT name FROM sqlite_master WHERE type = ? AND name = ?').get('table', peer)) return [];
+    return db.prepare(`SELECT rewardKey, inviterKey FROM ${peer}
+      WHERE createdAt >= ? AND rewardKey NOT IN (SELECT rewardKey FROM ${this.#table})`).all(timestamp(startsAt));
+  }
+
+  counterpart(rewardKey) {
+    const db = this.#open();
+    if (!db) return null;
+    const peer = this.#role === 'invitee' ? 'referral_rewards' : 'referral_invitee_rewards';
+    if (!db.prepare('SELECT name FROM sqlite_master WHERE type = ? AND name = ?').get('table', peer)) return null;
+    return db.prepare(`SELECT inviterKey FROM ${peer} WHERE rewardKey = ?`).get(rewardKey) ?? null;
   }
 
   reserve({ member, inviter, now, policy = REFERRAL_POLICY, sourceVerified = false }) {
-    const input = { member, inviter, now, policy, sourceVerified: sourceVerified === true };
+    const input = { member, inviter, now, policy, sourceVerified: sourceVerified === true, role: this.#role };
     const initial = assessReferral(input);
     if (!initial.eligible) return { ...initial, record: null };
     if (typeof policy.version !== 'string' || !policy.version.trim() || policy.version.length > 80) {
@@ -78,13 +105,15 @@ export class ReferralLedger {
     const inviterKey = referralKey(inviter);
     const at = timestamp(now);
     return this.#transaction(db => {
+      const peer = this.counterpart(initial.rewardKey);
+      if (peer && peer.inviterKey !== inviterKey) throw new Error('Referral attribution differs between rewards');
       const existingReward = this.get(initial.rewardKey);
       // Every reserved amount counts forever in its month, including held outcomes.
       const { total } = db.prepare(`SELECT COALESCE(SUM(amountWon), 0) AS total
-        FROM referral_rewards WHERE inviterKey = ? AND month = ?`).get(inviterKey, initial.month);
+        FROM ${this.#table} WHERE inviterKey = ? AND month = ?`).get(inviterKey, initial.month);
       const decision = assessReferral({ ...input, existingReward, monthlyReservedWon: total });
       if (!decision.eligible && decision.reason !== 'monthly_limit') return { ...decision, record: existingReward };
-      db.prepare(`INSERT INTO referral_rewards
+      db.prepare(`INSERT INTO ${this.#table}
         (rewardKey, inviterKey, month, policyVersion, amountWon, status, reason, createdAt, updatedAt)
         VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?)`).run(initial.rewardKey, inviterKey, initial.month,
         policy.version, decision.rewardWon, decision.eligible ? 'pending' : 'rejected', decision.reason, at, at);
@@ -95,13 +124,13 @@ export class ReferralLedger {
   // The sole dispatch grant. A crash after this transition never permits reclaim.
   claim(rewardKey, now = new Date().toISOString()) {
     if (!this.#open()) return null;
-    return record(this.#db.prepare(`UPDATE referral_rewards SET status = 'dispatching', updatedAt = ?
+    return this.#record(this.#db.prepare(`UPDATE ${this.#table} SET status = 'dispatching', updatedAt = ?
       WHERE rewardKey = ? AND status = 'pending' RETURNING *`).get(timestamp(now), rewardKey));
   }
 
   holdUnknown(rewardKey, now = new Date().toISOString()) {
     if (!this.#open()) return false;
-    return this.#db.prepare(`UPDATE referral_rewards
+    return this.#db.prepare(`UPDATE ${this.#table}
       SET status = 'held', reason = 'provider_outcome_unknown', updatedAt = ?
       WHERE rewardKey = ? AND status = 'dispatching'`).run(timestamp(now), rewardKey).changes === 1;
   }
@@ -117,11 +146,11 @@ export class ReferralLedger {
     const at = timestamp(now);
     return this.#transaction(db => {
       const row = this.get(rewardKey);
-      if (!row || row.inviterKey !== recipientKey || proof.amountWon !== row.amountWon ||
+      if (!row || row.recipientKey !== recipientKey || proof.amountWon !== row.amountWon ||
           proof.reason !== row.providerReason || !['dispatching', 'held', 'paid'].includes(row.status)) return false;
       if (row.status === 'paid') return row.providerLogKey === logKey;
-      if (db.prepare('SELECT rewardKey FROM referral_rewards WHERE providerLogKey = ?').get(logKey)) return false;
-      db.prepare(`UPDATE referral_rewards SET status = 'paid', reason = 'provider_log_verified',
+      if (db.prepare(`SELECT rewardKey FROM ${this.#table} WHERE providerLogKey = ?`).get(logKey)) return false;
+      db.prepare(`UPDATE ${this.#table} SET status = 'paid', reason = 'provider_log_verified',
         providerLogKey = ?, updatedAt = ? WHERE rewardKey = ?`).run(logKey, at, rewardKey);
       return true;
     });
