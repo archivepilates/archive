@@ -1,0 +1,83 @@
+/* Official-home only: keep the shared Imweb assets immutable. */
+:root { --header-h: 109px; }
+
+.site-header .nav-links {
+  grid-template-columns: minmax(0, 1.25fr) minmax(0, 1.15fr) minmax(0, 1fr) minmax(0, 0.75fr);
+}
+
+.site-header .nav-academy {
+  position: relative;
+  min-width: 0;
+}
+
+.site-header .nav-links .nav-academy summary {
+  position: relative;
+  grid-template-columns: max-content 10px;
+  justify-content: center;
+  column-gap: 2px;
+  font-weight: 750;
+  white-space: nowrap;
+  list-style: none;
+  cursor: pointer;
+  border-radius: 0;
+}
+
+.site-header .nav-academy summary::-webkit-details-marker { display: none; }
+.site-header .nav-academy summary::marker { content: ""; }
+.site-header .nav-caret {
+  grid-area: 1 / 2;
+  width: 10px;
+  line-height: 1;
+  font-size: 14px;
+  font-weight: 500;
+  transform: translateY(-2px);
+}
+.site-header .nav-academy[open] .nav-caret { transform: rotate(180deg) translateY(-2px); }
+.site-header .nav-academy[open] summary { color: #9a3324; }
+.site-header summary:focus-visible { outline: 2px solid #9a3324; outline-offset: -2px; }
+
+.site-header .nav-submenu {
+  position: absolute;
+  z-index: 2;
+  top: 100%;
+  left: 50%;
+  transform: translateX(-50%);
+  width: 208px;
+  padding: 6px;
+  border: 1px solid #dce0dc;
+  border-radius: 4px;
+  background: #fff;
+  box-shadow: 0 8px 20px rgb(0 0 0 / 10%);
+}
+
+.site-header .nav-academy:not([open]) .nav-submenu { display: none; }
+.site-header .nav-submenu a {
+  display: flex;
+  align-items: center;
+  justify-content: flex-start;
+  min-height: 48px;
+  min-width: 0;
+  margin: 0;
+  padding: 0 14px;
+  font-size: 0.875rem;
+  font-weight: 750;
+  line-height: 1.4;
+  letter-spacing: 0;
+  text-decoration: none;
+  color: #2a2521;
+  transform: none;
+  transition: background-color 120ms ease, color 120ms ease;
+}
+.site-header .nav-submenu a:hover,
+.site-header .nav-submenu a:focus-visible { background: #f1f3f1; color: #9a3324; }
+
+@media (min-width: 921px) {
+  :root { --header-h: 75px; }
+  .site-header .nav-academy { flex: 0 0 auto; }
+  .site-header .nav-links .nav-academy summary { min-width: 114px; }
+  .site-header .nav-submenu a { font-size: 0.94rem; }
+}
+
+@media (prefers-reduced-motion: reduce) {
+  .site-header .nav-submenu a { transition: none; }
+}

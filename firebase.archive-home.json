@@ -3,6 +3,8 @@
     "site": "archive-pilates-home",
     "predeploy": [
       "python3 scripts/validate-official-home-seo.py",
+      "python3 scripts/validate-official-home-navigation.py",
+      "node --test scripts/tests/official-home-academy-nav.test.mjs",
       "node scripts/validate-public-site-ux.mjs",
       "npm run validate:archive-home-address",
       "npm run validate:archive-home-team",

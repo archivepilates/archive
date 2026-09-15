@@ -12,6 +12,8 @@
   <meta name="theme-color" content="#faf8f5">
   <link rel="shortcut icon" href="/favicon.ico"><link rel="apple-touch-icon" sizes="180x180" href="/apple-touch-icon.png"><link rel="stylesheet" href="/assets/team.css"><link rel="stylesheet" href="/assets/community-nav-20260827a.css">
   <link rel="stylesheet" href="/assets/public-home-ux-20260905.css">
+  <link rel="stylesheet" href="/assets/academy-nav-20260915.css">
+  <script src="/assets/academy-nav-20260915.js" defer></script>
   <script type="application/ld+json">{"@context":"https://schema.org","@type":"Person","name":"정은영","jobTitle":"부원장","description":"부산 명지 아카이브필라테스 정은영 부원장은 회원의 현재 능력에 맞춰 강도를 조절하고, 동작의 목적과 진행 단계를 설명하는 필라테스 수업을 설계합니다.","worksFor":{"@type":"Organization","name":"ARCHIVE PILATES","alternateName":"아카이브필라테스","description":"부산 명지에서 필라테스 수업을 운영하는 아카이브필라테스입니다.","url":"https://archivepilates.com/"},"image":"https://archivepilates.com/assets/team/jung-eunyoung.jpg","url":"https://archivepilates.com/teams/eunyoung"}</script>
 </head>
 <body>
@@ -20,9 +22,18 @@
     <a class="brand" href="/" aria-label="ARCHIVE PILATES 홈"><img class="brand-logo" src="/assets/archive-wordmark-nav-crop.png" alt="ARCHIVE PILATES" width="513" height="126"></a>
     <div class="nav-links" aria-label="주요 메뉴">
       <a class="nav-swap is-current" data-nav="team" href="/teams" aria-label="팀아카이브"><span class="nav-ko">팀아카이브</span><span class="nav-en" aria-hidden="true">TEAM ARCHIVE</span></a>
-      <a class="nav-swap" data-nav="lesson" href="/offline" aria-label="강사레슨"><span class="nav-ko">강사레슨</span><span class="nav-en" aria-hidden="true">LESSON</span></a>
-      <a class="nav-swap" data-nav="video" href="https://archivepilates.imweb.me/17" aria-label="영상구매"><span class="nav-ko">영상구매</span><span class="nav-en" aria-hidden="true">VIDEO</span></a>
-      <a class="nav-swap" data-nav="products" href="/shop" aria-label="판매상품"><span class="nav-ko">판매상품</span><span class="nav-en" aria-hidden="true">PRODUCTS</span></a>
+        <details class="nav-academy">
+          <summary class="nav-swap" data-nav="academy" aria-label="아카데미" aria-controls="academy-links">
+            <span class="nav-ko">아카데미</span>
+            <span class="nav-en" aria-hidden="true">ACADEMY</span>
+            <span class="nav-caret" aria-hidden="true">&#8964;</span>
+          </summary>
+          <div class="nav-submenu" id="academy-links">
+            <a data-nav="lesson" href="/offline">강사레슨</a>
+            <a data-nav="video" href="https://archivepilates.imweb.me/17">영상구매</a>
+            <a data-nav="products" href="/shop">판매상품</a>
+          </div>
+        </details>
       <a class="nav-swap" data-nav="community" href="https://archivepilates.imweb.me/community" aria-label="커뮤니티"><span class="nav-ko">커뮤니티</span><span class="nav-en" aria-hidden="true">COMMUNITY</span></a>
       <a class="nav-swap" data-nav="career" href="/careers" aria-label="채용, 신규 모집 중"><span class="nav-ko">채용</span><span class="nav-en" aria-hidden="true">CAREERS</span><span class="nav-new" aria-hidden="true">NEW</span></a>
     </div>
