@@ -62,7 +62,7 @@ function start() {
   }
   function entries() {
     addEntry(document.getElementById('doz_footer_wrap'), 'ap-referral-footer');
-    addEntry(document.getElementById('mobile_slide_menu'), 'ap-referral-side');
+    addEntry(document.querySelector('#mobile_slide_menu ._menu_wrap'), 'ap-referral-side');
     const code = nativeOwnCode(document);
     if (code) widget.setCode(code);
   }
