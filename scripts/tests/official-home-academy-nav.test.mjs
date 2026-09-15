@@ -3,7 +3,7 @@ import { readFileSync } from 'node:fs';
 import { runInNewContext } from 'node:vm';
 import test from 'node:test';
 
-const source = readFileSync(new URL('../../official-home/assets/academy-nav-20260915.js', import.meta.url), 'utf8');
+const source = readFileSync(new URL('../../official-home/assets/academy-nav-20260915b.js', import.meta.url), 'utf8');
 
 function setup() {
   function target() {
@@ -83,7 +83,18 @@ test('submenu keyboard focus survives pointer leave and closes when focus exits'
   menu.fire('pointerleave', { pointerType: 'mouse' });
   assert.equal(menu.open, true);
   document.activeElement = {};
-  menu.fire('focusout');
+  menu.fire('focusout', { relatedTarget: document.activeElement });
   await new Promise(resolve => queueMicrotask(resolve));
+  assert.equal(menu.open, false);
+});
+
+test('Safari link blur to body must not remove the link before its click', () => {
+  const { menu, document, panel, window } = setup();
+  menu.open = true;
+  document.fire('pointerdown', { target: panel });
+  document.activeElement = {};
+  menu.fire('focusout', { relatedTarget: null });
+  assert.equal(menu.open, true);
+  window.fire('blur');
   assert.equal(menu.open, false);
 });

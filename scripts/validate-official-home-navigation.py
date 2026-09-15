@@ -2,7 +2,7 @@ from html.parser import HTMLParser
 from pathlib import Path
 
 ROOT = Path(__file__).resolve().parents[1] / "official-home"
-ASSETS = ("/assets/academy-nav-20260915.css", "/assets/academy-nav-20260915.js")
+ASSETS = ("/assets/academy-nav-20260915.css", "/assets/academy-nav-20260915b.js")
 DESTINATIONS = {
     "team": "/teams",
     "lesson": "/offline",
