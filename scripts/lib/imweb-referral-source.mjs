@@ -9,7 +9,7 @@ export const IMWEB_REFERRAL_SCOPE = Object.freeze({
 
 export function imwebJson(args) {
   try {
-    const result = JSON.parse(execFileSync('imweb', ['--output', 'json', ...args], {
+    const result = JSON.parse(execFileSync('imweb', ['--profile', 'default', '--output', 'json', ...args], {
       encoding: 'utf8', timeout: 45000, maxBuffer: 8 * 1024 * 1024,
       stdio: ['ignore', 'pipe', 'pipe'],
     }));
