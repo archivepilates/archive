@@ -1,48 +1,62 @@
-# ARCHIVE PILATES Referral Source Policy
+# ARCHIVE PILATES 친구 초대 운영 기준
 
-Status: local prototype, not promoted or deployed. Updated 2026-09-15.
+갱신: 2026-09-15. 관리자 저장값과 공개 화면, 실제 지급 시험 및 정기 실행을 직접 확인한 기록입니다.
+상태: 운영 활성화·정기 실행 3회 성공·지급 대상 0건. 팝업과 사이드메뉴 저장·배포 확인. 가입폼 자동 입력의 라이브 확인은 약관 동의 승인 대기입니다.
 
-## Approved Benefit
+## 승인된 혜택
 
-Inviter-only KRW 3,000 after a new signup, at most KRW 30,000 per inviter per KST calendar month. No purchase or phone authentication. The native campaign and custom worker must never award simultaneously. Existing members and prior-month backfills are excluded until explicitly approved.
+- 시작 시각 이후 신규 이메일 가입 1건당 초대자에게만 3,000원. 초대자별 `Asia/Seoul` 달력 월 최대 30,000원·10건까지 지급합니다.
+- 구매·휴대폰 인증은 요구하지 않습니다. 초대받은 회원에게 별도 적립하지 않습니다.
+- 기존 가입의 소급 적립, 테스트·관리자 계정, 자기추천·중복 지급은 운영 대상에서 제외합니다. 테스트계정 지급은 별도 승인된 시험만 허용합니다.
+- 지난달 미지급분과 월 한도 초과분은 자동 이월하지 않습니다. 이메일이 다르다는 사실만으로 서로 다른 사람임을 보장하지는 않습니다.
 
-## Sources And Identity
+## 원천과 식별
 
-- Canonical source: a complete, scope-checked Imweb member API scan, including immutable member code, join timestamp, own recommendation code and signup recommendation target code.
-- Stable identity: `siteCode + unitCode + memberCode`. Email is an additional self-referral guard only. Names, browser hashes, submitted member IDs, CORE mirrors and `workLanes` cannot authorize an award.
-- Native recommendation codes are public link tokens, not authentication credentials. Do not put email, phone, member UID or API credentials in links or browser storage.
-- Local ledger: `ReferralLedger` requires one absolute SQLite path in an existing owner-only directory outside Git. Activation must record the final path, owner and backup procedure. No production ledger has been created.
-- The ledger is the canonical award-attempt and budget record; Imweb points logs are canonical provider-outcome evidence. Neither is a replacement for the member source.
-- No Firestore/CRM mirror collection is introduced. There is no public award endpoint or browser-to-Firebase member impersonation route.
+- 가입 원천: 고정 사이트·유닛을 확인한 전체 아임웹 회원 API 조회. 회원 고유 코드, 가입 시각, 본인 추천인 코드와 가입 시 입력한 추천인 코드를 사용합니다.
+- 고정 식별자: `siteCode + unitCode + memberCode`. 최초 기록된 초대자는 바꾸지 않습니다. 이메일은 추가 자기추천 차단 근거로만 사용합니다.
+- 지급 시도·월 예산 원천: Git 밖 소유자 전용 영구 SQLite 원장. 실제 지급 결과의 원천은 아임웹 적립 내역입니다.
+- 이름·브라우저 입력·제출된 회원 ID·CORE 미러·`workLanes`는 지급 대상의 원천이 아닙니다. 공개 지급 API나 브라우저의 회원 사칭 경로를 만들지 않습니다.
+- 추천인 코드는 공개 링크 토큰이며 인증정보가 아닙니다. URL·탭 저장소에 이메일·연락처·회원 UID·인증정보를 넣지 않습니다.
 
-## Dedupe And Failure Behavior
+## 원장과 실패 처리
 
-- Unique SHA-256 identity per new member across policy versions. First recorded inviter remains bound.
-- SQLite immediate transactions reserve identity and month budget together. Pending, dispatching, paid and uncertain awards consume the reserved budget.
-- A dispatch claim is single-use. Unknown provider outcomes are held for reconciliation, never automatically re-sent or released.
-- Paid status requires an independently verified provider log matching recipient, reason and amount. An HTTP success or balance change alone is insufficient.
-- The live point-log API has no log ID. The proof adapter requires a complete consistent scan and exactly one matching row, then uses a derived fingerprint of its fixed fields. Identical duplicate rows, missing pages, changed totals, other recipients or invalid timestamps stop reconciliation. This fingerprint is not a provider-issued ID.
-- Log proof confirms the original award occurred, not that its current net balance remains positive. A separate approved test reversal leaves a negative log and must be verified independently.
-- Monthly-cap rejection is terminal for that signup. No carry-over. A delayed event from an earlier month requires operator review.
-- Complete-source failure stops before any award. Large member growth beyond scan bounds must be handled explicitly, not by awarding from partial pages.
-- Different emails do not prove different people. Without phone authentication, person-level multi-account abuse cannot be fully prevented.
+- 운영 원장은 비공개 경로에 영구 보존합니다. 원장이 누락되면 지급을 중단하며 빈 원장으로 재생성하지 않습니다. 초기화는 새 비활성 설정·빈 원장 생성 전용이고 기존 파일을 덮어쓰지 않습니다.
+- 설정·원장은 저장소 밖 절대 경로와 소유자 전용 권한을 요구합니다. 파일·상위 경로의 심볼릭 링크를 거부합니다.
+- 같은 비공개 폴더의 배타 잠금으로 단일 실행을 보장합니다. 오래된 잠금을 자동 제거하지 않습니다. 적용 전 한국시간 일별 SQLite 백업을 만들고 백업 실패 시 지급하지 않습니다.
+- 신규 가입 식별자와 월 예산을 SQLite 트랜잭션에서 함께 예약합니다. 대기·지급 시도·지급 완료·결과 불명 상태의 예약 금액은 월 한도에 포함합니다.
+- 지급 권한은 한 번만 사용합니다. 결과 불명은 보류하고 자동 재전송하거나 예산을 반환하지 않습니다. 미해결 원장 기록도 실패 상태로 보고합니다.
+- 지급 완료는 수신자·사유·금액이 일치하는 실제 적립 내역으로만 확정합니다. HTTP 성공이나 잔액 변화만으로 완료 처리하지 않습니다.
+- 적립 내역에 공급사 발급 ID가 없으므로 전체 조회 후 유일한 일치 행의 고정 필드 지문을 사용합니다. 중복 행·누락 페이지·조회 중 변경·다른 수신자는 검증 실패이며 지문을 공급사 ID라고 표시하지 않습니다.
+- 회수는 원래 지급 사실을 삭제하지 않습니다. 시험 회수 후에도 원장의 지급 기록을 보존해 재지급을 막습니다.
+- 로그·상태 JSON은 집계·시각·고정 오류 코드만 기록합니다. 공급사 원문 오류·개인정보·비공개 설정은 Git에 저장하지 않습니다.
 
-## Allowed Readers And Forbidden Actions
+## 활성화와 단일 지급 방식
 
-- Private Mac mini worker and authorized operator only. SQLite contains pseudonymous member keys and must remain private.
-- Public widget reads only a native public recommendation code and stores only that code for the current browser tab.
-- No browser/UI content may choose a points recipient or amount. No customer messages, order changes, group changes, classroom changes, or enrollment changes are part of this lane.
-- Logs/reports contain aggregate counts and fixed reason codes only. Do not store raw provider responses or member data in Git.
+- 기본 실행은 지급하지 않습니다. 운영 적용은 명시적 `--apply`, `enabled=true`, 검증 승인, 고정 금액·시간대·사이트·유닛과 유효한 `startsAt`을 요구합니다. 운영 시각을 되돌리는 `--now` 옵션은 두지 않습니다.
+- 현재 시작 시각은 `2026-09-15T11:29:14.318Z`(한국시간 20:29)이고 운영 설정은 활성화했습니다. 비공개 `excludedMemberCodes`에 테스트·관리자 계정 정확히 3개를 등록해 초대자·신규 가입자 양쪽에서 제외합니다.
+- 미리보기를 종료한 뒤 메인이 아임웹 기본 캠페인이 없음을 다시 확인했습니다. 자체 프로그램을 운영하는 동안 기본 캠페인을 켜지 않습니다.
+- 고정 사이트·유닛 설정의 `nativeCampaignDisabled=true`, 유효한 ISO 시각 `nativeCampaignCheckedAt <= startsAt`은 수동 확인 기록입니다. 런타임 공급사 API 검사라고 주장하지 않습니다.
+- 확인 기록에 24시간이나 무료체험 종료일 기반 자동 만료를 적용하지 않습니다. 단일 지급 방식 유지와 제외 목록의 정확성은 운영자가 관리합니다.
 
-## Promotion Gate
+## 확인된 결과
 
-1. Required signup terms approved and user completed test signup. Native signup field observed as `#join_form input#recommend_code[name="recommend_code"]`. Automatic invite-link wiring and social signup remain pending.
-2. Completed: read new member's native `recommendTargetCode` from the full Imweb scan and uniquely resolved the intended ordinary test inviter.
-3. Provider operation and signup-worker checks completed 2026-09-15 in two separately approved test cycles. Each returned inviter balance 0 -> 3,000 -> 0 with exact positive/reversal logs; both members' groups unchanged. The worker used real canonical signup attribution, a private durable test ledger and real log verification. No signup scheduler or production activation is implied.
-4. Duplicate prevention passed before and after reopening the ledger: zero additional prepare/send attempts. Keep the historical paid test record after reversal. Existing ordinary-member video access regression remains pending; no entitlement groups changed.
-5. Run responsive browser QA. The local file URL was blocked by browser policy on 2026-09-15; no workaround was attempted and preview visual QA remains pending.
-6. Approve start timestamp, production ledger path/backup, one award engine, deployment scope and worker schedule. Update CORE rule state only after live verification.
+- 별도 승인된 가입 시험에서 초대자에게 실제 +3,000원을 지급하고 중복 재실행의 추가 지급을 차단했습니다. -3,000원 회수 후 두 일반 테스트회원의 잔액은 0원, 회원그룹은 그대로입니다. 원장을 재개방해도 중복 차단됩니다.
+- 앞선 수동 공급사 시험과 가입 기반 프로그램 시험은 별도 승인 이력입니다. 이 결과를 정기 실행에서 발생한 실제 지급으로 표시하지 않습니다.
+- 모의실행은 회원 83명·2페이지, 추천인 연결 1건·제외 1건, 적립 대상 0건입니다.
+- 5분 LaunchAgent를 부트스트랩하고 첫 정기 적용 실행을 직접 검증했습니다. 시작 `2026-09-15T11:29:47.576Z`, 종료 `2026-09-15T11:29:48.639Z`, 성공입니다.
+- 첫 실행은 회원 83명·2페이지, 연결 1건·제외 1건이며 지급·예약·실패 등 나머지 집계는 0입니다. 운영 원장 0행, 일별 백업 20,480바이트, 잠금 파일 없음, launchctl 종료 코드 0·실행 간격 300초를 확인했습니다. 지급 대상이 없어 정기 실행의 실고객 지급을 검증한 것은 아닙니다.
+- 후속 2회도 성공했습니다. 세 번째 종료 시각 `2026-09-15T11:39:53.240Z`, 지급·실패 0건입니다. LaunchAgent는 Mac mini 전원과 로그인된 사용자 세션에 의존합니다.
+- 최종 UI 코드 `d92577b` 기준 자동 테스트 120개 통과, CORE Hosting 배포, 공개 자산 HTTP 200 및 로컬 파일 28,456바이트 일치를 확인했습니다. PC 440px 상한 패널·모바일 하단 시트·초대자 전용 혜택 문구이며 320·390·768·1440px 화면을 확인했습니다.
+- 실제 SEO Footer 원문 54,568자를 보존하고 210자 로더만 추가했습니다. 최신 로더 `282893b98f96` 저장 후 다시 열어 전체 저장값 일치를 확인했습니다. Body·Header API 원문 해시는 변경되지 않았습니다.
+- unit-script CLI는 다른 과거 원문 50,004자를 반환합니다. 원천이 일치하지 않으므로 스크립트 게시 CLI의 운영 apply는 차단합니다. SEO Footer 저장·Hosting 자산 배포와 CLI 게시 가능 상태를 구분합니다.
+- 일반회원 `editProfile`에서 추천인 코드 생성, 본인 코드의 공유 URL과 복사 완료 표시를 확인했습니다. 브라우저 외부 클립보드 내용까지 독립 확인하지는 못했습니다. 권한 없는 일반 테스트회원의 `/48` 접근은 계속 차단됩니다. 전체 가입 흐름·모든 영상 권한의 검증으로 확대하지 않습니다.
+- 정식 원천 조회의 기본 인증 프로필 고정과 `auth doctor` 실제 갱신 성공을 확인했습니다. Gmail은 기존 위임 권한으로 메일함 프로필 읽기를 확인했으며 시험 이메일은 보내지 않았습니다.
 
-Unit tests and the generated preview are not proof of native signup attribution or real points payout.
+## 남은 확인과 책임
 
-The home Chrome admin session was verified. Required terms consent and user-completed new test signup are confirmed; the third-party disclosure still contains example placeholder text requiring separate review. Existing administrator autofill was not used as a substitute for a newly created ordinary member. No supplied password was stored.
+- 가입폼 자동 입력은 라이브 검증 전입니다. 빈 가입폼을 여는 시점에 사용자의 약관 동의 승인을 받아야 합니다. 추가 계정 생성·추가 지급은 진행하지 않습니다. 소셜 가입 완료도 주장하지 않습니다.
+- 사이드바 친구 초대를 커뮤니티 바로 아래에 배치했습니다. PC y=407px·모바일 371px 화면 y=372px, 높이 57px이며 실제 클릭으로 팝업이 열렸습니다. 사이드메뉴·하단 진입점은 각 1개입니다.
+- 사용자 요청대로 사이드바 가운데 정렬, #b3392d 배경·흰색 글자를 적용하고 PC·모바일 실제 스타일과 화면을 확인했습니다. 하단 진입점 스타일은 변경하지 않았습니다.
+- SEO Footer와 CLI 원천 불일치가 해소되기 전에는 운영 게시 차단을 유지합니다. 원문이 다른 상태에서 강제로 덮어쓰지 않습니다.
+- 관련 구현: `scripts/run-imweb-referral-worker.mjs`, `scripts/run-imweb-referral-job.mjs`, `scripts/imweb-referral-site.mjs`, `scripts/publish-imweb-referral.mjs`.
+- 활성 운영규칙은 ARCHIVE CORE `/core/rules/`의 `imweb-referral-rewards` 항목에서 관리합니다. 미검증 항목은 승인 및 실제 확인 후 갱신합니다.
