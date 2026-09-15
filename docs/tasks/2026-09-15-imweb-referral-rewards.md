@@ -134,3 +134,8 @@
 - Final code tests: 120 passed. CORE Hosting, onsite welcome compatibility and release guards passed. One predeploy stopped on an outdated local HEAD before any upload; fast-forward corrected it and deployment succeeded.
 - Remaining live proof: native signup-field auto-fill after required terms. Action-time consent requested; no new acceptance, account or payment without response. Social signup not certified. Task-owned QA tabs close at final; only the terms handoff remains while awaiting consent.
 - Final verification report and CORE rules updated in this release; no Notion duplicate created.
+
+## Popup Copy Removal
+
+- User requested removal of the existing-member invitation notice. Do not create that paragraph for logged-in visitors; preserve the anonymous email-signup invitation and all referral attribution/reward rules.
+- This is presentation-only: no worker, payout, identity, policy or access change. No CORE operating-rule update is needed. Generated widget asset version 3366800e05eb; deploy CORE asset and update only the existing native SEO loader version.

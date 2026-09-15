@@ -75,11 +75,10 @@ function start() {
   observer.observe(document.body, { childList: true, subtree: true }); entries();
 
   if (incomingReferral(location.href)) {
-    const note = document.createElement('p'); note.className = 'ap-invite-note';
-    note.textContent = memberLink() ? '초대 혜택은 처음 가입하는 친구에게만 적용됩니다. 내 초대 링크로 다른 친구를 초대할 수 있어요.' :
-      '친구의 초대로 오셨군요. 이메일로 처음 가입하면 초대한 친구에게 3,000원이 적립됩니다.';
-    content.prepend(note);
     if (!memberLink()) {
+      const note = document.createElement('p'); note.className = 'ap-invite-note';
+      note.textContent = '친구의 초대로 오셨군요. 이메일로 처음 가입하면 초대한 친구에게 3,000원이 적립됩니다.';
+      content.prepend(note);
       const join = document.createElement('button'); join.type = 'button'; join.className = 'ap-invite-join';
       join.textContent = '이메일로 회원가입'; join.addEventListener('click', async () => {
         const link = nativeJoin();
