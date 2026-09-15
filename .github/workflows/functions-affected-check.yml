@@ -85,6 +85,9 @@ jobs:
       - name: Test system hardening and deploy safety
         run: npm run test:system-hardening
 
+      - name: Test Imweb referral award guards
+        run: node --test scripts/tests/imweb-referral-*.test.mjs
+
       - name: Validate instructor lesson registration release
         run: node scripts/validate-instructor-lesson-registration-release.mjs
 

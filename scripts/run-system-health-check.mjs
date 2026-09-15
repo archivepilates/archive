@@ -74,6 +74,16 @@ let headlessRuntime;
 
 const AUTOMATIONS = [
   {
+    id: "imweb-referral-rewards",
+    label: "com.archive.imweb-referral-rewards",
+    title: "Imweb friend referral rewards",
+    area: "shopping",
+    resultFile: path.join(HOME, "ArchiveIN/automation/referral-production/imweb-referral-worker-status.json"),
+    maxAgeMinutes: 20,
+    plist: path.join(PLIST_DIR, "com.archive.imweb-referral-rewards.plist"),
+    repair: "none",
+  },
+  {
     id: "studiomate-excel-sync",
     label: "com.archive.studiomate-excel-emergency-mode",
     title: "StudioMate Excel sync",

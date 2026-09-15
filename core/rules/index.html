@@ -58,6 +58,7 @@
             <a href="#staff-evaluation">강사 평가<span>퀴즈, 인사기록카드</span></a>
             <a href="#parking">주차등록<span>차량, 아이파킹, 자동 할인</span></a>
             <a href="#welcome">회원등록·가입 이력<span>StudioMate 수동 등록, 과거 가입서 후속 확인</span></a>
+            <a href="#imweb-referral-rewards">아임웹 친구 초대<span>가입 적립금, 중복 방지, 월 한도</span></a>
             <a href="#settlement">정산·지표<span>월별 정산, 대시보드</span></a>
             <a href="#refunds">환불<span>예상액, 검토, 이폼싸인</span></a>
             <a href="#cloud-cost">클라우드 비용<span>예산, 과금, 자원 정리</span></a>
@@ -852,6 +853,28 @@
           </div>
           <div class="rule-note"><strong>변경·검증 상태</strong><span>2026-09-14 폐기 릴리스: 신규 API 요청은 410으로 차단하고 발송 큐에서도 웰컴을 제외합니다. 15초 조회 작업과 점검 자동복구 대상에서 제거합니다. 기존 개별 가입서·서명·PDF는 보존하며, StudioMate 자체 계약서 자동화는 센터 서명·발급·이력 검증 후 별도 적용합니다.</span></div>
           <div class="rule-note"><strong>현재 확인 위치</strong><span>StudioMate 회원·수강권·자체 계약서 / 과거 가입서 원본: Firestore onsiteWelcomeRequests, memberSignupContracts, studiomateMemberProfileWriteJobs / Google Drive 가입서 PDF 폴더 / CORE 강사레슨 / Firestore lectures, bookings, memberProfiles.activeTickets, instructorLessonRegistrations, studiomateInstructorLessonJobs, eformsignInstructorMemberJobs, instructorMemberConsents / 이폼싸인 강사회원가입서</span></div>
+        </section>
+
+        <section class="panel rule-section" id="imweb-referral-rewards">
+          <div class="panel-header"><div><h2>아임웹 친구 초대 · 2026.09.15</h2><p>신규 회원 초대 혜택을 준비하며, 아임웹 무료체험에서 화면 구성을 검토합니다.</p></div><span class="pill">무료체험 · 캠페인 미실행</span></div>
+          <div class="rule-grid">
+            <article class="rule-card"><h3>승인된 기준</h3><ul>
+              <li>친구의 신규 가입 1건당 초대자에게 3,000원을 적립합니다. 구매와 휴대폰 인증은 요구하지 않습니다.</li>
+              <li>초대자별 한국시간 달력 월 최대 30,000원, 10건까지 지급합니다. 신규 가입 1건에는 추천인 1명만 인정하며 자기추천·중복 지급을 금지합니다.</li>
+              <li>휴대폰 인증이 없으므로 다른 이메일을 사용한 동일인의 다계정 가입까지 완전히 방지할 수는 없습니다.</li>
+            </ul></article>
+            <article class="rule-card"><h3>구현·검증 상태</h3><ul>
+              <li>로컬 구현: 공유 위젯, 초대 링크, 가입 코드 유지, SQLite 중복·월 한도 원장, 단일 지급 시도와 실제 적립 내역 대조. 자동 테스트 60개 통과. 실제 가입 폼 연결은 미완료입니다.</li>
+              <li>원천: 아임웹 API의 회원 고유 코드, 가입 시각, 추천인 코드와 적립 내역. 브라우저가 보낸 이름·이메일만으로 지급 대상을 정하지 않습니다.</li>
+              <li>조회 확인: 2026-09-15 사용자 완료 테스트 가입을 API로 확인했습니다. 회원 83명·2페이지 중 추천인 연결 1건이 기존 일반회원 테스트 초대자에게 정확히 연결됩니다. 실제 가입 기록의 지급 모의실행은 3,000원 대상 1건, 실제 지급 시도 0건입니다.</li>
+              <li>실제 시험 적립·회수 완료: 수동 시험 이후 별도 승인을 받아 신규 가입 기록으로 지급 프로그램을 실행했습니다. 초대자에게 3,000원 1회 지급, 재실행 시 추가 지급 0회, 즉시 회수 후 잔액 0원. 두 테스트회원의 그룹과 신규회원 잔액 0원 유지 확인. 원장을 다시 열어도 중복 차단됩니다. 예약 실행은 아직 없습니다.</li>
+              <li>관리자 저장: 적립금 기능을 켜고 공통 구매·일반 후기·사진 후기 적립을 0으로 저장했습니다. 기존 사용 조건은 유지하며, 상품별 별도 적립 설정은 미점검입니다.</li>
+              <li>무료체험: 2026-09-28까지 이용 가능. 자동갱신 해지 후 구독 갱신 버튼과 결제 내역 없음 표시를 확인했습니다. 9월 29일 결제 예정은 사라졌습니다.</li>
+              <li>벤치마크: 아임웹 모바일 하단 패널·PC 우측 위젯과 링크 복사·공유 버튼 확인. 자체 화면은 테스트 HTML로 저장했으나 로컬 파일 접근 제한으로 모바일·PC 시각 검증은 미완료입니다.</li>
+              <li>배포: 이 운영규칙과 자체 코드는 미배포. 자체 지급 비활성, 아임웹 캠페인 미실행. 주문·회원그룹·영상 권한·내 강의실 변경 없음.</li>
+              <li>다음: 실제 가입·추천인 연결·지급·중복 차단·회수 검증 완료. 초대 링크 자동 입력·소셜 가입·화면 및 기존 영상 이용 검증이 남아 있습니다. 필수 제3자 제공 항목의 예시 문구도 정리가 필요합니다. 검증 후 한 개 지급 방식만 활성화하고 시작 일시·원장 경로·백업·실행 주기를 확정합니다. 결과가 불명확하면 자동 재지급하지 않습니다.</li>
+            </ul></article>
+          </div>
         </section>
 
         <section class="panel rule-section" id="settlement">
