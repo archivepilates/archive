@@ -296,7 +296,7 @@ test("findSourceLinkedNotionMemberPage rejects archived source page", async () =
   );
 });
 
-test("findSourceLinkedNotionMemberPage rejects public ancestry", async () => {
+test("findSourceLinkedNotionMemberPage allows participant-facing public ancestry", async () => {
   const runtime = makeRuntime({
     refs: {
       privateLessonChartRecords: () =>
@@ -312,18 +312,50 @@ test("findSourceLinkedNotionMemberPage rejects public ancestry", async () => {
     },
     notionRequest: makeNotionRequest({
       "public-source-id": { parent: { page_id: "member-public-page" } },
-      "member-public-page": { public_url: "https://notion.site/public" },
+      "member-public-page": {
+        public_url: "https://notion.site/public",
+        parent: { page_id: "root-instructor-b" },
+      },
+    }),
+    helpers: identityHelpers,
+  });
+
+  const result = await runtime.findSourceLinkedNotionMemberPage({
+    recordId: "record-3",
+    memberId: "member-public",
+    staffName: "Instructor B",
+  });
+  assert.equal(result, "member-public-page");
+});
+
+test("findSourceLinkedNotionMemberPage rejects archived ancestry", async () => {
+  const runtime = makeRuntime({
+    refs: {
+      privateLessonChartRecords: () =>
+        makeQuery([
+          {
+            recordId: "archived-parent-record",
+            memberId: "member-archived-parent",
+            staffName: "Instructor B",
+            lessonDate: "2026-09-01",
+            notionSync: { instructorPageId: "archived-parent-source" },
+          },
+        ]),
+    },
+    notionRequest: makeNotionRequest({
+      "archived-parent-source": { parent: { page_id: "member-archived-parent-page" } },
+      "member-archived-parent-page": { archived: true, parent: { page_id: "root-instructor-b" } },
     }),
     helpers: identityHelpers,
   });
 
   await assert.rejects(
     () => runtime.findSourceLinkedNotionMemberPage({
-      recordId: "record-3",
-      memberId: "member-public",
+      recordId: "record-archived-parent",
+      memberId: "member-archived-parent",
       staffName: "Instructor B",
     }),
-    /Notion 회원 기록의 보관·공개 상태 확인 필요/,
+    /Notion 회원 기록의 보관 상태 확인 필요/,
   );
 });
 

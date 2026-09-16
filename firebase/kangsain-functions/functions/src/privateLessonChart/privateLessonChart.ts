@@ -2139,7 +2139,7 @@ async function findSourceLinkedNotionMemberPage(record: PrivateLessonChartRecord
   let parent = memberPageId;
   for (let depth = 0; depth < 3; depth++) {
     const page = await notionRequest(`pages/${parent}`, "GET");
-    if (page.archived || page.in_trash || page.public_url) throw new Error("Notion 회원 기록의 보관·공개 상태 확인 필요");
+    if (page.archived || page.in_trash) throw new Error("Notion 회원 기록의 보관 상태 확인 필요");
     const ancestor = String(page.parent?.page_id || "");
     if (ancestor.replaceAll("-", "") === instructorRoot.replaceAll("-", "")) return memberPageId;
     if (!ancestor) break;
