@@ -4,7 +4,7 @@
 </head><body><main>
 <small>ARCHIVE PILATES · 2026-09-16</small>
 <h1>ARCHIVE METHOD #8<br>외부 피드백</h1>
-<p class="status">시퀀스 우선 배치 완료 / 배포 전 검증 통과</p>
+<p class="status">시퀀스 우선 배치 / Hosting 배포·노션 갱신·실사이트 검증 완료</p>
 <p>오늘의 핵심: <strong>도구로 느끼고, 스스로 조절합니다.</strong></p>
 <section><h2>완성한 내용</h2><ul>
 <li>최신 노션 원본의 민진T 리포머+폼롤러 12개, 은영T 바렐+토닝볼 12개 동작 순서 반영.</li>
@@ -21,7 +21,7 @@
 <tr><td>2026-09-20</td><td>9/20 12:00 KST</td><td><a href="https://www.notion.so/3ddd49eae4bf814286d2e0a11c65060f">9/20 DB · HTML 첨부</a></td></tr>
 </tbody></table>
 <p>날짜는 현재 9월 노션 확정 안내와 기존 캘린더 계약을 대조했다. StudioMate 예약자·수강권은 이번 작업에서 조회하거나 변경하지 않았다.</p>
-<p>DB 상태: 자료확인필요(배포 대기). 알림톡 사용: 꺼짐. 교재 HTML은 내부 프리뷰로 첨부했고 공개경로는 배포 예정임을 명시했다.</p>
+<p>두 DB 상태: 공개가능. 실제 공개는 각 수업 당일 정오. 노션 HTML 첨부와 웹 모두 시퀀스 우선 순서로 일치한다. 알림톡 사용은 별도 발송 준비 확인 전까지 꺼짐 유지.</p>
 </section>
 <section><h2>검증</h2><ul>
 <li>노션 이론 재조회 및 두 원본 하위 페이지 보존 확인.</li>
@@ -37,7 +37,10 @@
 <p>작업트리: <code>/Users/archivepilates/codex-worktrees/archive-method-external-feedback-260919</code></p>
 <p>브랜치: <code>codex/mini/archive-method-external-feedback-260919</code></p>
 <p>새 큐카드 2개, 전용 CSS, 원본 스냅샷, 이론 문서, 집중 검증 스크립트. 기존 회차와 공통 잠금 스크립트, 캘린더는 변경하지 않음.</p>
-<p>커밋·push·Hosting 배포·실제 알림톡 발송은 실행하지 않음. 배포 요청 시 검증된 소스를 통합한 뒤 공개 URL을 확인해야 함.</p>
+<p>배포 커밋: <code>b303ec743fcdef27bd75b10ce275e3e95cb00ff2</code>. GitHub main 통합 후 깨끗한 main에서 Firebase 프로젝트 <code>archive-pilates</code>의 <code>hosting:archive-pilates,hosting:archive-pilates-in</code>만 배포했다. Functions·Firestore·CORE 별도 사이트·알림톡 발송은 실행하지 않았다.</p>
+<p>실사이트와 미러의 두 날짜 HTML 및 전용 CSS가 소스와 SHA-256 일치. HTTP 200, 슬래시 없는 링크 301, no-cache 헤더 확인. 릴리스 canary 22개 항목과 <a href="https://github.com/archivepilates/archive/actions/runs/35077969773">GitHub CI</a> 통과.</p>
+<p>실사이트 Chromium 검사 32개 통과: 두 날짜의 잠금·프리뷰·시퀀스 우선 순서, 320·390·768·1280px 두 강사 탭 12개씩, 이미지·가로 넘침·런타임 오류 확인. 작업 브라우저·컨텍스트 종료 완료.</p>
+<p><a href="https://in.archivepilates.com/method/external-feedback-260919/?preview=externalfeedback260919">9/19 스태프 프리뷰</a> · <a href="https://in.archivepilates.com/method/external-feedback-260920/?preview=externalfeedback260920">9/20 스태프 프리뷰</a></p>
 <p>수업배정 안내 페이지와 D-1 라우팅은 별도 발송 준비 사항이다. 현재 9월 배정 페이지가 없으므로 교재 생성만으로 D-1 발송 준비 완료로 보지 않는다.</p>
 <p>운영 규칙 변경은 없으며, 기존 정오 공개 규칙을 적용했으므로 ARCHIVE CORE 운영규칙 수정은 필요하지 않다.</p>
 </section></main></body></html>
