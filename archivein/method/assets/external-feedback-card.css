@@ -1,0 +1,71 @@
+:root {
+  --bg: #f8faf9;
+  --paper: #fff;
+  --ink: #202725;
+  --muted: #54615d;
+  --quiet: #66726e;
+  --line: #dce4e0;
+  --soft: #edf4f0;
+  --accent: #ab342e;
+  --dark: #202725;
+}
+body { font-size: 16px; overflow-wrap: anywhere; letter-spacing: 0; }
+.page { max-width: 800px; }
+.brand-symbol { display: block; width: 44px; height: 44px; margin-bottom: 18px; }
+.title { font-size: 40px; line-height: 1.2; }
+.sub { font-size: 16px; }
+.lesson-meta { margin: 20px 0 6px; font-size: 13px; color: var(--muted); }
+.apparatus { margin: 0; font-size: 14px; font-weight: 650; }
+.hero-note { padding-top: 20px; }
+.hero-note p { font-size: 26px; line-height: 1.4; }
+.section-lead { margin: 0 0 20px; max-width: 65ch; color: var(--muted); }
+.concept b { font-size: 15px; }
+.concept p { font-size: 14px; font-weight: 500; }
+.flow { grid-template-columns: repeat(4, minmax(0, 1fr)); border-radius: 4px; }
+.flow-step b { font-size: 14px; }
+.flow-step span { font-size: 13px; font-weight: 500; }
+.lesson-contrast { margin-top: 22px; }
+.lesson-contrast p { padding: 0 0 14px; margin: 14px 0 0; border-bottom: 1px solid var(--line); font-size: 14px; color: var(--muted); }
+.lesson-contrast b { color: var(--ink); }
+.theory-note { color: var(--muted); font-size: 13px; line-height: 1.7; margin: 18px 0 0; }
+.tab { font-size: 16px; min-height: 72px; cursor: pointer; }
+.tab span { font-size: 12px; }
+.teacher-intro { font-size: 14px; font-weight: 500; }
+.practice-note { margin: 0 0 20px; padding-left: 12px; border-left: 2px solid var(--accent); color: var(--muted); font-size: 13px; }
+.phase-card { overflow: visible; border-radius: 6px; }
+.phase-mark { border-radius: 5px 0 0 0; color: #315c49; }
+.phase-title h3 { font-size: 16px; }
+.phase-title p { font-weight: 500; }
+.move-name { margin: 0; font-size: 16px; }
+.move-setup { margin: 8px 0; font-size: 13px; color: #315c49; }
+.move-steps { margin: 10px 0; }
+.move-steps p { margin: 5px 0; padding-left: 12px; border-left: 2px solid var(--line); font-size: 14px; line-height: 1.65; }
+.move-focus { font-size: 13px; font-weight: 500; margin: 9px 0 0; }
+.move-list li { padding-top: 18px; padding-bottom: 18px; }
+.move-list li::before { top: 20px; }
+.references { margin-top: 26px; font-size: 13px; color: var(--muted); }
+.references summary { display: list-item; padding: 12px 0; min-height: 44px; font-weight: 700; cursor: pointer; color: var(--ink); }
+.references ul { padding-left: 20px; }
+.references li { margin: 12px 0; }
+.references p { margin: 6px 0; }
+.references a { color: #315c49; text-underline-offset: 3px; }
+a:focus-visible, button:focus-visible, summary:focus-visible, [role="tabpanel"]:focus-visible { outline: 3px solid #315c49; outline-offset: 4px; }
+.video-cta { padding: 28px 0 0; border-radius: 0; border-bottom: 0; background: transparent; color: var(--ink); }
+.video-cta .tag { color: var(--accent); }
+.video-cta p, .join-note { color: var(--muted) !important; }
+.join-button { padding: 14px 16px; border-radius: 6px; font-size: 14px; }
+.method-gate p { border-radius: 6px; box-shadow: none; }
+.topbtn { z-index: 5; pointer-events: none; visibility: hidden; }
+.topbtn.on { pointer-events: auto; visibility: visible; }
+@media (max-width: 620px) {
+  .flow { grid-template-columns: 1fr; }
+  .flow-step { grid-template-columns: 72px minmax(0, 1fr); }
+}
+@media (max-width: 390px) {
+  .title { font-size: 36px; }
+  .tab { font-size: 16px; }
+  .tab span { font-size: 12px; }
+}
+@media (prefers-reduced-motion: reduce) {
+  *, *::before, *::after { scroll-behavior: auto !important; }
+}
