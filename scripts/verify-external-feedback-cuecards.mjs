@@ -15,7 +15,7 @@ const { chromium } = require("playwright");
 const repoRoot = path.resolve(path.dirname(fileURLToPath(import.meta.url)), "..");
 const publicRoot = path.join(repoRoot, "archivein");
 const outputDir = path.join(repoRoot, "artifacts/external-feedback-2609");
-const sourceFile = "docs/tasks/2026-09-16-external-feedback-source.json";
+const sourceFile = "docs/tasks/2026-09-18-external-feedback-source.json";
 const cards = [
   { code: "260919", date: "2026-09-19", displayDate: "2026. 9. 19. (토)" },
   { code: "260920", date: "2026-09-20", displayDate: "2026. 9. 20. (일)" },
@@ -49,7 +49,6 @@ const report = {
 };
 const contexts = new Set();
 const text = (value) => value.replace(/\*\*/g, "").replace(/\s+/g, " ").trim();
-const title = (value) => text(value).replace(/ — /g, " · ");
 const hash = (file) => createHash("sha256").update(fs.readFileSync(path.join(repoRoot, file))).digest("hex");
 let browser;
 let baseUrl;
@@ -71,21 +70,44 @@ async function check(name, callback) {
 }
 
 function parseSource(source) {
-  const blocks = [...source.minjin.text.matchAll(/^## (\d+)\. (.+)\n([\s\S]*?)(?=^## \d+\.|$(?![\s\S]))/gm)];
-  const minjin = blocks.map((match, index) => {
-    assert.equal(Number(match[1]), index + 1, "Minjin source numbering changed");
-    const body = match[3];
-    const moves = body.includes("### 동작\n")
-      ? body.split("### 동작\n")[1].split(/^###? /m)[0]
-      : body.split(/^###? /m)[0];
-    const steps = [...moves.matchAll(/^- (.+)$/gm)].map((step) => text(step[1]));
-    assert.ok(steps.length, `No source steps found for ${match[2]}`);
-    return { title: text(match[2]), steps };
-  });
-  const eunyoung = [...source.eunyoung.text.matchAll(/^\d+\. (.+)$/gm)].map((match) => text(match[1]));
-  assert.equal(minjin.length, 12, "Minjin source must contain 12 detailed moves");
+  assert.equal(source.minjin.pageId, "3ded49ea-e4bf-800e-9a73-d23defe9b2b6", "Only the final Minjin child page is canonical");
+  const phaseNames = { "WARM-UP": "Warm-up", MAIN: "Main", "COOL DOWN": "Cool Down" };
+  const parseSequence = (raw) => {
+    const phases = [];
+    const moves = [];
+    let phase;
+    let move;
+    for (const rawLine of raw.split("\n")) {
+      const line = text(rawLine).replace(/^#+\s*/, "");
+      if (phaseNames[line]) {
+        phase = { title: phaseNames[line], moves: 0 };
+        phases.push(phase);
+        move = undefined;
+      } else if (/^\d+\. /.test(line)) {
+        assert.ok(phase, "A source move must follow a phase heading");
+        const match = line.match(/^(\d+)\. (.+)$/);
+        assert.equal(Number(match[1]), phase.moves + 1, "Source numbering must restart within each phase");
+        phase.moves++;
+        move = { title: match[2], steps: [] };
+        moves.push(move);
+      } else if (line.startsWith("- ")) {
+        assert.ok(move, "A source substep must follow a move");
+        move.steps.push(line.slice(2));
+      }
+    }
+    return { moves, phases };
+  };
+  const mj = parseSequence(source.minjin.text);
+  const ey = parseSequence(source.eunyoung.text);
+  const minjin = mj.moves;
+  const eunyoung = ey.moves;
+  assert.equal(minjin.length, 9, "Final Minjin source must contain 9 groups");
+  assert.equal(minjin.flatMap((move) => move.steps).length, 28, "Final Minjin source must contain 28 substeps");
+  assert.deepEqual(minjin.map((move) => move.steps.length), [3, 2, 3, 3, 5, 5, 2, 2, 3]);
   assert.equal(eunyoung.length, 12, "Eunyoung source must contain 12 moves");
-  return { minjin, eunyoung };
+  assert.deepEqual(mj.phases, [{ title: "Warm-up", moves: 3 }, { title: "Main", moves: 4 }, { title: "Cool Down", moves: 2 }]);
+  assert.deepEqual(ey.phases, [{ title: "Warm-up", moves: 3 }, { title: "Main", moves: 8 }, { title: "Cool Down", moves: 1 }]);
+  return { minjin, eunyoung, phases: { minjin: mj.phases, eunyoung: ey.phases } };
 }
 
 const contentTypes = {
@@ -206,7 +228,7 @@ async function accessState(page, state) {
   assert.equal(observed.contentAriaHidden, String(locked));
   assert.equal(observed.message, "수업자료는 수업 당일 12시에 공개됩니다.");
   assert.equal(await page.getByRole("tab").count(), locked ? 0 : 2);
-  assert.equal(await page.getByRole("heading", { level: 4 }).count(), locked ? 0 : 12);
+  assert.equal(await page.getByRole("heading", { level: 4 }).count(), locked ? 0 : expected.minjin.length);
   return observed;
 }
 
@@ -245,27 +267,41 @@ async function verifyContent(page, card) {
   for (const teacher of teachers) {
     await page.getByRole("tab", { name: teacher.name }).click();
     const pane = page.getByRole("tabpanel", { name: teacher.name });
-    await check(`${card.code}: ${teacher.key} 12 source titles in order`, async () => {
+    await check(`${card.code}: ${teacher.key} final source titles in order`, async () => {
       const actual = (await pane.getByRole("heading", { level: 4 }).allTextContents()).map(text);
-      assert.equal(actual.length, 12);
-      const wanted = teacher.key === "minjin" ? expected.minjin.map((move) => title(move.title)) : expected.eunyoung;
+      const wanted = expected[teacher.key].map((move) => move.title);
+      assert.equal(actual.length, wanted.length);
       assert.deepEqual(actual, wanted);
-      return { titles: actual, titleNormalization: teacher.key === "minjin" ? "Source em dash becomes display middle dot; otherwise exact" : "Exact source titles" };
+      return { titles: actual, titleNormalization: "Exact final source titles" };
+    });
+    await check(`${card.code}: ${teacher.key} source phase grouping`, async () => {
+      const phases = await pane.evaluate((element) => [...element.querySelectorAll(".phase-card")].map((phase) => ({ title: phase.querySelector("h3").textContent, moves: phase.querySelectorAll("h4").length })));
+      assert.deepEqual(phases, expected.phases[teacher.key]);
+      return phases;
     });
     if (teacher.key === "minjin") {
-      await check(`${card.code}: Minjin all steps and repetition counts`, async () => {
+      await check(`${card.code}: Minjin all 28 final substeps by group, no legacy settings or repetitions`, async () => {
         const actual = await pane.evaluate((element) => [...element.querySelectorAll(".move-list > li")].map((move) => [...move.querySelectorAll(".move-steps p")].map((step) => step.textContent.replace(/\s+/g, " ").trim())));
         assert.deepEqual(actual, expected.minjin.map((move) => move.steps));
-        return { moves: actual.length, steps: actual.flat().length, repetitionInstructions: actual.flat().filter((step) => /×|회|좌우 반복/.test(step)) };
+        assert.equal(actual.flat().length, 28);
+        assert.equal(await pane.evaluate((element) => element.querySelectorAll(".move-setup").length), 0);
+        assert.doesNotMatch(await pane.textContent(), /Jump|Feedback ON|Feedback OFF|Front Rowing|Feet on Frame|롤러 제거|×|\d+\s*(?:회|세트|breaths|ea|kg)/i);
+        return { groups: actual.length, substeps: actual.flat().length, stepsPerGroup: actual.map((steps) => steps.length) };
       });
     } else {
-      await check(`${card.code}: Eunyoung source phase grouping`, async () => {
-        const phases = await pane.evaluate((element) => [...element.querySelectorAll(".phase-card")].map((phase) => ({ title: phase.querySelector("h3").textContent, moves: phase.querySelectorAll("h4").length })));
-        assert.deepEqual(phases, [{ title: "Warm-up", moves: 3 }, { title: "Main", moves: 7 }, { title: "Cool Down", moves: 2 }]);
-        return phases;
+      await check(`${card.code}: Eunyoung external-load intro without invented weights or repetitions`, async () => {
+        const content = await pane.textContent();
+        assert.match(content, /스프링의 직접적인 저항이 없어/);
+        assert.match(content, /토닝볼을 웨이트로 활용해 외부 부하/);
+        assert.doesNotMatch(content, /마무리의 Push up|마무리에 맞는 강도|×|\d+\s*(?:회|세트|kg)/i);
       });
     }
   }
+  await check(`${card.code}: shared theory does not claim the superseded Minjin sequence`, async () => {
+    const content = await page.evaluate(() => [...document.querySelectorAll('main > section:not([aria-labelledby="sequence-title"])')].map((section) => section.textContent).join("\n"));
+    assert.doesNotMatch(content, /Jump|Feedback ON|Feedback OFF|Front Rowing|Frame Bridge|Rowing에서 롤러를 제거/);
+    assert.match(content, /이번 시퀀스의 특정 동작을 설명하는 문장은 아닙니다/);
+  });
   await check(`${card.code}: signup exists and no rating form`, async () => {
     const signup = page.getByRole("link", { name: "ARCHIVE PILATES 홈페이지 가입하기", exact: true });
     assert.equal(await signup.count(), 1);
@@ -380,7 +416,7 @@ function closedPort() {
 }
 
 try {
-  await check("Files exist and source yields 12 moves per teacher", () => {
+  await check("Files exist; final source yields Minjin 9 groups / 28 substeps and Eunyoung 12 moves", () => {
     for (const file of [sourceFile, ...cards.map((card) => card.file), "archivein/method/assets/external-feedback-card.css", "archivein/method/assets/method-access.js", "archivein/method/assets/method-access.css", "archivein/method/assets/support-movement-card.js", "archivein/method/assets/support-movement-card.css", "archivein/logo120.png", "archivein/apple-touch-icon.png"]) {
       assert.ok(fs.statSync(path.join(repoRoot, file)).isFile(), file);
       report.inputs[file] = hash(file);
