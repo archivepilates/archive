@@ -56,8 +56,18 @@ for (const file of cueCardFiles) {
 
 const accessScript = path.join(METHOD_ROOT, "assets", "method-access.js");
 const accessScriptSource = fs.readFileSync(accessScript, "utf8");
-for (const marker of ["T12:00:00+09:00", OPEN_MESSAGE, 'body.classList.toggle("method-locked"']) {
+for (const marker of [
+  "T12:00:00+09:00",
+  OPEN_MESSAGE,
+  'body.classList.toggle("method-locked"',
+  'window.addEventListener("pageshow", applyMethodAccess)',
+  'window.addEventListener("focus", applyMethodAccess)',
+  'document.addEventListener("visibilitychange", applyMethodAccessWhenVisible)',
+]) {
   if (!accessScriptSource.includes(marker)) fail(accessScript, `default access marker missing: ${marker}`);
+}
+if (/Math\.min\(remaining \+ 50, 30_000\)/.test(accessScriptSource)) {
+  fail(accessScript, "30-second polling must not be used for cue-card access checks");
 }
 
 if (failures.length) {

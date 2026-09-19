@@ -15,6 +15,7 @@
     : new Date(Number.NaN);
   const isConfigured = Boolean(gate && content && !Number.isNaN(openAt.getTime()));
   const isStaffPreview = Boolean(previewCode && requestedPreview === previewCode);
+  const MAX_TIMEOUT_MS = 2_147_000_000;
   let timerId;
 
   if (message) message.textContent = OPEN_MESSAGE;
@@ -30,8 +31,12 @@
     window.clearTimeout(timerId);
     if (!isUnlocked && isConfigured) {
       const remaining = Math.max(0, openAt.getTime() - Date.now());
-      timerId = window.setTimeout(applyMethodAccess, Math.min(remaining + 50, 30_000));
+      timerId = window.setTimeout(applyMethodAccess, Math.min(remaining + 50, MAX_TIMEOUT_MS));
     }
+  }
+
+  function applyMethodAccessWhenVisible() {
+    if (document.visibilityState === "visible") applyMethodAccess();
   }
 
   if (!isConfigured) {
@@ -39,4 +44,7 @@
   }
 
   applyMethodAccess();
+  window.addEventListener("pageshow", applyMethodAccess);
+  window.addEventListener("focus", applyMethodAccess);
+  document.addEventListener("visibilitychange", applyMethodAccessWhenVisible);
 })();
