@@ -388,6 +388,7 @@ const required = [
     markers: [
       "archive-method-watch-",
       "private-lesson-support-movement-a-260829",
+      "private-lesson-external-feedback-a-260919",
       "student_share",
       "window.MEMBER_HASH",
       "SHA-256",
@@ -402,6 +403,7 @@ const required = [
     markers: [
       "archive-method-watch-",
       "private-lesson-support-movement-d-260830",
+      "private-lesson-external-feedback-b-260919",
       "student_share",
       "window.MEMBER_HASH",
       "videoWatchEventApi",

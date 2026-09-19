@@ -28,6 +28,8 @@ test("tracker is restricted to paid and explicitly registered student-share page
   assert.match(source, /archive-method-watch-/);
   assert.match(source, /private-lesson-support-movement-a-260829/);
   assert.match(source, /private-lesson-support-movement-d-260830/);
+  assert.match(source, /private-lesson-external-feedback-a-260919/);
+  assert.match(source, /private-lesson-external-feedback-b-260919/);
   assert.match(source, /contentType: "student_share"/);
   assert.match(source, /D팀 · 수강생 공유 \(B팀 영상 대체\)/);
   assert.match(source, /waitForYouTubeIframe/);
@@ -79,7 +81,7 @@ test("body script merge preserves unrelated scripts and replaces the tracker ide
   assert.ok(!mergedTwice.includes("window.oldTracker = true"));
   assert.match(
     mergedTwice,
-    /src="https:\/\/core\.archivepilates\.com\/assets\/imweb-video-watch-tracker-20260901\.js\?v=20260901a"/,
+    /src="https:\/\/core\.archivepilates\.com\/assets\/imweb-video-watch-tracker-20260901\.js\?v=20260919a"/,
   );
   assert.ok(!mergedTwice.includes("archivePilatesVideoWatchTracker"));
   assert.equal(mergedTwice, mergedOnce);

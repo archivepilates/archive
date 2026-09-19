@@ -88,6 +88,21 @@ test("normalizes only explicitly registered student-share pages", () => {
     () => normalizeVideoWatchEvent({ ...event, videoCode: "B260829" }, now),
     /일치/,
   );
+
+  const externalFeedback = normalizeVideoWatchEvent(
+    {
+      ...event,
+      eventId: "event_student_260919_1234567890",
+      sessionId: "session_student_260919_1234",
+      videoCode: "A260919",
+      videoTitle: "9/19 외부 피드백 A팀 · 수강생 공유",
+      pagePath: "/private-lesson-external-feedback-a-260919/",
+    },
+    now,
+  );
+  assert.equal(externalFeedback.contentType, "student_share");
+  assert.equal(externalFeedback.videoCode, "A260919");
+  assert.equal(externalFeedback.pagePath, "/private-lesson-external-feedback-a-260919");
 });
 
 test("builds video and buyer frequency summaries from started sessions only", () => {

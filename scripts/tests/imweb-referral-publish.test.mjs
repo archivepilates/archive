@@ -17,7 +17,7 @@ test('marker merge preserves unrelated bytes and is idempotent', () => {
 test('publisher aborts concurrent edits and preserves protected positions', () => {
   for (const concurrent of [false, true]) {
     const directory = mkdtempSync(join(tmpdir(), 'referral-publish-'));
-    const scripts = { body: 'data-archive-pilates-video-watch-tracker="2026-09-01.1"' + 'b'.repeat(10000),
+    const scripts = { body: 'data-archive-pilates-video-watch-tracker="2026-09-19.1"' + 'b'.repeat(10000),
       header: 'data-archive-pilates-my-classroom-v2="2026-09-04d"' + 'h'.repeat(10000), footer: 'f'.repeat(10000) };
     let reads = 0, writes = 0;
     const run = args => {

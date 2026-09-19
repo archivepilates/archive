@@ -36,7 +36,7 @@ function readScripts(run) {
     scripts[row.position] = row.scriptContent;
   }
   if (!scripts.header.includes('data-archive-pilates-my-classroom-v2="2026-09-04d"') ||
-      !scripts.body.includes('data-archive-pilates-video-watch-tracker="2026-09-01.1"')) {
+      !scripts.body.includes('data-archive-pilates-video-watch-tracker="2026-09-19.1"')) {
     throw new Error('Protected classroom markers changed; inspect current source');
   }
   return scripts;

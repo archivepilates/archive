@@ -51,6 +51,8 @@ const STUDENT_SHARE_PAGE_CODES = new Map<string, string>([
   ["/private-lesson-support-movement-b-260829", "B260829"],
   ["/private-lesson-support-movement-c-260830", "C260830"],
   ["/private-lesson-support-movement-d-260830", "D260830"],
+  ["/private-lesson-external-feedback-a-260919", "A260919"],
+  ["/private-lesson-external-feedback-b-260919", "B260919"],
 ]);
 
 export interface NormalizedVideoWatchEvent {
@@ -570,7 +572,7 @@ function contentTypeForPage(pagePath: string, videoCode: string): VideoWatchCont
 
 function storedContentType(value: unknown, sourcePage: unknown): VideoWatchContentType {
   if (value === "student_share") return "student_share";
-  if (String(sourcePage || "").startsWith("/private-lesson-support-movement-")) return "student_share";
+  if (STUDENT_SHARE_PAGE_CODES.has(normalizePagePath(sourcePage))) return "student_share";
   return "paid";
 }
 

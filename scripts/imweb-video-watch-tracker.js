@@ -1,7 +1,7 @@
 (function archivePilatesVideoWatchTracker() {
   "use strict";
 
-  const TRACKER_VERSION = "2026-09-01.1";
+  const TRACKER_VERSION = "2026-09-19.1";
   const TRACKER_MARKER = "data-archive-pilates-video-watch-tracker";
   const EVENT_ENDPOINT = "https://asia-northeast3-archive-pilates.cloudfunctions.net/videoWatchEventApi";
   const SESSION_IDLE_MS = 30 * 60 * 1000;
@@ -24,6 +24,14 @@
     "/private-lesson-support-movement-d-260830": {
       videoCode: "D260830",
       videoTitle: "8/30 지지와 움직임 D팀 · 수강생 공유 (B팀 영상 대체)",
+    },
+    "/private-lesson-external-feedback-a-260919": {
+      videoCode: "A260919",
+      videoTitle: "9/19 외부 피드백 A팀 · 수강생 공유",
+    },
+    "/private-lesson-external-feedback-b-260919": {
+      videoCode: "B260919",
+      videoTitle: "9/19 외부 피드백 B팀 · 수강생 공유",
     },
   });
 
