@@ -40,11 +40,13 @@ const TEST_ACCESS_CASES = [
     code: "A260919",
     groupCode: "g2026092001cc74fe9d643",
     path: "/private-lesson-external-feedback-a-260919",
+    expectedVideoId: "Mxk1oeWZzXM",
   },
   {
     code: "B260919",
     groupCode: "g20260920394ff8e948673",
     path: "/private-lesson-external-feedback-b-260919",
+    expectedVideoId: "Vq9JxoeQpTY",
   },
   {
     code: "ACA6",
@@ -227,6 +229,23 @@ async function verifyAccount({
           protectedMedia,
           `${role}/${viewport.name}/${allowedAccess.code}: watch page did not render.`,
         );
+        if (allowedAccess.expectedVideoId) {
+          const videoIds = await page.evaluate(() =>
+            Array.from(
+              document.querySelectorAll(
+                'iframe[src*="youtube.com/embed"],iframe[src*="youtube-nocookie.com/embed"]',
+              ),
+              (frame) => {
+                const match = String(frame.getAttribute("src") || "").match(/\/embed\/([^?&/]+)/);
+                return match ? match[1] : "";
+              },
+            ).filter(Boolean),
+          );
+          assert(
+            videoIds.includes(allowedAccess.expectedVideoId),
+            `${role}/${viewport.name}/${allowedAccess.code}: corrected barrel video is missing.`,
+          );
+        }
       }
     } else {
       assert(state.emptyVisible, `${role}/${viewport.name}: empty state is missing.`);

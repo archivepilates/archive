@@ -2,7 +2,44 @@
   var VERSION="2026-09-20a";
   var MAX_PROBES=6;
   var path=String(location.pathname||"").replace(/\/$/,"");
+  patch260919BarrelVideo(path);
   if(path!=="/48"&&path!=="/my-classroom")return;
+
+  function patch260919BarrelVideo(currentPath){
+    var PATCH_VERSION="2026-09-20a";
+    var expectedByPath={
+      "/private-lesson-external-feedback-a-260919":"Mxk1oeWZzXM",
+      "/private-lesson-external-feedback-b-260919":"Vq9JxoeQpTY"
+    };
+    var barrelIds=["Vq9JxoeQpTY","Mxk1oeWZzXM"];
+    var expectedId=expectedByPath[currentPath];
+    if(!expectedId)return;
+
+    function swap(){
+      Array.prototype.slice.call(document.querySelectorAll('iframe[src*="youtube.com/embed"],iframe[src*="youtube-nocookie.com/embed"]')).forEach(function(frame){
+        var src=String(frame.getAttribute("src")||"");
+        var match=src.match(/\/embed\/([^?&/]+)/);
+        var currentId=match&&match[1];
+        if(barrelIds.indexOf(currentId)<0||currentId===expectedId)return;
+        frame.setAttribute("src",src.replace("/embed/"+currentId,"/embed/"+expectedId));
+        frame.setAttribute("data-archive-pilates-260919-barrel-video",expectedId);
+      });
+      document.documentElement.setAttribute("data-archive-pilates-260919-barrel-swap",PATCH_VERSION);
+    }
+
+    if(document.readyState==="loading")document.addEventListener("DOMContentLoaded",swap,{once:true});else swap();
+    [200,600,1200,2400].forEach(function(delay){window.setTimeout(swap,delay)});
+    try{
+      var pending=false;
+      var observer=new MutationObserver(function(){
+        if(pending)return;
+        pending=true;
+        window.setTimeout(function(){pending=false;swap()},80);
+      });
+      observer.observe(document.documentElement,{childList:true,subtree:true});
+      window.setTimeout(function(){observer.disconnect()},8000);
+    }catch(error){}
+  }
 
   document.documentElement.setAttribute("data-ap-classroom",VERSION);
   document.documentElement.setAttribute("data-ap-classroom-v2",VERSION);

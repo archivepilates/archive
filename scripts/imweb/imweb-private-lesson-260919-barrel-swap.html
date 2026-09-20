@@ -1,0 +1,37 @@
+<script data-archive-pilates-private-lesson-260919-barrel-swap="2026-09-20a">
+(function(){
+  var path=String(location.pathname||"").replace(/\/$/,"");
+  var expectedByPath={
+    "/private-lesson-external-feedback-a-260919":"Mxk1oeWZzXM",
+    "/private-lesson-external-feedback-b-260919":"Vq9JxoeQpTY"
+  };
+  var expectedId=expectedByPath[path];
+  var barrelIds=["Vq9JxoeQpTY","Mxk1oeWZzXM"];
+  if(!expectedId)return;
+
+  function swap(){
+    Array.prototype.slice.call(document.querySelectorAll('iframe[src*="youtube.com/embed"],iframe[src*="youtube-nocookie.com/embed"]')).forEach(function(frame){
+      var src=String(frame.getAttribute("src")||"");
+      var match=src.match(/\/embed\/([^?&/]+)/);
+      var currentId=match&&match[1];
+      if(barrelIds.indexOf(currentId)<0||currentId===expectedId)return;
+      frame.setAttribute("src",src.replace("/embed/"+currentId,"/embed/"+expectedId));
+      frame.setAttribute("data-archive-pilates-260919-barrel-video",expectedId);
+    });
+    document.documentElement.setAttribute("data-archive-pilates-260919-barrel-swap","2026-09-20a");
+  }
+
+  if(document.readyState==="loading")document.addEventListener("DOMContentLoaded",swap,{once:true});else swap();
+  [200,600,1200,2400].forEach(function(delay){window.setTimeout(swap,delay)});
+  try{
+    var pending=false;
+    var observer=new MutationObserver(function(){
+      if(pending)return;
+      pending=true;
+      window.setTimeout(function(){pending=false;swap()},80);
+    });
+    observer.observe(document.documentElement,{childList:true,subtree:true});
+    window.setTimeout(function(){observer.disconnect()},8000);
+  }catch(error){}
+})();
+</script>
