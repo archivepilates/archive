@@ -10,7 +10,7 @@ if (!fs.existsSync(assetPath)) {
 
 const source = fs.readFileSync(assetPath, "utf8");
 const requiredMarkers = [
-  'VERSION="2026-09-04c"',
+  'VERSION="2026-09-20a"',
   "var MAX_PROBES=6",
   'data-ap-classroom-v2',
   '"/archive-method-watch-ach8"',
@@ -23,6 +23,8 @@ const requiredMarkers = [
   '"/private-lesson-support-movement-b-260829"',
   '"/private-lesson-support-movement-c-260830"',
   '"/private-lesson-support-movement-d-260830"',
+  '"/private-lesson-external-feedback-a-260919"',
+  '"/private-lesson-external-feedback-b-260919"',
 ];
 
 for (const marker of requiredMarkers) {
@@ -98,9 +100,9 @@ assert(
   hooks.responseMatches(
     {
       ok: true,
-      url: "https://archivepilates.imweb.me/private-lesson-support-movement-c-260830?probe=1",
+      url: "https://archivepilates.imweb.me/private-lesson-external-feedback-b-260919?probe=1",
     },
-    { path: "/private-lesson-support-movement-c-260830" },
+    { path: "/private-lesson-external-feedback-b-260919" },
   ),
   "An authorized private watch response must match its expected page.",
 );
@@ -108,9 +110,9 @@ assert(
   !hooks.responseMatches(
     {
       ok: true,
-      url: "https://archivepilates.imweb.me/login?back_url=private-lesson-support-movement-c-260830",
+      url: "https://archivepilates.imweb.me/login?back_url=private-lesson-external-feedback-b-260919",
     },
-    { path: "/private-lesson-support-movement-c-260830" },
+    { path: "/private-lesson-external-feedback-b-260919" },
   ),
   "A login redirect must never create a classroom card.",
 );

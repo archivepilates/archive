@@ -4,7 +4,7 @@ import { chromium } from "playwright";
 
 const SITE = "https://archivepilates.imweb.me";
 const CLASSROOM_PATH = "/48";
-const VERSION = "2026-09-04c";
+const VERSION = "2026-09-20a";
 const IMWEB = process.env.IMWEB_CLI || "/Users/archivepilates/.local/bin/imweb";
 
 const BUYER = {
@@ -35,6 +35,16 @@ const TEST_ACCESS_CASES = [
     code: "D260830",
     groupCode: "g202608311da9acbcaf394",
     path: "/private-lesson-support-movement-d-260830",
+  },
+  {
+    code: "A260919",
+    groupCode: "g2026092001cc74fe9d643",
+    path: "/private-lesson-external-feedback-a-260919",
+  },
+  {
+    code: "B260919",
+    groupCode: "g20260920394ff8e948673",
+    path: "/private-lesson-external-feedback-b-260919",
   },
   {
     code: "ACA6",

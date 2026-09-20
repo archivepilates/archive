@@ -14,7 +14,7 @@ import { fileURLToPath } from "node:url";
 const ROOT = path.resolve(path.dirname(fileURLToPath(import.meta.url)), "..");
 const SITE = "https://archivepilates.imweb.me";
 const SITE_CODE = "S20260516852c71a014d08";
-const VERSION = "2026-09-04c";
+const VERSION = "2026-09-20a";
 const IMWEB = process.env.IMWEB_CLI || "/Users/archivepilates/.local/bin/imweb";
 const LOCK = path.join(tmpdir(), "archive-pilates-public-site-member-regression.lock");
 const CASES = Object.freeze([
@@ -22,6 +22,8 @@ const CASES = Object.freeze([
   { code: "B260829", group: "g20260831285f4ebae0f7d", path: "/private-lesson-support-movement-b-260829" },
   { code: "C260830", group: "g2026083145148b595b4dd", path: "/private-lesson-support-movement-c-260830" },
   { code: "D260830", group: "g202608311da9acbcaf394", path: "/private-lesson-support-movement-d-260830" },
+  { code: "A260919", group: "g2026092001cc74fe9d643", path: "/private-lesson-external-feedback-a-260919" },
+  { code: "B260919", group: "g20260920394ff8e948673", path: "/private-lesson-external-feedback-b-260919" },
   { code: "ACA6", group: "g20260904cd391d32c1196", path: "/archive-method-watch-aca6" },
   { code: "ACH9", group: "g202609044ef28afed03be", path: "/archive-method-watch-ach9" },
 ].map(Object.freeze));
@@ -71,7 +73,7 @@ async function main() {
   requireGate(args.every((arg) => ["--help", "--apply-test-fixtures"].includes(arg)), "UNKNOWN_ARGUMENT");
   requireGate(new Set(args).size === args.length, "DUPLICATE_ARGUMENT");
   if (args.includes("--help")) {
-    emit({ code: "READ_ONLY_DEFAULT", fixtureFlag: "--apply-test-fixtures", accountCount: 2, caseCount: 6, viewportCount: 2 });
+    emit({ code: "READ_ONLY_DEFAULT", fixtureFlag: "--apply-test-fixtures", accountCount: 2, caseCount: CASES.length, viewportCount: 2 });
     return;
   }
   const apply = args.includes("--apply-test-fixtures");
@@ -168,7 +170,7 @@ async function main() {
   const summary = {
     code: "PUBLIC_SITE_MEMBER_REGRESSION",
     mode: apply ? "TEMPORARY_TEST_GROUPS" : "READ_ONLY_GROUPS",
-    expectedCaseCount: 6,
+    expectedCaseCount: CASES.length,
     expectedMatrixCount: 4,
     completedMatrixCount: results.length,
     restoredAccountCount: snapshots.filter((snapshot) => snapshot.restored).length,

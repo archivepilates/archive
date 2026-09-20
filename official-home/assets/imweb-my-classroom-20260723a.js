@@ -1,5 +1,5 @@
 (function(){
-  var VERSION="2026-09-04c";
+  var VERSION="2026-09-20a";
   var MAX_PROBES=6;
   var path=String(location.pathname||"").replace(/\/$/,"");
   if(path!=="/48"&&path!=="/my-classroom")return;
@@ -44,7 +44,9 @@
     {"code":"A260829","path":"/private-lesson-support-movement-a-260829","title":"8/29 지지와 움직임 A팀 · 수강생 공유","group":"PRIVATE LESSON SUPPORT MOVEMENT A 260829 40D","private":true},
     {"code":"B260829","path":"/private-lesson-support-movement-b-260829","title":"8/29 지지와 움직임 B팀 · 수강생 공유","group":"PRIVATE LESSON SUPPORT MOVEMENT B 260829 40D","private":true},
     {"code":"C260830","path":"/private-lesson-support-movement-c-260830","title":"8/30 지지와 움직임 C팀 · 수강생 공유","group":"PRIVATE LESSON SUPPORT MOVEMENT C 260830 40D","private":true},
-    {"code":"D260830","path":"/private-lesson-support-movement-d-260830","title":"8/30 지지와 움직임 D팀 · 수강생 공유","group":"PRIVATE LESSON SUPPORT MOVEMENT D 260830 40D","private":true}
+    {"code":"D260830","path":"/private-lesson-support-movement-d-260830","title":"8/30 지지와 움직임 D팀 · 수강생 공유","group":"PRIVATE LESSON SUPPORT MOVEMENT D 260830 40D","private":true},
+    {"code":"A260919","path":"/private-lesson-external-feedback-a-260919","title":"9/19 외부 피드백 A팀 · 수강생 공유","group":"PRIVATE LESSON EXTERNAL FEEDBACK A 260919 40D","private":true},
+    {"code":"B260919","path":"/private-lesson-external-feedback-b-260919","title":"9/19 외부 피드백 B팀 · 수강생 공유","group":"PRIVATE LESSON EXTERNAL FEEDBACK B 260919 40D","private":true}
   ];
   var M={
     "d43dd28704f02dbdf0ff891b31450e359240d62d":"all",
