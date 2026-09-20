@@ -36,11 +36,11 @@ assert(
   "Prepared body lost or duplicated the inline fallback.",
 );
 assert(
-  count(preparedHeader, 'data-archive-pilates-my-classroom-v2="2026-09-20b"') === 1,
+  count(preparedHeader, 'data-archive-pilates-my-classroom-v2="2026-09-20d"') === 1,
   "Prepared header does not contain the current loader version.",
 );
 assert(
-  count(preparedHeader, "imweb-my-classroom-20260723a.js?v=20260920a") === 1,
+  count(preparedHeader, "imweb-my-classroom-20260723a.js?v=20260920c") === 1,
   "Prepared header does not contain the current asset URL.",
 );
 
@@ -55,7 +55,7 @@ console.log(
       bodyLengthBefore: body.length,
       headerLengthAfter: preparedHeader.length,
       headerLengthBefore: header.length,
-      loaderVersion: "2026-09-20b",
+      loaderVersion: "2026-09-20d",
       outputDir,
       removedBodyLoaderCount: bodyLoaderCount,
     },

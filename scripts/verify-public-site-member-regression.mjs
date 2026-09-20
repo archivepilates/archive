@@ -14,7 +14,7 @@ import { fileURLToPath } from "node:url";
 const ROOT = path.resolve(path.dirname(fileURLToPath(import.meta.url)), "..");
 const SITE = "https://archivepilates.imweb.me";
 const SITE_CODE = "S20260516852c71a014d08";
-const VERSION = "2026-09-20a";
+const VERSION = "2026-09-20c";
 const IMWEB = process.env.IMWEB_CLI || "/Users/archivepilates/.local/bin/imweb";
 const LOCK = path.join(tmpdir(), "archive-pilates-public-site-member-regression.lock");
 const CASES = Object.freeze([
@@ -24,6 +24,8 @@ const CASES = Object.freeze([
   { code: "D260830", group: "g202608311da9acbcaf394", path: "/private-lesson-support-movement-d-260830" },
   { code: "A260919", group: "g2026092001cc74fe9d643", path: "/private-lesson-external-feedback-a-260919" },
   { code: "B260919", group: "g20260920394ff8e948673", path: "/private-lesson-external-feedback-b-260919" },
+  { code: "C260920", group: "g202609202752d40b80da6", path: "/private-lesson-external-feedback-c-260920" },
+  { code: "D260920", group: "g20260920f16ab9f5788f7", path: "/private-lesson-external-feedback-d-260920" },
   { code: "ACA6", group: "g20260904cd391d32c1196", path: "/archive-method-watch-aca6" },
   { code: "ACH9", group: "g202609044ef28afed03be", path: "/archive-method-watch-ach9" },
 ].map(Object.freeze));

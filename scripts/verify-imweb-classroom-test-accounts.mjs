@@ -4,7 +4,7 @@ import { chromium } from "playwright";
 
 const SITE = "https://archivepilates.imweb.me";
 const CLASSROOM_PATH = "/48";
-const VERSION = "2026-09-20a";
+const VERSION = "2026-09-20c";
 const IMWEB = process.env.IMWEB_CLI || "/Users/archivepilates/.local/bin/imweb";
 
 const BUYER = {
@@ -47,6 +47,18 @@ const TEST_ACCESS_CASES = [
     groupCode: "g20260920394ff8e948673",
     path: "/private-lesson-external-feedback-b-260919",
     expectedVideoId: "Vq9JxoeQpTY",
+  },
+  {
+    code: "C260920",
+    groupCode: "g202609202752d40b80da6",
+    path: "/private-lesson-external-feedback-c-260920",
+    expectedVideoIds: ["BAtIlSC-20k", "UrVZ1ukr6M4"],
+  },
+  {
+    code: "D260920",
+    groupCode: "g20260920f16ab9f5788f7",
+    path: "/private-lesson-external-feedback-d-260920",
+    expectedVideoIds: ["HMbaoNzQ8XE", "QCrzx6Y8ISE"],
   },
   {
     code: "ACA6",
@@ -244,6 +256,24 @@ async function verifyAccount({
           assert(
             videoIds.includes(allowedAccess.expectedVideoId),
             `${role}/${viewport.name}/${allowedAccess.code}: corrected barrel video is missing.`,
+          );
+        }
+        if (allowedAccess.expectedVideoIds) {
+          const videoIds = await page.evaluate(() =>
+            Array.from(
+              document.querySelectorAll(
+                'iframe[src*="youtube.com/embed"],iframe[src*="youtube-nocookie.com/embed"]',
+              ),
+              (frame) => {
+                const match = String(frame.getAttribute("src") || "").match(/\/embed\/([^?&/]+)/);
+                return match ? match[1] : "";
+              },
+            ).filter(Boolean),
+          );
+          assert(
+            JSON.stringify([...videoIds].sort()) ===
+              JSON.stringify([...allowedAccess.expectedVideoIds].sort()),
+            `${role}/${viewport.name}/${allowedAccess.code}: expected team videos are missing or mixed.`,
           );
         }
       }

@@ -1,12 +1,12 @@
 (function(){
-  var VERSION="2026-09-20a";
+  var VERSION="2026-09-20c";
   var MAX_PROBES=6;
   var path=String(location.pathname||"").replace(/\/$/,"");
   patch260919BarrelVideo(path);
   if(path!=="/48"&&path!=="/my-classroom")return;
 
   function patch260919BarrelVideo(currentPath){
-    var PATCH_VERSION="2026-09-20a";
+    var PATCH_VERSION="2026-09-20c";
     var expectedByPath={
       "/private-lesson-external-feedback-a-260919":"Mxk1oeWZzXM",
       "/private-lesson-external-feedback-b-260919":"Vq9JxoeQpTY"
@@ -83,7 +83,9 @@
     {"code":"C260830","path":"/private-lesson-support-movement-c-260830","title":"8/30 지지와 움직임 C팀 · 수강생 공유","group":"PRIVATE LESSON SUPPORT MOVEMENT C 260830 40D","private":true},
     {"code":"D260830","path":"/private-lesson-support-movement-d-260830","title":"8/30 지지와 움직임 D팀 · 수강생 공유","group":"PRIVATE LESSON SUPPORT MOVEMENT D 260830 40D","private":true},
     {"code":"A260919","path":"/private-lesson-external-feedback-a-260919","title":"9/19 외부 피드백 A팀 · 수강생 공유","group":"PRIVATE LESSON EXTERNAL FEEDBACK A 260919 40D","private":true},
-    {"code":"B260919","path":"/private-lesson-external-feedback-b-260919","title":"9/19 외부 피드백 B팀 · 수강생 공유","group":"PRIVATE LESSON EXTERNAL FEEDBACK B 260919 40D","private":true}
+    {"code":"B260919","path":"/private-lesson-external-feedback-b-260919","title":"9/19 외부 피드백 B팀 · 수강생 공유","group":"PRIVATE LESSON EXTERNAL FEEDBACK B 260919 40D","private":true},
+    {"code":"C260920","path":"/private-lesson-external-feedback-c-260920","title":"9/20 외부 피드백 C팀 · 수강생 공유","group":"PRIVATE LESSON EXTERNAL FEEDBACK C 260920 40D","private":true},
+    {"code":"D260920","path":"/private-lesson-external-feedback-d-260920","title":"9/20 외부 피드백 D팀 · 수강생 공유","group":"PRIVATE LESSON EXTERNAL FEEDBACK D 260920 40D","private":true}
   ];
   var M={
     "d43dd28704f02dbdf0ff891b31450e359240d62d":"all",
