@@ -23,6 +23,13 @@ const money = (value) => {
   const parsed = integer(value);
   return parsed !== null && parsed >= 0 ? parsed : null;
 };
+const firstText = (row, keys) => {
+  for (const key of keys) {
+    const value = cleanText(row?.[key]);
+    if (value) return value;
+  }
+  return "";
+};
 
 export class StudioMateNativeApiError extends Error {
   constructor(message, { status = 0, method = "GET", ambiguous = false } = {}) {
@@ -193,6 +200,15 @@ export async function readExactStudioMateMember(api, phone) {
     });
   }
   const row = matches[0];
+  const memberGrade = firstText(row, [
+    "grade",
+    "member_grade",
+    "memberGrade",
+    "member_type",
+    "memberType",
+    "등급",
+    "회원구분",
+  ]);
   return Object.freeze({
     status: "verified",
     reason: "exact_phone_match",
@@ -203,6 +219,7 @@ export async function readExactStudioMateMember(api, phone) {
       phone: normalizedPhone,
       gender: cleanText(row.gender),
       birthday: cleanText(row.birthday),
+      ...(memberGrade ? { memberGrade } : {}),
       inactive: row.inactiveMember === true,
       hasAccount: row.has_user_account === true,
     }),

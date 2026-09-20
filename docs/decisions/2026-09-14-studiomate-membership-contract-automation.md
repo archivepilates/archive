@@ -9,6 +9,11 @@ Staff register the member and issue the ticket in StudioMate once. Native electr
 contracts should follow issuance without recreating a member, ticket, payment or booking.
 Trial, one-off, instructor lessons, staff education, complimentary and compensation
 products are excluded. Regular products require an approved native product-ID allowlist.
+StudioMate member grade is an independent gate: only the established regular-member grade
+family (blank, VIP, Blue, influencer, member/general-member labels) may proceed. Instructor
+members, staff, trial and consultation grades are excluded before contract creation. A new
+unknown grade is review-only until explicitly classified; product eligibility cannot override
+the member-grade gate.
 
 First regular purchase uses the full signup agreement only when complete purchase and
 signature histories establish no previous applicable agreement. Renewal uses the purchase

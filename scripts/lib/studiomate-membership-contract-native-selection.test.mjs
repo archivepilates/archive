@@ -1,6 +1,9 @@
 import assert from "node:assert/strict";
 import test from "node:test";
-import { selectNativeMembershipContractCandidate } from "./studiomate-membership-contract-native-selection.mjs";
+import {
+  membershipContractMemberGradeDecision,
+  selectNativeMembershipContractCandidate,
+} from "./studiomate-membership-contract-native-selection.mjs";
 
 const PREVIOUS = "2026-09-14T00:00:00.000Z";
 const CURRENT = "2026-09-14T01:00:00.000Z";
@@ -52,7 +55,7 @@ function fixture() {
   return {
     group: {
       phone: "01000000001",
-      rows: [{ "수강권명": "10주(주2회)" }],
+      rows: [{ "수강권명": "10주(주2회)", "등급": "" }],
     },
     member: {
       memberId: "100",
@@ -91,6 +94,53 @@ test("selects exactly one fresh native regular issuance for first purchase", () 
   assert.equal(result.selection.productId, "300");
   assert.match(result.selection.jobKey, /^membership_contract_[a-f0-9]{64}$/);
   assert.equal(result.ticket, input.ticketRead.tickets[0]);
+});
+
+test("allows only the known regular member-grade family", () => {
+  for (const grade of ["", "VIP", "Blue", "인플루언서", "회원", "일반회원"]) {
+    const decision = membershipContractMemberGradeDecision({ rows: [{ "등급": grade }] });
+    assert.equal(decision.status, "eligible", grade);
+    assert.equal(decision.classification, "member", grade);
+  }
+});
+
+test("excludes instructor members before contract selection", () => {
+  const input = fixture();
+  input.group.rows[0]["등급"] = "강사회원";
+  const result = selectNativeMembershipContractCandidate(input);
+  assert.deepEqual(
+    { status: result.status, reason: result.reason, selection: result.selection },
+    { status: "excluded", reason: "instructor_member_grade_excluded", selection: null },
+  );
+});
+
+test("excludes staff, trial, and consultation grades", () => {
+  const expected = new Map([
+    ["스텝", "staff_member_grade_excluded"],
+    ["체험회원", "trial_member_grade_excluded"],
+    ["상담회원", "consultation_member_grade_excluded"],
+  ]);
+  for (const [grade, reason] of expected) {
+    const decision = membershipContractMemberGradeDecision({ rows: [{ "회원구분": grade }] });
+    assert.equal(decision.status, "excluded", grade);
+    assert.equal(decision.reason, reason, grade);
+  }
+});
+
+test("holds an unknown new member grade for review", () => {
+  const input = fixture();
+  input.group.rows[0]["등급"] = "새등급";
+  const result = selectNativeMembershipContractCandidate(input);
+  assert.equal(result.status, "review");
+  assert.equal(result.reason, "unknown_member_grade");
+});
+
+test("native instructor grade overrides a regular Excel grade", () => {
+  const input = fixture();
+  input.member.memberGrade = "강사회원";
+  const result = selectNativeMembershipContractCandidate(input);
+  assert.equal(result.status, "excluded");
+  assert.equal(result.reason, "instructor_member_grade_excluded");
 });
 
 test("blocks duplicate fresh issuances instead of guessing", () => {

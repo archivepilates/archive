@@ -4,6 +4,47 @@ import {
 } from "./studiomate-membership-contract-policy.mjs";
 
 const nativeId = (value) => /^[1-9]\d{0,63}$/.test(String(value ?? ""));
+const REGULAR_MEMBER_GRADES = new Set(["", "vip", "blue", "인플루언서", "회원", "일반회원", "일반멤버"]);
+const EXCLUDED_MEMBER_GRADES = new Map([
+  ["강사회원", "instructor_member_grade_excluded"],
+  ["강사", "instructor_member_grade_excluded"],
+  ["스텝", "staff_member_grade_excluded"],
+  ["직원", "staff_member_grade_excluded"],
+  ["체험회원", "trial_member_grade_excluded"],
+  ["상담회원", "consultation_member_grade_excluded"],
+]);
+
+const normalizedGrade = (value) => String(value ?? "").trim().replace(/\s+/g, "").toLowerCase();
+
+export function membershipContractMemberGradeDecision(group, member = {}) {
+  const grades = [
+    ...(Array.isArray(group?.rows)
+      ? group.rows.flatMap((row) => [row?.["등급"], row?.["회원구분"], row?.["회원등급"]])
+      : []),
+    member.memberGrade,
+  ]
+    .map(normalizedGrade)
+    .filter(Boolean);
+  const unique = [...new Set(grades)];
+  for (const grade of unique) {
+    const reason = EXCLUDED_MEMBER_GRADES.get(grade);
+    if (reason) return { status: "excluded", reason, classification: null, memberGrade: grade };
+  }
+  const unknown = unique.filter((grade) => !REGULAR_MEMBER_GRADES.has(grade));
+  if (unknown.length)
+    return {
+      status: "review",
+      reason: "unknown_member_grade",
+      classification: null,
+      memberGrade: unknown[0],
+    };
+  return {
+    status: "eligible",
+    reason: "regular_member_grade",
+    classification: "member",
+    memberGrade: unique[0] || "",
+  };
+}
 
 export function selectNativeMembershipContractCandidate({
   group,
@@ -20,6 +61,18 @@ export function selectNativeMembershipContractCandidate({
     selection: null,
     ...details,
   });
+  const memberGradeDecision = membershipContractMemberGradeDecision(group, member);
+  if (memberGradeDecision.status === "excluded") {
+    return {
+      status: "excluded",
+      reason: memberGradeDecision.reason,
+      selection: null,
+      memberGrade: memberGradeDecision.memberGrade,
+    };
+  }
+  if (memberGradeDecision.status !== "eligible") {
+    return review(memberGradeDecision.reason, { memberGrade: memberGradeDecision.memberGrade });
+  }
   if (
     !group?.phone ||
     !member ||
@@ -95,7 +148,8 @@ export function selectNativeMembershipContractCandidate({
     member: {
       memberId: member.memberId,
       identityVerified: true,
-      classification: "member",
+      classification: memberGradeDecision.classification,
+      memberGrade: memberGradeDecision.memberGrade,
     },
     ticket: {
       memberId: ticket.memberId,

@@ -31,6 +31,7 @@ export async function runStudioMateMembershipContractCandidates({
   const result = {
     status: "disabled",
     checked: 0,
+    excluded: 0,
     waiting: 0,
     signed: 0,
     review: 0,
@@ -114,6 +115,13 @@ export async function runStudioMateMembershipContractCandidates({
           sourceDownloadedAt: discovery.sourceDownloadedAt,
           config,
         });
+        if (selected.status === "excluded") {
+          await markHint(db, hint?.hintId, "excluded", selected.reason, {
+            memberGrade: selected.memberGrade || "",
+          });
+          result.excluded += 1;
+          continue;
+        }
         if (selected.status !== "eligible") {
           await markHint(db, hint?.hintId, "review", selected.reason);
           result.review += 1;
