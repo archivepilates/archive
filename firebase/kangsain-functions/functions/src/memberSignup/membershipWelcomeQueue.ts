@@ -45,6 +45,14 @@ export const membershipActivationScopeIssue = (config: Data | undefined, memberI
 };
 export const isMembershipWelcomeCandidate = (candidate: Data) =>
   candidate.type === "membership_welcome" || candidate.templateCode === MEMBERSHIP_WELCOME_TEMPLATE.templateId;
+export const isMembershipWelcomeCanaryRecipient = (
+  config: Data | undefined,
+  candidate: Data,
+) =>
+  candidate.type === "membership_welcome" &&
+  candidate.templateCode === MEMBERSHIP_WELCOME_TEMPLATE.templateId &&
+  config?.activationScope === "canary" &&
+  membershipActivationScopeIssue(config, candidate.memberId) === "";
 const overrideMarker = (value: Data) => Object.keys(value).some((key) => /test|override/i.test(key));
 
 export function membershipWelcomeClaimIssue(candidate: Data) {

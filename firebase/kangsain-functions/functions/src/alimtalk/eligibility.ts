@@ -32,6 +32,11 @@ import {
 } from "./instructorLessonManagement";
 import { hasExplicitAlimtalkTestOverride, isAlimtalkTestRecipient } from "./testRecipients";
 import { currentAutomaticMemberExclusionReason } from "./recipientExclusion";
+import { db } from "../config/firebase";
+import {
+  isMembershipWelcomeCanaryRecipient,
+  MEMBERSHIP_AUTOMATION_SETTINGS,
+} from "../memberSignup/membershipWelcomeQueue";
 
 export const RETRYABLE_TEMPLATE_STATUS_PREFIX = "템플릿 상태 확인 일시 실패:";
 const PRIVATE_SURVEY_BUTTON_URL = "https://in.archivepilates.com/s/#{링크ID}/";
@@ -45,14 +50,28 @@ export async function autoSendabilityIssue(candidate: AlimtalkCandidateDoc, toda
   if (candidate.type === "membership_welcome" && (hasExplicitAlimtalkTestOverride(candidate)
     || candidate.templateCode !== ALIMTALK_TEMPLATES.membership_welcome.code || candidate.maxAttempts !== 1
     || !candidate.payload?.sourceContractId)) return "계약완료 웰컴 후보 규칙 불일치";
+  const membershipCanaryRecipient =
+    candidate.type === "membership_welcome" &&
+    isMembershipWelcomeCanaryRecipient(
+      (await db.doc(MEMBERSHIP_AUTOMATION_SETTINGS).get()).data(),
+      candidate,
+    );
   const rule = alimtalkTemplateTargetRule(candidate.type);
   if (rule?.requiresMemberPhone && !candidate.memberPhone) return "전화번호 없음";
-  if (ALIMTALK_MEMBER_EXCLUSION_REASONS[candidate.memberId] && !hasExplicitAlimtalkTestOverride(candidate))
+  if (
+    ALIMTALK_MEMBER_EXCLUSION_REASONS[candidate.memberId] &&
+    !hasExplicitAlimtalkTestOverride(candidate) &&
+    !membershipCanaryRecipient
+  )
     return ALIMTALK_MEMBER_EXCLUSION_REASONS[candidate.memberId];
-  if (isAlimtalkTestRecipient(candidate) && !hasExplicitAlimtalkTestOverride(candidate)) {
+  if (
+    isAlimtalkTestRecipient(candidate) &&
+    !hasExplicitAlimtalkTestOverride(candidate) &&
+    !membershipCanaryRecipient
+  ) {
     return "스텝 계정 알림톡 제외";
   }
-  if (!hasExplicitAlimtalkTestOverride(candidate)) {
+  if (!hasExplicitAlimtalkTestOverride(candidate) && !membershipCanaryRecipient) {
     const currentMemberExclusion = await currentAutomaticMemberExclusionReason(candidate);
     if (currentMemberExclusion) return currentMemberExclusion;
   }

@@ -4,6 +4,7 @@ import test from "node:test";
 import {
   dispatchMembershipWelcome,
   inspectMembershipWelcome,
+  isMembershipWelcomeCanaryRecipient,
   queueMembershipWelcome,
   MEMBERSHIP_AUTOMATION_SETTINGS,
   MEMBERSHIP_CONTRACT_COLLECTION,
@@ -44,6 +45,42 @@ const data = (value: unknown): Data => {
   assert.ok(value && typeof value === "object" && !Array.isArray(value));
   return value as Data;
 };
+
+test("canary bypass applies only to the exact configured membership welcome member", () => {
+  const candidate = {
+    type: "membership_welcome",
+    templateCode: MEMBERSHIP_WELCOME_TEMPLATE.templateId,
+    memberId: MEMBER,
+  };
+  assert.equal(
+    isMembershipWelcomeCanaryRecipient(
+      { activationScope: "canary", canaryMemberIds: [MEMBER] },
+      candidate,
+    ),
+    true,
+  );
+  assert.equal(
+    isMembershipWelcomeCanaryRecipient(
+      { activationScope: "canary", canaryMemberIds: ["other"] },
+      candidate,
+    ),
+    false,
+  );
+  assert.equal(
+    isMembershipWelcomeCanaryRecipient(
+      { activationScope: "production", canaryMemberIds: [MEMBER] },
+      candidate,
+    ),
+    false,
+  );
+  assert.equal(
+    isMembershipWelcomeCanaryRecipient(
+      { activationScope: "canary", canaryMemberIds: [MEMBER] },
+      { ...candidate, templateCode: "other" },
+    ),
+    false,
+  );
+});
 
 /** Shape reused from scripts/lib/studiomate-membership-welcome.test.mjs; no real records. */
 function fixture() {
