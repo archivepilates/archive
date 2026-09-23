@@ -170,6 +170,14 @@
           ]
         },
         {
+          "source": "/archivein/instructor-observation/**",
+          "headers": [
+            { "key": "Cache-Control", "value": "no-cache, no-store, must-revalidate" },
+            { "key": "Referrer-Policy", "value": "no-referrer" },
+            { "key": "X-Robots-Tag", "value": "noindex, nofollow, noarchive" }
+          ]
+        },
+        {
           "source": "/archivein/method/**",
           "headers": [
             { "key": "Cache-Control", "value": "no-cache, no-store, must-revalidate" }
@@ -321,6 +329,13 @@
           }
         },
         {
+          "source": "/archivein/api/instructorObservationSurvey",
+          "function": {
+            "functionId": "instructorObservationSurveyApi",
+            "region": "asia-northeast3"
+          }
+        },
+        {
           "source": "/archivein/api/recommendedMealPlan",
           "function": {
             "functionId": "recommendedMealPlanApi",
@@ -345,6 +360,10 @@
         {
           "source": "/archivein/recommendedMealSurvey/**",
           "destination": "/archivein/recommendedMealSurvey/index.html"
+        },
+        {
+          "source": "/archivein/instructor-observation/**",
+          "destination": "/archivein/instructor-observation/index.html"
         },
         {
           "source": "/archivein/recommendedMealPlan/**",
@@ -590,6 +609,14 @@
           ]
         },
         {
+          "source": "/instructor-observation/**",
+          "headers": [
+            { "key": "Cache-Control", "value": "no-cache, no-store, must-revalidate" },
+            { "key": "Referrer-Policy", "value": "no-referrer" },
+            { "key": "X-Robots-Tag", "value": "noindex, nofollow, noarchive" }
+          ]
+        },
+        {
           "source": "/method/**",
           "headers": [
             { "key": "Cache-Control", "value": "no-cache, no-store, must-revalidate" }
@@ -676,6 +703,13 @@
           }
         },
         {
+          "source": "/api/instructorObservationSurvey",
+          "function": {
+            "functionId": "instructorObservationSurveyApi",
+            "region": "asia-northeast3"
+          }
+        },
+        {
           "source": "/api/recommendedMealPlan",
           "function": {
             "functionId": "recommendedMealPlanApi",
@@ -700,6 +734,10 @@
         {
           "source": "/recommendedMealSurvey/**",
           "destination": "/recommendedMealSurvey/index.html"
+        },
+        {
+          "source": "/instructor-observation/**",
+          "destination": "/instructor-observation/index.html"
         },
         {
           "source": "/recommendedMealPlan/**",

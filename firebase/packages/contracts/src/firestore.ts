@@ -14,6 +14,7 @@ export const archiveCollections = {
   studiomateInstructorLessonJobs: "studiomateInstructorLessonJobs",
   eformsignInstructorMemberJobs: "eformsignInstructorMemberJobs",
   instructorMemberConsents: "instructorMemberConsents",
+  instructorObservationResponses: "instructorObservationResponses",
   contactSyncJobs: "contactSyncJobs",
   memberSignupContracts: "memberSignupContracts",
   studiomateMembershipContracts: "studiomateMembershipContracts",
@@ -61,6 +62,7 @@ export const sourceOfTruthCollections = [
   archiveCollections.studiomateInstructorLessonJobs,
   archiveCollections.eformsignInstructorMemberJobs,
   archiveCollections.instructorMemberConsents,
+  archiveCollections.instructorObservationResponses,
 ] as const;
 
 export const mirrorCollections = [archiveCollections.membersMirror, archiveCollections.member360CardsMirror] as const;

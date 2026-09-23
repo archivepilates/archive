@@ -57,6 +57,20 @@ if (selectedSurfaces.includes("archivein")) {
     ]),
     statusCheck("private-survey-api-custom-domain", "https://in.archivepilates.com/api/privateSurveySubmit", [403]),
     statusCheck("private-survey-api-webapp-path", "https://archive-pilates.web.app/archivein/api/privateSurveySubmit", [403]),
+    textCheck("instructor-observation-form-custom-domain", "https://in.archivepilates.com/instructor-observation/", [
+      "ARCHIVE PILATES 타 강사 수업 분석",
+      "surveyForm",
+      "api/instructorObservationSurvey",
+      "핵심 관찰: 수업 목표",
+    ]),
+    textCheck("instructor-observation-form-webapp-path", "https://archive-pilates.web.app/archivein/instructor-observation/", [
+      "ARCHIVE PILATES 타 강사 수업 분석",
+      "surveyForm",
+      "api/instructorObservationSurvey",
+      "핵심 관찰: 수업 목표",
+    ]),
+    statusCheck("instructor-observation-api-custom-domain", "https://in.archivepilates.com/api/instructorObservationSurvey", [405]),
+    statusCheck("instructor-observation-api-webapp-path", "https://archive-pilates.web.app/archivein/api/instructorObservationSurvey", [405]),
     textCheck("recommended-meal-survey-custom-domain", "https://in.archivepilates.com/recommendedMealSurvey/", [
       "ARCHIVE PILATES 추천식단 프로그램",
       "mealSurveyForm",

@@ -1,0 +1,357 @@
+<!doctype html>
+<html lang="ko">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1">
+  <meta name="robots" content="noindex,nofollow,noarchive">
+  <meta name="theme-color" content="#fffdfa">
+  <title>ARCHIVE PILATES 타 강사 수업 분석</title>
+  <style>
+    :root {
+      color-scheme: light;
+      --ink: #171512;
+      --muted: #6c655f;
+      --line: #e8e1da;
+      --paper: #fffdfa;
+      --canvas: #f5f2ed;
+      --accent: #c7372f;
+      --accent-soft: #fff1ed;
+      --good: #25675e;
+      --good-soft: #edf8f5;
+      --shadow: 0 10px 32px rgba(41, 32, 24, .06);
+    }
+    *, *::before, *::after { box-sizing: border-box; }
+    html { -webkit-text-size-adjust: 100%; }
+    body {
+      margin: 0;
+      min-height: 100dvh;
+      background: var(--canvas);
+      color: var(--ink);
+      font-family: -apple-system, BlinkMacSystemFont, "Apple SD Gothic Neo", "Noto Sans KR", sans-serif;
+      text-rendering: optimizeLegibility;
+    }
+    button, input, textarea, select { font: inherit; }
+    input, textarea, select, button, fieldset { min-width: 0; }
+    p, h1, h2, legend, label, span { overflow-wrap: anywhere; word-break: keep-all; }
+    main {
+      width: min(100% - 24px, 780px);
+      margin: 20px auto 64px;
+      overflow: hidden;
+      border: 1px solid rgba(55, 45, 36, .08);
+      border-radius: 8px;
+      background: var(--paper);
+      box-shadow: var(--shadow);
+    }
+    .hero {
+      display: grid;
+      grid-template-columns: minmax(0, 1fr) auto;
+      gap: 20px;
+      align-items: start;
+      padding: 28px 24px 26px;
+      border-bottom: 1px solid var(--line);
+    }
+    .brand { color: var(--accent); font-size: 13px; font-weight: 850; }
+    h1 { margin: 8px 0 12px; font-size: 27px; line-height: 1.28; letter-spacing: 0; }
+    .lead { max-width: 58ch; margin: 0; color: var(--muted); font-size: 15px; line-height: 1.75; }
+    .mark { width: 52px; height: 52px; object-fit: contain; }
+    .focus-strip {
+      padding: 14px 24px;
+      border-bottom: 1px solid var(--line);
+      background: var(--accent-soft);
+      color: #694039;
+      font-size: 14px;
+      font-weight: 750;
+      line-height: 1.65;
+    }
+    form { display: block; }
+    .section { padding: 26px 24px; border-bottom: 1px solid var(--line); }
+    .section-heading { margin-bottom: 20px; }
+    .section-kicker { margin: 0 0 5px; color: var(--accent); font-size: 12px; font-weight: 850; }
+    h2, legend { margin: 0; padding: 0; font-size: 18px; font-weight: 850; line-height: 1.45; letter-spacing: 0; }
+    .section-heading p, .hint { margin: 7px 0 0; color: var(--muted); font-size: 13px; line-height: 1.65; }
+    .fields { display: grid; gap: 18px; }
+    .grid-2 { display: grid; grid-template-columns: repeat(2, minmax(0, 1fr)); gap: 16px; }
+    .field, fieldset { display: grid; gap: 9px; margin: 0; padding: 0; border: 0; }
+    .field > span, .sub-label { font-size: 14px; font-weight: 800; line-height: 1.5; }
+    .required::after { content: " *"; color: var(--accent); }
+    input[type="text"], input[type="date"], textarea, select {
+      width: 100%;
+      min-height: 50px;
+      padding: 13px 14px;
+      border: 1px solid #dcd3ca;
+      border-radius: 7px;
+      background: #fff;
+      color: var(--ink);
+      font-size: 16px;
+      line-height: 1.5;
+    }
+    textarea { min-height: 124px; resize: vertical; }
+    textarea.short { min-height: 96px; }
+    input:focus-visible, textarea:focus-visible, select:focus-visible, button:focus-visible {
+      outline: 2px solid rgba(199, 55, 47, .42);
+      outline-offset: 2px;
+      border-color: var(--accent);
+    }
+    .options { display: grid; grid-template-columns: repeat(2, minmax(0, 1fr)); gap: 9px; }
+    .option {
+      display: grid;
+      grid-template-columns: 22px minmax(0, 1fr);
+      gap: 10px;
+      align-items: center;
+      min-height: 48px;
+      padding: 10px 12px;
+      border: 1px solid #e2dad2;
+      border-radius: 7px;
+      background: #fff;
+      color: #3d3732;
+      font-size: 14px;
+      line-height: 1.45;
+      cursor: pointer;
+    }
+    .option:has(input:checked) { border-color: rgba(199, 55, 47, .55); background: var(--accent-soft); color: var(--ink); }
+    .option input { width: 20px; height: 20px; margin: 0; accent-color: var(--accent); }
+    .scale { grid-template-columns: repeat(5, minmax(0, 1fr)); }
+    .scale .option { display: flex; justify-content: center; padding: 10px 6px; text-align: center; }
+    .scale small { color: var(--muted); font-size: 11px; }
+    .other-field[hidden] { display: none; }
+    .privacy { padding: 18px 24px; color: var(--muted); font-size: 12px; line-height: 1.65; }
+    .actions { padding: 0 24px 26px; }
+    .submit-button {
+      width: 100%;
+      min-height: 54px;
+      border: 0;
+      border-radius: 7px;
+      background: var(--accent);
+      color: #fff;
+      font-size: 16px;
+      font-weight: 850;
+      cursor: pointer;
+    }
+    .submit-button:disabled { cursor: wait; opacity: .6; }
+    .status { min-height: 24px; margin: 12px 0 0; font-size: 14px; font-weight: 700; line-height: 1.6; }
+    .status.error { color: #a12f28; }
+    .status.success { color: var(--good); }
+    .success-panel { display: none; padding: 44px 24px 50px; text-align: center; }
+    .success-panel.visible { display: block; }
+    .success-panel h2 { font-size: 23px; }
+    .success-panel p { max-width: 44ch; margin: 12px auto 0; color: var(--muted); line-height: 1.75; }
+    .honeypot { position: absolute !important; width: 1px !important; height: 1px !important; overflow: hidden !important; opacity: 0 !important; pointer-events: none !important; }
+    @media (max-width: 620px) {
+      main { width: 100%; margin: 0; border: 0; border-radius: 0; box-shadow: none; }
+      .hero, .section { padding-left: 18px; padding-right: 18px; }
+      .hero { padding-top: 22px; }
+      h1 { font-size: 24px; }
+      .mark { width: 44px; height: 44px; }
+      .focus-strip, .privacy, .actions { padding-left: 18px; padding-right: 18px; }
+      .grid-2, .options { grid-template-columns: 1fr; }
+      .scale { grid-template-columns: repeat(5, minmax(0, 1fr)); }
+      .scale .option { min-height: 58px; flex-direction: column; gap: 2px; }
+    }
+    @media (prefers-reduced-motion: reduce) { *, *::before, *::after { scroll-behavior: auto !important; } }
+  </style>
+</head>
+<body>
+  <main>
+    <header class="hero">
+      <div>
+        <div class="brand">ARCHIVE PILATES ONBOARDING</div>
+        <h1>타 강사 수업 분석 설문</h1>
+        <p class="lead">강사의 우열을 평가하기보다 수업이 왜 그렇게 진행됐는지 관찰하고, 다음 수업에 적용할 구체적인 행동을 찾는 기록입니다.</p>
+      </div>
+      <img class="mark" src="../logo120.png" width="52" height="52" alt="ARCHIVE PILATES">
+    </header>
+    <div class="focus-strip">핵심 관찰: 수업 목표 → 큐잉 → 수준 조절 → 내 수업 적용</div>
+
+    <form id="surveyForm" novalidate>
+      <input class="honeypot" type="text" name="website" tabindex="-1" autocomplete="off" aria-hidden="true">
+
+      <section class="section">
+        <div class="section-heading"><p class="section-kicker">BASIC</p><h2>기본 정보</h2></div>
+        <div class="fields">
+          <div class="grid-2">
+            <label class="field"><span class="required">작성 강사</span><input type="text" name="instructorName" maxlength="60" autocomplete="name" required></label>
+            <label class="field"><span class="required">참여일</span><input type="date" name="attendedOn" required></label>
+          </div>
+          <div class="grid-2">
+            <label class="field"><span class="required">담당 강사</span><input type="text" name="observedInstructor" maxlength="60" required></label>
+            <label class="field"><span class="required">수업명 / 기구</span><input type="text" name="classNameEquipment" maxlength="120" placeholder="예: 흉추 가동성 / 체어" required></label>
+          </div>
+          <div class="grid-2">
+            <label class="field"><span class="required">수업 형태</span><select name="classType" required><option value="">선택</option><option>그룹</option><option>개인</option><option>기타</option></select></label>
+            <label class="field"><span class="required">예상 대상 수준</span><select name="expectedLevel" required><option value="">선택</option><option>초급</option><option>초중급</option><option>중급</option><option>기타</option></select></label>
+          </div>
+        </div>
+      </section>
+
+      <section class="section">
+        <div class="section-heading"><p class="section-kicker">1 · GOAL</p><h2>오늘 수업의 핵심 목표는 무엇이었다고 생각하나요?</h2><p>수업 전체를 관통한 목표를 1~2문장으로 정리해 주세요.</p></div>
+        <label class="field"><span class="required">수업 목표</span><textarea class="short" name="classGoal" maxlength="1200" required></textarea></label>
+      </section>
+
+      <section class="section">
+        <div class="section-heading"><p class="section-kicker">2 · FLOW</p><h2>수업의 전체 흐름은 어떻게 구성되어 있었나요?</h2><p>워밍업 → 메인 움직임 → 난이도 확장 → 정리처럼 흐름이 바뀌는 지점을 중심으로 작성해 주세요.</p></div>
+        <label class="field"><span class="required">전체 흐름</span><textarea name="classFlow" maxlength="2000" required></textarea></label>
+      </section>
+
+      <section class="section">
+        <div class="section-heading"><p class="section-kicker">3 · CUEING</p><h2>가장 인상적이었던 큐잉 1~2가지는 무엇인가요?</h2><p>실제 표현이나 방식, 효과적이었다고 생각한 이유를 함께 적어 주세요.</p></div>
+        <label class="field"><span class="required">인상적인 큐잉</span><textarea name="memorableCueing" maxlength="2000" required></textarea></label>
+      </section>
+
+      <section class="section">
+        <div class="section-heading"><p class="section-kicker">4 · UNDERSTANDING</p><h2>회원들이 동작을 이해하기 쉽게 만든 방법은 무엇이었나요?</h2><p>복수 선택할 수 있습니다.</p></div>
+        <fieldset>
+          <legend class="sub-label required">관찰한 방법</legend>
+          <div class="options">
+            <label class="option"><input type="checkbox" name="understandingMethods" value="시범"><span>시범</span></label>
+            <label class="option"><input type="checkbox" name="understandingMethods" value="언어 큐잉"><span>언어 큐잉</span></label>
+            <label class="option"><input type="checkbox" name="understandingMethods" value="이미지 큐잉"><span>이미지 큐잉</span></label>
+            <label class="option"><input type="checkbox" name="understandingMethods" value="촉각 피드백"><span>촉각 피드백</span></label>
+            <label class="option"><input type="checkbox" name="understandingMethods" value="반복 설명"><span>반복 설명</span></label>
+            <label class="option"><input type="checkbox" name="understandingMethods" value="동작 분해"><span>동작 분해</span></label>
+            <label class="option"><input type="checkbox" name="understandingMethods" value="회원별 개별 설명"><span>회원별 개별 설명</span></label>
+            <label class="option"><input id="methodOther" type="checkbox" name="understandingMethods" value="기타"><span>기타</span></label>
+          </div>
+        </fieldset>
+        <label id="methodOtherField" class="field other-field" hidden><span class="required">기타 방법</span><input type="text" name="understandingOther" maxlength="500"></label>
+      </section>
+
+      <section class="section">
+        <div class="section-heading"><p class="section-kicker">5 · LEVEL</p><h2>회원별 수준 차이에 어떻게 대응했나요?</h2><p>쉬운 옵션, 기본 옵션, 도전 옵션 또는 개별 수정 사례를 작성해 주세요.</p></div>
+        <label class="field"><span class="required">수준 차이 대응</span><textarea name="levelAdjustment" maxlength="2000" required></textarea></label>
+      </section>
+
+      <section class="section">
+        <div class="section-heading"><p class="section-kicker">6 · RESPONSE</p><h2>회원의 반응을 강사가 어떻게 확인했나요?</h2><p>표정, 호흡, 동작 수행, 질문, 강도 조절, 개별 피드백 등을 관찰해 주세요.</p></div>
+        <label class="field"><span class="required">회원 반응 확인</span><textarea name="memberResponseCheck" maxlength="1600" required></textarea></label>
+      </section>
+
+      <section class="section">
+        <div class="section-heading"><p class="section-kicker">7 · TIME</p><h2>수업의 흐름과 시간 운영은 어땠나요?</h2></div>
+        <fieldset>
+          <legend class="sub-label required">점수</legend>
+          <div class="options scale">
+            <label class="option"><input type="radio" name="flowTimeScore" value="1" required><span>1<br><small>매우 아쉬움</small></span></label>
+            <label class="option"><input type="radio" name="flowTimeScore" value="2"><span>2</span></label>
+            <label class="option"><input type="radio" name="flowTimeScore" value="3"><span>3<br><small>보통</small></span></label>
+            <label class="option"><input type="radio" name="flowTimeScore" value="4"><span>4</span></label>
+            <label class="option"><input type="radio" name="flowTimeScore" value="5"><span>5<br><small>매우 좋음</small></span></label>
+          </div>
+        </fieldset>
+        <label class="field"><span>인상 깊었던 전환이나 진행 방법</span><textarea class="short" name="transitionNote" maxlength="1000"></textarea></label>
+      </section>
+
+      <section class="section">
+        <div class="section-heading"><p class="section-kicker">8 · ARCHIVE</p><h2>‘아카이브다운 수업’이라고 느낀 부분은 무엇인가요?</h2><p>분위기, 회원과의 거리감, 설명 방식, 움직임 구성, 전문성 등을 자유롭게 작성해 주세요.</p></div>
+        <label class="field"><span class="required">아카이브다운 부분</span><textarea name="archiveStyle" maxlength="1600" required></textarea></label>
+      </section>
+
+      <section class="section">
+        <div class="section-heading"><p class="section-kicker">9 · REFLECT</p><h2>내가 같은 회원들에게 수업한다면 다르게 해보고 싶은 부분이 있나요?</h2><p>유지할 부분, 수정할 부분, 그 이유를 함께 적어 주세요.</p></div>
+        <label class="field"><span class="required">유지·수정·이유</span><textarea name="keepChangeReason" maxlength="2000" required></textarea></label>
+      </section>
+
+      <section class="section">
+        <div class="section-heading"><p class="section-kicker">10 · APPLY</p><h2>내 수업에 바로 적용하고 싶은 한 가지는 무엇인가요?</h2><p>예: 다음 수업에서 스쿼트 설명 전에 시범을 먼저 보여준다.</p></div>
+        <label class="field"><span class="required">구체적인 행동 한 가지</span><textarea class="short" name="immediateApplication" maxlength="1200" required></textarea></label>
+      </section>
+
+      <section class="section">
+        <div class="section-heading"><p class="section-kicker">11 · SUMMARY</p><h2>오늘 수업을 한 문장으로 정리한다면?</h2><p>예: 설명을 최소화하고 움직임 안에서 회원을 수정해주는 수업</p></div>
+        <label class="field"><span class="required">한 문장 정리</span><textarea class="short" name="oneSentence" maxlength="500" required></textarea></label>
+      </section>
+
+      <p class="privacy">제출 내용은 ARCHIVE PILATES 온보딩 교육과 내부 피드백에만 사용되며, 교육자 확인 항목은 제출 후 노션 온보딩 기록에서 별도로 작성됩니다.</p>
+      <div class="actions">
+        <button id="submitButton" class="submit-button" type="submit">분석 기록 제출</button>
+        <p id="status" class="status" role="status" aria-live="polite"></p>
+      </div>
+    </form>
+
+    <section id="successPanel" class="success-panel" aria-live="polite">
+      <h2>분석 기록이 저장됐습니다.</h2>
+      <p>교육자가 온보딩 기록에서 확인한 뒤, 다음 참관 수업의 관찰 주제를 이어서 작성합니다.</p>
+    </section>
+  </main>
+
+  <script>
+    const form = document.getElementById("surveyForm");
+    const submitButton = document.getElementById("submitButton");
+    const statusNode = document.getElementById("status");
+    const successPanel = document.getElementById("successPanel");
+    const methodOther = document.getElementById("methodOther");
+    const methodOtherField = document.getElementById("methodOtherField");
+    const attendedOn = form.elements.attendedOn;
+    const submissionStorageKey = "archiveInstructorObservationSubmissionId";
+
+    attendedOn.max = new Date().toISOString().slice(0, 10);
+
+    function submissionId() {
+      let value = sessionStorage.getItem(submissionStorageKey);
+      if (!value) {
+        value = crypto.randomUUID();
+        sessionStorage.setItem(submissionStorageKey, value);
+      }
+      return value;
+    }
+
+    function apiPath() {
+      return location.pathname.startsWith("/archivein/")
+        ? "/archivein/api/instructorObservationSurvey"
+        : "/api/instructorObservationSurvey";
+    }
+
+    function showStatus(message, type) {
+      statusNode.textContent = message;
+      statusNode.className = `status ${type || ""}`.trim();
+    }
+
+    methodOther.addEventListener("change", () => {
+      methodOtherField.hidden = !methodOther.checked;
+      form.elements.understandingOther.required = methodOther.checked;
+      if (!methodOther.checked) form.elements.understandingOther.value = "";
+    });
+
+    form.addEventListener("submit", async (event) => {
+      event.preventDefault();
+      showStatus("", "");
+      if (!form.reportValidity()) {
+        showStatus("필수 항목을 확인해 주세요.", "error");
+        return;
+      }
+
+      const checkedMethods = form.querySelectorAll('input[name="understandingMethods"]:checked');
+      if (!checkedMethods.length) {
+        showStatus("회원 이해를 도운 방법을 하나 이상 선택해 주세요.", "error");
+        form.querySelector('input[name="understandingMethods"]').focus();
+        return;
+      }
+
+      const data = new FormData(form);
+      const payload = Object.fromEntries(data.entries());
+      payload.submissionId = submissionId();
+      payload.understandingMethods = data.getAll("understandingMethods");
+      payload.flowTimeScore = Number(payload.flowTimeScore);
+
+      submitButton.disabled = true;
+      submitButton.textContent = "저장 중...";
+      try {
+        const response = await fetch(apiPath(), {
+          method: "POST",
+          headers: { "Content-Type": "application/json" },
+          body: JSON.stringify(payload),
+        });
+        const result = await response.json().catch(() => ({}));
+        if (!response.ok || !result.ok) throw new Error(result.error || "저장하지 못했습니다.");
+        form.hidden = true;
+        successPanel.classList.add("visible");
+        window.scrollTo({ top: 0, behavior: "smooth" });
+      } catch (error) {
+        showStatus(error.message || "저장 중 오류가 발생했습니다. 잠시 후 다시 시도해 주세요.", "error");
+        submitButton.disabled = false;
+        submitButton.textContent = "분석 기록 제출";
+      }
+    });
+  </script>
+</body>
+</html>

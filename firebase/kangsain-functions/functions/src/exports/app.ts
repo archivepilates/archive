@@ -17,7 +17,7 @@ import {
 import { submitBookingAttendanceHandler } from "../callable/submitBookingAttendance";
 import { submitMemberMemoHandler } from "../callable/submitMemberMemo";
 import { REGION } from "../config/constants";
-import { googleDwdServiceAccountJson, privateSurveyWebhookSecret } from "../config/secrets";
+import { googleDwdServiceAccountJson, notionToken, privateSurveyWebhookSecret } from "../config/secrets";
 import {
   iparkingAccountPoolJson,
   iparkingLoginId,
@@ -40,6 +40,7 @@ import {
   queueInstructorLessonConfirmationOnTicketVerifiedHandler,
 } from "../instructorLessonRegistration/instructorLessonConfirmation";
 import { recommendedMealSurveyApiHandler } from "../mealPlan/recommendedMealSurvey";
+import { instructorObservationSurveyApiHandler } from "../onboarding/instructorObservationSurvey";
 import {
   generateRecommendedMealProgramDraftForSubmittedResponse,
   generateRecommendedMealProgramDraftHandler,
@@ -249,6 +250,11 @@ export const instructorApplicantEvaluationApi = onRequest(
 );
 
 export const recommendedMealSurveyApi = onRequest(publicRequestOptions, recommendedMealSurveyApiHandler);
+
+export const instructorObservationSurveyApi = onRequest(
+  { ...publicRequestOptions, secrets: [notionToken] },
+  instructorObservationSurveyApiHandler,
+);
 
 export const recommendedMealPlanApi = onRequest(publicRequestOptions, recommendedMealPlanApiHandler);
 

@@ -55,7 +55,7 @@
             <a href="#social-content">Instagram<span>초안, 승인, 예약 발행</span></a>
             <a href="#meal-plan">추천식단<span>설문, InBody, 안전 검토</span></a>
             <a href="#private">프라이빗<span>회차, 설문, 리포트</span></a>
-            <a href="#staff-evaluation">강사 평가<span>퀴즈, 인사기록카드</span></a>
+            <a href="#staff-evaluation">강사 평가·온보딩<span>퀴즈, 인사기록카드, 수업 분석</span></a>
             <a href="#parking">주차등록<span>차량, 아이파킹, 자동 할인</span></a>
             <a href="#welcome">회원등록·가입 이력<span>StudioMate 수동 등록, 과거 가입서 후속 확인</span></a>
             <a href="#imweb-referral-rewards">아임웹 친구 초대<span>가입 적립금, 중복 방지, 월 한도</span></a>
@@ -660,7 +660,7 @@
         </section>
 
         <section class="panel rule-section" id="staff-evaluation">
-          <div class="panel-header"><div><h2>5-1. 강사 평가·인사기록카드</h2><p>기존 Google Form 기반 강사 평가 퀴즈를 Firebase 기반 제출/채점/기록 구조로 전환합니다.</p></div><span class="pill good">staff</span></div>
+          <div class="panel-header"><div><h2>5-1. 강사 평가·온보딩</h2><p>평가 결과와 수업 관찰 기록을 각각의 원천에 보존하고 강사 교육에 사용합니다.</p></div><span class="pill good">staff</span></div>
           <div class="rule-grid">
             <article class="rule-card">
               <h3>운영 흐름</h3>
@@ -720,8 +720,19 @@
                 <li>인사기록카드 차트는 최신 점수, 최고 점수, 제출 횟수, 검토 상태만 운영자가 빠르게 볼 수 있게 표시합니다.</li>
               </ul>
             </article>
+            <article class="rule-card">
+              <h3>타 강사 수업 분석 설문</h3>
+              <ul>
+                <li>온보딩 강사는 ARCHIVE IN 설문 링크에서 참여일, 수업 정보와 11개 관찰 문항을 제출합니다.</li>
+                <li>핵심 문항은 수업 목표, 큐잉, 수준 조절, 본인 수업 적용이며 단순 호감 평가보다 관찰·분석·적용을 우선합니다.</li>
+                <li>응답 원천은 Firestore instructorObservationResponses입니다. 작성 강사·참여일·담당 강사·수업명으로 만든 canonical key가 같은 제출은 하나로 처리합니다.</li>
+                <li>Notion 타 강사 수업 분석 기록은 교육자가 확인하는 투영 화면입니다. 좋았던 관찰, 추가로 볼 부분, 다음 관찰 주제, 확인자와 확인일은 Notion에서 작성합니다.</li>
+                <li>Notion 일시 오류가 있어도 Firestore 원본은 유지하며 같은 제출을 다시 보내면 미동기화 기록만 재시도합니다.</li>
+                <li>설문 결과는 회원 연락, 예약, 알림톡, 정산 또는 인사평가 자동화의 원천으로 사용하지 않습니다.</li>
+              </ul>
+            </article>
           </div>
-          <div class="rule-note"><strong>현재 확인 위치</strong><span>CORE Staff / 공개 시험 https://in.archivepilates.com/instructor-evaluation/ / Firestore staffs, staffEvaluationSubmissions, staffApplicantEvaluationSubmissions, staffHrCards, auditLogs</span></div>
+          <div class="rule-note"><strong>현재 확인 위치</strong><span>CORE Staff / 공개 시험 https://in.archivepilates.com/instructor-evaluation/ / 온보딩 설문 https://in.archivepilates.com/instructor-observation/ / Firestore staffs, staffEvaluationSubmissions, staffApplicantEvaluationSubmissions, staffHrCards, instructorObservationResponses, auditLogs</span></div>
         </section>
 
         <section class="panel rule-section" id="parking">

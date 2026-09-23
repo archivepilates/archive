@@ -161,6 +161,63 @@ const guardGroups = [
     ],
   },
   {
+    id: "instructor-observation-survey-notion-projection",
+    reason:
+      "온보딩 타 강사 수업 분석 설문, Firestore 원본, Notion 기록 투영이 다른 배포에서 빠지는 것을 막습니다.",
+    files: [
+      {
+        file: "archivein/instructor-observation/index.html",
+        markers: [
+          "ARCHIVE PILATES 타 강사 수업 분석",
+          'id="surveyForm"',
+          "api/instructorObservationSurvey",
+          "핵심 관찰: 수업 목표",
+        ],
+      },
+      {
+        file: "firebase/kangsain-functions/functions/src/onboarding/instructorObservationSurvey.ts",
+        markers: [
+          'INSTRUCTOR_OBSERVATION_COLLECTION = "instructorObservationResponses"',
+          "INSTRUCTOR_OBSERVATION_NOTION_DATABASE_ID",
+          "instructorObservationCanonicalKey",
+          "syncInstructorObservationToNotion",
+          'status: "검토 대기"',
+        ],
+      },
+      {
+        file: "firebase/kangsain-functions/functions/src/exports/app.ts",
+        markers: [
+          "instructorObservationSurveyApiHandler",
+          "export const instructorObservationSurveyApi",
+        ],
+      },
+      {
+        file: "firebase.json",
+        markers: [
+          '"source": "/archivein/api/instructorObservationSurvey"',
+          '"source": "/archivein/instructor-observation/**"',
+          '"source": "/api/instructorObservationSurvey"',
+          '"source": "/instructor-observation/**"',
+        ],
+      },
+      {
+        file: "scripts/validate-live-release-canary.mjs",
+        markers: [
+          "instructor-observation-form-custom-domain",
+          "instructor-observation-api-custom-domain",
+        ],
+      },
+      {
+        file: "core/rules/index.html",
+        markers: [
+          "타 강사 수업 분석 설문",
+          "instructorObservationResponses",
+          "Notion 타 강사 수업 분석 기록",
+        ],
+      },
+    ],
+  },
+  {
     id: "recommended-meal-program",
     reason:
       "추천식단 설문, API, CORE 단건 발송, SOLAPI 짧은 링크 연결이 다른 배포에서 빠지는 것을 막습니다.",

@@ -95,6 +95,8 @@ function buildManifest(surface) {
         "ARCHIVE IN 운영자 앱 종료 안내",
         "ARCHIVE PILATES 프라이빗 사전설문",
         "api/privateSurveySubmit",
+        "ARCHIVE PILATES 타 강사 수업 분석",
+        "api/instructorObservationSurvey",
         "uploadMediaFileDirect",
         "completeMediaUpload",
         "Drive 직접 업로드 중",

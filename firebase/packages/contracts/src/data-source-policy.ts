@@ -19,6 +19,7 @@ export const archiveSourceCollections = [
   archiveCollections.memberMemos,
   archiveCollections.memberTags,
   archiveCollections.privateSurveyResponses,
+  archiveCollections.instructorObservationResponses,
 ] as const;
 
 export const archiveActionCollections = [
@@ -57,6 +58,7 @@ export const archiveIncubationCollections = [archiveCollections.workLanes] as co
 
 export const archiveExternalProjectionTargets = [
   "notionPrivateCharts",
+  "notionInstructorObservationRecords",
   "googleDriveReports",
   "solapi",
   "studiomate",
