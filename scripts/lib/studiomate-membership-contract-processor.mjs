@@ -157,7 +157,7 @@ export async function runStudioMateMembershipContractCandidates({
           if (outcome.status !== "existing") result.studioMateWrites += 1;
           if (outcome.status === "waiting") result.waiting += 1;
           if (outcome.status === "signed") result.signed += 1;
-          await persistContractSource({
+          await persistStudioMateMembershipContractSource({
             db,
             contractId: outcome.contractId,
             member: memberResult.member,
@@ -248,7 +248,7 @@ function firestoreJournal(db) {
   };
 }
 
-async function persistContractSource({
+export async function persistStudioMateMembershipContractSource({
   db,
   contractId,
   member,
