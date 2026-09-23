@@ -19,8 +19,8 @@ test("canonical catalog produces both public runtime catalogs", () => {
   const classroom = renderClassroomCatalog(catalog);
   const sales = renderVideoSalesCatalog(catalog);
 
-  assert.ok(catalog.products.length >= 29);
-  assert.equal(catalog.runtime.releaseDate, "2026-09-04");
+  assert.ok(catalog.products.length >= 31);
+  assert.equal(catalog.runtime.releaseDate, "2026-09-23");
   const currentRelease = releaseProducts(catalog);
   assert.ok(currentRelease.length > 0);
   assert.ok(currentRelease.every((product) => product.previewYouTubeId));

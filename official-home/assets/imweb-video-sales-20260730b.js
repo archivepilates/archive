@@ -1,7 +1,7 @@
 (function () {
   "use strict";
 
-  var VERSION = "2026-09-04a";
+  var VERSION = "2026-09-23a";
   var ORIGIN = "https://archivepilates.com";
   var ANALYTICS_ASSET = ORIGIN + "/assets/archive-analytics-20260729a.js?v=" + VERSION;
   var STYLE_ID = "archive-pilates-video-sales-style";
@@ -10,35 +10,37 @@
 
   // <archive-paid-video-sales-catalog:begin>
   var CATALOG = {
-    27: { code: "AR1", title: "리포머 척추 정렬 & 코어 컨트롤", price: 15000 },
-    28: { code: "ACH7", title: "체어 흉추가동성", price: 15000 },
-    29: { code: "ACA4", title: "캐딜락 흉추가동성", price: 15000 },
-    30: { code: "AB7", title: "바렐 요추안정화", price: 15000 },
-    31: { code: "AR3", title: "리포머 요추안정화", price: 15000 },
-    32: { code: "AB6", title: "바렐 직장인 증후군", price: 15000 },
-    33: { code: "ACH6", title: "체어 직장인 증후군", price: 15000 },
-    34: { code: "AR2-1", title: "리포머 챌린지 동작 빌드업", price: 15000 },
-    35: { code: "ACH5", title: "체어 고강도 필라테스", price: 15000 },
-    36: { code: "ACA2", title: "캐딜락 경추보호 코어강화", price: 15000 },
-    37: { code: "ACA3", title: "캐딜락 고강도 필라테스", price: 15000 },
-    38: { code: "ACA1", title: "캐딜락 보상패턴 바로잡기", price: 15000 },
-    39: { code: "AB3", title: "바렐 척추 유연성 & 어깨 안정화", price: 15000 },
-    40: { code: "ACH2", title: "체어 림프 순환 & 척추 컨트롤", price: 15000 },
-    41: { code: "AB2", title: "바렐 척추 신장 & 복부 컨트롤", price: 15000 },
-    42: { code: "ACH1", title: "체어 골반 & 체간 안정화", price: 15000 },
-    43: { code: "ACH4", title: "체어 골반 안정화 & 비대칭 교정", price: 15000 },
-    44: { code: "ACH3", title: "체어 정렬 인지 & 체간 안정화", price: 15000 },
-    45: { code: "AB5", title: "바렐 크로스패턴", price: 15000 },
-    46: { code: "AB1", title: "바렐 척추 신장 & 흉곽 안정화", price: 15000 },
-    47: { code: "AR4", title: "리포머 순환", price: 15000 },
-    48: { code: "AB4", title: "바렐 전신 근막 FLOW", price: 15000 },
-    49: { code: "AB8", title: "바렐 순환", price: 15000 },
-    50: { code: "ACH8", title: "체어 호흡", price: 15000 },
-    51: { code: "ACA5", title: "캐딜락 호흡", price: 15000 },
-    79: { code: "AB9", title: "바렐 골반·고관절", price: 15000 },
-    80: { code: "AR5", title: "리포머 골반·고관절", price: 15000 },
-    84: { code: "ACA6", title: "캐딜락 지지와 움직임", price: 15000 },
-    85: { code: "ACH9", title: "체어 지지와 움직임", price: 15000 }
+    27: { code: "AR1", title: "리포머 척추 정렬 & 코어 컨트롤", price: 20000 },
+    28: { code: "ACH7", title: "체어 흉추가동성", price: 20000 },
+    29: { code: "ACA4", title: "캐딜락 흉추가동성", price: 20000 },
+    30: { code: "AB7", title: "바렐 요추안정화", price: 20000 },
+    31: { code: "AR3", title: "리포머 요추안정화", price: 20000 },
+    32: { code: "AB6", title: "바렐 직장인 증후군", price: 20000 },
+    33: { code: "ACH6", title: "체어 직장인 증후군", price: 20000 },
+    34: { code: "AR2-1", title: "리포머 챌린지 동작 빌드업", price: 20000 },
+    35: { code: "ACH5", title: "체어 고강도 필라테스", price: 20000 },
+    36: { code: "ACA2", title: "캐딜락 경추보호 코어강화", price: 20000 },
+    37: { code: "ACA3", title: "캐딜락 고강도 필라테스", price: 20000 },
+    38: { code: "ACA1", title: "캐딜락 보상패턴 바로잡기", price: 20000 },
+    39: { code: "AB3", title: "바렐 척추 유연성 & 어깨 안정화", price: 20000 },
+    40: { code: "ACH2", title: "체어 림프 순환 & 척추 컨트롤", price: 20000 },
+    41: { code: "AB2", title: "바렐 척추 신장 & 복부 컨트롤", price: 20000 },
+    42: { code: "ACH1", title: "체어 골반 & 체간 안정화", price: 20000 },
+    43: { code: "ACH4", title: "체어 골반 안정화 & 비대칭 교정", price: 20000 },
+    44: { code: "ACH3", title: "체어 정렬 인지 & 체간 안정화", price: 20000 },
+    45: { code: "AB5", title: "바렐 크로스패턴", price: 20000 },
+    46: { code: "AB1", title: "바렐 척추 신장 & 흉곽 안정화", price: 20000 },
+    47: { code: "AR4", title: "리포머 순환", price: 20000 },
+    48: { code: "AB4", title: "바렐 전신 근막 FLOW", price: 20000 },
+    49: { code: "AB8", title: "바렐 순환", price: 20000 },
+    50: { code: "ACH8", title: "체어 호흡", price: 20000 },
+    51: { code: "ACA5", title: "캐딜락 호흡", price: 20000 },
+    79: { code: "AB9", title: "바렐 골반·고관절", price: 20000 },
+    80: { code: "AR5", title: "리포머 골반·고관절", price: 20000 },
+    84: { code: "ACA6", title: "캐딜락 지지와 움직임", price: 20000 },
+    85: { code: "ACH9", title: "체어 지지와 움직임", price: 20000 },
+    86: { code: "AR6", title: "리포머 외부 피드백", price: 20000 },
+    87: { code: "AB10", title: "바렐 외부 피드백", price: 20000 }
   };
 
   var BEST = [
@@ -64,6 +66,11 @@
       items: [79, 80]
     },
     {
+      title: "외부 피드백",
+      copy: "도구로 감각을 선명하게 만든 뒤 기구 시퀀스로 연결하는 수업을 비교합니다.",
+      items: [86, 87]
+    },
+    {
       title: "순환과 FLOW",
       copy: "동작 사이의 연결과 회복까지 끊기지 않게 구성합니다.",
       items: [49, 47]
@@ -82,12 +89,14 @@
     ACA5: 44,
     AB9: 80,
     AR5: 79,
+    AR6: 87,
+    AB10: 86,
     AB8: 47,
     AR4: 49,
     AR1: 44,
     ACH3: 27
   };
-  var NEXT_PRIORITY = ["ACA6","ACH9","ACH8","AB9","AB8","AR1","ACA5","AR5","AR4","ACH3"];
+  var NEXT_PRIORITY = ["ACA6","ACH9","AR6","AB10","ACH8","AB9","AB8","AR1","ACA5","AR5","AR4","ACH3"];
   // <archive-paid-video-sales-catalog:end>
 
   function currentPath() {

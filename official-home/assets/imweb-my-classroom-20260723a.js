@@ -1,5 +1,5 @@
 (function(){
-  var VERSION="2026-09-20c";
+  var VERSION="2026-09-23a";
   var MAX_PROBES=6;
   var path=String(location.pathname||"").replace(/\/$/,"");
   patch260919BarrelVideo(path);
@@ -75,7 +75,9 @@
     {"code":"AB9","path":"/archive-method-watch-ab9","title":"바렐 골반·고관절 (AB9)"},
     {"code":"AR5","path":"/archive-method-watch-ar5","title":"리포머 골반·고관절 (AR5)"},
     {"code":"ACA6","path":"/archive-method-watch-aca6","title":"캐딜락 지지와 움직임 (ACA6)"},
-    {"code":"ACH9","path":"/archive-method-watch-ach9","title":"체어 지지와 움직임 (ACH9)"}
+    {"code":"ACH9","path":"/archive-method-watch-ach9","title":"체어 지지와 움직임 (ACH9)"},
+    {"code":"AR6","path":"/archive-method-watch-ar6","title":"리포머 외부 피드백 (AR6)"},
+    {"code":"AB10","path":"/archive-method-watch-ab10","title":"바렐 외부 피드백 (AB10)"}
   ];
   // <archive-paid-video-classroom-catalog:end>
   var L=PAID_VIDEO_CATALOG.concat([

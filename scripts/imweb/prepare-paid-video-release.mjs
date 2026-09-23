@@ -258,25 +258,6 @@ function renderProductDetail(video) {
     <iframe src="https://www.youtube.com/embed/${video.previewYouTubeId}" title="ARCHIVE PILATES preview" style="position:absolute;inset:0;width:100%;height:100%;border:0;" allow="accelerometer; autoplay; clipboard-write; encrypted-media; gyroscope; picture-in-picture; web-share" allowfullscreen></iframe>
   </div>
   <div style="padding:20px;border:1px solid #e7e1d8;background:#fbfaf7;margin:22px 0;"><strong style="display:block;margin-bottom:8px;color:#171717;">수업 구성</strong>${summary}</div>
-  <h3 style="font-size:20px;margin:26px 0 10px;color:#171717;">구매 후 이용 안내</h3>
-  <ul style="padding-left:20px;margin:0 0 18px;color:#333;">
-    <li>결제 완료 후 주문자 계정에 <strong>${group}</strong> 권한이 자동 부여됩니다.</li>
-    <li>전체 영상은 공개 링크로 발송하지 않고 로그인 후 구매자 전용 페이지에서 시청합니다.</li>
-    <li>시청 가능 기간은 권한 부여일 기준 ${video.entitlementDays}일이며 파일 다운로드는 제공하지 않습니다.</li>
-    <li>무단 저장, 복제, 공유, 재배포는 금지됩니다.</li>
-  </ul>
-  <!-- ARCHIVE_TOSSPAY_POLICY_START -->
-  <div data-archive-pilates-tosspay="online-2026-07-30" style="padding:22px;border:2px solid #1e1b18;background:#fffdfa;margin:24px 0;color:#1f1f1f;line-height:1.75;">
-    <h3 style="font-size:20px;margin:0 0 12px;color:#171717;">결제 후 제공 방식 · 이용기간 · 환불 기준</h3>
-    <ul style="padding-left:20px;margin:0;color:#333;">
-      <li><strong>제공 방식:</strong> 결제 완료 즉시 구매 계정에 시청 권한이 자동 부여되며 로그인 후 <strong>내 강의실</strong>에서 스트리밍합니다.</li>
-      <li><strong>최종 제공 완료:</strong> 시청 권한 부여일로부터 ${video.entitlementDays}일이 되는 날에 이용기간이 종료됩니다.</li>
-      <li><strong>전액 환불:</strong> 결제일로부터 7일 이내이면서 영상 재생 이력이 없는 경우 전액 환불합니다.</li>
-      <li><strong>재생 시작 후 환불:</strong> 시청을 시작했거나 결제 후 7일이 지난 경우, 이용기간의 1/3 경과 전에는 결제금액의 2/3, 1/3 이후부터 1/2 경과 전에는 1/2을 환불하며, 1/2 경과 후에는 환불되지 않습니다.</li>
-      <li><strong>예외 처리:</strong> 중복 결제, 권한 미부여 또는 사업자 귀책의 재생 장애는 확인 후 전액 환불하거나 이용기간을 연장합니다.</li>
-    </ul>
-  </div>
-  <!-- ARCHIVE_TOSSPAY_POLICY_END -->
   <a href="http://pf.kakao.com/_AHdvn/chat" style="display:inline-block;margin-top:4px;padding:13px 18px;background:#f8de59;color:#171717!important;text-decoration:none;font-weight:800;border:1px solid #d9be2d;">카카오톡 문의</a>
 </section>`;
 }

@@ -8,14 +8,14 @@
     "onlineCategoryCode": "s20260613848c8356b9c73"
   },
   "runtime": {
-    "releaseDate": "2026-09-04",
-    "classroomAssetVersion": "2026-09-04c",
-    "classroomLoaderVersion": "2026-09-04d",
-    "classroomAssetQuery": "20260904c",
-    "videoSalesVersion": "2026-09-04a"
+    "releaseDate": "2026-09-23",
+    "classroomAssetVersion": "2026-09-23a",
+    "classroomLoaderVersion": "2026-09-23b",
+    "classroomAssetQuery": "20260923a",
+    "videoSalesVersion": "2026-09-23a"
   },
   "defaults": {
-    "price": 15000,
+    "price": 20000,
     "entitlementDays": 40,
     "productType": "subscribe"
   },
@@ -294,8 +294,7 @@
       "watchPath": "/archive-method-watch-aca6",
       "saleStatus": "sale",
       "displayed": true,
-      "previewYouTubeId": "gsoSB2PwkXU",
-      "verifyInRelease": true
+      "previewYouTubeId": "gsoSB2PwkXU"
     },
     {
       "code": "ACH9",
@@ -305,7 +304,28 @@
       "watchPath": "/archive-method-watch-ach9",
       "saleStatus": "sale",
       "displayed": true,
-      "previewYouTubeId": "JVdsoaWkH-s",
+      "previewYouTubeId": "JVdsoaWkH-s"
+    },
+    {
+      "code": "AR6",
+      "productNo": 86,
+      "title": "리포머 외부 피드백",
+      "groupCode": "g20260923b97341245f687",
+      "watchPath": "/archive-method-watch-ar6",
+      "saleStatus": "sale",
+      "displayed": true,
+      "previewYouTubeId": "oxOhFWmv20k",
+      "verifyInRelease": true
+    },
+    {
+      "code": "AB10",
+      "productNo": 87,
+      "title": "바렐 외부 피드백",
+      "groupCode": "g20260923a06f9585001d9",
+      "watchPath": "/archive-method-watch-ab10",
+      "saleStatus": "sale",
+      "displayed": true,
+      "previewYouTubeId": "NsA8KsC6MpI",
       "verifyInRelease": true
     }
   ],
@@ -353,6 +373,14 @@
         ]
       },
       {
+        "title": "외부 피드백",
+        "copy": "도구로 감각을 선명하게 만든 뒤 기구 시퀀스로 연결하는 수업을 비교합니다.",
+        "codes": [
+          "AR6",
+          "AB10"
+        ]
+      },
+      {
         "title": "순환과 FLOW",
         "copy": "동작 사이의 연결과 회복까지 끊기지 않게 구성합니다.",
         "codes": [
@@ -376,6 +404,8 @@
       "ACA5": "ACH3",
       "AB9": "AR5",
       "AR5": "AB9",
+      "AR6": "AB10",
+      "AB10": "AR6",
       "AB8": "AR4",
       "AR4": "AB8",
       "AR1": "ACH3",
@@ -384,6 +414,8 @@
     "nextPriority": [
       "ACA6",
       "ACH9",
+      "AR6",
+      "AB10",
       "ACH8",
       "AB9",
       "AB8",

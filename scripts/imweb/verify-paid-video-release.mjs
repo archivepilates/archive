@@ -68,6 +68,18 @@ for (const product of selected) {
   assert(subscribe.group_code === product.groupCode, `${product.code}: entitlement group mismatch.`);
   assert(Number(subscribe.period) === daysFor(catalog, product), `${product.code}: period mismatch.`);
   assert(Array.isArray(live.productImages) && live.productImages.length > 0, `${product.code}: thumbnail missing.`);
+  const detailContent = [live.content, live.mobileContent].filter(Boolean).join("\n");
+  assert(
+    detailContent.includes(product.previewYouTubeId),
+    `${product.code}: preview is missing from saved product content.`,
+  );
+  assert(
+    detailContent.includes(product.watchPath),
+    `${product.code}: watch CTA is missing from saved product content.`,
+  );
+  for (const fullId of privateIds) {
+    assert(!detailContent.includes(fullId), `${product.code}: a full video id leaked to saved product content.`);
+  }
   const group = groups.find((item) => item.siteGroupCode === product.groupCode);
   assert(group, `${product.code}: entitlement group does not exist.`);
   assert(group.title === groupName(catalog, product), `${product.code}: entitlement group title mismatch.`);
@@ -89,9 +101,6 @@ for (const product of selected) {
   assert(detail.status === 200, `${product.code}: public product page returned ${detail.status}.`);
   assert(detail.body.includes(product.previewYouTubeId), `${product.code}: preview is missing from product detail.`);
   assert(detail.body.includes(product.watchPath), `${product.code}: watch CTA is missing from product detail.`);
-  for (const fullId of privateIds) {
-    assert(!detail.body.includes(fullId), `${product.code}: a full video id leaked to the public product page.`);
-  }
 
   const gate = await fetch(`${SITE}${product.watchPath}`, {
     redirect: "manual",
