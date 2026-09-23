@@ -16,7 +16,10 @@ import {
   normalizeNativeContractObservation,
   normalizeNativeContractDom,
 } from "./lib/studiomate-native-contract-evidence.mjs";
-import { buildMembershipContractMemberProfilePatch } from "./lib/studiomate-membership-contract-member-profile.mjs";
+import {
+  buildMembershipContractMemberProfilePatch,
+  membershipContractFallbackAliasIds,
+} from "./lib/studiomate-membership-contract-member-profile.mjs";
 
 const args = process.argv.slice(2);
 let requestedContractId = "";
@@ -114,6 +117,8 @@ try {
     let outcome;
     let refreshedReadback = null;
     let refreshedMember = null;
+    let profilePatch = null;
+    let fallbackAliasIds = [];
     try {
       const [observed, providerContract, memberResult] = await Promise.all([
         readNativeContractPage(page, doc.id),
@@ -158,6 +163,20 @@ try {
       );
       if (dom.observation && !outcome.observation)
         outcome.observation = dom.observation;
+      if (outcome.status === "complete") {
+        profilePatch = buildMembershipContractMemberProfilePatch(
+          refreshedMember,
+          source.studioId,
+        );
+        const aliases = await db
+          .collection("memberProfiles")
+          .where("phoneLast4", "==", profilePatch.phoneLast4)
+          .get();
+        fallbackAliasIds = membershipContractFallbackAliasIds(
+          aliases.docs.map((item) => ({ id: item.id, data: item.data() })),
+          profilePatch,
+        );
+      }
     } catch {
       outcome = {
         status: "review",
@@ -202,19 +221,32 @@ try {
         updatedAt: admin.firestore.Timestamp.now(),
       });
       if (outcome.completion) {
-        const profilePatch = buildMembershipContractMemberProfilePatch(
-          refreshedMember,
-          source.studioId,
-        );
         tx.set(
           db.collection("memberProfiles").doc(profilePatch.memberId),
           {
             ...profilePatch,
+            ...(fallbackAliasIds.length
+              ? {
+                  mergedMemberIds:
+                    admin.firestore.FieldValue.arrayUnion(...fallbackAliasIds),
+                }
+              : {}),
             syncedAt: admin.firestore.Timestamp.now(),
             updatedAt: admin.firestore.Timestamp.now(),
           },
           { merge: true },
         );
+        for (const aliasId of fallbackAliasIds) {
+          tx.set(
+            db.collection("memberProfiles").doc(aliasId),
+            {
+              canonicalMemberId: profilePatch.memberId,
+              status: "merged",
+              updatedAt: admin.firestore.Timestamp.now(),
+            },
+            { merge: true },
+          );
+        }
         tx.set(
           db
             .collection("studiomateMembershipContractJobs")

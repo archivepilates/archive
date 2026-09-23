@@ -1,6 +1,9 @@
 import assert from "node:assert/strict";
 import test from "node:test";
-import { buildMembershipContractMemberProfilePatch } from "./studiomate-membership-contract-member-profile.mjs";
+import {
+  buildMembershipContractMemberProfilePatch,
+  membershipContractFallbackAliasIds,
+} from "./studiomate-membership-contract-member-profile.mjs";
 
 test("builds a canonical numeric StudioMate member profile from verified contract identity", () => {
   assert.deepEqual(
@@ -39,5 +42,32 @@ test("rejects incomplete or temporary member identity", () => {
     { memberId: "1", name: "Member", phone: "invalid" },
   ]) {
     assert.throws(() => buildMembershipContractMemberProfilePatch(member, "5330"));
+  }
+});
+
+test("links only exact same-identity Excel fallback profiles", () => {
+  const canonical = buildMembershipContractMemberProfilePatch(
+    { memberId: "5009368", name: "Member", phone: "01012345678" },
+    "5330",
+  );
+  assert.deepEqual(
+    membershipContractFallbackAliasIds(
+      [
+        { id: "5009368", data: canonical },
+        {
+          id: "excel_old",
+          data: { studioId: "5330", name: " Member ", phone: "010-1234-5678" },
+        },
+      ],
+      canonical,
+    ),
+    ["excel_old"],
+  );
+  for (const row of [
+    { id: "other_numeric", data: { studioId: "5330", name: "Member", phone: "01012345678" } },
+    { id: "excel_other", data: { studioId: "5330", name: "Other", phone: "01012345678" } },
+    { id: "excel_other", data: { studioId: "9999", name: "Member", phone: "01012345678" } },
+  ]) {
+    assert.throws(() => membershipContractFallbackAliasIds([row], canonical));
   }
 });
