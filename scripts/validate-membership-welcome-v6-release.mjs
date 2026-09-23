@@ -27,10 +27,14 @@ requireAll("firebase/kangsain-functions/functions/src/memberSignup/membershipWel
 requireAll("firebase/kangsain-functions/macmini-studiomate/com.archive.studiomate-excel-emergency-mode.plist", [
   "STUDIOMATE_MEMBERSHIP_CONTRACT_OBSERVER",
   "<string>shadow</string>",
+  "STUDIOMATE_MEMBERSHIP_CONTRACT_WRITER",
+  "STUDIOMATE_MEMBERSHIP_CONTRACT_COMPLETION",
+  "<string>enabled</string>",
 ]);
 requireAll("core/rules/index.html", [
   "2026-09-23 SOLAPI 재조회",
-  "신규 수강권 감지만 운영 관찰 모드",
+  "신규 수강권을 감지해 StudioMate 자체 계약서를 자동 작성",
+  "일반회원 운영 모드로 승격",
   "김기효 계정은 스텝이므로 일반회원 계약 자동화 대상에는 포함하지 않습니다.",
 ]);
 

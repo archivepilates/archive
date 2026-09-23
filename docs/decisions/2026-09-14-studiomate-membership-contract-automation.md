@@ -1,6 +1,6 @@
 # StudioMate Membership Contract Automation
 
-State: v6 approved and verified by an isolated delivery; source discovery runs in shadow mode, while contract writes remain gated.
+State: production active for allowlisted regular-member products after native contract and v6 welcome E2E verification.
 Owner: ARCHIVE PILATES. Updated: 2026-09-23.
 
 ## Operating Decision
@@ -49,11 +49,12 @@ Provider state, exact ID, content, image, channel and buttons must
 match before a ready intent can be produced. Public Notion destination rendering was not
 verified in this session because the web reader could not open those existing URLs.
 
-On 2026-09-23, one isolated v6 delivery test to the registered 김기효 test recipient was
-accepted and delivered by SOLAPI after the exact template contract was verified. This was
-recorded as test-only evidence and does not qualify 김기효 for automatic membership-contract
-processing: the current canonical profile is staff and the ordinary-member gate must not be
-bypassed. No StudioMate member, ticket, payment or contract was created for this test.
+On 2026-09-23, one explicitly approved synthetic StudioMate member, paid regular ticket and
+native contract completed the full writer-to-signature flow without creating a booking. The
+member signed directly, and one isolated v6 delivery to the registered 김기효 test recipient
+was accepted and delivered by SOLAPI after the exact template contract was verified. The
+canary-only staff-phone exception was then removed by switching to production scope. The real
+김기효 staff profile remains excluded from ordinary-member contract processing.
 
 Permanent dedupe spans the whole welcome family, not template version or contract ID.
 The proposed candidate identity hashes studio + normalized phone + welcome family. Before
@@ -64,16 +65,14 @@ history. Delivered/accepted blocks permanently. Queued/sending/unknown or any at
 failure is review-only; repeated contract-complete events must not resend. Unattempted
 cancelled/skipped jobs may qualify only after the fresh complete cross-family audit.
 
-Promotion design (implemented, NOT active): native StudioMate contract/issuance records are the source;
+Production design (active): native StudioMate contract/issuance records are the source;
 `studiomateMembershipContracts` is the verified-source collection and
 `alimtalkCandidates`/`alimtalkSends` are the existing delivery ledger. The source collection
-is populated only by the guarded writer after a verified native issuance. The authorized
-manual test contract is not retroactively inserted. WorkLane hints and CRM mirrors are forbidden
+is populated only by the guarded writer after a verified native issuance. WorkLane hints and CRM mirrors are forbidden
 external-action sources. The adapter atomically reserves phone/member welcome identity
 before the provider POST, repeats source/role/template/history checks and uses the shared
 Alimtalk queue/provider ledger without a second direct sender.
-No automatic retry on ambiguous provider acceptance. Activate only after native E2E,
-approved template, source promotion and limited test readback; no historical backfill.
+No automatic retry runs after ambiguous provider acceptance, and no historical backfill runs.
 
 ## Source And Promotion Boundary
 
@@ -91,14 +90,16 @@ approved template, source promotion and limited test readback; no historical bac
 - Allowed readers: bounded operator review/enrichment. Forbidden: sends, member creation,
   ticket issue, payment, reservation, contact or memo writes from hints or CRM mirrors.
 - Native field mapping, full contract-history reads and exact ticket/payment readback are
-  implemented and verified against the authorized completed test. Production promotion
-  still requires a fresh issuance through the automatic writer and an approved v6 template.
+  implemented and verified against the authorized completed automatic-writer test. Production
+  remains limited to the reviewed regular-product allowlist and ordinary-member grades.
 
 ## Implemented Guarded Entry Point
 
 The existing fresh-download runner passes `--contract-source-downloaded-at` to the
 member importer. The Mac mini LaunchAgent now supplies
-`STUDIOMATE_MEMBERSHIP_CONTRACT_OBSERVER=shadow`; a
+`STUDIOMATE_MEMBERSHIP_CONTRACT_OBSERVER=shadow`,
+`STUDIOMATE_MEMBERSHIP_CONTRACT_WRITER=enabled`, and
+`STUDIOMATE_MEMBERSHIP_CONTRACT_COMPLETION=enabled`; a
 successfully applied, complete, fresh raw export enable provisional discovery. Default
 remains off outside that LaunchAgent. Manual historical files, contacts-only imports and dry runs do not invoke it.
 The first baseline never creates candidates. Remaining-count/status/holding-end edits
@@ -163,12 +164,10 @@ not permission to send; `sendAllowed` remains false in this staging implementati
    wording were not rewritten or certified legally valid during this task.
 5. Synthetic tests cover cutover baseline, signed renewal, first regular purchase,
    exclusions, source edits, duplicate jobs, partial payments and ambiguous external
-   results. Run one limited automatic-writer E2E on a future explicitly approved test
-   issuance before setting `nativeE2eVerified` and live activation flags.
+   results. One limited automatic-writer E2E completed on an explicitly approved test issuance.
 6. The canonical source reader, contract writer, completion refresh and queue adapter are
-   implemented and deployed. v6 approval and an isolated provider delivery are verified.
-   Remaining blockers for automatic contract creation are the explicit regular-product ID
-   allowlist and a limited ordinary-member automatic-writer E2E. The legacy onsite entry was
+   implemented and deployed. The 23-product regular allowlist, native automatic-writer E2E,
+   member signature readback and isolated v6 provider delivery are verified. The legacy onsite entry was
    already retired on main in commits 06f49971/7c3d658a; do not re-enable it or delete
    historical ARCHIVE IN contracts or links when integrating this older worktree.
 
@@ -179,12 +178,13 @@ Verified live evidence:
   later actual card-settlement row. No member/ticket/payment duplication occurred.
 - Native readback normalized the ticket period and the two-row payment ledger to the
   exact owned issuance, 398,000 KRW paid and zero outstanding balance.
-- template `KA01TP260914091233543JoFDsn7KfCr` is `APPROVED` in SOLAPI. An isolated
-  김기효 v6 delivery was accepted and delivered on 2026-09-23 without changing StudioMate.
+- template `KA01TP260914091233543JoFDsn7KfCr` is `APPROVED` in SOLAPI. The automatic
+  synthetic-member contract flow completed without a booking, and the isolated 김기효 v6
+  delivery was accepted and delivered exactly once on 2026-09-23.
 
-No Codex heartbeat or duplicate LaunchAgent was created. The existing hourly Excel sync
-now performs read-only contract discovery in shadow mode. Native contract writes and
-automatic member sends stay off until the product allowlist and ordinary-member canary pass.
+No Codex heartbeat or duplicate LaunchAgent was created. The existing hourly Excel sync now
+performs discovery, guarded contract writes and completion checks. Automatic member sends run
+only after a fresh post-candidate native readback and the permanent welcome-family dedupe.
 
 ## Completion And Dispatch Implementation
 
@@ -215,15 +215,14 @@ automatic member sends stay off until the product allowlist and ordinary-member 
 - Source fingerprints, config, role exclusions, template content/image/buttons and history
   are rechecked. The shared transport does not create an extra short link for welcome v6.
 
-The native issuance/payment/contract-history reader and automatic
-draft/seal/signature-request writer are implemented. They remain dormant behind environment
-and Firestore gates. Do not activate them until the v6 template is approved and one fresh,
-explicitly authorized issuance completes the automatic writer E2E. The completed manual
-test must not be rerun through the writer because its issuance is already contracted.
+The native issuance/payment/contract-history reader and automatic draft/seal/signature-request
+writer are active behind environment and Firestore gates for allowlisted ordinary-member
+products. Existing contracted issuances are idempotently skipped and ambiguous writes are not
+retried automatically.
 
 ## Checks
 
-`npm run test:membership-contract` passed 815 tests (189 Node + 626 TypeScript),
+`npm run test:membership-contract` passed 628 tests,
 with zero failures or skipped tests. Covers first/renewal/exclusions, partial evidence,
 template contract, native DOM/signature intervals, historical pagination, aliases,
 concurrent/crashed dispatch, legacy nested outbound markers and current-readback races.
@@ -232,9 +231,8 @@ concurrent/crashed dispatch, legacy nested outbound markers and current-readback
 `npm run validate:data-source-policy` passed. All 5 codebases / 91 exports build.
 The existing Alimtalk dedupe/safeguards/onsite-retirement regression suites passed 19 tests;
 `node scripts/validate-onsite-welcome-release.mjs` passed. Retired entry points remain blocked.
-One explicitly approved native LMS signature request ran after manual source review. No
-welcome Alimtalk or separate member/ticket/payment write ran. New source formatting and
-syntax checks passed.
+One explicitly approved native LMS signature request and one v6 welcome delivery completed.
+No booking was created. New source formatting and syntax checks passed.
 
 `node --check scripts/emergency-import-studiomate-member-excel.mjs`
 
@@ -247,9 +245,8 @@ returned disabled with zero reads, writes and sends (browser never opened).
 
 `git diff --check`
 
-Commits through `4d7afc62` were fast-forwarded to `main`, pushed to GitHub, and deployed on
-2026-09-14. `functions-alimtalk` and ARCHIVE CORE Hosting passed their release guards and
-live CORE canary. The Mac mini runtime checkout was fast-forwarded to the same commit.
-Production activation remains deferred until template approval and automatic-writer E2E.
+The production activation commits were fast-forwarded to `main`, pushed to GitHub, and the
+affected Functions codebases were deployed on 2026-09-23. ARCHIVE CORE Hosting and the Mac
+mini runtime are updated in the same release set.
 
 Report: `docs/reports/2026-09-14-studiomate-membership-contract-verification.html`.

@@ -27,6 +27,10 @@
     <string>https://arcpilates.studiomate.kr</string>
     <key>STUDIOMATE_MEMBERSHIP_CONTRACT_OBSERVER</key>
     <string>shadow</string>
+    <key>STUDIOMATE_MEMBERSHIP_CONTRACT_WRITER</key>
+    <string>enabled</string>
+    <key>STUDIOMATE_MEMBERSHIP_CONTRACT_COMPLETION</key>
+    <string>enabled</string>
     <key>GOOGLE_APPLICATION_CREDENTIALS</key>
     <string>/Users/archivepilates/ArchiveIN/secrets/google/archive-codex-operator.json</string>
     <key>GOOGLE_CLOUD_PROJECT</key>
