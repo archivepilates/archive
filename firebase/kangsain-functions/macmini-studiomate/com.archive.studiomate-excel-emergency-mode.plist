@@ -25,6 +25,8 @@
     <string>true</string>
     <key>STUDIOMATE_BASE_URL</key>
     <string>https://arcpilates.studiomate.kr</string>
+    <key>STUDIOMATE_MEMBERSHIP_CONTRACT_OBSERVER</key>
+    <string>shadow</string>
     <key>GOOGLE_APPLICATION_CREDENTIALS</key>
     <string>/Users/archivepilates/ArchiveIN/secrets/google/archive-codex-operator.json</string>
     <key>GOOGLE_CLOUD_PROJECT</key>

@@ -57,7 +57,7 @@ export const ALIMTALK_TEMPLATES = {
   membership_welcome: {
     code: MEMBERSHIP_WELCOME_TEMPLATE.templateId,
     label: MEMBERSHIP_WELCOME_TEMPLATE.name,
-    status: "pending",
+    status: "approved",
   },
   reservation_open: {
     code: RESERVATION_OPEN_ALIMTALK_TEMPLATE_CODE,
