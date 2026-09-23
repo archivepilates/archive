@@ -30,6 +30,19 @@ export const membershipAutomationEnabled = (config: Data | undefined) =>
   config?.sourcePromoted === true &&
   config?.nativeE2eVerified === true;
 const enabled = membershipAutomationEnabled;
+export const membershipActivationScopeIssue = (config: Data | undefined, memberId: unknown) => {
+  if (config?.activationScope === "production") return "";
+  if (
+    config?.activationScope === "canary" &&
+    typeof memberId === "string" &&
+    Array.isArray(config?.canaryMemberIds) &&
+    config.canaryMemberIds.length > 0 &&
+    config.canaryMemberIds.every((id: unknown) => typeof id === "string") &&
+    config.canaryMemberIds.includes(memberId)
+  )
+    return "";
+  return "membership_activation_scope_blocked";
+};
 export const isMembershipWelcomeCandidate = (candidate: Data) =>
   candidate.type === "membership_welcome" || candidate.templateCode === MEMBERSHIP_WELCOME_TEMPLATE.templateId;
 const overrideMarker = (value: Data) => Object.keys(value).some((key) => /test|override/i.test(key));
@@ -65,6 +78,8 @@ function sourceIssue(source: Data | undefined, sourceId: string, config: Data | 
     source.status !== "signed"
   )
     return "canonical_contract_not_verified";
+  const activationIssue = membershipActivationScopeIssue(config, source.completion.memberId);
+  if (activationIssue) return activationIssue;
   if (
     !Number.isFinite(Date.parse(config?.cutoverAt)) ||
     Date.parse(source.selection.now) < Date.parse(config?.cutoverAt) ||

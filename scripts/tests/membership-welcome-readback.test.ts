@@ -3,6 +3,7 @@ import test from "node:test";
 import { membershipWelcomeReadbackIssue } from "../../firebase/kangsain-functions/functions/src/memberSignup/membershipWelcomeReadback";
 import {
   isMembershipWelcomeCandidate,
+  membershipActivationScopeIssue,
   membershipAutomationEnabled,
   membershipWelcomeClaimIssue,
 } from "../../firebase/kangsain-functions/functions/src/memberSignup/membershipWelcomeQueue";
@@ -523,6 +524,34 @@ test("automation requires all four explicit live gates", () => {
     assert.equal(
       membershipAutomationEnabled({ ...enabledConfig, mode }),
       false,
+    );
+  }
+});
+
+test("activation scope allows production or one explicitly listed canary member", () => {
+  assert.equal(
+    membershipActivationScopeIssue({ activationScope: "production" }, "100"),
+    "",
+  );
+  assert.equal(
+    membershipActivationScopeIssue(
+      { activationScope: "canary", canaryMemberIds: ["100"] },
+      "100",
+    ),
+    "",
+  );
+  for (const config of [
+    undefined,
+    {},
+    { activationScope: "canary" },
+    { activationScope: "canary", canaryMemberIds: [] },
+    { activationScope: "canary", canaryMemberIds: ["101"] },
+    { activationScope: "canary", canaryMemberIds: [100] },
+    { activationScope: "production_prepared" },
+  ]) {
+    assert.equal(
+      membershipActivationScopeIssue(config, "100"),
+      "membership_activation_scope_blocked",
     );
   }
 });

@@ -14,6 +14,7 @@ import { MEMBERSHIP_WELCOME_TEMPLATE } from "./membershipWelcomePolicy";
 import { membershipWelcomeReadbackIssue } from "./membershipWelcomeReadback";
 import {
   dispatchMembershipWelcome,
+  membershipActivationScopeIssue,
   queueMembershipWelcome,
   MEMBERSHIP_AUTOMATION_SETTINGS,
   MEMBERSHIP_CONTRACT_COLLECTION,
@@ -58,6 +59,10 @@ function dependencies(): MembershipWelcomeDependencies {
         memberName: source.memberName,
         payload: {},
       } as AlimtalkCandidateDoc;
+      const config = (await db.doc(MEMBERSHIP_AUTOMATION_SETTINGS).get()).data();
+      const canaryRecipient =
+        config?.activationScope === "canary" &&
+        membershipActivationScopeIssue(config, memberId) === "";
       let recipientIssue =
         !profile ||
         profile.studioId !== source.studioId ||
@@ -70,7 +75,8 @@ function dependencies(): MembershipWelcomeDependencies {
         (isAlimtalkTestRecipient(candidate) || /강사|스텝|직원|staff/i.test(String(profile?.memberGrade || "")))
       )
         recipientIssue = "staff_or_instructor_excluded";
-      if (!recipientIssue) recipientIssue = await currentAutomaticMemberExclusionReason(candidate);
+      if (!recipientIssue && !canaryRecipient)
+        recipientIssue = await currentAutomaticMemberExclusionReason(candidate);
       if (recipientIssue) return { recipientIssue, history: {}, template: {} };
       const local = await loadMembershipWelcomeHistory(db, {
         studioId: source.studioId,
@@ -87,7 +93,6 @@ function dependencies(): MembershipWelcomeDependencies {
       ) {
         return { recipientIssue: "welcome_already_sent_pending_or_ambiguous", history: {}, template: {} };
       }
-      const config = (await db.doc(MEMBERSHIP_AUTOMATION_SETTINGS).get()).data();
       // Coverage must be independently audited before promotion; retention gaps fail closed.
       const coverage = config?.providerHistoryCoverage;
       const deadline = Date.now() + 25_000;
