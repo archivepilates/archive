@@ -16,6 +16,7 @@ import {
   normalizeNativeContractObservation,
   normalizeNativeContractDom,
 } from "./lib/studiomate-native-contract-evidence.mjs";
+import { buildMembershipContractMemberProfilePatch } from "./lib/studiomate-membership-contract-member-profile.mjs";
 
 const args = process.argv.slice(2);
 let requestedContractId = "";
@@ -112,6 +113,7 @@ try {
     result.checked++;
     let outcome;
     let refreshedReadback = null;
+    let refreshedMember = null;
     try {
       const [observed, providerContract, memberResult] = await Promise.all([
         readNativeContractPage(page, doc.id),
@@ -132,6 +134,7 @@ try {
       if (refreshed.status !== "verified")
         throw new Error(refreshed.reason);
       refreshedReadback = refreshed.nativeReadback;
+      refreshedMember = memberResult.member;
       const contract = {
         ...observed,
         schemaVersion: 1,
@@ -199,6 +202,19 @@ try {
         updatedAt: admin.firestore.Timestamp.now(),
       });
       if (outcome.completion) {
+        const profilePatch = buildMembershipContractMemberProfilePatch(
+          refreshedMember,
+          source.studioId,
+        );
+        tx.set(
+          db.collection("memberProfiles").doc(profilePatch.memberId),
+          {
+            ...profilePatch,
+            syncedAt: admin.firestore.Timestamp.now(),
+            updatedAt: admin.firestore.Timestamp.now(),
+          },
+          { merge: true },
+        );
         tx.set(
           db
             .collection("studiomateMembershipContractJobs")
