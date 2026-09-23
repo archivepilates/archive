@@ -17,6 +17,7 @@ import { toHttpsError } from "../utils/errors";
 import { callableOptions, longCallableOptions, longRequestOptions, scheduleOptions } from "../runtime/functionOptions";
 import type { StaffDoc } from "../types/models";
 import { queueActiveStaffContactSync, staffContactIdentityChanged } from "../sync/queueStaffContactSync";
+import { isMacMiniAdminSyncRequest } from "../sync/adminSyncRequestRouting";
 
 export const scheduledProcessWriteQueue = onSchedule(
   {
@@ -169,9 +170,10 @@ export const processAdminSyncRequest = onDocumentCreated(
       createdByUid?: string;
       status?: string;
     };
-    if (data.requestMode === "emergency_excel") {
-      logger.info("processAdminSyncRequest skipped emergency Excel request for Mac mini runner", {
+    if (isMacMiniAdminSyncRequest(data.requestMode)) {
+      logger.info("processAdminSyncRequest skipped request for Mac mini runner", {
         requestId: event.params.requestId,
+        requestMode: data.requestMode,
       });
       return;
     }
