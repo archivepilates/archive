@@ -16,6 +16,7 @@ const SELECTED = "2026-09-14T03:00:00.000Z";
 const CHECKED = "2026-09-14T03:55:00.000Z";
 const PHONE = "01012345678";
 const DRAFT = "\uC791\uC131\uC911";
+const REQUEST_WAITING = "\uC694\uCCAD\uB300\uAE30";
 const SIGNED = "\uC11C\uBA85\uC644\uB8CC";
 
 function fixture() {
@@ -470,6 +471,18 @@ test("status signed and both actual signatures are required", () => {
   assert.equal(run(input).status, "waiting");
   input.raw.memberSignaturePresent = true;
   review(input, "conflicting_signature_state");
+});
+
+test("native request-waiting label is a valid unsigned observation", () => {
+  const input = fixture();
+  input.raw.statusText = REQUEST_WAITING;
+  input.raw.signedDateText = null;
+  input.raw.memberSignaturePresent = false;
+  input.binding.currentMemberTicket.providerSignature = null;
+  const result = run(input);
+  assert.equal(result.status, "waiting");
+  assert.equal(result.reason, "native_member_signature_required");
+  assert.equal(result.observation.status, "sent");
 });
 
 test("date-only first discovery cannot manufacture signedAt or establish a transition", () => {

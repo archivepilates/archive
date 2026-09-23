@@ -18,6 +18,7 @@ const contractId = (v) =>
 const money = (v) => Number.isSafeInteger(v) && v >= 0;
 const statusByText = new Map([
   ["\uC791\uC131\uC911", "draft"],
+  ["\uC694\uCCAD\uB300\uAE30", "sent"],
   ["\uC11C\uBA85\uC644\uB8CC", "signed"],
 ]);
 const identityKeys = ["studioId", "memberId", "userTicketId", "productId"];
@@ -224,8 +225,9 @@ export function normalizeNativeContractDom(rawDOM, binding) {
  * Confirmed reader inputs: .contract-template-form-title__input input (title),
  * .contract-form-field.name input (memberName), .contract-form-field.mobile input
  * (memberPhone), .contract-status-tag (statusText), p.sign-completed-date (signedDateText).
- * Status text is exactly U+C791 U+C131 U+C911
- * (draft) or U+C11C U+BA85 U+C644 U+B8CC (signed); the reader may trim outer whitespace.
+ * Status text is exactly U+C791 U+C131 U+C911 (draft),
+ * U+C694 U+CCAD U+B300 U+AE30 (sent/waiting), or
+ * U+C11C U+BA85 U+C644 U+B8CC (signed); the reader may trim outer whitespace.
  * Signature booleans require p img under the footer li with the exact direct span
  * label, nonempty src, image.complete AND naturalWidth > 0. Never pass/store images.
  * DOM HAS NO native issuance/product IDs. Those come from independent native reads
