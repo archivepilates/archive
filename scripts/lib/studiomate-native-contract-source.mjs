@@ -101,9 +101,12 @@ export function createStudioMateNativeApiClient({
     ),
   );
   const request = async (method, pathname, body) => {
-    if (!/^\/v2\/staff\/[A-Za-z0-9_/?=&%.,:+-]+$/.test(pathname))
-      throw new Error("Invalid StudioMate API path");
     const upper = method.toUpperCase();
+    const validV2Path = /^\/v2\/staff\/[A-Za-z0-9_/?=&%.,:+-]+$/.test(pathname);
+    const validMemberDetailPath =
+      upper === "GET" && /^\/staff\/member\/[1-9]\d{0,63}$/.test(pathname);
+    if (!validV2Path && !validMemberDetailPath)
+      throw new Error("Invalid StudioMate API path");
     const controller = new AbortController();
     const timeout = setTimeout(() => controller.abort(), timeoutMs);
     let response;
@@ -200,7 +203,23 @@ export async function readExactStudioMateMember(api, phone) {
     });
   }
   const row = matches[0];
-  const memberGrade = firstText(row, [
+  const detailBody = await api.get(`/staff/member/${row.id}`);
+  const detail = detailBody?.member;
+  if (
+    !record(detail) ||
+    String(detail.id ?? "") !== String(row.id) ||
+    normalizeMembershipPhone(detail.mobile) !== normalizedPhone ||
+    cleanText(detail.name) !== cleanText(row.name) ||
+    detail.deleted_at
+  ) {
+    return Object.freeze({
+      status: "review",
+      reason: "member_detail_identity_mismatch",
+      matchCount: 1,
+      member: null,
+    });
+  }
+  const memberGrade = firstText(detail, [
     "grade",
     "member_grade",
     "memberGrade",
@@ -208,20 +227,27 @@ export async function readExactStudioMateMember(api, phone) {
     "memberType",
     "등급",
     "회원구분",
-  ]);
+  ]) || cleanText(detail.user_grade?.name);
+  const profile = record(detail.profile) ? detail.profile : {};
   return Object.freeze({
     status: "verified",
     reason: "exact_phone_match",
     matchCount: 1,
     member: Object.freeze({
       memberId: String(row.id),
-      name: cleanText(row.name),
+      name: cleanText(detail.name),
       phone: normalizedPhone,
-      gender: cleanText(row.gender),
-      birthday: cleanText(row.birthday),
+      gender: cleanText(profile.gender || detail.gender || row.profile?.gender || row.gender),
+      birthday: cleanText(
+        profile.birthday || detail.birthday || row.profile?.birthday || row.birthday,
+      ),
       ...(memberGrade ? { memberGrade } : {}),
-      inactive: row.inactiveMember === true,
-      hasAccount: row.has_user_account === true,
+      inactive: detail.inactiveMember === true || row.inactiveMember === true,
+      hasAccount:
+        detail.has_user_account === true ||
+        row.has_user_account === true ||
+        nativeId(detail.account_id) ||
+        nativeId(row.account_id),
     }),
   });
 }
@@ -646,7 +672,7 @@ export async function readStudioMateTemplateTerms(api, templateId) {
 
 function arrayBody(body) {
   if (Array.isArray(body)) return body;
-  for (const key of ["data", "items", "list", "rows", "results"]) {
+  for (const key of ["data", "items", "list", "rows", "results", "members"]) {
     if (Array.isArray(body?.[key])) return body[key];
   }
   return [];

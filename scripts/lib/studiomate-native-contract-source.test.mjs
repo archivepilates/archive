@@ -59,17 +59,28 @@ test("requires exactly one native member with the exact normalized phone", async
     {
       get: async (pathname) => {
         requestedPaths.push(pathname);
+        if (pathname === "/staff/member/101") {
+          return {
+            member: {
+              id: 101,
+              name: "Synthetic Member",
+              mobile: "01012345678",
+              user_grade: { name: "강사회원" },
+              profile: { gender: "F", birthday: "2000-01-02" },
+              account_id: 901,
+              deleted_at: null,
+            },
+          };
+        }
         return {
-          rows: [
+          members: [
             {
               id: 101,
               name: "Synthetic Member",
               mobile: "010-1234-5678",
-              member_grade: "강사회원",
-              gender: "F",
-              birthday: "2000-01-02",
-              inactiveMember: false,
-              has_user_account: true,
+              user_grade: null,
+              profile: { gender: "F", birthday: "2000-01-02" },
+              account_id: 901,
             },
             { id: 102, name: "Near Match", mobile: "010-1234-5679" },
           ],
@@ -81,6 +92,7 @@ test("requires exactly one native member with the exact normalized phone", async
 
   assert.deepEqual(requestedPaths, [
     "/v2/staff/contract/member-list?search_word=01012345678",
+    "/staff/member/101",
   ]);
   assert.deepEqual(result, {
     status: "verified",
@@ -111,6 +123,36 @@ test("requires exactly one native member with the exact normalized phone", async
     status: "review",
     reason: "ambiguous_exact_phone",
     matchCount: 2,
+    member: null,
+  });
+});
+
+test("fails closed when the StudioMate member detail does not match the search identity", async () => {
+  const result = await readExactStudioMateMember(
+    {
+      get: async (pathname) =>
+        pathname.startsWith("/v2/staff/contract/member-list")
+          ? {
+              members: [
+                { id: 101, name: "Synthetic Member", mobile: "01012345678" },
+              ],
+            }
+          : {
+              member: {
+                id: 101,
+                name: "Different Member",
+                mobile: "01012345678",
+                deleted_at: null,
+              },
+            },
+    },
+    "01012345678",
+  );
+
+  assert.deepEqual(result, {
+    status: "review",
+    reason: "member_detail_identity_mismatch",
+    matchCount: 1,
     member: null,
   });
 });
