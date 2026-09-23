@@ -213,6 +213,8 @@ function firestoreJournal(db) {
             status: "resume",
             payloadHash,
             contractId: data.contractId || "",
+            stage: data.stage || "",
+            reason: data.reason || "",
           };
         }
         tx.create(ref, {

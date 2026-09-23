@@ -1,6 +1,7 @@
 import assert from "node:assert/strict";
 import test from "node:test";
 import {
+  buildStudioMateSignatureRequestPayload,
   buildStudioMateJoinContractPayload,
   executeStudioMateMembershipContract,
   MEMBERSHIP_CONTRACT_TEMPLATES,
@@ -213,7 +214,42 @@ test("builds the exact native payload with verified IDs, template and no member 
   );
 });
 
-test("claims before create POST and uses only the native non-SMS signature request", async () => {
+test("builds the native signature message only from an exact prepared binding", () => {
+  assert.deepEqual(
+    buildStudioMateSignatureRequestPayload({
+      prepared: {
+        contract_id_hash: CONTRACT_ID,
+        contractor_name: "Synthetic Member",
+        studio_name: "Synthetic Studio",
+        contract_link: `https://sign.studiomate.kr/${CONTRACT_ID}`,
+      },
+      contractId: CONTRACT_ID,
+      memberName: "Synthetic Member",
+    }),
+    {
+      title: "전자계약서가 도착했습니다.",
+      message: `[Synthetic Studio] 안녕하세요, 'Synthetic Member'님. 전자계약서 링크 입니다.\nhttps://sign.studiomate.kr/${CONTRACT_ID}`,
+      status: "draft",
+      is_message: false,
+      filter: {},
+    },
+  );
+  assert.throws(
+    () =>
+      buildStudioMateSignatureRequestPayload({
+        prepared: {
+          contract_id_hash: "d".repeat(64),
+          contractor_name: "Synthetic Member",
+          contract_link: `https://sign.studiomate.kr/${CONTRACT_ID}`,
+        },
+        contractId: CONTRACT_ID,
+        memberName: "Synthetic Member",
+      }),
+    /binding is invalid/,
+  );
+});
+
+test("claims before create POST and completes both native signature request steps", async () => {
   const input = fixture();
   const events = [];
   let reads = 0;
@@ -221,7 +257,15 @@ test("claims before create POST and uses only the native non-SMS signature reque
     post: async (pathname, body) => {
       events.push(["post", pathname, body]);
       if (pathname === "/v2/staff/contract/join") return { id: CONTRACT_ID };
-      if (pathname === `/v2/staff/contract/signature/request/${CONTRACT_ID}`) return null;
+      if (pathname === `/v2/staff/contract/signature/request/${CONTRACT_ID}`)
+        return {
+          contract_id_hash: CONTRACT_ID,
+          contractor_name: input.member.name,
+          studio_name: "Synthetic Studio",
+          contract_link: `https://sign.studiomate.kr/${CONTRACT_ID}`,
+        };
+      if (pathname === `/v2/staff/contract/signature/request/sms/${CONTRACT_ID}`)
+        return { success: true };
       throw new Error(`Unexpected synthetic POST: ${pathname}`);
     },
     get: async (pathname) => {
@@ -248,10 +292,17 @@ test("claims before create POST and uses only the native non-SMS signature reque
     [
       "/v2/staff/contract/join",
       `/v2/staff/contract/signature/request/${CONTRACT_ID}`,
+      `/v2/staff/contract/signature/request/sms/${CONTRACT_ID}`,
     ],
   );
-  assert.ok(posts.every(([, pathname]) => !pathname.toLowerCase().includes("sms")));
   assert.ok(posts[0][2].terms.every((term) => term.is_agree === false));
+  assert.deepEqual(posts[2][2], {
+    title: "전자계약서가 도착했습니다.",
+    message: `[Synthetic Studio] 안녕하세요, 'Synthetic Member'님. 전자계약서 링크 입니다.\nhttps://sign.studiomate.kr/${CONTRACT_ID}`,
+    status: "draft",
+    is_message: false,
+    filter: {},
+  });
 });
 
 test("an ambiguous create is retained and never retried automatically", async () => {
@@ -291,6 +342,39 @@ test("an ambiguous create is retained and never retried automatically", async ()
     stages.map(([stage]) => stage),
     ["attempting_create", "unknown"],
   );
+});
+
+test("an ambiguous signature message is not sent again on resume", async () => {
+  const input = fixture();
+  let posts = 0;
+  const api = {
+    post: async () => {
+      posts++;
+      assert.fail("resume after an ambiguous message must not POST again");
+    },
+    get: async () => nativeContract(input, "draft"),
+  };
+  const journal = {
+    claim: async (request) => ({
+      status: "resume",
+      payloadHash: request.payloadHash,
+      contractId: CONTRACT_ID,
+      stage: "attempting_signature_message",
+    }),
+    stage: async () => {},
+  };
+
+  const result = await executeStudioMateMembershipContract({
+    ...input,
+    api,
+    journal,
+  });
+  assert.deepEqual(result, {
+    status: "review",
+    reason: "signature_message_outcome_unknown",
+    contractId: CONTRACT_ID,
+  });
+  assert.equal(posts, 0);
 });
 
 test("a complete duplicate claim produces no API write or read", async () => {
@@ -362,8 +446,17 @@ test("signature request readback requires both sent state and retained center se
     const input = fixture();
     let reads = 0;
     const api = {
-      post: async (pathname) =>
-        pathname === "/v2/staff/contract/join" ? { id: CONTRACT_ID } : null,
+      post: async (pathname) => {
+        if (pathname === "/v2/staff/contract/join") return { id: CONTRACT_ID };
+        if (pathname === `/v2/staff/contract/signature/request/${CONTRACT_ID}`)
+          return {
+            contract_id_hash: CONTRACT_ID,
+            contractor_name: input.member.name,
+            studio_name: "Synthetic Studio",
+            contract_link: `https://sign.studiomate.kr/${CONTRACT_ID}`,
+          };
+        return { success: true };
+      },
       get: async () =>
         reads++ === 0
           ? nativeContract(input, "draft")

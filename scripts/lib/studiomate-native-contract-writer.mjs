@@ -23,6 +23,47 @@ const money = (value) => Number.isSafeInteger(value) && value >= 0;
 const hash = (value) =>
   createHash("sha256").update(JSON.stringify(value)).digest("hex");
 
+export function buildStudioMateSignatureRequestPayload({
+  prepared,
+  contractId,
+  memberName,
+}) {
+  const source = prepared?.data && typeof prepared.data === "object"
+    ? prepared.data
+    : prepared;
+  const preparedContractId = clean(
+    source?.contract_id_hash || source?.contractId || source?.id,
+  );
+  const contractorName = clean(
+    source?.contractor_name || source?.contractorName || memberName,
+  );
+  const studioName = clean(
+    source?.studio_name || source?.studioName || "ARCHIVE PILATES",
+  );
+  const contractLink = clean(
+    source?.contract_link || source?.contractLink || source?.link,
+  );
+  if (
+    preparedContractId !== contractId ||
+    contractorName !== clean(memberName) ||
+    !studioName ||
+    !/^https:\/\/sign\.studiomate\.kr\/[a-f0-9]{64}$/.test(contractLink) ||
+    !contractLink.endsWith(contractId)
+  )
+    throw new Error("Prepared signature request binding is invalid");
+
+  const preparedMessage = clean(source?.message || source?.contents || source?.body);
+  return Object.freeze({
+    title: clean(source?.title) || "전자계약서가 도착했습니다.",
+    message:
+      preparedMessage ||
+      `[${studioName}] 안녕하세요, '${contractorName}'님. 전자계약서 링크 입니다.\n${contractLink}`,
+    status: "draft",
+    is_message: false,
+    filter: {},
+  });
+}
+
 export function buildStudioMateJoinContractPayload(input) {
   const { selection, member, ticket, staff, template, terms } = input || {};
   validateSelection(selection, member, ticket);
@@ -241,12 +282,68 @@ export async function executeStudioMateMembershipContract({
   }
 
   if (readback.detail.status === "draft") {
+    if (
+      claim.status === "resume" &&
+      ["attempting_signature_message", "signature_message_outcome_unknown"].includes(
+        claim.stage,
+      )
+    ) {
+      await journal.stage(selection.jobKey, "signature_message_outcome_unknown", {
+        reason: "signature_message_outcome_unknown",
+        contractId,
+      });
+      return {
+        status: "review",
+        reason: "signature_message_outcome_unknown",
+        contractId,
+      };
+    }
     await journal.stage(selection.jobKey, "attempting_signature_request", { contractId });
+    let prepared;
     try {
-      // Native LMS request only. Do not use the separate SMS request endpoint.
-      await api.post(`/v2/staff/contract/signature/request/${contractId}`);
+      prepared = await api.post(`/v2/staff/contract/signature/request/${contractId}`);
     } catch {
-      // Resolve ambiguous response through one authoritative readback.
+      // Preparation may have completed, but it does not send the member message.
+      // Stop rather than guessing a second write payload.
+      await journal.stage(selection.jobKey, "review", {
+        reason: "signature_request_prepare_outcome_unknown",
+        contractId,
+      });
+      return {
+        status: "review",
+        reason: "signature_request_prepare_outcome_unknown",
+        contractId,
+      };
+    }
+    let requestPayload;
+    try {
+      requestPayload = buildStudioMateSignatureRequestPayload({
+        prepared,
+        contractId,
+        memberName: member.name,
+      });
+    } catch {
+      await journal.stage(selection.jobKey, "review", {
+        reason: "signature_request_prepare_binding_invalid",
+        contractId,
+      });
+      return {
+        status: "review",
+        reason: "signature_request_prepare_binding_invalid",
+        contractId,
+      };
+    }
+    await journal.stage(selection.jobKey, "attempting_signature_message", { contractId });
+    let signatureMessageError = false;
+    try {
+      await api.post(
+        `/v2/staff/contract/signature/request/sms/${contractId}`,
+        requestPayload,
+      );
+    } catch {
+      // The provider may have accepted the send before a transport failure.
+      // Resolve that ambiguity through the authoritative contract status below.
+      signatureMessageError = true;
     }
     readback = validateCreatedContractReadback(
       await api.get(`/v2/staff/contract/${contractId}`),
@@ -256,10 +353,18 @@ export async function executeStudioMateMembershipContract({
     );
     if (!readback.ok || !["sent", "signed"].includes(readback.detail.status)) {
       await journal.stage(selection.jobKey, "review", {
-        reason: "signature_request_outcome_unknown",
+        reason: signatureMessageError
+          ? "signature_message_outcome_unknown"
+          : "signature_request_outcome_unknown",
         contractId,
       });
-      return { status: "review", reason: "signature_request_outcome_unknown", contractId };
+      return {
+        status: "review",
+        reason: signatureMessageError
+          ? "signature_message_outcome_unknown"
+          : "signature_request_outcome_unknown",
+        contractId,
+      };
     }
   }
 
