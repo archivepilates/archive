@@ -66,6 +66,40 @@ export async function readNativeContractPage(page, contractId) {
     null,
     { timeout: 20_000 },
   );
+  // StudioMate paints the signed status before the remote signature images have
+  // finished loading. Reading at that point turns a valid signed contract into
+  // a false missing-signature conflict. Unsigned contracts do not need this wait.
+  await page.waitForFunction(
+    () => {
+      const status = document.querySelector(".contract-status-tag")?.textContent?.trim();
+      if (status !== "서명완료") return true;
+      const blocks = [
+        ...document.querySelectorAll(
+          ".contract-template-footer-signature-block__pad-wrapper li",
+        ),
+      ];
+      const loaded = (label) => {
+        const matches = blocks.filter(
+          (item) => item.querySelector("span")?.textContent?.trim() === label,
+        );
+        if (matches.length !== 1) return false;
+        const images = matches[0].querySelectorAll("img");
+        return (
+          images.length === 1 &&
+          images[0].complete &&
+          images[0].naturalWidth > 0 &&
+          !!images[0].getAttribute("src")
+        );
+      };
+      return (
+        !!document.querySelector("p.sign-completed-date")?.textContent?.trim() &&
+        loaded("[서명자]") &&
+        loaded("[아카이브필라테스]")
+      );
+    },
+    null,
+    { timeout: 20_000 },
+  );
   if (page.url() !== url)
     throw new Error("Native contract navigation mismatch");
   const observation = await page.evaluate(extractNativeContractDom);

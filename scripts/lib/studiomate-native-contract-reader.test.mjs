@@ -36,7 +36,7 @@ test("waits for populated DOM; reads only the exact contract and contains no wri
   const result = await readNativeContractPage(page, id);
   assert.deepEqual(
     calls.map((c) => c[0]),
-    ["goto", "loaded", "read"],
+    ["goto", "loaded", "loaded", "read"],
   );
   assert.equal(result.contractId, id);
   assert.ok(Date.parse(result.observedAt));
