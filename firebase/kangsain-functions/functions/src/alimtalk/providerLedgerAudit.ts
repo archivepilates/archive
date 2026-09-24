@@ -23,6 +23,11 @@ export interface ProviderLedgerAuditResult {
   missingInLedger: ProviderMessageEvidence[];
 }
 
+interface LedgerProviderMessageReference {
+  solapiMessageId?: unknown;
+  providerMessageId?: unknown;
+}
+
 interface SolapiMessageListResponse {
   nextKey?: string;
   messageList?: Record<string, unknown>;
@@ -44,11 +49,8 @@ export async function auditPreviousDayAlimtalkProviderLedger(
       .where("updatedAt", "<", Timestamp.fromDate(end))
       .get(),
   ]);
-  const ledgerMessageIds = new Set(
-    ledgerSnap.docs
-      .filter((doc) => doc.data().status === "done")
-      .map((doc) => String(doc.data().solapiMessageId || "").trim())
-      .filter(Boolean),
+  const ledgerMessageIds = ledgerProviderMessageIds(
+    ledgerSnap.docs.filter((doc) => doc.data().status === "done").map((doc) => doc.data()),
   );
   return compareProviderMessagesWithLedger(date, providerMessages, ledgerMessageIds);
 }
@@ -68,11 +70,11 @@ export async function auditPreviousDayAlimtalkProviderLedgerAndNotify(): Promise
       )
       .join("\n");
     await sendAlimtalkLogEmail({
-      subject: `[알림톡][확인필요] SOLAPI 원장 누락 ${result.missingInLedger.length}건 · ${result.date}`,
+      subject: `[알림톡][확인필요] SOLAPI 원장 ID 불일치 ${result.missingInLedger.length}건 · ${result.date}`,
       status: "attention",
       body: [
         "주체: ARCHIVE IN / 알림톡 원장 대조 자동화",
-        `결론: SOLAPI에는 있으나 alimtalkSends에 없는 발송 ${result.missingInLedger.length}건을 찾았습니다.`,
+        `결론: SOLAPI 성공 기록과 alimtalkSends 성공 원장의 메시지 ID가 일치하지 않는 발송 ${result.missingInLedger.length}건을 찾았습니다.`,
         "핵심:",
         `- 기준일 ${result.date}`,
         `- SOLAPI 알림톡 ${result.providerMessageCount}건`,
@@ -80,8 +82,8 @@ export async function auditPreviousDayAlimtalkProviderLedgerAndNotify(): Promise
         "- 회원 재발송이나 데이터 수정은 수행하지 않았습니다.",
         "검증:",
         evidence,
-        "주의: SOLAPI 콘솔 직접 발송 또는 원장 기록 실패 여부를 확인해야 합니다.",
-        "다음: 누락 메시지의 발송 경로를 확인하고 시스템 발송이면 원장 쓰기를 보강합니다.",
+        "주의: SOLAPI 콘솔 직접 발송, 레거시 메시지 ID 필드 또는 원장 기록 실패 여부를 확인해야 합니다.",
+        "다음: 불일치 메시지의 발송 경로를 확인하고 시스템 발송이면 원장 쓰기를 보강합니다.",
       ].join("\n"),
     });
     logger.warn("SOLAPI provider messages missing from Firestore ledger", result);
@@ -103,6 +105,17 @@ export async function auditPreviousDayAlimtalkProviderLedgerAndNotify(): Promise
     });
     return null;
   }
+}
+
+export function ledgerProviderMessageIds(
+  rows: ReadonlyArray<LedgerProviderMessageReference>,
+): Set<string> {
+  return new Set(
+    rows
+      .flatMap((row) => [row.solapiMessageId, row.providerMessageId])
+      .map((value) => String(value || "").trim())
+      .filter(Boolean),
+  );
 }
 
 export function compareProviderMessagesWithLedger(

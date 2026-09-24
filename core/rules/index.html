@@ -489,7 +489,7 @@
               </ul>
             </article>
           </div>
-          <div class="rule-note"><strong>현재 구현 상태</strong><span>2026.09.03 자동 회원알림 스텝 제외, 회원관리 14일 교차 중복 차단, stale 후보 종료, 운영 템플릿만 동기화, 전일 SOLAPI 원장 대조를 functions-alimtalk에 적용하고 단위 테스트·Functions 빌드·원천 경계 검증을 완료했습니다.</span></div>
+          <div class="rule-note"><strong>현재 구현 상태</strong><span>2026.09.24 자동 회원알림 스텝 제외, 회원관리 14일 교차 중복 차단, stale 후보 종료, 운영 템플릿만 동기화, 전일 SOLAPI 원장 대조를 functions-alimtalk에 적용했습니다. 원장 대조는 운영 필드 solapiMessageId와 과거 테스트 기록의 providerMessageId를 함께 인정하며, 일치하지 않을 때만 원장 ID 불일치로 보고합니다.</span></div>
           <div class="rule-note"><strong>현재 확인 위치</strong><span>CORE Messages / Firestore pricingInquiryAlimtalkRequests, alimtalkCandidates, alimtalkSends, alimtalkTemplateStates, shortLinks</span></div>
         </section>
 

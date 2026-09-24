@@ -12,6 +12,7 @@ import {
 import { isPastDueAutomaticCandidate } from "../../firebase/kangsain-functions/functions/src/alimtalk/rebuildAlimtalkCandidates";
 import {
   compareProviderMessagesWithLedger,
+  ledgerProviderMessageIds,
   providerMessageEvidence,
 } from "../../firebase/kangsain-functions/functions/src/alimtalk/providerLedgerAudit";
 
@@ -121,5 +122,17 @@ test("SOLAPI list evidence ignores non-Alimtalk rows and detects provider-only s
       new Set(),
     ).providerMessageCount,
     0,
+  );
+});
+
+test("SOLAPI ledger audit accepts canonical and legacy provider message ID fields", () => {
+  assert.deepEqual(
+    [...ledgerProviderMessageIds([
+      { solapiMessageId: "canonical-1" },
+      { providerMessageId: "legacy-1" },
+      { solapiMessageId: " same-id ", providerMessageId: "same-id" },
+      { providerMessageId: "" },
+    ])].sort(),
+    ["canonical-1", "legacy-1", "same-id"],
   );
 });
