@@ -19,6 +19,7 @@ const viewports = [
 ];
 const routes = [
   { name: "home", path: "/" },
+  { name: "member-registration", path: "/member-registration/" },
   { name: "instructor-lessons", path: "/instructor-lessons/" },
   { name: "members", path: "/members/" },
   { name: "lessons", path: "/lessons/" },
@@ -106,6 +107,32 @@ try {
                 </ol>
                 <div class="instructor-registration-next is-error"><strong>확인할 내용</strong><span>수강권 발급 안내 후보를 다시 확인합니다.</span></div>
                 <div class="instructor-registration-actions"><button class="secondary-action instructor-confirmation-action" type="button">안내 재처리</button><small>수강권 발급 증거와 캘린더를 다시 확인한 뒤 발송 대기열에 등록합니다.</small></div>
+              </article>`;
+          }
+        });
+      }
+      if (route.name === "member-registration") {
+        await page.evaluate(() => {
+          const counts = {
+            memberRegistrationRecentCount: "6명",
+            memberRegistrationActiveCount: "2명",
+            memberRegistrationReviewCount: "1명",
+            memberRegistrationCompletedCount: "3명",
+          };
+          for (const [id, value] of Object.entries(counts)) {
+            const element = document.querySelector(`#${id}`);
+            if (element) element.textContent = value;
+          }
+          const list = document.querySelector("#memberRegistrationList");
+          if (list) {
+            list.innerHTML = `
+              <article class="instructor-registration-item member-registration-item">
+                <div class="instructor-registration-item-head"><div><strong><a href="#">긴이름회원등록반응형검증회원</a></strong><span>010-****-5678 · 9. 25. 오후 03:20</span></div><span class="pill danger">확인필요</span></div>
+                <div class="instructor-registration-meta"><span>일반회원</span><span>10주 기간권 주 2회 장기 상품명</span></div>
+                <ol class="instructor-registration-progress member-registration-progress" aria-label="회원등록 진행 단계">
+                  ${["회원", "수강권", "계약서", "서명", "웰컴"].map((label, index) => `<li class="${index < 2 ? "is-done" : index === 2 ? "is-error" : "is-pending"}"><span>${index + 1}</span><small>${label}</small><em>${index < 2 ? "확인" : index === 2 ? "확인필요" : "대기"}</em></li>`).join("")}
+                </ol>
+                <div class="instructor-registration-next is-error"><strong>확인할 내용</strong><span>결제와 수강권 발급 시각 검증에서 중단됐습니다.</span></div>
               </article>`;
           }
         });
@@ -243,7 +270,7 @@ try {
           }));
         const touchTargets = [
           ...document.querySelectorAll(
-            ".nav a, .nav-more-button, .quick-action, .external-tool-link, .instructor-tool-link, .filter-button, .text-link, .reference-toggle, a.rank-row, .rank-link, .primary-action, .secondary-action, .renewal-actions button, .refund-candidate-option, .range-segment button, .video-watch-member-button",
+            ".nav a, .nav-more-button, .quick-action, .external-tool-link, .instructor-tool-link, .filter-button, .segmented-control button, .text-link, .reference-toggle, a.rank-row, .rank-link, .primary-action, .secondary-action, .renewal-actions button, .refund-candidate-option, .range-segment button, .video-watch-member-button",
           ),
         ]
           .filter((element) => element.offsetParent !== null)

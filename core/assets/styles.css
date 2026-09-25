@@ -517,8 +517,27 @@ kbd {
   font-weight: 750;
 }
 
-.instructor-registration-kpis {
+.instructor-registration-kpis,
+.member-registration-kpis {
   grid-template-columns: repeat(4, minmax(0, 1fr));
+}
+
+.member-registration-page .title-block > p:last-child {
+  max-width: 46ch;
+  margin: 0;
+  color: var(--muted);
+  line-height: 1.55;
+  word-break: keep-all;
+}
+
+.member-registration-open {
+  min-height: 44px;
+  white-space: nowrap;
+}
+
+.member-registration-page .top-actions:has(> .command-search-button) {
+  grid-template-columns: minmax(180px, 1fr) minmax(120px, 0.55fr) auto;
+  width: min(100%, 36rem);
 }
 
 .instructor-seat-overview {
@@ -799,7 +818,8 @@ kbd {
   overflow-wrap: anywhere;
 }
 
-.instructor-registration-history {
+.instructor-registration-history,
+.member-registration-history {
   margin-bottom: 20px;
 }
 
@@ -833,10 +853,21 @@ kbd {
   box-shadow: 0 1px 4px rgba(17, 17, 17, 0.08);
 }
 
-.instructor-registration-list {
+.instructor-registration-list,
+.member-registration-list {
   display: grid;
   gap: 12px;
   padding: 16px 20px 20px;
+}
+
+.instructor-registration-progress.member-registration-progress {
+  grid-template-columns: repeat(5, minmax(0, 1fr));
+}
+
+.member-registration-item a {
+  color: inherit;
+  text-decoration-thickness: 1px;
+  text-underline-offset: 3px;
 }
 
 .instructor-registration-item {
@@ -1002,7 +1033,8 @@ kbd {
 }
 
 @media (max-width: 980px) {
-  .instructor-registration-kpis {
+  .instructor-registration-kpis,
+  .member-registration-kpis {
     grid-template-columns: repeat(2, minmax(0, 1fr));
   }
 
@@ -1014,20 +1046,41 @@ kbd {
     grid-template-columns: repeat(3, minmax(0, 1fr));
   }
 
+  .instructor-registration-progress.member-registration-progress {
+    grid-template-columns: repeat(5, minmax(0, 1fr));
+  }
+
   .instructor-tool-grid.compact {
     grid-template-columns: repeat(2, minmax(0, 1fr));
   }
 }
 
 @media (max-width: 620px) {
+  .member-registration-page .top-actions:has(> .command-search-button) {
+    grid-template-columns: 1fr;
+    width: 100%;
+    margin-left: 0;
+  }
+
+  .member-registration-page .top-actions > .command-search-button {
+    grid-column: 1;
+  }
+
   .instructor-registration-fields,
   .instructor-registration-checks,
   .instructor-registration-kpis,
+  .member-registration-kpis,
   .instructor-tool-grid.compact {
     grid-template-columns: 1fr;
   }
 
+  .kpis.member-registration-kpis {
+    grid-template-columns: repeat(2, minmax(0, 1fr));
+    gap: 10px;
+  }
+
   .instructor-registration-history .panel-header,
+  .member-registration-history .panel-header,
   .instructor-registration-item-head {
     align-items: stretch;
     flex-direction: column;
@@ -1039,9 +1092,19 @@ kbd {
     grid-template-columns: repeat(2, minmax(0, 1fr));
   }
 
+  .member-registration-history .segmented-control {
+    display: grid;
+    width: 100%;
+    grid-template-columns: repeat(2, minmax(0, 1fr));
+  }
+
   .instructor-registration-progress {
     grid-template-columns: repeat(2, minmax(0, 1fr));
     row-gap: 12px;
+  }
+
+  .instructor-registration-progress.member-registration-progress {
+    grid-template-columns: repeat(2, minmax(0, 1fr));
   }
 
   .instructor-registration-next {

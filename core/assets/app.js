@@ -1,5 +1,5 @@
 const FIREBASE_APP_VERSION = "10.14.1";
-const CORE_RUNTIME_CONTRACT_VERSION = "2026-08-28.2";
+const CORE_RUNTIME_CONTRACT_VERSION = "2026-09-25.1";
 const WORK_LANE_ID = "archive-core-transition";
 const STUDIO_ID = "5330";
 
@@ -22,6 +22,7 @@ const ALIMTALK_TEMPLATE_LABELS_BY_CODE = Object.freeze({
   KA01TP260528081225871Fr92FW901Vo: "프라이빗 회원 리포트 안내 v1",
   KA01TP260528090148593isshfXtt8vE: "회원용 인바디 리포트 안내 v1",
   KA01TP260602101939427lPhGyuDLvFM: "신규회원 웰컴 v5",
+  KA01TP260914091233543JoFDsn7KfCr: "신규회원 웰컴 v6",
   KA01TP260611053817155zqYlw27wEOU: "회원용 수강료 안내 링크 v1",
   KA01TP26072806273194229P2ZesQwPp: "스튜디오메이트 예약 안내 v4",
   KA01TP260728111926523p2JzzTgHsS8: "아카이브 추천식단 프로그램 v1 (삭제됨)",
@@ -36,6 +37,7 @@ const ALIMTALK_TEMPLATE_LABELS_BY_TYPE = Object.freeze({
   reservation_open: "스튜디오메이트 예약 안내",
   new_member: "신규회원 안내",
   onsite_welcome: "신규회원 웰컴",
+  membership_welcome: "신규회원 웰컴 v6",
   ticket_expiring: "그룹 기간권 잔여기간 안내",
   remaining_low: "그룹 횟수권 잔여횟수 안내",
   private_count_low: "프라이빗 횟수권 잔여횟수 안내",
@@ -98,6 +100,7 @@ const state = {
   instagramDashboard: null,
   videoWatchDashboard: null,
   instructorLessonRegistrationDashboard: null,
+  memberRegistrationDashboard: null,
   lane: null,
   authReady: null,
   memberDirectoryLoadPromise: null,
@@ -119,6 +122,7 @@ let videoWatchContentType = "paid";
 let videoWatchMembers = [];
 let selectedVideoWatchMemberId = "";
 let instructorLessonRegistrationFilter = "active";
+let memberRegistrationFilter = "active";
 let renewalView = "today";
 let renewalVisibleLimit = 20;
 let privateScope = "today";
@@ -135,10 +139,9 @@ const COMMAND_ITEMS = [
     keywords: "member 회원 검색 전화번호 수강권 방문",
   },
   {
-    title: "회원등록 (StudioMate)",
-    detail: "StudioMate에서 회원·수강권·자체 계약서를 수동 등록",
-    href: "https://arcpilates.studiomate.kr/users/create",
-    external: true,
+    title: "회원등록",
+    detail: "최근 등록 단계 확인 후 StudioMate에서 신규회원 등록",
+    href: "./member-registration/",
     keywords: "회원등록 신규회원 스튜디오메이트 studiomate 수강권 계약서",
   },
   {
@@ -493,6 +496,9 @@ function currentReadRequirements() {
   if (qs("instructorLessonRegistrationList")) {
     return [{ label: "instructorLessonRegistrations", title: "강사레슨 등록", staleAfterHours: null }];
   }
+  if (qs("memberRegistrationList")) {
+    return [{ label: "memberRegistrationDashboard", title: "회원등록 진행상황", staleAfterHours: null }];
+  }
   if (qs("messagesCandidateList")) {
     return [
       { label: "alimtalkCandidates", title: "알림톡 후보", staleAfterHours: null },
@@ -835,7 +841,7 @@ const NAV_LABELS = {
   home: "홈",
   members: "회원",
   lessons: "수업",
-  "studiomate-member-registration": "회원등록 (StudioMate)",
+  "studiomate-member-registration": "회원등록",
   "instructor-lessons": "강사레슨",
   private: "프라이빗",
   "recommended-meals": "추천식단",
@@ -900,9 +906,9 @@ function enhanceNav() {
     if (homeLink) homeLink.insertAdjacentElement("afterend", registrationLink);
     else nav.prepend(registrationLink);
   }
-  registrationLink.href = "https://arcpilates.studiomate.kr/users/create";
-  registrationLink.target = "_blank";
-  registrationLink.rel = "noopener noreferrer";
+  registrationLink.href = `${coreRootHref}member-registration/`;
+  registrationLink.removeAttribute("target");
+  registrationLink.removeAttribute("rel");
   if (!nav.querySelector('[data-section="instructor-lessons"]')) {
     const link = document.createElement("a");
     link.href = `${coreRootHref}instructor-lessons/`;
@@ -7308,6 +7314,272 @@ function renderInstructorLessonRoster(schedule) {
   }).join("");
 }
 
+const MEMBER_REGISTRATION_REASONS = Object.freeze({
+  fresh_native_issuance_not_found: "수강권 발급 정보가 아직 확인되지 않았습니다.",
+  invalid_payment_transaction: "결제와 수강권 발급 시각 검증에서 중단됐습니다.",
+  unverified_payment: "결제 완료 여부를 확인해야 합니다.",
+  missing_payment_transactions: "결제 상세내역을 확인해야 합니다.",
+  unsettled_or_zero_payment: "결제 잔액 또는 결제금액을 확인해야 합니다.",
+  unknown_member_grade: "회원구분을 확인해야 합니다.",
+  inactive_member: "비활성 회원으로 확인됐습니다.",
+  native_member_signature_required: "회원 서명을 기다리고 있습니다.",
+  native_contract_read_failed: "StudioMate 계약서 상태를 다시 확인해야 합니다.",
+  reconciliation_failed: "웰컴 안내 준비 중 오류가 발생했습니다.",
+  current_canonical_member_mismatch: "회원 원천정보 연결을 확인해야 합니다.",
+  staff_or_instructor_excluded: "강사·스텝은 일반회원 자동화에서 제외됩니다.",
+  welcome_already_sent_pending_or_ambiguous: "기존 웰컴 발송 이력을 확인해야 합니다.",
+  membership_activation_scope_blocked: "회원가입 자동화 적용 범위를 확인해야 합니다.",
+  contract_outside_cutover_or_stale: "계약서 최신 상태를 다시 확인해야 합니다.",
+  canonical_contract_not_verified: "계약서 원천 검증이 완료되지 않았습니다.",
+});
+
+function memberRegistrationReason(value, fallback = "자동화 상태를 확인해야 합니다.") {
+  const reason = String(value || "").trim();
+  if (!reason) return fallback;
+  return MEMBER_REGISTRATION_REASONS[reason] || reason.replaceAll("_", " ");
+}
+
+async function membershipPhoneFingerprint(value) {
+  const phone = normalizePhone(value);
+  if (!/^01[016789]\d{7,8}$/.test(phone) || !globalThis.crypto?.subtle) return "";
+  const input = new TextEncoder().encode(JSON.stringify(phone));
+  const digest = await globalThis.crypto.subtle.digest("SHA-256", input);
+  return [...new Uint8Array(digest)].map((byte) => byte.toString(16).padStart(2, "0")).join("");
+}
+
+function memberRegistrationItemTime(item) {
+  return Math.max(
+    timestampMs(item?.updatedAt),
+    timestampMs(item?.createdAt),
+    timestampMs(item?.discoveredAt),
+    timestampMs(item?.sourceDownloadedAt),
+    timestampMs(item?.sentAt),
+    timestampMs(item?.completion?.checkedAt),
+  );
+}
+
+function memberRegistrationLatest(items = []) {
+  return [...items].sort((a, b) => memberRegistrationItemTime(b) - memberRegistrationItemTime(a))[0] || null;
+}
+
+function memberRegistrationTicketHint(hint) {
+  const rows = Array.isArray(hint?.hints) ? hint.hints : [];
+  return [...rows]
+    .filter((item) => {
+      const name = String(item.productName || "");
+      const amount = Number(String(item.paymentAmountText || "").replace(/[^0-9.-]/g, "")) || 0;
+      return amount > 0 && !/(체험|1회|상품권|쿠폰)/.test(name);
+    })
+    .sort((a, b) => {
+      const bTime = timestampMs(b.issuedAtText || b.paymentAtText);
+      const aTime = timestampMs(a.issuedAtText || a.paymentAtText);
+      return bTime - aTime;
+    })[0] || null;
+}
+
+function memberRegistrationWelcomeState(contract, candidate, send) {
+  const sendStatus = String(send?.status || "").toLowerCase();
+  const candidateStatus = String(candidate?.status || "").toLowerCase();
+  const contractStatus = String(contract?.welcomeStatus || "").toLowerCase();
+  if (["done", "sent", "accepted", "delivered"].includes(sendStatus) || candidateStatus === "sent" || contractStatus === "accepted") {
+    return { status: "done", label: "발송완료" };
+  }
+  if (["failed", "skipped"].includes(sendStatus) || ["failed", "skipped"].includes(candidateStatus) || contractStatus === "review") {
+    return { status: "error", label: "확인필요" };
+  }
+  if (["queued", "processing", "sending"].includes(candidateStatus) || contractStatus === "queued") {
+    return { status: "active", label: "발송대기" };
+  }
+  return { status: "pending", label: "대기" };
+}
+
+function memberRegistrationProfilePreference(item) {
+  const id = String(item?.memberId || item?.id || "");
+  const temporary = /^(reservation_phone_|excel_|usage_)/.test(id) ? 1 : 0;
+  const merged = item?.status === "merged" || item?.canonicalMemberId ? 1 : 0;
+  return [temporary, merged, -memberRegistrationItemTime(item)];
+}
+
+function preferredMemberRegistrationProfile(items = []) {
+  return [...items].sort((a, b) => {
+    const left = memberRegistrationProfilePreference(a);
+    const right = memberRegistrationProfilePreference(b);
+    return left[0] - right[0] || left[1] - right[1] || left[2] - right[2];
+  })[0] || null;
+}
+
+async function loadMemberRegistrationDashboard(runtime) {
+  const { db } = runtime;
+  const hintPath = "workLanes/studiomate-membership-contract-automation/purchaseHints";
+  const [profiles, hintsSnapshot, contracts, candidates, sends] = await Promise.all([
+    getCollectionBy(db, runtime, "memberProfiles", "updatedAt", 2000),
+    runtime.getDocs(
+      runtime.query(runtime.collection(db, hintPath), runtime.orderBy("discoveredAt", "desc"), runtime.limit(100)),
+    ),
+    getRecentCollectionBy(db, runtime, "studiomateMembershipContracts", "updatedAt", 100),
+    getRecentCollectionBy(db, runtime, "alimtalkCandidates", "updatedAt", 250),
+    getRecentCollectionBy(db, runtime, "alimtalkSends", "updatedAt", 250),
+  ]);
+  const hints = hintsSnapshot.docs.map((snapshot) => ({ id: snapshot.id, ...snapshot.data() }));
+  const welcomeCandidates = candidates.filter((item) => item.type === "membership_welcome");
+  const welcomeCandidateIds = new Set(welcomeCandidates.map((item) => String(item.candidateId || item.id || "")));
+  const welcomeSends = sends.filter((item) => welcomeCandidateIds.has(String(item.candidateId || item.id || "")));
+  const groups = new Map();
+  const group = (fingerprint) => {
+    if (!groups.has(fingerprint)) groups.set(fingerprint, { fingerprint, profiles: [], hints: [], contracts: [], candidates: [], sends: [] });
+    return groups.get(fingerprint);
+  };
+  const attachWithPhone = async (items, field, key) => {
+    const pairs = await Promise.all(items.map(async (item) => [await membershipPhoneFingerprint(field(item)), item]));
+    pairs.forEach(([fingerprint, item]) => { if (fingerprint) group(fingerprint)[key].push(item); });
+  };
+  hints.forEach((hint) => { if (/^[a-f0-9]{64}$/.test(String(hint.phoneFingerprint || ""))) group(hint.phoneFingerprint).hints.push(hint); });
+  await Promise.all([
+    attachWithPhone(profiles, (item) => item.phone || item.phoneNormalized || item.normalizedPhone || item.mobile || item.phoneNumber, "profiles"),
+    attachWithPhone(contracts, (item) => item.binding?.memberPhone || item.completion?.memberPhone, "contracts"),
+    attachWithPhone(welcomeCandidates, (item) => item.memberPhone, "candidates"),
+    attachWithPhone(welcomeSends, (item) => item.memberPhone, "sends"),
+  ]);
+  for (const send of welcomeSends) {
+    if (normalizePhone(send.memberPhone)) continue;
+    const candidate = welcomeCandidates.find((item) => String(item.candidateId || item.id || "") === String(send.candidateId || send.id || ""));
+    const fingerprint = await membershipPhoneFingerprint(candidate?.memberPhone);
+    if (fingerprint) group(fingerprint).sends.push(send);
+  }
+
+  const cutoff = Date.now() - 14 * 24 * 60 * 60 * 1000;
+  const items = [...groups.values()].map((entry) => {
+    const profile = preferredMemberRegistrationProfile(entry.profiles);
+    const hint = memberRegistrationLatest(entry.hints);
+    const contract = memberRegistrationLatest(entry.contracts);
+    const candidate = memberRegistrationLatest(entry.candidates);
+    const send = memberRegistrationLatest(entry.sends);
+    const ticketHint = memberRegistrationTicketHint(hint);
+    const latestAt = Math.max(
+      memberRegistrationItemTime(hint), memberRegistrationItemTime(contract),
+      memberRegistrationItemTime(candidate), memberRegistrationItemTime(send),
+    );
+    if (!latestAt || latestAt < cutoff) return null;
+    const memberName = String(profile?.name || contract?.memberName || candidate?.memberName || "회원명 확인필요").trim();
+    const phone = normalizePhone(profile?.phone || contract?.binding?.memberPhone || contract?.completion?.memberPhone || candidate?.memberPhone || send?.memberPhone);
+    const memberId = String(contract?.binding?.memberId || contract?.completion?.memberId || candidate?.memberId || profile?.memberId || profile?.id || "").trim();
+    const contractStatus = String(contract?.status || contract?.observationStatus || "").toLowerCase();
+    const signed = contractStatus === "signed" || Boolean(contract?.completion);
+    const contractCreated = Boolean(contract?.contractId || contract?.id);
+    const ticketConfirmed = Boolean(ticketHint || contract?.binding?.userTicketId || contract?.selection?.userTicketId);
+    const identityConfirmed = Boolean(profile || contract?.binding?.memberId || contract?.completion?.memberId || candidate?.memberId);
+    const welcome = memberRegistrationWelcomeState(contract, candidate, send);
+    const hintReview = String(hint?.status || "") === "review";
+    const contractReview = ["review", "failed", "error"].includes(String(contract?.observationStatus || "").toLowerCase());
+    const welcomeReview = welcome.status === "error";
+    const review = !identityConfirmed || (hintReview && !contractCreated) || contractReview || welcomeReview;
+    const completed = signed && welcome.status === "done";
+    const status = review ? "review" : completed ? "completed" : "active";
+    const reason = review
+      ? memberRegistrationReason(
+          !identityConfirmed
+            ? "회원 원천정보를 연결하지 못했습니다."
+            : welcomeReview
+              ? send?.lastError || candidate?.lastError || contract?.welcomeReason
+              : contractReview
+                ? contract?.observationReason
+                : hint?.reason,
+        )
+      : !contractCreated
+        ? "수강권 원천 확인 후 계약서를 생성합니다."
+        : !signed
+          ? "회원의 계약서 서명을 기다리고 있습니다."
+          : welcome.status === "active"
+            ? "웰컴 알림톡 발송을 준비하고 있습니다."
+            : completed
+              ? "회원등록 후속 절차가 완료됐습니다."
+              : "서명 완료 후 웰컴 알림톡을 준비합니다.";
+    const detailAvailable = memberId && !/^(reservation_phone_|excel_|usage_)/.test(memberId);
+    return {
+      key: entry.fingerprint,
+      memberName,
+      phoneLast4: phone.slice(-4),
+      memberId,
+      memberDetailHref: detailAvailable ? coreHref(`members/detail/?id=${encodeURIComponent(memberId)}`) : "",
+      memberGrade: String(profile?.memberGrade || profile?.grade || "일반회원"),
+      ticketName: String(ticketHint?.productName || contract?.selection?.productName || "수강권 확인"),
+      latestAt,
+      status,
+      reason,
+      steps: [
+        { name: "회원", status: identityConfirmed ? "done" : "error", statusLabel: identityConfirmed ? "확인" : "확인필요" },
+        { name: "수강권", status: ticketConfirmed ? "done" : review ? "error" : "active", statusLabel: ticketConfirmed ? "확인" : review ? "확인필요" : "확인중" },
+        { name: "계약서", status: contractCreated ? "done" : review ? "error" : "pending", statusLabel: contractCreated ? "발송" : review ? "확인필요" : "대기" },
+        { name: "서명", status: signed ? "done" : contractCreated ? "active" : "pending", statusLabel: signed ? "완료" : contractCreated ? "대기" : "대기" },
+        { name: "웰컴", status: welcome.status, statusLabel: welcome.label },
+      ],
+    };
+  }).filter(Boolean).sort((a, b) => {
+    const priority = { review: 0, active: 1, completed: 2 };
+    return priority[a.status] - priority[b.status] || b.latestAt - a.latestAt;
+  });
+  return {
+    items,
+    counts: {
+      recent: items.length,
+      active: items.filter((item) => item.status === "active").length,
+      review: items.filter((item) => item.status === "review").length,
+      completed: items.filter((item) => item.status === "completed").length,
+    },
+  };
+}
+
+function memberRegistrationMatchesFilter(item) {
+  if (memberRegistrationFilter === "all") return true;
+  return item.status === memberRegistrationFilter;
+}
+
+function renderMemberRegistrationDashboard(data = state.memberRegistrationDashboard) {
+  const container = qs("memberRegistrationList");
+  if (!container) return;
+  if (readUnavailable("memberRegistrationDashboard")) {
+    ["memberRegistrationRecentCount", "memberRegistrationActiveCount", "memberRegistrationReviewCount", "memberRegistrationCompletedCount"]
+      .forEach((id) => setText(id, "확인 필요"));
+    container.innerHTML = '<div class="empty-state danger">회원등록 원장을 읽지 못했습니다. 연결 상태를 확인하세요.</div>';
+    return;
+  }
+  const items = Array.isArray(data?.items) ? data.items : [];
+  const counts = data?.counts || {};
+  setText("memberRegistrationRecentCount", `${Number(counts.recent || 0).toLocaleString("ko-KR")}명`);
+  setText("memberRegistrationActiveCount", `${Number(counts.active || 0).toLocaleString("ko-KR")}명`);
+  setText("memberRegistrationReviewCount", `${Number(counts.review || 0).toLocaleString("ko-KR")}명`);
+  setText("memberRegistrationCompletedCount", `${Number(counts.completed || 0).toLocaleString("ko-KR")}명`);
+  document.querySelectorAll("[data-member-registration-filter]").forEach((button) => {
+    const selected = button.dataset.memberRegistrationFilter === memberRegistrationFilter;
+    button.classList.toggle("active", selected);
+    button.setAttribute("aria-pressed", String(selected));
+  });
+  const visibleItems = items.filter(memberRegistrationMatchesFilter);
+  if (!visibleItems.length) {
+    container.innerHTML = '<div class="empty-state">이 상태의 최근 회원등록 내역이 없습니다.</div>';
+    return;
+  }
+  container.innerHTML = visibleItems.map((item) => {
+    const statusLabel = item.status === "review" ? "확인필요" : item.status === "completed" ? "완료" : "진행중";
+    const tone = item.status === "review" ? "danger" : item.status === "completed" ? "good" : "warn";
+    const name = item.memberDetailHref
+      ? `<a href="${escapeHtml(item.memberDetailHref)}">${escapeHtml(item.memberName)}</a>`
+      : escapeHtml(item.memberName);
+    return `
+      <article class="instructor-registration-item member-registration-item">
+        <div class="instructor-registration-item-head">
+          <div><strong>${name}</strong><span>010-****-${escapeHtml(item.phoneLast4 || "----")} · ${escapeHtml(formatDate(item.latestAt))}</span></div>
+          <span class="pill ${tone}">${statusLabel}</span>
+        </div>
+        <div class="instructor-registration-meta"><span>${escapeHtml(item.memberGrade)}</span><span>${escapeHtml(item.ticketName)}</span></div>
+        <ol class="instructor-registration-progress member-registration-progress" aria-label="회원등록 진행 단계">
+          ${item.steps.map((step, index) => `<li class="is-${escapeHtml(step.status)}"><span>${index + 1}</span><small>${escapeHtml(step.name)}</small><em>${escapeHtml(step.statusLabel)}</em></li>`).join("")}
+        </ol>
+        <div class="instructor-registration-next ${item.status === "review" ? "is-error" : ""}"><strong>${item.status === "review" ? "확인할 내용" : "다음 단계"}</strong><span>${escapeHtml(item.reason)}</span></div>
+      </article>`;
+  }).join("");
+}
+
 function renderInstructorLessonRegistrationDashboard(data = state.instructorLessonRegistrationDashboard) {
   if (!qs("instructorLessonRegistrationList")) return;
   const container = qs("instructorLessonRegistrationList");
@@ -7533,6 +7805,7 @@ function renderFallback(error, options = {}) {
   state.instagramDashboard = null;
   state.videoWatchDashboard = null;
   state.instructorLessonRegistrationDashboard = null;
+  state.memberRegistrationDashboard = null;
   renderPricingInquiryRecentList();
   renderRecommendedMealRecentList();
   renderRecommendedMealQueue();
@@ -7547,6 +7820,7 @@ function renderFallback(error, options = {}) {
   renderInstagramContentDashboard(null);
   renderVideoWatchDashboard(null);
   renderInstructorLessonRegistrationDashboard(null);
+  renderMemberRegistrationDashboard(null);
   renderMemberDetail(null);
   renderPrivate([], [], [], []);
   renderBusinessFallback(error);
@@ -7597,6 +7871,7 @@ async function refresh() {
     const shouldLoadInstagram = Boolean(qs("instagramApprovalList"));
     const shouldLoadVideoWatch = Boolean(qs("videoWatchBuyerList"));
     const shouldLoadInstructorLessons = Boolean(qs("instructorLessonRegistrationList"));
+    const shouldLoadMemberRegistration = Boolean(qs("memberRegistrationList"));
     const shouldLoadBusinessSnapshot = shouldLoadBusiness || shouldLoadStaffDashboard;
     const [
       laneSnapshot,
@@ -7833,6 +8108,13 @@ async function refresh() {
         });
       }
     }
+    if (shouldLoadMemberRegistration) {
+      state.memberRegistrationDashboard = await safeRead(
+        "memberRegistrationDashboard",
+        () => loadMemberRegistrationDashboard(runtime),
+        null,
+      );
+    }
     renderLane(state.lane);
     renderAutomation(automationItems);
     renderImports(state.sourceImports);
@@ -7846,6 +8128,7 @@ async function refresh() {
     renderInstagramContentDashboard(state.instagramDashboard);
     renderVideoWatchDashboard(state.videoWatchDashboard);
     renderInstructorLessonRegistrationDashboard(state.instructorLessonRegistrationDashboard);
+    renderMemberRegistrationDashboard(state.memberRegistrationDashboard);
     renderPricingInquiryRecentList();
     renderRecommendedMealRecentList();
     renderRecommendedMealQueue();
@@ -7958,6 +8241,12 @@ qs("videoWatchBuyerList")?.addEventListener("click", handleVideoWatchMemberClick
 qs("instructorLessonRegistrationForm")?.addEventListener("submit", handleInstructorLessonRegistrationSubmit);
 qs("instructorLessonRegistrationFilters")?.addEventListener("click", handleInstructorLessonRegistrationFilter);
 qs("instructorLessonRegistrationList")?.addEventListener("click", handleInstructorLessonConfirmation);
+qs("memberRegistrationFilters")?.addEventListener("click", (event) => {
+  const button = event.target.closest?.("[data-member-registration-filter]");
+  if (!button) return;
+  memberRegistrationFilter = button.dataset.memberRegistrationFilter || "active";
+  renderMemberRegistrationDashboard();
+});
 qs("instructorLessonScheduleList")?.addEventListener("click", (event) => {
   const button = event.target.closest("[data-instructor-schedule-date]");
   if (!button) return;

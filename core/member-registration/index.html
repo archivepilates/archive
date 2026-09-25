@@ -1,0 +1,84 @@
+<!doctype html>
+<html lang="ko">
+  <head>
+    <meta charset="utf-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1" />
+    <meta name="theme-color" content="#f8f5ef" />
+    <link rel="icon" type="image/png" sizes="32x32" href="/icons/favicon-32.png?v=1" />
+    <link rel="shortcut icon" type="image/png" href="/favicon.png?v=1" />
+    <link rel="icon" type="image/png" sizes="192x192" href="/icons/archive-pilates-icon-192.png?v=1" />
+    <link rel="apple-touch-icon" sizes="180x180" href="/icons/apple-touch-icon.png?v=1" />
+    <link rel="manifest" href="/site.webmanifest?v=1" />
+    <title>회원등록 · ARCHIVE CORE</title>
+    <link rel="stylesheet" href="../assets/styles.css" />
+    <script src="../firebase-config.js"></script>
+    <script type="module" src="../assets/app.js"></script>
+  </head>
+  <body data-firestore-dashboard data-member-registration-dashboard>
+    <div class="shell">
+      <aside class="sidebar" aria-label="ARCHIVE CORE navigation">
+        <div class="brand">
+          <div class="brand-mark" aria-hidden="true">CORE</div>
+          <strong>ARCHIVE CORE</strong>
+          <span>ARCHIVE PILATES Operations Platform</span>
+        </div>
+        <nav class="nav">
+          <a href="../" data-section="home">Home <small>요약</small></a>
+          <a href="./" data-section="studiomate-member-registration">Member <small>회원등록</small></a>
+          <a href="../instructor-lessons/" data-section="instructor-lessons">Instructor <small>강사레슨</small></a>
+          <a href="../private/" data-section="private">Private <small>차트</small></a>
+          <a href="../staff/" data-section="staff">Staff <small>강사</small></a>
+          <a href="../messages/" data-section="messages">Messages <small>알림톡</small></a>
+          <a href="../automation/" data-section="automation">Automation <small>관제</small></a>
+          <a href="../business/" data-section="business">Business <small>지표</small></a>
+          <a href="../imports/" data-section="imports">Imports <small>원본</small></a>
+          <a href="../rules/" data-section="rules">Rules <small>규칙</small></a>
+          <a href="../settings/" data-section="settings">Settings <small>설정</small></a>
+        </nav>
+      </aside>
+
+      <main class="main member-registration-page">
+        <header class="topbar">
+          <div class="title-block">
+            <p class="eyebrow">MEMBER ONBOARDING</p>
+            <h1>회원등록</h1>
+            <p>최근 신규회원의 계약서와 웰컴 안내 진행상황을 확인합니다.</p>
+          </div>
+          <div class="top-actions" aria-label="회원등록 실행과 상태 확인">
+            <a class="primary-action member-registration-open" href="https://arcpilates.studiomate.kr/users/create" target="_blank" rel="noopener noreferrer">StudioMate 회원등록</a>
+            <div class="connection-card" aria-live="polite">
+              <span id="connectionLabel">로딩</span>
+              <strong id="connectionDetail">진행상황 확인 중</strong>
+            </div>
+            <button class="refresh-button" id="refreshButton" type="button">새로고침</button>
+          </div>
+        </header>
+
+        <section class="grid kpis member-registration-kpis" aria-label="최근 회원등록 현황">
+          <article class="panel metric"><div class="metric-label">최근 등록</div><div class="metric-value" id="memberRegistrationRecentCount">0명</div></article>
+          <article class="panel metric"><div class="metric-label">진행중</div><div class="metric-value" id="memberRegistrationActiveCount">0명</div></article>
+          <article class="panel metric"><div class="metric-label">확인필요</div><div class="metric-value" id="memberRegistrationReviewCount">0명</div></article>
+          <article class="panel metric"><div class="metric-label">완료</div><div class="metric-value" id="memberRegistrationCompletedCount">0명</div></article>
+        </section>
+
+        <section class="panel member-registration-history">
+          <div class="panel-header">
+            <div>
+              <h2>최근 회원등록</h2>
+              <p>최근 14일의 회원·수강권·계약서·서명·웰컴 단계를 표시하고, 확인이 필요한 건을 먼저 보여줍니다.</p>
+            </div>
+            <div class="segmented-control" id="memberRegistrationFilters" role="group" aria-label="회원등록 상태 필터">
+              <button type="button" class="active" data-member-registration-filter="active">진행중</button>
+              <button type="button" data-member-registration-filter="review">확인필요</button>
+              <button type="button" data-member-registration-filter="completed">완료</button>
+              <button type="button" data-member-registration-filter="all">전체</button>
+            </div>
+          </div>
+          <div class="member-registration-list" id="memberRegistrationList" aria-live="polite">
+            <div class="empty-state">최근 회원등록 내역을 불러오는 중입니다.</div>
+          </div>
+        </section>
+      </main>
+    </div>
+  </body>
+</html>

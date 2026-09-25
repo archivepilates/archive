@@ -185,6 +185,11 @@ service cloud.firestore {
       allow write: if false;
     }
 
+    match /studiomateMembershipContracts/{contractId} {
+      allow read: if isManager() && sameStudioClaim(resource.data.studioId);
+      allow write: if false;
+    }
+
     match /studiomateInstructorLessonJobs/{jobId} {
       allow read, write: if false;
     }
