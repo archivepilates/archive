@@ -14,7 +14,6 @@ const EXCLUDED = new Set([
   "test",
 ]);
 const CONTRACT_STATUSES = new Set(["signed", "draft", "opened", "sent", "cancelled", "expired"]);
-const PAYMENT_ISSUANCE_CLOCK_SKEW_MS = 5 * 60_000;
 const nativeId = (value: any) => typeof value === "string" && /^[1-9]\d{0,63}$/.test(value);
 const nativeIds = (value: any) => Array.isArray(value) && [...value].every(nativeId);
 const text = (value: any) => typeof value === "string" && value.trim().length > 0;
@@ -110,14 +109,14 @@ function instant(value: any) {
  *   classification: "regular", status: "active"|"scheduled", refunded: false,
  *   cancelled: false, issuedAt,
  *   source: { kind: "studiomate_member_excel", verified: true, complete: true, capturedAt },
- *   payment: { verified: true, complete: true, status: "paid", totalAmount,
- *     paidAmount, outstandingAmount: 0, refundedAmount: 0,
+ *   payment: { verified: true, complete: true, status: "paid"|"partial"|"unpaid", totalAmount,
+ *     paidAmount, outstandingAmount, refundedAmount: 0,
  *     transactions: [{ paymentId, method: "card"|"cash"|"bank_transfer", status: "paid",
  *       amount, paidAt, installmentMonths?: positive integer (card only) }] } }
  * Amounts are nonnegative integer KRW, never strings/null. Transactions are distinct
  * settled payments, not future card-installment schedule rows; mixed methods may sum.
- * StudioMate can persist a settled payment shortly before creating the linked ticket.
- * A payment up to five minutes before issuance is accepted; older payments stay review-only.
+ * Payment settlement and payment time do not determine contract eligibility. The native
+ * payment snapshot is validated only so the contract can display paid and unpaid amounts.
  * policy: { regularProductIds: [productId], termsVersion, cutoverAt,
  *   maxSourceAgeMs: positive integer, maxIssuanceAgeMs: positive integer }
  * history: { previousIssuanceIds: null|[id], currentIssuanceIds: [id], baselineCapturedAt,
@@ -216,7 +215,7 @@ export function evaluateMembershipContractEligibility(input: any = {}) {
   if (!delta.newIds.includes(ticket.userTicketId)) return result("ignored", "issuance_already_observed");
   if (issuedMs <= baselineMs) return review("late_discovered_issuance_no_backfill");
 
-  const paymentError = validatePayment(ticket.payment, issuedMs, capturedMs);
+  const paymentError = validatePayment(ticket.payment);
   if (paymentError) return review(paymentError);
   for (const evidence of [history.purchases, history.contracts]) {
     const asOf = instant(evidence?.asOf);
@@ -289,36 +288,40 @@ export function evaluateMembershipContractEligibility(input: any = {}) {
   return result("eligible", "verified_signed_member_renewal", "renewal_purchase_confirmation");
 }
 
-function validatePayment(payment: any, issuedMs: number, capturedMs: number) {
-  if (!payment || payment.verified !== true || payment.complete !== true || payment.status !== "paid")
+function validatePayment(payment: any) {
+  if (
+    !payment ||
+    payment.verified !== true ||
+    payment.complete !== true ||
+    !["paid", "partial", "unpaid"].includes(payment.status)
+  )
     return "unverified_payment";
   if (![payment.totalAmount, payment.paidAmount, payment.outstandingAmount, payment.refundedAmount].every(money))
     return "invalid_payment_amounts";
   if (
     payment.totalAmount === 0 ||
-    payment.paidAmount === 0 ||
     payment.refundedAmount !== 0 ||
-    payment.outstandingAmount !== 0 ||
-    payment.totalAmount !== payment.paidAmount
+    payment.totalAmount !== payment.paidAmount + payment.outstandingAmount ||
+    (payment.status === "paid" && (payment.paidAmount === 0 || payment.outstandingAmount !== 0)) ||
+    (payment.status === "partial" && (payment.paidAmount === 0 || payment.outstandingAmount === 0)) ||
+    (payment.status === "unpaid" && (payment.paidAmount !== 0 || payment.outstandingAmount === 0))
   )
-    return "unsettled_or_zero_payment";
+    return "invalid_payment_balance";
   const rows = payment.transactions;
-  if (!Array.isArray(rows) || !rows.length) return "missing_payment_transactions";
+  if (!Array.isArray(rows) || (payment.paidAmount > 0 && !rows.length))
+    return "missing_payment_transactions";
   const ids = new Set();
   let total = 0;
   for (const row of rows) {
     if (!row || !text(row.paymentId) || row.paymentId !== row.paymentId.trim() || ids.has(row.paymentId))
       return "invalid_or_duplicate_payment_id";
     ids.add(row.paymentId);
-    const paidMs = instant(row.paidAt);
     if (
       row.status !== "paid" ||
       !["card", "cash", "bank_transfer"].includes(row.method) ||
       !money(row.amount) ||
       row.amount === 0 ||
-      !Number.isFinite(paidMs) ||
-      paidMs < issuedMs - PAYMENT_ISSUANCE_CLOCK_SKEW_MS ||
-      paidMs > capturedMs
+      !Number.isFinite(instant(row.paidAt))
     )
       return "invalid_payment_transaction";
     if (

@@ -250,7 +250,7 @@ test("fresh native completion must bind the exact selected issuance and member",
   }
 });
 
-test("send-time member/phone/ticket/payment changes block welcome", () => {
+test("send-time member, phone and ticket changes block welcome", () => {
   for (const patch of [
     { memberClassification: "staff" },
     { ticketClassification: "trial" },
@@ -261,9 +261,6 @@ test("send-time member/phone/ticket/payment changes block welcome", () => {
     { refunded: true },
     { cancelled: true },
     { ticketStatus: "expired" },
-    { paymentStatus: "pending" },
-    { paidAmount: 0 },
-    { outstandingAmount: 1 },
   ]) {
     const input = fixture();
     Object.assign(input.completion, patch);
@@ -271,6 +268,18 @@ test("send-time member/phone/ticket/payment changes block welcome", () => {
       status: "excluded",
       reason: "current_member_or_ticket_ineligible",
     });
+  }
+});
+
+test("welcome eligibility is independent of current payment settlement", () => {
+  for (const patch of [
+    { paymentStatus: "unpaid", paidAmount: 0, outstandingAmount: 398000 },
+    { paymentStatus: "partial", paidAmount: 100000, outstandingAmount: 298000 },
+    { paymentStatus: "paid", paidAmount: 398000, outstandingAmount: 0 },
+  ]) {
+    const input = fixture();
+    Object.assign(input.completion, patch);
+    assertStaged(input, { status: "ready", ready: true });
   }
 });
 

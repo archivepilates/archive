@@ -391,9 +391,6 @@ test("mixed settled payments and card installments must reconcile exactly", () =
       x.ticket.payment.transactions[0].method = "points";
     },
     (x) => {
-      x.ticket.payment.transactions[0].paidAt = "2026-09-15T00:00:00Z";
-    },
-    (x) => {
       x.ticket.payment.transactions = [];
     },
   ]) {
@@ -403,20 +400,40 @@ test("mixed settled payments and card installments must reconcile exactly", () =
   }
 });
 
-test("StudioMate payment persistence may precede ticket issuance by at most five minutes", () => {
+test("unpaid and partially paid issued tickets remain contract-eligible", () => {
+  const unpaid = fixture();
+  Object.assign(unpaid.ticket.payment, {
+    status: "unpaid",
+    totalAmount: 398000,
+    paidAmount: 0,
+    outstandingAmount: 398000,
+    transactions: [],
+  });
+  assert.equal(evaluate(unpaid).status, "eligible");
+
+  const partial = fixture();
+  Object.assign(partial.ticket.payment, {
+    status: "partial",
+    totalAmount: 398000,
+    paidAmount: 100000,
+    outstandingAmount: 298000,
+  });
+  partial.ticket.payment.transactions[0].amount = 100000;
+  assert.equal(evaluate(partial).status, "eligible");
+});
+
+test("payment timing does not determine eligibility for an issued ticket", () => {
   for (const paidAt of [
     "2026-09-14T11:29:56+09:00",
     "2026-09-14T11:27:34+09:00",
     "2026-09-14T11:25:00+09:00",
+    "2026-08-01T10:00:00+09:00",
+    "2026-09-15T00:00:00+09:00",
   ]) {
     const input = fixture();
     input.ticket.payment.transactions[0].paidAt = paidAt;
     assert.equal(evaluate(input).status, "eligible");
   }
-
-  const tooEarly = fixture();
-  tooEarly.ticket.payment.transactions[0].paidAt = "2026-09-14T11:24:59+09:00";
-  blocked(tooEarly, "invalid_payment_transaction");
 });
 
 test("explicit timezone equivalents agree; date-only, impossible and future times fail closed", () => {

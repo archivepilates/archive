@@ -430,11 +430,16 @@ function validateSelection(selection, member, ticket) {
     !/^\d{4}-\d{2}-\d{2}$/.test(ticket?.expireAt) ||
     ticket?.payment?.verified !== true ||
     ticket?.payment?.complete !== true ||
-    ticket?.payment?.status !== "paid" ||
+    !["paid", "partial", "unpaid"].includes(ticket?.payment?.status) ||
+    !money(ticket?.payment?.totalAmount) ||
+    ticket.payment.totalAmount <= 0 ||
     !money(ticket?.payment?.paidAmount) ||
-    ticket.payment.paidAmount <= 0 ||
-    ticket.payment.outstandingAmount !== 0 ||
-    !ticket.payment.contractPayment
+    !money(ticket?.payment?.outstandingAmount) ||
+    ticket.payment.totalAmount !== ticket.payment.paidAmount + ticket.payment.outstandingAmount ||
+    ticket.payment.refundedAmount !== 0 ||
+    !ticket.payment.contractPayment ||
+    ticket.payment.contractPayment.amount !== ticket.payment.paidAmount ||
+    ticket.payment.contractPayment.unpaidAmount !== ticket.payment.outstandingAmount
   )
     throw new Error("Ticket/payment binding is incomplete");
 }

@@ -37,6 +37,7 @@ function fixture() {
     selectedAt: SELECTED,
     selectionJobKey: membershipContractJobKey(ids.memberId, ids.userTicketId),
     expectedPaidAmount: 100000,
+    expectedTotalAmount: 100000,
     previousObservations: [],
     currentMemberTicket: {
       member: {
@@ -351,7 +352,7 @@ test("requires exact contract ID, title, phone and native member/issuance/produc
     { productId: "" },
     { memberPhone: "010-1234-5678" },
     { selectionJobKey: "forged" },
-    { expectedPaidAmount: "100000" },
+    { expectedTotalAmount: "100000" },
     { selectedAt: "2026-09-14" },
     { selectedAt: "2026-09-01T00:00:00Z" },
   ]) {
@@ -402,7 +403,7 @@ test("contract, member, ticket, payment and provider freshness are independent",
   assert.equal(run(boundary).completion.checkedAt, "2026-09-14T03:30:00.000Z");
 });
 
-test("independent sources require complete exact native linkage and current settled state", () => {
+test("independent sources require complete exact native linkage and current member-ticket state", () => {
   for (const source of ["member", "ticket", "payment"]) {
     for (const patch of [
       { complete: false },
@@ -438,20 +439,20 @@ test("independent sources require complete exact native linkage and current sett
   const member = fixture();
   member.binding.currentMemberTicket.member.classification = "instructor";
   review(member, "current_member_or_ticket_ineligible");
-  for (const patch of [
-    { status: "pending" },
-    { totalAmount: 100001 },
-    { paidAmount: 99999 },
-    { outstandingAmount: 1 },
-    { refundedAmount: 1 },
-    { paidAmount: "100000" },
-    { paidAmount: NaN },
-    { paidAmount: Infinity },
-    { totalAmount: null },
+});
+
+test("payment settlement changes do not block a signed issued ticket", () => {
+  for (const payment of [
+    { status: "unpaid", totalAmount: 398000, paidAmount: 0, outstandingAmount: 398000 },
+    { status: "partial", totalAmount: 398000, paidAmount: 100000, outstandingAmount: 298000 },
+    { status: "paid", totalAmount: 398000, paidAmount: 398000, outstandingAmount: 0 },
   ]) {
     const input = fixture();
-    Object.assign(input.binding.currentMemberTicket.payment, patch);
-    review(input, "unsettled_current_payment");
+    Object.assign(input.binding.currentMemberTicket.payment, payment);
+    const result = run(input);
+    assert.equal(result.status, "complete");
+    assert.equal(result.completion.paymentStatus, payment.status);
+    assert.equal(result.completion.outstandingAmount, payment.outstandingAmount);
   }
 });
 

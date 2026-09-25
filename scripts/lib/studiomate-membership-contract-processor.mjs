@@ -277,6 +277,8 @@ export async function persistStudioMateMembershipContractSource({
     selectionJobKey: selection.jobKey,
     selectedAt: selection.now,
     expectedPaidAmount: ticket.payment.paidAmount,
+    expectedOutstandingAmount: ticket.payment.outstandingAmount,
+    expectedTotalAmount: ticket.payment.totalAmount,
     previousObservations: [],
   };
   const nativeReadback = {

@@ -156,10 +156,7 @@ export function planMembershipContractWelcome(input: any = {}) {
     completion.currentPhone !== phone ||
     completion.refunded !== false ||
     completion.cancelled !== false ||
-    !["active", "scheduled"].includes(completion.ticketStatus) ||
-    completion.paymentStatus !== "paid" ||
-    completion.paidAmount !== selection.ticket.payment.paidAmount ||
-    completion.outstandingAmount !== 0
+    !["active", "scheduled"].includes(completion.ticketStatus)
   )
     return result("excluded", "current_member_or_ticket_ineligible");
   if (completion.status !== "signed" || completion.memberSigned !== true || completion.centerSigned !== true)

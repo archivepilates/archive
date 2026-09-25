@@ -214,6 +214,48 @@ test("builds the exact native payload with verified IDs, template and no member 
   );
 });
 
+test("writes unpaid and partial balances into the contract without blocking creation", () => {
+  const unpaid = fixture();
+  Object.assign(unpaid.ticket.payment, {
+    status: "unpaid",
+    totalAmount: 398000,
+    paidAmount: 0,
+    outstandingAmount: 398000,
+    contractPayment: {
+      cardAmount: 0,
+      cashAmount: 0,
+      wireAmount: 0,
+      pointAmount: 0,
+      amount: 0,
+      unpaidAmount: 398000,
+      installmentPeriod: 0,
+    },
+  });
+  const unpaidTicket = buildStudioMateJoinContractPayload(unpaid).join_user_tickets[0].required;
+  assert.equal(unpaidTicket.amount, 0);
+  assert.equal(unpaidTicket.unpaid_amount, 398000);
+
+  const partial = fixture();
+  Object.assign(partial.ticket.payment, {
+    status: "partial",
+    totalAmount: 398000,
+    paidAmount: 100000,
+    outstandingAmount: 298000,
+    contractPayment: {
+      cardAmount: 100000,
+      cashAmount: 0,
+      wireAmount: 0,
+      pointAmount: 0,
+      amount: 100000,
+      unpaidAmount: 298000,
+      installmentPeriod: 0,
+    },
+  });
+  const partialTicket = buildStudioMateJoinContractPayload(partial).join_user_tickets[0].required;
+  assert.equal(partialTicket.amount, 100000);
+  assert.equal(partialTicket.unpaid_amount, 298000);
+});
+
 test("builds the native signature message only from an exact prepared binding", () => {
   assert.deepEqual(
     buildStudioMateSignatureRequestPayload({

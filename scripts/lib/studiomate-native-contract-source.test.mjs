@@ -209,6 +209,66 @@ test("normalizes an initial unpaid ledger and later card settlement once", () =>
   });
 });
 
+test("normalizes unpaid and partial ledgers for contract display without blocking issuance", () => {
+  const unpaid = normalizePayments([
+    {
+      id: 601,
+      created_at: "2026-09-14 10:00:00",
+      card_amount: 0,
+      cash_amount: 0,
+      wiretransfer_amount: 0,
+      transfer_amount: 0,
+      unpaid_amount: 398000,
+      installment_period: 0,
+    },
+  ]);
+  assert.deepEqual(
+    {
+      status: unpaid.status,
+      totalAmount: unpaid.totalAmount,
+      paidAmount: unpaid.paidAmount,
+      outstandingAmount: unpaid.outstandingAmount,
+      transactions: unpaid.transactions,
+      contractPayment: unpaid.contractPayment,
+    },
+    {
+      status: "unpaid",
+      totalAmount: 398000,
+      paidAmount: 0,
+      outstandingAmount: 398000,
+      transactions: [],
+      contractPayment: {
+        cardAmount: 0,
+        cashAmount: 0,
+        wireAmount: 0,
+        pointAmount: 0,
+        amount: 0,
+        unpaidAmount: 398000,
+        installmentPeriod: 0,
+      },
+    },
+  );
+
+  const partial = normalizePayments([
+    {
+      id: 602,
+      created_at: "2026-09-14 10:00:00",
+      card_amount: 100000,
+      cash_amount: 0,
+      wiretransfer_amount: 0,
+      transfer_amount: 0,
+      unpaid_amount: 298000,
+      installment_period: 0,
+    },
+  ]);
+  assert.equal(partial.status, "partial");
+  assert.equal(partial.totalAmount, 398000);
+  assert.equal(partial.paidAmount, 100000);
+  assert.equal(partial.outstandingAmount, 298000);
+  assert.equal(partial.contractPayment.amount, 100000);
+  assert.equal(partial.contractPayment.unpaidAmount, 298000);
+});
+
 test("requires signed session headers and marks write transport failures ambiguous", async () => {
   for (const missing of Object.keys(SESSION_HEADERS)) {
     const headers = { ...SESSION_HEADERS };

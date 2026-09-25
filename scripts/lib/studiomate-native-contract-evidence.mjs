@@ -107,8 +107,8 @@ function validBinding(binding) {
     ) &&
     binding.selectionJobKey ===
       membershipContractJobKey(binding.memberId, binding.userTicketId) &&
-    money(binding.expectedPaidAmount) &&
-    binding.expectedPaidAmount > 0 &&
+    money(binding.expectedTotalAmount ?? binding.expectedPaidAmount) &&
+    (binding.expectedTotalAmount ?? binding.expectedPaidAmount) > 0 &&
     Number.isFinite(utcMillis(binding.selectedAt))
   );
 }
@@ -236,7 +236,7 @@ export function normalizeNativeContractDom(rawDOM, binding) {
  *
  * binding: { verified:true, studioId, contractId, title, memberPhone:canonicalPhone,
  *   memberId, userTicketId, productId, contractAction, selectionJobKey,
- *   selectedAt:UTC, expectedPaidAmount:positiveIntegerKRW,
+ *   selectedAt:UTC, expectedTotalAmount:positiveIntegerKRW,
  *   previousObservations?: readonly BoundObservation[], currentMemberTicket:{
  *     member:MemberRead, ticket:TicketRead, payment:PaymentRead,
  *     providerSignature?:ProviderRead|null } }
@@ -260,8 +260,8 @@ export function normalizeNativeContractDom(rawDOM, binding) {
  *   classification:'regular', status:'active'|'scheduled', refunded:false,
  *   cancelled:false, ...Read}
  * PaymentRead: {source:'studiomate_native_payment', userTicketId, productId,
- *   status:'paid', totalAmount, paidAmount, outstandingAmount:0, refundedAmount:0,
- *   ...Read} // Current ledger read, not a copied selection or sales aggregate.
+ *   status:'paid'|'partial'|'unpaid', totalAmount, paidAmount, outstandingAmount,
+ *   refundedAmount, ...Read} // Display/audit snapshot, never an eligibility gate.
  * ProviderRead: {source:'studiomate_native_contract', contractId, userTicketId,
  *   productId, signedAt:RFC3339_WITH_ZONE, ...Read} // Actual native timestamp only.
  *
@@ -275,7 +275,8 @@ export function normalizeNativeContractDom(rawDOM, binding) {
  * now/observation/read clocks are canonical UTC (seconds or three-digit millis).
  * Each current read must be <=30 minutes old, independently of contract freshness.
  * currentMemberTicket is supplied separately by the trusted worker, NEVER from old
- * selection evidence. Missing readback returns current_member_ticket_readback_required.
+ * selection evidence. Member and issued-ticket state determine eligibility; payment
+ * settlement is retained for contract display and audit only.
  *
  * Returns {status:'complete'|'review'|'waiting',reason,completion|null,
  *   observation|null,firstObservedSignedAt|null,transition|null,sendAllowed:false}.
@@ -365,20 +366,6 @@ export function normalizeNativeContractObservation(raw, binding, now) {
   )
     return result("review", "current_member_or_ticket_ineligible");
   const payment = readback.payment;
-  if (
-    payment.status !== "paid" ||
-    ![
-      payment.totalAmount,
-      payment.paidAmount,
-      payment.outstandingAmount,
-      payment.refundedAmount,
-    ].every(money) ||
-    payment.paidAmount !== binding.expectedPaidAmount ||
-    payment.totalAmount !== payment.paidAmount ||
-    payment.outstandingAmount !== 0 ||
-    payment.refundedAmount !== 0
-  )
-    return result("review", "unsettled_current_payment");
 
   const previous =
     binding.previousObservations === undefined
@@ -530,7 +517,7 @@ export function normalizeNativeContractObservation(raw, binding, now) {
       ticketStatus: readback.ticket.status,
       paymentStatus: payment.status,
       paidAmount: payment.paidAmount,
-      outstandingAmount: 0,
+      outstandingAmount: payment.outstandingAmount,
       status: "signed",
       memberSigned: true,
       centerSigned: true,

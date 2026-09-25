@@ -11,7 +11,7 @@ const utcMillis = (value: any) => {
   return Number.isFinite(millis) && new Date(millis).toISOString() === value ? millis : NaN;
 };
 
-/** A signed contract's copied purchase fields are not current payment/refund evidence. */
+/** A signed contract's copied fields are not current ticket/refund evidence; settlement is not an eligibility gate. */
 export function membershipWelcomeReadbackIssue(source: Data, now: Date, candidate?: Data) {
   if (!record(source) || !(now instanceof Date) || !Number.isFinite(now.getTime()))
     return "native_readback_clock_unverified";
@@ -93,7 +93,7 @@ export function membershipWelcomeReadbackIssue(source: Data, now: Date, candidat
     providerSignedAt > providerCheckedAt
   )
     return "current_native_signature_mismatch";
-  const [member, ticket, payment] = reads;
+  const [member, ticket] = reads;
   if (
     member.phoneMatchCount !== 1 ||
     !normalizeMembershipPhone(completion.memberPhone) ||
@@ -109,15 +109,5 @@ export function membershipWelcomeReadbackIssue(source: Data, now: Date, candidat
     !["active", "scheduled"].includes(ticket.status)
   )
     return "current_native_ticket_ineligible";
-  if (
-    payment.status !== "paid" ||
-    !Number.isSafeInteger(payment.paidAmount) ||
-    payment.paidAmount <= 0 ||
-    payment.paidAmount !== completion.paidAmount ||
-    payment.totalAmount !== payment.paidAmount ||
-    payment.outstandingAmount !== 0 ||
-    payment.refundedAmount !== 0
-  )
-    return "current_native_payment_ineligible";
   return "";
 }

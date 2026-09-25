@@ -846,8 +846,6 @@ for (const patch of [
   { memberClassification: "staff" },
   { ticketClassification: "trial" },
   { currentRecipientEligible: false },
-  { paymentStatus: "refunded" },
-  { outstandingAmount: 1 },
   { memberSigned: false },
 ])
   test(`sender excludes stale/refunded/ineligible completion ${JSON.stringify(patch)}`, async () => {

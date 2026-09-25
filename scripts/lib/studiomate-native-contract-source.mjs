@@ -448,13 +448,15 @@ export function normalizePayments(rows) {
     }
   }
   const paidAmount = transactions.reduce((sum, row) => sum + row.amount, 0);
-  if (!Number.isSafeInteger(paidAmount) || paidAmount <= 0 || latestOutstanding !== 0)
-    return invalidPayment("unsettled_or_zero_payment");
+  const totalAmount = paidAmount + latestOutstanding;
+  if (!Number.isSafeInteger(paidAmount) || !Number.isSafeInteger(totalAmount) || totalAmount <= 0)
+    return invalidPayment("invalid_payment_total");
+  const status = latestOutstanding === 0 ? "paid" : paidAmount === 0 ? "unpaid" : "partial";
   return Object.freeze({
     verified: true,
     complete: true,
-    status: "paid",
-    totalAmount: paidAmount + latestOutstanding,
+    status,
+    totalAmount,
     paidAmount,
     outstandingAmount: latestOutstanding,
     refundedAmount: 0,

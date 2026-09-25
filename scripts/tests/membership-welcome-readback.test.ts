@@ -324,39 +324,6 @@ const eligibilityCases: Array<[Kind, string, unknown, string]> = [
       "current_native_ticket_ineligible",
     ],
   ),
-  ...["refunded", "partial", "pending", "PAID", undefined].map(
-    (value): [Kind, string, unknown, string] => [
-      "payment",
-      "status",
-      value,
-      "current_native_payment_ineligible",
-    ],
-  ),
-  ...[
-    0,
-    -1,
-    99999,
-    0.5,
-    NaN,
-    Infinity,
-    Number.MAX_SAFE_INTEGER + 1,
-    "100000",
-    undefined,
-  ].map((value): [Kind, string, unknown, string] => [
-    "payment",
-    "paidAmount",
-    value,
-    "current_native_payment_ineligible",
-  ]),
-  ...["totalAmount", "outstandingAmount", "refundedAmount"].flatMap(
-    (field): Array<[Kind, string, unknown, string]> =>
-      [1, undefined, field === "totalAmount" ? "100000" : "0"].map((value) => [
-        "payment",
-        field,
-        value,
-        "current_native_payment_ineligible",
-      ]),
-  ),
 ];
 for (const [kind, field, value, expected] of eligibilityCases) {
   test(`${kind} eligibility rejects ${field}=${String(value)}`, () => {
@@ -365,6 +332,18 @@ for (const [kind, field, value, expected] of eligibilityCases) {
     assert.equal(membershipWelcomeReadbackIssue(f.source, f.now), expected);
   });
 }
+
+test("welcome readback accepts paid, partial and unpaid settlement states", () => {
+  for (const payment of [
+    { status: "paid", totalAmount: 398000, paidAmount: 398000, outstandingAmount: 0 },
+    { status: "partial", totalAmount: 398000, paidAmount: 100000, outstandingAmount: 298000 },
+    { status: "unpaid", totalAmount: 398000, paidAmount: 0, outstandingAmount: 398000 },
+  ]) {
+    const f = fixture();
+    Object.assign(f.source.nativeReadback.payment, payment);
+    assert.equal(membershipWelcomeReadbackIssue(f.source, f.now), "");
+  }
+});
 for (const phone of ["010-0000-0001", "+82 10-0000-0001"]) {
   test(`member phone normalization accepts synthetic ${phone}`, () => {
     const f = fixture();
