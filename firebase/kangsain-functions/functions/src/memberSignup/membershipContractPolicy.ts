@@ -14,6 +14,7 @@ const EXCLUDED = new Set([
   "test",
 ]);
 const CONTRACT_STATUSES = new Set(["signed", "draft", "opened", "sent", "cancelled", "expired"]);
+const PAYMENT_ISSUANCE_CLOCK_SKEW_MS = 5 * 60_000;
 const nativeId = (value: any) => typeof value === "string" && /^[1-9]\d{0,63}$/.test(value);
 const nativeIds = (value: any) => Array.isArray(value) && [...value].every(nativeId);
 const text = (value: any) => typeof value === "string" && value.trim().length > 0;
@@ -115,8 +116,8 @@ function instant(value: any) {
  *       amount, paidAt, installmentMonths?: positive integer (card only) }] } }
  * Amounts are nonnegative integer KRW, never strings/null. Transactions are distinct
  * settled payments, not future card-installment schedule rows; mixed methods may sum.
- * This conservative draft requires payment times between issuance and capture; earlier
- * deposits are review-only until the main lane approves their native linkage semantics.
+ * StudioMate can persist a settled payment shortly before creating the linked ticket.
+ * A payment up to five minutes before issuance is accepted; older payments stay review-only.
  * policy: { regularProductIds: [productId], termsVersion, cutoverAt,
  *   maxSourceAgeMs: positive integer, maxIssuanceAgeMs: positive integer }
  * history: { previousIssuanceIds: null|[id], currentIssuanceIds: [id], baselineCapturedAt,
@@ -316,7 +317,7 @@ function validatePayment(payment: any, issuedMs: number, capturedMs: number) {
       !money(row.amount) ||
       row.amount === 0 ||
       !Number.isFinite(paidMs) ||
-      paidMs < issuedMs ||
+      paidMs < issuedMs - PAYMENT_ISSUANCE_CLOCK_SKEW_MS ||
       paidMs > capturedMs
     )
       return "invalid_payment_transaction";

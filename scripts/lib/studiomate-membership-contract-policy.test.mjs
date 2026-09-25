@@ -403,6 +403,22 @@ test("mixed settled payments and card installments must reconcile exactly", () =
   }
 });
 
+test("StudioMate payment persistence may precede ticket issuance by at most five minutes", () => {
+  for (const paidAt of [
+    "2026-09-14T11:29:56+09:00",
+    "2026-09-14T11:27:34+09:00",
+    "2026-09-14T11:25:00+09:00",
+  ]) {
+    const input = fixture();
+    input.ticket.payment.transactions[0].paidAt = paidAt;
+    assert.equal(evaluate(input).status, "eligible");
+  }
+
+  const tooEarly = fixture();
+  tooEarly.ticket.payment.transactions[0].paidAt = "2026-09-14T11:24:59+09:00";
+  blocked(tooEarly, "invalid_payment_transaction");
+});
+
 test("explicit timezone equivalents agree; date-only, impossible and future times fail closed", () => {
   const utc = fixture();
   utc.ticket.issuedAt = "2026-09-14T02:30:00Z";
