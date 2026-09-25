@@ -139,7 +139,7 @@ if (selectedSurfaces.includes("core")) {
       (json) => json?.source?.head === expectedSha && json?.runtimeContractVersion === "2026-08-01.1",
     ),
     textCheck("core-home-actions-custom-domain", "https://core.archivepilates.com/", [
-      "https://arcpilates.studiomate.kr/users/create",
+      "./member-registration/",
       "오늘 처리할 일",
       "homeDecisionList",
       "renewalPipelineList",
@@ -151,7 +151,7 @@ if (selectedSurfaces.includes("core")) {
       "recommendedMealHistoryPanel",
     ]),
     textCheck("core-home-actions-webapp-path", "https://archive-pilates.web.app/core/", [
-      "https://arcpilates.studiomate.kr/users/create",
+      "./member-registration/",
       "오늘 처리할 일",
       "homeDecisionList",
       "renewalPipelineList",
@@ -162,8 +162,16 @@ if (selectedSurfaces.includes("core")) {
       "recommendedMealProgramForm",
       "recommendedMealHistoryPanel",
     ]),
-    textCheck("core-app-bundle-custom-domain", "https://core.archivepilates.com/assets/app.js", [
+    textCheck("core-member-registration-custom-domain", "https://core.archivepilates.com/member-registration/", [
       "https://arcpilates.studiomate.kr/users/create",
+      "data-member-registration-dashboard",
+    ]),
+    textCheck("core-member-registration-webapp-path", "https://archive-pilates.web.app/core/member-registration/", [
+      "https://arcpilates.studiomate.kr/users/create",
+      "data-member-registration-dashboard",
+    ]),
+    textCheck("core-app-bundle-custom-domain", "https://core.archivepilates.com/assets/app.js", [
+      "memberRegistrationDashboard",
       "studiomate-member-registration",
       "pricingInquiryAlimtalkRequests",
       "recommendedMealProgramRequests",
@@ -196,7 +204,7 @@ if (selectedSurfaces.includes("core")) {
       '"delivered", "전달 완료"',
     ]),
     textCheck("core-app-bundle-webapp-path", "https://archive-pilates.web.app/core/assets/app.js", [
-      "https://arcpilates.studiomate.kr/users/create",
+      "memberRegistrationDashboard",
       "studiomate-member-registration",
       "isCurrentCommunicationFailure",
       "이전·테스트 실패 이력",
