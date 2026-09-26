@@ -257,8 +257,12 @@ mini runtime are updated in the same release set.
   registration queue when no contract or welcome record exists.
 - StudioMate `point_amount` is part of the paid and total purchase amount. It is preserved as
   a `point` payment component and copied to the native contract `point_amount` field.
-- Existing members without an applicable signed native membership contract remain
-  `prior_purchase_without_signed_contract`. Rechecking may correct the stop reason, but does
-  not invent contract history or send a contract automatically.
+- Existing members whose verified StudioMate registration date is at or before the automation
+  cutover end as `legacy_member_before_contract_cutover` when no signed native contract exists.
+  This acknowledges legacy paper contracts without inventing a digital contract or sending a
+  replacement. Missing or post-cutover registration dates still remain
+  `prior_purchase_without_signed_contract` for review.
+- ARCHIVE CORE registration names link to the verified StudioMate member detail URL only when a
+  native numeric member ID is available. Temporary Excel or mirror IDs never form external links.
 
 Report: `docs/reports/2026-09-14-studiomate-membership-contract-verification.html`.

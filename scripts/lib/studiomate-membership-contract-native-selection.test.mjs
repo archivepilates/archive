@@ -181,3 +181,17 @@ test("a prior applicable signed membership contract selects renewal confirmation
   assert.equal(result.status, "eligible");
   assert.equal(result.selection.action, "renewal_purchase_confirmation");
 });
+
+test("ignores a legacy member registered before contract automation cutover", () => {
+  const input = fixture();
+  input.member.registeredAt = "2025-03-07T00:00:00.000Z";
+  input.ticketRead.tickets.unshift({
+    ...input.ticketRead.tickets[0],
+    userTicketId: "199",
+    issuedAt: "2026-09-13T23:30:00.000Z",
+  });
+  const result = selectNativeMembershipContractCandidate(input);
+  assert.equal(result.status, "ignored");
+  assert.equal(result.reason, "legacy_member_before_contract_cutover");
+  assert.equal(result.policyStatus, "ignored");
+});

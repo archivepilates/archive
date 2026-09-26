@@ -546,6 +546,15 @@ test("legacy or incomplete history is not evidence of first purchase", () => {
   const existing = renewal();
   existing.history.contracts.records = [];
   blocked(existing, "prior_purchase_without_signed_contract");
+  const legacy = renewal();
+  legacy.member.registeredAt = "2025-03-07T00:00:00+09:00";
+  legacy.history.contracts.records = [];
+  const legacyResult = blocked(legacy, "legacy_member_before_contract_cutover");
+  assert.equal(legacyResult.status, "ignored");
+  const postCutover = renewal();
+  postCutover.member.registeredAt = "2026-09-14T09:00:01+09:00";
+  postCutover.history.contracts.records = [];
+  blocked(postCutover, "prior_purchase_without_signed_contract");
   const invalid = fixture();
   invalid.history.purchases.priorRegularIssuanceIds = ["200"];
   blocked(invalid, "invalid_purchase_history");

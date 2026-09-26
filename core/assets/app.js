@@ -7346,6 +7346,7 @@ const MEMBER_REGISTRATION_REASONS = Object.freeze({
   no_fresh_native_issuance: "새로 발급된 수강권이 없어 처리 대상에서 제외됐습니다.",
   invalid_payment_transaction: "결제와 수강권 발급 시각 검증에서 중단됐습니다.",
   prior_purchase_without_signed_contract: "기존 회원이지만 적용 가능한 과거 서명계약 원본을 확인해야 합니다.",
+  legacy_member_before_contract_cutover: "계약 자동화 적용 전 가입한 기존 회원으로 처리 대상에서 제외됐습니다.",
   unverified_payment: "결제 완료 여부를 확인해야 합니다.",
   missing_payment_transactions: "결제 상세내역을 확인해야 합니다.",
   unsettled_or_zero_payment: "결제 잔액 또는 결제금액을 확인해야 합니다.",
@@ -7497,6 +7498,14 @@ async function loadMemberRegistrationDashboard(runtime) {
     const memberName = String(profile?.name || contract?.memberName || candidate?.memberName || "회원명 확인필요").trim();
     const phone = normalizePhone(profile?.phone || contract?.binding?.memberPhone || contract?.completion?.memberPhone || candidate?.memberPhone || send?.memberPhone);
     const memberId = String(contract?.binding?.memberId || contract?.completion?.memberId || candidate?.memberId || profile?.memberId || profile?.id || "").trim();
+    const studioMateMemberId = String(
+      contract?.binding?.memberId ||
+      contract?.completion?.memberId ||
+      candidate?.memberId ||
+      profile?.studiomateMemberId ||
+      (/^[1-9]\d{0,63}$/.test(String(profile?.memberId || "")) ? profile.memberId : "") ||
+      (/^[1-9]\d{0,63}$/.test(String(profile?.id || "")) ? profile.id : ""),
+    ).trim();
     const contractStatus = String(contract?.status || contract?.observationStatus || "").toLowerCase();
     const signed = contractStatus === "signed" || Boolean(contract?.completion);
     const contractCreated = Boolean(contract?.contractId || contract?.id);
@@ -7528,13 +7537,15 @@ async function loadMemberRegistrationDashboard(runtime) {
             : completed
               ? "회원등록 후속 절차가 완료됐습니다."
               : "서명 완료 후 웰컴 알림톡을 준비합니다.";
-    const detailAvailable = memberId && !/^(reservation_phone_|excel_|usage_)/.test(memberId);
+    const studioMateMemberHref = /^[1-9]\d{0,63}$/.test(studioMateMemberId)
+      ? `https://arcpilates.studiomate.kr/users/detail?id=${encodeURIComponent(studioMateMemberId)}`
+      : "";
     return {
       key: entry.fingerprint,
       memberName,
       phoneLast4: phone.slice(-4),
       memberId,
-      memberDetailHref: detailAvailable ? coreHref(`members/detail/?id=${encodeURIComponent(memberId)}`) : "",
+      memberDetailHref: studioMateMemberHref,
       memberGrade: String(profile?.memberGrade || profile?.grade || "일반회원"),
       ticketName: String(ticketHint?.productName || contract?.selection?.productName || "수강권 확인"),
       latestAt,
@@ -7597,7 +7608,7 @@ function renderMemberRegistrationDashboard(data = state.memberRegistrationDashbo
     const statusLabel = item.status === "review" ? "확인필요" : item.status === "completed" ? "완료" : "진행중";
     const tone = item.status === "review" ? "danger" : item.status === "completed" ? "good" : "warn";
     const name = item.memberDetailHref
-      ? `<a href="${escapeHtml(item.memberDetailHref)}">${escapeHtml(item.memberName)}</a>`
+      ? `<a href="${escapeHtml(item.memberDetailHref)}" target="_blank" rel="noopener noreferrer">${escapeHtml(item.memberName)}</a>`
       : escapeHtml(item.memberName);
     return `
       <article class="instructor-registration-item member-registration-item">

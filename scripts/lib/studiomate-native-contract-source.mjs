@@ -229,6 +229,12 @@ export async function readExactStudioMateMember(api, phone) {
     "회원구분",
   ]) || cleanText(detail.user_grade?.name);
   const profile = record(detail.profile) ? detail.profile : {};
+  const registeredAt = parseStudioMateLocalTime(firstText(detail, [
+    "registered_at",
+    "created_at",
+    "registeredAt",
+    "createdAt",
+  ]));
   return Object.freeze({
     status: "verified",
     reason: "exact_phone_match",
@@ -241,6 +247,7 @@ export async function readExactStudioMateMember(api, phone) {
       birthday: cleanText(
         profile.birthday || detail.birthday || row.profile?.birthday || row.birthday,
       ),
+      ...(registeredAt ? { registeredAt } : {}),
       ...(memberGrade ? { memberGrade } : {}),
       inactive: detail.inactiveMember === true || row.inactiveMember === true,
       hasAccount:

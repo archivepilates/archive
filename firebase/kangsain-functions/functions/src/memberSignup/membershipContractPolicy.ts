@@ -104,7 +104,8 @@ function instant(value: any) {
  * Issuance/product namespaces are distinct, even if their numeric values coincide.
  * All times (including now) are RFC3339 strings with explicit timezone.
  *
- * member: { memberId, identityVerified: true, classification: "member" }
+ * member: { memberId, identityVerified: true, classification: "member",
+ *   registeredAt?: RFC3339 }
  * ticket: { memberId, userTicketId, productId, identityVerified: true,
  *   classification: "regular", status: "active"|"scheduled", refunded: false,
  *   cancelled: false, issuedAt,
@@ -266,6 +267,9 @@ export function evaluateMembershipContractEligibility(input: any = {}) {
   )
     return review("incomplete_signature_evidence");
   if (!signed.length) {
+    const registeredMs = instant(member.registeredAt);
+    if (prior.length && Number.isFinite(registeredMs) && registeredMs <= cutoverMs)
+      return result("ignored", "legacy_member_before_contract_cutover");
     return prior.length
       ? review("prior_purchase_without_signed_contract")
       : result("eligible", "verified_first_regular_purchase", "first_purchase_contract");

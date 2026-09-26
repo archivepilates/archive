@@ -86,6 +86,8 @@ const required = [
       "invalid_payment_transaction",
       "no_fresh_native_issuance",
       "prior_purchase_without_signed_contract",
+      "legacy_member_before_contract_cutover",
+      "https://arcpilates.studiomate.kr/users/detail?id=",
       'data-section="instructor-lessons"',
       "enhanceRuleSections",
       "CORE_RUNTIME_CONTRACT_VERSION",

@@ -156,6 +156,7 @@ export function selectNativeMembershipContractCandidate({
       identityVerified: true,
       classification: memberGradeDecision.classification,
       memberGrade: memberGradeDecision.memberGrade,
+      registeredAt: member.registeredAt,
     },
     ticket: {
       memberId: ticket.memberId,
@@ -205,6 +206,13 @@ export function selectNativeMembershipContractCandidate({
     },
   };
   const decision = evaluateMembershipContractEligibility(selectionInput);
+  if (decision.status === "ignored")
+    return {
+      status: "ignored",
+      reason: decision.reasons?.[0] || "membership_policy_ignored",
+      selection: null,
+      policyStatus: decision.status,
+    };
   if (!decision.eligibleForDetection)
     return review(decision.reasons?.[0] || "membership_policy_rejected", {
       policyStatus: decision.status,
