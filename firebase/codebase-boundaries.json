@@ -106,6 +106,7 @@
         "instructorApplicantEvaluationApi",
         "recommendedMealSurveyApi",
         "instructorObservationSurveyApi",
+        "instructorLessonCalendarApi",
         "recommendedMealPlanApi",
         "instructorLessonParkingPreRegistrationApi",
         "videoWatchEventApi",

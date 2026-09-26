@@ -64,7 +64,7 @@ export function codebasesForFile(file) {
   if (normalized.includes("/refund/")) return ["functions-app"];
   if (normalized.includes("/videoAnalytics/")) return ["functions-app"];
   if (normalized.includes("/onboarding/")) return ["functions-app"];
-  if (normalized.endsWith("/instructorLessonRegistration/instructorLessonConfirmation.ts")) {
+  if (/\/instructorLessonRegistration\/instructorLesson(Confirmation|NotionSchedule)\.ts$/.test(normalized)) {
     return ["functions-alimtalk", "functions-app"];
   }
   if (normalized.includes("/instructorLessonRegistration/")) return ["functions-app"];

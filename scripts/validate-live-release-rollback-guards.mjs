@@ -1448,6 +1448,9 @@ const guardGroups = [
           "assertCalendarReady",
           'queuedBy: "auto"',
           "system:instructor-lesson-ticket-issued",
+          "resolveNotionLessonSchedule",
+          "scheduleSnapshot: JSON.stringify(config)",
+          "노션 강사레슨 일정이 변경되었습니다",
         ],
       },
       {

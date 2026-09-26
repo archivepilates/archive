@@ -259,6 +259,13 @@
       ],
       "rewrites": [
         {
+          "source": "/archivein/method/notion-*/calendar/**",
+          "function": {
+            "functionId": "instructorLessonCalendarApi",
+            "region": "asia-northeast3"
+          }
+        },
+        {
           "source": "/archivein/api/groupSurveySubmit",
           "function": {
             "functionId": "ingestPrivateSurveyResponse",
@@ -632,6 +639,13 @@
         "firebase-debug.*.log"
       ],
       "rewrites": [
+        {
+          "source": "/method/notion-*/calendar/**",
+          "function": {
+            "functionId": "instructorLessonCalendarApi",
+            "region": "asia-northeast3"
+          }
+        },
         {
           "source": "/api/groupSurveySubmit",
           "function": {

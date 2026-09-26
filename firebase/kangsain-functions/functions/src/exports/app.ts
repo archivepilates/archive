@@ -41,6 +41,7 @@ import {
 } from "../instructorLessonRegistration/instructorLessonConfirmation";
 import { recommendedMealSurveyApiHandler } from "../mealPlan/recommendedMealSurvey";
 import { instructorObservationSurveyApiHandler } from "../onboarding/instructorObservationSurvey";
+import { instructorLessonCalendarApiHandler } from "../instructorLessonRegistration/instructorLessonCalendar";
 import {
   generateRecommendedMealProgramDraftForSubmittedResponse,
   generateRecommendedMealProgramDraftHandler,
@@ -380,7 +381,11 @@ export const operatorCreateInstructorLessonRegistration = onCall(callableOptions
   }
 });
 
-export const confirmInstructorLessonBookingAndQueueAlimtalk = onCall(callableOptions, async (request) => {
+export const instructorLessonCalendarApi = onRequest(
+  { ...publicRequestOptions, secrets: [notionToken] }, instructorLessonCalendarApiHandler,
+);
+
+export const confirmInstructorLessonBookingAndQueueAlimtalk = onCall({ ...callableOptions, secrets: [...callableOptions.secrets, notionToken] }, async (request) => {
   try {
     return await confirmInstructorLessonBookingAndQueueAlimtalkHandler(request);
   } catch (err) {
@@ -392,6 +397,7 @@ export const queueInstructorLessonConfirmationOnTicketVerified = onDocumentWritt
   {
     region: REGION,
     document: "instructorLessonRegistrations/{registrationId}",
+    secrets: [notionToken],
     retry: true,
   },
   async (event) => {

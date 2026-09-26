@@ -10,6 +10,7 @@ import { ALIMTALK_MEMBER_EXCLUSION_REASONS, ALIMTALK_TEMPLATES } from "../alimta
 import { hasExplicitAlimtalkTestOverride, isAlimtalkTestRecipient } from "../alimtalk/testRecipients";
 import { instructorLessonRegistrationId } from "./instructorLessonRegistration";
 import { deriveInstructorLessonRegistrationState } from "./instructorLessonRegistrationState";
+import { resolveNotionLessonSchedule } from "./instructorLessonNotionSchedule";
 
 const REGISTRATIONS = "instructorLessonRegistrations";
 const TICKET_NAME = "강사레슨 (2T)";
@@ -99,6 +100,14 @@ export async function queueInstructorLessonConfirmationForIssuedTicket(
 ): Promise<Record<string, unknown>> {
   const registrationRef = db.collection(REGISTRATIONS).doc(registrationId);
   const now = nowTimestamp();
+  const initial = (await registrationRef.get()).data();
+  if (!initial) throw new AppError("NOT_FOUND", "강사레슨 등록 건이 삭제되었습니다.");
+  if (context.expectedStudioId && initial.studioId !== context.expectedStudioId) throw new AppError("PERMISSION_DENIED", "다른 스튜디오의 강사레슨 등록 건입니다.");
+  const initialIssue = instructorLessonTicketConfirmationIssue(initial);
+  if (initialIssue) throw new AppError("INVALID_ARGUMENT", initialIssue);
+  const sourceDate = cleanText(initial.lessonDate, 10);
+  const config = await resolveConfirmationSchedule(sourceDate);
+  await assertCalendarReady(config);
   const result = await db.runTransaction(async (transaction) => {
     const freshRegistrationSnapshot = await transaction.get(registrationRef);
     if (!freshRegistrationSnapshot.exists) throw new AppError("NOT_FOUND", "강사레슨 등록 건이 삭제되었습니다.");
@@ -112,10 +121,7 @@ export async function queueInstructorLessonConfirmationForIssuedTicket(
     const ticketIssue = instructorLessonTicketConfirmationIssue(freshRegistration);
     if (ticketIssue) throw new AppError("INVALID_ARGUMENT", ticketIssue);
     const lessonDate = cleanText(freshRegistration.lessonDate, 10);
-    const config = instructorLessonConfirmationScheduleFor(lessonDate);
-    if (!config) {
-      throw new AppError("INVALID_ARGUMENT", `${lessonDate || "해당 수업일"} 예약확정 안내 설정이 없습니다.`);
-    }
+    if (lessonDate !== sourceDate) throw new AppError("INVALID_ARGUMENT", "일정 확인 중 수업일이 변경되었습니다. 다시 처리하세요.");
     const candidateId = instructorLessonConfirmationCandidateId({
       phone: normalizePhone(freshRegistration.memberPhone),
       lessonDate,
@@ -204,6 +210,7 @@ export async function queueInstructorLessonConfirmationForIssuedTicket(
           operatorStaffId: cleanText(context.operatorStaffId || freshRegistration.createdBy?.staffId, 80),
           operatorUid: cleanText(context.operatorUid, 160),
           queueSource: context.source,
+          scheduleSnapshot: JSON.stringify(config),
         },
         attempts: 0,
         maxAttempts: 2,
@@ -247,9 +254,15 @@ export async function instructorLessonConfirmationSendabilityIssue(candidate: Al
   const ticketIssue = instructorLessonTicketConfirmationIssue(registration);
   if (ticketIssue) return ticketIssue;
   const lessonDate = cleanText(candidate.payload?.lessonDate, 10);
-  const config = instructorLessonConfirmationScheduleFor(lessonDate);
+  let config: InstructorLessonConfirmationSchedule;
+  try { config = await resolveConfirmationSchedule(lessonDate); }
+  catch (error) { return error instanceof Error ? error.message : String(error); }
   if (!config || config.managementNumber !== cleanText(candidate.payload?.managementNumber, 100)) {
     return "강사레슨 예약확정 일정·관리번호 계약 불일치";
+  }
+  if (lessonDate !== cleanText(registration.lessonDate, 10)) return "강사레슨 등록 수업일이 변경되었습니다.";
+  if (candidate.payload?.lessonDateText !== config.lessonDateText || candidate.payload?.lessonTimeText !== config.lessonTimeText || candidate.payload?.lessonComposition !== config.lessonComposition) {
+    return "노션 강사레슨 일정이 변경되었습니다. 안내 재처리로 최신 내용을 확인하세요.";
   }
   if (normalizePhone(candidate.memberPhone) !== normalizePhone(registration.memberPhone)) {
     return "강사레슨 수강권 회원과 알림톡 수신자 불일치";
@@ -341,6 +354,10 @@ export function instructorLessonConfirmationScheduleFor(
   lessonDate: string,
 ): InstructorLessonConfirmationSchedule | null {
   return CONFIRMATION_SCHEDULES[cleanText(lessonDate, 10)] || null;
+}
+
+async function resolveConfirmationSchedule(lessonDate: string): Promise<InstructorLessonConfirmationSchedule> {
+  return instructorLessonConfirmationScheduleFor(lessonDate) || await resolveNotionLessonSchedule(lessonDate);
 }
 
 export function instructorLessonConfirmationCandidateId(input: {
