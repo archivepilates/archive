@@ -63,6 +63,39 @@ test("수강권 발급 전에는 취소되지 않은 CORE 접수 인원을 사�
   assert.equal(summary.remainingSeats, 7);
 });
 
+test("수강권 미러가 늦어도 발급 검증된 당일 접수는 즉시 좌석에 합산한다", () => {
+  const verifiedRegistration = {
+    ...registration(6, "action_required"),
+    memberName: "New instructor",
+    evidence: { studiomateMemberId: "resolved-member-6" },
+    steps: { ticket: { status: "verified" } },
+  };
+  const alreadyMirroredRegistration = {
+    ...registration(0, "completed"),
+    memberPhone: holder(0, "2026-09-20").phone,
+  };
+  const [summary] = buildInstructorLessonScheduleSummaries({
+    startDate: "2026-08-28",
+    endDate: "2026-12-31",
+    ticketHolders: Array.from({ length: 6 }, (_, index) =>
+      holder(index, "2026-09-20"),
+    ),
+    registrations: [verifiedRegistration, alreadyMirroredRegistration],
+  });
+
+  assert.equal(summary.countSource, "tickets");
+  assert.equal(summary.ticketHolderCount, 6);
+  assert.equal(summary.verifiedRegistrationCount, 1);
+  assert.equal(summary.registrationCount, 2);
+  assert.equal(summary.occupiedCount, 7);
+  assert.equal(summary.remainingSeats, 3);
+  assert.ok(summary.roster?.some((row) => row.memberId === "resolved-member-6"));
+  assert.equal(
+    summary.roster?.filter((row) => row.registrationId === "registration-0").length,
+    1,
+  );
+});
+
 test("수업 정원이 있으면 같은 시작 시간의 병렬 수업 정원을 합산한다", () => {
   const [summary] = buildInstructorLessonScheduleSummaries({
     startDate: "2026-08-28",

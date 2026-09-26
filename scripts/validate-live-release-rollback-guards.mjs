@@ -1487,7 +1487,8 @@ const guardGroups = [
         file: "firebase/kangsain-functions/functions/src/instructorLessonRegistration/instructorLessonSchedule.ts",
         markers: [
           "if (!hasInstructorLessonTicket(holder)) continue;",
-          "const countSource = ticketHolderCount",
+          "const effectiveTicketMembers = mergeScheduleMembers",
+          "verifiedRegistrationMembers",
         ],
         forbiddenMarkers: ["excludedTicketOnlyMember(holder)"],
       },

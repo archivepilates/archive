@@ -81,11 +81,12 @@ const checks = [
     "buildInstructorLessonScheduleSummaries",
     "bookingMemberCount",
     "ticketHolderCount",
+    "verifiedRegistrationCount",
     "registrationCount",
     "capacitySource",
     "archiveBooking?.isCanonical === false",
     "currentInstructorLessonTicketDates",
-    "const countSource = ticketHolderCount",
+    "const effectiveTicketMembers = mergeScheduleMembers",
     "newMemberSimulation",
   ], ["db.collection(", "batch.set(", "transaction.set(", "excludedTicketOnlyMember(holder)"]],
   ["firebase/kangsain-functions/firestore.rules", [

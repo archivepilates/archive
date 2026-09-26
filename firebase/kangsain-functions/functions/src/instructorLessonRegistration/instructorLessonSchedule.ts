@@ -26,6 +26,7 @@ export type InstructorLessonScheduleSummary = {
   countSource: "bookings" | "tickets" | "registrations" | "none";
   bookingMemberCount: number;
   ticketHolderCount: number;
+  verifiedRegistrationCount: number;
   registrationCount: number;
   roster?: InstructorLessonScheduleRosterRow[];
 };
@@ -108,6 +109,7 @@ export function buildInstructorLessonScheduleSummaries(input: {
   }
 
   const registrationMembers: ScheduleMembers = new Map();
+  const verifiedRegistrationMembers: ScheduleMembers = new Map();
   for (const registration of input.registrations || []) {
     if (isInstructorLessonSyntheticTest(registration)) continue;
     const date = dateKey(registration.lessonDate);
@@ -116,6 +118,9 @@ export function buildInstructorLessonScheduleSummaries(input: {
     const memberKey = memberIdentity(registration) || cleanText(registration.registrationId || registration.id);
     if (!memberKey) continue;
     addScheduleMember(registrationMembers, date, memberKey, registration);
+    if (cleanText(registration.steps?.ticket?.status).toLowerCase() === "verified") {
+      addScheduleMember(verifiedRegistrationMembers, date, memberKey, registration);
+    }
     dates.add(date);
   }
 
@@ -123,8 +128,13 @@ export function buildInstructorLessonScheduleSummaries(input: {
     const dateLectures = lectures.filter((lecture) => dateKey(lecture.date) === date);
     const bookingMemberCount = bookingMembers.get(date)?.size || 0;
     const ticketHolderCount = ticketMembers.get(date)?.size || 0;
+    const verifiedRegistrationCount = verifiedRegistrationMembers.get(date)?.size || 0;
     const registrationCount = registrationMembers.get(date)?.size || 0;
-    const countSource = ticketHolderCount
+    const effectiveTicketMembers = mergeScheduleMembers(
+      ticketMembers.get(date),
+      verifiedRegistrationMembers.get(date),
+    );
+    const countSource = effectiveTicketMembers.size
       ? "tickets"
       : bookingMemberCount
         ? "bookings"
@@ -135,7 +145,7 @@ export function buildInstructorLessonScheduleSummaries(input: {
       countSource === "bookings"
         ? bookingMembers.get(date)
         : countSource === "tickets"
-          ? ticketMembers.get(date)
+          ? effectiveTicketMembers
           : registrationMembers.get(date);
     const occupiedCount = occupiedMembers?.size || 0;
     const roster = [...(occupiedMembers || [])].map(([memberKey, members]) => {
@@ -156,7 +166,14 @@ export function buildInstructorLessonScheduleSummaries(input: {
         // The internal identity may contain a full phone number; keep it out of the response.
         memberKey: `member:${createHash("sha256").update(memberKey).digest("hex")}`,
         memberId:
-          sources.map((item) => rosterMemberId(item, countSource === "tickets")).find(Boolean) ||
+          sources
+            .map((item) =>
+              rosterMemberId(
+                item,
+                countSource === "tickets" && !cleanText(item.registrationId || item.lessonDate),
+              ),
+            )
+            .find(Boolean) ||
           (registration ? rosterMemberId(registration) : null),
         memberName:
           sources.map((item) => cleanText(item.memberName || item.name)).find(Boolean) ||
@@ -189,6 +206,7 @@ export function buildInstructorLessonScheduleSummaries(input: {
       countSource,
       bookingMemberCount,
       ticketHolderCount,
+      verifiedRegistrationCount,
       registrationCount,
       roster,
     } satisfies InstructorLessonScheduleSummary;
@@ -300,6 +318,18 @@ function addScheduleMember(map: ScheduleMembers, date: string, memberKey: string
   records.push(item);
   members.set(memberKey, records);
   map.set(date, members);
+}
+
+function mergeScheduleMembers(
+  ...sources: Array<Map<string, SourceRecord[]> | undefined>
+): Map<string, SourceRecord[]> {
+  const merged = new Map<string, SourceRecord[]>();
+  for (const source of sources) {
+    for (const [memberKey, records] of source || []) {
+      merged.set(memberKey, [...(merged.get(memberKey) || []), ...records]);
+    }
+  }
+  return merged;
 }
 
 function rosterMemberId(item: SourceRecord, isProfile = false): string | null {
