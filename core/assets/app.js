@@ -7342,8 +7342,10 @@ function renderInstructorLessonRoster(schedule) {
 }
 
 const MEMBER_REGISTRATION_REASONS = Object.freeze({
-  fresh_native_issuance_not_found: "수강권 발급 정보가 아직 확인되지 않았습니다.",
+  fresh_native_issuance_not_found: "새로 발급된 수강권이 없어 처리 대상에서 제외됐습니다.",
+  no_fresh_native_issuance: "새로 발급된 수강권이 없어 처리 대상에서 제외됐습니다.",
   invalid_payment_transaction: "결제와 수강권 발급 시각 검증에서 중단됐습니다.",
+  prior_purchase_without_signed_contract: "기존 회원이지만 적용 가능한 과거 서명계약 원본을 확인해야 합니다.",
   unverified_payment: "결제 완료 여부를 확인해야 합니다.",
   missing_payment_transactions: "결제 상세내역을 확인해야 합니다.",
   unsettled_or_zero_payment: "결제 잔액 또는 결제금액을 확인해야 합니다.",
@@ -7481,6 +7483,11 @@ async function loadMemberRegistrationDashboard(runtime) {
     const contract = memberRegistrationLatest(entry.contracts);
     const candidate = memberRegistrationLatest(entry.candidates);
     const send = memberRegistrationLatest(entry.sends);
+    const hintStatus = String(hint?.status || "").toLowerCase();
+    const noActionHint =
+      ["ignored", "excluded"].includes(hintStatus) ||
+      (hintStatus === "review" && hint?.reason === "fresh_native_issuance_not_found");
+    if (noActionHint && !contract && !candidate && !send) return null;
     const ticketHint = memberRegistrationTicketHint(hint);
     const latestAt = Math.max(
       memberRegistrationItemTime(hint), memberRegistrationItemTime(contract),
@@ -7496,7 +7503,7 @@ async function loadMemberRegistrationDashboard(runtime) {
     const ticketConfirmed = Boolean(ticketHint || contract?.binding?.userTicketId || contract?.selection?.userTicketId);
     const identityConfirmed = Boolean(profile || contract?.binding?.memberId || contract?.completion?.memberId || candidate?.memberId);
     const welcome = memberRegistrationWelcomeState(contract, candidate, send);
-    const hintReview = String(hint?.status || "") === "review";
+    const hintReview = hintStatus === "review";
     const contractReview = ["review", "failed", "error"].includes(String(contract?.observationStatus || "").toLowerCase());
     const welcomeReview = welcome.status === "error";
     const review = !identityConfirmed || (hintReview && !contractCreated) || contractReview || welcomeReview;

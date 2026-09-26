@@ -111,7 +111,7 @@ function instant(value: any) {
  *   source: { kind: "studiomate_member_excel", verified: true, complete: true, capturedAt },
  *   payment: { verified: true, complete: true, status: "paid"|"partial"|"unpaid", totalAmount,
  *     paidAmount, outstandingAmount, refundedAmount: 0,
- *     transactions: [{ paymentId, method: "card"|"cash"|"bank_transfer", status: "paid",
+ *     transactions: [{ paymentId, method: "card"|"cash"|"bank_transfer"|"point", status: "paid",
  *       amount, paidAt, installmentMonths?: positive integer (card only) }] } }
  * Amounts are nonnegative integer KRW, never strings/null. Transactions are distinct
  * settled payments, not future card-installment schedule rows; mixed methods may sum.
@@ -318,7 +318,7 @@ function validatePayment(payment: any) {
     ids.add(row.paymentId);
     if (
       row.status !== "paid" ||
-      !["card", "cash", "bank_transfer"].includes(row.method) ||
+      !["card", "cash", "bank_transfer", "point"].includes(row.method) ||
       !money(row.amount) ||
       row.amount === 0 ||
       !Number.isFinite(instant(row.paidAt))

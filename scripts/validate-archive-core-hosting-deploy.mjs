@@ -84,6 +84,8 @@ const required = [
       "renderMemberRegistrationDashboard",
       "getRecentStudioCollectionBy",
       "invalid_payment_transaction",
+      "no_fresh_native_issuance",
+      "prior_purchase_without_signed_contract",
       'data-section="instructor-lessons"',
       "enhanceRuleSections",
       "CORE_RUNTIME_CONTRACT_VERSION",

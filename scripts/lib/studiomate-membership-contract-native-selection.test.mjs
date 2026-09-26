@@ -154,12 +154,13 @@ test("blocks duplicate fresh issuances instead of guessing", () => {
   assert.equal(result.reason, "multiple_fresh_native_issuances");
 });
 
-test("blocks a native ticket that is absent from the changed Excel product hint", () => {
+test("ignores an Excel history change when no fresh native issuance exists", () => {
   const input = fixture();
   input.group.rows[0]["수강권명"] = "다른 수강권";
   const result = selectNativeMembershipContractCandidate(input);
-  assert.equal(result.status, "review");
-  assert.equal(result.reason, "fresh_native_issuance_not_found");
+  assert.equal(result.status, "ignored");
+  assert.equal(result.reason, "no_fresh_native_issuance");
+  assert.equal(result.candidateCount, 0);
 });
 
 test("a prior applicable signed membership contract selects renewal confirmation", () => {

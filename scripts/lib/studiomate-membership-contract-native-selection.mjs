@@ -116,11 +116,17 @@ export function selectNativeMembershipContractCandidate({
       Date.parse(ticket.issuedAt) <= Date.parse(sourceDownloadedAt) &&
       changedProductNames.has(ticket.title),
   );
-  if (candidates.length !== 1)
-    return review(
-      candidates.length ? "multiple_fresh_native_issuances" : "fresh_native_issuance_not_found",
-      { candidateCount: candidates.length },
-    );
+  if (!candidates.length)
+    return {
+      status: "ignored",
+      reason: "no_fresh_native_issuance",
+      selection: null,
+      candidateCount: 0,
+    };
+  if (candidates.length > 1)
+    return review("multiple_fresh_native_issuances", {
+      candidateCount: candidates.length,
+    });
 
   const ticket = candidates[0];
   const contracts = contractHistory.records.map((contract) => ({

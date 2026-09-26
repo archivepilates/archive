@@ -269,6 +269,53 @@ test("normalizes unpaid and partial ledgers for contract display without blockin
   assert.equal(partial.contractPayment.unpaidAmount, 298000);
 });
 
+test("includes StudioMate points in paid and contract totals", () => {
+  const payment = normalizePayments([
+    {
+      id: 701,
+      created_at: "2026-09-23 18:54:53",
+      settlement_at: "2026-09-23 18:52:27",
+      card_amount: 378100,
+      cash_amount: 0,
+      wiretransfer_amount: 0,
+      transfer_amount: 0,
+      point_amount: 19900,
+      unpaid_amount: 0,
+      installment_period: 1,
+    },
+  ]);
+
+  assert.equal(payment.status, "paid");
+  assert.equal(payment.totalAmount, 398000);
+  assert.equal(payment.paidAmount, 398000);
+  assert.deepEqual(payment.transactions, [
+    {
+      paymentId: "701:card",
+      method: "card",
+      status: "paid",
+      amount: 378100,
+      paidAt: "2026-09-23T09:52:27.000Z",
+      installmentMonths: 1,
+    },
+    {
+      paymentId: "701:point",
+      method: "point",
+      status: "paid",
+      amount: 19900,
+      paidAt: "2026-09-23T09:52:27.000Z",
+    },
+  ]);
+  assert.deepEqual(payment.contractPayment, {
+    cardAmount: 378100,
+    cashAmount: 0,
+    wireAmount: 0,
+    pointAmount: 19900,
+    amount: 398000,
+    unpaidAmount: 0,
+    installmentPeriod: 1,
+  });
+});
+
 test("requires signed session headers and marks write transport failures ambiguous", async () => {
   for (const missing of Object.keys(SESSION_HEADERS)) {
     const headers = { ...SESSION_HEADERS };

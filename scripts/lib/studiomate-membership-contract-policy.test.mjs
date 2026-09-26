@@ -357,17 +357,18 @@ test("payment amounts never coerce null, strings, boolean, nonfinite or fraction
   }
 });
 
-test("mixed settled payments and card installments must reconcile exactly", () => {
+test("mixed settled payments, points and card installments must reconcile exactly", () => {
   const input = fixture();
   const base = input.ticket.payment.transactions[0];
   input.ticket.payment.transactions = [
-    { ...base, amount: 60000, installmentMonths: 3 },
-    { ...base, paymentId: "payment-2", method: "cash", amount: 40000 },
+    { ...base, amount: 50000, installmentMonths: 3 },
+    { ...base, paymentId: "payment-2", method: "cash", amount: 30000 },
+    { ...base, paymentId: "payment-3", method: "point", amount: 20000 },
   ];
   assert.equal(evaluate(input).status, "eligible");
   for (const update of [
     (x) => {
-      x.ticket.payment.transactions[1].amount = 39999;
+      x.ticket.payment.transactions[1].amount = 29999;
     },
     (x) => {
       x.ticket.payment.transactions[1].status = "pending";

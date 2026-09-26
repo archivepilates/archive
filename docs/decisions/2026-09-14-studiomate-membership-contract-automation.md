@@ -249,4 +249,16 @@ The production activation commits were fast-forwarded to `main`, pushed to GitHu
 affected Functions codebases were deployed on 2026-09-23. ARCHIVE CORE Hosting and the Mac
 mini runtime are updated in the same release set.
 
+## 2026-09-26 Existing-Member Recheck
+
+- A changed historical Excel purchase group is only a discovery hint. When StudioMate has no
+  newly issued native ticket in the source window, the hint ends as `ignored` with
+  `no_fresh_native_issuance`; it is not an operator error and is hidden from the recent
+  registration queue when no contract or welcome record exists.
+- StudioMate `point_amount` is part of the paid and total purchase amount. It is preserved as
+  a `point` payment component and copied to the native contract `point_amount` field.
+- Existing members without an applicable signed native membership contract remain
+  `prior_purchase_without_signed_contract`. Rechecking may correct the stop reason, but does
+  not invent contract history or send a contract automatically.
+
 Report: `docs/reports/2026-09-14-studiomate-membership-contract-verification.html`.

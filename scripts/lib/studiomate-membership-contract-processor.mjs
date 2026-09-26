@@ -32,6 +32,7 @@ export async function runStudioMateMembershipContractCandidates({
     status: "disabled",
     checked: 0,
     excluded: 0,
+    ignored: 0,
     waiting: 0,
     signed: 0,
     review: 0,
@@ -120,6 +121,11 @@ export async function runStudioMateMembershipContractCandidates({
             memberGrade: selected.memberGrade || "",
           });
           result.excluded += 1;
+          continue;
+        }
+        if (selected.status === "ignored") {
+          await markHint(db, hint?.hintId, "ignored", selected.reason);
+          result.ignored += 1;
           continue;
         }
         if (selected.status !== "eligible") {

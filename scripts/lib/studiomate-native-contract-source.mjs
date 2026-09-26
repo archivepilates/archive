@@ -423,6 +423,7 @@ export function normalizePayments(rows) {
     ["cash_amount", "cash"],
     ["wiretransfer_amount", "bank_transfer"],
     ["transfer_amount", "bank_transfer"],
+    ["point_amount", "point"],
   ];
   for (const row of sorted) {
     if (!nativeId(row.id)) return invalidPayment("invalid_payment_id");
@@ -430,7 +431,7 @@ export function normalizePayments(rows) {
     if (!paidAt) return invalidPayment("invalid_payment_time");
     const seenMethods = new Set();
     for (const [key, method] of components) {
-      const amount = money(row[key]);
+      const amount = money(key === "point_amount" ? row[key] ?? 0 : row[key]);
       if (amount === null) return invalidPayment("invalid_payment_amount");
       if (!amount || seenMethods.has(method)) continue;
       seenMethods.add(method);
@@ -471,7 +472,9 @@ export function normalizePayments(rows) {
       wireAmount: transactions
         .filter((row) => row.method === "bank_transfer")
         .reduce((sum, row) => sum + row.amount, 0),
-      pointAmount: 0,
+      pointAmount: transactions
+        .filter((row) => row.method === "point")
+        .reduce((sum, row) => sum + row.amount, 0),
       amount: paidAmount,
       unpaidAmount: latestOutstanding,
       installmentPeriod:
