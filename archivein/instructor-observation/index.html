@@ -168,12 +168,19 @@
       <section class="section">
         <div class="section-heading"><p class="section-kicker">BASIC</p><h2>기본 정보</h2></div>
         <div class="fields">
+          <fieldset>
+            <legend class="sub-label required">참관 방식</legend>
+            <div class="options">
+              <label class="option"><input type="radio" name="observationMode" value="현장 참가" required><span>현장 참가</span></label>
+              <label class="option"><input type="radio" name="observationMode" value="영상 시청"><span>영상 시청</span></label>
+            </div>
+          </fieldset>
           <div class="grid-2">
             <label class="field"><span class="required">작성 강사</span><input type="text" name="instructorName" maxlength="60" autocomplete="name" required></label>
-            <label class="field"><span class="required">참여일</span><input type="date" name="attendedOn" required></label>
+            <label class="field"><span class="required">수업일 / 분석일</span><input type="date" name="attendedOn" required></label>
           </div>
           <div class="grid-2">
-            <label class="field"><span class="required">담당 강사</span><input type="text" name="observedInstructor" maxlength="60" required></label>
+            <label class="field"><span class="required">수업 대상 강사</span><input type="text" name="observedInstructor" maxlength="60" required></label>
             <label class="field"><span class="required">수업명 / 기구</span><input type="text" name="classNameEquipment" maxlength="120" placeholder="예: 흉추 가동성 / 체어" required></label>
           </div>
           <div class="grid-2">

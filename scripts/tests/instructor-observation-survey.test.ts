@@ -9,6 +9,7 @@ function validPayload(): Record<string, unknown> {
   return {
     submissionId: "9d2e4f80-6b38-49ea-b7c6-f56860e3fa65",
     instructorName: "정유리",
+    observationMode: "현장 참가",
     attendedOn: "2026-09-23",
     observedInstructor: "정은영",
     classNameEquipment: "흉추 가동성 / 체어",
@@ -35,6 +36,13 @@ test("normalizes a complete observation payload", () => {
   assert.equal(parsed.flowTimeScore, 4);
   assert.deepEqual(parsed.understandingMethods, ["시범", "언어 큐잉"]);
   assert.equal(parsed.classType, "그룹");
+  assert.equal(parsed.observationMode, "현장 참가");
+});
+
+test("requires a supported observation mode", () => {
+  const input = validPayload();
+  input.observationMode = "온라인 미팅";
+  assert.throws(() => parseInstructorObservationPayload(input), /참관 방식/);
 });
 
 test("rejects missing priority answers", () => {
@@ -66,4 +74,10 @@ test("canonical key stays stable for the same class observation", () => {
   const first = parseInstructorObservationPayload(validPayload());
   const second = parseInstructorObservationPayload({ ...validPayload(), submissionId: "b18e385c-e346-48fb-bcbf-dc7084da065d" });
   assert.equal(instructorObservationCanonicalKey(first), instructorObservationCanonicalKey(second));
+});
+
+test("canonical key separates in-person and video observations", () => {
+  const inPerson = parseInstructorObservationPayload(validPayload());
+  const video = parseInstructorObservationPayload({ ...validPayload(), observationMode: "영상 시청" });
+  assert.notEqual(instructorObservationCanonicalKey(inPerson), instructorObservationCanonicalKey(video));
 });

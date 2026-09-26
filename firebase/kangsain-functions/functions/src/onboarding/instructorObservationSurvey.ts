@@ -20,6 +20,7 @@ const ALLOWED_ORIGINS = new Set([
 export interface InstructorObservationPayload {
   submissionId: string;
   instructorName: string;
+  observationMode: "현장 참가" | "영상 시청";
   attendedOn: string;
   observedInstructor: string;
   classNameEquipment: string;
@@ -130,6 +131,7 @@ export async function instructorObservationSurveyApiHandler(request: Request, re
 }
 
 export function parseInstructorObservationPayload(body: Record<string, unknown>): InstructorObservationPayload {
+  const observationMode = requiredChoice(body.observationMode, "참관 방식", ["현장 참가", "영상 시청"] as const);
   const classType = requiredChoice(body.classType, "수업 형태", ["그룹", "개인", "기타"] as const);
   const expectedLevel = requiredChoice(body.expectedLevel, "예상 대상 수준", ["초급", "초중급", "중급", "기타"] as const);
   const score = Number(body.flowTimeScore);
@@ -149,8 +151,9 @@ export function parseInstructorObservationPayload(body: Record<string, unknown>)
   return {
     submissionId,
     instructorName: requiredText(body.instructorName, "작성 강사", 60),
-    attendedOn: requiredDate(body.attendedOn, "참여일"),
-    observedInstructor: requiredText(body.observedInstructor, "담당 강사", 60),
+    observationMode,
+    attendedOn: requiredDate(body.attendedOn, "수업일 / 분석일"),
+    observedInstructor: requiredText(body.observedInstructor, "수업 대상 강사", 60),
     classNameEquipment: requiredText(body.classNameEquipment, "수업명 / 기구", 120),
     classType,
     expectedLevel,
@@ -189,8 +192,9 @@ async function syncInstructorObservationToNotion(
         parent: { database_id: INSTRUCTOR_OBSERVATION_NOTION_DATABASE_ID },
         properties: {
           "작성 강사": notionTitle(payload.instructorName),
-          "참여일": { date: { start: payload.attendedOn } },
-          "담당 강사": notionText(payload.observedInstructor),
+          "수업일·분석일": { date: { start: payload.attendedOn } },
+          "참관 방식": notionSelect(payload.observationMode),
+          "수업 대상 강사": notionSelect(payload.observedInstructor),
           "수업명·기구": notionText(payload.classNameEquipment),
           "수업 형태": notionSelect(payload.classType),
           "예상 대상 수준": notionSelect(payload.expectedLevel),
@@ -288,6 +292,12 @@ function setCors(request: Request, response: Response): void {
 
 export function instructorObservationCanonicalKey(payload: InstructorObservationPayload): string {
   return createHash("sha256")
-    .update([payload.instructorName, payload.attendedOn, payload.observedInstructor, payload.classNameEquipment].join("|"))
+    .update([
+      payload.instructorName,
+      payload.observationMode,
+      payload.attendedOn,
+      payload.observedInstructor,
+      payload.classNameEquipment,
+    ].join("|"))
     .digest("hex");
 }

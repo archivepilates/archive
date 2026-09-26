@@ -170,6 +170,8 @@ const guardGroups = [
         markers: [
           "ARCHIVE PILATES 타 강사 수업 분석",
           'id="surveyForm"',
+          'name="observationMode"',
+          "수업 대상 강사",
           "api/instructorObservationSurvey",
           "핵심 관찰: 수업 목표",
         ],
@@ -179,6 +181,8 @@ const guardGroups = [
         markers: [
           'INSTRUCTOR_OBSERVATION_COLLECTION = "instructorObservationResponses"',
           "INSTRUCTOR_OBSERVATION_NOTION_DATABASE_ID",
+          '"참관 방식": notionSelect(payload.observationMode)',
+          '"수업 대상 강사": notionSelect(payload.observedInstructor)',
           "instructorObservationCanonicalKey",
           "syncInstructorObservationToNotion",
           'status: "검토 대기"',
@@ -212,7 +216,7 @@ const guardGroups = [
         markers: [
           "타 강사 수업 분석 설문",
           "instructorObservationResponses",
-          "Notion 타 강사 수업 분석 기록",
+          "Notion 수업 분석 페이지",
         ],
       },
     ],
