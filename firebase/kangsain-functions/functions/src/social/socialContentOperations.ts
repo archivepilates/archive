@@ -3,6 +3,7 @@ import type { CallableRequest } from "firebase-functions/v2/https";
 import { Timestamp } from "firebase-admin/firestore";
 import { DEFAULT_STUDIO_ID } from "../config/constants";
 import { db } from "../config/firebase";
+import { isSocialPublishJobDue, loadDueSocialPublishJobs } from "./socialDueJobs";
 import type { StaffDoc } from "../types/models";
 import { AppError } from "../utils/errors";
 import {
@@ -350,13 +351,10 @@ export async function publishDueInstagramContent(): Promise<{
   blocked: number;
 }> {
   const now = Timestamp.now();
-  const snapshot = await jobCollection.where("status", "in", ["pending", "retry", "processing"]).limit(30).get();
-  const due = snapshot.docs
+  const documents = await loadDueSocialPublishJobs(jobCollection, now);
+  const due = documents
     .map((doc) => ({ ref: doc.ref, data: doc.data() as SocialPublishJobDoc }))
-    .filter(({ data }) => {
-      if (data.status === "processing") return data.updatedAt.toMillis() < now.toMillis() - 30 * 60_000;
-      return data.nextRunAt.toMillis() <= now.toMillis();
-    })
+    .filter(({ data }) => isSocialPublishJobDue(data, now.toMillis()))
     .sort((a, b) => a.data.nextRunAt.toMillis() - b.data.nextRunAt.toMillis());
 
   const summary = { scanned: due.length, published: 0, failed: 0, blocked: 0 };
@@ -439,6 +437,7 @@ async function claimPublishJob(jobId: string): Promise<SocialPublishJobDoc | nul
     if (!snapshot.exists) return null;
     const job = snapshot.data() as SocialPublishJobDoc;
     const now = Timestamp.now();
+    if (!isSocialPublishJobDue(job, now.toMillis())) return null;
     if (job.status === "processing" && job.stage === "publish_requested") {
       transaction.update(jobRef, {
         status: "manual_review",

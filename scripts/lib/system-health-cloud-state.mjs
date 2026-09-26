@@ -6,9 +6,9 @@ export const SYSTEM_HEALTH_SCHEDULERS = [
   { functionName: "scheduledProcessAlimtalkQueue", expectedState: "ENABLED", collection: "alimtalkCandidates" },
   { functionName: "scheduledProcessContactSyncJobs", expectedState: "ENABLED", collection: "contactSyncJobs" },
   { functionName: "scheduledSyncPrivateSurveyResponses", expectedState: "ENABLED" },
-  { functionName: "scheduledProcessWriteQueue", expectedState: "PAUSED", collection: "writeQueue", intentionallyRetired: true },
-  { functionName: "scheduledSyncDashboardDaily", expectedState: "PAUSED", intentionallyRetired: true },
-  { functionName: "scheduledAttendanceReminder", expectedState: "PAUSED", intentionallyRetired: true },
+  { functionName: "scheduledProcessWriteQueue", expectedState: "ABSENT", collection: "writeQueue", intentionallyRetired: true },
+  { functionName: "scheduledSyncDashboardDaily", expectedState: "ABSENT", intentionallyRetired: true },
+  { functionName: "scheduledAttendanceReminder", expectedState: "ABSENT", intentionallyRetired: true },
 ];
 
 export function classifyCloudReadError(error) {
@@ -18,11 +18,15 @@ export function classifyCloudReadError(error) {
 }
 
 export function classifySchedulerState(job, policy, error = null) {
-  if (error) return classifyCloudReadError(error);
-  const actualState = job?.state || "UNKNOWN";
-  if (actualState === "PAUSED" && policy.expectedState === "PAUSED" && policy.intentionallyRetired) {
-    return { state: "intentionally_retired", actualState, needsAttention: false };
+  if (error) {
+    const failure = classifyCloudReadError(error);
+    // Only an authoritative not-found response proves a retired Scheduler is absent.
+    if (failure.code === "404" && policy.expectedState === "ABSENT" && policy.intentionallyRetired) {
+      return { state: "intentionally_retired", actualState: "ABSENT", code: "404", needsAttention: false };
+    }
+    return failure;
   }
+  const actualState = job?.state || "UNKNOWN";
   if (actualState === "ENABLED" && policy.expectedState === "ENABLED") {
     const actualSchedule = typeof job?.schedule === "string" ? job.schedule.trim().replace(/\s+/g, " ") : "";
     const cadenceMatches = ["*/10 * * * *", "every 10 minutes"].includes(actualSchedule.toLowerCase());
@@ -75,7 +79,7 @@ export async function readSystemHealthCloudState({ request, projectId, databaseI
   const completedCheckIds = new Set();
   const databaseName = `projects/${projectId}/databases/${databaseId}`;
   // Firestore Admin list endpoints are not paginated; unreachable locations still make evidence incomplete.
-  async function read(id, url) {
+  async function read(id, url, schedulerPolicy = null) {
     try {
       const response = await request({ url, method: "GET", timeout: 15000, retry: false });
       if (!response?.data || typeof response.data !== "object") throw new Error("Missing metadata");
@@ -86,7 +90,9 @@ export async function readSystemHealthCloudState({ request, projectId, databaseI
       successfulReads.add(id);
       return response.data;
     } catch (error) {
-      checks.push({ id, ...classifyCloudReadError(error) });
+      const state = schedulerPolicy ? classifySchedulerState(null, schedulerPolicy, error) : classifyCloudReadError(error);
+      checks.push({ id, ...state });
+      if (!state.needsAttention) successfulReads.add(id);
       return null;
     }
   }
@@ -108,10 +114,10 @@ export async function readSystemHealthCloudState({ request, projectId, databaseI
   for (const policy of schedulers) {
     const name = `projects/${projectId}/locations/${region}/jobs/firebase-schedule-${policy.functionName}-${region}`;
     const id = `scheduler:${policy.functionName}`;
-    const job = await read(id, `https://cloudscheduler.googleapis.com/v1/${name}`);
+    const job = await read(id, `https://cloudscheduler.googleapis.com/v1/${name}`, policy);
     const state = job ? classifySchedulerState(job, policy) : checks.find((check) => check.id === id);
     if (job) checks.push({ id, name, ...state });
-    if (job && !state.needsAttention) completedCheckIds.add(id);
+    if (state && !state.needsAttention) completedCheckIds.add(id);
     if (policy.collection) workers[policy.collection] = state;
   }
   for (const id of ["firestore-database-metadata", "firestore-backup-schedules", "firestore-backups"]) {

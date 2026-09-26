@@ -6,10 +6,8 @@ import { syncDashboardFromSheets } from "../sync/syncDashboardFromSheets";
 import { syncLecturesRange } from "../sync/syncLecturesRange";
 import { pollManagerNotices } from "../sync/pollManagerNotices";
 import { processContactSyncJobs } from "../sync/processContactSyncJobs";
-import { processWriteQueue } from "../queue/processWriteQueue";
 import { createDueParkingDiscountJobs } from "../parking/parkingOperations";
 import { syncManagerStaffs } from "../sync/syncManagerStaffs";
-import { sendAttendanceReminder } from "../push/sendAttendanceReminder";
 import { getStaffByUid } from "../firestore/staffRepository";
 import { isManagerRole, requireManager, requireStaff } from "../security/authGuards";
 import { nowTimestamp } from "../utils/date";
@@ -18,16 +16,6 @@ import { callableOptions, longCallableOptions, longRequestOptions, scheduleOptio
 import type { StaffDoc } from "../types/models";
 import { queueActiveStaffContactSync, staffContactIdentityChanged } from "../sync/queueStaffContactSync";
 import { isMacMiniAdminSyncRequest } from "../sync/adminSyncRequestRouting";
-
-export const scheduledProcessWriteQueue = onSchedule(
-  {
-    ...scheduleOptions,
-    schedule: "every 1 minutes",
-  },
-  async () => {
-    await processWriteQueue();
-  },
-);
 
 export const scheduledProcessContactSyncJobs = onSchedule(
   {
@@ -52,16 +40,6 @@ export const queueStaffContactSync = onDocumentWritten(
   },
 );
 
-export const scheduledAttendanceReminder = onSchedule(
-  {
-    ...scheduleOptions,
-    schedule: "0 * * * *",
-  },
-  async () => {
-    await sendAttendanceReminder();
-  },
-);
-
 export const scheduledCreateParkingDiscountJobs = onSchedule(
   {
     ...scheduleOptions,
@@ -73,16 +51,6 @@ export const scheduledCreateParkingDiscountJobs = onSchedule(
       requestedByUid: "scheduler",
       scanMode: "scheduled_window",
     });
-  },
-);
-
-export const scheduledSyncDashboardDaily = onSchedule(
-  {
-    ...scheduleOptions,
-    schedule: "20 0 * * *",
-  },
-  async () => {
-    await syncDashboardFromSheets();
   },
 );
 

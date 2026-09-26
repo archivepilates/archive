@@ -44,7 +44,7 @@ import {
 } from "../runtime/functionOptions";
 import { redirectShortLinkHandler } from "../utils/shortLinks";
 import { REGION } from "../config/constants";
-import { notionToken } from "../config/secrets";
+import { googleDwdServiceAccountJson, notionToken, privateSurveyWebhookSecret } from "../config/secrets";
 
 const privateNotionEventOptions = {
   region: REGION,
@@ -70,6 +70,7 @@ export const syncPrivateLessonNotionFromRequest = onDocumentWritten(
 export const scheduledSyncPrivateSurveyResponses = onSchedule(
   {
     ...scheduleOptions,
+    secrets: [googleDwdServiceAccountJson, privateSurveyWebhookSecret],
     schedule: "every 10 minutes",
   },
   async () => {
@@ -100,6 +101,7 @@ export const scheduledProcessMissingSurveySubmissionAlerts = onSchedule(
 export const scheduledSyncPrivateSurveyNotion = onSchedule(
   {
     ...privateSurveyIntakeOptions,
+    secrets: [notionToken],
     schedule: "40 22 * * *",
   },
   async () => {
@@ -130,6 +132,7 @@ export const scheduledSendTodayPrivateLessonChartAlimtalks = onSchedule(
 export const scheduledSyncPrivateLessonNotionProjections = onSchedule(
   {
     ...privateLessonChartScheduleOptions,
+    secrets: [notionToken],
     schedule: "20 22 * * *",
   },
   async () => {
@@ -184,7 +187,10 @@ export const privateSurveyResponseView = onRequest(publicRequestOptions, private
 
 export const privateLessonChartApi = onRequest(privateLessonChartRequestOptions, privateLessonChartApiHandler);
 
-export const privateLessonReportView = onRequest(publicRequestOptions, privateLessonReportViewHandler);
+export const privateLessonReportView = onRequest(
+  { ...publicRequestOptions, secrets: [privateSurveyWebhookSecret] },
+  privateLessonReportViewHandler,
+);
 
 export const memberSignupContract = onRequest(publicDriveRequestOptions, memberSignupContractHandler);
 
@@ -193,7 +199,7 @@ export const onsiteWelcomeRequest = onRequest({ ...publicRequestOptions, secrets
 export const methodCueCardReview = onRequest(publicDriveRequestOptions, methodCueCardReviewHandler);
 
 export const notionPrivateLessonReportWebhook = onRequest(
-  privateLessonChartRequestOptions,
+  { ...privateLessonChartRequestOptions, secrets: [] },
   notionPrivateLessonReportWebhookHandler,
 );
 
@@ -210,6 +216,7 @@ export const processPrivateSurveyIntake = onDocumentCreated(
 export const syncPrivateLessonSessionFromRequest = onDocumentWritten(
   {
     ...privateSurveyIntakeOptions,
+    secrets: [],
     document: "privateLessonChartRequests/{requestId}",
   },
   syncPrivateLessonSessionOnRequestWrite,
@@ -218,6 +225,7 @@ export const syncPrivateLessonSessionFromRequest = onDocumentWritten(
 export const syncPrivateLessonSessionFromRecord = onDocumentWritten(
   {
     ...privateSurveyIntakeOptions,
+    secrets: [],
     document: "privateLessonChartRecords/{recordId}",
   },
   syncPrivateLessonSessionOnRecordWrite,

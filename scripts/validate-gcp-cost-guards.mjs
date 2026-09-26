@@ -4,7 +4,24 @@ import path from "node:path";
 import { fileURLToPath } from "node:url";
 
 const repoRoot = path.resolve(path.dirname(fileURLToPath(import.meta.url)), "..");
+const retiredSchedulers = ["scheduledProcessWriteQueue", "scheduledSyncDashboardDaily", "scheduledAttendanceReminder"];
 const checks = [
+  {
+    file: "firebase/kangsain-functions/functions/src/exports/sync.ts",
+    required: [
+      "export const scheduledProcessContactSyncJobs = onSchedule(",
+      "export const scheduledCreateParkingDiscountJobs = onSchedule(",
+      "export const syncDashboardNow = onRequest(",
+      "export const adminSyncLecturesRange = onCall(",
+      "export const processAdminSyncRequest = onDocumentCreated(",
+    ],
+    forbidden: retiredSchedulers,
+  },
+  {
+    file: "firebase/codebase-boundaries.json",
+    required: ['"scheduledProcessContactSyncJobs"', '"scheduledCreateParkingDiscountJobs"', '"syncDashboardNow"'],
+    forbidden: retiredSchedulers.map((name) => `"${name}"`),
+  },
   {
     file: "scripts/run-studiomate-excel-emergency-mode.mjs",
     required: ["privateSessionLedgerDelta", "affectedPrivateMemberIds", "--member-ids"],
@@ -76,10 +93,20 @@ const checks = [
   {
     file: "firebase/kangsain-functions/functions/src/social/socialContentOperations.ts",
     required: [
-      'where("status", "in", ["pending", "retry", "processing"]).limit(30)',
+      "loadDueSocialPublishJobs(jobCollection, now)",
+      "if (!isSocialPublishJobDue(job, now.toMillis())) return null;",
       'where("status", "==", "published").limit(50)',
       "socialPublishIdempotencyKey",
       'status: "manual_review"',
+    ],
+    forbidden: [],
+  },
+  {
+    file: "firebase/kangsain-functions/functions/src/social/socialDueJobs.ts",
+    required: [
+      '.where("nextRunAt", "<=", now)',
+      '.where("updatedAt", "<", Timestamp.fromMillis(now.toMillis() - 30 * 60_000))',
+      '.limit(30)',
     ],
     forbidden: [],
   },
@@ -222,6 +249,7 @@ console.log(
       ok: true,
       checkedFiles: checks.length + scheduleGuards.length + exactScheduleGuards.length,
       guards: [
+        "retired schedulers stay absent from source exports and ownership while replacement entrypoints remain",
         "hourly import cannot trigger full-month reconcile",
         "unchanged member and reservation documents are skipped",
         "instructor views do not depend on the latest source file name",

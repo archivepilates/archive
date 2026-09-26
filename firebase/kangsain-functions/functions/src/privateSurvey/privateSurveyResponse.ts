@@ -23,6 +23,7 @@ import { surveyDetailButtonUrlLengthIssue } from "../alimtalk/templateTargetRule
 import { sendAlimtalkLogEmail } from "../google/driveDocsMailer";
 import { ensureShortLink } from "../utils/shortLinks";
 import { isNotionPrivateSurveySyncConfigured, syncPrivateSurveyResponseToNotion } from "./notionSync";
+import { canSkipUnchangedSurveySheet } from "./sheetSyncCheckpoint";
 
 const PUBLIC_VIEW_BASE_URL =
   process.env.PRIVATE_SURVEY_VIEW_BASE_URL || "https://in.archivepilates.com/privateSurveyResponseView";
@@ -342,15 +343,39 @@ export async function syncPrivateSurveyResponsesFromSheet(): Promise<{ processed
     "https://www.googleapis.com/auth/spreadsheets",
     "https://www.googleapis.com/auth/drive.readonly",
   ]);
+  const checkpointRef = db.collection("syncStates").doc(
+    `privateSurveySheet_${stableHash(`${PRIVATE_SURVEY_SPREADSHEET_ID}:${PRIVATE_SURVEY_SHEET_NAME}`)}`,
+  );
+  let version: string | undefined;
+  try {
+    const metadata = await client.request<{ version?: string }>(
+      `https://www.googleapis.com/drive/v3/files/${encodeURIComponent(PRIVATE_SURVEY_SPREADSHEET_ID)}?fields=version&supportsAllDrives=true`,
+    );
+    version = metadata.version;
+    const checkpoint = await checkpointRef.get();
+    if (canSkipUnchangedSurveySheet(version, checkpoint.data(), Date.now())) {
+      logger.info("syncPrivateSurveyResponsesFromSheet unchanged", { processed: 0, skipped: 0 });
+      return { processed: 0, skipped: 0 };
+    }
+  } catch (error) {
+    // Metadata is an optimization only; legacy submissions must still be ingested.
+    logger.warn("Private survey sheet checkpoint unavailable; using full scan", {
+      error: error instanceof Error ? error.message : String(error),
+    });
+  }
   const rows = await readSurveySheet(client);
   if (!rows.length) return { processed: 0, skipped: 0 };
 
-  const headers = rows[0].map((value) => String(value || "").trim());
+  const existingHeaders = rows[0].map((value) => String(value || "").trim());
+  const headers = [...existingHeaders];
   const headerMap = ensureHeaderMap(headers);
-  await ensureSheetHeaders(client, headers, headerMap);
+  if (headers.some((header, index) => header !== existingHeaders[index])) {
+    await ensureSheetHeaders(client, headers, headerMap);
+  }
 
   let processed = 0;
   let skipped = 0;
+  let invalid = 0;
   for (let index = 1; index < rows.length; index += 1) {
     const rowNumber = index + 1;
     const row = rows[index] || [];
@@ -366,6 +391,7 @@ export async function syncPrivateSurveyResponsesFromSheet(): Promise<{ processed
     const memberName = firstFilled(answers, ["1. 성함을 입력해주세요"]);
     const memberPhone = normalizePhone(firstFilled(answers, ["2. 연락처를 입력해주세요"]));
     if (!memberName || !memberPhone) {
+      invalid += 1;
       await updateSheetOutput(client, rowNumber, headerMap, [
         "",
         "",
@@ -419,6 +445,17 @@ export async function syncPrivateSurveyResponsesFromSheet(): Promise<{ processed
       "",
     ]);
     processed += 1;
+  }
+  // Store only the pre-read revision after a clean scan. Concurrent edits or our
+  // output writes change the Drive version and force another scan next time.
+  if (version && !invalid) {
+    try {
+      await checkpointRef.set({ version, checkedAtMillis: Date.now() });
+    } catch (error) {
+      logger.warn("Private survey sheet checkpoint persistence unavailable; next run will rescan", {
+        error: error instanceof Error ? error.message : String(error),
+      });
+    }
   }
   logger.info("syncPrivateSurveyResponsesFromSheet completed", { processed, skipped });
   return { processed, skipped };
@@ -2257,7 +2294,7 @@ async function ensureSheetHeaders(
   const outputStart = Math.min(...OUTPUT_HEADERS.map((header) => headerMap[header]));
   const outputEnd = Math.max(...OUTPUT_HEADERS.map((header) => headerMap[header]));
   const range = `${columnName(outputStart + 1)}1:${columnName(outputEnd + 1)}1`;
-  await writeSheetValues(client, range, [OUTPUT_HEADERS]);
+  await writeSheetValues(client, range, [headers.slice(outputStart, outputEnd + 1)]);
 }
 
 function answersFromRow(headers: string[], row: string[]): Record<string, string> {

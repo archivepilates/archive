@@ -1,5 +1,6 @@
 import assert from "node:assert/strict";
 import test from "node:test";
+import { readFileSync } from "node:fs";
 import {
   classifyBackupState, classifyCloudReadError, classifyDatabaseProtection, classifyMcpReachability,
   classifySchedulerState, probeMcpEndpoints, readSystemHealthCloudState, SYSTEM_HEALTH_SCHEDULERS,
@@ -49,20 +50,52 @@ test("database protection missing or disabled is visibly attention-required", ()
   assert.equal(classifyDatabaseProtection({ ...database, deleteProtectionState: "DELETE_PROTECTION_DISABLED" })[0].needsAttention, true);
 });
 
-test("the exact three current workers must be ENABLED and the exact three legacy workers PAUSED", () => {
+test("the exact three current workers must be ENABLED and the exact three retired workers ABSENT", () => {
   assert.deepEqual(SYSTEM_HEALTH_SCHEDULERS.filter((policy) => policy.expectedState === "ENABLED").map((policy) => policy.functionName), [
     "scheduledProcessAlimtalkQueue", "scheduledProcessContactSyncJobs", "scheduledSyncPrivateSurveyResponses",
   ]);
-  assert.deepEqual(SYSTEM_HEALTH_SCHEDULERS.filter((policy) => policy.expectedState === "PAUSED" && policy.intentionallyRetired).map((policy) => policy.functionName), [
+  assert.deepEqual(SYSTEM_HEALTH_SCHEDULERS.filter((policy) => policy.expectedState === "ABSENT" && policy.intentionallyRetired).map((policy) => policy.functionName), [
     "scheduledProcessWriteQueue", "scheduledSyncDashboardDaily", "scheduledAttendanceReminder",
   ]);
   assert.equal(SYSTEM_HEALTH_SCHEDULERS.length, 6);
   for (const policy of SYSTEM_HEALTH_SCHEDULERS) {
-    const expected = classifySchedulerState({ state: policy.expectedState, schedule: "every 10 minutes" }, policy);
+    const expected = policy.intentionallyRetired
+      ? classifySchedulerState(null, policy, { response: { status: 404 } })
+      : classifySchedulerState({ state: "ENABLED", schedule: "every 10 minutes" }, policy);
     assert.equal(expected.needsAttention, false);
     assert.equal(expected.state, policy.intentionallyRetired ? "intentionally_retired" : "enabled");
     assert.equal(classifySchedulerState({ state: policy.expectedState === "ENABLED" ? "PAUSED" : "ENABLED" }, policy).needsAttention, true);
     assert.equal(classifySchedulerState(null, policy).needsAttention, true);
+  }
+});
+
+test("retired schedulers require explicit retirement policy and a 404, never a missing payload", () => {
+  for (const policy of SYSTEM_HEALTH_SCHEDULERS.filter((item) => item.intentionallyRetired)) {
+    for (const error of [{ response: { status: 404 } }, { code: 404 }, { code: "404" }]) {
+      assert.deepEqual(classifySchedulerState(null, policy, error), {
+        state: "intentionally_retired", actualState: "ABSENT", code: "404", needsAttention: false,
+      });
+      assert.equal(classifySchedulerState(null, { ...policy, intentionallyRetired: false }, error).needsAttention, true);
+      assert.equal(classifySchedulerState(null, { ...policy, expectedState: "ENABLED" }, error).needsAttention, true);
+    }
+    for (const job of [null, {}, { state: "PAUSED" }, { state: "ENABLED" }, { state: "ABSENT" }]) {
+      assert.equal(classifySchedulerState(job, policy).needsAttention, true);
+    }
+  }
+  assert.equal(classifyCloudReadError({ response: { status: 404 } }).needsAttention, true);
+});
+
+test("sync exports and ownership retire only the three schedulers and preserve other entrypoints", () => {
+  const source = readFileSync(new URL("../../firebase/kangsain-functions/functions/src/exports/sync.ts", import.meta.url), "utf8");
+  const manifest = JSON.parse(readFileSync(new URL("../../firebase/codebase-boundaries.json", import.meta.url), "utf8"));
+  const remaining = ["scheduledProcessContactSyncJobs", "queueStaffContactSync", "scheduledCreateParkingDiscountJobs",
+    "syncDashboardNow", "adminSyncLecturesRange", "adminSyncManagerStaffs", "adminPollManagerNotices", "processAdminSyncRequest"];
+  assert.deepEqual([...source.matchAll(/^export const (\w+)\s*=/gm)].map((match) => match[1]), remaining);
+  assert.deepEqual(manifest.targetCodebases["functions-sync"].owns, remaining);
+  const allOwned = Object.values(manifest.targetCodebases).flatMap((group) => group.owns);
+  for (const { functionName } of SYSTEM_HEALTH_SCHEDULERS.filter((policy) => policy.intentionallyRetired)) {
+    assert.equal(source.includes(functionName), false);
+    assert.equal(allOwned.includes(functionName), false);
   }
 });
 
@@ -81,15 +114,21 @@ test("enabled workers require the full ten-minute cadence, not merely enabled st
       assert.equal(result.expectedSchedule, "*/10 * * * * or every 10 minutes");
     }
   }
-  for (const policy of SYSTEM_HEALTH_SCHEDULERS.filter((item) => item.expectedState === "PAUSED")) {
-    assert.equal(classifySchedulerState({ state: "PAUSED", schedule: "20 0 * * *" }, policy).state, "intentionally_retired");
-  }
 });
 
-test("permission unavailable is never quietly classified as healthy or retired", () => {
-  for (const error of [{ code: 7 }, { code: "PERMISSION_DENIED" }, { response: { status: 403 } }]) {
-    assert.equal(classifyCloudReadError(error).state, "permission_unavailable");
-    const result = classifySchedulerState(null, { expectedState: "PAUSED", intentionallyRetired: true }, error);
+test("permission and network failures remain distinct and never prove retirement", () => {
+  for (const [error, state] of [
+    [{ code: 7 }, "permission_unavailable"],
+    [{ code: "PERMISSION_DENIED" }, "permission_unavailable"],
+    [{ response: { status: 403 }, code: 404 }, "permission_unavailable"],
+    [{ response: { status: 401 } }, "permission_unavailable"],
+    [{ code: "ETIMEDOUT" }, "metadata_unavailable"],
+    [{ code: "ECONNRESET" }, "metadata_unavailable"],
+    [{ response: { status: 500 } }, "metadata_unavailable"],
+    [{ code: "NOT_FOUND" }, "metadata_unavailable"],
+  ]) {
+    const result = classifySchedulerState(null, { expectedState: "ABSENT", intentionallyRetired: true }, error);
+    assert.equal(result.state, state);
     assert.equal(result.needsAttention, true);
   }
 });
@@ -106,6 +145,7 @@ test("cloud reader performs only GET metadata requests and covers every expected
     if (options.url.includes("cloudscheduler")) {
       const policy = SYSTEM_HEALTH_SCHEDULERS.find((item) => options.url.includes(`${item.functionName}-`));
       assert.ok(policy);
+      if (policy.expectedState === "ABSENT") throw { response: { status: 404 } };
       return { data: { state: policy.expectedState, schedule: "*/10 * * * *" } };
     }
     return { data: database };
@@ -117,7 +157,57 @@ test("cloud reader performs only GET metadata requests and covers every expected
   ].map((name) => `https://cloudscheduler.googleapis.com/v1/projects/test/locations/asia-northeast3/jobs/firebase-schedule-${name}-asia-northeast3`));
   assert.equal(result.checks.every((row) => !row.needsAttention), true);
   assert.equal(result.workers.writeQueue.state, "intentionally_retired");
+  assert.equal(result.workers.writeQueue.actualState, "ABSENT");
   assert.equal(result.workers.contactSyncJobs.state, "enabled");
+  assert.equal(result.completedCheckIds.includes("cloud-metadata"), true);
+  for (const policy of SYSTEM_HEALTH_SCHEDULERS) {
+    assert.equal(result.completedCheckIds.includes(`scheduler:${policy.functionName}`), true);
+  }
+});
+
+test("scheduler read failures cannot complete checks or hide behind retired queue mapping", async () => {
+  for (const policy of SYSTEM_HEALTH_SCHEDULERS) {
+    for (const [error, state] of [
+      [{ response: { status: 403 } }, "permission_unavailable"],
+      [{ code: "ETIMEDOUT" }, "metadata_unavailable"],
+      ...(policy.expectedState === "ENABLED" ? [[{ response: { status: 404 } }, "metadata_unavailable"]] : []),
+    ]) {
+      const result = await readSystemHealthCloudState({ projectId: "test", nowMs, schedulers: [policy], request: async ({ url }) => {
+        if (url.endsWith("/backupSchedules")) return { data: { backupSchedules: [schedule()] } };
+        if (url.endsWith("/backups")) return { data: { backups: [backup()] } };
+        if (url.includes("cloudscheduler")) throw error;
+        return { data: database };
+      } });
+      const id = `scheduler:${policy.functionName}`;
+      const check = result.checks.find((item) => item.id === id);
+      assert.equal(check.state, state);
+      assert.equal(check.needsAttention, true);
+      assert.equal(result.completedCheckIds.includes(id), false);
+      assert.equal(result.completedCheckIds.includes("cloud-metadata"), false);
+      if (policy.collection) assert.equal(result.workers[policy.collection].state, state);
+    }
+  }
+});
+
+test("retired Scheduler presence and incomplete responses stay attention-required", async () => {
+  const policy = SYSTEM_HEALTH_SCHEDULERS.find((item) => item.collection === "writeQueue");
+  for (const [response, expectedState] of [
+    [{ data: { state: "PAUSED" } }, "unexpected_scheduler_state"],
+    [{ data: { state: "ENABLED", schedule: "every 1 minutes" } }, "unexpected_scheduler_state"],
+    [{ data: {} }, "unexpected_scheduler_state"],
+    [{ data: null }, "metadata_unavailable"],
+    [{ data: { unreachable: ["test-region"] } }, "metadata_incomplete"],
+  ]) {
+    const result = await readSystemHealthCloudState({ projectId: "test", nowMs, schedulers: [policy], request: async ({ url }) => {
+      if (url.endsWith("/backupSchedules")) return { data: { backupSchedules: [schedule()] } };
+      if (url.endsWith("/backups")) return { data: { backups: [backup()] } };
+      if (url.includes("cloudscheduler")) return response;
+      return { data: database };
+    } });
+    assert.equal(result.workers.writeQueue.state, expectedState);
+    assert.equal(result.workers.writeQueue.needsAttention, true);
+    assert.equal(result.completedCheckIds.includes(`scheduler:${policy.functionName}`), false);
+  }
 });
 
 test("metadata reads expose a cadence mismatch and block worker health without extra queries", async () => {
@@ -129,6 +219,7 @@ test("metadata reads expose a cadence mismatch and block worker health without e
     if (url.endsWith("/backups")) return { data: { backups: [backup()] } };
     if (url.includes("cloudscheduler")) {
       const policy = SYSTEM_HEALTH_SCHEDULERS.find((item) => url.includes(`${item.functionName}-`));
+      if (policy.expectedState === "ABSENT") throw { response: { status: 404 } };
       return { data: { state: policy.expectedState, schedule: "every 60 minutes" } };
     }
     return { data: database };

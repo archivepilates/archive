@@ -755,14 +755,14 @@ async function applyPlans({ lectures, bookings, reservationOnlyProfiles, staleBo
 
 async function rebuildInstructorViews(staffDates) {
   for (const item of staffDates) {
-    const [lecturesSnap, bookingsSnap] = await Promise.all([
-      db.collection("lectures").where("studioId", "==", STUDIO_ID).where("staffId", "==", item.staffId).where("date", "==", item.date).get(),
-      db.collection("bookings").where("studioId", "==", STUDIO_ID).where("staffId", "==", item.staffId).where("lectureDate", "==", item.date).get(),
-    ]);
+    const lecturesSnap = await db.collection("lectures").where("studioId", "==", STUDIO_ID).where("staffId", "==", item.staffId).where("date", "==", item.date).get();
     const lectures = lecturesSnap.docs
       .map((doc) => doc.data())
       .filter((lecture) => lecture.status !== "deleted");
     const lectureIds = new Set(lectures.map((lecture) => lecture.lectureId).filter(Boolean));
+    const bookingsSnap = lectureIds.size
+      ? await db.collection("bookings").where("studioId", "==", STUDIO_ID).where("staffId", "==", item.staffId).where("lectureDate", "==", item.date).get()
+      : { docs: [] };
     const bookings = bookingsSnap.docs
       .map((doc) => doc.data())
       .filter((booking) => lectureIds.has(booking.lectureId));

@@ -67,12 +67,9 @@
       "physicalSource": "firebase/function-codebases/sync",
       "sourceEntrypoint": "firebase/kangsain-functions/functions/src/exports/sync.ts",
       "owns": [
-        "scheduledProcessWriteQueue",
         "scheduledProcessContactSyncJobs",
         "queueStaffContactSync",
-        "scheduledAttendanceReminder",
         "scheduledCreateParkingDiscountJobs",
-        "scheduledSyncDashboardDaily",
         "syncDashboardNow",
         "adminSyncLecturesRange",
         "adminSyncManagerStaffs",

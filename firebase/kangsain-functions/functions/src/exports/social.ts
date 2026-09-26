@@ -38,7 +38,7 @@ export const getInstagramContentDashboard = onCall(socialCallableOptions, async 
   }
 });
 
-export const saveInstagramContentDraft = onCall(socialCallableOptions, async (request) => {
+export const saveInstagramContentDraft = onCall({ ...socialCallableOptions, secrets: [] }, async (request) => {
   try {
     const staff = await requireStaff(request);
     requireManager(staff);
@@ -58,7 +58,7 @@ export const approveInstagramContent = onCall(socialCallableOptions, async (requ
   }
 });
 
-export const holdInstagramContent = onCall(socialCallableOptions, async (request) => {
+export const holdInstagramContent = onCall({ ...socialCallableOptions, secrets: [] }, async (request) => {
   try {
     const staff = await requireStaff(request);
     requireManager(staff);

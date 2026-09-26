@@ -73,6 +73,8 @@ import {
 import { toHttpsError } from "../utils/errors";
 import { getVideoWatchDashboardHandler, videoWatchEventApiHandler } from "../videoAnalytics/videoWatchAnalytics";
 
+const secretlessCallableOptions = { ...callableOptions, secrets: [] };
+
 const parkingDiscountJobOptions = {
   region: REGION,
   document: "parkingDiscountJobs/{jobId}",
@@ -98,7 +100,7 @@ const videoWatchRequestOptions = {
   maxInstances: 3,
 };
 
-export const getInstructorHome = onCall(callableOptions, async (request) => {
+export const getInstructorHome = onCall(secretlessCallableOptions, async (request) => {
   try {
     return await getInstructorHomeHandler(request);
   } catch (err) {
@@ -106,7 +108,7 @@ export const getInstructorHome = onCall(callableOptions, async (request) => {
   }
 });
 
-export const loginStaffWithPin = onCall(callableOptions, async (request) => {
+export const loginStaffWithPin = onCall(secretlessCallableOptions, async (request) => {
   try {
     return await loginStaffWithPinHandler(request);
   } catch (err) {
@@ -114,7 +116,7 @@ export const loginStaffWithPin = onCall(callableOptions, async (request) => {
   }
 });
 
-export const setupStaffPinWithTempCode = onCall(callableOptions, async (request) => {
+export const setupStaffPinWithTempCode = onCall(secretlessCallableOptions, async (request) => {
   try {
     return await setupStaffPinWithTempCodeHandler(request);
   } catch (err) {
@@ -122,7 +124,7 @@ export const setupStaffPinWithTempCode = onCall(callableOptions, async (request)
   }
 });
 
-export const submitBookingAttendance = onCall(callableOptions, async (request) => {
+export const submitBookingAttendance = onCall(secretlessCallableOptions, async (request) => {
   try {
     return await submitBookingAttendanceHandler(request);
   } catch (err) {
@@ -130,7 +132,7 @@ export const submitBookingAttendance = onCall(callableOptions, async (request) =
   }
 });
 
-export const submitMemberMemo = onCall(callableOptions, async (request) => {
+export const submitMemberMemo = onCall(secretlessCallableOptions, async (request) => {
   try {
     return await submitMemberMemoHandler(request);
   } catch (err) {
@@ -138,7 +140,7 @@ export const submitMemberMemo = onCall(callableOptions, async (request) => {
   }
 });
 
-export const getMemberMemoHistory = onCall(callableOptions, async (request) => {
+export const getMemberMemoHistory = onCall(secretlessCallableOptions, async (request) => {
   try {
     return await getMemberMemoHistoryHandler(request);
   } catch (err) {
@@ -146,7 +148,7 @@ export const getMemberMemoHistory = onCall(callableOptions, async (request) => {
   }
 });
 
-export const searchMembers = onCall(callableOptions, async (request) => {
+export const searchMembers = onCall(secretlessCallableOptions, async (request) => {
   try {
     return await searchMembersHandler(request);
   } catch (err) {
@@ -154,7 +156,7 @@ export const searchMembers = onCall(callableOptions, async (request) => {
   }
 });
 
-export const lookupKioskCheckin = onCall(callableOptions, async (request) => {
+export const lookupKioskCheckin = onCall(secretlessCallableOptions, async (request) => {
   try {
     return await lookupKioskCheckinHandler(request);
   } catch (err) {
@@ -162,7 +164,7 @@ export const lookupKioskCheckin = onCall(callableOptions, async (request) => {
   }
 });
 
-export const submitKioskCheckin = onCall(callableOptions, async (request) => {
+export const submitKioskCheckin = onCall(secretlessCallableOptions, async (request) => {
   try {
     return await submitKioskCheckinHandler(request);
   } catch (err) {
@@ -170,7 +172,7 @@ export const submitKioskCheckin = onCall(callableOptions, async (request) => {
   }
 });
 
-export const getKioskParkingJobStatus = onCall(callableOptions, async (request) => {
+export const getKioskParkingJobStatus = onCall(secretlessCallableOptions, async (request) => {
   try {
     return await getKioskParkingJobStatusHandler(request);
   } catch (err) {
@@ -178,7 +180,7 @@ export const getKioskParkingJobStatus = onCall(callableOptions, async (request) 
   }
 });
 
-export const registerParkingVehicle = onCall(callableOptions, async (request) => {
+export const registerParkingVehicle = onCall(secretlessCallableOptions, async (request) => {
   try {
     return await registerParkingVehicleHandler(request);
   } catch (err) {
@@ -186,7 +188,7 @@ export const registerParkingVehicle = onCall(callableOptions, async (request) =>
   }
 });
 
-export const getParkingDashboard = onCall(callableOptions, async (request) => {
+export const getParkingDashboard = onCall(secretlessCallableOptions, async (request) => {
   try {
     return await getParkingDashboardHandler(request);
   } catch (err) {
@@ -194,7 +196,7 @@ export const getParkingDashboard = onCall(callableOptions, async (request) => {
   }
 });
 
-export const removeParkingVehicle = onCall(callableOptions, async (request) => {
+export const removeParkingVehicle = onCall(secretlessCallableOptions, async (request) => {
   try {
     return await removeParkingVehicleHandler(request);
   } catch (err) {
@@ -202,7 +204,7 @@ export const removeParkingVehicle = onCall(callableOptions, async (request) => {
   }
 });
 
-export const runParkingAutoApplyNow = onCall(callableOptions, async (request) => {
+export const runParkingAutoApplyNow = onCall(secretlessCallableOptions, async (request) => {
   try {
     return await runParkingAutoApplyNowHandler(request);
   } catch (err) {
@@ -210,7 +212,7 @@ export const runParkingAutoApplyNow = onCall(callableOptions, async (request) =>
   }
 });
 
-export const registerFcmToken = onCall(callableOptions, async (request) => {
+export const registerFcmToken = onCall(secretlessCallableOptions, async (request) => {
   try {
     return await registerFcmTokenHandler(request);
   } catch (err) {
@@ -218,7 +220,7 @@ export const registerFcmToken = onCall(callableOptions, async (request) => {
   }
 });
 
-export const getInstructorEvaluationQuiz = onCall(callableOptions, async (request) => {
+export const getInstructorEvaluationQuiz = onCall(secretlessCallableOptions, async (request) => {
   try {
     const staff = await requireStaff(request);
     return await getInstructorEvaluationQuizHandler(request, staff);
@@ -227,7 +229,7 @@ export const getInstructorEvaluationQuiz = onCall(callableOptions, async (reques
   }
 });
 
-export const submitInstructorEvaluationQuiz = onCall(callableOptions, async (request) => {
+export const submitInstructorEvaluationQuiz = onCall({ ...callableOptions, secrets: [googleDwdServiceAccountJson] }, async (request) => {
   try {
     const staff = await requireStaff(request);
     return await submitInstructorEvaluationQuizHandler(request, staff);
@@ -236,7 +238,7 @@ export const submitInstructorEvaluationQuiz = onCall(callableOptions, async (req
   }
 });
 
-export const adjustInstructorEvaluationEssayScore = onCall(callableOptions, async (request) => {
+export const adjustInstructorEvaluationEssayScore = onCall(secretlessCallableOptions, async (request) => {
   try {
     const staff = await requireStaff(request);
     return await adjustInstructorEvaluationEssayScoreHandler(request, staff);
@@ -246,7 +248,7 @@ export const adjustInstructorEvaluationEssayScore = onCall(callableOptions, asyn
 });
 
 export const instructorApplicantEvaluationApi = onRequest(
-  publicRequestOptions,
+  { ...publicRequestOptions, secrets: [googleDwdServiceAccountJson] },
   instructorApplicantEvaluationApiHandler,
 );
 
@@ -266,7 +268,7 @@ export const instructorLessonParkingPreRegistrationApi = onRequest(
 
 export const videoWatchEventApi = onRequest(videoWatchRequestOptions, videoWatchEventApiHandler);
 
-export const getVideoWatchDashboard = onCall(callableOptions, async (request) => {
+export const getVideoWatchDashboard = onCall(secretlessCallableOptions, async (request) => {
   try {
     const staff = await requireStaff(request);
     requireManager(staff);
@@ -276,7 +278,7 @@ export const getVideoWatchDashboard = onCall(callableOptions, async (request) =>
   }
 });
 
-export const getRecommendedMealProgramReview = onCall(callableOptions, async (request) => {
+export const getRecommendedMealProgramReview = onCall(secretlessCallableOptions, async (request) => {
   try {
     const staff = await requireStaff(request);
     requireManager(staff);
@@ -296,7 +298,7 @@ export const generateRecommendedMealProgramDraft = onCall(recommendedMealCallabl
   }
 });
 
-export const saveRecommendedMealProgramDraft = onCall(callableOptions, async (request) => {
+export const saveRecommendedMealProgramDraft = onCall(secretlessCallableOptions, async (request) => {
   try {
     const staff = await requireStaff(request);
     requireManager(staff);
@@ -324,7 +326,7 @@ export const processParkingDiscountJob = onDocumentCreated(parkingDiscountJobOpt
   await processParkingDiscountJobSnapshot(snap);
 });
 
-export const adminIssueStaffTempCode = onCall(callableOptions, async (request) => {
+export const adminIssueStaffTempCode = onCall(secretlessCallableOptions, async (request) => {
   try {
     const staff = await requireStaff(request);
     return await adminIssueStaffTempCodeHandler(request, staff);
@@ -333,7 +335,7 @@ export const adminIssueStaffTempCode = onCall(callableOptions, async (request) =
   }
 });
 
-export const getRefundMemberTickets = onCall(callableOptions, async (request) => {
+export const getRefundMemberTickets = onCall(secretlessCallableOptions, async (request) => {
   try {
     return await getRefundMemberTicketsHandler(request);
   } catch (err) {
@@ -341,7 +343,7 @@ export const getRefundMemberTickets = onCall(callableOptions, async (request) =>
   }
 });
 
-export const previewRefund = onCall(callableOptions, async (request) => {
+export const previewRefund = onCall(secretlessCallableOptions, async (request) => {
   try {
     return await previewRefundHandler(request);
   } catch (err) {
@@ -349,7 +351,7 @@ export const previewRefund = onCall(callableOptions, async (request) => {
   }
 });
 
-export const sendRefundAgreement = onCall(callableOptions, async (request) => {
+export const sendRefundAgreement = onCall(secretlessCallableOptions, async (request) => {
   try {
     return await sendRefundAgreementHandler(request);
   } catch (err) {
@@ -357,7 +359,7 @@ export const sendRefundAgreement = onCall(callableOptions, async (request) => {
   }
 });
 
-export const queueRefundStudioMateSms = onCall(callableOptions, async (request) => {
+export const queueRefundStudioMateSms = onCall(secretlessCallableOptions, async (request) => {
   try {
     return await queueRefundStudioMateSmsHandler(request);
   } catch (err) {
@@ -365,7 +367,7 @@ export const queueRefundStudioMateSms = onCall(callableOptions, async (request) 
   }
 });
 
-export const getInstructorLessonRegistrationDashboard = onCall(callableOptions, async (request) => {
+export const getInstructorLessonRegistrationDashboard = onCall(secretlessCallableOptions, async (request) => {
   try {
     return await getInstructorLessonRegistrationDashboardHandler(request);
   } catch (err) {
@@ -373,7 +375,7 @@ export const getInstructorLessonRegistrationDashboard = onCall(callableOptions, 
   }
 });
 
-export const operatorCreateInstructorLessonRegistration = onCall(callableOptions, async (request) => {
+export const operatorCreateInstructorLessonRegistration = onCall(secretlessCallableOptions, async (request) => {
   try {
     return await operatorCreateInstructorLessonRegistrationHandler(request);
   } catch (err) {
