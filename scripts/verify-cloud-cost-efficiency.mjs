@@ -35,6 +35,9 @@ try {
       assert.deepEqual(actual, expected, `${name} secret bindings differ`);
       report.functions.push({ name, state: live.state, secretCount: actual.length, updateTime: live.updateTime });
     }
+    // Each physical codebase initializes its own default app in production.
+    const { getApps, deleteApp } = require("firebase-admin/app");
+    for (const app of getApps()) await deleteApp(app);
   }
   for (const name of retired) {
     assert.ok(!functions.some((item) => item.name.endsWith(`/${name}`)), `${name} still exists`);
