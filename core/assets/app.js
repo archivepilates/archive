@@ -1251,6 +1251,33 @@ async function getStudioCollectionBy(db, firestore, collectionName, orderField =
     .sort((a, b) => String(b[orderField] || "").localeCompare(String(a[orderField] || "")));
 }
 
+async function getRecentStudioCollectionBy(db, firestore, collectionName, orderField = "updatedAt", maxItems = 1000) {
+  const collectionRef = firestore.collection(db, collectionName);
+  try {
+    const snapshot = await firestore.getDocs(
+      firestore.query(
+        collectionRef,
+        firestore.where("studioId", "==", STUDIO_ID),
+        firestore.orderBy(orderField, "desc"),
+        firestore.limit(maxItems),
+      ),
+    );
+    return snapshot.docs.map((docSnapshot) => ({ id: docSnapshot.id, ...docSnapshot.data() }));
+  } catch (error) {
+    if (isPermissionDenied(error)) throw error;
+    const snapshot = await firestore.getDocs(
+      firestore.query(
+        collectionRef,
+        firestore.where("studioId", "==", STUDIO_ID),
+        firestore.limit(maxItems),
+      ),
+    );
+    return snapshot.docs
+      .map((docSnapshot) => ({ id: docSnapshot.id, ...docSnapshot.data() }))
+      .sort((a, b) => timestampMs(b[orderField]) - timestampMs(a[orderField]));
+  }
+}
+
 async function getBookingsForLessonWindow(db, firestore) {
   const rangeStart = startOfLocalDay(new Date());
   rangeStart.setDate(rangeStart.getDate() - 1);
@@ -7416,9 +7443,9 @@ async function loadMemberRegistrationDashboard(runtime) {
     runtime.getDocs(
       runtime.query(runtime.collection(db, hintPath), runtime.orderBy("discoveredAt", "desc"), runtime.limit(100)),
     ),
-    getRecentCollectionBy(db, runtime, "studiomateMembershipContracts", "updatedAt", 100),
-    getRecentCollectionBy(db, runtime, "alimtalkCandidates", "updatedAt", 250),
-    getRecentCollectionBy(db, runtime, "alimtalkSends", "updatedAt", 250),
+    getRecentStudioCollectionBy(db, runtime, "studiomateMembershipContracts", "updatedAt", 100),
+    getRecentStudioCollectionBy(db, runtime, "alimtalkCandidates", "updatedAt", 250),
+    getRecentStudioCollectionBy(db, runtime, "alimtalkSends", "updatedAt", 250),
   ]);
   const hints = hintsSnapshot.docs.map((snapshot) => ({ id: snapshot.id, ...snapshot.data() }));
   const welcomeCandidates = candidates.filter((item) => item.type === "membership_welcome");
@@ -7837,7 +7864,13 @@ function renderFallback(error, options = {}) {
 
 async function refresh() {
   const refreshButton = qs("refreshButton");
-  if (refreshButton) refreshButton.disabled = true;
+  const refreshButtonLabel = refreshButton?.textContent || "새로고침";
+  if (refreshButton) {
+    refreshButton.disabled = true;
+    refreshButton.setAttribute("aria-busy", "true");
+    refreshButton.textContent = "새로고침 중";
+  }
+  delete document.body.dataset.sourceHealth;
   setConnection("연결 중", "데이터 읽기 확인 중");
 
   try {
@@ -8154,7 +8187,11 @@ async function refresh() {
   } catch (error) {
     renderFallback(error, { requireLogin: !state.firebaseRuntime?.authClient?.currentUser });
   } finally {
-    if (refreshButton) refreshButton.disabled = false;
+    if (refreshButton) {
+      refreshButton.disabled = false;
+      refreshButton.removeAttribute("aria-busy");
+      refreshButton.textContent = refreshButtonLabel;
+    }
   }
 }
 

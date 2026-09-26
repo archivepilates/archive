@@ -82,6 +82,7 @@ const required = [
       "member-registration/",
       "loadMemberRegistrationDashboard",
       "renderMemberRegistrationDashboard",
+      "getRecentStudioCollectionBy",
       "invalid_payment_transaction",
       'data-section="instructor-lessons"',
       "enhanceRuleSections",
@@ -459,6 +460,18 @@ for (const item of required) {
     if (!expected.pattern.test(content)) {
       failures.push({ file: item.file, label: item.label, missing: expected.label });
     }
+  }
+}
+
+const coreRuntime = fs.readFileSync(path.join(repoRoot, "core/assets/app.js"), "utf8");
+for (const collectionName of ["studiomateMembershipContracts", "alimtalkCandidates", "alimtalkSends"]) {
+  const studioScopedRead = `getRecentStudioCollectionBy(db, runtime, "${collectionName}"`;
+  if (!coreRuntime.includes(studioScopedRead)) {
+    failures.push({
+      file: "core/assets/app.js",
+      label: "member registration studio-scoped source reads",
+      missing: studioScopedRead,
+    });
   }
 }
 
