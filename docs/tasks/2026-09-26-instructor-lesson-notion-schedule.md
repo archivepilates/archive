@@ -2,9 +2,9 @@
 
 ## Scope and state
 
-- Implemented locally; not deployed or pushed in this task.
+- Implementation commit `f09ccd0` promoted to origin/main and deployed on 2026-09-26 with prior seat-count commit `6151f38`.
 - Corrected the October Notion application examples from September 19/20 to October 24/25 and read back the saved text.
-- No member records, tickets, reservations, Alimtalk candidates or sends changed.
+- Initial implementation did not change member records. Subsequent explicit deployment/send approval covered three October registrations. A separate explicit approval resumed the stalled new-member registration after live identity verification; no duplicate member or class booking was created.
 
 ## Source contract
 
@@ -32,3 +32,11 @@
 - NOTION_TOKEN must be bound on the new endpoint, callable and ticket trigger; queue workers already bind it.
 - Deploy and verify the calendar endpoint/Hosting routes before unblocking pending registrations. Do not mark pending Kim Jiwoo confirmation as sent without provider evidence.
 - After approved deployment, independently verify live calendar HTML/ICS and perform an authorized pending-registration retry with canonical duplicate checks.
+
+## Approved deployment and recovery results
+
+- functions-app and functions-alimtalk deployed successfully. Other three codebases were built/validated but not deployed: the broad affected detector conservatively includes them for manifest/package edits; no shared runtime behavior changed.
+- ARCHIVE IN primary/custom Hosting deployed. Live HTML/ICS verified for October 24 on both domains, and the full ARCHIVE IN release canary passed.
+- GitHub Actions Functions Affected Check run `36247583400` passed.
+- Final provider evidence, operator follow-up and scoped recovery details: `docs/reports/2026-09-26-instructor-lesson-confirmation-release.html`.
+- CORE operating rules updated for the final Hosting release. No Firestore rules/index change was deployed.

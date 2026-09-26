@@ -1,0 +1,15 @@
+<!doctype html>
+<html lang="ko"><meta charset="utf-8"><meta name="viewport" content="width=device-width,initial-scale=1">
+<title>10월 강사레슨 안내 복구 · ARCHIVE PILATES</title>
+<style>*{box-sizing:border-box}body{margin:0;color:#202321;background:#fff;font:16px/1.7 system-ui,sans-serif}main{max-width:64rem;margin:auto;padding:2rem 1.25rem}h1{font-size:26px}h2{font-size:19px;margin-top:2rem}p{max-width:70ch}table{width:100%;border-collapse:collapse}th,td{padding:12px;text-align:left;border-bottom:1px solid #d6dad7;overflow-wrap:anywhere}th{background:#f2f5f3}code{overflow-wrap:anywhere}a{color:#176849}.evidence{font-size:13px}section{border-top:1px solid #d6dad7;margin-top:2rem;padding-top:1rem}@media(max-width:500px){th,td{padding:8px;font-size:14px}}</style>
+<main><p>ARCHIVE PILATES · 2026-09-26</p><h1>10월 강사레슨 안내 복구</h1>
+<p>기존 노션 월별 안내 페이지에서 일정을 읽는 자동화를 배포하고, 10월 24일 수강생 3명의 예약확정 안내를 각 1회 발송했습니다. 새 노션 DB나 자동 수업 예약은 추가하지 않았습니다.</p>
+<h2>발송 결과</h2><table><thead><tr><th>수강생</th><th>발송 시각(KST)</th><th>확인</th></tr></thead><tbody>
+<tr><td>김지우</td><td>23:17:01</td><td>SOLAPI 4000 / COMPLETE</td></tr>
+<tr><td>김윤화</td><td>23:17:06</td><td>SOLAPI 4000 / COMPLETE</td></tr>
+<tr><td>백소진</td><td>23:18:21</td><td>SOLAPI 4000 / COMPLETE</td></tr></tbody></table>
+<p>발송 전 동일 수업 후보·원장·SOLAPI 이력을 대조했습니다. 김윤화님의 기존 9월 발송은 별도 수업이므로 보존했습니다. 기존 발송 건은 재실행 시 다시 보내지 않았습니다.</p>
+<h2>백소진 등록 복구</h2><p>원인은 일정 설정 누락이 아니라 StudioMate 회원 생성 응답 시간초과였습니다. 실화면에서 동일 전화번호의 기존 생성 회원·강사회원 등급·당일 가입·수강권 미발급을 확인했습니다. 사용자 승인 후 해당 회원에 수강권을 발급하고 안내를 발송했습니다. 이폼싸인 가입서는 자동 발송되어 서명 대기 중이며, 서명 완료로 처리하지 않았습니다.</p>
+<h2>배포·검증</h2><ul><li>Functions 구현: <code>f09ccd0</code>, 좌석 집계: <code>6151f38</code>, origin/main 승격.</li><li>배포 범위: functions-app, functions-alimtalk, ARCHIVE IN Hosting 및 CORE 운영규칙 Hosting. Firestore 규칙·인덱스는 변경하지 않음.</li><li>테스트 30개, 전체 코드베이스 빌드·경계검사·회귀방지·등록 릴리스 검사 통과.</li><li>GitHub Actions <code>36247583400</code> 성공.</li><li>실제 노션 10월 24·25일 13:00~15:10, 날짜별 정원 10명 및 A/B 수업 구성 확인.</li><li>실제 캘린더 HTML·ICS 양쪽 도메인 검증, ARCHIVE IN 전체 canary 통과. 캘린더 320·390·768·1440px 화면에서 넘침·이미지·버튼 크기 확인.</li></ul>
+<p><a href="https://in.archivepilates.com/method/notion-261024/calendar/">10월 24일 캘린더</a> · <a href="https://core.archivepilates.com/instructor-lessons/">CORE 강사레슨</a></p>
+<section class="evidence"><h2>감사 증거</h2><p>김지우: M4V202609262317018JRFJY4TVJ1BBOH<br>김윤화: M4V20260926231706INVHCJVTWVSWCHQ<br>백소진: M4V20260926231821VM4Q9V0PLPBMMU3<br>백소진 가입서 문서: 66408be50640447bbfe2c014bbe5187a</p><p>원천: instructorLessonRegistrations, alimtalkCandidates, alimtalkSends, SOLAPI 메시지 조회, StudioMate 실화면 및 이폼싸인 발송 큐 결과.</p></section></main></html>
