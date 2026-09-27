@@ -1,0 +1,58 @@
+/* Public presentation only. Native purchase, option and permission controls stay intact. */
+html body #doz_header_wrap #doz_header :is(.ap-shop-nav-label,.ap-shop-visual-label) > :is(.ap-nav-en,.ap-shop-pill-en) { display:none!important; }
+html body #doz_header_wrap #doz_header :is(.ap-shop-nav-link,.ap-shop-visual-link):is(:hover,:focus-visible) :is(.ap-nav-ko,.ap-shop-pill-ko),
+html body #doz_header_wrap #doz_header :is(.ap-nav-ko,.ap-shop-pill-ko) { opacity:1!important; transform:none!important; }
+html body #doz_header_wrap #doz_header :is(.ap-shop-nav-link,.ap-shop-visual-link):is(:hover,:focus-visible) { color:#a7352b!important; text-decoration:underline!important; text-underline-offset:6px; }
+html[data-ap-renewal] body :is(.ap-listing-intro,.apvd-filters,.apvd-curated,.ap-knitido-brand-intro,.archive-online-product) { color:#242424; letter-spacing:0; }
+html[data-ap-renewal] body .ap-listing-intro { padding-top:24px!important; padding-bottom:18px!important; margin-bottom:12px!important; }
+html[data-ap-renewal] body .ap-listing-intro h1 { font-size:30px!important; line-height:1.3!important; }
+html[data-ap-renewal] body .ap-listing-intro p { font-size:15px!important; line-height:1.65!important; }
+html[data-ap-video-discovery-route='list'] body .apvd-jump { display:none!important; }
+html[data-ap-video-discovery-route='list'] body .apvd-filters { padding-top:16px; margin-bottom:20px; scroll-margin-top:160px; }
+html[data-ap-video-discovery-route='list'] body .apvd-filters h2 { font-size:20px; }
+html[data-ap-video-discovery-route='list'] body .shop-grid .doz-timesale-wrap,
+html[data-ap-video-discovery-route='list'] body .shop-grid .prod_icon.timesale,
+html[data-ap-video-discovery-route='list'] body .shop-grid .prod_icon.sale { display:none!important; }
+html[data-ap-video-discovery-route='list'] body .shop-title { font-size:17px!important; font-weight:700!important; line-height:1.5!important; letter-spacing:0!important; }
+html[data-ap-renewal] body .sale_percentage { color:#a7352b!important; }
+html[data-ap-renewal] body .ap-price-countdown--list { display:flex!important; flex-wrap:wrap; justify-content:space-between; align-items:center; gap:12px!important; padding:14px 18px!important; margin:0 0 20px!important; border:1px solid #dedede!important; border-radius:0!important; background:#fff!important; box-shadow:none!important; }
+html[data-ap-renewal] body .ap-price-countdown--list .ap-price-countdown__title { font-size:16px!important; }
+html[data-ap-renewal] body .ap-price-countdown--list .ap-price-countdown__copy p { font-size:13px!important; margin:3px 0 0!important; }
+html[data-ap-renewal] body .ap-price-countdown--list .ap-price-countdown__number { font-size:20px!important; min-width:2ch; }
+html[data-ap-renewal] body .apvd-curated { margin-top:48px!important; }
+html[data-ap-renewal] body .apvd-curated .ap-video-sales__section { padding:24px 0!important; }
+html[data-ap-renewal] body :is(.goods_detail,.goods_form) h1.view_tit { font-size:25px!important; line-height:1.45!important; letter-spacing:0!important; word-break:keep-all; overflow-wrap:anywhere; }
+html[data-ap-renewal] body .archive-online-product { max-width:960px; margin-inline:auto!important; }
+html[data-ap-renewal] body .archive-online-product > p:first-of-type { line-height:1.7!important; }
+html[data-ap-renewal] body :is(.archive-online-product,.archive-offline-product) > p:first-child { background:#f4f4f4!important; color:#333!important; border-color:#ddd!important; border-radius:2px!important; }
+html[data-ap-renewal] body .archive-offline-product > div:not([data-archive-pilates-tosspay]) { border:0!important; border-top:1px solid #dedede!important; background:#fff!important; padding:22px 0!important; }
+html[data-ap-renewal] body .archive-offline-product > div > div { border:0!important; padding:8px 0!important; }
+html[data-ap-renewal] body .archive-online-product [data-archive-pilates-watch-cta] { background:#f6f6f6!important; border:1px solid #dedede!important; border-radius:4px!important; padding:20px!important; }
+html[data-ap-renewal] body .archive-online-product [data-archive-pilates-watch-cta] a { background:#242424!important; color:#fff!important; border-color:#242424!important; min-height:44px; }
+html[data-ap-renewal] body .ap-knitido-brand-hero { padding:22px 0!important; align-items:center!important; gap:24px!important; }
+html[data-ap-renewal] body .ap-knitido-brand-intro h1 { font-size:36px!important; line-height:1.2!important; }
+html[data-ap-renewal] body .ap-knitido-brand-lead { font-size:16px!important; line-height:1.7!important; }
+html[data-ap-renewal] body .ap-knitido-brand-media img { height:auto!important; aspect-ratio:auto!important; object-fit:contain!important; }
+html[data-ap-renewal] body .ap-renewal-story { border-bottom:1px solid #ddd; padding:0 0 12px; margin:0 0 24px; }
+html[data-ap-renewal] body .ap-renewal-story > summary { display:list-item; min-height:48px; padding:14px 0; color:#333; font-size:15px; font-weight:700; cursor:pointer; }
+html[data-ap-renewal] body .ap-knitido-products-heading { margin-top:24px!important; }
+html[data-ap-renewal] body .ap-renewal-schedule { margin:20px 0; padding:16px 0; border-block:1px solid #ddd; font-size:15px; line-height:1.7; }
+html[data-ap-renewal] body .ap-renewal-schedule h2 { font-size:18px; margin:0 0 8px; }
+html[data-ap-renewal] body .ap-renewal-schedule a { display:inline-flex; align-items:center; min-height:44px; color:#a7352b; text-decoration:underline; text-underline-offset:3px; }
+html[data-ap-renewal] body :is(.ap-renewal-story,.ap-renewal-schedule) :focus-visible { outline:2px solid #a7352b; outline-offset:3px; }
+@media(max-width:991px) {
+  html[data-ap-renewal-home] body .ap-renewal-home-row { margin-inline:0!important; width:auto!important; }
+  html[data-ap-renewal-home] body .ap-renewal-home-row > .col-dz { max-width:100%; }
+}
+@media(max-width:767px) {
+  html[data-ap-renewal] body .ap-listing-intro h1 { font-size:26px!important; }
+  html[data-ap-renewal] body .apvd-fields { gap:10px; }
+  html[data-ap-renewal] body .shop-title { font-size:15px!important; }
+  html[data-ap-renewal] body :is(.goods_detail,.goods_form) h1.view_tit { font-size:22px!important; }
+  html[data-ap-renewal] body .ap-price-countdown--list .ap-price-countdown__clock { flex-direction:row!important; flex-wrap:wrap; gap:10px!important; }
+  html[data-ap-renewal] body .ap-price-countdown--list .ap-price-countdown__digits { gap:8px!important; }
+  html[data-ap-renewal] body .ap-knitido-brand-intro h1 { font-size:28px!important; }
+}
+@media(prefers-reduced-motion:reduce) {
+  html[data-ap-renewal] body :is(.ap-price-countdown,.apvd-curated) * { animation:none!important; transition:none!important; }
+}

@@ -43,6 +43,7 @@
 
   document.documentElement.setAttribute("data-ap-classroom",VERSION);
   document.documentElement.setAttribute("data-ap-classroom-v2",VERSION);
+  document.documentElement.setAttribute("data-ap-classroom-ux","2026-09-27a");
 
   var K="ap_classroom_relogin";
   // <archive-paid-video-classroom-catalog:begin>
@@ -107,15 +108,16 @@
       "html[data-ap-classroom-v2] body{margin:0!important;background:#fffdfa!important;color:#181614!important}",
       "html[data-ap-classroom-v2] #doz_header_wrap,html[data-ap-classroom-v2] #doz_header,html[data-ap-classroom-v2] #doz_footer_wrap,html[data-ap-classroom-v2] #doz_footer{display:none!important;height:0!important;min-height:0!important;margin:0!important;padding:0!important;overflow:hidden!important}",
       "html[data-ap-classroom-v2] #doz_content{display:block!important;min-height:100svh!important;margin:0!important;padding:0!important;background:#fffdfa!important}",
-      ".apc{box-sizing:border-box;min-height:100svh;padding:96px 18px 80px;font-family:inherit;background:#fffdfa}",
-      ".apc *{box-sizing:border-box}.apc-in{position:relative;max-width:1080px;margin:0 auto}.apc-ey{margin:0 0 18px;font-size:12px;letter-spacing:.12em;font-weight:900;color:#8c3425}",
-      ".apc h1{margin:0 0 14px;font-size:38px;line-height:1.18;color:#181614;letter-spacing:0}.apc-lead{margin:0 0 32px;max-width:680px;color:#625850;line-height:1.75}",
-      ".apc-loading{color:#756a62}.apc-grid{display:grid;grid-template-columns:repeat(3,minmax(0,1fr));gap:14px}",
-      ".apc-card{display:flex;min-width:0;min-height:150px;flex-direction:column;justify-content:space-between;padding:20px;border:1px solid #ded5cb;background:#fff;color:#181614!important;text-decoration:none!important;transition:transform .22s ease,border-color .22s ease}",
-      ".apc-card:hover{transform:translateY(-3px);border-color:#1e1b18}.apc-code{font-size:12px;letter-spacing:.1em;font-weight:900;color:#8c3425}.apc-card strong{font-size:18px;line-height:1.4;letter-spacing:0}.apc-card span:last-child{color:#756a62;font-weight:800}",
-      ".apc-empty{max-width:720px;padding:24px 26px;border:1px solid #e3d8ce;background:#fbf7f1;line-height:1.75;color:#1e1b18}.apc-empty strong{display:block;margin:0 0 8px;font-size:18px;line-height:1.45}.apc-empty-help{margin:0 0 4px;color:#675d55}.apc-account{margin:10px 0 0;font-size:13px;color:#7d7168;overflow-wrap:anywhere;word-break:break-word}",
-      ".apc-actions{display:flex;gap:10px;flex-wrap:wrap;margin-top:18px}.apc-btn{display:inline-flex;align-items:center;justify-content:center;min-height:44px;padding:10px 14px;border:1px solid #1e1b18;background:#1e1b18;color:#fff!important;text-decoration:none!important;font-weight:800}.apc-btn.sub{border-color:#d8cec3;background:#fff;color:#1e1b18!important}",
-      "@media(max-width:760px){.apc{padding:84px 15px 60px}.apc h1{font-size:28px}.apc-grid{grid-template-columns:1fr}.apc-card{min-height:142px}.apc-empty{padding:20px 18px}.apc-btn{width:100%}}",
+      ".apc{box-sizing:border-box;min-height:100svh;padding:64px 16px 60px;font-family:inherit;background:#fffdfa}",
+      ".apc *{box-sizing:border-box;letter-spacing:0}.apc [hidden]{display:none!important}.apc-in{position:relative;max-width:1080px;margin:0 auto;min-width:0}.apc-ey{margin:0 0 18px;font-size:12px;font-weight:800;color:#a52c32}",
+      ".apc-top{display:flex;align-items:center;justify-content:space-between;flex-wrap:wrap;gap:8px 16px;margin-bottom:20px}.apc-top .apc-ey{margin:0}.apc-exit{position:static;display:inline-flex;align-items:center;min-height:44px;padding:10px 0;color:#605c59!important;font-size:14px;line-height:1.5;text-decoration:underline!important;text-underline-offset:4px}.apc-exit:focus-visible{outline:3px solid #a52c32;outline-offset:4px}",
+      ".apc h1{margin:0 0 14px;font-size:30px;line-height:1.25;color:#181614}.apc-lead{margin:0 0 28px;max-width:65ch;color:#605c59;line-height:1.75}.apc p,.apc strong,.apc a,.apc button{overflow-wrap:anywhere;word-break:keep-all}",
+      ".apc-toolbar{display:flex;align-items:center;justify-content:space-between;gap:12px;flex-wrap:wrap;padding:18px 0;margin-bottom:20px;border-top:1px solid #dedbd7;border-bottom:1px solid #dedbd7}.apc-loading{flex:1 1 220px;min-width:0;margin:0;color:#605c59;line-height:1.6}.apc-grid{display:grid;grid-template-columns:minmax(0,1fr);gap:16px}.apc-count{margin:0 0 16px;font-size:16px;line-height:1.5;font-weight:800}",
+      ".apc-card{display:flex;min-width:0;min-height:196px;flex-direction:column;gap:18px;padding:20px;border:1px solid #dedbd7;border-radius:6px;background:#fff;color:#181614!important;text-decoration:none!important;transition:border-color .2s ease}.apc-card:hover{border-color:#a52c32}.apc-card:focus-visible,.apc-btn:focus-visible{outline:3px solid #a52c32;outline-offset:4px}",
+      ".apc-code{font-size:12px;font-weight:800;color:#a52c32}.apc-card strong{font-size:18px;line-height:1.5}.apc-watch{display:flex;align-items:center;justify-content:space-between;gap:12px;margin-top:auto;padding-top:16px;border-top:1px solid #eeeae6;color:#181614;font-size:15px;font-weight:800}.apc-watch b{font-size:22px;line-height:1;font-weight:400}",
+      ".apc-empty,.apc-error{max-width:720px;padding:8px 0 24px;line-height:1.75;color:#181614}.apc-empty strong,.apc-error strong{display:block;margin:0 0 8px;font-size:18px;line-height:1.5}.apc-empty-help,.apc-error p{margin:0 0 4px;color:#605c59}.apc-account{margin:10px 0 0;font-size:13px;color:#605c59;overflow-wrap:anywhere;word-break:break-word}",
+      ".apc-actions{display:flex;gap:10px;flex-wrap:wrap;margin-top:18px}.apc-btn{display:inline-flex;align-items:center;justify-content:center;min-height:44px;max-width:100%;padding:10px 14px;border:1px solid #181614;border-radius:4px;background:#181614;color:#fff!important;text-decoration:none!important;font:inherit;font-size:14px;font-weight:800;line-height:1.5;cursor:pointer}.apc-btn.sub{border-color:#dedbd7;background:#fff;color:#181614!important}.apc-btn:disabled{color:#605c59!important;background:#f3f4f2;border-color:#dedbd7;cursor:wait}.apc-retry{min-width:104px}",
+      "@media(min-width:640px){.apc{padding:80px 24px}.apc h1{font-size:36px}.apc-grid{grid-template-columns:repeat(2,minmax(0,1fr))}}@media(min-width:960px){.apc-grid{grid-template-columns:repeat(3,minmax(0,1fr))}}",
       "@media(prefers-reduced-motion:reduce){.apc-card{transition:none!important}}"
     ].join("");
     (document.head||document.documentElement).appendChild(s);
@@ -157,9 +159,10 @@
     var a=document.createElement("a");
     a.className="apc-card";
     a.href=x.path;
-    a.innerHTML='<span class="apc-code"></span><strong></strong><span>시청 페이지 열기</span>';
+    a.innerHTML='<span class="apc-code"></span><strong></strong><span class="apc-watch">수업 시청하기<b aria-hidden="true">\u2192</b></span>';
     a.querySelector(".apc-code").textContent=x.code;
     a.querySelector("strong").textContent=titleFor(x);
+    // Watch-page og:image can be the shared site logo; await verified per-lesson assets.
     return a;
   }
   function accountLabel(){
@@ -174,13 +177,30 @@
     var host=document.getElementById("doz_content")||document.querySelector("main")||document.body;
     if(!host){setTimeout(run,60);return}
     document.documentElement.setAttribute("data-ap-classroom-v2-ready",VERSION);
-    host.innerHTML='<section class="apc"><div class="apc-in"><p class="apc-ey">ARCHIVE PILATES · MY CLASSROOM</p><h1>내 강의실</h1><p class="apc-lead">구매했거나 수동으로 권한이 부여된 온라인 클래스만 표시됩니다.</p><div class="apc-loading">시청 가능한 수업을 확인하고 있습니다.</div><div class="apc-grid" hidden></div></div></section>';
+    var exit=document.querySelector('.apc-exit,.ap-classroom-exit,a[data-archive-pilates-classroom-exit],button[data-archive-pilates-classroom-exit]');
+    host.innerHTML='<section class="apc" aria-labelledby="apc-title"><div class="apc-in"><div class="apc-top"><p class="apc-ey">ARCHIVE PILATES · MY CLASSROOM</p></div><h1 id="apc-title">내 강의실</h1><p class="apc-lead">오늘도 나의 수업을 이어가세요.</p><div class="apc-toolbar"><p class="apc-loading" role="status" aria-live="polite" aria-atomic="true">시청 가능한 수업을 확인하고 있습니다.</p><button type="button" class="apc-btn sub apc-retry" disabled>다시 확인</button></div><div class="apc-error" hidden><strong></strong><p></p></div><h2 class="apc-count" hidden></h2><div class="apc-grid" hidden></div></div></section>';
 
     var sec=host.querySelector(".apc");
+    if(!exit){
+      exit=document.createElement("a");
+      exit.href="/17";
+      exit.textContent="나가기";
+    }
+    exit.classList.add("apc-exit");
+    exit.setAttribute("data-archive-pilates-classroom-exit","");
+    exit.setAttribute("aria-label","내 강의실 나가기");
+    sec.querySelector(".apc-top").appendChild(exit);
     var grid=sec.querySelector(".apc-grid");
     var loading=sec.querySelector(".apc-loading");
+    var retry=sec.querySelector(".apc-retry");
+    var error=sec.querySelector(".apc-error");
+    var countLabel=sec.querySelector(".apc-count");
     var available=[];
+    var cards=[];
+    var failures=[];
     var finished=false;
+    var busy=false;
+    var empty=null;
 
     function add(x,i,source){
       if(available[i])return false;
@@ -189,19 +209,29 @@
       return true;
     }
     function draw(){
-      grid.innerHTML="";
       var count=0;
       L.forEach(function(x,i){
         if(!available[i])return;
-        grid.appendChild(makeCard(x));
+        if(!cards[i]){
+          cards[i]=makeCard(x);
+          var next=cards.slice(i+1).filter(Boolean)[0]||null;
+          grid.insertBefore(cards[i],next);
+        }
         count++;
       });
-      if(count){
-        grid.hidden=false;
-        loading.textContent=finished?"":"추가 시청 권한을 확인하고 있습니다.";
-        loading.hidden=finished;
-      }
+      var failed=failures.filter(Boolean).length;
+      grid.hidden=!count;
+      countLabel.hidden=!count;
+      countLabel.textContent="시청 가능한 수업 "+count+"개";
+      retry.disabled=busy;
+      retry.textContent=busy?"확인 중":"다시 확인";
+      error.hidden=!finished||!failed;
+      error.querySelector("strong").textContent=count?"일부 수업을 확인하지 못했습니다.":"수업 목록을 불러오지 못했습니다.";
+      error.querySelector("p").textContent=count?"확인된 수업은 바로 시청할 수 있습니다. 다시 확인하면 나머지 수업을 조회합니다.":"연결이 불안정하거나 일시적인 오류가 발생했습니다. 로그아웃하지 않고 다시 확인해 주세요.";
+      loading.textContent=!finished?(count?"추가 시청 권한을 확인하고 있습니다.":"시청 가능한 수업을 확인하고 있습니다."):(failed?"수업 "+failed+"개의 조회에 실패했습니다.":(count?"시청 가능한 수업을 모두 확인했습니다.":"수업 목록 확인을 마쳤습니다."));
       document.documentElement.setAttribute("data-ap-classroom-card-count",String(count));
+      document.documentElement.setAttribute("data-ap-classroom-fetch-failures",String(failed));
+      document.documentElement.setAttribute("data-ap-classroom-state",!finished?"loading":failed?(count?"partial":"error"):(count?"ready":"empty"));
     }
     function markManual(){
       var mode=M[memberHash()];
@@ -216,13 +246,14 @@
       L.forEach(function(x,i){if(text.indexOf(groupTitle(x))>-1)add(x,i,"profile")});
     }
     function showEmpty(){
-      loading.remove();
+      if(empty){empty.hidden=false;return}
       var e=document.createElement("div");
       e.className="apc-empty";
-      e.innerHTML='<strong>현재 이 계정으로 볼 수 있는 온라인 클래스가 없습니다.</strong><p class="apc-empty-help">최근 구매했거나 권한을 수동으로 받은 경우, 로그인한 계정이 권한을 받은 계정과 같은지 확인해 주세요. 아래 계정이 예상과 다르면 로그아웃 후 권한을 받은 계정으로 로그인해야 합니다.</p><p class="apc-account"></p><div class="apc-actions"><a class="apc-btn" href="/logout.cm">다시 로그인</a><a class="apc-btn sub" href="/17">온라인 클래스 보기</a><a class="apc-btn sub" href="http://pf.kakao.com/_AHdvn/chat">권한 문의</a></div>';
+      e.innerHTML='<strong>현재 이 계정으로 볼 수 있는 온라인 클래스가 없습니다.</strong><p class="apc-empty-help">최근 구매했거나 권한을 받은 수업이 있다면 먼저 다시 확인해 주세요. 아래 계정이 권한을 받은 계정과 다를 때만 다시 로그인해 주세요.</p><p class="apc-account"></p><div class="apc-actions"><a class="apc-btn" href="/17">온라인 클래스 보기</a><a class="apc-btn sub" href="/logout.cm">다시 로그인</a><a class="apc-btn sub" href="http://pf.kakao.com/_AHdvn/chat">권한 문의</a></div>';
       e.querySelector(".apc-account").textContent=accountLabel();
       e.querySelector('.apc-btn[href="/logout.cm"]').addEventListener("click",startRelogin);
       sec.querySelector(".apc-in").appendChild(e);
+      empty=e;
     }
     async function probe(x,i){
       if(available[i])return;
@@ -235,10 +266,14 @@
           cache:"no-store",
           signal:controller.signal
         });
+        // Permission denials are not transport failures; keep the existing access checks below.
+        if(!response.ok&&response.status!==401&&response.status!==403)failures[i]=true;
         var html=await response.text();
         var doc=new DOMParser().parseFromString(html,"text/html");
-        if(responseMatches(response,x)&&okDocument(doc)&&add(x,i,"fetch"))draw();
-      }catch(e){}finally{clearTimeout(timer)}
+        if(responseMatches(response,x)&&okDocument(doc)&&add(x,i,"fetch")){
+          draw();
+        }
+      }catch(e){failures[i]=true}finally{clearTimeout(timer)}
     }
 
     function runProbes(){
@@ -254,16 +289,27 @@
       return Promise.all(workers);
     }
 
-    markManual();
-    markProfile();
-    draw();
-    runProbes().then(function(){
-      finished=true;
+    function refresh(){
+      if(busy)return;
+      busy=true;
+      finished=false;
+      failures=[];
+      if(empty)empty.hidden=true;
       markManual();
       markProfile();
-      if(available.some(Boolean))draw();else showEmpty();
-      document.documentElement.setAttribute("data-ap-classroom-v2-complete",VERSION);
-    });
+      draw();
+      return runProbes().then(function(){
+        busy=false;
+        finished=true;
+        markManual();
+        markProfile();
+        draw();
+        if(!available.some(Boolean)&&!failures.some(Boolean))showEmpty();
+        document.documentElement.setAttribute("data-ap-classroom-v2-complete",VERSION);
+      });
+    }
+    retry.addEventListener("click",refresh);
+    refresh();
   }
 
   if(document.readyState==="loading")document.addEventListener("DOMContentLoaded",run,{once:true});else run();

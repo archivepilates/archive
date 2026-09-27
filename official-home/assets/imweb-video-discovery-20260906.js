@@ -1,7 +1,7 @@
 (function () {
   "use strict";
 
-  var VERSION = "2026-09-06a";
+  var VERSION = "2026-09-27a";
   var STYLE_ID = "ap-video-discovery-style";
   var LIST_ID = "ap-video-discovery-all";
   var ROUTE_ATTR = "data-ap-video-discovery-route";
@@ -47,7 +47,9 @@
     79: ["AB9", "바렐 골반·고관절", "민진쌤"],
     80: ["AR5", "리포머 골반·고관절", "은영쌤"],
     84: ["ACA6", "캐딜락 지지와 움직임", "민진쌤"],
-    85: ["ACH9", "체어 지지와 움직임", "은영쌤"]
+    85: ["ACH9", "체어 지지와 움직임", "은영쌤"],
+    86: ["AR6", "리포머 외부 피드백", "민진쌤"],
+    87: ["AB10", "바렐 외부 피드백", "은영쌤"]
   };
 
   function route() {
@@ -297,6 +299,13 @@
     var root = main.querySelector(".ap-video-sales");
     if (!root) return;
     root.classList.add("apvd-curated");
+    // Keep the native catalog and pagination together, ahead of recommendations.
+    var grid = main.querySelector(".shop-grid");
+    var shop = grid && grid.closest(".shop-content");
+    if (shop && !root.hasAttribute("data-apvd-catalog-first")) {
+      shop.after(root);
+      root.setAttribute("data-apvd-catalog-first", "");
+    }
     var routes = root.querySelector(".ap-video-sales__routes");
     if (!routes || routes.parentElement.classList.contains("apvd-topics")) return;
     var disclosure = element("details", "apvd-topics");
@@ -341,13 +350,13 @@
           return url.hostname === "i.ytimg.com" && url.pathname.split("/")[2] === id && img.alt.indexOf(code) >= 0 && img.alt.indexOf("미리보기") >= 0;
         } catch (error) { return false; }
       });
-      // The preview label, matching thumbnail and section code must agree.
-      if (!thumbnail) return;
+      // The preview iframe and product code are authoritative. A thumbnail can
+      // legitimately retain an earlier preview ID after a preview-only edit.
       var previewHeading = element("h3", "apvd-preview-heading", "미리보기");
       cta.before(previewHeading);
       cta.before(wrapper);
       wrapper.classList.add("apvd-preview");
-      thumbnail.setAttribute("data-apvd-duplicate-thumbnail", "");
+      if (thumbnail) thumbnail.setAttribute("data-apvd-duplicate-thumbnail", "");
       section.classList.add("apvd-preview-section");
       section.setAttribute("data-ap-video-preview-ready", "true");
     });

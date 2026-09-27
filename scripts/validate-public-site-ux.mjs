@@ -6,9 +6,9 @@ const installer = fs.readFileSync("scripts/imweb/install-public-site-ux.html", "
 const assets = [...installer.matchAll(/(?:src|href)="https:\/\/archivepilates\.com([^\"]+)"/g)].map(match => match[1]);
 assert(assets.length >= 4, "UI installer assets missing");
 for (const asset of assets) {
-  const file = `official-home${asset}`;
+  const file = `official-home${asset.split("?")[0]}`;
   assert(fs.existsSync(file), `Installer references missing asset: ${asset}`);
-  if (asset.endsWith(".js")) execFileSync(process.execPath, ["--check", file]);
+  if (file.endsWith(".js")) execFileSync(process.execPath, ["--check", file]);
 }
 for (const name of ["team", "coast", "factory"]) {
   for (const width of [640, 1280]) {
