@@ -326,7 +326,8 @@ async function createInstructorMember(page, ref, job) {
   const gradeField = page.locator(".member-form__header__user-grade").first();
   const gradeInput = gradeField.locator('input[placeholder="선택"]').first();
   await gradeInput.click();
-  const gradeOptions = page.locator(".el-select-dropdown__item:visible").filter({ hasText: "강사회원" });
+  const gradeOptions = page.locator(".el-select-dropdown__item:visible").filter({ hasText: /^강사회원$/ });
+  await gradeOptions.first().waitFor({ state: "visible", timeout: 15_000 });
   if ((await gradeOptions.count()) !== 1) throw new Error("StudioMate 강사회원 등급 선택값을 정확히 찾지 못했습니다.");
   await gradeOptions.first().click();
   if (!isInstructorMemberGrade(await gradeInput.inputValue())) {
