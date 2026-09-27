@@ -234,7 +234,6 @@ function renderYouTubeMetadata(video) {
 
 function renderProductDetail(video) {
   const title = escapeHtml(`ARCHIVE METHOD ${video.title} (${video.code})`);
-  const group = escapeHtml(video.groupName);
   const summary = escapeHtml(video.summary);
   const watchUrl = `https://archivepilates.imweb.me${video.watchPath}`;
   const previewThumb = `https://i.ytimg.com/vi/${video.previewYouTubeId}/maxresdefault.jpg`;
@@ -248,10 +247,8 @@ function renderProductDetail(video) {
   <h2 style="font-size:28px;line-height:1.25;margin:0 0 12px;color:#171717;">${title}</h2>
   <p style="margin:0 0 18px;color:#555;">${escapeHtml(video.instructor)} · ${escapeHtml(video.equipment)} · ${escapeHtml(video.duration)} · 결제 후 ${video.entitlementDays}일 시청 권한</p>
   <div data-archive-pilates-watch-cta="${input.releaseDate}" style="margin:18px 0 24px;padding:20px 22px;border:1px solid #1e1b18;background:#fffdfa;color:#1f1f1f;line-height:1.75;">
-    <strong style="display:block;margin:0 0 8px;font-size:20px;line-height:1.35;color:#171717;">구매 후 시청 페이지</strong>
-    <p style="margin:0 0 12px;color:#333;">결제 완료 후 구매 계정에 <strong>${group}</strong> 권한이 자동 부여됩니다. 로그인 후 <strong>내 강의실</strong>에서 시청할 수 있습니다.</p>
-    <p style="margin:0 0 14px;color:#6b625b;font-size:14px;">비회원 또는 미구매 계정은 로그인 또는 권한 확인 화면으로 이동합니다.</p>
-    <a href="${watchUrl}" style="display:inline-block;min-height:44px;padding:13px 18px;background:#1e1b18;color:#fff!important;text-decoration:none;font-weight:800;border:1px solid #1e1b18;">${video.code} 구매 후 시청 페이지 열기</a>
+    <strong style="display:block;margin:0 0 8px;font-size:20px;line-height:1.35;color:#171717;">구매 후 시청</strong>
+    <a href="${watchUrl}" style="display:inline-block;min-height:44px;padding:13px 18px;background:#1e1b18;color:#fff!important;text-decoration:none;font-weight:800;border:1px solid #1e1b18;">시청 페이지 열기</a>
   </div>
   <figure style="margin:24px 0 0;"><img src="${previewThumb}" alt="${title} 미리보기 썸네일" style="display:block;width:100%;max-width:960px;border:1px solid #e8e0d6;"></figure>
   <div data-archive-pilates-preview="${input.releaseDate}" style="position:relative;padding-bottom:56.25%;height:0;overflow:hidden;margin:16px 0 26px;background:#111;">

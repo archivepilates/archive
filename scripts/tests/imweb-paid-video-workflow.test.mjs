@@ -64,6 +64,12 @@ test("release preparation keeps the full video id out of public product artifact
     assert.doesNotMatch(detail, /BBBBBBBBBBB/);
     assert.doesNotMatch(product, /BBBBBBBBBBB/);
     assert.match(detail, /AAAAAAAAAAA/);
+    const watchCta = detail.match(/<div data-archive-pilates-watch-cta[^>]*>[\s\S]*?<\/div>/)?.[0];
+    assert.ok(watchCta);
+    assert.match(watchCta, />구매 후 시청<\/strong>/);
+    assert.match(watchCta, />시청 페이지 열기<\/a>/);
+    assert.match(watchCta, /href="https:\/\/archivepilates\.imweb\.me\/archive-method-watch-aca7"/);
+    assert.doesNotMatch(watchCta, /<p\b|구매 후 시청 페이지/);
     assert.match(privateWatch, /BBBBBBBBBBB/);
     assert.equal(youtube.full.privacy, "unlisted");
     assert.equal(youtube.preview.privacy, "public");
