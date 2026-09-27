@@ -8,6 +8,8 @@ export const IMWEB_LESSON_POLICY = Object.freeze({
 });
 export const orderFingerprint = order => createHash('sha256').update(JSON.stringify(order)).digest('hex');
 export const orderLedgerId = orderNo => `imweb_${String(orderNo).replace(/[^0-9]/g, '')}`;
+export const LEGACY_PAYMENT_METHOD_REVIEW = '홈페이지 결제수단 매핑 확인필요';
+export const needsPaymentMethodReassessment = reason => reason === LEGACY_PAYMENT_METHOD_REVIEW;
 
 export function assessInstructorOrder(order, { now = new Date(), policy = IMWEB_LESSON_POLICY } = {}) {
   const items = (order.sections || []).flatMap(section => (section.sectionItems || []).map(item => ({ ...item, section })));
@@ -28,6 +30,7 @@ export function assessInstructorOrder(order, { now = new Date(), policy = IMWEB_
     productNo: Number(item.productInfo?.prodNo), productName: String(item.productInfo?.prodName || ''),
     memberName, memberPhone, lessonDate, paidAmount: Number(order.totalPaymentPrice),
     paymentMethod: 'card', paymentCompleteTime: paidAt ? new Date(paidAt).toISOString() : null,
+    sourcePaymentMethod: paid.length === 1 ? String(paid[0].method || '') : null,
     registrationId: /^010\d{8}$/.test(memberPhone) && lessonDate
       ? instructorLessonRegistrationId(policy.studioId, memberPhone, lessonDate) : orderLedgerId(order.orderNo),
   };
@@ -40,14 +43,13 @@ export function assessInstructorOrder(order, { now = new Date(), policy = IMWEB_
     || ['totalRefundPendingPrice', 'totalRefundedPrice', 'totalRefundPendingPoint', 'totalRefundedPoint'].some(k => Number(order[k]) !== 0)
     || item.section.returnInfo?.isRefund === 'Y' || item.section.returnInfo?.isExchange === 'Y') return review('취소·환불·교환 상태 확인필요');
   if (paid.length !== 1 || (order.payments || []).length !== 1 || !paidAt) return review('결제 완료 원본 확인필요');
-  if (paid[0].method !== 'CARD') return review('홈페이지 결제수단 매핑 확인필요');
   if (!memberName || !/^010\d{8}$/.test(memberPhone)) return review('수강자 이름·휴대폰 확인필요');
   if (!lessonDate || !Number.isFinite(Date.parse(`${lessonDate}T00:00:00Z`))
     || new Date(`${lessonDate}T00:00:00Z`).toISOString().slice(0, 10) !== lessonDate
     || lessonDate <= new Intl.DateTimeFormat('en-CA', { timeZone: 'Asia/Seoul', year: 'numeric', month: '2-digit', day: '2-digit' }).format(now)) return review('미래 수강일 옵션 확인필요');
   if (input.paidAmount !== policy.expectedPrice || Number(paid[0].paidPrice) !== input.paidAmount
     || Number(order.totalDeliveryPrice) !== 0 || Number(order.totalPoint) !== 0) return review('할인·포인트·금액 변경 주문은 구매조건 확인필요');
-  return { status: 'ready', reason: '홈페이지 카드 결제·수강일 확인', ...input };
+  return { status: 'ready', reason: '홈페이지 결제·수강일 확인 / StudioMate 신용카드 분류', ...input };
 }
 
 export function assertSamePaidOrder(job, order) {

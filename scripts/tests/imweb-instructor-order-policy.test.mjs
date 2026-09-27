@@ -18,7 +18,6 @@ const reasons = {
   quantity: '복수 상품·인원 또는 선물 주문은 실제 수강자 확인필요',
   status: '취소·환불·교환 상태 확인필요',
   payment: '결제 완료 원본 확인필요',
-  method: '홈페이지 결제수단 매핑 확인필요',
   member: '수강자 이름·휴대폰 확인필요',
   date: '미래 수강일 옵션 확인필요',
   amount: '할인·포인트·금액 변경 주문은 구매조건 확인필요',
@@ -178,9 +177,23 @@ for (const [name, change] of [
 ]) {
   test(`${name} requires purchase-condition review`, () => expectReview(fixture(change), reasons.amount));
 }
-for (const method of ['BANK', 'VBANK', 'CASH', 'POINT', '']) {
-  test(`non-CARD method ${JSON.stringify(method)} requires review`, () => {
-    expectReview(fixture(order => { order.payments[0].method = method; }), reasons.method);
+for (const method of ['CARD', 'TOSSPAY', 'KAKAOPAY', 'NAVERPAY', 'BANK', 'VBANK', 'CASH', 'POINT', '']) {
+  test(`paid website method ${JSON.stringify(method)} maps to card while preserving source`, () => {
+    const order = fixture(order => { order.payments[0].method = method; });
+    const before = structuredClone(order);
+    const result = assess(order);
+    assert.equal(result.status, 'ready');
+    assert.equal(result.paymentMethod, 'card');
+    assert.equal(result.sourcePaymentMethod, method);
+    assert.deepEqual(order, before);
+    expectReview(fixture(order => {
+      order.payments[0].method = method;
+      order.payments[0].paymentStatus = 'PAYMENT_PENDING';
+    }), reasons.payment);
+    expectReview(fixture(order => {
+      order.payments[0].method = method;
+      order.payments[0].isCancel = 'Y';
+    }), reasons.payment);
   });
 }
 
@@ -249,7 +262,6 @@ test('assertSamePaidOrder blocks orders that became refunded, canceled, pending 
     order => { order.payments[0].isCancel = 'Y'; },
     order => { order.sections[0].orderSectionStatus = 'PAYMENT_PENDING'; },
     order => { item(order).productInfo.prodNo = 999; },
-    order => { order.payments[0].method = 'BANK'; },
     order => { order.payments[0].paymentCompleteTime = '2026-09-27T12:21:59.999Z'; },
   ]) {
     assert.throws(() => assertSamePaidOrder(job, fixture(change)), /홈페이지 주문 재검증 중단/);

@@ -1,7 +1,7 @@
 import assert from 'node:assert/strict';
 import { beforeEach, test } from 'node:test';
-import { importInstructorOrder } from '../lib/imweb-instructor-orders.mjs';
-import { assessInstructorOrder, IMWEB_LESSON_POLICY, orderLedgerId } from '../lib/imweb-instructor-order-policy.mjs';
+import { importInstructorOrder, resolvedPaymentMethodIssue } from '../lib/imweb-instructor-orders.mjs';
+import { assessInstructorOrder, IMWEB_LESSON_POLICY, orderLedgerId, orderFingerprint, LEGACY_PAYMENT_METHOD_REVIEW, needsPaymentMethodReassessment } from '../lib/imweb-instructor-order-policy.mjs';
 
 const NOW = new Date('2026-09-27T12:30:00.000Z');
 const ORDER_NO = '209901010000001';
@@ -153,6 +153,123 @@ test('admission atomically creates one ledger, registration and ticket job, with
   assert.equal(store.get(keys.registration).operatorChecks.seatConfirmed, true);
   assert.equal(store.get(keys.job).externalOrder.orderNo, ORDER_NO);
   assert.equal(store.get(keys.job).ticketPrice, 70000);
+});
+
+function legacyMethodHold(order) {
+  const input = assessInstructorOrder(order, { now: NOW });
+  const keys = paths(order);
+  return {
+    [keys.registration]: { registrationId: input.registrationId, studioId: STUDIO,
+      lessonDate: input.lessonDate, memberPhone: input.memberPhone, status: 'action_required',
+      source: { type: 'imweb_order_review', sourceId: input.orderNo }, lastError: LEGACY_PAYMENT_METHOD_REVIEW },
+    [keys.ledger]: { registrationId: input.registrationId, fingerprint: orderFingerprint(order),
+      status: 'review_required', reason: LEGACY_PAYMENT_METHOD_REVIEW },
+  };
+}
+
+test('unchanged TossPay method-only hold promotes once with original method and card ticket job', async () => {
+  const order = fixture(o => { o.payments[0].method = 'TOSSPAY'; });
+  const keys = paths(order);
+  const store = mockDb(legacyMethodHold(order), { retryOnce: true });
+  assert.equal((await store.ingest(order)).status, 'queued');
+  assert.equal(store.get(keys.registration).lastError, null);
+  assert.equal(store.get(keys.registration).externalOrder.sourcePaymentMethod, 'TOSSPAY');
+  assert.equal(store.get(keys.job).externalOrder.sourcePaymentMethod, 'TOSSPAY');
+  assert.equal(store.get(keys.job).paymentMethod, 'card');
+  assert.equal(store.get(keys.registration).steps.bookings.status, 'not_required');
+  const before = store.all();
+  assert.equal((await store.ingest(order)).status, 'unchanged');
+  assert.deepEqual(store.all(), before);
+});
+
+test('method-only reassessment still checks current capacity', async () => {
+  const order = fixture(o => { o.payments[0].method = 'TOSSPAY'; });
+  const store = mockDb({ ...legacyMethodHold(order),
+    'lectures/full': lecture(1), 'bookings/other': booking('01000000002') });
+  const result = await store.ingest(order);
+  assert.equal(result.status, 'review_required');
+  assert.match(result.reason, /정원/);
+  assert.equal(store.get(paths(order).job), undefined);
+});
+
+for (const guard of ['existing-job', 'other-reason', 'foreign-owner', 'completed', 'effect-started', 'canceled', 'new-hold', 'failed-step', 'ticket-evidence']) {
+  test(`method reassessment does not bypass ${guard}`, async () => {
+    const order = fixture(o => { o.payments[0].method = 'TOSSPAY'; });
+    const keys = paths(order);
+    const seed = legacyMethodHold(order);
+    if (guard === 'existing-job') seed[keys.job] = { status: 'done', ticketId: 'existing' };
+    if (guard === 'other-reason') seed[keys.ledger].reason = '정원 초과';
+    if (guard === 'foreign-owner') seed[keys.registration].source.sourceId = 'another-order';
+    if (guard === 'completed') seed[keys.registration].status = 'completed';
+    if (guard === 'effect-started') seed[keys.registration].externalEffectStarted = true;
+    if (guard === 'new-hold') seed[keys.registration].lastError = '운영자 추가 확인필요';
+    if (guard === 'failed-step') seed[keys.registration].steps = { ticket: { status: 'failed' } };
+    if (guard === 'ticket-evidence') seed[keys.registration].evidence = { ticketId: 'existing' };
+    if (guard === 'canceled') {
+      order.payments[0].isCancel = 'Y';
+      seed[keys.ledger].fingerprint = orderFingerprint(order);
+    }
+    const store = mockDb(seed);
+    assert.equal((await store.ingest(order)).status, 'unchanged');
+    assert.deepEqual(store.all(), seed);
+  });
+}
+
+for (const guard of ['completed', 'effect-started', 'new-hold', 'failed-step', 'ticket-evidence']) {
+  test(`changed source fingerprint cannot promote ${guard} review`, async () => {
+    const order = fixture(o => { o.payments[0].method = 'TOSSPAY'; });
+    const keys = paths(order);
+    const seed = legacyMethodHold(order);
+    if (guard === 'completed') seed[keys.registration].status = 'completed';
+    if (guard === 'effect-started') seed[keys.registration].externalEffectStarted = true;
+    if (guard === 'new-hold') seed[keys.registration].lastError = '운영자 추가 확인필요';
+    if (guard === 'failed-step') seed[keys.registration].steps = { ticket: { status: 'failed' } };
+    if (guard === 'ticket-evidence') seed[keys.registration].evidence = { ticketId: 'existing' };
+    const store = mockDb(seed);
+    order.orderStatus = 'CLOSED';
+    assert.equal((await store.ingest(order)).status, 'review_required');
+    assert.equal(store.get(keys.job), undefined);
+    assert.equal(store.get(keys.registration).source.type, 'imweb_order_review');
+    assert.deepEqual(store.get(keys.registration).evidence, seed[keys.registration].evidence);
+  });
+}
+
+test('committed admission resolves stale local method warning without creating a duplicate job', async () => {
+  const order = fixture(o => { o.payments[0].method = 'TOSSPAY'; });
+  const store = mockDb(legacyMethodHold(order));
+  await store.ingest(order);
+  const before = store.all();
+  const replay = await store.ingest(order);
+  assert.equal(resolvedPaymentMethodIssue(replay), true);
+  assert.deepEqual(store.all(), before);
+  assert.equal(resolvedPaymentMethodIssue({ status: 'unchanged' }), false);
+  assert.equal(resolvedPaymentMethodIssue({ status: 'review_required', paymentMethodReviewResolved: true }), false);
+});
+
+test('successive source changes preserve a newer operator hold and never promote it', async () => {
+  const order = fixture(o => { o.payments[0].method = 'TOSSPAY'; });
+  const keys = paths(order);
+  const seed = legacyMethodHold(order);
+  seed[keys.registration].lastError = '운영자 추가 확인필요';
+  const store = mockDb(seed);
+  for (const change of [
+    () => { order.orderStatus = 'CLOSED'; },
+    () => { order.sections[0].orderSectionStatus = 'SHIPPING_COMPLETE'; },
+    () => { order.sections[0].orderSectionStatus = 'PURCHASE_CONFIRMATION'; },
+  ]) {
+    change();
+    assert.equal((await store.ingest(order)).status, 'review_required');
+    assert.equal(store.get(keys.job), undefined);
+    assert.equal(store.get(keys.registration).lastError, '운영자 추가 확인필요');
+    assert.equal(store.get(keys.registration).externalOrderReviewRequired, true);
+  }
+});
+
+test('local fingerprint cache rechecks only obsolete payment-method holds', () => {
+  assert.equal(needsPaymentMethodReassessment(LEGACY_PAYMENT_METHOD_REVIEW), true);
+  for (const reason of [undefined, '', '정원 초과', '기존 접수와 홈페이지 주문 연결 확인필요']) {
+    assert.equal(needsPaymentMethodReassessment(reason), false);
+  }
 });
 
 test('transaction failure commits neither registration nor job nor ledger', async () => {

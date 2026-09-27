@@ -2,7 +2,7 @@ import { execFileSync } from 'node:child_process';
 import { mkdir, readFile, writeFile, rename } from 'node:fs/promises';
 import os from 'node:os';
 import path from 'node:path';
-import { IMWEB_LESSON_POLICY as policy, assessInstructorOrder, assertSamePaidOrder, orderFingerprint, orderLedgerId } from './imweb-instructor-order-policy.mjs';
+import { IMWEB_LESSON_POLICY as policy, assessInstructorOrder, assertSamePaidOrder, orderFingerprint, orderLedgerId, needsPaymentMethodReassessment } from './imweb-instructor-order-policy.mjs';
 import { normalizeInstructorLessonPhone } from './instructor-lesson-registration-contract.mjs';
 import { recordAutomationStatus } from './archive-core-ops-logging.mjs';
 import { acquireStudioMateBrowserLock } from './studiomate-browser-lock.mjs';
@@ -49,6 +49,9 @@ export function readRecentImwebOrders(read = imwebOrderRead, now = new Date()) {
 }
 
 const step = (status, label, detail = '') => ({ status, label, detail });
+export function resolvedPaymentMethodIssue(item) {
+  return item.status === 'queued' || (item.status === 'unchanged' && item.paymentMethodReviewResolved === true);
+}
 function registrationDocument(input, now) {
   return {
     registrationId: input.registrationId, idempotencyKey: input.registrationId, studioId: policy.studioId,
@@ -115,8 +118,23 @@ export async function importInstructorOrder(db, order, { apply = false, now = ne
   }
   return db.runTransaction(async tx => {
     const [ledger, registration, job] = await Promise.all([tx.get(ledgerRef), tx.get(registrationRef), tx.get(jobRef)]);
-    if (ledger.exists && ledger.data().fingerprint === fingerprint) return { status: 'unchanged', orderNo: input.orderNo };
     const old = ledger.data() || {};
+    const reg = registration.data();
+    const promotableReview = reg?.source?.type === 'imweb_order_review'
+      && reg.source.sourceId === input.orderNo && old.registrationId === input.registrationId
+      && reg.status === 'action_required' && reg.lastError === old.reason
+      && !reg.externalOrderReviewRequired && !reg.externalEffectStarted
+      && !reg.evidence && !reg.ticketId && !reg.completedAt && !job.exists
+      && Object.values(reg.steps || {}).every(s => ['pending', 'not_required'].includes(s.status));
+    // Only the obsolete method-only hold may bypass an unchanged source fingerprint.
+    const paymentMethodReassessment = input.status === 'ready' && old.status === 'review_required'
+      && needsPaymentMethodReassessment(old.reason) && promotableReview;
+    if (ledger.exists && old.fingerprint === fingerprint && !paymentMethodReassessment) return {
+      status: 'unchanged', orderNo: input.orderNo,
+      paymentMethodReviewResolved: old.status === 'queued' && old.registrationId === input.registrationId
+        && reg?.source?.type === 'imweb_paid_order' && reg.source.sourceId === input.orderNo
+        && !reg.externalOrderReviewRequired && job.data()?.externalOrder?.orderNo === input.orderNo,
+    };
     if (old.status === 'duplicate') {
       tx.set(ledgerRef, { fingerprint, updatedAt: now }, { merge: true });
       return { status: 'duplicate', orderNo: input.orderNo, reason: '기존 수동 접수 또는 다른 주문과 중복: 자동 변경하지 않음' };
@@ -141,8 +159,6 @@ export async function importInstructorOrder(db, order, { apply = false, now = ne
       return { status: 'review_required', orderNo: input.orderNo, reason };
     }
     let reason = input.status === 'ready' ? '' : input.reason;
-    const promotableReview = registration.exists && registration.data().source?.type === 'imweb_order_review'
-      && !job.exists && old.registrationId === input.registrationId;
     if (registration.exists && registration.data().source?.sourceId !== input.orderNo) {
       tx.set(ledgerRef, { orderNo: input.orderNo, registrationId: input.registrationId, fingerprint, status: 'duplicate', reason: '동일 연락처·수강일 접수 존재: 기존 발급 재확인', updatedAt: now });
       return { status: 'duplicate', orderNo: input.orderNo, registrationId: input.registrationId };
@@ -169,7 +185,7 @@ export async function importInstructorOrder(db, order, { apply = false, now = ne
     }
     if (registration.exists && !promotableReview) {
       if (reason || old.fingerprint !== fingerprint) {
-        reason ||= '이미 접수된 홈페이지 주문 정보 변경 확인필요';
+        reason ||= reg.lastError || '이미 접수된 홈페이지 주문 정보 변경 확인필요';
         tx.update(registrationRef, { status: 'action_required', externalOrderReviewRequired: true, 'operatorChecks.paymentConfirmed': false, lastError: reason, updatedAt: now });
         if (job.exists && ['pending', 'retry'].includes(job.data().status)) tx.update(jobRef, { status: 'review_required', lastError: reason, updatedAt: now });
       }
@@ -222,14 +238,15 @@ export async function syncImwebInstructorOrders(db, { apply = false, orderNo = '
     }
     const items = [];
     for (const order of orders) {
-      if (!orderNo && fingerprints[order.orderNo] === orderFingerprint(order)) continue;
+      if (!orderNo && fingerprints[order.orderNo] === orderFingerprint(order)
+        && !needsPaymentMethodReassessment(issues[order.orderNo])) continue;
       if (assessInstructorOrder(order).status === 'ignored' && !watch[order.orderNo]) continue;
       // Re-read the exact source immediately before admitting any external work.
       const fresh = readImwebOrder(order.orderNo, read);
       const item = await importInstructorOrder(db, fresh, { apply: true, tracked: Boolean(watch[order.orderNo]) });
       items.push(item);
       if (['review_required', 'duplicate'].includes(item.status)) issues[item.orderNo] = item.reason || '기존 접수와 홈페이지 주문 연결 확인필요';
-      else if (item.status === 'queued') delete issues[item.orderNo];
+      else if (resolvedPaymentMethodIssue(item)) delete issues[item.orderNo];
       fingerprints[order.orderNo] = orderFingerprint(fresh);
       const assessment = assessInstructorOrder(fresh);
       if (assessment.lessonDate) watch[order.orderNo] = Date.parse(`${assessment.lessonDate}T23:59:59+09:00`) + 86400000;
