@@ -225,7 +225,8 @@ function mockProfilePage(job, options = {}) {
   const page = {
     goto: async url => { events.push('load'); currentUrl = options.wrongId ? url.replace(MEMBER_ID, '999') : url; draft = stored; },
     url: () => currentUrl,
-    getByRole: (role, { name }) => {
+    getByRole: (role, { name } = {}) => {
+      if (role === 'textbox') return { and: locator => locator };
       if (role === 'heading') return { waitFor: async () => { assert.equal(name, job.memberName); } };
       if (name === '\uD68C\uC6D0\uC815\uBCF4 \uC218\uC815') return { click: async () => { events.push('editor'); } };
       assert.equal(name, '\uD68C\uC6D0 \uC218\uC815 \uC644\uB8CC');
