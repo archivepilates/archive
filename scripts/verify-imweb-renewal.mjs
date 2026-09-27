@@ -276,7 +276,51 @@ export async function layoutEvidence(page) {
 
 const escapeHtml = (value) => String(value).replace(/[&<>"']/g, (char) => ({ "&": "&amp;", "<": "&lt;", ">": "&gt;", '"': "&quot;", "'": "&#39;" })[char]);
 
-export async function runVerification({ live = false, output = path.join(os.tmpdir(), `imweb-renewal-${Date.now()}`), widths = WIDTHS, routes = ROUTES } = {}) {
+async function desktopNavigation(page, evidence, capture) {
+  const initialUrl = page.url();
+  evidence.navigation = [];
+  await page.waitForFunction(() => !!document.querySelector("a.ap-shop-nav-link > .plain_name > .ap-shop-nav-label > .ap-nav-ko"));
+  for (const name of ["아카이브홈", "강사레슨", "영상구매", "판매상품", "커뮤니티"]) {
+    const candidates = page.getByRole("link", { name, exact: true });
+    let link;
+    for (let index = 0; index < await candidates.count(); index += 1) {
+      const candidate = candidates.nth(index);
+      if (await candidate.evaluate((element) => {
+        const rect = element.getBoundingClientRect();
+        return !!element.closest("#doz_header") && element.matches("a.ap-shop-nav-link,a.ap-shop-visual-link") && rect.width > 0 && rect.height > 0 && rect.left >= 0 && rect.right <= innerWidth + 1 && rect.top >= 0 && rect.bottom <= innerHeight;
+      })) { link = candidate; break; }
+    }
+    assert(link, `Visible desktop navigation link missing: ${name}`);
+    for (const state of ["default", "hover", "focus"]) {
+      await page.mouse.move(0, 0);
+      if (state === "hover") await link.hover();
+      if (state === "focus") { await page.keyboard.press("Tab"); await link.focus(); }
+      const result = await link.evaluate((element) => {
+        const visual = element.matches("a.ap-shop-visual-link");
+        const prefix = visual ? ":scope > .ap-shop-visual-label > .ap-shop-pill-" : ":scope > .plain_name > .ap-shop-nav-label > .ap-nav-";
+        const describe = (node) => {
+          if (!node) return null;
+          const style = getComputedStyle(node), rect = node.getBoundingClientRect();
+          return { text: node.textContent, display: style.display, visibility: style.visibility, opacity: style.opacity, width: rect.width, height: rect.height };
+        };
+        return { type: visual ? "shop-visual" : "regular", ko: describe(element.querySelector(prefix + "ko")), en: describe(element.querySelector(prefix + "en")), hover: element.matches(":hover"), focus: element.matches(":focus"), focusVisible: element.matches(":focus-visible") };
+      });
+      evidence.navigation.push({ name, state, ...result });
+      assert(result.ko && result.en, `Native label structure missing: ${name}`);
+      assert(result.ko.width > 0 && result.ko.height > 0 && result.ko.visibility === "visible" && Number(result.ko.opacity) === 1, `${name}/${state}: Korean label hidden`);
+      assert.equal(result.en.display, "none", `${name}/${state}: English label must stay hidden`);
+      if (state === "hover") assert(result.hover, `${name}: hover did not activate`);
+      if (state === "focus") assert(result.focus && result.focusVisible, `${name}: keyboard focus did not activate`);
+      if (name === "영상구매" && state === "hover" || name === "판매상품" && state === "focus") await capture(`nav-${result.type}-${state}`);
+    }
+    await link.evaluate((element) => element.blur());
+    await page.keyboard.press("Escape");
+  }
+  await page.mouse.move(0, 0);
+  assert.equal(page.url(), initialUrl, "Navigation labels must be tested without visiting their destinations");
+}
+
+export async function runVerification({ live = false, output = path.join(os.tmpdir(), `imweb-renewal-${Date.now()}`), widths = WIDTHS, routes = ROUTES, expectedCssVersion, checkDesktopNavigation = false } = {}) {
   fs.mkdirSync(output, { recursive: true });
   const snapshots = new Map(ASSETS.map((name) => [name, fs.readFileSync(path.join(ROOT, "official-home/assets", name))]));
   const report = { mode: live ? "live-no-interception" : "preview-local-assets", account: "logged-out ephemeral context; no authentication", startedAt: new Date().toISOString(), assetHashes: Object.fromEntries([...snapshots].map(([name, body]) => [name, digest(body)])), results: [], cleanup: false };
@@ -298,6 +342,13 @@ export async function runVerification({ live = false, output = path.join(os.tmpd
           page.on("pageerror", (error) => result.errors.push(error.message));
           page.on("console", (message) => { if (message.type() === "error") result.consoleErrors.push(message.text()); });
           page.on("requestfailed", (request) => result.failedRequests.push({ url: request.url(), error: request.failure()?.errorText }));
+          page.on("response", (response) => {
+            if (response.status() === 429 && new URL(response.url()).origin === SITE) {
+              report.rateLimited = true;
+              result.errors.push("HTTP 429: stop all remaining scenarios; no automatic retry");
+              void context.close().catch(() => {});
+            }
+          });
           const check = async (name, fn) => {
             try { await fn(); result.checks.push({ name, ok: true }); }
             catch (error) { result.checks.push({ name, ok: false, error: error.message }); }
@@ -318,10 +369,15 @@ export async function runVerification({ live = false, output = path.join(os.tmpd
             await page.waitForFunction(() => document.documentElement.hasAttribute("data-ap-renewal"));
             result.renewalVersion = await page.evaluate(() => document.documentElement.getAttribute("data-ap-renewal"));
             assert(await page.evaluate(() => Array.from(document.styleSheets).some((sheet) => sheet.href?.includes("imweb-renewal-20260927.css"))), "Renewal CSS missing");
+            if (expectedCssVersion) {
+              result.renewalCssLinks = await page.evaluate(() => Array.from(document.querySelectorAll('link[rel="stylesheet"]'), (link) => link.href).filter((href) => new URL(href).pathname.endsWith("/imweb-renewal-20260927.css")));
+              assert(result.renewalCssLinks.length && result.renewalCssLinks.every((href) => new URL(href).searchParams.get("v") === expectedCssVersion), `Expected renewal CSS v=${expectedCssVersion}: ${result.renewalCssLinks}`);
+            }
             if (!live) for (const name of ASSETS.filter((name) => route.name === "catalog" || route.name === "ab10" || name !== DISCOVERY)) assert(result.localAssets.some((asset) => asset.asset === name), `Local asset not intercepted: ${name}`);
           });
           await page.waitForFunction(() => document.fonts.status === "loaded");
           await check("initial-screenshot", () => capture("top"));
+          if (checkDesktopNavigation && width === 1440 && route.name === "catalog") await check("desktop-navigation-korean", () => desktopNavigation(page, result, capture));
           if (route.name === "ab10") await check("short-title", () => detailTitle(page, result));
           await check(route.name, () => ({ home, "home-index": home, catalog, ab10: detail, knitido, lesson })[route.name](page, result, capture));
           await check("no-horizontal-overflow", async () => {
@@ -334,6 +390,7 @@ export async function runVerification({ live = false, output = path.join(os.tmpd
         finally { clearTimeout(deadline); await context.close(); }
         result.ok = !result.errors.length && result.checks.every((check) => check.ok);
         console.log(`${result.ok ? "PASS" : "FAIL"} ${route.name} ${width}: ${result.checks.filter((check) => !check.ok).map((check) => `${check.name}: ${check.error}`).join("; ") || result.errors.join("; ") || "all checks"}`);
+        if (report.rateLimited) break scenarios;
       }
     }
   } catch (error) { report.fatal = error.message; }

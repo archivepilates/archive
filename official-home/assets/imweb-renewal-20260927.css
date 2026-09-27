@@ -1,8 +1,8 @@
 /* Public presentation only. Native purchase, option and permission controls stay intact. */
-html body #doz_header_wrap #doz_header :is(.ap-shop-nav-label,.ap-shop-visual-label) > :is(.ap-nav-en,.ap-shop-pill-en) { display:none!important; }
-html body #doz_header_wrap #doz_header :is(.ap-shop-nav-link,.ap-shop-visual-link):is(:hover,:focus-visible) :is(.ap-nav-ko,.ap-shop-pill-ko),
-html body #doz_header_wrap #doz_header :is(.ap-nav-ko,.ap-shop-pill-ko) { opacity:1!important; transform:none!important; }
-html body #doz_header_wrap #doz_header :is(.ap-shop-nav-link,.ap-shop-visual-link):is(:hover,:focus-visible) { color:#a7352b!important; text-decoration:underline!important; text-underline-offset:6px; }
+html body :is(#doz_header_wrap #doz_header,#mobile_slide_menu_wrap,.im-mobile-slide) :is(.ap-shop-nav-label,.ap-shop-visual-label) > :is(.ap-nav-en,.ap-shop-pill-en) { display:none!important; }
+html body :is(#doz_header_wrap #doz_header,#mobile_slide_menu_wrap,.im-mobile-slide) :is(.ap-shop-nav-link,.ap-shop-visual-link):is(:hover,:focus-visible) :is(.ap-nav-ko,.ap-shop-pill-ko),
+html body :is(#doz_header_wrap #doz_header,#mobile_slide_menu_wrap,.im-mobile-slide) :is(.ap-nav-ko,.ap-shop-pill-ko) { opacity:1!important; transform:none!important; }
+html body :is(#doz_header_wrap #doz_header,#mobile_slide_menu_wrap,.im-mobile-slide) :is(.ap-shop-nav-link,.ap-shop-visual-link):is(:hover,:focus-visible) { color:#a7352b!important; text-decoration:underline!important; text-underline-offset:6px; }
 html[data-ap-renewal] body :is(.ap-listing-intro,.apvd-filters,.apvd-curated,.ap-knitido-brand-intro,.archive-online-product) { color:#242424; letter-spacing:0; }
 html[data-ap-renewal] body .ap-listing-intro { padding-top:24px!important; padding-bottom:18px!important; margin-bottom:12px!important; }
 html[data-ap-renewal] body .ap-listing-intro h1 { font-size:30px!important; line-height:1.3!important; }

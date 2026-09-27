@@ -30,6 +30,26 @@ async function withPage(route, markup, fn, { width = 390, discover = false } = {
 const product = (id, code, title) => `<article class="shop-item _shop_item" data-product-properties='${JSON.stringify({ idx: id, name: `[온라인] ARCHIVE METHOD ${title} (${code}) 40D 이용권` })}'><a href="/17/?idx=${id}">${title} (${code})</a></article>`;
 const catalog = `<section class="ap-video-sales"><h2>추천 영상</h2><div class="ap-video-sales__routes"><p>추천 내용</p></div></section><div class="shop-content"><div class="shop-grid">${product(86, "AR6", "리포머 외부 피드백")}${product(87, "AB10", "바렐 외부 피드백")}${product(27, "AR1", "리포머 척추 정렬 & 코어 컨트롤")}</div><nav aria-label="상품 페이지">1</nav></div>`;
 
+test("sidebar Korean labels remain stable on hover and keyboard focus despite legacy swap CSS", async () => {
+  for (const width of [390, 1920]) {
+    await withPage("/17", `<nav id="mobile_slide_menu_wrap"><a class="ap-shop-nav-link" href="/17" aria-label="영상구매"><span class="plain_name"><span class="ap-shop-nav-label"><span class="ap-nav-ko">영상구매</span><span class="ap-nav-en">VIDEO SHOP</span></span></span></a></nav>`, async (page) => {
+      await page.addStyleTag({ content: "html body:not(.ap-shop-nav-pointer-down) .ap-shop-nav-link:hover .ap-nav-ko{opacity:0!important;transform:translateY(-4px)}html body:not(.ap-shop-nav-pointer-down) .ap-shop-nav-link:hover .ap-nav-en{opacity:1!important}a:focus-visible{outline:2px solid red}" });
+      const link = page.getByRole("link", { name: "영상구매", exact: true });
+      const original = await link.boundingBox();
+      for (const state of ["hover", "focus"]) {
+        if (state === "hover") await link.hover();
+        else { await page.mouse.move(0, 0); await page.keyboard.press("Tab"); await link.focus(); }
+        const result = await link.evaluate((element) => ({ ko: getComputedStyle(element.querySelector(".ap-nav-ko")).opacity, en: getComputedStyle(element.querySelector(".ap-nav-en")).display, focus: element.matches(":focus-visible") }));
+        assert.equal(result.ko, "1");
+        assert.equal(result.en, "none");
+        if (state === "focus") assert(result.focus);
+        assert.deepEqual(await link.boundingBox(), original);
+      }
+      assert.equal(new URL(page.url()).pathname, "/17");
+    }, { width });
+  }
+});
+
 test("preview injection is idempotent and leaves existing discovery inclusion intact", () => {
   const original = `<html><head><script src="https://archivepilates.com/assets/${DISCOVERY}?v=old"></script></head><body>Native shop</body></html>`;
   const injected = injectRenewal(original);
