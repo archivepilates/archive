@@ -27,7 +27,19 @@ Approved: user requested items 1-6 of the design proposal on 2026-09-27.
 - Compare live homepage, team page, classroom and sales assets to source before deployment to avoid rollback.
 
 ## Release
-Pending final preview verification, scoped commit, Hosting release, SEO Header save, live checks and push.
+Hosting release, SEO Header save and live verification completed. Report included; scoped branch push and final status are reported in chat.
+
+- Code commits: cc2f803, 0e3b537, 9eb09c6, d165377.
+- Hosting target: archive-pilates / archive-pilates-home. No Functions deployment.
+- Final CSS query: v=20260927d. Renewal scripts appear once in saved SEO Header Code.
+- Regression tests: 23/23 passed; existing Hosting predeploy and final postdeploy classroom guard passed.
+- Ordinary buyer/nonbuyer: mobile and desktop 10/0 classes; test-only groups restored to original zero and verified. No real checkout performed.
+- Initial live checks: 18/24 passed. Remaining six layout scenarios passed after photo repair and sequential rerun. Not a single final-version 24-case run.
+- Temporary Imweb 429 stopped audits. Later HTTP 200 and final guard passed; no 429 in final six cases.
+- Final desktop countdown and catalog edges match (95px / 1345px, center 720px).
+- Sidebar legacy hover exposed English on a later check. CSS scope now includes native sidebar containers; regression test covers 390/1920px hover/focus geometry and labels.
+- Final live menu check: CSS d loaded; 1920/390px hover and focus all passed, Korean retained, English hidden, rect drift 0px, focus visible, URL unchanged, no 429. All browsers closed.
+- All task-owned Chrome admin/public tabs closed; user's pre-existing tab preserved. Agent Playwright contexts closed.
 
 ## Confirmed before release
 - Homepage, team page, classroom and sales runtime live bytes matched the source baseline.

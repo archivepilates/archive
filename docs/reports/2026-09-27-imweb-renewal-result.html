@@ -1,0 +1,26 @@
+<!doctype html>
+<html lang="ko"><head><meta charset="utf-8"><meta name="viewport" content="width=device-width,initial-scale=1"><title>ARCHIVE PILATES 아임웹 리뉴얼 결과</title><style>
+*{box-sizing:border-box}body{margin:0;background:#fff;color:#242424;font:16px/1.75 -apple-system,BlinkMacSystemFont,"Apple SD Gothic Neo",sans-serif;letter-spacing:0}main{max-width:960px;margin:auto;padding:40px 20px}header{border-bottom:2px solid #242424;padding-bottom:24px}h1{font-size:30px;line-height:1.35}h2{font-size:21px}section{padding:24px 0;border-bottom:1px solid #ddd}p{max-width:65ch}.label{color:#a7352b;font-size:13px;font-weight:700}.row{display:grid;grid-template-columns:140px minmax(0,1fr);gap:20px;padding:14px 0;border-top:1px solid #eee}.row p{margin:0}a{color:inherit;text-underline-offset:4px}code{overflow-wrap:anywhere}small{color:#666}li{margin:7px 0}@media(max-width:600px){h1{font-size:26px}.row{grid-template-columns:1fr;gap:4px}main{padding:26px 18px}}
+</style></head><body><main><header><p class="label">ARCHIVE PILATES · 2026.09.27</p><h1>아임웹 디자인 리뉴얼</h1><p>구매와 시청 동선을 먼저 보여주고, 기존 결제·재고·권한 연결은 보존했습니다.</p><p id="release-status">Hosting 배포, 아임웹 저장, 일반회원 및 공개 화면 검증 완료.</p></header>
+<section><h2>변경 내용</h2>
+<div class="row"><strong>공통 디자인</strong><p>흰색·차콜 중심의 글자와 버튼, 얇은 구분선, 레드 강조. 메뉴는 한국어를 유지하며 롤오버 때 밑줄·색상으로 반응합니다.</p></div>
+<div class="row"><strong>메뉴·홈</strong><p>사진과 첫 화면 정렬은 유지하고 수업 선택을 후기보다 앞에 배치했습니다. 버튼은 강사레슨 예약 / 강사레슨 영상구매로 정리했습니다. 모바일 기본 행 여백의 가로 넘침도 수정했습니다.</p></div>
+<div class="row"><strong>영상 목록</strong><p>전체 영상과 필터를 추천 영역보다 먼저 표시합니다. 행사 안내를 줄이고 카드별 반복 타이머·SALE 표시를 정리했습니다. AR6·AB10의 강사 필터 매핑도 보완했습니다.</p></div>
+<div class="row"><strong>영상 상세</strong><p>상단 상품명의 반복 접두어를 줄이고 상품 본문의 해당 영상 미리보기를 시청 안내보다 먼저 보여줍니다. 원본 상품명·가격·결제 버튼·보호된 시청 경로는 유지했습니다.</p></div>
+<div class="row"><strong>레슨·니티도</strong><p>레슨 날짜별 예약 가능/마감 상태와 대기 문의를 네이티브 옵션에서 읽어 표시합니다. 수량은 표시하지 않습니다. 오래된 일정 문구가 있는 대표사진을 실제 수업 사진으로 교체했습니다. 니티도 단체사진은 유지하고 긴 이야기를 접기 영역으로 정리했습니다.</p></div>
+<div class="row"><strong>내 강의실</strong><p>나가기·수업 시청하기 버튼, 확인된 수업 수, 조회 오류와 빈 목록의 구분, 로그아웃 없이 다시 확인 기능을 적용했습니다. 재조회 때 기존 카드와 포커스를 보존합니다.</p></div>
+</section><section><h2>검증</h2><ul>
+<li>공개 화면 미리보기: 홈 / index / 영상 목록 / AB10 / 니티도 / 강사레슨, 320·390·768·1440px 총 24조합 통과.</li>
+<li>새 회귀 테스트: 공통 화면 12개, 내 강의실 11개, 총 23개 통과. 기존 SEO·메뉴·배송상품·카탈로그·로더 검증 통과.</li>
+<li>실제 일반회원: 권한 있는 계정은 모바일·PC 각 10개 수업 표시, 비구매 계정은 각 0개. 관리자 수동 우회 없이 fetch 경로로 확인했고, 테스트 계정 그룹은 원래 0개로 복원했습니다.</li>
+<li>테스트한 수업: AR6·AB10과 8월·9월 A/B/C/D 수강생 공유 영상. 전체 과거 주문 및 실제 카드결제를 새로 실행한 검증은 아닙니다.</li>
+<li>비로그인: 내 강의실과 최신 판매·공유 시청 경로는 로그인 이동 302를 유지합니다.</li>
+<li>상품 1 API 전후 비교: productImages와 editTime만 변경. 가격·설명·판매 상태 등 나머지 상품 필드는 동일합니다.</li>
+<li>아임웹 Header Code 재열기 후 저장 문자열 동일, 리뉴얼 CSS·JS 각각 1회 연결 확인.</li>
+<li id="public-live">공개 라이브 최초 24조합 중 18개 통과. 사진 및 요청 제한으로 남은 6개 조합은 수정 후 별도 순차 재검증하여 핵심 화면 검증 모두 통과했습니다. 마지막 6조합 모두 CSS v=20260927c를 확인했습니다. 단일 최종 버전으로 전체 24조합을 다시 실행한 결과는 아닙니다.</li>
+<li>PC 카운트다운과 상품 열은 좌측 95px, 우측 1345px, 중심 720px로 일치합니다. 니티도 단체사진은 320·768·1440px에서 표시 및 비율을 확인했습니다.</li>
+<li>검증 중 Imweb HTTP 429가 발생해 요청을 중단했습니다. 이후 HTTP 200 복구, 최신 배포 후 내 강의실 보호 검증 통과, 마지막 6조합에서 429 재발 없음까지 확인했습니다.</li>
+<li id="navigation-live">최종 메뉴 확인에서 사이드바의 기존 영문 전환 효과가 발견되어 CSS 적용 범위를 보완했습니다. 최종 d 버전에서 실제 메뉴 1920·390px의 hover/focus 4개 검사 통과: 한글 유지, 영문 숨김, 글자 크기 유지, 위치 변화 0px, 키보드 포커스 표시, URL 이동 없음. 테스트 브라우저는 모두 닫았습니다.</li>
+</ul></section><section><h2>유지·제외한 범위</h2><p>결제, 재고 수량, 환불 정책, 권한 부여, 상품 식별자, 회원 데이터, 영상 원본은 변경하지 않았습니다. 정확한 만료일·진도·개별 썸네일을 보장할 원본 데이터가 없어 내 강의실에 추정 값을 추가하지 않았습니다. 색상별 상품 통합이나 결제 UI 재구축은 포함하지 않았습니다.</p><p>표현·탐색 기능만 변경했으므로 ARCHIVE CORE 운영규칙과 Functions는 변경·배포하지 않았습니다. 기존 루트 저장소의 다른 작업도 건드리지 않았습니다.</p></section>
+<section><h2>배포 기록</h2><p>대상: <code>archive-pilates / archive-pilates-home</code>, Hosting만 배포.<br>브랜치: <code>codex/mini/imweb-design-renewal-20260927</code><br>코드 커밋: <code>cc2f803</code>, 정렬 보완: <code>0e3b537</code>, 사진 및 검증 보호: <code>9eb09c6</code>, 사이드 메뉴: <code>d165377</code>.<br>최종 스타일: <code>imweb-renewal-20260927.css?v=20260927d</code>.</p><p>현재 운영 파일과 일치하는 원격 판매영상 브랜치의 e2b8001을 기준으로 분리했습니다. main에 존재하는 별도 운영툴 변경을 합치거나 되돌리지 않았습니다.</p><p id="git-state">변경 파일은 전용 브랜치에만 커밋합니다. GitHub push와 최종 clean 상태는 채팅 완료 보고에 기록합니다. 원본 루트 저장소의 기존 미커밋 작업은 그대로 보존했습니다.</p></section>
+<section><h2>확인 링크</h2><p><a href="https://archivepilates.imweb.me/">홈</a> · <a href="https://archivepilates.imweb.me/17">영상구매</a> · <a href="https://archivepilates.imweb.me/17/?idx=87">영상 상세</a> · <a href="https://archivepilates.imweb.me/18/?idx=1">강사레슨</a> · <a href="https://archivepilates.imweb.me/16?ap_shop=knitido">니티도</a></p></section></main></body></html>
