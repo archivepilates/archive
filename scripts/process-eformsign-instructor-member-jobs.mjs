@@ -11,6 +11,7 @@ import { runEformStage, waitForEformOperatorFields, resolvedEformErrorPatch } fr
 import { appendIdleHeartbeatIfDue } from "./lib/idle-heartbeat.mjs";
 import { readImwebOrder } from "./lib/imweb-instructor-orders.mjs";
 import { assertSamePaidOrder } from "./lib/imweb-instructor-order-policy.mjs";
+import { readCompletedSignupProfile, signupProfileMemo, SIGNUP_PROFILE_VERSION } from "./lib/instructor-signup-profile.mjs";
 import {
   EFORMSIGN_COMPLETED_DOCUMENTS_URL,
   EFORMSIGN_PROGRESS_DOCUMENTS_URL,
@@ -47,9 +48,12 @@ const config = {
   waitForLogin: process.env.WAIT_FOR_LOGIN === "true",
   loginOnly: Boolean(args["login-only"]),
   jobId: String(args["job-id"] || process.env.EFORMSIGN_INSTRUCTOR_MEMBER_JOB_ID || ""),
+  refreshCompletedFields: Boolean(args["refresh-completed-fields"]),
   limit: Math.max(1, Math.min(3, Number(args.limit || process.env.EFORMSIGN_INSTRUCTOR_MEMBER_LIMIT || "1"))),
   staleLeaseMs: Math.max(5 * 60 * 1000, Number(process.env.EFORMSIGN_INSTRUCTOR_MEMBER_STALE_LEASE_MS || 15 * 60 * 1000)),
 };
+
+if (config.refreshCompletedFields && !config.jobId) throw new Error("완료 가입서 답변 재확인은 --job-id 지정이 필요합니다.");
 
 if (!admin.apps.length) admin.initializeApp({ projectId: config.projectId });
 const db = admin.firestore();
@@ -72,7 +76,7 @@ const summary = {
 await mkdir(config.profileDir, { recursive: true });
 await mkdir(path.dirname(config.runLogPath), { recursive: true });
 await mkdir(path.dirname(config.lastResultPath), { recursive: true });
-if (apply && !config.loginOnly) await recoverStaleJobs();
+if (apply && !config.loginOnly && !config.refreshCompletedFields) await recoverStaleJobs();
 
 const candidates = await loadCandidates(config.limit);
 if (!candidates.length && !config.loginOnly) {
@@ -143,7 +147,7 @@ async function processCandidate(page, candidate) {
       summary.jobs.push(item);
       return;
     }
-    if (["sent", "waiting_completion"].includes(String(candidate.data.status || ""))) {
+    if (isCompletionCandidate(candidate.data)) {
       const claimed = await claimCompletionCheck(candidate.ref);
       if (!claimed) return;
       summary.processed += 1;
@@ -210,6 +214,10 @@ async function loadCandidates(limit) {
       db.collection("eformsignInstructorMemberJobs").doc(config.jobId).get(),
       db.collection("instructorLessonRegistrations").doc(config.jobId).get(),
     ]);
+    if (config.refreshCompletedFields) {
+      return snapshot.exists && isCompletionCandidate(snapshot.data())
+        ? [{ ref: snapshot.ref, data: snapshot.data(), type: "job" }] : [];
+    }
     if (snapshot.exists && ["pending", "retry", "sent", "waiting_completion"].includes(String(snapshot.data()?.status || ""))) {
       return [{ ref: snapshot.ref, data: snapshot.data(), type: "job" }];
     }
@@ -326,10 +334,15 @@ async function claimJob(ref) {
   });
 }
 
+function isCompletionCandidate(data) {
+  if (config.refreshCompletedFields) return data?.status === "done" && data?.submittedProfile?.version !== SIGNUP_PROFILE_VERSION;
+  return ["sent", "waiting_completion"].includes(String(data?.status || ""));
+}
+
 async function claimCompletionCheck(ref) {
   return db.runTransaction(async (transaction) => {
     const snapshot = await transaction.get(ref);
-    if (!snapshot.exists || !["sent", "waiting_completion"].includes(String(snapshot.data()?.status || ""))) return null;
+    if (!snapshot.exists || !isCompletionCandidate(snapshot.data())) return null;
     const data = snapshot.data();
     const claimToken = randomUUID();
     transaction.set(ref, {
@@ -691,8 +704,14 @@ async function inspectCompletion(page, ref, job) {
   await page.goto(EFORMSIGN_COMPLETED_DOCUMENTS_URL, { waitUntil: "domcontentloaded", timeout: 60_000 });
   const completedEvidence = await documentRowEvidenceAfterLoad(page, job.documentName || "", job.documentId || "");
   if (completedEvidence.found) {
-    await finalizeCompletedDocument(ref, job, completedEvidence);
-    return { status: "completed", detail: "가입서 완료 · 회원 메모 등록" };
+    let profile;
+    try {
+      profile = await readCompletedSignupProfile(page, job, completedEvidence);
+    } catch {
+      return markCompletionReviewRequired(ref, job, "완료 가입서 답변·회원 일치·생년월일 확인필요. 원본 확인 후 재처리하세요.");
+    }
+    await finalizeCompletedDocument(ref, job, completedEvidence, profile);
+    return { status: "completed", detail: "가입서 완료 · 생년월일 및 메모 반영 대기" };
   }
   if (completedEvidence.nameMatchCount > 0) {
     return markCompletionReviewRequired(ref, job, "완료 문서명이 같지만 저장된 문서 ID와 일치하지 않습니다.");
@@ -872,13 +891,13 @@ async function writeSendClaimedState(ref, claimToken, allowedStatuses, jobPatch,
   });
 }
 
-async function finalizeCompletedDocument(ref, job, evidence) {
+async function finalizeCompletedDocument(ref, job, evidence, profile) {
   const registrationRef = db.collection("instructorLessonRegistrations").doc(ref.id);
   const documentId = String(job.documentId || evidence.documentId || "").slice(0, 160);
   if (!documentId || documentId !== String(evidence.documentId || "")) {
     throw new Error("완료 문서 ID가 발송 후 저장한 문서 ID와 일치하지 않습니다.");
   }
-  const memoId = `instructor_lesson_signup_${ref.id}`;
+  const memoId = `instructor_member_profile_${documentId}`;
   const consentMemberId = String(job.studiomateMemberId || "");
   if (!consentMemberId) throw new Error("강사회원 동의 기록에 필요한 StudioMate 회원 ID가 없습니다.");
   const consentId = `consent_${String(job.studioId || "")}_${consentMemberId}`;
@@ -886,12 +905,13 @@ async function finalizeCompletedDocument(ref, job, evidence) {
   const memoRef = db.collection("memberMemos").doc(memoId);
   const memoJobRef = db.collection("studiomateMemoWriteJobs").doc(memoId);
   const memoContent = [
-    "[ARCHIVE PILATES 강사회원 가입서 완료]",
+    "[ARCHIVE PILATES 강사회원 가입서 정보 반영]",
     `수강일: ${job.lessonDate || "-"}`,
     `수강권: ${job.ticketName || "강사레슨 (2T)"}`,
     "촬영·강의 콘텐츠 제작·제공·판매 및 해당 강의 소개 활용 필수 동의 완료",
-    `이폼싸인 문서: ${documentId || job.documentName || "확인 완료"}`,
+    signupProfileMemo(profile),
   ].join("\n");
+  if (memoContent.length > 2000) throw new Error("가입서 메모 최대 길이 확인필요");
   await db.runTransaction(async (transaction) => {
     const [jobSnapshot, registrationSnapshot, memoSnapshot, memoJobSnapshot] = await Promise.all([
       transaction.get(ref),
@@ -906,6 +926,10 @@ async function finalizeCompletedDocument(ref, job, evidence) {
     if (!registrationSnapshot.exists) throw new Error("강사레슨 등록 원본을 찾지 못했습니다.");
     const registration = registrationSnapshot.data() || {};
     const memberId = String(job.studiomateMemberId || registration.studiomateMemberId || "");
+    if (String(registration.studiomateMemberId || registration.evidence?.studiomateMemberId || "") !== memberId
+      || normalizeInstructorLessonPhone(registration.memberPhone) !== profile.memberPhone
+      || normalizeInstructorLessonName(registration.memberName) !== profile.memberName
+      || currentJob.documentId !== documentId) throw new Error("가입서 완료 원본 회원정보가 변경되어 반영을 중단했습니다.");
     const now = FieldValue.serverTimestamp();
     transaction.set(consentRef, {
       consentId,
@@ -921,8 +945,8 @@ async function finalizeCompletedDocument(ref, job, evidence) {
       documentUrl: job.documentUrl || "",
       status: "completed",
       consentScope: "instructor_lesson_recording_content_and_lesson_promotion",
-      completedAt: now,
-      createdAt: now,
+      completedAt: job.completedAt || now,
+      createdAt: job.completedAt || now,
       updatedAt: now,
     }, { merge: true });
     if (!memoSnapshot.exists) {
@@ -937,7 +961,7 @@ async function finalizeCompletedDocument(ref, job, evidence) {
         staffId: "",
         staffName: "",
         memoType: "member_note",
-        visibility: "staff_and_manager",
+        visibility: "manager_only",
         content: memoContent,
         syncStatus: "pending",
         createdByUid: "system:instructor_lesson_registration",
@@ -955,6 +979,7 @@ async function finalizeCompletedDocument(ref, job, evidence) {
         status: "pending",
         writeMode: "playwright",
         registrationId: ref.id,
+        profileUpdate: { version: profile.version, birthDate: profile.birthDate, documentId },
         studiomateMemberId: memberId,
         memberId,
         memberName: job.memberName,
@@ -968,20 +993,23 @@ async function finalizeCompletedDocument(ref, job, evidence) {
         updatedAt: now,
       });
     } else if (String(memoJobSnapshot.data()?.status || "") !== "done") {
-      transaction.set(memoJobRef, { content: memoContent, updatedAt: now }, { merge: true });
+      transaction.set(memoJobRef, { content: memoContent, profileUpdate: { version: profile.version, birthDate: profile.birthDate, documentId }, updatedAt: now }, { merge: true });
     }
     transaction.set(ref, {
       status: "done",
+      submittedProfile: profile,
+      profileMemoJobId: memoId,
+      profileExtractedAt: now,
       claimToken: null,
       claimedAt: null,
       claimedBy: null,
-      completedAt: now,
+      completedAt: job.completedAt || now,
       updatedAt: now,
       lastError: null,
     }, { merge: true });
     transaction.update(registrationRef, deriveRegistrationPatch(registration, {
       "steps.eformsign": stepValue("verified", "강사회원 가입서", "이폼싸인 작성 완료 확인"),
-      "steps.memo": stepValue("queued", "가입서 완료 메모", "ARCHIVE PILATES 메모 저장 · StudioMate 반영 대기"),
+      "steps.memo": stepValue(memoJobSnapshot.data()?.status === "done" ? "verified" : "queued", "가입서 정보 반영", memoJobSnapshot.data()?.status === "done" ? "생년월일·메모 반영 완료" : "생년월일·경력·소속·주소 반영 대기"),
       "evidence.eformsignDocumentId": documentId,
       updatedAt: now,
     }));

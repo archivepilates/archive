@@ -8,6 +8,7 @@ import { acquireStudioMateBrowserLock } from "./lib/studiomate-browser-lock.mjs"
 import { ensureStudioMateLoggedIn } from "./lib/studiomate-login.mjs";
 import { appendIdleHeartbeatIfDue } from "./lib/idle-heartbeat.mjs";
 import { deriveInstructorLessonRegistrationState } from "./lib/instructor-lesson-registration-contract.mjs";
+import { applySignupBirthDate, assertSignupProfileSource, signupProfileMemoPresent } from "./lib/instructor-signup-profile.mjs";
 
 const require = createRequire(import.meta.url);
 const admin = require("../firebase/kangsain-functions/functions/node_modules/firebase-admin");
@@ -102,6 +103,7 @@ try {
             attempts: Number(activeData.attempts || 0),
             claimToken: null,
             ...(writeResult.studiomateMemberId ? { studiomateMemberId: writeResult.studiomateMemberId } : {}),
+            ...(writeResult.profileStatus ? { profileStatus: writeResult.profileStatus } : {}),
             writtenAt: admin.firestore.Timestamp.now(),
             lastError: null,
             updatedAt: admin.firestore.Timestamp.now(),
@@ -120,7 +122,7 @@ try {
         });
         await updateInstructorLessonRegistrationMemoStatus(activeData, {
           status: "done",
-          reason: "StudioMate 회원 메모 반영 완료",
+          reason: activeData.profileUpdate ? "StudioMate 생년월일·가입서 메모 반영 완료" : "StudioMate 회원 메모 반영 완료",
         });
         await markMemberIdLookupDone(activeData, writeResult.studiomateMemberId);
         item.status = "done";
@@ -129,8 +131,10 @@ try {
     } catch (error) {
       const attempts = Number(activeData.attempts || 0) || Number(data.attempts || 0) + 1;
       const maxAttempts = Number(activeData.maxAttempts || data.maxAttempts || 3);
-      const message = error instanceof Error ? error.message : String(error);
-      const status = attempts >= maxAttempts ? "failed" : "retry";
+      const message = activeData.profileUpdate
+        ? (error?.nonRetryable ? error.message : "가입서 정보 반영 중 StudioMate 메모 저장·재조회 실패. 원본 확인 후 재처리합니다.")
+        : error instanceof Error ? error.message : String(error);
+      const status = error?.nonRetryable || attempts >= maxAttempts ? "failed" : "retry";
       await ref.set(
         {
           status,
@@ -253,6 +257,10 @@ async function updateInstructorLessonRegistrationMemoStatus(job, patch) {
   const registrationRef = db.collection("instructorLessonRegistrations").doc(registrationId);
   await db.runTransaction(async (transaction) => {
     const snapshot = await transaction.get(registrationRef);
+    const sourceSnapshot = await transaction.get(db.collection("eformsignInstructorMemberJobs").doc(registrationId));
+    const profileMemoJobId = sourceSnapshot.data()?.profileMemoJobId;
+    // Older completion-only memos cannot finish the newer profile-and-memo step.
+    if (profileMemoJobId && profileMemoJobId !== job.jobId) return;
     if (!snapshot.exists) return;
     const current = snapshot.data() || {};
     const currentMemo = current.steps?.memo || {};
@@ -267,7 +275,7 @@ async function updateInstructorLessonRegistrationMemoStatus(job, patch) {
       memo: {
         ...currentMemo,
         status: completed ? "verified" : failed ? "review_required" : "retry",
-        label: "가입서 완료 메모",
+        label: job.profileUpdate ? "가입서 정보 반영" : "가입서 완료 메모",
         detail: String(patch.reason || "").slice(0, 240),
         updatedAt: now,
       },
@@ -426,21 +434,36 @@ async function writeMemo(page, job, authorization) {
   const content = String(job.content || "");
   if (!memberId || !content) throw new Error("memberId/content is required");
   const studiomateMemberId = await resolveStudioMateMemberId(page, job);
+  let profileStatus;
+  if (job.profileUpdate) {
+    try {
+      const source = (await db.collection("eformsignInstructorMemberJobs").doc(String(job.registrationId || "")).get()).data();
+      const registration = (await db.collection("instructorLessonRegistrations").doc(String(job.registrationId || "")).get()).data();
+      assertSignupProfileSource(job, source, registration);
+      profileStatus = await applySignupBirthDate(page, job, studiomateMemberId, config.baseUrl);
+    } catch (error) {
+      const safeError = new Error(/기존 생년월일/.test(String(error?.message || ""))
+        ? "StudioMate 기존 생년월일과 가입서가 다릅니다. 덮어쓰지 않고 확인필요"
+        : "가입서 원본·회원 일치·생년월일 저장 검증 실패. 원본 확인 후 재처리하세요.");
+      safeError.nonRetryable = true;
+      throw safeError;
+    }
+  }
   if (await studioMateMemoExists(page, studiomateMemberId, content)) {
-    return { studiomateMemberId, alreadyExists: true };
+    return { studiomateMemberId, alreadyExists: true, profileStatus };
   }
   try {
     await writeMemoViaBrowserRequest(page, studiomateMemberId, content, authorization);
     if (!(await studioMateMemoExists(page, studiomateMemberId, content))) {
       throw new Error("StudioMate memo API success was not visible on the member detail page.");
     }
-    return { studiomateMemberId };
+    return { studiomateMemberId, profileStatus };
   } catch (error) {
     const message = error instanceof Error ? error.message : String(error);
     if (!/403|비정상|abnormal/i.test(message)) throw error;
   }
   await writeMemoViaUi(page, studiomateMemberId, content);
-  return { studiomateMemberId };
+  return { studiomateMemberId, profileStatus };
 }
 
 async function studioMateMemoExists(page, memberId, content) {
@@ -558,6 +581,7 @@ async function writeMemoViaUi(page, memberId, content) {
 }
 
 function bodyContainsMemoContent(body, content) {
+  if (content.includes("[ARCHIVE PILATES 강사회원 가입서 정보]")) return signupProfileMemoPresent(body, content);
   const normalizedBody = normalizeMemoText(body);
   const normalizedContent = normalizeMemoText(content);
   if (!normalizedContent) return false;
