@@ -49,7 +49,7 @@ export function parseSignupProfile(fields, job, documentId, now = new Date()) {
 
 export async function readCompletedSignupProfile(page, job, evidence) {
   const url = new URL(evidence.href, 'https://www.eformsign.com');
-  if (!evidence.found || !/^완료\s/.test(evidence.text) || evidence.documentId !== job.documentId
+  if (!evidence.found || !/^(?:완료|Completed)\s/i.test(evidence.text) || evidence.documentId !== job.documentId
     || url.origin !== 'https://www.eformsign.com' || url.pathname !== '/eform/document/view_service.html'
     || url.searchParams.get('document_id') !== job.documentId
     || url.searchParams.get('form_id') !== INSTRUCTOR_MEMBER_EFORMSIGN_TEMPLATE_ID) {

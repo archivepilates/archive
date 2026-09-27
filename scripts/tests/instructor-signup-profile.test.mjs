@@ -141,7 +141,7 @@ for (const [label, change] of [
   });
 }
 
-test('verified signed-form extraction reads the six mapped fields using a mocked page', async () => {
+for (const language of ['완료', 'Completed']) test(`verified ${language} signed-form extraction reads the six mapped fields using a mocked page`, async () => {
   const { source, fields, profile } = fixture();
   const selectors = [];
   const frame = { locator: selector => {
@@ -158,7 +158,7 @@ test('verified signed-form extraction reads the six mapped fields using a mocked
     },
     frameLocator: selector => { assert.equal(selector, '#viewer_frame'); return frame; },
   };
-  assert.deepEqual(await readCompletedSignupProfile(page, source, evidence()), profile);
+  assert.deepEqual(await readCompletedSignupProfile(page, source, { ...evidence(), text: `${language} Synthetic document` }), profile);
   for (const id of Object.values(SIGNUP_PROFILE_FIELDS)) assert.ok(selectors.includes(`#${id}`));
 });
 

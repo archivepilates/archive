@@ -335,7 +335,10 @@ async function claimJob(ref) {
 }
 
 function isCompletionCandidate(data) {
-  if (config.refreshCompletedFields) return data?.status === "done" && data?.submittedProfile?.version !== SIGNUP_PROFILE_VERSION;
+  if (config.refreshCompletedFields) return (data?.status === "done"
+    || (data?.status === "send_review_required" && data?.completedAt
+      && data?.lastError === "완료 가입서 답변·회원 일치·생년월일 확인필요. 원본 확인 후 재처리하세요."))
+    && data?.submittedProfile?.version !== SIGNUP_PROFILE_VERSION;
   return ["sent", "waiting_completion"].includes(String(data?.status || ""));
 }
 
@@ -1008,6 +1011,7 @@ async function finalizeCompletedDocument(ref, job, evidence, profile) {
       lastError: null,
     }, { merge: true });
     transaction.update(registrationRef, deriveRegistrationPatch(registration, {
+      ...resolvedEformErrorPatch(registration, job.lastError),
       "steps.eformsign": stepValue("verified", "강사회원 가입서", "이폼싸인 작성 완료 확인"),
       "steps.memo": stepValue(memoJobSnapshot.data()?.status === "done" ? "verified" : "queued", "가입서 정보 반영", memoJobSnapshot.data()?.status === "done" ? "생년월일·메모 반영 완료" : "생년월일·경력·소속·주소 반영 대기"),
       "evidence.eformsignDocumentId": documentId,
