@@ -7,6 +7,7 @@ import os from "node:os";
 import path from "node:path";
 import { recordAutomationStatus } from "./lib/archive-core-ops-logging.mjs";
 import { acquireEformsignBrowserLock } from "./lib/eformsign-browser-lock.mjs";
+import { runEformStage, waitForEformOperatorFields, resolvedEformErrorPatch } from "./lib/eformsign-send-readiness.mjs";
 import { appendIdleHeartbeatIfDue } from "./lib/idle-heartbeat.mjs";
 import { readImwebOrder } from "./lib/imweb-instructor-orders.mjs";
 import { assertSamePaidOrder } from "./lib/imweb-instructor-order-policy.mjs";
@@ -386,33 +387,28 @@ async function sendInstructorMemberForm(page, job, beforeFinalSend) {
   const titleInput = page.locator("#document_name").first();
   if (await titleInput.isVisible().catch(() => false)) await titleInput.fill(documentName);
   await startButton.click();
-  await page.locator("#viewer_frame").waitFor({ state: "attached", timeout: 30_000 }).catch(() => {});
-  await page.waitForFunction(
-    () => document.querySelector("#viewer_layer")?.getAttribute("load_status") === "1",
-    undefined,
-    { timeout: 30_000 },
-  );
-  const frame = page.frameLocator("#viewer_frame");
+  const frame = await runEformStage(page, "operator_fields_ready", () =>
+    waitForEformOperatorFields(page, INSTRUCTOR_MEMBER_EFORMSIGN_OPERATOR_FIELD_IDS));
   const ticketName = String(job.ticketName || INSTRUCTOR_LESSON_TICKET_NAME);
   const ticketPrice = positiveMoney(job.ticketPrice || job.paymentAmount || INSTRUCTOR_LESSON_TICKET_PRICE);
-  await fillFrameField(page, frame, INSTRUCTOR_MEMBER_EFORMSIGN_OPERATOR_FIELD_IDS.ticketName, ticketName);
-  await fillFrameField(
+  await runEformStage(page, "ticket_name_input", () => fillFrameField(page, frame, INSTRUCTOR_MEMBER_EFORMSIGN_OPERATOR_FIELD_IDS.ticketName, ticketName));
+  await runEformStage(page, "payment_input", () => fillFrameField(
     page,
     frame,
     INSTRUCTOR_MEMBER_EFORMSIGN_OPERATOR_FIELD_IDS.paymentAmount,
     `${ticketPrice.toLocaleString("ko-KR")}원`,
-  );
+  ));
 
   const processButton = page.locator("#btn_unstructured_process_request");
   await processButton.click();
-  await page.waitForFunction(
+  await runEformStage(page, "send_transition", () => page.waitForFunction(
     () => /^(전송|Send)$/.test(document.querySelector("#btn_unstructured_process_request")?.textContent?.trim() || ""),
     undefined,
     { timeout: 30_000 },
-  );
+  ));
   await assertOperatorFieldsReady(page, frame, { ticketName, ticketPrice });
 
-  const sendHeading = await openSendDialog(page, processButton);
+  const sendHeading = await runEformStage(page, "send_dialog", () => openSendDialog(page, processButton));
   const sendModal = sendHeading.locator("xpath=ancestor::*[.//button[@subkey='cancelButton']][1]");
   await configureSmsRecipient(page, sendModal, job);
 
@@ -852,10 +848,10 @@ async function markSent(ref, job, sendResult) {
     "steps.eformsign": stepValue("sent", "강사회원 가입서", "SMS 발송 확인 · 작성 대기"),
     "evidence.eformsignDocumentId": sendResult.documentId,
     updatedAt: now,
-  });
+  }, job.lastError);
 }
 
-async function writeSendClaimedState(ref, claimToken, allowedStatuses, jobPatch, registrationPatch) {
+async function writeSendClaimedState(ref, claimToken, allowedStatuses, jobPatch, registrationPatch, resolvedError = null) {
   await db.runTransaction(async (transaction) => {
     const registrationRef = db.collection("instructorLessonRegistrations").doc(ref.id);
     const [snapshot, registrationSnapshot] = await Promise.all([
@@ -868,7 +864,11 @@ async function writeSendClaimedState(ref, claimToken, allowedStatuses, jobPatch,
     }
     if (!registrationSnapshot.exists) throw new Error("강사레슨 등록 원본을 찾지 못했습니다.");
     transaction.set(ref, jobPatch, { merge: true });
-    transaction.update(registrationRef, deriveRegistrationPatch(registrationSnapshot.data() || {}, registrationPatch));
+    const registration = registrationSnapshot.data() || {};
+    transaction.update(registrationRef, deriveRegistrationPatch(registration, {
+      ...resolvedEformErrorPatch(registration, resolvedError),
+      ...registrationPatch,
+    }));
   });
 }
 
@@ -1030,7 +1030,7 @@ async function persistSummary() {
     automationId: "eformsign-instructor-member-queue",
     title: "이폼싸인 강사회원 가입서 큐",
     ownerArea: "instructor-lessons",
-    status: summary.ok ? "healthy" : summary.reviewRequired ? "warning" : "failed",
+    status: summary.failed || summary.error ? "failed" : summary.retried || summary.reviewRequired ? "warning" : "healthy",
     lastRunAt: summary.finishedAt || new Date().toISOString(),
     lastResult: `처리 ${summary.processed}건 · 발송 ${summary.sent}건 · 완료 ${summary.completed}건 · 대기 ${summary.waiting}건`,
     warnings: [summary.error, ...summary.jobs.filter((job) => job.error).map((job) => `${job.jobId}: ${job.error}`)].filter(Boolean),
