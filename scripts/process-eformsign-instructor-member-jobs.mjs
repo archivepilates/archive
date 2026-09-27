@@ -8,6 +8,8 @@ import path from "node:path";
 import { recordAutomationStatus } from "./lib/archive-core-ops-logging.mjs";
 import { acquireEformsignBrowserLock } from "./lib/eformsign-browser-lock.mjs";
 import { appendIdleHeartbeatIfDue } from "./lib/idle-heartbeat.mjs";
+import { readImwebOrder } from "./lib/imweb-instructor-orders.mjs";
+import { assertSamePaidOrder } from "./lib/imweb-instructor-order-policy.mjs";
 import {
   EFORMSIGN_COMPLETED_DOCUMENTS_URL,
   EFORMSIGN_PROGRESS_DOCUMENTS_URL,
@@ -168,6 +170,14 @@ async function processCandidate(page, candidate) {
     let finalSendClicked = false;
     try {
       const sendResult = await sendInstructorMemberForm(page, { ...claimed, jobId: candidate.ref.id }, async () => {
+        const registration = (await db.collection("instructorLessonRegistrations").doc(candidate.ref.id).get()).data();
+        if (!registration) throw new Error("강사레슨 등록 원본을 찾지 못했습니다.");
+        if (registration.externalOrder) {
+          if (registration.externalOrderReviewRequired || registration.operatorChecks?.paymentConfirmed !== true) {
+            throw new Error("홈페이지 주문 확인필요: 가입서 발송 중단");
+          }
+          assertSamePaidOrder(registration, readImwebOrder(registration.externalOrder.orderNo));
+        }
         finalSendClicked = true;
         await markSending(candidate.ref, claimed);
       });

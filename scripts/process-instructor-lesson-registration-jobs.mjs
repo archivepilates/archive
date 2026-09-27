@@ -9,6 +9,8 @@ import { recordAutomationStatus } from "./lib/archive-core-ops-logging.mjs";
 import { acquireStudioMateBrowserLock } from "./lib/studiomate-browser-lock.mjs";
 import { ensureStudioMateLoggedIn } from "./lib/studiomate-login.mjs";
 import { appendIdleHeartbeatIfDue } from "./lib/idle-heartbeat.mjs";
+import { readImwebOrder, syncImwebInstructorOrders } from "./lib/imweb-instructor-orders.mjs";
+import { assertSamePaidOrder } from "./lib/imweb-instructor-order-policy.mjs";
 import {
   INSTRUCTOR_LESSON_TICKET_NAME,
   INSTRUCTOR_LESSON_TICKET_PRICE,
@@ -68,6 +70,13 @@ const summary = {
 await mkdir(path.dirname(config.runLogPath), { recursive: true });
 await mkdir(path.dirname(config.lastResultPath), { recursive: true });
 if (apply) await recoverStaleJobs();
+if (apply && !config.jobId) {
+  try { summary.websiteOrders = await syncImwebInstructorOrders(db, { apply: true }); }
+  catch (error) {
+    summary.websiteOrders = { ok: false, error: error.message };
+    console.error(`홈페이지 강사레슨 접수 확인필요: ${error.message}`);
+  }
+}
 
 const candidates = await loadCandidates(config.limit);
 if (config.simulateNewMemberTest) {
@@ -77,7 +86,7 @@ if (config.simulateNewMemberTest) {
   }
 }
 if (!candidates.length) {
-  summary.ok = true;
+  summary.ok = summary.websiteOrders?.ok !== false;
   summary.finishedAt = new Date().toISOString();
   appendIdleHeartbeatIfDue(config.runLogPath, summary, 30 * 60 * 1000);
   await writeFile(config.lastResultPath, `${JSON.stringify(summary, null, 2)}\n`);
@@ -121,7 +130,7 @@ try {
   await releaseBrowserLock?.().catch(() => {});
 }
 
-summary.ok = summary.failed === 0 && summary.reviewRequired === 0;
+summary.ok = summary.failed === 0 && summary.reviewRequired === 0 && summary.websiteOrders?.ok !== false;
 summary.finishedAt = new Date().toISOString();
 await persistSummary();
 if (!summary.ok) process.exitCode = 1;
@@ -155,6 +164,7 @@ async function runCandidate(candidate, page) {
   summary.processed += 1;
   try {
     if (!page) throw new Error("StudioMate 브라우저가 준비되지 않았습니다.");
+    if (claimed.externalOrder) assertSamePaidOrder(claimed, readImwebOrder(claimed.externalOrder.orderNo));
     const processed = await processStudioMateRegistration(page, candidate.ref, {
       ...claimed,
       newMemberSimulation,
@@ -231,6 +241,13 @@ async function processStudioMateRegistration(page, ref, job) {
 
   await openMemberDetail(page, memberId);
   const activeTicket = await findActiveInstructorTicket(page, job.lessonDate);
+  if (activeTicket && job.externalOrder) {
+    const payment = activeTicket.text.match(/결제\s*금액\s*([\d,]+)\s*원/);
+    if (!job.ticketId || String(activeTicket.ticketId) !== String(job.ticketId)
+      || !payment || Number(payment[1].replaceAll(",", "")) !== job.externalOrder.paidAmount) {
+      throw new Error("동일 수강일 수강권의 ID·결제액 연결 확인필요: 자동 재발급 금지");
+    }
+  }
   let ticketId = String(job.ticketId || "");
   if (activeTicket) {
     ticketId = activeTicket.ticketId || ticketId;
@@ -240,7 +257,9 @@ async function processStudioMateRegistration(page, ref, job) {
   }
   await completeStep(ref, job.claimToken, "ticket", {
     ticketId,
-    detail: activeTicket ? "기존 동일 수강일 수강권 재사용" : "강사레슨 (2T) 발급 검증 완료",
+    ...(job.externalOrder ? { ticketPaymentAmount: job.externalOrder.paidAmount } : {}),
+    detail: (activeTicket ? "기존 동일 수강일 수강권 재사용" : "강사레슨 (2T) 발급 검증 완료")
+      + (job.externalOrder ? ` · 홈페이지 ${job.externalOrder.paidAmount.toLocaleString("ko-KR")}원 / 주문 ${job.externalOrder.orderNo}` : ""),
     nextStep: "followup",
   });
   await preparePostTicketSteps(ref, job.claimToken, {
@@ -413,6 +432,20 @@ async function issueInstructorLessonTicket(page, ref, job) {
   await dialog.getByRole("button", { name: "다음", exact: true }).click();
   await dialog.getByRole("button", { name: "완료", exact: true }).waitFor({ state: "visible" });
   await selectPaymentMethod(dialog, job.paymentMethod);
+  if (job.externalOrder) {
+    assertSamePaidOrder(job, readImwebOrder(job.externalOrder.orderNo));
+    const fields = await dialog.locator(".price-input, .point-input").evaluateAll(nodes => nodes.map(node => ({
+      label: node.querySelector("label")?.textContent?.trim(),
+      value: node.querySelector("input")?.value,
+    })));
+    for (const [label, amount] of Object.entries({ 판매가: job.externalOrder.paidAmount, 결제금액: job.externalOrder.paidAmount,
+      카드: job.externalOrder.paidAmount, 현금: 0, 계좌이체: 0, 포인트: 0, 미수금: 0, 할인금액: 0 })) {
+      const matches = fields.filter(field => field.label === label);
+      if (matches.length !== 1 || Number(String(matches[0].value || "").replaceAll(",", "")) !== amount) {
+        throw new Error(`홈페이지 결제와 StudioMate ${label} 불일치: 발급 중단`);
+      }
+    }
+  }
 
   await startExternalEffect(ref, job.claimToken, "ticket", "ticket_issue");
   const responsePromise = page.waitForResponse(
@@ -431,6 +464,12 @@ async function issueInstructorLessonTicket(page, ref, job) {
   await openMemberDetail(page, job.studiomateMemberId);
   const verified = await findActiveInstructorTicket(page, job.lessonDate);
   if (!verified) throw new Error("발급 후 StudioMate 상세에서 강사레슨 (2T) 수강권을 확인하지 못했습니다.");
+  if (job.externalOrder) {
+    const payment = verified.text.match(/결제\s*금액\s*([\d,]+)\s*원/);
+    if (!payment || Number(payment[1].replaceAll(",", "")) !== job.externalOrder.paidAmount) {
+      throw new Error("발급 후 홈페이지 결제금액과 수강권 결제금액 불일치: 자동 재발급 금지");
+    }
+  }
   const ticketId = String(payload?.data?.[0]?.id || payload?.[0]?.id || verified.ticketId || "");
   return { ticketId };
 }
@@ -450,6 +489,7 @@ async function preparePostTicketSteps(ref, claimToken, job) {
     }
     if (!registrationSnapshot.exists) throw new Error("강사레슨 등록 원본을 찾지 못했습니다.");
     const registrationData = registrationSnapshot.data() || {};
+    if (registrationData.externalOrderReviewRequired) throw new Error("홈페이지 주문 변경 확인필요: 후속 처리 중단");
     const currentSteps = registrationData.steps || {};
     const now = FieldValue.serverTimestamp();
     const newMember = String(job.mode || currentJob.mode || "") === "new_member";
@@ -489,7 +529,7 @@ async function preparePostTicketSteps(ref, claimToken, job) {
         lessonDate: job.lessonDate,
         studiomateMemberId: job.studiomateMemberId,
         ticketName: INSTRUCTOR_LESSON_TICKET_NAME,
-        ticketPrice: INSTRUCTOR_LESSON_TICKET_PRICE,
+        ticketPrice: job.externalOrder?.paidAmount ?? INSTRUCTOR_LESSON_TICKET_PRICE,
         status: "pending",
         attempts: 0,
         maxAttempts: 3,
@@ -657,6 +697,7 @@ async function completeStep(ref, claimToken, stepName, values = {}) {
   const evidence = {};
   if (values.studiomateMemberId) evidence.studiomateMemberId = values.studiomateMemberId;
   if (values.ticketId) evidence.ticketId = values.ticketId;
+  if (Number.isFinite(values.ticketPaymentAmount)) evidence.ticketPaymentAmount = values.ticketPaymentAmount;
   await commitClaimedState(ref, claimToken, {
     status: "processing",
     currentStep: values.nextStep || stepName,
@@ -692,6 +733,8 @@ async function completeStep(ref, claimToken, stepName, values = {}) {
 async function commitClaimedState(ref, claimToken, jobPatch, registrationPatch) {
   await db.runTransaction(async (transaction) => {
     const snapshot = await transaction.get(ref);
+    const registrationSnapshot = await transaction.get(registration(ref.id));
+    if (registrationSnapshot.data()?.externalOrderReviewRequired) throw new Error("홈페이지 주문 변경으로 자동 처리 중단: 운영자 확인필요");
     const current = snapshot.data() || {};
     if (!snapshot.exists || current.status !== "processing" || current.claimToken !== claimToken) {
       throw new Error("강사레슨 작업 임대가 변경되어 외부 작업 결과 반영을 중단했습니다.");
