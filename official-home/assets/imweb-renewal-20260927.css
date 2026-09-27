@@ -15,7 +15,7 @@ html[data-ap-video-discovery-route='list'] body .shop-grid .prod_icon.timesale,
 html[data-ap-video-discovery-route='list'] body .shop-grid .prod_icon.sale { display:none!important; }
 html[data-ap-video-discovery-route='list'] body .shop-title { font-size:17px!important; font-weight:700!important; line-height:1.5!important; letter-spacing:0!important; }
 html[data-ap-renewal] body .sale_percentage { color:#a7352b!important; }
-html[data-ap-renewal] body .ap-price-countdown--list { display:flex!important; flex-wrap:wrap; justify-content:space-between; align-items:center; gap:12px!important; padding:14px 18px!important; margin:0 0 20px!important; border:1px solid #dedede!important; border-radius:0!important; background:#fff!important; box-shadow:none!important; }
+html[data-ap-renewal] body .ap-price-countdown--list { display:flex!important; flex-wrap:wrap; justify-content:space-between; align-items:center; gap:12px!important; padding:14px 18px!important; margin:0 auto 20px!important; border:1px solid #dedede!important; border-radius:0!important; background:#fff!important; box-shadow:none!important; }
 html[data-ap-renewal] body .ap-price-countdown--list .ap-price-countdown__title { font-size:16px!important; }
 html[data-ap-renewal] body .ap-price-countdown--list .ap-price-countdown__copy p { font-size:13px!important; margin:3px 0 0!important; }
 html[data-ap-renewal] body .ap-price-countdown--list .ap-price-countdown__number { font-size:20px!important; min-width:2ch; }
