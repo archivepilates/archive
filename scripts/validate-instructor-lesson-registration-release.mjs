@@ -188,6 +188,29 @@ for (const [file, required, forbidden] of checks) {
   for (const marker of forbidden) if (source.includes(marker)) failures.push(`${file} contains forbidden ${marker}`);
 }
 
+const registrationWorker = "scripts/process-instructor-lesson-registration-jobs.mjs";
+if (existsSync(registrationWorker)) {
+  const source = readFileSync(registrationWorker, "utf8");
+  const createMember = source.match(/async function createInstructorMember\(page, ref, job\) \{([\s\S]*?)\n\}/)?.[1] || "";
+  const gradeSelectionSteps = [
+    'await gradeInput.click();',
+    'const gradeOptions = page.locator(".el-select-dropdown__item:visible").filter({ hasText: /^강사회원$/ });',
+    'await gradeOptions.first().waitFor({ state: "visible", timeout: 15_000 });',
+    'if ((await gradeOptions.count()) !== 1) throw new Error(',
+    'await gradeOptions.first().click();',
+    'if (!isInstructorMemberGrade(await gradeInput.inputValue())) {',
+    'await startExternalEffect(ref, job.claimToken, "member", "member_create");',
+  ];
+  let previousPosition = -1;
+  for (const marker of gradeSelectionSteps) {
+    const position = createMember.indexOf(marker);
+    if (position < 0 || position <= previousPosition) {
+      failures.push(`${registrationWorker} createInstructorMember missing or out-of-order grade selection: ${marker}`);
+    }
+    previousPosition = position;
+  }
+}
+
 if (failures.length) {
   console.error(`validate-instructor-lesson-registration-release failed:\n- ${failures.join("\n- ")}`);
   process.exit(1);

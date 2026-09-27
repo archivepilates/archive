@@ -335,14 +335,8 @@ async function createInstructorMember(page, ref, job) {
   }
 
   await startExternalEffect(ref, job.claimToken, "member", "member_create");
-  const responsePromise = page.waitForResponse(
-    (response) => response.request().method() === "POST" && /\/v2\/staff\/members(?:\?|$)/.test(response.url()),
-    { timeout: 60_000 },
-  );
   await page.getByRole("button", { name: "회원 등록 완료", exact: true }).click();
-  const response = await responsePromise;
-  const payload = await response.json().catch(async () => ({ raw: await response.text() }));
-  if (!response.ok()) throw new Error(`StudioMate 회원 생성 실패: ${response.status()} ${JSON.stringify(payload).slice(0, 500)}`);
+  // Prove persistence by a fresh exact-phone lookup, not a versioned write-response URL.
   await page.waitForURL(/\/users\/detail\?id=\d+/, { timeout: 30_000 });
   const createdMemberId = new URL(page.url()).searchParams.get("id") || "";
   const lookup = await lookupExactMember(page, job);
