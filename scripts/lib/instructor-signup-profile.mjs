@@ -143,8 +143,11 @@ export async function applySignupBirthDate(page, job, memberId, baseUrl) {
   const field = await openEditor();
   const decision = birthDateWriteDecision(await field.inputValue(), expected.birthDate);
   if (decision !== 'write') return decision;
-  await field.fill(expected.birthDate);
+  // StudioMate formats DOB on key events; fill alone strips the separators.
+  await field.fill('');
+  await field.pressSequentially(expected.birthDate.replace(/-/g, ''));
   await field.press('Tab');
+  if (await field.inputValue() !== expected.birthDate) throw new Error('StudioMate 생년월일 입력 형식 확인필요');
   await page.getByRole('button', { name: '회원 수정 완료', exact: true }).click();
   await page.waitForURL(detailUrl, { timeout: 30000 });
   const verified = await openEditor();

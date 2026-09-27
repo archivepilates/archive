@@ -219,7 +219,9 @@ function mockProfilePage(job, options = {}) {
   let draft = stored;
   let currentUrl = '';
   const field = { inputValue: async () => draft,
-    fill: async value => { events.push('fill'); draft = value; }, press: async () => {} };
+    fill: async value => { events.push('fill'); assert.equal(value, ''); draft = value; },
+    pressSequentially: async value => { assert.match(value, /^\d{8}$/); draft = options.badMask ? value : `${value.slice(0, 4)}-${value.slice(4, 6)}-${value.slice(6)}`; },
+    press: async () => {} };
   const visibleOnly = locator => ({ filter: options => { assert.deepEqual(options, { visible: true }); return locator; } });
   const phoneValue = options.phone ?? job.memberPhone;
   const page = {
@@ -252,6 +254,12 @@ test('DOB save requires a persisted readback and replay is a no-op', async () =>
   assert.deepEqual(mock.events, ['load', 'editor', 'fill', 'save', 'load', 'editor']);
   assert.equal(await applySignupBirthDate(mock.page, job, MEMBER_ID, BASE_URL), 'already_equal');
   assert.equal(mock.events.filter(e => e === 'save').length, 1);
+});
+
+test('DOB rejects a broken input mask before save', async () => {
+  const { job } = fixture(); const mock = mockProfilePage(job, { badMask: true });
+  await assert.rejects(applySignupBirthDate(mock.page, job, MEMBER_ID, BASE_URL));
+  assert.equal(mock.events.includes('save'), false);
 });
 
 for (const [label, options] of [
