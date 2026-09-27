@@ -220,6 +220,7 @@ function mockProfilePage(job, options = {}) {
   let currentUrl = '';
   const field = { inputValue: async () => draft,
     fill: async value => { events.push('fill'); draft = value; }, press: async () => {} };
+  const visibleOnly = locator => ({ filter: options => { assert.deepEqual(options, { visible: true }); return locator; } });
   const phoneValue = options.phone ?? job.memberPhone;
   const page = {
     goto: async url => { events.push('load'); currentUrl = options.wrongId ? url.replace(MEMBER_ID, '999') : url; draft = stored; },
@@ -231,9 +232,9 @@ function mockProfilePage(job, options = {}) {
       return { click: async () => { events.push('save'); if (options.saveError) throw new Error('synthetic save error'); if (options.persist !== false) stored = draft; } };
     },
     getByPlaceholder: placeholder => {
-      if (placeholder === '\uD734\uB300\uD3F0 \uBC88\uD638') return { waitFor: async () => {}, inputValue: async () => phoneValue };
-      if (placeholder === '\uC774\uB984\uC744 \uC785\uB825\uD574\uC8FC\uC138\uC694') return { inputValue: async () => options.name ?? job.memberName };
-      assert.equal(placeholder, '\uC0DD\uB144\uC6D4\uC77C (YYYY-MM-DD)'); return field;
+      if (placeholder === '\uD734\uB300\uD3F0 \uBC88\uD638') return visibleOnly({ waitFor: async () => {}, inputValue: async () => phoneValue });
+      if (placeholder === '\uC774\uB984\uC744 \uC785\uB825\uD574\uC8FC\uC138\uC694') return visibleOnly({ inputValue: async () => options.name ?? job.memberName });
+      assert.equal(placeholder, '\uC0DD\uB144\uC6D4\uC77C (YYYY-MM-DD)'); return visibleOnly(field);
     },
     waitForFunction: async (_, { expectedPhone }) => {
       if (phoneValue.replace(/\D/g, '') !== expectedPhone) throw new Error('synthetic identity timeout');

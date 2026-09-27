@@ -128,16 +128,16 @@ export async function applySignupBirthDate(page, job, memberId, baseUrl) {
     await page.goto(detailUrl, { waitUntil: 'networkidle', timeout: 60000 });
     await page.getByRole('heading', { name: job.memberName, exact: true }).waitFor({ state: 'visible' });
     await page.getByRole('button', { name: '회원정보 수정', exact: true }).click();
-    const phone = page.getByPlaceholder('휴대폰 번호', { exact: true });
+    const phone = page.getByPlaceholder('휴대폰 번호', { exact: true }).filter({ visible: true });
     await phone.waitFor({ state: 'visible' });
     await page.waitForFunction(({ expectedPhone }) => {
-      const input = document.querySelector('input[placeholder="휴대폰 번호"]');
+      const input = [...document.querySelectorAll('input[placeholder="휴대폰 번호"]')].find(element => element.getClientRects().length > 0);
       return String(input?.value || '').replace(/\D/g, '') === expectedPhone;
     }, { expectedPhone: normalizeInstructorLessonPhone(job.memberPhone) }, { timeout: 20000 });
     if (normalizeInstructorLessonPhone(await phone.inputValue()) !== normalizeInstructorLessonPhone(job.memberPhone)
-      || normalizeInstructorLessonName(await page.getByPlaceholder('이름을 입력해주세요', { exact: true }).inputValue()) !== normalizeInstructorLessonName(job.memberName)
+      || normalizeInstructorLessonName(await page.getByPlaceholder('이름을 입력해주세요', { exact: true }).filter({ visible: true }).inputValue()) !== normalizeInstructorLessonName(job.memberName)
       || new URL(page.url()).searchParams.get('id') !== memberId) throw new Error('StudioMate 회원 이름·연락처·ID 불일치: 반영 중단');
-    return page.getByPlaceholder('생년월일 (YYYY-MM-DD)', { exact: true });
+    return page.getByPlaceholder('생년월일 (YYYY-MM-DD)', { exact: true }).filter({ visible: true });
   };
   const field = await openEditor();
   const decision = birthDateWriteDecision(await field.inputValue(), expected.birthDate);
