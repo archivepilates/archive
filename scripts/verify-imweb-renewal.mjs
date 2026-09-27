@@ -140,6 +140,22 @@ async function catalog(page, evidence, capture) {
   });
   assert(evidence.order.dom, "Catalog must precede recommendations in DOM");
   assert(evidence.order.gridBottom <= evidence.order.recommendationTop + 1, `Catalog overlaps/follows recommendations: ${JSON.stringify(evidence.order)}`);
+  if (page.viewportSize().width >= 1024) {
+    const countdown = page.getByTestId("video-price-countdown");
+    await countdown.waitFor({ state: "visible" });
+    evidence.countdownAlignment = await countdown.evaluate((element) => {
+      const banner = element.getBoundingClientRect();
+      const grid = document.querySelector(".shop-grid").getBoundingClientRect();
+      return {
+        countdown: { left: banner.left, right: banner.right, center: (banner.left + banner.right) / 2 },
+        catalog: { left: grid.left, right: grid.right, center: (grid.left + grid.right) / 2 },
+      };
+    });
+    for (const edge of ["left", "right", "center"]) {
+      assert(Math.abs(evidence.countdownAlignment.countdown[edge] - evidence.countdownAlignment.catalog[edge]) <= 1.5,
+        `Countdown ${edge} must align with catalog: ${JSON.stringify(evidence.countdownAlignment)}`);
+    }
+  }
   const instructor = page.getByLabel("강사", { exact: true });
   evidence.instructors = {};
   for (const [label, expected, excluded] of [["민진쌤", 86, 87], ["은영쌤", 87, 86]]) {
@@ -268,7 +284,7 @@ export async function runVerification({ live = false, output = path.join(os.tmpd
   let browser;
   try {
     browser = await chromium.launch({ headless: true });
-    for (const width of widths) {
+    scenarios: for (const width of widths) {
       for (const route of routes) {
         const result = { name: route.name, width, url: SITE + route.url, checks: [], screenshots: [], localAssets: [], errors: [], consoleErrors: [], failedRequests: [] };
         report.results.push(result);
@@ -292,6 +308,11 @@ export async function runVerification({ live = false, output = path.join(os.tmpd
             result.screenshots.push(screenshot);
           };
           const response = await page.goto(result.url, { waitUntil: "domcontentloaded" });
+          if (response?.status() === 429) {
+            result.errors.push("HTTP 429: stop all remaining scenarios; no automatic retry");
+            report.rateLimited = true;
+            break scenarios;
+          }
           assert(response?.ok(), `HTTP ${response?.status()}`);
           await check("renewal-loaded", async () => {
             await page.waitForFunction(() => document.documentElement.hasAttribute("data-ap-renewal"));

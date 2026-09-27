@@ -32,7 +32,8 @@ html[data-ap-renewal] body .archive-online-product [data-archive-pilates-watch-c
 html[data-ap-renewal] body .ap-knitido-brand-hero { padding:22px 0!important; align-items:center!important; gap:24px!important; }
 html[data-ap-renewal] body .ap-knitido-brand-intro h1 { font-size:36px!important; line-height:1.2!important; }
 html[data-ap-renewal] body .ap-knitido-brand-lead { font-size:16px!important; line-height:1.7!important; }
-html[data-ap-renewal] body .ap-knitido-brand-media img { height:auto!important; aspect-ratio:auto!important; object-fit:contain!important; }
+html[data-ap-renewal] body .ap-knitido-brand-media { width:100%; aspect-ratio:3/2; margin:0; }
+html[data-ap-renewal] body .ap-knitido-brand-media img { display:block; width:100%!important; height:100%!important; aspect-ratio:3/2!important; object-fit:contain!important; }
 html[data-ap-renewal] body .ap-renewal-story { border-bottom:1px solid #ddd; padding:0 0 12px; margin:0 0 24px; }
 html[data-ap-renewal] body .ap-renewal-story > summary { display:list-item; min-height:48px; padding:14px 0; color:#333; font-size:15px; font-weight:700; cursor:pointer; }
 html[data-ap-renewal] body .ap-knitido-products-heading { margin-top:24px!important; }

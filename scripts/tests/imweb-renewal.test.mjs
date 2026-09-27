@@ -148,6 +148,15 @@ test("native Imweb goods_form title outside goods_detail is shortened too", asyn
   }, { width });
 });
 
+test("Knitido lazy team image reserves space before intrinsic dimensions load", async () => {
+  await withPage("/16?ap_shop=knitido", `<section class="ap-knitido-brand-intro"><figure class="ap-knitido-brand-media"><img loading="lazy" src="/pending-image.jpg" alt="팀 사진"></figure><div class="ap-knitido-brand-story">Story</div></section>`, async (page) => {
+    const photo = page.getByRole("img", { name: "팀 사진", exact: true });
+    const size = await photo.evaluate((img) => ({ width: img.getBoundingClientRect().width, height: img.getBoundingClientRect().height }));
+    assert(size.width > 0 && size.height > 0);
+    assert(Math.abs(size.width / size.height - 1.5) < 0.02);
+  }, { width: 320 });
+});
+
 test("lesson schedule mirrors native available/sold-out options without selecting or ordering", async () => {
   const options = ["10월 3일 토요일 14:00 (품절)", "10월 10일 토요일 14:00"];
   await withPage("/18/?idx=1", `<div id="prod_options"><div class="dropdown-menu">${options.map((option) => `<div class="dropdown-item"><a class="_requireOption" href="#">${option}</a></div>`).join("")}</div></div>`, async (page) => {
