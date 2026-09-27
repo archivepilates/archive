@@ -27,4 +27,10 @@
 - Registration contract and affected-codebase tests: 11 passed.
 - Instructor lesson release validator: passed.
 - CORE Hosting and live rollback static guards: passed.
-- Runtime rollout and affected-order live recovery: verify after main promotion; signature completion remains the recipient's action.
+- Released code: `1996c221`; main pushed, Mac mini runtime fast-forwarded, CORE Hosting deployed. Live `/release.json` matches and `/rules/` serves the payment-category rule.
+- GitHub Actions run `36332603748`: success.
+- Affected order recovered through the normal deterministic ingestion queue. The scheduled worker claimed it first; the scoped manual worker performed zero duplicate actions.
+- StudioMate member detail and payment-history UI independently verified one instructor lesson ticket for 2026-10-25, KRW 70,000, card (single payment), zero outstanding balance.
+- Registration/job retains original `TOSSPAY`, normalized `card`, verified member/ticket, no registration error, and manual bookings.
+- At final check, eformsign signup and confirmation Alimtalk were queued, not yet confirmed sent. Recipient signature remains pending; do not report complete delivery.
+- Task-owned verification tab closed, scoped worker exited, StudioMate profile lock absent. Source worktree, integration and runtime clean before this evidence-only update.
