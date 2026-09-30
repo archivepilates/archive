@@ -3,6 +3,15 @@ const CORE_RUNTIME_CONTRACT_VERSION = "2026-09-25.1";
 const WORK_LANE_ID = "archive-core-transition";
 const STUDIO_ID = "5330";
 
+const templateCatalogHost = document.querySelector("[data-template-catalog]");
+if (templateCatalogHost) {
+  import("./alimtalk-catalog.js")
+    .then(({ mountTemplateCatalog }) => mountTemplateCatalog(templateCatalogHost))
+    .catch(() => {
+      templateCatalogHost.innerHTML = '<h2 id="catalogTitle">템플릿 카탈로그</h2><p role="status">카탈로그 모듈 확인 필요 · 화면을 새로고침해 주세요.</p>';
+    });
+}
+
 const ALIMTALK_TEMPLATE_LABELS_BY_CODE = Object.freeze({
   KA01TP260514145047261araXgWLVFRs: "그룹 기간권 잔여기간 안내 v3",
   KA01TP260514145047393VpTbcCZKkCV: "그룹 횟수권 잔여횟수 안내 v3",

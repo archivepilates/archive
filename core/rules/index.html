@@ -68,6 +68,17 @@
           </nav>
         </section>
 
+        <section class="panel rule-section" id="alimtalk-catalog-draft">
+          <div class="panel-header"><div><h2>알림톡 카탈로그 · 2026.09.30</h2></div><span class="pill">소스 정책 기준</span></div>
+          <div class="rule-note"><strong>목적·구현</strong><span>확인된 SOLAPI 목록 23종과 소스 전용·구버전·미연결·별도 프로젝트 항목을 모두 분리 표시합니다. 최근 후보·발송 표본을 전체 템플릿 목록 또는 운영 가동 상태로 해석하지 않습니다.</span></div>
+          <div class="rule-note"><strong>원천·정책</strong><span>ALIMTALK_TEMPLATES, ALIMTALK_TEMPLATE_TARGET_RULES, TICKET_NOTICE_POLICY와 실제 스케줄 소스에서 생성한 읽기 전용 카탈로그를 사용합니다. 목적·시기·대상·제외·정책 지문을 표시하며 발송 대상 선정에는 사용하지 않습니다. <a href="../messages/">템플릿 카탈로그</a></span></div>
+          <div class="rule-note"><strong>운영 원칙</strong><span>네 잔여 수강권 템플릿은 소스에 검토된 사실 안내 계약입니다. 후속권 보유만으로 후보를 제외하지 않으며 현재 계약의 재심사는 요구하지 않습니다. 알 수 없거나 본문·버튼이 달라진 계약만 원문 검토가 필요합니다. 예약 오픈은 케어 교차제한과 분리합니다. 공급자 승인·운영자 승인·소스 연결·실제 배포·발송 결과는 각각 별도 증거로 확인합니다.</span></div>
+          <div class="rule-note"><strong>승인 범위</strong><span>최초 승인 명단·수신자·본문 스냅샷은 변경하지 않습니다. 승인 후 추가 대상 또는 수신자·본문 변경은 10건 미만이어도 별도 추가분 승인이 필요합니다. 같은 내용이라도 후보 ID가 재생성되면 이전 승인을 재사용하지 않고 확인 대기로 둡니다. 승인 연결이 없는 이전 대기 건도 자동 처리하지 않습니다. 웰컴·리포트·강사레슨 등 독립 승인 경로는 그대로 유지합니다.</span></div>
+          <div class="rule-note"><strong>검증·상태</strong><span>기존 126건 이후 승인 재현 3건·배포 보호 6건을 추가해 총 135건 통과. Functions 5개 묶음 빌드·경계 검사와 반응형 90개 검사를 통과했습니다. 2026.09.30 16:44 KST에 사실 안내 4종의 SOLAPI 승인·본문·버튼 일치를 확인했습니다. 이는 해당 시점의 점검이며 카탈로그의 실시간 공급자·배포 상태 연결은 아닙니다. 실발송과 Firestore 에뮬레이터 검증은 수행하지 않았습니다.</span></div>
+          <div class="rule-note"><strong>자동 검증</strong><span>기존 CORE 업무 검증과 Hosting 검증은 카탈로그 소스 일치 검사를 먼저 실행합니다. 정책 소스가 바뀐 뒤 카탈로그를 재생성하지 않으면 검증을 중단합니다. 생성: generate:alimtalk-catalog. 확인: validate:alimtalk-catalog. 이 연결은 배포 실행이나 운영 승인으로 간주하지 않습니다.</span></div>
+          <div class="rule-note"><strong>전환·다음</strong><span>과거 승인 기록을 일괄 수정하거나 후보를 재발송하지 않습니다. 재생성·연결 미확인 건은 원천과 이전 발송을 확인한 뒤 승인합니다. 사실 안내는 후속권이 있어도 유지하고 재등록 관리의 후속권 제외는 유지하는 검사를 배포 전 필수 실행합니다. 화면 버전은 <a href="../release.json">릴리스 기록</a>, 서버 상태와 발송 성공은 별도 증거로 확인합니다. 최종 갱신: 2026.09.30.</span></div>
+        </section>
+
         <section class="panel rule-section" id="operator-workflow">
           <div class="panel-header"><div><h2>업무 화면 개선 · 2026.09.05</h2></div><span class="pill good">운영 반영</span></div>
           <div class="rule-grid">

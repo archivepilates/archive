@@ -9,9 +9,28 @@ import type { AlimtalkCandidateDoc } from "../types/models";
 import { nowTimestamp, todayKst } from "../utils/date";
 import { autoSendabilityIssue } from "./eligibility";
 import { processAlimtalkQueue } from "./processAlimtalkQueue";
+import { privateSurveySendabilityIssue } from "./privateSurveySendGuard";
+import { renewalCandidateSendabilityIssue } from "./renewalSendGuard";
+import { longAbsenceCandidateSendabilityIssue } from "./longAbsenceSendGuard";
+import {
+  alimtalkApprovalId,
+  alimtalkApprovalSnapshotKey,
+  approvalDeltaId,
+  approvedBatchForCandidate,
+  partitionApprovalCandidates,
+  usesAlimtalkBatchApproval,
+  type ApprovalBatchSnapshot,
+} from "./approvalPolicy";
+import {
+  alimtalkApprovalClaimIssue,
+  approvalCandidateBinding,
+  approvalRef,
+  readApprovalBatches,
+} from "./approvalStore";
+
+export { alimtalkApprovalId } from "./approvalPolicy";
 
 const APPROVAL_THRESHOLD = 10;
-const APPROVAL_COLLECTION = "alimtalkSendApprovals";
 const APPROVAL_FUNCTION_URL =
   process.env.ALIMTALK_APPROVAL_FUNCTION_URL ||
   `https://${REGION}-archive-pilates.cloudfunctions.net/approveAlimtalkBatch`;
@@ -21,18 +40,20 @@ export interface AlimtalkApprovalResult {
   approved: boolean;
   approvalId?: string;
   emailed?: boolean;
+  allowedCandidateIds: string[];
+  pendingCandidateIds: string[];
+  pendingApprovalIds: string[];
 }
 
-interface ApprovalDoc {
-  approvalId: string;
-  studioId: string;
-  sourceDate: string;
-  approvalScope?: "daily" | "reservation_open";
+interface ApprovalDoc extends ApprovalBatchSnapshot {
   status: "pending" | "approved";
   candidateIds: string[];
   candidateCount: number;
+  candidateLines?: string[];
+  candidateSourceDates?: string[];
   tokenHash: string;
   emailSentAt?: FirebaseFirestore.Timestamp;
+  emailAttemptAt?: FirebaseFirestore.Timestamp | null;
   approvedAt?: FirebaseFirestore.Timestamp;
   approvedBy?: string;
   createdAt: FirebaseFirestore.Timestamp;
@@ -45,55 +66,129 @@ export async function requireApprovalForLargeAlimtalkBatch(input: {
   candidates: AlimtalkCandidateDoc[];
   approvalScope?: "daily" | "reservation_open";
 }): Promise<AlimtalkApprovalResult> {
-  if (input.candidates.length < APPROVAL_THRESHOLD) return { required: false, approved: true };
   const approvalScope = input.approvalScope || "daily";
-  const approvalId = alimtalkApprovalId(input.studioId, input.today, approvalScope);
-  const ref = db.collection(APPROVAL_COLLECTION).doc(approvalId);
-  const existing = (await ref.get()).data() as ApprovalDoc | undefined;
-  if (existing?.status === "approved") return { required: true, approved: true, approvalId };
-
-  let token = "";
-  let emailed = false;
-  if (!existing?.emailSentAt) {
-    token = randomBytes(24).toString("hex");
-    await ref.set(
-      {
-        approvalId,
+  const rootId = alimtalkApprovalId(input.studioId, input.today, approvalScope);
+  const candidates = input.candidates.filter(
+    (candidate) =>
+      usesAlimtalkBatchApproval(candidate) &&
+      candidate.studioId === input.studioId &&
+      (candidate.type === "reservation_open" ? "reservation_open" : "daily") === approvalScope &&
+      ["candidate", "reviewed", "failed"].includes(candidate.status),
+  );
+  const result = await db.runTransaction(async (tx): Promise<AlimtalkApprovalResult> => {
+    const batches = await readApprovalBatches(tx, rootId);
+    const partition = partitionApprovalCandidates(candidates, batches);
+    if (!batches.length && partition.additions.length < APPROVAL_THRESHOLD) {
+      return {
+        required: false,
+        approved: true,
+        allowedCandidateIds: partition.additions.map((item) => item.candidateId),
+        pendingCandidateIds: [],
+        pendingApprovalIds: [],
+      };
+    }
+    let createdId: string | undefined;
+    if (partition.additions.length) {
+      createdId = batches.length ? approvalDeltaId(rootId, partition.additions) : rootId;
+      const timestamp = nowTimestamp();
+      const doc: ApprovalDoc = {
+        approvalId: createdId,
         studioId: input.studioId,
         sourceDate: input.today,
         approvalScope,
         status: "pending",
-        candidateIds: input.candidates.map((candidate) => candidate.candidateId),
-        candidateCount: input.candidates.length,
-        tokenHash: tokenHash(token),
-        emailSentAt: nowTimestamp(),
-        createdAt: existing?.createdAt || nowTimestamp(),
-        updatedAt: nowTimestamp(),
-      },
-      { merge: true },
-    );
+        snapshotVersion: 1,
+        targets: partition.additions.map((candidate) => ({
+          candidateId: candidate.candidateId,
+          snapshotKey: alimtalkApprovalSnapshotKey(candidate),
+          status: "included",
+        })),
+        candidateIds: partition.additions.map((candidate) => candidate.candidateId),
+        candidateCount: partition.additions.length,
+        candidateLines: partition.additions.map(candidateLine),
+        candidateSourceDates: [...new Set(partition.additions.map((candidate) => candidate.sourceDate))],
+        tokenHash: "",
+        createdAt: timestamp,
+        updatedAt: timestamp,
+      };
+      tx.create(approvalRef(createdId), doc);
+      if (batches.length) {
+        // The root serializes concurrent additions; its original snapshot never changes.
+        tx.update(approvalRef(rootId), { deltaApprovalIds: [...(batches[0].deltaApprovalIds || []), createdId] });
+      }
+    }
+    const pending = [...partition.pending, ...partition.additions];
+    const pendingKeys = new Set(pending.map(alimtalkApprovalSnapshotKey));
+    const pendingApprovalIds = batches
+      .filter(
+        (batch) =>
+          batch.snapshotVersion === 1 &&
+          batch.status === "pending" &&
+          batch.targets?.some((target) => pendingKeys.has(target.snapshotKey)),
+      )
+      .map((batch) => batch.approvalId);
+    if (createdId) pendingApprovalIds.push(createdId);
+    return {
+      required: true,
+      approved: pending.length === 0,
+      approvalId: pendingApprovalIds[0] || rootId,
+      allowedCandidateIds: partition.allowed.map((item) => item.candidateId),
+      pendingCandidateIds: pending.map((item) => item.candidateId),
+      pendingApprovalIds,
+    };
+  });
+  let emailed = false;
+  for (const id of result.pendingApprovalIds) {
+    if (await notifyPendingApproval(id)) emailed = true;
+  }
+  return { ...result, emailed };
+}
+
+async function notifyPendingApproval(approvalId: string): Promise<boolean> {
+  const token = randomBytes(24).toString("hex");
+  const ref = approvalRef(approvalId);
+  const approval = await db.runTransaction(async (tx) => {
+    const current = (await tx.get(ref)).data() as ApprovalDoc | undefined;
+    if (
+      !current ||
+      current.status !== "pending" ||
+      current.snapshotVersion !== 1 ||
+      current.emailSentAt ||
+      (current.emailAttemptAt && Date.now() - current.emailAttemptAt.toMillis() < 300_000)
+    )
+      return null;
+    tx.update(ref, { tokenHash: tokenHash(token), emailAttemptAt: nowTimestamp() });
+    return current;
+  });
+  if (!approval) return false;
+  try {
     await sendApprovalEmail({
       approvalId,
       token,
-      date: input.today,
-      candidates: input.candidates,
+      date: approval.sourceDate,
+      lines: approval.candidateLines || [],
+      count: approval.candidateCount,
     });
-    emailed = true;
-  } else {
-    await ref.set(
-      {
-        candidateIds: input.candidates.map((candidate) => candidate.candidateId),
-        candidateCount: input.candidates.length,
-        updatedAt: nowTimestamp(),
-      },
-      { merge: true },
-    );
+    await finishAttempt({ emailSentAt: nowTimestamp() });
+    return true;
+  } catch (error) {
+    await finishAttempt({ emailAttemptAt: null });
+    throw error;
   }
 
-  return { required: true, approved: false, approvalId, emailed };
+  async function finishAttempt(update: FirebaseFirestore.UpdateData<ApprovalDoc>): Promise<void> {
+    await db.runTransaction(async (tx) => {
+      const current = (await tx.get(ref)).data() as ApprovalDoc | undefined;
+      if (current?.tokenHash === tokenHash(token)) tx.update(ref, update);
+    });
+  }
 }
 
 export async function approveAlimtalkBatchHandler(request: Request, response: Response): Promise<void> {
+  if (request.method !== "GET" && request.method !== "POST") {
+    response.status(405).send("GET 또는 POST 요청만 가능합니다.");
+    return;
+  }
   const approvalId = String(request.query.id || request.body?.id || "");
   const token = String(request.query.token || request.body?.token || "");
   if (!approvalId || !token) {
@@ -101,26 +196,49 @@ export async function approveAlimtalkBatchHandler(request: Request, response: Re
     return;
   }
 
-  const ref = db.collection(APPROVAL_COLLECTION).doc(approvalId);
+  if (approvalId.includes("/")) {
+    response.status(400).send("승인 링크 정보가 올바르지 않습니다.");
+    return;
+  }
+  const ref = approvalRef(approvalId);
   const snap = await ref.get();
   const approval = snap.data() as ApprovalDoc | undefined;
   if (!approval || approval.tokenHash !== tokenHash(token)) {
     response.status(403).send("승인 링크가 올바르지 않습니다.");
     return;
   }
-  if (approval.status !== "approved") {
-    await ref.set(
-      {
+  if (approval.snapshotVersion !== 1 || !approval.targets?.length) {
+    response.status(409).send("고정된 승인 스냅샷이 없습니다. 새 승인 요청이 필요합니다.");
+    return;
+  }
+  if (request.method === "GET") {
+    response.status(200).send(approvalConfirmationHtml(approvalId, token, approval));
+    return;
+  }
+  const confirmed = await db.runTransaction(async (tx) => {
+    const current = (await tx.get(ref)).data() as ApprovalDoc | undefined;
+    if (
+      !current ||
+      current.tokenHash !== tokenHash(token) ||
+      current.snapshotVersion !== 1 ||
+      !["pending", "approved"].includes(current.status)
+    )
+      return null;
+    if (current.status === "pending")
+      tx.update(ref, {
         status: "approved",
         approvedAt: nowTimestamp(),
         approvedBy: "email-button",
         updatedAt: nowTimestamp(),
-      },
-      { merge: true },
-    );
+      });
+    return { ...current, status: "approved" as const };
+  });
+  if (!confirmed) {
+    response.status(409).send("승인 요청 상태가 변경되었습니다. 다시 확인해 주세요.");
+    return;
   }
 
-  const queued = await queueApprovedCandidates(approval);
+  const queued = await queueApprovedCandidates(confirmed);
   const processSummary = { processed: 0, sent: 0, failed: 0, deferred: 0 };
   for (let index = 0; index < 10; index += 1) {
     const result = await processAlimtalkQueue();
@@ -146,32 +264,46 @@ export async function approveAlimtalkBatchHandler(request: Request, response: Re
 async function queueApprovedCandidates(approval: ApprovalDoc): Promise<number> {
   const today = approval.sourceDate || todayKst();
   let queued = 0;
-  const snaps = await Promise.all(
-    approval.candidateIds.map((candidateId) => refs.alimtalkCandidate(candidateId).get()),
+  // Both the approved content and original candidate ID must still match.
+  // Regenerated IDs require review; they cannot inherit a cancelled/consumed target.
+  const sourceDates = approval.candidateSourceDates || [approval.sourceDate];
+  const snapshots = await Promise.all(
+    sourceDates.map((date) => refs.alimtalkCandidates().where("sourceDate", "==", date).get()),
   );
-  for (const snap of snaps) {
+  const seen = new Set<string>();
+  for (const snap of snapshots.flatMap((snapshot) => snapshot.docs)) {
     const candidate = snap.data();
     if (!candidate || candidate.studioId !== approval.studioId) continue;
-    if (candidate.sourceDate !== today) continue;
     if (!["candidate", "reviewed", "failed"].includes(candidate.status)) continue;
-    if (await autoSendabilityIssue(candidate, today)) continue;
-    const didQueue = await queueApprovedCandidate(candidate);
-    if (didQueue) queued += 1;
+    if (!approvedBatchForCandidate(candidate, [approval])) continue;
+    const key = alimtalkApprovalSnapshotKey(candidate);
+    if (seen.has(key)) continue;
+    if (await approvalQueueEligibilityIssue(candidate, todayKst())) continue;
+    const didQueue = await queueApprovedCandidate(candidate, today);
+    if (didQueue) {
+      queued += 1;
+      seen.add(key);
+    }
   }
   return queued;
 }
 
-async function queueApprovedCandidate(candidate: AlimtalkCandidateDoc): Promise<boolean> {
+async function queueApprovedCandidate(candidate: AlimtalkCandidateDoc, today: string): Promise<boolean> {
   return db.runTransaction(async (tx) => {
     const ref = refs.alimtalkCandidate(candidate.candidateId);
     const snap = await tx.get(ref);
     const current = snap.data();
     if (!current) return false;
     if (!["candidate", "reviewed", "failed"].includes(current.status)) return false;
+    if (alimtalkApprovalSnapshotKey(current) !== alimtalkApprovalSnapshotKey(candidate)) return false;
+    if (await alimtalkApprovalClaimIssue(tx, { ...current, ...approvalCandidateBinding(current, today) }, today))
+      return false;
+    if (await approvalQueueEligibilityIssue(current, todayKst())) return false;
     tx.set(
       ref,
       {
         status: "queued",
+        ...approvalCandidateBinding(current, today),
         queuedBy: "operator",
         reviewedByUid: "system:email-approval",
         reviewedAt: nowTimestamp(),
@@ -186,36 +318,46 @@ async function queueApprovedCandidate(candidate: AlimtalkCandidateDoc): Promise<
   });
 }
 
+export async function approvalQueueEligibilityIssue(candidate: AlimtalkCandidateDoc, today: string): Promise<string> {
+  return (
+    (await autoSendabilityIssue(candidate, today)) ||
+    (await privateSurveySendabilityIssue(candidate)) ||
+    (await renewalCandidateSendabilityIssue(candidate)) ||
+    (await longAbsenceCandidateSendabilityIssue(candidate))
+  );
+}
+
 async function sendApprovalEmail(input: {
   approvalId: string;
   token: string;
   date: string;
-  candidates: AlimtalkCandidateDoc[];
+  lines: string[];
+  count: number;
 }): Promise<void> {
   const approvalUrl = `${APPROVAL_FUNCTION_URL}?id=${encodeURIComponent(input.approvalId)}&token=${encodeURIComponent(
     input.token,
   )}`;
-  const lines = input.candidates.map(candidateLine);
+  const lines = input.lines;
   const body = [
     "ARCHIVE IN 알림톡 대량 발송 승인 요청",
     "",
     `기준일: ${input.date}`,
-    `발송 예정: ${input.candidates.length}건`,
+    `발송 예정: ${input.count}건`,
     "",
     "발송 예정 리스트",
     ...lines,
     "",
-    "아래 링크를 누르면 승인 후 발송이 진행됩니다.",
+    "아래 링크에서 고정된 대상 목록을 확인하고 승인하면 발송이 진행됩니다.",
     approvalUrl,
   ].join("\n");
   const htmlBody = approvalHtml({
     date: input.date,
-    count: input.candidates.length,
+    count: input.count,
     lines,
     approvalUrl,
   });
   await sendAlimtalkLogEmail({
-    subject: `[알림톡][긴급] ${input.candidates.length}건 발송 승인 요청 ${input.date}`,
+    subject: `[알림톡][긴급] ${input.count}건 발송 승인 요청 ${input.date}`,
     body,
     htmlBody,
     status: "urgent",
@@ -243,12 +385,13 @@ function approvalHtml(input: { date: string; count: number; lines: string[]; app
   ].join("");
 }
 
-export function alimtalkApprovalId(
-  studioId: string,
-  date: string,
-  approvalScope: "daily" | "reservation_open" = "daily",
-): string {
-  return approvalScope === "daily" ? `${studioId}_${date}` : `${studioId}_${date}_${approvalScope}`;
+function approvalConfirmationHtml(id: string, token: string, approval: ApprovalDoc): string {
+  const lines = (approval.candidateLines || []).map((line) => `<li>${escapeHtml(line)}</li>`).join("");
+  return (
+    `<h1>ARCHIVE IN 알림톡 발송 승인</h1><p>고정 대상 ${approval.candidateCount}건 · ${escapeHtml(approval.sourceDate)}</p>` +
+    `<ol>${lines}</ol><form method="post"><input type="hidden" name="id" value="${escapeHtml(id)}">` +
+    `<input type="hidden" name="token" value="${escapeHtml(token)}"><button type="submit">이 목록만 발송 승인</button></form>`
+  );
 }
 
 function tokenHash(value: string): string {

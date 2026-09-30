@@ -1,0 +1,2148 @@
+{
+  "schemaVersion": 1,
+  "policyFingerprint": "7c0313b1a6e346d56aec19754c62408ab59ef4a8ca46e06214ddaf9819d83b73",
+  "sourceMode": "repository_defaults_no_environment_or_live_reads",
+  "coverage": {
+    "observedAt": "2026-09-30T06:41:16.973Z",
+    "knownProviderCount": 23,
+    "sourceOnlyCount": 9,
+    "note": "Known-provider coverage only; no current approval or content evidence"
+  },
+  "deployment": {
+    "status": "UNVERIFIED"
+  },
+  "sourceFingerprints": [
+    {
+      "path": "core/assets/app.js",
+      "sha256": "a8e9fecd39676e035ae6773d74dcb6c73b552e0583f72ab1f71ce0b5af8894c8"
+    },
+    {
+      "path": "firebase/kangsain-functions/functions/src/alimtalk/approvalGate.ts",
+      "sha256": "c9cec394b258b330e33f352e7abd15d3ce73d23954d2f3c96e180faf567e6c28"
+    },
+    {
+      "path": "firebase/kangsain-functions/functions/src/alimtalk/approvalPolicy.ts",
+      "sha256": "d2b2f5605f4d0e5db731c21df7aefcdf442c3d232f9138a7d5bfc8ce04eb212b"
+    },
+    {
+      "path": "firebase/kangsain-functions/functions/src/alimtalk/approvalStore.ts",
+      "sha256": "bed9e510ee52f33bae7ee771c180b16e2f03e6cf56f92b1f6fdd9a6b17644213"
+    },
+    {
+      "path": "firebase/kangsain-functions/functions/src/alimtalk/dedupe.ts",
+      "sha256": "7e998cbaabe8d42ea9be4e438d9a3d7c5ca8947a6a69a868721ea870981d2ace"
+    },
+    {
+      "path": "firebase/kangsain-functions/functions/src/alimtalk/eligibility.ts",
+      "sha256": "e5dd5d2c7312f0847454233a338713067c6ef309a2b6833be36c199e589e6d6a"
+    },
+    {
+      "path": "firebase/kangsain-functions/functions/src/alimtalk/longAbsencePolicy.ts",
+      "sha256": "47ecba6e740df0f74b5e2caaf071bd893d478c6916685d03d07588eca4f6be60"
+    },
+    {
+      "path": "firebase/kangsain-functions/functions/src/alimtalk/processAlimtalkQueue.ts",
+      "sha256": "266814f24f25a9c9a7d91c74f2f9d5377c4d89baacd7d8a4d1c999c0dc65f151"
+    },
+    {
+      "path": "firebase/kangsain-functions/functions/src/alimtalk/queueDailyAlimtalk.ts",
+      "sha256": "fc4f1e14342584a49d15aa667a080d58588ca8000d9add6d2a25e7b514ed274a"
+    },
+    {
+      "path": "firebase/kangsain-functions/functions/src/alimtalk/rebuildAlimtalkCandidates.ts",
+      "sha256": "9e0424e57ec9acd078147237d9a8280853f72e994e4db41555922aaaa8eb116b"
+    },
+    {
+      "path": "firebase/kangsain-functions/functions/src/alimtalk/renewalSendGuard.ts",
+      "sha256": "fa14ff5458c96c5c499901c8488365aa971ca3eb5d810c43ea0ce1c29ac4ac0e"
+    },
+    {
+      "path": "firebase/kangsain-functions/functions/src/alimtalk/templates.ts",
+      "sha256": "39791adedd31000986ba6533ff72b75c5601dea224c3c6bdfe6e92c55357b974"
+    },
+    {
+      "path": "firebase/kangsain-functions/functions/src/alimtalk/templateTargetRules.ts",
+      "sha256": "4fbf131018d9b59df78afd793b557ec7930be1b6df8b20b825fc3e5ad955d2c7"
+    },
+    {
+      "path": "firebase/kangsain-functions/functions/src/alimtalk/ticketNoticePolicy.ts",
+      "sha256": "01e562c43e16a05f61c823961cfdaf9077bc0add5445f159b3ecd2670a378728"
+    },
+    {
+      "path": "firebase/kangsain-functions/functions/src/config/constants.ts",
+      "sha256": "3c19526c63fcdaeb35de6f32f28d294e2d1ed309fe94916386f187d0f969ca48"
+    },
+    {
+      "path": "firebase/kangsain-functions/functions/src/exports/alimtalk.ts",
+      "sha256": "9930b26b04b065d8be647885fecfad7e57d2527ed34c1b338070c7a180f13484"
+    },
+    {
+      "path": "firebase/kangsain-functions/functions/src/exports/privateChart.ts",
+      "sha256": "b0a88ff0f8cda5259476c30d309eb5f01180fb13961ab77b30fb6f51f068ed86"
+    },
+    {
+      "path": "firebase/kangsain-functions/functions/src/memberSignup/membershipWelcomePolicy.ts",
+      "sha256": "7411bbf3e182057838153e1c1bbed27bd96e84ab50ae2b417e7bab2c3a56c186"
+    },
+    {
+      "path": "firebase/kangsain-functions/functions/src/parking/instructorLessonParkingContract.ts",
+      "sha256": "b1c394f422434fe6fd5cf011f307c36ccec40bd7cf8fbf2cdff30cf1516d57a5"
+    },
+    {
+      "path": "firebase/kangsain-functions/functions/src/privateLessonChart/privateLessonChart.ts",
+      "sha256": "dd57a0fdac5baf9634ea7fde0b59d42fa834cb3de7f21226dd0008842a539503"
+    },
+    {
+      "path": "firebase/kangsain-functions/functions/src/privateSurvey/privateSurveyResponse.ts",
+      "sha256": "2aa3a3bfead6fe663a88edb6717a214b7cb85903fbac25df678716ab20d153aa"
+    },
+    {
+      "path": "scripts/fixtures/alimtalk-catalog-known-provider.json",
+      "sha256": "a50f47e6accaba327862a774e16094578fd7778260c9bd55fc99d95e4a862860"
+    },
+    {
+      "path": "scripts/generate-alimtalk-catalog.mjs",
+      "sha256": "4e2edb9b0b6f81cdd6fd611665f9eb8b71c57b4981115fc12b54a5370ed6a21b"
+    },
+    {
+      "path": "scripts/lib/alimtalk-catalog-metadata.mjs",
+      "sha256": "9b29000ff087d10d42f7501330a3f8289249c77371da5651c487661bc54ef6d5"
+    },
+    {
+      "path": "scripts/lib/alimtalk-catalog-source.mjs",
+      "sha256": "04d8ff07265ec625dc49ab78b6d8cd7cdcee021b32fd7872c614c3606a484776"
+    }
+  ],
+  "rows": [
+    {
+      "id": "KA01TP260914091233543JoFDsn7KfCr",
+      "type": "membership_welcome",
+      "code": "KA01TP260914091233543JoFDsn7KfCr",
+      "label": "아카이브 신규회원 가입완료 웰컴 안내 v6",
+      "providerInventoryName": "아카이브 신규회원 가입완료 웰컴 안내 v6",
+      "knownProvider": true,
+      "implementation": "source_connected",
+      "sourceConfiguredStatus": "approved",
+      "purpose": "가입 완료·이용 안내",
+      "purposeId": "membership_welcome",
+      "timing": "기준일 이전·당일의 업무 완료 조건",
+      "schedule": null,
+      "targetRules": [
+        "신규 정규 수강권 구매 계약서 본인 서명 완료",
+        "발송 직전 원본 계약·수강권·전체 웰컴 이력 재검증"
+      ],
+      "policy": {
+        "type": "membership_welcome",
+        "templateCode": "KA01TP260914091233543JoFDsn7KfCr",
+        "templateLabel": "아카이브 신규회원 가입완료 웰컴 안내 v6",
+        "sourceDatePolicy": "same_or_before_today",
+        "requiresApprovedTemplate": true,
+        "requiresMemberPhone": true,
+        "targetRules": [
+          "신규 정규 수강권 구매 계약서 본인 서명 완료",
+          "발송 직전 원본 계약·수강권·전체 웰컴 이력 재검증"
+        ],
+        "exclusionRules": [
+          "재등록·체험·1회권·강사회원·스텝·무료권 제외",
+          "과거 웰컴 발송 또는 결과 불명 시 재발송 금지",
+          "승인·검증·가동 설정 미완료 시 발송 금지"
+        ]
+      },
+      "factNotice": null,
+      "careGroup": false,
+      "providerApproval": {
+        "status": "UNKNOWN",
+        "checkedAt": null,
+        "evidence": "not_read_in_this_catalog"
+      },
+      "deployment": {
+        "status": "UNVERIFIED",
+        "checkedAt": null
+      },
+      "sources": [
+        {
+          "path": "firebase/kangsain-functions/functions/src/alimtalk/templates.ts",
+          "symbol": "ALIMTALK_TEMPLATES",
+          "line": 56
+        },
+        {
+          "path": "firebase/kangsain-functions/functions/src/alimtalk/templateTargetRules.ts",
+          "symbol": "ALIMTALK_TEMPLATE_TARGET_RULES",
+          "line": 49
+        }
+      ]
+    },
+    {
+      "id": "KA01TP26072806273194229P2ZesQwPp",
+      "type": "reservation_open",
+      "code": "KA01TP26072806273194229P2ZesQwPp",
+      "label": "스튜디오메이트 예약 안내 v4",
+      "providerInventoryName": "아카이브 스튜디오메이트 예약 안내 v4",
+      "knownProvider": true,
+      "implementation": "source_connected",
+      "sourceConfiguredStatus": "approved",
+      "purpose": "주간 예약 오픈 안내",
+      "purposeId": "reservation_open",
+      "timing": "기준일 당일 후보",
+      "schedule": {
+        "expression": "30 12 * * 1",
+        "timezone": "Asia/Seoul"
+      },
+      "targetRules": [
+        "월요일 예약 오픈 안내일",
+        "예약 오픈 주간에 유효한 그룹 또는 혼합 수강권 보유",
+        "프라이빗/강사레슨 수강권 제외",
+        "예약주차 변수가 있음"
+      ],
+      "policy": {
+        "type": "reservation_open",
+        "templateCode": "KA01TP26072806273194229P2ZesQwPp",
+        "templateLabel": "스튜디오메이트 예약 안내 v4",
+        "sourceDatePolicy": "today",
+        "requiresApprovedTemplate": true,
+        "requiresMemberPhone": true,
+        "targetRules": [
+          "월요일 예약 오픈 안내일",
+          "예약 오픈 주간에 유효한 그룹 또는 혼합 수강권 보유",
+          "프라이빗/강사레슨 수강권 제외",
+          "예약주차 변수가 있음"
+        ],
+        "exclusionRules": [
+          "전화번호 없음",
+          "예약주차 변수 없음",
+          "예약 오픈 주간에 유효한 그룹/혼합 수강권 없음",
+          "프라이빗 또는 강사레슨 수강권",
+          "동일 예약주차 6일 내 발송 이력 있음",
+          "SOLAPI 미승인 템플릿"
+        ]
+      },
+      "factNotice": null,
+      "careGroup": false,
+      "providerApproval": {
+        "status": "UNKNOWN",
+        "checkedAt": null,
+        "evidence": "not_read_in_this_catalog"
+      },
+      "deployment": {
+        "status": "UNVERIFIED",
+        "checkedAt": null
+      },
+      "sources": [
+        {
+          "path": "firebase/kangsain-functions/functions/src/alimtalk/templates.ts",
+          "symbol": "ALIMTALK_TEMPLATES",
+          "line": 56
+        },
+        {
+          "path": "firebase/kangsain-functions/functions/src/alimtalk/templateTargetRules.ts",
+          "symbol": "ALIMTALK_TEMPLATE_TARGET_RULES",
+          "line": 49
+        },
+        {
+          "path": "firebase/kangsain-functions/functions/src/exports/alimtalk.ts",
+          "symbol": "scheduledQueueAndSendReservationOpenAlimtalk",
+          "line": 79
+        }
+      ]
+    },
+    {
+      "id": "source:new_member",
+      "type": "new_member",
+      "code": "",
+      "label": "신규회원 웰컴 v3 삭제됨",
+      "providerInventoryName": null,
+      "knownProvider": false,
+      "implementation": "archived",
+      "sourceConfiguredStatus": "deleted",
+      "purpose": "이전 신규회원 안내",
+      "purposeId": "new_member",
+      "timing": "신규 발송 종료 · 과거 이력 보존",
+      "schedule": null,
+      "targetRules": [
+        "StudioMate 등록일 기준 신규회원",
+        "전화번호가 있음",
+        "활성 수업 수강권이 1개 이상 있음",
+        "등록일이 2026-05-16 이후이고 최근 3일 이내"
+      ],
+      "policy": {
+        "type": "new_member",
+        "templateCode": "",
+        "templateLabel": "신규회원 웰컴 v3 삭제됨",
+        "minSourceDate": "2026-05-16",
+        "sourceDatePolicy": "recent_new_member",
+        "maxAgeDays": 3,
+        "requiresApprovedTemplate": true,
+        "requiresMemberPhone": true,
+        "targetRules": [
+          "StudioMate 등록일 기준 신규회원",
+          "전화번호가 있음",
+          "활성 수업 수강권이 1개 이상 있음",
+          "등록일이 2026-05-16 이후이고 최근 3일 이내"
+        ],
+        "exclusionRules": [
+          "알림톡 제외 회원",
+          "전화번호 없음",
+          "활성 수업 수강권 없음",
+          "상담 고객 또는 수업권이 아닌 상품만 보유",
+          "신규회원 웰컴 발송 이력 있음",
+          "SOLAPI 미승인 템플릿"
+        ]
+      },
+      "factNotice": null,
+      "careGroup": false,
+      "providerApproval": {
+        "status": "UNKNOWN",
+        "checkedAt": null,
+        "evidence": "not_read_in_this_catalog"
+      },
+      "deployment": {
+        "status": "UNVERIFIED",
+        "checkedAt": null
+      },
+      "sources": [
+        {
+          "path": "firebase/kangsain-functions/functions/src/alimtalk/templates.ts",
+          "symbol": "ALIMTALK_TEMPLATES",
+          "line": 56
+        },
+        {
+          "path": "firebase/kangsain-functions/functions/src/alimtalk/templateTargetRules.ts",
+          "symbol": "ALIMTALK_TEMPLATE_TARGET_RULES",
+          "line": 49
+        }
+      ]
+    },
+    {
+      "id": "KA01TP260602101939427lPhGyuDLvFM",
+      "type": "onsite_welcome",
+      "code": "KA01TP260602101939427lPhGyuDLvFM",
+      "label": "신규회원 웰컴 v5",
+      "providerInventoryName": "아카이브 신규회원 웰컴 안내 v5",
+      "knownProvider": true,
+      "implementation": "archived",
+      "sourceConfiguredStatus": "approved",
+      "purpose": "이전 현장 가입서·이용 안내",
+      "purposeId": "onsite_welcome",
+      "timing": "신규 발송 종료 · 과거 이력 보존",
+      "schedule": null,
+      "targetRules": [
+        "2026-09-14 현장 웰컴 신규 접수·발송 종료",
+        "회원등록은 StudioMate에서 진행",
+        "기존 가입서·발송 이력과 개별 링크는 보존"
+      ],
+      "policy": {
+        "type": "onsite_welcome",
+        "templateCode": "KA01TP260602101939427lPhGyuDLvFM",
+        "templateLabel": "신규회원 웰컴 v5",
+        "sourceDatePolicy": "today",
+        "requiresApprovedTemplate": true,
+        "requiresMemberPhone": true,
+        "buttonUrlRules": [
+          {
+            "label": "회원가입서 작성 버튼",
+            "template": "https://in.archivepilates.com/s/#{링크ID}/",
+            "maxLength": 100
+          }
+        ],
+        "targetRules": [
+          "2026-09-14 현장 웰컴 신규 접수·발송 종료",
+          "회원등록은 StudioMate에서 진행",
+          "기존 가입서·발송 이력과 개별 링크는 보존"
+        ],
+        "exclusionRules": [
+          "현장 웰컴 신규 발송 종료: 테스트 예외와 재시도에도 적용",
+          "전화번호 없음",
+          "회원가입서 링크 없음",
+          "신규회원 웰컴 v5 템플릿 코드 미설정 또는 미승인",
+          "기존 신규회원 웰컴 발송 이력 있음",
+          "같은 현장 웰컴 요청 이미 sent/error 처리"
+        ]
+      },
+      "factNotice": null,
+      "careGroup": false,
+      "providerApproval": {
+        "status": "UNKNOWN",
+        "checkedAt": null,
+        "evidence": "not_read_in_this_catalog"
+      },
+      "deployment": {
+        "status": "UNVERIFIED",
+        "checkedAt": null
+      },
+      "sources": [
+        {
+          "path": "firebase/kangsain-functions/functions/src/alimtalk/templates.ts",
+          "symbol": "ALIMTALK_TEMPLATES",
+          "line": 56
+        },
+        {
+          "path": "firebase/kangsain-functions/functions/src/alimtalk/templateTargetRules.ts",
+          "symbol": "ALIMTALK_TEMPLATE_TARGET_RULES",
+          "line": 49
+        }
+      ]
+    },
+    {
+      "id": "KA01TP260514145047261araXgWLVFRs",
+      "type": "ticket_expiring",
+      "code": "KA01TP260514145047261araXgWLVFRs",
+      "label": "그룹 기간권 잔여기간 안내 v3",
+      "providerInventoryName": "아카이브 그룹 기간권 잔여기간 안내 v3",
+      "knownProvider": true,
+      "implementation": "source_connected",
+      "sourceConfiguredStatus": "approved",
+      "purpose": "그룹권 잔여기간 사실 안내",
+      "purposeId": "ticket_facts",
+      "timing": "기준일 당일 후보",
+      "schedule": {
+        "expression": "30 11 * * *",
+        "timezone": "Asia/Seoul"
+      },
+      "targetRules": [
+        "활성 그룹 수강권",
+        "만료일이 발송 기준일로부터 14일 이내",
+        "후속 수강권 구매 여부와 관계없이 기존권의 잔여횟수·만료 정보를 안내"
+      ],
+      "policy": {
+        "type": "ticket_expiring",
+        "templateCode": "KA01TP260514145047261araXgWLVFRs",
+        "templateLabel": "그룹 기간권 잔여기간 안내 v3",
+        "sourceDatePolicy": "today",
+        "requiresApprovedTemplate": true,
+        "requiresMemberPhone": true,
+        "targetRules": [
+          "활성 그룹 수강권",
+          "만료일이 발송 기준일로부터 14일 이내",
+          "후속 수강권 구매 여부와 관계없이 기존권의 잔여횟수·만료 정보를 안내"
+        ],
+        "exclusionRules": [
+          "알림톡 제외 회원",
+          "전화번호 없음",
+          "프라이빗 또는 강사레슨 수강권",
+          "수업권이 아닌 상품",
+          "검토된 사실 안내 본문·버튼과 불일치",
+          "만료일이 지났거나 14일 초과",
+          "동일 수강권 기간 안내 30일 내 발송 이력 있음",
+          "SOLAPI 미승인 템플릿"
+        ]
+      },
+      "factNotice": {
+        "purpose": "ticket_facts",
+        "followupPurchaseExcludes": false,
+        "reviewedAt": "2026-09-30",
+        "targetRule": "후속 수강권 구매 여부와 관계없이 기존권의 잔여횟수·만료 정보를 안내",
+        "pendingReason": "수강권 사실 안내 템플릿 검토 대기:",
+        "types": [
+          "ticket_expiring",
+          "remaining_low",
+          "private_count_low",
+          "private_ticket_expiring"
+        ],
+        "contractFingerprint": "5650d4586081d6845d2c672451b03f6f160aa9fb1068b20ad6adcedf609b29c7",
+        "reviewState": "reviewed_fact_only",
+        "changedTemplateAction": "pending_template_review"
+      },
+      "careGroup": true,
+      "providerApproval": {
+        "status": "UNKNOWN",
+        "checkedAt": null,
+        "evidence": "not_read_in_this_catalog"
+      },
+      "deployment": {
+        "status": "UNVERIFIED",
+        "checkedAt": null
+      },
+      "sources": [
+        {
+          "path": "firebase/kangsain-functions/functions/src/alimtalk/templates.ts",
+          "symbol": "ALIMTALK_TEMPLATES",
+          "line": 56
+        },
+        {
+          "path": "firebase/kangsain-functions/functions/src/alimtalk/templateTargetRules.ts",
+          "symbol": "ALIMTALK_TEMPLATE_TARGET_RULES",
+          "line": 49
+        },
+        {
+          "path": "firebase/kangsain-functions/functions/src/exports/alimtalk.ts",
+          "symbol": "scheduledQueueAndSendAlimtalkDaily",
+          "line": 53
+        },
+        {
+          "path": "firebase/kangsain-functions/functions/src/alimtalk/ticketNoticePolicy.ts",
+          "symbol": "TICKET_NOTICE_POLICY",
+          "line": 5
+        },
+        {
+          "path": "firebase/kangsain-functions/functions/src/alimtalk/ticketNoticePolicy.ts",
+          "symbol": "REVIEWED_TICKET_FACT_CONTRACTS",
+          "line": 15
+        }
+      ]
+    },
+    {
+      "id": "KA01TP260514145047393VpTbcCZKkCV",
+      "type": "remaining_low",
+      "code": "KA01TP260514145047393VpTbcCZKkCV",
+      "label": "그룹 횟수권 잔여횟수 안내 v3",
+      "providerInventoryName": "아카이브 그룹 횟수권 잔여횟수 안내 v3",
+      "knownProvider": true,
+      "implementation": "source_connected",
+      "sourceConfiguredStatus": "approved",
+      "purpose": "그룹권 잔여횟수 사실 안내",
+      "purposeId": "ticket_facts",
+      "timing": "기준일 당일 후보",
+      "schedule": {
+        "expression": "30 11 * * *",
+        "timezone": "Asia/Seoul"
+      },
+      "targetRules": [
+        "활성 그룹 횟수권",
+        "잔여횟수 1-4회",
+        "후속 수강권 구매 여부와 관계없이 기존권의 잔여횟수·만료 정보를 안내"
+      ],
+      "policy": {
+        "type": "remaining_low",
+        "templateCode": "KA01TP260514145047393VpTbcCZKkCV",
+        "templateLabel": "그룹 횟수권 잔여횟수 안내 v3",
+        "sourceDatePolicy": "today",
+        "requiresApprovedTemplate": true,
+        "requiresMemberPhone": true,
+        "targetRules": [
+          "활성 그룹 횟수권",
+          "잔여횟수 1-4회",
+          "후속 수강권 구매 여부와 관계없이 기존권의 잔여횟수·만료 정보를 안내"
+        ],
+        "exclusionRules": [
+          "알림톡 제외 회원",
+          "전화번호 없음",
+          "프라이빗 또는 강사레슨 수강권",
+          "수업권이 아닌 상품",
+          "검토된 사실 안내 본문·버튼과 불일치",
+          "잔여횟수 0회 또는 5회 이상",
+          "동일 수강권 횟수 안내 30일 내 발송 이력 있음",
+          "SOLAPI 미승인 템플릿"
+        ]
+      },
+      "factNotice": {
+        "purpose": "ticket_facts",
+        "followupPurchaseExcludes": false,
+        "reviewedAt": "2026-09-30",
+        "targetRule": "후속 수강권 구매 여부와 관계없이 기존권의 잔여횟수·만료 정보를 안내",
+        "pendingReason": "수강권 사실 안내 템플릿 검토 대기:",
+        "types": [
+          "ticket_expiring",
+          "remaining_low",
+          "private_count_low",
+          "private_ticket_expiring"
+        ],
+        "contractFingerprint": "344deea3f6172e6a2fa00d4ef5b486bbc145213882c6e52a5d5d1341aca37ae0",
+        "reviewState": "reviewed_fact_only",
+        "changedTemplateAction": "pending_template_review"
+      },
+      "careGroup": true,
+      "providerApproval": {
+        "status": "UNKNOWN",
+        "checkedAt": null,
+        "evidence": "not_read_in_this_catalog"
+      },
+      "deployment": {
+        "status": "UNVERIFIED",
+        "checkedAt": null
+      },
+      "sources": [
+        {
+          "path": "firebase/kangsain-functions/functions/src/alimtalk/templates.ts",
+          "symbol": "ALIMTALK_TEMPLATES",
+          "line": 56
+        },
+        {
+          "path": "firebase/kangsain-functions/functions/src/alimtalk/templateTargetRules.ts",
+          "symbol": "ALIMTALK_TEMPLATE_TARGET_RULES",
+          "line": 49
+        },
+        {
+          "path": "firebase/kangsain-functions/functions/src/exports/alimtalk.ts",
+          "symbol": "scheduledQueueAndSendAlimtalkDaily",
+          "line": 53
+        },
+        {
+          "path": "firebase/kangsain-functions/functions/src/alimtalk/ticketNoticePolicy.ts",
+          "symbol": "TICKET_NOTICE_POLICY",
+          "line": 5
+        },
+        {
+          "path": "firebase/kangsain-functions/functions/src/alimtalk/ticketNoticePolicy.ts",
+          "symbol": "REVIEWED_TICKET_FACT_CONTRACTS",
+          "line": 15
+        }
+      ]
+    },
+    {
+      "id": "KA01TP260514152235608d9icGOBotnV",
+      "type": "private_count_low",
+      "code": "KA01TP260514152235608d9icGOBotnV",
+      "label": "프라이빗 횟수권 잔여횟수 안내 v1",
+      "providerInventoryName": "아카이브 프라이빗 횟수권 잔여횟수 안내 v1",
+      "knownProvider": true,
+      "implementation": "source_connected",
+      "sourceConfiguredStatus": "approved",
+      "purpose": "프라이빗권 잔여횟수 사실 안내",
+      "purposeId": "ticket_facts",
+      "timing": "기준일 당일 후보",
+      "schedule": {
+        "expression": "30 11 * * *",
+        "timezone": "Asia/Seoul"
+      },
+      "targetRules": [
+        "활성 프라이빗·듀엣 횟수권",
+        "잔여횟수 1-3회",
+        "후속 수강권 구매 여부와 관계없이 기존권의 잔여횟수·만료 정보를 안내"
+      ],
+      "policy": {
+        "type": "private_count_low",
+        "templateCode": "KA01TP260514152235608d9icGOBotnV",
+        "templateLabel": "프라이빗 횟수권 잔여횟수 안내 v1",
+        "sourceDatePolicy": "today",
+        "requiresApprovedTemplate": true,
+        "requiresMemberPhone": true,
+        "targetRules": [
+          "활성 프라이빗·듀엣 횟수권",
+          "잔여횟수 1-3회",
+          "후속 수강권 구매 여부와 관계없이 기존권의 잔여횟수·만료 정보를 안내"
+        ],
+        "exclusionRules": [
+          "알림톡 제외 회원",
+          "전화번호 없음",
+          "그룹 또는 강사레슨 수강권",
+          "수업권이 아닌 상품",
+          "검토된 사실 안내 본문·버튼과 불일치",
+          "잔여횟수 0회 또는 4회 이상",
+          "동일 수강권 횟수 안내 30일 내 발송 이력 있음",
+          "SOLAPI 미승인 템플릿"
+        ]
+      },
+      "factNotice": {
+        "purpose": "ticket_facts",
+        "followupPurchaseExcludes": false,
+        "reviewedAt": "2026-09-30",
+        "targetRule": "후속 수강권 구매 여부와 관계없이 기존권의 잔여횟수·만료 정보를 안내",
+        "pendingReason": "수강권 사실 안내 템플릿 검토 대기:",
+        "types": [
+          "ticket_expiring",
+          "remaining_low",
+          "private_count_low",
+          "private_ticket_expiring"
+        ],
+        "contractFingerprint": "1131eccfa127bc73db6fe97227159661b5399bf8231ca829101b85be6b67d6e2",
+        "reviewState": "reviewed_fact_only",
+        "changedTemplateAction": "pending_template_review"
+      },
+      "careGroup": true,
+      "providerApproval": {
+        "status": "UNKNOWN",
+        "checkedAt": null,
+        "evidence": "not_read_in_this_catalog"
+      },
+      "deployment": {
+        "status": "UNVERIFIED",
+        "checkedAt": null
+      },
+      "sources": [
+        {
+          "path": "firebase/kangsain-functions/functions/src/alimtalk/templates.ts",
+          "symbol": "ALIMTALK_TEMPLATES",
+          "line": 56
+        },
+        {
+          "path": "firebase/kangsain-functions/functions/src/alimtalk/templateTargetRules.ts",
+          "symbol": "ALIMTALK_TEMPLATE_TARGET_RULES",
+          "line": 49
+        },
+        {
+          "path": "firebase/kangsain-functions/functions/src/exports/alimtalk.ts",
+          "symbol": "scheduledQueueAndSendAlimtalkDaily",
+          "line": 53
+        },
+        {
+          "path": "firebase/kangsain-functions/functions/src/alimtalk/ticketNoticePolicy.ts",
+          "symbol": "TICKET_NOTICE_POLICY",
+          "line": 5
+        },
+        {
+          "path": "firebase/kangsain-functions/functions/src/alimtalk/ticketNoticePolicy.ts",
+          "symbol": "REVIEWED_TICKET_FACT_CONTRACTS",
+          "line": 15
+        }
+      ]
+    },
+    {
+      "id": "KA01TP260729144645970fv13He8mfsK",
+      "type": "private_survey",
+      "code": "KA01TP260729144645970fv13He8mfsK",
+      "label": "프라이빗 사전설문 안내 v2",
+      "providerInventoryName": "프라이빗 사전설문 안내 v2",
+      "knownProvider": true,
+      "implementation": "source_connected",
+      "sourceConfiguredStatus": "approved",
+      "purpose": "첫 프라이빗 수업 사전설문",
+      "purposeId": "private_survey",
+      "timing": "기준일 당일 후보",
+      "schedule": {
+        "expression": "30 11 * * *",
+        "timezone": "Asia/Seoul"
+      },
+      "targetRules": [
+        "오늘부터 다음 주 일요일까지 예정된 첫 프라이빗 예약이 있음",
+        "예약이 강사레슨이 아님",
+        "자체설문 요청 문서와 짧은 링크가 있음",
+        "과거 프라이빗 사전설문 제출 이력이 없음(회원별 영구 1회)",
+        "과거 프라이빗 출석 완료 이력이 없음"
+      ],
+      "policy": {
+        "type": "private_survey",
+        "templateCode": "KA01TP260729144645970fv13He8mfsK",
+        "templateLabel": "프라이빗 사전설문 안내 v2",
+        "minSourceDate": "2026-05-19",
+        "sourceDatePolicy": "today",
+        "requiresApprovedTemplate": true,
+        "requiresMemberPhone": true,
+        "buttonUrlRules": [
+          {
+            "label": "프라이빗 사전설문 작성 버튼",
+            "template": "https://in.archivepilates.com/s/#{링크ID}/",
+            "maxLength": 100
+          }
+        ],
+        "targetRules": [
+          "오늘부터 다음 주 일요일까지 예정된 첫 프라이빗 예약이 있음",
+          "예약이 강사레슨이 아님",
+          "자체설문 요청 문서와 짧은 링크가 있음",
+          "과거 프라이빗 사전설문 제출 이력이 없음(회원별 영구 1회)",
+          "과거 프라이빗 출석 완료 이력이 없음"
+        ],
+        "exclusionRules": [
+          "알림톡 제외 회원",
+          "전화번호 없음",
+          "프라이빗 예약 없음",
+          "그룹 또는 강사레슨 예약",
+          "짧은 링크 생성 실패 또는 버튼 URL 치환 후 100자 초과",
+          "과거 프라이빗 사전설문 제출 이력 있음",
+          "과거 프라이빗 출석 완료 이력 있음",
+          "SOLAPI 미승인 템플릿"
+        ]
+      },
+      "factNotice": null,
+      "careGroup": false,
+      "providerApproval": {
+        "status": "UNKNOWN",
+        "checkedAt": null,
+        "evidence": "not_read_in_this_catalog"
+      },
+      "deployment": {
+        "status": "UNVERIFIED",
+        "checkedAt": null
+      },
+      "sources": [
+        {
+          "path": "firebase/kangsain-functions/functions/src/alimtalk/templates.ts",
+          "symbol": "ALIMTALK_TEMPLATES",
+          "line": 56
+        },
+        {
+          "path": "firebase/kangsain-functions/functions/src/alimtalk/templateTargetRules.ts",
+          "symbol": "ALIMTALK_TEMPLATE_TARGET_RULES",
+          "line": 49
+        },
+        {
+          "path": "firebase/kangsain-functions/functions/src/exports/alimtalk.ts",
+          "symbol": "scheduledQueueAndSendAlimtalkDaily",
+          "line": 53
+        }
+      ]
+    },
+    {
+      "id": "KA01TP2605210729364330NbhZVAu9zA",
+      "type": "group_survey",
+      "code": "KA01TP2605210729364330NbhZVAu9zA",
+      "label": "그룹 첫 수업 사전확인 안내 v1",
+      "providerInventoryName": "아카이브 그룹 첫 수업 사전확인 안내 v1",
+      "knownProvider": true,
+      "implementation": "source_connected",
+      "sourceConfiguredStatus": "approved",
+      "purpose": "첫 그룹수업 사전확인",
+      "purposeId": "group_survey",
+      "timing": "기준일 당일 후보",
+      "schedule": {
+        "expression": "30 11 * * *",
+        "timezone": "Asia/Seoul"
+      },
+      "targetRules": [
+        "오늘부터 다음 주 일요일까지 예정된 첫 그룹수업 예약이 있음",
+        "예약이 강사레슨이 아님",
+        "최근 1년 내 그룹 사전확인 제출 이력이 없음",
+        "과거 그룹 출석 완료 이력이 없음"
+      ],
+      "policy": {
+        "type": "group_survey",
+        "templateCode": "KA01TP2605210729364330NbhZVAu9zA",
+        "templateLabel": "그룹 첫 수업 사전확인 안내 v1",
+        "minSourceDate": "2026-05-21",
+        "sourceDatePolicy": "today",
+        "requiresApprovedTemplate": true,
+        "requiresMemberPhone": true,
+        "blocksTooLateGroupSurvey": true,
+        "buttonUrlRules": [
+          {
+            "label": "그룹 사전확인 작성 버튼",
+            "template": "https://in.archivepilates.com/groupSurvey?id=#{설문ID}&token=#{접근토큰}",
+            "maxLength": 100
+          },
+          {
+            "label": "그룹 사전확인 작성 버튼",
+            "template": "https://in.archivepilates.com/s/#{링크ID}/",
+            "maxLength": 100
+          }
+        ],
+        "targetRules": [
+          "오늘부터 다음 주 일요일까지 예정된 첫 그룹수업 예약이 있음",
+          "예약이 강사레슨이 아님",
+          "최근 1년 내 그룹 사전확인 제출 이력이 없음",
+          "과거 그룹 출석 완료 이력이 없음"
+        ],
+        "exclusionRules": [
+          "알림톡 제외 회원",
+          "전화번호 없음",
+          "그룹 예약 없음",
+          "프라이빗 또는 강사레슨 예약",
+          "최근 1년 내 그룹 사전확인 제출 이력 있음",
+          "과거 그룹 출석 완료 이력 있음",
+          "수업 시작 30분 미만인 당일 급예약",
+          "짧은 링크 생성 실패 또는 버튼 URL 치환 후 100자 초과",
+          "SOLAPI 미승인 템플릿"
+        ]
+      },
+      "factNotice": null,
+      "careGroup": false,
+      "providerApproval": {
+        "status": "UNKNOWN",
+        "checkedAt": null,
+        "evidence": "not_read_in_this_catalog"
+      },
+      "deployment": {
+        "status": "UNVERIFIED",
+        "checkedAt": null
+      },
+      "sources": [
+        {
+          "path": "firebase/kangsain-functions/functions/src/alimtalk/templates.ts",
+          "symbol": "ALIMTALK_TEMPLATES",
+          "line": 56
+        },
+        {
+          "path": "firebase/kangsain-functions/functions/src/alimtalk/templateTargetRules.ts",
+          "symbol": "ALIMTALK_TEMPLATE_TARGET_RULES",
+          "line": 49
+        },
+        {
+          "path": "firebase/kangsain-functions/functions/src/exports/alimtalk.ts",
+          "symbol": "scheduledQueueAndSendAlimtalkDaily",
+          "line": 53
+        }
+      ]
+    },
+    {
+      "id": "KA01TP260514153314927WH270IppWQS",
+      "type": "private_ticket_expiring",
+      "code": "KA01TP260514153314927WH270IppWQS",
+      "label": "프라이빗 기간권 잔여기간 안내 v1",
+      "providerInventoryName": "아카이브 프라이빗 기간권 잔여기간 안내 v1",
+      "knownProvider": true,
+      "implementation": "source_connected",
+      "sourceConfiguredStatus": "approved",
+      "purpose": "프라이빗권 잔여기간 사실 안내",
+      "purposeId": "ticket_facts",
+      "timing": "기준일 당일 후보",
+      "schedule": {
+        "expression": "30 11 * * *",
+        "timezone": "Asia/Seoul"
+      },
+      "targetRules": [
+        "활성 프라이빗 수강권",
+        "만료일이 발송 기준일로부터 14일 이내",
+        "후속 수강권 구매 여부와 관계없이 기존권의 잔여횟수·만료 정보를 안내"
+      ],
+      "policy": {
+        "type": "private_ticket_expiring",
+        "templateCode": "KA01TP260514153314927WH270IppWQS",
+        "templateLabel": "프라이빗 기간권 잔여기간 안내 v1",
+        "sourceDatePolicy": "today",
+        "requiresApprovedTemplate": true,
+        "requiresMemberPhone": true,
+        "targetRules": [
+          "활성 프라이빗 수강권",
+          "만료일이 발송 기준일로부터 14일 이내",
+          "후속 수강권 구매 여부와 관계없이 기존권의 잔여횟수·만료 정보를 안내"
+        ],
+        "exclusionRules": [
+          "알림톡 제외 회원",
+          "전화번호 없음",
+          "그룹 또는 강사레슨 수강권",
+          "수업권이 아닌 상품",
+          "검토된 사실 안내 본문·버튼과 불일치",
+          "만료일이 지났거나 14일 초과",
+          "동일 수강권 기간 안내 30일 내 발송 이력 있음",
+          "SOLAPI 미승인 템플릿"
+        ]
+      },
+      "factNotice": {
+        "purpose": "ticket_facts",
+        "followupPurchaseExcludes": false,
+        "reviewedAt": "2026-09-30",
+        "targetRule": "후속 수강권 구매 여부와 관계없이 기존권의 잔여횟수·만료 정보를 안내",
+        "pendingReason": "수강권 사실 안내 템플릿 검토 대기:",
+        "types": [
+          "ticket_expiring",
+          "remaining_low",
+          "private_count_low",
+          "private_ticket_expiring"
+        ],
+        "contractFingerprint": "7bc46e639c64db89499b9d85752ed1e2609514fdecb6163bc63cdb99b6c361f0",
+        "reviewState": "reviewed_fact_only",
+        "changedTemplateAction": "pending_template_review"
+      },
+      "careGroup": true,
+      "providerApproval": {
+        "status": "UNKNOWN",
+        "checkedAt": null,
+        "evidence": "not_read_in_this_catalog"
+      },
+      "deployment": {
+        "status": "UNVERIFIED",
+        "checkedAt": null
+      },
+      "sources": [
+        {
+          "path": "firebase/kangsain-functions/functions/src/alimtalk/templates.ts",
+          "symbol": "ALIMTALK_TEMPLATES",
+          "line": 56
+        },
+        {
+          "path": "firebase/kangsain-functions/functions/src/alimtalk/templateTargetRules.ts",
+          "symbol": "ALIMTALK_TEMPLATE_TARGET_RULES",
+          "line": 49
+        },
+        {
+          "path": "firebase/kangsain-functions/functions/src/exports/alimtalk.ts",
+          "symbol": "scheduledQueueAndSendAlimtalkDaily",
+          "line": 53
+        },
+        {
+          "path": "firebase/kangsain-functions/functions/src/alimtalk/ticketNoticePolicy.ts",
+          "symbol": "TICKET_NOTICE_POLICY",
+          "line": 5
+        },
+        {
+          "path": "firebase/kangsain-functions/functions/src/alimtalk/ticketNoticePolicy.ts",
+          "symbol": "REVIEWED_TICKET_FACT_CONTRACTS",
+          "line": 15
+        }
+      ]
+    },
+    {
+      "id": "KA01TP260524083643752cySb9BoDOjN",
+      "type": "long_absence",
+      "code": "KA01TP260524083643752cySb9BoDOjN",
+      "label": "장기 미방문 수업안내 v1",
+      "providerInventoryName": "아카이브 장기 미방문 수업안내 v1",
+      "knownProvider": true,
+      "implementation": "source_connected",
+      "sourceConfiguredStatus": "approved",
+      "purpose": "유효회원 수업 복귀 지원",
+      "purposeId": "long_absence",
+      "timing": "기준일 당일 후보",
+      "schedule": {
+        "expression": "30 11 * * *",
+        "timezone": "Asia/Seoul"
+      },
+      "targetRules": [
+        "활성 수업 수강권 보유",
+        "현재 활성 수강 주기 안의 마지막 출석 완료일이 발송 기준일로부터 7일 이상 지남",
+        "마지막 출석일과 보유 수강권명이 변수로 있음"
+      ],
+      "policy": {
+        "type": "long_absence",
+        "templateCode": "KA01TP260524083643752cySb9BoDOjN",
+        "templateLabel": "장기 미방문 수업안내 v1",
+        "minSourceDate": "2026-05-24",
+        "sourceDatePolicy": "today",
+        "requiresApprovedTemplate": true,
+        "requiresMemberPhone": true,
+        "targetRules": [
+          "활성 수업 수강권 보유",
+          "현재 활성 수강 주기 안의 마지막 출석 완료일이 발송 기준일로부터 7일 이상 지남",
+          "마지막 출석일과 보유 수강권명이 변수로 있음"
+        ],
+        "exclusionRules": [
+          "알림톡 제외 회원",
+          "전화번호 없음",
+          "활성 수업 수강권 없음",
+          "수강권 정지중/중지/홀딩 상태",
+          "출석 완료 이력 없음",
+          "발송 기준일 이후 예정 예약 또는 수업 대기 신청 있음",
+          "새 수강권 시작일 이후 출석 전인 복귀 회원",
+          "마지막 출석 완료일이 7일 미만",
+          "발송 직전 원천 재검사에서 수강권·예약·대기·출석 상태가 바뀜",
+          "동일 회원 장기 미방문 안내 14일 내 발송 이력 있음",
+          "SOLAPI 미승인 템플릿"
+        ]
+      },
+      "factNotice": null,
+      "careGroup": true,
+      "providerApproval": {
+        "status": "UNKNOWN",
+        "checkedAt": null,
+        "evidence": "not_read_in_this_catalog"
+      },
+      "deployment": {
+        "status": "UNVERIFIED",
+        "checkedAt": null
+      },
+      "sources": [
+        {
+          "path": "firebase/kangsain-functions/functions/src/alimtalk/templates.ts",
+          "symbol": "ALIMTALK_TEMPLATES",
+          "line": 56
+        },
+        {
+          "path": "firebase/kangsain-functions/functions/src/alimtalk/templateTargetRules.ts",
+          "symbol": "ALIMTALK_TEMPLATE_TARGET_RULES",
+          "line": 49
+        },
+        {
+          "path": "firebase/kangsain-functions/functions/src/exports/alimtalk.ts",
+          "symbol": "scheduledQueueAndSendAlimtalkDaily",
+          "line": 53
+        }
+      ]
+    },
+    {
+      "id": "KA01TP260808034937468FF5LLYH823H",
+      "type": "staff_private_survey",
+      "code": "KA01TP260808034937468FF5LLYH823H",
+      "label": "담당강사 사전설문 제출 안내 v2",
+      "providerInventoryName": "담당강사 사전설문 제출 안내 v2",
+      "knownProvider": true,
+      "implementation": "source_connected",
+      "sourceConfiguredStatus": "approved",
+      "purpose": "담당강사에게 프라이빗 설문 전달",
+      "purposeId": "staff_private_survey",
+      "timing": "D-1 09:00부터 수업 시작 전",
+      "schedule": {
+        "expression": "every 10 minutes",
+        "timezone": "Asia/Seoul"
+      },
+      "targetRules": [
+        "제출된 프라이빗 사전설문에 연결된 담당강사"
+      ],
+      "policy": {
+        "targetRules": [
+          "제출된 프라이빗 사전설문에 연결된 담당강사"
+        ],
+        "exclusionRules": [],
+        "sourceDatePolicy": "staff_workflow"
+      },
+      "factNotice": null,
+      "careGroup": false,
+      "providerApproval": {
+        "status": "UNKNOWN",
+        "checkedAt": null,
+        "evidence": "not_read_in_this_catalog"
+      },
+      "deployment": {
+        "status": "UNVERIFIED",
+        "checkedAt": null
+      },
+      "sources": [
+        {
+          "path": "firebase/kangsain-functions/functions/src/alimtalk/templates.ts",
+          "symbol": "ALIMTALK_TEMPLATES",
+          "line": 56
+        },
+        {
+          "path": "firebase/kangsain-functions/functions/src/privateSurvey/privateSurveyResponse.ts",
+          "symbol": "staffSurveyNotificationDueAt",
+          "line": 1628
+        },
+        {
+          "path": "firebase/kangsain-functions/functions/src/privateSurvey/privateSurveyResponse.ts",
+          "symbol": "isStaffSurveyAlimtalkDue",
+          "line": 1607
+        },
+        {
+          "path": "firebase/kangsain-functions/functions/src/exports/privateChart.ts",
+          "symbol": "scheduledProcessStaffSurveyAlimtalks",
+          "line": 81
+        }
+      ]
+    },
+    {
+      "id": "KA01TP260903104439283cNjQW0YrrtV",
+      "type": "staff_private_chart",
+      "code": "KA01TP260903104439283cNjQW0YrrtV",
+      "label": "강사용 프라이빗 오늘 기록 안내 v4",
+      "providerInventoryName": "강사용 프라이빗 오늘 기록 안내 v4",
+      "knownProvider": true,
+      "implementation": "source_connected",
+      "sourceConfiguredStatus": "approved",
+      "purpose": "담당강사의 당일 프라이빗 기록 안내",
+      "purposeId": "staff_private_chart",
+      "timing": "수업 당일, 담당강사별 통합 안내",
+      "schedule": {
+        "expression": "0 7-21 * * *",
+        "timezone": "Asia/Seoul"
+      },
+      "targetRules": [
+        "당일 유효한 프라이빗 수업 요청이 있는 담당강사",
+        "취소·중복 예약 제외, 담당강사별 하루 1회"
+      ],
+      "policy": {
+        "targetRules": [
+          "당일 유효한 프라이빗 수업 요청이 있는 담당강사",
+          "취소·중복 예약 제외, 담당강사별 하루 1회"
+        ],
+        "exclusionRules": [],
+        "sourceDatePolicy": "staff_workflow"
+      },
+      "factNotice": null,
+      "careGroup": false,
+      "providerApproval": {
+        "status": "UNKNOWN",
+        "checkedAt": null,
+        "evidence": "not_read_in_this_catalog"
+      },
+      "deployment": {
+        "status": "UNVERIFIED",
+        "checkedAt": null
+      },
+      "sources": [
+        {
+          "path": "firebase/kangsain-functions/functions/src/alimtalk/templates.ts",
+          "symbol": "ALIMTALK_TEMPLATES",
+          "line": 56
+        },
+        {
+          "path": "firebase/kangsain-functions/functions/src/privateLessonChart/privateLessonChart.ts",
+          "symbol": "sendTodayPrivateLessonChartAlimtalks",
+          "line": 601
+        },
+        {
+          "path": "firebase/kangsain-functions/functions/src/privateLessonChart/privateLessonChart.ts",
+          "symbol": "sendDailyPrivateLessonChartAlimtalksForDate",
+          "line": 384
+        },
+        {
+          "path": "firebase/kangsain-functions/functions/src/exports/privateChart.ts",
+          "symbol": "scheduledSendTodayPrivateLessonChartAlimtalks",
+          "line": 122
+        }
+      ]
+    },
+    {
+      "id": "KA01TP260522041704111wu4Z0cu9cgl",
+      "type": "staff_group_survey",
+      "code": "KA01TP260522041704111wu4Z0cu9cgl",
+      "label": "첫 그룹수업 회원 확인 v1",
+      "providerInventoryName": "아카이브 첫 그룹수업 회원 확인 v1",
+      "knownProvider": true,
+      "implementation": "source_connected",
+      "sourceConfiguredStatus": "approved",
+      "purpose": "담당강사에게 첫 그룹수업 설문 전달",
+      "purposeId": "staff_group_survey",
+      "timing": "수업 1시간 전부터 수업 시작 전",
+      "schedule": {
+        "expression": "every 10 minutes",
+        "timezone": "Asia/Seoul"
+      },
+      "targetRules": [
+        "제출된 첫 그룹수업 설문에 연결된 담당강사"
+      ],
+      "policy": {
+        "targetRules": [
+          "제출된 첫 그룹수업 설문에 연결된 담당강사"
+        ],
+        "exclusionRules": [],
+        "sourceDatePolicy": "staff_workflow"
+      },
+      "factNotice": null,
+      "careGroup": false,
+      "providerApproval": {
+        "status": "UNKNOWN",
+        "checkedAt": null,
+        "evidence": "not_read_in_this_catalog"
+      },
+      "deployment": {
+        "status": "UNVERIFIED",
+        "checkedAt": null
+      },
+      "sources": [
+        {
+          "path": "firebase/kangsain-functions/functions/src/alimtalk/templates.ts",
+          "symbol": "ALIMTALK_TEMPLATES",
+          "line": 56
+        },
+        {
+          "path": "firebase/kangsain-functions/functions/src/privateSurvey/privateSurveyResponse.ts",
+          "symbol": "staffSurveyNotificationDueAt",
+          "line": 1628
+        },
+        {
+          "path": "firebase/kangsain-functions/functions/src/privateSurvey/privateSurveyResponse.ts",
+          "symbol": "isStaffSurveyAlimtalkDue",
+          "line": 1607
+        },
+        {
+          "path": "firebase/kangsain-functions/functions/src/exports/privateChart.ts",
+          "symbol": "scheduledProcessStaffSurveyAlimtalks",
+          "line": 81
+        }
+      ]
+    },
+    {
+      "id": "KA01TP2608241233353269Jgtoiwnzi6",
+      "type": "instructor_lesson_confirmation",
+      "code": "KA01TP2608241233353269Jgtoiwnzi6",
+      "label": "강사레슨_예약확정 안내 v1",
+      "providerInventoryName": "강사레슨_예약확정 안내 v1",
+      "knownProvider": true,
+      "implementation": "source_connected",
+      "sourceConfiguredStatus": "approved",
+      "purpose": "강사레슨 수강 등록 확정",
+      "purposeId": "instructor_lesson_confirmation",
+      "timing": "기준일 이전·당일의 업무 완료 조건",
+      "schedule": null,
+      "targetRules": [
+        "ARCHIVE CORE 강사레슨 등록 건",
+        "입금·수강 접수 운영자 확인",
+        "StudioMate 강사레슨 (2T) 수강권 발급 검증",
+        "수업일별 관리번호와 캘린더 경로 확인",
+        "수강권 발급 검증 직후 수업일별 1회 자동 발송"
+      ],
+      "policy": {
+        "type": "instructor_lesson_confirmation",
+        "templateCode": "KA01TP2608241233353269Jgtoiwnzi6",
+        "templateLabel": "강사레슨_예약확정 안내 v1",
+        "sourceDatePolicy": "same_or_before_today",
+        "requiresApprovedTemplate": true,
+        "requiresMemberPhone": true,
+        "requiresManagementNumber": true,
+        "buttonUrlRules": [
+          {
+            "label": "강사레슨 캘린더 버튼",
+            "template": "https://in.archivepilates.com/method/#{관리번호}/calendar/",
+            "maxLength": 100
+          }
+        ],
+        "targetRules": [
+          "ARCHIVE CORE 강사레슨 등록 건",
+          "입금·수강 접수 운영자 확인",
+          "StudioMate 강사레슨 (2T) 수강권 발급 검증",
+          "수업일별 관리번호와 캘린더 경로 확인",
+          "수강권 발급 검증 직후 수업일별 1회 자동 발송"
+        ],
+        "exclusionRules": [
+          "전화번호 없음",
+          "입금·수강 접수 운영자 확인 없음",
+          "강사레슨 (2T) 수강권 발급 미확인",
+          "취소된 강사레슨 등록 건",
+          "수업일별 관리번호 또는 캘린더 계약 없음",
+          "알림톡 제외 스텝 계정",
+          "같은 연락처·수업일·관리번호·템플릿 발송 이력 있음",
+          "SOLAPI 미승인 템플릿"
+        ]
+      },
+      "factNotice": null,
+      "careGroup": false,
+      "providerApproval": {
+        "status": "UNKNOWN",
+        "checkedAt": null,
+        "evidence": "not_read_in_this_catalog"
+      },
+      "deployment": {
+        "status": "UNVERIFIED",
+        "checkedAt": null
+      },
+      "sources": [
+        {
+          "path": "firebase/kangsain-functions/functions/src/alimtalk/templates.ts",
+          "symbol": "ALIMTALK_TEMPLATES",
+          "line": 56
+        },
+        {
+          "path": "firebase/kangsain-functions/functions/src/alimtalk/templateTargetRules.ts",
+          "symbol": "ALIMTALK_TEMPLATE_TARGET_RULES",
+          "line": 49
+        }
+      ]
+    },
+    {
+      "id": "KA01TP260825074722212ylmndmsB3V4",
+      "type": "instructor_lesson_material",
+      "code": "KA01TP260825074722212ylmndmsB3V4",
+      "label": "강사레슨_수업자료 안내 v3",
+      "providerInventoryName": "강사레슨_수업자료 안내 v3",
+      "knownProvider": true,
+      "implementation": "source_connected",
+      "sourceConfiguredStatus": "approved",
+      "purpose": "강사레슨 자료·배정·방문 안내",
+      "purposeId": "instructor_lesson_material",
+      "timing": "기준일 당일 후보",
+      "schedule": {
+        "expression": "30 11 * * *",
+        "timezone": "Asia/Seoul"
+      },
+      "targetRules": [
+        "강사레슨 예약",
+        "수업 하루 전 후보",
+        "수업자료 관리번호가 있음",
+        "주차 사전등록 짧은 링크가 있음",
+        "강사레슨 카카오 채널 템플릿 사용"
+      ],
+      "policy": {
+        "type": "instructor_lesson_material",
+        "templateCode": "KA01TP260825074722212ylmndmsB3V4",
+        "templateLabel": "강사레슨_수업자료 안내 v3",
+        "sourceDatePolicy": "today",
+        "requiresApprovedTemplate": true,
+        "requiresMemberPhone": true,
+        "requiresManagementNumber": true,
+        "buttonUrlRules": [
+          {
+            "label": "강사레슨 수업자료 버튼",
+            "template": "https://in.archivepilates.com/method/#{관리번호}",
+            "maxLength": 100
+          },
+          {
+            "label": "강사레슨 짧은 링크",
+            "template": "https://in.archivepilates.com/s/#{링크ID}/",
+            "maxLength": 100
+          },
+          {
+            "label": "강사레슨 수업배정 버튼",
+            "template": "https://in.archivepilates.com/method/#{관리번호}/assignment",
+            "maxLength": 100
+          },
+          {
+            "label": "강사레슨 주차 사전등록 버튼",
+            "template": "https://in.archivepilates.com/s/#{주차링크ID}/",
+            "maxLength": 100
+          }
+        ],
+        "targetRules": [
+          "강사레슨 예약",
+          "수업 하루 전 후보",
+          "수업자료 관리번호가 있음",
+          "주차 사전등록 짧은 링크가 있음",
+          "강사레슨 카카오 채널 템플릿 사용"
+        ],
+        "exclusionRules": [
+          "전화번호 없음",
+          "강사레슨 예약 아님",
+          "수업자료 관리번호 없음",
+          "주차 사전등록 짧은 링크 없음",
+          "짧은 링크 생성 실패 또는 버튼 URL 치환 후 100자 초과",
+          "같은 수업자료와 수업일 조합 발송 이력 있음",
+          "SOLAPI 미승인 템플릿"
+        ]
+      },
+      "factNotice": null,
+      "careGroup": false,
+      "providerApproval": {
+        "status": "UNKNOWN",
+        "checkedAt": null,
+        "evidence": "not_read_in_this_catalog"
+      },
+      "deployment": {
+        "status": "UNVERIFIED",
+        "checkedAt": null
+      },
+      "sources": [
+        {
+          "path": "firebase/kangsain-functions/functions/src/alimtalk/templates.ts",
+          "symbol": "ALIMTALK_TEMPLATES",
+          "line": 56
+        },
+        {
+          "path": "firebase/kangsain-functions/functions/src/alimtalk/templateTargetRules.ts",
+          "symbol": "ALIMTALK_TEMPLATE_TARGET_RULES",
+          "line": 49
+        },
+        {
+          "path": "firebase/kangsain-functions/functions/src/exports/alimtalk.ts",
+          "symbol": "scheduledQueueAndSendAlimtalkDaily",
+          "line": 53
+        }
+      ]
+    },
+    {
+      "id": "KA01TP260528081225871Fr92FW901Vo",
+      "type": "private_lesson_report",
+      "code": "KA01TP260528081225871Fr92FW901Vo",
+      "label": "프라이빗 회원 리포트 안내 v1",
+      "providerInventoryName": "회원용_프라이빗 수업 리포트 안내 v1",
+      "knownProvider": true,
+      "implementation": "source_connected",
+      "sourceConfiguredStatus": "approved",
+      "purpose": "회원용 프라이빗 수업 리포트 전달",
+      "purposeId": "private_lesson_report",
+      "timing": "기준일 이전·당일의 업무 완료 조건",
+      "schedule": null,
+      "targetRules": [
+        "수업 후 기록이 제출된 프라이빗 회차",
+        "회원용 리포트 초안이 생성됨(자동 생성 또는 강사 수정본)",
+        "회원용 HTML 리포트 URL이 있음",
+        "강사 차트 링크에서 회원 알림톡 발송 승인됨"
+      ],
+      "policy": {
+        "type": "private_lesson_report",
+        "templateCode": "KA01TP260528081225871Fr92FW901Vo",
+        "templateLabel": "프라이빗 회원 리포트 안내 v1",
+        "sourceDatePolicy": "same_or_before_today",
+        "requiresApprovedTemplate": true,
+        "requiresMemberPhone": true,
+        "buttonUrlRules": [
+          {
+            "label": "프라이빗 수업 리포트 버튼",
+            "template": "https://in.archivepilates.com/s/#{리포트링크ID}/",
+            "maxLength": 100
+          }
+        ],
+        "targetRules": [
+          "수업 후 기록이 제출된 프라이빗 회차",
+          "회원용 리포트 초안이 생성됨(자동 생성 또는 강사 수정본)",
+          "회원용 HTML 리포트 URL이 있음",
+          "강사 차트 링크에서 회원 알림톡 발송 승인됨"
+        ],
+        "exclusionRules": [
+          "전화번호 없음",
+          "수업 후 기록 미제출",
+          "회원용 리포트 URL 없음",
+          "회원 알림톡 발송 승인 전",
+          "프라이빗 리포트 발송 큐 상태가 대기가 아님",
+          "같은 회차 리포트 발송 이력 있음",
+          "SOLAPI 미승인 템플릿"
+        ]
+      },
+      "factNotice": null,
+      "careGroup": false,
+      "providerApproval": {
+        "status": "UNKNOWN",
+        "checkedAt": null,
+        "evidence": "not_read_in_this_catalog"
+      },
+      "deployment": {
+        "status": "UNVERIFIED",
+        "checkedAt": null
+      },
+      "sources": [
+        {
+          "path": "firebase/kangsain-functions/functions/src/alimtalk/templates.ts",
+          "symbol": "ALIMTALK_TEMPLATES",
+          "line": 56
+        },
+        {
+          "path": "firebase/kangsain-functions/functions/src/alimtalk/templateTargetRules.ts",
+          "symbol": "ALIMTALK_TEMPLATE_TARGET_RULES",
+          "line": 49
+        }
+      ]
+    },
+    {
+      "id": "KA01TP260528090148593isshfXtt8vE",
+      "type": "inbody_report",
+      "code": "KA01TP260528090148593isshfXtt8vE",
+      "label": "회원용 인바디 리포트 안내 v1",
+      "providerInventoryName": null,
+      "knownProvider": false,
+      "implementation": "source_only",
+      "sourceConfiguredStatus": "pending",
+      "purpose": "회원용 인바디 리포트 전달",
+      "purposeId": "inbody_report",
+      "timing": "기준일 이전·당일의 업무 완료 조건",
+      "schedule": null,
+      "targetRules": [
+        "프라이빗 유효회원",
+        "인바디 측정 후 회원용 리포트 URL 생성 완료",
+        "회원 전화번호가 있음",
+        "운영자 승인 또는 자동 발송 조건 충족"
+      ],
+      "policy": {
+        "type": "inbody_report",
+        "templateCode": "KA01TP260528090148593isshfXtt8vE",
+        "templateLabel": "회원용 인바디 리포트 안내 v1",
+        "sourceDatePolicy": "same_or_before_today",
+        "requiresApprovedTemplate": true,
+        "requiresMemberPhone": true,
+        "buttonUrlRules": [
+          {
+            "label": "인바디 리포트 버튼",
+            "template": "https://in.archivepilates.com/s/#{리포트링크ID}/",
+            "maxLength": 100
+          }
+        ],
+        "targetRules": [
+          "프라이빗 유효회원",
+          "인바디 측정 후 회원용 리포트 URL 생성 완료",
+          "회원 전화번호가 있음",
+          "운영자 승인 또는 자동 발송 조건 충족"
+        ],
+        "exclusionRules": [
+          "프라이빗 유효회원 아님",
+          "전화번호 없음",
+          "인바디 리포트 URL 없음",
+          "같은 측정 또는 리포트 발송 이력 있음",
+          "운영자 승인 전 또는 자동 발송 조건 미충족",
+          "SOLAPI 미승인 템플릿"
+        ]
+      },
+      "factNotice": null,
+      "careGroup": false,
+      "providerApproval": {
+        "status": "UNKNOWN",
+        "checkedAt": null,
+        "evidence": "not_read_in_this_catalog"
+      },
+      "deployment": {
+        "status": "UNVERIFIED",
+        "checkedAt": null
+      },
+      "sources": [
+        {
+          "path": "firebase/kangsain-functions/functions/src/alimtalk/templates.ts",
+          "symbol": "ALIMTALK_TEMPLATES",
+          "line": 56
+        },
+        {
+          "path": "firebase/kangsain-functions/functions/src/alimtalk/templateTargetRules.ts",
+          "symbol": "ALIMTALK_TEMPLATE_TARGET_RULES",
+          "line": 49
+        }
+      ]
+    },
+    {
+      "id": "KA01TP260611053817155zqYlw27wEOU",
+      "type": "pricing_info",
+      "code": "KA01TP260611053817155zqYlw27wEOU",
+      "label": "회원용_수강료 안내 링크 v1",
+      "providerInventoryName": "회원용_수강료 안내 링크 v1",
+      "knownProvider": true,
+      "implementation": "source_connected",
+      "sourceConfiguredStatus": "approved",
+      "purpose": "요청한 수강료 안내 전달",
+      "purposeId": "pricing_info",
+      "timing": "운영자 단건 요청·검토",
+      "schedule": null,
+      "targetRules": [
+        "수강료를 문의한 비회원 또는 회원에게 운영자가 단건 발송",
+        "CORE Messages 탭에서 전화번호를 직접 입력",
+        "SOLAPI 버튼 URL이 공개 Notion 수강료 안내 도메인으로 설정됨",
+        "최근 7일 내 같은 전화번호로 동일 안내 발송 이력 없음"
+      ],
+      "policy": {
+        "type": "pricing_info",
+        "templateCode": "KA01TP260611053817155zqYlw27wEOU",
+        "templateLabel": "회원용_수강료 안내 링크 v1",
+        "sourceDatePolicy": "manual",
+        "requiresApprovedTemplate": true,
+        "requiresMemberPhone": true,
+        "buttonUrlRules": [
+          {
+            "label": "수강료 안내 보기 버튼",
+            "template": "https://archivepilates.notion.site/",
+            "maxLength": 100
+          }
+        ],
+        "targetRules": [
+          "수강료를 문의한 비회원 또는 회원에게 운영자가 단건 발송",
+          "CORE Messages 탭에서 전화번호를 직접 입력",
+          "SOLAPI 버튼 URL이 공개 Notion 수강료 안내 도메인으로 설정됨",
+          "최근 7일 내 같은 전화번호로 동일 안내 발송 이력 없음"
+        ],
+        "exclusionRules": [
+          "전화번호 없음",
+          "수강료 안내 링크 없음",
+          "같은 전화번호 7일 내 수강료 안내 발송 이력 있음",
+          "SOLAPI 미승인 템플릿",
+          "대량 발송 또는 홍보성 일괄 발송"
+        ]
+      },
+      "factNotice": null,
+      "careGroup": false,
+      "providerApproval": {
+        "status": "UNKNOWN",
+        "checkedAt": null,
+        "evidence": "not_read_in_this_catalog"
+      },
+      "deployment": {
+        "status": "UNVERIFIED",
+        "checkedAt": null
+      },
+      "sources": [
+        {
+          "path": "firebase/kangsain-functions/functions/src/alimtalk/templates.ts",
+          "symbol": "ALIMTALK_TEMPLATES",
+          "line": 56
+        },
+        {
+          "path": "firebase/kangsain-functions/functions/src/alimtalk/templateTargetRules.ts",
+          "symbol": "ALIMTALK_TEMPLATE_TARGET_RULES",
+          "line": 49
+        }
+      ]
+    },
+    {
+      "id": "KA01TP260802163827071E2TTuX6CsWp",
+      "type": "recommended_meal_survey",
+      "code": "KA01TP260802163827071E2TTuX6CsWp",
+      "label": "아카이브 추천식단 프로그램 v2",
+      "providerInventoryName": "아카이브 추천식단 프로그램 v2",
+      "knownProvider": true,
+      "implementation": "source_connected",
+      "sourceConfiguredStatus": "approved",
+      "purpose": "추천식단 설문·리포트 링크 전달",
+      "purposeId": "recommended_meal_survey",
+      "timing": "운영자 단건 요청·검토",
+      "schedule": null,
+      "targetRules": [
+        "ARCHIVE CORE에서 운영자가 회원 전화번호와 이름을 확인한 단건 발송",
+        "memberProfiles 또는 memberContactIndex의 전화번호 기준 회원 매칭",
+        "추천식단 전용 요청과 설문·리포트 짧은 링크가 있음",
+        "최근 30일 내 같은 회원에게 동일 설문 발송 이력 없음"
+      ],
+      "policy": {
+        "type": "recommended_meal_survey",
+        "templateCode": "KA01TP260802163827071E2TTuX6CsWp",
+        "templateLabel": "아카이브 추천식단 프로그램 v2",
+        "sourceDatePolicy": "manual",
+        "requiresApprovedTemplate": true,
+        "requiresMemberPhone": true,
+        "buttonUrlRules": [
+          {
+            "label": "추천식단 설문 작성 버튼",
+            "template": "https://in.archivepilates.com/s/#{링크ID}/",
+            "maxLength": 100
+          },
+          {
+            "label": "추천식단 확인 버튼",
+            "template": "https://in.archivepilates.com/s/#{리포트링크ID}/",
+            "maxLength": 100
+          }
+        ],
+        "targetRules": [
+          "ARCHIVE CORE에서 운영자가 회원 전화번호와 이름을 확인한 단건 발송",
+          "memberProfiles 또는 memberContactIndex의 전화번호 기준 회원 매칭",
+          "추천식단 전용 요청과 설문·리포트 짧은 링크가 있음",
+          "최근 30일 내 같은 회원에게 동일 설문 발송 이력 없음"
+        ],
+        "exclusionRules": [
+          "회원 전화번호 또는 회원카드 매칭 없음",
+          "같은 전화번호에 서로 다른 이름의 회원이 있어 운영자 확인 필요",
+          "추천식단 설문 짧은 링크 없음",
+          "추천식단 리포트 짧은 링크 없음",
+          "최근 30일 내 같은 회원에게 동일 설문 발송 이력 있음",
+          "SOLAPI 미승인 템플릿"
+        ]
+      },
+      "factNotice": null,
+      "careGroup": false,
+      "providerApproval": {
+        "status": "UNKNOWN",
+        "checkedAt": null,
+        "evidence": "not_read_in_this_catalog"
+      },
+      "deployment": {
+        "status": "UNVERIFIED",
+        "checkedAt": null
+      },
+      "sources": [
+        {
+          "path": "firebase/kangsain-functions/functions/src/alimtalk/templates.ts",
+          "symbol": "ALIMTALK_TEMPLATES",
+          "line": 56
+        },
+        {
+          "path": "firebase/kangsain-functions/functions/src/alimtalk/templateTargetRules.ts",
+          "symbol": "ALIMTALK_TEMPLATE_TARGET_RULES",
+          "line": 49
+        }
+      ]
+    },
+    {
+      "id": "KA01TP260731123545629Sx4N5CZa5BF",
+      "type": "recommended_meal_report",
+      "code": "KA01TP260731123545629Sx4N5CZa5BF",
+      "label": "아카이브 추천식단 도착 안내 v1",
+      "providerInventoryName": null,
+      "knownProvider": false,
+      "implementation": "source_only",
+      "sourceConfiguredStatus": "pending",
+      "purpose": "승인된 추천식단 리포트 전달",
+      "purposeId": "recommended_meal_report",
+      "timing": "운영자 단건 요청·검토",
+      "schedule": null,
+      "targetRules": [
+        "ARCHIVE CORE에서 운영자가 설문과 InBody를 검토하고 최종 식단을 승인",
+        "승인된 revision과 발송 candidate의 revision이 일치",
+        "추천식단 전용 짧은 링크가 있음",
+        "같은 추천식단 reportId는 1회만 발송"
+      ],
+      "policy": {
+        "type": "recommended_meal_report",
+        "templateCode": "KA01TP260731123545629Sx4N5CZa5BF",
+        "templateLabel": "아카이브 추천식단 도착 안내 v1",
+        "sourceDatePolicy": "manual",
+        "requiresApprovedTemplate": true,
+        "requiresMemberPhone": true,
+        "buttonUrlRules": [
+          {
+            "label": "추천식단 보기 버튼",
+            "template": "https://in.archivepilates.com/s/#{링크ID}/",
+            "maxLength": 100
+          }
+        ],
+        "targetRules": [
+          "ARCHIVE CORE에서 운영자가 설문과 InBody를 검토하고 최종 식단을 승인",
+          "승인된 revision과 발송 candidate의 revision이 일치",
+          "추천식단 전용 짧은 링크가 있음",
+          "같은 추천식단 reportId는 1회만 발송"
+        ],
+        "exclusionRules": [
+          "운영자 검토 미완료 또는 주의 응답 미확인",
+          "승인 후 식단 내용이 변경됨",
+          "추천식단 짧은 링크 없음",
+          "동일 reportId 발송 이력 있음",
+          "SOLAPI 미승인 템플릿"
+        ]
+      },
+      "factNotice": null,
+      "careGroup": false,
+      "providerApproval": {
+        "status": "UNKNOWN",
+        "checkedAt": null,
+        "evidence": "not_read_in_this_catalog"
+      },
+      "deployment": {
+        "status": "UNVERIFIED",
+        "checkedAt": null
+      },
+      "sources": [
+        {
+          "path": "firebase/kangsain-functions/functions/src/alimtalk/templates.ts",
+          "symbol": "ALIMTALK_TEMPLATES",
+          "line": 56
+        },
+        {
+          "path": "firebase/kangsain-functions/functions/src/alimtalk/templateTargetRules.ts",
+          "symbol": "ALIMTALK_TEMPLATE_TARGET_RULES",
+          "line": 49
+        }
+      ]
+    },
+    {
+      "id": "KA01TP260514153632171uiWXYoeiOLS",
+      "type": null,
+      "code": "KA01TP260514153632171uiWXYoeiOLS",
+      "label": "프라이빗 사전설문 안내 v1 (미사용)",
+      "providerInventoryName": null,
+      "knownProvider": false,
+      "implementation": "archived",
+      "sourceConfiguredStatus": null,
+      "purpose": "이전 버전 안내 · 이력 보존",
+      "purposeId": "archived",
+      "timing": "현재 발송 시기 정의 없음",
+      "schedule": null,
+      "targetRules": [
+        "현재 ALIMTALK_TEMPLATES 매핑 없음"
+      ],
+      "policy": null,
+      "factNotice": null,
+      "careGroup": false,
+      "providerApproval": {
+        "status": "UNKNOWN",
+        "checkedAt": null,
+        "evidence": "not_read_in_this_catalog"
+      },
+      "deployment": {
+        "status": "UNVERIFIED",
+        "checkedAt": null
+      },
+      "sources": [
+        {
+          "path": "core/assets/app.js",
+          "symbol": "ALIMTALK_TEMPLATE_LABELS_BY_CODE",
+          "line": 15
+        }
+      ]
+    },
+    {
+      "id": "KA01TP260519093416836f1EHZYJ00uM",
+      "type": null,
+      "code": "KA01TP260519093416836f1EHZYJ00uM",
+      "label": "아카이브 담당강사 사전설문 제출 안내 v1",
+      "providerInventoryName": "아카이브 담당강사 사전설문 제출 안내 v1",
+      "knownProvider": true,
+      "implementation": "archived",
+      "sourceConfiguredStatus": null,
+      "purpose": "이전 프라이빗 설문 제출 전달",
+      "purposeId": "archived",
+      "timing": "현재 발송 시기 정의 없음",
+      "schedule": null,
+      "targetRules": [
+        "현재 v2와 분리된 구버전"
+      ],
+      "policy": null,
+      "factNotice": null,
+      "careGroup": false,
+      "providerApproval": {
+        "status": "UNKNOWN",
+        "checkedAt": null,
+        "evidence": "not_read_in_this_catalog"
+      },
+      "deployment": {
+        "status": "UNVERIFIED",
+        "checkedAt": null
+      },
+      "sources": [
+        {
+          "path": "core/assets/app.js",
+          "symbol": "ALIMTALK_TEMPLATE_LABELS_BY_CODE",
+          "line": 15
+        }
+      ]
+    },
+    {
+      "id": "KA01TP260521120040094XcMvYgFTryj",
+      "type": null,
+      "code": "KA01TP260521120040094XcMvYgFTryj",
+      "label": "강사레슨 수업자료 안내 v1",
+      "providerInventoryName": null,
+      "knownProvider": false,
+      "implementation": "archived",
+      "sourceConfiguredStatus": null,
+      "purpose": "이전 버전 안내 · 이력 보존",
+      "purposeId": "archived",
+      "timing": "현재 발송 시기 정의 없음",
+      "schedule": null,
+      "targetRules": [
+        "현재 ALIMTALK_TEMPLATES 매핑 없음"
+      ],
+      "policy": null,
+      "factNotice": null,
+      "careGroup": false,
+      "providerApproval": {
+        "status": "UNKNOWN",
+        "checkedAt": null,
+        "evidence": "not_read_in_this_catalog"
+      },
+      "deployment": {
+        "status": "UNVERIFIED",
+        "checkedAt": null
+      },
+      "sources": [
+        {
+          "path": "core/assets/app.js",
+          "symbol": "ALIMTALK_TEMPLATE_LABELS_BY_CODE",
+          "line": 15
+        }
+      ]
+    },
+    {
+      "id": "KA01TP260724090746135DWCIb2boEw7",
+      "type": null,
+      "code": "KA01TP260724090746135DWCIb2boEw7",
+      "label": "강사레슨 수업자료 안내 v2",
+      "providerInventoryName": null,
+      "knownProvider": false,
+      "implementation": "archived",
+      "sourceConfiguredStatus": null,
+      "purpose": "이전 버전 안내 · 이력 보존",
+      "purposeId": "archived",
+      "timing": "현재 발송 시기 정의 없음",
+      "schedule": null,
+      "targetRules": [
+        "현재 ALIMTALK_TEMPLATES 매핑 없음"
+      ],
+      "policy": null,
+      "factNotice": null,
+      "careGroup": false,
+      "providerApproval": {
+        "status": "UNKNOWN",
+        "checkedAt": null,
+        "evidence": "not_read_in_this_catalog"
+      },
+      "deployment": {
+        "status": "UNVERIFIED",
+        "checkedAt": null
+      },
+      "sources": [
+        {
+          "path": "core/assets/app.js",
+          "symbol": "ALIMTALK_TEMPLATE_LABELS_BY_CODE",
+          "line": 15
+        }
+      ]
+    },
+    {
+      "id": "KA01TP260527182741301uIuSTL01YQ1",
+      "type": null,
+      "code": "KA01TP260527182741301uIuSTL01YQ1",
+      "label": "강사용 프라이빗 차트 작성 안내 v2 (삭제됨)",
+      "providerInventoryName": null,
+      "knownProvider": false,
+      "implementation": "archived",
+      "sourceConfiguredStatus": null,
+      "purpose": "이전 버전 안내 · 이력 보존",
+      "purposeId": "archived",
+      "timing": "현재 발송 시기 정의 없음",
+      "schedule": null,
+      "targetRules": [
+        "현재 ALIMTALK_TEMPLATES 매핑 없음"
+      ],
+      "policy": null,
+      "factNotice": null,
+      "careGroup": false,
+      "providerApproval": {
+        "status": "UNKNOWN",
+        "checkedAt": null,
+        "evidence": "not_read_in_this_catalog"
+      },
+      "deployment": {
+        "status": "UNVERIFIED",
+        "checkedAt": null
+      },
+      "sources": [
+        {
+          "path": "core/assets/app.js",
+          "symbol": "ALIMTALK_TEMPLATE_LABELS_BY_CODE",
+          "line": 15
+        }
+      ]
+    },
+    {
+      "id": "KA01TP260728111926523p2JzzTgHsS8",
+      "type": null,
+      "code": "KA01TP260728111926523p2JzzTgHsS8",
+      "label": "아카이브 추천식단 프로그램 v1 (삭제됨)",
+      "providerInventoryName": null,
+      "knownProvider": false,
+      "implementation": "archived",
+      "sourceConfiguredStatus": null,
+      "purpose": "이전 버전 안내 · 이력 보존",
+      "purposeId": "archived",
+      "timing": "현재 발송 시기 정의 없음",
+      "schedule": null,
+      "targetRules": [
+        "현재 ALIMTALK_TEMPLATES 매핑 없음"
+      ],
+      "policy": null,
+      "factNotice": null,
+      "careGroup": false,
+      "providerApproval": {
+        "status": "UNKNOWN",
+        "checkedAt": null,
+        "evidence": "not_read_in_this_catalog"
+      },
+      "deployment": {
+        "status": "UNVERIFIED",
+        "checkedAt": null
+      },
+      "sources": [
+        {
+          "path": "core/assets/app.js",
+          "symbol": "ALIMTALK_TEMPLATE_LABELS_BY_CODE",
+          "line": 15
+        }
+      ]
+    },
+    {
+      "id": "KA01TP260729144657202OV26yAD15wR",
+      "type": null,
+      "code": "KA01TP260729144657202OV26yAD15wR",
+      "label": "강사용 프라이빗 차트 작성 안내 v3 (삭제됨)",
+      "providerInventoryName": null,
+      "knownProvider": false,
+      "implementation": "archived",
+      "sourceConfiguredStatus": null,
+      "purpose": "이전 버전 안내 · 이력 보존",
+      "purposeId": "archived",
+      "timing": "현재 발송 시기 정의 없음",
+      "schedule": null,
+      "targetRules": [
+        "현재 ALIMTALK_TEMPLATES 매핑 없음"
+      ],
+      "policy": null,
+      "factNotice": null,
+      "careGroup": false,
+      "providerApproval": {
+        "status": "UNKNOWN",
+        "checkedAt": null,
+        "evidence": "not_read_in_this_catalog"
+      },
+      "deployment": {
+        "status": "UNVERIFIED",
+        "checkedAt": null
+      },
+      "sources": [
+        {
+          "path": "core/assets/app.js",
+          "symbol": "ALIMTALK_TEMPLATE_LABELS_BY_CODE",
+          "line": 15
+        }
+      ]
+    },
+    {
+      "id": "KA01TP2607050825481844FfRze7o9Pw",
+      "type": null,
+      "code": "KA01TP2607050825481844FfRze7o9Pw",
+      "label": "회원용_강사 변경 안내 v1",
+      "providerInventoryName": "회원용_강사 변경 안내 v1",
+      "knownProvider": true,
+      "implementation": "unconnected",
+      "sourceConfiguredStatus": null,
+      "purpose": "예약 수업의 강사 변경 공지",
+      "purposeId": "unconnected",
+      "timing": "중앙 발송 경로 미연결",
+      "schedule": null,
+      "targetRules": [
+        "중앙 정책 미연결 · 자동 발송 대상 정의 없음"
+      ],
+      "policy": null,
+      "factNotice": null,
+      "careGroup": false,
+      "providerApproval": {
+        "status": "UNKNOWN",
+        "checkedAt": null,
+        "evidence": "not_read_in_this_catalog"
+      },
+      "deployment": {
+        "status": "UNVERIFIED",
+        "checkedAt": null
+      },
+      "sources": [
+        {
+          "path": "scripts/fixtures/alimtalk-catalog-known-provider.json",
+          "symbol": "templates (coverage only)",
+          "line": 1
+        }
+      ]
+    },
+    {
+      "id": "KA01TP2607050825471794qyKK2E0URD",
+      "type": null,
+      "code": "KA01TP2607050825471794qyKK2E0URD",
+      "label": "회원용_수업 일정 변경 안내 v1",
+      "providerInventoryName": "회원용_수업 일정 변경 안내 v1",
+      "knownProvider": true,
+      "implementation": "unconnected",
+      "sourceConfiguredStatus": null,
+      "purpose": "예약 수업의 일정 변경 공지",
+      "purposeId": "unconnected",
+      "timing": "중앙 발송 경로 미연결",
+      "schedule": null,
+      "targetRules": [
+        "중앙 정책 미연결 · 자동 발송 대상 정의 없음"
+      ],
+      "policy": null,
+      "factNotice": null,
+      "careGroup": false,
+      "providerApproval": {
+        "status": "UNKNOWN",
+        "checkedAt": null,
+        "evidence": "not_read_in_this_catalog"
+      },
+      "deployment": {
+        "status": "UNVERIFIED",
+        "checkedAt": null
+      },
+      "sources": [
+        {
+          "path": "scripts/fixtures/alimtalk-catalog-known-provider.json",
+          "symbol": "templates (coverage only)",
+          "line": 1
+        }
+      ]
+    },
+    {
+      "id": "KA01TP260606215619915xrfx4W0JsZf",
+      "type": null,
+      "code": "KA01TP260606215619915xrfx4W0JsZf",
+      "label": "ARCHIVE PILATES 면접 일정 예약 안내 v1",
+      "providerInventoryName": "ARCHIVE PILATES 면접 일정 예약 안내 v1",
+      "knownProvider": true,
+      "implementation": "separate_project",
+      "sourceConfiguredStatus": null,
+      "purpose": "면접 일정 선택 안내",
+      "purposeId": "separate_project",
+      "timing": "별도 프로젝트 운영·배포 상태 미조회",
+      "schedule": null,
+      "targetRules": [
+        "ARCHIVE APPLY 지원자 · 별도 프로젝트 대상 정책 미조회"
+      ],
+      "policy": null,
+      "factNotice": null,
+      "careGroup": false,
+      "providerApproval": {
+        "status": "UNKNOWN",
+        "checkedAt": null,
+        "evidence": "not_read_in_this_catalog"
+      },
+      "deployment": {
+        "status": "UNVERIFIED",
+        "checkedAt": null
+      },
+      "sources": [
+        {
+          "path": "scripts/fixtures/alimtalk-catalog-known-provider.json",
+          "symbol": "templates (coverage only)",
+          "line": 1
+        }
+      ]
+    },
+    {
+      "id": "KA01TP260521072937354Ve2n5cEapDL",
+      "type": null,
+      "code": "KA01TP260521072937354Ve2n5cEapDL",
+      "label": "아카이브 담당강사 그룹 사전확인 제출 안내 v1",
+      "providerInventoryName": "아카이브 담당강사 그룹 사전확인 제출 안내 v1",
+      "knownProvider": true,
+      "implementation": "archived",
+      "sourceConfiguredStatus": null,
+      "purpose": "이전 그룹 사전확인 제출 전달",
+      "purposeId": "archived",
+      "timing": "현재 발송 시기 정의 없음",
+      "schedule": null,
+      "targetRules": [
+        "현재 중앙 템플릿 매핑 없음"
+      ],
+      "policy": null,
+      "factNotice": null,
+      "careGroup": false,
+      "providerApproval": {
+        "status": "UNKNOWN",
+        "checkedAt": null,
+        "evidence": "not_read_in_this_catalog"
+      },
+      "deployment": {
+        "status": "UNVERIFIED",
+        "checkedAt": null
+      },
+      "sources": [
+        {
+          "path": "scripts/fixtures/alimtalk-catalog-known-provider.json",
+          "symbol": "templates (coverage only)",
+          "line": 1
+        }
+      ]
+    }
+  ]
+}

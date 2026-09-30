@@ -33,6 +33,7 @@ import {
 import { hasExplicitAlimtalkTestOverride, isAlimtalkTestRecipient } from "./testRecipients";
 import { currentAutomaticMemberExclusionReason } from "./recipientExclusion";
 import { db } from "../config/firebase";
+import { ticketFactTemplateIssue } from "./ticketNoticePolicy";
 import {
   isMembershipWelcomeCanaryRecipient,
   MEMBERSHIP_AUTOMATION_SETTINGS,
@@ -95,7 +96,8 @@ export async function autoSendabilityIssue(candidate: AlimtalkCandidateDoc, toda
       recommendedMealTemplateContractIssue(candidate, readiness.state) ||
       recommendedMealReportTemplateContractIssue(candidate, readiness.state) ||
       instructorLessonConfirmationTemplateContractIssue(candidate, readiness.state) ||
-      reservationOpenTemplateContractIssue(candidate, readiness.state);
+      reservationOpenTemplateContractIssue(candidate, readiness.state) ||
+      ticketFactTemplateIssue(candidate, readiness.state);
     if (remoteContractIssue) return remoteContractIssue;
   }
   if ((candidate.attempts || 0) >= (candidate.maxAttempts || 2)) return "발송 실패 재시도 한도 초과";

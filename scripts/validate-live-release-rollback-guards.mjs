@@ -1,5 +1,6 @@
 #!/usr/bin/env node
 import fs from "node:fs";
+import { spawnSync } from "node:child_process";
 import path from "node:path";
 import { fileURLToPath } from "node:url";
 
@@ -634,7 +635,7 @@ const guardGroups = [
   {
     id: "renewal-personalization",
     reason:
-      "재등록 듀엣 분류, 예상 소진일, 상담 장부, 발송 직전 재등록 차단이 후속 배포에서 빠지는 것을 막습니다.",
+      "수강권 사실 안내와 재등록 관리를 분리하고, 후속권 보유자의 사실 안내 유지와 재등록 관리 제외가 되돌아가는 것을 막습니다.",
     files: [
       {
         file: "firebase/kangsain-functions/functions/src/renewal/renewalPolicy.ts",
@@ -651,11 +652,37 @@ const guardGroups = [
         file: "firebase/kangsain-functions/functions/src/alimtalk/renewalSendGuard.ts",
         markers: [
           "renewalCandidateSendabilityIssue",
-          "동일 유형 후속 수강권 보유",
           "재등록 안내 제외 수강권",
           "isRenewalManagedTicket",
           "renewalCandidateProfileIssue",
         ],
+        forbiddenMarkers: [
+          "hasSameKindAlternativeTicket",
+          "hasSameKindActiveBackup",
+          "hasOtherActiveTicket",
+          "동일 유형 후속 수강권 보유",
+        ],
+      },
+      {
+        file: "firebase/kangsain-functions/functions/src/alimtalk/ticketNoticePolicy.ts",
+        markers: [
+          'purpose: "ticket_facts"',
+          "followupPurchaseExcludes: false",
+          "REVIEWED_TICKET_FACT_CONTRACTS",
+          "ticketFactTemplateIssue",
+          'state.source !== "solapi"',
+          'state.status !== "APPROVED"',
+          "ticketFactContractFingerprint(state) !== expected",
+        ],
+      },
+      {
+        file: "firebase/kangsain-functions/functions/src/alimtalk/eligibility.ts",
+        markers: ["ticketFactTemplateIssue(candidate, readiness.state)"],
+      },
+      {
+        file: "firebase/kangsain-functions/functions/src/alimtalk/templateTargetRules.ts",
+        markers: ["TICKET_NOTICE_POLICY.targetRule"],
+        forbiddenMarkers: ["다른 현재 또는 사용예정 동일 유형 유효 수강권 보유"],
       },
       {
         file: "core/assets/app.js",
@@ -677,6 +704,9 @@ const guardGroups = [
           '"ticketClassType"',
           "if (!isRenewalManagedTicket(ticket)) return null;",
           "currentLessonProfileTickets(profile, sourceDate).filter(isRenewalManagedTicket)",
+          "noticePurpose: TICKET_NOTICE_POLICY.purpose",
+          "!hasSameKindActiveBackup(currentOrUpcomingTickets, item.ticket, sourceDate)",
+          "return hasSameKindAlternativeTicket(tickets, target, sourceDate);",
         ],
       },
       {
@@ -1733,6 +1763,42 @@ for (const group of guardGroups) {
   }
 }
 
+// Static markers alone cannot prove that facts stay sendable while renewal cases
+// remain suppressed by healthy follow-up tickets. These offline tests are mandatory.
+const semanticTests = [
+  "scripts/tests/alimtalk-ticket-facts.test.ts",
+  "scripts/tests/renewal-policy.test.ts",
+  "scripts/tests/renewal-core-visibility.test.mjs",
+  "scripts/tests/alimtalk-release-policy-guard.test.mjs",
+];
+const semanticResult = spawnSync(process.execPath, [
+  "--import", "./firebase/kangsain-functions/functions/node_modules/tsx/dist/loader.mjs",
+  "--test", ...semanticTests,
+], {
+  cwd: repoRoot,
+  encoding: "utf8",
+  timeout: 60_000,
+  maxBuffer: 4 * 1024 * 1024,
+  env: {
+    PATH: process.env.PATH,
+    HOME: path.join(repoRoot, ".offline-policy-tests-no-home"),
+    TSX_DISABLE_CACHE: "1",
+    FIRESTORE_EMULATOR_HOST: "127.0.0.1:1",
+    GCLOUD_PROJECT: "demo-alimtalk-policy",
+  },
+});
+if (semanticResult.error || semanticResult.signal || semanticResult.status !== 0) {
+  failures.push({
+    group: "renewal-personalization",
+    reason: "Mandatory offline ticket-fact and renewal-management regression tests failed.",
+    tests: semanticTests,
+    status: semanticResult.status,
+    signal: semanticResult.signal,
+    error: semanticResult.error?.message,
+    output: `${semanticResult.stdout || ""}${semanticResult.stderr || ""}`,
+  });
+}
+
 if (failures.length) {
   console.error("Live release rollback guard failed.");
   console.error(
@@ -1747,6 +1813,7 @@ console.log(
     {
       ok: true,
       guard: "archive-live-release-rollback-guards",
+      semanticTests,
       groups: guardGroups.map((group) => group.id),
       checkedFiles: [
         ...new Set(

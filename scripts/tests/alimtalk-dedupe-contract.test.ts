@@ -124,7 +124,7 @@ test("does not treat an automatic Kim test-recipient candidate as an explicit te
 test("CORE instructor confirmation keeps staff exclusion unless a separate test override is approved", () => {
   assert.match(
     eligibilitySource,
-    /isAlimtalkTestRecipient\(candidate\) && !hasExplicitAlimtalkTestOverride\(candidate\)/,
+    /isAlimtalkTestRecipient\(candidate\)\s*&&\s*!hasExplicitAlimtalkTestOverride\(candidate\)/,
   );
   assert.match(instructorLessonConfirmationSource, /queuedBy: "auto"/);
   assert.match(

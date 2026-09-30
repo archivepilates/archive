@@ -1,4 +1,5 @@
 import type { AlimtalkCandidateType } from "../types/models";
+import { TICKET_NOTICE_POLICY } from "./ticketNoticePolicy";
 import {
   ALIMTALK_TEMPLATES,
   GROUP_SURVEY_ALIMTALK_START_DATE,
@@ -299,14 +300,14 @@ export const ALIMTALK_TEMPLATE_TARGET_RULES: Partial<Record<AlimtalkCandidateTyp
     targetRules: [
       "활성 그룹 수강권",
       "만료일이 발송 기준일로부터 14일 이내",
-      "다른 현재 또는 사용예정 동일 유형 유효 수강권 없음",
+      TICKET_NOTICE_POLICY.targetRule,
     ],
     exclusionRules: [
       "알림톡 제외 회원",
       "전화번호 없음",
       "프라이빗 또는 강사레슨 수강권",
       "수업권이 아닌 상품",
-      "다른 현재 또는 사용예정 동일 유형 유효 수강권 보유",
+      "검토된 사실 안내 본문·버튼과 불일치",
       "만료일이 지났거나 14일 초과",
       "동일 수강권 기간 안내 30일 내 발송 이력 있음",
       "SOLAPI 미승인 템플릿",
@@ -319,13 +320,13 @@ export const ALIMTALK_TEMPLATE_TARGET_RULES: Partial<Record<AlimtalkCandidateTyp
     sourceDatePolicy: "today",
     requiresApprovedTemplate: true,
     requiresMemberPhone: true,
-    targetRules: ["활성 그룹 횟수권", "잔여횟수 1-4회", "다른 현재 또는 사용예정 동일 유형 유효 수강권 없음"],
+    targetRules: ["활성 그룹 횟수권", "잔여횟수 1-4회", TICKET_NOTICE_POLICY.targetRule],
     exclusionRules: [
       "알림톡 제외 회원",
       "전화번호 없음",
       "프라이빗 또는 강사레슨 수강권",
       "수업권이 아닌 상품",
-      "다른 현재 또는 사용예정 동일 유형 유효 수강권 보유",
+      "검토된 사실 안내 본문·버튼과 불일치",
       "잔여횟수 0회 또는 5회 이상",
       "동일 수강권 횟수 안내 30일 내 발송 이력 있음",
       "SOLAPI 미승인 템플릿",
@@ -338,13 +339,13 @@ export const ALIMTALK_TEMPLATE_TARGET_RULES: Partial<Record<AlimtalkCandidateTyp
     sourceDatePolicy: "today",
     requiresApprovedTemplate: true,
     requiresMemberPhone: true,
-    targetRules: ["활성 프라이빗·듀엣 횟수권", "잔여횟수 1-3회", "다른 현재 또는 사용예정 동일 유형 유효 수강권 없음"],
+    targetRules: ["활성 프라이빗·듀엣 횟수권", "잔여횟수 1-3회", TICKET_NOTICE_POLICY.targetRule],
     exclusionRules: [
       "알림톡 제외 회원",
       "전화번호 없음",
       "그룹 또는 강사레슨 수강권",
       "수업권이 아닌 상품",
-      "다른 현재 또는 사용예정 동일 유형 유효 수강권 보유",
+      "검토된 사실 안내 본문·버튼과 불일치",
       "잔여횟수 0회 또는 4회 이상",
       "동일 수강권 횟수 안내 30일 내 발송 이력 있음",
       "SOLAPI 미승인 템플릿",
@@ -360,14 +361,14 @@ export const ALIMTALK_TEMPLATE_TARGET_RULES: Partial<Record<AlimtalkCandidateTyp
     targetRules: [
       "활성 프라이빗 수강권",
       "만료일이 발송 기준일로부터 14일 이내",
-      "다른 현재 또는 사용예정 동일 유형 유효 수강권 없음",
+      TICKET_NOTICE_POLICY.targetRule,
     ],
     exclusionRules: [
       "알림톡 제외 회원",
       "전화번호 없음",
       "그룹 또는 강사레슨 수강권",
       "수업권이 아닌 상품",
-      "다른 현재 또는 사용예정 동일 유형 유효 수강권 보유",
+      "검토된 사실 안내 본문·버튼과 불일치",
       "만료일이 지났거나 14일 초과",
       "동일 수강권 기간 안내 30일 내 발송 이력 있음",
       "SOLAPI 미승인 템플릿",

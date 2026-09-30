@@ -1,0 +1,98 @@
+{
+  "basis": "Known-provider coverage only; no current approval or content evidence",
+  "observedAt": "2026-09-30T06:41:16.973Z",
+  "templates": [
+    {
+      "templateId": "KA01TP260914091233543JoFDsn7KfCr",
+      "name": "아카이브 신규회원 가입완료 웰컴 안내 v6"
+    },
+    {
+      "templateId": "KA01TP260903104439283cNjQW0YrrtV",
+      "name": "강사용 프라이빗 오늘 기록 안내 v4"
+    },
+    {
+      "templateId": "KA01TP260808034937468FF5LLYH823H",
+      "name": "담당강사 사전설문 제출 안내 v2"
+    },
+    {
+      "templateId": "KA01TP260802163827071E2TTuX6CsWp",
+      "name": "아카이브 추천식단 프로그램 v2"
+    },
+    {
+      "templateId": "KA01TP260729144645970fv13He8mfsK",
+      "name": "프라이빗 사전설문 안내 v2"
+    },
+    {
+      "templateId": "KA01TP26072806273194229P2ZesQwPp",
+      "name": "아카이브 스튜디오메이트 예약 안내 v4"
+    },
+    {
+      "templateId": "KA01TP2607050825481844FfRze7o9Pw",
+      "name": "회원용_강사 변경 안내 v1"
+    },
+    {
+      "templateId": "KA01TP2607050825471794qyKK2E0URD",
+      "name": "회원용_수업 일정 변경 안내 v1"
+    },
+    {
+      "templateId": "KA01TP260611053817155zqYlw27wEOU",
+      "name": "회원용_수강료 안내 링크 v1"
+    },
+    {
+      "templateId": "KA01TP260606215619915xrfx4W0JsZf",
+      "name": "ARCHIVE PILATES 면접 일정 예약 안내 v1"
+    },
+    {
+      "templateId": "KA01TP260602101939427lPhGyuDLvFM",
+      "name": "아카이브 신규회원 웰컴 안내 v5"
+    },
+    {
+      "templateId": "KA01TP260528081225871Fr92FW901Vo",
+      "name": "회원용_프라이빗 수업 리포트 안내 v1"
+    },
+    {
+      "templateId": "KA01TP260524083643752cySb9BoDOjN",
+      "name": "아카이브 장기 미방문 수업안내 v1"
+    },
+    {
+      "templateId": "KA01TP260522041704111wu4Z0cu9cgl",
+      "name": "아카이브 첫 그룹수업 회원 확인 v1"
+    },
+    {
+      "templateId": "KA01TP260521072937354Ve2n5cEapDL",
+      "name": "아카이브 담당강사 그룹 사전확인 제출 안내 v1"
+    },
+    {
+      "templateId": "KA01TP2605210729364330NbhZVAu9zA",
+      "name": "아카이브 그룹 첫 수업 사전확인 안내 v1"
+    },
+    {
+      "templateId": "KA01TP260519093416836f1EHZYJ00uM",
+      "name": "아카이브 담당강사 사전설문 제출 안내 v1"
+    },
+    {
+      "templateId": "KA01TP260514153314927WH270IppWQS",
+      "name": "아카이브 프라이빗 기간권 잔여기간 안내 v1"
+    },
+    {
+      "templateId": "KA01TP260514152235608d9icGOBotnV",
+      "name": "아카이브 프라이빗 횟수권 잔여횟수 안내 v1"
+    },
+    {
+      "templateId": "KA01TP260514145047393VpTbcCZKkCV",
+      "name": "아카이브 그룹 횟수권 잔여횟수 안내 v3"
+    },
+    {
+      "templateId": "KA01TP260514145047261araXgWLVFRs",
+      "name": "아카이브 그룹 기간권 잔여기간 안내 v3"
+    },
+    {
+      "templateId": "KA01TP260825074722212ylmndmsB3V4",
+      "name": "강사레슨_수업자료 안내 v3"
+    },
+    {
+      "templateId": "KA01TP2608241233353269Jgtoiwnzi6",
+      "name": "강사레슨_예약확정 안내 v1"
+    }
+  ]
+}

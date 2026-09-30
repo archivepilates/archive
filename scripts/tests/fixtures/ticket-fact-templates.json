@@ -1,0 +1,52 @@
+[
+  {
+    "code": "KA01TP260514153314927WH270IppWQS",
+    "content": "#{이름}님,\n프라이빗 수강권 기간이\n#{남은일수}일 남았습니다. 🧘\n\n보유 수강권\n#{수강권명}\n\n남은 이용 기간을 확인하시고\n프라이빗 수업 일정을 계획해 주세요.\n\n필요하신 일정 조정은\n아카이브로 문의해 주세요.",
+    "buttons": [],
+    "hash": "7bc46e639c64db89499b9d85752ed1e2609514fdecb6163bc63cdb99b6c361f0"
+  },
+  {
+    "code": "KA01TP260514152235608d9icGOBotnV",
+    "content": "#{이름}님,\n프라이빗 수강권의\n잔여 횟수는 #{잔여횟수}회입니다. 🎟\n\n보유 수강권\n#{수강권명}\n\n만료일\n#{만료일}\n\n남은 이용 기간을 확인하시고\n프라이빗 수업 일정을 계획해 주세요. 📅",
+    "buttons": [],
+    "hash": "1131eccfa127bc73db6fe97227159661b5399bf8231ca829101b85be6b67d6e2"
+  },
+  {
+    "code": "KA01TP260514145047393VpTbcCZKkCV",
+    "content": "#{이름}님,\n이용 중인 그룹 수강권의\n잔여 횟수는 #{잔여횟수}회입니다. 🎟\n\n보유 수강권\n#{수강권명}\n\n만료일\n#{만료일}\n\n남은 이용 기간을 확인하시고\n수업 일정을 계획해 주세요.\n\n이용 규정은 아래 안내를\n참고해 주세요.",
+    "buttons": [
+      {
+        "name": "이용안내 보기",
+        "type": "WL",
+        "mobileUrl": "https://archivepilates.notion.site/archivepilates",
+        "desktopUrl": "https://archivepilates.notion.site/archivepilates"
+      },
+      {
+        "name": "홀딩규정 보기",
+        "type": "WL",
+        "mobileUrl": "https://archivepilates.notion.site/hold",
+        "desktopUrl": "https://archivepilates.notion.site/hold"
+      }
+    ],
+    "hash": "344deea3f6172e6a2fa00d4ef5b486bbc145213882c6e52a5d5d1341aca37ae0"
+  },
+  {
+    "code": "KA01TP260514145047261araXgWLVFRs",
+    "content": "#{이름}님,\n이용 중인 그룹 수강권 기간이\n#{남은일수}일 남았습니다. ⏳\n\n보유 수강권\n#{수강권명}\n\n남은 이용 기간을 확인하시고\n수업 일정을 계획해 주세요.\n\n이용 규정은 아래 안내를\n참고해 주세요.",
+    "buttons": [
+      {
+        "name": "이용안내 보기",
+        "type": "WL",
+        "mobileUrl": "https://archivepilates.notion.site/archivepilates",
+        "desktopUrl": "https://archivepilates.notion.site/archivepilates"
+      },
+      {
+        "name": "홀딩규정 보기",
+        "type": "WL",
+        "mobileUrl": "https://archivepilates.notion.site/hold",
+        "desktopUrl": "https://archivepilates.notion.site/hold"
+      }
+    ],
+    "hash": "5650d4586081d6845d2c672451b03f6f160aa9fb1068b20ad6adcedf609b29c7"
+  }
+]

@@ -1,4 +1,5 @@
 import { createHash, createHmac } from "node:crypto";
+import { TICKET_NOTICE_POLICY } from "./ticketNoticePolicy";
 import { Timestamp } from "firebase-admin/firestore";
 import { logger } from "firebase-functions";
 import type { AlimtalkCandidateDoc, BookingDoc, LectureDoc, MemberProfileDoc, RenewalCaseDoc } from "../types/models";
@@ -914,14 +915,13 @@ function isInstructorLessonBooking(booking: BookingDoc): boolean {
   return bookingTicketKind(booking) === "instructor";
 }
 
-function directTicketCandidate(
+export function directTicketCandidate(
   profile: MemberProfileDoc,
   ticket: NonNullable<MemberProfileDoc["activeTickets"]>[number],
   sourceDate: string,
   bookings: BookingDoc[] = [],
 ): AlimtalkCandidateDoc | null {
   if (!isRenewalManagedTicket(ticket)) return null;
-  if (hasOtherActiveTicket(profile, ticket, sourceDate)) return null;
   const memberId = profile.memberId;
   const memberName = profile.name;
   const memberPhone = profile.phone;
@@ -942,6 +942,7 @@ function directTicketCandidate(
     date: sourceDate,
     memberId,
     type,
+    sourceTicketKey: renewalSourceTicketKey(profile.memberId, ticketKind, ticket),
     ticketName: payload.ticketName,
   }).slice(0, 24)}`;
   return {
@@ -961,6 +962,7 @@ function directTicketCandidate(
       reason: ticketReason(type, payload),
       date: sourceDate,
       renewalCaseId,
+      noticePurpose: TICKET_NOTICE_POLICY.purpose,
       predictedDepletionDate: assessment?.predictedDepletionDate || "",
       weeklyUsagePace: assessment ? String(assessment.usage.weeklyPace) : "",
       nextBookingDate: assessment?.usage.nextBookingDate || "",
@@ -995,14 +997,6 @@ function alimtalkTypeFromTicket(
 function ticketReason(type: SendableAlimtalkCandidateType, payload: Record<string, string>): string {
   if (type === "remaining_low" || type === "private_count_low") return `잔여횟수 부족 · ${payload.remainingCount}회`;
   return `기간만료 임박 · ${payload.remainingDays}일`;
-}
-
-function hasOtherActiveTicket(
-  profile: MemberProfileDoc | undefined,
-  target: NonNullable<MemberProfileDoc["activeTickets"]>[number],
-  sourceDate: string,
-): boolean {
-  return hasSameKindAlternativeTicket(currentOrUpcomingLessonProfileTickets(profile, sourceDate), target, sourceDate);
 }
 
 function hasHoldingTicket(profile: MemberProfileDoc | undefined): boolean {

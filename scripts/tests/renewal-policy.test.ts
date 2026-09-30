@@ -242,7 +242,7 @@ test("an incomplete same-kind ticket is not treated as a healthy follow-up", () 
   assert.equal(hasSameKindAlternativeTicket([target, incomplete], target, "2026-08-01"), false);
 });
 
-test("send guard blocks a stale candidate after a follow-up ticket is added", () => {
+test("fact notice send guard retains original ticket after a follow-up ticket is added", () => {
   const target: Ticket = {
     userTicketId: "target",
     name: "그룹 30회",
@@ -298,10 +298,10 @@ test("send guard blocks a stale candidate after a follow-up ticket is added", ()
     expiresAt: timestamp("2026-12-31T23:59:59+09:00"),
     expiryLevel: "normal",
   });
-  assert.equal(renewalCandidateProfileIssue(candidate, profile), "현재 또는 사용예정 동일 유형 후속 수강권 보유");
+  assert.equal(renewalCandidateProfileIssue(candidate, profile), "");
 });
 
-test("send guard blocks a same-name follow-up ticket without stable ticket ids", () => {
+test("fact notice guard allows unique current ticket with a future same-name ticket", () => {
   const profile: MemberProfileDoc = {
     memberId: "member-1",
     studioId: "5330",
@@ -347,7 +347,7 @@ test("send guard blocks a same-name follow-up ticket without stable ticket ids",
   };
   assert.equal(
     renewalCandidateProfileIssue(candidate, profile),
-    "현재 또는 사용예정 동일 유형 후속 수강권 보유",
+    "",
   );
 });
 

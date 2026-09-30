@@ -27,6 +27,8 @@ import { hasExplicitAlimtalkTestOverride } from "./testRecipients";
 import { currentPrivateLessonReportRevision } from "../privateLessonChart/privateLessonReportRevision";
 import { privateSurveySendabilityIssue } from "./privateSurveySendGuard";
 import { renewalCandidateSendabilityIssue } from "./renewalSendGuard";
+import { TICKET_NOTICE_POLICY } from "./ticketNoticePolicy";
+import { alimtalkApprovalClaimIssue } from "./approvalStore";
 import { longAbsenceCandidateSendabilityIssue } from "./longAbsenceSendGuard";
 import {
   RECOMMENDED_MEAL_DRAFT_COLLECTION,
@@ -93,6 +95,11 @@ export async function processAlimtalkQueue(): Promise<{
       }
       const sendabilityIssue = await autoSendabilityIssue(claimed, todayKst());
       if (sendabilityIssue) {
+        if (sendabilityIssue.startsWith(TICKET_NOTICE_POLICY.pendingReason)) {
+          await deferTicketFactTemplateReview(claimed, sendabilityIssue);
+          deferred += 1;
+          continue;
+        }
         if (isRetryableTemplateStatusIssue(sendabilityIssue)) {
           await deferCandidateForTemplateStatus(claimed, sendabilityIssue);
           await safeSyncInstructorLessonConfirmationOutcome(claimed, {
@@ -376,6 +383,10 @@ export async function processAlimtalkCandidate(candidateId: string): Promise<Ali
     }
     const sendabilityIssue = await autoSendabilityIssue(claimed, todayKst());
     if (sendabilityIssue) {
+      if (sendabilityIssue.startsWith(TICKET_NOTICE_POLICY.pendingReason)) {
+        await deferTicketFactTemplateReview(claimed, sendabilityIssue);
+        return { processed: true, status: "deferred", lastError: sendabilityIssue };
+      }
       if (isRetryableTemplateStatusIssue(sendabilityIssue)) {
         await deferCandidateForTemplateStatus(claimed, sendabilityIssue);
         await safeSyncInstructorLessonConfirmationOutcome(claimed, {
@@ -618,6 +629,15 @@ export async function processAlimtalkCandidate(candidateId: string): Promise<Ali
     });
     return { processed: true, status: "failed", lastError: message };
   }
+}
+
+async function deferTicketFactTemplateReview(candidate: AlimtalkCandidateDoc, issue: string): Promise<void> {
+  await refs.alimtalkCandidate(candidate.candidateId).set({
+    status: "reviewed",
+    reasonCode: "ticket_fact_template_review",
+    lastError: issue,
+    updatedAt: nowTimestamp(),
+  }, { merge: true });
 }
 
 async function deferCandidateForTemplateStatus(candidate: AlimtalkCandidateDoc, issue: string): Promise<void> {
@@ -897,7 +917,7 @@ async function markPrivateLessonReportFailed(candidate: AlimtalkCandidateDoc, me
   );
 }
 
-async function claimCandidate(candidate: AlimtalkCandidateDoc): Promise<AlimtalkCandidateDoc | null> {
+export async function claimCandidate(candidate: AlimtalkCandidateDoc): Promise<AlimtalkCandidateDoc | null> {
   return db.runTransaction(async (tx) => {
     const ref = refs.alimtalkCandidate(candidate.candidateId);
     const snap = await tx.get(ref);
@@ -915,6 +935,16 @@ async function claimCandidate(candidate: AlimtalkCandidateDoc): Promise<Alimtalk
     }
     if (current.status === "processing" && !isStaleProcessing(current)) return null;
     if (!["queued", "processing"].includes(current.status)) return null;
+    const approvalIssue = await alimtalkApprovalClaimIssue(tx, current);
+    if (approvalIssue) {
+      tx.set(ref, {
+        status: "reviewed",
+        reasonCode: approvalIssue,
+        lastError: "현재 수신자와 발송 내용에 대한 별도 승인이 필요합니다.",
+        updatedAt: nowTimestamp(),
+      }, { merge: true });
+      return null;
+    }
     if ((current.attempts || 0) >= (current.maxAttempts || 2)) {
       tx.set(
         ref,

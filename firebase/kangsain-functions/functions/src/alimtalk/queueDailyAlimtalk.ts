@@ -6,7 +6,9 @@ import type { AlimtalkCandidateDoc } from "../types/models";
 import { nowTimestamp, todayKst } from "../utils/date";
 import { autoSendabilityIssue } from "./eligibility";
 import { rebuildAlimtalkCandidatesForRange } from "./rebuildAlimtalkCandidates";
-import { requireApprovalForLargeAlimtalkBatch } from "./approvalGate";
+import { approvalQueueEligibilityIssue, requireApprovalForLargeAlimtalkBatch } from "./approvalGate";
+import { alimtalkApprovalSnapshotKey } from "./approvalPolicy";
+import { alimtalkApprovalClaimIssue, approvalCandidateBinding } from "./approvalStore";
 import { privateSurveySendabilityIssue } from "./privateSurveySendGuard";
 import { renewalCandidateSendabilityIssue } from "./renewalSendGuard";
 import { selectDailyAlimtalkCandidates } from "./dailyCandidateSelection";
@@ -27,6 +29,7 @@ export async function queueDailyAlimtalkCandidates(
   blocked: number;
   approvalRequired?: boolean;
   approvalId?: string;
+  pendingApprovalIds?: string[];
   instructorLessonSample?: InstructorLessonSampleApprovalSummary;
 }> {
   const studioId = input.studioId || DEFAULT_STUDIO_ID;
@@ -47,6 +50,9 @@ export async function queueDailyAlimtalkCandidates(
     }
     const autoIssue = await autoSendabilityIssue(candidate, today);
     if (autoIssue) {
+      if (autoIssue.startsWith("수강권 사실 안내 템플릿 검토 대기:")) {
+        await markTicketFactTemplateReview(candidate, autoIssue);
+      }
       blocked += 1;
       continue;
     }
@@ -99,20 +105,18 @@ export async function queueDailyAlimtalkCandidates(
       approvalId: approval.approvalId,
       emailed: approval.emailed,
     });
-    return {
-      rebuilt: rebuilt.candidates,
-      queued: 0,
-      blocked: blocked + sendable.length,
-      approvalRequired: true,
-      approvalId: approval.approvalId,
-      instructorLessonSample,
-    };
   }
 
   let queued = 0;
+  const allowed = new Set(approval.allowedCandidateIds);
   for (const candidate of sendable) {
-    const didQueue = await queueCandidate(candidate, today);
+    if (!allowed.has(candidate.candidateId)) {
+      blocked += 1;
+      continue;
+    }
+    const didQueue = await queueCandidate(candidate, today, approval.required);
     if (didQueue) queued += 1;
+    else blocked += 1;
   }
 
   logger.info("queueDailyAlimtalkCandidates completed", {
@@ -128,6 +132,7 @@ export async function queueDailyAlimtalkCandidates(
     blocked,
     approvalRequired: approval.required,
     approvalId: approval.approvalId,
+    pendingApprovalIds: approval.pendingApprovalIds,
     instructorLessonSample,
   };
 }
@@ -148,12 +153,33 @@ async function markDailyCandidateSkipped(
   );
 }
 
+async function markTicketFactTemplateReview(candidate: AlimtalkCandidateDoc, lastError: string): Promise<void> {
+  await db.runTransaction(async (tx) => {
+    const ref = refs.alimtalkCandidate(candidate.candidateId);
+    const current = (await tx.get(ref)).data();
+    if (!current || !["candidate", "reviewed", "failed"].includes(current.status)) return;
+    if (alimtalkApprovalSnapshotKey(current) !== alimtalkApprovalSnapshotKey(candidate)) return;
+    tx.set(
+      ref,
+      { status: "reviewed", reasonCode: "ticket_fact_template_review", lastError, updatedAt: nowTimestamp() },
+      { merge: true },
+    );
+  });
+}
+
 export async function queueReservationOpenAlimtalkCandidates(
   input: {
     studioId?: string;
     today?: string;
   } = {},
-): Promise<{ rebuilt: number; queued: number; blocked: number; approvalRequired?: boolean; approvalId?: string }> {
+): Promise<{
+  rebuilt: number;
+  queued: number;
+  blocked: number;
+  approvalRequired?: boolean;
+  approvalId?: string;
+  pendingApprovalIds?: string[];
+}> {
   const studioId = input.studioId || DEFAULT_STUDIO_ID;
   const today = input.today || todayKst();
   const rebuilt = await rebuildAlimtalkCandidatesForRange({
@@ -194,19 +220,18 @@ export async function queueReservationOpenAlimtalkCandidates(
       approvalId: approval.approvalId,
       emailed: approval.emailed,
     });
-    return {
-      rebuilt: rebuilt.candidates,
-      queued: 0,
-      blocked: blocked + sendable.length,
-      approvalRequired: true,
-      approvalId: approval.approvalId,
-    };
   }
 
   let queued = 0;
+  const allowed = new Set(approval.allowedCandidateIds);
   for (const candidate of sendable) {
-    const didQueue = await queueCandidate(candidate, today, "system:auto-reservation-open-1230");
+    if (!allowed.has(candidate.candidateId)) {
+      blocked += 1;
+      continue;
+    }
+    const didQueue = await queueCandidate(candidate, today, approval.required, "system:auto-reservation-open-1230");
     if (didQueue) queued += 1;
+    else blocked += 1;
   }
 
   logger.info("queueReservationOpenAlimtalkCandidates completed", {
@@ -222,6 +247,7 @@ export async function queueReservationOpenAlimtalkCandidates(
     blocked,
     approvalRequired: approval.required,
     approvalId: approval.approvalId,
+    pendingApprovalIds: approval.pendingApprovalIds,
   };
 }
 
@@ -236,9 +262,10 @@ async function listRebuiltCandidates(candidateIds: string[], studioId: string): 
 async function queueCandidate(
   candidate: AlimtalkCandidateDoc,
   today: string,
+  approvalRequired: boolean,
   reviewedByUid = "system:auto-daily-1130",
 ): Promise<boolean> {
-  if (await autoSendabilityIssue(candidate, today)) return false;
+  if (await approvalQueueEligibilityIssue(candidate, today)) return false;
   return db.runTransaction(async (tx) => {
     const ref = refs.alimtalkCandidate(candidate.candidateId);
     const snap = await tx.get(ref);
@@ -246,10 +273,18 @@ async function queueCandidate(
     if (!current) return false;
     if (!["candidate", "reviewed", "failed"].includes(current.status)) return false;
     if ((current.attempts || 0) >= (current.maxAttempts || 2)) return false;
+    if (alimtalkApprovalSnapshotKey(current) !== alimtalkApprovalSnapshotKey(candidate)) return false;
+    const binding = {
+      ...approvalCandidateBinding(current, today),
+      approvalGateMode: approvalRequired ? "snapshot" as const : "below_threshold" as const,
+    };
+    if (await alimtalkApprovalClaimIssue(tx, { ...current, ...binding }, today)) return false;
+    if (await approvalQueueEligibilityIssue(current, today)) return false;
     tx.set(
       ref,
       {
         status: "queued",
+        ...binding,
         queuedBy: "auto",
         reviewedByUid,
         reviewedAt: nowTimestamp(),
