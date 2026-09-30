@@ -912,6 +912,9 @@ function bookingTicketKind(booking: BookingDoc): "group" | "private" | "instruct
 
 function isInstructorLessonBooking(booking: BookingDoc): boolean {
   if (/강사레슨/i.test(booking.ticketName || "")) return true;
+  if ([booking.ticketClassType, booking.ticketType].some((value) =>
+    /^(I|INSTRUCTOR)$/i.test(String(value || "").trim()) || /강사레슨/i.test(String(value || "")),
+  )) return true;
   return bookingTicketKind(booking) === "instructor";
 }
 
@@ -921,6 +924,7 @@ export function directTicketCandidate(
   sourceDate: string,
   bookings: BookingDoc[] = [],
 ): AlimtalkCandidateDoc | null {
+  if (!isLessonProfileTicket(ticket)) return null;
   if (!isRenewalManagedTicket(ticket)) return null;
   const memberId = profile.memberId;
   const memberName = profile.name;
@@ -1039,9 +1043,9 @@ function isCurrentOrUpcomingLessonProfileTicket(
 }
 
 function isLessonProfileTicket(ticket: NonNullable<MemberProfileDoc["activeTickets"]>[number]): boolean {
-  const classType = String(ticket.classType || "").toUpperCase();
+  const classType = String(ticket.classType || "").trim().toUpperCase();
   const name = String(ticket.name || "");
-  if (classType === "I") return false;
+  if (classType === "I" || classType === "INSTRUCTOR") return false;
   if (/토삭스|삭스|양말|기간연장|체험|체험권|강사레슨/.test(name)) return false;
   return true;
 }

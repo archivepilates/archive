@@ -1766,6 +1766,7 @@ for (const group of guardGroups) {
 // Static markers alone cannot prove that facts stay sendable while renewal cases
 // remain suppressed by healthy follow-up tickets. These offline tests are mandatory.
 const semanticTests = [
+  "scripts/tests/alimtalk-member-exclusion-release.test.ts",
   "scripts/tests/alimtalk-ticket-facts.test.ts",
   "scripts/tests/renewal-policy.test.ts",
   "scripts/tests/renewal-core-visibility.test.mjs",

@@ -94,7 +94,7 @@ export async function buildCatalog() {
     });
     seen.add(code);
   }
-  for (const name of ["alimtalk/rebuildAlimtalkCandidates", "alimtalk/renewalSendGuard", "alimtalk/longAbsencePolicy", "alimtalk/approvalGate", "alimtalk/approvalPolicy", "alimtalk/approvalStore", "alimtalk/queueDailyAlimtalk", "alimtalk/processAlimtalkQueue", "alimtalk/eligibility"]) reader.touch(source(name));
+  for (const name of ["alimtalk/rebuildAlimtalkCandidates", "alimtalk/renewalSendGuard", "alimtalk/longAbsencePolicy", "alimtalk/recipientExclusion", "alimtalk/privateSurveySendGuard", "alimtalk/approvalGate", "alimtalk/approvalPolicy", "alimtalk/approvalStore", "alimtalk/queueDailyAlimtalk", "alimtalk/processAlimtalkQueue", "alimtalk/eligibility"]) reader.touch(source(name));
   const sourceFingerprints = reader.fingerprints();
   for (const file of [coverageFile, "scripts/lib/alimtalk-catalog-metadata.mjs", "scripts/lib/alimtalk-catalog-source.mjs", "scripts/generate-alimtalk-catalog.mjs"])
     sourceFingerprints.push({ path: file, sha256: hash(await fs.readFile(path.join(root, file))) });

@@ -64,6 +64,7 @@ test("current policy passes markers and mandates offline semantic suites without
   assert.deepEqual(call.args, [
     "--import", "./firebase/kangsain-functions/functions/node_modules/tsx/dist/loader.mjs",
     "--test",
+    "scripts/tests/alimtalk-member-exclusion-release.test.ts",
     "scripts/tests/alimtalk-ticket-facts.test.ts",
     "scripts/tests/renewal-policy.test.ts",
     "scripts/tests/renewal-core-visibility.test.mjs",

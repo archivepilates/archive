@@ -1,6 +1,6 @@
 {
   "schemaVersion": 1,
-  "policyFingerprint": "7c0313b1a6e346d56aec19754c62408ab59ef4a8ca46e06214ddaf9819d83b73",
+  "policyFingerprint": "6708d5b226e974569a7053d02a06de3c2b75d89ae6618976120aace6c5d6af29",
   "sourceMode": "repository_defaults_no_environment_or_live_reads",
   "coverage": {
     "observedAt": "2026-09-30T06:41:16.973Z",
@@ -41,6 +41,10 @@
       "sha256": "47ecba6e740df0f74b5e2caaf071bd893d478c6916685d03d07588eca4f6be60"
     },
     {
+      "path": "firebase/kangsain-functions/functions/src/alimtalk/privateSurveySendGuard.ts",
+      "sha256": "dc44217bb04e0167ab95919670aa989e35b42dad65db728ef9f3fb2206bae25e"
+    },
+    {
       "path": "firebase/kangsain-functions/functions/src/alimtalk/processAlimtalkQueue.ts",
       "sha256": "266814f24f25a9c9a7d91c74f2f9d5377c4d89baacd7d8a4d1c999c0dc65f151"
     },
@@ -50,11 +54,15 @@
     },
     {
       "path": "firebase/kangsain-functions/functions/src/alimtalk/rebuildAlimtalkCandidates.ts",
-      "sha256": "9e0424e57ec9acd078147237d9a8280853f72e994e4db41555922aaaa8eb116b"
+      "sha256": "53dc545197d56488134fd4bd9be0d6ce5c431d2c00b915f1b61cc0464a04f46a"
+    },
+    {
+      "path": "firebase/kangsain-functions/functions/src/alimtalk/recipientExclusion.ts",
+      "sha256": "47e772b13974c7fee847aea979ebcf706912928eddda12f4761e94f9df2c1ca9"
     },
     {
       "path": "firebase/kangsain-functions/functions/src/alimtalk/renewalSendGuard.ts",
-      "sha256": "fa14ff5458c96c5c499901c8488365aa971ca3eb5d810c43ea0ce1c29ac4ac0e"
+      "sha256": "30ff467f1b996cc133e639ede75261cea9fe6a0a1927ea410a7eee29f5c69ea0"
     },
     {
       "path": "firebase/kangsain-functions/functions/src/alimtalk/templates.ts",
@@ -102,7 +110,7 @@
     },
     {
       "path": "scripts/generate-alimtalk-catalog.mjs",
-      "sha256": "4e2edb9b0b6f81cdd6fd611665f9eb8b71c57b4981115fc12b54a5370ed6a21b"
+      "sha256": "b39495ef6379dc70a85eef236ad2158353b3286f3ae608d2a2285a228c82d157"
     },
     {
       "path": "scripts/lib/alimtalk-catalog-metadata.mjs",

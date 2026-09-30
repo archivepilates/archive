@@ -73,6 +73,10 @@ function sha256(value: string): string {
 }
 
 function isPrivateBooking(booking: BookingDoc): boolean {
+  if (/강사레슨/i.test(booking.ticketName || "")) return false;
+  if ([booking.ticketClassType, booking.ticketType].some((value) =>
+    /^(I|INSTRUCTOR)$/i.test(String(value || "").trim()) || /강사레슨/i.test(String(value || "")),
+  )) return false;
   if (booking.lessonType === "group") return false;
   if (booking.lessonType === "private" || booking.lessonType === "semi_private") return true;
   const text = `${booking.ticketName || ""} ${booking.ticketClassType || ""} ${booking.ticketType || ""}`;

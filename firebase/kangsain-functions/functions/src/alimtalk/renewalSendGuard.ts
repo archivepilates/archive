@@ -29,6 +29,8 @@ export function renewalCandidateProfileIssue(
   if (matches.length > 1) return "안내 대상 수강권 식별 불가: 동일 식별자 복수";
   const target = matches[0];
   if (!target) return "최신 수강권 상태에서 안내 대상 아님";
+  const classType = String(target.classType || "").trim().toUpperCase();
+  if (classType === "I" || classType === "INSTRUCTOR") return "강사레슨 수강권 일반 안내 제외";
   if (!isRenewalManagedTicket(target)) return "재등록 안내 제외 수강권";
 
   const remaining = target.remainingCount == null ? Number.NaN : Number(target.remainingCount);

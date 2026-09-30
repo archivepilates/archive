@@ -1,4 +1,4 @@
-import type { AlimtalkCandidateDoc, AlimtalkCandidateType, MemberProfileDoc } from "../types/models";
+import type { AlimtalkCandidateDoc, AlimtalkCandidateType, BookingDoc, MemberProfileDoc } from "../types/models";
 import { refs } from "../firestore/refs";
 import { ALIMTALK_MEMBER_EXCLUSION_REASONS } from "./templates";
 import { normalizeRecipientPhone } from "./testRecipients";
@@ -69,12 +69,42 @@ export async function currentAutomaticMemberExclusionReason(candidate: AlimtalkC
     loadActiveStaffPhones(candidate.studioId),
   ]);
   const profile = profileSnap?.data();
-  return automaticMemberExclusionReason(
+  const staffIssue = automaticMemberExclusionReason(
     {
       memberId: candidate.memberId,
       phone: profile?.phone || candidate.memberPhone,
       memberGrade: profile?.memberGrade || "",
     },
     activeStaffPhones,
+  );
+  if (staffIssue) return staffIssue;
+  const bookingId = candidate.type === "group_survey" ? String(candidate.payload?.bookingId || "") : "";
+  const booking = bookingId ? (await refs.booking(bookingId).get()).data() : undefined;
+  return automaticMemberProductIssue(candidate, profile, booking);
+}
+
+export function automaticMemberProductIssue(
+  candidate: AlimtalkCandidateDoc,
+  profile: MemberProfileDoc | undefined,
+  booking?: BookingDoc,
+): string {
+  if (candidate.type === "group_survey") {
+    if (!booking || booking.memberId !== candidate.memberId) return "그룹 설문 예약 원천 확인 필요";
+    if (instructorLessonSource(booking.ticketName, booking.ticketClassType, booking.ticketType)) {
+      return "강사레슨 예약 일반 설문 제외";
+    }
+  }
+  if (candidate.type === "reservation_open" || candidate.type === "new_member") {
+    if (!profile?.activeTickets?.length) return "일반 안내 수강권 원천 확인 필요";
+    if (profile.activeTickets.every((ticket) => instructorLessonSource(ticket.name, ticket.classType))) {
+      return "강사레슨 수강권 일반 안내 제외";
+    }
+  }
+  return "";
+}
+
+function instructorLessonSource(name: unknown, ...codes: unknown[]): boolean {
+  return /강사레슨/i.test(String(name || "")) || codes.some((code) =>
+    /^(I|INSTRUCTOR)$/i.test(String(code || "").trim()) || /강사레슨/i.test(String(code || "")),
   );
 }
