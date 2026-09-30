@@ -5,7 +5,7 @@ import path from "node:path";
 import vm from "node:vm";
 import { createRequire } from "node:module";
 import { build } from "esbuild";
-import { buildCatalog, catalogFile } from "../generate-alimtalk-catalog.mjs";
+import { buildCatalog, catalogFile, catalogVisibility } from "../generate-alimtalk-catalog.mjs";
 import { root, sourceRoot, sourceReader, hash } from "../lib/alimtalk-catalog-source.mjs";
 import { purposes } from "../lib/alimtalk-catalog-metadata.mjs";
 import { createCatalogFixture } from "../verify-alimtalk-catalog.mjs";
@@ -98,13 +98,40 @@ test("generated data never turns static approval, history, or a send into live s
   assert.throws(() => ui.validateCatalog(duplicate), /정책 연결/);
 });
 
-test("filters preserve all rows without send history and search by code, purpose, target", () => {
-  assert.equal(ui.selectCatalogRows(saved).length, saved.rows.length);
+test("filters exclude confirmed deletions consistently while preserving current templates", () => {
+  assert.equal(saved.rows.length, 32, "audit/source history remains intact");
+  assert.equal(ui.selectCatalogRows(saved).length, 23);
   assert.equal(ui.selectCatalogRows(saved, { scope: "known" }).length, 23);
-  assert.equal(ui.selectCatalogRows(saved, { scope: "source" }).length, saved.rows.length - 23);
-  for (const row of saved.rows) assert.ok(ui.selectCatalogRows(saved, { search: row.code || row.label }).includes(row));
+  assert.equal(ui.selectCatalogRows(saved, { scope: "source" }).length, 0);
+  assert.equal(ui.selectCatalogRows(saved, { implementation: "unconnected" }).length, 2);
+  assert.equal(ui.selectCatalogRows(saved, { implementation: "archived" }).length, 3);
+  for (const row of saved.rows) {
+    const visible = row.visibility.state === "visible";
+    for (const scope of ["all", row.knownProvider ? "known" : "source"])
+      for (const implementation of ["all", row.implementation])
+        assert.equal(ui.selectCatalogRows(saved, { search: row.code || row.label, scope, implementation }).includes(row), visible, row.id);
+  }
   assert.equal(ui.selectCatalogRows(saved, { search: "후속 수강권" }).length, 4);
   assert.equal(ui.selectCatalogRows(saved, { search: "no-such-template" }).length, 0);
+});
+
+test("only exact missing-template evidence or explicit code-less source deletion hides rows", () => {
+  const row = { code: "unknown", sourceConfiguredStatus: "unapproved", implementation: "archived", label: "삭제됨" };
+  const presence = { checkedAt: "2026-09-30T12:13:51.489Z", inventoryComplete: true, present: [], absent: [] };
+  assert.equal(catalogVisibility(row, presence).state, "visible");
+  for (const error of [{ httpStatus: 503, errorCode: "TemplateNotFound" }, { httpStatus: 404, errorCode: "Unauthorized" }, { httpStatus: 403, errorCode: "Forbidden" }])
+    assert.equal(catalogVisibility(row, { ...presence, absent: [{ templateId: row.code, ...error }] }).state, "visible");
+  const absent = [{ templateId: row.code, httpStatus: 404, errorCode: "TemplateNotFound" }];
+  assert.equal(catalogVisibility(row, { ...presence, absent }).state, "hidden_deleted");
+  assert.equal(catalogVisibility(row, { ...presence, absent, inventoryComplete: false }).state, "visible");
+  assert.equal(catalogVisibility(row, { ...presence, absent, present: [row.code] }).state, "visible");
+  assert.equal(catalogVisibility({ ...row, sourceConfiguredStatus: "deleted" }, presence).state, "visible");
+  assert.equal(catalogVisibility({ ...row, code: "", sourceConfiguredStatus: "deleted" }, presence).state, "hidden_deleted");
+  const unknown = { ...saved.rows[0], knownProvider: false, visibility: undefined };
+  assert.equal(ui.selectCatalogRows({ rows: [unknown] }).length, 1);
+  const invalid = structuredClone(saved);
+  invalid.rows[0].visibility = { state: "hidden_deleted", basis: "missing_from_list" };
+  assert.throws(() => ui.validateCatalog(invalid), /삭제 근거/);
 });
 
 test("rendered details include all policy targets and escape HTML without action controls", () => {

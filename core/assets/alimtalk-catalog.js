@@ -17,6 +17,10 @@ export function validateCatalog(catalog) {
     if (!row.id || ids.has(row.id) || !row.label || !row.purpose || !row.timing || !implementationLabels[row.implementation] || !Array.isArray(row.targetRules) || !row.targetRules.length || !Array.isArray(row.sources) || !row.sources.length)
       throw new Error("템플릿 정책 연결 확인 필요");
     ids.add(row.id);
+    if (row.visibility?.state === "hidden_deleted" && !(
+      (row.visibility.basis === "source_configured_deleted" && !row.code && row.sourceConfiguredStatus === "deleted") ||
+      (row.visibility.basis === "provider_template_not_found" && row.code && !row.knownProvider && row.visibility.httpStatus === 404 && row.visibility.errorCode === "TemplateNotFound" && !Number.isNaN(Date.parse(row.visibility.checkedAt)))
+    )) throw new Error("템플릿 삭제 근거 확인 필요");
     // A generated source file is never fresh provider or deployment evidence.
     if (row.providerApproval?.status !== "UNKNOWN" || row.providerApproval.checkedAt !== null || row.deployment?.status !== "UNVERIFIED")
       throw new Error("소스 자료에 운영 상태가 혼합되어 있습니다");
@@ -29,6 +33,7 @@ export function validateCatalog(catalog) {
 export function selectCatalogRows(catalog, { search = "", scope = "all", implementation = "all" } = {}) {
   const query = search.trim().toLocaleLowerCase();
   return catalog.rows.filter((row) => {
+    if (row.visibility?.state === "hidden_deleted") return false;
     if (scope === "known" && !row.knownProvider) return false;
     if (scope === "source" && row.knownProvider) return false;
     if (implementation !== "all" && row.implementation !== implementation) return false;
@@ -81,16 +86,18 @@ export async function mountTemplateCatalog(host, { url = new URL("./alimtalk-cat
     const response = await fetcher(url, { cache: "no-store", credentials: "omit" });
     if (!response.ok) throw new Error(`정책 자료 응답 ${response.status}`);
     const catalog = validateCatalog(await response.json());
+    const visibleCount = selectCatalogRows(catalog).length;
+    const knownCount = selectCatalogRows(catalog, { scope: "known" }).length;
     host.querySelector(".catalog-load").remove();
-    host.insertAdjacentHTML("beforeend", `<div class="catalog-provenance"><p>확인된 SOLAPI ${catalog.coverage.knownProviderCount}종 + 소스·이력 ${catalog.rows.length - catalog.coverage.knownProviderCount}종</p><details><summary>소스 기준 · 정책 버전·근거</summary><p>목록 기준 ${escape(catalog.coverage.observedAt)}. 최신 공급자 승인·운영 환경변수·실제 배포·최근 발송은 미확인입니다.</p><code>${escape(catalog.policyFingerprint)}</code><a href="${escape(String(url))}" download="alimtalk-catalog.json">정책 데이터 내려받기</a></details></div>
-      <div class="catalog-filters"><label>템플릿 검색<input type="search" name="catalog-search" autocomplete="off" placeholder="이름, 목적, 대상, 코드"></label><label>목록 범위<select name="catalog-scope"><option value="all">전체</option><option value="known">확인된 SOLAPI 23종</option><option value="source">소스·이력 추가</option></select></label><label>구현 상태<select name="catalog-implementation"><option value="all">전체 상태</option>${Object.entries(implementationLabels).map(([value, label]) => `<option value="${value}">${label}</option>`).join("")}</select></label></div>
+    host.insertAdjacentHTML("beforeend", `<div class="catalog-provenance"><p>확인된 SOLAPI ${knownCount}종 + 소스·이력 ${visibleCount - knownCount}종</p><details><summary>소스 기준 · 정책 버전·근거</summary><p>목록 기준 ${escape(catalog.coverage.observedAt)}. 삭제 확인 기준 ${escape(catalog.visibilityCheckedAt || "미확인")}; 확인된 삭제 항목은 표시에서 제외하며 원본 이력은 보존합니다. 최신 공급자 승인·운영 환경변수·실제 배포·최근 발송은 미확인입니다.</p><code>${escape(catalog.policyFingerprint)}</code><a href="${escape(String(url))}" download="alimtalk-catalog.json">정책 데이터 내려받기</a></details></div>
+      <div class="catalog-filters"><label>템플릿 검색<input type="search" name="catalog-search" autocomplete="off" placeholder="이름, 목적, 대상, 코드"></label><label>목록 범위<select name="catalog-scope"><option value="all">전체</option><option value="known">확인된 SOLAPI ${knownCount}종</option><option value="source">소스·이력 추가</option></select></label><label>구현 상태<select name="catalog-implementation"><option value="all">전체 상태</option>${Object.entries(implementationLabels).map(([value, label]) => `<option value="${value}">${label}</option>`).join("")}</select></label></div>
       <p class="catalog-count" role="status" aria-live="polite"></p><div class="catalog-results"></div>`);
     const search = host.querySelector('[name="catalog-search"]');
     const scope = host.querySelector('[name="catalog-scope"]');
     const implementation = host.querySelector('[name="catalog-implementation"]');
     const render = () => {
       const rows = selectCatalogRows(catalog, { search: search.value, scope: scope.value, implementation: implementation.value });
-      host.querySelector(".catalog-count").textContent = `${rows.length} / ${catalog.rows.length}종`;
+      host.querySelector(".catalog-count").textContent = `${rows.length} / ${visibleCount}종`;
       host.querySelector(".catalog-results").innerHTML = rows.length ? rows.map(renderCatalogRow).join("") : '<p class="catalog-empty">일치하는 템플릿이 없습니다.</p>';
     };
     search.addEventListener("input", render);

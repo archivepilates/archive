@@ -1,6 +1,6 @@
 {
   "schemaVersion": 1,
-  "policyFingerprint": "6708d5b226e974569a7053d02a06de3c2b75d89ae6618976120aace6c5d6af29",
+  "policyFingerprint": "57baa9535e5afc49abd256109ca1bfb17642c757b3e6052d7c654055d02237f5",
   "sourceMode": "repository_defaults_no_environment_or_live_reads",
   "coverage": {
     "observedAt": "2026-09-30T06:41:16.973Z",
@@ -109,8 +109,12 @@
       "sha256": "a50f47e6accaba327862a774e16094578fd7778260c9bd55fc99d95e4a862860"
     },
     {
+      "path": "scripts/fixtures/alimtalk-catalog-provider-presence.json",
+      "sha256": "c9f147a1339c070d2847ddcf761e0a93ec591b03030cd50687dd816ebb2ef721"
+    },
+    {
       "path": "scripts/generate-alimtalk-catalog.mjs",
-      "sha256": "b39495ef6379dc70a85eef236ad2158353b3286f3ae608d2a2285a228c82d157"
+      "sha256": "5f4821a6ecdac85c4c32baba880aa886513659ac61096ba6dcfeca551d3cc184"
     },
     {
       "path": "scripts/lib/alimtalk-catalog-metadata.mjs",
@@ -121,6 +125,7 @@
       "sha256": "04d8ff07265ec625dc49ab78b6d8cd7cdcee021b32fd7872c614c3606a484776"
     }
   ],
+  "visibilityCheckedAt": "2026-09-30T12:13:51.489Z",
   "rows": [
     {
       "id": "KA01TP260914091233543JoFDsn7KfCr",
@@ -178,7 +183,11 @@
           "symbol": "ALIMTALK_TEMPLATE_TARGET_RULES",
           "line": 49
         }
-      ]
+      ],
+      "visibility": {
+        "state": "visible",
+        "basis": "not_confirmed_deleted"
+      }
     },
     {
       "id": "KA01TP26072806273194229P2ZesQwPp",
@@ -251,7 +260,11 @@
           "symbol": "scheduledQueueAndSendReservationOpenAlimtalk",
           "line": 79
         }
-      ]
+      ],
+      "visibility": {
+        "state": "visible",
+        "basis": "not_confirmed_deleted"
+      }
     },
     {
       "id": "source:new_member",
@@ -318,7 +331,11 @@
           "symbol": "ALIMTALK_TEMPLATE_TARGET_RULES",
           "line": 49
         }
-      ]
+      ],
+      "visibility": {
+        "state": "hidden_deleted",
+        "basis": "source_configured_deleted"
+      }
     },
     {
       "id": "KA01TP260602101939427lPhGyuDLvFM",
@@ -388,7 +405,11 @@
           "symbol": "ALIMTALK_TEMPLATE_TARGET_RULES",
           "line": 49
         }
-      ]
+      ],
+      "visibility": {
+        "state": "visible",
+        "basis": "not_confirmed_deleted"
+      }
     },
     {
       "id": "KA01TP260514145047261araXgWLVFRs",
@@ -486,7 +507,11 @@
           "symbol": "REVIEWED_TICKET_FACT_CONTRACTS",
           "line": 15
         }
-      ]
+      ],
+      "visibility": {
+        "state": "visible",
+        "basis": "not_confirmed_deleted"
+      }
     },
     {
       "id": "KA01TP260514145047393VpTbcCZKkCV",
@@ -584,7 +609,11 @@
           "symbol": "REVIEWED_TICKET_FACT_CONTRACTS",
           "line": 15
         }
-      ]
+      ],
+      "visibility": {
+        "state": "visible",
+        "basis": "not_confirmed_deleted"
+      }
     },
     {
       "id": "KA01TP260514152235608d9icGOBotnV",
@@ -682,7 +711,11 @@
           "symbol": "REVIEWED_TICKET_FACT_CONTRACTS",
           "line": 15
         }
-      ]
+      ],
+      "visibility": {
+        "state": "visible",
+        "basis": "not_confirmed_deleted"
+      }
     },
     {
       "id": "KA01TP260729144645970fv13He8mfsK",
@@ -767,7 +800,11 @@
           "symbol": "scheduledQueueAndSendAlimtalkDaily",
           "line": 53
         }
-      ]
+      ],
+      "visibility": {
+        "state": "visible",
+        "basis": "not_confirmed_deleted"
+      }
     },
     {
       "id": "KA01TP2605210729364330NbhZVAu9zA",
@@ -857,7 +894,11 @@
           "symbol": "scheduledQueueAndSendAlimtalkDaily",
           "line": 53
         }
-      ]
+      ],
+      "visibility": {
+        "state": "visible",
+        "basis": "not_confirmed_deleted"
+      }
     },
     {
       "id": "KA01TP260514153314927WH270IppWQS",
@@ -955,7 +996,11 @@
           "symbol": "REVIEWED_TICKET_FACT_CONTRACTS",
           "line": 15
         }
-      ]
+      ],
+      "visibility": {
+        "state": "visible",
+        "basis": "not_confirmed_deleted"
+      }
     },
     {
       "id": "KA01TP260524083643752cySb9BoDOjN",
@@ -1032,7 +1077,11 @@
           "symbol": "scheduledQueueAndSendAlimtalkDaily",
           "line": 53
         }
-      ]
+      ],
+      "visibility": {
+        "state": "visible",
+        "basis": "not_confirmed_deleted"
+      }
     },
     {
       "id": "KA01TP260808034937468FF5LLYH823H",
@@ -1092,7 +1141,11 @@
           "symbol": "scheduledProcessStaffSurveyAlimtalks",
           "line": 81
         }
-      ]
+      ],
+      "visibility": {
+        "state": "visible",
+        "basis": "not_confirmed_deleted"
+      }
     },
     {
       "id": "KA01TP260903104439283cNjQW0YrrtV",
@@ -1154,7 +1207,11 @@
           "symbol": "scheduledSendTodayPrivateLessonChartAlimtalks",
           "line": 122
         }
-      ]
+      ],
+      "visibility": {
+        "state": "visible",
+        "basis": "not_confirmed_deleted"
+      }
     },
     {
       "id": "KA01TP260522041704111wu4Z0cu9cgl",
@@ -1214,7 +1271,11 @@
           "symbol": "scheduledProcessStaffSurveyAlimtalks",
           "line": 81
         }
-      ]
+      ],
+      "visibility": {
+        "state": "visible",
+        "basis": "not_confirmed_deleted"
+      }
     },
     {
       "id": "KA01TP2608241233353269Jgtoiwnzi6",
@@ -1291,7 +1352,11 @@
           "symbol": "ALIMTALK_TEMPLATE_TARGET_RULES",
           "line": 49
         }
-      ]
+      ],
+      "visibility": {
+        "state": "visible",
+        "basis": "not_confirmed_deleted"
+      }
     },
     {
       "id": "KA01TP260825074722212ylmndmsB3V4",
@@ -1390,7 +1455,11 @@
           "symbol": "scheduledQueueAndSendAlimtalkDaily",
           "line": 53
         }
-      ]
+      ],
+      "visibility": {
+        "state": "visible",
+        "basis": "not_confirmed_deleted"
+      }
     },
     {
       "id": "KA01TP260528081225871Fr92FW901Vo",
@@ -1463,7 +1532,11 @@
           "symbol": "ALIMTALK_TEMPLATE_TARGET_RULES",
           "line": 49
         }
-      ]
+      ],
+      "visibility": {
+        "state": "visible",
+        "basis": "not_confirmed_deleted"
+      }
     },
     {
       "id": "KA01TP260528090148593isshfXtt8vE",
@@ -1535,7 +1608,14 @@
           "symbol": "ALIMTALK_TEMPLATE_TARGET_RULES",
           "line": 49
         }
-      ]
+      ],
+      "visibility": {
+        "state": "hidden_deleted",
+        "basis": "provider_template_not_found",
+        "checkedAt": "2026-09-30T12:13:51.489Z",
+        "httpStatus": 404,
+        "errorCode": "TemplateNotFound"
+      }
     },
     {
       "id": "KA01TP260611053817155zqYlw27wEOU",
@@ -1606,7 +1686,11 @@
           "symbol": "ALIMTALK_TEMPLATE_TARGET_RULES",
           "line": 49
         }
-      ]
+      ],
+      "visibility": {
+        "state": "visible",
+        "basis": "not_confirmed_deleted"
+      }
     },
     {
       "id": "KA01TP260802163827071E2TTuX6CsWp",
@@ -1683,7 +1767,11 @@
           "symbol": "ALIMTALK_TEMPLATE_TARGET_RULES",
           "line": 49
         }
-      ]
+      ],
+      "visibility": {
+        "state": "visible",
+        "basis": "not_confirmed_deleted"
+      }
     },
     {
       "id": "KA01TP260731123545629Sx4N5CZa5BF",
@@ -1754,7 +1842,14 @@
           "symbol": "ALIMTALK_TEMPLATE_TARGET_RULES",
           "line": 49
         }
-      ]
+      ],
+      "visibility": {
+        "state": "hidden_deleted",
+        "basis": "provider_template_not_found",
+        "checkedAt": "2026-09-30T12:13:51.489Z",
+        "httpStatus": 404,
+        "errorCode": "TemplateNotFound"
+      }
     },
     {
       "id": "KA01TP260514153632171uiWXYoeiOLS",
@@ -1790,7 +1885,14 @@
           "symbol": "ALIMTALK_TEMPLATE_LABELS_BY_CODE",
           "line": 15
         }
-      ]
+      ],
+      "visibility": {
+        "state": "hidden_deleted",
+        "basis": "provider_template_not_found",
+        "checkedAt": "2026-09-30T12:13:51.489Z",
+        "httpStatus": 404,
+        "errorCode": "TemplateNotFound"
+      }
     },
     {
       "id": "KA01TP260519093416836f1EHZYJ00uM",
@@ -1826,7 +1928,11 @@
           "symbol": "ALIMTALK_TEMPLATE_LABELS_BY_CODE",
           "line": 15
         }
-      ]
+      ],
+      "visibility": {
+        "state": "visible",
+        "basis": "not_confirmed_deleted"
+      }
     },
     {
       "id": "KA01TP260521120040094XcMvYgFTryj",
@@ -1862,7 +1968,14 @@
           "symbol": "ALIMTALK_TEMPLATE_LABELS_BY_CODE",
           "line": 15
         }
-      ]
+      ],
+      "visibility": {
+        "state": "hidden_deleted",
+        "basis": "provider_template_not_found",
+        "checkedAt": "2026-09-30T12:13:51.489Z",
+        "httpStatus": 404,
+        "errorCode": "TemplateNotFound"
+      }
     },
     {
       "id": "KA01TP260724090746135DWCIb2boEw7",
@@ -1898,7 +2011,14 @@
           "symbol": "ALIMTALK_TEMPLATE_LABELS_BY_CODE",
           "line": 15
         }
-      ]
+      ],
+      "visibility": {
+        "state": "hidden_deleted",
+        "basis": "provider_template_not_found",
+        "checkedAt": "2026-09-30T12:13:51.489Z",
+        "httpStatus": 404,
+        "errorCode": "TemplateNotFound"
+      }
     },
     {
       "id": "KA01TP260527182741301uIuSTL01YQ1",
@@ -1934,7 +2054,14 @@
           "symbol": "ALIMTALK_TEMPLATE_LABELS_BY_CODE",
           "line": 15
         }
-      ]
+      ],
+      "visibility": {
+        "state": "hidden_deleted",
+        "basis": "provider_template_not_found",
+        "checkedAt": "2026-09-30T12:13:51.489Z",
+        "httpStatus": 404,
+        "errorCode": "TemplateNotFound"
+      }
     },
     {
       "id": "KA01TP260728111926523p2JzzTgHsS8",
@@ -1970,7 +2097,14 @@
           "symbol": "ALIMTALK_TEMPLATE_LABELS_BY_CODE",
           "line": 15
         }
-      ]
+      ],
+      "visibility": {
+        "state": "hidden_deleted",
+        "basis": "provider_template_not_found",
+        "checkedAt": "2026-09-30T12:13:51.489Z",
+        "httpStatus": 404,
+        "errorCode": "TemplateNotFound"
+      }
     },
     {
       "id": "KA01TP260729144657202OV26yAD15wR",
@@ -2006,7 +2140,14 @@
           "symbol": "ALIMTALK_TEMPLATE_LABELS_BY_CODE",
           "line": 15
         }
-      ]
+      ],
+      "visibility": {
+        "state": "hidden_deleted",
+        "basis": "provider_template_not_found",
+        "checkedAt": "2026-09-30T12:13:51.489Z",
+        "httpStatus": 404,
+        "errorCode": "TemplateNotFound"
+      }
     },
     {
       "id": "KA01TP2607050825481844FfRze7o9Pw",
@@ -2042,7 +2183,11 @@
           "symbol": "templates (coverage only)",
           "line": 1
         }
-      ]
+      ],
+      "visibility": {
+        "state": "visible",
+        "basis": "not_confirmed_deleted"
+      }
     },
     {
       "id": "KA01TP2607050825471794qyKK2E0URD",
@@ -2078,7 +2223,11 @@
           "symbol": "templates (coverage only)",
           "line": 1
         }
-      ]
+      ],
+      "visibility": {
+        "state": "visible",
+        "basis": "not_confirmed_deleted"
+      }
     },
     {
       "id": "KA01TP260606215619915xrfx4W0JsZf",
@@ -2114,7 +2263,11 @@
           "symbol": "templates (coverage only)",
           "line": 1
         }
-      ]
+      ],
+      "visibility": {
+        "state": "visible",
+        "basis": "not_confirmed_deleted"
+      }
     },
     {
       "id": "KA01TP260521072937354Ve2n5cEapDL",
@@ -2150,7 +2303,11 @@
           "symbol": "templates (coverage only)",
           "line": 1
         }
-      ]
+      ],
+      "visibility": {
+        "state": "visible",
+        "basis": "not_confirmed_deleted"
+      }
     }
   ]
 }

@@ -8,6 +8,16 @@ import { purposes, supplemental, timingBasisLabels } from "./lib/alimtalk-catalo
 
 export const catalogFile = "core/assets/alimtalk-catalog.json";
 const coverageFile = "scripts/fixtures/alimtalk-catalog-known-provider.json";
+const presenceFile = "scripts/fixtures/alimtalk-catalog-provider-presence.json";
+export function catalogVisibility(row, presence) {
+  // Unconnected, unapproved, archived, missing from a list, and failed reads are not deletion evidence.
+  if (!row.code && row.sourceConfiguredStatus === "deleted")
+    return { state: "hidden_deleted", basis: "source_configured_deleted" };
+  const absent = presence.absent.find((item) => item.templateId === row.code);
+  if (presence.inventoryComplete === true && !presence.present.includes(row.code) && absent?.httpStatus === 404 && absent.errorCode === "TemplateNotFound")
+    return { state: "hidden_deleted", basis: "provider_template_not_found", checkedAt: presence.checkedAt, httpStatus: absent.httpStatus, errorCode: absent.errorCode };
+  return { state: "visible", basis: "not_confirmed_deleted" };
+}
 const source = (name) => `${sourceRoot}${name}.ts`;
 const templatesPath = source("alimtalk/templates");
 const rulesPath = source("alimtalk/templateTargetRules");
@@ -28,6 +38,11 @@ export async function buildCatalog() {
   assert.equal(coverage.templates.length, 23);
   assert.equal(new Set(coverage.templates.map((row) => row.templateId)).size, 23);
   const known = new Map(coverage.templates.map((row) => [row.templateId, row]));
+  const presence = JSON.parse(await fs.readFile(path.join(root, presenceFile), "utf8"));
+  assert.ok(!Number.isNaN(Date.parse(presence.checkedAt)), "Presence evidence needs a check date");
+  assert.deepEqual([...presence.present].sort(), [...known.keys()].sort(), "Refresh inventory and presence evidence together");
+  assert.equal(new Set(presence.absent.map((item) => item.templateId)).size, presence.absent.length);
+  assert.ok(presence.absent.every((item) => !known.has(item.templateId)), "Contradictory provider evidence");
   const history = reader.constant("core/assets/app.js", "ALIMTALK_TEMPLATE_LABELS_BY_CODE");
   const daily = reader.schedule(source("exports/alimtalk"), "scheduledQueueAndSendAlimtalkDaily");
   const reservation = reader.schedule(source("exports/alimtalk"), "scheduledQueueAndSendReservationOpenAlimtalk");
@@ -96,7 +111,7 @@ export async function buildCatalog() {
   }
   for (const name of ["alimtalk/rebuildAlimtalkCandidates", "alimtalk/renewalSendGuard", "alimtalk/longAbsencePolicy", "alimtalk/recipientExclusion", "alimtalk/privateSurveySendGuard", "alimtalk/approvalGate", "alimtalk/approvalPolicy", "alimtalk/approvalStore", "alimtalk/queueDailyAlimtalk", "alimtalk/processAlimtalkQueue", "alimtalk/eligibility"]) reader.touch(source(name));
   const sourceFingerprints = reader.fingerprints();
-  for (const file of [coverageFile, "scripts/lib/alimtalk-catalog-metadata.mjs", "scripts/lib/alimtalk-catalog-source.mjs", "scripts/generate-alimtalk-catalog.mjs"])
+  for (const file of [coverageFile, presenceFile, "scripts/lib/alimtalk-catalog-metadata.mjs", "scripts/lib/alimtalk-catalog-source.mjs", "scripts/generate-alimtalk-catalog.mjs"])
     sourceFingerprints.push({ path: file, sha256: hash(await fs.readFile(path.join(root, file))) });
   sourceFingerprints.sort((a, b) => a.path.localeCompare(b.path));
   return {
@@ -106,7 +121,8 @@ export async function buildCatalog() {
     coverage: { observedAt: coverage.observedAt, knownProviderCount: known.size, sourceOnlyCount: rows.filter((row) => !row.knownProvider).length, note: coverage.basis },
     deployment: { status: "UNVERIFIED" },
     sourceFingerprints,
-    rows,
+    visibilityCheckedAt: presence.checkedAt,
+    rows: rows.map((row) => ({ ...row, visibility: catalogVisibility(row, presence) })),
   };
 }
 

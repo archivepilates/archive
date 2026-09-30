@@ -1,0 +1,80 @@
+{
+  "checkedAt": "2026-09-30T12:13:51.489Z",
+  "inventoryComplete": true,
+  "basis": "Unfiltered provider inventory exhausted; individual historical code GET returned HTTP 404 TemplateNotFound. UI visibility only; does not change sending or delete history.",
+  "present": [
+    "KA01TP260914091233543JoFDsn7KfCr",
+    "KA01TP260903104439283cNjQW0YrrtV",
+    "KA01TP260825074722212ylmndmsB3V4",
+    "KA01TP2608241233353269Jgtoiwnzi6",
+    "KA01TP260808034937468FF5LLYH823H",
+    "KA01TP260802163827071E2TTuX6CsWp",
+    "KA01TP260729144645970fv13He8mfsK",
+    "KA01TP26072806273194229P2ZesQwPp",
+    "KA01TP2607050825481844FfRze7o9Pw",
+    "KA01TP2607050825471794qyKK2E0URD",
+    "KA01TP260611053817155zqYlw27wEOU",
+    "KA01TP260606215619915xrfx4W0JsZf",
+    "KA01TP260602101939427lPhGyuDLvFM",
+    "KA01TP260528081225871Fr92FW901Vo",
+    "KA01TP260524083643752cySb9BoDOjN",
+    "KA01TP260522041704111wu4Z0cu9cgl",
+    "KA01TP260521072937354Ve2n5cEapDL",
+    "KA01TP2605210729364330NbhZVAu9zA",
+    "KA01TP260519093416836f1EHZYJ00uM",
+    "KA01TP260514153314927WH270IppWQS",
+    "KA01TP260514152235608d9icGOBotnV",
+    "KA01TP260514145047393VpTbcCZKkCV",
+    "KA01TP260514145047261araXgWLVFRs"
+  ],
+  "absent": [
+    {
+      "templateId": "KA01TP260528090148593isshfXtt8vE",
+      "label": "회원용 인바디 리포트 안내 v1",
+      "httpStatus": 404,
+      "errorCode": "TemplateNotFound"
+    },
+    {
+      "templateId": "KA01TP260731123545629Sx4N5CZa5BF",
+      "label": "아카이브 추천식단 도착 안내 v1",
+      "httpStatus": 404,
+      "errorCode": "TemplateNotFound"
+    },
+    {
+      "templateId": "KA01TP260514153632171uiWXYoeiOLS",
+      "label": "프라이빗 사전설문 안내 v1 (미사용)",
+      "httpStatus": 404,
+      "errorCode": "TemplateNotFound"
+    },
+    {
+      "templateId": "KA01TP260521120040094XcMvYgFTryj",
+      "label": "강사레슨 수업자료 안내 v1",
+      "httpStatus": 404,
+      "errorCode": "TemplateNotFound"
+    },
+    {
+      "templateId": "KA01TP260724090746135DWCIb2boEw7",
+      "label": "강사레슨 수업자료 안내 v2",
+      "httpStatus": 404,
+      "errorCode": "TemplateNotFound"
+    },
+    {
+      "templateId": "KA01TP260527182741301uIuSTL01YQ1",
+      "label": "강사용 프라이빗 차트 작성 안내 v2 (삭제됨)",
+      "httpStatus": 404,
+      "errorCode": "TemplateNotFound"
+    },
+    {
+      "templateId": "KA01TP260728111926523p2JzzTgHsS8",
+      "label": "아카이브 추천식단 프로그램 v1 (삭제됨)",
+      "httpStatus": 404,
+      "errorCode": "TemplateNotFound"
+    },
+    {
+      "templateId": "KA01TP260729144657202OV26yAD15wR",
+      "label": "강사용 프라이빗 차트 작성 안내 v3 (삭제됨)",
+      "httpStatus": 404,
+      "errorCode": "TemplateNotFound"
+    }
+  ]
+}
