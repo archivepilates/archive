@@ -150,6 +150,7 @@ const sourceImportIds = steps
 const sourceFileCleanup = await cleanupDownloadedCounterparts();
 const summary = {
   ok: failed.length === 0,
+  status: failed.length ? "failed" : warnings.length ? "partial" : "success",
   mode: apply ? "apply" : "dry-run",
   download,
   source: "studiomate_excel_emergency_mode",

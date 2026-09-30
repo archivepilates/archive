@@ -1,5 +1,6 @@
 import assert from "node:assert/strict";
 import test from "node:test";
+import { firestoreJournal } from "./studiomate-membership-contract-processor.mjs";
 import {
   buildStudioMateSignatureRequestPayload,
   buildStudioMateJoinContractPayload,
@@ -347,6 +348,133 @@ test("claims before create POST and completes both native signature request step
   });
 });
 
+test("recovery claim persistence failures reject before any native API call", async (t) => {
+  for (const failureAt of ["create", "commit"]) {
+    await t.test(failureAt, async () => {
+      const input = fixture();
+      input.selection.now = "2026-09-30T00:00:00.000Z";
+      const approval = {
+        reference: "synthetic-operator-approval",
+        memberId: input.member.memberId,
+        userTicketId: input.ticket.userTicketId,
+        originalMaxIssuanceAgeMs: null,
+        approvedRecoveryMaxAgeMs: 7 * 86400000,
+      };
+      const failure = new Error(`Synthetic transaction ${failureAt} failure`);
+      let creates = 0;
+      let posts = 0;
+      let reads = 0;
+      const ref = { set: async () => assert.fail("failed claim must not be staged") };
+      const db = {
+        collection: (name) => {
+          assert.equal(name, "studiomateMembershipContractJobs");
+          return { doc: (id) => {
+            assert.equal(id, input.selection.jobKey);
+            return ref;
+          } };
+        },
+        runTransaction: async (callback) => {
+          await callback({
+            get: async (target) => {
+              assert.equal(target, ref);
+              return { exists: false };
+            },
+            create: (target, data) => {
+              creates++;
+              assert.equal(target, ref);
+              assert.deepEqual(data.recoveryApproval, approval);
+              if (failureAt === "create") throw failure;
+            },
+          });
+          throw failure;
+        },
+      };
+      const api = {
+        post: async () => { posts++; throw new Error("Unexpected native POST"); },
+        get: async () => { reads++; throw new Error("Unexpected native GET"); },
+      };
+
+      await assert.rejects(
+        executeStudioMateMembershipContract({ ...input, api, journal: firestoreJournal(db, approval) }),
+        (error) => error === failure,
+      );
+      assert.equal(creates, 1);
+      assert.equal(posts, 0);
+      assert.equal(reads, 0);
+    });
+  }
+});
+
+test("recovery approval is committed with the initial claim before native writes", async () => {
+  const input = fixture();
+  input.selection.now = "2026-09-30T00:00:00.000Z";
+  const approval = {
+    reference: "synthetic-operator-approval",
+    memberId: input.member.memberId,
+    userTicketId: input.ticket.userTicketId,
+    originalMaxIssuanceAgeMs: null,
+    approvedRecoveryMaxAgeMs: 7 * 86400000,
+  };
+  let committed = null;
+  let creates = 0;
+  const posts = [];
+  const ref = {
+    set: async (fields, options) => {
+      assert.ok(committed, "staging must wait for the claim commit");
+      assert.deepEqual(options, { merge: true });
+      committed = { ...committed, ...fields };
+    },
+  };
+  const db = {
+    collection: (name) => {
+      assert.equal(name, "studiomateMembershipContractJobs");
+      return { doc: (id) => {
+        assert.equal(id, input.selection.jobKey);
+        return ref;
+      } };
+    },
+    runTransaction: async (callback) => {
+      let pending = null;
+      const result = await callback({
+        get: async (target) => {
+          assert.equal(target, ref);
+          return { exists: false };
+        },
+        create: (target, data) => {
+          creates++;
+          assert.equal(target, ref);
+          assert.equal(data.stage, "claimed");
+          assert.deepEqual(data.recoveryApproval, approval);
+          assert.deepEqual(posts, []);
+          pending = structuredClone(data);
+        },
+      });
+      assert.deepEqual(posts, [], "native writes must wait for transaction commit");
+      committed = pending;
+      return result;
+    },
+  };
+  const api = {
+    post: async (pathname) => {
+      assert.deepEqual(committed?.recoveryApproval, approval);
+      assert.equal(committed.jobKey, input.selection.jobKey);
+      posts.push(pathname);
+      assert.equal(pathname, "/v2/staff/contract/join");
+      return { id: CONTRACT_ID };
+    },
+    get: async () => nativeContract(input, "waiting"),
+  };
+
+  const result = await executeStudioMateMembershipContract({
+    ...input, api, journal: firestoreJournal(db, approval),
+  });
+  assert.equal(result.status, "waiting");
+  assert.equal(result.contractId, CONTRACT_ID);
+  assert.equal(creates, 1);
+  assert.deepEqual(posts, ["/v2/staff/contract/join"]);
+  assert.deepEqual(committed.recoveryApproval, approval);
+});
+
 test("an ambiguous create is retained and never retried automatically", async () => {
   const input = fixture();
   let payloadHash = "";
@@ -419,6 +547,110 @@ test("an ambiguous signature message is not sent again on resume", async () => {
   assert.equal(posts, 0);
 });
 
+test("persisted review reasons prevent replay after an uncertain first request", async (t) => {
+  for (const reason of [
+    "signature_message_outcome_unknown",
+    "signature_request_outcome_unknown",
+    "signature_request_prepare_outcome_unknown",
+    "signature_request_prepare_binding_invalid",
+  ]) {
+    await t.test(reason, async () => {
+      const input = fixture();
+      let saved = null;
+      const posts = [];
+      const claims = [];
+      const journal = {
+        claim: async ({ jobKey, payloadHash }) => {
+          const status = saved ? "resume" : "claimed";
+          saved ||= { jobKey, payloadHash, stage: "claimed" };
+          assert.equal(jobKey, saved.jobKey);
+          assert.equal(payloadHash, saved.payloadHash);
+          const claim = { ...saved, status };
+          claims.push(claim);
+          return claim;
+        },
+        stage: async (jobKey, stage, fields = {}) => {
+          assert.equal(jobKey, saved.jobKey);
+          saved = { ...saved, stage, ...fields };
+        },
+      };
+      const api = {
+        post: async (pathname) => {
+          posts.push(pathname);
+          if (pathname === "/v2/staff/contract/join") return { id: CONTRACT_ID };
+          if (pathname === `/v2/staff/contract/signature/request/${CONTRACT_ID}`) {
+            if (reason === "signature_request_prepare_outcome_unknown")
+              throw new Error("Synthetic preparation response lost");
+            return {
+              contract_id_hash: reason === "signature_request_prepare_binding_invalid"
+                ? "d".repeat(64)
+                : CONTRACT_ID,
+              contractor_name: input.member.name,
+              studio_name: "Synthetic Studio",
+              contract_link: `https://sign.studiomate.kr/${CONTRACT_ID}`,
+            };
+          }
+          if (pathname === `/v2/staff/contract/signature/request/sms/${CONTRACT_ID}`) {
+            if (reason === "signature_message_outcome_unknown")
+              throw new Error("Synthetic send response lost");
+            return { success: true };
+          }
+          throw new Error(`Unexpected synthetic POST: ${pathname}`);
+        },
+        get: async () => nativeContract(input, "draft"),
+      };
+
+      const first = await executeStudioMateMembershipContract({ ...input, api, journal });
+      assert.deepEqual(first, { status: "review", reason, contractId: CONTRACT_ID });
+      assert.equal(saved.stage, "review");
+      assert.equal(saved.reason, reason);
+      assert.equal(saved.contractId, CONTRACT_ID);
+      const expectedPosts = [
+        "/v2/staff/contract/join",
+        `/v2/staff/contract/signature/request/${CONTRACT_ID}`,
+      ];
+      if (!reason.startsWith("signature_request_prepare_"))
+        expectedPosts.push(`/v2/staff/contract/signature/request/sms/${CONTRACT_ID}`);
+      assert.deepEqual(posts, expectedPosts);
+
+      const second = await executeStudioMateMembershipContract({ ...input, api, journal });
+      assert.equal(second.status, "review");
+      assert.equal(second.contractId, CONTRACT_ID);
+      assert.equal(claims.length, 2);
+      assert.equal(claims[1].status, "resume");
+      assert.equal(claims[1].stage, "review");
+      assert.equal(claims[1].reason, reason);
+      assert.deepEqual(posts, expectedPosts, "resume must not create, prepare or send again");
+    });
+  }
+});
+
+test("an interrupted signature preparation is not replayed on resume", async () => {
+  const input = fixture();
+  const posts = [];
+  const api = {
+    post: async (pathname) => {
+      posts.push(pathname);
+      throw new Error("Unexpected synthetic POST after interrupted preparation");
+    },
+    get: async () => nativeContract(input, "draft"),
+  };
+  const journal = {
+    claim: async ({ payloadHash }) => ({
+      status: "resume",
+      payloadHash,
+      contractId: CONTRACT_ID,
+      stage: "attempting_signature_request",
+    }),
+    stage: async () => {},
+  };
+
+  const result = await executeStudioMateMembershipContract({ ...input, api, journal });
+  assert.equal(result.status, "review");
+  assert.equal(result.contractId, CONTRACT_ID);
+  assert.deepEqual(posts, []);
+});
+
 test("a complete duplicate claim produces no API write or read", async () => {
   const input = fixture("renewal_purchase_confirmation");
   let apiCalls = 0;
@@ -470,6 +702,22 @@ test("preflight/readback rejects changed native bindings", () => {
     validateCreatedContractReadback(wrongTicket, input.selection, payload, CONTRACT_ID),
     { ok: false, reason: "contract_ticket_mismatch", detail: null },
   );
+});
+
+test("readback rejects a different or missing issuance with otherwise identical purchase fields", () => {
+  const input = fixture();
+  const payload = buildStudioMateJoinContractPayload(input);
+  for (const userTicketId of [34, undefined]) {
+    const contract = nativeContract(input, "draft");
+    const required = contract.field_values.join_user_tickets[0].required;
+    if (userTicketId === undefined) delete required.user_ticket_id;
+    else required.user_ticket_id = userTicketId;
+
+    assert.deepEqual(
+      validateCreatedContractReadback(contract, input.selection, payload, CONTRACT_ID),
+      { ok: false, reason: "contract_ticket_mismatch", detail: null },
+    );
+  }
 });
 
 test("signature request readback requires both sent state and retained center seal", async () => {

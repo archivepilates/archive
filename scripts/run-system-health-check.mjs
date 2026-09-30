@@ -510,6 +510,19 @@ async function checkLaunchAgents() {
       launchState.runs > 0 &&
       launchState.lastExitCode !== null &&
       launchState.lastExitCode !== 0));
+    const contractIssues = pipeline?.contractIssues || [];
+    if (pipeline) {
+      const contractCheckKey = `${checkKey}:membership-contract`;
+      if (!contractIssues.length) completedChecks.add(contractCheckKey);
+      else addFinding({
+        checkKey: contractCheckKey, area: item.area, severity: "action_required",
+        title: "회원 계약 자동화 확인 필요",
+        cause: contractIssues.map((issue) => `${issue.name}: ${issue.reason}`).join("; "),
+        impact: "회원·예약 동기화와 별개로 계약 감지 또는 서명 요청이 지연될 수 있습니다.",
+        suggestedAction: "계약 후보와 StudioMate 계약 원장을 확인하세요. 중복 발송 방지를 위해 무조건 재전송하지 않습니다.",
+        sourceRefs: [pipeline.latestPath], autoRepairable: false,
+      });
+    }
 
     if (!plistExists) {
       addFinding({
@@ -586,7 +599,7 @@ async function checkLaunchAgents() {
       automationId: item.id,
       title: item.title,
       ownerArea: item.area,
-      status: !plistExists || !launchState.loaded || executionFailed ? "failed" : stale || missingEvidence ? "warning" : "healthy",
+      status: !plistExists || !launchState.loaded || executionFailed ? "failed" : stale || missingEvidence || contractIssues.length ? "warning" : "healthy",
       lastRunAt: latest.mtimeIso || new Date().toISOString(),
       runId,
       lastResult: !plistExists
@@ -597,12 +610,13 @@ async function checkLaunchAgents() {
             ? `최근 실행 실패${pipeline?.failedStep ? ` · ${pipeline.failedStep}` : ` · exit ${launchState.lastExitCode}`}`
           : stale
             ? `마지막 정상 반영 ${evidenceAge === null ? "확인 불가" : `${Math.round(evidenceAge)}분 전`}`
-            : "Health Check 통과",
+            : contractIssues.length ? "회원·예약 동기화 정상 · 회원 계약 확인 필요" : "Health Check 통과",
       warnings: [
         launchState.error,
         executionFailed ? `last exit code ${launchState.lastExitCode}` : "",
         stale ? "stale evidence" : "",
         missingEvidence ? "missing evidence" : "",
+        ...contractIssues.map((issue) => `${issue.name}: ${issue.reason}`),
         pipeline?.lastSuccessAt ? `last success ${pipeline.lastSuccessAt}` : "",
       ].filter(Boolean),
     });

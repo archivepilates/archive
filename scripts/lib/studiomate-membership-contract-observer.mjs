@@ -38,6 +38,9 @@ function validBaseline(value) {
   )
     return false;
   const ids = Object.keys(value.fingerprints);
+  if (value.observedAtByMember !== undefined && (!isRecord(value.observedAtByMember) || Object.keys(value.observedAtByMember).length !== ids.length ||
+    Object.entries(value.observedAtByMember).some(([id, at]) => !ids.includes(id) || !isUtcTime(at) ||
+      Date.parse(at) > Date.parse(value.downloadedAt)))) return false;
   return (
     ids.length > 0 &&
     ids.length === Object.keys(value.rowCounts).length &&
@@ -154,17 +157,27 @@ export async function observeMembershipContractHints({
   const rowCounts = Object.fromEntries(
     groups.map((group) => [group.id, group.hints.length]),
   );
-  // A partial export must not reset old purchases into apparent new issuances.
-  if (
-    previous &&
-    Object.keys(previous.fingerprints).some(
-      (id) => !fingerprints[id] || rowCounts[id] < previous.rowCounts[id],
-    )
-  ) {
+  // Quarantine small coverage losses without blocking unrelated new members.
+  // Keep affected baselines intact so a restored row never looks like a purchase.
+  const coverageLossIds = previous ? Object.keys(previous.fingerprints).filter(
+    (id) => !fingerprints[id] || rowCounts[id] < previous.rowCounts[id],
+  ) : [];
+  const priorRows = previous ? Object.values(previous.rowCounts).reduce((a, b) => a + b, 0) : 0;
+  const lostRows = coverageLossIds.reduce((sum, id) =>
+    sum + previous.rowCounts[id] - (rowCounts[id] || 0), 0);
+  if (previous && (coverageLossIds.length / Object.keys(previous.fingerprints).length > 0.05 ||
+    lostRows / priorRows > 0.05)) {
     return review("export_coverage_loss_explicit_review_required");
   }
+  for (const id of coverageLossIds) {
+    fingerprints[id] = previous.fingerprints[id];
+    rowCounts[id] = previous.rowCounts[id];
+  }
+  const observedAtByMember = Object.fromEntries(Object.keys(fingerprints).map((id) => [id,
+    coverageLossIds.includes(id) ? previous.observedAtByMember?.[id] || previous.downloadedAt : source.downloadedAt,
+  ]));
   if (
-    Buffer.byteLength(JSON.stringify({ fingerprints, rowCounts })) > 700_000
+    Buffer.byteLength(JSON.stringify({ fingerprints, rowCounts, observedAtByMember })) > 700_000
   ) {
     throw new Error(
       "Contract discovery baseline exceeds safe document size; no writes performed",
@@ -172,7 +185,8 @@ export async function observeMembershipContractHints({
   }
   const changes = previous
     ? groups.filter(
-        (group) => previous.fingerprints?.[group.id] !== group.fingerprint,
+        (group) => !coverageLossIds.includes(group.id) &&
+          previous.fingerprints?.[group.id] !== group.fingerprint,
       )
     : [];
   // One atomic batch prevents a baseline advance from losing its pending hints.
@@ -204,7 +218,7 @@ export async function observeMembershipContractHints({
         ambiguousNames: group.ambiguousNames,
         hints: group.hints,
         sourceImportId: source.sourceImportId,
-        previousDownloadedAt: previous.downloadedAt,
+        previousDownloadedAt: previous.observedAtByMember?.[group.id] || previous.downloadedAt,
         sourceDownloadedAt: source.downloadedAt,
         discoveredAt: now,
         status: "native_verification_required",
@@ -224,15 +238,18 @@ export async function observeMembershipContractHints({
       schemaVersion: BASELINE_VERSION,
       fingerprints,
       rowCounts,
+      observedAtByMember,
       downloadedAt: source.downloadedAt,
       sourceImportId: source.sourceImportId,
       initializedAt: previous?.initializedAt || now,
       updatedAt: now,
       mode: "shadow",
+      coverageLossIds,
     });
     return unseen.map(({ group, ref }) => ({
       phoneFingerprint: group.id,
       hintId: ref.id,
+      previousDownloadedAt: previous.observedAtByMember?.[group.id] || previous.downloadedAt,
     }));
   });
   return {
@@ -244,6 +261,8 @@ export async function observeMembershipContractHints({
     candidateHints: result,
     previousDownloadedAt: previous?.downloadedAt || null,
     sourceDownloadedAt: source.downloadedAt,
+    coverageLossIds,
+    coverageReviewCount: coverageLossIds.length,
     sends: 0,
   };
 }
@@ -278,15 +297,22 @@ export function membershipContractDiscoveryWarning(importSummary) {
   )
     return null;
   const result = importSummary.membershipContractDiscovery;
-  if (isRecord(result) && result.ok === true) return null;
+  const processing = importSummary.membershipContractProcessing;
+  const processingIssue = processing && (processing.status === "review" || processing.review > 0);
+  const coverageIssue = result?.coverageReviewCount > 0;
+  const pendingIssue = result?.invalidPendingCount > 0 || result?.pendingScanLimited === true;
+  if (isRecord(result) && result.ok === true && !processingIssue && !coverageIssue && !pendingIssue) return null;
   return {
     name: "membershipContractDiscovery",
     command: [],
     exitCode: 0,
-    stdout: result,
+    stdout: { ...result, ok: false },
     stdoutOk: false,
     requiredFailed: false,
     stderr:
+      (processingIssue ? text(processing.reason) || "membership_contract_processing_review" : "") ||
+      (coverageIssue ? `member_coverage_review_${result.coverageReviewCount}` : "") ||
+      (pendingIssue ? "pending_contract_hint_scan_review" : "") ||
       text(result?.reason) || "invalid membership contract discovery result",
   };
 }

@@ -23,7 +23,8 @@ export function successfulSyncReport(report) {
       report.steps.some((step) => step.name.startsWith("syncArchiveDashboardDb") && syncStepSucceeded(step));
   }
   return ["download", "memberProfiles", "memberPhoneDedupe", "reservations", "deletedClassLogs"]
-    .every((name) => report.steps.some((step) => step.name === name && syncStepSucceeded(step))) && report.steps.every(syncStepSucceeded);
+    .every((name) => report.steps.some((step) => step.name === name && syncStepSucceeded(step))) &&
+    report.steps.filter((step) => !step.name?.startsWith("membershipContract")).every(syncStepSucceeded);
 }
 
 export function summarizeSyncReports(entries, { nowMs = Date.now(), maxAgeMinutes } = {}) {
@@ -47,6 +48,9 @@ export function summarizeSyncReports(entries, { nowMs = Date.now(), maxAgeMinute
     latestPath: latest?.file || "",
     latestAttemptAt: latest?.report?.finishedAt || "",
     latestAttemptSucceeded: Boolean(latest && successfulSyncReport(latest.report)),
+    contractIssues: (latest?.report?.steps || [])
+      .filter((step) => step.name?.startsWith("membershipContract") && !syncStepSucceeded(step))
+      .map((step) => ({ name: step.name, reason: String(step.stderr || step.stdout?.reason || "contract_stage_incomplete").slice(0, 180) })),
     lastSuccessPath: lastSuccess?.file || "",
     lastSuccessAt,
     sourceObservedAt,

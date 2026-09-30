@@ -52,7 +52,7 @@ export async function runStudioMateMembershipContractCandidates({
   if (
     !Array.isArray(discovery?.candidateFingerprints) ||
     !discovery.candidateFingerprints.length ||
-    !discovery.previousDownloadedAt ||
+    !(discovery.previousDownloadedAt || discovery.candidateHints?.every((hint) => hint.previousDownloadedAt)) ||
     !discovery.sourceDownloadedAt
   )
     return { ...result, status: "idle" };
@@ -60,13 +60,20 @@ export async function runStudioMateMembershipContractCandidates({
     rows,
     discovery.candidateFingerprints,
   );
-  if (groups.length !== discovery.candidateFingerprints.length || groups.length > 5)
+  if (groups.length > 5)
     return {
       ...result,
       status: "review",
       review: groups.length,
       reason: "candidate_phone_reconstruction_mismatch",
     };
+  for (const hint of discovery.candidateHints || []) {
+    if (!groups.some((g) => g.phoneFingerprint === hint.phoneFingerprint)) {
+      await markHint(db, hint.hintId, "review", "pending_member_missing_from_current_export");
+      result.review += 1;
+    }
+  }
+  if (!groups.length) return { ...result, status: result.review ? "review" : "idle" };
 
   let context;
   let release;
@@ -112,7 +119,7 @@ export async function runStudioMateMembershipContractCandidates({
           member: memberResult.member,
           ticketRead,
           contractHistory,
-          previousDownloadedAt: discovery.previousDownloadedAt,
+          previousDownloadedAt: hint?.previousDownloadedAt || discovery.previousDownloadedAt,
           sourceDownloadedAt: discovery.sourceDownloadedAt,
           config,
         });
@@ -199,7 +206,7 @@ export async function runStudioMateMembershipContractCandidates({
   }
 }
 
-function firestoreJournal(db) {
+export function firestoreJournal(db, recoveryApproval = null) {
   return {
     async claim({ jobKey, payloadHash, selection }) {
       const ref = db.collection(JOBS).doc(jobKey);
@@ -236,6 +243,7 @@ function firestoreJournal(db) {
           sourceCapturedAt: selection.now,
           createdAt: new Date(),
           updatedAt: new Date(),
+          ...(recoveryApproval ? { recoveryApproval } : {}),
         });
         return { status: "claimed", payloadHash, contractId: "" };
       });

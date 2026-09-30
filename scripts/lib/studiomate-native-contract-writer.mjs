@@ -165,6 +165,7 @@ export function validateCreatedContractReadback(raw, selection, payload, contrac
             : detail.memberPhone !== selection.memberPhone
               ? "contract_recipient_mismatch"
               : !detail.ticket ||
+                  detail.ticket.userTicketId !== String(expectedTicket.user_ticket_id) ||
                   detail.ticket.productId !== String(expectedTicket.ticket_id) ||
                   detail.ticket.title !== expectedTicket.title ||
                   detail.ticket.availabilityStartAt !== expectedTicket.availability_start_at ||
@@ -284,9 +285,9 @@ export async function executeStudioMateMembershipContract({
   if (readback.detail.status === "draft") {
     if (
       claim.status === "resume" &&
-      ["attempting_signature_message", "signature_message_outcome_unknown"].includes(
-        claim.stage,
-      )
+      (["attempting_signature_request", "attempting_signature_message", "signature_message_outcome_unknown"].includes(claim.stage) ||
+        ["signature_message_outcome_unknown", "signature_request_outcome_unknown",
+          "signature_request_prepare_outcome_unknown", "signature_request_prepare_binding_invalid"].includes(claim.reason))
     ) {
       await journal.stage(selection.jobKey, "signature_message_outcome_unknown", {
         reason: "signature_message_outcome_unknown",

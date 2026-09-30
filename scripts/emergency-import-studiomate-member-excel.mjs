@@ -7,6 +7,7 @@ import { createRequire } from "node:module";
 import { qualityIssuesFromSummary, recordDataQualityIssues, recordSourceImport } from "./lib/archive-core-ops-logging.mjs";
 import { cleanupImportedSourceFiles } from "./lib/imported-source-retention.mjs";
 import { observeMembershipContractHints } from "./lib/studiomate-membership-contract-observer.mjs";
+import { loadPendingContractDiscovery } from "./lib/studiomate-membership-contract-pending.mjs";
 import { runStudioMateMembershipContractCandidates } from "./lib/studiomate-membership-contract-processor.mjs";
 import {
   buildInstructorLessonContactGroupNames,
@@ -148,16 +149,20 @@ const { importId } = await recordSourceImport(db, {
 await recordDataQualityIssues(db, qualityIssuesFromSummary(summary, importId));
 if (apply && process.env.STUDIOMATE_MEMBERSHIP_CONTRACT_OBSERVER === "shadow" && valueArg("--contract-source-downloaded-at")) {
   try {
-    summary.membershipContractDiscovery = await observeMembershipContractHints({
-      db,
-      rows,
-      source: {
+    const contractSource = {
         sourceImportId: importId,
         downloadedAt: valueArg("--contract-source-downloaded-at"),
         applied: true,
         // Profile exclusions (staff, expired passes) do not make the raw export partial.
         complete: rows.length > 0 && rows.every((row) => Object.hasOwn(row, "전화번호") && Object.hasOwn(row, "수강권명")),
-      },
+      };
+    summary.membershipContractDiscovery = await observeMembershipContractHints({
+      db,
+      rows,
+      source: contractSource,
+    });
+    summary.membershipContractDiscovery = await loadPendingContractDiscovery({
+      db, discovery: summary.membershipContractDiscovery, source: contractSource,
     });
   } catch (error) {
     summary.membershipContractDiscovery = { ok: false, mode: "shadow", reason: error.message, sends: 0 };

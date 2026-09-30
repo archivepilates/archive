@@ -42,6 +42,18 @@ test("approved sales fallback is successful only with download and DB success", 
   assert.equal(successfulSyncReport({ ...value, dbSyncSucceeded: false }), false);
 });
 
+test("contract failures stay actionable without invalidating member/reservation source freshness", () => {
+  const value = report({ finishedAt: now.toISOString(), steps: [...report().steps,
+    { name: "membershipContractDiscovery", exitCode: 0, stdoutOk: false,
+      stdout: { ok: false }, stderr: "member_coverage_review_1" }] });
+  assert.equal(successfulSyncReport(value), true);
+  const evidence = summarizeSyncReports([entry("2026-09-05T02", value)], { nowMs: now.getTime(), maxAgeMinutes: 95 });
+  assert.equal(evidence.stale, false);
+  assert.equal(evidence.latestAttemptSucceeded, true);
+  assert.equal(evidence.consecutiveFailures, 0);
+  assert.deepEqual(evidence.contractIssues, [{ name: "membershipContractDiscovery", reason: "member_coverage_review_1" }]);
+});
+
 test("nested sales Firestore failures and missing write evidence cannot reset freshness", () => {
   for (const firebaseSync of [undefined, null, { ok: false, firestorePatch: { ok: false, status: 403 } }, { ok: true, firestorePatch: { ok: false } }]) {
     const value = report({ source: "archive_dashboard_sales_daily", dbSyncSucceeded: true,

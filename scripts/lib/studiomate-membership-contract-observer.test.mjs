@@ -1,6 +1,7 @@
 import test from "node:test";
 import assert from "node:assert/strict";
 import { readFileSync } from "node:fs";
+import { selectNativeMembershipContractCandidate } from "./studiomate-membership-contract-native-selection.mjs";
 import {
   CONTRACT_LANE,
   contractObservationGroups,
@@ -39,6 +40,7 @@ function fakeDb() {
   const records = new Map();
   const ref = (key) => ({
     key,
+    id: key.split("/").at(-1),
     collection: (name) => ({ doc: (id) => ref(`${key}/${name}/${id}`) }),
     get: async () => ({
       exists: records.has(key),
@@ -59,6 +61,155 @@ function fakeDb() {
     },
   };
 }
+
+function memberRows(count = 100) {
+  return Array.from({ length: count }, (_, index) => ({
+    ...row,
+    전화번호: `010${String(index).padStart(8, "0")}`,
+  }));
+}
+
+test("one missing member out of 100 does not block an unrelated new candidate", async () => {
+  const db = fakeDb();
+  const rows = memberRows();
+  await observeMembershipContractHints({ db, rows, source, now });
+  const before = structuredClone(db.records.get(stateKey));
+  const [held] = contractObservationGroups([rows[0]]);
+  const newcomer = { ...row, 전화번호: "01000000100" };
+  const [added] = contractObservationGroups([newcomer]);
+  const result = await observeMembershipContractHints({
+    db, rows: [...rows.slice(1), newcomer], source: nextSource, now,
+  });
+  assert.equal(result.ok, true);
+  assert.equal(result.candidates, 1);
+  assert.deepEqual(result.candidateFingerprints, [added.id]);
+  assert.deepEqual(result.coverageLossIds, [held.id]);
+  assert.equal(result.coverageReviewCount, 1);
+  assert.equal(result.sends, 0);
+  const baseline = db.records.get(stateKey);
+  assert.equal(baseline.fingerprints[held.id], before.fingerprints[held.id]);
+  assert.equal(baseline.rowCounts[held.id], before.rowCounts[held.id]);
+  assert.equal(baseline.observedAtByMember[held.id], source.downloadedAt);
+  assert.equal(baseline.observedAtByMember[added.id], nextSource.downloadedAt);
+  assert.equal(baseline.downloadedAt, nextSource.downloadedAt);
+  assert.equal(db.records.size, 2);
+});
+
+test("restoring a quarantined ticket row preserves identity and emits no duplicate hint", async () => {
+  const db = fakeDb();
+  const rows = memberRows();
+  const extra = { ...rows[0], 수강권명: "Second regular ticket" };
+  const complete = [...rows, extra];
+  const [held] = contractObservationGroups([rows[0], extra]);
+  await observeMembershipContractHints({ db, rows: complete, source, now });
+  const partial = await observeMembershipContractHints({ db, rows, source: nextSource, now });
+  assert.equal(partial.ok, true);
+  assert.deepEqual(partial.coverageLossIds, [held.id]);
+  assert.equal(partial.candidates, 0);
+  assert.equal(db.records.get(stateKey).fingerprints[held.id], held.fingerprint);
+  assert.equal(db.records.get(stateKey).rowCounts[held.id], 2);
+  const restored = await observeMembershipContractHints({
+    db, rows: complete, source: restoredSource, now,
+  });
+  assert.equal(restored.ok, true);
+  assert.equal(restored.candidates, 0);
+  assert.deepEqual(restored.coverageLossIds, []);
+  assert.equal(db.records.get(stateKey).fingerprints[held.id], held.fingerprint);
+  assert.equal(db.records.get(stateKey).observedAtByMember[held.id], restoredSource.downloadedAt);
+  assert.equal(db.records.size, 1);
+});
+
+test("repeated quarantine retains the old member bound and selects an issuance from the gap", async () => {
+  const db = fakeDb();
+  const rows = memberRows();
+  const extra = { ...rows[0], 수강권명: "Old extra ticket" };
+  const purchase = { ...rows[0], 수강권명: "New regular ticket" };
+  const [held] = contractObservationGroups([rows[0], extra]);
+  await observeMembershipContractHints({ db, rows: [...rows, extra], source, now });
+  for (const downloadedAt of [nextSource.downloadedAt, "2026-09-14T06:58:30Z"]) {
+    const partial = await observeMembershipContractHints({
+      db, rows, source: { ...nextSource, downloadedAt }, now,
+    });
+    assert.equal(partial.ok, true);
+    assert.deepEqual(partial.coverageLossIds, [held.id]);
+    assert.equal(db.records.get(stateKey).observedAtByMember[held.id], source.downloadedAt);
+    assert.equal(db.records.get(stateKey).downloadedAt, downloadedAt);
+  }
+  const restored = await observeMembershipContractHints({
+    db, rows: [...rows, extra, purchase], source: restoredSource, now,
+  });
+  assert.equal(restored.candidates, 1);
+  const [candidate] = restored.candidateHints;
+  assert.equal(candidate.phoneFingerprint, held.id);
+  assert.equal(candidate.previousDownloadedAt, source.downloadedAt);
+  const persisted = db.records.get(`workLanes/${CONTRACT_LANE}/purchaseHints/${candidate.hintId}`);
+  assert.equal(persisted.previousDownloadedAt, source.downloadedAt);
+  assert.equal(db.records.get(stateKey).observedAtByMember[held.id], restoredSource.downloadedAt);
+  const input = {
+    group: { phone: rows[0].전화번호, rows: [rows[0], extra, purchase] },
+    member: { memberId: "100", phone: rows[0].전화번호 },
+    ticketRead: {
+      status: "verified",
+      tickets: [{
+        memberId: "100", userTicketId: "200", productId: "300",
+        title: purchase.수강권명, issuedAt: "2026-09-14T06:57:00.000Z",
+        status: "active", refunded: false, cancelled: false,
+        payment: {
+          verified: true, complete: true, status: "paid",
+          totalAmount: 400000, paidAmount: 400000, outstandingAmount: 0, refundedAmount: 0,
+          transactions: [{
+            paymentId: "synthetic-payment", method: "card", status: "paid",
+            amount: 400000, paidAt: "2026-09-14T06:57:00.000Z",
+          }],
+        },
+      }],
+    },
+    contractHistory: { status: "verified", records: [] },
+    previousDownloadedAt: candidate.previousDownloadedAt,
+    sourceDownloadedAt: restored.sourceDownloadedAt,
+    config: {
+      studioId: "5330", regularProductIds: ["300"], termsVersion: "synthetic-v1",
+      cutoverAt: "2026-09-14T00:00:00.000Z", maxSourceAgeMs: 3600000,
+      maxIssuanceAgeMs: 3600000,
+    },
+  };
+  const selected = selectNativeMembershipContractCandidate(input);
+  assert.equal(selected.status, "eligible");
+  assert.equal(selected.selection.userTicketId, "200");
+  assert.equal(selectNativeMembershipContractCandidate({
+    ...input, previousDownloadedAt: restored.previousDownloadedAt,
+  }).reason, "no_fresh_native_issuance");
+  const repeated = await observeMembershipContractHints({
+    db, rows: [...rows, extra, purchase], source: { ...restoredSource, downloadedAt: now }, now,
+  });
+  assert.equal(repeated.candidates, 0);
+  assert.equal(db.records.size, 2);
+});
+
+test("coverage loss above five percent of members or rows blocks all writes", async (t) => {
+  for (const kind of ["members", "rows"]) {
+    await t.test(kind, async () => {
+      const db = fakeDb();
+      const rows = memberRows();
+      const extras = Array.from({ length: 6 }, (_, index) => ({
+        ...rows[0], 수강권명: `Extra ticket ${index}`,
+      }));
+      await observeMembershipContractHints({
+        db, rows: kind === "rows" ? [...rows, ...extras] : rows, source, now,
+      });
+      const before = structuredClone([...db.records]);
+      const partial = await observeMembershipContractHints({
+        db,
+        rows: [...(kind === "rows" ? rows : rows.slice(6)), { ...row, 전화번호: "01000000100" }],
+        source: nextSource, now,
+      });
+      assert.equal(partial.ok, false);
+      assert.equal(partial.reason, "export_coverage_loss_explicit_review_required");
+      assert.equal(partial.candidates, 0);
+      assert.deepEqual([...db.records], before);
+    });
+  }
+});
 
 test("source guard rejects dry runs, missing import, stale and future downloads", () => {
   assert.equal(isFreshContractDiscoverySource(source, Date.parse(now)), true);
