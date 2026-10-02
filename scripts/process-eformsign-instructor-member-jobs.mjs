@@ -11,7 +11,9 @@ import { runEformStage, waitForEformOperatorFields, resolvedEformErrorPatch } fr
 import { appendIdleHeartbeatIfDue } from "./lib/idle-heartbeat.mjs";
 import { readImwebOrder } from "./lib/imweb-instructor-orders.mjs";
 import { assertSamePaidOrder } from "./lib/imweb-instructor-order-policy.mjs";
-import { readCompletedSignupProfile, signupProfileMemo, SIGNUP_PROFILE_VERSION } from "./lib/instructor-signup-profile.mjs";
+import { readCompletedSignupProfile, signupProfileMemo, SIGNUP_PROFILE_VERSION, canonicalSignupPhone, parseSignupProfile } from "./lib/instructor-signup-profile.mjs";
+import { buildOrderContactBinding, canRecheckCompletedSignup, readCompletedRecipientEvidence, readSignupMemberIdentity } from "./lib/instructor-signup-order-identity.mjs";
+import { acquireStudioMateBrowserLock } from "./lib/studiomate-browser-lock.mjs";
 import {
   EFORMSIGN_COMPLETED_DOCUMENTS_URL,
   EFORMSIGN_PROGRESS_DOCUMENTS_URL,
@@ -49,11 +51,14 @@ const config = {
   loginOnly: Boolean(args["login-only"]),
   jobId: String(args["job-id"] || process.env.EFORMSIGN_INSTRUCTOR_MEMBER_JOB_ID || ""),
   refreshCompletedFields: Boolean(args["refresh-completed-fields"]),
+  recheckCompletedDocument: String(args["recheck-completed-document"] || ""),
   limit: Math.max(1, Math.min(3, Number(args.limit || process.env.EFORMSIGN_INSTRUCTOR_MEMBER_LIMIT || "1"))),
   staleLeaseMs: Math.max(5 * 60 * 1000, Number(process.env.EFORMSIGN_INSTRUCTOR_MEMBER_STALE_LEASE_MS || 15 * 60 * 1000)),
 };
 
 if (config.refreshCompletedFields && !config.jobId) throw new Error("완료 가입서 답변 재확인은 --job-id 지정이 필요합니다.");
+if (config.recheckCompletedDocument && (!config.jobId || !/^[a-f0-9]{32}$/.test(config.recheckCompletedDocument)
+  || config.refreshCompletedFields || config.loginOnly)) throw new Error("완료 문서 재검증은 --job-id와 정확한 --recheck-completed-document 지정만 허용합니다.");
 
 if (!admin.apps.length) admin.initializeApp({ projectId: config.projectId });
 const db = admin.firestore();
@@ -76,7 +81,7 @@ const summary = {
 await mkdir(config.profileDir, { recursive: true });
 await mkdir(path.dirname(config.runLogPath), { recursive: true });
 await mkdir(path.dirname(config.lastResultPath), { recursive: true });
-if (apply && !config.loginOnly && !config.refreshCompletedFields) await recoverStaleJobs();
+if (apply && !config.loginOnly && !config.refreshCompletedFields && !config.recheckCompletedDocument) await recoverStaleJobs();
 
 const candidates = await loadCandidates(config.limit);
 if (!candidates.length && !config.loginOnly) {
@@ -214,7 +219,7 @@ async function loadCandidates(limit) {
       db.collection("eformsignInstructorMemberJobs").doc(config.jobId).get(),
       db.collection("instructorLessonRegistrations").doc(config.jobId).get(),
     ]);
-    if (config.refreshCompletedFields) {
+    if (config.refreshCompletedFields || config.recheckCompletedDocument) {
       return snapshot.exists && isCompletionCandidate(snapshot.data())
         ? [{ ref: snapshot.ref, data: snapshot.data(), type: "job" }] : [];
     }
@@ -335,6 +340,8 @@ async function claimJob(ref) {
 }
 
 function isCompletionCandidate(data) {
+  if (config.recheckCompletedDocument) return canRecheckCompletedSignup(data,
+    { jobId: config.jobId, documentId: config.recheckCompletedDocument });
   if (config.refreshCompletedFields) return (data?.status === "done"
     || (data?.status === "send_review_required" && data?.completedAt
       && data?.lastError === "완료 가입서 답변·회원 일치·생년월일 확인필요. 원본 확인 후 재처리하세요."))
@@ -709,7 +716,9 @@ async function inspectCompletion(page, ref, job) {
   if (completedEvidence.found) {
     let profile;
     try {
-      profile = await readCompletedSignupProfile(page, job, completedEvidence);
+      profile = await readCompletedSignupProfile(page, job, completedEvidence, {
+        verifyOrderContact: fields => verifyCompletedOrderContact(page, ref, job, fields),
+      });
     } catch {
       return markCompletionReviewRequired(ref, job, "완료 가입서 답변·회원 일치·생년월일 확인필요. 원본 확인 후 재처리하세요.");
     }
@@ -754,6 +763,28 @@ async function inspectCompletion(page, ref, job) {
     updatedAt: FieldValue.serverTimestamp(),
   });
   return { status: "waiting_completion", detail: "가입서 작성 대기" };
+}
+
+async function verifyCompletedOrderContact(page, ref, job, fields) {
+  const document = await readCompletedRecipientEvidence(page, job);
+  const registrationRef = db.collection('instructorLessonRegistrations').doc(ref.id);
+  const registration = (await registrationRef.get()).data();
+  if (registration?.source?.type !== 'imweb_paid_order' || registration.registrationId !== ref.id
+    || !registration.externalOrder?.orderNo) throw new Error('주문 원본이 없는 가입서 연락처 불일치');
+  let memberContext, releaseMemberLock, member;
+  try {
+    releaseMemberLock = await acquireStudioMateBrowserLock({ owner: 'signup-order-contact-verification' });
+    const { chromium } = await import('playwright');
+    memberContext = await chromium.launchPersistentContext(
+      expandHome(process.env.STUDIOMATE_EMERGENCY_PROFILE_DIR || '~/ArchiveIN/automation/browser-profile'),
+      { headless: config.headless });
+    member = await readSignupMemberIdentity(await memberContext.newPage(), job);
+  } finally {
+    try { await memberContext?.close(); } finally { await releaseMemberLock?.(); }
+  }
+  // Read the paid order after browser checks; the transaction below rechecks both stored identities.
+  const order = readImwebOrder(registration.externalOrder.orderNo);
+  return buildOrderContactBinding({ job, registration, order, member, document, submittedPhone: fields.memberPhone });
 }
 
 async function markCompletionReviewRequired(ref, job, message, extra = {}) {
@@ -929,8 +960,13 @@ async function finalizeCompletedDocument(ref, job, evidence, profile) {
     if (!registrationSnapshot.exists) throw new Error("강사레슨 등록 원본을 찾지 못했습니다.");
     const registration = registrationSnapshot.data() || {};
     const memberId = String(job.studiomateMemberId || registration.studiomateMemberId || "");
+    parseSignupProfile(profile, currentJob, documentId);
+    const canonicalPhone = canonicalSignupPhone(profile, currentJob, registration);
     if (String(registration.studiomateMemberId || registration.evidence?.studiomateMemberId || "") !== memberId
-      || normalizeInstructorLessonPhone(registration.memberPhone) !== profile.memberPhone
+      || String(currentJob.studiomateMemberId || '') !== memberId
+      || normalizeInstructorLessonPhone(currentJob.memberPhone) !== normalizeInstructorLessonPhone(job.memberPhone)
+      || normalizeInstructorLessonName(currentJob.memberName) !== normalizeInstructorLessonName(job.memberName)
+      || normalizeInstructorLessonPhone(registration.memberPhone) !== canonicalPhone
       || normalizeInstructorLessonName(registration.memberName) !== profile.memberName
       || currentJob.documentId !== documentId) throw new Error("가입서 완료 원본 회원정보가 변경되어 반영을 중단했습니다.");
     const now = FieldValue.serverTimestamp();

@@ -91,6 +91,9 @@ jobs:
       - name: Validate instructor lesson registration release
         run: node scripts/validate-instructor-lesson-registration-release.mjs
 
+      - name: Test instructor signup identity and profile guards
+        run: node --test scripts/tests/instructor-signup*.test.mjs
+
       - name: Test staff and member contact precedence
         run: npm run test:contact-staff-precedence
 

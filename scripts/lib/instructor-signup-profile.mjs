@@ -1,4 +1,5 @@
 import { INSTRUCTOR_MEMBER_EFORMSIGN_TEMPLATE_ID, normalizeInstructorLessonName, normalizeInstructorLessonPhone } from './instructor-lesson-registration-contract.mjs';
+import { assertOrderContactBinding } from './instructor-signup-order-identity.mjs';
 
 export const SIGNUP_PROFILE_VERSION = 1;
 export const SIGNUP_PROFILE_FIELDS = Object.freeze({
@@ -28,26 +29,41 @@ export function normalizeSignupBirthDate(value, now = new Date()) {
   return raw;
 }
 
-export function parseSignupProfile(fields, job, documentId, now = new Date()) {
+export function parseSignupProfile(fields, job, documentId, now = new Date(), orderContactBinding = fields?.orderContactBinding) {
   const name = normalizeInstructorLessonName(fields.memberName);
   const phone = normalizeInstructorLessonPhone(fields.memberPhone);
   if (!/^[a-f0-9]{32}$/i.test(documentId) || documentId !== job.documentId
     || !/^\d+$/.test(String(job.studiomateMemberId || '')) || job.studioId !== '5330'
-    || !/^010\d{8}$/.test(phone) || phone !== normalizeInstructorLessonPhone(job.memberPhone)
+    || !/^010\d{8}$/.test(phone)
+    || (!orderContactBinding && phone !== normalizeInstructorLessonPhone(job.memberPhone))
     || !name || name !== normalizeInstructorLessonName(job.memberName)) {
     throw new Error('완료 가입서 문서·회원 ID·이름·연락처 불일치: 정보 반영 중단');
   }
   const profile = { version: SIGNUP_PROFILE_VERSION, documentId, templateId: INSTRUCTOR_MEMBER_EFORMSIGN_TEMPLATE_ID,
     memberName: name, memberPhone: phone, birthDate: normalizeSignupBirthDate(fields.birthDate, now) };
+  if (orderContactBinding) {
+    assertOrderContactBinding(orderContactBinding, job, phone);
+    const rawFields = fields.rawFields || Object.fromEntries(Object.keys(SIGNUP_PROFILE_FIELDS).map(key => [key, String(fields[key] || '')]));
+    if (Object.keys(rawFields).length !== Object.keys(SIGNUP_PROFILE_FIELDS).length
+      || Object.keys(SIGNUP_PROFILE_FIELDS).some(key => typeof rawFields[key] !== 'string' || rawFields[key].length > 1000)
+      || normalizeInstructorLessonPhone(rawFields.memberPhone) !== phone
+      || normalizeInstructorLessonName(rawFields.memberName) !== name) throw new Error('가입서 작성 원문과 검증 정보 불일치');
+    profile.rawFields = { ...rawFields };
+    profile.orderContactBinding = { ...orderContactBinding };
+  }
   for (const key of ['affiliation', 'career', 'address']) {
     const value = text(fields[key]);
     if (value.length > 1000) throw new Error('가입서 작성내용 길이 확인필요');
     profile[key] = value;
   }
+  if (profile.rawFields && (normalizeSignupBirthDate(profile.rawFields.birthDate, now) !== profile.birthDate
+    || ['affiliation', 'career', 'address'].some(key => text(profile.rawFields[key]) !== profile[key]))) {
+    throw new Error('가입서 작성 원문과 검증 정보 불일치');
+  }
   return profile;
 }
 
-export async function readCompletedSignupProfile(page, job, evidence) {
+export async function readCompletedSignupProfile(page, job, evidence, { verifyOrderContact } = {}) {
   const url = new URL(evidence.href, 'https://www.eformsign.com');
   if (!evidence.found || !/^(?:완료|Completed)\s/i.test(evidence.text) || evidence.documentId !== job.documentId
     || url.origin !== 'https://www.eformsign.com' || url.pathname !== '/eform/document/view_service.html'
@@ -60,11 +76,12 @@ export async function readCompletedSignupProfile(page, job, evidence) {
   const frame = page.frameLocator('#viewer_frame');
   await frame.locator(`#${SIGNUP_PROFILE_FIELDS.memberName}`).waitFor({ state: 'visible', timeout: 30000 });
   const viewer = await (await page.locator('#viewer_frame').elementHandle()).contentFrame();
-  await viewer.waitForFunction(({ ids, name, phone }) => {
+  await viewer.waitForFunction(({ ids, name, phone, allowOrderContact }) => {
     const normalize = value => String(value || '').replace(/[\s-]/g, '');
     return normalize(document.getElementById(ids.memberName)?.value) === normalize(name)
-      && normalize(document.getElementById(ids.memberPhone)?.value) === normalize(phone);
-  }, { ids: SIGNUP_PROFILE_FIELDS, name: job.memberName, phone: job.memberPhone }, { timeout: 20000 });
+      && (allowOrderContact ? Boolean(normalize(document.getElementById(ids.memberPhone)?.value))
+        : normalize(document.getElementById(ids.memberPhone)?.value) === normalize(phone));
+  }, { ids: SIGNUP_PROFILE_FIELDS, name: job.memberName, phone: job.memberPhone, allowOrderContact: typeof verifyOrderContact === 'function' }, { timeout: 20000 });
   const fields = {};
   for (const [key, id] of Object.entries(SIGNUP_PROFILE_FIELDS)) {
     const field = frame.locator(`#${id}`);
@@ -72,7 +89,15 @@ export async function readCompletedSignupProfile(page, job, evidence) {
     if (await field.count() !== 1) throw new Error('가입서 입력 항목 중복 확인필요');
     fields[key] = await field.inputValue();
   }
-  return parseSignupProfile(fields, job, evidence.documentId);
+  const mismatch = normalizeInstructorLessonPhone(fields.memberPhone) !== normalizeInstructorLessonPhone(job.memberPhone);
+  const binding = mismatch && typeof verifyOrderContact === 'function' ? await verifyOrderContact(fields) : undefined;
+  return parseSignupProfile(fields, job, evidence.documentId, new Date(), binding);
+}
+
+export function canonicalSignupPhone(profile, source, registration) {
+  return profile?.orderContactBinding
+    ? assertOrderContactBinding(profile.orderContactBinding, source, profile.memberPhone, registration)
+    : normalizeInstructorLessonPhone(profile?.memberPhone);
 }
 
 export function signupProfileMemo(profile) {
@@ -95,6 +120,7 @@ export function birthDateWriteDecision(current, expected) {
 
 export function assertSignupProfileSource(job, source, registration) {
   const profile = source?.submittedProfile;
+  const canonicalPhone = canonicalSignupPhone(profile, source, registration);
   if (!profile || source.status !== 'done' || profile.version !== SIGNUP_PROFILE_VERSION
     || profile.documentId !== source.documentId
     || profile.templateId !== INSTRUCTOR_MEMBER_EFORMSIGN_TEMPLATE_ID
@@ -108,7 +134,7 @@ export function assertSignupProfileSource(job, source, registration) {
     || String(job.studiomateMemberId) !== String(source.studiomateMemberId)
     || String(registration?.studiomateMemberId || registration?.evidence?.studiomateMemberId || '') !== String(source.studiomateMemberId)
     || normalizeInstructorLessonPhone(job.memberPhone) !== normalizeInstructorLessonPhone(source.memberPhone)
-    || normalizeInstructorLessonPhone(registration?.memberPhone) !== profile.memberPhone
+    || normalizeInstructorLessonPhone(registration?.memberPhone) !== canonicalPhone
     || normalizeInstructorLessonName(job.memberName) !== normalizeInstructorLessonName(source.memberName)
     || normalizeInstructorLessonName(registration?.memberName) !== profile.memberName
     || !job.content?.endsWith(signupProfileMemo(profile))) throw new Error('가입서 정보 반영 원천 불일치: 확인필요');
