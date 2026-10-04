@@ -1,0 +1,42 @@
+<!doctype html>
+<html lang="ko">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width,initial-scale=1">
+<title>조회 오류 알림 개선 | ARCHIVE PILATES</title>
+<style>
+*{box-sizing:border-box}body{margin:0;background:#fff;color:#202124;font:16px/1.7 system-ui,sans-serif}
+main{max-width:850px;margin:auto;padding:32px 20px}h1{font-size:28px;line-height:1.3}h2{font-size:20px;margin-top:32px}
+p,li{overflow-wrap:anywhere}li{margin:8px 0}.status{color:#a5242c;font-weight:700}code{font-size:14px}
+section{border-top:1px solid #ddd;margin-top:24px;padding-top:8px}small{color:#666}
+</style>
+</head>
+<body><main>
+<small>ARCHIVE PILATES · 2026-10-05</small>
+<h1>추천인 적립·강사레슨 자동접수 오류 알림 개선</h1>
+<p class="status">구현·로컬 검증 완료 / 운영 배포·푸시·실제 메일 검증 대기</p>
+<section><h2>변경 규칙</h2><ul>
+<li>회원·주문 원본 조회의 확인된 네트워크 오류, HTTP 429·5xx는 3회 연속 실패할 때 알립니다. 첫 1~2회는 실행 기록만 남깁니다.</li>
+<li>인증·권한 오류, 원본 불일치, 적립 결과 불명, 장부 오류, 접수 실패는 즉시 알립니다. 포괄적인 원인 미상 오류를 일시 오류로 간주하지 않습니다.</li>
+<li>실패 알림을 전달했던 경우에만 정상 전체 실행 후 복구 알림을 1회 보냅니다. 수동 단건 조회, 비활성·생략 실행, 남아 있는 주문 확인필요 건은 전체 복구로 판단하지 않습니다.</li>
+<li>계속되는 동일 오류 알림은 하루에 한 번만 반복합니다. 메일 전달이 불명확하면 고정 Message-ID로 보낸편지함을 대조하며, 라벨 처리 실패는 재발송 사유가 아닙니다.</li>
+<li>적립 금액·대상, 수강권 발급·접수 조건, 중복 방지, 자동화 주기는 변경하지 않습니다. 복구 알림은 과거 누락 건의 자동 보상·소급 완료를 의미하지 않습니다.</li>
+</ul></section>
+<section><h2>검증 결과</h2><ul>
+<li>조회 알림·적립·주문 접수·시스템 점검 관련 13개 테스트 파일, 총 302개 테스트 통과.</li>
+<li>3회 임계값, 정상화 후 횟수 초기화, 재시작 후 상태 유지, 뒤늦은 실행 결과 무시, 실패·복구 알림 중복 방지, 메일 전달 불명 후 복구 전 대조를 검증했습니다.</li>
+<li>실제 적립·접수 실패를 단발성 조회 오류로 숨기지 않는 회귀 검증과 실행 스크립트 구문 검사, git diff --check를 통과했습니다.</li>
+<li>초기 확장 테스트는 새 worktree의 TypeScript 의존성 부재로 중단됐습니다. 기존 runtime 의존성을 임시 연결해 전체 통과 후 연결을 제거했습니다. 제품 코드 실패가 아니었습니다.</li>
+<li>archive-pilates / archive-codex-operator로 Codex 점검 대기열을 읽기 전용 조회했으며 미해결 0건입니다.</li>
+</ul></section>
+<section><h2>변경 범위와 운영 원천</h2>
+<p>전용 worktree: <code>/Users/archivepilates/codex-worktrees/transient-query-alerts</code><br>
+브랜치: <code>codex/mini/transient-query-alerts</code></p>
+<p>알림 원천은 각 정기 실행의 결과와 비공개 <code>query-alert-state.json</code>입니다. 외부 적립·접수의 원천은 기존 아임웹 회원·주문 및 처리 장부를 그대로 사용합니다. 이 알림 상태에서 회원 대상 작업을 생성하지 않습니다.</p>
+<p>추천인 실행기, 홈페이지 주문 조회·접수 실행기, 시스템 점검의 유예 판정, 공통 메일 발송 보조 코드와 테스트, CORE 운영규칙 소스를 변경했습니다. 기존 사용자 변경은 포함하지 않았습니다.</p>
+</section>
+<section><h2>남은 단계</h2>
+<p>배포 승인 후 최신 main과 충돌 확인, 범위 한정 커밋 승격·푸시, Mac mini runtime 업데이트, CORE 운영규칙 Hosting 반영과 운영 검증이 필요합니다. Firebase Functions 자체의 기능 변경은 없습니다.</p>
+<p>이번 검증에서는 실제 적립·접수·회원 메시지·운영 메일을 보내지 않았습니다. 브라우저를 열지 않았으며 테스트용 임시 상태와 잠금은 정리했습니다.</p>
+</section>
+</main></body></html>

@@ -6,14 +6,18 @@ import { IMWEB_LESSON_POLICY as policy, assessInstructorOrder, assertSamePaidOrd
 import { normalizeInstructorLessonPhone } from './instructor-lesson-registration-contract.mjs';
 import { recordAutomationStatus } from './archive-core-ops-logging.mjs';
 import { acquireStudioMateBrowserLock } from './studiomate-browser-lock.mjs';
+import { imwebRequestFailure, isTransientReadFailure } from './imweb-read-failure.mjs';
+import { observeAutomationRun, sendAutomationHealthEmail } from './automation-failure-notifications.mjs';
 
-export function imwebOrderRead(args) {
+const emailContext = { area: '강사레슨', title: '홈페이지 자동접수', link: 'https://core.archivepilates.com/instructor-lessons/' };
+
+export function imwebOrderRead(args, { execute = execFileSync } = {}) {
   try {
-    const result = JSON.parse(execFileSync(process.env.IMWEB_CLI_BIN || path.join(os.homedir(), '.local/bin/imweb'),
+    const result = JSON.parse(execute(process.env.IMWEB_CLI_BIN || path.join(os.homedir(), '.local/bin/imweb'),
       ['--profile', 'default', '--output', 'json', ...args], { encoding: 'utf8', timeout: 45000, maxBuffer: 8 * 1024 * 1024, stdio: ['ignore', 'pipe', 'pipe'] }));
-    if (result.statusCode && result.statusCode !== 200) throw new Error();
+    if (result.statusCode && result.statusCode !== 200) throw Object.assign(new Error(), { statusCode: result.statusCode });
     return result;
-  } catch { throw new Error('아임웹 주문 조회 실패: 인증·네트워크 확인필요 (자동 쓰기 재시도 없음)'); }
+  } catch (error) { throw imwebRequestFailure(error, { readOnly: args[0] === 'order' && ['get', 'list'].includes(args[1]) }); }
 }
 export function verifyImwebSite(read = imwebOrderRead) {
   const c = read(['config', 'context']);
@@ -212,6 +216,8 @@ export async function importInstructorOrder(db, order, { apply = false, now = ne
 }
 
 export async function syncImwebInstructorOrders(db, { apply = false, orderNo = '', force = false, read = imwebOrderRead,
+  recordStatus = recordAutomationStatus, attention = notifyAttention,
+  notify = event => sendAutomationHealthEmail(emailContext, event),
   stateDir = path.join(os.homedir(), 'ArchiveIN/automation/imweb-instructor-orders') } = {}) {
   if (!apply) {
     const orders = orderNo ? [readImwebOrder(orderNo, read)] : readRecentImwebOrders(read);
@@ -255,12 +261,22 @@ export async function syncImwebInstructorOrders(db, { apply = false, orderNo = '
     const next = { attemptedAt: Date.now(), fingerprints, watch, issues, result };
     await writeFile(`${file}.tmp`, JSON.stringify(next), { mode: 0o600 });
     await rename(`${file}.tmp`, file);
-    await recordAutomationStatus(db, { automationId: 'imweb-instructor-lesson-orders', title: '홈페이지 강사레슨 자동접수', ownerArea: 'instructor-lessons', status: result.ok ? 'healthy' : 'warning', lastResult: `최근 30일 주문 ${orders.length}건 확인 / 변경 처리 ${items.length}건`, warnings: Object.entries(issues).map(([no, reason]) => `${no}: ${reason}`) });
-    if (!result.ok) await notifyAttention(stateDir, Object.entries(issues).map(([no, reason]) => `${no}: ${reason}`).join('\n'));
+    await recordStatus(db, { automationId: 'imweb-instructor-lesson-orders', title: '홈페이지 강사레슨 자동접수', ownerArea: 'instructor-lessons', status: result.ok ? 'healthy' : 'warning', lastResult: `최근 30일 주문 ${orders.length}건 확인 / 변경 처리 ${items.length}건`, warnings: Object.entries(issues).map(([no, reason]) => `${no}: ${reason}`) });
+    if (!orderNo) await observeAutomationRun(stateDir, { ok: result.ok, blocked: !result.ok }, notify);
+    if (!result.ok) await attention(stateDir, Object.entries(issues).map(([no, reason]) => `${no}: ${reason}`).join('\n'));
     return result;
   } catch (error) {
-    await recordAutomationStatus(db, { automationId: 'imweb-instructor-lesson-orders', title: '홈페이지 강사레슨 자동접수', ownerArea: 'instructor', status: 'failed', lastResult: String(error.message).slice(0, 300) });
-    await notifyAttention(stateDir, String(error.message));
+    let alert;
+    try {
+      // A one-order manual check cannot clear or count toward the scheduled scan incident.
+      if (!orderNo) alert = await observeAutomationRun(stateDir, { ok: false,
+        transient: isTransientReadFailure(error), errorCode: error.code || 'ORDER_INTAKE_FAILED' }, notify);
+      else await attention(stateDir, String(error.message));
+    } catch { console.error('홈페이지 자동접수 오류 알림 상태 저장 실패'); }
+    if (alert) error.queryAlertObservedAt = alert.observedAt;
+    try {
+      await recordStatus(db, { automationId: 'imweb-instructor-lesson-orders', title: '홈페이지 강사레슨 자동접수', ownerArea: 'instructor', status: 'failed', lastResult: `${String(error.message).slice(0, 240)}${alert ? ` / 연속 실패 ${alert.consecutiveFailures}회` : ''}` });
+    } catch { console.error('홈페이지 자동접수 관제 상태 저장 실패'); }
     throw error;
   } finally { await release(); }
 }

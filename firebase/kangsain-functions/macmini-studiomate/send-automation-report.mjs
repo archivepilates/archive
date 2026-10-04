@@ -2,6 +2,7 @@
 import { Buffer } from "node:buffer";
 import crypto from "node:crypto";
 import fs from "node:fs";
+import { deliverAutomationReport, reportMessageId } from "./automation-report-delivery.mjs";
 
 const REPORT_LABEL = process.env.AUTOMATION_REPORT_LABEL || "자동화 완료보고";
 const FROM = process.env.AUTOMATION_REPORT_FROM || "home@archivepilates.com";
@@ -11,14 +12,18 @@ const SERVICE_ACCOUNT_PATH =
   "/Users/archivepilates/ArchiveIN/secrets/google/archive-codex-operator.json";
 const subject = process.env.AUTOMATION_REPORT_SUBJECT;
 const body = process.env.AUTOMATION_REPORT_BODY;
+const messageId = reportMessageId(process.env.AUTOMATION_REPORT_EVENT_ID);
 
 if (!subject || !body) throw new Error("AUTOMATION_REPORT_SUBJECT and AUTOMATION_REPORT_BODY are required.");
 
 const accessToken = await getServiceAccountAccessToken();
-const labelId = await ensureLabel(REPORT_LABEL);
+let labelId;
+try { labelId = await ensureLabel(REPORT_LABEL); }
+catch { console.error('Automation report label unavailable; delivery proceeds independently.'); }
 const message = [
   `From: ${FROM}`,
   `To: ${TO}`,
+  ...(messageId ? [`Message-ID: <${messageId}>`] : []),
   `Subject: =?UTF-8?B?${Buffer.from(subject, "utf8").toString("base64")}?=`,
   "MIME-Version: 1.0",
   "Content-Type: text/plain; charset=UTF-8",
@@ -27,19 +32,9 @@ const message = [
   Buffer.from(body, "utf8").toString("base64"),
 ].join("\r\n");
 
-const sent = await gmailFetch("https://gmail.googleapis.com/gmail/v1/users/me/messages/send", {
-  method: "POST",
-  body: JSON.stringify({ raw: base64Url(message) }),
-});
-
-if (labelId && sent.id) {
-  await gmailFetch(`https://gmail.googleapis.com/gmail/v1/users/me/messages/${sent.id}/modify`, {
-    method: "POST",
-    body: JSON.stringify({ addLabelIds: [labelId] }),
-  });
-}
-
-console.log(JSON.stringify({ ok: true, messageId: sent.id, threadId: sent.threadId, label: REPORT_LABEL }, null, 2));
+const sent = await deliverAutomationReport({ gmailFetch, raw: base64Url(message), messageId, labelId,
+  reconcileOnly: process.env.AUTOMATION_REPORT_RECONCILE_ONLY === '1' });
+console.log(JSON.stringify({ ok: true, ...sent, label: REPORT_LABEL }, null, 2));
 
 async function getServiceAccountAccessToken() {
   if (!fs.existsSync(SERVICE_ACCOUNT_PATH)) throw new Error(`Missing service account key at ${SERVICE_ACCOUNT_PATH}`);

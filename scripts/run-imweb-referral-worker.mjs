@@ -296,7 +296,8 @@ export async function main(argv = [], dependencies = {}) {
   let failureCode = 'CONFIG_FAILED';
   const fail = error => {
     report.state = 'failed';
-    report.errorCode = error instanceof RunnerError ? error.code : failureCode;
+    report.errorCode = error instanceof RunnerError ? error.code
+      : failureCode === 'WORKER_FAILED' && error?.code === 'IMWEB_TRANSIENT_READ_FAILED' ? error.code : failureCode;
   };
   try {
     report.startedAt = isoTime(clock());

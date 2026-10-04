@@ -16,6 +16,17 @@ const START = '2026-09-15T00:00:00+09:00';
 const runnerURL = new URL('../run-imweb-referral-worker.mjs', import.meta.url);
 const PRIVATE = 'private-provider-error person@example.test token=secret';
 const forbidden = () => { throw new Error('Unexpected provider or ledger access'); };
+test('transient member scan classification survives worker/runner without awards', async t => {
+  const f = fixture(t);
+  const result = await f.run(['--apply'], { workerDependencies: {
+    ...f.dependencies.workerDependencies,
+    readReferralMembers: () => { throw Object.assign(new Error('private provider output'), { code: 'IMWEB_TRANSIENT_READ_FAILED' }); },
+    preparePointAward: forbidden,
+  } });
+  assert.equal(result.exitCode, 1);
+  assert.equal(result.errorCode, 'IMWEB_TRANSIENT_READ_FAILED');
+  assert.equal(JSON.stringify(result).includes('private provider output'), false);
+});
 const empty = { disabled: 0, pages: 1, members: 0, pairs: 0, filtered: 0, simulated: 0,
   reserved: 0, rejected: 0, duplicates: 0, prepared: 0, claimed: 0, sendAttempts: 0,
   paid: 0, reconciled: 0, held: 0, unresolved: 0, failures: 0 };

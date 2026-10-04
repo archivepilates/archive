@@ -81,7 +81,11 @@ export async function runReferralWorker(config = {}, dependencies = {}) {
       return { member, inviter };
     });
     summary.pages = scan.pages; summary.members = members.length; summary.pairs = pairs.length;
-  } catch { throw new Error('Complete unambiguous canonical referral scan required; no awards attempted'); }
+  } catch (error) {
+    throw Object.assign(new Error('Complete unambiguous canonical referral scan required; no awards attempted'), {
+      code: error?.code === 'IMWEB_TRANSIENT_READ_FAILED' ? error.code : undefined,
+    });
+  }
 
   const seen = new Set();
   const counterparts = new Map(apply && ledger.counterpartRecords

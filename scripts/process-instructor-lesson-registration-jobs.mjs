@@ -73,7 +73,8 @@ if (apply) await recoverStaleJobs();
 if (apply && !config.jobId) {
   try { summary.websiteOrders = await syncImwebInstructorOrders(db, { apply: true }); }
   catch (error) {
-    summary.websiteOrders = { ok: false, error: error.message };
+    summary.websiteOrders = { ok: false, error: error.message, errorCode: error.code || 'ORDER_INTAKE_FAILED',
+      queryAlertObservedAt: error.queryAlertObservedAt || null };
     console.error(`홈페이지 강사레슨 접수 확인필요: ${error.message}`);
   }
 }

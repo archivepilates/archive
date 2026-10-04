@@ -1,23 +1,24 @@
 import { execFileSync } from 'node:child_process';
 import { referralKey, awardReason } from './imweb-referral-policy.mjs';
 import { readCanonicalPointLogs } from './imweb-referral-point-logs.mjs';
+import { imwebRequestFailure } from './imweb-read-failure.mjs';
 
 export const IMWEB_REFERRAL_SCOPE = Object.freeze({
   siteCode: 'S20260516852c71a014d08',
   unitCode: 'u2026051698c99ea234719',
 });
 
-export function imwebJson(args) {
+export function imwebJson(args, { execute = execFileSync } = {}) {
   try {
-    const result = JSON.parse(execFileSync('imweb', ['--profile', 'default', '--output', 'json', ...args], {
+    const result = JSON.parse(execute('imweb', ['--profile', 'default', '--output', 'json', ...args], {
       encoding: 'utf8', timeout: 45000, maxBuffer: 8 * 1024 * 1024,
       stdio: ['ignore', 'pipe', 'pipe'],
     }));
-    if (result.statusCode && result.statusCode !== 200) throw new Error();
+    if (result.statusCode && result.statusCode !== 200) throw Object.assign(new Error(), { statusCode: result.statusCode });
     return result;
-  } catch {
+  } catch (error) {
     // Provider responses can contain member identifiers and credentials.
-    throw new Error('Imweb request failed; no automatic write retry is allowed.');
+    throw imwebRequestFailure(error, { readOnly: args[0] === 'member' && args[1] === 'list' });
   }
 }
 

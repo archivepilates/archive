@@ -5,6 +5,7 @@ import { createRequire } from "node:module";
 import os from "node:os";
 import path from "node:path";
 import { recordAutomationStatus } from "./lib/archive-core-ops-logging.mjs";
+import { ALERT_STATE_FILE, deferReferralHealthFinding, deferInstructorOrderHealthFinding } from "./lib/automation-failure-notifications.mjs";
 import { shouldApplyOperationalDataPurge } from "./lib/operational-data-retention-policy.mjs";
 import { isActionableAlimtalkFailure } from "./lib/system-health-alimtalk.mjs";
 import { monthlySettlementIndexPath } from "./lib/system-health-schedule-evidence.mjs";
@@ -555,7 +556,24 @@ async function checkLaunchAgents() {
       });
     }
 
-    if (executionFailed) {
+    let deferredQueryFailure = false;
+    if (executionFailed && item.id === "imweb-referral-rewards" && !stale && !missingEvidence) {
+      try {
+        deferredQueryFailure = deferReferralHealthFinding(
+          JSON.parse(readFileSync(item.resultFile, "utf8")),
+          JSON.parse(readFileSync(path.join(path.dirname(item.resultFile), ALERT_STATE_FILE), "utf8")),
+        );
+      } catch { /* Missing or inconsistent alert evidence must not hide a failure. */ }
+    }
+    if (executionFailed && item.id === "instructor-lesson-registration-queue" && !stale && !missingEvidence) {
+      try {
+        deferredQueryFailure = deferInstructorOrderHealthFinding(
+          JSON.parse(readFileSync(item.resultFile, "utf8")),
+          JSON.parse(readFileSync(path.join(HOME, "ArchiveIN/automation/imweb-instructor-orders", ALERT_STATE_FILE), "utf8")),
+        );
+      } catch { /* Actual registration failures remain immediately actionable. */ }
+    }
+    if (executionFailed && !deferredQueryFailure) {
       addFinding({
         checkKey: checkKey ? `${checkKey}:execution` : "",
         area: item.area,
