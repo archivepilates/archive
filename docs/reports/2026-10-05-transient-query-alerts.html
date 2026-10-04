@@ -14,7 +14,7 @@ section{border-top:1px solid #ddd;margin-top:24px;padding-top:8px}small{color:#6
 <body><main>
 <small>ARCHIVE PILATES · 2026-10-05</small>
 <h1>추천인 적립·강사레슨 자동접수 오류 알림 개선</h1>
-<p class="status">구현·로컬 검증 완료 / 운영 배포·푸시·실제 메일 검증 대기</p>
+<p class="status">운영 배포·main 푸시·라이브 검증 완료 / 실제 장애·복구 메일 검증은 미실시</p>
 <section><h2>변경 규칙</h2><ul>
 <li>회원·주문 원본 조회의 확인된 네트워크 오류, HTTP 429·5xx는 3회 연속 실패할 때 알립니다. 첫 1~2회는 실행 기록만 남깁니다.</li>
 <li>인증·권한 오류, 원본 불일치, 적립 결과 불명, 장부 오류, 접수 실패는 즉시 알립니다. 포괄적인 원인 미상 오류를 일시 오류로 간주하지 않습니다.</li>
@@ -28,6 +28,9 @@ section{border-top:1px solid #ddd;margin-top:24px;padding-top:8px}small{color:#6
 <li>실제 적립·접수 실패를 단발성 조회 오류로 숨기지 않는 회귀 검증과 실행 스크립트 구문 검사, git diff --check를 통과했습니다.</li>
 <li>초기 확장 테스트는 새 worktree의 TypeScript 의존성 부재로 중단됐습니다. 기존 runtime 의존성을 임시 연결해 전체 통과 후 연결을 제거했습니다. 제품 코드 실패가 아니었습니다.</li>
 <li>archive-pilates / archive-codex-operator로 Codex 점검 대기열을 읽기 전용 조회했으며 미해결 0건입니다.</li>
+<li>로컬 및 라이브 화면 검사 각각 90건, CORE 배포 canary 10건을 통과했습니다. 모바일·태블릿·데스크톱 화면을 확인했습니다.</li>
+<li>Hosting 보호 검사, 롤백 방지 검사, 수강권 가격 검증을 통과했습니다. GitHub <a href="https://github.com/archivepilates/archive/actions/runs/37222908592">ARCHIVE IN Functions Affected Check</a>도 성공했습니다.</li>
+<li>Mac mini runtime은 배포 커밋과 실행 코드가 일치합니다. 추천인 정기 실행은 2026-10-05 03:07 KST에 success, 연속 실패 0회로 기록됐습니다. 강사레슨 주문 조회의 새 알림 상태는 확인 시점에 아직 생성되지 않았습니다.</li>
 </ul></section>
 <section><h2>변경 범위와 운영 원천</h2>
 <p>전용 worktree: <code>/Users/archivepilates/codex-worktrees/transient-query-alerts</code><br>
@@ -35,8 +38,10 @@ section{border-top:1px solid #ddd;margin-top:24px;padding-top:8px}small{color:#6
 <p>알림 원천은 각 정기 실행의 결과와 비공개 <code>query-alert-state.json</code>입니다. 외부 적립·접수의 원천은 기존 아임웹 회원·주문 및 처리 장부를 그대로 사용합니다. 이 알림 상태에서 회원 대상 작업을 생성하지 않습니다.</p>
 <p>추천인 실행기, 홈페이지 주문 조회·접수 실행기, 시스템 점검의 유예 판정, 공통 메일 발송 보조 코드와 테스트, CORE 운영규칙 소스를 변경했습니다. 기존 사용자 변경은 포함하지 않았습니다.</p>
 </section>
-<section><h2>남은 단계</h2>
-<p>배포 승인 후 최신 main과 충돌 확인, 범위 한정 커밋 승격·푸시, Mac mini runtime 업데이트, CORE 운영규칙 Hosting 반영과 운영 검증이 필요합니다. Firebase Functions 자체의 기능 변경은 없습니다.</p>
-<p>이번 검증에서는 실제 적립·접수·회원 메시지·운영 메일을 보내지 않았습니다. 브라우저를 열지 않았으며 테스트용 임시 상태와 잠금은 정리했습니다.</p>
+<section><h2>배포 결과</h2>
+<p>기능 커밋 <code>d7d7cb7e</code>, 운영 배포 커밋 <code>4a8a1a40</code>을 최신 main으로 승격하고 GitHub에 푸시했습니다. Mac mini runtime도 같은 버전으로 갱신했습니다. 이 보고서의 후속 기록 커밋은 실행 코드를 변경하지 않습니다.</p>
+<p>Firebase 프로젝트 <code>archive-pilates</code>에서 <code>archive-codex-operator</code> 서비스 계정으로 Hosting <code>archive-pilates</code> 및 <code>archive-pilates-core</code>만 배포했습니다. Functions·Firestore 규칙·색인은 배포하지 않았으며 실행 주기는 유지했습니다.</p>
+<p><a href="https://core.archivepilates.com/rules/">CORE 운영규칙</a>과 <a href="https://archive-pilates.web.app/core/rules/">web.app 호환 경로</a> 모두 HTTP 200이며 배포 소스와 정확히 일치합니다.</p>
+<p>검증 목적으로 실제 적립·접수·회원 메시지·운영 메일을 수동 실행하지 않았습니다. 실제 연속 장애와 복구 시 메일 전달은 아직 검증하지 않았으며 정상 정기 실행을 관찰합니다. 화면 검증용 브라우저와 임시 프로필은 모두 종료·정리했고 사용자 브라우저는 변경하지 않았습니다.</p>
 </section>
 </main></body></html>
