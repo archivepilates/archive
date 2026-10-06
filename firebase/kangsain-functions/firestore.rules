@@ -56,6 +56,75 @@ service cloud.firestore {
         booking.lectureStartAt <= request.time;
     }
 
+    function safeSequenceNoteId(noteId) {
+      return noteId is string && noteId.matches('^[A-Za-z0-9_-]{1,100}$');
+    }
+
+    function validSequenceNote(data) {
+      let fields = [
+        'ownerUid', 'revision', 'updatedAt', 'payload', 'title', 'teacher',
+        'equipment', 'date', 'goal', 'moveCount', 'deleted'
+      ];
+      return data.keys().hasAll(fields) && data.keys().hasOnly(fields) &&
+        data.ownerUid is string && data.ownerUid == request.auth.uid &&
+        data.revision is int && data.revision >= 1 &&
+        data.updatedAt is timestamp && data.updatedAt == request.time &&
+        data.payload is string && data.payload.size() <= 180000 &&
+        data.title is string && data.title.size() <= 70 &&
+        data.teacher is string && data.teacher.size() <= 30 &&
+        data.equipment is string && data.equipment.size() <= 35 &&
+        data.date is string && data.date.size() <= 10 &&
+        data.goal is string && data.goal.size() <= 180 &&
+        data.moveCount is int && data.moveCount >= 0 && data.moveCount <= 90 &&
+        data.deleted is bool;
+    }
+
+    function sequenceImageParentMatches(data, deleted) {
+      let parent = getAfter(/databases/$(database)/documents/sequenceNotes/$(data.noteId)).data;
+      return parent.ownerUid == request.auth.uid &&
+        parent.ownerUid == data.ownerUid && parent.deleted == deleted;
+    }
+
+    match /sequenceNotes/{noteId} {
+      allow get: if isManager() &&
+        (resource == null || resource.data.ownerUid == request.auth.uid);
+      allow list: if isManager() && resource.data.ownerUid == request.auth.uid &&
+        resource.data.deleted == false &&
+        request.query.limit != null && request.query.limit <= 100;
+      allow create: if isManager() && safeSequenceNoteId(noteId) &&
+        validSequenceNote(request.resource.data) && request.resource.data.revision == 1;
+      allow update: if isManager() && safeSequenceNoteId(noteId) &&
+        resource.data.ownerUid == request.auth.uid && resource.data.deleted == false &&
+        validSequenceNote(request.resource.data) &&
+        request.resource.data.ownerUid == resource.data.ownerUid &&
+        request.resource.data.revision == resource.data.revision + 1;
+      allow delete: if false;
+    }
+
+    match /sequenceNoteImages/{assetId} {
+      allow get: if isManager() &&
+        (resource == null || resource.data.ownerUid == request.auth.uid);
+      allow list: if isManager() && resource.data.ownerUid == request.auth.uid;
+      allow create: if isManager() &&
+        request.resource.data.keys().hasAll(['ownerUid', 'noteId', 'dataUrl']) &&
+        request.resource.data.keys().hasOnly(['ownerUid', 'noteId', 'dataUrl']) &&
+        request.resource.data.ownerUid is string &&
+        request.resource.data.ownerUid == request.auth.uid &&
+        safeSequenceNoteId(request.resource.data.noteId) &&
+        assetId.matches('^' + request.resource.data.noteId + '_[a-f0-9]{64}$') &&
+        request.resource.data.dataUrl is string &&
+        request.resource.data.dataUrl.size() <= 90000 &&
+        request.resource.data.dataUrl.matches(
+          '^data:image/jpeg;base64,/9j/([A-Za-z0-9+/]{4})*([A-Za-z0-9+/]{2}==|[A-Za-z0-9+/]{3}=)?$'
+        ) && assetId == request.resource.data.noteId + '_' +
+          hashing.sha256(request.resource.data.dataUrl).toHexString().lower() &&
+        sequenceImageParentMatches(request.resource.data, false);
+      allow update: if false;
+      allow delete: if isManager() && resource.data.ownerUid == request.auth.uid &&
+        safeSequenceNoteId(resource.data.noteId) &&
+        sequenceImageParentMatches(resource.data, true);
+    }
+
     match /studios/{studioId} {
       allow read: if signedIn();
       allow write: if false;

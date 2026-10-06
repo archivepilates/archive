@@ -14,8 +14,13 @@ const required = [
   },
   {
     file: "core/sequence/studio.html",
-    label: "offline sequence studio",
-    markers: ["archive.sequence.studio.draft.v1", "archive.sequence.studio.library.v1", "function makePDF", "font-assets", "내 시퀀스에 저장"],
+    label: "Firestore sequence studio",
+    markers: ["archiveSequenceStore", "cloudRecovery", "importLegacy", "function makePDF", "font-assets", "내 시퀀스에 저장"],
+  },
+  {
+    file: "core/assets/sequence-store.js",
+    label: "sequence note storage contract",
+    markers: ["sequenceNotes", "sequenceNoteImages", "runTransaction", "IMAGE_MAX_BYTES = 64 * 1024", "sequence/conflict", "where('deleted', '==', false)"],
   },
   {
     file: "core/index.html",

@@ -7929,6 +7929,19 @@ async function refresh() {
     if (document.querySelector("[data-auth-only-dashboard]")) {
       const sequenceStudio = document.querySelector("[data-sequence-studio]");
       if (sequenceStudio) {
+        const { createSequenceStore } = await import("./sequence-store.js");
+        if (window.archiveSequenceStore?.uid !== user.uid) sequenceStudio.removeAttribute("src");
+        window.archiveSequenceStore = createSequenceStore(runtime, user);
+        if (!state.sequenceAuthUnsubscribe) {
+          state.sequenceAuthUnsubscribe = runtime.auth.onAuthStateChanged(runtime.authClient, (currentUser) => {
+            if (currentUser?.uid === window.archiveSequenceStore?.uid) return;
+            sequenceStudio.removeAttribute("src");
+            sequenceStudio.hidden = true;
+            delete window.archiveSequenceStore;
+            showLoginGate("시퀀스 노트를 열려면 운영자 로그인이 필요합니다.");
+          });
+          window.addEventListener("pagehide", () => state.sequenceAuthUnsubscribe?.(), { once: true });
+        }
         sequenceStudio.dataset.authReady = "true";
         if (!sequenceStudio.hasAttribute("src")) sequenceStudio.src = sequenceStudio.dataset.src;
         sequenceStudio.hidden = false;
