@@ -84,6 +84,10 @@ try {
         return JSON.parse(frame.localStorage.getItem("archive.sequence.studio.draft.v1") || "{}").moves?.warm?.length === 1;
       });
       await page.reload({ waitUntil: "load" });
+      await page.waitForFunction((title) => {
+        const frame = document.querySelector("iframe").contentWindow;
+        return frame.ARCHIVE_TEST?.getState().title === title;
+      }, `시퀀스 검증 ${width}`);
       assert.equal(await studio.getByLabel("수업명", { exact: true }).inputValue(), `시퀀스 검증 ${width}`);
       await studio.getByRole("tab", { name: "02 노트 보기" }).click();
       await studio.getByRole("button", { name: "내 시퀀스에 저장", exact: true }).click();
@@ -160,6 +164,7 @@ try {
       assert.ok(conflict.message.includes("다른 창"));
       assert.equal(conflict.records, 2, "conflicting save must not replace newer library");
       await page.reload({ waitUntil: "load" });
+      await studio.getByRole("button", { name: "체어", exact: true }).waitFor();
       await studio.getByRole("tab", { name: /내 시퀀스/ }).click();
       await studio.getByRole("heading", { name: "다른 창 저장", exact: true }).waitFor();
       await page.screenshot({ path: path.join(output, `library-${width}.png`) });
