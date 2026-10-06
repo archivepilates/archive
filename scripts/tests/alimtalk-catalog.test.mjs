@@ -99,11 +99,16 @@ test("generated data never turns static approval, history, or a send into live s
 });
 
 test("filters exclude confirmed deletions consistently while preserving current templates", () => {
-  assert.equal(saved.rows.length, 32, "audit/source history remains intact");
-  assert.equal(ui.selectCatalogRows(saved).length, 23);
+  assert.equal(saved.rows.length, 33, "audit/source history plus holding sample remains intact");
+  assert.equal(ui.selectCatalogRows(saved).length, 24);
   assert.equal(ui.selectCatalogRows(saved, { scope: "known" }).length, 23);
-  assert.equal(ui.selectCatalogRows(saved, { scope: "source" }).length, 0);
-  assert.equal(ui.selectCatalogRows(saved, { implementation: "unconnected" }).length, 2);
+  assert.equal(ui.selectCatalogRows(saved, { scope: "source" }).length, 1);
+  assert.equal(ui.selectCatalogRows(saved, { implementation: "unconnected" }).length, 3);
+  const holding = saved.rows.find((row) => row.code === "KA01TP261006054728079NtSGrYdtSQH");
+  assert.equal(holding.label, "수강권 홀딩 현황 안내 v1");
+  assert.equal(holding.implementation, "unconnected");
+  assert.match(holding.targetRules[0], /일반 회원 자동발송 차단/);
+  assert.equal(holding.providerApproval.status, "UNKNOWN", "catalog is not live approval proof");
   assert.equal(ui.selectCatalogRows(saved, { implementation: "archived" }).length, 3);
   for (const row of saved.rows) {
     const visible = row.visibility.state === "visible";

@@ -2,7 +2,7 @@
 
 - Worktree: /Users/archivepilates/codex-worktrees/holding-allowance-notice
 - Branch: codex/mini/holding-allowance-notice
-- Base: origin/main 1f485993
+- Initial base: origin/main 1f485993; reviewed feature rebased onto 7fd3777e.
 - Scope: calculation, shadow planner, template creation/inspection, operating-rule source.
 - User confirmed floor rounding: floor(initial purchased duration days / 5).
 - User authorized SOLAPI template creation/inspection, not member sends.
@@ -44,3 +44,20 @@ SOLAPI creation/inspection readback at 2026-10-06T04:47:29.094Z:
 - Member sends: 0
 
 No operational source changes, browser sessions, new recurring jobs, historical sends, or source-state writes were performed by this feature task.
+
+## Approved connection and isolated test, 2026-10-06
+
+- Latest human request authorized template connection and one test to Kim Ki-hyo.
+- SOLAPI direct readback: APPROVED, exact channel / BA / IMAGE / original logo / eight variables / no buttons.
+- Production account: archive-codex-operator@archive-pilates.iam.gserviceaccount.com, project archive-pilates.
+- Synced alimtalkTemplateStates/KA01TP261006054728079NtSGrYdtSQH and settings/holdingNotice (operator_sample_only, autoSendEnabled=false, canonicalSourcePromoted=false).
+- Sent a synthetic [test] 12-week ticket example only to the registered Kim recipient, ending 8585. Total allowance 16 days, used 7, remaining 9. No StudioMate ticket, hold, payment or booking was created/changed.
+- Provider receipt: M4V20261006203146QOI3B62KARGLDDZ, group G4V20261006203146GZMLONOSWFXONYA, created 2026-10-06T11:31:46.734Z, COMPLETE / 4000 at 11:31:51.726Z.
+- Durable candidate/send: holding_notice_sample_2853e590c098400005549b3a5033d67dd08d34055b53129625a6fa9e6441b690.
+- Initial dispatcher conservatively held the accepted response because the documented send-many/detail messageList omits recipient. Fixed by independently resolving the message ID using GET /messages/v4/list. Reconciled exact recipient/template/text/eight variables and completed delivery without another POST. Reference: https://solapi.com/developers/api/messages.
+- Replay verified against live ledgers: duplicateBlocked=true, providerPostCount=0, ledger done, delivery COMPLETE/4000.
+- Candidate uses reviewed/manual_review, not the automatic queue. Synthetic content exists only in the audit ledger and provider message; there are no synthetic source documents to delete. Preserve these audit records for dedupe.
+- Read-only StudioMate holding UI confirms full intervals but exposes no stable event IDs in rendered fields. Excel status alone still cannot provide immutable original duration and complete holding history. General automatic detection/queue connection remains blocked, not complete.
+- CORE names the template in Korean and separately records sample success and automatic detection pending. Deploy scope is CORE Hosting only; no Functions or source schema rollout.
+- Verification: 181 focused calculator, dispatcher/reconciliation and catalog tests passed; CORE Hosting validator and data-source policy validator passed; affected Functions codebases empty; whitespace check passed.
+- Existing approval heartbeat was updated, not duplicated. It records the completed test and forbids another test even on a later date; its remaining purpose is verified real-source integration.

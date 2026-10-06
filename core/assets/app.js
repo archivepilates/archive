@@ -13,6 +13,7 @@ if (templateCatalogHost) {
 }
 
 const ALIMTALK_TEMPLATE_LABELS_BY_CODE = Object.freeze({
+  KA01TP261006054728079NtSGrYdtSQH: "수강권 홀딩 현황 안내 v1",
   KA01TP260514145047261araXgWLVFRs: "그룹 기간권 잔여기간 안내 v3",
   KA01TP260514145047393VpTbcCZKkCV: "그룹 횟수권 잔여횟수 안내 v3",
   KA01TP260514152235608d9icGOBotnV: "프라이빗 횟수권 잔여횟수 안내 v1",

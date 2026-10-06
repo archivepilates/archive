@@ -1,11 +1,11 @@
 {
   "schemaVersion": 1,
-  "policyFingerprint": "b4d781b9221e359d4fbbb923c86b4574fc22fdefbfd44fa78d2809dd96c005fc",
+  "policyFingerprint": "e9b50943e3d9a3e1f8ca13867232e31b468ef1a5d9e2e1cdf5ae5a91b6e90868",
   "sourceMode": "repository_defaults_no_environment_or_live_reads",
   "coverage": {
     "observedAt": "2026-09-30T06:41:16.973Z",
     "knownProviderCount": 23,
-    "sourceOnlyCount": 9,
+    "sourceOnlyCount": 10,
     "note": "Known-provider coverage only; no current approval or content evidence"
   },
   "deployment": {
@@ -14,7 +14,7 @@
   "sourceFingerprints": [
     {
       "path": "core/assets/app.js",
-      "sha256": "ab0ec2c000546ceadd248d62607c1d5bbbee3391fce6812853f82441825c359c"
+      "sha256": "8f3cba33c472781b1109d1512dc9b4c5e6965c13b997c6ae790d054784d9b9ff"
     },
     {
       "path": "firebase/kangsain-functions/functions/src/alimtalk/approvalGate.ts",
@@ -118,7 +118,7 @@
     },
     {
       "path": "scripts/lib/alimtalk-catalog-metadata.mjs",
-      "sha256": "9b29000ff087d10d42f7501330a3f8289249c77371da5651c487661bc54ef6d5"
+      "sha256": "bd7ae530a21b2b9345b8e1dfda5c882e8f09cce328166afd51ecaa8d47138d18"
     },
     {
       "path": "scripts/lib/alimtalk-catalog-source.mjs",
@@ -1849,6 +1849,46 @@
         "checkedAt": "2026-09-30T12:13:51.489Z",
         "httpStatus": 404,
         "errorCode": "TemplateNotFound"
+      }
+    },
+    {
+      "id": "KA01TP261006054728079NtSGrYdtSQH",
+      "type": null,
+      "code": "KA01TP261006054728079NtSGrYdtSQH",
+      "label": "수강권 홀딩 현황 안내 v1",
+      "providerInventoryName": null,
+      "knownProvider": false,
+      "implementation": "unconnected",
+      "sourceConfiguredStatus": null,
+      "purpose": "홀딩 가능·사용·잔여기간 안내",
+      "purposeId": "unconnected",
+      "timing": "운영자 테스트 요청 시 · 실제 홀딩 원천 연결 대기",
+      "schedule": null,
+      "targetRules": [
+        "김기효 승인 단건 합성 테스트만 연결 · 일반 회원 자동발송 차단"
+      ],
+      "policy": null,
+      "factNotice": null,
+      "careGroup": false,
+      "providerApproval": {
+        "status": "UNKNOWN",
+        "checkedAt": null,
+        "evidence": "not_read_in_this_catalog"
+      },
+      "deployment": {
+        "status": "UNVERIFIED",
+        "checkedAt": null
+      },
+      "sources": [
+        {
+          "path": "core/assets/app.js",
+          "symbol": "ALIMTALK_TEMPLATE_LABELS_BY_CODE",
+          "line": 15
+        }
+      ],
+      "visibility": {
+        "state": "visible",
+        "basis": "not_confirmed_deleted"
       }
     },
     {
