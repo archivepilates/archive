@@ -12,6 +12,25 @@ const key = JSON.parse(await fs.readFile(process.env.GOOGLE_APPLICATION_CREDENTI
 if (key.client_email !== 'archive-codex-operator@archive-pilates.iam.gserviceaccount.com') throw Error('Unexpected service account.');
 const app = admin.initializeApp({ credential: admin.credential.cert(key), projectId: 'archive-pilates' }, 'sequence-live-test');
 const db = app.firestore();
+// Hosting releases do not wait for new composite indexes to finish provisioning.
+// Check only synthetic ownership before creating the temporary Auth identity.
+try {
+  const deadline = Date.now() + 300000;
+  for (;;) {
+    try {
+      await db.collection('sequenceNotes').where('ownerUid', '==', 'codex-sequence-index-readiness').where('deleted', '==', false).orderBy('updatedAt', 'desc').limit(1).get();
+      await db.collection('sequenceNoteImages').where('ownerUid', '==', 'codex-sequence-index-readiness').where('noteId', '==', 'no-note').get();
+      break;
+    } catch (error) {
+      if (error.code !== 9 || !/index/i.test(error.message) || Date.now() >= deadline) throw error;
+      console.log('Sequence indexes still provisioning; waiting 30 seconds.');
+      await new Promise((resolve) => setTimeout(resolve, 30000));
+    }
+  }
+} catch (error) {
+  await app.delete();
+  throw error;
+}
 const testUid = `codex-sequence-qa-${Date.now()}`;
 const base = process.env.ARCHIVE_CORE_BASE_URL || 'https://core.archivepilates.com';
 let browser;
@@ -24,22 +43,27 @@ try {
   async function open(context) {
     const page = await context.newPage();
     await page.goto(`${base}/sequence/`);
-    await page.waitForFunction(async () => {
-      const { getApps } = await import('https://www.gstatic.com/firebasejs/10.14.1/firebase-app.js');
-      return getApps().length > 0;
-    });
+    await page.waitForFunction(() => window.KANGSAIN_FIREBASE_CONFIG?.projectId === 'archive-pilates');
     await page.evaluate(async (customToken) => {
       const { getAuth, signInWithCustomToken } = await import('https://www.gstatic.com/firebasejs/10.14.1/firebase-auth.js');
-      const { getApps } = await import('https://www.gstatic.com/firebasejs/10.14.1/firebase-app.js');
-      // Wait for the normal CORE bootstrap rather than creating another app.
-      if (!getApps().length) throw Error('CORE Firebase app is not ready.');
-      await signInWithCustomToken(getAuth(getApps()[0]), customToken);
+      const { getApps, initializeApp } = await import('https://www.gstatic.com/firebasejs/10.14.1/firebase-app.js');
+      // Reuse the default app or initialize the exact public CORE config.
+      const firebaseApp = getApps()[0] || initializeApp(window.KANGSAIN_FIREBASE_CONFIG);
+      await signInWithCustomToken(getAuth(firebaseApp), customToken);
     }, token);
     await page.reload();
-    await page.waitForFunction(() => {
-      const frame = document.querySelector('iframe')?.contentWindow;
-      return frame?.ARCHIVE_TEST && !frame.document.querySelector('#title').disabled;
-    });
+    try {
+      await page.waitForFunction(() => {
+        const frame = document.querySelector('iframe')?.contentWindow;
+        return frame?.ARCHIVE_TEST && !frame.document.querySelector('#title').disabled;
+      });
+    } catch (error) {
+      const diagnostic = await page.evaluate(() => {
+        const frame = document.querySelector('iframe')?.contentDocument;
+        return { frame: !!frame, status: frame?.querySelector('#saveStatus')?.textContent, notice: frame?.querySelector('#toast')?.textContent, login: document.querySelector('#coreLoginError')?.textContent };
+      });
+      throw Error(`Studio readiness failed: ${JSON.stringify(diagnostic)}`, { cause: error });
+    }
     return page;
   }
   const pageA = await open(first);

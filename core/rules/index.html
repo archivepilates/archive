@@ -75,7 +75,7 @@
           <div class="rule-note"><strong>원천·저장</strong><span>Firestore sequenceNotes가 원천이며 sequenceNoteImages에 JPEG 사진을 따로 저장합니다. 같은 운영자 계정의 기기에서 이어서 작성합니다. 다른 운영자 계정에는 공개하지 않습니다. 사진은 긴 변 640px·64KB 이하로 압축하며 Drive·Storage는 사용하지 않습니다. 이미지와 본문은 검색 인덱스에서 제외합니다.</span></div>
           <div class="rule-note"><strong>저장·예외</strong><span>입력 중 2.5초 대기 또는 15초 주기로 변경분을 묶어 저장하며 서버 확인 후에만 저장 완료로 표시합니다. 최신 100개 기록을 조회하고 선택한 노트의 사진만 읽습니다. 동시 수정은 버전 비교로 차단하고 최신 기록 열기 또는 사본 저장을 선택합니다. 저장 실패 시 응답 파일을 백업합니다. 기존 브라우저 기록은 가져오기 승인 후 옮기며 원본은 삭제하지 않습니다. 삭제된 노트의 표식은 남겨 오래된 기기의 재생성을 막고 사진은 제거합니다.</span></div>
           <div class="rule-note"><strong>영향 범위</strong><span>운영자 본인의 시퀀스 전용 원천만 읽고 씁니다. 회원·예약·알림톡·Notion·정산·연락처 자동화는 변경하지 않습니다. 시퀀스 데이터는 회원 대상 발송·예약·환불 등의 판단 원천으로 사용할 수 없습니다. Firestore 규칙·인덱스와 CORE Hosting만 배포합니다.</span></div>
-          <div class="rule-note"><strong>검증·상태</strong><span>기기 간 저장·수정 충돌·권한·이미지 용량·복원·삭제·한글 PDF·320/390/768/1440px 화면을 격리된 테스트로 검증합니다. 실제 운영 계정의 기존 기록을 자동 이관하거나 회원 데이터를 변경하지 않습니다. 배포 상태는 <a href="../release.json">릴리스 기록</a>을 따릅니다. 최종 갱신: 2026.10.06.</span></div>
+          <div class="rule-note"><strong>검증·상태</strong><span>Firestore 규칙 206건·작성 흐름 11건·CORE 반응형 95건 통과. 운영 Firestore에서도 격리된 시험 계정으로 두 기기의 노트·사진 공유, 충돌 차단, 사본 복구, 사진 삭제를 확인했습니다. 시험 계정·데이터·브라우저는 정리 완료했으며 실제 회원 데이터와 기존 운영자 기록은 변경하지 않았습니다. 인덱스 두 개는 READY이며 규칙·CORE 배포 완료. 배포 버전은 <a href="../release.json">릴리스 기록</a>을 따릅니다. 다음 조치: 기존 브라우저 기록이 필요하면 가져오기. 최종 갱신: 2026.10.06.</span></div>
         </section>
 
         <section class="panel rule-section" id="alimtalk-catalog-draft">
