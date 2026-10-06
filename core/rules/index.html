@@ -42,6 +42,15 @@
           </div>
         </section>
 
+        <section class="panel rule-section" id="holding-allowance-notice">
+          <div class="panel-header"><div><h2>홀딩 잔여기간 안내 · 2026.10.06</h2></div><span class="pill">운영 연결 전</span></div>
+          <div class="rule-note"><strong>목적·계산</strong><span>홀딩 등록 후 총 가능일, 누적 사용일, 잔여일을 안내합니다. 총 가능일은 최초 계약기간의 20%를 소수점 버림으로 계산합니다. 홀딩으로 연장된 만료일은 기준으로 쓰지 않습니다.</span></div>
+          <div class="rule-note"><strong>사용일</strong><span>취소되지 않은 회원 홀딩을 시작일·종료일 포함으로 합산하며, 이번 등록과 예정된 홀딩도 포함합니다. 겹친 날짜는 한 번만 셉니다. 센터 휴무 보상 연장은 회원 홀딩으로 차감하지 않습니다. 초과 시 잔여일은 0일, 초과일은 운영자 확인 대상으로 남깁니다.</span></div>
+          <div class="rule-note"><strong>원천·중복</strong><span>StudioMate의 실제 회원·발급 수강권·홀딩 식별자, 검증된 최초 계약기간, 전체 정지 이력을 사용해야 합니다. Excel의 정지 상태와 현재 만료일만으로 발송하지 않습니다. 최초 기준선의 과거 홀딩은 발송하지 않고, 동일 홀딩 건의 날짜 수정·템플릿 교체로 재발송하지 않습니다.</span></div>
+          <div class="rule-note"><strong>구현·검증</strong><span>계산 및 무발송 미리보기 로직만 구현했습니다. 365일권의 총 73일, 사용 75일, 잔여 0일과 소수점 버림·중복·취소·불완전 이력 차단을 테스트합니다. 실제 회원 발송, 데이터 변경, 운영 배포는 하지 않았습니다.</span></div>
+          <div class="rule-note"><strong>차단·다음</strong><span>현재 동기화에는 최초 계약기간과 전체 정지 이력이 없습니다. 전용 원본 수집·기준선 검증 후 canonical 데이터 승격과 기존 알림톡 큐 연결이 필요합니다. 승인된 이미지형 템플릿 계약 검증 및 테스트 수신자 검증 전 자동발송을 활성화하지 않습니다. 적용 범위: scripts/lib/holding-allowance-notice.mjs, 향후 Excel 동기화·알림톡 큐. 최종 갱신: 2026.10.06.</span></div>
+        </section>
+
         <section class="panel rules-index" aria-labelledby="rulesIndexTitle">
           <div class="panel-header"><div><h2 id="rulesIndexTitle">운영규칙 위계</h2><p>운영자가 문제를 찾을 때 이 순서로 이동합니다.</p></div><span class="pill">2-click map</span></div>
           <nav class="rule-anchor-grid" aria-label="운영규칙 목차">
