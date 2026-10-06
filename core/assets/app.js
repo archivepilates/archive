@@ -160,6 +160,12 @@ const COMMAND_ITEMS = [
     keywords: "강사레슨 강사회원 수강신청 등록 수강권 예약 가입서 이폼싸인",
   },
   {
+    title: "시퀀스 노트",
+    detail: "수업 시퀀스 작성, 보관과 PDF 다운로드",
+    href: "./sequence/",
+    keywords: "sequence 시퀀스 노트 수업 동작 큐잉 PDF",
+  },
+  {
     title: "수강료 안내 발송",
     detail: "문의 전화번호 입력 후 승인 템플릿으로 즉시 발송",
     href: "#pricingInquiry",
@@ -837,7 +843,7 @@ const NAV_ICONS = {
 };
 
 function navIcon(section) {
-  const path = NAV_ICONS[section] || NAV_ICONS.home;
+  const path = NAV_ICONS[section === "sequence" ? "rules" : section] || NAV_ICONS.home;
   return `
     <svg class="nav-icon" aria-hidden="true" viewBox="0 0 24 24" focusable="false">
       <path d="${path}" />
@@ -848,6 +854,7 @@ function navIcon(section) {
 const SECONDARY_NAV_SECTIONS = new Set(["automation", "business", "imports", "rules", "settings"]);
 const NAV_LABELS = {
   home: "홈",
+  sequence: "시퀀스 노트",
   members: "회원",
   lessons: "수업",
   "studiomate-member-registration": "회원등록",
@@ -918,6 +925,14 @@ function enhanceNav() {
   registrationLink.href = `${coreRootHref}member-registration/`;
   registrationLink.removeAttribute("target");
   registrationLink.removeAttribute("rel");
+  if (!nav.querySelector('[data-section="sequence"]')) {
+    const link = document.createElement("a");
+    link.href = `${coreRootHref}sequence/`;
+    link.dataset.section = "sequence";
+    link.textContent = NAV_LABELS.sequence;
+    const before = nav.querySelector('[data-section="staff"]');
+    nav.insertBefore(link, before || null);
+  }
   if (!nav.querySelector('[data-section="instructor-lessons"]')) {
     const link = document.createElement("a");
     link.href = `${coreRootHref}instructor-lessons/`;
@@ -7912,6 +7927,12 @@ async function refresh() {
     }
     hideLoginGate();
     if (document.querySelector("[data-auth-only-dashboard]")) {
+      const sequenceStudio = document.querySelector("[data-sequence-studio]");
+      if (sequenceStudio) {
+        sequenceStudio.dataset.authReady = "true";
+        if (!sequenceStudio.hasAttribute("src")) sequenceStudio.src = sequenceStudio.dataset.src;
+        sequenceStudio.hidden = false;
+      }
       setConnection("연결됨", "운영 도구 준비 완료");
       return;
     }

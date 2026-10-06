@@ -8,6 +8,16 @@ const repoRoot = path.resolve(__dirname, "..");
 
 const required = [
   {
+    file: "core/sequence/index.html",
+    label: "sequence studio CORE entry",
+    markers: ['data-section="sequence"', 'data-src="./studio.html"', "data-auth-only-dashboard", "./sequence.css", "../assets/app.js"],
+  },
+  {
+    file: "core/sequence/studio.html",
+    label: "offline sequence studio",
+    markers: ["archive.sequence.studio.draft.v1", "archive.sequence.studio.library.v1", "function makePDF", "font-assets", "내 시퀀스에 저장"],
+  },
+  {
     file: "core/index.html",
     label: "ARCHIVE CORE home latest action dashboard",
     markers: [
