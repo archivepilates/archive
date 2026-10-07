@@ -26,7 +26,7 @@ export const purposes = {
 
 export const supplemental = {
   KA01TP261006054728079NtSGrYdtSQH: { state: "archived", purpose: "구 홀딩 안내 · 이력 보존", target: "v1 신규 발송 금지 · 삭제된 템플릿 fallback 금지", timing: "신규 발송 종료" },
-  KA01TP2610061247076605VQTRV7FTPK: { state: "unconnected", purpose: "홀딩 가능·사용·잔여기간 안내", target: "김기효 승인 단건 합성 테스트만 연결 · 일반 회원 자동발송 차단", timing: "운영자 테스트 전체 1회 · 실제 홀딩 원천 연결 대기" },
+  KA01TP2610061247076605VQTRV7FTPK: { state: "source_connected", purpose: "홀딩 가능·사용·잔여기간 안내", target: "2026.10.08 00:00 이후 새로 등록된 홀딩 · 최신 원본 검증 · 스텝·과거 건·중복 제외 · 불명확한 이력 보류", timing: "기존 시간별 회원 동기화 후 원본 재조회 · 실제 등록시각 기준 · 운영 활성화 상태는 별도 확인" },
   KA01TP2607050825481844FfRze7o9Pw: { state: "unconnected", purpose: "예약 수업의 강사 변경 공지", target: "중앙 정책 미연결 · 자동 발송 대상 정의 없음", timing: "중앙 발송 경로 미연결" },
   KA01TP2607050825471794qyKK2E0URD: { state: "unconnected", purpose: "예약 수업의 일정 변경 공지", target: "중앙 정책 미연결 · 자동 발송 대상 정의 없음", timing: "중앙 발송 경로 미연결" },
   KA01TP260606215619915xrfx4W0JsZf: { state: "separate_project", purpose: "면접 일정 선택 안내", target: "ARCHIVE APPLY 지원자 · 별도 프로젝트 대상 정책 미조회", timing: "별도 프로젝트 운영·배포 상태 미조회" },

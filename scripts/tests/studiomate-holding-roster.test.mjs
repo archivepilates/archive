@@ -394,10 +394,12 @@ test("a completed readback is reopened for a fresh observation with a new reques
   await observe(db);
   const path = [...db.records.keys()].find(key => key.startsWith(`${HOLDING_ROSTER_JOBS}/`));
   db.records.get(path).status = "completed";
+  db.records.get(path).lastCheckedAt = at(1);
   const result = await observe(db, { source: source(2), now: at(3) });
   assert.equal(result.ok, true, result.reason);
   const job = db.records.get(path);
   assert.equal(job.status, "pending");
   assert.equal(job.requestedAt, at(3));
+  assert.equal(job.lastCheckedAt, at(1), "fresh roster must preserve rotation across completed observations");
   assertDiscoveryOnly({ ...result, jobs: [job] });
 });

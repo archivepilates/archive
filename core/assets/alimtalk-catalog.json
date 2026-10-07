@@ -1,6 +1,6 @@
 {
   "schemaVersion": 1,
-  "policyFingerprint": "6f4a4f82f8fd0380632ed798ae5c1d9d01c2e562b8cc9c3c4e132b41e6df0486",
+  "policyFingerprint": "78d72d4e93d2cd968dfa85037d6203e48431fefb53336717a0e5f58929d34a34",
   "sourceMode": "repository_defaults_no_environment_or_live_reads",
   "coverage": {
     "observedAt": "2026-09-30T06:41:16.973Z",
@@ -118,7 +118,7 @@
     },
     {
       "path": "scripts/lib/alimtalk-catalog-metadata.mjs",
-      "sha256": "c58b8a779704b5641b7aa0a190ff2036e1f12f3729f95c53792fa3bf44e43381"
+      "sha256": "ef04c7b5f1d2086296871c580c9203434c4fb9ac90e2cd06ebb2b123f0005680"
     },
     {
       "path": "scripts/lib/alimtalk-catalog-source.mjs",
@@ -1898,14 +1898,14 @@
       "label": "수강권 홀딩 현황 안내 v2",
       "providerInventoryName": null,
       "knownProvider": false,
-      "implementation": "unconnected",
+      "implementation": "source_connected",
       "sourceConfiguredStatus": null,
       "purpose": "홀딩 가능·사용·잔여기간 안내",
-      "purposeId": "unconnected",
-      "timing": "운영자 테스트 전체 1회 · 실제 홀딩 원천 연결 대기",
+      "purposeId": "source_connected",
+      "timing": "기존 시간별 회원 동기화 후 원본 재조회 · 실제 등록시각 기준 · 운영 활성화 상태는 별도 확인",
       "schedule": null,
       "targetRules": [
-        "김기효 승인 단건 합성 테스트만 연결 · 일반 회원 자동발송 차단"
+        "2026.10.08 00:00 이후 새로 등록된 홀딩 · 최신 원본 검증 · 스텝·과거 건·중복 제외 · 불명확한 이력 보류"
       ],
       "policy": null,
       "factNotice": null,

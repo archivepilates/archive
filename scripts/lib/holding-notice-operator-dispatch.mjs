@@ -2,6 +2,7 @@ import { HOLDING_NOTICE_TEMPLATE, HOLDING_NOTICE_TEMPLATE_ID, holdingTemplateIss
 import { holdingFingerprint, normalizeHoldingObservation } from "./studiomate-holding-source.mjs";
 import { completeProviderRows } from "./holding-notice-test-dispatch.mjs";
 import { calculateLiveHolding, verifyHoldingAtDispatch } from "./holding-notice-live-readback.mjs";
+import { HOLDING_AUTO_EVENTS, automaticHoldingEventIssue } from "./holding-notice-automatic.mjs";
 
 const FAMILY = new Set([HOLDING_NOTICE_TEMPLATE_ID, "KA01TP261006054728079NtSGrYdtSQH"]);
 export const isHoldingLedger = row => FAMILY.has(row?.templateCode) || row?.payload?.holdingNotice === true;
@@ -10,7 +11,7 @@ function knownOtherHoldingSend(row, plan) {
   if (!row || row.id === plan.id || row.status !== "done" || row.providerStatus !== "COMPLETE" ||
       row.providerStatusCode !== "4000" || row.templateCode !== HOLDING_NOTICE_TEMPLATE_ID ||
       row.memberId !== plan.memberId || row.memberPhone !== plan.memberPhone || row.studioId !== plan.studioId ||
-      row.payload?.deliveryMode !== "operator_verified_one_off" || !row.solapiMessageId ||
+      !["operator_verified_one_off", "automatic_live_readback"].includes(row.payload?.deliveryMode) || !row.solapiMessageId ||
       !/^[a-f0-9]{64}$/.test(row.issuanceFingerprint || "") || !/^[a-f0-9]{64}$/.test(row.creationEvidenceFingerprint || "")) return false;
   const expected = `holding_operator_notice_${holdingFingerprint([row.studioId, row.memberId, row.issuanceFingerprint, row.creationEvidenceFingerprint])}`;
   return row.id === expected && row.candidateId === expected && row.sendId === expected &&
@@ -61,7 +62,8 @@ function receiptLookup(plan) {
     startDate: plan.observedAt, endDate: new Date().toISOString(), limit: "500" })}`;
 }
 
-export async function dispatchVerifiedOperatorHolding({ db, stamp, plan, template, request, recipientIssue, readLatest, now = () => new Date() }) {
+export async function dispatchVerifiedOperatorHolding({ db, stamp, plan, template, request, recipientIssue, readLatest,
+  automatic = false, now = () => new Date() }) {
   plan = structuredClone(plan);
   const issue = holdingTemplateIssue(template);
   if (issue) throw new Error(issue);
@@ -95,7 +97,11 @@ export async function dispatchVerifiedOperatorHolding({ db, stamp, plan, templat
   const claimRef = db.doc(`holdingNoticeClaims/${plan.id}`);
   const claimed = await db.runTransaction(async tx => {
     const config = (await tx.get(db.doc("settings/holdingNotice"))).data();
-    if (config?.autoSendEnabled !== false || config?.canonicalSourcePromoted !== false || config?.templateId !== HOLDING_NOTICE_TEMPLATE_ID)
+    if (automatic) {
+      const event = (await tx.get(db.doc(`${HOLDING_AUTO_EVENTS}/${plan.id}`))).data();
+      const issue = automaticHoldingEventIssue(event, plan, config, now());
+      if (issue) throw new Error(issue);
+    } else if (config?.autoSendEnabled !== false || config?.canonicalSourcePromoted !== false || config?.templateId !== HOLDING_NOTICE_TEMPLATE_ID)
       throw new Error("operator_dispatch_requires_separate_inactive_automation");
     const profile = (await tx.get(db.doc(`memberProfiles/${plan.memberId}`))).data();
     if (!profile || profile.memberId !== plan.memberId || profile.name !== plan.memberName || profile.phone !== plan.memberPhone || profile.studioId !== plan.studioId)
@@ -130,7 +136,8 @@ export async function dispatchVerifiedOperatorHolding({ db, stamp, plan, templat
     const common = { ...auditPlan, calculationMode: "live_studiomate_readback", templateCode: HOLDING_NOTICE_TEMPLATE_ID, title: HOLDING_NOTICE_TEMPLATE.name,
       type: "manual_review", dedupeKey: plan.id, sourceActionKey: plan.id, isTest: false,
       attempts: 1, maxAttempts: 1, reviewedByUid: plan.approval.approvedBy, reviewedAt: stamp(),
-      payload: { holdingNotice: true, deliveryMode: "operator_verified_one_off", source: "studiomate_live_ticket_readback" },
+      payload: { holdingNotice: true, deliveryMode: automatic ? "automatic_live_readback" : "operator_verified_one_off",
+        source: "studiomate_live_ticket_readback", ...(automatic ? { holdingEventId: plan.id, policyId: config.automaticPolicyId } : {}) },
       createdAt: stamp(), updatedAt: stamp(), lastError: null };
     tx.create(candidateRef, { ...common, candidateId: plan.id, status: "processing" });
     tx.create(sendRef, { ...common, candidateId: plan.id, sendId: plan.id, status: "processing", providerOutcome: "claimed_no_retry" });
@@ -165,18 +172,24 @@ export async function dispatchVerifiedOperatorHolding({ db, stamp, plan, templat
     await final.commit();
     return { ok: true, id: plan.id, ...receipt, providerPostCount: 1, deliveryComplete: delivered, summary: plan.summary };
   } catch (error) {
-    const batch = db.batch();
-    batch.update(candidateRef, { status: "failed", reasonCode: "holding_operator_reconciliation_required", lastError: error.message, updatedAt: stamp() });
-    batch.update(sendRef, { ...(receipt || {}), status: "failed", providerOutcome: "unknown_do_not_retry", lastError: error.message, updatedAt: stamp() });
-    batch.update(claimRef, { ...(receipt || {}), status: "reconciliation_required", updatedAt: stamp() });
-    await batch.commit().catch(() => {});
+    const delivered = await db.runTransaction(async tx => {
+      const send = (await tx.get(sendRef)).data(), claim = (await tx.get(claimRef)).data();
+      if (send?.status === "done" && send.providerStatus === "COMPLETE" && send.providerStatusCode === "4000" &&
+          send.solapiMessageId && claim?.status === "delivered" && claim.solapiMessageId === send.solapiMessageId)
+        return { solapiMessageId: send.solapiMessageId, solapiGroupId: send.solapiGroupId };
+      tx.update(candidateRef, { status: "failed", reasonCode: "holding_operator_reconciliation_required", lastError: error.message, updatedAt: stamp() });
+      tx.update(sendRef, { ...(receipt || {}), status: "failed", providerOutcome: "unknown_do_not_retry", lastError: error.message, updatedAt: stamp() });
+      tx.update(claimRef, { ...(receipt || {}), status: "reconciliation_required", updatedAt: stamp() });
+      return null;
+    }).catch(() => null);
+    if (delivered) return { ok: true, id: plan.id, ...delivered, providerPostCount: 1, deliveryComplete: true, summary: plan.summary };
     throw error;
   }
 }
 
 export async function reconcileVerifiedOperatorHolding({ db, stamp, id, request }) {
   const sendRef = db.doc(`alimtalkSends/${id}`), ledger = (await sendRef.get()).data();
-  if (!ledger || ledger.isTest !== false || ledger.payload?.deliveryMode !== "operator_verified_one_off" ||
+  if (!ledger || ledger.isTest !== false || !["operator_verified_one_off", "automatic_live_readback"].includes(ledger.payload?.deliveryMode) ||
       ledger.templateCode !== HOLDING_NOTICE_TEMPLATE_ID || !ledger.solapiMessageId || ledger.id !== id)
     throw new Error("matching_operator_receipt_required");
   const row = verifiedReceipt(await request(receiptLookup(ledger)), ledger, ledger.solapiMessageId);

@@ -46,6 +46,7 @@ class Store {
           return this.querySnapshot(ref);
         },
         create: (ref, row) => { assert.equal(this.docs.has(ref.path), false); writes.push([ref.path, row]); },
+        update: (ref, row) => { assert.ok(this.docs.has(ref.path)); writes.push([ref.path, { ...this.docs.get(ref.path), ...row }]); },
       });
       for (const [path, row] of writes) this.docs.set(path, structuredClone(row));
       return result;
@@ -126,6 +127,22 @@ test("concurrent calls post once; unknown outcome retains durable claims and can
   assert.equal(unknown.db.docs.get(`holdingNoticeClaims/${unknown.plan.id}`).status, "reconciliation_required");
   await assert.rejects(unknown.run(), /prior_holding_local/); assert.equal(unknown.posts.length, 1);
 });
+test("a late receipt error never downgrades delivery independently confirmed by another worker", async () => {
+  const h = harness();
+  const result = await h.run({ request: async (url, method, body) => {
+    if (!method && h.posts.length) {
+      await reconcileVerifiedOperatorHolding({ db: h.db, stamp: () => NOW.toISOString(), id: h.plan.id, request: h.request });
+      throw new Error("late_receipt_network_error");
+    }
+    return h.request(url, method, body);
+  } });
+  assert.equal(result.deliveryComplete, true);
+  assert.equal(h.posts.length, 1);
+  assert.equal(h.db.docs.get(`alimtalkCandidates/${h.plan.id}`).status, "sent");
+  assert.equal(h.db.docs.get(`alimtalkSends/${h.plan.id}`).status, "done");
+  assert.equal(h.db.docs.get(`holdingNoticeClaims/${h.plan.id}`).status, "delivered");
+});
+
 test("provider and local prior records, staff exclusion, global activation and changed payload block", async () => {
   const prior = harness({ providerPrior: true }); await assert.rejects(prior.run(), /prior_holding_provider/); assert.equal(prior.posts.length, 0);
   const local = harness(); local.db.docs.set("alimtalkSends/old-key", { memberPhone: member.phone, templateCode: HOLDING_NOTICE_TEMPLATE_ID });

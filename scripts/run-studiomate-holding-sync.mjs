@@ -4,6 +4,7 @@ import { spawnSync } from "node:child_process";
 import { readFile } from "node:fs/promises";
 import { normalizeHoldingObservation, reconcileHoldingObservation, holdingSourceId } from "./lib/studiomate-holding-source.mjs";
 import { HOLDING_ROSTER_JOBS, HOLDING_ROSTER_STATE, holdingRosterReadbackIssue, holdingRosterReadbackIsCurrent } from "./lib/studiomate-holding-roster.mjs";
+import { HOLDING_AUTO_MODE } from "./lib/holding-notice-automatic.mjs";
 
 const require = createRequire(import.meta.url);
 const admin = require("../firebase/kangsain-functions/functions/node_modules/firebase-admin");
@@ -12,6 +13,13 @@ const db = admin.firestore();
 const apply = process.argv.includes("--apply");
 const fromRoster = process.argv.includes("--from-roster");
 const settings = (await db.doc("settings/holdingNotice").get()).data();
+if (fromRoster && settings?.mode === HOLDING_AUTO_MODE) {
+  const run = spawnSync(process.execPath, ["firebase/kangsain-functions/functions/node_modules/tsx/dist/cli.mjs", "scripts/run-automatic-holding-notices.ts", ...(apply ? ["--apply"] : [])],
+    { cwd: process.cwd(), env: process.env, encoding: "utf8", maxBuffer: 2 * 1024 * 1024, timeout: 10 * 60_000 });
+  if (run.stdout) process.stdout.write(run.stdout);
+  if (run.stderr) process.stderr.write(run.stderr);
+  process.exit(run.status ?? 1);
+}
 function authorized(config, target) {
   return config?.calculationMode !== "live_studiomate_readback" && config?.sourceScanEnabled === true && config?.canonicalSourcePromoted === true &&
     config?.sourceReadbackVerified === true && !!config?.promotionAuditId && config?.studioId === "5330" &&

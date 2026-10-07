@@ -10,6 +10,8 @@
  * historical identities, arbitrary unindexed phone spellings and deleted records cannot
  * be certified by this loader. Missing/ambiguous evidence is never a clean history.
  */
+import { createHash } from "node:crypto";
+
 type Data = Record<string, unknown>;
 export interface WelcomeHistoryDocument {
   readonly id: string;
@@ -306,6 +308,16 @@ function family(data: Data, id: string, collection: string): "welcome" | "other"
     identities.some((value) => WELCOME_TYPES.some((prefix) => value.startsWith(`${prefix}_`)))
   )
     return "welcome";
+  if (template.some(value => value === "KA01TP2610061247076605VQTRV7FTPK") &&
+    template.every(value => !value || value === "KA01TP2610061247076605VQTRV7FTPK") &&
+    type === "manual_review" && object(data.payload) && data.payload.holdingNotice === true &&
+    data.payload.source === "studiomate_live_ticket_readback" &&
+    ["operator_verified_one_off", "automatic_live_readback"].includes(text(data.payload.deliveryMode)) &&
+    /^[a-f0-9]{64}$/.test(text(data.issuanceFingerprint)) && /^[a-f0-9]{64}$/.test(text(data.creationEvidenceFingerprint)) &&
+    identities.every(value => !value || value === id) &&
+    id === `holding_operator_notice_${createHash("sha256").update(JSON.stringify([
+      data.studioId, data.memberId, data.issuanceFingerprint, data.creationEvidenceFingerprint])).digest("hex")}`)
+    return "other";
   // Only the canonical holding family is unrelated to welcome; malformed/manual records remain unknown.
   if (template.some(value => value === "KA01TP2610061247076605VQTRV7FTPK") &&
     template.every(value => !value || value === "KA01TP2610061247076605VQTRV7FTPK") &&

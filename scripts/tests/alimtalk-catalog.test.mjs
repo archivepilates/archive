@@ -103,14 +103,14 @@ test("filters exclude confirmed deletions consistently while preserving current 
   assert.equal(ui.selectCatalogRows(saved).length, 25);
   assert.equal(ui.selectCatalogRows(saved, { scope: "known" }).length, 23);
   assert.equal(ui.selectCatalogRows(saved, { scope: "source" }).length, 2);
-  assert.equal(ui.selectCatalogRows(saved, { implementation: "unconnected" }).length, 3);
+  assert.equal(ui.selectCatalogRows(saved, { implementation: "unconnected" }).length, 2);
   const retiredHolding = saved.rows.find((row) => row.code === "KA01TP261006054728079NtSGrYdtSQH");
   assert.equal(retiredHolding.implementation, "archived");
   assert.match(retiredHolding.label, /삭제됨/);
   const holding = saved.rows.find((row) => row.code === "KA01TP2610061247076605VQTRV7FTPK");
   assert.equal(holding.label, "수강권 홀딩 현황 안내 v2");
-  assert.equal(holding.implementation, "unconnected");
-  assert.match(holding.targetRules[0], /일반 회원 자동발송 차단/);
+  assert.equal(holding.implementation, "source_connected");
+  assert.match(holding.targetRules[0], /2026.10.08 00:00 이후 새로 등록된 홀딩/);
   assert.equal(holding.providerApproval.status, "UNKNOWN", "catalog is not live approval proof");
   assert.equal(ui.selectCatalogRows(saved, { implementation: "archived" }).length, 4);
   for (const row of saved.rows) {

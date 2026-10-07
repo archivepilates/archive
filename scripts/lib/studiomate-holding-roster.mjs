@@ -138,7 +138,7 @@ export async function observeHoldingRoster({ db, rows, source, profiles, now = n
     for (const [index, job] of plan.jobs.entries()) {
       const old = oldJobs[index];
       tx.set(refs[index], { ...job, requestedAt: old?.status === "pending" && instant(old.requestedAt) ? old.requestedAt : now,
-        ...(old?.status === "pending" && instant(old.lastCheckedAt) ? { lastCheckedAt: old.lastCheckedAt } : {}),
+        ...(instant(old?.lastCheckedAt) ? { lastCheckedAt: old.lastCheckedAt } : {}),
         updatedAt: now });
     }
     tx.set(stateRef, plan.state);

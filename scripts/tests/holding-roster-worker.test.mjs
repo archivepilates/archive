@@ -34,7 +34,10 @@ test("worker remains bounded, checks roster freshness and preserves audit/write 
   assert.doesNotMatch(source, /send-many|dispatchHoldingNotice|queueHoldingNotice/);
   assert.match(source, /calculationMode !== "live_studiomate_readback"/);
   assert.match(source, /live_ticket_detail_deferred_until_dispatch/);
-  assert.ok(source.indexOf('settings.calculationMode === "live_studiomate_readback"') < source.indexOf("const run = spawnSync"));
+  const legacy = source.slice(source.indexOf("function authorized"));
+  assert.ok(legacy.indexOf('settings.calculationMode === "live_studiomate_readback"') < legacy.indexOf("const run = spawnSync"));
+  assert.match(source, /fromRoster && settings\?\.mode === HOLDING_AUTO_MODE/);
+  assert.match(source, /scripts\/run-automatic-holding-notices\.ts/);
 });
 test("superseded readbacks cannot promote or revoke a newer source", () => {
   const target = job();

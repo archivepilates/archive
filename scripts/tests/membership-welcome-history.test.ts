@@ -2,6 +2,7 @@ import assert from "node:assert/strict";
 import test from "node:test";
 import { readFileSync } from "node:fs";
 import { resolve } from "node:path";
+import { createHash } from "node:crypto";
 import {
   loadMembershipWelcomeHistory,
   MEMBERSHIP_WELCOME_HISTORY_LIMITS as LIMITS,
@@ -1017,6 +1018,28 @@ test("canonical holding candidates and sends are unrelated welcome history, but 
     { templateCode: "unmapped" }, { type: "unknown" }]) {
     const result = await loadMembershipWelcomeHistory(new FakeDb({ alimtalkCandidates: { [id]: { ...holding, ...patch } } }), INPUT);
     assert.ok(result.complete === false || result.records.length > 0, "unknown/conflicting records cannot silently disappear");
+  }
+});
+
+test("native live-readback holding receipts do not block welcome, with strict identity and family contracts", async () => {
+  const issuanceFingerprint = "c".repeat(64), creationEvidenceFingerprint = "d".repeat(64);
+  const id = `holding_operator_notice_${createHash("sha256").update(JSON.stringify([
+    INPUT.studioId, INPUT.memberId, issuanceFingerprint, creationEvidenceFingerprint])).digest("hex")}`;
+  for (const deliveryMode of ["operator_verified_one_off", "automatic_live_readback"]) {
+    const row = { studioId: INPUT.studioId, memberId: INPUT.memberId, memberPhone: INPUT.phone,
+      issuanceFingerprint, creationEvidenceFingerprint, candidateId: id, sendId: id,
+      type: "manual_review", templateCode: "KA01TP2610061247076605VQTRV7FTPK", status: "done", solapiMessageId: "fixture",
+      payload: { holdingNotice: true, source: "studiomate_live_ticket_readback", deliveryMode } };
+    const result = await loadMembershipWelcomeHistory(new FakeDb({ alimtalkCandidates: { [id]: { ...row, status: "sent" } },
+      alimtalkSends: { [id]: row } }), INPUT);
+    assert.equal(result.complete, true);
+    assert.equal(result.records.length, 0);
+    for (const patch of [{ issuanceFingerprint: "e".repeat(64) }, { candidateId: "forged" },
+      { templateId: TEMPLATES[0] }, { payload: { ...row.payload, source: "workLanes" } },
+      { payload: { ...row.payload, deliveryMode: "unverified" } }, { type: "unknown" }]) {
+      const bad = await loadMembershipWelcomeHistory(new FakeDb({ alimtalkSends: { [id]: { ...row, ...patch } } }), INPUT);
+      assert.ok(!bad.complete || bad.records.length > 0);
+    }
   }
 });
 
