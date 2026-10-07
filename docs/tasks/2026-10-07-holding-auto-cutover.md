@@ -33,4 +33,20 @@ Deploy selection correction: the directory-based affected detector incorrectly c
 
 ## Status
 
-Implementation reviewed. Focused Node suites: 193 passed; welcome-history TypeScript suite: 100 passed; additional deployment-selection/predeploy guards: 24 distinct cases passed. Functions TypeScript build, Hosting/catalog validation, 95 responsive route/viewport checks, and read-only production receipt-query/index preflight passed. Production activation is not complete until settings readback, runtime revision, scoped deployment and pre-cutoff no-send checks are recorded. Tomorrow's first natural scheduled send cannot be claimed from today's tests.
+Implemented, deployed and activated for native registrations from 2026-10-08 00:00 KST. Tomorrow's first natural scheduled send has not occurred and is not claimed from today's tests.
+
+## Release Evidence
+
+- Implementation: `33076476ca8d5b4c8075b2414ff7ea55d5d3c758`, promoted and pushed to `origin/main`. Main checkout and Mac mini execution runtime were clean and aligned at activation.
+- Operator/project: `archive-codex-operator@archive-pilates.iam.gserviceaccount.com`, Firebase `archive-pilates`.
+- Checks: focused Node suites 193 passed; welcome-history TypeScript suite 100 passed; additional deployment-selection/predeploy guards 24 distinct cases passed. Functions TypeScript build, Hosting/catalog validation, diff check, and production receipt-query/index preflight passed. Responsive verification passed 95 local and 95 live route/viewport checks, covering 320/390/768/1440/1920px.
+- GitHub Actions: implementation run 37631866039 completed successfully: https://github.com/archivepilates/archive/actions/runs/37631866039.
+- Functions: affected dry-run and production deployment completed for `functions-alimtalk` only. All 13 functions in that codebase verified ACTIVE; update times 2026-10-07 13:54 UTC. Queue revision: `scheduledprocessalimtalkqueue-00125-jik`.
+- Hosting: scoped CORE deployment to `hosting:archive-pilates,hosting:archive-pilates-core` completed. Custom-domain and web.app release canaries match implementation SHA. Both `/rules/` and `/assets/alimtalk-catalog.json` return HTTP 200 and exact holding-cutoff/template markers.
+- Activation: provider v2 APPROVED/BA/IMAGE, exact body/image/button contract, prior native E2E COMPLETE/4000 and cleanup evidence were reread. `mode=live_readback_auto`, `autoSendEnabled=true`, `canonicalSourcePromoted=true`, `activationCommit=33076476ca8d5b4c8075b2414ff7ea55d5d3c758`; cutoff `2026-10-07T15:00:00.000Z`.
+- Pre-cutoff actual entrypoint check at 2026-10-07T13:55:50.834Z: `run-studiomate-holding-sync.mjs --from-roster --apply` returned `holding_cutover_not_reached`, `sendAllowed=false`. Automatic events/candidates/sends/claims each remained 0 before and after. Baseline initialization `2026-10-07T10:25:08.176Z` and seven historical held members preserved. Legacy cached-history queue remained disabled.
+- Scheduler: existing `com.archive.studiomate-excel-emergency-mode` LaunchAgent is loaded/enabled, interval 3600 seconds, last exit 0. It runs the updated Git-tracked runtime with `--download --apply`; no additional polling schedule was created.
+- Follow-up: existing daily 10:00 heartbeat `automation-4` updated to read-only first natural automatic-delivery verification. It must not revert activation from obsolete disabled-state notes, manually run queues, create test holds or send more tests. Unchanged/no-target runs stay quiet; delete after first canonical-ledger/provider-confirmed natural delivery.
+- No real member/ticket/holding/reservation changes or additional manual sends were performed in this activation session. Prior approved temporary test ticket cleanup was verified from its evidence. Browser QA contexts were closed by their existing finally blocks; no StudioMate browser was opened for the pre-cutoff gate check.
+
+Remaining verification: first post-cutoff natural holding send, and scheduled-future-hold export exposure. Missing/ambiguous source evidence is review-only; activation does not waive those guards. This follow-up documentation does not change deployed assets and needs no additional Hosting/Functions deployment.

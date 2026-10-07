@@ -1,2 +1,63 @@
 <!doctype html>
-<html lang="ko"><head><meta charset="utf-8"><meta name="viewport" content="width=device-width,initial-scale=1"><title>홀딩 신규 자동발송 전환 | ARCHIVE PILATES</title><style>*{box-sizing:border-box}body{margin:0;background:#f4f5f6;color:#202324;font:16px/1.7 system-ui,sans-serif}main{max-width:880px;margin:auto;padding:40px 20px}h1{font-size:28px;line-height:1.4}h2{font-size:20px;margin:32px 0 12px}p{max-width:70ch}section{padding:16px 0;border-top:1px solid #d9dfe2}dl{display:grid;grid-template-columns:minmax(100px,1fr) minmax(0,3fr);gap:12px 20px}dt{font-weight:700}dd{margin:0;overflow-wrap:anywhere}.status{color:#a22b28;font-weight:700}a{color:#a22b28}@media(max-width:500px){dl{grid-template-columns:1fr;gap:6px}dd{margin-bottom:12px}main{padding:24px 16px}}</style></head><body><main><p>ARCHIVE PILATES · ARCHIVE CORE 운영 전환</p><h1>홀딩 신규 자동발송</h1><p class="status" id="release-status">검증·배포 준비 중</p><section><h2>적용 기준</h2><dl><dt>시작</dt><dd>한국시간 2026년 10월 8일 00:00 이후 StudioMate에 새로 등록한 정지</dd><dt>제외</dt><dd>기존·과거 홀딩, 스텝, 동일 정지의 수정·재실행, 불명확한 최초 발급·중도 해제 이력</dd><dt>주기</dt><dd>기존 시간별 회원 동기화 후 최신 수강권을 조회해 발송합니다. 즉시발송이 아니며, 공유 브라우저 대기와 회당 최대 10건 한도로 이월될 수 있습니다.</dd></dl></section><section><h2>계산·중복 방지</h2><p>최초 계약기간의 20%를 소수점 버림으로 계산합니다. 발송 직전 최신 정지기간을 다시 열어 양 끝날을 포함한 합집합으로 사용일을 계산하며 센터 휴무 보상 연장은 제외합니다.</p><p>발급·정지 생성 이력에 연결된 고정 키로 후보·발송 원장을 함께 선점합니다. 접수 결과가 불명확하면 조회만 하고 재발송하지 않습니다. 모호한 회원만 보류하고 운영자 확인 메일을 보냅니다.</p></section><section><h2>검증 구분</h2><p>이전 승인된 김기효 임시 수강권 테스트는 SOLAPI 전달 완료와 후보·발송·선점 원장 일치를 확인했고 임시 수강권을 삭제했습니다. 이번 활성화에서는 그 증거를 다시 조회하며 새로운 회원 발송이나 수강권 변경을 하지 않습니다.</p><p id="verification-status">자정 경계·기존 이력 제외·중복·동시 실행·불명확 접수·최신 원본 검증을 진행 중입니다.</p><p>내일부터의 첫 자연 발생 홀딩에 대한 정기 자동발송은 아직 발생하지 않았으며, 오늘의 단위검증과 구분합니다.</p></section><section><h2>운영 경로</h2><p>시간별 Excel 정지명단 → 읽기 요청 → 최신 StudioMate 원본 검증 → 최소 확정 이벤트 → 발송 직전 재조회 → 후보·원장 선점 → SOLAPI → 전달 결과 조회</p><p>이전 Firestore 정지 장부 기반 자동 큐는 사용하지 않습니다. 정지 전체 이력·잔여일 장부를 반복 저장하지 않고 중복방지와 감사에 필요한 기록만 남깁니다.</p><p><a href="https://core.archivepilates.com/rules/#holding-allowance-notice">ARCHIVE CORE 운영규칙</a></p></section></main></body></html>
+<html lang="ko">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width,initial-scale=1">
+<title>홀딩 신규 자동발송 전환 | ARCHIVE PILATES</title>
+<style>
+*{box-sizing:border-box}body{margin:0;background:#f4f5f6;color:#202324;font:16px/1.7 system-ui,sans-serif}
+main{max-width:880px;margin:auto;padding:40px 20px}h1{font-size:28px;line-height:1.4}h2{font-size:20px;margin:24px 0 12px}
+p{max-width:70ch}section{padding:16px 0;border-top:1px solid #d9dfe2}dl{display:grid;grid-template-columns:minmax(100px,1fr) minmax(0,3fr);gap:12px 20px}
+dt{font-weight:700}dd{margin:0;overflow-wrap:anywhere}code{overflow-wrap:anywhere;font-size:14px}.status{color:#196547;font-weight:700}a{color:#a22b28}
+@media(max-width:500px){dl{grid-template-columns:1fr;gap:6px}dd{margin-bottom:12px}main{padding:24px 16px}}
+</style>
+</head>
+<body><main>
+<p>ARCHIVE PILATES · ARCHIVE CORE · 2026.10.07</p>
+<h1>홀딩 신규 자동발송</h1>
+<p class="status" id="release-status">배포·활성화 완료 · 10월 8일 신규 등록부터 적용</p>
+<section>
+<h2>적용 기준</h2>
+<dl>
+<dt>시작</dt><dd>한국시간 2026년 10월 8일 00:00 이후 StudioMate에 새로 등록한 정지. 시작일이나 발견시각이 아니라 원본 생성 이력의 등록시각 기준입니다.</dd>
+<dt>기존 홀딩</dt><dd>기존 정지회원 7명의 기준선은 보존했습니다. 과거 등록 건은 소급발송하지 않으며, 기간 수정만으로 새 발송을 만들지 않습니다.</dd>
+<dt>제외·보류</dt><dd>스텝·중복은 제외합니다. 최초 발급기간·중도 해제 실제 기간·회원 식별 등이 불명확하거나 허용일을 초과한 건만 보류하고 운영자 확인 메일을 보냅니다.</dd>
+<dt>주기</dt><dd>기존 1시간 주기 회원 동기화 후 최신 수강권을 조회해 발송합니다. 즉시발송이 아니며, 공유 브라우저 대기와 회당 최대 10건 한도로 다음 실행에 이월될 수 있습니다.</dd>
+</dl>
+</section>
+<section>
+<h2>계산·중복 방지</h2>
+<p>최초 계약기간의 20%를 소수점 버림으로 계산합니다. 발송 직전 최신 정지기간을 다시 열어 양 끝날을 포함한 합집합으로 사용일을 계산하며 센터 휴무 보상 연장은 제외합니다.</p>
+<p>회원·발급·정지 생성 이력에 연결된 고정 키로 후보·발송 원장을 함께 선점합니다. 같은 정지의 날짜 수정·템플릿 교체·재실행은 재발송하지 않습니다. 접수 결과가 불명확하면 메시지 ID와 선점을 보존하고 조회만 합니다.</p>
+<p>정지 전체 이력이나 잔여일 장부를 반복 저장하지 않습니다. 최신 원본 검증 후 최소 확정 이벤트와 발송 감사 기록만 남깁니다.</p>
+</section>
+<section>
+<h2>검증 결과</h2>
+<dl>
+<dt>로직</dt><dd>집중 Node 검증 193건, 웰컴 이력 TypeScript 검증 100건, 추가 배포 보호 검증 24건 통과. 자정 경계·과거 제외·취소·동시 실행·불명확 접수·최신 원본 변경·중복 차단을 포함합니다.</dd>
+<dt>빌드·화면</dt><dd>Functions 빌드, Hosting·템플릿 목록 검증, 배포 대상 의존성 검증 통과. 320/390/768/1440/1920px에서 로컬 95건과 라이브 95건 반응형 검증 통과.</dd>
+<dt>템플릿</dt><dd>홀딩 v2 APPROVED, BA/IMAGE, 변수 8개, ARCHIVE PILATES 이미지, 홀딩규정 보기 모바일·PC 버튼 계약을 직접 재확인했습니다. 삭제된 v1은 사용하지 않습니다.</dd>
+<dt>단건 실전달</dt><dd>이전 승인된 김기효 임시 0원 수강권 테스트의 SOLAPI COMPLETE/4000과 후보·발송·선점 원장 일치, 임시 수강권 삭제 및 원래 수강권 무변경 증거를 다시 확인했습니다. 이번 활성화에서는 추가 테스트 발송이나 회원 수강권 변경을 하지 않았습니다.</dd>
+<dt>자정 전 실행</dt><dd id="verification-status">2026.10.07 22:55 KST 정상 실행 경로에서 적용 시각 전 차단을 확인했습니다. 확정 이벤트·자동 후보·발송·선점이 각각 0 → 0건이며, 기준선과 기존 7명은 유지됐습니다.</dd>
+</dl>
+</section>
+<section>
+<h2>배포·운영 상태</h2>
+<dl>
+<dt>소스</dt><dd><code>33076476ca8d5b4c8075b2414ff7ea55d5d3c758</code><br>origin/main 반영·푸시 및 맥미니 실행 runtime 갱신 완료.</dd>
+<dt>Functions</dt><dd>실제 영향을 받는 functions-alimtalk만 배포, 13개 함수 ACTIVE 확인. 다른 함수 코드베이스는 배포하지 않았습니다.</dd>
+<dt>CORE</dt><dd>archive-pilates / archive-pilates-core Hosting 배포 완료. 커스텀 도메인·web.app 릴리스 버전 일치, 운영규칙·템플릿 목록 HTTP 200 및 적용 기준 일치 확인.</dd>
+<dt>활성화</dt><dd><code>live_readback_auto</code>, 자동발송·canonical 원천 승격 활성화. 이전 저장 장부 기반 자동 큐는 비활성 유지.</dd>
+<dt>정기 실행</dt><dd>기존 회원 Excel 동기화 LaunchAgent 활성, 1시간 간격, 마지막 종료코드 0. 추가 전체 회원 폴링은 만들지 않았습니다.</dd>
+<dt>CI</dt><dd><a href="https://github.com/archivepilates/archive/actions/runs/37631866039">배포 소스 GitHub Actions 성공</a></dd>
+</dl>
+</section>
+<section>
+<h2>남은 운영 확인</h2>
+<p>내일부터 첫 자연 발생 신규 홀딩의 실제 정기 자동발송은 아직 발생하지 않았습니다. 기존 오전 10시 점검은 읽기 전용으로 첫 전달 결과와 원장 일치를 확인하도록 갱신했습니다. 대상이 없거나 상태가 같으면 반복 알리지 않고, 첫 성공이나 새로운 운영 차단만 보고합니다.</p>
+<p>예정 홀딩은 StudioMate Excel 명단에 노출되기 전 감지를 보장하지 않습니다. 최초 노출이 등록 후 48시간을 넘거나 원본 근거가 불완전하면 자동 소급발송하지 않고 확인필요로 보류합니다.</p>
+<p>문제가 생기면 자동발송 플래그를 끄는 것으로 새 접수를 중단할 수 있습니다. 이미 접수된 메시지와 중복방지·감사 원장은 삭제하지 않습니다.</p>
+<p><a href="https://core.archivepilates.com/rules/#holding-allowance-notice">ARCHIVE CORE 운영규칙</a></p>
+</section>
+</main></body>
+</html>
