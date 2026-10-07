@@ -48,3 +48,17 @@
 - Real member result: 2026-10-07 through 2026-10-31, total 73, used 25, remaining 48 days.
 - Global autoSendEnabled and canonicalSourcePromoted remain false. No native member/ticket/hold changes.
 - Deployment scope: Mac mini runtime scripts and CORE operating-rule Hosting only; no Functions changes.
+
+## Live Release Evidence
+
+- Implementation d7099ef130aa9fb828110cdc01d0ea483885e6d7 promoted to origin/main and pushed to lane branch.
+- Runtime checkout fast-forwarded cleanly. Read-only runtime collector returns the same observation fingerprint,
+  original 365 days and one registered hold; no send or StudioMate write in this verification.
+- CORE Hosting release completed on archive-pilates and archive-pilates-core. Live custom-domain rules contain
+  current-controls hardening, one-off receipt evidence and the explicit global-send hold.
+- Local and live responsive smoke each passed 95 checks across 320, 390, 768, 1440 and 1920 widths.
+- Live release canary passed on custom domain and web.app, both identifying d7099ef.
+- No Functions rebuild/deploy was needed: affected-codebases output was empty.
+- Candidate sent, send done/COMPLETE/4000 and claim delivered verified directly; global settings remain false.
+- Task-owned collectors/QA browsers closed and shared profile lock released. No browser process cleanup of user sessions.
+- This final record is documentation-only; it does not require a second Hosting release.
