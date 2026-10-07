@@ -12,6 +12,7 @@ import {
   extractHoldingHistoryDom,
   extractRegisteredHoldsDom,
   readOpenHoldingTicket,
+  registeredHoldingRanges,
 } from "../lib/studiomate-holding-reader.mjs";
 import { holdingNoticeKey } from "../lib/holding-allowance-notice.mjs";
 
@@ -216,7 +217,7 @@ test("cancelled holds contribute zero days and cannot reuse their ID as register
   raw.observedAt = LATER;
   raw.activeHolds = [{ start: hold.start, end: hold.end }];
   assert.throws(() => reconcile(raw, review(raw, [{ ...hold, status: "registered" }]), baseline.source),
-    /cancelled_identity_cannot_be_reused/);
+    /cancelled_identity_cannot_be_reused|hold_lifecycle_status_mismatch/);
 });
 
 test("unmapped cancellation history and cancellation without evidence fail closed", () => {
@@ -366,15 +367,28 @@ test("history omission: previously observed non-hold evidence must not silently 
 test("history omission: prior hold-edit evidence must remain mapped across observations", () => {
   const raw = fixture();
   raw.history.push(row("2026. 09. 02. 09:00", "수강권 정지 수정", [
-    change("정지종료일", "2026. 09. 07.", "2026. 09. 08."),
+    change("정지종료일", "2026. 09. 08.", "2026. 09. 10."),
   ]));
+  raw.activeHolds[0].end = "2026. 09. 10.";
   const obs = normalizeHoldingObservation(raw);
   const previous = reconcile(raw, review(raw, [mapping(raw, 1, IDS[0], {
+    end: "2026. 09. 10.",
     evidenceFingerprints: [obs.history[1].fingerprint, obs.history[2].fingerprint],
   })])).source;
   raw.history.pop();
   raw.observedAt = LATER;
   assert.throws(() => reconcile(raw, review(raw), previous), "Dropping prior mapped edit evidence must fail closed");
+});
+
+test("identity review cannot consume cancellation as registered, invent dates, or combine creation rows", () => {
+  const cancelled = cancelledFixture();
+  cancelled.raw.activeHolds = [{ start: cancelled.hold.start, end: cancelled.hold.end }];
+  assert.throws(() => reconcile(cancelled.raw, review(cancelled.raw, [{ ...cancelled.hold, status: "registered" }])), /hold_lifecycle_status_mismatch/);
+  const unsupported = fixture(); unsupported.activeHolds[0].end = "2026. 09. 09.";
+  assert.throws(() => reconcile(unsupported, review(unsupported, [{ ...mapping(unsupported, 1), end: "2026. 09. 09." }])), /hold_dates_not_supported/);
+  const combined = fixture(); addHold(combined, { at: "2026. 09. 02. 09:00", start: "2026. 09. 01.", end: "2026. 09. 08." });
+  combined.activeHolds.pop(); const obs = normalizeHoldingObservation(combined);
+  assert.throws(() => reconcile(combined, review(combined, [{ ...mapping(combined, 1), evidenceFingerprints: [obs.history[1].fingerprint, obs.history[2].fingerprint] }])), /single_hold_creation/);
 });
 
 // The page protocol is mocked; evaluate never executes DOM code or starts a browser.
@@ -418,7 +432,7 @@ test("mocked reader requires two matching history and hold-list reads before dec
   const page = mockPage(raw);
   const result = await read(page, raw);
   assert.deepEqual(result.history, raw.history);
-  assert.deepEqual(result.activeHolds, raw.activeHolds);
+  assert.deepEqual(result.activeHolds, raw.activeHolds.map(({ start, end }) => ({ start: sourceDate(start), end: sourceDate(end) })));
   assert.equal(result.historyComplete, true);
   assert.equal(result.activeHoldsComplete, true);
   assert.equal(result.source, HOLDING_SOURCE);
@@ -432,6 +446,17 @@ test("mocked reader requires two matching history and hold-list reads before dec
   assert.ok(clicks[0].test(" 변경이력 "));
   assert.ok(clicks[1].test(" 정지기간정보 "));
   assert.ok(!clicks[0].test("변경이력 수정"));
+});
+
+test("ongoing hold controls supplement the list without double-counting the same range", () => {
+  const ongoing = { start: "2026. 10. 7.", end: "2026. 10. 31." };
+  const expected = [{ start: "2026-10-07", end: "2026-10-31" }];
+  assert.deepEqual(registeredHoldingRanges({ activeHolds: [], currentHold: ongoing }), expected);
+  assert.deepEqual(registeredHoldingRanges({ activeHolds: [ongoing], currentHold: ongoing }), expected);
+  assert.deepEqual(registeredHoldingRanges({ activeHolds: [], currentHold: null }), []);
+  assert.equal(registeredHoldingRanges({ activeHolds: [{ start: "2026-09-01", end: "2026-09-08" }], currentHold: ongoing }).length, 2);
+  assert.throws(() => registeredHoldingRanges({ activeHolds: [ongoing, ongoing] }), /duplicate_live_hold_ranges/);
+  assert.throws(() => registeredHoldingRanges({ activeHolds: [], currentHold: { ...ongoing, end: "2026-10-06" } }), /invalid_hold_range/);
 });
 
 test("unchanged source refresh retains bounded queue progress but changed source resets it", () => {

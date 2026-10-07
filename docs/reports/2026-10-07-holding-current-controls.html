@@ -1,0 +1,43 @@
+<!doctype html>
+<html lang="ko">
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width,initial-scale=1">
+<title>ARCHIVE PILATES 홀딩 수집 보강 · 2026.10.07</title>
+<style>
+*{box-sizing:border-box}body{margin:0;background:#f5f6f7;color:#202124;font:16px/1.7 system-ui,sans-serif;letter-spacing:0}main{max-width:900px;margin:auto;padding:36px 20px}h1{font-size:28px;line-height:1.4}h2{font-size:20px;margin-top:32px;border-top:1px solid #d8dce1;padding-top:20px}p{max-width:70ch}dl{display:grid;grid-template-columns:minmax(100px,1fr) 2fr;gap:10px 20px}dt{color:#626871}dd{margin:0;overflow-wrap:anywhere}.result{border-left:4px solid #218366;padding:8px 16px;background:#fff}code{overflow-wrap:anywhere}li{margin:8px 0}@media(max-width:480px){dl{grid-template-columns:1fr;gap:4px}dd{margin-bottom:12px}h1{font-size:24px}}
+</style>
+<main>
+<p>ARCHIVE PILATES · 운영 검증 · 2026.10.07</p>
+<h1>진행 중인 홀딩 수집 보강 및 단건 발송</h1>
+<p class="result">이지영2님 홀딩 현황 안내 v2를 정확히 1회 발송했습니다. SOLAPI 전달 완료와 내부 원장을 대조했습니다. 전체 회원 자동발송 활성화와는 별개의 운영자 승인 단건입니다.</p>
+<h2>원인과 수정</h2>
+<p>StudioMate의 진행 중인 정지는 정지 목록이 비어 있어도 저장된 날짜 입력칸에 표시됩니다. 이전 수집기는 목록만 읽어 현재 정지를 누락했습니다. StudioMate 원본 오류가 아니라 수집 범위 누락이었습니다.</p>
+<ul>
+<li>저장된 현재 날짜칸과 정지 목록을 함께 수집하고 같은 기간은 한 번만 계산합니다.</li>
+<li>두 번 조회 결과가 일치해야 하며, 미저장 입력·일부 날짜 누락·중복·모순된 변경 이력은 차단합니다.</li>
+<li>생성·수정·취소 이력 연결을 검증하여 취소된 정지를 사용 중으로 계산하지 않습니다.</li>
+<li>실회원 단건은 원본 증거와 운영자 승인에 고정된 식별자로 후보·발송·선점을 먼저 저장합니다. 결과가 불명확해도 재발송하지 않습니다.</li>
+</ul>
+<h2>실제 전달 결과</h2>
+<dl>
+<dt>회원 / 수강권</dt><dd>이지영2 / 3주년 100회권</dd>
+<dt>이번 정지</dt><dd>2026.10.07~2026.10.31 · 양 끝날 포함 25일</dd>
+<dt>최초 계약기간</dt><dd>365일 · 센터 휴무 연장은 별도이며 사용 홀딩에서 제외</dd>
+<dt>총 가능 / 사용 / 잔여</dt><dd>73일 / 25일 / 48일</dd>
+<dt>전달 증거</dt><dd>COMPLETE / 4000 · 수신자, 본문, 변수 8개 일치</dd>
+<dt>메시지 ID</dt><dd><code>M4V20261007201421XGIXGNWGBH8OQTW</code></dd>
+<dt>그룹 ID</dt><dd><code>G4V20261007201421KY5UNRUQZQZO1VN</code></dd>
+<dt>원장</dt><dd>후보 sent / 발송 done / 선점 delivered · isTest=false</dd>
+</dl>
+<p>첫 접수 후 전달 확인용 JSON-array messageIds 조회가 빈 결과를 반환했습니다. 수신자·시간 범위의 전체 조회 후 고정된 메시지 ID로 대조하도록 수정했습니다. 이미 성공한 메시지를 추가 발송하지 않고 원장만 조정했습니다.</p>
+<h2>검증과 적용 범위</h2>
+<ul>
+<li>Node 회귀 319건 및 TypeScript 회귀 236건, 총 555건 통과.</li>
+<li>실제 날짜 입력칸 DOM, 동시 실행, 중복, 접수 결과 불명확, 잘못된 회원 ID, 승인 후 입력 변조, 부분 조회를 검증했습니다.</li>
+<li>실제 원본 재조회: 이지영2 정지 1건, 김기효 1건, 배민진 0건. 김기효·배민진에게는 추가 발송하지 않았습니다.</li>
+<li>변경 대상은 맥미니 수집·단건 처리 스크립트와 ARCHIVE CORE 운영규칙입니다. Firebase Functions 변경은 없습니다.</li>
+</ul>
+<h2>남아 있는 자동화 조건</h2>
+<p>autoSendEnabled=false, canonicalSourcePromoted=false를 유지합니다. 발급권 원본 식별자와 정지 생성 이력 연결, 공급자 이력 완전성 감사, 실제 원천 기반 전체 흐름 검증이 끝나기 전에는 전체 자동발송을 켜지 않습니다. 이번 승인 단건은 원천 승격이나 일반 회원 일괄 발송 승인을 뜻하지 않습니다.</p>
+</main>
+</html>

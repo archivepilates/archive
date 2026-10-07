@@ -80,7 +80,7 @@ export function reconcileHoldingObservation(raw, review, previous = null, now = 
   "observation_bound_identity_review_required");
   required(Date.parse(obs.observedAt) <= now.getTime(), "future_observation");
   const ids = new Set(), consumed = new Set();
-  const holdRows = obs.history.filter(r => /정지|홀딩/.test(r.type));
+  const holdRows = obs.history.filter(r => /정지|홀딩/.test(r.type) || r.changes.some(c => /정지|홀딩/.test(c.field)));
   const holds = review.holds.map(h => {
     required(h && /^(?:hold_[a-f0-9]{8}-[a-f0-9]{4}-[a-f0-9]{4}-[a-f0-9]{4}-[a-f0-9]{12}|native_[1-9]\d*)$/.test(h.id) &&
       !ids.has(h.id) && ["registered", "cancelled"].includes(h.status) && h.kind === "member" &&
@@ -97,6 +97,33 @@ export function reconcileHoldingObservation(raw, review, previous = null, now = 
       /취소/.test(holdRows.find(r => r.fingerprint === fp)?.type)), "cancel_evidence_required");
     const start = sourceDate(h.start), end = sourceDate(h.end);
     required(start <= end, "invalid_hold_range");
+    const lifecycle = h.evidenceFingerprints.map(fp => holdRows.find(r => r.fingerprint === fp))
+      .sort((a, b) => sourceInstant(a.at).localeCompare(sourceInstant(b.at)));
+    required(lifecycle[0]?.fingerprint === creation.fingerprint &&
+      lifecycle.filter(row => row.type.replace(/\s/g, "") === "수강권정지").length === 1,
+    "single_hold_creation_per_identity_required");
+    const creationStart = creation.changes.find(c => c.field === "정지시작일");
+    const creationEnd = creation.changes.find(c => c.field === "정지종료일");
+    required(creationStart?.before === "내역없음" && creationEnd?.before === "내역없음", "hold_creation_dates_required");
+    let currentStart = sourceDate(creationStart.after), currentEnd = sourceDate(creationEnd.after), cancelled = false;
+    for (let index = 1; index < lifecycle.length; index++) {
+      const row = lifecycle[index], type = row.type.replace(/\s/g, "");
+      required(sourceInstant(row.at) > sourceInstant(lifecycle[index - 1].at) && !cancelled,
+        "ambiguous_hold_lifecycle_order");
+      required(["수강권정지수정", "수강권정지취소"].includes(type), "unsupported_hold_lifecycle_requires_review");
+      for (const change of row.changes) {
+        if (change.field === "정지시작일") {
+          required(sourceDate(change.before) === currentStart, "hold_date_change_chain_mismatch");
+          currentStart = sourceDate(change.after);
+        } else if (change.field === "정지종료일") {
+          required(sourceDate(change.before) === currentEnd, "hold_date_change_chain_mismatch");
+          currentEnd = sourceDate(change.after);
+        }
+      }
+      cancelled = type === "수강권정지취소";
+    }
+    required(start === currentStart && end === currentEnd, "hold_dates_not_supported_by_history");
+    required(cancelled === (h.status === "cancelled"), "hold_lifecycle_status_mismatch");
     return { id: h.id, start, end, status: h.status, kind: h.kind,
       registeredAt: sourceInstant(creation.at),
       creationEvidenceFingerprint: creation.fingerprint, evidenceRef: `${raw.memberUrl}#hold-${creation.fingerprint}` };

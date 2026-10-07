@@ -1,4 +1,18 @@
-import { HOLDING_SOURCE, normalizeHoldingObservation } from "./studiomate-holding-source.mjs";
+import { HOLDING_SOURCE, normalizeHoldingObservation, sourceDate } from "./studiomate-holding-source.mjs";
+
+export function registeredHoldingRanges({ activeHolds, currentHold }) {
+  if (!Array.isArray(activeHolds)) throw new Error("complete_hold_list_required");
+  const ranges = activeHolds.map(({ start, end }) => ({ start: sourceDate(start), end: sourceDate(end) }));
+  if (new Set(ranges.map(range => JSON.stringify(range))).size !== ranges.length)
+    throw new Error("duplicate_live_hold_ranges");
+  if (currentHold) {
+    const current = { start: sourceDate(currentHold.start), end: sourceDate(currentHold.end) };
+    // StudioMate renders the ongoing hold in date controls, not necessarily in the list.
+    if (!ranges.some(range => range.start === current.start && range.end === current.end)) ranges.push(current);
+  }
+  if (ranges.some(range => range.start > range.end)) throw new Error("invalid_hold_range");
+  return ranges.sort((a, b) => a.start.localeCompare(b.start) || a.end.localeCompare(b.end));
+}
 
 // Verified rendered DOM only. No framework internals, API calls, or form changes.
 export function extractHoldingHistoryDom() {
@@ -40,7 +54,15 @@ export function extractRegisteredHoldsDom() {
     if (dates.length !== 2 || !/\d+일 정지/.test(text)) throw new Error("hold_row_layout_changed");
     return { start: dates[0], end: dates[1] };
   });
-  return { activeHolds, paginationPresent: [...d.querySelectorAll(".el-pagination")].some(visible) };
+  const starts = [...d.querySelectorAll('.holding-detail__form__element.start_date input[placeholder="정지 시작일"]')].filter(visible);
+  const ends = [...d.querySelectorAll('.holding-detail__form__element.end_date input[placeholder="정지 종료일"]')].filter(visible);
+  if (starts.length !== 1 || ends.length !== 1) throw new Error("single_current_hold_controls_required");
+  const start = starts[0].value.trim(), end = ends[0].value.trim();
+  if (Boolean(start) !== Boolean(end)) throw new Error("incomplete_current_hold_controls");
+  if (start && !starts[0].disabled && !starts[0].readOnly) throw new Error("uncommitted_current_hold_controls");
+  const currentHold = start ? { start, end } : null;
+  const currentControlState = { disabled: starts[0].disabled, readOnly: starts[0].readOnly };
+  return { activeHolds, currentHold, currentControlState, paginationPresent: [...d.querySelectorAll(".el-pagination")].some(visible) };
 }
 
 export async function readOpenHoldingTicket(page, { studioId, memberId, memberName }) {
@@ -64,7 +86,7 @@ export async function readOpenHoldingTicket(page, { studioId, memberId, memberNa
   if (JSON.stringify(first) !== JSON.stringify(second) || JSON.stringify(firstHolds) !== JSON.stringify(secondHolds))
     throw new Error("ticket_changed_during_observation");
   const raw = { source: HOLDING_SOURCE, studioId, memberId, memberName, memberUrl,
-    ticketName: first.ticketName, history: first.history, activeHolds: firstHolds.activeHolds,
+    ticketName: first.ticketName, history: first.history, activeHolds: registeredHoldingRanges(firstHolds),
     historyComplete: true, activeHoldsComplete: true, observedAt: new Date().toISOString() };
   normalizeHoldingObservation(raw);
   return raw;
