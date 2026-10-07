@@ -9,7 +9,7 @@
 </style>
 </head>
 <body><main>
-<header><span class="status">로컬 구현·검증 완료 / 운영 미배포</span><h1>ARCHIVE CORE UI 개선</h1><p>반복 설명을 덜고, 업무 상태와 실행 항목을 중심으로 정리했습니다.</p><p class="muted">2026.10.08 · ARCHIVE PILATES · 기준 커밋 d2566b2e</p></header>
+<header><span class="status">Hosting 배포·라이브 검증 완료</span><h1>ARCHIVE CORE UI 개선</h1><p>반복 설명을 덜고, 업무 상태와 실행 항목을 중심으로 정리했습니다.</p><p class="muted">2026.10.08 · ARCHIVE PILATES · UI 릴리스 93c154e1</p></header>
 <section><h2>변경 내용</h2><ul>
 <li>20개 화면의 메뉴, 글자 크기, 간격, 입력칸, 상태 표시를 공통 스타일로 통일했습니다.</li>
 <li>공식 로고와 로컬 Lucide 아이콘을 적용했습니다. 메뉴·새로고침은 44px 도구 버튼과 접근성 이름을 유지합니다.</li>
@@ -23,9 +23,11 @@
 <tr><td>기존 업무 회귀</td><td>JavaScript 52건 + TypeScript 26건</td><td>78건 통과</td></tr>
 <tr><td>UI 보존·기존 프라이빗 디자인</td><td>운영 ID, 입력, 이벤트, 인증·쓰기 함수 비교</td><td>30건 통과</td></tr>
 <tr><td>Hosting 검증·문법·차이 검사</td><td>기존 릴리스 가드, JS 구문, diff 공백</td><td>통과</td></tr>
+<tr><td>라이브 반응형</td><td>운영 Hosting · 95개 조합</td><td>통과</td></tr>
+<tr><td>릴리스·자산 원천 대조</td><td>커스텀 도메인과 web.app/core · CSS, 아이콘, JS, 카탈로그 해시</td><td>정확히 일치</td></tr>
 </tbody></table></div></section>
 <section><h2>변경하지 않은 부분</h2><p>회원 데이터, Firebase 인증·권한, Firestore 조회·쓰기, 알림톡 발송 규칙, 예약, 환불 계산, 시퀀스 편집·저장 로직은 그대로입니다.</p><p class="muted">알림톡 카탈로그는 화면 소스 변경에 따른 해시와 줄 번호만 재생성했습니다. 템플릿·발송 정책은 변경하지 않았습니다.</p></section>
-<section><h2>미리보기</h2><p><a href="http://127.0.0.1:4180/">맥미니 로컬 미리보기 열기</a></p><p>예시 데이터만 표시합니다. 실제 Firebase 설정·외부 연결·저장·발송을 차단했습니다. 운영 사이트는 아직 변경하지 않았습니다.</p></section>
-<section><h2>남은 범위</h2><p>이번 검증은 합성 데이터 기반 로컬 검사입니다. 실제 운영 로그인·실데이터 화면, 시퀀스 저장 기능, 전체 스크린리더·색 대비 감사는 실행하지 않았습니다.</p><p>운영규칙에는 미배포 상태로 기록했습니다. 디자인 검토 후 명시적 배포 요청이 있으면 Hosting 배포, 라이브 검증, 커밋·푸시를 진행합니다.</p></section>
-<section><h2>작업 위치</h2><p><code>/Users/archivepilates/codex-worktrees/core-ui-refinement-20261008</code></p><p><code>codex/mini/core-ui-refinement-20261008</code></p><p class="muted">변경 파일은 이 전용 작업공간에만 있습니다. 기존 프로젝트의 다른 변경은 건드리지 않았습니다.</p></section>
+<section><h2>운영 링크</h2><p><a href="https://core.archivepilates.com/">ARCHIVE CORE 열기</a> · <a href="https://core.archivepilates.com/release.json">현재 릴리스 기록</a></p><p>프로젝트 archive-pilates의 archive-pilates·archive-pilates-core Hosting만 배포했습니다. Functions·Firestore 규칙·운영 회원 데이터는 변경하지 않았습니다.</p></section>
+<section><h2>검증 범위</h2><p>업무 화면은 합성 데이터로 검사했으며 실제 Hosting의 페이지·반응형·릴리스·자산 원천을 대조했습니다. 실제 회원 로그인·실데이터 쓰기·발송, 시퀀스 저장 기능, 전체 스크린리더·색 대비 감사는 실행하지 않았습니다.</p><p>배포 전 확인된 펼치기 아이콘과 건수 배지의 겹침도 수정하고 다시 검증했습니다. CORE 운영규칙에 배포·검증 결과를 기록했습니다.</p></section>
+<section><h2>작업 위치</h2><p><code>/Users/archivepilates/codex-worktrees/core-ui-refinement-20261008</code></p><p><code>codex/mini/core-ui-refinement-20261008 → main</code></p><p class="muted">전용 작업공간에서 검증 후 main으로 승격했습니다. 기존 프로젝트의 다른 변경은 건드리지 않았습니다.</p></section>
 </main></body></html>
