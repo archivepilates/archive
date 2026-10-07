@@ -1,0 +1,11 @@
+<!doctype html>
+<html lang="ko"><meta charset="utf-8"><meta name="viewport" content="width=device-width, initial-scale=1"><title>ARCHIVE PILATES 강사 근무명단 연동</title>
+<style>*{box-sizing:border-box}body{margin:0;background:#f6f7f8;color:#202124;font:16px/1.7 system-ui,sans-serif}main{max-width:900px;margin:auto;padding:32px 20px}h1{font-size:28px}h2{font-size:20px;margin-top:32px}table{border-collapse:collapse;width:100%;background:white}th,td{text-align:left;padding:12px;border-bottom:1px solid #ddd}p{max-width:65ch}code{overflow-wrap:anywhere}a{color:#b5272c}.muted{color:#61686e}</style>
+<main><p class="muted">ARCHIVE PILATES · 2026-10-07</p><h1>강사 근무명단 연동</h1>
+<h2>확인된 원인</h2><p>기존 화면은 로그인·연락처 정책에도 쓰이는 active 값을 근무 상태로 해석했습니다. 과거 강사 스캔은 정기 동기화에 연결되지 않았고, 일부 강사만 확인한 기록이 남아 있었습니다.</p>
+<table><thead><tr><th>기준</th><th>인원</th><th>확인 내용</th></tr></thead><tbody><tr><td>StudioMate 전체 직원 명단</td><td>5명</td><td>김기효, 배민진, 이초림, 정유리, 정은영</td></tr><tr><td>수정 전 CORE 현재 근무중</td><td>7명</td><td>김민지·김아영이 추가 노출</td></tr><tr><td>근무 상태 반영 후</td><td>5명</td><td>김민지·김아영은 비근무 이력으로 보존</td></tr></tbody></table>
+<h2>반영 구조</h2><ul><li>StudioMate 필터 없는 전체 명단 → staffs 근무 상태 → CORE 표시.</li><li>기존 Excel 동기화 작업에서 24시간 경과 후 직원 탭을 확인합니다. 새 주기 작업은 만들지 않습니다.</li><li>누락·빈 명단·부분 조회·식별 충돌·급격한 명단 감소는 반영을 차단합니다.</li><li>로그인 권한, 알림톡 제외, 연락처, 수업·급여·평가 이력은 변경하지 않습니다.</li><li>브라우저 잠금 충돌은 기다리지 않고 운영 경고를 남기며 다음 정기 실행에서 재확인합니다.</li><li>강사 조회 실패가 정상 완료된 회원·예약 원천의 최신성까지 무효화하지 않도록 분리했습니다.</li></ul>
+<h2>검증</h2><p>회귀 테스트 87개, CORE Hosting 검사, 기존 기능 롤백 방지 검사를 통과했습니다. 전체 명단 대조 후 근무 상태 12건을 반영했고 기존 13개 직원 문서의 근무 상태 외 모든 필드가 그대로임을 검증했습니다. 일일 중복 조회 방지도 확인했습니다. 신규 강사 동시 등록 시 기존 권한을 덮어쓰지 않으며, 점검 시스템이 강사 동기화 경고를 정상으로 지우지 않도록 보강했습니다. Functions 변경은 없습니다.</p>
+<h2>운영 확인</h2><p>라이브 화면·배포 식별자·CI 최종 확인 결과는 아래 실행 기록에 추가합니다. 첫 무인 전체 브라우저 스캔은 24시간 후 정기 실행에서 확인해야 하며, 수동 원천 대조와 이번 반영만으로 이미 완료됐다고 판단하지 않습니다.</p>
+<p><a href="https://core.archivepilates.com/staff/">ARCHIVE CORE 강사 현황</a></p>
+<section id="release-result"><h2>배포 기록</h2><p>검증 후 승인된 CORE Hosting 전용 배포를 진행합니다.</p></section></main></html>

@@ -24,7 +24,7 @@ export function successfulSyncReport(report) {
   }
   return ["download", "memberProfiles", "memberPhoneDedupe", "reservations", "deletedClassLogs"]
     .every((name) => report.steps.some((step) => step.name === name && syncStepSucceeded(step))) &&
-    report.steps.filter((step) => !step.name?.startsWith("membershipContract")).every(syncStepSucceeded);
+    report.steps.filter((step) => !step.name?.startsWith("membershipContract") && step.name !== "staffEmployment").every(syncStepSucceeded);
 }
 
 export function summarizeSyncReports(entries, { nowMs = Date.now(), maxAgeMinutes } = {}) {
@@ -51,6 +51,10 @@ export function summarizeSyncReports(entries, { nowMs = Date.now(), maxAgeMinute
     contractIssues: (latest?.report?.steps || [])
       .filter((step) => step.name?.startsWith("membershipContract") && !syncStepSucceeded(step))
       .map((step) => ({ name: step.name, reason: String(step.stderr || step.stdout?.reason || "contract_stage_incomplete").slice(0, 180) })),
+    staffEmploymentIssues: (latest?.report?.steps || [])
+      .filter((step) => step.name === "staffEmployment" && !syncStepSucceeded(step))
+      .map((step) => ({ name: step.name, reason: String(step.stderr || step.stdout?.error || "staff_scan_incomplete").slice(0, 180) })),
+    staffEmploymentChecked: (latest?.report?.steps || []).some((step) => step.name === "staffEmployment" && syncStepSucceeded(step)),
     lastSuccessPath: lastSuccess?.file || "",
     lastSuccessAt,
     sourceObservedAt,

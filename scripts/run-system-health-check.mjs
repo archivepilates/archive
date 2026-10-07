@@ -512,7 +512,18 @@ async function checkLaunchAgents() {
       launchState.lastExitCode !== null &&
       launchState.lastExitCode !== 0));
     const contractIssues = pipeline?.contractIssues || [];
+    const staffEmploymentIssues = pipeline?.staffEmploymentIssues || [];
     if (pipeline) {
+      const staffCheckKey = `${checkKey}:staff-employment`;
+      if (pipeline.staffEmploymentChecked) completedChecks.add(staffCheckKey);
+      if (staffEmploymentIssues.length) addFinding({
+        checkKey: staffCheckKey, area: item.area, severity: "warning",
+        title: "강사 근무명단 동기화 확인 필요",
+        cause: staffEmploymentIssues.map((issue) => `${issue.name}: ${issue.reason}`).join("; "),
+        impact: "회원·예약 동기화와 별개로 CORE 강사 근무 상태는 이전 명단을 유지합니다.",
+        suggestedAction: "StudioMate 직원 탭 전체 명단과 브라우저 잠금을 확인하세요. 다음 정기 실행에서 재확인하며 퇴사 처리나 로그인 권한 변경은 하지 않습니다.",
+        sourceRefs: [pipeline.latestPath], autoRepairable: false,
+      });
       const contractCheckKey = `${checkKey}:membership-contract`;
       if (!contractIssues.length) completedChecks.add(contractCheckKey);
       else addFinding({
@@ -617,7 +628,7 @@ async function checkLaunchAgents() {
       automationId: item.id,
       title: item.title,
       ownerArea: item.area,
-      status: !plistExists || !launchState.loaded || executionFailed ? "failed" : stale || missingEvidence || contractIssues.length ? "warning" : "healthy",
+      status: !plistExists || !launchState.loaded || executionFailed ? "failed" : stale || missingEvidence || contractIssues.length || staffEmploymentIssues.length ? "warning" : "healthy",
       lastRunAt: latest.mtimeIso || new Date().toISOString(),
       runId,
       lastResult: !plistExists
@@ -628,13 +639,15 @@ async function checkLaunchAgents() {
             ? `최근 실행 실패${pipeline?.failedStep ? ` · ${pipeline.failedStep}` : ` · exit ${launchState.lastExitCode}`}`
           : stale
             ? `마지막 정상 반영 ${evidenceAge === null ? "확인 불가" : `${Math.round(evidenceAge)}분 전`}`
-            : contractIssues.length ? "회원·예약 동기화 정상 · 회원 계약 확인 필요" : "Health Check 통과",
+            : contractIssues.length ? "회원·예약 동기화 정상 · 회원 계약 확인 필요"
+            : staffEmploymentIssues.length ? "회원·예약 동기화 정상 · 강사 근무명단 확인 필요" : "Health Check 통과",
       warnings: [
         launchState.error,
         executionFailed ? `last exit code ${launchState.lastExitCode}` : "",
         stale ? "stale evidence" : "",
         missingEvidence ? "missing evidence" : "",
         ...contractIssues.map((issue) => `${issue.name}: ${issue.reason}`),
+        ...staffEmploymentIssues.map((issue) => `${issue.name}: ${issue.reason}`),
         pipeline?.lastSuccessAt ? `last success ${pipeline.lastSuccessAt}` : "",
       ].filter(Boolean),
     });

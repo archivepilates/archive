@@ -5734,7 +5734,7 @@ function promotedStaffEvaluationKey(rows, item) {
   const phone = staffEvaluationIdentityPhone(item);
   if (phone.length < 10) return "";
   const matches = [...rows.values()].filter(
-    (row) => row.employmentSource === "staffs" && row.identityPhone === phone,
+    (row) => row.employmentSource === "staffs" && row.isCurrentStaff && row.identityPhone === phone,
   );
   return matches.length === 1 ? matches[0].key : "";
 }
@@ -5747,7 +5747,10 @@ function staffEvaluationRows() {
     const applicantEvaluation = Boolean(staff.applicantEvaluation || staff.role === "applicant");
     const role = staff.role || "instructor";
     const isTeachingRole = ["instructor", "owner"].includes(String(role));
-    const isCurrentStaff = staff.active !== false && !applicantEvaluation && isTeachingRole;
+    const employed = ["current", "inactive"].includes(staff.employmentStatus)
+      ? staff.employmentStatus === "current"
+      : staff.active === true;
+    const isCurrentStaff = employed && !applicantEvaluation && isTeachingRole;
     rows.set(key, {
       key,
       staffId: staff.staffId || staff.id || "",
@@ -5756,9 +5759,12 @@ function staffEvaluationRows() {
       submissions: [],
       card: null,
       applicantEvaluation,
-      staffActive: staff.active !== false,
+      staffActive: staff.active === true,
       isCurrentStaff,
       employmentSource: "staffs",
+      employmentStatus: staff.employmentStatus,
+      employmentSyncSource: staff.employmentSource,
+      employmentSyncedAt: staff.employmentSyncedAt,
       identityPhone: staffEvaluationIdentityPhone(staff),
     });
   }
@@ -5873,6 +5879,13 @@ function staffEmploymentLabel(row) {
   if (state === "operator") return "운영자 계정";
   if (state === "applicant") return "지원자/시험 기록";
   return "비근무/퇴사 기록";
+}
+
+function staffEmploymentBasis(row) {
+  if (row.employmentSource !== "staffs") return "기록 보존 기준";
+  if (!["current", "inactive"].includes(row.employmentStatus)) return "기존 active 기준 · 근무 명단 동기화 대기";
+  const source = row.employmentSyncSource === "studiomate_staff_tab_browser_scan" ? "StudioMate 근무 명단" : "근무 상태 기록";
+  return source + (row.employmentSyncedAt ? " · 확인 " + formatDate(row.employmentSyncedAt) : " · 확인 시각 없음");
 }
 
 function staffEmploymentPill(row) {
@@ -6106,7 +6119,7 @@ function renderStaffDetail(row) {
       <div class="staff-detail-kpi staff-detail-kpi-status">
         <span>근무 상태</span>
         <strong>${escapeHtml(staffEmploymentLabel(row))}</strong>
-        <em>${escapeHtml(row.employmentSource === "staffs" ? "staffs active 기준" : "기록 보존 기준")}</em>
+        <em>${escapeHtml(staffEmploymentBasis(row))}</em>
       </div>
       ${metricCards
         .map(
@@ -6350,7 +6363,7 @@ function renderStaffHr() {
 
   const inactiveContainsSelected = inactiveStaffs.some((staff) => staff.key === selectedStaffKey);
   list.innerHTML = [
-    renderStaffGroup("현재 근무중", "staffs active 기준으로 현재 운영 중인 강사입니다.", currentStaffs, "is-current", true),
+    renderStaffGroup("현재 근무중", "StudioMate 근무 명단", currentStaffs, "is-current", true),
     renderStaffGroup(
       "비근무 · 지원자 · 운영자 기록",
       "입사시험 제출자, 퇴사/비활성 강사, 운영자 계정, 기록만 남은 대상을 분리 보관합니다.",

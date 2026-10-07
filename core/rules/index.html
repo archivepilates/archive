@@ -718,8 +718,11 @@
                 <li>staffEvaluationSubmissions는 제출 원본, staffHrCards는 인사기록카드 read-model입니다.</li>
                 <li>강사 평가 제출 원본과 인사기록카드는 ARCHIVE CORE 관리자만 읽을 수 있으며, 직접 쓰기는 허용하지 않습니다.</li>
                 <li>지원자 원본은 staffApplicantEvaluationSessions와 staffApplicantEvaluationSubmissions에 별도로 보관합니다.</li>
-                <li>현재 근무중 여부는 staffs.active와 staffRole 기준으로 판단합니다. active인 instructor/owner는 현재 근무중, manager/viewer는 운영자 계정, staffHrCards나 제출 기록만 있는 대상은 비근무/지원자 기록으로 보관합니다.</li>
-                <li>지원자 시험 ID와 입사 후 강사 ID가 달라진 경우 휴대폰번호가 정확히 한 명에게만 일치할 때 현재 강사 인사기록카드로 연결합니다.</li>
+                <li>현재 근무중 여부는 staffs.employmentStatus(current/inactive)를 우선 사용하고, 유효한 근무 상태가 없으면 active === true만 사용합니다. instructor/owner와 지원자 구분은 유지하며 manager/viewer는 운영자 계정, 인사·시험 기록만 있는 대상은 비근무/지원자 기록으로 보관합니다.</li>
+                <li>지원자 시험 ID와 입사 후 강사 ID가 달라진 경우 휴대폰번호가 현재 근무중 강사 정확히 한 명에게만 일치할 때 연결합니다. 비근무 동명이력은 연결 후보에서 제외합니다.</li>
+                <li>2026-10-07 근무 명단 연동: 원천은 StudioMate 직원 탭 전체 명단이며, 기존 Excel 동기화 runner에서 매일 완전 스캔 후 staffs.employmentStatus, employmentSource=studiomate_staff_tab_browser_scan, employmentSyncedAt을 반영하는 방식입니다. 명단에서 빠진 대상은 비근무로 보존하고 삭제하지 않습니다. 실패·부분 스캔은 근무 상태를 변경하지 않습니다.</li>
+                <li>staffs.active는 인증과 연결된 값이므로 근무 명단 연동으로 active, role, uid, 로그인 권한을 변경하지 않습니다. CORE 새로고침은 Firestore만 읽으며 StudioMate 스캔을 시작하지 않습니다.</li>
+                <li>2026-10-07 구현·검증: 전체 명단 5명과 근무 상태를 대조하고 회귀 테스트를 통과했습니다. 배포 범위: CORE Hosting과 Mac mini runner. 다음 확인: 첫 정기 전체 스캔 결과. 강사 조회 오류나 브라우저 잠금은 운영 경고로 남기고 다음 정기 실행에서 재확인하며, 정상 완료된 회원·예약 원천의 최신성은 무효화하지 않습니다.</li>
                 <li>인사기록카드는 외부 발송, 정산, 예약, 회원 응대 자동화의 원천으로 사용하지 않습니다.</li>
               </ul>
             </article>

@@ -1,356 +1,132 @@
 #!/usr/bin/env node
 import os from "node:os";
 import path from "node:path";
-import { mkdir, writeFile } from "node:fs/promises";
+import { mkdir, readFile, writeFile } from "node:fs/promises";
 import { createRequire } from "node:module";
 import { acquireStudioMateBrowserLock } from "./lib/studiomate-browser-lock.mjs";
 import { ensureStudioMateLoggedIn } from "./lib/studiomate-login.mjs";
+import { STAFF_EMPLOYMENT_SOURCE, buildStaffEmploymentPlans, validateStaffSnapshot, staffScanDue } from "./lib/studiomate-staff-employment.mjs";
 
 const require = createRequire(import.meta.url);
 const admin = require("../firebase/kangsain-functions/functions/node_modules/firebase-admin");
-
 const args = new Set(process.argv.slice(2));
 const apply = args.has("--apply");
 const staffIdScope = valueArg("--staff-id");
-
+const snapshotFile = valueArg("--snapshot-file");
 const PROJECT_ID = process.env.GOOGLE_CLOUD_PROJECT || process.env.GCLOUD_PROJECT || "archive-pilates";
-const STUDIO_ID = process.env.STUDIOMATE_STUDIO_ID || process.env.MANAGER_STUDIO_ID || "5330";
-const BASE_URL = process.env.STUDIOMATE_BASE_URL || "https://arcpilates.studiomate.kr";
+const STUDIO_ID = process.env.STUDIOMATE_STUDIO_ID || "5330";
+const BASE_URL = "https://arcpilates.studiomate.kr";
 const PROFILE_DIR = expandHome(process.env.STUDIOMATE_EMERGENCY_PROFILE_DIR || "~/ArchiveIN/automation/browser-profile");
 const REPORT_DIR = expandHome(process.env.STUDIOMATE_STAFF_SCAN_REPORT_DIR || "~/ArchiveIN/automation/reports/studiomate-staff-scan");
 const HEADLESS = process.env.HEADLESS !== "false";
-const WAIT_FOR_LOGIN = process.env.WAIT_FOR_LOGIN === "true";
-const TODAY = kstDate(new Date());
-const OPERATOR_STAFF_IDS = new Set(["operator_01029244425"]);
-
+if (PROJECT_ID !== "archive-pilates" || STUDIO_ID !== "5330") throw new Error("Unexpected staff sync project/studio");
 if (!admin.apps.length) admin.initializeApp({ projectId: PROJECT_ID });
 const db = admin.firestore();
-
-const startedAt = new Date();
+const startedAt = new Date().toISOString();
 let summary;
 try {
-  const scanned = await scanStudioMateStaffTab();
-  const scopedStaffs = staffIdScope
-    ? scanned.staffs.filter((staff) => staff.staffId === staffIdScope)
-    : scanned.staffs;
-  if (staffIdScope && !scopedStaffs.length) {
-    throw new Error(`StudioMate staff not found for --staff-id ${staffIdScope}`);
-  }
-  const mismatchedStudio = scopedStaffs.find((staff) => staff.studioId && staff.studioId !== STUDIO_ID);
-  if (mismatchedStudio) {
-    throw new Error(`StudioMate staff ${mismatchedStudio.staffId} does not belong to studio ${STUDIO_ID}`);
-  }
-  const existing = await loadExistingStaffs();
-  const plans = await buildPlans({ ...scanned, staffs: scopedStaffs }, existing, {
-    retireMissing: !staffIdScope,
-  });
-  summary = {
-    ok: true,
-    mode: apply ? "apply" : "dry-run",
-    source: "studiomate_staff_tab_browser_scan",
-    studioId: STUDIO_ID,
-    baseUrl: BASE_URL,
-    profileDir: PROFILE_DIR,
-    scanUrl: scanned.scanUrl,
-    scannedStaffs: scopedStaffs.length,
-    scannedNames: scopedStaffs.map((staff) => staff.name),
-    staffIdScope: staffIdScope || null,
-    plannedWrites: plans.writes.length,
-    plannedRetirements: plans.writes.filter((plan) => plan.change === "retire_missing_no_future_schedule").length,
-    keptMissingWithFutureSchedule: plans.keptMissingWithFutureSchedule,
-    skippedOperators: plans.skippedOperators,
-    writes: plans.writes.map(({ data: _data, ...plan }) => plan),
-    startedAt: startedAt.toISOString(),
-    finishedAt: new Date().toISOString(),
-  };
-
-  if (apply && plans.writes.length) {
-    const batch = db.batch();
-    for (const plan of plans.writes) {
-      batch.set(db.collection("staffs").doc(plan.staffId), plan.data, { merge: true });
-    }
-    batch.set(
-      db.collection("opsState").doc("studiomateStaffBrowserScan"),
-      {
-        active: true,
-        source: summary.source,
-        scannedStaffs: summary.scannedStaffs,
-        scannedNames: summary.scannedNames,
-        plannedWrites: summary.plannedWrites,
-        plannedRetirements: summary.plannedRetirements,
-        keptMissingWithFutureSchedule: summary.keptMissingWithFutureSchedule,
+  const prior = (await db.doc("opsState/studiomateStaffBrowserScan").get()).data();
+  if (args.has("--if-due") && !staffScanDue(prior)) {
+    summary = { ok: true, skipped: "full_scan_not_due", lastFullScanAt: prior.lastFullScanAt };
+  } else {
+    const existing = (await db.collection("staffs").where("studioId", "==", STUDIO_ID).get()).docs.map(doc => ({ ...doc.data(), docId: doc.id }));
+    const scanned = snapshotFile ? JSON.parse(await readFile(snapshotFile, "utf8")) : await scanStudioMateStaffTab(existing);
+    validateStaffSnapshot(scanned, { studioId: STUDIO_ID });
+    const plans = buildPlans(scanned, existing, { retireMissing: !staffIdScope });
+    summary = { ok: true, mode: apply ? "apply" : "dry-run", source: STAFF_EMPLOYMENT_SOURCE,
+      studioId: STUDIO_ID, scanUrl: scanned.scanUrl, scannedStaffs: scanned.total,
+      scannedNames: scanned.staffs.map(s => s.name), staffIdScope: staffIdScope || null,
+      plannedWrites: plans.writes.length, skippedOperators: plans.skippedOperators,
+      writes: plans.writes.map(({ data, ...plan }) => ({ ...plan, after: data.employmentStatus })) };
+    if (apply) {
+      const batch = db.batch();
+      for (const plan of plans.writes) {
+        const ref = db.collection("staffs").doc(plan.docId);
+        if (plan.change === "create_unprovisioned_staff") batch.create(ref, plan.data);
+        else batch.set(ref, plan.data, { merge: true });
+      }
+      batch.set(db.doc("opsState/studiomateStaffBrowserScan"), {
+        source: STAFF_EMPLOYMENT_SOURCE, scannedStaffs: scanned.total, scannedNames: summary.scannedNames,
         updatedAt: admin.firestore.Timestamp.now(),
-      },
-      { merge: true },
-    );
-    await batch.commit();
+        ...(!staffIdScope ? { fullScanComplete: true, lastFullScanAt: scanned.capturedAt } : {}),
+      }, { merge: true });
+      await batch.commit();
+    }
   }
 } catch (error) {
   process.exitCode = 1;
-  summary = {
-    ok: false,
-    mode: apply ? "apply" : "dry-run",
-    source: "studiomate_staff_tab_browser_scan",
-    studioId: STUDIO_ID,
-    baseUrl: BASE_URL,
-    profileDir: PROFILE_DIR,
-    error: error instanceof Error ? error.message : String(error),
-    startedAt: startedAt.toISOString(),
-    finishedAt: new Date().toISOString(),
-  };
+  summary = { ok: false, mode: apply ? "apply" : "dry-run", error: error instanceof Error ? error.message : String(error) };
+}
+summary = { ...summary, startedAt, finishedAt: new Date().toISOString() };
+await mkdir(REPORT_DIR, { recursive: true });
+summary.reportPath = path.join(REPORT_DIR, `${new Date().toISOString().replace(/[:.]/g, "-" )}-staff-employment-${apply ? "apply" : "dry-run"}.json`);
+await writeFile(summary.reportPath, `${JSON.stringify(summary, null, 2)}\n`);
+console.log(JSON.stringify(summary, null, 2));
+
+function buildPlans(scanned, existing, options = {}) {
+  if (options.retireMissing !== false) return buildStaffEmploymentPlans(scanned, existing);
+  if (!staffIdScope) throw new Error("Partial scan requires a staff scope");
+  return buildStaffEmploymentPlans(scanned, existing, { staffIdScope });
 }
 
-await writeReport(summary);
-if (summary.ok) {
-  console.log(JSON.stringify(summary, null, 2));
-} else {
-  console.error(JSON.stringify(summary, null, 2));
-}
-
-async function scanStudioMateStaffTab() {
-  const releaseBrowserLock = await acquireStudioMateBrowserLock({ owner: "studiomate-staff-browser-scan" });
-  let context = null;
-
+async function scanStudioMateStaffTab(existing) {
+  const release = await acquireStudioMateBrowserLock({ owner: "studiomate-staff-browser-scan", waitMs: 0 });
+  let context;
   try {
     const { chromium } = await import("playwright");
-    context = await chromium.launchPersistentContext(PROFILE_DIR, {
-      acceptDownloads: true,
-      headless: HEADLESS,
-    });
+    context = await chromium.launchPersistentContext(PROFILE_DIR, { headless: HEADLESS });
     const page = await context.newPage();
-    let capturedAuthorization = "";
-    page.on("request", (request) => {
-      if (!request.url().includes("api.studiomate.kr")) return;
-      capturedAuthorization = request.headers().authorization || capturedAuthorization;
-    });
-    await page.goto(new URL("/staffs", BASE_URL).toString(), { waitUntil: "networkidle", timeout: 60000 });
-    await closeNoticeDialog(page);
-    await assertLoggedIn(page);
-    if (!new URL(page.url()).pathname.startsWith("/staffs")) {
-      await page.goto(new URL("/staffs", BASE_URL).toString(), { waitUntil: "networkidle", timeout: 60000 });
-      await closeNoticeDialog(page);
-      await assertLoggedIn(page);
+    await page.goto(`${BASE_URL}/staffs`, { waitUntil: "domcontentloaded", timeout: 60000 });
+    await ensureStudioMateLoggedIn(page, { headless: HEADLESS, waitForLogin: process.env.WAIT_FOR_LOGIN === "true" });
+    if (new URL(page.url()).pathname !== "/staffs") await page.goto(`${BASE_URL}/staffs`, { waitUntil: "domcontentloaded" });
+    await page.getByRole("heading", { name: /^총\s*\d+명$/ }).waitFor({ state: "visible" });
+    // A loading page briefly reports zero; require actual visible staff rows.
+    await page.getByRole("row").filter({ has: page.getByRole("img") }).first().waitFor({ state: "visible", timeout: 20000 });
+    const source = await page.evaluate(() => ({
+      total: Number(document.querySelector("h4")?.textContent?.match(/총\s*(\d+)명/)?.[1]),
+      filters: [...document.querySelectorAll(".staff-filter input")].map(i => i.value),
+      search: document.querySelector('input[placeholder="이름 또는 휴대폰 번호로 검색"]')?.value,
+      rows: [...document.querySelectorAll("table.el-table__body tr")].map(r => [...r.querySelectorAll("td")].map(c => c.innerText.trim())),
+    }));
+    if (source.filters[0] !== "역할 전체" || source.filters[1] !== "근무형태 전체" || source.search !== "") throw new Error("Staff roster filters are not complete");
+    if (!source.total || source.rows.length !== source.total) throw new Error("Incomplete staff roster page; no writes allowed");
+    const staffs = [];
+    for (const cells of source.rows) {
+      const name = cells[1]?.split("\n")[0]?.trim();
+      const phone = (cells[4] || "").replace(/\D/g, "");
+      const matches = existing.filter(s => String(s.phone || "").replace(/\D/g, "") === phone && s.name === name);
+      let staffId;
+      if (matches.length === 1) {
+        staffId = String(matches[0].studiomateStaffId || matches[0].staffId || matches[0].docId);
+      } else {
+        if (matches.length > 1) throw new Error("Ambiguous staff identity in canonical records");
+        await page.getByRole("img", { name, exact: true }).click();
+        await page.waitForURL(`${BASE_URL}/staffs/detail?id=*`);
+        await page.getByRole("heading", { name, exact: true }).waitFor({ state: "visible" });
+        staffId = new URL(page.url()).searchParams.get("id");
+        await page.getByRole("link", { name: "강사", exact: true }).click();
+        await page.waitForURL(`${BASE_URL}/staffs`);
+        await page.getByRole("img", { name, exact: true }).waitFor({ state: "visible" });
+      }
+      staffs.push({ staffId, name, phone, sourceRole: cells[2], employmentType: cells[3] });
     }
-    await page.waitForTimeout(1200);
-    if (!capturedAuthorization) throw new Error("StudioMate authorization header was not captured from the browser session.");
-    const staffs = await fetchAllStaffs(capturedAuthorization);
-    return { scanUrl: page.url(), staffs };
+    const final = await page.evaluate(() => ({
+      total: Number(document.querySelector("h4")?.textContent?.match(/총\s*(\d+)명/)?.[1]),
+      rows: [...document.querySelectorAll("table.el-table__body tr")].map(r => [...r.querySelectorAll("td")].map(c => c.innerText.trim())),
+    }));
+    if (final.total !== source.total || JSON.stringify(final.rows) !== JSON.stringify(source.rows)) throw new Error("Staff roster changed during scan");
+    return { source: STAFF_EMPLOYMENT_SOURCE, studioId: STUDIO_ID, scanUrl: `${BASE_URL}/staffs`,
+      capturedAt: new Date().toISOString(), total: source.total, complete: true,
+      filters: { role: "전체", employmentType: "전체", search: "" }, staffs };
   } finally {
-    if (context) await context.close();
-    await releaseBrowserLock();
+    try { if (context) await context.close(); } finally { await release(); }
   }
-}
-
-async function fetchAllStaffs(authorization) {
-  const out = [];
-  let page = 1;
-  let lastPage = 1;
-  do {
-    const query = new URLSearchParams({ order_by: "asc", search: "", page: String(page), per_page: "100" });
-    const response = await fetch(`https://api.studiomate.kr/staff/staff?${query.toString()}`, {
-      headers: { authorization, accept: "application/json" },
-    });
-    const text = await response.text();
-    if (!response.ok) throw new Error(`StudioMate staff tab API failed ${response.status}: ${text.slice(0, 500)}`);
-    const json = JSON.parse(text);
-    const pageData = json.staffs || {};
-    const rows = Array.isArray(pageData.data) ? pageData.data : [];
-    out.push(...rows.map(normalizeStudioMateStaff).filter((staff) => staff.staffId && staff.name));
-    lastPage = Number(pageData.last_page || page);
-    page += 1;
-  } while (page <= lastPage);
-  return out;
-}
-
-async function loadExistingStaffs() {
-  const snap = await db.collection("staffs").where("studioId", "==", STUDIO_ID).get();
-  return snap.docs.map((doc) => ({ docId: doc.id, ...doc.data() }));
-}
-
-async function buildPlans(scanned, existing, options = {}) {
-  const writes = [];
-  const scannedIds = new Set(scanned.staffs.map((staff) => staff.staffId));
-  const existingById = new Map(existing.map((staff) => [staff.staffId || staff.docId, staff]));
-  for (const staff of scanned.staffs) {
-    const current = existingById.get(staff.staffId);
-    const data = {
-      staffId: staff.staffId,
-      studioId: STUDIO_ID,
-      name: staff.name,
-      phone: staff.phone || current?.phone || "",
-      phoneLast4: staff.phone ? staff.phone.slice(-4) : current?.phoneLast4 || "",
-      color: staff.color || current?.color || "",
-      themeColor: staff.color || current?.themeColor || "",
-      role: protectedRole(current?.role, staff.role),
-      active: !staff.deletedAt,
-      studiomateStaffId: staff.staffId,
-      visibleLectureStaffNames: current?.visibleLectureStaffNames?.length ? current.visibleLectureStaffNames : [staff.name],
-      sourceUpdatedAt: staff.updatedAt || null,
-      updatedAt: admin.firestore.Timestamp.now(),
-      createdAt: current?.createdAt || admin.firestore.Timestamp.now(),
-    };
-    if (current?.uid) data.uid = current.uid;
-    if (current?.email) data.email = current.email;
-    writes.push({
-      staffId: staff.staffId,
-      name: staff.name,
-      change: current ? "upsert_scanned_staff" : "create_scanned_staff",
-      before: pickStaff(current),
-      after: pickStaff(data),
-      data,
-    });
-  }
-
-  const skippedOperators = [];
-  const keptMissingWithFutureSchedule = [];
-  if (options.retireMissing !== false) {
-    for (const staff of existing) {
-      const staffId = staff.staffId || staff.docId;
-      if (!staff.active || scannedIds.has(staffId)) continue;
-      if (OPERATOR_STAFF_IDS.has(staffId) || staff.role === "manager") {
-        skippedOperators.push({ staffId, name: staff.name, role: staff.role });
-        continue;
-      }
-      const future = await futureScheduleCount(staffId);
-      if (future.lectures || future.bookings) {
-        keptMissingWithFutureSchedule.push({ staffId, name: staff.name, ...future });
-        continue;
-      }
-      writes.push({
-        staffId,
-        name: staff.name,
-        change: "retire_missing_no_future_schedule",
-        before: pickStaff(staff),
-        after: { ...pickStaff(staff), active: false },
-        data: {
-          active: false,
-          retiredAt: admin.firestore.Timestamp.now(),
-          retiredReason: "StudioMate 강사탭 주간 스캔에서 제외되고 미래 수업/예약 없음",
-          updatedAt: admin.firestore.Timestamp.now(),
-        },
-      });
-    }
-  }
-  return { writes, skippedOperators, keptMissingWithFutureSchedule };
 }
 
 function valueArg(name) {
-  const prefix = `${name}=`;
-  const inline = process.argv.slice(2).find((arg) => arg.startsWith(prefix));
-  if (inline) return inline.slice(prefix.length);
+  const inline = process.argv.slice(2).find(a => a.startsWith(`${name}=`));
+  if (inline) return inline.slice(name.length + 1);
   const index = process.argv.indexOf(name);
-  return index >= 0 ? process.argv[index + 1] : "";
+  return index >= 0 ? process.argv[index + 1] || "" : "";
 }
-
-async function futureScheduleCount(staffId) {
-  const [lectures, bookings] = await Promise.all([
-    db.collection("lectures").where("studioId", "==", STUDIO_ID).where("staffId", "==", staffId).where("date", ">=", TODAY).limit(1).get(),
-    db
-      .collection("bookings")
-      .where("studioId", "==", STUDIO_ID)
-      .where("staffId", "==", staffId)
-      .where("lectureDate", ">=", TODAY)
-      .limit(1)
-      .get(),
-  ]);
-  return { lectures: lectures.size, bookings: bookings.size };
-}
-
-function normalizeStudioMateStaff(row) {
-  const profile = row.profile || {};
-  const representativeContact = Array.isArray(row.contact_infos)
-    ? row.contact_infos.find((item) => item?.is_representative)?.contact || row.contact_infos[0]?.contact
-    : "";
-  return {
-    staffId: stringValue(row.id),
-    studioId: stringValue(row.studio_id || row.studio?.id || row.profile?.studio_id),
-    name: stringValue(row.name || profile.name),
-    phone: digitsOnly(row.mobile || representativeContact),
-    role: roleFromStudioMate(row),
-    color: colorValue(profile.representative_color || row.color || row.theme_color),
-    deletedAt: row.deleted_at || profile.deleted_at || null,
-    updatedAt: parseTimestamp(row.updated_at || profile.updated_at),
-  };
-}
-
-function roleFromStudioMate(row) {
-  const roles = Array.isArray(row.roles) ? row.roles : [];
-  const text = roles.map((role) => `${role.name || ""} ${role.display_name || ""}`).join(" ");
-  if (/studio_owner|오너|owner/i.test(text)) return "owner";
-  if (/manager|매니저|관리/i.test(text)) return "manager";
-  return "instructor";
-}
-
-function protectedRole(currentRole, scannedRole) {
-  if (currentRole) return currentRole;
-  return scannedRole || "instructor";
-}
-
-async function assertLoggedIn(page) {
-  await ensureStudioMateLoggedIn(page, { headless: HEADLESS, waitForLogin: WAIT_FOR_LOGIN });
-}
-
-async function closeNoticeDialog(page) {
-  for (const candidate of [
-    page.getByRole("button", { name: "닫기" }).last(),
-    page.getByText("닫기", { exact: true }).last(),
-    page.locator(".el-dialog__headerbtn").first(),
-  ]) {
-    if (await candidate.isVisible().catch(() => false)) {
-      await candidate.click({ timeout: 3000 }).catch(() => {});
-      await page.waitForTimeout(300);
-    }
-  }
-}
-
-async function writeReport(summary) {
-  await mkdir(REPORT_DIR, { recursive: true });
-  const reportPath = path.join(
-    REPORT_DIR,
-    `${new Date().toISOString().replace(/[:.]/g, "-")}-staff-scan-${apply ? "apply" : "dry-run"}.json`,
-  );
-  summary.reportPath = reportPath;
-  await writeFile(reportPath, `${JSON.stringify(summary, null, 2)}\n`);
-}
-
-function pickStaff(staff) {
-  if (!staff) return null;
-  return {
-    staffId: staff.staffId,
-    name: staff.name,
-    role: staff.role,
-    active: staff.active,
-    phoneLast4: staff.phoneLast4 || "",
-    color: staff.color || staff.themeColor || "",
-  };
-}
-
-function parseTimestamp(value) {
-  if (!value) return null;
-  const normalized = String(value).includes("T") ? String(value) : String(value).replace(" ", "T");
-  const date = new Date(`${normalized}${/[zZ]|[+-]\d\d:?\d\d$/.test(normalized) ? "" : "+09:00"}`);
-  return Number.isNaN(date.getTime()) ? null : admin.firestore.Timestamp.fromDate(date);
-}
-
-function colorValue(value) {
-  const text = stringValue(value);
-  if (/^#[0-9a-f]{6}$/i.test(text)) return text;
-  const hex = text.match(/[0-9a-f]{6}/i)?.[0];
-  return hex ? `#${hex}` : "";
-}
-
-function kstDate(date) {
-  return new Intl.DateTimeFormat("en-CA", { timeZone: "Asia/Seoul" }).format(date);
-}
-
-function expandHome(value) {
-  return String(value || "").replace(/^~/, os.homedir());
-}
-
-function stringValue(value) {
-  return value == null ? "" : String(value).trim();
-}
-
-function digitsOnly(value) {
-  return stringValue(value).replace(/\D/g, "");
-}
+function expandHome(value) { return String(value).replace(/^~/, os.homedir()); }

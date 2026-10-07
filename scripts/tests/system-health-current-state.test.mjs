@@ -54,6 +54,18 @@ test("contract failures stay actionable without invalidating member/reservation 
   assert.deepEqual(evidence.contractIssues, [{ name: "membershipContractDiscovery", reason: "member_coverage_review_1" }]);
 });
 
+test("staff sidecar errors stay actionable without invalidating canonical source freshness", () => {
+  const value = report({ status: "partial", finishedAt: now.toISOString(), steps: [...report().steps,
+    { name: "staffEmployment", exitCode: 1, stdoutOk: false, stdout: { ok: false, error: "incomplete_staff_roster" } }] });
+  assert.equal(successfulSyncReport(value), true);
+  const evidence = summarizeSyncReports([entry("2026-09-05T02", value)], { nowMs: now.getTime(), maxAgeMinutes: 95 });
+  assert.equal(evidence.stale, false);
+  assert.equal(evidence.latestAttemptSucceeded, true);
+  assert.deepEqual(evidence.staffEmploymentIssues, [{ name: "staffEmployment", reason: "incomplete_staff_roster" }]);
+  const brokenImport = { ...value, steps: value.steps.map(s => s.name === "reservations" ? { ...s, exitCode: 1 } : s) };
+  assert.equal(successfulSyncReport(brokenImport), false);
+});
+
 test("nested sales Firestore failures and missing write evidence cannot reset freshness", () => {
   for (const firebaseSync of [undefined, null, { ok: false, firestorePatch: { ok: false, status: 403 } }, { ok: true, firestorePatch: { ok: false } }]) {
     const value = report({ source: "archive_dashboard_sales_daily", dbSyncSucceeded: true,
@@ -441,6 +453,36 @@ test("read-only orchestration and LaunchAgent checks never write status", async 
     latestEvidence: () => ({ exists: true, ageMinutes: 1 }),
     completedChecks: new Set(), db: {}, recordAutomationStatus: forbidden,
   }))();
+});
+
+test("health checker preserves staff scan warnings and resolves them after recovery", async () => {
+  for (const failed of [true, false]) {
+    const emitted = [], statuses = [], completedChecks = new Set();
+    const pipeline = {
+      latestPath: "/fixture-run-apply.json", lastSuccessAt: now.toISOString(),
+      latestAttemptSucceeded: true, stale: false, successAgeMinutes: 1, contractIssues: [],
+      staffEmploymentIssues: failed ? [{ name: "staffEmployment", reason: "incomplete_roster" }] : [], staffEmploymentChecked: !failed,
+    };
+    await runnerFunction("checkLaunchAgents", baseGlobals({
+      READ_ONLY: false,
+      AUTOMATIONS: [{ id: "studiomate-excel-sync", area: "studiomate", title: "fixture", plist: "/fixture", maxAgeMinutes: 95, syncEvidence: true }],
+      syncEvidence: new Map(), completedChecks, db: {},
+      existsSync: () => true,
+      loadSyncRunEvidence: () => pipeline,
+      launchAgentState: () => ({ loaded: true, state: "not running", runs: 1, lastExitCode: 0 }),
+      fileEvidence: () => ({ exists: true, ageMinutes: 1 }),
+      addFinding: finding => emitted.push(finding),
+      recordAutomationStatus: async (_db, status) => statuses.push(status),
+    }))();
+    assert.equal(statuses[0].status, failed ? "warning" : "healthy");
+    assert.equal(emitted.length, failed ? 1 : 0);
+    assert.equal(completedChecks.has("sync:studiomate-excel-sync:staff-employment"), !failed);
+    if (failed) {
+      assert.equal(emitted[0].checkKey, "sync:studiomate-excel-sync:staff-employment");
+      assert.match(statuses[0].lastResult, /강사 근무명단/);
+      assert.ok(statuses[0].warnings.some(w => /incomplete_roster/.test(w)));
+    }
+  }
 });
 
 test("run-evidence write failure prevents any queue resolution", async () => {

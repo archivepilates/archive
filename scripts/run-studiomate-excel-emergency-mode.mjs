@@ -142,8 +142,14 @@ if (!downloadFailedWithoutMember) {
   }
 }
 
-const failed = steps.filter((step) => step.exitCode && step.exitCode !== 0);
-const warnings = steps.filter((step) => step.stdoutOk === false || step.requiredFailed);
+if (apply && download && !downloadFailedWithoutMember) {
+  steps.push(runStep("staffEmployment", ["scripts/sync-studiomate-staffs-from-browser.mjs", "--apply", "--if-due"]));
+}
+
+// Staff roster refresh is a sidecar, not evidence of member/reservation import success.
+const failed = steps.filter((step) => step.name !== "staffEmployment" && step.exitCode && step.exitCode !== 0);
+const warnings = steps.filter((step) => step.stdoutOk === false || step.requiredFailed ||
+  (step.name === "staffEmployment" && step.exitCode !== 0));
 const sourceImportIds = steps
   .map((step) => (step.stdout && typeof step.stdout === "object" ? step.stdout.sourceImportId : ""))
   .filter(Boolean);
