@@ -40,3 +40,21 @@
 - Independent review found same-hold resend through changed issuance display metadata; now any issuance change blocks, with a regression.
 - Verified earlier receipts must remain byte-equivalent by structured fingerprint in the claim transaction; new receipts appearing after provider verification block.
 - Live read-only Bae preview returned early_release_actual_period_required, an expected safety block, with no send.
+
+## Live Release Evidence
+
+- Implementation d81ef1ddc0e28863b9100ee9aab2e6a792012a83 promoted and pushed to origin/main and codex/mini/holding-source-queue.
+- Clean main deployment checkout and Mac mini runtime fast-forwarded to the implementation.
+- Operator service account transaction changed only settings/holdingNotice.calculationMode. Read-back confirmed all other settings identical, including both global send gates false and mode operator_sample_only.
+- Runtime roster worker dry-run returned ok with zero pending jobs and no writes or browser acquisition. Deferral with pending hints is covered by code-path guards, not a fabricated live job.
+- Runtime Lee preview reconfirmed 73/25/48 and the same observation fingerprint without a send or a source file.
+- Runtime Kim preview returned ambiguous_live_hold_change for same-minute history; this is an intentional no-send review boundary, not proof that actual usage is zero.
+- Existing v2 send ledger still contains exactly two earlier delivered rows (Kim synthetic test and Lee approved one-off). Lee candidate sent, send done/COMPLETE/4000, and claim delivered agree. No new send this turn.
+- CORE Hosting deployed to archive-pilates and archive-pilates-core; local and live responsive checks passed 95 checks each at 320, 390, 768, 1440 and 1920 widths.
+- Canary passed on custom domain and web.app identifying d81ef1dd. All three live rules URLs returned HTTP 200 with the live-readback and no-accumulating-balance rules.
+- Functions affected set is empty. Functions deploy/build not required for this scoped change; existing CI performs the broader generated build independently.
+- Production deploy completed without errors. The quota-project warning refers to a separate local ADC setting; deployment and scoped operations used the explicit operator account/project successfully.
+- Browser collectors closed through finally and shared lock absent after live previews. No user Chrome process was terminated.
+- Final process check found no task collector, shared-profile Chrome, Playwright temporary profile or responsive QA process.
+- GitHub Functions Affected Check completed success for main run 37615910755 and lane run 37616038434. No CI failure remains.
+- This audit record is documentation-only; a second Hosting release is not needed.
