@@ -26,7 +26,10 @@
 
 ## Status
 - Imweb one-line patch: saved and live verified.
-- Search Console: chorim, eunyoung, kihyo, minjin requests accepted; yuri request pending.
-- Hosting: validated, deployment pending.
+- Search Console: chorim, eunyoung, kihyo, minjin, yuri requests all accepted into Google's priority crawl queue.
+- Hosting: deployed and live verified, version 383e8ed81291f74f, release 1791373332381000.
+- Live checks: all eight canonical pages return 200; www returns 301 to root; community returns 301 to the Imweb board; sitemap matches tracked source exactly.
+- All other 79 live file hashes are identical. Imweb /?idx=33 and /17/?idx=33 have product canonicals and no noindex; real Imweb home retains its prior official-home canonical and noindex,follow.
+- Core source commit: 00d1e0f. Push will include this scoped branch, not main promotion: current main lacks this site's historical source and a broad merge would introduce unrelated applications.
 - Actual purchase/playback testing: not performed; this patch does not change purchase or watch assets. Full live-manifest equality is the rollback check.
 - Google indexing and ranking are not guaranteed by request acceptance; wait for Google's subsequent crawl.
