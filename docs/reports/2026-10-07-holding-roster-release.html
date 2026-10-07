@@ -1,0 +1,44 @@
+<!doctype html>
+<html lang="ko"><head><meta charset="utf-8"><meta name="viewport" content="width=device-width,initial-scale=1"><title>홀딩 감지 운영 배포 검증 | ARCHIVE PILATES</title><style>
+*{box-sizing:border-box}body{margin:0;background:#fff;color:#202225;font:16px/1.65 system-ui,-apple-system,sans-serif}main{max-width:980px;margin:auto;padding:32px 20px 72px}h1{font-size:28px;line-height:1.3}h2{font-size:20px;margin:32px 0 12px}p{max-width:72ch}small{color:#62666b}section{border-top:1px solid #ddd;padding-top:6px;margin-top:24px}.summary{border-left:4px solid #cb323a;padding:8px 16px;background:#fafafa}dl{display:grid;grid-template-columns:minmax(120px,1fr) 3fr;gap:12px 20px}dt{font-weight:650}dd{margin:0;overflow-wrap:anywhere}code{overflow-wrap:anywhere;font-size:14px}a{color:#95323a}li{margin-bottom:8px}@media(max-width:560px){dl{grid-template-columns:1fr;gap:5px}dd{margin-bottom:14px}h1{font-size:24px}}
+</style></head><body><main>
+<small>ARCHIVE PILATES · 2026.10.07 · 운영 검증</small><h1>홀딩 명단 감지와 상세 조회 활성화</h1>
+<div class="summary"><strong>자동 감지·상세 조회는 활성화했습니다. 실제 회원 자동발송은 아직 보류입니다.</strong><p>수강권·정지의 고유 식별자 연결과 정식 원천 승격이 끝나지 않아 발송까지 완료된 자동화로 볼 수 없습니다. Excel 정지상태만으로 사용일이나 신규 홀딩을 추정해 보내지 않습니다.</p></div>
+<section><h2>실제 운영 실행</h2><dl>
+<dt>실행</dt><dd>기존 맥미니 Excel 동기화 작업을 새 코드로 1회 실행. 2026.10.07 19:23:59~19:25:48 KST, 정상 종료(exit 0).</dd>
+<dt>원본</dt><dd>최신 회원목록 3,419행, 정지회원 7명. 최초 기준선은 무발송으로 저장.</dd>
+<dt>상세 조회</dt><dd>실제 회원 ID로 연결된 5명 전원 조회 성공. 약 15초. 나머지 2명은 실제 회원 ID 미확인으로 확인필요.</dd>
+<dt>주기</dt><dd>기존 LaunchAgent 3,600초 유지. shadow 명단 관찰과 source scan만 추가. 별도 다운로드나 새 정기 작업 없음.</dd>
+<dt>기존 기능</dt><dd>회원·예약·삭제수업 반영, 회원 중복 확인, 계약서 완료 확인, 프라이빗 회차 처리, 강사 상태 확인 단계 정상 종료. 이 실행 성공은 모든 기존 기능의 완전 E2E 검증을 뜻하지 않음.</dd>
+<dt>저장</dt><dd>workLanes 관찰/조회 작업만 생성. 정식 발송 원천 memberTicketHolds는 0건. 관찰 데이터는 발송 대상 선택에 사용하지 않음.</dd>
+<dt>정리</dt><dd>성공한 다운로드 원본은 기존 보존 정책으로 삭제. 본 작업의 이전 읽기전용 Excel 사본도 최신 성공 실행 이후 삭제. 브라우저 잠금 해제 확인.</dd>
+</dl></section>
+<section><h2>김기효·배민진 검증</h2><ul>
+<li>실제 수강권을 읽기 전용으로 조회. 최초 발급기간은 각각 365일, 현재 정지 등록 1건/0건. 실제 수강권·홀딩·예약은 수정하지 않음.</li>
+<li>v2 템플릿 APPROVED·BA·IMAGE, 로고 이미지·본문 변수 8개·홀딩규정 버튼 계약을 직접 확인.</li>
+<li>김기효 기존 테스트 결과 COMPLETE/4000, 후보·발송 원장 일치. 메시지 <code>M4V20261007144407GMUNAIAT107LQYE</code>. 이번 작업에서 새 메시지를 보낸 증거가 아님.</li>
+<li>동일 테스트 키 재실행 시 중복 차단, provider POST 0회. 추가 테스트·배민진 메시지는 발송하지 않음.</li>
+</ul></section>
+<section><h2>검증과 수정</h2><ul>
+<li>회귀검증 1,245건 통과 후 추가 경합 회귀 테스트 통과. 최종 수정 관련 재실행: Node 125건, TypeScript 212건 통과. strict typecheck, 5개 코드베이스 빌드·경계, 원천 정책, 카탈로그·Hosting·롤백 가드 통과.</li>
+<li>실제 수강권 카드 클릭 오버레이와 탭 여백 문제 수정. 오래된 조회 결과가 최신 상태를 덮어쓰지 않도록 트랜잭션 버전 대조.</li>
+<li>홀딩 후보가 일반 발송 큐를 막는 병목 수정. 10건 제한은 처리 묶음으로 변경. 선점 경합은 해당 이벤트 종료로 처리하고 후속 신규 건 진행.</li>
+<li>원본·조회 실패, 중복 상품, 불완전 이력, 취소·기간 변경, 0일·초과, 접수 응답 불명확, 중복·동시 실행은 발송 차단 검증.</li>
+</ul></section>
+<section><h2>배포 증거</h2><dl>
+<dt>코드</dt><dd><code>130a657</code>, origin/main 승격 완료. runtime과 깨끗한 main 배포 작업공간 fast-forward 정렬.</dd>
+<dt>Functions</dt><dd id="functions-status">5개 영향 코드베이스 dry-run 및 운영 배포 성공. 91개 함수 모두 ACTIVE, 이번 배포 updateTime 확인. 신규 승인 API 비로그인 요청 HTTP 401 차단.</dd>
+<dt>CORE</dt><dd id="core-status">운영규칙 커밋 <code>d577c798</code>의 Hosting 2개 사이트 배포 완료. 커스텀 도메인·web.app canary 및 3개 운영규칙 URL의 실제 내용 확인. 배포 전·후 각각 5개 해상도(320/390/768/1440/1920)에서 95개 화면 검사 통과.</dd>
+<dt>CI</dt><dd><a href="https://github.com/archivepilates/archive/actions/runs/37607063404">코드 Functions Affected Check</a> 및 <a href="https://github.com/archivepilates/archive/actions/runs/37608622221">운영규칙 Functions Affected Check</a> 성공.</dd>
+<dt>Scheduler</dt><dd>기존 알림톡 큐 every 10 minutes, ENABLED. 19:32 KST 새 리비전의 정기 실행 HTTP 200, processed=0/sent=0/failed=0/deferred=0 정상 종료. 수동 큐 실행이나 다른 회원 테스트 발송 없음.</dd>
+<dt>실행 보고서</dt><dd><code>2026-10-07T10-25-48-299Z-run-apply.json</code>, sourceImportId <code>af84ae05322f2e74fa7cd07bc660d316</code>.</dd>
+<dt>재실행</dt><dd>완료된 명단 조회 작업 재실행 결과 results=[]·sendAllowed=false. 추가 조회나 발송 없음. v2 후보·발송 원장은 기존 김기효 테스트 각 1건만 유지.</dd>
+<dt>후속 점검</dt><dd>기존 홀딩 연결 모니터에 현재 배포·검증 결과와 미완료 조건 반영. 새 반복 작업은 만들지 않음. 추가 실발송에는 별도 승인 필요.</dd>
+</dl></section>
+<section><h2>남은 차단과 다음 작업</h2><ol>
+<li>발급 수강권 원본 ID와 정지 생성 이력에 연결된 안정적 ID 확보. 날짜 해시를 고유 정지 ID로 대체 사용하지 않음.</li>
+<li>회원 ID 미확인 2건 해결, 예정 정지 노출·전체 Excel 범위 별도 대조.</li>
+<li>전체 홀딩 이력·최초 발급기간 검증과 SOLAPI 이력 감사 후 정식 원천 승격.</li>
+<li>실제 원천 E2E 및 관리자 승인 흐름 검증 후 제한적으로 발송 활성화. 현재 <code>mode=operator_sample_only</code>, <code>autoSendEnabled=false</code>, <code>canonicalSourcePromoted=false</code> 유지.</li>
+</ol><p>전 과정 실발송 자동화는 미완료입니다. 첫 기준선의 과거 정지는 나중에 활성화하더라도 발송하지 않습니다.</p></section>
+</main></body></html>

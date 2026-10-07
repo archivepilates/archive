@@ -48,7 +48,7 @@ The roundtrip uses synthetic issuance/holding evidence, mock Firestore and a moc
 No runtime checkout, deployed configuration, member records, tickets, holds or messages changed.
 Interrupted processing is quarantined out of the active queue without retrying or deleting durable claims. The welcome interoperability gate reuses the welcome provider's exact audit validator, including malformed/duplicate/template-family rejection.
 
-## Operator Runbook (Not Activated)
+## Initial Operator Runbook (Before Release)
 
 1. Read-only collector: `node scripts/collect-studiomate-holding-source.mjs --member-id <native-member-id> --ticket-name <exact-name>`.
 2. Evidence preview: `node scripts/reconcile-studiomate-holding-source.mjs --observation <private-json> --output <private-preview-json>`.
@@ -102,7 +102,7 @@ Report: `docs/reports/2026-10-07-holding-roster-sync.html`.
   superseded promotion reports `superseded` without acknowledging newer work.
 - Current canonical runtime remains unchanged. No task-owned browser state was created.
 
-## Approved Release (2026-10-07, In Progress)
+## Approved Release (2026-10-07, Initial Release Plan)
 
 - User approved scoped deploy, discovery activation, and testing. Production sends remain gated by real evidence.
 - Fresh 19:16 KST member Excel: 3419 rows, 7 held members; 5 resolved native members, 2 native-ID review cases.
@@ -119,3 +119,38 @@ Report: `docs/reports/2026-10-07-holding-roster-sync.html`.
   autoSendEnabled=false, canonicalSourcePromoted=false. No fabricated identity mappings or audit/E2E booleans.
 - Pending final proof: clean-main promotion, Functions/CORE deployment, runtime update, loaded agent environment,
   first canonical import baseline/readback run, CI and live readback. Final audit report will record actual results.
+
+### Release Verification Evidence
+
+- Code commit `130a657` fast-forward promoted to origin/main. Clean local main and runtime updated.
+- Functions affected detection conservatively includes all five codebases due to the export ownership manifest.
+  All five dry-runs and production deploys succeeded. Read-back verified all 91 Functions ACTIVE and updated today.
+  No force push/reset/clean used.
+- Installed existing hourly LaunchAgent with two opt-in holding environment variables; other membership settings preserved.
+  Firestore sourceScanEnabled/rosterDiscoveryEnabled enabled. All sending/promotion/E2E gates remain closed.
+- Actual periodic pipeline `2026-10-07T10-25-48-299Z-run-apply.json`: success, exit 0.
+  Fresh member import `af84ae05322f2e74fa7cd07bc660d316`: 3419 rows, held baseline 7, readback jobs 7, sends 0.
+  Five native-member readbacks succeeded and staged observations, two native-ID matches need review.
+  No canonical memberTicketHolds documents were promoted. No StudioMate test mutations or additional messages.
+- Whole pipeline elapsed approximately 108 seconds; holding readbacks approximately 15 seconds.
+- Existing v2 receipt rechecked COMPLETE/4000 at 19:26 KST; one provider receipt and local ledgers agree.
+- Callable operatorApproveHoldingNotice ACTIVE; unauthenticated POST returns HTTP 401 UNAUTHENTICATED.
+  scheduledProcessAlimtalkQueue ACTIVE revision scheduledprocessalimtalkqueue-00124-fij.
+  Scheduler retains every 10 minutes / ENABLED. At 19:32 KST the new queue revision returned HTTP 200 and
+  processAlimtalkQueue completed with processed=0/sent=0/failed=0/deferred=0. No manual queue invocation.
+- CI Functions Affected Check 37607063404 succeeded. Independent offline CORE QA passed 95 cases at 320/390/768/1440/1920.
+- Final concurrency correction treats only durable prior send/claim outcome as terminal for progress; other blocked states
+  still require review. Latest focused reruns: Node 125, TypeScript 212 passed; strict typecheck passed.
+- Successful raw downloads cleaned by normal retention; task-owned superseded 19:16 read-only Excel copies deleted.
+  Shared StudioMate browser lock absent and hourly agent exited normally. Audit records and dedupe ledgers preserved.
+- Rollback of discovery only: set sourceScanEnabled=false/rosterDiscoveryEnabled=false and remove the two holding
+  environment flags from the existing hourly agent. Do not disable unrelated member/contract/reservation synchronization.
+- Final release report: `docs/reports/2026-10-07-holding-roster-release.html`. Full real-source send E2E is not complete.
+- CORE rules commit `d577c798` promoted to origin/main and deployed to both Hosting sites. Custom-domain and web.app
+  release canary passed. All three rules URLs returned HTTP 200 and the holding discovery/deployment markers.
+  Pre-release and post-live responsive QA each passed 95 checks across five viewport widths.
+- CORE rules CI 37608622221 completed successfully. Existing follow-up heartbeat updated with the verified release
+  state and remaining native identity/source promotion gates; no duplicate schedule or additional send authorized.
+- Replaying completed roster work returned an empty results array and sendAllowed=false. Provider/local v2 ledgers
+  still contain only the existing Kim test receipt. No new candidate or message was created.
+- This final audit update changes documentation only; the deployed code remains `130a657`, CORE Hosting `d577c798`.
