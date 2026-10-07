@@ -456,12 +456,13 @@ test("read-only orchestration and LaunchAgent checks never write status", async 
 });
 
 test("health checker preserves staff scan warnings and resolves them after recovery", async () => {
-  for (const failed of [true, false]) {
+  for (const state of ["failed", "recovered", "not_run"]) {
+    const failed = state === "failed", recovered = state === "recovered";
     const emitted = [], statuses = [], completedChecks = new Set();
     const pipeline = {
       latestPath: "/fixture-run-apply.json", lastSuccessAt: now.toISOString(),
       latestAttemptSucceeded: true, stale: false, successAgeMinutes: 1, contractIssues: [],
-      staffEmploymentIssues: failed ? [{ name: "staffEmployment", reason: "incomplete_roster" }] : [], staffEmploymentChecked: !failed,
+      staffEmploymentIssues: failed ? [{ name: "staffEmployment", reason: "incomplete_roster" }] : [], staffEmploymentChecked: recovered,
     };
     await runnerFunction("checkLaunchAgents", baseGlobals({
       READ_ONLY: false,
@@ -476,7 +477,7 @@ test("health checker preserves staff scan warnings and resolves them after recov
     }))();
     assert.equal(statuses[0].status, failed ? "warning" : "healthy");
     assert.equal(emitted.length, failed ? 1 : 0);
-    assert.equal(completedChecks.has("sync:studiomate-excel-sync:staff-employment"), !failed);
+    assert.equal(completedChecks.has("sync:studiomate-excel-sync:staff-employment"), recovered);
     if (failed) {
       assert.equal(emitted[0].checkKey, "sync:studiomate-excel-sync:staff-employment");
       assert.match(statuses[0].lastResult, /강사 근무명단/);

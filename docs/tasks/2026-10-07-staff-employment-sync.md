@@ -28,3 +28,13 @@
 - Release: scoped feature commit, main fast-forward/push as required by release guard, runtime fast-forward, CORE Hosting only. No Functions or Firestore security rule deployment.
 - Live acceptance: Firestore full-roster comparison, unchanged auth/contact fields, daily gate, CORE current/non-working display, asset and release identity verification, GitHub CI.
 - First unattended full browser scan remains a next-day operational verification item; the manual source validation and snapshot apply do not claim that it has already executed.
+
+## Execution Evidence
+
+- Production metadata apply: `2026-10-07T05-18-13-162Z-staff-employment-apply.json` in the local staff-scan report folder; 5 current, 7 inactive, 1 custom operator preserved. All non-employment fields of all 13 existing documents are unchanged.
+- Code release: `9db18c47be66fcf39e3d4ae9c5a3614aafcce902`, main pushed and runtime aligned; `hosting:archive-pilates-core` deployed successfully.
+- CORE custom domain and core web.app release SHA and exact app/rules/staff assets matched. Live current count 5; inactive evaluation history retained; no captured console errors.
+- Viewports 320/390/768/1440 have no horizontal overflow. Task-owned tabs closed before final report.
+- Focused tests: 87 passed, including auth preservation, atomic new-record creation guard, warning recovery and no-scan non-resolution. GitHub Actions run `37575912254` succeeded for the deployed code.
+- Skipped: full paired CORE/ARCHIVE IN canary because it expects release markers on a different, intentionally untouched Hosting site. Replaced with exact-byte and release-SHA checks on both deployed CORE domains.
+- Pending: first unattended full browser scan after the 24-hour gate. No forced full member import or browser scan was run for this verification.
