@@ -117,7 +117,7 @@
       {
         "source": "/community{,/**}",
         "destination": "https://archivepilates.imweb.me/community",
-        "type": 302
+        "type": 301
       },
       {
         "source": "/teams/ayoung",

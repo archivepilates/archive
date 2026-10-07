@@ -83,5 +83,6 @@ urls = ET.parse(PUBLIC / "sitemap.xml").findall("s:url", ns)
 locations = [entry.findtext("s:loc", namespaces=ns) for entry in urls]
 assert len(locations) == len(set(locations))
 assert all(ORIGIN + route in locations for route in routes)
+assert set(locations) == {ORIGIN + route for route in routes}, "Sitemap must contain indexable canonical pages only"
 assert "Allow: /" in (PUBLIC / "robots.txt").read_text()
 print(f"Validated Korean SEO: {len(routes)} pages, unique metadata, structured data, internal links and sitemap.")

@@ -39,7 +39,7 @@
       params = { get: function () { return null; } };
     }
 
-    if (path === "/" || path === "/index") {
+    if ((path === "/" || path === "/index") && !params.get("idx")) {
       setCanonical(OFFICIAL_HOME);
       setMeta("robots", "noindex,follow");
       return;

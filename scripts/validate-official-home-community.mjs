@@ -12,6 +12,7 @@ const page = fs.readFileSync("official-home/community/index.html", "utf8");
 assert(page.includes(`location.replace("${destination}")`), "Direct-file fallback missing");
 assert(!page.includes("게시판 열기"), "Intermediate community action returned");
 const { hosting } = JSON.parse(fs.readFileSync("firebase.archive-home.json", "utf8"));
-assert(hosting.redirects.some(rule => rule.source === "/community{,/**}" && rule.destination === destination && rule.type === 302), "Immediate board redirect missing");
+assert(hosting.redirects.some(rule => rule.source === "/community{,/**}" && rule.destination === destination && rule.type === 301), "Permanent board redirect missing");
+assert(!fs.readFileSync("official-home/sitemap.xml", "utf8").includes("https://archivepilates.com/community"), "Redirect must not appear in sitemap");
 assert(!hosting.rewrites.some(rule => rule.source === "/community"), "Obsolete landing rewrite returned");
 console.log("Community navigation opens the actual board directly; legacy URLs retained.");
