@@ -181,9 +181,10 @@ h3 { font-size: 0.9375rem; line-height: 1.5; font-weight: 650; }
 .workflow-tabs button[aria-selected="true"] { color: var(--accent); background: transparent; border-color: var(--accent); }
 .disclosure-body > .workflow-tabs { margin: 12px 0 16px; }
 .action-disclosure > summary, .diagnostic-panel > summary { padding: 18px 0; gap: 12px; }
+.action-disclosure > summary { padding-inline-end: 36px; }
 .action-disclosure > summary strong { font-size: 0.9375rem; font-weight: 650; }
 .action-disclosure > summary small { font-size: 0.75rem; font-weight: 400; }
-.action-disclosure > summary::after, .diagnostic-panel > summary::after { width: 24px; height: 24px; background: transparent; color: var(--muted); }
+.action-disclosure > summary::after, .diagnostic-panel > summary::after { width: 24px; height: 24px; right: 0; background: transparent; color: var(--muted); }
 .action-disclosure[open] > summary { border-bottom: 1px solid var(--line-soft); }
 .ops-card, .parking-dashboard article { border: 0; border-radius: 0; padding: 16px 0; background: transparent; }
 .ops-card + .ops-card { border-top: 1px solid var(--line-soft); }

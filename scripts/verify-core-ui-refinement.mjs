@@ -239,6 +239,12 @@ async function measure(page, mode) {
       return rect.height < 43.5 || rect.width < 43.5;
     }).map((element) => ({ element: label(element), width: element.getBoundingClientRect().width, height: element.getBoundingClientRect().height }));
     const prose = mode !== "populated" ? [] : [...root.querySelectorAll(".eyebrow,.title-block > p,.brand > span,.mast > p,.private-mast > p")].filter(visible).filter((element) => !/^ARCHIVE (?:CORE|PILATES|METHOD)$/.test(element.textContent.trim())).map(label);
+    const disclosureOverlap = [...root.querySelectorAll(".action-disclosure > summary")].filter(visible).filter((element) => {
+      const indicator = getComputedStyle(element, "::after");
+      if (indicator.position !== "absolute") return false;
+      const indicatorLeft = element.getBoundingClientRect().right - parseFloat(indicator.right) - parseFloat(indicator.width);
+      return [...element.children].filter(visible).some((child) => child.getBoundingClientRect().right > indicatorLeft - 8);
+    }).map(label);
     const brands = [...root.querySelectorAll(".brand img,.brand-mark img,img.brand-mark,.login-card img")].filter(visible);
     const brand = brands.some((element) => element.complete && element.naturalWidth > 0 && new URL(element.src).pathname === "/icons/archive-pilates-icon-192.png");
     const failures = [];
@@ -247,8 +253,9 @@ async function measure(page, mode) {
     if (clipped.length) failures.push(`clipped text: ${clipped.join(", ")}`);
     if (touch.length) failures.push(`targets below 44px: ${JSON.stringify(touch)}`);
     if (prose.length) failures.push(`decorative prose remains: ${prose.join(", ")}`);
+    if (disclosureOverlap.length) failures.push(`disclosure indicator overlaps content: ${disclosureOverlap.join(", ")}`);
     if (mode === "populated" && !brand) failures.push("loaded official brand image missing");
-    return { viewport, documentWidth, typography, clipped, touch, prose, brand, failures };
+    return { viewport, documentWidth, typography, clipped, touch, prose, disclosureOverlap, brand, failures };
   }, mode);
 }
 
