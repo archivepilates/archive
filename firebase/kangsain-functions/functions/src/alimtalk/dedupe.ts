@@ -4,6 +4,7 @@ import { stableHash } from "../utils/hash";
 import { normalizeInstructorLessonManagementNumber } from "./instructorLessonManagement";
 import { ALIMTALK_TEMPLATES } from "./templates";
 import { hasExplicitAlimtalkTestOverride } from "./testRecipients";
+import { isHoldingNoticeCandidate } from "./holdingNoticeQueue";
 
 const MEMBER_CARE_TYPES = new Set([
   "ticket_expiring",
@@ -177,6 +178,7 @@ async function findInstructorLessonDuplicate(
 }
 
 export function alimtalkDedupeKey(candidate: AlimtalkCandidateDoc): string {
+  if (isHoldingNoticeCandidate(candidate)) return candidate.candidateId;
   if (candidate.type === "membership_welcome") return candidate.candidateId;
   if (candidate.type === "instructor_lesson_confirmation") {
     return stableHash({

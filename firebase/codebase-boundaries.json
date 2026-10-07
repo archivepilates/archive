@@ -17,6 +17,7 @@
         "scheduledCheckInstructorLessonSampleApproval",
         "scheduledSendApprovedInstructorLessonAlimtalk",
         "approveAlimtalkBatch",
+        "operatorApproveHoldingNotice",
         "approveInstructorLessonAlimtalkBatch",
         "operatorSendPricingInquiryAlimtalk",
         "operatorSendRecommendedMealProgramAlimtalk",

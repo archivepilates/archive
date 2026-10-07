@@ -306,6 +306,13 @@ function family(data: Data, id: string, collection: string): "welcome" | "other"
     identities.some((value) => WELCOME_TYPES.some((prefix) => value.startsWith(`${prefix}_`)))
   )
     return "welcome";
+  // Only the canonical holding family is unrelated to welcome; malformed/manual records remain unknown.
+  if (template.some(value => value === "KA01TP2610061247076605VQTRV7FTPK") &&
+    template.every(value => !value || value === "KA01TP2610061247076605VQTRV7FTPK") &&
+    (!type || type === "manual_review") && /^holding_notice_[a-f0-9]{64}$/.test(id) &&
+    identities.every(value => !value || value === id) &&
+    (collection !== "alimtalkCandidates" || (object(data.payload) && data.payload.holdingNotice === true &&
+      /^holding_ticket_[a-f0-9]{64}$/.test(text(data.payload.holdingSourceId))))) return "other";
   if (
     OTHER_TYPES.includes(type) ||
     identities.some((value) => OTHER_TYPES.some((prefix) => value.startsWith(`${prefix}_`)))

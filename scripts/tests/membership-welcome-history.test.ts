@@ -1004,6 +1004,22 @@ test("missing studio, unresolved identity, unknown family/state never certify a 
   );
 });
 
+test("canonical holding candidates and sends are unrelated welcome history, but malformed or conflicting records still block", async () => {
+  const id = `holding_notice_${"a".repeat(64)}`;
+  const holding = { studioId: INPUT.studioId, memberId: INPUT.memberId, memberPhone: INPUT.phone,
+    candidateId: id, type: "manual_review", templateCode: "KA01TP2610061247076605VQTRV7FTPK", status: "reviewed", attempts: 0,
+    payload: { holdingNotice: true, holdingSourceId: `holding_ticket_${"b".repeat(64)}` } };
+  const clean = await loadMembershipWelcomeHistory(new FakeDb({ alimtalkCandidates: { [id]: holding },
+    alimtalkSends: { [id]: { ...holding, type: undefined, payload: undefined, status: "done", solapiMessageId: "fixture" } } }), INPUT);
+  assert.equal(clean.complete, true);
+  assert.equal(clean.records.length, 0);
+  for (const patch of [{ payload: {} }, { templateId: TEMPLATES[0] }, { candidateId: "other" },
+    { templateCode: "unmapped" }, { type: "unknown" }]) {
+    const result = await loadMembershipWelcomeHistory(new FakeDb({ alimtalkCandidates: { [id]: { ...holding, ...patch } } }), INPUT);
+    assert.ok(result.complete === false || result.records.length > 0, "unknown/conflicting records cannot silently disappear");
+  }
+});
+
 test("welcome template and candidate prefix override a misleading unrelated type", async () => {
   const result = await loadMembershipWelcomeHistory(
     new FakeDb({

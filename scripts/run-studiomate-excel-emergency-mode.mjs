@@ -83,11 +83,16 @@ if (!downloadFailedWithoutMember) {
       "--allow-new-excel-profiles",
       "--queue-contact-sync",
       ...(contractSourceDownloadedAt ? ["--contract-source-downloaded-at", contractSourceDownloadedAt] : []),
+      ...(contractSourceDownloadedAt ? ["--holding-source-downloaded-at", contractSourceDownloadedAt] : []),
       ...(apply ? ["--apply"] : []),
     ]),
   );
-  const memberImportSucceeded = steps.at(-1)?.exitCode === 0 && steps.at(-1)?.stdoutOk !== false;
-  const contractDiscoveryWarning = membershipContractDiscoveryWarning(steps.at(-1)?.stdout);
+  const memberImportStep = steps.at(-1);
+  const memberImportSucceeded = memberImportStep?.exitCode === 0 && memberImportStep?.stdoutOk !== false;
+  const holdingRosterDiscovery = memberImportStep?.stdout?.holdingRosterDiscovery;
+  if (holdingRosterDiscovery?.ok === false) steps.push({ name: "holdingRosterDiscovery", exitCode: 0,
+    stdoutOk: false, stdout: holdingRosterDiscovery, stderr: "Holding roster retained; source readback requires review" });
+  const contractDiscoveryWarning = membershipContractDiscoveryWarning(memberImportStep?.stdout);
   if (contractDiscoveryWarning) steps.push(contractDiscoveryWarning);
   if (apply && download && contractSourceDownloadedAt && memberImportSucceeded
     && process.env.STUDIOMATE_MEMBERSHIP_CONTRACT_COMPLETION === "enabled") {
@@ -144,12 +149,18 @@ if (!downloadFailedWithoutMember) {
 
 if (apply && download && !downloadFailedWithoutMember) {
   steps.push(runStep("staffEmployment", ["scripts/sync-studiomate-staffs-from-browser.mjs", "--apply", "--if-due"]));
+  if (process.env.STUDIOMATE_HOLDING_SOURCE_SCAN === "enabled") {
+    if (holdingRosterReady(steps))
+      steps.push(runStep("holdingSource", ["scripts/run-studiomate-holding-sync.mjs", "--from-roster", "--apply"]));
+    else steps.push(skippedStep("holdingSource", "fresh successful holding roster discovery required"));
+  }
 }
 
 // Staff roster refresh is a sidecar, not evidence of member/reservation import success.
-const failed = steps.filter((step) => step.name !== "staffEmployment" && step.exitCode && step.exitCode !== 0);
+const sidecars = new Set(["staffEmployment", "holdingSource"]);
+const failed = steps.filter((step) => !sidecars.has(step.name) && step.exitCode && step.exitCode !== 0);
 const warnings = steps.filter((step) => step.stdoutOk === false || step.requiredFailed ||
-  (step.name === "staffEmployment" && step.exitCode !== 0));
+  (sidecars.has(step.name) && step.exitCode !== 0));
 const sourceImportIds = steps
   .map((step) => (step.stdout && typeof step.stdout === "object" ? step.stdout.sourceImportId : ""))
   .filter(Boolean);
@@ -202,6 +213,11 @@ if (failed.length) process.exitCode = 1;
 
 function runStep(name, command) {
   return runCommandStep(name, [process.execPath, ...command]);
+}
+
+function holdingRosterReady(runSteps) {
+  const member = runSteps.find(step => step.name === "memberProfiles");
+  return member?.exitCode === 0 && member.stdoutOk !== false && member.stdout?.holdingRosterDiscovery?.ok === true;
 }
 
 function runCommandStep(name, command) {

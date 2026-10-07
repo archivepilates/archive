@@ -31,6 +31,10 @@
     <string>enabled</string>
     <key>STUDIOMATE_MEMBERSHIP_CONTRACT_COMPLETION</key>
     <string>enabled</string>
+    <key>STUDIOMATE_HOLDING_ROSTER_OBSERVER</key>
+    <string>shadow</string>
+    <key>STUDIOMATE_HOLDING_SOURCE_SCAN</key>
+    <string>enabled</string>
     <key>GOOGLE_APPLICATION_CREDENTIALS</key>
     <string>/Users/archivepilates/ArchiveIN/secrets/google/archive-codex-operator.json</string>
     <key>GOOGLE_CLOUD_PROJECT</key>

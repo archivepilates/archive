@@ -1,4 +1,5 @@
 import { addDays } from "../utils/date";
+import { holdingClaimIssue, isHoldingNoticeCandidate } from "./holdingNoticeQueue";
 import {
   ALIMTALK_MEMBER_EXCLUSION_REASONS,
   ALIMTALK_TEMPLATES,
@@ -48,6 +49,7 @@ const RESERVATION_METHOD_BUTTON_URL = "https://archivepilates.notion.site/studio
 
 export async function autoSendabilityIssue(candidate: AlimtalkCandidateDoc, today: string): Promise<string> {
   if (candidate.type === "onsite_welcome") return "현장 웰컴 신규 발송 종료";
+  if (isHoldingNoticeCandidate(candidate)) return holdingClaimIssue(candidate);
   if (candidate.type === "membership_welcome" && (hasExplicitAlimtalkTestOverride(candidate)
     || candidate.templateCode !== ALIMTALK_TEMPLATES.membership_welcome.code || candidate.maxAttempts !== 1
     || !candidate.payload?.sourceContractId)) return "계약완료 웰컴 후보 규칙 불일치";

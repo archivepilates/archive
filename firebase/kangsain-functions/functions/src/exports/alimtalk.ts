@@ -8,6 +8,7 @@ import {
   sendApprovedInstructorLessonAlimtalks,
 } from "../alimtalk/instructorLessonSampleApproval";
 import { processAlimtalkQueue } from "../alimtalk/processAlimtalkQueue";
+import { approveHoldingNoticeForOperator } from "../alimtalk/holdingNoticeRuntime";
 import { operatorSendPricingInquiryAlimtalkHandler } from "../alimtalk/pricingInquiryAlimtalk";
 import { operatorSendRecommendedMealProgramAlimtalkHandler } from "../mealPlan/recommendedMealAlimtalk";
 import { operatorPublishRecommendedMealPlanHandler } from "../mealPlan/recommendedMealReportAlimtalk";
@@ -145,6 +146,16 @@ export const scheduledSendApprovedInstructorLessonAlimtalk = onSchedule(
 );
 
 export const approveAlimtalkBatch = onRequest(alimtalkQueueRequestOptions, approveAlimtalkBatchHandler);
+export const operatorApproveHoldingNotice = onCall(callableOptions, async request => {
+  try {
+    const staff = await requireStaff(request);
+    requireManager(staff);
+    return await approveHoldingNoticeForOperator({ candidateId: request.data?.candidateId,
+      expectedSnapshot: request.data?.expectedSnapshot, reviewedByUid: request.auth!.uid, studioId: staff.studioId });
+  } catch (error) {
+    throw toHttpsError(error);
+  }
+});
 export const approveInstructorLessonAlimtalkBatch = onRequest(
   publicRequestOptions,
   approveInstructorLessonAlimtalkBatchHandler,

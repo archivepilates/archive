@@ -1,4 +1,9 @@
 import { createHmac, randomBytes } from "node:crypto";
+import { reconcileHoldingNoticeQueue, sendHoldingNotice } from "./holdingNoticeRuntime";
+import { holdingRecoveryPatch } from "./holdingNoticeScheduling";
+import { selectHoldingQueueCandidates } from "./holdingQueueSelection";
+import { holdingAutomationEnabled, holdingClaimIssue, isHoldingNoticeCandidate,
+  HOLDING_NOTICE_SETTINGS, HOLDING_NOTICE_SOURCE_COLLECTION, HOLDING_NOTICE_CLAIM_COLLECTION } from "./holdingNoticeQueue";
 import { reconcileMembershipWelcomeQueue, sendMembershipWelcome } from "../memberSignup/membershipWelcomeRuntime";
 import { MEMBERSHIP_WELCOME_TEMPLATE } from "../memberSignup/membershipWelcomePolicy";
 import { isMembershipWelcomeCandidate, membershipAutomationEnabled, membershipWelcomeClaimIssue,
@@ -62,15 +67,22 @@ export async function processAlimtalkQueue(): Promise<{
       error: errorMessage(error),
     }),
   );
-  const snap = await refs.alimtalkCandidates().where("status", "in", ["queued", "processing"]).limit(20).get();
+  await reconcileHoldingNoticeQueue().catch(error => logger.error("Holding reconciliation unavailable", { error: errorMessage(error) }));
+  const candidates = await selectHoldingQueueCandidates(
+    refs.alimtalkCandidates().where("status", "in", ["queued", "processing"]),
+  );
 
   let processed = 0;
   let sent = 0;
   let failed = 0;
   let deferred = 0;
   let membershipProcessed = false;
+  let holdingProcessed = false;
 
-  for (const candidateSnap of snap.docs) {
+  for (const candidateSnap of candidates) {
+    if (isHoldingNoticeCandidate(candidateSnap.data())) {
+      if (holdingProcessed) continue;
+    }
     if (isMembershipWelcomeCandidate(candidateSnap.data())) {
       if (membershipProcessed) continue;
       membershipProcessed = true;
@@ -78,6 +90,14 @@ export async function processAlimtalkQueue(): Promise<{
     const claimed = await claimCandidate(candidateSnap.data());
     if (!claimed) continue;
     processed += 1;
+    if (isHoldingNoticeCandidate(claimed)) {
+      holdingProcessed = true;
+      const outcome = await processClaimedHoldingNotice(claimed);
+      if (outcome.status === "sent") sent += 1;
+      else if (outcome.status === "failed") failed += 1;
+      else deferred += 1;
+      continue;
+    }
     try {
       await safeSyncInstructorLessonConfirmationOutcome(claimed, { status: "processing" });
       const instructorLessonBlock = genericInstructorLessonQueueBlock(claimed);
@@ -362,6 +382,7 @@ export async function processAlimtalkCandidate(candidateId: string): Promise<Ali
   if (!candidate) return { processed: false, status: "not_found", lastError: "알림톡 후보가 없습니다" };
   const claimed = await claimCandidate(candidate);
   if (!claimed) return { processed: false, status: "not_claimed", lastError: "알림톡 후보를 처리할 수 없습니다" };
+  if (isHoldingNoticeCandidate(claimed)) return processClaimedHoldingNotice(claimed);
 
   try {
     await safeSyncInstructorLessonConfirmationOutcome(claimed, { status: "processing" });
@@ -917,12 +938,69 @@ async function markPrivateLessonReportFailed(candidate: AlimtalkCandidateDoc, me
   );
 }
 
+async function processClaimedHoldingNotice(candidate: AlimtalkCandidateDoc): Promise<AlimtalkCandidateProcessResult> {
+  try {
+    const result = await sendHoldingNotice(candidate);
+    return { processed: true, status: "sent", solapiMessageId: result.messageId };
+  } catch (error) {
+    const message = errorMessage(error);
+    // The holding dispatcher owns attempted outcomes. Never let generic retry bookkeeping overwrite it.
+    const claim = await db.collection(HOLDING_NOTICE_CLAIM_COLLECTION).doc(candidate.candidateId).get();
+    if (!claim.exists) {
+      await db.runTransaction(async tx => {
+        const ref = refs.alimtalkCandidate(candidate.candidateId);
+        const current = (await tx.get(ref)).data();
+        const durable = await tx.get(claim.ref);
+        if (!durable.exists && current?.status === "processing" && current.attempts === 0) {
+          tx.update(ref, { status: "reviewed", queuedBy: null, holdingApprovalSnapshot: null,
+            reviewedByUid: null, reviewedAt: null, lastError: message, updatedAt: nowTimestamp() });
+        }
+      });
+    }
+    logger.warn("Holding dispatch stopped without automatic replay", { candidateId: candidate.candidateId, error: message });
+    return { processed: true, status: claim.exists ? "failed" : "deferred", lastError: message };
+  }
+}
+
 export async function claimCandidate(candidate: AlimtalkCandidateDoc): Promise<AlimtalkCandidateDoc | null> {
   return db.runTransaction(async (tx) => {
     const ref = refs.alimtalkCandidate(candidate.candidateId);
     const snap = await tx.get(ref);
     const current = snap.data();
     if (!current) return null;
+    if (isHoldingNoticeCandidate(current)) {
+      // Only a manager-authenticated queued review may capture an approval binding.
+      // Processing/attempted rows are never automatically reclaimed for this action.
+      if (current.status === "processing" && isStaleProcessing(current)) {
+        const claim = await tx.get(db.collection(HOLDING_NOTICE_CLAIM_COLLECTION).doc(current.candidateId));
+        const send = await tx.get(refs.alimtalkSend(current.candidateId));
+        const recovery = holdingRecoveryPatch(current, Date.now(), claim.exists, send.exists);
+        if (recovery) tx.update(ref, { ...recovery, updatedAt: nowTimestamp() });
+        return null;
+      }
+      const config = (await tx.get(db.doc(HOLDING_NOTICE_SETTINGS))).data();
+      if (!holdingAutomationEnabled(config)) return null;
+      if (current.status !== "queued") return null;
+      const next = { ...current, status: "processing" as const, updatedAt: nowTimestamp() };
+      if (holdingClaimIssue(next)) return null;
+      const source = (await tx.get(db.collection(HOLDING_NOTICE_SOURCE_COLLECTION).doc(String(current.payload?.holdingSourceId)))).data();
+      const observed = Date.parse(source?.observedAt || "");
+      if (!source || source.identityVerified !== true || source.sourceVersion !== current.payload?.holdingSourceVersion) {
+        const cancelled = source?.identityVerified === true && source.holds?.some((hold: any) =>
+          hold.id === current.payload?.holdId && hold.status === "cancelled");
+        tx.update(ref, { status: cancelled ? "skipped" : "reviewed", queuedBy: null,
+          holdingApprovalSnapshot: null, reviewedByUid: null, reviewedAt: null,
+          reasonCode: cancelled ? "holding_cancelled" : "holding_source_changed_review_required", updatedAt: nowTimestamp() });
+        return null;
+      }
+      if (!Number.isFinite(observed) || observed > Date.now() || Date.now() - observed > 15 * 60_000 ||
+        observed <= (current.createdAt?.toMillis?.() || Infinity)) return null;
+      const claim = await tx.get(db.collection(HOLDING_NOTICE_CLAIM_COLLECTION).doc(current.candidateId));
+      const send = await tx.get(refs.alimtalkSend(current.candidateId));
+      if (claim.exists || send.exists) return null;
+      tx.update(ref, next);
+      return next;
+    }
     if (isMembershipWelcomeCandidate(current)) {
       const settings = await tx.get(db.doc(MEMBERSHIP_AUTOMATION_SETTINGS));
       if (!membershipAutomationEnabled(settings.data())) return null;
@@ -978,6 +1056,7 @@ function isStaleProcessing(candidate: AlimtalkCandidateDoc): boolean {
 export async function sendSolapiAlimtalk(
   candidate: AlimtalkCandidateDoc,
 ): Promise<{ messageId: string; variables: Record<string, string> }> {
+  if (isHoldingNoticeCandidate(candidate)) return sendHoldingNotice(candidate);
   if (candidate.type === "membership_welcome" || candidate.templateCode === MEMBERSHIP_WELCOME_TEMPLATE.templateId) {
     return sendMembershipWelcome(candidate, () => sendSolapiMessage(candidate));
   }

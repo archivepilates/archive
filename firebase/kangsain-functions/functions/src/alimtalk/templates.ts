@@ -298,6 +298,7 @@ export const ALIMTALK_DEDUPE_POLICIES_BY_TEMPLATE_CODE: Record<string, AlimtalkD
 };
 
 export function alimtalkDedupePolicy(templateCode: string): AlimtalkDedupePolicy {
+  if (templateCode === "KA01TP2610061247076605VQTRV7FTPK") return { label: "동일 정지 식별자별 영구 1회", windowDays: null };
   return (
     ALIMTALK_DEDUPE_POLICIES_BY_TEMPLATE_CODE[templateCode] || {
       label: "기본 30일",

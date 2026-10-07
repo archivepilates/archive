@@ -9,6 +9,7 @@ import { cleanupImportedSourceFiles } from "./lib/imported-source-retention.mjs"
 import { observeMembershipContractHints } from "./lib/studiomate-membership-contract-observer.mjs";
 import { loadPendingContractDiscovery } from "./lib/studiomate-membership-contract-pending.mjs";
 import { runStudioMateMembershipContractCandidates } from "./lib/studiomate-membership-contract-processor.mjs";
+import { observeHoldingRoster } from "./lib/studiomate-holding-roster.mjs";
 import {
   buildInstructorLessonContactGroupNames,
   formatExcelMemberContactDisplayName,
@@ -187,6 +188,18 @@ if (
       studioMateWrites: 0,
       alimtalkSends: 0,
     };
+  }
+}
+// Reuse parsed raw rows before retention cleanup; paused-only members may not have a profile.
+if (apply && process.env.STUDIOMATE_HOLDING_ROSTER_OBSERVER === "shadow" && valueArg("--holding-source-downloaded-at")) {
+  try {
+    summary.holdingRosterDiscovery = await observeHoldingRoster({ db, rows,
+      profiles: [...existingProfiles.values()].flat().map(profile => ({ ...profile.data, memberId: profile.id })),
+      source: { sourceImportId: importId, studioId: STUDIO_ID, applied: true,
+        downloadedAt: valueArg("--holding-source-downloaded-at"),
+        complete: rows.length > 0 && rows.every(row => ["전화번호", "수강권명", "수강권상태"].every(key => Object.hasOwn(row, key))) } });
+  } catch (error) {
+    summary.holdingRosterDiscovery = { ok: false, mode: "discovery_only", reason: error.message, sends: 0 };
   }
 }
 summary.sourceFileRetention = await cleanupImportedSourceFiles({

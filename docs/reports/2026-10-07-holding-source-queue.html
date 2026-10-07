@@ -1,0 +1,25 @@
+<!doctype html>
+<html lang="ko">
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>홀딩 원천·후보·큐 연결 | ARCHIVE PILATES</title>
+<style>
+*{box-sizing:border-box}body{margin:0;background:#fff;color:#202321;font:16px/1.7 system-ui,-apple-system,sans-serif;letter-spacing:0}main{max-width:960px;margin:auto;padding:36px 20px 64px}h1{font-size:28px;line-height:1.35;margin:8px 0 16px}h2{font-size:20px;margin:32px 0 12px}p{max-width:72ch}header{border-bottom:2px solid #222;padding-bottom:24px}.meta,small{color:#606965}.status{padding:14px 16px;border-left:4px solid #25744e;background:#f0f7f3}.pending{border-left-color:#a84928;background:#fff4ef}section{border-bottom:1px solid #dfe5e1;padding-bottom:24px}table{border-collapse:collapse;width:100%;font-size:14px}th,td{text-align:left;vertical-align:top;padding:12px 8px;border-bottom:1px solid #dfe5e1}th{background:#f4f6f5}code{overflow-wrap:anywhere;font-size:.88em}li{margin:8px 0}.table-wrap{overflow:auto}footer{margin-top:30px;font-size:13px;color:#606965}@media(max-width:480px){main{padding:24px 16px}h1{font-size:24px}th,td{padding:10px 6px}}
+</style>
+<main>
+<header><div class="meta">ARCHIVE PILATES · 2026.10.07 · 로컬 구현·검증 결과</div><h1>홀딩 원천 수집부터 후보·큐 연결까지</h1><p class="status">원천 수집·식별자 조정·신규 후보·발송 선점 코드를 구현하고 격리 테스트했습니다. 운영 배포와 실제 자동발송 전환은 하지 않았습니다.</p></header>
+<section><h2>구현한 흐름</h2><div class="table-wrap"><table><thead><tr><th>단계</th><th>처리</th><th>안전 기준</th></tr></thead><tbody>
+<tr><td>원천 수집</td><td>StudioMate 발급 변경이력과 정지기간정보를 두 번 읽어 대조</td><td>회원·상품 단일 일치, 전체 이력, 공유 브라우저 잠금. 페이지 분할·동일 상품 복수·읽기 중 변경 시 중단</td></tr>
+<tr><td>최초 기간</td><td>최초 발급 당시 시작·종료일의 양 끝날 포함 기간</td><td>연장된 만료일·상품명에서 추정하지 않음</td></tr>
+<tr><td>안정적 식별자</td><td>검증된 발급권 ID + 정지 생성 이력에 연결된 고정 UUID</td><td>날짜 수정·재수집·템플릿 교체에도 동일 키 유지. 이력 내용이 바뀌면 다시 검증</td></tr>
+<tr><td>기준선</td><td>처음 수집한 과거 정지는 계산에만 포함</td><td>과거 정지 알림 소급 발송 없음</td></tr>
+<tr><td>후보·큐</td><td>기준선 이후 신규 정지만 기존 알림톡 후보에 검토 상태로 생성</td><td>관리자 인증 승인 API에서 검토한 내용 지문을 고정. 내용 변경 시 재승인. 후보 생성 이후 최신 원본, 현재 회원·스텝 상태 재검증</td></tr>
+<tr><td>발송</td><td>후보·원장·영구 선점 기록을 함께 확인한 뒤 v2 전용 전송 경로 사용</td><td>동일 정지 영구 1회. 접수 불명확·원장 기록 실패도 자동 재발송 금지. 접수와 최종 전달 완료는 별도 상태</td></tr>
+</tbody></table></div></section>
+<section><h2>실제 원천 확인</h2><p>기존 배민진 오너 로그인으로 화면을 읽기만 했습니다. 다음 값은 현재 발급권 변경이력·정지기간정보 대조 결과이며, 실제 신규 정지를 만들거나 발송한 결과가 아닙니다.</p><table><thead><tr><th>확인 대상</th><th>최초 기간</th><th>총 가능일</th><th>등록 사용일</th><th>잔여일</th></tr></thead><tbody><tr><td>김기효</td><td>365일</td><td>73일</td><td>8일</td><td>65일</td></tr><tr><td>배민진</td><td>365일</td><td>73일</td><td>0일</td><td>73일</td></tr></tbody></table><p class="pending">확인한 화면의 DOM에는 고유 발급권·정지 ID가 노출되지 않았습니다. 실제 발급권 원본 ID 확인과 정지별 고정 식별자 연결 검증이 남아 있습니다. 이를 확인했다고 가정하거나 날짜 해시를 ID로 사용해 자동발송하지 않습니다.</p></section>
+<section><h2>테스트</h2><ul><li>새 원천·큐·템플릿·통합 테스트 281개 통과: 과거 무발송, 수정·취소, 이력 누락, 동일 시각 원본 차단, 후보 갱신 시 승인 취소, 동시 실행, 응답 불명확과 재시도 차단. 중단된 발송은 원장을 보존한 채 활성 큐에서 격리합니다.</li><li>기존 알림톡·웰컴·스텝 제외·중복방지·브라우저 잠금 회귀 테스트 846개 통과. 합계 1,127개입니다.</li><li>Functions 전체 소스 엄격 타입 검사 통과. 5개 분리 Functions 빌드와 경계 검사 통과. 원천 데이터 정책 검사 통과.</li><li>통합 테스트는 가상 Firestore와 전송기를 사용했습니다. 읽기 선택자 구조는 실제 화면에서 확인했지만 자동 수집기 전체 실행 및 운영 후보 생성·실발송 E2E는 미검증입니다.</li></ul></section>
+<section><h2>운영 전환 조건</h2><ol><li>발급권 원본 ID와 전체 정지 이력의 식별자 연결 검증.</li><li>원천·계산 결과 무발송 비교 후 별도 감사 기록으로 canonical 원천 승격.</li><li>SOLAPI 전체 홀딩 버전 발송 이력의 조회 기간·보존 공백 여부 검증. 기존 웰컴 자동화의 타 용도 템플릿 허용 목록에도 독립 감사 후 v2를 추가해야 합니다. 미확인 상태에서는 후보·발송을 차단합니다.</li><li>운영 배포 후 제한된 대상의 신규 정지부터 후보를 검토하고 운영자 승인으로 검증. 관리자 승인 API는 구현했으나 CORE 전용 승인 화면은 이번 범위에 포함하지 않았습니다.</li></ol><p>현재 설정은 유지했습니다: <code>mode=operator_sample_only</code>, <code>autoSendEnabled=false</code>, <code>canonicalSourcePromoted=false</code>. 본 구현 요청으로 실제 회원의 수강권·정지·예약·결제나 메시지를 변경하지 않았습니다.</p></section>
+<section><h2>주기·남은 병목</h2><p>새 반복 작업은 추가하지 않았습니다. 원천 수집은 기존 시간별 회원 동기화에 명시적으로 켜는 보조 단계이고, 후보·발송은 기존 10분 큐를 재사용합니다. 현재 초기 적용 범위는 설정한 최대 10개 회원·상품입니다.</p><p>원본 변화 시 식별자 재검토는 수동입니다. 후보 생성 후 원본 재확인도 필요하므로 현재 구조의 무인 즉시발송은 보장하지 않습니다. 활성화 시 원천 대기 최대 약 1시간, 운영자 검토 시간, 후보 이후 원본 재확인 대기와 다음 10분 큐 대기가 더해질 수 있습니다. 이는 설정 기반 예상이며 실제 운영 SLA 측정값은 아닙니다.</p></section>
+<section><h2>저장·배포 범위</h2><p>임시 원본·검토 기록은 <code>workLanes/holding-allowance-notice</code>에만 준비하고, 승격 후 원천은 <code>memberTicketHolds</code>를 사용합니다. 발송 원천으로 member360·미러·workLanes를 사용하지 않습니다. 기존 <code>alimtalkCandidates</code>·<code>alimtalkSends</code>와 <code>holdingNoticeClaims</code>가 중복 방지 기록입니다.</p><p>로컬 원본은 내용 지문별 파일에 재사용 저장하고 파일 권한은 0600으로 제한합니다. CORE 운영규칙 수정본도 함께 준비했습니다. 현재 커밋·푸시·운영 배포는 하지 않았으며 다른 작업의 변경을 섞지 않았습니다.</p></section>
+<footer>작업 공간: <code>/Users/archivepilates/codex-worktrees/holding-source-queue</code><br>브랜치: <code>codex/mini/holding-source-queue</code> · 기준 커밋 <code>644a1b4c</code></footer>
+</main></html>

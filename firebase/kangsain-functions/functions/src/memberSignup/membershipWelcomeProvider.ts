@@ -23,7 +23,7 @@ const record = (value: unknown): value is Record<string, unknown> =>
 const templateId = (value: unknown): value is string =>
   typeof value === "string" && /^[A-Za-z0-9_-]{1,128}$/.test(value);
 
-function auditedNonWelcomeTemplates(value: unknown): Set<string> | null {
+export function auditedNonWelcomeTemplates(value: unknown): Set<string> | null {
   if (value === undefined) return new Set();
   if (
     !record(value) ||
