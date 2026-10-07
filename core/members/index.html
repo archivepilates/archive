@@ -3,7 +3,7 @@
   <head>
     <meta charset="utf-8" />
     <meta name="viewport" content="width=device-width, initial-scale=1" />
-    <meta name="theme-color" content="#f8f5ef" />
+    <meta name="theme-color" content="#f5f6f8" />
     <link rel="icon" type="image/png" sizes="32x32" href="/icons/favicon-32.png?v=1" />
     <link rel="shortcut icon" type="image/png" href="/favicon.png?v=1" />
     <link rel="icon" type="image/png" sizes="192x192" href="/icons/archive-pilates-icon-192.png?v=1" />
@@ -11,6 +11,7 @@
     <link rel="manifest" href="/site.webmanifest?v=1" />
     <title>Members · ARCHIVE CORE</title>
     <link rel="stylesheet" href="../assets/styles.css" />
+    <link rel="stylesheet" href="../assets/interface.css" />
     <script src="../firebase-config.js"></script>
     <script type="module" src="../assets/app.js"></script>
   </head>
@@ -33,7 +34,6 @@
       <main class="main">
         <header class="topbar">
           <div class="title-block">
-            <p class="eyebrow">회원</p>
             <h1>회원 찾기</h1>
           </div>
           <div class="top-actions" aria-label="상태 확인">
@@ -64,7 +64,7 @@
               <button class="filter-button" type="button" data-member-filter="quality">확인 필요 <span id="memberFilterQualityCount">0</span></button>
             </div>
           </div>
-          <div class="table-wrap"><table class="core-table members-table"><thead><tr><th>회원</th><th>수강권</th><th>최근 방문</th><th>누적 매출</th></tr></thead><tbody id="membersTable"><tr><td colspan="4">데이터 연결 후 표시합니다.</td></tr></tbody></table></div>
+          <div class="table-wrap"><table class="core-table members-table"><thead><tr><th>회원</th><th>수강권</th><th>최근 방문</th><th>누적 매출</th></tr></thead><tbody id="membersTable"><tr><td colspan="4">회원 확인 중</td></tr></tbody></table></div>
           <div class="pagination-bar" id="memberPagination" aria-label="회원 목록 페이지"></div>
         </section>
       </main>

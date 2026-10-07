@@ -1,3 +1,6 @@
+import { uiIcon } from "./ui-icons.js";
+
+const CORE_BRAND_IMAGE_URL = new URL("../icons/archive-pilates-icon-192.png", import.meta.url).href;
 const FIREBASE_APP_VERSION = "10.14.1";
 const CORE_RUNTIME_CONTRACT_VERSION = "2026-09-25.1";
 const WORK_LANE_ID = "archive-core-transition";
@@ -825,32 +828,28 @@ function revealHashTarget() {
 }
 
 const NAV_ICONS = {
-  home: "M3 11.5 12 4l9 7.5M5 10v10h14V10M9 20v-6h6v6",
-  members: "M16 19v-1.5A3.5 3.5 0 0 0 12.5 14h-5A3.5 3.5 0 0 0 4 17.5V19M11 8a3 3 0 1 1-6 0 3 3 0 0 1 6 0M20 19v-1a3 3 0 0 0-3-3h-1.2M15 5.2a2.8 2.8 0 0 1 0 5.6",
-  lessons: "M4 6.5h16M4 12h16M4 17.5h9M8 4v16M16 4v10",
-  "studiomate-member-registration": "M4 5h16v14H4zM8 9h8M8 13h5M16 16l2 2 3-4",
-  "instructor-lessons": "M4 5h16v14H4zM8 9h8M8 13h4M16 13l2 2 3-4",
-  private: "M5 4h14v16H5zM8 8h8M8 12h5M8 16h7",
-  "recommended-meals": "M5 5h14v14H5zM8 9h8M8 13h8M8 17h5",
-  refunds: "M4 7h16M7 4v6M17 4v6M6 11h12v9H6zM9 15h6",
-  staff: "M12 12a4 4 0 1 0 0-8 4 4 0 0 0 0 8M4 21a8 8 0 0 1 16 0M17.5 7.5l1.5 1.5 3-3",
-  messages: "M4 6h16v11H8l-4 3V6zM8 10h8M8 14h5",
-  content: "M5 4h14v16H5zM8 8h8M8 12h5M8 16h7M16.5 15.5l2.5 2.5",
-  "video-analytics": "M4 6h16v12H4zM10 9l5 3-5 3z",
-  automation: "M12 3v4M12 17v4M4.9 4.9l2.8 2.8M16.3 16.3l2.8 2.8M3 12h4M17 12h4M4.9 19.1l2.8-2.8M16.3 7.7l2.8-2.8M9 12a3 3 0 1 0 6 0 3 3 0 0 0-6 0",
-  business: "M4 19h16M6 16V9M12 16V5M18 16v-7",
-  imports: "M12 3v11M7 9l5 5 5-5M5 19h14",
-  rules: "M6 4h12v16H6zM9 8h6M9 12h6M9 16h4",
-  settings: "M12 8a4 4 0 1 0 0 8 4 4 0 0 0 0-8M12 3v3M12 18v3M4.6 6.2l2.1 2.1M17.3 15.7l2.1 2.1M3 12h3M18 12h3M4.6 17.8l2.1-2.1M17.3 8.3l2.1-2.1",
+  home: "house",
+  members: "users",
+  lessons: "calendar-days",
+  "studiomate-member-registration": "user-plus",
+  "instructor-lessons": "clipboard-check",
+  private: "file-text",
+  sequence: "notebook-pen",
+  "recommended-meals": "utensils",
+  refunds: "receipt-text",
+  staff: "user-round",
+  messages: "messages-square",
+  content: "file-text",
+  "video-analytics": "video",
+  automation: "activity",
+  business: "chart-no-axes-combined",
+  imports: "download",
+  rules: "book-open",
+  settings: "settings-2",
 };
 
 function navIcon(section) {
-  const path = NAV_ICONS[section === "sequence" ? "rules" : section] || NAV_ICONS.home;
-  return `
-    <svg class="nav-icon" aria-hidden="true" viewBox="0 0 24 24" focusable="false">
-      <path d="${path}" />
-    </svg>
-  `;
+  return uiIcon(NAV_ICONS[section] || NAV_ICONS.home, "nav-icon");
 }
 
 const SECONDARY_NAV_SECTIONS = new Set(["automation", "business", "imports", "rules", "settings"]);
@@ -888,6 +887,8 @@ function enhanceNav() {
   const nav = document.querySelector(".nav");
   if (!nav) return;
   const sidebar = nav.closest(".sidebar");
+  const brandMark = sidebar?.querySelector(".brand-mark");
+  if (brandMark) brandMark.innerHTML = `<img src="${CORE_BRAND_IMAGE_URL}" width="36" height="36" alt="" />`;
   if (sidebar && !sidebar.querySelector(".mobile-nav-toggle")) {
     nav.id = "coreNavigation";
     const toggle = document.createElement("button");
@@ -895,7 +896,9 @@ function enhanceNav() {
     toggle.className = "mobile-nav-toggle";
     toggle.setAttribute("aria-controls", nav.id);
     toggle.setAttribute("aria-expanded", "false");
-    toggle.textContent = "메뉴";
+    toggle.setAttribute("aria-label", "메뉴");
+    toggle.setAttribute("title", "메뉴");
+    toggle.innerHTML = uiIcon("menu");
     toggle.addEventListener("click", () => toggle.setAttribute("aria-expanded", String(sidebar.classList.toggle("is-open"))));
     sidebar.prepend(toggle);
   }
@@ -907,6 +910,17 @@ function enhanceNav() {
     search.textContent = "회원 또는 업무 검색";
     search.setAttribute("aria-haspopup", "dialog");
     document.querySelector(".top-actions")?.prepend(search);
+  }
+  const searchButton = qs("commandPaletteOpen");
+  if (searchButton) {
+    searchButton.setAttribute("aria-label", "회원 또는 업무 검색");
+    searchButton.innerHTML = `${uiIcon("search")}<span>회원·업무 검색</span>`;
+  }
+  const refreshButton = qs("refreshButton");
+  if (refreshButton) {
+    refreshButton.setAttribute("aria-label", "새로고침");
+    refreshButton.setAttribute("title", "새로고침");
+    refreshButton.innerHTML = uiIcon("refresh-cw");
   }
   const hiddenSections = new Set(["members", "lessons", "content"]);
   nav.querySelectorAll("a[data-section]").forEach((link) => {
@@ -1054,8 +1068,7 @@ function ensureLoginGate() {
   gate.id = "coreLoginGate";
   gate.innerHTML = `
     <form class="login-card" id="coreLoginForm">
-      <h2>ARCHIVE CORE</h2>
-      <p>운영자 휴대폰번호와 비밀번호로 로그인하세요.</p>
+      <div class="login-brand"><img src="${CORE_BRAND_IMAGE_URL}" width="48" height="48" alt="ARCHIVE PILATES" /><h2>ARCHIVE CORE</h2></div>
       <label>
         <span>휴대폰번호</span>
         <input id="coreLoginPhone" type="tel" inputmode="numeric" autocomplete="tel" placeholder="01000000000" />
@@ -7921,11 +7934,10 @@ function renderFallback(error, options = {}) {
 
 async function refresh() {
   const refreshButton = qs("refreshButton");
-  const refreshButtonLabel = refreshButton?.textContent || "새로고침";
   if (refreshButton) {
     refreshButton.disabled = true;
     refreshButton.setAttribute("aria-busy", "true");
-    refreshButton.textContent = "새로고침 중";
+    refreshButton.setAttribute("title", "새로고침 중");
   }
   delete document.body.dataset.sourceHealth;
   setConnection("연결 중", "데이터 읽기 확인 중");
@@ -8266,7 +8278,7 @@ async function refresh() {
     if (refreshButton) {
       refreshButton.disabled = false;
       refreshButton.removeAttribute("aria-busy");
-      refreshButton.textContent = refreshButtonLabel;
+      refreshButton.setAttribute("title", "새로고침");
     }
   }
 }

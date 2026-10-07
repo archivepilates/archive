@@ -3,7 +3,7 @@
   <head>
     <meta charset="utf-8" />
     <meta name="viewport" content="width=device-width, initial-scale=1" />
-    <meta name="theme-color" content="#f8f5ef" />
+    <meta name="theme-color" content="#f5f6f8" />
     <link rel="icon" type="image/png" sizes="32x32" href="/icons/favicon-32.png?v=1" />
     <link rel="shortcut icon" type="image/png" href="/favicon.png?v=1" />
     <link rel="icon" type="image/png" sizes="192x192" href="/icons/archive-pilates-icon-192.png?v=1" />
@@ -11,6 +11,7 @@
     <link rel="manifest" href="/site.webmanifest?v=1" />
     <title>Staff · ARCHIVE CORE</title>
     <link rel="stylesheet" href="../assets/styles.css" />
+    <link rel="stylesheet" href="../assets/interface.css" />
     <script src="../firebase-config.js"></script>
     <script type="module" src="../assets/app.js"></script>
   </head>
@@ -26,7 +27,6 @@
       <main class="main">
         <header class="topbar">
           <div class="title-block">
-            <p class="eyebrow">강사</p>
             <h1>강사 현황</h1>
           </div>
           <div class="top-actions" aria-label="상태 확인">
@@ -50,7 +50,7 @@
             <div><h2>강사별 평가 점수</h2><p>근무중 강사 · 최신 점수와 최고 점수</p></div>
           </div>
           <div class="staff-chart" id="staffEvaluationChart">
-            <div class="empty-state">평가 제출 기록이 생기면 강사별 점수 차트가 표시됩니다.</div>
+            <div class="empty-state">평가 기록 확인 중</div>
           </div>
         </section>
 
@@ -65,7 +65,7 @@
               </div>
             </div>
             <div class="list staff-list" id="staffHrList">
-              <div class="empty-state">데이터 연결 후 강사별 카드가 표시됩니다.</div>
+              <div class="empty-state">인사기록 불러오는 중</div>
             </div>
           </article>
 
@@ -74,7 +74,7 @@
               <div><h2 id="staffDetailTitle">강사 세부 지표</h2><p id="staffDetailSubtitle">평가 답안 · 월별 운영 지표</p></div>
             </div>
             <div id="staffDetailCard" class="staff-detail-card">
-              <div class="empty-state">강사 리스트에서 이름을 선택해 주세요.</div>
+              <div class="empty-state">강사 선택</div>
             </div>
           </aside>
         </section>
@@ -84,7 +84,7 @@
             <div><h2>최근 평가 제출</h2></div>
           </div>
           <div class="list" id="staffEvaluationSubmissionList">
-            <div class="empty-state">최근 제출 이력이 없습니다.</div>
+            <div class="empty-state">최근 제출 이력 없음</div>
           </div>
         </section>
 

@@ -3,7 +3,7 @@
   <head>
     <meta charset="utf-8" />
     <meta name="viewport" content="width=device-width, initial-scale=1" />
-    <meta name="theme-color" content="#f8f5ef" />
+    <meta name="theme-color" content="#f5f6f8" />
     <link rel="icon" type="image/png" sizes="32x32" href="/icons/favicon-32.png?v=1" />
     <link rel="shortcut icon" type="image/png" href="/favicon.png?v=1" />
     <link rel="icon" type="image/png" sizes="192x192" href="/icons/archive-pilates-icon-192.png?v=1" />
@@ -11,6 +11,7 @@
     <link rel="manifest" href="/site.webmanifest?v=1" />
     <title>ARCHIVE CORE</title>
     <link rel="stylesheet" href="./assets/styles.css" />
+    <link rel="stylesheet" href="./assets/interface.css" />
     <script src="./firebase-config.js"></script>
     <script type="module" src="./assets/app.js"></script>
   </head>
@@ -38,7 +39,6 @@
       <main class="main">
         <header class="command-hero">
           <div class="command-copy">
-            <p class="eyebrow">ARCHIVE CORE</p>
             <h1>오늘 할 일</h1>
             <button class="command-search-button" id="commandPaletteOpen" type="button" aria-haspopup="dialog" aria-controls="commandPalette">
               <span>회원 또는 업무 검색</span>
@@ -131,16 +131,15 @@
               <div>
                 <h2>오늘 처리할 일</h2>
               </div>
-              <span class="pill good">오늘</span>
             </div>
             <div class="list" id="homeDecisionList">
-              <div class="empty-state">확인 중입니다.</div>
+              <div class="empty-state">확인 중</div>
             </div>
             <aside class="command-context-card" aria-label="오늘 운영 요약">
               <div>
                 <span class="context-label">오늘 우선순위</span>
                 <strong id="commandQueueStatus">운영 큐 확인 중</strong>
-                <p id="commandQueueNote">처리가 필요한 업무를 확인합니다.</p>
+                <p id="commandQueueNote"></p>
               </div>
               <div class="connection-card" aria-live="polite">
                 <span id="connectionLabel">로딩</span>
@@ -152,7 +151,7 @@
 
         <details class="panel action-disclosure" id="renewalPipeline">
           <summary>
-            <span><strong>재등록 관리</strong><small>오늘 연락할 회원과 재등록 대기 회원</small></span>
+            <span><strong>재등록 관리</strong></span>
             <span class="pill" id="renewalPipelineCount">0명</span>
           </summary>
           <div class="disclosure-body">
@@ -168,7 +167,7 @@
               <div><span>재등록 대기</span><strong id="renewalWaitingCount">0명</strong></div>
             </div>
             <div class="list compact-list renewal-list" id="renewalPipelineList" role="tabpanel" aria-label="재등록 상담 목록" tabindex="0" aria-live="polite">
-              <div class="empty-state">확인 중입니다.</div>
+              <div class="empty-state">확인 중</div>
             </div>
             <div class="disclosure-actions">
               <a class="text-link" data-ticket-liability-link href="./business/#ticketLiability">수강권 잔여금액</a>
@@ -178,7 +177,7 @@
 
         <details class="panel action-disclosure parking-panel" id="parkingTools">
           <summary>
-            <span><strong>주차등록</strong><small>차량 등록 또는 오늘 주차권 적용</small></span>
+            <span><strong>주차등록</strong></span>
             <span class="pill good" id="parkingPolicyPill">2시간 × 2계정</span>
           </summary>
           <div class="disclosure-body">
@@ -205,14 +204,12 @@
             </label>
             <label class="wide">
               <span>내부 메모</span>
-              <textarea id="parkingNote" name="note" rows="2" placeholder="차량 변경 사유, 가족차량, 방문 목적 등 운영 메모를 남깁니다."></textarea>
+              <textarea id="parkingNote" name="note" rows="2" placeholder="변경 사유, 가족차량, 방문 목적"></textarea>
             </label>
             <div class="action-form-footer">
               <button class="primary-action" id="parkingRegisterButton" type="submit">차량 등록</button>
               <button class="secondary-action" id="parkingAutoApplyButton" type="button">오늘 자동적용 실행</button>
-              <p class="form-status" id="parkingStatus" role="status" aria-live="polite">
-                회원, 강사, 방문 차량을 등록하고 필요할 때 자동적용을 실행합니다.
-              </p>
+              <p class="form-status" id="parkingStatus" role="status" aria-live="polite"></p>
             </div>
           </form>
           <div class="parking-dashboard">
@@ -224,7 +221,7 @@
                 <span class="pill" id="parkingVehicleCount">0대</span>
               </div>
               <div class="pricing-history-list" id="parkingVehicleList">
-                <div class="empty-state">등록된 차량을 불러오면 여기에 표시됩니다.</div>
+                <div class="empty-state">차량 불러오는 중</div>
               </div>
             </article>
             <article>
@@ -235,7 +232,7 @@
                 <span class="pill" id="parkingJobCount">0건</span>
               </div>
               <div class="pricing-history-list" id="parkingJobList">
-                <div class="empty-state">최근 주차권 작업을 불러오면 여기에 표시됩니다.</div>
+                <div class="empty-state">주차권 작업 불러오는 중</div>
               </div>
             </article>
           </div>
@@ -244,7 +241,7 @@
 
         <details class="panel action-disclosure" id="pricingInquiry">
           <summary>
-            <span><strong>수강료 문의</strong><small>전화번호 입력 후 안내 알림톡 발송</small></span>
+            <span><strong>수강료 문의</strong><small>안내 알림톡</small></span>
             <span class="pill">바로 발송</span>
           </summary>
           <div class="disclosure-body">
@@ -259,7 +256,7 @@
             </label>
             <label class="wide">
               <span>내부 메모</span>
-              <textarea id="pricingInquiryNote" name="note" rows="2" placeholder="문의 경로나 상담 메모를 남깁니다. 알림톡 본문에는 들어가지 않습니다."></textarea>
+              <textarea id="pricingInquiryNote" name="note" rows="2" placeholder="문의 경로·상담 메모 (알림톡 미포함)"></textarea>
             </label>
             <div class="action-form-footer">
               <button class="primary-action" id="pricingInquirySendButton" type="submit">수강료 안내 발송</button>
@@ -281,12 +278,11 @@
             <div class="pricing-history-header">
               <div>
                 <strong>최근 수강료 안내 발송</strong>
-                <p>내부 메모와 최근 발송 결과를 함께 확인합니다.</p>
               </div>
               <span class="pill" id="pricingInquiryHistoryCount">0건</span>
             </div>
             <div class="pricing-history-list" id="pricingInquiryHistoryList">
-              <div class="empty-state">최근 발송 이력을 불러오면 여기에 표시됩니다.</div>
+              <div class="empty-state">발송 이력 불러오는 중</div>
             </div>
           </div>
           </div>
@@ -294,7 +290,7 @@
 
         <details class="panel action-disclosure" id="recommendedMealProgram">
           <summary>
-            <span><strong>추천식단 프로그램</strong><small>회원 확인 후 생활·식습관 설문 알림톡 발송</small></span>
+            <span><strong>추천식단 프로그램</strong><small>회원 확인 후 설문 알림톡</small></span>
             <span class="pill">단건 발송</span>
           </summary>
           <div class="disclosure-body">
@@ -308,11 +304,11 @@
               </label>
               <label>
                 <span>회원명</span>
-                <input id="recommendedMealName" name="memberName" type="text" autocomplete="name" placeholder="동일 번호 구분을 위해 입력 권장" />
+                <input id="recommendedMealName" name="memberName" type="text" autocomplete="name" placeholder="동일 번호 구분용 · 입력 권장" />
               </label>
               <label class="wide">
                 <span>내부 메모</span>
-                <textarea id="recommendedMealNote" name="note" rows="2" placeholder="회원 목표나 상담 배경을 적습니다. 설문과 알림톡 본문에는 포함되지 않습니다."></textarea>
+                <textarea id="recommendedMealNote" name="note" rows="2" placeholder="목표·상담 배경 (설문·알림톡 미포함)"></textarea>
               </label>
               <div class="action-form-footer">
                 <button class="primary-action" id="recommendedMealSendButton" type="submit">추천식단 설문 발송</button>
@@ -339,7 +335,7 @@
                 <span class="pill" id="recommendedMealHistoryCount">0건</span>
               </div>
               <div class="pricing-history-list" id="recommendedMealHistoryList">
-                <div class="empty-state">최근 추천식단 요청을 불러오면 여기에 표시됩니다.</div>
+                <div class="empty-state">요청 불러오는 중</div>
               </div>
             </div>
           </div>

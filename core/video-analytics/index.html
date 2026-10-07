@@ -3,7 +3,7 @@
   <head>
     <meta charset="utf-8" />
     <meta name="viewport" content="width=device-width, initial-scale=1" />
-    <meta name="theme-color" content="#f8f5ef" />
+    <meta name="theme-color" content="#f5f6f8" />
     <link rel="icon" type="image/png" sizes="32x32" href="/icons/favicon-32.png?v=1" />
     <link rel="shortcut icon" type="image/png" href="/favicon.png?v=1" />
     <link rel="icon" type="image/png" sizes="192x192" href="/icons/archive-pilates-icon-192.png?v=1" />
@@ -11,6 +11,7 @@
     <link rel="manifest" href="/site.webmanifest?v=1" />
     <title>영상 시청 현황 · ARCHIVE CORE</title>
     <link rel="stylesheet" href="../assets/styles.css" />
+    <link rel="stylesheet" href="../assets/interface.css" />
     <script src="../firebase-config.js"></script>
     <script type="module" src="../assets/app.js"></script>
   </head>
@@ -26,9 +27,8 @@
       <main class="main video-watch-page">
         <header class="topbar">
           <div class="title-block">
-            <p class="eyebrow">VIDEO WATCH</p>
             <h1>회원별 영상 시청 현황</h1>
-            <p class="subtitle">판매영상과 수강생 공유영상의 최근 시청 회원 및 개인별 이력</p>
+            <p class="subtitle">판매영상·수강생 공유영상</p>
           </div>
           <div class="top-actions" aria-label="시청 현황 설정">
             <div class="connection-card" aria-live="polite">
@@ -42,7 +42,7 @@
         <section class="panel video-watch-toolbar" aria-labelledby="videoWatchViewTitle">
           <div>
             <h2 id="videoWatchViewTitle">판매영상 조회</h2>
-            <p id="videoWatchUpdatedAt">추적 기능을 적용한 시점 이후의 기록만 표시됩니다.</p>
+            <p id="videoWatchUpdatedAt">추적 적용 이후 기록만 표시</p>
           </div>
           <div class="video-watch-toolbar-controls">
             <div class="range-segment content-type-segment" id="videoWatchContentType" role="group" aria-label="영상 유형 선택">
@@ -82,20 +82,19 @@
               <span class="pill" id="videoWatchBuyerCount">0명</span>
             </div>
             <div class="video-watch-member-list" id="videoWatchBuyerList">
-              <div class="empty-state">회원 시청 기록을 확인 중입니다.</div>
+              <div class="empty-state">시청 기록 확인 중</div>
             </div>
           </article>
 
           <article class="panel video-watch-member-detail" aria-labelledby="videoWatchMemberDetailTitle">
             <div class="panel-header">
               <div>
-                <p class="eyebrow">MEMBER HISTORY</p>
-                <h2 id="videoWatchMemberDetailTitle">회원 선택</h2>
-                <p id="videoWatchMemberDetailMeta">최근 시청 회원을 선택하세요.</p>
+                <h2 id="videoWatchMemberDetailTitle">회원별 시청 이력</h2>
+                <p id="videoWatchMemberDetailMeta"></p>
               </div>
             </div>
             <div class="video-watch-history" id="videoWatchMemberHistory" aria-live="polite">
-              <div class="empty-state">선택한 회원의 시청 이력이 표시됩니다.</div>
+              <div class="empty-state">회원 선택 대기</div>
             </div>
           </article>
         </section>

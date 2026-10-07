@@ -3,7 +3,7 @@
   <head>
     <meta charset="utf-8" />
     <meta name="viewport" content="width=device-width, initial-scale=1" />
-    <meta name="theme-color" content="#f8f5ef" />
+    <meta name="theme-color" content="#f5f6f8" />
     <link rel="icon" type="image/png" sizes="32x32" href="/icons/favicon-32.png?v=1" />
     <link rel="shortcut icon" type="image/png" href="/favicon.png?v=1" />
     <link rel="icon" type="image/png" sizes="192x192" href="/icons/archive-pilates-icon-192.png?v=1" />
@@ -12,6 +12,7 @@
     <title>프라이빗 · ARCHIVE CORE</title>
     <link rel="stylesheet" href="../assets/styles.css" />
     <link rel="stylesheet" href="./private.css" />
+    <link rel="stylesheet" href="../assets/interface.css" />
     <script src="../firebase-config.js"></script>
     <script type="module" src="../assets/app.js"></script>
   </head>
@@ -25,11 +26,11 @@
       </aside>
       <main class="main private-main" aria-label="프라이빗 기록·리포트">
         <header class="topbar">
-          <div class="private-brand">ARCHIVE PILATES <span>PRIVATE STUDIO</span></div>
+          <div class="private-brand">ARCHIVE PILATES</div>
           <div class="top-actions" aria-label="상태 확인"><div class="connection-card" aria-live="polite"><span id="connectionLabel">로딩</span><strong id="connectionDetail">데이터 연결 준비 중</strong></div><button class="refresh-button" id="refreshButton" type="button">새로고침</button></div>
         </header>
         <div class="private-workspace">
-        <div class="private-mast"><p class="eyebrow">프라이빗</p><h1>기록·리포트</h1></div>
+        <div class="private-mast"><h1>프라이빗 기록·리포트</h1></div>
         <div class="workflow-tabs" id="privateScopeTabs" role="tablist" aria-label="프라이빗 업무 범위">
           <button id="privateTodayTab" type="button" role="tab" class="is-active" data-private-scope="today" aria-selected="true" aria-controls="privateScopePanel">오늘</button>
           <button id="privateOverdueTab" type="button" role="tab" data-private-scope="overdue" aria-selected="false" aria-controls="privateScopePanel">미처리</button>
@@ -47,14 +48,14 @@
               <h2 id="privateProgressHeading">기록·전달 현황</h2>
               <span class="pill" id="privateProgressStatus">확인 중</span>
             </div>
-            <div class="stage-board" id="privateProgressList"><div class="empty-state" role="status">수업 정보를 불러오는 중입니다.</div></div>
+            <div class="stage-board" id="privateProgressList"><div class="empty-state" role="status">수업 불러오는 중</div></div>
           </section>
           <section class="private-section private-instructors" aria-labelledby="privateInstructorHeading">
             <div class="panel-header">
               <h2 id="privateInstructorHeading">강사별 할 일</h2>
               <span class="pill warn" id="privateInstructorPendingStatus">확인 중</span>
             </div>
-            <div class="list compact-list" id="privateInstructorPendingList"><div class="empty-state" role="status">강사별 작업을 불러오는 중입니다.</div></div>
+            <div class="list compact-list" id="privateInstructorPendingList"><div class="empty-state" role="status">강사별 작업 불러오는 중</div></div>
           </section>
           </div>
         </div>

@@ -2,10 +2,23 @@ import assert from "node:assert/strict";
 import fs from "node:fs";
 import test from "node:test";
 import vm from "node:vm";
+import { buildSync } from "esbuild";
+import { fileURLToPath } from "node:url";
 
-const source = fs.readFileSync(new URL("../../core/assets/app.js", import.meta.url), "utf8");
+const appUrl = new URL("../../core/assets/app.js", import.meta.url);
+const source = fs.readFileSync(appUrl, "utf8");
 const end = source.lastIndexOf("\nenhanceNav();");
 assert.ok(end > 0);
+// Bundle local presentation imports without running browser startup or remote Firebase modules.
+const testSource = buildSync({
+  stdin: { contents: source.slice(0, end), resolveDir: fileURLToPath(new URL(".", appUrl)), sourcefile: "app.js" },
+  bundle: true,
+  treeShaking: false,
+  format: "cjs",
+  write: false,
+  define: { "import.meta.url": JSON.stringify(appUrl.href) },
+  external: ["https://*"],
+}).outputFiles[0].text;
 
 function app() {
   const elements = new Map();
@@ -16,7 +29,7 @@ function app() {
     querySelectorAll: () => [],
   };
   const context = { document, URL, console, Date, Intl };
-  vm.runInNewContext(`${source.slice(0, end)}\nglobalThis.api = {
+  vm.runInNewContext(`${testSource}\nglobalThis.api = {
     state, setReadState, renderHomeSummary, renderHomeDecisions, renderRenewalPipeline,
     renewalCaseRows, activeRenewalMemberRows, groupRenewalRows, getCommunicationActions,
     pendingAlimtalkCandidates, failedAlimtalkCandidates, failedAlimtalkSends, isCurrentCommunicationFailure, communicationProblemSummary, currentPrivateSessionRows,

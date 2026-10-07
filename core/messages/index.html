@@ -3,7 +3,7 @@
   <head>
     <meta charset="utf-8" />
     <meta name="viewport" content="width=device-width, initial-scale=1" />
-    <meta name="theme-color" content="#f8f5ef" />
+    <meta name="theme-color" content="#f5f6f8" />
     <link rel="icon" type="image/png" sizes="32x32" href="/icons/favicon-32.png?v=1" />
     <link rel="shortcut icon" type="image/png" href="/favicon.png?v=1" />
     <link rel="icon" type="image/png" sizes="192x192" href="/icons/archive-pilates-icon-192.png?v=1" />
@@ -12,6 +12,7 @@
     <title>Messages · ARCHIVE CORE</title>
     <link rel="stylesheet" href="../assets/styles.css" />
     <link rel="stylesheet" href="../assets/alimtalk-catalog.css" />
+    <link rel="stylesheet" href="../assets/interface.css" />
     <script src="../firebase-config.js"></script>
     <script type="module" src="../assets/app.js"></script>
   </head>
@@ -26,8 +27,7 @@
       <main class="main">
         <header class="topbar">
           <div class="title-block">
-            <p class="eyebrow">알림톡</p>
-            <h1>발송 관리</h1>
+            <h1>알림톡 발송 관리</h1>
           </div>
           <div class="top-actions" aria-label="상태 확인">
             <div class="connection-card" aria-live="polite"><span id="connectionLabel">로딩</span><strong id="connectionDetail">데이터 연결 준비 중</strong></div>
@@ -36,7 +36,7 @@
         </header>
         <section class="template-catalog" data-template-catalog aria-labelledby="catalogTitle">
           <h2 id="catalogTitle">템플릿 카탈로그</h2>
-          <p role="status">정책 자료 읽는 중</p>
+          <p role="status">정책 확인 중</p>
         </section>
         <section class="grid kpis">
           <article class="panel metric"><div class="metric-label">검토 대상</div><div class="metric-value" id="messagesCandidateCount">0건</div></article>
@@ -51,21 +51,21 @@
           </div>
           <div class="ops-board">
             <article class="ops-card">
-              <div class="ops-card-header"><h3>처리할 일</h3><span class="pill">오늘</span></div>
-              <div class="list compact-list" id="messagesDecisionList"><div class="empty-state">데이터 연결 후 판단 항목을 표시합니다.</div></div>
+              <div class="ops-card-header"><h3>처리할 일</h3></div>
+              <div class="list compact-list" id="messagesDecisionList"><div class="empty-state">처리 항목 확인 중</div></div>
             </article>
             <details class="ops-card compact-disclosure">
               <summary><h3>최근 표본 템플릿</h3><span class="pill">최대 8종</span></summary>
               <p>최근 후보·발송에서 추린 표본이며 전체 템플릿 목록·가동 상태가 아닙니다.</p>
-              <div class="list compact-list" id="messagesTemplateList"><div class="empty-state">데이터 연결 후 템플릿별 현황을 표시합니다.</div></div>
+              <div class="list compact-list" id="messagesTemplateList"><div class="empty-state">템플릿 확인 중</div></div>
             </details>
             <details class="ops-card compact-disclosure">
               <summary><h3>최근 후보</h3><span class="pill">상세</span></summary>
-              <div class="list compact-list" id="messagesCandidateList"><div class="empty-state">데이터 연결 후 후보 기록을 표시합니다.</div></div>
+              <div class="list compact-list" id="messagesCandidateList"><div class="empty-state">후보 확인 중</div></div>
             </details>
             <article class="ops-card">
               <div class="ops-card-header"><h3>발송 결과</h3><span class="pill danger" id="messagesRiskDecision">확인 중</span></div>
-              <div class="list compact-list" id="messagesSendList"><div class="empty-state">데이터 연결 후 발송 기록을 표시합니다.</div></div>
+              <div class="list compact-list" id="messagesSendList"><div class="empty-state">발송 기록 확인 중</div></div>
             </article>
           </div>
         </section>

@@ -1,6 +1,6 @@
 {
   "schemaVersion": 1,
-  "policyFingerprint": "78d72d4e93d2cd968dfa85037d6203e48431fefb53336717a0e5f58929d34a34",
+  "policyFingerprint": "20fbce4fbfa6e169a3b8d488300727412b32b63dcff52909121f1e7bcfba25d7",
   "sourceMode": "repository_defaults_no_environment_or_live_reads",
   "coverage": {
     "observedAt": "2026-09-30T06:41:16.973Z",
@@ -14,7 +14,7 @@
   "sourceFingerprints": [
     {
       "path": "core/assets/app.js",
-      "sha256": "52f74bb1e30f684a1bb31d171aafc498335c5ec4927d61c16513cd07179640b5"
+      "sha256": "14886fa5fcc3bdd1fdde291ef8956e9b1ecd6187daed03f23b444aaed7ac4550"
     },
     {
       "path": "firebase/kangsain-functions/functions/src/alimtalk/approvalGate.ts",
@@ -1883,7 +1883,7 @@
         {
           "path": "core/assets/app.js",
           "symbol": "ALIMTALK_TEMPLATE_LABELS_BY_CODE",
-          "line": 15
+          "line": 18
         }
       ],
       "visibility": {
@@ -1923,7 +1923,7 @@
         {
           "path": "core/assets/app.js",
           "symbol": "ALIMTALK_TEMPLATE_LABELS_BY_CODE",
-          "line": 15
+          "line": 18
         }
       ],
       "visibility": {
@@ -1963,7 +1963,7 @@
         {
           "path": "core/assets/app.js",
           "symbol": "ALIMTALK_TEMPLATE_LABELS_BY_CODE",
-          "line": 15
+          "line": 18
         }
       ],
       "visibility": {
@@ -2006,7 +2006,7 @@
         {
           "path": "core/assets/app.js",
           "symbol": "ALIMTALK_TEMPLATE_LABELS_BY_CODE",
-          "line": 15
+          "line": 18
         }
       ],
       "visibility": {
@@ -2046,7 +2046,7 @@
         {
           "path": "core/assets/app.js",
           "symbol": "ALIMTALK_TEMPLATE_LABELS_BY_CODE",
-          "line": 15
+          "line": 18
         }
       ],
       "visibility": {
@@ -2089,7 +2089,7 @@
         {
           "path": "core/assets/app.js",
           "symbol": "ALIMTALK_TEMPLATE_LABELS_BY_CODE",
-          "line": 15
+          "line": 18
         }
       ],
       "visibility": {
@@ -2132,7 +2132,7 @@
         {
           "path": "core/assets/app.js",
           "symbol": "ALIMTALK_TEMPLATE_LABELS_BY_CODE",
-          "line": 15
+          "line": 18
         }
       ],
       "visibility": {
@@ -2175,7 +2175,7 @@
         {
           "path": "core/assets/app.js",
           "symbol": "ALIMTALK_TEMPLATE_LABELS_BY_CODE",
-          "line": 15
+          "line": 18
         }
       ],
       "visibility": {
@@ -2218,7 +2218,7 @@
         {
           "path": "core/assets/app.js",
           "symbol": "ALIMTALK_TEMPLATE_LABELS_BY_CODE",
-          "line": 15
+          "line": 18
         }
       ],
       "visibility": {

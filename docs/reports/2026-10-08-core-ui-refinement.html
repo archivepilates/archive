@@ -1,0 +1,31 @@
+<!doctype html>
+<html lang="ko">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width,initial-scale=1">
+<title>ARCHIVE CORE UI 개선 · 2026.10.08</title>
+<style>
+*{box-sizing:border-box}body{margin:0;background:#f5f6f8;color:#20262c;font:15px/1.7 -apple-system,BlinkMacSystemFont,sans-serif;letter-spacing:0}main{max-width:980px;margin:auto;padding:40px 24px 72px}header{border-bottom:1px solid #d8dde3;padding-bottom:28px}h1{font-size:28px;line-height:1.4;margin:8px 0 12px}h2{font-size:18px;margin:0 0 12px}p{margin:6px 0}section{padding:26px 0;border-bottom:1px solid #d8dde3}.muted{color:#626d78}.status{display:inline-block;padding:3px 8px;border-radius:4px;background:#eef4fa;color:#35658f;font-size:12px}table{width:100%;border-collapse:collapse;text-align:left}th,td{padding:12px 8px;border-bottom:1px solid #e9edf1;vertical-align:top}th{font-weight:600}td:last-child{color:#26715d}a{color:#35658f;overflow-wrap:anywhere}code{font-size:13px;overflow-wrap:anywhere}ul{padding-left:20px}li{margin:6px 0}.scroll{overflow-x:auto}@media(max-width:600px){main{padding:24px 16px 48px}h1{font-size:24px}th,td{padding:10px 4px;font-size:13px}}@media print{body{background:#fff}main{max-width:none;padding:0}section{break-inside:avoid}}
+</style>
+</head>
+<body><main>
+<header><span class="status">로컬 구현·검증 완료 / 운영 미배포</span><h1>ARCHIVE CORE UI 개선</h1><p>반복 설명을 덜고, 업무 상태와 실행 항목을 중심으로 정리했습니다.</p><p class="muted">2026.10.08 · ARCHIVE PILATES · 기준 커밋 d2566b2e</p></header>
+<section><h2>변경 내용</h2><ul>
+<li>20개 화면의 메뉴, 글자 크기, 간격, 입력칸, 상태 표시를 공통 스타일로 통일했습니다.</li>
+<li>공식 로고와 로컬 Lucide 아이콘을 적용했습니다. 메뉴·새로고침은 44px 도구 버튼과 접근성 이름을 유지합니다.</li>
+<li>장식용 영문 라벨, 중복 설명, 경영 화면의 정적인 기능 소개를 제거했습니다.</li>
+<li>큰 박스를 줄이고 구분선·목록 중심으로 구성했습니다. 상세 정보는 기존 접기·펼치기를 유지합니다.</li>
+<li>발송 승인, 환불 확인, 개인정보, 오류 원인, 원천·조회 기간 안내는 유지했습니다.</li>
+</ul></section>
+<section><h2>검증 결과</h2><div class="scroll"><table><thead><tr><th>검사</th><th>범위</th><th>결과</th></tr></thead><tbody>
+<tr><td>전체 반응형 화면</td><td>95개 조합 · 320 / 390 / 768 / 1440 / 1920px</td><td>통과</td></tr>
+<tr><td>표시·상호작용</td><td>32개 조합 · 로그인, 메뉴, 검색, 접기, 포커스, 로고, 넘침</td><td>통과</td></tr>
+<tr><td>기존 업무 회귀</td><td>JavaScript 52건 + TypeScript 26건</td><td>78건 통과</td></tr>
+<tr><td>UI 보존·기존 프라이빗 디자인</td><td>운영 ID, 입력, 이벤트, 인증·쓰기 함수 비교</td><td>30건 통과</td></tr>
+<tr><td>Hosting 검증·문법·차이 검사</td><td>기존 릴리스 가드, JS 구문, diff 공백</td><td>통과</td></tr>
+</tbody></table></div></section>
+<section><h2>변경하지 않은 부분</h2><p>회원 데이터, Firebase 인증·권한, Firestore 조회·쓰기, 알림톡 발송 규칙, 예약, 환불 계산, 시퀀스 편집·저장 로직은 그대로입니다.</p><p class="muted">알림톡 카탈로그는 화면 소스 변경에 따른 해시와 줄 번호만 재생성했습니다. 템플릿·발송 정책은 변경하지 않았습니다.</p></section>
+<section><h2>미리보기</h2><p><a href="http://127.0.0.1:4180/">맥미니 로컬 미리보기 열기</a></p><p>예시 데이터만 표시합니다. 실제 Firebase 설정·외부 연결·저장·발송을 차단했습니다. 운영 사이트는 아직 변경하지 않았습니다.</p></section>
+<section><h2>남은 범위</h2><p>이번 검증은 합성 데이터 기반 로컬 검사입니다. 실제 운영 로그인·실데이터 화면, 시퀀스 저장 기능, 전체 스크린리더·색 대비 감사는 실행하지 않았습니다.</p><p>운영규칙에는 미배포 상태로 기록했습니다. 디자인 검토 후 명시적 배포 요청이 있으면 Hosting 배포, 라이브 검증, 커밋·푸시를 진행합니다.</p></section>
+<section><h2>작업 위치</h2><p><code>/Users/archivepilates/codex-worktrees/core-ui-refinement-20261008</code></p><p><code>codex/mini/core-ui-refinement-20261008</code></p><p class="muted">변경 파일은 이 전용 작업공간에만 있습니다. 기존 프로젝트의 다른 변경은 건드리지 않았습니다.</p></section>
+</main></body></html>
