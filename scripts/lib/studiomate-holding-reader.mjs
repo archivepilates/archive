@@ -52,6 +52,9 @@ export function extractRegisteredHoldsDom() {
     const text = li.innerText;
     const dates = text.match(/\d{4}\.\s*\d{1,2}\.\s*\d{1,2}\./g) || [];
     if (dates.length !== 2 || !/\d+일 정지/.test(text)) throw new Error("hold_row_layout_changed");
+    const utc = value => { const parts = value.match(/\d+/g).map(Number); return Date.UTC(parts[0], parts[1] - 1, parts[2]); };
+    const displayed = Number(text.match(/(\d+)일 정지/)[1]);
+    if ((utc(dates[1]) - utc(dates[0])) / 86400000 + 1 !== displayed) throw new Error("hold_displayed_days_mismatch");
     return { start: dates[0], end: dates[1] };
   });
   const starts = [...d.querySelectorAll('.holding-detail__form__element.start_date input[placeholder="정지 시작일"]')].filter(visible);
@@ -87,6 +90,7 @@ export async function readOpenHoldingTicket(page, { studioId, memberId, memberNa
     throw new Error("ticket_changed_during_observation");
   const raw = { source: HOLDING_SOURCE, studioId, memberId, memberName, memberUrl,
     ticketName: first.ticketName, history: first.history, activeHolds: registeredHoldingRanges(firstHolds),
+    currentHold: firstHolds.currentHold || null,
     historyComplete: true, activeHoldsComplete: true, observedAt: new Date().toISOString() };
   normalizeHoldingObservation(raw);
   return raw;

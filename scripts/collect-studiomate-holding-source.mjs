@@ -11,6 +11,7 @@ const args = process.argv.slice(2);
 const value = name => args[args.indexOf(name) + 1];
 const memberId = args.includes("--member-id") ? value("--member-id") : "";
 const ticketName = args.includes("--ticket-name") ? value("--ticket-name") : "";
+const stdoutOnly = args.includes("--stdout");
 if (!/^[1-9]\d*$/.test(memberId) || !ticketName || ticketName.startsWith("--")) throw new Error("--member-id and --ticket-name required");
 if (args.some(a => ["--apply", "--send", "--promote"].includes(a))) throw new Error("Collector is read-only");
 const profile = process.env.STUDIOMATE_EMERGENCY_PROFILE_DIR || path.join(os.homedir(), "ArchiveIN/automation/browser-profile");
@@ -39,14 +40,18 @@ try {
   await clickTarget.click();
   const raw = await readOpenHoldingTicket(page, { studioId: "5330", memberId, memberName });
   const normalized = normalizeHoldingObservation(raw);
-  const dir = path.join(os.homedir(), "ArchiveIN/automation/reports/holding-source");
-  await mkdir(dir, { recursive: true, mode: 0o700 });
-  const file = path.join(dir, `${memberId}-${normalized.observationFingerprint}.json`);
-  await writeFile(file, JSON.stringify(raw, null, 2), { mode: 0o600 });
-  console.log(JSON.stringify({ ok: true, mode: "read-only", file, memberId,
-    observationFingerprint: normalized.observationFingerprint, issuanceFingerprint: normalized.issuanceFingerprint,
-    originalDays: normalized.originalPeriod.days, registeredHolds: normalized.activeHolds.length,
-    identityStatus: "explicit_native_ticket_and_stable_hold_mapping_required", sendAllowed: false }));
+  if (stdoutOnly) {
+    console.log(JSON.stringify({ ok: true, mode: "read-only-memory", raw, sendAllowed: false }));
+  } else {
+    const dir = path.join(os.homedir(), "ArchiveIN/automation/reports/holding-source");
+    await mkdir(dir, { recursive: true, mode: 0o700 });
+    const file = path.join(dir, `${memberId}-${normalized.observationFingerprint}.json`);
+    await writeFile(file, JSON.stringify(raw, null, 2), { mode: 0o600 });
+    console.log(JSON.stringify({ ok: true, mode: "read-only", file, memberId,
+      observationFingerprint: normalized.observationFingerprint, issuanceFingerprint: normalized.issuanceFingerprint,
+      originalDays: normalized.originalPeriod.days, registeredHolds: normalized.activeHolds.length,
+      identityStatus: "explicit_native_ticket_and_stable_hold_mapping_required", sendAllowed: false }));
+  }
 } catch (error) {
   const tabs = await page?.locator(".ticket-edit-modal__tabs").evaluateAll(elements =>
     elements.map(element => element.outerHTML)).catch(() => []);

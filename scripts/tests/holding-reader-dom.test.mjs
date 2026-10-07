@@ -26,5 +26,10 @@ test("real DOM current controls are collected, while draft/partial/ambiguous con
     await t.test("filled editable start is uncommitted", async () => { await assert.rejects(render({ disabled: false }), /uncommitted_current/); });
     await t.test("ambiguous controls rejected", async () => { await assert.rejects(render({ duplicate: true }), /single_current/); });
     await t.test("invalid date rejected", async () => { assert.throws(() => registeredHoldingRanges({ activeHolds: [], currentHold: { start: "2026-02-30", end: "2026-10-31" } }), /invalid_source_date/); });
+    await t.test("displayed actual days must agree with dates", async () => {
+      await assert.rejects(render({ list: "<li>2026. 10. 7. ~ 2026. 10. 16. (25일 정지)</li>" }), /hold_displayed_days_mismatch/);
+      const read = await render({ list: "<li>2026. 10. 7. ~ 2026. 10. 16. (10일 정지)</li>", start: "", end: "", disabled: false });
+      assert.deepEqual(registeredHoldingRanges(read), [{ start: "2026-10-07", end: "2026-10-16" }]);
+    });
   } finally { await browser.close(); }
 });

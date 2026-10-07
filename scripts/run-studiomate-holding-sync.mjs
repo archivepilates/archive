@@ -13,7 +13,7 @@ const apply = process.argv.includes("--apply");
 const fromRoster = process.argv.includes("--from-roster");
 const settings = (await db.doc("settings/holdingNotice").get()).data();
 function authorized(config, target) {
-  return config?.sourceScanEnabled === true && config?.canonicalSourcePromoted === true &&
+  return config?.calculationMode !== "live_studiomate_readback" && config?.sourceScanEnabled === true && config?.canonicalSourcePromoted === true &&
     config?.sourceReadbackVerified === true && !!config?.promotionAuditId && config?.studioId === "5330" &&
     config.scanTargets?.some(t => t.memberId === target.memberId && t.ticketName === target.ticketName);
 }
@@ -84,6 +84,12 @@ if (settings?.sourceScanEnabled !== true) {
         const currentProfile = (await db.doc(`memberProfiles/${target.memberId}`).get()).data();
         const issue = holdingRosterReadbackIssue(target, currentProfile);
         if (issue) throw new Error(issue);
+      }
+      if (settings.calculationMode === "live_studiomate_readback") {
+        // Discovery is a read hint, not a balance cache or authorization to message a member.
+        await recordReadback(target, "observed", "live_ticket_detail_deferred_until_dispatch");
+        results.push({ memberId: target.memberId, status: "discovery_only", reason: "live_ticket_detail_deferred_until_dispatch" });
+        continue;
       }
       const run = spawnSync(process.execPath, ["scripts/collect-studiomate-holding-source.mjs", "--member-id", target.memberId,
         "--ticket-name", target.ticketName], { cwd: process.cwd(), env: process.env, encoding: "utf8", maxBuffer: 1024 * 1024, timeout: 120000 });

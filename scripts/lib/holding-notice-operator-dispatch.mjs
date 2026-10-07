@@ -1,13 +1,27 @@
-import { calculateHoldingAllowance, HOLDING_NOTICE_TEMPLATE, HOLDING_NOTICE_TEMPLATE_ID, holdingTemplateIssue } from "./holding-allowance-notice.mjs";
-import { holdingFingerprint, normalizeHoldingObservation, sourceDate, sourceInstant } from "./studiomate-holding-source.mjs";
+import { HOLDING_NOTICE_TEMPLATE, HOLDING_NOTICE_TEMPLATE_ID, holdingTemplateIssue } from "./holding-allowance-notice.mjs";
+import { holdingFingerprint, normalizeHoldingObservation } from "./studiomate-holding-source.mjs";
 import { completeProviderRows } from "./holding-notice-test-dispatch.mjs";
+import { calculateLiveHolding, verifyHoldingAtDispatch } from "./holding-notice-live-readback.mjs";
 
 const FAMILY = new Set([HOLDING_NOTICE_TEMPLATE_ID, "KA01TP261006054728079NtSGrYdtSQH"]);
 export const isHoldingLedger = row => FAMILY.has(row?.templateCode) || row?.payload?.holdingNotice === true;
 
-// Deliberately narrower than automatic reconciliation: only unchanged creation events are supported.
+function knownOtherHoldingSend(row, plan) {
+  if (!row || row.id === plan.id || row.status !== "done" || row.providerStatus !== "COMPLETE" ||
+      row.providerStatusCode !== "4000" || row.templateCode !== HOLDING_NOTICE_TEMPLATE_ID ||
+      row.memberId !== plan.memberId || row.memberPhone !== plan.memberPhone || row.studioId !== plan.studioId ||
+      row.payload?.deliveryMode !== "operator_verified_one_off" || !row.solapiMessageId ||
+      !/^[a-f0-9]{64}$/.test(row.issuanceFingerprint || "") || !/^[a-f0-9]{64}$/.test(row.creationEvidenceFingerprint || "")) return false;
+  const expected = `holding_operator_notice_${holdingFingerprint([row.studioId, row.memberId, row.issuanceFingerprint, row.creationEvidenceFingerprint])}`;
+  return row.id === expected && row.candidateId === expected && row.sendId === expected &&
+    row.issuanceFingerprint === plan.issuanceFingerprint && row.creationEvidenceFingerprint !== plan.creationEvidenceFingerprint &&
+    normalizeHoldingObservation(plan.sourceEvidence).history.some(history => history.fingerprint === row.creationEvidenceFingerprint);
+}
+
 export function verifiedOperatorHoldingPlan(raw, member, approval, now = new Date()) {
-  const obs = normalizeHoldingObservation(raw);
+  const { observation: obs, summary, selected: current } = calculateLiveHolding(raw,
+    { creationEvidenceFingerprint: approval?.creationEvidenceFingerprint, now });
+  if (!current) throw new Error("approved_current_hold_required");
   if (obs.studioId !== "5330" || member?.memberId !== obs.memberId || member.studioId !== obs.studioId ||
       member.name !== obs.memberName || !/^01[016789]\d{7,8}$/.test(member.phone || "")) throw new Error("operator_member_identity_mismatch");
   const age = now.getTime() - Date.parse(obs.observedAt);
@@ -16,27 +30,6 @@ export function verifiedOperatorHoldingPlan(raw, member, approval, now = new Dat
       approval.observationFingerprint !== obs.observationFingerprint ||
       approval.memberId !== obs.memberId || approval.memberPhone !== member.phone)
     throw new Error("observation_bound_operator_approval_required");
-  const rows = obs.history.filter(row => /정지|홀딩/.test(row.type) || row.changes.some(c => /정지|홀딩/.test(c.field)));
-  if (!rows.length || rows.some(row => row.type.replace(/\s/g, "") !== "수강권정지"))
-    throw new Error("hold_edit_or_cancellation_requires_identity_review");
-  const holds = rows.map(row => {
-    const start = row.changes.find(c => c.field === "정지시작일");
-    const end = row.changes.find(c => c.field === "정지종료일");
-    if (start?.before !== "내역없음" || end?.before !== "내역없음") throw new Error("hold_creation_evidence_required");
-    return { id: row.fingerprint, creationEvidenceFingerprint: row.fingerprint,
-      start: sourceDate(start.after), end: sourceDate(end.after), registeredAt: sourceInstant(row.at),
-      status: "registered", kind: "member", evidenceRef: `${obs.memberUrl}#hold-${row.fingerprint}` };
-  });
-  const ranges = holds.map(({ start, end }) => ({ start, end }))
-    .sort((a, b) => a.start.localeCompare(b.start) || a.end.localeCompare(b.end));
-  if (JSON.stringify(ranges) !== JSON.stringify(obs.activeHolds)) throw new Error("operator_history_and_controls_mismatch");
-  const current = holds.find(hold => hold.creationEvidenceFingerprint === approval.creationEvidenceFingerprint);
-  if (!current) throw new Error("approved_hold_creation_missing");
-  for (let i = 1; i < ranges.length; i++) {
-    if (ranges[i].start <= ranges[i - 1].end) throw new Error("overlapping_hold_identity_review_required");
-  }
-  const summary = calculateHoldingAllowance({ originalPeriod: obs.originalPeriod, holds, holdsComplete: true });
-  if (!summary.ok || summary.overageDays) throw new Error(summary.reason || "holding_allowance_overage");
   const id = `holding_operator_notice_${holdingFingerprint([obs.studioId, obs.memberId, obs.issuanceFingerprint, current.id])}`;
   const variables = {
     "#{이름}": obs.memberName, "#{수강권명}": obs.ticketName,
@@ -68,7 +61,7 @@ function receiptLookup(plan) {
     startDate: plan.observedAt, endDate: new Date().toISOString(), limit: "500" })}`;
 }
 
-export async function dispatchVerifiedOperatorHolding({ db, stamp, plan, template, request, recipientIssue, now = () => new Date() }) {
+export async function dispatchVerifiedOperatorHolding({ db, stamp, plan, template, request, recipientIssue, readLatest, now = () => new Date() }) {
   plan = structuredClone(plan);
   const issue = holdingTemplateIssue(template);
   if (issue) throw new Error(issue);
@@ -77,8 +70,27 @@ export async function dispatchVerifiedOperatorHolding({ db, stamp, plan, templat
   // The whole holding-template family is audited, not just this version or this execution date.
   const params = new URLSearchParams({ to: plan.memberPhone, type: "ATA", dateType: "CREATED", limit: "500",
     startDate: "2026-10-06T00:00:00+09:00", endDate: now().toISOString() });
+  const local = await db.collection("alimtalkSends").where("memberPhone", "==", plan.memberPhone).limit(500).get();
+  if (local.size === 500) throw new Error("incomplete_holding_receipt_history");
+  const known = new Map();
+  for (const doc of local.docs) {
+    const row = doc.data();
+    if (!isHoldingLedger(row)) continue;
+    if (!knownOtherHoldingSend(row, plan) || known.has(row.solapiMessageId))
+      throw new Error("prior_holding_local_attempt_do_not_resend");
+    known.set(row.solapiMessageId, row);
+  }
   const prior = completeProviderRows(await request(`/messages/v4/list?${params}`));
-  if (prior.some(row => FAMILY.has(row.kakaoOptions.templateId))) throw new Error("prior_holding_provider_receipt_do_not_resend");
+  for (const row of prior.filter(row => FAMILY.has(row.kakaoOptions.templateId))) {
+    const ledger = known.get(row.messageId);
+    if (!ledger) throw new Error("prior_holding_provider_receipt_do_not_resend");
+    const checked = verifiedReceipt({ messageList: [row] }, ledger, row.messageId);
+    if (checked.status !== "COMPLETE" || String(checked.statusCode) !== "4000")
+      throw new Error("prior_holding_provider_receipt_do_not_resend");
+    known.delete(row.messageId);
+  }
+  if (known.size) throw new Error("incomplete_holding_receipt_history");
+  plan = await verifyHoldingAtDispatch(plan, readLatest, verifiedOperatorHoldingPlan, now);
   const candidateRef = db.doc(`alimtalkCandidates/${plan.id}`), sendRef = db.doc(`alimtalkSends/${plan.id}`);
   const claimRef = db.doc(`holdingNoticeClaims/${plan.id}`);
   const claimed = await db.runTransaction(async tx => {
@@ -90,6 +102,14 @@ export async function dispatchVerifiedOperatorHolding({ db, stamp, plan, templat
       throw new Error("operator_member_changed");
     const exclusion = await recipientIssue(tx, profile);
     if (exclusion) throw new Error(exclusion);
+    for (const old of local.docs.filter(doc => isHoldingLedger(doc.data()))) {
+      const row = old.data();
+      const current = (await tx.get(db.doc(`alimtalkSends/${old.id}`))).data();
+      const claim = (await tx.get(db.doc(`holdingNoticeClaims/${row.id}`))).data();
+      if (!knownOtherHoldingSend(current, plan) || holdingFingerprint(current) !== holdingFingerprint(row) ||
+          claim?.status !== "delivered" || claim.solapiMessageId !== row.solapiMessageId)
+        throw new Error("prior_holding_claim_reconciliation_required");
+    }
     for (const collection of ["alimtalkCandidates", "alimtalkSends", "holdingNoticeClaims"]) {
       const existing = await tx.get(db.doc(`${collection}/${plan.id}`));
       if (existing.exists) return false;
@@ -97,15 +117,20 @@ export async function dispatchVerifiedOperatorHolding({ db, stamp, plan, templat
     for (const collection of ["alimtalkCandidates", "alimtalkSends"]) {
       for (const [field, value] of [["memberId", plan.memberId], ["memberPhone", plan.memberPhone]]) {
         const rows = await tx.get(db.collection(collection).where(field, "==", value).limit(500));
-        if (rows.size === 500 || rows.docs.some(doc => isHoldingLedger(doc.data())))
+        if (rows.size === 500 || rows.docs.some(doc => isHoldingLedger(doc.data()) &&
+          !(collection === "alimtalkSends" ? local.docs.some(send => send.id === doc.id &&
+              knownOtherHoldingSend(doc.data(), plan) && holdingFingerprint(send.data()) === holdingFingerprint(doc.data())) :
+            doc.data().candidateId !== plan.id && doc.data().status === "sent" &&
+            local.docs.some(send => send.id === doc.data().candidateId && knownOtherHoldingSend(send.data(), plan)))))
           throw new Error("prior_holding_local_attempt_do_not_resend");
       }
     }
     if (now().getTime() - Date.parse(plan.observedAt) > 120_000) throw new Error("fresh_operator_readback_required");
-    const common = { ...plan, templateCode: HOLDING_NOTICE_TEMPLATE_ID, title: HOLDING_NOTICE_TEMPLATE.name,
+    const { sourceEvidence, ...auditPlan } = plan;
+    const common = { ...auditPlan, calculationMode: "live_studiomate_readback", templateCode: HOLDING_NOTICE_TEMPLATE_ID, title: HOLDING_NOTICE_TEMPLATE.name,
       type: "manual_review", dedupeKey: plan.id, sourceActionKey: plan.id, isTest: false,
       attempts: 1, maxAttempts: 1, reviewedByUid: plan.approval.approvedBy, reviewedAt: stamp(),
-      payload: { holdingNotice: true, deliveryMode: "operator_verified_one_off", source: "studiomate_verified_normalized_file" },
+      payload: { holdingNotice: true, deliveryMode: "operator_verified_one_off", source: "studiomate_live_ticket_readback" },
       createdAt: stamp(), updatedAt: stamp(), lastError: null };
     tx.create(candidateRef, { ...common, candidateId: plan.id, status: "processing" });
     tx.create(sendRef, { ...common, candidateId: plan.id, sendId: plan.id, status: "processing", providerOutcome: "claimed_no_retry" });

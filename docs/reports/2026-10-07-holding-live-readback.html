@@ -1,0 +1,17 @@
+<!doctype html>
+<html lang="ko"><head><meta charset="utf-8"><meta name="viewport" content="width=device-width, initial-scale=1"><title>ARCHIVE PILATES 홀딩 발송 직전 원본 계산 검증</title>
+<style>*{box-sizing:border-box}body{margin:0;color:#202426;background:#fff;font:16px/1.7 system-ui,sans-serif}main{max-width:960px;margin:auto;padding:32px 20px}h1{font-size:28px;line-height:1.4}h2{font-size:20px;margin-top:32px}p{max-width:70ch}table{width:100%;border-collapse:collapse}th,td{text-align:left;border-bottom:1px solid #dce2e3;padding:12px 8px;vertical-align:top;overflow-wrap:anywhere}th{background:#f0f4f4}strong{color:#a82d39}.status{border-left:4px solid #286b65;padding:12px 16px;background:#eff7f5}small{color:#586267}@media(max-width:600px){main{padding:20px 16px}h1{font-size:24px}table{font-size:14px}th,td{padding:9px 5px}}</style></head>
+<body><main><small>ARCHIVE PILATES · 2026.10.07 · 홀딩 안내</small><h1>별도 잔액 장부 없이<br>발송 직전 StudioMate 원본으로 계산</h1>
+<p class="status">운영자 승인 단건 실행기를 최신 수강권 재조회 방식으로 수정했습니다. 전체 회원 자동발송은 아직 비활성입니다. 이번 검증에서는 실제 알림톡을 추가 발송하거나 회원·수강권·정지 정보를 변경하지 않았습니다.</p>
+<h2>확정한 흐름</h2><ol><li>기존 시간별 회원 Excel에서 정지명단 변화를 감지합니다. 명단은 조회 참고정보이며 발송 원천이 아닙니다.</li><li>발송을 승인한 회원의 실제 수강권을 다시 엽니다. 최초 발급기간, 최신 정지 목록, 저장된 현재 정지 날짜칸을 대조합니다.</li><li>최초 기간 20%의 소수점을 버려 총 가능일을 계산하고, 원본의 실제 적용기간과 이번·예정 정지를 양 끝날 포함 날짜 합집합으로 합산합니다.</li><li>승인 내용·현재 회원·스텝 제외·템플릿·발송 원장을 재검증하고 같은 정지인지 확인한 후 1회만 발송합니다.</li><li>생성 이력 식별자, 계산 결과, 승인·메시지 ID·중복방지 기록만 남깁니다. 별도 누적 잔액과 전체 정지 원본을 반복 저장하지 않습니다.</li></ol>
+<h2>검증 결과</h2><table><thead><tr><th>구분</th><th>결과</th><th>증거 범위</th></tr></thead><tbody>
+<tr><td>이지영2 실제 조회</td><td>최초 365일 → 가능 73일 / 사용 25일 / 잔여 48일</td><td>라이브 읽기 전용 미리보기. 이전 전달 완료 이력을 보존하며 재발송하지 않음.</td></tr>
+<tr><td>중도 해제 후 다음 정지</td><td>이전 예정 25일 → 원본 실제 10일 + 새 정지 7일 = 사용 17일 / 잔여 56일</td><td>합성 원본·모의 전송 테스트. 실제 회원의 정지를 변경하지 않음.</td></tr>
+<tr><td>배민진 실제 조회</td><td>확인필요로 차단</td><td>시작 후 취소된 과거 정지의 실제 적용기간이 현재 목록에서 사라짐. 취소 시각으로 사용일을 추정하거나 0일 처리하지 않음.</td></tr>
+<tr><td>중복·동시 실행</td><td>같은 정지 재발송 차단. 검증된 별도 신규 정지만 허용.</td><td>동시 실행, 불명확 접수, 발급 이력 표시 변경, 원장 변경·추가 경쟁 조건을 모의 검증.</td></tr>
+<tr><td>회귀 테스트</td><td>Node 328개 + TypeScript 236개 통과</td><td>원천 읽기·계산·후보·큐·승인·공급자 원장·중복 및 오류 차단.</td></tr>
+</tbody></table>
+<h2>유지하는 안전장치</h2><p>계산 모드는 <code>live_studiomate_readback</code>입니다. <code>autoSendEnabled=false</code>와 <code>canonicalSourcePromoted=false</code>는 유지합니다. 이전 Firestore 정지 장부 기반 자동 큐는 사용하지 않습니다. 과거 발송·선점 감사 기록도 삭제하지 않습니다.</p>
+<p><strong>현재 한계:</strong> 중도 해제 후 실제 적용기간이 원본에 남지 않거나 동일 발급권·정지를 확정할 수 없으면 운영자 확인이 필요합니다. 자동발송 활성화 완료나 모든 중도 해제 자동 계산 성공으로 해석하면 안 됩니다.</p>
+<h2>반영 범위</h2><p>맥미니 상세 수집·계산·승인 단건 실행 코드, 정기 명단 감지의 상세 조회 유예, ARCHIVE CORE 운영규칙입니다. Firebase Functions 코드는 변경하지 않습니다. 실제 배포·런타임·설정 검증 증거는 같은 날짜 작업 기록에 남깁니다.</p>
+</main></body></html>
