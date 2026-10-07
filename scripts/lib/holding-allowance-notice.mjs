@@ -1,15 +1,16 @@
 import { createHash } from "node:crypto";
 
-export const HOLDING_NOTICE_TEMPLATE_ID = "KA01TP261006054728079NtSGrYdtSQH";
+export const HOLDING_NOTICE_TEMPLATE_ID = "KA01TP2610061247076605VQTRV7FTPK";
 export const HOLDING_NOTICE_TEMPLATE = {
-  name: "수강권 홀딩 현황 안내 v1",
+  name: "수강권 홀딩 현황 안내 v2",
   referenceTemplateId: "KA01TP260914091233543JoFDsn7KfCr",
   channelId: "KA01PF260511123220162lk0NUjstpVl",
   messageType: "BA",
   emphasizeType: "IMAGE",
-  imageId: "ST01FZ260602081207381GWsxSyw1Yo5",
-  content: "#{이름}님, 수강권 홀딩이 등록되었습니다.\n\n수강권: #{수강권명}\n이번 홀딩: #{홀딩시작일} ~ #{홀딩종료일} (#{이번홀딩일수}일)\n\n전체 홀딩 가능 기간: #{전체홀딩일수}일\n누적 사용 홀딩 기간: #{사용홀딩일수}일\n잔여 홀딩 가능 기간: #{잔여홀딩일수}일\n\n홀딩 가능 기간은 최초 수강권 전체기간의 20%이며 소수점은 버립니다. 누적 사용 기간에는 이번에 등록된 홀딩과 예정된 홀딩이 포함됩니다.\n\n문의사항은 아카이브필라테스로 연락해 주세요.",
-  buttons: [],
+  imageId: "ST01FZ261006124706032WUA50TaQpg0",
+  content: "#{이름}님, \n수강권 홀딩이 등록되었습니다.\n\n🏷수강권: #{수강권명}\n\n🚫홀딩 기간\n#{홀딩시작일}~#{홀딩종료일} (#{이번홀딩일수}일)\n\n▶전체 홀딩 가능 기간: #{전체홀딩일수}일\n▶누적 사용 홀딩 기간: #{사용홀딩일수}일\n▶잔여 홀딩 가능 기간: #{잔여홀딩일수}일\n\n❗홀딩 가능 기간은 \n수강권 전체기간의 20%입니다.",
+  buttons: [{ buttonType: "WL", buttonName: "홀딩규정 보기", linkMo: "https://archivepilates.notion.site/hold",
+    linkPc: "https://archivepilates.notion.site/hold", targetOut: false }],
 };
 
 const DAY = 86_400_000;
@@ -72,7 +73,10 @@ export function holdingTemplateIssue(template, { requireApproved = true } = {}) 
   for (const field of ["name", "channelId", "messageType", "emphasizeType", "imageId", "content"]) {
     if (template[field] !== HOLDING_NOTICE_TEMPLATE[field]) return `template_${field}_mismatch`;
   }
-  if (!Array.isArray(template.buttons) || template.buttons.length ||
+  const button = template.buttons?.[0];
+  if (!Array.isArray(template.buttons) || template.buttons.length !== 1 ||
+      !button || Object.entries(HOLDING_NOTICE_TEMPLATE.buttons[0]).some(([field, value]) => button[field] !== value) ||
+      ["linkAnd", "linkIos", "chatExtra"].some((field) => button[field] != null && button[field] !== "") ||
       (template.quickReplies != null && (!Array.isArray(template.quickReplies) || template.quickReplies.length))) return "template_buttons_mismatch";
   return "";
 }

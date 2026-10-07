@@ -1,11 +1,11 @@
 {
   "schemaVersion": 1,
-  "policyFingerprint": "05d118d11c63e3a7b12444f24a06cf3cebfc7a2aaac7fb3a962ae1619d0a9725",
+  "policyFingerprint": "43fb05b8ba734fc45bf51886caed0d6eeae0b7400e43bc3fa920fbe1f1970ea6",
   "sourceMode": "repository_defaults_no_environment_or_live_reads",
   "coverage": {
     "observedAt": "2026-09-30T06:41:16.973Z",
     "knownProviderCount": 23,
-    "sourceOnlyCount": 10,
+    "sourceOnlyCount": 11,
     "note": "Known-provider coverage only; no current approval or content evidence"
   },
   "deployment": {
@@ -14,7 +14,7 @@
   "sourceFingerprints": [
     {
       "path": "core/assets/app.js",
-      "sha256": "85fa9c3f400df8dadbd561b8a597b4a54ec83dd4d2681d5436d6d7c4e4941f00"
+      "sha256": "52f74bb1e30f684a1bb31d171aafc498335c5ec4927d61c16513cd07179640b5"
     },
     {
       "path": "firebase/kangsain-functions/functions/src/alimtalk/approvalGate.ts",
@@ -118,7 +118,7 @@
     },
     {
       "path": "scripts/lib/alimtalk-catalog-metadata.mjs",
-      "sha256": "bd7ae530a21b2b9345b8e1dfda5c882e8f09cce328166afd51ecaa8d47138d18"
+      "sha256": "c58b8a779704b5641b7aa0a190ff2036e1f12f3729f95c53792fa3bf44e43381"
     },
     {
       "path": "scripts/lib/alimtalk-catalog-source.mjs",
@@ -1855,14 +1855,54 @@
       "id": "KA01TP261006054728079NtSGrYdtSQH",
       "type": null,
       "code": "KA01TP261006054728079NtSGrYdtSQH",
-      "label": "수강권 홀딩 현황 안내 v1",
+      "label": "수강권 홀딩 현황 안내 v1 (삭제됨)",
+      "providerInventoryName": null,
+      "knownProvider": false,
+      "implementation": "archived",
+      "sourceConfiguredStatus": null,
+      "purpose": "구 홀딩 안내 · 이력 보존",
+      "purposeId": "archived",
+      "timing": "신규 발송 종료",
+      "schedule": null,
+      "targetRules": [
+        "v1 신규 발송 금지 · 삭제된 템플릿 fallback 금지"
+      ],
+      "policy": null,
+      "factNotice": null,
+      "careGroup": false,
+      "providerApproval": {
+        "status": "UNKNOWN",
+        "checkedAt": null,
+        "evidence": "not_read_in_this_catalog"
+      },
+      "deployment": {
+        "status": "UNVERIFIED",
+        "checkedAt": null
+      },
+      "sources": [
+        {
+          "path": "core/assets/app.js",
+          "symbol": "ALIMTALK_TEMPLATE_LABELS_BY_CODE",
+          "line": 15
+        }
+      ],
+      "visibility": {
+        "state": "visible",
+        "basis": "not_confirmed_deleted"
+      }
+    },
+    {
+      "id": "KA01TP2610061247076605VQTRV7FTPK",
+      "type": null,
+      "code": "KA01TP2610061247076605VQTRV7FTPK",
+      "label": "수강권 홀딩 현황 안내 v2",
       "providerInventoryName": null,
       "knownProvider": false,
       "implementation": "unconnected",
       "sourceConfiguredStatus": null,
       "purpose": "홀딩 가능·사용·잔여기간 안내",
       "purposeId": "unconnected",
-      "timing": "운영자 테스트 요청 시 · 실제 홀딩 원천 연결 대기",
+      "timing": "운영자 테스트 전체 1회 · 실제 홀딩 원천 연결 대기",
       "schedule": null,
       "targetRules": [
         "김기효 승인 단건 합성 테스트만 연결 · 일반 회원 자동발송 차단"

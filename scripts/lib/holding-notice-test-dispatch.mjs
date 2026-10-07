@@ -1,5 +1,16 @@
-import { createHash } from "node:crypto";
 import { HOLDING_NOTICE_TEMPLATE, HOLDING_NOTICE_TEMPLATE_ID, holdingTemplateIssue, planHoldingNotice } from "./holding-allowance-notice.mjs";
+
+export const HOLDING_V2_TEST_KEY = "holding_v2_operator_test_20261006";
+export const HOLDING_V2_TEST_DATE = "2026-10-06";
+
+export function completeProviderRows(provider) {
+  if (!provider || !provider.messageList || typeof provider.messageList !== "object" || provider.nextKey)
+    throw new Error("Incomplete provider history; do not send");
+  const rows = Object.values(provider.messageList);
+  if (rows.some((row) => !row || typeof row !== "object" || !row.messageId || !row.to || !row.kakaoOptions?.templateId))
+    throw new Error("Malformed provider history; do not send");
+  return rows;
+}
 
 export function holdingNoticeSample(recipient, date) {
   if (recipient?.memberId !== "1982133" || recipient?.name !== "김기효" || recipient?.phone !== "01086488585")
@@ -16,10 +27,11 @@ export function holdingNoticeSample(recipient, date) {
 }
 
 export function holdingNoticeSamplePlan(recipient, date, template) {
-  const snapshot = holdingNoticeSample(recipient, date);
+  holdingNoticeSample(recipient, date);
+  const snapshot = holdingNoticeSample(recipient, HOLDING_V2_TEST_DATE);
   const plan = planHoldingNotice({ snapshot, previousHoldIds: [], history: { complete: true, keys: [] }, template });
   if (!plan.ok) throw new Error(plan.reason);
-  const id = `holding_notice_sample_${createHash("sha256").update(`${recipient.phone}|${date}`).digest("hex")}`;
+  const id = HOLDING_V2_TEST_KEY;
   return { ...plan, id, snapshot };
 }
 
@@ -38,7 +50,7 @@ export async function dispatchHoldingNoticeSample({ db, stamp, recipient, date, 
       candidateId: plan.id, studioId: "5330", memberId: recipient.memberId, memberName: recipient.name,
       memberPhone: recipient.phone, type: "manual_review", status: "reviewed", templateCode: HOLDING_NOTICE_TEMPLATE_ID,
       title: HOLDING_NOTICE_TEMPLATE.name, reason: "운영자 승인 단건 합성 테스트 · 실제 홀딩 아님",
-      sourceActionKey: plan.id, sourceDate: date, dedupeKey: plan.id, queuedBy: "operator",
+      sourceActionKey: plan.id, sourceDate: HOLDING_V2_TEST_DATE, dedupeKey: plan.id, queuedBy: "operator",
       reviewedByUid: "codex:operator-approved-holding-test", reviewedAt: stamp(),
       payload: { deliveryMode: "sample", source: "holding_notice_operator_sample" },
       isTest: true, attempts: 1, maxAttempts: 1, lastError: null, createdAt: stamp(), updatedAt: stamp(),
@@ -46,7 +58,7 @@ export async function dispatchHoldingNoticeSample({ db, stamp, recipient, date, 
     tx.create(sendRef, {
       sendId: plan.id, candidateId: plan.id, studioId: "5330", memberId: recipient.memberId,
       memberName: recipient.name, memberPhone: recipient.phone, templateCode: HOLDING_NOTICE_TEMPLATE_ID,
-      status: "processing", dedupeKey: plan.id, dedupePolicy: "운영자 합성 테스트 날짜별 1회",
+      status: "processing", dedupeKey: plan.id, dedupePolicy: "운영자 승인 v2 합성 테스트 전체 1회 · 날짜 변경 재발송 금지",
       dedupeWindowDays: null, attempts: 1, maxAttempts: 1, variables: plan.variables,
       isTest: true, createdByUid: "codex:operator-approved-holding-test", nextRunAt: stamp(),
       lastError: null, createdAt: stamp(), updatedAt: stamp(),
@@ -64,14 +76,22 @@ export async function dispatchHoldingNoticeSample({ db, stamp, recipient, date, 
       } }], strict: true, allowDuplicates: false, showMessageList: true,
     });
     const messages = Array.isArray(result.messageList) ? result.messageList : Object.values(result.messageList || {});
-    let message = messages.find((m) => m.messageId && String(m.to) === recipient.phone);
+    let message = null;
     const failures = Array.isArray(result.failedMessageList) ? result.failedMessageList : Object.values(result.failedMessageList || {});
-    // SOLAPI's detail response omits `to`; independently resolve its single receipt.
-    if (!failures.length && !message && messages.length === 1 && messages[0].messageId && !messages[0].to) {
-      const provider = await request(`/messages/v4/list?messageIds=${encodeURIComponent(JSON.stringify([messages[0].messageId]))}`);
-      const row = provider.messageList?.[messages[0].messageId];
-      if (row?.messageId === messages[0].messageId && row.to === recipient.phone && row.kakaoOptions?.templateId === HOLDING_NOTICE_TEMPLATE_ID)
-        message = row;
+    if (!failures.length && messages.length === 1 && messages[0].messageId &&
+        (!messages[0].to || messages[0].to === recipient.phone) &&
+        (!messages[0].kakaoOptions?.templateId || messages[0].kakaoOptions.templateId === HOLDING_NOTICE_TEMPLATE_ID)) {
+      const provisional = messages[0];
+      receipt = { solapiMessageId: provisional.messageId, solapiGroupId: provisional.groupId || result.groupInfo?.groupId || "" };
+      message = provisional;
+      // Preserve the provisional receipt even if independent identity lookup times out.
+      if (!message.to || !message.kakaoOptions?.templateId) {
+        const provider = await request(`/messages/v4/list?messageIds=${encodeURIComponent(JSON.stringify([provisional.messageId]))}`);
+        const rows = completeProviderRows(provider);
+        message = rows.length === 1 ? rows[0] : null;
+      }
+      if (message?.messageId !== provisional.messageId || message?.to !== recipient.phone ||
+          message?.kakaoOptions?.templateId !== HOLDING_NOTICE_TEMPLATE_ID) message = null;
     }
     if (failures.length || !message?.messageId) throw new Error("Provider acceptance not proven; reconcile before retry");
     accepted = true;
@@ -108,16 +128,18 @@ export async function reconcileHoldingNoticeSample({ db, stamp, recipient, date,
     ledger.createdByUid !== "codex:operator-approved-holding-test" ||
     !variablesMatch(ledger.variables))
     throw new Error("Matching durable test claim required");
-  const params = new URLSearchParams({ startDate: `${date}T00:00:00+09:00`, endDate: new Date().toISOString(),
+  const params = new URLSearchParams({ startDate: `${HOLDING_V2_TEST_DATE}T00:00:00+09:00`, endDate: new Date().toISOString(),
     dateType: "CREATED", type: "ATA", to: recipient.phone, limit: "500" });
   const provider = await request(`/messages/v4/list?${params}`);
-  if (provider.nextKey) throw new Error("Incomplete provider evidence; do not resend");
-  const rows = Object.values(provider.messageList || {}).filter((row) => row.to === recipient.phone &&
+  const rows = completeProviderRows(provider).filter((row) => row.to === recipient.phone &&
     row.kakaoOptions?.templateId === HOLDING_NOTICE_TEMPLATE_ID && row.text === plan.message &&
     row.kakaoOptions?.disableSms === true && row.messageId && row.groupId &&
     variablesMatch(row.kakaoOptions?.variables));
   if (rows.length !== 1) throw new Error("Provider evidence ambiguous; do not resend");
   const row = rows[0];
+  if ((ledger.solapiMessageId && ledger.solapiMessageId !== row.messageId) ||
+      (ledger.solapiGroupId && ledger.solapiGroupId !== row.groupId))
+    throw new Error("Provider receipt differs from durable claim; do not resend");
   if (String(row.statusCode) !== "4000" || row.status !== "COMPLETE") throw new Error("Delivery not complete; do not resend");
   const batch = db.batch();
   batch.update(candidateRef, { status: "sent", sentAt: stamp(), lastError: null, updatedAt: stamp() });

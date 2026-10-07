@@ -5,6 +5,7 @@ import {
   holdingNoticeSample,
   holdingNoticeSamplePlan,
   reconcileHoldingNoticeSample,
+  completeProviderRows,
 } from "../lib/holding-notice-test-dispatch.mjs";
 import { HOLDING_NOTICE_TEMPLATE, HOLDING_NOTICE_TEMPLATE_ID } from "../lib/holding-allowance-notice.mjs";
 
@@ -12,7 +13,7 @@ const RECIPIENT = { memberId: "1982133", name: "김기효", phone: "01086488585"
 const DATE = "2026-10-06";
 const STAMP = "2026-10-06T06:00:00.000Z";
 const approvedTemplate = () => ({ ...structuredClone(HOLDING_NOTICE_TEMPLATE), templateId: HOLDING_NOTICE_TEMPLATE_ID, status: "APPROVED" });
-const acceptance = () => ({ messageList: [{ to: RECIPIENT.phone, messageId: "fixture-message", groupId: "fixture-group" }] });
+const acceptance = () => ({ messageList: [{ to: RECIPIENT.phone, messageId: "fixture-message", groupId: "fixture-group", kakaoOptions: { templateId: HOLDING_NOTICE_TEMPLATE_ID } }] });
 
 class FakeFirestore {
   constructor({ failBatches = [] } = {}) {
@@ -218,7 +219,7 @@ test("valid sample dates include leap days and calendar boundaries", () => {
     const sample = holdingNoticeSample(RECIPIENT, start);
     assert.equal(sample.holds[0].start, start);
     assert.equal(sample.holds[0].end, end);
-    assert.equal(holdingNoticeSamplePlan(RECIPIENT, start, approvedTemplate()).summary.usedDays, 7);
+    assert.equal(holdingNoticeSamplePlan(RECIPIENT, start, approvedTemplate()).snapshot.holds[0].start, DATE);
   }
 });
 
@@ -293,6 +294,54 @@ test("either pre-existing candidate or send record blocks dispatch regardless of
   }
 });
 
+test("v2 test identity is stable across days and a later execution cannot resend", async () => {
+  const h = fixture();
+  assert.equal(h.plan.id, "holding_v2_operator_test_20261006");
+  assert.equal(holdingNoticeSamplePlan(RECIPIENT, "2026-10-07", approvedTemplate()).id, h.plan.id);
+  await h.run();
+  const replay = await h.run({ date: "2026-10-07" });
+  assert.equal(replay.duplicateBlocked, true);
+  assert.equal(h.posts.length, 1);
+});
+
+test("provider history must be structurally complete", () => {
+  for (const response of [null, {}, { messageList: null }, { messageList: "invalid" },
+    { messageList: {}, nextKey: "more" }, { messageList: { broken: null } }])
+    assert.throws(() => completeProviderRows(response));
+  assert.deepEqual(completeProviderRows({ messageList: {} }), []);
+});
+
+test("fresh later-date dispatch freezes persisted date and variables", async () => {
+  const h = fixture();
+  await h.run({ date: "2026-10-07" });
+  assert.equal(h.db.read(h.paths.candidate).sourceDate, DATE);
+  assert.deepEqual(h.db.read(h.paths.send).variables, h.plan.variables);
+});
+
+test("wrong-template and multiple acceptance receipts block success", async () => {
+  for (const response of [
+    { messageList: [{ ...acceptance().messageList[0], kakaoOptions: { templateId: "wrong" } }] },
+    { messageList: [acceptance().messageList[0], { ...acceptance().messageList[0], messageId: "second" }] },
+  ]) {
+    const h = fixture({ respond: () => response });
+    await assert.rejects(h.run(), /acceptance not proven/);
+    await assertReplayBlocked(h);
+  }
+});
+
+test("ID-only lookup timeout preserves provisional receipt and blocks retry", async () => {
+  const h = fixture();
+  let posts = 0;
+  await assert.rejects(h.run({ request: async (_url, method) => {
+    if (method === "POST") { posts++; return { messageList: [{ messageId: "provisional", groupId: "group" }] }; }
+    throw new Error("Lookup timeout");
+  } }), /Lookup timeout/);
+  assert.equal(posts, 1);
+  assert.equal(h.db.read(h.paths.send).solapiMessageId, "provisional");
+  assert.equal(h.db.read(h.paths.send).solapiGroupId, "group");
+  assert.equal((await h.run()).duplicateBlocked, true);
+});
+
 test("provider timeout is held as unknown and cannot be retried", async () => {
   const timeout = new Error("Fixture provider timeout after possible acceptance");
   const h = fixture({ respond: () => { throw timeout; } });
@@ -328,7 +377,7 @@ test("rejected, missing-ID and wrong-recipient responses retain claims and forbi
 });
 
 test("object-shaped accepted message list uses the groupInfo fallback", async () => {
-  const h = fixture({ respond: () => ({ messageList: { first: { to: RECIPIENT.phone, messageId: "object-message" } }, groupInfo: { groupId: "object-group" } }) });
+  const h = fixture({ respond: () => ({ messageList: { first: { to: RECIPIENT.phone, messageId: "object-message", kakaoOptions: { templateId: HOLDING_NOTICE_TEMPLATE_ID } } }, groupInfo: { groupId: "object-group" } }) });
   const result = await h.run();
   assert.equal(result.messageId, "object-message");
   assert.equal(result.groupId, "object-group");
@@ -469,6 +518,14 @@ test("reconciliation completes a matching durable sample using GET only and all 
   assert.deepEqual(send.variables, h.plan.variables);
 });
 
+test("reconciliation cannot replace an existing receipt", async () => {
+  for (const patch of [{ solapiMessageId: "another-message" }, { solapiGroupId: "another-group" }]) {
+    const h = reconciliationFixture();
+    h.db.seed(h.paths.send, { ...h.db.read(h.paths.send), ...patch });
+    await assertReconciliationBlocked(h, /receipt differs/);
+  }
+});
+
 test("reconciliation rejects recipient, date and template input mismatches before GET or writes", async (t) => {
   const cases = [
     ["recipient ID", { recipient: { ...RECIPIENT, memberId: "different" } }],
@@ -561,7 +618,7 @@ test("reconciliation rejects mismatched provider recipient, template, text and r
     await t.test(name, async () => {
       const h = reconciliationFixture();
       mutate(h.delivered);
-      await assertReconciliationBlocked(h, /Provider evidence ambiguous/);
+      await assertReconciliationBlocked(h, /Provider evidence ambiguous|Malformed provider history/);
       assert.equal(h.db.batchCalls, 0);
     });
   }
@@ -579,7 +636,7 @@ test("reconciliation blocks missing, ambiguous or paginated provider evidence wi
   for (const [name, respond] of cases) {
     await t.test(name, async () => {
       const h = reconciliationFixture({ respond });
-      await assertReconciliationBlocked(h, /Provider evidence ambiguous|Incomplete provider evidence/);
+      await assertReconciliationBlocked(h, /Provider evidence ambiguous|Incomplete provider history/);
       assert.equal(h.requests.length, 1);
       assert.equal(h.db.batchCalls, 0);
     });

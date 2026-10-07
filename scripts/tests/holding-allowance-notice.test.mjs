@@ -8,6 +8,17 @@ const snapshot = () => ({ studioId: "5330", memberId: "100", ticketId: "200", me
   holds: [hold("a", "2026-04-27", "2026-05-05"), hold("b", "2026-05-30", "2026-06-07"),
     hold("c", "2026-07-25", "2026-08-10"), hold("d", "2026-08-11", "2026-09-13"), hold("new", "2026-10-06", "2026-10-11")] });
 const template = () => ({ ...spec, templateId: HOLDING_NOTICE_TEMPLATE_ID, status: "APPROVED" });
+
+test("v2 keeps the approved image and exact holding policy button contract", () => {
+  assert.equal(HOLDING_NOTICE_TEMPLATE_ID, "KA01TP2610061247076605VQTRV7FTPK");
+  assert.equal(spec.imageId, "ST01FZ261006124706032WUA50TaQpg0");
+  assert.equal(holdingTemplateIssue(template()), "");
+  for (const patch of [{ buttonType: "AL" }, { buttonName: "다른 버튼" }, { linkMo: "https://example.com" }, { linkPc: "https://example.com" }, { targetOut: true }, { linkAnd: "intent://unexpected" }]) {
+    assert.equal(holdingTemplateIssue({ ...template(), buttons: [{ ...spec.buttons[0], ...patch }] }), "template_buttons_mismatch");
+  }
+  assert.equal(holdingTemplateIssue({ ...template(), buttons: [] }), "template_buttons_mismatch");
+  assert.equal(holdingTemplateIssue({ ...template(), templateId: "KA01TP261006054728079NtSGrYdtSQH" }), "template_id_mismatch");
+});
 const input = () => ({ snapshot: snapshot(), previousHoldIds: ["a", "b", "c", "d"], history: { complete: true, keys: [] }, template: template() });
 
 test("365 days / 20 percent: prior 69 plus current 6 = 75; remaining zero; overage two", () => {
