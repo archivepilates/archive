@@ -13,3 +13,7 @@
 - Verification: focused isolated browser suite; synthetic live account suite with cleanup; CORE responsive and Hosting/release guards. Results recorded in the HTML report.
 - Deployment: CORE Hosting and default-site /core/ compatibility; no Functions deploy. Full release hash recorded in core/release.json.
 - Limitation: historical PITR snapshots older than one hour are minute-granular. Restoration uses the last available whole-minute state before each title transition; no claim of sub-minute recovery.
+- Completed: code release 64bbdd73cdca6c3b14fb453f830a53d3e053dc56 deployed to archive-pilates-core and archive-pilates compatibility path; local and live responsive 95/95 each, local sequence suite 15/15 twice, real Auth/Firestore isolated regression and cleanup passed.
+- Live assets: exact SHA-256 source matches for the studio and adapter on CORE, and studio on the default-site /core/ path. Live release canary passed both domains.
+- Operator data readback: all three original documents retained payload, revision and deletion state; two restored distinct documents coexist. Reapplying the same recovery plan skipped both without additional writes.
+- Cleanup: synthetic test notes/images/Auth deleted with zero remaining; QA contexts, browser processes, subscriptions, transactions and test servers closed. Existing user browser tabs preserved.
