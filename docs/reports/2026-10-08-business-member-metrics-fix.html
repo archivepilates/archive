@@ -2,19 +2,22 @@
 <html lang="ko"><head><meta charset="utf-8"><meta name="viewport" content="width=device-width,initial-scale=1"><title>ARCHIVE CORE 회원 지표 수정 검증</title>
 <style>*{box-sizing:border-box}body{margin:0;color:#24262a;background:#fff;font:16px/1.7 system-ui,sans-serif}main{max-width:900px;margin:auto;padding:32px 20px}h1{font-size:26px;line-height:1.4}h2{font-size:19px;margin-top:30px}table{border-collapse:collapse;width:100%;font-size:14px}td,th{text-align:left;padding:10px 8px;border-bottom:1px solid #ddd}th{background:#f5f6f8}.wrap{overflow:auto}.status{color:#9c4f00;font-weight:700}code{overflow-wrap:anywhere;font-size:13px}li{margin:8px 0}footer{border-top:1px solid #ddd;margin-top:30px;padding-top:15px;font-size:14px;color:#666}a{color:#185abc}</style></head>
 <body><main><p>ARCHIVE PILATES · 2026-10-08</p><h1>경영 회원 지표 누락 수정</h1>
-<p class="status">로컬 구현·무반영 검증 완료. 2026-10-08 배포세트 승인으로 운영 데이터 복구·배포·커밋·푸시를 진행합니다. 완료 증거는 아래 배포 결과에 기록합니다.</p>
+<p class="status">운영 데이터 복구·Hosting 배포·라이브 검증 완료. 배포 소스 2c50db12는 GitHub main에 반영됐습니다.</p>
 <h2>수정 내용</h2><ul>
 <li>기존 매일 23시 대시보드 작업에 회원 지표를 독립 단계로 연결했습니다. 매출 성공·실패에 따라 회원 집계가 생략되지 않습니다.</li>
 <li>누락 월과 당월·전월만 조회합니다. 과거 전체 기간 반복 조회와 별도 감시 주기는 추가하지 않습니다.</li>
 <li>수강권 보유회원은 정산 시트 숫자와 고유 전화번호 목록을 대조합니다. 누락·불일치·빈 예약 원본은 0명으로 채우지 않습니다.</li>
 <li>대상 회원 지표 필드만 동시 수정 보호 후 갱신하고 재조회합니다. 오래된 실행이 더 최신 결과를 덮어쓰지 못하게 했습니다.</li>
 <li>화면에 누락·잘못된 값은 집계 필요로 표시하며, 실제 0명과 구분합니다. 매출 계산과 기존 예약 제외 기준은 유지했습니다.</li></ul>
-<h2>무반영 재집계</h2><div class="wrap"><table><thead><tr><th>월</th><th>수강권 보유회원<br>정산 시트 기준</th><th>예약 이용회원</th><th>출석 회원</th><th>원본 예약 건수</th></tr></thead><tbody>
+<h2>복구 후 재조회 결과</h2><div class="wrap"><table><thead><tr><th>월</th><th>수강권 보유회원<br>정산 시트 기준</th><th>예약 이용회원</th><th>출석 회원</th><th>원본 예약 건수</th></tr></thead><tbody>
 <tr><td>2026-08</td><td>87</td><td>153</td><td>152</td><td>1,910</td></tr>
 <tr><td>2026-09</td><td>69</td><td>155</td><td>153</td><td>1,873</td></tr>
 <tr><td>2026-10</td><td>52</td><td>147</td><td>121</td><td>1,003</td></tr></tbody></table></div>
 <p>10월은 진행 중이며 조회 시점 이후 변경될 수 있습니다. 원본 예약 건수는 취소·중복을 포함할 수 있어 회원 수와 다릅니다. 수강권 보유회원은 원천 시트와 목록의 일치를 검증한 값입니다. 실시간 수강권 원본의 재산정이나 월말 확정을 검증한 결과는 아닙니다.</p>
-<h2>검증</h2><ul><li>회원 집계·화면 회귀 테스트 및 기존 CORE 운영 화면 회귀 테스트 통과.</li><li>320·390·768·1440px의 정상/누락 화면 8개: 가로 넘침·회원 지표 텍스트 잘림 없음.</li><li>Hosting 소스 검사 통과. API 조회만 수행한 무반영 결과이며 Firestore 쓰기는 아직 실행하지 않았습니다.</li><li>기존 1~7월 19개 행과 매출을 보존하는 방식으로 구성했습니다. 실제 보존 여부는 승인 후 반영 전후 대조해야 합니다.</li></ul>
-<h2>배포 범위</h2><p>scoped commit·main 승격, CORE Hosting 배포, 8~10월 지표 복구, 라이브 화면·원천·GitHub CI 대조를 진행합니다. Functions나 회원·수강권·예약 원본 및 알림톡은 변경하지 않습니다.</p>
+<h2>검증</h2><ul><li>회원 집계·화면 테스트 22건, 기존 CORE 운영 화면 회귀 테스트 78건 통과.</li><li>320·390·768·1440px의 정상/누락 화면 8개 통과. 별도 전체 반응형 검사 95건은 배포 전과 라이브 모두 통과했습니다. 초기 연결 오류 상태의 320px 줄바꿈 문제도 보정했습니다.</li><li>Firestore 복구 시각: 2026-10-08 17:43 KST. 반영 전 시점을 readTime으로 다시 조회해 객체 키 순서를 정규화한 뒤 대조했습니다. 기존 19개월 지표와 다른 17개 필드가 모두 동일했습니다. 단순 JSON 해시는 Firestore 객체 키 순서 차이가 있어 최종 비교에는 사용하지 않았습니다.</li><li>라이브 app.js·styles.css가 배포 소스와 정확히 일치하고, 커스텀 도메인과 web.app 경로 canary가 통과했습니다.</li><li>라이브에서 받은 렌더러와 독립 조회한 실제 집계값을 격리 DOM에 연결하여 8~10월을 320·1440px에서 검증했습니다. 로그인된 운영자 세션을 통한 전체 데이터 로드 검증과는 구분합니다.</li></ul>
+<h2>배포 범위</h2><p>배포 커밋: <code>2c50db12dcf1db7471e15a6bd971db92a1865b16</code>. main 승격 및 푸시 후 깨끗한 main에서 배포하도록 하는 기존 안전장치를 따랐습니다. <code>archive-pilates</code> 프로젝트의 <code>hosting:archive-pilates,hosting:archive-pilates-core</code>만 배포했습니다. Functions·Firestore 규칙·회원·수강권·예약 원본·알림톡은 변경하지 않았습니다.</p>
+<p>Mac mini runtime은 동일 소스로 갱신했습니다. 설치·로드된 <code>com.archive.archive-dashboard-db-sync</code>는 매일 23:00에 해당 runtime의 <code>--apply --sync-firebase</code> 작업을 실행하도록 확인했습니다. 새 버전의 첫 자연 정기 실행은 아직 관찰 전입니다.</p>
+<p>복구 로그: <code>/Users/archivepilates/ArchiveIN/automation/reports/business-member-metrics/2026-10-08T08-43-11-277Z-apply.json</code>. 독립 대조와 화면 증거는 <code>/tmp/archive-business-metrics-readback-20261008.json</code>, <code>/tmp/business-live-aggregate-verification-20261008.json</code>입니다.</p>
+<p>배포 소스의 GitHub <a href="https://github.com/archivepilates/archive/actions/runs/37751687659">ARCHIVE IN Functions Affected Check</a>는 success입니다. 운영 결과 기록은 문서 전용 후속 커밋으로 푸시하며, 라이브 코드의 릴리스 식별자는 위 배포 커밋을 유지합니다.</p>
 <p><a href="2026-10-08-business-member-metrics-audit.html">원인 점검 보고서</a></p>
-<footer>작업 브라우저와 컨텍스트는 종료했습니다. 운영규칙은 로컬 수정 상태이며 운영에 반영되지 않았습니다.</footer></main></body></html>
+<footer>작업 브라우저와 컨텍스트는 종료했습니다. CORE 운영규칙은 동일 Hosting 릴리스에 반영됐습니다. 수강권 보유회원 정의의 원천 시트 기준은 유지하며, 실시간 보유 수강권 또는 과거 월말 자료 재구축을 완료했다고 해석하지 않습니다.</footer></main></body></html>

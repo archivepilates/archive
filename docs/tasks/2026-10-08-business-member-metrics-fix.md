@@ -47,3 +47,18 @@
 6. Record actual rollout result. Natural 23:00 run remains a separate future observation; do not claim it has already executed.
 
 No production data, notifications, StudioMate, Contacts, scheduler settings or source Sheets were changed during local implementation.
+
+## Approved Rollout Result
+
+- Source commit: 2c50db12dcf1db7471e15a6bd971db92a1865b16, promoted/pushed to origin/main before deployment as required by the clean-main release guard.
+- Clean main deploy checkout and archive-in-runtime fast-forwarded to the source commit. Existing loaded daily 23:00 LaunchAgent points to the updated runtime; no scheduler change or full revenue job was manually triggered.
+- Scoped production recovery completed at 2026-10-08T08:43:15.033008Z; apply log: /Users/archivepilates/ArchiveIN/automation/reports/business-member-metrics/2026-10-08T08-43-11-277Z-apply.json.
+- August 87/153/152, September 69/155/153, October 52/147/121, respectively sheet ticket members / booking users / attended members.
+- Independent Firestore readTime comparison against the captured pre-apply document version confirmed all 17 unrelated fields and 19 historical rows unchanged; 22 metric months now present. Recursive key sorting avoids false differences from Firestore map key order.
+- npm run deploy:archive-core-live completed: archive-pilates and archive-pilates-core Hosting only. No Functions, rules, source Sheet, StudioMate or member-facing changes.
+- Initial responsive sidecar found a 320px SDK-error URL overflow. Scoped business hero paragraph wrapping fixed it; full 95-case local and live responsive suites passed afterwards.
+- Deployed JavaScript/CSS match source exactly. Custom-domain/web.app canary passed for release source 2c50db12.
+- Deployed renderer plus independently read canonical aggregates rendered the correct three counts for August/September/October at 320/1440px (6 checks); isolated DOM verification, not an authenticated operator-session test.
+- CORE operating rules deployed. First natural 23:00 execution of this version remains pending observation, not claimed completed.
+- Task-owned QA contexts, browser processes and local servers closed; user browser state preserved.
+- Source-commit GitHub CI succeeded: https://github.com/archivepilates/archive/actions/runs/37751687659 (ARCHIVE IN Functions Affected Check). Deployment evidence is a separate documentation-only follow-up commit, so the live release manifest remains source commit 2c50db12.
