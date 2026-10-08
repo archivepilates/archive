@@ -788,7 +788,7 @@ function ensureCommandPalette() {
   dialog.id = "commandPalette";
   dialog.className = "command-palette";
   dialog.hidden = true;
-  dialog.innerHTML = `<div class="command-palette-card" role="dialog" aria-modal="true" aria-label="회원 또는 업무 검색"><button type="button" class="secondary-action" data-command-close aria-label="검색 닫기">닫기</button><label class="command-palette-search"><span>회원 또는 업무 검색</span><input id="commandPaletteInput" type="search" autocomplete="off" /></label><div id="commandPaletteResults" class="command-palette-results"></div></div>`;
+  dialog.innerHTML = `<div class="command-palette-card" role="dialog" aria-modal="true" aria-label="회원 또는 업무 검색"><button type="button" class="secondary-action command-palette-close" data-command-close aria-label="검색 닫기" title="검색 닫기">${uiIcon("x")}</button><label class="command-palette-search"><span>회원 또는 업무 검색</span><input id="commandPaletteInput" type="search" autocomplete="off" /></label><div id="commandPaletteResults" class="command-palette-results"></div></div>`;
   document.body.appendChild(dialog);
   qs("commandPaletteInput").addEventListener("input", handleCommandPaletteInput);
   dialog.addEventListener("click", (event) => {
@@ -922,6 +922,17 @@ function enhanceNav() {
     refreshButton.setAttribute("title", "새로고침");
     refreshButton.innerHTML = uiIcon("refresh-cw");
   }
+  const quickActionIcons = {
+    "#pricingInquiry": "receipt-text",
+    "./member-registration/": "user-plus",
+    "#parkingTools": "square-parking",
+    "./instructor-lessons/": "clipboard-check",
+  };
+  document.querySelectorAll(".quick-action").forEach((link) => {
+    const icon = quickActionIcons[link.getAttribute("href")];
+    if (!icon || link.querySelector(".ui-icon")) return;
+    link.insertAdjacentHTML("afterbegin", uiIcon(icon));
+  });
   const hiddenSections = new Set(["members", "lessons", "content"]);
   nav.querySelectorAll("a[data-section]").forEach((link) => {
     if (hiddenSections.has(link.dataset.section)) link.remove();

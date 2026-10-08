@@ -83,7 +83,7 @@ for (const file of htmlFiles) {
 
 test("UI feature changes do not include Firebase, permissions, packages or deployment config", () => {
   const changed = [...git("diff", "--name-only", "origin/main", "--").split("\n"), ...git("ls-files", "--others", "--exclude-standard").split("\n")].filter(Boolean);
-  const allowed = /^(?:core\/(?:.+\.(?:html|css)|assets\/(?:app|ui-icons)\.js|assets\/alimtalk-catalog\.json)|scripts\/(?:tests\/(?:core-ui-refinement|core-operator-workflow)\.test\.mjs|verify-core-ui-refinement\.mjs|preview-core-ui\.mjs)|docs\/(?:tasks|reports)\/[^/]+\.(?:md|html)|artifacts\/qa\/.*)$/;
+  const allowed = /^(?:core\/(?:.+\.(?:html|css)|assets\/(?:app|ui-icons)\.js|assets\/alimtalk-catalog\.json)|scripts\/(?:tests\/(?:core-ui-refinement|core-operator-workflow|core-crm-motion)\.test\.mjs|verify-core-(?:ui-refinement|crm-motion)\.mjs|preview-core-ui\.mjs)|docs\/(?:tasks|reports)\/[^/]+\.(?:md|html)|artifacts\/qa\/.*)$/;
   assert.deepEqual(changed.filter((file) => !allowed.test(file)), [], "non-UI change requires separate review");
 });
 
