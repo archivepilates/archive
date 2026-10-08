@@ -1487,6 +1487,7 @@ body[data-source-health="unavailable"] .connection-card {
 .business-hero p {
   margin: 0;
   color: var(--muted);
+  overflow-wrap: anywhere;
 }
 
 .month-control {

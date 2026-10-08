@@ -2,6 +2,7 @@
 import { existsSync, mkdirSync, writeFileSync } from "node:fs";
 import os from "node:os";
 import path from "node:path";
+import { pathToFileURL } from "node:url";
 import {
   EXPORT_SHEET_NAME,
   amount,
@@ -31,10 +32,12 @@ const config = {
   delegatedUser: String(args["delegated-user"] || process.env.GOOGLE_DELEGATED_USER || "home@archivepilates.com"),
 };
 
-main().catch((err) => {
-  console.error(err instanceof Error ? err.stack || err.message : String(err));
-  process.exitCode = 1;
-});
+if (process.argv[1] && import.meta.url === pathToFileURL(process.argv[1]).href) {
+  main().catch((err) => {
+    console.error(err instanceof Error ? err.stack || err.message : String(err));
+    process.exitCode = 1;
+  });
+}
 
 async function main() {
   if (!existsSync(config.credentialsPath)) throw new Error(`Google credentials not found: ${config.credentialsPath}`);
@@ -50,8 +53,6 @@ async function main() {
   const current = await fetchFirestoreDashboard();
   const next = mergeDashboardData(current, exported, source);
   const paymentRevenuePatch = augmentSummaryRevenue(next, paymentRevenueByMonth);
-  const bookingMemberMetrics = await loadBookingMemberMetrics(next);
-  if (bookingMemberMetrics.rows.length) next.월별회원지표 = bookingMemberMetrics.rows;
   const firestorePatch = config.apply ? await writeFirestoreDashboard(next) : null;
   const report = {
     ok: !firestorePatch || firestorePatch.ok,
@@ -61,10 +62,10 @@ async function main() {
     exportSheetName: EXPORT_SHEET_NAME,
     rows: Math.max(0, exportValues.length - 1),
     paymentRevenuePatch,
-    bookingMemberMetrics: bookingMemberMetrics.summary,
+    bookingMemberMetrics: { status: "separate_daily_step", script: "scripts/sync-archive-business-member-metrics.mjs" },
     updatedAt: next.updatedAt,
     firestorePatch,
-    note: "대시보드_EXPORT를 기본으로 반영하되, 총매출은 아카이브 DB 수강권매출 원천으로, 회원수는 bookings 예약 원천으로 보강합니다.",
+    note: "매출 EXPORT 동기화입니다. 회원 지표는 매출 성공 여부와 무관한 별도 정기 단계에서 갱신합니다.",
   };
   console.log(JSON.stringify({ ...report, reportPath: writeReport(report) }, null, 2));
   if (firestorePatch && !firestorePatch.ok) process.exitCode = 1;
@@ -186,47 +187,7 @@ function augmentSummaryRevenue(exported, paymentRevenueByMonth) {
   return patched;
 }
 
-async function loadBookingMemberMetrics(dashboardData) {
-  const months = dashboardMetricMonths(dashboardData);
-  if (!months.length) return { rows: [], summary: { months: 0, rows: 0 } };
-  const token = await googleAccessToken({
-    credentialsPath: config.credentialsPath,
-    scopes: ["https://www.googleapis.com/auth/datastore"],
-    delegated: false,
-  });
-  const sheetMembersByMonth = new Map(
-    (dashboardData.월별이용회원 || [])
-      .map((row) => [monthKey(row.월), amount(row.이용회원수)])
-      .filter(([month]) => month),
-  );
-  const rows = [];
-  for (const month of months) {
-    const bookings = await fetchBookingsForMonth(token, month);
-    rows.push(summarizeBookingMemberMetric(month, bookings, sheetMembersByMonth.get(month) || 0));
-  }
-  return {
-    rows,
-    summary: {
-      months: rows.length,
-      rows: rows.reduce((sum, row) => sum + row.원본예약행수, 0),
-      latest: rows.at(-1) || null,
-      comparison: rows.filter((row) => ["2025-06", "2026-06", rows.at(-1)?.월].includes(row.월)),
-      note: "수강권 보유회원은 기존 월별이용회원 시트값, 예약/출석 회원은 Firestore bookings 기준입니다.",
-    },
-  };
-}
-
-function dashboardMetricMonths(dashboardData) {
-  const currentMonth = monthKey(new Date().toLocaleDateString("sv-SE", { timeZone: "Asia/Seoul" }));
-  const months = new Set();
-  for (const row of dashboardData.summary || []) months.add(monthKey(row.월 || row.기준월));
-  for (const row of dashboardData.월별이용회원 || []) months.add(monthKey(row.월 || row.기준월));
-  return [...months]
-    .filter((month) => month && month >= "2025-01" && month <= currentMonth)
-    .sort();
-}
-
-async function fetchBookingsForMonth(token, month) {
+export async function fetchBookingsForMonth(token, month) {
   const start = `${month}-01`;
   const end = nextMonth(month);
   const body = {
@@ -275,7 +236,7 @@ async function fetchBookingsForMonth(token, month) {
     }));
 }
 
-function summarizeBookingMemberMetric(month, bookings, ticketMemberCount) {
+export function summarizeBookingMemberMetric(month, bookings, ticketMemberCount) {
   const deduped = dedupeBookings(bookings);
   const activeMembers = new Set();
   const attendedMembers = new Set();
@@ -312,7 +273,7 @@ function summarizeBookingMemberMetric(month, bookings, ticketMemberCount) {
 
   return {
     월: month,
-    수강권보유회원수: Math.round(ticketMemberCount),
+    수강권보유회원수: Number.isInteger(ticketMemberCount) && ticketMemberCount >= 0 ? ticketMemberCount : null,
     예약이용회원수: activeMembers.size,
     출석회원수: attendedMembers.size,
     원본예약행수: bookings.length,
@@ -494,20 +455,22 @@ async function writeFirestoreDashboard(data) {
     scopes: ["https://www.googleapis.com/auth/datastore"],
     delegated: false,
   });
-  const result = await fetch("https://firestore.googleapis.com/v1/projects/archive-pilates/databases/(default)/documents/dashboardSnapshots/current", {
+  const fields = ["summary", "강사별", "강사통계", "월별강사평균인원", "매출일일누적", "updatedAt", "sourceSpreadsheetId", "sourceSpreadsheetName", "syncMode"];
+  const mask = fields.map((field) => `updateMask.fieldPaths=${encodeURIComponent(`\`${field}\``)}`).join("&");
+  const result = await fetch(`https://firestore.googleapis.com/v1/projects/archive-pilates/databases/(default)/documents/dashboardSnapshots/current?${mask}`, {
     method: "PATCH",
     headers: {
       authorization: `Bearer ${token}`,
       "content-type": "application/json",
     },
-    body: JSON.stringify({ fields: Object.fromEntries(Object.entries(data).map(([field, value]) => [field, firestoreValue(value)])) }),
+    body: JSON.stringify({ fields: Object.fromEntries(fields.map((field) => [field, firestoreValue(data[field])])) }),
   });
   const text = await result.text();
   const body = safeJson(text) || text.slice(0, 2000);
   return { ok: result.ok, status: result.status, updateTime: body?.updateTime || "", body: result.ok ? undefined : body };
 }
 
-function firestoreValue(value) {
+export function firestoreValue(value) {
   if (Array.isArray(value)) return { arrayValue: { values: value.map((item) => firestoreValue(item)) } };
   if (value && typeof value === "object") {
     return { mapValue: { fields: Object.fromEntries(Object.entries(value).map(([key, item]) => [key, firestoreValue(item)])) } };
@@ -518,7 +481,7 @@ function firestoreValue(value) {
   return { stringValue: String(value) };
 }
 
-function decodeFirestoreFields(fields) {
+export function decodeFirestoreFields(fields) {
   return Object.fromEntries(Object.entries(fields).map(([key, value]) => [key, decodeFirestoreValue(value)]));
 }
 

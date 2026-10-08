@@ -5102,6 +5102,11 @@ function renderPrivate(requests, records, ledgerEntries, candidates = [], sends 
 }
 
 function normalizeBusinessSnapshot(data) {
+  const nullableMemberCount = (value) => {
+    if (value === null || value === undefined || String(value).trim() === "") return null;
+    const number = Number(String(value).replace(/,/g, ""));
+    return Number.isInteger(number) && number >= 0 ? number : null;
+  };
   const summary = (data?.summary || [])
     .map((row) => ({
       month: normMonth(row.월),
@@ -5153,13 +5158,16 @@ function normalizeBusinessSnapshot(data) {
   const memberMetrics = (data?.월별회원지표 || [])
     .map((row) => ({
       month: normMonth(row.월),
-      ticketMembers: toNumber(row.수강권보유회원수),
-      bookingMembers: toNumber(row.예약이용회원수),
-      attendedMembers: toNumber(row.출석회원수),
+      ticketMembers: nullableMemberCount(row.수강권보유회원수),
+      bookingMembers: nullableMemberCount(row.예약이용회원수),
+      attendedMembers: nullableMemberCount(row.출석회원수),
       activeReservationRows: toNumber(row.유효예약행수),
       normalizedReservationRows: toNumber(row.정규화예약건수),
       source: String(row.산출원천 || "bookings"),
       rule: String(row.산출기준 || ""),
+      collectedAt: row.집계시각 || null,
+      ticketSource: String(row.수강권원천 || ""),
+      aggregationStatus: String(row.집계상태 || ""),
     }))
     .filter((row) => row.month)
     .sort((a, b) => a.month.localeCompare(b.month));
@@ -5188,6 +5196,7 @@ function normalizeBusinessSnapshot(data) {
     memberMetrics,
     dailyRevenue,
     updatedAt: data?.updatedAt || data?.syncedAt || null,
+    memberMetricsUpdatedAt: data?.memberMetricsUpdatedAt || null,
   };
 }
 
@@ -5296,21 +5305,28 @@ function renderBusinessMonth(month) {
       ? deltaText(daily.attendanceRate, daily.previousAttendanceRate, "%p")
       : deltaText(current.attendanceRate, previous?.attendanceRate, "%p"),
   );
-  setText("businessTicketMembers", currentMember ? formatCount(currentMember.ticketMembers, "명") : "-");
-  setText("businessBookingMembers", currentMember ? formatCount(currentMember.bookingMembers, "명") : "-");
-  setText("businessAttendedMembers", currentMember ? formatCount(currentMember.attendedMembers, "명") : "-");
-  setText(
-    "businessTicketMembersNote",
-    currentMember ? memberCountDeltaText(currentMember.ticketMembers, previousYearMember?.ticketMembers, "전년동월") : "정산 시트 기준",
-  );
-  setText(
-    "businessBookingMembersNote",
-    currentMember ? memberCountDeltaText(currentMember.bookingMembers, previousYearMember?.bookingMembers, "전년동월") : "예약 원천 기준",
-  );
-  setText(
-    "businessAttendedMembersNote",
-    currentMember ? memberCountDeltaText(currentMember.attendedMembers, previousYearMember?.attendedMembers, "전년동월") : "출석 완료 기준",
-  );
+  const bookingBasis = !currentMember?.source || currentMember.source === "bookings"
+    ? "예약 원천 기준"
+    : `${currentMember.source} 기준`;
+  const memberCards = [
+    ["businessTicketMembers", "ticketMembers", "정산 시트 기준"],
+    ["businessBookingMembers", "bookingMembers", bookingBasis],
+    ["businessAttendedMembers", "attendedMembers", `${bookingBasis} · 출석 완료`],
+  ];
+  const missingMemberMetrics = memberCards.some(([, key]) => !Number.isFinite(currentMember?.[key]));
+  for (const [id, key, basis] of memberCards) {
+    const value = currentMember?.[key];
+    const available = Number.isFinite(value);
+    setText(id, available ? formatCount(value, "명") : "집계 필요");
+    setText(`${id}Note`, `${basis} · ${available ? memberCountDeltaText(value, previousYearMember?.[key], "전년동월") : "집계 필요"}`);
+  }
+  setText("businessSnapshotStatus", missingMemberMetrics ? "회원 집계 필요" : "연결됨");
+  if (qs("businessSnapshotStatus")) {
+    qs("businessSnapshotStatus").className = missingMemberMetrics ? "pill warn" : "pill good";
+    qs("businessSnapshotStatus").title = currentMember?.collectedAt
+      ? `회원 지표 집계: ${formatDate(currentMember.collectedAt)}`
+      : "회원 지표 집계시각 미기록";
+  }
   renderBusinessBars(snapshot.summary, current.month);
   renderBusinessRanks(snapshot, current.month);
 }
@@ -5331,8 +5347,6 @@ function renderBusiness(snapshot) {
     .join("");
   const latestMonth = state.businessMonths.at(-1);
   select.value = latestMonth;
-  qs("businessSnapshotStatus").textContent = "연결됨";
-  qs("businessSnapshotStatus").className = "pill good";
   setText("businessUpdatedAt", snapshot.updatedAt ? formatDate(snapshot.updatedAt) : "업데이트 확인");
   renderBusinessMonth(latestMonth);
 }

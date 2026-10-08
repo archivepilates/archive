@@ -54,11 +54,23 @@ if (!downloadFailed && shouldRunDbSync) {
   }
 }
 
+// Member coverage is independent of the revenue fallback and must run even if revenue fails.
+if (shouldRunDbSync && syncFirebase) {
+  steps.push(runStep("syncBusinessMemberMetrics", [
+    "scripts/sync-archive-business-member-metrics.mjs",
+    ...(month ? [`--month=${month}`] : []),
+    ...(apply ? ["--apply"] : []),
+  ]));
+}
+
 const dbSyncSteps = steps.filter((step) => step.name.startsWith("syncArchiveDashboardDb"));
 const dbSyncSucceeded = !shouldRunDbSync || dbSyncSteps.some(stepSucceeded);
+const memberMetricStep = steps.find((step) => step.name === "syncBusinessMemberMetrics");
+const memberMetricsSucceeded = memberMetricStep ? stepSucceeded(memberMetricStep) : null;
 const blockingFailures = [
   ...(downloadFailed && downloadStep ? [downloadStep] : []),
   ...(!downloadFailed && shouldRunDbSync && !dbSyncSucceeded ? dbSyncSteps : []),
+  ...(memberMetricStep && !memberMetricsSucceeded ? [memberMetricStep] : []),
 ];
 const warnings = steps
   .filter((step) => !stepSucceeded(step) && !blockingFailures.includes(step))
@@ -69,6 +81,7 @@ const summary = {
   source: "archive_dashboard_sales_daily",
   skippedDbSync: downloadFailed ? "sales Excel download failed" : shouldRunDbSync ? "" : "dry-run download does not create source Excel files",
   dbSyncSucceeded,
+  memberMetricsSucceeded,
   warnings,
   steps,
   finishedAt: new Date().toISOString(),

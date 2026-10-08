@@ -1,0 +1,72 @@
+<!doctype html>
+<html lang="ko">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1">
+  <title>ARCHIVE CORE 경영 회원 지표 누락 점검</title>
+  <style>
+    *{box-sizing:border-box}body{margin:0;background:#fff;color:#202124;font-family:system-ui,-apple-system,sans-serif;line-height:1.7}main{max-width:960px;margin:auto;padding:40px 22px}h1{font-size:26px;line-height:1.4}h2{font-size:19px;margin:32px 0 12px}p{margin:10px 0}small,.muted{color:#666}section{border-top:1px solid #ddd;margin-top:28px;padding-top:4px}table{width:100%;border-collapse:collapse;font-size:14px}th,td{text-align:left;padding:12px 8px;border-bottom:1px solid #ddd;vertical-align:top}th{background:#f5f6f7}code{font-size:13px;overflow-wrap:anywhere}a{color:#185abc;overflow-wrap:anywhere}li{margin:8px 0}.status{font-weight:700;color:#a32626}.table-wrap{overflow:auto}footer{margin-top:36px;border-top:1px solid #ddd;padding-top:16px;font-size:13px;color:#666}@media(max-width:480px){main{padding:24px 16px}h1{font-size:23px}th,td{padding:9px 6px}}
+  </style>
+</head>
+<body><main>
+  <p class="muted">ARCHIVE PILATES · 2026-10-08 · 읽기 전용 점검</p>
+  <h1>경영 메뉴의 8월 이후 회원 지표 누락</h1>
+  <p class="status">확인: 회원이 0명이 아니라, 월별 회원 지표 집계 연동이 누락된 상태입니다.</p>
+  <p>매출 요약에는 2026년 10월까지 데이터가 있지만, 세 회원 카드가 사용하는 <code>dashboardSnapshots/current.월별회원지표</code>는 7월까지만 있습니다. 새로고침이나 최근 디자인 변경으로 해결되는 문제가 아닙니다.</p>
+
+  <section><h2>현재 운영 데이터</h2>
+  <div class="table-wrap"><table>
+    <thead><tr><th>구분</th><th>확인 결과</th><th>판정</th></tr></thead>
+    <tbody>
+      <tr><td>매출 요약</td><td>2025-01~2026-10, 22개 월</td><td>최근 월 포함</td></tr>
+      <tr><td>월별회원지표</td><td>2025-01~2026-07, 19개 월</td><td>8·9·10월 누락</td></tr>
+      <tr><td>세 카드</td><td>수강권 보유회원 / 예약 이용회원 / 출석 회원</td><td>해당 월 행이 없으면 모두 '-' 표시</td></tr>
+      <tr><td>스냅샷 갱신</td><td>2026-10-07 23:01:26 KST</td><td>매출 갱신시각이며 회원 지표 최신성의 증거가 아님</td></tr>
+    </tbody>
+  </table></div>
+  <p>Firestore 직접 조회: 2026-10-08 15:48:12 KST. 라이브 배포 소스: <code>9a6712da</code>. 조회한 소스 저장소 기준: <code>origin/main bb68a2c1</code>.</p>
+  <div class="table-wrap"><table>
+    <thead><tr><th>월</th><th>예약 원본 문서 수</th><th>회원 집계 행</th></tr></thead>
+    <tbody><tr><td>2026-08</td><td>1,910</td><td>없음</td></tr><tr><td>2026-09</td><td>1,873</td><td>없음</td></tr><tr><td>2026-10</td><td>1,001</td><td>없음</td></tr></tbody>
+  </table></div>
+  <p class="muted">예약 문서 수는 중복·취소를 포함할 수 있는 원본 건수입니다. 고유 예약 이용회원 수나 출석 회원 수가 아니며, 10월은 진행 중입니다.</p>
+  </section>
+
+  <section><h2>누락 경로</h2>
+  <ol>
+    <li>보존 실행 기록상 마지막 회원 지표 보강 성공은 7월 30일 23:02:23입니다. 당시 19개 월, 예약 원본 57,526행을 읽었습니다.</li>
+    <li>7월 31일~8월 5일에는 EXPORT 경로에서 <code>아카이브 정산_2026-07</code> 시트를 찾지 못한 오류가 기록됐습니다.</li>
+    <li>8월 5일 커밋 <code>84ef5ff3</code>에서 EXPORT 실행이 매출 직접 동기화의 실패 시에만 수행되는 방식으로 변경됐습니다.</li>
+    <li>현재 매출 직접 동기화는 회원 지표를 갱신하지 않습니다. 회원 지표를 계산하는 코드는 EXPORT 경로에만 있어, 매출 동기화가 성공하면 실행되지 않습니다.</li>
+    <li>변경 후 10월 7일까지 보존된 실행 보고서 66건 중 65건은 전체 성공이지만, EXPORT 실행은 0건입니다. 월말 정산명세서 생성도 별도 작업이며 이 회원 지표를 계산하지 않습니다.</li>
+  </ol>
+  <p>화면 역시 매출 요약이 있으면 전체를 '연결됨'으로 표시합니다. 회원 지표의 월별 누락과 개별 갱신시각을 검사하지 않아 장기간 누락이 드러나지 않았습니다.</p>
+  </section>
+
+  <section><h2>수강권 보유회원 기준 주의</h2>
+  <p><a href="https://docs.google.com/spreadsheets/d/1yEU2lDM_hTKQ-qT8UNj1PsiL7fsBwAgkzsKOzfXVsKg/edit#gid=41937386">아카이브 DB · 월별 유효회원</a>에는 8월 이후 값도 있지만 2028년까지 미래 월이 포함됩니다. 이 값이 현재 월말 실제 보유회원과 일치한다고 이번 점검에서 검증한 것은 아닙니다.</p>
+  <p>기존 보강 코드는 새 수강권 원본을 재계산하지 않고 스냅샷의 <code>월별이용회원</code> 값을 재사용합니다. 따라서 기존 값을 복사해 빈칸만 채우면 정합성 문제가 남습니다. 수강권 보유회원은 발급권·유효기간·정지·만료 및 회원 제외 기준을 대조한 뒤 복구해야 합니다.</p>
+  <p><a href="https://docs.google.com/spreadsheets/d/1ip48SK5gFZZ3O0Fkl01IgQGSVbgfnDYDhstZtwKytgA/edit#gid=94093347">현재 스냅샷의 정산 EXPORT 원천</a>에도 회원 지표 section은 없습니다.</p>
+  </section>
+
+  <section><h2>권장 복구 범위</h2>
+  <ol>
+    <li>8~10월만 원천 대조 후 재집계합니다. 예약 이용회원과 출석 회원은 canonical 예약 원본에서, 수강권 보유회원은 검증한 보유기간 원본에서 계산합니다. 과거 확정 월은 불필요하게 재조회하지 않습니다.</li>
+    <li>기존 정기 동기화에 회원 지표 갱신 단계를 연결합니다. 새 반복 감시 작업을 추가하지 않고, 매출 성공 여부와 무관하게 필요한 월만 갱신합니다.</li>
+    <li>회원 지표 전용 갱신시각·원천·월별 커버리지를 기록하고, 누락을 0명과 구분해 표시·점검합니다.</li>
+    <li>문서 전체 덮어쓰기 대신 대상 필드만 갱신하고 동시 변경을 보호합니다. 반영 후 원본·Firestore·화면을 다시 대조합니다.</li>
+  </ol>
+  <p>회귀 검증: 매출 성공 시 회원 지표도 갱신되는지, 8~10월이 각각 한 행인지, 중복·취소·강사레슨 제외 기준이 유지되는지, 원천 누락이 0으로 바뀌지 않는지 확인해야 합니다.</p>
+  </section>
+
+  <section><h2>코드 및 실행 근거</h2>
+  <ul>
+    <li><code>core/assets/app.js</code>: <code>normalizeBusinessSnapshot</code>, <code>renderBusinessMonth</code>, <code>renderBusiness</code></li>
+    <li><code>scripts/run-archive-dashboard-sales-daily.mjs:38</code>: 성공 시 EXPORT 미실행</li>
+    <li><code>scripts/sync-archive-dashboard-db.mjs:917</code>: 매출 필드만 갱신</li>
+    <li><code>scripts/sync-archive-dashboard-db-export.mjs:53</code>, <code>:189</code>: 회원 지표 계산 및 기존 보유회원 값 재사용</li>
+    <li>보존 실행 기록: <code>archive-dashboard-db-sync/2026-07-30T14-02-23-651Z-dashboard-export-etl.json</code>, <code>archive-dashboard-sales-daily/2026-10-07T14-01-26-971Z-run-apply.json</code></li>
+  </ul>
+  </section>
+  <footer>이번 작업은 조회와 원인 분석만 완료했습니다. 운영 데이터 변경, 집계 재실행, 발송, 배포, 커밋·푸시는 하지 않았습니다. 운영 동작 변경이 없어 운영규칙은 수정하지 않았습니다. 개인 회원 목록은 보고서에 포함하지 않았으며, 브라우저를 새로 열지 않았습니다.</footer>
+</main></body></html>
