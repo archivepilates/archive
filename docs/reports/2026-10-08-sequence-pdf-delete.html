@@ -1,0 +1,38 @@
+<!doctype html>
+<html lang="ko">
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width,initial-scale=1">
+<title>시퀀스 PDF 저장 및 삭제 검증 | ARCHIVE PILATES</title>
+<style>
+*{box-sizing:border-box}body{margin:0;background:#f7f8fa;color:#20262d;font:16px/1.7 system-ui,sans-serif}main{max-width:920px;margin:auto;padding:36px 22px}h1{font-size:28px;line-height:1.35}h2{font-size:20px;margin:32px 0 12px}p{max-width:70ch}header{border-bottom:3px solid #cc302b;padding-bottom:20px}small{color:#59636e}table{width:100%;border-collapse:collapse;background:white}th,td{padding:12px;text-align:left;border-bottom:1px solid #dce1e6;vertical-align:top}th{width:36%;font-weight:600}a{color:#175979;overflow-wrap:anywhere}code{font-size:14px;overflow-wrap:anywhere}.ok{color:#246c49;font-weight:700}li{margin:8px 0}@media(max-width:500px){main{padding:24px 16px}h1{font-size:24px}th,td{padding:10px 8px}th{width:34%}}
+</style>
+<main>
+<header><small>ARCHIVE PILATES · ARCHIVE CORE · 2026.10.08</small><h1>내 시퀀스 PDF 저장 · 삭제 후 재생성 검증</h1><p class="ok">운영 배포 및 라이브 검증 완료</p></header>
+<h2>변경 내용</h2>
+<ul><li>내 시퀀스의 개별 ‘응답 저장’을 ‘PDF 저장’으로 교체했습니다. 선택한 서버 저장본과 사진을 읽어 바로 PDF로 내려받습니다.</li><li>현재 편집 중인 노트·미저장 입력·수정 버전을 바꾸거나 저장하지 않습니다. 연속 클릭은 같은 기록당 한 번만 처리합니다.</li><li>복원용 응답 파일 및 최근 기록 백업은 별도 JSON 기능으로 유지합니다.</li><li>CORE 운영규칙에 PDF 저장과 삭제 표식, 명시적 복원 기준을 기록했습니다.</li></ul>
+<h2>삭제 현상 판정</h2>
+<p>읽기 전용 확인에서 삭제한 원본 ID는 삭제 상태였습니다. 같은 제목의 별도 복구본은 19:03에 만들어졌고 원본 삭제는 19:56이므로, 삭제 이후 자동 재생성된 기록이 아닙니다. 실제 운영자의 원본·복구본은 임의 삭제하지 않았습니다.</p>
+<p>삭제한 ID는 삭제 표식으로 보존되어 오래된 다른 기기의 저장을 거부합니다. 재접속과 과거 localStorage로 자동 복원하지 않습니다. JSON 복원은 확인 후 새로운 ID의 사본으로만 생성됩니다.</p>
+<h2>검증 결과</h2>
+<table><tbody>
+<tr><th>시퀀스 UI·저장</th><td>26/26 통과, 건너뛴 검사 없음. 320·390·768·1440px 반응형 및 PDF 검증.</td></tr>
+<tr><th>Firestore 규칙</th><td>실제 에뮬레이터 215/215 통과. 규칙 변경·재배포 없음.</td></tr>
+<tr><th>PDF 파일</th><td>로컬 8개와 라이브 2개를 pypdf·PDFium으로 독립 확인. 선택 가능한 한글, 저장본 제목, 압축 사진, 비어 있지 않은 4:3 페이지 확인 및 래스터 육안 확인.</td></tr>
+<tr><th>실제 서비스</th><td>격리된 Auth 계정으로 390·1440px에서 PDF·원본 불변·UI 삭제·사진 정리·오래된 저장 거부·재접속 비복원을 검증했습니다.</td></tr>
+<tr><th>CORE 회귀</th><td>Hosting dry-run, 로컬·라이브 반응형 각 95개, 릴리스 canary 및 GitHub Actions 통과.</td></tr>
+<tr><th>시험 정리</th><td>합성 계정의 노트·이미지·Auth 계정 삭제 확인. 작업 소유 브라우저·컨텍스트·구독·트랜잭션·시험 서버 종료. 사용자 Chrome은 변경하지 않았습니다.</td></tr>
+</tbody></table>
+<p><small>시험 중 오류 문구·태블릿 숨김 상태의 기대값을 보정했고, 라이브에서는 목록 반영보다 사진 삭제가 늦게 완료되는 시차를 완료 상태 대기로 보정했습니다. 모두 재검증 통과했으며 이를 위해 운영 저장·삭제 로직을 바꾸지 않았습니다.</small></p>
+<h2>배포 증거</h2>
+<table><tbody>
+<tr><th>배포 소스</th><td><code>d7fae9e50062a4d0805bcc2c3056ed75a7dc84ae</code> · origin/main</td></tr>
+<tr><th>대상</th><td>archive-pilates 프로젝트 · archive-pilates 및 archive-pilates-core Hosting만 배포</td></tr>
+<tr><th>운영 확인</th><td><a href="https://core.archivepilates.com/sequence/">CORE 시퀀스</a>, <a href="https://core.archivepilates.com/rules/">운영규칙</a>. custom domain·web.app 모두 Git 원본과 파일 해시 일치.</td></tr>
+<tr><th>CI</th><td><a href="https://github.com/archivepilates/archive/actions/runs/37768209595">Functions Affected Check 성공</a></td></tr>
+<tr><th>영향 없음</th><td>Functions·Firestore 규칙·인덱스·회원·예약·알림톡·연락처·Notion·정산 자동화</td></tr>
+</tbody></table>
+<h2>상세 증거 위치</h2>
+<p><code>/tmp/archive-core-sequence-cloud-qa/results.json</code><br><code>/tmp/sequence-pdf-delete-rules.log</code><br><code>/tmp/sequence-pdf-delete-hosting-deploy.log</code><br><code>/tmp/sequence-pdf-delete-live.log</code><br><code>/tmp/archive-core-sequence-pdf-delete-live/</code></p>
+<p><small>남은 차단 없음. 같은 제목의 서로 다른 기록은 독립적으로 유지되므로 불필요한 복구본 정리는 운영자가 기록을 확인한 뒤 선택합니다.</small></p>
+</main>
+</html>

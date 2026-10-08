@@ -188,6 +188,8 @@ try {
   await pageA.frameLocator('iframe').getByRole('tab', { name: /내 시퀀스/ }).click();
   pageA.once('dialog', (dialog) => dialog.accept());
   await pageA.frameLocator('iframe').getByTestId(`sequence-record-${copyId}`).getByRole('button', { name: '삭제', exact: true }).click();
+  // List snapshots can arrive before the adapter finishes deleting attachments.
+  await pageA.frameLocator('iframe').getByRole('status').filter({ hasText: '삭제했어요.' }).waitFor();
   await pageA.frameLocator('iframe').getByTestId(`sequence-record-${copyId}`).waitFor({ state: 'hidden' });
   assert.equal((await db.collection('sequenceNotes').doc(copyId).get()).data().deleted, true);
   assert.equal((await db.collection('sequenceNoteImages').where('noteId', '==', copyId).get()).size, 0);
