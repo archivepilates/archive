@@ -77,6 +77,13 @@ try {
     assert.equal(fresh.revision, 0);
     assert.equal(fresh.dirty, false);
     await frame.getByRole('tab', { name: /내 시퀀스/ }).click();
+    const source = await db.collection('sequenceNotes').doc(id).get();
+    const formatter = new Intl.DateTimeFormat('en-CA', { timeZone: 'Asia/Seoul', year: 'numeric', month: '2-digit', day: '2-digit' });
+    const parts = formatter.formatToParts(source.data().createdAt.toDate());
+    const day = ['year', 'month', 'day'].map((type) => parts.find((part) => part.type === type).value).join('.');
+    await frame.getByTestId(`sequence-record-${id}`).filter({ hasText: `작성일 ${day}` }).waitFor();
+    await fs.mkdir('/tmp/archive-core-sequence-created-date-live', { recursive: true });
+    await page.screenshot({ path: `/tmp/archive-core-sequence-created-date-live/library-${page.viewportSize().width}.png`, fullPage: true });
     await frame.getByTestId(`sequence-record-${id}`).getByRole('button', { name: '수정', exact: true }).click();
     await frame.getByRole('tabpanel', { name: '02 노트 보기', exact: true }).waitFor();
     await page.waitForFunction((noteId) => document.querySelector('iframe').contentWindow.ARCHIVE_TEST.getState().id === noteId, id);
@@ -100,6 +107,7 @@ try {
   const canonical = await db.collection('sequenceNotes').doc(record.id).get();
   assert.equal(canonical.data().ownerUid, testUid);
   assert.equal(canonical.data().revision, 1);
+  assert.ok(canonical.data().createdAt instanceof admin.firestore.Timestamp, 'Server creation time must exist');
   assert.ok(!canonical.data().payload.includes('data:image'));
   assert.ok(Buffer.from(record.image.split(',')[1], 'base64').length <= 65536);
   const imageRows = await db.collection('sequenceNoteImages').where('ownerUid', '==', testUid).get();
@@ -128,6 +136,7 @@ try {
   const canonicalB = await db.collection('sequenceNotes').doc(recordB.id).get();
   assert.equal(canonicalB.data().ownerUid, testUid);
   assert.equal(canonicalB.data().revision, 1);
+  assert.ok(canonicalB.data().createdAt instanceof admin.firestore.Timestamp);
   assert.deepEqual(JSON.parse(canonicalB.data().payload), recordB);
   assert.equal((await db.collection('sequenceNotes').doc(record.id).get()).data().payload, canonical.data().payload, 'Saving B must preserve A payload');
   const pair = await db.collection('sequenceNotes').where('ownerUid', '==', testUid).get();
@@ -147,6 +156,7 @@ try {
   await pageA.frameLocator('iframe').getByRole('status').filter({ hasText: '다른 기기에서 변경됨' }).waitFor();
   assert.equal(await pageA.evaluate(() => document.querySelector('iframe').contentWindow.ARCHIVE_TEST.flush()), false);
   assert.equal((await db.collection('sequenceNotes').doc(record.id).get()).data().goal, '기기 B의 확정 변경');
+  assert.ok((await db.collection('sequenceNotes').doc(record.id).get()).data().createdAt.isEqual(canonical.data().createdAt), 'Editing must preserve creation time');
   await pageA.frameLocator('iframe').getByRole('button', { name: '사본으로 저장', exact: true }).click();
   await pageA.frameLocator('iframe').getByRole('status').filter({ hasText: 'Firestore 저장 완료' }).waitFor();
   const copyId = await pageA.evaluate(() => document.querySelector('iframe').contentWindow.ARCHIVE_TEST.getState().id);

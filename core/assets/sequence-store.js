@@ -97,6 +97,8 @@ export function createSequenceStore(runtime, user) {
       });
       transaction.set(ref, {
         ownerUid: user.uid, revision: revision + 1, updatedAt: serverTimestamp(), deleted: false,
+        ...(!snapshot.exists() ? { createdAt: serverTimestamp() }
+          : snapshot.data().createdAt ? { createdAt: snapshot.data().createdAt } : {}),
         payload, title: state.title, teacher: state.teacher,
         equipment: state.equipment === '기타' ? state.equipmentOther : state.equipment,
         date: state.date, goal: state.goal, moveCount: Object.values(state.moves).flat().length,

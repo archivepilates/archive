@@ -65,7 +65,8 @@ service cloud.firestore {
         'ownerUid', 'revision', 'updatedAt', 'payload', 'title', 'teacher',
         'equipment', 'date', 'goal', 'moveCount', 'deleted'
       ];
-      return data.keys().hasAll(fields) && data.keys().hasOnly(fields) &&
+      return data.keys().hasAll(fields) && data.keys().hasOnly(fields.concat(['createdAt'])) &&
+        (!('createdAt' in data) || (data.createdAt is timestamp && data.createdAt <= request.time)) &&
         data.ownerUid is string && data.ownerUid == request.auth.uid &&
         data.revision is int && data.revision >= 1 &&
         data.updatedAt is timestamp && data.updatedAt == request.time &&
@@ -92,10 +93,14 @@ service cloud.firestore {
         resource.data.deleted == false &&
         request.query.limit != null && request.query.limit <= 100;
       allow create: if isManager() && safeSequenceNoteId(noteId) &&
-        validSequenceNote(request.resource.data) && request.resource.data.revision == 1;
+        validSequenceNote(request.resource.data) && request.resource.data.revision == 1 &&
+        (!('createdAt' in request.resource.data) || request.resource.data.createdAt == request.time);
       allow update: if isManager() && safeSequenceNoteId(noteId) &&
         resource.data.ownerUid == request.auth.uid && resource.data.deleted == false &&
         validSequenceNote(request.resource.data) &&
+        (('createdAt' in resource.data)
+          ? ('createdAt' in request.resource.data && request.resource.data.createdAt == resource.data.createdAt)
+          : !('createdAt' in request.resource.data)) &&
         request.resource.data.ownerUid == resource.data.ownerUid &&
         request.resource.data.revision == resource.data.revision + 1;
       allow delete: if false;

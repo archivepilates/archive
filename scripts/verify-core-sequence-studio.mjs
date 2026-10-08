@@ -127,7 +127,10 @@ async function dispatch(uid, operation, args = {}, source) {
 
 // Shared by the browser fixture and the Node actual-adapter checks.
 function sdkRuntime(call) {
-  const snapshot = (ref, data) => ({ id: ref.path.split("/").pop(), ref, exists: () => data !== null, data: () => data });
+  const snapshot = (ref, data) => ({ id: ref.path.split("/").pop(), ref, exists: () => data !== null, data: () => {
+    if (!data?.createdAt?.__fixtureToDate) return data;
+    return { ...data, createdAt: { toDate: () => new Date(data.createdAt.iso) } };
+  } });
   const snapshots = (rows) => ({ docs: rows.map((row) => snapshot({ path: row.path }, row.data)), metadata: { fromCache: false, hasPendingWrites: false } });
   const callbacks = new Map();
   const deliver = (id, rows) => callbacks.get(id)?.next(rows);
@@ -295,6 +298,31 @@ async function actualAdapterChecks() {
   } finally { stopWatch(); stopList(); }
 }
 
+async function createdAtInvariantChecks() {
+  const uid = "created-at-adapter-qa";
+  const store = createSequenceStore(runtimeFor(uid), { uid });
+  const state = note("created-at-invariant");
+  const key = `sequenceNotes/${state.id}`;
+  try {
+    await store.save(state, 0);
+    const createdAt = documents.get(key).createdAt;
+    assert.ok(Number.isFinite(createdAt) && createdAt > 0, "new notes must resolve a server createdAt timestamp");
+    assert.ok(!Object.hasOwn(JSON.parse(documents.get(key).payload), "createdAt"), "creation metadata stays outside the answer payload");
+    const updatedAt = documents.get(key).updatedAt;
+    await store.save({ ...state, title: "edited without resetting creation" }, 1);
+    assert.equal(documents.get(key).createdAt, createdAt, "edits preserve the original server creation timestamp");
+    assert.ok(documents.get(key).updatedAt > updatedAt, "editing still advances updatedAt independently");
+    delete documents.get(key).createdAt;
+    await store.save({ ...state, title: "legacy edit" }, 2);
+    assert.equal(Object.hasOwn(documents.get(key), "createdAt"), false, "editing legacy records must not invent a creation date");
+    const timestamp = { seconds: 1791471600, nanoseconds: 123000000 };
+    documents.get(key).createdAt = timestamp;
+    await store.save({ ...state, title: "preserve structured timestamp" }, 3);
+    assert.deepEqual(documents.get(key).createdAt, timestamp, "structured creation timestamps remain unchanged on edit");
+    return { newServerTimestamp: true, editsPreserveCreatedAt: true, missingLegacyRemainsAbsent: true, mockSDK: true };
+  } finally { documents.delete(key); }
+}
+
 async function fixture(context, uid, legacy = {}) {
   const errors = [];
   context.on("page", (page) => page.on("pageerror", (error) => errors.push(error.message)));
@@ -332,7 +360,7 @@ async function fixture(context, uid, legacy = {}) {
 }
 
 async function withContext(uid, width, action, legacy = {}) {
-  const context = await browser.newContext({ viewport: { width, height: 1000 }, acceptDownloads: true, serviceWorkers: "block" });
+  const context = await browser.newContext({ viewport: { width, height: 1000 }, timezoneId: "UTC", acceptDownloads: true, serviceWorkers: "block" });
   contexts.add(context);
   try {
     await context.tracing.start({ screenshots: true, snapshots: true, sources: false });
@@ -421,6 +449,63 @@ async function layout(page, frame, filename) {
   assert.equal(inner.smallTargets, 0, "44px touch targets");
   assert.ok(outer.height > 300, "usable editor frame");
   return { outer, inner };
+}
+
+async function libraryCreatedDates(width) {
+  const uid = `created-dates-${width}`;
+  const boundary = Date.parse("2026-10-08T15:00:00.000Z");
+  const cases = [
+    { id: "timestamp-method", title: "날짜 검증 · 신규 노트", createdAt: { __fixtureToDate: true, iso: "2026-10-08T15:00:00.000Z" }, expected: "작성일 2026.10.09", classDate: "2026-10-07" },
+    { id: "seconds-before-boundary", createdAt: { seconds: boundary / 1000 - 1, nanoseconds: 999999999 }, expected: "작성일 2026.10.08" },
+    { id: "seconds-at-boundary", createdAt: { seconds: boundary / 1000, nanoseconds: 0 }, expected: "작성일 2026.10.09" },
+    { id: "iso-boundary", createdAt: "2026-10-08T15:00:00.000Z", expected: "작성일 2026.10.09" },
+    { id: "numeric-milliseconds", createdAt: boundary, expected: "작성일 2026.10.09" },
+    { id: "numeric-zero", createdAt: 0, expected: "작성일 1970.01.01" },
+    { id: "missing-created", expected: "작성일 확인 필요", classDate: "2026-10-07" },
+    { id: "null-created", createdAt: null, expected: "작성일 확인 필요" },
+    { id: "invalid-created", createdAt: "not-a-timestamp", expected: "작성일 확인 필요" },
+    { id: "invalid-seconds", createdAt: { seconds: "invalid", nanoseconds: 0 }, expected: "작성일 확인 필요" },
+    { id: "invalid-nanoseconds", createdAt: { seconds: boundary / 1000, nanoseconds: 1e9 }, expected: "작성일 확인 필요" },
+    { id: "recovered_boundary", title: "날짜 검증 · 복구 노트", createdAt: { seconds: boundary / 1000, nanoseconds: 0 }, expected: "복구일 2026.10.09", classDate: "2026-09-30" },
+    { id: "recovered_missing", expected: "복구일 확인 필요" },
+  ];
+  for (const item of cases) {
+    const state = { ...note(item.id, item.title || item.id), date: item.classDate || "", createdAt: "2001-01-01T00:00:00Z" };
+    documents.set(`sequenceNotes/${item.id}`, {
+      ownerUid: uid, deleted: false, revision: 1, updatedAt: Date.parse("2030-01-01T00:00:00Z"),
+      payload: JSON.stringify(state), title: state.title, teacher: state.teacher, equipment: state.equipment,
+      date: state.date, goal: state.goal, moveCount: 1,
+      ...(Object.hasOwn(item, "createdAt") ? { createdAt: item.createdAt } : {}),
+    });
+  }
+  try {
+    return await withContext(uid, width, async (context, errors) => {
+      const { page, frame } = await openStudio(context);
+      assert.equal(await frame.evaluate(() => Intl.DateTimeFormat().resolvedOptions().timeZone), "UTC", "KST display must not depend on the browser timezone");
+      await frame.getByRole("tab", { name: /내 시퀀스/ }).click();
+      for (const item of cases) {
+        const card = frame.getByTestId(`sequence-record-${item.id}`);
+        await card.waitFor();
+        const paragraphs = await card.evaluate((element) => [...element.querySelectorAll("p")].map((p) => p.textContent));
+        assert.equal(paragraphs[1], item.expected, `${item.id}: creation metadata has its own labeled row`);
+        assert.equal(paragraphs[0].includes("수업일"), !!item.classDate, `${item.id}: class date is optional`);
+        if (item.classDate) assert.ok(paragraphs[0].includes(`수업일 ${item.classDate}`), "class date must stay distinct from creation date");
+        assert.ok(!paragraphs.join(" ").includes("2030"), "updatedAt must never be presented as creation date");
+        assert.ok(!paragraphs.join(" ").includes("2001"), "payload must not supply creation metadata");
+      }
+      const libraryLayout = await layout(page, frame, `created-dates-${width}.png`);
+      await frame.getByLabel("저장된 시퀀스 검색").fill("날짜 검증");
+      const datesScreenshot = path.join(output, `created-dates-kst-recovered-class-${width}.png`);
+      const datesLayout = await layout(page, frame, path.basename(datesScreenshot));
+      for (const id of ["timestamp-method", "recovered_boundary"]) {
+        await frame.getByTestId(`sequence-record-${id}`).screenshot({ path: path.join(output, `created-date-card-${id}-${width}.png`) });
+      }
+      assert.deepEqual(errors, []);
+      return { width, cases: cases.length, koreaTimezone: true, noUpdatedAtFallback: true, libraryLayout, datesLayout, datesScreenshot };
+    });
+  } finally {
+    for (const item of cases) documents.delete(`sequenceNotes/${item.id}`);
+  }
 }
 
 async function responsive(width) {
@@ -791,6 +876,7 @@ print(json.dumps(results))
 
 try {
   await check("actual adapter: transactions/revisions/assets/tombstone/owner guard (fake SDK)", actualAdapterChecks);
+  await check("actual adapter createdAt: server creation/edit invariant/legacy absence (fake SDK)", createdAtInvariantChecks);
   server = liveBase ? null : http.createServer(async (req, res) => {
     try {
       const pathname = decodeURIComponent(new URL(req.url, "http://localhost").pathname);
@@ -813,6 +899,7 @@ try {
     await page.waitForURL(`${base}/sequence/`);
     assert.deepEqual(errors, []);
   }));
+  for (const width of [320, 390, 768, 1440]) await check(`library created dates ${width}: Timestamp/seconds/ISO/KST boundary/recovery/class date/no fallback`, () => libraryCreatedDates(width));
   for (const width of [320, 390, 768, 1440]) await check(`responsive ${width}: persistence/import/export/selectable Korean PDF/layout`, () => responsive(width));
   for (const width of [320, 390, 768, 1440]) await check(`save isolation ${width}: blank startup/New/copy/pending save/fresh backup`, () => saveIsolation(width));
   await check("distinct contexts same UID: broadcast/conflict/kept edits/copy/latest recovery", sharingAndConflicts);

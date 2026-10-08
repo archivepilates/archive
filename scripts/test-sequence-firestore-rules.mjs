@@ -145,15 +145,18 @@ if (!process.argv.includes('--emulator')) {
       ...overrides,
     };
   }
-  function noteWrite(id, data, { create = false, serverTime = true, timestamp } = {}) {
+  function noteWrite(id, data, { create = false, serverTime = true, timestamp, createdTimestamp, createdServerTime = false } = {}) {
     const encoded = fields(data);
     if (timestamp) encoded.updatedAt = { timestampValue: timestamp };
+    if (createdTimestamp) encoded.createdAt = { timestampValue: createdTimestamp };
+    const transforms = [
+      ...(serverTime ? [{ fieldPath: 'updatedAt', setToServerValue: 'REQUEST_TIME' }] : []),
+      ...(createdServerTime ? [{ fieldPath: 'createdAt', setToServerValue: 'REQUEST_TIME' }] : []),
+    ];
     return {
       update: { name: `${documents}/sequenceNotes/${id}`, fields: encoded },
       currentDocument: { exists: !create },
-      ...(serverTime ? {
-        updateTransforms: [{ fieldPath: 'updatedAt', setToServerValue: 'REQUEST_TIME' }],
-      } : {}),
+      ...(transforms.length ? { updateTransforms: transforms } : {}),
     };
   }
   const jpeg = 'data:image/jpeg;base64,/9j/2Q==';
@@ -534,6 +537,35 @@ if (!process.argv.includes('--emulator')) {
       assert.equal(result.body.fields.revision.integerValue, '2');
       return result;
     }, allowed);
+
+    await check('server creation timestamp accepted', () => commit([
+      noteWrite('created-time', note(), { create: true, createdServerTime: true }),
+    ]), allowed);
+    const createdAt = (await allowed(get('sequenceNotes/created-time'))).fields.createdAt.timestampValue;
+    await check('creation timestamp immutable on normal edit', () => commit([
+      noteWrite('created-time', note({ revision: 2 }), { createdTimestamp: createdAt }),
+    ]), allowed);
+    await check('creation timestamp removal denied', () => commit([
+      noteWrite('created-time', note({ revision: 3 })),
+    ]));
+    await check('creation timestamp replacement denied', () => commit([
+      noteWrite('created-time', note({ revision: 3 }), { createdTimestamp: '2020-01-01T00:00:00Z' }),
+    ]));
+    await check('backdated new note denied', () => commit([
+      noteWrite('backdated', note(), { create: true, createdTimestamp: '2020-01-01T00:00:00Z' }),
+    ]));
+    await check('creation timestamp wrong type denied', () => commit([
+      noteWrite('wrong-created-type', note({ createdAt: 'today' }), { create: true }),
+    ]));
+    await check('legacy client without creation metadata remains compatible', () => commit([
+      noteWrite('legacy-time', note(), { create: true }),
+    ]), allowed);
+    await check('legacy creation time cannot be guessed by client', () => commit([
+      noteWrite('legacy-time', note({ revision: 2 }), { createdServerTime: true }),
+    ]));
+    await check('soft deletion preserves creation timestamp', () => commit([
+      noteWrite('created-time', note({ revision: 3, deleted: true, payload: '{}' }), { createdTimestamp: createdAt }),
+    ]), allowed);
 
     // Preserve representative pre-existing grants and denies outside the new collections.
     await allowed(commit([
