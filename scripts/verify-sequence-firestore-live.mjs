@@ -82,8 +82,25 @@ try {
     const parts = formatter.formatToParts(source.data().createdAt.toDate());
     const day = ['year', 'month', 'day'].map((type) => parts.find((part) => part.type === type).value).join('.');
     await frame.getByTestId(`sequence-record-${id}`).filter({ hasText: `작성일 ${day}` }).waitFor();
-    await fs.mkdir('/tmp/archive-core-sequence-created-date-live', { recursive: true });
-    await page.screenshot({ path: `/tmp/archive-core-sequence-created-date-live/library-${page.viewportSize().width}.png`, fullPage: true });
+    const downloadReady = page.waitForEvent('download');
+    await frame.getByTestId(`sequence-record-${id}`).getByRole('button', { name: 'PDF 저장', exact: true }).click();
+    const download = await downloadReady;
+    assert.ok(download.suggestedFilename().endsWith('.pdf'));
+    await fs.mkdir('/tmp/archive-core-sequence-pdf-delete-live', { recursive: true });
+    const pdfPath = `/tmp/archive-core-sequence-pdf-delete-live/library-${page.viewportSize().width}.pdf`;
+    await download.saveAs(pdfPath);
+    const pdf = await fs.readFile(pdfPath);
+    assert.equal(pdf.subarray(0, 8).toString(), '%PDF-1.7');
+    assert.ok(pdf.includes(Buffer.from('/Subtype /Image')), 'Saved attachment must be included');
+    const text = [...pdf.toString('latin1').matchAll(/<([0-9A-F]+)> Tj/g)].map((match) => match[1].match(/.{4}/g).map((hex) => String.fromCharCode(parseInt(hex, 16))).join('')).join('\n');
+    assert.ok(text.includes(source.data().title), 'PDF uses selected canonical record');
+    const unchangedEditor = await page.evaluate(() => {
+      const test = document.querySelector('iframe').contentWindow.ARCHIVE_TEST;
+      return { state: test.getState(), revision: test.getRevision(), dirty: test.dirty() };
+    });
+    assert.deepEqual(unchangedEditor, fresh, 'Library PDF download must not open or overwrite the editor');
+    assert.deepEqual((await source.ref.get()).data(), source.data(), 'PDF download must not write the source');
+    await page.screenshot({ path: `/tmp/archive-core-sequence-pdf-delete-live/library-${page.viewportSize().width}.png`, fullPage: true });
     await frame.getByTestId(`sequence-record-${id}`).getByRole('button', { name: '수정', exact: true }).click();
     await frame.getByRole('tabpanel', { name: '02 노트 보기', exact: true }).waitFor();
     await page.waitForFunction((noteId) => document.querySelector('iframe').contentWindow.ARCHIVE_TEST.getState().id === noteId, id);
@@ -167,12 +184,40 @@ try {
     return { outer: document.documentElement.scrollWidth <= innerWidth + 1, inner: inner.scrollWidth <= inner.clientWidth + 1 };
   });
   assert.deepEqual(dimensions, { outer: true, inner: true });
-  await pageA.evaluate(async (id) => {
-    const loaded = await window.archiveSequenceStore.get(id);
-    await window.archiveSequenceStore.remove(id, loaded.revision);
-  }, copyId);
+  const staleCopy = await pageB.evaluate((id) => window.archiveSequenceStore.get(id), copyId);
+  await pageA.frameLocator('iframe').getByRole('tab', { name: /내 시퀀스/ }).click();
+  pageA.once('dialog', (dialog) => dialog.accept());
+  await pageA.frameLocator('iframe').getByTestId(`sequence-record-${copyId}`).getByRole('button', { name: '삭제', exact: true }).click();
+  await pageA.frameLocator('iframe').getByTestId(`sequence-record-${copyId}`).waitFor({ state: 'hidden' });
   assert.equal((await db.collection('sequenceNotes').doc(copyId).get()).data().deleted, true);
   assert.equal((await db.collection('sequenceNoteImages').where('noteId', '==', copyId).get()).size, 0);
+  const tombstone = await db.collection('sequenceNotes').doc(copyId).get();
+  const staleAttempt = await pageB.evaluate(async (loaded) => {
+    try { await window.archiveSequenceStore.save(loaded.state, loaded.revision); return 'unexpected-save'; }
+    catch (error) { return error.code; }
+  }, staleCopy);
+  assert.equal(staleAttempt, 'sequence/conflict', 'Other device must not recreate the deleted ID');
+  await pageA.evaluate((state) => {
+    const storage = document.querySelector('iframe').contentWindow.localStorage;
+    storage.setItem('archive.sequence.studio.draft.v1', JSON.stringify(state));
+    storage.setItem('archive.sequence.studio.library.v1', JSON.stringify([state]));
+  }, staleCopy.state);
+  await pageA.reload();
+  await pageA.waitForFunction(() => {
+    const frame = document.querySelector('iframe')?.contentWindow;
+    return frame?.ARCHIVE_TEST && !frame.document.querySelector('#title').disabled;
+  });
+  const afterReload = await pageA.evaluate(async () => ({
+    rows: (await window.archiveSequenceStore.list()).map((row) => row.id),
+    freshId: document.querySelector('iframe').contentWindow.ARCHIVE_TEST.getState().id,
+    flushed: await document.querySelector('iframe').contentWindow.ARCHIVE_TEST.flush(),
+  }));
+  assert.ok(!afterReload.rows.includes(copyId));
+  assert.notEqual(afterReload.freshId, copyId);
+  assert.equal(afterReload.flushed, true);
+  assert.deepEqual((await tombstone.ref.get()).data(), tombstone.data(), 'Reload, old localStorage and stale save preserve tombstone');
+  await pageA.frameLocator('iframe').getByRole('tab', { name: /내 시퀀스/ }).click();
+  assert.equal(await pageA.frameLocator('iframe').getByTestId(`sequence-record-${copyId}`).count(), 0);
   assert.equal((await db.collection('sequenceNotes').doc(recordB.id).get()).data().payload, canonicalB.data().payload, 'Explicit A editing and conflict recovery must preserve B');
   completed = true;
 } finally {
@@ -190,4 +235,4 @@ try {
   try { await app.auth().deleteUser(testUid); } catch (error) { if (error.code !== 'auth/user-not-found') throw error; }
   await app.delete();
 }
-console.log(JSON.stringify({ ok: completed, base, testUid, checks: ['real-auth', 'real-firestore-note-and-image', 'blank-reload', 'distinct-A-B-originals', 'original-A-preserved-after-B-save', 'actual-new-button', 'blank-second-context', 'explicit-edit', 'cross-device', 'conflict-preservation', 'copy-recovery', 'original-B-preserved', 'photo-delete', 'responsive', 'exact-test-cleanup'], browserClosed: true }));
+console.log(JSON.stringify({ ok: completed, base, testUid, checks: ['real-auth', 'real-firestore-note-and-image', 'library-pdf-download-390-1440', 'pdf-korean-and-image', 'pdf-keeps-editor-and-source', 'blank-reload', 'distinct-A-B-originals', 'original-A-preserved-after-B-save', 'actual-new-button', 'blank-second-context', 'explicit-edit', 'cross-device', 'conflict-preservation', 'copy-recovery', 'original-B-preserved', 'ui-delete', 'stale-device-cannot-restore', 'reload-and-legacy-cannot-restore', 'photo-delete', 'responsive', 'exact-test-cleanup'], browserClosed: true }));

@@ -18,11 +18,15 @@ const clone = (value) => JSON.parse(JSON.stringify(value));
 const KEY = "archive.sequence.studio.draft.v1";
 const LIBKEY = "archive.sequence.studio.library.v1";
 const results = [];
+const testFilter = process.env.ARCHIVE_SEQUENCE_TEST_FILTER;
+const skippedChecks = [];
 const subscriptions = new Map();
 const documents = new Map();
 const failures = new Map();
 const saveGates = new Map();
+const readGates = new Map();
 const pausedLists = new Set();
+const pausedContexts = new Set();
 let serial = Promise.resolve();
 let transactionId = 0;
 let clock = 0;
@@ -55,6 +59,7 @@ function queryRows(ref) {
 
 function broadcast() {
   for (const [id, subscription] of subscriptions) {
+    if (pausedContexts.has(subscription.context)) continue;
     if (pausedLists.has(subscription.uid) && subscription.ref.kind !== "doc") continue;
     const task = subscription.frame.evaluate(({ id, rows }) => window.__sequenceSnapshot?.(id, rows), {
       id, rows: snapshotPayload(subscription.ref),
@@ -110,7 +115,11 @@ async function dispatch(uid, operation, args = {}, source) {
     } finally { transactions.delete(args.token); transaction.release(); }
     return true;
   }
-  if (operation === "get") return documents.has(args.ref.path) ? clone(documents.get(args.ref.path)) : null;
+  if (operation === "get") {
+    const gate = readGates.get(uid);
+    if (gate?.path === args.ref.path) { gate.reads++; gate.started(); await gate.released; }
+    return documents.has(args.ref.path) ? clone(documents.get(args.ref.path)) : null;
+  }
   if (operation === "list") return queryRows(args.ref);
   if (operation === "subscribe") {
     assert.ok(source, "browser subscription requires an exposed binding source");
@@ -199,6 +208,7 @@ const note = (id, title = "실제 adapter 검증") => ({ schema: "archive.sequen
 const rowsFor = (uid) => [...documents].filter(([key, data]) => key.startsWith("sequenceNotes/") && data.ownerUid === uid && !data.deleted);
 
 async function check(name, action) {
+  if (testFilter && !new RegExp(testFilter).test(name)) { skippedChecks.push(name); return; }
   const start = Date.now();
   try { const evidence = await action(); results.push({ name, status: "passed", milliseconds: Date.now() - start, evidence }); }
   catch (error) {
@@ -836,6 +846,242 @@ async function migration() {
   }, legacy);
 }
 
+const sourceSnapshot = (uid) => clone([...documents].filter(([, data]) => data.ownerUid === uid));
+
+async function pauseAutosave(page) {
+  const time = new Date("2026-10-08T00:00:00Z");
+  await page.clock.install({ time });
+  await page.clock.pauseAt(new Date(time.getTime() + 1000));
+}
+
+function pdfText(pdf) {
+  return [...pdf.toString("latin1").matchAll(/<([0-9A-F]+)> Tj/g)]
+    .map((match) => match[1].match(/.{4}/g).map((hex) => String.fromCharCode(parseInt(hex, 16))).join("")).join("\n");
+}
+
+async function libraryPDF(width) {
+  const uid = `library-pdf-${width}`;
+  const store = createSequenceStore(runtimeFor(uid), { uid });
+  const saved = note(`library-pdf-note-${width}`, `저장본 시퀀스 ${width}`);
+  saved.date = "2026-10-08";
+  await store.save(saved, 0);
+  await store.save(note(`library-pdf-other-${width}`, "손대지 않을 다른 원본"), 0);
+  return withContext(uid, width, async (context, errors) => {
+    const { page, frame } = await openStudio(context);
+    await frame.evaluate(() => window.ARCHIVE_TEST.ready());
+    // Resolve a real compressed asset through the canonical adapter, not the editor.
+    const compressed = await page.evaluate(async () => {
+      const canvas = document.createElement("canvas"); canvas.width = 1000; canvas.height = 800;
+      const ctx = canvas.getContext("2d");
+      ctx.fillStyle = "#e23b35"; ctx.fillRect(0, 0, 1000, 800);
+      ctx.fillStyle = "#246c49"; ctx.fillRect(100, 100, 600, 400);
+      return window.archiveSequenceStore.compressImage(canvas.toDataURL("image/png"));
+    });
+    assert.ok(compressed.startsWith("data:image/jpeg;base64,"));
+    assert.ok(Buffer.from(compressed.split(",")[1], "base64").length <= 65536);
+    await frame.getByRole("tab", { name: /내 시퀀스/ }).click();
+    const record = frame.getByTestId(`sequence-record-${saved.id}`);
+    await record.getByRole("heading", { name: saved.title, exact: true }).waitFor();
+    // Keep the card's metadata stale to prove the PDF uses a fresh canonical get.
+    pausedLists.add(uid);
+    const canonical = { ...saved, title: `최신 저장본 시퀀스 ${width}` };
+    canonical.moves.warm[0].image = compressed;
+    try {
+      await store.save(canonical, 1);
+      assert.equal(await record.getByRole("heading", { name: saved.title, exact: true }).count(), 1);
+      await pauseAutosave(page);
+      await frame.getByRole("tab", { name: "01 작성하기", exact: true }).click();
+      await frame.getByLabel("수업명", { exact: true }).fill(`관련 없는 미저장 초안 ${width}`);
+      await frame.getByLabel("수업 목표", { exact: true }).fill("다운로드가 바꾸면 안 되는 초안 목표");
+      const editorBefore = await snapshot(frame);
+      assert.equal(editorBefore.dirty, true);
+      assert.equal(editorBefore.revision, 0);
+      assert.notEqual(editorBefore.state.id, saved.id);
+      const originals = sourceSnapshot(uid);
+      await frame.getByRole("tab", { name: /내 시퀀스/ }).click();
+      const pdfButton = record.getByRole("button", { name: "PDF 저장", exact: true });
+      assert.equal(await record.getByRole("button", { name: "응답 저장", exact: true }).count(), 0);
+      await frame.evaluate(() => {
+        const create = URL.createObjectURL.bind(URL);
+        window.__sequencePDFBlobs = [];
+        URL.createObjectURL = (blob) => {
+          window.__sequencePDFBlobs.push({ type: blob.type, size: blob.size });
+          return create(blob);
+        };
+      });
+      let started, release;
+      const reached = new Promise((resolve) => { started = resolve; });
+      const released = new Promise((resolve) => { release = resolve; });
+      const gate = { path: `sequenceNotes/${saved.id}`, started, released, reads: 0 };
+      readGates.set(uid, gate);
+      const downloads = [];
+      const onDownload = (download) => downloads.push(download);
+      page.on("download", onDownload);
+      const nextDownload = page.waitForEvent("download");
+      // Context cleanup may cancel this event wait after an earlier assertion fails.
+      void nextDownload.catch(() => {});
+      try {
+        await pdfButton.dblclick();
+        await reached;
+        assert.equal(gate.reads, 1, "double click must initiate one canonical read only");
+        assert.equal(await record.getByRole("button", { name: "PDF 만드는 중…", exact: true }).isDisabled(), true, "pending export disables its action");
+        // Rerender creates a new button: the per-ID guard must still suppress it.
+        await frame.getByLabel("저장된 시퀀스 검색").fill("저장본");
+        await record.getByRole("button", { name: "PDF 저장", exact: true }).evaluate((button) => { button.click(); button.click(); });
+        assert.equal(gate.reads, 1, "rerender must not bypass the per-record in-flight guard");
+      } finally { readGates.delete(uid); release(); }
+      try {
+        const download = await nextDownload;
+        await record.getByRole("button", { name: "PDF 저장", exact: true }).waitFor({ state: "visible" });
+        await frame.waitForFunction(() => window.__sequencePDFBlobs.length === 1);
+        assert.equal(download.suggestedFilename(), `ARCHIVE_${canonical.title}_${saved.date}.pdf`);
+        const pdfPath = path.join(output, `library-sequence-${width}.pdf`);
+        await download.saveAs(pdfPath);
+        const pdf = await fs.readFile(pdfPath);
+        assert.equal(pdf.subarray(0, 8).toString(), "%PDF-1.7");
+        const blobs = await frame.evaluate(() => window.__sequencePDFBlobs);
+        assert.deepEqual(blobs, [{ type: "application/pdf", size: pdf.length }]);
+        const text = pdfText(pdf);
+        assert.ok(text.includes(canonical.title) && text.includes("롤백") && text.includes("명치를 뒤로"), "saved Korean title/movement/content must be selectable");
+        assert.ok(!text.includes(editorBefore.state.title), "PDF must not use the active draft");
+        const titleHex = [...canonical.title].map((char) => char.charCodeAt(0).toString(16).padStart(4, "0")).join("").toUpperCase();
+        assert.ok(pdf.includes(Buffer.from(`/Title <FEFF${titleHex}>`)), "PDF metadata title must use the saved record");
+        assert.ok(pdf.includes(Buffer.from("/Subtype /Image")) && pdf.includes(Buffer.from("/DCTDecode")));
+        assert.ok(pdf.includes(Buffer.from(compressed.split(",")[1], "base64")), "PDF embeds the canonical compressed image bytes");
+        await fs.writeFile(path.join(output, `library-sequence-${width}-text.txt`), text);
+        assert.equal(downloads.length, 1, "double click must download exactly one PDF");
+        assert.deepEqual(await snapshot(frame), editorBefore, "PDF must preserve editor ID/title/revision/dirty and all input");
+        assert.deepEqual(sourceSnapshot(uid), originals, "PDF must not save, mutate, copy, or delete source records/assets");
+        const libraryLayout = await layout(page, frame, `library-pdf-${width}.png`);
+        assert.deepEqual(errors, []);
+        return { width, pdfPath, screenshot: path.join(output, `library-pdf-${width}.png`), filename: download.suggestedFilename(), mime: blobs[0].type, pdfBytes: pdf.length, canonicalFreshRead: true, koreanTextAndTitle: true, compressedImage: true, editorUntouched: true, allSourcesUntouched: true, doubleClickDownloads: downloads.length, libraryLayout };
+      } finally { page.off("download", onDownload); }
+    } finally { pausedLists.delete(uid); broadcast(); }
+  });
+}
+
+async function unavailableLibraryPDF() {
+  const uid = "library-pdf-unavailable";
+  const store = createSequenceStore(runtimeFor(uid), { uid });
+  for (const kind of ["missing", "deleted"]) await store.save(note(`pdf-${kind}`, `없는 원본 ${kind}`), 0);
+  return withContext(uid, 390, async (context, errors) => {
+    const { page, frame } = await openStudio(context);
+    await frame.getByRole("tab", { name: /내 시퀀스/ }).click();
+    await frame.getByTestId("sequence-record-pdf-deleted").waitFor();
+    const editorBefore = await snapshot(frame);
+    const downloads = [];
+    page.on("download", (download) => downloads.push(download));
+    pausedLists.add(uid);
+    try {
+      documents.delete("sequenceNotes/pdf-missing");
+      await store.remove("pdf-deleted", 1);
+      const originals = sourceSnapshot(uid);
+      for (const kind of ["missing", "deleted"]) {
+        const button = frame.getByTestId(`sequence-record-pdf-${kind}`).getByRole("button", { name: "PDF 저장", exact: true });
+        await button.click();
+        const message = kind === "missing" ? "노트를 찾지 못했습니다." : "다른 기기에서 변경됐습니다.";
+        await frame.getByRole("status").filter({ hasText: message }).waitFor();
+        await frame.waitForFunction(() => [...document.querySelectorAll('[data-act="export"]')].every((button) => !button.disabled));
+        assert.equal(downloads.length, 0, `${kind} canonical source must not download`);
+        assert.deepEqual(await snapshot(frame), editorBefore, "export error must not put the editor in save/conflict state");
+        assert.deepEqual(sourceSnapshot(uid), originals);
+        // Clear the toast through the controlled clock so the next assertion cannot reuse it.
+        if (kind === "missing") {
+          await pauseAutosave(page);
+          await page.clock.fastForward(10000);
+        }
+      }
+      await layout(page, frame, "library-pdf-unavailable.png");
+      assert.deepEqual(errors, []);
+      return { missingAndDeletedNoDownload: true, editorAndSourcesUntouched: true };
+    } finally { pausedLists.delete(uid); broadcast(); }
+  });
+}
+
+async function deletionNoAutoRestore() {
+  const uid = "delete-no-auto-restore";
+  const saved = note("delete-no-auto-restore-note", "삭제 회귀 합성 원본");
+  const legacy = { [KEY]: JSON.stringify(saved), [LIBKEY]: JSON.stringify([saved]) };
+  const store = createSequenceStore(runtimeFor(uid), { uid });
+  await store.save(saved, 0);
+  const backupPath = path.join(output, "deleted-record-explicit-backup.json");
+  await fs.writeFile(backupPath, JSON.stringify({ schema: "archive.library.v1", records: [saved] }));
+  return withContext(uid, 390, async (contextA, errorsA) => {
+    const a = await openStudio(contextA);
+    await editSaved(a.frame, saved.id);
+    return withContext(uid, 768, async (contextB, errorsB) => {
+      const b = await openStudio(contextB);
+      await editSaved(b.frame, saved.id);
+      await pauseAutosave(b.page);
+      pausedContexts.add(contextB);
+      try {
+        await b.frame.getByRole("tab", { name: "01 작성하기", exact: true }).click();
+        await b.frame.getByLabel("수업명", { exact: true }).fill("오래된 기기의 미저장 수정");
+        assert.equal((await snapshot(b.frame)).dirty, true);
+        await a.frame.getByRole("tab", { name: /내 시퀀스/ }).click();
+        await confirm(contextA, async () => {
+          await a.frame.getByTestId(`sequence-record-${saved.id}`).getByRole("button", { name: "삭제", exact: true }).click();
+          await a.frame.getByRole("status").filter({ hasText: "삭제했어요." }).waitFor();
+        });
+        const tombstone = clone(documents.get(`sequenceNotes/${saved.id}`));
+        assert.equal(tombstone.deleted, true);
+        assert.equal(tombstone.payload, "{}");
+        const deletedEditor = await snapshot(a.frame);
+        assert.notEqual(deletedEditor.state.id, saved.id, "deleting the active record resets the editor identity");
+        assert.equal(deletedEditor.state.title, "");
+        assert.equal(deletedEditor.revision, 0);
+        assert.equal(deletedEditor.dirty, false);
+        assert.equal(await b.frame.getByRole("button", { name: "사본으로 저장", exact: true }).isVisible(), false, "second context has not received deletion snapshots");
+        await b.page.clock.fastForward(16000);
+        await b.frame.getByRole("button", { name: "사본으로 저장", exact: true }).waitFor();
+        assert.equal(await b.frame.evaluate(() => window.ARCHIVE_TEST.flush()), false);
+        assert.deepEqual(documents.get(`sequenceNotes/${saved.id}`), tombstone, "stale autosave cannot recreate or advance a tombstone");
+        assert.equal(rowsFor(uid).length, 0, "stale autosave must not silently create a new-ID copy either");
+        let frame = await reloadBlank(a.page, saved.id);
+        await frame.getByRole("tab", { name: /내 시퀀스/ }).click();
+        assert.equal(await frame.getByTestId(`sequence-record-${saved.id}`).count(), 0);
+        assert.equal(rowsFor(uid).length, 0, "reload must not import old localStorage records");
+        assert.deepEqual(await frame.evaluate(({ KEY, LIBKEY }) => ({ [KEY]: localStorage.getItem(KEY), [LIBKEY]: localStorage.getItem(LIBKEY) }), { KEY, LIBKEY }), legacy);
+        await layout(a.page, frame, "deleted-record-after-reload.png");
+        const importFile = async (accept) => {
+          const chooserPromise = a.page.waitForEvent("filechooser");
+          await frame.getByRole("button", { name: "응답 불러오기", exact: true }).click();
+          const chooser = await chooserPromise;
+          const dialogPromise = a.page.waitForEvent("dialog");
+          const settingFiles = chooser.setFiles(backupPath);
+          const dialog = await dialogPromise;
+          assert.equal(dialog.type(), "confirm");
+          assert.match(dialog.message(), /새 사본/);
+          assert.equal(rowsFor(uid).length, 0, "no restore before the operator confirms");
+          assert.deepEqual(documents.get(`sequenceNotes/${saved.id}`), tombstone);
+          if (accept) await dialog.accept(); else await dialog.dismiss();
+          await settingFiles;
+        };
+        await importFile(false);
+        await frame.evaluate(() => Promise.resolve());
+        assert.equal(rowsFor(uid).length, 0, "cancelled JSON restore must not write");
+        await importFile(true);
+        await frame.getByRole("status").filter({ hasText: "1개 기록을 Firestore에 저장했어요." }).waitFor();
+        assert.equal(rowsFor(uid).length, 1);
+        const [newPath, restored] = rowsFor(uid)[0];
+        assert.notEqual(newPath, `sequenceNotes/${saved.id}`, "explicit confirmed restore creates a new identity only");
+        const copyId = newPath.split("/")[1];
+        assert.deepEqual(JSON.parse(restored.payload), { ...saved, id: copyId });
+        assert.deepEqual(documents.get(`sequenceNotes/${saved.id}`), tombstone);
+        frame = await reloadBlank(a.page, (await snapshot(frame)).state.id);
+        await frame.getByRole("tab", { name: /내 시퀀스/ }).click();
+        await frame.getByTestId(`sequence-record-${copyId}`).waitFor();
+        assert.equal(await frame.getByTestId(`sequence-record-${saved.id}`).count(), 0);
+        assert.equal(rowsFor(uid).length, 1, "reload retains the intentional copy without importing legacy data");
+        assert.deepEqual(documents.get(`sequenceNotes/${saved.id}`), tombstone);
+        await layout(a.page, frame, "deleted-record-explicit-copy.png");
+        assert.deepEqual(errorsA, []); assert.deepEqual(errorsB, []);
+        return { activeDeleteReset: true, reloadAbsent: true, distinctContextStaleAutosaveRejected: true, tombstoneUnchanged: true, localStorageNeverAutoImported: true, localStoragePreserved: true, jsonRestoreCancelledNoWrite: true, confirmedRestoreNewIdOnly: true, explicitCopyIsNotAutoRestore: true, backupPath, restoredCopyId: copyId };
+      } finally { pausedContexts.delete(contextB); }
+    });
+  }, legacy);
+}
+
 async function independentPDFChecks() {
   const python = process.env.ARCHIVE_SEQUENCE_PDF_PYTHON || path.join(homedir(), ".cache/codex-runtimes/codex-primary-runtime/dependencies/python/bin/python3");
   const script = `
@@ -844,12 +1090,16 @@ import pypdf, pypdfium2
 from PIL import ImageStat
 root = pathlib.Path(sys.argv[1])
 results = []
-for width in [320, 390, 768, 1440]:
-    file = root / ('sequence-%s.pdf' % width)
+for prefix, width in [(prefix, width) for prefix in ['sequence', 'library-sequence'] for width in [320, 390, 768, 1440]]:
+    file = root / ('%s-%s.pdf' % (prefix, width))
     reader = pypdf.PdfReader(file, strict=True)
     text = '\\n'.join(page.extract_text() for page in reader.pages)
-    assert '롤백' in text and ('시퀀스 검증 %s' % width) in text, 'Independent Korean extraction failed'
-    (root / ('parsed-pdf-%s.txt' % width)).write_text(text)
+    expected = ('최신 저장본 시퀀스 %s' if prefix == 'library-sequence' else '시퀀스 검증 %s') % width
+    assert '롤백' in text and expected in text, 'Independent Korean extraction failed'
+    if prefix == 'library-sequence':
+        assert reader.metadata.title == expected, 'Library PDF metadata must use saved canonical title'
+        assert any(page.images for page in reader.pages), 'Saved compressed attachment missing from PDF'
+    (root / ('parsed-%s-%s.txt' % (prefix, width))).write_text(text)
     pdf = pypdfium2.PdfDocument(str(file))
     try:
         for index, page in enumerate(reader.pages):
@@ -860,12 +1110,12 @@ for width in [320, 390, 768, 1440]:
                 try:
                     image = bitmap.to_pil().convert('RGB')
                     assert max(ImageStat.Stat(image).stddev) > 5, 'Blank PDF raster'
-                    image.save(root / ('pdf-raster-%s-%s.png' % (width, index)))
+                    image.save(root / ('pdf-raster-%s-%s-%s.png' % (prefix, width, index)))
                 finally:
                     bitmap.close()
             finally:
                 rendered.close()
-        results.append({'width': width, 'pages': len(reader.pages), 'koreanExtracted': True, 'rasterNonblank': True})
+        results.append({'file': str(file), 'width': width, 'pages': len(reader.pages), 'koreanExtracted': True, 'rasterNonblank': True})
     finally:
         pdf.close()
 print(json.dumps(results))
@@ -902,6 +1152,9 @@ try {
   for (const width of [320, 390, 768, 1440]) await check(`library created dates ${width}: Timestamp/seconds/ISO/KST boundary/recovery/class date/no fallback`, () => libraryCreatedDates(width));
   for (const width of [320, 390, 768, 1440]) await check(`responsive ${width}: persistence/import/export/selectable Korean PDF/layout`, () => responsive(width));
   for (const width of [320, 390, 768, 1440]) await check(`save isolation ${width}: blank startup/New/copy/pending save/fresh backup`, () => saveIsolation(width));
+  for (const width of [320, 390, 768, 1440]) await check(`library PDF ${width}: canonical saved source/MIME/filename/Korean/title/image/draft isolation/double-click guard`, () => libraryPDF(width));
+  await check("library PDF: missing/deleted canonical records produce no download or editor changes", unavailableLibraryPDF);
+  await check("deletion: active editor/reload/stale autosave/legacy no-auto-import/confirmed JSON new-ID copy only", deletionNoAutoRestore);
   await check("distinct contexts same UID: broadcast/conflict/kept edits/copy/latest recovery", sharingAndConflicts);
   await check("noisy image: compression/assets/save failure/export/retry/delete", imagesAndFailures);
   await check("legacy: untouched localStorage/explicit migration/idempotence", migration);
@@ -918,7 +1171,7 @@ try {
     assert.deepEqual(errors, []);
     return { queryIsolation: true, adapterOwnerGuard: true, realRules: "not run; separate emulator agent/script required" };
   }));
-  await check("independent PDF parser/rasterizer: Korean extraction and nonblank 4:3 pages", independentPDFChecks);
+  await check("independent PDF parser/rasterizer: editor + library Korean/title/images/nonblank 4:3 pages", independentPDFChecks);
 } catch (error) {
   results.push({ name: "runner", status: "failed", error: error.stack });
 } finally {
@@ -931,6 +1184,8 @@ try {
   const changedDuringRun = adapterHash !== createHash("sha256").update(await fs.readFile(path.join(coreRoot, "assets/sequence-store.js"))).digest("hex");
   const warnings = ["Security rules and real Firebase Auth/Firestore are not verified by this fixture; use the emulator and live verifier."];
   const report = { ok: results.every((result) => result.status === "passed"), mode: "actual adapter + actual UI; isolated Auth + Node-shared fake Firebase SDK", realFirestore: false, productionWrites: false, base, output, adapterHash, adapterChangedDuringRun: changedDuringRun, securityRules: "not verified by this fixture; use separate real Firestore rules emulator suite", warnings, blockedRequests, cleanup, results };
+  report.testFilter = testFilter || null;
+  report.skippedChecks = skippedChecks;
   if (Object.values(cleanup).some((value) => value === false) || cleanup.contexts || cleanup.subscriptions || cleanup.openTransactions || changedDuringRun) report.ok = false;
   await fs.writeFile(path.join(output, "results.json"), JSON.stringify(report, null, 2));
   const escape = (value) => String(value).replace(/[&<>\"]/g, (char) => ({ "&": "&amp;", "<": "&lt;", ">": "&gt;", '"': "&quot;" }[char]));
