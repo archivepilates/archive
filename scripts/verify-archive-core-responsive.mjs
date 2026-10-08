@@ -51,7 +51,7 @@ try {
     for (const route of routes) {
       const url = `${baseUrl}${route.path}`;
       await page.goto(url, { waitUntil: "domcontentloaded", timeout: 30_000 });
-      await page.waitForSelector(".shell", { state: "visible", timeout: 10_000 });
+      await page.waitForSelector(".shell", { state: "attached", timeout: 10_000 });
       await page.evaluate(() => {
         const style = document.createElement("style");
         style.dataset.archiveCoreQa = "login-gate";
@@ -59,6 +59,7 @@ try {
         document.head.appendChild(style);
         document.querySelectorAll(".login-gate").forEach((element) => element.remove());
       });
+      await page.waitForSelector(".shell", { state: "visible", timeout: 10_000 });
       if (route.name === "home") {
         await page.evaluate(() => {
           const panel = document.querySelector("#renewalPipeline");

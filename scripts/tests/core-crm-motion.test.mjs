@@ -152,6 +152,11 @@ test("full-page login gate excludes background controls without changing auth", 
   assert.ok(rule, "active login gate must exclude background controls");
   assert.equal(rule.declarations.visibility, "hidden");
   assert.ok(!interfaceRules.some((rule) => rule.selector === ".shell" && rule.declarations.visibility === "hidden"), "authenticated shell must not stay hidden");
+  const responsive = fs.readFileSync(new URL("../verify-archive-core-responsive.mjs", import.meta.url), "utf8");
+  const attached = responsive.indexOf('waitForSelector(".shell", { state: "attached"');
+  const fixture = responsive.indexOf('document.querySelectorAll(".login-gate").forEach((element) => element.remove())');
+  const visible = responsive.indexOf('waitForSelector(".shell", { state: "visible"');
+  assert.ok(attached >= 0 && fixture > attached && visible > fixture, "responsive fixture must reveal the shell before its visibility assertion");
 });
 
 test("CRM main, command palette and action disclosures have scoped bounded entrances", () => {
