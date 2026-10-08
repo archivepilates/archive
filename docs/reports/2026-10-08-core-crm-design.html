@@ -15,7 +15,7 @@
     p { margin: 8px 0; max-width: 70ch; }
     section { padding: 24px 0; border-bottom: 1px solid #dce0e6; }
     .meta, .muted { color: #606978; }
-    .badge { display: inline-block; padding: 2px 8px; border-radius: 4px; background: #fcf7e9; color: #88631f; font-size: 13px; }
+    .badge { display: inline-block; padding: 2px 8px; border-radius: 4px; background: #eaf6f0; color: #256147; font-size: 13px; }
     .grid { display: grid; grid-template-columns: repeat(2, minmax(0, 1fr)); gap: 20px 28px; }
     .grid > div { min-width: 0; }
     a { color: #35658f; text-underline-offset: 3px; overflow-wrap: anywhere; }
@@ -36,9 +36,9 @@
   <header>
     <div class="meta">ARCHIVE PILATES · 2026.10.08</div>
     <h1>ARCHIVE CORE CRM 디자인</h1>
-    <span class="badge">배포 승인 · 실행 중</span>
+    <span class="badge">운영 배포·라이브 검증 완료</span>
     <p>공통 메뉴와 목록, 입력폼을 정돈하고 짧은 조작 피드백을 적용했습니다. 회원 데이터·자동화·발송·예약·환불 규칙은 변경하지 않았습니다.</p>
-    <p><a href="http://127.0.0.1:4180/">로컬 디자인 미리보기</a> <span class="muted">예시 데이터만 표시하며 실제 저장·발송은 차단됩니다. Mac mini에서 확인할 수 있습니다.</span></p>
+    <p><a href="https://core.archivepilates.com/">ARCHIVE CORE 열기</a> · <a href="https://core.archivepilates.com/release.json">배포 버전 확인</a></p>
   </header>
   <section>
     <h2>바뀐 화면</h2>
@@ -56,7 +56,7 @@
         <thead><tr><th scope="col">검증</th><th scope="col">결과</th><th scope="col">범위</th></tr></thead>
         <tbody>
           <tr><th scope="row">운영 회귀 테스트</th><td>78건 통과</td><td>JavaScript 52건, TypeScript 26건. canonical 판정·운영 흐름 보호.</td></tr>
-          <tr><th scope="row">UI·계약·모션 테스트</th><td>39건 통과</td><td>HTML 필드·핸들러·Firebase/auth/read/write 유지, 유한 효과·동작 줄이기.</td></tr>
+          <tr><th scope="row">UI·계약·모션 테스트</th><td>40건 통과</td><td>HTML 필드·핸들러·Firebase/auth/read/write 유지, 유한 효과·동작 줄이기·로그인 배경 포커스 제외.</td></tr>
           <tr><th scope="row">전체 반응형 검사</th><td>95조합 통과</td><td>320·390·768·1440·1920px. 로그인·메뉴·화면 너비.</td></tr>
           <tr><th scope="row">합성 데이터 화면</th><td>32조합 통과</td><td>데이터가 표시된 주요 화면과 로그인 상태.</td></tr>
           <tr><th scope="row">일반·동작 줄이기</th><td>56조합 통과</td><td>7개 주요 화면 × 4개 너비 × 2개 동작 모드. 메뉴·검색·펼치기·포커스 복귀.</td></tr>
@@ -66,6 +66,21 @@
       </table>
     </div>
     <p class="muted">검증은 localhost와 합성 데이터로 수행했습니다. 실제 로그인·운영 데이터·회원 발송의 라이브 검증을 의미하지 않습니다. 새 모션 검증기는 외부/쓰기 요청 0건이며 8개 컨텍스트와 브라우저·검증 서버를 종료했습니다.</p>
+  </section>
+  <section>
+    <h2>운영 배포 결과</h2>
+    <ul>
+      <li>최종 소스 커밋: <code>9a6712da2bb8e562743b8a6167ab0e4787d7de55</code>. 검토한 변경만 main 승격·GitHub 푸시 후 깨끗한 main에서 배포했습니다.</li>
+      <li>Firebase 프로젝트 <code>archive-pilates</code>의 <code>archive-pilates</code> 및 <code>archive-pilates-core</code> Hosting을 배포했습니다. Functions와 Firestore는 제외했습니다.</li>
+      <li><code>https://core.archivepilates.com/</code>와 <code>https://archive-pilates.web.app/core/</code>의 릴리스가 정확히 일치합니다.</li>
+      <li>운영 사이트 반응형 95조합, 두 주소의 canary 10건을 통과했습니다. 두 주소의 HTML·CSS·JS·아이콘·카탈로그 14개 원본 비교도 일치했습니다.</li>
+      <li><a href="https://github.com/archivepilates/archive/actions/runs/37717732507">최종 소스 GitHub Actions 검사</a>는 정확한 배포 커밋에서 성공했습니다. 영향받는 Functions는 0개이며 실패 단계는 없습니다.</li>
+      <li>추가 독립 라이브 검사 28조합을 새로 실행해 모두 통과했습니다. 첫 Tab이 로그인 입력칸을 선택하고 180ms 진입 효과·동작 줄이기 설정이 정상입니다. 브라우저·네트워크 오류는 0건입니다.</li>
+      <li>공통 CSS는 <code>max-age=0, must-revalidate</code>로 최신 자산을 확인합니다.</li>
+    </ul>
+    <p class="muted">라이브 확인은 비로그인 화면과 정적 자산 기준입니다. 실제 회원 발송·저장 테스트는 하지 않았습니다.</p>
+    <p>초기 배포의 추가 키보드 검사 28조합에서는 로그인 화면 뒤의 메뉴가 먼저 선택되는 기존 문제가 확인됐습니다. 로그인 판정이나 API를 바꾸지 않고 CSS만으로 배경 메뉴를 선택에서 제외하도록 보강했습니다. 첫 Tab과 로그인 화면 종료 시 복원 테스트를 추가했고 후속 Hosting 배포와 독립 라이브 재검사를 완료했습니다.</p>
+    <p class="muted">보강 배포의 첫 사전검사는 기존 테스트가 로그인 배경 표시를 먼저 기다려 업로드 전에 중단됐습니다. 합성 로그인 화면을 제거한 뒤 표시를 검사하도록 순서만 조정했고, 원래 95개 검사 조건은 유지했습니다.</p>
   </section>
   <section>
     <h2>보존한 동작</h2>
@@ -78,11 +93,12 @@
   </section>
   <section>
     <h2>상태와 다음 단계</h2>
-    <p>별도 작업공간 <code>codex/mini/core-crm-design-20261008</code>에 구현했습니다. 운영규칙에는 기존 배포 내역과 구분한 배포 대기 기록을 추가했습니다.</p>
-    <p>로컬 검토 후 2026.10.08 사용자가 배포를 승인했습니다. 변경 범위만 커밋하고 최신 main으로 승격한 뒤 CORE Hosting 두 주소를 배포합니다. Functions와 Firestore는 배포하지 않습니다. 배포 후 실제 자산·릴리스·반응형 화면·GitHub Actions를 확인합니다.</p>
+    <p>별도 작업공간 <code>codex/mini/core-crm-design-20261008</code>에 구현 후 2026.10.08 사용자의 승인으로 운영 배포했습니다. 운영규칙에도 기존 배포 내역과 구분한 CRM 개편 내용과 현재 릴리스 확인 경로를 반영했습니다.</p>
+    <p>배포 후 증거 기록은 문서 전용 커밋으로 보존합니다. 이 기록의 Git 커밋과 실제 배포 소스 커밋은 구분하며, 운영 버전은 위 릴리스 기록의 소스 커밋으로 확인합니다.</p>
+    <p>검증용 브라우저·28개 컨텍스트·임시 프로필과 작업 소유 프로세스는 정리했습니다. 사용자 브라우저는 유지했으며 localhost:4180의 읽기 전용 미리보기 서버만 남겨두었습니다.</p>
     <p class="muted">한계: 실제 기기의 Safari, 전체 스크린리더·대비 감사, 로그인 후 실데이터 화면은 미검증입니다. 컨테이너 쿼리를 지원하지 않는 브라우저의 프라이빗 보드는 한 열로 유지됩니다.</p>
   </section>
-  <footer>기준: origin/main 5d5dd49c · 증거: /tmp/archive-core-responsive, /tmp/archive-core-ui-refinement, /tmp/archive-core-crm-motion. 사용자 작업과 다른 작업공간은 변경하지 않았습니다.</footer>
+  <footer>기준: origin/main 5d5dd49c → 배포 소스 9a6712da · 증거: /tmp/archive-core-responsive, /tmp/archive-core-ui-refinement, /tmp/archive-core-crm-motion, /tmp/archive-core-crm-live. 사용자 작업은 보존했으며 배포 및 검증 기록을 main에 보존하고 Mac mini runtime을 fast-forward 정렬합니다.</footer>
 </main>
 </body>
 </html>
