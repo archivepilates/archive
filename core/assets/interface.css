@@ -309,6 +309,8 @@ input::placeholder, textarea::placeholder { color: #7a8691; font-weight: 400; op
 .command-palette-results strong { font-size: 0.875rem; font-weight: 550; }
 .command-palette-results span { font-size: 0.75rem; }
 
+/* Exclude background controls while the full-page login gate is active. */
+body:has(> .login-gate.on) > :is(.shell, .command-palette) { visibility: hidden; }
 .login-gate { background: var(--paper); backdrop-filter: none; }
 .login-card { width: min(100%, 380px); padding: 32px; gap: 20px; box-shadow: 0 12px 40px #24272e08; border-color: var(--line); border-radius: 8px; }
 .login-brand { display: grid; justify-items: start; gap: 14px; margin-bottom: 4px; }

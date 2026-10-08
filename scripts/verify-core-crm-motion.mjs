@@ -79,6 +79,17 @@ try {
             const form = page.getByTestId("qa-motion-login");
             assert.equal(await form.getByLabel("휴대폰번호", { exact: true }).count(), 1);
             assert.equal(await form.getByLabel("비밀번호", { exact: true }).count(), 1);
+            await page.keyboard.press("Tab");
+            assert.ok(await form.getByLabel("휴대폰번호", { exact: true }).evaluate((element) => element === document.activeElement), "first Tab stays on the visible login page");
+            assert.deepEqual(await page.evaluate(() => {
+              const gate = document.querySelector("#coreLoginGate");
+              const shell = document.querySelector(".shell");
+              const active = getComputedStyle(shell).visibility;
+              gate.classList.remove("on");
+              const inactive = getComputedStyle(shell).visibility;
+              gate.classList.add("on");
+              return { active, inactive };
+            }), { active: "hidden", inactive: "visible" }, "background shell is restored when the existing login gate closes");
             await keyboardFocus(form.getByLabel("휴대폰번호", { exact: true }));
           });
           await check("main entrance", () => entrance(page, ".main", motion, "core-content-enter"));

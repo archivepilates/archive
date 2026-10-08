@@ -147,6 +147,13 @@ test("shared motion tokens are positive, bounded and use a reusable easing", () 
   assert.match(tokens["--motion-ease"] || "", /^(?:ease(?:-in(?:-out)?|-out)?|linear|cubic-bezier\([\d\s.,-]+\))$/);
 });
 
+test("full-page login gate excludes background controls without changing auth", () => {
+  const rule = interfaceRules.find((rule) => rule.selector === "body:has(> .login-gate.on) > :is(.shell, .command-palette)");
+  assert.ok(rule, "active login gate must exclude background controls");
+  assert.equal(rule.declarations.visibility, "hidden");
+  assert.ok(!interfaceRules.some((rule) => rule.selector === ".shell" && rule.declarations.visibility === "hidden"), "authenticated shell must not stay hidden");
+});
+
 test("CRM main, command palette and action disclosures have scoped bounded entrances", () => {
   entrance(".main:not(.sequence-main)", "core-content-enter", "--motion-enter");
   entrance(".command-palette:not([hidden]) .command-palette-card", "core-dialog-enter", "--motion-enter");
