@@ -66,6 +66,22 @@ try {
     }
     return page;
   }
+  async function editSaved(page, id) {
+    const frame = page.frameLocator('iframe');
+    const fresh = await page.evaluate(() => {
+      const test = document.querySelector('iframe').contentWindow.ARCHIVE_TEST;
+      return { state: test.getState(), revision: test.getRevision(), dirty: test.dirty() };
+    });
+    assert.notEqual(fresh.state.id, id, 'Startup must use a fresh ID');
+    assert.equal(fresh.state.title, '', 'Startup must not auto-open the most recent note');
+    assert.equal(fresh.revision, 0);
+    assert.equal(fresh.dirty, false);
+    await frame.getByRole('tab', { name: /내 시퀀스/ }).click();
+    await frame.getByTestId(`sequence-record-${id}`).getByRole('button', { name: '수정', exact: true }).click();
+    await frame.getByRole('tabpanel', { name: '02 노트 보기', exact: true }).waitFor();
+    await page.waitForFunction((noteId) => document.querySelector('iframe').contentWindow.ARCHIVE_TEST.getState().id === noteId, id);
+    await frame.getByRole('tab', { name: '01 작성하기', exact: true }).click();
+  }
   const pageA = await open(first);
   const record = await pageA.evaluate(async () => {
     const frame = document.querySelector('iframe').contentWindow;
@@ -88,8 +104,42 @@ try {
   assert.ok(Buffer.from(record.image.split(',')[1], 'base64').length <= 65536);
   const imageRows = await db.collection('sequenceNoteImages').where('ownerUid', '==', testUid).get();
   assert.equal(imageRows.size, 1);
+  await pageA.reload();
+  await pageA.waitForFunction(() => {
+    const frame = document.querySelector('iframe')?.contentWindow;
+    return frame?.ARCHIVE_TEST && !frame.document.querySelector('#title').disabled;
+  });
+  const blankAfterReload = await pageA.evaluate(() => {
+    const test = document.querySelector('iframe').contentWindow.ARCHIVE_TEST;
+    return { state: test.getState(), revision: test.getRevision(), dirty: test.dirty() };
+  });
+  assert.notEqual(blankAfterReload.state.id, record.id);
+  assert.equal(blankAfterReload.state.title, '');
+  assert.equal(blankAfterReload.revision, 0);
+  assert.equal(blankAfterReload.dirty, false);
+  await pageA.frameLocator('iframe').getByLabel('수업명', { exact: true }).fill('Codex 격리된 저장 테스트 B');
+  assert.equal(await pageA.evaluate(() => document.querySelector('iframe').contentWindow.ARCHIVE_TEST.flush()), true);
+  await pageA.waitForFunction(() => {
+    const test = document.querySelector('iframe').contentWindow.ARCHIVE_TEST;
+    return !test.dirty() && test.getRevision() === 1;
+  });
+  const recordB = await pageA.evaluate(() => document.querySelector('iframe').contentWindow.ARCHIVE_TEST.getState());
+  assert.notEqual(recordB.id, record.id, 'B must use a distinct Firestore document');
+  const canonicalB = await db.collection('sequenceNotes').doc(recordB.id).get();
+  assert.equal(canonicalB.data().ownerUid, testUid);
+  assert.equal(canonicalB.data().revision, 1);
+  assert.deepEqual(JSON.parse(canonicalB.data().payload), recordB);
+  assert.equal((await db.collection('sequenceNotes').doc(record.id).get()).data().payload, canonical.data().payload, 'Saving B must preserve A payload');
+  const pair = await db.collection('sequenceNotes').where('ownerUid', '==', testUid).get();
+  assert.deepEqual(pair.docs.filter((doc) => !doc.data().deleted).map((doc) => doc.id).sort(), [record.id, recordB.id].sort(), 'Both originals must coexist in real Firestore');
+  await pageA.frameLocator('iframe').getByRole('button', { name: '새 시퀀스', exact: true }).click();
+  await pageA.waitForFunction((id) => {
+    const test = document.querySelector('iframe').contentWindow.ARCHIVE_TEST;
+    return test.getState().id !== id && test.getState().title === '' && test.getRevision() === 0 && !test.dirty();
+  }, recordB.id);
+  await editSaved(pageA, record.id);
   const pageB = await open(second);
-  await pageB.waitForFunction((id) => document.querySelector('iframe').contentWindow.ARCHIVE_TEST.getState().id === id, record.id);
+  await editSaved(pageB, record.id);
   assert.equal(await pageB.evaluate(() => document.querySelector('iframe').contentWindow.ARCHIVE_TEST.getState().moves.warm[0].image), record.image);
   await pageA.frameLocator('iframe').getByLabel('수업 목표', { exact: true }).fill('기기 A의 미저장 변경');
   await pageB.frameLocator('iframe').getByLabel('수업 목표', { exact: true }).fill('기기 B의 확정 변경');
@@ -113,6 +163,7 @@ try {
   }, copyId);
   assert.equal((await db.collection('sequenceNotes').doc(copyId).get()).data().deleted, true);
   assert.equal((await db.collection('sequenceNoteImages').where('noteId', '==', copyId).get()).size, 0);
+  assert.equal((await db.collection('sequenceNotes').doc(recordB.id).get()).data().payload, canonicalB.data().payload, 'Explicit A editing and conflict recovery must preserve B');
   completed = true;
 } finally {
   await browser?.close();
@@ -129,4 +180,4 @@ try {
   try { await app.auth().deleteUser(testUid); } catch (error) { if (error.code !== 'auth/user-not-found') throw error; }
   await app.delete();
 }
-console.log(JSON.stringify({ ok: completed, base, testUid, checks: ['real-auth', 'real-firestore-note-and-image', 'cross-device', 'conflict-preservation', 'copy-recovery', 'photo-delete', 'responsive', 'exact-test-cleanup'], browserClosed: true }));
+console.log(JSON.stringify({ ok: completed, base, testUid, checks: ['real-auth', 'real-firestore-note-and-image', 'blank-reload', 'distinct-A-B-originals', 'original-A-preserved-after-B-save', 'actual-new-button', 'blank-second-context', 'explicit-edit', 'cross-device', 'conflict-preservation', 'copy-recovery', 'original-B-preserved', 'photo-delete', 'responsive', 'exact-test-cleanup'], browserClosed: true }));

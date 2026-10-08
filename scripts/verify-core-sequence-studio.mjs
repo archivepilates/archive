@@ -21,6 +21,8 @@ const results = [];
 const subscriptions = new Map();
 const documents = new Map();
 const failures = new Map();
+const saveGates = new Map();
+const pausedLists = new Set();
 let serial = Promise.resolve();
 let transactionId = 0;
 let clock = 0;
@@ -53,6 +55,7 @@ function queryRows(ref) {
 
 function broadcast() {
   for (const [id, subscription] of subscriptions) {
+    if (pausedLists.has(subscription.uid) && subscription.ref.kind !== "doc") continue;
     const task = subscription.frame.evaluate(({ id, rows }) => window.__sequenceSnapshot?.(id, rows), {
       id, rows: snapshotPayload(subscription.ref),
     }).catch((error) => {
@@ -100,6 +103,8 @@ async function dispatch(uid, operation, args = {}, source) {
     try {
       if (operation === "commit") {
         if (failures.get(uid)) throw Error("QA injected server save failure");
+        const gate = saveGates.get(uid);
+        if (gate) { gate.started(); await gate.released; }
         applyWrites(args.writes);
       }
     } finally { transactions.delete(args.token); transaction.release(); }
@@ -109,7 +114,7 @@ async function dispatch(uid, operation, args = {}, source) {
   if (operation === "list") return queryRows(args.ref);
   if (operation === "subscribe") {
     assert.ok(source, "browser subscription requires an exposed binding source");
-    subscriptions.set(args.id, { ref: args.ref, frame: source.frame, context: source.context, errors: source.errors });
+    subscriptions.set(args.id, { uid, ref: args.ref, frame: source.frame, context: source.context, errors: source.errors });
     return snapshotPayload(args.ref);
   }
   if (operation === "unsubscribe") { subscriptions.delete(args.id); return true; }
@@ -213,6 +218,14 @@ async function actualAdapterChecks() {
   assert.equal([...documents.keys()].filter((key) => key.startsWith("sequenceNoteImages/adapter-note_")).length, 1);
   const loaded = await b.get(state.id);
   assert.deepEqual(loaded.state, state);
+  documents.set("sequenceNotes/mismatched-payload", { ...clone(documents.get("sequenceNotes/adapter-note")), payload: JSON.stringify({ ...state, id: "wrong-payload-id" }) });
+  try {
+    await assert.rejects(a.get("mismatched-payload"), "document/payload ID mismatch must be rejected");
+  } finally { documents.delete("sequenceNotes/mismatched-payload"); }
+  documents.set("sequenceNotes/invalid-moves", { ...clone(documents.get("sequenceNotes/adapter-note")), payload: JSON.stringify({ ...state, id: "invalid-moves", moves: null }) });
+  try {
+    await assert.rejects(a.get("invalid-moves"), "malformed moves must be rejected");
+  } finally { documents.delete("sequenceNotes/invalid-moves"); }
   const watched = [];
   const listed = [];
   let readyWatch, readyList;
@@ -278,7 +291,7 @@ async function actualAdapterChecks() {
   runtimeB.authClient.currentUser = { uid: "changed-account" };
   await assert.rejects(b.list(), { code: "permission-denied" });
   await assert.rejects(b.save(note("session-test"), 0), { code: "permission-denied" });
-  return { actualAdapter: true, mockSDK: true, realFirestore: false, concurrentWinnerCount: 1, cleanupAssets: 402, watch: true, confirmedSnapshotsOnly: true, listLimit: 100, deletedExcluded: true, sessionGuard: true, adapterHash };
+  return { actualAdapter: true, mockSDK: true, realFirestore: false, payloadIntegrity: true, concurrentWinnerCount: 1, cleanupAssets: 402, watch: true, confirmedSnapshotsOnly: true, listLimit: 100, deletedExcluded: true, sessionGuard: true, adapterHash };
   } finally { stopWatch(); stopList(); }
 }
 
@@ -356,6 +369,25 @@ async function snapshot(frame) {
   return frame.evaluate(() => ({ state: window.ARCHIVE_TEST.getState(), revision: window.ARCHIVE_TEST.getRevision(), dirty: window.ARCHIVE_TEST.dirty() }));
 }
 
+async function reloadBlank(page, previousId) {
+  await page.reload({ waitUntil: "load" });
+  await page.waitForFunction(() => document.querySelector("iframe")?.contentWindow?.ARCHIVE_TEST && !document.querySelector("iframe").contentDocument.getElementById("title").disabled);
+  const frame = page.frames().find((item) => /\/sequence\/studio\.html/.test(item.url()));
+  const fresh = await snapshot(frame);
+  assert.notEqual(fresh.state.id, previousId, "reload must create a fresh editor ID");
+  assert.equal(fresh.state.title, "", "reload must never auto-open an existing note");
+  assert.equal(fresh.revision, 0);
+  assert.equal(fresh.dirty, false);
+  return frame;
+}
+
+async function editSaved(frame, id) {
+  await frame.getByRole("tab", { name: /내 시퀀스/ }).click();
+  await frame.getByTestId(`sequence-record-${id}`).getByRole("button", { name: "수정", exact: true }).click();
+  await frame.getByRole("tabpanel", { name: "02 노트 보기", exact: true }).waitFor();
+  assert.equal((await snapshot(frame)).state.id, id);
+}
+
 async function downloadJSON(page, button, filename) {
   const promise = page.waitForEvent("download");
   await button.click();
@@ -418,10 +450,9 @@ async function responsive(width) {
     await frame.getByLabel("수업명", { exact: true }).focus();
     const focus = await frame.getByLabel("수업명", { exact: true }).evaluate((el) => ({ active: document.activeElement === el, outline: getComputedStyle(el).outlineStyle, shadow: getComputedStyle(el).boxShadow }));
     assert.ok(focus.active && (focus.outline !== "none" || focus.shadow !== "none"), "visible input focus");
-    await page.reload({ waitUntil: "load" });
-    await page.waitForFunction((id) => document.querySelector("iframe")?.contentWindow?.ARCHIVE_TEST?.getState().id === id, saved.state.id);
-    frame = page.frames().find((item) => /\/sequence\/studio\.html/.test(item.url()));
-    assert.deepEqual((await snapshot(frame)).state, saved.state, "cloud persists across reload without localStorage");
+    frame = await reloadBlank(page, saved.state.id);
+    await editSaved(frame, saved.state.id);
+    assert.deepEqual((await snapshot(frame)).state, saved.state, "explicit edit restores saved cloud content without localStorage");
     await frame.getByRole("tab", { name: "02 노트 보기" }).click();
     await frame.getByRole("button", { name: "내 시퀀스에 저장", exact: true }).click();
     await frame.getByRole("button", { name: "굿노트용 PDF 만들기", exact: true }).click();
@@ -481,6 +512,12 @@ async function sharingAndConflicts() {
     return withContext(uid, 390, async (contextB, errorsB) => {
       assert.notEqual(contextA, contextB);
       const b = await openStudio(contextB);
+      const fresh = await snapshot(b.frame);
+      assert.equal(fresh.state.title, "");
+      assert.equal(fresh.revision, 0);
+      assert.notEqual(fresh.state.id, original.state.id);
+      await editSaved(b.frame, original.state.id);
+      await b.frame.getByRole("tab", { name: "01 작성하기", exact: true }).click();
       assert.deepEqual((await snapshot(b.frame)).state, original.state);
       await a.frame.getByLabel("수업 목표", { exact: true }).fill("다른 기기 서버 변경");
       await flush(a.frame);
@@ -520,6 +557,101 @@ async function sharingAndConflicts() {
       assert.deepEqual(errorsA, []); assert.deepEqual(errorsB, []);
       return { distinctContexts: true, sharedUid: true, snapshotBroadcast: true, keptLocalChanges: true, copyRecovery: true, latestRecovery: true, remoteDeleteRecovery: true };
     });
+  });
+}
+
+async function saveIsolation(width) {
+  const uid = `save-isolation-${width}`;
+  return withContext(uid, width, async (context, errors) => {
+    let { page, frame } = await openStudio(context);
+    const newButton = () => frame.getByRole("button", { name: "새 시퀀스", exact: true });
+    assert.equal(await newButton().isVisible(), true, "New must be available on mobile and desktop");
+    await frame.getByLabel("수업명", { exact: true }).fill("회귀 A 원본");
+    await frame.getByLabel("수업 목표", { exact: true }).fill("A의 고유한 목표");
+    await frame.getByRole("button", { name: "+ 동작 추가", exact: true }).first().click();
+    await frame.getByLabel("동작명", { exact: true }).fill("A 원본 동작");
+    await flush(frame);
+    const a = await snapshot(frame);
+    const rawA = clone(documents.get(`sequenceNotes/${a.state.id}`));
+
+    frame = await reloadBlank(page, a.state.id);
+    await frame.getByLabel("수업명", { exact: true }).fill("회귀 B 재접속 후 새 기록");
+    await frame.getByLabel("수업 목표", { exact: true }).fill("B의 고유한 목표");
+    await flush(frame);
+    const b = await snapshot(frame);
+    const rawB = clone(documents.get(`sequenceNotes/${b.state.id}`));
+    assert.notEqual(b.state.id, a.state.id);
+    assert.equal(rowsFor(uid).length, 2);
+    assert.deepEqual(documents.get(`sequenceNotes/${a.state.id}`), rawA);
+    assert.deepEqual(JSON.parse(rawB.payload), b.state);
+
+    await editSaved(frame, a.state.id);
+    await newButton().click();
+    await frame.waitForFunction((id) => window.ARCHIVE_TEST.getState().id !== id && window.ARCHIVE_TEST.getRevision() === 0, a.state.id);
+    assert.equal((await snapshot(frame)).state.title, "");
+    assert.equal((await snapshot(frame)).dirty, false);
+    assert.ok(!(await frame.getByRole("tabpanel", { name: "02 노트 보기", includeHidden: true }).textContent()).includes("회귀 A 원본"), "New must clear the previous preview");
+    await frame.getByLabel("수업명", { exact: true }).fill("회귀 C 새 버튼 기록");
+    await flush(frame);
+    const c = await snapshot(frame);
+    const rawC = clone(documents.get(`sequenceNotes/${c.state.id}`));
+    assert.notEqual(c.state.id, a.state.id);
+    assert.notEqual(c.state.id, b.state.id);
+    assert.equal(rowsFor(uid).length, 3);
+    assert.deepEqual(documents.get(`sequenceNotes/${a.state.id}`), rawA);
+
+    await frame.getByRole("tab", { name: /내 시퀀스/ }).click();
+    await frame.getByTestId(`sequence-record-${a.state.id}`).getByRole("button", { name: "사본 만들기", exact: true }).click();
+    await frame.waitForFunction((id) => window.ARCHIVE_TEST.getState().id !== id && !window.ARCHIVE_TEST.dirty() && window.ARCHIVE_TEST.getRevision() === 1, c.state.id);
+    const copied = await snapshot(frame);
+    assert.notEqual(copied.state.id, a.state.id);
+    assert.deepEqual(copied.state, { ...a.state, id: copied.state.id });
+    assert.equal(rowsFor(uid).length, 4);
+    await frame.getByLabel("수업 목표", { exact: true }).fill("사본에서만 바뀐 목표");
+    await flush(frame);
+    assert.deepEqual(documents.get(`sequenceNotes/${a.state.id}`), rawA, "copy and later edits must leave the original payload and revision intact");
+    await newButton().scrollIntoViewIfNeeded();
+    const copyLayout = await layout(page, frame, `save-isolation-${width}.png`);
+
+    let started, release;
+    const gateStarted = new Promise((resolve) => { started = resolve; });
+    const released = new Promise((resolve) => { release = resolve; });
+    saveGates.set(uid, { started, released });
+    await frame.getByLabel("수업 전 확인·수정 메모", { exact: true }).fill("진행 중인 저장 보존");
+    const pendingSave = frame.evaluate(() => window.ARCHIVE_TEST.flush());
+    try {
+      await Promise.race([gateStarted, pendingSave.then(() => { throw Error("Save finished without reaching the controlled gate"); })]);
+      await newButton().click();
+      assert.equal(await newButton().isDisabled(), true);
+      assert.equal(await frame.getByRole("button", { name: "예시 불러오기", exact: true }).isDisabled(), true);
+      assert.equal((await snapshot(frame)).state.id, copied.state.id, "New must wait for the pending save");
+    } finally { saveGates.delete(uid); release(); await pendingSave; }
+    await frame.waitForFunction((id) => window.ARCHIVE_TEST.getState().id !== id && window.ARCHIVE_TEST.getRevision() === 0, copied.state.id);
+    assert.equal((await snapshot(frame)).state.title, "");
+    assert.equal(JSON.parse(documents.get(`sequenceNotes/${copied.state.id}`).payload).memo, "진행 중인 저장 보존");
+    assert.equal([...subscriptions.values()].some((sub) => sub.uid === uid && sub.ref.kind === "doc"), false, "New must detach the previous note watcher");
+
+    pausedLists.add(uid);
+    let backup;
+    try {
+      await frame.getByLabel("수업명", { exact: true }).fill("회귀 D 백업 직전 기록");
+      const d = await snapshot(frame);
+      await frame.getByRole("tab", { name: /내 시퀀스/ }).click();
+      assert.equal(await frame.getByTestId(`sequence-record-${d.state.id}`).count(), 0, "fixture holds the library subscription stale");
+      backup = await downloadJSON(page, frame.getByRole("button", { name: "최근 기록 백업", exact: true }), `fresh-backup-${width}.json`);
+      assert.equal(backup.data.records.length, 5);
+      assert.deepEqual(backup.data.records.find((record) => record.id === d.state.id), d.state, "backup must fetch a fresh server list after flushing");
+    } finally { pausedLists.delete(uid); broadcast(); }
+    await frame.getByRole("button", { name: "예시 불러오기", exact: true }).click();
+    await flush(frame);
+    const sample = await snapshot(frame);
+    assert.notEqual(sample.state.id, a.state.id);
+    assert.equal(sample.state.title, "체어 · 흉추 가동성");
+    assert.deepEqual(documents.get(`sequenceNotes/${a.state.id}`), rawA);
+    assert.deepEqual(documents.get(`sequenceNotes/${b.state.id}`), rawB);
+    assert.deepEqual(documents.get(`sequenceNotes/${c.state.id}`), rawC);
+    assert.deepEqual(errors, []);
+    return { width, reloadBlank: true, distinctIds: true, originalPayloadsIntact: true, actualNewButton: true, explicitCopy: true, pendingSaveSwitchGuard: true, watcherReset: true, freshBackup: true, sampleReset: true, copyLayout };
   });
 }
 
@@ -612,8 +744,7 @@ async function migration() {
       assert.deepEqual(await frame.evaluate(({ KEY, LIBKEY }) => ({ [KEY]: localStorage.getItem(KEY), [LIBKEY]: localStorage.getItem(LIBKEY) }), { KEY, LIBKEY }), legacy);
     }
     assert.ok(rowsFor(uid).every(([key]) => key.startsWith("sequenceNotes/legacy_")));
-    await page.reload();
-    await page.waitForFunction(() => document.querySelector("iframe")?.contentWindow?.ARCHIVE_TEST?.getRevision() > 0);
+    await reloadBlank(page, (await snapshot(frame)).state.id);
     assert.equal(rowsFor(uid).length, 2);
     assert.deepEqual(errors, []);
     return { explicitOnly: true, idempotent: true, originalLocalStorageUntouched: true };
@@ -683,6 +814,7 @@ try {
     assert.deepEqual(errors, []);
   }));
   for (const width of [320, 390, 768, 1440]) await check(`responsive ${width}: persistence/import/export/selectable Korean PDF/layout`, () => responsive(width));
+  for (const width of [320, 390, 768, 1440]) await check(`save isolation ${width}: blank startup/New/copy/pending save/fresh backup`, () => saveIsolation(width));
   await check("distinct contexts same UID: broadcast/conflict/kept edits/copy/latest recovery", sharingAndConflicts);
   await check("noisy image: compression/assets/save failure/export/retry/delete", imagesAndFailures);
   await check("legacy: untouched localStorage/explicit migration/idempotence", migration);

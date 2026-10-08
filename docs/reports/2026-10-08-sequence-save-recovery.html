@@ -1,0 +1,18 @@
+<!doctype html>
+<html lang="ko"><meta charset="utf-8"><meta name="viewport" content="width=device-width,initial-scale=1">
+<title>시퀀스 저장 오류 수정 및 복구 | ARCHIVE PILATES</title>
+<style>*{box-sizing:border-box}body{margin:0;background:#f4f6f7;color:#202724;font:16px/1.7 system-ui,sans-serif}main{max-width:960px;margin:auto;padding:40px 22px}h1{font-size:28px;line-height:1.4}h2{font-size:20px;margin-top:32px}p{max-width:70ch}table{width:100%;border-collapse:collapse;background:white}th,td{text-align:left;padding:14px;border-bottom:1px solid #dce2df;overflow-wrap:anywhere}th{background:#e9eeeb}small{color:#64716a}.lead{font-size:19px;color:#245b46}code{overflow-wrap:anywhere}a{color:#155d46}@media(max-width:540px){main{padding:24px 16px}th,td{padding:9px;font-size:14px}}</style>
+<main><small>ARCHIVE PILATES · ARCHIVE CORE · 2026.10.08</small><h1>시퀀스 저장 오류 수정 및 이전 수업 복구</h1>
+<p class="lead">이전 수업 2개를 별도 시퀀스로 복구했습니다. 현재 노트와 기존 예시는 그대로 보존했습니다.</p>
+<h2>확인된 원인</h2><p>메뉴 진입 시 가장 최근 노트를 자동으로 열었고, 이후 입력과 저장 버튼이 같은 문서 ID에 자동 저장했습니다. 실제로 한 문서가 코어 &amp; 칼로리 버닝 → 척추 컨디셔닝 → 복부 옆구리로 변경됐습니다. 동시 수정 방지 기능은 있었으나 새로운 수업과 기존 수업 수정의 구분이 부족했습니다.</p>
+<h2>복구 결과</h2><table><thead><tr><th>시퀀스</th><th>결과</th><th>동작 수</th></tr></thead><tbody>
+<tr><td>코어 &amp; 칼로리 버닝</td><td>별도 ID로 복구</td><td>8개</td></tr>
+<tr><td>척추 컨디셔닝</td><td>별도 ID로 복구</td><td>8개</td></tr>
+<tr><td>복부 옆구리</td><td>현재 원본 보존</td><td>8개</td></tr>
+<tr><td>체어 · 흉추 가동성</td><td>기존 예시 보존</td><td>7개</td></tr></tbody></table>
+<p>Firestore 시점 복구 기록에서 47개 시간대와 제목 전환 구간을 조회했습니다. 이전 제목의 마지막 분 단위 저장본을 각각 복구했으며, 재실행 시 이미 복구된 문서는 건너뛰어 중복이 발생하지 않았습니다. 활성 기록 4개와 기존 삭제 표식 1개를 확인했습니다. 의도적으로 삭제된 예시 중복본은 복구하지 않았습니다.</p>
+<h2>저장 방식 변경</h2><ul><li>메뉴 진입과 새로고침은 새 빈 시퀀스에서 시작합니다.</li><li>기존 기록은 목록의 수정으로 열고, 다른 수업에 활용할 때는 사본 만들기를 사용합니다.</li><li>상단 새 시퀀스를 모바일과 데스크톱 모두에서 사용할 수 있습니다.</li><li>화면 전환 전 변경분 저장을 확인하고, 저장 실패 시 전환을 중단합니다.</li><li>백업은 서버의 최신 목록을 다시 조회하며 문서 ID와 내용 ID가 다르면 읽기를 차단합니다.</li></ul>
+<h2>검증 및 배포</h2><p id="verification">로컬 작성·저장 회귀 15건, CORE 반응형 95개 화면 조합, Hosting·릴리스 보호 검사 및 수강권 가격 회귀 5건 통과. 운영 배포 및 격리 시험 계정의 실제 Firestore 검증은 후속 확인 중입니다.</p>
+<p>변경 파일: 시퀀스 편집기, Firestore 저장 어댑터, 격리·운영 검증 스크립트, 제한된 시점 복구 도구, CORE 운영규칙과 작업 기록. 회원·예약·알림톡·StudioMate·Notion·인증 정책은 변경하지 않았습니다. Functions·Firestore 규칙·인덱스는 배포하지 않습니다.</p>
+<h2>보관과 한계</h2><p>복구 전 원본·전체 이력 증거·적용 결과는 운영 호스트의 비공개 백업에 보관하며 Git 또는 웹에 공개하지 않습니다. 한 시간보다 오래된 시점 복구 자료는 분 단위이므로 제목 변경 직전 마지막 1분 이내의 입력까지 복구했다고 보장하지 않습니다. 이미 열어둔 편집기는 저장 완료 확인 후 새로고침해야 새 버전이 적용됩니다.</p>
+<p><a href="https://core.archivepilates.com/sequence/">시퀀스 노트</a> · <a href="https://core.archivepilates.com/release.json">운영 릴리스</a></p></main></html>

@@ -53,6 +53,9 @@ export function createSequenceStore(runtime, user) {
     const data = snapshot.data();
     checkOwner(data);
     const state = JSON.parse(data.payload);
+    if (state.id !== id || !state.moves || typeof state.moves !== 'object' || Array.isArray(state.moves)) {
+      throw Error('노트 원본 확인이 필요합니다. 다른 기록에 저장하지 않습니다.');
+    }
     await Promise.all(Object.values(state.moves).flat().map(async (move) => {
       if (!move.image) return;
       const assetId = `${id}_${move.image}`;
