@@ -16,9 +16,12 @@ User requested creation dates in My Sequences and approved real Firestore creati
 ## Verification
 
 - Local sequence suite: 20 passed across 320/390/768/1440, KST day boundary and legacy absence.
-- Firestore emulator: date invariance plus existing access/owner/images/tombstone regression; final result in HTML report.
-- Production read-only audit: five active operator notes missing createdAt, one deleted tombstone excluded. No backfill yet at source preparation.
-- Deployment, backfill, synthetic live Auth/Firestore test and cleanup results will be recorded in `docs/reports/2026-10-08-sequence-created-date.html`.
+- Firestore emulator: 215 passed, including creation date invariance and existing access/owner/images/tombstone regression.
+- Production audit and apply: five active operator notes backfilled from actual document createTime; one deleted tombstone untouched. All other fields unchanged. Idempotent second apply changed zero documents.
+- Code release `162bbae5d4cec1a5da4772bce6d79cb919b5bd47`: Firestore rules, archive-pilates-core Hosting and default-site /core/ compatibility deployed. Functions and indexes not deployed.
+- Local and live full CORE responsive checks: 95/95 each. Exact source hashes match CORE studio, adapter and default-site compatibility studio. The in.archivepilates.com member site does not host /core/ and is not the compatibility target.
+- Synthetic live Auth/Firestore: writing dates visible at 390/1440, creation metadata present and immutable after edits, distinct originals preserved, cross-device conflict recovery passed. Temporary test notes/images/Auth identity removed and browser closed.
+- Results in `docs/reports/2026-10-08-sequence-created-date.html`; private preimages and reviewed five-ID plan remain outside Git under the automation recovery directory.
 - CORE operating rules updated in the same change; no Notion update needed.
 
 ## Rollout
