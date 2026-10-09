@@ -1,24 +1,33 @@
 import { execFileSync } from 'node:child_process';
 import { referralKey, awardReason } from './imweb-referral-policy.mjs';
 import { readCanonicalPointLogs } from './imweb-referral-point-logs.mjs';
-import { imwebRequestFailure } from './imweb-read-failure.mjs';
+import { imwebRequestFailure, isTransientReadFailure } from './imweb-read-failure.mjs';
 
 export const IMWEB_REFERRAL_SCOPE = Object.freeze({
   siteCode: 'S20260516852c71a014d08',
   unitCode: 'u2026051698c99ea234719',
 });
 
-export function imwebJson(args, { execute = execFileSync } = {}) {
-  try {
-    const result = JSON.parse(execute('imweb', ['--profile', 'default', '--output', 'json', ...args], {
-      encoding: 'utf8', timeout: 45000, maxBuffer: 8 * 1024 * 1024,
-      stdio: ['ignore', 'pipe', 'pipe'],
-    }));
-    if (result.statusCode && result.statusCode !== 200) throw Object.assign(new Error(), { statusCode: result.statusCode });
-    return result;
-  } catch (error) {
-    // Provider responses can contain member identifiers and credentials.
-    throw imwebRequestFailure(error, { readOnly: args[0] === 'member' && args[1] === 'list' });
+export function imwebJson(args, { execute = execFileSync,
+  wait = milliseconds => Atomics.wait(new Int32Array(new SharedArrayBuffer(4)), 0, 0, milliseconds) } = {}) {
+  const readOnly = args[0] === 'member' && args[1] === 'list';
+  const operation = readOnly ? 'member_list' : args[0] === 'config' && args[1] === 'context' ? 'config_context' : 'other_request';
+  for (let attempt = 0; attempt < 2; attempt++) {
+    try {
+      const result = JSON.parse(execute('imweb', ['--profile', 'default', '--output', 'json', ...args], {
+        encoding: 'utf8', timeout: 45000, maxBuffer: 8 * 1024 * 1024,
+        stdio: ['ignore', 'pipe', 'pipe'],
+      }));
+      if (result.ok === false || result.statusCode && result.statusCode !== 200) {
+        throw Object.assign(new Error(), { stdout: JSON.stringify(result) });
+      }
+      return result;
+    } catch (error) {
+      // Provider responses can contain member identifiers and credentials.
+      const failure = imwebRequestFailure(error, { readOnly, operation });
+      if (attempt === 0 && isTransientReadFailure(failure)) { wait(500); continue; }
+      throw failure;
+    }
   }
 }
 

@@ -14,6 +14,7 @@ export async function runReferralJob({ directory = join(homedir(), 'ArchiveIN/au
     await observeAutomationRun(directory, {
       ok: !result.exitCode, errorCode: result.errorCode,
       transient: result.errorCode === TRANSIENT_READ_CODE,
+      failureDetails: result.failureDetails,
       runFinishedAt: result.finishedAt,
       skipped: !result.exitCode && (result.mode !== 'apply' || Boolean(result.summary?.disabled)),
     }, notify);

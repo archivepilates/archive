@@ -3,7 +3,7 @@ import assert from 'node:assert/strict';
 import { mkdtemp, rm, readFile, writeFile, stat, readdir } from 'node:fs/promises';
 import os from 'node:os';
 import path from 'node:path';
-import { observeAutomationRun, ALERT_STATE_FILE, deferReferralHealthFinding, deferInstructorOrderHealthFinding } from '../lib/automation-failure-notifications.mjs';
+import { observeAutomationRun, ALERT_STATE_FILE, deferReferralHealthFinding, deferInstructorOrderHealthFinding, automationHealthEmailBody } from '../lib/automation-failure-notifications.mjs';
 import { imwebRequestFailure, TRANSIENT_READ_CODE } from '../lib/imweb-read-failure.mjs';
 import { imwebJson } from '../lib/imweb-referral-source.mjs';
 import { imwebOrderRead, syncImwebInstructorOrders } from '../lib/imweb-instructor-orders.mjs';
@@ -179,6 +179,22 @@ test('referral wrapper leaves failed exit code intact and disabled runs cannot r
   assert.equal(f.events.length, 1);
   await invoke({ exitCode: 0, mode: 'apply', summary: { disabled: 0 } });
   assert.equal(f.events[1].type, 'recovery');
+});
+
+test('referral alert persists only sanitized diagnostics and recovery includes the failure stage', async t => {
+  const f = await fixture(t);
+  const result = { exitCode: 1, errorCode: TRANSIENT_READ_CODE, failureDetails: {
+    phase: 'member_scan', operation: 'member_list', statusCode: 503, providerCode: '30001', private: 'token=secret',
+  } };
+  for (let i = 0; i < 3; i++) await runReferralJob({ directory: f.directory, notify: f.notify, run: async () => result });
+  assert.equal(f.events.length, 1);
+  assert.equal(f.events[0].failureDetails.private, undefined);
+  assert.equal((await f.state()).failureDetails.statusCode, 503);
+  await f.observe({ ok: true });
+  assert.equal(f.events[1].failureDetails.operation, 'member_list');
+  const body = automationHealthEmailBody({ title: '자동 적립', link: 'https://example.test' }, f.events[1]);
+  assert.match(body, /member_scan/);
+  assert.doesNotMatch(body, /token=secret/);
 });
 
 const context = { resolved_profile: { site_code: policy.siteCode, unit_code: policy.unitCode } };

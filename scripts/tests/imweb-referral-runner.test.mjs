@@ -8,8 +8,9 @@ import { join } from 'node:path';
 import { fileURLToPath } from 'node:url';
 import { DatabaseSync } from 'node:sqlite';
 import { ReferralLedger } from '../lib/imweb-referral-ledger.mjs';
-import { IMWEB_REFERRAL_SCOPE as scope } from '../lib/imweb-referral-source.mjs';
+import { IMWEB_REFERRAL_SCOPE as scope, readReferralMembers, imwebJson } from '../lib/imweb-referral-source.mjs';
 import { backupLedger, loadConfig, main, parseArgs, validateConfig } from '../run-imweb-referral-worker.mjs';
+import { imwebRequestFailure } from '../lib/imweb-read-failure.mjs';
 
 const NOW = '2026-09-15T06:00:00Z';
 const START = '2026-09-15T00:00:00+09:00';
@@ -26,6 +27,82 @@ test('transient member scan classification survives worker/runner without awards
   assert.equal(result.exitCode, 1);
   assert.equal(result.errorCode, 'IMWEB_TRANSIENT_READ_FAILED');
   assert.equal(JSON.stringify(result).includes('private provider output'), false);
+});
+test('CLI source diagnostics survive worker and runner; auth is not downgraded to transient', async t => {
+  const f = fixture(t);
+  for (const status of [503, 401]) {
+    const result = await f.run(['--apply'], { workerDependencies: {
+      ...f.dependencies.workerDependencies,
+      readReferralMembers: () => { throw imwebRequestFailure({ stdout: JSON.stringify({ ok: false,
+        error: { status_code: status, error_code: '30001', message: PRIVATE } }) },
+      { readOnly: true, operation: 'member_list' }); },
+      preparePointAward: forbidden,
+    } });
+    assert.equal(result.exitCode, 1);
+    assert.equal(result.errorCode, status === 503 ? 'IMWEB_TRANSIENT_READ_FAILED' : 'IMWEB_REQUEST_FAILED');
+    assert.deepEqual(result.failureDetails, { phase: 'member_scan', operation: 'member_list', statusCode: status, providerCode: '30001' });
+    assert.equal(result.summary, null);
+    assert.equal(countRows(f.ledgerPath), 0);
+    assert.equal(JSON.stringify(result).includes(PRIVATE), false);
+    assert.equal(f.events.includes('send'), false);
+  }
+});
+test('preparation and unknown send diagnostics are kept without authorizing a retry', async t => {
+  for (const phase of ['point_prepare', 'point_send']) {
+    const f = fixture(t);
+    let sends = 0;
+    const fail = () => { throw imwebRequestFailure({ stdout: JSON.stringify({ ok: false,
+      error: { status_code: 503, message: PRIVATE } }) }); };
+    const result = await f.run(['--apply'], { workerDependencies: {
+      ...f.dependencies.workerDependencies,
+      preparePointAward: phase === 'point_prepare' ? fail : (_member, key) => ({
+        reason: `imweb-referral:${key}`, send: () => { sends++; fail(); },
+      }),
+    } });
+    assert.equal(result.exitCode, 1);
+    assert.equal(result.errorCode, 'WORKER_INCOMPLETE');
+    assert.deepEqual(result.failureDetails, { phase, role: 'inviter', statusCode: 503 });
+    assert.equal(sends, phase === 'point_send' ? 1 : 0);
+    assert.equal(JSON.stringify(result).includes(PRIVATE), false);
+  }
+});
+test('later-page CLI retry exhaustion cannot reserve or award from a partial scan', async t => {
+  const f = fixture(t);
+  let failedReads = 0;
+  const result = await f.run(['--apply'], { workerDependencies: {
+    ...f.dependencies.workerDependencies,
+    readReferralMembers: () => readReferralMembers({ run: args => {
+      if (args[0] === 'config') return { resolved_profile: { site_code: scope.siteCode, unit_code: scope.unitCode } };
+      if (!args.includes('--cursor')) return { data: { list: [inviter, invitee], hasNext: true, nextCursor: 'fixture' } };
+      return imwebJson(args, { execute: () => {
+        failedReads++;
+        throw { stdout: JSON.stringify({ ok: false, error: { status_code: 503, message: PRIVATE } }) };
+      }, wait: () => {} });
+    } }),
+    preparePointAward: forbidden,
+  } });
+  assert.equal(result.errorCode, 'IMWEB_TRANSIENT_READ_FAILED');
+  assert.equal(failedReads, 2);
+  assert.equal(countRows(f.ledgerPath), 0);
+  assert.equal(f.events.includes('send'), false);
+});
+test('CLI transient read recovery completes the canonical scan before a single fixture award', async t => {
+  const f = fixture(t);
+  let reads = 0;
+  const result = await f.run(['--apply'], { workerDependencies: {
+    ...f.dependencies.workerDependencies,
+    readReferralMembers: () => readReferralMembers({ run: args => {
+      if (args[0] === 'config') return { resolved_profile: { site_code: scope.siteCode, unit_code: scope.unitCode } };
+      return imwebJson(args, { execute: () => {
+        if (++reads === 1) throw { stderr: JSON.stringify({ ok: false, error: { status_code: 503 } }) };
+        return JSON.stringify({ data: { list: [inviter, invitee], hasNext: false } });
+      }, wait: () => {} });
+    } }),
+  } });
+  assert.equal(result.exitCode, 0);
+  assert.equal(reads, 2);
+  assert.equal(result.summary.sendAttempts, 1);
+  assert.equal(result.summary.paid, 1);
 });
 const empty = { disabled: 0, pages: 1, members: 0, pairs: 0, filtered: 0, simulated: 0,
   reserved: 0, rejected: 0, duplicates: 0, prepared: 0, claimed: 0, sendAttempts: 0,

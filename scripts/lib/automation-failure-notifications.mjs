@@ -4,25 +4,32 @@ import path from 'node:path';
 import { execFileSync } from 'node:child_process';
 import os from 'node:os';
 import { acquireStudioMateBrowserLock } from './studiomate-browser-lock.mjs';
-import { TRANSIENT_READ_CODE } from './imweb-read-failure.mjs';
+import { TRANSIENT_READ_CODE, sanitizeImwebFailureDetails } from './imweb-read-failure.mjs';
 
 export const FAILURE_THRESHOLD = 3;
 export const ALERT_STATE_FILE = 'query-alert-state.json';
 
-export function sendAutomationHealthEmail({ area, title, link }, event) {
+export function automationHealthEmailBody({ title, link }, event) {
   const recovered = event.type === 'recovery';
-  const eventId = createHash('sha256').update(JSON.stringify([area, event.type,
-    event.firstFailureAt, event.notifiedAt, event.errorCode])).digest('hex');
-  const body = [
+  const details = sanitizeImwebFailureDetails(event.failureDetails);
+  return [
     `주체: ARCHIVE IN / ${title}`,
     `결론: ${recovered ? '알림을 보낸 오류 이후 전체 정기 실행이 정상 완료됐습니다.' : `${event.consecutiveFailures}회 연속 실패했습니다.`}`,
     `발생: ${event.firstFailureAt} / 확인: ${event.observedAt}`,
     `원인 코드: ${event.errorCode}`,
+    ...(Object.keys(details).length ? [`진단: ${JSON.stringify(details)}`] : []),
     recovered ? '검증: 전체 조회와 해당 실행의 처리가 완료됐습니다. 개별 적립·수강권 발급의 과거 누락 해소를 뜻하지 않습니다.'
       : '현재: 해당 실행이 완료되지 않았습니다. 처리 결과가 불명확한 적립·접수는 자동 쓰기 재시도하지 않습니다.',
     `다음: ${recovered ? '추가 조치 없음. 기존 확인필요 건은 별도 검토합니다.' : '원본과 실행 장부를 확인하세요.'}`,
     `상세: ${link}`,
   ].join('\n');
+}
+
+export function sendAutomationHealthEmail({ area, title, link }, event) {
+  const recovered = event.type === 'recovery';
+  const eventId = createHash('sha256').update(JSON.stringify([area, event.type,
+    event.firstFailureAt, event.notifiedAt, event.errorCode])).digest('hex');
+  const body = automationHealthEmailBody({ title, link }, event);
   const output = execFileSync(process.execPath, ['firebase/kangsain-functions/macmini-studiomate/send-automation-report.mjs'], {
     cwd: new URL('../../', import.meta.url), encoding: 'utf8', timeout: 45000, stdio: ['ignore', 'pipe', 'pipe'],
     env: { ...process.env,
@@ -84,6 +91,7 @@ export async function observeAutomationRun(directory, observation, notify, now =
       if (!state.consecutiveFailures && !state.notifiedAt) state.firstFailureAt = now;
       state.consecutiveFailures += 1;
       state.errorCode = observation.errorCode;
+      state.failureDetails = sanitizeImwebFailureDetails(observation.failureDetails);
       state.lastOutcome = observation.transient ? 'transient_failure' : 'failure';
       const due = !state.notifiedAt || !observation.transient && state.notifiedCode !== observation.errorCode
         || Date.parse(now) - Date.parse(state.notifiedAt) >= 86400000;
@@ -101,7 +109,8 @@ export async function observeAutomationRun(directory, observation, notify, now =
       } finally { await unlink(temporary).catch(error => { if (error.code !== 'ENOENT') throw error; }); }
     };
     if (event?.type === 'failure') state.pendingNotice = { type: event.type, firstFailureAt: event.firstFailureAt,
-      notifiedAt: event.notifiedAt, errorCode: event.errorCode, consecutiveFailures: event.consecutiveFailures, observedAt: event.observedAt };
+      notifiedAt: event.notifiedAt, errorCode: event.errorCode, failureDetails: event.failureDetails,
+      consecutiveFailures: event.consecutiveFailures, observedAt: event.observedAt };
     // Persist the observation even when delivery fails; acknowledge only after success.
     await persist();
     if (event) {

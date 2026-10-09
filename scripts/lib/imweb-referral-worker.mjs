@@ -1,6 +1,7 @@
 import { REFERRAL_POLICY, assessReferral, kstMonth, referralKey, awardRole } from './imweb-referral-policy.mjs';
 import { readReferralMembers as readMembers, referralPairs as makePairs,
   preparePointAward as prepareAward } from './imweb-referral-source.mjs';
+import { sanitizeImwebFailureDetails } from './imweb-read-failure.mjs';
 
 const pairKey = (memberCode, inviterCode) => JSON.stringify([memberCode, inviterCode]);
 const nonempty = value => typeof value === 'string' && value.trim().length > 0;
@@ -28,7 +29,7 @@ export async function runReferralWorker(config = {}, dependencies = {}) {
   const role = awardRole(config.role);
   const policy = { ...REFERRAL_POLICY, ...config.policy };
   const { readReferralMembers = readMembers, referralPairs = makePairs,
-    preparePointAward = prepareAward, ledger, verifier, beforePrepare,
+    preparePointAward = prepareAward, ledger, verifier, beforePrepare, onFailure,
     clock = () => config.now ?? new Date().toISOString() } = dependencies;
   if (typeof clock !== 'function') throw new Error('Invalid referral clock');
   if (beforePrepare !== undefined && typeof beforePrepare !== 'function') throw new Error('Invalid referral prepare guard');
@@ -63,6 +64,7 @@ export async function runReferralWorker(config = {}, dependencies = {}) {
     throw new Error('Invalid referral exclusions');
   }
   const excluded = new Set(excludedMemberCodes);
+  const recordFailure = (phase, error) => onFailure?.(sanitizeImwebFailureDetails({ ...error?.failureDetails, phase, role }));
   const permits = (member, inviter) => !excluded.has(member.memberCode) && !excluded.has(inviter?.memberCode) &&
     (!allowed || allowed.has(pairKey(member.memberCode, inviter?.memberCode)));
 
@@ -83,7 +85,8 @@ export async function runReferralWorker(config = {}, dependencies = {}) {
     summary.pages = scan.pages; summary.members = members.length; summary.pairs = pairs.length;
   } catch (error) {
     throw Object.assign(new Error('Complete unambiguous canonical referral scan required; no awards attempted'), {
-      code: error?.code === 'IMWEB_TRANSIENT_READ_FAILED' ? error.code : undefined,
+      code: ['IMWEB_TRANSIENT_READ_FAILED', 'IMWEB_REQUEST_FAILED'].includes(error?.code) ? error.code : undefined,
+      failureDetails: sanitizeImwebFailureDetails({ ...error?.failureDetails, phase: 'member_scan' }),
     });
   }
 
@@ -102,13 +105,15 @@ export async function runReferralWorker(config = {}, dependencies = {}) {
     else throw new Error('Unable to persist referral hold');
   };
   const reconcile = async (member, inviter, record, sendResult, existing) => {
+    let failure;
     try {
       const proof = await verifier({ member, inviter, record, sendResult });
       if (ledger.verifyPaid(record.rewardKey, proof, readNow()) === true) {
         summary.paid++; if (existing) summary.reconciled++;
         return;
       }
-    } catch { /* An acknowledgement or unreadable log is not payment proof. */ }
+    } catch (error) { failure = error; }
+    recordFailure('point_verify', failure);
     summary.failures++;
     hold(record.rewardKey);
   };
@@ -192,7 +197,7 @@ export async function runReferralWorker(config = {}, dependencies = {}) {
         prepared = await preparePointAward(role === 'invitee' ? member : inviter, key, { role });
         if (prepared?.reason !== row.providerReason || typeof prepared.send !== 'function') throw new Error();
         summary.prepared++;
-      } catch { summary.failures++; continue; }
+      } catch (error) { recordFailure('point_prepare', error); summary.failures++; continue; }
       const dispatchAt = readNow();
       if (!canDispatch(member, inviter, row, dispatchAt) || !hasDispatchWindow(dispatchAt)) {
         summary.rejected++; summary.unresolved++; summary.failures++; continue;
@@ -207,9 +212,13 @@ export async function runReferralWorker(config = {}, dependencies = {}) {
       }
       let sendResult;
       try { summary.sendAttempts++; sendResult = await prepared.send(); }
-      catch { summary.failures++; hold(key); continue; }
+      catch (error) { recordFailure('point_send', error); summary.failures++; hold(key); continue; }
       await reconcile(member, inviter, claimed, sendResult, false);
     }
-  } catch { throw new Error('Referral ledger operation failed; stop and reconcile before resuming'); }
+  } catch {
+    throw Object.assign(new Error('Referral ledger operation failed; stop and reconcile before resuming'), {
+      failureDetails: { phase: 'ledger_processing', role },
+    });
+  }
   return summary;
 }

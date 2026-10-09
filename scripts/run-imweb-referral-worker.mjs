@@ -7,6 +7,7 @@ import { REFERRAL_POLICY } from './lib/imweb-referral-policy.mjs';
 import { IMWEB_REFERRAL_SCOPE, readReferralMembers } from './lib/imweb-referral-source.mjs';
 import { readPointAwardProof } from './lib/imweb-referral-proof.mjs';
 import { runReferralWorker } from './lib/imweb-referral-worker.mjs';
+import { sanitizeImwebFailureDetails } from './lib/imweb-read-failure.mjs';
 
 // No arguments: disabled, no files or provider calls. --config FILE: simulation
 // (local lock/status only). --config FILE --apply additionally requires approval.
@@ -297,7 +298,8 @@ export async function main(argv = [], dependencies = {}) {
   const fail = error => {
     report.state = 'failed';
     report.errorCode = error instanceof RunnerError ? error.code
-      : failureCode === 'WORKER_FAILED' && error?.code === 'IMWEB_TRANSIENT_READ_FAILED' ? error.code : failureCode;
+      : failureCode === 'WORKER_FAILED' && ['IMWEB_TRANSIENT_READ_FAILED', 'IMWEB_REQUEST_FAILED'].includes(error?.code) ? error.code : failureCode;
+    report.failureDetails = sanitizeImwebFailureDetails(error?.failureDetails ?? report.failureDetails);
   };
   try {
     report.startedAt = isoTime(clock());
@@ -375,6 +377,7 @@ export async function main(argv = [], dependencies = {}) {
             verifier: input => readPointAwardProof(input, { ...bounds, now: isoTime(clock()) }),
             clock: () => isoTime(clock()),
             ...dependencies.workerDependencies,
+            onFailure: details => { report.failureDetails ??= sanitizeImwebFailureDetails(details); },
             readReferralMembers: async () => (scan ??= await scanMembers()), ledger: roleLedger,
             beforePrepare: options.apply ? async () => { await ensureBackup(); return true; } : undefined,
           }));
