@@ -79,7 +79,10 @@ const secretlessCallableOptions = { ...callableOptions, secrets: [] };
 export const getCoreAccessSession = onCall(secretlessCallableOptions, async request => {
   try { return await getCoreAccessSessionHandler(request); } catch (err) { throw toHttpsError(err); }
 });
-export const completeCoreFirstLogin = onCall(secretlessCallableOptions, async request => {
+export const completeCoreFirstLogin = onCall({
+  ...secretlessCallableOptions,
+  serviceAccount: "archive-core-auth@archive-pilates.iam.gserviceaccount.com",
+}, async request => {
   try { return await completeCoreFirstLoginHandler(request); } catch (err) { throw toHttpsError(err); }
 });
 export const getCoreInstructorWorkspace = onCall(secretlessCallableOptions, async request => {

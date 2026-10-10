@@ -45,3 +45,10 @@
 - Use a dedicated archive-core-auth runtime for completeCoreFirstLogin only, with a custom project role containing firebaseauth.users.get/update, plus datastore.user and logging.logWriter. Do not grant Auth admin to the shared compute runtime or grant user creation/deletion/config/send privileges. No service-account key is created.
 - Source f0886adc is deployed to app/sync/alimtalk/social, both CORE Hosting sites, Firestore rules and the READY request index. Main and feature CI both passed. Synthetic login, pending API denial and the four-width dialog passed; password update remains blocked by runtime Auth permission.
 - Operator credentials cannot create IAM accounts/roles; HOME administrator credentials require reauthentication. Chrome tab 2059966952 is handed off for HOME sign-in. The waiting CLI was stopped without changing credentials; resume with a fresh OAuth authorization request, not a stale verification code. Never provision the real four instructors before the isolated live flow passes.
+
+## Runtime Permission Repair
+
+- HOME Cloud SDK reauthentication completed; the task-owned OAuth tab is closed. Credentials are not recorded in this repository.
+- Created keyless archive-core-auth service account and coreInstructorPasswordUpdater custom role with only firebaseauth.users.get/update; project bindings are datastore.user and logging.logWriter plus that custom role. The operator has serviceAccountUser on this dedicated account only.
+- App export selects this account only for completeCoreFirstLogin. Shared runtime identity and all other callables remain unchanged. Two AST contract tests prevent accidental shared-account expansion.
+- Pending: clean-main single-function deployment, isolated live first-change/ownership/revocation QA, then approved four-instructor provisioning and final operating-rule Hosting release.
