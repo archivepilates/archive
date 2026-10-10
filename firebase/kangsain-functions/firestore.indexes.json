@@ -1,6 +1,15 @@
 {
   "indexes": [
     {
+      "collectionGroup": "privateLessonChartRequests",
+      "queryScope": "COLLECTION",
+      "fields": [
+        { "fieldPath": "studioId", "order": "ASCENDING" },
+        { "fieldPath": "staffId", "order": "ASCENDING" },
+        { "fieldPath": "lessonDate", "order": "DESCENDING" }
+      ]
+    },
+    {
       "collectionGroup": "sequenceNoteImages",
       "queryScope": "COLLECTION",
       "fields": [

@@ -1,6 +1,7 @@
 import { onCall, onRequest } from "firebase-functions/v2/https";
 import { onDocumentCreated, onDocumentWritten } from "firebase-functions/v2/firestore";
 import { getInstructorHomeHandler } from "../callable/getInstructorHome";
+import { completeCoreFirstLoginHandler, getCoreAccessSessionHandler, getCoreInstructorWorkspaceHandler } from "../callable/coreInstructorAccess";
 import {
   getKioskParkingJobStatusHandler,
   lookupKioskCheckinHandler,
@@ -74,6 +75,16 @@ import { toHttpsError } from "../utils/errors";
 import { getVideoWatchDashboardHandler, videoWatchEventApiHandler } from "../videoAnalytics/videoWatchAnalytics";
 
 const secretlessCallableOptions = { ...callableOptions, secrets: [] };
+
+export const getCoreAccessSession = onCall(secretlessCallableOptions, async request => {
+  try { return await getCoreAccessSessionHandler(request); } catch (err) { throw toHttpsError(err); }
+});
+export const completeCoreFirstLogin = onCall(secretlessCallableOptions, async request => {
+  try { return await completeCoreFirstLoginHandler(request); } catch (err) { throw toHttpsError(err); }
+});
+export const getCoreInstructorWorkspace = onCall(secretlessCallableOptions, async request => {
+  try { return await getCoreInstructorWorkspaceHandler(request); } catch (err) { throw toHttpsError(err); }
+});
 
 const parkingDiscountJobOptions = {
   region: REGION,

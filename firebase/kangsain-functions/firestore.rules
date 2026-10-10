@@ -3,11 +3,26 @@ rules_version = '2';
 service cloud.firestore {
   match /databases/{database}/documents {
     function signedIn() {
-      return request.auth != null;
+      return request.auth != null && request.auth.token.get('role', '') != 'instructor';
+    }
+
+    function readyCoreInstructor() {
+      let id = request.auth.token.get('staffId', '');
+      let staff = get(/databases/$(database)/documents/staffs/$(id)).data;
+      return request.auth != null && request.auth.token.get('role', '') == 'instructor' &&
+        staff.role == 'instructor' && staff.active == true && staff.uid == request.auth.uid &&
+        staff.staffId == id && staff.studioId == request.auth.token.get('studioId', '') &&
+        staff.employmentStatus == 'current' && staff.employmentSource == 'studiomate_staff_tab_browser_scan' &&
+        staff.coreAccessEnabled == true && staff.coreMustChangePassword == false &&
+        staff.coreAuthAfter is int && request.auth.token.auth_time >= staff.coreAuthAfter;
+    }
+
+    function sequenceUser() {
+      return isManager() || (request.auth != null && readyCoreInstructor());
     }
 
     function isManager() {
-      return signedIn() &&
+      return request.auth != null &&
         (
           request.auth.token.role in ['owner', 'manager'] ||
           request.auth.token.email in [
@@ -18,17 +33,7 @@ service cloud.firestore {
     }
 
     function isInstructor(staffId) {
-      return signedIn() &&
-        (
-          request.auth.token.staffId == staffId ||
-          (
-            exists(/databases/$(database)/documents/staffs/$(staffId)) &&
-            (
-              get(/databases/$(database)/documents/staffs/$(staffId)).data.uid == request.auth.uid ||
-              get(/databases/$(database)/documents/staffs/$(staffId)).data.email == request.auth.token.email
-            )
-          )
-        );
+      return request.auth != null && readyCoreInstructor() && request.auth.token.staffId == staffId;
     }
 
     function sameStudio(studioId) {
@@ -87,15 +92,15 @@ service cloud.firestore {
     }
 
     match /sequenceNotes/{noteId} {
-      allow get: if isManager() &&
+      allow get: if sequenceUser() &&
         (resource == null || resource.data.ownerUid == request.auth.uid);
-      allow list: if isManager() && resource.data.ownerUid == request.auth.uid &&
+      allow list: if sequenceUser() && resource.data.ownerUid == request.auth.uid &&
         resource.data.deleted == false &&
         request.query.limit != null && request.query.limit <= 100;
-      allow create: if isManager() && safeSequenceNoteId(noteId) &&
+      allow create: if sequenceUser() && safeSequenceNoteId(noteId) &&
         validSequenceNote(request.resource.data) && request.resource.data.revision == 1 &&
         (!('createdAt' in request.resource.data) || request.resource.data.createdAt == request.time);
-      allow update: if isManager() && safeSequenceNoteId(noteId) &&
+      allow update: if sequenceUser() && safeSequenceNoteId(noteId) &&
         resource.data.ownerUid == request.auth.uid && resource.data.deleted == false &&
         validSequenceNote(request.resource.data) &&
         (('createdAt' in resource.data)
@@ -107,10 +112,10 @@ service cloud.firestore {
     }
 
     match /sequenceNoteImages/{assetId} {
-      allow get: if isManager() &&
+      allow get: if sequenceUser() &&
         (resource == null || resource.data.ownerUid == request.auth.uid);
-      allow list: if isManager() && resource.data.ownerUid == request.auth.uid;
-      allow create: if isManager() &&
+      allow list: if sequenceUser() && resource.data.ownerUid == request.auth.uid;
+      allow create: if sequenceUser() &&
         request.resource.data.keys().hasAll(['ownerUid', 'noteId', 'dataUrl']) &&
         request.resource.data.keys().hasOnly(['ownerUid', 'noteId', 'dataUrl']) &&
         request.resource.data.ownerUid is string &&
@@ -125,7 +130,7 @@ service cloud.firestore {
           hashing.sha256(request.resource.data.dataUrl).toHexString().lower() &&
         sequenceImageParentMatches(request.resource.data, false);
       allow update: if false;
-      allow delete: if isManager() && resource.data.ownerUid == request.auth.uid &&
+      allow delete: if sequenceUser() && resource.data.ownerUid == request.auth.uid &&
         safeSequenceNoteId(resource.data.noteId) &&
         sequenceImageParentMatches(resource.data, true);
     }
@@ -136,7 +141,7 @@ service cloud.firestore {
     }
 
     match /staffs/{staffId} {
-      allow read: if isManager() || isInstructor(staffId);
+      allow read: if isManager();
       allow write: if false;
     }
 
@@ -163,7 +168,7 @@ service cloud.firestore {
     match /bookings/{bookingId} {
       allow read: if isManager() || isInstructor(resource.data.staffId);
       allow update: if
-        (isManager() || isInstructor(resource.data.staffId)) &&
+        isManager() &&
         request.resource.data.diff(resource.data).affectedKeys().hasOnly([
           'attendanceStatus',
           'syncStatus',

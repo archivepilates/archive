@@ -572,7 +572,7 @@ if (!process.argv.includes('--emulator')) {
       { update: { name: `${documents}/studios/qa-studio`, fields: fields({ name: 'QA' }) } },
       { update: { name: `${documents}/memberProfiles/qa-member`, fields: fields({ studioId: 'qa-studio' }) } },
     ], 'owner'));
-    await check('existing signed-in studio read preserved', () => get('studios/qa-studio', nonmanager), allowed);
+    await check('unprovisioned instructor cannot read studio metadata', () => get('studios/qa-studio', nonmanager));
     await check('existing signed-out studio read denied', () => get('studios/qa-studio', null));
     await check('existing studio write denied even for manager', () => commit([
       { update: { name: `${documents}/studios/qa-studio`, fields: fields({ name: 'No' }) } },
@@ -582,5 +582,50 @@ if (!process.argv.includes('--emulator')) {
     await check('existing default-deny collection preserved', () => commit([
       { update: { name: `${documents}/unknownCollection/test`, fields: fields({ ownerUid: uid }) } },
     ]));
+
+    const instructorUid = 'core-instructor-a';
+    const instructorId = 'core-staff-a';
+    const authTime = Math.floor(Date.now() / 1000);
+    const instructor = mockToken(instructorUid, 'instructor', { staffId: instructorId, auth_time: authTime });
+    const coreStaff = { uid: instructorUid, staffId: instructorId, studioId: 'qa-studio', role: 'instructor', active: true,
+      employmentStatus: 'current', employmentSource: 'studiomate_staff_tab_browser_scan',
+      coreAccessEnabled: true, coreMustChangePassword: true, coreAuthAfter: authTime };
+    const putStaff = (changes = {}) => commit([
+      { update: { name: `${documents}/staffs/${instructorId}`, fields: fields({ ...coreStaff, ...changes }) } },
+    ], 'owner');
+    await allowed(putStaff());
+    await check('initial instructor cannot create a sequence', () => commit([
+      noteWrite('core-own', note({ ownerUid: instructorUid }), { create: true }),
+    ], instructor));
+    await check('initial instructor cannot read own credential document', () => get(`staffs/${instructorId}`, instructor));
+    await check('initial instructor cannot read a missing sequence', () => get('sequenceNotes/core-own', instructor));
+    await allowed(putStaff({ coreMustChangePassword: false }));
+    await check('ready instructor creates only own sequence', () => commit([
+      noteWrite('core-own', note({ ownerUid: instructorUid }), { create: true }),
+    ], instructor), allowed);
+    await check('ready instructor reads own sequence', () => get('sequenceNotes/core-own', instructor), allowed);
+    await check('ready instructor queries own sequence list', () => query('sequenceNotes', instructorUid, 100, instructor), allowed);
+    await check('ready instructor cannot read manager sequence', () => get('sequenceNotes/atomic', instructor));
+    await check('ready instructor cannot query another owner', () => query('sequenceNotes', uid, 100, instructor));
+    await check('ready instructor cannot read credential hashes', () => get(`staffs/${instructorId}`, instructor));
+    await check('ready instructor cannot read member profile', () => get('memberProfiles/qa-member', instructor));
+    await allowed(commit(['dashboardSnapshots/current', 'conversations/core-test', 'privateLessonChartRequests/core-test',
+      'privateSurveyResponses/core-test', 'alimtalkSends/core-test'].map(id => ({
+      update: { name: `${documents}/${id}`, fields: fields({ studioId: 'qa-studio', staffId: instructorId }) },
+    })), 'owner'));
+    for (const path of ['dashboardSnapshots/current', 'conversations/core-test', 'privateLessonChartRequests/core-test',
+      'privateSurveyResponses/core-test', 'alimtalkSends/core-test']) {
+      await check(`ready instructor raw read denied ${path}`, () => get(path, instructor));
+    }
+    await allowed(putStaff({ coreMustChangePassword: false, coreAuthAfter: authTime + 1 }));
+    await check('old session stays blocked after password change', () => get('sequenceNotes/core-own', instructor));
+    await allowed(putStaff({ coreMustChangePassword: false, employmentStatus: 'inactive' }));
+    await check('departure blocks existing instructor token', () => get('sequenceNotes/core-own', instructor));
+    await allowed(putStaff({ coreMustChangePassword: false, coreAccessEnabled: false }));
+    await check('operator access switch blocks existing token', () => get('sequenceNotes/core-own', instructor));
+    await allowed(putStaff({ coreMustChangePassword: false }));
+    await check('wrong canonical UID cannot access sequence', () => get('sequenceNotes/core-own',
+      mockToken('different-instructor', 'instructor', { staffId: instructorId })));
+    await check('manager access remains unchanged after instructor policy', () => get('sequenceNotes/_', manager), allowed);
   });
 }

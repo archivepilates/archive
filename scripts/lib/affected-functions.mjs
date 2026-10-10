@@ -36,6 +36,9 @@ export function codebasesForFile(file) {
   const normalized = file.replaceAll("\\", "/");
   if (!normalized || normalized.startsWith("docs/") || normalized.startsWith("artifacts/")) return [];
   if (isSharedPath(normalized)) return allCodebases;
+  if (normalized.includes("/security/")) {
+    return ["functions-alimtalk", "functions-app", "functions-social", "functions-sync"];
+  }
   // This adapter is consumed by the Alimtalk queue, not the signup HTTP codebase.
   if (normalized.endsWith("/memberSignup/membershipWelcomeHistory.ts")) return ["functions-alimtalk"];
   if (normalized.endsWith("/alimtalk/templates.ts")) return ["functions-alimtalk", "functions-private-chart"];

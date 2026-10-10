@@ -84,6 +84,9 @@
       "sourceEntrypoint": "firebase/kangsain-functions/functions/src/exports/app.ts",
       "owns": [
         "getInstructorHome",
+        "getCoreAccessSession",
+        "completeCoreFirstLogin",
+        "getCoreInstructorWorkspace",
         "loginStaffWithPin",
         "setupStaffPinWithTempCode",
         "submitBookingAttendance",

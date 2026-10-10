@@ -1,4 +1,5 @@
 import { uiIcon } from "./ui-icons.js";
+import { prepareCoreAccess, renderInstructorCore } from "./core-instructor-access.js";
 
 const CORE_BRAND_IMAGE_URL = new URL("../icons/archive-pilates-icon-192.png", import.meta.url).href;
 const FIREBASE_APP_VERSION = "10.14.1";
@@ -1073,7 +1074,7 @@ async function initFirebase() {
 }
 
 function ensureLoginGate() {
-  if (qs("coreLoginGate") || !document.querySelector("[data-firestore-dashboard]")) return;
+  if (qs("coreLoginGate")) return;
   const gate = document.createElement("div");
   gate.className = "login-gate";
   gate.id = "coreLoginGate";
@@ -7978,6 +7979,13 @@ async function refresh() {
       throw error;
     }
     hideLoginGate();
+    const access = await prepareCoreAccess(runtime, user);
+    if (!access) {
+      showLoginGate(qs("coreLoginError")?.textContent || "");
+      return;
+    }
+    if (access.role === "instructor" && await renderInstructorCore(runtime, access)) return;
+    if (!document.querySelector("[data-firestore-dashboard]")) return;
     if (document.querySelector("[data-auth-only-dashboard]")) {
       const sequenceStudio = document.querySelector("[data-sequence-studio]");
       if (sequenceStudio) {
@@ -8479,4 +8487,6 @@ syncParkingVisitorFields();
 if (qs("refundRequestedAt") && !qs("refundRequestedAt").value) {
   qs("refundRequestedAt").value = new Date().toLocaleDateString("en-CA", { timeZone: "Asia/Seoul" });
 }
-if (document.querySelector("[data-firestore-dashboard]")) refresh();
+document.addEventListener("core-password-changed", () => showLoginGate("비밀번호가 변경되었습니다. 새 비밀번호로 로그인하세요."));
+document.addEventListener("core-instructor-signed-out", () => showLoginGate());
+refresh();
