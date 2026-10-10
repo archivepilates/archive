@@ -57,7 +57,13 @@ async function jsonRequest(url, { token, body, method = body ? 'POST' : 'GET' } 
     signal: AbortSignal.any([controller.signal, AbortSignal.timeout(30_000)]),
   });
   // Never print or include response/error bodies in assertions or thrown errors.
-  return { status: response.status, body: await response.json() };
+  const payload = await response.text();
+  let parsed;
+  try { parsed = JSON.parse(payload); } catch {
+    report.transportFailure = { status: response.status, json: false };
+    throw new Error('Non-JSON transport response');
+  }
+  return { status: response.status, body: parsed };
 }
 
 function callableDenied(response, allowUnauthenticated = false) {
@@ -258,6 +264,7 @@ async function run() {
     };
 
     await check('managerSessionAllowedWithoutClaimMutation', async () => {
+      report.managerStage = 'identity';
       const user = await auth.getUser(managerUid);
       verify(!user.disabled);
       const staffRows = await db.collection('staffs').where('uid', '==', managerUid).limit(2).get();
@@ -268,16 +275,27 @@ async function run() {
       managerBefore = { auth: managerAuthState(user), staff };
       // No additional claims and never set/update/revoke the existing manager.
       const customToken = await auth.createCustomToken(managerUid);
+      report.managerStage = 'sign_in';
       const login = await identity('signInWithCustomToken', { token: customToken, returnSecureToken: true });
-      verify(login.status === 200 && login.body?.localId === managerUid && typeof login.body?.idToken === 'string');
+      report.managerLogin = { status: login.status,
+        hasToken: typeof login.body?.idToken === 'string', errorCode: login.body?.error?.code };
+      // Custom-token sign-in does not return localId. The verified ID token
+      // below is authoritative for the existing manager's UID and claims.
+      verify(login.status === 200 && typeof login.body?.idToken === 'string');
       const managerToken = login.body.idToken;
+      report.managerStage = 'verify_token';
       const claims = await auth.verifyIdToken(managerToken);
+      report.managerStage = 'claims';
       verify(claims.uid === managerUid && claims.aud === PROJECT);
       for (const [key, value] of Object.entries(user.customClaims || {})) {
         verify(isDeepStrictEqual(claims[key], value));
       }
+      report.managerStage = 'callable';
       const result = callableResult(await call('getCoreAccessSession', managerToken));
+      report.managerStage = 'result';
       verify(result.role === 'manager' && result.staffId === staff.staffId && result.mustChangePassword === false);
+      delete report.managerStage;
+      delete report.managerLogin;
     });
 
     const staffRef = db.doc(`staffs/${staffId}`);
@@ -351,10 +369,15 @@ async function run() {
         new URL(response.url()).pathname.endsWith('/completeCoreFirstLogin') && response.request().method() === 'POST');
       await dialog.getByRole('button', { name: '변경 후 다시 로그인', exact: true }).click();
       const response = await completed;
-      const result = callableResult({ status: response.status(), body: await response.json() });
+      const payload = await response.json();
+      report.firstChangeResponse = { status: response.status(), errorStatus: payload.error?.status,
+        callCount: uiPasswordChanges,
+        authPermissionMissing: /insufficient permission|permission.denied|not authorized/i.test(String(payload.error?.message || '')) };
+      const result = callableResult({ status: response.status(), body: payload });
       verify(result.ok === true && result.requireFreshLogin === true && uiPasswordChanges === 1);
       await loginPage.getByRole('button', { name: '로그인', exact: true }).waitFor({ state: 'visible' });
       verify(!await dialog.isVisible());
+      delete report.firstChangeResponse;
     });
     let cutoff;
     await check('persistedAuthCutoffRejectsOriginalToken', async () => {

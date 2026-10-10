@@ -37,3 +37,11 @@
 - CI sidecar: system hardening 62/62, contact staff precedence 16/16, private flow 87/87 and rollback semantics 60/60 passed. Source-policy, cost, private-flow, instructor-registration and release guards passed.
 - Isolated production first-change test and real instructor provisioning remain pending. No production account mutation or deployment yet.
 - Shared auth guard is consumed by app, sync, alimtalk and social exports. Private-chart bearer authentication is unaffected; the manifest/detector changes conservatively report all codebases but do not change private-chart runtime behavior.
+
+## Live Test Repair
+
+- Initial manager test incorrectly required localId from custom-token sign-in. The API omits that field; verified ID-token UID/audience/claims remain mandatory instead. Added sanitized fixed-stage diagnostics.
+- Live pending login and four-width first-change dialog passed. Password update returned INTERNAL because the default compute runtime lacks Firebase Auth user-update permission. Every synthetic account and browser was removed after each attempt; manager state remained unchanged.
+- Use a dedicated archive-core-auth runtime for completeCoreFirstLogin only, with a custom project role containing firebaseauth.users.get/update, plus datastore.user and logging.logWriter. Do not grant Auth admin to the shared compute runtime or grant user creation/deletion/config/send privileges. No service-account key is created.
+- Source f0886adc is deployed to app/sync/alimtalk/social, both CORE Hosting sites, Firestore rules and the READY request index. Main and feature CI both passed. Synthetic login, pending API denial and the four-width dialog passed; password update remains blocked by runtime Auth permission.
+- Operator credentials cannot create IAM accounts/roles; HOME administrator credentials require reauthentication. Chrome tab 2059966952 is open for HOME sign-in; gcloud verification session 99800 waits for the OAuth code. Never provision the real four instructors before the isolated live flow passes.
