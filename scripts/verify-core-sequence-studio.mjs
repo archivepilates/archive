@@ -7,12 +7,12 @@ import { fileURLToPath } from "node:url";
 import { createHash } from "node:crypto";
 import { execFile } from "node:child_process";
 import { promisify } from "node:util";
-import { homedir } from "node:os";
+import { homedir, tmpdir } from "node:os";
 import { chromium } from "playwright";
 
 // Actual adapter and UI, fake Auth/Firestore SDK. This is NOT real Firestore QA.
 const coreRoot = fileURLToPath(new URL("../core/", import.meta.url));
-const output = "/tmp/archive-core-sequence-cloud-qa";
+const output = await fs.mkdtemp(path.join(tmpdir(), "archive-core-sequence-cloud-qa-"));
 const liveBase = process.env.ARCHIVE_CORE_BASE_URL?.replace(/\/+$/, "");
 const clone = (value) => JSON.parse(JSON.stringify(value));
 const KEY = "archive.sequence.studio.draft.v1";
@@ -38,7 +38,6 @@ const pendingBroadcasts = new Set();
 const contexts = new Set();
 const blockedRequests = [];
 const runFile = promisify(execFile);
-await fs.mkdir(output, { recursive: true });
 
 function queryRows(ref) {
   let rows = [...documents].filter(([key]) => key.startsWith(`${ref.path}/`) && key.split("/").length === ref.path.split("/").length + 1)
@@ -357,7 +356,17 @@ async function fixture(context, uid, legacy = {}) {
         "firebase-app.js": "export const getApps=()=>[];export const initializeApp=()=>({});",
         "firebase-auth.js": "export const getAuth=()=>({currentUser:window.__sequenceFixtureUid?{uid:window.__sequenceFixtureUid}:null});export const onAuthStateChanged=(auth,callback)=>{queueMicrotask(()=>callback(auth.currentUser));return ()=>{};};",
         "firebase-firestore.js": firestore,
-        "firebase-functions.js": "export const getFunctions=()=>({});export const httpsCallable=()=>{throw Error('Unexpected callable in isolated QA');};",
+        "firebase-functions.js": `
+          export const getFunctions = () => ({});
+          export const httpsCallable = (_client, name) => {
+            if (name !== "getCoreAccessSession") throw Error("Unexpected callable in isolated QA: " + name);
+            return async () => {
+              const uid = window.__sequenceFixtureUid;
+              if (!uid) throw Object.assign(Error("Synthetic session is signed out"), { code: "functions/unauthenticated" });
+              return { data: { role: "manager", staffId: uid, staffName: "Sequence QA", mustChangePassword: false } };
+            };
+          };
+        `,
       };
       assert.ok(modules[file], `Unsupported Firebase module: ${file}`);
       return route.fulfill({ contentType: "text/javascript", body: modules[file], headers: { "Access-Control-Allow-Origin": "*" } });
@@ -394,6 +403,8 @@ async function openStudio(context) {
   await page.waitForFunction(() => document.querySelector("iframe")?.contentWindow?.ARCHIVE_TEST && !document.querySelector("iframe").contentDocument.getElementById("title").disabled);
   const frame = page.frames().find((item) => /\/sequence\/studio\.html/.test(item.url()));
   assert.ok(frame, "authenticated studio iframe must load");
+  assert.equal(await page.evaluate(() => document.documentElement.dataset.coreAccess), "manager");
+  assert.equal(await page.evaluate(() => window.archiveSequenceStore.uid === window.__sequenceFixtureUid), true, "store must retain the fixture UID");
   await frame.getByRole("heading", { name: "시퀀스 노트 스튜디오" }).waitFor();
   return { page, frame };
 }

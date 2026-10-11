@@ -497,7 +497,94 @@ async function workspaceCase(page, base, kind) {
   return noOperatorReads(page);
 }
 
+async function managerSequenceGeometry(page, frame) {
+  await page.evaluate(() => document.fonts.ready);
+  await frame.evaluate(() => document.fonts.ready);
+  const main = await page.getByRole("main", { name: "시퀀스 노트", exact: true }).boundingBox();
+  const shell = await page.getByTestId("qa-operator-shell").boundingBox();
+  const account = await page.getByTestId("qa-account-bar").boundingBox();
+  const studio = await page.getByTestId("qa-sequence-frame").boundingBox();
+  assert.ok(main && shell && account && studio, "Manager sequence layout must be visible");
+  const aligned = (actual, expected, message) => assert.ok(Math.abs(actual - expected) <= 1, message);
+  const viewport = page.viewportSize();
+  assert.ok(main.x >= 0 && main.x + main.width <= viewport.width + 1, "Sequence main fits viewport");
+  aligned(main.x + main.width, shell.x + shell.width, "Main fills available shell width");
+  if (viewport.width <= 1040) aligned(main.x, shell.x, "Mobile main starts at shell left edge");
+  for (const [label, box] of [["Account", account], ["Iframe", studio]]) {
+    aligned(box.x, main.x, `${label} left edge aligns with main`);
+    aligned(box.width, main.width, `${label} spans full main width`);
+  }
+  aligned(account.y, main.y, "Account starts at top of main");
+  assert.ok(account.y + account.height <= studio.y + 1, "Account stays above iframe without overlap");
+  aligned(studio.y + studio.height, main.y + main.height, "Iframe fills remaining main height");
+  assert.ok(studio.height > 300, "Manager studio iframe retains usable height");
+  const inner = await frame.evaluate(() => ({
+    width: innerWidth, height: innerHeight,
+    scrollWidth: document.documentElement.scrollWidth, bodyScrollWidth: document.body.scrollWidth,
+  }));
+  aligned(inner.width, studio.width, "Actual studio viewport spans iframe width");
+  aligned(inner.height, studio.height, "Actual studio viewport spans iframe height");
+  assert.ok(inner.scrollWidth <= inner.width + 1 && inner.bodyScrollWidth <= inner.width + 1,
+    "Actual manager studio has no horizontal overflow");
+  return { main, shell, account, studio, inner };
+}
+
+async function managerSequenceCase(page, base, name) {
+  await settled(page);
+  await page.getByTestId("qa-operator-shell").waitFor({ state: "visible" });
+  assert.equal(await page.getByTestId("qa-instructor").count(), 0);
+  await loginName(page, true);
+  await page.waitForFunction(() => window.archiveSequenceStore?.uid === "qa-instructor"
+    && window.__coreFirebaseQA?.reads.some(read => read.operation === "onSnapshot"));
+  const frameElement = page.getByTestId("qa-sequence-frame");
+  await frameElement.waitFor({ state: "visible" });
+  assert.equal(await frameElement.getAttribute("data-auth-ready"), "true");
+  assert.equal(await frameElement.getAttribute("src"), "./studio.html");
+  const frame = page.frames().find(frame => new URL(frame.url()).pathname === `${base}sequence/studio.html`);
+  assert.ok(frame, "Actual manager studio iframe loads on the matching surface");
+  await frame.getByRole("heading", { name: "시퀀스 노트 스튜디오", exact: true }).waitFor();
+  await frame.getByRole("tab", { name: /내 시퀀스/ }).waitFor();
+  const sequenceLayout = { initial: await managerSequenceGeometry(page, frame) };
+  const menu = page.getByRole("button", { name: "메뉴", exact: true });
+  const nav = page.getByTestId("qa-operator-nav");
+  assert.ok(await nav.getByRole("link", { includeHidden: true }).count() > 3);
+  if (page.viewportSize().width <= 1040) {
+    await menu.waitFor({ state: "visible" });
+    const menuBox = await menu.boundingBox();
+    assert.ok(menuBox.width >= 44 && menuBox.height >= 44, "Menu touch target");
+    assert.equal(await menu.getAttribute("aria-expanded"), "false");
+    await nav.waitFor({ state: "hidden" });
+    await menu.click();
+    assert.equal(await menu.getAttribute("aria-expanded"), "true");
+    await nav.waitFor({ state: "visible" });
+    sequenceLayout.menuOpen = await layout(page, `${name}-menu-open`, false);
+    await menu.click();
+    assert.equal(await menu.getAttribute("aria-expanded"), "false");
+    await nav.waitFor({ state: "hidden" });
+    sequenceLayout.menuClosed = await managerSequenceGeometry(page, frame);
+    assert.deepEqual(sequenceLayout.menuClosed, sequenceLayout.initial, "Closing menu restores studio geometry");
+  } else {
+    assert.equal(await menu.isVisible(), false);
+    await nav.waitFor({ state: "visible" });
+  }
+  const state = await telemetry(page);
+  assert.equal(state.role, "manager");
+  assert.equal(state.events[0]?.name, "getCoreAccessSession", "Access check precedes sequence reads");
+  assert.equal(state.events.find(event => event.kind === "session")?.rawRole, "manager");
+  assert.deepEqual(state.callables.map(call => call.name), ["getCoreAccessSession"]);
+  assert.ok(state.reads.length > 0, "Actual manager sequence store reads its notes");
+  for (const read of state.reads) {
+    assert.equal(read.path, "sequenceNotes");
+    assert.equal(read.allowed, true);
+    assert.ok(read.filters.some(filter => filter.kind === "where" && filter.field === "ownerUid"
+      && filter.operator === "==" && filter.value === "qa-instructor"));
+  }
+  assert.deepEqual(state.writes, [], "Manager studio QA must not write");
+  return { ...state, sequenceLayout };
+}
+
 async function runCase(page, base, kind, name) {
+  if (kind === "manager-sequence") return managerSequenceCase(page, base, name);
   if (kind === "logged-out") {
     await page.getByTestId("qa-login").waitFor({ state: "visible" });
     assert.equal(await page.getByTestId("qa-operator-shell").isVisible(), false);
@@ -708,6 +795,7 @@ async function runCase(page, base, kind, name) {
 }
 
 function routeFor(base, kind) {
+  if (kind === "manager-sequence") return `${base}sequence/`;
   if (kind === "private" || kind === "sequence") return `${base}${kind}/`;
   if (kind === "workspace-retry") return `${base}private/`;
   if (["navigation", "instructor-bfcache"].includes(kind)) return `${base}private/`;
@@ -770,6 +858,12 @@ async function attemptCase(base, viewport, kind, retry) {
     await page.waitForFunction(() => window.__coreUiQA.frames >= 3);
     assert.equal(await page.getByTestId("qa-operator-shell").isVisible(), false, "Operator shell hidden before app/auth startup");
     assert.equal(await page.evaluate(() => window.__coreUiQA.operatorFlashes), 0, "No first-paint flash while module is delayed");
+    if (kind === "manager-sequence") {
+      const frame = page.getByTestId("qa-sequence-frame");
+      assert.equal(await frame.isVisible(), false, "Manager studio hidden before access check");
+      assert.equal(await frame.getAttribute("src"), null, "Studio must not load before access check");
+      assert.equal(await frame.getAttribute("data-auth-ready"), null);
+    }
     releaseBootstrap();
     if (kind === "bootstrap-failure") {
       await page.getByRole("paragraph").filter({ hasText: /^연결 중$/ }).waitFor();
@@ -780,6 +874,7 @@ async function attemptCase(base, viewport, kind, retry) {
     } else state = await runCase(page, base, kind, name);
     if (["home", "private", "sequence"].includes(kind) || kind.startsWith("blocked-")) await loginName(page);
     metrics = await layout(page, name, !["manager", "owner", "revoked-session", "logged-out", "bootstrap-failure"].includes(kind) && !kind.startsWith("manager-"));
+    if (kind === "manager-sequence") metrics.sequenceLayout = state.sequenceLayout;
     if (kind === "home") {
       await page.getByRole("button", { name: "로그아웃", exact: true }).click();
       await page.getByTestId("qa-login").waitFor({ state: "visible" });
@@ -787,7 +882,12 @@ async function attemptCase(base, viewport, kind, retry) {
       assert.ok(state.uiEvents.includes("core-instructor-signed-out"));
       await clearedLoginName(page);
     }
-    if (["manager", "owner"].includes(kind)) state = await managerLogout(page);
+    if (["manager", "owner", "manager-sequence"].includes(kind)) state = await managerLogout(page);
+    if (kind === "manager-sequence") {
+      await page.getByTestId("qa-sequence-frame").waitFor({ state: "hidden" });
+      assert.equal(await page.getByTestId("qa-sequence-frame").getAttribute("src"), null, "Logout unloads manager studio");
+      assert.equal(await page.evaluate(() => Boolean(window.archiveSequenceStore)), false, "Logout clears sequence store");
+    }
     if (kind === "revoked-session") await clearedLoginName(page);
     assert.deepEqual(pageErrors, [], "No unhandled page errors");
     assert.deepEqual(deniedRequests, [], "No external/unknown network attempts");
@@ -843,7 +943,7 @@ try {
   origin = `http://127.0.0.1:${server.address().port}`;
   browser = await chromium.launch({ headless: true });
   const cases = ["home", "private", "first-login", "pending-role", "access-denied", "sequence",
-    "blocked-business", "blocked-members/detail", "blocked-rules", "manager", "owner", "revoked-session", "access-transient",
+    "blocked-business", "blocked-members/detail", "blocked-rules", "manager", "manager-sequence", "owner", "revoked-session", "access-transient",
     "logged-out", "bootstrap-failure"];
   for (const base of surfaces) {
     for (const viewport of viewports) {
