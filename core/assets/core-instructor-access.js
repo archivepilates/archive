@@ -3,11 +3,9 @@ import { uiIcon } from "./ui-icons.js";
 const APPROVED_HOSTS = new Set(["in.archivepilates.com", "core.archivepilates.com"]);
 const CORE_BASE = new URL("../", import.meta.url).pathname;
 const ROUTES = [
-  ["home", CORE_BASE, "홈", "house"],
   ["private", `${CORE_BASE}private/`, "프라이빗", "clipboard-check"],
   ["sequence", `${CORE_BASE}sequence/`, "시퀀스 노트", "notebook-pen"],
 ];
-const TERMINAL_STATUSES = new Set(["completed", "done", "sent", "delivered", "cancelled", "canceled"]);
 const STATUS_LABELS = {
   pending: "기록 대기", waiting: "대기", recording: "기록 중", submitted: "기록 제출",
   report_review: "리포트 확인", completed: "완료", done: "완료",
@@ -55,7 +53,7 @@ function loadStyles() {
 }
 
 function hideNode(node) {
-  if (!(node instanceof HTMLElement) || node === root || node.id === "coreLoginGate"
+  if (!(node instanceof HTMLElement) || node === root || ["coreLoginGate", "coreAccessLoading"].includes(node.id)
     || ["SCRIPT", "STYLE", "LINK"].includes(node.tagName)) return;
   if (!hiddenNodes.has(node)) {
     hiddenNodes.set(node, {
@@ -75,6 +73,7 @@ function hideNode(node) {
 
 // Quarantine operator DOM before awaiting access, including late-added operator overlays.
 function isolateOperatorContent() {
+  delete document.documentElement.dataset.coreAccess;
   if (!root?.isConnected) {
     root = document.createElement("div");
     root.className = "core-instructor-access";
@@ -119,9 +118,11 @@ function restoreManagerContent() {
     if (!previous.hadStyle && !node.style.cssText) node.removeAttribute("style");
   }
   hiddenNodes.clear();
+  document.documentElement.dataset.coreAccess = "manager";
 }
 
 function suspendAccess() {
+  delete document.documentElement.dataset.coreAccess;
   generation += 1;
   activeSession = null;
   accountBar?.remove();
@@ -168,6 +169,9 @@ function renderManagerAccount(runtime, session, error = "") {
 
 function observeAuth(runtime) {
   if (!pageHideRegistered) {
+    window.addEventListener("pageshow", (event) => {
+      if (event.persisted) window.location.reload();
+    });
     window.addEventListener("pagehide", () => {
       suspendAccess();
       authUnsubscribe?.();
@@ -193,6 +197,7 @@ async function signOut(runtime) {
 
 function currentRoute() {
   const path = window.location.pathname.replace(/\/index\.html$/, "/").replace(/\/+$/, "") || "/";
+  if (path === (CORE_BASE.replace(/\/+$/, "") || "/")) return "home";
   return ROUTES.find(([, href]) => path === (href.replace(/\/+$/, "") || "/"))?.[0] || "blocked";
 }
 
@@ -254,7 +259,7 @@ function renderAccessNotice(runtime, session, pending = false) {
     ${uiIcon("user-round", "cia-notice-icon")}
     <h1 id="ciaAccessTitle">${pending ? "접근 권한 확인 필요" : "접근할 수 없는 페이지"}</h1>
     <p>${pending ? "강사 계정 연결을 확인해 주세요." : "이 계정에는 페이지 접근 권한이 없습니다."}</p>
-    <a class="cia-button" href="${escapeHtml(ROUTES[0][1])}">${uiIcon("house", "cia-icon")}<span>홈으로</span></a>
+    <a class="cia-button" href="${escapeHtml(ROUTES[0][1])}">${uiIcon("clipboard-check", "cia-icon")}<span>프라이빗으로</span></a>
   </section>`;
 }
 
@@ -473,40 +478,30 @@ function taskMarkup(task) {
   </li>`;
 }
 
-function renderWorkspace(content, workspace, session, route, view = {}) {
+function renderWorkspace(content, workspace, session, view = {}) {
   if (!workspace || !/^\d{4}-\d{2}-\d{2}$/.test(workspace.date)
     || !Array.isArray(workspace.lessons) || !Array.isArray(workspace.privateTasks)
     || workspace.lessons.some((item) => !item || typeof item !== "object")
     || workspace.privateTasks.some((item) => !item || typeof item !== "object")) {
     throw new Error("Invalid instructor workspace");
   }
-  const pending = workspace.privateTasks.filter((task) => !TERMINAL_STATUSES.has(task.status));
-  const tasks = route === "home" ? pending : workspace.privateTasks.filter(task =>
+  const tasks = workspace.privateTasks.filter(task =>
     view.filter === "records" ? task.recordSubmitted === true : view.filter === "reports" ? Boolean(safeUrl(task.reportUrl)) : true);
-  const today = workspace.lessons.filter((lesson) => lesson.date === workspace.date)
-    .sort((a, b) => String(a.startTime || "").localeCompare(String(b.startTime || "")));
-  const sortedTasks = [...tasks].sort((a, b) => (route === "home" ? 1 : -1) * `${a.date || ""} ${a.startTime || ""}`.localeCompare(`${b.date || ""} ${b.startTime || ""}`));
+  const sortedTasks = [...tasks].sort((a, b) => `${b.date || ""} ${b.startTime || ""}`.localeCompare(`${a.date || ""} ${a.startTime || ""}`));
   content.innerHTML = `<header class="cia-page-heading">
     <p class="cia-eyebrow">${escapeHtml(workspace.staffName || session.staffName || "강사")} · ${escapeHtml(workspace.date)}</p>
-    <h1>${route === "home" ? "오늘의 수업" : "프라이빗 기록·리포트"}</h1>
+    <h1>프라이빗 기록·리포트</h1>
   </header>
-  ${route === "private" ? `<div class="cia-private-toolbar">
+  <div class="cia-private-toolbar">
     <div class="cia-view-options" role="group" aria-label="내 프라이빗 보기">
       ${[["all", "전체"], ["records", "기록"], ["reports", "리포트"]].map(([key, label]) => `<button type="button" class="cia-button" data-private-filter="${key}" aria-pressed="${(view.filter || "all") === key}">${label}</button>`).join("")}
     </div>
     <div class="cia-private-period"><input type="month" aria-label="조회 월" value="${escapeHtml(view.month || workspace.date.slice(0, 7))}" data-private-month>
       <button type="button" class="cia-button" aria-label="새로고침" title="새로고침" data-private-refresh>${uiIcon("refresh-cw", "cia-icon")}</button></div>
-  </div>` : ""}
-  ${route === "home" ? `<section class="cia-section" aria-labelledby="ciaLessonsTitle">
-    <div class="cia-section-heading"><h2 id="ciaLessonsTitle">오늘 수업</h2><span>${today.length}건</span></div>
-    ${today.length ? `<ul class="cia-list">${today.map((lesson) => `<li class="cia-row cia-lesson-row">
-      <time>${escapeHtml(lesson.startTime || "시간 확인 필요")}</time>
-      <div class="cia-row-detail"><strong>${escapeHtml(lesson.title || "수업")}</strong><span>${escapeHtml(lesson.memberName || "")}</span></div>
-    </li>`).join("")}</ul>` : '<p class="cia-empty">오늘 예정된 수업이 없습니다.</p>'}
-  </section>` : ""}
+  </div>
   <section class="cia-section" aria-labelledby="ciaTasksTitle">
-    <div class="cia-section-heading"><h2 id="ciaTasksTitle">${route === "home" ? "미처리 프라이빗" : "내 기록"}</h2><span>${tasks.length}건</span></div>
-    ${tasks.length ? `<ul class="cia-list">${sortedTasks.map(taskMarkup).join("")}</ul>` : `<p class="cia-empty">${route === "home" ? "미처리 기록이 없습니다." : "연결된 프라이빗 기록이 없습니다."}</p>`}
+    <div class="cia-section-heading"><h2 id="ciaTasksTitle">내 기록</h2><span>${tasks.length}건</span></div>
+    ${tasks.length ? `<ul class="cia-list">${sortedTasks.map(taskMarkup).join("")}</ul>` : '<p class="cia-empty">연결된 프라이빗 기록이 없습니다.</p>'}
   </section>`;
 }
 
@@ -523,6 +518,10 @@ export async function renderInstructorCore(runtime, session, view = {}) {
   if (activeSession?.session !== session) return true;
   const route = currentRoute();
   const ticket = ++generation;
+  if (route === "home") {
+    window.location.replace(ROUTES[0][1]);
+    return true;
+  }
   if (route === "blocked") {
     renderAccessNotice(runtime, session);
     return true;
@@ -549,15 +548,15 @@ export async function renderInstructorCore(runtime, session, view = {}) {
   const content = renderShell(runtime, session, route);
   root.classList.remove("core-instructor-access--sequence");
   const status = root.querySelector("[data-core-instructor-status]");
-  status.textContent = "내 수업을 불러오는 중";
+  status.textContent = "프라이빗 기록을 불러오는 중";
   content.setAttribute("aria-busy", "true");
-  const month = route === "private" ? view.month || new Date().toLocaleDateString("en-CA", { timeZone: "Asia/Seoul", year: "numeric", month: "2-digit" }) : undefined;
+  const month = view.month || new Date().toLocaleDateString("en-CA", { timeZone: "Asia/Seoul", year: "numeric", month: "2-digit" });
   try {
     const response = await runtime.httpsCallable(runtime.functionsClient, "getCoreInstructorWorkspace")(month ? { month } : {});
     if (generation !== ticket || activeSession?.session !== session || !content.isConnected) return true;
     const paint = (filter = view.filter || "all") => {
       if (generation !== ticket || activeSession?.session !== session || !content.isConnected) return;
-      renderWorkspace(content, response?.data, session, route, { month, filter });
+      renderWorkspace(content, response?.data, session, { month, filter });
       content.querySelectorAll("[data-private-filter]").forEach(button => button.addEventListener("click", () => paint(button.dataset.privateFilter)));
       content.querySelector("[data-private-month]")?.addEventListener("change", event => {
         if (/^20\d{2}-(0[1-9]|1[0-2])$/.test(event.target.value)) renderInstructorCore(runtime, session, { month: event.target.value, filter });
@@ -569,7 +568,7 @@ export async function renderInstructorCore(runtime, session, view = {}) {
   } catch {
     if (generation !== ticket || !content.isConnected) return true;
     content.replaceChildren();
-    status.textContent = "내 수업을 불러오지 못했습니다.";
+    status.textContent = "프라이빗 기록을 불러오지 못했습니다.";
     const retry = document.createElement("button");
     retry.type = "button";
     retry.className = "cia-button";

@@ -66,6 +66,29 @@ a {
   outline-offset: 3px;
 }
 
+/* Keep operator navigation out of first paint until the server confirms access. */
+html:not([data-core-access="manager"]) .shell {
+  display: none !important;
+}
+
+.core-access-loading {
+  min-height: 100dvh;
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  justify-content: center;
+  gap: 12px;
+  color: var(--muted);
+}
+
+.core-access-loading p { margin: 0; }
+.core-access-loading a { display: inline-flex; align-items: center; color: var(--text); }
+html[data-core-access="manager"] .core-access-loading,
+body:has(#coreInstructorAccess:not(:empty)) .core-access-loading,
+body:has(.login-gate.on) .core-access-loading {
+  display: none;
+}
+
 .shell {
   display: grid;
   min-height: 100dvh;

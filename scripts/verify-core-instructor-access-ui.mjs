@@ -143,7 +143,7 @@ function firebaseModule(kind) {
   if (kind === "functions") return shared + `
     export const getFunctions = () => ({ mock: true });
     export const httpsCallable = (_, name) => async (payload) => {
-      const call = record("callables", { name, month: payload?.month });
+      const call = record("callables", { name, month: payload?.month, path: location.pathname });
       if (!authClient.currentUser) throw denied("Synthetic session is signed out");
       if (name === "getCoreAccessSession") {
         if (fixture.mode === "access-denied") throw denied("Synthetic pending access");
@@ -288,7 +288,19 @@ async function seedFixture(mode) {
 
 // Add test IDs only; do not change DOM visibility, app bootstrap, or access decisions.
 function installDomHooks() {
-  window.__coreUiQA = { events: [] };
+  window.__coreUiQA = { events: [], frames: 0, operatorFlashes: 0 };
+  const inspectFrame = () => {
+    const qa = window.__coreUiQA;
+    qa.frames++;
+    const shell = document.querySelector(".shell");
+    const box = shell?.getBoundingClientRect();
+    if (box?.width && box?.height && getComputedStyle(shell).visibility !== "hidden"
+      && (!window.__coreFirebaseQA?.accessResolved || window.__coreFirebaseQA?.session?.role !== "manager")) {
+      qa.operatorFlashes++;
+    }
+    requestAnimationFrame(inspectFrame);
+  };
+  requestAnimationFrame(inspectFrame);
   for (const name of ["core-password-changed", "core-instructor-signed-out"]) {
     document.addEventListener(name, () => window.__coreUiQA.events.push(name));
   }
@@ -315,7 +327,7 @@ async function telemetry(page) {
     return { events: state.events, reads: state.reads, writes: state.writes, callables: state.callables,
       auth: state.auth, role: state.session?.role, storedUid: localStorage.getItem("core-ui-user"),
       currentUid: authClient.currentUser?.uid ?? null,
-      uiEvents: window.__coreUiQA.events };
+      uiEvents: window.__coreUiQA.events, operatorFlashes: window.__coreUiQA.operatorFlashes };
   });
 }
 
@@ -432,25 +444,29 @@ async function layout(page, name, instructor = true) {
 async function instructorNav(page, base) {
   const nav = page.getByRole("navigation", { name: "강사 메뉴" });
   await nav.waitFor({ state: "visible" });
-  assert.equal(await nav.getByRole("link").count(), 3);
-  for (const [name, suffix] of [["홈", ""], ["프라이빗", "private/"], ["시퀀스 노트", "sequence/"]]) {
+  assert.equal(await nav.getByRole("link").count(), 2);
+  assert.equal(await nav.getByRole("link", { name: "홈", exact: true }).count(), 0);
+  for (const [name, suffix] of [["프라이빗", "private/"], ["시퀀스 노트", "sequence/"]]) {
     assert.equal(await nav.getByRole("link", { name, exact: true }).getAttribute("href"), `${base}${suffix}`);
   }
-  assert.equal(await page.getByRole("link", { name: "ARCHIVE CORE", exact: true }).getAttribute("href"), base);
+  assert.equal(await page.getByRole("link", { name: "ARCHIVE CORE", exact: true }).getAttribute("href"), `${base}private/`);
   assert.equal(await page.getByRole("button", { name: "로그아웃", exact: true }).isVisible(), true);
 }
 
 async function workspaceCase(page, base, kind) {
-  await page.getByRole("heading", { name: kind === "private" ? "프라이빗 기록·리포트" : "오늘의 수업", exact: true }).waitFor();
+  if (kind === "home") await page.waitForURL(`${origin}${base}private/`);
+  await page.getByRole("heading", { name: "프라이빗 기록·리포트", exact: true }).waitFor();
   await settled(page);
   await instructorNav(page, base);
   const ui = page.getByTestId("qa-instructor");
   assert.equal(await ui.getByRole("link", { name: "기록 작성", exact: true }).count(), 1);
   assert.equal(await ui.getByRole("link", { name: "설문", exact: true }).count(), 1);
-  assert.equal(await ui.getByRole("link", { name: "리포트 확인", exact: true }).count(), kind === "private" ? 1 : 0);
+  assert.equal(await ui.getByRole("link", { name: "리포트 확인", exact: true }).count(), 1);
   const text = await ui.innerText();
-  assert.equal(text.includes("QA 내일 수업"), false, "Home must not show another date's lesson");
-  assert.equal(text.includes("QA 완료 회원"), kind === "private", "Home excludes terminal tasks; private keeps own task history");
+  assert.equal(text.includes("QA 내일 수업"), false, "Lesson roster must not be displayed");
+  assert.equal(text.includes("QA 오늘 회원"), false, "Lesson member rows must not be counted as classes");
+  assert.equal(await ui.getByRole("heading", { name: /오늘.*수업/ }).count(), 0);
+  assert.equal(text.includes("QA 완료 회원"), true, "Private keeps own task history");
   const links = await ui.getByRole("link").evaluateAll(nodes => nodes.filter(node => node.target === "_blank").map(node => node.href));
   for (const href of links) {
     const url = new URL(href);
@@ -458,7 +474,7 @@ async function workspaceCase(page, base, kind) {
     assert.ok(["in.archivepilates.com", "core.archivepilates.com"].includes(url.hostname));
     assert.equal(url.username + url.password + url.port, "");
   }
-  if (kind === "private") {
+  {
     const filters = ui.getByRole("group", { name: "내 프라이빗 보기" });
     await filters.getByRole("button", { name: "기록", exact: true }).click();
     assert.equal(await ui.getByRole("listitem").count(), 1);
@@ -482,10 +498,46 @@ async function workspaceCase(page, base, kind) {
 }
 
 async function runCase(page, base, kind, name) {
+  if (kind === "logged-out") {
+    await page.getByTestId("qa-login").waitFor({ state: "visible" });
+    assert.equal(await page.getByTestId("qa-operator-shell").isVisible(), false);
+    const state = await telemetry(page);
+    assert.deepEqual(state.reads, []);
+    assert.deepEqual(state.callables, []);
+    assert.deepEqual(state.writes, []);
+    return state;
+  }
+  if (kind === "navigation" || kind === "instructor-bfcache") {
+    await workspaceCase(page, base, "private");
+    if (kind === "navigation") {
+      await page.getByRole("navigation", { name: "강사 메뉴" }).getByRole("link", { name: "시퀀스 노트", exact: true }).click();
+      await runCase(page, base, "sequence", name);
+      assert.equal((await telemetry(page)).operatorFlashes, 0);
+      await page.goBack();
+    } else {
+      // Deterministic persisted-page lifecycle simulation; not proof of browser cache eligibility.
+      await page.evaluate(() => window.dispatchEvent(new PageTransitionEvent("pagehide", { persisted: true })));
+      assert.equal(await page.getByTestId("qa-operator-shell").isVisible(), false);
+      await Promise.all([
+        page.waitForEvent("load"),
+        page.evaluate(() => window.dispatchEvent(new PageTransitionEvent("pageshow", { persisted: true }))),
+      ]);
+    }
+    return workspaceCase(page, base, "private");
+  }
   if (/^(manager|instructor)-/.test(kind)) {
     const manager = kind.startsWith("manager-");
     await runCase(page, base, manager ? "manager" : "home", name);
     await loginName(page, manager, kind.endsWith("name-missing"));
+    if (kind === "manager-bfcache") {
+      await page.evaluate(() => window.dispatchEvent(new PageTransitionEvent("pagehide", { persisted: true })));
+      assert.equal(await page.getByTestId("qa-operator-shell").isVisible(), false);
+      await Promise.all([
+        page.waitForEvent("load"),
+        page.evaluate(() => window.dispatchEvent(new PageTransitionEvent("pageshow", { persisted: true }))),
+      ]);
+      return runCase(page, base, "manager", name);
+    }
     if (kind.endsWith("auth-change")) {
       await page.evaluate(async () => {
         const { changeAuth } = await import("/__qa/state.mjs");
@@ -548,15 +600,15 @@ async function runCase(page, base, kind, name) {
     await page.getByRole("heading", { name: "접근할 수 없는 페이지", exact: true }).waitFor();
     await settled(page);
     await instructorNav(page, base);
-    assert.equal(await page.getByRole("link", { name: "홈으로", exact: true }).getAttribute("href"), base);
+    assert.equal(await page.getByRole("link", { name: "프라이빗으로", exact: true }).getAttribute("href"), `${base}private/`);
     const state = await noOperatorReads(page);
     assert.equal(state.callables.some(call => call.name === "getCoreInstructorWorkspace"), false);
     if (kind === "blocked-rules") {
       await layout(page, `${name}-blocked`);
-      await page.getByRole("link", { name: "홈으로", exact: true }).click();
-      await page.waitForURL(`${origin}${base}`);
-      await workspaceCase(page, base, "home");
-      state.returnHomeVerified = true;
+      await page.getByRole("link", { name: "프라이빗으로", exact: true }).click();
+      await page.waitForURL(`${origin}${base}private/`);
+      await workspaceCase(page, base, "private");
+      state.returnPrivateVerified = true;
     }
     return state;
   }
@@ -615,9 +667,9 @@ async function runCase(page, base, kind, name) {
     await page.getByRole("button", { name: "다시 시도", exact: true }).waitFor();
     await noOperatorReads(page);
     await page.getByRole("button", { name: "다시 시도", exact: true }).click();
-    const state = await workspaceCase(page, base, "home");
-    assert.equal(state.callables.filter(call => call.name === "getCoreInstructorWorkspace").length, 2);
-    return state;
+    await page.getByRole("heading", { name: "프라이빗 기록·리포트", exact: true }).waitFor();
+    assert.equal((await telemetry(page)).callables.filter(call => call.name === "getCoreInstructorWorkspace").length, 2);
+    return workspaceCase(page, base, "private");
   }
   assert.ok(["first-login", "signout-retry"].includes(kind));
   await page.getByRole("dialog", { name: "새 비밀번호 설정" }).waitFor();
@@ -657,6 +709,8 @@ async function runCase(page, base, kind, name) {
 
 function routeFor(base, kind) {
   if (kind === "private" || kind === "sequence") return `${base}${kind}/`;
+  if (kind === "workspace-retry") return `${base}private/`;
+  if (["navigation", "instructor-bfcache"].includes(kind)) return `${base}private/`;
   if (kind.startsWith("blocked-")) return `${base}${kind.slice(8)}/`;
   return base;
 }
@@ -667,7 +721,7 @@ async function attemptCase(base, viewport, kind, retry) {
   const context = await browser.newContext({
     viewport, locale: "ko-KR", timezoneId: "Asia/Seoul", reducedMotion: "reduce", serviceWorkers: "block",
     storageState: { cookies: [], origins: [{ origin, localStorage: [
-      { name: "core-ui-fixture", value: fixture.id }, { name: "core-ui-user", value: fixture.uid },
+      { name: "core-ui-fixture", value: fixture.id }, { name: "core-ui-user", value: kind === "logged-out" ? "" : fixture.uid },
     ] }] },
   });
   report.cleanup.contextsOpened++;
@@ -677,6 +731,9 @@ async function attemptCase(base, viewport, kind, retry) {
   let metrics;
   const pageErrors = [];
   const deniedRequests = [];
+  let releaseBootstrap;
+  const bootstrapGate = new Promise(resolve => { releaseBootstrap = resolve; });
+  let bootstrapHeld = false;
   try {
     await context.addInitScript(installDomHooks);
     await context.routeWebSocket("**/*", socket => {
@@ -690,7 +747,14 @@ async function attemptCase(base, viewport, kind, retry) {
       if (match && request.method() === "GET") return route.fulfill({
         contentType: "text/javascript", headers: { "Access-Control-Allow-Origin": "*" }, body: firebaseModule(match[1]),
       });
-      if (url.origin === origin && request.method() === "GET") return route.continue();
+      if (url.origin === origin && request.method() === "GET") {
+        if (!bootstrapHeld && url.pathname.endsWith("/assets/app.js")) {
+          bootstrapHeld = true;
+          await bootstrapGate;
+          if (kind === "bootstrap-failure") return route.fulfill({ status: 503, contentType: "text/javascript", body: "" });
+        }
+        return route.continue();
+      }
       deniedRequests.push({ type: request.resourceType(), method: request.method(), url: `${url.origin}${url.pathname}` });
       return route.abort("blockedbyclient");
     });
@@ -701,10 +765,21 @@ async function attemptCase(base, viewport, kind, retry) {
     page.setDefaultTimeout(8000);
     page.on("pageerror", error => pageErrors.push(error.message));
     await page.clock.setFixedTime(new Date(fixedTime));
-    await page.goto(`${origin}${routeFor(base, kind)}`, { waitUntil: "load" });
-    state = await runCase(page, base, kind, name);
+    await page.goto(`${origin}${routeFor(base, kind)}`, { waitUntil: "commit" });
+    await page.getByTestId("qa-operator-shell").waitFor({ state: "attached" });
+    await page.waitForFunction(() => window.__coreUiQA.frames >= 3);
+    assert.equal(await page.getByTestId("qa-operator-shell").isVisible(), false, "Operator shell hidden before app/auth startup");
+    assert.equal(await page.evaluate(() => window.__coreUiQA.operatorFlashes), 0, "No first-paint flash while module is delayed");
+    releaseBootstrap();
+    if (kind === "bootstrap-failure") {
+      await page.getByRole("paragraph").filter({ hasText: /^연결 중$/ }).waitFor();
+      assert.equal(await page.getByRole("link", { name: "다시 연결", exact: true }).isVisible(), true);
+      assert.equal(await page.getByTestId("qa-operator-shell").isVisible(), false);
+      assert.equal(await page.evaluate(() => Boolean(window.__coreFirebaseQA)), false);
+      state = { bootstrapRecovery: true };
+    } else state = await runCase(page, base, kind, name);
     if (["home", "private", "sequence"].includes(kind) || kind.startsWith("blocked-")) await loginName(page);
-    metrics = await layout(page, name, !["manager", "owner", "revoked-session"].includes(kind) && !kind.startsWith("manager-"));
+    metrics = await layout(page, name, !["manager", "owner", "revoked-session", "logged-out", "bootstrap-failure"].includes(kind) && !kind.startsWith("manager-"));
     if (kind === "home") {
       await page.getByRole("button", { name: "로그아웃", exact: true }).click();
       await page.getByTestId("qa-login").waitFor({ state: "visible" });
@@ -716,6 +791,11 @@ async function attemptCase(base, viewport, kind, retry) {
     if (kind === "revoked-session") await clearedLoginName(page);
     assert.deepEqual(pageErrors, [], "No unhandled page errors");
     assert.deepEqual(deniedRequests, [], "No external/unknown network attempts");
+    assert.equal(await page.evaluate(() => window.__coreUiQA.operatorFlashes), 0, "No frame exposes operator UI before verified manager access");
+    if (kind === "home") {
+      assert.ok(state.callables.filter(call => call.name === "getCoreInstructorWorkspace")
+        .every(call => call.path === `${base}private/`), "Home never requests lesson workspace before redirect");
+    }
   } catch (error) {
     failure = error.message;
     console.error(`${name}: ${failure}`);
@@ -724,6 +804,7 @@ async function attemptCase(base, viewport, kind, retry) {
       state = await telemetry(page).catch(() => undefined);
     }
   } finally {
+    releaseBootstrap();
     try {
       if (retry === 1) await context.tracing.stop({ path: path.join(output, `${name}-trace.zip`) });
     } finally {
@@ -762,7 +843,8 @@ try {
   origin = `http://127.0.0.1:${server.address().port}`;
   browser = await chromium.launch({ headless: true });
   const cases = ["home", "private", "first-login", "pending-role", "access-denied", "sequence",
-    "blocked-business", "blocked-members/detail", "blocked-rules", "manager", "owner", "revoked-session", "access-transient"];
+    "blocked-business", "blocked-members/detail", "blocked-rules", "manager", "owner", "revoked-session", "access-transient",
+    "logged-out", "bootstrap-failure"];
   for (const base of surfaces) {
     for (const viewport of viewports) {
       for (const kind of cases) {
@@ -777,7 +859,7 @@ try {
     }
     for (const kind of ["signout-retry", "workspace-retry", "manager-name-safe", "instructor-name-safe",
       "manager-name-missing", "instructor-name-missing", "manager-auth-change", "instructor-auth-change",
-      "manager-logout-failure", "manager-revoked-after-login"]) {
+      "manager-logout-failure", "manager-revoked-after-login", "navigation", "instructor-bfcache", "manager-bfcache"]) {
       let result;
       for (let retry = 0; retry <= options.retries; retry++) {
         result = await attemptCase(base, viewports[1], kind, retry);

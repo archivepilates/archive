@@ -48,11 +48,20 @@ const results = [];
 try {
   for (const viewport of viewports) {
     const page = await browser.newPage({ viewport });
+    // Static synthetic operator layout QA, not a login or live data/authorization test.
+    await page.route("**/assets/app.js", async route => {
+      const response = await route.fetch();
+      const source = await response.text();
+      if (!source.trimEnd().endsWith("\nrefresh();")) throw new Error("Unknown CORE bootstrap; cannot isolate static layout QA");
+      await route.fulfill({ response, body: source.replace(/\nrefresh\(\);\s*$/, "\n") });
+    });
+    await page.route("https://www.gstatic.com/firebasejs/**", route => route.abort("blockedbyclient"));
     for (const route of routes) {
       const url = `${baseUrl}${route.path}`;
       await page.goto(url, { waitUntil: "domcontentloaded", timeout: 30_000 });
       await page.waitForSelector(".shell", { state: "attached", timeout: 10_000 });
       await page.evaluate(() => {
+        document.documentElement.dataset.coreAccess = "manager";
         const style = document.createElement("style");
         style.dataset.archiveCoreQa = "login-gate";
         style.textContent = ".login-gate{display:none!important}";

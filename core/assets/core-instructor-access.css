@@ -46,7 +46,7 @@
 }
 .core-instructor-access .cia-account { display: flex; align-items: center; justify-content: flex-end; gap: .5rem; }
 .core-instructor-access .cia-account > span { color: var(--cia-muted); text-align: right; }
-.core-instructor-access .cia-nav { display: grid; grid-column: 1 / -1; grid-template-columns: repeat(3, minmax(0, 1fr)); gap: .375rem; }
+.core-instructor-access .cia-nav { display: grid; grid-column: 1 / -1; grid-template-columns: repeat(2, minmax(0, 1fr)); gap: .375rem; }
 
 .core-account-bar {
   display: flex;
@@ -129,8 +129,6 @@
 .core-instructor-access .cia-row-detail { display: grid; gap: .25rem; }
 .core-instructor-access .cia-row-detail > span { color: var(--cia-muted); font-size: .875rem; }
 .core-instructor-access .cia-row-detail strong { font-size: 1rem; font-weight: 650; }
-.core-instructor-access .cia-lesson-row { grid-template-columns: minmax(4rem, 5.5rem) minmax(0, 1fr); }
-.core-instructor-access .cia-lesson-row time { font-variant-numeric: tabular-nums; overflow-wrap: anywhere; }
 .core-instructor-access .cia-task-status { max-width: 6.5rem; color: var(--cia-muted); font-size: .875rem; text-align: right; }
 .core-instructor-access .cia-task-actions { grid-column: 1 / -1; display: flex; flex-wrap: wrap; align-items: center; gap: .5rem; }
 .core-instructor-access .cia-button {
@@ -180,7 +178,7 @@
   .core-instructor-access .cia-nav { grid-column: 1 / -1; width: min(100%, 34rem); }
   .core-instructor-access .cia-nav a { flex-direction: row; gap: .5rem; min-height: 44px; }
   .core-instructor-access .cia-main { padding: 1.5rem 2rem; }
-  .core-instructor-access .cia-row:not(.cia-lesson-row) { grid-template-columns: minmax(0, 1fr) minmax(4rem, 6.5rem) minmax(0, 24rem); align-items: center; }
+  .core-instructor-access .cia-row { grid-template-columns: minmax(0, 1fr) minmax(4rem, 6.5rem) minmax(0, 24rem); align-items: center; }
   .core-instructor-access .cia-task-actions { grid-column: auto; justify-content: flex-end; }
   .core-instructor-access .cia-password-panel { padding: 2rem; }
 }

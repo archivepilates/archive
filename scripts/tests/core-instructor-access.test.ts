@@ -1092,8 +1092,8 @@ test("workspace rejects a borrowed capability even when both requests bind to th
   assert.deepEqual(r.events, []);
 });
 
-// Exercise the actual home/private task filter without browser startup. Only
-// task-row markup is stubbed; status selection and terminal statuses stay real.
+// Exercise the actual private task list without browser startup.
+// Only task-row markup is stubbed; status selection stays real.
 const instructorUiSource = fs.readFileSync(
   new URL("../../core/assets/core-instructor-access.js", import.meta.url),
   "utf8",
@@ -1108,22 +1108,17 @@ const instructorUiTree = ts.createSourceFile(
 const rendererDeclarations = instructorUiTree.statements.filter(
   (node: any) =>
     (ts.isFunctionDeclaration(node) &&
-      ["renderWorkspace", "escapeHtml"].includes(node.name?.text)) ||
-    (ts.isVariableStatement(node) &&
-      node.declarationList.declarations.some(
-        (declaration: any) =>
-          declaration.name.getText(instructorUiTree) === "TERMINAL_STATUSES",
-      )),
+      ["renderWorkspace", "escapeHtml"].includes(node.name?.text)),
 );
 assert.equal(
   rendererDeclarations.length,
-  3,
-  "Expected real renderer, escaping and terminal-status declarations",
+  2,
+  "Expected real renderer and escaping declarations",
 );
 const rendererCode = rendererDeclarations
   .map((node: any) => node.getText(instructorUiTree))
   .join("\n");
-function renderedTaskIds(workspace: any, route: "home" | "private"): string[] {
+function renderedTaskIds(workspace: any): string[] {
   const ids: string[] = [];
   const renderer = vm.runInNewContext(`${rendererCode}\nrenderWorkspace;`, {
     safeUrl: (value: unknown) => value || "",
@@ -1137,7 +1132,6 @@ function renderedTaskIds(workspace: any, route: "home" | "private"): string[] {
     { innerHTML: "" },
     workspace,
     { staffName: "Test Instructor" },
-    route,
   );
   return ids;
 }
@@ -1188,7 +1182,7 @@ const sentRecordMarkers: Array<[string, Record<string, any>]> = [
   ["sent revision", { sentRevision: "revision-1" }],
 ];
 for (const [label, marker] of sentRecordMarkers) {
-  test(`workspace ${label} proves delivery and excludes a legacy real-model report from home pending`, async () => {
+  test(`workspace ${label} proves delivery and preserves private report history`, async () => {
     const result = await workspaceWithRecord(
       {
         gptStatus: "published",
@@ -1203,8 +1197,7 @@ for (const [label, marker] of sentRecordMarkers) {
       "delivered",
       "Delivery evidence outranks review, submission and stale pending status",
     );
-    assert.deepEqual(renderedTaskIds(result, "home"), []);
-    assert.deepEqual(renderedTaskIds(result, "private"), ["request-1"]);
+    assert.deepEqual(renderedTaskIds(result), ["request-1"]);
     assert.equal(result.privateTasks[0].recordUrl, CHART_URL);
     assert.equal(result.privateTasks[0].surveyUrl, "");
     const reportUrl = new URL(result.privateTasks[0].reportUrl);
@@ -1223,8 +1216,7 @@ for (const gptStatus of ["draft_created", "approved", "published"]) {
       report: { status: "pending" },
     });
     assert.equal(result.privateTasks[0].status, "report_review");
-    assert.deepEqual(renderedTaskIds(result, "home"), ["request-1"]);
-    assert.deepEqual(renderedTaskIds(result, "private"), ["request-1"]);
+    assert.deepEqual(renderedTaskIds(result), ["request-1"]);
   });
 }
 test("workspace report review takes precedence over submission and legacy report status", async () => {
@@ -1251,10 +1243,10 @@ for (const [label, record, request] of [
     { postStatus: "submitted" },
   ],
 ] as Array<[string, Record<string, any> | null, Record<string, unknown>]>) {
-  test(`workspace ${label} maps to submitted and remains in home pending`, async () => {
+  test(`workspace ${label} maps to submitted and remains in private history`, async () => {
     const result = await workspaceWithRecord(record, request);
     assert.equal(result.privateTasks[0].status, "submitted");
-    assert.deepEqual(renderedTaskIds(result, "home"), ["request-1"]);
+    assert.deepEqual(renderedTaskIds(result), ["request-1"]);
   });
 }
 for (const [label, record, expected] of [
@@ -1274,7 +1266,7 @@ for (const [label, record, expected] of [
   test(`workspace preserves the ${label} fallback without inventing delivery`, async () => {
     const result = await workspaceWithRecord(record);
     assert.equal(result.privateTasks[0].status, expected);
-    assert.deepEqual(renderedTaskIds(result, "home"), ["request-1"]);
+    assert.deepEqual(renderedTaskIds(result), ["request-1"]);
   });
 }
 for (const [label, identity] of [
@@ -1300,7 +1292,7 @@ for (const [label, identity] of [
     assert.equal(result.privateTasks[0].status, "pending");
     assert.equal(result.privateTasks[0].reportUrl, "");
     assert.equal(result.privateTasks[0].recordUrl, "");
-    assert.deepEqual(renderedTaskIds(result, "home"), ["request-1"]);
+    assert.deepEqual(renderedTaskIds(result), ["request-1"]);
   });
 }
 
