@@ -2,7 +2,7 @@ import type { CallableRequest } from "firebase-functions/v2/https";
 import { AppError } from "../utils/errors";
 import { getStaffByEmail, getStaffByUid } from "../firestore/staffRepository";
 import type { StaffDoc } from "../types/models";
-import { assertCoreInstructorAccess } from "./coreInstructorAccess";
+import { assertCoreInstructorAccess, assertCoreSessionFresh } from "./coreInstructorAccess";
 
 export async function requireStaff(request: CallableRequest): Promise<StaffDoc> {
   const auth = request.auth;
@@ -13,6 +13,7 @@ export async function requireStaff(request: CallableRequest): Promise<StaffDoc> 
   if (!staff || !staff.active) throw new AppError("PERMISSION_DENIED", "사용 가능한 강사 계정이 없습니다");
   if (staff.role === "instructor") assertCoreInstructorAccess(staff, auth);
   else if (!isManagerRole(staff.role)) throw new AppError("PERMISSION_DENIED", "업무 계정 권한이 필요합니다");
+  else assertCoreSessionFresh(staff, auth);
   return staff;
 }
 

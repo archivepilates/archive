@@ -4,7 +4,7 @@ import type { CallableRequest } from "firebase-functions/v2/https";
 import { db } from "../config/firebase";
 import { getStaffByEmail, getStaffByUid } from "../firestore/staffRepository";
 import { isManagerRole, requireStaff } from "../security/authGuards";
-import { assertCoreInstructorAccess, ownsCoreBooking, safeCoreChartUrl, validCorePassword, type CoreInstructorStaff } from "../security/coreInstructorAccess";
+import { assertCoreInstructorAccess, assertCoreSessionFresh, ownsCoreBooking, safeCoreChartUrl, validCorePassword, type CoreInstructorStaff } from "../security/coreInstructorAccess";
 import { AppError } from "../utils/errors";
 import { addDays, todayKst } from "../utils/date";
 
@@ -15,6 +15,7 @@ async function sessionStaff(request: CallableRequest): Promise<CoreInstructorSta
   if (!staff?.active) throw new AppError("PERMISSION_DENIED", "사용 가능한 업무 계정이 없습니다");
   if (staff.role === "instructor") assertCoreInstructorAccess(staff, request.auth, true);
   else if (!isManagerRole(staff.role)) throw new AppError("PERMISSION_DENIED", "업무 계정 권한이 필요합니다");
+  else assertCoreSessionFresh(staff, request.auth);
   return staff;
 }
 

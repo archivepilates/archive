@@ -2,8 +2,25 @@ rules_version = '2';
 
 service cloud.firestore {
   match /databases/{database}/documents {
+    function freshCoreSession() {
+      let email = request.auth.token.get('email', '');
+      let id = email == 'p01086488585@archivepilates.com' ? '1979746' :
+        email == 'p01029244425@archivepilates.com' ? 'operator_01029244425' :
+        request.auth.token.get('staffId', '');
+      let pathId = id == '' ? '__unscoped_manager__' : id;
+      let path = /databases/$(database)/documents/staffs/$(pathId);
+      return id == '' || (!exists(path) || !('coreAuthAfter' in get(path).data) ||
+        (get(path).data.uid == request.auth.uid && get(path).data.coreAuthAfter is int &&
+          get(path).data.coreAuthAfter >= 0 &&
+          request.auth.token.get('auth_time', -1) is int &&
+          request.auth.token.get('auth_time', -1) >= get(path).data.coreAuthAfter));
+    }
+
     function signedIn() {
-      return request.auth != null && request.auth.token.get('role', '') != 'instructor';
+      return request.auth != null && request.auth.token.get('role', '') != 'instructor' &&
+        (!(request.auth.token.get('role', '') in ['owner', 'manager']) &&
+          !(request.auth.token.get('email', '') in ['p01086488585@archivepilates.com', 'p01029244425@archivepilates.com']) ||
+          freshCoreSession());
     }
 
     function readyCoreInstructor() {
@@ -22,7 +39,7 @@ service cloud.firestore {
     }
 
     function isManager() {
-      return request.auth != null &&
+      return request.auth != null && freshCoreSession() &&
         (
           request.auth.token.role in ['owner', 'manager'] ||
           request.auth.token.email in [

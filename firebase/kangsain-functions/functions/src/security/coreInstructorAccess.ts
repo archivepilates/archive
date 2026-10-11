@@ -11,6 +11,14 @@ export type CoreInstructorStaff = StaffDoc & {
   corePasswordChangeLockUntil?: number;
 };
 
+export function assertCoreSessionFresh(staff: CoreInstructorStaff, auth: CallableRequest["auth"]): void {
+  if (staff.coreAuthAfter === undefined && staff.role !== "instructor") return;
+  if (!auth || staff.uid !== auth.uid || !Number.isSafeInteger(staff.coreAuthAfter) ||
+      Number(staff.coreAuthAfter) < 0 || !Number.isSafeInteger(auth.token.auth_time) ||
+      auth.token.auth_time < Number(staff.coreAuthAfter))
+    throw new AppError("AUTH_REQUIRED", "로그인 세션이 종료됐습니다. 다시 로그인하세요");
+}
+
 export function coreInstructorAccessIssue(
   staff: CoreInstructorStaff,
   auth: CallableRequest["auth"],
@@ -24,13 +32,14 @@ export function coreInstructorAccessIssue(
   if (staff.employmentStatus !== "current" || staff.employmentSource !== "studiomate_staff_tab_browser_scan")
     return "not_current_staff";
   if (!allowFirstLogin && staff.coreMustChangePassword !== false) return "password_change_required";
-  if (!Number.isFinite(staff.coreAuthAfter) || !Number.isFinite(auth.token.auth_time) || auth.token.auth_time < Number(staff.coreAuthAfter))
+  if (!Number.isSafeInteger(staff.coreAuthAfter) || Number(staff.coreAuthAfter) < 0 || !Number.isSafeInteger(auth.token.auth_time) || auth.token.auth_time < Number(staff.coreAuthAfter))
     return "fresh_login_required";
   return "";
 }
 
 export function assertCoreInstructorAccess(staff: CoreInstructorStaff, auth: CallableRequest["auth"], allowFirstLogin = false): void {
   const issue = coreInstructorAccessIssue(staff, auth, allowFirstLogin);
+  if (issue === "fresh_login_required") assertCoreSessionFresh(staff, auth);
   if (issue) throw new AppError("PERMISSION_DENIED", issue === "password_change_required"
     ? "먼저 초기 비밀번호를 변경하세요" : "사용 가능한 강사 계정이 없습니다. 다시 로그인하거나 운영자에게 확인하세요");
 }

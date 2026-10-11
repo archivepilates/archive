@@ -22,7 +22,7 @@ const options = { retries: 1, trace: "on-first-retry" };
 const sources = new Map();
 const fixtures = new Map();
 const report = {
-  scope: "Offline full-app integration with synthetic fixtures and mocked Firebase SDKs. No live auth, backend authorization, canonical matching, revocation, or delivery proof.",
+  scope: "Offline full-app integration with synthetic fixtures and mocked Firebase SDKs, including revoked-session and transient access failures. No live auth, backend authorization, canonical matching, revocation, or delivery proof.",
   fixedTime, options, sources: [], scenarios: [], failures: [],
   cleanup: { contextsOpened: 0, contextsClosed: 0, browserClosed: false, serverClosed: false, fixturesRemaining: 0 },
 };
@@ -34,7 +34,7 @@ let server;
 function makeFixture(mode) {
   return {
     mode, uid: "qa-instructor", staffId: "qa-staff", staffName: "QA 강사",
-    rawRole: mode === "owner" ? "owner" : mode === "manager" ? "manager" : "instructor",
+    rawRole: mode === "owner" ? "owner" : ["manager", "revoked-session", "access-transient"].includes(mode) ? "manager" : "instructor",
     mustChangePassword: ["first-login", "signout-retry"].includes(mode),
     signOutFailures: mode === "signout-retry" ? 1 : 0,
     workspaceFailures: mode === "workspace-retry" ? 1 : 0,
@@ -133,10 +133,14 @@ function firebaseModule(kind) {
   if (kind === "functions") return shared + `
     export const getFunctions = () => ({ mock: true });
     export const httpsCallable = (_, name) => async (payload) => {
-      record("callables", { name });
+      const call = record("callables", { name });
       if (!authClient.currentUser) throw denied("Synthetic session is signed out");
       if (name === "getCoreAccessSession") {
         if (fixture.mode === "access-denied") throw denied("Synthetic pending access");
+        if (["revoked-session", "access-transient"].includes(fixture.mode)) {
+          call.errorCode = fixture.mode === "revoked-session" ? "functions/unauthenticated" : "functions/unavailable";
+          throw Object.assign(new Error("Synthetic access-session failure"), { code: call.errorCode });
+        }
         // The backend contract normalizes owners; this is a frontend test of that response.
         const role = ["manager", "owner"].includes(fixture.rawRole) ? "manager"
           : fixture.mode === "pending-role" ? "pending" : "instructor";
@@ -293,10 +297,13 @@ function installDomHooks() {
 }
 
 async function telemetry(page) {
-  return page.evaluate(() => {
+  return page.evaluate(async () => {
+    const { authClient } = await import("/__qa/state.mjs");
     const state = window.__coreFirebaseQA;
     return { events: state.events, reads: state.reads, writes: state.writes, callables: state.callables,
-      auth: state.auth, role: state.session?.role, uiEvents: window.__coreUiQA.events };
+      auth: state.auth, role: state.session?.role, storedUid: localStorage.getItem("core-ui-user"),
+      currentUid: authClient.currentUser?.uid ?? null,
+      uiEvents: window.__coreUiQA.events };
   });
 }
 
@@ -449,6 +456,43 @@ async function runCase(page, base, kind, name) {
     assert.deepEqual(state.callables.map(call => call.name), ["getCoreAccessSession"]);
     return state;
   }
+  if (["revoked-session", "access-transient"].includes(kind)) {
+    const revoked = kind === "revoked-session";
+    if (revoked) {
+      await page.getByTestId("qa-login").waitFor({ state: "visible" });
+      await page.getByTestId("qa-instructor").waitFor({ state: "hidden" });
+      for (const label of ["휴대폰번호", "비밀번호"]) {
+        assert.equal(await page.getByLabel(label, { exact: true }).isVisible(), true);
+      }
+      assert.equal(await page.getByRole("button", { name: "로그인", exact: true }).isVisible(), true);
+    } else {
+      await page.getByRole("heading", { name: "접근 권한 확인 필요", exact: true }).waitFor();
+      await page.getByTestId("qa-login").waitFor({ state: "hidden" });
+    }
+    // Failed access checks never resolve a session; wait for the actual refresh to finish instead.
+    await page.waitForFunction(() => document.querySelector('[data-testid="qa-refresh"]')?.getAttribute("aria-busy") !== "true");
+    const state = await noOperatorReads(page);
+    assert.deepEqual(state.callables.map(call => ({ name: call.name, errorCode: call.errorCode })), [
+      { name: "getCoreAccessSession", errorCode: revoked ? "functions/unauthenticated" : "functions/unavailable" },
+    ]);
+    assert.equal(state.role, undefined, "Failed access check cannot grant a role");
+    await page.getByTestId("qa-operator-nav").waitFor({ state: "hidden" });
+    assert.equal((await page.getByTestId("qa-instructor").textContent()).includes("QA 오늘 회원"), false);
+    if (revoked) {
+      assert.deepEqual(state.auth.map(event => ({ action: event.action, success: event.success })), [
+        { action: "signOut", success: true },
+      ], "Revocation must call local Firebase signOut exactly once");
+      assert.equal(state.currentUid, null, "Firebase currentUser cleared");
+      assert.equal(state.storedUid, null, "Persisted synthetic user cleared");
+      assert.deepEqual(state.uiEvents, ["core-instructor-signed-out"]);
+    } else {
+      assert.deepEqual(state.auth, [], "Transient network failure must not force signOut");
+      assert.equal(state.currentUid, "qa-instructor", "Firebase currentUser retained");
+      assert.equal(state.storedUid, "qa-instructor", "Persisted synthetic user retained");
+      assert.deepEqual(state.uiEvents, [], "No signed-out event for transient failure");
+    }
+    return state;
+  }
   if (kind === "workspace-retry") {
     await page.getByRole("button", { name: "다시 시도", exact: true }).waitFor();
     await noOperatorReads(page);
@@ -541,7 +585,7 @@ async function attemptCase(base, viewport, kind, retry) {
     await page.clock.setFixedTime(new Date(fixedTime));
     await page.goto(`${origin}${routeFor(base, kind)}`, { waitUntil: "load" });
     state = await runCase(page, base, kind, name);
-    metrics = await layout(page, name, !["manager", "owner"].includes(kind));
+    metrics = await layout(page, name, !["manager", "owner", "revoked-session"].includes(kind));
     if (kind === "home") {
       await page.getByRole("button", { name: "로그아웃", exact: true }).click();
       await page.getByTestId("qa-login").waitFor({ state: "visible" });
@@ -596,7 +640,7 @@ try {
   origin = `http://127.0.0.1:${server.address().port}`;
   browser = await chromium.launch({ headless: true });
   const cases = ["home", "private", "first-login", "pending-role", "access-denied", "sequence",
-    "blocked-business", "blocked-members/detail", "blocked-rules", "manager", "owner"];
+    "blocked-business", "blocked-members/detail", "blocked-rules", "manager", "owner", "revoked-session", "access-transient"];
   for (const base of surfaces) {
     for (const viewport of viewports) {
       for (const kind of cases) {

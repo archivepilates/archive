@@ -5,6 +5,7 @@ import test from "node:test";
 import vm from "node:vm";
 import {
   assertCoreInstructorAccess,
+  assertCoreSessionFresh,
   coreInstructorAccessIssue,
   ownsCoreBooking,
   safeCoreChartUrl,
@@ -201,6 +202,9 @@ const accessDenials: Array<[string, Record<string, unknown>, any, string]> = [
     "fresh_login_required",
   ],
   ["NaN auth cutoff", { coreAuthAfter: NaN }, auth(), "fresh_login_required"],
+  ["fractional auth cutoff", { coreAuthAfter: AUTH_TIME - 0.5 }, auth(), "fresh_login_required"],
+  ["negative auth cutoff", { coreAuthAfter: -1 }, auth(), "fresh_login_required"],
+  ["fractional auth time", {}, auth({ auth_time: AUTH_TIME + 0.5 }), "fresh_login_required"],
   [
     "infinite auth cutoff",
     { coreAuthAfter: Infinity },
@@ -217,7 +221,7 @@ for (const [label, overrides, session, issue] of accessDenials) {
       );
       assert.throws(
         () => assertCoreInstructorAccess(staff(overrides), session, firstLogin),
-        { code: "PERMISSION_DENIED" },
+        { code: issue === "fresh_login_required" ? "AUTH_REQUIRED" : "PERMISSION_DENIED" },
       );
     }
   });
@@ -573,11 +577,12 @@ function runtime(options: RuntimeOptions = {}) {
     },
     "../security/coreInstructorAccess": {
       assertCoreInstructorAccess,
+      assertCoreSessionFresh,
       ownsCoreBooking,
       safeCoreChartUrl,
       validCorePassword,
     },
-    "./coreInstructorAccess": { assertCoreInstructorAccess },
+    "./coreInstructorAccess": { assertCoreInstructorAccess, assertCoreSessionFresh },
     "../utils/errors": { AppError },
   };
   const guards = loadMocked(guardCode, dependencies, () => now);
@@ -693,6 +698,25 @@ test("inactive owner cannot acquire a manager session or shared-guard authority"
     code: "PERMISSION_DENIED",
   });
   assert.deepEqual(r.events, []);
+});
+
+for (const role of ["owner", "manager"] as const) {
+  test(`${role} revocation rejects the old token and permits freshly authenticated access`, async () => {
+    const r = runtime({ current: staff({ role, coreAuthAfter: AUTH_TIME + 1 }) });
+    for (const handler of [r.handlers.getCoreAccessSessionHandler, r.guards.requireStaff]) {
+      await assert.rejects(handler(call({}, auth({ role }))), { code: "AUTH_REQUIRED" });
+      assert.ok(await handler(call({}, auth({ role, auth_time: AUTH_TIME + 1 }))));
+    }
+    assert.deepEqual(r.events, []);
+  });
+}
+for (const value of [undefined, null, "0", NaN, Infinity, AUTH_TIME + 0.5]) {
+  test(`session reset fails closed for invalid auth time ${String(value)}`, () => {
+    assert.throws(() => assertCoreSessionFresh(staff({ role: "manager" }), auth({ auth_time: value })), { code: "AUTH_REQUIRED" });
+  });
+}
+test("session reset does not alter legacy manager accounts without a cutoff", () => {
+  assert.doesNotThrow(() => assertCoreSessionFresh(staff({ role: "manager", coreAuthAfter: undefined }), auth({ auth_time: undefined })));
 });
 
 test("session allows pending first login while the real shared guard and workspace deny it", async () => {
@@ -841,7 +865,7 @@ test("successful first login revokes tokens and denies the old token when the ga
   assert.equal(r.current!.coreAuthAfter, AUTH_TIME + 1);
   assert.equal(r.current!.corePasswordChangeLockUntil, 0);
   await assert.rejects(r.guards.requireStaff(call()), {
-    code: "PERMISSION_DENIED",
+    code: "AUTH_REQUIRED",
   });
   r.advanceSeconds(1);
   assert.equal(
@@ -898,7 +922,7 @@ for (const stage of ["password", "revoke", "finalize"] as const) {
     assert.equal(r.current!.coreAuthAfter, AUTH_TIME + 2);
     assert.equal(r.password, "New-pass-123");
     await assert.rejects(r.guards.requireStaff(retry), {
-      code: "PERMISSION_DENIED",
+      code: "AUTH_REQUIRED",
     });
     r.advanceSeconds(1);
     assert.equal(

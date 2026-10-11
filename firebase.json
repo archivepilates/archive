@@ -488,6 +488,10 @@
               "value": "public, max-age=3600, stale-while-revalidate=86400"
             }
           ]
+        },
+        {
+          "source": "/{favicon.ico,favicon.png,icons/**}",
+          "headers": [{ "key": "Cache-Control", "value": "no-cache, no-store, must-revalidate" }]
         }
       ],
       "ignore": [

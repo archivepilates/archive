@@ -399,8 +399,13 @@ export async function prepareCoreAccess(runtime, user) {
       activeSession = { session, uid: user.uid };
       if (session.mustChangePassword) return await firstLogin(runtime);
       return session;
-    } catch {
+    } catch (error) {
       if (generation !== ticket) return null;
+      if (["functions/unauthenticated", "auth/user-token-expired", "auth/id-token-revoked", "auth/invalid-user-token"].includes(error?.code)) {
+        await signOut(runtime);
+        document.dispatchEvent(new Event("core-instructor-signed-out"));
+        return null;
+      }
       renderAccessNotice(runtime, {}, true);
       throw new Error("ARCHIVE CORE 접근 권한을 확인하지 못했습니다.");
     }

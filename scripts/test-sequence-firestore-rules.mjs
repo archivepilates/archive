@@ -627,5 +627,23 @@ if (!process.argv.includes('--emulator')) {
     await check('wrong canonical UID cannot access sequence', () => get('sequenceNotes/core-own',
       mockToken('different-instructor', 'instructor', { staffId: instructorId })));
     await check('manager access remains unchanged after instructor policy', () => get('sequenceNotes/_', manager), allowed);
+    const resetTime = Math.floor(Date.now() / 1000) + 10;
+    await allowed(commit([{ update: { name: `${documents}/staffs/qa-staff`, fields: fields({ uid, coreAuthAfter: resetTime }) } }], 'owner'));
+    await check('revoked manager cannot read sequence', () => get('sequenceNotes/_', manager));
+    await check('revoked manager cannot read ordinary profile', () => get('memberProfiles/qa-member', manager));
+    await check('revoked manager cannot create sequence', () => commit([noteWrite('revoked-manager', note(), { create: true })], manager));
+    const freshManager = mockToken(uid, 'manager', { auth_time: resetTime });
+    await check('fresh manager can read sequence', () => get('sequenceNotes/_', freshManager), allowed);
+    await check('fresh manager can read ordinary profile', () => get('memberProfiles/qa-member', freshManager), allowed);
+    await check('manager cutoff does not grant wrong UID access', () => get('sequenceNotes/_', mockToken(otherUid, 'owner', { auth_time: resetTime })));
+    await allowed(commit([{ update: { name: `${documents}/staffs/1979746`, fields: fields({ uid, coreAuthAfter: resetTime }) } }], 'owner'));
+    await check('legacy email grant cannot bypass logout without staff claim', () => get('sequenceNotes/_',
+      mockToken(uid, 'owner', { email: 'p01086488585@archivepilates.com', staffId: '', auth_time: resetTime - 1 })));
+    await check('legacy email grant permits fresh login', () => get('sequenceNotes/_',
+      mockToken(uid, 'owner', { email: 'p01086488585@archivepilates.com', staffId: '', auth_time: resetTime })), allowed);
+    await check('targeted operator stale staff claim cannot bypass cutoff', () => get('sequenceNotes/_',
+      mockToken(uid, 'owner', { email: 'p01086488585@archivepilates.com', staffId: 'missing-old-staff', auth_time: resetTime - 1 })));
+    await check('unrelated legacy manager without staff claim remains compatible', () => get('memberProfiles/qa-member',
+      mockToken(otherUid, 'manager', { staffId: '' })), allowed);
   });
 }

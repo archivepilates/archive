@@ -50,15 +50,16 @@ const required = [
       "./instructor-lessons/",
       "data-ticket-liability-link",
       "./business/#ticketLiability",
-      "/site.webmanifest?v=1",
-      "/icons/archive-pilates-icon-192.png?v=1",
+      "site.webmanifest?v=20261011",
+      "icons/archive-pilates-icon-192.png?v=20261011",
+      "favicon.ico?v=20261011",
     ],
     forbiddenMarkers: ["https://in.archivepilates.com/onsiteWelcome/", "회원가입서 발송"],
   },
   {
     file: "core/site.webmanifest",
     label: "ARCHIVE CORE app icon manifest",
-    markers: ["ARCHIVE CORE", "ARCHIVE PILATES Operations Platform", "/icons/archive-pilates-icon-512.png?v=1"],
+    markers: ["ARCHIVE CORE", "ARCHIVE PILATES Operations Platform", "icons/archive-pilates-icon-512.png?v=20261011"],
   },
   {
     file: "core/assets/app.js",
@@ -691,7 +692,7 @@ if (!coreHostingConfig) {
 for (const file of collectHtmlFiles(path.join(repoRoot, "core"))) {
   const relative = path.relative(repoRoot, file);
   const content = fs.readFileSync(file, "utf8");
-  for (const marker of ["/site.webmanifest?v=1", "/icons/favicon-32.png?v=1", "/icons/apple-touch-icon.png?v=1"]) {
+  for (const marker of ["site.webmanifest?v=20261011", "icons/favicon-32.png?v=20261011", "icons/apple-touch-icon.png?v=20261011", "favicon.ico?v=20261011"]) {
     if (!content.includes(marker)) {
       failures.push({ file: relative, label: "ARCHIVE CORE app icon links", missing: marker });
     }
