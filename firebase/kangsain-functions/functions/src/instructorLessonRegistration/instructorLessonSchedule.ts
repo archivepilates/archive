@@ -276,9 +276,28 @@ function concurrentLectureCapacity(lectures: SourceRecord[]): number {
     slots.set(key, rows);
   }
   const capacities = [...slots.values()]
-    .filter((rows) => rows.length > 0 && rows.every((row) => positiveInteger(row.capacity) > 0))
-    .map((rows) => rows.reduce((sum, row) => sum + positiveInteger(row.capacity), 0));
+    .filter((rows) => rows.length > 0 && rows.every((row) => verifiedLectureCapacity(row) > 0))
+    .map((rows) => rows.reduce((sum, row) => sum + verifiedLectureCapacity(row), 0));
   return capacities.length ? Math.max(...capacities) : 0;
+}
+
+function verifiedLectureCapacity(lecture: SourceRecord): number {
+  const evidence = lecture.capacityEvidence;
+  // Excel does not export group capacity. Keep native evidence separate from its nullable field.
+  if (
+    evidence?.source === "studiomate_lecture_detail" &&
+    /^\d+$/.test(cleanText(evidence.nativeLectureId)) &&
+    evidence.sourceUrl === `https://arcpilates.studiomate.kr/lecture/detail?id=${evidence.nativeLectureId}` &&
+    Number.isInteger(evidence.capacity) && evidence.capacity > 0 &&
+    millis(evidence.capturedAt) > 0 &&
+    millis(lecture.startAt) > 0 && millis(lecture.endAt) > 0 &&
+    millis(evidence.startAt) === millis(lecture.startAt) &&
+    millis(evidence.endAt) === millis(lecture.endAt) &&
+    ["studioId", "date", "title", "staffName", "roomName"].every(
+      (key) => cleanText(lecture[key]) && cleanText(evidence[key]) === cleanText(lecture[key]),
+    )
+  ) return evidence.capacity;
+  return positiveInteger(lecture.capacity);
 }
 
 function bookingOccurrenceKey(booking: SourceRecord): string {

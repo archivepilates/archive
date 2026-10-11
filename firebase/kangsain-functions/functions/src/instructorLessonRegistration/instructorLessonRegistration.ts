@@ -203,7 +203,7 @@ async function loadInstructorLessonSchedule(studioId: string): Promise<Record<st
     db
       .collection("bookings")
       .where("studioId", "==", studioId)
-      .where("ticketName", "==", TICKET_NAME)
+      .where("ticketName", "in", [TICKET_NAME, "Team 강사레슨"])
       .where("lectureDate", ">=", startDate)
       .where("lectureDate", "<=", endDate)
       .get(),

@@ -224,6 +224,98 @@ function lecturePair(date: string) {
   ];
 }
 
+function teamLectures() {
+  return ["13:30", "14:30"].map((time, index) => {
+    const lecture = {
+      lectureId: `team-${index}`,
+      studioId: "5330",
+      date: "2026-10-17",
+      title: "강사레슨(team)",
+      staffName: `instructor-${index}`,
+      roomName: `room-${index}`,
+      startAt: `2026-10-17T${time}:00+09:00`,
+      endAt: `2026-10-17T${index ? "15:20" : "14:20"}:00+09:00`,
+      capacity: null,
+    };
+    const nativeLectureId = index ? "97134052" : "97134045";
+    return {
+      ...lecture,
+      capacityEvidence: {
+        ...lecture,
+        capacity: 5,
+        source: "studiomate_lecture_detail",
+        nativeLectureId,
+        sourceUrl: `https://arcpilates.studiomate.kr/lecture/detail?id=${nativeLectureId}`,
+        capturedAt: "2026-10-11T10:00:00+09:00",
+      },
+    };
+  });
+}
+
+test("Team 강사레슨의 같은 5명 연속 두 수업은 정원 5명·잔여 0석이다", () => {
+  const lectures = teamLectures();
+  const bookings = lectures.flatMap((lecture, session) =>
+    Array.from({ length: 5 }, (_, index) => ({
+      ...booking(index, session ? "14:30" : "13:30", `staff-${session}`),
+      bookingId: `${275358611 + session * 40 + index}`,
+      lectureId: lecture.lectureId,
+      lectureDate: lecture.date,
+      lectureStartAt: lecture.startAt,
+      lectureTitle: lecture.title,
+      ticketName: "Team 강사레슨",
+    })),
+  );
+  const [summary] = buildInstructorLessonScheduleSummaries({
+    startDate: "2026-10-17", endDate: "2026-10-17", lectures, bookings,
+  });
+  assert.equal(summary.countSource, "bookings");
+  assert.equal(summary.bookingMemberCount, 5);
+  assert.equal(summary.occupiedCount, 5);
+  assert.equal(summary.sessionCount, 2);
+  assert.equal(summary.capacitySource, "lecture");
+  assert.equal(summary.capacity, 5);
+  assert.equal(summary.remainingSeats, 0);
+});
+
+test("반복된 엑셀 merge의 null 정원은 별도 원본 정원 증거를 지우지 않는다", () => {
+  const lectures = teamLectures().map((lecture) => ({ ...lecture, capacity: null }));
+  const [summary] = buildInstructorLessonScheduleSummaries({
+    startDate: "2026-10-17", endDate: "2026-10-17",
+    lectures: lectures.map((lecture) => ({ ...lecture, capacity: null })),
+  });
+  assert.equal(summary.capacity, 5);
+});
+
+for (const key of ["studioId", "date", "title", "staffName", "roomName", "startAt", "endAt", "source", "sourceUrl", "nativeLectureId", "capturedAt", "capacity"]) {
+  test(`원본 정원 증거의 ${key}가 불일치·불완전하면 사용하지 않는다`, () => {
+    const lectures = teamLectures().map((lecture) => ({
+      ...lecture, capacityEvidence: { ...lecture.capacityEvidence, [key]: "invalid" },
+    }));
+    const [summary] = buildInstructorLessonScheduleSummaries({
+      startDate: "2026-10-17", endDate: "2026-10-17", lectures,
+    });
+    assert.equal(summary.capacitySource, "default");
+    assert.equal(summary.capacity, 10);
+  });
+}
+
+test("유효한 원본 정원 증거도 병렬 두 룸이면 정원 10명이다", () => {
+  const lectures = teamLectures().map((lecture) => ({
+    ...lecture,
+    startAt: "2026-10-17T13:30:00+09:00",
+    endAt: "2026-10-17T14:20:00+09:00",
+    capacityEvidence: {
+      ...lecture.capacityEvidence,
+      startAt: "2026-10-17T13:30:00+09:00",
+      endAt: "2026-10-17T14:20:00+09:00",
+    },
+  }));
+  const [summary] = buildInstructorLessonScheduleSummaries({
+    startDate: "2026-10-17", endDate: "2026-10-17", lectures,
+  });
+  assert.equal(summary.capacity, 10);
+});
+
 function booking(index: number, time: string, staffId: string) {
   return {
     bookingId: `booking-${index}-${time}`,

@@ -50,6 +50,7 @@ const checks = [
     "loadInstructorLessonSchedule",
     "buildInstructorLessonScheduleSummaries",
     "INSTRUCTOR_LESSON_DEFAULT_CAPACITY",
+    '.where("ticketName", "in", [TICKET_NAME, "Team 강사레슨"])',
     "수강권 발급 검증 후 승인 템플릿으로 자동 1회 발송",
   ], ["waiting_class_assignment", "waiting_assignment", "expectedSessionCount", ".count().get()"]],
   ["firebase/kangsain-functions/functions/src/instructorLessonRegistration/instructorLessonConfirmation.ts", [
@@ -84,6 +85,8 @@ const checks = [
     "verifiedRegistrationCount",
     "registrationCount",
     "capacitySource",
+    "verifiedLectureCapacity",
+    "studiomate_lecture_detail",
     "archiveBooking?.isCanonical === false",
     "currentInstructorLessonTicketDates",
     "const effectiveTicketMembers = mergeScheduleMembers",
