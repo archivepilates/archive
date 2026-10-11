@@ -11,7 +11,7 @@
 - 15 installed/loaded ARCHIVE jobs, 13 periodic last exit codes zero, two persistent MCP services running. Retired onsite intake and Hohoyoga workers absent/unloaded. No exact duplicate commands or runtime-path mismatch confirmed.
 - CORE public shells: 15 routes and three active member/teacher/legacy-contract routes all HTTP 200 with expected markers. Public shell success does not prove authenticated workflows.
 
-## Implemented Locally
+## Implemented
 - Report subjects expose actual issue counts. System failures and recoveries include context, outcome, KST time, source cause, impact, verification, caution, next action and detail links.
 - Both mail transports use ARCHIVE CORE identity and matching quiet single-column default HTML plus plain text, domain/status labels. Preserve supplied approval HTML and actual member-facing in-domain links.
 - Post-send Gmail label errors do not invalidate confirmed delivery. Stable existing reconciliation keys remain unchanged.
@@ -31,4 +31,14 @@
 - Three enabled launchctl overrides have no installed/loaded worker: studiomate-contacts-sync, studiomate-member-excel, studiomate-reservation-deadline. Establish replacement/retirement ownership before removing overrides or restoring services.
 - Settlement cumulative stderr contains historical errors although latest month succeeded. Recommend timestamped run-scoped failure/recovery evidence; current failure not established.
 - Weekly authenticated verifier and actual mail-client delivery/rendering were not executed in this read-only audit.
-- User approved scoped runtime rollout, affected deployment, commit and push. No member sends, contract resends or reservation changes are included. Release validation and promotion are in progress; actual deploy/runtime evidence will be recorded after verification.
+- User approved scoped runtime rollout, affected deployment, commit and push. No member sends, contract resends or reservation changes are included. Source/runtime/Functions and Hosting rollout completed; final operating-rule and release-manifest alignment is recorded below.
+
+## Release Evidence
+- Source 235af444d3992bf6fef76456d46ec8a9311632ef promoted to origin/main by fast-forward; no force push. Clean main deployment checkout and archive-in-runtime match this source.
+- Hosting archive-pilates and archive-pilates-core deployed; CORE canary matched source 235af444, 95 local and 95 live fixture viewport/route checks passed. These fixtures do not prove authenticated business workflows.
+- GitHub affected-functions run 38110912743 succeeded, including all-codebase builds, boundaries, data-source and live rollback guards.
+- All four affected Functions dry-runs and deployments passed: alimtalk 13, app 43, private-chart 24, sync 8 successful updates. Metadata readback confirms 94 ACTIVE, 88 updated, all six social records unchanged. All 21 Scheduler records ENABLED; names, schedules and time zones unchanged across rollout.
+- Runtime read-only recheck health_202610111314_quick_read_only: 35 checks, 18 public shells HTTP 200 with matching markers, zero critical/warning, one pre-existing member_coverage_review_1. Latest source 2026-10-11T03-49-50-849Z-run-apply.json. No state persistence, repairs, emails or member actions executed.
+- getCoreAccessSession and getCoreInstructorWorkspace reject anonymous calls with HTTP 401/UNAUTHENTICATED. No custom token or authenticated session was created for these probes.
+- Additional Hosting archive-pilates-in deployment was required: memberSignup is a static page on its separate site, not the contract API response. Both custom-domain and web.app path now contain the ordinary-group-only/exclusion text. The first extra-site canary detected a stale web.app archivein release manifest (not stale contract copy); regenerate both manifests and publish all affected Hosting sites together for final canary alignment. No Firestore rules or retired intake reactivation is included.
+- Final read-only health health_202610111325_quick_read_only: 35 checks, zero critical/warning, one pre-existing contract coverage review. Source state was not persisted or changed.
