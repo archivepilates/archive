@@ -1,0 +1,35 @@
+<!doctype html>
+<html lang="ko">
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width,initial-scale=1">
+<title>ARCHIVE PILATES 강사레슨 자동접수 조회 보강</title>
+<style>
+*{box-sizing:border-box}body{margin:0;background:#f5f6f7;color:#202326;font:16px/1.7 system-ui,sans-serif}main{max-width:860px;margin:auto;padding:32px 20px}h1{font-size:26px;line-height:1.4;margin:8px 0 20px}h2{font-size:18px;margin:28px 0 8px}p{margin:8px 0}small{color:#697178}section{border-top:1px solid #d9dfe3;padding-top:12px}ul{padding-left:22px}li{margin:8px 0}dl{display:grid;grid-template-columns:minmax(120px,1fr) minmax(0,3fr);gap:12px;margin:16px 0}dt{font-weight:600}dd{margin:0;overflow-wrap:anywhere}a{color:#a82029}code{font-size:14px;overflow-wrap:anywhere}footer{border-top:1px solid #d9dfe3;padding-top:16px;margin-top:32px;color:#697178;font-size:14px}@media(max-width:480px){dl{grid-template-columns:1fr;gap:6px}dd{margin-bottom:10px}}
+</style>
+<main>
+<small>ARCHIVE PILATES · 운영 검증 · 2026-10-11</small>
+<h1>강사레슨 홈페이지 자동접수 조회 보강</h1>
+<p>주문 조회 실패 처리와 진단 기록을 보강하고 운영 반영했습니다. 회원·수강권·알림톡의 기존 중복방지와 실행 주기는 유지합니다.</p>
+<section><h2>확인된 문제</h2>
+<p>16:34 오류 알림에는 실패 단계와 상태코드가 남지 않았습니다. 주문 조회 함수가 상세 오류 정보를 잃었고, 정상 종료코드로 반환된 실패 응답을 명시적으로 차단하지 않았으며, 동기화 작업이 진단 정보를 알림 기록에 전달하지 않았습니다.</p>
+<p>인증 토큰 갱신 시각이 오류 시각과 일치했지만 과거 원문 응답이 없어 실제 외부 장애 원인은 확정할 수 없습니다. 정기 전체 조회는 이 수정 배포 전 이미 정상 복구된 상태입니다.</p></section>
+<section><h2>적용한 보강</h2><ul>
+<li>주문 목록·단건 읽기에서 확인된 네트워크·429·5xx 오류만 0.5초 후 1회 재확인합니다.</li>
+<li>인증·권한 오류, 서로 모순되는 오류 정보, 해석할 수 없는 응답과 원본 불일치는 즉시 중단합니다.</li>
+<li>정상 종료코드여도 실패 응답이면 차단합니다. 전체 주문 목록을 다 읽지 못하면 신규 접수를 시작하지 않습니다.</li>
+<li>목록 조회·발급 전 단건 재확인 단계, 상태코드, 조회 시도 수를 보고서·관제·메일에 전달합니다. 개인정보·토큰·원문 응답은 저장하지 않습니다.</li>
+<li>일시 조회 오류의 3회 연속 실패 알림, 전체 정상 실행 후 복구 알림 1회, 수동 단건 조회·실행 생략의 복구 제외 규칙을 유지합니다.</li>
+</ul></section>
+<section><h2>검증 증거</h2><dl>
+<dt>오류 주입·회귀</dt><dd>225건 통과 / 실패 0 / 생략 0. 조회 재확인, 인증 오류, 불완전 목록, 중복 접수, 거래 원자성, 알림 복구, 개인정보 제거를 검증했습니다. 관제·시스템 점검 회귀 59건도 추가 통과했습니다.</dd>
+<dt>실제 주문 원본</dt><dd>최근 30일 88건 / 강사레슨 대상 8건 / 변경된 대상 0건 / 확인필요 0건. 읽기 전용 확인입니다.</dd>
+<dt>기존 접수 원장</dt><dd>8건 모두 완료, 수강권 발급 8건·안내 발송 8건 검증 상태 일치. 추가 발급·재발송은 하지 않았습니다.</dd>
+<dt>배포</dt><dd><code>0596b08c5e129634c55195b8f7b66bb140798f96</code><br>맥미니 실행기 및 CORE Hosting·기존 CORE 미러. Functions·Firestore 보안규칙·인덱스 배포 없음.</dd>
+<dt>라이브 확인</dt><dd>배포 SHA를 포함한 CORE canary 10건 통과. 두 경로의 운영규칙 HTTP 200 및 새 문구 확인.</dd>
+<dt>정기 실행·CI</dt><dd id="scheduled-proof">GitHub CI 성공. 18:56:04 정기 전체 조회에서 주문 88건·새 접수 0건·확인필요 0건, 실행 성공을 확인했습니다. 연속 오류 0회, 알림 상태 정상입니다. 수동 실행이나 강제 상태 초기화는 하지 않았습니다.</dd>
+</dl></section>
+<section><h2>운영 범위</h2><p>주문 확인 10분, 등록 실행기 2분 주기를 유지합니다. 회원 생성·수강권 발급·예약·전자계약서·알림톡·포인트 지급은 이번 테스트에서 실행하지 않았습니다. 테스트는 격리된 임시 파일과 가짜 DB로 수행했습니다.</p>
+<p>외부 서비스 장애 자체를 없앨 수는 없습니다. 일시 조회 오류는 제한적으로 재확인하고, 안전하게 처리할 수 없는 상황은 원인을 남겨 운영자에게 알립니다.</p>
+<p><a href="https://core.archivepilates.com/rules/">CORE 운영규칙</a> · <a href="https://github.com/archivepilates/archive/actions/runs/38129776267">배포 소스 CI</a></p></section>
+<footer>작업 소유 브라우저는 생성하지 않았습니다. 서비스 계정과 기존 홈페이지 프로필은 변경하지 않았습니다.</footer>
+</main></html>
