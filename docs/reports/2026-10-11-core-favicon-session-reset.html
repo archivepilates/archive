@@ -1,0 +1,31 @@
+<!doctype html>
+<html lang="ko">
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>ARCHIVE CORE 파비콘 · 전체 재로그인 결과</title>
+<style>
+*{box-sizing:border-box}body{margin:0;background:#f5f6f7;color:#202326;font:16px/1.65 -apple-system,BlinkMacSystemFont,"Apple SD Gothic Neo",sans-serif}main{max-width:960px;margin:auto;padding:32px 20px}h1{font-size:28px;line-height:1.4}h2{font-size:19px;margin:30px 0 10px}p{max-width:70ch}section{padding:0 0 22px;border-bottom:1px solid #dce0e3}table{width:100%;border-collapse:collapse}th,td{padding:12px 8px;text-align:left;vertical-align:top;border-bottom:1px solid #dce0e3;overflow-wrap:anywhere}th{width:28%;font-weight:600}a{color:#b92f35}code{font-size:14px;overflow-wrap:anywhere}.muted{color:#626b73}.status{color:#177245;font-weight:700}@media(max-width:400px){main{padding:20px 16px}h1{font-size:24px}th,td{padding:10px 4px}th{width:32%}}
+</style>
+<main>
+<p class="muted">ARCHIVE PILATES · 운영 결과 · 2026-10-11</p>
+<h1>공식 로고 파비콘과 전체 재로그인</h1>
+<p class="status">운영 반영 및 실제 CORE 계정 6개 세션 해제 완료</p>
+<section><h2>처리 결과</h2><table>
+<tr><th>파비콘</th><td>기존 공식 원형 로고를 사용했습니다. ICO 6개 크기와 PNG 16·32px를 생성하고 CORE 21개 HTML의 아이콘 경로를 교체했습니다. 기존 공식 512px 원본은 변경하지 않았습니다.</td></tr>
+<tr><th>적용 계정</th><td>CORE 이용 자격이 확인된 운영자 2명·현재 근무 강사 4명. 다른 Firebase 계정은 제외했습니다.</td></tr>
+<tr><th>처리 시각</th><td>2026-10-11 09:50:17 KST 인증시각 기준. 승인된 6개 계정의 세션 기준시각과 Firebase 갱신 토큰 철회를 실제 원천에서 재조회해 확인했습니다.</td></tr>
+<tr><th>보존</th><td>비밀번호·권한·근무상태·회원 데이터·시퀀스 자료는 변경하지 않았습니다. 실제 계정에는 세션 차단시각과 처리 감사 필드만 기록했습니다.</td></tr>
+<tr><th>사용자 조치</th><td>열린 화면을 새로고침하고 다시 로그인합니다. 신규 강사의 기존 최초 비밀번호 변경 조건도 유지됩니다.</td></tr>
+</table></section>
+<section><h2>배포와 원천</h2><p>구현 커밋 <code>e1522f9935c0a5991a9ea84e2ba5fa0dc049f16b</code>은 GitHub origin/main에 반영됐습니다. 프로젝트 <code>archive-pilates</code>에서 전용 운영 서비스 계정으로 실행했습니다. Hosting <code>archive-pilates-core</code>와 <code>archive-pilates</code>의 CORE 경로, Firestore 규칙, 공유 인증 검증을 사용하는 app·sync·social·Alimtalk Functions를 반영했습니다. 네 Functions 코드베이스의 ACTIVE 상태와 갱신시각을 직접 조회했습니다. private-chart Functions는 변경하지 않았습니다.</p><p>인증 원천은 canonical <code>staffs/{staffId}</code>와 Firebase Auth입니다. 일회 처리 도구는 승인된 6계정의 UID·역할·소속·근무상태를 사전 검증하고, 트랜잭션 이후 갱신 토큰을 철회합니다. 이 작업으로 정기 로그아웃이나 새 알림톡 발송은 추가하지 않았습니다.</p></section>
+<section><h2>검증</h2><table>
+<tr><th>인증·권한</th><td>인증 단위 테스트 174건, 관련 회귀 36건, 격리 Firestore 권한 테스트 245건 통과.</td></tr>
+<tr><th>화면</th><td>320·390·768·1440px 및 두 경로의 오프라인 인증 UI 108조합 통과. 운영 반응형 UI 95개 검사 통과.</td></tr>
+<tr><th>실제 서버</th><td>격리 관리자·강사 계정에서 이전 세션의 Callable 접근 차단 및 Firestore 403, 동일 비밀번호의 새 로그인 성공을 확인했습니다. 시험 계정과 문서는 정리됐으며 실제 회원 문서는 쓰지 않았습니다.</td></tr>
+<tr><th>실제 6계정</th><td>세션 해제 6/6 완료. Auth 갱신 토큰 철회시각·canonical 세션 기준·권한 보존을 재확인했습니다. 실제 사용자 비밀번호로 로그인하지 않았습니다.</td></tr>
+<tr><th>파비콘</th><td>커스텀 도메인과 web.app/core 모두 아이콘 200 응답, 이미지 MIME, 원본 대비 해시 일치, no-cache/no-store 헤더 확인. 492개 로컬 아이콘 링크 해석 검사 통과.</td></tr>
+<tr><th>CI</th><td>구현 커밋의 GitHub Actions 실행 38099080960 성공.</td></tr>
+</table></section>
+<section><h2>주의와 정리</h2><p>이미 화면에 로드된 내용을 원격으로 지우지는 않습니다. 서버는 이전 인증을 거부하며, 화면은 새로고침 후 새 로그인 흐름으로 전환됩니다. 별도 프라이빗 bearer 링크는 이 로그인 세션 폐기 대상이 아닙니다. 동일 Firebase UID를 사용하는 다른 운영 화면도 다시 로그인해야 할 수 있습니다.</p><p>초기 격리 테스트가 app 배포 도중 실행돼 이전 거부 코드를 받은 건은 시험 자료를 정리하고 배포 완료 후 재시험해 통과했습니다. 첫 세션 처리 명령은 인증 환경 누락으로 네트워크 작업 전에 종료됐으며, 인증 환경을 지정한 실제 처리 명령은 한 번만 완료했습니다. 미해결 운영 실패는 없습니다. 작업용 브라우저·시험 계정은 정리했으며 기존 사용자 Chrome은 건드리지 않았습니다.</p></section>
+<p><a href="https://core.archivepilates.com/">ARCHIVE CORE</a> · <a href="https://core.archivepilates.com/rules/">운영규칙</a></p>
+</main></html>
