@@ -1,0 +1,32 @@
+<!doctype html>
+<html lang="ko">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width,initial-scale=1">
+<title>시퀀스 노트 화면 개선 · 2026-10-11</title>
+<style>
+*{box-sizing:border-box}body{font:16px/1.65 -apple-system,BlinkMacSystemFont,"Apple SD Gothic Neo",sans-serif;margin:0;background:#f6f7f8;color:#252a2d}main{max-width:960px;margin:auto;padding:32px 20px}h1{font-size:26px;line-height:1.4;margin:8px 0 20px}h2{font-size:18px;margin:28px 0 12px}p{margin:8px 0;color:#59636a}table{width:100%;border-collapse:collapse;background:white}th,td{padding:12px;border-bottom:1px solid #e0e4e7;text-align:left;vertical-align:top}th{width:28%;font-weight:600}code{overflow-wrap:anywhere;font-size:13px}a{color:#a83f31}ul{padding-left:22px}li{margin:8px 0}@media(max-width:500px){th,td{display:block;width:100%}th{padding-bottom:0;border:0}h1{font-size:22px}}
+</style>
+</head>
+<body><main>
+<p>ARCHIVE PILATES / ARCHIVE CORE · 2026-10-11</p>
+<h1>시퀀스 노트 화면 개선</h1>
+<p id="release-status">구현·로컬 검증 완료 · 운영 배포 대기</p>
+<h2>변경 내용</h2>
+<table>
+<tr><th>작성 화면</th><td>큰 소개 영역, 반복 설명, 장식용 우측 패널 제거. 수업 정보·목표·동작 구성·핵심 큐·메모 중심으로 정렬.</td></tr>
+<tr><th>탐색</th><td>작성 / 미리보기 / 내 시퀀스. 저장 상태와 새 시퀀스를 상단에 표시.</td></tr>
+<tr><th>부가기능</th><td>예시·AI 정리 요청문·라이선스는 도구 메뉴, 불러오기·백업은 목록의 접힌 메뉴, JSON·인쇄는 미리보기의 접힌 메뉴로 유지.</td></tr>
+<tr><th>목록</th><td>행 단위 정렬, 작성일·복구일·수업일과 수정·사본·PDF 저장·삭제 유지. 목록에서는 작성용 하단바를 표시하지 않음.</td></tr>
+<tr><th>작성 강사</th><td>새 시퀀스에 특정 강사명을 자동 입력하던 기본값 제거. 기존 저장본과 체어 예시의 작성자는 보존.</td></tr>
+<tr><th>모바일</th><td>유연한 입력 열과 버튼 정렬, 44px 터치 영역, 긴 제목 줄바꿈. 키보드 초점 유지와 동작 줄이기 설정 지원.</td></tr>
+</table>
+<h2>변경하지 않은 내용</h2>
+<p>canonical <code>sequenceNotes</code>·<code>sequenceNoteImages</code>, UID 소유권, 자동저장, 충돌 확인, 삭제 표식, 최초 작성일, PDF 렌더링·내보내기와 기존 자료는 변경하지 않습니다. Functions·Auth·Firestore 규칙·외부 발송·스케줄러 배포는 없습니다.</p>
+<h2>검증</h2>
+<ul id="checks"><li>Hosting 정적 검증 통과.</li><li>권한·담당 조회 단위검사 224건 통과.</li><li>격리 강사·운영자 UI 154/154, 저장·PDF 회귀 26/26 통과.</li><li>320·390·768·1440px 화면, 메뉴 키보드 초점, 터치 영역, 새 노트 작성 강사 기본값과 기존 작성자 보존 확인.</li><li>브라우저·서버 종료, 잔여 컨텍스트·구독·트랜잭션·fixture 0.</li></ul>
+<p>브라우저 회귀검사는 실제 앱과 저장 어댑터에 합성 Auth·Firestore SDK를 연결합니다. 실제 회원 자료를 쓰지 않으며 실계정 인증·Firestore 권한을 재검증한 결과로 표현하지 않습니다. 실제 iPhone Safari는 별도 확인 대상입니다.</p>
+<h2>운영 반영</h2>
+<p id="deployment">배포 대상: archive-pilates 프로젝트의 CORE Hosting과 /core/ 미러. 운영규칙도 함께 갱신합니다.</p>
+<p>편집 중인 화면은 저장 완료를 확인한 뒤 새로고침합니다.</p>
+</main></body></html>

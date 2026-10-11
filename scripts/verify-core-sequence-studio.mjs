@@ -193,6 +193,8 @@ function sdkRuntime(call) {
 
 const adapterSource = await fs.readFile(path.join(coreRoot, "assets/sequence-store.js"), "utf8");
 const adapterHash = createHash("sha256").update(adapterSource).digest("hex");
+const uiHashes = new Map(await Promise.all(["sequence/studio.html", "sequence/studio-ui.css", "assets/ui-icons.js"].map(async (file) =>
+  [file, createHash("sha256").update(await fs.readFile(path.join(coreRoot, file))).digest("hex")])));
 const { createSequenceStore } = await import(`data:text/javascript;base64,${Buffer.from(adapterSource).toString("base64")}`);
 const runtimeFor = (uid) => {
   let runtime;
@@ -405,8 +407,16 @@ async function openStudio(context) {
   assert.ok(frame, "authenticated studio iframe must load");
   assert.equal(await page.evaluate(() => document.documentElement.dataset.coreAccess), "manager");
   assert.equal(await page.evaluate(() => window.archiveSequenceStore.uid === window.__sequenceFixtureUid), true, "store must retain the fixture UID");
-  await frame.getByRole("heading", { name: "시퀀스 노트 스튜디오" }).waitFor();
+  await frame.getByRole("heading", { name: "시퀀스 노트", exact: true }).waitFor();
+  await blankAuthor(frame);
   return { page, frame };
+}
+
+async function blankAuthor(frame) {
+  const author = frame.getByLabel("작성 강사", { exact: true });
+  assert.equal(await author.inputValue(), "", "Fresh notes must not impersonate a specific author");
+  assert.equal(await author.getAttribute("placeholder"), "강사명");
+  assert.equal((await snapshot(frame)).state.teacher, "", "Blank author must also hold in editor state");
 }
 
 async function flush(frame) {
@@ -427,13 +437,14 @@ async function reloadBlank(page, previousId) {
   assert.equal(fresh.state.title, "", "reload must never auto-open an existing note");
   assert.equal(fresh.revision, 0);
   assert.equal(fresh.dirty, false);
+  await blankAuthor(frame);
   return frame;
 }
 
 async function editSaved(frame, id) {
   await frame.getByRole("tab", { name: /내 시퀀스/ }).click();
   await frame.getByTestId(`sequence-record-${id}`).getByRole("button", { name: "수정", exact: true }).click();
-  await frame.getByRole("tabpanel", { name: "02 노트 보기", exact: true }).waitFor();
+  await frame.getByRole("tabpanel", { name: "미리보기", exact: true }).waitFor();
   assert.equal((await snapshot(frame)).state.id, id);
 }
 
@@ -452,15 +463,93 @@ async function confirm(context, action) {
   try { return await action(); } finally { context.off("dialog", handler); }
 }
 
+function summaryControl(frame, name) {
+  if (name === "시퀀스 도구") return frame.getByLabel(name, { exact: true });
+  return frame.getByTestId(name === "불러오기·백업" ? "sequence-library-tools" : "sequence-file-tools");
+}
+
+async function expandTools(frame, name) {
+  const summary = summaryControl(frame, name);
+  await summary.waitFor({ state: "visible" });
+  if (name !== "시퀀스 도구") assert.equal((await summary.textContent()).trim(), name, "Maintenance summary label");
+  assert.equal(await summary.evaluate((node) => node.parentElement.tagName), "DETAILS");
+  if (!(await summary.evaluate((node) => node.parentElement.open))) await summary.click();
+  assert.equal(await summary.evaluate((node) => node.parentElement.open), true, `${name}: tools expanded`);
+  return summary;
+}
+
+async function visibleFocus(control) {
+  await control.focus();
+  // Enter keyboard modality before measuring :focus-visible after pointer commands.
+  await control.press("ArrowLeft");
+  const focus = await control.evaluate((node) => {
+    const style = getComputedStyle(node);
+    return { active: node === document.activeElement, outline: style.outlineStyle, width: parseFloat(style.outlineWidth), color: style.outlineColor, shadow: style.boxShadow };
+  });
+  assert.ok(focus.active && ((focus.outline !== "none" && focus.width > 0 && focus.color !== "rgba(0, 0, 0, 0)") || focus.shadow !== "none"), "Visible keyboard focus");
+  return focus;
+}
+
+async function simplifiedChrome(frame) {
+  await frame.evaluate(() => document.fonts.ready);
+  await frame.getByRole("heading", { name: "시퀀스 노트", exact: true }).waitFor();
+  const metrics = await frame.evaluate(() => {
+    const header = document.querySelector("header.top").getBoundingClientRect();
+    const tabs = document.querySelector('[role="tablist"]').getBoundingClientRect();
+    const first = document.querySelector("#survey .q").getBoundingClientRect();
+    return { headerHeight: header.height, firstSectionY: first.y, tabsBottom: tabs.bottom,
+      removed: document.querySelectorAll(".mast,.workflow,.aside,.aside-box,#generateSide").length,
+      prose: document.querySelectorAll(".top p,.qhead p").length };
+  });
+  assert.equal(metrics.removed, 0, "Hero/aside/generateSide removed, not merely hidden");
+  assert.equal(metrics.prose, 0, "No header or section introductory prose");
+  assert.ok(metrics.headerHeight <= 160, "Compact header on all viewports");
+  assert.ok(metrics.firstSectionY - metrics.tabsBottom <= 32, "Form starts immediately below tabs");
+  for (const name of ["작성", "미리보기"]) assert.equal(await frame.getByRole("tab", { name, exact: true }).count(), 1);
+  const tools = summaryControl(frame, "시퀀스 도구");
+  assert.equal(await tools.getAttribute("title"), "시퀀스 도구");
+  const toolBox = await tools.boundingBox();
+  assert.ok(toolBox.width >= 44 && toolBox.height >= 44, "Tool icon has a 44px square hit area");
+  await frame.waitForFunction(() => document.querySelector(".tool-menu > summary svg")?.getBoundingClientRect().width > 0);
+  assert.equal(await tools.evaluate((node) => node.parentElement.open), false, "Tools closed initially");
+  assert.equal(await frame.getByRole("button", { name: "AI 정리 요청문", exact: true }).isVisible(), false);
+  const focus = await visibleFocus(tools);
+  await tools.press("Enter");
+  await frame.getByRole("button", { name: "AI 정리 요청문", exact: true }).waitFor({ state: "visible" });
+  await tools.press("Escape");
+  assert.equal(await tools.evaluate((node) => node.parentElement.open), false);
+  assert.equal(await tools.evaluate((node) => node === document.activeElement), true, "Escape returns focus to tools");
+  await expandTools(frame, "시퀀스 도구");
+  await frame.getByLabel("수업명", { exact: true }).click();
+  assert.equal(await tools.evaluate((node) => node.parentElement.open), false, "Outside pointer closes tools");
+  await expandTools(frame, "시퀀스 도구");
+  await frame.getByRole("button", { name: "AI 정리 요청문", exact: true }).click();
+  const dialog = frame.getByRole("dialog").filter({ has: frame.getByRole("heading", { name: "긴 메모 → 짧은 응답", exact: true }) });
+  await dialog.waitFor({ state: "visible" });
+  assert.equal(await tools.evaluate((node) => node.parentElement.open), false, "Command closes tools");
+  await dialog.getByRole("button", { name: "닫기", exact: true }).click();
+  await dialog.waitFor({ state: "hidden" });
+  await frame.waitForFunction(() => document.activeElement === document.querySelector(".tool-menu > summary"));
+  assert.equal(await tools.evaluate((node) => node === document.activeElement), true, "Dialog close returns focus to visible tools");
+  await visibleFocus(tools);
+  return { ...metrics, focus, toolsKeyboardOutsideAndCommand: true };
+}
+
 async function layout(page, frame, filename) {
   await page.screenshot({ path: path.join(output, filename), fullPage: true });
   const outer = await page.evaluate(() => ({ scroll: document.documentElement.scrollWidth, width: innerWidth, height: document.querySelector("iframe").clientHeight }));
   const inner = await frame.evaluate(() => {
     const root = document.documentElement;
-    const shown = (el) => el.getClientRects().length && getComputedStyle(el).visibility !== "hidden";
+    const shown = (el) => {
+      const box = el.getBoundingClientRect(), style = getComputedStyle(el);
+      const control = el.tagName === "LABEL" && document.getElementById(el.htmlFor);
+      const accessibleLabel = box.width === 1 && box.height === 1 && style.clipPath === "inset(50%)"
+        && control?.labels && [...control.labels].includes(el) && control.getClientRects().length > 0;
+      return el.getClientRects().length && style.visibility !== "hidden" && !accessibleLabel;
+    };
     const textOverflow = [...document.querySelectorAll("button,label,h1,h2,h3,p")].filter(shown).filter((el) => el.scrollWidth > el.clientWidth + 2).map((el) => el.textContent.slice(0,80));
     const mediaOverflow = [...document.querySelectorAll("img,svg,canvas")].filter(shown).filter((el) => el.getBoundingClientRect().right > root.clientWidth + 1).length;
-    const smallTargets = [...document.querySelectorAll("button,a.btn")].filter(shown).filter((el) => el.getBoundingClientRect().height < 44).length;
+    const smallTargets = [...document.querySelectorAll("button,a.btn,summary")].filter(shown).filter((el) => el.getBoundingClientRect().height < 44).length;
     return { scroll: root.scrollWidth, width: root.clientWidth, textOverflow, mediaOverflow, smallTargets };
   });
   assert.ok(outer.scroll <= outer.width + 1, "CORE horizontal overflow");
@@ -533,6 +622,7 @@ async function responsive(width) {
   const uid = `responsive-${width}`;
   return withContext(uid, width, async (context, errors) => {
     let { page, frame } = await openStudio(context);
+    const chrome = await simplifiedChrome(frame);
     if (width <= 1040) await page.getByRole("button", { name: "메뉴", exact: true }).click();
     assert.equal(await page.getByRole("link", { name: "시퀀스 노트", exact: true }).getAttribute("aria-current"), "page");
     if (width <= 1040) await page.getByRole("button", { name: "메뉴", exact: true }).click();
@@ -559,9 +649,9 @@ async function responsive(width) {
     frame = await reloadBlank(page, saved.state.id);
     await editSaved(frame, saved.state.id);
     assert.deepEqual((await snapshot(frame)).state, saved.state, "explicit edit restores saved cloud content without localStorage");
-    await frame.getByRole("tab", { name: "02 노트 보기" }).click();
+    await frame.getByRole("tab", { name: "미리보기" }).click();
     await frame.getByRole("button", { name: "내 시퀀스에 저장", exact: true }).click();
-    await frame.getByRole("button", { name: "굿노트용 PDF 만들기", exact: true }).click();
+    await frame.getByRole("tabpanel", { name: "미리보기", exact: true }).getByRole("button", { name: "PDF 만들기", exact: true }).click();
     const promise = page.waitForEvent("download");
     await frame.getByRole("link", { name: "PDF 저장", exact: true }).click();
     const pdfDownload = await promise;
@@ -576,7 +666,21 @@ async function responsive(width) {
     assert.ok(text.includes("롤백") && text.includes("시퀀스 검증"), "PDF text operators preserve Korean");
     assert.ok(pdf.includes(Buffer.from("/MediaBox [0 0 1200 900]")));
     await fs.writeFile(path.join(output, `sequence-${width}-text.txt`), text);
+    const previewPanel = frame.getByRole("tabpanel", { name: "미리보기", exact: true });
+    assert.equal(await frame.getByRole("button", { name: "예시 불러오기", exact: true }).isVisible(), false, "Preview hides the footer example");
+    const fileTools = summaryControl(frame, "파일·인쇄");
+    assert.equal(await fileTools.evaluate((node) => node.parentElement.open), false);
+    assert.equal(await previewPanel.getByRole("button", { name: "인쇄", exact: true }).isVisible(), false);
+    await visibleFocus(fileTools);
+    await expandTools(frame, "파일·인쇄");
+    const answer = await downloadJSON(page, previewPanel.getByRole("button", { name: "응답 파일 저장 (.json)", exact: true }), `answer-${width}.json`);
+    assert.deepEqual(answer.data, saved.state, "Preview JSON preserves the complete answer");
+    await frame.evaluate(() => { window.__qaPrintCalls = 0; window.print = () => { window.__qaPrintCalls++; }; });
+    await previewPanel.getByRole("button", { name: "인쇄", exact: true }).click();
+    assert.equal(await frame.evaluate(() => window.__qaPrintCalls), 1, "Print action reaches browser print");
     const previewLayout = await layout(page, frame, `preview-${width}.png`);
+    await fileTools.click();
+    assert.equal(await previewPanel.getByRole("button", { name: "인쇄", exact: true }).isVisible(), false);
     const pagination = await frame.evaluate(() => {
       const state = window.ARCHIVE_TEST.sample();
       state.memo = "A\n".repeat(110);
@@ -589,6 +693,14 @@ async function responsive(width) {
     await frame.getByRole("tab", { name: /내 시퀀스/ }).click();
     await frame.getByLabel("저장된 시퀀스 검색").fill(saved.state.title);
     await frame.getByRole("heading", { name: saved.state.title, exact: true }).waitFor();
+    assert.equal(await frame.getByRole("contentinfo").isVisible(), false, "Library hides footer");
+    const libraryTools = summaryControl(frame, "불러오기·백업");
+    assert.equal(await libraryTools.evaluate((node) => node.parentElement.open), false);
+    for (const name of ["최근 기록 백업", "응답 불러오기", "이전 브라우저 기록 가져오기"]) {
+      assert.equal(await frame.getByRole("button", { name, exact: true }).isVisible(), false, "Maintenance closed initially");
+    }
+    await visibleFocus(libraryTools);
+    await expandTools(frame, "불러오기·백업");
     const backup = await downloadJSON(page, frame.getByRole("button", { name: "최근 기록 백업", exact: true }), `backup-${width}.json`);
     assert.equal(backup.data.records.length, 1);
     assert.deepEqual(backup.data.records[0], saved.state);
@@ -604,7 +716,7 @@ async function responsive(width) {
     const libraryLayout = await layout(page, frame, `library-${width}.png`);
     assert.deepEqual(await frame.evaluate(({ KEY, LIBKEY }) => [localStorage.getItem(KEY), localStorage.getItem(LIBKEY)], { KEY, LIBKEY }), [null, null]);
     assert.deepEqual(errors, []);
-    return { width, writeLayout, previewLayout, libraryLayout, pdfBytes: pdf.length, selectableKorean: true, pagination, focus };
+    return { width, chrome, writeLayout, previewLayout, libraryLayout, pdfBytes: pdf.length, selectableKorean: true, pagination, focus };
   });
 }
 
@@ -623,7 +735,7 @@ async function sharingAndConflicts() {
       assert.equal(fresh.revision, 0);
       assert.notEqual(fresh.state.id, original.state.id);
       await editSaved(b.frame, original.state.id);
-      await b.frame.getByRole("tab", { name: "01 작성하기", exact: true }).click();
+      await b.frame.getByRole("tab", { name: "작성", exact: true }).click();
       assert.deepEqual((await snapshot(b.frame)).state, original.state);
       await a.frame.getByLabel("수업 목표", { exact: true }).fill("다른 기기 서버 변경");
       await flush(a.frame);
@@ -672,31 +784,39 @@ async function saveIsolation(width) {
     let { page, frame } = await openStudio(context);
     const newButton = () => frame.getByRole("button", { name: "새 시퀀스", exact: true });
     assert.equal(await newButton().isVisible(), true, "New must be available on mobile and desktop");
+    await page.screenshot({ path: path.join(output, `blank-author-${width}.png`), fullPage: true });
     await frame.getByLabel("수업명", { exact: true }).fill("회귀 A 원본");
+    await frame.getByLabel("작성 강사", { exact: true }).fill("QA 기존 작성 강사 A");
     await frame.getByLabel("수업 목표", { exact: true }).fill("A의 고유한 목표");
     await frame.getByRole("button", { name: "+ 동작 추가", exact: true }).first().click();
     await frame.getByLabel("동작명", { exact: true }).fill("A 원본 동작");
     await flush(frame);
     const a = await snapshot(frame);
     const rawA = clone(documents.get(`sequenceNotes/${a.state.id}`));
+    assert.equal(rawA.teacher, "QA 기존 작성 강사 A");
 
     frame = await reloadBlank(page, a.state.id);
     await frame.getByLabel("수업명", { exact: true }).fill("회귀 B 재접속 후 새 기록");
+    await frame.getByLabel("작성 강사", { exact: true }).fill("QA 기존 작성 강사 B");
     await frame.getByLabel("수업 목표", { exact: true }).fill("B의 고유한 목표");
     await flush(frame);
     const b = await snapshot(frame);
     const rawB = clone(documents.get(`sequenceNotes/${b.state.id}`));
+    assert.equal(rawB.teacher, "QA 기존 작성 강사 B");
     assert.notEqual(b.state.id, a.state.id);
     assert.equal(rowsFor(uid).length, 2);
     assert.deepEqual(documents.get(`sequenceNotes/${a.state.id}`), rawA);
     assert.deepEqual(JSON.parse(rawB.payload), b.state);
 
     await editSaved(frame, a.state.id);
+    assert.equal(await frame.getByLabel("작성 강사", { exact: true }).inputValue(), a.state.teacher, "Opening existing notes preserves their author");
     await newButton().click();
     await frame.waitForFunction((id) => window.ARCHIVE_TEST.getState().id !== id && window.ARCHIVE_TEST.getRevision() === 0, a.state.id);
     assert.equal((await snapshot(frame)).state.title, "");
     assert.equal((await snapshot(frame)).dirty, false);
-    assert.ok(!(await frame.getByRole("tabpanel", { name: "02 노트 보기", includeHidden: true }).textContent()).includes("회귀 A 원본"), "New must clear the previous preview");
+    await blankAuthor(frame);
+    await page.screenshot({ path: path.join(output, `new-blank-author-${width}.png`), fullPage: true });
+    assert.ok(!(await frame.getByRole("tabpanel", { name: "미리보기", includeHidden: true }).textContent()).includes("회귀 A 원본"), "New must clear the previous preview");
     await frame.getByLabel("수업명", { exact: true }).fill("회귀 C 새 버튼 기록");
     await flush(frame);
     const c = await snapshot(frame);
@@ -712,6 +832,7 @@ async function saveIsolation(width) {
     const copied = await snapshot(frame);
     assert.notEqual(copied.state.id, a.state.id);
     assert.deepEqual(copied.state, { ...a.state, id: copied.state.id });
+    assert.equal(await frame.getByLabel("작성 강사", { exact: true }).inputValue(), a.state.teacher, "Copy preserves the original author");
     assert.equal(rowsFor(uid).length, 4);
     await frame.getByLabel("수업 목표", { exact: true }).fill("사본에서만 바뀐 목표");
     await flush(frame);
@@ -729,11 +850,12 @@ async function saveIsolation(width) {
       await Promise.race([gateStarted, pendingSave.then(() => { throw Error("Save finished without reaching the controlled gate"); })]);
       await newButton().click();
       assert.equal(await newButton().isDisabled(), true);
-      assert.equal(await frame.getByRole("button", { name: "예시 불러오기", exact: true }).isDisabled(), true);
+      assert.equal(await frame.getByRole("button", { name: "체어 예시 불러오기", exact: true, includeHidden: true }).isDisabled(), true);
       assert.equal((await snapshot(frame)).state.id, copied.state.id, "New must wait for the pending save");
     } finally { saveGates.delete(uid); release(); await pendingSave; }
     await frame.waitForFunction((id) => window.ARCHIVE_TEST.getState().id !== id && window.ARCHIVE_TEST.getRevision() === 0, copied.state.id);
     assert.equal((await snapshot(frame)).state.title, "");
+    await blankAuthor(frame);
     assert.equal(JSON.parse(documents.get(`sequenceNotes/${copied.state.id}`).payload).memo, "진행 중인 저장 보존");
     assert.equal([...subscriptions.values()].some((sub) => sub.uid === uid && sub.ref.kind === "doc"), false, "New must detach the previous note watcher");
 
@@ -744,20 +866,26 @@ async function saveIsolation(width) {
       const d = await snapshot(frame);
       await frame.getByRole("tab", { name: /내 시퀀스/ }).click();
       assert.equal(await frame.getByTestId(`sequence-record-${d.state.id}`).count(), 0, "fixture holds the library subscription stale");
+      await expandTools(frame, "불러오기·백업");
       backup = await downloadJSON(page, frame.getByRole("button", { name: "최근 기록 백업", exact: true }), `fresh-backup-${width}.json`);
       assert.equal(backup.data.records.length, 5);
       assert.deepEqual(backup.data.records.find((record) => record.id === d.state.id), d.state, "backup must fetch a fresh server list after flushing");
     } finally { pausedLists.delete(uid); broadcast(); }
-    await frame.getByRole("button", { name: "예시 불러오기", exact: true }).click();
+    await expandTools(frame, "시퀀스 도구");
+    await frame.getByRole("button", { name: "체어 예시 불러오기", exact: true }).click();
+    assert.equal(await summaryControl(frame, "시퀀스 도구").evaluate((node) => node === document.activeElement), true, "Sample command returns focus to visible tools");
     await flush(frame);
     const sample = await snapshot(frame);
     assert.notEqual(sample.state.id, a.state.id);
     assert.equal(sample.state.title, "체어 · 흉추 가동성");
+    assert.equal(sample.state.teacher, "정유리", "Sample retains its explicit original author");
+    assert.equal(await frame.getByLabel("작성 강사", { exact: true }).inputValue(), "정유리");
+    assert.equal(documents.get(`sequenceNotes/${sample.state.id}`).teacher, "정유리");
     assert.deepEqual(documents.get(`sequenceNotes/${a.state.id}`), rawA);
     assert.deepEqual(documents.get(`sequenceNotes/${b.state.id}`), rawB);
     assert.deepEqual(documents.get(`sequenceNotes/${c.state.id}`), rawC);
     assert.deepEqual(errors, []);
-    return { width, reloadBlank: true, distinctIds: true, originalPayloadsIntact: true, actualNewButton: true, explicitCopy: true, pendingSaveSwitchGuard: true, watcherReset: true, freshBackup: true, sampleReset: true, copyLayout };
+    return { width, reloadBlank: true, blankAuthorAndPlaceholder: true, existingAuthorsPreserved: true, sampleAuthorPreserved: true, distinctIds: true, originalPayloadsIntact: true, actualNewButton: true, explicitCopy: true, pendingSaveSwitchGuard: true, watcherReset: true, freshBackup: true, sampleReset: true, copyLayout };
   });
 }
 
@@ -809,9 +937,10 @@ async function imagesAndFailures() {
     const status = await frame.getByRole("status", { includeHidden: true }).allTextContents();
     assert.ok(status.some((text) => text.includes("저장 실패")), JSON.stringify({ status }));
     assert.ok(status.every((text) => !text.includes("저장 완료") && !text.includes("Firestore에 저장했어요")), "failed save must not claim success");
-    await frame.getByRole("tab", { name: "02 노트 보기" }).click();
+    await frame.getByRole("tab", { name: "미리보기" }).click();
     await frame.getByRole("button", { name: "내 시퀀스에 저장", exact: true }).click();
     assert.ok(!(await frame.getByRole("status", { includeHidden: true }).allTextContents()).some((text) => text === "Firestore에 저장했어요."));
+    await expandTools(frame, "파일·인쇄");
     const exported = await downloadJSON(page, frame.getByRole("button", { name: "응답 파일 저장 (.json)", exact: true }), "unsaved-response.json");
     assert.equal(exported.data.title, "저장되면 안 되는 변경");
     assert.ok(exported.data.moves.warm[0].image.startsWith("data:image/jpeg;base64,"), "portable response export includes resolved attachment");
@@ -841,6 +970,7 @@ async function migration() {
     assert.equal(rowsFor(uid).length, 0, "no implicit migration on initial load");
     assert.notEqual((await snapshot(frame)).state.id, legacyDraft.id);
     await frame.getByRole("tab", { name: /내 시퀀스/ }).click();
+    await expandTools(frame, "불러오기·백업");
     for (const count of [2, 0]) {
       await confirm(context, async () => {
         await frame.getByRole("button", { name: "이전 브라우저 기록 가져오기", exact: true }).click();
@@ -901,7 +1031,7 @@ async function libraryPDF(width) {
       await store.save(canonical, 1);
       assert.equal(await record.getByRole("heading", { name: saved.title, exact: true }).count(), 1);
       await pauseAutosave(page);
-      await frame.getByRole("tab", { name: "01 작성하기", exact: true }).click();
+      await frame.getByRole("tab", { name: "작성", exact: true }).click();
       await frame.getByLabel("수업명", { exact: true }).fill(`관련 없는 미저장 초안 ${width}`);
       await frame.getByLabel("수업 목표", { exact: true }).fill("다운로드가 바꾸면 안 되는 초안 목표");
       const editorBefore = await snapshot(frame);
@@ -1026,7 +1156,7 @@ async function deletionNoAutoRestore() {
       await pauseAutosave(b.page);
       pausedContexts.add(contextB);
       try {
-        await b.frame.getByRole("tab", { name: "01 작성하기", exact: true }).click();
+        await b.frame.getByRole("tab", { name: "작성", exact: true }).click();
         await b.frame.getByLabel("수업명", { exact: true }).fill("오래된 기기의 미저장 수정");
         assert.equal((await snapshot(b.frame)).dirty, true);
         await a.frame.getByRole("tab", { name: /내 시퀀스/ }).click();
@@ -1054,6 +1184,7 @@ async function deletionNoAutoRestore() {
         assert.equal(rowsFor(uid).length, 0, "reload must not import old localStorage records");
         assert.deepEqual(await frame.evaluate(({ KEY, LIBKEY }) => ({ [KEY]: localStorage.getItem(KEY), [LIBKEY]: localStorage.getItem(LIBKEY) }), { KEY, LIBKEY }), legacy);
         await layout(a.page, frame, "deleted-record-after-reload.png");
+        await expandTools(frame, "불러오기·백업");
         const importFile = async (accept) => {
           const chooserPromise = a.page.waitForEvent("filechooser");
           await frame.getByRole("button", { name: "응답 불러오기", exact: true }).click();
@@ -1161,7 +1292,7 @@ try {
     assert.deepEqual(errors, []);
   }));
   for (const width of [320, 390, 768, 1440]) await check(`library created dates ${width}: Timestamp/seconds/ISO/KST boundary/recovery/class date/no fallback`, () => libraryCreatedDates(width));
-  for (const width of [320, 390, 768, 1440]) await check(`responsive ${width}: persistence/import/export/selectable Korean PDF/layout`, () => responsive(width));
+  for (const width of [320, 390, 768, 1440]) await check(`responsive ${width}: compact chrome/tools/focus/persistence/import/export/selectable Korean PDF/layout`, () => responsive(width));
   for (const width of [320, 390, 768, 1440]) await check(`save isolation ${width}: blank startup/New/copy/pending save/fresh backup`, () => saveIsolation(width));
   for (const width of [320, 390, 768, 1440]) await check(`library PDF ${width}: canonical saved source/MIME/filename/Korean/title/image/draft isolation/double-click guard`, () => libraryPDF(width));
   await check("library PDF: missing/deleted canonical records produce no download or editor changes", unavailableLibraryPDF);
@@ -1193,11 +1324,13 @@ try {
   if (server?.listening) await new Promise((resolve) => server.close(resolve));
   const cleanup = { browserDisconnected: !browser?.isConnected(), contexts: contexts.size, subscriptions: subscriptions.size, openTransactions: transactions.size, serverStopped: !server?.listening };
   const changedDuringRun = adapterHash !== createHash("sha256").update(await fs.readFile(path.join(coreRoot, "assets/sequence-store.js"))).digest("hex");
+  const uiChangedDuringRun = [];
+  for (const [file, hash] of uiHashes) if (hash !== createHash("sha256").update(await fs.readFile(path.join(coreRoot, file))).digest("hex")) uiChangedDuringRun.push(file);
   const warnings = ["Security rules and real Firebase Auth/Firestore are not verified by this fixture; use the emulator and live verifier."];
-  const report = { ok: results.every((result) => result.status === "passed"), mode: "actual adapter + actual UI; isolated Auth + Node-shared fake Firebase SDK", realFirestore: false, productionWrites: false, base, output, adapterHash, adapterChangedDuringRun: changedDuringRun, securityRules: "not verified by this fixture; use separate real Firestore rules emulator suite", warnings, blockedRequests, cleanup, results };
+  const report = { ok: results.every((result) => result.status === "passed"), mode: "actual adapter + actual UI; isolated Auth + Node-shared fake Firebase SDK", realFirestore: false, productionWrites: false, base, output, adapterHash, adapterChangedDuringRun: changedDuringRun, uiHashes: Object.fromEntries(uiHashes), uiChangedDuringRun, securityRules: "not verified by this fixture; use separate real Firestore rules emulator suite", warnings, blockedRequests, cleanup, results };
   report.testFilter = testFilter || null;
   report.skippedChecks = skippedChecks;
-  if (Object.values(cleanup).some((value) => value === false) || cleanup.contexts || cleanup.subscriptions || cleanup.openTransactions || changedDuringRun) report.ok = false;
+  if (Object.values(cleanup).some((value) => value === false) || cleanup.contexts || cleanup.subscriptions || cleanup.openTransactions || changedDuringRun || uiChangedDuringRun.length) report.ok = false;
   await fs.writeFile(path.join(output, "results.json"), JSON.stringify(report, null, 2));
   const escape = (value) => String(value).replace(/[&<>\"]/g, (char) => ({ "&": "&amp;", "<": "&lt;", ">": "&gt;", '"': "&quot;" }[char]));
   await fs.writeFile(path.join(output, "report.html"), `<!doctype html><html lang="en"><meta charset="utf-8"><meta name="viewport" content="width=device-width,initial-scale=1"><title>ARCHIVE CORE Sequence Studio QA</title><style>*{box-sizing:border-box}body{font:16px system-ui;margin:24px auto;padding:0 16px;max-width:1000px;color:#202020}pre{white-space:pre-wrap;overflow-wrap:anywhere;background:#f2f3f4;padding:16px}li{margin:12px 0}.failed{color:#ad2020}img{max-width:100%;height:auto}</style><h1>ARCHIVE CORE Sequence Studio QA</h1><p>${report.ok ? "PASS" : "ATTENTION"}: actual adapter and UI, mock Firebase SDK. No real Firestore or security-rules claim. No production writes.</p><ul>${results.map((result) => `<li class="${result.status}">${escape(result.status.toUpperCase() + ": " + result.name)}${result.error ? `<pre>${escape(result.error)}</pre>` : ""}</li>`).join("")}</ul><h2>Cleanup</h2><pre>${escape(JSON.stringify(cleanup, null, 2))}</pre><h2>Evidence</h2>${[320,390,768,1440].map((width) => `<h3>${width}px</h3><img src="preview-${width}.png" alt="Preview at ${width}px">`).join("")}</html>`);

@@ -497,6 +497,133 @@ async function workspaceCase(page, base, kind) {
   return noOperatorReads(page);
 }
 
+function summaryControl(frame, name) {
+  if (name === "시퀀스 도구") return frame.getByLabel(name, { exact: true });
+  return frame.getByTestId(name === "불러오기·백업" ? "sequence-library-tools" : "sequence-file-tools");
+}
+
+async function expandTools(frame, name) {
+  const summary = summaryControl(frame, name);
+  await summary.waitFor({ state: "visible" });
+  if (name !== "시퀀스 도구") assert.equal((await summary.textContent()).trim(), name, "Maintenance summary label");
+  assert.equal(await summary.evaluate((node) => node.parentElement.tagName), "DETAILS");
+  if (!(await summary.evaluate((node) => node.parentElement.open))) await summary.click();
+  assert.equal(await summary.evaluate((node) => node.parentElement.open), true, `${name}: tools expanded`);
+  return summary;
+}
+
+async function visibleFocus(control) {
+  await control.focus();
+  // Enter keyboard modality before measuring :focus-visible after pointer commands.
+  await control.press("ArrowLeft");
+  const focus = await control.evaluate((node) => {
+    const style = getComputedStyle(node);
+    return { active: node === document.activeElement, outline: style.outlineStyle, width: parseFloat(style.outlineWidth), color: style.outlineColor, shadow: style.boxShadow };
+  });
+  assert.ok(focus.active && ((focus.outline !== "none" && focus.width > 0 && focus.color !== "rgba(0, 0, 0, 0)") || focus.shadow !== "none"), "Visible keyboard focus");
+  return focus;
+}
+
+async function simplifiedChrome(frame) {
+  await frame.evaluate(() => document.fonts.ready);
+  await frame.getByRole("heading", { name: "시퀀스 노트", exact: true }).waitFor();
+  const author = frame.getByLabel("작성 강사", { exact: true });
+  assert.equal(await author.inputValue(), "", "Fresh author must be blank for managers and instructors");
+  assert.equal(await author.getAttribute("placeholder"), "강사명");
+  assert.equal(await frame.evaluate(() => window.ARCHIVE_TEST.getState().teacher), "");
+  assert.equal(await frame.evaluate(() => window.ARCHIVE_TEST.sample().teacher), "정유리", "Sample keeps its explicitly named author");
+  const previousId = await frame.evaluate(() => window.ARCHIVE_TEST.getState().id);
+  await frame.getByRole("button", { name: "새 시퀀스", exact: true }).click();
+  await frame.waitForFunction(id => window.ARCHIVE_TEST.getState().id !== id, previousId);
+  assert.equal(await author.inputValue(), "", "New sequence author must be blank");
+  assert.equal(await author.getAttribute("placeholder"), "강사명");
+  assert.equal(await frame.evaluate(() => window.ARCHIVE_TEST.getState().teacher), "");
+  const metrics = await frame.evaluate(() => {
+    const header = document.querySelector("header.top").getBoundingClientRect();
+    const tabs = document.querySelector('[role="tablist"]').getBoundingClientRect();
+    const first = document.querySelector("#survey .q").getBoundingClientRect();
+    return { headerHeight: header.height, firstSectionY: first.y, tabsBottom: tabs.bottom,
+      removed: document.querySelectorAll(".mast,.workflow,.aside,.aside-box,#generateSide").length,
+      prose: document.querySelectorAll(".top p,.qhead p").length };
+  });
+  assert.equal(metrics.removed, 0, "Hero/aside/generateSide removed, not merely hidden");
+  assert.equal(metrics.prose, 0, "No header or section introductory prose");
+  assert.ok(metrics.headerHeight <= 160, "Compact header on all viewports");
+  assert.ok(metrics.firstSectionY - metrics.tabsBottom <= 32, "Form starts immediately below tabs");
+  for (const name of ["작성", "미리보기"]) assert.equal(await frame.getByRole("tab", { name, exact: true }).count(), 1);
+  const tools = summaryControl(frame, "시퀀스 도구");
+  assert.equal(await tools.getAttribute("title"), "시퀀스 도구");
+  const toolBox = await tools.boundingBox();
+  assert.ok(toolBox.width >= 44 && toolBox.height >= 44, "Tool icon has a 44px square hit area");
+  await frame.waitForFunction(() => document.querySelector(".tool-menu > summary svg")?.getBoundingClientRect().width > 0);
+  assert.equal(await tools.evaluate((node) => node.parentElement.open), false, "Tools closed initially");
+  assert.equal(await frame.getByRole("button", { name: "AI 정리 요청문", exact: true }).isVisible(), false);
+  const focus = await visibleFocus(tools);
+  await tools.press("Enter");
+  await frame.getByRole("button", { name: "AI 정리 요청문", exact: true }).waitFor({ state: "visible" });
+  await tools.press("Escape");
+  assert.equal(await tools.evaluate((node) => node.parentElement.open), false);
+  assert.equal(await tools.evaluate((node) => node === document.activeElement), true, "Escape returns focus to tools");
+  await expandTools(frame, "시퀀스 도구");
+  await frame.getByLabel("수업명", { exact: true }).click();
+  assert.equal(await tools.evaluate((node) => node.parentElement.open), false, "Outside pointer closes tools");
+  await expandTools(frame, "시퀀스 도구");
+  await frame.getByRole("button", { name: "AI 정리 요청문", exact: true }).click();
+  const dialog = frame.getByRole("dialog").filter({ has: frame.getByRole("heading", { name: "긴 메모 → 짧은 응답", exact: true }) });
+  await dialog.waitFor({ state: "visible" });
+  assert.equal(await tools.evaluate((node) => node.parentElement.open), false, "Command closes tools");
+  await dialog.getByRole("button", { name: "닫기", exact: true }).click();
+  await dialog.waitFor({ state: "hidden" });
+  await frame.waitForFunction(() => document.activeElement === document.querySelector(".tool-menu > summary"));
+  assert.equal(await tools.evaluate((node) => node === document.activeElement), true, "Dialog close returns focus to visible tools");
+  await visibleFocus(tools);
+  return { ...metrics, focus, toolsKeyboardOutsideAndCommand: true };
+}
+
+async function sequenceChromeLayout(page, frame, name) {
+  const chrome = await simplifiedChrome(frame);
+  const layout = await frame.evaluate(() => {
+    const shown = node => {
+      const box = node.getBoundingClientRect(), style = getComputedStyle(node);
+      const control = node.tagName === "LABEL" && document.getElementById(node.htmlFor);
+      const accessibleLabel = box.width === 1 && box.height === 1 && style.clipPath === "inset(50%)"
+        && control?.labels && [...control.labels].includes(node) && control.getClientRects().length > 0;
+      return node.getClientRects().length && style.visibility !== "hidden" && !accessibleLabel;
+    };
+    return {
+      overflow: document.documentElement.scrollWidth > innerWidth + 1,
+      clipped: [...document.querySelectorAll("button,summary,h1,h2,label,p")].filter(shown)
+        .filter(node => node.scrollWidth > node.clientWidth + 2).map(node => node.textContent.slice(0, 80)),
+      smallTargets: [...document.querySelectorAll("button,summary,a.btn")].filter(shown)
+        .filter(node => node.getBoundingClientRect().height < 44).map(node => node.textContent.slice(0, 80)),
+    };
+  });
+  assert.equal(layout.overflow, false, "Sequence chrome has no horizontal overflow");
+  assert.deepEqual(layout.clipped, [], "Sequence chrome text is not clipped");
+  assert.deepEqual(layout.smallTargets, [], "Sequence action hit areas are at least 44px high");
+  await frame.getByRole("tab", { name: /내 시퀀스/ }).click();
+  assert.equal(await frame.getByRole("contentinfo").isVisible(), false, "Library hides footer");
+  const summary = summaryControl(frame, "불러오기·백업");
+  assert.equal(await summary.evaluate(node => node.parentElement.open), false);
+  for (const name of ["응답 불러오기", "최근 기록 백업", "이전 브라우저 기록 가져오기"]) {
+    assert.equal(await frame.getByRole("button", { name, exact: true }).isVisible(), false);
+  }
+  await visibleFocus(summary);
+  await expandTools(frame, "불러오기·백업");
+  for (const name of ["응답 불러오기", "최근 기록 백업", "이전 브라우저 기록 가져오기"]) {
+    const button = frame.getByRole("button", { name, exact: true });
+    assert.equal(await button.isVisible(), true);
+    const box = await button.boundingBox();
+    assert.ok(box.height >= 44 && box.x >= 0 && box.x + box.width <= frame.page().viewportSize().width + 1);
+  }
+  const screenshot = path.join(output, `${name}-sequence-library-tools.png`);
+  await page.screenshot({ path: screenshot, fullPage: true });
+  await summary.click();
+  await frame.getByRole("tab", { name: "작성", exact: true }).click();
+  await page.screenshot({ path: path.join(output, `${name}-sequence-write.png`), fullPage: true });
+  return { chrome, layout, screenshot, noWrites: true };
+}
+
 async function managerSequenceGeometry(page, frame) {
   await page.evaluate(() => document.fonts.ready);
   await frame.evaluate(() => document.fonts.ready);
@@ -542,9 +669,9 @@ async function managerSequenceCase(page, base, name) {
   assert.equal(await frameElement.getAttribute("src"), "./studio.html");
   const frame = page.frames().find(frame => new URL(frame.url()).pathname === `${base}sequence/studio.html`);
   assert.ok(frame, "Actual manager studio iframe loads on the matching surface");
-  await frame.getByRole("heading", { name: "시퀀스 노트 스튜디오", exact: true }).waitFor();
+  await frame.getByRole("heading", { name: "시퀀스 노트", exact: true }).waitFor();
   await frame.getByRole("tab", { name: /내 시퀀스/ }).waitFor();
-  const sequenceLayout = { initial: await managerSequenceGeometry(page, frame) };
+  const sequenceLayout = { chrome: await sequenceChromeLayout(page, frame, name), initial: await managerSequenceGeometry(page, frame) };
   const menu = page.getByRole("button", { name: "메뉴", exact: true });
   const nav = page.getByTestId("qa-operator-nav");
   assert.ok(await nav.getByRole("link", { includeHidden: true }).count() > 3);
@@ -679,7 +806,9 @@ async function runCase(page, base, kind, name) {
     assert.ok(frame, "Actual sequence studio iframe must load on the matching surface");
     await frame.getByRole("tab", { name: /내 시퀀스/ }).waitFor();
     await frame.waitForFunction(() => document.documentElement.scrollWidth <= innerWidth);
+    const sequenceLayout = await sequenceChromeLayout(page, frame, name);
     const state = await noOperatorReads(page, true);
+    state.sequenceLayout = sequenceLayout;
     assert.equal(state.callables.some(call => call.name === "getCoreInstructorWorkspace"), false);
     return state;
   }
@@ -908,7 +1037,9 @@ async function attemptCase(base, viewport, kind, retry) {
     try {
       if (retry === 1) await context.tracing.stop({ path: path.join(output, `${name}-trace.zip`) });
     } finally {
-      await context.close();
+      await context.close().catch(error => {
+        if (browser.isConnected() || context.pages().length) throw error;
+      });
       report.cleanup.contextsClosed++;
       assert.equal(context.pages().length, 0, "All task-owned pages closed");
       const deletion = await fetch(`${origin}/__qa/fixtures/${fixture.id}`, { method: "DELETE" });

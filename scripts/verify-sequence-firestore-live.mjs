@@ -102,9 +102,9 @@ try {
     assert.deepEqual((await source.ref.get()).data(), source.data(), 'PDF download must not write the source');
     await page.screenshot({ path: `/tmp/archive-core-sequence-pdf-delete-live/library-${page.viewportSize().width}.png`, fullPage: true });
     await frame.getByTestId(`sequence-record-${id}`).getByRole('button', { name: '수정', exact: true }).click();
-    await frame.getByRole('tabpanel', { name: '02 노트 보기', exact: true }).waitFor();
+    await frame.getByRole('tabpanel', { name: '미리보기', exact: true }).waitFor();
     await page.waitForFunction((noteId) => document.querySelector('iframe').contentWindow.ARCHIVE_TEST.getState().id === noteId, id);
-    await frame.getByRole('tab', { name: '01 작성하기', exact: true }).click();
+    await frame.getByRole('tab', { name: '작성', exact: true }).click();
   }
   const pageA = await open(first);
   const record = await pageA.evaluate(async () => {
