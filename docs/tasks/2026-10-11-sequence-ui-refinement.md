@@ -25,9 +25,9 @@
 - [x] Independent scoped source review; menu focus finding fixed and tested.
 - [x] Responsive screenshots at 320, 390, 768 and 1440px.
 - [x] CORE operating rule updated with actual verification state.
-- [ ] Scoped commit, clean main promotion, Hosting deployment.
-- [ ] Actual live asset checks, UI regression and GitHub CI.
-- [ ] Git clean status and task-owned browser cleanup.
+- [x] Scoped commit, clean main promotion, Hosting deployment.
+- [x] Actual live asset checks, UI regression and GitHub CI.
+- [x] Git clean status and task-owned browser cleanup before audit recording.
 
 ## Verification Boundary
 
@@ -43,3 +43,31 @@ Chromium emulated viewports are not a physical iPhone Safari test.
 - Access unit tests: 224 passed.
 - Both browser reports confirm all contexts, servers and fixtures closed.
 - The real-Firestore harness only received current label updates; not executed.
+
+## Release Evidence
+
+- Deployed code: `79a7171934816750502e40228474425d1aa74310`.
+- Clean `main` Hosting release via `npm run deploy:archive-core-live`, exit 0.
+- Service account: `archive-codex-operator@archive-pilates.iam.gserviceaccount.com`.
+- Firebase project `archive-pilates`; only `hosting:archive-pilates` and
+  `hosting:archive-pilates-core`. No Functions, Auth or rules deployment.
+- Live: `https://core.archivepilates.com/sequence/` and
+  `https://archive-pilates.web.app/core/sequence/`.
+- Deployment wrapper: local static responsive 95/95, live static responsive
+  95/95 and exact-release canary 10/10 passed.
+- Live CORE Sequence harness: 26/26, zero skips; actual deployed UI and adapter
+  with isolated synthetic Auth/Firestore, no real data writes.
+- Mirror: 4/4 responsive checks; 22 checks intentionally not run with
+  `ARCHIVE_SEQUENCE_TEST_FILTER='^responsive '`. Not a full mirror regression.
+- Six scoped assets match source SHA-256 on both domains; both release markers
+  match the deployed code SHA.
+- Live CORE report: `/var/folders/4q/7mtq1lfj5_x55y84ksrz9zfc0000gn/T/archive-core-sequence-cloud-qa-vD3YLg/results.json`.
+- Mirror report: `/var/folders/4q/7mtq1lfj5_x55y84ksrz9zfc0000gn/T/archive-core-sequence-cloud-qa-fpDIac/results.json`.
+- Hash evidence: `/var/folders/4q/7mtq1lfj5_x55y84ksrz9zfc0000gn/T/sequence-live-independent-hashes-Sdy5hg/results.json`.
+- GitHub Actions `ARCHIVE IN Functions Affected Check` run `38147153319`:
+  success at exact deployed SHA, affected codebases `[]`.
+- Independent live 320/390/768/1440px screenshots reviewed; no overflow or
+  clipped text. Main reviewed live 390px screenshot.
+- Browser reports: disconnected, contexts/subscriptions/open transactions 0,
+  servers stopped. Task-owned agents closed; no matching browser processes.
+- Final audit updates only these two documents; no redeployment required.

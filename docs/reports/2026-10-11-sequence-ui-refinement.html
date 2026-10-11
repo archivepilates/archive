@@ -11,7 +11,7 @@
 <body><main>
 <p>ARCHIVE PILATES / ARCHIVE CORE · 2026-10-11</p>
 <h1>시퀀스 노트 화면 개선</h1>
-<p id="release-status">구현·로컬 검증 완료 · 운영 배포 대기</p>
+<p id="release-status">운영 배포·라이브 검증 완료</p>
 <h2>변경 내용</h2>
 <table>
 <tr><th>작성 화면</th><td>큰 소개 영역, 반복 설명, 장식용 우측 패널 제거. 수업 정보·목표·동작 구성·핵심 큐·메모 중심으로 정렬.</td></tr>
@@ -27,6 +27,9 @@
 <ul id="checks"><li>Hosting 정적 검증 통과.</li><li>권한·담당 조회 단위검사 224건 통과.</li><li>격리 강사·운영자 UI 154/154, 저장·PDF 회귀 26/26 통과.</li><li>320·390·768·1440px 화면, 메뉴 키보드 초점, 터치 영역, 새 노트 작성 강사 기본값과 기존 작성자 보존 확인.</li><li>브라우저·서버 종료, 잔여 컨텍스트·구독·트랜잭션·fixture 0.</li></ul>
 <p>브라우저 회귀검사는 실제 앱과 저장 어댑터에 합성 Auth·Firestore SDK를 연결합니다. 실제 회원 자료를 쓰지 않으며 실계정 인증·Firestore 권한을 재검증한 결과로 표현하지 않습니다. 실제 iPhone Safari는 별도 확인 대상입니다.</p>
 <h2>운영 반영</h2>
-<p id="deployment">배포 대상: archive-pilates 프로젝트의 CORE Hosting과 /core/ 미러. 운영규칙도 함께 갱신합니다.</p>
+<p id="deployment"><code>archive-pilates</code> 프로젝트의 <code>hosting:archive-pilates-core</code>와 <code>hosting:archive-pilates</code> 배포 완료. 운영규칙 포함. 배포 코드 <code>79a7171934816750502e40228474425d1aa74310</code>.</p>
+<p><a href="https://core.archivepilates.com/sequence/">CORE 시퀀스 노트</a> · <a href="https://archive-pilates.web.app/core/sequence/">web.app 미러</a></p>
+<ul><li>배포 실행기 종료코드 0. 배포 전·후 정적 반응형 검사 각각 95/95, 릴리스 확인 10/10 통과.</li><li>배포된 CORE 화면·저장 어댑터 합성 회귀검사 26/26 통과, 생략 없음. 미러는 반응형 4/4 통과이며 나머지 22건은 의도적으로 실행하지 않음.</li><li>320·390·768·1440px 화면 확인. 양쪽 도메인 관련 파일 6개씩 SHA-256 일치 및 릴리스 코드 일치.</li><li><a href="https://github.com/archivepilates/archive/actions/runs/38147153319">GitHub Actions 38147153319</a> 성공. 영향받은 Functions 없음.</li><li>작업 브라우저·서버 종료, 잔여 컨텍스트·구독·트랜잭션 0. 사용자 브라우저는 유지.</li></ul>
+<p>라이브 검증도 실제 계정·Firestore 쓰기가 아닌 격리된 SDK 기반 검사입니다. 실제 iPhone Safari와 실계정 권한 검사는 이번 UI 변경 범위에서 실행하지 않았습니다. 검증 기록만 후속 커밋하며 배포 코드는 변경하지 않습니다.</p>
 <p>편집 중인 화면은 저장 완료를 확인한 뒤 새로고침합니다.</p>
 </main></body></html>
