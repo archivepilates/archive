@@ -26,6 +26,15 @@
 
 ## Release
 
-- User approved scoped Hosting commit/deploy/push on 2026-10-11. Local implementation and verification complete; release in progress.
+- User approved scoped Hosting commit/deploy/push on 2026-10-11. Implementation, Hosting release and live verification complete.
+- Source release: 60d3ec7a290bfc286b8d94492e06bc2a8d73421b. npm run deploy:archive-core-live exited 0 from clean main equal to origin/main.
+- Project archive-pilates; service account archive-codex-operator@archive-pilates.iam.gserviceaccount.com; targets hosting:archive-pilates and hosting:archive-pilates-core only.
+- Rollback/source guards, Hosting dry-run and local static responsive 95 checks passed. Live static responsive 95 and canary 10 checks passed. These static operator checks do not prove real manager authentication.
+- 14 live asset hashes and both release.json source IDs match the deployed source. Live CORE rule includes the mobile alignment record.
+- Live synthetic sequence suite: 26/26 passed on https://core.archivepilates.com and 26/26 on https://archive-pilates.web.app/core, no skipped checks. Actual deployed files; isolated Auth/Firestore SDK, no production writes.
+- Live reports: /var/folders/4q/7mtq1lfj5_x55y84ksrz9zfc0000gn/T/archive-core-sequence-cloud-qa-jbAOMr/results.json and /var/folders/4q/7mtq1lfj5_x55y84ksrz9zfc0000gn/T/archive-core-sequence-cloud-qa-21tEKb/results.json. Browser disconnected, contexts/subscriptions/transactions zero, servers stopped.
+- Independent anonymous sequence page checks at 390px on both domains: login visible, shell hidden, iframe src absent, no horizontal overflow. Browser and contexts closed. Initial probe used an incorrect test label; corrected to the actual 휴대폰번호 label and both probes passed.
+- GitHub ARCHIVE IN Functions Affected Check run 38141978066 succeeded; codebases=[], deployOnly empty, allCodebasesAffected=false. https://github.com/archivepilates/archive/actions/runs/38141978066.
+- Completion audit changes docs only; core/ remains byte-identical to the deployed source, so no repeat Hosting release is needed.
 - CORE sequence operating rule updated locally with verification and refresh instructions; included in approved Hosting release only.
 - Close every task-owned context, browser and test server; preserve user browser state.
