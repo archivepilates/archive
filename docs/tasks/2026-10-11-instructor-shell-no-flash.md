@@ -36,7 +36,15 @@
 
 ## Deployment
 
-- Implementation and local verification complete. CORE rules updated locally.
-- User approved Hosting commit/deploy/push on 2026-10-11. Deployment preparation in progress; no production data mutation performed.
-- Release: rerun checks, scoped commit, main promotion, CORE Hosting + /core mirror deployment and live asset/canary verification; update this record with actual evidence.
+- Implementation, CORE rules, Hosting deployment and live verification completed on 2026-10-11.
+- Deployed source: 62617424d4799b65ed74f58fda5fcede084ad394, promoted to origin/main after scoped checks.
+- Account: archive-codex-operator@archive-pilates.iam.gserviceaccount.com; Firebase project archive-pilates.
+- npm run deploy:archive-core-live: exit 0; hosting:archive-pilates-core and hosting:archive-pilates only. Functions, Auth and Firestore unchanged.
+- Custom domain https://core.archivepilates.com/ and mirror https://archive-pilates.web.app/core/ release markers match the deployed source.
+- Live canary: 10 checks passed. Live static synthetic operator responsive QA: 95 checks passed, not real authorization proof.
+- Independent live readback: 14 asset hashes matched; 8 anonymous screens at 320/390/768/1440px showed login, zero operator-shell flashes and no horizontal overflow.
+- Live report: /var/folders/4q/7mtq1lfj5_x55y84ksrz9zfc0000gn/T/instructor-shell-live-e5OGtx/report.json.
+- Live cleanup: all 8 contexts and browser closed; user Chrome untouched. No production test account, login or data mutation performed.
+- GitHub ARCHIVE IN Functions Affected Check: run 38133157533 completed successfully; affected codebases empty. https://github.com/archivepilates/archive/actions/runs/38133157533.
+- Completion audit is documentation only; no repeat Hosting deployment is required when core/ matches the deployed source.
 - Do not change instructor passwords or create production test accounts to verify these UI-only changes.
