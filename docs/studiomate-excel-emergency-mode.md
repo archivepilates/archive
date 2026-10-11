@@ -11,7 +11,7 @@ StudioMate API 모드는 ARCHIVE PILATES 자사 사이트 운영 전까지 사�
 
 ## 현재 운영 기준
 
-- Firebase Scheduler 기반 StudioMate API 동기화와 연락처 동기화는 사용하지 않는다.
+- Firebase Scheduler 기반 StudioMate API 원천 동기화는 사용하지 않는다. 연락처는 시간별 Excel 반영이 만든 큐를 Firebase Scheduler가 10분마다 처리한다.
 - 알림톡 후보 원천은 엑셀 동기화가 갱신한 `memberProfiles.activeTickets`이며, 실발송은 운영자 승인과 중복/제외 최종 확인 뒤 처리한다.
 - 기존 23:00 회원목록 다운로드 자동화 `com.archive.studiomate-member-excel`는 실패 메일 혼선을 막기 위해 삭제했다. 회원목록 엑셀은 엑셀 동기화 전용 브라우저 자동화가 받는다.
 - 엑셀 다운로드/반영은 1시간 간격으로 실행한다.
@@ -33,8 +33,8 @@ StudioMate API 모드는 ARCHIVE PILATES 자사 사이트 운영 전까지 사�
 - 엑셀에만 있는 사람은 등록일이 3일 이내이고 활성 수강권이 있을 때만 `excel_...` 임시 ID로 회원카드를 만든다. 수강권 없는 상담고객은 회원카드를 만들지 않는다.
 - `excel_...` 임시 ID로 만든 신규회원은 `studiomateMemberIdLookupJobs` 큐를 함께 만든다. StudioMate 메모쓰기 같은 후행 작업은 전화번호/이름으로 StudioMate 실제 회원 ID를 먼저 찾아 `memberProfiles.studiomateMemberId`에 보강한 뒤 진행한다.
 - 단, `등급=상담회원`이고 활성 수강권이 없는 사람은 회원카드는 만들지 않고 Google 연락처만 `이름 상담 YYMMDD` 형식으로 동기화한다. `YYMMDD`는 메모의 상담일을 우선 사용하고 없으면 등록일을 사용한다.
-- Google Contacts 작업 큐는 회원 엑셀 반영과 분리한다. 연락처 LaunchAgent만 `--queue-contact-sync`를 붙여 `contactSyncJobs`를 준비한다.
-- `contactSyncJobs` 생성은 Google Contacts 실제 쓰기와 다르다. 엑셀 동기화 기본모드에서는 Firebase Scheduler `scheduledProcessContactSyncJobs`를 평소 `PAUSED`로 두고, 연락처 LaunchAgent가 필요할 때만 잠깐 실행한 뒤 다시 `PAUSED`로 되돌린다.
+- 시간별 회원 Excel 반영이 `--queue-contact-sync`로 `contactSyncJobs`를 준비한다. 별도 연락처 LaunchAgent는 사용하지 않는다.
+- `contactSyncJobs` 생성과 실제 Google Contacts 반영은 구분한다. `scheduledProcessContactSyncJobs`는 `ENABLED`, 10분 주기를 유지한다. 수동복구가 이 스케줄러를 중지하거나 주기를 변경해서는 안 된다.
 - 연락처 예외 스탭은 회원목록 엑셀에 있더라도 회원 연락처 큐를 만들지 않는다. 현재 예외는 김기효, 김민지, 김아영, 배민진, 이초림, 정은영이다.
 - ARCHIVE IN 앱 안의 출석, 결석, 메모 작성은 버튼과 저장 로직에서 모두 차단한다. 화면 확인과 읽기 전용 운영만 허용한다.
 
@@ -106,18 +106,19 @@ ARCHIVE IN 운영자 모드의 동기화 버튼은 StudioMate API 동기화를 �
 | 예약/수강권 사유 취소 | 삭제이유가 `예약취소`, `수강권 환불`, `수강권 사용불가 처리`, `예약 실패` 등 | 제외 |
 | 그룹 삭제수업 확인필요 | 그룹 수업이고 삭제이유가 일반 `수업 삭제`이며 수업일 7일 미만 전에 삭제됨 | 운영자 확인 후 결정 |
 
-수동 복구가 필요한 경우에만 아래 스크립트를 사용합니다.
+2026-10-11에 예전 연락처 수동복구 실행 파일을 삭제했습니다. 성공·실패 뒤
+현재 연락처 Scheduler를 중지하는 코드가 남아 있었으며, 설치된 자동화나
+현재 실행기에서 호출하지 않는 것을 확인했습니다.
 
-```bash
-node scripts/run-emergency-contacts-hourly-sync.mjs
-```
+연락처 확인이 필요하면 최신 회원 Excel 반영 결과, `contactSyncJobs`의
+상태·오류, Scheduler의 `ENABLED` 여부와 최신 실행 결과를 읽기 전용으로
+대조합니다. 재수집·큐 재실행은 원인 확인과 별도 승인 이후에만 진행합니다.
+과거 보고서와 발송·동기화 원장은 삭제하지 않습니다.
 
-동작:
-
-1. 최신 회원목록 엑셀을 `--apply --queue-contact-sync`로 반영한다.
-2. `scheduledProcessContactSyncJobs`를 확인하고 필요한 큐를 처리한다.
-3. `home_archivepilates` 연락처 큐가 0건이 될 때까지 필요한 횟수만 반복 실행한다.
-4. 자동 스케줄 상태는 변경하지 않는다.
+설치·실행이 없는 예전 `com.archive.studiomate-contacts-sync`,
+`com.archive.studiomate-member-excel`, `com.archive.studiomate-reservation-deadline`은
+launchctl에서도 비활성으로 유지합니다. 회원·연락처는 현재 Excel/큐 경로,
+예약 오픈은 StudioMate 네이티브 반복설정을 사용하며 예전 작업은 복구하지 않습니다.
 
 로그:
 
@@ -126,8 +127,6 @@ node scripts/run-emergency-contacts-hourly-sync.mjs
 /Users/archivepilates/ArchiveIN/emergency/logs/studiomate-excel-emergency-mode.err.log
 /Users/archivepilates/ArchiveIN/emergency/logs/archivein-admin-emergency-sync.out.log
 /Users/archivepilates/ArchiveIN/emergency/logs/archivein-admin-emergency-sync.err.log
-/Users/archivepilates/ArchiveIN/emergency/logs/studiomate-emergency-contacts-sync.out.log
-/Users/archivepilates/ArchiveIN/emergency/logs/studiomate-emergency-contacts-sync.err.log
 ```
 
 특정 엑셀 파일을 지정:
