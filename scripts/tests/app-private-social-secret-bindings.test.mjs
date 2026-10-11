@@ -274,7 +274,10 @@ test("report view accepts stored and HMAC tokens, rejects wrong tokens, and prov
   const storedToken = createHmac("sha256", signingKey).update(rawToken).digest("hex");
   let secretReads = 0;
   let bound = true;
+  const identity = { requestId: "test-request", staffId: "test-staff", studioId: "test-studio",
+    memberId: "test-member", bookingId: "test-booking", lessonDate: "2026-10-11" };
   const runtime = evaluate(declarations(chartFile, ["privateLessonReportViewHandler", "sha256"]), {
+    ...evaluate(source("privateLessonChart/privateLessonChartOwnership")),
     createHmac,
     privateSurveyWebhookSecret: { value: () => {
       secretReads++;
@@ -284,8 +287,10 @@ test("report view accepts stored and HMAC tokens, rejects wrong tokens, and prov
       return signingKey;
     } },
     refs: {
-      privateLessonChartRecord: () => ({ get: async () => ({ data: () => ({ requestId: "test-request" }) }) }),
-      privateLessonChartRequest: () => ({ get: async () => ({ data: () => ({ accessTokenHash: storedToken }) }) }),
+      privateLessonChartRecord: () => ({ get: async () => ({ id: identity.requestId, exists: true,
+        data: () => ({ ...identity, recordId: identity.requestId }) }) }),
+      privateLessonChartRequest: () => ({ get: async () => ({ id: identity.requestId, exists: true,
+        data: () => ({ ...identity, accessTokenHash: storedToken }) }) }),
     },
     isPrivateLessonReportGenerated: () => true,
     ensureLegacySentReportSnapshot: async (record) => record,
@@ -295,11 +300,11 @@ test("report view accepts stored and HMAC tokens, rejects wrong tokens, and prov
   });
   for (const [token, expected] of [[storedToken, 200], [rawToken, 200], ["wrong-token", 403]]) {
     const res = response();
-    await runtime.privateLessonReportViewHandler({ query: { recordId: "test-record", token } }, res);
+    await runtime.privateLessonReportViewHandler({ query: { recordId: identity.requestId, token } }, res);
     assert.equal(res.statusCode, expected);
   }
   assert.equal(secretReads, 2, "stored-token equality must short-circuit the secret read");
   bound = false;
-  await assert.rejects(runtime.privateLessonReportViewHandler({ query: { recordId: "test-record", token: rawToken } }, response()),
+  await assert.rejects(runtime.privateLessonReportViewHandler({ query: { recordId: identity.requestId, token: rawToken } }, response()),
     /Missing synthetic HMAC binding/);
 });
