@@ -8,6 +8,7 @@ import { recordAutomationStatus } from './archive-core-ops-logging.mjs';
 import { acquireStudioMateBrowserLock } from './studiomate-browser-lock.mjs';
 import { imwebRequestFailure, isTransientReadFailure } from './imweb-read-failure.mjs';
 import { observeAutomationRun, sendAutomationHealthEmail } from './automation-failure-notifications.mjs';
+import { formatOperationsReport } from './operations-email-format.mjs';
 
 const emailContext = { area: '강사레슨', title: '홈페이지 자동접수', link: 'https://core.archivepilates.com/instructor-lessons/' };
 
@@ -288,13 +289,21 @@ async function notifyAttention(stateDir, detail) {
   try { previous = JSON.parse(await readFile(file, 'utf8')); } catch (e) { if (e.code !== 'ENOENT') throw e; }
   if (previous.fingerprint === fingerprint && Date.now() - previous.sentAt < 86400000) return;
   const root = new URL('../../', import.meta.url);
+  const report = formatOperationsReport({ area: '강사레슨', status: '확인필요', title: '홈페이지 결제 접수 검토',
+    observedAt: new Date().toISOString(), context: '홈페이지 강사레슨 자동접수',
+    conclusion: '주문 원본 또는 접수 결과 확인이 필요합니다.', key: [`원인: ${detail.slice(0, 1200)}`],
+    verification: ['접수 결과가 확정되지 않았습니다.'],
+    caution: ['불확실한 주문은 신규 회원·수강권 발급을 중단합니다. 이미 발급된 건은 자동 삭제하지 않습니다.'],
+    next: ['CORE에서 접수 단계와 아임웹 해당 주문을 확인하세요.'],
+    details: [emailContext.link, 'https://archivepilates.imweb.me/admin'],
+  });
   try {
     execFileSync(process.execPath, ['firebase/kangsain-functions/macmini-studiomate/send-automation-report.mjs'], {
       cwd: root, timeout: 45000, stdio: ['ignore', 'pipe', 'pipe'],
       env: { ...process.env, GOOGLE_SERVICE_ACCOUNT_KEY: path.join(os.homedir(), 'ArchiveIN/secrets/google/archive-codex-operator.json'),
         AUTOMATION_REPORT_FROM: 'home@archivepilates.com', AUTOMATION_REPORT_TO: 'home@archivepilates.com',
-        AUTOMATION_REPORT_SUBJECT: '[강사레슨][확인필요] 홈페이지 결제 접수 검토', AUTOMATION_REPORT_LABEL: '자동화 확인필요',
-        AUTOMATION_REPORT_BODY: `주체: ARCHIVE IN / 홈페이지 강사레슨 자동접수\n결론: 주문 원본 또는 접수 결과 확인이 필요합니다.\n발생: ${new Date().toISOString()}\n원인: ${detail.slice(0, 1200)}\n현재: 불확실한 주문은 신규 회원·수강권 발급을 중단합니다. 이미 발급된 건은 자동 삭제하지 않습니다.\n다음: https://core.archivepilates.com/instructor-lessons/ 에서 접수 단계와 https://archivepilates.imweb.me/admin 에서 해당 주문을 확인하세요.`,
+        AUTOMATION_REPORT_SUBJECT: report.subject, AUTOMATION_REPORT_LABEL: '자동화 확인필요',
+        AUTOMATION_REPORT_BODY: report.body,
       },
     });
     await writeFile(file, JSON.stringify({ fingerprint, sentAt: Date.now() }), { mode: 0o600 });

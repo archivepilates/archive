@@ -1,4 +1,6 @@
+import { logger } from "firebase-functions";
 import { DelegatedGoogleClient } from "./delegatedGoogleClient";
+import { formatOperationsEmail } from "./operationsEmailFormat";
 
 const DRIVE_SCOPE = "https://www.googleapis.com/auth/drive";
 const DOCS_SCOPE = "https://www.googleapis.com/auth/documents";
@@ -89,43 +91,53 @@ export async function sendAlimtalkLogEmail(input: {
 }
 
 export async function sendOperationsEmail(input: OperationsEmailInput): Promise<void> {
-  const client = new DelegatedGoogleClient([GMAIL_SEND_SCOPE, GMAIL_MODIFY_SCOPE]);
   const to = input.to || OPERATOR_EMAIL;
   const boundary = `archive-in-${Date.now().toString(36)}`;
-  const content = input.htmlBody
-    ? [
-        `Content-Type: multipart/alternative; boundary="${boundary}"`,
-        "",
-        `--${boundary}`,
-        "Content-Type: text/plain; charset=UTF-8",
-        "Content-Transfer-Encoding: 8bit",
-        "",
-        input.body,
-        "",
-        `--${boundary}`,
-        "Content-Type: text/html; charset=UTF-8",
-        "Content-Transfer-Encoding: 8bit",
-        "",
-        input.htmlBody,
-        "",
-        `--${boundary}--`,
-      ].join("\r\n")
-    : ["Content-Type: text/plain; charset=UTF-8", "Content-Transfer-Encoding: 8bit", "", input.body].join("\r\n");
+  for (const value of [OPERATOR_EMAIL, to, input.subject, boundary]) {
+    if (/[\r\n]/.test(value)) throw new Error("Invalid operations email header.");
+  }
+  const formatted = formatOperationsEmail(input);
+  const content = [
+    `Content-Type: multipart/alternative; boundary="${boundary}"`,
+    "",
+    `--${boundary}`,
+    "Content-Type: text/plain; charset=UTF-8",
+    "Content-Transfer-Encoding: base64",
+    "",
+    encodeMimeBody(formatted.body),
+    "",
+    `--${boundary}`,
+    "Content-Type: text/html; charset=UTF-8",
+    "Content-Transfer-Encoding: base64",
+    "",
+    encodeMimeBody(formatted.htmlBody),
+    "",
+    `--${boundary}--`,
+  ].join("\r\n");
   const raw = Buffer.from(
     [
-      `From: ARCHIVE IN <${OPERATOR_EMAIL}>`,
+      `From: ARCHIVE CORE <${OPERATOR_EMAIL}>`,
       `To: ${to}`,
       `Subject: ${encodeMimeHeader(input.subject)}`,
       "MIME-Version: 1.0",
       content,
     ].join("\r\n"),
   ).toString("base64url");
+  const client = new DelegatedGoogleClient([GMAIL_SEND_SCOPE, GMAIL_MODIFY_SCOPE]);
   const sent = await client.request<GmailMessage>("https://gmail.googleapis.com/gmail/v1/users/me/messages/send", {
     method: "POST",
     body: JSON.stringify({ raw }),
   });
-  if (sent.id) {
+  if (typeof sent?.id !== "string" || !sent.id.trim()) {
+    throw new Error("Gmail send response is missing a message id.");
+  }
+  try {
     await applyGmailLabels(client, sent.id, reportLabelNames(input.domainLabel, input.status, input.labelNames));
+  } catch {
+    // The message is already sent; label failure must not trigger a resend.
+    logger.warn("Operations email sent; Gmail label application failed. Do not resend.", {
+      sendConfirmed: true,
+    });
   }
 }
 
@@ -189,4 +201,8 @@ function escapeDriveQuery(value: string): string {
 
 function encodeMimeHeader(value: string): string {
   return `=?UTF-8?B?${Buffer.from(value).toString("base64")}?=`;
+}
+
+function encodeMimeBody(value: string): string {
+  return Buffer.from(value, "utf8").toString("base64").match(/.{1,76}/g)?.join("\r\n") || "";
 }

@@ -5,6 +5,7 @@ import { execFileSync } from 'node:child_process';
 import os from 'node:os';
 import { acquireStudioMateBrowserLock } from './studiomate-browser-lock.mjs';
 import { TRANSIENT_READ_CODE, sanitizeImwebFailureDetails } from './imweb-read-failure.mjs';
+import { formatOperationsReport, kstTimestamp } from './operations-email-format.mjs';
 
 export const FAILURE_THRESHOLD = 3;
 export const ALERT_STATE_FILE = 'query-alert-state.json';
@@ -12,17 +13,16 @@ export const ALERT_STATE_FILE = 'query-alert-state.json';
 export function automationHealthEmailBody({ title, link }, event) {
   const recovered = event.type === 'recovery';
   const details = sanitizeImwebFailureDetails(event.failureDetails);
-  return [
-    `주체: ARCHIVE IN / ${title}`,
-    `결론: ${recovered ? '알림을 보낸 오류 이후 전체 정기 실행이 정상 완료됐습니다.' : `${event.consecutiveFailures}회 연속 실패했습니다.`}`,
-    `발생: ${event.firstFailureAt} / 확인: ${event.observedAt}`,
-    `원인 코드: ${event.errorCode}`,
-    ...(Object.keys(details).length ? [`진단: ${JSON.stringify(details)}`] : []),
-    recovered ? '검증: 전체 조회와 해당 실행의 처리가 완료됐습니다. 개별 적립·수강권 발급의 과거 누락 해소를 뜻하지 않습니다.'
-      : '현재: 해당 실행이 완료되지 않았습니다. 처리 결과가 불명확한 적립·접수는 자동 쓰기 재시도하지 않습니다.',
-    `다음: ${recovered ? '추가 조치 없음. 기존 확인필요 건은 별도 검토합니다.' : '원본과 실행 장부를 확인하세요.'}`,
-    `상세: ${link}`,
-  ].join('\n');
+  return formatOperationsReport({ area: '자동화', status: recovered ? '성공' : '실패', title,
+    observedAt: event.observedAt, context: title,
+    conclusion: recovered ? '알림을 보낸 오류 이후 전체 정기 실행이 정상 완료됐습니다.' : `${event.consecutiveFailures}회 연속 실패했습니다.`,
+    key: [`최초 발생: ${kstTimestamp(event.firstFailureAt)}`, `원인 코드: ${event.errorCode}`,
+      ...Object.entries(details).map(([name, value]) => `${name}: ${value}`)],
+    verification: [recovered ? '전체 조회와 해당 실행의 처리가 완료됐습니다.' : '해당 실행이 완료되지 않았습니다.'],
+    caution: [recovered ? '개별 적립·수강권 발급의 과거 누락 해소를 뜻하지 않습니다.' : '처리 결과가 불명확한 적립·접수는 자동 쓰기 재시도하지 않습니다.'],
+    next: [recovered ? '추가 조치 없음. 기존 확인필요 건은 별도 검토합니다.' : '원본과 실행 장부를 확인하세요.'],
+    details: [link],
+  }).body;
 }
 
 export function sendAutomationHealthEmail({ area, title, link }, event) {
@@ -37,7 +37,7 @@ export function sendAutomationHealthEmail({ area, title, link }, event) {
       AUTOMATION_REPORT_FROM: 'home@archivepilates.com', AUTOMATION_REPORT_TO: 'home@archivepilates.com',
       AUTOMATION_REPORT_EVENT_ID: eventId,
       AUTOMATION_REPORT_RECONCILE_ONLY: event.reconcileOnly ? '1' : '0',
-      AUTOMATION_REPORT_SUBJECT: `[${area}][${recovered ? '성공' : '실패'}] ${title} ${recovered ? '복구' : '확인 필요'}`,
+      AUTOMATION_REPORT_SUBJECT: `[${area}][${recovered ? '성공' : '실패'}] ${title} ${recovered ? '복구' : '확인 필요'} · ${kstTimestamp(event.observedAt).slice(0, 10)}`,
       AUTOMATION_REPORT_LABEL: recovered ? '자동화 성공' : '자동화 실패', AUTOMATION_REPORT_BODY: body,
     },
   });

@@ -73,7 +73,7 @@ export async function auditPreviousDayAlimtalkProviderLedgerAndNotify(): Promise
       subject: `[알림톡][확인필요] SOLAPI 원장 ID 불일치 ${result.missingInLedger.length}건 · ${result.date}`,
       status: "attention",
       body: [
-        "주체: ARCHIVE IN / 알림톡 원장 대조 자동화",
+        "주체: ARCHIVE CORE / 알림톡 원장 대조 자동화",
         `결론: SOLAPI 성공 기록과 alimtalkSends 성공 원장의 메시지 ID가 일치하지 않는 발송 ${result.missingInLedger.length}건을 찾았습니다.`,
         "핵심:",
         `- 기준일 ${result.date}`,
@@ -95,7 +95,7 @@ export async function auditPreviousDayAlimtalkProviderLedgerAndNotify(): Promise
       subject: `[알림톡][실패] SOLAPI 원장 대조 불가 · ${todayKst()}`,
       status: "failure",
       body: [
-        "주체: ARCHIVE IN / 알림톡 원장 대조 자동화",
+        "주체: ARCHIVE CORE / 알림톡 원장 대조 자동화",
         "결론: 전일 SOLAPI 발송과 Firestore 원장을 대조하지 못했습니다.",
         `핵심: ${message}`,
         "검증: 발송이나 회원 데이터 변경은 수행하지 않았습니다.",

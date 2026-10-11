@@ -243,7 +243,7 @@ function sendMissingRateFailureReport(error) {
       ...process.env,
       AUTOMATION_REPORT_SUBJECT: `[월말정산][실패] 강사 보수기준 누락 · ${ym}`,
       AUTOMATION_REPORT_BODY: [
-        "주체: ARCHIVE IN / 월말 정산 자동화",
+        "주체: ARCHIVE CORE / 월말 정산 자동화",
         "결론: 강사 보수기준 누락으로 정산 생성을 중단했습니다.",
         "",
         "핵심:",

@@ -1,6 +1,6 @@
 import { sendOperationsEmail } from "../google/driveDocsMailer";
 
-const CORE_PARKING_URL = "https://in.archivepilates.com/core/#parkingTools";
+const CORE_PARKING_URL = "https://core.archivepilates.com/#parkingTools";
 const PARKING_REPORT_LABEL = "주차등록 보고";
 
 export type ParkingNoEntryAlertInput = {
@@ -32,7 +32,7 @@ export function buildParkingNoEntryAlertEmail(input: ParkingNoEntryAlertInput): 
   return {
     subject: `[주차등록][확인필요] 입차기록 없음 · ${lessonDate}`,
     body: [
-      "주체: ARCHIVE IN / 주차등록 자동화",
+      "주체: ARCHIVE CORE / 주차등록 자동화",
       "",
       "결론: 수업 시작 30분 후 입차 기록을 찾지 못해 주차 할인을 적용하지 않았습니다.",
       "",

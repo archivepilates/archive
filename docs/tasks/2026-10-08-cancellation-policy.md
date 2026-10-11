@@ -16,3 +16,12 @@
 - Existing production branch guard requires origin/main to equal deployment HEAD. Validate first, promote scoped commit, deploy, verify live surfaces, and confirm remote/local identity afterward.
 - Verification commands: validate:archive-core-hosting, validate:live-release-rollback-guards, validate:ticket-liability-price, validate:onsite-welcome, verify:archive-core-responsive, Hosting dry-run and live canary.
 - Report: docs/reports/2026-10-08-cancellation-policy.html. Final release hash and live verification are recorded in the chat execution evidence.
+
+## 2026-10-11 Scope Clarification
+
+- User-confirmed scope: the previous-calendar-day 21:00 cancellation rule applies ONLY to ordinary group classes on public holidays, Saturdays and Sundays, starting with classes dated 2026-10-09. Private and instructor lessons are excluded; their separate rules are unchanged. Ordinary weekday group classes retain the six-hour cutoff.
+- The 2026-10-08 execution record above is preserved as historical evidence. Its pending/unanswered scope question is resolved by this confirmation, not by extending the rule to private or instructor lessons. The existing 27-class readback and excluded instructor-lesson evidence have not been rerun in this patch.
+- Still unresolved: the recorded 2026-10-09 11:30 private class has a StudioMate 24-hour cutoff while the facility wording says previous-day 21:00. This scope confirmation does not select a private cutoff or authorize changing either surface; the existing private wording remains unchanged pending separate confirmation.
+- Local patch only: clarify the existing ARCHIVE CORE cancellation rule and index, and the ARCHIVE IN memberSignup facility wording. No mail/health rules, existing signed contracts, historical reports, native settings, external terms, notices or Notion pages are changed.
+- Deployment status: pending main-chat review and a separately approved release. The 2026-10-08 release approval above is historical and is not authorization to commit, deploy, push or write externally for this patch.
+- Verification scope: narrow local static checks and diff review only; no live settings or external copy verification. Next action: main chat reviews the patch, checks external exclusion wording and handles the separate private-cutoff discrepancy.

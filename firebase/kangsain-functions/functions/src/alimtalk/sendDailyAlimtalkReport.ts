@@ -38,11 +38,11 @@ export async function sendDailyAlimtalkReport(input: {
     surveyStats,
   });
   const status = reportStatus(input.processSummary, surveyStats);
-  const title = `ARCHIVE IN 알림톡 발송 로그 ${date}`;
+  const title = `ARCHIVE CORE 알림톡 발송 로그 ${date}`;
   const document = await createAlimtalkLogDocument({ title, body });
   const emailBody = `${body}\n\n구글드라이브 로그 문서\n${document.url}\n`;
   await sendAlimtalkLogEmail({
-    subject: `[알림톡][${status === "failure" ? "실패" : "성공"}] 발송 로그 ${date}`,
+    subject: `[알림톡][${status === "failure" ? "실패" : "성공"}] 발송 로그 · ${date}`,
     body: emailBody,
     status,
   });
@@ -92,7 +92,10 @@ function buildReportBody(input: {
   );
 
   return [
-    "ARCHIVE IN 알림톡 발송 로그",
+    "주체: ARCHIVE CORE / 알림톡 발송 기록",
+    `결론: 발송 성공 ${input.processSummary.sent}건, 실패 ${input.processSummary.failed}건, 처리 ${input.processSummary.processed}건입니다.`,
+    "",
+    "ARCHIVE CORE 알림톡 발송 로그",
     "",
     `기준일: ${input.date}`,
     `생성시각: ${now}`,

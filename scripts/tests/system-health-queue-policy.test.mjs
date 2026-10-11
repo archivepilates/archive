@@ -1,6 +1,7 @@
 import assert from "node:assert/strict";
 import test from "node:test";
 import { readFileSync } from "node:fs";
+import { HEALTH_WEB_SURFACES } from "../lib/system-health-web-surfaces.mjs";
 import {
   canAutoRetryQueueDocument, classifyNotionDocument, classifyQueueDocument, healthTimestampMs,
   isExplicitlyRetired, loadRecentQueueFailures, queryCoverage, recentQueueFailure,
@@ -68,7 +69,7 @@ test("health monitoring retains contract history and instructor eformsign withou
   const source = readFileSync(new URL("../run-system-health-check.mjs", import.meta.url), "utf8");
   assert.ok(!source.includes("com.archive.onsite-welcome-requests"));
   assert.ok(!source.includes('url: "https://in.archivepilates.com/onsiteWelcome/"'));
-  assert.ok(source.includes('url: "https://in.archivepilates.com/memberSignup/"'));
+  assert.ok(HEALTH_WEB_SURFACES.some(target => target.url === 'https://in.archivepilates.com/memberSignup/'));
   assert.ok(source.includes('queueWorkers.set("onsiteWelcomeRequests", { state: "intentionally_retired"'));
   assert.ok(source.includes('collection: "onsiteWelcomeRequests"'));
   assert.ok(source.includes('input.collection === "onsiteWelcomeRequests") return { ok: false, updated: 0 }'));

@@ -4,7 +4,7 @@ export function reportMessageId(eventId) {
   return `automation-${eventId}@archivepilates.com`;
 }
 
-export async function deliverAutomationReport({ gmailFetch, raw, messageId = '', labelId, reconcileOnly = false }) {
+export async function deliverAutomationReport({ gmailFetch, raw, messageId = '', labelId, labelIds = [], reconcileOnly = false }) {
   const base = 'https://gmail.googleapis.com/gmail/v1/users/me/messages';
   let sent;
   if (messageId) {
@@ -15,9 +15,10 @@ export async function deliverAutomationReport({ gmailFetch, raw, messageId = '',
   if (!sent) sent = await gmailFetch(`${base}/send`, { method: 'POST', body: JSON.stringify({ raw }) });
   if (!sent.id) throw new Error('Automation report delivery unconfirmed');
   let labelApplied = false;
-  if (labelId) {
+  const labels = [...new Set([labelId, ...labelIds].filter(Boolean))];
+  if (labels.length) {
     try {
-      await gmailFetch(`${base}/${sent.id}/modify`, { method: 'POST', body: JSON.stringify({ addLabelIds: [labelId] }) });
+      await gmailFetch(`${base}/${sent.id}/modify`, { method: 'POST', body: JSON.stringify({ addLabelIds: labels }) });
       labelApplied = true;
     } catch { /* Delivery already succeeded; a label failure must not cause a resend. */ }
   }

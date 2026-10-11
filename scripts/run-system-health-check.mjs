@@ -6,6 +6,8 @@ import os from "node:os";
 import path from "node:path";
 import { recordAutomationStatus } from "./lib/archive-core-ops-logging.mjs";
 import { ALERT_STATE_FILE, deferReferralHealthFinding, deferInstructorOrderHealthFinding } from "./lib/automation-failure-notifications.mjs";
+import { HEALTH_WEB_SURFACES, probeWebSurface } from "./lib/system-health-web-surfaces.mjs";
+import { systemHealthEmail } from "./lib/system-health-email.mjs";
 import { shouldApplyOperationalDataPurge } from "./lib/operational-data-retention-policy.mjs";
 import { isActionableAlimtalkFailure } from "./lib/system-health-alimtalk.mjs";
 import { monthlySettlementIndexPath } from "./lib/system-health-schedule-evidence.mjs";
@@ -360,25 +362,8 @@ async function runWeeklyArtifactRetention() {
 }
 
 async function checkWebSurfaces() {
-  const targets = [
-    { area: "core", title: "ARCHIVE CORE home", url: "https://core.archivepilates.com/" },
-    { area: "core", title: "ARCHIVE CORE staff", url: "https://core.archivepilates.com/staff/" },
-    { area: "archivein", title: "ARCHIVE IN domain", url: "https://in.archivepilates.com/" },
-    { area: "private", title: "Private survey", url: "https://in.archivepilates.com/privateSurvey/" },
-    { area: "private", title: "Private chart", url: "https://in.archivepilates.com/private-chart/" },
-    { area: "welcome", title: "Member signup", url: "https://in.archivepilates.com/memberSignup/" },
-  ];
-  const checks = await Promise.all(targets.map(async (target) => {
-    const started = Date.now();
-    try {
-      const response = await fetch(target.url, { redirect: "manual" });
-      const text = await response.text().catch(() => "");
-      return { ...target, ok: response.status < 500 && response.status !== 404, status: response.status, ms: Date.now() - started, text: text.slice(0, 240) };
-    } catch (error) {
-      return { ...target, ok: false, status: 0, ms: Date.now() - started, error: error instanceof Error ? error.message : String(error) };
-    }
-  }));
-  checked.push({ id: "web-surfaces", checks: checks.map(({ text, ...rest }) => rest) });
+  const checks = await Promise.all(HEALTH_WEB_SURFACES.map(target => probeWebSurface(target)));
+  checked.push({ id: "web-surfaces", checks });
   for (const check of checks.filter((item) => !item.ok)) {
     addFinding({
       area: check.area,
@@ -445,7 +430,7 @@ async function checkCloudMetadata() {
 
 async function checkAdminAccess() {
   if (READ_ONLY) {
-    checked.push({ id: "archivein-admin-access", skipped: "read-only: credential-creating verifier excluded" });
+    checked.push({ id: "core-admin-access", skipped: "read-only: credential-creating verifier excluded" });
     return;
   }
   if (!["weekly", "deep", "e2e"].includes(MODE)) return;
@@ -456,7 +441,7 @@ async function checkAdminAccess() {
     maxBuffer: 64 * 1024 * 1024,
   });
   checked.push({
-    id: "archivein-admin-access",
+    id: "core-admin-access",
     ok: result.status === 0,
     code: result.status ?? 1,
     signal: result.signal || "",
@@ -725,7 +710,7 @@ async function checkQueues() {
   await inspectQueue({
     collection: "writeQueue",
     area: "studiomate",
-    title: "ARCHIVE IN 쓰기 큐",
+      title: "StudioMate 쓰기 큐",
     activeStatuses: ["pending", "retry", "processing"],
     staleStatuses: ["processing"],
     staleMinutes: 30,
@@ -1507,32 +1492,7 @@ function gitDirty(cwd) {
 }
 
 async function sendAttentionEmail(summary, reportPath) {
-  const top = summary.findings.slice(0, 6).map((item) => `- [${item.severity}] ${item.title}: ${item.suggestedAction || item.cause}`);
-  const subject = `[시스템점검][${summary.status === "critical" ? "긴급" : "확인필요"}] 자동복구 ${summary.repairedCount}건 · ${kstDate(new Date())}`;
-  const body = [
-    "주체: ARCHIVE IN / Mac mini 시스템 점검 자동화",
-    `결론: ${summary.findingCount}건 감지 · 직접 복구 ${summary.repairedCount}건 · 재실행 요청 ${summary.restartRequestedCount}건입니다.`,
-    "",
-    "핵심:",
-    `- 긴급: ${summary.criticalCount}건`,
-    `- 확인필요: ${summary.actionRequiredCount}건`,
-    `- 경고: ${summary.warningCount}건`,
-    "- 재실행 요청은 복구 완료가 아닙니다. 실제 정상 반영 결과로 재검증합니다.",
-    `- 모드: ${summary.mode}${summary.repair ? " / repair" : ""}`,
-    "",
-    "주요 항목:",
-    ...(top.length ? top : ["- 없음"]),
-    "",
-    "검증:",
-    `- 실행 리포트: ${reportPath}`,
-    `- Firestore: systemHealthRuns/${summary.runId}`,
-    "",
-    "주의:",
-    "- 회원 발송, 예약 생성/삭제, 정산 금액 변경은 자동복구 대상에서 제외했습니다.",
-    "",
-    "다음:",
-    summary.criticalCount || summary.actionRequiredCount ? "- ARCHIVE CORE 자동화 관제에서 open 항목을 확인하세요." : "- 없음",
-  ].join("\n");
+  const { subject, body } = systemHealthEmail(summary, reportPath);
   const report = spawnSync(process.execPath, ["firebase/kangsain-functions/macmini-studiomate/send-automation-report.mjs"], {
     cwd: ROOT,
     encoding: "utf8",

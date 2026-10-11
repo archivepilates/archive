@@ -3,6 +3,7 @@ import { Buffer } from "node:buffer";
 import crypto from "node:crypto";
 import fs from "node:fs";
 import { deliverAutomationReport, reportMessageId } from "./automation-report-delivery.mjs";
+import { buildOperationsReportMime, normalizeOperationsIdentity, operationsReportLabels } from "../../../scripts/lib/operations-email-format.mjs";
 
 const REPORT_LABEL = process.env.AUTOMATION_REPORT_LABEL || "자동화 완료보고";
 const FROM = process.env.AUTOMATION_REPORT_FROM || "home@archivepilates.com";
@@ -11,28 +12,21 @@ const SERVICE_ACCOUNT_PATH =
   process.env.GOOGLE_SERVICE_ACCOUNT_KEY ||
   "/Users/archivepilates/ArchiveIN/secrets/google/archive-codex-operator.json";
 const subject = process.env.AUTOMATION_REPORT_SUBJECT;
-const body = process.env.AUTOMATION_REPORT_BODY;
+const body = normalizeOperationsIdentity(process.env.AUTOMATION_REPORT_BODY || '');
 const messageId = reportMessageId(process.env.AUTOMATION_REPORT_EVENT_ID);
 
 if (!subject || !body) throw new Error("AUTOMATION_REPORT_SUBJECT and AUTOMATION_REPORT_BODY are required.");
 
 const accessToken = await getServiceAccountAccessToken();
-let labelId;
-try { labelId = await ensureLabel(REPORT_LABEL); }
-catch { console.error('Automation report label unavailable; delivery proceeds independently.'); }
-const message = [
-  `From: ${FROM}`,
-  `To: ${TO}`,
-  ...(messageId ? [`Message-ID: <${messageId}>`] : []),
-  `Subject: =?UTF-8?B?${Buffer.from(subject, "utf8").toString("base64")}?=`,
-  "MIME-Version: 1.0",
-  "Content-Type: text/plain; charset=UTF-8",
-  "Content-Transfer-Encoding: base64",
-  "",
-  Buffer.from(body, "utf8").toString("base64"),
-].join("\r\n");
+const labelIds = [];
+for (const label of operationsReportLabels(subject, REPORT_LABEL)) {
+  try { labelIds.push(await ensureLabel(label)); }
+  catch { console.error('Automation report label unavailable; delivery proceeds independently.'); }
+}
+const boundary = `archive-core-${crypto.randomUUID()}`;
+const message = buildOperationsReportMime({ from: FROM, to: TO, subject, body, messageId, boundary });
 
-const sent = await deliverAutomationReport({ gmailFetch, raw: base64Url(message), messageId, labelId,
+const sent = await deliverAutomationReport({ gmailFetch, raw: base64Url(message), messageId, labelIds,
   reconcileOnly: process.env.AUTOMATION_REPORT_RECONCILE_ONLY === '1' });
 console.log(JSON.stringify({ ok: true, ...sent, label: REPORT_LABEL }, null, 2));
 

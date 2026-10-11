@@ -189,7 +189,7 @@ async function run(deadline: ReturnType<typeof createHoldingWorkerDeadline>) {
       results.push({ memberId: job.memberId, status: historical ? "excluded" : "review", reason, ...(eventId ? { id: eventId } : {}) });
       if (apply && !historical) {
         if (eventId) await eventStatus(eventId, "reconciliation_required", promoted);
-        const body = [`주체: ARCHIVE IN / 홀딩 신규 자동발송`, `결론: 회원 ${job.memberId} 홀딩 안내를 보류했습니다.`,
+        const body = [`주체: ARCHIVE CORE / 홀딩 신규 자동발송`, `결론: 회원 ${job.memberId} 홀딩 안내를 보류했습니다.`,
           `발생: ${new Date().toISOString()}`, `원인: ${reason}`, `현재: 후보·접수 여부 확인 필요. 자동 재발송하지 않습니다.`,
           `원천: 회원 ${job.memberId} / ${job.sourceImportId}${eventId ? ` / ${eventId}` : ""}`,
           `상세: https://arcpilates.studiomate.kr/users/detail?id=${job.memberId}`,
@@ -197,7 +197,7 @@ async function run(deadline: ReturnType<typeof createHoldingWorkerDeadline>) {
         try {
           await child(process.execPath, ["firebase/kangsain-functions/macmini-studiomate/send-automation-report.mjs"], 45000, { ...process.env,
               AUTOMATION_REPORT_FROM: "home@archivepilates.com", AUTOMATION_REPORT_TO: "home@archivepilates.com",
-              AUTOMATION_REPORT_EVENT_ID: `holding_auto_review_${holdingFingerprint([job.jobId, reason])}`,
+              AUTOMATION_REPORT_EVENT_ID: holdingFingerprint(['holding_auto_review', job.jobId, reason]),
               AUTOMATION_REPORT_SUBJECT: "[홀딩 안내][확인필요] 원본·발송 원장 확인 필요",
               AUTOMATION_REPORT_LABEL: "자동화 확인필요", AUTOMATION_REPORT_BODY: body });
         } catch { results.push({ memberId: job.memberId, status: "review", reason: "holding_review_email_unconfirmed" }); }
@@ -209,10 +209,10 @@ async function run(deadline: ReturnType<typeof createHoldingWorkerDeadline>) {
     try {
       await child(process.execPath, ["firebase/kangsain-functions/macmini-studiomate/send-automation-report.mjs"], 45000, { ...process.env,
         AUTOMATION_REPORT_FROM: "home@archivepilates.com", AUTOMATION_REPORT_TO: "home@archivepilates.com",
-        AUTOMATION_REPORT_EVENT_ID: `holding_receipt_review_${holdingFingerprint(receiptReviews.map(row => [row.id, row.reason]))}`,
+        AUTOMATION_REPORT_EVENT_ID: holdingFingerprint(['holding_receipt_review', receiptReviews.map(row => [row.id, row.reason]).sort((a, b) => String(a[0]).localeCompare(String(b[0])))]),
         AUTOMATION_REPORT_SUBJECT: "[홀딩 안내][확인필요] 접수 원장 확인 필요",
         AUTOMATION_REPORT_LABEL: "자동화 확인필요",
-        AUTOMATION_REPORT_BODY: ["주체: ARCHIVE IN / 홀딩 신규 자동발송", "결론: 접수 결과 대조를 완료하지 못했습니다. 재발송하지 않습니다.",
+        AUTOMATION_REPORT_BODY: ["주체: ARCHIVE CORE / 홀딩 신규 자동발송", "결론: 접수 결과 대조를 완료하지 못했습니다. 재발송하지 않습니다.",
           `확인필요: ${receiptReviews.length}건`, ...receiptReviews.slice(0, 10).map(row => `원천: ${row.id} / 원인: ${row.reason}`),
           "현재: 기존 발송·클레임 유지. 원장 대조만 재확인합니다.",
           "상세: https://console.firebase.google.com/project/archive-pilates/firestore/databases/-default-/data/~2FholdingNoticeEvents",
