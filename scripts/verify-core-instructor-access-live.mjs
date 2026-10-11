@@ -7,9 +7,12 @@
 import { createHash, randomBytes, randomUUID } from 'node:crypto';
 import { mkdir, readFile } from 'node:fs/promises';
 import { createRequire } from 'node:module';
+import { dirname, join } from 'node:path';
 import { setTimeout as delay } from 'node:timers/promises';
 import { isDeepStrictEqual } from 'node:util';
 import vm from 'node:vm';
+import { collectCoreAuthTokens } from './lib/core-auth-storage.mjs';
+import { firestoreRestDenied } from './lib/firestore-rest-denial.mjs';
 
 const PROJECT = 'archive-pilates';
 const OPERATOR = 'archive-codex-operator@archive-pilates.iam.gserviceaccount.com';
@@ -72,7 +75,7 @@ function callableDenied(response, allowUnauthenticated = false) {
 }
 
 function firestoreDenied(response) {
-  return response.status === 403 && response.body?.error?.status === 'PERMISSION_DENIED';
+  return firestoreRestDenied(response);
 }
 
 function callableResult(response) {
@@ -154,7 +157,10 @@ async function run() {
     });
     const require = createRequire(new URL('../firebase/kangsain-functions/functions/package.json', import.meta.url));
     const admin = require('firebase-admin');
-    const { chromium } = createRequire(new URL('../package.json', import.meta.url))('playwright');
+    const browserRequire = createRequire(new URL('../package.json', import.meta.url));
+    const { chromium } = browserRequire('playwright');
+    const { parseEvaluationResultValue } = browserRequire(join(dirname(browserRequire.resolve('playwright-core')),
+      'lib/utils/isomorphic/utilityScriptSerializers.js'));
     app = admin.initializeApp({ credential: admin.credential.cert(serviceAccount), projectId: PROJECT }, `core-qa-${runId}`);
     db = app.firestore();
     auth = app.auth();
@@ -413,25 +419,29 @@ async function run() {
         Array.isArray(result.privateTasks) && result.privateTasks.length === 0);
     });
     await check('uiFreshPasswordLoginAndInMemoryIndexedDbState', async () => {
+      report.uiReadyStage = 'cutoff';
       await waitForAuthCutoff(cutoff);
+      report.uiReadyStage = 'login';
       await uiLogin(loginPage, newPassword);
+      report.uiReadyStage = 'shell';
       await instructorShell(loginPage);
+      report.uiReadyStage = 'heading';
       await loginPage.getByRole('heading', { name: '오늘의 수업', exact: true }).waitFor({ state: 'visible' });
+      report.uiReadyStage = 'empty_workspace';
       await loginPage.waitForFunction(() => document.querySelector('[data-core-instructor-content]')?.textContent
         .includes('오늘 예정된 수업이 없습니다.'));
+      report.uiReadyStage = 'storage_state';
       readyStorageState = await loginPage.context().storageState({ indexedDB: true });
       // Validate the actual browser-issued token, not just the parallel REST login.
-      const tokens = new Set();
-      const visit = value => {
-        if (!value || typeof value !== 'object') return;
-        if (value.uid === uid && typeof value.stsTokenManager?.accessToken === 'string') {
-          tokens.add(value.stsTokenManager.accessToken);
-        }
-        for (const child of Object.values(value)) visit(child);
-      };
-      visit(readyStorageState);
+      const tokens = collectCoreAuthTokens(readyStorageState, {
+        origin: CORE_ORIGIN, apiKey: config.apiKey, uid, decodeIndexedDB: parseEvaluationResultValue,
+      });
+      report.uiReadyTokenCount = tokens.size;
+      report.uiReadyStage = 'browser_token';
       verify(tokens.size === 1);
       await verifyInstructorToken([...tokens][0], cutoff);
+      delete report.uiReadyStage;
+      delete report.uiReadyTokenCount;
     });
     for (const width of WIDTHS) {
       await check(`uiScopedRoutesAndSequenceFrame_${width}`, async () => {
@@ -483,7 +493,12 @@ async function run() {
           where: { fieldFilter: { field: { fieldPath: '__name__' }, op: 'EQUAL',
             value: { referenceValue: `${documentRoot}/${path}` } } },
         } } });
+        report.rawQueryDiagnostic = { collection, status: response.status,
+          errorStatus: response.body?.error?.status,
+          streamedErrorStatuses: Array.isArray(response.body) ? response.body.map(row => row?.error?.status).filter(Boolean) : [],
+          hasDocument: Array.isArray(response.body) && response.body.some(row => row?.document) };
         verify(firestoreDenied(response));
+        delete report.rawQueryDiagnostic;
       });
     }
 

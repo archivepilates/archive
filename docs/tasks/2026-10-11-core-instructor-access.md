@@ -51,4 +51,14 @@
 - HOME Cloud SDK reauthentication completed; the task-owned OAuth tab is closed. Credentials are not recorded in this repository.
 - Created keyless archive-core-auth service account and coreInstructorPasswordUpdater custom role with only firebaseauth.users.get/update; project bindings are datastore.user and logging.logWriter plus that custom role. The operator has serviceAccountUser on this dedicated account only.
 - App export selects this account only for completeCoreFirstLogin. Shared runtime identity and all other callables remain unchanged. Two AST contract tests prevent accidental shared-account expansion.
-- Pending: clean-main single-function deployment, isolated live first-change/ownership/revocation QA, then approved four-instructor provisioning and final operating-rule Hosting release.
+- Single-function source e237e8ea is promoted and pushed to main; completeCoreFirstLogin deployed ACTIVE with the dedicated archive-core-auth runtime. The shared compute runtime is unchanged. GitHub affected-functions check passed.
+
+## Current Result (Supersedes Earlier Pending Status)
+
+- Complete isolated live flow passed: initial password gate, UI first change exactly once, old password/token denial, fresh REST and browser login, own workspace, denied raw sensitive documents and queries, per-UID notes/images, tombstone protection, inactive employment and manager preservation. Synthetic Auth/staff/note/image records and all browser contexts were cleaned.
+- Updated QA parsing for official Playwright encoded IndexedDB auth storage and Firestore streamed permission-denied responses. Exact origin/database/store/key/UID scoping and actual HTTP 403 remain mandatory. Regression tests: 20 storage cases and 12 REST denial cases passed. No tokens or storageState files are written to disk.
+- Latest local checks: security/handler 162, runtime/release 24, QA parser 32 and responsive instructor UI 92 passed. Rules 235 passed in the prior source deployment and are unchanged in this repair.
+- Provisioned only approved canonical current instructors 1983525, 2222464, 2849322 and 4817346. Preserved three existing Auth UIDs; created core_staff_4817346 only. Manager documents, roles, password/session metadata are unchanged.
+- Read back all four enabled/must-change states and tested initial login plus getCoreAccessSession; getCoreInstructorWorkspace returned PERMISSION_DENIED before change for every instructor. No real instructor first-change was performed; instructors choose their new password themselves.
+- No StudioMate writes, SOLAPI sends, contact/payroll/booking/member-data changes. Auth role has only users.get/update, datastore.user and logging.logWriter; no key created or shared runtime privilege expansion.
+- CORE operating rules and HTML result are updated for the final paired Hosting release. Final release verification is performed after this scoped commit is promoted to clean main. Separate sequence-user-library changes remain uncommitted and unshipped; administrator combined sequence browsing is not part of this release.
