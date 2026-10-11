@@ -6,31 +6,60 @@ import { IMWEB_LESSON_POLICY as policy, assessInstructorOrder, assertSamePaidOrd
 import { normalizeInstructorLessonPhone } from './instructor-lesson-registration-contract.mjs';
 import { recordAutomationStatus } from './archive-core-ops-logging.mjs';
 import { acquireStudioMateBrowserLock } from './studiomate-browser-lock.mjs';
-import { imwebRequestFailure, isTransientReadFailure } from './imweb-read-failure.mjs';
+import { imwebRequestFailure, isTransientReadFailure, sanitizeImwebFailureDetails } from './imweb-read-failure.mjs';
 import { observeAutomationRun, sendAutomationHealthEmail } from './automation-failure-notifications.mjs';
 import { formatOperationsReport } from './operations-email-format.mjs';
 
 const emailContext = { area: '강사레슨', title: '홈페이지 자동접수', link: 'https://core.archivepilates.com/instructor-lessons/' };
 
-export function imwebOrderRead(args, { execute = execFileSync } = {}) {
-  try {
-    const result = JSON.parse(execute(process.env.IMWEB_CLI_BIN || path.join(os.homedir(), '.local/bin/imweb'),
-      ['--profile', 'default', '--output', 'json', ...args], { encoding: 'utf8', timeout: 45000, maxBuffer: 8 * 1024 * 1024, stdio: ['ignore', 'pipe', 'pipe'] }));
-    if (result.statusCode && result.statusCode !== 200) throw Object.assign(new Error(), { statusCode: result.statusCode });
-    return result;
-  } catch (error) { throw imwebRequestFailure(error, { readOnly: args[0] === 'order' && ['get', 'list'].includes(args[1]) }); }
+export function imwebOrderRead(args, { execute = execFileSync,
+  wait = milliseconds => Atomics.wait(new Int32Array(new SharedArrayBuffer(4)), 0, 0, milliseconds) } = {}) {
+  const readOnly = args[0] === 'order' && ['get', 'list'].includes(args[1]);
+  const operation = readOnly ? `order_${args[1]}` : args[0] === 'config' && args[1] === 'context' ? 'config_context' : 'other_request';
+  for (let attempt = 0; attempt < 2; attempt++) {
+    try {
+      const result = JSON.parse(execute(process.env.IMWEB_CLI_BIN || path.join(os.homedir(), '.local/bin/imweb'),
+        ['--profile', 'default', '--output', 'json', ...args], { encoding: 'utf8', timeout: 45000, maxBuffer: 8 * 1024 * 1024, stdio: ['ignore', 'pipe', 'pipe'] }));
+      if (!result || typeof result !== 'object' || Array.isArray(result)) {
+        throw Object.assign(new Error(), { failureKind: 'invalid_envelope' });
+      }
+      if (result.ok === false || result.error != null ||
+        [result.statusCode, result.status_code].some(status => status !== undefined && Number(status) !== 200)) {
+        throw Object.assign(new Error(), { stdout: JSON.stringify(result) });
+      }
+      return result;
+    } catch (error) {
+      const failure = imwebRequestFailure(error, { readOnly, operation });
+      failure.failureDetails = sanitizeImwebFailureDetails({ ...failure.failureDetails,
+        readAttempts: attempt + 1, failureKind: error instanceof SyntaxError ? 'invalid_json' : error.failureKind });
+      // Only verified read failures retry; never repeat member-facing writes or auth failures.
+      if (attempt === 0 && isTransientReadFailure(failure)) { wait(500); continue; }
+      throw failure;
+    }
+  }
 }
-export function verifyImwebSite(read = imwebOrderRead) {
-  const c = read(['config', 'context']);
+function readOrderSource(args, phase, read) {
+  try { return read(args); }
+  catch (error) {
+    error.failureDetails = sanitizeImwebFailureDetails({ ...error.failureDetails, phase });
+    throw error;
+  }
+}
+function invalidOrderSource(message, phase, operation) {
+  return Object.assign(new Error(message), { code: 'IMWEB_ORDER_SOURCE_INVALID',
+    failureDetails: sanitizeImwebFailureDetails({ phase, operation, failureKind: 'source_validation' }) });
+}
+export function verifyImwebSite(read = imwebOrderRead, phase = 'order_scan') {
+  const c = readOrderSource(['config', 'context'], phase, read);
   if (c.resolved_profile?.site_code !== policy.siteCode || c.resolved_profile?.unit_code !== policy.unitCode) {
-    throw new Error('아임웹 사이트 불일치: 주문 등록 중단');
+    throw invalidOrderSource('아임웹 사이트 불일치: 주문 등록 중단', phase, 'config_context');
   }
 }
 export function readImwebOrder(orderNo, read = imwebOrderRead) {
   if (!/^\d{15}$/.test(String(orderNo))) throw new Error('Invalid order number');
-  verifyImwebSite(read);
-  const { data } = read(['order', 'get', String(orderNo)]);
-  if (String(data?.orderNo) !== String(orderNo)) throw new Error('아임웹 주문번호 불일치');
+  verifyImwebSite(read, 'order_readback');
+  const { data } = readOrderSource(['order', 'get', String(orderNo)], 'order_readback', read);
+  if (String(data?.orderNo) !== String(orderNo)) throw invalidOrderSource('아임웹 주문번호 불일치', 'order_readback', 'order_get');
   return data;
 }
 export function readRecentImwebOrders(read = imwebOrderRead, now = new Date()) {
@@ -39,18 +68,19 @@ export function readRecentImwebOrders(read = imwebOrderRead, now = new Date()) {
   const result = [];
   let previous = Infinity;
   for (let page = 1; page <= 10; page++) {
-    const { data } = read(['order', 'list', '--unit-code', policy.unitCode, '--page', String(page), '--limit', '50']);
-    if (!Array.isArray(data?.list) || data.currentPage !== page || !Number.isInteger(data.totalPage)) throw new Error('아임웹 주문 페이지 구조 확인필요');
+    const { data } = readOrderSource(['order', 'list', '--unit-code', policy.unitCode, '--page', String(page), '--limit', '50'], 'order_scan', read);
+    if (!Array.isArray(data?.list) || data.currentPage !== page || !Number.isInteger(data.totalPage) || data.totalPage < 0 ||
+      data.totalPage < page && data.list.length > 0) throw invalidOrderSource('아임웹 주문 페이지 구조 확인필요', 'order_scan', 'order_list');
     for (const order of data.list) {
       const time = Date.parse(order.wtime);
-      if (!Number.isFinite(time) || time > previous) throw new Error('아임웹 주문 시간 정렬 확인필요');
+      if (!Number.isFinite(time) || time > previous) throw invalidOrderSource('아임웹 주문 시간 정렬 확인필요', 'order_scan', 'order_list');
       previous = time;
       if (time < cutoff) return result;
       result.push(order);
     }
     if (page >= data.totalPage || data.totalCount === 0) return result;
   }
-  throw new Error('최근 30일 주문 조회 상한 초과: 전체 조회 전 자동 등록 중단');
+  throw invalidOrderSource('최근 30일 주문 조회 상한 초과: 전체 조회 전 자동 등록 중단', 'order_scan', 'order_list');
 }
 
 const step = (status, label, detail = '') => ({ status, label, detail });
@@ -271,12 +301,15 @@ export async function syncImwebInstructorOrders(db, { apply = false, orderNo = '
     try {
       // A one-order manual check cannot clear or count toward the scheduled scan incident.
       if (!orderNo) alert = await observeAutomationRun(stateDir, { ok: false,
-        transient: isTransientReadFailure(error), errorCode: error.code || 'ORDER_INTAKE_FAILED' }, notify);
+        transient: isTransientReadFailure(error), errorCode: error.code || 'ORDER_INTAKE_FAILED',
+        failureDetails: sanitizeImwebFailureDetails(error.failureDetails) }, notify);
       else await attention(stateDir, String(error.message));
     } catch { console.error('홈페이지 자동접수 오류 알림 상태 저장 실패'); }
     if (alert) error.queryAlertObservedAt = alert.observedAt;
     try {
-      await recordStatus(db, { automationId: 'imweb-instructor-lesson-orders', title: '홈페이지 강사레슨 자동접수', ownerArea: 'instructor', status: 'failed', lastResult: `${String(error.message).slice(0, 240)}${alert ? ` / 연속 실패 ${alert.consecutiveFailures}회` : ''}` });
+      const details = sanitizeImwebFailureDetails(error.failureDetails);
+      await recordStatus(db, { automationId: 'imweb-instructor-lesson-orders', title: '홈페이지 강사레슨 자동접수', ownerArea: 'instructor', status: 'failed', lastResult: `${String(error.message).slice(0, 240)}${alert ? ` / 연속 실패 ${alert.consecutiveFailures}회` : ''}`,
+        warnings: Object.entries(details).map(([name, value]) => `${name}: ${value}`) });
     } catch { console.error('홈페이지 자동접수 관제 상태 저장 실패'); }
     throw error;
   } finally { await release(); }

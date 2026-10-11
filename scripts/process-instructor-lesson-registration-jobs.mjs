@@ -10,6 +10,7 @@ import { acquireStudioMateBrowserLock } from "./lib/studiomate-browser-lock.mjs"
 import { ensureStudioMateLoggedIn } from "./lib/studiomate-login.mjs";
 import { appendIdleHeartbeatIfDue } from "./lib/idle-heartbeat.mjs";
 import { readImwebOrder, syncImwebInstructorOrders } from "./lib/imweb-instructor-orders.mjs";
+import { sanitizeImwebFailureDetails } from "./lib/imweb-read-failure.mjs";
 import { assertSamePaidOrder } from "./lib/imweb-instructor-order-policy.mjs";
 import {
   INSTRUCTOR_LESSON_TICKET_NAME,
@@ -74,7 +75,8 @@ if (apply && !config.jobId) {
   try { summary.websiteOrders = await syncImwebInstructorOrders(db, { apply: true }); }
   catch (error) {
     summary.websiteOrders = { ok: false, error: error.message, errorCode: error.code || 'ORDER_INTAKE_FAILED',
-      queryAlertObservedAt: error.queryAlertObservedAt || null };
+      queryAlertObservedAt: error.queryAlertObservedAt || null,
+      failureDetails: sanitizeImwebFailureDetails(error.failureDetails) };
     console.error(`홈페이지 강사레슨 접수 확인필요: ${error.message}`);
   }
 }

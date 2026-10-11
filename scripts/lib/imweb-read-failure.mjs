@@ -4,8 +4,10 @@ export const TRANSIENT_READ_CODE = 'IMWEB_TRANSIENT_READ_FAILED';
 export function sanitizeImwebFailureDetails(value = {}) {
   value ||= {};
   const details = {};
-  if (['member_list', 'config_context', 'other_request'].includes(value.operation)) details.operation = value.operation;
-  if (['member_scan', 'point_prepare', 'point_send', 'point_verify', 'ledger_processing'].includes(value.phase)) details.phase = value.phase;
+  if (['member_list', 'order_list', 'order_get', 'config_context', 'other_request'].includes(value.operation)) details.operation = value.operation;
+  if (['member_scan', 'order_scan', 'order_readback', 'point_prepare', 'point_send', 'point_verify', 'ledger_processing'].includes(value.phase)) details.phase = value.phase;
+  if (['invalid_json', 'invalid_envelope', 'source_validation'].includes(value.failureKind)) details.failureKind = value.failureKind;
+  if ([1, 2].includes(value.readAttempts)) details.readAttempts = value.readAttempts;
   if (['inviter', 'invitee'].includes(value.role)) details.role = value.role;
   if (Number.isInteger(value.statusCode) && value.statusCode >= 100 && value.statusCode <= 599) details.statusCode = value.statusCode;
   if (typeof value.providerCode === 'string' && /^\d{1,10}$/.test(value.providerCode)) details.providerCode = value.providerCode;
