@@ -27,6 +27,7 @@
 .core-instructor-access .cia-icon { width: 1.25rem; height: 1.25rem; flex: 0 0 1.25rem; }
 .core-instructor-access .cia-header {
   display: grid;
+  grid-template-columns: minmax(0, 1fr) minmax(0, 1fr);
   gap: 1rem;
   padding: 1rem;
   border-bottom: 1px solid var(--line, #dce0e6);
@@ -43,9 +44,57 @@
   font-weight: 800;
   text-decoration: none;
 }
-.core-instructor-access .cia-account { display: flex; align-items: center; justify-content: space-between; gap: .75rem; }
-.core-instructor-access .cia-account > span { color: var(--cia-muted); }
-.core-instructor-access .cia-nav { display: grid; grid-template-columns: repeat(3, minmax(0, 1fr)); gap: .375rem; }
+.core-instructor-access .cia-account { display: flex; align-items: center; justify-content: flex-end; gap: .5rem; }
+.core-instructor-access .cia-account > span { color: var(--cia-muted); text-align: right; }
+.core-instructor-access .cia-nav { display: grid; grid-column: 1 / -1; grid-template-columns: repeat(3, minmax(0, 1fr)); gap: .375rem; }
+
+.core-account-bar {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  justify-content: flex-end;
+  gap: .5rem;
+  min-width: 0;
+  min-height: 44px;
+  margin-bottom: .75rem;
+  color: var(--muted, #5f625f);
+  font-size: .875rem;
+  line-height: 1.5;
+}
+.core-account-bar .core-account-icon { width: 1.125rem; height: 1.125rem; flex: 0 0 1.125rem; }
+.core-account-bar [data-core-login-name] { min-width: 0; max-width: 24rem; overflow-wrap: anywhere; text-align: right; }
+.core-account-bar .core-account-logout {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  flex: 0 0 44px;
+  width: 44px;
+  height: 44px;
+  padding: 0;
+  border: 1px solid var(--line-soft, #dce0e6);
+  border-radius: 6px;
+  background: transparent;
+  color: inherit;
+  cursor: pointer;
+}
+.core-account-bar .core-account-logout:hover { color: var(--text, #0d0d0f); background: var(--paper, #f5f6f8); }
+.core-account-bar .core-account-logout:focus-visible { outline: 2px solid var(--accent, #ef4b23); outline-offset: 3px; }
+.core-account-bar .core-account-logout:disabled { opacity: .6; cursor: wait; }
+.core-account-bar .core-account-status { flex-basis: 100%; color: var(--red, #b42318); text-align: right; }
+.core-account-bar [hidden] { display: none !important; }
+@media (max-width: 25rem) {
+  .core-instructor-access .cia-account .cia-button { width: 44px; padding: .625rem; }
+  .core-instructor-access .cia-account .cia-button > span {
+    position: absolute;
+    width: 1px;
+    height: 1px;
+    padding: 0;
+    border: 0;
+    clip-path: inset(50%);
+    white-space: nowrap;
+    overflow: hidden;
+  }
+}
 .core-instructor-access .cia-nav a {
   display: flex;
   flex-direction: column;

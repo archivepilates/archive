@@ -32,11 +32,14 @@ let browser;
 let server;
 
 function makeFixture(mode) {
+  const manager = mode.startsWith("manager") || ["owner", "revoked-session", "access-transient"].includes(mode);
   return {
-    mode, uid: "qa-instructor", staffId: "qa-staff", staffName: "QA 강사",
-    rawRole: mode === "owner" ? "owner" : ["manager", "revoked-session", "access-transient"].includes(mode) ? "manager" : "instructor",
+    mode, uid: "qa-instructor", staffId: "qa-staff",
+    staffName: mode.endsWith("name-safe") ? 'QA <b>& "이름"</b>' : mode.endsWith("name-missing") ? "" : manager ? "QA 관리자" : "QA 강사",
+    phone: "01000000000", email: "qa-login@example.invalid",
+    rawRole: mode === "owner" ? "owner" : manager ? "manager" : "instructor",
     mustChangePassword: ["first-login", "signout-retry"].includes(mode),
-    signOutFailures: mode === "signout-retry" ? 1 : 0,
+    signOutFailures: ["signout-retry", "manager-logout-failure"].includes(mode) ? 1 : 0,
     workspaceFailures: mode === "workspace-retry" ? 1 : 0,
     workspace: {
       date: "2026-10-11", staffName: "QA 강사",
@@ -85,8 +88,15 @@ export function denied(message) {
 }
 const listeners = new Set();
 export const authClient = {
-  currentUser: localStorage.getItem("core-ui-user") === fixture.uid ? { uid: fixture.uid } : null,
+  currentUser: localStorage.getItem("core-ui-user") === fixture.uid
+    ? { uid: fixture.uid, phoneNumber: fixture.phone, email: fixture.email, displayName: fixture.email } : null,
 };
+export function changeAuth(user) {
+  authClient.currentUser = user;
+  if (user) localStorage.setItem("core-ui-user", user.uid);
+  else localStorage.removeItem("core-ui-user");
+  for (const listener of [...listeners]) listener(user);
+}
 export function observe(callback) {
   listeners.add(callback);
   queueMicrotask(() => { if (listeners.has(callback)) callback(authClient.currentUser); });
@@ -286,6 +296,8 @@ function installDomHooks() {
     ".shell": "qa-operator-shell", ".nav": "qa-operator-nav", "#refreshButton": "qa-refresh",
     "#coreInstructorAccess": "qa-instructor", "#coreLoginGate": "qa-login",
     "[data-sequence-studio]": "qa-sequence-frame",
+    "[data-core-login-name]": "qa-login-name", ".core-account-bar": "qa-account-bar",
+    ".cia-account": "qa-instructor-account",
   };
   const tag = () => {
     for (const [selector, id] of Object.entries(hooks)) {
@@ -313,6 +325,58 @@ async function settled(page) {
     const refresh = document.querySelector('[data-testid="qa-refresh"]');
     return !refresh || refresh.getAttribute("aria-busy") !== "true";
   });
+}
+
+async function loginName(page, manager = false, missing = false) {
+  const fixture = await page.evaluate(async () => (await import("/__qa/state.mjs")).fixture);
+  const name = page.getByTestId("qa-login-name");
+  await name.waitFor({ state: "visible" });
+  assert.equal(await name.count(), 1, "Exactly one current login name");
+  const text = (await name.textContent()).trim();
+  if (!missing && fixture.staffName) assert.equal(text, fixture.staffName, "Canonical session staffName, including manager");
+  assert.ok(!text.includes(fixture.phone) && !text.includes(fixture.email), "No phone/email name substitution");
+  assert.equal(await name.evaluate(node => node.childElementCount), 0, "Name must be safe text, not HTML");
+  const account = page.getByTestId(manager ? "qa-account-bar" : "qa-instructor-account");
+  assert.equal(await account.count(), 1, "Account toolbar cannot duplicate");
+  const box = await account.boundingBox();
+  const nameBox = await name.boundingBox();
+  const viewport = page.viewportSize();
+  assert.ok(box && nameBox && box.y >= 0 && box.y < 160 && box.x + box.width >= viewport.width * .75,
+    "Account must be visible in top-right of first viewport");
+  assert.ok(nameBox.x >= box.x - 1 && nameBox.x + nameBox.width <= box.x + box.width + 1, "Name fits account toolbar");
+  const logout = account.getByRole("button", { name: "로그아웃", exact: true });
+  assert.equal(await logout.isVisible(), true);
+  const logoutBox = await logout.boundingBox();
+  assert.ok(logoutBox.width >= 44 && logoutBox.height >= 44, "Logout touch target");
+  assert.ok(nameBox.x + nameBox.width <= logoutBox.x + 1, "Name and logout do not overlap");
+}
+
+async function clearedLoginName(page) {
+  await page.waitForFunction(() => [...document.querySelectorAll('[data-testid="qa-login-name"]')]
+    .every(node => !node.textContent.trim()));
+  assert.equal(await page.getByTestId("qa-account-bar").count(), 0, "Manager toolbar removed with session");
+}
+
+async function managerLogout(page, failure = false) {
+  await page.getByRole("button", { name: "로그아웃", exact: true }).click();
+  if (failure) {
+    await page.getByRole("alert").waitFor({ state: "visible" });
+    assert.equal(await page.getByRole("alert").textContent(), "로그아웃하지 못했습니다. 다시 시도하세요.");
+    await loginName(page, true);
+    assert.equal(await page.getByTestId("qa-operator-shell").isVisible(), true, "Failed logout restores current manager UI");
+    assert.equal((await telemetry(page)).currentUid, "qa-instructor", "Failed logout keeps authenticated user");
+    await page.getByRole("button", { name: "로그아웃", exact: true }).click();
+  }
+  await page.getByTestId("qa-login").waitFor({ state: "visible" });
+  await clearedLoginName(page);
+  await page.getByTestId("qa-operator-shell").waitFor({ state: "hidden" });
+  const state = await telemetry(page);
+  assert.equal(state.currentUid, null);
+  assert.equal(state.storedUid, null);
+  assert.deepEqual(state.auth.map(event => event.success), failure ? [false, true] : [true]);
+  assert.deepEqual(state.uiEvents, ["core-instructor-signed-out"]);
+  assert.deepEqual(state.writes, []);
+  return state;
 }
 
 async function noOperatorReads(page, sequence = false) {
@@ -343,7 +407,11 @@ async function layout(page, name, instructor = true) {
     const target = instructorOnly ? root : document.body;
     const visible = node => {
       const box = node.getBoundingClientRect();
-      return box.width > 0 && box.height > 0 && getComputedStyle(node).visibility !== "hidden";
+      const style = getComputedStyle(node);
+      // Icon buttons retain a deliberately clipped label for screen readers.
+      const accessibleIconLabel = box.width === 1 && box.height === 1 && style.clipPath === "inset(50%)"
+        && node.parentElement?.getAttribute("aria-label") === node.textContent.trim();
+      return box.width > 0 && box.height > 0 && style.visibility !== "hidden" && !accessibleIconLabel;
     };
     return {
       overflow: document.documentElement.scrollWidth > innerWidth,
@@ -358,7 +426,7 @@ async function layout(page, name, instructor = true) {
   assert.deepEqual(metrics.clippedText, [], "No hidden clipped text");
   assert.deepEqual(metrics.smallTargets, [], "Instructor touch targets at least 44px high");
   await page.screenshot({ path: path.join(output, `${name}.png`), fullPage: true });
-  return metrics;
+  return { ...metrics, screenshot: path.join(output, `${name}.png`) };
 }
 
 async function instructorNav(page, base) {
@@ -394,6 +462,28 @@ async function workspaceCase(page, base, kind) {
 }
 
 async function runCase(page, base, kind, name) {
+  if (/^(manager|instructor)-/.test(kind)) {
+    const manager = kind.startsWith("manager-");
+    await runCase(page, base, manager ? "manager" : "home", name);
+    await loginName(page, manager, kind.endsWith("name-missing"));
+    if (kind.endsWith("auth-change")) {
+      await page.evaluate(async () => {
+        const { changeAuth } = await import("/__qa/state.mjs");
+        changeAuth({ uid: "qa-other-user", email: "other@example.invalid" });
+      });
+      await clearedLoginName(page);
+      await page.getByTestId("qa-operator-shell").waitFor({ state: "hidden" });
+    }
+    if (kind === "manager-revoked-after-login") {
+      await page.evaluate(async () => { (await import("/__qa/state.mjs")).fixture.mode = "revoked-session"; });
+      await page.getByTestId("qa-refresh").click();
+      await page.getByTestId("qa-login").waitFor({ state: "visible" });
+      await clearedLoginName(page);
+      assert.equal((await telemetry(page)).currentUid, null);
+    }
+    if (kind === "manager-logout-failure") return managerLogout(page, true);
+    return telemetry(page);
+  }
   if (["home", "private"].includes(kind)) return workspaceCase(page, base, kind);
   if (["manager", "owner"].includes(kind)) {
     await page.getByRole("heading", { name: "오늘 할 일", exact: true }).waitFor();
@@ -408,6 +498,14 @@ async function runCase(page, base, kind, name) {
     assert.ok(state.reads.some(read => read.path === "workLanes/archive-core-transition"));
     assert.ok(state.reads.every(read => read.allowed));
     assert.deepEqual(state.writes, []);
+    await loginName(page, true);
+    for (let refresh = 0; refresh < 2; refresh++) {
+      const before = (await telemetry(page)).callables.filter(call => call.name === "getCoreAccessSession").length;
+      await page.getByTestId("qa-refresh").click();
+      await page.waitForFunction(count => window.__coreFirebaseQA.callables.filter(call => call.name === "getCoreAccessSession").length > count, before);
+      await settled(page);
+      await loginName(page, true);
+    }
     return state;
   }
   if (kind === "sequence") {
@@ -585,13 +683,17 @@ async function attemptCase(base, viewport, kind, retry) {
     await page.clock.setFixedTime(new Date(fixedTime));
     await page.goto(`${origin}${routeFor(base, kind)}`, { waitUntil: "load" });
     state = await runCase(page, base, kind, name);
-    metrics = await layout(page, name, !["manager", "owner", "revoked-session"].includes(kind));
+    if (["home", "private", "sequence"].includes(kind) || kind.startsWith("blocked-")) await loginName(page);
+    metrics = await layout(page, name, !["manager", "owner", "revoked-session"].includes(kind) && !kind.startsWith("manager-"));
     if (kind === "home") {
       await page.getByRole("button", { name: "로그아웃", exact: true }).click();
       await page.getByTestId("qa-login").waitFor({ state: "visible" });
       state = await noOperatorReads(page);
       assert.ok(state.uiEvents.includes("core-instructor-signed-out"));
+      await clearedLoginName(page);
     }
+    if (["manager", "owner"].includes(kind)) state = await managerLogout(page);
+    if (kind === "revoked-session") await clearedLoginName(page);
     assert.deepEqual(pageErrors, [], "No unhandled page errors");
     assert.deepEqual(deniedRequests, [], "No external/unknown network attempts");
   } catch (error) {
@@ -653,7 +755,9 @@ try {
       }
       console.log(`${base} ${viewport.width}px: ${cases.length} integration scenarios checked`);
     }
-    for (const kind of ["signout-retry", "workspace-retry"]) {
+    for (const kind of ["signout-retry", "workspace-retry", "manager-name-safe", "instructor-name-safe",
+      "manager-name-missing", "instructor-name-missing", "manager-auth-change", "instructor-auth-change",
+      "manager-logout-failure", "manager-revoked-after-login"]) {
       let result;
       for (let retry = 0; retry <= options.retries; retry++) {
         result = await attemptCase(base, viewports[1], kind, retry);

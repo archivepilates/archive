@@ -41,6 +41,7 @@
         </section>
 
         <section class="panel rule-section" id="core-instructor-access">
+          <div class="rule-note"><strong>로그인 사용자 · 2026-10-11</strong><span>관리자·강사 화면 오른쪽 상단에 현재 사용자 이름과 로그아웃을 표시합니다. 이름은 getCoreAccessSession의 canonical staffs 이름을 사용하며 전화번호·이메일로 대체하거나 별도 저장하지 않습니다. 로그아웃·계정 변경 시 이전 사용자 표시와 업무 화면을 숨기고, 로그아웃 완료 후 로그인 화면으로 돌아갑니다. 실패 시 다시 시도할 수 있습니다. 비밀번호·역할·저장된 시퀀스는 변경하지 않습니다. 격리 화면 124건과 반응형 95건 검증 완료. CORE Hosting 반영 대상이며 Functions·Firestore 규칙 변경은 없습니다. 다음: 화면 새로고침 후 이름 옆 로그아웃 버튼을 사용합니다.</span></div>
           <div class="rule-note"><strong>전체 재로그인 · 2026-10-11</strong><span>운영자 요청 시 canonical staffs.coreAuthAfter를 갱신하고 해당 계정의 Firebase 갱신 토큰을 철회합니다. 이전 인증시각의 관리자·강사 세션은 Functions와 Firestore에서 차단하며 다시 로그인해야 합니다. 비밀번호·역할·근무상태·시퀀스는 변경하지 않습니다. 열린 이전 화면은 새로고침하면 로그인 화면으로 전환됩니다. 실제 권한 원천은 staffs와 Firebase Auth이며 프라이빗 별도 bearer 링크는 폐기하지 않습니다. 승인 대상 6계정만 일회 처리하며 정기 로그아웃이나 새 알림톡 발송은 추가하지 않습니다. 2026-10-11 09:50:17 KST 기준 운영자 2명·강사 4명 세션 해제와 원천 재조회 검증 완료. 격리 관리자·강사 계정으로 이전 세션 차단과 같은 비밀번호의 새 로그인 허용을 확인했습니다. 공식 로고 파비콘, Hosting·Functions·Firestore 권한 규칙은 e1522f99에서 운영 반영했습니다. 다음: 각 사용자가 새로고침 후 다시 로그인합니다.</span></div>
           <div class="panel-header"><div><h2>강사 CORE 접근 · 2026-10-11</h2></div><span class="pill">강사 4명 연결 · 라이브 검증 완료</span></div>
           <div class="rule-note"><strong>목적·현재 상태</strong><span>현재 근무 강사에게 본인 수업·프라이빗 링크·시퀀스만 제공합니다. 배민진·정은영·이초림·정유리 계정을 연결하고 초기 로그인과 변경 전 업무 차단을 확인했습니다. 사용자 선택은 초기 비밀번호 111111과 별도 활성화 코드 없음입니다. 실제 강사는 첫 로그인에서 본인이 새 비밀번호를 정해야 합니다.</span></div>

@@ -28,6 +28,7 @@ let pageHideRegistered = false;
 let sequenceFrame;
 let sequenceParent;
 let sequenceNext;
+let accountBar;
 
 function escapeHtml(value) {
   return String(value ?? "").replace(/[&<>"']/g, (character) => ({
@@ -123,12 +124,46 @@ function restoreManagerContent() {
 function suspendAccess() {
   generation += 1;
   activeSession = null;
+  accountBar?.remove();
+  accountBar = null;
   cancelFirstLogin?.();
   resetSequence();
   if (root) {
     root.replaceChildren();
     root.hidden = true;
   }
+}
+
+function renderManagerAccount(runtime, session, error = "") {
+  accountBar?.remove();
+  accountBar = null;
+  const main = document.querySelector(".main");
+  if (!main) return;
+  accountBar = document.createElement("div");
+  accountBar.className = "core-account-bar";
+  accountBar.setAttribute("aria-label", "로그인 사용자");
+  accountBar.innerHTML = `${uiIcon("user-round", "core-account-icon")}<span data-core-login-name></span>
+    <button type="button" class="core-account-logout" data-core-account-logout aria-label="로그아웃" title="로그아웃">${uiIcon("log-out", "core-account-icon")}</button>
+    <span class="core-account-status" role="alert"${error ? "" : " hidden"}></span>`;
+  accountBar.querySelector("[data-core-login-name]").textContent = String(session.staffName || "사용자").trim() || "사용자";
+  accountBar.querySelector(".core-account-status").textContent = error;
+  const button = accountBar.querySelector("[data-core-account-logout]");
+  button.addEventListener("click", async () => {
+    const uid = runtime.authClient.currentUser?.uid;
+    const ticket = ++generation;
+    button.disabled = true;
+    isolateOperatorContent();
+    root.replaceChildren();
+    try {
+      await signOut(runtime);
+      document.dispatchEvent(new CustomEvent("core-instructor-signed-out", { bubbles: true }));
+    } catch {
+      if (generation !== ticket || runtime.authClient.currentUser?.uid !== uid) return;
+      restoreManagerContent();
+      renderManagerAccount(runtime, session, "로그아웃하지 못했습니다. 다시 시도하세요.");
+    }
+  });
+  main.prepend(accountBar);
 }
 
 function observeAuth(runtime) {
@@ -144,7 +179,10 @@ function observeAuth(runtime) {
   authUnsubscribe?.();
   observedRuntime = runtime;
   authUnsubscribe = runtime.auth?.onAuthStateChanged?.(runtime.authClient, (user) => {
-    if (!user || (activeSession?.uid && activeSession.uid !== user.uid)) suspendAccess();
+    if (!user || (activeSession?.uid && activeSession.uid !== user.uid)) {
+      isolateOperatorContent();
+      suspendAccess();
+    }
   });
 }
 
@@ -195,8 +233,8 @@ function renderShell(runtime, session, route) {
   root.innerHTML = `
     <header class="cia-header">
       <a class="cia-brand" href="${escapeHtml(ROUTES[0][1])}">ARCHIVE CORE</a>
-      <div class="cia-account"><span>${escapeHtml(session.staffName || "강사")}</span>
-        <button class="cia-button" type="button" data-core-instructor-logout>${uiIcon("x", "cia-icon")}<span>로그아웃</span></button>
+      <div class="cia-account" aria-label="로그인 사용자"><span data-core-login-name>${escapeHtml(session.staffName || "강사")}</span>
+        <button class="cia-button" type="button" aria-label="로그아웃" title="로그아웃" data-core-instructor-logout>${uiIcon("log-out", "cia-icon")}<span>로그아웃</span></button>
       </div>
       <nav class="cia-nav" aria-label="강사 메뉴">${ROUTES.map(([key, href, label, icon]) => `
         <a href="${href}"${key === route ? ' aria-current="page"' : ""}>${uiIcon(icon, "cia-icon")}<span>${label}</span></a>
@@ -370,6 +408,8 @@ export async function prepareCoreAccess(runtime, user) {
   cancelFirstLogin?.();
   const ticket = ++generation;
   activeSession = null;
+  accountBar?.remove();
+  accountBar = null;
   isolateOperatorContent();
   resetSequence();
   root.replaceChildren();
@@ -387,6 +427,7 @@ export async function prepareCoreAccess(runtime, user) {
       if (session?.role === "manager") {
         activeSession = { session, uid: user.uid };
         restoreManagerContent();
+        renderManagerAccount(runtime, session);
         return session;
       }
       if (session?.role !== "instructor") {
