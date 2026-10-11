@@ -37,4 +37,14 @@
 - No Functions implementation, cadence or contract discovery algorithm changed. Firebase Functions deployment unnecessary. CORE Hosting needed only to publish updated operating rules if approved.
 - Operator approval received. Local guards passed; scoped main promotion/runtime alignment and CORE Hosting publication are the next release steps.
 
-Next: complete approved main/runtime/Hosting release and verify the next scheduled source result without manual contract processing.
+## Approved release completed
+
+- Source commit 2e5e11044bff2c82a2ee28214e77d412187f5e34 promoted/pushed to origin/main. Feature branch pushed to origin/codex/mini/retired-automation-cleanup-20261011.
+- Clean local main deploy worktree and archive-runtime-main fast-forward aligned. Legacy runner absent in active runtime. No LaunchAgent restart or interval change required.
+- Hosting archive-pilates-core and archive-pilates deployed from clean main with existing archive-codex-operator account. Shared CORE mirror deployed intentionally; Functions and Firestore rules/indexes not deployed.
+- CORE live canary passed ten checks for exact source SHA at custom domain and web.app path. Both rules URLs return HTTP 200 with retirement, approved single-member correction and no-resend markers.
+- Firestore readback: coverageLossIds empty, target rowCount four, review audit resolved, 917 member baselines preserved and downloadedAt unchanged at 2026-10-11T05:52:16.103Z. No candidate/send/contract or external data writes by this correction.
+- Production health's prior import warning is historical evidence, not proof that correction failed. It may persist until next regular hourly import; no manual broad import/contract processing was run to accelerate the display.
+- GitHub source CI 38119043200 status is checked separately. This operational note is not the source SHA stamped in the deployed Hosting release manifest.
+
+Next: ordinary scheduled source collection updates the old health warning. No remaining operator decision required and no contract recovery/send is authorized.
