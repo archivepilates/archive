@@ -51,7 +51,7 @@ function makeFixture(mode) {
         { id: "qa-task-pending", memberName: "QA 긴이름으로줄바꿈을검증하는가상회원", date: "2026-10-11", startTime: "09:00", status: "pending",
           recordUrl: "https://in.archivepilates.com/private-chart/?r=qa-record&t=synthetic",
           surveyUrl: "https://core.archivepilates.com/private/?qa=survey", reportUrl: "https://unapproved.example/report" },
-        { id: "qa-task-sent", memberName: "QA 완료 회원", date: "2026-10-10", startTime: "10:00", status: "sent",
+        { id: "qa-task-sent", memberName: "QA 완료 회원", date: "2026-10-10", startTime: "10:00", status: "sent", recordSubmitted: true,
           recordUrl: "javascript:alert(1)", surveyUrl: "http://in.archivepilates.com/private-chart/",
           reportUrl: "https://core.archivepilates.com/private/?qa=report" },
         { id: "qa-task-unsafe", memberName: "QA 링크 확인 회원", date: "2026-10-09", startTime: "11:00", status: "pending",
@@ -143,7 +143,7 @@ function firebaseModule(kind) {
   if (kind === "functions") return shared + `
     export const getFunctions = () => ({ mock: true });
     export const httpsCallable = (_, name) => async (payload) => {
-      const call = record("callables", { name });
+      const call = record("callables", { name, month: payload?.month });
       if (!authClient.currentUser) throw denied("Synthetic session is signed out");
       if (name === "getCoreAccessSession") {
         if (fixture.mode === "access-denied") throw denied("Synthetic pending access");
@@ -174,7 +174,7 @@ function firebaseModule(kind) {
         if (state.session?.role !== "instructor" || fixture.mustChangePassword) throw denied("Workspace before access");
         state.workspaceAttempts++;
         if (fixture.workspaceFailures-- > 0) throw new Error("Synthetic workspace failure");
-        return { data: fixture.workspace };
+        return { data: { ...fixture.workspace, privateTasks: payload?.month && payload.month !== "2026-10" ? [] : fixture.workspace.privateTasks } };
       }
       if (name === "getParkingDashboard" && state.session?.role === "manager") {
         return { data: { vehicles: [], jobs: [], config: null } };
@@ -441,7 +441,7 @@ async function instructorNav(page, base) {
 }
 
 async function workspaceCase(page, base, kind) {
-  await page.getByRole("heading", { name: kind === "private" ? "프라이빗 기록" : "오늘의 수업", exact: true }).waitFor();
+  await page.getByRole("heading", { name: kind === "private" ? "프라이빗 기록·리포트" : "오늘의 수업", exact: true }).waitFor();
   await settled(page);
   await instructorNav(page, base);
   const ui = page.getByTestId("qa-instructor");
@@ -457,6 +457,26 @@ async function workspaceCase(page, base, kind) {
     assert.equal(url.protocol, "https:");
     assert.ok(["in.archivepilates.com", "core.archivepilates.com"].includes(url.hostname));
     assert.equal(url.username + url.password + url.port, "");
+  }
+  if (kind === "private") {
+    const filters = ui.getByRole("group", { name: "내 프라이빗 보기" });
+    await filters.getByRole("button", { name: "기록", exact: true }).click();
+    assert.equal(await ui.getByRole("listitem").count(), 1);
+    assert.equal((await ui.innerText()).includes("QA 완료 회원"), true);
+    await filters.getByRole("button", { name: "리포트", exact: true }).click();
+    assert.equal(await ui.getByRole("listitem").count(), 1);
+    assert.equal(await ui.getByRole("link", { name: "리포트 확인", exact: true }).count(), 1);
+    await filters.getByRole("button", { name: "전체", exact: true }).click();
+    assert.equal(await ui.getByRole("listitem").count(), 3);
+    await ui.getByLabel("조회 월").fill("2026-08");
+    await ui.getByRole("paragraph").filter({ hasText: "연결된 프라이빗 기록이 없습니다." }).waitFor();
+    assert.equal((await telemetry(page)).callables.at(-1).month, "2026-08");
+    await ui.getByLabel("조회 월").fill("2026-10");
+    await ui.getByRole("link", { name: "리포트 확인", exact: true }).waitFor();
+    const before = (await telemetry(page)).callables.length;
+    await ui.getByRole("button", { name: "새로고침", exact: true }).click();
+    await page.waitForFunction(count => window.__coreFirebaseQA.callables.length > count, before);
+    await ui.getByRole("link", { name: "리포트 확인", exact: true }).waitFor();
   }
   return noOperatorReads(page);
 }

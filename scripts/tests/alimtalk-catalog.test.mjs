@@ -8,7 +8,7 @@ import { build } from "esbuild";
 import { buildCatalog, catalogFile, catalogVisibility } from "../generate-alimtalk-catalog.mjs";
 import { root, sourceRoot, sourceReader, hash } from "../lib/alimtalk-catalog-source.mjs";
 import { purposes } from "../lib/alimtalk-catalog-metadata.mjs";
-import { createCatalogFixture } from "../verify-alimtalk-catalog.mjs";
+import { createCatalogFixture, instrumentCatalogApp } from "../verify-alimtalk-catalog.mjs";
 
 const saved = JSON.parse(await fs.readFile(path.join(root, catalogFile), "utf8"));
 const moduleSource = await fs.readFile(path.join(root, "core/assets/alimtalk-catalog.js"), "utf8");
@@ -163,6 +163,15 @@ test("catalog reads only same-origin static data; no Firebase/provider SDK or mu
   assert.match(moduleSource, /cache: "no-store"/);
 });
 
+test("catalog instrumentation removes only the unique final current bootstrap", async () => {
+  const source = await fs.readFile(path.join(root, "core/assets/app.js"), "utf8");
+  const instrumented = instrumentCatalogApp(source);
+  assert.ok(!instrumented.includes("\nrefresh();"));
+  assert.match(instrumented, /renderMessages\(state.alimtalkCandidates, state.alimtalkSends\)/);
+  assert.throws(() => instrumentCatalogApp(source + "\nconsole.log('unexpected');"));
+  assert.throws(() => instrumentCatalogApp("\nrefresh();" + source));
+});
+
 test("synthetic fixture fails closed before external fetch/XHR/socket calls and never starts Firebase", async () => {
   const fixture = await createCatalogFixture({ autoCloseMs: 0 });
   try {
@@ -183,7 +192,9 @@ test("synthetic fixture fails closed before external fetch/XHR/socket calls and 
     const html = fixture.assets.get("/messages/");
     assert.doesNotMatch(html, /firebase-config\.js/);
     assert.match(html, /fixture-guard\.js/);
-    assert.ok(!fixture.assets.get("/assets/app.js").includes('if (document.querySelector("[data-firestore-dashboard]")) refresh();'));
+    assert.ok(!fixture.assets.get("/assets/app.js").includes("\nrefresh();"));
+    for (const modulePath of ["/assets/ui-icons.js", "/assets/core-instructor-access.js"])
+      assert.equal((await fetch(`${fixture.origin}${modulePath}`)).status, 200);
     assert.match(fixture.csp, /connect-src 'self'/);
     assert.equal((await fetch(`${fixture.origin}/assets/alimtalk-catalog-error.json`)).status, 503);
   } finally { await fixture.close(); }

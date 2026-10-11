@@ -7,7 +7,7 @@ import path from "node:path";
 import { pathToFileURL } from "node:url";
 import { root } from "./lib/alimtalk-catalog-source.mjs";
 
-const boot = 'if (document.querySelector("[data-firestore-dashboard]")) refresh();';
+const boot = "\nrefresh();";
 export function instrumentCatalogApp(source) {
   assert.equal(source.split(boot).length, 2);
   assert.ok(source.trimEnd().endsWith(boot), "Only the final live bootstrap can be removed");
@@ -56,6 +56,9 @@ export async function createCatalogFixture({ port = 0, autoCloseMs = 20 * 60_000
     "/rules/": "core/rules/index.html",
     "/assets/styles.css": "core/assets/styles.css",
     "/assets/app.js": "core/assets/app.js",
+    "/assets/ui-icons.js": "core/assets/ui-icons.js",
+    "/assets/core-instructor-access.js": "core/assets/core-instructor-access.js",
+    "/assets/core-instructor-access.css": "core/assets/core-instructor-access.css",
     "/assets/alimtalk-catalog.js": "core/assets/alimtalk-catalog.js",
     "/assets/alimtalk-catalog.css": "core/assets/alimtalk-catalog.css",
     "/assets/alimtalk-catalog.json": "core/assets/alimtalk-catalog.json",

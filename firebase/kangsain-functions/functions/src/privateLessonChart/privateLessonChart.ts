@@ -20,6 +20,7 @@ import { errorMessage } from "../utils/errors";
 import { stableHash } from "../utils/hash";
 import { ensureShortLink } from "../utils/shortLinks";
 import { bookingSourcePriority, isExcelBookingId } from "../utils/canonicalBooking";
+import { isPrivateChartLesson, matchesPrivateChartBooking, matchesPrivateChartRecord } from "./privateLessonChartOwnership";
 import {
   ALIMTALK_TEMPLATES,
   LEGACY_STAFF_PRIVATE_CHART_ALIMTALK_TEMPLATE_CODE,
@@ -178,16 +179,18 @@ export async function privateLessonReportViewHandler(request: any, response: any
   const requestedRevision = String(request.query?.rev || "");
   response.set("Cache-Control", "no-store");
 
-  if ((!recordId && !requestId) || !token) {
+  if ((!recordId && !requestId) || !token ||
+      [recordId, requestId].some(id => id && !/^[A-Za-z0-9_.:-]{1,150}$/.test(id))) {
     response.status(400).send(renderPrivateLessonReportMessagePage("리포트 링크 정보가 올바르지 않습니다."));
     return;
   }
 
-  let record = recordId ? (await refs.privateLessonChartRecord(recordId).get()).data() : undefined;
-  if (!record && requestId) {
+  let recordSnap = recordId ? await refs.privateLessonChartRecord(recordId).get() : undefined;
+  if (!recordSnap?.exists && requestId) {
     const snap = await refs.privateLessonChartRecords().where("requestId", "==", requestId).limit(1).get();
-    record = snap.docs.length ? snap.docs[0].data() : undefined;
+    recordSnap = snap.docs[0];
   }
+  let record = recordSnap?.data();
   if (!record) {
     response.status(404).send(renderPrivateLessonReportMessagePage("회차 기록을 찾을 수 없습니다."));
     return;
@@ -197,7 +200,8 @@ export async function privateLessonReportViewHandler(request: any, response: any
   const requestDoc = requestSnap.data();
   const storedToken = String(requestDoc?.accessTokenHash || "");
   const isAuthorized = token === storedToken || sha256(token) === storedToken;
-  if (!requestDoc || !isAuthorized) {
+  if (!requestDoc || !isAuthorized || recordSnap?.id !== record.recordId ||
+      !matchesPrivateChartRecord(requestDoc, requestSnap.id, record)) {
     response.status(403).send(renderPrivateLessonReportMessagePage("리포트 조회 권한이 없습니다."));
     return;
   }
@@ -2467,11 +2471,16 @@ async function readChartRequest(requestId: string, token: string): Promise<Priva
   const chartRequest = snap.data();
   if (!chartRequest || chartRequest.accessTokenHash !== sha256(token))
     throw new Error("차트 링크를 확인할 수 없습니다.");
-  const activeBooking = await activePrivateBookingForChartRequest(chartRequest);
-  if (!activeBooking.ok) {
-    await cancelPrivateLessonChartRequest(chartRequest, activeBooking.reason);
+  // Link authorization must not repair ownership or mutate a changed request.
+  const bookingSnap = await refs.booking(chartRequest.bookingId).get();
+  const booking = bookingSnap.data();
+  if (!booking || !matchesPrivateChartBooking(chartRequest, snap.id, booking, bookingSnap.id) ||
+      inactivePrivateBookingReason(booking) || chartRequest.status === "cancelled") {
     throw new Error("취소되었거나 변경된 수업입니다. 운영자에게 확인해 주세요.");
   }
+  const record = (await refs.privateLessonChartRecord(requestId).get()).data();
+  if (record && !matchesPrivateChartRecord(chartRequest, requestId, record))
+    throw new Error("기록의 담당자 정보가 일치하지 않습니다. 운영자에게 확인해 주세요.");
   return chartRequest;
 }
 
@@ -2480,6 +2489,8 @@ async function publicChartRequest(
   mode: PrivateLessonChartMode,
   record: PrivateLessonChartRecordDoc | null = null,
 ): Promise<Record<string, unknown>> {
+  if (record && !matchesPrivateChartRecord(chartRequest, chartRequest.requestId, record))
+    throw new Error("기록의 담당자 정보를 확인해 주세요.");
   const approvalStatus = record?.publicReportApproval?.status || "";
   const reportReady = isPrivateLessonReportGenerated(record);
   const reportSent = isPrivateLessonReportSent(record);
@@ -2563,8 +2574,10 @@ async function previousPrivateLessonReportSummary(
     .where("memberId", "==", chartRequest.memberId)
     .limit(120)
     .get();
-  const previous = snap.docs
+  const candidates = snap.docs
+    .filter((doc) => doc.data().recordId === doc.id && doc.data().requestId === doc.id)
     .map((doc) => doc.data())
+    .filter((record) => record.staffId === chartRequest.staffId && record.studioId === chartRequest.studioId)
     .filter((record) => record.recordId !== chartRequest.requestId)
     .filter((record) => isPrivateLessonReportGenerated(record))
     .filter((record) => {
@@ -2578,7 +2591,16 @@ async function previousPrivateLessonReportSummary(
       const orderDiff = privateLessonOrderMillis(b) - privateLessonOrderMillis(a);
       if (orderDiff) return orderDiff;
       return Number(b.sessionNumber || 0) - Number(a.sessionNumber || 0);
-    })[0];
+    });
+  let previous: PrivateLessonChartRecordDoc | undefined;
+  for (const record of candidates) {
+    const source = await refs.privateLessonChartRequest(record.requestId).get();
+    const sourceRequest = source.data();
+    if (sourceRequest && matchesPrivateChartRecord(sourceRequest, source.id, record)) {
+      previous = record;
+      break;
+    }
+  }
   if (!previous) return null;
   const url = previous.publicReportUrl || previous.publicReportCanonicalUrl || "";
   return {
@@ -2799,10 +2821,7 @@ function canonicalSessionNumberFromBooking(booking: BookingDoc): number | null {
 
 function isPrivateBooking(booking: BookingDoc): boolean {
   if (booking.appStatus && booking.appStatus !== "reserved") return false;
-  if (booking.lessonType === "group") return false;
-  if (booking.lessonType === "private" || booking.lessonType === "semi_private") return true;
-  const text = `${booking.ticketName || ""} ${booking.ticketClassType || ""} ${booking.ticketType || ""} ${(booking as any).title || ""} ${(booking as any).lectureTitle || ""}`;
-  return /프라이빗|개인|1:1|PRIVATE|\bP\b/i.test(text);
+  return isPrivateChartLesson(booking);
 }
 
 function isCountablePrivateHistoryBooking(booking: BookingDoc): boolean {

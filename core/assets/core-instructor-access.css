@@ -118,6 +118,10 @@
 .core-instructor-access h2 { font-size: 1.0625rem; font-weight: 700; }
 .core-instructor-access .cia-eyebrow { color: var(--cia-muted); font-size: .875rem; }
 .core-instructor-access .cia-section { padding-block: 1.25rem; border-top: 1px solid var(--cia-line); }
+.core-instructor-access .cia-private-toolbar { display: flex; flex-wrap: wrap; justify-content: space-between; align-items: center; gap: .75rem; padding-bottom: 1rem; }
+.core-instructor-access .cia-view-options, .core-instructor-access .cia-private-period { display: flex; align-items: center; gap: .375rem; min-width: 0; }
+.core-instructor-access .cia-view-options .cia-button[aria-pressed="true"] { color: #fff; background: #222; border-color: #222; }
+.core-instructor-access .cia-private-period input { min-width: 0; max-width: 12rem; min-height: 44px; padding: .5rem .75rem; border: 1px solid var(--cia-line); border-radius: 6px; background: var(--cia-surface); color: var(--cia-text); font: inherit; }
 .core-instructor-access .cia-section-heading { display: flex; justify-content: space-between; align-items: center; gap: 1rem; padding-bottom: .75rem; }
 .core-instructor-access .cia-section-heading > span { color: var(--cia-muted); font-size: .875rem; white-space: nowrap; }
 .core-instructor-access .cia-list { padding: 0; list-style: none; }

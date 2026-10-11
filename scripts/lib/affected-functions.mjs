@@ -41,6 +41,7 @@ export function codebasesForFile(file) {
   }
   // This adapter is consumed by the Alimtalk queue, not the signup HTTP codebase.
   if (normalized.endsWith("/memberSignup/membershipWelcomeHistory.ts")) return ["functions-alimtalk"];
+  if (normalized.endsWith("/privateLessonChart/privateLessonChartOwnership.ts")) return ["functions-app", "functions-private-chart"];
   if (normalized.endsWith("/alimtalk/templates.ts")) return ["functions-alimtalk", "functions-private-chart"];
   if (normalized.includes("/social/") || normalized.endsWith("/exports/social.ts")) return ["functions-social"];
   if (normalized.includes("/alimtalk/") || normalized.endsWith("/exports/alimtalk.ts")) return ["functions-alimtalk"];

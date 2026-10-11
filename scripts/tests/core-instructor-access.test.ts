@@ -13,6 +13,8 @@ import {
   type CoreInstructorStaff,
 } from "../../firebase/kangsain-functions/functions/src/security/coreInstructorAccess";
 import { AppError } from "../../firebase/kangsain-functions/functions/src/utils/errors";
+import { matchesPrivateChartBooking, matchesPrivateChartRecord } from "../../firebase/kangsain-functions/functions/src/privateLessonChart/privateLessonChartOwnership";
+import { bookingSourcePriority } from "../../firebase/kangsain-functions/functions/src/utils/canonicalBooking";
 
 const NOW = Date.parse("2026-10-11T03:00:00Z");
 const AUTH_TIME = NOW / 1000;
@@ -77,6 +79,7 @@ function chartRequest(
   overrides: Record<string, unknown> = {},
 ): Record<string, any> {
   return {
+    requestId: "request-1",
     bookingId: "12345",
     staffId: "staff-1",
     studioId: "studio-1",
@@ -453,6 +456,7 @@ function loadMocked(
   const exports = {};
   vm.runInNewContext(code, {
     exports,
+    URL,
     Date: class extends Date {
       static now() {
         return now();
@@ -571,6 +575,8 @@ function runtime(options: RuntimeOptions = {}) {
     },
   };
   const dependencies: Record<string, any> = {
+    "../privateLessonChart/privateLessonChartOwnership": { matchesPrivateChartBooking, matchesPrivateChartRecord },
+    "../utils/canonicalBooking": { bookingSourcePriority },
     "../firestore/staffRepository": {
       getStaffByUid: async () => current,
       getStaffByEmail: async () => options.fallbackStaff || null,
@@ -966,11 +972,7 @@ test("workspace returns only bound tasks and never uses another staff/studio rec
     ["request-1"],
   );
   assert.equal(result.privateTasks[0].status, "pending");
-  assert.equal(result.privateTasks[0].recordUrl, CHART_URL);
-  assert.equal(
-    new URL(result.privateTasks[0].recordUrl).searchParams.get("r"),
-    result.privateTasks[0].id,
-  );
+  assert.equal(result.privateTasks[0].recordUrl, "", "A mismatched existing record cannot be opened");
   assert.equal(result.privateTasks[0].surveyUrl, "");
   assert.equal(result.privateTasks[0].reportUrl, "");
   assert.deepEqual(r.events, []);
@@ -999,6 +1001,11 @@ for (const [label, source, request] of [
   ["missing canonical booking", null, {}],
   ["changed source owner", { staffId: "staff-2" }, {}],
   ["cancelled source", { appStatus: "cancelled" }, {}],
+  ["superseded source", { archiveBooking: { isCanonical: false } }, {}],
+  ["excluded source", { sessionOrder: { counted: false } }, {}],
+  ["stale source", { sourceStatus: "stale" }, {}],
+  ["forged booking id field", { bookingId: "different" }, {}],
+  ["wrong lesson type", { lessonType: "group" }, {}],
   ["cancelled request", {}, { status: "cancelled" }],
   ["manual test", {}, { manualTest: true }],
   ["wrong member", {}, { memberId: "member-2" }],
@@ -1043,6 +1050,7 @@ test("workspace prefers the real source over fallback duplicates of a canonical 
   ]) {
     documents[`bookings/${id}`] = booking({ bookingId: id });
     documents[`privateLessonChartRequests/${requestId}`] = chartRequest({
+      requestId,
       bookingId: id,
       postUrl: CHART_URL.replace("r=request-1", `r=${requestId}`),
     });
@@ -1118,6 +1126,8 @@ const rendererCode = rendererDeclarations
 function renderedTaskIds(workspace: any, route: "home" | "private"): string[] {
   const ids: string[] = [];
   const renderer = vm.runInNewContext(`${rendererCode}\nrenderWorkspace;`, {
+    safeUrl: (value: unknown) => value || "",
+    uiIcon: () => "",
     taskMarkup(task: any) {
       ids.push(task.id);
       return "<li>Test task</li>";
@@ -1197,7 +1207,10 @@ for (const [label, marker] of sentRecordMarkers) {
     assert.deepEqual(renderedTaskIds(result, "private"), ["request-1"]);
     assert.equal(result.privateTasks[0].recordUrl, CHART_URL);
     assert.equal(result.privateTasks[0].surveyUrl, "");
-    assert.equal(result.privateTasks[0].reportUrl, "");
+    const reportUrl = new URL(result.privateTasks[0].reportUrl);
+    assert.equal(reportUrl.searchParams.get("r"), "request-1");
+    assert.equal(reportUrl.searchParams.get("t"), "test-token");
+    assert.equal(reportUrl.searchParams.get("focus"), "report");
   });
 }
 for (const gptStatus of ["draft_created", "approved", "published"]) {
@@ -1267,6 +1280,12 @@ for (const [label, record, expected] of [
 for (const [label, identity] of [
   ["different staff", { staffId: "staff-2" }],
   ["different studio", { studioId: "studio-2" }],
+  ["different member", { memberId: "member-2" }],
+  ["different booking", { bookingId: "67890" }],
+  ["different date", { lessonDate: "2026-10-10" }],
+  ["different request", { requestId: "request-2" }],
+  ["different record", { recordId: "request-2" }],
+  ["missing member", { memberId: "" }],
 ] as Array<[string, Record<string, string>]>) {
   test(`workspace ignores sent/review/submitted evidence belonging to ${label}`, async () => {
     const result = await workspaceWithRecord({
@@ -1279,6 +1298,8 @@ for (const [label, identity] of [
       report: { status: "delivered" },
     });
     assert.equal(result.privateTasks[0].status, "pending");
+    assert.equal(result.privateTasks[0].reportUrl, "");
+    assert.equal(result.privateTasks[0].recordUrl, "");
     assert.deepEqual(renderedTaskIds(result, "home"), ["request-1"]);
   });
 }
@@ -1295,4 +1316,31 @@ test("workspace fails closed at the query cap rather than returning a partial so
     code: "PERMISSION_DENIED",
   });
   assert.deepEqual(r.reads, []);
+});
+
+test("workspace can read an older month using the authenticated staff and studio only", async () => {
+  const r = runtime({ current: staff(), documents: {
+    "bookings/12345": booking({ lectureDate: "2026-08-20" }),
+    "privateLessonChartRequests/request-1": chartRequest({ lessonDate: "2026-08-20" }),
+    "privateLessonChartRequests/other": chartRequest({ requestId: "other", staffId: "staff-2", lessonDate: "2026-08-20" }),
+  } });
+  const workspace = await r.handlers.getCoreInstructorWorkspaceHandler(call({ month: "2026-08", staffId: "staff-2" }));
+  assert.deepEqual(Array.from(workspace.privateTasks, (task: any) => task.id), ["request-1"]);
+  assert.equal(workspace.period.from, "2026-08-01");
+  assert.equal(workspace.period.to, "2026-08-31");
+  assert.deepEqual(r.events, []);
+});
+
+for (const month of ["2026-00", "2026-13", "2026-1", "../staffs", null, 202610]) {
+  test(`workspace rejects invalid month ${JSON.stringify(month)}`, async () => {
+    const r = runtime({ current: staff() });
+    await assert.rejects(r.handlers.getCoreInstructorWorkspaceHandler(call({ month })), { code: "INVALID_ARGUMENT" });
+    assert.equal(r.queryCalls.length, 0);
+  });
+}
+
+test("workspace month handles leap February", async () => {
+  const r = runtime({ current: staff() });
+  const result = await r.handlers.getCoreInstructorWorkspaceHandler(call({ month: "2028-02" }));
+  assert.equal(result.period.to, "2028-02-29");
 });

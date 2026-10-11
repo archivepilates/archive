@@ -1,6 +1,6 @@
 {
   "schemaVersion": 1,
-  "policyFingerprint": "9010243774d2d1de6fe81607bb73cb18471a2da09ce78e6eeb5f7d242285378d",
+  "policyFingerprint": "ccfe23ab5678358f092cb67aea9c34343547bb1e7dc0957f2d6dd860f693131b",
   "sourceMode": "repository_defaults_no_environment_or_live_reads",
   "coverage": {
     "observedAt": "2026-09-30T06:41:16.973Z",
@@ -98,7 +98,7 @@
     },
     {
       "path": "firebase/kangsain-functions/functions/src/privateLessonChart/privateLessonChart.ts",
-      "sha256": "dd57a0fdac5baf9634ea7fde0b59d42fa834cb3de7f21226dd0008842a539503"
+      "sha256": "0d3f330b36683f1cddce29e271ecc59ac6f505f32f255fe59234b59a19bc9f32"
     },
     {
       "path": "firebase/kangsain-functions/functions/src/privateSurvey/privateSurveyResponse.ts",
@@ -1195,12 +1195,12 @@
         {
           "path": "firebase/kangsain-functions/functions/src/privateLessonChart/privateLessonChart.ts",
           "symbol": "sendTodayPrivateLessonChartAlimtalks",
-          "line": 601
+          "line": 605
         },
         {
           "path": "firebase/kangsain-functions/functions/src/privateLessonChart/privateLessonChart.ts",
           "symbol": "sendDailyPrivateLessonChartAlimtalksForDate",
-          "line": 384
+          "line": 388
         },
         {
           "path": "firebase/kangsain-functions/functions/src/exports/privateChart.ts",

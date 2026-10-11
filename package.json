@@ -23,6 +23,8 @@
     "validate:alimtalk-catalog": "node scripts/generate-alimtalk-catalog.mjs --check",
     "generate:alimtalk-catalog": "node scripts/generate-alimtalk-catalog.mjs",
     "verify:core-operator-workflow": "node scripts/verify-core-operator-workflow.mjs",
+    "test:core-instructor-access": "firebase/kangsain-functions/functions/node_modules/.bin/tsx --test scripts/tests/core-instructor-access.test.ts scripts/tests/private-chart-access-ownership.test.ts && node --test scripts/tests/affected-functions-core-access.test.mjs",
+    "verify:core-instructor-access-ui": "node scripts/verify-core-instructor-access-ui.mjs",
     "test:eformsign-refund-queue": "node --test scripts/tests/eformsign-refund-queue.test.mjs",
     "process:eformsign-refunds": "node scripts/process-eformsign-refund-jobs.mjs",
     "validate:eformsign-refund-release": "node scripts/validate-eformsign-refund-release.mjs",

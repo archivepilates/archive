@@ -12,3 +12,8 @@ test("shared authentication guards redeploy every callable consumer", () => {
 test("instructor workspace endpoints belong only to app", () => {
   assert.deepEqual(codebasesForFile("firebase/kangsain-functions/functions/src/callable/coreInstructorAccess.ts"), ["functions-app"]);
 });
+
+test("private ownership predicates redeploy workspace and chart consumers only", () => {
+  assert.deepEqual(codebasesForFile("firebase/kangsain-functions/functions/src/privateLessonChart/privateLessonChartOwnership.ts"),
+    ["functions-app", "functions-private-chart"]);
+});

@@ -7,6 +7,8 @@ import { isManagerRole, requireStaff } from "../security/authGuards";
 import { assertCoreInstructorAccess, assertCoreSessionFresh, ownsCoreBooking, safeCoreChartUrl, validCorePassword, type CoreInstructorStaff } from "../security/coreInstructorAccess";
 import { AppError } from "../utils/errors";
 import { addDays, todayKst } from "../utils/date";
+import { matchesPrivateChartBooking, matchesPrivateChartRecord } from "../privateLessonChart/privateLessonChartOwnership";
+import { bookingSourcePriority } from "../utils/canonicalBooking";
 
 async function sessionStaff(request: CallableRequest): Promise<CoreInstructorStaff> {
   if (!request.auth) throw new AppError("AUTH_REQUIRED", "로그인이 필요합니다");
@@ -57,7 +59,11 @@ export async function getCoreInstructorWorkspaceHandler(request: CallableRequest
   const staff = await requireStaff(request);
   if (staff.role !== "instructor") throw new AppError("PERMISSION_DENIED", "강사 계정 전용 화면입니다");
   const date = todayKst();
-  const from = addDays(date, -45), to = addDays(date, 14);
+  const month = request.data?.month;
+  if (month !== undefined && (typeof month !== "string" || !/^20\d{2}-(0[1-9]|1[0-2])$/.test(month)))
+    throw new AppError("INVALID_ARGUMENT", "조회할 월을 확인하세요");
+  const from = month ? `${month}-01` : addDays(date, -45);
+  const to = month ? new Date(Date.UTC(Number(month.slice(0, 4)), Number(month.slice(5, 7)), 0)).toISOString().slice(0, 10) : addDays(date, 14);
   const [bookings, requests] = await Promise.all([
     db.collection("bookings").where("studioId", "==", staff.studioId).where("staffId", "==", staff.staffId)
       .where("lectureDate", "==", date).limit(200).get(),
@@ -67,18 +73,17 @@ export async function getCoreInstructorWorkspaceHandler(request: CallableRequest
   if (bookings.size === 200 || requests.size === 200) throw new AppError("PERMISSION_DENIED", "조회 범위가 많아 운영자 확인이 필요합니다");
   const sourceIds = [...new Set(requests.docs.map(d => String(d.data().bookingId || "")))].filter(id => /^[A-Za-z0-9_-]{1,150}$/.test(id));
   const sources = sourceIds.length ? await db.getAll(...sourceIds.map(id => db.doc(`bookings/${id}`))) : [];
-  const ownedBookings = new Map([...bookings.docs, ...sources].filter(d => d.exists && ownsCoreBooking(staff, d.data()!)).map(d => [d.id, d.data()!]));
+  const ownedBookings = new Map([...bookings.docs, ...sources].filter(d => d.exists && d.data()!.bookingId === d.id && ownsCoreBooking(staff, d.data()!)).map(d => [d.id, d.data()!]));
   const matchingRequests = requests.docs.filter(d => {
     const r = d.data(), b = ownedBookings.get(String(r.bookingId));
-    return b && ownsCoreBooking(staff, b, r) && safeCoreChartUrl(r.postUrl, d.id);
+    return b && matchesPrivateChartBooking(r, d.id, b, String(r.bookingId)) && ownsCoreBooking(staff, b, r) && safeCoreChartUrl(r.postUrl, d.id);
   });
   const canonicalRequests = new Map<string, typeof matchingRequests[number]>();
-  const sourceRank = (id: string) => /^\d+$/.test(id) ? 3 : id.startsWith("usage_booking_") ? 2 : 1;
   for (const document of matchingRequests) {
     const r = document.data(), b = ownedBookings.get(String(r.bookingId))!;
     const key = String(b.canonicalBookingKey || `${staff.staffId}:${b.memberId}:${b.lectureDate}:${b.lectureStartAt?.seconds}`);
     const previous = canonicalRequests.get(key);
-    if (!previous || sourceRank(r.bookingId) > sourceRank(previous.data().bookingId)) canonicalRequests.set(key, document);
+    if (!previous || bookingSourcePriority(r.bookingId) < bookingSourcePriority(previous.data().bookingId)) canonicalRequests.set(key, document);
   }
   const validRequests = [...canonicalRequests.values()];
   const recordRefs = validRequests.map(d => db.doc(`privateLessonChartRecords/${d.id}`));
@@ -89,12 +94,16 @@ export async function getCoreInstructorWorkspaceHandler(request: CallableRequest
     .map(([id, b]) => ({ id, date: b.lectureDate, startTime: time(b.lectureStartAt), title: b.lessonType === "private" ? "프라이빗" : "수업", memberName: b.memberName || "회원" }));
   const privateTasks = validRequests.map(d => {
     const r = d.data(), record = recordById.get(d.id);
-    const ownRecord = record?.staffId === staff.staffId && record?.studioId === staff.studioId ? record : null;
+    const ownRecord = record && matchesPrivateChartRecord(r, d.id, record) ? record : null;
     const sent = Boolean(ownRecord?.publicReportApproval?.status === "sent" || ownRecord?.publicReportApproval?.sentAt || ownRecord?.publicReportSentAt || ownRecord?.sentRevision);
     const ready = ["draft_created", "approved", "published"].includes(String(ownRecord?.gptStatus || ""));
     const status = sent ? "delivered" : ready ? "report_review" : ownRecord?.postSubmittedAt || r.postStatus === "submitted" ? "submitted" : ownRecord?.report?.status || r.postStatus || "pending";
+    const recordUrl = record && !ownRecord ? "" : safeCoreChartUrl(r.postUrl, d.id);
+    // Use the already-bound staff capability, not an arbitrary public/short URL.
+    const reportUrl = ready || sent ? new URL(recordUrl) : null;
+    reportUrl?.searchParams.set("focus", "report");
     return { id: d.id, memberName: r.memberName || "회원", date: r.lessonDate, startTime: time(r.lessonStartAt),
-      status, recordUrl: safeCoreChartUrl(r.postUrl, d.id), surveyUrl: "", reportUrl: "" };
+      status, recordSubmitted: Boolean(ownRecord?.postSubmittedAt), recordUrl, surveyUrl: "", reportUrl: reportUrl?.href || "" };
   });
-  return { date, staffName: staff.name, lessons, privateTasks };
+  return { date, staffName: staff.name, lessons, privateTasks, period: { from, to } };
 }
