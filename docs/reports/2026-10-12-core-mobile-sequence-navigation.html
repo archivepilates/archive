@@ -5,5 +5,5 @@
 <section><h2>원인</h2><p>저장 확인이 모든 iframe을 검사하여 다른 출처의 로그인 보조 프레임 접근 오류를 시퀀스 저장 실패로 처리했습니다. 격리된 로그인 보조 프레임을 추가한 WebKit 화면에서 사용자에게 표시된 동일 문구를 재현했습니다.</p></section>
 <section><h2>수정 범위</h2><p>실제 시퀀스 편집기와 CORE 내용 프레임만 저장 검사합니다. 실제 저장 실패·충돌·편집기 준비 미완료 시에는 현재 기록을 유지하며 이동을 막습니다. 로그인 권한·기존 시퀀스·회원 데이터·알림톡·Functions·Firestore 설정은 변경하지 않았습니다.</p></section>
 <section><h2>검증</h2><ul><li>저장 검사·배포 안전장치 단위검사 25/25 통과</li><li>Chromium 전체 격리 통합검사 204/204 통과</li><li>WebKit 격리 통합검사 16/16 통과</li><li>320·390·768·1440px, 강사·운영자, 직접 접근·메뉴 전환·뒤로/앞으로·실패 시 편집기 보존 검증</li><li>CORE Hosting 및 라이브 롤백 방지 검사 통과</li></ul><p>인증과 Firestore는 합성 테스트입니다. 실제 강사 로그인·실제 iPhone 검증·실데이터 저장 증거는 아닙니다.</p></section>
-<section><h2>배포</h2><p>승인 대상: Firebase archive-pilates의 archive-pilates-core Hosting만. 배포 완료 후 release.json·라이브 정적 소스·합성 모바일 화면을 재검증합니다.</p></section>
+<section><h2>배포 완료</h2><p>Firebase archive-pilates의 archive-pilates-core Hosting만 반영했습니다. 소스 <code>271d5e813d6c4e42166553fbb25c3b2fc48c7c6a</code>를 main에 커밋·푸시한 뒤 깨끗한 main에서 배포했습니다. dry-run·실배포 모두 성공했습니다.</p><p>공식 도메인과 Firebase 도메인의 release.json 및 실제 코드가 일치하고 운영규칙도 반영됐습니다. 라이브 정적 화면으로 WebKit 합성 검증 16/16 통과, GitHub Actions <code>38219446351</code> 성공. 테스트 브라우저·서버·임시 합성 상태를 정리했습니다.</p></section>
 <section><h2>후속</h2><p>기존 화면은 저장 상태 확인 후 새로고침합니다. 알림톡 연결 설문 전체의 줄바꿈 점검은 별도 읽기 전용 검사로 진행합니다.</p></section></main></html>

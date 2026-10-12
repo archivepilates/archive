@@ -14,5 +14,8 @@
 - WebKit touch-enabled integration: 16/16 passed, report `/var/folders/4q/7mtq1lfj5_x55y84ksrz9zfc0000gn/T/core-instructor-access-ui-L3xc93/report.json`.
 - UI coverage uses synthetic auth and SDK fixtures; not a real instructor login or physical iPhone verification. Chrome/WebKit screenshots and geometry cover 320, 390, 768 and 1440px on root and `/core/` routes.
 - CORE rules updated with the same save-guard policy and verification limits.
-- Deployment target: `hosting:archive-pilates-core`, Firebase `archive-pilates`, archive-codex-operator service account. Release evidence will be recorded after live readback.
+- Deployed source: `271d5e813d6c4e42166553fbb25c3b2fc48c7c6a`, promoted/pushed to `origin/main`; clean main checkout used for dry-run and actual deployment of `hosting:archive-pilates-core`, Firebase `archive-pilates`, archive-codex-operator service account. Both deployment commands passed.
+- Live source at `https://core.archivepilates.com/assets/core-navigation.js` and `https://archive-pilates-core.web.app/assets/core-navigation.js` returned HTTP 200 and exactly matched source, SHA-256 `08c53bb437e4b600b94fe16a10489f70d222e371c4fcb5b53458e4556810aead`. Both release manifests confirmed source commit `271d5e8`. CORE rules live readback confirmed the new save-guard rule.
+- Live-static WebKit regression: 16/16 passed with mocked auth/Firestore; report `/var/folders/4q/7mtq1lfj5_x55y84ksrz9zfc0000gn/T/core-instructor-access-ui-LGdKj5/report.json`. All 17 test contexts closed, browser/server closed, synthetic fixtures removed.
+- GitHub Actions run `38219446351` completed successfully. No task-owned CUA/Chrome tab was opened. Test-owned browsers and servers were closed.
 - New request: all Alimtalk-linked survey/input pages receive a separate read-only mobile wrapping audit; no implicit member sends or survey submissions.
