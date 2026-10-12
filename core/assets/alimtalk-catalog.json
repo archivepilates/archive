@@ -1,12 +1,12 @@
 {
   "schemaVersion": 1,
-  "policyFingerprint": "f18a3b1dc49dccc06564a5f5bb0fd934b5dcf24268fc744767070d978e418fd8",
+  "policyFingerprint": "570f20ed2e88bf0def0166978d6ecb102d75290aa86e3e43b18902cedf6ecbad",
   "sourceMode": "repository_defaults_no_environment_or_live_reads",
   "coverage": {
-    "observedAt": "2026-09-30T06:41:16.973Z",
-    "knownProviderCount": 23,
-    "sourceOnlyCount": 11,
-    "note": "Known-provider coverage only; no current approval or content evidence"
+    "observedAt": "2026-10-12T05:57:20.967Z",
+    "knownProviderCount": 19,
+    "sourceOnlyCount": 15,
+    "note": "Complete provider inventory at observedAt; not current approval or deployment evidence"
   },
   "deployment": {
     "status": "UNVERIFIED"
@@ -66,7 +66,7 @@
     },
     {
       "path": "firebase/kangsain-functions/functions/src/alimtalk/templates.ts",
-      "sha256": "3a55b09ce48ba14398575f94b248eee61539e2439a11c7616bd1c3e2cc74bd8d"
+      "sha256": "ca88dfdfe13c32ae4e5586d088b5b98506901710f3ef28ab3d0f7611c7f461c2"
     },
     {
       "path": "firebase/kangsain-functions/functions/src/alimtalk/templateTargetRules.ts",
@@ -106,15 +106,19 @@
     },
     {
       "path": "scripts/fixtures/alimtalk-catalog-known-provider.json",
-      "sha256": "a50f47e6accaba327862a774e16094578fd7778260c9bd55fc99d95e4a862860"
+      "sha256": "b5a47175a807c083750196342c0bc6f4704d31794ec69f15390c8e71bf307680"
     },
     {
       "path": "scripts/fixtures/alimtalk-catalog-provider-presence.json",
-      "sha256": "c9f147a1339c070d2847ddcf761e0a93ec591b03030cd50687dd816ebb2ef721"
+      "sha256": "97a29ebe705e38d032030a5f9152573a2b998dd74f381b89b94194a49775d2ac"
+    },
+    {
+      "path": "scripts/fixtures/alimtalk-template-retirement.json",
+      "sha256": "2a7134e4b348078d429d0cc250f28fc44bab0736db43b6b8f18bf04482a1e7b8"
     },
     {
       "path": "scripts/generate-alimtalk-catalog.mjs",
-      "sha256": "5f4821a6ecdac85c4c32baba880aa886513659ac61096ba6dcfeca551d3cc184"
+      "sha256": "e47f951ae4367740f5f7ec3807685d39423886229aee6239bd10dc93da1877a4"
     },
     {
       "path": "scripts/lib/alimtalk-catalog-metadata.mjs",
@@ -125,7 +129,7 @@
       "sha256": "04d8ff07265ec625dc49ab78b6d8cd7cdcee021b32fd7872c614c3606a484776"
     }
   ],
-  "visibilityCheckedAt": "2026-09-30T12:13:51.489Z",
+  "visibilityCheckedAt": "2026-10-12T05:57:20.967Z",
   "rows": [
     {
       "id": "KA01TP260914091233543JoFDsn7KfCr",
@@ -341,11 +345,11 @@
       "id": "KA01TP260602101939427lPhGyuDLvFM",
       "type": "onsite_welcome",
       "code": "KA01TP260602101939427lPhGyuDLvFM",
-      "label": "신규회원 웰컴 v5",
-      "providerInventoryName": "아카이브 신규회원 웰컴 안내 v5",
-      "knownProvider": true,
+      "label": "신규회원 웰컴 v5 (사용 종료)",
+      "providerInventoryName": null,
+      "knownProvider": false,
       "implementation": "archived",
-      "sourceConfiguredStatus": "approved",
+      "sourceConfiguredStatus": "deleted",
       "purpose": "이전 현장 가입서·이용 안내",
       "purposeId": "onsite_welcome",
       "timing": "신규 발송 종료 · 과거 이력 보존",
@@ -358,7 +362,7 @@
       "policy": {
         "type": "onsite_welcome",
         "templateCode": "KA01TP260602101939427lPhGyuDLvFM",
-        "templateLabel": "신규회원 웰컴 v5",
+        "templateLabel": "신규회원 웰컴 v5 (사용 종료)",
         "sourceDatePolicy": "today",
         "requiresApprovedTemplate": true,
         "requiresMemberPhone": true,
@@ -407,8 +411,11 @@
         }
       ],
       "visibility": {
-        "state": "visible",
-        "basis": "not_confirmed_deleted"
+        "state": "hidden_deleted",
+        "basis": "provider_template_not_found",
+        "checkedAt": "2026-10-12T05:57:20.967Z",
+        "httpStatus": 404,
+        "errorCode": "TemplateNotFound"
       }
     },
     {
@@ -1612,7 +1619,7 @@
       "visibility": {
         "state": "hidden_deleted",
         "basis": "provider_template_not_found",
-        "checkedAt": "2026-09-30T12:13:51.489Z",
+        "checkedAt": "2026-10-12T05:57:20.967Z",
         "httpStatus": 404,
         "errorCode": "TemplateNotFound"
       }
@@ -1846,7 +1853,7 @@
       "visibility": {
         "state": "hidden_deleted",
         "basis": "provider_template_not_found",
-        "checkedAt": "2026-09-30T12:13:51.489Z",
+        "checkedAt": "2026-10-12T05:57:20.967Z",
         "httpStatus": 404,
         "errorCode": "TemplateNotFound"
       }
@@ -1887,8 +1894,11 @@
         }
       ],
       "visibility": {
-        "state": "visible",
-        "basis": "not_confirmed_deleted"
+        "state": "hidden_deleted",
+        "basis": "provider_template_not_found",
+        "checkedAt": "2026-10-12T05:57:20.967Z",
+        "httpStatus": 404,
+        "errorCode": "TemplateNotFound"
       }
     },
     {
@@ -1896,8 +1906,8 @@
       "type": null,
       "code": "KA01TP2610061247076605VQTRV7FTPK",
       "label": "수강권 홀딩 현황 안내 v2",
-      "providerInventoryName": null,
-      "knownProvider": false,
+      "providerInventoryName": "수강권 홀딩 현황 안내 v2",
+      "knownProvider": true,
       "implementation": "source_connected",
       "sourceConfiguredStatus": null,
       "purpose": "홀딩 가능·사용·잔여기간 안내",
@@ -1969,7 +1979,7 @@
       "visibility": {
         "state": "hidden_deleted",
         "basis": "provider_template_not_found",
-        "checkedAt": "2026-09-30T12:13:51.489Z",
+        "checkedAt": "2026-10-12T05:57:20.967Z",
         "httpStatus": 404,
         "errorCode": "TemplateNotFound"
       }
@@ -1979,8 +1989,8 @@
       "type": null,
       "code": "KA01TP260519093416836f1EHZYJ00uM",
       "label": "아카이브 담당강사 사전설문 제출 안내 v1",
-      "providerInventoryName": "아카이브 담당강사 사전설문 제출 안내 v1",
-      "knownProvider": true,
+      "providerInventoryName": null,
+      "knownProvider": false,
       "implementation": "archived",
       "sourceConfiguredStatus": null,
       "purpose": "이전 프라이빗 설문 제출 전달",
@@ -2010,8 +2020,11 @@
         }
       ],
       "visibility": {
-        "state": "visible",
-        "basis": "not_confirmed_deleted"
+        "state": "hidden_deleted",
+        "basis": "provider_template_not_found",
+        "checkedAt": "2026-10-12T05:57:20.967Z",
+        "httpStatus": 404,
+        "errorCode": "TemplateNotFound"
       }
     },
     {
@@ -2052,7 +2065,7 @@
       "visibility": {
         "state": "hidden_deleted",
         "basis": "provider_template_not_found",
-        "checkedAt": "2026-09-30T12:13:51.489Z",
+        "checkedAt": "2026-10-12T05:57:20.967Z",
         "httpStatus": 404,
         "errorCode": "TemplateNotFound"
       }
@@ -2095,7 +2108,7 @@
       "visibility": {
         "state": "hidden_deleted",
         "basis": "provider_template_not_found",
-        "checkedAt": "2026-09-30T12:13:51.489Z",
+        "checkedAt": "2026-10-12T05:57:20.967Z",
         "httpStatus": 404,
         "errorCode": "TemplateNotFound"
       }
@@ -2138,7 +2151,7 @@
       "visibility": {
         "state": "hidden_deleted",
         "basis": "provider_template_not_found",
-        "checkedAt": "2026-09-30T12:13:51.489Z",
+        "checkedAt": "2026-10-12T05:57:20.967Z",
         "httpStatus": 404,
         "errorCode": "TemplateNotFound"
       }
@@ -2181,7 +2194,7 @@
       "visibility": {
         "state": "hidden_deleted",
         "basis": "provider_template_not_found",
-        "checkedAt": "2026-09-30T12:13:51.489Z",
+        "checkedAt": "2026-10-12T05:57:20.967Z",
         "httpStatus": 404,
         "errorCode": "TemplateNotFound"
       }
@@ -2224,7 +2237,50 @@
       "visibility": {
         "state": "hidden_deleted",
         "basis": "provider_template_not_found",
-        "checkedAt": "2026-09-30T12:13:51.489Z",
+        "checkedAt": "2026-10-12T05:57:20.967Z",
+        "httpStatus": 404,
+        "errorCode": "TemplateNotFound"
+      }
+    },
+    {
+      "id": "KA01TP260521072937354Ve2n5cEapDL",
+      "type": null,
+      "code": "KA01TP260521072937354Ve2n5cEapDL",
+      "label": "아카이브 담당강사 그룹 사전확인 제출 안내 v1",
+      "providerInventoryName": null,
+      "knownProvider": false,
+      "implementation": "archived",
+      "sourceConfiguredStatus": null,
+      "purpose": "이전 그룹 사전확인 제출 전달",
+      "purposeId": "archived",
+      "timing": "현재 발송 시기 정의 없음",
+      "schedule": null,
+      "targetRules": [
+        "현재 중앙 템플릿 매핑 없음"
+      ],
+      "policy": null,
+      "factNotice": null,
+      "careGroup": false,
+      "providerApproval": {
+        "status": "UNKNOWN",
+        "checkedAt": null,
+        "evidence": "not_read_in_this_catalog"
+      },
+      "deployment": {
+        "status": "UNVERIFIED",
+        "checkedAt": null
+      },
+      "sources": [
+        {
+          "path": "scripts/fixtures/alimtalk-template-retirement.json",
+          "symbol": "templates (coverage only)",
+          "line": 1
+        }
+      ],
+      "visibility": {
+        "state": "hidden_deleted",
+        "basis": "provider_template_not_found",
+        "checkedAt": "2026-10-12T05:57:20.967Z",
         "httpStatus": 404,
         "errorCode": "TemplateNotFound"
       }
@@ -2234,8 +2290,8 @@
       "type": null,
       "code": "KA01TP2607050825481844FfRze7o9Pw",
       "label": "회원용_강사 변경 안내 v1",
-      "providerInventoryName": "회원용_강사 변경 안내 v1",
-      "knownProvider": true,
+      "providerInventoryName": null,
+      "knownProvider": false,
       "implementation": "unconnected",
       "sourceConfiguredStatus": null,
       "purpose": "예약 수업의 강사 변경 공지",
@@ -2259,14 +2315,17 @@
       },
       "sources": [
         {
-          "path": "scripts/fixtures/alimtalk-catalog-known-provider.json",
+          "path": "scripts/fixtures/alimtalk-template-retirement.json",
           "symbol": "templates (coverage only)",
           "line": 1
         }
       ],
       "visibility": {
-        "state": "visible",
-        "basis": "not_confirmed_deleted"
+        "state": "hidden_deleted",
+        "basis": "provider_template_not_found",
+        "checkedAt": "2026-10-12T05:57:20.967Z",
+        "httpStatus": 404,
+        "errorCode": "TemplateNotFound"
       }
     },
     {
@@ -2274,8 +2333,8 @@
       "type": null,
       "code": "KA01TP2607050825471794qyKK2E0URD",
       "label": "회원용_수업 일정 변경 안내 v1",
-      "providerInventoryName": "회원용_수업 일정 변경 안내 v1",
-      "knownProvider": true,
+      "providerInventoryName": null,
+      "knownProvider": false,
       "implementation": "unconnected",
       "sourceConfiguredStatus": null,
       "purpose": "예약 수업의 일정 변경 공지",
@@ -2299,14 +2358,17 @@
       },
       "sources": [
         {
-          "path": "scripts/fixtures/alimtalk-catalog-known-provider.json",
+          "path": "scripts/fixtures/alimtalk-template-retirement.json",
           "symbol": "templates (coverage only)",
           "line": 1
         }
       ],
       "visibility": {
-        "state": "visible",
-        "basis": "not_confirmed_deleted"
+        "state": "hidden_deleted",
+        "basis": "provider_template_not_found",
+        "checkedAt": "2026-10-12T05:57:20.967Z",
+        "httpStatus": 404,
+        "errorCode": "TemplateNotFound"
       }
     },
     {
@@ -2324,46 +2386,6 @@
       "schedule": null,
       "targetRules": [
         "ARCHIVE APPLY 지원자 · 별도 프로젝트 대상 정책 미조회"
-      ],
-      "policy": null,
-      "factNotice": null,
-      "careGroup": false,
-      "providerApproval": {
-        "status": "UNKNOWN",
-        "checkedAt": null,
-        "evidence": "not_read_in_this_catalog"
-      },
-      "deployment": {
-        "status": "UNVERIFIED",
-        "checkedAt": null
-      },
-      "sources": [
-        {
-          "path": "scripts/fixtures/alimtalk-catalog-known-provider.json",
-          "symbol": "templates (coverage only)",
-          "line": 1
-        }
-      ],
-      "visibility": {
-        "state": "visible",
-        "basis": "not_confirmed_deleted"
-      }
-    },
-    {
-      "id": "KA01TP260521072937354Ve2n5cEapDL",
-      "type": null,
-      "code": "KA01TP260521072937354Ve2n5cEapDL",
-      "label": "아카이브 담당강사 그룹 사전확인 제출 안내 v1",
-      "providerInventoryName": "아카이브 담당강사 그룹 사전확인 제출 안내 v1",
-      "knownProvider": true,
-      "implementation": "archived",
-      "sourceConfiguredStatus": null,
-      "purpose": "이전 그룹 사전확인 제출 전달",
-      "purposeId": "archived",
-      "timing": "현재 발송 시기 정의 없음",
-      "schedule": null,
-      "targetRules": [
-        "현재 중앙 템플릿 매핑 없음"
       ],
       "policy": null,
       "factNotice": null,

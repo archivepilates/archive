@@ -4,7 +4,7 @@ import { createHmac, randomBytes } from "node:crypto";
 import { execFileSync } from "node:child_process";
 
 const PROJECT_ID = "archive-pilates";
-const REFERENCE_TEMPLATE_ID = "KA01TP260519093416836f1EHZYJ00uM";
+const REFERENCE_TEMPLATE_ID = "KA01TP260808034937468FF5LLYH823H";
 const TEMPLATE_NAME = "담당강사 사전설문 제출 안내 v2";
 const TEMPLATE_CONTENT = `#{강사명} 강사님,
 담당 수업으로 배정된

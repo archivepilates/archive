@@ -53,7 +53,7 @@ async function request(url, method = "GET", body) {
   return data;
 }
 
-const reference = await request(`${api}/${spec.referenceTemplateId}`);
+const reference = await request(`${api}/${spec.templateId}`);
 if (
   reference.status !== "APPROVED" ||
   reference.imageId !== spec.imageId ||

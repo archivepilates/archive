@@ -1,5 +1,5 @@
 export const implementationLabels = Object.freeze({
-  source_connected: "소스 연결",
+  source_connected: "운영 연결",
   source_only: "소스 전용",
   unconnected: "미연결",
   archived: "종료·이력",
@@ -79,7 +79,7 @@ export function renderCatalogRow(row) {
 }
 
 export async function mountTemplateCatalog(host, { url = new URL("./alimtalk-catalog.json", import.meta.url), fetcher = fetch } = {}) {
-  host.innerHTML = `<div class="catalog-heading"><div><h2 id="catalogTitle">템플릿 카탈로그</h2></div><a href="../rules/#alimtalk-catalog-draft">운영규칙</a></div>
+  host.innerHTML = `<div class="catalog-heading"><div><h2 id="catalogTitle">현재 템플릿</h2></div><a href="../rules/#alimtalk-catalog-draft">운영규칙</a></div>
     <div class="catalog-load" role="status">정책 자료 읽는 중</div>`;
   host.setAttribute("aria-busy", "true");
   try {
@@ -89,7 +89,9 @@ export async function mountTemplateCatalog(host, { url = new URL("./alimtalk-cat
     const visibleCount = selectCatalogRows(catalog).length;
     const knownCount = selectCatalogRows(catalog, { scope: "known" }).length;
     host.querySelector(".catalog-load").remove();
-    host.insertAdjacentHTML("beforeend", `<div class="catalog-provenance"><p>확인된 SOLAPI ${knownCount}종 + 소스·이력 ${visibleCount - knownCount}종</p><details><summary>소스 기준 · 정책 버전·근거</summary><p>목록 기준 ${escape(catalog.coverage.observedAt)}. 삭제 확인 기준 ${escape(catalog.visibilityCheckedAt || "미확인")}; 확인된 삭제 항목은 표시에서 제외하며 원본 이력은 보존합니다. 최신 공급자 승인·운영 환경변수·실제 배포·최근 발송은 미확인입니다.</p><code>${escape(catalog.policyFingerprint)}</code><a href="${escape(String(url))}" download="alimtalk-catalog.json">정책 데이터 내려받기</a></details></div>
+    const connectedCount = selectCatalogRows(catalog, { implementation: "source_connected" }).length;
+    const separateCount = selectCatalogRows(catalog, { implementation: "separate_project" }).length;
+    host.insertAdjacentHTML("beforeend", `<div class="catalog-provenance"><p>운영 연결 ${connectedCount}종 · 별도 프로젝트 ${separateCount}종${visibleCount - connectedCount - separateCount ? ` · 연결 확인 ${visibleCount - connectedCount - separateCount}종` : ""}</p><details><summary>목록 확인일·근거</summary><p>목록 기준 ${escape(catalog.coverage.observedAt)}. 삭제 확인 기준 ${escape(catalog.visibilityCheckedAt || "미확인")}; 종료 양식은 현재 목록에서 제외하고 발송 이력은 보존합니다. 최신 승인·가동·전달 상태는 발송 원장에서 별도로 확인합니다.</p><code>${escape(catalog.policyFingerprint)}</code><a href="${escape(String(url))}" download="alimtalk-catalog.json">정책 데이터 내려받기</a></details></div>
       <div class="catalog-filters"><label>템플릿 검색<input type="search" name="catalog-search" autocomplete="off" placeholder="이름, 목적, 대상, 코드"></label><label>목록 범위<select name="catalog-scope"><option value="all">전체</option><option value="known">확인된 SOLAPI ${knownCount}종</option><option value="source">소스·이력 추가</option></select></label><label>구현 상태<select name="catalog-implementation"><option value="all">전체 상태</option>${Object.entries(implementationLabels).map(([value, label]) => `<option value="${value}">${label}</option>`).join("")}</select></label></div>
       <p class="catalog-count" role="status" aria-live="polite"></p><div class="catalog-results"></div>`);
     const search = host.querySelector('[name="catalog-search"]');

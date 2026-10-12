@@ -30,9 +30,9 @@ test("saved JSON exactly matches current policy/source fingerprints", async () =
   assert.equal(saved.policyFingerprint, hash(JSON.stringify(saved.sourceFingerprints)));
 });
 
-test("all 23 known provider templates occur exactly once, including unconnected/history/separate project", async () => {
+test("current provider inventory occurs exactly once, with historical rows retained for audit", async () => {
   const coverage = JSON.parse(await fs.readFile(path.join(root, "scripts/fixtures/alimtalk-catalog-known-provider.json"), "utf8"));
-  assert.equal(coverage.templates.length, 23);
+  assert.equal(coverage.templates.length, 19);
   for (const { templateId } of coverage.templates) assert.equal(saved.rows.filter((row) => row.code === templateId && row.knownProvider).length, 1);
   assert.ok(saved.rows.length > 23);
   for (const state of ["source_connected", "source_only", "archived", "unconnected", "separate_project"]) assert.ok(saved.rows.some((row) => row.implementation === state));
@@ -100,10 +100,10 @@ test("generated data never turns static approval, history, or a send into live s
 
 test("filters exclude confirmed deletions consistently while preserving current templates", () => {
   assert.equal(saved.rows.length, 34, "audit/source history plus both holding versions remains intact");
-  assert.equal(ui.selectCatalogRows(saved).length, 25);
-  assert.equal(ui.selectCatalogRows(saved, { scope: "known" }).length, 23);
-  assert.equal(ui.selectCatalogRows(saved, { scope: "source" }).length, 2);
-  assert.equal(ui.selectCatalogRows(saved, { implementation: "unconnected" }).length, 2);
+  assert.equal(ui.selectCatalogRows(saved).length, 19);
+  assert.equal(ui.selectCatalogRows(saved, { scope: "known" }).length, 19);
+  assert.equal(ui.selectCatalogRows(saved, { scope: "source" }).length, 0);
+  assert.equal(ui.selectCatalogRows(saved, { implementation: "unconnected" }).length, 0);
   const retiredHolding = saved.rows.find((row) => row.code === "KA01TP261006054728079NtSGrYdtSQH");
   assert.equal(retiredHolding.implementation, "archived");
   assert.match(retiredHolding.label, /삭제됨/);
@@ -112,7 +112,7 @@ test("filters exclude confirmed deletions consistently while preserving current 
   assert.equal(holding.implementation, "source_connected");
   assert.match(holding.targetRules[0], /2026.10.08 00:00 이후 새로 등록된 홀딩/);
   assert.equal(holding.providerApproval.status, "UNKNOWN", "catalog is not live approval proof");
-  assert.equal(ui.selectCatalogRows(saved, { implementation: "archived" }).length, 4);
+  assert.equal(ui.selectCatalogRows(saved, { implementation: "archived" }).length, 0);
   for (const row of saved.rows) {
     const visible = row.visibility.state === "visible";
     for (const scope of ["all", row.knownProvider ? "known" : "source"])

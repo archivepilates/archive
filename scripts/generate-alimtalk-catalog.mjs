@@ -9,6 +9,7 @@ import { purposes, supplemental, timingBasisLabels } from "./lib/alimtalk-catalo
 export const catalogFile = "core/assets/alimtalk-catalog.json";
 const coverageFile = "scripts/fixtures/alimtalk-catalog-known-provider.json";
 const presenceFile = "scripts/fixtures/alimtalk-catalog-provider-presence.json";
+const retirementFile = "scripts/fixtures/alimtalk-template-retirement.json";
 export function catalogVisibility(row, presence) {
   // Unconnected, unapproved, archived, missing from a list, and failed reads are not deletion evidence.
   if (!row.code && row.sourceConfiguredStatus === "deleted")
@@ -35,10 +36,11 @@ export async function buildCatalog() {
   assert.equal(noticePolicy.purpose, "ticket_facts");
   assert.equal(noticePolicy.followupPurchaseExcludes, false);
   const coverage = JSON.parse(await fs.readFile(path.join(root, coverageFile), "utf8"));
-  assert.equal(coverage.templates.length, 23);
-  assert.equal(new Set(coverage.templates.map((row) => row.templateId)).size, 23);
+  assert.ok(coverage.templates.length > 0, "Empty inventory cannot prove template deletion");
+  assert.equal(new Set(coverage.templates.map((row) => row.templateId)).size, coverage.templates.length);
   const known = new Map(coverage.templates.map((row) => [row.templateId, row]));
   const presence = JSON.parse(await fs.readFile(path.join(root, presenceFile), "utf8"));
+  const retirement = JSON.parse(await fs.readFile(path.join(root, retirementFile), "utf8"));
   assert.ok(!Number.isNaN(Date.parse(presence.checkedAt)), "Presence evidence needs a check date");
   assert.deepEqual([...presence.present].sort(), [...known.keys()].sort(), "Refresh inventory and presence evidence together");
   assert.equal(new Set(presence.absent.map((item) => item.templateId)).size, presence.absent.length);
@@ -95,7 +97,7 @@ export async function buildCatalog() {
     });
   }
   const seen = new Set(rows.map((row) => row.code));
-  for (const [code, label] of new Map([...Object.entries(history), ...coverage.templates.map((row) => [row.templateId, row.name])])) {
+  for (const [code, label] of new Map([...Object.entries(history), ...retirement.templates.map((row) => [row.templateId, row.name]), ...coverage.templates.map((row) => [row.templateId, row.name])])) {
     if (seen.has(code)) continue;
     const extra = supplemental[code] || { state: "archived", purpose: "이전 버전 안내 · 이력 보존", target: "현재 ALIMTALK_TEMPLATES 매핑 없음", timing: "현재 발송 시기 정의 없음" };
     rows.push({
@@ -105,13 +107,13 @@ export async function buildCatalog() {
       targetRules: [extra.target], policy: null, factNotice: null, careGroup: false,
       providerApproval: { status: "UNKNOWN", checkedAt: null, evidence: "not_read_in_this_catalog" },
       deployment: { status: "UNVERIFIED", checkedAt: null },
-      sources: history[code] ? [reader.reference("core/assets/app.js", "ALIMTALK_TEMPLATE_LABELS_BY_CODE")] : [{ path: coverageFile, symbol: "templates (coverage only)", line: 1 }],
+      sources: history[code] ? [reader.reference("core/assets/app.js", "ALIMTALK_TEMPLATE_LABELS_BY_CODE")] : [{ path: known.has(code) ? coverageFile : retirementFile, symbol: "templates (coverage only)", line: 1 }],
     });
     seen.add(code);
   }
   for (const name of ["alimtalk/rebuildAlimtalkCandidates", "alimtalk/renewalSendGuard", "alimtalk/longAbsencePolicy", "alimtalk/recipientExclusion", "alimtalk/privateSurveySendGuard", "alimtalk/approvalGate", "alimtalk/approvalPolicy", "alimtalk/approvalStore", "alimtalk/queueDailyAlimtalk", "alimtalk/processAlimtalkQueue", "alimtalk/eligibility"]) reader.touch(source(name));
   const sourceFingerprints = reader.fingerprints();
-  for (const file of [coverageFile, presenceFile, "scripts/lib/alimtalk-catalog-metadata.mjs", "scripts/lib/alimtalk-catalog-source.mjs", "scripts/generate-alimtalk-catalog.mjs"])
+  for (const file of [coverageFile, presenceFile, retirementFile, "scripts/lib/alimtalk-catalog-metadata.mjs", "scripts/lib/alimtalk-catalog-source.mjs", "scripts/generate-alimtalk-catalog.mjs"])
     sourceFingerprints.push({ path: file, sha256: hash(await fs.readFile(path.join(root, file))) });
   sourceFingerprints.sort((a, b) => a.path.localeCompare(b.path));
   return {

@@ -71,8 +71,8 @@ export const ALIMTALK_TEMPLATES = {
   },
   onsite_welcome: {
     code: process.env.ONSITE_WELCOME_ALIMTALK_TEMPLATE_ID || "KA01TP260602101939427lPhGyuDLvFM",
-    label: "신규회원 웰컴 v5",
-    status: "approved",
+    label: "신규회원 웰컴 v5 (사용 종료)",
+    status: "deleted",
   },
   ticket_expiring: {
     code: "KA01TP260514145047261araXgWLVFRs",
