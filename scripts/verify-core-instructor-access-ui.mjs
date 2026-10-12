@@ -76,6 +76,7 @@ export const fixture = await response.json();
 export const state = window.__coreFirebaseQA = {
   fixtureId, events: [], reads: [], writes: [], callables: [], auth: [],
   accessResolved: false, session: null, workspaceAttempts: 0, passwordChanged: false,
+  sdkInitializations: 0, authClientsCreated: 0,
 };
 export function record(kind, detail) {
   const entry = { kind, ...detail };
@@ -131,11 +132,11 @@ function firebaseModule(kind) {
   const shared = `import { fixture, state, record, denied, authClient, observe, logout, read, rejectWrite } from ${JSON.stringify(`${origin}/__qa/state.mjs`)};\n`;
   if (kind === "app") return shared + `
     const app = { name: "qa-only" };
-    export const initializeApp = () => app;
+    export const initializeApp = () => { state.sdkInitializations++; return app; };
     export const getApps = () => [];
   `;
   if (kind === "auth") return shared + `
-    export const getAuth = () => authClient;
+    export const getAuth = () => { state.authClientsCreated++; return authClient; };
     export const onAuthStateChanged = (_, callback) => observe(callback);
     export const signOut = () => logout();
     export const signInWithEmailAndPassword = () => rejectWrite("unexpected-login");
@@ -146,6 +147,19 @@ function firebaseModule(kind) {
       const call = record("callables", { name, month: payload?.month, path: location.pathname });
       if (!authClient.currentUser) throw denied("Synthetic session is signed out");
       if (name === "getCoreAccessSession") {
+        const destination = document.querySelector('[data-core-navigation-frame][hidden]');
+        if (destination) call.destination = new URL(destination.dataset.destination).pathname;
+        const gate = state.nextAccessGate;
+        if (gate) {
+          state.nextAccessGate = null;
+          gate.started = true;
+          await gate.promise;
+          if (gate.errorCode) {
+            call.errorCode = gate.errorCode;
+            throw Object.assign(new Error("Synthetic pending access failure"), { code: gate.errorCode });
+          }
+          if (!authClient.currentUser) throw Object.assign(new Error("Signed out during access"), { code: "functions/unauthenticated" });
+        }
         if (fixture.mode === "access-denied") throw denied("Synthetic pending access");
         if (["revoked-session", "access-transient"].includes(fixture.mode)) {
           call.errorCode = fixture.mode === "revoked-session" ? "functions/unauthenticated" : "functions/unavailable";
@@ -158,6 +172,7 @@ function firebaseModule(kind) {
           mustChangePassword: fixture.mustChangePassword };
         state.session = session;
         state.accessResolved = true;
+        call.resolved = true;
         record("session", { role, rawRole: fixture.rawRole });
         return { data: session };
       }
@@ -288,14 +303,14 @@ async function seedFixture(mode) {
 
 // Add test IDs only; do not change DOM visibility, app bootstrap, or access decisions.
 function installDomHooks() {
-  window.__coreUiQA = { events: [], frames: 0, operatorFlashes: 0 };
+  window.__coreUiQA = { events: [], frames: 0, operatorFlashes: 0, documentId: crypto.randomUUID() };
   const inspectFrame = () => {
     const qa = window.__coreUiQA;
     qa.frames++;
     const shell = document.querySelector(".shell");
     const box = shell?.getBoundingClientRect();
     if (box?.width && box?.height && getComputedStyle(shell).visibility !== "hidden"
-      && (!window.__coreFirebaseQA?.accessResolved || window.__coreFirebaseQA?.session?.role !== "manager")) {
+      && document.documentElement.dataset.coreAccess !== "manager") {
       qa.operatorFlashes++;
     }
     requestAnimationFrame(inspectFrame);
@@ -310,6 +325,8 @@ function installDomHooks() {
     "[data-sequence-studio]": "qa-sequence-frame",
     "[data-core-login-name]": "qa-login-name", ".core-account-bar": "qa-account-bar",
     ".cia-account": "qa-instructor-account",
+    "[data-core-navigation-frame]": "qa-navigation-frame",
+    ".core-navigation-status": "qa-navigation-status",
   };
   const tag = () => {
     for (const [selector, id] of Object.entries(hooks)) {
@@ -327,6 +344,7 @@ async function telemetry(page) {
     return { events: state.events, reads: state.reads, writes: state.writes, callables: state.callables,
       auth: state.auth, role: state.session?.role, storedUid: localStorage.getItem("core-ui-user"),
       currentUid: authClient.currentUser?.uid ?? null,
+      sdkInitializations: state.sdkInitializations, authClientsCreated: state.authClientsCreated,
       uiEvents: window.__coreUiQA.events, operatorFlashes: window.__coreUiQA.operatorFlashes };
   });
 }
@@ -447,18 +465,18 @@ async function instructorNav(page, base) {
   assert.equal(await nav.getByRole("link").count(), 2);
   assert.equal(await nav.getByRole("link", { name: "홈", exact: true }).count(), 0);
   for (const [name, suffix] of [["프라이빗", "private/"], ["시퀀스 노트", "sequence/"]]) {
-    assert.equal(await nav.getByRole("link", { name, exact: true }).getAttribute("href"), `${base}${suffix}`);
+    assert.equal(await nav.getByRole("link", { name, exact: true }).evaluate(node => node.href), `${origin}${base}${suffix}`);
   }
-  assert.equal(await page.getByRole("link", { name: "ARCHIVE CORE", exact: true }).getAttribute("href"), `${base}private/`);
+  assert.equal(await page.getByRole("link", { name: "ARCHIVE CORE", exact: true }).evaluate(node => node.href), `${origin}${base}private/`);
   assert.equal(await page.getByRole("button", { name: "로그아웃", exact: true }).isVisible(), true);
 }
 
-async function workspaceCase(page, base, kind) {
+async function workspaceCase(page, base, kind, surface = page) {
   if (kind === "home") await page.waitForURL(`${origin}${base}private/`);
-  await page.getByRole("heading", { name: "프라이빗 기록·리포트", exact: true }).waitFor();
+  await surface.getByRole("heading", { name: "프라이빗 기록·리포트", exact: true }).waitFor();
   await settled(page);
   await instructorNav(page, base);
-  const ui = page.getByTestId("qa-instructor");
+  const ui = surface.getByTestId("qa-instructor");
   assert.equal(await ui.getByRole("link", { name: "기록 작성", exact: true }).count(), 1);
   assert.equal(await ui.getByRole("link", { name: "설문", exact: true }).count(), 1);
   assert.equal(await ui.getByRole("link", { name: "리포트 확인", exact: true }).count(), 1);
@@ -710,7 +728,269 @@ async function managerSequenceCase(page, base, name) {
   return { ...state, sequenceLayout };
 }
 
+async function navigationSetup(page, manager) {
+  await page.getByRole("heading", { name: manager ? "오늘 할 일" : "프라이빗 기록·리포트", exact: true }).waitFor();
+  await page.waitForFunction(() => Boolean(window.archiveCoreNavigation));
+  await loginName(page, manager);
+  await page.evaluate(() => {
+    const host = window.archiveCoreNavigation;
+    const ready = host.ready;
+    window.__coreNavigationQA = { ready: [], prepareCalls: 0 };
+    host.ready = function(frame, runtime, session, error) {
+      const access = window.__coreFirebaseQA.callables.filter(call => call.name === "getCoreAccessSession").at(-1);
+      window.__coreNavigationQA.ready.push({
+        destination: frame.dataset.destination, hidden: frame.hidden,
+        sharedRuntime: runtime === host.runtime, distinctSession: session !== host.session,
+        accessResolved: access?.resolved === true, accessDestination: access?.destination,
+        childHasTelemetry: Boolean(frame.contentWindow.__coreFirebaseQA),
+      });
+      return ready.call(this, frame, runtime, session, error);
+    };
+  });
+  return page.evaluate(() => window.__coreUiQA.documentId);
+}
+
+async function navigationLink(page, manager, label) {
+  if (manager && page.viewportSize().width <= 1040) {
+    const menu = page.getByRole("button", { name: "메뉴", exact: true });
+    if (await menu.getAttribute("aria-expanded") !== "true") await menu.click();
+  }
+  const nav = manager ? page.getByTestId("qa-operator-nav") : page.getByRole("navigation", { name: "강사 메뉴", exact: true });
+  return nav.getByRole("link", { name: label, exact: true });
+}
+
+async function armNavigationAccess(page, errorCode = null) {
+  await page.evaluate(errorCode => {
+    let release;
+    const promise = new Promise(resolve => { release = resolve; });
+    const gate = window.__coreNavigationGate = { promise, release, started: false, errorCode };
+    window.__coreFirebaseQA.nextAccessGate = gate;
+  }, errorCode);
+}
+
+async function pendingNavigation(page, destination, documentId) {
+  await page.waitForFunction(() => window.__coreNavigationGate?.started);
+  assert.equal(page.url(), `${origin}${destination.before}`, "Top URL changes only after destination verification");
+  assert.equal(await page.evaluate(() => window.__coreUiQA.documentId), documentId, "No outer document reload");
+  const pending = page.getByTestId("qa-navigation-frame");
+  assert.equal(await pending.evaluateAll(nodes => nodes.filter(node => node.hidden).length), 1);
+  assert.equal(await pending.evaluateAll(nodes => nodes.filter(node => node.hidden && !node.inert && getComputedStyle(node).display !== "none").length), 0,
+    "Unverified destination is not displayed");
+  const last = (await telemetry(page)).callables.filter(call => call.name === "getCoreAccessSession").at(-1);
+  assert.equal(last.destination, destination.after, "Separate destination access call is pending");
+  assert.notEqual(last.resolved, true);
+}
+
+async function destinationFrame(page, pathName, documentId, manager) {
+  await page.waitForURL(`${origin}${pathName}`);
+  await page.waitForFunction(pathName => [...document.querySelectorAll('[data-core-navigation-frame]')]
+    .some(frame => !frame.hidden && new URL(frame.dataset.destination).pathname === pathName), pathName);
+  const frame = page.frames().find(frame => frame !== page.mainFrame() && new URL(frame.url()).pathname === pathName);
+  assert.ok(frame, "Verified content frame exists");
+  const evidence = await page.evaluate(() => ({
+    documentId: window.__coreUiQA.documentId,
+    ready: window.__coreNavigationQA.ready.at(-1),
+  }));
+  assert.equal(evidence.documentId, documentId, "Outer document identity retained through history");
+  assert.equal(evidence.ready.hidden, true, "Readiness follows revalidation while destination is hidden");
+  assert.equal(evidence.ready.sharedRuntime, true, "Destination uses the exact outer Firebase runtime");
+  assert.equal(evidence.ready.distinctSession, true, "Destination obtains a fresh access session");
+  assert.equal(evidence.ready.accessResolved, true);
+  assert.equal(evidence.ready.accessDestination, pathName);
+  assert.equal(evidence.ready.childHasTelemetry, false, "Shared SDK telemetry stays in the outer fixture");
+  const hiddenSiblings = await page.evaluate(() => [...document.querySelectorAll('.core-navigation-container > [hidden]')]
+    .map(node => ({ tag: node.tagName, className: node.className, display: getComputedStyle(node).display })));
+  assert.ok(hiddenSiblings.length, "Original destination siblings are retired");
+  assert.ok(hiddenSiblings.every(node => node.display === "none"),
+    `Retired original siblings must not leave stale headings/content: ${JSON.stringify(hiddenSiblings)}`);
+  const sdk = await telemetry(page);
+  assert.equal(sdk.sdkInitializations, 1, "Only one Firebase app initialization across content transitions");
+  assert.equal(sdk.authClientsCreated, 1, "Only one Auth client across content transitions");
+  assert.deepEqual(sdk.writes, [], "Navigation never writes through the SDK");
+  const child = await frame.evaluate(async () => {
+    const module = await import(new URL('./core-navigation.js', document.querySelector('script[src$="assets/app.js"]').src).href);
+    return {
+      sharedRuntime: module.sharedNavigationRuntime() === parent.archiveCoreNavigation.runtime,
+      operatorFlashes: window.__coreUiQA.operatorFlashes,
+      overflow: document.documentElement.scrollWidth > innerWidth,
+      navigationVisible: [...document.querySelectorAll('.sidebar,.cia-header,.core-account-bar')]
+        .some(node => node.getBoundingClientRect().height > 0 && getComputedStyle(node).display !== 'none'),
+    };
+  });
+  assert.equal(child.sharedRuntime, true);
+  assert.equal(child.operatorFlashes, 0, "No child operator flash before authorization");
+  assert.equal(child.overflow, false, "Content frame fits its mobile/desktop viewport");
+  assert.equal(child.navigationVisible, false, "Destination does not duplicate the outer navigation/account");
+  await loginName(page, manager);
+  if (manager && page.viewportSize().width <= 1040) {
+    assert.equal(await page.getByRole("button", { name: "메뉴", exact: true }).getAttribute("aria-expanded"), "false",
+      "Mobile menu collapsed and ARIA state reset after navigation");
+  }
+  return frame;
+}
+
+async function navigationCase(page, base, manager, name) {
+  const documentId = await navigationSetup(page, manager);
+  const initial = `${base}${manager ? '' : 'private/'}`;
+  const sequence = `${base}sequence/`;
+  const privatePath = `${base}private/`;
+  const before = (await telemetry(page)).callables.filter(call => call.name === "getCoreAccessSession").length;
+  await armNavigationAccess(page);
+  await (await navigationLink(page, manager, "시퀀스 노트")).click();
+  await pendingNavigation(page, { before: initial, after: sequence }, documentId);
+  await page.evaluate(() => window.__coreNavigationGate.release());
+  const sequencePage = await destinationFrame(page, sequence, documentId, manager);
+  const studio = sequencePage.childFrames().find(frame => new URL(frame.url()).pathname === `${sequence}studio.html`);
+  assert.ok(studio, "Sequence studio remains a nested authenticated editor");
+  await studio.getByRole("tab", { name: /내 시퀀스/ }).waitFor();
+  await studio.waitForFunction(() => Boolean(window.archiveSequenceNavigation));
+  assert.equal(await studio.evaluate(() => parent.archiveSequenceStore.uid), "qa-instructor");
+  const nestedViewport = await studio.evaluate(() => ({
+    width: innerWidth, height: innerHeight,
+    scrollWidth: document.documentElement.scrollWidth, bodyWidth: document.body.scrollWidth,
+  }));
+  assert.ok(nestedViewport.height >= 300 && nestedViewport.width > 0, "Nested editor retains a usable, nonblank viewport");
+  assert.ok(nestedViewport.scrollWidth <= nestedViewport.width + 1 && nestedViewport.bodyWidth <= nestedViewport.width + 1,
+    "Nested Sequence editor has no horizontal overflow");
+  await page.screenshot({ path: path.join(output, `${name}-frame-sequence.png`), fullPage: true });
+  // Exercise the production prepare boundary without making a Firestore save.
+  await studio.evaluate(() => {
+    window.__qaOriginalPrepare = window.archiveSequenceNavigation.prepare;
+    window.archiveSequenceNavigation.prepare = async () => {
+      top.__coreNavigationQA.prepareCalls++;
+      return false;
+    };
+  });
+  const accessBeforeFailure = (await telemetry(page)).callables.length;
+  await (await navigationLink(page, manager, "프라이빗")).click();
+  await page.getByTestId("qa-navigation-status").filter({ hasText: "저장을 확인하지 못했습니다" }).waitFor();
+  assert.equal(page.url(), `${origin}${sequence}`, "Failed save leaves URL and draft frame intact");
+  assert.equal(await page.getByTestId("qa-navigation-frame").count(), 1, "Save failure creates no destination frame");
+  assert.equal((await telemetry(page)).callables.length, accessBeforeFailure, "Save failure precedes all destination access calls");
+  assert.equal(await studio.evaluate(() => Boolean(window.__qaOriginalPrepare)), true, "Departing editor stays alive");
+  await studio.evaluate(() => {
+    let release;
+    const promise = new Promise(resolve => { release = resolve; });
+    window.__qaPrepareGate = { release };
+    window.archiveSequenceNavigation.prepare = () => {
+      top.__coreNavigationQA.prepareCalls++;
+      return promise;
+    };
+  });
+  await armNavigationAccess(page);
+  await (await navigationLink(page, manager, "프라이빗")).click();
+  await page.waitForFunction(() => window.__coreNavigationQA.prepareCalls === 2);
+  assert.equal((await telemetry(page)).callables.length, accessBeforeFailure, "Destination access waits for save acknowledgement");
+  assert.equal(await page.getByTestId("qa-navigation-frame").count(), 1);
+  await studio.evaluate(() => window.__qaPrepareGate.release(true));
+  await pendingNavigation(page, { before: sequence, after: privatePath }, documentId);
+  assert.equal(studio.isDetached(), false, "Saved editor is retained until destination passes access validation");
+  await page.evaluate(() => window.__coreNavigationGate.release());
+  await destinationFrame(page, privatePath, documentId, manager);
+  await page.goBack();
+  await destinationFrame(page, sequence, documentId, manager);
+  await page.goBack();
+  await destinationFrame(page, initial, documentId, manager);
+  await page.goForward();
+  await destinationFrame(page, sequence, documentId, manager);
+  await page.goForward();
+  await destinationFrame(page, privatePath, documentId, manager);
+  const evidence = await page.evaluate(() => window.__coreNavigationQA);
+  assert.equal(evidence.prepareCalls, 2, "One failed prepare and one successful prepare");
+  assert.equal((await telemetry(page)).callables.filter(call => call.name === "getCoreAccessSession").length - before, 6,
+    "Each click/back/forward destination independently revalidates access");
+  await layout(page, `${name}-continuity`, !manager);
+  return { ...await telemetry(page), navigation: evidence };
+}
+
+async function pendingAccessCase(page, base, manager, revoked) {
+  const documentId = await navigationSetup(page, manager);
+  const initial = `${base}${manager ? '' : 'private/'}`;
+  await armNavigationAccess(page, revoked ? "functions/unauthenticated" : null);
+  await (await navigationLink(page, manager, "시퀀스 노트")).click();
+  await pendingNavigation(page, { before: initial, after: `${base}sequence/` }, documentId);
+  if (!revoked) await page.getByRole("button", { name: "로그아웃", exact: true }).click();
+  await page.evaluate(() => window.__coreNavigationGate.release());
+  await page.waitForFunction(() => window.__coreFirebaseQA.auth.some(event => event.action === "signOut" && event.success));
+  await page.getByTestId("qa-login").waitFor({ state: "visible" });
+  await clearedLoginName(page);
+  await page.getByTestId("qa-operator-shell").waitFor({ state: "hidden" });
+  assert.equal(await page.getByTestId("qa-navigation-frame").count(), 0, "Auth invalidation removes pending/current destination frames");
+  assert.equal(await page.evaluate(() => Boolean(window.archiveCoreNavigation)), false);
+  assert.equal(await page.evaluate(() => window.__coreUiQA.documentId), documentId);
+  assert.deepEqual(await page.evaluate(() => window.__coreNavigationQA.ready), [], "Late access never installs a destination after sign-out");
+  const state = await telemetry(page);
+  assert.equal(state.currentUid, null);
+  assert.equal(state.storedUid, null);
+  assert.deepEqual(state.writes, []);
+  assert.equal(state.callables.filter(call => call.name === "getCoreAccessSession").length, 2);
+  return state;
+}
+
+async function destinationFailureCase(page, base, manager, timeout) {
+  const documentId = await navigationSetup(page, manager);
+  const initial = `${base}${manager ? '' : 'private/'}`;
+  await armNavigationAccess(page, timeout ? null : "functions/unavailable");
+  await (await navigationLink(page, manager, "시퀀스 노트")).click();
+  await pendingNavigation(page, { before: initial, after: `${base}sequence/` }, documentId);
+  if (timeout) {
+    await page.clock.fastForward(30001);
+    await page.getByTestId("qa-navigation-status").filter({ hasText: "응답이 늦어지고" }).waitFor();
+    await page.evaluate(() => window.__coreNavigationGate.release());
+  } else {
+    await page.evaluate(() => window.__coreNavigationGate.release());
+    await page.waitForFunction(documentId => window.__coreUiQA.documentId !== documentId
+      || !document.querySelector('[data-core-navigation-frame][hidden]'), documentId);
+  }
+  assert.equal(await page.evaluate(() => window.__coreUiQA.documentId), documentId,
+    "Transient destination failures preserve the authenticated outer document");
+  assert.equal(page.url(), `${origin}${initial}`, "Failed destination never replaces URL/history");
+  assert.equal(await page.getByTestId("qa-navigation-frame").count(), 0, "Failed pending frame removed");
+  if (manager && page.viewportSize().width <= 1040) {
+    const menu = page.getByRole("button", { name: "메뉴", exact: true });
+    if (await menu.getAttribute("aria-expanded") === "true") await menu.click();
+  }
+  await loginName(page, manager);
+  const state = await telemetry(page);
+  assert.equal(state.currentUid, "qa-instructor", "Transient failures do not sign out");
+  assert.deepEqual(state.auth, []);
+  assert.deepEqual(state.writes, []);
+  // A new click must recover; late readiness from the failed frame is not reusable.
+  await (await navigationLink(page, manager, "시퀀스 노트")).click();
+  await destinationFrame(page, `${base}sequence/`, documentId, manager);
+  return { ...await telemetry(page), recoveredDestination: true, timeout };
+}
+
+async function currentRefreshDowngrade(page, base, name) {
+  const documentId = await navigationSetup(page, true);
+  const target = `${base}private/`;
+  await (await navigationLink(page, true, "프라이빗")).click();
+  const child = await destinationFrame(page, target, documentId, true);
+  const fixtureId = await page.evaluate(() => window.__coreFirebaseQA.fixtureId);
+  fixtures.get(fixtureId).rawRole = "instructor";
+  await page.evaluate(async () => { (await import("/__qa/state.mjs")).fixture.rawRole = "instructor"; });
+  await child.getByTestId("qa-refresh").click();
+  await page.waitForFunction(documentId => window.__coreUiQA.documentId !== documentId, documentId);
+  await page.getByRole("heading", { name: "프라이빗 기록·리포트", exact: true }).waitFor();
+  await instructorNav(page, base);
+  await page.getByTestId("qa-operator-shell").waitFor({ state: "hidden" });
+  assert.equal(await page.getByTestId("qa-account-bar").count(), 0, "Current-child downgrade cannot retain manager toolbar");
+  assert.equal(await page.getByTestId("qa-navigation-frame").count(), 0, "Downgrade destroys old content frame");
+  const state = await noOperatorReads(page);
+  assert.equal(state.role, "instructor");
+  await layout(page, `${name}-downgraded`);
+  return { ...state, currentRefreshDowngrade: true };
+}
+
 async function runCase(page, base, kind, name) {
+  if (["navigation", "manager-navigation"].includes(kind)) return navigationCase(page, base, kind.startsWith("manager-"), name);
+  if (kind === "manager-current-refresh-downgrade") return currentRefreshDowngrade(page, base, name);
+  if (/^(?:manager|instructor)-destination-(?:transient|timeout)$/.test(kind)) {
+    return destinationFailureCase(page, base, kind.startsWith("manager-"), kind.endsWith("timeout"));
+  }
+  if (/^(?:manager|instructor)-pending-(?:logout|revocation)$/.test(kind)) {
+    return pendingAccessCase(page, base, kind.startsWith("manager-"), kind.endsWith("revocation"));
+  }
   if (kind === "manager-sequence") return managerSequenceCase(page, base, name);
   if (kind === "logged-out") {
     await page.getByTestId("qa-login").waitFor({ state: "visible" });
@@ -721,14 +1001,8 @@ async function runCase(page, base, kind, name) {
     assert.deepEqual(state.writes, []);
     return state;
   }
-  if (kind === "navigation" || kind === "instructor-bfcache") {
+  if (kind === "instructor-bfcache") {
     await workspaceCase(page, base, "private");
-    if (kind === "navigation") {
-      await page.getByRole("navigation", { name: "강사 메뉴" }).getByRole("link", { name: "시퀀스 노트", exact: true }).click();
-      await runCase(page, base, "sequence", name);
-      assert.equal((await telemetry(page)).operatorFlashes, 0);
-      await page.goBack();
-    } else {
       // Deterministic persisted-page lifecycle simulation; not proof of browser cache eligibility.
       await page.evaluate(() => window.dispatchEvent(new PageTransitionEvent("pagehide", { persisted: true })));
       assert.equal(await page.getByTestId("qa-operator-shell").isVisible(), false);
@@ -736,7 +1010,6 @@ async function runCase(page, base, kind, name) {
         page.waitForEvent("load"),
         page.evaluate(() => window.dispatchEvent(new PageTransitionEvent("pageshow", { persisted: true }))),
       ]);
-    }
     return workspaceCase(page, base, "private");
   }
   if (/^(manager|instructor)-/.test(kind)) {
@@ -821,9 +1094,15 @@ async function runCase(page, base, kind, name) {
     assert.equal(state.callables.some(call => call.name === "getCoreInstructorWorkspace"), false);
     if (kind === "blocked-rules") {
       await layout(page, `${name}-blocked`);
+      const documentId = await page.evaluate(() => window.__coreUiQA.documentId);
       await page.getByRole("link", { name: "프라이빗으로", exact: true }).click();
       await page.waitForURL(`${origin}${base}private/`);
-      await workspaceCase(page, base, "private");
+      await page.getByTestId("qa-navigation-frame").waitFor({ state: "visible" });
+      const child = page.frames().find(frame => frame !== page.mainFrame() && new URL(frame.url()).pathname === `${base}private/`);
+      assert.ok(child, "Blocked-route recovery loads an authorized private content frame");
+      assert.equal(await page.evaluate(() => window.__coreUiQA.documentId), documentId);
+      assert.equal(await child.evaluate(() => Boolean(window.__coreFirebaseQA)), false);
+      await workspaceCase(page, base, "private", child);
       state.returnPrivateVerified = true;
     }
     return state;
@@ -927,7 +1206,7 @@ function routeFor(base, kind) {
   if (kind === "manager-sequence") return `${base}sequence/`;
   if (kind === "private" || kind === "sequence") return `${base}${kind}/`;
   if (kind === "workspace-retry") return `${base}private/`;
-  if (["navigation", "instructor-bfcache"].includes(kind)) return `${base}private/`;
+  if (["navigation", "instructor-bfcache"].includes(kind) || /^instructor-(?:pending|destination)-/.test(kind)) return `${base}private/`;
   if (kind.startsWith("blocked-")) return `${base}${kind.slice(8)}/`;
   return base;
 }
@@ -981,7 +1260,8 @@ async function attemptCase(base, viewport, kind, retry) {
     page = await context.newPage();
     page.setDefaultTimeout(8000);
     page.on("pageerror", error => pageErrors.push(error.message));
-    await page.clock.setFixedTime(new Date(fixedTime));
+    if (kind.endsWith("destination-timeout")) await page.clock.install({ time: new Date(fixedTime) });
+    else await page.clock.setFixedTime(new Date(fixedTime));
     await page.goto(`${origin}${routeFor(base, kind)}`, { waitUntil: "commit" });
     await page.getByTestId("qa-operator-shell").waitFor({ state: "attached" });
     await page.waitForFunction(() => window.__coreUiQA.frames >= 3);
@@ -1075,7 +1355,7 @@ try {
   browser = await chromium.launch({ headless: true });
   const cases = ["home", "private", "first-login", "pending-role", "access-denied", "sequence",
     "blocked-business", "blocked-members/detail", "blocked-rules", "manager", "manager-sequence", "owner", "revoked-session", "access-transient",
-    "logged-out", "bootstrap-failure"];
+    "logged-out", "bootstrap-failure", "navigation", "manager-navigation"];
   for (const base of surfaces) {
     for (const viewport of viewports) {
       for (const kind of cases) {
@@ -1090,13 +1370,25 @@ try {
     }
     for (const kind of ["signout-retry", "workspace-retry", "manager-name-safe", "instructor-name-safe",
       "manager-name-missing", "instructor-name-missing", "manager-auth-change", "instructor-auth-change",
-      "manager-logout-failure", "manager-revoked-after-login", "navigation", "instructor-bfcache", "manager-bfcache"]) {
+      "manager-logout-failure", "manager-revoked-after-login", "instructor-bfcache", "manager-bfcache"]) {
       let result;
       for (let retry = 0; retry <= options.retries; retry++) {
         result = await attemptCase(base, viewports[1], kind, retry);
         if (!result.failure) break;
       }
       if (result.failure) report.failures.push({ name: result.name, message: result.failure });
+    }
+    for (const viewport of [viewports[1], viewports[3]]) {
+      for (const kind of ["instructor-pending-logout", "instructor-pending-revocation", "manager-pending-logout", "manager-pending-revocation",
+        "manager-current-refresh-downgrade", "instructor-destination-transient", "manager-destination-transient",
+        "instructor-destination-timeout", "manager-destination-timeout"]) {
+        let result;
+        for (let retry = 0; retry <= options.retries; retry++) {
+          result = await attemptCase(base, viewport, kind, retry);
+          if (!result.failure) break;
+        }
+        if (result.failure) report.failures.push({ name: result.name, message: result.failure });
+      }
     }
   }
 } catch (error) {

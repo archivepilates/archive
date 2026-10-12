@@ -73,6 +73,7 @@ function hideNode(node) {
 
 // Quarantine operator DOM before awaiting access, including late-added operator overlays.
 function isolateOperatorContent() {
+  window.archiveCoreNavigation?.dispose();
   delete document.documentElement.dataset.coreAccess;
   if (!root?.isConnected) {
     root = document.createElement("div");
@@ -122,6 +123,7 @@ function restoreManagerContent() {
 }
 
 function suspendAccess() {
+  window.archiveCoreNavigation?.dispose();
   delete document.documentElement.dataset.coreAccess;
   generation += 1;
   activeSession = null;
@@ -157,7 +159,6 @@ function renderManagerAccount(runtime, session, error = "") {
     root.replaceChildren();
     try {
       await signOut(runtime);
-      document.dispatchEvent(new CustomEvent("core-instructor-signed-out", { bubbles: true }));
     } catch {
       if (generation !== ticket || runtime.authClient.currentUser?.uid !== uid) return;
       restoreManagerContent();
@@ -186,6 +187,7 @@ function observeAuth(runtime) {
     if (!user || (activeSession?.uid && activeSession.uid !== user.uid)) {
       isolateOperatorContent();
       suspendAccess();
+      document.dispatchEvent(new Event("core-instructor-signed-out"));
     }
   });
 }
@@ -224,7 +226,6 @@ function bindLogout(runtime) {
     const status = root.querySelector("[data-core-instructor-status]");
     try {
       await signOut(runtime);
-      document.dispatchEvent(new CustomEvent("core-instructor-signed-out", { bubbles: true }));
     } catch {
       status.textContent = "로그아웃하지 못했습니다. 다시 시도하세요.";
       button.disabled = false;
@@ -350,7 +351,7 @@ function firstLogin(runtime) {
     async function finishSignOut(changed) {
       await signOut(runtime);
       finish();
-      document.dispatchEvent(new CustomEvent(changed ? "core-password-changed" : "core-instructor-signed-out", { bubbles: true }));
+      if (changed) document.dispatchEvent(new CustomEvent("core-password-changed", { bubbles: true }));
     }
     form.addEventListener("submit", async (event) => {
       event.preventDefault();
@@ -410,6 +411,7 @@ function firstLogin(runtime) {
 /** Call before any existing CORE reads; null means the caller must show its login gate. */
 export async function prepareCoreAccess(runtime, user) {
   if (prepareJob?.runtime === runtime && prepareJob?.uid === user?.uid) return prepareJob.promise;
+  window.archiveCoreNavigation?.dispose();
   cancelFirstLogin?.();
   const ticket = ++generation;
   activeSession = null;
@@ -425,8 +427,10 @@ export async function prepareCoreAccess(runtime, user) {
   observeAuth(runtime);
   const promise = (async () => {
     try {
-      await loadStyles();
-      const response = await runtime.httpsCallable(runtime.functionsClient, "getCoreAccessSession")({});
+      const [, response] = await Promise.all([
+        loadStyles(),
+        runtime.httpsCallable(runtime.functionsClient, "getCoreAccessSession")({}),
+      ]);
       if (generation !== ticket) return null;
       const session = response?.data;
       if (session?.role === "manager") {
@@ -449,11 +453,14 @@ export async function prepareCoreAccess(runtime, user) {
       if (generation !== ticket) return null;
       if (["functions/unauthenticated", "auth/user-token-expired", "auth/id-token-revoked", "auth/invalid-user-token"].includes(error?.code)) {
         await signOut(runtime);
-        document.dispatchEvent(new Event("core-instructor-signed-out"));
         return null;
       }
       renderAccessNotice(runtime, {}, true);
-      throw new Error("ARCHIVE CORE 접근 권한을 확인하지 못했습니다.");
+      const failure = new Error("ARCHIVE CORE 접근 권한을 확인하지 못했습니다.");
+      if (["functions/unavailable", "functions/deadline-exceeded", "functions/resource-exhausted"].includes(error?.code)) {
+        failure.code = "core/access-unavailable";
+      }
+      throw failure;
     }
   })();
   prepareJob = { runtime, uid: user.uid, promise };

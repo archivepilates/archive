@@ -1,5 +1,6 @@
 import { uiIcon } from "./ui-icons.js";
 import { prepareCoreAccess, renderInstructorCore } from "./core-instructor-access.js";
+import { finishCoreNavigation, sharedNavigationRuntime, initCoreNavigationDocument } from "./core-navigation.js";
 
 const CORE_BRAND_IMAGE_URL = new URL("../icons/archive-pilates-icon-192.png", import.meta.url).href;
 const FIREBASE_APP_VERSION = "10.14.1";
@@ -1050,6 +1051,11 @@ function activateNav() {
 
 async function initFirebase() {
   if (state.firebaseRuntime) return state.firebaseRuntime;
+  const shared = sharedNavigationRuntime();
+  if (shared) {
+    state.firebaseRuntime = shared;
+    return shared;
+  }
   const config = window.KANGSAIN_FIREBASE_CONFIG;
   if (!config?.apiKey) throw new Error("Firebase 설정을 찾을 수 없습니다.");
 
@@ -7959,6 +7965,8 @@ function renderFallback(error, options = {}) {
 }
 
 async function refresh() {
+  let navigationAccess = null;
+  let navigationError = null;
   const refreshButton = qs("refreshButton");
   if (refreshButton) {
     refreshButton.disabled = true;
@@ -7980,6 +7988,7 @@ async function refresh() {
     }
     hideLoginGate();
     const access = await prepareCoreAccess(runtime, user);
+    navigationAccess = access;
     if (!access) {
       showLoginGate(qs("coreLoginError")?.textContent || "");
       return;
@@ -8306,6 +8315,7 @@ async function refresh() {
     if (qs("instructorEvaluationQuizForm")) await loadInstructorEvaluationQuiz();
     renderReadHealth();
   } catch (error) {
+    navigationError = error?.code === "core/access-unavailable" ? error.code : null;
     renderFallback(error, { requireLogin: !state.firebaseRuntime?.authClient?.currentUser });
   } finally {
     if (refreshButton) {
@@ -8313,10 +8323,12 @@ async function refresh() {
       refreshButton.removeAttribute("aria-busy");
       refreshButton.setAttribute("title", "새로고침");
     }
+    await finishCoreNavigation(state.firebaseRuntime, navigationAccess, navigationError);
   }
 }
 
 enhanceNav();
+initCoreNavigationDocument();
 activateNav();
 enhanceRuleSections();
 revealHashTarget();
