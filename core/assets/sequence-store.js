@@ -2,6 +2,8 @@ export const IMAGE_MAX_BYTES = 64 * 1024;
 const imagePattern = /^data:image\/jpeg;base64,[A-Za-z0-9+/=]+$/;
 const safeId = /^[A-Za-z0-9_-]{1,100}$/;
 const copy = (value) => JSON.parse(JSON.stringify(value));
+// A shared Firebase SDK can live in the parent frame; retain SDK values across realms.
+const firestoreRecord = (value) => Object.assign(Object.create(null), value);
 const conflict = () => Object.assign(new Error('다른 기기에서 변경됐습니다. 최신 기록을 열거나 사본으로 저장하세요.'), { code: 'sequence/conflict' });
 
 export async function compressSequenceImage(source) {
@@ -93,16 +95,16 @@ export function createSequenceStore(runtime, user) {
         const old = assetSnapshots[index];
         if (old.exists()) {
           if (old.data().ownerUid !== user.uid || old.data().noteId !== state.id || old.data().dataUrl !== dataUrl) throw conflict();
-        } else transaction.set(doc(db, 'sequenceNoteImages', id), { ownerUid: user.uid, noteId: state.id, dataUrl });
+        } else transaction.set(doc(db, 'sequenceNoteImages', id), firestoreRecord({ ownerUid: user.uid, noteId: state.id, dataUrl }));
       });
-      transaction.set(ref, {
+      transaction.set(ref, firestoreRecord({
         ownerUid: user.uid, revision: revision + 1, updatedAt: serverTimestamp(), deleted: false,
         ...(!snapshot.exists() ? { createdAt: serverTimestamp() }
           : snapshot.data().createdAt ? { createdAt: snapshot.data().createdAt } : {}),
         payload, title: state.title, teacher: state.teacher,
         equipment: state.equipment === '기타' ? state.equipmentOther : state.equipment,
         date: state.date, goal: state.goal, moveCount: Object.values(state.moves).flat().length,
-      });
+      }));
       return revision + 1;
     });
     for (const id of assets.keys()) knownImages.add(id);
@@ -116,7 +118,7 @@ export function createSequenceStore(runtime, user) {
       if (!snapshot.exists()) throw conflict();
       checkOwner(snapshot.data());
       if (snapshot.data().revision !== revision) throw conflict();
-      transaction.update(ref, { deleted: true, revision: revision + 1, updatedAt: serverTimestamp(), payload: '{}' });
+      transaction.update(ref, firestoreRecord({ deleted: true, revision: revision + 1, updatedAt: serverTimestamp(), payload: '{}' }));
     });
     // Keep the tombstone so stale devices cannot recreate a deleted note.
     await cleanupImages(id);
