@@ -8,7 +8,7 @@ import path from "node:path";
 import { fileURLToPath } from "node:url";
 import vm from "node:vm";
 import { build } from "esbuild";
-import { chromium } from "playwright";
+import { chromium, webkit } from "playwright";
 
 const repo = path.resolve(path.dirname(fileURLToPath(import.meta.url)), "..");
 const output = await fs.mkdtemp(path.join(os.tmpdir(), "core-instructor-access-ui-"));
@@ -19,11 +19,14 @@ const viewports = [
 ];
 const surfaces = ["/", "/core/"];
 const options = { retries: 1, trace: "on-first-retry" };
+const engineName = process.env.CORE_QA_ENGINE || "chromium";
+const scenarioFilter = process.env.CORE_QA_SCENARIOS?.split(",");
+const liveStaticOrigin = process.env.CORE_QA_LIVE_ORIGIN;
 const sources = new Map();
 const fixtures = new Map();
 const report = {
   scope: "Offline full-app integration with synthetic fixtures and mocked Firebase SDKs, including revoked-session and transient access failures. No live auth, backend authorization, canonical matching, revocation, or delivery proof.",
-  fixedTime, options, sources: [], scenarios: [], failures: [],
+  fixedTime, options, engine: engineName, scenarioFilter, liveStaticOrigin, sources: [], scenarios: [], failures: [],
   cleanup: { contextsOpened: 0, contextsClosed: 0, browserClosed: false, serverClosed: false, fixturesRemaining: 0 },
 };
 let fixtureNumber = 0;
@@ -63,7 +66,13 @@ function makeFixture(mode) {
 }
 
 async function source(relative) {
-  if (!sources.has(relative)) sources.set(relative, await fs.readFile(path.join(repo, relative)));
+  if (!sources.has(relative)) {
+    if (liveStaticOrigin && relative.startsWith("core/")) {
+      const response = await fetch(new URL(relative.slice(5), liveStaticOrigin));
+      if (!response.ok) throw new Error(`Live static read ${relative}: ${response.status}`);
+      sources.set(relative, Buffer.from(await response.arrayBuffer()));
+    } else sources.set(relative, await fs.readFile(path.join(repo, relative)));
+  }
   return sources.get(relative);
 }
 
@@ -303,6 +312,7 @@ async function seedFixture(mode) {
 
 // Add test IDs only; do not change DOM visibility, app bootstrap, or access decisions.
 function installDomHooks() {
+  if (location.protocol === "data:") return;
   window.__coreUiQA = { events: [], frames: 0, operatorFlashes: 0, documentId: crypto.randomUUID() };
   const inspectFrame = () => {
     const qa = window.__coreUiQA;
@@ -368,6 +378,14 @@ async function loginName(page, manager = false, missing = false) {
   assert.equal(await name.evaluate(node => node.childElementCount), 0, "Name must be safe text, not HTML");
   const account = page.getByTestId(manager ? "qa-account-bar" : "qa-instructor-account");
   assert.equal(await account.count(), 1, "Account toolbar cannot duplicate");
+  await account.evaluate(async () => { await document.fonts.ready; });
+  await page.waitForFunction(({ id, width }) => {
+    const box = document.querySelector(`[data-testid="${id}"]`)?.getBoundingClientRect();
+    return box && box.y >= 0 && box.y < 160 && box.x + box.width >= width * .75;
+  }, { id: manager ? "qa-account-bar" : "qa-instructor-account", width: page.viewportSize().width }).catch(async error => {
+    error.message += ` Account geometry: ${JSON.stringify(await account.evaluate(node => ({ box: node.getBoundingClientRect().toJSON(), scrollY, width: innerWidth })))}`;
+    throw error;
+  });
   const box = await account.boundingBox();
   const nameBox = await name.boundingBox();
   const viewport = page.viewportSize();
@@ -831,12 +849,28 @@ async function destinationFrame(page, pathName, documentId, manager) {
 
 async function navigationCase(page, base, manager, name) {
   const documentId = await navigationSetup(page, manager);
+  await page.evaluate(async () => {
+    // Firebase Auth can install a cross-origin helper, especially on mobile.
+    // It is not an editor and must not participate in the save guard.
+    const helper = document.createElement("iframe");
+    helper.title = "Synthetic authentication helper";
+    helper.hidden = true;
+    const loaded = new Promise(resolve => helper.addEventListener("load", resolve, { once: true }));
+    helper.src = "data:text/html,<title>Isolated authentication helper</title>";
+    document.body.append(helper);
+    await loaded;
+    let isolated = false;
+    try { void helper.contentWindow.document; } catch { isolated = true; }
+    if (!isolated) throw new Error("Authentication helper fixture must be cross-origin");
+  });
   const initial = `${base}${manager ? '' : 'private/'}`;
   const sequence = `${base}sequence/`;
   const privatePath = `${base}private/`;
   const before = (await telemetry(page)).callables.filter(call => call.name === "getCoreAccessSession").length;
   await armNavigationAccess(page);
-  await (await navigationLink(page, manager, "시퀀스 노트")).click();
+  const enterSequence = await navigationLink(page, manager, "시퀀스 노트");
+  if (page.viewportSize().width <= 390) await enterSequence.tap();
+  else await enterSequence.click();
   await pendingNavigation(page, { before: initial, after: sequence }, documentId);
   await page.evaluate(() => window.__coreNavigationGate.release());
   const sequencePage = await destinationFrame(page, sequence, documentId, manager);
@@ -1215,7 +1249,8 @@ async function attemptCase(base, viewport, kind, retry) {
   const fixture = await seedFixture(["home", "private", "sequence"].includes(kind) || kind.startsWith("blocked-") ? "instructor" : kind);
   const name = `${base === "/" ? "root" : "core"}-${viewport.width}-${kind.replace(/[^a-z0-9-]/g, "-")}-${retry}`;
   const context = await browser.newContext({
-    viewport, locale: "ko-KR", timezoneId: "Asia/Seoul", reducedMotion: "reduce", serviceWorkers: "block",
+    viewport, hasTouch: viewport.width <= 390, isMobile: viewport.width <= 390,
+    locale: "ko-KR", timezoneId: "Asia/Seoul", reducedMotion: "reduce", serviceWorkers: "block",
     storageState: { cookies: [], origins: [{ origin, localStorage: [
       { name: "core-ui-fixture", value: fixture.id }, { name: "core-ui-user", value: kind === "logged-out" ? "" : fixture.uid },
     ] }] },
@@ -1352,13 +1387,14 @@ try {
     server.listen(0, "127.0.0.1", resolve);
   });
   origin = `http://127.0.0.1:${server.address().port}`;
-  browser = await chromium.launch({ headless: true });
+  browser = await ({ chromium, webkit }[engineName]).launch({ headless: true });
   const cases = ["home", "private", "first-login", "pending-role", "access-denied", "sequence",
     "blocked-business", "blocked-members/detail", "blocked-rules", "manager", "manager-sequence", "owner", "revoked-session", "access-transient",
     "logged-out", "bootstrap-failure", "navigation", "manager-navigation"];
   for (const base of surfaces) {
     for (const viewport of viewports) {
       for (const kind of cases) {
+        if (scenarioFilter && !scenarioFilter.includes(kind)) continue;
         let result;
         for (let retry = 0; retry <= options.retries; retry++) {
           result = await attemptCase(base, viewport, kind, retry);
@@ -1371,6 +1407,7 @@ try {
     for (const kind of ["signout-retry", "workspace-retry", "manager-name-safe", "instructor-name-safe",
       "manager-name-missing", "instructor-name-missing", "manager-auth-change", "instructor-auth-change",
       "manager-logout-failure", "manager-revoked-after-login", "instructor-bfcache", "manager-bfcache"]) {
+      if (scenarioFilter && !scenarioFilter.includes(kind)) continue;
       let result;
       for (let retry = 0; retry <= options.retries; retry++) {
         result = await attemptCase(base, viewports[1], kind, retry);
@@ -1382,6 +1419,7 @@ try {
       for (const kind of ["instructor-pending-logout", "instructor-pending-revocation", "manager-pending-logout", "manager-pending-revocation",
         "manager-current-refresh-downgrade", "instructor-destination-transient", "manager-destination-transient",
         "instructor-destination-timeout", "manager-destination-timeout"]) {
+        if (scenarioFilter && !scenarioFilter.includes(kind)) continue;
         let result;
         for (let retry = 0; retry <= options.retries; retry++) {
           result = await attemptCase(base, viewport, kind, retry);

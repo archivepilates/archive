@@ -40,6 +40,40 @@ test("save guard uses the production acknowledged save loop before departure", (
   assert.match(source, /setTimeout\([\s\S]*?30000/);
 });
 
+test("save guard ignores provider frames but fails closed for an active editor", async () => {
+  const bundle = buildSync({ stdin: { contents: source + '\nexport { flushEditors };', resolveDir: fileURLToPath(new URL("../../core/assets/", import.meta.url)) },
+    format: "cjs", write: false, define: { "import.meta.url": JSON.stringify(file.href) } }).outputFiles[0].text;
+  const module = { exports: {} };
+  vm.runInNewContext(bundle, { module, exports: module.exports, URL });
+  const { flushEditors } = module.exports;
+  let providerReads = 0;
+  const provider = { get contentWindow() { providerReads++; throw Error("Cross-origin auth helper"); } };
+  const editor = (child, loaded = true) => ({
+    hasAttribute: name => name === "data-sequence-studio" || name === "src" && loaded,
+    get contentWindow() { return child; },
+  });
+  const doc = frames => ({ querySelectorAll(selector) {
+    assert.equal(selector, "[data-sequence-studio], [data-core-navigation-frame]");
+    return frames.filter(frame => frame !== provider);
+  } });
+  assert.equal(await flushEditors(doc([provider])), true);
+  assert.equal(providerReads, 0);
+  assert.equal(await flushEditors(doc([provider, editor(null, false)])), true);
+  assert.equal(await flushEditors(doc([editor({})])), false, "Unready active editor is not discarded");
+  assert.equal(await flushEditors(doc([editor({ archiveSequenceNavigation: { prepare: async () => false } })])), false);
+  assert.equal(await flushEditors(doc([editor({ archiveSequenceNavigation: { prepare: async () => { throw Error("Save failed"); } } })])), false);
+  let release;
+  let settled = false;
+  const pending = flushEditors(doc([editor({ archiveSequenceNavigation: { prepare: () => new Promise(resolve => { release = resolve; }) } })]));
+  pending.then(() => { settled = true; });
+  await Promise.resolve();
+  assert.equal(settled, false, "Departure waits for the acknowledged save");
+  release(true);
+  assert.equal(await pending, true);
+  const nested = { hasAttribute: name => name === "src", contentWindow: { document: doc([editor({ archiveSequenceNavigation: { prepare: async () => true } })]) } };
+  assert.equal(await flushEditors(doc([nested])), true);
+});
+
 test("access isolation tears down content frames and tasks rather than preserving privileges", () => {
   assert.match(access, /function isolateOperatorContent\(\) \{\n  window.archiveCoreNavigation\?\.dispose\(\);/);
   assert.match(access, /function suspendAccess\(\) \{\n  window.archiveCoreNavigation\?\.dispose\(\);/);

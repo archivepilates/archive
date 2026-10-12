@@ -31,11 +31,14 @@ function sameSession(host, session, runtime) {
 }
 
 async function flushEditors(doc) {
-  for (const frame of doc.querySelectorAll("iframe")) {
+  // Auth/provider helpers are not editors and may be cross-origin.
+  for (const frame of doc.querySelectorAll("[data-sequence-studio], [data-core-navigation-frame]")) {
+    if (!frame.hasAttribute("src")) continue;
     try {
       const child = frame.contentWindow;
-      if (child?.archiveSequenceNavigation && !await child.archiveSequenceNavigation.prepare()) return false;
-      if (child?.document && !await flushEditors(child.document)) return false;
+      if (frame.hasAttribute("data-sequence-studio")) {
+        if (!child?.archiveSequenceNavigation || !await child.archiveSequenceNavigation.prepare()) return false;
+      } else if (!child?.document || !await flushEditors(child.document)) return false;
     } catch { return false; }
   }
   return true;
