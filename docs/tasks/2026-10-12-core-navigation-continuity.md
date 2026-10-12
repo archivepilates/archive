@@ -22,6 +22,8 @@ Main owns production JS/CSS, Sequence save integration, unit contracts, operatin
 - Regression unit suite and navigation contracts: passed after exact reviewed bridge normalization and generated catalog fingerprint refresh.
 - Initial shell/access, frame navigation/history, pending logout, failed save, role changes, transient access errors and responsive checks: 204 passed, 0 failures. Evidence: /var/folders/4q/7mtq1lfj5_x55y84ksrz9zfc0000gn/T/core-instructor-access-ui-zZHgB4/report.json. Synthetic fixtures only; all task-owned browser contexts, browser and local server closed.
 - Regression/navigation unit checks: 89 passed. Server instructor access contracts: 193 passed. Static responsive checks: 95 passed.
-- Production release: validated for scoped Hosting release; deployment evidence will be recorded after live verification.
+- Production release: dfdfc8f00a3c428cff24aed325438278820bfaf3, promoted to origin/main and pushed to codex/mini/core-navigation-continuity. Hosting targets archive-pilates and archive-pilates-core deployed using archive-codex-operator. No Functions/rules deployment.
+- Live verification: 95 responsive checks and 10 release canary checks passed. Seven changed CORE assets/pages matched SHA-256 at https://core.archivepilates.com/ and https://archive-pilates.web.app/core/; both release manifests identify the deployed source above.
+- GitHub main CI: https://github.com/archivepilates/archive/actions/runs/38202793938 succeeded. Release source worktree, clean main deploy checkout and runtime were clean at deployment; this documentation-only audit commit follows without another Hosting release.
 - No new deployment Functions or Firestore rules are required; server contracts are unchanged.
 - Actual iPhone Safari and real member draft navigation are not tested by isolated browser fixtures.
