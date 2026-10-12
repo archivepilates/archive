@@ -1,0 +1,21 @@
+# Alimtalk-linked form wrapping audit
+
+- Request: audit member/staff pages linked from Alimtalk buttons for wrapping and clipping.
+- Scope: read-only audit; no form submissions, sends, signatures, production mutations or app edits.
+- Worktree: `member-form-wrap-audit`; branch `codex/mini/member-form-wrap-audit`.
+- Snapshot: source catalog 34 rows, 19 known-provider records; not live SOLAPI inventory proof.
+- Form QA: 288 Chromium/WebKit captures at 320/390/768/1440; 264 non-retired plus 24 retained legacy memberSignup captures. No wrapping/clipping/body-overflow or harness/page errors.
+- Static live HTML: 15/15 HTTP 200 and matching source hashes, including one retired compatibility route.
+- Results QA: 64 pure-source/synthetic cases. Normal text passes; long unbroken free-answer content overflows group/private result pages in 16 stress cases. No real member incident asserted.
+- Additional touch findings: private survey labels 32px; some evaluation quiz labels about 43.6px.
+- Report: `docs/reports/2026-10-12-member-form-wrapping-audit.html`.
+- Data source: Git-tracked HTML and pure renderer functions; mocked GET fixtures only. No mirror or production data source adopted.
+- Limitations: external Notion/eformsign/StudioMate/interview pages, real sent short links, physical iOS, media playback, full METHOD material inventory and individual InBody reports unverified.
+- Follow-up approval: user requested fixes and explicitly approved validation, Functions/Hosting deployment, commit and push.
+- Fix scope: grid intrinsic minimum widths and long-answer wrapping in server/static survey results; 44px private survey/mobile quiz choices. Survey questions, data, message rules and sends remain unchanged.
+- Catalog regenerated only for source fingerprints; all 34 rows identical to baseline.
+- CORE rules updated within the existing template/link record; no Notion update required.
+- Fix verification: 288 form captures (264 active) and 64 normal/stress result cases pass in Chromium/WebKit at 320/390/768/1440. No viewport overflow or clipping; explicit answer newlines and long URLs retained. Private survey and quiz choices have an observed minimum height of 44px. Pure fixtures only, no submissions.
+- Regression checks: Functions build, boundaries, private flow 87/87, CORE workflow 79/79, predeploy/release-policy guards 26/26, Hosting validation and rollback guards pass. Independent six-file review found no actionable issue.
+- Release status: local validation complete; deployment pending. Only functions-private-chart:privateSurveyResponseView and affected Hosting sites are approved; no whole-project Functions deployment.
+- Browsers/contexts/server closed; no actual sends, responses or private member contents retained.

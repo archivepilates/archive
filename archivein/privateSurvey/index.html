@@ -23,7 +23,7 @@
     legend, .label { padding:0; margin:0 0 10px; font-size:14px; font-weight:900; color:#3e3831; }
     .hint { margin:6px 0 0; color:var(--muted); font-size:12px; line-height:1.5; }
     .options { display:grid; gap:8px; }
-    label.option { display:grid; grid-template-columns:22px 1fr; gap:8px; align-items:start; min-height:32px; font-size:15px; line-height:1.48; }
+    label.option { display:grid; grid-template-columns:22px minmax(0,1fr); gap:8px; align-items:center; min-height:44px; font-size:15px; line-height:1.48; word-break:keep-all; overflow-wrap:anywhere; }
     input[type="radio"], input[type="checkbox"] { width:18px; height:18px; margin:2px 0 0; accent-color:var(--accent); }
     textarea { width:100%; min-height:92px; resize:vertical; border:1px solid var(--line); border-radius:8px; padding:11px 12px; background:#fff; color:var(--ink); font:inherit; line-height:1.55; }
     input[type="text"] { width:100%; min-height:44px; margin-top:8px; border:1px solid var(--line); border-radius:8px; padding:10px 12px; background:#fff; color:var(--ink); font:inherit; }

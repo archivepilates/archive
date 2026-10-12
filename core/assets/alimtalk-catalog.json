@@ -1,6 +1,6 @@
 {
   "schemaVersion": 1,
-  "policyFingerprint": "570f20ed2e88bf0def0166978d6ecb102d75290aa86e3e43b18902cedf6ecbad",
+  "policyFingerprint": "14f6eb09492d75d34eca3fd674225b8764abcb21d80f0e995533ed5b43ee004e",
   "sourceMode": "repository_defaults_no_environment_or_live_reads",
   "coverage": {
     "observedAt": "2026-10-12T05:57:20.967Z",
@@ -102,7 +102,7 @@
     },
     {
       "path": "firebase/kangsain-functions/functions/src/privateSurvey/privateSurveyResponse.ts",
-      "sha256": "2aa3a3bfead6fe663a88edb6717a214b7cb85903fbac25df678716ab20d153aa"
+      "sha256": "525cd03e23c1de9ce6a622fee9aa150e86a96eb3babecff336ecc2501f18f528"
     },
     {
       "path": "scripts/fixtures/alimtalk-catalog-known-provider.json",

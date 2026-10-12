@@ -1,0 +1,46 @@
+<!doctype html>
+<html lang="ko">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width,initial-scale=1">
+<title>ARCHIVE PILATES 알림톡 연결 화면 줄바꿈 점검</title>
+<style>
+:root{color-scheme:light;--ink:#222;--muted:#626262;--line:#ddd;--accent:#b52e29;--ok:#226c48}*{box-sizing:border-box}body{margin:0;background:#fafafa;color:var(--ink);font:16px/1.7 -apple-system,BlinkMacSystemFont,"Apple SD Gothic Neo",sans-serif;word-break:keep-all;overflow-wrap:anywhere}main{max-width:960px;margin:auto;padding:32px 20px 72px}header{border-bottom:2px solid var(--ink);padding-bottom:22px}h1{font-size:28px;line-height:1.4;margin:6px 0 12px}h2{font-size:20px;margin:32px 0 12px}p{margin:8px 0}small,.muted{color:var(--muted)}.brand{font-size:13px;color:var(--accent);font-weight:700}.summary{border-left:4px solid var(--accent);padding:4px 0 4px 16px;margin:24px 0}.facts{display:grid;grid-template-columns:repeat(auto-fit,minmax(150px,1fr));gap:16px;padding:20px 0;border-bottom:1px solid var(--line)}.facts strong{display:block;font-size:24px}.table{overflow:auto}table{width:100%;border-collapse:collapse}th,td{padding:12px 10px;text-align:left;vertical-align:top;border-bottom:1px solid var(--line)}th{font-size:14px;color:var(--muted)}.ok{color:var(--ok)}.attention{color:var(--accent)}code{font-size:13px;white-space:normal;word-break:break-all}li{margin:8px 0}section{padding-bottom:12px;border-bottom:1px solid var(--line)}@media(max-width:560px){main{padding:22px 16px 48px}h1{font-size:24px}td,th{padding:10px 6px;font-size:14px}}
+</style>
+</head>
+<body><main>
+<header><div class="brand">ARCHIVE PILATES</div><h1>알림톡 연결 화면 줄바꿈 점검</h1><p>2026-10-12 · 작성 폼, 제출 결과, 회원 리포트</p><p class="muted">읽기 전용 점검 결과입니다. 이번 감사에서 설문·응답·템플릿·발송 규칙을 변경하거나 테스트 메시지를 보내지 않았습니다.</p></header>
+<div class="summary"><strong>작성 폼의 일반 문항·선택지에는 가로 밀림이나 글자 잘림이 재현되지 않았습니다.</strong><p>아래 내용은 보완 전 감사 결과입니다. 이후 승인된 수정·배포 상태는 <a href="2026-10-12-member-form-wrapping-fix.html">보완 결과 보고서</a>에서 별도로 확인합니다.</p><p>별도 결과 화면 스트레스 검사에서는 공백 없는 긴 답변이 화면 폭을 늘리는 문제를 확인했습니다. 프라이빗 사전설문은 터치 영역 보완이 권장됩니다.</p></div>
+<div class="facts"><div><strong>352</strong>렌더링 검사</div><div><strong>4</strong>320·390·768·1440px</div><div><strong>2</strong>Chromium·WebKit</div><div><strong>15 / 15</strong>운영 정적 HTML 소스 일치</div></div>
+<section><h2>주요 발견</h2><div class="table"><table><thead><tr><th>중요도</th><th>화면</th><th>확인 내용 / 조치</th></tr></thead><tbody>
+<tr><td class="attention">보완 필요</td><td>그룹·프라이빗 제출 결과</td><td>정상 한글 답변은 정상. 공백 없는 긴 영문 문자열이 답변에 포함되면 <code>.priority</code> 그리드의 최소 콘텐츠 폭이 커져 가로 밀림이 발생합니다. 두 엔진·네 폭의 16개 스트레스 사례에서 재현했습니다. <code>min-width:0</code>, <code>minmax(0,1fr)</code>, <code>overflow-wrap:anywhere</code>를 결과 표시 영역에 함께 적용하고 재검증하는 것이 적절합니다. 실제 회원에게 발생한 오류라고 판정한 것은 아닙니다.</td></tr>
+<tr><td class="attention">사용성 개선</td><td>프라이빗 사전설문</td><td>40개 선택지의 라벨 높이가 32px입니다. 줄바꿈 오류는 아니지만 손가락으로 누르기 작습니다. 최소 44px을 권장합니다.</td></tr>
+<tr><td>낮음</td><td>강사 퀴즈</td><td>일부 짧은 선택지 높이가 43.58~43.61px입니다. 글자 잘림은 없으며 최소 44px 방어 설정을 권장합니다.</td></tr>
+</tbody></table></div><p class="muted">위 보완 사항은 아직 운영 수정·배포하지 않았습니다. 별도 승인 질문을 제시했습니다.</p></section>
+<section><h2>작성 화면 점검</h2><p>288개 캡처: 현행·인접 화면 264개, 사용 종료 가입서 24개. 본문 가로 넘침·글자 잘림·숨겨진 폼의 오노출·페이지 오류·검사 실행 실패 0건입니다. 추천식단 선택 상자에서 가장 긴 실제 선택값도 별도로 확인했습니다.</p><div class="table"><table><thead><tr><th>화면</th><th>검사 상태</th><th>결과</th></tr></thead><tbody>
+<tr><td>그룹 첫 수업 사전확인</td><td>작성·기타 입력·오류·제출 완료·긴 메타 정보</td><td class="ok">줄바꿈·잘림 정상</td></tr>
+<tr><td>프라이빗 사전설문</td><td>작성·기타 입력·오류·제출 완료·긴 메타 정보</td><td>줄바꿈 정상 / 터치 영역 보완</td></tr>
+<tr><td>추천식단 설문</td><td>작성·오류·제출 완료·긴 선택값</td><td class="ok">줄바꿈·잘림 정상</td></tr>
+<tr><td>강사용 프라이빗 기록</td><td>작성·선택 정보 펼침·리포트 수정·오류·오늘 기록 없음</td><td class="ok">줄바꿈·잘림 정상</td></tr>
+<tr><td>주차 사전등록</td><td>작성·오류</td><td class="ok">줄바꿈·잘림 정상</td></tr>
+<tr><td>수업 분석 설문</td><td>작성·기타 입력</td><td class="ok">줄바꿈·잘림 정상</td></tr>
+<tr><td>강사 평가</td><td>정보 입력·원본 퀴즈 22문항 표시</td><td>줄바꿈 정상 / 일부 터치 높이 44px 미만</td></tr>
+<tr><td>METHOD 배정 5개·캘린더 2개</td><td>외부 웹폰트 차단·명단을 가상 이름으로 치환</td><td class="ok">검사한 정적 화면 정상</td></tr>
+<tr><td>이전 자체 회원가입서</td><td>이전 링크 호환 화면 24개</td><td>현행 발송 대상에서 제외해 별도 분류</td></tr>
+</tbody></table></div></section>
+<section><h2>결과·리포트 점검</h2><p>운영 데이터 연결 없이 실제 소스의 순수 렌더링 함수와 가상 추천식단 응답을 사용했습니다. 정상 문장·개행·긴 문자열을 두 엔진·네 폭에서 총 64회 확인했습니다.</p><div class="table"><table><thead><tr><th>화면</th><th>정상 답변</th><th>긴 문자열</th></tr></thead><tbody>
+<tr><td>그룹 제출 결과</td><td class="ok">정상</td><td class="attention">가로 밀림 재현</td></tr>
+<tr><td>프라이빗 제출 결과</td><td class="ok">정상</td><td class="attention">가로 밀림 재현</td></tr>
+<tr><td>회원 프라이빗 리포트</td><td class="ok">정상</td><td class="ok">정상</td></tr>
+<tr><td>회원 추천식단 리포트</td><td class="ok">정상</td><td class="ok">정상</td></tr>
+</tbody></table></div><p class="muted">이미지·영상·외부 요청은 차단했습니다. 화면 폭 검증이며, 미디어 재생·실제 응답 조회·Functions 현재 배포 리비전의 검증은 아닙니다.</p></section>
+<section><h2>운영 소스 대조</h2><p><code>https://in.archivepilates.com/</code>의 위 정적 작성 화면 8개와 METHOD 배정·캘린더 7개를 읽기 전용 GET으로 조회했습니다. HTTP 200이고 HTML SHA-256이 검사 소스와 모두 일치했습니다. 이 15개에는 사용 종료 호환 가입서 1개도 포함됩니다. 실제 회원 토큰이나 설문 답변은 조회하지 않았습니다.</p><p>템플릿 카탈로그는 34행 / 제공자 확인 기록 19개를 읽었습니다. 카탈로그는 저장소 스냅샷이며, SOLAPI의 현재 전체 버튼 설정이나 실제 전달된 짧은 링크 전수 검증을 뜻하지 않습니다.</p></section>
+<section><h2>미확인 범위</h2><ul>
+<li>노션 안내·홀딩규정·수강료 페이지, 이폼싸인 서명·환불 양식, StudioMate 회원등록·예약 화면, 별도 면접 일정 서비스.</li>
+<li>실제로 발송된 각 알림톡의 짧은 링크와 모바일·PC 버튼 최종 목적지, 동적으로 생성된 개별 회원 리포트.</li>
+<li>METHOD 수업자료 본문 전체 및 모든 관리번호의 현재 사용 여부, 인바디 보고서 개별 내용.</li>
+<li>실제 iPhone 기기, 카카오 인앱 브라우저, 키보드 표시, 네이티브 선택창, 퀴즈 시작·타이머·제출 기능.</li>
+</ul><p>따라서 “전체 외부 화면까지 오류 없음”으로 판정하지 않습니다. 확인한 자체 폼과 합성 결과 화면의 범위에 한정한 결과입니다.</p></section>
+<section><h2>증거와 재실행</h2><p>점검 소스: <code>scripts/verify-member-form-wrapping.mjs</code>, <code>scripts/verify-member-result-wrapping.mjs</code></p><p>폼 원본 JSON·캡처: <code>/var/folders/4q/7mtq1lfj5_x55y84ksrz9zfc0000gn/T/member-form-wrapping-t9p3xN/</code></p><p>리포트 원본 JSON·캡처: <code>/var/folders/4q/7mtq1lfj5_x55y84ksrz9zfc0000gn/T/member-result-wrapping-jernXD/</code></p><p>검사 브라우저·컨텍스트·서버는 종료했습니다. 비-GET 요청 및 실제 발송·서명·응답 제출은 0건입니다.</p></section>
+<section><h2>함께 완료된 시퀀스 메뉴 수정</h2><p>모바일 메뉴 전환 시 로그인 보조 iframe까지 저장 검사해 이동이 차단되던 원인을 수정했습니다. 실제 시퀀스 편집기만 검사하며 저장 실패·충돌 보호는 유지했습니다.</p><p>CORE Hosting 배포 소스 <code>271d5e8</code>, 운영 검증 기록 <code>30b1a05</code>를 <code>origin/main</code>에 푸시했습니다. Chromium 전체 204건, 운영 정적 소스를 사용한 WebKit 16건, Hosting·롤백 방어 검사 및 GitHub CI가 통과했습니다. 로그인 권한과 기존 시퀀스 자료는 변경하지 않았습니다.</p></section>
+</main></body></html>
