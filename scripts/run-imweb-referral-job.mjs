@@ -2,7 +2,7 @@ import { homedir } from 'node:os';
 import { join, resolve } from 'node:path';
 import { pathToFileURL } from 'node:url';
 import { main } from './run-imweb-referral-worker.mjs';
-import { observeAutomationRun, sendAutomationHealthEmail } from './lib/automation-failure-notifications.mjs';
+import { observeAutomationRun, sendAutomationHealthEmail, isDeferredReferralMemberScan } from './lib/automation-failure-notifications.mjs';
 import { TRANSIENT_READ_CODE } from './lib/imweb-read-failure.mjs';
 
 const emailContext = { area: '친구초대', title: '자동 적립', link: 'https://archivepilates.imweb.me/admin' };
@@ -13,7 +13,8 @@ export async function runReferralJob({ directory = join(homedir(), 'ArchiveIN/au
   try {
     await observeAutomationRun(directory, {
       ok: !result.exitCode, errorCode: result.errorCode,
-      transient: result.errorCode === TRANSIENT_READ_CODE,
+      transient: result.errorCode === TRANSIENT_READ_CODE && isDeferredReferralMemberScan(result),
+      deferredRead: isDeferredReferralMemberScan(result),
       failureDetails: result.failureDetails,
       runFinishedAt: result.finishedAt,
       skipped: !result.exitCode && (result.mode !== 'apply' || Boolean(result.summary?.disabled)),

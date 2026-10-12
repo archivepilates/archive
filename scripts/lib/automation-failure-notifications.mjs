@@ -25,10 +25,19 @@ export function automationHealthEmailBody({ title, link }, event) {
   }).body;
 }
 
+export function automationHealthEventId(area, event) {
+  const identity = [area, event.type, event.firstFailureAt, event.notifiedAt, event.errorCode];
+  // Legacy pending notices keep their original identity for sent-mail reconciliation.
+  if (event.noticeVersion === 2) {
+    const details = sanitizeImwebFailureDetails(event.failureDetails);
+    identity.push(['phase', 'operation', 'role', 'statusCode', 'failureKind'].map(key => details[key] ?? null));
+  }
+  return createHash('sha256').update(JSON.stringify(identity)).digest('hex');
+}
+
 export function sendAutomationHealthEmail({ area, title, link }, event) {
   const recovered = event.type === 'recovery';
-  const eventId = createHash('sha256').update(JSON.stringify([area, event.type,
-    event.firstFailureAt, event.notifiedAt, event.errorCode])).digest('hex');
+  const eventId = automationHealthEventId(area, event);
   const body = automationHealthEmailBody({ title, link }, event);
   const output = execFileSync(process.execPath, ['firebase/kangsain-functions/macmini-studiomate/send-automation-report.mjs'], {
     cwd: new URL('../../', import.meta.url), encoding: 'utf8', timeout: 45000, stdio: ['ignore', 'pipe', 'pipe'],
@@ -69,6 +78,7 @@ export async function observeAutomationRun(directory, observation, notify, now =
         if (receipt?.messageId) {
           state.notifiedAt = state.pendingNotice.observedAt;
           state.notifiedCode = state.pendingNotice.errorCode;
+          state.notifiedFailureDetails = state.pendingNotice.failureDetails;
           state.notifiedMessageId = receipt.messageId;
         } else if (!receipt?.notFound) throw new Error('Unconfirmed notification lookup');
         delete state.pendingNotice;
@@ -83,20 +93,29 @@ export async function observeAutomationRun(directory, observation, notify, now =
       state.lastOutcome = 'blocked';
       if (!state.notifiedAt) delete state.firstFailureAt;
     } else if (observation.ok) {
-      if (state.notifiedAt) event = { type: 'recovery', ...state, observedAt: now };
+      if (state.notifiedAt) event = { noticeVersion: 2, type: 'recovery', ...state, observedAt: now };
       state.consecutiveFailures = 0;
       state.lastOutcome = 'success';
       if (!event) state = { version: 1, consecutiveFailures: 0, notifiedAt: null, lastOutcome: 'success' };
     } else {
+      const notifiedDetails = state.notifiedFailureDetails || state.failureDetails || {};
       if (!state.consecutiveFailures && !state.notifiedAt) state.firstFailureAt = now;
       state.consecutiveFailures += 1;
       state.errorCode = observation.errorCode;
       state.failureDetails = sanitizeImwebFailureDetails(observation.failureDetails);
-      state.lastOutcome = observation.transient ? 'transient_failure' : 'failure';
-      const due = !state.notifiedAt || !observation.transient && state.notifiedCode !== observation.errorCode
+      const deferredRead = observation.transient || observation.deferredRead;
+      const newFailureStage = ['phase', 'operation', 'role', 'statusCode', 'failureKind']
+        .some(key => notifiedDetails[key] !== state.failureDetails[key]);
+      state.lastOutcome = observation.transient ? 'transient_failure' : observation.deferredRead ? 'read_failure' : 'failure';
+      const due = !state.notifiedAt || !deferredRead && (state.notifiedCode !== observation.errorCode || newFailureStage)
         || Date.parse(now) - Date.parse(state.notifiedAt) >= 86400000;
-      if ((!observation.transient || state.consecutiveFailures >= FAILURE_THRESHOLD) && due) {
-        event = { type: 'failure', ...state, observedAt: now };
+      if ((!deferredRead || state.consecutiveFailures >= FAILURE_THRESHOLD) && due) {
+        const pending = state.pendingNotice;
+        const samePendingStage = pending?.type === 'failure' && pending.errorCode === observation.errorCode
+          && ['phase', 'operation', 'role', 'statusCode', 'failureKind']
+            .every(key => pending.failureDetails?.[key] === state.failureDetails[key]);
+        event = samePendingStage ? { ...pending, consecutiveFailures: state.consecutiveFailures }
+          : { noticeVersion: 2, type: 'failure', ...state, observedAt: now };
       }
     }
     state.observedAt = now;
@@ -108,7 +127,8 @@ export async function observeAutomationRun(directory, observation, notify, now =
         await rename(temporary, file);
       } finally { await unlink(temporary).catch(error => { if (error.code !== 'ENOENT') throw error; }); }
     };
-    if (event?.type === 'failure') state.pendingNotice = { type: event.type, firstFailureAt: event.firstFailureAt,
+    if (event?.type === 'failure') state.pendingNotice = { noticeVersion: event.noticeVersion,
+      type: event.type, firstFailureAt: event.firstFailureAt,
       notifiedAt: event.notifiedAt, errorCode: event.errorCode, failureDetails: event.failureDetails,
       consecutiveFailures: event.consecutiveFailures, observedAt: event.observedAt };
     // Persist the observation even when delivery fails; acknowledge only after success.
@@ -120,6 +140,7 @@ export async function observeAutomationRun(directory, observation, notify, now =
           ...(lastRunFinishedAt ? { lastRunFinishedAt } : {}) };
         else {
           state.notifiedAt = now; state.notifiedCode = observation.errorCode;
+          state.notifiedFailureDetails = state.failureDetails;
           if (receipt?.messageId) state.notifiedMessageId = receipt.messageId;
           delete state.pendingNotice;
         }
@@ -141,11 +162,31 @@ export function isDeferredTransientAlert(state, { now = Date.now(), maxAgeMs = 2
 }
 
 export function deferReferralHealthFinding(report, state, options) {
-  return report?.state === 'failed' && report.errorCode === TRANSIENT_READ_CODE
+  const age = (options?.now ?? Date.now()) - Date.parse(state?.observedAt);
+  return isDeferredReferralMemberScan(report)
+    && state?.errorCode === report.errorCode
+    && state.failureDetails?.phase === 'member_scan' && state.failureDetails?.operation === 'member_list'
+    && ['transient_failure', 'read_failure'].includes(state.lastOutcome) && !state.notifiedAt
+    && Number.isInteger(state.consecutiveFailures) && state.consecutiveFailures > 0
+    && state.consecutiveFailures < FAILURE_THRESHOLD
+    && age >= 0 && age < (options?.maxAgeMs ?? 20 * 60000)
     && Number.isFinite(Date.parse(report.finishedAt))
+    && state.lastRunFinishedAt === report.finishedAt
     && Date.parse(state?.observedAt) >= Date.parse(report.finishedAt)
-    && Date.parse(state?.observedAt) - Date.parse(report.finishedAt) < 60000
-    && isDeferredTransientAlert(state, options);
+    && Date.parse(state?.observedAt) - Date.parse(report.finishedAt) < 60000;
+}
+
+export function isDeferredReferralMemberScan(report) {
+  const details = report?.failureDetails;
+  // Unknown provider errors may wait for the next scan, but only with proof that no awards began.
+  return report?.mode === 'apply' && report.state === 'failed'
+    && ['IMWEB_REQUEST_FAILED', TRANSIENT_READ_CODE].includes(report.errorCode)
+    && details?.phase === 'member_scan' && details.operation === 'member_list'
+    && (details.statusCode === undefined || Number.isInteger(details.statusCode)
+      && (details.statusCode === 429 || details.statusCode >= 500 && details.statusCode <= 599))
+    && !details.failureKind && !details.role
+    && report.summary === null && report.rewards !== null && typeof report.rewards === 'object'
+    && !Array.isArray(report.rewards) && Object.keys(report.rewards).length === 0;
 }
 
 export function deferInstructorOrderHealthFinding(report, state, options) {

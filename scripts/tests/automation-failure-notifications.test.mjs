@@ -3,7 +3,7 @@ import assert from 'node:assert/strict';
 import { mkdtemp, rm, readFile, writeFile, stat, readdir } from 'node:fs/promises';
 import os from 'node:os';
 import path from 'node:path';
-import { observeAutomationRun, ALERT_STATE_FILE, deferReferralHealthFinding, deferInstructorOrderHealthFinding, automationHealthEmailBody } from '../lib/automation-failure-notifications.mjs';
+import { observeAutomationRun, ALERT_STATE_FILE, deferReferralHealthFinding, deferInstructorOrderHealthFinding, automationHealthEmailBody, automationHealthEventId } from '../lib/automation-failure-notifications.mjs';
 import { imwebRequestFailure, TRANSIENT_READ_CODE } from '../lib/imweb-read-failure.mjs';
 import { imwebJson } from '../lib/imweb-referral-source.mjs';
 import { imwebOrderRead, syncImwebInstructorOrders } from '../lib/imweb-instructor-orders.mjs';
@@ -13,6 +13,8 @@ import { deliverAutomationReport, reportMessageId } from '../../firebase/kangsai
 
 const failure = { ok: false, transient: true, errorCode: TRANSIENT_READ_CODE };
 const now = '2026-10-05T01:00:00.000Z';
+const scanFailure = { exitCode: 1, mode: 'apply', state: 'failed', errorCode: 'IMWEB_REQUEST_FAILED',
+  summary: null, rewards: {}, failureDetails: { phase: 'member_scan', operation: 'member_list' } };
 async function fixture(t) {
   const directory = await mkdtemp(path.join(os.tmpdir(), 'query-alert-test-'));
   t.after(() => rm(directory, { recursive: true, force: true }));
@@ -174,7 +176,7 @@ test('actual CLI adapters classify reads but not config or award writes and sani
 test('referral wrapper leaves failed exit code intact and disabled runs cannot recover', async t => {
   const f = await fixture(t);
   const invoke = result => runReferralJob({ directory: f.directory, notify: f.notify, run: async () => result });
-  for (let i = 0; i < 3; i++) assert.equal((await invoke({ exitCode: 1, errorCode: TRANSIENT_READ_CODE })).exitCode, 1);
+  for (let i = 0; i < 3; i++) assert.equal((await invoke({ ...scanFailure, errorCode: TRANSIENT_READ_CODE })).exitCode, 1);
   await invoke({ exitCode: 0, mode: 'disabled' });
   assert.equal(f.events.length, 1);
   await invoke({ exitCode: 0, mode: 'apply', summary: { disabled: 0 } });
@@ -183,7 +185,7 @@ test('referral wrapper leaves failed exit code intact and disabled runs cannot r
 
 test('referral alert persists only sanitized diagnostics and recovery includes the failure stage', async t => {
   const f = await fixture(t);
-  const result = { exitCode: 1, errorCode: TRANSIENT_READ_CODE, failureDetails: {
+  const result = { ...scanFailure, errorCode: TRANSIENT_READ_CODE, failureDetails: {
     phase: 'member_scan', operation: 'member_list', statusCode: 503, providerCode: '30001', private: 'token=secret',
   } };
   for (let i = 0; i < 3; i++) await runReferralJob({ directory: f.directory, notify: f.notify, run: async () => result });
@@ -195,6 +197,128 @@ test('referral alert persists only sanitized diagnostics and recovery includes t
   const body = automationHealthEmailBody({ title: '자동 적립', link: 'https://example.test' }, f.events[1]);
   assert.match(body, /member_scan/);
   assert.doesNotMatch(body, /token=secret/);
+});
+
+test('generic pre-award member scan failures and quiet recoveries never generate isolated email pairs', async t => {
+  const f = await fixture(t);
+  const invoke = result => runReferralJob({ directory: f.directory, notify: f.notify, run: async () => result });
+  for (let i = 0; i < 3; i++) {
+    assert.equal((await invoke(scanFailure)).exitCode, 1);
+    assert.equal((await f.state()).lastOutcome, 'read_failure');
+    await invoke({ exitCode: 0, mode: 'apply', state: 'success', summary: { disabled: 0 } });
+    assert.equal((await f.state()).consecutiveFailures, 0);
+  }
+  assert.equal(f.events.length, 0);
+});
+
+test('generic pre-award scans alert on the third failure, throttle, and recover exactly once', async t => {
+  const f = await fixture(t);
+  const invoke = result => runReferralJob({ directory: f.directory, notify: f.notify, run: async () => result });
+  await invoke(scanFailure); await invoke(scanFailure);
+  assert.equal(f.events.length, 0);
+  await invoke(scanFailure); await invoke(scanFailure);
+  assert.equal(f.events.length, 1);
+  assert.equal(f.events[0].consecutiveFailures, 3);
+  await invoke({ exitCode: 0, mode: 'apply', summary: { disabled: 0 } });
+  await invoke({ exitCode: 0, mode: 'apply', summary: { disabled: 0 } });
+  assert.deepEqual(f.events.map(e => e.type), ['failure', 'recovery']);
+});
+
+test('referral auth, validation, unknown phase and award risk remain immediate even with read-like codes', async t => {
+  const cases = [
+    ...[401, 403, 422].map(statusCode => ({ failureDetails: { ...scanFailure.failureDetails, statusCode } })),
+    ...['invalid_json', 'invalid_envelope', 'source_validation', 'conflicting_status'].map(failureKind => ({ failureDetails: { ...scanFailure.failureDetails, failureKind } })),
+    ...['point_send', 'point_verify', 'point_prepare'].flatMap(phase => [
+      { failureDetails: { operation: 'member_list', phase } },
+      { errorCode: TRANSIENT_READ_CODE, failureDetails: { operation: 'member_list', phase } },
+    ]),
+    { failureDetails: {} }, { failureDetails: { phase: 'member_scan', operation: 'other_request' } },
+    { summary: {} }, { rewards: { inviter: {} } }, { rewards: null },
+    { errorCode: 'LEDGER_INVALID' }, { errorCode: 'WORKER_INCOMPLETE' }, { mode: 'simulate' },
+  ];
+  for (const change of cases) {
+    const f = await fixture(t);
+    await runReferralJob({ directory: f.directory, notify: f.notify, run: async () => ({ ...scanFailure, ...change }) });
+    assert.equal(f.events.length, 1, JSON.stringify(change));
+    assert.equal((await f.state()).lastOutcome, 'failure');
+  }
+});
+
+test('an alerted read outage cannot suppress a new point or authentication failure with the same generic code', async t => {
+  const f = await fixture(t);
+  const invoke = change => runReferralJob({ directory: f.directory, notify: f.notify,
+    run: async () => ({ ...scanFailure, ...change }) });
+  await invoke({}); await invoke({}); await invoke({});
+  await invoke({ failureDetails: { phase: 'point_send', operation: 'other_request', role: 'inviter' }, rewards: { inviter: {} } });
+  await invoke({ failureDetails: { phase: 'point_send', operation: 'other_request', role: 'inviter' }, rewards: { inviter: {} } });
+  assert.equal(f.events.length, 2);
+  await invoke({ failureDetails: { ...scanFailure.failureDetails, statusCode: 401 } });
+  assert.equal(f.events.length, 3);
+});
+
+test('uncertain same-code point delivery cannot acknowledge an unsent auth alert; legacy notices keep their identity', async t => {
+  const f = await fixture(t);
+  const delivered = new Map();
+  let uncertain = true;
+  const notify = async event => {
+    const id = automationHealthEventId('친구초대', event);
+    if (delivered.has(id)) return { messageId: delivered.get(id) };
+    if (event.reconcileOnly) return { notFound: true };
+    delivered.set(id, `message-${delivered.size + 1}`);
+    if (event.failureDetails.phase === 'point_send' && uncertain) {
+      uncertain = false;
+      throw new Error('delivered but caller timed out');
+    }
+    return { messageId: delivered.get(id) };
+  };
+  const invoke = change => runReferralJob({ directory: f.directory, notify,
+    run: async () => ({ ...scanFailure, ...change }) });
+  await invoke({}); await invoke({}); await invoke({});
+  await invoke({ failureDetails: { phase: 'point_send', operation: 'other_request' }, rewards: { inviter: {} } });
+  assert.equal((await f.state()).pendingNotice.noticeVersion, 2);
+  await invoke({ failureDetails: { ...scanFailure.failureDetails, statusCode: 401 } });
+  assert.equal(delivered.size, 3);
+  assert.equal((await f.state()).notifiedFailureDetails.statusCode, 401);
+  const old = { type: 'failure', firstFailureAt: now, errorCode: 'IMWEB_REQUEST_FAILED' };
+  assert.equal(automationHealthEventId('친구초대', old), automationHealthEventId('친구초대', {
+    ...old, failureDetails: { phase: 'point_send' }, reconcileOnly: true,
+  }));
+});
+
+test('contradictory CLI statuses stay immediate through wrapper and system health', async t => {
+  const f = await fixture(t);
+  let error;
+  try {
+    imwebJson(['member', 'list'], { execute: () => { throw {
+      stdout: JSON.stringify({ statusCode: 503 }), stderr: JSON.stringify({ statusCode: 502 }),
+    }; }, wait: () => assert.fail('must not retry') });
+  } catch (caught) { error = caught; }
+  assert.equal(error.failureDetails.failureKind, 'conflicting_status');
+  const report = { ...scanFailure, finishedAt: now, failureDetails: { ...error.failureDetails, phase: 'member_scan' } };
+  await runReferralJob({ directory: f.directory, notify: f.notify, run: async () => report });
+  assert.equal(f.events.length, 1);
+  assert.equal(deferReferralHealthFinding(report, await f.state(), { now: Date.now() }), false);
+});
+
+test('same-stage retry preserves a delivered legacy pending notice identity without sending again', async t => {
+  const f = await fixture(t);
+  const pending = { type: 'failure', firstFailureAt: now, notifiedAt: null,
+    errorCode: scanFailure.errorCode, failureDetails: scanFailure.failureDetails,
+    consecutiveFailures: 3, observedAt: now };
+  const legacyId = automationHealthEventId('친구초대', pending);
+  await writeFile(path.join(f.directory, ALERT_STATE_FILE), JSON.stringify({ version: 1,
+    consecutiveFailures: 3, notifiedAt: null, firstFailureAt: now, errorCode: pending.errorCode,
+    failureDetails: pending.failureDetails, pendingNotice: pending }), { mode: 0o600 });
+  let deliveries = 1;
+  await runReferralJob({ directory: f.directory, run: async () => scanFailure, notify: async event => {
+    const id = automationHealthEventId('친구초대', event);
+    if (id !== legacyId) deliveries++;
+    assert.equal(id, legacyId);
+    return { messageId: 'legacy-delivered' };
+  } });
+  assert.equal(deliveries, 1);
+  assert.equal((await f.state()).notifiedMessageId, 'legacy-delivered');
+  assert.equal((await f.state()).pendingNotice, undefined);
 });
 
 const context = { resolved_profile: { site_code: policy.siteCode, unit_code: policy.unitCode } };
@@ -231,17 +355,35 @@ test('order DB/status failures remain immediate and cannot prevent notification'
 
 test('system health defers only fresh matching first/second query failures, never corrupt/stale evidence', async t => {
   const f = await fixture(t);
-  await f.observe(failure);
+  const report = { ...scanFailure, errorCode: TRANSIENT_READ_CODE, finishedAt: now };
+  await f.observe({ ...failure, failureDetails: report.failureDetails, runFinishedAt: now });
   const state = await f.state();
-  const report = { state: 'failed', errorCode: TRANSIENT_READ_CODE, finishedAt: now };
   const options = { now: Date.parse(now) + 1000 };
   assert.equal(deferReferralHealthFinding(report, state, options), true);
+  assert.equal(deferReferralHealthFinding(report, undefined, options), false);
   assert.equal(deferReferralHealthFinding({ ...report, errorCode: 'LEDGER_INVALID' }, state, options), false);
   assert.equal(deferReferralHealthFinding(report, { ...state, consecutiveFailures: 3 }, options), false);
   assert.equal(deferReferralHealthFinding(report, state, { now: Date.parse(now) + 21 * 60000 }), false);
   assert.equal(deferReferralHealthFinding({ ...report, finishedAt: '2026-10-05T02:00:00Z' }, state, options), false);
   await writeFile(path.join(f.directory, ALERT_STATE_FILE), '{}');
   await assert.rejects(f.observe({ ok: true }), /Invalid alert state/);
+});
+
+test('system health shares the generic pre-award scan policy and requires exact current-run evidence', async t => {
+  const f = await fixture(t);
+  const report = { ...scanFailure, finishedAt: now };
+  await f.observe({ ok: false, deferredRead: true, errorCode: report.errorCode,
+    failureDetails: report.failureDetails, runFinishedAt: now });
+  const state = await f.state();
+  const options = { now: Date.parse(now) + 1000 };
+  assert.equal(deferReferralHealthFinding(report, state, options), true);
+  for (const change of [{ consecutiveFailures: 3 }, { lastRunFinishedAt: undefined },
+    { errorCode: TRANSIENT_READ_CODE }, { failureDetails: { phase: 'point_send' } },
+    { lastOutcome: 'failure' }, { notifiedAt: now }]) {
+    assert.equal(deferReferralHealthFinding(report, { ...state, ...change }, options), false);
+  }
+  assert.equal(deferReferralHealthFinding(report, state, { now: Date.parse(now) + 21 * 60000 }), false);
+  assert.equal(deferReferralHealthFinding({ ...report, failureDetails: { phase: 'point_send', operation: 'member_list' } }, state, options), false);
 });
 
 test('system health never hides actual instructor registration failures or mismatched runs', async t => {

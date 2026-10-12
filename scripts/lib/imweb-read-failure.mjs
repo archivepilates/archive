@@ -6,7 +6,7 @@ export function sanitizeImwebFailureDetails(value = {}) {
   const details = {};
   if (['member_list', 'order_list', 'order_get', 'config_context', 'other_request'].includes(value.operation)) details.operation = value.operation;
   if (['member_scan', 'order_scan', 'order_readback', 'point_prepare', 'point_send', 'point_verify', 'ledger_processing'].includes(value.phase)) details.phase = value.phase;
-  if (['invalid_json', 'invalid_envelope', 'source_validation'].includes(value.failureKind)) details.failureKind = value.failureKind;
+  if (['invalid_json', 'invalid_envelope', 'source_validation', 'conflicting_status'].includes(value.failureKind)) details.failureKind = value.failureKind;
   if ([1, 2].includes(value.readAttempts)) details.readAttempts = value.readAttempts;
   if (['inviter', 'invitee'].includes(value.role)) details.role = value.role;
   if (Number.isInteger(value.statusCode) && value.statusCode >= 100 && value.statusCode <= 599) details.statusCode = value.statusCode;
@@ -42,6 +42,7 @@ export function imwebRequestFailure(error, { readOnly = false, operation } = {})
     : '아임웹 요청 실패: 인증·원본·처리 결과 확인필요 (자동 쓰기 재시도 없음)'), {
     code: transient ? TRANSIENT_READ_CODE : 'IMWEB_REQUEST_FAILED',
     failureDetails: sanitizeImwebFailureDetails({ operation, statusCode: status,
+      failureKind: uniqueStatuses.length > 1 ? 'conflicting_status' : undefined,
       providerCode, transportCode }),
   });
 }

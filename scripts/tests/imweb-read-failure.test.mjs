@@ -92,3 +92,25 @@ test('zero-exit failure envelope is not mistaken for success and diagnostics are
     phase: 'member_scan', statusCode: 503, transportCode: 'ECONNRESET',
   });
 });
+
+test('referral adapter rejects malformed and snake-case zero-exit envelopes without retaining payloads', () => {
+  for (const [payload, failureKind, statusCode] of [
+    ['null', 'invalid_envelope'], ['[]', 'invalid_envelope'], ['"private"', 'invalid_envelope'],
+    ['not JSON token=secret', 'invalid_json'],
+    [JSON.stringify({ status_code: 403, secret: 'private' }), undefined, 403],
+    [JSON.stringify({ error: { status_code: 401, message: 'private' } }), undefined, 401],
+  ]) {
+    let calls = 0;
+    assert.throws(() => imwebJson(['member', 'list'], {
+      execute: () => { calls++; return payload; }, wait: () => assert.fail('must not retry'),
+    }), error => {
+      assert.equal(error.code, 'IMWEB_REQUEST_FAILED');
+      assert.equal(error.failureDetails.readAttempts, 1);
+      assert.equal(error.failureDetails.failureKind, failureKind);
+      assert.equal(error.failureDetails.statusCode, statusCode);
+      assert.doesNotMatch(JSON.stringify(error), /private|secret|@/);
+      return true;
+    });
+    assert.equal(calls, 1);
+  }
+});

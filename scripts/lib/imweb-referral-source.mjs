@@ -1,7 +1,9 @@
 import { execFileSync } from 'node:child_process';
+import os from 'node:os';
+import path from 'node:path';
 import { referralKey, awardReason } from './imweb-referral-policy.mjs';
 import { readCanonicalPointLogs } from './imweb-referral-point-logs.mjs';
-import { imwebRequestFailure, isTransientReadFailure } from './imweb-read-failure.mjs';
+import { imwebRequestFailure, isTransientReadFailure, sanitizeImwebFailureDetails } from './imweb-read-failure.mjs';
 
 export const IMWEB_REFERRAL_SCOPE = Object.freeze({
   siteCode: 'S20260516852c71a014d08',
@@ -14,17 +16,24 @@ export function imwebJson(args, { execute = execFileSync,
   const operation = readOnly ? 'member_list' : args[0] === 'config' && args[1] === 'context' ? 'config_context' : 'other_request';
   for (let attempt = 0; attempt < 2; attempt++) {
     try {
-      const result = JSON.parse(execute('imweb', ['--profile', 'default', '--output', 'json', ...args], {
+      const result = JSON.parse(execute(process.env.IMWEB_CLI_BIN || path.join(os.homedir(), '.local/bin/imweb'), ['--profile', 'default', '--output', 'json', ...args], {
         encoding: 'utf8', timeout: 45000, maxBuffer: 8 * 1024 * 1024,
         stdio: ['ignore', 'pipe', 'pipe'],
       }));
-      if (result.ok === false || result.statusCode && result.statusCode !== 200) {
+      if (!result || typeof result !== 'object' || Array.isArray(result)) {
+        throw Object.assign(new Error(), { failureKind: 'invalid_envelope' });
+      }
+      if (result.ok === false || result.error != null
+        || [result.statusCode, result.status_code].some(status => status !== undefined && Number(status) !== 200)) {
         throw Object.assign(new Error(), { stdout: JSON.stringify(result) });
       }
       return result;
     } catch (error) {
       // Provider responses can contain member identifiers and credentials.
       const failure = imwebRequestFailure(error, { readOnly, operation });
+      failure.failureDetails = sanitizeImwebFailureDetails({ ...failure.failureDetails,
+        ...(readOnly ? { readAttempts: attempt + 1 } : {}),
+        failureKind: error instanceof SyntaxError ? 'invalid_json' : error.failureKind || failure.failureDetails.failureKind });
       if (attempt === 0 && isTransientReadFailure(failure)) { wait(500); continue; }
       throw failure;
     }
