@@ -8,26 +8,33 @@
   <style>
     :root { color-scheme: light; --ink:#181512; --muted:#746b62; --line:#e8e0d7; --paper:#fffdf9; --accent:#c9392f; --soft:#f5efe9; --good:#2f6f68; --bad:#9d2f24; }
     * { box-sizing:border-box; }
+    html { -webkit-text-size-adjust:100%; text-size-adjust:100%; }
     body { margin:0; font-family:-apple-system,BlinkMacSystemFont,"Apple SD Gothic Neo","Noto Sans KR",sans-serif; background:#f6f1eb; color:var(--ink); }
     main { width:min(720px,100%); margin:0 auto; padding:18px 14px 36px; }
-    .top { display:grid; grid-template-columns:1fr auto; gap:16px; align-items:start; padding:18px 2px 14px; border-bottom:1px solid rgba(24,21,18,.08); }
+    .top { display:grid; grid-template-columns:minmax(0,1fr) auto; gap:12px 16px; align-items:start; padding:18px 2px 14px; border-bottom:1px solid rgba(24,21,18,.08); }
+    .heading { min-width:0; }
     .brand { width:52px; height:52px; border-radius:50%; object-fit:contain; }
     .eyebrow { font-size:12px; font-weight:800; color:var(--accent); }
-    h1 { margin:6px 0 10px; font-size:27px; line-height:1.18; letter-spacing:0; }
-    .lead { margin:0; color:var(--muted); font-size:14px; line-height:1.66; word-break:keep-all; overflow-wrap:break-word; }
-    .meta { display:flex; flex-wrap:wrap; gap:6px; margin-top:10px; color:var(--muted); font-size:13px; line-height:1.5; }
-    .chip { display:inline-flex; align-items:center; min-height:28px; padding:4px 9px; border:1px solid var(--line); border-radius:999px; background:rgba(255,253,249,.72); }
+    h1 { margin:6px 0 0; font-size:27px; line-height:1.4; letter-spacing:0; word-break:keep-all; }
+    h1 span { display:inline-block; }
+    .lead { grid-column:1 / -1; min-width:0; max-width:65ch; margin:0; color:var(--muted); font-size:14px; line-height:1.66; word-break:keep-all; overflow-wrap:break-word; }
+    .lead span { display:block; }
+    .lead span + span { margin-top:6px; }
+    .meta { grid-column:1 / -1; display:flex; min-width:0; flex-wrap:wrap; gap:6px; margin:0; color:var(--muted); font-size:13px; line-height:1.5; }
+    .chip { display:inline-flex; align-items:center; max-width:100%; min-height:28px; padding:4px 9px; border:1px solid var(--line); border-radius:999px; background:rgba(255,253,249,.72); word-break:keep-all; overflow-wrap:anywhere; }
     form { display:grid; gap:12px; margin-top:16px; }
-    fieldset, .field, .message { margin:0; padding:15px 16px; border:1px solid var(--line); border-radius:8px; background:var(--paper); }
-    legend, .label { padding:0; margin:0 0 10px; font-size:14px; font-weight:900; color:#3e3831; }
+    form[hidden], .message[hidden] { display:none; }
+    fieldset, .field, .message { min-width:0; margin:0; padding:15px 16px; border:1px solid var(--line); border-radius:8px; background:var(--paper); }
+    legend, .label { display:block; max-width:100%; padding:0; margin:0 0 10px; font-size:15px; line-height:1.6; font-weight:900; color:#3e3831; white-space:normal; word-break:keep-all; overflow-wrap:break-word; text-wrap:pretty; }
     .hint { margin:6px 0 0; color:var(--muted); font-size:12px; line-height:1.5; }
     .options { display:grid; gap:8px; }
-    label.option { display:grid; grid-template-columns:22px 1fr; gap:8px; align-items:start; min-height:32px; font-size:15px; line-height:1.48; }
+    label.option { display:grid; grid-template-columns:22px minmax(0,1fr); gap:8px; align-items:start; min-width:0; min-height:44px; padding:6px 0; font-size:15px; line-height:1.55; }
+    label.option span { min-width:0; word-break:keep-all; overflow-wrap:break-word; text-wrap:pretty; }
     input[type="radio"], input[type="checkbox"] { width:18px; height:18px; margin:2px 0 0; accent-color:var(--accent); }
     .other-answer { margin:-2px 0 2px 30px; }
     .other-answer[hidden] { display:none; }
     .other-answer textarea { min-height:76px; }
-    textarea { width:100%; min-height:92px; resize:vertical; border:1px solid var(--line); border-radius:8px; padding:11px 12px; background:#fff; color:var(--ink); font:inherit; line-height:1.55; }
+    textarea { display:block; max-width:100%; width:100%; min-height:92px; resize:vertical; border:1px solid var(--line); border-radius:8px; padding:11px 12px; background:#fff; color:var(--ink); font:inherit; font-size:16px; line-height:1.55; word-break:keep-all; overflow-wrap:break-word; }
     textarea:focus { outline:2px solid rgba(201,57,47,.18); border-color:var(--accent); }
     .actions { position:sticky; bottom:0; margin:0 -14px -36px; padding:12px 14px 18px; background:linear-gradient(to top,#f6f1eb 82%,rgba(246,241,235,0)); }
     button { width:100%; min-height:48px; border:0; border-radius:8px; background:var(--accent); color:#fff; font-size:15px; font-weight:900; cursor:pointer; }
@@ -37,7 +44,7 @@
     .message.bad { border-color:#f0c9c1; background:#fff7f4; color:var(--bad); }
     @media (max-width:560px) {
       main { padding:14px 12px 34px; }
-      .top { grid-template-columns:1fr 44px; gap:12px; padding-top:12px; }
+      .top { grid-template-columns:minmax(0,1fr) 44px; gap:12px; padding-top:12px; }
       .brand { width:44px; height:44px; }
       h1 { font-size:24px; }
       fieldset, .field, .message { padding:14px; }
@@ -48,13 +55,13 @@
 <body>
   <main>
     <section class="top">
-      <div>
+      <div class="heading">
         <div class="eyebrow">ARCHIVE PILATES</div>
-        <h1>그룹 첫 수업 사전확인</h1>
-        <p class="lead">회원님께서 예약하신 첫 그룹수업을 더 안전하게 준비하기 위한 사전 확인 설문입니다. 통증, 질환, 운동 경험 등 수업 전 강사가 확인해야 할 내용을 간단히 작성해 주세요.</p>
-        <div class="meta" id="meta"><span class="chip">설문 정보를 확인하는 중</span></div>
+        <h1><span>그룹 첫 수업</span> <span>사전확인</span></h1>
       </div>
       <img class="brand" src="../logo120.png" alt="ARCHIVE PILATES">
+      <p class="lead"><span>회원님께서 예약하신 첫 그룹수업을 더 안전하게 준비하기 위한 사전 확인 설문입니다.</span><span>통증, 질환, 운동 경험 등 수업 전 강사가 확인해야 할 내용을 간단히 작성해 주세요.</span></p>
+      <div class="meta" id="meta"><span class="chip">설문 정보를 확인하는 중</span></div>
     </section>
     <form id="surveyForm" hidden>
       <fieldset>
@@ -66,8 +73,8 @@
         <div class="options" data-check="painAreas"></div>
       </fieldset>
       <div class="field">
-        <div class="label">통증이나 불편함이 있다면 자세히 적어주세요</div>
-        <textarea name="painNote" maxlength="500" placeholder="예: 허리가 오래 앉아 있으면 불편해요 / 무릎 수술 이력이 있어요"></textarea>
+        <label class="label" for="painNote">통증이나 불편함이 있다면 자세히 적어주세요</label>
+        <textarea id="painNote" name="painNote" maxlength="500" placeholder="예: 허리가 오래 앉아 있으면 불편해요 / 무릎 수술 이력이 있어요"></textarea>
       </div>
       <fieldset>
         <legend>수업 전 강사가 꼭 알아야 할 내용이 있나요?</legend>
@@ -78,8 +85,8 @@
         <div class="options" data-radio="concern"></div>
       </fieldset>
       <div class="field">
-        <div class="label">오늘 수업에서 강사가 참고했으면 하는 요청사항이 있나요?</div>
-        <textarea name="requestNote" maxlength="500" placeholder="예: 허리 부담이 큰 동작은 조심하고 싶어요 / 처음이라 천천히 안내받고 싶어요"></textarea>
+        <label class="label" for="requestNote">오늘 수업에서 강사가 참고했으면 하는 요청사항이 있나요?</label>
+        <textarea id="requestNote" name="requestNote" maxlength="500" placeholder="예: 허리 부담이 큰 동작은 조심하고 싶어요 / 처음이라 천천히 안내받고 싶어요"></textarea>
       </div>
       <div class="actions">
         <button type="submit">제출하기</button>
@@ -121,7 +128,7 @@
         const info = await requestJson(`../api/groupSurveySubmit?id=${encodeURIComponent(requestId)}&token=${encodeURIComponent(accessToken)}`);
         meta.innerHTML = [
           `<span class="chip">${escapeHtml(info.memberName || '회원')} 회원</span>`,
-          `<span class="chip">${escapeHtml(info.lessonTime || '첫 그룹수업')}</span>`,
+          info.lessonTime && info.lessonTime !== '-' ? `<span class="chip">${escapeHtml(info.lessonTime)}</span>` : '',
           info.staffName ? `<span class="chip">수업 강사 ${escapeHtml(info.staffName)}</span>` : ''
         ].filter(Boolean).join('');
         if (info.status === 'submitted') {
@@ -143,7 +150,7 @@
             <input type="${type}" name="${name}" value="${escapeAttr(value)}" ${isOtherChoice(value) ? 'data-other-trigger="1"' : ''}>
             <span>${escapeHtml(value)}</span>
           </label>
-          ${isOtherChoice(value) ? `<div class="other-answer" data-other-for="${escapeAttr(name)}" hidden><textarea name="${escapeAttr(name)}Other" maxlength="300" placeholder="기타 내용을 적어주세요"></textarea></div>` : ''}
+          ${isOtherChoice(value) ? `<div class="other-answer" data-other-for="${escapeAttr(name)}" hidden><textarea name="${escapeAttr(name)}Other" aria-label="${escapeAttr(choiceLabels[name])} 기타 내용" maxlength="300" placeholder="기타 내용을 적어주세요"></textarea></div>` : ''}
         `).join('');
       }
       syncOtherAnswers();
