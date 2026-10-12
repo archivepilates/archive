@@ -21,8 +21,11 @@
 - Existing onsite-welcome retirement and CORE Hosting guards: passed.
 - Responsive Chromium/WebKit fixture verification: 48/48 cases passed at 320/390/768/1440px; screenshots reviewed. Invalid, rejected and submitted links, Other validation, mocked retry and duplicate submission included. No production API calls.
 - Functions predeploy safety tests: 20/20 passed; existing live rollback guards and configuration-only diff checks passed.
-- Live static verification: pending deployment.
-- Deploy only `hosting:archive-pilates` and `hosting:archive-pilates-in` in Firebase project `archive-pilates` from clean main.
+- Production source: `83e8e469cbd22be527064f61210d1ea1a73e333a`, promoted to `origin/main`; Hosting dry-run and deployment succeeded from clean main.
+- Deployed only `hosting:archive-pilates` and `hosting:archive-pilates-in` in Firebase project `archive-pilates`.
+- Live static verification: 48/48 Chromium/WebKit cases passed on `https://in.archivepilates.com/groupSurvey/`, all APIs mocked. Three live HTML bodies exactly matched source SHA-256 `dacd0edd2d7fe733e75cd75419b0a0b822b8fd47ba6694176bae3c6161483f97` and all three returned `no-cache, no-store, must-revalidate`.
+- Other verified paths: `https://archive-pilates-in.web.app/groupSurvey/`, `https://archive-pilates.web.app/archivein/groupSurvey/`. Live release manifest reports production source `83e8e469`.
+- GitHub source CI run `38217567131`: completed/success.
 - No Functions, Firestore, StudioMate changes, real submission or additional Alimtalk dispatch.
 - CORE operating-rule changes are unnecessary: presentation and static HTML caching only; no staff workflow, source selection, timing, exclusion or approval rule changes.
-- Close all task-owned browsers and fixture servers after verification.
+- All test contexts, browsers and fixture servers closed in finally. Screenshots and final synthetic/live test evidence: `/tmp/group-survey-responsive/`.
