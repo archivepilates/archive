@@ -136,6 +136,7 @@
       "physicalSource": "firebase/function-codebases/social",
       "sourceEntrypoint": "firebase/kangsain-functions/functions/src/exports/social.ts",
       "owns": [
+        "approveYoutubeReel",
         "getInstagramContentDashboard",
         "saveInstagramContentDraft",
         "approveInstagramContent",
