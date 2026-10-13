@@ -8000,7 +8000,7 @@ async function refresh() {
       if (sequenceStudio) {
         const { createSequenceStore } = await import("./sequence-store.js");
         if (window.archiveSequenceStore?.uid !== user.uid) sequenceStudio.removeAttribute("src");
-        window.archiveSequenceStore = createSequenceStore(runtime, user);
+        window.archiveSequenceStore = createSequenceStore(runtime, user, access);
         if (!state.sequenceAuthUnsubscribe) {
           state.sequenceAuthUnsubscribe = runtime.auth.onAuthStateChanged(runtime.authClient, (currentUser) => {
             if (currentUser?.uid === window.archiveSequenceStore?.uid) return;

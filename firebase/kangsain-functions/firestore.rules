@@ -110,8 +110,9 @@ service cloud.firestore {
 
     match /sequenceNotes/{noteId} {
       allow get: if sequenceUser() &&
-        (resource == null || resource.data.ownerUid == request.auth.uid);
-      allow list: if sequenceUser() && resource.data.ownerUid == request.auth.uid &&
+        (resource == null || resource.data.ownerUid == request.auth.uid ||
+          (isManager() && resource.data.deleted == false));
+      allow list: if sequenceUser() && (isManager() || resource.data.ownerUid == request.auth.uid) &&
         resource.data.deleted == false &&
         request.query.limit != null && request.query.limit <= 100;
       allow create: if sequenceUser() && safeSequenceNoteId(noteId) &&
@@ -130,7 +131,10 @@ service cloud.firestore {
 
     match /sequenceNoteImages/{assetId} {
       allow get: if sequenceUser() &&
-        (resource == null || resource.data.ownerUid == request.auth.uid);
+        (resource == null || resource.data.ownerUid == request.auth.uid ||
+          (isManager() &&
+            get(/databases/$(database)/documents/sequenceNotes/$(resource.data.noteId)).data.deleted == false &&
+            get(/databases/$(database)/documents/sequenceNotes/$(resource.data.noteId)).data.ownerUid == resource.data.ownerUid));
       allow list: if sequenceUser() && resource.data.ownerUid == request.auth.uid;
       allow create: if sequenceUser() &&
         request.resource.data.keys().hasAll(['ownerUid', 'noteId', 'dataUrl']) &&

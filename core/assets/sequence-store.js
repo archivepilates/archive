@@ -32,9 +32,10 @@ export async function compressSequenceImage(source) {
   }
 }
 
-export function createSequenceStore(runtime, user) {
+export function createSequenceStore(runtime, user, access = {}) {
   const { db, doc, collection, query, where, orderBy, limit, onSnapshot,
-    getDocFromServer, getDocsFromServer, runTransaction, serverTimestamp, writeBatch } = runtime;
+    getDocFromServer, getDocsFromServer, runTransaction, serverTimestamp, writeBatch, startAfter, documentId } = runtime;
+  const canReadAll = access.role === 'manager';
   const knownImages = new Set();
   const assertSession = () => {
     if (runtime.authClient && runtime.authClient.currentUser?.uid !== user.uid) {
@@ -53,7 +54,7 @@ export function createSequenceStore(runtime, user) {
     const snapshot = await getDocFromServer(noteRef(id));
     if (!snapshot.exists()) return null;
     const data = snapshot.data();
-    checkOwner(data);
+    if (data.deleted || (data.ownerUid !== user.uid && !canReadAll)) throw conflict();
     const state = JSON.parse(data.payload);
     if (state.id !== id || !state.moves || typeof state.moves !== 'object' || Array.isArray(state.moves)) {
       throw Error('노트 원본 확인이 필요합니다. 다른 기록에 저장하지 않습니다.');
@@ -62,11 +63,11 @@ export function createSequenceStore(runtime, user) {
       if (!move.image) return;
       const assetId = `${id}_${move.image}`;
       const asset = await getDocFromServer(doc(db, 'sequenceNoteImages', assetId));
-      if (!asset.exists() || asset.data().ownerUid !== user.uid || asset.data().noteId !== id) throw Error('첨부 이미지 확인이 필요합니다.');
+      if (!asset.exists() || asset.data().ownerUid !== data.ownerUid || asset.data().noteId !== id) throw Error('첨부 이미지 확인이 필요합니다.');
       knownImages.add(assetId);
       move.image = asset.data().dataUrl;
     }));
-    return { state, revision: data.revision };
+    return { state, revision: data.revision, readOnly: data.ownerUid !== user.uid };
   }
   async function save(input, revision) {
     assertSession();
@@ -132,16 +133,25 @@ export function createSequenceStore(runtime, user) {
       await batch.commit();
     }
   }
-  function subscribe(next, error) {
+  function libraryQuery(scope = 'mine', after) {
+    if (!['mine', 'all'].includes(scope) || (scope === 'all' && !canReadAll)) {
+      throw Object.assign(Error('전체 시퀀스는 운영자만 조회할 수 있습니다.'), { code: 'permission-denied' });
+    }
+    const constraints = [...(scope === 'mine' ? [where('ownerUid', '==', user.uid)] : []),
+      where('deleted', '==', false), orderBy('updatedAt', 'desc')];
+    if (after) constraints.push(orderBy(documentId(), 'desc'), startAfter(after.updatedAt, after.id));
+    return query(collection(db, 'sequenceNotes'), ...constraints, limit(100));
+  }
+  function subscribe(next, error, scope = 'mine') {
     assertSession();
-    return onSnapshot(query(collection(db, 'sequenceNotes'), where('ownerUid', '==', user.uid), where('deleted', '==', false), orderBy('updatedAt', 'desc'), limit(100)), { includeMetadataChanges: true }, (snapshot) => {
+    return onSnapshot(libraryQuery(scope), { includeMetadataChanges: true }, (snapshot) => {
       if (snapshot.metadata.fromCache || snapshot.metadata.hasPendingWrites) return;
       next(snapshot.docs.map((item) => ({ id: item.id, ...item.data() })));
     }, error);
   }
-  async function list() {
+  async function list(scope = 'mine', after) {
     assertSession();
-    const snapshot = await getDocsFromServer(query(collection(db, 'sequenceNotes'), where('ownerUid', '==', user.uid), where('deleted', '==', false), orderBy('updatedAt', 'desc'), limit(100)));
+    const snapshot = await getDocsFromServer(libraryQuery(scope, after));
     return snapshot.docs.map((item) => ({ id: item.id, ...item.data() }));
   }
   function watch(id, next, error) {
@@ -151,5 +161,5 @@ export function createSequenceStore(runtime, user) {
       next(snapshot.exists() ? snapshot.data() : { deleted: true, revision: Infinity });
     }, error);
   }
-  return { get, save, remove, cleanupImages, list, subscribe, watch, compressImage: compressSequenceImage, uid: user.uid };
+  return { get, save, remove, cleanupImages, list, subscribe, watch, canReadAll, compressImage: compressSequenceImage, uid: user.uid };
 }

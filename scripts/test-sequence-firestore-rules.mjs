@@ -23,6 +23,11 @@ assert(indexes.indexes.some((index) => index.collectionGroup === 'sequenceNotes'
     { fieldPath: 'deleted', order: 'ASCENDING' },
     { fieldPath: 'updatedAt', order: 'DESCENDING' },
   ])), 'Missing owner/deleted/updatedAt composite index');
+assert(indexes.indexes.some((index) => index.collectionGroup === 'sequenceNotes' &&
+  index.queryScope === 'COLLECTION' && JSON.stringify(index.fields) === JSON.stringify([
+    { fieldPath: 'deleted', order: 'ASCENDING' },
+    { fieldPath: 'updatedAt', order: 'DESCENDING' },
+  ])), 'Missing manager all-owner deleted/updatedAt composite index');
 assert(indexes.indexes.some((index) => index.collectionGroup === 'sequenceNoteImages' &&
   index.queryScope === 'COLLECTION' && JSON.stringify(index.fields) === JSON.stringify([
     { fieldPath: 'ownerUid', order: 'ASCENDING' },
@@ -117,6 +122,7 @@ if (!process.argv.includes('--emulator')) {
   const manager = mockToken(uid);
   const other = mockToken(otherUid, 'owner');
   const nonmanager = mockToken(uid, 'instructor');
+  const member = mockToken(uid, 'member');
 
   function value(data) {
     if (data === null) return { nullValue: null };
@@ -177,7 +183,8 @@ if (!process.argv.includes('--emulator')) {
   const commit = (writes, token = manager) => request(`${documents}:commit`, token, { writes });
   const get = (path, token = manager) => request(`${documents}/${path}`, token);
   const remove = (path, token = manager) => commit([{ delete: `${documents}/${path}` }], token);
-  function query(collection, owner = uid, limit = 100, token = manager, ordered = true, noteId, deleted = false) {
+  function query(collection, owner = uid, limit = 100, token = manager, ordered = true, noteId, deleted = false,
+    { documentOrder = false, startAfter } = {}) {
     const filters = [];
     for (const [fieldPath, data] of [
       ['ownerUid', owner], ['noteId', noteId], ['deleted', collection === 'sequenceNotes' ? deleted : undefined],
@@ -190,7 +197,13 @@ if (!process.argv.includes('--emulator')) {
       from: [{ collectionId: collection }],
       ...(filters.length ? { where: filters.length === 1 ? filters[0]
         : { compositeFilter: { op: 'AND', filters } } } : {}),
-      ...(ordered ? { orderBy: [{ field: { fieldPath: 'updatedAt' }, direction: 'DESCENDING' }] } : {}),
+      ...(ordered ? { orderBy: [
+        { field: { fieldPath: 'updatedAt' }, direction: 'DESCENDING' },
+        ...(documentOrder ? [{ field: { fieldPath: '__name__' }, direction: 'DESCENDING' }] : []),
+      ] } : {}),
+      ...(startAfter ? { startAt: { before: false, values: [
+        startAfter.fields.updatedAt, { referenceValue: startAfter.name },
+      ] } } : {}),
       ...(limit === null ? {} : { limit }),
     } });
   }
@@ -238,9 +251,16 @@ if (!process.argv.includes('--emulator')) {
       imageWrite(assetId('other'), image('other', { ownerUid: otherUid })),
     ], other), allowed);
 
-    for (const [label, token] of [['signed-out', null], ['nonmanager', nonmanager], ['cross-operator', other]]) {
+    for (const [label, token] of [['signed-out', null], ['nonmanager', nonmanager], ['member', member]]) {
       await check(`${label} note read denied`, () => get('sequenceNotes/atomic', token));
       await check(`${label} image read denied`, () => get(`sequenceNoteImages/${assetId('atomic')}`, token));
+      await check(`${label} notes query denied`, () => query('sequenceNotes', uid, 100, token));
+      await check(`${label} all-owner notes query denied`, () => query('sequenceNotes', null, 100, token));
+      await check(`${label} images query denied`, () => query('sequenceNoteImages', uid, 100, token, false));
+      await check(`${label} parent-scoped images query denied`, () =>
+        query('sequenceNoteImages', uid, 100, token, false, 'atomic'));
+    }
+    for (const [label, token] of [['signed-out', null], ['nonmanager', nonmanager], ['member', member], ['cross-operator', other]]) {
       await check(`${label} note creation denied`, () => commit([
         noteWrite(`denied-${label}`, note(), { create: true }),
       ], token));
@@ -249,8 +269,41 @@ if (!process.argv.includes('--emulator')) {
       await check(`${label} image creation denied`, () => commit([
         imageWrite(assetId('atomic', jpegFor(label)), image('atomic', { dataUrl: jpegFor(label) })),
       ], token));
-      await check(`${label} notes query denied`, () => query('sequenceNotes', uid, 100, token));
-      await check(`${label} images query denied`, () => query('sequenceNoteImages', uid, 100, token, false));
+      await check(`${label} image update denied`, () => commit([
+        imageWrite(assetId('atomic'), image('atomic'), false),
+      ], token));
+      await check(`${label} live image deletion denied`, () => remove(`sequenceNoteImages/${assetId('atomic')}`, token));
+    }
+    for (const [label, token, ownerUid, id] of [
+      ['manager', manager, otherUid, 'other'], ['owner-role manager', other, uid, 'atomic'],
+    ]) {
+      await check(`${label} reads foreign live note`, () => get(`sequenceNotes/${id}`, token), allowed);
+      await check(`${label} reads foreign live image with matching parent`, () =>
+        get(`sequenceNoteImages/${assetId(id)}`, token), allowed);
+      await check(`${label} lists foreign live notes`, () => query('sequenceNotes', ownerUid, 100, token), allowed);
+      await check(`${label} cannot list foreign images even with live parent scope`, () =>
+        query('sequenceNoteImages', ownerUid, 100, token, false, id));
+      await check(`${label} cannot create a foreign-owned note`, () => commit([
+        noteWrite(`foreign-create-${id}`, note({ ownerUid }), { create: true }),
+      ], token));
+      await check(`${label} cannot update foreign note preserving its owner`, () => commit([
+        noteWrite(id, note({ ownerUid, revision: 2 })),
+      ], token));
+      await check(`${label} cannot take ownership of foreign note`, () => commit([
+        noteWrite(id, note({ ownerUid: token === manager ? uid : otherUid, revision: 2 })),
+      ], token));
+      await check(`${label} cannot softdelete foreign note`, () => commit([
+        noteWrite(id, note({ ownerUid, revision: 2, deleted: true })),
+      ], token));
+      await check(`${label} cannot delete foreign note`, () => remove(`sequenceNotes/${id}`, token));
+      const dataUrl = jpegFor(`foreign-create-${id}`);
+      await check(`${label} cannot append image to foreign parent`, () => commit([
+        imageWrite(assetId(id, dataUrl), image(id, { ownerUid, dataUrl })),
+      ], token));
+      await check(`${label} cannot overwrite foreign image`, () => commit([
+        imageWrite(assetId(id), image(id, { ownerUid }), false),
+      ], token));
+      await check(`${label} cannot delete foreign live image`, () => remove(`sequenceNoteImages/${assetId(id)}`, token));
     }
     for (const [label, token] of [['signed-out', null], ['nonmanager', nonmanager]]) {
       await check(`${label} missing note read denied`, () => get('sequenceNotes/missing', token));
@@ -274,8 +327,24 @@ if (!process.argv.includes('--emulator')) {
     await check('own notes query limit1 works', () => query('sequenceNotes', uid, 1), allowed);
     await check('notes query limit101 denied', () => query('sequenceNotes', uid, 101));
     await check('unlimited notes query denied', () => query('sequenceNotes', uid, null));
-    await check('unfiltered notes query denied', () => query('sequenceNotes', null));
-    await check('other owner notes query denied', () => query('sequenceNotes', otherUid));
+    await check('manager all-owner live notes query includes both owners', async () => {
+      const result = await query('sequenceNotes', null);
+      const notes = result.body.filter((row) => row.document).map((row) => row.document);
+      assert.equal(notes.length, 2);
+      assert.deepEqual(new Set(notes.map((doc) => doc.fields.ownerUid.stringValue)), new Set([uid, otherUid]));
+      assert(notes.every((doc) => doc.fields.deleted.booleanValue === false));
+      return result;
+    }, allowed);
+    await check('manager all-owner notes query limit1 works', () => query('sequenceNotes', null, 1), allowed);
+    await check('manager all-owner live notes query without ordering works', () =>
+      query('sequenceNotes', null, 100, manager, false), allowed);
+    await check('manager all-owner notes query limit101 denied', () => query('sequenceNotes', null, 101));
+    await check('manager unlimited all-owner notes query denied', () => query('sequenceNotes', null, null));
+    await check('manager all-owner notes query without deleted filter denied', () =>
+      query('sequenceNotes', null, 100, manager, true, undefined, null));
+    await check('manager all-owner notes query for deleted:true denied', () =>
+      query('sequenceNotes', null, 100, manager, true, undefined, true));
+    await check('other owner notes query allowed for manager', () => query('sequenceNotes', otherUid), allowed);
     await check('notes query without deleted filter denied', () =>
       query('sequenceNotes', uid, 100, manager, true, undefined, null));
     await check('notes query for deleted:true denied', () =>
@@ -286,7 +355,7 @@ if (!process.argv.includes('--emulator')) {
     await check('cleanup query without owner denied', () =>
       query('sequenceNoteImages', null, null, manager, false, 'atomic'));
     await check('unfiltered images query denied', () => query('sequenceNoteImages', null, 100, manager, false));
-    await check('other owner images query denied', () => query('sequenceNoteImages', otherUid, 100, manager, false));
+    await check('other owner images query without parent scope denied', () => query('sequenceNoteImages', otherUid, 100, manager, false));
 
     const invalidNotes = [
       ['unexpected field', { extra: true }], ['owner mismatch', { ownerUid: otherUid }],
@@ -395,7 +464,7 @@ if (!process.argv.includes('--emulator')) {
     ]));
     await check('failed atomic write left no note', () => get('sequenceNotes/rollback'), absent);
     await check('failed atomic write left no image', () => get(`sequenceNoteImages/${assetId('rollback')}`), absent);
-    await check('cross-operator transaction reads denied', async () => {
+    await check('cross-operator transaction reads allowed without granting writes', async () => {
       const transaction = await allowed(request(`${documents}:beginTransaction`, other,
         { options: { readWrite: {} } }));
       try {
@@ -406,7 +475,7 @@ if (!process.argv.includes('--emulator')) {
       } finally {
         await allowed(request(`${documents}:rollback`, other, { transaction: transaction.transaction }));
       }
-    });
+    }, allowed);
     await check('image create with simultaneous parent softdelete denied', () => commit([
       noteWrite('atomic', note({ revision: 2, deleted: true })),
       imageWrite(assetId('atomic', deletedParentJpeg), image('atomic', { dataUrl: deletedParentJpeg })),
@@ -437,6 +506,22 @@ if (!process.argv.includes('--emulator')) {
       return result;
     }, allowed);
     await check('deleted note remains owner-readable', () => get('sequenceNotes/atomic'), allowed);
+    await check('manager cannot read foreign deleted note', () => get('sequenceNotes/atomic', other));
+    await check('manager cannot read foreign image of deleted parent', () =>
+      get(`sequenceNoteImages/${assetId('atomic')}`, other));
+    await check('manager cannot list foreign images of deleted parent', () =>
+      query('sequenceNoteImages', uid, 100, other, false, 'atomic'));
+    await check('manager cannot run foreign tombstone image cleanup query', () =>
+      query('sequenceNoteImages', uid, null, other, false, 'atomic'));
+    await check('manager all-owner live list excludes foreign tombstone', async () => {
+      const result = await query('sequenceNotes', null, 100, other);
+      const notes = result.body.filter((row) => row.document).map((row) => row.document);
+      assert.equal(notes.length, 3);
+      assert(notes.some((doc) => doc.name.endsWith('/other')));
+      assert(notes.every((doc) => doc.fields.deleted.booleanValue === false));
+      assert(!notes.some((doc) => doc.name.endsWith('/atomic')));
+      return result;
+    }, allowed);
     await check('recent own live notes exclude tombstones', async () => {
       const result = await query('sequenceNotes');
       const notes = result.body.filter((row) => row.document).map((row) => row.document);
@@ -485,14 +570,27 @@ if (!process.argv.includes('--emulator')) {
     // Admin fixture writes stay inside the isolated demo emulator, never production.
     const mismatchedParentAsset = assetId('other', jpegFor('mismatched-parent'));
     const absentParentAsset = assetId('absent', jpegFor('absent-parent'));
+    const foreignMismatchedAsset = assetId('_', jpegFor('foreign-mismatched-parent'));
+    const foreignAbsentAsset = assetId('absent', jpegFor('foreign-absent-parent'));
     await allowed(commit([
       imageWrite(mismatchedParentAsset, image('other', { dataUrl: jpegFor('mismatched-parent') })),
       imageWrite(absentParentAsset, image('absent', { dataUrl: jpegFor('absent-parent') })),
+      imageWrite(foreignMismatchedAsset, image('_', { ownerUid: otherUid, dataUrl: jpegFor('foreign-mismatched-parent') })),
+      imageWrite(foreignAbsentAsset, image('absent', { ownerUid: otherUid, dataUrl: jpegFor('foreign-absent-parent') })),
     ], 'owner'));
     await check('image deletion with mismatched tombstone parent owner denied', () =>
       remove(`sequenceNoteImages/${mismatchedParentAsset}`));
     await check('orphan image deletion without parent denied', () =>
       remove(`sequenceNoteImages/${absentParentAsset}`));
+    await check('manager cannot read foreign image with mismatched deleted parent owner', () =>
+      get(`sequenceNoteImages/${mismatchedParentAsset}`, other));
+    await check('manager cannot read foreign image with mismatched live parent owner', () =>
+      get(`sequenceNoteImages/${foreignMismatchedAsset}`));
+    await check('manager cannot list foreign image with mismatched live parent owner', () =>
+      query('sequenceNoteImages', otherUid, 100, manager, false, '_'));
+    await check('manager cannot read foreign orphan image', () => get(`sequenceNoteImages/${foreignAbsentAsset}`));
+    await check('manager cannot list foreign orphan image', () =>
+      query('sequenceNoteImages', otherUid, 100, manager, false, 'absent'));
 
     const manyImages = Array.from({ length: 90 }, (_, index) => {
       const bytes = Buffer.from([0xff, 0xd8, 0xff, index, 0xff, 0xd9]);
@@ -602,11 +700,83 @@ if (!process.argv.includes('--emulator')) {
     await allowed(putStaff({ coreMustChangePassword: false }));
     await check('ready instructor creates only own sequence', () => commit([
       noteWrite('core-own', note({ ownerUid: instructorUid }), { create: true }),
+      imageWrite(assetId('core-own'), image('core-own', { ownerUid: instructorUid })),
     ], instructor), allowed);
     await check('ready instructor reads own sequence', () => get('sequenceNotes/core-own', instructor), allowed);
+    await check('ready instructor reads own image', () => get(`sequenceNoteImages/${assetId('core-own')}`, instructor), allowed);
     await check('ready instructor queries own sequence list', () => query('sequenceNotes', instructorUid, 100, instructor), allowed);
+    await check('ready instructor queries own images', () =>
+      query('sequenceNoteImages', instructorUid, 100, instructor, false, 'core-own'), allowed);
+    await check('ready instructor own notes query limit101 denied', () => query('sequenceNotes', instructorUid, 101, instructor));
+    await check('ready instructor unlimited own notes query denied', () => query('sequenceNotes', instructorUid, null, instructor));
+    await check('ready instructor own notes query without deleted filter denied', () =>
+      query('sequenceNotes', instructorUid, 100, instructor, true, undefined, null));
     await check('ready instructor cannot read manager sequence', () => get('sequenceNotes/atomic', instructor));
+    await check('ready instructor cannot read live manager sequence', () => get('sequenceNotes/_', instructor));
+    await check('ready instructor cannot read live manager image', () =>
+      get(`sequenceNoteImages/${assetId('x'.repeat(100))}`, instructor));
     await check('ready instructor cannot query another owner', () => query('sequenceNotes', uid, 100, instructor));
+    await check('ready instructor cannot query all-owner live notes', () => query('sequenceNotes', null, 100, instructor));
+    await check('ready instructor cannot query live manager images', () =>
+      query('sequenceNoteImages', uid, 100, instructor, false, 'x'.repeat(100)));
+    await check('ready instructor cannot create manager-owned note', () => commit([
+      noteWrite('core-foreign', note(), { create: true }),
+    ], instructor));
+    await check('ready instructor cannot update live manager note', () => commit([
+      noteWrite('_', note({ revision: 2 })),
+    ], instructor));
+    await check('ready instructor cannot create image on manager parent', () => commit([
+      imageWrite(assetId('_'), image('_', { ownerUid: instructorUid })),
+    ], instructor));
+    await check('manager reads live instructor-owned sequence', () => get('sequenceNotes/core-own'), allowed);
+    await check('manager reads live instructor-owned image', () => get(`sequenceNoteImages/${assetId('core-own')}`), allowed);
+    await check('manager cannot query instructor-owned images even with parent scope', () =>
+      query('sequenceNoteImages', instructorUid, 100, manager, false, 'core-own'));
+    await check('manager cannot update instructor-owned sequence', () => commit([
+      noteWrite('core-own', note({ ownerUid: instructorUid, revision: 2 })),
+    ]));
+
+    const peerUid = 'core-instructor-b';
+    const peerId = 'core-staff-b';
+    const peer = mockToken(peerUid, 'instructor', { staffId: peerId, auth_time: authTime });
+    await allowed(commit([{ update: { name: `${documents}/staffs/${peerId}`, fields: fields({
+      ...coreStaff, uid: peerUid, staffId: peerId, coreMustChangePassword: false,
+    }) } }], 'owner'));
+    await check('second ready instructor creates own note and image', () => commit([
+      noteWrite('core-peer', note({ ownerUid: peerUid }), { create: true }),
+      imageWrite(assetId('core-peer'), image('core-peer', { ownerUid: peerUid })),
+    ], peer), allowed);
+    for (const [label, token, ownerUid, id] of [
+      ['instructor', instructor, peerUid, 'core-peer'], ['peer instructor', peer, instructorUid, 'core-own'],
+    ]) {
+      await check(`${label} cannot read other instructor note`, () => get(`sequenceNotes/${id}`, token));
+      await check(`${label} cannot read other instructor image`, () => get(`sequenceNoteImages/${assetId(id)}`, token));
+      await check(`${label} cannot list other instructor notes`, () => query('sequenceNotes', ownerUid, 100, token));
+      await check(`${label} cannot list other instructor images`, () =>
+        query('sequenceNoteImages', ownerUid, 100, token, false, id));
+      await check(`${label} cannot update other instructor note`, () => commit([
+        noteWrite(id, note({ ownerUid, revision: 2 })),
+      ], token));
+      await check(`${label} cannot delete other instructor image`, () => remove(`sequenceNoteImages/${assetId(id)}`, token));
+    }
+    await check('ready instructor updates own note', () => commit([
+      noteWrite('core-own', note({ ownerUid: instructorUid, revision: 2 })),
+    ], instructor), allowed);
+    await check('second ready instructor softdeletes own note', () => commit([
+      noteWrite('core-peer', note({ ownerUid: peerUid, revision: 2, deleted: true })),
+    ], peer), allowed);
+    await check('instructor reads own deleted note', () => get('sequenceNotes/core-peer', peer), allowed);
+    await check('manager cannot read deleted instructor-owned note', () => get('sequenceNotes/core-peer'));
+    await check('manager cannot read image of deleted instructor-owned parent', () =>
+      get(`sequenceNoteImages/${assetId('core-peer')}`));
+    await check('manager cannot list images of deleted instructor-owned parent', () =>
+      query('sequenceNoteImages', peerUid, 100, manager, false, 'core-peer'));
+    await check('manager cannot delete image of deleted instructor-owned parent', () =>
+      remove(`sequenceNoteImages/${assetId('core-peer')}`));
+    await check('instructor retains own tombstone image cleanup', () =>
+      query('sequenceNoteImages', peerUid, null, peer, false, 'core-peer'), allowed);
+    await check('instructor deletes own tombstone image', () =>
+      remove(`sequenceNoteImages/${assetId('core-peer')}`, peer), allowed);
     await check('ready instructor cannot read credential hashes', () => get(`staffs/${instructorId}`, instructor));
     await check('ready instructor cannot read member profile', () => get('memberProfiles/qa-member', instructor));
     await allowed(commit(['dashboardSnapshots/current', 'conversations/core-test', 'privateLessonChartRequests/core-test',
@@ -627,9 +797,55 @@ if (!process.argv.includes('--emulator')) {
     await check('wrong canonical UID cannot access sequence', () => get('sequenceNotes/core-own',
       mockToken('different-instructor', 'instructor', { staffId: instructorId })));
     await check('manager access remains unchanged after instructor policy', () => get('sequenceNotes/_', manager), allowed);
+    await t.test('manager all-owner pagination covers every live note exactly once across 100-row pages', async () => {
+      const baseline = await allowed(query('sequenceNotes', null));
+      const baselineNotes = baseline.filter((row) => row.document).map((row) => row.document);
+      assert(baselineNotes.length < 100, 'Baseline must fit one page before pagination fixtures');
+      const fixtureIds = Array.from({ length: 105 }, (_, index) => `page-${String(index).padStart(3, '0')}`);
+      // Duplicate timestamps exercise the document-name tiebreaker at the page boundary.
+      await allowed(commit([
+        ...fixtureIds.map((id, index) => noteWrite(id, note({ ownerUid: index % 2 ? otherUid : instructorUid }), {
+          create: true, serverTime: false,
+          timestamp: new Date(Date.UTC(2020, 0, 1, 0, 0, Math.floor(index / 2))).toISOString(),
+        })),
+        noteWrite('page-deleted', note({ ownerUid: otherUid, deleted: true }), { create: true }),
+      ], 'owner'));
+      const expected = new Set([...baselineNotes.map((doc) => doc.name),
+        ...fixtureIds.map((id) => `${documents}/sequenceNotes/${id}`)]);
+      for (const token of [manager, other]) {
+        const seen = [];
+        let cursor;
+        for (let page = 0; page < 3; page++) {
+          const result = await allowed(query('sequenceNotes', null, 100, token, true, undefined, false,
+            { documentOrder: true, startAfter: cursor }));
+          const notes = result.filter((row) => row.document).map((row) => row.document);
+          assert.equal(notes.length, page === 0 ? 100 : page === 1 ? expected.size - 100 : 0);
+          assert(notes.every((doc) => doc.fields.deleted.booleanValue === false));
+          seen.push(...notes);
+          if (notes.length) cursor = notes.at(-1);
+        }
+        assert.equal(seen.length, expected.size, 'No duplicated or missing rows across pages');
+        assert.deepEqual(new Set(seen.map((doc) => doc.name)), expected);
+        const sorted = [...seen].sort((a, b) => {
+          const aTime = a.fields.updatedAt.timestampValue;
+          const bTime = b.fields.updatedAt.timestampValue;
+          return aTime < bTime ? 1 : aTime > bTime ? -1 : a.name < b.name ? 1 : a.name > b.name ? -1 : 0;
+        });
+        assert.deepEqual(seen.map((doc) => doc.name), sorted.map((doc) => doc.name));
+        await denied(query('sequenceNotes', null, 101, token, true, undefined, false,
+          { documentOrder: true, startAfter: seen[99] }));
+        await denied(query('sequenceNotes', null, null, token, true, undefined, false,
+          { documentOrder: true, startAfter: seen[99] }));
+        await denied(query('sequenceNotes', null, 100, token, true, undefined, null,
+          { documentOrder: true, startAfter: seen[99] }));
+      }
+    });
     const resetTime = Math.floor(Date.now() / 1000) + 10;
     await allowed(commit([{ update: { name: `${documents}/staffs/qa-staff`, fields: fields({ uid, coreAuthAfter: resetTime }) } }], 'owner'));
     await check('revoked manager cannot read sequence', () => get('sequenceNotes/_', manager));
+    await check('revoked manager cannot read foreign sequence', () => get('sequenceNotes/core-own', manager));
+    await check('revoked manager cannot read foreign image', () => get(`sequenceNoteImages/${assetId('core-own')}`, manager));
+    await check('revoked manager cannot query all-owner notes', () => query('sequenceNotes', null, 100, manager));
     await check('revoked manager cannot read ordinary profile', () => get('memberProfiles/qa-member', manager));
     await check('revoked manager cannot create sequence', () => commit([noteWrite('revoked-manager', note(), { create: true })], manager));
     const freshManager = mockToken(uid, 'manager', { auth_time: resetTime });

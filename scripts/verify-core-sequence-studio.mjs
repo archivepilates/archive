@@ -25,6 +25,7 @@ const documents = new Map();
 const failures = new Map();
 const saveGates = new Map();
 const readGates = new Map();
+const listGates = new Map();
 const pausedLists = new Set();
 const pausedContexts = new Set();
 let serial = Promise.resolve();
@@ -47,11 +48,14 @@ function queryRows(ref) {
       assert.equal(constraint.operator, "==", "fixture supports equality queries only");
       rows = rows.filter((row) => row.data[constraint.field] === constraint.value);
     }
-    if (constraint.type === "orderBy") rows.sort((a, b) => {
+    if (constraint.type === "orderBy" && constraint.field !== '__name__') rows.sort((a, b) => {
       const aa = a.data[constraint.field], bb = b.data[constraint.field];
       return (aa < bb ? -1 : aa > bb ? 1 : a.path.localeCompare(b.path)) * (constraint.direction === "desc" ? -1 : 1);
     });
     if (constraint.type === "limit") rows = rows.slice(0, constraint.count);
+    if (constraint.type === "startAfter") rows = rows.filter(row =>
+      row.data.updatedAt < constraint.updatedAt ||
+      row.data.updatedAt === constraint.updatedAt && row.path.split('/').at(-1) < constraint.id);
   }
   return rows;
 }
@@ -119,7 +123,14 @@ async function dispatch(uid, operation, args = {}, source) {
     if (gate?.path === args.ref.path) { gate.reads++; gate.started(); await gate.released; }
     return documents.has(args.ref.path) ? clone(documents.get(args.ref.path)) : null;
   }
-  if (operation === "list") return queryRows(args.ref);
+  if (operation === "list") {
+    const gate = listGates.get(uid);
+    if (gate && (gate.kind === 'initial' || args.ref.constraints.some(c => gate.kind === 'page' ? c.type === 'startAfter' : c.type === 'where' && c.field === 'ownerUid'))) {
+      listGates.delete(uid); gate.started(); await gate.released;
+      if (gate.fail) throw Error('QA injected page refresh failure');
+    }
+    return queryRows(args.ref);
+  }
   if (operation === "subscribe") {
     assert.ok(source, "browser subscription requires an exposed binding source");
     subscriptions.set(args.id, { uid, ref: args.ref, frame: source.frame, context: source.context, errors: source.errors });
@@ -152,6 +163,8 @@ function sdkRuntime(call) {
     where: (field, operator, value) => ({ type: "where", field, operator, value }),
     orderBy: (field, direction = "asc") => ({ type: "orderBy", field, direction }),
     limit: (count) => ({ type: "limit", count }),
+    documentId: () => '__name__',
+    startAfter: (updatedAt, id) => ({ type: 'startAfter', updatedAt, id }),
     serverTimestamp: () => ({ __serverTimestamp: true }),
     getDocFromServer: async (ref) => snapshot(ref, await call("get", { ref })),
     getDocsFromServer: async (ref) => snapshots(await call("list", { ref })),
@@ -352,7 +365,7 @@ async function fixture(context, uid, legacy = {}) {
     if (url.hostname === "www.gstatic.com" && /\/firebase-[a-z-]+\.js$/.test(url.pathname)) {
       const file = url.pathname.split("/").pop();
       const firestore = `const sdk=(${sdkRuntime.toString()})((op,args)=>window.__sequenceQA(op,args));\n` +
-        ["doc", "collection", "query", "where", "orderBy", "limit", "serverTimestamp", "getDocFromServer", "getDocsFromServer", "onSnapshot", "runTransaction", "writeBatch"]
+        ["doc", "collection", "query", "where", "orderBy", "limit", "documentId", "startAfter", "serverTimestamp", "getDocFromServer", "getDocsFromServer", "onSnapshot", "runTransaction", "writeBatch"]
           .map((name) => `export const ${name}=sdk.${name};`).join("\n") + "\nexport const getFirestore=()=>sdk.db;";
       const modules = {
         "firebase-app.js": "export const getApps=()=>[];export const initializeApp=()=>({});",
@@ -442,7 +455,7 @@ async function reloadBlank(page, previousId) {
 }
 
 async function editSaved(frame, id) {
-  await frame.getByRole("tab", { name: /내 시퀀스/ }).click();
+  await frame.getByRole("tab", { name: /시퀀스/ }).click();
   await frame.getByTestId(`sequence-record-${id}`).getByRole("button", { name: "수정", exact: true }).click();
   await frame.getByRole("tabpanel", { name: "미리보기", exact: true }).waitFor();
   assert.equal((await snapshot(frame)).state.id, id);
@@ -592,7 +605,7 @@ async function libraryCreatedDates(width) {
     return await withContext(uid, width, async (context, errors) => {
       const { page, frame } = await openStudio(context);
       assert.equal(await frame.evaluate(() => Intl.DateTimeFormat().resolvedOptions().timeZone), "UTC", "KST display must not depend on the browser timezone");
-      await frame.getByRole("tab", { name: /내 시퀀스/ }).click();
+      await frame.getByRole("tab", { name: /시퀀스/ }).click();
       for (const item of cases) {
         const card = frame.getByTestId(`sequence-record-${item.id}`);
         await card.waitFor();
@@ -690,7 +703,7 @@ async function responsive(width) {
     });
     assert.ok(pagination.pages > 1);
     assert.equal(pagination.clipped, 0, "long content must paginate within PDF bounds");
-    await frame.getByRole("tab", { name: /내 시퀀스/ }).click();
+    await frame.getByRole("tab", { name: /시퀀스/ }).click();
     await frame.getByLabel("저장된 시퀀스 검색").fill(saved.state.title);
     await frame.getByRole("heading", { name: saved.state.title, exact: true }).waitFor();
     assert.equal(await frame.getByRole("contentinfo").isVisible(), false, "Library hides footer");
@@ -826,7 +839,7 @@ async function saveIsolation(width) {
     assert.equal(rowsFor(uid).length, 3);
     assert.deepEqual(documents.get(`sequenceNotes/${a.state.id}`), rawA);
 
-    await frame.getByRole("tab", { name: /내 시퀀스/ }).click();
+    await frame.getByRole("tab", { name: /시퀀스/ }).click();
     await frame.getByTestId(`sequence-record-${a.state.id}`).getByRole("button", { name: "사본 만들기", exact: true }).click();
     await frame.waitForFunction((id) => window.ARCHIVE_TEST.getState().id !== id && !window.ARCHIVE_TEST.dirty() && window.ARCHIVE_TEST.getRevision() === 1, c.state.id);
     const copied = await snapshot(frame);
@@ -864,7 +877,7 @@ async function saveIsolation(width) {
     try {
       await frame.getByLabel("수업명", { exact: true }).fill("회귀 D 백업 직전 기록");
       const d = await snapshot(frame);
-      await frame.getByRole("tab", { name: /내 시퀀스/ }).click();
+      await frame.getByRole("tab", { name: /시퀀스/ }).click();
       assert.equal(await frame.getByTestId(`sequence-record-${d.state.id}`).count(), 0, "fixture holds the library subscription stale");
       await expandTools(frame, "불러오기·백업");
       backup = await downloadJSON(page, frame.getByRole("button", { name: "최근 기록 백업", exact: true }), `fresh-backup-${width}.json`);
@@ -947,7 +960,7 @@ async function imagesAndFailures() {
     failures.delete(uid);
     await frame.getByRole("button", { name: "저장 재시도", exact: true }).click();
     await frame.waitForFunction(() => !window.ARCHIVE_TEST.dirty());
-    await frame.getByRole("tab", { name: /내 시퀀스/ }).click();
+    await frame.getByRole("tab", { name: /시퀀스/ }).click();
     await confirm(context, async () => {
       await frame.getByRole("button", { name: "삭제", exact: true }).click();
       await frame.getByRole("status").filter({ hasText: "삭제했어요." }).waitFor();
@@ -969,7 +982,7 @@ async function migration() {
     const { page, frame } = await openStudio(context);
     assert.equal(rowsFor(uid).length, 0, "no implicit migration on initial load");
     assert.notEqual((await snapshot(frame)).state.id, legacyDraft.id);
-    await frame.getByRole("tab", { name: /내 시퀀스/ }).click();
+    await frame.getByRole("tab", { name: /시퀀스/ }).click();
     await expandTools(frame, "불러오기·백업");
     for (const count of [2, 0]) {
       await confirm(context, async () => {
@@ -1020,7 +1033,7 @@ async function libraryPDF(width) {
     });
     assert.ok(compressed.startsWith("data:image/jpeg;base64,"));
     assert.ok(Buffer.from(compressed.split(",")[1], "base64").length <= 65536);
-    await frame.getByRole("tab", { name: /내 시퀀스/ }).click();
+    await frame.getByRole("tab", { name: /시퀀스/ }).click();
     const record = frame.getByTestId(`sequence-record-${saved.id}`);
     await record.getByRole("heading", { name: saved.title, exact: true }).waitFor();
     // Keep the card's metadata stale to prove the PDF uses a fresh canonical get.
@@ -1039,7 +1052,7 @@ async function libraryPDF(width) {
       assert.equal(editorBefore.revision, 0);
       assert.notEqual(editorBefore.state.id, saved.id);
       const originals = sourceSnapshot(uid);
-      await frame.getByRole("tab", { name: /내 시퀀스/ }).click();
+      await frame.getByRole("tab", { name: /시퀀스/ }).click();
       const pdfButton = record.getByRole("button", { name: "PDF 저장", exact: true });
       assert.equal(await record.getByRole("button", { name: "응답 저장", exact: true }).count(), 0);
       await frame.evaluate(() => {
@@ -1107,7 +1120,7 @@ async function unavailableLibraryPDF() {
   for (const kind of ["missing", "deleted"]) await store.save(note(`pdf-${kind}`, `없는 원본 ${kind}`), 0);
   return withContext(uid, 390, async (context, errors) => {
     const { page, frame } = await openStudio(context);
-    await frame.getByRole("tab", { name: /내 시퀀스/ }).click();
+    await frame.getByRole("tab", { name: /시퀀스/ }).click();
     await frame.getByTestId("sequence-record-pdf-deleted").waitFor();
     const editorBefore = await snapshot(frame);
     const downloads = [];
@@ -1159,7 +1172,7 @@ async function deletionNoAutoRestore() {
         await b.frame.getByRole("tab", { name: "작성", exact: true }).click();
         await b.frame.getByLabel("수업명", { exact: true }).fill("오래된 기기의 미저장 수정");
         assert.equal((await snapshot(b.frame)).dirty, true);
-        await a.frame.getByRole("tab", { name: /내 시퀀스/ }).click();
+        await a.frame.getByRole("tab", { name: /시퀀스/ }).click();
         await confirm(contextA, async () => {
           await a.frame.getByTestId(`sequence-record-${saved.id}`).getByRole("button", { name: "삭제", exact: true }).click();
           await a.frame.getByRole("status").filter({ hasText: "삭제했어요." }).waitFor();
@@ -1179,7 +1192,7 @@ async function deletionNoAutoRestore() {
         assert.deepEqual(documents.get(`sequenceNotes/${saved.id}`), tombstone, "stale autosave cannot recreate or advance a tombstone");
         assert.equal(rowsFor(uid).length, 0, "stale autosave must not silently create a new-ID copy either");
         let frame = await reloadBlank(a.page, saved.id);
-        await frame.getByRole("tab", { name: /내 시퀀스/ }).click();
+        await frame.getByRole("tab", { name: /시퀀스/ }).click();
         assert.equal(await frame.getByTestId(`sequence-record-${saved.id}`).count(), 0);
         assert.equal(rowsFor(uid).length, 0, "reload must not import old localStorage records");
         assert.deepEqual(await frame.evaluate(({ KEY, LIBKEY }) => ({ [KEY]: localStorage.getItem(KEY), [LIBKEY]: localStorage.getItem(LIBKEY) }), { KEY, LIBKEY }), legacy);
@@ -1211,7 +1224,7 @@ async function deletionNoAutoRestore() {
         assert.deepEqual(JSON.parse(restored.payload), { ...saved, id: copyId });
         assert.deepEqual(documents.get(`sequenceNotes/${saved.id}`), tombstone);
         frame = await reloadBlank(a.page, (await snapshot(frame)).state.id);
-        await frame.getByRole("tab", { name: /내 시퀀스/ }).click();
+        await frame.getByRole("tab", { name: /시퀀스/ }).click();
         await frame.getByTestId(`sequence-record-${copyId}`).waitFor();
         assert.equal(await frame.getByTestId(`sequence-record-${saved.id}`).count(), 0);
         assert.equal(rowsFor(uid).length, 1, "reload retains the intentional copy without importing legacy data");
@@ -1266,6 +1279,86 @@ print(json.dumps(results))
   return { parser: "pypdf", rasterizer: "PDFium", results: JSON.parse(stdout) };
 }
 
+async function managerLibrary(width) {
+  const uid = `manager-library-${width}`, foreignUid = `teacher-library-${width}`;
+  const seeded = [];
+  for (let i = 0; i < 103; i++) {
+    const id = `manager_read_${width}_${String(i).padStart(3, '0')}`;
+    const state = note(id, `강사 자료 ${i}`); state.teacher = '통합 조회 강사';
+    const key = `sequenceNotes/${id}`; seeded.push(key);
+    documents.set(key, { ownerUid: foreignUid, deleted: false, revision: 1, updatedAt: 500000 + i,
+      createdAt: 500000, payload: JSON.stringify(state), title: state.title, teacher: state.teacher,
+      equipment: '체어', goal: state.goal, moveCount: 1 });
+  }
+  const before = seeded.map(key => [key, clone(documents.get(key))]);
+  try {
+    return await withContext(uid, width, async (context, errors) => {
+      const { page, frame } = await openStudio(context);
+      const draft = await snapshot(frame);
+      await frame.getByRole('tab', { name: /시퀀스/ }).click();
+      assert.equal(await frame.getByLabel('시퀀스 조회 범위').inputValue(), 'all');
+      assert.equal(await frame.getByTestId(/^sequence-record-/).count(), 100);
+      await frame.getByRole('button', { name: '더 보기', exact: true }).click();
+      await frame.getByTestId(`sequence-record-manager_read_${width}_000`).waitFor();
+      assert.equal(await frame.getByTestId(/^sequence-record-/).count(), 103);
+      assert.equal(await frame.getByRole('button', { name: '더 보기', exact: true }).isVisible(), false);
+      documents.get(seeded.at(-1)).title = '라이브 변경';
+      documents.get(seeded.at(-1)).updatedAt = 600000;
+      broadcast();
+      await frame.getByRole('heading', { name: '라이브 변경', exact: true }).waitFor();
+      await frame.getByTestId(`sequence-record-manager_read_${width}_000`).waitFor();
+      assert.equal(await frame.getByTestId(/^sequence-record-/).count(), 103, 'Live head changes preserve loaded older pages');
+      let releaseFailure, failureStarted;
+      const failureReleased = new Promise(resolve => { releaseFailure = resolve; });
+      const failureReached = new Promise(resolve => { failureStarted = resolve; });
+      listGates.set(uid, { kind: 'page', fail: true, released: failureReleased, started: failureStarted });
+      try {
+        documents.get(seeded.at(-2)).title = '이전 알림'; documents.get(seeded.at(-2)).updatedAt = 600001;
+        broadcast(); await failureReached;
+        documents.get(seeded.at(-2)).title = '최신 알림'; documents.get(seeded.at(-2)).updatedAt = 600002;
+        broadcast(); await Promise.all([...pendingBroadcasts]);
+      } finally { releaseFailure(); listGates.delete(uid); }
+      await frame.getByRole('button', { name: '목록 다시 확인', exact: true }).waitFor();
+      await frame.getByRole('button', { name: '목록 다시 확인', exact: true }).click();
+      await frame.getByRole('heading', { name: '최신 알림', exact: true }).waitFor();
+      await frame.getByTestId(`sequence-record-manager_read_${width}_000`).waitFor();
+      const refreshedBefore = seeded.map(key => [key, clone(documents.get(key))]);
+      const card = frame.getByTestId(`sequence-record-manager_read_${width}_102`);
+      assert.equal(await card.getByRole('button', { name: '삭제', exact: true }).count(), 0);
+      assert.equal(await card.getByRole('button', { name: '수정', exact: true }).count(), 0);
+      assert.equal(await card.getByRole('button', { name: '사본 만들기', exact: true }).count(), 0);
+      await card.getByRole('button', { name: '보기', exact: true }).click();
+      const dialog = frame.getByRole('dialog', { name: '시퀀스 읽기 전용' });
+      await dialog.getByRole('img', { name: '시퀀스 노트 미리보기' }).waitFor();
+      assert.ok(await dialog.getByText('강사 자료 102', { exact: true }).count());
+      await page.screenshot({ path: path.join(output, `manager-readonly-${width}.png`), fullPage: true });
+      await frame.getByRole('button', { name: '시퀀스 보기 닫기', exact: true }).click();
+      const downloading = page.waitForEvent('download');
+      await card.getByRole('button', { name: 'PDF 저장', exact: true }).click();
+      const download = await downloading;
+      assert.ok(download.suggestedFilename().endsWith('.pdf'));
+      assert.deepEqual(await snapshot(frame), draft, 'Foreign preview/PDF must preserve the editor');
+      let release, started;
+      const released = new Promise(resolve => { release = resolve; });
+      const reached = new Promise(resolve => { started = resolve; });
+      listGates.set(uid, { released, started });
+      try {
+        await frame.getByLabel('시퀀스 조회 범위').selectOption('mine');
+        await reached;
+        assert.equal(await frame.getByTestId(/^sequence-record-/).count(), 0, 'Old-scope rows clear before the new query');
+        assert.equal(await frame.getByLabel('시퀀스 조회 범위').isDisabled(), true);
+        assert.equal(await frame.getByRole('button', { name: '더 보기', exact: true }).isVisible(), false);
+      } finally { release(); listGates.delete(uid); }
+      await frame.getByText('저장한 시퀀스가 없어요.', { exact: true }).waitFor();
+      assert.deepEqual(seeded.map(key => [key, documents.get(key)]), refreshedBefore, 'Foreign sources must remain unchanged by UI');
+      const metrics = await frame.evaluate(() => ({ width: innerWidth, scroll: document.documentElement.scrollWidth }));
+      assert.ok(metrics.scroll <= metrics.width, 'No horizontal overflow');
+      assert.deepEqual(errors, []);
+      return { pagination: 103, foreignReadOnly: true, pdf: true, draftPreserved: true, sourceUnchanged: true, width };
+    });
+  } finally { for (const key of seeded) documents.delete(key); }
+}
+
 try {
   await check("actual adapter: transactions/revisions/assets/tombstone/owner guard (fake SDK)", actualAdapterChecks);
   await check("actual adapter createdAt: server creation/edit invariant/legacy absence (fake SDK)", createdAtInvariantChecks);
@@ -1291,6 +1384,21 @@ try {
     await page.waitForURL(`${base}/sequence/`);
     assert.deepEqual(errors, []);
   }));
+  for (const width of [320, 390, 768, 1440]) await check(`manager library ${width}: all/mine/pagination/readonly/PDF/draft isolation`, () => managerLibrary(width));
+  await check('library initial failure: full connection retry restores controls and save readiness', () => withContext('initial-library-retry', 390, async(context,errors) => {
+    listGates.set('initial-library-retry', { kind: 'initial', fail: true, released: Promise.resolve(), started() {} });
+    const page=await context.newPage();await page.goto(`${base}/sequence/`);
+    await page.waitForFunction(()=>document.querySelector('iframe')?.contentWindow?.ARCHIVE_TEST && !document.querySelector('iframe').contentDocument.getElementById('cloudRecovery').hidden);
+    const frame=page.frames().find(item=>/\/sequence\/studio\.html/.test(item.url()));
+    await frame.evaluate(()=>document.getElementById('libraryRetry').click());
+    await page.waitForFunction(()=>!document.querySelector('iframe').contentDocument.getElementById('title').disabled);
+    await frame.getByLabel('수업명',{exact:true}).fill('초기 조회 복구');
+    assert.equal(await frame.evaluate(()=>window.ARCHIVE_TEST.flush()),true);
+    assert.equal(rowsFor('initial-library-retry').length,1);
+    assert.deepEqual(errors,[]);
+    for(const [key]of rowsFor('initial-library-retry'))documents.delete(key);
+    return {fullConnectionRetry:true,saveReady:true,mockSDK:true};
+  }));
   for (const width of [320, 390, 768, 1440]) await check(`library created dates ${width}: Timestamp/seconds/ISO/KST boundary/recovery/class date/no fallback`, () => libraryCreatedDates(width));
   for (const width of [320, 390, 768, 1440]) await check(`responsive ${width}: compact chrome/tools/focus/persistence/import/export/selectable Korean PDF/layout`, () => responsive(width));
   for (const width of [320, 390, 768, 1440]) await check(`save isolation ${width}: blank startup/New/copy/pending save/fresh backup`, () => saveIsolation(width));
@@ -1306,12 +1414,10 @@ try {
     assert.equal((await snapshot(frame)).state.title, "");
     const foreignId = rowsFor("responsive-320")[0]?.[0].split("/")[1];
     assert.ok(foreignId);
-    const rejected = await page.evaluate(async (id) => {
-      try { await window.archiveSequenceStore.get(id); return false; } catch (error) { return error.code === "sequence/conflict"; }
-    }, foreignId);
-    assert.equal(rejected, true);
+    const loaded = await page.evaluate(async (id) => (await window.archiveSequenceStore.get(id)).readOnly, foreignId);
+    assert.equal(loaded, true);
     assert.deepEqual(errors, []);
-    return { queryIsolation: true, adapterOwnerGuard: true, realRules: "not run; separate emulator agent/script required" };
+    return { ownQueryDefault: true, managerForeignReadOnly: true, realRules: "not run; separate emulator agent/script required" };
   }));
   await check("independent PDF parser/rasterizer: editor + library Korean/title/images/nonblank 4:3 pages", independentPDFChecks);
 } catch (error) {

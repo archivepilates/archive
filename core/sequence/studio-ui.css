@@ -70,6 +70,11 @@
   .export-ready { background: #f2f7f4; border-radius: 6px; }
   .library-tools { align-items: flex-start; flex-wrap: wrap; }
   .library-tools input { flex: 1 1 220px; max-width: none; min-width: 0; }
+  .library-tools select { flex: 0 1 150px; width: auto; min-height: 44px; }
+  .sequence-readonly { width: min(1200px, calc(100% - 24px)); max-width: 1200px; padding: 16px; }
+  .sequence-readonly .dialog-top { margin-bottom: 16px; }
+  #libraryMore { margin-top: 16px; }
+  #libraryMore[hidden], #libraryRetry[hidden] { display: none; }
   .library-advanced { flex: 0 1 auto; }
   .library-advanced > summary { min-height: 44px; padding: 10px 0; }
   .library-advanced .maintenance-actions { display: flex; gap: 8px; flex-wrap: wrap; margin-top: 8px; }
