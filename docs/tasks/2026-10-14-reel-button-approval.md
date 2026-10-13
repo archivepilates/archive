@@ -25,6 +25,7 @@
   canonical runtime source and forbids edits/deploys in the legacy cwd.
 - Deployment approved by operator. Pending: scoped release, live marked-test
   approval, responsive QA, cron conversion, worker installation and final readback.
+  This was the pre-release checkpoint; final completion evidence follows below.
 
 ## Live Verification
 
@@ -50,3 +51,17 @@
 - No production-approved new reel was available. Real unlisted-to-public API path
   remains from the prior verified release; button dispatch retries/caps/matching
   use the offline 16-case fixture rather than publishing an unapproved real reel.
+
+## Final Release Readback
+
+- Release source ea4b1e95 pushed to origin/main and runtime fast-forward aligned.
+- Scoped Functions update and hosting:archive-pilates-core deploy completed.
+- Live approval endpoint HTTP 200, CSP/no-store and fragment-reuse fix present.
+- CORE /rules/ HTTP 200 with button approval and detached background policy.
+- CI 38434280356 completed success; added reel guard step passed, not skipped.
+- Cron ACTIVE at 09:00 KST, no thread target; local worker interval 300 seconds,
+  two scheduled runs exited 0 and error log empty. Production approval queue zero.
+- Existing five clips and one publication retained; no new real video published.
+- User-owned browser tab retained; all task-owned tabs closed and override reset.
+- Deploy required clean main exactly equal to origin/main; scoped source promotion
+  and push therefore preceded deploy. This final record is documentation-only.
