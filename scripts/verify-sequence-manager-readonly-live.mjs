@@ -28,8 +28,18 @@ try {
   const expected = before.docs.filter(doc => doc.data().deleted === false).map(doc => doc.id).sort();
   const ownExpected = before.docs.filter(doc => doc.data().deleted === false && doc.data().ownerUid === instructor.uid).map(doc => doc.id).sort();
   assert.ok(ownExpected.length >= 6, 'Assigned instructor notes must exist');
-  // Preflight the production index without browser retries or fallback queries.
-  await db.collection('sequenceNotes').where('deleted', '==', false).orderBy('updatedAt', 'desc').limit(100).get();
+  // Hosting releases may finish before the new index is ready. No fallback queries.
+  const deadline = Date.now() + 300000;
+  for (;;) {
+    try {
+      await db.collection('sequenceNotes').where('deleted', '==', false).orderBy('updatedAt', 'desc').limit(100).get();
+      break;
+    } catch (error) {
+      if (error.code !== 9 || !/index/i.test(error.message) || Date.now() >= deadline) throw error;
+      console.log('Sequence all-owner index still provisioning; waiting 30 seconds.');
+      await new Promise(resolve => setTimeout(resolve, 30000));
+    }
+  }
   browser = await chromium.launch({ headless: true });
   async function open(staff, width) {
     const account = await app.auth().getUser(staff.uid);
