@@ -88,6 +88,9 @@ jobs:
       - name: Test Imweb referral award guards
         run: node --test scripts/tests/imweb-referral-*.test.mjs
 
+      - name: Test reel email-button approval and publication guards
+        run: npm run test:reel-approval
+
       - name: Validate instructor lesson registration release
         run: node scripts/validate-instructor-lesson-registration-release.mjs
 

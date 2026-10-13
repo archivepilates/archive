@@ -97,7 +97,8 @@ async function run(action, input) {
     });
     return { ok: true };
   }
-  if (action !== 'request') throw new Error('Unknown action');
+  if (!['request', 'fixture'].includes(action)) throw new Error('Unknown action');
+  if (action === 'fixture' && (input.isTest !== true || !input.id.startsWith('test-'))) throw new Error('Fixture must be test-only');
   if (input.channelId !== channel || !/^[\w-]{11}$/.test(input.videoId) || typeof input.isTest !== 'boolean') throw new Error('Invalid channel or video');
   for (const field of ['fileSha256', 'contentHash', 'tokenHash']) if (!/^[a-f0-9]{64}$/.test(input[field] || '')) throw new Error('Invalid approval hash');
   if (!/^[A-Za-z0-9_-]{43}$/.test(input.token || '') || createHash('sha256').update(input.token).digest('hex') !== input.tokenHash) throw new Error('Token hash mismatch');
@@ -118,6 +119,7 @@ async function run(action, input) {
     tx.create(ref, doc);
   });
   const existing = (await ref.get()).data();
+  if (action === 'fixture') return { id: input.id, isTest: true, status: existing.status };
   if (existing.requestEmail?.messageId) return { id: input.id, ...existing.requestEmail };
   const content = approvalEmail(existing, token);
   const date = new Intl.DateTimeFormat('en-CA', { timeZone: 'Asia/Seoul', year: 'numeric', month: '2-digit', day: '2-digit' }).format(new Date());

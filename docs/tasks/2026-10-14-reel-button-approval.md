@@ -25,3 +25,28 @@
   canonical runtime source and forbids edits/deploys in the legacy cwd.
 - Deployment approved by operator. Pending: scoped release, live marked-test
   approval, responsive QA, cron conversion, worker installation and final readback.
+
+## Live Verification
+
+- First main release: 276dc442. Only functions-social:approveYoutubeReel created;
+  Firebase reported successful deployment and GET returned HTTP 200.
+- Malformed/missing-token approval rejected with HTTP 403.
+- Test email 1a1361e4585d3438 independently re-read from Sent: approval button,
+  test-only copy and no-reply-required copy present. No raw tokens in this record.
+- Controlled fixture test-live-reel-button-20261014 stayed pending after GET and
+  inspector loading. Explicit mobile button click persisted approved/email-button.
+- Approved test fixtures are excluded from the production publication query.
+  Production approved queue count zero; no new real publication or media upload.
+- Responsive live QA at 320, 390, 768, 1440: no horizontal overflow/clipping;
+  approve touch target 52.4px, tokens absent from displayed text and cleaned URL.
+- Task-owned approval tabs 10/11 closed and viewport reset; user tabs preserved.
+- com.archive.youtube-reel-approval installed with 300-second interval. Initial
+  scheduled run exited 0; stderr empty. Manual no-op also succeeded.
+- Private journal preserves five existing clips and one recorded release; new
+  2026-10-14 publication count is zero. Button-background mode recorded separately.
+- Initial CI run 38431394250 succeeded. The new 6 JS / 16 Python gate tests were
+  added explicitly to CI after its read-only review found they were not invoked.
+- New-page fragment reuse reload added; it only reinspects and never auto-approves.
+- No production-approved new reel was available. Real unlisted-to-public API path
+  remains from the prior verified release; button dispatch retries/caps/matching
+  use the offline 16-case fixture rather than publishing an unapproved real reel.

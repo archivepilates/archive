@@ -70,6 +70,9 @@ export function youtubeReelApprovalPage(): string {
   <script>
     (function () {
       'use strict';
+      window.addEventListener('hashchange', function () {
+        if (location.hash) location.reload();
+      });
       var params = new URLSearchParams(location.hash.slice(1));
       var id = params.get('id');
       var token = params.get('token');
