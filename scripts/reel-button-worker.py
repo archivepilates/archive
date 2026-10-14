@@ -10,6 +10,7 @@ import secrets
 import subprocess
 import sys
 import time
+import traceback
 from zoneinfo import ZoneInfo
 
 ROOT = Path(__file__).resolve().parents[1]
@@ -17,6 +18,35 @@ spec = importlib.util.spec_from_file_location('reel_publisher', ROOT / 'scripts/
 publisher = importlib.util.module_from_spec(spec)
 spec.loader.exec_module(publisher)
 STORE = ROOT / 'scripts/reel-approval-store.mjs'
+
+
+def verify_credentials(video_id=None):
+    """Read-only probe for the actual background runtime, without publishing."""
+    credentials = publisher.Credentials.from_authorized_user_file(str(publisher.TOKEN))
+    if not credentials.valid:
+        credentials.refresh(publisher.Request())
+    youtube = publisher.build('youtube', 'v3', credentials=credentials)
+    channels = youtube.channels().list(part='snippet', mine=True).execute()['items']
+    assert len(channels) == 1 and channels[0]['id'] == publisher.CHANNEL
+    result = {'ok': True, 'channelVerified': True}
+    if video_id:
+        journal = publisher.load(publisher.JOURNAL)
+        row = next(c for c in journal['clips'] if c.get('youtubeId') == video_id)
+        doc = bridge('get', {'id': row['buttonApprovalId']})
+        publisher.check_approval({**doc, 'kind': 'email-button', 'independentlyReadBack': True}, row, journal)
+        assert publisher.content_fingerprint(doc['contentSnapshot']) == doc['contentHash']
+        live = youtube.videos().list(part='snippet,status,processingDetails,localizations', id=video_id).execute()['items'][0]
+        publisher.check_content(live, doc['contentSnapshot'])
+        result.update(videoId=video_id, approvalStatus=doc['status'], visibility=live['status']['privacyStatus'],
+                      contentUnchanged=True)
+    return result
+
+
+def safe_error(error):
+    # Do not log exception messages, subprocess output, API bodies or local values.
+    return {'errorType': type(error).__name__, 'frames': [
+        {'file': Path(frame.filename).name, 'line': frame.lineno, 'function': frame.name}
+        for frame in traceback.extract_tb(error.__traceback__)]}
 
 
 def bridge(action, data=None):
@@ -84,6 +114,8 @@ def process():
                 if row.get('state') == 'button_approval_request_intent' and row.get('buttonSnapshotPath'):
                     request(row['youtubeId'], Path(row['buttonSnapshotPath']))
             docs = sorted(bridge('list'), key=lambda d: d['approvedAt'])
+            health = publisher.load(publisher.JOURNAL).get('buttonWorkerHealth', {})
+            youtube_checked = False
             released = 0
             for doc in docs:
                 journal = publisher.load(publisher.JOURNAL)
@@ -103,6 +135,7 @@ def process():
                 publisher.save(folder / 'approval.json', approval)
                 publisher.save(folder / 'baseline.json', baseline)
                 publisher.publish(folder / 'approval.json', folder / 'baseline.json')
+                youtube_checked = True
                 journal = publisher.load(publisher.JOURNAL)
                 row = next(c for c in journal['clips'] if c.get('youtubeId') == doc['videoId'])
                 assert row['visibility'] == 'public'
@@ -125,12 +158,15 @@ def process():
                 bridge('finish-notice', {'id': doc['id'], 'contentHash': doc['contentHash'],
                     'messageId': row['releaseConfirmation']['messageId']})
                 released += not bool(prior)
+            # Empty or daily-capped queues must not conceal failed YouTube access.
+            if health.get('failures', 0) and not youtube_checked:
+                verify_credentials()
             return {'ok': True, 'approvedWaiting': len(docs), 'publicReleases': released}
         finally:
             fcntl.flock(worker_lock, fcntl.LOCK_UN)
 
 
-def report_health(ok):
+def report_health(ok, error=None):
     with (publisher.JOURNAL.parent / 'run.lock').open('a') as lock:
         fcntl.flock(lock, fcntl.LOCK_EX | fcntl.LOCK_NB)
         try:
@@ -139,6 +175,9 @@ def report_health(ok):
             if ok and health['failures'] == 0:
                 return
             health['failures'] = 0 if ok else health['failures'] + 1
+            if not ok and error is not None:
+                health['lastError'] = safe_error(error)
+                health['lastErrorAt'] = datetime.now(ZoneInfo('UTC')).isoformat()
             if ok and health.get('noticeSent'):
                 bridge('notice', {'eventKey': f"reel-worker-recovered/{health['firstFailure']}",
                     'subject': '[릴스][성공] 승인 공개 처리기 복구',
@@ -157,12 +196,14 @@ def report_health(ok):
 
 if __name__ == '__main__':
     parser = argparse.ArgumentParser()
-    parser.add_argument('action', choices=['request', 'process'])
+    parser.add_argument('action', choices=['request', 'process', 'verify-credentials'])
     parser.add_argument('--video-id')
     parser.add_argument('--baseline', type=Path)
     args = parser.parse_args()
     try:
-        if args.action == 'request':
+        if args.action == 'verify-credentials':
+            print(json.dumps(verify_credentials(args.video_id)))
+        elif args.action == 'request':
             assert args.video_id and args.baseline
             print(json.dumps(request(args.video_id, args.baseline), ensure_ascii=False))
         else:
@@ -173,11 +214,11 @@ if __name__ == '__main__':
                 print(json.dumps(result))
     except BlockingIOError:
         pass
-    except Exception:
+    except Exception as error:
         if args.action == 'process':
             try:
-                report_health(False)
+                report_health(False, error)
             except Exception:
                 pass
-        print('Reel approval operation needs review; no private error details logged.', file=sys.stderr)
+        print(json.dumps({'at': datetime.now(ZoneInfo('UTC')).isoformat(), **safe_error(error)}), file=sys.stderr)
         sys.exit(1)

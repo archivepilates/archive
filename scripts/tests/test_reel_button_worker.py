@@ -421,5 +421,53 @@ class ReelButtonTests(unittest.TestCase):
         self.assertEqual(len(self.saved_journal()['publications']), 1)
 
 
+    def test_read_only_background_probe_never_publishes(self):
+        self.assertEqual(self.worker.verify_credentials(), {'ok': True, 'channelVerified': True})
+        self.youtube.videos.return_value.update.assert_not_called()
+        self.bridge.assert_not_called()
+
+    def test_empty_queue_cannot_hide_broken_credentials_after_failure(self):
+        journal = self.saved_journal()
+        journal['buttonWorkerHealth'] = {'failures': 3}
+        self.publisher.save(self.publisher.JOURNAL, journal)
+        self.bridge.side_effect = lambda action, data=None: []
+        self.credentials.from_authorized_user_file.side_effect = PermissionError('private-token-value')
+        with self.assertRaises(PermissionError):
+            self.worker.process()
+        self.youtube.videos.return_value.update.assert_not_called()
+        self.assertEqual(self.saved_journal()['buttonWorkerHealth']['failures'], 3)
+
+    def test_recovery_probe_rejects_wrong_channel(self):
+        self.youtube.channels.return_value.list.return_value.execute.return_value = {'items': [{'id': 'other'}]}
+        with self.assertRaises(AssertionError):
+            self.worker.verify_credentials()
+        self.youtube.videos.return_value.update.assert_not_called()
+
+    def test_daily_capped_queue_cannot_falsely_report_recovery(self):
+        journal = self.saved_journal()
+        journal['buttonWorkerHealth'] = {'failures': 3}
+        journal['publications'].append({'youtubeId': 'other-video', 'dateKst': TODAY})
+        self.publisher.save(self.publisher.JOURNAL, journal)
+        self.credentials.from_authorized_user_file.side_effect = PermissionError('private-token-value')
+        with self.assertRaises(PermissionError):
+            self.worker.process()
+        self.youtube.videos.return_value.update.assert_not_called()
+        self.assertEqual(self.saved_journal()['buttonWorkerHealth']['failures'], 3)
+
+    def test_safe_failure_diagnostics_preserve_no_private_messages(self):
+        try:
+            raise PermissionError('secret-token-https://private-link')
+        except PermissionError as error:
+            self.worker.report_health(False, error)
+            diagnostic = self.worker.safe_error(error)
+        health = self.saved_journal()['buttonWorkerHealth']
+        self.assertEqual(health['lastError']['errorType'], 'PermissionError')
+        self.assertTrue(diagnostic['frames'])
+        self.assertNotIn('secret-token', str(health))
+        self.assertNotIn('private-link', str(diagnostic))
+        self.assertEqual(health['failures'], 1)
+        self.bridge.assert_not_called()
+
+
 if __name__ == '__main__':
     unittest.main(verbosity=2)
