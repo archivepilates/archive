@@ -1,0 +1,28 @@
+<!doctype html>
+<html lang="ko">
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width,initial-scale=1">
+<title>ARCHIVE PILATES 릴스 승인 공개 점검</title>
+<style>body{margin:0;background:#fafafa;color:#222;font:16px/1.75 -apple-system,BlinkMacSystemFont,sans-serif}main{max-width:760px;margin:auto;padding:36px 20px}h1{font-size:26px;line-height:1.4}h2{font-size:19px;margin-top:28px}p{overflow-wrap:anywhere}a{color:#a52028}dt{font-weight:700}dd{margin:0 0 12px}code{overflow-wrap:anywhere}section{border-top:1px solid #ddd;margin-top:24px;padding-top:8px}</style>
+<main>
+<p>ARCHIVE PILATES / 릴스 제작·승인 운영 · 2026-10-14 KST</p>
+<h1>ACH9 전체공개 완료, 승인 처리 점검 보강</h1>
+<p><a href="https://www.youtube.com/shorts/VZY8dTaK__Q">체어 몸통 회전, 팔을 떼기 전 지지하는 손부터</a></p>
+<section><h2>확인된 상태</h2><dl>
+<dt>메일 승인</dt><dd>실제 버튼 승인은 서버에 정상 저장됐습니다. 승인된 영상·채널·파일·콘텐츠 해시를 비공개 원장과 대조했습니다.</dd>
+<dt>공개 및 재생</dt><dd>공식 채널에서 전체공개를 재조회했습니다. 로그아웃 상태에서 38.561초 전체 재생과 엔딩, 오류 없음, 승인된 한국어·일본어 제목·설명 보존을 확인했습니다. 공개 원장은 해당 영상 1건이며 서버 상태는 published, needsWorker=false입니다.</dd>
+<dt>메일</dt><dd>home@archivepilates.com에 공개 완료 메일이 발송된 것을 Gmail 보낸메일에서 독립 조회했습니다. 기존 승인 요청과 완료 메일을 재발송하지 않았습니다.</dd>
+</dl></section>
+<section><h2>수정 범위</h2><p>비밀정보를 제외한 오류 유형·발생 시각·코드 위치를 기록합니다. 실패 후 대기 영상이 없거나 당일 공개 한도로 처리를 건너뛰더라도 실제 YouTube 인증과 공식 채널 조회를 통과하기 전에는 복구로 판단하지 않습니다. 운영 환경에서 쓰기 없는 인증·승인·콘텐츠 조회 명령을 추가했습니다.</p>
+<p>승인·일일 한도·내용 불변·공통 잠금은 유지합니다. 매일 제작 예약은 PAUSED이며 '아카이브 릴스 제작' 명령에만 1회성 제작합니다. 5분 간격 로컬 처리기는 새 영상을 만들지 않습니다.</p></section>
+<section><h2>검증과 반영</h2><dl>
+<dt>코드</dt><dd><code>f2fe33e4</code> · 전용 작업 브랜치 및 origin/main 반영, 운영 checkout 업데이트 완료.</dd>
+<dt>테스트</dt><dd>npm run test:reel-approval: 27개 통과. CORE Hosting 검증 및 배포 가드 통과. 리뷰에서 발견된 당일 한도 도달 시 잘못된 복구 판정도 회귀 테스트로 차단했습니다.</dd>
+<dt>운영 환경</dt><dd>실제 Background LaunchAgent에서 공식 채널·해당 승인 기록·공개 상태·내용 보존을 쓰기 없이 검증했습니다. 정규 process 작업 복원 후 exit code 0, 임시 진단 작업 제거, 설치 plist와 저장소 템플릿 일치를 확인했습니다.</dd>
+<dt>배포</dt><dd>Firebase archive-pilates의 hosting:archive-pilates-core만 배포했습니다. <a href="https://archive-pilates-core.web.app/rules/">CORE 운영규칙</a> HTTP 200과 명령형 제작·복구 점검 문구를 확인했습니다. Functions와 회원·상품·판매 원본은 변경하지 않았습니다.</dd>
+<dt>GitHub Actions</dt><dd id="ci">코드 커밋 f2fe33e4의 실행 <a href="https://github.com/archivepilates/archive/actions/runs/38519743014">38519743014</a> 성공. 릴스 승인·공개 가드와 기존 공통 회귀 검증을 모두 통과했습니다.</dd>
+</dl></section>
+<section><h2>남은 한계</h2><p>과거 29회 실패 로그가 동일한 일반 문구만 남겨 당시 예외의 근본 원인은 확정할 수 없습니다. 인증·macOS 접근 권한·스키마 오류 중 하나라고 추정해 단정하지 않았습니다. 현재 승인·공개·재생·백그라운드 조회는 정상이며, 재발 시 구체적인 오류 위치를 확인할 수 있도록 보강했습니다. 이번 공개 전환은 승인 원천을 대조한 운영자 수동 실행으로 복구했으며, 새로운 영상의 자동 공개를 시험하려고 추가 영상을 임의 게시하지 않았습니다.</p>
+<p>작업용 브라우저 탭은 닫았고 사용자 Chrome은 조작하지 않았습니다.</p></section>
+</main>
+</html>
