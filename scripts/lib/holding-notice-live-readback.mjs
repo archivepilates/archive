@@ -64,7 +64,10 @@ export function calculateLiveHolding(raw, { creationEvidenceFingerprint, now = n
   const currentHold = raw.currentHold ? { start: sourceDate(raw.currentHold.start), end: sourceDate(raw.currentHold.end) } : null;
   const selected = creationEvidenceFingerprint ? holds.find(hold => hold.id === creationEvidenceFingerprint) : null;
   if (creationEvidenceFingerprint) {
-    requireEvidence(selected && !selected.cancelledAt && currentHold && selected.start === currentHold.start && selected.end === currentHold.end,
+    const savedCurrent = currentHold && selected?.start === currentHold.start && selected?.end === currentHold.end;
+    const savedFuture = !currentHold && selected?.start > kstDay(now.toISOString()) &&
+      observation.activeHolds.some(range => range.start === selected.start && range.end === selected.end);
+    requireEvidence(selected && !selected.cancelledAt && (savedCurrent || savedFuture),
       "selected_hold_not_current_saved_controls");
     requireEvidence(!holds.some(hold => hold.id !== selected.id && hold.start <= selected.end && selected.start <= hold.end),
       "overlapping_live_hold_identity");

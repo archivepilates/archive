@@ -195,7 +195,7 @@ if (apply && process.env.STUDIOMATE_HOLDING_ROSTER_OBSERVER === "shadow" && valu
   try {
     summary.holdingRosterDiscovery = await observeHoldingRoster({ db, rows,
       profiles: [...existingProfiles.values()].flat().map(profile => ({ ...profile.data, memberId: profile.id })),
-      source: { sourceImportId: importId, studioId: STUDIO_ID, applied: true,
+      source: { sourceImportId: importId, studioId: STUDIO_ID, applied: true, recentTicketChanges: true,
         downloadedAt: valueArg("--holding-source-downloaded-at"),
         complete: rows.length > 0 && rows.every(row => ["전화번호", "수강권명", "수강권상태"].every(key => Object.hasOwn(row, key))) } });
   } catch (error) {

@@ -49,6 +49,15 @@ function seed(db, n, { receipt = false, status = "ready" } = {}) {
 }
 const budget = () => ({ remaining: () => 400_000 });
 
+test("recent ticket-change hints share new-event priority without starving continued hints", () => {
+  const jobs = [
+    { jobId: "recent", transition: "ticket_changed", requestedAt: at(5) },
+    ...Array.from({ length: 4 }, (_, n) => ({ jobId: `continued_${n}`, transition: "continued", requestedAt: at(n) })),
+    { jobId: "left", transition: "left", requestedAt: at(0) },
+  ];
+  assert.deepEqual(selectHoldingWorkerJobs(jobs, 3).map(job => job.jobId), ["continued_0", "continued_1", "recent"]);
+});
+
 test("eleven receipt-bearing events behind ten unclaimed events all rotate into polling", async () => {
   const db = mockDb();
   for (let n = 0; n < 21; n++) seed(db, n, { receipt: n >= 10 });

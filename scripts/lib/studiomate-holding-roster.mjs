@@ -23,6 +23,30 @@ export const holdingRosterMemberKey = phone => {
 const isHeld = status => /^(?:일시|사용)?(?:정지|중지|홀딩)(?:중|예정)?(?:\([^()]*\))?$/.test(text(status).replace(/\s/g, "")) &&
   !/해제|취소|만료/.test(status);
 const blocked = reason => ({ ok: false, mode: "discovery_only", reason, jobs: [], sends: 0 });
+const kstDay = milliseconds => new Date(milliseconds + 9 * 3600_000).toISOString().slice(0, 10);
+
+function recentTicketChanges(rows, now) {
+  const earliest = kstDay(Date.parse(now) - 48 * 3600_000), today = kstDay(Date.parse(now));
+  const out = [];
+  for (const row of rows) {
+    const modified = text(row["수강권최종수정일"]), day = modified.slice(0, 10);
+    const stamp = modified.match(/^\d{4}-\d{2}-\d{2}(?: (\d{2}):(\d{2})(?::(\d{2}))?)?$/);
+    if (!stamp || (stamp[1] && (Number(stamp[1]) > 23 || Number(stamp[2]) > 59 || Number(stamp[3] || 0) > 59)) ||
+        !Number.isFinite(Date.parse(`${day}T00:00:00Z`)) || new Date(`${day}T00:00:00Z`).toISOString().slice(0, 10) !== day ||
+        day < earliest || day > today) continue;
+    const status = text(row["수강권상태"]), ticketName = text(row["수강권명"]);
+    if (!/^(?:사용중|이용중)(?:\s*\([^()]*\))?$/.test(status) || !ticketName) continue;
+    const end = text(row["수강권종료일"]).slice(0, 10);
+    if (!/^\d{4}-\d{2}-\d{2}$/.test(end) || !Number.isFinite(Date.parse(`${end}T00:00:00Z`)) ||
+        new Date(`${end}T00:00:00Z`).toISOString().slice(0, 10) !== end || end < today) continue;
+    const memberKey = holdingRosterMemberKey(row["전화번호"]);
+    if (!memberKey) continue;
+    // Dates only select native reads. Never infer a holding event or balance from Excel.
+    out.push({ memberKey, ticketName, ticketRevision: hash([ticketName, text(row["수강권종류"]),
+      text(row["수강권시작일"]), text(row["수강권종료일"]), modified]) });
+  }
+  return out;
+}
 
 export function buildHoldingRoster(rows) {
   if (!Array.isArray(rows) || !rows.length || !rows.every(row => record(row) &&
@@ -82,6 +106,8 @@ export function planHoldingRoster({ rows, source, previous = null, profiles = []
     return { ok: true, mode: "discovery_only", reason: "already_observed_or_older_download", jobs: [], sends: 0 };
   let members;
   try { members = buildHoldingRoster(rows); } catch (error) { return blocked(error.message); }
+  if (source.recentTicketChanges === true && !rows.every(row => Object.hasOwn(row, "수강권최종수정일")))
+    return blocked("ticket_modification_column_required");
   const rowCounts = Object.fromEntries([...members.values()].map(member => [member.key, member.rows]));
   const priorKeys = previous ? Object.keys(previous.rowCounts) : [];
   const missing = priorKeys.filter(key => !rowCounts[key]);
@@ -120,6 +146,26 @@ export function planHoldingRoster({ rows, source, previous = null, profiles = []
         baselineOnly: transition === "baseline", absenceConfirmed: false, sendAllowed: false, requestedAt: now });
     }
   }
+  if (previous && source.recentTicketChanges === true) {
+    counts.ticketChanged = 0;
+    const existingKeys = new Set(jobs.map(job => job.jobId));
+    for (const change of recentTicketChanges(rows, now)) {
+      const { memberKey, ticketName, ticketRevision } = change, jobId = hash([memberKey, ticketName]);
+      if (existingKeys.has(jobId)) continue;
+      existingKeys.add(jobId);
+      const memberIds = [...(byKey.get(memberKey) || [])];
+      const reason = memberIds.length !== 1 ? "native_member_phone_match_required" :
+        members.get(memberKey)?.productCounts[ticketName] !== 1 ? "duplicate_product_readback_review_required" : "";
+      counts.ticketChanged++;
+      if (reason) counts.review++;
+      jobs.push({ jobId, memberKey, memberId: memberIds.length === 1 ? memberIds[0] : null,
+        studioId: "5330", ticketName, ticketRevision, transition: "ticket_changed",
+        status: reason ? "review" : "pending", reason, sourceImportId: source.sourceImportId,
+        downloadedAt: source.downloadedAt,
+        discoveryVersion: hash([source.sourceImportId, source.downloadedAt, memberKey, ticketName, ticketRevision]),
+        baselineOnly: false, absenceConfirmed: false, sendAllowed: false, requestedAt: now });
+    }
+  }
   const state = { schemaVersion: 2, mode: "discovery_only", sourceImportId: source.sourceImportId,
     downloadedAt: source.downloadedAt, initializedAt: previous?.initializedAt || now, updatedAt: now,
     totalRows: rows.length, rowCounts, held };
@@ -137,15 +183,20 @@ export async function observeHoldingRoster({ db, rows, source, profiles, now = n
     const refs = plan.jobs.map(job => db.doc(`${HOLDING_ROSTER_JOBS}/${job.jobId}`));
     const oldJobs = [];
     for (const ref of refs) oldJobs.push((await tx.get(ref)).data());
+    let readbackJobs = 0;
     for (const [index, job] of plan.jobs.entries()) {
       const old = oldJobs[index];
+      if (job.transition === "ticket_changed" && job.ticketRevision === old?.ticketRevision &&
+          job.memberId === old.memberId && old.status === "review" && old.reason === job.reason) continue;
+      // Excel dates have no event time; a new export must recheck same-day native changes.
       tx.set(refs[index], { ...job, requestedAt: old?.status === "pending" && instant(old.requestedAt) ? old.requestedAt : now,
         ...(instant(old?.lastCheckedAt) ? { lastCheckedAt: old.lastCheckedAt } : {}),
         updatedAt: now });
+      readbackJobs++;
     }
     tx.set(stateRef, plan.state);
     return { ok: true, mode: plan.mode, reason: plan.reason, counts: plan.counts,
-      readbackJobs: plan.jobs.length, sourceImportId: source.sourceImportId, sends: 0 };
+      readbackJobs, sourceImportId: source.sourceImportId, sends: 0 };
   });
 }
 

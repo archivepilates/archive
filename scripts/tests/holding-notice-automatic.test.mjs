@@ -492,3 +492,164 @@ test("fresh native source must be read after provider preflight and must remain 
   } });
   assert.equal(h.posts.length, 1);
 });
+
+function scheduledAutomaticEvidence(now = NOW) {
+  const raw = evidence(now);
+  raw.currentHold = null;
+  raw.activeHolds = [{ start: "2026-10-20", end: "2026-10-26" }];
+  raw.history[2] = creation("2026. 10. 08. 09:00", "2026-10-20", "2026-10-26");
+  return raw;
+}
+
+function editScheduledPeriod(raw) {
+  raw.history.push({ at: "2026. 10. 08. 10:00", staff: "Synthetic Operator", type: "수강권정지수정",
+    changes: [change("정지종료일", "2026-10-26", "2026-10-28")] });
+  raw.activeHolds[0].end = "2026-10-28";
+}
+
+test("single saved future holding with blank controls has a stable plan and one automatic mock POST", async () => {
+  const raw = scheduledAutomaticEvidence(), proof = automaticHoldingEvidence(raw, config(), NOW);
+  const plan = planFor(raw), later = new Date(NOW.getTime() + 1000);
+  assert.equal(proof.live.currentHold, null);
+  assert.equal(proof.selected.id, normalizeHoldingObservation(raw).history[2].fingerprint);
+  assert.equal(planFor(scheduledAutomaticEvidence(later), config(), later).id, plan.id);
+  assert.deepEqual(plan.summary, { ok: true, originalDays: 365, totalDays: 73,
+    usedDays: 7, remainingDays: 66, overageDays: 0 });
+  assert.equal(plan.variables["#{이번홀딩일수}"], "7");
+  assert.equal(plan.variables["#{홀딩시작일}"], "2026-10-20");
+  assert.equal(plan.variables["#{홀딩종료일}"], "2026-10-26");
+  const h = harness({ raw, plan }), result = await h.run({ automatic: true });
+  assert.equal(result.deliveryComplete, true);
+  assert.equal(result.providerPostCount, 1);
+  assert.equal(h.posts.length, 1);
+  assert.deepEqual(h.calls.map(call => call.method), ["GET", "POST", "GET"]);
+  assert.deepEqual(h.posts[0].messages[0].kakaoOptions.variables, plan.variables);
+  assert.equal(h.db.docs.get(`alimtalkSends/${plan.id}`).payload.deliveryMode, "automatic_live_readback");
+  assert.equal(h.db.docs.get(`holdingNoticeClaims/${plan.id}`).status, "delivered");
+});
+
+test("blank controls keep current and past holdings blocked; populated controls still select current", () => {
+  for (const start of ["2026-10-07", "2026-10-08"]) {
+    const raw = scheduledAutomaticEvidence();
+    raw.activeHolds[0].start = start;
+    raw.history[2].changes[0].after = start;
+    assert.throws(() => automaticHoldingEvidence(raw, config(), NOW), /holding_current_controls_required/);
+  }
+  const raw = evidence();
+  raw.history.push(creation("2026. 10. 08. 10:00", "2026-10-20", "2026-10-26"));
+  raw.activeHolds.push({ start: "2026-10-20", end: "2026-10-26" });
+  const proof = automaticHoldingEvidence(raw, config(), NOW);
+  assert.equal(proof.selected.id, normalizeHoldingObservation(raw).history[2].fingerprint);
+  assert.equal(proof.selected.start, raw.currentHold.start);
+  assert.equal(proof.live.summary.usedDays, 14);
+});
+
+test("future automatic discovery rejects malformed, incomplete, unmatched, overlapping, cancelled and multiple ranges", async t => {
+  const cases = [
+    ["malformed date", raw => { raw.activeHolds[0].start = "not-a-date"; }],
+    ["inverted range", raw => { raw.activeHolds[0].end = "2026-10-19"; }],
+    ["incomplete history", raw => { raw.historyComplete = false; }],
+    ["incomplete saved ranges", raw => { raw.activeHoldsComplete = false; }],
+    ["missing creation end", raw => { raw.history[2].changes.pop(); }],
+    ["unmatched saved range", raw => { raw.activeHolds[0].start = "2026-10-21"; }],
+    ["future truncated range", raw => { raw.activeHolds[0].end = "2026-10-25"; }],
+    ["overlap with current saved range", raw => {
+      raw.history.push(creation("2026. 10. 08. 10:00", "2026-10-08", "2026-10-20"));
+      raw.activeHolds.push({ start: "2026-10-08", end: "2026-10-20" });
+    }],
+    ["cancelled future", raw => {
+      raw.history.push({ at: "2026. 10. 08. 10:00", staff: "Synthetic Operator", type: "수강권 정지취소", changes: [] });
+      raw.activeHolds = [];
+    }],
+    ["cancelled future still displayed", raw => {
+      raw.history.push({ at: "2026. 10. 08. 10:00", staff: "Synthetic Operator", type: "수강권 정지취소", changes: [] });
+    }],
+    ["multiple nonoverlapping futures", raw => {
+      raw.history.push(creation("2026. 10. 08. 10:00", "2026-11-01", "2026-11-07"));
+      raw.activeHolds.push({ start: "2026-11-01", end: "2026-11-07" });
+    }],
+    ["over allowance", raw => {
+      raw.activeHolds[0].end = "2027-01-01";
+      raw.history[2].changes[1].after = "2027-01-01";
+    }],
+  ];
+  for (const [name, mutate] of cases) await t.test(name, () => {
+    const raw = scheduledAutomaticEvidence();
+    mutate(raw);
+    assert.throws(() => automaticHoldingEvidence(raw, config(), NOW));
+    assert.throws(() => planFor(raw));
+  });
+});
+
+test("future start never bypasses native registration cutoff or inclusive 48-hour guard", () => {
+  const boundary = new Date(HOLDING_AUTO_CUTOVER), raw = scheduledAutomaticEvidence(boundary);
+  raw.history[2].at = "2026. 10. 08. 00:00:00";
+  assert.equal(automaticHoldingEvidence(raw, config(), boundary).selected.registeredAt, HOLDING_AUTO_CUTOVER);
+  raw.history[2].at = "2026. 10. 07. 23:59:59";
+  assert.throws(() => automaticHoldingEvidence(raw, config(), boundary), /holding_historical_registration_excluded/);
+  raw.history[2].at = "2026. 10. 08. 00:00:00";
+  const limit = new Date(boundary.getTime() + 48 * 3600_000);
+  raw.observedAt = limit.toISOString();
+  assert.ok(automaticHoldingEvidence(raw, config(), limit).selected);
+  const expired = new Date(limit.getTime() + 1);
+  raw.observedAt = expired.toISOString();
+  assert.throws(() => automaticHoldingEvidence(raw, config(), expired), /holding_registration_too_old_review_required/);
+});
+
+test("editing future period preserves creation key and canonical event, not stale approval", () => {
+  const raw = scheduledAutomaticEvidence(), original = planFor(raw);
+  const before = automaticHoldingEvent(original, automaticHoldingEvidence(raw, config(), NOW).selected, config());
+  editScheduledPeriod(raw);
+  const edited = planFor(raw);
+  assert.equal(edited.id, original.id);
+  assert.equal(edited.creationEvidenceFingerprint, original.creationEvidenceFingerprint);
+  assert.equal(edited.issuanceFingerprint, original.issuanceFingerprint);
+  assert.notEqual(edited.observationFingerprint, original.observationFingerprint);
+  assert.equal(edited.variables["#{이번홀딩일수}"], "9");
+  assert.equal(edited.summary.usedDays, 9);
+  assert.equal(edited.summary.remainingDays, 64);
+  assert.deepEqual(automaticHoldingEvent(edited, automaticHoldingEvidence(raw, config(), NOW).selected, config()), before);
+  assert.throws(() => verifiedOperatorHoldingPlan(raw, MEMBER, original.approval, NOW), /observation_bound_operator_approval_required/);
+});
+
+test("future period edit or cancellation after provider preflight blocks before claims and mock POST", async t => {
+  const mutations = [
+    ["period edited", editScheduledPeriod],
+    ["future cancelled", raw => {
+      raw.history.push({ at: "2026. 10. 08. 10:00", staff: "Synthetic Operator", type: "수강권 정지취소", changes: [] });
+      raw.activeHolds = [];
+    }],
+  ];
+  for (const [name, mutate] of mutations) await t.test(name, async () => {
+    const raw = scheduledAutomaticEvidence(), h = harness({ raw });
+    let reads = 0;
+    await assert.rejects(h.run({ automatic: true, readLatest: async () => {
+      reads++;
+      assert.deepEqual(h.calls.map(call => call.method), ["GET"]);
+      assert.deepEqual(h.db.creates, []);
+      const changed = structuredClone(raw);
+      mutate(changed);
+      return changed;
+    } }), /observation_bound_operator_approval_required|selected_hold_not_current_saved_controls/);
+    assert.equal(reads, 1);
+    assert.deepEqual(h.calls.map(call => call.method), ["GET"]);
+    assert.equal(h.db.transactionReads.length, 0);
+    assertUnclaimed(h);
+  });
+});
+
+test("future same-event replay and edited-period replay cannot produce a second mock POST", async () => {
+  const raw = scheduledAutomaticEvidence(), h = harness({ raw });
+  assert.equal((await h.run({ automatic: true })).providerPostCount, 1);
+  const later = new Date(NOW.getTime() + 1000), replay = scheduledAutomaticEvidence(later);
+  const replayPlan = planFor(replay, config(), later);
+  assert.equal(replayPlan.id, h.plan.id);
+  await assert.rejects(h.run({ plan: replayPlan, now: () => later, readLatest: async () => replay }), /prior_holding_local/);
+  editScheduledPeriod(replay);
+  const editedPlan = planFor(replay, config(), later);
+  assert.equal(editedPlan.id, h.plan.id);
+  await assert.rejects(h.run({ plan: editedPlan, now: () => later, readLatest: async () => replay }), /prior_holding_local/);
+  assert.equal(h.posts.length, 1);
+  assert.equal(h.db.creates.length, 3);
+  assert.equal(h.db.docs.get(`holdingNoticeClaims/${h.plan.id}`).status, "delivered");
+});

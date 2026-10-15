@@ -57,3 +57,87 @@ test("never use a cached allowance or an extended expiry to calculate the origin
   assert.equal(result.summary.totalDays, 73); assert.equal(result.summary.usedDays, 17);
   assert.equal(result.summary.remainingDays, 56);
 });
+
+function scheduledLiveFixture() {
+  const raw = fixture();
+  raw.currentHold = null;
+  raw.activeHolds = [{ start: "2026-10-21", end: "2026-10-27" }];
+  raw.history = [raw.history[0], create("2026. 10. 20.", "2026-10-21", "2026-10-27")];
+  return raw;
+}
+
+test("saved future range without current controls counts both endpoints and binds its creation", () => {
+  const raw = scheduledLiveFixture(), result = calculate(raw);
+  assert.equal(result.currentHold, null);
+  assert.equal(result.selected.id, normalizeHoldingObservation(raw).history[1].fingerprint);
+  assert.equal(result.selected.start, "2026-10-21");
+  assert.equal(result.selected.end, "2026-10-27");
+  assert.deepEqual(result.summary, { ok: true, originalDays: 365, totalDays: 73,
+    usedDays: 7, remainingDays: 66, overageDays: 0 });
+  raw.activeHolds[0].end = "2026-10-21";
+  raw.history[1].changes[1].after = "2026-10-21";
+  assert.equal(calculate(raw).summary.usedDays, 1);
+});
+
+test("missing controls never authorize today's or past ranges, using KST rather than UTC", () => {
+  for (const start of ["2026-10-19", "2026-10-20"]) {
+    const raw = scheduledLiveFixture();
+    raw.activeHolds[0].start = start;
+    raw.history[1].changes[0].after = start;
+    assert.throws(() => calculate(raw), /selected_hold_not_current_saved_controls/);
+  }
+  const raw = scheduledLiveFixture();
+  const creationEvidenceFingerprint = normalizeHoldingObservation(raw).history[1].fingerprint;
+  const beforeMidnight = new Date("2026-10-20T14:59:59.999Z");
+  raw.observedAt = beforeMidnight.toISOString();
+  assert.ok(calculateLiveHolding(raw, { creationEvidenceFingerprint, now: beforeMidnight }).selected);
+  const midnight = new Date("2026-10-20T15:00:00.000Z");
+  raw.observedAt = midnight.toISOString();
+  assert.throws(() => calculateLiveHolding(raw, { creationEvidenceFingerprint, now: midnight }),
+    /selected_hold_not_current_saved_controls/);
+});
+
+test("future selection fails closed for malformed, incomplete, unmatched, cancelled and overlapping evidence", async t => {
+  const cases = [
+    ["malformed saved date", raw => { raw.activeHolds[0].end = "2026-10-99"; }],
+    ["inverted saved range", raw => { raw.activeHolds[0].end = "2026-10-20"; }],
+    ["incomplete history", raw => { raw.historyComplete = false; }],
+    ["incomplete saved ranges", raw => { raw.activeHoldsComplete = false; }],
+    ["incomplete creation", raw => { raw.history[1].changes.pop(); }],
+    ["missing saved range", raw => { raw.activeHolds = []; }],
+    ["unmatched saved range", raw => { raw.activeHolds[0].start = "2026-10-22"; }],
+    ["future truncated range", raw => { raw.activeHolds[0].end = "2026-10-26"; }],
+    ["partial controls do not become blank controls", raw => { raw.currentHold = { start: "2026-10-21" }; }],
+    ["pre-start cancellation", raw => {
+      raw.history.push({ at: "2026. 10. 20. 13:00", staff: "Fixture", type: "수강권 정지취소", changes: [] });
+      raw.activeHolds = [];
+    }],
+    ["overlap at inclusive endpoint", raw => {
+      raw.history.push(create("2026. 10. 20.", "2026-10-27", "2026-10-29"));
+      raw.activeHolds.push({ start: "2026-10-27", end: "2026-10-29" });
+    }],
+    ["allowance exceeded", raw => {
+      raw.activeHolds[0].end = "2027-01-02";
+      raw.history[1].changes[1].after = "2027-01-02";
+    }],
+  ];
+  for (const [name, mutate] of cases) await t.test(name, () => {
+    const raw = scheduledLiveFixture();
+    const creationEvidenceFingerprint = normalizeHoldingObservation(raw).history[1].fingerprint;
+    mutate(raw);
+    assert.throws(() => calculateLiveHolding(raw, { creationEvidenceFingerprint, now }));
+  });
+});
+
+test("future period edit keeps original creation identity and recalculates inclusive usage", () => {
+  const raw = scheduledLiveFixture(), original = calculate(raw);
+  raw.history.push({ at: "2026. 10. 20. 13:00", staff: "Fixture", type: "수강권정지수정",
+    changes: [c("정지종료일", "2026-10-27", "2026-10-29")] });
+  raw.activeHolds[0].end = "2026-10-29";
+  const edited = calculateLiveHolding(raw, { creationEvidenceFingerprint: original.selected.id, now });
+  assert.equal(edited.selected.id, original.selected.id);
+  assert.equal(edited.selected.registeredAt, original.selected.registeredAt);
+  assert.notEqual(edited.observation.observationFingerprint, original.observation.observationFingerprint);
+  assert.equal(edited.summary.usedDays, 9);
+  assert.equal(edited.summary.remainingDays, 64);
+});

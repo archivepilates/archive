@@ -29,8 +29,11 @@ export function automaticHoldingEvidence(raw, config, now = new Date()) {
       Date.parse(sourceInstant(row.at)) >= Date.parse(config.cutoverAt)))
     throw new Error("holding_historical_registration_excluded");
   const live = calculateLiveHolding(raw, { now });
-  if (!live.currentHold) throw new Error("holding_current_controls_required");
-  const matches = live.holds.filter(hold => !hold.cancelledAt && hold.start === live.currentHold.start && hold.end === live.currentHold.end);
+  const today = new Date(now.getTime() + 9 * 3600_000).toISOString().slice(0, 10);
+  const matches = live.holds.filter(hold => !hold.cancelledAt && (live.currentHold
+    ? hold.start === live.currentHold.start && hold.end === live.currentHold.end
+    : hold.start > today));
+  if (!live.currentHold && !matches.length) throw new Error("holding_current_controls_required");
   if (matches.length !== 1) throw new Error("holding_single_current_creation_required");
   const selected = matches[0];
   if (Date.parse(selected.registeredAt) < Date.parse(config.cutoverAt)) throw new Error("holding_historical_registration_excluded");

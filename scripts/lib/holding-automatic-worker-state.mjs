@@ -28,7 +28,7 @@ export function selectHoldingWorkerJobs(jobs, limit = 10) {
   const reserved = continued.slice(0, Math.min(2, limit));
   const reservedIds = new Set(reserved.map(job => job.jobId));
   const rest = jobs.filter(job => !reservedIds.has(job.jobId)).sort((a, b) =>
-    Number(!["entered", "changed"].includes(a.transition)) - Number(!["entered", "changed"].includes(b.transition)) || oldest(a, b));
+    Number(!["entered", "changed", "ticket_changed"].includes(a.transition)) - Number(!["entered", "changed", "ticket_changed"].includes(b.transition)) || oldest(a, b));
   return [...reserved, ...rest].slice(0, limit);
 }
 
