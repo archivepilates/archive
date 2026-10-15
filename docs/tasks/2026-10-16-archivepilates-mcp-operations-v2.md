@@ -41,4 +41,12 @@
 
 ## Release state
 
-Pending final independent review, commit/main promotion, stable runtime fast-forward, Codex allowlist update, scoped Hosting deploy, registered read-only recheck and GitHub CI. No claim that monthly operations are available.
+- Source cc2a287bd0a3cc611defef05280de748cf901fd8 committed and pushed feature/main after independent review found no remaining P1/P2. Existing Hosting guard requires exact origin/main, so source promotion/push preceded deploy. Runtime archive-runtime-main and clean main deployment checkout fast-forwarded, no user changes overwritten.
+- Codex config enabled_tools adds members_list_expiring only; same stable command/path, staffId1979746, read-only=true and memo writes=false. Existing cached connections preserved, not forcibly terminated; reconnect required to rediscover new tool.
+- Registered SDK full seven-tool smoke passed; native Kim Gihyo identity/live ticket check, four stored ledgers, expiry snapshot and hidden memo invocation rejection. Existing message date indexes active; no database/index deployment.
+- Registered actual failure-case verification 2026-10-16 01:52KST: Kim Seowon search2728/1781ms, overview3075/3014ms; Jung1693+3022ms. Expiry33members/34stored rows,372ms first/84ms cached. Member/message mutations false.
+- Hosting archive-pilates and archive-pilates-core deployed using existing archive-codex-operator service account. Preflight, dry-run, real deployment, local95/live95 static responsive QA and live canary passed. Live core release points to cc2a287b and rules show new seven-tool/expiry boundary. Private service URL: IN404; CORE200 HTML fallback, not server JS.
+- Cleanup verification: no shared-profile/test-profile Chromium PIDs or shared StudioMate lock remained. No Functions/rules/index/LaunchAgent/automation schedule/member/reservation/contract/message changes.
+- Code CI main https://github.com/archivepilates/archive/actions/runs/38772533420 and feature https://github.com/archivepilates/archive/actions/runs/38772519139 succeeded. Source/feature/main/runtime worktrees were clean after deployment and before this completion record.
+- This follow-up completion record changes task/report/README only; deployed executable/UI source remains cc2a287b. It is pushed to main and feature and fast-forwarded to runtime/deployment worktrees after verification; no new UI deploy needed.
+- No claim that whole-roster coverage or monthly operations are available; priorities and completion criteria remain in the report.

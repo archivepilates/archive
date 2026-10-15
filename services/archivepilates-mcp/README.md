@@ -126,3 +126,5 @@ npm run smoke -- --live-read-only --registered --require-date-indexes
 2026-10-16 실시간 조회 소스 `6927f98d`의 main 승격·맥미니 운영 소스 전환·CORE 운영규칙 Hosting 배포·등록 실행기 시험을 완료했습니다. 연결 갱신 후 메인 채팅의 실제 MCP 도구도 `liveReadback=true`를 반환했습니다. 다른 이미 열린 연결이 구버전을 유지하면 다시 연결하고 결과 메타데이터를 확인합니다. 증거는 `docs/tasks/2026-10-15-archivepilates-mcp-live-lookup.md`와 대응 HTML 보고서를 따릅니다.
 
 2026-10-16 v2는 검색 누락·중복 조회를 수정하고 조건별 동기화 조회를 추가합니다. 원래 사용자 목표인 전체 명단과 월간 고정예약·수업 복제까지 완료한 것이 아닙니다. 단계별 범위·실측·운영 반영 상태는 `docs/reports/2026-10-16-archivepilates-mcp-operations-v2.html`과 대응 task에 기록합니다.
+
+v2 운영 소스 `cc2a287b`의 main/feature 푸시·기존 맥미니 실행 경로 전환·조회7개 Codex 허용목록·CORE 운영규칙 Hosting 배포·등록 SDK 재검증을 완료했습니다. 서비스161건과 공유 잠금7건, CORE 로컬/라이브 정적 반응형 각각95건이 통과했습니다. 원래 열려 있던 채팅은 MCP 연결을 새로고침해야 새 도구 목록을 사용할 수 있습니다. 기존 쓰기·회원 발송·예약·정기 실행은 변경하지 않았습니다.
