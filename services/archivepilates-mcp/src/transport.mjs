@@ -40,7 +40,7 @@ function result(payload, isError = false) {
 export function createMcpServer({ listTools, callTool }) {
   const server = new Server(
     { name: 'archivepilates-mcp', version: '0.1.0' },
-    { capabilities: { tools: {} }, instructions: 'ARCHIVE PILATES 운영자용 업무 도구입니다. 운영 연결은 조회 전용입니다. 먼저 members_find로 정확한 회원을 선택하세요. 동기화 원장과 StudioMate 실시간 원본을 구분하고 freshness=unknown을 최신으로 단정하지 마세요. 후보·큐·공급자 접수·최종 전달·서명 완료는 서로 다릅니다. 조회 오류·한도·불완전한 ID 연결을 빈 결과로 해석하지 마세요. 회원 변경·예약·취소·발송은 지원하지 않습니다. 응답의 개인정보는 최소한만 요약하세요.' },
+    { capabilities: { tools: {} }, instructions: 'ARCHIVE PILATES 운영자용 조회 전용 도구입니다. members_find로 실시간 검색 후 선택한 원본 회원 ID를 members_get_overview에 전달하세요. 두 도구는 맥미니 StudioMate 화면을 읽으며 로그인·잠금·조회 실패 시 저장 자료로 대체하지 않습니다. 예약·계약·알림톡·작업 도구는 저장 원장 조회이며 실시간으로 단정하지 마세요. 각 결과의 liveReadback·checkedAt·coverage를 확인하세요. 후보·큐·접수·최종 전달·서명은 다릅니다. 오류·한도를 빈 결과로 해석하지 마세요. 회원 변경·예약·취소·발송은 지원하지 않습니다. 개인정보는 최소한만 요약하세요.' },
   );
 
   server.setRequestHandler(ListToolsRequestSchema, () => {
@@ -51,7 +51,7 @@ export function createMcpServer({ listTools, callTool }) {
     }
   });
 
-  server.setRequestHandler(CallToolRequestSchema, async ({ params }) => {
+  server.setRequestHandler(CallToolRequestSchema, async ({ params }, extra) => {
     try {
       if (!listTools().some((tool) => tool.name === params.name)) {
         return result(
@@ -59,7 +59,7 @@ export function createMcpServer({ listTools, callTool }) {
           true,
         );
       }
-      return result(await callTool(params.name, params.arguments ?? {}));
+      return result(await callTool(params.name, params.arguments ?? {}, { signal: extra.signal }));
     } catch (error) {
       return result({ ok: false, error: toolError(error) }, true);
     }

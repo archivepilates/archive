@@ -4,8 +4,8 @@ const read = { readOnlyHint: true, destructiveHint: false, idempotentHint: true,
 const tool = (name, description, inputSchema, annotations = read) => ({ name, description, inputSchema, annotations });
 const member = { memberId: string() };
 export const TOOLS = [
-  tool('members_find', '이름 또는 전체 휴대폰 번호 완전일치로 회원 후보를 찾습니다. 동기화 자료이며 실시간 원본이 아닙니다.', schema({ query: string(50) })),
-  tool('members_get_overview', '선택 회원의 동기화 수강권과 원본 ID 연결·기준시각을 조회합니다.', schema(member)),
+  tool('members_find', '맥미니 StudioMate 화면에서 이름 또는 전체 휴대폰 번호 완전일치 회원을 실시간 검색합니다. 동명이인은 선택이 필요합니다.', schema({ query: string(50) })),
+  tool('members_get_overview', '선택 회원의 StudioMate 현재 수강권·등급을 실시간 화면에서 재확인합니다. 잠금·로그인·조회 실패는 저장 자료로 대체하지 않습니다.', schema(member)),
   tool('bookings_list', '선택 회원의 최대 31일 예약 원장을 조회합니다. 중복 원본은 표시하며 예약을 생성·취소하지 않습니다.', schema({ ...member, startDate: string(10), endDate: string(10) })),
   tool('contracts_get_progress', '회원 계약의 생성·발송·서명·웰컴 원장 상태를 구분해 조회합니다. 기록 없음은 미서명을 뜻하지 않습니다.', schema(member)),
   tool('messages_get_delivery', '회원의 최대 31일 알림톡 후보와 발송 기록을 조회합니다. 공급자 최종 조회가 아닌 저장된 증거입니다.', schema({ ...member, startDate: string(10), endDate: string(10) })),

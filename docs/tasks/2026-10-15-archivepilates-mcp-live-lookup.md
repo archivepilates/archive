@@ -1,0 +1,22 @@
+# archivepilates-mcp live member and ticket lookup
+
+- Date: 2026-10-15 KST.
+- Worktree: /Users/archivepilates/codex-worktrees/archivepilates-mcp-local.
+- Branch: codex/mini/archivepilates-mcp-local, based on origin/main decb2680.
+- Scope: services/archivepilates-mcp/**, scoped CORE rule, task/report. No unrelated files.
+- User requested Mac mini live lookup and another test. On 2026-10-16 KST the user explicitly approved operational connection replacement, CORE Hosting, commit and push. No member/ticket/booking/message/schedule mutations are authorized by this release.
+- Source: rendered StudioMate /users search and /users/detail?id=<native ID>, not response bodies or framework state.
+- Identity: exact normalized name/full phone, native ID from clicked detail URL; revalidated for overview. Native search selection lives only in process for 10 minutes. No Excel-ID guessing or Firestore identity mutation.
+- Source policy: member/ticket tools only use live DOM when wired in production. Remaining four reads retain canonical ledgers and explicit stored-evidence labels. No mirror selection or external writes.
+- Browser: existing shared profile/lock, max five-second wait, method-level write block including login, 45-second total processing budget, five-second cleanup confirmation. Uncertain close retains lock; confirmed retry or late completion releases owned lock.
+- Coverage: visible exact search matches, current ticket cards only, no history/financial ledger interpretation or fabricated ticket IDs.
+- Tests: pure DOM validation, synthetic browser fixtures, lifecycle/cancellation/concurrency boundaries, MCP/service projection and prior regression suite. Independent bounded subagent review/test evidence included.
+- Read-only live checks: Jung exact search 4647ms and double-view ticket overview 4148ms; two current cards matched expected source. Kim six-tool MCP smoke passed: search 5450ms, overview 4099ms, four ledgers 178-538ms; writes hidden, no messages/data changes.
+- Final candidate MCP protocol test using registered command/environment and candidate entrypoint: Jung search 5123ms, overview 4342ms; liveReadback=true, checkedAt=2026-10-15T14:49:46.502Z, native ID verified, two source cards. This does not claim the registered stable entrypoint was changed.
+- Final checks: service npm test 142/142; shared browser lock tests 7/7; npm audit --omit=dev zero vulnerabilities; git diff --check; validate:archive-core-hosting passed. Initial Hosting validation lacked worktree TypeScript dependencies; reused existing runtime node_modules through ignored symlink and reran successfully. No tracked Functions changes.
+- Independent review: no remaining confirmed actionable P1/P2 within member/ticket live-read scope after setup-race and bounded-cleanup repairs. Subagent pure DOM 36/36 and browser-free lifecycle 8/8 passed. Fixture browser tests are synthetic, not production writes.
+- Development findings fixed: loading mask must finish before zero/partial cards are accepted; malformed integer grouping; context cleanup retry retains release ownership; bounded cleanup failure reports while lock stays held.
+- Deployment state: approved 2026-10-16; scoped promotion/runtime replacement/Hosting/registered live verification in progress. Do not interpret this pre-release record as completed deployment evidence. No production data, schedules, Functions, rules or indexes changed.
+- Report: docs/reports/2026-10-15-archivepilates-mcp-live-lookup.html.
+- Dedicated operational chat created on user request: archivepilates-mcp, thread 01a1400c-736e-7811-b995-b76c62e35d47, local ARCHIVE project, verified pinned at position 5. Shared handoff distinguishes candidate live-reader checks from still-pending operational promotion. First task is read-only readiness confirmation only. Existing CORE rule draft updated; no deployment/push approval inferred from thread creation.
+- 2026-10-16 pre-release rechecks: 142 service tests, seven shared lock tests, npm audit zero vulnerabilities and CORE Hosting static validation passed again. Runtime and main deploy checkout clean; origin/main remained decb2680 before promotion. The unrelated membership-contract action queue item is not altered by this release.

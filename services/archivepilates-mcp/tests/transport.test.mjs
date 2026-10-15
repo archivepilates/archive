@@ -153,3 +153,20 @@ test('leaves concurrent call coordination to the business layer', { timeout: 500
     { ok: true, query: 'second' },
   ]);
 });
+
+test('MCP cancellation is propagated to the live reader signal', async t => {
+  let entered, cancelled;
+  const started = new Promise(resolve => { entered = resolve; });
+  const stopped = new Promise(resolve => { cancelled = resolve; });
+  const { client } = await connect(t, { callTool: (_name, _args, { signal }) => new Promise(resolve => {
+    assert.equal(signal.aborted, false);
+    signal.addEventListener('abort', () => { cancelled(); resolve({ ok: false }); }, { once: true });
+    entered();
+  }) });
+  const controller = new AbortController();
+  const result = assert.rejects(client.callTool({ name: 'local_lookup' }, undefined, { signal: controller.signal }));
+  await started;
+  controller.abort();
+  await result;
+  await stopped;
+});

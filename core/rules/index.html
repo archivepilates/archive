@@ -44,9 +44,11 @@
         <section class="panel rule-section" id="archivepilates-mcp">
           <div class="panel-header"><div><h2>StudioMate 업무 MCP</h2><p>archivepilates-mcp · 맥미니 운영자 조회 전용</p></div></div>
           <div class="rule-note"><strong>목적·구현 · 2026-10-15</strong><span>맥미니 로컬 stdio 연결로 회원·수강권·예약·계약·알림톡·작업 원장을 조회합니다. 별도 챗봇·모델 호출·HTTP 공개·정기 실행은 추가하지 않습니다. 운영자는 조회할 회원과 업무를 지정하며, 강사 계정용 공개 서버가 아닙니다.</span></div>
-          <div class="rule-note"><strong>원천·안전</strong><span>기존 memberProfiles·bookings·계약·알림톡·기능별 작업 원장만 사용합니다. 동기화 저장시각과 StudioMate 실시간 원본을 구분하며, 조회 실패나 한도를 빈 결과로 처리하지 않습니다. 예약·취소·수강권·홀딩 변경·실제 환불·발송은 지원하지 않습니다. 기존 자동화·공유 브라우저 잠금·발송 중복방지는 유지합니다.</span></div>
+          <div class="rule-note"><strong>원천·안전</strong><span>회원 검색·현재 수강권은 맥미니 StudioMate 화면을 직접 확인하고 원본 회원 ID·이름·전체 전화번호를 대조합니다. 확인시각을 표시하며 종료·삭제된 수강권 이력은 포함하지 않습니다. 예약·계약·알림톡·작업은 기존 원장 조회로 구분합니다. 조회 실패를 빈 목록이나 저장 자료로 대체하지 않습니다. 예약·취소·수강권·홀딩 변경·실제 환불·발송은 지원하지 않습니다.</span></div>
           <div class="rule-note"><strong>연결·권한</strong><span>맥미니 Codex 설정에서 운영 소스의 MCP를 필요할 때 실행합니다. 서버와 클라이언트 모두 회원 검색·수강권·예약·계약·알림톡·작업 상태 조회 6개만 허용합니다. 활성 owner·manager 원장을 매 호출 확인하며, 강사 계정이나 외부 공개용으로 제공하지 않습니다. 메모 계획·실행 도구는 운영 연결에 노출하지 않습니다.</span></div>
-          <div class="rule-note"><strong>검증·다음 · 2026-10-15</strong><span>메시지는 한국 날짜 범위를 원본 쿼리에 적용합니다. 날짜 인덱스 미준비 시 제한적 호환 조회와 미준비 상태를 명시하며 한도 초과는 중단합니다. 실제 연결·인덱스·명령 검증 증거는 2026-10-15-archivepilates-mcp-connection 보고서를 따릅니다. 이 운영규칙은 해당 Hosting 릴리스부터 적용하며 회원·발송·예약·자동화 주기는 변경하지 않습니다. 메모와 실시간 브라우저 제어는 별도 승인·제한 테스트 후 결정합니다.</span></div>
+          <div class="rule-note"><strong>전용 운영 채팅 · 2026-10-15</strong><span>Codex 사이드바에 고정한 archivepilates-mcp 채팅에서 MCP 업무 조회를 요청합니다. 개발·배포·운영 정책 통합은 기존 ARCHIVE CORE 채팅에서 관리합니다. 채팅 생성은 실시간 조회 운영 전환이나 회원 변경·발송 승인과 다르며, 실제 지원 범위는 연결된 도구 결과로 확인합니다.</span></div>
+          <div class="rule-note"><strong>실시간 조회·예외</strong><span>기존 공유 브라우저 잠금은 최대 5초 대기하고 조회 후 브라우저를 닫습니다. 로그인 만료·다른 자동화 사용 중·화면 변경은 재인증 또는 재조회를 안내합니다. 수강권은 로딩 종료 후 새 상세 화면에서도 대조하며, 조회 중 변경되면 중단합니다. 종료 확인 실패 시 잠금을 유지하고 운영자 확인이 필요합니다. 로그인·회원 변경 POST는 차단하며 기존 동기화·발송 주기·중복방지는 유지합니다.</span></div>
+          <div class="rule-note"><strong>검증·배포 · 2026-10-16</strong><span>운영 연결 전환은 10월 16일 승인됐으며 이 문구가 포함된 Hosting과 맥미니 실행기 반영 후 적용합니다. 회원·수강권 실시간 원본 조회, 회귀 142건·공유 잠금 7건을 검증했습니다. 실제 배포·등록 연결 재시험은 2026-10-15-archivepilates-mcp-live-lookup 보고서를 따릅니다. 새 MCP 프로세스에서 실행하며 기존 대화에 옛 도구 설명이 남으면 연결을 새로고침합니다. 메모·예약·발송 쓰기는 별도 승인·제한 테스트 대상입니다.</span></div>
         </section>
 
         <section class="panel rule-section" id="core-instructor-access">

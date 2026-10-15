@@ -45,7 +45,8 @@ try {
   assert.equal(found.members[0].memberId, '1982133');
   const memberId = found.members[0].memberId;
   const overview = await call('members_get_overview', { memberId });
-  assert.equal(overview.member.source.liveReadback, false);
+  assert.equal(found.liveReadback, true);
+  assert.equal(overview.member.source.liveReadback, true);
   assert.equal(JSON.stringify(overview).includes('01086488585'), false);
   const now = new Date(Date.now() + 9 * 3600000), endDate = now.toISOString().slice(0, 10);
   const startDate = new Date(now.getTime() - 6 * 86400000).toISOString().slice(0, 10);
@@ -64,7 +65,7 @@ try {
   checks.push({ check: 'production_write_disabled', ok: true });
   console.log(JSON.stringify({ ok: true, mode: registered ? 'registered_config_read_only' : 'live_read_only', checks,
     dateIndexesActive: !messages.coverage.candidates.needsIndexDeployment && !messages.coverage.sends.needsIndexDeployment, memberDataWritten: false,
-    studioMateBrowserOpened: false, messagesSent: false }, null, 2));
+    studioMateBrowserOpened: true, messagesSent: false }, null, 2));
 } finally {
   await client.close();
   await transport.close();

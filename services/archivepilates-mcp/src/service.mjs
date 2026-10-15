@@ -67,7 +67,14 @@ const statusView = value => ({ recordId: value._id, status: safeState(value.stat
   // Arbitrary error strings can contain health answers, credentials or member content.
   nextAction: value.lastError || value.error ? '원본 업무 화면에서 오류를 확인하세요. 자동 재실행하지 않았습니다.' : null });
 
-export function createService({ store, approvals, staffId, now = Date.now, memoWritesEnabled = false, readOnly = false }) {
+export function createService({ store, approvals, staffId, now = Date.now, memoWritesEnabled = false, readOnly = false, liveReader }) {
+  const liveSelections = new Map();
+  function liveMember(value, checkedAt) {
+    return { memberId: value.memberId, name: value.name, maskedPhone: maskedPhone(value.phone),
+      nativeMemberId: value.memberId, linkedNativeMemberId: value.memberId, linkVerified: true,
+      source: { collection: null, kind: 'studiomate_rendered_dom', recordId: value.memberId,
+        observedAt: checkedAt, queriedAt: checkedAt, freshness: 'live_at_checked_time', liveReadback: true } };
+  }
   async function actor() {
     const current = await store.getOperator(id(staffId));
     requireValue(current && current.studioId === '5330' && current.active === true
@@ -111,7 +118,7 @@ export function createService({ store, approvals, staffId, now = Date.now, memoW
     }
     return ids;
   }
-  async function callTool(name, args) {
+  async function callTool(name, args, { signal } = {}) {
     requireValue(validate(name, args), 'INVALID_ARGUMENT', '지원하는 도구와 입력 항목을 확인해 주세요.');
     requireValue(!readOnly || !['memos_prepare', 'memos_commit'].includes(name), 'WRITE_DISABLED', '조회 전용 연결에서는 메모 계획·실행을 제공하지 않습니다.');
     const operator = await actor();
@@ -120,6 +127,17 @@ export function createService({ store, approvals, staffId, now = Date.now, memoW
       const isPhone = /^[\d\s()+-]+$/.test(query);
       requireValue(isPhone ? /^01[016789]\d{7,8}$/.test(phone(query)) : query.length >= 2,
         'INVALID_ARGUMENT', '이름 또는 전체 휴대폰 번호를 입력해 주세요.');
+      if (liveReader) {
+        const result = await liveReader.findMembers(isPhone ? phone(query) : query, isPhone, signal);
+        for (const member of result.members) {
+          if (liveSelections.size >= 100) liveSelections.delete(liveSelections.keys().next().value);
+          liveSelections.set(member.memberId, { ...member, selectedAt: now() });
+        }
+        return { ok: true, members: result.members.map(value => liveMember(value, result.checkedAt)),
+          match: 'exact', needsSelection: result.members.length !== 1, liveReadback: true,
+          checkedAt: result.checkedAt, elapsedMs: result.elapsedMs, coverage: result.coverage,
+          note: 'StudioMate 화면의 정확 일치 검색입니다. 선택한 원본 회원 ID로 다음 조회를 진행하세요.' };
+      }
       const found = await store.findMembers(isPhone ? phone(query) : query, isPhone);
       const active = found.filter(value => !value.mergedInto && !value.canonicalMemberId && !value.memberMerge?.canonicalMemberId
         && !['merged', 'deleted'].includes(value.status));
@@ -143,6 +161,25 @@ export function createService({ store, approvals, staffId, now = Date.now, memoW
       return { ok: true, ...result, studioMateVerified: false,
         note: result.duplicate ? '기존 동일 메모 작업이 있습니다. 다시 접수하지 않았습니다.'
           : 'CORE 원장 저장·기존 큐 접수 완료입니다. StudioMate 반영 완료는 작업 상태로 별도 확인하세요.' };
+    }
+    if (name === 'members_get_overview' && liveReader) {
+      const memberId = id(args.memberId);
+      const selected = liveSelections.get(memberId);
+      let expected;
+      if (selected && now() - selected.selectedAt < 10 * 60000) expected = selected;
+      else {
+        const current = await profile(memberId);
+        requireValue(/^[1-9]\d{0,15}$/.test(memberId), 'LIVE_SELECTION_REQUIRED',
+          '임시 회원 ID를 원본 ID로 추측하지 않습니다. members_find로 다시 선택해 주세요.');
+        expected = { memberId, name: current.name, phone: phone(current.phone) };
+      }
+      const result = await liveReader.getOverview(expected, signal);
+      requireValue(result.memberId === expected.memberId && result.name === expected.name
+        && phone(result.phone) === phone(expected.phone), 'LIVE_IDENTITY_MISMATCH', '실시간 회원 식별 결과가 다릅니다.');
+      return { ok: true, member: liveMember(result, result.checkedAt), memberGrade: result.memberGrade,
+        tickets: result.tickets, checkedAt: result.checkedAt, elapsedMs: result.elapsedMs,
+        coverage: result.coverage, ticketIdsAvailable: result.ticketIdsAvailable, liveReadback: true,
+        note: 'StudioMate 현재 수강권 화면을 직접 확인했습니다. 종료·삭제 이력과 결제 원장은 이 조회 범위가 아닙니다.' };
     }
     const current = await profile(args.memberId, name === 'memos_prepare');
     const member = memberView(current, now());

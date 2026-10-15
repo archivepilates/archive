@@ -9,8 +9,9 @@ import { createApprovals } from './approvals.mjs';
 import { createService } from './service.mjs';
 import { createMcpServer } from './transport.mjs';
 import { requireValue, safeError } from './errors.mjs';
+import { createLiveReader } from './live-browser.mjs';
 
-let app, server;
+let app, server, liveReader;
 let appCleanup;
 function cleanupApp() {
   if (!appCleanup) {
@@ -28,11 +29,12 @@ try {
   app = initializeApp({ credential: cert(key), projectId: settings.projectId });
   const db = getFirestore(app);
   const approvals = await createApprovals(settings.stateDir);
+  liveReader = createLiveReader();
   const service = createService({ store: createStore(db, Timestamp), approvals,
-    staffId: settings.staffId, memoWritesEnabled: settings.memoWritesEnabled, readOnly: settings.readOnly });
+    staffId: settings.staffId, memoWritesEnabled: settings.memoWritesEnabled, readOnly: settings.readOnly, liveReader });
   server = createMcpServer(service);
   let closing = false;
-  const shutdown = async () => { if (closing) return; closing = true; await server.close(); await cleanupApp(); };
+  const shutdown = async () => { if (closing) return; closing = true; await liveReader.close(); await server.close(); await cleanupApp(); };
   const disconnect = () => { void shutdown().catch(() => { process.exitCode = 1; }); };
   process.once('SIGINT', disconnect);
   process.once('SIGTERM', disconnect);
@@ -40,7 +42,7 @@ try {
   process.stdin.once('close', disconnect);
   // stdout belongs exclusively to MCP JSON-RPC; no credentials or payload diagnostics are printed.
   await server.connect(new StdioServerTransport());
-  server.onclose = () => { void cleanupApp(); };
+  server.onclose = () => { void liveReader.close().finally(cleanupApp).catch(() => { process.exitCode = 1; }); };
 } catch (error) {
   process.stderr.write(`${JSON.stringify(safeError(error))}\n`);
   await cleanupApp();

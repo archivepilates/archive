@@ -5,7 +5,7 @@ ARCHIVE PILATES StudioMate 업무를 위한 맥미니 로컬 MCP입니다. 운�
 ## 현재 상태
 
 - 표준 MCP stdio 연결과 조회 도구 6개를 구현했습니다. 외부 HTTP 포트·별도 모델 호출·추가 스케줄러는 없습니다.
-- 회원·예약은 기존 canonical 동기화 원장 조회입니다. StudioMate 화면의 실시간 조회가 아닙니다.
+- 회원 검색·현재 수강권은 맥미니 StudioMate 화면을 직접 조회합니다. 예약·계약·알림톡·작업은 기존 canonical 원장 조회입니다.
 - 계약은 `binding.memberId`, `selection.memberId`, `completion.memberId`와 서명 증거를 구분합니다. 예전 `memberSignupContracts`는 이 도구의 조회 범위가 아닙니다.
 - 메모 계획·승인·접수 코드는 격리 테스트만 완료했습니다. 실제 회원 메모 쓰기는 기본 비활성이며 운영 승격 전입니다.
 - 기존 자동화와 기존 `archive-ai-server`는 변경하지 않습니다. CORE 챗봇과 이전 중단된 개발본도 사용하지 않습니다.
@@ -15,8 +15,8 @@ ARCHIVE PILATES StudioMate 업무를 위한 맥미니 로컬 MCP입니다. 운�
 
 | 이름 | 기능 |
 | --- | --- |
-| `members_find` | 이름 또는 전체 휴대폰 번호 완전일치 검색, 동명이인 후보 반환 |
-| `members_get_overview` | 선택 회원의 수강권·등급·저장 기준시각 |
+| `members_find` | StudioMate 화면의 이름 또는 전체 휴대폰 번호 완전일치 검색, 검증한 원본 ID 반환 |
+| `members_get_overview` | 선택 회원의 현재 수강권·등급·실시간 확인시각 |
 | `bookings_list` | 최대 31일 예약 원장, 대체·fallback 표시 |
 | `contracts_get_progress` | 계약 생성·서명 증거·관측 상태·웰컴 상태 |
 | `messages_get_delivery` | 최대 31일 알림톡 후보·발송 원장, 최종 전달 미확인 구분 |
@@ -24,7 +24,7 @@ ARCHIVE PILATES StudioMate 업무를 위한 맥미니 로컬 MCP입니다. 운�
 | `memos_prepare` | 비공개 로컬 메모 계획 작성, 실제 회원 변경 없음 |
 | `memos_commit` | 별도 운영자 승인이 있는 메모만 기존 큐 접수, 기본 비활성 |
 
-현재 지원하지 않는 것: 일반 예약 생성·취소, 수강권·홀딩 변경, 새 회원 생성, 계약 재발송, 실제 환불·송금, 알림톡 발송, 브라우저 직접 실행, 임의 셸/Firestore 호출.
+현재 지원하지 않는 것: 일반 예약 생성·취소, 수강권·홀딩 변경, 새 회원 생성, 계약 재발송, 실제 환불·송금, 알림톡 발송, 임의 URL·브라우저 명령·셸/Firestore 호출.
 
 ## 로컬 실행
 
@@ -34,7 +34,7 @@ Node.js 22 이상이 필요합니다. 이 폴더에서 `npm ci --ignore-scripts`
 ARCHIVE_MCP_OPERATOR_STAFF_ID=1979746 npm start
 ```
 
-`stdout`은 MCP 전용이므로 일반 터미널에서는 대화 화면이 뜨지 않습니다. MCP 클라이언트가 실행·종료하는 구조입니다. 이미 로그인된 브라우저를 자동으로 열지 않습니다.
+`stdout`은 MCP 전용이므로 일반 터미널에서는 대화 화면이 뜨지 않습니다. MCP 클라이언트가 실행·종료하는 구조입니다. 회원 검색·수강권 도구를 호출할 때만 로그인된 공유 브라우저 프로필을 잠금 후 열고 종료합니다. Playwright Chromium이 설치된 맥미니에서 사용합니다.
 
 - Firebase 프로젝트: `archive-pilates`
 - 계정: `archive-codex-operator@archive-pilates.iam.gserviceaccount.com`
@@ -75,15 +75,25 @@ ARCHIVE_MCP_READ_ONLY = "true"
 
 ## 데이터·비용·결과 해석
 
-- 원천은 `memberProfiles`, `bookings`, `studiomateMembershipContracts`, `alimtalkCandidates/Sends` 및 지정된 feature 작업 원장입니다. `workLanes`, `member360Cards`, `members` 미러는 사용하지 않습니다.
+- 회원 검색·현재 수강권의 원천은 `https://arcpilates.studiomate.kr`의 렌더링된 화면입니다. 기존 내부 API 호출·응답 본문·인증 헤더·프레임워크 상태는 읽지 않습니다. 화면이 발생시키는 검색 요청은 완료 상태만 관찰합니다.
+- 나머지 원천은 `memberProfiles`, `bookings`, `studiomateMembershipContracts`, `alimtalkCandidates/Sends` 및 지정된 feature 작업 원장입니다. `workLanes`, `member360Cards`, `members` 미러는 사용하지 않습니다.
 - 전화번호는 기본 마스킹합니다. 생년월일·이메일·설문 원문·메모 원문·서명 이미지·접근 토큰·자유 형식 오류는 조회 결과에 반환하지 않습니다.
-- 현재 이름 검색은 정확히 저장된 이름 기준입니다. 부분 이름·별명·국가번호 변형 검색은 후순위입니다.
+- 이름 검색은 화면의 전체 이름 정확 일치입니다. 부분 이름·전화번호 뒤 4자리로 선택하지 않습니다. 전체 이름·전화번호를 대조하고 실제 상세 주소에서 원본 ID를 확인합니다. 검증한 선택은 같은 MCP 세션에서 10분간 보관하며 수강권은 매번 새로 조회합니다. 임시 Excel ID를 원본 ID로 추측하지 않습니다.
 - 검증된 Excel ID 연결과 명시적 병합 이력만 사용합니다. 불완전하거나 상충하는 연결은 조회 보류이며 묵시적으로 전체 이력을 확인했다고 하지 않습니다.
-- 기록의 `syncedAt`은 저장시각입니다. 최신 다운로드와의 직접 연결 증거가 없으므로 `freshness=unknown`, `liveReadback=false`를 반환합니다.
+- 실시간 결과에는 `liveReadback=true`, `checkedAt`, `elapsedMs`, `coverage`가 붙습니다. 현재 수강권 카드만 조회하며 종료·삭제 이력과 실제 결제 원장을 확인한 것으로 해석하지 않습니다. 화면에 없는 수강권 ID는 만들지 않으며 `ticketIdsAvailable=false`로 표시합니다. 이용기간은 한국 날짜 필드와 ISO 값을 함께 제공합니다.
+- 원장 조회의 `syncedAt`은 저장시각입니다. 최신 다운로드와의 직접 연결 증거가 없으므로 `freshness=unknown`, `liveReadback=false`를 유지합니다. 실시간 도구가 실패해도 이 자료로 자동 대체하지 않습니다.
 - 예약은 기간을 서버 쿼리에 적용합니다. 메시지는 생성시각의 한국 날짜를 원본 쿼리에 적용합니다. 두 복합 인덱스는 운영 READY 및 실제 날짜 쿼리 성공을 확인했습니다. 인덱스가 없을 때만 기존 회원 이력을 엄격한 한도로 읽는 호환 경로를 쓰며 `coverage.needsIndexDeployment=true`로 표시합니다. 이 경로에서 한도를 넘으면 날짜 축소 대신 인덱스 배포 필요로 차단합니다. 다른 권한·통신 오류에는 대체 조회하지 않습니다.
 - 조회는 목록당 최대 200개 고유 문서, 원장 호출당 최대 400개 수신 문서로 제한합니다. 한도·권한·인덱스 오류를 빈 목록으로 바꾸지 않습니다.
 - 후보 `sent`, 발송 작업 `done`, SOLAPI 메시지 ID는 최종 전달 증거가 아닙니다. 이 버전은 SOLAPI 최종 상태를 새로 조회하지 않습니다.
 - 조회 시 Firestore 읽기 비용이 발생할 수 있습니다. MCP 전용 정기 조회·새 클라우드 런타임·모델 API 비용은 추가하지 않습니다.
+
+## 실시간 브라우저 안전장치
+
+- 기존 `~/ArchiveIN/automation/browser-profile`과 공통 `scripts/lib/studiomate-browser-lock.mjs`를 사용합니다. 잠금은 최대 5초 대기 후 `LIVE_BUSY`로 종료하며 실행 중인 동기화를 중지하지 않습니다.
+- 처리 예산은 잠금 대기 포함 45초, 종료 확인은 최대 5초입니다. MCP 취소·연결 종료도 브라우저 종료를 요청합니다. 종료를 확인하지 못하면 `LIVE_CLEANUP_REQUIRED`로 알리고 잠금을 유지합니다. 이후 종료가 확인되면 같은 소유 잠금만 해제합니다.
+- 모든 작업은 GET/HEAD/OPTIONS만 통과시킵니다. 로그인 POST도 차단하므로 로그인 만료 시 `LIVE_LOGIN_REQUIRED`를 반환하고 맥미니에서 재인증해야 합니다. 로그인 유지나 CAPTCHA 우회를 보장하지 않습니다.
+- 로딩 종료 후 읽으며 수강권은 새로운 상세 화면에서 두 번 대조합니다. 조회 중 변경·중복·불완전 목록·잘못된 날짜/횟수·마스킹된 원본 전화번호는 확인필요로 중단합니다. 검색은 화면에 보인 정확 일치 후보만이며 10개 이상은 조회 범위를 줄여야 합니다.
+- 브라우저 프로필의 세션 보관 외에 회원·수강권·예약·계약·메모·발송 원장은 변경하지 않습니다. 정기 실행도 추가하지 않습니다.
 
 ## 검증
 
@@ -94,8 +104,10 @@ ARCHIVE_MCP_OPERATOR_STAFF_ID=1979746 npm run smoke -- --live-read-only
 npm run smoke -- --live-read-only --registered --require-date-indexes
 ```
 
-라이브 smoke는 김기효 테스트 프로필의 조회 도구 6개와 운영 쓰기 차단만 확인합니다. 서버와 임시 로컬 상태를 종료·정리합니다. 실제 회원·수강권·예약·메모·발송·스케줄러는 변경하지 않습니다.
+라이브 smoke는 김기효 테스트 계정의 실시간 회원·수강권 2개와 저장 원장 조회 4개 및 운영 쓰기 차단을 확인합니다. 서버·브라우저·잠금·임시 로컬 상태를 종료·정리합니다. 실제 회원·수강권·예약·메모·발송·스케줄러는 변경하지 않습니다.
 
 ## 다음 단계
 
 조회 전용 연결은 구현 커밋 `c5254165`로 배포·검증됐습니다. 등록 설정을 읽은 SDK 시험과 앱 실행기의 자연어 검색→수강권 조회를 모두 확인했습니다. 기존 앱·대화의 도구 목록은 새 연결 또는 앱 재시작이 필요할 수 있습니다. 메모 큐는 별도 승인된 제한 테스트와 보존정책 확정 뒤 활성화합니다. 예약·취소 등 새 쓰기 도구는 각각 원본 읽기·승인·저장·전체 재검증 절차가 완성된 후 추가합니다.
+
+실시간 조회 변경의 실제 운영 전환 여부는 `docs/tasks/2026-10-15-archivepilates-mcp-live-lookup.md`와 대응 HTML 보고서를 따릅니다. 개발 소스 검증만으로 기존 연결이 전환됐다고 하지 않습니다.
