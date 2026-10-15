@@ -1,0 +1,23 @@
+<!doctype html>
+<html lang="ko">
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width,initial-scale=1">
+<title>회원 계약 서명 상태 점검 · 2026-10-15</title>
+<style>*{box-sizing:border-box}body{margin:0;background:#f7f8fa;color:#20252b;font:16px/1.65 system-ui,sans-serif}main{max-width:900px;margin:auto;padding:32px 20px}h1{font-size:26px}h2{font-size:18px;margin:28px 0 8px}p{margin:8px 0}table{width:100%;border-collapse:collapse}td,th{padding:12px 8px;text-align:left;border-bottom:1px solid #dfe3e7}code{overflow-wrap:anywhere}.pending{color:#8d4800}</style>
+<main>
+<h1>회원 계약 서명 상태 점검</h1>
+<p>ARCHIVE PILATES · 2026-10-15</p>
+<h2>결론</h2>
+<p>대상 두 계약의 StudioMate 서명완료를 확인해 canonical 계약 원장과 작업 상태를 보완했습니다. CORE 모바일 운영자 화면에서도 서명 단계가 완료로 표시됨을 확인했습니다.</p>
+<table><tr><th>단계</th><th>확인 결과</th></tr><tr><td>원본</td><td>10월 12일 서명완료, 회원·발급권·상품·양측 서명·실제 완료시각 일치</td></tr><tr><td>CORE</td><td>서명 완료 / 웰컴 확인필요</td></tr><tr><td>외부 발송</td><td>계약 재생성·재발송·StudioMate 변경 0건, 웰컴 후보·발송 원장 변화 0건</td></tr><tr><td>재발방지 코드</td><td>수정·검증 완료, 운영 실행기 반영·Hosting·커밋·푸시 승인 완료</td></tr></table>
+<h2>원인과 보완</h2>
+<p>기존 완료 확인기는 저장된 관찰 이력이 100건에 도달하면 다음 조회 예약을 제거했습니다. 두 계약 모두 본인 서명 전 이 한도에 도달해 이후 서명을 읽지 않았습니다.</p>
+<p>보완된 확인기는 원래 100건 이력을 보존하고 새 관찰을 별도 보관합니다. 동일 상태의 반복 관찰은 최초·최종 시각을 유지하고 상태 변화·충돌 증거는 버리지 않습니다. 누락된 조회 예약과 만기 조회는 제한된 순환 커서로 점검합니다. 일시적 실패는 재확인 간격을 늘리고, 원본 연결 충돌은 운영자 확인 대상으로 보류합니다.</p>
+<h2>발송 안전장치</h2>
+<p>늦게 확인된 서명은 <code>signatureReceipt</code>의 <code>signature_status_only</code>로 기록합니다. 웰컴 발송용 <code>completion</code>을 새로 만들지 않으며 기존 7일 계약 연결·24시간 서명·최신 원본·스텝 제외·중복 방지 규칙을 유지합니다. 웰컴 발송이 필요하면 별도 판단과 승인이 필요합니다.</p>
+<h2>검증</h2>
+<p>계약·서명·웰컴 회귀 테스트, 대기 이력 한도·재시도·조회 복구·정확한 발급권 대조·상태 전용 확인의 무발송 테스트 총 878건 통과. 실제 Firestore 커서 조회 지원 확인. CORE 390px 운영자 화면에서 두 계약의 서명 완료 확인, 페이지 오류와 Firestore 쓰기 시도 0건. 작업 소유 브라우저·컨텍스트와 StudioMate 잠금 정리 완료.</p>
+<h2>배포 상태</h2>
+<p class="pending">두 건의 데이터 보완은 운영 반영됐습니다. 2026-10-15 재발방지 확인기와 CORE 안내·운영규칙의 운영 반영·배포·커밋·푸시 승인을 받았습니다. 필요한 범위는 맥미니 실행기와 CORE Hosting이며 Functions·Firestore 규칙·인덱스 변경은 없습니다. 배포 결과는 릴리스 증거로 구분해 기록합니다.</p>
+<p>개인정보를 포함한 전후 감사 자료는 Git 밖의 운영 보고서 경로에 보관하며 계약 원본·서명 이미지는 공개 보고서에 포함하지 않습니다.</p>
+</main></html>

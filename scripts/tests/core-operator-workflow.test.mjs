@@ -4,6 +4,7 @@ import test from "node:test";
 import vm from "node:vm";
 import { buildSync } from "esbuild";
 import { fileURLToPath } from "node:url";
+import { webcrypto } from "node:crypto";
 
 const appUrl = new URL("../../core/assets/app.js", import.meta.url);
 const source = fs.readFileSync(appUrl, "utf8");
@@ -28,14 +29,15 @@ function app() {
     querySelector: () => null,
     querySelectorAll: () => [],
   };
-  const context = { document, URL, console, Date, Intl };
+  const context = { document, URL, console, Date, Intl, crypto: webcrypto, TextEncoder };
   vm.runInNewContext(`${testSource}\nglobalThis.api = {
     state, setReadState, renderHomeSummary, renderHomeDecisions, renderRenewalPipeline,
     renewalCaseRows, activeRenewalMemberRows, groupRenewalRows, getCommunicationActions,
     pendingAlimtalkCandidates, failedAlimtalkCandidates, failedAlimtalkSends, isCurrentCommunicationFailure, communicationProblemSummary, currentPrivateSessionRows,
     privateSessionAction, renderPrivateSessionCard, staffCompositeScore, scoreBand,
     formatMetricNumber, formatMetricRate, parkingJobNeedsAttention, parkingJobStatusLabel,
-    renderPrivate, coreHref, commandPaletteEntries
+    renderPrivate, coreHref, commandPaletteEntries, loadMemberRegistrationDashboard, renderMemberRegistrationDashboard,
+    setMemberRegistrationFilter(value) { memberRegistrationFilter = value; }
   };`, context);
   const element = (id) => {
     const value = { textContent: "", innerHTML: "", className: "" };
@@ -46,6 +48,30 @@ function app() {
 }
 
 const reference = new Date("2026-09-05T12:00:00+09:00");
+
+test("late native signature is complete in registration UI without claiming welcome delivery", async () => {
+  const a = app();
+  const now = new Date().toISOString();
+  const rows = {
+    memberProfiles: [{ id: "100", memberId: "100", name: "Synthetic member", phone: "01012345678", updatedAt: now }],
+    studiomateMembershipContracts: [{ id: "a".repeat(64), contractId: "a".repeat(64), memberName: "Synthetic member", studioId: "5330",
+      status: "signed", observationStatus: "signed", welcomeStatus: "review", welcomeReason: "late_signature_welcome_review_required",
+      updatedAt: now, binding: { memberId: "100", memberPhone: "01012345678", userTicketId: "200" },
+      signatureReceipt: { purpose: "signature_status_only", sendAllowed: false } }],
+  };
+  const runtime = { db: {}, collection: (_db, path) => ({ path }), orderBy: () => ({}), where: () => ({}), limit: () => ({}),
+    query: collection => collection, getDocs: async query => ({ docs: (rows[query.path] || []).map(row => ({ id: row.id, data: () => row })) }) };
+  const dashboard = await a.loadMemberRegistrationDashboard(runtime);
+  assert.equal(dashboard.items.length, 1);
+  const item = dashboard.items[0];
+  assert.equal(item.steps.find(step => step.name === "서명").statusLabel, "완료");
+  assert.equal(item.steps.find(step => step.name === "웰컴").statusLabel, "확인필요");
+  assert.ok(item.reason.includes("서명은 완료"));
+  const list = a.element("memberRegistrationList");
+  a.setMemberRegistrationFilter("review");
+  a.renderMemberRegistrationDashboard(dashboard);
+  assert.ok(list.innerHTML.includes("서명은 완료"));
+});
 const ticket = (id, remainingCount = 2) => ({ userTicketId: id, name: "그룹 30회", classType: "G", remainingCount, expiresAt: "2026-12-20" });
 const renewal = (id, extra = {}) => ({ id, memberId: "m1", memberName: "테스트", ticketIdentity: "user:old", ticketName: "그룹 30회", kind: "group", priority: "urgent", active: true, ...extra });
 

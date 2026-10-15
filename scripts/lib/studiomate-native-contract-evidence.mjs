@@ -219,6 +219,63 @@ export function normalizeNativeContractDom(rawDOM, binding) {
   };
 }
 
+// Historical signature truth is not a fresh completion event or send permission.
+export function normalizeNativeContractSignatureReceipt(rawDOM, binding, provider, now) {
+  const nowMs = utcMillis(now);
+  const fail = (reason) => ({ status: "review", reason, receipt: null, sendAllowed: false });
+  if (!Number.isFinite(nowMs) || !validBinding(binding) || utcMillis(binding.selectedAt) > nowMs)
+    return fail("invalid_native_binding");
+  const parsed = domObservation(rawDOM, binding);
+  if (parsed.reason) return fail(parsed.reason);
+  const dom = parsed.observation;
+  if (!fresh(utcMillis(dom.observedAt), nowMs) || utcMillis(dom.observedAt) < utcMillis(binding.selectedAt))
+    return fail("stale_contract_source");
+  if (dom.status !== "signed" || !dom.memberSignaturePresent || !dom.centerSignaturePresent)
+    return fail("native_member_signature_required");
+  if (!record(provider) || provider.source !== "studiomate_native_contract" ||
+      provider.verified !== true || provider.complete !== true ||
+      provider.contractId !== binding.contractId || provider.studioId !== binding.studioId ||
+      provider.memberId !== binding.memberId || provider.title !== binding.title ||
+      provider.memberName !== dom.memberName || provider.memberPhone !== binding.memberPhone ||
+      provider.ticket?.userTicketId !== binding.userTicketId || provider.ticket?.productId !== binding.productId ||
+      provider.status !== "signed" || !provider.memberSignaturePresent || !provider.centerSignaturePresent)
+    return fail("native_signature_receipt_identity_mismatch");
+  const signedMs = providerMillis(provider.signedAt);
+  if (!Number.isFinite(signedMs) || signedMs < utcMillis(binding.selectedAt) ||
+      signedMs > utcMillis(dom.observedAt) || kstDate(signedMs) !== dom.signedDate)
+    return fail("native_signature_receipt_time_mismatch");
+  const history = binding.previousObservations || [];
+  if (!Array.isArray(history) || history.length > MAX_HISTORY)
+    return fail("invalid_observation_history");
+  let sawSigned = false;
+  let lastAt = utcMillis(binding.selectedAt);
+  for (const raw of history) {
+    const parsed = domObservation(raw, binding, true);
+    if (parsed.reason) return fail("invalid_bound_observation_history");
+    const prior = parsed.observation;
+    const at = utcMillis(prior.observedAt);
+    if (at < lastAt || at > utcMillis(dom.observedAt)) return fail("invalid_observation_history_time");
+    if (sawSigned && (prior.status !== "signed" || !prior.memberSignaturePresent || !prior.centerSignaturePresent))
+      return fail("signature_history_regression");
+    if (prior.status === "signed") {
+      if (!prior.memberSignaturePresent || !prior.centerSignaturePresent || prior.signedDate !== dom.signedDate || at < signedMs)
+        return fail("signature_history_regression");
+      sawSigned = true;
+    } else if (at >= signedMs) return fail("provider_signature_conflicts_with_dom");
+    lastAt = at;
+  }
+  return {
+    status: "signed", reason: "verified_native_signature_receipt", sendAllowed: false,
+    receipt: Object.freeze({
+      source: "studiomate_native_contract", purpose: "signature_status_only", authoritative: true,
+      contractId: binding.contractId, ...Object.fromEntries(identityKeys.map(key => [key, binding[key]])),
+      memberPhone: binding.memberPhone, checkedAt: dom.observedAt,
+      signedAt: iso(signedMs), signedDate: dom.signedDate,
+      status: "signed", memberSigned: true, centerSigned: true, sendAllowed: false,
+    }),
+  };
+}
+
 /**
  * Pure, staged adapter; no clock reads, browser, persistence or send permission.
  * This is a VERIFIED COLLECTOR DTO, not a claimed StudioMate API/selector schema.

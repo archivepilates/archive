@@ -483,6 +483,20 @@ const noActions = (h: Harness): void => {
   assert.equal(h.db.writes.length, 0);
   assert.equal(h.calls.transport, 0);
 };
+
+test("signature-status-only receipt cannot queue or dispatch a welcome", async () => {
+  const h = harness();
+  const source = h.db.row(SOURCE_PATH)!;
+  delete source.completion;
+  source.status = "signed";
+  source.signatureReceipt = { purpose: "signature_status_only", sendAllowed: false, signedAt: "2026-09-10T03:00:00.000Z" };
+  h.db.put(SOURCE_PATH, source);
+  assert.deepEqual(await queueMembershipWelcome(h.deps, SOURCE_ID), { status: "blocked", reason: "canonical_contract_not_verified" });
+  await assert.rejects(dispatchMembershipWelcome(h.deps, h.candidate, h.transport));
+  noActions(h);
+  assert.equal(h.calls.evidence, 0);
+  assert.equal(h.db.entries(MEMBERSHIP_READBACK_REQUESTS).length, 0);
+});
 const rejectsWithoutActions = async (
   h: Harness,
   candidate = h.candidate,

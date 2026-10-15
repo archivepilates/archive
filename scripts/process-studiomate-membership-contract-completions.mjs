@@ -15,7 +15,17 @@ import {
 import {
   normalizeNativeContractObservation,
   normalizeNativeContractDom,
+  normalizeNativeContractSignatureReceipt,
 } from "./lib/studiomate-native-contract-evidence.mjs";
+import {
+  needsMembershipContractObservation,
+  membershipContractNextObservation,
+  selectMembershipContractObservationTargets,
+  membershipContractObservationHistory,
+  resolveMembershipContractSignature,
+  membershipContractObservationTail,
+  membershipContractCompletionSafetyPatch,
+} from "./lib/studiomate-membership-contract-completion-state.mjs";
 import {
   buildMembershipContractMemberProfilePatch,
   membershipContractFallbackAliasIds,
@@ -46,6 +56,8 @@ const result = {
   review: 0,
   sent: 0,
   studioMateWrites: 0,
+  signaturesRecorded: 0,
+  records: [],
 };
 // Same download runner as contact sync; no duplicate downloader, LaunchAgent or heartbeat.
 if (process.env.STUDIOMATE_MEMBERSHIP_CONTRACT_COMPLETION !== "enabled") {
@@ -72,15 +84,37 @@ if (
   console.log(JSON.stringify({ ...result, status: "source_not_promoted" }));
   process.exit(0);
 }
+const recoveryCursorRef = db.doc("opsState/membershipContractCompletionRecoveryCursor");
+let recoveryPage = null;
+let nextRecoveryCursor = null;
+let nextDueCursor = null;
 const targets = requestedContractId
   ? await exactContractTarget(requestedContractId)
-  : await db
+  : await scheduledTargets();
+
+async function scheduledTargets() {
+  const savedCursor = (await recoveryCursorRef.get()).data() || {};
+  let dueQuery = db
       .collection("studiomateMembershipContracts")
       .where("nextObservationAt", "<=", admin.firestore.Timestamp.now())
       .orderBy("nextObservationAt")
-      .limit(5)
-      .get();
+      .orderBy(admin.firestore.FieldPath.documentId()).limit(20);
+  if (savedCursor.dueAt?.toMillis && /^[a-f0-9]{64}$/.test(savedCursor.dueId || ""))
+    dueQuery = dueQuery.startAfter(savedCursor.dueAt, savedCursor.dueId);
+  const due = await dueQuery.get();
+  nextDueCursor = due.size === 20 ? { dueId: due.docs.at(-1).id, dueAt: due.docs.at(-1).data().nextObservationAt } : { dueId: null, dueAt: null };
+  const cursor = savedCursor.lastId;
+  let query = db.collection("studiomateMembershipContracts")
+    .where("status", "in", ["waiting", "review"])
+    .orderBy(admin.firestore.FieldPath.documentId()).limit(20);
+  if (/^[a-f0-9]{64}$/.test(cursor || "")) query = query.startAfter(cursor);
+  recoveryPage = await query.get();
+  nextRecoveryCursor = recoveryPage.size === 20 ? recoveryPage.docs.at(-1).id : null;
+  const docs = selectMembershipContractObservationTargets(due.docs, recoveryPage.docs, config.studioId);
+  return { empty: !docs.length, docs };
+}
 if (targets.empty) {
+  if (apply && recoveryPage) await recoveryCursorRef.set({ ...nextDueCursor, lastId: nextRecoveryCursor, updatedAt: admin.firestore.Timestamp.now() });
   console.log(JSON.stringify({ ...result, status: "idle" }));
   process.exit(0);
 }
@@ -104,13 +138,7 @@ try {
   for (const doc of targets.docs) {
     const source = doc.data();
     if (
-      source.schemaVersion !== 1 ||
-      source.source !== "studiomate_native_contract" ||
-      source.bindingVerified !== true ||
-      source.studioId !== config.studioId ||
-      source.contractId !== doc.id ||
-      source.binding?.contractId !== doc.id ||
-      source.welcomeStatus === "accepted"
+      !needsMembershipContractObservation(source, doc.id, config.studioId, { refresh: Boolean(requestedContractId) })
     )
       continue;
     result.checked++;
@@ -151,9 +179,11 @@ try {
       };
       const binding = {
         ...source.binding,
+        previousObservations: membershipContractObservationHistory(source),
         currentMemberTicket: refreshed.nativeReadback,
       };
       const dom = normalizeNativeContractDom(contract, binding);
+      const signature = normalizeNativeContractSignatureReceipt(contract, binding, providerContract, new Date().toISOString());
       // Native eligibility comes only from an independently verified current member/ticket/payment read.
       // The contract's copied purchase fields cannot prove a ticket was not later refunded.
       outcome = normalizeNativeContractObservation(
@@ -163,7 +193,8 @@ try {
       );
       if (dom.observation && !outcome.observation)
         outcome.observation = dom.observation;
-      if (outcome.status === "complete") {
+      outcome = resolveMembershipContractSignature(outcome, signature, dom.observation?.status);
+      if (outcome.completion) {
         profilePatch = buildMembershipContractMemberProfilePatch(
           refreshedMember,
           source.studioId,
@@ -177,16 +208,22 @@ try {
           profilePatch,
         );
       }
-    } catch {
+    } catch (error) {
       outcome = {
         status: "review",
-        reason: "native_contract_read_failed",
+        reason: error?.message === "invalid_observation_history" ? "invalid_observation_history" : "native_contract_read_failed",
         observation: null,
         completion: null,
       };
+      outcome.diagnostic = String(error?.message || "unknown_native_read_failure").slice(0, 160);
     }
+    const tail = membershipContractObservationTail(source, outcome.observation);
+    if (tail.overflow) outcome = { ...outcome, status: "review", reason: "invalid_observation_history", completion: null, signatureReceipt: null };
     if (outcome.status === "complete") result.completed++;
     if (outcome.status === "review") result.review++;
+    if (outcome.signatureReceipt) result.signaturesRecorded++;
+    result.records.push({ contractId: doc.id, status: outcome.status, reason: outcome.reason,
+      signedAt: outcome.signatureReceipt?.signedAt || null, diagnostic: outcome.diagnostic || null });
     if (!apply) continue;
     await db.runTransaction(async (tx) => {
       const latest = await tx.get(doc.ref);
@@ -200,13 +237,22 @@ try {
       const observations = [...(source.binding.previousObservations || [])];
       if (outcome.observation && observations.length < 100)
         observations.push(outcome.observation);
-      const terminal =
-        outcome.status !== "waiting" || observations.length >= 100;
+      const next = membershipContractNextObservation(outcome, source, Date.now());
       tx.update(doc.ref, {
         observationStatus: outcome.status,
         observationReason: outcome.reason,
         ...(refreshedReadback ? { nativeReadback: refreshedReadback } : {}),
         "binding.previousObservations": observations,
+        lastObservation: outcome.observation || source.lastObservation || null,
+        observationTail: tail.rows,
+        observationReviewAttempts: next?.reviewAttempts || 0,
+        observationHold: outcome.status === "review" && !next,
+        observationDiagnostic: outcome.diagnostic || null,
+        ...(outcome.signatureReceipt ? { signatureReceipt: outcome.signatureReceipt, status: "signed" } : {}),
+        ...(outcome.signatureReceipt && !outcome.completion ? {
+          welcomeStatus: ["accepted", "queued"].includes(source.welcomeStatus) ? source.welcomeStatus : "review",
+          welcomeReason: "late_signature_welcome_review_required",
+        } : {}),
         ...(outcome.completion
           ? {
               completion: outcome.completion,
@@ -215,9 +261,8 @@ try {
                 source.welcomeStatus === "queued" ? "queued" : "ready",
             }
           : {}),
-        nextObservationAt: terminal
-          ? admin.firestore.FieldValue.delete()
-          : admin.firestore.Timestamp.fromMillis(Date.now() + 10 * 60_000),
+        ...membershipContractCompletionSafetyPatch(outcome, source, admin.firestore.FieldValue.delete()),
+        nextObservationAt: next ? admin.firestore.Timestamp.fromMillis(next.at) : admin.firestore.FieldValue.delete(),
         updatedAt: admin.firestore.Timestamp.now(),
       });
       if (outcome.completion) {
@@ -247,6 +292,8 @@ try {
             { merge: true },
           );
         }
+      }
+      if (outcome.completion || outcome.signatureReceipt) {
         tx.set(
           db
             .collection("studiomateMembershipContractJobs")
@@ -255,8 +302,9 @@ try {
             stage: "complete",
             contractId: doc.id,
             signedAt:
-              outcome.completion.signedAt ||
-              outcome.completion.firstObservedSignedAt,
+              outcome.completion?.signedAt ||
+              outcome.completion?.firstObservedSignedAt ||
+              outcome.signatureReceipt.signedAt,
             updatedAt: admin.firestore.Timestamp.now(),
           },
           { merge: true },
@@ -271,6 +319,7 @@ try {
     await release?.();
   }
 }
+if (apply && recoveryPage) await recoveryCursorRef.set({ ...nextDueCursor, lastId: nextRecoveryCursor, updatedAt: admin.firestore.Timestamp.now() });
 console.log(
   JSON.stringify({ ...result, status: result.review ? "review" : "checked" }),
 );

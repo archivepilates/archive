@@ -7445,6 +7445,7 @@ const MEMBER_REGISTRATION_REASONS = Object.freeze({
   membership_activation_scope_blocked: "회원가입 자동화 적용 범위를 확인해야 합니다.",
   contract_outside_cutover_or_stale: "계약서 최신 상태를 다시 확인해야 합니다.",
   canonical_contract_not_verified: "계약서 원천 검증이 완료되지 않았습니다.",
+  late_signature_welcome_review_required: "계약서 서명은 완료됐습니다. 늦게 확인된 서명의 웰컴 안내는 별도 확인이 필요합니다.",
 });
 
 function memberRegistrationReason(value, fallback = "자동화 상태를 확인해야 합니다.") {

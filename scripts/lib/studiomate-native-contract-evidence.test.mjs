@@ -9,6 +9,7 @@ import {
   normalizeNativeContractObservation as normalize,
   normalizeNativeContractDom,
   parseNativeSignedDate,
+  normalizeNativeContractSignatureReceipt,
 } from "./studiomate-native-contract-evidence.mjs";
 
 const NOW = "2026-09-14T04:00:00.000Z";
@@ -126,6 +127,75 @@ function historyIdentity(binding) {
 function run(input) {
   return normalize(input.raw, input.binding, NOW);
 }
+
+function receiptFixture() {
+  const input = fixture();
+  input.binding.selectedAt = "2026-09-01T03:00:00.000Z";
+  input.raw.signedDateText = "2026-09-10";
+  input.provider = {
+    source: "studiomate_native_contract", verified: true, complete: true,
+    contractId: input.binding.contractId, studioId: input.binding.studioId,
+    memberId: input.binding.memberId, title: input.binding.title,
+    memberName: input.raw.memberName, memberPhone: PHONE,
+    ticket: { userTicketId: input.binding.userTicketId, productId: input.binding.productId },
+    status: "signed", memberSignaturePresent: true, centerSignaturePresent: true,
+    signedAt: "2026-09-10T03:00:00.000Z",
+  };
+  return input;
+}
+
+test("late signature receipt records truth without refreshing completion/send eligibility", () => {
+  const input = receiptFixture();
+  assert.equal(run(input).status, "review");
+  const result = normalizeNativeContractSignatureReceipt(input.raw, input.binding, input.provider, NOW);
+  assert.equal(result.status, "signed");
+  assert.equal(result.receipt.signedAt, input.provider.signedAt);
+  assert.equal(result.receipt.purpose, "signature_status_only");
+  assert.equal(result.sendAllowed, false);
+  assert.equal(result.receipt.sendAllowed, false);
+  assert.equal(result.completion, undefined);
+});
+
+test("signature receipt rejects wrong identity, mismatched dates and incomplete signatures", () => {
+  const cases = [
+    input => { input.provider.memberId = "999"; },
+    input => { input.provider.memberName = "Other member"; },
+    input => { input.provider.memberPhone = "01099999999"; },
+    input => { input.provider.ticket.userTicketId = "999"; },
+    input => { input.provider.ticket.productId = "999"; },
+    input => { input.provider.centerSignaturePresent = false; },
+    input => { input.provider.memberSignaturePresent = false; },
+    input => { input.raw.memberSignaturePresent = false; },
+    input => { input.provider.signedAt = "2026-09-11T03:00:00.000Z"; },
+    input => { input.provider.signedAt = "2026-08-01T03:00:00.000Z"; },
+    input => { input.provider.signedAt = "2026-09-20T03:00:00.000Z"; },
+    input => { input.raw.observedAt = "2026-09-14T02:00:00.000Z"; },
+    input => { input.binding.verified = false; },
+  ];
+  for (const mutate of cases) {
+    const input = receiptFixture();
+    mutate(input);
+    const result = normalizeNativeContractSignatureReceipt(input.raw, input.binding, input.provider, NOW);
+    assert.equal(result.status, "review");
+    assert.equal(result.receipt, null);
+    assert.equal(result.sendAllowed, false);
+  }
+});
+
+test("late receipt preserves history contradictions and signing clocks", () => {
+  const input = receiptFixture();
+  const old = draft(input, "2026-09-09T03:00:00.000Z");
+  input.binding.previousObservations = Array.from({ length: 100 }, () => structuredClone(old));
+  assert.equal(normalizeNativeContractSignatureReceipt(input.raw, input.binding, input.provider, NOW).status, "signed");
+  const before = JSON.stringify(input.binding.previousObservations);
+  normalizeNativeContractSignatureReceipt(input.raw, input.binding, input.provider, NOW);
+  assert.equal(JSON.stringify(input.binding.previousObservations), before);
+  input.binding.previousObservations = [old, { ...old, observedAt: "2026-09-11T03:00:00.000Z" }];
+  assert.equal(normalizeNativeContractSignatureReceipt(input.raw, input.binding, input.provider, NOW).reason, "provider_signature_conflicts_with_dom");
+  input.binding.previousObservations = [{ ...input.raw, bindingIdentity: historyIdentity(input.binding), observedAt: "2026-09-12T03:00:00.000Z" },
+    { ...old, observedAt: "2026-09-13T03:00:00.000Z" }];
+  assert.equal(normalizeNativeContractSignatureReceipt(input.raw, input.binding, input.provider, NOW).reason, "signature_history_regression");
+});
 function review(input, reason) {
   const result = run(input);
   assert.equal(result.status, "review");
