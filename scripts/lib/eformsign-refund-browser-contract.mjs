@@ -81,12 +81,13 @@ export function assertRefundSourceUnchanged(job, profile) {
   const tickets = Array.isArray(profile.activeTickets) ? profile.activeTickets : [];
   const liveTicket = tickets.find((ticket) => refundTicketKey(ticket) === job.ticketKey);
   if (!liveTicket) throw new Error("환불 대상 수강권을 현재 원천에서 찾지 못했습니다.");
-  const liveSnapshot = currentRefundTicketSourceSnapshot(liveTicket);
+  const liveSnapshot = normalizeQueuedTicketSourceSnapshot(currentRefundTicketSourceSnapshot(liveTicket));
+  const queuedSnapshot = normalizeQueuedTicketSourceSnapshot(job.ticketSourceSnapshot);
   if (!isRefundCandidateStatus(liveSnapshot.status)) {
     throw new Error("환불 대상 수강권 상태가 변경되어 발송을 중단했습니다.");
   }
   assertRefundJobStillWithinValidity({ ticketExpiresAt: liveSnapshot.expiresAt });
-  if (JSON.stringify(liveSnapshot) !== JSON.stringify(job.ticketSourceSnapshot)) {
+  if (JSON.stringify(liveSnapshot) !== JSON.stringify(queuedSnapshot)) {
     throw new Error("환불 대상 수강권의 금액·사용·유효기간 원천이 변경되었습니다. 다시 계산하세요.");
   }
   return liveSnapshot;
@@ -116,26 +117,40 @@ export function formatInputWon(value) {
   return `${Math.round(Number(value) || 0).toLocaleString("ko-KR")}원`;
 }
 
+/**
+ * evidenceScope is "document_record" or "send_confirmation", never whole-page text.
+ * The caller must bind documentId to that record/confirmation's actual attribute or href.
+ */
 export function isUnambiguousSendSuccess({
   url = "",
   bodyText = "",
   documentName = "",
   documentId = "",
   recipientPhone = "",
+  evidenceScope = "",
 } = {}) {
   const text = String(bodyText || "").replace(/\s+/g, " ");
   const normalizedName = String(documentName || "").trim();
   if (
-    !normalizedName
+    !["document_record", "send_confirmation"].includes(evidenceScope)
+    || typeof documentName !== "string"
+    || !normalizedName
     || !text.includes(normalizedName)
-    || !String(documentId || "").trim()
+    || typeof documentId !== "string"
+    || !documentId.trim()
     || !hasRecipientPhoneEvidence(text, recipientPhone)
   ) return false;
-  const explicitSuccess = /문서(?:가|를)?\s*전송(?:되었습니다|했습니다| 완료)/.test(text)
-    || /전송이\s*완료(?:되었습니다|됐습니다)/.test(text);
-  const documentInSentList = /\/eform\/document\/(?:document_list\.html|list|doc_list|sent)/.test(String(url || ""))
-    && /진행 중|처리 중|완료|수신자|문서함/.test(text);
-  return explicitSuccess || documentInSentList;
+  const statusText = text.replace(normalizedName, "");
+  const negativeEnglish = /\b(?:no|not|never|cannot|can't|couldn't|wasn't|isn't|hasn't|didn't|failed|failure|unsuccessful(?:ly)?|draft|unsent|cancelled|canceled|error|pending)\b/i;
+  const negativeKorean = /실패|오류|취소|임시\s*저장|초안|미\s*(?:전송|발송|완료)|(?:전송|발송|완료)[^.!?]*(?:않|못|아니|아님|불가|없)|(?:전송|발송)\s*대기/;
+  if (negativeEnglish.test(statusText) || negativeKorean.test(statusText)) return false;
+  if (evidenceScope === "send_confirmation") {
+    return /문서(?:가|를)?\s*전송(?:되었습니다|했습니다| 완료)/.test(statusText)
+      || /전송이\s*완료(?:되었습니다|됐습니다)/.test(statusText)
+      || /\bdocument\s+(?:(?:has been|was)\s+)?(?:successfully\s+sent|sent(?:\s+successfully)?)(?:[.!]|$)/i.test(statusText);
+  }
+  return /\/eform\/document\/(?:document_list\.html|list|doc_list|sent)(?:[/?#]|$)/.test(String(url || ""))
+    && /(?:^|[\s:|])(?:진행\s*중|처리\s*중|완료)(?=$|[\s:|.,])|\b(?:In progress|Processing|Completed)\b/i.test(statusText);
 }
 
 export function hasRecipientPhoneEvidence(bodyText = "", recipientPhone = "") {
@@ -163,19 +178,46 @@ export function extractEformsignDocumentId(url = "") {
   }
 }
 
-function normalizeQueuedTicketSourceSnapshot(value) {
-  if (!value || typeof value !== "object") throw new Error("환불동의서 수강권 원천 스냅샷이 없습니다.");
+export function normalizeQueuedTicketSourceSnapshot(value) {
+  if (!value || typeof value !== "object" || Array.isArray(value)) {
+    throw new Error("환불동의서 수강권 원천 스냅샷이 없습니다.");
+  }
+  const fields = [
+    "ticketKey", "ticketName", "status", "paymentAmount", "totalCount", "remainingCount",
+    "availableFrom", "purchasedAt", "paymentAt", "expiresAt",
+  ];
+  if (Reflect.ownKeys(value).length !== fields.length || fields.some((field) => !Object.hasOwn(value, field))) {
+    throw new Error("환불 수강권 원천 스냅샷 필드가 누락되었거나 승인되지 않은 필드가 있습니다.");
+  }
+  for (const [field, maxLength] of [["ticketKey", 160], ["ticketName", 120], ["status", 40]]) {
+    if (typeof value[field] !== "string" || !value[field] || cleanText(value[field], maxLength) !== value[field]) {
+      throw new Error(`환불 수강권 원천 스냅샷 문자열이 올바르지 않습니다: ${field}`);
+    }
+  }
+  for (const field of ["paymentAmount", "totalCount", "remainingCount"]) {
+    if (value[field] !== null && (!Number.isSafeInteger(value[field]) || value[field] < 0)) {
+      throw new Error(`환불 수강권 원천 스냅샷 숫자가 올바르지 않습니다: ${field}`);
+    }
+  }
+  for (const field of ["availableFrom", "purchasedAt", "paymentAt", "expiresAt"]) {
+    const date = value[field];
+    if (date === null && field !== "expiresAt") continue;
+    if (typeof date !== "string" || !Number.isFinite(Date.parse(date)) || new Date(date).toISOString() !== date) {
+      throw new Error(`환불 수강권 원천 스냅샷 날짜가 올바르지 않습니다: ${field}`);
+    }
+  }
+  // Rebuild the exact source schema so Firestore map ordering cannot affect equality.
   return {
-    ticketKey: cleanText(value.ticketKey, 160),
-    ticketName: cleanText(value.ticketName, 120),
-    status: cleanText(value.status || "active", 40),
-    paymentAmount: nullableSourceNumber(value.paymentAmount),
-    totalCount: nullableSourceNumber(value.totalCount),
-    remainingCount: nullableSourceNumber(value.remainingCount),
-    availableFrom: cleanText(value.availableFrom, 40) || null,
-    purchasedAt: cleanText(value.purchasedAt, 40) || null,
-    paymentAt: cleanText(value.paymentAt, 40) || null,
-    expiresAt: cleanText(value.expiresAt, 40) || null,
+    ticketKey: value.ticketKey,
+    ticketName: value.ticketName,
+    status: value.status,
+    paymentAmount: value.paymentAmount,
+    totalCount: value.totalCount,
+    remainingCount: value.remainingCount,
+    availableFrom: value.availableFrom,
+    purchasedAt: value.purchasedAt,
+    paymentAt: value.paymentAt,
+    expiresAt: value.expiresAt,
   };
 }
 

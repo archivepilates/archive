@@ -1,6 +1,7 @@
 import {
   assertRefundJobStillWithinValidity,
   assertRefundSourceUnchanged,
+  normalizeQueuedTicketSourceSnapshot,
   staleRefundJobRecoveryStatus,
 } from "./eformsign-refund-browser-contract.mjs";
 
@@ -16,7 +17,7 @@ export function normalizeRefundSmsJob(raw = {}) {
     ticketKey: cleanText(raw.ticketKey, 160),
     ticketName: cleanText(raw.ticketName, 120),
     ticketExpiresAt: cleanText(raw.ticketExpiresAt, 40),
-    ticketSourceSnapshot: raw.ticketSourceSnapshot,
+    ticketSourceSnapshot: normalizeQueuedTicketSourceSnapshot(raw.ticketSourceSnapshot),
     calculationHash: cleanText(raw.calculationHash, 80),
     smsTitle: cleanText(raw.smsTitle, 80),
     smsMessage: String(raw.smsMessage || "").trim().slice(0, 3000),

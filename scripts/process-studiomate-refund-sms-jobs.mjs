@@ -2,6 +2,7 @@
 import { appendFile, mkdir, writeFile } from "node:fs/promises";
 import { createRequire } from "node:module";
 import os from "node:os";
+import { readNativeRefundSource, refundNativeMemberPointer } from "./lib/studiomate-refund-native-source.mjs";
 import path from "node:path";
 import { acquireStudioMateBrowserLock } from "./lib/studiomate-browser-lock.mjs";
 import { ensureStudioMateLoggedIn } from "./lib/studiomate-login.mjs";
@@ -92,9 +93,10 @@ try {
     let finalSendClicked = false;
     try {
       const job = normalizeRefundSmsJob({ ...claimed, jobId: candidate.ref.id });
-      const live = await assertLiveRefundSource(job);
-      const sendResult = await sendRefundSms(page, job, live.profile, async () => {
-        await assertLiveRefundSource(job);
+      const live = await assertLiveRefundSource(job, page);
+      const sendResult = await sendRefundSms(page, job, live.nativeSource.studiomateMemberId, async () => {
+        const fresh = await assertLiveRefundSource(job, page);
+        if (fresh.nativeSource.studiomateMemberId !== live.nativeSource.studiomateMemberId) throw new Error("발송 직전 회원 원본 ID가 변경되어 문자를 중단했습니다.");
         finalSendClicked = true;
         await markSending(candidate.ref, job);
       });
@@ -187,7 +189,7 @@ async function claimJob(ref) {
   });
 }
 
-async function assertLiveRefundSource(job) {
+async function assertLiveRefundSource(job, page) {
   const [memberSnapshot, caseSnapshot] = await Promise.all([
     db.collection("memberProfiles").doc(job.memberId).get(),
     db.collection("refundCases").doc(job.caseId).get(),
@@ -195,11 +197,13 @@ async function assertLiveRefundSource(job) {
   if (!memberSnapshot.exists) throw new Error("환불 대상 회원 원천이 없어 문자 발송을 중단했습니다.");
   if (!caseSnapshot.exists) throw new Error("환불 케이스 원천이 없어 문자 발송을 중단했습니다.");
   assertRefundSmsSourceUnchanged(job, memberSnapshot.data(), caseSnapshot.data());
-  return { profile: memberSnapshot.data(), refundCase: caseSnapshot.data() };
+  const profile = memberSnapshot.data();
+  const nativeSource = await readNativeRefundSource({ ...job, studiomateMemberId: refundNativeMemberPointer(job, profile) }, { page });
+  return { profile, refundCase: caseSnapshot.data(), nativeSource };
 }
 
-async function sendRefundSms(page, job, profile, beforeFinalSend) {
-  const studiomateMemberId = await resolveStudioMateMemberId(page, job, profile);
+async function sendRefundSms(page, job, studiomateMemberId, beforeFinalSend) {
+  if (!/^[1-9]\d*$/.test(studiomateMemberId)) throw new Error("검증된 StudioMate 회원 ID가 없어 문자를 중단했습니다.");
   await page.goto(new URL(`/users/detail?id=${encodeURIComponent(studiomateMemberId)}`, config.baseUrl).toString(), {
     waitUntil: "domcontentloaded",
     timeout: 60000,
@@ -248,22 +252,6 @@ async function sendRefundSms(page, job, profile, beforeFinalSend) {
     studiomateMemberId,
     evidence: `${relevant.status || "-"} ${String(relevant.url || "").slice(0, 220)}`,
   };
-}
-
-async function resolveStudioMateMemberId(page, job, profile) {
-  for (const value of [job.studiomateMemberId, profile?.studiomateMemberId, job.memberId]) {
-    if (/^\d+$/.test(String(value || ""))) return String(value);
-  }
-  await page.goto(new URL("/users", config.baseUrl).toString(), { waitUntil: "domcontentloaded", timeout: 60000 });
-  const search = await textboxWithPlaceholder(page, "이름 또는 전화번호로 검색");
-  await search.fill(job.memberPhone);
-  const memberLink = page.getByText(job.memberName, { exact: true }).first();
-  await memberLink.waitFor({ state: "visible", timeout: 15000 });
-  await memberLink.click();
-  await page.waitForURL(/\/users\/detail\?id=\d+/, { timeout: 15000 });
-  const resolved = new URL(page.url()).searchParams.get("id") || "";
-  if (!/^\d+$/.test(resolved)) throw new Error("StudioMate 회원 ID를 확인하지 못했습니다.");
-  return resolved;
 }
 
 async function textboxWithPlaceholder(container, expected) {

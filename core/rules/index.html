@@ -1086,6 +1086,9 @@
 
         <section class="panel rule-section" id="refunds">
           <div class="panel-header"><div><h2>9. 환불 안내·동의서</h2><p>환불 예상액은 원천과 계산 근거를 확인한 뒤 운영자가 확정합니다.</p></div><span class="pill warn">manager review</span></div>
+          <div class="rule-note"><strong>발송 원천 확인 · 2026.10.15</strong><span>Firestore 항목 순서는 변경으로 판단하지 않고 동일한 수강권 필드의 실제 값을 비교합니다. 현재 canonical 수강권·계산값 검증에 더해 입력 전과 최종 전송 직전 StudioMate 원본을 읽어 회원·수강권·기간·횟수·결제 원천을 대조합니다. 조회 실패·모호한 대상·환불 또는 취소 표시는 발송을 중단합니다. 수강권 환불 표시를 실제 지급 완료로 간주하지 않습니다. 수강권만 먼저 종료한 건은 원래 계산과 미발송 이력을 보존하고 운영자에게 별도 확인합니다.</span></div>
+          <div class="rule-note"><strong>동의서·문자 검증</strong><span>이폼싸인 한글·영문 화면과 준비 완료를 확인합니다. 발송 성공은 같은 문서의 이름·ID·전체 수신번호·명시적 전송 상태가 함께 확인될 때만 기록합니다. 문서함 메뉴의 완료 문구나 다른 행의 번호는 증거가 아닙니다. 최종 클릭 후 불명확한 건은 확인필요로 유지하며 재발송하지 않습니다. StudioMate 문자는 접수 증거와 최종 수신을 구분합니다. 큐가 비어 있다는 결과로 기존 실패가 해결됐다고 판단하지 않습니다.</span></div>
+          <div class="rule-note"><strong>반영·다음 확인</strong><span>대상은 맥미니 환불동의서·문자 처리기와 CORE 운영규칙이며 계산식·발송 주기·권한·실제 환불 실행은 변경하지 않습니다. 격리 회귀·원본 읽기 검증 후 이 Hosting 릴리스와 해당 Git 소스를 운영 반영합니다. 기존 보류 건의 실제 발송은 별도 승인·원장 확인 후 처리합니다. 다음: 확인필요 건의 금액·지급 전 안내 승인과 발송 증거 확인. 최종 갱신: 2026.10.15.</span></div>
           <div class="rule-grid">
             <article class="rule-card">
               <h3>회원과 수강권 원천</h3>

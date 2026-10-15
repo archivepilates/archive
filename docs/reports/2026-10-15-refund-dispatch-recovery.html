@@ -1,0 +1,10 @@
+<!doctype html>
+<html lang="ko"><meta charset="utf-8"><meta name="viewport" content="width=device-width,initial-scale=1"><title>환불 발송 복구 · ARCHIVE PILATES</title>
+<style>body{font:16px/1.7 system-ui,sans-serif;color:#202322;margin:0;background:white}main{max-width:760px;margin:auto;padding:32px 20px}h1{font-size:26px}h2{font-size:19px;border-top:1px solid #ddd;padding-top:20px}p,li{overflow-wrap:anywhere}strong{color:#b22d29}</style>
+<main><h1>환불동의서·안내 문자 점검</h1><p>2026.10.15 · ARCHIVE PILATES</p>
+<h2>확인된 원인</h2><ul><li>실제 수강권 값은 같지만 Firestore 항목 순서가 달라 문자 발송이 원천 변경으로 차단됐습니다.</li><li>이폼싸인은 인증돼 있었지만 영문 화면과 준비 시간을 처리하지 못했습니다.</li><li>점검 중 해당 수강권이 환불 상태로 변경됐습니다. 운영자는 수강권만 처리했고 실제 지급은 아직이라고 확인했습니다.</li></ul>
+<h2>수정 내용</h2><p>항목별 실제 값 비교, 영문·한글 준비 확인, 입력 전·최종 발송 직전의 원본 대조를 추가합니다. 발송 증거는 같은 문서의 ID·이름·수신번호·전송 상태로 제한하며 다른 행이나 메뉴의 완료 표시는 제외합니다.</p>
+<h2>현재 건의 처리</h2><p>기존 계산·요청·실패 원장은 보존하고 발송을 확인필요로 보류했습니다. 실제 지급 완료로 기록하지 않았습니다. 수강권 상태 변경 후 지급 전 동의서와 문자를 보내는 단건 후속 처리는 금액·내용 확인 및 별도 승인 후 진행합니다. 승인 대기와 발송 완료는 구분합니다.</p>
+<h2>안전장치</h2><p>원본 조회 실패·대상 모호·금액이나 기간 불일치·취소/환불 표시 시 자동 발송을 중단합니다. 최종 클릭 뒤 결과가 불명확하면 재시도하지 않습니다. 실제 결제 환불·수강권 복원·새 회원 발송은 수행하지 않습니다.</p>
+<h2>검증</h2><p>환불·브라우저·원본·큐 회귀 71건과 환불정책 15건을 통과했습니다. 18:39 실제 원본의 읽기 전용 재확인에서 환불 표시 수강권의 발송 차단을 확인했으며 외부 발송은 0건입니다. 별도 리뷰에서 회원 ID 충돌, 기간권 0회 원천, 문서별 증거 혼합을 보강했습니다.</p>
+<h2>반영 범위</h2><p>맥미니 환불 실행기와 CORE 운영규칙 Hosting. Functions·Firestore 규칙·계산 정책·120초 큐 주기는 변경하지 않습니다. 실제 릴리스는 CORE release.json과 Git 기록으로 확인합니다.</p></main></html>

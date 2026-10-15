@@ -2,6 +2,8 @@
 import { appendFile, mkdir, writeFile } from "node:fs/promises";
 import { createRequire } from "node:module";
 import os from "node:os";
+import { readNativeRefundSource, refundNativeMemberPointer } from "./lib/studiomate-refund-native-source.mjs";
+import { readRefundSendEvidence, waitForRefundTemplateReady } from "./lib/eformsign-refund-evidence.mjs";
 import path from "node:path";
 import { acquireEformsignBrowserLock } from "./lib/eformsign-browser-lock.mjs";
 import {
@@ -12,7 +14,6 @@ import {
   EFORMSIGN_PROGRESS_DOCUMENTS_URL,
   EFORMSIGN_REFUND_FIELD_IDS,
   EFORMSIGN_REFUND_TEMPLATE_URL,
-  extractEformsignDocumentId,
   formatInputWon,
   isUnambiguousSendSuccess,
   normalizeRefundJob,
@@ -182,7 +183,10 @@ async function recoverStaleJobs() {
 async function assertLiveRefundSource(job) {
   const snapshot = await db.collection("memberProfiles").doc(job.memberId).get();
   if (!snapshot.exists) throw new Error("환불 대상 회원 원천이 없어 발송을 중단했습니다.");
-  return assertRefundSourceUnchanged(job, snapshot.data());
+  const profile = snapshot.data();
+  const source = assertRefundSourceUnchanged(job, profile);
+  await readNativeRefundSource({ ...job, studiomateMemberId: refundNativeMemberPointer(job, profile) });
+  return source;
 }
 
 async function claimJob(ref) {
@@ -214,25 +218,20 @@ async function claimJob(ref) {
 
 async function ensureLoggedIn(page) {
   await page.goto(EFORMSIGN_REFUND_TEMPLATE_URL, { waitUntil: "domcontentloaded", timeout: 60000 });
-  if (await page.getByRole("button", { name: "입력 시작", exact: true }).isVisible().catch(() => false)) return;
+  if (await waitForRefundTemplateReady(page).then(() => true).catch(() => false)) return;
   if (!config.waitForLogin) {
     throw new Error("eformsign 전용 브라우저 프로필 로그인이 필요합니다.");
   }
   console.log("eformsign 로그인 후 환불동의서 템플릿 화면이 열릴 때까지 기다립니다.");
-  await page.waitForFunction(
-    () => [...document.querySelectorAll("button")].some((button) => button.textContent?.trim() === "입력 시작"),
-    undefined,
-    { timeout: 5 * 60 * 1000 },
-  );
+  await waitForRefundTemplateReady(page, { timeout: 5 * 60 * 1000 });
 }
 
 async function sendRefundAgreement(page, job, beforeFinalSend) {
   assertRefundJobStillWithinValidity(job);
   await page.goto(EFORMSIGN_REFUND_TEMPLATE_URL, { waitUntil: "domcontentloaded", timeout: 60000 });
-  const startButton = page.getByRole("button", { name: "입력 시작", exact: true });
-  await startButton.waitFor({ state: "visible", timeout: 30000 });
+  const startButton = await waitForRefundTemplateReady(page, { timeout: 30000 });
   const documentName = buildRefundDocumentName(job);
-  const titleInput = page.locator("h1 input").first();
+  const titleInput = page.locator("#document_name").first();
   if (await titleInput.isVisible().catch(() => false)) await titleInput.fill(documentName);
   await startButton.click();
 
@@ -246,12 +245,12 @@ async function sendRefundAgreement(page, job, beforeFinalSend) {
   await clickNext(page);
   await fillFrameField(page, frame, EFORMSIGN_REFUND_FIELD_IDS.companySignerName, "배민진");
   await clickFrameControl(frame, EFORMSIGN_REFUND_FIELD_IDS.companySignature);
-  await page.getByText(/필수 입력 항목\(8\/8\)/).waitFor({ state: "visible", timeout: 30000 });
+  await page.getByText(/(?:필수 입력 항목|Required fields)\s*\(8\s*\/\s*8\)/i).waitFor({ state: "visible", timeout: 30000 });
 
-  await page.getByRole("button", { name: "전송", exact: true }).first().click();
-  const sendHeading = page.getByRole("heading", { name: "문서 전송", exact: true });
+  await page.getByRole("button", { name: /^(전송|Send)$/ }).filter({ visible: true }).first().click();
+  const sendHeading = page.getByRole("heading", { name: /^(문서 전송|Send document)$/ }).filter({ visible: true }).first();
   await sendHeading.waitFor({ state: "visible", timeout: 30000 });
-  const sendModal = sendHeading.locator("xpath=ancestor::*[.//button[normalize-space()='취소']][1]");
+  const sendModal = sendHeading.locator("xpath=ancestor::*[.//button[@subkey='cancelButton']][1]");
   const emailCheckbox = sendModal.locator('input[type="checkbox"][clonekey="useEmail"]').last();
   const smsCheckbox = sendModal.locator('input[type="checkbox"][clonekey="useSms"]').last();
   if (await emailCheckbox.isChecked().catch(() => false)) {
@@ -274,7 +273,7 @@ async function sendRefundAgreement(page, job, beforeFinalSend) {
 
   assertRefundJobStillWithinValidity(job);
   await beforeFinalSend();
-  const finalSendButton = sendModal.getByRole("button", { name: "전송", exact: true });
+  const finalSendButton = sendModal.getByRole("button", { name: /^(전송|Send)$/ }).filter({ visible: true }).first();
   if (!(await finalSendButton.isEnabled())) throw new Error("이폼싸인 수신자 정보가 완성되지 않아 전송을 중단했습니다.");
   await finalSendButton.click();
   const sendEvidence = await waitForSendEvidence(page, documentName, job.memberPhone);
@@ -309,7 +308,7 @@ async function clickFrameControl(frame, fieldId) {
 }
 
 async function clickNext(page) {
-  const button = page.getByRole("button", { name: "다음", exact: true }).last();
+  const button = page.getByRole("button", { name: /^(다음|Next)$/ }).filter({ visible: true }).last();
   await button.waitFor({ state: "visible", timeout: 30000 });
   await button.click();
 }
@@ -319,11 +318,7 @@ async function waitForSendEvidence(page, documentName, recipientPhone) {
   let last = { url: page.url(), bodyText: "", documentId: "" };
   let openedProgressDocuments = false;
   while (Date.now() < deadline) {
-    last = {
-      url: page.url(),
-      bodyText: await page.locator("body").innerText().catch(() => ""),
-      documentId: await findDocumentIdOnPage(page, documentName),
-    };
+    last = await readRefundSendEvidence(page, documentName, recipientPhone);
     if (isUnambiguousSendSuccess({ ...last, documentName, recipientPhone })) return last;
     if (!openedProgressDocuments && /\/eform\/index\.html/.test(page.url())) {
       openedProgressDocuments = true;
@@ -333,24 +328,6 @@ async function waitForSendEvidence(page, documentName, recipientPhone) {
     await sleep(500);
   }
   return last;
-}
-
-async function findDocumentIdOnPage(page, documentName) {
-  const evidence = await page.evaluate((expectedName) => {
-    const nodes = [...document.querySelectorAll("a[href], [data-document-id], [data-doc-id]")];
-    for (const node of nodes) {
-      const container = node.closest("tr, [role='row'], li, article, .document-item, .list-item") || node;
-      if (!String(container.textContent || "").includes(expectedName)) continue;
-      return node.getAttribute("data-document-id")
-        || node.getAttribute("data-doc-id")
-        || node.getAttribute("href")
-        || "";
-    }
-    return "";
-  }, documentName).catch(() => "");
-  if (!evidence) return extractEformsignDocumentId(page.url());
-  if (!evidence.includes("/") && !evidence.includes("?")) return String(evidence).slice(0, 160);
-  return extractEformsignDocumentId(new URL(evidence, page.url()).toString());
 }
 
 async function markSending(ref, job) {
