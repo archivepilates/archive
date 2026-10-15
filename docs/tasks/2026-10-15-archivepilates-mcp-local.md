@@ -35,14 +35,14 @@
 - Repeat after hardening: six reads 195-638 ms, discovery and write-disabled check passed. Message date composite indexes are absent live (read-only probe returned code 9). Source definitions added; bounded legacy member query is disclosed through coverage until index deployment. No production index deployment occurred.
 - No browser created; no shared StudioMate profile lock acquired. MCP child processes closed by client finally blocks; temporary smoke directories deleted.
 
-## CORE rule status
+## Initial CORE rule status (superseded by operational connection below)
 
 Local draft only: archivepilates-mcp is development/read-only; Mac mini remains execution host; existing canonical source/queue/locking/schedules remain unchanged. No live CORE update because no production operating rule or service activation occurred. The scoped source draft must explicitly remain unreleased until promotion.
 
 ## Remaining rollout gates
 
 1. Independent review findings addressed; 85/85 local tests passed. Final syntax/JSON/whitespace checks and scoped audit passed. Live read-only stdio smoke passed with explicit missing-index coverage. No production-write or browser E2E claim.
-2. User go-live request before commit/push/main promotion, Codex config registration and CORE Hosting rule deployment.
+2. Completed below: explicit user connection request, source promotion/push, local registration, indexes and CORE Hosting rule deployment.
 3. Memo: human-approved limited E2E, queue/source verification, proposal retention/expiry cleanup and rollout decision. Keep writes false until then.
 4. Browser native readback, general booking/cancel and other modification tools are future scope, not delivered by this initial read-only facade.
 
@@ -53,3 +53,16 @@ Local draft only: archivepilates-mcp is development/read-only; Mac mini remains 
 - Server defaults to ARCHIVE_MCP_READ_ONLY=true and omits both memo tools. Codex enabled_tools additionally restricts the six reads. Operator staff 1979746, project archive-pilates, existing archive-codex-operator service account. No secrets copied to source/config.
 - Root Hosting must ignore services/** so this private server implementation is not published as a static asset.
 - Final evidence and deployed source revision: docs/reports/2026-10-15-archivepilates-mcp-connection.html.
+
+## Final operational evidence
+
+- Source c5254165d5b2d802090014e2e867eff974ec9e33 promoted to origin/main, feature branch pushed, runtime and clean main aligned. Dependency install from scoped lockfile succeeded.
+- Local ~/.codex/config.toml registered archivepilates-mcp using stable runtime path. enabled_tools is exactly six reads; server also hides/rejects memo tools. Existing servers retained. No global model or CLI binary upgrade.
+- Message indexes CICAgNja54wK (candidates) and CICAgOi36pgK (sends) READY; actual server queries verified, no compatibility fallback in final registered smoke. Created only these two indexes, no existing indexes deleted.
+- Registered-config stdio smoke: 6 reads passed, memo UNKNOWN_TOOL, dateIndexesActive=true. Timings 173-589 ms in final sample. No member/queue/StudioMate/send mutations.
+- Natural-language test via app-bundled Codex 0.162.0-alpha.17.2: members_find completed, members_get_overview completed, Korean response correctly reported synced snapshot, exit 0. Ephemeral session, same registered transport/env/allowlist. Standalone CLI 0.143.0 could not use current models; left untouched and used app binary.
+- Local service tests 89/89, npm audit 0 advisories. Local and deployed static CORE responsive 95/95 each; Hosting safety/dry-run and live canary passed. No actual member-write E2E claim.
+- Hosting archive-pilates and archive-pilates-core deployed; live rules show read-only MCP and release SHA c5254165. Private server source path returned HTTP 404.
+- CI run 38749515324 succeeded. No Functions/rules/scheduler deployment. CORE operating rule now live, not draft.
+- Test MCP child processes, temporary state and task-owned UI browsers/servers closed. Shared StudioMate browser untouched. Existing action queue finding left unchanged/out of scope.
+- Documentation evidence is recorded in a later docs-only commit; no Hosting redeploy is required for these nonpublic report/README/task updates.
