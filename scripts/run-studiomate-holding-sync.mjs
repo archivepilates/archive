@@ -4,6 +4,7 @@ import { spawnSync } from "node:child_process";
 import { readFile } from "node:fs/promises";
 import { normalizeHoldingObservation, reconcileHoldingObservation, holdingSourceId } from "./lib/studiomate-holding-source.mjs";
 import { HOLDING_ROSTER_JOBS, HOLDING_ROSTER_STATE, holdingRosterReadbackIssue, holdingRosterReadbackIsCurrent } from "./lib/studiomate-holding-roster.mjs";
+import { readHoldingMemberProfile } from "./lib/holding-member-identity.mjs";
 import { HOLDING_AUTO_MODE } from "./lib/holding-notice-automatic.mjs";
 
 const require = createRequire(import.meta.url);
@@ -89,7 +90,7 @@ if (settings?.sourceScanEnabled !== true) {
   for (const target of targets) {
     try {
       if (fromRoster) {
-        const currentProfile = (await db.doc(`memberProfiles/${target.memberId}`).get()).data();
+        const currentProfile = await readHoldingMemberProfile({ db, memberId: target.memberId });
         const issue = holdingRosterReadbackIssue(target, currentProfile);
         if (issue) throw new Error(issue);
       }

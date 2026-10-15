@@ -403,3 +403,76 @@ test("a completed readback is reopened for a fresh observation with a new reques
   assert.equal(job.lastCheckedAt, at(1), "fresh roster must preserve rotation across completed observations");
   assertDiscoveryOnly({ ...result, jobs: [job] });
 });
+
+const resolvedExcelProfile = (patch = {}) => profile({
+  memberId: "excel_synthetic_roster_101", studiomateMemberId: "101",
+  studiomateMemberIdResolvedAt: "2026-10-07T02:00:00.000Z", ...patch,
+});
+
+test("a timestamped Excel pointer discovers the numeric member with the canonical stable job key", () => {
+  const canonical = baseline();
+  for (const profiles of [[resolvedExcelProfile()], [resolvedExcelProfile(), profile()], [profile(), resolvedExcelProfile()]]) {
+    const linked = baseline([row()], profiles);
+    assert.equal(linked.jobs.length, 1);
+    assert.equal(linked.jobs[0].memberId, "101");
+    assert.equal(linked.jobs[0].status, "pending");
+    assert.equal(linked.jobs[0].reason, "");
+    assert.equal(linked.jobs[0].jobId, canonical.jobs[0].jobId);
+    assert.equal(linked.jobs[0].memberKey, canonical.jobs[0].memberKey);
+    assert.equal(linked.jobs[0].discoveryVersion, canonical.jobs[0].discoveryVersion);
+    assert.deepEqual(linked.state, canonical.state);
+    assertDiscoveryOnly(linked);
+  }
+});
+
+test("unresolved or invalid Excel pointers stay in review, never become native readback targets", async t => {
+  for (const [label, patch] of [
+    ["missing pointer", { studiomateMemberId: undefined }],
+    ["missing proof time", { studiomateMemberIdResolvedAt: undefined }],
+    ["invalid proof time", { studiomateMemberIdResolvedAt: "invalid" }],
+    ["zero proof time", { studiomateMemberIdResolvedAt: { toMillis: () => 0 } }],
+    ["numeric pointer", { studiomateMemberId: 101 }],
+    ["zero pointer", { studiomateMemberId: "0" }],
+    ["wrong studio", { studioId: "9001" }],
+    ["empty name", { name: "" }],
+    ["merged profile", { mergedInto: "102" }],
+    ["canonical redirect", { canonicalMemberId: "102" }],
+    ["merged status", { status: "merged" }],
+    ["external actions disabled", { externalActionEligible: false }],
+  ]) {
+    await t.test(label, () => {
+      const result = baseline([row()], [resolvedExcelProfile(patch)]);
+      assert.equal(result.jobs[0].memberId, null);
+      assert.equal(result.jobs[0].status, "review");
+      assert.equal(result.jobs[0].reason, "native_member_phone_match_required");
+      assert.equal(result.counts.review, 1);
+      assertDiscoveryOnly(result);
+    });
+  }
+});
+
+test("conflicting native and linked identities for one phone require review in every order", async t => {
+  for (const [label, profiles] of [
+    ["native then conflicting link", [profile(), resolvedExcelProfile({ studiomateMemberId: "102" })]],
+    ["conflicting link then native", [resolvedExcelProfile({ studiomateMemberId: "102" }), profile()]],
+    ["two conflicting links", [resolvedExcelProfile(), resolvedExcelProfile({ memberId: "excel_synthetic_roster_102", studiomateMemberId: "102" })]],
+  ]) {
+    await t.test(label, () => {
+      const result = baseline([row()], profiles);
+      assert.equal(result.jobs[0].memberId, null);
+      assert.equal(result.jobs[0].status, "review");
+      assert.equal(result.jobs[0].reason, "native_member_phone_match_required");
+      assert.equal(result.counts.review, 1);
+      assertDiscoveryOnly(result);
+    });
+  }
+});
+
+test("native readback validation requires the resolved profile ID to match the queued numeric ID", async () => {
+  const { holdingRosterReadbackIssue } = await import("../lib/studiomate-holding-roster.mjs");
+  const job = baseline().jobs[0];
+  assert.equal(holdingRosterReadbackIssue(job, profile()), "");
+  for (const memberId of ["102", "excel_synthetic_roster_101", undefined]) {
+    assert.equal(holdingRosterReadbackIssue(job, profile({ memberId })), "holding_roster_native_member_recheck_failed");
+  }
+});

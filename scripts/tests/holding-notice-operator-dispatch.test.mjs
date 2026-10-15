@@ -229,3 +229,121 @@ test("changed issuance metadata cannot mint another send key for the same holdin
   await assert.rejects(h.run({ plan, readLatest: async () => raw }), /prior_holding_local/);
   assert.equal(h.posts.length, 1);
 });
+
+const LINKED_EXCEL_ID = "excel_synthetic_dispatch_101";
+const LINKED_PROFILE_PATH = `memberProfiles/${LINKED_EXCEL_ID}`;
+const LINKED_LOOKUP_PATH = `studiomateMemberIdLookupJobs/studiomate_member_id_lookup_${LINKED_EXCEL_ID}`;
+const LINKED_RESOLVED_AT = "2026-10-07T10:00:00.000Z";
+
+function linkedHarness(patch = {}) {
+  const h = harness();
+  h.db.docs.delete(`memberProfiles/${member.memberId}`);
+  h.db.docs.set(LINKED_PROFILE_PATH, { ...member, memberId: LINKED_EXCEL_ID,
+    studiomateMemberId: member.memberId, studiomateMemberIdResolvedAt: LINKED_RESOLVED_AT, ...patch });
+  h.db.docs.set(LINKED_LOOKUP_PATH, { jobId: `studiomate_member_id_lookup_${LINKED_EXCEL_ID}`,
+    memberId: LINKED_EXCEL_ID, studioId: member.studioId, memberName: member.name, memberPhone: member.phone,
+    studiomateMemberId: member.memberId, status: "done", resolvedAt: LINKED_RESOLVED_AT });
+  return h;
+}
+
+function assertNoLinkedDispatch(h) {
+  assert.equal(h.posts.length, 0);
+  for (const collection of ["alimtalkCandidates", "alimtalkSends", "holdingNoticeClaims"]) {
+    assert.equal(h.db.docs.has(`${collection}/${h.plan.id}`), false, `${collection} must not be claimed`);
+  }
+  assert.equal(h.db.docs.has(`memberProfiles/${member.memberId}`), false, "never synthesize a native profile");
+}
+
+test("verified Excel-only identity dispatches once under the unchanged canonical plan key without native creation", async () => {
+  const h = linkedHarness();
+  const before = structuredClone(h.db.docs);
+  assert.equal(h.plan.id, planFor(evidence()).id);
+  const result = await h.run({ recipientIssue: async (_tx, profile) => {
+    assert.deepEqual(profile, { ...before.get(LINKED_PROFILE_PATH), memberId: member.memberId });
+    return "";
+  } });
+  assert.equal(result.deliveryComplete, true);
+  assert.equal(result.id, h.plan.id);
+  assert.equal(result.providerPostCount, 1);
+  assert.equal(h.posts.length, 1);
+  assert.equal(h.posts[0].messages[0].to, member.phone);
+  for (const collection of ["alimtalkCandidates", "alimtalkSends", "holdingNoticeClaims"]) {
+    assert.equal(h.db.docs.get(`${collection}/${h.plan.id}`).memberId, member.memberId);
+  }
+  assert.equal(h.db.docs.get(`holdingNoticeClaims/${h.plan.id}`).status, "delivered");
+  assert.equal(h.db.docs.has(`memberProfiles/${member.memberId}`), false);
+  assert.deepEqual(h.db.docs.get(LINKED_PROFILE_PATH), before.get(LINKED_PROFILE_PATH));
+  assert.deepEqual(h.db.docs.get(LINKED_LOOKUP_PATH), before.get(LINKED_LOOKUP_PATH));
+  assert.deepEqual([...h.db.docs.keys()].filter(path => !before.has(path)).sort(), [
+    `alimtalkCandidates/${h.plan.id}`, `alimtalkSends/${h.plan.id}`, `holdingNoticeClaims/${h.plan.id}`,
+  ].sort());
+  await assert.rejects(h.run(), /prior_holding_local/);
+  assert.equal(h.posts.length, 1);
+});
+
+test("revoked or changed linked proof immediately before the claim transaction prevents every provider POST", async t => {
+  for (const [label, mutate, error] of [
+    ["lookup revoked", h => { h.db.docs.get(LINKED_LOOKUP_PATH).status = "pending"; }, /holding_member_lookup_proof_mismatch/],
+    ["lookup removed", h => { h.db.docs.delete(LINKED_LOOKUP_PATH); }, /holding_member_lookup_proof_mismatch/],
+    ["native pointer changed", h => { h.db.docs.get(LINKED_PROFILE_PATH).studiomateMemberId = "102"; }, /operator_member_changed/],
+    ["profile resolution revoked", h => { delete h.db.docs.get(LINKED_PROFILE_PATH).studiomateMemberIdResolvedAt; }, /holding_verified_member_link_required/],
+    ["profile resolution changed", h => { h.db.docs.get(LINKED_PROFILE_PATH).studiomateMemberIdResolvedAt = "2026-10-07T10:00:00.001Z"; }, /holding_member_lookup_proof_mismatch/],
+    ["lookup timestamp changed", h => { h.db.docs.get(LINKED_LOOKUP_PATH).resolvedAt = "2026-10-07T10:00:00.001Z"; }, /holding_member_lookup_proof_mismatch/],
+    ["lookup name changed", h => { h.db.docs.get(LINKED_LOOKUP_PATH).memberName = "Synthetic Other Member"; }, /holding_member_lookup_proof_mismatch/],
+    ["lookup phone changed", h => { h.db.docs.get(LINKED_LOOKUP_PATH).memberPhone = "01000000002"; }, /holding_member_lookup_proof_mismatch/],
+    ["lookup studio changed", h => { h.db.docs.get(LINKED_LOOKUP_PATH).studioId = "9001"; }, /holding_member_lookup_proof_mismatch/],
+    ["second native pointer", h => { h.db.docs.set("memberProfiles/excel_synthetic_duplicate_101",
+      { ...h.db.docs.get(LINKED_PROFILE_PATH), memberId: "excel_synthetic_duplicate_101" }); }, /holding_unique_linked_member_required/],
+    ["second phone profile", h => { h.db.docs.set("memberProfiles/102", { ...member, memberId: "102" }); }, /holding_member_phone_ambiguity/],
+  ]) {
+    await t.test(label, async () => {
+      const h = linkedHarness();
+      const originalTransaction = h.db.runTransaction.bind(h.db);
+      let latestChecked = false, exclusionChecks = 0;
+      h.db.runTransaction = async callback => {
+        assert.equal(latestChecked, true, "mutate only after the final live holding readback");
+        mutate(h);
+        return originalTransaction(callback);
+      };
+      await assert.rejects(h.run({
+        readLatest: async () => {
+          assert.equal(h.db.docs.get(LINKED_LOOKUP_PATH).status, "done");
+          assert.equal(h.db.docs.get(LINKED_PROFILE_PATH).studiomateMemberId, member.memberId);
+          latestChecked = true;
+          return evidence();
+        },
+        recipientIssue: async () => { exclusionChecks++; return ""; },
+      }), error);
+      assert.equal(latestChecked, true);
+      assert.equal(exclusionChecks, 0, "unverified identity cannot reach recipient eligibility or claim writes");
+      assertNoLinkedDispatch(h);
+    });
+  }
+});
+
+test("staff and member-exclusion fields survive Excel resolution and still block dispatch", async t => {
+  for (const patch of [{ isStaff: true }, { excludeFromAlimtalk: true }, { memberGrade: "스텝" }]) {
+    await t.test(JSON.stringify(patch), async () => {
+      const h = linkedHarness(patch);
+      let exclusionChecks = 0;
+      await assert.rejects(h.run({ recipientIssue: async (_tx, profile) => {
+        exclusionChecks++;
+        assert.equal(profile.memberId, member.memberId);
+        for (const [field, value] of Object.entries(patch)) assert.equal(profile[field], value);
+        return "synthetic_staff_excluded";
+      } }), /synthetic_staff_excluded/);
+      assert.equal(exclusionChecks, 1);
+      assertNoLinkedDispatch(h);
+    });
+  }
+});
+
+test("a native document that appears before claim remains authoritative over the Excel link", async () => {
+  const h = linkedHarness();
+  await assert.rejects(h.run({ readLatest: async () => {
+    h.db.docs.set(`memberProfiles/${member.memberId}`, { ...member, name: "Synthetic Other Native Member" });
+    return evidence();
+  } }), /operator_member_changed/);
+  assert.equal(h.posts.length, 0);
+  assert.equal(h.db.docs.has(`holdingNoticeClaims/${h.plan.id}`), false);
+});

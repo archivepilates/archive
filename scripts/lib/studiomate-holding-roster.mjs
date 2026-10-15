@@ -1,4 +1,5 @@
 import { createHash } from "node:crypto";
+import { holdingProfileNativeId } from "./holding-member-identity.mjs";
 
 export const HOLDING_ROSTER_LANE = "holding-allowance-notice";
 export const HOLDING_ROSTER_STATE = `workLanes/${HOLDING_ROSTER_LANE}/state/excelHoldingRoster`;
@@ -88,11 +89,12 @@ export function planHoldingRoster({ rows, source, previous = null, profiles = []
     return blocked("holding_export_coverage_loss_review_required");
   const byKey = new Map();
   for (const profile of profiles) {
-    if (!record(profile) || !nativeId(profile.memberId) || profile.studioId !== "5330") continue;
+    const memberId = holdingProfileNativeId(profile);
+    if (!memberId) continue;
     const key = holdingRosterMemberKey(profile.phone);
     if (!key) continue;
     const ids = byKey.get(key) || new Set();
-    ids.add(profile.memberId);
+    ids.add(memberId);
     byKey.set(key, ids);
   }
   const held = Object.fromEntries([...members.values()].filter(member => member.tickets.length).map(member =>
@@ -153,7 +155,7 @@ export function holdingRosterReadbackIssue(job, profile) {
     job.status !== "pending" || job.studioId !== "5330" || job.sendAllowed !== false || job.absenceConfirmed !== false ||
     !instant(job.downloadedAt) || !instant(job.requestedAt) ||
     typeof job.sourceImportId !== "string" || !job.sourceImportId.trim()) return "holding_roster_job_invalid";
-  return profile?.studioId === "5330" && holdingRosterMemberKey(profile.phone) === job.memberKey
+  return profile?.memberId === job.memberId && profile.studioId === "5330" && holdingRosterMemberKey(profile.phone) === job.memberKey
     ? "" : "holding_roster_native_member_recheck_failed";
 }
 

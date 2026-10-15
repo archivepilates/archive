@@ -3,6 +3,7 @@ import { holdingFingerprint, normalizeHoldingObservation } from "./studiomate-ho
 import { completeProviderRows } from "./holding-notice-test-dispatch.mjs";
 import { calculateLiveHolding, verifyHoldingAtDispatch } from "./holding-notice-live-readback.mjs";
 import { HOLDING_AUTO_EVENTS, automaticHoldingEventIssue } from "./holding-notice-automatic.mjs";
+import { readHoldingMemberProfile } from "./holding-member-identity.mjs";
 
 const FAMILY = new Set([HOLDING_NOTICE_TEMPLATE_ID, "KA01TP261006054728079NtSGrYdtSQH"]);
 export const isHoldingLedger = row => FAMILY.has(row?.templateCode) || row?.payload?.holdingNotice === true;
@@ -103,7 +104,7 @@ export async function dispatchVerifiedOperatorHolding({ db, stamp, plan, templat
       if (issue) throw new Error(issue);
     } else if (config?.autoSendEnabled !== false || config?.canonicalSourcePromoted !== false || config?.templateId !== HOLDING_NOTICE_TEMPLATE_ID)
       throw new Error("operator_dispatch_requires_separate_inactive_automation");
-    const profile = (await tx.get(db.doc(`memberProfiles/${plan.memberId}`))).data();
+    const profile = await readHoldingMemberProfile({ db, memberId: plan.memberId, reader: tx });
     if (!profile || profile.memberId !== plan.memberId || profile.name !== plan.memberName || profile.phone !== plan.memberPhone || profile.studioId !== plan.studioId)
       throw new Error("operator_member_changed");
     const exclusion = await recipientIssue(tx, profile);

@@ -5,6 +5,7 @@ import { nowTimestamp } from "../firebase/kangsain-functions/functions/src/utils
 import { automaticMemberExclusionReason } from "../firebase/kangsain-functions/functions/src/alimtalk/recipientExclusion";
 import { normalizeRecipientPhone } from "../firebase/kangsain-functions/functions/src/alimtalk/testRecipients";
 import { HOLDING_NOTICE_TEMPLATE_ID, holdingTemplateIssue } from "./lib/holding-allowance-notice.mjs";
+import { readHoldingMemberProfile } from "./lib/holding-member-identity.mjs";
 import { holdingFingerprint } from "./lib/studiomate-holding-source.mjs";
 import { HOLDING_ROSTER_JOBS, HOLDING_ROSTER_STATE, holdingRosterReadbackIssue, holdingRosterReadbackIsCurrent } from "./lib/studiomate-holding-roster.mjs";
 import { HOLDING_AUTO_EVENTS, holdingAutomaticConfigIssue, automaticHoldingEvidence, automaticHoldingEvent } from "./lib/holding-notice-automatic.mjs";
@@ -117,7 +118,7 @@ async function run(deadline: ReturnType<typeof createHoldingWorkerDeadline>) {
     let eventId: string | undefined;
     let promoted = false;
     try {
-      const profile = (await db.doc(`memberProfiles/${job.memberId}`).get()).data();
+      const profile = await readHoldingMemberProfile({ db, memberId: job.memberId });
       const invalid = holdingRosterReadbackIssue(job, profile);
       if (invalid) throw new Error(invalid);
       if (job.sourceImportId !== baseline.sourceImportId || job.downloadedAt !== baseline.downloadedAt)
