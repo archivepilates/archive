@@ -242,9 +242,12 @@ async function sendRefundAgreement(page, job, beforeFinalSend) {
   await fillFrameField(page, frame, EFORMSIGN_REFUND_FIELD_IDS.penaltyAmount, formatInputWon(job.penaltyAmount));
   await fillFrameField(page, frame, EFORMSIGN_REFUND_FIELD_IDS.usedAmount, formatInputWon(job.usedAmount));
   await fillFrameField(page, frame, EFORMSIGN_REFUND_FIELD_IDS.refundAmount, formatInputWon(job.refundAmount));
-  await clickNext(page);
   await fillFrameField(page, frame, EFORMSIGN_REFUND_FIELD_IDS.companySignerName, "배민진");
   await clickFrameControl(frame, EFORMSIGN_REFUND_FIELD_IDS.companySignature);
+  const signatureOk = page.getByRole("button", { name: /^(확인|OK)$/ }).filter({ visible: true });
+  if (await signatureOk.waitFor({ state: "visible", timeout: 2000 }).then(() => true).catch(() => false)
+    && await signatureOk.count() === 1) await signatureOk.click();
+  await commitRefundWritingDateIfNeeded(page, frame);
   await page.getByText(/(?:필수 입력 항목|Required fields)\s*\(8\s*\/\s*8\)/i).waitFor({ state: "visible", timeout: 30000 });
 
   await page.getByRole("button", { name: /^(전송|Send)$/ }).filter({ visible: true }).first().click();
@@ -291,14 +294,10 @@ async function sendRefundAgreement(page, job, beforeFinalSend) {
 async function fillFrameField(page, frame, fieldId, value) {
   const field = frame.locator(`#${fieldId}`);
   await field.waitFor({ state: "visible", timeout: 30000 });
-  try {
-    await field.fill(String(value));
-  } catch {
-    await field.click({ force: true });
-    await page.keyboard.press(process.platform === "darwin" ? "Meta+A" : "Control+A");
-    await page.keyboard.type(String(value));
-  }
-  await field.press("Tab").catch(() => {});
+  await field.click();
+  await field.press(process.platform === "darwin" ? "Meta+A" : "Control+A");
+  await field.pressSequentially(String(value), { delay: 3 });
+  await field.press("Enter");
 }
 
 async function clickFrameControl(frame, fieldId) {
@@ -307,10 +306,24 @@ async function clickFrameControl(frame, fieldId) {
   await control.click({ force: true });
 }
 
-async function clickNext(page) {
-  const button = page.getByRole("button", { name: /^(다음|Next)$/ }).filter({ visible: true }).last();
-  await button.waitFor({ state: "visible", timeout: 30000 });
-  await button.click();
+async function commitRefundWritingDateIfNeeded(page, frame, now = new Date()) {
+  const complete = page.getByText(/(?:필수 입력 항목|Required fields)\s*\(8\s*\/\s*8\)/i);
+  if (await complete.isVisible()) return;
+  const dates = frame.locator('input[id^="dp"]:not([readonly]):not([disabled])').filter({ visible: true });
+  const count = await dates.count();
+  if (count === 0) return;
+  if (count !== 1) throw new Error("환불동의서 작성일 입력란을 하나로 확인하지 못했습니다.");
+  const date = dates.first();
+  if (!(await date.inputValue()).trim()) {
+    const today = new Intl.DateTimeFormat("en-CA", {
+      timeZone: "Asia/Seoul", year: "numeric", month: "2-digit", day: "2-digit",
+    }).format(now);
+    await date.click();
+    await date.press(process.platform === "darwin" ? "Meta+A" : "Control+A");
+    await date.pressSequentially(today, { delay: 3 });
+  }
+  await date.press("Enter");
+  await frame.locator(`#${EFORMSIGN_REFUND_FIELD_IDS.memberName}`).click();
 }
 
 async function waitForSendEvidence(page, documentName, recipientPhone) {

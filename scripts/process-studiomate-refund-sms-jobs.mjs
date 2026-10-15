@@ -219,28 +219,30 @@ async function sendRefundSms(page, job, studiomateMemberId, beforeFinalSend) {
   await dialog.waitFor({ state: "visible", timeout: 15000 });
   const smsTab = dialog.getByRole("button", { name: "SMS 보내기", exact: true });
   if (await smsTab.isVisible().catch(() => false)) await smsTab.click();
-  const dialogText = await dialog.innerText();
-  if (!dialogText.includes(job.memberName)) throw new Error("StudioMate 문자 수신자가 대상 회원과 일치하지 않습니다.");
+  await assertRefundSmsRecipient(dialog, job.memberName);
 
   const titleBox = await textboxWithPlaceholder(dialog, "제목을 입력해주세요.");
   const messageBox = await textboxWithPlaceholder(dialog, "메시지를 입력해주세요.");
   await titleBox.fill(job.smsTitle);
   await messageBox.fill(job.smsMessage);
-  await beforeFinalSend();
 
-  const responses = [];
-  const responseListener = (response) => {
-    if (response.request().method() !== "POST" || !response.url().includes("api.studiomate.kr")) return;
-    responses.push({ url: response.url(), status: response.status() });
-  };
-  page.on("response", responseListener);
-  try {
-    await dialog.getByRole("button", { name: "보내기", exact: true }).click();
-    await dialog.waitFor({ state: "hidden", timeout: 20000 }).catch(() => {});
-  } finally {
-    page.off("response", responseListener);
-  }
-  const relevant = responses.find((item) => /message|sms|notification|send/i.test(item.url)) || responses.at(-1) || {};
+  await dialog.getByRole("button", { name: "보내기", exact: true }).click();
+  const confirmation = await refundSmsConfirmation(page);
+  await beforeFinalSend();
+  const responsePromise = page.waitForResponse((response) => (
+    response.request().method() === "POST"
+    && response.url() === "https://api.studiomate.kr/v2/staff/sms"
+  ), { timeout: 20000 });
+  // Attach rejection handling before clicking; a failed click must not leave a rejected waiter unhandled.
+  const resultPromise = responsePromise.then(async (response) => ({
+    url: response.url(), status: response.status(), body: await response.json(),
+    requestPayload: response.request().postDataJSON(),
+  })).then((result) => ({ result }), (error) => ({ error }));
+  await confirmation.getByRole("button", { name: "확인", exact: true }).click();
+  const { result: relevant, error } = await resultPromise;
+  if (error) throw error;
+  assertRefundSmsResponse(relevant, job, studiomateMemberId);
+  await dialog.waitFor({ state: "hidden", timeout: 20000 }).catch(() => {});
   const dialogClosed = !(await dialog.isVisible().catch(() => false));
   const status = classifyStudioMateSmsSendEvidence({
     responseUrl: relevant.url,
@@ -250,8 +252,46 @@ async function sendRefundSms(page, job, studiomateMemberId, beforeFinalSend) {
   if (status !== "sent") throw new Error("최종 문자 발송 후 성공 여부를 명확히 확인하지 못했습니다.");
   return {
     studiomateMemberId,
-    evidence: `${relevant.status || "-"} ${String(relevant.url || "").slice(0, 220)}`,
+    evidence: `${relevant.status} ${relevant.url} id=${relevant.body.id} type=send title/message=matched`,
+    smsId: relevant.body.id,
+    providerMessageId: String(relevant.body.id),
+    deliveryStatus: relevant.body.status ?? "processing",
   };
+}
+
+async function assertRefundSmsRecipient(dialog, memberName) {
+  const recipient = await textboxWithPlaceholder(dialog, "받는 사람을 선택해주세요.");
+  if (await recipient.getAttribute("readonly") === null || await recipient.inputValue() !== memberName) {
+    throw new Error("StudioMate 문자 수신자가 대상 회원과 일치하지 않습니다.");
+  }
+}
+
+async function refundSmsConfirmation(page) {
+  const confirmation = page.getByRole("dialog")
+    .filter({ hasText: "메시지를 보내시겠습니까?" }).filter({ visible: true });
+  await confirmation.waitFor({ state: "visible", timeout: 15000 });
+  const text = await confirmation.innerText();
+  const counts = text.match(/\d+\s*건/g) || [];
+  if (await confirmation.count() !== 1 || !/^(?:메시지\s*보내기\s*)?1\s*건을\s*즉시\s*발송합니다!/.test(text.trim())
+    || counts.length === 0 || counts.some((count) => count.replace(/\s/g, "") !== "1건")) {
+    throw new Error("StudioMate 문자 발송 확인이 정확히 1건이 아니므로 중단했습니다.");
+  }
+  return confirmation;
+}
+
+function assertRefundSmsResponse(result, job, studiomateMemberId) {
+  const body = result?.body;
+  const payload = result?.requestPayload;
+  if (result?.url !== "https://api.studiomate.kr/v2/staff/sms"
+    || result.status !== 200 || !Number.isSafeInteger(body?.id) || body.id <= 0
+    || String(body.studio_id) !== job.studioId || body.type !== "send"
+    || (Object.hasOwn(body, "is_sent") && body.is_sent !== 1)
+    || body.title !== job.smsTitle || body.message !== job.smsMessage
+    || !Array.isArray(payload?.users) || payload.users.length !== 1
+    || String(payload.users[0]) !== studiomateMemberId
+    || payload.title !== job.smsTitle || payload.message !== job.smsMessage) {
+    throw new Error("StudioMate 문자 응답의 발송 ID·스튜디오·제목·본문을 검증하지 못했습니다.");
+  }
 }
 
 async function textboxWithPlaceholder(container, expected) {
@@ -284,6 +324,9 @@ async function markSent(ref, job, result) {
     status: "sent",
     studiomateMemberId: result.studiomateMemberId,
     sendEvidence: result.evidence,
+    smsId: result.smsId,
+    providerMessageId: result.providerMessageId,
+    deliveryStatus: result.deliveryStatus,
     sentAt: now,
     completedAt: now,
     updatedAt: now,
@@ -292,6 +335,8 @@ async function markSent(ref, job, result) {
   batch.update(db.collection("refundCases").doc(job.caseId), {
     "smsNotice.status": "sent",
     "smsNotice.sentAt": now,
+    "smsNotice.providerMessageId": result.providerMessageId,
+    "smsNotice.deliveryStatus": result.deliveryStatus,
     "smsNotice.updatedAt": now,
     updatedAt: now,
   });
