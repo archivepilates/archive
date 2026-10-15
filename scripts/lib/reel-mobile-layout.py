@@ -5,8 +5,9 @@ from pathlib import Path
 import subprocess
 
 WIDTH, HEIGHT = 1080, 1920
-SAFE = (144, 200, 800, 1430)
-VIDEO = (120, 520, 752, 660)
+VERSION = 'mobile-safe-v2'
+SAFE = (144, 320, 800, 1430)
+VIDEO = (120, 660, 752, 520)
 CAPTION = (132, 1230, 680, 190)
 FONT = Path.home() / 'Library/Fonts/Paperlogy-7Bold.ttf'
 BACKGROUND = '#faf9f7'
@@ -53,12 +54,12 @@ def design(plan, folder):
         draw.text((x, y), text, font=font, fill=color)
         boxes.append({'text': text, 'bounds': list(box)})
 
-    label('ARCHIVE PILATES', 148, 220, 29)
-    draw.rectangle((148, 272, 218, 279), fill='#b52d25')
+    label('ARCHIVE PILATES', 148, 360, 29)
+    draw.rectangle((148, 412, 218, 419), fill='#b52d25')
     assert len(plan['hook']) == 2
     for index, text in enumerate(plan['hook']):
-        label(text, 148, 300 + index * 72, 56)
-    label(plan['subtitle'], 148, 460, 28, '#6c6b67')
+        label(text, 148, 440 + index * 72, 56)
+    label(plan['subtitle'], 148, 600, 28, '#6c6b67')
     x, y, width, height = VIDEO
     draw.rectangle((x, y, x+width-1, y+height-1), fill=(0, 0, 0, 0))
     canvas.save(folder / 'layout.png')
@@ -99,9 +100,9 @@ def design(plan, folder):
     (folder / 'captions.ffconcat').write_text('\n'.join(entries) + '\n')
     subs = [srt.Subtitle(i+1, timedelta(seconds=a), timedelta(seconds=b), text) for i, (a,b,text) in enumerate(plan['cues'])]
     (folder / 'captions-reviewed.srt').write_text(srt.compose(subs), encoding='utf-8')
-    manifest = {'version': 'mobile-safe-v1', 'safeBounds': list(SAFE), 'videoBox': list(VIDEO),
+    manifest = {'version': VERSION, 'safeBounds': list(SAFE), 'videoBox': list(VIDEO),
                 'captionBox': list(CAPTION), 'labels': boxes, 'captions': bounds,
-                'reserved': {'top': [0, 0, 1080, 200], 'right': [900, 200, 1080, 1920],
+                'reserved': {'top': [0, 0, 1080, 320], 'right': [900, 320, 1080, 1920],
                              'bottom': [0, 1450, 1080, 1920]}, 'footer': False}
     (folder / 'layout-manifest.json').write_text(json.dumps(manifest, ensure_ascii=False, indent=2), encoding='utf-8')
     return manifest

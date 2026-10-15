@@ -69,7 +69,7 @@ def verify(plan, folder):
     samples = []
     manifest = load(folder / 'layout-manifest.json')
     layout = mobile_layout()
-    assert manifest['version'] == 'mobile-safe-v1' and manifest['footer'] is False
+    assert manifest['version'] == layout.VERSION and manifest['footer'] is False
     assert all(layout.within_safe(item['bounds']) for item in manifest['labels'] + manifest['captions'])
     cap = cv2.VideoCapture(str(movie))
     try:
@@ -79,6 +79,7 @@ def verify(plan, folder):
             assert ok
             rgb = cv2.cvtColor(frame, cv2.COLOR_BGR2RGB)
             if i < 5:
+                assert np.all(rgb[:layout.SAFE[1]] > 225), 'Upper app-control area must remain blank'
                 assert rgb[600:1400].std() > 20
                 _, xs = np.where(np.all(rgb[1230:1420] < 100, axis=2))
                 assert len(xs) > 300 and xs.min() >= 144 and xs.max() <= 800

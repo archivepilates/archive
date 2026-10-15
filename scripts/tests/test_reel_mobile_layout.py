@@ -18,15 +18,15 @@ class FixedFont:
 
 class MobileLayoutTests(unittest.TestCase):
     def test_safe_area_excludes_native_chrome(self):
-        self.assertTrue(layout.within_safe((148, 220, 790, 1410)))
-        for box in [(148, 100, 700, 150), (148, 1300, 700, 1530), (148, 300, 950, 400)]:
+        self.assertTrue(layout.within_safe((148, 360, 790, 1410)))
+        for box in [(148, 220, 700, 300), (148, 100, 700, 150), (148, 1300, 700, 1530), (148, 360, 950, 400)]:
             self.assertFalse(layout.within_safe(box))
 
     def test_picture_does_not_intersect_caption_or_native_controls(self):
         x, y, w, h = layout.VIDEO
         self.assertGreaterEqual(x, 0)
         self.assertLessEqual(x+w, 900)
-        self.assertGreaterEqual(y, 200)
+        self.assertGreaterEqual(y, 320)
         self.assertLess(y+h, layout.CAPTION[1])
 
     def test_center_fill_stress_at_phone_aspects(self):
@@ -37,7 +37,7 @@ class MobileLayoutTests(unittest.TestCase):
                 crop_left = (1080 - width/scale) / 2
                 self.assertGreaterEqual((left-crop_left)*scale, 0)
                 self.assertLessEqual((right-crop_left)*scale, width*.84)
-                self.assertGreaterEqual(top*scale, 0)
+                self.assertGreaterEqual(top*scale, width*ratio*.16)
                 self.assertLess(bottom*scale, 1450*scale)
                 x, y, w, h = layout.VIDEO
                 self.assertGreaterEqual((x-crop_left)*scale, 0)
@@ -74,6 +74,10 @@ class MobileLayoutTests(unittest.TestCase):
                 'start': 0, 'end': 10, 'cues': [[0, 10, '손목에 기대시는 분들에게\n굉장히 도움 많이 돼요.']]}
         with tempfile.TemporaryDirectory() as folder, patch.object(layout.subprocess, 'run', side_effect=AssertionError('External execution')):
             manifest = layout.design(plan, Path(folder))
+            self.assertEqual(manifest['version'], 'mobile-safe-v2')
+            self.assertEqual(manifest['reserved']['top'], [0, 0, 1080, 320])
+            self.assertGreaterEqual(min(item['bounds'][1] for item in manifest['labels']), 360)
+            self.assertLess(max(item['bounds'][3] for item in manifest['labels']), layout.VIDEO[1])
             self.assertFalse(manifest['footer'])
             self.assertTrue(all(layout.within_safe(x['bounds']) for x in manifest['labels'] + manifest['captions']))
             plan['cues'] = [[1, 5, 'one'], [4, 8, 'two']]
