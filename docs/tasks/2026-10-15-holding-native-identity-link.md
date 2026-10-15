@@ -35,3 +35,12 @@ Release evidence: `docs/reports/2026-10-15-holding-native-identity-link.html`.
 Node holding suites: 553 passed. TypeScript holding suites: 236 passed. Staff exclusion and Alimtalk policy suites: 36 passed. Price regression: 5 passed. Local responsive QA: 95 passed at 320/390/768/1440/1920px. No skipped tests. Independent production-code review found no actionable issue.
 
 Live identity resolution passed both direct read and read-only transaction. Original member fields and document ID were preserved, no native profile clone exists, and that member's holding event/candidate/send/claim counts were all zero. The future hold was not yet present in the latest hourly roster; no natural delivery is claimed. Canonical data-source, catalog, rollback and Hosting guards passed. Functions affected detection returned no codebases.
+
+## Live Rollout
+
+- Implementation `8f6e91dea039ec74196bad4057cd762dcba9dae1` pushed to main and `codex/mini/holding-native-identity-link`. Clean main deployment checkout used; Mac mini runtime fast-forwarded while the hourly LaunchAgent was idle.
+- Scoped CORE Hosting dry-run and deployment passed for `hosting:archive-pilates,hosting:archive-pilates-core` in project `archive-pilates` using `archive-codex-operator@archive-pilates.iam.gserviceaccount.com`. Functions/rules/indexes untouched.
+- Live responsive QA: 95 passed. Release canary: 10 checks passed, exact implementation SHA. Custom-domain and web.app operating-rule HTML have identical local source SHA-256 `2a96e1da57ca9687f7a6344a57ae4c21c29750a70fcc990a85da3bd07d2ab83e`.
+- Runtime read-only recheck at 2026-10-15T08:58:46.742Z: link and transaction proof passed; source fields preserved, no native clone, member holding event/candidate/send/claim counts zero. Settings unchanged, baseline initialization preserved, future hold not yet discovered.
+- Existing LaunchAgent remains loaded with interval 3600 seconds and last exit 0; no kickstart or queue execution. Browser QA contexts, temporary profiles and local server closed.
+- GitHub Actions main run `38709455931` and feature run `38709452231` both succeeded for the implementation SHA. Main evidence: https://github.com/archivepilates/archive/actions/runs/38709455931. CI affected-codebase detection returned `codebases: []`. Final evidence-only documentation does not change deployed source/assets and requires no extra Hosting deployment.
