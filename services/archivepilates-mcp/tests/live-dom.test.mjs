@@ -170,12 +170,17 @@ test('overview rejects unverified empty lists, pagination, missing sections and 
   throwsCode(() => validateOverview(null, EXPECTED), 'LIVE_INCOMPLETE');
 });
 
-test('overview checks name, full phone and grade even when there are no tickets', () => {
+test('overview checks name and full phone even when there are no tickets', () => {
   for (const patch of [{ name: `${NAME} Extra` }, { name: '' }, { phone: '01092345678' },
     { phone: '010-****-5678' }, { phone: '010-\u2022\u2022\u2022\u2022-5678' },
-    { phone: '010*12345678' }, { phone: '' }, { memberGrade: '' }]) {
+    { phone: '010*12345678' }, { phone: '' }]) {
     throwsCode(() => validateOverview(overview({ tickets: [], ...patch }), EXPECTED), 'LIVE_IDENTITY_MISMATCH');
   }
+});
+
+test('missing member grade is unknown metadata, not a failed member identity', () => {
+  assert.equal(validateOverview(overview({ memberGrade: '' }), EXPECTED).memberGrade, null);
+  assert.equal(validateOverview(overview({ memberGrade: undefined, tickets: [] }), EXPECTED).memberGrade, null);
 });
 
 test('overview normalizes identity whitespace and phone formatting', () => {

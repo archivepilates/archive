@@ -4,7 +4,7 @@ import { chromium } from 'playwright';
 import { acquireStudioMateBrowserLock } from '../../../scripts/lib/studiomate-browser-lock.mjs';
 import { OperationError, requireValue } from './errors.mjs';
 import { STUDIO_ORIGIN, clean, assertMemberUrl, extractSearchDom, validateSearch,
-  extractOverviewDom, validateOverview } from './live-dom.mjs';
+  extractOverviewDom, validateOverview, extractIdentityDom, validateIdentity } from './live-dom.mjs';
 
 export const allowReadRequest = method => ['GET', 'HEAD', 'OPTIONS'].includes(method);
 
@@ -97,7 +97,7 @@ export function createLiveReader({ launch = options => chromium.launchPersistent
   }
   async function navigate(page, pathname) {
     checkpoint(page);
-    await page.goto(`${STUDIO_ORIGIN}${pathname}`, { waitUntil: 'networkidle' });
+    await page.goto(`${STUDIO_ORIGIN}${pathname}`, { waitUntil: 'domcontentloaded' });
     await page.waitForFunction(() => document.querySelector('.member-detail__header, .search-bar, input[type="password"]'));
     const url = new URL(page.url());
     requireValue(url.origin === STUDIO_ORIGIN, 'LIVE_IDENTITY_MISMATCH', 'StudioMate 센터 주소가 다릅니다.');
@@ -123,26 +123,46 @@ export function createLiveReader({ launch = options => chromium.launchPersistent
     });
     return validateSearch(await page.evaluate(extractSearchDom), query, isPhone);
   }
-  async function openSelected(page, expected) {
+  async function openSelected(page, expected, searchReady = false) {
     checkpoint(page);
-    const rows = await search(page, expected.phone, true);
-    requireValue(rows.filter(row => row.name === expected.name && row.phone === expected.phone).length === 1,
-      'LIVE_IDENTITY_MISMATCH', '선택한 회원의 이름·전체 전화번호가 현재 검색 결과와 다릅니다.');
+    if (!searchReady) {
+      const rows = await search(page, expected.phone, true);
+      requireValue(rows.filter(row => row.name === expected.name && row.phone === expected.phone).length === 1,
+        'LIVE_IDENTITY_MISMATCH', '선택한 회원의 이름·전체 전화번호가 현재 검색 결과와 다릅니다.');
+    }
     const target = page.locator('.search-bar .members .member').filter({ has: page.locator('.name', { hasText: new RegExp(`^${escape(expected.name)}$`) }) })
       .filter({ has: page.locator('.mobile', { hasText: new RegExp(`^${expected.phone.slice(0, 3)}[- ]?${expected.phone.slice(3, -4)}[- ]?${expected.phone.slice(-4)}$`) }) });
     requireValue(await target.count() === 1, 'LIVE_AMBIGUOUS', '검색 화면에서 한 명을 확정하지 못했습니다.');
     checkpoint(page);
     await target.click();
     await page.waitForURL(url => url.origin === STUDIO_ORIGIN && url.pathname === '/users/detail' && /^[1-9]\d+$/.test(url.searchParams.get('id') || ''));
-    await page.waitForLoadState('networkidle');
     const memberId = new URL(page.url()).searchParams.get('id');
     assertMemberUrl(page.url(), memberId);
     if (expected.memberId) requireValue(memberId === expected.memberId, 'LIVE_IDENTITY_MISMATCH', '선택한 StudioMate 회원 ID가 달라졌습니다.');
+    await waitIdentity(page);
+    checkpoint(page);
+    const detail = validateIdentity(await page.evaluate(extractIdentityDom), expected);
+    return { memberId, detail };
+  }
+  async function waitIdentity(page) {
+    checkpoint(page);
+    await page.waitForFunction(() => !!document.querySelector('.member-detail__header__mobile span')?.textContent?.trim());
+  }
+  async function readOverview(page, expected) {
+    const loaded = page.waitForResponse(response => {
+      const url = new URL(response.url());
+      return response.request().method() === 'GET' && url.origin === 'https://api.studiomate.kr'
+        && url.pathname === '/v2/staff/userTickets' && url.searchParams.get('member_id') === expected.memberId;
+    }, { timeout: 10000 }).catch(() => null);
+    await navigate(page, `/users/detail?id=${expected.memberId}`);
+    const response = await loaded;
+    requireValue(response?.ok() && !await response.finished(), 'LIVE_INCOMPLETE', '수강권 목록의 원본 조회 완료를 확인하지 못했습니다. 빈 목록으로 처리하지 않았습니다.');
+    // Require positive ticket-load completion plus a settled rendered view, not a briefly absent loading mask.
+    await page.waitForLoadState('networkidle');
     await waitOverview(page);
     checkpoint(page);
-    const raw = await page.evaluate(extractOverviewDom);
-    const detail = validateOverview(raw, expected);
-    return { memberId, detail, raw };
+    assertMemberUrl(page.url(), expected.memberId);
+    return validateOverview(await page.evaluate(extractOverviewDom), expected);
   }
   async function waitOverview(page) {
     checkpoint(page);
@@ -156,8 +176,8 @@ export function createLiveReader({ launch = options => chromium.launchPersistent
   return {
     findMembers: (query, isPhone, signal) => session(async page => {
       const rows = await search(page, query, isPhone), members = [];
-      for (const expected of rows) {
-        const value = await openSelected(page, expected);
+      for (const [index, expected] of rows.entries()) {
+        const value = await openSelected(page, expected, index === 0);
         members.push({ memberId: value.memberId, name: value.detail.name, phone: value.detail.phone });
       }
       requireValue(new Set(members.map(row => row.memberId)).size === members.length,
@@ -165,14 +185,12 @@ export function createLiveReader({ launch = options => chromium.launchPersistent
       return { members, coverage: 'visible_exact_matches' };
     }, signal),
     getOverview: (expected, signal) => session(async page => {
-      const first = await openSelected(page, expected);
+      assertMemberUrl(`${STUDIO_ORIGIN}/users/detail?id=${expected.memberId}`, expected.memberId);
+      const first = await readOverview(page, expected);
       // Two fresh navigations detect changing/partially rendered tickets without a cached fallback.
-      await navigate(page, `/users/detail?id=${first.memberId}`);
-      await waitOverview(page);
-      assertMemberUrl(page.url(), first.memberId);
-      const second = validateOverview(await page.evaluate(extractOverviewDom), expected);
-      requireValue(JSON.stringify(first.detail) === JSON.stringify(second), 'LIVE_CHANGED', '조회 중 회원·수강권 정보가 바뀌었습니다. 다시 조회하세요.');
-      return { memberId: first.memberId, ...second, coverage: 'current_ticket_cards', ticketIdsAvailable: false };
+      const second = await readOverview(page, expected);
+      requireValue(JSON.stringify(first) === JSON.stringify(second), 'LIVE_CHANGED', '조회 중 회원·수강권 정보가 바뀌었습니다. 다시 조회하세요.');
+      return { memberId: expected.memberId, ...second, coverage: 'current_ticket_cards', ticketIdsAvailable: false };
     }, signal),
     close: async () => {
       stopped = true;

@@ -5,6 +5,7 @@ import { createLiveReader, allowReadRequest } from '../src/live-browser.mjs';
 
 const member = { memberId: '123', name: '가상강사', phone: '01012345678' };
 const origin = 'https://arcpilates.studiomate.kr';
+const apiOrigin = 'https://api.studiomate.kr';
 const ticket = name => `<div class="userticket-card"><h3>${name}</h3>
   <span class="userticket-card__indicator__tag contained">사용중</span>
   <p class="userticket-card__body__details">그룹형 횟수제</p>
@@ -27,21 +28,22 @@ function searchHtml() {
     document.getElementById('results').replaceChildren(container);
   });</script>`;
 }
-function detailHtml(name) {
+function detailHtml(name, grade = '스텝', malformedTicket = false) {
   return `<div class="member-detail__header">
     <div class="member-detail__header__name"><h3>가상강사</h3></div>
     <div class="member-detail__header__mobile"><span>01012345678</span></div>
-    <div class="member-detail__header__user-grade"><span>스텝</span></div></div>
+    <div class="member-detail__header__user-grade"><span>${grade}</span></div></div>
     <div class="member-basic__user-tickets"><div class="userticket-card"><p class="userticket-card__extra__add-new">새 수강권</p></div>
     <div class="el-loading-mask">불러오는 중</div><div id="tickets"></div></div>
-    <script>fetch('/ready').then(()=>{document.getElementById('tickets').innerHTML=${JSON.stringify(ticket(name))};
+    <script>fetch('${apiOrigin}/v2/staff/userTickets?member_id=123').then(()=>{document.getElementById('tickets').innerHTML=${JSON.stringify(malformedTicket ? '<div class="userticket-card">변경된 표시</div>' : ticket(name))};
     document.querySelector('.el-loading-mask').remove();});fetch('/must-not-write',{method:'POST'}).catch(()=>{});</script>`;
 }
 
-async function fixture(t, { change = false, login = false } = {}) {
+async function fixture(t, { change = false, login = false, grade = '스텝', malformedTicket = false, pendingTickets = false } = {}) {
   const events = [], forwardedWrites = [], contexts = [];
   let held = false, visits = 0;
   const reader = createLiveReader({
+    budgetMs: pendingTickets ? 2000 : 45000,
     acquire: async () => {
       if (held) throw new Error('busy');
       held = true; events.push('lock');
@@ -59,13 +61,16 @@ async function fixture(t, { change = false, login = false } = {}) {
         const request = route.request(), url = new URL(request.url());
         events.push(`fixture-request:${request.method()}:${url.pathname}`);
         if (!allowReadRequest(request.method())) forwardedWrites.push(request.method());
-        if (url.origin !== origin) return route.abort();
+        if (![origin, apiOrigin].includes(url.origin)) return route.abort();
         if (url.pathname === '/users') return route.fulfill({ contentType: 'text/html; charset=utf-8', body: login ? '<input type="password">' : searchHtml() });
         if (url.pathname === '/users/detail') {
           visits += 1;
-          return route.fulfill({ contentType: 'text/html; charset=utf-8', body: detailHtml(change && visits > 1 ? '변경권' : '가상권') });
+          const html = detailHtml(change && visits > 1 ? '변경권' : '가상권', grade, malformedTicket);
+          return route.fulfill({ contentType: 'text/html; charset=utf-8', body: login ? '<input type="password">'
+            : pendingTickets ? html.replace('class="el-loading-mask"', 'class="el-loading-mask" style="display:none"') : html });
         }
-        return route.fulfill({ contentType: 'application/json', body: '{}' });
+        if (pendingTickets && url.pathname === '/v2/staff/userTickets') return new Promise(() => {});
+        return route.fulfill({ contentType: 'application/json', headers: { 'access-control-allow-origin': origin }, body: '{}' });
       });
       return context;
     },
@@ -87,6 +92,28 @@ test('fixture browser searches exact identity, resolves native ID, waits for tic
   assert.ok(Number.isFinite(Date.parse(result.checkedAt)));
   assert.deepEqual(f.forwardedWrites, []);
   assert.deepEqual(f.events.filter(event => !event.startsWith('fixture-')), ['lock', 'launch', 'close', 'release', 'lock', 'launch', 'close', 'release']);
+  assert.equal(f.held(), false);
+  assert.ok(f.contexts.every(context => context.pages().length === 0));
+  assert.equal(f.events.filter(e => e === 'fixture-request:GET:/v2/staff/members/top-bar-search').length, 1);
+  assert.equal(f.events.filter(e => e === 'fixture-request:GET:/users/detail').length, 3);
+});
+
+test('search needs identity only, not grade or parsable ticket layout', async t => {
+  const f = await fixture(t, { grade: '', malformedTicket: true });
+  assert.deepEqual((await f.reader.findMembers(member.name, false)).members, [member]);
+  await assert.rejects(f.reader.getOverview(member), { code: 'LIVE_LAYOUT_CHANGED' });
+  assert.equal(f.held(), false);
+});
+
+test('direct overview permits unknown grade but preserves live identity verification', async t => {
+  const f = await fixture(t, { grade: '' });
+  assert.equal((await f.reader.getOverview(member)).memberGrade, null);
+  await assert.rejects(f.reader.getOverview({ ...member, phone: '01099995678' }), { code: 'LIVE_IDENTITY_MISMATCH' });
+  assert.equal(f.held(), false);
+});
+test('pending ticket request without a loading mask cannot become a verified empty list', async t => {
+  const f = await fixture(t, { pendingTickets: true });
+  await assert.rejects(f.reader.getOverview(member), { code: 'LIVE_TIMEOUT' });
   assert.equal(f.held(), false);
   assert.ok(f.contexts.every(context => context.pages().length === 0));
 });

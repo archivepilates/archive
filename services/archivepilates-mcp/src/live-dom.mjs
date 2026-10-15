@@ -64,6 +64,21 @@ export function extractOverviewDom() {
       payment: text(e, '.userticket-card__extra__price__total') })) };
 }
 
+export function extractIdentityDom() {
+  const headers = [...document.querySelectorAll('.member-detail__header')].filter(e => e.getClientRects().length > 0);
+  if (headers.length !== 1) return { ready: false };
+  const text = selector => headers[0].querySelector(selector)?.textContent?.trim() || '';
+  return { ready: true, name: text('.member-detail__header__name h3'),
+    phone: text('.member-detail__header__mobile span'), memberGrade: text('.member-detail__header__user-grade span') };
+}
+
+export function validateIdentity(raw, expected) {
+  requireValue(raw?.ready && clean(raw.name) === clean(expected.name)
+    && phone(raw.phone) === phone(expected.phone) && /^01[016789]\d{7,8}$/.test(phone(raw.phone))
+    && !/[*•]/.test(raw.phone), 'LIVE_IDENTITY_MISMATCH', '회원 상세의 이름·전체 전화번호가 선택 결과와 다릅니다.');
+  return { name: clean(raw.name), phone: phone(raw.phone), memberGrade: clean(raw.memberGrade) || null };
+}
+
 function day(value) {
   const match = /^(\d{4})\.\s*(\d{1,2})\.\s*(\d{1,2})\.?$/.exec(value.trim());
   requireValue(match, 'LIVE_LAYOUT_CHANGED', '수강권의 이용 날짜 형식을 확인해야 합니다.');
@@ -78,9 +93,7 @@ export function validateOverview(raw, expected) {
   requireValue(raw?.ready && !raw.incomplete && raw.addCards === 1
     && Array.isArray(raw.tickets) && raw.tickets.length <= 100,
   'LIVE_INCOMPLETE', '수강권 화면의 현재 보유 목록 전체를 확인하지 못했습니다.');
-  requireValue(clean(raw.name) === clean(expected.name) && phone(raw.phone) === phone(expected.phone)
-    && /^01[016789]\d{7,8}$/.test(phone(raw.phone)) && !/[*•]/.test(raw.phone)
-    && clean(raw.memberGrade), 'LIVE_IDENTITY_MISMATCH', '회원 상세의 이름·전체 전화번호·등급이 검색 결과와 다릅니다.');
+  const identity = validateIdentity(raw, expected);
   const tickets = raw.tickets.map(row => {
     const name = clean(row.name), status = clean(row.status), type = clean(row.type);
     requireValue(name && status && type && Array.isArray(row.counts),
@@ -112,5 +125,5 @@ export function validateOverview(raw, expected) {
   });
   requireValue(new Set(tickets.map(row => JSON.stringify(row))).size === tickets.length,
     'LIVE_AMBIGUOUS', '같은 표시의 수강권이 여러 개라 전체 목록을 확정하지 않았습니다.');
-  return { name: clean(raw.name), phone: phone(raw.phone), memberGrade: clean(raw.memberGrade), tickets };
+  return { ...identity, tickets };
 }

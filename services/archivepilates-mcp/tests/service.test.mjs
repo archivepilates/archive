@@ -13,6 +13,7 @@ const memberArgs = { memberId: '123' };
 const readCalls = [
   ['members_find', { query: 'Fixture Member' }],
   ['members_get_overview', memberArgs],
+  ['members_list_expiring', { daysRemainingMax: 10 }],
   ['bookings_list', { ...memberArgs, ...dates }],
   ['contracts_get_progress', memberArgs],
   ['messages_get_delivery', { ...memberArgs, ...dates }],
@@ -62,6 +63,7 @@ function fixture(t, options = {}) {
     getProfile: t.mock.fn(async memberId => state.profile?.memberId === memberId ? state.profile : null),
     findMembers: t.mock.fn(async () => [state.profile]),
     getLookup: t.mock.fn(async () => state.lookup),
+    getTicketInventory: t.mock.fn(async () => ({ profiles: [state.profile], fetchedAt: NOW, cacheHit: false })),
     getRows: t.mock.fn(async collection => state.rows[collection] || []),
     getMessageRows: t.mock.fn(async (...args) => ({ rows: await store.getRows(...args), coverage: { queryMode: 'fixture' } })),
     getJob: t.mock.fn(async (kind, jobId) => state.jobs.get(`${kind}:${jobId}`) || null),
@@ -125,7 +127,7 @@ async function prepareApproved(f) {
   return result.proposal.proposalId;
 }
 
-test('catalog exposes exactly six reads and two explicit memo actions', t => {
+test('catalog exposes seven reads and two explicit memo actions', t => {
   const f = fixture(t);
   assert.deepEqual(f.listTools(), TOOLS);
   assert.deepEqual(TOOLS.filter(tool => tool.annotations.readOnlyHint).map(tool => tool.name),
@@ -140,7 +142,7 @@ test('catalog exposes exactly six reads and two explicit memo actions', t => {
   noWrites(f);
 });
 
-test('all six reads return projected data without raw phones, payloads, or error content', async t => {
+test('all seven reads return projected data without raw phones, payloads, or error content', async t => {
   const f = fixture(t);
   for (const [name, args] of readCalls) {
     const response = await f.callTool(name, args);
@@ -150,7 +152,7 @@ test('all six reads return projected data without raw phones, payloads, or error
     assert.ok(!serialized.includes(SECRET), name);
     assert.doesNotMatch(serialized, /rawPayload|"lastError"|"answers"/, name);
   }
-  assert.equal(f.store.getOperator.mock.callCount(), 6);
+  assert.equal(f.store.getOperator.mock.callCount(), 7);
   noWrites(f);
 });
 
@@ -312,7 +314,9 @@ test('cross-studio ledger rejections propagate from the store without partial re
   const f = fixture(t);
   f.store.getRows.mock.mockImplementation(async () => { throw new OperationError('SOURCE_SCOPE_MISMATCH', 'Fixture scope.'); });
   f.store.getJob.mock.mockImplementation(async () => { throw new OperationError('SOURCE_SCOPE_MISMATCH', 'Fixture scope.'); });
-  for (const [name, args] of readCalls.slice(2)) await rejectsCode(f.callTool(name, args), 'SOURCE_SCOPE_MISMATCH');
+  for (const [name, args] of readCalls.filter(([name]) => ['bookings_list', 'contracts_get_progress', 'messages_get_delivery', 'operations_get_job'].includes(name))) {
+    await rejectsCode(f.callTool(name, args), 'SOURCE_SCOPE_MISMATCH');
+  }
   noWrites(f);
 });
 

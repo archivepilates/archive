@@ -14,6 +14,7 @@ function fake(seed = {}) {
     const build = (filters = [], cap = Infinity) => ({
       where: (field, operator, value) => { assert.equal(operator, '=='); return build([...filters, [field, value]], cap); },
       limit: max => build(filters, max),
+      select: (...fields) => { assert.ok(fields.includes('activeTickets')); assert.ok(!fields.includes('answers')); return build(filters, cap); },
       async get() {
         reads.push({ name, filters, cap });
         const docs = [...data.entries()].filter(([key, value]) => key.startsWith(`${name}/`)
@@ -25,7 +26,7 @@ function fake(seed = {}) {
     return build();
   }
   let tail = Promise.resolve();
-  return { data, reads, writes, db: { collection,
+  return { data, reads, writes, db: { collection, getAll: async (...refs) => refs.map(ref => snapshot(ref.path)),
     runTransaction(fn) {
       const next = tail.then(async () => {
         const pending = [];
@@ -68,6 +69,53 @@ test('exact member search is capped and preserves source IDs', async () => {
   const f = fake({ 'memberProfiles/123': person() });
   assert.equal((await createStore(f.db, timestamps).findMembers('테스트', false))[0]._id, '123');
   assert.equal(f.reads[0].cap, 11);
+});
+
+test('ticket inventory is scoped, projected and cached for five minutes without writes', async () => {
+  const f = fake({ 'memberProfiles/123': person(), 'memberProfiles/999': { ...person(), studioId: 'other' } });
+  let clock = now;
+  const store = createStore(f.db, timestamps, { now: () => clock });
+  assert.equal((await store.getTicketInventory()).cacheHit, false);
+  assert.equal((await store.getTicketInventory()).cacheHit, true);
+  assert.equal(f.reads.length, 1);
+  assert.equal(f.reads[0].cap, 2001);
+  assert.equal((await store.getTicketInventory()).profiles.length, 1);
+  await store.getTicketInventory({ forceRefresh: true });
+  assert.equal(f.reads.length, 2);
+  clock += 300000;
+  assert.equal((await store.getTicketInventory()).cacheHit, false);
+  assert.equal(f.reads.length, 3);
+  assert.equal(f.writes.length, 0);
+});
+
+test('ticket inventory rejects overflow and never falls back to an old snapshot after refresh failure', async () => {
+  const f = fake({ 'memberProfiles/123': person() });
+  const store = createStore(f.db, timestamps, { now: () => now });
+  await store.getTicketInventory();
+  for (let n = 0; n < 2001; n++) f.data.set(`memberProfiles/x${n}`, person());
+  await assert.rejects(store.getTicketInventory({ forceRefresh: true }), { code: 'SOURCE_LIMIT' });
+  await assert.rejects(store.getTicketInventory(), { code: 'SOURCE_LIMIT' });
+});
+
+test('concurrent inventory requests share one bounded source read', async () => {
+  const f = fake({ 'memberProfiles/123': person() });
+  const store = createStore(f.db, timestamps, { now: () => now });
+  const [one, two] = await Promise.all([store.getTicketInventory(), store.getTicketInventory({ forceRefresh: true })]);
+  assert.equal(f.reads.length, 1);
+  assert.equal(one.fetchedAt, two.fetchedAt);
+});
+
+test('inventory links native and Excel identities only with a matching completion receipt', async () => {
+  const alias = { ...person(), memberId: 'excel_123', studiomateMemberId: '123', studiomateMemberIdResolvedAt: new Date(now) };
+  const proof = { status: 'done', studioId: '5330', memberId: 'excel_123', studiomateMemberId: '123',
+    memberName: alias.name, memberPhone: alias.phone, resolvedAt: new Date(now) };
+  for (const patch of [{}, { status: 'pending' }, { studioId: 'other' }, { memberName: '다른이름' },
+    { memberPhone: '01099995678' }, { resolvedAt: new Date(now - 1) }]) {
+    const f = fake({ 'memberProfiles/123': person(), 'memberProfiles/excel_123': alias,
+      'studiomateMemberIdLookupJobs/studiomate_member_id_lookup_excel_123': { ...proof, ...patch } });
+    const result = await createStore(f.db, timestamps).getTicketInventory();
+    assert.equal(result.verifiedLinks.length, Object.keys(patch).length ? 0 : 1);
+  }
 });
 function input(f) {
   const profile = { ...person(), _id: '123' };

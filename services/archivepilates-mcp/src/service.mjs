@@ -1,6 +1,7 @@
 import { createHash } from 'node:crypto';
 import { TOOLS, validate } from './catalog.mjs';
 import { id, text, phone, maskedPhone, millis, iso, requireValue } from './errors.mjs';
+import { selectExpiring } from './ticket-query.mjs';
 
 export const hash = value => createHash('sha256').update(JSON.stringify(value)).digest('hex');
 export const sourceHash = value => hash([value._id, value.memberId, value.studioId, value.name, value.phone,
@@ -122,6 +123,15 @@ export function createService({ store, approvals, staffId, now = Date.now, memoW
     requireValue(validate(name, args), 'INVALID_ARGUMENT', '지원하는 도구와 입력 항목을 확인해 주세요.');
     requireValue(!readOnly || !['memos_prepare', 'memos_commit'].includes(name), 'WRITE_DISABLED', '조회 전용 연결에서는 메모 계획·실행을 제공하지 않습니다.');
     const operator = await actor();
+    if (name === 'members_list_expiring') {
+      const started = now();
+      const inventory = await store.getTicketInventory({ forceRefresh: args.forceRefresh === true });
+      return { ok: true, ...selectExpiring(inventory.profiles, { now: now(), daysRemainingMax: args.daysRemainingMax,
+        classType: args.classType, verifiedLinks: inventory.verifiedLinks }),
+        source: { collection: 'memberProfiles', snapshotFetchedAt: iso(inventory.fetchedAt),
+          queriedAt: new Date(now()).toISOString(), cacheHit: inventory.cacheHit, cacheTtlSeconds: 300,
+          freshness: 'unknown', liveReadback: false }, elapsedMs: now() - started };
+    }
     if (name === 'members_find') {
       const query = text(args.query, 50);
       const isPhone = /^[\d\s()+-]+$/.test(query);

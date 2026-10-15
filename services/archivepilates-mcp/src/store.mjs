@@ -1,4 +1,4 @@
-import { id, requireValue } from './errors.mjs';
+import { id, requireValue, phone, millis } from './errors.mjs';
 import { validateContract } from './service.mjs';
 
 export const JOB_COLLECTIONS = Object.freeze({
@@ -9,7 +9,8 @@ export const JOB_COLLECTIONS = Object.freeze({
 const MEMBER_COLLECTIONS = new Set(['bookings', 'studiomateMembershipContracts', 'alimtalkCandidates', 'alimtalkSends']);
 const row = doc => doc.exists ? { ...doc.data(), _id: doc.id } : null;
 
-export function createStore(db, Timestamp) {
+export function createStore(db, Timestamp, { now = Date.now } = {}) {
+  let inventory, inventoryLoading, inventoryExpiry;
   const profile = memberId => db.collection('memberProfiles').doc(id(memberId));
   const memo = memoId => db.collection('memberMemos').doc(id(memoId));
   const job = memoId => db.collection(JOB_COLLECTIONS.memo).doc(id(memoId));
@@ -24,6 +25,39 @@ export function createStore(db, Timestamp) {
       const snapshot = await db.collection('memberProfiles').where(isPhone ? 'phone' : 'name', '==', query).limit(11).get();
       requireValue(snapshot.size <= 10, 'SEARCH_TOO_BROAD', '동일한 회원이 많습니다. 전체 전화번호로 조회해 주세요.');
       return snapshot.docs.map(row).filter(value => value.studioId === '5330');
+    },
+    async getTicketInventory({ forceRefresh = false } = {}) {
+      if (!forceRefresh && inventory && now() >= inventory.fetchedAt && now() - inventory.fetchedAt < 300000) {
+        return { ...inventory, cacheHit: true };
+      }
+      if (!inventoryLoading) inventoryLoading = (async () => {
+        const snapshot = await db.collection('memberProfiles').where('studioId', '==', '5330')
+          .select('studioId', 'memberId', 'name', 'phone', 'status', 'mergedInto', 'canonicalMemberId', 'memberMerge.canonicalMemberId',
+            'activeTickets', 'syncedAt', 'sourceObservedAt', 'sourceUpdatedAt', 'studiomateMemberId', 'studiomateMemberIdResolvedAt').limit(2001).get();
+        requireValue(snapshot.size <= 2000, 'SOURCE_LIMIT', '동기화 회원이 조회 한도를 넘었습니다. 일부를 전체 목록으로 표시하지 않았습니다.');
+        const profiles = snapshot.docs.map(row).map(scope), byId = new Map(profiles.map(p => [p._id, p]));
+        const pairs = profiles.filter(p => /^excel_/.test(p._id) && /^[1-9]\d*$/.test(p.studiomateMemberId || '')
+          && byId.has(p.studiomateMemberId)).slice(0, 20);
+        const receipts = pairs.length ? await db.getAll(...pairs.map(p => db.collection('studiomateMemberIdLookupJobs')
+          .doc(`studiomate_member_id_lookup_${id(p._id)}`))) : [];
+        const verifiedLinks = [];
+        for (const [index, alias] of pairs.entries()) {
+          const native = byId.get(alias.studiomateMemberId), proof = row(receipts[index]);
+          if (alias._id === alias.memberId && native._id === native.memberId && proof?.status === 'done'
+            && proof.studioId === '5330' && proof.memberId === alias.memberId && proof.studiomateMemberId === native.memberId
+            && proof.memberName === alias.name && native.name === alias.name && phone(alias.phone)
+            && phone(proof.memberPhone) === phone(alias.phone) && phone(native.phone) === phone(alias.phone)
+            && millis(proof.resolvedAt) && millis(proof.resolvedAt) === millis(alias.studiomateMemberIdResolvedAt)) {
+            verifiedLinks.push({ aliasId: alias.memberId, nativeId: native.memberId });
+          }
+        }
+        inventory = { profiles, verifiedLinks, fetchedAt: now() };
+        clearTimeout(inventoryExpiry);
+        inventoryExpiry = setTimeout(() => { inventory = null; }, 300000);
+        inventoryExpiry.unref?.();
+        return { ...inventory, cacheHit: false };
+      })().catch(error => { clearTimeout(inventoryExpiry); inventory = null; throw error; }).finally(() => { inventoryLoading = null; });
+      return inventoryLoading;
     },
     async getLookup(memberId) { return row(await db.collection('studiomateMemberIdLookupJobs').doc(`studiomate_member_id_lookup_${id(memberId)}`).get()); },
     async getRows(collection, memberIds, range = null) {
