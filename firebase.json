@@ -238,6 +238,7 @@
         ".firebase",
         ".firebase/**",
         "firebase/**",
+        "services/**",
         "firebase.json",
         "package.json",
         "package-lock.json",
