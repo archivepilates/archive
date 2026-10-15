@@ -39,37 +39,17 @@ def probe(path):
     ], text=True))
 
 
-def helper(name):
-    spec = importlib.util.spec_from_file_location(name.replace('-', '_'), REFERENCES / 'scripts' / name)
+def mobile_layout():
+    spec = importlib.util.spec_from_file_location('reel_mobile_layout', ROOT / 'scripts/lib/reel-mobile-layout.py')
     module = importlib.util.module_from_spec(spec)
     spec.loader.exec_module(module)
     return module
 
 
 def render(plan, folder):
-    template = helper('reels-extra-samples.py')
-    template.OUT = folder.parent
-    template.SAMPLES = [{
-        'id': folder.name, 'title': plan['hook'], 'subtitle': plan['subtitle'],
-        'start': plan['start'], 'end': plan['end'], 'crop': plan['crop'],
-        'cues': [(a + plan['start'], b + plan['start'], text) for a, b, text in plan['cues']],
-    }]
-    template.render(Path(plan['source']))
-    body = folder / 'archive-reels-test-final.mp4'
     tail = REFERENCES / 'artifacts/reels-local-test/ending/archive-ending.mp4'
-    duration = float(probe(body)['format']['duration'])
     assert abs(float(probe(tail)['format']['duration']) - 3) < .1
-    graph = (
-        f'[0:v]fps=30,setsar=1,setpts=PTS-STARTPTS,fade=t=out:st={duration-.22}:d=0.22:color=0xfaf9f7[v0];'
-        '[1:v]fps=30,setsar=1,setpts=PTS-STARTPTS[v1];'
-        '[0:a]aresample=48000,aformat=channel_layouts=stereo,asetpts=PTS-STARTPTS[a0];'
-        '[1:a]aresample=48000,aformat=channel_layouts=stereo,asetpts=PTS-STARTPTS[a1];'
-        '[v0][a0][v1][a1]concat=n=2:v=1:a=1[v][a]'
-    )
-    run(['ffmpeg', '-hide_banner', '-loglevel', 'error', '-i', str(body), '-i', str(tail),
-         '-filter_complex', graph, '-map', '[v]', '-map', '[a]', '-c:v', 'h264_videotoolbox',
-         '-b:v', '8M', '-pix_fmt', 'yuv420p', '-c:a', 'aac', '-b:a', '192k',
-         '-ar', '48000', '-movflags', '+faststart', '-n', str(folder / 'review-short.mp4')])
+    mobile_layout().render(plan, folder, tail)
 
 
 def verify(plan, folder):
@@ -87,6 +67,10 @@ def verify(plan, folder):
     run(['ffmpeg', '-hide_banner', '-loglevel', 'error', '-i', str(movie), '-f', 'null', '-'])
     sheet = Image.new('RGB', (1080, 1320), 'white')
     samples = []
+    manifest = load(folder / 'layout-manifest.json')
+    layout = mobile_layout()
+    assert manifest['version'] == 'mobile-safe-v1' and manifest['footer'] is False
+    assert all(layout.within_safe(item['bounds']) for item in manifest['labels'] + manifest['captions'])
     cap = cv2.VideoCapture(str(movie))
     try:
         for i, second in enumerate([.5, body*.2, body*.4, body*.6, body*.85, body+2.5]):
@@ -96,11 +80,14 @@ def verify(plan, folder):
             rgb = cv2.cvtColor(frame, cv2.COLOR_BGR2RGB)
             if i < 5:
                 assert rgb[600:1400].std() > 20
-                _, xs = np.where(np.all(rgb[1535:1745] < 100, axis=2))
-                assert len(xs) > 300 and xs.min() > 50 and xs.max() < 1030
+                _, xs = np.where(np.all(rgb[1230:1420] < 100, axis=2))
+                assert len(xs) > 300 and xs.min() >= 144 and xs.max() <= 800
                 samples.append({'second': second, 'captionX': [int(xs.min()), int(xs.max())]})
             else:
-                assert np.sum((rgb[:, :, 0] > 150) & (rgb[:, :, 1] < 80)) > 50000
+                assert np.sum((rgb[:, :, 0] > 150) & (rgb[:, :, 1] < 80)) > 20000
+                ink = np.all(rgb < 100, axis=2) | ((rgb[:, :, 0] > 150) & (rgb[:, :, 1] < 80))
+                ys, xs = np.where(ink)
+                assert layout.within_safe((int(xs.min()), int(ys.min()), int(xs.max())+1, int(ys.max())+1))
             picture = Image.fromarray(rgb)
             if i == 1:
                 picture.save(folder / 'poster.jpg', quality=95)
@@ -117,7 +104,7 @@ def verify(plan, folder):
     with movie.open('rb') as stream:
         digest = hashlib.file_digest(stream, 'sha256').hexdigest()
     result = {'duration': duration, 'sha256': digest, 'sourceUnchanged': True,
-              'fullDecode': 'passed', 'captionBounds': samples,
+              'fullDecode': 'passed', 'captionBounds': samples, 'layoutVersion': manifest['version'],
               'audio': loudness.stderr[loudness.stderr.rfind('Summary:'):].split('[out#')[0]}
     save(folder / 'verification.json', result)
     print(json.dumps(result, ensure_ascii=False), flush=True)

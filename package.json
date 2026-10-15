@@ -49,6 +49,7 @@
     "deploy:affected-functions": "node scripts/deploy-affected-functions.mjs --apply",
     "validate:function-boundaries": "node scripts/validate-functions-boundaries.mjs",
     "test:reel-approval": "node --test scripts/tests/youtube-reel-approval.test.mjs && python3 -B scripts/tests/test_reel_button_worker.py",
+    "test:reel-layout": "python3 -B scripts/tests/test_reel_mobile_layout.py",
     "validate:data-source-policy": "node scripts/validate-data-source-policy.mjs",
     "validate:gcp-cost-guards": "node scripts/validate-gcp-cost-guards.mjs",
     "migrate:private-report-waiting-post": "node scripts/migrate-private-report-waiting-post.mjs",

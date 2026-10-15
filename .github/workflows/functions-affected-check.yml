@@ -89,7 +89,7 @@ jobs:
         run: node --test scripts/tests/imweb-referral-*.test.mjs
 
       - name: Test reel email-button approval and publication guards
-        run: npm run test:reel-approval
+        run: npm run test:reel-approval && npm run test:reel-layout
 
       - name: Validate instructor lesson registration release
         run: node scripts/validate-instructor-lesson-registration-release.mjs
