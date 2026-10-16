@@ -1,0 +1,39 @@
+.alimtalk-target-validation { min-width: 0; margin-block: 0 1.5rem; padding-block: 1rem; border-block: 1px solid var(--line); color: var(--text); letter-spacing: 0; }
+.alimtalk-target-validation[hidden], html:not([data-core-access="manager"]) .alimtalk-target-validation { display: none !important; }
+.alimtalk-target-validation *, .alimtalk-target-validation *::before, .alimtalk-target-validation *::after { box-sizing: border-box; min-width: 0; letter-spacing: 0; }
+.atv-heading { display: flex; align-items: baseline; flex-wrap: wrap; gap: .5rem 1rem; }
+.atv-heading h2 { margin: 0; font-size: 1rem; }
+.atv-heading span, .atv-boundary { color: var(--muted); font-size: .8125rem; }
+.atv-boundary { margin: .35rem 0 .75rem; line-height: 1.6; word-break: keep-all; overflow-wrap: anywhere; }
+.atv-form { max-width: 44rem; }
+.atv-form label { display: block; margin-bottom: .3rem; font-size: .8125rem; font-weight: 600; }
+.atv-controls { display: grid; grid-template-columns: minmax(0, 1fr) auto; gap: .5rem; }
+.atv-controls input, .atv-controls button { min-height: 44px; border: 1px solid var(--line); border-radius: 4px; padding: .5rem .75rem; font: inherit; }
+.atv-controls input { width: 100%; background: #fff; color: var(--text); font-size: 1rem; }
+.atv-controls input[aria-invalid="true"] { border-color: var(--red); }
+.atv-controls button { min-width: 4rem; background: var(--text); color: #fff; cursor: pointer; }
+.atv-controls button:disabled { opacity: .65; cursor: wait; }
+.alimtalk-target-validation :focus-visible { outline: 2px solid var(--blue); outline-offset: 3px; }
+.atv-status { margin: .5rem 0 0; font-size: .8125rem; overflow-wrap: anywhere; }
+.atv-status:empty { margin: 0; }
+.atv-result { margin-top: .75rem; font-size: .8125rem; line-height: 1.6; }
+.atv-result[hidden] { display: none; }
+.atv-result p { margin: .3rem 0; overflow-wrap: anywhere; }
+.atv-result strong { font-size: .875rem; }
+.atv-result[data-status="blocked"] strong { color: var(--red); }
+.atv-result ul { margin: .4rem 0; padding-left: 1.2rem; }
+.atv-result li { overflow-wrap: anywhere; margin-block: .25rem; }
+.atv-checked-at { color: var(--muted); }
+.atv-row-button {
+  flex: 0 0 auto;
+  min-height: 44px;
+  padding: 0.5rem 0.75rem;
+  border: 1px solid #cbd0d7;
+  border-radius: 6px;
+  background: #fff;
+  color: #20252b;
+  font: inherit;
+  cursor: pointer;
+}
+.atv-row-button:focus-visible { outline: 2px solid #b5222c; outline-offset: 2px; }
+.atv-row-actions { display: flex; flex-wrap: wrap; align-items: center; justify-content: flex-end; gap: 6px; }

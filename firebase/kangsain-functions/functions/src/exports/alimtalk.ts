@@ -1,4 +1,5 @@
 import { logger } from "firebase-functions";
+import { REGION } from "../config/constants";
 import { onCall, onRequest } from "firebase-functions/v2/https";
 import { onSchedule } from "firebase-functions/v2/scheduler";
 import { approveAlimtalkBatchHandler } from "../alimtalk/approvalGate";
@@ -16,6 +17,7 @@ import { queueDailyAlimtalkCandidates, queueReservationOpenAlimtalkCandidates } 
 import { sendDailyAlimtalkReport } from "../alimtalk/sendDailyAlimtalkReport";
 import { syncAlimtalkTemplateStatuses } from "../alimtalk/templateStatus";
 import { auditPreviousDayAlimtalkProviderLedgerAndNotify } from "../alimtalk/providerLedgerAudit";
+import { inspectAlimtalkTargets } from "../alimtalk/targetValidation";
 import { notionToken } from "../config/secrets";
 import {
   callableOptions,
@@ -40,6 +42,15 @@ const alimtalkQueueRequestOptions = {
   ...publicLongRequestOptions,
   secrets: [...publicLongRequestOptions.secrets, notionToken],
 };
+
+export const getAlimtalkTargetValidation = onCall({ region: REGION,
+  invoker: "public", timeoutSeconds: 60, memory: "256MiB", maxInstances: 2, concurrency: 1 }, async request => {
+  try {
+    const staff = await requireStaff(request);
+    requireManager(staff);
+    return await inspectAlimtalkTargets(request.data?.candidateIds, staff.studioId);
+  } catch (error) { throw toHttpsError(error); }
+});
 
 export const scheduledProcessAlimtalkQueue = onSchedule(
   {

@@ -10,7 +10,7 @@ import { StdioClientTransport } from '@modelcontextprotocol/sdk/client/stdio.js'
 
 assert.equal(process.argv.includes('--live-read-only'), true, 'Explicit --live-read-only is required.');
 const registered = process.argv.includes('--registered') ? JSON.parse(execFileSync('codex', ['mcp', 'get', 'archivepilates-mcp', '--json'], { encoding: 'utf8' })) : null;
-const readTools = ['members_find', 'members_get_overview', 'members_list_expiring', 'bookings_list', 'contracts_get_progress', 'messages_get_delivery', 'operations_get_job'];
+const readTools = ['members_find', 'members_get_overview', 'members_list_expiring', 'bookings_list', 'contracts_get_progress', 'messages_get_delivery', 'messages_validate_target', 'operations_get_job'];
 if (registered) {
   assert.equal(registered.enabled, true);
   assert.equal(registered.transport.type, 'stdio');
@@ -28,7 +28,7 @@ const checks = [];
 try {
   await client.connect(transport);
   const tools = await client.listTools();
-  assert.equal(tools.tools.length, 7);
+  assert.equal(tools.tools.length, readTools.length);
   assert.ok(tools.tools.every(tool => tool.annotations.readOnlyHint));
   checks.push({ check: 'stdio_handshake_and_discovery', tools: tools.tools.length, ok: true });
   async function call(name, args) {

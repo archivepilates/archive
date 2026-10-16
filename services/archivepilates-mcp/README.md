@@ -21,11 +21,14 @@ ARCHIVE PILATES StudioMate 업무를 위한 맥미니 로컬 MCP입니다. 운�
 | `bookings_list` | 기본값은 선택 회원의 최대 31일 원본 예약·출석·취소 이력. 명시적 snapshot은 저장 원장 |
 | `contracts_get_progress` | 계약 생성·서명 증거·관측 상태·웰컴 상태 |
 | `messages_get_delivery` | 최대 31일 알림톡 후보·발송 원장, 최종 전달 미확인 구분 |
+| `messages_validate_target` | 정확한 후보 ID의 저장 원장 사전 검증. 발송 허가·승인·큐 접수 아님 |
 | `operations_get_job` | 허용된 업무 종류와 작업 ID의 상태 |
 | `memos_prepare` | 비공개 로컬 메모 계획 작성, 실제 회원 변경 없음 |
 | `memos_commit` | 별도 운영자 승인이 있는 메모만 기존 큐 접수, 기본 비활성 |
 
 현재 지원하지 않는 것: 일반 예약 생성·취소, 수강권·홀딩 변경, 새 회원 생성, 계약 재발송, 실제 환불·송금, 알림톡 발송, 임의 URL·브라우저 명령·셸/Firestore 호출.
+
+로컬 개발본은 사전 검증을 포함해 조회 도구 8개입니다. `messages_validate_target({candidateId})`는 매 호출 운영자 권한을 확인하고 별도 Node 자식에서 `scripts/read-alimtalk-target-validation.mjs`를 실행합니다. Functions의 `lib/alimtalk/targetValidation.js` 빌드가 없거나 읽기에 실패하면 대체 없이 중단합니다. 기존 설정의 자격증명 경로만 자식 환경에 전달하고 응답·오류에는 공개하지 않습니다. 45초 예산·출력 합계 128 KiB 제한·취소 시 소유 자식 종료와 종료 확인을 적용합니다. 결과는 `preflightOnly=true`, `liveReadback=false`, `allowedForExternalActions=false`이며 통과해도 발송 시점 승인·큐 선점·업무별 최종 검증이 별도로 필요합니다. 운영 등록·배포·라이브 검증은 이 로컬 변경에 포함하지 않습니다.
 
 ## 로컬 실행
 

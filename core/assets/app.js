@@ -2711,20 +2711,23 @@ function renderMessages(candidates, sends) {
     const date = formatDate(item.sentAt || item.updatedAt || item.createdAt || item.sourceDate);
     const reason = humanizeAlimtalkTemplateText(item.reason || item.lastError || item.dedupePolicy || item.candidateId || "");
     const templateContext = title !== template ? `${template} · ` : "";
+    const validationId = options.validateCandidate ? String(item.candidateId || item.id || "") : "";
+    const validationButton = /^[A-Za-z0-9_-]{1,160}$/.test(validationId)
+      ? `<button type="button" class="atv-row-button" data-validate-alimtalk-candidate="${escapeHtml(validationId)}" aria-label="${escapeHtml(member)} 대상 검증">검증</button>` : "";
     return `
       <div class="status-row">
         <div>
           <strong>${escapeHtml(member)}</strong>
           <p>${escapeHtml(title)} · ${escapeHtml(templateContext)}${escapeHtml(date)}${reason ? ` · ${escapeHtml(reason)}` : ""}</p>
         </div>
-        ${pill(options.status?.(item) || item.status || item.sendStatus)}
+        <div class="atv-row-actions">${validationButton}${pill(options.status?.(item) || item.status || item.sendStatus)}</div>
       </div>
     `;
   };
 
   const candidateList = qs("messagesCandidateList");
   candidateList.innerHTML = candidates.length
-    ? candidates.map((item) => renderAlimtalkRow(item)).join("")
+    ? candidates.map((item) => renderAlimtalkRow(item, { validateCandidate: true })).join("")
     : `<div class="empty-state">최근 알림톡 내역이 없습니다.</div>`;
 
   const sendList = qs("messagesSendList");

@@ -1,0 +1,27 @@
+<!doctype html>
+<html lang="ko"><head><meta charset="utf-8"><meta name="viewport" content="width=device-width,initial-scale=1"><title>ARCHIVE PILATES 알림톡 공통 대상 검증</title><style>
+*{box-sizing:border-box}body{margin:0;background:#f6f7f9;color:#20252b;font:16px/1.7 -apple-system,BlinkMacSystemFont,"Apple SD Gothic Neo",sans-serif}main{max-width:960px;margin:auto;padding:32px 20px}h1{font-size:28px;line-height:1.35;margin:8px 0 20px}h2{font-size:20px;margin:0 0 12px}section{border-top:1px solid #d6dbe1;padding:24px 0}p{margin:8px 0}small{color:#59616c}table{width:100%;border-collapse:collapse}th,td{text-align:left;border-bottom:1px solid #dfe3e8;padding:12px 8px;vertical-align:top;overflow-wrap:anywhere}th{font-size:14px}code{font-size:14px;overflow-wrap:anywhere}.status{color:#a5202b;font-weight:600}.flow{white-space:pre-wrap;background:#fff;padding:16px;border:1px solid #d6dbe1;border-radius:6px}a{color:#a5202b}@media(max-width:480px){main{padding:24px 16px}h1{font-size:24px}th,td{padding:10px 4px;font-size:14px}}
+</style></head><body><main>
+<small>ARCHIVE PILATES · 2026.10.16</small><h1>알림톡 공통 대상 검증</h1>
+<p class="status" id="release-status">구현·로컬 검증 완료 / 운영 배포·라이브 검증 대기</p>
+<p>기존 Firestore를 유지하고 일반 발송 큐, 강사레슨 승인 발송, CORE와 MCP가 같은 검증 정책을 사용하도록 연결했습니다. 새 종합 DB·스케줄러·발송 실행기는 없습니다.</p>
+<section><h2>구조</h2><div class="flow">CORE 대상 검증 / MCP messages_validate_target
+             ↓
+공통 사전검증: 후보 ID · 기존 발송 시도 · 회원 제외 · 템플릿 · 업무 원본 · 중복 이력
+             ↓
+사전검증 통과 / 차단 / 검토 필요 / 후보 없음
+
+실제 발송: 기존 승인 → 기존 큐 또는 승인 전용 실행기 → 최종 원본·선점 검증 → SOLAPI</div></section>
+<section><h2>사용 방법</h2><p>CORE 알림톡 메뉴에서 최근 후보를 펼쳐 <strong>검증</strong>을 누르거나 정확한 후보 ID를 입력합니다. MCP는 <code>messages_validate_target({candidateId})</code>로 조회합니다.</p><p>운영자만 사용할 수 있습니다. 결과의 조회시각은 StudioMate 실시간 확인시각이 아니며 <code>allowedForExternalActions=false</code>입니다. 사전검증은 승인·발송·재시도 권한이 아닙니다.</p></section>
+<section><h2>유지한 운영 규칙</h2><ul><li>기존 대상 선정, 대량 승인, 근무 스텝 제외, 템플릿별 중복 기간과 승인된 단건 테스트 예외를 유지합니다.</li><li>일반 큐와 강사레슨 승인 실행기의 함수 본문은 기존 배포본과 동일하며 검증 import만 공통 경로로 연결합니다.</li><li>기존 발송 원장·시도·불명확한 결과가 있으면 자동 재발송 대상으로 표시하지 않습니다.</li><li>조회는 후보·원장·템플릿 상태를 변경하지 않습니다. 10분 이내 템플릿 증거가 없으면 추가 확인으로 남깁니다.</li><li>홀딩, 계약완료 웰컴, 강사레슨, 그룹 설문, 리포트의 전용 최종 검증은 기존 실행기에 남기고 사전검증과 구분합니다.</li><li>전체 회원·예약·수업을 새로 재계산하지 않고 요청된 후보만 순차 확인합니다. 기존 회원별 중복 이력의 조회 기간을 임의로 줄이지 않습니다.</li></ul></section>
+<section><h2>검증</h2><table><thead><tr><th>항목</th><th>결과</th></tr></thead><tbody>
+<tr><td>공통 검증·정책 동일성</td><td>60건 통과. 잘못된 ID, 다른 센터, 이전 시도, 기존 제외·중복 규칙, 미확인 상태, 민감정보 비노출, 조회 중 템플릿 쓰기 금지.</td></tr>
+<tr><td>기존 승인 발송</td><td>83건 통과. 동시 실행, 취소, 승인 변경, 결과 불명, 최종 원본 재확인 및 전체 자료 조회 금지.</td></tr>
+<tr><td>MCP</td><td>전체 252건 및 읽기 전용 새 프로세스 시험. 기존 시도 2건 차단·없는 후보 1건 없음, 조회 전후 후보·발송 원장 동일.</td></tr>
+<tr><td>CORE</td><td>통제된 브라우저 17건, 320·390·768·1440px 검증. 권한 변경, 늦은 응답, 목록 버튼, 미확인·차단 표시와 민감정보 차단.</td></tr>
+<tr><td>회귀·빌드</td><td>CORE 업무 80건, 재등록 24건, 강사레슨 승인 15건, 전체 5개 Functions 빌드·경계 및 배포 롤백 가드 확인.</td></tr>
+<tr><td>실발송</td><td>없음. 수강권·회원·예약 변경 및 오늘 중단 건의 재발송 없음.</td></tr>
+</tbody></table></section>
+<section><h2>운영 반영</h2><p id="deployment-evidence">배포 전 기록입니다. 승인된 범위는 functions-alimtalk, CORE Hosting, 맥미니 MCP 운영 소스와 도구 허용목록입니다. Firestore 규칙·인덱스·회원 데이터는 변경하지 않습니다.</p></section>
+<section><h2>남은 범위</h2><p>11:30 후보 준비의 전체 자료 적재와 과거 후보 전역 정리는 이번 작업에서 변경하지 않았습니다. 이 서비스를 추가했다고 그 메모리 문제가 모두 해결된 것은 아닙니다. 또한 Firestore 기반 사전검증은 실시간 StudioMate 수집 완료를 보장하지 않습니다.</p><p>각 전용 실행기의 최종 검증·승인·원장 대조가 계속 필요합니다. 기존 Codex 대화는 이전 MCP 도구 목록을 유지할 수 있으므로 새 연결로 확인해야 합니다.</p></section>
+</main></body></html>

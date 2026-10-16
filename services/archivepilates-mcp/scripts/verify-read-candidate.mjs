@@ -26,7 +26,7 @@ const transport = new StdioClientTransport({ command: registered?.transport.comm
 const checks = [];
 try {
   await client.connect(transport);
-  assert.equal((await client.listTools()).tools.length, 7);
+  assert.equal((await client.listTools()).tools.length, 8);
   async function call(name, args) {
     const start = performance.now();
     const result = await client.callTool({ name, arguments: args }, undefined, { timeout: 60000 });

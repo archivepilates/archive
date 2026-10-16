@@ -14,8 +14,10 @@
     <link rel="stylesheet" href="../assets/styles.css" />
     <link rel="stylesheet" href="../assets/alimtalk-catalog.css" />
     <link rel="stylesheet" href="../assets/interface.css" />
+    <link rel="stylesheet" href="../assets/alimtalk-target-validation.css" />
     <script src="../firebase-config.js"></script>
     <script type="module" src="../assets/app.js"></script>
+    <script type="module" src="../assets/alimtalk-target-validation.js"></script>
   </head>
   <body data-firestore-dashboard data-messages-dashboard>
     <div id="coreAccessLoading" class="core-access-loading" role="status"><p>연결 중</p><a href="">다시 연결</a></div>
@@ -36,6 +38,19 @@
             <button class="refresh-button" id="refreshButton" type="button">새로고침</button>
           </div>
         </header>
+        <section class="alimtalk-target-validation" data-alimtalk-target-validation aria-labelledby="targetValidationTitle" hidden>
+          <div class="atv-heading"><h2 id="targetValidationTitle">대상 검증</h2><span>읽기 전용</span></div>
+          <p class="atv-boundary" id="targetValidationBoundary">저장된 스냅샷 기준 · 실시간 조회 아님 · 사전검증 통과는 승인·발송 아님</p>
+          <form class="atv-form" novalidate>
+            <label for="targetValidationCandidateId">후보 ID</label>
+            <div class="atv-controls">
+              <input id="targetValidationCandidateId" name="candidateId" type="text" required maxlength="160" autocomplete="off" autocapitalize="none" spellcheck="false" aria-describedby="targetValidationBoundary targetValidationStatus" />
+              <button type="submit">검증</button>
+            </div>
+          </form>
+          <p id="targetValidationStatus" class="atv-status" role="status" aria-live="polite" aria-atomic="true"></p>
+          <div class="atv-result" data-validation-result hidden></div>
+        </section>
         <section class="template-catalog" data-template-catalog aria-labelledby="catalogTitle">
           <h2 id="catalogTitle">현재 템플릿</h2>
           <p role="status">정책 확인 중</p>
@@ -62,7 +77,7 @@
               <div class="list compact-list" id="messagesTemplateList"><div class="empty-state">템플릿 확인 중</div></div>
             </details>
             <details class="ops-card compact-disclosure">
-              <summary><h3>최근 후보</h3><span class="pill">상세</span></summary>
+              <summary data-testid="recent-alimtalk-candidates"><h3>최근 후보</h3><span class="pill">상세</span></summary>
               <div class="list compact-list" id="messagesCandidateList"><div class="empty-state">후보 확인 중</div></div>
             </details>
             <article class="ops-card">

@@ -32,10 +32,10 @@ function fixture(t, { reader = true } = {}) {
     ...createService({ store, liveReader, staffId: 'operator', readOnly: true, now: () => clock }) };
 }
 
-test('schemas preserve seven reads, make source optional with live default, and reject other source values', () => {
+test('schemas preserve eight reads, make source optional with live default, and reject other source values', () => {
   assert.deepEqual(TOOLS.filter(value => value.annotations.readOnlyHint).map(value => value.name), [
     'members_find', 'members_get_overview', 'members_list_expiring', 'bookings_list',
-    'contracts_get_progress', 'messages_get_delivery', 'operations_get_job',
+    'contracts_get_progress', 'messages_get_delivery', 'messages_validate_target', 'operations_get_job',
   ]);
   for (const [name, args] of [['members_list_expiring', { daysRemainingMax: 10 }],
     ['bookings_list', { memberId: '123', ...dates }]]) {

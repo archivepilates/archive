@@ -137,10 +137,12 @@ export async function isAlimtalkTemplateApproved(templateCode: string): Promise<
   return (await alimtalkTemplateReadiness(templateCode)).approved;
 }
 
-export async function alimtalkTemplateReadiness(templateCode: string): Promise<AlimtalkTemplateReadiness> {
+export async function alimtalkTemplateReadiness(templateCode: string, options: { readOnly?: boolean } = {}): Promise<AlimtalkTemplateReadiness> {
   const normalizedTemplateCode = normalizeTemplateCode(templateCode);
   if (!normalizedTemplateCode) return { approved: false, retryable: false, state: null };
-  return templateReadinessFromState(await templateState(normalizedTemplateCode));
+  const state = await templateState(normalizedTemplateCode, options.readOnly);
+  if (options.readOnly && !state) return { approved: false, retryable: true, state: null };
+  return templateReadinessFromState(state);
 }
 
 export function templateReadinessFromState(
@@ -173,13 +175,16 @@ export function alimtalkImageTemplateContractIssue(
   return "";
 }
 
-async function templateState(templateCode: string): Promise<AlimtalkTemplateState | null> {
+async function templateState(templateCode: string, readOnly = false): Promise<AlimtalkTemplateState | null> {
   const normalizedTemplateCode = normalizeTemplateCode(templateCode);
   if (!normalizedTemplateCode) return null;
   const ref = db.collection("alimtalkTemplateStates").doc(normalizedTemplateCode);
   const snap = await ref.get();
   const state = snap.data() as AlimtalkTemplateState | undefined;
   const syncedAt = state?.syncedAt?.toMillis?.() || 0;
+  // Inspection must never refresh SOLAPI or mutate the template cache.
+  if (readOnly) return state && syncedAt > 0 && syncedAt <= Date.now()
+    && Date.now() - syncedAt < TEMPLATE_STATUS_CACHE_MS ? state : null;
   if (state && Date.now() - syncedAt < TEMPLATE_STATUS_CACHE_MS) return state;
 
   const template = Object.values(ALIMTALK_TEMPLATES).find((item) => normalizeTemplateCode(item.code) === normalizedTemplateCode);

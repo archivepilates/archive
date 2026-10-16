@@ -49,6 +49,15 @@ const RESERVATION_METHOD_BUTTON_URL = "https://archivepilates.notion.site/studio
 
 export async function autoSendabilityIssue(candidate: AlimtalkCandidateDoc, today: string): Promise<string> {
   if (candidate.type === "onsite_welcome") return "현장 웰컴 신규 발송 종료";
+  return evaluateAutoSendability(candidate, today);
+}
+
+export async function inspectAutoSendabilityIssue(candidate: AlimtalkCandidateDoc, today: string): Promise<string> {
+  return evaluateAutoSendability(candidate, today, { readOnly: true });
+}
+
+async function evaluateAutoSendability(candidate: AlimtalkCandidateDoc, today: string, options: { readOnly?: boolean } = {}): Promise<string> {
+  if (candidate.type === "onsite_welcome") return "현장 웰컴 신규 발송 종료";
   if (isHoldingNoticeCandidate(candidate)) return holdingClaimIssue(candidate);
   if (candidate.type === "membership_welcome" && (hasExplicitAlimtalkTestOverride(candidate)
     || candidate.templateCode !== ALIMTALK_TEMPLATES.membership_welcome.code || candidate.maxAttempts !== 1
@@ -87,7 +96,7 @@ export async function autoSendabilityIssue(candidate: AlimtalkCandidateDoc, toda
     reservationOpenTemplateContractIssue(candidate);
   if (templateContractIssue) return templateContractIssue;
   if (rule?.requiresApprovedTemplate) {
-    const readiness = await alimtalkTemplateReadiness(candidate.templateCode);
+    const readiness = await alimtalkTemplateReadiness(candidate.templateCode, options);
     if (readiness.retryable) {
       return `${RETRYABLE_TEMPLATE_STATUS_PREFIX} ${candidate.templateCode}`;
     }

@@ -23,25 +23,24 @@ import { errorMessage } from "../utils/errors";
 import { nowTimestamp, todayKst } from "../utils/date";
 import { ensureShortLink } from "../utils/shortLinks";
 import { ALIMTALK_TEMPLATE_CHANNEL_IDS, alimtalkDedupePolicy } from "./templates";
-import { autoSendabilityIssue, isRetryableTemplateStatusIssue } from "./eligibility";
-import { alimtalkDedupeKey, findCompletedDuplicateForCandidate, normalizePhone } from "./dedupe";
+import { isRetryableTemplateStatusIssue } from "./eligibility";
+import { alimtalkDedupeKey, normalizePhone } from "./dedupe";
+import { targetEligibilityIssue as autoSendabilityIssue, targetDuplicateIssue as findCompletedDuplicateForCandidate,
+  privateSurveySendabilityIssue, renewalCandidateSendabilityIssue, longAbsenceCandidateSendabilityIssue,
+  instructorLessonConfirmationSendabilityIssue } from "./targetValidationChecks";
 import { isAlimtalkTemplateApproved } from "./templateStatus";
 import { normalizeInstructorLessonManagementNumber } from "./instructorLessonManagement";
 import { genericInstructorLessonQueueBlock } from "./instructorLessonDeliveryGuard";
 import { hasExplicitAlimtalkTestOverride } from "./testRecipients";
 import { currentPrivateLessonReportRevision } from "../privateLessonChart/privateLessonReportRevision";
-import { privateSurveySendabilityIssue } from "./privateSurveySendGuard";
-import { renewalCandidateSendabilityIssue } from "./renewalSendGuard";
 import { TICKET_NOTICE_POLICY } from "./ticketNoticePolicy";
 import { alimtalkApprovalClaimIssue } from "./approvalStore";
-import { longAbsenceCandidateSendabilityIssue } from "./longAbsenceSendGuard";
 import {
   RECOMMENDED_MEAL_DRAFT_COLLECTION,
   RECOMMENDED_MEAL_REPORT_COLLECTION,
 } from "../mealPlan/recommendedMealProgram";
 import { RECOMMENDED_MEAL_REQUEST_COLLECTION } from "../mealPlan/recommendedMealSurvey";
 import {
-  instructorLessonConfirmationSendabilityIssue,
   syncInstructorLessonConfirmationOutcome,
 } from "../instructorLessonRegistration/instructorLessonConfirmation";
 

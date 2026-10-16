@@ -1,6 +1,6 @@
 {
   "schemaVersion": 1,
-  "policyFingerprint": "52d54f5b60e40e7a69e56c25922603b9fb28795cd30313f6df0da455817d9a6b",
+  "policyFingerprint": "972629f67d7785872cc9983bdca2b01695ed6bd6023614c13af02a16c3fcbafc",
   "sourceMode": "repository_defaults_no_environment_or_live_reads",
   "coverage": {
     "observedAt": "2026-10-12T05:57:20.967Z",
@@ -14,7 +14,7 @@
   "sourceFingerprints": [
     {
       "path": "core/assets/app.js",
-      "sha256": "38a1ebc790b1be65f7e4c9fd7f704391d5739fe43eb64cad44ce6a8deba0afc7"
+      "sha256": "dfb2c47ebe48ad9244148381097a26e3f9e9e62f4f62ee53b8b98c451c8cc990"
     },
     {
       "path": "firebase/kangsain-functions/functions/src/alimtalk/approvalGate.ts",
@@ -34,7 +34,7 @@
     },
     {
       "path": "firebase/kangsain-functions/functions/src/alimtalk/eligibility.ts",
-      "sha256": "63290fc8b97898ccdf7e29dd6412b0a7e7e7abadd3a2fd6f299f07b63c2532e0"
+      "sha256": "ee0c411dce278afe040b03bf514c71b0c7569e8b5ccdb397b322f87337c66255"
     },
     {
       "path": "firebase/kangsain-functions/functions/src/alimtalk/longAbsencePolicy.ts",
@@ -46,7 +46,7 @@
     },
     {
       "path": "firebase/kangsain-functions/functions/src/alimtalk/processAlimtalkQueue.ts",
-      "sha256": "71b51f0f37532610ec9100f222c50683a0f1f454f54a6a0623d1f87692b925e1"
+      "sha256": "844bac218c29006094dcc93b42a7df726c5f1390787d668e86bbafb49b581438"
     },
     {
       "path": "firebase/kangsain-functions/functions/src/alimtalk/queueDailyAlimtalk.ts",
@@ -82,7 +82,7 @@
     },
     {
       "path": "firebase/kangsain-functions/functions/src/exports/alimtalk.ts",
-      "sha256": "6fb8d40e83b783427c2cbc57ae6416f3e9d650846dbeddc675b8160307f5b66a"
+      "sha256": "1f1e1a1e7d359db964c1f975af8e02ba52337840ff189b90e36f183d0d517b71"
     },
     {
       "path": "firebase/kangsain-functions/functions/src/exports/privateChart.ts",
@@ -262,7 +262,7 @@
         {
           "path": "firebase/kangsain-functions/functions/src/exports/alimtalk.ts",
           "symbol": "scheduledQueueAndSendReservationOpenAlimtalk",
-          "line": 80
+          "line": 91
         }
       ],
       "visibility": {
@@ -502,7 +502,7 @@
         {
           "path": "firebase/kangsain-functions/functions/src/exports/alimtalk.ts",
           "symbol": "scheduledQueueAndSendAlimtalkDaily",
-          "line": 54
+          "line": 65
         },
         {
           "path": "firebase/kangsain-functions/functions/src/alimtalk/ticketNoticePolicy.ts",
@@ -604,7 +604,7 @@
         {
           "path": "firebase/kangsain-functions/functions/src/exports/alimtalk.ts",
           "symbol": "scheduledQueueAndSendAlimtalkDaily",
-          "line": 54
+          "line": 65
         },
         {
           "path": "firebase/kangsain-functions/functions/src/alimtalk/ticketNoticePolicy.ts",
@@ -706,7 +706,7 @@
         {
           "path": "firebase/kangsain-functions/functions/src/exports/alimtalk.ts",
           "symbol": "scheduledQueueAndSendAlimtalkDaily",
-          "line": 54
+          "line": 65
         },
         {
           "path": "firebase/kangsain-functions/functions/src/alimtalk/ticketNoticePolicy.ts",
@@ -805,7 +805,7 @@
         {
           "path": "firebase/kangsain-functions/functions/src/exports/alimtalk.ts",
           "symbol": "scheduledQueueAndSendAlimtalkDaily",
-          "line": 54
+          "line": 65
         }
       ],
       "visibility": {
@@ -899,7 +899,7 @@
         {
           "path": "firebase/kangsain-functions/functions/src/exports/alimtalk.ts",
           "symbol": "scheduledQueueAndSendAlimtalkDaily",
-          "line": 54
+          "line": 65
         }
       ],
       "visibility": {
@@ -991,7 +991,7 @@
         {
           "path": "firebase/kangsain-functions/functions/src/exports/alimtalk.ts",
           "symbol": "scheduledQueueAndSendAlimtalkDaily",
-          "line": 54
+          "line": 65
         },
         {
           "path": "firebase/kangsain-functions/functions/src/alimtalk/ticketNoticePolicy.ts",
@@ -1082,7 +1082,7 @@
         {
           "path": "firebase/kangsain-functions/functions/src/exports/alimtalk.ts",
           "symbol": "scheduledQueueAndSendAlimtalkDaily",
-          "line": 54
+          "line": 65
         }
       ],
       "visibility": {
@@ -1460,7 +1460,7 @@
         {
           "path": "firebase/kangsain-functions/functions/src/exports/alimtalk.ts",
           "symbol": "scheduledQueueAndSendAlimtalkDaily",
-          "line": 54
+          "line": 65
         }
       ],
       "visibility": {

@@ -9,6 +9,7 @@
       "physicalSource": "firebase/function-codebases/alimtalk",
       "sourceEntrypoint": "firebase/kangsain-functions/functions/src/exports/alimtalk.ts",
       "owns": [
+        "getAlimtalkTargetValidation",
         "scheduledProcessAlimtalkQueue",
         "scheduledQueueAndSendAlimtalkDaily",
         "scheduledQueueAndSendReservationOpenAlimtalk",

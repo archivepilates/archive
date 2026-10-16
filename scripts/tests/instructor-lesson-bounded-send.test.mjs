@@ -201,6 +201,10 @@ function harness({ count = 1, approvals = true, providerError = false, duplicate
       alimtalkDedupeKey: (item) => hash.stableHash({ memberId: item.memberId, lessonDate: item.payload.lessonDate, managementNumber: item.payload.managementNumber }),
       findCompletedDuplicateForCandidate: async (item, key, window) => { dedupeCalls.push({ id: item.candidateId, key, window }); return duplicate; } },
     "./eligibility": { autoSendabilityIssue: async (item, date) => { eligibilityCalls.push({ id: item.candidateId, date }); return autoIssue; } },
+    "./targetValidationChecks": {
+      targetEligibilityIssue: async (item, date) => { eligibilityCalls.push({ id: item.candidateId, date }); return autoIssue; },
+      targetDuplicateIssue: async (item, key, window) => { dedupeCalls.push({ id: item.candidateId, key, window }); return duplicate; },
+    },
     "../instructorLessonRegistration/instructorLessonCancellationPolicy": cancellation,
     "./instructorLessonManagement": management,
     "./instructorLessonBookingPolicy": bookingPolicy,

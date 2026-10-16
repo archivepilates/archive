@@ -10,6 +10,7 @@ import { createService } from './service.mjs';
 import { createMcpServer } from './transport.mjs';
 import { requireValue, safeError } from './errors.mjs';
 import { createLiveReader } from './live-browser.mjs';
+import { createTargetValidator } from './target-validator.mjs';
 
 let app, server, liveReader;
 let appCleanup;
@@ -31,7 +32,8 @@ try {
   const approvals = await createApprovals(settings.stateDir);
   liveReader = createLiveReader();
   const service = createService({ store: createStore(db, Timestamp), approvals,
-    staffId: settings.staffId, memoWritesEnabled: settings.memoWritesEnabled, readOnly: settings.readOnly, liveReader });
+    staffId: settings.staffId, memoWritesEnabled: settings.memoWritesEnabled, readOnly: settings.readOnly, liveReader,
+    targetValidator: createTargetValidator({ credentialPath: settings.credentialPath }) });
   server = createMcpServer(service);
   let closing = false;
   const shutdown = async () => { if (closing) return; closing = true; await liveReader.close(); await server.close(); await cleanupApp(); };

@@ -17,6 +17,7 @@ const readCalls = [
   ['bookings_list', { ...memberArgs, ...dates, source: 'snapshot' }],
   ['contracts_get_progress', memberArgs],
   ['messages_get_delivery', { ...memberArgs, ...dates }],
+  ['messages_validate_target', { candidateId: 'candidate-1' }],
   ['operations_get_job', { kind: 'memo', jobId: 'memo-1' }],
 ];
 
@@ -101,7 +102,10 @@ function fixture(t, options = {}) {
       return proposal;
     }),
   };
-  const service = createService({ store, approvals, staffId: 'staff-1', now: () => NOW, ...options });
+  const targetValidator = t.mock.fn(async candidateId => ({ version: 'alimtalk-target-validation-v1',
+    checkedAt: new Date(NOW).toISOString(), readOnly: true, liveReadback: false, allowedForExternalActions: false,
+    results: [{ candidateId, status: 'not_found', checks: [] }] }));
+  const service = createService({ store, approvals, targetValidator, staffId: 'staff-1', now: () => NOW, ...options });
   return { ...service, state, store, approvals };
 }
 
@@ -127,7 +131,7 @@ async function prepareApproved(f) {
   return result.proposal.proposalId;
 }
 
-test('catalog exposes seven reads and two explicit memo actions', t => {
+test('catalog exposes eight reads and two explicit memo actions', t => {
   const f = fixture(t);
   assert.deepEqual(f.listTools(), TOOLS);
   assert.deepEqual(TOOLS.filter(tool => tool.annotations.readOnlyHint).map(tool => tool.name),
@@ -142,7 +146,7 @@ test('catalog exposes seven reads and two explicit memo actions', t => {
   noWrites(f);
 });
 
-test('all seven reads return projected data without raw phones, payloads, or error content', async t => {
+test('all eight reads return projected data without raw phones, payloads, or error content', async t => {
   const f = fixture(t);
   for (const [name, args] of readCalls) {
     const response = await f.callTool(name, args);
@@ -152,7 +156,7 @@ test('all seven reads return projected data without raw phones, payloads, or err
     assert.ok(!serialized.includes(SECRET), name);
     assert.doesNotMatch(serialized, /rawPayload|"lastError"|"answers"/, name);
   }
-  assert.equal(f.store.getOperator.mock.callCount(), 7);
+  assert.equal(f.store.getOperator.mock.callCount(), 8);
   noWrites(f);
 });
 
