@@ -91,12 +91,17 @@ export function createInstructorCancellationBrowser(page) {
     const target = targets[0];
     if (!target.usable) {
       const previous = page.getByRole("button", { name: "이전 수강권 보기", exact: true });
-      if (await previous.count() === 1) await previous.click();
+      await previous.click();
     }
     const compactDate = job.lessonDate.replaceAll("-", ".");
-    const cards = page.locator(".member-basic__user-tickets .userticket-card").filter({
+    let cards = page.locator(target.usable
+      ? ".member-basic__user-tickets .userticket-card"
+      : ".ticket-expired-modal__product-list .userticket-card").filter({
       has: page.getByRole("heading", { name: job.ticketName, exact: true }),
-    }).filter({ hasText: compactDate });
+    });
+    // Archived cards omit dates; the UI detail response below must match the exact issued ID.
+    if (target.usable) cards = cards.filter({ hasText: compactDate });
+    await cards.first().waitFor({ state: "visible", timeout: 20000 });
     if (await cards.count() !== 1) throw new Error("수강일에 연결된 화면 수강권이 중복되거나 없습니다.");
     const detailResponse = responseFor(`/v2/staff/userTickets/${target.userTicketId}`).catch(error => ({ error }));
     const bookingsResponse = responseFor(`/v2/staff/userTickets/reserve-list/${target.userTicketId}/booking`).catch(error => ({ error }));

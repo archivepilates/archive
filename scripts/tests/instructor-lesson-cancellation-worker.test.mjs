@@ -115,6 +115,149 @@ const bookingBody = () => ({ bookings: { current_page: 1, last_page: 1, total: 1
   user_ticket_id: 201, lecture_id: 501, member: { id: 101 }, status: "booked", deleted_at: null,
   lecture: { studio_id: 5330, title: "강사레슨 A", start_on: "2026-10-24 13:00:00", instructor: { name: "합성 강사" } } }] } });
 
+function archivedTicketReadFixture({ cardCount = 1, detailPatch = {} } = {}) {
+  const ticket = { id: 201, ticket_id: 301, studio_id: 5330, member: { id: 101 },
+    ticket: { id: 301, title: job.ticketName, type: "coupon", available_class_type: "group" },
+    created_at: "2026-10-16 12:00:00", updated_at: "2026-10-16 12:01:00", deleted_at: null,
+    availability_start_at: job.lessonDate, expire_at: job.lessonDate, active: false, ticket_usable: false,
+    is_shared: false, max_coupon: 2, remaining_coupon: 2,
+    payments: [{ id: 601, created_at: "2026-10-16 12:00:00", unpaid_amount: 0,
+      card_amount: 20000, cash_amount: 0, wiretransfer_amount: 0, transfer_amount: 0, point_amount: 0 }] };
+  const response = (path, value) => ({ url: () => `https://api.studiomate.kr${path}`,
+    request: () => ({ method: () => "GET" }), ok: () => true, finished: async () => null,
+    json: async () => structuredClone(value) });
+  const responses = [response("/v2/staff/userTickets?member_id=101&is_all=true", [ticket]),
+    response("/v2/staff/userTickets/201", { data: { ...ticket, ...detailPatch } }),
+    response("/v2/staff/userTickets/reserve-list/201/booking", bookingBody())];
+  const events = [], writes = [];
+  let previousClicked = false, visible = false, previousCounts = 0, routeHandler, currentUrl;
+  const heading = name => ({ role: "heading", name, exact: true });
+  const previous = {
+    count: async () => { previousCounts++; return previousClicked ? 1 : 0; },
+    click: async () => {
+      events.push("previous:start");
+      await Promise.resolve();
+      previousClicked = true;
+      events.push("previous:done");
+    },
+  };
+  const cards = {
+    filter: options => {
+      // Archived cards contain only the title, not the lesson date.
+      assert.deepEqual(options, { has: heading(job.ticketName) });
+      events.push("cards:title-filter");
+      return cards;
+    },
+    first: () => ({ waitFor: async options => {
+      assert.deepEqual(options, { state: "visible", timeout: 20000 });
+      assert.equal(previousClicked, true, "previous.click() must finish before waiting for archived cards");
+      events.push("cards:wait-start");
+      await Promise.resolve();
+      visible = true;
+      events.push("cards:visible");
+    } }),
+    count: async () => { events.push("cards:count"); return visible ? cardCount : 0; },
+    locator: selector => {
+      assert.equal(selector, ".userticket-card__click-listener");
+      return { click: async () => {
+        assert.equal(visible, true); assert.equal(cardCount, 1);
+        events.push("cards:open");
+      } };
+    },
+  };
+  const dialog = {
+    filter: options => { assert.deepEqual(options, { has: heading(`${job.memberName}님의 수강권`) }); return dialog; },
+    waitFor: async options => { assert.deepEqual(options, { state: "visible" }); },
+    getByRole: (role, options) => {
+      if (role !== "heading") { writes.push({ role, options }); assert.fail("read must not access disable controls"); }
+      assert.deepEqual(options, { name: job.ticketName, exact: true });
+      return { count: async () => 1 };
+    },
+    locator: selector => {
+      if (selector === ".booking-history__list .booking") return { count: async () => 1 };
+      assert.equal(selector, ".booking-history__tabs");
+      return { getByRole: role => {
+        assert.equal(role, "listitem");
+        return { filter: options => {
+          assert.ok(options.hasText instanceof RegExp);
+          return { waitFor: async () => {} };
+        } };
+      } };
+    },
+  };
+  const page = {
+    route: async (pattern, handler) => { assert.equal(pattern, "**/*"); routeHandler = handler; },
+    waitForResponse: predicate => {
+      const matched = responses.find(predicate);
+      assert.ok(matched, "only expected native GET responses may be requested");
+      return Promise.resolve(matched);
+    },
+    goto: async url => { currentUrl = url; }, url: () => currentUrl,
+    locator: selector => {
+      if (selector === ".ticket-expired-modal__product-list .userticket-card") return cards;
+      assert.equal(selector, ".member-detail__header", "inactive passes must use the archived modal, not active cards");
+      return { waitFor: async () => {}, innerText: async () => `${job.memberName} ${job.memberPhone}`,
+        getByRole: (role, options) => {
+          assert.equal(role, "heading"); assert.deepEqual(options, { name: job.memberName, exact: true });
+          return { count: async () => 1 };
+        } };
+    },
+    getByRole: (role, options) => {
+      if (role === "heading") { assert.equal(options.exact, true); return heading(options.name); }
+      if (role === "dialog" && !options) return dialog;
+      if (role === "button" && options?.name === "이전 수강권 보기") {
+        assert.equal(options.exact, true); return previous;
+      }
+      writes.push({ role, options }); assert.fail("unexpected write/disable control during read");
+    },
+  };
+  return { adapter: createInstructorCancellationBrowser(page), events, writes,
+    previousCounts: () => previousCounts, routeHandler: () => routeHandler };
+}
+
+test("browser read awaits archived-card visibility without a previous-button count or date filter", async () => {
+  const f = archivedTicketReadFixture();
+  const result = await f.adapter.read(job);
+  assert.equal(result.complete, true);
+  assert.deepEqual(result.member, snapshot().member);
+  assert.equal(result.tickets.length, 1);
+  assert.equal(result.tickets[0].userTicketId, "201");
+  assert.equal(result.tickets[0].productId, "301");
+  assert.equal(result.tickets[0].usable, false);
+  assert.deepEqual(result.bookings, snapshot().bookings);
+  assert.equal(f.previousCounts(), 0, "the initially absent previous button must never be count-gated");
+  assert.deepEqual(f.events, ["previous:start", "previous:done", "cards:title-filter",
+    "cards:wait-start", "cards:visible", "cards:count", "cards:open"]);
+  assert.deepEqual(f.writes, []);
+  let continued = 0, aborted = 0;
+  for (const method of ["POST", "PATCH", "DELETE"]) await f.routeHandler()({
+    request: () => ({ method: () => method,
+      url: () => "https://api.studiomate.kr/v2/staff/userTickets/active-toggle/201",
+      postDataJSON: () => ({ reason: "강사레슨 수강 취소" }) }),
+    continue: async () => { continued++; }, abort: async () => { aborted++; },
+  });
+  assert.equal(continued, 0, "read must never arm native writes");
+  assert.equal(aborted, 3);
+});
+
+test("browser read rejects duplicate same-title archived cards after awaiting visibility", async () => {
+  const f = archivedTicketReadFixture({ cardCount: 2 });
+  await assert.rejects(f.adapter.read(job), /화면 수강권이 중복되거나 없습니다/);
+  assert.equal(f.previousCounts(), 0);
+  assert.deepEqual(f.events, ["previous:start", "previous:done", "cards:title-filter",
+    "cards:wait-start", "cards:visible", "cards:count"]);
+  assert.deepEqual(f.writes, []);
+});
+
+test("browser read rejects archived detail for a different issued ticket, member or studio", async () => {
+  for (const detailPatch of [{ id: 202 }, { member: { id: 102 } }, { studio_id: 5331 }]) {
+    const f = archivedTicketReadFixture({ detailPatch });
+    await assert.rejects(f.adapter.read(job), /선택된 화면의 발급 수강권 ID가 다릅니다/);
+    assert.ok(f.events.includes("cards:open"));
+    assert.deepEqual(f.writes, []);
+  }
+});
+
 test("UI booking response is bounded by native issued pass, member, studio and complete pagination", () => {
   const body = bookingBody();
   assert.equal(normalizeCancellationBookingResponse(body, job, "201").rows[0].startTime, "13:00");
