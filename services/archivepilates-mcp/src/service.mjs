@@ -2,6 +2,7 @@ import { createHash } from 'node:crypto';
 import { TOOLS, validate } from './catalog.mjs';
 import { id, text, phone, maskedPhone, millis, iso, requireValue } from './errors.mjs';
 import { selectExpiring } from './ticket-query.mjs';
+import { liveSource, snapshotSource } from './freshness.mjs';
 
 export const hash = value => createHash('sha256').update(JSON.stringify(value)).digest('hex');
 export const sourceHash = value => hash([value._id, value.memberId, value.studioId, value.name, value.phone,
@@ -10,7 +11,8 @@ export const sourceHash = value => hash([value._id, value.memberId, value.studio
 const observed = value => value.syncedAt || value.sourceObservedAt || value.sourceUpdatedAt;
 function source(value, collection, now) {
   const time = millis(observed(value));
-  return { collection, recordId: value._id, observedAt: iso(observed(value)), queriedAt: new Date(now).toISOString(),
+  return { ...snapshotSource({ kind: 'firestore_snapshot', queriedAt: new Date(now).toISOString(),
+    observedAt: iso(observed(value)) }), collection, recordId: value._id,
     persistenceAge: time && time <= now && now - time <= 2 * 3600000 ? 'recent' : 'old_or_unknown',
     freshness: 'unknown',
     liveReadback: false };
@@ -70,11 +72,39 @@ const statusView = value => ({ recordId: value._id, status: safeState(value.stat
 
 export function createService({ store, approvals, staffId, now = Date.now, memoWritesEnabled = false, readOnly = false, liveReader }) {
   const liveSelections = new Map();
+  function rememberSelection(member) {
+    liveSelections.delete(member.memberId);
+    if (liveSelections.size >= 200) liveSelections.delete(liveSelections.keys().next().value);
+    liveSelections.set(member.memberId, { memberId: member.memberId, name: member.name,
+      phone: phone(member.phone), selectedAt: now() });
+  }
+  async function expectedMember(memberId) {
+    id(memberId);
+    const selected = liveSelections.get(memberId), age = selected ? now() - selected.selectedAt : null;
+    if (selected && age >= 0 && age < 10 * 60000) return selected;
+    const current = await profile(memberId);
+    requireValue(/^[1-9]\d{0,15}$/.test(memberId), 'LIVE_SELECTION_REQUIRED',
+      '임시 회원 ID를 원본 ID로 추측하지 않습니다. members_find로 다시 선택해 주세요.');
+    return { memberId, name: current.name, phone: phone(current.phone) };
+  }
+  function verifyIdentity(result, expected) {
+    requireValue(result?.memberId === expected.memberId && result.name === expected.name
+      && phone(result.phone) === phone(expected.phone), 'LIVE_IDENTITY_MISMATCH', '실시간 회원 식별 결과가 다릅니다.');
+  }
+  function liveProof(result, kind) {
+    requireValue(result?.coverage?.complete === true && result.coverage.kind === kind,
+      'LIVE_SOURCE_INCOMPLETE', '실시간 원본 전체 조회 범위를 확인하지 못했습니다. 저장 자료로 대체하지 않았습니다.');
+    // Reader timestamps describe the source window; the injected service clock may be a fixture clock.
+    const proof = liveSource({ kind: 'studiomate_ui_generated_response', checkedAt: result.checkedAt,
+      queriedAt: result.checkedAt, coverage: result.coverage });
+    if (result.startedAt !== undefined) liveSource({ kind: proof.kind, checkedAt: result.startedAt, queriedAt: result.checkedAt });
+    return { ...proof, sourceWindow: { startedAt: result.startedAt ?? null, checkedAt: result.checkedAt } };
+  }
   function liveMember(value, checkedAt) {
     return { memberId: value.memberId, name: value.name, maskedPhone: maskedPhone(value.phone),
       nativeMemberId: value.memberId, linkedNativeMemberId: value.memberId, linkVerified: true,
-      source: { collection: null, kind: 'studiomate_rendered_dom', recordId: value.memberId,
-        observedAt: checkedAt, queriedAt: checkedAt, freshness: 'live_at_checked_time', liveReadback: true } };
+      source: { ...liveSource({ kind: 'studiomate_rendered_dom', checkedAt, queriedAt: checkedAt }),
+        collection: null, recordId: value.memberId } };
   }
   async function actor() {
     const current = await store.getOperator(id(staffId));
@@ -123,14 +153,43 @@ export function createService({ store, approvals, staffId, now = Date.now, memoW
     requireValue(validate(name, args), 'INVALID_ARGUMENT', '지원하는 도구와 입력 항목을 확인해 주세요.');
     requireValue(!readOnly || !['memos_prepare', 'memos_commit'].includes(name), 'WRITE_DISABLED', '조회 전용 연결에서는 메모 계획·실행을 제공하지 않습니다.');
     const operator = await actor();
+    if (name === 'bookings_list') range(args.startDate, args.endDate);
     if (name === 'members_list_expiring') {
+      if (args.source !== 'snapshot') {
+        requireValue(typeof liveReader?.getInventory === 'function', 'LIVE_SOURCE_UNAVAILABLE',
+          '실시간 수강권 조회 연결이 없습니다. 저장 자료로 대체하지 않았습니다.');
+        const inventory = await liveReader.getInventory(signal);
+        const proof = liveProof(inventory, 'native_member_pages');
+        const { profiles, coverage } = inventory;
+        requireValue(Array.isArray(profiles) && Number.isSafeInteger(coverage.nativeTotal)
+          && coverage.nativeTotal >= 0 && coverage.nativeTotal === profiles.length
+          && coverage.scannedMembers === profiles.length,
+        'LIVE_SOURCE_INCOMPLETE', '실시간 전체 회원 수와 조회 범위가 일치하지 않습니다.');
+        requireValue(profiles.every(value => value && typeof value.memberId === 'string'
+          && /^[1-9]\d{0,15}$/.test(value.memberId) && value._id === value.memberId && value.studioId === '5330')
+          && new Set(profiles.map(value => value.memberId)).size === profiles.length,
+        'LIVE_IDENTITY_MISMATCH', '실시간 회원 원본 ID 또는 센터 연결이 일치하지 않습니다.');
+        const result = selectExpiring(profiles, { now: Date.parse(inventory.checkedAt),
+          daysRemainingMax: args.daysRemainingMax, classType: args.classType });
+        const matchedIds = new Set(result.members.map(value => value.memberId));
+        for (const value of profiles) if (matchedIds.has(value.memberId)) rememberSelection(value);
+        const scanCoverage = { ...result.coverage, ...coverage, liveRosterComplete: true, rosterTraversalComplete: true };
+        return { ok: true, ...result,
+          members: result.members.map(value => ({ ...value, ticketFreshness: proof.freshness,
+            checkedAt: inventory.checkedAt })),
+          source: { ...proof, collection: null, coverage: scanCoverage }, coverage: scanCoverage,
+          checkedAt: inventory.checkedAt, startedAt: inventory.startedAt ?? null, elapsedMs: inventory.elapsedMs,
+          liveReadback: true, allowedForExternalActions: false,
+          note: 'StudioMate 원본 회원 목록의 전체 페이지 조회를 완료했습니다. 변경 점검은 첫 페이지 재확인에 한정되며 단일 시점의 전체 상태나 변경 없음을 보장하지 않습니다. 신원 불완전·미분류 제외 수를 확인하세요. 종료·삭제 이력은 아닙니다. 오늘 만료는 0일이며 만료·잔여 0회·정지권을 제외합니다. 예약·환불·발송 근거로 사용하지 않습니다.' };
+      }
       const started = now();
       const inventory = await store.getTicketInventory({ forceRefresh: args.forceRefresh === true });
       return { ok: true, ...selectExpiring(inventory.profiles, { now: now(), daysRemainingMax: args.daysRemainingMax,
         classType: args.classType, verifiedLinks: inventory.verifiedLinks }),
-        source: { collection: 'memberProfiles', snapshotFetchedAt: iso(inventory.fetchedAt),
-          queriedAt: new Date(now()).toISOString(), cacheHit: inventory.cacheHit, cacheTtlSeconds: 300,
-          freshness: 'unknown', liveReadback: false }, elapsedMs: now() - started };
+        source: { ...snapshotSource({ kind: 'ticket_inventory_snapshot', queriedAt: new Date(now()).toISOString(),
+          fetchedAt: iso(inventory.fetchedAt), cacheHit: inventory.cacheHit === true }),
+          collection: 'memberProfiles', snapshotFetchedAt: iso(inventory.fetchedAt), cacheTtlSeconds: 300 },
+        elapsedMs: now() - started };
     }
     if (name === 'members_find') {
       const query = text(args.query, 50);
@@ -139,10 +198,7 @@ export function createService({ store, approvals, staffId, now = Date.now, memoW
         'INVALID_ARGUMENT', '이름 또는 전체 휴대폰 번호를 입력해 주세요.');
       if (liveReader) {
         const result = await liveReader.findMembers(isPhone ? phone(query) : query, isPhone, signal);
-        for (const member of result.members) {
-          if (liveSelections.size >= 100) liveSelections.delete(liveSelections.keys().next().value);
-          liveSelections.set(member.memberId, { ...member, selectedAt: now() });
-        }
+        for (const member of result.members) rememberSelection(member);
         return { ok: true, members: result.members.map(value => liveMember(value, result.checkedAt)),
           match: 'exact', needsSelection: result.members.length !== 1, liveReadback: true,
           checkedAt: result.checkedAt, elapsedMs: result.elapsedMs, coverage: result.coverage,
@@ -173,23 +229,35 @@ export function createService({ store, approvals, staffId, now = Date.now, memoW
           : 'CORE 원장 저장·기존 큐 접수 완료입니다. StudioMate 반영 완료는 작업 상태로 별도 확인하세요.' };
     }
     if (name === 'members_get_overview' && liveReader) {
-      const memberId = id(args.memberId);
-      const selected = liveSelections.get(memberId);
-      let expected;
-      if (selected && now() - selected.selectedAt < 10 * 60000) expected = selected;
-      else {
-        const current = await profile(memberId);
-        requireValue(/^[1-9]\d{0,15}$/.test(memberId), 'LIVE_SELECTION_REQUIRED',
-          '임시 회원 ID를 원본 ID로 추측하지 않습니다. members_find로 다시 선택해 주세요.');
-        expected = { memberId, name: current.name, phone: phone(current.phone) };
-      }
+      const expected = await expectedMember(args.memberId);
       const result = await liveReader.getOverview(expected, signal);
-      requireValue(result.memberId === expected.memberId && result.name === expected.name
-        && phone(result.phone) === phone(expected.phone), 'LIVE_IDENTITY_MISMATCH', '실시간 회원 식별 결과가 다릅니다.');
+      verifyIdentity(result, expected);
       return { ok: true, member: liveMember(result, result.checkedAt), memberGrade: result.memberGrade,
         tickets: result.tickets, checkedAt: result.checkedAt, elapsedMs: result.elapsedMs,
         coverage: result.coverage, ticketIdsAvailable: result.ticketIdsAvailable, liveReadback: true,
         note: 'StudioMate 현재 수강권 화면을 직접 확인했습니다. 종료·삭제 이력과 결제 원장은 이 조회 범위가 아닙니다.' };
+    }
+    if (name === 'bookings_list' && args.source !== 'snapshot') {
+      requireValue(typeof liveReader?.getBookings === 'function', 'LIVE_SOURCE_UNAVAILABLE',
+        '실시간 예약 조회 연결이 없습니다. 저장 자료로 대체하지 않았습니다.');
+      const expected = await expectedMember(args.memberId);
+      const result = await liveReader.getBookings(expected, { startDate: args.startDate, endDate: args.endDate }, signal);
+      verifyIdentity(result, expected);
+      const proof = liveProof(result, 'native_member_booking_history');
+      requireValue(Array.isArray(result.records) && result.records.length <= 2000,
+        'LIVE_SOURCE_INCOMPLETE', '실시간 예약 이력 범위를 확인하지 못했습니다.');
+      const records = result.records.filter(value => value.lectureDate >= args.startDate && value.lectureDate <= args.endDate)
+        .map(value => ({ bookingId: value.bookingId, lectureDate: value.lectureDate,
+          startAt: value.startAt, endAt: value.endAt, staffName: value.staffName || null,
+          lessonType: value.lessonType || null, sourceStatus: value.sourceStatus || 'unknown',
+          userTicketId: value.userTicketId || null,
+          source: { ...proof, collection: null, recordId: value.bookingId ?? null } }));
+      return { ok: true, member: liveMember(result, result.checkedAt),
+        records: records.sort((a, b) => `${a.lectureDate}${a.startAt}`.localeCompare(`${b.lectureDate}${b.startAt}`)),
+        source: proof, coverage: result.coverage, checkedAt: result.checkedAt,
+        startedAt: result.startedAt ?? null, elapsedMs: result.elapsedMs,
+        liveReadback: true, allowedForExternalActions: false,
+        note: '선택한 StudioMate 원본 회원의 예약 이력을 조회 구간까지 직접 확인했습니다. 예약·출석·발송을 변경하지 않았으며 외부 작업 대상 확정에 사용하지 않습니다.' };
     }
     const current = await profile(args.memberId, name === 'memos_prepare');
     const member = memberView(current, now());
@@ -212,7 +280,6 @@ export function createService({ store, approvals, staffId, now = Date.now, memoW
     }
     const ids = await memberIds(current);
     if (name === 'bookings_list') {
-      range(args.startDate, args.endDate);
       const rows = await store.getRows('bookings', ids, { startDate: args.startDate, endDate: args.endDate });
       const selected = rows.filter(value => value.lectureDate >= args.startDate && value.lectureDate <= args.endDate);
       const records = selected.map(value => ({ bookingId: value._id, lectureDate: value.lectureDate,
@@ -223,6 +290,8 @@ export function createService({ store, approvals, staffId, now = Date.now, memoW
         sourceKind: /^(excel_|usage_)/.test(value._id) ? 'fallback' : 'native_or_other',
         source: source(value, 'bookings', now()) }));
       return { ok: true, member, records: records.sort((a, b) => `${a.lectureDate}${a.startAt}`.localeCompare(`${b.lectureDate}${b.startAt}`)),
+        source: snapshotSource({ kind: 'bookings_snapshot', queriedAt: new Date(now()).toISOString() }),
+        liveReadback: false, allowedForExternalActions: false,
         note: '동기화 원장을 그대로 표시합니다. 대체·중복 원본은 별도로 표시하며 이 목록으로 예약·발송하지 않습니다.' };
     }
     if (name === 'contracts_get_progress') {

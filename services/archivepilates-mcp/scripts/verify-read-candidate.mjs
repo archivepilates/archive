@@ -44,15 +44,29 @@ try {
     checks.push({ check: 'live_member_read', name, searchMs: found.milliseconds, overviewMs: overview.milliseconds,
       ticketCount: overview.value.tickets.length, gradeKnown: overview.value.memberGrade !== null });
   }
-  for (const attempt of [1, 2]) {
-    const result = await call('members_list_expiring', { daysRemainingMax: 10 });
-    assert.equal(result.value.liveReadback, false);
+  for (const source of ['live', 'snapshot']) {
+    const result = await call('members_list_expiring', { daysRemainingMax: 10, ...(source === 'snapshot' ? { source } : {}) });
+    assert.equal(result.value.liveReadback, source === 'live');
+    assert.equal(result.value.coverage.liveRosterComplete, source === 'live');
+    assert.equal(result.value.source.freshness, source === 'live' ? 'live_at_checked_time' : 'unknown');
     assert.equal(result.value.allowedForExternalActions, false);
     assert.ok(result.value.members.every(m => m.tickets.every(t => t.daysRemaining >= 0 && t.daysRemaining <= 10)));
-    checks.push({ check: 'expiring_snapshot', attempt, milliseconds: result.milliseconds,
+    checks.push({ check: `expiring_${source}`, milliseconds: result.milliseconds,
       memberCount: result.value.memberCount, ticketRowCount: result.value.ticketRowCount,
       range: result.value.range, coverage: result.value.coverage, source: result.value.source });
   }
+  const found = await call('members_find', { query: '이수정' });
+  const selected = found.value.members.find(member => member.memberId === '5012352');
+  assert.ok(selected, 'Read-only cancellation evidence member must be selected by native ID.');
+  const bookings = await call('bookings_list', { memberId: selected.memberId,
+    startDate: '2026-10-01', endDate: '2026-10-31' });
+  assert.equal(bookings.value.liveReadback, true);
+  assert.equal(bookings.value.coverage.complete, true);
+  assert.equal(bookings.value.records.filter(row => row.lectureDate === '2026-10-25'
+    && row.sourceStatus === 'cancel').length, 2);
+  checks.push({ check: 'native_all_status_booking_history', milliseconds: bookings.milliseconds,
+    count: bookings.value.records.length, statuses: [...new Set(bookings.value.records.map(row => row.sourceStatus))],
+    coverage: bookings.value.coverage });
   console.log(JSON.stringify({ ok: true, checkedAt: new Date().toISOString(), mode: registered ? 'registered_operational_config' : 'candidate_not_registered', checks,
     memberDataWritten: false, messagesSent: false }, null, 2));
 } finally {

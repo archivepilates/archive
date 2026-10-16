@@ -3,6 +3,7 @@ import path from 'node:path';
 import { chromium } from 'playwright';
 import { acquireStudioMateBrowserLock } from '../../../scripts/lib/studiomate-browser-lock.mjs';
 import { OperationError, requireValue } from './errors.mjs';
+import { readNativeInventory, readNativeBookings } from './native-pages.mjs';
 import { STUDIO_ORIGIN, clean, assertMemberUrl, extractSearchDom, validateSearch,
   extractOverviewDom, validateOverview, extractIdentityDom, validateIdentity } from './live-dom.mjs';
 
@@ -174,6 +175,9 @@ export function createLiveReader({ launch = options => chromium.launchPersistent
     });
   }
   return {
+    getInventory: signal => session(page => readNativeInventory(page, { navigate, checkpoint }), signal),
+    getBookings: (expected, range, signal) => session(page => readNativeBookings(page, expected, range,
+      { navigate, checkpoint, waitIdentity }), signal),
     findMembers: (query, isPhone, signal) => session(async page => {
       const rows = await search(page, query, isPhone), members = [];
       for (const [index, expected] of rows.entries()) {

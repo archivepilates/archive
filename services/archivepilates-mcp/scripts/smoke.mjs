@@ -60,8 +60,8 @@ try {
   const missing = await call('operations_get_job', { kind: 'memo', jobId: 'mcp_readonly_smoke_nonexistent' });
   assert.equal(missing.found, false);
   const expiring = await call('members_list_expiring', { daysRemainingMax: 10 });
-  assert.equal(expiring.liveReadback, false);
-  assert.equal(expiring.coverage.liveRosterComplete, false);
+  assert.equal(expiring.liveReadback, true);
+  assert.equal(expiring.coverage.liveRosterComplete, true);
   assert.equal(expiring.allowedForExternalActions, false);
   const blocked = await client.callTool({ name: 'memos_commit', arguments: { proposalId: 'smoke-no-approval' } });
   assert.equal(blocked.isError, true);

@@ -96,10 +96,10 @@ test('service checks operator even on cached inventory and never calls browser o
   const service = createService({ staffId: 'operator', now: () => now, readOnly: true,
     store: { getOperator: async () => ({ studioId: '5330', role: 'owner', active }),
       getTicketInventory: async ({ forceRefresh }) => { calls++; assert.equal(forceRefresh, true); return { profiles: [profile()], fetchedAt: now, cacheHit: false }; } } });
-  const result = await service.callTool('members_list_expiring', { daysRemainingMax: 10, forceRefresh: true });
+  const result = await service.callTool('members_list_expiring', { daysRemainingMax: 10, forceRefresh: true, source: 'snapshot' });
   assert.equal(result.memberCount, 1);
   assert.equal(result.source.freshness, 'unknown');
   active = false;
-  await assert.rejects(service.callTool('members_list_expiring', { daysRemainingMax: 10 }), { code: 'PERMISSION_DENIED' });
+  await assert.rejects(service.callTool('members_list_expiring', { daysRemainingMax: 10, source: 'snapshot' }), { code: 'PERMISSION_DENIED' });
   assert.equal(calls, 1);
 });

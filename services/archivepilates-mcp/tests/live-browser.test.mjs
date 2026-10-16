@@ -179,6 +179,107 @@ test('cancellation and deadline close active browser before releasing the lock',
   }
 });
 
+function paginationLifecycleFixture(t, kind) {
+  const deferred = () => {
+    let resolve;
+    const promise = new Promise(done => { resolve = done; });
+    return { promise, resolve };
+  };
+  const paginating = deferred(), closing = deferred(), allowClose = deferred();
+  const waiters = new Set(), events = [];
+  const pathname = kind === 'inventory' ? '/v2/staff/members' : `/staff/member/${member.memberId}/booking`;
+  const query = kind === 'inventory' ? 'limit=1&sort_name=asc&with=tickets.ticket' : 'per_page=1&order_by=start_on';
+  const meta = { current_page: 1, per_page: 1, total: 2, last_page: 2 };
+  const body = kind === 'inventory'
+    ? { meta, count: { total_count: 2 }, data: [{ id: 123, name: member.name, mobile: member.phone, userTickets: [] }] }
+    : { kind: { total_count: 2 }, bookings: { ...meta, data: [{ id: 81, member_id: 123,
+      studio_id: 5330, user_ticket_id: 71, lecture_id: 91, status: 'booked', deleted_at: null,
+      lecture: { id: 91, studio_id: 5330, type: 'G', start_on: '2026-10-16 08:30:00',
+        end_on: '2026-10-16 09:20:00', instructor: { name: 'Synthetic Staff' } } }] } };
+  let held = false, closed = false, currentUrl;
+  function firstResponse() {
+    const response = { url: () => `${apiOrigin}${pathname}?page=1&${query}`,
+      request: () => ({ method: () => 'GET' }), ok: () => true,
+      finished: async () => null, json: async () => structuredClone(body) };
+    for (const waiter of waiters) if (waiter.predicate(response)) {
+      waiters.delete(waiter); waiter.resolve(response);
+    }
+  }
+  // Only the native first page is fulfilled. The second-page response stays pending until close.
+  const page = {
+    goto: async url => { currentUrl = url; if (kind === 'inventory') firstResponse(); },
+    url: () => currentUrl, waitForFunction: async () => {},
+    evaluate: async () => ({ ready: true, ...member }),
+    getByRole: () => ({ count: async () => 0 }),
+    waitForResponse: predicate => new Promise((resolve, reject) => { waiters.add({ predicate, resolve, reject }); }),
+    locator: selector => ({
+      count: async () => selector === 'input[type="password"]' ? 0 : 1,
+      isEnabled: async () => true, waitFor: async () => {},
+      inputValue: async () => '수업일 내림차순',
+      getByText: label => ({ click: async () => {
+        if (label instanceof RegExp && label.test('전체(2)')) firstResponse();
+      } }),
+      click: async () => {
+        assert.ok(selector.endsWith('.btn-next'));
+        assert.equal(waiters.size, 1, 'second-page response wait must be armed before clicking');
+        events.push('page:2'); paginating.resolve();
+      },
+    }),
+  };
+  const context = {
+    setDefaultTimeout() {}, setDefaultNavigationTimeout() {}, route: async () => {},
+    newPage: async () => page, pages: () => closed ? [] : [page],
+    close: async () => {
+      events.push('close:start'); closing.resolve();
+      for (const waiter of waiters) waiter.reject(new Error('synthetic context closed'));
+      waiters.clear();
+      await allowClose.promise;
+      closed = true; events.push('close:done');
+    },
+  };
+  const reader = createLiveReader({ budgetMs: 45000,
+    acquire: async () => {
+      assert.equal(held, false); held = true; events.push('lock');
+      return async () => {
+        assert.equal(closed, true, 'lock must remain held until context.close resolves');
+        held = false; events.push('release');
+      };
+    },
+    launch: async () => { assert.equal(held, true); return context; },
+  });
+  t.after(async () => { allowClose.resolve(); await reader.close(); });
+  return { reader, context, waiters, events, paginating, closing, allowClose, held: () => held,
+    read: signal => kind === 'inventory' ? reader.getInventory(signal)
+      : reader.getBookings(member, { startDate: '2026-10-16', endDate: '2026-10-26' }, signal) };
+}
+
+for (const kind of ['inventory', 'bookings']) {
+  for (const mode of ['cancel', 'deadline']) {
+    test(`${kind} pagination ${mode} rejects without fallback and drains waits before releasing lock`, { timeout: 5000 }, async t => {
+      t.mock.timers.enable({ apis: ['setTimeout'] });
+      const f = paginationLifecycleFixture(t, kind), controller = new AbortController();
+      const rejected = assert.rejects(f.read(controller.signal), {
+        code: mode === 'cancel' ? 'LIVE_CANCELLED' : 'LIVE_TIMEOUT',
+      });
+      await f.paginating.promise;
+      assert.equal(f.waiters.size, 1);
+      if (mode === 'cancel') controller.abort();
+      else t.mock.timers.tick(45000);
+      await f.closing.promise;
+      assert.equal(f.held(), true);
+      assert.ok(!f.events.includes('release'));
+      f.allowClose.resolve();
+      await rejected;
+      await f.reader.close();
+      await f.reader.close();
+      assert.equal(f.waiters.size, 0, 'no response wait may survive context closure');
+      assert.deepEqual(f.context.pages(), []);
+      assert.equal(f.held(), false);
+      assert.deepEqual(f.events, ['lock', 'page:2', 'close:start', 'close:done', 'release']);
+    });
+  }
+}
+
 test('unconfirmed browser close retains exclusive lock for operator review', async () => {
   let released = false;
   const reader = createLiveReader({ acquire: async () => async () => { released = true; },

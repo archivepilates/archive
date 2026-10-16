@@ -5,7 +5,7 @@ ARCHIVE PILATES StudioMate 업무를 위한 맥미니 로컬 MCP입니다. 운�
 ## 현재 상태
 
 - 표준 MCP stdio 연결과 조회 도구 7개를 구현했습니다. 외부 HTTP 포트·별도 모델 호출·추가 스케줄러는 없습니다. 7번째 조건별 조회의 운영 전환은 아래 v2 보고서를 따릅니다.
-- 회원 검색·현재 수강권은 맥미니 StudioMate 화면을 직접 조회합니다. 예약·계약·알림톡·작업은 기존 canonical 원장 조회입니다.
+- 회원 검색·현재 수강권·조건별 만료 목록·회원 예약은 요청 시 맥미니 StudioMate에서 직접 조회합니다. 계약·알림톡·작업은 기존 canonical 원장 조회입니다.
 - 계약은 `binding.memberId`, `selection.memberId`, `completion.memberId`와 서명 증거를 구분합니다. 예전 `memberSignupContracts`는 이 도구의 조회 범위가 아닙니다.
 - 메모 계획·승인·접수 코드는 격리 테스트만 완료했습니다. 실제 회원 메모 쓰기는 기본 비활성이며 운영 승격 전입니다.
 - 기존 자동화와 기존 `archive-ai-server`는 변경하지 않습니다. CORE 챗봇과 이전 중단된 개발본도 사용하지 않습니다.
@@ -17,8 +17,8 @@ ARCHIVE PILATES StudioMate 업무를 위한 맥미니 로컬 MCP입니다. 운�
 | --- | --- |
 | `members_find` | StudioMate 화면의 이름 또는 전체 휴대폰 번호 완전일치 검색, 검증한 원본 ID 반환 |
 | `members_get_overview` | 선택 회원의 현재 수강권·등급·실시간 확인시각 |
-| `members_list_expiring` | 오늘부터 N일 이하 만료 동기화 목록, 누락·상충·범위 경고, 전체 실시간 명단 아님 |
-| `bookings_list` | 최대 31일 예약 원장, 대체·fallback 표시 |
+| `members_list_expiring` | 기본값은 원본 전체 회원 페이지의 현재 수강권에서 오늘부터 N일 이하 만료 조회. 명시적 snapshot은 저장 목록 |
+| `bookings_list` | 기본값은 선택 회원의 최대 31일 원본 예약·출석·취소 이력. 명시적 snapshot은 저장 원장 |
 | `contracts_get_progress` | 계약 생성·서명 증거·관측 상태·웰컴 상태 |
 | `messages_get_delivery` | 최대 31일 알림톡 후보·발송 원장, 최종 전달 미확인 구분 |
 | `operations_get_job` | 허용된 업무 종류와 작업 ID의 상태 |
@@ -76,29 +76,33 @@ ARCHIVE_MCP_READ_ONLY = "true"
 
 ## 데이터·비용·결과 해석
 
-- 회원 검색·현재 수강권의 원천은 `https://arcpilates.studiomate.kr`의 렌더링된 화면입니다. 기존 내부 API 호출·응답 본문·인증 헤더·프레임워크 상태는 읽지 않습니다. 화면이 발생시키는 검색 요청은 완료 상태만 관찰합니다.
-- 나머지 원천은 `memberProfiles`, `bookings`, `studiomateMembershipContracts`, `alimtalkCandidates/Sends` 및 지정된 feature 작업 원장입니다. `workLanes`, `member360Cards`, `members` 미러는 사용하지 않습니다.
+- 회원 검색·현재 수강권은 `https://arcpilates.studiomate.kr`의 렌더링된 화면입니다. 원본 전체 회원 목록과 예약 이력은 화면의 페이지·탭 조작으로 발생한 GET 응답을 최소 필드로 투영합니다. 임의 API 요청·인증 헤더·프레임워크 상태 추출은 하지 않습니다. 검색 요청은 완료 상태만 관찰합니다.
+- 명시적 snapshot과 나머지 원천은 `memberProfiles`, `bookings`, `studiomateMembershipContracts`, `alimtalkCandidates/Sends` 및 지정된 feature 작업 원장입니다. `workLanes`, `member360Cards`, `members` 미러는 사용하지 않습니다.
 - 전화번호는 기본 마스킹합니다. 생년월일·이메일·설문 원문·메모 원문·서명 이미지·접근 토큰·자유 형식 오류는 조회 결과에 반환하지 않습니다.
 - 이름 검색은 화면의 전체 이름 정확 일치입니다. 부분 이름·전화번호 뒤 4자리로 선택하지 않습니다. 전체 이름·전화번호를 대조하고 실제 상세 주소에서 원본 ID를 확인합니다. 검증한 선택은 같은 MCP 세션에서 10분간 보관하며 수강권은 매번 새로 조회합니다. 임시 Excel ID를 원본 ID로 추측하지 않습니다.
 - 검증된 Excel ID 연결과 명시적 병합 이력만 사용합니다. 불완전하거나 상충하는 연결은 조회 보류이며 묵시적으로 전체 이력을 확인했다고 하지 않습니다.
 - 실시간 결과에는 `liveReadback=true`, `checkedAt`, `elapsedMs`, `coverage`가 붙습니다. 현재 수강권 카드만 조회하며 종료·삭제 이력과 실제 결제 원장을 확인한 것으로 해석하지 않습니다. 화면에 없는 수강권 ID는 만들지 않으며 `ticketIdsAvailable=false`로 표시합니다. 이용기간은 한국 날짜 필드와 ISO 값을 함께 제공합니다.
 - 원장 조회의 `syncedAt`은 저장시각입니다. 최신 다운로드와의 직접 연결 증거가 없으므로 `freshness=unknown`, `liveReadback=false`를 유지합니다. 실시간 도구가 실패해도 이 자료로 자동 대체하지 않습니다.
-- 예약은 기간을 서버 쿼리에 적용합니다. 메시지는 생성시각의 한국 날짜를 원본 쿼리에 적용합니다. 두 복합 인덱스는 운영 READY 및 실제 날짜 쿼리 성공을 확인했습니다. 인덱스가 없을 때만 기존 회원 이력을 엄격한 한도로 읽는 호환 경로를 쓰며 `coverage.needsIndexDeployment=true`로 표시합니다. 이 경로에서 한도를 넘으면 날짜 축소 대신 인덱스 배포 필요로 차단합니다. 다른 권한·통신 오류에는 대체 조회하지 않습니다.
+- 실시간 예약은 이용내역의 전체 상태를 수업일 내림차순으로 읽고 요청 시작일을 지난 페이지까지 검증합니다. 총건수·원본 ID·중복·정렬·회원 연결을 대조하며 최대 2,000행 수집·200행 반환, 31일 범위입니다. 취소 이력도 포함하므로 예약예정 0건을 전체 이력 0건으로 해석하지 않습니다. snapshot 예약과 메시지는 기존 날짜 쿼리·인덱스 제한을 유지합니다.
 - 조회는 목록당 최대 200개 고유 문서, 원장 호출당 최대 400개 수신 문서로 제한합니다. 한도·권한·인덱스 오류를 빈 목록으로 바꾸지 않습니다.
 - 후보 `sent`, 발송 작업 `done`, SOLAPI 메시지 ID는 최종 전달 증거가 아닙니다. 이 버전은 SOLAPI 최종 상태를 새로 조회하지 않습니다.
 - 조회 시 Firestore 읽기 비용이 발생할 수 있습니다. MCP 전용 정기 조회·새 클라우드 런타임·모델 API 비용은 추가하지 않습니다.
 
 ### 조건별 수강권 조회
 
-`members_list_expiring({daysRemainingMax:10,classType:"all",forceRefresh:false})`는 한국 날짜 기준 0~10일 남은 동기화 수강권을 필터링합니다. `classType`은 all/group/private/instructor 중 선택하며 강사레슨을 그룹과 구분합니다. 두 선택 입력을 생략할 수 있습니다. 정지권은 이 목록의 범위가 아니며 사용예정권은 상태를 그대로 반환합니다.
+`members_list_expiring({daysRemainingMax:10,classType:"all"})`는 기본적으로 StudioMate 전체 회원 원본 페이지의 현재 수강권을 요청 시 조회합니다. `source:"snapshot"`을 명시한 경우만 저장 목록을 사용합니다. 한국 날짜 기준 오늘 만료 0일을 포함합니다. classType은 all/group/private/instructor이며 기존 필터·정지권 제외 정책은 유지합니다.
+
+- Live source: 회원 화면에서 50/page로 전체 페이지를 읽고 페이지별 총수·중복·고유 회원/발급권 ID를 검사합니다. 첫 페이지를 다시 대조합니다. 최대 2,000회원·반환 200회원이며 잘못된 페이지·변경·로그인·잠금·시간초과는 실패로 반환하고 snapshot으로 대체하지 않습니다.
+- Live coverage: 원본 회원 총수를 확인하지만 여러 페이지의 조회 구간이며 단일 시점 스냅샷은 아닙니다. `atomicSnapshot=false`, `sourceWindow`, `checkedAt`, `elapsedMs`를 표시합니다. 현재 userTickets 범위이며 종료·삭제 이력 또는 실제 결제 원장이 아닙니다. 동시 수동 변경을 완전히 검출한다고 보장하지 않습니다.
+- 아래 캐시·연결 규칙은 명시적 snapshot에만 해당합니다. live 결과는 Firestore에 저장하거나 기존 자동화의 원천으로 승격하지 않습니다.
 
 - Source: `memberProfiles.activeTickets`를 센터 5330으로 제한한 투영 조회. 최대 2,000프로필, 결과 최대 200회원 초과 시 차단합니다. 새로운 Firestore 컬렉션·미러·정기 작업은 생성하지 않습니다.
 - Destination: 이 MCP 프로세스의 비공개 메모리에서만 최대 5분 보관. 동시에 들어온 최초 조회는 합치며 실패한 갱신 후 이전 결과로 자동 대체하지 않습니다. `forceRefresh:true`는 Firestore 재조회이지 StudioMate 강제 동기화가 아닙니다.
 - Identity: 원본 document ID=memberId와 센터·전체 이름·전화번호를 검사합니다. 병합·삭제 원본은 제외합니다. Excel/native 쌍은 최대20건의 완료된 ID lookup receipt와 이름·전체 전화번호·원본 ID·동일한 해결시각을 확인한 경우만 native 목록을 우선하며 수강권 배열을 합치지 않습니다. 이름이 달라도 전체 전화번호가 겹치거나 native 목록이 불완전하면 별도 확인 대상으로 표시합니다.
 - Reader: 매 호출 활성 owner/manager 재확인. 회원별 연락처는 마스킹하며 설문·메모·서명 원문을 반환하지 않습니다.
-- Forbidden downstream: 목록을 예약·환불·발송·계약·연락처 쓰기의 대상 원천으로 사용하지 않습니다. `allowedForExternalActions=false`, `liveReadback=false`, `coverage.liveRosterComplete=false`를 유지합니다.
+- Forbidden downstream: 두 모드 모두 목록을 예약·환불·발송·계약·연락처 쓰기의 대상 원천으로 사용하지 않습니다. `allowedForExternalActions=false`를 유지합니다. snapshot은 `liveReadback=false`, `freshness=unknown`, `coverage.liveRosterComplete=false`입니다. 캐시 재조회 시각과 수강권 원천 확인시각을 구분합니다.
 - Coverage: 최신 전체 Excel과 직접 연결된 명단 manifest가 없습니다. 누락된 프로필·신분만 보완된 프로필·수강권 미갱신이 있을 수 있습니다. 프로필 timestamp는 수강권 최신 확인시각이 아닙니다. `ticketRowCount`는 저장 표시 행 수이며 실제 구매 건수가 아닙니다. 미래 사용권·빈 횟수·확인 불가 상태를 함께 고려해야 합니다.
-- Verification: `node scripts/verify-read-candidate.mjs --live-read-only`와 `tests/ticket-query.test.mjs`, v2 HTML 보고서를 따릅니다. 원천을 완전히 보장하는 다음 단계는 기존 시간별 Excel의 전체 roster manifest와 검색 인덱스를 검증해 연결하는 것입니다. 이 버전은 해당 단계 완료가 아닙니다.
+- Verification: `node scripts/verify-read-candidate.mjs --live-read-only`와 native-model/native-pages/freshness/ticket-query 테스트, `docs/reports/2026-10-16-mcp-freshness-policy.html`을 따릅니다. 기존 시간별 Excel·발송·연락처·예약 실행기는 변경하지 않습니다.
 
 ## 실시간 브라우저 안전장치
 

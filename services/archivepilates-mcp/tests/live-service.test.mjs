@@ -75,3 +75,18 @@ test('unexpected returned identity is rejected, writes remain hidden', async t =
   assert.ok(f.listTools().every(row => row.annotations.readOnlyHint));
   await assert.rejects(f.callTool('memos_commit', { proposalId: 'none' }), { code: 'WRITE_DISABLED' });
 });
+
+test('live bookings reuse overview native profile binding and reject temporary IDs without translation', async t => {
+  const f = fixture(t);
+  f.store.getProfile.mock.mockImplementation(async memberId => ({ _id: memberId, memberId, studioId: '5330',
+    name: identity.name, phone: identity.phone, studiomateMemberId: '123' }));
+  f.liveReader.getBookings = t.mock.fn(async expected => ({ ...expected, checkedAt, records: [],
+    coverage: { complete: true, kind: 'native_member_booking_history' } }));
+  const dates = { startDate: '2026-10-01', endDate: '2026-10-31' };
+  const result = await f.callTool('bookings_list', { memberId: '123', ...dates });
+  assert.equal(result.liveReadback, true);
+  assert.deepEqual(f.liveReader.getBookings.mock.calls[0].arguments[0], identity);
+  assert.equal(f.store.getProfile.mock.callCount(), 1);
+  await assert.rejects(f.callTool('bookings_list', { memberId: 'excel_old', ...dates }), { code: 'LIVE_SELECTION_REQUIRED' });
+  assert.equal(f.liveReader.getBookings.mock.callCount(), 1);
+});

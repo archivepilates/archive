@@ -40,7 +40,7 @@ function result(payload, isError = false) {
 export function createMcpServer({ listTools, callTool }) {
   const server = new Server(
     { name: 'archivepilates-mcp', version: '0.1.0' },
-    { capabilities: { tools: {} }, instructions: 'ARCHIVE PILATES 운영자용 조회 전용 도구입니다. members_find로 실시간 검색 후 선택한 원본 회원 ID를 members_get_overview에 전달하세요. 두 도구는 맥미니 StudioMate 화면을 읽으며 로그인·잠금·조회 실패 시 저장 자료로 대체하지 않습니다. 며칠 이하 만료 회원 목록은 members_list_expiring을 사용하세요. 이 도구는 5분 이내 메모리 캐시를 쓰는 동기화 원장 분석이며 실시간 전체 명단이 아닙니다. coverage·ambiguousMembers를 확인하고 이 결과를 예약·환불·발송 대상 선정에 사용하지 마세요. 예약·계약·알림톡·작업 도구도 저장 원장 조회이며 실시간으로 단정하지 마세요. 각 결과의 liveReadback·checkedAt·coverage를 확인하세요. 후보·큐·접수·최종 전달·서명은 다릅니다. 오류·한도를 빈 결과로 해석하지 마세요. 회원 변경·예약·취소·발송은 지원하지 않습니다. 개인정보는 최소한만 요약하세요.' },
+    { capabilities: { tools: {} }, instructions: 'ARCHIVE PILATES 운영자용 조회 전용 도구입니다. members_find로 원본 회원을 선택하세요. 회원·현재 수강권·예약과 members_list_expiring의 기본 조회는 StudioMate 실시간 화면 기준이며 로그인·잠금·조회 실패를 저장 자료로 대체하지 않습니다. 예약은 요청 기간의 출석·취소를 포함한 전체 상태를 확인합니다. 조건별 목록은 원본 회원 총수·페이지·중복을 검증한 조회 시간 구간의 결과이며 단일 시점의 원장 스냅샷이 아닙니다. source=snapshot을 명시한 경우에만 기존 동기화 자료를 조회하며 5분 캐시를 원본 확인시각으로 해석하지 마세요. 계약·알림톡·작업은 저장 원장이며 실시간으로 단정하지 마세요. liveReadback·checkedAt·sourceWindow·coverage·ambiguousMembers를 확인하세요. 모든 도구는 조회 전용이며 결과를 예약·환불·발송 실행 대상으로 직접 사용하지 마세요. 후보·큐·접수·최종 전달·서명은 다릅니다. 오류·한도·부분 조회를 대상 없음으로 해석하지 마세요. 회원 변경·예약·취소·발송은 지원하지 않습니다. 개인정보는 최소한만 요약하세요.' },
   );
 
   server.setRequestHandler(ListToolsRequestSchema, () => {

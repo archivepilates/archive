@@ -13,8 +13,8 @@ const memberArgs = { memberId: '123' };
 const readCalls = [
   ['members_find', { query: 'Fixture Member' }],
   ['members_get_overview', memberArgs],
-  ['members_list_expiring', { daysRemainingMax: 10 }],
-  ['bookings_list', { ...memberArgs, ...dates }],
+  ['members_list_expiring', { daysRemainingMax: 10, source: 'snapshot' }],
+  ['bookings_list', { ...memberArgs, ...dates, source: 'snapshot' }],
   ['contracts_get_progress', memberArgs],
   ['messages_get_delivery', { ...memberArgs, ...dates }],
   ['operations_get_job', { kind: 'memo', jobId: 'memo-1' }],
@@ -212,7 +212,7 @@ test('overview projects ticket fields and preserves unknown freshness even for r
 
 test('bookings keep canonical/fallback distinctions, filter dates, sort, and never execute', async t => {
   const f = fixture(t);
-  const result = await f.callTool('bookings_list', { ...memberArgs, ...dates });
+  const result = await f.callTool('bookings_list', { ...memberArgs, ...dates, source: 'snapshot' });
   assert.deepEqual(result.records.map(row => row.bookingId), ['excel_booking_1', 'booking-1', 'booking-2']);
   assert.equal(result.records[0].sourceKind, 'fallback');
   assert.equal(result.records[0].supersededByBookingId, 'booking-1');
@@ -336,7 +336,7 @@ test('aliases require matching persisted resolution proof and query both IDs onl
   assert.equal(overview.member.linkedNativeMemberId, '123');
   assert.equal(overview.member.linkVerified, false);
   for (const [name, extra] of [['bookings_list', dates], ['contracts_get_progress', {}], ['messages_get_delivery', dates]]) {
-    await f.callTool(name, { ...args, ...extra });
+    await f.callTool(name, { ...args, ...extra, ...(name === 'bookings_list' ? { source: 'snapshot' } : {}) });
   }
   assert.equal(f.store.getLookup.mock.callCount(), 3);
   for (const call of f.store.getRows.mock.calls) assert.deepEqual(call.arguments[1], ['excel_fixture', '123']);
@@ -351,7 +351,7 @@ test('missing, mismatched, and stale-resolution aliases cannot silently show par
     const args = alias(f);
     f.state.lookup = patch === null ? null : { ...f.state.lookup, ...patch };
     for (const [name, extra] of [['bookings_list', dates], ['contracts_get_progress', {}], ['messages_get_delivery', dates]]) {
-      await rejectsCode(f.callTool(name, { ...args, ...extra }), 'SOURCE_ID_UNRESOLVED');
+      await rejectsCode(f.callTool(name, { ...args, ...extra, ...(name === 'bookings_list' ? { source: 'snapshot' } : {}) }), 'SOURCE_ID_UNRESOLVED');
     }
     assert.equal(f.store.getRows.mock.callCount(), 0);
     noWrites(f);
@@ -400,8 +400,9 @@ test('invalid identifiers and non-exact or incomplete searches are rejected', as
 test('both ranged tools accept 31 inclusive days and reject 32, reversals and nonexistent dates', async t => {
   const f = fixture(t);
   for (const name of ['bookings_list', 'messages_get_delivery']) {
-    assert.equal((await f.callTool(name, { ...memberArgs, ...dates })).ok, true);
-    assert.equal((await f.callTool(name, { ...memberArgs, startDate: '2028-02-29', endDate: '2028-02-29' })).ok, true);
+    const source = name === 'bookings_list' ? { source: 'snapshot' } : {};
+    assert.equal((await f.callTool(name, { ...memberArgs, ...dates, ...source })).ok, true);
+    assert.equal((await f.callTool(name, { ...memberArgs, startDate: '2028-02-29', endDate: '2028-02-29', ...source })).ok, true);
     for (const [startDate, endDate] of [
       ['2026-10-01', '2026-11-01'], ['2026-10-31', '2026-10-01'],
       ['2026-02-29', '2026-03-01'], ['2026-02-30', '2026-03-01'],
@@ -409,7 +410,7 @@ test('both ranged tools accept 31 inclusive days and reject 32, reversals and no
       ['2026-1-01', '2026-01-02'], ['not-a-date', '2026-10-01'],
     ]) {
       const before = f.store.getRows.mock.callCount();
-      await rejectsCode(f.callTool(name, { ...memberArgs, startDate, endDate }), 'INVALID_ARGUMENT');
+      await rejectsCode(f.callTool(name, { ...memberArgs, startDate, endDate, ...source }), 'INVALID_ARGUMENT');
       assert.equal(f.store.getRows.mock.callCount(), before);
     }
   }
@@ -429,7 +430,8 @@ test('SOURCE_LIMIT propagates rather than returning a truncated success', async 
     });
     const name = failedCollection === 'bookings' ? 'bookings_list'
       : failedCollection === 'studiomateMembershipContracts' ? 'contracts_get_progress' : 'messages_get_delivery';
-    await rejectsCode(f.callTool(name, name === 'contracts_get_progress' ? memberArgs : { ...memberArgs, ...dates }), 'SOURCE_LIMIT');
+    await rejectsCode(f.callTool(name, name === 'contracts_get_progress' ? memberArgs
+      : { ...memberArgs, ...dates, ...(name === 'bookings_list' ? { source: 'snapshot' } : {}) }), 'SOURCE_LIMIT');
   }
   noWrites(f);
 });
