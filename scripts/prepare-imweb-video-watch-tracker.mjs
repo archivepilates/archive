@@ -13,7 +13,7 @@ const TRACKER_ASSET_URL =
 const IMWEB_CLI_BIN = process.env.IMWEB_CLI_BIN || "imweb";
 
 export function mergeVideoWatchTracker(currentContent) {
-  const wrapped = `<script ${TRACKER_ATTRIBUTE}="${TRACKER_VERSION}" src="${TRACKER_ASSET_URL}"></script>`;
+  const wrapped = `<script async ${TRACKER_ATTRIBUTE}="${TRACKER_VERSION}" src="${TRACKER_ASSET_URL}"></script>`;
   const pattern = new RegExp(
     `<script\\b[^>]*${TRACKER_ATTRIBUTE}=(?:"[^"]*"|'[^']*'|[^\\s>]+)[^>]*>[\\s\\S]*?<\\/script>\\s*`,
     "gi",

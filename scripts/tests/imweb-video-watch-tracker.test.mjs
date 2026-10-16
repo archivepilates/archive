@@ -85,6 +85,7 @@ test("body script merge preserves unrelated scripts and replaces the tracker ide
   );
   assert.ok(!mergedTwice.includes("archivePilatesVideoWatchTracker"));
   assert.equal(mergedTwice, mergedOnce);
+  assert.match(mergedTwice, /<script async data-archive-pilates-video-watch-tracker=/);
 });
 
 test("body script update accepts current and legacy Imweb confirmation token keys", () => {
