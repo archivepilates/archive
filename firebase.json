@@ -659,6 +659,28 @@
           ]
         }
       ],
+      "redirects": [
+        {
+          "source": "/method/team-261017/assignment",
+          "destination": "/method/external-feedback-261017/assignment/",
+          "type": 302
+        },
+        {
+          "source": "/method/team-261017/assignment/",
+          "destination": "/method/external-feedback-261017/assignment/",
+          "type": 302
+        },
+        {
+          "source": "/method/team-261017",
+          "destination": "/method/external-feedback-261017/",
+          "type": 302
+        },
+        {
+          "source": "/method/team-261017/",
+          "destination": "/method/external-feedback-261017/",
+          "type": 302
+        }
+      ],
       "ignore": [
         ".git",
         ".git/**",
