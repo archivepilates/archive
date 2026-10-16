@@ -33,7 +33,12 @@ Use existing Firestore canonical `alimtalkCandidates`, `alimtalkSends`, `memberP
 - Added isolated VM tests for missing/foreign records, ID binding, prior attempts, input limits, eligibility/source/duplicate failures, private-result redaction, stale template evidence, specialized final checks and no-write/no-fetch template mode.
 - Existing 83-case strict approved-send runtime test still passes: no full source reads, canonical ownership, cancellation, transaction races, single provider attempt and unknown outcomes.
 - Build, cross-codebase boundaries, catalog and mandatory rollback guards required before release.
-- Pending: final MCP/UI evidence, live callable auth and read-only proof, Hosting hashes, CI and clean Git status.
+- Shared inspector/policy parity 60, MCP 252, controlled UI 17, existing CORE 80 and renewal 24 checks passed. All five codebases built; ownership 97 exports passed. No-mock AST comparisons prove both senders' execution bodies match the released baseline.
+- Backend source `26dcb8f82c43569d85e70c1c8e2493576bfb37ae` promoted and pushed to main/feature; `functions-alimtalk` 14 endpoints deployed (one new read-only callable). Other four codebases were validated but not deployed; the boundary-manifest edit alone conservatively flags all five in affected detection.
+- New callable ACTIVE, revision `getalimtalktargetvalidation-00001-fud`, 256MiB, concurrency 1, max instances 2, no secret bindings. Downloaded deployed source generation `1792153944735141`: exact SHA256 matches for inspector, shared checks, eligibility, normal queue and approved sender.
+- Live unauthenticated request rejected 401; existing owner temporary authentication succeeded, unsafe ID rejected 400. No new account, password or role changes; tokens not persisted. Candidates/send records unchanged before and after live inspection; fresh stdio tool set has eight read-only tools.
+- Existing four main schedules remain ENABLED at 11:30, Monday 12:30, 18:00 and every ten minutes. GitHub affected-codebase CI `38901035696` succeeded.
+- Pending: CORE Hosting release, static hashes, live responsive checks and final clean status.
 
 ## Remaining Boundaries
 

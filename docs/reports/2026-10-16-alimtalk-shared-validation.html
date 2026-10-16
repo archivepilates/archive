@@ -3,7 +3,7 @@
 *{box-sizing:border-box}body{margin:0;background:#f6f7f9;color:#20252b;font:16px/1.7 -apple-system,BlinkMacSystemFont,"Apple SD Gothic Neo",sans-serif}main{max-width:960px;margin:auto;padding:32px 20px}h1{font-size:28px;line-height:1.35;margin:8px 0 20px}h2{font-size:20px;margin:0 0 12px}section{border-top:1px solid #d6dbe1;padding:24px 0}p{margin:8px 0}small{color:#59616c}table{width:100%;border-collapse:collapse}th,td{text-align:left;border-bottom:1px solid #dfe3e8;padding:12px 8px;vertical-align:top;overflow-wrap:anywhere}th{font-size:14px}code{font-size:14px;overflow-wrap:anywhere}.status{color:#a5202b;font-weight:600}.flow{white-space:pre-wrap;background:#fff;padding:16px;border:1px solid #d6dbe1;border-radius:6px}a{color:#a5202b}@media(max-width:480px){main{padding:24px 16px}h1{font-size:24px}th,td{padding:10px 4px;font-size:14px}}
 </style></head><body><main>
 <small>ARCHIVE PILATES · 2026.10.16</small><h1>알림톡 공통 대상 검증</h1>
-<p class="status" id="release-status">구현·로컬 검증 완료 / 운영 배포·라이브 검증 대기</p>
+<p class="status" id="release-status">Functions·MCP 운영 반영·라이브 검증 완료 / CORE Hosting 배포 대기</p>
 <p>기존 Firestore를 유지하고 일반 발송 큐, 강사레슨 승인 발송, CORE와 MCP가 같은 검증 정책을 사용하도록 연결했습니다. 새 종합 DB·스케줄러·발송 실행기는 없습니다.</p>
 <section><h2>구조</h2><div class="flow">CORE 대상 검증 / MCP messages_validate_target
              ↓
@@ -22,6 +22,6 @@
 <tr><td>회귀·빌드</td><td>CORE 업무 80건, 재등록 24건, 강사레슨 승인 15건, 전체 5개 Functions 빌드·경계 및 배포 롤백 가드 확인.</td></tr>
 <tr><td>실발송</td><td>없음. 수강권·회원·예약 변경 및 오늘 중단 건의 재발송 없음.</td></tr>
 </tbody></table></section>
-<section><h2>운영 반영</h2><p id="deployment-evidence">배포 전 기록입니다. 승인된 범위는 functions-alimtalk, CORE Hosting, 맥미니 MCP 운영 소스와 도구 허용목록입니다. Firestore 규칙·인덱스·회원 데이터는 변경하지 않습니다.</p></section>
+<section><h2>운영 반영</h2><p id="deployment-evidence">소스 26dcb8f8: functions-alimtalk 14개 배포 완료. 새 검증 API는 ACTIVE, revision getalimtalktargetvalidation-00001-fud, 256MiB·동시 1개·최대 2개 인스턴스·비밀키 바인딩 없음입니다. 배포 소스 generation 1792153944735141의 검증·큐·승인 발송 모듈 5개가 로컬 빌드와 일치합니다. 다른 Functions 4개 codebase와 Firestore 규칙·인덱스는 배포하지 않았습니다.</p><p>운영자 인증 조회 200, 비로그인 차단 401, 잘못된 ID 차단 400을 확인했습니다. MCP와 기존 후보·발송 원장 대조도 무변경입니다. GitHub Actions 38901035696 성공. 기존 11:30·월요일 12:30·18:00·10분 큐 스케줄은 ENABLED로 유지됩니다. CORE Hosting 배포·최종 정적 해시 검증이 남았습니다.</p></section>
 <section><h2>남은 범위</h2><p>11:30 후보 준비의 전체 자료 적재와 과거 후보 전역 정리는 이번 작업에서 변경하지 않았습니다. 이 서비스를 추가했다고 그 메모리 문제가 모두 해결된 것은 아닙니다. 또한 Firestore 기반 사전검증은 실시간 StudioMate 수집 완료를 보장하지 않습니다.</p><p>각 전용 실행기의 최종 검증·승인·원장 대조가 계속 필요합니다. 기존 Codex 대화는 이전 MCP 도구 목록을 유지할 수 있으므로 새 연결로 확인해야 합니다.</p></section>
 </main></body></html>

@@ -4,7 +4,7 @@ ARCHIVE PILATES StudioMate 업무를 위한 맥미니 로컬 MCP입니다. 운�
 
 ## 현재 상태
 
-- 표준 MCP stdio 연결과 조회 도구 7개를 구현했습니다. 외부 HTTP 포트·별도 모델 호출·추가 스케줄러는 없습니다. 7번째 조건별 조회의 운영 전환은 아래 v2 보고서를 따릅니다.
+- 표준 MCP stdio 연결과 조회 도구 8개를 구현했습니다. 외부 HTTP 포트·별도 모델 호출·추가 스케줄러는 없습니다. 조건별 조회는 아래 v2 보고서를, 알림톡 사전 검증은 `docs/reports/2026-10-16-alimtalk-shared-validation.html`을 따릅니다.
 - 회원 검색·현재 수강권·조건별 만료 목록·회원 예약은 요청 시 맥미니 StudioMate에서 직접 조회합니다. 계약·알림톡·작업은 기존 canonical 원장 조회입니다.
 - 계약은 `binding.memberId`, `selection.memberId`, `completion.memberId`와 서명 증거를 구분합니다. 예전 `memberSignupContracts`는 이 도구의 조회 범위가 아닙니다.
 - 메모 계획·승인·접수 코드는 격리 테스트만 완료했습니다. 실제 회원 메모 쓰기는 기본 비활성이며 운영 승격 전입니다.
@@ -28,7 +28,7 @@ ARCHIVE PILATES StudioMate 업무를 위한 맥미니 로컬 MCP입니다. 운�
 
 현재 지원하지 않는 것: 일반 예약 생성·취소, 수강권·홀딩 변경, 새 회원 생성, 계약 재발송, 실제 환불·송금, 알림톡 발송, 임의 URL·브라우저 명령·셸/Firestore 호출.
 
-로컬 개발본은 사전 검증을 포함해 조회 도구 8개입니다. `messages_validate_target({candidateId})`는 매 호출 운영자 권한을 확인하고 별도 Node 자식에서 `scripts/read-alimtalk-target-validation.mjs`를 실행합니다. Functions의 `lib/alimtalk/targetValidation.js` 빌드가 없거나 읽기에 실패하면 대체 없이 중단합니다. 기존 설정의 자격증명 경로만 자식 환경에 전달하고 응답·오류에는 공개하지 않습니다. 45초 예산·출력 합계 128 KiB 제한·취소 시 소유 자식 종료와 종료 확인을 적용합니다. 결과는 `preflightOnly=true`, `liveReadback=false`, `allowedForExternalActions=false`이며 통과해도 발송 시점 승인·큐 선점·업무별 최종 검증이 별도로 필요합니다. 운영 등록·배포·라이브 검증은 이 로컬 변경에 포함하지 않습니다.
+사전 검증을 포함해 조회 도구 8개입니다. `messages_validate_target({candidateId})`는 매 호출 운영자 권한을 확인하고 별도 Node 자식에서 `scripts/read-alimtalk-target-validation.mjs`를 실행합니다. Functions의 `lib/alimtalk/targetValidation.js` 빌드가 없거나 읽기에 실패하면 대체 없이 중단합니다. 기존 설정의 자격증명 경로만 자식 환경에 전달하고 응답·오류에는 공개하지 않습니다. 45초 예산·출력 합계 128 KiB 제한·취소 시 소유 자식 종료와 종료 확인을 적용합니다. 결과는 `preflightOnly=true`, `liveReadback=false`, `allowedForExternalActions=false`이며 통과해도 발송 시점 승인·큐 선점·업무별 최종 검증이 별도로 필요합니다. 2026-10-16 운영 소스·빌드·Codex 허용목록과 새 stdio 연결을 확인했고, 기존 운영자 인증의 라이브 callable도 동일한 차단 결과와 미발견 결과를 반환했습니다. 기존 연결은 다시 연결해야 여덟 번째 도구가 보입니다.
 
 ## 로컬 실행
 
@@ -53,7 +53,7 @@ ARCHIVE_MCP_OPERATOR_STAFF_ID=1979746 npm start
 [mcp_servers.archivepilates-mcp]
 command = "/absolute/path/to/node"
 args = ["/absolute/path/to/repo/services/archivepilates-mcp/src/index.mjs"]
-enabled_tools = ["members_find", "members_get_overview", "members_list_expiring", "bookings_list", "contracts_get_progress", "messages_get_delivery", "operations_get_job"]
+enabled_tools = ["members_find", "members_get_overview", "members_list_expiring", "bookings_list", "contracts_get_progress", "messages_get_delivery", "messages_validate_target", "operations_get_job"]
 tool_timeout_sec = 60
 
 [mcp_servers.archivepilates-mcp.env]

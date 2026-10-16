@@ -42,6 +42,7 @@ const snapshot = async () => {
 };
 try {
   const before = await snapshot();
+  const mcpStatuses = [];
   await client.connect(transport);
   const tools = (await client.listTools()).tools;
   assert.equal(tools.length, 8);
@@ -54,6 +55,7 @@ try {
     const value = result.structuredContent;
     assert.equal(value.allowedForExternalActions, false);
     assert.equal(value.liveReadback, false);
+    mcpStatuses.push(value.results[0].status);
     report.checks.push({ surface: 'fresh_stdio_mcp', candidateHash: digest(id).slice(0, 12),
       status: value.results[0].status, stages: value.results[0].checks, elapsedMs: Math.round(performance.now() - start) });
   }
@@ -81,11 +83,14 @@ try {
         method: 'POST', headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify({ token: customToken, returnSecureToken: true }), signal: AbortSignal.timeout(30000) });
       const session = await response.json();
-      assert.ok(response.ok && session.localId === staff.uid && session.idToken);
+      assert.ok(response.ok && session.idToken);
+      const verified = await auth.verifyIdToken(session.idToken);
+      assert.equal(verified.uid, staff.uid);
       const value = await call({ candidateIds: ids }, session.idToken);
       assert.equal(value.status, 200); assert.equal(value.body.result.readOnly, true);
       assert.equal(value.body.result.allowedForExternalActions, false);
       assert.equal(value.body.result.results.length, ids.length);
+      assert.deepEqual(value.body.result.results.map(row => row.status), mcpStatuses);
       const invalid = await call({ candidateIds: ['../invalid'] }, session.idToken);
       assert.equal(invalid.status, 400); assert.equal(invalid.body.error.status, 'INVALID_ARGUMENT');
       report.checks.push({ surface: 'live_callable_existing_operator', statuses: value.body.result.results.map(row => row.status),
