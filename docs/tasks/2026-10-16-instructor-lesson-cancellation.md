@@ -25,5 +25,13 @@
 - Required release: functions-app + functions-alimtalk (including confirmation/material final guards), CORE Hosting, runtime fast-forward. No Firestore rules/index changes or new LaunchAgent.
 - Release report: docs/reports/2026-10-16-instructor-lesson-cancellation.html. CORE rule: /rules/#instructor-lesson-cancellation.
 
-## Remaining Release Checks
-Record scoped test results, native/UI cleanup, source-vs-dashboard preview, clean-main promotion, deployment canary, function ACTIVE state, no-auth denial, runtime revision and CI after deployment. Do not manually run the production worker as a smoke test.
+## Release Evidence / 2026-10-16
+- Implementation commit 16091ba700262bd239f8ce514a5aa78e0635351b was pushed to the feature branch and promoted to origin/main. Deployment used a clean main checkout and archive-codex-operator for Firebase project archive-pilates.
+- functions-app (44) and functions-alimtalk (13) deployed successfully after dry-runs; all 57 are ACTIVE. New cancellation callable returned HTTP 401 / UNAUTHENTICATED for an unauthenticated probe; no request was created.
+- Both Hosting sites archive-pilates and archive-pilates-core deployed. Live release canary matches implementation SHA 16091ba7. Live instructor-lesson HTML, app.js, interface.css and operating rules match tested source hashes.
+- Node focused suite: 396 passed. TypeScript workflow suite: 62 passed. All five codebase builds, ownership boundaries, release/data-source/rollback checks passed. Local and live whole-CORE responsive checks each passed 95 checks at 320/390/768/1440/1920px; synthetic cancellation dialog passed four widths.
+- GitHub Functions Affected Check passed: https://github.com/archivepilates/archive/actions/runs/38842304467 (2m32s).
+- Runtime fast-forwarded to 16091ba7. Existing com.archive.instructor-lesson-registration-queue remains loaded at 120 seconds, last exit 0. Natural run at 2026-10-16T02:58:03.802Z reported ok=true, failed=0, cancellation processed=0. Cancellation queue count remained 0 after deployment verification.
+- No real-member cancellation, financial refund, test message or manual production worker invocation occurred. Native read-only preflight is not end-to-end production cancellation proof; verify completion on the next legitimate operator-requested cancellation.
+- All task-owned browser contexts closed in finally and the shared StudioMate browser lock was released. Existing user browser state was preserved.
+- Documentation-only completion commit follows the deployed implementation. Hosting/runtime behavior remains versioned by implementation SHA; no second deploy is required for these task/report records.
