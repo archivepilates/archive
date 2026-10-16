@@ -8,14 +8,14 @@
 </style>
 </head>
 <body><main>
-<header><p class="meta">ARCHIVE PILATES · ARCHIVE CORE / 알림톡 운영 점검 · 2026-10-16</p><h1>강사레슨 승인 발송의 전체 재계산 제거</h1><p>5명 발송 전 약 11만 건의 회원·예약·수업 원천을 읽는 구조가 확인됐습니다. 승인된 후보만 조회하도록 수정하고 기존 승인·중복방지·원천 검증을 강화했습니다.</p><p class="state">소스 구현·무발송 검증·독립 리뷰 완료 · 운영 배포 승인 완료 / 배포 준비 중</p></header>
+<header><p class="meta">ARCHIVE PILATES · ARCHIVE CORE / 알림톡 운영 점검 · 2026-10-16</p><h1>강사레슨 승인 발송의 전체 재계산 제거</h1><p>5명 발송 전 약 11만 건의 회원·예약·수업 원천을 읽는 구조가 확인됐습니다. 승인된 후보만 조회하도록 수정하고 기존 승인·중복방지·원천 검증을 강화했습니다.</p><p class="state">18시 수정 운영 배포 완료 · 다른 공용 준비 경로는 별도 개선 필요</p></header>
 <div class="grid"><div class="metric">함수 메모리 한도<strong>512MiB</strong></div><div class="metric">오늘 종료 당시<strong>513MiB</strong></div><div class="metric">이번 승인 대상<strong>5명</strong></div></div>
 <section><h2>확인된 원인</h2><table><tbody>
 <tr><th>운영 함수</th><td><code>archive-pilates / asia-northeast3 / scheduledSendApprovedInstructorLessonAlimtalk</code></td></tr>
 <tr><th>문제 경로</th><td><code>sendApprovedInstructorLessonAlimtalks → rebuildAlimtalkCandidatesForRange</code>. 발송 전에 전체 회원·예약·수업을 메모리에 적재하고 갱신관리 및 다른 알림톡 후보까지 다시 계산했습니다. 승인 대상이 없는 날에도 호출됩니다.</td></tr>
 <tr><th>원천 건수</th><td>회원 626명 · 예약 95,722건 · 수업 16,153건. <code>studioId=5330</code> Firestore count()로 재확인했습니다.</td></tr>
 <tr><th>Cloud Logging</th><td>2026-10-16 18:00:41 KST: 513MiB로 종료. 2026-09-17 18:00:52 KST: 516MiB로 종료. 운영 함수 설정은 512MiB, 상태 ACTIVE였습니다.</td></tr>
-<tr><th>검증 경계</th><td>제공된 최근 30일의 90%·98% 사용 일수는 이번 작업에서 재집계하지 않았습니다. OOM 2회와 전체 적재 경로·현재 원천 건수는 직접 확인했습니다.</td></tr>
+<tr><th>30일 재집계</th><td>2026-09-17 00:00~2026-10-16 20:06 KST, 오늘은 부분 일자입니다. 실행별 최대 메모리 지표를 KST 일자별로 집계했으며 18시 함수는 90% 이상 16일·98% 이상 4일로 재확인됐습니다. 하루 종일 그 비율을 사용했다는 뜻은 아닙니다.</td></tr>
 </tbody></table></section>
 <section><h2>수정 내용</h2><ul>
 <li>18시 발송 함수에서 전체 후보 재생성 호출·의존성을 제거했습니다. 승인 묶음의 고유 후보 ID를 한 건씩 읽습니다.</li>
@@ -36,7 +36,26 @@
 <li>TypeScript 타입 검사와 5개 Functions 코드베이스 빌드, 릴리스 회귀 방지 검증이 통과했습니다.</li>
 <li>실제 발송 함수를 사용하는 오프라인 원장 테스트 83건이 통과했습니다. 승인 외 조회 금지, 동시 실행, 원천 변경·트랜잭션 재시도, 취소·미확인 결과 차단을 검증했습니다. 독립 리뷰 지적 2건을 보완했고 재검토에서 추가 문제는 없었습니다.</li>
 <li>실제 발송·수동 큐 실행·승인 상태 변경·회원/예약 변경은 테스트하지 않았습니다.</li>
-<li>운영 배포·커밋·푸시는 승인되어 준비 중입니다. 다음 정기 실행 전까지 운영 환경의 개선된 RAM 사용량은 미실측이며, 로컬 통과를 운영 검증 완료로 표현하지 않습니다.</li>
+<li>커밋 <code>6cf64b80</code>을 main에 승격·푸시하고 functions-alimtalk 13개 함수와 CORE 운영규칙 Hosting 두 사이트를 배포했습니다. 함수 ACTIVE, 스케줄 18:00 KST 유지, 라이브 규칙·카탈로그와 GitHub 검사 성공을 확인했습니다.</li>
+<li>배포된 함수 소스의 승인 ID 검증 마커와 전체 재계산 호출 제거를 확인했고, 소스 SHA-256이 로컬 빌드와 일치했습니다. 배포 후 기존 5건 원장 상태는 그대로이며 재발송은 하지 않았습니다.</li>
+<li>로컬 및 라이브 도메인 합성 반응형 검사 각각 95건 통과, 320·390·768·1440·1920px 가로 넘침 없음. Firebase를 차단한 정적 검사이며 실제 로그인·회원 동작을 수행하지 않았습니다. 작업 소유 브라우저는 정리했습니다.</li>
+<li>다음 정기 실행 전까지 개선된 운영 RAM 사용량은 미실측이며, 배포 성공을 발송·메모리 실측 성공으로 표현하지 않습니다.</li>
 </ul></section>
-<footer>계정: archive-codex-operator 서비스 계정 · 프로젝트 archive-pilates. 확인 근거: 현재 Git 소스, Cloud Functions 설정, Cloud Logging, Firestore 원장·count(), SOLAPI GET 조회. 개인정보와 인증정보는 보고서에 포함하지 않습니다.</footer>
+<section><h2>알림톡 전체 경로 추가 점검</h2><p>모든 발송이 전체 재계산을 수행하지는 않습니다. 문제는 공용 후보 준비 함수와 그 반복 호출에 집중돼 있으며, 18시 수정만으로 일일 준비 작업의 메모리 구조까지 해결됐다고 볼 수 없습니다.</p>
+<table><thead><tr><th>경로</th><th>현재 한도</th><th>관측 최대</th><th>전체 재계산</th></tr></thead><tbody>
+<tr><td>강사레슨 18시</td><td>512MiB</td><td>506.30MiB / 90% 이상 16일</td><td>기존에는 매일 수행. 이번 수정은 승인 ID 조회로 변경.</td></tr>
+<tr><td>일일 준비 11:30</td><td>1,024MiB</td><td>552.93MiB / 약 54%</td><td>회원·예약·수업 전체 적재 유지. 후속 개선 필요.</td></tr>
+<tr><td>일반 큐 10분</td><td>512MiB</td><td>155.05MiB / 약 30%</td><td>전체 후보 재생성 없음. 제한된 큐 처리.</td></tr>
+<tr><td>예약오픈 월요일</td><td>1,024MiB</td><td>170.07MiB / 약 17%</td><td>회원 전체 확인, 예약·수업 적재 생략. 과거 후보 정리는 별도 전역 조회.</td></tr>
+<tr><td>일반 승인 HTTP</td><td>512MiB</td><td>136.46MiB / 약 27%</td><td>전체 원천 재생성 없음. 해당 날짜 후보 조회는 승인 ID보다 넓음.</td></tr>
+<tr><td>프라이빗 오늘 기록</td><td>512MiB</td><td>180.78MiB / 약 35%</td><td>이번 공용 전체 재생성의 호출 경로가 아님.</td></tr>
+</tbody></table>
+<p class="meta">Cloud Monitoring <code>cloudfunctions.googleapis.com/function/user_memory_bytes</code>: 실행별 최대 메모리 분포의 분당 평균 중 일자별 최대값. 표의 앞 5개 함수는 표본당 실행 수가 모두 1이어서 실행 최대와 일치합니다. 프라이빗 오늘 기록 등 일부 분당 다중 실행은 평균일 수 있습니다. 현재 한도를 분모로 사용하므로 과거 한도 변화는 반영하지 않습니다. OOM 실행의 지표 누락을 0으로 계산하지 않았습니다. 506.30MiB 관측 최대와 종료 로그의 513/516MiB는 서로 다른 증거입니다. 9/17·10/16 OOM 날짜는 지표의 90% 이상 16일에 포함되지 않으므로, 두 증거를 합치면 30일 중 18일에 한도 근접 또는 초과가 확인됩니다. 이름에 Alimtalk가 포함된 관측 함수 13개를 조회했으며 이름이 다른 모든 알림 발송 기능까지 지표로 포괄했다고 주장하지 않습니다.</p>
+<h2>남은 공통 개선 순서</h2><ol>
+<li>일일 준비를 회원별 소규모 묶음으로 전환하고 해당 회원의 필요한 전체 이력과 참조 수업만 읽습니다. 최초 출석·장기 미출석·정규 예약 판정을 지키기 위해 무조건 최근 며칠로 이력을 잘라서는 안 됩니다.</li>
+<li>매번 실행되는 과거 후보 만료 정리를 스튜디오·상태·날짜 조건과 페이지 단위로 제한합니다. 현재는 candidate/reviewed/failed 전체를 읽은 뒤 메모리에서 거릅니다.</li>
+<li>일반 대량 승인도 승인 ID 한정 조회와 처리로 좁히고, 갱신 원장·후보의 내용이 같으면 같은 문서를 반복 쓰지 않도록 합니다.</li>
+<li>중복 검사 이력을 날짜·회원·수업 범위로 줄이되 평생 중복방지와 시각 누락 보호를 보존하고, 기존 결과와 무발송 비교 후 적용합니다.</li>
+</ol><p>수업 동기화 <code>syncLecturesRange</code>에도 공용 재생성 호출이 남아 있지만, 기본 Excel 동기화와 달리 API/관리자 경로의 실제 활성·호출 여부는 별도 확인해야 합니다. 소스에 경로가 있다는 사실만으로 현재 매시간 실행된다고 해석하지 않습니다. 메모리 누수는 확인하지 않았으며 전체 적재와 반복 계산 구조만 확인했습니다. 위 후속 구조 변경은 이번 승인 대상에 자동 포함하지 않았습니다.</p></section>
+<footer>계정: archive-codex-operator 서비스 계정 · 프로젝트 archive-pilates. 확인 근거: 현재 Git 소스, Cloud Functions 설정, Cloud Monitoring, Cloud Logging, Firestore 원장·count(), SOLAPI GET 조회. 개인정보와 인증정보는 보고서에 포함하지 않습니다.</footer>
 </main></body></html>
