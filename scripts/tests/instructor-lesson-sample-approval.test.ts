@@ -15,6 +15,11 @@ import {
   instructorLessonApprovalId,
   instructorLessonContentFingerprint,
   instructorLessonReservationSnapshotIssue,
+  instructorLessonApprovedCandidatesIssue,
+  instructorLessonCancellationRegistrationId,
+  instructorLessonCandidateSourceIssue,
+  instructorLessonTargetKey,
+  type InstructorLessonApprovalDoc,
   splitInstructorLessonCandidates,
 } from "../../firebase/kangsain-functions/functions/src/alimtalk/instructorLessonSampleApproval";
 
@@ -63,6 +68,65 @@ test("uses the approved V3 instructor lesson template and validates all four but
     buttonRules.at(-1)?.template,
     INSTRUCTOR_LESSON_PARKING_BUTTON_URL,
   );
+});
+
+function approvedBatch(candidates = [candidate()]): InstructorLessonApprovalDoc {
+  return {
+    approvalId: "approval", studioId: "5330", sourceDate: "2026-08-28",
+    lessonDate: "2026-08-29", managementNumber: "support-movement-260829",
+    templateCode: INSTRUCTOR_LESSON_ALIMTALK_TEMPLATE_CODE, status: "approved",
+    candidateIds: candidates.map((item) => item.candidateId),
+    approvedTargetKeys: candidates.map(instructorLessonTargetKey),
+    contentFingerprint: instructorLessonContentFingerprint(candidates[0]),
+  } as InstructorLessonApprovalDoc;
+}
+
+function sourcedCandidate(overrides: Partial<AlimtalkCandidateDoc> = {}): AlimtalkCandidateDoc {
+  const item = candidate();
+  return { ...item, payload: { ...item.payload, bookingId: "booking-1", lectureId: "lecture-1" }, ...overrides };
+}
+
+test("approved batch requires every original candidate, recipient and content contract", () => {
+  const first = sourcedCandidate();
+  const second = sourcedCandidate({ candidateId: "candidate-2", memberId: "member-2", memberPhone: "01033334444" });
+  const approval = approvedBatch([first, second]);
+  assert.equal(instructorLessonApprovedCandidatesIssue(approval, [first, second]), "");
+  assert.match(instructorLessonApprovedCandidatesIssue(approval, [first]), /누락/);
+  for (const changed of [
+    { ...second, memberPhone: "01099999999" },
+    { ...second, studioId: "other" },
+    { ...second, sourceDate: "2026-08-27" },
+    { ...second, templateCode: "old-template" },
+    { ...second, payload: { ...second.payload, shortLinkId: "changed-link" } },
+  ]) {
+    assert.notEqual(instructorLessonApprovedCandidatesIssue(approval, [first, changed]), "");
+  }
+});
+
+test("cancellation registration lookup uses lesson day, never D-1 send day", async () => {
+  const { createHash } = await import("node:crypto");
+  const expected = `ilr_${createHash("sha256").update("5330|01011112222|2026-08-29").digest("hex").slice(0, 24)}`;
+  assert.equal(instructorLessonCancellationRegistrationId(sourcedCandidate()), expected);
+});
+
+test("current booking and lecture ownership, cancellation and management contract are checked", () => {
+  const item = sourcedCandidate();
+  const booking = {
+    bookingId: "booking-1", lectureId: "lecture-1", studioId: "5330", memberId: item.memberId,
+    memberPhone: item.memberPhone, appStatus: "reserved", lectureDate: "2026-08-29",
+    ticketName: "강사레슨 (2T)",
+  } as Parameters<typeof instructorLessonCandidateSourceIssue>[1];
+  const lecture = {
+    lectureId: "lecture-1", studioId: "5330", date: "2026-08-29", status: "open", title: "강사레슨",
+  } as Parameters<typeof instructorLessonCandidateSourceIssue>[2];
+  assert.equal(instructorLessonCandidateSourceIssue(item, booking, lecture), "");
+  for (const patch of [{ appStatus: "cancelled" }, { memberId: "other" }, { memberPhone: "01099999999" },
+    { studioId: "other" }, { lectureDate: "2026-08-30" }, { supersededByBookingId: "real-booking" },
+    { ticketName: "그룹 10회", ticketClassType: "G", ticketType: "GROUP" }]) {
+    assert.notEqual(instructorLessonCandidateSourceIssue(item, { ...booking, ...patch } as typeof booking, lecture), "");
+  }
+  assert.notEqual(instructorLessonCandidateSourceIssue(item, booking, { ...lecture, status: "deleted" } as typeof lecture), "");
+  assert.notEqual(instructorLessonCandidateSourceIssue(item, booking, undefined), "");
 });
 
 test("blocks a persisted V2 candidate from the approved live-send path", () => {

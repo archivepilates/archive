@@ -28,6 +28,7 @@ import {
 } from "./templates";
 import { alimtalkDedupeKey, findCompletedDuplicateForCandidate } from "./dedupe";
 import { instructorLessonManagementNumberFor } from "./instructorLessonManagement";
+import { isInstructorLessonBooking } from "./instructorLessonBookingPolicy";
 import { hasExplicitAlimtalkTestOverride } from "./testRecipients";
 import { automaticMemberExclusionReason, loadActiveStaffPhones } from "./recipientExclusion";
 import { alimtalkTemplateTargetRule } from "./templateTargetRules";
@@ -908,14 +909,6 @@ function bookingTicketKind(booking: BookingDoc): "group" | "private" | "instruct
     if (upper === "I" || upper === "INSTRUCTOR" || /강사레슨/i.test(value)) return "instructor";
   }
   return "";
-}
-
-function isInstructorLessonBooking(booking: BookingDoc): boolean {
-  if (/강사레슨/i.test(booking.ticketName || "")) return true;
-  if ([booking.ticketClassType, booking.ticketType].some((value) =>
-    /^(I|INSTRUCTOR)$/i.test(String(value || "").trim()) || /강사레슨/i.test(String(value || "")),
-  )) return true;
-  return bookingTicketKind(booking) === "instructor";
 }
 
 export function directTicketCandidate(

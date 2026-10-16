@@ -50,13 +50,20 @@ const renewal = pure("renewal/renewalPolicy.ts", null);
 const guard = pure("alimtalk/renewalSendGuard.ts", [
   "RENEWAL_TYPES", "renewalCandidateProfileIssue", "sameTicket", "currentTicket", "daysUntil", "dateText",
 ], renewal);
+let instructorBookingPolicy: Record<string, any> = {};
+try {
+  instructorBookingPolicy = pure("alimtalk/instructorLessonBookingPolicy.ts", ["isInstructorLessonBooking"]);
+} catch (error) {
+  // Historical revisions declared this helper inside the candidate generator.
+  if (!revision) throw error;
+}
 const generation = pure("alimtalk/rebuildAlimtalkCandidates.ts", [
   "isLessonProfileTicket", "currentLessonProfileTickets", "currentOrUpcomingLessonProfileTickets",
   "isCurrentLessonProfileTicket", "isCurrentOrUpcomingLessonProfileTicket", "expiryDateText",
   "reservationOpenEligibleGroupTickets", "isReservationOpenEligibleGroupTicket",
   "isGroupOrMixedProfileTicket", "isPrivateProfileTicket", "isPrivateBookingTicket",
   "bookingTicketKind", "isInstructorLessonBooking", "isGroupBooking",
-], renewal);
+], { ...renewal, ...instructorBookingPolicy });
 const absence = pure("alimtalk/longAbsencePolicy.ts", null, renewal);
 const welcomeTemplate = pure("memberSignup/membershipWelcomePolicy.ts", ["MEMBERSHIP_WELCOME_TEMPLATE"]);
 const canary = pure("memberSignup/membershipWelcomeQueue.ts", [

@@ -1,18 +1,19 @@
 import { createHash, randomBytes } from "node:crypto";
 import type { Request, Response } from "express";
+import { logger } from "firebase-functions";
 import { DEFAULT_STUDIO_ID, REGION } from "../config/constants";
 import { db } from "../config/firebase";
 import { sendAlimtalkLogEmail } from "../google/driveDocsMailer";
 import { refs } from "../firestore/refs";
-import type { AlimtalkCandidateDoc } from "../types/models";
+import type { AlimtalkCandidateDoc, BookingDoc, LectureDoc } from "../types/models";
 import { nowTimestamp, todayKst } from "../utils/date";
 import { stableHash } from "../utils/hash";
 import { alimtalkDedupeKey, findCompletedDuplicateForCandidate, normalizePhone } from "./dedupe";
 import { autoSendabilityIssue } from "./eligibility";
 import { cancellationBlocksRegistration } from "../instructorLessonRegistration/instructorLessonCancellationPolicy";
-import { normalizeInstructorLessonManagementNumber } from "./instructorLessonManagement";
+import { instructorLessonManagementNumberFor, normalizeInstructorLessonManagementNumber } from "./instructorLessonManagement";
+import { isInstructorLessonBooking } from "./instructorLessonBookingPolicy";
 import { sendSolapiAlimtalk } from "./processAlimtalkQueue";
-import { rebuildAlimtalkCandidatesForRange } from "./rebuildAlimtalkCandidates";
 import { alimtalkDedupePolicy, INSTRUCTOR_LESSON_ALIMTALK_TEMPLATE_CODE } from "./templates";
 import { primaryAlimtalkTestRecipient } from "./testRecipients";
 import {
@@ -42,7 +43,7 @@ type InstructorLessonApprovalStatus =
   | "blocked_source_stale"
   | "no_targets";
 
-interface InstructorLessonApprovalDoc {
+export interface InstructorLessonApprovalDoc {
   approvalId: string;
   studioId: string;
   sourceDate: string;
@@ -396,12 +397,13 @@ export async function sendApprovedInstructorLessonAlimtalks(
   const sourceDate = input.sourceDate || todayKst();
   const studioId = input.studioId || DEFAULT_STUDIO_ID;
   const approvals = await approvalsForSourceDate(studioId, sourceDate);
-  const rebuilt = await rebuildAlimtalkCandidatesForRange({ studioId, startDate: sourceDate, endDate: sourceDate });
-  const candidates = await candidatesByIds(rebuilt.candidateIds, studioId);
-  const groups = groupInstructorLessonCandidates(
-    candidates.filter((candidate) => ["candidate", "reviewed"].includes(candidate.status)),
-  );
   const summary = { batches: approvals.length, sent: 0, skipped: 0, failed: 0, blocked: 0 };
+  logger.info("instructor_lesson_approved_id_send started", {
+    studioId, sourceDate, batches: approvals.length,
+    approvedCandidateCount: approvals.filter((approval) => approval.status === "approved")
+      .reduce((count, approval) => count + new Set(approval.candidateIds || []).size, 0),
+    memory: process.memoryUsage(),
+  });
 
   for (const approval of approvals) {
     const ref = db.collection(APPROVAL_COLLECTION).doc(approval.approvalId);
@@ -427,10 +429,44 @@ export async function sendApprovedInstructorLessonAlimtalks(
       continue;
     }
 
-    const group = groups.find(
-      (item) => item.lessonDate === approval.lessonDate && item.managementNumber === approval.managementNumber,
-    );
-    if (!group?.candidates.length) {
+    // Claim before preflight so a competing invocation cannot overwrite an active batch's outcome.
+    const claimed = await db.runTransaction(async (tx) => {
+      const snap = await tx.get(ref);
+      const current = snap.data() as InstructorLessonApprovalDoc | undefined;
+      if (!current || current.status !== "approved" || approvalTargetFingerprint(current) !== approvalTargetFingerprint(approval)) return false;
+      tx.set(ref, {
+        status: "sending", liveSendStartedAt: nowTimestamp(), lastError: null, updatedAt: nowTimestamp(),
+      }, { merge: true });
+      return true;
+    });
+    if (!claimed) {
+      summary.blocked += 1;
+      continue;
+    }
+
+    // Approval is the immutable target boundary; never rebuild every member's candidates here.
+    const candidates = await candidatesByIds(approval.candidateIds || [], studioId);
+    const candidateIssue = instructorLessonApprovedCandidatesIssue(approval, candidates);
+    if (candidateIssue) {
+      await ref.set(
+        { status: "blocked_content_changed", lastError: candidateIssue, updatedAt: nowTimestamp() },
+        { merge: true },
+      );
+      await sendInstructorLessonAttentionEmail({
+        subject: `[알림톡][긴급] 강사레슨 승인 대상 재확인 ${approval.lessonDate}`,
+        lessonDate: approval.lessonDate,
+        managementNumber: approval.managementNumber,
+        issue: candidateIssue,
+      });
+      summary.blocked += 1;
+      continue;
+    }
+    const group: InstructorLessonCandidateGroup = {
+      lessonDate: approval.lessonDate,
+      managementNumber: approval.managementNumber,
+      candidates: candidates.filter((candidate) => ["candidate", "reviewed"].includes(candidate.status)),
+    };
+    if (!group.candidates.length) {
       await ref.set(
         {
           status: "no_targets",
@@ -439,26 +475,6 @@ export async function sendApprovedInstructorLessonAlimtalks(
         },
         { merge: true },
       );
-      summary.blocked += 1;
-      continue;
-    }
-
-    const currentFingerprint = instructorLessonContentFingerprint(group.candidates[0]);
-    if (currentFingerprint !== approval.contentFingerprint) {
-      await ref.set(
-        {
-          status: "blocked_content_changed",
-          lastError: "샘플 승인 후 템플릿 또는 날짜별 링크 계약 변경",
-          updatedAt: nowTimestamp(),
-        },
-        { merge: true },
-      );
-      await sendInstructorLessonAttentionEmail({
-        subject: `[알림톡][긴급] 강사레슨 콘텐츠 변경 재승인 필요 ${approval.lessonDate}`,
-        lessonDate: approval.lessonDate,
-        managementNumber: approval.managementNumber,
-        issue: "샘플 승인 후 템플릿 또는 날짜별 링크가 변경되어 본 발송을 중단했습니다.",
-      });
       summary.blocked += 1;
       continue;
     }
@@ -485,45 +501,26 @@ export async function sendApprovedInstructorLessonAlimtalks(
       continue;
     }
 
-    const claimed = await db.runTransaction(async (tx) => {
-      const snap = await tx.get(ref);
-      const current = snap.data() as InstructorLessonApprovalDoc | undefined;
-      if (!current || current.status !== "approved") return false;
-      tx.set(
-        ref,
-        {
-          status: "sending",
-          candidateIds: group.candidates.map((candidate) => candidate.candidateId),
-          candidateCount: group.candidates.length,
-          liveSendStartedAt: nowTimestamp(),
-          lastError: null,
-          updatedAt: nowTimestamp(),
-        },
-        { merge: true },
-      );
-      return true;
-    });
-    if (!claimed) {
-      summary.blocked += 1;
-      continue;
-    }
-
-    const batchResult = { sent: 0, skipped: 0, failed: 0 };
+    const batchResult = { sent: 0, skipped: 0, failed: 0, blocked: 0, blockedReasons: [] as string[] };
     for (const candidate of group.candidates) {
-      const result = await sendApprovedInstructorLessonCandidate(candidate, sourceDate);
-      batchResult[result] += 1;
+      const result = await sendApprovedInstructorLessonCandidate(candidate, sourceDate, approval);
+      batchResult[result.status] += 1;
+      if (result.reason) batchResult.blockedReasons.push(`${candidate.candidateId}: ${result.reason}`);
     }
     summary.sent += batchResult.sent;
     summary.skipped += batchResult.skipped;
     summary.failed += batchResult.failed;
+    summary.blocked += batchResult.blocked;
     await ref.set(
       {
-        status: batchResult.failed ? "failed" : "sent",
+        status: batchResult.failed || batchResult.blocked ? "failed" : "sent",
         sentCount: batchResult.sent,
         skippedCount: batchResult.skipped,
         failedCount: batchResult.failed,
+        blockedCount: batchResult.blocked,
+        blockedReasons: batchResult.blockedReasons,
         liveSendCompletedAt: nowTimestamp(),
-        lastError: batchResult.failed ? `${batchResult.failed}건 발송 실패` : null,
+        lastError: batchResult.failed || batchResult.blocked ? `발송 실패 ${batchResult.failed}건 / 원본 재확인 ${batchResult.blocked}건` : null,
         updatedAt: nowTimestamp(),
       },
       { merge: true },
@@ -531,6 +528,7 @@ export async function sendApprovedInstructorLessonAlimtalks(
     await sendInstructorLessonResultEmail(approval, batchResult);
   }
 
+  logger.info("instructor_lesson_approved_id_send completed", { ...summary, memory: process.memoryUsage() });
   return summary;
 }
 
@@ -568,7 +566,8 @@ async function recoverSampleSendingApproval(
 async function sendApprovedInstructorLessonCandidate(
   candidate: AlimtalkCandidateDoc,
   sourceDate: string,
-): Promise<"sent" | "skipped" | "failed"> {
+  approval: InstructorLessonApprovalDoc,
+): Promise<{ status: "sent" | "skipped" | "failed" | "blocked"; reason?: string }> {
   const sendabilityIssue = await autoSendabilityIssue(candidate, sourceDate);
   if (sendabilityIssue) {
     await refs.alimtalkCandidate(candidate.candidateId).set(
@@ -580,7 +579,7 @@ async function sendApprovedInstructorLessonCandidate(
       },
       { merge: true },
     );
-    return "skipped";
+    return { status: "skipped" };
   }
   const dedupeKey = alimtalkDedupeKey(candidate);
   const dedupePolicy = alimtalkDedupePolicy(candidate.templateCode);
@@ -596,16 +595,33 @@ async function sendApprovedInstructorLessonCandidate(
       },
       { merge: true },
     );
-    return "skipped";
+    return { status: "skipped" };
   }
 
   const claimed = await db.runTransaction(async (tx) => {
     const ref = refs.alimtalkCandidate(candidate.candidateId);
     const snap = await tx.get(ref);
     const current = snap.data();
-    if (!current || !["candidate", "reviewed"].includes(current.status)) return null;
+    const blocked = (issue: string) => ({ candidate: null, issue });
+    if (!current || !["candidate", "reviewed"].includes(current.status)) return blocked("후보 원본 누락 또는 선점 상태 변경");
+    const approvalSnap = await tx.get(db.collection(APPROVAL_COLLECTION).doc(approval.approvalId));
+    const currentApproval = approvalSnap.data() as InstructorLessonApprovalDoc | undefined;
+    if (!currentApproval || currentApproval.status !== "sending"
+      || approvalTargetFingerprint(currentApproval) !== approvalTargetFingerprint(approval)
+      || instructorLessonApprovedCandidateIssue(currentApproval, current)
+      || stableHash(current) !== stableHash(candidate)) return blocked("승인 또는 후보 원본 변경");
+    const send = await tx.get(refs.alimtalkSend(candidate.candidateId));
+    // Any prior attempt, including an unknown provider outcome, requires reconciliation, not a retry.
+    if (send.exists) return blocked("기존 발송 원장 존재: 공급자 결과 대조 필요");
     const source = await tx.get(db.doc(`instructorLessonRegistrations/${instructorLessonCancellationRegistrationId(current)}`));
-    if (cancellationBlocksRegistration(source.data())) return null;
+    if (cancellationBlocksRegistration(source.data())) return blocked("강사레슨 취소 요청");
+    const booking = await tx.get(refs.booking(String(current.payload?.bookingId || "")));
+    const lecture = await tx.get(refs.lecture(String(current.payload?.lectureId || "")));
+    const sourceIssue = instructorLessonCandidateSourceIssue(current, booking.data(), lecture.data());
+    if (sourceIssue) return blocked(sourceIssue);
+    const profile = (await tx.get(refs.memberProfile(current.memberId))).data();
+    if (!profile || profile.studioId !== current.studioId || profile.memberId !== current.memberId
+      || normalizePhone(profile.phone || "") !== normalizePhone(current.memberPhone)) return blocked("현재 회원 원본 연락처 또는 ID 불일치");
     const next: AlimtalkCandidateDoc = {
       ...current,
       status: "processing",
@@ -631,28 +647,29 @@ async function sendApprovedInstructorLessonCandidate(
       updatedAt: nowTimestamp(),
     };
     tx.set(ref, next, { merge: true });
-    return next;
+    return { candidate: next, issue: "" };
   });
-  if (!claimed) return "skipped";
+  if (!claimed.candidate) return { status: "blocked", reason: claimed.issue };
+  const sendCandidate = claimed.candidate;
 
   try {
-    const result = await sendSolapiAlimtalk(claimed);
+    const result = await sendSolapiAlimtalk(sendCandidate);
     const now = nowTimestamp();
     await refs
-      .alimtalkCandidate(claimed.candidateId)
+      .alimtalkCandidate(sendCandidate.candidateId)
       .set(
         { status: "sent", attempts: 1, maxAttempts: 1, sentAt: now, lastError: null, updatedAt: now },
         { merge: true },
       );
-    await refs.alimtalkSend(claimed.candidateId).set(
+    await refs.alimtalkSend(sendCandidate.candidateId).set(
       {
-        sendId: claimed.candidateId,
-        studioId: claimed.studioId,
-        candidateId: claimed.candidateId,
-        memberId: claimed.memberId,
-        memberName: claimed.memberName,
-        memberPhone: claimed.memberPhone,
-        templateCode: claimed.templateCode,
+        sendId: sendCandidate.candidateId,
+        studioId: sendCandidate.studioId,
+        candidateId: sendCandidate.candidateId,
+        memberId: sendCandidate.memberId,
+        memberName: sendCandidate.memberName,
+        memberPhone: sendCandidate.memberPhone,
+        templateCode: sendCandidate.templateCode,
         dedupeKey,
         dedupePolicy: dedupePolicy.label,
         dedupeWindowDays: dedupePolicy.windowDays,
@@ -668,11 +685,11 @@ async function sendApprovedInstructorLessonCandidate(
       },
       { merge: true },
     );
-    return "sent";
+    return { status: "sent" };
   } catch (err) {
     const message = errorText(err);
     const now = nowTimestamp();
-    await refs.alimtalkCandidate(claimed.candidateId).set(
+    await refs.alimtalkCandidate(sendCandidate.candidateId).set(
       {
         status: "failed",
         attempts: 1,
@@ -683,15 +700,15 @@ async function sendApprovedInstructorLessonCandidate(
       },
       { merge: true },
     );
-    await refs.alimtalkSend(claimed.candidateId).set(
+    await refs.alimtalkSend(sendCandidate.candidateId).set(
       {
-        sendId: claimed.candidateId,
-        studioId: claimed.studioId,
-        candidateId: claimed.candidateId,
-        memberId: claimed.memberId,
-        memberName: claimed.memberName,
-        memberPhone: claimed.memberPhone,
-        templateCode: claimed.templateCode,
+        sendId: sendCandidate.candidateId,
+        studioId: sendCandidate.studioId,
+        candidateId: sendCandidate.candidateId,
+        memberId: sendCandidate.memberId,
+        memberName: sendCandidate.memberName,
+        memberPhone: sendCandidate.memberPhone,
+        templateCode: sendCandidate.templateCode,
         dedupeKey,
         dedupePolicy: dedupePolicy.label,
         dedupeWindowDays: dedupePolicy.windowDays,
@@ -706,7 +723,7 @@ async function sendApprovedInstructorLessonCandidate(
       },
       { merge: true },
     );
-    return "failed";
+    return { status: "failed" };
   }
 }
 
@@ -826,15 +843,84 @@ async function instructorLessonGroupSourceIssue(group: InstructorLessonCandidate
     const bookingId = String(candidate.payload?.bookingId || "");
     if (!bookingId) return `${candidate.memberName}: 예약 ID 없음`;
     const booking = (await refs.booking(bookingId).get()).data();
-    if (!booking) return `${candidate.memberName}: 현재 예약을 찾을 수 없음`;
-    if (booking.appStatus !== "reserved") return `${candidate.memberName}: 현재 예약 상태 ${booking.appStatus}`;
-    if (booking.lectureDate !== group.lessonDate) return `${candidate.memberName}: 수업일 불일치`;
+    const lectureId = String(candidate.payload?.lectureId || "");
+    if (!lectureId) return `${candidate.memberName}: 수업 ID 없음`;
+    const lecture = (await refs.lecture(lectureId).get()).data();
+    const issue = instructorLessonCandidateSourceIssue(candidate, booking, lecture);
+    if (issue) return `${candidate.memberName}: ${issue}`;
   }
   return "";
 }
 
-function instructorLessonCancellationRegistrationId(candidate: AlimtalkCandidateDoc): string {
-  return `ilr_${createHash("sha256").update(`${candidate.studioId}|${normalizePhone(candidate.memberPhone)}|${candidate.sourceDate}`).digest("hex").slice(0, 24)}`;
+export function instructorLessonCancellationRegistrationId(candidate: AlimtalkCandidateDoc): string {
+  const lessonDate = String(candidate.payload?.lessonDate || candidate.payload?.lectureDate || "");
+  return `ilr_${createHash("sha256").update(`${candidate.studioId}|${normalizePhone(candidate.memberPhone)}|${lessonDate}`).digest("hex").slice(0, 24)}`;
+}
+
+export function instructorLessonCandidateSourceIssue(
+  candidate: AlimtalkCandidateDoc,
+  booking: BookingDoc | undefined,
+  lecture: LectureDoc | undefined,
+): string {
+  if (!booking) return "현재 예약을 찾을 수 없음";
+  if (!isInstructorLessonBooking(booking)) return "강사레슨 수강권 예약이 아님";
+  if (booking.appStatus !== "reserved") return `현재 예약 상태 ${booking.appStatus}`;
+  if (booking.supersededByBookingId || booking.sessionOrder?.supersededByBookingId) return "대체된 예약 원천";
+  if (booking.studioId !== candidate.studioId || booking.memberId !== candidate.memberId
+    || normalizePhone(booking.memberPhone) !== normalizePhone(candidate.memberPhone)) return "예약 회원 정보 불일치";
+  if (booking.bookingId !== candidate.payload?.bookingId || booking.lectureId !== candidate.payload?.lectureId) return "예약 수업 ID 불일치";
+  const lessonDate = String(candidate.payload?.lessonDate || candidate.payload?.lectureDate || "");
+  if (candidate.payload?.lectureDate && candidate.payload.lectureDate !== lessonDate) return "수업 날짜 정보 불일치";
+  if (booking.lectureDate !== lessonDate) return "수업일 불일치";
+  if (!lecture || lecture.studioId !== candidate.studioId || lecture.date !== lessonDate
+    || lecture.lectureId !== booking.lectureId || lecture.status !== "open") return "현재 수업 원천 확인 필요";
+  if (instructorLessonManagementNumberFor({ title: lecture.title, lessonDate })
+    !== normalizeInstructorLessonManagementNumber(String(candidate.payload?.managementNumber || candidate.payload?.materialNumber || ""))) {
+    return "현재 수업 관리번호 변경";
+  }
+  return "";
+}
+
+function approvalTargetFingerprint(approval: InstructorLessonApprovalDoc): string {
+  return stableHash({
+    studioId: approval.studioId, sourceDate: approval.sourceDate, lessonDate: approval.lessonDate,
+    managementNumber: approval.managementNumber, templateCode: approval.templateCode,
+    contentFingerprint: approval.contentFingerprint,
+    candidateIds: [...(approval.candidateIds || [])].sort(),
+    approvedTargetKeys: [...(approval.approvedTargetKeys || [])].sort(),
+  });
+}
+
+function instructorLessonApprovedCandidateIssue(
+  approval: InstructorLessonApprovalDoc,
+  candidate: AlimtalkCandidateDoc,
+): string {
+  if (candidate.type !== "instructor_lesson_material" || candidate.studioId !== approval.studioId
+    || candidate.sourceDate !== approval.sourceDate || !(approval.candidateIds || []).includes(candidate.candidateId)
+    || !(approval.approvedTargetKeys || []).includes(instructorLessonTargetKey(candidate))) return "승인된 후보 또는 수신자 정보 불일치";
+  if (candidate.templateCode !== approval.templateCode || candidate.templateCode !== INSTRUCTOR_LESSON_ALIMTALK_TEMPLATE_CODE
+    || instructorLessonContentFingerprint(candidate) !== approval.contentFingerprint
+    || String(candidate.payload?.lessonDate || candidate.payload?.lectureDate || "") !== approval.lessonDate
+    || normalizeInstructorLessonManagementNumber(String(candidate.payload?.managementNumber || candidate.payload?.materialNumber || ""))
+      !== approval.managementNumber) return "샘플 승인 후 템플릿 또는 날짜별 링크 계약 변경";
+  if (!candidate.payload?.bookingId || !candidate.payload?.lectureId) return "승인 후보의 예약 또는 수업 ID 없음";
+  return "";
+}
+
+export function instructorLessonApprovedCandidatesIssue(
+  approval: InstructorLessonApprovalDoc,
+  candidates: AlimtalkCandidateDoc[],
+): string {
+  const ids = new Set(approval.candidateIds || []);
+  if (!ids.size || ids.size !== candidates.length || candidates.some((candidate) => !ids.has(candidate.candidateId))) {
+    return "승인된 후보 원본 누락 또는 중복";
+  }
+  for (const candidate of candidates) {
+    const issue = instructorLessonApprovedCandidateIssue(approval, candidate);
+    if (issue) return issue;
+    if (!["candidate", "reviewed", "sent", "skipped"].includes(candidate.status)) return "기존 발송 시도 상태 확인 필요: 자동 재시도 금지";
+  }
+  return "";
 }
 
 export function instructorLessonReservationSnapshotIssue(
@@ -972,11 +1058,11 @@ async function sendInstructorLessonAttentionEmail(input: {
 
 async function sendInstructorLessonResultEmail(
   approval: InstructorLessonApprovalDoc,
-  result: { sent: number; skipped: number; failed: number },
+  result: { sent: number; skipped: number; failed: number; blocked: number; blockedReasons: string[] },
 ): Promise<void> {
   const failed = result.failed > 0;
   await sendAlimtalkLogEmail({
-    subject: `[알림톡][${failed ? "실패" : "성공"}] 강사레슨 D-1 발송 ${approval.lessonDate}`,
+    subject: `[알림톡][${failed ? "실패" : result.blocked ? "확인필요" : "성공"}] 강사레슨 D-1 발송 ${approval.lessonDate}`,
     body: [
       "ARCHIVE IN / 강사레슨 D-1 알림톡",
       "",
@@ -985,8 +1071,10 @@ async function sendInstructorLessonResultEmail(
       `성공: ${result.sent}건`,
       `제외: ${result.skipped}건`,
       `실패: ${result.failed}건`,
+      `원본 재확인: ${result.blocked}건`,
+      ...result.blockedReasons,
     ].join("\n"),
-    status: failed ? "failure" : "success",
+    status: failed ? "failure" : result.blocked ? "attention" : "success",
   });
 }
 
@@ -998,12 +1086,13 @@ async function approvalsForSourceDate(studioId: string, sourceDate: string): Pro
 }
 
 async function candidatesByIds(candidateIds: string[], studioId: string): Promise<AlimtalkCandidateDoc[]> {
-  const snaps = await Promise.all(
-    [...new Set(candidateIds)].map((candidateId) => refs.alimtalkCandidate(candidateId).get()),
-  );
-  return snaps
-    .map((snap) => snap.data())
-    .filter((candidate): candidate is AlimtalkCandidateDoc => Boolean(candidate?.studioId === studioId));
+  const candidates: AlimtalkCandidateDoc[] = [];
+  for (const candidateId of new Set(candidateIds)) {
+    if (!candidateId || candidateId.includes("/")) continue;
+    const candidate = (await refs.alimtalkCandidate(candidateId).get()).data();
+    if (candidate?.studioId === studioId && candidate.candidateId === candidateId) candidates.push(candidate);
+  }
+  return candidates;
 }
 
 function sampleCandidateId(approvalId: string): string {

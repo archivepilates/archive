@@ -69,6 +69,7 @@ test("current policy passes markers and mandates offline semantic suites without
     "scripts/tests/renewal-policy.test.ts",
     "scripts/tests/renewal-core-visibility.test.mjs",
     "scripts/tests/alimtalk-release-policy-guard.test.mjs",
+    "scripts/tests/instructor-lesson-bounded-send.test.mjs",
   ]);
   assert.equal(call.options.env.FIRESTORE_EMULATOR_HOST, "127.0.0.1:1");
   assert.equal(call.options.env.GCLOUD_PROJECT, "demo-alimtalk-policy");

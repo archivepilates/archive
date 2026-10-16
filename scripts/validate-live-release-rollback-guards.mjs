@@ -1551,7 +1551,10 @@ const guardGroups = [
           "instructorLessonReservationSnapshotIssue",
           'snapshotPolicy !== "bookings_single_source_reconcile_import_range"',
           "maxAttempts: 1",
+          "instructorLessonApprovedCandidatesIssue",
+          "instructor_lesson_approved_id_send completed",
         ],
+        forbiddenMarkers: ["rebuildAlimtalkCandidatesForRange"],
       },
       {
         file: "firebase/kangsain-functions/functions/src/alimtalk/instructorLessonDeliveryGuard.ts",
@@ -1771,6 +1774,7 @@ const semanticTests = [
   "scripts/tests/renewal-policy.test.ts",
   "scripts/tests/renewal-core-visibility.test.mjs",
   "scripts/tests/alimtalk-release-policy-guard.test.mjs",
+  "scripts/tests/instructor-lesson-bounded-send.test.mjs",
 ];
 const semanticResult = spawnSync(process.execPath, [
   "--import", "./firebase/kangsain-functions/functions/node_modules/tsx/dist/loader.mjs",
