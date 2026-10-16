@@ -38,7 +38,10 @@ Use existing Firestore canonical `alimtalkCandidates`, `alimtalkSends`, `memberP
 - New callable ACTIVE, revision `getalimtalktargetvalidation-00001-fud`, 256MiB, concurrency 1, max instances 2, no secret bindings. Downloaded deployed source generation `1792153944735141`: exact SHA256 matches for inspector, shared checks, eligibility, normal queue and approved sender.
 - Live unauthenticated request rejected 401; existing owner temporary authentication succeeded, unsafe ID rejected 400. No new account, password or role changes; tokens not persisted. Candidates/send records unchanged before and after live inspection; fresh stdio tool set has eight read-only tools.
 - Existing four main schedules remain ENABLED at 11:30, Monday 12:30, 18:00 and every ten minutes. GitHub affected-codebase CI `38901035696` succeeded.
-- Pending: CORE Hosting release, static hashes, live responsive checks and final clean status.
+- Hosting source `5c60190e962ee931b987051b70bf73599038086f`: archive-pilates + archive-pilates-core deployed. Release canary exact source passed, local/live responsive checks each 95 passed across 320/390/768/1440/1920. Ten live hashes (messages HTML, inspector JS/CSS, app and rules across custom/web.app URLs) match local.
+- Live inspector module SHA256 `0b21d1494f576ba7bedceb0fd6a6655def07e34a9d2fc8c55087ce22a79e1fc8`; CORE inspector JS `1e6c7c8298cbb700021244d78973e91de0cb191a8dacb96a9da79632dd404b26`; CORE rules `60e3813f547c1d2b8c6324629f92dad391755b41dc1e7b5c981fafb9aff0c3d5`.
+- All task-owned test contexts/browsers and mock servers closed in finally blocks. Fresh MCP clients/child validators and temporary credential-bearing in-memory sessions closed without persisting tokens; no StudioMate browser or shared production lock was opened.
+- Final record is documentation-only: no further runtime deployment required. Existing Codex chats may cache the old MCP tool catalog; reconnect to expose the eighth tool.
 
 ## Remaining Boundaries
 
