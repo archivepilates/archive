@@ -30,6 +30,11 @@
 
 ## Release Status
 
-- Implemented/verified locally; runtime adoption and Hosting pending final validation.
-- Required: scoped commit/main promotion, clean main Hosting deploy, runtime fast-forward, fresh registered SDK checks, CI and final clean status.
+- Implementation commit `cc9ac5255ec7131809aa757bb00551b0c03d2800` promoted to origin/main and pushed to feature branch; both clean deployment main and runtime fast-forwarded.
+- Scoped deployment: `bash scripts/deploy-archive-core-live.sh`, project archive-pilates, operator service account, targets hosting:archive-pilates and hosting:archive-pilates-core. Dry-run, predeploy guards, local95, deploy, live95 and canary all passed. Live rules exact-byte match SHA256 `05d74b717f57aeb4069dee11ac58242c82dd81d14a0383baaf369124f3328090`.
+- Registered configuration (not an old conversation) verified through fresh SDK stdio processes after runtime adoption. Query7/write-block smoke passed: search 2321ms, overview2951ms, bookings1602ms, inventory14003ms. Extended verification: native roster1036/21pages, expiry33members/34rows, existing cancellations2; snapshot observation remains unknown. No credentials/config changed.
+- CORE live release manifest identifies cc9ac525. Documentation-only follow-up does not require another Hosting deploy.
+- Task-owned browser/process/profile-lock checks: no matching browser or live verification process remains, shared profile lock absent. Temporary SDK state directories removed in finally. User Chrome preserved.
+- GitHub Actions `38868398662` (ARCHIVE IN Functions Affected Check, exact implementation SHA) completed successfully; all steps passed, no skipped checks. CI advisory: ubuntu-latest migration begins 2026-10-19, no failure.
+- Release complete: implementation/runtime/Hosting/live verification/CI succeeded. Documentation-only evidence commit follows implementation; no additional Hosting needed because docs and service README are excluded from deployed static content.
 - No Functions, IAM, Firestore rules, member records or schedules are release targets.

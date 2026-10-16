@@ -9,9 +9,9 @@
 </style>
 </head>
 <body><main>
-<p class="meta">ARCHIVE PILATES · archivepilates-mcp · 2026.10.16</p>
+<p class="meta">ARCHIVE PILATES · archivepilates-mcp · 2026.10.16 · 운영 검증 완료</p>
 <h1>StudioMate 실시간 업무 처리 기준</h1>
-<p class="status">실시간 조회 구현·읽기 전용 검증 완료 · 운영 연결·Hosting 반영은 아래 배포 기록 참조</p>
+<p class="status">실시간 조회 운영 연결·CORE 운영규칙 Hosting 배포·등록 연결 검증 완료</p>
 <p>빠른 답변과 정확한 실행은 다른 문제입니다. 저장 자료는 탐색과 분석을 돕고, 현재 상태의 확정 및 회원에게 영향을 주는 처리는 StudioMate 원본 재확인에 근거하도록 구분합니다.</p>
 
 <section><h2>확인한 현재 구조</h2>
@@ -74,5 +74,6 @@
 </ol>
 <p>이번 구현은 조회·최신성 메타데이터만 확장합니다. 고정예약·수업 복제·환불 등 실제 실행은 후속 개발이며 완료로 보고하지 않습니다. 모든 결과에 외부 작업 사용 금지를 유지합니다. 새 Firestore 컬렉션·미러·정기 수집·모델 API 비용은 추가하지 않습니다.</p>
 </section>
-<section id="deployment"><h2>배포·검증 기록</h2><p>기능 브랜치 codex/mini/mcp-freshness-policy에서 MCP 234건·공유 잠금 7건, CORE 반응형 95건을 검증했습니다. 취소·시간초과 중 브라우저 종료가 잠금 해제보다 먼저 완료되는지 확인했습니다. npm audit 취약점 0건이며 CORE Hosting·롤백 가드도 통과했습니다. StudioMate 실시간 브라우저·잠금은 매 요청 finally에서 종료합니다. CORE 운영규칙만 Hosting 반영 대상이며 Functions·Firestore 규칙·운영 데이터 변경은 없습니다.</p><p id="release-state">배포 준비 중. 최종 커밋·main 승격·맥미니 실행 경로·Hosting·등록 SDK 재시험 결과는 docs/tasks/2026-10-16-mcp-freshness-policy.md에서 구분해 기록합니다.</p></section>
+<section id="deployment"><h2>배포·검증 기록</h2><p>기능 브랜치 codex/mini/mcp-freshness-policy에서 MCP 234건·공유 잠금 7건, CORE 반응형 로컬·라이브 각각 95건을 검증했습니다. 취소·시간초과 중 브라우저 종료가 잠금 해제보다 먼저 완료되는지 확인했습니다. npm audit 취약점 0건이며 CORE Hosting·롤백 가드도 통과했습니다. StudioMate 실시간 브라우저·잠금은 매 요청 finally에서 종료합니다. CORE 운영규칙만 Hosting 반영 대상이며 Functions·Firestore 규칙·운영 데이터 변경은 없습니다.</p><p id="release-state">구현 커밋 cc9ac525를 origin/main과 기능 브랜치에 푸시하고 맥미니 운영 실행 경로에 반영했습니다. archive-pilates·archive-pilates-core Hosting 배포와 라이브 canary, 운영규칙 원본 파일 일치를 확인했습니다. 등록된 설정으로 새 stdio 연결을 열어 조회 7개·쓰기 차단을 재검증했습니다. 개별 검색 2.3초·수강권 3.0초·예약 1.6초·전체 만료 목록 14.0초였습니다. GitHub 검사 및 최종 기록은 대응 작업 파일을 따릅니다. 이전에 열린 Codex 연결은 MCP 재연결이 필요할 수 있습니다. 작업 소유 브라우저·프로필 잠금은 정리했습니다.</p></section>
+<section><h2>최종 검사</h2><p>구현 커밋 cc9ac525의 GitHub Actions 38868398662가 성공했습니다. 빌드·경계·데이터 원천 정책·배포 안전장치·승인 가드·릴리스 검사가 모두 통과했고 생략한 단계는 없습니다. 배포 이후 기록만 보완한 문서는 Hosting 제외 대상이므로 다시 배포하지 않습니다. 실제 예약·수강권·환불 실행은 이번 완료 범위가 아닙니다.</p></section>
 </main></body></html>
