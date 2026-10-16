@@ -12,6 +12,7 @@ import { appendIdleHeartbeatIfDue } from "./lib/idle-heartbeat.mjs";
 import { readImwebOrder, syncImwebInstructorOrders } from "./lib/imweb-instructor-orders.mjs";
 import { sanitizeImwebFailureDetails } from "./lib/imweb-read-failure.mjs";
 import { assertSamePaidOrder } from "./lib/imweb-instructor-order-policy.mjs";
+import { processInstructorLessonCancellations } from "./lib/instructor-lesson-cancellation-worker.mjs";
 import {
   INSTRUCTOR_LESSON_TICKET_NAME,
   INSTRUCTOR_LESSON_TICKET_PRICE,
@@ -70,6 +71,11 @@ const summary = {
 
 await mkdir(path.dirname(config.runLogPath), { recursive: true });
 await mkdir(path.dirname(config.lastResultPath), { recursive: true });
+if (apply && !config.jobId) {
+  summary.cancellations = await processInstructorLessonCancellations({ db, admin, apply, profileDir: config.profileDir,
+    headless: config.headless, limit: config.limit });
+  summary.reviewRequired += summary.cancellations.reviewRequired;
+}
 if (apply) await recoverStaleJobs();
 if (apply && !config.jobId) {
   try { summary.websiteOrders = await syncImwebInstructorOrders(db, { apply: true }); }
@@ -89,11 +95,12 @@ if (config.simulateNewMemberTest) {
   }
 }
 if (!candidates.length) {
-  summary.ok = summary.websiteOrders?.ok !== false;
+  summary.ok = summary.websiteOrders?.ok !== false && summary.reviewRequired === 0;
   summary.finishedAt = new Date().toISOString();
   appendIdleHeartbeatIfDue(config.runLogPath, summary, 30 * 60 * 1000);
   await writeFile(config.lastResultPath, `${JSON.stringify(summary, null, 2)}\n`);
-  process.exit(0);
+  if (summary.cancellations?.processed) await persistSummary();
+  process.exit(summary.ok ? 0 : 1);
 }
 
 if (!apply) {
@@ -626,6 +633,8 @@ async function loadCandidates(limit) {
 async function claimJob(ref) {
   return db.runTransaction(async (transaction) => {
     const snapshot = await transaction.get(ref);
+    const source = await transaction.get(registration(ref.id));
+    if (source.data()?.cancellation?.jobId) return null;
     if (!snapshot.exists || !["pending", "retry"].includes(String(snapshot.data()?.status || ""))) return null;
     const data = snapshot.data();
     if (data.nextRunAt && timestampMillis(data.nextRunAt) > Date.now()) return null;
@@ -732,6 +741,7 @@ async function commitClaimedState(ref, claimToken, jobPatch, registrationPatch) 
   await db.runTransaction(async (transaction) => {
     const snapshot = await transaction.get(ref);
     const registrationSnapshot = await transaction.get(registration(ref.id));
+    if (registrationSnapshot.data()?.cancellation?.jobId) throw new Error("강사레슨 취소 요청으로 등록 후속 처리를 중단합니다.");
     if (registrationSnapshot.data()?.externalOrderReviewRequired) throw new Error("홈페이지 주문 변경으로 자동 처리 중단: 운영자 확인필요");
     const current = snapshot.data() || {};
     if (!snapshot.exists || current.status !== "processing" || current.claimToken !== claimToken) {
@@ -746,6 +756,8 @@ async function markFailure(ref, job, message, status) {
   const currentStep = registrationStepName(job.currentStep);
   await db.runTransaction(async (transaction) => {
     const snapshot = await transaction.get(ref);
+    const source = await transaction.get(registration(ref.id));
+    if (source.data()?.cancellation?.jobId) return;
     const current = snapshot.data() || {};
     if (!snapshot.exists) return;
     if (job.claimToken && current.claimToken && current.claimToken !== job.claimToken) return;
@@ -790,7 +802,8 @@ async function persistSummary() {
     status: summary.ok ? "healthy" : summary.reviewRequired ? "warning" : "failed",
     lastRunAt: summary.finishedAt || new Date().toISOString(),
     lastResult: `처리 ${summary.processed}건 · 완료 ${summary.completed}건 · 대기 ${summary.waiting}건`,
-    warnings: summary.jobs.filter((job) => job.error).map((job) => `${job.jobId}: ${job.error}`),
+    warnings: [...summary.jobs, ...(summary.cancellations?.results || [])].filter((job) => job.error || job.status === "review_required")
+      .map((job) => `${job.jobId}: ${job.error || "취소 원본 확인 필요"}`),
   }).catch(() => {});
   console.log(JSON.stringify(summary, null, 2));
 }

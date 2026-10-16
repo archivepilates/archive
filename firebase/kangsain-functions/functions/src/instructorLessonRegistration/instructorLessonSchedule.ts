@@ -59,6 +59,15 @@ export function buildInstructorLessonScheduleSummaries(input: {
 }): InstructorLessonScheduleSummary[] {
   const startDate = dateKey(input.startDate);
   const endDate = dateKey(input.endDate);
+  const cancelled = (input.registrations || []).filter(row => row.status === "cancelled"
+    && row.cancellation?.status === "completed" && row.cancellation?.nativeVerified === true);
+  const isCancelled = (date: string, row: SourceRecord, isProfile = false) => cancelled.some(c => {
+    if (dateKey(c.lessonDate) !== date) return false;
+    const native = cleanText(c.cancellation?.memberId || rosterMemberId(c));
+    const target = rosterMemberId(row, isProfile) || "";
+    if (/^[1-9]\d+$/.test(native) && /^[1-9]\d+$/.test(target)) return native === target;
+    return Boolean(memberIdentity(c) && memberIdentity(c) === memberIdentity(row));
+  });
   const defaultCapacity = positiveInteger(input.defaultCapacity) || INSTRUCTOR_LESSON_DEFAULT_CAPACITY;
   const lectures = (input.lectures || []).filter(
     (item) => inRange(item.date, startDate, endDate) && isInstructorLesson(item),
@@ -69,6 +78,7 @@ export function buildInstructorLessonScheduleSummaries(input: {
   const bookingMembers: ScheduleMembers = new Map();
   const canonicalOccurrences = new Map<string, SourceRecord>();
   for (const booking of input.bookings || []) {
+    if (isCancelled(dateKey(booking.lectureDate), booking)) continue;
     if (!activeBooking(booking) || !inRange(booking.lectureDate, startDate, endDate)) continue;
     if (!isInstructorLesson(booking) && !lectureIds.has(cleanText(booking.lectureId))) continue;
     const occurrenceKey = bookingOccurrenceKey(booking);
@@ -101,6 +111,7 @@ export function buildInstructorLessonScheduleSummaries(input: {
     if (!memberKey) continue;
     for (const rawDate of currentInstructorLessonTicketDates(holder)) {
       const date = dateKey(rawDate);
+      if (isCancelled(date, holder, true)) continue;
       if (!inRange(date, startDate, endDate)) continue;
       if (syntheticMembers.get(date)?.has(memberKey)) continue;
       addScheduleMember(ticketMembers, date, memberKey, holder);

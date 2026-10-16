@@ -202,6 +202,13 @@ async function claimMemoJob(ref) {
     const snapshot = await transaction.get(ref);
     if (!snapshot.exists || !["pending", "retry"].includes(String(snapshot.data()?.status || ""))) return null;
     const data = snapshot.data() || {};
+    if (data.source === "instructor_member_eformsign" && data.registrationId) {
+      const registration = await transaction.get(db.collection("instructorLessonRegistrations").doc(data.registrationId));
+      if (registration.data()?.cancellation?.jobId) {
+        transaction.update(ref, { status: "cancelled", lastError: "강사레슨 수강 취소로 정보 반영 중단", updatedAt: admin.firestore.Timestamp.now() });
+        return null;
+      }
+    }
     const attempts = Number(data.attempts || 0) + 1;
     const claimToken = randomUUID();
     transaction.set(ref, {
@@ -264,6 +271,7 @@ async function updateInstructorLessonRegistrationMemoStatus(job, patch) {
     if (!snapshot.exists) return;
     const current = snapshot.data() || {};
     const currentMemo = current.steps?.memo || {};
+    if (current.cancellation?.jobId) return;
     const alreadyCompleted = current.status === "completed" && currentMemo.status === "verified";
     const completed = patch.status === "done";
     if (alreadyCompleted && !completed) return;

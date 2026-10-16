@@ -109,7 +109,11 @@ function registrationDocument(input, now) {
 
 function activeIdentities(registrations, holders, date, bookings, lectures) {
   const members = new Set();
-  const add = (data, id) => members.add(normalizeInstructorLessonPhone(data.memberPhone || data.phone) || `id:${id}`);
+  const cancelledPhones = new Set(registrations.docs.map(doc => doc.data()).filter(d => d.studioId === policy.studioId
+    && d.lessonDate === date && d.status === 'cancelled' && d.cancellation?.nativeVerified === true)
+    .map(d => normalizeInstructorLessonPhone(d.memberPhone)).filter(Boolean));
+  const add = (data, id) => { const phone = normalizeInstructorLessonPhone(data.memberPhone || data.phone);
+    if (!cancelledPhones.has(phone)) members.add(phone || `id:${id}`); };
   for (const doc of registrations.docs) {
     const d = doc.data();
     if (d.studioId === policy.studioId && !['cancelled', 'canceled', 'rejected'].includes(d.status)
@@ -155,6 +159,7 @@ export async function importInstructorOrder(db, order, { apply = false, now = ne
     const [ledger, registration, job] = await Promise.all([tx.get(ledgerRef), tx.get(registrationRef), tx.get(jobRef)]);
     const old = ledger.data() || {};
     const reg = registration.data();
+    if (reg?.cancellation?.jobId) return { status: 'unchanged', orderNo: input.orderNo, reason: '운영자 수강 취소 요청 보존' };
     const promotableReview = reg?.source?.type === 'imweb_order_review'
       && reg.source.sourceId === input.orderNo && old.registrationId === input.registrationId
       && reg.status === 'action_required' && reg.lastError === old.reason
@@ -187,6 +192,10 @@ export async function importInstructorOrder(db, order, { apply = false, now = ne
       const oldRef = db.collection('instructorLessonRegistrations').doc(old.registrationId);
       const oldJobRef = db.collection('studiomateInstructorLessonJobs').doc(old.registrationId);
       const [oldReg, oldJob] = await Promise.all([tx.get(oldRef), tx.get(oldJobRef)]);
+      if (oldReg.data()?.cancellation?.jobId) {
+        tx.set(ledgerRef, { fingerprint, status: 'review_required', reason: '수강 취소 후 주문 일정·수강자 변경: 기존 취소 이력 보존', updatedAt: now }, { merge: true });
+        return { status: 'review_required', orderNo: input.orderNo, reason: '취소 이력 보존 · 새 일정 접수 운영자 확인' };
+      }
       const reason = '홈페이지 주문 수강자·날짜 변경: 기존 발급 및 새 일정 운영자 확인';
       if (oldReg.exists && oldReg.data().source?.sourceId === input.orderNo) tx.update(oldRef, { status: 'action_required', lastError: reason, externalOrderReviewRequired: true, 'operatorChecks.paymentConfirmed': false, updatedAt: now });
       if (oldJob.exists && oldJob.data().externalOrder?.orderNo === input.orderNo && ['pending', 'retry'].includes(oldJob.data().status)) tx.update(oldJobRef, { status: 'review_required', lastError: reason, updatedAt: now });

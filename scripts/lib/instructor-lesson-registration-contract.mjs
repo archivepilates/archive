@@ -61,7 +61,7 @@ export function isInstructorMemberEformOrphan(registration, hasJob = false) {
   const registrationStatus = String(registration?.status || "").toLowerCase();
   const eformStatus = String(steps?.eformsign?.status || "pending").toLowerCase();
   if (hasJob || String(registration?.mode || "") !== "new_member") return false;
-  if (["cancelled", "canceled", "rejected", "completed"].includes(registrationStatus)) return false;
+  if (registration?.cancellation?.jobId || ["cancelled", "canceled", "rejected", "completed"].includes(registrationStatus)) return false;
   if (String(steps?.member?.status || "") !== "verified") return false;
   if (String(steps?.ticket?.status || "") !== "verified") return false;
   return ["pending", "queued", "sent", "waiting_external"].includes(eformStatus);

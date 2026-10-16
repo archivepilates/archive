@@ -9,6 +9,7 @@ import { nowTimestamp, todayKst } from "../utils/date";
 import { stableHash } from "../utils/hash";
 import { alimtalkDedupeKey, findCompletedDuplicateForCandidate, normalizePhone } from "./dedupe";
 import { autoSendabilityIssue } from "./eligibility";
+import { cancellationBlocksRegistration } from "../instructorLessonRegistration/instructorLessonCancellationPolicy";
 import { normalizeInstructorLessonManagementNumber } from "./instructorLessonManagement";
 import { sendSolapiAlimtalk } from "./processAlimtalkQueue";
 import { rebuildAlimtalkCandidatesForRange } from "./rebuildAlimtalkCandidates";
@@ -603,6 +604,8 @@ async function sendApprovedInstructorLessonCandidate(
     const snap = await tx.get(ref);
     const current = snap.data();
     if (!current || !["candidate", "reviewed"].includes(current.status)) return null;
+    const source = await tx.get(db.doc(`instructorLessonRegistrations/${instructorLessonCancellationRegistrationId(current)}`));
+    if (cancellationBlocksRegistration(source.data())) return null;
     const next: AlimtalkCandidateDoc = {
       ...current,
       status: "processing",
@@ -816,6 +819,10 @@ async function instructorLessonGroupSourceIssue(group: InstructorLessonCandidate
   const snapshotIssue = instructorLessonReservationSnapshotIssue(snapshot, group.lessonDate);
   if (snapshotIssue) return snapshotIssue;
   for (const candidate of group.candidates) {
+    const registrationId = instructorLessonCancellationRegistrationId(candidate);
+    if (cancellationBlocksRegistration((await db.doc(`instructorLessonRegistrations/${registrationId}`).get()).data())) {
+      return `${candidate.memberName}: 강사레슨 수강 취소 요청`;
+    }
     const bookingId = String(candidate.payload?.bookingId || "");
     if (!bookingId) return `${candidate.memberName}: 예약 ID 없음`;
     const booking = (await refs.booking(bookingId).get()).data();
@@ -824,6 +831,10 @@ async function instructorLessonGroupSourceIssue(group: InstructorLessonCandidate
     if (booking.lectureDate !== group.lessonDate) return `${candidate.memberName}: 수업일 불일치`;
   }
   return "";
+}
+
+function instructorLessonCancellationRegistrationId(candidate: AlimtalkCandidateDoc): string {
+  return `ilr_${createHash("sha256").update(`${candidate.studioId}|${normalizePhone(candidate.memberPhone)}|${candidate.sourceDate}`).digest("hex").slice(0, 24)}`;
 }
 
 export function instructorLessonReservationSnapshotIssue(

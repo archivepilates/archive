@@ -124,6 +124,7 @@
         "queueRefundStudioMateSms",
         "getInstructorLessonRegistrationDashboard",
         "operatorCreateInstructorLessonRegistration",
+        "operatorQueueInstructorLessonCancellation",
         "confirmInstructorLessonBookingAndQueueAlimtalk",
         "queueInstructorLessonConfirmationOnTicketVerified"
       ],

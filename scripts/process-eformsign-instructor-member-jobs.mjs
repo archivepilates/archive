@@ -305,6 +305,7 @@ async function claimJob(ref) {
       transaction.get(registrationRef),
     ]);
     if (!snapshot.exists || !["pending", "retry"].includes(String(snapshot.data()?.status || ""))) return null;
+    if (registrationSnapshot.data()?.cancellation?.jobId) return null;
     const data = snapshot.data();
     if (data.externalEffectStarted || data.effectStartedAt || data.sendClickedAt) {
       const message = "이폼싸인 전송 실행 흔적이 있어 자동 재발송을 차단했습니다.";
@@ -352,6 +353,8 @@ function isCompletionCandidate(data) {
 async function claimCompletionCheck(ref) {
   return db.runTransaction(async (transaction) => {
     const snapshot = await transaction.get(ref);
+    const registrationSnapshot = await transaction.get(db.collection("instructorLessonRegistrations").doc(ref.id));
+    if (registrationSnapshot.data()?.cancellation?.jobId) return null;
     if (!snapshot.exists || !isCompletionCandidate(snapshot.data())) return null;
     const data = snapshot.data();
     const claimToken = randomUUID();
@@ -959,6 +962,7 @@ async function finalizeCompletedDocument(ref, job, evidence, profile) {
     }
     if (!registrationSnapshot.exists) throw new Error("강사레슨 등록 원본을 찾지 못했습니다.");
     const registration = registrationSnapshot.data() || {};
+    if (registration.cancellation?.jobId) throw new Error("수강 취소 요청으로 가입서 후속 반영 중단");
     const memberId = String(job.studiomateMemberId || registration.studiomateMemberId || "");
     parseSignupProfile(profile, currentJob, documentId);
     const canonicalPhone = canonicalSignupPhone(profile, currentJob, registration);
@@ -1107,6 +1111,7 @@ async function persistSummary() {
 }
 
 function deriveRegistrationPatch(current, patch) {
+  if (current.cancellation?.jobId) return { ...patch, status: current.status, nextAction: current.nextAction, lastError: current.lastError || null };
   const steps = { ...(current.steps || {}) };
   for (const [key, value] of Object.entries(patch || {})) {
     if (key.startsWith("steps.")) steps[key.slice("steps.".length)] = value;

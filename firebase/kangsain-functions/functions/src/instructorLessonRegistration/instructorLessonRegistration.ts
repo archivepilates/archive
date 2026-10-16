@@ -3,8 +3,10 @@ import type { CallableRequest } from "firebase-functions/v2/https";
 import { db } from "../config/firebase";
 import { requireManager, requireStaff } from "../security/authGuards";
 import type { StaffDoc } from "../types/models";
-import { nowTimestamp } from "../utils/date";
+import { nowTimestamp, todayKst } from "../utils/date";
 import { AppError } from "../utils/errors";
+import { INSTRUCTOR_CANCELLATIONS, assertInstructorCancellationIdle, cancellationBlocksRegistration,
+  instructorCancellationId, parseInstructorCancellation } from "./instructorLessonCancellationPolicy";
 import {
   buildInstructorLessonRegistrationCounts,
   buildInstructorLessonScheduleSummaries,
@@ -30,6 +32,9 @@ const DASHBOARD_STATUSES = [
   "review_required",
   "failed",
   "completed",
+  "cancellation_pending",
+  "cancellation_review",
+  "cancelled",
 ] as const;
 
 type RegistrationStepStatus =
@@ -76,6 +81,9 @@ export async function operatorCreateInstructorLessonRegistrationHandler(
     ]);
     const existing = registrationSnapshot.data() || {};
     const existingStatus = cleanText(existing.status, 40);
+    if (cancellationBlocksRegistration(existing)) {
+      throw new AppError("INVALID_ARGUMENT", "취소 요청·이력이 있는 접수입니다. 기존 수강권과 취소 결과를 먼저 확인하세요.");
+    }
     if (registrationSnapshot.exists && existingStatus !== "cancelled") {
       assertSameRegistration(existing, input);
       return {
@@ -214,6 +222,9 @@ async function loadInstructorLessonSchedule(studioId: string): Promise<Record<st
       .get(),
     db.collection(REGISTRATIONS).where("lessonDate", ">=", startDate).where("lessonDate", "<=", endDate).get(),
   ]);
+  const registrationRows = registrationsSnapshot.docs
+    .map((doc) => ({ id: doc.id, ...doc.data() } as Record<string, any>))
+    .filter((item) => cleanText(item.studioId, 80) === studioId);
   const items = buildInstructorLessonScheduleSummaries({
     startDate,
     endDate,
@@ -221,16 +232,129 @@ async function loadInstructorLessonSchedule(studioId: string): Promise<Record<st
     lectures: lecturesSnapshot.docs.map((doc) => ({ id: doc.id, ...doc.data() })),
     bookings: bookingsSnapshot.docs.map((doc) => ({ id: doc.id, ...doc.data() })),
     ticketHolders: holdersSnapshot.docs.map((doc) => ({ id: doc.id, ...doc.data() })),
-    registrations: registrationsSnapshot.docs
-      .map((doc) => ({ id: doc.id, ...doc.data() }))
-      .filter((item) => cleanText((item as Record<string, unknown>).studioId, 80) === studioId),
-  });
+    registrations: registrationRows,
+  }).map((item) => ({ ...item, roster: item.roster?.map((row) => {
+    const registration = registrationRows.find((r) => row.registrationId === r.id);
+    const cancellation = registration?.cancellation;
+    return { ...row, canCancel: /^[1-9]\d{0,15}$/.test(row.memberId || "")
+      && (item.countSource === "tickets" || registration?.ticketName === TICKET_NAME)
+      && !cancellation && !cancellationBlocksRegistration(registration),
+      ...(cancellation ? { cancellation: { jobId: cancellation.jobId, status: cancellation.status,
+        lastError: cleanText(cancellation.lastError, 300) } } : {}) };
+  }) }));
   return {
     startDate,
     endDate,
     defaultCapacity: INSTRUCTOR_LESSON_DEFAULT_CAPACITY,
     items,
   };
+}
+
+export async function operatorQueueInstructorLessonCancellationHandler(request: CallableRequest): Promise<Record<string, unknown>> {
+  const staff = await manager(request);
+  const input = parseInstructorCancellation(request.data, todayKst());
+  const jobId = instructorCancellationId(staff.studioId, input.memberId, input.lessonDate);
+  const cancellationRef = db.collection(INSTRUCTOR_CANCELLATIONS).doc(jobId);
+  // A lost response must return the durable request, never mint another action.
+  const prior = await cancellationRef.get();
+  if (prior.exists) return { ok: true, jobId, status: prior.data()?.status, duplicate: true };
+  const schedule = await loadInstructorLessonSchedule(staff.studioId);
+  const rows = (schedule.items as any[]).filter((item) => item.date === input.lessonDate)
+    .flatMap((item) => item.roster || []).filter((row: any) => row.memberId === input.memberId);
+  if (rows.length !== 1 || rows[0].canCancel !== true
+    || (input.registrationId && rows[0].registrationId !== input.registrationId)) {
+    throw new AppError("INVALID_ARGUMENT", "현재 수강 명단의 정확한 회원을 다시 선택하세요.");
+  }
+  let profileRef = db.doc(`memberProfiles/${input.memberId}`);
+  let profile = await profileRef.get();
+  if (!profile.exists) {
+    const linked = await db.collection("memberProfiles").where("studiomateMemberId", "==", input.memberId).limit(2).get();
+    if (linked.size !== 1) throw new AppError("INVALID_ARGUMENT", "원본 회원 ID 연결을 확인하세요.");
+    profile = linked.docs[0]; profileRef = profile.ref;
+  }
+  const person = profile.data() || {};
+  const phone = normalizePhone(person.phone);
+  const name = cleanText(person.name || person.memberName, 40);
+  if (person.studioId !== staff.studioId || !/^010\d{8}$/.test(phone) || !name || name !== rows[0].memberName) {
+    throw new AppError("INVALID_ARGUMENT", "명단과 원본 회원 이름·연락처를 확인하세요.");
+  }
+  const registrationId = instructorLessonRegistrationId(staff.studioId, phone, input.lessonDate);
+  if (rows[0].registrationId && rows[0].registrationId !== registrationId) {
+    throw new AppError("INVALID_ARGUMENT", "회원과 접수 원본 연결이 다릅니다.");
+  }
+  const registrationRef = db.doc(`${REGISTRATIONS}/${registrationId}`);
+  const registrationJobRef = db.doc(`${STUDIOMATE_JOBS}/${registrationId}`);
+  return db.runTransaction(async (tx) => {
+    const eformRef = db.doc(`eformsignInstructorMemberJobs/${registrationId}`);
+    const [existing, freshProfile, registration, job, eform] = await Promise.all([
+      tx.get(cancellationRef), tx.get(profileRef), tx.get(registrationRef), tx.get(registrationJobRef), tx.get(eformRef),
+    ]);
+    if (existing.exists) return { ok: true, jobId, status: existing.data()?.status, duplicate: true };
+    const current = freshProfile.data() || {};
+    if (current.studioId !== staff.studioId || normalizePhone(current.phone) !== phone
+      || cleanText(current.name || current.memberName, 40) !== name) throw new AppError("INVALID_ARGUMENT", "회원 원본이 변경됐습니다.");
+    const r = registration.data() || {};
+    if (registration.exists && (r.studioId !== staff.studioId || normalizePhone(r.memberPhone) !== phone
+      || r.lessonDate !== input.lessonDate || cancellationBlocksRegistration(r))) {
+      throw new AppError("INVALID_ARGUMENT", "접수 원본이나 취소 상태가 변경됐습니다.");
+    }
+    const candidateId = cleanText(r.evidence?.confirmationCandidateId, 160);
+    const candidate = candidateId ? await tx.get(db.doc(`alimtalkCandidates/${candidateId}`)) : null;
+    const recipientCandidates = await tx.get(db.collection("alimtalkCandidates").where("memberPhone", "==", phone).limit(501));
+    if (recipientCandidates.size > 500) throw new AppError("INVALID_ARGUMENT", "기존 안내 원장을 모두 확인해야 합니다.");
+    const affectedCandidates = recipientCandidates.docs.filter(doc => {
+      const c = doc.data();
+      return ["instructor_lesson_material", "instructor_lesson_confirmation"].includes(String(c.type))
+        && c.studioId === staff.studioId && (c.sourceDate === input.lessonDate || c.payload?.lessonDate === input.lessonDate);
+    });
+    if (affectedCandidates.some(doc => doc.data().status === "processing")) {
+      throw new AppError("INVALID_ARGUMENT", "해당일 강사레슨 안내가 발송 중입니다. 결과 확인 후 취소하세요.");
+    }
+    assertInstructorCancellationIdle(r, job.data(), candidate?.data());
+    if (["processing", "sending", "checking_completion"].includes(String(eform.data()?.status || ""))) {
+      throw new AppError("INVALID_ARGUMENT", "가입서 발송이 실행 중입니다. 결과 확인 후 취소하세요.");
+    }
+    const memoId = cleanText(eform.data()?.profileMemoJobId, 160);
+    const memo = memoId ? await tx.get(db.doc(`studiomateMemoWriteJobs/${memoId}`)) : null;
+    if (memo?.data()?.status === "processing") throw new AppError("INVALID_ARGUMENT", "가입서 정보 반영 중입니다. 완료 후 취소하세요.");
+    const memoJobs = await tx.get(db.collection("studiomateMemoWriteJobs").where("registrationId", "==", registrationId).limit(21));
+    if (memoJobs.size > 20 || memoJobs.docs.some(doc => doc.data().source === "instructor_member_eformsign" && doc.data().status === "processing")) {
+      throw new AppError("INVALID_ARGUMENT", "가입서 정보 반영 작업을 먼저 확인하세요.");
+    }
+    const now = nowTimestamp();
+    tx.create(cancellationRef, { schemaVersion: 1, jobId, registrationId, studioId: staff.studioId,
+      memberId: input.memberId, memberName: name, memberPhone: phone, profilePath: profileRef.path,
+      lessonDate: input.lessonDate, ticketName: TICKET_NAME, expectedTicketId: cleanText(r.evidence?.ticketId, 80) || null,
+      reason: input.reason, status: "pending", externalEffectStarted: false,
+      requestedBy: { staffId: staff.staffId, uid: staff.uid || "", name: staff.name },
+      paymentRefundAllowed: false, createdAt: now, updatedAt: now });
+    tx.set(registrationRef, { registrationId, studioId: staff.studioId, memberName: name, memberPhone: phone,
+      lessonDate: input.lessonDate, ticketName: TICKET_NAME, status: "cancellation_pending",
+      cancellation: { jobId, status: "pending", reason: input.reason, memberId: input.memberId }, nextAction: "StudioMate 수강권·예약 취소 확인 대기",
+      updatedAt: now, ...(registration.exists ? {} : { createdAt: now, source: { type: "archive_core_cancellation", sourceId: jobId } }) }, { merge: true });
+    if (job.exists) tx.update(registrationJobRef, { status: "cancelled", cancellationJobId: jobId, updatedAt: now });
+    if (eform.exists && ["pending", "retry"].includes(String(eform.data()?.status || ""))) {
+      tx.update(eformRef, { status: "cancelled", cancellationJobId: jobId, updatedAt: now });
+    }
+    if (memo?.exists && ["pending", "retry"].includes(String(memo.data()?.status))) {
+      tx.update(memo.ref, { status: "cancelled", cancellationJobId: jobId, updatedAt: now });
+    }
+    for (const doc of memoJobs.docs) {
+      if (doc.id !== memoId && doc.data().source === "instructor_member_eformsign" && ["pending", "retry"].includes(String(doc.data().status))) {
+        tx.update(doc.ref, { status: "cancelled", cancellationJobId: jobId, updatedAt: now });
+      }
+    }
+    if (candidate?.exists && ["queued", "pending"].includes(String(candidate.data()?.status))) {
+      tx.update(candidate.ref, { status: "skipped", reasonCode: "instructor_lesson_cancellation_requested",
+        lastError: "수강 취소 요청으로 미발송 안내 차단", updatedAt: now });
+    }
+    for (const doc of affectedCandidates) {
+      if (doc.id === candidateId || !["candidate", "reviewed", "queued", "pending"].includes(String(doc.data().status))) continue;
+      tx.update(doc.ref, { status: "skipped", reasonCode: "instructor_lesson_cancellation_requested",
+        lastError: "수강 취소 요청으로 해당일 미발송 안내 차단", updatedAt: now });
+    }
+    return { ok: true, jobId, status: "pending", duplicate: false };
+  });
 }
 
 export function instructorLessonRegistrationId(studioId: string, phone: string, lessonDate: string): string {
@@ -281,6 +405,8 @@ function safeRegistration(id: string, data: Record<string, unknown>): Record<str
     lastError: cleanText(data.lastError, 300),
     steps,
     evidence: safeEvidence(data.evidence),
+    cancellation: data.cancellation ? { jobId: cleanText((data.cancellation as any).jobId, 80),
+      status: cleanText((data.cancellation as any).status, 40), lastError: cleanText((data.cancellation as any).lastError, 300) } : null,
     createdAt: timestampIso(data.createdAt),
     updatedAt: timestampIso(data.updatedAt),
   };

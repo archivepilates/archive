@@ -143,6 +143,9 @@ let renewalView = "today";
 let renewalVisibleLimit = 20;
 let privateScope = "today";
 let selectedInstructorLessonDate = "";
+let instructorLessonCancellationTarget = null;
+let instructorLessonCancellationBusy = false;
+const instructorLessonCancellationReceipts = new Map();
 let refundFlow = { candidates: [], member: null, tickets: [], selectedTicket: null, preview: null };
 
 const MEMBER_PAGE_SIZE = 20;
@@ -7250,8 +7253,10 @@ const INSTRUCTOR_LESSON_ACTIVE_STATUSES = new Set([
   "memo_pending",
   "booking_pending",
   "confirmation_pending",
+  "cancellation_pending",
 ]);
-const INSTRUCTOR_LESSON_REVIEW_STATUSES = new Set(["action_required", "review_required", "failed"]);
+const INSTRUCTOR_LESSON_REVIEW_STATUSES = new Set(["action_required", "review_required", "failed", "cancellation_review"]);
+const INSTRUCTOR_LESSON_CANCELLATION_STATUSES = new Set(["cancellation_pending", "cancellation_review", "cancelled"]);
 
 function instructorLessonStatusLabel(value) {
   return {
@@ -7266,6 +7271,9 @@ function instructorLessonStatusLabel(value) {
     review_required: "확인필요",
     failed: "실패",
     completed: "완료",
+    cancellation_pending: "취소 처리중",
+    cancellation_review: "취소 확인필요",
+    cancelled: "취소 완료",
   }[String(value || "")] || "확인";
 }
 
@@ -7273,7 +7281,7 @@ function instructorLessonStatusTone(value) {
   const status = String(value || "");
   if (status === "completed") return "good";
   if (INSTRUCTOR_LESSON_REVIEW_STATUSES.has(status)) return "danger";
-  if (["waiting_signature", "memo_pending", "booking_pending", "confirmation_pending"].includes(status)) return "warn";
+  if (["waiting_signature", "memo_pending", "booking_pending", "confirmation_pending", "cancellation_pending"].includes(status)) return "warn";
   return "";
 }
 
@@ -7414,15 +7422,169 @@ function renderInstructorLessonRoster(schedule) {
     container.innerHTML = '<div class="empty-state">명단 연결 확인이 필요합니다. 접수 건수와 수강권 보유 인원은 다를 수 있습니다.</div>';
     return;
   }
-  container.innerHTML = `<h3>${escapeHtml(instructorLessonScheduleDateLabel(schedule.date))} · ${roster.length}명</h3>` + roster.map((member) => {
+  container.innerHTML = `<h3>${escapeHtml(instructorLessonScheduleDateLabel(schedule.date))} · ${roster.length}명</h3>` + roster.map((member, index) => {
     const registration = registrations.find((item) => member.registrationId && item.registrationId === member.registrationId);
     const steps = registration?.steps || {};
     const details = registration
       ? [`가입서 ${instructorLessonStepStatusLabel(steps.eformsign?.status || "pending")}`, `안내 ${instructorLessonStepStatusLabel(steps.confirmation?.status || "pending")}`].join(" · ")
       : "가입서·안내 기록 연결 전";
     const name = member.memberId ? `<a href="${escapeHtml(coreHref(`members/detail/?id=${encodeURIComponent(member.memberId)}`))}">${escapeHtml(member.memberName)}</a>` : escapeHtml(member.memberName);
-    return `<div class="status-row"><div><strong>${name}</strong><p>${escapeHtml(details)}</p></div><span class="pill">${escapeHtml(instructorLessonScheduleSourceLabel(schedule.countSource))}</span></div>`;
+    const cancellation = member.cancellation || instructorLessonCancellationReceipts.get(instructorLessonCancellationKey(schedule.date, member));
+    const cancellationLabel = instructorLessonCancellationStatusLabel(cancellation?.status);
+    const statusId = `instructorLessonCancellationRowStatus-${index}`;
+    const action = canCancelInstructorLesson(schedule.date, member)
+      ? `<button type="button" class="secondary-action instructor-lesson-cancel-button" data-instructor-cancel-key="${escapeHtml(member.memberKey)}" data-instructor-cancel-date="${escapeHtml(schedule.date)}" aria-label="${escapeHtml(member.memberName)} · ${escapeHtml(schedule.date)} 수강 취소" aria-describedby="${statusId}"${instructorLessonCancellationBusy ? " disabled" : ""}>수강 취소</button>`
+      : "";
+    return `<div class="status-row instructor-lesson-roster-row"><div><strong>${name}</strong><p>${escapeHtml(details)}</p><p id="${statusId}" class="instructor-lesson-cancellation-status" role="status" aria-label="${escapeHtml(member.memberName)} 취소 상태">${escapeHtml(cancellationLabel)}${cancellation?.lastError ? ` · ${escapeHtml(cancellation.lastError)}` : ""}</p></div><div class="instructor-lesson-roster-actions"><span class="pill">${escapeHtml(instructorLessonScheduleSourceLabel(schedule.countSource))}</span>${action}</div></div>`;
   }).join("");
+}
+
+function instructorLessonCancellationKey(lessonDate, member) {
+  return JSON.stringify([lessonDate, member.memberKey, member.memberId, member.registrationId || ""]);
+}
+
+function instructorLessonCancellationStatusLabel(status) {
+  if (!status) return "";
+  if (["pending", "queued", "processing"].includes(status)) return "취소 처리중";
+  if (["completed", "cancelled"].includes(status)) return "취소 완료";
+  return status === "unknown" ? "취소 접수 확인필요 · 재요청하지 말고 새로고침해 주세요." : "취소 확인필요";
+}
+
+function canCancelInstructorLesson(lessonDate, member) {
+  return document.documentElement.dataset.coreAccess === "manager"
+    && !readUnavailable("instructorLessonRegistrations")
+    && member?.canCancel === true && Boolean(member.memberId) && Boolean(member.memberKey)
+    && !member.cancellation
+    && !instructorLessonCancellationReceipts.has(instructorLessonCancellationKey(lessonDate, member));
+}
+
+function findInstructorLessonCancellationTarget(target) {
+  const schedules = state.instructorLessonRegistrationDashboard?.schedule?.items || [];
+  const roster = schedules.find((item) => item.date === target.lessonDate)?.roster;
+  const matches = Array.isArray(roster) ? roster.filter((member) => member.memberKey === target.memberKey
+    && member.memberId === target.memberId && (member.registrationId || "") === target.registrationId) : [];
+  return matches.length === 1 ? matches[0] : null;
+}
+
+function setInstructorLessonCancellationMessage(message, error = false) {
+  const element = qs("instructorLessonCancellationError");
+  if (element) element.textContent = error ? message : "";
+  setText("instructorLessonCancellationStatus", error ? "" : message);
+}
+
+function handleInstructorLessonCancellationOpen(event) {
+  const button = event.target.closest?.("[data-instructor-cancel-key]");
+  const dialog = qs("instructorLessonCancellationDialog");
+  if (!button || button.disabled || instructorLessonCancellationBusy || !dialog?.showModal || dialog.open) return;
+  const lessonDate = button.dataset.instructorCancelDate;
+  const roster = state.instructorLessonRegistrationDashboard?.schedule?.items?.find((item) => item.date === lessonDate)?.roster;
+  const matches = Array.isArray(roster) ? roster.filter((item) => item.memberKey === button.dataset.instructorCancelKey) : [];
+  const member = matches.length === 1 ? matches[0] : null;
+  if (!canCancelInstructorLesson(lessonDate, member)) return;
+  instructorLessonCancellationTarget = Object.freeze({
+    lessonDate, memberKey: member.memberKey, memberId: member.memberId,
+    registrationId: member.registrationId || "", memberName: member.memberName,
+  });
+  qs("instructorLessonCancellationForm")?.reset();
+  qs("instructorLessonCancellationReason")?.setAttribute("aria-invalid", "false");
+  qs("instructorLessonCancellationSubmit").disabled = false;
+  setText("instructorLessonCancellationMember", member.memberName);
+  setText("instructorLessonCancellationDate", `${lessonDate} · ${instructorLessonScheduleDateLabel(lessonDate)}`);
+  setInstructorLessonCancellationMessage("");
+  dialog.showModal();
+}
+
+function closeInstructorLessonCancellation() {
+  if (!instructorLessonCancellationBusy) qs("instructorLessonCancellationDialog")?.close();
+}
+
+function handleInstructorLessonCancellationClose() {
+  const target = instructorLessonCancellationTarget;
+  instructorLessonCancellationTarget = null;
+  const button = [...document.querySelectorAll("[data-instructor-cancel-key]")].find((item) =>
+    item.dataset.instructorCancelDate === target?.lessonDate && item.dataset.instructorCancelKey === target?.memberKey);
+  (button || qs("refreshButton"))?.focus();
+}
+
+async function refreshInstructorLessonCancellationDashboard(runtime) {
+  state.instructorLessonRegistrationDashboard = await loadInstructorLessonRegistrationDashboard(runtime);
+  setReadState("instructorLessonRegistrations", "success", {
+    count: state.instructorLessonRegistrationDashboard?.items?.length || 0,
+  });
+  renderInstructorLessonRegistrationDashboard();
+}
+
+async function handleInstructorLessonCancellationSubmit(event) {
+  event.preventDefault();
+  const target = instructorLessonCancellationTarget;
+  if (!target || instructorLessonCancellationBusy || qs("instructorLessonCancellationSubmit")?.disabled) return;
+  const reasonInput = qs("instructorLessonCancellationReason");
+  const reason = String(reasonInput?.value || "").trim();
+  if (reason.length < 2 || reason.length > 200) {
+    reasonInput?.setAttribute("aria-invalid", "true");
+    setInstructorLessonCancellationMessage("취소 사유를 2~200자로 입력하세요.", true);
+    reasonInput?.focus();
+    return;
+  }
+  reasonInput?.setAttribute("aria-invalid", "false");
+  if (!event.currentTarget.reportValidity()) return;
+  const submit = qs("instructorLessonCancellationSubmit");
+  const close = qs("instructorLessonCancellationClose");
+  const dialog = qs("instructorLessonCancellationDialog");
+  const receiptKey = instructorLessonCancellationKey(target.lessonDate, target);
+  let attempted = false;
+  instructorLessonCancellationBusy = true;
+  submit.disabled = true;
+  close.disabled = true;
+  reasonInput.disabled = true;
+  dialog.setAttribute("aria-busy", "true");
+  setInstructorLessonCancellationMessage("현재 명단을 확인하고 있습니다.");
+  try {
+    const runtime = await initFirebase();
+    await refreshInstructorLessonCancellationDashboard(runtime);
+    const current = findInstructorLessonCancellationTarget(target);
+    if (!canCancelInstructorLesson(target.lessonDate, current) || current.memberName !== target.memberName) {
+      setInstructorLessonCancellationMessage("명단 또는 취소 가능 상태가 변경됐습니다. 창을 닫고 현재 명단을 확인하세요.", true);
+      return;
+    }
+    const callable = runtime.httpsCallable(runtime.functionsClient, "operatorQueueInstructorLessonCancellation");
+    attempted = true;
+    setInstructorLessonCancellationMessage("취소 요청을 접수하고 있습니다.");
+    const result = await callable({
+      memberId: target.memberId, lessonDate: target.lessonDate,
+      ...(target.registrationId ? { registrationId: target.registrationId } : {}),
+      reason, confirmed: true,
+    });
+    const receipt = result?.data;
+    if (receipt?.ok !== true || !receipt.jobId || !receipt.status) throw new Error("cancellation-outcome-unknown");
+    instructorLessonCancellationReceipts.set(receiptKey, { jobId: receipt.jobId, status: receipt.status });
+    setInstructorLessonCancellationMessage(`${receipt.duplicate ? "기존 취소 요청" : "취소 요청 접수"} · ${instructorLessonCancellationStatusLabel(receipt.status)}`);
+    try {
+      await refreshInstructorLessonCancellationDashboard(runtime);
+      const latest = findInstructorLessonCancellationTarget(target)?.cancellation;
+      if (latest) {
+        instructorLessonCancellationReceipts.set(receiptKey, latest);
+        renderInstructorLessonRegistrationDashboard();
+        setInstructorLessonCancellationMessage(instructorLessonCancellationStatusLabel(latest.status));
+      }
+    } catch {
+      setInstructorLessonCancellationMessage("취소 요청은 접수됐지만 명단을 새로 읽지 못했습니다. 재요청하지 말고 새로고침해 주세요.", true);
+    }
+  } catch {
+    if (attempted) instructorLessonCancellationReceipts.set(receiptKey, { status: "unknown" });
+    setInstructorLessonCancellationMessage(attempted
+      ? "취소 요청 결과를 확인하지 못했습니다. 재요청하지 말고 새로고침해 접수 상태를 확인하세요."
+      : "현재 명단을 확인하지 못해 취소를 요청하지 않았습니다. 새로고침 후 확인하세요.", true);
+  } finally {
+    instructorLessonCancellationBusy = false;
+    close.disabled = false;
+    reasonInput.disabled = false;
+    dialog.setAttribute("aria-busy", "false");
+    // An attempted write stays locked even when its response is lost.
+    submit.disabled = true;
+    renderInstructorLessonRegistrationDashboard();
+    close.focus();
+  }
 }
 
 const MEMBER_REGISTRATION_REASONS = Object.freeze({
@@ -7781,6 +7943,7 @@ function renderInstructorLessonRegistrationDashboard(data = state.instructorLess
 }
 
 function instructorLessonConfirmationAction(item) {
+  if (INSTRUCTOR_LESSON_CANCELLATION_STATUSES.has(String(item?.status || ""))) return "";
   const steps = item?.steps && typeof item.steps === "object" ? item.steps : {};
   const memberReady = steps.member?.status === "verified";
   const ticketReady = steps.ticket?.status === "verified";
@@ -7877,9 +8040,11 @@ function handleInstructorLessonRegistrationFilter(event) {
 
 async function handleInstructorLessonConfirmation(event) {
   const button = event.target.closest?.("[data-confirm-instructor-lesson]");
-  if (!button) return;
+  if (!button || button.disabled) return;
   const registrationId = String(button.dataset.confirmInstructorLesson || "").trim();
   if (!registrationId) return;
+  const registration = state.instructorLessonRegistrationDashboard?.items?.find((item) => item.registrationId === registrationId);
+  if (!registration || INSTRUCTOR_LESSON_CANCELLATION_STATUSES.has(String(registration.status || ""))) return;
   button.disabled = true;
   setInstructorLessonRegistrationStatus("수강권 발급 증거와 캘린더 설정을 확인하고 있습니다.");
   try {
@@ -8412,6 +8577,13 @@ qs("videoWatchBuyerList")?.addEventListener("click", handleVideoWatchMemberClick
 qs("instructorLessonRegistrationForm")?.addEventListener("submit", handleInstructorLessonRegistrationSubmit);
 qs("instructorLessonRegistrationFilters")?.addEventListener("click", handleInstructorLessonRegistrationFilter);
 qs("instructorLessonRegistrationList")?.addEventListener("click", handleInstructorLessonConfirmation);
+qs("instructorLessonScheduleDetail")?.addEventListener("click", handleInstructorLessonCancellationOpen);
+qs("instructorLessonCancellationForm")?.addEventListener("submit", handleInstructorLessonCancellationSubmit);
+qs("instructorLessonCancellationClose")?.addEventListener("click", closeInstructorLessonCancellation);
+qs("instructorLessonCancellationDialog")?.addEventListener("close", handleInstructorLessonCancellationClose);
+qs("instructorLessonCancellationDialog")?.addEventListener("cancel", (event) => {
+  if (instructorLessonCancellationBusy) event.preventDefault();
+});
 qs("memberRegistrationFilters")?.addEventListener("click", (event) => {
   const button = event.target.closest?.("[data-member-registration-filter]");
   if (!button) return;

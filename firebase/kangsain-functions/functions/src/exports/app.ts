@@ -35,6 +35,7 @@ import {
 import {
   getInstructorLessonRegistrationDashboardHandler,
   operatorCreateInstructorLessonRegistrationHandler,
+  operatorQueueInstructorLessonCancellationHandler,
 } from "../instructorLessonRegistration/instructorLessonRegistration";
 import {
   confirmInstructorLessonBookingAndQueueAlimtalkHandler,
@@ -395,6 +396,11 @@ export const operatorCreateInstructorLessonRegistration = onCall(secretlessCalla
   } catch (err) {
     throw toHttpsError(err);
   }
+});
+
+export const operatorQueueInstructorLessonCancellation = onCall(secretlessCallableOptions, async (request) => {
+  try { return await operatorQueueInstructorLessonCancellationHandler(request); }
+  catch (err) { throw toHttpsError(err); }
 });
 
 export const instructorLessonCalendarApi = onRequest(

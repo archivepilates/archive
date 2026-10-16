@@ -11,6 +11,7 @@ import { hasExplicitAlimtalkTestOverride, isAlimtalkTestRecipient } from "../ali
 import { instructorLessonRegistrationId } from "./instructorLessonRegistration";
 import { deriveInstructorLessonRegistrationState } from "./instructorLessonRegistrationState";
 import { resolveNotionLessonSchedule } from "./instructorLessonNotionSchedule";
+import { cancellationBlocksRegistration } from "./instructorLessonCancellationPolicy";
 
 const REGISTRATIONS = "instructorLessonRegistrations";
 const TICKET_NAME = "강사레슨 (2T)";
@@ -297,6 +298,7 @@ export async function syncInstructorLessonConfirmationOutcome(
     const snapshot = await transaction.get(registrationRef);
     if (!snapshot.exists) return;
     const registration = snapshot.data() || {};
+    if (cancellationBlocksRegistration(registration)) return;
     const memberExcluded =
       Boolean(ALIMTALK_MEMBER_EXCLUSION_REASONS[candidate.memberId]) ||
       (isAlimtalkTestRecipient(candidate) && !hasExplicitAlimtalkTestOverride(candidate));
@@ -374,7 +376,7 @@ export function instructorLessonConfirmationCandidateId(input: {
 }
 
 export function instructorLessonTicketConfirmationIssue(registration: Record<string, any>): string {
-  if (cleanText(registration.status, 40) === "cancelled") return "취소된 강사레슨 등록 건";
+  if (cancellationBlocksRegistration(registration)) return "취소 요청·처리된 강사레슨 등록 건";
   if (registration.operatorChecks?.paymentConfirmed !== true || registration.operatorChecks?.seatConfirmed !== true) {
     return "입금·수강 접수 운영자 확인 없음";
   }
@@ -395,6 +397,7 @@ async function markConfirmationQueueFailure(registrationId: string, detail: stri
     const snapshot = await transaction.get(registrationRef);
     if (!snapshot.exists) return;
     const registration = snapshot.data() || {};
+    if (cancellationBlocksRegistration(registration)) return;
     const steps = {
       ...(registration.steps || {}),
       confirmation: {

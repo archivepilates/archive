@@ -56,6 +56,7 @@ function exportModule(name) {
       if (id === "../config/secrets") return secrets;
       if (id === "../config/constants") return constants;
       if (id.startsWith("firebase-functions/v2/")) return captures;
+      if (id === "../social/youtubeReelApprovalGate") return { REEL_APPROVAL_COLLECTION: "test-reels", reelApprovalHandler: () => unavailable };
       return new Proxy({}, { get: (_target, key) => otherSecrets[key] || unavailable });
     },
   });
@@ -81,6 +82,7 @@ const secretlessApp = [
   "getVideoWatchDashboard", "getRecommendedMealProgramReview", "saveRecommendedMealProgramDraft",
   "adminIssueStaffTempCode", "getRefundMemberTickets", "previewRefund", "sendRefundAgreement",
   "queueRefundStudioMateSms", "getInstructorLessonRegistrationDashboard", "operatorCreateInstructorLessonRegistration",
+  "operatorQueueInstructorLessonCancellation",
 ];
 for (const name of secretlessApp) {
   test(`${name} has no secret bindings and preserves callable options`, () => {

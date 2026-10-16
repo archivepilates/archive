@@ -146,5 +146,24 @@
         </section>
       </main>
     </div>
+    <dialog id="instructorLessonCancellationDialog" class="instructor-lesson-cancellation-dialog" aria-labelledby="instructorLessonCancellationTitle" aria-describedby="instructorLessonCancellationScope instructorLessonCancellationRefund">
+      <form id="instructorLessonCancellationForm">
+        <h2 id="instructorLessonCancellationTitle">수강 취소 확인</h2>
+        <dl class="instructor-lesson-cancellation-target">
+          <div><dt>회원</dt><dd id="instructorLessonCancellationMember"></dd></div>
+          <div><dt>수강일</dt><dd id="instructorLessonCancellationDate"></dd></div>
+        </dl>
+        <p id="instructorLessonCancellationScope">수강권 및 해당일 수업 예약 취소</p>
+        <p id="instructorLessonCancellationRefund">결제 환불은 별도입니다. 실제 결제 환불은 진행되지 않습니다.</p>
+        <label for="instructorLessonCancellationReason">취소 사유</label>
+        <textarea id="instructorLessonCancellationReason" name="reason" rows="3" minlength="2" maxlength="200" required autofocus aria-describedby="instructorLessonCancellationError"></textarea>
+        <p id="instructorLessonCancellationError" class="form-status danger" role="alert"></p>
+        <p id="instructorLessonCancellationStatus" class="form-status" role="status" aria-live="polite"></p>
+        <div class="instructor-lesson-cancellation-actions">
+          <button id="instructorLessonCancellationClose" type="button" class="secondary-action">닫기</button>
+          <button id="instructorLessonCancellationSubmit" type="submit" class="primary-action">수강 취소 요청</button>
+        </div>
+      </form>
+    </dialog>
   </body>
 </html>
