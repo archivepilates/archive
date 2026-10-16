@@ -1,0 +1,72 @@
+{
+  "checkedAt": "2026-10-16",
+  "topic": "#8 외부 피드백1",
+  "lesson": {
+    "date": "2026-10-17",
+    "title": "강사레슨(team)",
+    "source": "StudioMate schedule",
+    "sessions": [
+      {
+        "start": "13:30",
+        "end": "14:20",
+        "teacher": "정은영",
+        "room": "바렐룸",
+        "apparatus": "바렐 + 토닝볼"
+      },
+      {
+        "start": "14:30",
+        "end": "15:20",
+        "teacher": "배민진",
+        "room": "리포머룸",
+        "apparatus": "리포머 + 폼롤러"
+      }
+    ]
+  },
+  "minjin": {
+    "pageId": "3ded49ea-e4bf-800e-9a73-d23defe9b2b6",
+    "pageLastEditedAt": "2026-09-17T15:59:19.015Z",
+    "phases": {
+      "Warm-up": [
+        { "title": "Seated Thoracic Mobility", "steps": ["Spinal Flexion & Extension with Roller", "Overhead Side Bend", "Trunk Circle"] },
+        { "title": "Standing Mobility & Balance", "steps": ["Single Foot on Roller Roll Down", "Upper Thoracic Extension"] },
+        { "title": "Foam Roller Balance Squat", "steps": ["Deep Squat → Hamstring Stretch", "Assisted Squat → Hands Off", "Free Squat"] }
+      ],
+      "Main": [
+        { "title": "Side Split", "steps": ["Side Split Squat", "Squat → Carriage Leg Reach", "Side Split with Thoracic Rotation"] },
+        { "title": "Abdominal Series", "steps": ["Forearm Plank Prep", "Knees Off Plank", "Long Stretch", "Roll Back", "Oblique Rotation"] },
+        { "title": "Rowing Series", "steps": ["Open Elbow / Horizontal Abduction", "High Elbow Biceps Curl", "Flat Back Back Rowing", "Wash Your Face Variation", "Rowing with Arm Sweep"] },
+        { "title": "Posterior Chain Series", "steps": ["Bridge on Foam Roller", "Leg Pull Back"] }
+      ],
+      "Cool Down": [
+        { "title": "Kneeling Thoracic Stretch Series", "steps": ["Kneeling Foam Roller Stretch", "Kneeling Thoracic Rotation"] },
+        { "title": "Upper Cervical Release", "steps": ["Thoracic Support on Foam Roller", "Suboccipital Release", "Arm Opening"] }
+      ]
+    }
+  },
+  "eunyoung": {
+    "pageId": "3c1d49ea-e4bf-80f4-9f9d-c43df612102b",
+    "pageLastEditedAt": "2026-09-21T09:31:13.900Z",
+    "phases": {
+      "Warm-up": [
+        { "title": "Ladder Hold Wide Squat + Side Bend Series", "withoutToningBall": true },
+        { "title": "Punch Series", "withoutToningBall": false },
+        { "title": "Spinal Articulation", "withoutToningBall": false }
+      ],
+      "Main": [
+        { "title": "Hip Hinge + Arm Series", "withoutToningBall": false },
+        { "title": "Mountain Climber", "withoutToningBall": true },
+        { "title": "Standing Leg Series", "withoutToningBall": true },
+        { "title": "Forward Stretch", "withoutToningBall": false },
+        { "title": "Saw", "withoutToningBall": false },
+        { "title": "Kneeling Arm Series", "withoutToningBall": false },
+        { "title": "Prone Arm Series", "withoutToningBall": false },
+        { "title": "Push up", "withoutToningBall": false }
+      ],
+      "Cool Down": [
+        { "title": "Arabesque Series", "withoutToningBall": true }
+      ]
+    },
+    "intro": "오늘의 주제는 외부 피드백이에요. 바렐에서 토닝볼을 사용해보도록 할게요.",
+    "closing": "토닝볼로 운동 강도를 높이기보다 바렐에서 제공되지 않는 외부 저항을 보완하고, 힘의 방향과 중심 이동, 상지와 몸통의 연결을 스스로 인지합니다."
+  }
+}
