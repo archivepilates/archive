@@ -32,7 +32,7 @@ function app() {
   };
   const context = { document, URL, console, Date, Intl, crypto: webcrypto, TextEncoder };
   vm.runInNewContext(`${testSource}\nglobalThis.api = {
-    state, setReadState, renderReadHealth, renderHomeSummary, renderHomeDecisions, renderRenewalPipeline,
+    state, setReadState, renderReadHealth, renderHomeDecisions, renderRenewalPipeline,
     renewalCaseRows, activeRenewalMemberRows, groupRenewalRows, getCommunicationActions,
     pendingAlimtalkCandidates, failedAlimtalkCandidates, failedAlimtalkSends, isCurrentCommunicationFailure, communicationProblemSummary, currentPrivateSessionRows,
     privateSessionAction, renderPrivateSessionCard, staffCompositeScore, scoreBand,
@@ -49,6 +49,32 @@ function app() {
 }
 
 const reference = new Date("2026-09-05T12:00:00+09:00");
+
+test("home removes the duplicate total and visible empty title while keeping operational tools", () => {
+  const html = fs.readFileSync(new URL("../../core/index.html", import.meta.url), "utf8");
+  assert.doesNotMatch(html, /오늘 할 일|오늘 우선순위|commandQueueStatus|commandQueueNote|command-context-card/);
+  assert.match(html, /<h1 class="home-title">홈<\/h1>/);
+  assert.match(html, /class="home-data-toolbar" aria-label="데이터 조회 상태"/);
+  for (const id of ["homeDecisionList", "connectionLabel", "connectionDetail", "refreshButton", "renewalPipeline", "parkingRegistrationForm", "pricingInquiryForm", "recommendedMealProgramForm"]) {
+    assert.equal((html.match(new RegExp(`id="${id}"`, "g")) || []).length, 1, id);
+  }
+  assert.doesNotMatch(source, /renderHomeSummary|commandQueueStatus|commandQueueNote/);
+  assert.match(source.slice(source.indexOf("async function refresh()")), /renderRenewalPipeline\(\)/);
+});
+
+test("home retains actionable links and source failure warnings without a summary total", () => {
+  const a = app();
+  const list = a.element("homeDecisionList");
+  a.state.communicationActions.alimtalkCandidates = [{ id: "canonical_failure", status: "failed" }];
+  a.renderHomeDecisions();
+  assert.match(list.innerHTML, /알림톡 실패/);
+  assert.match(list.innerHTML, /href="\.\/messages\/"/);
+  a.setReadState("actions:alimtalkCandidates", "unavailable");
+  a.renderHomeDecisions();
+  assert.match(list.innerHTML, /일부 업무를 확인하지 못했습니다/);
+  assert.match(list.innerHTML, /href="#connectionDetail"/);
+  assert.doesNotMatch(list.innerHTML, /오늘 처리할 일이 없습니다/);
+});
 
 test("late native signature is complete in registration UI without claiming welcome delivery", async () => {
   const a = app();
@@ -129,13 +155,11 @@ test("past next-booking dates are not rendered as future appointments", () => {
 
 test("failed reads never render an all-clear or zero renewal count", () => {
   const a = app();
-  const summary = a.element("commandQueueStatus");
   const list = a.element("homeDecisionList");
   const renewals = a.element("renewalPipelineList");
   const count = a.element("renewalPipelineCount");
   a.setReadState("renewalCases", "unavailable");
-  a.renderHomeSummary(); a.renderHomeDecisions();
-  assert.match(summary.textContent, /확인 필요/);
+  a.renderRenewalPipeline(); a.renderHomeDecisions();
   assert.match(list.innerHTML, /확인하지 못/);
   assert.match(renewals.innerHTML, /불러오지 못/);
   assert.equal(count.textContent, "확인 필요");
@@ -188,10 +212,9 @@ test("child home action queries use owner-frame arrays for all five sources", as
     a.setReadState(`actions:${name}`, "ready");
   }
   assert.ok(queries > 5);
-  const status = a.element("commandQueueStatus");
   const list = a.element("homeDecisionList");
-  a.renderHomeSummary(); a.renderHomeDecisions();
-  assert.doesNotMatch(status.textContent, /업무 조회 확인 필요/);
+  a.renderRenewalPipeline(); a.renderHomeDecisions();
+  assert.doesNotMatch(list.innerHTML, /일부 업무를 확인하지 못했습니다/);
   assert.match(list.innerHTML, /알림톡 실패/);
 });
 

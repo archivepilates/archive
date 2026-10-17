@@ -595,7 +595,7 @@ function renderReadHealth() {
     .sort((a, b) => b.state.sourceUpdatedAtMs - a.state.sourceUpdatedAtMs);
   document.body.dataset.sourceHealth = nonEmpty.length ? "current" : "empty";
   if (!nonEmpty.length) {
-    setConnection("조회 완료 · 0건", "원본 읽기는 성공했고 현재 표시할 기록이 없습니다.");
+    setConnection("조회 완료 · 0건", qs("homeDecisionList") ? `화면 조회 ${formatDate(new Date())}` : "원본 읽기는 성공했고 현재 표시할 기록이 없습니다.");
     return;
   }
   setConnection("조회 완료", `화면 조회 ${formatDate(new Date())}`);
@@ -713,7 +713,7 @@ async function ensureMemberDirectory() {
       state.memberProfiles = studioItems(memberProfiles);
       state.members = mergeMemberCardsWithProfiles(state.memberCards, state.memberProfiles);
       state.memberDirectoryLoadStatus = "success";
-      renderHomeSummary();
+      renderRenewalPipeline();
       renderHomeDecisions();
       return true;
     } catch (error) {
@@ -5572,15 +5572,13 @@ function renderHomeDecisions() {
   const rows = [];
 
   if (homeActionReadsIncomplete()) {
-    rows.push({ title: "일부 업무를 확인하지 못했습니다", detail: "새로고침 후 연결 상태를 확인해 주세요. 아래 건수는 조회된 내역만 포함합니다.", status: "warning", href: "#connectionDetail" });
+    rows.push({ title: "일부 업무를 확인하지 못했습니다", detail: "조회 상태 확인이 필요합니다. 목록은 확인된 내역만 표시합니다.", status: "warning", href: "#connectionDetail" });
   }
 
   if (renewalUrgent) {
     rows.push({
       title: "재등록 관리",
-      detail: renewalUrgent
-        ? `오늘 확인 ${renewalUrgent}명, 전체 후보 ${renewalRows.length}명입니다. 현장 상담과 복귀 연락을 먼저 처리하세요.`
-        : `30일 내 만료/잔여 부족/재등록 대기 ${renewalRows.length}명을 관리합니다.`,
+      detail: `오늘 확인 ${renewalUrgent}명 · 전체 후보 ${renewalRows.length}명`,
       status: renewalUrgent ? "critical" : "warning",
       href: "#renewalPipeline",
     });
@@ -5588,7 +5586,7 @@ function renderHomeDecisions() {
   if (flowProblems.length) {
     rows.push({
       title: "회원 응대 후속 처리",
-      detail: `현장 웰컴/회원가입서/수강료 흐름에서 ${flowProblems.length}건을 확인해야 합니다.`,
+      detail: `가입서·회원 안내 후속 처리 ${flowProblems.length}건`,
       status: "failed",
       href: "./messages/",
     });
@@ -5596,7 +5594,7 @@ function renderHomeDecisions() {
   if (sendFailures) {
     rows.push({
       title: "알림톡 실패",
-      detail: `후보 실패 ${failedCandidates.length}건, 발송 실패 ${failedSends.length}건입니다. 실패 원인을 먼저 확인하세요.`,
+      detail: `후보 실패 ${failedCandidates.length}건 · 발송 실패 ${failedSends.length}건`,
       status: "failed",
       href: "./messages/",
     });
@@ -5604,7 +5602,7 @@ function renderHomeDecisions() {
   if (pendingCandidates.length) {
     rows.push({
       title: "알림톡 승인/대기",
-      detail: `${pendingCandidates.length}건이 대기/검토/처리중입니다. 실제 발송 전 중복과 템플릿을 확인하세요.`,
+      detail: `대기·검토·처리 중 ${pendingCandidates.length}건`,
       status: "warning",
       href: "./messages/",
     });
@@ -5612,7 +5610,7 @@ function renderHomeDecisions() {
   if (failedAutomation.length) {
     rows.push({
       title: "자동화 실패/중단",
-      detail: `${failedAutomation.length}개 자동화 상태가 실패/중단입니다. 실패한 작업만 확인하면 됩니다.`,
+      detail: `실패·중단 ${failedAutomation.length}건`,
       status: "failed",
       href: "./automation/",
     });
@@ -5622,9 +5620,7 @@ function renderHomeDecisions() {
       <div class="status-row">
         <div>
           <strong>오늘 처리할 일이 없습니다.</strong>
-          <p>새 업무가 생기면 여기에 표시됩니다.</p>
         </div>
-        ${pill("success")}
       </div>
     `;
     return;
@@ -5640,25 +5636,6 @@ function renderHomeDecisions() {
       `,
     )
     .join("");
-}
-
-function renderHomeSummary() {
-  if (!qs("commandQueueStatus")) return;
-  const failedAutomation = failedAutomationItems();
-  const renewalRows = activeRenewalMemberRows();
-  const renewalUrgent = renewalRows.filter((row) => row.view === "today").length;
-  const { failedCandidates, failedSends, flowProblems, pendingCandidates } = communicationProblemSummary();
-  const communicationProblems = failedCandidates.length + failedSends.length + flowProblems.length;
-  const actionTotal = communicationProblems + pendingCandidates.length + failedAutomation.length + renewalUrgent;
-  const incomplete = homeActionReadsIncomplete();
-  setText("commandQueueStatus", incomplete ? "업무 조회 확인 필요" : actionTotal ? `${actionTotal}건 확인 필요` : "오늘 처리할 일 없음");
-  setText(
-    "commandQueueNote",
-    incomplete ? "일부 내역을 확인하지 못했습니다." : actionTotal
-      ? "회원 응대, 알림톡, 자동화 중 확인할 항목입니다."
-      : "오늘 확인할 문제가 없습니다.",
-  );
-  renderRenewalPipeline();
 }
 
 function renderRenewalPipeline(rows = renewalCandidateRows()) {
@@ -8121,7 +8098,7 @@ function renderFallback(error, options = {}) {
   renderMessages([], []);
   renderStaffHr();
   renderLessons([], [], []);
-  renderHomeSummary();
+  renderRenewalPipeline();
   renderHomeDecisions();
   renderParkingDashboard();
   renderInstagramContentDashboard(null);
@@ -8463,7 +8440,7 @@ async function refresh() {
     renderMembers(state.members);
     renderMessages(alimtalkCandidates, alimtalkSends);
     renderStaffHr();
-    renderHomeSummary();
+    renderRenewalPipeline();
     renderHomeDecisions();
     renderParkingDashboard();
     renderInstagramContentDashboard(state.instagramDashboard);

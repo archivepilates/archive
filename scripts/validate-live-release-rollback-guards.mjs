@@ -543,7 +543,7 @@ const guardGroups = [
           "operatorSendPricingInquiryAlimtalk",
           "recommendedMealProgramRequests",
           "operatorSendRecommendedMealProgramAlimtalk",
-          "commandQueueStatus",
+          "renderHomeDecisions",
           "renewalCandidateRows",
           "renderRenewalPipeline",
           "renewalCases",

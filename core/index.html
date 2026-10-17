@@ -16,7 +16,7 @@
     <script src="./firebase-config.js"></script>
     <script type="module" src="./assets/app.js"></script>
   </head>
-  <body data-firestore-dashboard>
+  <body class="home-page" data-firestore-dashboard>
     <div id="coreAccessLoading" class="core-access-loading" role="status"><p>연결 중</p><a href="">다시 연결</a></div>
     <div class="shell">
       <aside class="sidebar" aria-label="ARCHIVE CORE navigation">
@@ -41,7 +41,7 @@
       <main class="main">
         <header class="command-hero">
           <div class="command-copy">
-            <h1>오늘 할 일</h1>
+            <h1 class="home-title">홈</h1>
             <button class="command-search-button" id="commandPaletteOpen" type="button" aria-haspopup="dialog" aria-controls="commandPalette">
               <span>회원 또는 업무 검색</span>
               <kbd>⌘K</kbd>
@@ -132,18 +132,13 @@
             <div class="list" id="homeDecisionList">
               <div class="empty-state">확인 중</div>
             </div>
-            <aside class="command-context-card" aria-label="오늘 운영 요약">
-              <div>
-                <span class="context-label">오늘 우선순위</span>
-                <strong id="commandQueueStatus">운영 큐 확인 중</strong>
-                <p id="commandQueueNote"></p>
-              </div>
+            <div class="home-data-toolbar" aria-label="데이터 조회 상태">
               <div class="connection-card" aria-live="polite">
                 <span id="connectionLabel">로딩</span>
                 <strong id="connectionDetail">데이터 연결 준비 중</strong>
               </div>
               <button class="refresh-button" id="refreshButton" type="button">새로고침</button>
-            </aside>
+            </div>
         </section>
 
         <details class="panel action-disclosure" id="renewalPipeline">

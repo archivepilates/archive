@@ -750,7 +750,7 @@ async function managerSequenceCase(page, base, name) {
 }
 
 async function navigationSetup(page, manager) {
-  await page.getByRole("heading", { name: manager ? "오늘 할 일" : "프라이빗 기록·리포트", exact: true }).waitFor();
+  await page.getByRole("heading", { name: manager ? "홈" : "프라이빗 기록·리포트", exact: true }).waitFor({ state: "attached" });
   await page.waitForFunction(() => Boolean(window.archiveCoreNavigation));
   await loginName(page, manager);
   await page.evaluate(() => {
@@ -930,11 +930,13 @@ async function navigationCase(page, base, manager, name) {
   const restored = await destinationFrame(page, initial, documentId, manager);
   if (manager) {
     const home = await restored.evaluate(() => ({
-      status: document.getElementById("commandQueueStatus")?.textContent,
+      actions: document.getElementById("homeDecisionList")?.textContent,
+      summaryPresent: Boolean(document.getElementById("commandQueueStatus")),
       sourceHealth: document.body.dataset.sourceHealth,
       connection: document.getElementById("connectionDetail")?.textContent,
     }));
-    assert.equal(home.status, "오늘 처리할 일 없음", "Empty verified fixture stays clear after returning to the child home");
+    assert.match(home.actions, /오늘 처리할 일이 없습니다/, "Verified empty fixture stays clear after returning to the child home");
+    assert.equal(home.summaryPresent, false, "Removed priority summary is not recreated on menu navigation");
     assert.notEqual(home.sourceHealth, "unavailable");
     assert.doesNotMatch(home.connection, /조회 실패/);
     const reads = (await telemetry(page)).reads;
@@ -1097,7 +1099,7 @@ async function runCase(page, base, kind, name) {
   }
   if (["home", "private"].includes(kind)) return workspaceCase(page, base, kind);
   if (["manager", "owner"].includes(kind)) {
-    await page.getByRole("heading", { name: "오늘 할 일", exact: true }).waitFor();
+    await page.getByRole("heading", { name: "홈", exact: true }).waitFor({ state: "attached" });
     await settled(page);
     assert.equal(await page.getByTestId("qa-operator-shell").isVisible(), true);
     assert.equal(await page.getByTestId("qa-instructor").count(), 0);

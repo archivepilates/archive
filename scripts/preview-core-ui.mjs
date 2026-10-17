@@ -15,7 +15,6 @@ document.getElementById("coreLoginGate")?.remove();
 const put = (id, html) => { const node = document.getElementById(id); if (node) node.innerHTML = html; };
 put("connectionLabel", "미리보기");
 put("connectionDetail", "예시 데이터");
-put("commandQueueStatus", "확인할 업무 2건");
 const row = (title, note, status = "확인필요") => '<article class="status-row"><div><strong>' + title + '</strong><p>' + note + '</p></div><span class="pill warn">' + status + '</span></article>';
 put("homeDecisionList", row("회원등록", "가입서 작성 대기 1건") + row("프라이빗 리포트", "발송 전 검토 1건"));
 put("renewalPipelineList", row("예시 회원", "그룹 30회 · 잔여 3회 · 재등록 상담"));

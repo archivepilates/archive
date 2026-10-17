@@ -309,6 +309,17 @@ body:has(.login-gate.on) .core-access-loading {
   gap: 10px;
 }
 
+.home-page .home-title {
+  position: absolute;
+  width: 1px;
+  height: 1px;
+  margin: -1px;
+  padding: 0;
+  border: 0;
+  clip-path: inset(50%);
+  white-space: nowrap;
+}
+
 .command-copy .subtitle {
   max-width: 780px;
   margin-top: 0;
@@ -1144,63 +1155,6 @@ kbd {
   .instructor-seat-overview-head > strong {
     text-align: left;
   }
-}
-
-.command-context-card {
-  display: grid;
-  min-width: 0;
-  align-content: start;
-  gap: 8px;
-  color: var(--text);
-  padding: 0;
-}
-
-.command-context-card .context-label {
-  display: block;
-  color: var(--muted);
-  font-size: 0.78rem;
-  font-weight: 900;
-}
-
-.command-context-card strong {
-  display: block;
-  margin-top: 4px;
-  font-size: 1rem;
-  line-height: 1.2;
-  overflow-wrap: anywhere;
-}
-
-.command-context-card p {
-  margin: 4px 0 0;
-  color: var(--muted);
-  font-size: 0.82rem;
-}
-
-.command-context-card .connection-card,
-.command-context-card .refresh-button {
-  box-shadow: none;
-}
-
-.command-context-card .connection-card {
-  background: var(--surface);
-  border-color: var(--line-soft);
-}
-
-.command-context-card .connection-card span,
-.command-context-card .connection-card strong {
-  color: var(--text);
-}
-
-.command-context-card .connection-card strong {
-  margin-top: 0;
-  font-size: 0.9rem;
-}
-
-.command-context-card .refresh-button {
-  min-height: 44px;
-  width: 100%;
-  border-color: var(--line);
-  background: #ffffff;
 }
 
 .title-block {
@@ -2402,10 +2356,45 @@ td span {
   margin-bottom: 18px;
 }
 
-.home-action-panel .command-context-card {
-  grid-template-columns: minmax(0, 1fr) minmax(0, 1fr) auto;
-  padding: 16px 20px;
+.home-data-toolbar {
+  display: flex;
+  min-width: 0;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: 8px;
+  padding: 12px 16px;
   border-top: 1px solid var(--line-soft);
+}
+
+.home-data-toolbar .connection-card {
+  display: flex;
+  flex: 1 1 10rem;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: 4px 8px;
+  min-height: 44px;
+  padding: 4px 8px;
+  border: 0;
+  background: transparent;
+}
+
+.home-data-toolbar .connection-card span,
+.home-data-toolbar .connection-card strong {
+  min-width: 0;
+  font-size: 0.8125rem;
+  font-weight: 500;
+  line-height: 1.5;
+  overflow-wrap: anywhere;
+}
+
+.home-data-toolbar .refresh-button {
+  flex: 0 0 44px;
+  width: 44px;
+  min-width: 44px;
+  min-height: 44px;
+  padding: 0;
+  border-color: var(--line);
+  background: #ffffff;
 }
 
 .action-disclosure {
@@ -4652,20 +4641,6 @@ a.rank-row:hover,
     padding: 4px 0 16px;
   }
 
-  .command-context-card {
-    grid-template-columns: minmax(0, 1fr) auto;
-    align-items: stretch;
-  }
-
-  .home-action-panel .command-context-card {
-    grid-template-columns: minmax(0, 1fr) auto;
-    padding: 16px;
-  }
-
-  .command-context-card > div:first-child {
-    grid-column: 1 / -1;
-  }
-
   .instructor-tool-grid {
     grid-template-columns: repeat(2, minmax(0, 1fr));
   }
@@ -4744,15 +4719,6 @@ a.rank-row:hover,
   .command-hero {
     grid-template-columns: 1fr;
     padding: 4px 0 16px;
-  }
-
-  .command-context-card {
-    grid-template-columns: minmax(0, 1fr) auto;
-    align-items: stretch;
-  }
-
-  .command-context-card > div:first-child {
-    grid-column: 1 / -1;
   }
 
   .topbar {
@@ -4919,20 +4885,6 @@ a.rank-row:hover,
     grid-template-columns: 36px minmax(0, 1fr) 20px;
     gap: 12px;
     padding: 16px;
-  }
-
-  .command-context-card {
-    grid-template-columns: minmax(0, 1fr) auto;
-  }
-
-  .command-context-card .connection-card {
-    min-width: 0;
-    width: auto;
-  }
-
-  .command-context-card .refresh-button {
-    width: auto;
-    padding-inline: 12px;
   }
 
   .disclosure-body > .workflow-tabs {

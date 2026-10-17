@@ -67,7 +67,7 @@ function instrumentApp(source) {
     source.slice(0, source.lastIndexOf(boot)) +
     `
 Object.defineProperty(window, "__coreOperatorQA", { value: {
-  state, setReadState, renderRenewalPipeline, renderHomeSummary, renderHomeDecisions,
+  state, setReadState, renderRenewalPipeline, renderHomeDecisions,
   renderPrivate, renderStaffHr, staffCompositeScore, scoreBand, formatMetricNumber,
   formatMetricRate, coreHref, commandPaletteEntries,
   renderInstructorLessonRegistrationDashboard, renderInstructorLessonSchedule,
@@ -244,7 +244,7 @@ async function seed(page, kind) {
         qa.setReadState(label, "success");
       qa.resetViews();
       if (kind === "home") {
-        qa.renderHomeSummary();
+        qa.renderRenewalPipeline();
         qa.renderHomeDecisions();
       }
       if (kind === "private")
@@ -553,7 +553,7 @@ async function home(page, name, width) {
         await page.evaluate((source) => {
           const qa = window.__coreOperatorQA;
           qa.setReadState(source, "unavailable");
-          qa.renderHomeSummary();
+          qa.renderRenewalPipeline();
           qa.renderHomeDecisions();
         }, source);
         assert.match(
@@ -574,7 +574,7 @@ async function home(page, name, width) {
         assert.doesNotMatch(
           await dom(
             page,
-            () => document.getElementById("commandQueueStatus").textContent,
+            () => document.getElementById("homeDecisionList").textContent,
           ),
           /오늘 처리할 일 없음/,
         );
