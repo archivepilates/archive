@@ -1,5 +1,4 @@
 import { createHmac, randomBytes } from "node:crypto";
-import { Timestamp } from "firebase-admin/firestore";
 import { logger } from "firebase-functions";
 import { solapiApiKey, solapiApiSecret } from "../config/secrets";
 import { refs } from "../firestore/refs";
@@ -26,6 +25,8 @@ export interface ProviderLedgerAuditResult {
 interface LedgerProviderMessageReference {
   solapiMessageId?: unknown;
   providerMessageId?: unknown;
+  status?: unknown;
+  templateCode?: unknown;
 }
 
 interface SolapiMessageListResponse {
@@ -41,18 +42,64 @@ export async function auditPreviousDayAlimtalkProviderLedger(
   const date = addDays(baseDate, -1);
   const start = new Date(`${date}T00:00:00+09:00`);
   const end = new Date(start.getTime() + 24 * 60 * 60 * 1000);
-  const [providerMessages, ledgerSnap] = await Promise.all([
-    listSolapiAlimtalkMessages(start, end),
-    refs
-      .alimtalkSends()
-      .where("updatedAt", ">=", Timestamp.fromDate(start))
-      .where("updatedAt", "<", Timestamp.fromDate(end))
-      .get(),
-  ]);
-  const ledgerMessageIds = ledgerProviderMessageIds(
-    ledgerSnap.docs.filter((doc) => doc.data().status === "done").map((doc) => doc.data()),
+  const providerMessages = (await listSolapiAlimtalkMessages(start, end)).filter(isCompletedProviderMessage);
+  // Provider creation time bounds the audit. Ledger timestamps can move or predate a retry.
+  const rows = await lookupLedgerProviderMessages(providerMessages.map((message) => message.messageId));
+  const ledger = indexCompletedLedgerRows(rows);
+  const unresolved = providerMessages.filter((message) => !ledgerContainsProviderMessage(ledger, message));
+  // Older send paths stored SOLAPI's groupId in a message ID field.
+  const legacyRows = await lookupLedgerProviderMessages(unresolved.map((message) => message.groupId));
+  for (const [id, matches] of indexCompletedLedgerRows(legacyRows)) {
+    ledger.set(id, [...(ledger.get(id) || []), ...matches]);
+  }
+  return {
+    date,
+    providerMessageCount: providerMessages.length,
+    ledgerMessageCount: ledger.size,
+    missingInLedger: providerMessages.filter((message) => !ledgerContainsProviderMessage(ledger, message)),
+  };
+}
+
+async function lookupLedgerProviderMessages(ids: string[]): Promise<LedgerProviderMessageReference[]> {
+  const uniqueIds = [...new Set(ids.filter(Boolean))];
+  const rows: LedgerProviderMessageReference[] = [];
+  for (let offset = 0; offset < uniqueIds.length; offset += 30) {
+    const batch = uniqueIds.slice(offset, offset + 30);
+    // Single-field indexed reads avoid both a collection scan and timestamp/status composite indexes.
+    const snapshots = await Promise.all(
+      ["solapiMessageId", "providerMessageId"].map((field) => refs.alimtalkSends().where(field, "in", batch).get()),
+    );
+    for (const snapshot of snapshots) rows.push(...snapshot.docs.map((doc) => doc.data()));
+  }
+  return rows;
+}
+
+function indexCompletedLedgerRows(
+  rows: LedgerProviderMessageReference[],
+): Map<string, LedgerProviderMessageReference[]> {
+  const index = new Map<string, LedgerProviderMessageReference[]>();
+  for (const row of rows) {
+    if (row.status !== "done") continue;
+    for (const id of ledgerProviderMessageIds([row])) {
+      index.set(id, [...(index.get(id) || []), row]);
+    }
+  }
+  return index;
+}
+
+function ledgerContainsProviderMessage(
+  ledger: ReadonlyMap<string, LedgerProviderMessageReference[]>,
+  message: ProviderMessageEvidence,
+): boolean {
+  return [message.messageId, message.groupId].some((id) =>
+    (ledger.get(id) || []).some(
+      (row) => !message.templateId || String(row.templateCode || "").trim() === message.templateId,
+    ),
   );
-  return compareProviderMessagesWithLedger(date, providerMessages, ledgerMessageIds);
+}
+
+function isCompletedProviderMessage(message: ProviderMessageEvidence): boolean {
+  return message.status.toUpperCase() === "COMPLETE" || message.statusCode === "4000";
 }
 
 export async function auditPreviousDayAlimtalkProviderLedgerAndNotify(): Promise<ProviderLedgerAuditResult | null> {
@@ -107,9 +154,7 @@ export async function auditPreviousDayAlimtalkProviderLedgerAndNotify(): Promise
   }
 }
 
-export function ledgerProviderMessageIds(
-  rows: ReadonlyArray<LedgerProviderMessageReference>,
-): Set<string> {
+export function ledgerProviderMessageIds(rows: ReadonlyArray<LedgerProviderMessageReference>): Set<string> {
   return new Set(
     rows
       .flatMap((row) => [row.solapiMessageId, row.providerMessageId])
@@ -123,9 +168,7 @@ export function compareProviderMessagesWithLedger(
   providerMessages: ProviderMessageEvidence[],
   ledgerMessageIds: ReadonlySet<string>,
 ): ProviderLedgerAuditResult {
-  const completedProviderMessages = providerMessages.filter(
-    (message) => message.status.toUpperCase() === "COMPLETE" || message.statusCode === "4000",
-  );
+  const completedProviderMessages = providerMessages.filter(isCompletedProviderMessage);
   const missingInLedger = completedProviderMessages.filter(
     (message) => !ledgerMessageIds.has(message.messageId) && !ledgerMessageIds.has(message.groupId),
   );
@@ -143,9 +186,7 @@ export function providerMessageEvidence(messageId: string, raw: unknown): Provid
   const type = String(row.type || "").toUpperCase();
   if (type !== "ATA") return null;
   const kakaoOptions =
-    row.kakaoOptions && typeof row.kakaoOptions === "object"
-      ? (row.kakaoOptions as Record<string, unknown>)
-      : {};
+    row.kakaoOptions && typeof row.kakaoOptions === "object" ? (row.kakaoOptions as Record<string, unknown>) : {};
   const normalizedMessageId = String(row.messageId || messageId || "").trim();
   if (!normalizedMessageId) return null;
   return {

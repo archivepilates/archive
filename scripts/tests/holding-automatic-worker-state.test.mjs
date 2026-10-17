@@ -232,4 +232,13 @@ test("worker wires warning/email, read-only collector, promotion gating and a sh
   assert.match(worker, /AbortSignal.any\(\[deadline.signal/);
   assert.match(worker, /await db\.terminate\(\)/);
   assert.ok(worker.indexOf("deadline.dispose()") < worker.indexOf("await db.terminate()"));
+  const readback = worker.indexOf("const proof = automaticHoldingReadback(raw, config)");
+  const prior = worker.indexOf("const prior = await reconcileExistingHoldingAttempt");
+  const ageGate = worker.indexOf("automaticHoldingEvidence(raw, config);");
+  const promote = worker.indexOf("const eventRef = db.doc");
+  assert.ok(readback > 0 && readback < prior && prior < ageGate && ageGate < promote);
+  assert.match(worker.slice(prior, ageGate), /status: prior.deliveryComplete \? "duplicate_blocked" : "receipt_pending"/);
+  assert.match(worker.slice(prior, ageGate), /continue;/);
+  assert.match(worker.slice(prior, ageGate), /prior.deliveryComplete \? "observed" : "pending"/);
+  assert.match(worker.slice(prior, ageGate), /"holding_prior_receipt_pending"/);
 });

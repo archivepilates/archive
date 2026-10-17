@@ -196,11 +196,49 @@ export async function reconcileVerifiedOperatorHolding({ db, stamp, id, request 
   const row = verifiedReceipt(await request(receiptLookup(ledger)), ledger, ledger.solapiMessageId);
   if (row.status !== "COMPLETE" || String(row.statusCode) !== "4000")
     return { ok: true, id, deliveryComplete: false, providerStatus: row.status, providerStatusCode: row.statusCode, providerPostCount: 0 };
-  const batch = db.batch();
-  batch.update(db.doc(`alimtalkCandidates/${id}`), { status: "sent", lastError: null, sentAt: stamp(), updatedAt: stamp() });
-  batch.update(sendRef, { status: "done", providerOutcome: "delivered_reconciled", providerStatus: row.status,
-    providerStatusCode: "4000", lastError: null, reconciledAt: stamp(), updatedAt: stamp() });
-  batch.update(db.doc(`holdingNoticeClaims/${id}`), { status: "delivered", updatedAt: stamp() });
-  await batch.commit();
+  await db.runTransaction(async tx => {
+    const candidateRef = db.doc(`alimtalkCandidates/${id}`), claimRef = db.doc(`holdingNoticeClaims/${id}`);
+    const current = (await tx.get(sendRef)).data();
+    const candidate = (await tx.get(candidateRef)).data(), claim = (await tx.get(claimRef)).data();
+    const identityKeys = ["id", "candidateId", "sendId", "memberId", "memberPhone", "studioId", "templateCode", "isTest",
+      "message", "variables", "issuanceFingerprint", "creationEvidenceFingerprint", "payload", "observedAt", "solapiMessageId"];
+    if (!current || identityKeys.some(key => holdingFingerprint(current[key] ?? null) !== holdingFingerprint(ledger[key] ?? null)) ||
+        !candidate || !claim || candidate.candidateId !== id || claim.candidateId !== id)
+      throw new Error("holding_receipt_ledger_changed");
+    if (current.status === "done" && current.providerStatus === "COMPLETE" && current.providerStatusCode === "4000" &&
+        candidate.status === "sent" && claim.status === "delivered" && claim.solapiMessageId === ledger.solapiMessageId) return;
+    const at = stamp();
+    tx.update(candidateRef, { status: "sent", lastError: null, ...(candidate.sentAt ? {} : { sentAt: at }), updatedAt: at });
+    tx.update(sendRef, { status: "done", providerOutcome: "delivered_reconciled", providerStatus: row.status,
+      providerStatusCode: "4000", lastError: null, reconciledAt: at, updatedAt: at });
+    tx.update(claimRef, { status: "delivered", updatedAt: at });
+  });
   return { ok: true, id, messageId: row.messageId, groupId: row.groupId, deliveryComplete: true, providerPostCount: 0 };
+}
+
+/** Exact canonical attempt only. This path cannot create a candidate, claim or provider POST. */
+export async function reconcileExistingHoldingAttempt({ db, stamp, plan, request }) {
+  const send = (await db.doc(`alimtalkSends/${plan.id}`).get()).data();
+  const claim = (await db.doc(`holdingNoticeClaims/${plan.id}`).get()).data();
+  const candidate = (await db.doc(`alimtalkCandidates/${plan.id}`).get()).data();
+  if (!send && !claim && !candidate) return null;
+  const matches = row => row && row.memberId === plan.memberId && row.memberPhone === plan.memberPhone &&
+    row.issuanceFingerprint === plan.issuanceFingerprint && row.creationEvidenceFingerprint === plan.creationEvidenceFingerprint &&
+    row.candidateId === plan.id;
+  if (!matches(send) || !matches(claim) || !matches(candidate) || send.id !== plan.id || send.sendId !== plan.id ||
+      send.studioId !== plan.studioId || send.isTest !== false || send.templateCode !== HOLDING_NOTICE_TEMPLATE_ID ||
+      !["operator_verified_one_off", "automatic_live_readback"].includes(send.payload?.deliveryMode) ||
+      !send.solapiMessageId || claim.solapiMessageId !== send.solapiMessageId)
+    throw new Error("holding_prior_claim_reconciliation_required");
+  if (send.status === "done" && send.providerStatus === "COMPLETE" && send.providerStatusCode === "4000" &&
+      candidate.status === "sent" && claim.status === "delivered")
+    return { id: plan.id, deliveryComplete: true, duplicateBlocked: true, providerPostCount: 0 };
+  const receipt = await reconcileVerifiedOperatorHolding({ db, stamp, id: plan.id, request: (url, method) => {
+    if (method && method !== "GET") throw new Error("holding_receipt_get_only");
+    return request(url, "GET");
+  } });
+  if (["FAILED", "DELETED", "REJECTED"].includes(receipt.providerStatus) ||
+      receipt.providerStatus === "COMPLETE" && String(receipt.providerStatusCode) !== "4000")
+    throw new Error(`holding_receipt_terminal_failure:${receipt.providerStatusCode}`);
+  return { ...receipt, duplicateBlocked: true };
 }

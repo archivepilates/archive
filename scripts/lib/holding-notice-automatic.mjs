@@ -21,7 +21,7 @@ export function holdingAutomaticConfigIssue(config, now = new Date()) {
 }
 
 /** Discovery only chooses reads. Fresh native creation evidence establishes the canonical event. */
-export function automaticHoldingEvidence(raw, config, now = new Date()) {
+export function automaticHoldingReadback(raw, config, now = new Date()) {
   const issue = holdingAutomaticConfigIssue(config, now);
   if (issue) throw new Error(issue);
   const observed = normalizeHoldingObservation(raw);
@@ -37,12 +37,19 @@ export function automaticHoldingEvidence(raw, config, now = new Date()) {
   if (matches.length !== 1) throw new Error("holding_single_current_creation_required");
   const selected = matches[0];
   if (Date.parse(selected.registeredAt) < Date.parse(config.cutoverAt)) throw new Error("holding_historical_registration_excluded");
-  if (now.getTime() - Date.parse(selected.registeredAt) > 48 * 3600_000) throw new Error("holding_registration_too_old_review_required");
   // Enforce overlap, allowance and cancelled-period guards for this specific creation.
   calculateLiveHolding(raw, { creationEvidenceFingerprint: selected.id, now });
   return { live, selected, approval: { confirmed: true, approvedBy: config.automaticPolicyId,
     reason: "Human-approved new holding automation after KST cutover", memberId: raw.memberId,
     observationFingerprint: live.observation.observationFingerprint, creationEvidenceFingerprint: selected.id } };
+}
+
+/** Only receipt matching may precede this age gate; every new send still requires it. */
+export function automaticHoldingEvidence(raw, config, now = new Date()) {
+  const proof = automaticHoldingReadback(raw, config, now);
+  if (now.getTime() - Date.parse(proof.selected.registeredAt) > 48 * 3600_000)
+    throw new Error("holding_registration_too_old_review_required");
+  return proof;
 }
 
 export function automaticHoldingEvent(plan, selected, config) {

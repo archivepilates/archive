@@ -8,8 +8,8 @@ import { HOLDING_NOTICE_TEMPLATE_ID, holdingTemplateIssue } from "./lib/holding-
 import { readHoldingMemberProfile } from "./lib/holding-member-identity.mjs";
 import { holdingFingerprint } from "./lib/studiomate-holding-source.mjs";
 import { HOLDING_ROSTER_JOBS, HOLDING_ROSTER_STATE, holdingRosterReadbackIssue, holdingRosterReadbackIsCurrent } from "./lib/studiomate-holding-roster.mjs";
-import { HOLDING_AUTO_EVENTS, holdingAutomaticConfigIssue, automaticHoldingEvidence, automaticHoldingEvent } from "./lib/holding-notice-automatic.mjs";
-import { dispatchVerifiedOperatorHolding, reconcileVerifiedOperatorHolding, verifiedOperatorHoldingPlan } from "./lib/holding-notice-operator-dispatch.mjs";
+import { HOLDING_AUTO_EVENTS, holdingAutomaticConfigIssue, automaticHoldingReadback, automaticHoldingEvidence, automaticHoldingEvent } from "./lib/holding-notice-automatic.mjs";
+import { dispatchVerifiedOperatorHolding, reconcileVerifiedOperatorHolding, reconcileExistingHoldingAttempt, verifiedOperatorHoldingPlan } from "./lib/holding-notice-operator-dispatch.mjs";
 import { recordAutomationStatus } from "./lib/archive-core-ops-logging.mjs";
 import { createHoldingWorkerDeadline, selectHoldingWorkerJobs, loadHoldingReceiptCandidates,
   recordHoldingReceiptCheck, transitionHoldingWorkerEvent, runHoldingWorkerChild } from "./lib/holding-automatic-worker-state.mjs";
@@ -135,10 +135,22 @@ async function run(deadline: ReturnType<typeof createHoldingWorkerDeadline>) {
         results.push({ memberId: job.memberId, status: "excluded", reason: exclusion }); continue;
       }
       const raw = await readLatest(job);
-      const proof = automaticHoldingEvidence(raw, config);
+      const proof = automaticHoldingReadback(raw, config);
       const approval = { ...proof.approval, memberPhone: profile!.phone };
       const plan = verifiedOperatorHoldingPlan(raw, profile, approval);
       eventId = plan.id;
+      const prior = await reconcileExistingHoldingAttempt({ db, stamp: nowTimestamp, plan,
+        request: apply ? request : async () => { throw new Error("dry_run_receipt_reconciliation_required"); } });
+      if (prior) {
+        if (apply) {
+          if (prior.deliveryComplete) await eventStatus(plan.id, "delivered");
+          await mark(job, prior.deliveryComplete ? "observed" : "pending",
+            prior.deliveryComplete ? "holding_prior_attempt_no_resend" : "holding_prior_receipt_pending");
+        }
+        results.push({ memberId: job.memberId, status: prior.deliveryComplete ? "duplicate_blocked" : "receipt_pending", id: plan.id });
+        continue;
+      }
+      automaticHoldingEvidence(raw, config);
       const event = automaticHoldingEvent(plan, proof.selected, config);
       if (!apply) { results.push({ memberId: job.memberId, status: "verified_no_send", id: plan.id }); continue; }
       const eventRef = db.doc(`${HOLDING_AUTO_EVENTS}/${plan.id}`);

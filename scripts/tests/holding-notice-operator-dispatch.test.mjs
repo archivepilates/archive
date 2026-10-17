@@ -111,6 +111,26 @@ test("manual send claims once with automation off and reconciles independently",
   assert.equal(reconciled.deliveryComplete, true); assert.equal(reconciled.providerPostCount, 0);
 });
 
+test("rechecking terminal delivery does not rewrite the original candidate or ledger timestamps", async () => {
+  const h = harness(); await h.run();
+  const before = structuredClone(h.db.docs);
+  await reconcileVerifiedOperatorHolding({ db: h.db, stamp: () => "2026-10-17T10:00:00.000Z", id: h.plan.id, request: h.request });
+  assert.deepEqual(h.db.docs, before);
+});
+
+test("concurrent successful reconciliations tolerate mutable receipt updates and write completion once", async () => {
+  const h = harness(); await h.run();
+  h.db.docs.get(`alimtalkSends/${h.plan.id}`).providerStatus = "SENDING";
+  h.db.docs.get(`holdingNoticeClaims/${h.plan.id}`).status = "accepted";
+  let stamps = 0;
+  const reconcile = () => reconcileVerifiedOperatorHolding({ db: h.db, stamp: () => { stamps++; return NOW.toISOString(); },
+    id: h.plan.id, request: h.request });
+  const results = await Promise.all([reconcile(), reconcile()]);
+  assert.ok(results.every(row => row.deliveryComplete));
+  assert.equal(stamps, 1);
+  assert.equal(h.posts.length, 1);
+});
+
 test("dispatch must acquire a new ticket after provider checks; stale files and reader errors never send", async () => {
   for (const readLatest of [undefined, async () => { throw new Error("browser_locked"); },
     async () => ({ ...evidence(), observedAt: new Date(NOW.getTime() - 1).toISOString() }),

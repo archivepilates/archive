@@ -4,10 +4,10 @@ import { HOLDING_NOTICE_TEMPLATE, HOLDING_NOTICE_TEMPLATE_ID } from "../lib/hold
 import { HOLDING_SOURCE, normalizeHoldingObservation, sourceInstant } from "../lib/studiomate-holding-source.mjs";
 import {
   HOLDING_AUTO_MODE, HOLDING_AUTO_EVENTS, HOLDING_AUTO_POLICY, HOLDING_AUTO_CUTOVER,
-  holdingAutomaticConfigIssue, automaticHoldingEvidence, automaticHoldingEvent, automaticHoldingEventIssue,
+  holdingAutomaticConfigIssue, automaticHoldingReadback, automaticHoldingEvidence, automaticHoldingEvent, automaticHoldingEventIssue,
 } from "../lib/holding-notice-automatic.mjs";
 import {
-  dispatchVerifiedOperatorHolding, verifiedOperatorHoldingPlan, reconcileVerifiedOperatorHolding,
+  dispatchVerifiedOperatorHolding, verifiedOperatorHoldingPlan, reconcileVerifiedOperatorHolding, reconcileExistingHoldingAttempt,
 } from "../lib/holding-notice-operator-dispatch.mjs";
 
 const NOW = new Date("2026-10-08T03:00:00.000Z");
@@ -400,6 +400,86 @@ test("automatic ledger records deliveryMode and canonical identity but never raw
   const receipt = await reconcileVerifiedOperatorHolding({ db: h.db, stamp: () => NOW.toISOString(), id: h.plan.id, request: h.request });
   assert.equal(receipt.deliveryComplete, true);
   assert.equal(receipt.providerPostCount, 0);
+  assert.equal(h.posts.length, 1);
+});
+
+test("delivered holding is matched before the age gate without GET, POST or ledger timestamp changes", async () => {
+  const h = harness();
+  await h.run();
+  const later = new Date("2026-10-11T03:00:00.000Z"), raw = evidence(later);
+  const proof = automaticHoldingReadback(raw, config(), later);
+  const plan = verifiedOperatorHoldingPlan(raw, MEMBER, { ...proof.approval, memberPhone: MEMBER.phone }, later);
+  assert.equal(plan.id, h.plan.id);
+  assert.throws(() => automaticHoldingEvidence(raw, config(), later), /registration_too_old/);
+  const before = structuredClone(h.db.docs);
+  const prior = await reconcileExistingHoldingAttempt({ db: h.db, plan, stamp: () => later.toISOString(),
+    request: async () => { throw new Error("no_provider_calls_for_terminal_delivery"); } });
+  assert.equal(prior.deliveryComplete, true);
+  assert.equal(prior.providerPostCount, 0);
+  assert.deepEqual(h.db.docs, before);
+  assert.equal(h.posts.length, 1);
+});
+
+test("old unseen holding still fails the 48-hour gate and cannot become a new automatic event", async () => {
+  const h = harness(), later = new Date("2026-10-11T03:00:00.000Z"), raw = evidence(later);
+  const proof = automaticHoldingReadback(raw, config(), later);
+  const plan = verifiedOperatorHoldingPlan(raw, MEMBER, { ...proof.approval, memberPhone: MEMBER.phone }, later);
+  assert.equal(await reconcileExistingHoldingAttempt({ db: h.db, plan,
+    request: async () => { throw new Error("no_provider_calls"); } }), null);
+  assert.throws(() => automaticHoldingEvidence(raw, config(), later), /registration_too_old/);
+  assert.throws(() => automaticHoldingEventIssue(automaticHoldingEvent(plan, proof.selected, config()), plan, config(), later), /registration_too_old/);
+  assert.equal(h.posts.length, 0);
+  assert.equal(h.db.creates.length, 0);
+});
+
+test("same-event receipt lookup never retries unknown claims and rejects identity mismatches", async t => {
+  for (const field of ["memberId", "memberPhone", "issuanceFingerprint", "creationEvidenceFingerprint", "candidateId", "solapiMessageId"]) {
+    await t.test(field, async () => {
+      const h = harness(); await h.run();
+      h.db.docs.get(`holdingNoticeClaims/${h.plan.id}`)[field] = "mismatch";
+      await assert.rejects(reconcileExistingHoldingAttempt({ db: h.db, plan: h.plan,
+        request: async () => { throw new Error("must_not_query_or_send"); } }), /prior_claim_reconciliation_required/);
+      assert.equal(h.posts.length, 1);
+    });
+  }
+  const h = harness({ failure: "throw" }); await assert.rejects(h.run());
+  await assert.rejects(reconcileExistingHoldingAttempt({ db: h.db, plan: h.plan,
+    request: async () => { throw new Error("unknown_attempt_never_retries"); } }), /prior_claim_reconciliation_required/);
+  assert.equal(h.posts.length, 1);
+});
+
+test("pending exact attempt reconciles GET-only even after 48 hours and preserves original sentAt", async () => {
+  const h = harness(); await h.run();
+  const send = h.db.docs.get(`alimtalkSends/${h.plan.id}`), claim = h.db.docs.get(`holdingNoticeClaims/${h.plan.id}`);
+  send.status = "failed"; send.providerStatus = "SENDING"; send.providerStatusCode = "2000";
+  claim.status = "accepted";
+  const later = new Date("2026-10-11T03:00:00.000Z"), proof = automaticHoldingReadback(evidence(later), config(), later);
+  const plan = verifiedOperatorHoldingPlan(evidence(later), MEMBER, { ...proof.approval, memberPhone: MEMBER.phone }, later);
+  const sentAt = h.db.docs.get(`alimtalkCandidates/${plan.id}`).sentAt;
+  const prior = await reconcileExistingHoldingAttempt({ db: h.db, stamp: () => later.toISOString(), plan,
+    request: (url, method) => { assert.equal(method, "GET"); return h.request(url); } });
+  assert.equal(prior.deliveryComplete, true);
+  assert.equal(prior.providerPostCount, 0);
+  assert.equal(h.db.docs.get(`alimtalkCandidates/${plan.id}`).sentAt, sentAt);
+  assert.equal(h.posts.length, 1);
+});
+
+test("prior operator attempt keeps nonterminal receipts pending and exposes terminal failures without an automatic event", async () => {
+  const h = harness(); await h.run();
+  h.db.docs.delete(h.eventPath);
+  const send = h.db.docs.get(`alimtalkSends/${h.plan.id}`), claim = h.db.docs.get(`holdingNoticeClaims/${h.plan.id}`);
+  send.payload.deliveryMode = "operator_verified_one_off";
+  send.providerStatus = "SENDING"; send.providerStatusCode = "2000"; claim.status = "accepted";
+  const row = { messageId: send.solapiMessageId, groupId: send.solapiGroupId, to: MEMBER.phone, status: "SENDING", statusCode: "2000",
+    text: send.message, kakaoOptions: { templateId: HOLDING_NOTICE_TEMPLATE_ID, disableSms: true, variables: send.variables } };
+  const call = () => reconcileExistingHoldingAttempt({ db: h.db, stamp: () => NOW.toISOString(), plan: h.plan,
+    request: async (_url, method) => { assert.equal(method, "GET"); return { messageList: [row] }; } });
+  const before = structuredClone(h.db.docs);
+  assert.equal((await call()).deliveryComplete, false);
+  assert.deepEqual(h.db.docs, before);
+  row.status = "COMPLETE"; row.statusCode = "3000";
+  await assert.rejects(call(), /holding_receipt_terminal_failure:3000/);
+  assert.equal(h.db.docs.has(h.eventPath), false);
   assert.equal(h.posts.length, 1);
 });
 
