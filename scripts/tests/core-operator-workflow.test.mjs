@@ -5,6 +5,7 @@ import vm from "node:vm";
 import { buildSync } from "esbuild";
 import { fileURLToPath } from "node:url";
 import { webcrypto } from "node:crypto";
+import { createRealmSafeWhere } from "../../core/assets/firestore-query.js";
 
 const appUrl = new URL("../../core/assets/app.js", import.meta.url);
 const source = fs.readFileSync(appUrl, "utf8");
@@ -31,7 +32,7 @@ function app() {
   };
   const context = { document, URL, console, Date, Intl, crypto: webcrypto, TextEncoder };
   vm.runInNewContext(`${testSource}\nglobalThis.api = {
-    state, setReadState, renderHomeSummary, renderHomeDecisions, renderRenewalPipeline,
+    state, setReadState, renderReadHealth, renderHomeSummary, renderHomeDecisions, renderRenewalPipeline,
     renewalCaseRows, activeRenewalMemberRows, groupRenewalRows, getCommunicationActions,
     pendingAlimtalkCandidates, failedAlimtalkCandidates, failedAlimtalkSends, isCurrentCommunicationFailure, communicationProblemSummary, currentPrivateSessionRows,
     privateSessionAction, renderPrivateSessionCard, staffCompositeScore, scoreBand,
@@ -159,6 +160,53 @@ test("an older pending message is counted independently of recent twelve history
   assert.equal(a.pendingAlimtalkCandidates()[0].id, "older");
   assert.equal(calls[0][1][0], "status");
   assert.ok(calls[0][1][2].includes("review"));
+});
+
+test("child home action queries use owner-frame arrays for all five sources", async () => {
+  const a = app();
+  let queries = 0;
+  const runtime = {
+    collection: (_, name) => name,
+    where: (field, operator, value) => {
+      if (operator === "in" && !(value instanceof Array)) throw Error("Unsupported field value: a custom Array object");
+      return { field, operator, value };
+    },
+    limit: n => n,
+    query: (name, condition) => ({ name, condition }),
+    getDocs: async ({ name }) => {
+      queries++;
+      return { metadata: { fromCache: false }, docs: [{ id: `${name}_1`, data: () => ({ status: "failed", studioId: "5330" }) }] };
+    },
+  };
+  await assert.rejects(a.getCommunicationActions({}, runtime, "alimtalkCandidates"), /custom Array/);
+  assert.equal(queries, 0);
+  runtime.where = createRealmSafeWhere(runtime.where);
+  for (const name of ["alimtalkCandidates", "alimtalkSends", "onsiteWelcomeRequests", "memberSignupContracts", "pricingInquiryAlimtalkRequests"]) {
+    const rows = await a.getCommunicationActions({}, runtime, name);
+    assert.equal(rows.length, 1, name);
+    a.state.communicationActions[name] = rows;
+    a.setReadState(`actions:${name}`, "ready");
+  }
+  assert.ok(queries > 5);
+  const status = a.element("commandQueueStatus");
+  const list = a.element("homeDecisionList");
+  a.renderHomeSummary(); a.renderHomeDecisions();
+  assert.doesNotMatch(status.textContent, /업무 조회 확인 필요/);
+  assert.match(list.innerHTML, /알림톡 실패/);
+});
+
+test("home read failures identify the affected source instead of repeating a generic title", () => {
+  const a = app();
+  a.element("homeDecisionList");
+  const label = a.element("connectionLabel");
+  const detail = a.element("connectionDetail");
+  a.setReadState("actions:alimtalkCandidates", "unavailable");
+  a.setReadState("actions:alimtalkSends", "unavailable");
+  a.setReadState("actions:memberSignupContracts", "unavailable");
+  a.renderReadHealth();
+  assert.equal(label.textContent, "원본 확인 필요");
+  assert.match(detail.textContent, /알림톡 대기·실패, 알림톡 발송 결과, 가입서 후속 처리 조회 실패/);
+  assert.doesNotMatch(detail.textContent, /미해결 알림톡/);
 });
 
 test("bounded action queries flag incomplete totals at the cap", async () => {

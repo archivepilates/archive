@@ -74,6 +74,12 @@
           <div class="rule-note"><strong>검증·배포·다음</strong><span>기능·권한 규칙·조회 인덱스 반영(f0886adc), 최초 변경 함수의 전용 최소 권한 실행 계정 반영(e237e8ea) 완료. 회귀 218건·통합 화면 92조합과 전체 격리 라이브 테스트를 통과했습니다. 이전 규칙 검증 235건은 변경 없이 유지합니다. 최초 변경·새 로그인·과거 세션 차단·민감 원문 차단·UID별 본문/사진·삭제본 복구 방지·비근무 차단을 확인했습니다. 실강사 3명은 UID 유지, 1명은 신규 생성했으며 관리자 인증·문서는 보존했습니다. 실제 강사의 비밀번호 변경과 문자 발송은 시험하지 않았습니다. 다음: 강사별 최초 변경 안내. 운영자 전체 시퀀스 조회는 아래 2026-10-13 통합 조회 규칙을 따릅니다. 최종 갱신: 2026-10-11.</span></div>
         </section>
 
+        <section class="panel rule-section" id="home-priority-read-health">
+          <div class="panel-header"><div><h2>홈 우선순위 조회 · 2026.10.17</h2></div><span class="pill">조회 보완</span></div>
+          <div class="rule-note"><strong>목적·원천</strong><span>홈 우선순위는 기존 재등록 상담·회원 원본·자동화 상태와 알림톡 후보·발송·요청 원장을 조회한 운영 참고 목록입니다. 조회 실패·한도 도달은 정상 0건으로 표시하지 않습니다. 발송 승인이나 실시간 StudioMate 원본 확인을 대신하지 않습니다.</span></div>
+          <div class="rule-note"><strong>수정·검증</strong><span>메뉴 전환 후 공유 Firebase 연결이 다른 화면의 상태 배열을 거부하여 통신 업무 5개 조회가 누락되는 오류를 재현했습니다. 연결을 소유한 화면에서 배열을 복사하고 오류를 원천별로 표시하도록 수정했습니다. 실제 SDK 무통신 재현과 회귀 55건, 모바일·데스크톱 메뉴 이동 8조합을 통과했습니다. 이 문구가 표시되는 Hosting 릴리스에 포함하며 배포 식별자는 release.json으로 확인합니다. 회원 데이터·발송·중복방지·승인·자동화 주기는 변경하지 않습니다. 이전 연결을 교체하려면 전체 새로고침이 필요하며 최종 운영 검증 결과는 2026-10-17-core-home-priority-query 보고서를 따릅니다.</span></div>
+        </section>
+
         <section class="panel rule-section" id="class-cancellation-policy">
           <div class="panel-header"><div><h2>공휴일·주말 일반 그룹수업 취소 · 2026.10.08</h2></div><span class="pill">10.09 수업부터</span></div>
           <div class="rule-note"><strong>운영 기준</strong><span>2026년 10월 9일 수업부터 공휴일·토·일 일반 그룹수업만 수업일 하루 전 21:00까지 취소 가능합니다. 프라이빗·강사레슨은 이 규정의 적용 대상에서 제외하며 별도 규정을 유지합니다. 일반 그룹수업의 토요일 마감은 금요일 21:00, 일요일 마감은 토요일 21:00입니다. 일반 평일 그룹수업의 6시간 전 기준은 유지합니다.</span></div>

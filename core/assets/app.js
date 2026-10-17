@@ -1,6 +1,7 @@
 import { uiIcon } from "./ui-icons.js";
 import { prepareCoreAccess, renderInstructorCore } from "./core-instructor-access.js";
 import { finishCoreNavigation, sharedNavigationRuntime, initCoreNavigationDocument } from "./core-navigation.js";
+import { createRealmSafeWhere } from "./firestore-query.js";
 
 const CORE_BRAND_IMAGE_URL = new URL("../icons/archive-pilates-icon-192.png", import.meta.url).href;
 const FIREBASE_APP_VERSION = "10.14.1";
@@ -561,7 +562,7 @@ function renderReadHealth() {
     document.body.dataset.sourceHealth = "unavailable";
     setConnection(
       "원본 확인 필요",
-      `${unavailable.map((item) => item.title).join(", ")} 조회 실패 · 새로고침이 필요합니다.`,
+      `${[...new Set(unavailable.map((item) => item.title))].join(", ")} 조회 실패 · 새로고침이 필요합니다.`,
     );
     return;
   }
@@ -609,7 +610,14 @@ const COMMUNICATION_ACTION_FIELDS = {
 };
 
 function communicationReadRequirements() {
-  return Object.keys(COMMUNICATION_ACTION_FIELDS).map((name) => ({ label: `actions:${name}`, title: "미해결 알림톡", staleAfterHours: null }));
+  const titles = {
+    alimtalkCandidates: "알림톡 대기·실패",
+    alimtalkSends: "알림톡 발송 결과",
+    onsiteWelcomeRequests: "기존 웰컴 후속 처리",
+    memberSignupContracts: "가입서 후속 처리",
+    pricingInquiryAlimtalkRequests: "수강료 안내",
+  };
+  return Object.keys(COMMUNICATION_ACTION_FIELDS).map((name) => ({ label: `actions:${name}`, title: titles[name], staleAfterHours: null }));
 }
 
 function communicationActionItems(name) {
@@ -1078,6 +1086,7 @@ async function initFirebase() {
     httpsCallable: functions.httpsCallable,
     auth,
     ...firestore,
+    where: createRealmSafeWhere(firestore.where),
   };
   return state.firebaseRuntime;
 }

@@ -213,7 +213,10 @@ function firebaseModule(kind) {
     const reference = (args) => ({ path: args.filter(value => typeof value === "string").join("/"), filters: [] });
     export const doc = (...args) => reference(args);
     export const collection = (...args) => reference(args);
-    export const where = (field, operator, value) => ({ kind: "where", field, operator, value });
+    export const where = (field, operator, value) => {
+      if (Array.isArray(value) && !(value instanceof Array)) throw new Error("Unsupported field value: a custom Array object");
+      return { kind: "where", field, operator, value };
+    };
     export const orderBy = (field, direction) => ({ kind: "orderBy", field, direction });
     export const limit = (value) => ({ kind: "limit", value });
     export const query = (ref, ...filters) => ({ ...ref, filters: [...ref.filters, ...filters] });
@@ -876,7 +879,7 @@ async function navigationCase(page, base, manager, name) {
   const sequencePage = await destinationFrame(page, sequence, documentId, manager);
   const studio = sequencePage.childFrames().find(frame => new URL(frame.url()).pathname === `${sequence}studio.html`);
   assert.ok(studio, "Sequence studio remains a nested authenticated editor");
-  await studio.getByRole("tab", { name: /내 시퀀스/ }).waitFor();
+  await studio.getByRole("tab", { name: manager ? /^시퀀스/ : /내 시퀀스/ }).waitFor();
   await studio.waitForFunction(() => Boolean(window.archiveSequenceNavigation));
   assert.equal(await studio.evaluate(() => parent.archiveSequenceStore.uid), "qa-instructor");
   const nestedViewport = await studio.evaluate(() => ({
@@ -924,7 +927,22 @@ async function navigationCase(page, base, manager, name) {
   await page.goBack();
   await destinationFrame(page, sequence, documentId, manager);
   await page.goBack();
-  await destinationFrame(page, initial, documentId, manager);
+  const restored = await destinationFrame(page, initial, documentId, manager);
+  if (manager) {
+    const home = await restored.evaluate(() => ({
+      status: document.getElementById("commandQueueStatus")?.textContent,
+      sourceHealth: document.body.dataset.sourceHealth,
+      connection: document.getElementById("connectionDetail")?.textContent,
+    }));
+    assert.equal(home.status, "오늘 처리할 일 없음", "Empty verified fixture stays clear after returning to the child home");
+    assert.notEqual(home.sourceHealth, "unavailable");
+    assert.doesNotMatch(home.connection, /조회 실패/);
+    const reads = (await telemetry(page)).reads;
+    for (const path of ["alimtalkCandidates", "alimtalkSends", "onsiteWelcomeRequests", "memberSignupContracts", "pricingInquiryAlimtalkRequests"]) {
+      assert.ok(reads.filter(read => read.path === path && read.filters.some(filter => filter.kind === "where" && filter.operator === "in")).length >= 2,
+        `Both initial and child home must query unresolved ${path}`);
+    }
+  }
   await page.goForward();
   await destinationFrame(page, sequence, documentId, manager);
   await page.goForward();
