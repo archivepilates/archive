@@ -25,5 +25,9 @@
 - Read-only actual completed-attempt check: duplicate blocked, delivery complete, provider calls 0, writes 0, three ledgers unchanged.
 - Read-only audit of the previously flagged day: provider 9 / ledger 9 / missing 0. No notification or member send invoked.
 - Local responsive QA: 95 passed at 320/390/768/1440/1920px. Independent review found concurrent receipt and terminal-failure edge cases; both were fixed with regression tests. Independent re-review: both reproductions resolved, 159 targeted tests passed, no remaining scoped blocker.
-- Pending: scoped release and live code/config readback.
+- Source commit: `4c23403cc0a4453234861747e98a80f04f3445cc`, promoted to origin/main. Runtime branch `archive-runtime-main` and clean main deployment worktree fast-forward aligned; three changed worker module hashes match. The existing LaunchAgent points at this runtime and retains StartInterval=3600.
+- Scoped Functions release: only `functions-alimtalk:scheduledAuditAlimtalkProviderLedger`. ACTIVE revision `scheduledauditalimtalkproviderledger-00022-pow`, 512MiB unchanged, updated 2026-10-17T11:36:04.730Z. Downloaded the deployed source generation and verified both audit TypeScript and compiled JavaScript bytes against local build; temporary archive removed.
+- Hosting: `archive-pilates` and `archive-pilates-core` released. Live responsive QA: 95 passed. Canary source=4c23403c passed. CORE rules bytes match on custom domain, core web.app and main web.app/core path. An extra probe against the unrelated IN-domain CORE path returned 404; corrected to the configured main web.app/core path, which passed.
+- Scheduler readback: audit 10:15 daily, queue every 10 minutes, both ENABLED Asia/Seoul. No Scheduler or LaunchAgent configuration changes.
+- Additional send-policy regression: 137 passed. GitHub Actions `39029217300` succeeded with no failure/warning annotations. No task-owned browser or verification process remains.
 - Natural hourly outcome will be reported separately from no-send simulation; do not run the production worker manually for verification.
