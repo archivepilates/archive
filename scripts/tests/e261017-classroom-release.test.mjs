@@ -2,7 +2,7 @@ import test from 'node:test';
 import assert from 'node:assert/strict';
 import fs from 'node:fs';
 import { createHash } from 'node:crypto';
-import { ASSET, BASELINE_SHA256, makeManifest, assertManifest } from '../release-e261017-classroom.mjs';
+import { ASSET, BASELINE_SHA256, makeManifest, assertManifest, assertETeamNoteOnly } from '../release-e261017-classroom.mjs';
 
 test('only E261017 is added to the pinned live classroom source', () => {
   const source = fs.readFileSync(`official-home${ASSET}`, 'utf8');
@@ -31,4 +31,14 @@ test('CORE rule-only manifest cannot alter any other resource', () => {
   assert.equal(manifest[asset], 'c'.repeat(64));
   assert.equal(manifest['/archivein/index.html'], 'b'.repeat(64));
   assert.throws(() => makeManifest(files, 'c'.repeat(64)), /missing/);
+});
+
+test('CORE replacement is restricted to one existing E-team note without whitespace drift', () => {
+  const old = '<p>untouched</p>\n  <div class="rule-note"><strong>E팀 수강생 영상 · 2026.10.18 verified</strong><span>old</span></div>\n<footer>end</footer>\n';
+  const next = old.replace(' verified', '').replace('>old<', '>new<');
+  assert.doesNotThrow(() => assertETeamNoteOnly(old, next));
+  for (const bad of [old, next.replace('untouched', 'changed'), next + '\n',
+    next.replace('E팀 수강생 영상', '다른 팀'), next + next.match(/  <div[^\n]+\n/)[0]]) {
+    assert.throws(() => assertETeamNoteOnly(old, bad), /exactly one/);
+  }
 });

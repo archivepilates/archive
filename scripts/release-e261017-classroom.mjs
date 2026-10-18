@@ -12,7 +12,7 @@ const CORE_RULES = process.argv.includes('--core-rules');
 const SITE = CORE_RULES ? 'archive-pilates' : 'archive-pilates-home';
 const RESOURCE_PATH = CORE_RULES ? '/core/rules/index.html' : ASSET;
 const LIVE_URL = CORE_RULES ? 'https://archive-pilates.web.app/core/rules/' : `https://archivepilates.com${ASSET}`;
-const EXPECTED_BASELINE = CORE_RULES ? '79e6db699f1d342349dc17c35b6a436e930df92d40d2c0a3fd7620e259829651' : BASELINE_SHA256;
+const EXPECTED_BASELINE = CORE_RULES ? '74d1e287bdbe7bcfbee9724afb2ee456cd19c806ca8b9aa2cf7b09a5bcda027f' : BASELINE_SHA256;
 const ACCOUNT = 'archive-codex-operator@archive-pilates.iam.gserviceaccount.com';
 const API = 'https://firebasehosting.googleapis.com/v1beta1/';
 const sha = value => createHash('sha256').update(value).digest('hex');
@@ -37,6 +37,16 @@ export function assertManifest(actual, expected) {
   }
 }
 
+export function assertETeamNoteOnly(before, after) {
+  const note = /^[ \t]*<div class="rule-note"><strong>E팀 수강생 영상 · 2026\.10\.18(?: verified)?<\/strong>[^\n]*\n/gm;
+  const oldNotes = before.match(note) || [];
+  const newNotes = after.match(note) || [];
+  if (oldNotes.length !== 1 || newNotes.length !== 1 || oldNotes[0] === newNotes[0]
+      || before.replace(note, '') !== after.replace(note, '')) {
+    throw Error('CORE change must replace exactly one E-team operating note');
+  }
+}
+
 async function main() {
   const apply = process.argv.includes('--apply');
   const expectedVersion = process.argv.find(arg => arg.startsWith('--expected-version='))?.slice(19);
@@ -44,13 +54,11 @@ async function main() {
   const root = git(['rev-parse', '--show-toplevel']);
   const trackedPath = CORE_RULES ? 'core/rules/index.html' : `official-home${ASSET}`;
   const source = fs.readFileSync(path.join(root, trackedPath));
-  const oldSource = execFileSync('git', ['show', `${CORE_RULES ? 'c05484a2' : 'cc2f803'}:${trackedPath}`]);
+  const oldSource = execFileSync('git', ['show', `${CORE_RULES ? '136be350a9bc9917a942f94fc2d87dffe1ec312a' : 'cc2f803'}:${trackedPath}`]);
   if (sha(oldSource) !== EXPECTED_BASELINE) throw Error('Pinned Git baseline changed');
   const addition = ',\n    {"code":"E261017","path":"/private-lesson-external-feedback-e-261017","title":"10/17 외부 피드백 E팀 · 수강생 공유","group":"PRIVATE LESSON EXTERNAL FEEDBACK E 261017 40D","private":true}';
   if (CORE_RULES) {
-    const withoutNotes = source.toString().replace(/^[ \t]*<div class="rule-note"><strong>(?:2026\.10\.17 E팀|E팀)[^\n]*\n/gm, '');
-    const normalize = text => text.replace(/\n{3,}/g, '\n\n');
-    if (normalize(withoutNotes) !== normalize(oldSource.toString())) throw Error('CORE change must contain only E-team operating notes');
+    assertETeamNoteOnly(oldSource.toString(), source.toString());
   } else if (!source.toString().includes(addition) || source.toString().replace(addition, '') !== oldSource.toString()) {
     throw Error('Classroom change must be exactly the E261017 catalog entry');
   }
@@ -104,6 +112,7 @@ async function main() {
   const fd = fs.openSync(lock, 'wx', 0o600);
   try {
     fs.writeSync(fd, JSON.stringify({ pid: process.pid, startedAt: new Date().toISOString() }));
+    if ((await latest()).name !== release.name) throw Error('Concurrent deployment detected after locking');
     const created = await request(`sites/${SITE}/versions`, 'POST', { config: baseline.config });
     evidence.createdVersion = created.name; save();
     if (!created.name?.startsWith(`sites/${SITE}/versions/`)) throw Error('Unexpected new version');
