@@ -92,3 +92,4 @@
 - 검증 후 테스트 계정을 로그아웃하고 모든 작업 소유 Chrome·인앱 탭을 종료했다. 기존 사용자 탭은 보존했고 viewport override를 해제했다. 자격증명은 Keychain만 재사용하고 파일/로그/소스에 저장하지 않았다.
 - 증거: `e-access-matrix.json`, `e-playback-check.json`, `classroom-e-authorized-*.png`, `page-e-authorized-*.png`. 최초 플레이어 검사는 미디어 준비 전에 상태를 읽어 조기 실패했으나 실제 진행 시간을 독립 재조회해 복구했고 최종 4건 재생 검사에 통과했다.
 - CORE 운영규칙은 중복 준비 기록을 현재 검증 상태의 한 항목으로 정리했다. 해당 운영규칙 페이지만 별도 배포하며 다른 CORE 기능은 변경하지 않는다.
+- CORE 운영규칙 배포 완료: 소스 `6fd5251f`, 새 버전 `sites/archive-pilates/versions/4d7dff2ba485a956`, 릴리스 `1792285130106000`. 전체 167개 파일 중 `/core/rules/index.html` 하나만 변경했고 설정 보존·라이브 해시 일치를 확인했다. 최종 Node 테스트는 shallow CI에서도 실행되도록 과거 Git 객체 대신 고정 원본 해시로 비교한다.
