@@ -8,21 +8,25 @@ import { pathToFileURL } from 'node:url';
 
 export const ASSET = '/assets/imweb-my-classroom-20260723a.js';
 export const BASELINE_SHA256 = '6145954b623ae8ad1bd8541a582eaafe0e1c964aa82cc10b28195ccfcf6cc646';
-const SITE = 'archive-pilates-home';
+const CORE_RULES = process.argv.includes('--core-rules');
+const SITE = CORE_RULES ? 'archive-pilates' : 'archive-pilates-home';
+const RESOURCE_PATH = CORE_RULES ? '/core/rules/index.html' : ASSET;
+const LIVE_URL = CORE_RULES ? 'https://archive-pilates.web.app/core/rules/' : `https://archivepilates.com${ASSET}`;
+const EXPECTED_BASELINE = CORE_RULES ? '79e6db699f1d342349dc17c35b6a436e930df92d40d2c0a3fd7620e259829651' : BASELINE_SHA256;
 const ACCOUNT = 'archive-codex-operator@archive-pilates.iam.gserviceaccount.com';
 const API = 'https://firebasehosting.googleapis.com/v1beta1/';
 const sha = value => createHash('sha256').update(value).digest('hex');
 
-export function makeManifest(files, newHash) {
+export function makeManifest(files, newHash, asset = ASSET) {
   const map = {};
   for (const file of files) {
     if (!file.path?.startsWith('/') || !/^[a-f0-9]{64}$/.test(file.hash)) throw Error('Invalid baseline file');
     if (Object.hasOwn(map, file.path)) throw Error('Duplicate baseline path');
     map[file.path] = file.hash;
   }
-  if (!Object.hasOwn(map, ASSET)) throw Error('Baseline classroom asset is missing');
+  if (!Object.hasOwn(map, asset)) throw Error('Baseline target asset is missing');
   if (!/^[a-f0-9]{64}$/.test(newHash)) throw Error('Invalid replacement hash');
-  map[ASSET] = newHash;
+  map[asset] = newHash;
   return map;
 }
 
@@ -38,12 +42,16 @@ async function main() {
   const expectedVersion = process.argv.find(arg => arg.startsWith('--expected-version='))?.slice(19);
   const git = args => execFileSync('git', args, { encoding: 'utf8' }).trim();
   const root = git(['rev-parse', '--show-toplevel']);
-  const trackedPath = `official-home${ASSET}`;
+  const trackedPath = CORE_RULES ? 'core/rules/index.html' : `official-home${ASSET}`;
   const source = fs.readFileSync(path.join(root, trackedPath));
-  const oldSource = execFileSync('git', ['show', `cc2f803:${trackedPath}`]);
-  if (sha(oldSource) !== BASELINE_SHA256) throw Error('Pinned Git baseline changed');
+  const oldSource = execFileSync('git', ['show', `${CORE_RULES ? 'c05484a2' : 'cc2f803'}:${trackedPath}`]);
+  if (sha(oldSource) !== EXPECTED_BASELINE) throw Error('Pinned Git baseline changed');
   const addition = ',\n    {"code":"E261017","path":"/private-lesson-external-feedback-e-261017","title":"10/17 외부 피드백 E팀 · 수강생 공유","group":"PRIVATE LESSON EXTERNAL FEEDBACK E 261017 40D","private":true}';
-  if (!source.toString().includes(addition) || source.toString().replace(addition, '') !== oldSource.toString()) {
+  if (CORE_RULES) {
+    const withoutNotes = source.toString().replace(/^[ \t]*<div class="rule-note"><strong>(?:2026\.10\.17 E팀|E팀)[^\n]*\n/gm, '');
+    const normalize = text => text.replace(/\n{3,}/g, '\n\n');
+    if (normalize(withoutNotes) !== normalize(oldSource.toString())) throw Error('CORE change must contain only E-team operating notes');
+  } else if (!source.toString().includes(addition) || source.toString().replace(addition, '') !== oldSource.toString()) {
     throw Error('Classroom change must be exactly the E261017 catalog entry');
   }
   if (apply) {
@@ -79,14 +87,14 @@ async function main() {
   const baselineFiles = await filesFor(baseline.name);
   const compressed = gzipSync(source, { level: 9 });
   const hash = sha(compressed);
-  const manifest = makeManifest(baselineFiles, hash);
-  const live = await fetch(`https://archivepilates.com${ASSET}`, { cache: 'no-store' });
-  if (!live.ok || sha(Buffer.from(await live.arrayBuffer())) !== BASELINE_SHA256) throw Error('Live asset is not the reviewed baseline');
+  const manifest = makeManifest(baselineFiles, hash, RESOURCE_PATH);
+  const live = await fetch(LIVE_URL, { cache: 'no-store' });
+  if (!live.ok || sha(Buffer.from(await live.arrayBuffer())) !== EXPECTED_BASELINE) throw Error('Live asset is not the reviewed baseline');
   const evidenceDir = path.join(root, 'artifacts/student-share-261017');
   fs.mkdirSync(evidenceDir, { recursive: true });
-  const evidencePath = path.join(evidenceDir, apply ? 'hosting-release.json' : 'hosting-plan.json');
+  const evidencePath = path.join(evidenceDir, `${CORE_RULES ? 'core-rules-' : ''}${apply ? 'hosting-release.json' : 'hosting-plan.json'}`);
   const evidence = { site: SITE, sourceCommit: git(['rev-parse', 'HEAD']), baselineVersion: baseline.name,
-    changedPaths: [ASSET], fileCount: baselineFiles.length, newSourceHash: sha(source), compressedHash: hash, mode: apply ? 'apply' : 'plan' };
+    changedPaths: [RESOURCE_PATH], fileCount: baselineFiles.length, newSourceHash: sha(source), compressedHash: hash, mode: apply ? 'apply' : 'plan' };
   const save = () => fs.writeFileSync(evidencePath, JSON.stringify(evidence, null, 2));
   save();
   if (!apply) { console.log(JSON.stringify(evidence, null, 2)); return; }
@@ -120,11 +128,11 @@ async function main() {
     if ((await latest()).name !== release.name) throw Error('Concurrent deployment detected after finalization');
     evidence.releaseIntentAt = new Date().toISOString(); save();
     const result = await request(`sites/${SITE}/releases?versionName=${created.name}`, 'POST', {
-      message: `E261017 classroom catalog only (${evidence.sourceCommit.slice(0, 12)})`,
+      message: `E261017 ${CORE_RULES ? 'operating notes' : 'classroom catalog'} only (${evidence.sourceCommit.slice(0, 12)})`,
     });
     evidence.releaseName = result.name; evidence.releaseTime = result.releaseTime; save();
     if ((await latest()).version.name !== created.name) throw Error('Release readback mismatch');
-    const verified = await fetch(`https://archivepilates.com${ASSET}`, { cache: 'no-store' });
+    const verified = await fetch(LIVE_URL, { cache: 'no-store' });
     if (!verified.ok || sha(Buffer.from(await verified.arrayBuffer())) !== sha(source)) throw Error('Live asset readback mismatch');
     evidence.verified = true; save(); console.log(JSON.stringify(evidence, null, 2));
   } finally { fs.closeSync(fd); fs.unlinkSync(lock); }

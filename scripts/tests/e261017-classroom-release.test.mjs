@@ -26,3 +26,12 @@ test('release preserves every other file and rejects missing/duplicate baseline 
   assert.throws(() => assertManifest(files, manifest), /differs/);
   assert.throws(() => assertManifest(files.slice(1), manifest), /differs/);
 });
+
+test('CORE rule-only manifest cannot alter any other resource', () => {
+  const asset = '/core/rules/index.html';
+  const files = [{ path: asset, hash: 'a'.repeat(64) }, { path: '/archivein/index.html', hash: 'b'.repeat(64) }];
+  const manifest = makeManifest(files, 'c'.repeat(64), asset);
+  assert.equal(manifest[asset], 'c'.repeat(64));
+  assert.equal(manifest['/archivein/index.html'], 'b'.repeat(64));
+  assert.throws(() => makeManifest(files, 'c'.repeat(64)), /missing/);
+});
