@@ -110,6 +110,31 @@ const auditedAllowlist = {
   auditId: "synthetic-independent-audit",
   templateIds: [unrelatedId],
 };
+
+test("audited group survey before signup completion is unrelated, but legacy welcome on a later page still blocks", async () => {
+  const groupId = "KA01TP2605210729364330NbhZVAu9zA";
+  const allowlist = { independentlyAudited: true, auditId: "synthetic-reviewed-group-survey", templateIds: [groupId] };
+  let pages = 0;
+  const result = await loadMembershipProviderHistory(async () => ++pages === 1
+    ? { messageList: { survey: { ...message("survey"), kakaoOptions: { templateId: groupId } } }, nextKey: "survey" }
+    : { messageList: { oldWelcome: message("oldWelcome") }, nextKey: null },
+  { ...input, nonWelcomeTemplateAllowlist: allowlist });
+  assert.equal(pages, 2);
+  assert.equal(result.complete, true);
+  assert.deepEqual(result.records.map(row => [row.id, row.status, row.attempted]), [["solapi/oldWelcome", "delivered", true]]);
+});
+
+test("group-survey-only receipt needs its exact independent audit and never becomes a welcome receipt", async () => {
+  const groupId = "KA01TP2605210729364330NbhZVAu9zA";
+  const get = async () => ({ messageList: { survey: { ...message("survey"), kakaoOptions: { templateId: groupId } } } });
+  assert.equal((await loadMembershipProviderHistory(get, input)).reason, "unknown_welcome_template");
+  const audited = await loadMembershipProviderHistory(get, { ...input,
+    nonWelcomeTemplateAllowlist: { independentlyAudited: true, auditId: "synthetic-exact-audit", templateIds: [groupId] } });
+  assert.equal(audited.complete, true);
+  assert.deepEqual(audited.records, []);
+  assert.equal((await loadMembershipProviderHistory(get, { ...input,
+    nonWelcomeTemplateAllowlist: { independentlyAudited: true, auditId: "synthetic-other-audit", templateIds: ["other-template"] } })).complete, false);
+});
 const page = (row: Record<string, unknown>) => ({
   messageList: { m1: row },
   nextKey: null,
