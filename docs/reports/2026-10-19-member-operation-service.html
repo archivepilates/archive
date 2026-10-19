@@ -1,0 +1,48 @@
+<!doctype html>
+<html lang="ko">
+<head><meta charset="utf-8"><meta name="viewport" content="width=device-width,initial-scale=1">
+<title>공통 업무 처리 계층 · ARCHIVE PILATES</title>
+<style>
+*{box-sizing:border-box;min-width:0;letter-spacing:0}body{margin:0;background:#fff;color:#20252b;font:16px/1.7 -apple-system,BlinkMacSystemFont,"Apple SD Gothic Neo",sans-serif}main{max-width:960px;margin:auto;padding:32px 20px 64px}header{border-bottom:3px solid #b5222c;padding-bottom:20px}h1{font-size:26px;margin:6px 0 10px}h2{font-size:19px;margin:28px 0 10px}h3{font-size:16px;margin:0 0 8px}p{max-width:70ch;margin:8px 0}small,.muted{color:#626b75}section{border-bottom:1px solid #dfe3e8;padding-bottom:24px}.flow{display:grid;grid-template-columns:repeat(auto-fit,minmax(140px,1fr));gap:16px;margin-top:20px}.flow>div{border-left:3px solid #dfe3e8;padding-left:12px}.flow p{font-size:14px}dl{margin:12px 0}dt{font-weight:600;margin-top:14px}dd{margin:2px 0;color:#525c66}ul{padding-left:22px}li{margin:5px 0}code{font-size:13px;overflow-wrap:anywhere;background:#f3f5f7;padding:2px 4px}a{color:#176c78;overflow-wrap:anywhere}.status{font-weight:600;color:#176c78}.pending{color:#8b4b0b}footer{padding-top:20px;color:#626b75;font-size:13px}@media(max-width:480px){main{padding:20px 16px 40px}h1{font-size:23px}.flow{grid-template-columns:minmax(0,1fr)}}
+</style></head>
+<body><main>
+<header><small>ARCHIVE PILATES · 2026-10-19</small><h1>공통 업무 처리 계층</h1>
+<p>기존 공통 대상 검증기를 유지하고, 업무별 처리와 후속 작업·진행상태 조회를 연결합니다. 새 DB·독립 발송기·정기 작업은 추가하지 않습니다.</p>
+<p class="pending">개발·검증 완료 / 운영 반영·배포·커밋·푸시 승인 완료 / 배포 준비 중</p></header>
+<section><h2>먼저 처리한 메모</h2><p class="status">요청한 미처리 홀딩 메모 한 건은 StudioMate 반영 완료</p>
+<ul><li>기존 알림톡 전달 결과를 GET으로 대조한 뒤 같은 발송 ID의 메모만 생성했습니다. 알림톡 재발송은 없습니다.</li>
+<li>18:31:42 KST 메모와 작업을 원자적으로 생성, 18:31:58 KST 기존 처리기로 반영했습니다.</li>
+<li>저장 후 전체 내용·고유 표식을 재조회하는 기존 경로를 사용했고, 별도 원장 조회로 메모 synced / 같은 작업 done / 시도 1회와 내용 해시 일치를 확인했습니다.</li>
+<li>총 가능 24일·사용 22일·잔여 2일을 기록했습니다. 이번 완료는 승인된 단건 복구이며 새 정책의 자연 자동 실행 증거는 아닙니다.</li></ul></section>
+<section><h2>구조</h2><div class="flow">
+<div><h3>공통 검증</h3><p>기존 회원 연결·대상 조건·이전 시도·중복 검사. 사전검증은 승인이나 실행 권한이 아닙니다.</p></div>
+<div><h3>업무별 어댑터</h3><p>홀딩은 기존 원본 재조회·계산·승인·발송 선점을 유지합니다. 범용 쓰기 도구를 추가하지 않습니다.</p></div>
+<div><h3>후속 작업</h3><p>정상 발송 접수의 불변 증거로 메모를 준비합니다. 기존 메모 큐가 StudioMate 사본을 추가합니다.</p></div>
+<div><h3>공통 조회</h3><p>CORE·MCP가 같은 백엔드에서 감지·접수·전달·메모의 서로 다른 증거를 읽습니다.</p></div>
+</div></section>
+<section><h2>첫 적용: 홀딩 안내</h2><dl>
+<dt>접수 후 메모 연결</dt><dd>새 발송만 <code>holding_acceptance_memo_v2</code>에 등록합니다. 기존 발송 직후 수신자·본문·변수·템플릿·메시지 ID 확인을 재사용하며 최종 전달 대기를 제거합니다. 추가 공급자 조회는 없습니다.</dd>
+<dt>기존 건 보존</dt><dd><code>holding_delivery_memo_v1</code>은 전달 완료 기준을 유지합니다. 과거 발송 일괄 등록, 동일 건의 정책 변경, 완료·재시도 작업 초기화는 하지 않습니다.</dd>
+<dt>메모 처리</dt><dd>정상 접수 후 준비된 원장만 기존 5분 처리기가 읽습니다. 메모에는 발송 접수라고 쓰며 전달 완료라고 쓰지 않습니다. 기존 브라우저 잠금·추가 전용 쓰기·전체 내용 재확인을 유지합니다.</dd>
+<dt>실패 분리</dt><dd>접수 불명확·수신자/내용 불일치·거절은 보류합니다. 나중에 전달 실패가 확인돼도 정상 접수 당시 감사 메모를 전달 완료로 바꾸거나 발송을 재시도하지 않습니다. 메모 오류는 메모 작업에만 한정합니다.</dd>
+<dt>동시 실행</dt><dd>불변 발송 키에 연결된 같은 메모 ID를 사용합니다. 원자적 메모/작업 생성, 완료·검토 상태 보존, 응답 유실 후 기존 접수 증거 보존으로 중복 실행을 막습니다.</dd>
+</dl></section>
+<section><h2>CORE·MCP 조회</h2><p>CORE 자동화 화면의 홀딩 처리 현황과 알림톡 목록의 진행 상태 링크, MCP의 <code>operations_get_progress</code>가 같은 읽기 전용 검사기를 사용합니다.</p>
+<p>정확한 업무 ID 한 건으로 기존 6개 문서만 읽습니다. 전체 회원·예약 재계산, 공급자 호출, 큐 실행, DB 수정은 하지 않습니다. 활성 운영자 권한과 센터 범위를 검사하고 이름·연락처·메모 본문·임의 오류 문자열은 반환하지 않습니다.</p>
+<p>단계는 원본 등록 증거 / 원본 확인 / 발송 접수 / 전달 결과 / 메모 접수 / StudioMate 반영입니다. 표시 시각은 저장된 증거의 시각이며 공급자 실제 전달 시각·실시간 원본 확인과 혼동하지 않습니다.</p></section>
+<section><h2>원천과 권한</h2><dl>
+<dt>원천</dt><dd><code>holdingNoticeEvents</code>, <code>alimtalkCandidates</code>, <code>alimtalkSends</code>, <code>holdingNoticeClaims</code>, <code>memberMemos</code>, <code>studiomateMemoWriteJobs</code>. 회원·수강권 판단은 기존 정규화 원천과 최종 StudioMate 원본 확인을 유지합니다.</dd>
+<dt>미러/색인</dt><dd>새 미러나 통합 회원 DB는 없습니다. workLanes·member360 자료를 발송이나 메모 대상 원천으로 사용하지 않습니다.</dd>
+<dt>독자/실행자</dt><dd>CORE·MCP 진행상태는 활성 운영자만 읽습니다. 메모 사본 쓰기는 기존 맥미니 처리기만 수행합니다. 조회 결과에는 외부 작업 허가가 항상 false입니다.</dd>
+<dt>검증</dt><dd>합성 데이터로 접수·실패·응답 불명확·중복·동시 실행·부분 원장·완료 보존·권한·정보 노출을 검증합니다. 실제 회원에게 테스트 메시지는 보내지 않습니다.</dd>
+</dl></section>
+<section><h2>다음 확장 순서</h2><ol>
+<li>회원등록 계약서 → 서명 → 웰컴 상태 조회를 같은 공통 상태 형식으로 연결. 기존 발송·계약 규칙은 재사용.</li>
+<li>설문 → 강사 기록 → 리포트 → 메모의 중단 지점과 후속 작업을 표준화. 민감 응답은 권한 있는 원본 화면에만 표시.</li>
+<li>예약·취소·환불은 조회부터 연결. 실행은 별도 승인, 직전 실시간 재조회, 예상 변경 검토, 고유 작업 키와 원본 재검증을 갖춘 뒤 단계적으로 추가.</li>
+</ol><p class="muted">이번 구현에는 예약·환불 실행, 계약 재발송, 기존 전체 후보 생성 구조 변경이 포함되지 않습니다.</p></section>
+<section><h2>검증·배포 기록</h2><p id="verification">홀딩 770건, 공통 검증·기존 승인 발송·CORE 회귀 173건, 공통 조회 백엔드 13건, MCP 266건, 신규 UI 22건, 기존 반응형 95건이 통과했습니다. TypeScript 5개 코드베이스 빌드와 Functions 98개 소유권 검증도 통과했습니다. 운영용 새 큐 조건은 읽기 전용 조회로 인덱스 호환을 확인했습니다.</p>
+<p>완료 메모의 새 공통 조회는 실제 canonical 6개 문서로 대조해 완료 상태를 확인했습니다. 새 정책 실제 자동발송은 검증하지 않았습니다. 운영 실행기/Functions/Hosting은 아직 변경하지 않았습니다.</p>
+<p><a href="../tasks/2026-10-19-member-operation-service.md">상세 작업·검증 기록</a></p></section>
+<footer>사용자가 운영 반영·배포·커밋·푸시를 승인했습니다. 실제 배포 결과와 라이브 검증은 완료 후 작업 문서에 추가 기록합니다.</footer>
+</main></body></html>

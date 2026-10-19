@@ -131,11 +131,11 @@ async function prepareApproved(f) {
   return result.proposal.proposalId;
 }
 
-test('catalog exposes eight reads and two explicit memo actions', t => {
+test('catalog exposes nine reads and two explicit memo actions', t => {
   const f = fixture(t);
   assert.deepEqual(f.listTools(), TOOLS);
   assert.deepEqual(TOOLS.filter(tool => tool.annotations.readOnlyHint).map(tool => tool.name),
-    readCalls.map(([name]) => name));
+    [...readCalls.map(([name]) => name), 'operations_get_progress']);
   assert.deepEqual(TOOLS.filter(tool => !tool.annotations.readOnlyHint).map(tool => tool.name),
     ['memos_prepare', 'memos_commit']);
   for (const tool of TOOLS) {

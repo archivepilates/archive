@@ -10,6 +10,7 @@
       "sourceEntrypoint": "firebase/kangsain-functions/functions/src/exports/alimtalk.ts",
       "owns": [
         "getAlimtalkTargetValidation",
+        "getMemberOperationProgress",
         "scheduledProcessAlimtalkQueue",
         "scheduledQueueAndSendAlimtalkDaily",
         "scheduledQueueAndSendReservationOpenAlimtalk",

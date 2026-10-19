@@ -18,6 +18,7 @@ import { sendDailyAlimtalkReport } from "../alimtalk/sendDailyAlimtalkReport";
 import { syncAlimtalkTemplateStatuses } from "../alimtalk/templateStatus";
 import { auditPreviousDayAlimtalkProviderLedgerAndNotify } from "../alimtalk/providerLedgerAudit";
 import { inspectAlimtalkTargets } from "../alimtalk/targetValidation";
+import { inspectMemberOperationProgress } from "../operations/memberOperationProgress";
 import { notionToken } from "../config/secrets";
 import {
   callableOptions,
@@ -49,6 +50,15 @@ export const getAlimtalkTargetValidation = onCall({ region: REGION,
     const staff = await requireStaff(request);
     requireManager(staff);
     return await inspectAlimtalkTargets(request.data?.candidateIds, staff.studioId);
+  } catch (error) { throw toHttpsError(error); }
+});
+
+export const getMemberOperationProgress = onCall({ region: REGION,
+  invoker: "public", timeoutSeconds: 30, memory: "256MiB", maxInstances: 2, concurrency: 1 }, async request => {
+  try {
+    const staff = await requireStaff(request);
+    requireManager(staff);
+    return await inspectMemberOperationProgress(request.data, staff.studioId);
   } catch (error) { throw toHttpsError(error); }
 });
 

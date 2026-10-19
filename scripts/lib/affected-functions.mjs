@@ -45,6 +45,7 @@ export function codebasesForFile(file) {
   if (normalized.endsWith("/alimtalk/templates.ts")) return ["functions-alimtalk", "functions-private-chart"];
   if (normalized.includes("/social/") || normalized.endsWith("/exports/social.ts")) return ["functions-social"];
   if (normalized.includes("/alimtalk/") || normalized.endsWith("/exports/alimtalk.ts")) return ["functions-alimtalk"];
+  if (normalized.includes("/operations/memberOperationProgress")) return ["functions-alimtalk"];
   if (
     normalized.includes("/privateLessonChart/") ||
     normalized.includes("/privateSurvey/") ||

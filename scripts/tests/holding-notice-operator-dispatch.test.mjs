@@ -2,7 +2,7 @@ import test from "node:test";
 import assert from "node:assert/strict";
 import { HOLDING_NOTICE_TEMPLATE, HOLDING_NOTICE_TEMPLATE_ID } from "../lib/holding-allowance-notice.mjs";
 import { HOLDING_SOURCE, holdingFingerprint, normalizeHoldingObservation } from "../lib/studiomate-holding-source.mjs";
-import { dispatchVerifiedOperatorHolding, verifiedOperatorHoldingPlan, reconcileVerifiedOperatorHolding } from "../lib/holding-notice-operator-dispatch.mjs";
+import { dispatchVerifiedOperatorHolding, verifiedOperatorHoldingPlan, reconcileVerifiedOperatorHolding, reconcileExistingHoldingAttempt } from "../lib/holding-notice-operator-dispatch.mjs";
 
 const NOW = new Date("2026-10-07T11:00:00Z");
 const member = { memberId: "101", name: "Fixture Member", phone: "01000000001", studioId: "5330" };
@@ -75,7 +75,7 @@ function harness({ failure = false, providerPrior = false, issue = "" } = {}) {
     return { messageList: posts.length || providerPrior ? { [row.messageId]: row } : {} };
   };
   const run = (overrides = {}) => dispatchVerifiedOperatorHolding({ db, stamp: () => NOW.toISOString(), plan, template: template(), request,
-    recipientIssue: async () => issue, readLatest: async () => evidence(), now: () => NOW, ...overrides });
+    recipientIssue: async () => issue, readLatest: async () => evidence(), now: () => NOW, memoPolicy:"holding_delivery_memo_v1", ...overrides });
   return { db, plan, posts, request, run, row };
 }
 
@@ -123,6 +123,109 @@ test("accepted receipts wait for final delivery before making the memo outbox re
   await reconcileVerifiedOperatorHolding({db:h.db,stamp:()=>NOW.toISOString(),id:h.plan.id,request:h.request});
   assert.equal(h.db.docs.get(`alimtalkSends/${h.plan.id}`).holdingMemoStatus,"ready");
   assert.equal(h.posts.length,1);
+});
+
+test("new policy uses the existing immediate receipt verification and makes accepted memo ready without another delivery lookup",async()=>{
+  const h=harness();h.row.status="SENDING";h.row.statusCode="3000";
+  let gets=0;
+  const result=await h.run({memoPolicy:"holding_acceptance_memo_v2",request:(url,method,body)=>{
+    if(method!=="POST")gets++;
+    return h.request(url,method,body);
+  }});
+  assert.equal(gets,2);assert.equal(h.posts.length,1);assert.equal(result.deliveryComplete,false);
+  const send=h.db.docs.get(`alimtalkSends/${h.plan.id}`),claim=h.db.docs.get(`holdingNoticeClaims/${h.plan.id}`);
+  assert.equal(send.holdingMemoPolicy,"holding_acceptance_memo_v2");assert.equal(send.holdingMemoStatus,"ready");
+  assert.equal(send.holdingMemoAcceptedMessageId,"fixture-message");
+  assert.equal(claim.holdingMemoAcceptanceFingerprint,send.holdingMemoAcceptanceFingerprint);
+  assert.equal(send.holdingMemoAcceptanceEvidence,"verified_provider_receipt");
+  for(const status of ["queued","review"]){
+    h.db.docs.get(`alimtalkSends/${h.plan.id}`).holdingMemoStatus=status;h.row.status="COMPLETE";h.row.statusCode="4000";
+    await reconcileVerifiedOperatorHolding({db:h.db,stamp:()=>NOW.toISOString(),id:h.plan.id,request:h.request});
+    assert.equal(h.db.docs.get(`alimtalkSends/${h.plan.id}`).holdingMemoStatus,status);
+  }
+});
+
+test("production dispatcher default opts in only newly created sends to acceptance policy",async()=>{
+  const h=harness();h.row.status="SENDING";h.row.statusCode="3000";
+  await h.run({memoPolicy:undefined});
+  const send=h.db.docs.get(`alimtalkSends/${h.plan.id}`);
+  assert.equal(send.holdingMemoPolicy,"holding_acceptance_memo_v2");
+  assert.equal(send.holdingMemoStatus,"ready");assert.equal(h.posts.length,1);
+});
+
+test("new policy never marks rejected, unknown or mismatched provider responses memo-ready",async()=>{
+  for(const mutate of [row=>{row.status="COMPLETE";row.statusCode="5000";},
+    row=>{row.status="UNKNOWN";row.statusCode="3000";},row=>{row.text="different content";}]){
+    const h=harness();mutate(h.row);
+    try{await h.run({memoPolicy:"holding_acceptance_memo_v2"});}catch{}
+    const send=h.db.docs.get(`alimtalkSends/${h.plan.id}`);
+    assert.notEqual(send.holdingMemoStatus,"ready");assert.equal(send.holdingMemoAcceptedMessageId,undefined);
+    assert.equal(h.posts.length,1);
+  }
+  const h=harness({failure:true});
+  await assert.rejects(h.run({memoPolicy:"holding_acceptance_memo_v2"}));
+  assert.equal(h.db.docs.get(`alimtalkSends/${h.plan.id}`).holdingMemoAcceptedMessageId,undefined);
+  assert.equal(h.posts.length,1);
+});
+
+test("unknown immediate readback stays held until exact receipt reconciliation recovers the same new-policy event",async()=>{
+  const h=harness();
+  await assert.rejects(h.run({memoPolicy:"holding_acceptance_memo_v2",request:async(url,method,body)=>{
+    if(method!=="POST"&&h.posts.length)throw new Error("readback_timeout");
+    return h.request(url,method,body);
+  }}),/readback_timeout/);
+  const ref=`alimtalkSends/${h.plan.id}`;
+  assert.equal(h.db.docs.get(ref).holdingMemoStatus,"waiting_acceptance");
+  assert.equal(h.db.docs.get(ref).holdingMemoAcceptedMessageId,undefined);
+  await reconcileVerifiedOperatorHolding({db:h.db,stamp:()=>NOW.toISOString(),id:h.plan.id,request:h.request});
+  assert.equal(h.db.docs.get(ref).holdingMemoStatus,"ready");
+  assert.equal(h.db.docs.get(ref).holdingMemoAcceptedMessageId,"fixture-message");
+  assert.equal(h.posts.length,1);
+});
+
+test("existing-attempt wrapper recovers new acceptance while still SENDING and delivered legacy-worker proof without POST",async()=>{
+  for(const complete of [false,true]){
+    const h=harness();await h.run({memoPolicy:"holding_acceptance_memo_v2"});
+    const send=h.db.docs.get(`alimtalkSends/${h.plan.id}`),claim=h.db.docs.get(`holdingNoticeClaims/${h.plan.id}`);
+    for(const row of [send,claim])for(const field of ["holdingMemoAcceptedAt","holdingMemoAcceptedMessageId","holdingMemoAcceptanceEvidence","holdingMemoAcceptanceFingerprint"])delete row[field];
+    send.holdingMemoStatus="waiting_acceptance";
+    if(!complete){h.row.status="SENDING";h.row.statusCode="3000";send.providerStatus="SENDING";send.providerStatusCode="3000";claim.status="accepted_pending_readback";}
+    const result=await reconcileExistingHoldingAttempt({db:h.db,stamp:()=>NOW.toISOString(),plan:h.plan,request:h.request});
+    assert.equal(result.providerPostCount,0);assert.equal(h.posts.length,1);
+    assert.equal(result.deliveryComplete,complete);assert.equal(h.db.docs.get(`alimtalkSends/${h.plan.id}`).holdingMemoStatus,"ready");
+    assert.equal(h.db.docs.get(`holdingNoticeClaims/${h.plan.id}`).holdingMemoAcceptedMessageId,"fixture-message");
+  }
+});
+
+test("concurrent receipt and memo projection cannot be reopened by a late accepted response",async()=>{
+  for(const memoStatus of ["queued","review"]){
+    const h=harness();h.row.status="SENDING";h.row.statusCode="3000";
+    await h.run({memoPolicy:"holding_acceptance_memo_v2",request:async(url,method,body)=>{
+      if(method!=="POST"&&h.posts.length){
+        h.row.status="COMPLETE";h.row.statusCode="4000";
+        await reconcileVerifiedOperatorHolding({db:h.db,stamp:()=>NOW.toISOString(),id:h.plan.id,request:h.request});
+        h.db.docs.get(`alimtalkSends/${h.plan.id}`).holdingMemoStatus=memoStatus;
+        h.row.status="SENDING";h.row.statusCode="3000";
+      }
+      return h.request(url,method,body);
+    }});
+    assert.equal(h.db.docs.get(`alimtalkSends/${h.plan.id}`).holdingMemoStatus,memoStatus);
+    assert.equal(h.db.docs.get(`alimtalkSends/${h.plan.id}`).providerStatusCode,"4000");
+    assert.equal(h.posts.length,1);
+  }
+});
+
+test("a lost commit response preserves durable accepted evidence and never downgrades or resends",async()=>{
+  const h=harness();h.row.status="SENDING";h.row.statusCode="3000";
+  const original=h.db.runTransaction.bind(h.db);let lost=false;
+  h.db.runTransaction=async fn=>{const result=await original(fn);
+    if(!lost&&h.db.docs.get(`alimtalkSends/${h.plan.id}`)?.holdingMemoAcceptedMessageId){lost=true;throw new Error("commit_response_lost");}
+    return result;
+  };
+  const result=await h.run({memoPolicy:"holding_acceptance_memo_v2"});
+  assert.equal(result.deliveryComplete,false);assert.equal(lost,true);assert.equal(h.posts.length,1);
+  assert.equal(h.db.docs.get(`alimtalkSends/${h.plan.id}`).providerOutcome,"accepted_verified");
+  assert.equal(h.db.docs.get(`alimtalkSends/${h.plan.id}`).holdingMemoStatus,"ready");
 });
 
 test("reconciliation never enrolls a historical ledger into the memo policy", async () => {

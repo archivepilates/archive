@@ -2723,13 +2723,16 @@ function renderMessages(candidates, sends) {
     const validationId = options.validateCandidate ? String(item.candidateId || item.id || "") : "";
     const validationButton = /^[A-Za-z0-9_-]{1,160}$/.test(validationId)
       ? `<button type="button" class="atv-row-button" data-validate-alimtalk-candidate="${escapeHtml(validationId)}" aria-label="${escapeHtml(member)} 대상 검증">검증</button>` : "";
+    const operationId = String(item.candidateId || item.id || "");
+    const progressLink = /^holding_operator_notice_[a-f0-9]{64}$/.test(operationId)
+      ? `<a class="atv-row-button" href="../automation/?holdingNotice=${encodeURIComponent(operationId)}" aria-label="${escapeHtml(member)} 홀딩 처리 현황">진행 상태</a>` : "";
     return `
       <div class="status-row">
         <div>
           <strong>${escapeHtml(member)}</strong>
           <p>${escapeHtml(title)} · ${escapeHtml(templateContext)}${escapeHtml(date)}${reason ? ` · ${escapeHtml(reason)}` : ""}</p>
         </div>
-        <div class="atv-row-actions">${validationButton}${pill(options.status?.(item) || item.status || item.sendStatus)}</div>
+        <div class="atv-row-actions">${validationButton}${progressLink}${pill(options.status?.(item) || item.status || item.sendStatus)}</div>
       </div>
     `;
   };

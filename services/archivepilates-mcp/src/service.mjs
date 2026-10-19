@@ -4,6 +4,7 @@ import { id, text, phone, maskedPhone, millis, iso, requireValue } from './error
 import { selectExpiring } from './ticket-query.mjs';
 import { liveSource, snapshotSource } from './freshness.mjs';
 import { targetValidationView, unavailable } from './target-validator.mjs';
+import { operationProgressView, progressUnavailable } from './operation-progress.mjs';
 
 export const hash = value => createHash('sha256').update(JSON.stringify(value)).digest('hex');
 export const sourceHash = value => hash([value._id, value.memberId, value.studioId, value.name, value.phone,
@@ -71,7 +72,7 @@ const statusView = value => ({ recordId: value._id, status: safeState(value.stat
   // Arbitrary error strings can contain health answers, credentials or member content.
   nextAction: value.lastError || value.error ? '원본 업무 화면에서 오류를 확인하세요. 자동 재실행하지 않았습니다.' : null });
 
-export function createService({ store, approvals, staffId, now = Date.now, memoWritesEnabled = false, readOnly = false, liveReader, targetValidator }) {
+export function createService({ store, approvals, staffId, now = Date.now, memoWritesEnabled = false, readOnly = false, liveReader, targetValidator, operationProgressReader }) {
   const liveSelections = new Map();
   function rememberSelection(member) {
     liveSelections.delete(member.memberId);
@@ -154,6 +155,12 @@ export function createService({ store, approvals, staffId, now = Date.now, memoW
     requireValue(validate(name, args), 'INVALID_ARGUMENT', '지원하는 도구와 입력 항목을 확인해 주세요.');
     requireValue(!readOnly || !['memos_prepare', 'memos_commit'].includes(name), 'WRITE_DISABLED', '조회 전용 연결에서는 메모 계획·실행을 제공하지 않습니다.');
     const operator = await actor();
+    if (name === 'operations_get_progress') {
+      try {
+        requireValue(typeof operationProgressReader === 'function', 'SOURCE_UNAVAILABLE', progressUnavailable().message);
+        return operationProgressView(await operationProgressReader(args, { signal }), args);
+      } catch { throw progressUnavailable(); }
+    }
     if (name === 'messages_validate_target') {
       const candidateId = id(args.candidateId);
       requireValue(typeof targetValidator === 'function', 'SOURCE_UNAVAILABLE', unavailable().message);

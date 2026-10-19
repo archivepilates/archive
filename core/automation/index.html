@@ -13,8 +13,10 @@
     <title>Automation · ARCHIVE CORE</title>
     <link rel="stylesheet" href="../assets/styles.css" />
     <link rel="stylesheet" href="../assets/interface.css" />
+    <link rel="stylesheet" href="../assets/member-operation-progress.css" />
     <script src="../firebase-config.js"></script>
     <script type="module" src="../assets/app.js"></script>
+    <script type="module" src="../assets/member-operation-progress.js"></script>
   </head>
   <body data-firestore-dashboard>
     <div id="coreAccessLoading" class="core-access-loading" role="status"><p>연결 중</p><a href="">다시 연결</a></div>
@@ -38,6 +40,18 @@
         <section class="panel">
           <div class="panel-header"><div><h2>확인할 작업</h2></div><span class="pill" id="automationMode">확인 중</span></div>
           <div class="list compact-list" id="automationHealthList"><div class="empty-state">상태 확인 중</div></div>
+        </section>
+        <section class="member-operation-progress" data-member-operation-progress aria-labelledby="holdingProgressTitle" hidden>
+          <div class="mop-heading"><h2 id="holdingProgressTitle">홀딩 처리 현황</h2><span>기록 조회 · 실시간 재조회 아님</span></div>
+          <form class="mop-form" novalidate>
+            <label for="holdingOperationId">작업 ID</label>
+            <div class="mop-controls">
+              <input id="holdingOperationId" name="operationId" type="text" autocomplete="off" autocapitalize="none" spellcheck="false" maxlength="88" aria-describedby="holdingProgressStatus" />
+              <button type="submit">조회</button>
+            </div>
+          </form>
+          <p class="mop-status" id="holdingProgressStatus" role="status" aria-live="polite" aria-atomic="true"></p>
+          <div class="mop-result" data-operation-progress-result hidden></div>
         </section>
         <details class="panel diagnostic-panel">
           <summary><span>전체 자동화 기록</span><small>정상·이전 실행</small></summary>

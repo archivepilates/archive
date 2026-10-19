@@ -4,6 +4,8 @@ import { holdingFingerprint } from "./studiomate-holding-source.mjs";
 import { readHoldingMemberProfile } from "./holding-member-identity.mjs";
 
 export const HOLDING_MEMO_POLICY = "holding_delivery_memo_v1";
+export const HOLDING_ACCEPTANCE_MEMO_POLICY = "holding_acceptance_memo_v2";
+const policies = [HOLDING_MEMO_POLICY, HOLDING_ACCEPTANCE_MEMO_POLICY];
 const source = "holding_notice_delivery";
 const fail = () => { throw new Error("holding_delivery_memo_source_mismatch"); };
 const digest = text => createHash("sha256").update(text).digest("hex");
@@ -12,16 +14,36 @@ const validDay = value => typeof value === "string" && /^\d{4}-\d{2}-\d{2}$/.tes
 const shortDate = value => `${Number(value.slice(5,7))}/${Number(value.slice(8,10))}`;
 const same = (a,b) => JSON.stringify(a) === JSON.stringify(b);
 
+export function holdingMemoAcceptanceFingerprint(send) {
+  return digest(JSON.stringify([send.id, send.memberId, send.memberPhone, send.templateCode,
+    send.message, Object.entries(send.variables || {}).sort(([a],[b])=>a.localeCompare(b)),
+    send.issuanceFingerprint, send.creationEvidenceFingerprint, send.solapiMessageId]));
+}
+
+export function hasHoldingMemoAcceptance(send, claim) {
+  const at = send.holdingMemoAcceptedAt?.toDate?.().toISOString() ?? send.holdingMemoAcceptedAt;
+  const claimAt = claim?.holdingMemoAcceptedAt?.toDate?.().toISOString() ?? claim?.holdingMemoAcceptedAt;
+  return typeof at === "string" && Number.isFinite(Date.parse(at)) &&
+    at === claimAt && send.holdingMemoAcceptanceEvidence === "verified_provider_receipt" &&
+    claim?.holdingMemoAcceptanceEvidence === "verified_provider_receipt" &&
+    send.holdingMemoAcceptedMessageId === send.solapiMessageId &&
+    send.holdingMemoAcceptanceFingerprint === holdingMemoAcceptanceFingerprint(send) &&
+    claim?.holdingMemoAcceptedMessageId === send.solapiMessageId &&
+    claim.holdingMemoAcceptanceFingerprint === send.holdingMemoAcceptanceFingerprint;
+}
+
 /** The sent calculation is an audit snapshot, never a source for a later allowance. */
 export function holdingDeliveryMemoPlan(send, candidate, claim) {
-  if (send?.holdingMemoPolicy !== HOLDING_MEMO_POLICY || send.studioId !== "5330" || !/^[1-9]\d*$/.test(send.memberId || "") ||
+  const acceptance = send?.holdingMemoPolicy === HOLDING_ACCEPTANCE_MEMO_POLICY;
+  if (!policies.includes(send?.holdingMemoPolicy) || send.studioId !== "5330" || !/^[1-9]\d*$/.test(send.memberId || "") ||
       !/^01[016789]\d{7,8}$/.test(send.memberPhone || "") || !send.memberName?.trim() || send.isTest !== false ||
       send.templateCode !== HOLDING_NOTICE_TEMPLATE_ID || send.calculationMode !== "live_studiomate_readback" ||
       send.payload?.holdingNotice !== true || send.payload.source !== "studiomate_live_ticket_readback" ||
       !["automatic_live_readback","operator_verified_one_off"].includes(send.payload.deliveryMode) ||
       !/^[a-f0-9]{64}$/.test(send.issuanceFingerprint || "") || !/^[a-f0-9]{64}$/.test(send.creationEvidenceFingerprint || "") ||
-      send.attempts !== 1 || send.maxAttempts !== 1 || send.status !== "done" || send.providerStatus !== "COMPLETE" ||
-      send.providerStatusCode !== "4000" || !send.solapiMessageId || candidate?.status !== "sent" || claim?.status !== "delivered") fail();
+      send.attempts !== 1 || send.maxAttempts !== 1 || !send.solapiMessageId ||
+      (acceptance ? !hasHoldingMemoAcceptance(send, claim) : send.status !== "done" || send.providerStatus !== "COMPLETE" ||
+      send.providerStatusCode !== "4000" || candidate?.status !== "sent" || claim?.status !== "delivered")) fail();
   const expected = `holding_operator_notice_${holdingFingerprint([send.studioId,send.memberId,send.issuanceFingerprint,send.creationEvidenceFingerprint])}`;
   if (send.id !== expected || send.sendId !== expected || send.candidateId !== expected || candidate.id !== expected || candidate.candidateId !== expected ||
       claim.candidateId !== expected || claim.solapiMessageId !== send.solapiMessageId ||
@@ -52,14 +74,15 @@ export function holdingDeliveryMemoPlan(send, candidate, claim) {
   const content = [`[홀딩 안내] ${v["#{수강권명}"]} · 최초 ${summary.originalDays}일권`,
     `홀딩 가능 ${summary.totalDays}일 · 사용 ${summary.usedDays}일 (${sorted.map(r=>`${shortDate(r.start)}~${shortDate(r.end)}`).join(", ")})`,
     `잔여 ${summary.remainingDays}일`, `이번 홀딩: ${start}~${end}`, `확인일: ${checkedDate}`,
+    ...(acceptance ? ["알림톡: 발송 접수 (전달 완료 여부와 별도)"] : []),
     `[홀딩기록: ${memoId}]`].join("\n");
   return {memoId,content,contentHash:digest(content),studioId:send.studioId,memberId:send.memberId,memberName:send.memberName,
-    memberPhone:send.memberPhone,holdingNoticeId:expected,solapiMessageId:send.solapiMessageId};
+    memberPhone:send.memberPhone,holdingNoticeId:expected,solapiMessageId:send.solapiMessageId,holdingMemoPolicy:send.holdingMemoPolicy};
 }
 
 function matchesRecord(row, plan, job) {
   const keys=["studioId","memberId","memberName","holdingNoticeId","solapiMessageId","content","contentHash"];
-  return row && keys.every(k=>row[k]===plan[k]) && row.source===source && row.holdingMemoPolicy===HOLDING_MEMO_POLICY &&
+  return row && keys.every(k=>row[k]===plan[k]) && row.source===source && row.holdingMemoPolicy===plan.holdingMemoPolicy &&
     (job ? row.jobId===plan.memoId && row.memberPhone===plan.memberPhone && row.studiomateMemberId===plan.memberId : row.memoId===plan.memoId);
 }
 
@@ -85,7 +108,7 @@ export async function enqueueDeliveredHoldingMemo({db,stamp,id}) {
   if (!/^holding_operator_notice_[a-f0-9]{64}$/.test(id)) fail();
   return db.runTransaction(async tx=>{
     const sendRef=db.doc(`alimtalkSends/${id}`), send=(await tx.get(sendRef)).data();
-    if (send?.holdingMemoPolicy !== HOLDING_MEMO_POLICY) return {status:"not_enabled"};
+    if (!policies.includes(send?.holdingMemoPolicy)) return {status:"not_enabled"};
     if (!["ready","queued"].includes(send.holdingMemoStatus)) return {status:"held"};
     const candidate=(await tx.get(db.doc(`alimtalkCandidates/${id}`))).data();
     const claim=(await tx.get(db.doc(`holdingNoticeClaims/${id}`))).data();
@@ -101,7 +124,7 @@ export async function enqueueDeliveredHoldingMemo({db,stamp,id}) {
     }
     if (send.holdingMemoStatus!=="ready") fail();
     const at=stamp(), common={studioId:plan.studioId,memberId:plan.memberId,memberName:plan.memberName,source,
-      holdingMemoPolicy:HOLDING_MEMO_POLICY,holdingNoticeId:id,solapiMessageId:plan.solapiMessageId,
+      holdingMemoPolicy:plan.holdingMemoPolicy,holdingNoticeId:id,solapiMessageId:plan.solapiMessageId,
       content:plan.content,contentHash:plan.contentHash,createdAt:at,updatedAt:at};
     tx.create(memoRef,{...common,memoId:plan.memoId,lectureId:"",bookingId:"",lectureDate:"",staffId:"",staffName:"",
       memoType:"member_note",visibility:"staff_and_manager",syncStatus:"pending",createdByUid:"system:holding_notice"});
@@ -112,10 +135,10 @@ export async function enqueueDeliveredHoldingMemo({db,stamp,id}) {
   });
 }
 
-/** Exact new-policy ready outbox only; no historical scan, send retry or browser work. */
+/** Explicitly opted-in ready outbox only; no historical scan, send retry or browser work. */
 export async function enqueuePendingHoldingMemos({db,stamp,limit=10}) {
   if (!Number.isSafeInteger(limit) || limit<1 || limit>10) throw new Error("holding_memo_limit_invalid");
-  const rows=await db.collection("alimtalkSends").where("holdingMemoPolicy","==",HOLDING_MEMO_POLICY)
+  const rows=await db.collection("alimtalkSends").where("holdingMemoPolicy","in",policies)
     .where("holdingMemoStatus","==","ready").limit(limit).get();
   const results=[];
   for (const doc of rows.docs) {
@@ -123,7 +146,7 @@ export async function enqueuePendingHoldingMemos({db,stamp,limit=10}) {
     catch (error) {
       const status=await db.runTransaction(async tx=>{
         const ref=db.doc(`alimtalkSends/${doc.id}`), current=(await tx.get(ref)).data();
-        if (current?.holdingMemoPolicy!==HOLDING_MEMO_POLICY || current.holdingMemoStatus!=="ready" ||
+        if (!policies.includes(current?.holdingMemoPolicy) || current.holdingMemoStatus!=="ready" ||
             holdingFingerprint(current)!==holdingFingerprint(doc.data())) return "changed";
         const attempts=Number(current.holdingMemoProjectionAttempts || 0)+1;
         const invalid=/^(holding_delivery_memo_|operator_member_changed|holding_(native_member|unique_linked|verified_member|member_lookup|member_phone))/.test(error.message || "");
@@ -140,7 +163,7 @@ export async function enqueuePendingHoldingMemos({db,stamp,limit=10}) {
 }
 
 export async function pendingHoldingMemoAlerts(db) {
-  const rows=await db.collection("alimtalkSends").where("holdingMemoPolicy","==",HOLDING_MEMO_POLICY)
+  const rows=await db.collection("alimtalkSends").where("holdingMemoPolicy","in",policies)
     .where("holdingMemoAlertStatus","==","pending").limit(10).get();
   return rows.docs.map(doc=>({id:doc.id,status:"review",reason:doc.data().holdingMemoError || "holding_delivery_memo_source_or_queue_unavailable"}));
 }
@@ -149,7 +172,7 @@ export async function settleHoldingMemoAlert({db,stamp,id,observed,status}) {
   if (!/^holding_operator_notice_[a-f0-9]{64}$/.test(id) || !["sent","resolved"].includes(status)) fail();
   return db.runTransaction(async tx=>{
     const ref=db.doc(`alimtalkSends/${id}`), current=(await tx.get(ref)).data();
-    if (!current || current.holdingMemoPolicy!==HOLDING_MEMO_POLICY || current.holdingMemoAlertStatus!=="pending" ||
+    if (!current || !policies.includes(current.holdingMemoPolicy) || current.holdingMemoAlertStatus!=="pending" ||
         holdingFingerprint(current)!==holdingFingerprint(observed) || status==="resolved" && current.holdingMemoStatus==="review") return false;
     tx.update(ref,{holdingMemoAlertStatus:status,...(status==="sent" && !current.holdingMemoFailureEmailSentAt
       ?{holdingMemoFailureEmailSentAt:stamp()}:{})});

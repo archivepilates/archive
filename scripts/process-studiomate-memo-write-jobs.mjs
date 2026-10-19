@@ -11,7 +11,8 @@ import { ensureStudioMateLoggedIn } from "./lib/studiomate-login.mjs";
 import { appendIdleHeartbeatIfDue } from "./lib/idle-heartbeat.mjs";
 import { deriveInstructorLessonRegistrationState } from "./lib/instructor-lesson-registration-contract.mjs";
 import { applySignupBirthDate, assertSignupProfileSource, signupProfileMemoPresent } from "./lib/instructor-signup-profile.mjs";
-import { enqueuePendingHoldingMemos, assertHoldingMemoWriteSource, holdingMemoContentPresent, assertHoldingMemoMemberProfile, pendingHoldingMemoAlerts, settleHoldingMemoAlert } from "./lib/holding-delivery-memo.mjs";
+import { assertHoldingMemoWriteSource, holdingMemoContentPresent, assertHoldingMemoMemberProfile, pendingHoldingMemoAlerts, settleHoldingMemoAlert } from "./lib/holding-delivery-memo.mjs";
+import { preparePendingMemberOperations } from "./lib/member-operation-service.mjs";
 import { readHoldingMemberProfile } from "./lib/holding-member-identity.mjs";
 
 const require = createRequire(import.meta.url);
@@ -55,10 +56,10 @@ const result = {
 await mkdir(config.profileDir, { recursive: true });
 await mkdir(path.dirname(config.runLogPath), { recursive: true });
 
-// New delivered notices carry an explicit outbox marker; old receipts are never backfilled.
+// Explicit acceptance/delivery policies share the existing outbox; no historical backfill.
 if (apply && !jobId) {
   try {
-    result.holdingMemoProjection = await enqueuePendingHoldingMemos({db,stamp:()=>admin.firestore.Timestamp.now()});
+    result.holdingMemoProjection = await preparePendingMemberOperations({db,stamp:()=>admin.firestore.Timestamp.now()});
     for (const alert of await pendingHoldingMemoAlerts(db)) {
       if (!result.holdingMemoProjection.some(item=>item.id===alert.id)) result.holdingMemoProjection.push(alert);
     }
@@ -96,7 +97,7 @@ function reportHoldingMemoProjection(item) {
       AUTOMATION_REPORT_FROM:config.delegatedUser,AUTOMATION_REPORT_TO:config.operatorEmail,AUTOMATION_REPORT_EVENT_ID:eventId,
       AUTOMATION_REPORT_SUBJECT:item.id?"[홀딩 안내][확인필요] 회원 메모 원본 확인 필요":"[홀딩 안내][실패] 회원 메모 원장 조회 실패",
       AUTOMATION_REPORT_LABEL:item.id?"자동화 확인필요":"자동화 실패",
-      AUTOMATION_REPORT_BODY:["주체: ARCHIVE CORE / 홀딩 안내 메모","결론: 전달 후 메모 생성 또는 원장 조회를 완료하지 못했습니다.",
+      AUTOMATION_REPORT_BODY:["주체: ARCHIVE CORE / 홀딩 안내 메모","결론: 발송 안내 메모 생성 또는 원장 조회를 완료하지 못했습니다.",
         `원인: ${item.reason}`,`원천: ${item.id?`alimtalkSends/${item.id}`:"alimtalkSends / holdingMemoStatus=ready"}`,
         "현재: 다른 메모 작업은 계속 처리하며 알림톡을 재발송하지 않습니다.",
         "상세: https://core.archivepilates.com/automation/","다음: 회원 연결·전달 원장·네트워크와 메모 처리기 로그를 확인하세요."].join("\n")}});

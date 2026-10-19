@@ -45,7 +45,7 @@ try {
   const mcpStatuses = [];
   await client.connect(transport);
   const tools = (await client.listTools()).tools;
-  assert.equal(tools.length, 8);
+  assert.equal(tools.length, 9);
   assert.ok(tools.every(tool => tool.annotations.readOnlyHint));
   assert.ok(tools.some(tool => tool.name === 'messages_validate_target'));
   for (const id of ids) {

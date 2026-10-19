@@ -9,9 +9,9 @@ test('production bootstrap defaults to read-only and cannot enable memo writes a
   assert.throws(() => config({ ARCHIVE_MCP_OPERATOR_STAFF_ID: 'operator', ARCHIVE_MCP_ENABLE_MEMO_WRITES: 'true',
     ARCHIVE_MCP_MEMO_ROLLOUT: 'verified_v1' }), { code: 'WRITE_DISABLED' });
 });
-test('read-only server exposes eight tools and rejects direct memo calls before any dependency access', async () => {
+test('read-only server exposes nine tools and rejects direct memo calls before any dependency access', async () => {
   const service = createService({ store: {}, approvals: {}, staffId: 'operator', readOnly: true });
-  assert.equal(service.listTools().length, 8);
+  assert.equal(service.listTools().length, 9);
   assert.ok(service.listTools().every(tool => tool.annotations.readOnlyHint));
   await assert.rejects(service.callTool('memos_prepare', { memberId: '123', content: 'no writes' }), { code: 'WRITE_DISABLED' });
   await assert.rejects(service.callTool('memos_commit', { proposalId: 'no-approval' }), { code: 'WRITE_DISABLED' });

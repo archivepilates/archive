@@ -4,7 +4,7 @@ import { completeProviderRows } from "./holding-notice-test-dispatch.mjs";
 import { calculateLiveHolding, verifyHoldingAtDispatch } from "./holding-notice-live-readback.mjs";
 import { HOLDING_AUTO_EVENTS, automaticHoldingEventIssue } from "./holding-notice-automatic.mjs";
 import { readHoldingMemberProfile } from "./holding-member-identity.mjs";
-import { HOLDING_MEMO_POLICY } from "./holding-delivery-memo.mjs";
+import { HOLDING_MEMO_POLICY, HOLDING_ACCEPTANCE_MEMO_POLICY, holdingMemoAcceptanceFingerprint, hasHoldingMemoAcceptance } from "./holding-delivery-memo.mjs";
 
 const FAMILY = new Set([HOLDING_NOTICE_TEMPLATE_ID, "KA01TP261006054728079NtSGrYdtSQH"]);
 export const isHoldingLedger = row => FAMILY.has(row?.templateCode) || row?.payload?.holdingNotice === true;
@@ -65,7 +65,8 @@ function receiptLookup(plan) {
 }
 
 export async function dispatchVerifiedOperatorHolding({ db, stamp, plan, template, request, recipientIssue, readLatest,
-  automatic = false, now = () => new Date() }) {
+  automatic = false, now = () => new Date(), memoPolicy = HOLDING_ACCEPTANCE_MEMO_POLICY }) {
+  if (![HOLDING_MEMO_POLICY, HOLDING_ACCEPTANCE_MEMO_POLICY].includes(memoPolicy)) throw new Error("holding_memo_policy_invalid");
   plan = structuredClone(plan);
   const issue = holdingTemplateIssue(template);
   if (issue) throw new Error(issue);
@@ -143,7 +144,7 @@ export async function dispatchVerifiedOperatorHolding({ db, stamp, plan, templat
       createdAt: stamp(), updatedAt: stamp(), lastError: null };
     tx.create(candidateRef, { ...common, candidateId: plan.id, status: "processing" });
     tx.create(sendRef, { ...common, candidateId: plan.id, sendId: plan.id, status: "processing", providerOutcome: "claimed_no_retry",
-      holdingMemoPolicy: HOLDING_MEMO_POLICY, holdingMemoStatus: "waiting_delivery",
+      holdingMemoPolicy: memoPolicy, holdingMemoStatus: memoPolicy === HOLDING_MEMO_POLICY ? "waiting_delivery" : "waiting_acceptance",
       holdingMemoRanges: calculateLiveHolding(plan.sourceEvidence, {now:now()}).holds.map(({start,end})=>({start,end})) });
     tx.create(claimRef, { candidateId: plan.id, memberId: plan.memberId, memberPhone: plan.memberPhone,
       issuanceFingerprint: plan.issuanceFingerprint, creationEvidenceFingerprint: plan.creationEvidenceFingerprint,
@@ -168,26 +169,57 @@ export async function dispatchVerifiedOperatorHolding({ db, stamp, plan, templat
     await batch.commit();
     const row = verifiedReceipt(await request(receiptLookup(plan)), plan, receipt.solapiMessageId);
     const delivered = row.status === "COMPLETE" && String(row.statusCode) === "4000";
-    const final = db.batch();
-    final.update(candidateRef, { status: "sent", sentAt: stamp(), updatedAt: stamp() });
-    final.update(sendRef, { status: "done", providerOutcome: delivered ? "delivered_reconciled" : "accepted_verified",
-      providerStatus: row.status, providerStatusCode: String(row.statusCode),
-      ...(delivered ? {holdingMemoStatus:"ready"} : {}), updatedAt: stamp() });
-    final.update(claimRef, { status: delivered ? "delivered" : "accepted", updatedAt: stamp() });
-    await final.commit();
-    return { ok: true, id: plan.id, ...receipt, providerPostCount: 1, deliveryComplete: delivered, summary: plan.summary };
+    const accepted = delivered || row.status === "SENDING" && /^[23]\d{3}$/.test(String(row.statusCode));
+    if (memoPolicy === HOLDING_ACCEPTANCE_MEMO_POLICY && !accepted) throw new Error("holding_memo_acceptance_unverified");
+    const acceptedAt = stamp();
+    const acceptance = memoPolicy === HOLDING_ACCEPTANCE_MEMO_POLICY && accepted ? {
+      holdingMemoAcceptedAt: acceptedAt, holdingMemoAcceptedMessageId: receipt.solapiMessageId,
+      holdingMemoAcceptanceEvidence: "verified_provider_receipt",
+      holdingMemoAcceptanceFingerprint: holdingMemoAcceptanceFingerprint({...plan, templateCode:HOLDING_NOTICE_TEMPLATE_ID, ...receipt}),
+    } : {};
+    const deliveryComplete = await db.runTransaction(async tx => {
+      const current = (await tx.get(sendRef)).data(), claim = (await tx.get(claimRef)).data();
+      if (!current || current.solapiMessageId !== receipt.solapiMessageId || claim?.solapiMessageId !== receipt.solapiMessageId ||
+          current.holdingMemoPolicy !== memoPolicy || current.id !== plan.id || current.memberId !== plan.memberId ||
+          current.memberPhone !== plan.memberPhone || current.message !== plan.message ||
+          holdingMemoAcceptanceFingerprint(current) !== holdingMemoAcceptanceFingerprint({...plan,templateCode:HOLDING_NOTICE_TEMPLATE_ID,...receipt}))
+        throw new Error("holding_acceptance_ledger_changed");
+      const existingAcceptance = current.holdingMemoAcceptedMessageId ? {
+        holdingMemoAcceptedAt:current.holdingMemoAcceptedAt, holdingMemoAcceptedMessageId:current.holdingMemoAcceptedMessageId,
+        holdingMemoAcceptanceEvidence:current.holdingMemoAcceptanceEvidence,
+        holdingMemoAcceptanceFingerprint:current.holdingMemoAcceptanceFingerprint,
+      } : acceptance;
+      if (current.holdingMemoAcceptedMessageId && (!hasHoldingMemoAcceptance(current,claim) ||
+          current.holdingMemoAcceptanceFingerprint !== acceptance.holdingMemoAcceptanceFingerprint))
+        throw new Error("holding_acceptance_ledger_changed");
+      const finalDelivery = delivered || current.status === "done" && current.providerStatus === "COMPLETE" &&
+        current.providerStatusCode === "4000" && claim.status === "delivered";
+      const ready = (memoPolicy === HOLDING_MEMO_POLICY ? finalDelivery : accepted) &&
+        ["waiting_acceptance","waiting_delivery"].includes(current.holdingMemoStatus);
+      tx.update(candidateRef, { status: "sent", sentAt: stamp(), updatedAt: stamp() });
+      tx.update(sendRef, { status: "done", providerOutcome: finalDelivery ? "delivered_reconciled" : "accepted_verified",
+        providerStatus: finalDelivery ? "COMPLETE" : row.status, providerStatusCode: finalDelivery ? "4000" : String(row.statusCode),
+        ...existingAcceptance, ...(ready ? {holdingMemoStatus:"ready"} : {}), updatedAt: stamp() });
+      tx.update(claimRef, { status: finalDelivery ? "delivered" : "accepted", ...existingAcceptance, updatedAt: stamp() });
+      return finalDelivery;
+    });
+    return { ok: true, id: plan.id, ...receipt, providerPostCount: 1, deliveryComplete, summary: plan.summary };
   } catch (error) {
-    const delivered = await db.runTransaction(async tx => {
+    const verified = await db.runTransaction(async tx => {
       const send = (await tx.get(sendRef)).data(), claim = (await tx.get(claimRef)).data();
+      const candidate = (await tx.get(candidateRef)).data();
       if (send?.status === "done" && send.providerStatus === "COMPLETE" && send.providerStatusCode === "4000" &&
           send.solapiMessageId && claim?.status === "delivered" && claim.solapiMessageId === send.solapiMessageId)
-        return { solapiMessageId: send.solapiMessageId, solapiGroupId: send.solapiGroupId };
+        return { solapiMessageId: send.solapiMessageId, solapiGroupId: send.solapiGroupId, deliveryComplete:true };
+      if (send?.holdingMemoPolicy===HOLDING_ACCEPTANCE_MEMO_POLICY && send.status==="done" &&
+          candidate?.status==="sent" && claim?.status==="accepted" && hasHoldingMemoAcceptance(send,claim))
+        return { solapiMessageId:send.solapiMessageId,solapiGroupId:send.solapiGroupId,deliveryComplete:false };
       tx.update(candidateRef, { status: "failed", reasonCode: "holding_operator_reconciliation_required", lastError: error.message, updatedAt: stamp() });
       tx.update(sendRef, { ...(receipt || {}), status: "failed", providerOutcome: "unknown_do_not_retry", lastError: error.message, updatedAt: stamp() });
       tx.update(claimRef, { ...(receipt || {}), status: "reconciliation_required", updatedAt: stamp() });
       return null;
     }).catch(() => null);
-    if (delivered) return { ok: true, id: plan.id, ...delivered, providerPostCount: 1, deliveryComplete: true, summary: plan.summary };
+    if (verified) return { ok: true, id: plan.id, ...verified, providerPostCount: 1, summary: plan.summary };
     throw error;
   }
 }
@@ -198,27 +230,47 @@ export async function reconcileVerifiedOperatorHolding({ db, stamp, id, request 
       ledger.templateCode !== HOLDING_NOTICE_TEMPLATE_ID || !ledger.solapiMessageId || ledger.id !== id)
     throw new Error("matching_operator_receipt_required");
   const row = verifiedReceipt(await request(receiptLookup(ledger)), ledger, ledger.solapiMessageId);
-  if (row.status !== "COMPLETE" || String(row.statusCode) !== "4000")
+  const delivered = row.status === "COMPLETE" && String(row.statusCode) === "4000";
+  const recoverableAcceptance = ledger.holdingMemoPolicy===HOLDING_ACCEPTANCE_MEMO_POLICY &&
+    ledger.holdingMemoStatus==="waiting_acceptance" && !ledger.holdingMemoAcceptedMessageId &&
+    row.status==="SENDING" && /^[23]\d{3}$/.test(String(row.statusCode));
+  if (!delivered && !recoverableAcceptance)
     return { ok: true, id, deliveryComplete: false, providerStatus: row.status, providerStatusCode: row.statusCode, providerPostCount: 0 };
-  await db.runTransaction(async tx => {
+  const deliveryComplete = await db.runTransaction(async tx => {
     const candidateRef = db.doc(`alimtalkCandidates/${id}`), claimRef = db.doc(`holdingNoticeClaims/${id}`);
     const current = (await tx.get(sendRef)).data();
     const candidate = (await tx.get(candidateRef)).data(), claim = (await tx.get(claimRef)).data();
     const identityKeys = ["id", "candidateId", "sendId", "memberId", "memberPhone", "studioId", "templateCode", "isTest",
-      "message", "variables", "issuanceFingerprint", "creationEvidenceFingerprint", "payload", "observedAt", "solapiMessageId"];
+      "message", "variables", "issuanceFingerprint", "creationEvidenceFingerprint", "payload", "observedAt", "solapiMessageId", "holdingMemoPolicy"];
     if (!current || identityKeys.some(key => holdingFingerprint(current[key] ?? null) !== holdingFingerprint(ledger[key] ?? null)) ||
-        !candidate || !claim || candidate.candidateId !== id || claim.candidateId !== id)
+        !candidate || !claim || candidate.candidateId !== id || claim.candidateId !== id ||
+        claim.solapiMessageId !== current.solapiMessageId || [candidate,claim].some(other=>
+          ["memberId","memberPhone","issuanceFingerprint","creationEvidenceFingerprint"].some(key=>other[key]!==current[key])))
       throw new Error("holding_receipt_ledger_changed");
-    if (current.status === "done" && current.providerStatus === "COMPLETE" && current.providerStatusCode === "4000" &&
-        candidate.status === "sent" && claim.status === "delivered" && claim.solapiMessageId === ledger.solapiMessageId) return;
+    const needsAcceptance = current.holdingMemoPolicy===HOLDING_ACCEPTANCE_MEMO_POLICY &&
+      current.holdingMemoStatus==="waiting_acceptance" && !current.holdingMemoAcceptedMessageId;
+    if (!needsAcceptance && current.status === "done" && current.providerStatus === "COMPLETE" && current.providerStatusCode === "4000" &&
+        candidate.status === "sent" && claim.status === "delivered" && claim.solapiMessageId === ledger.solapiMessageId) return true;
+    if (!delivered && !needsAcceptance) return false;
+    const finalDelivery = delivered || current.providerStatus === "COMPLETE" && current.providerStatusCode === "4000" && claim.status === "delivered";
     const at = stamp();
+    const recoveredAcceptance = needsAcceptance ? {
+        holdingMemoAcceptedAt:at, holdingMemoAcceptedMessageId:current.solapiMessageId,
+        holdingMemoAcceptanceEvidence:"verified_provider_receipt",
+        holdingMemoAcceptanceFingerprint:holdingMemoAcceptanceFingerprint(current),
+      } : {};
     tx.update(candidateRef, { status: "sent", lastError: null, ...(candidate.sentAt ? {} : { sentAt: at }), updatedAt: at });
-    tx.update(sendRef, { status: "done", providerOutcome: "delivered_reconciled", providerStatus: row.status,
-      providerStatusCode: "4000", lastError: null, reconciledAt: at, updatedAt: at,
-      ...(current.holdingMemoPolicy===HOLDING_MEMO_POLICY && current.holdingMemoStatus!=="queued" ? {holdingMemoStatus:"ready"} : {}) });
-    tx.update(claimRef, { status: "delivered", updatedAt: at });
+    tx.update(sendRef, { status: "done", providerOutcome: finalDelivery ? "delivered_reconciled" : "accepted_verified",
+      providerStatus: finalDelivery ? "COMPLETE" : row.status,
+      providerStatusCode: finalDelivery ? "4000" : String(row.statusCode), lastError: null, reconciledAt: at, updatedAt: at,
+      ...recoveredAcceptance,
+      ...(current.holdingMemoPolicy===HOLDING_MEMO_POLICY && current.holdingMemoStatus==="waiting_delivery" ||
+          recoveredAcceptance.holdingMemoAcceptedMessageId ? {holdingMemoStatus:"ready"} : {}) });
+    tx.update(claimRef, { status: finalDelivery ? "delivered" : "accepted", ...recoveredAcceptance, updatedAt: at });
+    return finalDelivery;
   });
-  return { ok: true, id, messageId: row.messageId, groupId: row.groupId, deliveryComplete: true, providerPostCount: 0 };
+  return { ok: true, id, messageId: row.messageId, groupId: row.groupId, deliveryComplete,
+    providerStatus:deliveryComplete ? "COMPLETE" : row.status,providerStatusCode:deliveryComplete ? "4000" : row.statusCode, providerPostCount: 0 };
 }
 
 /** Exact canonical attempt only. This path cannot create a candidate, claim or provider POST. */
@@ -235,7 +287,9 @@ export async function reconcileExistingHoldingAttempt({ db, stamp, plan, request
       !["operator_verified_one_off", "automatic_live_readback"].includes(send.payload?.deliveryMode) ||
       !send.solapiMessageId || claim.solapiMessageId !== send.solapiMessageId)
     throw new Error("holding_prior_claim_reconciliation_required");
-  if (send.status === "done" && send.providerStatus === "COMPLETE" && send.providerStatusCode === "4000" &&
+  const needsAcceptance = send.holdingMemoPolicy===HOLDING_ACCEPTANCE_MEMO_POLICY &&
+    send.holdingMemoStatus==="waiting_acceptance" && !send.holdingMemoAcceptedMessageId;
+  if (!needsAcceptance && send.status === "done" && send.providerStatus === "COMPLETE" && send.providerStatusCode === "4000" &&
       candidate.status === "sent" && claim.status === "delivered")
     return { id: plan.id, deliveryComplete: true, duplicateBlocked: true, providerPostCount: 0 };
   const receipt = await reconcileVerifiedOperatorHolding({ db, stamp, id: plan.id, request: (url, method) => {

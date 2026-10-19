@@ -10,7 +10,9 @@ import {
   assertHoldingMemoMemberProfile,
   pendingHoldingMemoAlerts,
   settleHoldingMemoAlert,
+  HOLDING_ACCEPTANCE_MEMO_POLICY, holdingMemoAcceptanceFingerprint,
 } from "../lib/holding-delivery-memo.mjs";
+import { continueMemberOperation } from "../lib/member-operation-service.mjs";
 
 const AT = "2026-10-19T10:00:00.000Z";
 const stamp = () => AT;
@@ -56,6 +58,17 @@ function source(seed = "first") {
 }
 
 const planFor = ({ send, candidate, claim }) => holdingDeliveryMemoPlan(send, candidate, claim);
+
+function acceptanceSource(seed = "accepted") {
+  const input = source(seed);
+  Object.assign(input.send, { holdingMemoPolicy: HOLDING_ACCEPTANCE_MEMO_POLICY,
+    providerStatus: "SENDING", providerStatusCode: "3000", providerOutcome: "accepted_verified" });
+  const proof = { holdingMemoAcceptedAt: AT, holdingMemoAcceptedMessageId: input.send.solapiMessageId,
+    holdingMemoAcceptanceEvidence: "verified_provider_receipt", holdingMemoAcceptanceFingerprint: holdingMemoAcceptanceFingerprint(input.send) };
+  Object.assign(input.send, proof);
+  Object.assign(input.claim, proof, {status:"accepted"});
+  return input;
+}
 
 // Serialized transactions stage all writes; aborts cannot leak a half-created memo/job pair.
 class MemoryDb {
@@ -181,6 +194,62 @@ test("planner uses the opt-in policy and deterministic delivered-source identity
   assert.ok(typeof plan.memoId === "string" && plan.memoId.length > 0 && !plan.memoId.includes("/"));
   assert.equal(plan.contentHash, createHash("sha256").update(plan.content).digest("hex"));
   assert.notEqual(planFor(source("second")).memoId, plan.memoId, "separate stable sends must not share a memo");
+});
+
+test("new acceptance policy queues a memo without terminal delivery and labels it only accepted", async () => {
+  const h = harness(acceptanceSource());
+  const outcome = await continueMemberOperation({db:h.db,stamp,kind:"holding",operationId:h.input.send.id});
+  assert.equal(outcome.status,"queued");
+  const records = pair(h.db,outcome.memoId);
+  assert.match(records.memo.content,/알림톡: 발송 접수/);
+  assert.doesNotMatch(records.memo.content,/알림톡: 전달 완료/);
+  assert.equal(records.memo.holdingMemoPolicy,HOLDING_ACCEPTANCE_MEMO_POLICY);
+  guard(h,records);
+  assert.equal(h.db.docs.get(`alimtalkSends/${h.input.send.id}`).providerStatus,"SENDING");
+});
+
+test("acceptance fingerprint survives Firestore map ordering and later provider failure", async () => {
+  const input=acceptanceSource();
+  input.send.variables=Object.fromEntries(Object.entries(input.send.variables).reverse());
+  input.candidate.variables=structuredClone(input.send.variables);
+  Object.assign(input.send,{providerStatus:"COMPLETE",providerStatusCode:"5000",providerOutcome:"delivery_failed",status:"failed"});
+  input.claim.status="reconciliation_required";
+  input.candidate.status="failed";
+  const h=harness(input),outcome=await h.run();
+  assert.equal(outcome.status,"queued");
+  guard(h,pair(h.db,outcome.memoId));
+  assert.equal(h.db.docs.get(`alimtalkSends/${input.send.id}`).providerStatusCode,"5000");
+});
+
+test("acceptance cannot be inferred from a message ID or mutable accepted status",async t=>{
+  for(const [name,mutate] of [
+    ["missing proof",s=>{delete s.send.holdingMemoAcceptedAt;}],
+    ["different timestamp",s=>{s.claim.holdingMemoAcceptedAt="2026-10-19T10:01:00Z";}],
+    ["wrong receipt",s=>{s.send.holdingMemoAcceptedMessageId="other-message";}],
+    ["changed digest",s=>{s.send.holdingMemoAcceptanceFingerprint="0".repeat(64);} ],
+    ["missing claim proof",s=>{delete s.claim.holdingMemoAcceptanceFingerprint;}],
+    ["unverified origin",s=>{s.send.holdingMemoAcceptanceEvidence="post_timeout";}],
+    ["claim unverified origin",s=>{delete s.claim.holdingMemoAcceptanceEvidence;}],
+  ])await t.test(name,async()=>{const input=acceptanceSource(name);mutate(input);await rejectsWithoutWrites(harness(input));});
+});
+
+test("acceptance projection is atomic and preserves an existing completed memo on repeated/concurrent calls",async()=>{
+  const h=harness(acceptanceSource("repeat"));
+  const results=await Promise.all([h.run(),h.run()]);
+  assert.deepEqual(results.map(r=>r.status).sort(),["existing","queued"]);
+  const id=results[0].memoId, records=pair(h.db,id);
+  records.job.status="done";records.job.attempts=2;records.memo.syncStatus="synced";
+  const before=structuredClone(records);
+  await h.run();
+  assert.deepEqual(pair(h.db,id),before);
+});
+
+test("common processor rejects other operation kinds and arbitrary paths before reading",async()=>{
+  for(const [kind,operationId] of [["refund","abc"],["holding","../secret"],["send","holding_operator_notice_"+"a".repeat(64)]]){
+    const h=harness();
+    await assert.rejects(continueMemberOperation({db:h.db,stamp,kind,operationId}),/unsupported/);
+    assert.deepEqual(h.db.reads,[]);
+  }
 });
 
 test("full memo shows original allowance, inclusive usage range, remaining days, check date and one final source marker", () => {
