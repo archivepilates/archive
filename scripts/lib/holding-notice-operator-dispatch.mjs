@@ -4,6 +4,7 @@ import { completeProviderRows } from "./holding-notice-test-dispatch.mjs";
 import { calculateLiveHolding, verifyHoldingAtDispatch } from "./holding-notice-live-readback.mjs";
 import { HOLDING_AUTO_EVENTS, automaticHoldingEventIssue } from "./holding-notice-automatic.mjs";
 import { readHoldingMemberProfile } from "./holding-member-identity.mjs";
+import { HOLDING_MEMO_POLICY } from "./holding-delivery-memo.mjs";
 
 const FAMILY = new Set([HOLDING_NOTICE_TEMPLATE_ID, "KA01TP261006054728079NtSGrYdtSQH"]);
 export const isHoldingLedger = row => FAMILY.has(row?.templateCode) || row?.payload?.holdingNotice === true;
@@ -141,7 +142,9 @@ export async function dispatchVerifiedOperatorHolding({ db, stamp, plan, templat
         source: "studiomate_live_ticket_readback", ...(automatic ? { holdingEventId: plan.id, policyId: config.automaticPolicyId } : {}) },
       createdAt: stamp(), updatedAt: stamp(), lastError: null };
     tx.create(candidateRef, { ...common, candidateId: plan.id, status: "processing" });
-    tx.create(sendRef, { ...common, candidateId: plan.id, sendId: plan.id, status: "processing", providerOutcome: "claimed_no_retry" });
+    tx.create(sendRef, { ...common, candidateId: plan.id, sendId: plan.id, status: "processing", providerOutcome: "claimed_no_retry",
+      holdingMemoPolicy: HOLDING_MEMO_POLICY, holdingMemoStatus: "waiting_delivery",
+      holdingMemoRanges: calculateLiveHolding(plan.sourceEvidence, {now:now()}).holds.map(({start,end})=>({start,end})) });
     tx.create(claimRef, { candidateId: plan.id, memberId: plan.memberId, memberPhone: plan.memberPhone,
       issuanceFingerprint: plan.issuanceFingerprint, creationEvidenceFingerprint: plan.creationEvidenceFingerprint,
       approvedBy: plan.approval.approvedBy, status: "claimed", createdAt: stamp() });
@@ -168,7 +171,8 @@ export async function dispatchVerifiedOperatorHolding({ db, stamp, plan, templat
     const final = db.batch();
     final.update(candidateRef, { status: "sent", sentAt: stamp(), updatedAt: stamp() });
     final.update(sendRef, { status: "done", providerOutcome: delivered ? "delivered_reconciled" : "accepted_verified",
-      providerStatus: row.status, providerStatusCode: String(row.statusCode), updatedAt: stamp() });
+      providerStatus: row.status, providerStatusCode: String(row.statusCode),
+      ...(delivered ? {holdingMemoStatus:"ready"} : {}), updatedAt: stamp() });
     final.update(claimRef, { status: delivered ? "delivered" : "accepted", updatedAt: stamp() });
     await final.commit();
     return { ok: true, id: plan.id, ...receipt, providerPostCount: 1, deliveryComplete: delivered, summary: plan.summary };
@@ -210,7 +214,8 @@ export async function reconcileVerifiedOperatorHolding({ db, stamp, id, request 
     const at = stamp();
     tx.update(candidateRef, { status: "sent", lastError: null, ...(candidate.sentAt ? {} : { sentAt: at }), updatedAt: at });
     tx.update(sendRef, { status: "done", providerOutcome: "delivered_reconciled", providerStatus: row.status,
-      providerStatusCode: "4000", lastError: null, reconciledAt: at, updatedAt: at });
+      providerStatusCode: "4000", lastError: null, reconciledAt: at, updatedAt: at,
+      ...(current.holdingMemoPolicy===HOLDING_MEMO_POLICY && current.holdingMemoStatus!=="queued" ? {holdingMemoStatus:"ready"} : {}) });
     tx.update(claimRef, { status: "delivered", updatedAt: at });
   });
   return { ok: true, id, messageId: row.messageId, groupId: row.groupId, deliveryComplete: true, providerPostCount: 0 };

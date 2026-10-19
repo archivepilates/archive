@@ -3,12 +3,16 @@ import { appendFile, mkdir, readFile, writeFile } from "node:fs/promises";
 import os from "node:os";
 import path from "node:path";
 import { createRequire } from "node:module";
-import { createSign, randomUUID } from "node:crypto";
+import { createSign, randomUUID, createHash } from "node:crypto";
+import { spawnSync } from "node:child_process";
+import { fileURLToPath } from "node:url";
 import { acquireStudioMateBrowserLock } from "./lib/studiomate-browser-lock.mjs";
 import { ensureStudioMateLoggedIn } from "./lib/studiomate-login.mjs";
 import { appendIdleHeartbeatIfDue } from "./lib/idle-heartbeat.mjs";
 import { deriveInstructorLessonRegistrationState } from "./lib/instructor-lesson-registration-contract.mjs";
 import { applySignupBirthDate, assertSignupProfileSource, signupProfileMemoPresent } from "./lib/instructor-signup-profile.mjs";
+import { enqueuePendingHoldingMemos, assertHoldingMemoWriteSource, holdingMemoContentPresent, assertHoldingMemoMemberProfile, pendingHoldingMemoAlerts, settleHoldingMemoAlert } from "./lib/holding-delivery-memo.mjs";
+import { readHoldingMemberProfile } from "./lib/holding-member-identity.mjs";
 
 const require = createRequire(import.meta.url);
 const admin = require("../firebase/kangsain-functions/functions/node_modules/firebase-admin");
@@ -51,12 +55,59 @@ const result = {
 await mkdir(config.profileDir, { recursive: true });
 await mkdir(path.dirname(config.runLogPath), { recursive: true });
 
+// New delivered notices carry an explicit outbox marker; old receipts are never backfilled.
+if (apply && !jobId) {
+  try {
+    result.holdingMemoProjection = await enqueuePendingHoldingMemos({db,stamp:()=>admin.firestore.Timestamp.now()});
+    for (const alert of await pendingHoldingMemoAlerts(db)) {
+      if (!result.holdingMemoProjection.some(item=>item.id===alert.id)) result.holdingMemoProjection.push(alert);
+    }
+  } catch {
+    result.holdingMemoProjection = [{status:"review",reason:"holding_memo_outbox_read_unavailable"}];
+  }
+  for (const item of result.holdingMemoProjection.filter(item=>item.status==="review")) {
+    result.failed += 1;
+    if (!item.id) {
+      if (!reportHoldingMemoProjection(item)) result.holdingMemoEmailUnconfirmed=true;
+      continue;
+    }
+    try {
+      const ref=db.doc(`alimtalkSends/${item.id}`), ledger=(await ref.get()).data();
+      if (ledger?.holdingMemoStatus!=="review") {
+        await settleHoldingMemoAlert({db,stamp:()=>admin.firestore.Timestamp.now(),id:item.id,observed:ledger,status:"resolved"});
+        continue;
+      }
+      if (!ledger?.holdingMemoFailureEmailSentAt) {
+        if (!reportHoldingMemoProjection(item)) throw new Error("holding_memo_alert_delivery_unconfirmed");
+        await settleHoldingMemoAlert({db,stamp:()=>admin.firestore.Timestamp.now(),id:item.id,observed:ledger,status:"sent"});
+      } else {
+        await settleHoldingMemoAlert({db,stamp:()=>admin.firestore.Timestamp.now(),id:item.id,observed:ledger,status:"sent"});
+      }
+    } catch { result.holdingMemoEmailUnconfirmed=true; }
+  }
+}
+
+function reportHoldingMemoProjection(item) {
+  const day=new Date(Date.now()+9*3600_000).toISOString().slice(0,10);
+  const eventKey=item.id?`holding_memo_projection_review:${item.id}`:`holding_memo_outbox_read_unavailable:${day}`;
+  const eventId=createHash("sha256").update(eventKey).digest("hex");
+  const report=spawnSync(process.execPath,[fileURLToPath(new URL("../firebase/kangsain-functions/macmini-studiomate/send-automation-report.mjs",import.meta.url))],{
+    encoding:"utf8",timeout:45000,maxBuffer:1024*1024,env:{...process.env,GOOGLE_SERVICE_ACCOUNT_KEY:config.googleCredentialsPath,
+      AUTOMATION_REPORT_FROM:config.delegatedUser,AUTOMATION_REPORT_TO:config.operatorEmail,AUTOMATION_REPORT_EVENT_ID:eventId,
+      AUTOMATION_REPORT_SUBJECT:item.id?"[홀딩 안내][확인필요] 회원 메모 원본 확인 필요":"[홀딩 안내][실패] 회원 메모 원장 조회 실패",
+      AUTOMATION_REPORT_LABEL:item.id?"자동화 확인필요":"자동화 실패",
+      AUTOMATION_REPORT_BODY:["주체: ARCHIVE CORE / 홀딩 안내 메모","결론: 전달 후 메모 생성 또는 원장 조회를 완료하지 못했습니다.",
+        `원인: ${item.reason}`,`원천: ${item.id?`alimtalkSends/${item.id}`:"alimtalkSends / holdingMemoStatus=ready"}`,
+        "현재: 다른 메모 작업은 계속 처리하며 알림톡을 재발송하지 않습니다.",
+        "상세: https://core.archivepilates.com/automation/","다음: 회원 연결·전달 원장·네트워크와 메모 처리기 로그를 확인하세요."].join("\n")}});
+  return report.status===0;
+}
 const jobs = await loadPendingJobs(limit);
 if (!jobs.length) {
-  result.ok = true;
+  result.ok = result.failed===0;
   result.finishedAt = new Date().toISOString();
   appendIdleHeartbeatIfDue(config.runLogPath, result, 15 * 60 * 1000);
-  process.exit(0);
+  process.exit(result.ok?0:1);
 }
 
 let releaseBrowserLock = null;
@@ -82,6 +133,7 @@ try {
   for (const { ref, data } of jobs) {
     const item = { jobId: data.jobId || ref.id, memberName: data.memberName, status: "pending" };
     let activeData = data;
+    let claimedThisRun = false;
     try {
       if (!apply) {
         result.processed += 1;
@@ -95,6 +147,7 @@ try {
           result.jobs.push(item);
           continue;
         }
+        claimedThisRun = true;
         result.processed += 1;
         const writeResult = await writeMemo(page, activeData, capturedAuthorization);
         await ref.set(
@@ -129,7 +182,9 @@ try {
         result.written += 1;
       }
     } catch (error) {
-      const attempts = Number(activeData.attempts || 0) || Number(data.attempts || 0) + 1;
+      const attempts = data.source==="holding_notice_delivery"
+        ? claimedThisRun ? Number(activeData.attempts || 0) : Number(data.attempts || 0)+1
+        : Number(activeData.attempts || 0) || Number(data.attempts || 0) + 1;
       const maxAttempts = Number(activeData.maxAttempts || data.maxAttempts || 3);
       const message = activeData.profileUpdate
         ? (error?.nonRetryable ? error.message : "가입서 정보 반영 중 StudioMate 메모 저장·재조회 실패. 원본 확인 후 재처리합니다.")
@@ -202,6 +257,22 @@ async function claimMemoJob(ref) {
     const snapshot = await transaction.get(ref);
     if (!snapshot.exists || !["pending", "retry"].includes(String(snapshot.data()?.status || ""))) return null;
     const data = snapshot.data() || {};
+    if (data.source === "holding_notice_delivery") {
+      const id=String(data.holdingNoticeId || "");
+      if (!/^holding_operator_notice_[a-f0-9]{64}$/.test(id)) throw new Error("holding_delivery_memo_source_mismatch");
+      const send=(await transaction.get(db.doc(`alimtalkSends/${id}`))).data();
+      const candidate=(await transaction.get(db.doc(`alimtalkCandidates/${id}`))).data();
+      const claim=(await transaction.get(db.doc(`holdingNoticeClaims/${id}`))).data();
+      const memo=(await transaction.get(db.doc(`memberMemos/${ref.id}`))).data();
+      try {
+        assertHoldingMemoWriteSource({job:data,memo,send,candidate,claim});
+        const profile=await readHoldingMemberProfile({db,memberId:data.memberId,reader:transaction});
+        assertHoldingMemoMemberProfile(profile,data);
+      } catch (error) {
+        if (/^(holding_delivery_memo_|operator_member_changed|holding_(native_member|unique_linked|verified_member|member_lookup|member_phone))/.test(error.message || "")) error.nonRetryable=true;
+        throw error;
+      }
+    }
     if (data.source === "instructor_member_eformsign" && data.registrationId) {
       const registration = await transaction.get(db.collection("instructorLessonRegistrations").doc(data.registrationId));
       if (registration.data()?.cancellation?.jobId) {
@@ -332,8 +403,12 @@ async function sendMemoWriteFailureEmailOnce(ref, job, message) {
   const latest = (await ref.get()).data() || {};
   if (latest.failureEmailSentAt) return;
   const jobId = String(job.jobId || ref.id);
-  const subject = `[ARCHIVE IN] StudioMate 메모쓰기 실패: ${job.memberName || jobId}`;
+  const subject = job.source==="holding_notice_delivery" ? "[홀딩 안내][실패] 회원 메모 반영 확인 필요" : `[ARCHIVE IN] StudioMate 메모쓰기 실패: ${job.memberName || jobId}`;
   const body = [
+    ...(job.source==="holding_notice_delivery" ? ["주체: ARCHIVE CORE / 홀딩 안내 메모", "결론: 홀딩 안내 메모의 원본 검증 또는 StudioMate 반영을 완료하지 못했습니다.",
+      `원천: alimtalkSends/${job.holdingNoticeId} / memberMemos/${jobId}`,
+      `상세: https://arcpilates.studiomate.kr/users/detail?id=${job.memberId}`,
+      "다음: 메모 작업만 확인하세요. 알림톡은 재발송하지 않습니다.", ""] : []),
     "StudioMate 회원메모 쓰기 작업이 실패했습니다.",
     "",
     `작업ID: ${jobId}`,
@@ -589,6 +664,7 @@ async function writeMemoViaUi(page, memberId, content) {
 }
 
 function bodyContainsMemoContent(body, content) {
+  if (content.startsWith("[홀딩 안내]") && content.includes("[홀딩기록: holding_notice_memo_")) return holdingMemoContentPresent(body,content);
   if (content.includes("[ARCHIVE PILATES 강사회원 가입서 정보]")) return signupProfileMemoPresent(body, content);
   const normalizedBody = normalizeMemoText(body);
   const normalizedContent = normalizeMemoText(content);

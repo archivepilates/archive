@@ -106,9 +106,34 @@ test("manual send claims once with automation off and reconciles independently",
   assert.equal(h.db.docs.get(`alimtalkSends/${h.plan.id}`).isTest, false);
   assert.equal(h.db.docs.get(`alimtalkSends/${h.plan.id}`).sourceEvidence, undefined);
   assert.equal(h.db.docs.get(`alimtalkSends/${h.plan.id}`).calculationMode, "live_studiomate_readback");
+  assert.equal(h.db.docs.get(`alimtalkSends/${h.plan.id}`).holdingMemoPolicy, "holding_delivery_memo_v1");
+  assert.equal(h.db.docs.get(`alimtalkSends/${h.plan.id}`).holdingMemoStatus, "ready");
+  assert.deepEqual(h.db.docs.get(`alimtalkSends/${h.plan.id}`).holdingMemoRanges, [{start:"2026-10-07",end:"2026-10-31"}]);
   await assert.rejects(h.run(), /prior_holding_local/); assert.equal(h.posts.length, 1);
   const reconciled = await reconcileVerifiedOperatorHolding({ db: h.db, stamp: () => NOW.toISOString(), id: h.plan.id, request: h.request });
   assert.equal(reconciled.deliveryComplete, true); assert.equal(reconciled.providerPostCount, 0);
+});
+
+test("accepted receipts wait for final delivery before making the memo outbox ready", async () => {
+  const h=harness(); h.row.status="SENDING"; h.row.statusCode="2000";
+  const result=await h.run();
+  assert.equal(result.deliveryComplete,false);
+  assert.equal(h.db.docs.get(`alimtalkSends/${h.plan.id}`).holdingMemoStatus,"waiting_delivery");
+  h.row.status="COMPLETE";h.row.statusCode="4000";
+  await reconcileVerifiedOperatorHolding({db:h.db,stamp:()=>NOW.toISOString(),id:h.plan.id,request:h.request});
+  assert.equal(h.db.docs.get(`alimtalkSends/${h.plan.id}`).holdingMemoStatus,"ready");
+  assert.equal(h.posts.length,1);
+});
+
+test("reconciliation never enrolls a historical ledger into the memo policy", async () => {
+  const h=harness();await h.run();
+  const ledger=h.db.docs.get(`alimtalkSends/${h.plan.id}`);
+  delete ledger.holdingMemoPolicy;delete ledger.holdingMemoStatus;delete ledger.holdingMemoRanges;
+  ledger.providerStatus="SENDING";h.db.docs.get(`holdingNoticeClaims/${h.plan.id}`).status="accepted";
+  await reconcileVerifiedOperatorHolding({db:h.db,stamp:()=>NOW.toISOString(),id:h.plan.id,request:h.request});
+  assert.equal(h.db.docs.get(`alimtalkSends/${h.plan.id}`).holdingMemoStatus,undefined);
+  assert.equal(h.db.docs.get(`alimtalkSends/${h.plan.id}`).holdingMemoPolicy,undefined);
+  assert.equal(h.posts.length,1);
 });
 
 test("rechecking terminal delivery does not rewrite the original candidate or ledger timestamps", async () => {
