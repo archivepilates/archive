@@ -4,11 +4,11 @@ ARCHIVE PILATES StudioMate 업무를 위한 맥미니 로컬 MCP입니다. 운�
 
 ## 현재 상태
 
-- 표준 MCP stdio 연결과 조회 도구 8개를 구현했습니다. 외부 HTTP 포트·별도 모델 호출·추가 스케줄러는 없습니다. 조건별 조회는 아래 v2 보고서를, 알림톡 사전 검증은 `docs/reports/2026-10-16-alimtalk-shared-validation.html`을 따릅니다.
+- 표준 MCP stdio 연결과 조회 도구 9개를 구현했습니다. 외부 HTTP 포트·별도 모델 호출·추가 스케줄러는 없습니다. 조건별 조회는 아래 v2 보고서를, 알림톡 사전 검증은 `docs/reports/2026-10-16-alimtalk-shared-validation.html`을 따릅니다.
 - 회원 검색·현재 수강권·조건별 만료 목록·회원 예약은 요청 시 맥미니 StudioMate에서 직접 조회합니다. 계약·알림톡·작업은 기존 canonical 원장 조회입니다.
 - 계약은 `binding.memberId`, `selection.memberId`, `completion.memberId`와 서명 증거를 구분합니다. 예전 `memberSignupContracts`는 이 도구의 조회 범위가 아닙니다.
 - 메모 계획·승인·접수 코드는 격리 테스트만 완료했습니다. 실제 회원 메모 쓰기는 기본 비활성이며 운영 승격 전입니다.
-- 기존 자동화와 기존 `archive-ai-server`는 변경하지 않습니다. CORE 챗봇과 이전 중단된 개발본도 사용하지 않습니다.
+- 기존 자동화의 발송 규칙·실행 주기와 `archive-ai-server`는 유지합니다. 홀딩 메모 후속 작업은 기존 처리기를 재사용하는 공통 계층으로 연결합니다. CORE 챗봇과 이전 중단된 개발본은 사용하지 않습니다.
 - 2026-10-15 조회 전용 Codex 등록·운영 소스 승격·인덱스 2개 READY·CORE 운영규칙 배포·명령 시험을 완료했습니다. 증거는 `docs/reports/2026-10-15-archivepilates-mcp-connection.html`을 따릅니다.
 
 ## 도구
@@ -23,12 +23,19 @@ ARCHIVE PILATES StudioMate 업무를 위한 맥미니 로컬 MCP입니다. 운�
 | `messages_get_delivery` | 최대 31일 알림톡 후보·발송 원장, 최종 전달 미확인 구분 |
 | `messages_validate_target` | 정확한 후보 ID의 저장 원장 사전 검증. 발송 허가·승인·큐 접수 아님 |
 | `operations_get_job` | 허용된 업무 종류와 작업 ID의 상태 |
+| `operations_get_progress` | 정확한 홀딩 업무 ID의 감지·원본·접수·전달·메모 큐·StudioMate 반영 증거를 한 번에 조회 |
 | `memos_prepare` | 비공개 로컬 메모 계획 작성, 실제 회원 변경 없음 |
 | `memos_commit` | 별도 운영자 승인이 있는 메모만 기존 큐 접수, 기본 비활성 |
 
 현재 지원하지 않는 것: 일반 예약 생성·취소, 수강권·홀딩 변경, 새 회원 생성, 계약 재발송, 실제 환불·송금, 알림톡 발송, 임의 URL·브라우저 명령·셸/Firestore 호출.
 
-사전 검증을 포함해 조회 도구 8개입니다. `messages_validate_target({candidateId})`는 매 호출 운영자 권한을 확인하고 별도 Node 자식에서 `scripts/read-alimtalk-target-validation.mjs`를 실행합니다. Functions의 `lib/alimtalk/targetValidation.js` 빌드가 없거나 읽기에 실패하면 대체 없이 중단합니다. 기존 설정의 자격증명 경로만 자식 환경에 전달하고 응답·오류에는 공개하지 않습니다. 45초 예산·출력 합계 128 KiB 제한·취소 시 소유 자식 종료와 종료 확인을 적용합니다. 결과는 `preflightOnly=true`, `liveReadback=false`, `allowedForExternalActions=false`이며 통과해도 발송 시점 승인·큐 선점·업무별 최종 검증이 별도로 필요합니다. 2026-10-16 운영 소스·빌드·Codex 허용목록과 새 stdio 연결을 확인했고, 기존 운영자 인증의 라이브 callable도 동일한 차단 결과와 미발견 결과를 반환했습니다. 기존 연결은 다시 연결해야 여덟 번째 도구가 보입니다.
+사전 검증과 공통 진행상태를 포함해 조회 도구 9개입니다. `messages_validate_target({candidateId})`는 매 호출 운영자 권한을 확인하고 별도 Node 자식에서 `scripts/read-alimtalk-target-validation.mjs`를 실행합니다. Functions의 `lib/alimtalk/targetValidation.js` 빌드가 없거나 읽기에 실패하면 대체 없이 중단합니다. 기존 설정의 자격증명 경로만 자식 환경에 전달하고 응답·오류에는 공개하지 않습니다. 45초 예산·출력 합계 128 KiB 제한·취소 시 소유 자식 종료와 종료 확인을 적용합니다. 결과는 `preflightOnly=true`, `liveReadback=false`, `allowedForExternalActions=false`이며 통과해도 발송 시점 승인·큐 선점·업무별 최종 검증이 별도로 필요합니다. 2026-10-19 운영 소스·빌드·Codex 허용목록과 새 stdio 연결에서 아홉 번째 조회 도구까지 확인했습니다. 기존 연결이 예전 도구 목록을 보관하면 다시 연결해야 새 도구가 표시됩니다.
+
+## 공통 업무 처리 진행상태
+
+`operations_get_progress({kind:"holding",operationId:"holding_operator_notice_..."})`는 정확한 원본 업무 ID 한 건만 받습니다. CORE의 `getMemberOperationProgress`와 같은 백엔드가 읽기 전용 트랜잭션에서 후보·발송·선점·이벤트·메모·메모 작업 6개 문서를 대조합니다. 전체 회원·예약을 읽거나 공급자·브라우저를 호출하지 않습니다. 저장된 증거 시각은 실제 공급자 전달 시각을 보장하지 않습니다.
+
+접수·전달·메모 반영을 분리하며, 새 `holding_acceptance_memo_v2`는 정상 접수 증거만으로 메모 작업을 준비합니다. 기존 `holding_delivery_memo_v1`은 전달 기준을 유지합니다. 실제 StudioMate 사본은 기존 5분 처리기가 담당하며 MCP는 해당 큐를 직접 실행하거나 메시지를 재발송하지 않습니다. 불완전·상이한 기록은 검토 대상으로 표시합니다. 계약·예약·환불 실행은 이 공통 도구에 포함되지 않습니다. 설계·검증·배포 증거는 `docs/tasks/2026-10-19-member-operation-service.md`에 기록합니다.
 
 ## 로컬 실행
 
@@ -53,7 +60,7 @@ ARCHIVE_MCP_OPERATOR_STAFF_ID=1979746 npm start
 [mcp_servers.archivepilates-mcp]
 command = "/absolute/path/to/node"
 args = ["/absolute/path/to/repo/services/archivepilates-mcp/src/index.mjs"]
-enabled_tools = ["members_find", "members_get_overview", "members_list_expiring", "bookings_list", "contracts_get_progress", "messages_get_delivery", "messages_validate_target", "operations_get_job"]
+enabled_tools = ["members_find", "members_get_overview", "members_list_expiring", "bookings_list", "contracts_get_progress", "messages_get_delivery", "messages_validate_target", "operations_get_job", "operations_get_progress"]
 tool_timeout_sec = 60
 
 [mcp_servers.archivepilates-mcp.env]
