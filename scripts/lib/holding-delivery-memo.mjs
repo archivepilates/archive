@@ -33,7 +33,8 @@ export function hasHoldingMemoAcceptance(send, claim) {
 }
 
 /** The sent calculation is an audit snapshot, never a source for a later allowance. */
-export function holdingDeliveryMemoPlan(send, candidate, claim) {
+export function holdingDeliveryMemoPlan(send, candidate, claim, { markerFormat = "compact" } = {}) {
+  if (!["compact", "legacy"].includes(markerFormat)) fail();
   const acceptance = send?.holdingMemoPolicy === HOLDING_ACCEPTANCE_MEMO_POLICY;
   if (!policies.includes(send?.holdingMemoPolicy) || send.studioId !== "5330" || !/^[1-9]\d*$/.test(send.memberId || "") ||
       !/^01[016789]\d{7,8}$/.test(send.memberPhone || "") || !send.memberName?.trim() || send.isTest !== false ||
@@ -70,12 +71,14 @@ export function holdingDeliveryMemoPlan(send, candidate, claim) {
   if (typeof send.observedAt!=="string" || !/^\d{4}-\d{2}-\d{2}T\d{2}:\d{2}:\d{2}\.\d{3}Z$/.test(send.observedAt) ||
       !Number.isFinite(observed) || new Date(observed).toISOString()!==send.observedAt) fail();
   const checkedDate = new Date(observed+9*3600_000).toISOString().slice(0,10);
-  const memoId = `holding_notice_memo_${expected.slice("holding_operator_notice_".length)}`;
+  const memoHash = expected.slice("holding_operator_notice_".length);
+  const memoId = `holding_notice_memo_${memoHash}`;
+  const marker = markerFormat === "legacy" ? memoId : `H-${memoHash.slice(0,24)}`;
   const content = [`[홀딩 안내] ${v["#{수강권명}"]} · 최초 ${summary.originalDays}일권`,
     `홀딩 가능 ${summary.totalDays}일 · 사용 ${summary.usedDays}일 (${sorted.map(r=>`${shortDate(r.start)}~${shortDate(r.end)}`).join(", ")})`,
     `잔여 ${summary.remainingDays}일`, `이번 홀딩: ${start}~${end}`, `확인일: ${checkedDate}`,
     ...(acceptance ? ["알림톡: 발송 접수 (전달 완료 여부와 별도)"] : []),
-    `[홀딩기록: ${memoId}]`].join("\n");
+    `[홀딩기록: ${marker}]`].join("\n");
   return {memoId,content,contentHash:digest(content),studioId:send.studioId,memberId:send.memberId,memberName:send.memberName,
     memberPhone:send.memberPhone,holdingNoticeId:expected,solapiMessageId:send.solapiMessageId,holdingMemoPolicy:send.holdingMemoPolicy};
 }
@@ -86,16 +89,27 @@ function matchesRecord(row, plan, job) {
     (job ? row.jobId===plan.memoId && row.memberPhone===plan.memberPhone && row.studiomateMemberId===plan.memberId : row.memoId===plan.memoId);
 }
 
+// Existing pairs keep their immutable content/hash, including the former full-ID marker.
+function existingMemoPlan(send, candidate, claim, memo, job) {
+  for (const markerFormat of ["compact", "legacy"]) {
+    const plan = holdingDeliveryMemoPlan(send, candidate, claim, { markerFormat });
+    if (matchesRecord(memo, plan, false) && matchesRecord(job, plan, true)) return plan;
+  }
+  fail();
+}
+
 export function assertHoldingMemoWriteSource({job,memo,send,candidate,claim}) {
-  const plan=holdingDeliveryMemoPlan(send,candidate,claim);
-  if (send.holdingMemoStatus!=="queued" || !matchesRecord(job,plan,true) || !matchesRecord(memo,plan,false) || job.profileUpdate || job.registrationId ||
+  const plan=existingMemoPlan(send,candidate,claim,memo,job);
+  if (send.holdingMemoStatus!=="queued" || job.profileUpdate || job.registrationId ||
       job.studiomateMemberId !== job.memberId) fail();
   return plan;
 }
 
 export function holdingMemoContentPresent(body, content) {
   const normalize = value => String(value || "").replace(/\s+/g," ").trim();
-  return content?.startsWith("[홀딩 안내]") && content.includes("[홀딩기록: holding_notice_memo_") && normalize(body).includes(normalize(content));
+  return typeof content === "string" && content.startsWith("[홀딩 안내]") &&
+    /\n\[홀딩기록: (?:holding_notice_memo_[a-f0-9]{64}|H-[a-f0-9]{24})\]$/.test(content) &&
+    normalize(body).includes(normalize(content));
 }
 
 export function assertHoldingMemoMemberProfile(profile, plan) {
@@ -118,7 +132,7 @@ export async function enqueueDeliveredHoldingMemo({db,stamp,id}) {
     const memoRef=db.doc(`memberMemos/${plan.memoId}`), jobRef=db.doc(`studiomateMemoWriteJobs/${plan.memoId}`);
     const memo=await tx.get(memoRef), job=await tx.get(jobRef);
     if (memo.exists || job.exists) {
-      if (!matchesRecord(memo.data(),plan,false) || !matchesRecord(job.data(),plan,true)) fail();
+      existingMemoPlan(send,candidate,claim,memo.data(),job.data());
       if (send.holdingMemoStatus !== "queued") tx.update(sendRef,{holdingMemoStatus:"queued",holdingMemoId:plan.memoId});
       return {status:"existing",memoId:plan.memoId};
     }

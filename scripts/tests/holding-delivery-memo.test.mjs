@@ -2,6 +2,7 @@ import test from "node:test";
 import assert from "node:assert/strict";
 import { createHash } from "node:crypto";
 import { readFile } from "node:fs/promises";
+import { runInNewContext } from "node:vm";
 import { HOLDING_NOTICE_TEMPLATE, HOLDING_NOTICE_TEMPLATE_ID } from "../lib/holding-allowance-notice.mjs";
 import {
   HOLDING_MEMO_POLICY, holdingDeliveryMemoPlan, enqueueDeliveredHoldingMemo,
@@ -19,13 +20,49 @@ const stamp = () => AT;
 const fingerprint = value => createHash("sha256").update(JSON.stringify(value)).digest("hex");
 const profile = { memberId: "701", studioId: "5330", name: "Synthetic Holding Member", phone: "01000000701" };
 
-for (const [label,body,expected] of [
-  ["full content", "[홀딩 안내] 테스트\n잔여 9일\n[홀딩기록: holding_notice_memo_abc]", true],
-  ["changed calculation", "[홀딩 안내] 테스트\n잔여 8일\n[홀딩기록: holding_notice_memo_abc]", false],
-  ["partial content", "[홀딩 안내] 테스트\n[홀딩기록: holding_notice_memo_abc]", false],
-  ["different event", "[홀딩 안내] 테스트\n잔여 9일\n[홀딩기록: holding_notice_memo_xyz]", false],
-]) test(`StudioMate memo readback requires exact calculation and event: ${label}`,()=>{
-  assert.equal(holdingMemoContentPresent(body,"[홀딩 안내] 테스트\n잔여 9일\n[홀딩기록: holding_notice_memo_abc]"),expected);
+for (const marker of [`holding_notice_memo_${"a".repeat(64)}`, `H-${"a".repeat(24)}`]) {
+  const content = `[홀딩 안내] 테스트\n잔여 9일\n[홀딩기록: ${marker}]`;
+  for (const [label,body,expected] of [
+    ["full content", content, true],
+    ["whitespace and surrounding page", `회원 메모\n${content.replaceAll("\n", "  ")}\n다른 메모`, true],
+    ["changed calculation", content.replace("잔여 9일", "잔여 8일"), false],
+    ["partial content", content.replace("잔여 9일\n", ""), false],
+    ["different event", content.replace(marker, marker.replaceAll("a", "b")), false],
+    ["marker only", `[홀딩기록: ${marker}]`, false],
+  ]) test(`StudioMate memo readback requires exact calculation and event: ${marker.slice(0,2)} ${label}`,()=>{
+    assert.equal(holdingMemoContentPresent(body,content),expected);
+  });
+}
+
+test("readback rejects missing, malformed or non-final markers", () => {
+  for (const marker of ["", "H-abc", `H-${"a".repeat(23)}`, `H-${"a".repeat(25)}`,
+    `holding_notice_memo_${"a".repeat(63)}`, `H-${"x".repeat(24)}`]) {
+    const content = `[홀딩 안내] 테스트\n잔여 9일\n[홀딩기록: ${marker}]`;
+    assert.equal(holdingMemoContentPresent(content, content), false);
+  }
+  const content = `[홀딩 안내] 테스트\n[홀딩기록: H-${"a".repeat(24)}]\n추가 문구`;
+  assert.equal(holdingMemoContentPresent(content, content), false);
+});
+
+test("actual worker uses strict full-content readback for both holding marker formats", async () => {
+  const script = await readFile(new URL("../process-studiomate-memo-write-jobs.mjs", import.meta.url),"utf8");
+  const start = script.indexOf("function bodyContainsMemoContent(body, content) {");
+  const end = script.indexOf("function normalizeMemoText(value) {", start);
+  assert.ok(start >= 0 && end > start);
+  const readback = runInNewContext(`${script.slice(start,end)}; bodyContainsMemoContent`, {
+    holdingMemoContentPresent,
+    signupProfileMemoPresent: () => { throw new Error("unexpected signup fallback"); },
+    normalizeMemoText: () => { throw new Error("holding must not use permissive generic fallback"); },
+  });
+  for (const markerFormat of ["compact","legacy"]) {
+    const input = source(), {content} = holdingDeliveryMemoPlan(input.send,input.candidate,input.claim,{markerFormat});
+    assert.equal(readback(`회원 메모\n${content}`,content),true);
+    assert.equal(readback(content.replace("잔여 9일","잔여 8일"),content),false);
+    const partial = content.split("\n").filter((_,i)=>i !== 1).join("\n");
+    assert.equal(readback(partial,content),false);
+    const noMarker = content.split("\n").slice(0,-1).join("\n");
+    assert.equal(readback(noMarker,noMarker),false);
+  }
 });
 
 function source(seed = "first") {
@@ -262,9 +299,25 @@ test("full memo shows original allowance, inclusive usage range, remaining days,
   assert.match(compact, /잔여[^\n]*9일/);
   assert.match(compact, /확인일(?:[:：])?(?:2026[-/.])?10[-/.]19/);
   const lines = plan.content.trimEnd().split("\n"), marker = lines.at(-1);
-  assert.ok(marker.includes(input.send.id) || marker.includes(plan.memoId), "last line must identify this stable source or memo");
+  assert.equal(marker, `[홀딩기록: H-${plan.memoId.slice("holding_notice_memo_".length, "holding_notice_memo_".length + 24)}]`);
+  assert.ok(marker.length < 40, "visible marker must stay compact");
   assert.equal(lines.filter(line => line === marker).length, 1, "source marker must appear exactly once");
   assert.notEqual(planFor(source("second")).content.trimEnd().split("\n").at(-1), marker);
+});
+
+test("short display reference preserves full IDs, calculations and provider policy", () => {
+  for (const input of [source(), acceptanceSource()]) {
+    const compact = planFor(input), legacy = holdingDeliveryMemoPlan(input.send,input.candidate,input.claim,{markerFormat:"legacy"});
+    assert.match(compact.memoId, /^holding_notice_memo_[a-f0-9]{64}$/);
+    assert.equal(compact.memoId, legacy.memoId);
+    assert.equal(compact.holdingNoticeId, legacy.holdingNoticeId);
+    assert.equal(compact.holdingMemoPolicy, legacy.holdingMemoPolicy);
+    assert.equal(compact.content.split("\n").slice(0,-1).join("\n"), legacy.content.split("\n").slice(0,-1).join("\n"));
+    assert.notEqual(compact.contentHash, legacy.contentHash);
+    assert.equal(holdingMemoContentPresent(compact.content,compact.content),true);
+    assert.equal(holdingMemoContentPresent(legacy.content,legacy.content),true);
+    assert.throws(()=>holdingDeliveryMemoPlan(input.send,input.candidate,input.claim,{markerFormat:"other"}));
+  }
 });
 
 test("automatic and operator-verified delivered notices are both eligible", () => {
@@ -461,6 +514,40 @@ test("existing done/retry jobs and memo sync state never have attempts, errors o
     assert.ok(results.every(result => result.status === "existing" && result.memoId === memoId));
     assert.deepEqual(h.db.docs, before);
   });
+});
+
+test("legacy pending/retry/done pairs remain immutable and pass worker validation under both policies", async t => {
+  for (const policy of ["delivery", "acceptance"]) for (const status of ["pending", "retry", "done"]) {
+    await t.test(`${policy} ${status}`, async () => {
+      const h = harness(policy === "delivery" ? source() : acceptanceSource()), {memoId} = await h.run();
+      const records = pair(h.db,memoId);
+      const legacy = holdingDeliveryMemoPlan(h.input.send,h.input.candidate,h.input.claim,{markerFormat:"legacy"});
+      for (const row of Object.values(records)) Object.assign(row,{content:legacy.content,contentHash:legacy.contentHash});
+      Object.assign(records.job,{status,attempts:2,lastError:status === "retry" ? "synthetic" : null});
+      records.memo.syncStatus = status === "done" ? "synced" : status;
+      const before = structuredClone(h.db.docs);
+      assert.equal(guard(h,records).content,legacy.content);
+      const results = await Promise.all([h.run(),h.run()]);
+      assert.ok(results.every(row=>row.status === "existing" && row.memoId === memoId));
+      assert.deepEqual(h.db.docs,before);
+      assert.equal(holdingMemoContentPresent(`StudioMate\n${legacy.content}`,legacy.content),true);
+    });
+  }
+});
+
+test("mixed formats or a rehashed wrong short reference cannot authorize existing records", async t => {
+  for (const recordName of ["memo","job"]) for (const change of ["legacy", "wrong-reference"]) {
+    await t.test(`${recordName} ${change}`, async () => {
+      const h = harness(), {memoId} = await h.run(), records = pair(h.db,memoId);
+      const row = records[recordName];
+      row.content = change === "legacy"
+        ? holdingDeliveryMemoPlan(h.input.send,h.input.candidate,h.input.claim,{markerFormat:"legacy"}).content
+        : row.content.replace(/H-[a-f0-9]{24}/,`H-${"0".repeat(24)}`);
+      row.contentHash = createHash("sha256").update(row.content).digest("hex");
+      assert.throws(()=>guard(h,records));
+      await rejectsWithoutWrites(h);
+    });
+  }
 });
 
 test("partial memo/job pairs block without healing, resetting or overwriting either record", async t => {

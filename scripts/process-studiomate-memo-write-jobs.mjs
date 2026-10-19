@@ -665,7 +665,7 @@ async function writeMemoViaUi(page, memberId, content) {
 }
 
 function bodyContainsMemoContent(body, content) {
-  if (content.startsWith("[홀딩 안내]") && content.includes("[홀딩기록: holding_notice_memo_")) return holdingMemoContentPresent(body,content);
+  if (content.startsWith("[홀딩 안내]")) return holdingMemoContentPresent(body,content);
   if (content.includes("[ARCHIVE PILATES 강사회원 가입서 정보]")) return signupProfileMemoPresent(body, content);
   const normalizedBody = normalizeMemoText(body);
   const normalizedContent = normalizeMemoText(content);

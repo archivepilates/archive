@@ -1,0 +1,22 @@
+<!doctype html>
+<html lang="ko">
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>ARCHIVE PILATES · 홀딩 메모 기록번호 개선</title>
+<style>
+*{box-sizing:border-box}body{margin:0;background:#f5f6f7;color:#222;font:16px/1.75 system-ui,sans-serif;letter-spacing:0}main{max-width:860px;margin:auto;padding:40px 24px}h1{font-size:28px;line-height:1.4}h2{font-size:19px;margin-top:32px}p,li{overflow-wrap:anywhere}small{color:#62666b}section{border-top:1px solid #d9dcdf;margin-top:24px}code{font-size:14px;background:#e9ecee;padding:2px 4px}strong{color:#a9212d}table{width:100%;border-collapse:collapse}th,td{text-align:left;vertical-align:top;padding:12px 8px;border-bottom:1px solid #d9dcdf}th{width:30%}@media(max-width:480px){main{padding:24px 16px}h1{font-size:24px}th,td{padding:10px 4px}}
+</style>
+<main>
+<small>ARCHIVE PILATES · 2026-10-19</small>
+<h1>홀딩 메모 기록번호 개선</h1>
+<p><strong>새 메모의 표시용 기록번호만 짧게 변경합니다.</strong> 내부 전체 ID, 중복 방지, 발송 규칙과 계산 방식은 유지합니다.</p>
+<section><h2>변경 내용</h2>
+<table><tr><th>표시 형식</th><td><code>[홀딩기록: H-24자리 코드]</code></td></tr>
+<tr><th>내부 원장</th><td>전체 메모·작업 ID와 발송 원장 연결 보존</td></tr>
+<tr><th>기존 기록</th><td>긴 번호의 대기·재시도·완료 메모를 수정하거나 다시 만들지 않음</td></tr>
+<tr><th>검증</th><td>메모 전체 내용·해시·원천을 함께 대조. 번호만으로 완료 처리하지 않음</td></tr>
+<tr><th>운영 범위</th><td>맥미니 실행기 및 CORE 운영규칙 Hosting. Functions 배포 없음</td></tr></table></section>
+<section><h2>검증 결과</h2><p>홀딩 관련 합성·DOM 회귀 테스트 793건 통과, 실패·생략 0건. 기존 양식 호환, 원자적 생성, 동시 실행 중복 차단, 변조 거부 및 실제 메모 처리기 분기를 포함합니다. 구문 검사와 Git diff 검사도 통과했습니다.</p>
+<p>실제 회원에게 테스트 알림톡을 보내거나 기존 메모를 수정하지 않습니다. 새 양식의 자연 발생 운영 결과는 배포 자체와 구분합니다.</p></section>
+<section id="release"><h2>운영 반영</h2><p>운영 반영·Hosting 배포·커밋·푸시 승인됨. 실제 배포 결과는 완료 후 이 보고서에 기록합니다.</p></section>
+</main></html>
