@@ -21,9 +21,14 @@
 - Quarantine is checked again inside the enqueue transaction and cannot be overridden by a stale ready scan. Quarantine alerts use a separately drained durable pending marker and the shared stable-event report sender, so a notification failure does not erase the required follow-up. Source delivery evidence remains unchanged.
 - Existing CORE responsive runner: 95 local checks passed at 320/390/768/1440/1920px.
 - Syntax and diff checks passed. Affected Functions: zero; no Functions build/deployment required.
-- Independent review closed with no remaining findings after the bounded follow-up fixes and their regressions. No actual member notice or memo has been created for testing. Release verification pending.
+- Independent review closed with no remaining findings after the bounded follow-up fixes and their regressions. No actual member notice or memo has been created for testing.
 
 ## Release
 - Targets: Mac mini archive-in-runtime on origin/main; existing com.archive.studiomate-memo-write-queue interval remains 300 seconds; CORE Hosting operating rules only (existing shared Hosting mirror deployment contract preserved).
 - Production account: archive-codex-operator@archive-pilates.iam.gserviceaccount.com; project archive-pilates.
-- Pending: commit/main promotion, runtime fast-forward, Hosting live release/canary/CI and read-only runtime marker/config check. A natural future end-to-end delivery/write is not implied by unit or deployment checks.
+- Source commit 440538421de6a6d5b1fcb91776ebf0b8ace8ed24 promoted and pushed to origin/main; clean main deployment checkout and archive-runtime-main fast-forwarded. Runtime independently reopened and 229 focused tests passed.
+- Existing LaunchAgent points to the runtime worker, retains its 300-second interval and last exit 0. Production read-only settings remain live_readback_auto/autoSendEnabled/canonicalSourcePromoted with the same v2 template. Policy-marked sends, ready records and pending alerts were all zero: no historical source was enrolled. No manual queue execution, member memo write or provider POST.
+- npm run deploy:archive-core-live succeeded for archive-pilates-core and its existing archive-pilates Hosting mirror. Live responsive checks passed 95/95; release canary matched source SHA 440538421de6a6d5b1fcb91776ebf0b8ace8ed24. Live rules returned HTTP 200 and contained the delivery memo, five-minute worker and no-backfill rules.
+- GitHub Actions ARCHIVE IN Functions Affected Check run 39194819642 succeeded for the exact source SHA (27 steps; no failed/warning annotations). Functions changes remain zero. Optional Prettier executable was not installed, so no formatting command ran; syntax/diff and scoped suites passed.
+- Task-owned responsive browser/server closed in finally; process check found no remaining task-owned browser/profile/server. No StudioMate browser opened for this task.
+- Natural future end-to-end delivery/write remains unobserved, and is not implied by synthetic tests or release checks. Results-only documentation is recorded separately without redeploying unchanged source.
