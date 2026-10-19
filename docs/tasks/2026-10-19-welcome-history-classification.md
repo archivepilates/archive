@@ -24,5 +24,12 @@
 - Tests: welcome TS 609, audit/inspector/native-completion Node 215, existing send policy 137: 961 passed, no skips. Local CORE responsive QA: 95 passed at 320/390/768/1440/1920px. Release/data-source/catalog guards pass.
 - Actual audit dry-run passed APPROVED exact template body/image/button contract; no writes. Initial source inspection reproduced `unknown_welcome_template` with local history complete and no prior welcome candidate/send/claim.
 - Independent review confirmed exact-ID/transaction/no-resend behavior and found inherited CLI HTTP logging risk; inspector now overrides HTTP/debug logging and regression guards passed. No backend source edit. Affected Functions: zero.
-- Runtime adoption, scoped audit apply and Hosting release pending.
-- Pending: exact member source refresh, welcome candidate/readback, one send and provider final delivery verification. Distinguish every state explicitly.
+- Runtime/main adopted source `896cdcd3effc2c616c98d1a2ffb7626e211dd8fb`; the single audited allowlist was applied at 2026-10-18T23:54:46.066Z. Source contract hash: `f80ef17f6b46b3dbb24db79c3c3edfb16eb11785ec7c6e77f8676775cff0b433`. No general coverage, schedule or enable flag changed.
+- CORE Hosting release and live canary passed at the same SHA; all 95 live responsive checks passed. GitHub affected-functions run `39178451405` succeeded with zero failed/warning annotations. Backend Functions unchanged.
+- Exact native completion dry-run and apply each checked one signed contract, with no StudioMate writes or messages. The regular queue created the permanent welcome candidate at 2026-10-19T00:02:03.619Z; the existing readback worker completed its post-candidate verification at 00:02:15.026Z.
+
+## Additional Recovery Blocker
+- The one authorized exact-candidate dispatch stopped before the provider transport: `history_time_limit`, the local Firestore history loader's 15-second bound. The generic sender catch recorded candidate/send `failed`, `attempts=1` at 2026-10-19T00:06:29Z even though no welcome claim or provider-attempt timestamp was created.
+- A subsequent independent read-only inspection exhausted both local and provider history successfully: two aliases, two failed local history rows, zero provider welcome receipts, valid v6 template. This proves recovery was NOT delivered; a stored failed send row is not provider acceptance.
+- Preserve candidate/send/claim evidence and the permanent identity. Do not reset counters, remove failure records, create another candidate or bypass the welcome history guard. No contract resend or second dispatch was attempted.
+- Remaining work: a reviewed pre-dispatch-failure recovery design that distinguishes a read failure from an actual/ambiguous outbound attempt, followed by explicitly scoped recovery. Do not weaken the 15-second completeness gate or infer that a provider history GET alone authorizes a retry. Member delivery remains blocked, not complete.
