@@ -17,3 +17,15 @@
 - Production read-only legacy check: existing completed memo/job/source pair passes the new worker guard, keeps its full marker and unchanged content hash `372d9edb5da82cb64511524fab573f1a9f112f74b1ea7882091ab989aef2058a`, memo synced/job done. No production transaction or write was invoked.
 - CORE Hosting/catalog validation passed. The new feature checkout initially lacked Functions development dependencies for its catalog parser; using the existing runtime dependency path resolved the local-only setup issue without changing lockfiles or packages.
 - Independent release review repeated all 793 holding tests with zero failures/skips; no code blockers. Local responsive checks passed 95 cases at 320/390/768/1440/1920 widths. Rollback must retain both-format reader support once any compact memo has been created.
+
+## Released And Verified
+
+- Source commit `ec82665eedc188b3a14e35c1efb0e51a90da6546` pushed to the feature branch and promoted to `origin/main`. Clean main deployment checkout fast-forwarded. Runtime fast-forwarded immediately after confirming no old memo/Excel/holding workers were active; no scheduler reload or queue execution was used.
+- Reopened runtime and reran all 793 holding tests: zero failures/skips. Existing legacy source/memo/job guard passed with identical five-document evidence digest before and after adoption. Full canonical IDs and stored legacy content unchanged; memo synced/job done.
+- Existing launch jobs still use the runtime checkout, interval 300/3600 seconds and last exit 0. Holding mode remains live_readback_auto, autoSendEnabled/canonicalSourcePromoted true. No settings changed.
+- Hosting dry-run and production release succeeded through root `deploy:archive-core-live` for `archive-pilates-core` and the existing `archive-pilates` mirror. No Functions/rules/index deployment. Exact release canary matched source SHA.
+- Local and live responsive suites each passed 95 cases at 320/390/768/1440/1920 widths. Live CORE rules and web.app mirror returned HTTP 200 and exact local SHA-256 `7e4056e334bc4c6057ff2c7fb394aba34e37c2b7fd7d85d140d10bc3ddd2c388` with the new rule present.
+- An exploratory probe used the wrong ARCHIVE IN-domain mirror path and returned 404. Correct canonical CORE and archive-pilates.web.app/core paths passed; no site/config change was needed.
+- User/member records were read only. No test memo, real notice, manual queue run, source mutation or historical backfill. Natural creation of a new compact memo is not claimed by this rollout.
+- Task-owned responsive contexts/servers closed; no task processes remained. Existing nonblocking ADC quota-project warning was preserved without auth/config changes. CI proof and final Git status follow below.
+- Exact source CI succeeded on main run `39251306404` and feature run `39251302646`; independent watcher reported no failed steps. Results-only task/report follow-up changes no executable/deployed assets, so no second Hosting release is required.

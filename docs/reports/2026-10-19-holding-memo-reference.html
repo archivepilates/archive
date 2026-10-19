@@ -18,5 +18,7 @@
 <tr><th>운영 범위</th><td>맥미니 실행기 및 CORE 운영규칙 Hosting. Functions 배포 없음</td></tr></table></section>
 <section><h2>검증 결과</h2><p>홀딩 관련 합성·DOM 회귀 테스트 793건 통과, 실패·생략 0건. 기존 양식 호환, 원자적 생성, 동시 실행 중복 차단, 변조 거부 및 실제 메모 처리기 분기를 포함합니다. 구문 검사와 Git diff 검사도 통과했습니다.</p>
 <p>실제 회원에게 테스트 알림톡을 보내거나 기존 메모를 수정하지 않습니다. 새 양식의 자연 발생 운영 결과는 배포 자체와 구분합니다.</p></section>
-<section id="release"><h2>운영 반영</h2><p>운영 반영·Hosting 배포·커밋·푸시 승인됨. 실제 배포 결과는 완료 후 이 보고서에 기록합니다.</p></section>
+<section id="release"><h2>운영 반영 완료</h2><p>소스 <code>ec82665e</code>를 기능 브랜치와 main에 푸시하고, 실행 중인 이전 처리기가 없는 상태에서 맥미니 운영 실행기를 전환했습니다. 전환 후 793건 재검증과 기존 완료 메모의 내용·원장 불변 확인을 통과했습니다.</p>
+<p>CORE 및 기존 web.app 미러 Hosting 배포 완료. 라이브 화면 크기별 검사 95건과 소스 리비전 검증을 통과했으며, 운영규칙 두 경로가 HTTP 200 및 소스 해시 일치로 확인됐습니다. 기존 메모 5분·홀딩 감지 1시간 주기와 자동발송 설정은 유지합니다.</p>
+<p>기존 메모 수정·알림톡 재발송·수동 큐 실행은 없었습니다. 새 짧은 번호의 자연 발생 기록은 이번 배포 완료와 별도입니다.</p><p>GitHub 검사: <a href="https://github.com/archivepilates/archive/actions/runs/39251306404">main</a> 및 <a href="https://github.com/archivepilates/archive/actions/runs/39251302646">기능 브랜치</a> 모두 성공, 실패 단계 없음. 결과 기록만 추가한 후속 문서 커밋은 추가 배포가 필요하지 않습니다.</p></section>
 </main></html>
