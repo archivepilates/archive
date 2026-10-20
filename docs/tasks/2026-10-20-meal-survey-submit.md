@@ -34,7 +34,30 @@
 
 ## Remaining
 
-- Hosting deployment and independent live verification are in progress; final
-  outcome will be appended after deployment.
+- Hosting deployment and live verification completed; see release evidence below.
 - Prior audit's expired queue display and backend publication-race/name-match
   findings are outside this submit-only patch and remain unmodified.
+
+## Release Evidence
+
+- Released source: `0f6b639c0d92e7cca59ec334293a02d0d6014580`, promoted to
+  `origin/main`, deployed from clean local `main`.
+- Firebase project `archive-pilates`, existing `archive-codex-operator` service
+  account; root firebase.json; Hosting sites archive-pilates, archive-pilates-in,
+  archive-pilates-core all reported release complete. No database/Functions deploy.
+- Rollback, onsite-welcome and CORE Hosting guards passed. Worktree dependencies
+  were linked to the existing runtime before rerunning the initially missing-module
+  local checks; no lockfiles or dependency versions changed.
+- Canonical and compatibility survey/rules HTML hashes exactly matched local
+  source. Both release manifests matched the released source commit.
+- `validate-live-release-canary.mjs --surface archivein --surface core --sha
+  0f6b639c0d92e7cca59ec334293a02d0d6014580`: 36 checks passed.
+- Live browser smoke: missing-link error visible and focused, form remained
+  hidden, new validation summary present, console errors absent. No live POST.
+- Response/draft/report fingerprints and Firestore updateTimes remained unchanged
+  after Hosting deployment. No member data mutations or message sends.
+- GitHub Actions `39394121572`: completed/success. Operational error emails were
+  not needed; there was no production failure.
+- Verification tab closed; original user tabs preserved. No test server remained.
+- Post-release docs-only commit records this result; its SHA is intentionally not
+  the deployed application source SHA and does not require another Hosting deploy.
