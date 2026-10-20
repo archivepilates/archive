@@ -1,0 +1,41 @@
+<!doctype html>
+<html lang="ko">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width,initial-scale=1">
+  <title>ARCHIVE PILATES 스텝 영상 권한 자동 연결</title>
+  <style>
+    *{box-sizing:border-box}body{margin:0;background:#fafafa;color:#222;font:16px/1.7 -apple-system,BlinkMacSystemFont,"Apple SD Gothic Neo",sans-serif;letter-spacing:0}main{max-width:860px;margin:auto;padding:40px 22px 64px}header{border-bottom:3px solid #ba302b;padding-bottom:20px}h1{font-size:28px;line-height:1.35;margin:8px 0}h2{font-size:20px;margin:30px 0 10px}p{margin:10px 0}small,.muted{color:#666}ul{padding-left:22px}li{margin:6px 0}a{color:#9b2622;overflow-wrap:anywhere}code{font-size:14px;overflow-wrap:anywhere}dl{display:grid;grid-template-columns:minmax(90px,1fr) minmax(0,3fr);gap:8px 14px}dt{font-weight:600}dd{margin:0;min-width:0}.status{font-weight:650}.notice{border-left:3px solid #ba302b;padding-left:14px}section{border-bottom:1px solid #ddd;padding-bottom:16px}@media(max-width:480px){main{padding:24px 18px 44px}h1{font-size:25px}dl{grid-template-columns:1fr;gap:4px}dd{margin-bottom:10px}}
+  </style>
+</head>
+<body><main>
+  <header><small>ARCHIVE PILATES / 아임웹 스텝 영상 권한 · 2026.10.20</small><h1>스텝 영상 권한 자동 연결</h1><p class="status">실제 권한 보완 확인 · 5분 주기 백그라운드 배포 확인</p></header>
+  <section><h2>결론</h2><p>쇼핑 등급은 할인에만 연결돼 있었고 영상 자동 권한 기능은 없었습니다. 정유리 강사의 누락 권한을 보완하고, 스텝 등급 변경 및 신규 영상 등록을 주기적으로 연결하는 기능을 배포했습니다.</p>
+    <dl><dt>정유리</dt><dd>기존 그룹 3개 보존. 영상 권한 39개와 STAFF 그룹 추가.</dd><dt>정은영</dt><dd>기존 42개 그룹 보존. 새 영상 권한 1개 추가.</dd><dt>현재 상태</dt><dd>두 명 모두 영상 권한 그룹 42개와 STAFF 그룹, 총 43개 연결. 그룹 수와 영상 편수는 다릅니다.</dd></dl>
+  </section>
+  <section><h2>운영 규칙</h2><ul>
+    <li>아임웹 최신 쇼핑 등급 ‘스텝’이 기준입니다. ARCHIVE STAFF 그룹만으로는 전체 영상 권한을 새로 부여하지 않습니다.</li>
+    <li>Mac mini의 전용 LaunchAgent가 300초마다 점검합니다. 신규 영상은 정식 40D 그룹·페이지 접근·내 강의실 카탈로그 등록 후 다음 점검에서 연결됩니다.</li>
+    <li>스텝 해제 시 이번 기능이 추가한 그룹만 회수합니다. 기존 권한과 유효 구매 권한은 보존하며, 과거 수동 부여 권한을 회수 대상으로 소급 편입하지 않습니다.</li>
+    <li>E팀의 최초 부여일부터 40일 계산은 그대로 유지합니다. 스텝인 동안 만료 회수를 유예하고, 해제 후에도 유효 구매를 보호합니다.</li>
+    <li>공유 잠금, 전체 주문 대조, dry-run 확인, 최종 회원 재조회, 변경 의도 저장과 결과 불명 재쓰기 금지를 적용합니다.</li>
+    <li>20% 할인 설정, 상품·가격, 기존 구매 이력, 관리자 권한, 영상 및 페이지 ACL은 변경하지 않았습니다.</li>
+  </ul></section>
+  <section><h2>검증 증거</h2><dl>
+    <dt>실제 아임웹</dt><dd>운영 default 프로필에서 전체 회원 123명, 영상 그룹 42개, 주문 207개를 완전 조회했습니다. 회원 상세와 전체 43개 그룹 명단을 독립 재조회해 두 스텝의 권한과 기존 그룹 보존을 확인했습니다.</dd>
+    <dt>반복 실행</dt><dd>보완 후 반복 실행은 추가·회수 모두 0개였습니다. 개인 원장에 미확정 변경 의도는 없습니다.</dd>
+    <dt>로컬 검사</dt><dd>정책·IO·E팀 만료·단일 파일 배포 검사 92개 통과. plist 구문과 Git diff 검사 통과.</dd>
+    <dt>백그라운드</dt><dd><code>com.archive.imweb-staff-video</code> 등록, 실행 경로 및 300초 주기 확인. 2026.10.20 17:12:11 KST 실행 완료, 종료 코드 0, 실제 변경 0개.</dd>
+    <dt>동시 실행</dt><dd>설치 직후 E팀 점검과 겹친 실행은 공유 잠금으로 차단됐습니다. 해당 점검 종료 후 작업 전용 서비스를 다시 실행해 정상 완료를 확인했습니다.</dd>
+    <dt>CORE 배포</dt><dd><a href="https://archive-pilates.web.app/core/rules/#imweb-staff-video-policy">운영규칙</a>의 스텝 정책 한 부분만 추가. 다른 파일 170개와 Hosting 설정을 그대로 보존했고, 실제 응답 해시 일치를 확인했습니다. Functions 배포 없음.</dd>
+    <dt>GitHub CI</dt><dd id="ci-result">성공 확인: <a href="https://github.com/archivepilates/archive/actions/runs/39391570049">ARCHIVE IN Functions Affected Check</a>. 해당 커밋에 적용된 기존 CI 검사가 완료됐으며, 위 92개 검사는 별도로 로컬 실행했습니다.</dd>
+  </dl></section>
+  <section><h2>미완료 및 제한</h2><p class="notice">일반회원 계정으로 실제 내 강의실 목록과 영상 재생을 확인하는 검증은 별도 로그인 세션이 없어 수행하지 않았습니다. 관리자 화면이나 API 권한 연결을 일반회원 재생 성공으로 보고하지 않습니다.</p><ul>
+    <li>Mac mini 정지·로그아웃·인증 실패 중에는 자동 연결이 지연될 수 있습니다. 연속 오류는 운영자 메일로 중복 없이 보고합니다.</li>
+    <li>현재 안전 한도는 영상 그룹 48개, 회원 그룹 변경 요청 50개입니다. 초과하거나 주문·등급·원장이 불명확하면 권한을 회수하지 않고 운영자 확인 대상으로 둡니다.</li>
+    <li>CORE 새 노트는 320·390·768·1440px 로컬 렌더에서 겹침과 내부 overflow가 없었습니다. 기존 다른 노트의 긴 식별자로 생기는 모바일 페이지 폭 405px 문제는 이번 변경과 무관하며 수정 범위에서 제외했습니다.</li>
+    <li>회원 계정 로그인·비밀번호 변경·다른 회원 변경·실제 스텝 해제 실험은 하지 않았습니다. 회수는 모의 데이터로 검증했습니다.</li>
+  </ul></section>
+  <section><h2>소스와 배포</h2><p>기능 커밋 <a href="https://github.com/archivepilates/archive/commit/57648001e16d57f02904264ac3339c751a603b7a"><code>57648001</code></a>, 등급 형식 보호 커밋 <a href="https://github.com/archivepilates/archive/commit/82588dd9e9e4b19166c84055e0f2f3ec1dbcec22"><code>82588dd9</code></a>. <code>origin/main</code> 반영 및 Mac mini 정본 런타임 fast-forward 확인.</p><p>CORE Hosting 버전 <code>e0513d3fc0d0fa5e</code>. 회원 원장과 실행 로그는 비공개 로컬 폴더에만 보관하며 Git에 포함하지 않았습니다. 작업용 브라우저·컨텍스트·서버는 종료했고 사용자 Chrome은 조작하지 않았습니다.</p></section>
+  <footer><p class="muted">다음 확인: 정유리 강사 계정에서 새로고침 또는 재로그인 후 내 강의실과 실제 영상 재생 확인.</p></footer>
+</main></body></html>

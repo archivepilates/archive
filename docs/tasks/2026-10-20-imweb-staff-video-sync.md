@@ -11,3 +11,14 @@
 - Limit: 50 memberships per update; canonical video catalog maximum 48; no CLI quota override. Unavailable or uncertain sources fail closed.
 - UI: ordinary-member classroom/playback requires a separate authorized test session. Do not impersonate staff or reset passwords.
 - Local ledger and logs contain restricted operational identity data; keep outside Git with private permissions.
+
+## Release Result
+
+- Implemented and live: commits 57648001 and 82588dd9 promoted to origin/main and integrated runtime.
+- Native readback: both staff have 42 video groups plus STAFF; original memberships preserved; all 43 group lists independently checked.
+- Full source checks: 123 members and 207 unique canonical orders; replay added/removed zero groups.
+- Worker: LaunchAgent installed at 300 seconds; verified successful background run at 2026-10-20T08:12:11.895Z, exit code 0.
+- CORE: only the staff note released in Hosting version e0513d3fc0d0fa5e; 170 other files and configuration preserved; response hash verified.
+- Checks: 92 focused tests, plist syntax, diff checks and GitHub Actions run 39391570049 succeeded.
+- Pending: actual ordinary-member classroom/playback verification needs an authorized separate session. No member impersonation or password changes.
+- Detailed outcome: docs/reports/2026-10-20-imweb-staff-video-sync.html.
