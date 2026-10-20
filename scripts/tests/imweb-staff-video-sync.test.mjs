@@ -601,3 +601,11 @@ test('unapproved policy rejects before any source access', () => {
   assert.throws(() => f.reconcile(), /Approved staff policy/);
   assert.deepEqual(f.events, []);
 });
+test('a malformed tracked native grade cannot be mistaken for a staff exit', () => {
+  for (const grade of [[STAFF_GRADE], { code: STAFF_GRADE }]) {
+    const source = member('m001', { grade, group: ['baseline', VIDEO_CODES[1]] });
+    const f = fixture({ members: [source], entries: { m001: tracked(source, [VIDEO_CODES[1]]) } });
+    assert.throws(() => f.reconcile(), /Ambiguous native member grade/);
+    assert.equal(f.writes.length, 0); assert.equal(f.saved.length, 0);
+  }
+});

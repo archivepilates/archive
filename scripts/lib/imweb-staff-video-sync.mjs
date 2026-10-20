@@ -99,6 +99,7 @@ export function reconcileStaffVideos(state,{run=staffImweb,apply=false,save=()=>
     const source=index.get(code);if(!source)throw Error('Tracked member missing; manual review required');
     const member=run(['member','get',source.uid,'--unit-code',UNIT]).data;
     if(member?.memberCode!==code||member.uid!==source.uid||member.siteCode!==SITE||member.unitCode!==UNIT)throw Error('Member identity mismatch');
+    if(member.grade!=null&&typeof member.grade!=='string')throw Error('Ambiguous native member grade; no group change');
     return member;
   };
   let orders;const prepared=[];
