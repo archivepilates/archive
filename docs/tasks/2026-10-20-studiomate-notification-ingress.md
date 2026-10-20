@@ -30,4 +30,4 @@ Remove only `STUDIOMATE_NOTIFICATION_INGRESS=enabled` from the existing admin La
 
 ## Status
 
-Implemented and baseline/readback verified; production rollout and natural post-baseline event result pending. Report: `docs/reports/2026-10-20-studiomate-notification-ingress.html`.
+Implemented, scoped tests and production rollout verified. Code `4b7ac6989ec3d749716506a2d3c00e2621b296f2` pushed to feature branch and main; runtime fast-forwarded, existing LaunchAgent flag enabled without interval change, CORE Hosting deployed and live markers verified. CI `39428084956` success. Operating reader health at 2026-10-20T13:10:53Z was healthy, 15 rows read, 0 pending and 0 notification-origin live requests. Isolated real-source replay produced one verification receipt and duplicate on retry, without canonical requests or member actions. A natural post-baseline event's live request/import completion remains unverified. Report: `docs/reports/2026-10-20-studiomate-notification-ingress.html`.

@@ -26,5 +26,12 @@
 <li>알림 감지는 기존 발송 규칙·시각·승인을 앞당기거나 우회하지 않습니다. 서명완료 알림을 받았다는 것만으로 계약 완료를 기록하지 않습니다.</li>
 <li>실회원 예약·수강권·홀딩 변경, 테스트 알림톡·문자·계약 재발송은 하지 않았습니다. 알림 읽음 상태·권한도 변경하지 않았습니다.</li>
 </ul></section>
-<section id="release"><h2>운영 반영</h2><p>구현·무발송 검증 완료. Mac mini 기존 admin-sync 환경 플래그와 CORE 운영규칙 Hosting 운영 반영·커밋·푸시·라이브 대조를 준비 중입니다. Functions·Firestore 규칙·기존 정기 간격은 변경하지 않습니다.</p></section>
+<section id="release"><h2>운영 반영 완료</h2><ul>
+<li>코드 4b7ac6989ec3d749716506a2d3c00e2621b296f2를 기능 브랜치와 origin/main에 푸시하고 깨끗한 main에서 검증·배포했습니다. runtime archive-runtime-main도 같은 코드로 fast-forward했습니다.</li>
+<li>기존 com.archive.archivein-admin-emergency-sync 작업이 비실행 상태일 때 환경 플래그 STUDIOMATE_NOTIFICATION_INGRESS=enabled를 추가하고 재등록했습니다. 기존 30초 실행과 홀딩용 1시간 Excel 주기는 그대로입니다.</li>
+<li>22:10:51 KST 운영 실행기의 실제 알림목록 15건 조회를 확인했고, 22:10:53 KST automationStatus/studiomate-notification-ingress는 healthy·idle입니다. 이 확인 시각까지 새 운영 요청 0건, pending 신호 0건입니다.</li>
+<li>Hosting archive-pilates와 archive-pilates-core 배포 완료. core.archivepilates.com/rules/ 및 archive-pilates.web.app/core/rules/에서 HTTP 200·알림 감지 규칙·폴링 고지·홀딩 유지 문구를 대조했습니다. Functions·Firestore 규칙은 배포하지 않았습니다.</li>
+<li>모바일 320/390·태블릿 768·데스크톱 1440/1920의 로컬 95개와 운영 95개 화면 검증, 코드 SHA를 대조한 라이브 canary 10개가 통과했습니다.</li>
+<li>GitHub Actions 39428084956: success. 원본 수집 테스트용 Chrome 탭을 닫았고 세 공유/작업 잠금이 해제된 것을 확인했습니다. 기존 사용자 탭과 정상 운영 작업은 보존했습니다.</li>
+</ul><p><strong>별도 미완료:</strong> 배포 후 자연 발생하는 새 알림의 운영 요청 생성→원본 import 완료는 아직 확인하지 못했습니다. 위 실제 표본 수신·격리 접수·중복 검증과 혼동하지 않습니다. 새 감지 경로는 운영 활성 상태이며 기존 자동화의 회원 발송 규칙·시각을 변경하지 않습니다.</p></section>
 </main></html>
