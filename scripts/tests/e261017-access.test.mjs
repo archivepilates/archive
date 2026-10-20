@@ -5,6 +5,7 @@ import os from 'node:os';
 import path from 'node:path';
 import { spawnSync } from 'node:child_process';
 import { GROUP, POLICY_ID, entitlementFromGrant, removalPlan, verifyRemoval, reconcile } from '../e261017-access.mjs';
+import { STAFF_GRADE, STAFF_GROUP } from '../lib/imweb-staff-video-policy.mjs';
 
 const start = '2026-10-18T01:16:33.501Z';
 const end = '2026-11-27T01:16:33.501Z';
@@ -39,6 +40,14 @@ test('expiration removes only E-team group and preserves all other permissions a
   assert.throws(() => verifyRemoval(member, { ...member, point: 0, group: plan.afterGroups }, plan.afterGroups));
   assert.throws(() => verifyRemoval(member, { ...member, group: [] }, plan.afterGroups));
 });
+test('native staff grade defers expiry without extending the original grant clock', () => {
+  const e = entitlement(); const snapshot = structuredClone(e);
+  assert.equal(removalPlan({ ...member, grade: STAFF_GRADE }, e, Date.parse(end)).action, 'staff_access_preserved');
+  assert.deepEqual(e, snapshot);
+  assert.equal(removalPlan({ ...member, group: [...member.group, STAFF_GROUP] }, e, Date.parse(end)).action, 'remove_group_only');
+  assert.equal(removalPlan({ ...member, grade: STAFF_GRADE }, e, Date.parse(end)-1).action, 'not_due');
+  assert.equal(removalPlan(member, e, Date.parse(end)+1).action, 'remove_group_only');
+});
 test('wrong scope, tampered expiry and ambiguous group data stop before mutation', () => {
   for (const bad of [{ ...member, memberCode: 'm123' }, { ...member, siteCode: 'other' },
     { ...member, unitCode: 'other' }, { ...member, group: [{}] }]) {
@@ -61,6 +70,7 @@ function fixture({ fail = false, unknown = false } = {}) {
   if (unknown) s.entitlements[code].revocation = { status: 'result_unknown' };
   const run = args => {
     if (args[0] === 'config') return { resolved_profile: { site_code: member.siteCode, unit_code: member.unitCode } };
+    if (args[0] === 'order') return { data: { list: [], currentPage: 1, totalCount: 0, totalPage: 0 } };
     if (args[1] === 'list') return { data: { list: [structuredClone(live)], hasNext: false } };
     if (args[1] === 'get') return { data: structuredClone(live) };
     if (args[1] === 'groups') return { data: { list: live.group.includes(GROUP) ? [structuredClone(live)] : [] } };
@@ -91,6 +101,52 @@ test('apply removes only target group, independently reads back and does not rep
   assert.deepEqual(f.s.untouched, { keep: true });
   reconcile(f.s, { run: f.run, now: Date.parse(end) + 1, apply: true, save: f.save });
   assert.equal(f.writes, 1);
+});
+test('staff expiry replay keeps the original active entitlement without a write', () => {
+  const f = fixture(); const run = args => {
+    const result = f.run(args);
+    if (args[1] === 'get') result.data.grade = STAFF_GRADE;
+    return result;
+  };
+  const original = structuredClone(f.s.entitlements[code]);
+  const outcomes = reconcile(f.s, { run, now: Date.parse(end), apply: true, save: f.save });
+  assert.equal(outcomes[0].action, 'staff_access_preserved');
+  assert.equal(f.writes, 0); assert.deepEqual(f.s.entitlements[code], original);
+});
+test('an expired manual E grant does not revoke a valid later purchase after staff exit', () => {
+  const f = fixture(); let orderReads = 0;
+  const purchase = { orderNo: 101, memberCode: code, orderStatus: 'CLOSED',
+    sections: [{ orderSectionStatus: 'PURCHASE_CONFIRMATION', sectionItems: [{
+      productInfo: { groupPassCode: GROUP, groupPassDayCnt: 40 } }] }],
+    payments: [{ paymentStatus: 'PAYMENT_COMPLETE', isCancel: 'N', paymentCompleteTime: '2026-11-20T01:00:00Z' }] };
+  const run = args => {
+    if (args[0] === 'order') { orderReads++; return { data: { list: [purchase], currentPage: 1, totalCount: 1, totalPage: 1 } }; }
+    return f.run(args);
+  };
+  const original = structuredClone(f.s.entitlements[code]);
+  const outcomes = reconcile(f.s, { run, now: Date.parse(end), apply: true, save: f.save });
+  assert.equal(outcomes[0].action, 'purchased_access_preserved');
+  assert.equal(orderReads, 1); assert.equal(f.writes, 0);
+  assert.deepEqual(f.s.entitlements[code], original);
+});
+test('a group added during the E purchase scan is not overwritten', () => {
+  const f = fixture(); let scanned = false;
+  const run = args => {
+    const result = f.run(args);
+    if (args[0] === 'order') scanned = true;
+    if (scanned && args[1] === 'get') result.data.group.push('new-manual-permission');
+    return result;
+  };
+  assert.throws(() => reconcile(f.s, { run, now: Date.parse(end), apply: true, save: f.save }), /readback mismatch/);
+  assert.equal(f.writes, 0); assert.equal(f.s.entitlements[code].revocation, undefined);
+});
+test('incomplete or duplicated E purchase pages prevent a permission write', () => {
+  for (const list of [[{ orderNo: 1 }, { orderNo: 1 }], []]) {
+    const f = fixture(); const run = args => args[0] === 'order'
+      ? { data: { list, currentPage: 1, totalCount: 2, totalPage: 1 } } : f.run(args);
+    assert.throws(() => reconcile(f.s, { run, now: Date.parse(end), apply: true, save: f.save }), /duplicate|Incomplete/);
+    assert.equal(f.writes, 0);
+  }
 });
 test('uncertain write is durably recorded and blocked until independently reconciled', () => {
   const f = fixture({ fail: true });

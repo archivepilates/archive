@@ -5,6 +5,9 @@ import { isDeepStrictEqual } from 'node:util';
 import { pathToFileURL } from 'node:url';
 import { createHash } from 'node:crypto';
 import { imwebJson, readReferralMembers, IMWEB_REFERRAL_SCOPE } from './lib/imweb-referral-source.mjs';
+import { STAFF_GRADE, protectedPurchaseGroups } from './lib/imweb-staff-video-policy.mjs';
+import { MEMBER_GROUP_LOCK, staffPages } from './lib/imweb-staff-video-sync.mjs';
+import { acquireStudioMateBrowserLock } from './lib/studiomate-browser-lock.mjs';
 
 export const GROUP = 'g2026101715ef28611dff4';
 export const POLICY_ID = 'e261017-grant-40d-v1';
@@ -57,6 +60,7 @@ export function removalPlan(member, entitlement, now) {
     return { action: 'review_unknown_result' };
   }
   if (!beforeGroups.includes(GROUP)) return { action: 'already_absent' };
+  if (member.grade === STAFF_GRADE) return { action: 'staff_access_preserved' };
   return { action: 'remove_group_only', beforeGroups, afterGroups: beforeGroups.filter(code => code !== GROUP) };
 }
 
@@ -103,7 +107,7 @@ export function reconcile(state, { now = Date.now(), apply = false, adopt = fals
     const plan = removalPlan(before, entry, now);
     outcomes.push({ memberCode: code, action: plan.action, expiresAt: entry.expiresAt });
     if (plan.action === 'review_unknown_result') throw Error('Prior removal result unresolved; do not repeat write');
-    if (!apply || plan.action === 'terminal' || plan.action === 'not_due') continue;
+    if (!apply || ['terminal', 'not_due', 'staff_access_preserved'].includes(plan.action)) continue;
     if (plan.action === 'reconcile_absent_unknown') {
       const receipt = entry.revocation;
       if (!Array.isArray(receipt.beforeGroups) || !Array.isArray(receipt.afterGroups)
@@ -126,6 +130,10 @@ export function reconcile(state, { now = Date.now(), apply = false, adopt = fals
     })];
     const dry = run([...args, '--dry-run']);
     if (typeof dry.confirmation_token !== 'string' || !dry.confirmation_token) throw Error('Missing confirmation token');
+    const orders = staffPages(run, ['order', 'list', '--unit-code', IMWEB_REFERRAL_SCOPE.unitCode]);
+    if (protectedPurchaseGroups(orders, code, now).includes(GROUP)) {
+      outcomes.at(-1).action = 'purchased_access_preserved'; continue;
+    }
     const fresh = memberFor(code);
     verifyRemoval(before, fresh, plan.beforeGroups);
     entry.revocation = { status: 'intent', attemptedAt: new Date(now).toISOString(),
@@ -153,13 +161,16 @@ export function reconcile(state, { now = Date.now(), apply = false, adopt = fals
   return outcomes;
 }
 
-function main() {
+async function main() {
   const args = process.argv.slice(2);
   if (args.some(arg => !['--apply', '--adopt-verified-grants'].includes(arg))) throw Error('Unsupported argument; time override is forbidden');
   const file = path.join(STATE_DIR, 'state.json');
   const lock = path.join(STATE_DIR, 'run.lock');
-  const fd = fs.openSync(lock, 'wx', 0o600);
+  const release = await acquireStudioMateBrowserLock({ lockPath: MEMBER_GROUP_LOCK,
+    owner: 'imweb-e261017-access', waitMs: 0, staleMs: 600000 });
+  let fd;
   try {
+    fd = fs.openSync(lock, 'wx', 0o600);
     fs.writeSync(fd, JSON.stringify({ pid: process.pid, operation: 'e261017-access', startedAt: new Date().toISOString() }));
     const state = JSON.parse(fs.readFileSync(file, 'utf8'));
     const save = data => {
@@ -169,9 +180,13 @@ function main() {
     };
     console.log(JSON.stringify({ ok: true, mode: args.includes('--apply') ? 'apply' : 'read_only',
       outcomes: reconcile(state, { apply: args.includes('--apply'), adopt: args.includes('--adopt-verified-grants'), save }) }, null, 2));
-  } finally { fs.closeSync(fd); fs.unlinkSync(lock); }
+  } finally {
+    try {
+      if (fd !== undefined) { fs.closeSync(fd); fs.unlinkSync(lock); }
+    } finally { await release(); }
+  }
 }
 
 if (process.argv[1] && import.meta.url === pathToFileURL(process.argv[1]).href) {
-  try { main(); } catch (error) { console.error(error.message); process.exitCode = 1; }
+  try { await main(); } catch (error) { console.error(error.message); process.exitCode = 1; }
 }
