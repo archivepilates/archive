@@ -175,6 +175,21 @@ export function createLiveReader({ launch = options => chromium.launchPersistent
     });
   }
   return {
+    getNotifications: signal => session(async page => {
+      await navigate(page, '/users');
+      await page.waitForFunction(() => document.querySelectorAll('.notification__list__item h6').length > 0);
+      checkpoint(page);
+      const rows = await page.evaluate(() => {
+        const aside = document.querySelector('aside.notification');
+        if (!aside || aside.querySelector('input')?.value) throw new Error('notification_filter_not_all');
+        return [...aside.querySelectorAll('.notification__list__item')].slice(0, 30).map(item => ({
+          title: item.querySelector('h6')?.textContent?.trim(),
+          body: item.querySelector('p')?.textContent?.trim(),
+        }));
+      });
+      requireValue(rows.length > 0, 'LIVE_INCOMPLETE', '알림 목록을 확인하지 못했습니다.');
+      return { rows, coverage: 'latest_rendered_notifications', livePushVerified: false };
+    }, signal),
     getInventory: signal => session(page => readNativeInventory(page, { navigate, checkpoint }), signal),
     getBookings: (expected, range, signal) => session(page => readNativeBookings(page, expected, range,
       { navigate, checkpoint, waitIdentity }), signal),

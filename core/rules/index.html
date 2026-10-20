@@ -41,6 +41,14 @@
           </div>
         </section>
 
+        <section class="panel rule-section" id="studiomate-notification-ingress">
+          <div class="panel-header"><div><h2>StudioMate 알림 감지 · 2026.10.20</h2></div></div>
+          <div class="rule-note"><strong>목적·구현</strong><span>기존 맥미니 요청 처리기의 30초 실행 안에서 2분마다 웹 알림목록을 읽습니다. Chrome 푸시 직접 구독이나 웹훅이 아닙니다. 새 실행기·발송기·모델 호출은 추가하지 않습니다. 첫 목록은 과거분 무처리 기준선으로 저장하고, 새 예약·수강권·계약 알림은 기존 Excel 원본 갱신 요청으로만 연결합니다.</span></div>
+          <div class="rule-note"><strong>원천·중복방지</strong><span>알림 제목·본문의 내용 해시는 재조회 신호이며 회원·예약·발송의 정본 ID가 아닙니다. 반복 수신·재시작은 동일 요청 키로 막고 대기 중 갱신에 합치며, 추가 갱신은 최소 15분 간격입니다. 전체 Excel 실행 잠금과 기존 브라우저 잠금을 분리해 정기·요청 실행의 동시 수집·반영을 막습니다. 처리 중 수집 이후의 새 알림은 다음 갱신 대상으로 남깁니다.</span></div>
+          <div class="rule-note"><strong>유지·예외</strong><span>홀딩·계약 생성/완료 확인·서명요청 문자·연락처 후속 처리는 알림 요청에서 실행하지 않고 기존 정기 경로를 유지합니다. 알림을 계약·수강권·첫 수업의 확정 증거로 쓰지 않으며 기존 canonical 원천·발송 승인·선점·중복방지를 유지합니다. 최근 목록 범위 밖 변경·같은 내용 반복은 정기 Excel로 보완합니다. 로그인·조회 오류는 3회 연속 실패 시 메일로 알리고 복구와 구분합니다.</span></div>
+          <div class="rule-note"><strong>검증·배포</strong><span>실제 원본 알림 15건 읽기와 반복 수집 신규 0건을 확인했습니다. 격리 중복·재시작·동시 실행·홀딩 제외 시험을 수행하며, 실제 새 알림 수신→운영 요청 원장 반영 여부는 배포 보고서에 별도로 기록합니다. 구현·테스트 완료와 자연 발생 처리 완료를 구분합니다. 대상은 맥미니 요청 처리기와 이 CORE 운영규칙이며 Functions·기존 정기 주기는 변경하지 않습니다.</span></div>
+        </section>
+
         <section class="panel rule-section" id="archivepilates-mcp">
           <div class="panel-header"><div><h2>StudioMate 업무 MCP</h2><p>archivepilates-mcp · 맥미니 운영자 조회 전용</p></div></div>
           <div class="rule-note"><strong>목적·구현 · 2026-10-15</strong><span>맥미니 로컬 stdio 연결로 회원·수강권·예약·계약·알림톡·작업 원장을 조회합니다. 별도 챗봇·모델 호출·HTTP 공개·정기 실행은 추가하지 않습니다. 운영자는 조회할 회원과 업무를 지정하며, 강사 계정용 공개 서버가 아닙니다.</span></div>

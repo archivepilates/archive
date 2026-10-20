@@ -1,0 +1,30 @@
+<!doctype html><html lang="ko"><meta charset="utf-8"><meta name="viewport" content="width=device-width,initial-scale=1"><title>ARCHIVE PILATES 알림 감지 연결</title>
+<style>*{box-sizing:border-box}body{margin:0;background:#f5f6f8;color:#20242a;font:16px/1.75 system-ui,sans-serif}main{max-width:900px;margin:auto;padding:32px 20px 64px}h1{font-size:28px}h2{font-size:20px;margin-top:32px}p,li{word-break:keep-all;overflow-wrap:anywhere}li{margin:8px 0}small{color:#606872}section{border-top:1px solid #dce0e5;margin-top:24px}code{overflow-wrap:anywhere}strong{color:#89172b}</style>
+<main><small>2026-10-20 · StudioMate 알림 감지</small><h1>알림 수신과 기존 갱신 큐 연결</h1>
+<p><strong>브라우저 알림목록 수집·중복 차단·기존 원본 갱신 요청 연결을 구현했습니다.</strong> Chrome Web Push 직접 수신이나 완전한 실시간 웹훅은 아닙니다. 홀딩과 기존 발송은 원래 경로를 유지합니다.</p>
+<section><h2>구현</h2><ul>
+<li>기존 30초 admin-sync 실행기 안에서 2분마다 최신 알림목록을 읽습니다. 새 LaunchAgent·발송기·모델 호출·공개 포트는 없습니다.</li>
+<li>첫 15건은 무처리 기준선입니다. 새 예약·취소·수강권·계약 알림은 기존 adminSyncRequests의 emergency_excel 요청만 만듭니다. 대기 요청과 합치며 추가 갱신은 최소 15분 간격입니다.</li>
+<li>내용 해시·순서 창·관찰된 재등장으로 신호를 구분하고, 같은 요청 키를 Firestore 트랜잭션으로 생성합니다. 반복 수신·시간 표시 변경·재시작·경쟁 생성이 별도 실행을 만들지 않습니다.</li>
+<li>알림은 원본 재조회의 힌트일 뿐 회원·예약·발송의 정본 ID가 아닙니다. 화면에 없는 변경과 구분할 수 없는 동일 알림의 반복은 기존 시간별 Excel로 보완합니다.</li>
+<li>전체 Excel 실행 잠금은 다운로드부터 반영·보고까지 유지합니다. 브라우저 잠금은 별개입니다. 시간별 실행은 대기하고 요청 실행은 중복 시작 대신 보류합니다.</li>
+<li>알림 요청은 홀딩 roster·발송, 계약 생성·완료 확인·서명요청 문자, 연락처 후속 처리와 강사 sidecar를 실행하지 않습니다. 연락처 원장의 hash/status도 보존해 다음 정기 동기화가 누락되지 않게 합니다.</li>
+<li>알림 갱신 보고서와 automationStatus는 정상 시간별 보고서와 분리합니다. 종료된 하위 프로세스·불완전 다운로드·부분 결과를 정상 성공으로 표시하지 않습니다.</li>
+<li>알림목록 읽기 3회 연속 실패 시 운영 메일과 복구 알림을 사용합니다. 범위 연속성 미확인은 경고로 표시합니다. 브라우저 종료 불명확 시 공유 프로필 잠금은 보존하고 기존 요청 처리는 계속합니다.</li>
+</ul></section>
+<section><h2>검증 증거</h2><ul>
+<li>구현한 읽기 처리기에서 StudioMate 원본 알림 15건을 실제 수집했습니다. 21:57, 21:58, 21:59, 22:02, 22:06 KST 재수집은 새 신호·후속 큐 0건입니다.</li>
+<li>22:08 KST 실제 원본 표본을 격리 Firestore 검증 원장에 재생했습니다. 첫 접수 queued, 동일 키 재접수 duplicate, 문서 1개를 확인했습니다. 실제 adminSyncRequests 생성 0건·회원 작업 0건입니다.</li>
+<li>검증 경로: workLanes/studiomate-notification-ingress/verificationRequests/studiomate_notification_839252c0a2b2032b8a87f7265ba83c758395acdd6bcc57b12b62094e25966544. 이 원장은 실제 처리기가 읽지 않습니다.</li>
+<li>초기 기준선·중복·재시작·경쟁 트랜잭션·대기 병합·취소 후 동일 내용 재예약·목록 연속성 상실·연락처 장부 보존·전체 실행 잠금과 기존 홀딩/문자 진입점 82개 시험 통과.</li>
+<li>별도 회귀: 홀딩 470개, MCP 88개, 브라우저/공유 잠금 fixture 25개 통과. CORE Hosting 검증 및 plist·JavaScript 구문·diff 검사 통과.</li>
+<li>독립 검토에서 연락처 장부 변경, 하위 프로세스 종료, 동일 내용 재발생, 종료 예외의 문제가 발견돼 수정했습니다. 최종 소스 검토에 남은 차단은 없습니다.</li>
+</ul></section>
+<section><h2>미확인과 제한</h2><ul>
+<li>위 격리 접수는 실제 알림 표본의 재생입니다. 배포 이후 자연 발생한 새 알림이 실제 운영 요청·원본 import까지 완료됐다는 증거와 구분합니다.</li>
+<li>푸시 payload 수신이나 모든 알림의 완전한 수집은 보장하지 않습니다. 최신 표시 범위를 넘는 급증·동일 내용만으로 채워진 창·알림에 없는 홀딩은 정기 Excel이 보완합니다.</li>
+<li>알림 감지는 기존 발송 규칙·시각·승인을 앞당기거나 우회하지 않습니다. 서명완료 알림을 받았다는 것만으로 계약 완료를 기록하지 않습니다.</li>
+<li>실회원 예약·수강권·홀딩 변경, 테스트 알림톡·문자·계약 재발송은 하지 않았습니다. 알림 읽음 상태·권한도 변경하지 않았습니다.</li>
+</ul></section>
+<section id="release"><h2>운영 반영</h2><p>구현·무발송 검증 완료. Mac mini 기존 admin-sync 환경 플래그와 CORE 운영규칙 Hosting 운영 반영·커밋·푸시·라이브 대조를 준비 중입니다. Functions·Firestore 규칙·기존 정기 간격은 변경하지 않습니다.</p></section>
+</main></html>

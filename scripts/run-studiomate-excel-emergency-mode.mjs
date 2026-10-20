@@ -7,6 +7,7 @@ import { createRequire } from "node:module";
 import { recordAutomationStatus } from "./lib/archive-core-ops-logging.mjs";
 import { cleanupImportedSourceFiles } from "./lib/imported-source-retention.mjs";
 import { membershipContractDiscoveryWarning } from "./lib/studiomate-membership-contract-observer.mjs";
+import { acquireStudioMateSyncRun } from "./lib/studiomate-sync-run-lock.mjs";
 import {
   isExcludedPrivateBooking,
   isPrivateBooking,
@@ -23,11 +24,13 @@ const args = new Set(process.argv.slice(2));
 const apply = args.has("--apply");
 const download = args.has("--download");
 const scheduledRun = args.has("--scheduled-run");
+const notificationRefresh = args.has("--notification-refresh");
 const reservationFile = valueArg("--reservation-file");
 const memberFile = valueArg("--member-file");
 const requestedStartDate = valueArg("--start-date");
 const requestedEndDate = valueArg("--end-date");
-const reportDir = path.join(os.homedir(), "ArchiveIN/automation/reports/excel-emergency-mode");
+const normalReportDir = path.join(os.homedir(), "ArchiveIN/automation/reports/excel-emergency-mode");
+const reportDir = notificationRefresh ? path.join(os.homedir(), "ArchiveIN/automation/reports/notification-refresh") : normalReportDir;
 const PROJECT_ID = process.env.GOOGLE_CLOUD_PROJECT || process.env.GCLOUD_PROJECT || "archive-pilates";
 const STUDIO_ID = process.env.STUDIOMATE_STUDIO_ID || "5330";
 
@@ -35,12 +38,18 @@ if (!admin.apps.length) admin.initializeApp({ projectId: PROJECT_ID });
 const db = admin.firestore();
 
 const steps = [];
+const syncRun = apply && download ? await acquireStudioMateSyncRun({ waitMs: scheduledRun ? 10 * 60_000 : 0 }) : null;
+if (syncRun && !syncRun.acquired) {
+  console.log(JSON.stringify({ ok: true, status: 'deferred', skipped: 'excel_sync_already_running', finishedAt: new Date().toISOString() }));
+  process.exit(0);
+}
+try {
 let downloadedMemberFile = "";
 let downloadedReservationFile = "";
 let downloadedDeletedClassFile = "";
 let downloadedReservationRange = null;
 let contractSourceDownloadedAt = "";
-const previousSyncEvidence = download ? loadSyncRunEvidence(reportDir, { maxAgeMinutes: 95 }) : {};
+const previousSyncEvidence = download ? loadSyncRunEvidence(normalReportDir, { maxAgeMinutes: 95 }) : {};
 const reservationWindow = download
   ? studioMateReservationSyncWindow({
       requestedStartDate,
@@ -70,7 +79,12 @@ if (download) {
   downloadedReservationRange = downloadStep.stdout?.downloads?.reservation?.range || null;
   downloadedDeletedClassFile =
     downloadStep.stdout?.downloads?.deletedClass?.archivePath || downloadStep.stdout?.downloads?.deletedClass?.stagingPath || "";
-  downloadFailedWithoutMember = apply && !downloadedMemberFile;
+  downloadFailedWithoutMember = apply && (downloadStep.exitCode !== 0 || downloadStep.stdout?.ok !== true
+    || !downloadedMemberFile || !downloadedReservationFile);
+  if (downloadFailedWithoutMember && downloadStep.exitCode === 0) {
+    downloadStep.exitCode = 1;
+    downloadStep.stderr = 'download_evidence_incomplete';
+  }
   if (apply && downloadStep.exitCode === 0 && downloadedMemberFile && !memberFile) {
     contractSourceDownloadedAt = downloadStartedAt;
   }
@@ -82,9 +96,10 @@ if (!downloadFailedWithoutMember) {
       "scripts/emergency-import-studiomate-member-excel.mjs",
       ...(memberFile || downloadedMemberFile ? ["--file", memberFile || downloadedMemberFile] : []),
       "--allow-new-excel-profiles",
-      "--queue-contact-sync",
-      ...(contractSourceDownloadedAt ? ["--contract-source-downloaded-at", contractSourceDownloadedAt] : []),
-      ...(contractSourceDownloadedAt ? ["--holding-source-downloaded-at", contractSourceDownloadedAt] : []),
+      ...(!notificationRefresh ? ["--queue-contact-sync"] : []),
+      ...(notificationRefresh ? ['--preserve-contact-sync'] : []),
+      ...(contractSourceDownloadedAt && !notificationRefresh ? ["--contract-source-downloaded-at", contractSourceDownloadedAt] : []),
+      ...(contractSourceDownloadedAt && !notificationRefresh ? ["--holding-source-downloaded-at", contractSourceDownloadedAt] : []),
       ...(apply ? ["--apply"] : []),
     ]),
   );
@@ -95,7 +110,7 @@ if (!downloadFailedWithoutMember) {
     stdoutOk: false, stdout: holdingRosterDiscovery, stderr: "Holding roster retained; source readback requires review" });
   const contractDiscoveryWarning = membershipContractDiscoveryWarning(memberImportStep?.stdout);
   if (contractDiscoveryWarning) steps.push(contractDiscoveryWarning);
-  if (apply && download && contractSourceDownloadedAt && memberImportSucceeded
+  if (!notificationRefresh && apply && download && contractSourceDownloadedAt && memberImportSucceeded
     && process.env.STUDIOMATE_MEMBERSHIP_CONTRACT_COMPLETION === "enabled") {
     steps.push(runStep("membershipContractCompletion", ["scripts/process-studiomate-membership-contract-completions.mjs", "--apply",
       ...(scheduledRun ? ["--send-signature-reminders"] : [])]));
@@ -149,7 +164,7 @@ if (!downloadFailedWithoutMember) {
   }
 }
 
-if (apply && download && !downloadFailedWithoutMember) {
+if (apply && download && !downloadFailedWithoutMember && !notificationRefresh) {
   steps.push(runStep("staffEmployment", ["scripts/sync-studiomate-staffs-from-browser.mjs", "--apply", "--if-due"]));
   if (process.env.STUDIOMATE_HOLDING_SOURCE_SCAN === "enabled") {
     if (holdingRosterReady(steps))
@@ -172,7 +187,8 @@ const summary = {
   status: failed.length ? "failed" : warnings.length ? "partial" : "success",
   mode: apply ? "apply" : "dry-run",
   download,
-  source: "studiomate_excel_emergency_mode",
+  notificationRefresh,
+  source: notificationRefresh ? "studiomate_notification_refresh" : "studiomate_excel_emergency_mode",
   skippedImports: downloadFailedWithoutMember ? "download failed or produced no member Excel file" : "",
   sourceImportIds,
   sourceFileCleanup,
@@ -193,8 +209,8 @@ mkdirSync(reportDir, { recursive: true });
 const reportPath = path.join(reportDir, `${new Date().toISOString().replace(/[:.]/g, "-")}-run-${apply ? "apply" : "dry-run"}.json`);
 writeFileSync(reportPath, `${JSON.stringify(summary, null, 2)}\n`);
 await recordAutomationStatus(db, {
-  automationId: "studiomate-excel-sync",
-  title: "StudioMate Excel sync",
+  automationId: notificationRefresh ? "studiomate-notification-refresh" : "studiomate-excel-sync",
+  title: notificationRefresh ? "StudioMate 알림 원본 갱신" : "StudioMate Excel sync",
   ownerArea: "studiomate",
   status: failed.length ? "failed" : warnings.length ? "warning" : "healthy",
   lastResult: failed.length
@@ -212,6 +228,9 @@ await recordAutomationStatus(db, {
 });
 console.log(JSON.stringify({ ...summary, reportPath }, null, 2));
 if (failed.length) process.exitCode = 1;
+} finally {
+  await syncRun?.release();
+}
 
 function runStep(name, command) {
   return runCommandStep(name, [process.execPath, ...command]);
@@ -232,7 +251,7 @@ function runCommandStep(name, command) {
   return {
     name,
     command,
-    exitCode: result.status ?? (result.error ? 1 : 0),
+    exitCode: result.error || result.signal ? 1 : result.status ?? 1,
     stdout: parseJsonOrText(result.stdout),
     stderr: String(result.error?.message || result.stderr || "").trim(),
     stdoutOk: parsedOk(result.stdout),

@@ -25,6 +25,8 @@
     <string>/Users/archivepilates/ArchiveIN/secrets/google/archive-codex-operator.json</string>
     <key>GOOGLE_CLOUD_PROJECT</key>
     <string>archive-pilates</string>
+    <key>STUDIOMATE_NOTIFICATION_INGRESS</key>
+    <string>enabled</string>
   </dict>
   <key>StandardOutPath</key>
   <string>/Users/archivepilates/ArchiveIN/emergency/logs/archivein-admin-emergency-sync.out.log</string>

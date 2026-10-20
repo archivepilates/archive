@@ -10,6 +10,7 @@ import { observeMembershipContractHints } from "./lib/studiomate-membership-cont
 import { loadPendingContractDiscovery } from "./lib/studiomate-membership-contract-pending.mjs";
 import { runStudioMateMembershipContractCandidates } from "./lib/studiomate-membership-contract-processor.mjs";
 import { observeHoldingRoster } from "./lib/studiomate-holding-roster.mjs";
+import { preserveNotificationContactPlans } from "./lib/studiomate-notification-ingress.mjs";
 import {
   buildInstructorLessonContactGroupNames,
   formatExcelMemberContactDisplayName,
@@ -67,7 +68,9 @@ const [existingProfiles, existingContacts, activeStaffContacts] = await Promise.
   loadExistingContacts(),
   loadActiveStaffContacts(),
 ]);
-const { plans, skipped } = buildPlans(groupedMembers, existingProfiles, existingContacts, activeStaffContacts);
+const builtPlans = buildPlans(groupedMembers, existingProfiles, existingContacts, activeStaffContacts);
+const plans = args.has('--preserve-contact-sync') ? preserveNotificationContactPlans(builtPlans.plans) : builtPlans.plans;
+const skipped = builtPlans.skipped;
 const plannedProfileWrites = plans.filter((plan) => plan.profileDoc && plan.writeProfile).length;
 const plannedContactIndexWrites = plans.filter((plan) => plan.writeContactIndex).length;
 const plannedContactSyncJobs = plans.filter((plan) => plan.contactSyncJobDoc).length;

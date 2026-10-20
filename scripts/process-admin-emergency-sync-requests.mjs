@@ -5,6 +5,8 @@ import { createRequire } from "node:module";
 import os from "node:os";
 import path from "node:path";
 import { writeIdleHeartbeatIfDue } from "./lib/idle-heartbeat.mjs";
+import { observeStudioMateNotifications } from "./observe-studiomate-notifications.mjs";
+import { recordNotificationIngressHealth } from "./lib/studiomate-notification-health.mjs";
 
 const require = createRequire(import.meta.url);
 const admin = require("../firebase/kangsain-functions/functions/node_modules/firebase-admin");
@@ -29,6 +31,17 @@ mkdirSync(REPORT_DIR, { recursive: true });
 
 const processed = [];
 
+// Reuse this existing timer. Notification hints can request canonical refresh, never sends.
+let notificationIngress = null;
+if (process.env.STUDIOMATE_NOTIFICATION_INGRESS === "enabled") {
+  try { notificationIngress = await observeStudioMateNotifications({ apply: true }); }
+  catch { notificationIngress = { ok: false, status: 'review', code: 'NOTIFICATION_OBSERVER_CLEANUP_FAILED' }; }
+}
+if (notificationIngress) {
+  try { await recordNotificationIngressHealth(db, notificationIngress); }
+  catch { console.error('알림 감지 상태 기록 확인 필요. 기존 요청 처리는 계속합니다.'); }
+}
+
 for (let index = 0; index < MAX_REQUESTS; index += 1) {
   const claimed = await claimNextRequest();
   if (!claimed) break;
@@ -39,6 +52,7 @@ const summary = {
   ok: processed.every((item) => item.ok),
   source: "archivein_admin_emergency_excel_sync_runner",
   processed,
+  ...(notificationIngress ? { notificationIngress } : {}),
   finishedAt: new Date().toISOString(),
 };
 
@@ -129,25 +143,30 @@ async function processRequest(request) {
       return { id, ok: true, result: result.stdout };
     }
     await updateProgress(ref, 15, "스튜디오메이트 엑셀 다운로드 준비");
-    const result = runEmergencyExcelMode();
+    const result = runEmergencyExcelMode(request.data.source === 'studiomate-notification-hints-v1');
     steps.push(result);
-    if (result.exitCode !== 0 || result.stdout?.ok === false) {
+    if (result.stdout?.skipped === 'excel_sync_already_running') {
+      await ref.set({ status: 'pending', progressPercent: 0, progressLabel: '기존 동기화 종료 대기',
+        updatedAt: FieldValue.serverTimestamp() }, { merge: true });
+      return { id, ok: true, deferred: true };
+    }
+    if (result.exitCode !== 0 || result.stdout?.ok !== true || !['success', 'partial'].includes(result.stdout?.status)) {
       throw new Error(result.stderr || result.stdout?.error || "엑셀 동기화 실패");
     }
     await updateProgress(ref, 96, "앱 데이터 반영 완료 확인");
     await ref.set(
       {
-        status: "success",
+        status: result.stdout.status === 'partial' ? 'error' : 'success',
         progressPercent: 100,
-        progressLabel: "동기화 완료",
+        progressLabel: result.stdout.status === 'partial' ? '동기화 일부 확인 필요' : '동기화 완료',
         completedAt: FieldValue.serverTimestamp(),
         updatedAt: FieldValue.serverTimestamp(),
         result: result.stdout || {},
-        lastError: null,
+        lastError: result.stdout.status === 'partial' ? '동기화 일부 단계 확인 필요. 결과의 steps를 확인하세요.' : null,
       },
       { merge: true },
     );
-    return { id, ok: true, result: result.stdout || {} };
+    return { id, ok: result.stdout.status !== 'partial', partial: result.stdout.status === 'partial', result: result.stdout || {} };
   } catch (err) {
     const message = err instanceof Error ? err.message : String(err);
     await ref.set(
@@ -166,8 +185,10 @@ async function processRequest(request) {
   }
 }
 
-function runEmergencyExcelMode() {
-  const result = spawnSync(NODE, ["scripts/run-studiomate-excel-emergency-mode.mjs", "--download", "--apply"], {
+function runEmergencyExcelMode(notificationRefresh = false) {
+  const command = ["scripts/run-studiomate-excel-emergency-mode.mjs", "--download", "--apply",
+    ...(notificationRefresh ? ['--notification-refresh'] : [])];
+  const result = spawnSync(NODE, command, {
     cwd: process.cwd(),
     encoding: "utf8",
     env: process.env,
@@ -175,8 +196,8 @@ function runEmergencyExcelMode() {
   });
   return {
     name: "run-studiomate-excel-emergency-mode",
-    command: [NODE, "scripts/run-studiomate-excel-emergency-mode.mjs", "--download", "--apply"],
-    exitCode: result.status ?? 0,
+    command: [NODE, ...command],
+    exitCode: result.error || result.signal ? 1 : result.status ?? 1,
     stdout: parseJsonOrText(result.stdout),
     stderr: String(result.stderr || "").trim(),
   };
