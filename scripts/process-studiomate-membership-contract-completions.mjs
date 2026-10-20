@@ -1,5 +1,8 @@
 #!/usr/bin/env node
 import { createRequire } from "node:module";
+import { createHash } from "node:crypto";
+import { spawnSync } from "node:child_process";
+import { fileURLToPath } from "node:url";
 import os from "node:os";
 import path from "node:path";
 import { acquireStudioMateBrowserLock } from "./lib/studiomate-browser-lock.mjs";
@@ -30,12 +33,14 @@ import {
   buildMembershipContractMemberProfilePatch,
   membershipContractFallbackAliasIds,
 } from "./lib/studiomate-membership-contract-member-profile.mjs";
+import { processContractSignatureReminder,planContractSignatureReminder,assertContractReminderLive } from "./lib/contract-signature-reminder.mjs";
+import { sendContractReminderSms } from "./lib/contract-signature-reminder-browser.mjs";
 
 const args = process.argv.slice(2);
 let requestedContractId = "";
 for (let index = 0; index < args.length; index += 1) {
   const arg = args[index];
-  if (["--apply", "--dry-run"].includes(arg)) continue;
+  if (["--apply", "--dry-run", "--send-signature-reminders"].includes(arg)) continue;
   if (arg === "--contract-id" && !requestedContractId) {
     requestedContractId = String(args[index + 1] || "");
     index += 1;
@@ -49,6 +54,9 @@ if (
 )
   throw new Error("Use --apply or --dry-run with a valid --contract-id");
 const apply = args.includes("--apply");
+const sendSignatureReminders = args.includes("--send-signature-reminders");
+if (sendSignatureReminders && (!apply || requestedContractId))
+  throw new Error("Signature reminders require the scheduled apply path without an exact contract target");
 const result = {
   mode: apply ? "apply" : "dry-run",
   checked: 0,
@@ -57,6 +65,8 @@ const result = {
   sent: 0,
   studioMateWrites: 0,
   signaturesRecorded: 0,
+  signatureReminderAccepted: 0,
+  signatureReminderReview: 0,
   records: [],
 };
 // Same download runner as contact sync; no duplicate downloader, LaunchAgent or heartbeat.
@@ -147,6 +157,7 @@ try {
     let refreshedMember = null;
     let profilePatch = null;
     let fallbackAliasIds = [];
+    let reminderReadback = null;
     try {
       const [observed, providerContract, memberResult] = await Promise.all([
         readNativeContractPage(page, doc.id),
@@ -168,6 +179,7 @@ try {
         throw new Error(refreshed.reason);
       refreshedReadback = refreshed.nativeReadback;
       refreshedMember = memberResult.member;
+      reminderReadback = {dom:observed,contract:providerContract,memberResult,ticketRead,checkedAt:new Date().toISOString()};
       const contract = {
         ...observed,
         schemaVersion: 1,
@@ -224,6 +236,13 @@ try {
     if (outcome.signatureReceipt) result.signaturesRecorded++;
     result.records.push({ contractId: doc.id, status: outcome.status, reason: outcome.reason,
       signedAt: outcome.signatureReceipt?.signedAt || null, diagnostic: outcome.diagnostic || null });
+    if (!apply && outcome.status === "waiting") {
+      const plan=planContractSignatureReminder(source,doc.id);
+      if (plan.status === "ready") {
+        try { assertContractReminderLive(source,plan,reminderReadback); result.records.at(-1).signatureReminderPreflight="verified_no_send"; }
+        catch { result.records.at(-1).signatureReminderPreflight="source_unverified_no_send"; }
+      } else result.records.at(-1).signatureReminderPreflight=plan.reason;
+    }
     if (!apply) continue;
     await db.runTransaction(async (tx) => {
       const latest = await tx.get(doc.ref);
@@ -311,6 +330,45 @@ try {
         );
       }
     });
+    if (sendSignatureReminders && outcome.status === "waiting") {
+      const reminder = await processContractSignatureReminder({
+        db,source:(await doc.ref.get()).data(),id:doc.id,apply,scheduled:true,
+        readLive:async()=>{
+          const verificationPage = await context.newPage();
+          try {
+            const dom = await readNativeContractPage(verificationPage,doc.id);
+            const contract = await readStudioMateContract(api,doc.id);
+            const memberResult = await readExactStudioMateMember(api,source.binding.memberPhone);
+            const ticketRead = memberResult.status === "verified"
+              ? await readStudioMateUserTickets(api,memberResult.member.memberId) : {status:"review",tickets:[]};
+            return {dom,contract,memberResult,ticketRead,checkedAt:new Date().toISOString()};
+          } finally { await verificationPage.close(); }
+        },
+        sendSms:(plan,beforeFinalSend)=>sendContractReminderSms(page,plan,beforeFinalSend),
+      });
+      result.records.at(-1).signatureReminder = reminder;
+      if (reminder.status === "accepted") { result.signatureReminderAccepted++; result.studioMateWrites++; }
+      if (reminder.status === "review") {
+        result.signatureReminderReview++;
+        const report = spawnSync(process.execPath,[fileURLToPath(new URL("../firebase/kangsain-functions/macmini-studiomate/send-automation-report.mjs",import.meta.url))],{
+          encoding:"utf8",timeout:45000,maxBuffer:1024*1024,env:{...process.env,
+            AUTOMATION_REPORT_FROM:"home@archivepilates.com",AUTOMATION_REPORT_TO:"home@archivepilates.com",
+            AUTOMATION_REPORT_EVENT_ID:createHash("sha256").update(`contract_signature_reminder_review:${reminder.stage}:${doc.id}`).digest("hex"),
+            AUTOMATION_REPORT_SUBJECT:"[전자계약][확인필요] 서명 요청 문자 결과 확인",
+            AUTOMATION_REPORT_LABEL:"자동화 확인필요",
+            AUTOMATION_REPORT_BODY:["주체: ARCHIVE CORE / 전자계약 24시간 서명 요청",
+              "결론: 서명 요청 문자를 안전하게 완료 확인하지 못했습니다.",`원인: ${reminder.reason}`,
+              `원천: studiomateMembershipContracts/${doc.id}`,
+              reminder.stage === "postclaim"
+                ? "현재: 발송 시도 기록은 보존되며 자동 재발송하지 않습니다. 문자 접수와 전달은 별도입니다."
+                : "현재: 최종 발송 시도 전 원본 검증에서 보류했습니다. 다음 정기 실행에서 원본을 다시 확인합니다.",
+              `상세: https://arcpilates.studiomate.kr/users/contract/detail?id=${doc.id}`,
+              reminder.stage === "postclaim"
+                ? "다음: StudioMate 문자 발송 내역과 서명 상태를 확인한 뒤 운영자가 판단하세요."
+                : "다음: 원본 계약·수강권 변경 여부를 확인하세요. 원본 검증 전 문자를 보내지 않습니다."].join("\n")}});
+        if (report.status !== 0) result.records.at(-1).signatureReminderEmailUnconfirmed=true;
+      }
+    }
   }
 } finally {
   try {
@@ -321,7 +379,7 @@ try {
 }
 if (apply && recoveryPage) await recoveryCursorRef.set({ ...nextDueCursor, lastId: nextRecoveryCursor, updatedAt: admin.firestore.Timestamp.now() });
 console.log(
-  JSON.stringify({ ...result, status: result.review ? "review" : "checked" }),
+  JSON.stringify({ ...result, ok:result.signatureReminderReview===0, status: result.review || result.signatureReminderReview ? "review" : "checked" }),
 );
 
 async function exactContractTarget(contractId) {

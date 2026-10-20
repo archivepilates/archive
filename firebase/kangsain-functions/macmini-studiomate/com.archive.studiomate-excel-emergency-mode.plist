@@ -10,6 +10,7 @@
     <string>/Users/archivepilates/dev/archive-in-runtime/scripts/run-studiomate-excel-emergency-mode.mjs</string>
     <string>--download</string>
     <string>--apply</string>
+    <string>--scheduled-run</string>
   </array>
   <key>WorkingDirectory</key>
   <string>/Users/archivepilates/dev/archive-in-runtime</string>

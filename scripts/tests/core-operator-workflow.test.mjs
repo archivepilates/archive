@@ -100,6 +100,25 @@ test("late native signature is complete in registration UI without claiming welc
   assert.ok(list.innerHTML.includes("서명은 완료"));
 });
 const ticket = (id, remainingCount = 2) => ({ userTicketId: id, name: "그룹 30회", classType: "G", remainingCount, expiresAt: "2026-12-20" });
+
+test("registration separates reminder acceptance from delivery and exposes uncertain attempts",async()=>{
+  for(const reminderStatus of ["accepted","attempting","review"]) {
+    const a=app(),now=new Date().toISOString();
+    const rows={memberProfiles:[{id:"100",memberId:"100",name:"Synthetic member",phone:"01012345678",updatedAt:now}],
+      studiomateMembershipContracts:[{id:"a".repeat(64),contractId:"a".repeat(64),memberName:"Synthetic member",studioId:"5330",
+        status:"waiting",observationStatus:"waiting",updatedAt:now,binding:{memberId:"100",memberPhone:"01012345678",userTicketId:"200"},
+        signatureReminder:{status:reminderStatus,acceptedAt:now}}]};
+    const runtime={db:{},collection:(_db,path)=>({path}),orderBy:()=>({}),where:()=>({}),limit:()=>({}),query:collection=>collection,
+      getDocs:async query=>({docs:(rows[query.path]||[]).map(row=>({id:row.id,data:()=>row}))})};
+    const dashboard=await a.loadMemberRegistrationDashboard(runtime),item=dashboard.items[0];
+    const list=a.element("memberRegistrationList");a.setMemberRegistrationFilter("all");a.renderMemberRegistrationDashboard(dashboard);
+    assert.equal(item.steps.find(step=>step.name==="서명").statusLabel,"대기");
+    if(reminderStatus==="accepted") {
+      assert.match(list.innerHTML,/서명 요청 문자 접수/);assert.match(list.innerHTML,/전달 여부 별도 확인/);
+      assert.doesNotMatch(list.innerHTML,/문자 전달 완료/);
+    }else{assert.equal(item.status,"review");assert.match(list.innerHTML,/서명 요청 문자 확인필요/);}
+  }
+});
 const renewal = (id, extra = {}) => ({ id, memberId: "m1", memberName: "테스트", ticketIdentity: "user:old", ticketName: "그룹 30회", kind: "group", priority: "urgent", active: true, ...extra });
 
 test("fresh canonical tickets override an already-loaded member directory", () => {

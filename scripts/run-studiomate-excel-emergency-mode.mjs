@@ -22,6 +22,7 @@ const admin = require("../firebase/kangsain-functions/functions/node_modules/fir
 const args = new Set(process.argv.slice(2));
 const apply = args.has("--apply");
 const download = args.has("--download");
+const scheduledRun = args.has("--scheduled-run");
 const reservationFile = valueArg("--reservation-file");
 const memberFile = valueArg("--member-file");
 const requestedStartDate = valueArg("--start-date");
@@ -96,7 +97,8 @@ if (!downloadFailedWithoutMember) {
   if (contractDiscoveryWarning) steps.push(contractDiscoveryWarning);
   if (apply && download && contractSourceDownloadedAt && memberImportSucceeded
     && process.env.STUDIOMATE_MEMBERSHIP_CONTRACT_COMPLETION === "enabled") {
-    steps.push(runStep("membershipContractCompletion", ["scripts/process-studiomate-membership-contract-completions.mjs", "--apply"]));
+    steps.push(runStep("membershipContractCompletion", ["scripts/process-studiomate-membership-contract-completions.mjs", "--apply",
+      ...(scheduledRun ? ["--send-signature-reminders"] : [])]));
   }
 
   steps.push(

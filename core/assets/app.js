@@ -7754,13 +7754,17 @@ async function loadMemberRegistrationDashboard(runtime) {
     const hintReview = hintStatus === "review";
     const contractReview = ["review", "failed", "error"].includes(String(contract?.observationStatus || "").toLowerCase());
     const welcomeReview = welcome.status === "error";
-    const review = !identityConfirmed || (hintReview && !contractCreated) || contractReview || welcomeReview;
+    const reminder = contract?.signatureReminder;
+    const reminderReview = ["review", "attempting"].includes(reminder?.status);
+    const review = !identityConfirmed || (hintReview && !contractCreated) || contractReview || welcomeReview || reminderReview;
     const completed = signed && welcome.status === "done";
     const status = review ? "review" : completed ? "completed" : "active";
     const reason = review
       ? memberRegistrationReason(
           !identityConfirmed
             ? "회원 원천정보를 연결하지 못했습니다."
+            : reminderReview
+              ? "서명 요청 문자의 발송 결과 확인이 필요합니다. 중복 발송하지 않습니다."
             : welcomeReview
               ? send?.lastError || candidate?.lastError || contract?.welcomeReason
               : contractReview
@@ -7790,6 +7794,9 @@ async function loadMemberRegistrationDashboard(runtime) {
       latestAt,
       status,
       reason,
+      signatureReminderLabel: reminder?.status === "accepted"
+        ? `서명 요청 문자 접수 · ${formatDate(reminder.acceptedAt)} · 전달 여부 별도 확인`
+        : reminderReview ? "서명 요청 문자 확인필요" : "",
       steps: [
         { name: "회원", status: identityConfirmed ? "done" : "error", statusLabel: identityConfirmed ? "확인" : "확인필요" },
         { name: "수강권", status: ticketConfirmed ? "done" : review ? "error" : "active", statusLabel: ticketConfirmed ? "확인" : review ? "확인필요" : "확인중" },
@@ -7859,6 +7866,7 @@ function renderMemberRegistrationDashboard(data = state.memberRegistrationDashbo
         <ol class="instructor-registration-progress member-registration-progress" aria-label="회원등록 진행 단계">
           ${item.steps.map((step, index) => `<li class="is-${escapeHtml(step.status)}"><span>${index + 1}</span><small>${escapeHtml(step.name)}</small><em>${escapeHtml(step.statusLabel)}</em></li>`).join("")}
         </ol>
+        ${item.signatureReminderLabel ? `<p>${escapeHtml(item.signatureReminderLabel)}</p>` : ""}
         <div class="instructor-registration-next ${item.status === "review" ? "is-error" : ""}"><strong>${item.status === "review" ? "확인할 내용" : "다음 단계"}</strong><span>${escapeHtml(item.reason)}</span></div>
       </article>`;
   }).join("");
