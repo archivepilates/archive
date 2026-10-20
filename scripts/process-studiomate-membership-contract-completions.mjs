@@ -33,7 +33,7 @@ import {
   buildMembershipContractMemberProfilePatch,
   membershipContractFallbackAliasIds,
 } from "./lib/studiomate-membership-contract-member-profile.mjs";
-import { processContractSignatureReminder,planContractSignatureReminder,assertContractReminderLive } from "./lib/contract-signature-reminder.mjs";
+import { processContractSignatureReminder,planContractSignatureReminder,assertContractReminderLive,contractReminderDiagnosticText } from "./lib/contract-signature-reminder.mjs";
 import { sendContractReminderSms } from "./lib/contract-signature-reminder-browser.mjs";
 
 const args = process.argv.slice(2);
@@ -358,13 +358,12 @@ try {
             AUTOMATION_REPORT_LABEL:"자동화 확인필요",
             AUTOMATION_REPORT_BODY:["주체: ARCHIVE CORE / 전자계약 24시간 서명 요청",
               "결론: 서명 요청 문자를 안전하게 완료 확인하지 못했습니다.",`원인: ${reminder.reason}`,
-              ...(reminder.diagnostic ? [`상세원인: ${reminder.diagnostic === "native_contract_signature_images_unavailable"
-                ? "전자계약 직인·서명 이미지 로딩을 확인하지 못했습니다. 원본 검증은 유지하며 발송하지 않았습니다."
-                : "전자계약 화면에서 센터 직인을 확인하지 못했습니다. 원본 직인 확인 전에는 발송하지 않습니다."}`] : []),
+              ...(contractReminderDiagnosticText(reminder.diagnostic)
+                ? [`상세원인: ${contractReminderDiagnosticText(reminder.diagnostic)} 최종 발송 전 보류했습니다.`] : []),
               `원천: studiomateMembershipContracts/${doc.id}`,
               reminder.stage === "postclaim"
                 ? "현재: 발송 시도 기록은 보존되며 자동 재발송하지 않습니다. 문자 접수와 전달은 별도입니다."
-                : "현재: 최종 발송 시도 전 원본 검증에서 보류했습니다. 다음 정기 실행에서 원본을 다시 확인합니다.",
+                : "현재: 원본 검증 또는 문자 작성 화면 확인 단계에서 보류했습니다. 최종 발송 시도는 없으며 다음 정기 실행에서 다시 확인합니다.",
               `상세: https://arcpilates.studiomate.kr/users/contract/detail?id=${doc.id}`,
               reminder.stage === "postclaim"
                 ? "다음: StudioMate 문자 발송 내역과 서명 상태를 확인한 뒤 운영자가 판단하세요."

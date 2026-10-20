@@ -14,6 +14,22 @@ const fail = diagnostic => {
   throw error;
 };
 const bindingKeys = ["studioId","memberId","userTicketId","productId","selectionJobKey","selectedAt"];
+const preclaimDiagnostics = Object.freeze({
+  native_contract_signature_images_unavailable: "전자계약 직인·서명 이미지 로딩을 확인하지 못했습니다.",
+  native_contract_center_signature_unverified: "전자계약 화면에서 센터 직인을 확인하지 못했습니다.",
+  contract_reminder_member_page_not_ready: "문자 작성 전 회원 상세의 이름·전체 연락처 로딩을 확인하지 못했습니다.",
+  contract_reminder_member_page_mismatch: "문자 작성 화면과 원본 회원이 일치하지 않습니다.",
+  contract_reminder_message_action_unavailable: "회원 상세의 메시지 보내기 버튼을 사용할 수 없습니다.",
+  contract_reminder_compose_unavailable: "문자 작성창이 준비되지 않았습니다.",
+  contract_reminder_sms_input_missing: "문자 제목·본문 또는 수신자 입력칸을 확인하지 못했습니다.",
+  contract_reminder_recipient_mismatch: "문자 작성창의 수신자가 원본 회원과 다릅니다.",
+  contract_reminder_confirmation_unavailable: "최종 전송 전 문자 확인창이 준비되지 않았습니다.",
+  contract_reminder_recipient_count_mismatch: "최종 문자 확인창이 정확히 1명인지 확인하지 못했습니다.",
+});
+
+export function contractReminderDiagnosticText(code) {
+  return typeof code === "string" && Object.hasOwn(preclaimDiagnostics,code) ? preclaimDiagnostics[code] : "";
+}
 
 export function contractReminderEnabled(config) {
   return config?.studioId === "5330" && config.observeEnabled === true && config.sourcePromoted === true
@@ -123,8 +139,8 @@ export async function processContractSignatureReminder({db,source,id,readLive,se
         if (settled.status === "accepted") return {status:"accepted",contractId:id,stage:"postclaim",smsId:settled.smsId};
       } catch { reason = "send_outcome_unknown_journal_unavailable"; }
     }
-    const diagnostic = !claimed && ["native_contract_signature_images_unavailable", "native_contract_center_signature_unverified"]
-      .includes(error?.code) ? error.code : null;
+    const errorCode = error?.code || error?.message;
+    const diagnostic = !claimed && contractReminderDiagnosticText(errorCode) ? errorCode : null;
     return {status:"review",contractId:id,stage:claimed?"postclaim":"preclaim",reason,
       ...(diagnostic ? {diagnostic} : {})};
   }

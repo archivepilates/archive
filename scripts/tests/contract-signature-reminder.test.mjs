@@ -7,6 +7,7 @@ import {
   contractReminderEnabled,
   planContractSignatureReminder,
   processContractSignatureReminder,
+  contractReminderDiagnosticText,
 } from "../lib/contract-signature-reminder.mjs";
 import { assertContractReminderSmsResponse } from "../lib/contract-signature-reminder-browser.mjs";
 
@@ -686,6 +687,22 @@ test("image loading failure stays preclaim, emits safe diagnostics and can recov
     assert.equal((await h.run({source:h.db.read(CONTRACT)})).reason,"reminder_already_recorded");
     assert.equal(h.browser.sends,1);
   });
+});
+
+test("SMS composition errors are separate safe preclaim diagnostics, not evidence of a send",async t=>{
+  for(const diagnostic of ["contract_reminder_member_page_not_ready","contract_reminder_message_action_unavailable",
+    "contract_reminder_compose_unavailable","contract_reminder_recipient_mismatch",
+    "contract_reminder_confirmation_unavailable","contract_reminder_recipient_count_mismatch"]) {
+    await t.test(diagnostic,async()=>{
+      const h=harness();
+      const result=await h.run({sendSms:async()=>{throw new Error(diagnostic);}});
+      assert.equal(result.stage,"preclaim");assert.equal(result.diagnostic,diagnostic);
+      assert.ok(contractReminderDiagnosticText(diagnostic));
+      assert.equal(h.db.read(CONTRACT).signatureReminder,undefined);
+      assert.equal(h.browser.sends,0);
+    });
+  }
+  for(const unsafe of [undefined,{},"constructor","SECRET phone raw error"]) assert.equal(contractReminderDiagnosticText(unsafe),"");
 });
 
 test("unpaid/partial contract copies remain valid through verified current payment settlement", async t => {
