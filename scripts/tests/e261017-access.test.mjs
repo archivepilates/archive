@@ -93,6 +93,13 @@ test('adoption is idempotent and does not restart the clock', () => {
   reconcile(f.s, { run: f.run, now: Date.parse(start) + 86400000, adopt: true, apply: true, save: f.save });
   assert.equal(f.s.entitlements[code].expiresAt, end); assert.equal(f.writes, 0);
 });
+test('shifting both entitlement dates cannot override the original verified receipt', () => {
+  const f = fixture(); const e = f.s.entitlements[code];
+  e.grantedAt = new Date(Date.parse(e.grantedAt) + 86400000).toISOString();
+  e.expiresAt = new Date(Date.parse(e.expiresAt) + 86400000).toISOString();
+  assert.throws(() => reconcile(f.s, { run: f.run, now: Date.parse(end), apply: true, save: f.save }), /Student-share/);
+  assert.equal(f.writes, 0); assert.equal(f.saves, 0);
+});
 test('apply removes only target group, independently reads back and does not repeat', () => {
   const f = fixture();
   reconcile(f.s, { run: f.run, now: Date.parse(end), apply: true, save: f.save });

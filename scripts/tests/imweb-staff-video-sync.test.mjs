@@ -1,6 +1,7 @@
 import assert from 'node:assert/strict';
 import test, { beforeEach } from 'node:test';
-import { reconcileStaffVideos, STAFF_VIDEO_POLICY } from '../lib/imweb-staff-video-sync.mjs';
+import { reconcileStaffVideos as reconcileRuntimeStaffVideos, STAFF_VIDEO_POLICY } from '../lib/imweb-staff-video-sync.mjs';
+import { E261017_SHARE } from '../lib/imweb-student-share-policy.mjs';
 import { STAFF_GRADE, STAFF_GROUP, SITE, UNIT } from '../lib/imweb-staff-video-policy.mjs';
 
 const NOW = Date.parse('2026-10-20T00:00:00Z');
@@ -12,6 +13,35 @@ const isWrite = args => args.slice(0, 3).join(' ') === 'member update groups' &&
 const isDry = args => args.slice(0, 3).join(' ') === 'member update groups' && args.includes('--dry-run');
 const isDetail = args => args[0] === 'member' && args[1] === 'get';
 let purchaseSequence = 0;
+
+const emptyShares = () => [{ source: E261017_SHARE, state: {
+  accessPolicy: { id: E261017_SHARE.policyId, approved: true, days: 40,
+    basis: 'first_verified_grant', revocation: E261017_SHARE.revocation },
+  entitlements: {}, manualImmediateGrants: {},
+} }];
+const reconcileStaffVideos = (state, options = {}) => reconcileRuntimeStaffVideos(state,
+  { readStudentShares: emptyShares, ...options });
+
+function shareLedger(code, start = NOW - 86400000) {
+  const source = E261017_SHARE;
+  const verifiedAt = new Date(start).toISOString();
+  const expiresAt = new Date(start + 40 * 86400000).toISOString();
+  const grant = { status: 'group_verified', verifiedAt, beforeGroups: ['baseline'],
+    afterGroups: ['baseline', source.groupCode], existingGroupsPreserved: true };
+  const ledgers = emptyShares();
+  ledgers[0].state.manualImmediateGrants[code] = grant;
+  ledgers[0].state.entitlements[code] = { memberCode: code, policyId: source.policyId,
+    groupCode: source.groupCode, grantedAt: verifiedAt, expiresAt, status: 'active' };
+  return ledgers;
+}
+
+function exitWithShare() {
+  const source = member('m001', { grade: 'ordinary', group: ['baseline', E261017_SHARE.groupCode, VIDEO_CODES[1]] });
+  const f = fixture({ members: [source], entries: { [source.memberCode]: tracked(source,
+    [E261017_SHARE.groupCode, VIDEO_CODES[1]]) } });
+  f.groups.push({ siteCode: SITE, siteGroupCode: E261017_SHARE.groupCode, title: 'PRIVATE LESSON EXTERNAL FEEDBACK E 261017 40D' });
+  return { f, source, ledgers: shareLedger(source.memberCode) };
+}
 
 beforeEach(t => {
   t.mock.timers.enable({ apis: ['Date'], now: NOW });
@@ -54,7 +84,7 @@ function fixture({ members = [member()], orders = [], entries = {} } = {}) {
     live, events, saved, state, orders: copy(orders),
     groups: [
       ...VIDEO_CODES.map((code, index) => ({ siteCode: SITE, siteGroupCode: code,
-        title: index % 2 ? `PRIVATE LESSON P${index} 40D` : `ARCHIVE METHOD A${index} 40D` })),
+        title: `ARCHIVE METHOD A${index} 40D` })),
       { siteCode: SITE, siteGroupCode: STAFF_GROUP, title: 'ARCHIVE STAFF' },
       { siteCode: SITE, siteGroupCode: 'test-group', title: 'ARCHIVE TEST' },
     ],
@@ -461,7 +491,7 @@ test('new purchase after preflight blocks removal before intent and apply', () =
   f.beforeCall = args => {
     if (isDry(args)) f.orders.push(purchase('m001', VIDEO_CODES[2]));
   };
-  assert.throws(() => f.reconcile(), /Purchase protection changed/);
+  assert.throws(() => f.reconcile(), /protection changed/);
   assert.equal(f.dryRuns.length, 1);
   assert.equal(f.writes.length, 0);
   assert.equal(f.saved.length, 0);
@@ -494,7 +524,7 @@ test('purchase expiring during preparation blocks removal using the fresh wall c
   f.beforeCall = args => {
     if (isDry(args)) t.mock.timers.tick(30 * 86_400_000);
   };
-  assert.throws(() => f.reconcile(), /Purchase protection changed/);
+  assert.throws(() => f.reconcile(), /protection changed/);
   assert.equal(f.writes.length, 0);
   assert.equal(f.saved.length, 0);
   assert.deepEqual(f.live.get(source.uid), source);
@@ -608,4 +638,74 @@ test('a malformed tracked native grade cannot be mistaken for a staff exit', () 
     assert.throws(() => f.reconcile(), /Ambiguous native member grade/);
     assert.equal(f.writes.length, 0); assert.equal(f.saved.length, 0);
   }
+});
+
+test('STAFF exit preserves independent student-share access and drops only other owned groups', () => {
+  const { f, source, ledgers } = exitWithShare(); const before = copy(ledgers);
+  const options = { readStudentShares: () => copy(ledgers) };
+  f.reconcile(options);
+  assert.deepEqual(sort(f.live.get(source.uid).group), sort(['baseline', E261017_SHARE.groupCode]));
+  assert.equal(f.writes.length, 1); assert.deepEqual(ledgers, before);
+  assert.deepEqual(f.state.members[source.memberCode].ownedAddedGroups, []);
+  f.reconcile(options); assert.equal(f.writes.length, 1);
+});
+
+test('grant-only student-share evidence preserves access until the expiry worker adopts it', () => {
+  const { f, source, ledgers } = exitWithShare(); ledgers[0].state.entitlements = {};
+  const before = copy(ledgers); f.reconcile({ readStudentShares: () => copy(ledgers) });
+  assert.ok(f.live.get(source.uid).group.includes(E261017_SHARE.groupCode));
+  assert.deepEqual(ledgers, before);
+});
+
+test('read-only student-share protection changes neither membership nor either ledger', () => {
+  const { f, ledgers } = exitWithShare(); const state = copy(f.state); const before = copy(ledgers);
+  const result = f.reconcile({ apply: false, readStudentShares: () => copy(ledgers) });
+  assert.equal(result.outcomes[0].removed, 1); assert.equal(f.writes.length, 0);
+  assert.deepEqual(f.state, state); assert.deepEqual(ledgers, before);
+});
+
+test('expired or terminal student-share cannot preserve access on STAFF exit', () => {
+  for (const terminal of [undefined, 'revoked', 'removed_externally']) {
+    const { f, source } = exitWithShare();
+    const ledgers = shareLedger(source.memberCode, terminal ? NOW - 1 : NOW - 40 * 86400000);
+    if (terminal) ledgers[0].state.entitlements[source.memberCode].status = terminal;
+    f.reconcile({ readStudentShares: () => copy(ledgers) });
+    assert.deepEqual(f.live.get(source.uid).group, ['baseline']);
+  }
+});
+
+test('missing, malformed, or pending student-share evidence blocks every provider write', () => {
+  for (const corrupt of [() => { throw Error('Missing student-share file'); }, () => [],
+    value => { value[0].state.entitlements = null; return value; },
+    value => { value[0].state.entitlements.m001.grantedAt = new Date(NOW).toISOString(); return value; },
+    value => { value[0].state.entitlements.m001.revocation = { status: 'result_unknown' }; return value; }]) {
+    const { f, ledgers } = exitWithShare();
+    assert.throws(() => f.reconcile({ readStudentShares: () => corrupt(copy(ledgers)) }));
+    assert.equal(f.writes.length, 0); assert.equal(f.saved.length, 0);
+  }
+});
+
+test('a student-share change after preflight blocks removal before saving intent', () => {
+  const { f, ledgers } = exitWithShare(); let reads = 0;
+  assert.throws(() => f.reconcile({ readStudentShares: () => ++reads === 1 ? emptyShares() : copy(ledgers) }),
+    /protection changed/);
+  assert.equal(f.writes.length, 0); assert.equal(f.saved.length, 0);
+});
+
+test('student-share expiration crossing during preparation aborts until replanned', () => {
+  const { f, source } = exitWithShare();
+  const ledgers = shareLedger(source.memberCode, NOW - 40 * 86400000 + 1);
+  f.afterResponse = args => { if (isDry(args)) Date.now = () => NOW + 2; };
+  const original = Date.now;
+  try {
+    assert.throws(() => f.reconcile({ readStudentShares: () => copy(ledgers) }), /protection changed/);
+    assert.equal(f.writes.length, 0); assert.equal(f.saved.length, 0);
+  } finally { Date.now = original; }
+});
+
+test('legacy student-share without an approved timestamp source blocks automatic STAFF exit', () => {
+  const { f, ledgers } = exitWithShare();
+  f.groups.find(group=>group.siteGroupCode===VIDEO_CODES[1]).title='PRIVATE LESSON LEGACY A 40D';
+  assert.throws(()=>f.reconcile({readStudentShares:()=>copy(ledgers)}), /Unregistered student-share/);
+  assert.equal(f.writes.length,0);assert.equal(f.saved.length,0);
 });

@@ -8,6 +8,7 @@ import { STAFF_GRADE, STAFF_GROUP, SITE, UNIT, videoGroups, planStaffGroups,
   protectedPurchaseGroups, assertMemberPreserved } from './imweb-staff-video-policy.mjs';
 import { acquireStudioMateBrowserLock } from './studiomate-browser-lock.mjs';
 import { imwebRequestFailure } from './imweb-read-failure.mjs';
+import { readStudentShareLedgers, protectedStudentShareGroups, STUDENT_SHARE_SOURCES } from './imweb-student-share-policy.mjs';
 
 export const STAFF_VIDEO_POLICY = 'imweb-staff-video-v1';
 export const STAFF_VIDEO_DIR = path.join(os.homedir(), 'ArchiveIN/automation/imweb-staff-video');
@@ -80,7 +81,8 @@ function verifyContext(run) {
     ||!c.remote_context?.write_ready||c.token?.status!=='healthy')throw Error('Imweb profile/auth mismatch');
 }
 
-export function reconcileStaffVideos(state,{run=staffImweb,apply=false,save=()=>{},now=Date.now(),onlyMemberCode=''}={}) {
+export function reconcileStaffVideos(state,{run=staffImweb,apply=false,save=()=>{},now=Date.now(),onlyMemberCode='',
+  readStudentShares=readStudentShareLedgers}={}) {
   if(!apply)state=structuredClone(state);
   if(state.policyVersion!==STAFF_VIDEO_POLICY||state.approved!==true)throw Error('Approved staff policy required');
   if(!state.members||Array.isArray(state.members)||typeof state.members!=='object')throw Error('Ownership members map missing or invalid');
@@ -116,7 +118,13 @@ export function reconcileStaffVideos(state,{run=staffImweb,apply=false,save=()=>
     let protectedGroups=[];
     if(before.grade!==STAFF_GRADE&&(entry.ownedAddedGroups||[]).some(g=>before.group.includes(g))) {
       orders??=staffPages(run,['order','list','--unit-code',UNIT]);
-      protectedGroups=protectedPurchaseGroups(orders,code,now);
+      protectedGroups=[...new Set([...protectedPurchaseGroups(orders,code,now),
+        ...protectedStudentShareGroups(readStudentShares(),code,now)])].sort();
+      const unknownShareGroups=groups.filter(group=>/^PRIVATE LESSON /.test(group.title)
+        &&!STUDENT_SHARE_SOURCES.some(source=>source.groupCode===group.siteGroupCode)
+        &&entry.ownedAddedGroups.includes(group.siteGroupCode)&&before.group.includes(group.siteGroupCode)
+        &&!protectedGroups.includes(group.siteGroupCode));
+      if(unknownShareGroups.length)throw Error('Unregistered student-share source; manual entitlement review required');
     }
     const plan=planStaffGroups(before,entry,catalog,protectedGroups);
     if(plan.afterGroups.length>50)throw Error('Member group hard limit exceeded; no quota override');
@@ -135,8 +143,11 @@ export function reconcileStaffVideos(state,{run=staffImweb,apply=false,save=()=>
     if(!apply)continue;
     if(plan.action==='update') {
       if(before.grade!==STAFF_GRADE) {
-        const latestProtected=protectedPurchaseGroups(staffPages(run,['order','list','--unit-code',UNIT]),code,Date.now());
-        if(!sameGroups(protectedGroups,latestProtected))throw Error('Purchase protection changed; no group removal');
+        const checkedAt=Date.now();
+        const latestProtected=[...new Set([
+          ...protectedPurchaseGroups(staffPages(run,['order','list','--unit-code',UNIT]),code,checkedAt),
+          ...protectedStudentShareGroups(readStudentShares(),code,checkedAt)])].sort();
+        if(!sameGroups(protectedGroups,latestProtected))throw Error('Purchase/student-share protection changed; no group removal');
       }
       const fresh=readMember(code);assertMemberPreserved(before,fresh,plan.beforeGroups);
       entry.pending={status:'intent',at:stamp(),memberHash:memberHash(before),beforeGroups:plan.beforeGroups,

@@ -8,11 +8,12 @@ import { imwebJson, readReferralMembers, IMWEB_REFERRAL_SCOPE } from './lib/imwe
 import { STAFF_GRADE, protectedPurchaseGroups } from './lib/imweb-staff-video-policy.mjs';
 import { MEMBER_GROUP_LOCK, staffPages } from './lib/imweb-staff-video-sync.mjs';
 import { acquireStudioMateBrowserLock } from './lib/studiomate-browser-lock.mjs';
+import { E261017_SHARE, STUDENT_SHARE_DAYS, STUDENT_SHARE_WINDOW_MS, shareInstant,
+  firstVerifiedShareWindow, assertSharePolicy, validatedShareEntries } from './lib/imweb-student-share-policy.mjs';
 
-export const GROUP = 'g2026101715ef28611dff4';
-export const POLICY_ID = 'e261017-grant-40d-v1';
-export const DAYS = 40;
-const DAY_MS = 86400000;
+export const GROUP = E261017_SHARE.groupCode;
+export const POLICY_ID = E261017_SHARE.policyId;
+export const DAYS = STUDENT_SHARE_DAYS;
 const STATE_DIR = path.join(os.homedir(), 'Library/Application Support/ARCHIVE PILATES/student-share-e-261017');
 const MEMBER_FIELDS = ['uid', 'memberCode', 'name', 'unitCode', 'siteCode', 'callnum', 'email', 'grade', 'point', 'coupon'];
 const memberHash = member => createHash('sha256').update(JSON.stringify(MEMBER_FIELDS.map(key => member[key]))).digest('hex');
@@ -25,10 +26,7 @@ export function groupCodes(member) {
 }
 
 function instant(value) {
-  if (typeof value !== 'string' || !/T.*(?:Z|[+-]\d\d:\d\d)$/.test(value) || !Number.isFinite(Date.parse(value))) {
-    throw Error('Explicit timestamp with timezone required');
-  }
-  return Date.parse(value);
+  return shareInstant(value);
 }
 
 export function entitlementFromGrant(memberCode, grant, now) {
@@ -37,11 +35,11 @@ export function entitlementFromGrant(memberCode, grant, now) {
       || !grant.afterGroups?.includes(GROUP) || grant.existingGroupsPreserved !== true) {
     throw Error('First verified E-team grant evidence required');
   }
-  const start = instant(grant.verifiedAt);
-  if (grant.grantedAt !== undefined && instant(grant.grantedAt) !== start) throw Error('Conflicting first grant timestamps');
-  if (start > now) throw Error('Grant timestamp is in the future');
+  if (grant.grantedAt !== undefined && instant(grant.grantedAt) !== instant(grant.verifiedAt)) throw Error('Conflicting first grant timestamps');
+  if (instant(grant.verifiedAt) > now) throw Error('Grant timestamp is in the future');
+  const window = firstVerifiedShareWindow(grant, GROUP, now);
   return { policyId: POLICY_ID, memberCode, groupCode: GROUP,
-    grantedAt: new Date(start).toISOString(), expiresAt: new Date(start + DAYS * DAY_MS).toISOString(),
+    ...window,
     status: 'active', grantEvidence: 'manualImmediateGrants:first_verified_transition' };
 }
 
@@ -49,7 +47,7 @@ export function removalPlan(member, entitlement, now) {
   if (member.memberCode !== entitlement.memberCode || member.siteCode !== IMWEB_REFERRAL_SCOPE.siteCode
       || member.unitCode !== IMWEB_REFERRAL_SCOPE.unitCode || entitlement.policyId !== POLICY_ID
       || entitlement.groupCode !== GROUP || !['active', 'revoked', 'removed_externally'].includes(entitlement.status)
-      || instant(entitlement.expiresAt) !== instant(entitlement.grantedAt) + DAYS * DAY_MS) {
+      || instant(entitlement.expiresAt) !== instant(entitlement.grantedAt) + STUDENT_SHARE_WINDOW_MS) {
     throw Error('Member or entitlement scope mismatch');
   }
   const beforeGroups = groupCodes(member);
@@ -72,9 +70,8 @@ export function verifyRemoval(before, after, expected) {
 export function reconcile(state, { now = Date.now(), apply = false, adopt = false,
   run = imwebJson, save = () => {} } = {}) {
   if (!apply) state = structuredClone(state);
-  if (state.accessPolicy?.id !== POLICY_ID || state.accessPolicy?.approved !== true
-      || state.accessPolicy?.days !== DAYS || state.accessPolicy?.basis !== 'first_verified_grant'
-      || state.accessPolicy?.revocation !== 'e_team_group_only') throw Error('Approved access policy required');
+  try { assertSharePolicy(state, E261017_SHARE); } catch { throw Error('Approved access policy required'); }
+  validatedShareEntries({ ...state, entitlements: state.entitlements === undefined ? {} : state.entitlements }, E261017_SHARE, now);
   const members = readReferralMembers({ run, maxPages: 100 }).members;
   state.entitlements ??= {};
   const outcomes = [];
