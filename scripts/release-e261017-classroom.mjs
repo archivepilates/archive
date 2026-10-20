@@ -12,7 +12,7 @@ const CORE_RULES = process.argv.includes('--core-rules');
 const SITE = CORE_RULES ? 'archive-pilates' : 'archive-pilates-home';
 const RESOURCE_PATH = CORE_RULES ? '/core/rules/index.html' : ASSET;
 const LIVE_URL = CORE_RULES ? 'https://archive-pilates.web.app/core/rules/' : `https://archivepilates.com${ASSET}`;
-const EXPECTED_BASELINE = CORE_RULES ? '74d1e287bdbe7bcfbee9724afb2ee456cd19c806ca8b9aa2cf7b09a5bcda027f' : BASELINE_SHA256;
+const EXPECTED_BASELINE = CORE_RULES ? '7e4056e334bc4c6057ff2c7fb394aba34e37c2b7fd7d85d140d10bc3ddd2c388' : BASELINE_SHA256;
 const ACCOUNT = 'archive-codex-operator@archive-pilates.iam.gserviceaccount.com';
 const API = 'https://firebasehosting.googleapis.com/v1beta1/';
 const sha = value => createHash('sha256').update(value).digest('hex');
@@ -54,7 +54,7 @@ async function main() {
   const root = git(['rev-parse', '--show-toplevel']);
   const trackedPath = CORE_RULES ? 'core/rules/index.html' : `official-home${ASSET}`;
   const source = fs.readFileSync(path.join(root, trackedPath));
-  const oldSource = execFileSync('git', ['show', `${CORE_RULES ? '136be350a9bc9917a942f94fc2d87dffe1ec312a' : 'cc2f803'}:${trackedPath}`]);
+  const oldSource = execFileSync('git', ['show', `${CORE_RULES ? '00624211d442384dff8d849e9ab860dc49a65836' : 'cc2f803'}:${trackedPath}`]);
   if (sha(oldSource) !== EXPECTED_BASELINE) throw Error('Pinned Git baseline changed');
   const addition = ',\n    {"code":"E261017","path":"/private-lesson-external-feedback-e-261017","title":"10/17 외부 피드백 E팀 · 수강생 공유","group":"PRIVATE LESSON EXTERNAL FEEDBACK E 261017 40D","private":true}';
   if (CORE_RULES) {
