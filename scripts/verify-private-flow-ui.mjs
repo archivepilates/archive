@@ -11,6 +11,7 @@ const repoRoot = path.resolve(path.dirname(fileURLToPath(import.meta.url)), ".."
 const submissions = [];
 let postSubmitted = false;
 let reportStatus = "draft_created";
+let reportEdit = null;
 
 const server = http.createServer(async (request, response) => {
   try {
@@ -36,6 +37,7 @@ const server = http.createServer(async (request, response) => {
         const body = await jsonBody(request);
         submissions.push({ kind: `staff-${body.mode || body.action || "action"}`, body });
         if (body.mode === "post") postSubmitted = true;
+        if (body.action === "editReport") reportEdit = { summary: body.summary, nextDirection: body.nextDirection };
         if (body.action === "approveReport") reportStatus = "queued";
         return json(response, 200, { ok: true });
       }
@@ -172,6 +174,7 @@ async function verifyMemberSurveySubmission() {
 async function verifyStaffPostSubmission() {
   postSubmitted = false;
   reportStatus = "draft_created";
+  reportEdit = null;
   const page = await browser.newPage({ viewport: { width: 390, height: 844 } });
   await page.goto(
     `${origin}/archivein/private-chart/?r=plc-ui-test&t=abcdefabcdefabcdefabcdefabcdefab&mode=post`,
@@ -259,9 +262,9 @@ function privateChartPayload() {
             sent: false,
             url: `${origin}/archivein/test-report`,
             canonicalUrl: `${origin}/archivein/test-report`,
-            summary:
+            summary: reportEdit?.summary ||
               "오늘은 흉곽 움직임과 호흡 연결을 중심으로 어깨의 불필요한 긴장을 줄이며 코어 연결을 확인했습니다.",
-            nextDirection:
+            nextDirection: reportEdit?.nextDirection ||
               "다음 수업에서는 고관절 안정성과 코어 연결을 바탕으로 움직임의 범위를 천천히 넓히고, 회원이 일상에서도 편안하게 적용할 수 있도록 충분한 설명과 반복을 이어갑니다.",
           }
         : {},

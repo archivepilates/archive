@@ -77,6 +77,8 @@ const NOTION_INSTRUCTOR_CHART_PAGE_IDS: Record<string, string> = {
   정은영: "22dd49eae4bf809da7e7d6953e41eb86",
   "김기효 강사": "36ed49eae4bf8161a0d3edd9f30643b9",
   김기효: "36ed49eae4bf8161a0d3edd9f30643b9",
+  "정유리 강사": "3ffd49eae4bf817dbe47e7be0e6ee4f6",
+  정유리: "3ffd49eae4bf817dbe47e7be0e6ee4f6",
 };
 
 type ChartAnswerMap = Record<string, string[] | string | number | null>;
@@ -3747,6 +3749,7 @@ function isPrivateLessonReportSent(record: PrivateLessonChartRecordDoc | null | 
       approval?.status === "sent" ||
       approval?.sentAt ||
       (record as any).publicReportSentAt ||
+      record.sentRevision ||
       record.gptStatus === "published"
     ),
   );
