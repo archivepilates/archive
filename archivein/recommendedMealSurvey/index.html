@@ -283,6 +283,9 @@
       background: var(--accent-soft);
       color: #8f2d26;
     }
+    .validation-list { margin: 8px 0 0; padding-left: 22px; }
+    .validation-list a { display: inline-block; padding: 8px 0; color: inherit; }
+    [aria-invalid="true"] { outline: 2px solid var(--accent); outline-offset: 2px; }
     .report-link {
       display: inline-flex;
       align-items: center;
@@ -331,6 +334,11 @@
     <div class="notice">
       이 설문은 건강한 식습관과 운동 목표를 돕기 위한 참고 자료입니다. 질환 치료나 의학적 영양 처방을 대신하지 않으며, 복용 약물·임신·섭식장애·중증 알레르기 등 주의사항이 있으면 자동 추천을 보류하고 전문가 확인을 안내합니다.
     </div>
+
+    <section id="surveyValidation" class="message bad" role="alert" tabindex="-1" hidden>
+      <strong>필수 항목을 확인해 주세요.</strong>
+      <ul id="surveyValidationList" class="validation-list"></ul>
+    </section>
 
     <form id="mealSurveyForm" hidden>
       <section class="section">
@@ -600,7 +608,7 @@
       </div>
     </form>
 
-    <section id="surveyMessage" class="message" hidden>
+    <section id="surveyMessage" class="message" role="status" aria-live="polite" tabindex="-1" hidden>
       <span id="surveyMessageText"></span>
       <a id="mealReportLink" class="report-link" href="#" hidden>추천식단 리포트 보기</a>
     </section>
@@ -619,7 +627,10 @@
 
     init();
     form.addEventListener("submit", submitSurvey);
+    form.noValidate = true;
     form.addEventListener("change", handleExclusiveNone);
+    form.addEventListener("input", clearFieldError);
+    form.addEventListener("change", clearFieldError);
 
     async function init() {
       if (!/^meal-[a-z0-9-]{16,96}$/i.test(requestId) || !/^[a-f0-9]{48}$/i.test(accessToken)) {
@@ -652,13 +663,10 @@
 
     async function submitSurvey(event) {
       event.preventDefault();
-      if (!form.reportValidity()) return;
+      if (submitButton.disabled) return;
+      if (!validateSurvey()) return;
+      message.hidden = true;
       const allergies = Array.from(form.querySelectorAll('input[name="allergies"]:checked')).map((input) => input.value);
-      if (!allergies.length) {
-        showMessage("알레르기 여부를 선택해 주세요.", true);
-        form.querySelector('input[name="allergies"]')?.focus();
-        return;
-      }
       submitButton.disabled = true;
       submitButton.textContent = "안전하게 저장하는 중";
       try {
@@ -699,11 +707,12 @@
           additionalNote: data.get("additionalNote"),
           consent: data.get("consent") === "yes"
         };
-        await requestJson("../api/recommendedMealSurvey", {
+        const result = await requestJson("../api/recommendedMealSurvey", {
           method: "POST",
           headers: { "Content-Type": "application/json" },
           body: JSON.stringify(payload)
         });
+        if (result.status !== "submitted") throw new Error("제출 완료를 확인하지 못했습니다. 작성 내용은 유지됩니다. 잠시 후 다시 확인해 주세요.");
         form.hidden = true;
         showMessage("설문 제출이 완료되었습니다. 설문과 최신 InBody를 반영해 추천식단을 준비합니다. 운영자 검토가 끝난 뒤 이 링크에서 확인할 수 있습니다.");
         window.scrollTo({ top: 0, behavior: "smooth" });
@@ -713,6 +722,60 @@
         submitButton.disabled = false;
         submitButton.textContent = "설문 제출하기";
       }
+    }
+
+    function validateSurvey() {
+      const invalid = new Map();
+      for (const input of form.querySelectorAll("input, select, textarea")) {
+        input.removeAttribute("aria-invalid");
+        if (!input.validity.valid || (input.required && input.type !== "radio" && input.type !== "checkbox" && !input.value.trim())) {
+          if (!invalid.has(input.name)) invalid.set(input.name, input);
+        }
+      }
+      if (!form.querySelector('input[name="allergies"]:checked')) {
+        invalid.set("allergies", form.querySelector('input[name="allergies"]'));
+      }
+      const summary = document.getElementById("surveyValidation");
+      const list = document.getElementById("surveyValidationList");
+      list.replaceChildren();
+      summary.hidden = !invalid.size;
+      if (!invalid.size) return true;
+      for (const [name, input] of invalid) {
+        input.id ||= `meal-field-${name}`;
+        input.setAttribute("aria-invalid", "true");
+        const label = name === "consent" ? "개인정보 및 건강정보 활용 동의"
+          : input.closest("fieldset")?.querySelector("legend")?.textContent
+            || input.closest("label")?.querySelector("span")?.textContent || name;
+        const item = document.createElement("li");
+        const link = document.createElement("a");
+        link.href = `#${input.id}`;
+        link.dataset.field = name;
+        link.textContent = label.trim();
+        link.addEventListener("click", (event) => {
+          event.preventDefault();
+          input.focus();
+          input.scrollIntoView({ block: "center" });
+        });
+        item.append(link);
+        list.append(item);
+      }
+      summary.focus();
+      summary.scrollIntoView({ block: "start" });
+      return false;
+    }
+
+    function clearFieldError(event) {
+      const input = event.target;
+      if (!input.name) return;
+      if (!input.validity.valid || (input.required && input.type !== "radio" && input.type !== "checkbox" && !input.value.trim())) return;
+      for (const field of form.elements) {
+        if (field.name === input.name) field.removeAttribute("aria-invalid");
+      }
+      const list = document.getElementById("surveyValidationList");
+      for (const link of list.querySelectorAll("a")) {
+        if (link.dataset.field === input.name) link.closest("li").remove();
+      }
+      document.getElementById("surveyValidation").hidden = !list.children.length;
     }
 
     function handleExclusiveNone(event) {
@@ -729,18 +792,25 @@
 
     async function requestJson(url, options) {
       const response = await fetch(url, options);
-      const data = await response.json().catch(() => ({}));
-      if (!response.ok || data.ok === false) throw new Error(data.error || `HTTP ${response.status}`);
+      const data = await response.json().catch(() => null);
+      if (!data || typeof data !== "object" || data.ok !== true || !response.ok) {
+        throw new Error(data?.error || "서버 응답을 확인하지 못했습니다. 작성 내용은 유지됩니다. 잠시 후 다시 확인해 주세요.");
+      }
       return data;
     }
 
     function showMessage(text, warn = false, showReport = false) {
       message.hidden = false;
       message.className = `message${warn ? " bad" : ""}`;
+      message.setAttribute("role", warn ? "alert" : "status");
       messageText.textContent = text;
       reportLink.hidden = !showReport;
       if (showReport) {
         reportLink.href = `../recommendedMealPlan/?id=${encodeURIComponent(requestId)}&token=${encodeURIComponent(accessToken)}`;
+      }
+      if (warn) {
+        message.focus();
+        message.scrollIntoView({ block: "center" });
       }
     }
 
