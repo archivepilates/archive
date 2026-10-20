@@ -13,3 +13,14 @@
 - Promotion review: existing canonical contract remains target source; action key `contract_signature_reminder_<nativeContractId>`, fixed recipient binding and payload fingerprint. Allowed readers: existing staff/manager CORE and source workers. Forbidden: using reminder evidence for welcome eligibility, payment/refund decisions or signature completion. Verification: synthetic/in-memory/no-network browser fixtures, bounded read-only production plan, limited config activation only after source/queue audit. New journal is not a mirror or new data pipeline.
 - CORE member-registration shows separate SMS accepted/review status; CORE operating rule records policy, source, timing, scope and verification. Normal existing polling slots/intervals preserved.
 - Separate member inquiry: signed contract confirmed for the requested member; welcome candidate/send remains failed due to `history_time_limit`, no message ID/claim. Provider GET pagination exhausted from configured history start: no known welcome receipts, only group survey/reservation notices. Unknown non-welcome template classification still blocks generic welcome history; no retry/reset/bypass performed.
+
+## Verified Release
+
+- Source `4b478551ef446c57ae886d3b49c09b72d92926ae` pushed to scoped branch and promoted to origin/main; clean main deploy and runtime checkouts fast-forwarded to the same source.
+- Combined related tests 300/300; original membership-contract command 245 Node tests plus 609 TS welcome tests passed. Runtime reminder/entrypoint tests 184/184. Browser fixtures intercepted all network and closed contexts; no real test SMS.
+- Read-only live completion dry-run checked 2 canonical waiting contracts: both verified_no_send, zero source or StudioMate writes. Scoped activation dry-run found those same 2 eligible records.
+- CORE local responsive 95/95 and live responsive 95/95 at 320/390/768/1440/1920 widths; Hosting guards and exact-source live release canary passed. Deployed hosting:archive-pilates and hosting:archive-pilates-core only; no Functions/rules/index changes.
+- Idle existing LaunchAgent reloaded with --scheduled-run, interval 3600 and no RunAtLoad; loaded arguments checked, runs 0, not running. No kickstart/manual queue execution. Reload may reset timer phase, not the one-hour interval.
+- 2026-10-20T04:02:57.237Z scoped settings activation enabled contract_signature_reminder_24h_v1. Independent reread confirmed flags and all other config fields unchanged; 2 waiting/review contracts still had zero reminder journals. Future regular processing enabled; first actual SMS acceptance/delivery not claimed.
+- Main-source CI run 39367362134 succeeded. CORE rules and app markers independently read back after deployment.
+- Remaining: requested member welcome still not sent; no recovery/reset under this scope. First natural SMS execution remains unverified, with no extra monitor or test sends created.
