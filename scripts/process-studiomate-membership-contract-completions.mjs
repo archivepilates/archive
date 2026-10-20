@@ -358,6 +358,9 @@ try {
             AUTOMATION_REPORT_LABEL:"자동화 확인필요",
             AUTOMATION_REPORT_BODY:["주체: ARCHIVE CORE / 전자계약 24시간 서명 요청",
               "결론: 서명 요청 문자를 안전하게 완료 확인하지 못했습니다.",`원인: ${reminder.reason}`,
+              ...(reminder.diagnostic ? [`상세원인: ${reminder.diagnostic === "native_contract_signature_images_unavailable"
+                ? "전자계약 직인·서명 이미지 로딩을 확인하지 못했습니다. 원본 검증은 유지하며 발송하지 않았습니다."
+                : "전자계약 화면에서 센터 직인을 확인하지 못했습니다. 원본 직인 확인 전에는 발송하지 않습니다."}`] : []),
               `원천: studiomateMembershipContracts/${doc.id}`,
               reminder.stage === "postclaim"
                 ? "현재: 발송 시도 기록은 보존되며 자동 재발송하지 않습니다. 문자 접수와 전달은 별도입니다."

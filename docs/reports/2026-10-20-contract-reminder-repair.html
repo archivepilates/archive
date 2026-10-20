@@ -1,0 +1,35 @@
+<!doctype html>
+<html lang="ko">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width,initial-scale=1">
+<title>ARCHIVE PILATES 전자계약 문자 오류 점검</title>
+<style>
+*{box-sizing:border-box}body{margin:0;background:#f6f7f8;color:#202428;font:16px/1.7 system-ui,sans-serif;letter-spacing:0}main{max-width:880px;margin:auto;padding:32px 20px}h1{font-size:26px;line-height:1.4}h2{font-size:19px;margin:28px 0 8px}p,li{overflow-wrap:anywhere;word-break:keep-all}.status{border-left:4px solid #ae2424;padding:12px 16px;background:#fff}table{border-collapse:collapse;width:100%;font-size:14px}th,td{text-align:left;vertical-align:top;border-bottom:1px solid #d8dde1;padding:10px 8px}small{color:#606970}@media(max-width:480px){main{padding:20px 16px}h1{font-size:23px}th,td{padding:8px 5px}}
+</style>
+</head>
+<body><main>
+<small>ARCHIVE PILATES · ARCHIVE CORE · 2026-10-20</small>
+<h1>전자계약 서명요청 문자 보류 원인과 수정</h1>
+<p class="status"><strong>수정·무발송 검증 완료, 승인된 운영 반영 준비 중.</strong> 실제 문자를 재발송하거나 계약·수강권·발송 시도 기록을 변경하지 않았습니다.</p>
+<h2>확인한 원인</h2>
+<p>두 미서명 계약의 14시·15시 정기 처리에서 발송 전 검증이 보류됐습니다. 기존 조회기는 서명완료 계약만 직인 이미지 로딩을 기다렸습니다. 요청대기 계약은 센터 직인이 아직 로딩 중일 때 ‘없음’으로 읽어 정상 계약을 차단했습니다. 원본 수신자·수강권·금액과 미서명 상태는 일치했으며 두 계약 모두 문자 시도 기록이 없었습니다.</p>
+<h2>수정 범위</h2>
+<ul>
+<li>요청대기 계약도 센터 직인 이미지의 실제 로딩 완료를 기다립니다.</li>
+<li>서명완료 계약은 기존대로 양측 서명과 완료일을 모두 확인합니다.</li>
+<li>20초 내 로딩을 확인하지 못하면 발송하지 않고 구체적인 안전한 진단을 남깁니다.</li>
+<li>24시간 기준, 기존 시간당 실행, 발송 직전 재검증, 계약별 1회 시도와 응답 불명확 재발송 차단은 유지합니다.</li>
+</ul>
+<h2>검증 결과</h2>
+<table><thead><tr><th>검증</th><th>결과</th></tr></thead><tbody>
+<tr><td>집중 회귀검사</td><td>209건 통과: 직인 로딩·누락·중복, 미서명·서명완료, 시간초과, 수신자 검증, 선점, 응답 유실과 재실행 차단.</td></tr>
+<tr><td>관련 회귀검사</td><td>회원계약 256건, 웰컴 609건 통과. 일부 직인 조회 테스트는 집중 검사와 중복됩니다.</td></tr>
+<tr><td>실제 원본 무발송 대조</td><td>15:49 KST 두 계약을 각각 두 번 조회해 4/4 통과. 각 조회 1.1~1.3초. 원본 updateTime 동일, 문자 시도 기록 없음, Firestore 쓰기·문자 호출 0건.</td></tr>
+<tr><td>CORE 운영규칙</td><td>로컬 320·390·768·1440·1920px 점검 95/95 통과. Hosting·카탈로그 검증과 diff 검사 통과.</td></tr>
+<tr><td>독립 검토</td><td>집중 검사 209건 재실행 통과, 차단할 문제 없음. 실제 운영 조회는 메인 작업에서 수행했습니다.</td></tr>
+</tbody></table>
+<h2>현재 상태와 다음 조치</h2>
+<p>사용자가 운영 실행기 반영·Hosting 배포·커밋·푸시를 승인했습니다. 전용 작업공간의 검증된 변경만 반영하며 기존 정기 처리부터 사용합니다. 수동 문자 발송은 하지 않습니다. 이 보고서는 실제 문자 접수나 전달 완료를 의미하지 않습니다. 실제 릴리스 결과는 배포 후 기록합니다.</p>
+<p>실제로 이미지가 없거나 로딩에 실패하면 계속 보류합니다. 알림 메일 자체의 반복 억제 방식은 이번 변경 대상이 아닙니다. 모든 작업 소유 브라우저를 닫고 공유 잠금을 해제했습니다.</p>
+</main></body></html>

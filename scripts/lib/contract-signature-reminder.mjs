@@ -8,7 +8,11 @@ const digest = value => createHash("sha256").update(JSON.stringify(value)).diges
 const instant = value => typeof value === "string" && /^\d{4}-\d\d-\d\dT\d\d:\d\d:\d\d\.\d{3}Z$/.test(value)
   && Number.isFinite(Date.parse(value)) && new Date(value).toISOString() === value ? Date.parse(value) : NaN;
 const nativeId = value => typeof value === "string" && /^[1-9]\d{0,63}$/.test(value);
-const fail = () => { throw new Error("contract_reminder_source_unverified"); };
+const fail = diagnostic => {
+  const error = new Error("contract_reminder_source_unverified");
+  if (diagnostic) error.code = diagnostic;
+  throw error;
+};
 const bindingKeys = ["studioId","memberId","userTicketId","productId","selectionJobKey","selectedAt"];
 
 export function contractReminderEnabled(config) {
@@ -55,6 +59,7 @@ export function planContractSignatureReminder(source, id, now = new Date()) {
 
 export function assertContractReminderLive(source, plan, live, now = new Date()) {
   const b = source.binding, c = live?.contract, dom = live?.dom, member = live?.memberResult?.member;
+  if (dom && dom.centerSignaturePresent !== true) fail("native_contract_center_signature_unverified");
   if (!live || instant(live.checkedAt) > now.getTime() || now.getTime()-instant(live.checkedAt) > 60_000
     || !Number.isFinite(instant(live.checkedAt)) || live.memberResult?.status !== "verified" || live.memberResult.matchCount !== 1
     || member?.memberId !== b.memberId || member.phone !== b.memberPhone || member.name !== source.memberName || member.inactive === true
@@ -110,7 +115,7 @@ export async function processContractSignatureReminder({db,source,id,readLive,se
     if (!claimed || !Number.isSafeInteger(receipt?.smsId) || receipt.smsId <= 0) fail();
     const settled = await settle({status:"accepted",smsId:receipt.smsId,acceptedAt:now().toISOString(),deliveryStatus:"not_verified"});
     return {status:"accepted",contractId:id,stage:"postclaim",smsId:settled.smsId};
-  } catch {
+  } catch (error) {
     let reason = claimed ? "send_outcome_unknown" : "source_or_claim_unverified";
     if (claimed) {
       try {
@@ -118,6 +123,9 @@ export async function processContractSignatureReminder({db,source,id,readLive,se
         if (settled.status === "accepted") return {status:"accepted",contractId:id,stage:"postclaim",smsId:settled.smsId};
       } catch { reason = "send_outcome_unknown_journal_unavailable"; }
     }
-    return {status:"review",contractId:id,stage:claimed?"postclaim":"preclaim",reason};
+    const diagnostic = !claimed && ["native_contract_signature_images_unavailable", "native_contract_center_signature_unverified"]
+      .includes(error?.code) ? error.code : null;
+    return {status:"review",contractId:id,stage:claimed?"postclaim":"preclaim",reason,
+      ...(diagnostic ? {diagnostic} : {})};
   }
 }

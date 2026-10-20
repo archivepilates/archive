@@ -605,6 +605,7 @@ const liveMutations = [
   ["DOM signature", live => { live.dom.memberSignaturePresent = true; }],
   ["DOM signing date", live => { live.dom.signedDateText = "2026-10-20"; }],
   ["missing center signature", live => { live.contract.centerSignaturePresent = false; }],
+  ["missing DOM center signature", live => { live.dom.centerSignaturePresent = false; }],
   ["contract phone", live => { live.contract.memberPhone = "01099999999"; }],
   ["live recipient phone", live => { live.memberResult.member.phone = "01099999999"; }],
   ["recipient name", live => { live.memberResult.member.name = "Different Member"; }],
@@ -663,6 +664,28 @@ test("live validator accepts sent/opened only with fresh exact identity and boun
   assert.doesNotThrow(() => assertContractReminderLive(source, plan, live, new Date(NOW)));
   live.dom.observedAt = "2026-10-20T00:58:59.999Z";
   assert.throws(() => assertContractReminderLive(source, plan, live, new Date(NOW)), /source_unverified/);
+});
+
+test("image loading failure stays preclaim, emits safe diagnostics and can recover without a resend", async t => {
+  for (const boundary of [1,2]) await t.test(`live boundary ${boundary}`,async()=>{
+    const h=harness();
+    const error=new Error("SECRET contact and remote image path");
+    error.code="native_contract_signature_images_unavailable";
+    const failed=await h.run({readLive:async()=>{
+      h.state.reads++;
+      if(h.state.reads===boundary)throw error;
+      return liveFixture(h.source);
+    }});
+    assert.deepEqual(failed,{status:"review",contractId:ID,stage:"preclaim",
+      reason:"source_or_claim_unverified",diagnostic:"native_contract_signature_images_unavailable"});
+    assert.equal(JSON.stringify(failed).includes("SECRET"),false);
+    assert.equal(h.browser.sends,0);
+    assert.equal(h.db.read(CONTRACT).signatureReminder,undefined);
+    assert.equal((await h.run()).status,"accepted");
+    assert.equal(h.browser.sends,1);
+    assert.equal((await h.run({source:h.db.read(CONTRACT)})).reason,"reminder_already_recorded");
+    assert.equal(h.browser.sends,1);
+  });
 });
 
 test("unpaid/partial contract copies remain valid through verified current payment settlement", async t => {
