@@ -129,6 +129,13 @@ function bootstrap(data) {
       if (f.hold === name) { f.hold = null; await new Promise(resolve => { f.release = resolve; }); }
       if (name === "getCoreAccessSession") return { data: { role: f.accessRole, staffName: "합성 운영자", staffId: "fixture-staff", mustChangePassword: false } };
       if (name === "getCoreAirConditioners") {
+        if (f.enforceReadCooldowns) {
+          const reads = f.calls.filter(call => call.name === name), previous = reads.at(-2);
+          if (previous && reads.at(-1).at - previous.at < (payload.deviceIds ? 2000 : 10000)) {
+            f.throttleFailures = (f.throttleFailures || 0) + 1;
+            throw new Error("synthetic-read-throttled");
+          }
+        }
         if (f.failRead) throw new Error("synthetic-read-error");
         return { data: f.readOverride || (payload.deviceIds ? { ...read, partial: true,
           devices: read.devices.filter(device => payload.deviceIds.includes(device.deviceId)) } : read) };
@@ -690,10 +697,10 @@ test("synthetic browser lifecycle, commands, auth integration and responsive QA"
       await visibility(page, "visible"); await advance(page, 1);
       assert.equal((await readCalls(page)).length, 3);
       await page.evaluate(() => { for (let i = 0; i < 6; i++) window.dispatchEvent(new Event("focus")); });
-      await advance(page, 9998); assert.equal((await readCalls(page)).length, 3);
+      await advance(page, 10248); assert.equal((await readCalls(page)).length, 3);
       await advance(page, 2); assert.equal((await readCalls(page)).length, 4);
       const reads = await readCalls(page);
-      assert.ok(reads[3].at - reads[2].at >= 10000);
+      assert.ok(reads[3].at - reads[2].at >= 10250);
       assert.equal((await calls(page, "operatorControlCoreAirConditioner")).length, 0);
     }));
 
@@ -746,21 +753,73 @@ test("synthetic browser lifecycle, commands, auth integration and responsive QA"
       assert.equal((await calls(page, "operatorControlCoreAirConditioner")).length, 0);
     }));
 
-    await t.test("clock: targeted cooldown is two seconds and unexpected partial IDs are rejected without losing cards", () => withPage(async page => {
+    await t.test("clock: targeted cooldown is 2250ms and unexpected partial IDs are rejected without losing cards", () => withPage(async page => {
       await clockMount(page, true);
       await page.evaluate(() => window.__fixture.signals([{ id: "a", data: { deviceId: "synthetic-eight-0", revision: 1 } }]));
-      await advance(page, 1999); assert.equal((await readCalls(page)).length, 1);
+      await advance(page, 2249); assert.equal((await readCalls(page)).length, 1);
       await advance(page, 1); assert.equal((await readCalls(page)).length, 2);
       await page.evaluate(() => {
         const f = window.__fixture;
         f.readOverride = { ...structuredClone(f.data), partial: true, devices: [{ ...structuredClone(f.data.devices[0]), deviceId: "unexpected" }] };
         f.signals([{ id: "a", data: { deviceId: "synthetic-eight-0", revision: 2 } }]);
       });
-      await advance(page, 1999); assert.equal((await readCalls(page)).length, 2);
+      await advance(page, 2249); assert.equal((await readCalls(page)).length, 2);
       await advance(page, 1); assert.equal((await readCalls(page)).length, 3);
       assert.equal(await page.getByRole("heading", { level: 2 }).count(), 9);
       assert.equal(await page.getByTestId("climate-device-0").getByRole("button", { name: "전원", exact: true }).isEnabled(), true);
-      assert.equal((await readCalls(page))[2].at - (await readCalls(page))[1].at, 2000);
+      assert.equal((await readCalls(page))[2].at - (await readCalls(page))[1].at, 2250);
+      assert.equal((await calls(page, "operatorControlCoreAirConditioner")).length, 0);
+    }));
+
+    await t.test("clock: a due full poll waits 10250ms after targeted read completion, never trips the shared UID guard", () => withPage(async page => {
+      await clockMount(page);
+      await advance(page, 14000);
+      await page.evaluate(() => {
+        const f = window.__fixture;
+        f.enforceReadCooldowns = true; f.hold = "getCoreAirConditioners";
+        f.signals([{ id: "a", data: { deviceId: "synthetic-eight-0", revision: 1 } }]);
+      });
+      await advance(page, 350); assert.equal((await readCalls(page)).length, 2);
+      assert.deepEqual((await readCalls(page))[1].payload, { deviceIds: ["synthetic-eight-0"] });
+      await advance(page, 1000); await page.evaluate(() => window.__fixture.release()); await idle(page);
+      await advance(page, 10249); assert.equal((await readCalls(page)).length, 2);
+      await advance(page, 1); assert.equal((await readCalls(page)).length, 3);
+      const reads = await readCalls(page);
+      assert.deepEqual(reads[2].payload, {});
+      assert.equal(reads[2].at - reads[1].at, 11250, "1000ms read duration + 10250ms completion cooldown");
+      assert.equal(await page.evaluate(() => window.__fixture.throttleFailures || 0), 0);
+      assert.equal((await calls(page, "operatorControlCoreAirConditioner")).length, 0);
+    }));
+
+    await t.test("clock: successful full and targeted background recovery clear only stale read errors, preserving partial whole timestamp", () => withPage(async page => {
+      await clockMount(page, true);
+      await page.evaluate(() => { window.__fixture.failRead = true; window.dispatchEvent(new Event("focus")); });
+      await advance(page, 10250); assert.equal((await readCalls(page)).length, 2);
+      const status = () => page.getByTestId("climate-device-0").evaluate(node => {
+        const status = node.closest("[data-climate-dashboard]").querySelector("[data-climate-status]");
+        return { text: status.textContent, error: status.dataset.error };
+      });
+      assert.equal((await status()).error, "true");
+      await page.evaluate(() => { window.__fixture.failRead = false; window.__fixture.data.checkedAt = "2026-10-21T03:05:00Z"; });
+      await advance(page, 15000); assert.equal((await readCalls(page)).length, 3);
+      assert.deepEqual(await status(), { text: "조회 완료", error: "false" });
+      await page.evaluate(() => {
+        const f = window.__fixture; f.failRead = true;
+        f.signals([
+          { id: "receiver-status", data: { connected: true, updatedAt: new Date().toISOString() } },
+          { id: "a", data: { deviceId: "synthetic-eight-0", revision: 1 } },
+        ]);
+      });
+      await advance(page, 2250); assert.equal((await status()).error, "true");
+      await page.evaluate(() => {
+        window.__fixture.failRead = false; window.__fixture.data.checkedAt = "2026-10-21T03:06:00Z";
+        window.__fixture.data.devices[0].values.currentTemperature = 21;
+      });
+      await advance(page, 15000); assert.equal((await readCalls(page)).length, 5);
+      assert.deepEqual((await readCalls(page))[4].payload, { deviceIds: ["synthetic-eight-0"] });
+      assert.deepEqual(await status(), { text: "조회 완료", error: "false" });
+      assert.match(await page.getByRole("time").textContent(), /12:05:00/, "partial recovery must not advance whole timestamp");
+      assert.equal(await page.getByTestId("climate-device-0").evaluate(node => node.querySelector(".climate-indoor dd").textContent), "21°C");
       assert.equal((await calls(page, "operatorControlCoreAirConditioner")).length, 0);
     }));
 
@@ -849,6 +908,7 @@ test("synthetic browser lifecycle, commands, auth integration and responsive QA"
       assert.equal(await button.getAttribute("aria-pressed"), "false");
       await page.evaluate(() => window.__fixture.release());
       assert.equal(await button.getAttribute("aria-pressed"), "false");
+      await advance(page, 10249); assert.equal((await readCalls(page)).length, 2);
       await advance(page, 1); await idle(page);
       assert.equal((await readCalls(page)).length, 3);
       assert.equal(await button.getAttribute("aria-pressed"), "false");

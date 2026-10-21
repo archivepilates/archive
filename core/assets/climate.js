@@ -14,6 +14,7 @@ const OPTIONS = Object.freeze({
 });
 const COMMANDS = Object.freeze({ verified: "반영 확인", no_change: "변경 없음", accepted: "접수됨 · 결과 확인 필요", pending: "처리 중 · 결과 확인 필요",
   unknown: "결과 미확인 · 재전송 금지", acknowledged: "현재 상태 확인 · 잠금 해제", rejected: "요청 거절 · 재시도하지 않음" });
+const READ_ERROR = "기기를 조회하지 못했습니다. 새로고침으로 다시 확인하세요.";
 const DEFINITIVE_ERRORS = Object.freeze({ invalid_request: "요청 항목을 확인하세요.", control_disabled: "제어가 비활성화되어 있습니다.",
   device_not_allowed: "제어 허용 기기가 아닙니다.", device_busy: "기기에 진행 중인 요청이 있습니다.",
   command_conflict: "기기 상태가 바뀌었습니다.", rate_limited: "요청 간격을 두고 새로고침하세요.", not_configured: "기기 연결 설정이 필요합니다." });
@@ -221,13 +222,13 @@ export function mountClimate(root, getRuntime = currentRuntime) {
         ownerLive?.requestFull(); return null;
       }
       adopt(climateSnapshot(data, requestedIds)); success = true;
-      if (!background) notice(devices.length ? "조회 완료" : "연결된 기기 없음");
+      if (!background || status.textContent === READ_ERROR) notice(devices.length ? "조회 완료" : "연결된 기기 없음");
       return true;
     } catch {
       success = false;
       if (current(request)) {
         if (!background) trusted = false;
-        notice("기기를 조회하지 못했습니다. 새로고침으로 다시 확인하세요.", true);
+        notice(READ_ERROR, true);
       }
       return false;
     } finally {

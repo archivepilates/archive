@@ -2,7 +2,7 @@
 export function startClimateLive({ win, doc, parentDoc, runtime, active, knownIds, blocked, read }) {
   let disposed = false, visible = false, entered = false, running = false, timer, unsubscribe;
   let baseline = true, revisions = new Map(), receiver = null;
-  let lastAny = -Infinity, lastFull = -Infinity, pollAt = Infinity;
+  let lastAny = -Infinity, pollAt = Infinity;
   let signalAt = Infinity, fullRequested = false, retryAt = 0, failures = 0;
   const pending = new Set();
   const now = () => win.Date.now();
@@ -12,6 +12,8 @@ export function startClimateLive({ win, doc, parentDoc, runtime, active, knownId
     && /^\d{4}-\d{2}-\d{2}T/.test(receiver.updatedAt)
     && now() - Date.parse(receiver.updatedAt) >= 0 && now() - Date.parse(receiver.updatedAt) < 180000 ? 60000 : 15000;
   const cancelTimer = () => { win.clearTimeout(timer); timer = undefined; };
+  // Both server guards share the last read, including a targeted read.
+  const earliestRead = full => lastAny + (full ? 10250 : 2250);
   function disconnect() { unsubscribe?.(); unsubscribe = undefined; baseline = true; revisions.clear(); receiver = null; }
   function signals(snapshot) {
     if (!foreground()) return;
@@ -54,8 +56,7 @@ export function startClimateLive({ win, doc, parentDoc, runtime, active, knownId
     if (!visible || !foreground() || running || blocked()) return;
     const full = fullRequested || pollAt <= Math.max(now(), signalAt === Infinity ? now() : signalAt);
     const due = full ? fullRequested ? now() : pollAt : Math.min(pollAt, signalAt);
-    const cooldown = full ? Math.max(lastAny + 2000, lastFull + 10000) : lastAny + 2000;
-    const at = Math.max(due, cooldown, retryAt);
+    const at = Math.max(due, earliestRead(full), retryAt);
     if (Number.isFinite(at)) timer = win.setTimeout(tick, Math.max(0, at - now()));
   }
   async function tick() {
@@ -65,7 +66,7 @@ export function startClimateLive({ win, doc, parentDoc, runtime, active, knownId
     const full = fullRequested || now() >= pollAt;
     const ids = full ? undefined : [...pending].filter(id => knownIds().includes(id));
     if (!full && (!ids.length || now() < signalAt)) { signalAt = Infinity; schedule(); return; }
-    if (now() < retryAt || now() < lastAny + 2000 || full && now() < lastFull + 10000) { schedule(); return; }
+    if (now() < retryAt || now() < earliestRead(full)) { schedule(); return; }
     fullRequested = false; pending.clear(); signalAt = Infinity;
     running = true;
     try {
@@ -100,9 +101,10 @@ export function startClimateLive({ win, doc, parentDoc, runtime, active, knownId
     sync,
     wake: schedule,
     requestFull() { fullRequested = true; schedule(); },
-    started(ids) { lastAny = now(); if (!ids) lastFull = lastAny; cancelTimer(); },
+    started() { lastAny = now(); cancelTimer(); },
     finished(success, ids) {
       if (disposed) return;
+      lastAny = Math.max(lastAny, now());
       if (success) { failures = 0; retryAt = 0; }
       else if (success === false) { failures++; retryAt = now() + Math.min(120000, 15000 * 2 ** Math.min(failures - 1, 3)); }
       if (!ids) pollAt = now() + interval();
