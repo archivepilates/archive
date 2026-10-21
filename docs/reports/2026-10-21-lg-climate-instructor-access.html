@@ -3,7 +3,7 @@
 <title>ARCHIVE PILATES 강사 에어컨 권한</title>
 <style>body{margin:0;background:#f5f6f7;color:#23282c;font:16px/1.7 system-ui,sans-serif}main{max-width:900px;margin:auto;padding:32px 20px}h1{font-size:28px}h2{font-size:20px;margin-top:28px}table{width:100%;border-collapse:collapse;background:#fff}th,td{padding:12px;text-align:left;border-bottom:1px solid #dce0e4;vertical-align:top}code{overflow-wrap:anywhere}a{color:#a32c3c}</style>
 <main><p>ARCHIVE PILATES · 2026.10.21</p><h1>강사 계정 에어컨 조회·제어 권한</h1>
-<p id="release">구현·검증 완료 · 운영 배포 진행</p>
+<p id="release">운영 배포·검증 완료</p>
 <h2>권한 범위</h2><table><tr><th>대상</th><th>기준</th></tr>
 <tr><td>허용 강사</td><td>현재 근무 원천이 확인되고 CORE 접근이 활성화된 본인 계정. 최초 비밀번호 변경 완료·최신 로그인·UID/강사/센터 정보 일치를 매 호출 검증.</td></tr>
 <tr><td>강사 메뉴</td><td>프라이빗·시퀀스 노트·에어컨 3개. 홈·회원·정산 등 다른 운영 메뉴를 열어주는 변경이 아닙니다.</td></tr>
@@ -12,5 +12,7 @@
 <tr><td>데이터</td><td>상태 재조회 신호만 최대 16개 읽기. 기기 명령 원장·회원 원장 직접 읽기와 모든 클라이언트 신호 쓰기는 계속 차단.</td></tr></table>
 <h2>변경하지 않는 것</h2><p>계정·비밀번호·강사 역할·회원 데이터·프라이빗 담당 범위·시퀀스 소유권·기존 운영자 권한을 변경하지 않습니다. LG 토큰·8대 허용 목록·MQTT 수신기·자동 갱신 간격·StudioMate·알림톡 자동화도 유지합니다.</p>
 <h2>검증</h2><p>서버·기존 강사 접근 회귀 317건, 실제 Firestore 규칙 360건, 에어컨 UI 78건, 집중 강사·메뉴 이동 통합 96건, climate 재확인 8건, 내비게이션·런타임 7건을 통과했습니다. 정상 강사의 3개 함수 진입과 불허 계정의 PAT 접근 전 차단, 신호 읽기만 허용되는 것을 확인했습니다. 320·390·768·1440px에서 카드 크기·넘침·최초 비밀번호 변경·로그아웃·다른 계정의 늦은 응답 차단을 검증했습니다. 기존 운영자 회귀와 전체 Functions 빌드·배포 안전 검사도 통과했습니다.</p>
-<h2>배포·실기</h2><p>대상은 기존 에어컨 함수 3개·신호 읽기 규칙·CORE Hosting입니다. 실제 강사 계정 대리 로그인·비밀번호 변경·실제 전원/온도 조작은 하지 않습니다. 배포 파일 모의계정 UI 검증과 실제 강사 로그인/기기 조작 증거를 구분합니다.</p>
+<p>배포된 정적 파일에 합성 Firebase SDK·강사 계정·기기를 연결한 Chromium 8건·WebKit 8건도 최종 재시도 없이 통과했습니다. 새 테스트의 중첩 에디터 준비 대기 누락을 바로잡았으며 운영 시퀀스 저장·이동 안전장치는 변경하지 않았습니다. 테스트 컨텍스트·서버·검증용 브라우저 탭을 정리했습니다.</p>
+<h2>배포·실기</h2><p>소스 7fff94d7을 main에 반영하고 기존 에어컨 함수 3개·신호 읽기 규칙·CORE Hosting 양쪽 사이트를 배포했습니다. 함수는 2026.10.21 18:32경 ACTIVE이며 운영 파일 해시·배포 canary·GitHub 검사를 통과했습니다. 실제 운영자 계정에서 8대 조회와 정상 화면을 확인했습니다. 미로그인 함수 요청은 401, 신호 읽기는 403으로 차단됩니다.</p>
+<p>배포 파일 모의 강사 UI와 실제 인증·기기 조작 증거는 구분합니다. 실제 강사 계정 대리 로그인·비밀번호 변경·실제 전원/온도 조작은 하지 않았습니다. 강사 계정에서 한 번 새로고침하면 프라이빗·시퀀스 노트·에어컨을 사용할 수 있습니다.</p>
 <p><a href="https://core.archivepilates.com/climate/">에어컨 메뉴</a> · <a href="https://core.archivepilates.com/rules/#lg-climate-control">운영규칙</a></p></main></html>

@@ -1085,6 +1085,13 @@ async function runCase(page, base, kind, name) {
     for (const [label, suffix] of [["프라이빗", "private/"], ["시퀀스 노트", "sequence/"], ["에어컨", "climate/"]]) {
       await (await navigationLink(page, false, label)).click();
       const frame = await destinationFrame(page, `${base}${suffix}`, documentId, false);
+      if (suffix === "sequence/") {
+        await frame.getByTestId("qa-sequence-frame").contentFrame().getByRole("tab", { name: /내 시퀀스/ }).waitFor();
+        const studio = frame.childFrames().find(child => new URL(child.url()).pathname === `${base}sequence/studio.html`);
+        assert.ok(studio, "Sequence studio remains a nested authenticated editor");
+        await studio.waitForFunction(() => Boolean(window.archiveSequenceNavigation));
+        assert.equal(await studio.evaluate(() => parent.archiveSequenceStore.uid), "qa-instructor");
+      }
       if (suffix === "climate/") await frame.getByRole("heading", { name: "QA 에어컨 8", exact: true }).waitFor();
     }
     const state = await telemetry(page);
