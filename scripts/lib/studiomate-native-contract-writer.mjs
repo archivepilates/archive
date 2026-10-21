@@ -13,7 +13,7 @@ export const MEMBERSHIP_CONTRACT_TEMPLATES = Object.freeze({
   }),
   renewal_purchase_confirmation: Object.freeze({
     id: "1341",
-    title: "\uC544\uCE74\uC774\uBE0C \uC7AC\uB4F1\uB85D \uAD6C\uB9E4\uC870\uAC74 \uD655\uC778",
+    title: "\uC544\uCE74\uC774\uBE0C \uC7AC\uB4F1\uB85D",
   }),
 });
 

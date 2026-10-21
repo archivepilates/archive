@@ -1,4 +1,5 @@
 import assert from "node:assert/strict";
+import { createHash } from "node:crypto";
 import test from "node:test";
 import { firestoreJournal } from "./studiomate-membership-contract-processor.mjs";
 import {
@@ -98,6 +99,59 @@ function fixture(action = "first_purchase_contract") {
     ],
   };
 }
+
+test("renewal title changes without changing the template ID, issuance key or purchase fields", () => {
+  const input = fixture("renewal_purchase_confirmation");
+  const payload = buildStudioMateJoinContractPayload(input);
+  assert.deepEqual(MEMBERSHIP_CONTRACT_TEMPLATES.renewal_purchase_confirmation, {
+    id: "1341", title: "아카이브 재등록",
+  });
+  assert.equal(payload.title, "아카이브 재등록");
+  assert.equal(input.selection.jobKey, `membership_contract_${"a".repeat(64)}`);
+  const firstPurchase = buildStudioMateJoinContractPayload(fixture());
+  assert.equal(firstPurchase.title, "아카이브 회원가입");
+  assert.equal(MEMBERSHIP_CONTRACT_TEMPLATES.first_purchase_contract.id, "608");
+  assert.deepEqual({ ...payload, title: firstPurchase.title }, firstPurchase);
+});
+
+test("renewal template title mismatch stays blocked after the rename", () => {
+  const input = fixture("renewal_purchase_confirmation");
+  input.template.title = "아카이브 재등록 구매조건 확인";
+  assert.throws(() => buildStudioMateJoinContractPayload(input), /Unexpected StudioMate contract template/);
+});
+
+test("old-title renewal journals remain unchanged and never replay after a title mismatch", async (t) => {
+  for (const stage of ["complete", "created", "signature_requested"]) {
+    await t.test(stage, async () => {
+      const input = fixture("renewal_purchase_confirmation");
+      const oldPayload = { ...buildStudioMateJoinContractPayload(input), title: "아카이브 재등록 구매조건 확인" };
+      const saved = {
+        payloadHash: createHash("sha256").update(JSON.stringify(oldPayload)).digest("hex"),
+        stage, contractId: CONTRACT_ID,
+      };
+      const original = structuredClone(saved);
+      const ref = { set: async () => assert.fail("old journal must not be rewritten") };
+      const db = {
+        collection: (name) => {
+          assert.equal(name, "studiomateMembershipContractJobs");
+          return { doc: (id) => { assert.equal(id, input.selection.jobKey); return ref; } };
+        },
+        runTransaction: async (callback) => callback({
+          get: async (target) => { assert.equal(target, ref); return { exists: true, data: () => saved }; },
+          create: () => assert.fail("old issuance must not create another claim"),
+        }),
+      };
+      const api = {
+        get: async () => assert.fail("old-title mismatch must stop before provider calls"),
+        post: async () => assert.fail("old-title mismatch must never recreate or resend"),
+      };
+      assert.deepEqual(await executeStudioMateMembershipContract({ ...input, api, journal: firestoreJournal(db) }), {
+        status: "review", reason: "job_payload_mismatch",
+      });
+      assert.deepEqual(saved, original);
+    });
+  }
+});
 
 function nativeContract(input, status, { centerSignaturePresent = true } = {}) {
   const payload = buildStudioMateJoinContractPayload(input);
