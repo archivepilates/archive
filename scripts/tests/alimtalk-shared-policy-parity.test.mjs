@@ -64,6 +64,28 @@ test('eligibility send evaluator has exactly the previous rule body, with only o
 for (const name of ['dedupe.ts', 'templates.ts', 'templateTargetRules.ts', 'recipientExclusion.ts', 'testRecipients.ts',
   'privateSurveySendGuard.ts', 'renewalSendGuard.ts', 'longAbsenceSendGuard.ts', 'approvalStore.ts']) {
   test(`${name}: canonical selection, history windows and exceptions are unchanged`, () => {
+    if (name === 'templates.ts') {
+      const file = prefix + name;
+      const metadata = new Set(['RESERVATION_OPEN_ALIMTALK_TEMPLATE', 'PRIVATE_SURVEY_NONWELCOME_CONTRACT',
+        'PRIVATE_LESSON_REPORT_NONWELCOME_CONTRACT']);
+      const seen = new Set();
+      const current = ast(read(file), file);
+      const policyStatements = current.statements.filter(statement => {
+        if (!ts.isVariableStatement(statement)) return true;
+        const declarations = statement.declarationList.declarations;
+        const names = declarations.map(node => node.name.getText(current));
+        if (!names.some(name => metadata.has(name))) return true;
+        assert.equal(declarations.length, 1);
+        assert.equal(names.length, 1);
+        assert.equal(seen.has(names[0]), false);
+        seen.add(names[0]);
+        return false;
+      });
+      assert.deepEqual(seen, metadata, 'Only the three independently audited metadata declarations are additional');
+      const baseline = ast(before(file), file);
+      assert.deepEqual(policyStatements.map(node => node.getText(current)), baseline.statements.map(node => node.getText(baseline)));
+      return;
+    }
     assert.equal(read(prefix + name), before(prefix + name));
   });
 }
