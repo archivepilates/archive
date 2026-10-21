@@ -250,6 +250,34 @@ if (!process.argv.includes('--emulator')) {
         await denied(get('facilityClimateCommands/qa', token));
       }
     });
+    const readyStaff = { uid: 'climate-instructor', staffId: 'climate-staff', studioId: 'qa-studio',
+      role: 'instructor', active: true, employmentStatus: 'current',
+      employmentSource: 'studiomate_staff_tab_browser_scan', coreAccessEnabled: true,
+      coreMustChangePassword: false, coreAuthAfter: 0 };
+    const readyToken = mockToken(readyStaff.uid, 'instructor', { staffId: readyStaff.staffId });
+    await allowed(commit([{ update: { name: `${documents}/staffs/${readyStaff.staffId}`, fields: fields(readyStaff) } }], 'owner'));
+    await t.test('eligible instructor reads bounded signals but cannot write or read command/member ledgers', async () => {
+      await allowed(get('facilityClimateSignals/qa', readyToken));
+      await allowed(query('facilityClimateSignals', null, 16, readyToken, false));
+      for (const limit of [null, 17]) await denied(query('facilityClimateSignals', null, limit, readyToken, false));
+      await denied(commit([{ update: { name: `${documents}/facilityClimateSignals/qa`, fields: fields({ revision: 'forged' }) } }], readyToken));
+      for (const collection of ['facilityClimateCommands', 'facilityClimateGuards', 'memberProfiles'])
+        await denied(get(`${collection}/qa`, readyToken));
+    });
+    for (const [label, patch, tokenPatch] of [
+      ['inactive', { active: false }, {}], ['former', { employmentStatus: 'former' }, {}],
+      ['unverified-source', { employmentSource: 'manual' }, {}], ['disabled', { coreAccessEnabled: false }, {}],
+      ['first-login', { coreMustChangePassword: true }, {}], ['missing-password', { coreMustChangePassword: null }, {}],
+      ['revoked', { coreAuthAfter: Math.floor(Date.now() / 1000) + 600 }, {}],
+      ['wrong-uid', { uid: 'somebody-else' }, {}], ['wrong-studio', {}, { studioId: 'somewhere-else' }],
+    ]) await t.test(`${label} instructor signal reads denied`, async () => {
+      const staffId = `climate-${label}`;
+      await allowed(commit([{ update: { name: `${documents}/staffs/${staffId}`,
+        fields: fields({ ...readyStaff, staffId, ...patch }) } }], 'owner'));
+      const token = mockToken(readyStaff.uid, 'instructor', { staffId, ...tokenPatch });
+      await denied(get('facilityClimateSignals/qa', token));
+      await denied(query('facilityClimateSignals', null, 16, token, false));
+    });
   });
 
   await test('Sequence Studio real Firestore rules emulator regression', async (t) => {

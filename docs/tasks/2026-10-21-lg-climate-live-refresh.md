@@ -1,5 +1,7 @@
 # LG climate live refresh
 
+Permission follow-up: `2026-10-21-lg-climate-instructor-access.md` records the subsequent approved current-instructor scope. Historical operator-only reader descriptions below describe this earlier release, not the current permission contract.
+
 - Lane: existing LG climate control; worktree `lg-thinq-control-20261021`, branch `codex/mini/lg-thinq-control-20261021`, base `87ab554e31524ea818e83f375c73e28def545b6b`.
 - Approval: user requested improvements through deployment. No real HVAC control test; the user tests hardware.
 - Scope: three existing climate callables, climate UI, isolated Mac mini MQTT receiver, narrowly scoped Firestore signal rules, CORE operating rules.

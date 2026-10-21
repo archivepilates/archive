@@ -1,6 +1,6 @@
 # LG ThinQ air conditioner control
 
-- Scope: operator-only ARCHIVE CORE menu, official LG ThinQ Connect REST API, no StudioMate or member automation changes.
+- Initial scope: operator-only ARCHIVE CORE menu, official LG ThinQ Connect REST API, no StudioMate or member automation changes. Later instructor permission expansion is recorded in `2026-10-21-lg-climate-instructor-access.md` and supersedes historical operator-only statements below.
 - Worktree: `/Users/archivepilates/codex-worktrees/lg-thinq-control-20261021`.
 - Branch: `codex/mini/lg-thinq-control-20261021`; base `8bac515a` (`origin/main`, fetched 2026-10-21).
 - Backend ownership: `src/climate/**`, three callables in `exports/app.ts`; physical codebase `functions-app`.

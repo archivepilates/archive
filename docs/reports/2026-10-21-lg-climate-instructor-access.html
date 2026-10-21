@@ -1,0 +1,16 @@
+<!doctype html>
+<html lang="ko"><meta charset="utf-8"><meta name="viewport" content="width=device-width,initial-scale=1">
+<title>ARCHIVE PILATES 강사 에어컨 권한</title>
+<style>body{margin:0;background:#f5f6f7;color:#23282c;font:16px/1.7 system-ui,sans-serif}main{max-width:900px;margin:auto;padding:32px 20px}h1{font-size:28px}h2{font-size:20px;margin-top:28px}table{width:100%;border-collapse:collapse;background:#fff}th,td{padding:12px;text-align:left;border-bottom:1px solid #dce0e4;vertical-align:top}code{overflow-wrap:anywhere}a{color:#a32c3c}</style>
+<main><p>ARCHIVE PILATES · 2026.10.21</p><h1>강사 계정 에어컨 조회·제어 권한</h1>
+<p id="release">구현·검증 완료 · 운영 배포 진행</p>
+<h2>권한 범위</h2><table><tr><th>대상</th><th>기준</th></tr>
+<tr><td>허용 강사</td><td>현재 근무 원천이 확인되고 CORE 접근이 활성화된 본인 계정. 최초 비밀번호 변경 완료·최신 로그인·UID/강사/센터 정보 일치를 매 호출 검증.</td></tr>
+<tr><td>강사 메뉴</td><td>프라이빗·시퀀스 노트·에어컨 3개. 홈·회원·정산 등 다른 운영 메뉴를 열어주는 변경이 아닙니다.</td></tr>
+<tr><td>에어컨</td><td>기존 허용 목록 8대의 지원 제어와 확인 후 순차 전체 끄기. 운영자와 동일한 제어 전 원본 확인·명령 ID·잠금·결과 재확인·불명확 시 자동 재전송 금지 적용.</td></tr>
+<tr><td>불허</td><td>퇴사·미확인 근무 원천·CORE 중지·초기 비밀번호 미변경·만료 로그인·본인 정보 불일치·비업무 계정.</td></tr>
+<tr><td>데이터</td><td>상태 재조회 신호만 최대 16개 읽기. 기기 명령 원장·회원 원장 직접 읽기와 모든 클라이언트 신호 쓰기는 계속 차단.</td></tr></table>
+<h2>변경하지 않는 것</h2><p>계정·비밀번호·강사 역할·회원 데이터·프라이빗 담당 범위·시퀀스 소유권·기존 운영자 권한을 변경하지 않습니다. LG 토큰·8대 허용 목록·MQTT 수신기·자동 갱신 간격·StudioMate·알림톡 자동화도 유지합니다.</p>
+<h2>검증</h2><p>서버·기존 강사 접근 회귀 317건, 실제 Firestore 규칙 360건, 에어컨 UI 78건, 집중 강사·메뉴 이동 통합 96건, climate 재확인 8건, 내비게이션·런타임 7건을 통과했습니다. 정상 강사의 3개 함수 진입과 불허 계정의 PAT 접근 전 차단, 신호 읽기만 허용되는 것을 확인했습니다. 320·390·768·1440px에서 카드 크기·넘침·최초 비밀번호 변경·로그아웃·다른 계정의 늦은 응답 차단을 검증했습니다. 기존 운영자 회귀와 전체 Functions 빌드·배포 안전 검사도 통과했습니다.</p>
+<h2>배포·실기</h2><p>대상은 기존 에어컨 함수 3개·신호 읽기 규칙·CORE Hosting입니다. 실제 강사 계정 대리 로그인·비밀번호 변경·실제 전원/온도 조작은 하지 않습니다. 배포 파일 모의계정 UI 검증과 실제 강사 로그인/기기 조작 증거를 구분합니다.</p>
+<p><a href="https://core.archivepilates.com/climate/">에어컨 메뉴</a> · <a href="https://core.archivepilates.com/rules/#lg-climate-control">운영규칙</a></p></main></html>

@@ -123,19 +123,29 @@ export function mountClimate(root, getRuntime = currentRuntime) {
   bulkOff.replaceChildren(iconNode("power"), text("span", "전체 끄기"));
 
   function session() {
-    if (disposed || !root.isConnected || doc.documentElement.dataset.coreAccess !== "manager"
+    const markers = doc.documentElement.dataset;
+    const role = markers.coreAccess;
+    if (disposed || !root.isConnected || !["manager", "instructor"].includes(role)
       || root.classList.contains("core-navigation-container")
-      || parentDoc && parentDoc.documentElement.dataset.coreAccess !== "manager") return null;
+      || parentDoc && parentDoc.documentElement.dataset.coreAccess !== role) return null;
     for (let node = root.parentElement; node; node = node.parentElement) if (node.hidden || node.inert) return null;
     const runtime = getRuntime();
     const user = runtime?.authClient?.currentUser;
     if (!user?.uid || user === blockedUser || typeof runtime.httpsCallable !== "function") return null;
+    if (role === "instructor" && (markers.coreInstructorUid !== user.uid || !markers.coreInstructorStaffId?.trim()
+      || !root.closest("#coreInstructorAccess .cia-main"))) return null;
     const host = parentDoc ? win.parent.archiveCoreNavigation : win.archiveCoreNavigation;
-    if (host && (host.runtime !== runtime || host.uid !== user.uid || host.session?.role !== "manager"
+    if (parentDoc && !host) return null;
+    if (host && (host.runtime !== runtime || host.uid !== user.uid || host.session?.role !== role
       || host.session.mustChangePassword === true)) return null;
-    return { runtime, user, uid: user.uid };
+    if (role === "instructor" && host && (host.session.mustChangePassword !== false
+      || host.session.staffId !== markers.coreInstructorStaffId
+      || parentDoc && (parentDoc.documentElement.dataset.coreInstructorUid !== user.uid
+        || parentDoc.documentElement.dataset.coreInstructorStaffId !== markers.coreInstructorStaffId))) return null;
+    return { runtime, user, uid: user.uid, role, staffId: markers.coreInstructorStaffId };
   }
-  const same = (a, b) => Boolean(a && b && a.runtime === b.runtime && a.user === b.user && a.uid === b.uid);
+  const same = (a, b) => Boolean(a && b && a.runtime === b.runtime && a.user === b.user && a.uid === b.uid
+    && a.role === b.role && a.staffId === b.staffId);
   function notice(message, error = false) { status.textContent = message; status.dataset.error = String(error); }
   function clear() {
     live?.dispose(); live = undefined;
@@ -531,9 +541,9 @@ export function mountClimate(root, getRuntime = currentRuntime) {
   }
   const observer = new win.MutationObserver(accessChanged);
   observer.observe(doc.documentElement, { attributes: true, childList: true, subtree: true,
-    attributeFilter: ["data-core-access", "hidden", "inert", "class"] });
+    attributeFilter: ["data-core-access", "data-core-instructor-uid", "data-core-instructor-staff-id", "hidden", "inert", "class"] });
   if (parentDoc) observer.observe(parentDoc.documentElement, { attributes: true, childList: true, subtree: true,
-    attributeFilter: ["data-core-access", "hidden", "inert", "class"] });
+    attributeFilter: ["data-core-access", "data-core-instructor-uid", "data-core-instructor-staff-id", "hidden", "inert", "class"] });
   refresh.addEventListener("click", load);
   bulkOff.addEventListener("click", turnAllOff);
   doc.addEventListener("core-instructor-signed-out", signedOut);

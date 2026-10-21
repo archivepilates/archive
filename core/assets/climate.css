@@ -1,7 +1,10 @@
 .climate-page *, .climate-page *::before, .climate-page *::after { box-sizing: border-box; }
-[data-climate-dashboard][hidden], html:not([data-core-access="manager"]) [data-climate-dashboard] { display: none !important; }
+[data-climate-dashboard][hidden],
+html:not([data-core-access="manager"]):not([data-core-access="instructor"][data-core-instructor-uid][data-core-instructor-staff-id]) [data-climate-dashboard],
+html[data-core-access="instructor"] [data-climate-dashboard]:not(.core-instructor-access .cia-main [data-climate-dashboard]) { display: none !important; }
 .climate-page .main { background: #eef0f3; }
 [data-climate-dashboard] { min-width: 0; letter-spacing: 0; }
+.core-instructor-access [data-climate-dashboard] { width: 100%; padding: 0; }
 .climate-heading, .climate-heading > div, .climate-summary { display: flex; align-items: center; gap: 12px; }
 .climate-heading { justify-content: space-between; margin-bottom: 18px; }
 .climate-heading > div { flex-wrap: wrap; min-width: 0; }
@@ -78,6 +81,7 @@
 .climate-command-actions { display: flex; flex-wrap: wrap; gap: 8px; }
 .climate-command-actions button { max-width: 100%; }
 .climate-readonly, .climate-empty { margin: 12px 0 0; color: #647181; font-size: .8125rem; overflow-wrap: anywhere; }
-@media (max-width: 360px) { .climate-device { padding: 16px; } .climate-device-heading { grid-template-columns: 36px minmax(0, 1fr) 48px; gap: 8px; } .climate-appliance { width: 36px; } .climate-appliance .ui-icon { width: 34px; height: 34px; } .climate-device .climate-power { width: 48px; height: 48px; min-height: 48px; padding: 11px; } .climate-reading dd { font-size: 1.25rem; } .climate-device[data-power="on"] .climate-readings { grid-template-columns: minmax(74px, 1fr) minmax(164px, 2fr); } }
+@media (max-width: 360px) { .climate-device { padding: 16px; } .climate-device-heading { grid-template-columns: 36px minmax(0, 1fr) 48px; gap: 8px; } .climate-appliance { width: 36px; } .climate-appliance .ui-icon { width: 34px; height: 34px; } .climate-device .climate-power { width: 48px; height: 48px; min-height: 48px; padding: 11px; } .climate-reading dd { font-size: 1.25rem; } .climate-device[data-power="on"] .climate-readings { grid-template-columns: minmax(0, 1fr); } .climate-device[data-power="on"] .climate-indoor { border-right: 0; padding-right: 0; } }
 @media (min-width: 720px) { .climate-devices { grid-template-columns: repeat(auto-fit, minmax(min(100%, 350px), 1fr)); gap: 18px; } }
+@media (max-width: 360px) { .climate-readings { min-height: 9rem; } }
 @media (prefers-reduced-motion: reduce) { .climate-device, .climate-device .climate-power, .climate-details > summary .ui-icon { transition: none; } .climate-device[data-writing="true"] .climate-power .ui-icon { animation: none; } }

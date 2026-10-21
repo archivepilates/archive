@@ -700,8 +700,9 @@ service cloud.firestore {
 
     // Invalidation signals only; device state and commands remain server/LG reads.
     match /facilityClimateSignals/{signalId} {
-      allow get: if isManager();
-      allow list: if isManager() && request.query.limit != null && request.query.limit <= 16;
+      allow get: if isManager() || (request.auth != null && readyCoreInstructor());
+      allow list: if (isManager() || (request.auth != null && readyCoreInstructor())) &&
+        request.query.limit != null && request.query.limit <= 16;
       allow write: if false;
     }
 

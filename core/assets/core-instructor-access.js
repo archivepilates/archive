@@ -5,6 +5,7 @@ const CORE_BASE = new URL("../", import.meta.url).pathname;
 const ROUTES = [
   ["private", `${CORE_BASE}private/`, "프라이빗", "clipboard-check"],
   ["sequence", `${CORE_BASE}sequence/`, "시퀀스 노트", "notebook-pen"],
+  ["climate", `${CORE_BASE}climate/`, "에어컨", "air-vent"],
 ];
 const STATUS_LABELS = {
   pending: "기록 대기", waiting: "대기", recording: "기록 중", submitted: "기록 제출",
@@ -27,6 +28,34 @@ let sequenceFrame;
 let sequenceParent;
 let sequenceNext;
 let accountBar;
+let climateDashboard;
+let disposeClimate;
+
+function clearAccessMarkers() {
+  delete document.documentElement.dataset.coreAccess;
+  delete document.documentElement.dataset.coreInstructorUid;
+  delete document.documentElement.dataset.coreInstructorStaffId;
+}
+
+function markInstructor(runtime, session) {
+  if (activeSession?.session !== session || activeSession.runtime !== runtime
+    || activeSession.uid !== runtime.authClient.currentUser?.uid
+    || session.role !== "instructor" || session.mustChangePassword !== false) return;
+  document.documentElement.dataset.coreInstructorUid = activeSession.uid;
+  document.documentElement.dataset.coreInstructorStaffId = session.staffId;
+  document.documentElement.dataset.coreAccess = "instructor";
+}
+
+function resetClimate() {
+  disposeClimate?.();
+  disposeClimate = null;
+  if (!climateDashboard) return;
+  const { node, parent, next, hadMain } = climateDashboard;
+  node.hidden = true;
+  node.classList.toggle("main", hadMain);
+  if (parent?.isConnected) parent.insertBefore(node, next?.parentNode === parent ? next : null);
+  climateDashboard = null;
+}
 
 function escapeHtml(value) {
   return String(value ?? "").replace(/[&<>"']/g, (character) => ({
@@ -74,7 +103,8 @@ function hideNode(node) {
 // Quarantine operator DOM before awaiting access, including late-added operator overlays.
 function isolateOperatorContent() {
   window.archiveCoreNavigation?.dispose();
-  delete document.documentElement.dataset.coreAccess;
+  clearAccessMarkers();
+  resetClimate();
   if (!root?.isConnected) {
     root = document.createElement("div");
     root.className = "core-instructor-access";
@@ -107,6 +137,7 @@ function restoreManagerContent() {
   observer?.disconnect();
   observer = null;
   resetSequence();
+  resetClimate();
   root?.remove();
   root = null;
   for (const [node, previous] of hiddenNodes) {
@@ -119,12 +150,14 @@ function restoreManagerContent() {
     if (!previous.hadStyle && !node.style.cssText) node.removeAttribute("style");
   }
   hiddenNodes.clear();
+  clearAccessMarkers();
   document.documentElement.dataset.coreAccess = "manager";
 }
 
 function suspendAccess() {
   window.archiveCoreNavigation?.dispose();
-  delete document.documentElement.dataset.coreAccess;
+  clearAccessMarkers();
+  resetClimate();
   generation += 1;
   activeSession = null;
   accountBar?.remove();
@@ -221,6 +254,9 @@ function bindLogout(runtime) {
     button.disabled = true;
     // Clear member data immediately, even if the network sign-out later fails.
     generation += 1;
+    activeSession = null;
+    clearAccessMarkers();
+    resetClimate();
     resetSequence();
     root.querySelector("[data-core-instructor-content]")?.replaceChildren();
     const status = root.querySelector("[data-core-instructor-status]");
@@ -246,10 +282,11 @@ function renderShell(runtime, session, route) {
         <a href="${href}"${key === route ? ' aria-current="page"' : ""}>${uiIcon(icon, "cia-icon")}<span>${label}</span></a>
       `).join("")}</nav>
     </header>
-    <main class="cia-main" aria-label="강사 업무">
+    <${route === "climate" ? "div" : "main"} class="cia-main" aria-label="강사 업무">
       <p class="cia-status" role="status" data-core-instructor-status></p>
       <div data-core-instructor-content></div>
-    </main>`;
+    </${route === "climate" ? "div" : "main"}>`;
+  markInstructor(runtime, session);
   bindLogout(runtime);
   return root.querySelector("[data-core-instructor-content]");
 }
@@ -431,10 +468,10 @@ export async function prepareCoreAccess(runtime, user) {
         loadStyles(),
         runtime.httpsCallable(runtime.functionsClient, "getCoreAccessSession")({}),
       ]);
-      if (generation !== ticket) return null;
+      if (generation !== ticket || runtime.authClient.currentUser?.uid !== user.uid) return null;
       const session = response?.data;
       if (session?.role === "manager") {
-        activeSession = { session, uid: user.uid };
+        activeSession = { session, uid: user.uid, runtime };
         restoreManagerContent();
         renderManagerAccount(runtime, session);
         return session;
@@ -446,11 +483,12 @@ export async function prepareCoreAccess(runtime, user) {
       if (typeof session.mustChangePassword !== "boolean" || !String(session.staffId || "").trim()) {
         throw new Error("강사 접근 정보 확인이 필요합니다.");
       }
-      activeSession = { session, uid: user.uid };
+      activeSession = { session, uid: user.uid, runtime };
       if (session.mustChangePassword) return await firstLogin(runtime);
+      markInstructor(runtime, session);
       return session;
     } catch (error) {
-      if (generation !== ticket) return null;
+      if (generation !== ticket || runtime.authClient.currentUser?.uid !== user.uid) return null;
       if (["functions/unauthenticated", "auth/user-token-expired", "auth/id-token-revoked", "auth/invalid-user-token"].includes(error?.code)) {
         await signOut(runtime);
         return null;
@@ -516,13 +554,14 @@ function renderWorkspace(content, workspace, session, view = {}) {
 export async function renderInstructorCore(runtime, session, view = {}) {
   if (session?.role === "manager") return false;
   if (!session || session.role !== "instructor" || session.mustChangePassword !== false
-    || activeSession?.session !== session) {
+    || activeSession?.session !== session || activeSession.runtime !== runtime
+    || activeSession.uid !== runtime.authClient.currentUser?.uid) {
     isolateOperatorContent();
     if (!cancelFirstLogin) renderAccessNotice(runtime, {}, true);
     return true;
   }
   await loadStyles();
-  if (activeSession?.session !== session) return true;
+  if (activeSession?.session !== session || activeSession.uid !== runtime.authClient.currentUser?.uid) return true;
   const route = currentRoute();
   const ticket = ++generation;
   if (route === "home") {
@@ -531,6 +570,27 @@ export async function renderInstructorCore(runtime, session, view = {}) {
   }
   if (route === "blocked") {
     renderAccessNotice(runtime, session);
+    return true;
+  }
+  if (route === "climate") {
+    resetSequence();
+    resetClimate();
+    const dashboard = document.querySelector("[data-climate-dashboard]");
+    const content = renderShell(runtime, session, route);
+    root.classList.remove("core-instructor-access--sequence");
+    if (!dashboard) {
+      renderAccessNotice(runtime, session);
+      return true;
+    }
+    climateDashboard = { node: dashboard, parent: dashboard.parentNode, next: dashboard.nextSibling,
+      hadMain: dashboard.classList.contains("main") };
+    // Move the original main, not the operator shell, into a non-main instructor container.
+    dashboard.classList.remove("main");
+    content.append(dashboard);
+    const { mountClimate } = await import("./climate.js");
+    if (generation !== ticket || activeSession?.session !== session || !content.isConnected
+      || activeSession.uid !== runtime.authClient.currentUser?.uid) return true;
+    disposeClimate = mountClimate(dashboard, () => runtime);
     return true;
   }
   if (route === "sequence") {

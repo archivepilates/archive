@@ -68,7 +68,7 @@ for (const [name, staff, req, expected] of [
   ["missing canonical staff", null, request, "permission-denied"],
   ["inactive owner", { role: "owner", active: false }, request, "permission-denied"],
   ["viewer", { role: "viewer", active: true }, request, "permission-denied"],
-  ["instructor", { role: "instructor", active: true }, request, "permission-denied"],
+  ["incomplete instructor", { role: "instructor", active: true }, request, "permission-denied"],
   ["revoked manager", { uid: "qa", role: "manager", active: true, coreAuthAfter: fresh + 10 }, request, "unauthenticated"],
 ] as const) test(`callable ${name} denied before PAT/provider`, async () => {
   const h = harness(staff);
@@ -83,6 +83,42 @@ for (const role of ["owner", "manager"]) test(`fresh canonical ${role} reaches s
   const h = harness({ uid: "qa", staffId: "qa", role, active: true, coreAuthAfter: fresh });
   await assert.rejects(() => h.handler(request, "dashboard"), (e: any) => e.code === "failed-precondition" && !e.message.includes("SYNTHETIC"));
   assert.equal(h.secrets(), 1);
+});
+const instructor = { uid: "qa", staffId: "qa-staff", studioId: "qa-studio", role: "instructor", active: true,
+  employmentStatus: "current", employmentSource: "studiomate_staff_tab_browser_scan", coreAccessEnabled: true,
+  coreMustChangePassword: false, coreAuthAfter: fresh };
+const instructorRequest = { auth: { uid: "qa", token: { email: "qa@example.invalid", auth_time: fresh,
+  staffId: "qa-staff", studioId: "qa-studio", role: "instructor" } }, data: {} };
+for (const action of ["dashboard", "control", "reconcile"] as const) {
+  test(`eligible instructor reaches ${action} configuration through the same canonical authorization`, async () => {
+    const h = harness(instructor);
+    await assert.rejects(() => h.handler(instructorRequest, action), (e: any) =>
+      e.code === "failed-precondition" && !e.message.includes("SYNTHETIC"));
+    assert.equal(h.secrets(), 1);
+  });
+}
+for (const [label, patch, authPatch] of [
+  ["inactive", { active: false }, {}],
+  ["former", { employmentStatus: "former" }, {}],
+  ["unverified source", { employmentSource: "manual" }, {}],
+  ["disabled access", { coreAccessEnabled: false }, {}],
+  ["missing activation", { coreAccessEnabled: undefined }, {}],
+  ["first login", { coreMustChangePassword: true }, {}],
+  ["missing password completion", { coreMustChangePassword: undefined }, {}],
+  ["revoked session", { coreAuthAfter: fresh + 10 }, {}],
+  ["wrong canonical uid", { uid: "other" }, {}],
+  ["wrong claimed staff", {}, { staffId: "other" }],
+  ["wrong claimed studio", {}, { studioId: "other" }],
+  ["spoofed manager role", {}, { role: "manager" }],
+] as const) test(`${label} instructor cannot read, control or reconcile before PAT/provider access`, async () => {
+  const h = harness({ ...instructor, ...patch });
+  const request = { ...instructorRequest, auth: { ...instructorRequest.auth,
+    token: { ...instructorRequest.auth.token, ...authPatch } } };
+  for (const action of ["dashboard", "control", "reconcile"]) {
+    await assert.rejects(() => h.handler(request, action), (e: any) =>
+      ["permission-denied", "unauthenticated"].includes(e.code));
+  }
+  assert.equal(h.secrets(), 0); assert.equal(h.reads(), 0);
 });
 function command(): service.ClimateCommand { const now = new Date().toISOString(); return { commandId: randomUUID(), deviceId: "qa-device", uid: "qa", staffId: "qa", field: "power", value: "POWER_ON", expectedVersion: "a".repeat(64), fingerprint: "fixture-fingerprint", status: "pending", createdAt: now, updatedAt: now, errorCode: null }; }
 test("actual store concurrent claim has one winning command and per-device lock", async () => {

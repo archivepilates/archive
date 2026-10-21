@@ -2,7 +2,7 @@ import { createHash } from "node:crypto";
 import { defineSecret } from "firebase-functions/params";
 import { HttpsError, type CallableRequest } from "firebase-functions/v2/https";
 import { db } from "../config/firebase";
-import { requireManager, requireStaff } from "../security/authGuards";
+import { isManagerRole, requireStaff } from "../security/authGuards";
 import { AppError, toHttpsError } from "../utils/errors";
 import { ClimateCommand, ClimateService, ClimateStore } from "./climateService";
 import { ClimateError, parseThinQConfig, ThinQClient } from "./thinqClient";
@@ -79,7 +79,9 @@ function service() {
 export async function climateHandler(request: CallableRequest, action: "dashboard" | "control" | "reconcile") {
   try {
     const staff = await requireStaff(request);
-    requireManager(staff);
+    // requireStaff checks current employment, activation, password and fresh instructor identity.
+    if (!isManagerRole(staff.role) && staff.role !== "instructor")
+      throw new AppError("PERMISSION_DENIED", "사용 가능한 업무 계정이 없습니다");
     const actor = { uid: request.auth!.uid, staffId: staff.staffId };
     if (action === "dashboard") return await service().dashboard(actor, request.data);
     if (action === "control") return await service().control(actor, request.data);

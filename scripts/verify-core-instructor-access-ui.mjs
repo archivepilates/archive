@@ -130,8 +130,11 @@ export function read(operation, ref) {
   const manager = state.session?.role === "manager" && !!authClient.currentUser;
   const sequence = state.session?.role === "instructor" && !state.session.mustChangePassword &&
     !!authClient.currentUser && ownerScoped;
-  record("reads", { operation, path: ref.path, filters, allowed: manager || sequence });
-  if (!manager && !sequence) throw denied("Unexpected broad Firestore read");
+  const climate = fixture.mode === "climate" && state.session?.role === "instructor" &&
+    state.session.mustChangePassword === false && !!authClient.currentUser && operation === "onSnapshot" &&
+    ref.path === "facilityClimateSignals" && filters.length === 1 && filters[0].kind === "limit" && filters[0].value === 16;
+  record("reads", { operation, path: ref.path, filters, allowed: manager || sequence || climate });
+  if (!manager && !sequence && !climate) throw denied("Unexpected broad Firestore read");
   return { docs: [], size: 0, empty: true, metadata: { fromCache: false, hasPendingWrites: false },
     exists: () => false, data: () => undefined, forEach: () => {} };
 }
@@ -199,6 +202,16 @@ function firebaseModule(kind) {
         state.workspaceAttempts++;
         if (fixture.workspaceFailures-- > 0) throw new Error("Synthetic workspace failure");
         return { data: { ...fixture.workspace, privateTasks: payload?.month && payload.month !== "2026-10" ? [] : fixture.workspace.privateTasks } };
+      }
+      if (name === "getCoreAirConditioners" && fixture.mode === "climate" && state.session?.role === "instructor"
+        && state.session.mustChangePassword === false) {
+        return { data: { checkedAt: ${JSON.stringify(fixedTime)}, devices: Array.from({ length: 8 }, (_, index) => ({
+          deviceId: "qa-climate-" + index, name: "QA 에어컨 " + (index + 1), available: true,
+          version: "qa-v1", checkedAt: ${JSON.stringify(fixedTime)},
+          values: { power: index % 2 ? "POWER_OFF" : "POWER_ON", mode: "COOL", currentTemperature: 25, targetTemperature: 24 },
+          controls: [{ field: "power", kind: "enum", values: ["POWER_ON", "POWER_OFF"] },
+            { field: "targetTemperature", kind: "range", min: 16, max: 30, step: 1 }],
+        })) } };
       }
       if (name === "getParkingDashboard" && state.session?.role === "manager") {
         return { data: { vehicles: [], jobs: [], config: null } };
@@ -483,9 +496,9 @@ async function layout(page, name, instructor = true) {
 async function instructorNav(page, base) {
   const nav = page.getByRole("navigation", { name: "강사 메뉴" });
   await nav.waitFor({ state: "visible" });
-  assert.equal(await nav.getByRole("link").count(), 2);
+  assert.equal(await nav.getByRole("link").count(), 3);
   assert.equal(await nav.getByRole("link", { name: "홈", exact: true }).count(), 0);
-  for (const [name, suffix] of [["프라이빗", "private/"], ["시퀀스 노트", "sequence/"]]) {
+  for (const [name, suffix] of [["프라이빗", "private/"], ["시퀀스 노트", "sequence/"], ["에어컨", "climate/"]]) {
     assert.equal(await nav.getByRole("link", { name, exact: true }).evaluate(node => node.href), `${origin}${base}${suffix}`);
   }
   assert.equal(await page.getByRole("link", { name: "ARCHIVE CORE", exact: true }).evaluate(node => node.href), `${origin}${base}private/`);
@@ -1037,6 +1050,50 @@ async function currentRefreshDowngrade(page, base, name) {
 }
 
 async function runCase(page, base, kind, name) {
+  if (kind === "climate") {
+    await instructorNav(page, base);
+    await page.getByRole("heading", { name: "QA 에어컨 8", exact: true }).waitFor();
+    await page.waitForFunction(() => window.archiveCoreNavigation?.session.role === "instructor");
+    const initial = await telemetry(page);
+    assert.equal(initial.events[0]?.name, "getCoreAccessSession");
+    assert.deepEqual(initial.callables.map(call => call.name), ["getCoreAccessSession", "getCoreAirConditioners"]);
+    assert.ok(initial.reads.length > 0);
+    assert.ok(initial.reads.every(read => read.path === "facilityClimateSignals" && read.allowed));
+    assert.deepEqual(initial.writes, []);
+    const dashboard = page.getByRole("main");
+    assert.equal(await dashboard.count(), 1);
+    assert.equal(await dashboard.getByRole("link").count(), 0);
+    const heights = await dashboard.getByRole("article").evaluateAll(cards => cards.map(card => card.getBoundingClientRect().height));
+    assert.equal(heights.length, 8);
+    assert.ok(Math.max(...heights) - Math.min(...heights) <= 1, "Eight collapsed on/off cards retain equal heights");
+    await page.getByTestId("qa-operator-shell").waitFor({ state: "hidden" });
+    await layout(page, `${name}-climate`);
+    // The actual parent navigation must keep private/sequence working from an initial climate document.
+    await page.evaluate(() => {
+      const host = window.archiveCoreNavigation;
+      const ready = host.ready;
+      window.__coreNavigationQA = { ready: [] };
+      host.ready = function(frame, runtime, session, error) {
+        const access = window.__coreFirebaseQA.callables.filter(call => call.name === "getCoreAccessSession").at(-1);
+        window.__coreNavigationQA.ready.push({ hidden: frame.hidden, sharedRuntime: runtime === host.runtime,
+          distinctSession: session !== host.session, accessResolved: access?.resolved === true,
+          accessDestination: access?.destination, childHasTelemetry: Boolean(frame.contentWindow.__coreFirebaseQA) });
+        return ready.call(this, frame, runtime, session, error);
+      };
+    });
+    const documentId = await page.evaluate(() => window.__coreUiQA.documentId);
+    for (const [label, suffix] of [["프라이빗", "private/"], ["시퀀스 노트", "sequence/"], ["에어컨", "climate/"]]) {
+      await (await navigationLink(page, false, label)).click();
+      const frame = await destinationFrame(page, `${base}${suffix}`, documentId, false);
+      if (suffix === "climate/") await frame.getByRole("heading", { name: "QA 에어컨 8", exact: true }).waitFor();
+    }
+    const state = await telemetry(page);
+    assert.deepEqual(state.writes, []);
+    assert.ok(state.reads.every(read => read.allowed && ["facilityClimateSignals", "sequenceNotes"].includes(read.path)));
+    assert.ok(state.callables.every(call => ["getCoreAccessSession", "getCoreInstructorWorkspace", "getCoreAirConditioners"].includes(call.name)));
+    assert.equal(await page.evaluate(() => document.documentElement.dataset.coreAccess), "instructor");
+    return state;
+  }
   if (["navigation", "manager-navigation"].includes(kind)) return navigationCase(page, base, kind.startsWith("manager-"), name);
   if (kind === "manager-current-refresh-downgrade") return currentRefreshDowngrade(page, base, name);
   if (/^(?:manager|instructor)-destination-(?:transient|timeout)$/.test(kind)) {
@@ -1258,7 +1315,7 @@ async function runCase(page, base, kind, name) {
 
 function routeFor(base, kind) {
   if (kind === "manager-sequence") return `${base}sequence/`;
-  if (kind === "private" || kind === "sequence") return `${base}${kind}/`;
+  if (["private", "sequence", "climate"].includes(kind)) return `${base}${kind}/`;
   if (kind === "workspace-retry") return `${base}private/`;
   if (["navigation", "instructor-bfcache"].includes(kind) || /^instructor-(?:pending|destination)-/.test(kind)) return `${base}private/`;
   if (kind.startsWith("blocked-")) return `${base}${kind.slice(8)}/`;
@@ -1408,7 +1465,7 @@ try {
   });
   origin = `http://127.0.0.1:${server.address().port}`;
   browser = await ({ chromium, webkit }[engineName]).launch({ headless: true });
-  const cases = ["home", "private", "first-login", "pending-role", "access-denied", "sequence",
+  const cases = ["home", "private", "first-login", "pending-role", "access-denied", "sequence", "climate",
     "blocked-business", "blocked-members/detail", "blocked-rules", "manager", "manager-sequence", "owner", "revoked-session", "access-transient",
     "logged-out", "bootstrap-failure", "navigation", "manager-navigation"];
   for (const base of surfaces) {

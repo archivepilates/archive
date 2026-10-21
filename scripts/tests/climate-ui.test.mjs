@@ -43,7 +43,8 @@ test("navigation and command search replace video entry without removing video s
   assert.match(videoPage, /회원별 영상 시청 현황/);
   const instructorAccess = await read("core/assets/core-instructor-access.js");
   const routes = instructorAccess.slice(instructorAccess.indexOf("const ROUTES ="), instructorAccess.indexOf("const STATUS_LABELS"));
-  assert.doesNotMatch(routes, /climate|video-analytics/);
+  assert.match(routes, /\["climate", `\$\{CORE_BASE\}climate\/`, "에어컨", "air-vent"\]/);
+  assert.doesNotMatch(routes, /video-analytics/);
 });
 
 test("shell, explicit mount, runtime and command boundaries", () => {
@@ -122,12 +123,15 @@ function bootstrap(data) {
       next(signalSnapshot(f.signalInitial));
       return () => { if (f.signalListeners.delete(listener)) f.unsubscriptions++; };
     },
-    auth: { onAuthStateChanged(_auth, callback) { f.listeners.add(callback); return () => f.listeners.delete(callback); } },
+    auth: { onAuthStateChanged(_auth, callback) { f.listeners.add(callback); return () => f.listeners.delete(callback); },
+      async signOut() { f.auth(null); } },
     httpsCallable(_client, name) { return async payload => {
       f.calls.push({ name, payload: structuredClone(payload), at: Date.now() });
       const read = structuredClone(f.data);
       if (f.hold === name) { f.hold = null; await new Promise(resolve => { f.release = resolve; }); }
-      if (name === "getCoreAccessSession") return { data: { role: f.accessRole, staffName: "합성 운영자", staffId: "fixture-staff", mustChangePassword: false } };
+      if (name === "getCoreAccessSession" && f.accessError) throw Object.assign(new Error("synthetic-access-error"), { code: f.accessError });
+      if (name === "getCoreAccessSession") return { data: { role: f.accessRole, staffName: "합성 운영자",
+        staffId: f.staffId === undefined ? "fixture-staff" : f.staffId, mustChangePassword: f.mustChangePassword ?? false } };
       if (name === "getCoreAirConditioners") {
         if (f.enforceReadCooldowns) {
           const reads = f.calls.filter(call => call.name === name), previous = reads.at(-2);
@@ -157,8 +161,17 @@ function bootstrap(data) {
   f.auth = uid => { runtime.authClient.currentUser = uid ? { uid } : null; [...f.listeners].forEach(callback => callback(runtime.authClient.currentUser)); };
   f.signals = items => [...f.signalListeners].forEach(listener => listener.next(signalSnapshot(items)));
   f.signalError = () => [...f.signalListeners].forEach(listener => listener.error(new Error("synthetic-signal-error")));
-  if (location.pathname === "/integration/") window.archiveCoreNavigation = { runtime, uid: runtime.authClient.currentUser.uid,
-    session: { role: "manager" }, ready() { window.__navigationReady = true; } };
+  if (location.pathname.startsWith("/integration/")) {
+    const instructor = location.pathname === "/integration/instructor/";
+    f.accessRole = instructor ? "instructor" : "manager";
+    if (instructor) {
+      document.documentElement.dataset.coreAccess = "instructor";
+      document.documentElement.dataset.coreInstructorUid = runtime.authClient.currentUser.uid;
+      document.documentElement.dataset.coreInstructorStaffId = "fixture-staff";
+    }
+    window.archiveCoreNavigation = { runtime, uid: runtime.authClient.currentUser.uid,
+      session: { role: f.accessRole, staffId: "fixture-staff", mustChangePassword: false }, ready() { window.__navigationReady = true; } };
+  }
 }
 
 async function fixtureServer() {
@@ -171,7 +184,12 @@ async function fixtureServer() {
     .replace('<script type="module" src="../assets/app.js"></script>', `<script type="module">
       import { initCoreNavigationDocument } from "../assets/core-navigation.js";
       import { mountClimate } from "../assets/climate.js";
+      import { prepareCoreAccess, renderInstructorCore } from "../assets/core-instructor-access.js";
       initCoreNavigationDocument();
+      window.__prepare = () => prepareCoreAccess(window.__runtime, window.__runtime.authClient.currentUser);
+      window.__render = session => renderInstructorCore(window.__runtime, session);
+      window.__dashboard = document.querySelector('[data-climate-dashboard]');
+      window.__dashboardParent = window.__dashboard.parentNode;
       window.__mount = (defaultRuntime = false) => window.__dispose = defaultRuntime
         ? mountClimate(document.querySelector('[data-climate-dashboard]'))
         : mountClimate(document.querySelector('[data-climate-dashboard]'), () => window.__runtime);
@@ -181,9 +199,12 @@ async function fixtureServer() {
   assets.set("/core/climate/integration.html", ["text/html", html.replace('<script src="../firebase-config.js"></script>', "")
     .replace('<nav class="nav">', '<nav class="nav"><a href="../video-analytics/" data-section="video-analytics">영상 시청</a>')]);
   assets.set("/integration/", ["text/html", `<!doctype html><html lang="ko" data-core-access="manager"><head>${boot}</head><body>
-    <iframe data-testid="integration-frame" data-core-navigation-frame src="/core/climate/integration.html" title="합성 권한 통합" style="width:100%;height:900px;border:0"></iframe></body></html>`]);
+    <iframe data-testid="integration-frame" data-core-navigation-frame src="/core/climate/?integration=1" title="합성 권한 통합" style="width:100%;height:900px;border:0"></iframe></body></html>`]);
+  assets.set("/integration/instructor/", ["text/html", assets.get("/integration/")[1]]);
   const server = createServer((req, res) => {
-    const asset = assets.get(new URL(req.url, "http://fixture").pathname);
+    const url = new URL(req.url, "http://fixture");
+    const asset = assets.get(url.pathname === "/core/climate/" && url.searchParams.has("integration")
+      ? "/core/climate/integration.html" : url.pathname);
     res.writeHead(asset ? 200 : 404, { "Content-Type": `${asset?.[0] || "text/plain"}; charset=utf-8`, "Cache-Control": "no-store" });
     res.end(asset?.[1] || "fixture-only");
   });
@@ -947,8 +968,118 @@ test("synthetic browser lifecycle, commands, auth integration and responsive QA"
       assert.equal((await calls(page, "operatorControlCoreAirConditioner")).length, 0);
     }));
 
-    await t.test("actual app.js mobile auth mount uses shared synthetic runtime and no general data reads", () => withPage(async page => {
-      await page.goto(`${origin}/integration/`);
+    for (const role of ["manager", "instructor"]) await t.test(`${role}: eight units share one-shot control pipeline with no automatic POST`, () => withPage(async page => {
+      const posts = [];
+      page.on("request", request => { if (request.method() === "POST") posts.push(request.url()); });
+      await page.evaluate(async role => {
+        const f = window.__fixture;
+        f.accessRole = role;
+        f.data.devices = Array.from({ length: 8 }, (_, index) => ({ ...structuredClone(f.data.devices[0]),
+          deviceId: `synthetic-role-${index}`, name: `합성 공간 ${index + 1}` }));
+        window.__session = await window.__prepare();
+        if (role === "instructor") window.__handled = await window.__render(window.__session);
+        else window.__mount();
+      }, role);
+      await page.getByRole("heading", { name: "합성 공간 8", exact: true }).waitFor(); await idle(page);
+      assert.equal((await calls(page, "operatorControlCoreAirConditioner")).length, 0);
+      assert.deepEqual(posts, []);
+      assert.equal(await page.getByRole("main").count(), 1, "no nested main or operator DOM leak");
+      if (role === "instructor") {
+        assert.equal(await page.evaluate(() => window.__handled), true);
+        assert.equal(await page.evaluate(() => document.documentElement.dataset.coreAccess), "instructor");
+        assert.equal(await page.getByRole("navigation", { name: "강사 메뉴" }).getByRole("link").count(), 3);
+        assert.equal(await page.getByRole("link", { name: "홈", exact: true }).count(), 0);
+        assert.equal(await page.evaluate(() => window.__dashboard === document.querySelector(".cia-main [data-climate-dashboard]")), true);
+        for (const width of [320, 390, 768, 1440]) {
+          await page.setViewportSize({ width, height: 1000 });
+          const issues = await page.evaluate(() => {
+            const root = document.getElementById("coreInstructorAccess");
+            const visible = node => node.getBoundingClientRect().height > 0;
+            return { overflow: document.documentElement.scrollWidth > innerWidth,
+              small: [...root.querySelectorAll("a,button,summary")].filter(visible).filter(node => node.getBoundingClientRect().height < 44).length,
+              clipped: [...root.querySelectorAll("h1,h2,dt,dd,a,button")].filter(visible).filter(node => node.scrollWidth > node.clientWidth + 1).length };
+          });
+          assert.deepEqual(issues, { overflow: false, small: 0, clipped: 0 });
+          await page.screenshot({ path: join(screenshotDir, `climate-instructor-${width}.png`), fullPage: true });
+        }
+      }
+      await page.getByTestId("climate-device-0").getByRole("button", { name: "전원", exact: true }).click(); await idle(page);
+      const commands = await calls(page, "operatorControlCoreAirConditioner");
+      assert.equal(commands.length, 1);
+      assert.match(commands[0].payload.commandId, /^[0-9a-f-]{36}$/);
+      assert.deepEqual(commands[0].payload, { commandId: commands[0].payload.commandId, deviceId: "synthetic-role-0",
+        expectedVersion: "fixture-v1", field: "power", value: "POWER_OFF" });
+      assert.deepEqual(await page.evaluate(() => window.__fixture.calls.map(call => call.name)),
+        ["getCoreAccessSession", "getCoreAirConditioners", "operatorControlCoreAirConditioner"]);
+      if (role === "instructor") {
+        await page.getByRole("button", { name: "로그아웃", exact: true }).click();
+        assert.deepEqual(await page.evaluate(() => ({
+          marker: document.documentElement.dataset.coreAccess ?? null,
+          uid: document.documentElement.dataset.coreInstructorUid ?? null,
+          cards: window.__dashboard.querySelectorAll(".climate-device").length,
+          restored: window.__dashboard.parentNode === window.__dashboardParent,
+          signals: window.__fixture.signalListeners.size,
+        })), { marker: null, uid: null, cards: 0, restored: true, signals: 0 });
+      }
+    }));
+
+    await t.test("instructor rerender and manager restore retain original dashboard; late reads and detached controls cannot act", () => withPage(async page => {
+      await page.evaluate(async () => {
+        window.__fixture.accessRole = "instructor";
+        window.__session = await window.__prepare(); await window.__render(window.__session);
+      });
+      await page.getByRole("heading", { name: "합성 공간 A", exact: true }).waitFor();
+      await page.evaluate(async () => { await window.__render(window.__session); });
+      await idle(page);
+      assert.equal(await page.evaluate(() => window.__dashboard === document.querySelector(".cia-main main")), true);
+      assert.equal(await page.evaluate(() => window.__fixture.signalListeners.size), 1);
+      await page.evaluate(() => {
+        window.__oldPower = window.__dashboard.querySelector(".climate-power");
+        window.__fixture.hold = "getCoreAirConditioners";
+      });
+      await page.getByRole("button", { name: "새로고침", exact: true }).click();
+      await page.evaluate(() => { window.__fixture.auth("changed-instructor"); window.__fixture.release(); window.__oldPower.click(); });
+      assert.equal(await page.evaluate(() => window.__dashboard.querySelectorAll(".climate-device").length), 0);
+      assert.equal((await calls(page, "operatorControlCoreAirConditioner")).length, 0);
+      await page.evaluate(async () => { window.__fixture.accessRole = "manager"; await window.__prepare(); window.__mount(); });
+      await page.getByRole("heading", { name: "합성 공간 A", exact: true }).waitFor();
+      assert.equal(await page.evaluate(() => window.__dashboard.parentNode === window.__dashboardParent && window.__dashboard.classList.contains("main")), true);
+      assert.equal(await page.evaluate(() => document.querySelector("#coreInstructorAccess")), null);
+      assert.equal(await page.evaluate(() => document.documentElement.dataset.coreInstructorUid ?? null), null);
+    }));
+
+    for (const invalid of ["pending", "member", "blocked", "unknown", "missing-staff", "first-login", "late-auth", "late-auth-error"]) {
+      await t.test(`${invalid}: instructor climate stays denied before validated session`, () => withPage(async page => {
+        await page.evaluate(async invalid => {
+          const f = window.__fixture;
+          f.accessRole = ["missing-staff", "first-login", "late-auth", "late-auth-error"].includes(invalid) ? "instructor" : invalid;
+          if (invalid === "missing-staff") f.staffId = "";
+          if (invalid === "first-login") f.mustChangePassword = true;
+          if (invalid.startsWith("late-auth")) f.hold = "getCoreAccessSession";
+          if (invalid === "late-auth-error") f.accessError = "functions/unauthenticated";
+          window.__pending = window.__prepare().catch(() => null);
+          if (invalid !== "first-login" && !invalid.startsWith("late-auth")) await window.__pending;
+        }, invalid);
+        if (invalid === "first-login") {
+          await page.getByRole("dialog", { name: "새 비밀번호 설정" }).waitFor();
+          assert.equal(await page.getByRole("navigation", { name: "강사 메뉴" }).count(), 0);
+        }
+        if (invalid.startsWith("late-auth")) {
+          await page.waitForFunction(() => typeof window.__fixture.release === "function");
+          await page.evaluate(() => { window.__fixture.auth("late-other-user"); window.__fixture.release(); });
+          await page.evaluate(() => window.__pending);
+          assert.equal(await page.evaluate(() => window.__runtime.authClient.currentUser?.uid), "late-other-user");
+        }
+        assert.equal((await calls(page, "getCoreAirConditioners")).length, 0);
+        assert.equal((await calls(page, "operatorControlCoreAirConditioner")).length, 0);
+        assert.equal(await page.evaluate(() => document.documentElement.dataset.coreAccess ?? null), null);
+        assert.equal(await page.evaluate(() => window.__fixture.signalListeners.size), 0);
+        if (invalid === "first-login") await page.evaluate(() => { window.__fixture.auth(null); return window.__pending; });
+      }));
+    }
+
+    for (const role of ["manager", "instructor"]) await t.test(`${role}: actual app.js mobile auth mount uses shared synthetic runtime and no general data reads`, () => withPage(async page => {
+      await page.goto(`${origin}/integration/${role === "instructor" ? "instructor/" : ""}`);
       const frame = page.getByTestId("integration-frame").contentFrame();
       try { await frame.getByRole("heading", { name: "합성 공간 A", exact: true }).waitFor(); }
       catch (error) {
@@ -961,9 +1092,30 @@ test("synthetic browser lifecycle, commands, auth integration and responsive QA"
       assert.deepEqual(await page.evaluate(() => window.__fixture.calls.map(call => call.name)), ["getCoreAccessSession", "getCoreAirConditioners"]);
       assert.equal(await frame.getByRole("heading", { name: "에어컨", exact: true }).isVisible(), true);
       // Navigation frames hide their duplicate sidebar; check the enhanced DOM contract too.
-      assert.equal(await frame.getByRole("link", { name: "에어컨", exact: true, includeHidden: true }).count(), 1);
-      assert.equal(await frame.getByRole("link", { name: "영상 시청", exact: true, includeHidden: true }).count(), 0);
-      assert.equal(await frame.getByRole("link", { name: "에어컨", exact: true, includeHidden: true }).getAttribute("href"), "../climate/");
+      if (role === "manager") {
+        assert.equal(await frame.getByRole("link", { name: "에어컨", exact: true, includeHidden: true }).count(), 1);
+        assert.equal(await frame.getByRole("link", { name: "영상 시청", exact: true, includeHidden: true }).count(), 0);
+        assert.equal(await frame.getByRole("link", { name: "에어컨", exact: true, includeHidden: true }).getAttribute("href"), "../climate/");
+      } else {
+        assert.equal(await frame.getByRole("main").count(), 1);
+        assert.equal(await frame.getByRole("main").getByRole("link").count(), 0, "no operator menu moved with dashboard");
+        for (const mismatch of ["role", "uid", "staff", "password"]) {
+          await page.evaluate(mismatch => {
+            const host = window.archiveCoreNavigation;
+            if (mismatch === "role") host.session.role = "manager";
+            if (mismatch === "uid") host.uid = "wrong-uid";
+            if (mismatch === "staff") host.session.staffId = "wrong-staff";
+            if (mismatch === "password") host.session.mustChangePassword = true;
+            document.body.append(document.createElement("span"));
+          }, mismatch);
+          await frame.getByRole("heading", { name: "합성 공간 A", exact: true }).waitFor({ state: "hidden" });
+          await page.evaluate(() => {
+            Object.assign(window.archiveCoreNavigation, { uid: "synthetic-manager", session: { role: "instructor", staffId: "fixture-staff", mustChangePassword: false } });
+            document.body.append(document.createElement("span"));
+          });
+          await frame.getByRole("heading", { name: "합성 공간 A", exact: true }).waitFor();
+        }
+      }
       await page.evaluate(() => window.__fixture.auth(null));
       await frame.getByRole("heading", { name: "합성 공간 A", exact: true }).waitFor({ state: "hidden" });
     }));

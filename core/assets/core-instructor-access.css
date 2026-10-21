@@ -46,7 +46,7 @@
 }
 .core-instructor-access .cia-account { display: flex; align-items: center; justify-content: flex-end; gap: .5rem; }
 .core-instructor-access .cia-account > span { color: var(--cia-muted); text-align: right; }
-.core-instructor-access .cia-nav { display: grid; grid-column: 1 / -1; grid-template-columns: repeat(2, minmax(0, 1fr)); gap: .375rem; }
+.core-instructor-access .cia-nav { display: grid; grid-column: 1 / -1; grid-template-columns: repeat(3, minmax(0, 1fr)); gap: .375rem; }
 
 .core-account-bar {
   display: flex;

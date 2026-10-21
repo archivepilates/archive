@@ -413,8 +413,9 @@ for (const status of [401, 403, 429, 500]) test(`provider ${status} is sanitized
 test("authorization is executed before secret/client creation and client Firestore access stays denied", () => {
   const source = readFileSync(new URL("../../firebase/kangsain-functions/functions/src/climate/climateCallables.ts", import.meta.url), "utf8");
   const handler = source.slice(source.indexOf("export async function climateHandler"));
-  assert.ok(handler.indexOf("await requireStaff") < handler.indexOf("requireManager"));
-  assert.ok(handler.indexOf("requireManager") < handler.indexOf("service().dashboard"));
+  assert.ok(handler.indexOf("await requireStaff") < handler.indexOf("isManagerRole"));
+  assert.ok(handler.indexOf("isManagerRole") < handler.indexOf("service().dashboard"));
+  assert.match(handler, /staff\.role !== "instructor"/);
   const rules = readFileSync(new URL("../../firebase/kangsain-functions/firestore.rules", import.meta.url), "utf8");
   assert.ok(!rules.includes("facilityClimateCommands") && !rules.includes("facilityClimateGuards"));
   assert.ok(!source.includes("console."));
